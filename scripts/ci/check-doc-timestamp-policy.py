@@ -10,6 +10,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+GATE_CODE = "DOC_TIMESTAMP_POLICY"
+GATE_NAME = "文档日期命名策略"
 DATE_RE = re.compile(r"\d{4}-\d{2}(?:-\d{2})?")
 
 CURRENT_DOC_PREFIXES = (
@@ -132,13 +134,13 @@ def main() -> int:
         errors.append(f"timestamp policy allowlist references missing doc: {path}")
 
     if errors:
-        print("Document timestamp policy failed:", file=sys.stderr)
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1", file=sys.stderr)
         for error in errors:
             print(f"  - {error}", file=sys.stderr)
         return 1
 
     print(
-        "✅ Document timestamp policy passed "
+        f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME} "
         f"(dated={dated_count}, undated={undated_count}, current-dated-legacy={len(DATED_CURRENT_DOC_ALLOWLIST)})"
     )
     return 0

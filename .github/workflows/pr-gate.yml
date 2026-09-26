@@ -259,6 +259,11 @@ jobs:
         shell: bash
         run: bash scripts/ci/run-gate.sh PR_FEATURE_SWITCH_REGISTRY "功能开关注册表" -- python3 scripts/ci/check-feature-switch-registry.py
 
+      - name: Verify environment variable governance
+        if: needs.changes.outputs.config == 'true' || needs.changes.outputs.docs == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        run: bash scripts/ci/run-gate.sh PR_ENV_VARIABLE_GOVERNANCE "环境变量治理" -- python3 scripts/ci/check-env-variable-governance.py
+
       - name: Verify configuration governance registry
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.docs == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash

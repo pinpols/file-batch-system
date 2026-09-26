@@ -11,6 +11,8 @@ import sys
 
 
 CVE_RE = re.compile(r"^CVE-\d{4}-\d{4,}$")
+GATE_CODE = "TRIVY_IGNORE_EXPIRY"
+GATE_NAME = "Trivy 白名单到期治理"
 EXPIRES_RE = re.compile(r"(?:expires|expire|到期|复审|review)\s*[:： ]\s*(\d{4}-\d{2}-\d{2})", re.IGNORECASE)
 OWNER_RE = re.compile(r"(?:owner|负责人)\s*[:：]\s*\S+", re.IGNORECASE)
 REASON_RE = re.compile(r"(?:reason|原因|真实暴露|说明)\s*[:：]\s*\S+", re.IGNORECASE)
@@ -34,7 +36,7 @@ def main() -> int:
     path = Path(args.file)
     today = parse_today(args.today)
     if not path.exists():
-        print(f"Trivy ignore expiry guard skipped: {path} 不存在。")
+        print(f"⏭️ 跳过 | code={GATE_CODE} | gate={GATE_NAME} | reason={path} 不存在")
         return 0
 
     errors: list[str] = []
@@ -64,13 +66,13 @@ def main() -> int:
             errors.append(f"{path}:{line_no}: {stripped} 缺少 reason")
 
     if errors:
-        print("Trivy ignore 白名单治理失败：", file=sys.stderr)
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1", file=sys.stderr)
         for error in errors:
-            print(f"  {error}", file=sys.stderr)
+          print(f"  {error}", file=sys.stderr)
         print("每组 CVE 前需要 owner、reason、expires: YYYY-MM-DD。", file=sys.stderr)
         return 1
 
-    print("Trivy ignore expiry guard passed: 所有 CVE 白名单均有 owner/reason/expires 且未过期。")
+    print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME}")
     return 0
 
 

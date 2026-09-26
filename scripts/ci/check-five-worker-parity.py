@@ -16,6 +16,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 WORKER_TYPES = ("import", "export", "process", "dispatch", "atomic")
 WORKER_TYPES_UPPER = tuple(worker_type.upper() for worker_type in WORKER_TYPES)
+GATE_CODE = "FIVE_WORKER_PARITY"
+GATE_NAME = "五类 Worker 对齐"
 
 
 def read(relative: str) -> str:
@@ -119,11 +121,11 @@ def main() -> int:
     )
 
     if errors:
-        print("Five-worker parity check failed:")
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1")
         for error in errors:
             print(f"  - {error}")
         return 1
-    print("Five-worker parity check passed")
+    print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME}")
     return 0
 
 

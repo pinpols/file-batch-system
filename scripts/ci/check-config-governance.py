@@ -32,6 +32,8 @@ FORBIDDEN_DEPENDENCIES = (
     "nacos-config",
     "apollo-client",
 )
+GATE_CODE = "CONFIG_GOVERNANCE"
+GATE_NAME = "配置治理"
 
 
 def production_java_files() -> list[Path]:
@@ -145,7 +147,7 @@ def main() -> int:
 
     violations = forbidden_usages()
     if violations:
-        print("❌ configuration governance validation failed:", file=sys.stderr)
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1", file=sys.stderr)
         print("\n".join(violations), file=sys.stderr)
         return 1
 
@@ -154,14 +156,14 @@ def main() -> int:
         REGISTRY.write_text(expected, encoding="utf-8")
         RUNTIME_REGISTRY.write_text(expected, encoding="utf-8")
         print(
-            "✅ configuration governance registry written: "
+            f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME} | action=write "
             f"{len(inventory())} configuration properties"
         )
         return 0
 
     if not REGISTRY.exists() or REGISTRY.read_text(encoding="utf-8") != expected:
         print(
-            "❌ configuration governance validation failed:\n"
+            f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1\n"
             "配置治理登记表与源码不一致；执行 "
             "python3 scripts/ci/check-config-governance.py --write 后提交结果。",
             file=sys.stderr,
@@ -169,13 +171,13 @@ def main() -> int:
         return 1
     if not RUNTIME_REGISTRY.exists() or RUNTIME_REGISTRY.read_text(encoding="utf-8") != expected:
         print(
-            "❌ configuration governance validation failed:\n"
+            f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1\n"
             "Console 运行时配置目录与治理登记表不一致；请执行 --write。",
             file=sys.stderr,
         )
         return 1
     print(
-        "✅ configuration governance valid: "
+        f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME} | "
         f"{len(inventory())} configuration properties, no runtime refresh violations"
     )
     return 0

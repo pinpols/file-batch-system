@@ -11,6 +11,8 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[2]
+GATE_CODE = "INFRASTRUCTURE_ABSTRACTION_BOUNDARY"
+GATE_NAME = "基础设施抽象边界"
 BANNED_INFRASTRUCTURE_REFERENCE = re.compile(
     r"("
     r"software\.amazon\.awssdk\."
@@ -84,13 +86,13 @@ def main() -> int:
                 errors.append(f"{path.relative_to(ROOT)}:{line_number}: {line.strip()}")
 
     if errors:
-        print("❌ Infrastructure abstraction boundary check failed:")
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1")
         print("Application/domain/service/web code must depend on ports or adapters, not concrete SDKs.")
         for error in errors:
             print(f"  - {error}")
         return 1
 
-    print("✅ Infrastructure abstraction boundary passed for changed Java main sources")
+    print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME}")
     return 0
 
 

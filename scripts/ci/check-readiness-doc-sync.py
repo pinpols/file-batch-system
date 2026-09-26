@@ -24,6 +24,8 @@ READINESS_TOUCHPOINTS = (
     re.compile(r"asset_partition|result_version|readiness", re.IGNORECASE),
     re.compile(r"HashedWheelTriggerScheduler|TriggerRuntimeState|DefaultTriggerService"),
 )
+GATE_CODE = "READINESS_DOC_SYNC"
+GATE_NAME = "readiness 文档/API/测试同步"
 
 EVIDENCE_PATHS = (
     re.compile(r"^docs/design/asset-partition-readiness\.md$"),
@@ -125,14 +127,15 @@ def main() -> int:
     files = changed_files(args.base)
     readiness_files = [path for path in files if is_readiness_touchpoint(path, args.base)]
     if not readiness_files:
-        print("Readiness doc sync guard passed: 未发现 readiness 契约触点变更。")
+        print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME} | reason=未发现 readiness 契约触点变更")
         return 0
 
     evidence_files = [path for path in files if is_evidence(path)]
     if evidence_files:
-        print("Readiness doc sync guard passed: 已同步文档/API/测试证据。")
+        print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME} | reason=已同步文档/API/测试证据")
         return 0
 
+    print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1", file=sys.stderr)
     print("readiness 相关契约变更缺少同步证据：", file=sys.stderr)
     for path in readiness_files:
         print(f"  {path}", file=sys.stderr)

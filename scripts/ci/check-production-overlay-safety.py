@@ -20,6 +20,8 @@ CHART_VALUES = ROOT / "helm/batch-platform/values.yaml"
 PROD_VALUES = ROOT / "helm/values-prod.yaml"
 LOCAL_K8S_VALUES = ROOT / "helm/batch-platform/examples/values-local-k8s.yaml"
 HEAVY_WORKER_VALUES = ROOT / "helm/batch-platform/examples/values-heavy-worker-pools.yaml"
+GATE_CODE = "PRODUCTION_OVERLAY_SAFETY"
+GATE_NAME = "生产 Helm 覆盖安全"
 
 GC_ENABLE_PATTERN = re.compile(
     r"-XX:\+Use(?:Serial|Parallel|G1|Z|Shenandoah|Epsilon)GC(?:\s|$)"
@@ -164,12 +166,12 @@ def main() -> int:
                 errors.append(f"workerAtomic.networkPolicy.egress.{kind} must not allow {get(peer, 'ipBlock', 'cidr')}")
 
     if errors:
-        print("❌ production overlay safety validation failed:")
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1")
         for error in errors:
             print(f"  - {error}")
         return 1
 
-    print("✅ production overlay safety contract passed")
+    print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME}")
     return 0
 
 

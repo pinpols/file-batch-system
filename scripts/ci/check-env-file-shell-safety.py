@@ -10,6 +10,8 @@ import sys
 
 
 ASSIGNMENT = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
+GATE_CODE = "ENV_FILE_SHELL_SAFETY"
+GATE_NAME = "env 文件 Shell 安全"
 
 
 def tracked_env_files() -> list[Path]:
@@ -51,13 +53,13 @@ def main() -> int:
                 )
 
     if errors:
-        print("env 文件 shell-safe 检查失败：", file=sys.stderr)
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1", file=sys.stderr)
         for error in errors:
             print(f"  {error}", file=sys.stderr)
         print("这些文件会被本地/CI 脚本 source；带空白的值必须写成 KEY=\"...\"。", file=sys.stderr)
         return 1
 
-    print("✅ Env shell-safety guard passed: tracked env files are source-safe.")
+    print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME}")
     return 0
 
 

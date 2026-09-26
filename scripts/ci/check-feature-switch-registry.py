@@ -11,6 +11,8 @@ from feature_switch_registry import load_feature_switches
 
 KEY_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$")
 ENV_PATTERN = re.compile(r"^BATCH_[A-Z0-9_]+$")
+GATE_CODE = "FEATURE_SWITCH_REGISTRY"
+GATE_NAME = "特性开关登记"
 
 
 def main() -> int:
@@ -38,12 +40,15 @@ def main() -> int:
             errors.append(f"{item.key}: helmRequired=true but no Helm environment variable")
 
     if errors:
-        print("❌ feature switch registry validation failed:")
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1")
         for error in errors:
             print(f"  - {error}")
         return 1
 
-    print(f"✅ feature switch registry valid: {len(switches)} switches, {len(envs)} environment variables")
+    print(
+        f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME} | "
+        f"switches={len(switches)} env={len(envs)}"
+    )
     return 0
 
 

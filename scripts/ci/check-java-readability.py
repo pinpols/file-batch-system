@@ -22,6 +22,8 @@ SOURCE_PREFIXES = (
 VAR_TOKEN = re.compile(r"\bvar\b")
 CONFIGURATION = re.compile(r"@Configuration\b(?:\s*\((?P<arguments>[^)]*)\))?")
 LITE_CONFIGURATION = re.compile(r"\bproxyBeanMethods\s*=\s*false\b")
+GATE_CODE = "JAVA_READABILITY"
+GATE_NAME = "Java 可读性"
 
 
 def tracked_main_sources(candidates: list[str] | None = None) -> list[Path]:
@@ -138,12 +140,12 @@ def main(argv: list[str] | None = None) -> int:
                 )
 
     if errors:
-        print("❌ Java readability check failed:")
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1")
         for error in errors:
             print(f"  - {error}")
         return 1
 
-    print("✅ Java readability check passed")
+    print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME}")
     return 0
 
 

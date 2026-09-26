@@ -13,9 +13,12 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
 BASE_REF="${1:-${SQUAWK_BASE_REF:-origin/main}}"
+GATE_CODE="MIGRATION_SAFETY"
+GATE_NAME="迁移安全 lint"
 
 if ! command -v squawk >/dev/null 2>&1; then
-  echo "❌ 未找到 squawk(CI 应经 action 安装;本地: npm i -g squawk-cli)"
+  echo "❌ 不通过 | code=${GATE_CODE} | gate=${GATE_NAME} | exit_code=1"
+  echo "  - 未找到 squawk(CI 应经 action 安装;本地: npm i -g squawk-cli)"
   exit 1
 fi
 
@@ -31,7 +34,7 @@ mapfile -t changed < <(
 )
 
 if [[ "${#changed[@]}" -eq 0 ]]; then
-  echo "✅ 本次无新增/改动迁移文件,跳过 squawk"
+  echo "⏭️ 跳过 | code=${GATE_CODE} | gate=${GATE_NAME} | reason=本次无新增/改动迁移文件"
   exit 0
 fi
 
@@ -41,4 +44,4 @@ echo
 
 # squawk 命中危险规则即非零退出 → fail PR。
 squawk "${changed[@]}"
-echo "✅ 迁移安全 lint 通过"
+echo "✅ 通过 | code=${GATE_CODE} | gate=${GATE_NAME}"

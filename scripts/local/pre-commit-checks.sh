@@ -31,6 +31,7 @@ loc_affecting_changed=0
 env_file_changed=0
 config_default_changed=0
 feature_switch_changed=0
+env_governance_changed=0
 maven_descriptor_changed=0
 helm_changed=0
 for file in "${staged_files[@]}"; do
@@ -46,6 +47,8 @@ for file in "${staged_files[@]}"; do
     && config_default_changed=1
   [[ "$file" == docs/runbook/feature-switch-registry.yml || "$file" == *.yml || "$file" == *.yaml || "$file" == docker-compose*.yml ]] \
     && feature_switch_changed=1
+  [[ "$file" == .env* || "$file" == docs/runbook/environment-variable-governance.md || "$file" == docs/runbook/feature-switches.md || "$file" == docs/runbook/config-ops-tiering.md || "$file" == scripts/ci/check-env-variable-governance.py ]] \
+    && env_governance_changed=1
   [[ "$file" == pom.xml || "$file" == */pom.xml ]] && maven_descriptor_changed=1
   [[ "$file" == helm/* ]] && helm_changed=1
   if [[ "$file" != docs/* && "$file" != db/migration/* ]]; then
@@ -134,6 +137,10 @@ fi
 if ((feature_switch_changed == 1)); then
   gate_run PRE_COMMIT_FEATURE_SWITCH_REGISTRY "功能开关注册表" \
     "$PYTHON_BIN" scripts/ci/check-feature-switch-registry.py
+fi
+if ((env_governance_changed == 1)); then
+  gate_run PRE_COMMIT_ENV_VARIABLE_GOVERNANCE "环境变量治理" \
+    "$PYTHON_BIN" scripts/ci/check-env-variable-governance.py
 fi
 if ((maven_descriptor_changed == 1)); then
   gate_run PRE_COMMIT_DEPENDENCY_BOUNDARIES "Maven 模块依赖边界" \

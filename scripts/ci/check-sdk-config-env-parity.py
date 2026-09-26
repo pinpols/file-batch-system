@@ -8,6 +8,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+GATE_CODE = "SDK_CONFIG_ENV_PARITY"
+GATE_NAME = "SDK 配置环境一致性"
 REQUIRED_FACTORY_KEYS = {
     "BATCH_SDK_BASE_URL",
     "BATCH_SDK_TENANT_ID",
@@ -52,11 +54,11 @@ def main() -> int:
                 errors.append(f"{path.relative_to(ROOT)} uses legacy {token}")
 
     if errors:
-        print("❌ SDK configuration environment parity failed:")
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1")
         for error in errors:
             print(f"  - {error}")
         return 1
-    print("✅ SDK configuration environment parity passed")
+    print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME}")
     return 0
 
 

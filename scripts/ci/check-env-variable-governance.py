@@ -9,6 +9,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 DOC = ROOT / "docs/runbook/environment-variable-governance.md"
+GATE_CODE = "ENV_VARIABLE_GOVERNANCE"
+GATE_NAME = "环境变量治理"
 
 REQUIRED_PATHS = (
     ".env.example",
@@ -79,12 +81,12 @@ def main() -> int:
                 errors.append(f".env.example missing critical variable template: {variable}")
 
     if errors:
-        print("❌ environment variable governance validation failed:")
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1")
         for error in errors:
             print(f"  - {error}")
         return 1
 
-    print("✅ environment variable governance doc and critical entry points are aligned")
+    print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME}")
     return 0
 
 

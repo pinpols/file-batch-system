@@ -15,6 +15,8 @@ ROOT = Path(__file__).resolve().parents[2]
 BASELINE_FILE = ROOT / "scripts/ci/sql-inline-baseline.tsv"
 SCAN_ROOTS = (ROOT / "scripts", ROOT / "load-tests")
 EXCLUDED_FILES = {Path("scripts/ci/check-sql-config-boundaries.sh")}
+GATE_CODE = "SQL_CONFIG_BOUNDARIES"
+GATE_NAME = "SQL/配置边界"
 
 PSQL_COMMAND = re.compile(r"\bpsql\b[^#\n]*(?:^|\s)-[A-Za-z]*c(?:\s|$)", re.IGNORECASE)
 SQL_HEREDOC = re.compile(r"<<\s*['\"]?SQL['\"]?\s*$", re.IGNORECASE)
@@ -172,6 +174,7 @@ def check(inventory: dict[str, list[tuple[int, str]]], baseline: dict[str, int])
 
     if failed:
         print(
+            f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1\n"
             "\n不要在 Shell 脚本中新增内联 SQL，也不要提高历史基线。"
             "将 SQL 放入对应 sql 目录，并通过 psql -v 绑定值；"
             "只有确认不是可执行 SQL 的文本才可使用 sql-boundary: ignore 注释。",
@@ -180,7 +183,7 @@ def check(inventory: dict[str, list[tuple[int, str]]], baseline: dict[str, int])
         return 1
 
     total = sum(len(matches) for matches in inventory.values())
-    print(f"SQL/config boundary check passed (historical matches={total}, files={len(inventory)})")
+    print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME} | historical_matches={total} files={len(inventory)}")
     return 0
 
 
