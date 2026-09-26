@@ -7,6 +7,7 @@ import io.github.pinpols.batch.console.domain.notification.application.ConsoleAl
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertRoutingResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
+import io.github.pinpols.batch.console.shared.command.EnabledPatchRequest;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -60,17 +61,15 @@ public class ConsoleAlertRoutingController {
     return responseFactory.success(alertRoutingApplicationService.update(id, request));
   }
 
-  @PostMapping("/{id}/toggle")
+  @PatchMapping("/{id}/enabled")
   @AuditAction(
       action = "alertRouting.toggle",
       aggregateType = "alert_routing",
       aggregateId = "#id",
-      targetTenantParam = "#tenantId")
-  public CommonResponse<Void> toggle(
-      @PathVariable Long id,
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam("enabled") Boolean enabled) {
-    alertRoutingApplicationService.toggle(id, tenantId, enabled);
+      targetTenantParam = "#request.tenantId")
+  public CommonResponse<Void> setEnabled(
+      @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
+    alertRoutingApplicationService.toggle(id, request.getTenantId(), request.getEnabled());
     return responseFactory.success(null);
   }
 }

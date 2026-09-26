@@ -1,7 +1,7 @@
 # 后端交付上线 · 完整性就绪检查表(Go-Live Readiness)
 
 > 目标:把"已有的强测试覆盖"跑给上线看 + 补"上线特有、CI/sim 覆盖不到"的演练,逐维度签字。
-> 适用参数(本次):**目标量级 5–20 jobs/s**(逼近单机控制面瓶颈)、**RTO < 2h / RPO < 15min**(常规 PITR + 异步备库)。
+> 适用参数:**目标量级 5–20 jobs/s**(逼近单机控制面瓶颈)、**RTO ≤ 30min / RPO ≤ 5min**。灾备阈值统一以 [`backup-and-pitr.md` §1.4](backup-and-pitr.md#14-rto--rpo-slo量化目标) 为准；这是目标值，只有目标环境完成严格恢复演练后才能判定达标。
 > 维护:每次上线复用本表;改动验收门同步本文件。
 
 ## 0. 已验证的测试覆盖(2026-06 深审实查,**不需重做,需在 staging 跑给上线看**)
@@ -36,7 +36,7 @@
 
 ### C DR / 韧性演练(**真缺口,见`scripts/sim/dr-drill-fleet-crash.sh`**)
 - [ ] **全 worker 组崩溃"精确一次"演练**:跑载荷 → kill 整组 worker → 等 lease/task 超时回收 + 重投 → 重启 worker → 断言**终态精确一次**(无重复 outbox/side-effect、单一 SUCCESS、无 job_instance 复活)。脚本 + 验收 SQL 见下。
-- [ ] **PITR 恢复演练**(RTO<2h / RPO<15min):备份恢复到某时间点 → 断言已提交数据不丢(RPO)+ 恢复总耗时(RTO);流程见 §4。
+- [ ] **PITR 恢复演练**(RTO≤30min / RPO≤5min):备份恢复到某时间点 → 断言已提交数据不丢(RPO)+ 恢复总耗时(RTO);流程见 §4。
 - [ ] PG failover(主备切换)+ Kafka 短时不可用降级 + DLQ 重放
 
 ### D 安全签收
@@ -56,14 +56,14 @@
 - [ ] **回滚脚本演练**(迁移可逆 / 数据可回退)
 - [ ] 配置开关核对:bypass-mode、Citus(默认关)、读写分离仅 console-api
 
-## 4. PITR 恢复演练程序(RTO<2h / RPO<15min)
+## 4. PITR 恢复演练程序(RTO≤30min / RPO≤5min)
 1. 记录基线:`SELECT max(updated_at), count(*) FROM batch.job_instance;` + 当前 LSN / 备份时间戳。
 2. 持续写入一批已知 job(记录其 dedup_key 集合)。
 3. 选一个恢复目标时间点 T(在最后一次备份后、某批写入之间)。
 4. 从备份 + WAL 恢复到 T(记录开始/结束时间 → **RTO**)。
-5. 断言:T 之前已提交的 job **全部存在**(无丢失);T 之后的写入丢失量 ≤ RPO 窗口(< 15min)。
+5. 断言:T 之前已提交的 job **全部存在**(无丢失)。另记录故障时刻与目标环境实际可恢复点的时间差，确认 ≤5min；当前 `dr-drill-pitr.sh` 验证目标点前数据指纹和 RTO，不单独测量 WAL 归档滞后或最大 RPO。
 6. 断言一致性:`ArchiveSchemaDriftCheck` 启动通过、outbox 无悬挂、无 job_instance 处于不可达中间态。
-> 落地脚本:`scripts/sim/dr-drill-pitr.sh`(**备份工具无关**——演练逻辑/断言通用,实际恢复动作做成 `RESTORE_CMD` 钩子,你接 pgBackRest / WAL-G / 云托管 PIT(RDS/Aurora)均可)。它自动选 T0、快照 T0 前已提交集合(count + 指纹)、触发 `RESTORE_CMD` 计 RTO、断言 RPO(T0 前数据不丢)+ RTO ≤ 预算 + 恢复后无重复。仅在 DR/staging 跑。
+> 落地脚本:`scripts/sim/dr-drill-pitr.sh`(**备份工具无关**——演练逻辑/断言通用,实际恢复动作做成 `RESTORE_CMD` 钩子,你接 pgBackRest / WAL-G / 云托管 PIT(RDS/Aurora)均可)。它自动选 T0、快照 T0 前已提交集合(count + 指纹)、触发 `RESTORE_CMD` 计 RTO、断言目标点前数据不丢、RTO ≤ 预算及恢复后无重复；脚本不校验归档滞后，因此 ≤5min 的 RPO 还需结合 WAL/archive 监控与故障时刻记录单独验收。仅在 DR/staging 跑。
 
 ## 5. Go / No-Go 门
 | 门 | 判据 |

@@ -2,7 +2,7 @@
 
 > 适用：本仓库 `batch-platform` 根 Maven reactor。平台运行时固定 10 个逻辑模块（batch-common / batch-trigger / batch-orchestrator / batch-worker-{core,import,export,process,dispatch,atomic} / batch-console-api），Java SDK 三件套位于 `sdk/java/{core,spring,testkit}` 并纳入根 reactor。共享配置基线 `batch-defaults.yml` 位于 `batch-common/src/main/resources/`,详见 ADR-029 修订版。
 >
-> 维护规则：发布操作 = `scripts/ci/bump-version.sh <version>` + 通过 `scripts/ci/check-version-alignment.sh` + 前端 `npm run check:version <version>` + 打 git tag。Maven 版本入口在根 pom 单点 `<revision>`，所有根 reactor 模块共版（CI-friendly placeholder + flatten-maven-plugin）；前后端是独立仓库，必须使用同一个发布版本并分别通过门禁。
+> 维护规则：后端版本变更统一使用 `bash scripts/ci/bump-version.sh <version>`，再运行后端 `scripts/ci/check-version-alignment.sh` 和前端 `npm run check:version -- <version>`，通过后才能打 tag。版本同步行为以该脚本为准，不手工用 `sed` 修改版本落点。根 `pom.xml` 的 `<revision>` 是 Maven 版本入口；不要假定当前开发版本一定带 `-SNAPSHOT`，以工作树的 pom、根 `CHANGELOG.md` 和版本检查脚本输出为准。
 
 ## 0. 运行时硬性前提
 
@@ -73,7 +73,7 @@ V119 把 `job_execution_log` / `job_step_instance` 的 FK 改为 `ON DELETE CASC
 | `MAJOR` | `2.0.0` | 不向后兼容的破坏性改动（API 删字段 / 行为反向 / DB schema 不可逆） |
 | `MINOR` | `1.1.0` | 向后兼容的新功能（加字段 / 加端点 / 加 ADR backend） |
 | `PATCH` | `1.0.1` | 向后兼容的 bug fix（不加新功能） |
-| `-SNAPSHOT` | `1.2.0-SNAPSHOT` | 开发分支当前正在累积的下一版本 |
+| `-SNAPSHOT` | `X.Y.Z-SNAPSHOT` | 经批准开启预发布周期时使用的开发版本示例；不是当前默认版本 |
 | `-RC.N` | `1.1.0-RC.1` | 准发布候选（QA / 灰度验证用） |
 | `-M1` / `-alpha.1` / `-beta.1` | `1.1.0-M1` | 早期里程碑 / 内部预览（可选，本项目暂不强制） |
 
@@ -87,107 +87,107 @@ V119 把 `job_execution_log` / `job_step_instance` 的 FK 改为 `ON DELETE CASC
 ### 2.1 平时（开发期）
 
 ```bash
-# pom.xml 默认 <revision>1.2.0-SNAPSHOT</revision>，所有 build / IT 用此值。
+# 使用当前根 pom.xml 中的 <revision> 构建；不要在普通 PR 中单独改版本。
 mvn package -DskipTests
 mvn -pl batch-orchestrator -am test
 ```
 
-PR 合并到 main 不动版本号。`-SNAPSHOT` 状态会一直累积新功能 / 新 bug fix。
+PR 合并到 main 通常不改版本号。只有明确开启新的预发布周期时，才按版本策略切换到 `-SNAPSHOT`；正式版本分支保持正式版本号。
 
 ### 2.2 准备 release（拉 release 分支或直接 main）
 
-确认 main 测试全部通过 + 当前 `<revision>` 是 `X.Y.0-SNAPSHOT`，准备发 `X.Y.0`：
+确认当前 `<revision>`、`CHANGELOG.md` 和最近 GA tag 后，按已批准的版本计划确定发布号 `X.Y.Z`。若从预发布版本发布，使用以下统一版本工具：
 
 ```bash
-# 1) 统一升级版本落点：pom / load-tests / Helm / OpenAPI / SDK docs / CHANGELOG
-bash scripts/ci/bump-version.sh X.Y.0
+# 同步后端版本落点；GA 版本会更新 Chart / prod image tag 并补正式 Changelog 小节。
+bash scripts/ci/bump-version.sh X.Y.Z
 
 # 2) 验证
 scripts/ci/check-version-alignment.sh
 mvn -DskipTests clean package
 mvn test
 
-# 4) 提交 release commit
+# 提交 release commit
 git add pom.xml load-tests/pom.xml helm docs CHANGELOG.md scripts
-git commit -m "release: X.Y.0"
+git commit -m "release: X.Y.Z"
 
-# 5) 打 tag（annotated tag，描述发布内容）
-git tag -a vX.Y.0 -m "Release X.Y.0 — <一句话亮点>"
+# 打 tag（annotated tag，描述发布内容）
+git tag -a vX.Y.Z -m "Release X.Y.Z — <一句话亮点>"
 
-# 6) push
+# push
 git push origin main
-git push origin vX.Y.0
+git push origin vX.Y.Z
 ```
 
-### 2.3 立即 bump 下一开发版本
+### 2.3 开启下一开发版本（按需，不自动执行）
+
+正式版本发布后，主干默认保持正式版本号。只有版本规划明确开始新的预发布周期时，才运行版本工具设置下一开发版本；不需要为每次合并自动切成 `SNAPSHOT`。
 
 ```bash
-# 1) 决定下一版本号：
-#    - 大概率是 X.(Y+1).0-SNAPSHOT （新功能积累）
-#    - 准备发紧急 patch 时用 X.Y.1-SNAPSHOT
-sed -i '' 's|<revision>X.Y.0</revision>|<revision>X.(Y+1).0-SNAPSHOT</revision>|' pom.xml
-
-# 2) CHANGELOG.md 添加新的 [Unreleased] 段头
-
-# 3) 提交 + push
-git add pom.xml CHANGELOG.md
-git commit -m "chore: bump to X.(Y+1).0-SNAPSHOT for next dev cycle"
-git push origin main
+# 只有已批准开启下一预发布周期时执行；版本号由版本计划决定。
+bash scripts/ci/bump-version.sh X.Y.Z-SNAPSHOT
+bash scripts/ci/check-version-alignment.sh
 ```
 
 ## 3. Patch 发布 flow（hotfix）
 
-main 已经在 `1.2.0-SNAPSHOT`，但生产跑的是 `1.1.0`，需要给 1.1 系列发 `1.1.1` 紧急 fix：
+从当前生产 GA tag 建 hotfix 分支，版本号使用实际 hotfix 计划，不照抄下例：
 
 ```bash
-# 1) 从 v1.1.0 tag 拉 hotfix 分支
-git checkout -b hotfix/1.1.1 v1.1.0
+# 1) 从实际生产 GA tag 拉 hotfix 分支
+git switch -c hotfix/X.Y.Z vX.Y.P
 
-# 2) 改 revision 为 1.1.1-SNAPSHOT 进入开发
-sed -i '' 's|<revision>1.1.0</revision>|<revision>1.1.1-SNAPSHOT</revision>|' pom.xml
-git commit -am "chore: bump to 1.1.1-SNAPSHOT for hotfix"
+# 2) 按仓库策略设置 hotfix 预发布版本
+bash scripts/ci/bump-version.sh X.Y.Z-SNAPSHOT
+git add pom.xml load-tests/pom.xml docs/api docs/sdk CHANGELOG.md
+git commit -m "chore: prepare hotfix X.Y.Z"
 
 # 3) cherry-pick 必要的 fix commit（或在该分支直接修）
 git cherry-pick <fix-sha>
 
-# 4) 走 §2.2 release flow，tag v1.1.1
+# 4) 修复验收后设置 GA 版本、检查对齐并按 §2.2 发布
+bash scripts/ci/bump-version.sh X.Y.Z
+bash scripts/ci/check-version-alignment.sh
+git tag -a vX.Y.Z -m "Release X.Y.Z"
 
 # 5) 把 hotfix 反向合回 main（避免 main 漏掉 fix）
 git checkout main
-git merge hotfix/1.1.1 --no-ff
+git merge hotfix/X.Y.Z --no-ff
 # 或 cherry-pick 单 fix commit 到 main（不连版本号）
 ```
 
 ## 4. RC / 预览版本 flow
 
-发 `1.2.0-RC.1` 给 QA 验：
+按批准的发布计划确定 RC 版本号（以下 `X.Y.Z-RC.1` 为格式示例）：
 
 ```bash
-sed -i '' 's|<revision>1.2.0-SNAPSHOT</revision>|<revision>1.2.0-RC.1</revision>|' pom.xml
-git commit -am "release: 1.2.0-RC.1"
-git tag -a v1.2.0-RC.1 -m "Release Candidate 1 for 1.2.0"
+bash scripts/ci/bump-version.sh X.Y.Z-RC.1
+bash scripts/ci/check-version-alignment.sh
+git commit -am "release: X.Y.Z-RC.1"
+git tag -a vX.Y.Z-RC.1 -m "Release Candidate 1 for X.Y.Z"
 mvn -DskipTests deploy   # 发到 nexus 让 QA 拉
-git push origin main v1.2.0-RC.1
+git push origin main vX.Y.Z-RC.1
 
-# RC 验证完后回 SNAPSHOT 继续修，或直接发 GA
-sed -i '' 's|<revision>1.2.0-RC.1</revision>|<revision>1.2.0-SNAPSHOT</revision>|' pom.xml
-git commit -am "chore: back to 1.2.0-SNAPSHOT after RC.1"
+# RC 验证通过后，按 §2.2 设置对应 GA 版本；若需继续修复，则设置下一 RC/SNAPSHOT 版本。
+bash scripts/ci/bump-version.sh X.Y.Z
+bash scripts/ci/check-version-alignment.sh
 ```
 
-## 4.5. release-bump-checklist（每次 release 必改的版本入口）
+## 4.5. release-bump-checklist（版本落点与自动同步范围）
 
-`${revision}` 之外还有 4 处版本入口**不在主 reactor 联动**，发版时必须手工同步：
+后端版本落点由 `scripts/ci/bump-version.sh` 集中同步并由版本对齐门禁校验；不要逐个手工编辑：
 
 | 文件 | 字段 | 语义 | release 时何时改 |
 |---|---|---|---|
-| `pom.xml` `<revision>` | 根 reactor 单点 | 当前开发 / release 版本 | `scripts/ci/bump-version.sh` |
-| `load-tests/pom.xml` `<version>` | 独立模块（未入 reactor） | 跟主 reactor 一致（永远 = 当前 main 的 `${revision}`） | §2.2 步骤 1 同时改 |
-| `helm/batch-platform/Chart.yaml` `appVersion` | helm chart 默认 image tag | **= 上一次 GA**（不跟 SNAPSHOT，部署侧重稳定） | §2.2 步骤 4 之后，发了 `vX.Y.Z` 才改成 `X.Y.Z` |
-| `helm/values-prod.yaml` `image.tag` | 生产环境镜像 tag override | **= 当前生产部署版本** | 部署到生产时改（SRE 触发，不在代码 release flow 内强制） |
+| `pom.xml` `<revision>` | 根 reactor 单点 | 当前构建 / release 版本 | `bump-version.sh` |
+| `load-tests/pom.xml` `<version>` | 独立 Maven 构建 | 与后端版本对齐 | `bump-version.sh` + 对齐门禁 |
+| OpenAPI、SDK quickstart | 对外 API / SDK 文档版本 | 与后端版本对齐 | `bump-version.sh` + 对齐门禁 |
+| `helm/batch-platform/Chart.yaml` `appVersion` | Chart 默认应用版本 | GA 时同步至新发布版本；预发布版本不改 | `bump-version.sh` |
+| `helm/values-prod.yaml` `image.tag` | 生产 values 默认镜像 tag | GA 时由版本工具同步；实际部署时点仍由发布流程控制 | `bump-version.sh` |
 | `../batch-console/package.json` `version` | 前端应用版本 | **= 本次后端发布版本** | 前端仓库单独的 release PR 同步修改 |
 | `../batch-console/package-lock.json` root `version` | 前端锁文件根版本 | **= package.json version** | 与前端 `npm run check:version` 一起校验 |
 
-前端仓库不纳入本仓库的 Maven reactor，因此不把它的路径硬编码进后端 CI。发布前在两个仓库分别执行：
+前端仓库不纳入本仓库的 Maven reactor，需在配对仓库单独更新版本并检查：
 
 ```bash
 # backend
@@ -195,29 +195,12 @@ bash scripts/ci/check-version-alignment.sh
 
 # frontend, <version> 必须与 backend pom.xml <revision> 相同
 cd ../batch-console
-npm run check:version -- 1.0.0
+npm run check:version -- <version>
 ```
 
 前端 `check:version` 同时校验 `package.json` 与 `package-lock.json` 的根版本；传入期望版本时还会校验它与发布号一致。任何一个仓库未通过，都不得创建或移动 `v<version>` 发布 tag。
 
-**对应 sed 命令**（标准 release `X.Y.0`，§2.2 步骤 1 + 步骤 4 之间按顺序执行）：
-
-```bash
-# 1. 主 reactor + load-tests 同步（去 SNAPSHOT）
-sed -i '' 's|<revision>X.Y.0-SNAPSHOT</revision>|<revision>X.Y.0</revision>|' pom.xml
-sed -i '' 's|<version>X.Y.0-SNAPSHOT</version>|<version>X.Y.0</version>|' load-tests/pom.xml
-
-# ... mvn package / commit / tag vX.Y.0 / push 之后 ...
-
-# 2. helm Chart.appVersion 升级到刚发的 GA
-sed -i '' 's|appVersion: ".*"|appVersion: "X.Y.0"|' helm/batch-platform/Chart.yaml
-
-# 3. main 分支立即 bump 到下一开发版本
-sed -i '' 's|<revision>X.Y.0</revision>|<revision>X.(Y+1).0-SNAPSHOT</revision>|' pom.xml
-sed -i '' 's|<version>X.Y.0</version>|<version>X.(Y+1).0-SNAPSHOT</version>|' load-tests/pom.xml
-```
-
-`helm/values-prod.yaml` 的 `image.tag` 由 SRE 在发到生产时改，**不**在代码仓库 release flow 内强制（可能存在"代码 release 1.2.0 但暂不发到生产"的窗口）。
+GA 版本工具会同步 `Chart.yaml` 的 `appVersion` 和 `helm/values-prod.yaml` 的默认 `image.tag`；这只更新部署声明，不会自动触发生产部署。前端版本仍由前端仓库独立维护，并通过上述命令检查一致性。
 
 ## 5. Maven 命令速查
 
@@ -226,7 +209,7 @@ sed -i '' 's|<version>X.Y.0</version>|<version>X.(Y+1).0-SNAPSHOT</version>|' lo
 | 默认 build（用 pom 中 `<revision>`） | `mvn package -DskipTests` |
 | 临时覆盖 revision（不改 pom） | `mvn -Drevision=1.0.5 package` |
 | 发到 nexus / artifactory | `mvn -Drevision=X.Y.Z deploy` |
-| 干跑 IT（默认 SNAPSHOT 状态） | `mvn -pl batch-orchestrator -am test` |
+| 干跑 IT（使用根 pom 当前 revision） | `mvn -pl batch-orchestrator -am test` |
 
 `flatten-maven-plugin` 在 `install` / `deploy` 期会展开 `${revision}` 为字面量写入 pom，下游消费者拿到的是已展开的版本号 —— 不要绕过此插件。
 
@@ -269,7 +252,7 @@ Release 时把 `[Unreleased]` 改成 `[X.Y.Z] - YYYY-MM-DD`，再开新空 `[Unr
 - 否 + 加东西 → MINOR；
 - 否 + 改东西 → PATCH。
 
-## 9. 当前状态（2026-09-13）
+## 9. 当前状态（核查于 2026-09-27）
 
 - **GA 版本**：`v1.0.0`（当前唯一 Git release tag）。
 - **当前 Maven revision**：`1.0.0`。
@@ -285,7 +268,7 @@ A：CalVer 优势在"协调多 repo 多团队多组件兼容性"。本项目单 
 A：出现"外部 / 别的 repo 要 import 锁定本仓多模块的兼容版本组合"时。当前所有消费者都在本仓内，不需要。
 
 **Q：跨 SNAPSHOT 边界的本地构建怎么办？**
-A：本仓所有模块用 `${revision}`，统一 SNAPSHOT 不会有漂移。如果要消费本地 SNAPSHOT 工件（如下一开发周期的 batch-common-1.2.0-SNAPSHOT 给 IDE 别的项目引用），用 `mvn install` 把当前 SNAPSHOT 装到本地 ~/.m2 即可。
+A：本仓所有模块用 `${revision}`，并通过版本对齐门禁防漂移。只有当前版本策略明确使用 SNAPSHOT 时，才需用 `mvn install` 将本地工件（例如 `batch-common-X.Y.Z-SNAPSHOT`）安装到 `~/.m2` 供 IDE 或其他项目引用。
 
 **Q：v0.x 阶段怎么办？**
 A：本项目跳过 v0.x，直接 1.0.0 GA。后续遇到大重构再考虑 0.x 阶段（未来如果要从内部产品转开源 lib，可能会有这个需求）。

@@ -72,7 +72,9 @@
 | 领域 | 文档 |
 |---|---|
 | 上线与环境 | [上线就绪](./go-live-readiness.md)、[staging 执行](./go-live-staging-execution.md)、[环境边界](./environment-profile-boundaries.md)、[环境变量治理](./environment-variable-governance.md)、[发布](./releasing.md)、[数据库迁移](./db-migration-checklist.md) |
-| Trigger 与批量日 | [Trigger 运维](./trigger-operations.md)、[异步 launch 灰度](./trigger-async-launch-rollout.md)、[依赖感知 fire](./dependency-aware-fire.md)、[批量日门禁](./batch-day-gate-howto.md)、[事件到达](./event-driven-arrival.md) |
+| Trigger 与批量日 | [Trigger 运维](./trigger-operations.md)、[依赖感知 fire](./dependency-aware-fire.md)、[批量日门禁](./batch-day-gate-howto.md)、[事件到达](./event-driven-arrival.md) |
+
+已废止的异步 launch 灰度流程仅保留[迁移提示](./trigger-async-launch-rollout.md)和[历史存档](../archive/runbook/trigger-async-launch-rollout-2026-05-02.md)，不得作为当前操作依据。
 | 多租户与数据 | [RLS](./multi-tenant-rls.md)、[RLS 严格灰度](./multi-tenant-rls-strict-rollout.md)、[biz 路由](./biz-tenant-routing.md)、[PG session](./pg-session-tuning.md)、[分区运维](./pg-table-partitioning.md) |
 | Worker 与恢复 | [重任务容量与资源池](./heavy-workload-operations.md)、[Atomic 隔离](./atomic-worker-production-isolation.md)、[Worker 扩缩容边界](./k8s-worker-scaling-boundary.md)、[checkpoint](./platform-worker-checkpoint-howto.md)、[Dispatch 模板](./dispatch-adapter-template.md) |
 | 文件与对象存储 | [Filesystem](./object-storage-filesystem.md)、[S3 后端](./object-storage-s3-backends.md)、[控制总数对账](./control-total-reconciliation-howto.md) |

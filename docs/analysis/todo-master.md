@@ -1,6 +1,6 @@
 # TODO Master · 当前待办唯一索引
 
-> 核查日期：2026-09-24。本文只登记当前仍有效的事项；`docs/archive/` 的历史待办不计入本表。
+> 核查日期：2026-09-27。本文只登记当前仍有效的事项；`docs/archive/` 的历史待办不计入本表。
 > 状态分类、证据要求和归档规则见 [`../standards/document-governance.md`](../standards/document-governance.md)。
 
 > 本文早期的统计数字和日期快照可能已过期；后续以事项表、证据路径和最后核查日期为准，不以历史总数为准。
@@ -19,7 +19,7 @@
 | 🟡 **暂缓** | 已明确不立即实施，并记录触发条件和复审周期 |
 | ❌ **不做** | 明确超出系统边界或收益不足，仅保留决策理由 |
 
-### 当前核查边界（2026-09-24）
+### 当前核查边界（2026-09-27）
 
 以下事项仍可从现行文档确认存在，但不能仅凭历史计划宣称“代码未完成”：
 
@@ -29,7 +29,8 @@
 | 生产 PG/Kafka/Redis HA、PITR 和真实故障演练 | 🔒 外部阻塞 | [`ha-readiness.md`](../runbook/ha-readiness.md) |
 | 前端 dry-run、跨日 DAG、批次日 replay 页面 | ✅ 已完成 | 本表 §二 FE-1/2/3 |
 | CI dry-run guard、dry-run 审计与指标维度 | ✅ 已完成 | `DryRunGuardConventionTest`、`TAG_DRY_RUN` 及 worker/plugin 守护已落地 |
-| Quartz 彻底迁移、冷热分层、资源亲和 | 🟡 暂缓 | 对应 ADR 的触发条件 |
+| Quartz → Wheel 时间轮替换 | ❌ 不做（旧提案已撤销） | [ADR-033](../architecture/adr/ADR-033-quartz-to-wheel-scheduler.md)；当前继续使用 Quartz |
+| 冷热分层、资源亲和 | 🟡 暂缓 | 对应 ADR 的触发条件 |
 
 其余来源文档中的“未完成 / TODO / 缺口”必须按 [`document-governance.md`](../standards/document-governance.md) 复核后，才能加入当前待办。
 
@@ -39,7 +40,6 @@
 |---|---|---|
 | ADR-024 冷热分层 | [ADR-024](../architecture/adr/ADR-024-archive-tiering.md) §"实施触发条件" | 数据量 / 备份 / 监管阈值达 |
 | ADR-027 资源亲和 / 地理调度 | [ADR-027](../architecture/adr/ADR-027-resource-affinity.md) | K8s 自研调度需求出现 |
-| ADR-033 Quartz→Wheel 切换 | [ADR-033](../architecture/adr/ADR-033-quartz-to-wheel-scheduler.md) §3 | fire QPS > 500 万/天 / Quartz 归因事件 / DB 锁红线 / cron SLA |
 | ADR-022 v0.2 `*_history` 影子表 + OSS 对象锁 | [ADR-022](../architecture/adr/ADR-022-forensic-audit-bundle.md) status | 7 年保留合规要求触发 |
 | LIC-2 SBOM 嵌入 artifact | todo-master §H | 合规审计 / 客户 SBOM 要求 |
 
@@ -120,30 +120,21 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 
 > 状态：Stage 1 / 1.2 / 2 / 3 代码 ✅（`DefaultWorkflowNodeDispatchService.mergeNodeParams` 集成 `WorkflowParamResolver` + 4 worker `*StepExecutionAdapter` 填 `NODE_OUTPUTS`）。Stage 4 deferred — 现 seed 节点间 `mergeUpstreamPartitionOutputs` 自动透传 `fileId` 已够用，业务方设计跨节点参数串联时按 §10 文档配。
 
-### D. ADR-010 灰度 + 物删 · P0/P1（V6-D-2 / V6-D-3）
+### D. ADR-010 灰度 + 物删 · 已完成（历史记录）
 
-> 🔒 本节全部 7 项需 ops / staging / prod 配合，本地不能独立完成 — 见 §九
+> ADR-010 的异步 Kafka 路径已固化为唯一路径，灰度开关和同步 HTTP 适配器已删除。以下旧清单不再是待办或操作指引；当前架构以 [`ADR-010`](../architecture/adr/ADR-010-trigger-async-decoupling.md) 与 [`Trigger 运维手册`](../runbook/trigger-operations.md) 为准。
 
 | ID | 主题 | 来源 | 关联门禁 |
 |---|---|---|---|
-| **ADR10-S6-pre-1** | V80 migration 应用到目标环境 | trigger-async-launch-rollout:9 | 灰度前置 |
-| **ADR10-S6-pre-2** | Kafka topic `batch.trigger.launch.v1` 已创建 | trigger-async-launch-rollout:10 | 灰度前置 |
-| **ADR10-S6-pre-3** | orchestrator/trigger 镜像版本校验 | trigger-async-launch-rollout:11 | 灰度前置 |
-| **ADR10-S6-pre-4** | orchestrator consumer group 状态校验 | trigger-async-launch-rollout:12 | 灰度前置 |
-| **ADR10-S6-pre-5** | Prometheus 指标抓取验证 | trigger-async-launch-rollout:13 | 灰度前置 |
-| **ADR10-S6-rollout** | staging → canary → prod 按 SOP 执行 | hardening-backlog v6 | operational |
-| **ADR10-S7-removal** | 物理删除 `HttpOrchestratorTriggerAdapter` 及同步 HTTP 路径 | hardening-backlog v6 | 全量切稳定 1 minor 后 |
+| **ADR10-S6/S7** | 灰度、唯一异步路径及旧同步入口清理 | ADR-010 实施后记 | 已完成；不再执行旧灰度 SOP |
 
-> 代码线索：`HttpOrchestratorTriggerAdapter.java:27` 已带 `@Deprecated(since="ADR-010 Stage 6", forRemoval=true)`。
+> 注意：旧版本评估快照中的分阶段状态只用于还原历史，不应重新登记为当前待办。
 
-### E. Quartz → HashedWheelTimer 切换收尾 · 🟡 暂缓(2026-05-21 [ADR-033](../architecture/adr/ADR-033-quartz-to-wheel-scheduler.md) 立项)
+### E. Quartz → HashedWheelTimer · 已撤销（历史记录）
 
-> **整体状态:暂缓实施**。[ADR-033](../architecture/adr/ADR-033-quartz-to-wheel-scheduler.md) 决策成立但触发条件未达
-> (fire QPS 未到 1000 万/天拐点 + 近 12 月 0 起 Quartz 归因事件 + 机会成本 > DBA 分区/ADR-010 灰度)。
-> 触发实施的条件 4 项见 ADR-033 §3。每季度 review 一次满足度。
+> [ADR-033](../architecture/adr/ADR-033-quartz-to-wheel-scheduler.md) 已于 2026-07-23 标记 `Superseded`，Wheel 运行路径已移除，当前统一使用 Quartz。下表旧切换任务与阈值均已失效，不是待办；若未来重新评估，须基于新的容量证据另立决策。
 >
-> 现状:phase 1 默认值已切到 `wheel`(changelog 2026-04-26),Quartz 仍保留作 opt-in 回退。要彻底删 codepath 需以下验证齐全(暂缓):
-> 🔒 本节 7 项需 ops/DBA/BIZ/staging 配合(QZ-pre-1/3 · QZ-prep-3 · QZ-stage-1/2/3 · QZ-rollback-2),其余本地可做 — 见 §九
+> 以下仅保留原计划条目作为历史记录，不应执行或纳入当前待办。
 
 | ID | 主题 | 来源 |
 |---|---|---|
@@ -183,11 +174,11 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 
 5 项 checklist 嵌入 `.github/PULL_REQUEST_TEMPLATE.md` "涉及删除语义的接口" 段，reviewer PR-time 勾选即可。同模板顺带嵌 4 类常见 review checklist（console-api / 字典 / 方法参数 / i18n / 规范条款）。
 
-### G2. REST / Command API Toggle 语义治理 · P2 · 🟡 暂缓
+### G2. REST / Command API Toggle 语义治理 · P2 · ✅ 已完成
 
 | ID | 主题 | 来源 | 状态 |
 |---|---|---|---|
-| **API-TOGGLE-1** | 6 个 `POST .../toggle?enabled=` 接口命名与显式状态契约收敛 | [`../backlog/rest-command-api-toggle-governance-2026-09-26.md`](../backlog/rest-command-api-toggle-governance-2026-09-26.md) | 当前不是活 bug；现有接口已显式传 `enabled`，建议后续新增 `PATCH .../enabled` 兼容迁移 |
+| ~~**API-TOGGLE-1**~~ | 6 个 `POST .../toggle?enabled=` 接口命名与显式状态契约收敛 | [`../backlog/rest-command-api-toggle-governance-2026-09-26.md`](../backlog/rest-command-api-toggle-governance-2026-09-26.md) | ✅ 2026-09-27 统一改为 `PATCH .../enabled`，前端及测试已切换，旧接口已删除 |
 
 ### G3. 批量平台能力演进 · P0/P1/P2 · 🟡 待验收
 
@@ -225,7 +216,7 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 
 | ID | 主题 | 代码位置 | 备注 |
 |---|---|---|---|
-| **DEP-1** | `HttpOrchestratorTriggerAdapter` 物删 | batch-trigger:HttpOrchestratorTriggerAdapter.java:27 | 同 ADR10-S7-removal |
+| ~~**DEP-1**~~ | `HttpOrchestratorTriggerAdapter` 物删 | batch-trigger:HttpOrchestratorTriggerAdapter.java:27 | ✅ 已随 ADR-010 唯一异步路径落地完成；保留历史记录 |
 | ~~**DEP-2**~~ | `BatchSecurityProperties.testingOpen` 物删 | batch-common:BatchSecurityProperties.java:45,51 | ✅ 已完成；代码与配置键已物理删除，保留历史记录 |
 | ~~**DEP-3**~~ | `ConsoleAlertRoutingExcelController` 4 处旧端点物删 | batch-console-api | ✅ 2026-05-01 物删 + OpenAPI 同步 |
 | ~~**DEP-4**~~ | `ConsoleFileTemplateExcelController` 4 处旧端点物删 | batch-console-api | ✅ 同上 |
@@ -239,7 +230,7 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 
 ### L. 历史一次性失败修复 · P3 · ✅
 
-`HIST-1` 4 个 E2E ConditionTimeout 失败已修（2026-05-01 校验：`docs/testing/e2e-coverage.md:151` "全套 E2E 无已知失败"）。
+`HIST-1` 4 个 E2E ConditionTimeout 失败已修（2026-05-01 的历史记录；当时结论见已归档的 `docs/archive/testing/e2e-coverage-2026-05-03.md`，不代表当前 E2E 状态）。
 
 ### M. IPv6 Happy Eyeballs 渐进治理 · P1
 
@@ -383,21 +374,7 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 
 | ID | 主题 | 阻塞类型 | 卡在哪 |
 |---|---|---|---|
-| **ADR10-S6-pre-1** | V80 migration 应用到目标环境 | `[ops]` | 需在 staging / prod 跑 flyway，本地仓库只能确认 SQL 文件 |
-| **ADR10-S6-pre-2** | Kafka topic `batch.trigger.launch.v1` 创建 | `[ops]` | 需 staging / prod Kafka 集群操作 |
-| **ADR10-S6-pre-3** | orchestrator/trigger 镜像版本校验 | `[ops]` | 需 CD 系统拉取镜像 tag |
-| **ADR10-S6-pre-4** | orchestrator consumer group 状态校验 | `[staging]` | 需 staging Kafka 集群 |
-| **ADR10-S6-pre-5** | Prometheus 指标抓取验证 | `[staging]` | 需 staging Prometheus + 抓取目标 |
-| **ADR10-S6-rollout** | staging → canary → prod 灰度执行 | `[ops][staging][prod]` | 按 `trigger-async-launch-rollout.md` SOP，需真部署环境 |
-| **ADR10-S7-removal** | 物理删除 `HttpOrchestratorTriggerAdapter` | `[prod]` 灰度门禁 | 需 ADR10-S6 灰度全量切稳定 1 minor 后才能删 |
-| **DEP-1** | `HttpOrchestratorTriggerAdapter` 物删 | `[prod]` 灰度门禁 | 同上，本质同一项 |
-| **QZ-pre-1** | 业务方明确 cron 精度 SLA | `[BIZ]` | 需业务方答复"是否容忍 ±100ms 精度差异" |
-| **QZ-pre-3** | trigger_runtime_state schema DBA 评审 | `[DBA]` | 需 DBA 团队 review |
-| **QZ-prep-3** | 4 个 Quartz health metric 在 Grafana 显示 | `[staging]` | 需 staging Grafana 配 dashboard |
-| **QZ-stage-1** | Staging 环境跑 2 周无回归 | `[staging]` | 需 staging 真跑 + 观察期 |
-| **QZ-stage-2** | 生产灰度方案制定与验证 | `[ops][prod]` | 需运维制定灰度 SOP |
-| **QZ-stage-3** | 监控告警 3 项就位（QPS/lag/duplicate）| `[staging]` | 需 staging 监控 |
-| **QZ-rollback-2** | Quartz 数据迁回 SQL 验证 | `[staging]` | 需迁移演练环境（有真 Quartz QRTZ_* 表）|
+| **ADR10-S6/S7** | 异步路径灰度与同步入口清理 | — | 已完成；历史灰度步骤不再适用 |
 | **WK-up-1** | drain 接口能否发起并查询 claimed-tasks（完整验证）| `[staging]` | 本地可补 IT 模拟，完整端到端验证需 staging worker 集群 |
 | **WK-up-2** | 超时后 Orchestrator 接管确认（完整验证）| `[staging]` | 同上 |
 | **WK-up-3** | force-offline 紧急场景验证（完整验证）| `[staging]` | 同上 |

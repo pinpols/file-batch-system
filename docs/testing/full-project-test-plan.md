@@ -8,7 +8,7 @@
 ## 0. 测试分层建议（来自旧 full-project-full-project-test-plan.md）
 
 
-完整功能与整体测试实施计划见：`docs/testing/full-project-full-project-test-plan.md`
+完整功能与整体测试实施计划见：`docs/testing/full-project-test-plan.md`
 Phase 1 测试覆盖矩阵见：`docs/testing/phase-coverage.md`
 统一回归入口与门禁说明见：`docs/testing/release-gate.md`
 
@@ -161,12 +161,12 @@ Phase 2 P0 回归范围见：`docs/testing/phase-coverage.md`
 
 仓库内已具备以下基础资产，且其中大部分已落地完成：
 
-- 单元测试、集成测试、E2E 的分层策略文档：`docs/testing/full-project-full-project-test-plan.md`
-- 三条主链路与失败分支的 E2E 覆盖分析：`docs/testing/e2e-coverage.md`
+- 单元测试、集成测试、E2E 的分层策略文档：`docs/testing/full-project-test-plan.md`
+- 三条主链路与失败分支的历史 E2E 矩阵：`docs/archive/testing/e2e-coverage-2026-05-03.md`；当前覆盖盘点见 `docs/testing/coverage-gap-analysis.md`
 - 本地 E2E 执行脚本：`scripts/local/run-tests.sh --e2e`
 - 统一回归入口：`scripts/ci/run-full-regression.sh`
 - 门禁与 staging 说明：`docs/testing/release-gate.md`
-- 压测模块与容量基线文档：`load-tests/`、`docs/testing/load-test-capacity-baseline.md`
+- 压测模块与容量文档：`load-tests/`、[`load-test-report.md`](./load-test-report.md)、[`load-test-dimensions.md`](./load-test-dimensions.md)；真实环境数据须以带日期的验证报告为证
 - 本地巡检与自愈脚本：`scripts/ops/inspect-*.sh`、`scripts/ops/heal-*.sh`
 - Helm 生产部署产物：`helm/batch-platform/`
 - Phase 1 盘点矩阵：`docs/testing/phase-coverage.md`
@@ -249,10 +249,11 @@ Phase 2 P0 回归范围见：`docs/testing/phase-coverage.md`
 - 死信重放与人工补偿
 - 定时任务在多实例下的行为
 
-已完成的本地可执行项：
+当前已有的本地可执行项：
 
-- `docs/testing/failure-drill-report.md`
 - `scripts/ci/run-full-regression.sh --skip-default-tests --skip-it-suite --with-deploy-smoke`
+
+`docs/testing/failure-drill-report.md` 是计划中的报告路径，尚未创建；本地脚本存在不等于已经形成 staging 演练报告。
 
 未完成：
 
@@ -269,7 +270,7 @@ Phase 2 P0 回归范围见：`docs/testing/phase-coverage.md`
 - `ConsoleQuerySimulation`
 - `CapacityBaselineSimulation`
 
-并将结果回填到 `docs/testing/load-test-capacity-baseline.md`。
+并将结果写入带日期的验证报告；可参考 [`load-test-report.md`](./load-test-report.md) 的结构。`load-test-capacity-baseline.md` 是旧计划中的目标路径，当前不存在。
 
 ### 6. 部署、升级与回滚验证
 
@@ -356,7 +357,7 @@ Phase 2 的详细收敛内容已拆到 `docs/testing/phase-coverage.md`。
 
 交付物：
 
-- `docs/testing/failure-drill-report.md`
+- 目标报告路径 `docs/testing/failure-drill-report.md`（尚未创建，真实演练后形成）
 - 演练记录中的故障时间线
 - 恢复验证结果和残余风险清单
 - 必要时回填 `docs/testing/release-gate.md` 的边界说明
@@ -368,10 +369,11 @@ Phase 2 的详细收敛内容已拆到 `docs/testing/phase-coverage.md`。
 - `docs/testing/release-gate.md`
 - `docs/testing/phase-coverage.md`
 
-当前已完成的 Phase 3 本地可执行项：
+当前已完成的 Phase 3 本地执行入口：
 
-- `docs/testing/failure-drill-report.md`
 - `scripts/ci/run-full-regression.sh --skip-default-tests --skip-it-suite --with-deploy-smoke`
+
+本地执行入口不等于 staging 报告；目标环境演练留档尚未形成。
 
 说明：这部分已经落成，但真实 staging 故障注入与回滚观测仍需在目标环境执行，因此 Phase 3 仍然保留为“待完成”的 staging 门禁项。
 
@@ -387,7 +389,7 @@ Phase 2 的详细收敛内容已拆到 `docs/testing/phase-coverage.md`。
 
 交付物：
 
-- 更新 `docs/testing/load-test-capacity-baseline.md`
+- 真实环境验证后形成带日期的容量报告；旧目标路径 `docs/testing/load-test-capacity-baseline.md` 尚不存在
 
 当前状态：
 
@@ -402,7 +404,7 @@ Phase 2 的详细收敛内容已拆到 `docs/testing/phase-coverage.md`。
 
 交付物：
 
-- `docs/testing/deployment-verification-report.md`
+- 目标报告路径 `docs/testing/deployment-verification-report.md`（尚未创建，真实 staging 执行后形成）
 
 当前状态：
 
@@ -473,11 +475,10 @@ Phase 2 的详细收敛内容已拆到 `docs/testing/phase-coverage.md`。
 ## 最终交付物清单
 
 - 已完成：`phase-coverage.md`
-- 已完成：`full-project-full-project-test-plan.md` 的 Phase 2 节
-- 已完成（staging 留档待回填）：`failure-drill-report.md`
-- 已完成（staging 留档待回填）：`load-test-capacity-baseline.md`
-- 已完成（staging 留档待回填）：`deployment-verification-report.md`
-- 已完成：`release-gate.md`
+- 已完成：本计划的 Phase 2 范围整理（历史计划内容，不代表当前验证结论）
+- 待形成：真实 staging 故障演练报告（旧目标路径 `failure-drill-report.md` 尚不存在）
+- 待形成：真实 staging / prod-like 容量验证报告（旧目标路径 `load-test-capacity-baseline.md` 尚不存在）
+- 待形成：真实 staging 升级 / 回滚验证报告（目标路径 `deployment-verification-report.md` 尚不存在）
 - 已完成：`release-gate.md`
 - 已完成：统一执行脚本与流水线配置
 

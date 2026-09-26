@@ -7,6 +7,7 @@ import io.github.pinpols.batch.console.application.contract.request.config.Resou
 import io.github.pinpols.batch.console.application.contract.request.config.ResourceQueueUpdateRequest;
 import io.github.pinpols.batch.console.application.contract.response.config.ResourceQueueResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.command.EnabledPatchRequest;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -49,12 +50,10 @@ public class ConsoleResourceQueueController {
     return responseFactory.success(resourceQueueApplicationService.update(id, request));
   }
 
-  @PostMapping("/{id}/toggle")
-  public CommonResponse<Void> toggle(
-      @PathVariable Long id,
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam("enabled") Boolean enabled) {
-    resourceQueueApplicationService.toggle(id, tenantId, enabled);
+  @PatchMapping("/{id}/enabled")
+  public CommonResponse<Void> setEnabled(
+      @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
+    resourceQueueApplicationService.toggle(id, request.getTenantId(), request.getEnabled());
     return responseFactory.success(null);
   }
 }

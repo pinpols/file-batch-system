@@ -1,6 +1,7 @@
 # ADR-033: Quartz 调度器替换为时间轮(HashedWheelTimer)（已撤销）
 
 - 状态: **Superseded** (2026-07-23) — Wheel 能力不对等且双引擎维护成本过高，运行路径已移除
+- 本文定位:历史提案记录。除背景与撤销原因外，下文方案、阶段、阈值和验收条件均已失效，不构成当前设计或实施计划；当前调度实现以代码和 Trigger 运维手册为准。
 - 范围: `batch-trigger` 模块的调度引擎(当前 Quartz JDBC JobStore)
 - 影响: trigger 模块整体重写调度子系统 + DB schema 迁移(quartz_* 表 → 自管 `trigger_runtime_state`)+ 灰度切换 + 双引擎并行
 
@@ -44,7 +45,7 @@
 
 ## 2. 决策
 
-### 用 Netty HashedWheelTimer 替换 Quartz,跳过 Quartz 集群模式中间态
+### 历史提案:用 Netty HashedWheelTimer 替换 Quartz(已撤销)
 
 技术核心:
 
@@ -69,7 +70,7 @@
 
 ## 3. 暂缓实施的理由(2026-05-21)
 
-**本 ADR 状态为 Accepted(暂缓实施)**。决策本身成立,但**实施触发条件未达**:
+**历史状态(2026-05-21):Accepted(暂缓实施)**。该状态后来已被文首 `Superseded (2026-07-23)` 取代；以下触发条件仅记录当时提案，不再适用:
 
 1. **业务量未到拐点**:当前 fire QPS 远低于 1000 万/天,Quartz 在 P99 latency / DB lock contention / failover time 三项指标上都未呈现 degradation
 2. **没有生产事件归因 Quartz**:近 12 月 oncall 记录 0 起调度延迟 / 双 fire / failover 卡 30s 的事件

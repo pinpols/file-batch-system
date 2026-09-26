@@ -40,7 +40,7 @@
 - **现状**:应用侧告警、备份脚本骨架和恢复 runbook 已具备；生产 WAL 归档、独立故障域和真实 PITR 演练尚未落地，不能标记为生产已验收。
 - **① 运维件**:`pg_basebackup` 日 base + WAL 连续归档(`archive_command` 指独立故障域)+ `pg_dump` 两库逻辑导出;Citus 下每 worker 独立备份 + coordinator 元数据。
 - **② 应用侧**:✅ 备份新鲜度告警 `PostgresBackupStale`(`prometheus-batch-rules.yml`,gauge 缺失/>26h critical)已就位,等运维 push 指标。备份脚本骨架 `scripts/db/backup/pg-backup.sh`(base + 两库逻辑 dump + 可选 WAL 清理 + 新鲜度指标 push)已落地,等运维按 §1.3 cron 编排。
-- **SLO 目标**:**RTO ≤ 30min / RPO ≤ 5min**(依据 + 调紧路径见 `backup-and-pitr.md` §1.4)。RPO 由 WAL `archive_timeout=300` 封顶,RTO 由 base+WAL replay / `pg_restore -j4` 保证。
+- **SLO 目标**:**RTO ≤ 30min / RPO ≤ 5min**(统一目标与条件见 `backup-and-pitr.md` §1.4)。这是规划目标，不代表当前生产环境已达标；实际达标须以目标环境严格 PITR 演练结果为证。WAL `archive_timeout=300` 只是配置上限，不单独证明 RPO 已满足。
 - **验证**:**至少跑一次恢复演练**(逻辑全量 + PITR 到某时刻),记录并对 RTO 做 SLO 断言——`bash scripts/db/backup/dr-drill.sh`(默认 WARN,`--strict-rto` 超阈值硬 fail;`backup-and-pitr.md` §2)。**没演练过的备份=没有备份。**
 - **回滚**:N/A(本身是回退)。
 

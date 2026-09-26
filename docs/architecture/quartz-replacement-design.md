@@ -4,7 +4,7 @@
 
 > **配套文档**：[`quartz-replacement-evaluation.md`](./quartz-replacement-evaluation.md)（战略决策层:为什么换、何时换);本文档是战术实施层(怎么换的每一处问题)。
 >
-> **状态**：设计文档,实施前必读;阶段 1 启动后按本文档对应章节落代码 + 测试。
+> **历史状态**：本文方案已于 2026-07-23 撤销，Wheel 运行路径已移除，当前调度器统一使用 Quartz JDBC JobStore。以下内容只记录历史设计，不是实施指南；当前决策见 [`ADR-033`](./adr/ADR-033-quartz-to-wheel-scheduler.md)。
 >
 > **审视阶段**：经过外部 review 后的修订版,补齐了 5 项原方案低估的生产风险(fire 幂等强约束 / 滑动窗口去重 / 时间精度 SLA / failover 快速补偿 / 工程量校准)。
 

@@ -92,14 +92,14 @@
 | E2E 执行入口 | `scripts/local/run-tests.sh --e2e` + `scripts/ci/run-full-regression.sh` | 本地 E2E 与完整回归入口都已存在 | 可以承担本地和 CI/staging 两类场景 |
 | 巡检/自愈 | `inspect-*.sh`、`heal-*.sh` 已存在 | 偏运维辅助，不是测试报告 | 可作为 Phase 3 演练资产 |
 | 部署产物 | `helm/batch-platform/`、`helm/values-prod.yaml`、`scripts/ci/run-full-regression.sh --with-deploy-smoke` | 静态 deploy smoke 已自动化，live rollout/readiness 逻辑已具备 | 仍缺真实 staging 实跑与回滚验证 |
-| 部署验证 | `scripts/ci/run-full-regression.sh --with-deployment-verification`、`docs/testing/deployment-verification-report.md` | 升级 / 回滚执行链路已接入 | 仍缺真实 staging 留档和 `--atomic` 失败观测 |
+| 部署验证 | `scripts/ci/run-full-regression.sh --with-deployment-verification` | 升级 / 回滚执行入口已接入；本快照未附真实 staging 报告 | 真实 staging 留档和 `--atomic` 失败观测需查当前验证记录 |
 | 压测资产 | `JobLaunchSimulation`、`ConsoleQuerySimulation`、`CapacityBaselineSimulation` | 仅有脚本和空白基线表 | 仍缺实测数据和流水线接入 |
 | CI 工作流 | `.github/workflows/pr-gate.yml`、`.github/workflows/full-ci-gate.yml`、`.github/workflows/staging-gate.yml` 已存在；未发现 `.gitlab-ci.yml`、`Jenkinsfile` | 三层门禁已落地 | 下一步重点转为真实 staging 执行与回滚验证 |
-| 文档一致性 | 本轮已统一到 156 / 76 / 27 / 42 口径 | 以本文件、`full-project-full-project-test-plan.md`、`release-gate.md` 为主 | 后续新增测试时需同步更新 |
+| 文档一致性 | 历史核查时统一到 156 / 76 / 27 / 42 口径 | 以本历史矩阵、`full-project-test-plan.md`、`release-gate.md` 为参考 | 该数量口径不代表当前测试资产 |
 
 ## 说明
 
-本文件只保留覆盖盘点和缺口分布。具体执行顺序、阶段推进、已完成 / 未完成状态和后续输入清单见 `docs/testing/full-project-full-project-test-plan.md`。
+本文件保留阶段覆盖历史和缺口分布快照。测试策略见 [`full-project-test-plan.md`](./full-project-test-plan.md)，当前有效待办见 [`../analysis/todo-master.md`](../analysis/todo-master.md)。
 
 ---
 

@@ -8,6 +8,7 @@ import io.github.pinpols.batch.console.domain.workflow.application.contract.resp
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.PipelineDefinitionDetailResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
+import io.github.pinpols.batch.console.shared.command.EnabledPatchRequest;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import java.util.Map;
@@ -15,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -86,17 +88,15 @@ public class ConsolePipelineDefinitionController {
     return responseFactory.success(pipelineDefinitionService.update(id, request));
   }
 
-  @PostMapping("/{id}/toggle")
+  @PatchMapping("/{id}/enabled")
   @AuditAction(
       action = "pipelineDefinition.toggle",
       aggregateType = "pipeline_definition",
       aggregateId = "#id",
-      targetTenantParam = "#tenantId")
-  public CommonResponse<Void> toggle(
-      @PathVariable Long id,
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam("enabled") Boolean enabled) {
-    pipelineDefinitionService.toggle(id, tenantId, enabled);
+      targetTenantParam = "#request.tenantId")
+  public CommonResponse<Void> setEnabled(
+      @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
+    pipelineDefinitionService.toggle(id, request.getTenantId(), request.getEnabled());
     return responseFactory.success(null);
   }
 }
