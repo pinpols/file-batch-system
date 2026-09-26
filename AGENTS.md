@@ -31,6 +31,13 @@ Use the focused workflows under `.agents/skills/` when relevant:
 - `performance-validation`: load and capacity evidence.
 - `module-config-boundaries`: module ownership and configuration lifecycle.
 - `acceptance-validation`: local acceptance scope, execution evidence, and result reporting.
+- `ci-governance`: GitHub Actions, required checks, full gate, merge queue, and failed run cleanup.
+- `configuration-governance`: feature switches, environment variables, Helm/Compose alignment, dynamic config, and secret lifecycle.
+- `documentation-governance`: README, documentation indexes, changelog, archive/date policy, and documentation drift controls.
+- `frontend-backend-contract`: Console API, OpenAPI, generated frontend types, navigation, permissions, and import/export UX contracts.
+- `object-storage-governance`: object storage abstraction, S3-compatible providers, local filesystem storage, encryption, checksum, and `.chk` integrity contracts.
+- `sdk-contract-governance`: multi-language SDK protocol, conformance, transport lifecycle, versioning, and release validation.
+- `worker-pipeline-review`: five Worker types, dry-run, claim/report, lease, outbox, progress, and recovery behavior.
 
 Repository-specific commands and contracts remain authoritative over generic skill checklists.
 
