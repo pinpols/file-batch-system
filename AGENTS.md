@@ -38,6 +38,11 @@ Use the focused workflows under `.agents/skills/` when relevant:
 - `object-storage-governance`: object storage abstraction, S3-compatible providers, local filesystem storage, encryption, checksum, and `.chk` integrity contracts.
 - `sdk-contract-governance`: multi-language SDK protocol, conformance, transport lifecycle, versioning, and release validation.
 - `worker-pipeline-review`: five Worker types, dry-run, claim/report, lease, outbox, progress, and recovery behavior.
+- `security-scan-governance`: local security scan modes and verified PR/Full Gate coverage.
+- `scheduler-correctness`: Trigger timing, business calendars, misfires, readiness deferral, and pause/resume behavior.
+- `sql-query-performance`: evidence-led PostgreSQL query, index, pagination, and JSONB optimization.
+- `disaster-recovery-validation`: backup, PITR, RPO/RTO, and post-recovery business consistency drills.
+- `adversarial-system-review`: broad threat and failure-path reviews across system trust boundaries; use instead of ordinary diff review only for explicit or genuinely system-wide audits.
 
 Repository-specific commands and contracts remain authoritative over generic skill checklists.
 
