@@ -119,8 +119,8 @@ RAW_KEY=$(echo "$created" | grep -oE '"rawKey":"[^"]+"' | head -1 | sed 's/"rawK
 
 # ---- 3. 从当前源码干净构建 sample worker ----
 note "3. sample-tenant-worker jar"
-info "安装当前 reactor SDK,并清理示例旧依赖后重新打包..."
-(cd "$REPO_ROOT" && mvn -q -pl sdk/java/core -am install -DskipTests && \
+info "安装当前 reactor SDK testkit 及其依赖,并清理示例旧依赖后重新打包..."
+(cd "$REPO_ROOT" && mvn -q -pl sdk/java/testkit -am install -DskipTests && \
    mvn -q clean package -f examples/self-hosted-sdk/sample-tenant-worker-java/pom.xml -DskipTests) \
   && ok "构建完成($(basename "$JAR"))" || { bad "构建失败"; exit 1; }
 

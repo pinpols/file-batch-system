@@ -1,12 +1,12 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `0c2260411`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `dc70d3f3b`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,535 | 467,147 | 235,644 | 50.4% |
+| 4,536 | 467,186 | 235,662 | 50.4% |
 
 ## 按用途
 
@@ -14,7 +14,7 @@
 |---|---:|---:|---:|---:|
 | prod | 2,641 | 240,961 | 109,972 | 45.6% |
 | test | 1,160 | 166,928 | 88,751 | 53.2% |
-| script | 591 | 43,977 | 27,440 | 62.4% |
+| script | 592 | 44,016 | 27,458 | 62.4% |
 | config | 52 | 7,862 | 5,550 | 70.6% |
 | infra-config | 32 | 5,191 | 3,766 | 72.5% |
 | sql | 59 | 2,228 | 165 | 7.4% |
@@ -24,14 +24,14 @@
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
 | Java | 3,354 | 343,352 | 174,083 | 50.7% |
-| Shell | 181 | 27,383 | 21,128 | 77.2% |
-| Python | 205 | 27,394 | 13,826 | 50.5% |
+| Shell | 181 | 27,398 | 21,142 | 77.2% |
+| Python | 205 | 27,398 | 13,829 | 50.5% |
 | YAML | 95 | 12,045 | 9,004 | 74.8% |
 | XML | 169 | 20,598 | 6,374 | 30.9% |
 | TypeScript | 37 | 6,573 | 3,097 | 47.1% |
 | Rust | 22 | 8,456 | 2,856 | 33.8% |
 | Properties | 5 | 2,867 | 2,341 | 81.7% |
-| SQL | 426 | 11,193 | 1,439 | 12.9% |
+| SQL | 427 | 11,213 | 1,440 | 12.8% |
 | Go | 34 | 6,955 | 1,281 | 18.4% |
 | TOML | 7 | 331 | 215 | 65.0% |
 
@@ -63,7 +63,7 @@
 ## 复跑
 
 ```bash
-python3 scripts/dev/lean-loc-report.py --write docs/stats/loc-current-lean.md
+python3.12 scripts/dev/lean-loc-report.py --write docs/stats/loc-current-lean.md
 ```
 
 ## 注意

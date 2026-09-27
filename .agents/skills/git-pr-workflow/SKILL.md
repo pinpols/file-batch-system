@@ -24,7 +24,7 @@ description: 用户要求在特性分支交付代码、执行提交检查、创�
 1. 按变更域追踪调用方、授权与租户边界、事务、并发、幂等、迁移、脚本运行时和错误处理；按风险选择定向验证，不以全绿旧快照替代当前代码测试。
 2. Java 多模块测试使用 Maven Wrapper，并根据依赖闭包使用 `-am`；记录真实测试类、用例数及是否依赖 Testcontainers/Docker。
 3. 本地提交门禁：显式暂存拟交付文件，审查 `git diff --cached`，再运行 `bash scripts/local/pre-commit-checks.sh`；提交 hook 会按暂存文件域路由检查，并可能自动格式化或新增生成快照，执行后必须重新审查暂存差异。
-4. **Lean LOC 快照**：tracked 源码变化由 pre-commit 使用暂存树重生成 `docs/stats/loc-current-lean.md` 并自动暂存。手工复核可运行 `python3 scripts/ci/check-loc-snapshot.py`；不要用旧快照覆盖当前结果。
+4. **Lean LOC 快照**：tracked 源码变化由 pre-commit 使用暂存树重生成 `docs/stats/loc-current-lean.md` 并自动暂存。生成器要求 Python 3.12+；手工复核可运行 `python3.12 scripts/ci/check-loc-snapshot.py`。不要用旧快照覆盖当前结果。
 5. **Java 可读性清单**：pre-push 可能自动刷新 `docs/analysis/java-readability-inventory-2026-08-12.md` 并拒绝本次 push。若仅清单排序/行数按生成逻辑变化，审查后单独暂存并提交该生成物，再重试 push；不要用 `SKIP_SDK_CHECKS=1` 绕过。
 6. **Changelog**：有用户可见功能、重要缺陷/安全修复、生产配置、部署、迁移或外部契约影响时，按根 `CHANGELOG.md` 的 `[Unreleased]` 分类追加条目。只有 `docs/agent-baseline.md` 或 ADR/架构权威约束变化才更新 `docs/changelog.md`。提交后运行 `python3 scripts/ci/check-changelog-sync.py --base origin/main`。
 7. **Sonar**：先确认本地 Sonar 服务/凭据可用及 `origin/main` 已更新。按需运行 `bash scripts/dev/sonar-scan.sh --incremental --base-ref origin/main`；需要刷新覆盖率时添加 `--with-tests`。检查增量 issues、changed-lines 和 hotspots 报告，修复本次引入的问题。报告位于 `reports/sonar/<timestamp>/`，通常是本地产物，不要随意纳入 PR。仓库 `.github/workflows/sonar-gate.yml` 当前默认关闭；若结果为 skipped 或未配置，不得描述为 Sonar 通过。
