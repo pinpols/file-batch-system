@@ -26,7 +26,7 @@
 
 ### Changed
 
-- **Console 启停 REST 契约**：资源队列、批次窗口、业务日历、配额策略、告警路由和 Pipeline 定义统一改为 `PATCH /{id}/enabled`，通过请求体显式提交租户与目标状态；前端及测试已同步切换，旧 `POST /{id}/toggle` 已删除，权限、审计、幂等和持久化语义保持不变。
+- **Console 启停 REST 契约**：资源队列、批次窗口、业务日历、配额策略、告警路由和 Pipeline 定义新增 `PATCH /{id}/enabled`，通过请求体显式提交租户与目标状态；前端及测试已切换，旧 `POST /{id}/toggle` 暂保留为 deprecated 兼容入口，复用原权限、审计、幂等和持久化语义。
 - **SDK 与前端运行时及依赖治理**：Go SDK 最低版本升至 1.26，CI 覆盖 Go 1.26/1.27；Python 覆盖 3.12/3.14；TypeScript SDK 覆盖 Node 22/24；Rust、Go、Python SDK 锁文件依兼容范围刷新。前端默认构建运行时改为 Node 24，保留 Node 22 消费兼容，并增加声明与 CI 矩阵对齐门禁。
 
 - **Maven 依赖与构建工具版本核查**：升级 Spring Boot、Spring AI、MyBatis starter、AWS SDK、OkHttp、PostgreSQL JDBC、POI、Commons Compress 及同主版本依赖补丁；Resilience4j 2.4 切换至 Boot 4 专用模块。同步 Maven 插件、Gatling 与 ArchUnit 版本，修复 SFTP SPI 示例基线，并更新技术栈与许可证基线。

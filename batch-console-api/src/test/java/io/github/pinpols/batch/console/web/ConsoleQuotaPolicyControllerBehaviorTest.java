@@ -111,6 +111,16 @@ class ConsoleQuotaPolicyControllerBehaviorTest {
     verify(service).toggle(9L, "ta", true);
   }
 
+  @Test
+  void deprecatedToggleShouldRemainCompatible() throws Exception {
+    mockMvc
+        .perform(post("/api/console/quota-policies/9/toggle")
+            .param("tenantId", "ta")
+            .param("enabled", "true"))
+        .andExpect(status().isOk());
+    verify(service).toggle(9L, "ta", true);
+  }
+
   private static QuotaPolicyResponse policy(Long id, String policyCode) {
     return new QuotaPolicyResponse(id, "ta", policyCode, 10, 0, 100, 1, true, null, null, null);
   }

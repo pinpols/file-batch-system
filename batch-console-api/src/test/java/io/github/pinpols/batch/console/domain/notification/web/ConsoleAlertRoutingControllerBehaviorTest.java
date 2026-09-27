@@ -119,4 +119,14 @@ class ConsoleAlertRoutingControllerBehaviorTest {
         .andExpect(status().isOk());
     verify(service).toggle(9L, "ta", true);
   }
+
+  @Test
+  void deprecatedToggleShouldRemainCompatible() throws Exception {
+    mockMvc
+        .perform(post("/api/console/alert-routings/9/toggle")
+            .param("tenantId", "ta")
+            .param("enabled", "true"))
+        .andExpect(status().isOk());
+    verify(service).toggle(9L, "ta", true);
+  }
 }

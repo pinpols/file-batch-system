@@ -54,4 +54,14 @@ public class ConsoleQuotaPolicyController {
     quotaPolicyApplicationService.toggle(id, request.getTenantId(), request.getEnabled());
     return responseFactory.success(null);
   }
+
+  @Deprecated(since = "1.0.0")
+  @PostMapping("/{id}/toggle")
+  public CommonResponse<Void> toggle(
+      @PathVariable Long id,
+      @RequestParam("tenantId") String tenantId,
+      @RequestParam("enabled") Boolean enabled) {
+    quotaPolicyApplicationService.toggle(id, tenantId, enabled);
+    return responseFactory.success(null);
+  }
 }

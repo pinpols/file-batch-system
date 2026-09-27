@@ -132,4 +132,14 @@ class ConsoleBatchWindowControllerBehaviorTest {
         .andExpect(status().isOk());
     verify(service).toggle(9L, "ta", false);
   }
+
+  @Test
+  void deprecatedToggleShouldRemainCompatible() throws Exception {
+    mockMvc
+        .perform(post("/api/console/batch-windows/9/toggle")
+            .param("tenantId", "ta")
+            .param("enabled", "false"))
+        .andExpect(status().isOk());
+    verify(service).toggle(9L, "ta", false);
+  }
 }

@@ -1,7 +1,7 @@
 # REST / Command API Toggle 语义治理待办
 
 > **完成状态（2026-09-27）**：Phase 1/2/3 已完成。6 个资源统一改为 `PATCH .../{id}/enabled`，
-> 前端调用与测试已切换，旧 `POST .../{id}/toggle?enabled=` 已按明确要求删除。
+> 前端调用与测试已切换到显式状态接口；为保持 API 兼容，旧 `POST .../{id}/toggle?enabled=` 暂保留并标记 deprecated，待版本化弃用周期完成后再评估删除。
 
 ## 结论
 
@@ -20,12 +20,12 @@
 
 | 接口 | 当前语义 | 治理建议 |
 |---|---|---|
-| `POST /api/console/queues/{id}/toggle?enabled=` | 设置队列启停 | 已替换并删除 |
-| `POST /api/console/batch-windows/{id}/toggle?enabled=` | 设置批量窗口启停 | 已替换并删除 |
-| `POST /api/console/calendars/{id}/toggle?enabled=` | 设置日历启停 | 已替换并删除 |
-| `POST /api/console/quota-policies/{id}/toggle?enabled=` | 设置配额策略启停 | 已替换并删除 |
-| `POST /api/console/alert-routings/{id}/toggle?enabled=` | 设置告警路由启停 | 已替换并删除 |
-| `POST /api/console/pipeline-definitions/{id}/toggle?enabled=` | 设置 Pipeline 定义启停 | 已替换并删除 |
+| `POST /api/console/queues/{id}/toggle?enabled=` | 设置队列启停 | deprecated 兼容；推荐 `PATCH /{id}/enabled` |
+| `POST /api/console/batch-windows/{id}/toggle?enabled=` | 设置批量窗口启停 | deprecated 兼容；推荐 `PATCH /{id}/enabled` |
+| `POST /api/console/calendars/{id}/toggle?enabled=` | 设置日历启停 | deprecated 兼容；推荐 `PATCH /{id}/enabled` |
+| `POST /api/console/quota-policies/{id}/toggle?enabled=` | 设置配额策略启停 | deprecated 兼容；推荐 `PATCH /{id}/enabled` |
+| `POST /api/console/alert-routings/{id}/toggle?enabled=` | 设置告警路由启停 | deprecated 兼容；推荐 `PATCH /{id}/enabled` |
+| `POST /api/console/pipeline-definitions/{id}/toggle?enabled=` | 设置 Pipeline 定义启停 | deprecated 兼容；推荐 `PATCH /{id}/enabled` |
 
 已存在的正向样板：
 
@@ -75,7 +75,7 @@ PATCH /api/console/pipeline-definitions/{id}/enabled
 约束：
 
 - 新接口调用原 application service 方法，避免业务实现漂移。
-- 旧 `toggle` 接口从 Controller 和 OpenAPI 删除。
+- 旧 `toggle` 接口在 Controller 和 OpenAPI 标为 deprecated；只有经过弃用周期与调用方迁移确认后，才另行删除。
 
 ### Phase 2：前端切换
 
@@ -90,7 +90,7 @@ PATCH /api/console/pipeline-definitions/{id}/enabled
 
 ### Phase 3：旧接口退役（已完成）
 
-前端、测试和 OpenAPI 生成类型已同步切换，旧 Controller 与契约路径已删除。
+前端、测试和 OpenAPI 生成类型已同步切换到新接口；旧 Controller 与契约路径仍以 deprecated 兼容方式保留。
 
 ## 影响面
 
@@ -121,6 +121,6 @@ PATCH /api/console/pipeline-definitions/{id}/enabled
 
 - 新接口和旧接口对同一资源设置相同 `enabled` 值时结果一致。
 - 重复调用新接口不会改变目标状态以外的字段。
-- 旧接口不再出现在 Controller、OpenAPI 和生成类型中。
+- 新旧接口行为一致；旧接口在完成正式弃用周期前持续保留。
 - OpenAPI 生成类型更新，前端 `gen:api:check` 通过。
 - 前端启停开关页面回归通过。
