@@ -2,12 +2,14 @@ package io.github.pinpols.batch.common.file;
 
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.Locale;
+import lombok.Builder;
 
 /** 导出文件名解析器。Console 预览与 Worker 运行时必须共用此实现。 */
 public final class ExportFileNameResolver {
 
   private ExportFileNameResolver() {}
 
+  @Builder
   public record Input(
       String namingRule,
       String fileFormatType,

@@ -8,23 +8,28 @@ class ExportFileNameResolverTest {
 
   @Test
   void resolvesEverySupportedPlaceholder() {
-    String result = ExportFileNameResolver.resolve(new ExportFileNameResolver.Input(
-        "${bizType}_${bizDate}_${tenantId}_${batchNo}_${region}_${version}.csv",
-        "DELIMITED",
-        "SETTLEMENT",
-        "2026-09-27",
-        "tenant-a",
-        "B001",
-        "cn-east",
-        "v3"));
+    String result = ExportFileNameResolver.resolve(ExportFileNameResolver.Input.builder()
+        .namingRule("${bizType}_${bizDate}_${tenantId}_${batchNo}_${region}_${version}.csv")
+        .fileFormatType("DELIMITED")
+        .bizType("SETTLEMENT")
+        .bizDate("2026-09-27")
+        .tenantId("tenant-a")
+        .batchNo("B001")
+        .region("cn-east")
+        .version("v3")
+        .build());
 
     assertThat(result).isEqualTo("SETTLEMENT_2026-09-27_tenant-a_B001_cn-east_v3.csv");
   }
 
   @Test
   void fallsBackToRuntimeDefaultNameAndExtension() {
-    assertThat(ExportFileNameResolver.resolve(new ExportFileNameResolver.Input(
-            null, "EXCEL", "CUSTOMER", "2026-09-27", "tenant-a", null, null, null)))
+    assertThat(ExportFileNameResolver.resolve(ExportFileNameResolver.Input.builder()
+            .fileFormatType("EXCEL")
+            .bizType("CUSTOMER")
+            .bizDate("2026-09-27")
+            .tenantId("tenant-a")
+            .build()))
         .isEqualTo("CUSTOMER_2026-09-27_batch.xlsx");
   }
 }
