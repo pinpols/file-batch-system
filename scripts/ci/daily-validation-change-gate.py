@@ -6,7 +6,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -39,13 +39,52 @@ def report_gate_result(status: str, code: str, detail: str = "0") -> None:
     )
 
 
+def validation_day(now: datetime, event_name: str, schedule: str) -> date:
+    if event_name != "schedule" or not schedule:
+        return now.date()
+
+    fields = schedule.split()
+    if len(fields) != 5 or fields[2:] != ["*", "*", "*"]:
+        raise ValueError(f"Unsupported daily validation schedule: {schedule}")
+    scheduled_utc = datetime.combine(
+        now.date(), time(hour=int(fields[1]), minute=int(fields[0]), tzinfo=timezone.utc)
+    )
+    scheduled_local = scheduled_utc.astimezone(SHANGHAI)
+    if now < scheduled_local:
+        scheduled_local -= timedelta(days=1)
+    return scheduled_local.date()
+
+
 def main() -> int:
     today_text = os.environ.get("VALIDATION_DAY")
-    today = date.fromisoformat(today_text) if today_text else datetime.now(SHANGHAI).date()
+    now_text = os.environ.get("VALIDATION_NOW")
+    now = datetime.fromisoformat(now_text) if now_text else datetime.now(SHANGHAI)
+    if now.tzinfo is None:
+        raise ValueError("VALIDATION_NOW must include a timezone offset")
+    now = now.astimezone(SHANGHAI)
+    today = (
+        date.fromisoformat(today_text)
+        if today_text
+        else validation_day(
+            now,
+            os.environ.get("VALIDATION_EVENT", ""),
+            os.environ.get("VALIDATION_SCHEDULE", ""),
+        )
+    )
     start = datetime.combine(today, time.min, SHANGHAI).astimezone(timezone.utc)
+    end = start + timedelta(days=1)
     since = start.isoformat(timespec="seconds")
     result = subprocess.run(
-        ["git", "log", f"--since={since}", "--format=", "--name-only", "--no-renames", "HEAD"],
+        [
+            "git",
+            "log",
+            f"--since={since}",
+            f"--before={end.isoformat(timespec='seconds')}",
+            "--format=",
+            "--name-only",
+            "--no-renames",
+            "HEAD",
+        ],
         cwd=ROOT,
         check=True,
         capture_output=True,
@@ -62,19 +101,27 @@ def main() -> int:
     reason = (
         "手动触发并强制运行"
         if force
-        else (f"当天检测到 {len(code_paths)} 个代码/配置变更路径" if code_paths else "当天无代码/配置变更")
+        else (
+            f"验证日检测到 {len(code_paths)} 个代码/配置变更路径"
+            if code_paths
+            else "验证日无代码/配置变更"
+        )
     )
 
     output("should_run", "true" if should_run else "false")
     output("reason", reason)
-    print(f"北京时间日期：{today.isoformat()}；检查起点：{since}")
+    print(
+        f"验证日期（北京时间）：{today.isoformat()}；检查区间："
+        f"[{since}, {end.isoformat(timespec='seconds')})"
+    )
     print(f"判定依据：{reason}")
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with open(summary, "a", encoding="utf-8") as stream:
             stream.write(
-                f"## 每日仿真与严格验证\n\n- 北京日期：`{today.isoformat()}`\n"
-                f"- 检查起点：`{since}`\n- 判定依据：{reason}\n"
+                f"## 每日仿真与严格验证\n\n- 计划验证日：`{today.isoformat()}`\n"
+                f"- 检查区间：`[{since}, {end.isoformat(timespec='seconds')})`\n"
+                f"- 判定依据：{reason}\n"
             )
 
     if force:

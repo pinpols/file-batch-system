@@ -35,6 +35,8 @@ jobs:
         id: gate
         env:
           FORCE_VALIDATION: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
+          VALIDATION_EVENT: ${{ github.event_name }}
+          VALIDATION_SCHEDULE: ${{ github.event.schedule }}
         run: python3 scripts/ci/daily-validation-change-gate.py
 
   sim-and-strict:
