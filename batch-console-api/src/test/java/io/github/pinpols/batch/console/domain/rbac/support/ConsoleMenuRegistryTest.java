@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.rbac.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.console.config.ConsoleMenuProperties;
 import java.util.List;
@@ -40,6 +41,13 @@ class ConsoleMenuRegistryTest {
         .flatExtracting(ConsoleMenuRegistry.MenuGroup::children)
         .extracting(ConsoleMenuRegistry.MenuItem::path)
         .containsExactly("/self-service");
+  }
+
+  @Test
+  void shouldRejectLegacyRoleInMenuAuthorities() {
+    assertThatThrownBy(() -> registryWithItem("VIEWER", List.of("ROLE_USER"), "VIEWER"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("unsupported console roles");
   }
 
   private static ConsoleMenuRegistry registryWithItem(

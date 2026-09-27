@@ -31,7 +31,7 @@
 | **平台级**(跨租户) | `ROLE_ADMIN` | `ROLE_AUDITOR` |
 | **租户级**(本租户) | `ROLE_TENANT_ADMIN` | `ROLE_TENANT_USER` |
 
-`ROLE_USER` 保留为向后兼容常量,语义等同 `TENANT_USER`,新代码禁用。
+`ROLE_USER` 由 V213 一次性迁移为 `ROLE_TENANT_USER`，运行时、JWT、账号 API 和测试不再兼容。
 `ROLE_CONFIG_ADMIN` 合并升级为 `ROLE_ADMIN`(V149 迁移)。
 
 ### 角色能力
@@ -56,7 +56,7 @@
 
 - `ROLE_ADMIN` → `ADMIN`
 - `ROLE_TENANT_ADMIN` → `TENANT_ADMIN`
-- `ROLE_AUDITOR` / `ROLE_TENANT_USER` / `ROLE_USER` → `VIEWER`
+- `ROLE_AUDITOR` / `ROLE_TENANT_USER` → `VIEWER`
 
 权限能力不是严格的等级继承关系（例如 AUDITOR 可看审计配置，但 TENANT_USER 不可看）。菜单项可通过 `authorities` 精确列出允许的 Spring authority；配置后覆盖 `minRole`。分组未配置 `authorities` 时不再先按组 `minRole` 拦截，而是由过滤后是否仍有可见子项决定展示，避免父级配置遮蔽合法子路由。前端本地导航和路由 `meta.permissions` 使用同一角色集合，后端菜单仍是最终 allowlist。
 
@@ -81,6 +81,7 @@
 | BE @PreAuthorize | 36 个 controller / config:`ROLE_CONFIG_ADMIN` → `ROLE_TENANT_ADMIN` |
 | BE Service 守卫 | `ConsoleUserAccountService` 4 层守卫:`enforceTenantScope` / `assertSameTenantOrGlobal` / `enforceGrantableAuthorities` / `normalizeAuthorities` |
 | DB 迁移 | `V149__role_redesign_config_admin_upgrade.sql`:`ROLE_CONFIG_ADMIN` → `ROLE_ADMIN` |
+| 旧角色收口 | `V213__enforce_four_console_roles.sql`:`ROLE_USER` → `ROLE_TENANT_USER`，并增加四角色约束 |
 | i18n | `error.account.cross_tenant_denied` / `error.account.role_grant_denied` (zh/en) |
 | FE | `tenantAccess.ts` `canSwitchTenant` 收敛为 ADMIN+AUDITOR;`stores/auth.ts` `isTenantUser` 包括 TENANT_ADMIN;`UserAccountList.vue` ROLE_OPTIONS 按 `isPlatformAdmin` 过滤 |
 | 测试 | `ConsoleUserAccountServiceTest` 11 测试覆盖 4 层守卫;`tenantAccess.test.ts` 更新 |

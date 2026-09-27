@@ -180,6 +180,23 @@ class ConsoleAuthenticationFilterTest {
   }
 
   @Test
+  void filter_returns403WhenBypassHeaderContainsLegacyRole() throws Exception {
+    batchProperties.setBypassMode(true);
+    doNothing().when(responseWriter).write(any(), any(), any(), anyString());
+
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    request.addHeader(properties.getTenantHeader(), "t1");
+    request.addHeader(properties.getRoleHeader(), "ROLE_ADMIN,ROLE_USER");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    FilterChain chain = mock(FilterChain.class);
+
+    filter.doFilterInternal(request, response, chain);
+
+    verify(responseWriter).write(eq(response), eq(HttpStatus.FORBIDDEN), any(), anyString());
+    verify(chain, never()).doFilter(any(), any());
+  }
+
+  @Test
   void filter_passesThroughWhenTestingOpenAndNoToken() throws Exception {
     batchProperties.setBypassMode(true);
 
@@ -213,7 +230,7 @@ class ConsoleAuthenticationFilterTest {
     io.github.pinpols.batch.console.application.observability.SseTicketService.TicketPayload
         payload =
             new io.github.pinpols.batch.console.application.observability.SseTicketService
-                .TicketPayload("alice", "t1", Set.of("ROLE_USER"));
+                .TicketPayload("alice", "t1", Set.of("ROLE_TENANT_USER"));
     when(sseTicketService.validate("ticket-1")).thenReturn(payload);
 
     MockHttpServletRequest request = new MockHttpServletRequest();
@@ -232,6 +249,24 @@ class ConsoleAuthenticationFilterTest {
 
     verify(sseTicketService, times(1)).validate("ticket-1");
     verify(chain, times(2)).doFilter(request, response);
+  }
+
+  @Test
+  void filter_returns401WhenSseTicketContainsLegacyRole() throws Exception {
+    SseTicketService.TicketPayload payload =
+        new SseTicketService.TicketPayload("alice", "t1", Set.of("ROLE_USER"));
+    when(sseTicketService.validate("legacy-ticket")).thenReturn(payload);
+    doNothing().when(responseWriter).write(any(), any(), any(), anyString());
+
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    request.setParameter("ticket", "legacy-ticket");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    FilterChain chain = mock(FilterChain.class);
+
+    filter.doFilterInternal(request, response, chain);
+
+    verify(responseWriter).write(eq(response), eq(HttpStatus.UNAUTHORIZED), any(), anyString());
+    verify(chain, never()).doFilter(any(), any());
   }
 
   @Test

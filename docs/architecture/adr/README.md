@@ -39,7 +39,7 @@
 | 029 | [ADR-029-dedicated-spi-worker.md](./ADR-029-dedicated-spi-worker.md)                      | 专用 SPI worker(atomic 隔离执行)。注:ADR-029 编号有两篇(共享配置模块 + 专用 SPI worker),历史原因占用同一编号,文件名不重命名以免断链 |
 | 030 | [ADR-030-content-verifier-spi.md](./ADR-030-content-verifier-spi.md)                     | 产物内容验收 SPI：`ContentVerifier` + `ContentVerifierRegistry` + Micrometer Timer/Counter；首发实现 ExportFileNonEmptyVerifier；stage hot path 接入由后续 PR 按需做（Accepted）   |
 | 031 | [ADR-031-dual-track-pagination.md](./ADR-031-dual-track-pagination.md)                   | 双轨分页：列表用 offset 分页(可跳页),大数据导出 / 深翻用 cursor(keyset)分页,二者并存按场景选（Accepted） |
-| 032 | [ADR-032-four-role-rbac-redesign.md](./ADR-032-four-role-rbac-redesign.md)               | 控制台 4 角色 RBAC 重设计:平台 vs 租户 × 写 vs 只读 二维矩阵(`ROLE_ADMIN`/`ROLE_AUDITOR`/`ROLE_TENANT_ADMIN`/`ROLE_TENANT_USER`);`ROLE_USER` 保留为兼容常量,新代码禁用（Accepted） |
+| 032 | [ADR-032-four-role-rbac-redesign.md](./ADR-032-four-role-rbac-redesign.md)               | 控制台 4 角色 RBAC 重设计:平台 vs 租户 × 写 vs 只读 二维矩阵(`ROLE_ADMIN`/`ROLE_AUDITOR`/`ROLE_TENANT_ADMIN`/`ROLE_TENANT_USER`)；旧角色仅在迁移中转换，运行时不兼容（Accepted） |
 | 033 | [ADR-033-quartz-to-wheel-scheduler.md](./ADR-033-quartz-to-wheel-scheduler.md)           | Quartz 替换为时间轮方案（Superseded，运行路径已移除） |
 | 034 | [ADR-034-cap-positioning.md](./ADR-034-cap-positioning.md)                               | CAP 定位:核心调度链路 = **CP**(任务 CLAIM / 状态机 / outbox / RBAC / 租户 / 审批必须强一致,牺牲可用),只读 / 观测层 = **AP**(Dashboard / trigger list 等走 `DownstreamFallback` 降级,允许 stale)。例外 + 落地机制 + 何时升级见 ADR(Accepted) |
 | 035 | [ADR-035-tenant-self-hosted-worker-sdk.md](./ADR-035-tenant-self-hosted-worker-sdk.md)   | 平台定位收敛为「纯调度面」,租户 worker 走 `batch-worker-sdk` 自托管:调度面(trigger/orchestrator/console)+ 平台内建 worker 代运维,租户进程引 SDK 只经 HTTP + Kafka 接调度（Accepted） |

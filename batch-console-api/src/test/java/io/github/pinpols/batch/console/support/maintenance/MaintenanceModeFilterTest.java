@@ -104,12 +104,12 @@ class MaintenanceModeFilterTest {
 
   @Test
   void nonAdminBlockedEvenWithAuthenticationDuringMaintenance() throws Exception {
-    // 普通登录用户(ROLE_VIEWER 等非 ADMIN)维护期仍被 503;防止 admin 判定逻辑放宽到任何 authority。
+    // 普通租户用户(非 ADMIN)维护期仍被 503;防止 admin 判定逻辑放宽到任何 authority。
     properties.setEnabled(true);
     refresh();
     SecurityContextHolder.getContext()
         .setAuthentication(new UsernamePasswordAuthenticationToken(
-            "viewer", null, java.util.List.of(new SimpleGrantedAuthority("ROLE_VIEWER"))));
+            "viewer", null, java.util.List.of(new SimpleGrantedAuthority("ROLE_TENANT_USER"))));
 
     filter.doFilterInternal(get("/api/console/jobs"), response, chain);
 

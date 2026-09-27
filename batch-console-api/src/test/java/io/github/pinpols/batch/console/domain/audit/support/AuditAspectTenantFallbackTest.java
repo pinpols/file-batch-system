@@ -94,7 +94,8 @@ class AuditAspectTenantFallbackTest {
 
   @Test
   void shouldUsePrincipalTenantWhenPresent() throws Throwable {
-    ConsolePrincipal principal = new ConsolePrincipal("alice", "tenant-a", Set.of("ROLE_OPERATOR"));
+    ConsolePrincipal principal =
+        new ConsolePrincipal("alice", "tenant-a", Set.of("ROLE_TENANT_USER"));
     SecurityContextHolder.getContext()
         .setAuthentication(new UsernamePasswordAuthenticationToken(principal, null, List.of()));
     MDC.put("tenant", "should-not-be-used");
@@ -129,7 +130,7 @@ class AuditAspectTenantFallbackTest {
   void shouldStillFallbackWhenTargetTenantParamResolvesToNull() throws Throwable {
     // targetTenantParam=#tenantId 但入参传 null → 必须继续 principal → MDC → "system" 回退链
     ConsolePrincipal principal =
-        new ConsolePrincipal("operator", "tenant-a", Set.of("ROLE_TENANT_OPERATOR"));
+        new ConsolePrincipal("operator", "tenant-a", Set.of("ROLE_TENANT_ADMIN"));
     SecurityContextHolder.getContext()
         .setAuthentication(new UsernamePasswordAuthenticationToken(principal, null, List.of()));
 

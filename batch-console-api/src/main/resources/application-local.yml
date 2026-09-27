@@ -50,8 +50,6 @@ batch:
       allowed-tenants: []
       default-authorities:
       - ROLE_ADMIN
-      - ROLE_AUDITOR
-      - ROLE_CONFIG_ADMIN
       # 本地/测试环境关掉单点登录,允许 e2e harness 共享 storageState (BE-ISSUE-3)。
       # 生产由 application.yml 的环境变量 BATCH_CONSOLE_SINGLE_SESSION_ENABLED 控制,默认仍 true。
       single-session-enabled: false

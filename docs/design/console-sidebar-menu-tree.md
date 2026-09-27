@@ -145,7 +145,7 @@
 | `ROLE_TENANT_ADMIN` | 配置与运维管理员 |
 | `ROLE_AUDITOR` | 只读审计 |
 | `ROLE_TENANT_USER` | 租户业务用户 |
-| `ROLE_USER` | 默认最低权限 |
+| `ROLE_TENANT_USER` | 租户内只读与受控自助权限 |
 
 多角色用逗号分隔，例如 `ROLE_TENANT_ADMIN,ROLE_AUDITOR`。
 
@@ -200,4 +200,3 @@
   - `ROLE_TENANT_ADMIN` 负责配置和运维类常规写操作
   - `ROLE_AUDITOR` 只读
   - `ROLE_TENANT_USER` 可查看状态和触发作业，不可修改配置或执行运维操作
-

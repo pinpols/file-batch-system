@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.rbac.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -8,6 +9,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.config.ConsoleMenuProperties;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
@@ -144,7 +146,7 @@ class ConsoleAuthApplicationServiceTest {
   @Test
   void profile_fallsBackToDefaultTenantWhenMetadataEmpty() {
     UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-        "user", "creds", List.of(new SimpleGrantedAuthority("ROLE_USER")));
+        "user", "creds", List.of(new SimpleGrantedAuthority("ROLE_TENANT_USER")));
     when(requestMetadataResolver.current())
         .thenReturn(new ConsoleRequestMetadata("req-1", "tr-1", null, null, null, "127.0.0.1"));
 
@@ -154,16 +156,24 @@ class ConsoleAuthApplicationServiceTest {
   }
 
   @Test
-  void profile_usesDefaultAuthoritiesWhenGrantedContainsOnlyRoleUser() {
+  void profile_keepsTenantUserAuthority() {
     UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-        "user", "creds", List.of(new SimpleGrantedAuthority("ROLE_USER")));
+        "user", "creds", List.of(new SimpleGrantedAuthority("ROLE_TENANT_USER")));
     when(requestMetadataResolver.current())
         .thenReturn(new ConsoleRequestMetadata("req-1", "tr-1", null, null, null, "127.0.0.1"));
 
     ConsoleAuthProfileResponse response = service.profile(auth);
 
-    assertThat(response.authorities())
-        .containsExactlyElementsOf(securityProperties.getDefaultAuthorities());
+    assertThat(response.authorities()).containsExactly("ROLE_TENANT_USER");
+  }
+
+  @Test
+  void profile_rejectsLegacyAuthority() {
+    ConsolePrincipal principal = new ConsolePrincipal("legacy", "t1", Set.of("ROLE_USER"));
+    UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+        principal, "creds", List.of(new SimpleGrantedAuthority("ROLE_USER")));
+
+    assertThatThrownBy(() -> service.profile(auth)).isInstanceOf(BizException.class);
   }
 
   @Test

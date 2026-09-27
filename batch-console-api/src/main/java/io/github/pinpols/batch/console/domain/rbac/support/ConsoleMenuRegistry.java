@@ -22,7 +22,7 @@ import org.springframework.stereotype.Component;
  * <ul>
  *   <li>{@code ROLE_ADMIN} → ADMIN(看全部)
  *   <li>{@code ROLE_TENANT_ADMIN} → TENANT_ADMIN(本租户配置 + 业务)
- *   <li>{@code ROLE_AUDITOR} / {@code ROLE_TENANT_USER} / {@code ROLE_USER} → VIEWER(只读)
+ *   <li>{@code ROLE_AUDITOR} / {@code ROLE_TENANT_USER} → VIEWER(只读)
  * </ul>
  *
  * <p>分组默认由过滤后仍有可见子项决定是否展示，避免分组等级误伤非单调角色（例如 AUDITOR）。只有分组显式配置
@@ -33,9 +33,9 @@ import org.springframework.stereotype.Component;
 public class ConsoleMenuRegistry {
 
   // 菜单项 minRole 字段值;层级:VIEWER < TENANT_ADMIN < ADMIN。
-  private static final String ROLE_VIEWER = "VIEWER";
-  private static final String ROLE_OPERATOR = "TENANT_ADMIN";
-  private static final String ROLE_ADMIN = "ADMIN";
+  private static final String ACCESS_VIEWER = "VIEWER";
+  private static final String ACCESS_TENANT_ADMIN = "TENANT_ADMIN";
+  private static final String ACCESS_ADMIN = "ADMIN";
 
   public record MenuItem(String title, String path, String icon, String minRole) {}
 
@@ -93,17 +93,21 @@ public class ConsoleMenuRegistry {
   }
 
   private static String normalizeRole(String role) {
-    return EmptyChecks.isNull(role) ? ROLE_ADMIN : role.trim().toUpperCase(Locale.ROOT);
+    return EmptyChecks.isNull(role) ? ACCESS_ADMIN : role.trim().toUpperCase(Locale.ROOT);
   }
 
   private static Set<String> normalizeAuthorities(List<String> authorities) {
     if (EmptyChecks.isEmpty(authorities)) {
       return Set.of();
     }
-    return authorities.stream()
+    Set<String> normalized = authorities.stream()
         .filter(EmptyChecks::isNotBlank)
         .map(authority -> authority.trim().toUpperCase(Locale.ROOT))
         .collect(Collectors.toUnmodifiableSet());
+    if (!ConsoleRoles.ALL.containsAll(normalized)) {
+      throw new IllegalArgumentException("menu authorities contain unsupported console roles");
+    }
+    return normalized;
   }
 
   private static boolean isAllowed(
@@ -123,19 +127,19 @@ public class ConsoleMenuRegistry {
 
   private static String resolveRole(Set<String> authorities) {
     if (authorities.contains("ROLE_ADMIN")) {
-      return ROLE_ADMIN;
+      return ACCESS_ADMIN;
     }
     if (authorities.contains("ROLE_TENANT_ADMIN")) {
-      return ROLE_OPERATOR;
+      return ACCESS_TENANT_ADMIN;
     }
-    return ROLE_VIEWER;
+    return ACCESS_VIEWER;
   }
 
   private static int roleLevel(String role) {
     return switch (role) {
-      case ROLE_ADMIN -> 2;
-      case ROLE_OPERATOR -> 1;
-      case ROLE_VIEWER -> 0;
+      case ACCESS_ADMIN -> 2;
+      case ACCESS_TENANT_ADMIN -> 1;
+      case ACCESS_VIEWER -> 0;
       // 未知 minRole(yml 笔误)fail-secure:按 ADMIN 处理,只对 admin 可见,不误放开低权角色。
       default -> 2;
     };

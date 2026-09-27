@@ -1,20 +1,20 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `2d90d0168`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `a7b88bf5b`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,537 | 467,458 | 235,879 | 50.5% |
+| 4,538 | 467,641 | 235,997 | 50.5% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| prod | 2,641 | 241,006 | 110,000 | 45.6% |
-| test | 1,160 | 166,940 | 88,759 | 53.2% |
-| script | 593 | 44,166 | 27,585 | 62.5% |
+| prod | 2,641 | 241,044 | 110,036 | 45.6% |
+| test | 1,161 | 167,088 | 88,843 | 53.2% |
+| script | 593 | 44,163 | 27,583 | 62.5% |
 | config | 52 | 7,927 | 5,604 | 70.7% |
 | infra-config | 32 | 5,191 | 3,766 | 72.5% |
 | sql | 59 | 2,228 | 165 | 7.4% |
@@ -23,14 +23,14 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,354 | 343,409 | 174,119 | 50.7% |
-| Shell | 182 | 27,522 | 21,253 | 77.2% |
+| Java | 3,355 | 343,595 | 174,239 | 50.7% |
+| Shell | 182 | 27,519 | 21,251 | 77.2% |
 | Python | 205 | 27,424 | 13,845 | 50.5% |
-| YAML | 95 | 12,045 | 9,004 | 74.8% |
+| YAML | 95 | 12,041 | 9,000 | 74.7% |
 | XML | 169 | 20,663 | 6,428 | 31.1% |
 | TypeScript | 37 | 6,573 | 3,097 | 47.1% |
 | Rust | 22 | 8,456 | 2,856 | 33.8% |
-| Properties | 5 | 2,867 | 2,341 | 81.7% |
+| Properties | 5 | 2,871 | 2,345 | 81.7% |
 | SQL | 427 | 11,213 | 1,440 | 12.8% |
 | Go | 34 | 6,955 | 1,281 | 18.4% |
 | TOML | 7 | 331 | 215 | 65.0% |
@@ -40,8 +40,8 @@
 | File | Group | Language | Physical LOC | Lean logical LOC |
 |---|---|---|---:|---:|
 | `load-tests/scripts/run-p2-capacity-profile.sh` | script | Shell | 1,385 | 1,264 |
-| `batch-common/src/main/resources/messages.properties` | prod | Properties | 1,423 | 1,170 |
-| `batch-common/src/main/resources/messages_zh_CN.properties` | prod | Properties | 1,421 | 1,170 |
+| `batch-common/src/main/resources/messages.properties` | prod | Properties | 1,425 | 1,172 |
+| `batch-common/src/main/resources/messages_zh_CN.properties` | prod | Properties | 1,423 | 1,172 |
 | `deploy/docker/observability/prometheus-batch-rules.yml` | config | YAML | 1,161 | 966 |
 | `helm/batch-platform/files/prometheus-batch-rules.yml` | infra-config | YAML | 1,161 | 966 |
 | `load-tests/scripts/run-control-plane-worker-benchmark.sh` | script | Shell | 792 | 714 |

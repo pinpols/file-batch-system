@@ -53,17 +53,13 @@ class ConsoleLoginServiceTest {
             "admin",
             "Console Admin",
             ConsolePasswordHasherTest.SEED_ARGON2_ADMIN123,
-            Set.of("ROLE_ADMIN", "ROLE_AUDITOR", "ROLE_CONFIG_ADMIN"),
+            Set.of("ROLE_ADMIN"),
             true,
             false)));
     when(passwordHasher.matches("admin123", ConsolePasswordHasherTest.SEED_ARGON2_ADMIN123))
         .thenReturn(true);
     when(sessionRegistry.nextSessionVersion("admin", "default-tenant")).thenReturn(7L);
-    when(jwtService.issueToken(
-            "admin",
-            "default-tenant",
-            Set.of("ROLE_ADMIN", "ROLE_AUDITOR", "ROLE_CONFIG_ADMIN"),
-            7L))
+    when(jwtService.issueToken("admin", "default-tenant", Set.of("ROLE_ADMIN"), 7L))
         .thenReturn(new ConsoleAuthTokenResponse(
             "jwt",
             "Bearer",
@@ -71,7 +67,7 @@ class ConsoleLoginServiceTest {
             Instant.parse("2026-04-05T08:00:00Z"),
             "admin",
             "default-tenant",
-            Set.of("ROLE_ADMIN", "ROLE_AUDITOR", "ROLE_CONFIG_ADMIN"),
+            Set.of("ROLE_ADMIN"),
             false));
 
     var response = loginService.login(request);

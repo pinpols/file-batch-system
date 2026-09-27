@@ -13,6 +13,24 @@ import org.junit.jupiter.api.Test;
 class ConsoleSecurityPropertiesTest {
 
   @Test
+  void defaultAuthorities_fourFormalRolesAreAccepted() {
+    ConsoleSecurityProperties p = new ConsoleSecurityProperties();
+    p.setDefaultAuthorities(List.of("ROLE_ADMIN", "ROLE_AUDITOR"));
+
+    p.validateDefaultAuthorities();
+  }
+
+  @Test
+  void defaultAuthorities_legacyRoleIsRejected() {
+    ConsoleSecurityProperties p = new ConsoleSecurityProperties();
+    p.setDefaultAuthorities(List.of("ROLE_USER"));
+
+    assertThatThrownBy(p::validateDefaultAuthorities)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("four formal console roles");
+  }
+
+  @Test
   void corsAllowlist_empty_isAccepted() {
     ConsoleSecurityProperties p = new ConsoleSecurityProperties();
     p.setCorsAllowedOrigins(List.of());
