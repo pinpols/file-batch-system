@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import re
+import subprocess
 from pathlib import Path
 
 
@@ -10,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = ROOT / "scripts"
 GATE_CODE = "SCRIPT_GOVERNANCE"
 GATE_NAME = "脚本治理"
+DIRECT_SCRIPT_CALL = re.compile(r'^\s*"?\$ROOT/(scripts/[A-Za-z0-9_./-]+\.sh)"?(?:\s|$)')
 
 
 def main() -> int:
@@ -33,12 +36,35 @@ def main() -> int:
         if guard not in ci_index:
             errors.append(f"CI guard is not registered in scripts/ci/README.md: {guard}")
 
+    direct_scripts: set[str] = set()
+    for caller in SCRIPTS.rglob("*.sh"):
+        for line in caller.read_text(encoding="utf-8").splitlines():
+            match = DIRECT_SCRIPT_CALL.match(line)
+            if match:
+                direct_scripts.add(match.group(1))
+    for script in sorted(direct_scripts):
+        result = subprocess.run(
+            ["git", "ls-files", "--stage", "--", script],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        entries = [line for line in result.stdout.splitlines() if line.endswith(f"\t{script}")]
+        if not entries:
+            errors.append(f"directly invoked script is not tracked by Git: {script}")
+        elif any(line.split(" ", 1)[0] != "100755" for line in entries):
+            errors.append(f"directly invoked script must have Git mode 100755: {script}")
+
     if errors:
         print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1")
         for error in errors:
             print(f"  - {error}")
         return 1
-    print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME} | guards={len(guards)}")
+    print(
+        f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME} "
+        f"| guards={len(guards)} direct-executable={len(direct_scripts)}"
+    )
     return 0
 
 
