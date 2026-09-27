@@ -158,6 +158,16 @@ if ((loc_affecting_changed == 1)); then
     local snapshot_commit
     local tmp_dir
     local tmp_worktree
+    local loc_python_bin="$PYTHON_BIN"
+
+    if ! "$loc_python_bin" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)' >/dev/null 2>&1; then
+      if command -v python3.12 >/dev/null 2>&1; then
+        loc_python_bin="$(command -v python3.12)"
+      else
+        echo "LOC 快照要求 Python 3.12+；请安装 python3.12 或设置 PYTHON_BIN 指向 Python 3.12+" >&2
+        return 1
+      fi
+    fi
 
     staged_tree="$(git write-tree)"
     snapshot_commit="$(git commit-tree "$staged_tree" -p HEAD -m pre-commit-loc-snapshot)"
@@ -176,8 +186,8 @@ if ((loc_affecting_changed == 1)); then
     if ! (
       unset GIT_INDEX_FILE GIT_DIR GIT_WORK_TREE
       cd "$tmp_worktree"
-      "$PYTHON_BIN" scripts/dev/lean-loc-report.py --write docs/stats/loc-current-lean.md >/dev/null
-      "$PYTHON_BIN" scripts/ci/check-loc-snapshot.py
+      "$loc_python_bin" scripts/dev/lean-loc-report.py --write docs/stats/loc-current-lean.md >/dev/null
+      "$loc_python_bin" scripts/ci/check-loc-snapshot.py
     ); then
       cleanup_loc_worktree
       return 1

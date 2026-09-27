@@ -211,6 +211,12 @@ jobs:
         shell: bash
         run: bash scripts/ci/run-gate.sh PR_REPOSITORY_HYGIENE "仓库卫生" -- python3 scripts/ci/check-repository-hygiene.py
 
+      - name: Set up Python for LOC snapshot
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.database == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: .python-version
+
       - name: Verify LOC snapshot
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.database == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash

@@ -23,6 +23,7 @@ import json
 import pathlib
 import re
 import subprocess
+import sys
 from collections import defaultdict
 from dataclasses import dataclass
 
@@ -341,7 +342,7 @@ def render_report(metrics: list[FileMetric], date: str, commit: str, rerun_targe
 ## 复跑
 
 ```bash
-python3 scripts/dev/lean-loc-report.py --write {rerun_target}
+python3.12 scripts/dev/lean-loc-report.py --write {rerun_target}
 ```
 
 ## 注意
@@ -354,6 +355,9 @@ python3 scripts/dev/lean-loc-report.py --write {rerun_target}
 
 
 def main() -> None:
+    if sys.version_info < (3, 12):
+        raise SystemExit("LOC report requires Python 3.12+; use python3.12 or the repository-pinned interpreter.")
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--write", type=pathlib.Path, help="Write markdown report to this path.")
     parser.add_argument("--json", action="store_true", help="Print raw file metrics as JSON.")
