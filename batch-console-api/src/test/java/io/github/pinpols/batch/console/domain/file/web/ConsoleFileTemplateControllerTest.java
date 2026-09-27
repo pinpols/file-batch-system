@@ -19,6 +19,7 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileTemplateApplicationService;
 import io.github.pinpols.batch.console.domain.file.application.FileTemplateMappingDraftResult;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileProjectionMapper;
+import io.github.pinpols.batch.console.domain.file.application.contract.response.FileNamePreviewResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -131,5 +132,20 @@ class ConsoleFileTemplateControllerTest {
         .andExpect(jsonPath("$.code").value("SUCCESS"))
         .andExpect(jsonPath("$.data.direction").value("IMPORT"))
         .andExpect(jsonPath("$.data.fieldMappingsJson").value("[{\"name\":\"orderNo\"}]"));
+  }
+
+  @Test
+  void shouldReturnWorkerCompatibleFileNamePreview() throws Exception {
+    when(applicationService.previewFileName(any()))
+        .thenReturn(new FileNamePreviewResponse("orders_2026-09-27.csv"));
+
+    mockMvc
+        .perform(post("/api/console/file-templates/naming-preview")
+            .contentType(APPLICATION_JSON)
+            .content("""
+                    {"tenantId":"t1","fileFormatType":"DELIMITED","bizDate":"2026-09-27"}
+                    """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.fileName").value("orders_2026-09-27.csv"));
   }
 }

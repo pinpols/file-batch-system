@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.exports.stage;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.constants.BatchFileConstants;
+import io.github.pinpols.batch.common.file.ExportFileNameResolver;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -136,23 +137,16 @@ public class PrepareStep implements ExportStageStep {
         : String.valueOf(templateConfig.get("naming_rule"));
     String bizDate = resolveBizDate(context, payload);
     String bizType = Texts.hasText(payload.bizType()) ? payload.bizType() : context.getJobCode();
-    String extension =
-        switch (fileFormatType.toUpperCase()) {
-          case "DELIMITED" -> ".csv";
-          case "EXCEL" -> ".xlsx";
-          case "FIXED_WIDTH" -> ".txt";
-          case "XML" -> ".xml";
-          default -> ".json";
-        };
-    if (Texts.hasText(namingRule)) {
-      return namingRule
-          .replace("${bizDate}", bizDate)
-          .replace("${tenantId}", context.getTenantId())
-          .replace("${batchNo}", defaultText(payload.batchNo(), "batch"))
-          .replace("${region}", defaultText(region, ""))
-          .replace("${version}", "v1");
-    }
-    return bizType + "_" + bizDate + "_" + defaultText(payload.batchNo(), "batch") + extension;
+    return ExportFileNameResolver.resolve(ExportFileNameResolver.Input.builder()
+        .namingRule(namingRule)
+        .fileFormatType(fileFormatType)
+        .bizType(bizType)
+        .bizDate(bizDate)
+        .tenantId(context.getTenantId())
+        .batchNo(payload.batchNo())
+        .region(region)
+        .version("v1")
+        .build());
   }
 
   private String resolveObjectName(

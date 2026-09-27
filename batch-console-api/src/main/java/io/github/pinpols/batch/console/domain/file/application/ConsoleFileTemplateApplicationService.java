@@ -2,9 +2,11 @@ package io.github.pinpols.batch.console.domain.file.application;
 
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.console.domain.file.application.contract.query.FileTemplateQueryRequest;
+import io.github.pinpols.batch.console.domain.file.application.contract.request.FileNamePreviewRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.FileTemplateCreateRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.FileTemplateUpdateRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileTemplateResponse;
+import io.github.pinpols.batch.console.domain.file.application.contract.response.FileNamePreviewResponse;
 
 /** 文件模板应用服务：管理文件模板配置的 CRUD 及启停操作。 */
 public interface ConsoleFileTemplateApplicationService {
@@ -20,4 +22,6 @@ public interface ConsoleFileTemplateApplicationService {
   void toggle(Long id, String tenantId, Boolean enabled);
 
   FileTemplateMappingDraftResult draftMapping(FileTemplateMappingDraftCommand command);
+
+  FileNamePreviewResponse previewFileName(FileNamePreviewRequest request);
 }

@@ -7,6 +7,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-09-28 | **运维预览接口授权与契约**：新增 `POST /api/console/file-templates/naming-preview`，按当前租户和导出 Worker 共用的命名解析器返回最终文件名；`GET /api/console/system/cron-preview` 改为正式角色可访问，不再匿名开放。 |
 | 2026-09-27 | **用户账号列表状态筛选**：`GET /api/console/users` 新增可选 `enabled` 布尔查询参数；启用/禁用状态由后端分页查询过滤，避免前端仅筛选当前页导致结果遗漏。 |
 | 2026-09-27 | **6 个启停接口显式状态化**：资源队列、批次窗口、业务日历、配额策略、告警路由和 Pipeline 定义统一改用 `PATCH /{id}/enabled`，使用 `EnabledPatchRequest { tenantId, enabled }`；旧 `POST /{id}/toggle?enabled=` 已删除。新入口复用原 application service，不改变权限、审计、租户和持久化语义。 |
 | 2026-09-24 | **登录验证码安全收敛**：自建滑块挑战接口标记弃用并始终返回 404，不再签发会泄露答案的挑战；`provider=selfhosted` 改为启动失败，配置改用已接入的第三方 provider。登录请求的 `captchaToken` 仅使用已配置 provider 返回的凭据。 |

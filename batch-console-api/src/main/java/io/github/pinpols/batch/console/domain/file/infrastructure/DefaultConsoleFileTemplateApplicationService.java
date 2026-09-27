@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.file.ExportFileNameResolver;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
@@ -13,10 +14,12 @@ import io.github.pinpols.batch.console.domain.file.application.ConsoleFileTempla
 import io.github.pinpols.batch.console.domain.file.application.FileTemplateMappingDraftCommand;
 import io.github.pinpols.batch.console.domain.file.application.FileTemplateMappingDraftResult;
 import io.github.pinpols.batch.console.domain.file.application.contract.query.FileTemplateQueryRequest;
+import io.github.pinpols.batch.console.domain.file.application.contract.request.FileNamePreviewRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.FileTemplateCreateRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.FileTemplateUpdateRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileProjectionMapper;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileTemplateResponse;
+import io.github.pinpols.batch.console.domain.file.application.contract.response.FileNamePreviewResponse;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.param.FileTemplateConfigUpsertParam;
 import io.github.pinpols.batch.console.domain.file.query.FileTemplateConfigQuery;
@@ -135,6 +138,22 @@ public class DefaultConsoleFileTemplateApplicationService
     resolveTenant(command.tenantId());
     String direction = normalizeDirection(command.direction());
     return "EXPORT".equals(direction) ? draftExportMapping(command) : draftImportMapping(command);
+  }
+
+  @Override
+  public FileNamePreviewResponse previewFileName(FileNamePreviewRequest request) {
+    String tenantId = resolveTenant(request.getTenantId());
+    return new FileNamePreviewResponse(
+        ExportFileNameResolver.resolve(ExportFileNameResolver.Input.builder()
+            .namingRule(request.getNamingRule())
+            .fileFormatType(request.getFileFormatType())
+            .bizType(request.getBizType())
+            .bizDate(request.getBizDate())
+            .tenantId(tenantId)
+            .batchNo(request.getBatchNo())
+            .region(request.getRegion())
+            .version(request.getVersion())
+            .build()));
   }
 
   private String resolveTenant(String tenantId) {
