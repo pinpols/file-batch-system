@@ -1,5 +1,7 @@
 # 批量平台时区与夏令时设计说明
 
+> **当前实现口径：**本文说明业务日历和调度时区设计；事件时间、Console 展示时区以及文件扫描的 `bizDate` 来源，以[时间与日期语义](./time-date-semantics.md)为准。特别是外部文件的业务日期不一定由日历从接收时刻推导。
+
 ## 1. 背景
 
 批量平台由多个模块组成，包括：
@@ -109,7 +111,7 @@ OffsetDateTime
 
 业务日期不是 UTC 日期，也不是机器本地日期。
 
-业务日期应该由业务日历决定：
+由调度触发和批量日状态机推导的业务日期应由业务日历决定：
 
 ```text
 business_calendar.timezone + cutoff_time
@@ -153,7 +155,7 @@ Java 推荐：
 LocalDate
 ```
 
-注意：`biz_date` 是平台根据业务日历计算出来的结果，不能使用数据库当前日期或机器当前日期直接代替。
+注意：调度触发和批量日状态机中的 `biz_date` 是平台根据业务日历计算出来的结果，不能使用数据库当前日期或机器当前日期直接代替。文件接收链路是明确例外：文件的 `bizDate` 按 manifest、文件名规则或扫描器默认值取得，不会由接收时刻自动推导，详见[时间与日期语义](./time-date-semantics.md)。
 
 ---
 
@@ -1115,7 +1117,7 @@ ZoneId.systemDefault()
 1. 物理机器、容器、JVM 可以运行在任意时区；
 2. 平台不信任机器本地时区；
 3. 所有事件时间统一用 UTC；
-4. 所有业务日期统一由 business_calendar.timezone + cutoff_time 计算；
+4. 调度和批量日业务日期由 business_calendar.timezone + cutoff_time 计算；外部文件按接入契约取得 bizDate；
 5. 所有 cron 调度统一由 schedule_timezone 解释；
 6. timezone 必须使用 IANA ZoneId，不能使用固定 offset；
 7. DST gap 和 DST overlap 必须有默认处理策略；

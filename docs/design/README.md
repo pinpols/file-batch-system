@@ -15,6 +15,7 @@
 | 02a | [batch-day-capability-design.md](./batch-day-capability-design.md) | 批量运行平台能力设计总结：批量日生命周期、补跑、并发控制、当前实现差距 | 评估批量日能力 / 规划日切驱动型扩展 |
 | 02b | [timezone-and-dst-design.md](./timezone-and-dst-design.md) | 时区与夏令时设计：默认时区、业务覆盖优先级、DST gap/overlap 裁决 | 改 cron 时区、cutoff、data_interval 处理 |
 | 02c | [batch-day-timezone-dst-optimized-design.md](./batch-day-timezone-dst-optimized-design.md) | 基于 02 / 02a / 02b 的优化收敛设计 | 改批量日、cron 时区、DST、前日门闩 |
+| 02d | [time-date-semantics.md](./time-date-semantics.md) | 当前运行口径：事件时间、业务日期、文件接收时间、调度与 Console 展示时区 | 配置跨时区租户 / 排查日期差异 |
 | 03 | [file-pipeline-design.md](./file-pipeline-design.md) | 文件处理链路（preprocess / receive / dispatch / publish）| 写新 file step |
 | 04 | [redis-usage-design.md](./redis-usage-design.md) | Redis 使用清单（quota / rate-limit / cache / pub-sub / SSE replay）| 改任何 Redis 相关代码 |
 | 05 | [logging-architecture.md](./logging-architecture.md) | 日志架构（MDC / 结构化 / Loki 分发） | 加日志埋点前 |
