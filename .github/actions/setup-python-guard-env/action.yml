@@ -1,0 +1,9 @@
+name: Setup Python Guard Environment
+description: Install shared Python dependencies for repository governance checks
+
+runs:
+  using: composite
+  steps:
+    - name: Install repository Python guard dependencies
+      shell: bash
+      run: python3 -m pip install --quiet --requirement scripts/requirements.txt
