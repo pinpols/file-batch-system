@@ -143,15 +143,16 @@ public class DefaultConsoleFileTemplateApplicationService
   @Override
   public FileNamePreviewResponse previewFileName(FileNamePreviewRequest request) {
     String tenantId = resolveTenant(request.getTenantId());
-    return new FileNamePreviewResponse(ExportFileNameResolver.resolve(
-        request.getNamingRule(),
-        request.getFileFormatType(),
-        request.getBizType(),
-        request.getBizDate(),
-        tenantId,
-        request.getBatchNo(),
-        request.getRegion(),
-        request.getVersion()));
+    return new FileNamePreviewResponse(
+        ExportFileNameResolver.resolve(new ExportFileNameResolver.Input(
+            request.getNamingRule(),
+            request.getFileFormatType(),
+            request.getBizType(),
+            request.getBizDate(),
+            tenantId,
+            request.getBatchNo(),
+            request.getRegion(),
+            request.getVersion())));
   }
 
   private String resolveTenant(String tenantId) {

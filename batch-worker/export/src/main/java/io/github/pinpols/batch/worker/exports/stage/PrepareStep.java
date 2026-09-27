@@ -137,7 +137,7 @@ public class PrepareStep implements ExportStageStep {
         : String.valueOf(templateConfig.get("naming_rule"));
     String bizDate = resolveBizDate(context, payload);
     String bizType = Texts.hasText(payload.bizType()) ? payload.bizType() : context.getJobCode();
-    return ExportFileNameResolver.resolve(
+    return ExportFileNameResolver.resolve(new ExportFileNameResolver.Input(
         namingRule,
         fileFormatType,
         bizType,
@@ -145,7 +145,7 @@ public class PrepareStep implements ExportStageStep {
         context.getTenantId(),
         payload.batchNo(),
         region,
-        "v1");
+        "v1"));
   }
 
   private String resolveObjectName(

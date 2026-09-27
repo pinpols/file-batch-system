@@ -8,7 +8,7 @@ public final class ExportFileNameResolver {
 
   private ExportFileNameResolver() {}
 
-  public static String resolve(
+  public record Input(
       String namingRule,
       String fileFormatType,
       String bizType,
@@ -16,24 +16,27 @@ public final class ExportFileNameResolver {
       String tenantId,
       String batchNo,
       String region,
-      String version) {
-    String normalizedBatchNo = defaultText(batchNo, "batch");
-    String normalizedVersion = defaultText(version, "v1");
-    if (hasText(namingRule)) {
-      return namingRule
-          .replace("${bizType}", defaultText(bizType, "export"))
-          .replace("${bizDate}", defaultText(bizDate, ""))
-          .replace("${tenantId}", defaultText(tenantId, ""))
+      String version) {}
+
+  public static String resolve(Input input) {
+    String normalizedBatchNo = defaultText(input.batchNo(), "batch");
+    String normalizedVersion = defaultText(input.version(), "v1");
+    if (hasText(input.namingRule())) {
+      return input
+          .namingRule()
+          .replace("${bizType}", defaultText(input.bizType(), "export"))
+          .replace("${bizDate}", defaultText(input.bizDate(), ""))
+          .replace("${tenantId}", defaultText(input.tenantId(), ""))
           .replace("${batchNo}", normalizedBatchNo)
-          .replace("${region}", defaultText(region, ""))
+          .replace("${region}", defaultText(input.region(), ""))
           .replace("${version}", normalizedVersion);
     }
-    return defaultText(bizType, "export")
+    return defaultText(input.bizType(), "export")
         + "_"
-        + defaultText(bizDate, "")
+        + defaultText(input.bizDate(), "")
         + "_"
         + normalizedBatchNo
-        + extension(fileFormatType);
+        + extension(input.fileFormatType());
   }
 
   static String extension(String fileFormatType) {
