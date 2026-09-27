@@ -67,6 +67,7 @@
 
 ### Fixed
 
+- 修复 RLS 导入 COPY 临时表继承目标表生成列 NOT NULL 约束、导致省略自增 ID 时导入失败的问题；临时表现只包含映射列，并补充 PostgreSQL 集成回归验证。
 - 修复每日定时验证延迟跨越北京时间午夜后按执行日期判断变更、导致漏跑前一计划日验证的问题；定时触发按最近计划时刻确定验证日期，手动触发仍使用当前日期。
 - 修复 Import 在启用 RLS 的业务表上无法使用 PostgreSQL `COPY` 的问题：先 COPY 到事务内临时表，再通过目标表 `INSERT ... SELECT` 保留真实 RLS 策略校验；Process SQL 的 compute、validate、feedback 在同一业务事务中设置租户 GUC，并补充非超级用户/不可绕过 RLS 角色的 PostgreSQL 集成验证。Atomic Stage 5c 改为验证 loopback SSRF 拒绝及错误分类，避免依赖公网 endpoint。
 - 修复内部接口认证与请求体限制可被 URL 规范化绕过、Dispatch/回执轮询及 Webhook 出站请求可触达受限地址、Webhook 重定向 SSRF 和超大错误响应占用内存的问题；限制 Kafka lag 元数据访问角色，修正登录失败计数清理键，并移除会泄露答案的自建验证码。

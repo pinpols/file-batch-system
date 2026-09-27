@@ -54,6 +54,7 @@ class JdbcMappedImportCopyIntegrationTest {
     jdbcTemplate.execute("CREATE SCHEMA biz");
     jdbcTemplate.execute("""
         CREATE TABLE biz.copy_import_customer (
+          id BIGSERIAL NOT NULL UNIQUE,
           tenant_id text NOT NULL,
           biz_date date NOT NULL,
           customer_no text NOT NULL,
@@ -91,7 +92,8 @@ class JdbcMappedImportCopyIntegrationTest {
         )
         """);
     jdbcTemplate.update(
-        "INSERT INTO biz.copy_import_customer VALUES (?,?,?,?,?,?)",
+        "INSERT INTO biz.copy_import_customer "
+            + "(tenant_id,biz_date,customer_no,customer_name,amount,note) VALUES (?,?,?,?,?,?)",
         "t1",
         Date.valueOf("2026-06-07"),
         "old-target",
@@ -99,7 +101,8 @@ class JdbcMappedImportCopyIntegrationTest {
         new BigDecimal("1.00"),
         "delete me");
     jdbcTemplate.update(
-        "INSERT INTO biz.copy_import_customer VALUES (?,?,?,?,?,?)",
+        "INSERT INTO biz.copy_import_customer "
+            + "(tenant_id,biz_date,customer_no,customer_name,amount,note) VALUES (?,?,?,?,?,?)",
         "t1",
         Date.valueOf("2026-06-06"),
         "keep-date",
@@ -107,7 +110,8 @@ class JdbcMappedImportCopyIntegrationTest {
         new BigDecimal("2.00"),
         "keep");
     jdbcTemplate.update(
-        "INSERT INTO biz.copy_import_customer VALUES (?,?,?,?,?,?)",
+        "INSERT INTO biz.copy_import_customer "
+            + "(tenant_id,biz_date,customer_no,customer_name,amount,note) VALUES (?,?,?,?,?,?)",
         "t2",
         Date.valueOf("2026-06-07"),
         "keep-tenant",
@@ -273,6 +277,8 @@ class JdbcMappedImportCopyIntegrationTest {
         "CREATE ROLE " + role + " LOGIN PASSWORD 'test-password'" + " NOSUPERUSER NOBYPASSRLS");
     jdbcTemplate.execute("GRANT USAGE ON SCHEMA biz TO " + role);
     jdbcTemplate.execute("GRANT SELECT, INSERT ON biz.copy_import_customer TO " + role);
+    jdbcTemplate.execute(
+        "GRANT USAGE, SELECT ON SEQUENCE biz.copy_import_customer_id_seq TO " + role);
     jdbcTemplate.execute("ALTER TABLE biz.copy_import_customer FORCE ROW LEVEL SECURITY");
     jdbcTemplate.execute("""
         CREATE POLICY tenant_isolation_test ON biz.copy_import_customer
