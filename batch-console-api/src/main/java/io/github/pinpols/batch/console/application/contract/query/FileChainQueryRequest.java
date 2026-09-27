@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.application.contract.query;
 
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 @Data
+@EqualsAndHashCode(callSuper = true)
 public class FileChainQueryRequest extends PageQueryRequest {
 
   private String tenantId;

@@ -48,6 +48,8 @@ logs/
 
 旧目录首次遇到时会移动到 `logs/archive/legacy/` 后再创建软链,不会直接删除。
 
+每次获取当前日志目录时会执行一次轻量整理：误放在 `logs/current/` 或 `logs/current/app/` 的 `.gz`、`*.screen.log`、`*.manual*.log`、`*.debug*.log` 和压测日志会移动到 `logs/archive/legacy/`。`logs/current/app/` 只保留当前常驻应用的规范 `.log`，确保运行时 WARN 审计不会重复扫描历史或人工日志。
+
 `cleanup-disk.sh --include-app-logs` 只清理超过保留期的 `logs/archive/app`，不会删除
 `logs/current/app` 中仍可能被进程持有的当前日志。相同组件在同一秒内连续启动时，归档名会追加
 `.1`、`.2` 等序号，避免覆盖。

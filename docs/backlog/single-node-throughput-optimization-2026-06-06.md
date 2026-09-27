@@ -728,7 +728,7 @@ BATCH_WORKER_IMPORT_FETCH_SIZE=5000
 
 **改动**(`deploy/docker/postgres/conf/postgresql.conf`,无则启动期 `-c` 注入):
 
-```conf
+```properties
 wal_buffers = 64MB
 max_wal_size = 8GB
 checkpoint_timeout = 15min

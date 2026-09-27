@@ -417,11 +417,33 @@ _clear_occupied_ports() {
       if [[ -f "$PID_FILE" ]] && grep -Fq "	${pid}	" "$PID_FILE" 2>/dev/null; then
         continue
       fi
-      if (( found == 0 )); then
-        echo "  端口 ${port} (${name}) 被占用，清理残留进程..."
+      local command_line
+      command_line="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+      if [[ "$command_line" != *"build/runtime-jars/${name}.jar"* ]]; then
+        echo "ERROR: 端口 ${port} (${name}) 被未知进程占用，拒绝自动终止。" >&2
+        echo "  pid=${pid} command=${command_line:-<unavailable>}" >&2
+        echo "  请确认进程归属后手动处理，或使用 scripts/local/stop-all.sh 停止本项目服务。" >&2
+        return 1
       fi
-      echo "    kill -9 pid=${pid}"
-      kill -9 "$pid" 2>/dev/null || true
+      if (( found == 0 )); then
+        echo "  端口 ${port} (${name}) 存在本项目残留进程，正在优雅停止..."
+      fi
+      echo "    kill -TERM pid=${pid}"
+      kill -TERM "$pid" 2>/dev/null || true
+      local waited=0
+      while kill -0 "$pid" 2>/dev/null && (( waited < 10 )); do
+        sleep 1
+        waited=$((waited + 1))
+      done
+      if kill -0 "$pid" 2>/dev/null; then
+        if [[ "${FORCE_KILL:-0}" != "1" ]]; then
+          echo "ERROR: pid=${pid} 在 10s 内未退出；拒绝默认 kill -9。" >&2
+          echo "  确认可强制终止后设置 FORCE_KILL=1 重试。" >&2
+          return 1
+        fi
+        echo "    FORCE_KILL=1，kill -9 pid=${pid}"
+        kill -9 "$pid" 2>/dev/null || true
+      fi
       ((found += 1)) || true
     done <<<"$pids"
   done
@@ -603,3 +625,16 @@ _build_check_list() {
 }
 
 wait_all_apps_healthy "$(_build_check_list)"
+
+echo ""
+echo "==> 审计启动期 WARN..."
+warning_audit_status=0
+"$ROOT/scripts/local/audit-runtime-warnings.sh" || warning_audit_status=$?
+if (( warning_audit_status != 0 )); then
+  echo "WARNING: 运行时 WARN 审计未通过(status=${warning_audit_status})，请根据上方 code/owner 跟进。" >&2
+  if [[ "${RUNTIME_WARNING_STRICT:-0}" == "1" ]]; then
+    echo "ERROR: RUNTIME_WARNING_STRICT=1，启动验收失败；服务保持运行供排查。" >&2
+    exit "$warning_audit_status"
+  fi
+  echo "  本地默认保留服务；CI/验收请设置 RUNTIME_WARNING_STRICT=1。" >&2
+fi

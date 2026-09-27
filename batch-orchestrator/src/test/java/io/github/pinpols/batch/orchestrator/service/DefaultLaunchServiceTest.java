@@ -12,6 +12,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
@@ -205,12 +206,12 @@ class DefaultLaunchServiceTest {
     assertThat(jobCaptor.getValue().getDeadlineAt()).isEqualTo(expectedSlaDeadline());
     assertThat(jobCaptor.getValue().getJobDefinitionVersion()).isEqualTo(jobDefinition.version());
     Map<String, Object> rerunPolicy =
-        JsonUtils.fromJson(jobCaptor.getValue().getRerunPolicySnapshot(), Map.class);
+        JsonUtils.fromJson(jobCaptor.getValue().getRerunPolicySnapshot(), new TypeReference<>() {});
     assertThat(rerunPolicy).containsEntry("resultIsolation", "NEW_JOB_INSTANCE_PER_RUN_ATTEMPT");
     assertThat(rerunPolicy)
         .containsEntry("configVersionPolicy", "SNAPSHOT_JOB_DEFINITION_VERSION_ON_CREATE");
     Map<String, Object> paramsSnapshot =
-        JsonUtils.fromJson(jobCaptor.getValue().getParamsSnapshot(), Map.class);
+        JsonUtils.fromJson(jobCaptor.getValue().getParamsSnapshot(), new TypeReference<>() {});
     assertThat(paramsSnapshot).containsEntry("jobDefinitionVersion", jobDefinition.version());
     ArgumentCaptor<BatchDayInstanceEntity> captor =
         ArgumentCaptor.forClass(BatchDayInstanceEntity.class);

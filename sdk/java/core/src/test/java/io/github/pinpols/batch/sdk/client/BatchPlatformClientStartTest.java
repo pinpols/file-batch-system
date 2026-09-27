@@ -76,7 +76,7 @@ class BatchPlatformClientStartTest {
     BatchPlatformClient client =
         BatchPlatformClient.builder(cfg()).register(stub("type-a")).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
-    ArgumentCaptor<Map<String, Object>> registerBody = ArgumentCaptor.forClass(Map.class);
+    ArgumentCaptor<Map<String, Object>> registerBody = ArgumentCaptor.captor();
     when(http.register(registerBody.capture()))
         .thenThrow(new IOException("orchestrator unreachable"));
     inject(client, "httpClient", http);

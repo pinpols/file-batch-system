@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.logging.ThrottledLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantSessionSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -16,6 +17,7 @@ import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
 import io.github.pinpols.batch.worker.processes.metrics.ProcessMetrics;
 import io.github.pinpols.batch.worker.processes.stage.ProcessComputePlugin;
 import io.github.pinpols.batch.worker.processes.stage.ProcessRuntimeKeys;
+import java.time.Duration;
 import java.time.temporal.TemporalAccessor;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -64,6 +66,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   private static final String PARAM_TENANT_ID = "tenantId";
   private static final String PARAM_TARGET_SCHEMA = "targetSchema";
   private static final String PARAM_TARGET_TABLE = "targetTable";
+  private static final Duration LEFTOVER_LOG_COOLDOWN = Duration.ofMinutes(5);
 
   /**
    * COMPUTE 阶段中转表的全名({@code schema.table})。Plugin SQL 与 {@link SqlTransformComputeSqlValidator} 的
@@ -77,6 +80,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   private final SqlTransformComputeSecurityProperties security;
   private final SqlTransformComputeSqlValidator sqlValidator;
   private final ProcessMetrics metrics;
+  private final ThrottledLogger leftoverLogThrottle = new ThrottledLogger(LEFTOVER_LOG_COOLDOWN);
 
   public SqlTransformComputePlugin(
       @Qualifier("processBusinessDataSource") DataSource processBusinessDataSource,
@@ -163,14 +167,26 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
             + " AND target_table = :targetTable",
         preCleanParams);
     if (leftover > 0) {
-      log.warn(
-          "sqlTransformCompute pre-compute cleared leftover staging: tenantId={}, batchKey={},"
-              + " target={}.{}, leftover={} (likely prior attempt crashed mid-flow)",
-          context.getTenantId(),
-          batchKey,
-          spec.targetSchema(),
-          spec.targetTable(),
-          leftover);
+      String warningKey = context.getTenantId()
+          + ':'
+          + batchKey
+          + ':'
+          + spec.targetSchema()
+          + '.'
+          + spec.targetTable();
+      ThrottledLogger.Decision decision = leftoverLogThrottle.evaluate(warningKey);
+      if (decision.shouldLog()) {
+        log.warn(
+            "sqlTransformCompute pre-compute cleared leftover staging: tenantId={}, batchKey={},"
+                + " target={}.{}, leftover={}, suppressedSincePrevious={}"
+                + " (likely prior attempt crashed mid-flow)",
+            context.getTenantId(),
+            batchKey,
+            spec.targetSchema(),
+            spec.targetTable(),
+            leftover,
+            decision.suppressedSincePrevious());
+      }
     }
 
     String stageSql = buildStagingInsertSql(spec);

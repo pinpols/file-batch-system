@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.exports.stage;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.InstanceOfAssertFactories.MAP;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -115,8 +116,8 @@ class RegisterStepTest {
     assertThat(result.success()).isTrue();
     assertThat(capturedParam).isNotNull();
     assertThat(capturedParam.getCharset()).isEqualTo("GBK");
-    assertThat(capturedParam.getMetadata()).isInstanceOf(Map.class);
-    assertThat((Map<String, Object>) capturedParam.getMetadata())
+    assertThat(capturedParam.getMetadata())
+        .asInstanceOf(MAP)
         .containsEntry("exportLineSeparator", "\r\n")
         .containsEntry("exportWithBom", false);
   }

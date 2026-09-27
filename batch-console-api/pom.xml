@@ -232,7 +232,31 @@
         </dependency>
     </dependencies>
 
-    <!-- macOS：Lettuce/Netty DNS 原生解析，消除 DnsServerAddressStreamProviders 的 WARN -->
+    <build>
+        <testResources>
+            <testResource>
+                <directory>src/test/resources</directory>
+            </testResource>
+            <testResource>
+                <directory>${project.basedir}/../db/migration</directory>
+                <targetPath>db/migration</targetPath>
+                <includes>
+                    <include>V*.sql</include>
+                </includes>
+            </testResource>
+        </testResources>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!-- 默认可执行 jar 为「库 jar」，供 batch-e2e-tests 等模块编译/引用类；
+                         fat jar 单独带 classifier exec，便于 java -jar 启动 console。 -->
+                    <classifier>exec</classifier>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
     <profiles>
         <profile>
             <id>netty-dns-macos-aarch64</id>
@@ -269,30 +293,4 @@
             </dependencies>
         </profile>
     </profiles>
-
-    <build>
-        <testResources>
-            <testResource>
-                <directory>src/test/resources</directory>
-            </testResource>
-            <testResource>
-                <directory>${project.basedir}/../db/migration</directory>
-                <targetPath>db/migration</targetPath>
-                <includes>
-                    <include>V*.sql</include>
-                </includes>
-            </testResource>
-        </testResources>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-                <configuration>
-                    <!-- 默认可执行 jar 为「库 jar」，供 batch-e2e-tests 等模块编译/引用类；
-                         fat jar 单独带 classifier exec，便于 java -jar 启动 console。 -->
-                    <classifier>exec</classifier>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
 </project>

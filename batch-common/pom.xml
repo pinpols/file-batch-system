@@ -160,7 +160,7 @@
         </dependency>
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
-            <artifactId>apache-client</artifactId>
+            <artifactId>apache5-client</artifactId>
         </dependency>
         <!-- @Contract/@Nullable(Guard/Texts 编译期注解)。注解 CLASS 保留,provided 不入运行时 jar。 -->
         <dependency>

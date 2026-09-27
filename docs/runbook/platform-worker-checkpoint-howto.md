@@ -54,12 +54,12 @@ Prometheus 规则 `BatchWorkerCheckpointPersistenceFailed` 会在 5 分钟窗口
 上线前在 staging 用一条单分区大任务完成一次“中途停止 → lease 回收 → 重派 → 终态”的真实链路，并保存以下三类证据：
 
 1. **续跑确实发生**：
-   ```promql
+   ```text
    sum by (stage) (increase(batch_worker_checkpoint_operations_total{operation="load",outcome="resumable"}[1h]))
    sum by (stage) (increase(batch_worker_checkpoint_resume_skipped_records_total[1h]))
    ```
 2. **位点没有持续失败**：
-   ```promql
+   ```text
    sum by (stage, operation) (increase(batch_worker_checkpoint_operations_total{outcome="failure"}[1h]))
    ```
    结果必须为 0；若非 0，不能用“任务最后成功”替代位点失败证据。

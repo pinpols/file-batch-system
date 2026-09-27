@@ -26,4 +26,32 @@
         <module>dispatch</module>
         <module>atomic</module>
     </modules>
+
+    <!-- 仅 Worker 可执行应用在 macOS 本地运行时需要 Netty 原生 DNS 解析器。 -->
+    <profiles>
+        <profile>
+            <id>netty-dns-macos-aarch64</id>
+            <activation><os><family>mac</family><arch>aarch64</arch></os></activation>
+            <dependencies>
+                <dependency>
+                    <groupId>io.netty</groupId>
+                    <artifactId>netty-resolver-dns-native-macos</artifactId>
+                    <classifier>osx-aarch_64</classifier>
+                    <scope>runtime</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>netty-dns-macos-x86_64</id>
+            <activation><os><family>mac</family><arch>x86_64</arch></os></activation>
+            <dependencies>
+                <dependency>
+                    <groupId>io.netty</groupId>
+                    <artifactId>netty-resolver-dns-native-macos</artifactId>
+                    <classifier>osx-x86_64</classifier>
+                    <scope>runtime</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
 </project>

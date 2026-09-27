@@ -11,7 +11,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 
 class WorkflowRunManagementApplicationServiceTest {
 
@@ -35,7 +35,7 @@ class WorkflowRunManagementApplicationServiceTest {
         workflowNodeRunMapper,
         mock(WorkflowTerminalOutboxService.class),
         mock(WorkflowDagService.class),
-        mock(ObjectProvider.class),
+        new StaticListableBeanFactory().getBeanProvider(WorkflowNodeDispatchService.class),
         mock(OrchestratorJobMappers.class),
         null,
         null);

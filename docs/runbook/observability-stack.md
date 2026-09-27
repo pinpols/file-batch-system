@@ -124,7 +124,7 @@ Collector 配置应使用对应版本官方镜像执行 `validate`；Prometheus 
 
 常用查询：
 
-```logql
+```text
 {service_name="batch-orchestrator"} |= "ERROR"
 {service_name="batch-console-api"} | tenantId="default-tenant"
 {service_name=~"batch-.+"} | traceId="<trace-id>"

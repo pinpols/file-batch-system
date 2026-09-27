@@ -3,8 +3,10 @@ package io.github.pinpols.batch.console.application.contract.query;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 @Data
+@EqualsAndHashCode(callSuper = true)
 public class ApprovalCommandQueryRequest extends PageQueryRequest {
 
   @NotBlank
