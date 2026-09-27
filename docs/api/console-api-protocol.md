@@ -7,6 +7,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-09-27 | **用户账号列表状态筛选**：`GET /api/console/users` 新增可选 `enabled` 布尔查询参数；启用/禁用状态由后端分页查询过滤，避免前端仅筛选当前页导致结果遗漏。 |
 | 2026-09-27 | **6 个启停接口显式状态化**：资源队列、批次窗口、业务日历、配额策略、告警路由和 Pipeline 定义统一改用 `PATCH /{id}/enabled`，使用 `EnabledPatchRequest { tenantId, enabled }`；旧 `POST /{id}/toggle?enabled=` 已删除。新入口复用原 application service，不改变权限、审计、租户和持久化语义。 |
 | 2026-09-24 | **登录验证码安全收敛**：自建滑块挑战接口标记弃用并始终返回 404，不再签发会泄露答案的挑战；`provider=selfhosted` 改为启动失败，配置改用已接入的第三方 provider。登录请求的 `captchaToken` 仅使用已配置 provider 返回的凭据。 |
 | 2026-09-23 | **Trace 诊断契约校正**：`GET /api/console/queries/trace-snapshot` 明确只接受完整 traceId 精确匹配（最多 128 字符），响应新增 `truncatedDomains`，标出因单领域 200 条快照上限而被截断的结果；安全过滤器生成的 401/403 响应同步返回 `X-Request-Id`、`X-Trace-Id` 与 `meta`。 |
