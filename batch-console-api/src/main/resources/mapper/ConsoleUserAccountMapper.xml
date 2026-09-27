@@ -46,6 +46,9 @@
                 and (username ilike concat('%', #{keyword}, '%')
                   or display_name ilike concat('%', #{keyword}, '%'))
             </if>
+            <if test="enabled != null">
+                and enabled = #{enabled}
+            </if>
         </where>
         order by id desc
         <include refid="io.github.pinpols.batch.common.mapper.CommonFragments.offsetPageClause"/>
@@ -61,6 +64,9 @@
             <if test="keyword != null and keyword != ''">
                 and (username ilike concat('%', #{keyword}, '%')
                   or display_name ilike concat('%', #{keyword}, '%'))
+            </if>
+            <if test="enabled != null">
+                and enabled = #{enabled}
             </if>
         </where>
     </select>

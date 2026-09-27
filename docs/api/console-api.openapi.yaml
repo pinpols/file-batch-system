@@ -8642,6 +8642,11 @@ paths:
           schema:
             type: string
           description: Fuzzy match on username or displayName
+        - name: enabled
+          in: query
+          schema:
+            type: boolean
+          description: Filter by enabled status
         - name: pageNo
           in: query
           schema:

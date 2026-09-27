@@ -42,11 +42,11 @@ public class ConsoleUserAccountService {
   private final ConsoleSessionRegistry sessionRegistry;
 
   public PageResponse<ConsoleUserAccountResponse> list(
-      String tenantId, String keyword, PageRequest pageRequest) {
+      String tenantId, String keyword, Boolean enabled, PageRequest pageRequest) {
     String effectiveTenantId = enforceTenantScope(tenantId);
     List<Map<String, Object>> rows =
-        userAccountMapper.selectByQuery(effectiveTenantId, keyword, pageRequest);
-    long total = userAccountMapper.countByQuery(effectiveTenantId, keyword);
+        userAccountMapper.selectByQuery(effectiveTenantId, keyword, enabled, pageRequest);
+    long total = userAccountMapper.countByQuery(effectiveTenantId, keyword, enabled);
     List<ConsoleUserAccountResponse> items = rows.stream().map(this::toResponse).toList();
     return new PageResponse<>(total, pageRequest.pageNo(), pageRequest.pageSize(), items);
   }

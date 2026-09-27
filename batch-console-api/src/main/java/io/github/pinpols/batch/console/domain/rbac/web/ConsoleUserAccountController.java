@@ -45,10 +45,11 @@ public class ConsoleUserAccountController {
   public CommonResponse<PageResponse<ConsoleUserAccountResponse>> list(
       @RequestParam(required = false) String tenantId,
       @RequestParam(required = false) String keyword,
+      @RequestParam(required = false) Boolean enabled,
       @RequestParam(defaultValue = "1") int pageNo,
       @RequestParam(defaultValue = "20") int pageSize) {
     return responseFactory.success(
-        userAccountService.list(tenantId, keyword, new PageRequest(pageNo, pageSize)));
+        userAccountService.list(tenantId, keyword, enabled, new PageRequest(pageNo, pageSize)));
   }
 
   @GetMapping("/{id}")

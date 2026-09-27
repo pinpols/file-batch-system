@@ -23,7 +23,7 @@
 
 ## `daily-validation-change-gate.py`
 
-判断北京时间当天默认分支是否包含代码/配置变更，Markdown、RST、`LICENSE` 和 `NOTICE` 不触发验证。Actions 手工 dispatch 可勾选 `force` 绕过当天变更条件；本地运行可设 `FORCE_VALIDATION=true`，脚本不接受 `--force` 参数。所有人类可见的结果使用共享 `gate-result.sh` 状态、错误码和原因格式，`should_run/reason` 仅写入 `$GITHUB_OUTPUT` 供 workflow 路由。
+判断定时触发对应的北京时间运行日是否包含代码/配置变更，Markdown、RST、`LICENSE` 和 `NOTICE` 不触发验证。日期按最近一次 cron 计划时间推导，因此定时任务延迟到午夜后启动仍检查原计划日；手动 dispatch 按当前北京时间日期处理，并可勾选 `force` 绕过变更条件。本地运行可设 `VALIDATION_DAY` 固定检查日期、`VALIDATION_EVENT=schedule` 与 `VALIDATION_SCHEDULE='31 13 * * *'`模拟定时触发，或设 `FORCE_VALIDATION=true` 强制运行；脚本不接受 `--force` 参数。所有人类可见的结果使用共享 `gate-result.sh` 状态、错误码和原因格式，`should_run/reason` 仅写入 `$GITHUB_OUTPUT` 供 workflow 路由。
 
 ```bash
 python3 scripts/ci/daily-validation-change-gate.py
