@@ -14,6 +14,7 @@
 
 ### Added
 
+- **用户账号状态筛选**：Console 用户账号列表 API 支持按启用状态筛选，前端分页查询改为服务端过滤，避免仅过滤当前页造成结果遗漏。
 - **每日仿真与严格数据验证**：新增按北京时间当天代码变更触发的 GitHub Actions 定时验证，顺序运行完整 `sim-harness` 和 BE-ACC 严格真实数据步骤；新增按暂存文件域运行的提交前检查。
 - **本地开发收尾守护**：业务数据源默认账号统一为 `batch_business_writer`，新增 SUPERUSER / BYPASSRLS 启动检查、健康检查和真实 PostgreSQL 集成测试；Trigger E2E 从真实 `TriggerService` 入口覆盖 Outbox→Kafka→Orchestrator，Kafka Outbox 增加故障恢复后重投验证；五语言 SDK 统一 live Kafka 环境变量，Java/Python 补齐重试与严格时序环境配置。
 - **脚本与文档治理入口**：新增仓库 Python 统一入口和治理聚合命令，避免系统 Python 缺包导致门禁漂移；校准 Chaos、运维剧本、Forensic Replay、测试覆盖快照和当前待办状态。
@@ -66,6 +67,7 @@
 
 ### Fixed
 
+- 修复每日定时验证延迟跨越北京时间午夜后按执行日期判断变更、导致漏跑前一计划日验证的问题；定时触发按最近计划时刻确定验证日期，手动触发仍使用当前日期。
 - 修复 Import 在启用 RLS 的业务表上无法使用 PostgreSQL `COPY` 的问题：先 COPY 到事务内临时表，再通过目标表 `INSERT ... SELECT` 保留真实 RLS 策略校验；Process SQL 的 compute、validate、feedback 在同一业务事务中设置租户 GUC，并补充非超级用户/不可绕过 RLS 角色的 PostgreSQL 集成验证。Atomic Stage 5c 改为验证 loopback SSRF 拒绝及错误分类，避免依赖公网 endpoint。
 - 修复内部接口认证与请求体限制可被 URL 规范化绕过、Dispatch/回执轮询及 Webhook 出站请求可触达受限地址、Webhook 重定向 SSRF 和超大错误响应占用内存的问题；限制 Kafka lag 元数据访问角色，修正登录失败计数清理键，并移除会泄露答案的自建验证码。
 - 修复租户用户已开放运营概览菜单但摘要接口拒绝访问的问题；Outbox 重试日志响应补充关联事件 ID，控制台重投不再误用重试日志自身 ID。

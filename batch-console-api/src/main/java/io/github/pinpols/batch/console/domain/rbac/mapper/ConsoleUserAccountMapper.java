@@ -18,9 +18,13 @@ public interface ConsoleUserAccountMapper {
   List<Map<String, Object>> selectByQuery(
       @Param("tenantId") String tenantId,
       @Param("keyword") String keyword,
+      @Param("enabled") Boolean enabled,
       @Param("pageRequest") PageRequest pageRequest);
 
-  long countByQuery(@Param("tenantId") String tenantId, @Param("keyword") String keyword);
+  long countByQuery(
+      @Param("tenantId") String tenantId,
+      @Param("keyword") String keyword,
+      @Param("enabled") Boolean enabled);
 
   Map<String, Object> selectById(@Param("id") long id);
 

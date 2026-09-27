@@ -228,24 +228,28 @@ class ConsoleUserAccountServiceTest {
     @Test
     void tenantAdminListIsAutoFilteredToOwnTenant() {
       asPrincipal("tenant-a", ConsoleRoles.TENANT_ADMIN);
-      when(userAccountMapper.selectByQuery(eq("tenant-a"), any(), any())).thenReturn(List.of());
-      when(userAccountMapper.countByQuery(eq("tenant-a"), any())).thenReturn(0L);
+      when(userAccountMapper.selectByQuery(eq("tenant-a"), any(), any(), any()))
+          .thenReturn(List.of());
+      when(userAccountMapper.countByQuery(eq("tenant-a"), any(), any())).thenReturn(0L);
 
-      service.list("tenant-b", null, new PageRequest(1, 10));
+      service.list("tenant-b", null, true, new PageRequest(1, 10));
 
-      verify(userAccountMapper).selectByQuery(eq("tenant-a"), nullable(String.class), any());
-      verify(userAccountMapper).countByQuery(eq("tenant-a"), nullable(String.class));
+      verify(userAccountMapper)
+          .selectByQuery(eq("tenant-a"), nullable(String.class), eq(true), any());
+      verify(userAccountMapper).countByQuery(eq("tenant-a"), nullable(String.class), eq(true));
     }
 
     @Test
     void adminListRespectsExplicitTenantFilter() {
       asPrincipal("system", ConsoleRoles.ADMIN);
-      when(userAccountMapper.selectByQuery(eq("tenant-b"), any(), any())).thenReturn(List.of());
-      when(userAccountMapper.countByQuery(eq("tenant-b"), any())).thenReturn(0L);
+      when(userAccountMapper.selectByQuery(eq("tenant-b"), any(), any(), any()))
+          .thenReturn(List.of());
+      when(userAccountMapper.countByQuery(eq("tenant-b"), any(), any())).thenReturn(0L);
 
-      service.list("tenant-b", null, new PageRequest(1, 10));
+      service.list("tenant-b", null, false, new PageRequest(1, 10));
 
-      verify(userAccountMapper).selectByQuery(eq("tenant-b"), nullable(String.class), any());
+      verify(userAccountMapper)
+          .selectByQuery(eq("tenant-b"), nullable(String.class), eq(false), any());
     }
   }
 
