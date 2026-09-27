@@ -5,7 +5,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.github.pinpols.batch.common.dto.ResponseMeta;
@@ -51,15 +50,6 @@ class ConsoleResourceQueueControllerBehaviorTest {
         .perform(patch("/api/console/queues/9/enabled")
             .contentType(APPLICATION_JSON)
             .content("{\"tenantId\":\"ta\",\"enabled\":true}"))
-        .andExpect(status().isOk());
-    verify(service).toggle(9L, "ta", true);
-  }
-
-  @Test
-  void deprecatedToggleShouldRemainCompatible() throws Exception {
-    mockMvc
-        .perform(
-            post("/api/console/queues/9/toggle").param("tenantId", "ta").param("enabled", "true"))
         .andExpect(status().isOk());
     verify(service).toggle(9L, "ta", true);
   }

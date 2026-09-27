@@ -72,19 +72,4 @@ public class ConsoleAlertRoutingController {
     alertRoutingApplicationService.toggle(id, request.getTenantId(), request.getEnabled());
     return responseFactory.success(null);
   }
-
-  @Deprecated(since = "1.0.0")
-  @PostMapping("/{id}/toggle")
-  @AuditAction(
-      action = "alertRouting.toggle",
-      aggregateType = "alert_routing",
-      aggregateId = "#id",
-      targetTenantParam = "#tenantId")
-  public CommonResponse<Void> toggle(
-      @PathVariable Long id,
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam("enabled") Boolean enabled) {
-    alertRoutingApplicationService.toggle(id, tenantId, enabled);
-    return responseFactory.success(null);
-  }
 }

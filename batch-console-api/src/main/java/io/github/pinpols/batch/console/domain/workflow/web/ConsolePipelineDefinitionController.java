@@ -99,19 +99,4 @@ public class ConsolePipelineDefinitionController {
     pipelineDefinitionService.toggle(id, request.getTenantId(), request.getEnabled());
     return responseFactory.success(null);
   }
-
-  @Deprecated(since = "1.0.0")
-  @PostMapping("/{id}/toggle")
-  @AuditAction(
-      action = "pipelineDefinition.toggle",
-      aggregateType = "pipeline_definition",
-      aggregateId = "#id",
-      targetTenantParam = "#tenantId")
-  public CommonResponse<Void> toggle(
-      @PathVariable Long id,
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam("enabled") Boolean enabled) {
-    pipelineDefinitionService.toggle(id, tenantId, enabled);
-    return responseFactory.success(null);
-  }
 }

@@ -126,16 +126,6 @@ class ConsoleCalendarControllerBehaviorTest {
   }
 
   @Test
-  void deprecatedToggleShouldRemainCompatible() throws Exception {
-    mockMvc
-        .perform(post("/api/console/calendars/9/toggle")
-            .param("tenantId", "ta")
-            .param("enabled", "true"))
-        .andExpect(status().isOk());
-    verify(service).toggle(9L, "ta", true);
-  }
-
-  @Test
   void holidaysShouldReturnListForTenant() throws Exception {
     when(service.holidays(3L, "ta"))
         .thenReturn(List.of(new ConsoleHolidayResponse(

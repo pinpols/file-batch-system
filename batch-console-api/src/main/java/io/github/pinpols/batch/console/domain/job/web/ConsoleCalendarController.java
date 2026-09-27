@@ -60,16 +60,6 @@ public class ConsoleCalendarController {
     return responseFactory.success(null);
   }
 
-  @Deprecated(since = "1.0.0")
-  @PostMapping("/{id}/toggle")
-  public CommonResponse<Void> toggle(
-      @PathVariable Long id,
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam("enabled") Boolean enabled) {
-    calendarApplicationService.toggle(id, tenantId, enabled);
-    return responseFactory.success(null);
-  }
-
   @GetMapping("/{id}/holidays")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
   public CommonResponse<List<ConsoleHolidayResponse>> holidays(
