@@ -151,6 +151,10 @@ jobs:
           # 0 = 全历史:migration-safety / openapi-breaking 守护要相对 base 做 diff。
           fetch-depth: 0
 
+      - name: Setup Python guard environment
+        if: needs.changes.outputs.config == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.ci == 'true'
+        uses: ./.github/actions/setup-python-guard-env
+
       - name: Setup build environment
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true'
         uses: ./.github/actions/setup-build-env
