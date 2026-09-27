@@ -114,7 +114,7 @@ public final class JdbcDryRunSqlProbe implements DryRunSqlProbe {
     } catch (Exception ex) {
       return SingleSelectCheck.UNPARSEABLE;
     }
-    List<Statement> list = statements.getStatements();
+    List<Statement> list = statements;
     if (EmptyChecks.isNotNull(list) && list.size() == 1 && list.get(0) instanceof Select) {
       return SingleSelectCheck.SINGLE_SELECT;
     }

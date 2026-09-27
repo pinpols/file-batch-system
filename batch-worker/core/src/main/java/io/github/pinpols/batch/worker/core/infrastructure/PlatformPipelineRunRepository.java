@@ -11,6 +11,7 @@ import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntime
 import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.toLong;
 import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.truncate;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.enums.PipelineRunStatus;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -142,7 +143,8 @@ public class PlatformPipelineRunRepository {
       return Map.of();
     }
     try {
-      Map<String, Object> parsed = JsonUtils.fromJson(json, Map.class);
+      Map<String, Object> parsed =
+          JsonUtils.fromJson(json, new TypeReference<Map<String, Object>>() {});
       return parsed == null ? Map.of() : parsed;
     } catch (RuntimeException ex) {
       log.warn(

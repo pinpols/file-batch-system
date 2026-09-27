@@ -82,8 +82,36 @@ log_current_dir() {
     mv "$legacy" "$archive"
   fi
   mkdir -p "$target"
+  log_reconcile_current_dir "$root" "$kind"
   ln -sfn "$target" "$legacy"
   printf '%s' "$target"
+}
+
+# current 只保留正在写入的标准日志。旧的 logrotate 压缩包和一次性
+# screen/manual/debug 日志统一迁到 archive，避免运维脚本把历史文件当成当前状态。
+log_reconcile_current_dir() {
+  local root="$1"
+  local kind="$2"
+  local current="$root/logs/current/$kind"
+  local archive="$root/logs/archive/$kind"
+  [[ -d "$current" ]] || return 0
+  mkdir -p "$archive"
+
+  local file base destination collision
+  while IFS= read -r -d '' file; do
+    base="$(basename "$file")"
+    destination="$archive/$base"
+    collision=1
+    while [[ -e "$destination" ]]; do
+      destination="$archive/${base}.${collision}"
+      collision=$((collision + 1))
+    done
+    mv "$file" "$destination"
+  done < <(
+    find "$current" -maxdepth 1 -type f \
+      \( -name '*.gz' -o -name '*.screen.log' -o -name '*.manual*.log' \
+      -o -name '*.debug*.log' -o -name 'loadtest-*.log' \) -print0
+  )
 }
 
 log_run_dir() {

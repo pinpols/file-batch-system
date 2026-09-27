@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
@@ -25,8 +26,8 @@ class TaskOutcomeSummaryBuilderTest {
         .verifierFailures(List.of(Map.of("code", "COUNT_MISMATCH")))
         .build();
 
-    Map<String, Object> summary =
-        JsonUtils.fromJson(TaskOutcomeSummaryBuilder.buildOutputSummary(command, null), Map.class);
+    Map<String, Object> summary = JsonUtils.fromJson(
+        TaskOutcomeSummaryBuilder.buildOutputSummary(command, null), new TypeReference<>() {});
 
     assertThat(summary).containsEntry("outputs", Map.of("rows", 100, "objectKey", "exports/a.csv"));
     assertThat(summary)
@@ -139,14 +140,14 @@ class TaskOutcomeSummaryBuilderTest {
 
     Map<String, Object> listBased = JsonUtils.fromJson(
         TaskOutcomeSummaryBuilder.buildJobInstanceResultSummary(jobInstance, partitions, command),
-        Map.class);
+        new TypeReference<>() {});
     Map<String, Object> countBased = JsonUtils.fromJson(
         TaskOutcomeSummaryBuilder.buildJobInstanceResultSummary(
             jobInstance,
             successCount,
             TaskOutcomeSummaryBuilder.countBroadFailed(statusRefs),
             command),
-        Map.class);
+        new TypeReference<>() {});
 
     assertThat(countBased).containsEntry("successPartitions", listBased.get("successPartitions"));
     assertThat(countBased).containsEntry("failedPartitions", listBased.get("failedPartitions"));

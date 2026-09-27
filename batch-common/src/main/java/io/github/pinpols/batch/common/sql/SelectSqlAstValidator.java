@@ -128,7 +128,7 @@ public final class SelectSqlAstValidator {
     }
     if (ps.getJoins() != null) {
       for (Join join : ps.getJoins()) {
-        if (join.getRightItem() instanceof Select sub) {
+        if (join.getFromItem() instanceof Select sub) {
           queue.add(sub);
         }
       }

@@ -94,7 +94,7 @@ class AlertmanagerNotifyServiceTest {
     assertThat(msg.getValue().payload().eventType()).isEqualTo("ALERTMANAGER");
     assertThat(msg.getValue().payload().data().toString()).contains("[FIRING] batch-dispatch · X");
 
-    ArgumentCaptor<Map<String, Object>> log = ArgumentCaptor.forClass(Map.class);
+    ArgumentCaptor<Map<String, Object>> log = ArgumentCaptor.captor();
     verify(deliveryLogMapper).insert(log.capture());
     assertThat(log.getValue()).containsEntry("deliveryStatus", "SUCCESS");
     assertThat(log.getValue()).containsEntry("channelCode", "batch-dispatch");
@@ -113,7 +113,7 @@ class AlertmanagerNotifyServiceTest {
     assertThat(outcome.delivered()).isFalse();
     assertThat(outcome.status()).isEqualTo("FAILED");
     assertThat(outcome.detail()).isEqualTo("boom");
-    ArgumentCaptor<Map<String, Object>> log = ArgumentCaptor.forClass(Map.class);
+    ArgumentCaptor<Map<String, Object>> log = ArgumentCaptor.captor();
     verify(deliveryLogMapper).insert(log.capture());
     assertThat(log.getValue()).containsEntry("deliveryStatus", "FAILED");
     assertThat(log.getValue()).containsEntry("errorMessage", "boom");

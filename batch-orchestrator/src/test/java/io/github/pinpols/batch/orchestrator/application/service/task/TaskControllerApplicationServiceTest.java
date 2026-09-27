@@ -469,8 +469,7 @@ class TaskControllerApplicationServiceTest {
     assertThat(resp.results().get(2).cancelRequested()).isTrue();
 
     // 整批只调一次底层(set-based),且 command 逐位映射入参
-    ArgumentCaptor<List<TaskAssignmentService.LeaseRenewCommand>> cap =
-        ArgumentCaptor.forClass(List.class);
+    ArgumentCaptor<List<TaskAssignmentService.LeaseRenewCommand>> cap = ArgumentCaptor.captor();
     verify(taskExecutionService).renewLeaseBatch(cap.capture());
     assertThat(cap.getValue()).hasSize(3);
     assertThat(cap.getValue().get(1).taskId()).isEqualTo(2L);
@@ -495,8 +494,7 @@ class TaskControllerApplicationServiceTest {
     assertThat(result.results().get(0).renewed()).isTrue();
     assertThat(result.results().get(1).taskId()).isNull();
     assertThat(result.results().get(1).renewed()).isFalse();
-    ArgumentCaptor<List<TaskAssignmentService.LeaseRenewCommand>> cap =
-        ArgumentCaptor.forClass(List.class);
+    ArgumentCaptor<List<TaskAssignmentService.LeaseRenewCommand>> cap = ArgumentCaptor.captor();
     verify(taskExecutionService).renewLeaseBatch(cap.capture());
     assertThat(cap.getValue()).hasSize(1);
   }

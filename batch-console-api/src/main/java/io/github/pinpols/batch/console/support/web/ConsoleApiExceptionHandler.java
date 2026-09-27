@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.support.web;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.constants.CommonErrorMessages;
 import io.github.pinpols.batch.common.dto.CommonResponse;
@@ -180,7 +181,8 @@ public class ConsoleApiExceptionHandler {
         exception.getStatusCode().value(),
         body);
     try {
-      CommonResponse<Object> downstream = JsonUtils.fromJson(body, CommonResponse.class);
+      CommonResponse<Object> downstream =
+          JsonUtils.fromJson(body, new TypeReference<CommonResponse<Object>>() {});
       if (downstream != null && downstream.code() != null) {
         // 以业务 code 为准，HTTP status 使用 code.httpStatus()（更稳定、跨服务一致）
         return ResponseEntity.status(downstream.code().httpStatus())

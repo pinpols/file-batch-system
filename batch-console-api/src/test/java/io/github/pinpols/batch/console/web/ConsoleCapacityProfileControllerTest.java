@@ -22,14 +22,17 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import java.net.URI;
 import java.util.List;
 import java.util.function.Function;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.util.UriBuilder;
 
 class ConsoleCapacityProfileControllerTest {
 
@@ -89,7 +92,8 @@ class ConsoleCapacityProfileControllerTest {
         .andExpect(jsonPath("$.data.groupBy").value("JOB"));
 
     verify(tenantGuard).resolveTenant("ta");
-    verify(getUriSpec).uri(any(Function.class));
+    ArgumentCaptor<Function<UriBuilder, URI>> uriFunction = ArgumentCaptor.captor();
+    verify(getUriSpec).uri(uriFunction.capture());
   }
 
   @Test

@@ -3,8 +3,10 @@ package io.github.pinpols.batch.console.application.contract.query;
 import io.github.pinpols.batch.common.validation.ValidTenantId;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 @Data
+@EqualsAndHashCode(callSuper = true)
 public class WorkerRegistryQueryRequest extends PageQueryRequest {
 
   @ValidTenantId

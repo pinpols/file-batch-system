@@ -16,7 +16,7 @@ import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.awscore.retry.AwsRetryStrategy;
 import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
-import software.amazon.awssdk.http.apache.ApacheHttpClient;
+import software.amazon.awssdk.http.apache5.Apache5HttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.retries.api.RetryStrategy;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -37,7 +37,7 @@ public class S3AutoConfiguration {
   @ConditionalOnMissingBean
   public S3Client s3Client(S3StorageProperties p, Environment environment) {
     validateCredentialsInProduction(p, environment);
-    ApacheHttpClient.Builder http = ApacheHttpClient.builder()
+    Apache5HttpClient.Builder http = Apache5HttpClient.builder()
         .connectionTimeout(Duration.ofMillis(p.getConnectTimeoutMs()))
         .socketTimeout(Duration.ofMillis(p.getReadTimeoutMs()));
     S3ClientBuilder b = S3Client.builder()

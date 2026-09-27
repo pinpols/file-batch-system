@@ -60,6 +60,16 @@ bash scripts/local/start-all.sh
 在 **IDE 中直接 Run**（不经过上述脚本）时，请在 Run Configuration 里至少设置 **`BATCH_TIMEZONE_DEFAULT_ZONE`** 与 **`BATCH_LOCALE`**（与同仓库 `.env.local` 一致）；若需 JVM 默认区与之一致，请再设 **`TZ`** 为同一 IANA 值（例如与 `BATCH_TIMEZONE_DEFAULT_ZONE` 均填 `Asia/Shanghai`），或使用 VM options `-Duser.timezone=Asia/Shanghai`。
 如果某些 Java 模块已经在运行，脚本会跳过它们，只补启动未运行或已退出的模块。
 
+端口已占用时，脚本只会处理命令行明确包含本仓 `build/runtime-jars/<module>.jar` 的进程，并先发送 `TERM` 等待退出。未知进程会直接阻断启动，不会误杀；仅在确认本仓进程无法优雅退出时才可显式设置 `FORCE_KILL=1`。全部模块通过健康检查后，脚本会执行 `scripts/local/audit-runtime-warnings.sh`：未登记 WARN 失败，策略过期失败，`ACTION_REQUIRED` 返回独立状态。本地默认保留服务供排查；CI/验收设置 `RUNTIME_WARNING_STRICT=1` 时，审计异常会让启动命令以原始状态码失败。
+
+可单独审计当前日志：
+
+```bash
+bash scripts/local/audit-runtime-warnings.sh
+```
+
+策略登记在 `config/runtime-warning-policy.tsv`，每项必须包含稳定 code、处置类型、owner、到期日和消息正则；不能用宽泛正则吞掉业务失败或运行状态异常。
+
 查看状态：
 
 ```bash

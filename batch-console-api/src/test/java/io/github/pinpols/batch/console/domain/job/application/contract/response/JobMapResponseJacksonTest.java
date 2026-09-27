@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.response;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.InstanceOfAssertFactories.LIST;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -103,7 +104,7 @@ class JobMapResponseJacksonTest {
 
     assertThat(back)
         .containsKeys("id", "instanceNo", "requested", "retried", "conflicts", "partitionIds");
-    assertThat((List<Object>) back.get("partitionIds")).containsExactly(101, 102);
+    assertThat(back.get("partitionIds")).asInstanceOf(LIST).containsExactly(101, 102);
   }
 
   @Test

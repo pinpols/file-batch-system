@@ -175,7 +175,36 @@
         </dependency>
     </dependencies>
 
-    <!-- macOS：补齐 Netty DNS 原生解析，消除 DnsServerAddressStreamProviders 的 WARN -->
+    <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <resource>
+                <directory>${project.basedir}/../db/migration</directory>
+                <targetPath>db/migration</targetPath>
+                <includes>
+                    <include>V*.sql</include>
+                </includes>
+            </resource>
+        </resources>
+        <testResources>
+            <testResource>
+                <directory>src/test/resources</directory>
+            </testResource>
+        </testResources>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!-- 保留原始 jar 不变，便于 batch-e2e-tests 作为库依赖；
+                         可执行的 fat jar 改用 classifier「exec」单独产出。 -->
+                    <classifier>exec</classifier>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
     <profiles>
         <profile>
             <id>netty-dns-macos-aarch64</id>
@@ -212,35 +241,4 @@
             </dependencies>
         </profile>
     </profiles>
-
-    <build>
-        <resources>
-            <resource>
-                <directory>src/main/resources</directory>
-            </resource>
-            <resource>
-                <directory>${project.basedir}/../db/migration</directory>
-                <targetPath>db/migration</targetPath>
-                <includes>
-                    <include>V*.sql</include>
-                </includes>
-            </resource>
-        </resources>
-        <testResources>
-            <testResource>
-                <directory>src/test/resources</directory>
-            </testResource>
-        </testResources>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-                <configuration>
-                    <!-- 保留原始 jar 不变，便于 batch-e2e-tests 作为库依赖；
-                         可执行的 fat jar 改用 classifier「exec」单独产出。 -->
-                    <classifier>exec</classifier>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
 </project>

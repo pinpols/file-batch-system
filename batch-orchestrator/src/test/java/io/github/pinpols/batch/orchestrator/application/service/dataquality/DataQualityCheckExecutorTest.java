@@ -139,7 +139,7 @@ class DataQualityCheckExecutorTest {
     assertThat(outcome.status()).isEqualTo(GateStatus.BLOCKED);
     assertThat(outcome.findings().get(0).status()).isEqualTo("ERROR");
     verify(jdbcTemplate, never())
-        .queryForObject(anyString(), any(MapSqlParameterSource.class), any(Class.class));
+        .queryForObject(anyString(), any(MapSqlParameterSource.class), eq(Number.class));
   }
 
   @Test

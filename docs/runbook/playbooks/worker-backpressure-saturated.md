@@ -21,7 +21,7 @@ listener 时应同步核对 Kafka 并发、执行许可和执行线程池三者�
 ## 怎么定位
 
 1. 确认是哪个 worker 类型和实例：
-   ```promql
+   ```text
    batch_worker_semaphore_available{workerType=~"IMPORT|EXPORT|PROCESS|DISPATCH|ATOMIC"}
    sum by (workerType) (rate(batch_worker_consumer_pause_total[10m]))
    sum by (workerType) (rate(batch_worker_consumer_resume_total[10m]))

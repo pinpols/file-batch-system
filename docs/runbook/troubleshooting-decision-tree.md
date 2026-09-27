@@ -277,7 +277,7 @@ DELETE FROM shedlock WHERE name = '<lock_name>' AND locked_by LIKE '<dead_pod_ho
 
 ## 附录：常用 Prometheus 查询
 
-```promql
+```text
 # Outbox 积压
 batch_outbox_pending_events
 # PUBLISHING 长期停滞

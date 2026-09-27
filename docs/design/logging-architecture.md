@@ -271,7 +271,7 @@ Authorization: Bearer <jwt>
 
 ## 6. Loki LogQL 常用查询示例
 
-```logql
+```text
 # 后端 ERROR 日志
 {service_name="batch-orchestrator"} |= "ERROR"
 

@@ -61,8 +61,11 @@ public class GenerateStep implements ExportStageStep {
   // 触发场景:trigger misfire 把同一 job 反复补点 + 配置错(如 biz 表缺失)导致每次都死在同一处,
   // 单条 catch:Exception 的诊断价值在第一次后递减,后续合并成"自上次后又失败 N 次"。
   private static final Duration FAILURE_LOG_COOLDOWN = Duration.ofSeconds(60);
+  private static final Duration FINGERPRINT_LOG_COOLDOWN = Duration.ofMinutes(5);
 
   private final ThrottledLogger failureLogThrottle = new ThrottledLogger(FAILURE_LOG_COOLDOWN);
+  private final ThrottledLogger fingerprintLogThrottle =
+      new ThrottledLogger(FINGERPRINT_LOG_COOLDOWN);
 
   private final ExportDataPluginRegistry exportDataPluginRegistry;
   private final ExportFormatStrategyRegistry formatStrategyRegistry;
@@ -157,13 +160,7 @@ public class GenerateStep implements ExportStageStep {
             // 幂等跳过:GENERATE 已整体完成且文件完整(STORE 尚未消费)→ 重派不重生成,补齐下游 attribute 即可。
             return completeWithoutRegenerate(context, batch, generatedFile, pos.processedCount());
           }
-          log.warn(
-              "export GENERATE completed-marker file fingerprint mismatch, regenerating fresh:"
-                  + " tenantId={}, instanceId={}, expectedBytes={}, actualBytes={}",
-              context.getTenantId(),
-              checkpointInstanceId,
-              expectedSize,
-              actualSize);
+          logFingerprintMismatch(context, checkpointInstanceId, expectedSize, actualSize);
           // 落到 open(pos.completed()) → resuming=false → generatePaged truncate 到 0 → 全量重写。
         }
         checkpoint = GenerateCheckpoint.open(
@@ -224,6 +221,23 @@ public class GenerateStep implements ExportStageStep {
           new Object[] {ex.getMessage()},
           ex.getMessage(),
           objectMapper);
+    }
+  }
+
+  private void logFingerprintMismatch(
+      ExportJobContext context, long checkpointInstanceId, long expectedSize, long actualSize) {
+    ThrottledLogger.Decision decision =
+        fingerprintLogThrottle.evaluate(context.getTenantId() + ':' + checkpointInstanceId);
+    if (decision.shouldLog()) {
+      log.warn(
+          "export GENERATE completed-marker file fingerprint mismatch, regenerating fresh:"
+              + " tenantId={}, instanceId={}, expectedBytes={}, actualBytes={},"
+              + " suppressedSincePrevious={}",
+          context.getTenantId(),
+          checkpointInstanceId,
+          expectedSize,
+          actualSize,
+          decision.suppressedSincePrevious());
     }
   }
 

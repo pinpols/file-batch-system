@@ -1,21 +1,21 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `502fabd54`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `7631e3fff`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,536 | 467,192 | 235,663 | 50.4% |
+| 4,537 | 467,432 | 235,863 | 50.5% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| prod | 2,641 | 240,961 | 109,972 | 45.6% |
-| test | 1,160 | 166,934 | 88,752 | 53.2% |
-| script | 592 | 44,016 | 27,458 | 62.4% |
-| config | 52 | 7,862 | 5,550 | 70.6% |
+| prod | 2,641 | 241,006 | 110,000 | 45.6% |
+| test | 1,160 | 166,940 | 88,759 | 53.2% |
+| script | 593 | 44,140 | 27,569 | 62.5% |
+| config | 52 | 7,927 | 5,604 | 70.7% |
 | infra-config | 32 | 5,191 | 3,766 | 72.5% |
 | sql | 59 | 2,228 | 165 | 7.4% |
 
@@ -23,11 +23,11 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,354 | 343,358 | 174,084 | 50.7% |
-| Shell | 181 | 27,398 | 21,142 | 77.2% |
+| Java | 3,354 | 343,409 | 174,119 | 50.7% |
+| Shell | 182 | 27,522 | 21,253 | 77.2% |
 | Python | 205 | 27,398 | 13,829 | 50.5% |
 | YAML | 95 | 12,045 | 9,004 | 74.8% |
-| XML | 169 | 20,598 | 6,374 | 30.9% |
+| XML | 169 | 20,663 | 6,428 | 31.1% |
 | TypeScript | 37 | 6,573 | 3,097 | 47.1% |
 | Rust | 22 | 8,456 | 2,856 | 33.8% |
 | Properties | 5 | 2,867 | 2,341 | 81.7% |
@@ -51,9 +51,9 @@
 | `scripts/local/validate-seed-scenarios.sh` | script | Shell | 768 | 560 |
 | `scripts/fix-fixture-xlsx.py` | script | Python | 979 | 559 |
 | `scripts/ci/run-full-regression.sh` | script | Shell | 647 | 528 |
+| `scripts/local/start-all.sh` | script | Shell | 640 | 512 |
 | `scripts/local/be-acceptance.sh` | script | Shell | 612 | 479 |
-| `scripts/local/start-all.sh` | script | Shell | 605 | 478 |
-| `pom.xml` | config | XML | 751 | 445 |
+| `pom.xml` | config | XML | 756 | 449 |
 | `scripts/local/pre-push-sdk-checks.sh` | script | Shell | 558 | 424 |
 | `scripts/local/sim-harness.sh` | script | Shell | 554 | 417 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java` | prod | Java | 841 | 399 |

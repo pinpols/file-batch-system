@@ -135,10 +135,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         .register(collaborators.meterRegistry());
   }
 
-  /**
-   * 保留给历史纯单元测试的兼容构造器；Spring 生产装配始终使用上面的完整构造器注入协作者。
-   */
-  @Deprecated(forRemoval = false)
+  /** 纯单元测试的便捷构造器；Spring 生产装配始终使用上面的完整构造器注入协作者。 */
   public DefaultTaskOutcomeService(
       OrchestratorJobMappers jobMappers,
       OrchestratorWorkflowMappers workflowMappers,

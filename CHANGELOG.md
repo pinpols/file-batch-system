@@ -14,6 +14,7 @@
 
 ### Added
 
+- **构建与运行告警治理**：Java 主源码和测试源码启用 deprecation/unchecked warning 零容忍；新增当前应用日志 WARN 策略审计，区分预期本地告警、需处理状态和未知回归，并在本地全量启动后自动报告。
 - **用户账号状态筛选**：Console 用户账号列表 API 支持按启用状态筛选，前端分页查询改为服务端过滤，避免仅过滤当前页造成结果遗漏。
 - **每日仿真与严格数据验证**：新增按北京时间当天代码变更触发的 GitHub Actions 定时验证，顺序运行完整 `sim-harness` 和 BE-ACC 严格真实数据步骤；新增按暂存文件域运行的提交前检查。
 - **本地开发收尾守护**：业务数据源默认账号统一为 `batch_business_writer`，新增 SUPERUSER / BYPASSRLS 启动检查、健康检查和真实 PostgreSQL 集成测试；Trigger E2E 从真实 `TriggerService` 入口覆盖 Outbox→Kafka→Orchestrator，Kafka Outbox 增加故障恢复后重投验证；五语言 SDK 统一 live Kafka 环境变量，Java/Python 补齐重试与严格时序环境配置。
@@ -27,6 +28,7 @@
 
 ### Changed
 
+- **本地启动与日志安全**：`start-all.sh` 只停止由本仓 runtime jar 占用的端口，优先 TERM 并仅在显式 `FORCE_KILL=1` 时强杀；当前日志目录自动归档压缩包和手工调试日志，重复业务告警增加时间窗聚合计数。
 - **Console 启停 REST 契约**：资源队列、批次窗口、业务日历、配额策略、告警路由和 Pipeline 定义统一改为 `PATCH /{id}/enabled`，通过请求体显式提交租户与目标状态；前端及测试已同步切换，旧 `POST /{id}/toggle` 已删除，权限、审计、幂等和持久化语义保持不变。
 - **SDK 与前端运行时及依赖治理**：Go SDK 最低版本升至 1.26，CI 覆盖 Go 1.26/1.27；Python 覆盖 3.12/3.14；TypeScript SDK 覆盖 Node 22/24；Rust、Go、Python SDK 锁文件依兼容范围刷新。前端默认构建运行时改为 Node 24，保留 Node 22 消费兼容，并增加声明与 CI 矩阵对齐门禁。
 

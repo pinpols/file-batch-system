@@ -253,7 +253,7 @@ class PlatformHttpClientTest {
     JsonNode scenarios = SdkJsonMapperFactory.create()
         .readTree(Files.readString(Path.of(matrixFile)))
         .get("scenarios");
-    Iterator<Map.Entry<String, JsonNode>> iterator = scenarios.fields();
+    Iterator<Map.Entry<String, JsonNode>> iterator = scenarios.properties().iterator();
     while (iterator.hasNext()) {
       Map.Entry<String, JsonNode> entry = iterator.next();
       String scenarioName = entry.getKey();

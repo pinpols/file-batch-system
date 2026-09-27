@@ -79,7 +79,7 @@ prune_older_than "$DEST/logical" 35d
 
 ### 1.3 cron 编排
 
-```cron
+```text
 # 每日 02:00 UTC base + 逻辑导出(避开 03:30 outbox 归档 / 04:x run 表归档,减少锁竞争)
 0 2 * * *  /opt/batch/scripts/db/backup/pg-backup.sh >> /var/log/batch/pg-backup.log 2>&1
 ```

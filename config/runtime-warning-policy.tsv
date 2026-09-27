@@ -1,0 +1,6 @@
+# code	disposition	owner	expires	message_regex
+LOCAL_SECURITY_BYPASS	EXPECTED	platform-security	2027-03-31	batch\.security\.bypass-mode=true
+LOCAL_EMPTY_TASK_EXECUTOR	EXPECTED	orchestrator	2027-03-31	BatchTaskExecutorRegistry started with no BatchTaskExecutor registered
+LOCAL_ATOMIC_GUARD	EXPECTED	worker-atomic	2027-03-31	Atomic dual-use executor in profile
+STARTUP_RESIDUAL_STATE	ACTION_REQUIRED	orchestrator	2027-03-31	Startup runtime audit found residual state
+WORKER_STARTUP_UNHEALTHY	ACTION_REQUIRED	worker-runtime	2027-03-31	worker startup runtime audit WARN
