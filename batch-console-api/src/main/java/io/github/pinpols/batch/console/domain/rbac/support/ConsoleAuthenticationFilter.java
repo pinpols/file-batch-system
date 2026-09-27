@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonErrorMessages;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.observability.SseTicketService;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
@@ -36,7 +37,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  *       ConsoleJwtService#authenticate}。ADR-030 §D7 Stage B 收尾（2026-05-15）后已删 Authorization Bearer
  *       header fallback —— 前端 axios {@code withCredentials=true} 自动带 cookie；运维脚本用 curl {@code
  *       --cookie}。
- *   <li><b>bypass-mode</b>：仅测试 profile 使用，可从 header 读 username/tenant/roles，放行任意角色 （生产禁用，由 {@code
+ *   <li><b>bypass-mode</b>：仅测试 profile 使用，可从 header 读 username/tenant/roles，只接受四类正式角色 （生产禁用，由 {@code
  *       batchSecurityProperties.bypass-mode} 控制）。
  * </ol>
  *
@@ -106,10 +107,15 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
           }
         }
         if (payload != null) {
-          // R4-P1-1：用 ticket 签发时绑定的真实角色集；空角色（旧数据兼容）走配置默认值回退。
-          LinkedHashSet<String> authorities = payload.authorities().isEmpty()
-              ? new LinkedHashSet<>(properties.getDefaultAuthorities())
-              : new LinkedHashSet<>(payload.authorities());
+          if (!ConsoleRoles.isFormalRoleSet(payload.authorities())) {
+            responseWriter.write(
+                response,
+                HttpStatus.UNAUTHORIZED,
+                ResultCode.UNAUTHORIZED,
+                CommonErrorMessages.INVALID_CONSOLE_JWT);
+            return;
+          }
+          LinkedHashSet<String> authorities = new LinkedHashSet<>(payload.authorities());
           ConsolePrincipal principal =
               new ConsolePrincipal(payload.username(), payload.tenantId(), authorities);
           setAuthentication(principal, "sse-ticket");
@@ -266,14 +272,19 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
 
   private Set<SimpleGrantedAuthority> resolveAuthorities(HttpServletRequest request) {
     String rolesHeader = request.getHeader(properties.getRoleHeader());
+    Set<String> roles;
     if (!Texts.hasText(rolesHeader)) {
-      return properties.getDefaultAuthorities().stream()
-          .map(SimpleGrantedAuthority::new)
+      roles = new LinkedHashSet<>(properties.getDefaultAuthorities());
+    } else {
+      roles = Arrays.stream(rolesHeader.split(","))
+          .map(String::trim)
+          .filter(EmptyChecks::isNotBlank)
           .collect(Collectors.toCollection(LinkedHashSet::new));
     }
-    return Arrays.stream(rolesHeader.split(","))
-        .map(String::trim)
-        .filter(role -> !role.isBlank())
+    if (!ConsoleRoles.isFormalRoleSet(roles)) {
+      throw new IllegalArgumentException("unsupported console role");
+    }
+    return roles.stream()
         .map(SimpleGrantedAuthority::new)
         .collect(Collectors.toCollection(LinkedHashSet::new));
   }

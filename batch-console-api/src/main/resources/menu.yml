@@ -26,9 +26,9 @@ batch:
           minRole: VIEWER
           children:
             - { title: 控制面板快照, path: /ops/summary, icon: TrendCharts, minRole: VIEWER }
-            - { title: 审批中心, path: /approvals, icon: Stamp, minRole: TENANT_ADMIN }
+            - { title: 审批中心, path: /approvals, icon: Stamp, minRole: TENANT_ADMIN, authorities: [ROLE_ADMIN, ROLE_TENANT_ADMIN] }
             - { title: 导出中心, path: /reports, icon: Download, minRole: VIEWER }
-            - { title: 自助服务, path: /self-service, icon: Tickets, minRole: TENANT_ADMIN, authorities: [ROLE_ADMIN, ROLE_TENANT_ADMIN, ROLE_TENANT_USER, ROLE_USER] }
+            - { title: 自助服务, path: /self-service, icon: Tickets, minRole: VIEWER, authorities: [ROLE_ADMIN, ROLE_TENANT_ADMIN, ROLE_TENANT_USER] }
             - { title: 容量画像, path: /ops/capacity-profile, icon: PieChart, minRole: VIEWER }
             - { title: 资产新鲜度策略, path: /ops/asset-freshness, icon: Timer, minRole: TENANT_ADMIN }
         - key: monitor
@@ -59,7 +59,7 @@ batch:
           minRole: VIEWER
           children:
             - { title: Job 定义, path: /jobs/definitions, icon: List, minRole: VIEWER }
-            - { title: Pipeline 定义, path: /jobs/pipelines, icon: Share, minRole: VIEWER, authorities: [ROLE_ADMIN, ROLE_TENANT_ADMIN, ROLE_AUDITOR, ROLE_TENANT_USER, ROLE_USER] }
+            - { title: Pipeline 定义, path: /jobs/pipelines, icon: Share, minRole: VIEWER, authorities: [ROLE_ADMIN, ROLE_TENANT_ADMIN, ROLE_AUDITOR, ROLE_TENANT_USER] }
             - { title: Workflow 定义, path: /workflow/definitions, icon: Collection, minRole: VIEWER }
             - { title: Workflow 编排, path: /workflow/designer, icon: Guide, minRole: TENANT_ADMIN }
             - { title: 合并导入, path: /config/tenant-package, icon: Box, minRole: TENANT_ADMIN }
@@ -98,7 +98,7 @@ batch:
           children:
             - { title: 租户管理, path: /system/tenants, icon: Briefcase, minRole: TENANT_ADMIN }
             - { title: 用户账户, path: /system/user-accounts, icon: Tickets, minRole: ADMIN, authorities: [ROLE_ADMIN, ROLE_TENANT_ADMIN] }
-            - { title: 当前登录态, path: /system/users, icon: Tickets, minRole: ADMIN }
+            - { title: 权限自查, path: /system/users, icon: Tickets, minRole: VIEWER, authorities: [ROLE_ADMIN, ROLE_AUDITOR, ROLE_TENANT_ADMIN, ROLE_TENANT_USER] }
             - { title: 配置发布, path: /config/releases, icon: DocumentChecked, minRole: TENANT_ADMIN, authorities: [ROLE_ADMIN, ROLE_TENANT_ADMIN, ROLE_AUDITOR] }
             - { title: 配置管理, path: /config/management, icon: Memo, minRole: TENANT_ADMIN, authorities: [ROLE_ADMIN, ROLE_TENANT_ADMIN, ROLE_AUDITOR] }
             - { title: 审计, path: /observability/audits, icon: Memo, minRole: VIEWER, authorities: [ROLE_ADMIN, ROLE_TENANT_ADMIN, ROLE_AUDITOR] }
@@ -106,6 +106,6 @@ batch:
             - { title: 事件目录, path: /system/event-catalog, icon: Collection, minRole: VIEWER }
             - { title: 标签管理, path: /system/tags, icon: PriceTag, minRole: TENANT_ADMIN }
             - { title: AI 助手, path: /system/ai-chat, icon: Document, minRole: ADMIN }
-            - { title: API Key, path: /system/api-keys, icon: Key, minRole: ADMIN, authorities: [ROLE_ADMIN, ROLE_TENANT_ADMIN, ROLE_TENANT_USER, ROLE_USER] }
+            - { title: API Key, path: /system/api-keys, icon: Key, minRole: VIEWER, authorities: [ROLE_ADMIN, ROLE_TENANT_ADMIN, ROLE_TENANT_USER] }
             - { title: 系统参数, path: /system/parameters, icon: Setting, minRole: ADMIN }
             - { title: 原子节点配置中心, path: /system/atomic-task-types, icon: Box, minRole: TENANT_ADMIN }

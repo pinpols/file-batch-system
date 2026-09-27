@@ -37,7 +37,7 @@
 | `AUDITOR` | `ROLE_AUDITOR` | ✅ | 只读审计 |
 | `TENANT_ADMIN` | `ROLE_TENANT_ADMIN` | ✅ | 配置发布管理 |
 | `TENANT_USER` | `ROLE_TENANT_USER` | ❌ | 单租户业务用户 |
-| `USER` | `ROLE_USER` | ❌ | 基础只读 |
+| `TENANT_USER` | `ROLE_TENANT_USER` | ❌ | 本租户基础只读与受控自助 |
 
 > `ConsoleRoles.GLOBAL_ROLES = {ADMIN, AUDITOR, TENANT_ADMIN}` —— 这三类自动越租户读，但写入 / 操作仍需通过审批 + 审计。
 

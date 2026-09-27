@@ -191,25 +191,33 @@ class ConsoleJwtServiceTest {
     // R4-P2-6：fallback 路径也必须带 JwtTimestampValidator(skew)；通过完整签发→验证 roundtrip 间接验证 decoder 可用
     ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment);
     // 不调 PostConstruct，强制走 lazy fallback
-    String token = svc.issueToken("bob", "t2", Set.of("ROLE_USER")).accessToken();
+    String token = svc.issueToken("bob", "t2", Set.of("ROLE_TENANT_USER")).accessToken();
     ConsolePrincipal principal = svc.authenticate(token);
     assertThat(principal.username()).isEqualTo("bob");
   }
 
   @Test
-  void issueToken_emptyAuthorities_accepted() {
+  void issueToken_emptyAuthorities_rejected() {
     ConsoleJwtService svc = newService();
-    ConsoleAuthTokenResponse resp = svc.issueToken("alice", "t1", Set.of());
-    ConsolePrincipal principal = svc.authenticate(resp.accessToken());
-    assertThat(principal.authorities()).isEmpty();
+    assertThatThrownBy(() -> svc.issueToken("alice", "t1", Set.of()))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.account.invalid_role_set");
   }
 
   @Test
-  void issueToken_nullAuthorities_treatedAsEmpty() {
+  void issueToken_nullAuthorities_rejected() {
     ConsoleJwtService svc = newService();
-    ConsoleAuthTokenResponse resp = svc.issueToken("alice", "t1", null);
-    ConsolePrincipal principal = svc.authenticate(resp.accessToken());
-    assertThat(principal.authorities()).isEmpty();
+    assertThatThrownBy(() -> svc.issueToken("alice", "t1", null))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.account.invalid_role_set");
+  }
+
+  @Test
+  void issueToken_legacyOrUnknownAuthorities_rejected() {
+    ConsoleJwtService svc = newService();
+    assertThatThrownBy(() -> svc.issueToken("alice", "t1", Set.of("ROLE_ADMIN", "ROLE_USER")))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.account.invalid_role_set");
   }
 
   // ─── 不可使用其它 issuer 签发的 JWT ──────────────────────────────────

@@ -64,7 +64,7 @@ class ConsoleAuthControllerTest {
             Instant.parse("2026-04-05T08:00:00Z"),
             "admin",
             "default-tenant",
-            Set.of("ROLE_ADMIN", "ROLE_AUDITOR", "ROLE_CONFIG_ADMIN"),
+            Set.of("ROLE_ADMIN"),
             false));
 
     mockMvc

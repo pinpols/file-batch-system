@@ -6,6 +6,9 @@
 >
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
+### 2026-09-27
+- **ADR-032 四角色运行时边界收紧**：控制台正式角色固定为 `ROLE_ADMIN`、`ROLE_AUDITOR`、`ROLE_TENANT_ADMIN`、`ROLE_TENANT_USER`；旧 `ROLE_USER` 仅由 V213 数据迁移转换，JWT、账号 API、菜单和运行时鉴权不再保留兼容分支。
+
 ### 2026-09-25
 - **开源多人协作下的 main 红线**：`full-ci-gate` 新增 `main-failure-triage` job，在 main 核心门禁失败后自动标记关联 PR 并评论处理要求；CI 文档明确 PR gate 只是合入门禁，main 最新 full-gate 才是发布门禁，并建议启用 merge queue 降低多人并发合并后主干变红的风险。
 - **本地门禁增量/全量边界**：`pre-commit` 中 Java 日志治理、可读性约定、文本块格式、抑制项注册表、`Map/List/Set.of` 空值风险、MyBatis Mapper XML 与 Shell Linux 可移植性改为只扫描暂存命中文件；CI 保持无参全量扫描。仓库级文档、配置、功能开关、Helm 环境变量、依赖、LOC、安全白名单、changelog 和运行时对齐检查继续按域触发全量执行，避免跨文件漂移漏检。

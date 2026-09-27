@@ -115,8 +115,6 @@ batch:
       # 默认授权列表（SSE ticket / bypass-mode 未带 role header 时的回退）
       default-authorities:
         - ROLE_ADMIN
-        - ROLE_AUDITOR
-        - ROLE_CONFIG_ADMIN
       # 单账号单会话：新登录会顶掉旧 JWT
       single-session-enabled: ${BATCH_CONSOLE_SINGLE_SESSION_ENABLED:true}
       # JWT 签发者

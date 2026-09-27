@@ -152,8 +152,7 @@ public class ConsoleSecurityConfiguration {
                 ConsoleRoles.ADMIN,
                 ConsoleRoles.TENANT_ADMIN,
                 ConsoleRoles.AUDITOR,
-                ConsoleRoles.TENANT_USER,
-                ConsoleRoles.USER)
+                ConsoleRoles.TENANT_USER)
             .anyRequest()
             .authenticated())
         // Auth 先建立 SecurityContext，MaintenanceModeFilter 才能识别 ROLE_ADMIN 旁路；

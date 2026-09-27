@@ -220,6 +220,9 @@ public class ConsoleJwtService {
     if (!Texts.hasText(tenantId)) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.tenant.required");
     }
+    if (!ConsoleRoles.isFormalRoleSet(authorities)) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.account.invalid_role_set");
+    }
     Instant issuedAt = BatchDateTimeSupport.utcNow();
     Instant expiresAt = issuedAt.plus(properties.getJwtTtl());
     String jti = UUID.randomUUID().toString();
@@ -234,9 +237,7 @@ public class ConsoleJwtService {
         .claim(CLAIM_TOKEN_TYPE, TOKEN_TYPE)
         .claim(CLAIM_SESSION_VERSION, sessionVersion)
         .claim(CLAIM_JTI, jti)
-        .claim(
-            CLAIM_AUTHORITIES,
-            EmptyChecks.isNull(authorities) ? List.of() : List.copyOf(authorities));
+        .claim(CLAIM_AUTHORITIES, List.copyOf(authorities));
     if (EmptyChecks.isNotNull(currentRequest)) {
       String ipHash = hashClientIp(currentRequest);
       String uaHash = hashUserAgent(currentRequest);
@@ -261,7 +262,7 @@ public class ConsoleJwtService {
         expiresAt,
         username,
         tenantId,
-        EmptyChecks.isNull(authorities) ? Set.of() : new LinkedHashSet<>(authorities),
+        new LinkedHashSet<>(authorities),
         false);
   }
 
@@ -296,10 +297,10 @@ public class ConsoleJwtService {
     // 升级会误伤,真要 deny 需配合风控规则。空 claim = 旧 token 兼容,跳过比对。
     auditClientBindingDrift(jwt, username, tenantId);
     List<String> authorities = jwt.getClaimAsStringList(CLAIM_AUTHORITIES);
-    return new ConsolePrincipal(
-        username,
-        tenantId,
-        EmptyChecks.isNull(authorities) ? Set.of() : new LinkedHashSet<>(authorities));
+    if (!ConsoleRoles.isFormalRoleSet(authorities)) {
+      throw BizException.of(ResultCode.UNAUTHORIZED, "error.console_jwt.invalid");
+    }
+    return new ConsolePrincipal(username, tenantId, new LinkedHashSet<>(authorities));
   }
 
   /**

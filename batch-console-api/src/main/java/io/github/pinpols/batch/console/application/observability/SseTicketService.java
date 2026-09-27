@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.application.observability;
 
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
@@ -33,12 +34,12 @@ public class SseTicketService {
 
   /** 签发一次性 ticket，绑定签发时的角色集。 */
   public String issue(String username, String tenantId, Collection<String> authorities) {
+    if (!ConsoleRoles.isFormalRoleSet(authorities)) {
+      throw new IllegalArgumentException("unsupported console role set");
+    }
     String ticket = UUID.randomUUID().toString().replace("-", "");
-    String roles = authorities == null
-        ? ""
-        : String.join(
-            ROLE_SEPARATOR,
-            authorities.stream().filter(Texts::hasText).distinct().toList());
+    String roles = String.join(
+        ROLE_SEPARATOR, authorities.stream().filter(Texts::hasText).distinct().toList());
     String value =
         username + FIELD_SEPARATOR + (tenantId == null ? "" : tenantId) + FIELD_SEPARATOR + roles;
     ticketStore.save(ticket, value, TICKET_TTL);

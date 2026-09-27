@@ -42,7 +42,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
  *   <li>TENANT_ADMIN 创建账号 tenantId 自动覆盖为 principal.tenantId
  *   <li>TENANT_ADMIN 授 ROLE_ADMIN / ROLE_AUDITOR → 403
  *   <li>TENANT_ADMIN 操作跨租户账号 → 403
- *   <li>ADMIN 不受守卫限制
+ *   <li>ADMIN 可授予四类正式角色，但不能写入旧角色或未知角色
  *   <li>无 principal 上下文(@Async / 内部脚本)豁免
  * </ul>
  */
@@ -181,6 +181,38 @@ class ConsoleUserAccountServiceTest {
               eq("Dave"),
               eq("hashed"),
               eq(ConsoleRoles.ADMIN),
+              nullable(String.class));
+    }
+
+    @Test
+    void rejectsLegacyRoleUser() {
+      asPrincipal("system", ConsoleRoles.ADMIN);
+
+      assertThatThrownBy(() -> service.create("tenant-z", "legacy", "pw", "Legacy", "ROLE_USER"))
+          .isInstanceOf(BizException.class)
+          .extracting(e -> ((BizException) e).getCode())
+          .isEqualTo(ResultCode.INVALID_ARGUMENT);
+      verify(userAccountMapper, never())
+          .insert(any(), any(), any(), any(), any(), nullable(String.class));
+    }
+
+    @Test
+    void allowsAllFourFormalRoles() {
+      asPrincipal("system", ConsoleRoles.ADMIN);
+      when(userAccountMapper.selectByUsername("security-owner"))
+          .thenReturn(null)
+          .thenReturn(accountRow(4L, "system", "security-owner"));
+      String roles = String.join(",", ConsoleRoles.ALL);
+
+      service.create("system", "security-owner", "pw", "Security Owner", roles);
+
+      verify(userAccountMapper)
+          .insert(
+              eq("system"),
+              eq("security-owner"),
+              eq("Security Owner"),
+              eq("hashed"),
+              eq(roles),
               nullable(String.class));
     }
   }

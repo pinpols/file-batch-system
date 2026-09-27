@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.persistence.BatchColumnNames;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleUserAccountResponse;
 import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
@@ -35,7 +36,7 @@ public class ConsoleUserAccountService {
    * 必须由 ADMIN 操作。
    */
   private static final Set<String> TENANT_ADMIN_GRANTABLE_ROLES =
-      Set.of(ConsoleRoles.TENANT_ADMIN, ConsoleRoles.TENANT_USER, ConsoleRoles.USER);
+      Set.of(ConsoleRoles.TENANT_ADMIN, ConsoleRoles.TENANT_USER);
 
   private final ConsoleUserAccountMapper userAccountMapper;
   private final ConsolePasswordHasher passwordHasher;
@@ -197,15 +198,19 @@ public class ConsoleUserAccountService {
     }
   }
 
-  /** TENANT_ADMIN 不可授予 ADMIN/AUDITOR;ADMIN 不受限。 */
+  /** 所有账号只能使用四个正式角色；TENANT_ADMIN 不可授予 ADMIN/AUDITOR。 */
   private void enforceGrantableAuthorities(String authoritiesCsv) {
-    ConsolePrincipal principal = currentPrincipal();
-    if (principal == null) return;
-    if (isGlobalCaller(principal)) return;
     Set<String> requested = Arrays.stream(authoritiesCsv.split(","))
         .map(String::trim)
         .filter(s -> !s.isEmpty())
         .collect(Collectors.toSet());
+    for (String authority : requested) {
+      if (!ConsoleRoles.ALL.contains(authority)) {
+        throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.account.invalid_role", authority);
+      }
+    }
+    ConsolePrincipal principal = currentPrincipal();
+    if (EmptyChecks.isNull(principal) || isGlobalCaller(principal)) return;
     for (String authority : requested) {
       if (!TENANT_ADMIN_GRANTABLE_ROLES.contains(authority)) {
         throw BizException.of(ResultCode.FORBIDDEN, "error.account.role_grant_denied", authority);

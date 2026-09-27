@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.console.domain.rbac.service;
 
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.request.ConsoleLoginRequest;
@@ -33,8 +35,7 @@ import org.springframework.stereotype.Service;
  *       —— 新登录自动踢旧会话，同一账号无法多端并存（{@code singleSessionEnabled=true} 时生效）。
  *   <li><b>tenantId 解析顺序</b>：Principal.tenantId → request metadata → {@code defaultTenantId} 回退。
  *       前两个缺失时用默认租户而不是拒绝，兼容无 Principal 的边界场景（如 legacy header-only）。
- *   <li><b>authorities 回退</b>：principal 无 authorities 或只含泛化的 {@link ConsoleRoles#USER} 时， 用服务端
- *       {@code defaultAuthorities} 替换——防止未正确配置角色的账号获得空权限集。
+ *   <li><b>authorities 收口</b>：仅接受四类正式角色。无角色或包含旧角色的会话直接拒绝，不做兼容映射。
  *   <li><b>profile 带菜单</b>：{@link ConsoleAuthProfileResponse} 除身份字段外还附带 {@link
  *       ConsoleMenuRegistry#filterByAuthorities} 过滤后的菜单树，前端不需再单独拉菜单接口。
  * </ul>
@@ -108,19 +109,23 @@ public class ConsoleAuthApplicationService {
   }
 
   private Set<String> authorities(Authentication authentication) {
-    if (authentication != null
-        && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
-      return principal.authorities();
-    }
     Set<String> resolved = new LinkedHashSet<>();
-    if (authentication != null) {
+    boolean hasConsolePrincipal = EmptyChecks.isNotNull(authentication)
+        && authentication.getPrincipal() instanceof ConsolePrincipal;
+    if (hasConsolePrincipal) {
+      ConsolePrincipal principal = (ConsolePrincipal) authentication.getPrincipal();
+      resolved.addAll(principal.authorities());
+    } else if (EmptyChecks.isNotNull(authentication)) {
       for (GrantedAuthority grantedAuthority : authentication.getAuthorities()) {
         resolved.add(grantedAuthority.getAuthority());
       }
     }
-    if (resolved.isEmpty() || resolved.contains(ConsoleRoles.USER)) {
+    if (EmptyChecks.isEmpty(resolved) && !hasConsolePrincipal) {
       resolved.clear();
       resolved.addAll(securityProperties.getDefaultAuthorities());
+    }
+    if (!ConsoleRoles.isFormalRoleSet(resolved)) {
+      throw BizException.of(ResultCode.UNAUTHORIZED, "error.console_jwt.invalid");
     }
     return resolved;
   }

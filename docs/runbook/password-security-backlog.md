@@ -43,7 +43,7 @@ public class ChangePasswordRequest {
 `ConsoleAuthController.java`:
 ```java
 @PostMapping("/api/console/auth/change-password")
-@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_USER', 'ROLE_USER')")
+@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_USER')")
 public ResponseEntity<?> changePassword(
   @RequestBody @Validated ChangePasswordRequest req,
   Authentication auth
@@ -83,7 +83,7 @@ public ResponseEntity<?> changePassword(
 }
 ```
 
-**权限**:`@PreAuthorize` 5 角色全收(class-level 改成方法级 hasAnyAuthority)
+**权限**:`@PreAuthorize` 四类正式角色全收(class-level 改成方法级 hasAnyAuthority)
 
 **返回**:
 ```json

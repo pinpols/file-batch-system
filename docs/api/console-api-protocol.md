@@ -911,7 +911,7 @@ Deployment note:
 - `POST /api/console/users/{id}/disable` — disable account
 - All operations require `ROLE_ADMIN`.
 - `username` is globally unique (case-insensitive). Format: alphanumeric + `.` `_` `-`, min 2 chars.
-- `authoritiesCsv` is a comma-separated list of role names (e.g. `ROLE_TENANT_ADMIN,ROLE_AUDITOR`); default is `ROLE_USER`.
+- `authoritiesCsv` is a comma-separated list containing only `ROLE_ADMIN`, `ROLE_AUDITOR`, `ROLE_TENANT_ADMIN`, or `ROLE_TENANT_USER`; default is `ROLE_TENANT_USER`.
 - Password minimum 8 characters; only the Argon2id hash is stored, raw password is discarded after hashing.
 - Response fields: `id`, `tenantId`, `username`, `displayName`, `authoritiesCsv`, `enabled`, `createdAt`, `updatedAt`. `passwordHash` is never exposed.
 - Create request fields: `tenantId` (required), `username` (required), `displayName`, `password` (required, min 8), `authoritiesCsv`.

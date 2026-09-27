@@ -65,7 +65,7 @@ class ConsoleAiAuthorizationServiceTest {
   void assertAllowed_userMatched_passes() {
     SecurityContextHolder.getContext()
         .setAuthentication(new UsernamePasswordAuthenticationToken(
-            "alice", null, List.of(new SimpleGrantedAuthority("ROLE_VIEWER"))));
+            "alice", null, List.of(new SimpleGrantedAuthority("ROLE_TENANT_USER"))));
     ConsoleAiAuthorizationService service =
         newService(List.of("alice"), List.of("ROLE_ADMIN")); // authority 不在白名单
     assertThatCode(service::assertAllowed).doesNotThrowAnyException();
@@ -87,7 +87,7 @@ class ConsoleAiAuthorizationServiceTest {
   void assertAllowed_neitherMatched_throwsForbidden() {
     SecurityContextHolder.getContext()
         .setAuthentication(new UsernamePasswordAuthenticationToken(
-            "charlie", null, List.of(new SimpleGrantedAuthority("ROLE_VIEWER"))));
+            "charlie", null, List.of(new SimpleGrantedAuthority("ROLE_TENANT_USER"))));
     ConsoleAiAuthorizationService service =
         newService(List.of("alice", "bob"), List.of("ROLE_ADMIN", "ROLE_AUDITOR"));
     assertThatThrownBy(service::assertAllowed).isInstanceOf(BizException.class);
@@ -98,7 +98,7 @@ class ConsoleAiAuthorizationServiceTest {
   void assertAllowed_emptyWhitelists_throwsForbidden() {
     SecurityContextHolder.getContext()
         .setAuthentication(new UsernamePasswordAuthenticationToken(
-            "anyone", null, List.of(new SimpleGrantedAuthority("ROLE_USER"))));
+            "anyone", null, List.of(new SimpleGrantedAuthority("ROLE_TENANT_USER"))));
     ConsoleAiAuthorizationService service = newService(List.of(), List.of());
     assertThatThrownBy(service::assertAllowed).isInstanceOf(BizException.class);
   }

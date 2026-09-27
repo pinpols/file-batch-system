@@ -139,6 +139,15 @@ public class ConsoleSecurityProperties implements EnvironmentAware {
             + " Use the single batch.security.bypass-mode switch for integration testing.");
   }
 
+  /** 默认角色也必须来自正式四角色集合，避免测试旁路或异常 ticket 获得未定义权限。 */
+  @PostConstruct
+  void validateDefaultAuthorities() {
+    if (!ConsoleRoles.isFormalRoleSet(defaultAuthorities)) {
+      throw new IllegalStateException(
+          "FATAL: batch.console.security.default-authorities must contain only the four formal console roles");
+    }
+  }
+
   /**
    * P2-1(2026-06-03,docs/archive/analysis/2026-06-03-deep-scan-be-security.md): 启动期强校验 {@code
    * cors-allowed-origins} 不含通配符 {@code "*"} / {@code "null"} / 空白。

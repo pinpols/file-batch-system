@@ -2,14 +2,13 @@
 # =============================================================
 # seed-test-role-users.sh
 #
-# 给本地 console-api 种入 FE e2e RBAC matrix 期望的 3 个角色用户。
+# 给本地 console-api 种入 FE e2e RBAC matrix 期望的 2 个租户角色用户。
 #
 # 用例:rbac-matrix.spec.ts 与 e2e/global-setup.cjs 期望以下角色 storage state
 #   - op-tx     ROLE_TENANT_USER  tenant=tc   pw=admin123
 #   - tadmin-ta ROLE_TENANT_ADMIN tenant=ta   pw=Admin@123abc
-#   - user-tx   ROLE_USER         tenant=tc   pw=admin123
-# 缺这 3 个 -> login 401 -> rbac-matrix 50 spec 假阳性失败。
-# 注:登录契约只认 username(op-tx/user-tx 字面量不变)+ password,不传 tenant;
+# 缺这 2 个 -> login 401 -> rbac-matrix spec 失败。
+# 注:登录契约只认 username + password,不传 tenant;
 #    用户归属租户改成白名单 tc 只影响 BE 数据归属,不动 FE storage-state 契约。
 #
 # 用法:
@@ -29,7 +28,7 @@
 #         (ta/tb/tc/default-tenant)或带 test- prefix;否则 INVALID_ARGUMENT。
 #         默认值(TENANT_TX=tc / TENANT_TA=ta)都在白名单内,开箱即过;
 #         若 export 成非白名单值(如 tx)会被 guard 拒,step 2 会引导切回白名单。
-#   3. POST /api/console/users 建 op-tx / tadmin-ta / user-tx(409 -> skip)
+#   3. POST /api/console/users 建 op-tx / tadmin-ta(409 -> skip)
 #   4. 逐用户验证可 login(明文 path)。任何失败 -> exit 1 + 引导。
 # =============================================================
 set -euo pipefail
@@ -112,7 +111,7 @@ create_tenant() {
 create_tenant "$TENANT_TX"
 create_tenant "$TENANT_TA"
 
-# --- 3) 建 3 个测试用户(幂等)---
+# --- 3) 建 2 个测试用户(幂等)---
 create_user() {
   local tid="$1" username="$2" role="$3" pw="$4"
   note "create user $username (tenant=$tid, role=$role)"
@@ -137,7 +136,6 @@ create_user() {
 
 create_user "$TENANT_TX" "op-tx"     "ROLE_TENANT_USER"  "admin123"
 create_user "$TENANT_TA" "tadmin-ta" "ROLE_TENANT_ADMIN" "Admin@123abc"
-create_user "$TENANT_TX" "user-tx"   "ROLE_USER"         "admin123"
 
 # --- 4) 逐用户验证 login ---
 verify_login() {
@@ -158,6 +156,5 @@ verify_login() {
 
 verify_login "op-tx"     "admin123"
 verify_login "tadmin-ta" "Admin@123abc"
-verify_login "user-tx"   "admin123"
 
-ok "RBAC seed 完成:3 用户均可登录"
+ok "RBAC seed 完成:2 个租户角色用户均可登录"
