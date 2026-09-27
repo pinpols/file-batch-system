@@ -160,19 +160,7 @@ public class GenerateStep implements ExportStageStep {
             // 幂等跳过:GENERATE 已整体完成且文件完整(STORE 尚未消费)→ 重派不重生成,补齐下游 attribute 即可。
             return completeWithoutRegenerate(context, batch, generatedFile, pos.processedCount());
           }
-          ThrottledLogger.Decision fingerprintDecision =
-              fingerprintLogThrottle.evaluate(context.getTenantId() + ':' + checkpointInstanceId);
-          if (fingerprintDecision.shouldLog()) {
-            log.warn(
-                "export GENERATE completed-marker file fingerprint mismatch, regenerating fresh:"
-                    + " tenantId={}, instanceId={}, expectedBytes={}, actualBytes={},"
-                    + " suppressedSincePrevious={}",
-                context.getTenantId(),
-                checkpointInstanceId,
-                expectedSize,
-                actualSize,
-                fingerprintDecision.suppressedSincePrevious());
-          }
+          logFingerprintMismatch(context, checkpointInstanceId, expectedSize, actualSize);
           // 落到 open(pos.completed()) → resuming=false → generatePaged truncate 到 0 → 全量重写。
         }
         checkpoint = GenerateCheckpoint.open(
@@ -233,6 +221,23 @@ public class GenerateStep implements ExportStageStep {
           new Object[] {ex.getMessage()},
           ex.getMessage(),
           objectMapper);
+    }
+  }
+
+  private void logFingerprintMismatch(
+      ExportJobContext context, long checkpointInstanceId, long expectedSize, long actualSize) {
+    ThrottledLogger.Decision decision =
+        fingerprintLogThrottle.evaluate(context.getTenantId() + ':' + checkpointInstanceId);
+    if (decision.shouldLog()) {
+      log.warn(
+          "export GENERATE completed-marker file fingerprint mismatch, regenerating fresh:"
+              + " tenantId={}, instanceId={}, expectedBytes={}, actualBytes={},"
+              + " suppressedSincePrevious={}",
+          context.getTenantId(),
+          checkpointInstanceId,
+          expectedSize,
+          actualSize,
+          decision.suppressedSincePrevious());
     }
   }
 
