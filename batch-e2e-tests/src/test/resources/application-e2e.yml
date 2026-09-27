@@ -28,7 +28,6 @@ batch:
       default-authorities:
         - ROLE_ADMIN
         - ROLE_AUDITOR
-        - ROLE_CONFIG_ADMIN
   worker:
     task-client:
       base-url: http://127.0.0.1:${local.server.port}
