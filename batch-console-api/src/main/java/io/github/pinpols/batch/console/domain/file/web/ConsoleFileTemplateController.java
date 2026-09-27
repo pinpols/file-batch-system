@@ -4,10 +4,12 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileTemplateApplicationService;
 import io.github.pinpols.batch.console.domain.file.application.contract.query.FileTemplateQueryRequest;
+import io.github.pinpols.batch.console.domain.file.application.contract.request.FileNamePreviewRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.FileTemplateCreateRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.FileTemplateMappingDraftRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.FileTemplateUpdateRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileTemplateResponse;
+import io.github.pinpols.batch.console.domain.file.application.contract.response.FileNamePreviewResponse;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.FileTemplateMappingDraftResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.command.EnabledPatchRequest;
@@ -69,6 +71,15 @@ public class ConsoleFileTemplateController {
       @Valid @RequestBody FileTemplateMappingDraftRequest request) {
     return responseFactory.success(FileTemplateMappingDraftResponse.from(
         fileTemplateApplicationService.draftMapping(request.toCommand())));
+  }
+
+  /** 使用导出 Worker 的同一规则预览最终文件名，不读取或修改模板配置。 */
+  @PostMapping("/naming-preview")
+  @PreAuthorize(
+      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_USER')")
+  public CommonResponse<FileNamePreviewResponse> previewFileName(
+      @Valid @RequestBody FileNamePreviewRequest request) {
+    return responseFactory.success(fileTemplateApplicationService.previewFileName(request));
   }
 
   /** 更新文件模板。 */

@@ -7714,6 +7714,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseFileTemplateMappingDraftResponse'
+  /api/console/file-templates/naming-preview:
+    post:
+      tags: [FileTemplates]
+      summary: Preview an export file name with the worker runtime resolver
+      operationId: previewFileTemplateName
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileNamePreviewRequest'
+      responses:
+        '200':
+          description: Worker-compatible export file name preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseFileNamePreviewResponse'
   /api/console/file-templates/{id}:
     get:
       tags: [FileTemplates]
@@ -11019,6 +11041,13 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/FileTemplateMappingDraftResponse'
+    CommonResponseFileNamePreviewResponse:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/FileNamePreviewResponse'
     DagValidationFinding:
       type: object
       description: 工作流 DAG 静态校验的单条发现条目。`nodeCode` 与 `edgeId` 至多一个非空。
@@ -13225,6 +13254,39 @@ components:
           type: array
           items:
             type: string
+    FileNamePreviewRequest:
+      type: object
+      required: [tenantId, fileFormatType, bizDate]
+      properties:
+        tenantId:
+          type: string
+        namingRule:
+          type: string
+          maxLength: 512
+        fileFormatType:
+          type: string
+          maxLength: 32
+        bizType:
+          type: string
+          maxLength: 64
+        bizDate:
+          type: string
+          format: date
+        batchNo:
+          type: string
+          maxLength: 128
+        region:
+          type: string
+          maxLength: 64
+        version:
+          type: string
+          maxLength: 32
+    FileNamePreviewResponse:
+      type: object
+      required: [fileName]
+      properties:
+        fileName:
+          type: string
     FileChannelCreateRequest:
       type: object
       description: 创建文件渠道。与 BE Java DTO `FileChannelCreateRequest` 对齐。

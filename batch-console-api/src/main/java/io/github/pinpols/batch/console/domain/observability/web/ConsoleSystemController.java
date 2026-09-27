@@ -15,12 +15,13 @@ import java.util.List;
 import java.util.TimeZone;
 import lombok.RequiredArgsConstructor;
 import org.quartz.CronExpression;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Console 系统级公开接口:健康/维护状态/cron 工具等不依赖业务数据的端点。 */
+/** Console 系统级接口：维护状态公开，其他工具遵循正式角色授权。 */
 @RestController
 @RequestMapping("/api/console/system")
 @RequiredArgsConstructor
@@ -64,6 +65,8 @@ public class ConsoleSystemController {
    * @param count 返回时刻数,默认 3,上限 20
    */
   @GetMapping("/cron-preview")
+  @PreAuthorize(
+      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_USER')")
   public CommonResponse<CronPreviewResponse> cronPreview(
       @RequestParam("expr") String expr,
       @RequestParam(value = "count", required = false) Integer count) {

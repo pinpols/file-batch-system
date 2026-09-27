@@ -28,6 +28,7 @@ import org.springframework.core.env.Environment;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.csrf.DefaultCsrfToken;
 
 class ConsoleSecurityConfigurationTest {
 
@@ -126,6 +127,18 @@ class ConsoleSecurityConfigurationTest {
     assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_OK);
     assertThat(chainCalled).isTrue();
     assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+  }
+
+  @Test
+  void shouldAcceptCookieTokenValueFromAxiosHeader() {
+    String tokenValue = "csrf-token-from-cookie";
+    MockHttpServletRequest request = baseRequest();
+    request.addHeader("X-XSRF-TOKEN", tokenValue);
+
+    String resolved = ConsoleSecurityConfiguration.csrfTokenRequestHandler()
+        .resolveCsrfTokenValue(request, new DefaultCsrfToken("X-XSRF-TOKEN", "_csrf", tokenValue));
+
+    assertThat(resolved).isEqualTo(tokenValue);
   }
 
   private MockHttpServletRequest baseRequest() {

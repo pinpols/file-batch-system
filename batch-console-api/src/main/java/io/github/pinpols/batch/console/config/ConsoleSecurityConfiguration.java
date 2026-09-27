@@ -31,6 +31,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.CsrfToken;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.csrf.CsrfTokenRequestHandler;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -106,6 +108,9 @@ public class ConsoleSecurityConfiguration {
     // XSRF-TOKEN intentionally stays readable by browser JavaScript: axios copies it into the
     // X-XSRF-TOKEN header for Spring Security's double-submit CSRF validation.
     http.csrf(csrf -> csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+        // Console 是纯 JSON API，前端 Axios 把 cookie 原值复制到请求头。显式使用明文处理器，
+        // 避免 Spring Security 默认 XOR 处理器把合法的 double-submit 请求误判为 403。
+        .csrfTokenRequestHandler(csrfTokenRequestHandler())
         .ignoringRequestMatchers(csrfIgnoredMatchers()));
     return http.sessionManagement(
             session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -133,7 +138,6 @@ public class ConsoleSecurityConfiguration {
                 "/api/console/captcha/config",
                 "/api/console/push/vapid-public-key",
                 "/api/console/system/maintenance",
-                "/api/console/system/cron-preview",
                 // FS 后端 presign 代下端点：URL 自带 HMAC 令牌即授权（见
                 // ConsoleFilesystemPresignDownloadController），无登录态；S3 后端
                 // ConditionalOnProperty 不装
@@ -168,6 +172,10 @@ public class ConsoleSecurityConfiguration {
     return batchSecurityProperties.isBypassMode()
         ? BYPASS_MODE_CSRF_IGNORED_MATCHERS
         : CSRF_IGNORED_MATCHERS;
+  }
+
+  static CsrfTokenRequestHandler csrfTokenRequestHandler() {
+    return new CsrfTokenRequestAttributeHandler();
   }
 
   private AuthenticationEntryPoint authenticationEntryPoint(

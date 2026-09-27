@@ -133,14 +133,17 @@ public final class ConsoleQuerySupport {
     if (value == null || value.isBlank()) {
       return null;
     }
-    try {
-      LocalDate date = LocalDate.parse(value);
-      return date.plusDays(1).atStartOfDay(zone).toInstant().minusMillis(1);
-    } catch (DateTimeParseException ignored) {
-      SwallowedExceptionLogger.info(
-          ConsoleQuerySupport.class, "catch:DateTimeParseException", ignored);
+    String trimmed = value.trim();
+    if (trimmed.length() == 10 && trimmed.charAt(4) == '-' && trimmed.charAt(7) == '-') {
+      try {
+        LocalDate date = LocalDate.parse(trimmed);
+        return date.plusDays(1).atStartOfDay(zone).toInstant().minusNanos(1_000);
+      } catch (DateTimeParseException ignored) {
+        SwallowedExceptionLogger.info(
+            ConsoleQuerySupport.class, "catch:DateTimeParseException", ignored);
+      }
     }
-    return parseFlexibleInstant(value, fieldName, zone);
+    return parseFlexibleInstant(trimmed, fieldName, zone);
   }
 
   public static String firstNonBlank(String first, String second) {
