@@ -162,6 +162,11 @@ def wait_for(job, rid, expected="SUCCESS"):
             marker = "✓" if status == expected else "✗"
             print(f"  [result] {job:28s} {status:14s} expected={expected} {marker}", flush=True)
             if status != expected:
+                print("  [failure details]", flush=True)
+                psql(
+                    os.environ["PLATFORM_DB"], "select-request-job-diagnostics.sql",
+                    {"tenant_id": "ta", "request_id": rid, "job_code": job},
+                    capture_output=False)
                 sys.exit(1)
             return
         time.sleep(3)
