@@ -7,6 +7,7 @@ import io.github.pinpols.batch.console.domain.job.application.contract.request.B
 import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchWindowUpdateRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchWindowResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.command.EnabledPatchRequest;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -48,12 +49,10 @@ public class ConsoleBatchWindowController {
     return responseFactory.success(batchWindowApplicationService.update(id, request));
   }
 
-  @PostMapping("/{id}/toggle")
-  public CommonResponse<Void> toggle(
-      @PathVariable Long id,
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam("enabled") Boolean enabled) {
-    batchWindowApplicationService.toggle(id, tenantId, enabled);
+  @PatchMapping("/{id}/enabled")
+  public CommonResponse<Void> setEnabled(
+      @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
+    batchWindowApplicationService.toggle(id, request.getTenantId(), request.getEnabled());
     return responseFactory.success(null);
   }
 }

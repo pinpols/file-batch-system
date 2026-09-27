@@ -1,5 +1,8 @@
 # REST / Command API Toggle 语义治理待办
 
+> **完成状态（2026-09-27）**：Phase 1/2/3 已完成。6 个资源统一改为 `PATCH .../{id}/enabled`，
+> 前端调用与测试已切换，旧 `POST .../{id}/toggle?enabled=` 已按明确要求删除。
+
 ## 结论
 
 当前 `toggle` 接口不是上线阻断问题。
@@ -11,18 +14,18 @@
 
 需要治理的是契约命名和接口风格：路径名 `toggle` 容易让调用方误解为非幂等翻转操作，也和已经较成熟的 `PATCH .../enabled` 风格不一致。
 
-## 当前范围
+## 迁移前范围
 
 后端 OpenAPI 当前命中 6 个候选接口：
 
 | 接口 | 当前语义 | 治理建议 |
 |---|---|---|
-| `POST /api/console/queues/{id}/toggle?enabled=` | 设置队列启停 | 新增显式状态接口，旧接口保留兼容 |
-| `POST /api/console/batch-windows/{id}/toggle?enabled=` | 设置批量窗口启停 | 新增显式状态接口，旧接口保留兼容 |
-| `POST /api/console/calendars/{id}/toggle?enabled=` | 设置日历启停 | 新增显式状态接口，旧接口保留兼容 |
-| `POST /api/console/quota-policies/{id}/toggle?enabled=` | 设置配额策略启停 | 新增显式状态接口，旧接口保留兼容 |
-| `POST /api/console/alert-routings/{id}/toggle?enabled=` | 设置告警路由启停 | 新增显式状态接口，旧接口保留兼容 |
-| `POST /api/console/pipeline-definitions/{id}/toggle?enabled=` | 设置 Pipeline 定义启停 | 新增显式状态接口，旧接口保留兼容 |
+| `POST /api/console/queues/{id}/toggle?enabled=` | 设置队列启停 | 已替换并删除 |
+| `POST /api/console/batch-windows/{id}/toggle?enabled=` | 设置批量窗口启停 | 已替换并删除 |
+| `POST /api/console/calendars/{id}/toggle?enabled=` | 设置日历启停 | 已替换并删除 |
+| `POST /api/console/quota-policies/{id}/toggle?enabled=` | 设置配额策略启停 | 已替换并删除 |
+| `POST /api/console/alert-routings/{id}/toggle?enabled=` | 设置告警路由启停 | 已替换并删除 |
+| `POST /api/console/pipeline-definitions/{id}/toggle?enabled=` | 设置 Pipeline 定义启停 | 已替换并删除 |
 
 已存在的正向样板：
 
@@ -47,9 +50,9 @@
 
 ## 建议方案
 
-### Phase 1：兼容新增
+### Phase 1：显式替换
 
-新增显式状态接口，保留旧接口：
+新增显式状态接口：
 
 ```text
 PATCH /api/console/queues/{id}/enabled
@@ -71,9 +74,8 @@ PATCH /api/console/pipeline-definitions/{id}/enabled
 
 约束：
 
-- 新旧接口必须调用同一个 application service 方法，避免双实现漂移。
-- 旧 `toggle` 接口标记 deprecated，但暂不删除。
-- OpenAPI 给旧接口补充说明：该接口实际为显式设置 `enabled`，不是无参翻转。
+- 新接口调用原 application service 方法，避免业务实现漂移。
+- 旧 `toggle` 接口从 Controller 和 OpenAPI 删除。
 
 ### Phase 2：前端切换
 
@@ -86,14 +88,9 @@ PATCH /api/console/pipeline-definitions/{id}/enabled
 
 页面层可以继续叫 `toggleXxx`，因为 UI 行为是开关切换；API 层注释要说明它是“设置目标 enabled 状态”。
 
-### Phase 3：旧接口退役
+### Phase 3：旧接口退役（已完成）
 
-满足以下条件后再删除旧接口：
-
-- 前端主分支和 E2E 已全部切新接口。
-- OpenAPI SDK / 生成类型不再依赖旧路径。
-- 至少一个小版本周期内没有旧接口访问日志。
-- PR 模板或 API review checklist 已覆盖“启停状态必须显式传目标状态”。
+前端、测试和 OpenAPI 生成类型已同步切换，旧 Controller 与契约路径已删除。
 
 ## 影响面
 
@@ -124,6 +121,6 @@ PATCH /api/console/pipeline-definitions/{id}/enabled
 
 - 新接口和旧接口对同一资源设置相同 `enabled` 值时结果一致。
 - 重复调用新接口不会改变目标状态以外的字段。
-- 旧接口仍兼容当前前端和外部调用方。
+- 旧接口不再出现在 Controller、OpenAPI 和生成类型中。
 - OpenAPI 生成类型更新，前端 `gen:api:check` 通过。
 - 前端启停开关页面回归通过。

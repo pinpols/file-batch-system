@@ -37,7 +37,7 @@ bash scripts/ci/security-scan.sh
 
 ```bash
 mvn -f security-scan/pom.xml package
-java -jar security-scan/target/security-scan-1.0.0-SNAPSHOT.jar --mode=all --root=. --target-url=http://localhost:18080
+java -jar security-scan/target/security-scan-1.0.0.jar --mode=all --root=. --target-url=http://localhost:18080
 ```
 
 如果从 `security-scan/` 目录运行：

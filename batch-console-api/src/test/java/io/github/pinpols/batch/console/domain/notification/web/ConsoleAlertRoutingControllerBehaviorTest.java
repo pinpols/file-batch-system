@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -110,12 +111,12 @@ class ConsoleAlertRoutingControllerBehaviorTest {
   }
 
   @Test
-  void toggleShouldDelegate() throws Exception {
+  void setEnabledShouldDelegate() throws Exception {
     mockMvc
-        .perform(post("/api/console/alert-routings/9/toggle")
-            .param("tenantId", "ta")
-            .param("enabled", "false"))
+        .perform(patch("/api/console/alert-routings/9/enabled")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"ta\",\"enabled\":true}"))
         .andExpect(status().isOk());
-    verify(service).toggle(9L, "ta", false);
+    verify(service).toggle(9L, "ta", true);
   }
 }

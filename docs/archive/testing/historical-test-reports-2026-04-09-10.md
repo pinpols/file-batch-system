@@ -1,7 +1,7 @@
 # 历史测试报告归档（2026-04-09 ~ 04-10 快照）
 
 > 这些是 v1 阶段（4/9-4/10）跑测产物的快照；保留为审计参考，不再维护。
-> 当前测试体系见 `docs/testing/` (full-project-test-plan / phase-coverage / e2e-coverage / release-gate / coverage-gap-analysis / load-test-report)。
+> 当前测试体系见 `docs/testing/`（`full-project-test-plan` / `phase-coverage` / `release-gate` / `coverage-gap-analysis` / `load-test-report`）；当前 E2E 覆盖快照以 `coverage-gap-analysis.md` 和对应测试代码为准。
 
 ---
 
@@ -740,5 +740,4 @@ java.lang.IllegalStateException: failed to register quartz trigger: export_settl
 
 - 新增迁移必须继续按版本号递增，不要回写旧版本。
 - 业务 seed 和测试 seed 仍要尽量保持幂等，避免重复执行中断联调。
-
 

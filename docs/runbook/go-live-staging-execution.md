@@ -1,7 +1,7 @@
 # 上线 · Phase 1-3 staging 执行 playbook(可复制粘贴)
 
 > 配套 [`go-live-readiness.md`](go-live-readiness.md) 的**最小执行清单**:在**生产同构 staging** 上逐条跑、记录、签字。
-> 本次参数:**5–20 jobs/s**、**RTO < 2h / RPO < 15min**。
+> 验收目标:**5–20 jobs/s**、**RTO ≤ 30min / RPO ≤ 5min**。灾备目标依据 [`backup-and-pitr.md` §1.4](backup-and-pitr.md#14-rto--rpo-slo量化目标)，须由目标环境严格恢复演练证明。`dr-drill-pitr.sh` 检查目标点前数据完整性与 RTO；RPO 时间窗口还须单独核对故障时刻与最新可恢复 WAL/归档点。
 > 通用前置:`unset BATCH_ENV_COMMON_ROOT`(防 profile 污染);staging 的 app(orchestrator+workers+console+trigger)+ infra(PG/Kafka/MinIO/Valkey)已起。
 
 ---
@@ -53,13 +53,13 @@ bash scripts/sim/dr-drill-fleet-crash.sh
 
 # (2) PITR → RPO/RTO(RESTORE_CMD 填你的备份工具)
 PG_CONTAINER=<staging-pg> POSTGRES_USER=<user> PG_PLATFORM_DB=batch_platform \
-RTO_BUDGET_S=7200 \
+RTO_BUDGET_S=1800 \
 RESTORE_CMD='pgbackrest --stanza=batch --type=time --target="$RESTORE_TARGET_TIME" restore' \
 bash scripts/sim/dr-drill-pitr.sh
 #   WAL-G:  RESTORE_CMD='wal-g backup-fetch /var/lib/postgresql/data LATEST && touch .../recovery.signal && ...'
 #   RDS/Aurora: RESTORE_CMD='aws rds restore-db-instance-to-point-in-time --restore-time "$RESTORE_TARGET_TIME" ...'
 ```
-**通过判据**:全 worker 组崩溃脚本退 0(无重复 job_instance / 无重复 outbox / 无复活长期停滞);PITR 脚本退 0(RPO 不丢 T0 前已提交 + RTO ≤ 2h)。另做 PG failover + Kafka 短时不可用 + DLQ 重放。
+**通过判据**:全 worker 组崩溃脚本退 0(无重复 job_instance / 无重复 outbox / 无复活长期停滞);PITR 脚本退 0(T0 前已提交数据完整 + RTO ≤ 30min)，并单独提供证据证明可恢复点滞后 ≤5min。另做 PG failover + Kafka 短时不可用 + DLQ 重放。
 签字:__________
 
 ## Phase 1-D · 安全签收

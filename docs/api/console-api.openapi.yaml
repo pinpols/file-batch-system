@@ -2,8 +2,10 @@ openapi: 3.1.0
 info:
   title: Batch Platform Console API
   version: 0.1.0
-  x-last-updated: "2026-08-27"
+  x-last-updated: "2026-09-27"
   x-changelog:
+    - date: "2026-09-27"
+      summary: "资源队列、批次窗口、业务日历、配额策略、告警路由和 Pipeline 定义统一改用 PATCH /{id}/enabled 显式状态接口，并删除旧 POST /{id}/toggle。"
     - date: "2026-08-27"
       summary: "新增租户配置治理接口：POST /api/console/config/tenant-copy 支持 jobCodes dependency-aware 最小复制包；新增 /tenant-copy/preview、/tenant-overlay/preview、/tenant-config-matrix，支持 base package + tenant overlay 差异包、跨租户 job 配置矩阵。"
     - date: "2026-08-21"
@@ -5837,11 +5839,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseResourceQueue'
-  /api/console/queues/{id}/toggle:
-    post:
+  /api/console/queues/{id}/enabled:
+    patch:
       tags: [Queues]
-      summary: Enable or disable resource queue
-      operationId: toggleResourceQueue
+      summary: Set resource queue enabled state
+      operationId: setResourceQueueEnabled
       security:
         - bearerAuth: []
       parameters:
@@ -5852,16 +5854,12 @@ paths:
           schema:
             type: integer
             format: int64
-        - name: tenantId
-          in: query
-          required: true
-          schema:
-            type: string
-        - name: enabled
-          in: query
-          required: true
-          schema:
-            type: boolean
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnabledPatchRequest'
       responses:
         '200':
           description: Success
@@ -5952,11 +5950,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseBatchWindow'
-  /api/console/batch-windows/{id}/toggle:
-    post:
+  /api/console/batch-windows/{id}/enabled:
+    patch:
       tags: [BatchWindows]
-      summary: Enable or disable batch window
-      operationId: toggleBatchWindow
+      summary: Set batch window enabled state
+      operationId: setBatchWindowEnabled
       security:
         - bearerAuth: []
       parameters:
@@ -5967,16 +5965,12 @@ paths:
           schema:
             type: integer
             format: int64
-        - name: tenantId
-          in: query
-          required: true
-          schema:
-            type: string
-        - name: enabled
-          in: query
-          required: true
-          schema:
-            type: boolean
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnabledPatchRequest'
       responses:
         '200':
           description: Success
@@ -6067,11 +6061,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseCalendar'
-  /api/console/calendars/{id}/toggle:
-    post:
+  /api/console/calendars/{id}/enabled:
+    patch:
       tags: [Calendars]
-      summary: Enable or disable calendar
-      operationId: toggleCalendar
+      summary: Set calendar enabled state
+      operationId: setCalendarEnabled
       security:
         - bearerAuth: []
       parameters:
@@ -6082,16 +6076,12 @@ paths:
           schema:
             type: integer
             format: int64
-        - name: tenantId
-          in: query
-          required: true
-          schema:
-            type: string
-        - name: enabled
-          in: query
-          required: true
-          schema:
-            type: boolean
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnabledPatchRequest'
       responses:
         '200':
           description: Success
@@ -6749,11 +6739,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseQuotaPolicy'
-  /api/console/quota-policies/{id}/toggle:
-    post:
+  /api/console/quota-policies/{id}/enabled:
+    patch:
       tags: [QuotaPolicies]
-      summary: Enable or disable quota policy
-      operationId: toggleQuotaPolicy
+      summary: Set quota policy enabled state
+      operationId: setQuotaPolicyEnabled
       security:
         - bearerAuth: []
       parameters:
@@ -6764,16 +6754,12 @@ paths:
           schema:
             type: integer
             format: int64
-        - name: tenantId
-          in: query
-          required: true
-          schema:
-            type: string
-        - name: enabled
-          in: query
-          required: true
-          schema:
-            type: boolean
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnabledPatchRequest'
       responses:
         '200':
           description: Success
@@ -6875,11 +6861,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleAlertRouting'
-  /api/console/alert-routings/{id}/toggle:
-    post:
+  /api/console/alert-routings/{id}/enabled:
+    patch:
       tags: [AlertRoutings]
-      summary: Enable or disable alert routing
-      operationId: toggleAlertRouting
+      summary: Set alert routing enabled state
+      operationId: setAlertRoutingEnabled
       security:
         - bearerAuth: []
       parameters:
@@ -6890,16 +6876,12 @@ paths:
           schema:
             type: integer
             format: int64
-        - name: tenantId
-          in: query
-          required: true
-          schema:
-            type: string
-        - name: enabled
-          in: query
-          required: true
-          schema:
-            type: boolean
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnabledPatchRequest'
       responses:
         '200':
           description: Success
@@ -7020,11 +7002,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseObject'
-  /api/console/pipeline-definitions/{id}/toggle:
-    post:
+  /api/console/pipeline-definitions/{id}/enabled:
+    patch:
       tags: [PipelineDefinitions]
-      summary: Enable or disable pipeline definition
-      operationId: togglePipelineDefinition
+      summary: Set pipeline definition enabled state
+      operationId: setPipelineDefinitionEnabled
       security:
         - bearerAuth: []
       parameters:
@@ -7035,16 +7017,12 @@ paths:
           schema:
             type: integer
             format: int64
-        - name: tenantId
-          in: query
-          required: true
-          schema:
-            type: string
-        - name: enabled
-          in: query
-          required: true
-          schema:
-            type: boolean
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnabledPatchRequest'
       responses:
         '200':
           description: Success

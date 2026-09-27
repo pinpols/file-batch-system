@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import difflib
 import pathlib
 import re
 import subprocess
@@ -54,6 +55,18 @@ def main() -> int:
         actual = normalize_report(read(snapshot))
         if expected != actual:
             print(f"❌ {snapshot.relative_to(ROOT)} 不是当前源码的最新代码量快照", file=sys.stderr)
+            diff = difflib.unified_diff(
+                expected.splitlines(),
+                actual.splitlines(),
+                fromfile="generated",
+                tofile=str(snapshot.relative_to(ROOT)),
+                lineterm="",
+            )
+            for index, line in enumerate(diff):
+                if index >= 80:
+                    print("   ... diff truncated after 80 lines", file=sys.stderr)
+                    break
+                print(f"   {line}", file=sys.stderr)
             print("   请执行：", file=sys.stderr)
             print(f"   python3 scripts/dev/lean-loc-report.py --write {snapshot.relative_to(ROOT)}", file=sys.stderr)
             return 1

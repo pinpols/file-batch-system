@@ -42,7 +42,9 @@
 | Worker ADR backlog 优先级 | docs/agent-baseline.md "ADR 实施范围纪律" + `architecture/adr/` 各 ADR 文档 | `archive/analysis/worker-adr-backlog-priority-2026-05-03.md`（时效性 priority 表）|
 | 测试计划 | `testing/full-project-test-plan.md` | `archive/testing/test-plan-2026-03-28.md` |
 | 测试报告 | `testing/load-test-report.md` | `archive/testing/historical-test-reports-2026-04-09-10.md` |
+| E2E 覆盖矩阵 | `testing/coverage-gap-analysis.md`（注明核查日期） | `archive/testing/e2e-coverage-2026-05-03.md`（历史场景快照） |
 | 发布流程 | `runbook/releasing.md` | `archive/runbook/release-process-2026-05-22.md`（已废弃 GitOps 蓝图） |
+| Trigger 异步 launch 灰度 | `runbook/trigger-operations.md` | `archive/runbook/trigger-async-launch-rollout-2026-05-02.md`（旧开关和同步路径已删除） |
 | 代码审查 | `review/` 当前保留近期仍有参考价值的快照 | `archive/review/` 历史快照 |
 
 ## 2026-08-21 归档批次

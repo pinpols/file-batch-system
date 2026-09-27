@@ -6,6 +6,7 @@ import io.github.pinpols.batch.console.application.config.ConsoleQuotaPolicyAppl
 import io.github.pinpols.batch.console.application.contract.request.config.QuotaPolicySaveRequest;
 import io.github.pinpols.batch.console.application.contract.response.config.QuotaPolicyResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.command.EnabledPatchRequest;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -47,12 +48,10 @@ public class ConsoleQuotaPolicyController {
     return responseFactory.success(quotaPolicyApplicationService.update(id, request));
   }
 
-  @PostMapping("/{id}/toggle")
-  public CommonResponse<Void> toggle(
-      @PathVariable Long id,
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam("enabled") Boolean enabled) {
-    quotaPolicyApplicationService.toggle(id, tenantId, enabled);
+  @PatchMapping("/{id}/enabled")
+  public CommonResponse<Void> setEnabled(
+      @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
+    quotaPolicyApplicationService.toggle(id, request.getTenantId(), request.getEnabled());
     return responseFactory.success(null);
   }
 }

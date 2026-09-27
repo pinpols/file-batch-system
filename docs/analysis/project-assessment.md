@@ -6,6 +6,8 @@
 > 评估方法：量化 grep / 模块依赖矩阵 / 跨模块边界核查 / ADR 落地实地验证 / 多维并行评估
 > 不包含：动态压测、生产流量回放；Docker daemon 偶发故障未真实验证容器重启效果
 
+> **后续状态提示（2026-09-27）**：本文是 2026-04-30 的历史快照，不作为当前待办或运行手册。文中 ADR-010 Stage 6/7 灰度及删除旧 HTTP 路径事项已被 ADR-010 后续实施后记取代；旧灰度流程已归档，不要按本文 F2/F3 或相关历史步骤执行。当前状态见 [`ADR-010`](../architecture/adr/ADR-010-trigger-async-decoupling.md) 和 [`Trigger 运维手册`](../runbook/trigger-operations.md)。
+
 ---
 
 ## 0. 24h 演进定量
@@ -42,7 +44,7 @@
 | 3 | `batch-trigger/.../service/DefaultTriggerService.java:202-225` 异步分支 + 灰度开关 |
 | 4 | `batch-trigger/.../infrastructure/mq/KafkaTriggerEventPublisher.java` + `batch-orchestrator/.../application/trigger/TriggerLaunchConsumer.java` |
 | 5 | **22 测试全部通过** = 9 单测 + 7 relay + 4 trigger E2E + 2 跨模块 E2E |
-| 6 | `docs/runbook/trigger-async-launch-rollout.md` 完整 SOP |
+| 6 | 旧版灰度 SOP（现已归档，仅为本次历史评估所引用） |
 | 7 | `HttpOrchestratorTriggerAdapter` `@Deprecated(forRemoval=true)` + DefaultTriggerService 首次进入 deprecation WARN |
 
 主链路从 trigger fire 到 worker REPORT 现已**全程异步解耦**：trigger 重启不丢 launch / orchestrator 短暂宕机不阻塞 trigger Quartz 线程。
@@ -141,7 +143,7 @@
 
 ### ✅ 新增资产
 
-- `docs/runbook/trigger-async-launch-rollout.md` 280 行 staging→canary→prod 三阶段 SOP + 回滚预案 + 24h 对账 SQL
+- 旧版灰度流程曾包含 staging→canary→prod 步骤、回滚预案和对账 SQL；现存档于 `docs/archive/runbook/trigger-async-launch-rollout-2026-05-02.md`，不得执行
 - `docs/runbook/feature-switches.md` `batch.trigger.async-launch.enabled` §3.7 已收录
 - `scripts/ops/heal-zombie-pipelines.sh` + `make ops-heal-zombie-pipelines` target 闭环 zombie 治理
 - V80 `trigger_outbox_event` schema 含 UK 防重 + partial index `(status, next_publish_at)` 热点
@@ -203,13 +205,13 @@
 
 7 个 Excel god class 中 6 个已拆完（`b9eefb47`），最后这 1 个**经决策保留**：本身已是从父类抽出的 single-purpose validator，9 个 `validateXxxRows` 方法共享 cross-reference 数据（workflow node ↔ pipeline step ↔ file channel 跨 sheet 比对），拆 9 个 SheetValidator 反而 fragment + 跨类传参 overhead > 收益。
 
-#### F2 — ADR-010 Stage 6 灰度切换 operational
+#### F2 — ADR-010 Stage 6 灰度切换 operational（当时待办，已完成）
 
-按 `docs/runbook/trigger-async-launch-rollout.md` 执行 staging → canary 24h → prod 全量切换。**需真部署环境**，不在代码 sprint 范围。
+当时计划按旧版灰度 runbook 执行 staging → canary → prod 灰度。该事项已完成；对应历史流程已归档，不能作为当前操作指引。
 
-#### F3 — ADR-010 Stage 7 物理删除旧 HTTP 路径
+#### F3 — ADR-010 Stage 7 物理删除旧 HTTP 路径（当时待办，已完成）
 
-灰度全量切稳定 1 minor 版本后，删 `HttpOrchestratorTriggerAdapter` + `DefaultTriggerService.forwardToOrchestrator` 同步路径。0.5 天工作但需时间窗口。
+旧同步 HTTP 路径已从当前实现删除；此条保留为当时的待办记录，不再需要执行。
 
 ### 🟢 P3 渐进改善（持续，见缝插针）
 
@@ -251,4 +253,4 @@
 | [`./hardening-backlog.md`](./hardening-backlog.md) | v6，完成率 33/42 = 79% |
 | [`./fix-report.md`](./fix-report.md) | §八 2026-04-30 校正补录 |
 | [`../architecture/adr/ADR-010-trigger-async-decoupling.md`](../architecture/adr/ADR-010-trigger-async-decoupling.md) | 7 stage 路线图实施事实源 |
-| [`../runbook/trigger-async-launch-rollout.md`](../runbook/trigger-async-launch-rollout.md) | 灰度切换 SOP |
+| 旧版灰度切换 SOP | 已归档至 [`../archive/runbook/trigger-async-launch-rollout-2026-05-02.md`](../archive/runbook/trigger-async-launch-rollout-2026-05-02.md)，不得执行 |

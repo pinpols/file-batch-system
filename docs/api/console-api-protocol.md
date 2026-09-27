@@ -7,6 +7,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-09-27 | **6 个启停接口显式状态化**：资源队列、批次窗口、业务日历、配额策略、告警路由和 Pipeline 定义统一改用 `PATCH /{id}/enabled`，使用 `EnabledPatchRequest { tenantId, enabled }`；旧 `POST /{id}/toggle?enabled=` 已删除。新入口复用原 application service，不改变权限、审计、租户和持久化语义。 |
 | 2026-09-24 | **登录验证码安全收敛**：自建滑块挑战接口标记弃用并始终返回 404，不再签发会泄露答案的挑战；`provider=selfhosted` 改为启动失败，配置改用已接入的第三方 provider。登录请求的 `captchaToken` 仅使用已配置 provider 返回的凭据。 |
 | 2026-09-23 | **Trace 诊断契约校正**：`GET /api/console/queries/trace-snapshot` 明确只接受完整 traceId 精确匹配（最多 128 字符），响应新增 `truncatedDomains`，标出因单领域 200 条快照上限而被截断的结果；安全过滤器生成的 401/403 响应同步返回 `X-Request-Id`、`X-Trace-Id` 与 `meta`。 |
 | 2026-09-21 | **运营概览与 Outbox 重投契约对齐**：`GET /api/console/ops/summary` 允许菜单已开放的 `ROLE_TENANT_USER` 读取租户摘要；`ConsoleOutboxRetryLogResponse` 新增 `outboxEventId`，前端重投必须传关联的 `outbox_event.id`，不再误用重试日志自身 `id`。 |
@@ -534,7 +535,7 @@ Deployment note:
 - `POST /api/console/pipeline-definitions`
 - `GET /api/console/pipeline-definitions/{id}`
 - `PUT /api/console/pipeline-definitions/{id}`
-- `POST /api/console/pipeline-definitions/{id}/toggle`
+- `PATCH /api/console/pipeline-definitions/{id}/enabled`
 - `GET /api/console/pipeline-definitions/events`
 - Create and update are transactional: definition and step list are persisted or replaced atomically.
 - Detail response (`PipelineDefinitionDetailResponse`) includes the ordered step list.
@@ -667,7 +668,7 @@ Deployment note:
 - `GET /api/console/queues`
 - `POST /api/console/queues`
 - `PUT /api/console/queues/{id}`
-- `POST /api/console/queues/{id}/toggle`
+- `PATCH /api/console/queues/{id}/enabled`
 - All write operations require `ROLE_ADMIN`.
 - `queue_code` uniqueness is enforced on create.
 
@@ -676,7 +677,7 @@ Deployment note:
 - `GET /api/console/batch-windows`
 - `POST /api/console/batch-windows`
 - `PUT /api/console/batch-windows/{id}`
-- `POST /api/console/batch-windows/{id}/toggle`
+- `PATCH /api/console/batch-windows/{id}/enabled`
 - All write operations require `ROLE_ADMIN`.
 - `window_code` uniqueness is enforced on create.
 - Window definition includes start/end time, cross-day policy, and out-of-window action.
@@ -686,7 +687,7 @@ Deployment note:
 - `GET /api/console/calendars`
 - `POST /api/console/calendars`
 - `PUT /api/console/calendars/{id}`
-- `POST /api/console/calendars/{id}/toggle`
+- `PATCH /api/console/calendars/{id}/enabled`
 - `GET /api/console/calendars/{id}/holidays`
 - `POST /api/console/calendars/{id}/holidays`
 - `PUT /api/console/calendars/{id}/holidays/{holidayId}`
@@ -711,7 +712,7 @@ Deployment note:
 - `GET /api/console/quota-policies`
 - `POST /api/console/quota-policies`
 - `PUT /api/console/quota-policies/{id}`
-- `POST /api/console/quota-policies/{id}/toggle`
+- `PATCH /api/console/quota-policies/{id}/enabled`
 - All write operations require `ROLE_ADMIN`.
 - `policy_code` uniqueness is enforced on create.
 - Policy definition includes concurrent cap, QPS, fair-share configuration, burst limit, and sliding window hours.

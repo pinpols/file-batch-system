@@ -9,6 +9,7 @@ import io.github.pinpols.batch.console.domain.job.application.contract.request.H
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleCalendarResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleHolidayResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.command.EnabledPatchRequest;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -52,12 +53,10 @@ public class ConsoleCalendarController {
     return responseFactory.success(calendarApplicationService.update(id, request));
   }
 
-  @PostMapping("/{id}/toggle")
-  public CommonResponse<Void> toggle(
-      @PathVariable Long id,
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam("enabled") Boolean enabled) {
-    calendarApplicationService.toggle(id, tenantId, enabled);
+  @PatchMapping("/{id}/enabled")
+  public CommonResponse<Void> setEnabled(
+      @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
+    calendarApplicationService.toggle(id, request.getTenantId(), request.getEnabled());
     return responseFactory.success(null);
   }
 
