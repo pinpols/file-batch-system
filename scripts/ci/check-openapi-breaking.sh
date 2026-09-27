@@ -80,6 +80,19 @@ for spec in "${SPECS[@]}"; do
   oasdiff breaking "$base_tmp" "$spec" --format singleline 2>/dev/null \
     | grep -E 'in API POST /api/console/config/releases .*request property `configPayloadJson` became required.*\[request-property-became-required\]' \
       >> "$clarification_ignore_tmp" || true
+  # User-approved breaking change in PR #1066 (2026-09-27): the six legacy toggle
+  # routes are removed in favor of PATCH /{id}/enabled. Ignore only these exact
+  # removed paths; all other endpoint removals remain blocking.
+  if [[ "$spec" == "docs/api/console-api.openapi.yaml" ]]; then
+    printf '%s\n' \
+      'POST /api/console/alert-routings/{id}/toggle api path removed without deprecation' \
+      'POST /api/console/batch-windows/{id}/toggle api path removed without deprecation' \
+      'POST /api/console/calendars/{id}/toggle api path removed without deprecation' \
+      'POST /api/console/pipeline-definitions/{id}/toggle api path removed without deprecation' \
+      'POST /api/console/queues/{id}/toggle api path removed without deprecation' \
+      'POST /api/console/quota-policies/{id}/toggle api path removed without deprecation' \
+      >> "$clarification_ignore_tmp"
+  fi
   # 仅 ERR 级 breaking 才 fail;成功时静默(该 spec 有重复参数定义,oasdiff 会刷大量
   # request-parameter-removed 的 WARN 噪音,失败时才打全量便于定位)。
   out="$(oasdiff breaking "$base_tmp" "$spec" --fail-on ERR \
