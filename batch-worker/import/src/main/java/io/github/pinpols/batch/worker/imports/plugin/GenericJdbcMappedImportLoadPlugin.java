@@ -469,8 +469,8 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
           String tempTable = "batch_import_copy_" + UUID.randomUUID().toString().replace("-", "");
           String quotedTempTable = JdbcMappedSqlValidator.quotePg(tempTable);
           try (Statement statement = conn.createStatement()) {
-            statement.execute("CREATE TEMP TABLE " + quotedTempTable + " (LIKE " + destinationTable
-                + ")" + " ON COMMIT DROP");
+            statement.execute("CREATE TEMP TABLE " + quotedTempTable + " ON COMMIT DROP AS SELECT "
+                + quotedColumns(insertCols) + " FROM " + destinationTable + " WITH NO DATA");
           }
           log.info(
               "jdbc-mapped-import COPY staged before RLS-protected insert:"
