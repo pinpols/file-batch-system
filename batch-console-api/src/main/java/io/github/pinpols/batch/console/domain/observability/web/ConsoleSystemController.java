@@ -1,20 +1,12 @@
 package io.github.pinpols.batch.console.domain.observability.web;
 
-import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.application.contract.response.CronPreviewResponse;
 import io.github.pinpols.batch.console.application.contract.response.MaintenanceStatusResponse;
+import io.github.pinpols.batch.console.domain.observability.application.CronPreviewService;
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder;
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
-import java.text.ParseException;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.TimeZone;
 import lombok.RequiredArgsConstructor;
-import org.quartz.CronExpression;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -27,14 +19,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleSystemController {
 
-  /** cron-preview 单次最多返回的执行时刻数。防止用户传巨大 count 拖慢响应。 */
-  private static final int CRON_PREVIEW_MAX_COUNT = 20;
-
-  /** cron-preview 默认返回的执行时刻数。 */
-  private static final int CRON_PREVIEW_DEFAULT_COUNT = 3;
-
   private final MaintenanceStateHolder maintenanceStateHolder;
-  private final BatchTimezoneProvider timezoneProvider;
+  private final CronPreviewService cronPreviewService;
 
   /**
    * 维护状态探活。前端启动 + 30s 轮询调用,据此切换全局 banner / 降级页。
@@ -56,7 +42,7 @@ public class ConsoleSystemController {
   /**
    * Cron 表达式预览:校验 + 计算下 N 次执行时刻(ISO-8601 UTC)。
    *
-   * <p>用 Quartz {@link CronExpression} 解析,与实际调度引擎同一份代码,保证 FE 展示的时间和真实触发时间不漂。FE `CronExprInput` 输入防抖
+   * <p>由服务使用 Quartz 解析,与实际调度引擎同一份代码。FE `CronExprInput` 输入防抖
    * 300ms 后调用,展示「最近 3 次执行」。
    *
    * <p>时区使用 {@code batch.timezone.default-zone}(默认 Asia/Shanghai),与 trigger 模块的 scheduler 默认配置对齐。
@@ -70,33 +56,6 @@ public class ConsoleSystemController {
   public CommonResponse<CronPreviewResponse> cronPreview(
       @RequestParam("expr") String expr,
       @RequestParam(value = "count", required = false) Integer count) {
-    int n = count == null
-        ? CRON_PREVIEW_DEFAULT_COUNT
-        : Math.max(1, Math.min(count, CRON_PREVIEW_MAX_COUNT));
-    String trimmed = expr == null ? "" : expr.trim();
-    if (trimmed.isEmpty()) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument_detail", "expr is required");
-    }
-    CronExpression cron;
-    try {
-      cron = new CronExpression(trimmed);
-    } catch (ParseException e) {
-      return CommonResponse.success(
-          new CronPreviewResponse(trimmed, false, e.getMessage(), List.of(), null));
-    }
-    TimeZone tz = TimeZone.getTimeZone(timezoneProvider.defaultZone());
-    cron.setTimeZone(tz);
-
-    List<String> next = new ArrayList<>(n);
-    Date cursor = new Date();
-    for (int i = 0; i < n; i++) {
-      Date d = cron.getNextValidTimeAfter(cursor);
-      if (d == null) break;
-      next.add(d.toInstant().toString());
-      cursor = d;
-    }
-    return CommonResponse.success(new CronPreviewResponse(
-        trimmed, true, null, next, timezoneProvider.defaultZone().getId()));
+    return CommonResponse.success(cronPreviewService.preview(expr, count));
   }
 }

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.file;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.Locale;
 
 /** 导出文件名解析器。Console 预览与 Worker 运行时必须共用此实现。 */
@@ -46,7 +47,7 @@ public final class ExportFileNameResolver {
   }
 
   private static boolean hasText(String value) {
-    return value != null && !value.isBlank();
+    return EmptyChecks.isNotBlank(value);
   }
 
   private static String defaultText(String value, String fallback) {

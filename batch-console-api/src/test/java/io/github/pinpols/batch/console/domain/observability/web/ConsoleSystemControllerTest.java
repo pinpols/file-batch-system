@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.config.ConsoleMaintenanceProperties;
+import io.github.pinpols.batch.console.infrastructure.cron.QuartzCronPreviewService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder;
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
@@ -46,8 +47,8 @@ class ConsoleSystemControllerTest {
     stateHolder = new MaintenanceStateHolder(props);
     ReflectionTestUtils.invokeMethod(stateHolder, "initFromProperties");
 
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleSystemController(stateHolder, timezoneProvider))
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleSystemController(
+            stateHolder, new QuartzCronPreviewService(timezoneProvider)))
         .setControllerAdvice(exceptionHandler)
         .build();
   }
