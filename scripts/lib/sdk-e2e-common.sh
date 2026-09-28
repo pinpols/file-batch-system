@@ -53,6 +53,18 @@ export PGPASSWORD="$BATCH_PLATFORM_DB_PASSWORD"
 
 SDK_E2E_SQL_DIR="$SDK_E2E_ROOT/scripts/lib/sql"
 
+sdk_e2e_load_env_value() {
+  local key="$1" env_file="${2:-$SDK_E2E_ROOT/.env.local}"
+  [[ -f "$env_file" ]] || return 1
+  (
+    set -a
+    # shellcheck disable=SC1090 # 调用方传入仓库内的环境文件路径。
+    source "$env_file"
+    set +a
+    printf '%s' "${!key:-}"
+  )
+}
+
 # 只引入公共地址格式化和 PostgreSQL 客户端入口，不重读环境文件；入口脚本
 # 已经定义的环境变量必须保持优先级。
 export BATCH_ENV_COMMON_HELPERS_ONLY=1
@@ -60,6 +72,10 @@ export BATCH_ENV_COMMON_HELPERS_ONLY=1
 # shellcheck disable=SC1091 # 运行时从仓库绝对路径加载。
 source "$SDK_E2E_ROOT/scripts/lib/env-common.sh"
 KAFKA_BOOTSTRAP="${KAFKA_BOOTSTRAP:-$(batch_format_host_port "${KAFKA_HOST:-localhost}" "$KAFKA_HOST_PORT")}"
+if [[ -z "${BATCH_INTERNAL_SECRET:-}" ]]; then
+  BATCH_INTERNAL_SECRET="$(sdk_e2e_load_env_value BATCH_INTERNAL_SECRET || true)"
+fi
+export BATCH_INTERNAL_SECRET="${BATCH_INTERNAL_SECRET:-internal-secret}"
 
 sdk_e2e_q_file() {
   local sql_file="$1"
@@ -200,12 +216,13 @@ sdk_e2e_start_worker() {
            BATCH_WORKER_CODE="$wc" KAFKA_BOOTSTRAP="$KAFKA_BOOTSTRAP" \
            node --experimental-strip-types src/main.ts ) >"$logf" 2>&1 & echo $! ;;
     java)
-      # 先 install SDK 到本地 m2(样例硬依赖 batch-worker-sdk:1.1.0),再 package 样例。
+      # 先 install SDK 到本地 m2(样例硬依赖 batch-worker-sdk + testkit),再 package 样例。
       # 样例用 maven-jar-plugin + copy-dependencies(lib/ classpath),非 Spring Boot 嵌套 fat-jar,
       # 启动不走嵌套 jar loader,本机可靠。Java 样例环境变量名是 BATCH_KAFKA(非 KAFKA_BOOTSTRAP)。
-      mvn -q -f "$root/pom.xml" -pl sdk/java/core -am install -DskipTests -Dspotless.check.skip=true >>"$logf" 2>&1
+      mvn -q -f "$root/pom.xml" -pl sdk/java/core,sdk/java/testkit -am install \
+        -DskipTests -Dspotless.check.skip=true >>"$logf" 2>&1
       local jdir="$root/examples/self-hosted-sdk/sample-tenant-worker-java"
-      mvn -q -f "$jdir/pom.xml" package -DskipTests -Dspotless.check.skip=true >>"$logf" 2>&1
+      mvn -q -U -f "$jdir/pom.xml" package -DskipTests -Dspotless.check.skip=true >>"$logf" 2>&1
       ( cd "$jdir" \
         && BATCH_BASE_URL="$ORCH_URL" BATCH_API_KEY="$raw" BATCH_TENANT_ID="$TENANT" \
            BATCH_WORKER_CODE="$wc" BATCH_KAFKA="$KAFKA_BOOTSTRAP" \
@@ -244,7 +261,7 @@ sdk_e2e_run_chain() {
   STAGE_DISPATCH=0 STAGE_EXECUTE=0 STAGE_REPORT=0 STAGE_TERMINAL=0
   SDK_E2E_IDEMPOTENCY_KEY="sdk-e2e-$$-$(date +%s 2>/dev/null || echo 0)"
   curl -fsS -X POST "${TRIGGER_URL}/api/triggers/launch" \
-    -H "Authorization: Bearer ${raw}" -H "Idempotency-Key: ${SDK_E2E_IDEMPOTENCY_KEY}" -H 'Content-Type: application/json' \
+    -H "X-Internal-Secret: ${BATCH_INTERNAL_SECRET}" -H "Idempotency-Key: ${SDK_E2E_IDEMPOTENCY_KEY}" -H 'Content-Type: application/json' \
     -d "{\"tenantId\":\"${TENANT}\",\"jobCode\":\"${SDK_E2E_JOB_CODE}\",\"bizDate\":\"$(date +%F)\",\"triggerType\":\"API\"}" >/dev/null \
     || { sdk_e2e_fail "launch call failed"; return 1; }
   deadline=$((SECONDS + SDK_E2E_INSTANCE_WAIT_SECONDS))

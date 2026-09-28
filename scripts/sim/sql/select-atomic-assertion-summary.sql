@@ -6,7 +6,9 @@ SELECT (
            JOIN batch.job_task task ON task.job_instance_id = instance.id
            WHERE request.tenant_id = :'tenant_id'
              AND request.request_id = :'http_request_id'
-           ORDER BY request.created_at DESC
+           ORDER BY (task.task_status = 'FAILED') DESC,
+                    (coalesce(task.error_code, '') <> '') DESC,
+                    task.id DESC
            LIMIT 1
        ),
        (
@@ -17,7 +19,9 @@ SELECT (
            JOIN batch.job_task task ON task.job_instance_id = instance.id
            WHERE request.tenant_id = :'tenant_id'
              AND request.request_id = :'timeout_request_id'
-           ORDER BY task.id DESC
+           ORDER BY (task.task_status = 'FAILED') DESC,
+                    (coalesce(task.error_code, '') <> '') DESC,
+                    task.id DESC
            LIMIT 1
        ),
        (
