@@ -19,6 +19,9 @@ if ((${#staged_files[@]} == 0)); then
   exit 0
 fi
 
+gate_run PRE_COMMIT_COMMENT_LANGUAGE "注释语言增量预检" \
+  "$PYTHON_BIN" scripts/ci/check-comment-language.py --staged
+
 gate_run PRE_COMMIT_DIFF_CHECK "暂存区空白与冲突标记" git diff --cached --check
 
 java_files=()

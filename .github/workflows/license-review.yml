@@ -32,4 +32,4 @@ jobs:
         with:
           persist-credentials: false
       - name: License compliance
-        run: bash scripts/ci/check-dependency-licenses.sh
+        run: bash scripts/ci/run-gate.sh DEPENDENCY_LICENSE_REVIEW "第三方依赖许可证审查" -- bash scripts/ci/check-dependency-licenses.sh

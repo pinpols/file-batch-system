@@ -21,6 +21,10 @@
 | 安全与许可 | `check-dependency-licenses.sh`、`check-license-compliance.sh`、`check-trivy-ignore-expiry.py` |
 | 观测 | `check-helm-prometheusrule-sync.sh`、`check-log-lifecycle.sh`、`check-observability-contract.py` |
 
+## 门禁结果格式
+
+Git hook 与 GitHub workflow 的门禁入口统一输出 `状态 | code | gate | exit_code | action`；跳过结果在固定字段后追加 `reason`。具体诊断仍由检查脚本输出，最终状态行由 `scripts/lib/gate-result.sh` / `scripts/ci/run-gate.sh` 生成。workflow 中不要直接调用门禁脚本；多项检查要逐项调用 `gate_run`，避免一项失败掩盖同一步其余门禁的独立状态。扫描器报告、测试清单和运行进度不是门禁状态行，不强行改成该格式。
+
 ## `daily-validation-change-gate.py`
 
 判断定时触发对应的北京时间运行日是否包含代码/配置变更，Markdown、RST、`LICENSE` 和 `NOTICE` 不触发验证。日期按最近一次 cron 计划时间推导，因此定时任务延迟到午夜后启动仍检查原计划日；手动 dispatch 按当前北京时间日期处理，并可勾选 `force` 绕过变更条件。本地运行可设 `VALIDATION_DAY` 固定检查日期、`VALIDATION_EVENT=schedule` 与 `VALIDATION_SCHEDULE='31 13 * * *'`模拟定时触发，或设 `FORCE_VALIDATION=true` 强制运行；脚本不接受 `--force` 参数。所有人类可见的结果使用共享 `gate-result.sh` 状态、错误码和原因格式，`should_run/reason` 仅写入 `$GITHUB_OUTPUT` 供 workflow 路由。
@@ -57,7 +61,7 @@ python3 scripts/ci/check-comment-language.py --base-ref origin/main
 python3 scripts/ci/check-comment-language.py --paths scripts load-tests/scripts load-tests/sql
 ```
 
-当前未接入自动门禁，可按需手动运行。注释治理分支临时跳过 PR 迁移安全 lint；合并后须移除该分支例外，并在后续变更中恢复注释语言门禁。
+当前作为本地增量预检接入 `scripts/local/pre-commit-checks.sh`，仅检查暂存 diff 新增的说明性注释，不扫描存量文件。PR/Full CI 暂不阻断；后续评估历史迁移 checksum 风险及误报率后，再单独启用 CI 门禁。Flyway checksum 校验仍独立生效，不能因改动仅涉及注释就跳过：已应用迁移文件内容变化会造成校验和差异，部署前必须按迁移治理流程处理。
 
 ## `check-empty-checks.py`
 

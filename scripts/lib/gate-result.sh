@@ -9,13 +9,13 @@ gate_result() {
 
   local line
   case "$status" in
-    PASS) line="✅ 通过 | code=${code} | gate=${name}" ;;
+    PASS) line="✅ 通过 | code=${code} | gate=${name} | exit_code=0 | action=none" ;;
     FAIL)
-      line="❌ 不通过 | code=${code} | gate=${name} | exit_code=${exit_code}"
+      line="❌ 不通过 | code=${code} | gate=${name} | exit_code=${exit_code} | action=检查失败详情并修复后重试"
       ;;
-    SKIP) line="⏭️ 跳过 | code=${code} | gate=${name} | reason=${exit_code}" ;;
+    SKIP) line="⏭️ 跳过 | code=${code} | gate=${name} | exit_code=0 | action=none | reason=${exit_code}" ;;
     *)
-      line="❌ 不通过 | code=GATE_RESULT_INVALID_STATUS | gate=${name} | exit_code=2"
+      line="❌ 不通过 | code=GATE_RESULT_INVALID_STATUS | gate=${name} | exit_code=2 | action=使用 PASS、FAIL 或 SKIP 状态"
       printf '%s\n' "$line" >&2
       return 2
       ;;
