@@ -62,7 +62,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class TriggerOutboxRelay {
 
-  private static final Duration LOCK_AT_MOST = Duration.ofMinutes(1);
+  private static final Duration LOCK_AT_MOST_BUFFER = Duration.ofSeconds(10);
 
   /** 退避上限,单条失败后最长 60s 后重试(2^6 = 64 → 60s 截断)。 */
   private static final long MAX_BACKOFF_SECONDS = 60L;
@@ -493,10 +493,13 @@ public class TriggerOutboxRelay {
   }
 
   private LockConfiguration lockConfig() {
+    Duration lockAtMost =
+        Duration.ofSeconds(properties.getPublishingTimeoutSeconds()).plus(LOCK_AT_MOST_BUFFER);
+    Duration lockAtLeast = Duration.ofMillis(properties.getPollIntervalMillis());
+    if (lockAtLeast.compareTo(lockAtMost) > 0) {
+      lockAtLeast = lockAtMost;
+    }
     return new LockConfiguration(
-        BatchDateTimeSupport.utcNow(),
-        "trigger_outbox_relay",
-        LOCK_AT_MOST,
-        Duration.ofMillis(properties.getPollIntervalMillis()));
+        BatchDateTimeSupport.utcNow(), "trigger_outbox_relay", lockAtMost, lockAtLeast);
   }
 }

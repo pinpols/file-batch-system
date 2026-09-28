@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.CannotAcquireLockException;
@@ -233,12 +234,14 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
    *
    * <p>R7-A2-P0：用 exceptionally 捕获并抑制单条 future 的异常，否则 allOf.join() 抛 CompletionException 会让整个 try
    * 块上抛、阶段三完全跳过，整批事件原地停在 PUBLISHING 状态，要等 stale TTL (`resetStalePublishing`) 才能回收 — 实测会让 trigger
-   * 高峰积压瞬间放大。阶段三里的 `future.getNow(false)` 已经对失败结果（false / 仍未完成）做正确处理，这里只负责等齐。
+   * 高峰积压瞬间放大。这里再用 publishingTimeoutSeconds 做业务层上限，避免具体 MQ 实现返回永不完成的 future；阶段三里的
+   * `future.getNow(false)` 已经对失败结果（false / 异常 / 仍未完成）做正确处理。
    */
   private void awaitAcknowledgements(List<InFlight> inFlight) {
     if (EmptyChecks.isNotEmpty(inFlight)) {
       CompletableFuture.allOf(
               inFlight.stream().map(InFlight::future).toArray(CompletableFuture[]::new))
+          .orTimeout(governance.outbox().getPublishingTimeoutSeconds(), TimeUnit.SECONDS)
           .exceptionally(ex -> null)
           .join();
     }

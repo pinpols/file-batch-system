@@ -25,16 +25,19 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
 import io.github.pinpols.batch.trigger.mapper.TriggerOutboxEventMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -130,6 +133,32 @@ class TriggerOutboxRelayTest {
     relay.poll();
 
     verify(mapper).selectPending(any(), eq(8), anyString(), anyString());
+  }
+
+  @Test
+  void poll_lockAtMostCoversPublishingTimeoutPlusBuffer() throws Throwable {
+    relayProperties.setPublishingTimeoutSeconds(120);
+    when(mapper.selectPending(any(), anyInt(), anyString(), anyString())).thenReturn(List.of());
+    ArgumentCaptor<LockConfiguration> lockConfig = ArgumentCaptor.forClass(LockConfiguration.class);
+
+    relay.poll();
+
+    verify(lockingTaskExecutor).executeWithLock(any(Runnable.class), lockConfig.capture());
+    assertThat(lockConfig.getValue().getLockAtMostFor()).isEqualTo(Duration.ofSeconds(130));
+  }
+
+  @Test
+  void poll_lockAtLeastIsClampedWhenPollIntervalExceedsLockAtMost() throws Throwable {
+    relayProperties.setPublishingTimeoutSeconds(1);
+    relayProperties.setPollIntervalMillis(30_000);
+    when(mapper.selectPending(any(), anyInt(), anyString(), anyString())).thenReturn(List.of());
+    ArgumentCaptor<LockConfiguration> lockConfig = ArgumentCaptor.forClass(LockConfiguration.class);
+
+    relay.poll();
+
+    verify(lockingTaskExecutor).executeWithLock(any(Runnable.class), lockConfig.capture());
+    assertThat(lockConfig.getValue().getLockAtMostFor()).isEqualTo(Duration.ofSeconds(11));
+    assertThat(lockConfig.getValue().getLockAtLeastFor()).isEqualTo(Duration.ofSeconds(11));
   }
 
   @Test

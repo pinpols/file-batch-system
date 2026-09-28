@@ -81,6 +81,7 @@
 
 ### Fixed
 
+- 修复 Trigger Outbox 锁最长持有时间短于发布超时、以及 Orchestrator Outbox publisher future 永不完成时阻塞 ACK 等待的问题；发布超时现由业务配置兜底并按失败重试路径收敛。
 - 修复告警升级通知在状态 CAS 前直接调用外部通知通道的问题；新增告警升级通知 outbox 表和发布服务，将升级状态写入与通知信封落库放入同一事务，避免单实例 at-least-once 和租约过期跨实例重复破坏通知契约。
 - Dispatch 渠道适配器选择改为构造期 `channelType -> adapter` 注册表；同一官方渠道被多个 adapter 支持时启动失败，避免插件或 stub 依赖 Spring 顺序静默接管真实分发渠道。
 - 显式管理 `okio-jvm` 版本，避免 `okhttp-jvm` 的传递依赖将 JVM 实现降级至与已管理的 Okio 版本不一致。
