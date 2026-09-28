@@ -1130,7 +1130,7 @@ batch-console-api       ← 控制台 BFF（面向前端）
 
 Shell/Python 使用 `#`，SQL/Flyway 使用 `--`。解释性注释单独成行，不写行尾自然语言注释。Flyway 文件头按“迁移目的、关键约束/执行注意事项”的顺序分段；无额外注意事项时只保留目的说明，不添加空洞的 `Notes:` 标题。修改已提交迁移会改变 Flyway checksum，必须在发布前协调已部署数据库的重建或 `repair` 方案。SQL 示例保持可复制执行，注释与语句之间空一行。
 
-可手动运行 `scripts/ci/check-comment-language.py` 检查新增注释或扫描存量目录；当前不接入自动提交门禁。该治理分支为合并暂时跳过迁移安全 lint；合并后须删除分支例外并恢复门禁。机器指令和代码示例按检查器规则豁免，不得用豁免标记绕过自然语言注释要求。
+`scripts/ci/check-comment-language.py --staged` 由本地 pre-commit 对暂存改动做增量检查；存量目录可手动扫描。Flyway 文件结构/checksum 校验与 diff-only 迁移安全 lint 在 PR CI 对应文件域阻断。机器指令和代码示例按检查器规则豁免，不得用豁免标记绕过自然语言注释要求。
 
 
 | 应写注释                    | 不应写注释                              |

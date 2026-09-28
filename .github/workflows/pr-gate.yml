@@ -188,15 +188,7 @@ jobs:
       - name: Validate Flyway schema (parse + checksum drift detection)
         if: needs.changes.outputs.database == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
-        env:
-          PR_HEAD_REF: ${{ github.head_ref }}
-        run: |
-          source scripts/lib/gate-result.sh
-          if [[ "$PR_HEAD_REF" == 'codex/comment-language-governance' ]]; then
-            gate_skip PR_FLYWAY_SCHEMA "Flyway 迁移静态校验" "临时豁免：注释治理分支修改历史迁移，合并后恢复并处理 checksum"
-          else
-            gate_run PR_FLYWAY_SCHEMA "Flyway 迁移静态校验" bash scripts/ci/validate-flyway-schema.sh
-          fi
+        run: bash scripts/ci/run-gate.sh PR_FLYWAY_SCHEMA "Flyway 迁移静态校验" -- bash scripts/ci/validate-flyway-schema.sh
 
       - name: Verify generated dicts in sync
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true'
@@ -431,15 +423,7 @@ jobs:
         if: needs.changes.outputs.database == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         # 只扫本 PR 新增/改动的 db/migration,拦危险 DDL(DROP COLUMN / 改类型 / 加 UNIQUE 长锁等)。
-        env:
-          PR_HEAD_REF: ${{ github.head_ref }}
-        run: |
-          source scripts/lib/gate-result.sh
-          if [[ "$PR_HEAD_REF" == 'codex/comment-language-governance' ]]; then
-            gate_skip PR_MIGRATION_SAFETY "数据库迁移安全" "临时豁免：注释治理分支修改历史迁移，合并后恢复"
-          else
-            gate_run PR_MIGRATION_SAFETY "数据库迁移安全" bash scripts/ci/check-migration-safety.sh "$GUARD_BASE"
-          fi
+        run: bash scripts/ci/run-gate.sh PR_MIGRATION_SAFETY "数据库迁移安全" -- bash scripts/ci/check-migration-safety.sh "$GUARD_BASE"
 
       - name: Database comment coverage (diff-only)
         if: needs.changes.outputs.database == 'true' || needs.changes.outputs.ci == 'true'

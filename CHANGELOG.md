@@ -77,7 +77,7 @@
 - **防漂移门禁闭环**：模块依赖、Shell 语法/ShellCheck warning 零容忍、脚本登记、仓库卫生和 changelog 同步进入 PR/full gate；文档检查扩展到图片、锚点、版本化目标和目录索引完整性；Zizmor 改为扫描全部 workflow/composite action。
 - **CI 按需路由**：PR required workflow 保持稳定上报，Java、数据库、脚本、文档、配置、API 和 CI 专项检查按变更路径执行；本地 pre-commit 同步采用暂存文件域路由，重型验证继续留在 pre-push / CI。
 - **代码和文档规范**：统一后端错误/告警消息为英文，收口运行时常量、Java 格式化、FQN 违约和代码规模统计；README、工程计划、Runbook 和架构边界文档同步更新。
-- **迁移与脚本注释规范**：统一历史 Flyway 迁移及 SH/PY/SQL 脚本说明注释的中文表达和头部格式，新增可手动运行的增量/存量扫描器。历史迁移内容变化会导致 Flyway checksum 改变；部署前须核对目标库迁移状态，并安排重建空库或经审查的 checksum repair。本 PR 暂时跳过迁移安全 lint，合并后需恢复。
+- **迁移与脚本注释规范**：统一历史 Flyway 迁移及 SH/PY/SQL 脚本说明注释的中文表达和头部格式，新增可手动运行的增量/存量扫描器。历史迁移内容变化会导致 Flyway checksum 改变；部署前须核对目标库迁移状态，并安排重建空库或经审查的 checksum repair。PR CI 持续执行迁移 checksum 校验和新增/修改迁移的安全 lint。
 
 ### Fixed
 

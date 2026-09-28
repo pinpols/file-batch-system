@@ -108,8 +108,8 @@ batch-common/*             # 跨模块基础库,改了全部模块都受影响
 | 检查项 | 工具 / 脚本 | 触发流水线 |
 |---|---|---|
 | OpenAPI 路径对齐 | `check-console-openapi-paths.py` | 全部（setup-build-env） |
-| Flyway 文件结构与 checksum 漂移 | `validate-flyway-schema.sh` | PR：database / CI 文件域；历史版本 checksum 变更阻断（当前注释治理 PR 有明确临时豁免） |
-| Flyway 危险 DDL | `check-migration-safety.sh`（Squawk，diff-only） | PR：database / CI 文件域；当前注释治理 PR 有明确临时豁免 |
+| Flyway 文件结构与 checksum 漂移 | `validate-flyway-schema.sh` | PR：database / CI 文件域；已有迁移 checksum 变化阻断 |
+| Flyway 危险 DDL | `check-migration-safety.sh`（Squawk，diff-only） | PR：database / CI 文件域；扫描新增或修改的迁移文件，危险 DDL 阻断 |
 | 新增数据库对象注释覆盖 | `check-db-comment-coverage.sh`（diff-only） | PR 与 Full CI：database 变更 |
 | 注释语言 | `check-comment-language.py --staged` | 本地 pre-commit 增量预检；暂不阻断 PR / Full CI |
 | 模块依赖边界 | `check-dependency-boundaries.py` | 全部（run-full-regression） |
