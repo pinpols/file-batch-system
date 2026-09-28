@@ -1,8 +1,8 @@
 -- =========================================================
 -- V19 - Worker graceful drain fields
--- Notes:
--- 1) Record drain start and takeover deadline on worker_registry.
--- 2) Let orchestrator reclaim in-flight work after the deadline passes.
+-- 说明：
+-- 1) 在 worker_registry 中记录排空开始时间和接管截止时间。
+-- 2) 截止时间后允许 orchestrator 回收执行中的任务。
 -- =========================================================
 
 ALTER TABLE batch.worker_registry

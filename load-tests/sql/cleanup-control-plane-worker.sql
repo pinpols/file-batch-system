@@ -1,10 +1,8 @@
 BEGIN;
 
--- run_id is generated per profile and is the cleanup boundary. Do not pin this
--- fixture cleanup to default-tenant: fairness profiles intentionally use ta/tb/tc.
--- Trigger ingress stores the run id in trigger_request.request_id rather than
--- job_instance.params_snapshot. Resolve both forms once so cleanup covers the
--- direct orchestrator and normal Trigger API profiles alike.
+-- 每个压测档案独立生成 run_id，并以此限定清理范围；公平性场景使用 ta/tb/tc，不能限定为默认租户。
+-- Trigger 入口将 run_id 写入 trigger_request.request_id，而不是 job_instance.params_snapshot。
+-- 同时解析两种记录方式，使清理覆盖 Orchestrator 直连和标准 Trigger API 场景。
 CREATE TEMP TABLE p2_cleanup_job_instance_ids (
   id bigint PRIMARY KEY
 ) ON COMMIT DROP;

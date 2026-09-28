@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared result format for local hooks and CI gate commands.
+# 本地提交检查与 CI 门禁共用的结果输出格式。
 
 gate_result() {
   local status="$1"

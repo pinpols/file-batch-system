@@ -1,6 +1,6 @@
 -- =========================================================
 -- V180 - 触发器依赖感知 fire 的 readiness defer 状态(ADR-043 §6.4 补全)
--- Notes:
+-- 说明：
 -- 1) readiness_deferred_since:上游未就绪时不再 skip 丢批,改 defer——记录首次 defer 的
 --    原始 scheduled fire 时刻。非空=正在等上游就绪;wheel 据此 (a) 算已等待时长是否超
 --    readinessWindow,(b) 把 bizDate pin 到原始触发时刻防 recheck 期间漂移到下一业务日。

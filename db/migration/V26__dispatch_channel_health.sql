@@ -1,8 +1,8 @@
 -- =========================================================
 -- V25 - Dispatch channel health state
--- Notes:
--- 1) Track health probe status for each dispatch channel.
--- 2) Keep failure counts and next probe timing queryable.
+-- 说明：
+-- 1) 跟踪各派发通道的健康探测状态。
+-- 2) 记录可查询的失败次数和下次探测时间。
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS batch.file_channel_health (

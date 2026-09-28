@@ -1,7 +1,7 @@
 -- =========================================================
 -- V101: Batch day operation governance
--- 1) Extend batch_day_instance state machine with manual terminal states.
--- 2) Add freeze and operator snapshot fields for governance actions.
+-- 1) 扩展 batch_day_instance 状态机，支持人工终态。
+-- 2) 增加治理操作所需的冻结状态和操作者快照字段。
 -- =========================================================
 
 ALTER TABLE batch.batch_day_instance

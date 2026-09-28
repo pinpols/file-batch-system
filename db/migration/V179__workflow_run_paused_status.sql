@@ -1,6 +1,6 @@
 -- =========================================================
 -- V179 - workflow_run 可逆暂停 PAUSED(ADR-044 Phase B)
--- Notes:
+-- 说明：
 -- 1) 放宽 ck_workflow_run_status 接纳 PAUSED:RUNNING workflow 可暂停 DAG 推进
 --    (停发下游节点,在途节点自然终结),resume 回 RUNNING。可逆非终态。
 -- 2) NOT VALID + 后置 VALIDATE:ADD 不全表扫描/不长锁写(squawk);新约束是旧超集

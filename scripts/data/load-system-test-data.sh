@@ -9,7 +9,7 @@
 #   - PostgreSQL: localhost:15432
 #   - 平台库: batch_platform
 #   - 业务库: batch_business
-#   - Object Storage: http://localhost:19000
+#   - 对象存储：http://localhost:19000
 #
 # 使用方法：
 #   BATCH_PLATFORM_DB_PASSWORD=... \

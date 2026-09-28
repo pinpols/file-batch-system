@@ -1,8 +1,8 @@
 -- =========================================================
--- V17 - File template security flags and download governance
--- Notes:
--- 1) Add masking, encryption, and approval flags to file_template_config.
--- 2) Keep the detailed semantics on the column comments for console use.
+-- V17 - 文件模板安全标记与下载治理
+-- 说明：
+-- 1) 为 file_template_config 增加脱敏、加密和审批标记。
+-- 2) 将字段详细语义写入列注释，供控制台展示。
 -- =========================================================
 
 ALTER TABLE batch.file_template_config

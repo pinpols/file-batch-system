@@ -1,4 +1,4 @@
--- Serialize release/secret version allocation and enforce approval/current-version invariants.
+-- 串行分配发布与密钥版本，并强制执行审批和当前版本约束。
 
 WITH ranked AS (
     SELECT id,

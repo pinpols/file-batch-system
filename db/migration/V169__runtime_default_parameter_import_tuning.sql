@@ -1,4 +1,4 @@
--- Align audited runtime defaults with 2026-06 import tuning.
+-- 根据 2026-06 导入调优结果同步已审计的运行时默认值。
 
 INSERT INTO batch.batch_runtime_default_parameter
     (module, parameter_key, default_value, value_type, unit, yaml_path, env_var, description)

@@ -1,5 +1,5 @@
--- Quartz does not have a trigger_runtime_state row. Allow new MANUAL_APPROVAL
--- records to stand alone while preserving legacy Wheel rows and their foreign key.
+-- Quartz 没有对应的 trigger_runtime_state 记录。允许新增 MANUAL_APPROVAL
+-- 允许相关记录独立存在，同时保留旧 Wheel 记录及其外键关系。
 ALTER TABLE batch.trigger_misfire_pending
     ALTER COLUMN trigger_runtime_state_id DROP NOT NULL;
 

@@ -1,6 +1,6 @@
 -- =========================================================
 -- V178 - job_instance 可逆暂停态 PAUSED(ADR-044 Phase A)
--- Notes:
+-- 说明：
 -- 1) 放宽 ck_job_instance_status 接纳 PAUSED:RUNNING 实例可暂停派发(停发新分区,
 --    在途分区自然终结),resume 回 RUNNING。PAUSED 是可逆非终态。
 -- 2) archive.job_instance_archive 不更新:PAUSED 非终态,永不进归档(归档只移终态/旧实例);

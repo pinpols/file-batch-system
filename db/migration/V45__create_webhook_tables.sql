@@ -1,5 +1,5 @@
 -- =========================================================
--- V45 - Webhook subscription and delivery log tables
+-- V45 - 创建 Webhook 订阅与投递日志表
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS batch.webhook_subscription (

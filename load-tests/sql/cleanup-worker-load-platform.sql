@@ -1,7 +1,6 @@
 BEGIN;
 
--- run_id is generated per profile and is the cleanup boundary. Do not pin this
--- fixture cleanup to default-tenant: fairness profiles intentionally use ta/tb/tc.
+-- 每个压测档案独立生成 run_id，并以此限定清理范围；公平性场景使用 ta/tb/tc，不能限定为默认租户。
 -- 优先通过已关联实例反查 Trigger 请求；新 Gatling 场景还会把 run_id 写入请求/追踪标识。
 -- 不扫描 trigger_outbox_event.payload：该 JSONB 全表文本匹配在十万级清理时会拖慢回收，且
 -- run_id 已有结构化的 request_id / trace_id 归属边界。

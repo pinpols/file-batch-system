@@ -1,8 +1,8 @@
 -- =========================================================
--- V43 - Alert routing / notification policy configuration
--- Notes:
--- 1) Stores alert routing rules that map alert conditions to receivers.
--- 2) Aligns with Alertmanager route semantics (group_by, wait, interval, repeat).
+-- V43 - 创建告警路由与通知策略配置
+-- 说明：
+-- 1) 保存告警条件到接收方的路由规则。
+-- 2) 与 Alertmanager 路由语义保持一致（group_by、wait、interval、repeat）。
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS batch.alert_routing_config (

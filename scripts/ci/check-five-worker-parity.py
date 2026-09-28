@@ -113,7 +113,7 @@ def main() -> int:
         "docs/api/console-api.openapi.yaml",
         ("enum: [ALL, IMPORT, EXPORT, PROCESS, DISPATCH, ATOMIC, WORKFLOW]",),
     )
-    # Atomic carries stricter isolation and intentionally cannot use the generic resource-pool template.
+    # Atomic 隔离要求更严格，因此不能使用通用资源池模板。
     require_all(
         errors,
         "docs/architecture/heavy-workload-guarantees.md",

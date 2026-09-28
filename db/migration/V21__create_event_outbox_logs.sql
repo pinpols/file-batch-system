@@ -1,8 +1,8 @@
 -- =========================================================
 -- V20 - Create outbox retry and delivery logs
--- Notes:
--- 1) Persist retry attempts separately from the base outbox event.
--- 2) Capture delivery status for downstream audit and troubleshooting.
+-- 说明：
+-- 1) 将重试记录与基础 Outbox 事件分开持久化。
+-- 2) 记录投递状态，供下游审计和故障排查使用。
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS batch.event_outbox_retry (

@@ -1,5 +1,5 @@
 -- =========================================================
--- V3 - Create definition tables
+-- V3 - 创建定义表
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS batch.job_definition (

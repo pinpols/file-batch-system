@@ -1,8 +1,8 @@
 -- =========================================================
 -- V24 - Quota runtime state for CALENDAR_DAY / SLIDING_WINDOW
--- Notes:
--- 1) Persist runtime quota reset state per tenant and owner scope.
--- 2) Support both calendar-day and sliding-window quota policies.
+-- 说明：
+-- 1) 按租户和归属范围持久化运行时配额重置状态。
+-- 2) 同时支持自然日和滑动窗口配额策略。
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS batch.quota_runtime_state (

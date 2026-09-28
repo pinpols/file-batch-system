@@ -102,7 +102,7 @@ def is_readiness_touchpoint(path: str, base: str | None) -> bool:
     if diff_contains_touchpoint(path, base):
         return True
 
-    # Fallback for callers without a diffable base and newly edited working-tree files.
+    # 调用方没有可比较基线时，回退检查工作区中新编辑的文件。
     if base:
         return False
     file_path = Path(path)

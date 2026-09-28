@@ -17,7 +17,7 @@
 #   TENANT GOROOT_HINT
 # =============================================================================
 
-# repo root (library lives under scripts/lib/)
+# 仓库根目录（本函数库位于 scripts/lib/）。
 SDK_E2E_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=runtime-defaults.sh
 source "$SDK_E2E_ROOT/scripts/lib/runtime-defaults.sh"
@@ -228,7 +228,7 @@ sdk_e2e_start_worker() {
            BATCH_WORKER_CODE="$wc" BATCH_KAFKA="$KAFKA_BOOTSTRAP" \
            java -jar target/sample-tenant-worker-1.0.0-SNAPSHOT.jar ) >>"$logf" 2>&1 & echo $! ;;
     rust)
-      # cargo at ~/.cargo/bin (not always on PATH); cmake on PATH for rdkafka build.
+      # cargo 通常位于 ~/.cargo/bin（未必已加入 PATH）；构建 rdkafka 还需要 PATH 中有 cmake。
       # 先 build(冷编 rdkafka 经 cmake 较慢,避免吃掉 register 超时),再跑编好的二进制。
       # Rust 样例环境变量:KAFKA_BOOTSTRAP(同 Go/TS)。
       local cargo_path="$HOME/.cargo/bin"

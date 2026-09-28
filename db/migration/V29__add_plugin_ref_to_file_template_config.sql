@@ -1,8 +1,8 @@
 -- =========================================================
--- V28 - Add plugin reference columns to file_template_config
--- Notes:
--- 1) Add explicit plugin references for export and import templates.
--- 2) Backfill existing templates to the current default plugin ids.
+-- V28 - 为 file_template_config 增加插件引用字段
+-- 说明：
+-- 1) 为导出和导入模板增加显式插件引用。
+-- 2) 将已有模板回填为当前默认插件标识。
 -- =========================================================
 
 ALTER TABLE batch.file_template_config
@@ -26,7 +26,7 @@ WHERE  template_type   = 'EXPORT'
   AND  export_data_ref IS NULL;
 
 -- Migrate existing IMPORT templates → jdbc_mapped
--- (query_param_schema.jdbcMappedImport must be configured separately per template)
+-- （每个模板都必须单独配置 query_param_schema.jdbcMappedImport）
 UPDATE batch.file_template_config
 SET    load_target_ref = 'jdbc_mapped'
 WHERE  template_type  = 'IMPORT'

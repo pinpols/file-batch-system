@@ -1,8 +1,8 @@
 -- =========================================================
--- V8 - Expand pipeline step stage codes
--- Notes:
--- 1) Keep stage_code enum aligned with file processing lifecycle.
--- 2) This change only widens the allowed stage values on pipeline_step_definition.
+-- V8 - 扩展流水线步骤阶段编码
+-- 说明：
+-- 1) 使 stage_code 枚举与文件处理生命周期保持一致。
+-- 2) 本次仅扩展 pipeline_step_definition 允许的阶段值。
 -- =========================================================
 
 ALTER TABLE batch.pipeline_step_definition

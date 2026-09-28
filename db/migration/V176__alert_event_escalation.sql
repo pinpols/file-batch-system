@@ -1,12 +1,10 @@
 -- =========================================================
 -- V176 - Alert escalation ladder (ops alert follow-through)
--- Notes:
--- 1) Track how many escalation tiers an OPEN alert has climbed when it
---    stays unacknowledged past its ack-SLA, so ops sweeps can progressively
---    raise visibility instead of letting a stuck alert sit silently.
--- 2) Additive only: existing rows default to tier 0 (never escalated).
--- 3) alert_event has no archive.* mirror, so no archive migration is paired
---    (verified: no batch.alert_event_archive table exists).
+-- 说明：
+-- 1) 记录未在确认时限内确认的 OPEN 告警已升级级别，供运维扫描逐级提升告警级别。
+-- 2) 仅新增字段：已有记录默认级别为 0（从未升级）。
+-- 3) alert_event 没有 archive.* 镜像表，因此不需要配套归档迁移
+--    （已确认不存在 batch.alert_event_archive 表）。
 -- =========================================================
 
 ALTER TABLE batch.alert_event

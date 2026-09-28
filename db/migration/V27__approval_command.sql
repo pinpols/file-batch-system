@@ -1,8 +1,8 @@
 -- =========================================================
 -- V26 - Unified approval command workflow
--- Notes:
--- 1) Centralize approval requests, approvals, rejections, and execution state.
--- 2) Store source trace and idempotency keys for audit and replay safety.
+-- 说明：
+-- 1) 集中管理审批申请、批准、拒绝和执行状态。
+-- 2) 保存来源追踪信息和幂等键，保障审计与安全重放。
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS batch.approval_command (

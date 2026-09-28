@@ -1,8 +1,8 @@
 -- =========================================================
 -- V27 - Add JOB node type to workflow_node and workflow_node_run
--- Notes:
--- 1) Allow workflow nodes to reference another job as a child execution.
--- 2) Keep node_type check constraints aligned on definition and runtime tables.
+-- 说明：
+-- 1) 允许工作流节点引用其他作业作为子任务执行。
+-- 2) 保持定义表与运行态表的 node_type CHECK 约束一致。
 -- =========================================================
 
 ALTER TABLE batch.workflow_node
