@@ -20,19 +20,21 @@
 | `AlertEscalationScheduler` | orchestrator | 默认每 60s sweep 一次,ShedLock `alert_escalation_sweep` 单节点执行,优雅停机时跳过 |
 | `DefaultAlertEventService#escalateOverdue` | orchestrator | 选出超期 OPEN 告警,逐条 CAS 升级 tier,打日志 + 计数 |
 | `V181__alert_event_escalation_notify.sql` | db | `alert_event` 加 `escalation_notified_tier`(通知水位线,默认 0)+ OPEN 行 notify 扫描 partial index |
-| `AlertEscalationNotifier` | console-api | 默认每 60s 扫「`escalation_tier > escalation_notified_tier` 的 OPEN 告警」,经现有 webhook 投递链路推「告警已升级」,再 CAS 推进水位线;自管理调度 + ShedLock `alert-escalation-notify` 多实例互斥 |
+| `V214__alert_escalation_notification_outbox.sql` | db | 新增升级通知 outbox,把“推进水位线”和“发布通知”拆成可恢复的两段 |
+| `AlertEscalationNotifier` | console-api | 默认每 60s 扫「`escalation_tier > escalation_notified_tier` 的 OPEN 告警」,先 CAS 推进水位线并同事务写入通知 outbox,再由 relay 投递 `ALERT_ESCALATED`;自管理调度 + ShedLock `alert-escalation-notify` 多实例互斥 |
 
 **SLA 随 tier 递进**:第 `N` 级需静默 `slaMinutes * N` 分钟才触发(越往上越慢),避免单故障短时间连环升级产生日志噪音。
 升级用 `expectedTier` 乐观守护,被并发 ack 或其它节点抢先升级时跳过(不重复计数)。
 
 **为什么 notifier 在 console-api 而非 orchestrator**:升级在 orchestrator 抬 tier 写共享表 `alert_event`;真正的通知渠道配置 / webhook 投递 /
 `ConsoleRealtimeDomainEvent` → 分发器全在 console-api,且 console-api **无 Kafka consumer**。让 console-api 轮询共享表上「刚升级未通知」的行,复用它本就有的「定时轮询 + ShedLock + webhook 投递」范式(同 `WebhookDeliveryRelay`),
-零新增 Kafka / policy 表 / 跨模块依赖。投递事件 `alerts/ALERT_ESCALATED` 与告警 ack 的 `alert-updated` 走同一条流,订阅 `alerts` 流的 webhook 自动收到。
+只新增本地通知 outbox,不新增 Kafka / policy 表 / 跨模块依赖。投递事件 `alerts/ALERT_ESCALATED` 与告警 ack 的 `alert-updated` 走同一条流,订阅 `alerts` 流的 webhook 自动收到。
 
-**至少一次 + 不重复**:notifier 先发事件再 CAS 推进水位线(发了没标 → 下轮重发,at-least-once);ShedLock 保证多实例不并发轮询;
-`markEscalationNotified` 的 CAS(`escalation_notified_tier = expected AND status='OPEN'`)兜住「被并发 ack / 抢先通知」的竞态。每次 tier 抬升只成功推进一次水位线 ⇒ 只通知一次。
+**至少一次 + 不重复入队**:notifier 先用 `markEscalationNotified` 的 CAS(`escalation_notified_tier = expected AND status='OPEN'`)抢占通知所有权,
+并在同一事务写入 `alert_escalation_notification_outbox`;只有 CAS 成功的一方能推进水位线和创建 outbox。relay 再抢占 NEW/FAILED outbox 行发布领域事件,
+发布成功标 `PUBLISHED`,失败标 `FAILED` 延迟重试,超过上限标 `GIVE_UP`。这样每次 tier 抬升只入队一次,发布链路仍保持至少一次语义。
 
-**边界**:`AlertEscalationNotifier` 只负责发布 `ALERT_ESCALATED` 领域事件；订阅规则可把事件路由到 WEBHOOK、EMAIL、DINGTALK、WECOM、SLACK 或 SMS sender。Alertmanager 迁移后 notifier 默认关闭，仅作回滚路径。`alert_routing_config`(前端「告警路由」页管的表)目前仍无运行时消费方,不在本回路内。升级**不改 `severity`、不重走 emit**,状态机不介入。
+**边界**:`AlertEscalationNotifier` 只负责把升级通知入队并发布 `ALERT_ESCALATED` 领域事件；订阅规则可把事件路由到 WEBHOOK、EMAIL、DINGTALK、WECOM、SLACK 或 SMS sender。Alertmanager 迁移后 notifier 默认关闭，仅作回滚路径。`alert_routing_config`(前端「告警路由」页管的表)目前仍无运行时消费方,不在本回路内。升级**不改 `severity`、不重走 emit**,状态机不介入。
 
 > **决策（2026-07-11）**：保留 Prometheus → Alertmanager 静态规则和路由模板；应用内 `alert_event` /
 > `alert_routing_config` 动态迁移暂缓到上线前出现真实告警流量后再评估。Console 页面当前只读并标记“预留”，不得把 CRUD 成功解释为路由已生效。
@@ -59,5 +61,5 @@
 
 - `batch.alert.escalations{alert_type,tier}` — orchestrator 每次成功抬 tier +1,可在看板上对 tier≥2 设二级告警。
 - 每次升级一条 `ERROR` 日志,带 `alertId / tenantId / alertType / severity / traceId`,供日志告警规则匹配。
-- `batch.alert.escalation.notifications` — console-api 每次成功把升级推到平台内 webhook +1(水位线推进成功才计数)。
+- `batch.alert.escalation.notifications` — console-api 每次成功把升级 outbox 发布到平台内 webhook +1。
 - notifier 每次成功通知一条 `INFO` 日志:`Alert escalation pushed to in-platform notification: alertId=… tier=…`。

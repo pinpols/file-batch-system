@@ -406,6 +406,13 @@ jobs:
         # 防新模块漏进 shard 被静默跳过(2026-06-14 实测 sdk×3 共 ~370 测试从未跑)。
         run: bash scripts/ci/run-gate.sh PR_MODULE_TEST_COVERAGE "Maven 测试模块覆盖" -- bash scripts/ci/check-module-test-coverage.sh
 
+      - name: Verify full-ci covers all integration test modules
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        # 守护主 reactor 里含 *IntegrationTest / *IT 的模块都进入 full-ci-gate 的
+        # `mvn verify -DskipITs=false` shard,防新增集成测试模块只在 PR unit 中出现、main 回退漏跑。
+        run: bash scripts/ci/run-gate.sh PR_INTEGRATION_TEST_COVERAGE "集成测试覆盖" -- python3 scripts/ci/check-integration-test-coverage.py
+
       - name: Migration safety lint (squawk, diff-only)
         # 注释治理分支临时跳过迁移 lint；合并后应移除此分支例外并恢复门禁。
         if: (needs.changes.outputs.database == 'true' || needs.changes.outputs.ci == 'true') && github.head_ref != 'codex/comment-language-governance'

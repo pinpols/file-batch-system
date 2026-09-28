@@ -1,18 +1,27 @@
 package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import io.github.pinpols.batch.console.domain.notification.entity.AlertEscalationNotificationOutboxEntity;
+import io.github.pinpols.batch.console.domain.notification.mapper.AlertEscalationNotificationOutboxMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertEventMapper;
+import io.github.pinpols.batch.console.domain.notification.service.AlertEscalationNotificationOutboxService;
+import io.github.pinpols.batch.console.domain.notification.service.AlertEscalationNotifier.AlertEscalationNotifyPayload;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.TestConstructor;
 
 /**
  * 集成测试:验证升级通知的两个新 SQL 对真实 PG 的语义正确(V181 列 + 谓词 + CAS 水位线)。
@@ -23,13 +32,27 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class AlertEscalationNotifyMapperIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private AlertEventMapper alertEventMapper;
+  private final AlertEventMapper alertEventMapper;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private final AlertEscalationNotificationOutboxMapper outboxMapper;
+
+  private final AlertEscalationNotificationOutboxService outboxService;
+
+  private final JdbcTemplate jdbcTemplate;
+
+  AlertEscalationNotifyMapperIntegrationTest(
+      AlertEventMapper alertEventMapper,
+      AlertEscalationNotificationOutboxMapper outboxMapper,
+      AlertEscalationNotificationOutboxService outboxService,
+      JdbcTemplate jdbcTemplate) {
+    this.alertEventMapper = alertEventMapper;
+    this.outboxMapper = outboxMapper;
+    this.outboxService = outboxService;
+    this.jdbcTemplate = jdbcTemplate;
+  }
 
   @Test
   void shouldSelectOnlyEscalatedPendingOpenRowsThenStopAfterWatermarkBump() {
@@ -78,6 +101,138 @@ class AlertEscalationNotifyMapperIntegrationTest extends AbstractIntegrationTest
     assertThat(marked).isZero();
   }
 
+  @Test
+  void shouldCreateOutboxInSameTransactionAsWatermarkBump() {
+    String tenantId = "t-esc-outbox-" + BatchDateTimeSupport.utcEpochMillis();
+    long alertId = insertAlert(tenantId, "SLA_BREACH", "OPEN", 2, 0);
+    AlertEventEntity alert = alertEventMapper.selectById(tenantId, alertId);
+
+    boolean enqueued = outboxService.enqueue(
+        alert,
+        "alerts",
+        "ALERT_ESCALATED",
+        new AlertEscalationNotifyPayload(
+            alertId, "SLA_BREACH", "CRITICAL", "SLA_BREACH escalated", 2, "trace-" + alertId));
+
+    assertThat(enqueued).isTrue();
+    assertThat(alertEventMapper.selectById(tenantId, alertId).getEscalationNotifiedTier())
+        .isEqualTo(2);
+    AlertEscalationNotificationOutboxEntity row = findOutboxByTenantAndAlert(tenantId, alertId);
+    assertThat(row.getPublishStatus()).isEqualTo(OutboxPublishStatus.NEW.code());
+    assertThat(row.getEscalationTier()).isEqualTo(2);
+    AlertEscalationNotifyPayload payload =
+        JsonUtils.fromJson(row.getPayloadJson(), AlertEscalationNotifyPayload.class);
+    assertThat(payload.alertId()).isEqualTo(alertId);
+    assertThat(payload.escalationTier()).isEqualTo(2);
+  }
+
+  @Test
+  void shouldRollbackWatermarkWhenOutboxInsertViolatesUniqueKey() {
+    String tenantId = "t-esc-outbox-rollback-" + BatchDateTimeSupport.utcEpochMillis();
+    long alertId = insertAlert(tenantId, "SLA_BREACH", "OPEN", 3, 0);
+    insertOutbox(
+        tenantId, alertId, 3, OutboxPublishStatus.NEW.code(), 0, BatchDateTimeSupport.utcNow());
+    AlertEventEntity alert = alertEventMapper.selectById(tenantId, alertId);
+
+    assertThatThrownBy(() -> outboxService.enqueue(
+            alert,
+            "alerts",
+            "ALERT_ESCALATED",
+            new AlertEscalationNotifyPayload(
+                alertId, "SLA_BREACH", "CRITICAL", "SLA_BREACH escalated", 3, "trace-" + alertId)))
+        .isInstanceOf(DuplicateKeyException.class);
+
+    assertThat(alertEventMapper.selectById(tenantId, alertId).getEscalationNotifiedTier())
+        .isZero();
+  }
+
+  @Test
+  void shouldEnforceUniqueOutboxPerTenantAlertAndTier() {
+    String tenantId = "t-esc-outbox-unique-" + BatchDateTimeSupport.utcEpochMillis();
+    long alertId = insertAlert(tenantId, "SLA_BREACH", "OPEN", 1, 0);
+
+    insertOutbox(
+        tenantId, alertId, 1, OutboxPublishStatus.NEW.code(), 0, BatchDateTimeSupport.utcNow());
+
+    assertThatThrownBy(() -> insertOutbox(
+            tenantId, alertId, 1, OutboxPublishStatus.NEW.code(), 0, BatchDateTimeSupport.utcNow()))
+        .isInstanceOf(DuplicateKeyException.class);
+  }
+
+  @Test
+  void shouldMoveOutboxThroughPublishStatusLifecycle() {
+    String tenantId = "t-esc-outbox-flow-" + BatchDateTimeSupport.utcEpochMillis();
+    long alertId = insertAlert(tenantId, "SLA_BREACH", "OPEN", 1, 0);
+    Instant now = BatchDateTimeSupport.utcNow();
+    long publishedId =
+        insertOutbox(tenantId, alertId, 1, OutboxPublishStatus.NEW.code(), 0, now.minusSeconds(1));
+
+    List<AlertEscalationNotificationOutboxEntity> pending = outboxMapper.selectPending(
+        now, 500, OutboxPublishStatus.NEW.code(), OutboxPublishStatus.FAILED.code());
+    assertThat(pending)
+        .extracting(AlertEscalationNotificationOutboxEntity::getId)
+        .contains(publishedId);
+
+    assertThat(outboxMapper.markPublishing(
+            publishedId,
+            tenantId,
+            OutboxPublishStatus.PUBLISHING.code(),
+            OutboxPublishStatus.NEW.code(),
+            OutboxPublishStatus.FAILED.code()))
+        .isEqualTo(1);
+    assertThat(outboxMapper.markPublished(
+            publishedId,
+            tenantId,
+            OutboxPublishStatus.PUBLISHED.code(),
+            OutboxPublishStatus.PUBLISHING.code()))
+        .isEqualTo(1);
+    assertThat(outboxMapper.markPublished(
+            publishedId,
+            tenantId,
+            OutboxPublishStatus.PUBLISHED.code(),
+            OutboxPublishStatus.PUBLISHING.code()))
+        .isZero();
+
+    long failedId =
+        insertOutbox(tenantId, alertId, 2, OutboxPublishStatus.NEW.code(), 0, now.minusSeconds(1));
+    assertThat(outboxMapper.markPublishing(
+            failedId,
+            tenantId,
+            OutboxPublishStatus.PUBLISHING.code(),
+            OutboxPublishStatus.NEW.code(),
+            OutboxPublishStatus.FAILED.code()))
+        .isEqualTo(1);
+    assertThat(outboxMapper.markFailed(
+            failedId,
+            tenantId,
+            OutboxPublishStatus.FAILED.code(),
+            now.plusSeconds(60),
+            "publish failed",
+            OutboxPublishStatus.PUBLISHING.code()))
+        .isEqualTo(1);
+
+    long giveUpId =
+        insertOutbox(tenantId, alertId, 3, OutboxPublishStatus.NEW.code(), 9, now.minusSeconds(1));
+    assertThat(outboxMapper.markPublishing(
+            giveUpId,
+            tenantId,
+            OutboxPublishStatus.PUBLISHING.code(),
+            OutboxPublishStatus.NEW.code(),
+            OutboxPublishStatus.FAILED.code()))
+        .isEqualTo(1);
+    assertThat(outboxMapper.markGiveUp(
+            giveUpId,
+            tenantId,
+            OutboxPublishStatus.GIVE_UP.code(),
+            "retry exhausted",
+            OutboxPublishStatus.PUBLISHING.code()))
+        .isEqualTo(1);
+
+    assertThat(statusOf(publishedId)).isEqualTo(OutboxPublishStatus.PUBLISHED.code());
+    assertThat(statusOf(failedId)).isEqualTo(OutboxPublishStatus.FAILED.code());
+    assertThat(statusOf(giveUpId)).isEqualTo(OutboxPublishStatus.GIVE_UP.code());
+  }
+
   private List<AlertEventEntity> onlyTenant(String tenantId) {
     return alertEventMapper.selectEscalatedPendingNotify(100).stream()
         .filter(a -> tenantId.equals(a.getTenantId()))
@@ -110,5 +265,56 @@ class AlertEscalationNotifyMapperIntegrationTest extends AbstractIntegrationTest
         Long.class,
         tenantId);
     return id == null ? -1L : id;
+  }
+
+  private long insertOutbox(
+      String tenantId,
+      long alertId,
+      int escalationTier,
+      String publishStatus,
+      int attemptCount,
+      Instant nextPublishAt) {
+    AlertEscalationNotificationOutboxEntity row = new AlertEscalationNotificationOutboxEntity();
+    row.setTenantId(tenantId);
+    row.setAlertEventId(alertId);
+    row.setEscalationTier(escalationTier);
+    row.setStream("alerts");
+    row.setEventType("ALERT_ESCALATED");
+    row.setPayloadJson("""
+        {"alertId":%d,"alertType":"SLA_BREACH","severity":"CRITICAL","title":"SLA_BREACH escalated","escalationTier":%d}
+        """.formatted(alertId, escalationTier));
+    row.setPublishStatus(publishStatus);
+    row.setAttemptCount(attemptCount);
+    row.setNextPublishAt(nextPublishAt);
+    int inserted = outboxMapper.insert(row);
+    assertThat(inserted).isEqualTo(1);
+    Long id = jdbcTemplate.queryForObject("""
+        SELECT id
+          FROM batch.alert_escalation_notification_outbox
+         WHERE tenant_id = ?
+           AND alert_event_id = ?
+           AND escalation_tier = ?
+        """, Long.class, tenantId, alertId, escalationTier);
+    return id == null ? -1L : id;
+  }
+
+  private AlertEscalationNotificationOutboxEntity findOutboxByTenantAndAlert(
+      String tenantId, long alertId) {
+    List<AlertEscalationNotificationOutboxEntity> rows = outboxMapper.selectPending(
+        BatchDateTimeSupport.utcNow().plusSeconds(1),
+        500,
+        OutboxPublishStatus.NEW.code(),
+        OutboxPublishStatus.FAILED.code());
+    return rows.stream()
+        .filter(row -> tenantId.equals(row.getTenantId()) && alertId == row.getAlertEventId())
+        .findFirst()
+        .orElseThrow();
+  }
+
+  private String statusOf(long id) {
+    return jdbcTemplate.queryForObject(
+        "select publish_status from batch.alert_escalation_notification_outbox where id = ?",
+        String.class,
+        id);
   }
 }

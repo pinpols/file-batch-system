@@ -22,6 +22,7 @@
 
 ### Added
 
+- **CI 集成测试覆盖守护**：新增主 reactor 集成测试模块发现检查，要求含 `*IntegrationTest` / 非 E2E `*IT` 的模块必须进入 `full-ci-gate` 的 `mvn verify -DskipITs=false` shard；`full-ci-gate` 同步执行 E2E shard 静态覆盖检查，防直推 main 时测试清单漂移。
 - **Console AI OpenAI-compatible 接入**：新增 `openai-compatible` provider 模式,支持 DeepSeek、千问、智谱、Kimi、MiniMax 或私有兼容代理通过统一配置接入;聊天端点与 RAG embedding 配置分离,兼容模式禁止自动跨 Provider failover。
 - **控制台运维工具契约**：导出文件命名预览与 Worker 运行时共用同一解析器，支持业务日、租户、批次号、区域和版本占位符，避免前端复制命名规则。
 - **构建与运行告警治理**：Java 主源码和测试源码启用 deprecation/unchecked warning 零容忍；新增当前应用日志 WARN 策略审计，区分预期本地告警、需处理状态和未知回归，并在本地全量启动后自动报告。
@@ -80,6 +81,7 @@
 
 ### Fixed
 
+- 修复告警升级通知在状态 CAS 前直接调用外部通知通道的问题；新增告警升级通知 outbox 表和发布服务，将升级状态写入与通知信封落库放入同一事务，避免单实例 at-least-once 和租约过期跨实例重复破坏通知契约。
 - Dispatch 渠道适配器选择改为构造期 `channelType -> adapter` 注册表；同一官方渠道被多个 adapter 支持时启动失败，避免插件或 stub 依赖 Spring 顺序静默接管真实分发渠道。
 - 显式管理 `okio-jvm` 版本，避免 `okhttp-jvm` 的传递依赖将 JVM 实现降级至与已管理的 Okio 版本不一致。
 - 修复非旁路环境下 Spring Security 默认 XOR CSRF 解析与前端 Axios 明文 double-submit 协议不一致、导致已登录用户写请求统一返回 403 的问题；保留 cookie/header 双提交校验及现有忽略路径。
