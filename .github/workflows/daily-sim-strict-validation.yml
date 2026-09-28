@@ -87,18 +87,22 @@ jobs:
         run: bash scripts/local/build-apps.sh
 
       - name: Start isolated infrastructure and application processes
+        id: start_apps
         run: bash scripts/local/start-all.sh
 
       - name: Run full simulation harness
+        id: sim_harness
         shell: bash
         run: |
           set -o pipefail
           bash scripts/local/sim-harness.sh all 2>&1 | tee /tmp/sim-harness-all.log
 
       - name: Quiesce simulated schedules
+        if: ${{ always() && steps.start_apps.outcome == 'success' }}
         run: bash scripts/sim/98-quiesce-schedules.sh
 
       - name: Run BE acceptance strict step
+        if: ${{ always() && steps.start_apps.outcome == 'success' }}
         shell: bash
         run: |
           set -o pipefail
