@@ -33,6 +33,7 @@
 - **`concurrency.group + cancel-in-progress`** 全配 — 同分支并发 push / 同 PR 多次推时,旧 run 自动取消省 runner
 - **pr-gate 与 full-ci-gate 检查项不完全相同**:见下表(pr-gate 重快速反馈,full-ci-gate 重深度回归 + 安全扫描)
 - **main 红线独立于 PR 绿灯**:PR gate 通过只代表候选变更可合入；合入后的 main 只有最新 `full-ci-gate` 通过才可作为发布基线。
+- **门禁结果行统一**:本地 hook 与 CI 统一输出 `状态 | code | gate | exit_code | action`；跳过时再输出 `reason`。单步中串行运行多个阻断检查时，每项都必须通过共享 `gate_run` 输出独立结果；具体诊断信息可保留各检查器原有内容。
 
 ## 开源多人协作策略
 
@@ -93,10 +94,10 @@ batch-common/*             # 跨模块基础库,改了全部模块都受影响
 | 纯 `.github/workflows/*.yml` | ✅ workflow 触发 + 升级 full(workflow 自身改要全测) | ✅ 全跑 |
 | 纯 `helm/*` | ✅ workflow 触发 + 升级 full | ✅ 全跑 |
 | 纯 `scripts/local/*` | ✅ workflow 触发 + 升级 full | ✅ 全跑 |
-| 纯 `db/migration/*.sql` | ⚠️ workflow 触发但 Detect 不在 case 列表 → `skip`(**潜在漏洞** — DB 改动建议手动触发 full) | ✅ 全跑 |
-| 纯 `docs/api/console-api.openapi.yaml` | ⚠️ 同上 `skip`(但 OpenAPI 漂移在 setup-build-env 已有 `check-console-openapi-paths.py` 守护) | ✅ 全跑 |
+| 纯 `db/migration/*.sql` | ✅ database 静态检查运行（Flyway、migration safety、注释覆盖）；Maven scope 可跳过 | ✅ 全跑 |
+| 纯 `docs/api/console-api.openapi.yaml` | ✅ api 路由同步与 OpenAPI 破坏性变更检查运行；Maven scope 可跳过 | ✅ 全跑 |
 
-**结论**:full-ci-gate 没配 `paths-ignore` — main 任何 push 都触发,**含纯文档 / 配置**。pr-gate 用 scope 探测省 runner,但 db/migration / OpenAPI 这类不在 case 列表里的"会影响运行时但 PR 不会自动升 full"的路径有盲区,改这类时建议手动 `workflow_dispatch` 触发 full-ci-gate 回退。
+**结论**:full-ci-gate 没配 `paths-ignore` — main 任何 push 都触发,**含纯文档 / 配置**。PR gate 对 database 变更运行 Flyway 结构/checksum、迁移安全和数据库注释检查；这些静态检查不依赖 Maven scope，不应因 Maven `skip` 而漏跑。OpenAPI 有独立路径同步与破坏性变更检查。
 
 ---
 
@@ -107,9 +108,13 @@ batch-common/*             # 跨模块基础库,改了全部模块都受影响
 | 检查项 | 工具 / 脚本 | 触发流水线 |
 |---|---|---|
 | OpenAPI 路径对齐 | `check-console-openapi-paths.py` | 全部（setup-build-env） |
+| Flyway 文件结构与 checksum 漂移 | `validate-flyway-schema.sh` | PR：database / CI 文件域；历史版本 checksum 变更阻断（当前注释治理 PR 有明确临时豁免） |
+| Flyway 危险 DDL | `check-migration-safety.sh`（Squawk，diff-only） | PR：database / CI 文件域；当前注释治理 PR 有明确临时豁免 |
+| 新增数据库对象注释覆盖 | `check-db-comment-coverage.sh`（diff-only） | PR 与 Full CI：database 变更 |
+| 注释语言 | `check-comment-language.py --staged` | 本地 pre-commit 增量预检；暂不阻断 PR / Full CI |
 | 模块依赖边界 | `check-dependency-boundaries.py` | 全部（run-full-regression） |
 | 编译 + 单元测试 | Maven `test` | 全部 |
-| 集成测试 (`*IntegrationTest`) | Maven `test` | full-ci-gate |
+| 集成测试 (`*IntegrationTest` / 非 E2E `*IT`) | Maven `verify -DskipITs=false` | full-ci-gate；`check-integration-test-coverage.py` 守护含集成测试的主 reactor 模块必须进入 full-ci verify shard |
 | E2E 套件 (`*E2eIT`) | Maven `test` `-pl batch-e2e-tests` | full-ci-gate |
 
 ### 提醒项（失败只通知，不阻断流水线）
@@ -158,6 +163,7 @@ pr-gate 会根据 PR 变更文件范围决定 Maven 构建粒度：
 | 触发范围 | 本地检查 | 扫描粒度 |
 |---|---|---|
 | 所有提交 | `git diff --cached --check` | 暂存区 |
+| 所有提交 | `check-comment-language.py --staged` | **增量预检**：仅检查暂存 diff 新增说明性注释；当前不作为 PR / Full CI 阻断项 |
 | Java 暂存文件 | `spotless:apply` | 受 Maven 插件能力限制，执行仓库 Spotless apply；随后重新暂存 Java 文件 |
 | Java 暂存文件 | Java 日志治理、可读性约定、文本块格式、抑制项注册表、`Map/List/Set.of` 空值风险 | **增量**：仅传入暂存 Java 文件；对应 CI 无参全量 |
 | MyBatis Mapper XML 暂存文件 | PostgreSQL generated key 列约束、禁止位置式 `INSERT ... SELECT *` | **增量**：仅传入暂存 Mapper 文件；对应 CI 无参全量 |

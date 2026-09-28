@@ -94,8 +94,7 @@ on_exit_cleanup() {
   fi
   echo "Auto-cleanup RUN_ID=${RUN_ID} ..." >&2
   cleanup_atomic_trigger >&2 || echo "WARN: atomic/trigger cleanup failed for RUN_ID=${RUN_ID}" >&2
-  # Trigger ingress is asynchronous. Remove its durable source first, then wait for and remove
-  # any instance that was already in flight when the trigger records were deleted.
+  # Trigger 入口采用异步处理。先删除持久化请求，再等待并清理删除请求时已进入处理流程的实例。
   RUN_ID="$RUN_ID" "$LOAD_DIR/scripts/cleanup-worker-load-data.sh" >&2 || \
     echo "WARN: cleanup-worker-load-data failed for RUN_ID=${RUN_ID}" >&2
   exit "$rc"
@@ -476,8 +475,7 @@ run_mixed_pressure() {
     local sampler_pid=""
   fi
 
-  # Keep collecting terminal-state evidence after a Gatling SLO failure. The caller receives the
-  # original exit code only after the sampler and asynchronous execution chain have settled.
+  # Gatling SLO 失败后仍继续采集终态证据；待采样器和异步执行链路稳定后，再向调用方返回原始退出码。
   if (
     cd "$LOAD_DIR"
     mvn gatling:test \
@@ -770,8 +768,7 @@ case "$CONTROL_PLANE_MODE" in
     fi
     ;;
   parallel)
-    # Do not let the shell abort before the report and cleanup run. Preserve the measured SLO
-    # result so capacity-profile callers can enforce CAPACITY_STRICT=1.
+    # 不要在报告生成和清理前让 Shell 提前退出。保留实测 SLO 结果，供容量画像调用方按 CAPACITY_STRICT=1 判定。
     set +e
     run_mixed_pressure
     BENCHMARK_RC=$?

@@ -1,5 +1,5 @@
 -- =========================================================
--- V71 - Create cold archive tables for hot-table slimming
+-- V71 - 创建归档冷表以缩减热表数据量
 -- =========================================================
 
 CREATE SCHEMA IF NOT EXISTS archive;

@@ -74,9 +74,8 @@ DRIFT_ALLOWLIST = {
         "compose 加 -local 后缀区分多容器实例；yml 默认裸名给 IDE 直跑",
 }
 
-# Public feature switches are registered once in
-# docs/runbook/feature-switch-registry.yml. They must be forwarded by Compose so
-# setting them in .env.local is not silently ignored by containers.
+# 对外功能开关统一登记在 docs/runbook/feature-switch-registry.yml，且必须由
+# Compose 显式传入容器，避免 .env.local 中的配置未生效却没有提示。
 REQUIRED_COMPOSE_FEATURE_VARS = compose_required_env_vars()
 
 

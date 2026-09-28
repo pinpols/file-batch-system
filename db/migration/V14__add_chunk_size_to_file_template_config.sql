@@ -1,8 +1,8 @@
 -- =========================================================
--- V13 - Add chunk size to file template config
--- Notes:
--- 1) Keep a database-level default for file_template_config.chunk_size.
--- 2) Enforce chunk_size > 0 through a dedicated check constraint.
+-- V13 - 为文件模板配置增加分块大小
+-- 说明：
+-- 1) 为 file_template_config.chunk_size 设置数据库默认值。
+-- 2) 通过独立 CHECK 约束确保 chunk_size 大于 0。
 -- =========================================================
 
 ALTER TABLE batch.file_template_config

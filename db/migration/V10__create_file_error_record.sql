@@ -1,8 +1,8 @@
 -- =========================================================
--- V9 - Create file error record table
--- Notes:
--- 1) Persist per-record import/export errors for console query and replay.
--- 2) Store raw_record as JSONB for debugging and operator review.
+-- V9 - 创建文件错误记录表
+-- 说明：
+-- 1) 持久化导入/导出记录级错误，供控制台查询和重放。
+-- 2) 将 raw_record 保存为 JSONB，便于排查和运维复核。
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS batch.file_error_record (

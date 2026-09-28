@@ -1,5 +1,5 @@
--- The P2 profile owns these isolated fixture tenants and configuration rows.
--- Cleanup is deliberately exact: it must not affect tenant-owned definitions.
+-- P2 压测档案独占这些隔离租户和配置记录。
+-- 清理条件采用精确匹配，不得影响租户自行维护的定义。
 DELETE FROM batch.tenant_quota_policy
 WHERE policy_code = 'p2-fairness-profile'
   AND fair_share_group = 'p2-load-fairness'

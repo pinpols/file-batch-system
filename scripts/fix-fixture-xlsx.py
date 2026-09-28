@@ -299,8 +299,8 @@ def linux5_to_quartz6(expr: str) -> str | None:
     if not m:
         return None
     minute, hour, dom, month, dow = m.groups()
-    # Quartz: sec min hour day-of-month month day-of-week [year]
-    # Linux DOW 0-6 (Sun=0) ; Quartz DOW 1-7 (Sun=1). If '*' or '?', keep '?'.
+    # Quartz 字段顺序：秒、分、时、日、月、周（可选年份）。
+    # Linux 周字段为 0-6（周日为 0），Quartz 为 1-7（周日为 1）；遇到 '*' 或 '?' 时保留 '?'。
     if dom == "*" and dow == "*":
         q_dom, q_dow = "*", "?"
     elif dow == "*":
@@ -659,7 +659,7 @@ def ensure_workflow_boundary_nodes(wb) -> tuple[int, int]:
     n_headers = [c.value for c in node_ws[1]]
     nidx = {h: i for i, h in enumerate(n_headers)}
 
-    # group rows by (tenant, code, version)
+    # 按租户、工作流编码和版本分组。
     groups: dict[tuple, list] = {}
     for row in node_ws.iter_rows(min_row=2):
         if row[nidx["tenant_id"]].value in (None, ""):
@@ -753,7 +753,7 @@ def ensure_workflow_boundary_nodes(wb) -> tuple[int, int]:
             appended += 1
             appended_codes.append("END")
 
-        # patch edges -> rename NODE_START/NODE_END and add START->first_job + last_job->END if missing
+        # 修复边关系：重命名 NODE_START/NODE_END；缺少时补充 START 到首个任务、末尾任务到 END 的边。
         if edge_ws is not None:
             e_headers = [c.value for c in edge_ws[1]]
             eidx = {h: i for i, h in enumerate(e_headers)}
@@ -765,7 +765,7 @@ def ensure_workflow_boundary_nodes(wb) -> tuple[int, int]:
                     continue
                 if er[eidx["workflow_version"]].value != wf_ver:
                     continue
-                # rename legacy boundary codes in edges
+                # 将边上的旧边界节点编码迁移为新编码。
                 if er[eidx["from_node_code"]].value == "NODE_START":
                     er[eidx["from_node_code"]].value = "START"
                 if er[eidx["to_node_code"]].value == "NODE_END":

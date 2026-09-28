@@ -60,9 +60,8 @@ def rls_covered_tables(sql: str, expected_tables):
     if m:
         return set(re.findall(r"'(biz\.[a-z0-9_]+)'", m.group(1), re.IGNORECASE))
 
-    # strict migration deliberately discovers future biz tables from the catalog;
-    # keep the guard closed-world by validating the dynamic policy shape and
-    # treating the current DDL inventory as the expected discovery set.
+    # strict 迁移会从系统目录动态发现新增业务表；通过校验动态策略结构，
+    # 并将当前 DDL 清单作为预期发现集合，保持检查范围闭合。
     dynamic_markers = (
         "pg_class",
         "information_schema.columns",

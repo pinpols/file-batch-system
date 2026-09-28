@@ -1,7 +1,7 @@
 -- =========================================================
 -- V16 - Ensure only one running compensation per target
--- Notes:
--- 1) Prevent duplicate manual compensation dispatch for the same target.
+-- 说明：
+-- 1) 防止同一目标被重复发起人工补偿。
 -- 2) Apply the uniqueness rule only when target_id is present and status is RUNNING.
 -- =========================================================
 

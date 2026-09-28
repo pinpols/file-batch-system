@@ -31,14 +31,10 @@ fi
 echo "[sdk-live] BATCH_SDK_KAFKA_BOOTSTRAP=${SDK_KAFKA_BOOTSTRAP}"
 echo "[sdk-live] Python=$("$PYTHON_BIN" -c 'import sys; print(sys.executable)')"
 
-# Broker readiness gate — READINESS WAIT ONLY (never a test retry; a genuine
-# broker/SDK bug must still fail loudly). The per-language live suites below
-# assume BATCH_SDK_KAFKA_BOOTSTRAP already serves the Kafka API. Under CI the workflow
-# already polls kafka-broker-api-versions.sh in-container; this host-side TCP
-# readiness loop is
-# defense-in-depth so a still-warming broker never surfaces as a spurious
-# per-language waitFor timeout — and so ad-hoc local runs (broker started by
-# hand) also wait instead of racing the first Kafka call.
+# Broker 就绪等待仅用于 READINESS WAIT，不重试测试请求；真正的 Broker/SDK 缺陷仍须明确失败。
+# 下方各语言实时测试要求 BATCH_SDK_KAFKA_BOOTSTRAP 已提供 Kafka API。CI 工作流会在容器内
+# 轮询 kafka-broker-api-versions.sh；此处再通过宿主机 TCP 检查防止 Broker 尚未就绪时出现
+# 误导性的 waitFor 超时，也让手动启动 Broker 的本地运行避免与首次 Kafka 调用发生竞态。
 wait_for_kafka() {
   local hostport="$1" host port deadline
   batch_parse_host_port "$hostport"

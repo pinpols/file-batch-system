@@ -1,7 +1,6 @@
--- Stateful backend cutover registry.
+-- 有状态后端切换登记表。
 --
--- Stateful implementations must not be changed only by flipping an environment variable:
--- the current backend identity is persisted here and every accepted cutover is audited.
+-- 有状态后端不能仅通过切换环境变量更换：当前后端标识需持久化，每次获批切换均须留审计记录。
 
 CREATE TABLE IF NOT EXISTS batch.stateful_backend_binding (
     feature_key       VARCHAR(160)  PRIMARY KEY,

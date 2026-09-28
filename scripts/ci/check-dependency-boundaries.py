@@ -120,7 +120,7 @@ def main() -> int:
                 "batch-common must stay lightweight; forbidden runtime dependency found: "
                 f"{forbidden[0]}:{forbidden[1]}"
             )
-    # Historical runtime weight in batch-common is tolerated for now, but no new categories should be added.
+    # 暂时保留 batch-common 中已有的运行时依赖，但不允许增加新的依赖类别。
     for existing in sorted(grandfathered_common_runtime):
         if existing not in common_runtime:
             print(

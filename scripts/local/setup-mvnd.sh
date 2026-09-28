@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install the pinned Maven Daemon used by local build scripts.
+# 安装本地构建脚本使用的固定版本 Maven Daemon。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"

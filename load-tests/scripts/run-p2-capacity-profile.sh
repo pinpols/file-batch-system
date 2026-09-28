@@ -29,19 +29,15 @@ FAIRNESS_CONCURRENCY="${FAIRNESS_CONCURRENCY:-96}"
 # 高并发公平画像使用的共享组硬上限。默认 96 与 6000/1200s 的画像预算匹配；
 # 12 槽位是用于小规模原子 admission 验证的专用 profile，不应混入吞吐画像。
 FAIRNESS_GROUP_SHARED_MAX_RUNNING_JOBS="${FAIRNESS_GROUP_SHARED_MAX_RUNNING_JOBS:-96}"
-# The fixture applies the fixed admission policy ta:tb:tc = 3:1:1. Submit an
-# equal tenant demand by default, otherwise the result cannot distinguish the
-# configured share from a tenant simply sending more work.
+# 测试数据采用固定准入策略 ta:tb:tc = 3:1:1。默认让各租户提交相同请求量，
+# 否则无法区分配置份额效果与租户提交量差异。
 FAIRNESS_LAUNCH_WEIGHTS="${FAIRNESS_LAUNCH_WEIGHTS:-p2fa:1,p2fb:1,p2fc:1}"
 FAIRNESS_WAIT_SECONDS="${FAIRNESS_WAIT_SECONDS:-1200}"
-# Default to the real trigger ingress so every request creates its own
-# trigger_request before the asynchronous orchestrator launch. Set
-# FAIRNESS_MODE=orchestrator only when using pre-seeded trigger requests.
+# 默认使用真实 Trigger 入口，使每个请求在异步 Orchestrator 启动前都创建对应 trigger_request。
+# 仅在已预置 trigger_request 时设置 FAIRNESS_MODE=orchestrator。
 FAIRNESS_MODE="${FAIRNESS_MODE:-trigger}"
-# The 10w profile is an upper-bound/capacity measurement and may legitimately
-# exceed the low-latency assertion. Keep report-only behavior by default, while
-# allowing CI or a release checklist to turn the measured failure into a hard
-# failure without changing the profile itself.
+# 10w 画像用于测量容量上限，响应时间可能超过低延迟断言。默认只生成报告；
+# CI 或发布检查可将实测失败设为硬失败，而不必修改画像配置。
 CAPACITY_STRICT="${CAPACITY_STRICT:-0}"
 # 容量画像验证的是入口完整性而非普通接口可用性：任何 4xx/5xx 都意味着目标请求没有进入
 # trigger_request，不能沿用通用混压画像允许 20% 错误的阈值。
@@ -89,8 +85,7 @@ CAPACITY_BIZ_DATE_CARDINALITY="${CAPACITY_BIZ_DATE_CARDINALITY:-1}"
 CAPACITY_TERMINAL_POLL_INTERVAL_SECONDS="${CAPACITY_TERMINAL_POLL_INTERVAL_SECONDS:-10}"
 CAPACITY_ISOLATED_TENANT_ENABLED="${CAPACITY_ISOLATED_TENANT_ENABLED:-1}"
 CAPACITY_TENANT_ID="${CAPACITY_TENANT_ID:-p2capacity}"
-# benchmark profile intentionally raises the isolated Trigger relay budget; do not inherit the
-# local production baseline from .env.local when checking the benchmark container.
+# 基准画像会有意提高隔离 Trigger 中继的预算；检查基准容器时不要继承 .env.local 中的本地生产基线。
 CAPACITY_ATOMIC_DISPATCH_PARTITIONS="${CAPACITY_ATOMIC_DISPATCH_PARTITIONS:-24}"
 CAPACITY_TRIGGER_LAUNCH_PARTITIONS="${CAPACITY_TRIGGER_LAUNCH_PARTITIONS:-12}"
 CAPACITY_ATOMIC_CONCURRENCY="${CAPACITY_ATOMIC_CONCURRENCY:-24}"
@@ -510,8 +505,8 @@ cleanup() {
     echo "10w storm did not reach terminal verification; preserving RUN_ID=${RUN_ID}-10w data for investigation" >&2
     release_capacity_lock
   elif [[ "$RUN_10W_STORM" == "1" ]]; then
-    # The Trigger consumer can create an instance after the load generator has stopped. Clear
-    # trigger/outbox sources first, then let the worker cleanup wait for and remove that tail.
+    # 负载发生器停止后，Trigger 消费者仍可能创建实例。先清理 Trigger/Outbox 源记录，
+    # 再由 Worker 清理流程等待并删除这部分滞后实例。
     if ! psql_platform -v run_id="${RUN_ID}-10w" \
         -f "$LOAD_DIR/sql/cleanup-control-plane-worker.sql" >&2; then
       rc=1
@@ -530,7 +525,7 @@ cleanup() {
     fi
     release_capacity_lock
   fi
-  # Fairness uses the profile run id directly. Keep it separate from the storm's -10w suffix.
+  # 公平性画像直接使用 profile run id，与压力测试的 -10w 后缀分开。
   if [[ "$FAIRNESS_STARTED" == "1" ]] \
       && ! psql_platform -v run_id="$RUN_ID" -f "$LOAD_DIR/sql/cleanup-control-plane-worker.sql" >&2; then
     rc=1
@@ -1260,10 +1255,8 @@ run_10w_storm() {
   echo "10w storm exit_code=${rc}" | tee "$LOG_DIR/10w-storm.exit"
   if storm_reached_terminal_state "$storm_run_id"; then
     STORM_TERMINAL_VERIFIED=1
-    # The worker benchmark may finish its bounded wait just before the final async
-    # result rows arrive. Keep the initial snapshot for latency evidence, but add a
-    # post-verification snapshot so the profile report cannot present an intermediate
-    # completion count as the final capacity result.
+    # Worker 基准的有界等待可能在最后一批异步结果写入前结束。保留初始快照作为延迟证据，
+    # 并在终态验证后补充快照，避免报告把中间完成数当成最终容量结果。
     append_sql_summary "10w Atomic Storm (final verification)" "$storm_run_id"
   elif [[ "$CAPACITY_STRICT" == "1" ]]; then
     PROFILE_RC=1

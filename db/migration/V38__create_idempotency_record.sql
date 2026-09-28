@@ -1,5 +1,5 @@
--- D-1: Global idempotency layer — prevents duplicate execution of critical operations.
--- The UNIQUE constraint on (tenant_id, idempotency_key) is the core mechanism:
+-- D-1：全局幂等层，防止关键操作重复执行。
+-- (tenant_id, idempotency_key) 上的 UNIQUE 约束是核心幂等机制：
 -- INSERT ... ON CONFLICT DO NOTHING ensures at-most-once semantics at the DB level.
 
 CREATE TABLE IF NOT EXISTS batch.idempotency_record (

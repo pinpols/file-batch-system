@@ -1,10 +1,16 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
+import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
+import io.github.pinpols.batch.common.i18n.BizExceptionUtils;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.config.AlertEscalationNotifyProperties;
+import io.github.pinpols.batch.console.domain.notification.entity.AlertEscalationNotificationOutboxEntity;
+import io.github.pinpols.batch.console.domain.notification.mapper.AlertEscalationNotificationOutboxMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertEventMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -12,6 +18,7 @@ import io.micrometer.core.instrument.Tags;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -32,14 +39,16 @@ import org.springframework.stereotype.Component;
  * 告警升级「最后一公里通知」notifier —— 闭合升级→通知回路。
  *
  * <p>背景:orchestrator 的 {@code AlertEscalationScheduler} 把超过 ack-SLA 仍 OPEN 的告警逐级抬升 {@code
- * escalation_tier}(V176),但只打日志/指标,无人被主动通知(headless)。本 notifier 把「刚升级、还没通知过」的 告警(escalation_tier
- * &gt; escalation_notified_tier)经现有 webhook 投递链路推到订阅方,然后 CAS 推进 {@code escalation_notified_tier}
- * 水位线,保证每次 tier 抬升只通知一次。
+ * escalation_tier}(V176),但只打日志/指标,无人被主动通知(headless)。本 notifier 把「刚升级、还没通知过」的告警
+ * ({@code escalation_tier > escalation_notified_tier})先用 CAS 抢占通知所有权,并在同一事务写入通知 outbox；随后 relay
+ * 从 outbox 发布 {@code alerts/ALERT_ESCALATED} 领域事件,保证每次 tier 抬升只入队一次、失败可重试。
  *
- * <p>复用既有能力,不新增 Kafka / policy 表:
+ * <p>复用既有能力,新增本地通知 outbox,不新增 Kafka / policy 表:
  *
  * <ul>
- *   <li>投递:{@link ConsoleRealtimeEventPort#publishChanged} 发 {@code
+ *   <li>入队:{@link AlertEscalationNotificationOutboxService} CAS 推进 {@code escalation_notified_tier} 并写入
+ *       {@code alert_escalation_notification_outbox},避免并发抢占失败后仍发出通知。
+ *   <li>投递:relay 抢占 outbox 后通过 {@link ConsoleRealtimeEventPort#publishChanged} 发 {@code
  *       alerts/ALERT_ESCALATED} 领域事件 → {@code ConsoleWebhookDomainEventListener} → 现有 webhook
  *       分发器(与告警 ack 走同一条路)。
  *   <li>调度:console-api 未启用全局 {@code @EnableScheduling},沿用自管理 {@link ScheduledExecutorService} +
@@ -72,8 +81,13 @@ public class AlertEscalationNotifier {
 
   private static final Duration LOCK_AT_MOST = Duration.ofMinutes(2);
   private static final Duration LOCK_AT_LEAST = Duration.ofSeconds(2);
+  private static final int MAX_PUBLISH_ATTEMPTS = 10;
+  private static final long RETRY_DELAY_SECONDS = 60L;
+  private static final long STALE_PUBLISHING_SECONDS = 120L;
 
   private final AlertEventMapper alertEventMapper;
+  private final AlertEscalationNotificationOutboxMapper outboxMapper;
+  private final AlertEscalationNotificationOutboxService outboxService;
   private final ConsoleRealtimeEventPort domainEventPublisher;
   private final LockingTaskExecutor lockingTaskExecutor;
   private final AlertEscalationNotifyProperties properties;
@@ -86,11 +100,15 @@ public class AlertEscalationNotifier {
 
   public AlertEscalationNotifier(
       AlertEventMapper alertEventMapper,
+      AlertEscalationNotificationOutboxMapper outboxMapper,
+      AlertEscalationNotificationOutboxService outboxService,
       ConsoleRealtimeEventPort domainEventPublisher,
       LockingTaskExecutor lockingTaskExecutor,
       AlertEscalationNotifyProperties properties,
       MeterRegistry meterRegistry) {
     this.alertEventMapper = alertEventMapper;
+    this.outboxMapper = outboxMapper;
+    this.outboxService = outboxService;
     this.domainEventPublisher = domainEventPublisher;
     this.lockingTaskExecutor = lockingTaskExecutor;
     this.properties = properties;
@@ -206,41 +224,75 @@ public class AlertEscalationNotifier {
     if (stopping.get()) {
       return;
     }
+    resetStalePublishing();
     List<AlertEventEntity> batch =
         alertEventMapper.selectEscalatedPendingNotify(properties.getBatchSize());
-    if (batch.isEmpty()) {
+    if (EmptyChecks.isNotEmpty(batch)) {
+      log.debug("AlertEscalationNotifier loaded {} escalation notifications", batch.size());
+      for (AlertEventEntity alert : batch) {
+        if (stopping.get()) {
+          return;
+        }
+        try {
+          enqueueOne(alert);
+        } catch (Exception t) {
+          // 单条异常不能拖累整批；CAS 未成功时水位线不推进，下一轮会重试。
+          log.error(
+              "AlertEscalationNotifier failed to enqueue one notification: alertId={} tenantId={}",
+              alert.getId(),
+              alert.getTenantId(),
+              t);
+        }
+      }
+    }
+    publishPendingOutbox();
+  }
+
+  private void resetStalePublishing() {
+    List<AlertEscalationNotificationOutboxEntity> stale = outboxMapper.selectStalePublishing(
+        properties.getBatchSize(), OutboxPublishStatus.PUBLISHING.code(), STALE_PUBLISHING_SECONDS);
+    if (EmptyChecks.isEmpty(stale)) {
       return;
     }
-    log.debug("AlertEscalationNotifier loaded {} escalation notifications", batch.size());
-    for (AlertEventEntity alert : batch) {
-      if (stopping.get()) {
-        return;
-      }
-      try {
-        notifyOne(alert);
-      } catch (Exception t) {
-        // 单条异常不能拖累整批;水位线未推进,下轮会重试
-        log.error(
-            "AlertEscalationNotifier failed to deliver one notification: alertId={} tenantId={}",
-            alert.getId(),
-            alert.getTenantId(),
-            t);
-      }
+    int reset = 0;
+    for (AlertEscalationNotificationOutboxEntity row : stale) {
+      reset += outboxMapper.resetStalePublishing(
+          row.getId(),
+          row.getTenantId(),
+          OutboxPublishStatus.FAILED.code(),
+          OutboxPublishStatus.PUBLISHING.code());
+    }
+    if (reset > 0) {
+      log.warn("AlertEscalationNotifier reset stale PUBLISHING outbox rows: count={}", reset);
     }
   }
 
-  /** 通知失败可以按单条隔离重试，但 JVM 级故障不能伪装成业务投递失败。 */
-  private void notifyOne(AlertEventEntity alert) {
-    int tier = alert.getEscalationTier() == null ? 0 : alert.getEscalationTier();
-    int notifiedTier =
-        alert.getEscalationNotifiedTier() == null ? 0 : alert.getEscalationNotifiedTier();
+  private void publishPendingOutbox() {
+    List<AlertEscalationNotificationOutboxEntity> pending = outboxMapper.selectPending(
+        BatchDateTimeSupport.utcNow(),
+        properties.getBatchSize(),
+        OutboxPublishStatus.NEW.code(),
+        OutboxPublishStatus.FAILED.code());
+    if (EmptyChecks.isEmpty(pending)) {
+      return;
+    }
+    for (AlertEscalationNotificationOutboxEntity row : pending) {
+      if (stopping.get()) {
+        return;
+      }
+      publishOne(row);
+    }
+  }
+
+  private void enqueueOne(AlertEventEntity alert) {
+    int tier = zeroIfNull(alert.getEscalationTier());
+    int notifiedTier = zeroIfNull(alert.getEscalationNotifiedTier());
     if (tier <= notifiedTier) {
       // 防御:select 谓词已过滤,这里再兜一层
       return;
     }
-    // 先发事件(至少一次语义:webhook 自带投递日志 + relay 重试),再 CAS 推进水位线。
-    domainEventPublisher.publishChanged(
-        alert.getTenantId(),
+    outboxService.enqueue(
+        alert,
         ALERT_STREAM,
         ESCALATED_EVENT_TYPE,
         new AlertEscalationNotifyPayload(
@@ -250,22 +302,87 @@ public class AlertEscalationNotifier {
             alert.getTitle(),
             tier,
             alert.getTraceId()));
-    int marked = alertEventMapper.markEscalationNotified(
-        alert.getTenantId(), alert.getId(), notifiedTier, tier);
-    if (marked == 0) {
-      // 被并发 ack 或其它实例抢先通知,水位线没动 —— 不重复计数。
+  }
+
+  private void publishOne(AlertEscalationNotificationOutboxEntity row) {
+    int claimed = outboxMapper.markPublishing(
+        row.getId(),
+        row.getTenantId(),
+        OutboxPublishStatus.PUBLISHING.code(),
+        OutboxPublishStatus.NEW.code(),
+        OutboxPublishStatus.FAILED.code());
+    if (claimed == 0) {
       return;
     }
-    notifyCounter.increment();
+    try {
+      AlertEscalationNotifyPayload payload =
+          JsonUtils.fromJson(row.getPayloadJson(), AlertEscalationNotifyPayload.class);
+      domainEventPublisher.publishChanged(
+          row.getTenantId(), row.getStream(), row.getEventType(), payload);
+      int marked = outboxMapper.markPublished(
+          row.getId(),
+          row.getTenantId(),
+          OutboxPublishStatus.PUBLISHED.code(),
+          OutboxPublishStatus.PUBLISHING.code());
+      if (marked > 0) {
+        notifyCounter.increment();
+        logPublished(row);
+      }
+    } catch (Exception ex) {
+      markPublishFailure(row, ex);
+    }
+  }
+
+  private void markPublishFailure(AlertEscalationNotificationOutboxEntity row, Exception ex) {
+    int nextAttempt = zeroIfNull(row.getAttemptCount()) + 1;
+    String error = BizExceptionUtils.ofLiteral(ex.getMessage()).renderedMessage();
+    if (nextAttempt >= MAX_PUBLISH_ATTEMPTS) {
+      outboxMapper.markGiveUp(
+          row.getId(),
+          row.getTenantId(),
+          OutboxPublishStatus.GIVE_UP.code(),
+          error,
+          OutboxPublishStatus.PUBLISHING.code());
+      log.error(
+          "AlertEscalationNotifier GIVE_UP: outboxId={} alertId={} tenantId={} attempt={} error={}",
+          row.getId(),
+          row.getAlertEventId(),
+          row.getTenantId(),
+          nextAttempt,
+          error);
+      return;
+    }
+    Instant nextPublishAt = BatchDateTimeSupport.utcNow().plusSeconds(RETRY_DELAY_SECONDS);
+    outboxMapper.markFailed(
+        row.getId(),
+        row.getTenantId(),
+        OutboxPublishStatus.FAILED.code(),
+        nextPublishAt,
+        error,
+        OutboxPublishStatus.PUBLISHING.code());
+    log.warn(
+        "AlertEscalationNotifier publish failed: outboxId={} alertId={} tenantId={} attempt={} "
+            + "nextPublishAt={} error={}",
+        row.getId(),
+        row.getAlertEventId(),
+        row.getTenantId(),
+        nextAttempt,
+        nextPublishAt,
+        error);
+  }
+
+  private void logPublished(AlertEscalationNotificationOutboxEntity row) {
     log.info(
         "Alert escalation pushed to in-platform notification: alertId={} tenantId={} tier={} "
-            + "alertType={} severity={} traceId={}",
-        alert.getId(),
-        alert.getTenantId(),
-        tier,
-        alert.getAlertType(),
-        alert.getSeverity(),
-        alert.getTraceId());
+            + "eventType={}",
+        row.getAlertEventId(),
+        row.getTenantId(),
+        row.getEscalationTier(),
+        row.getEventType());
+  }
+
+  private static int zeroIfNull(Integer value) {
+    return EmptyChecks.isNull(value) ? 0 : value;
   }
 
   private LockConfiguration lockConfig() {

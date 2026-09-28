@@ -1,6 +1,6 @@
 -- =========================================================
 -- V58 - Add ON DELETE CASCADE to runtime table foreign keys
--- Notes:
+-- 说明：
 -- 1) job_partition.job_instance_id -> job_instance.id
 -- 2) job_task.job_partition_id -> job_partition.id
 -- 3) job_step_instance.job_task_id -> job_task.id

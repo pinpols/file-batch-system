@@ -80,9 +80,8 @@ for spec in "${SPECS[@]}"; do
   oasdiff breaking "$base_tmp" "$spec" --format singleline 2>/dev/null \
     | grep -E 'in API POST /api/console/config/releases .*request property `configPayloadJson` became required.*\[request-property-became-required\]' \
       >> "$clarification_ignore_tmp" || true
-  # User-approved breaking change in PR #1066 (2026-09-27): the six legacy toggle
-  # routes are removed in favor of PATCH /{id}/enabled. Ignore only these exact
-  # removed paths; all other endpoint removals remain blocking.
+  # PR #1066（2026-09-27）经用户批准移除六个旧 toggle 路由，统一改用
+  # PATCH /{id}/enabled。仅忽略下列精确路径，其他端点移除仍须阻断。
   if [[ "$spec" == "docs/api/console-api.openapi.yaml" ]]; then
     printf '%s\n' \
       'POST /api/console/alert-routings/{id}/toggle api path removed without deprecation' \

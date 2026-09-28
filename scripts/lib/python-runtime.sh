@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared Python runtime selector for shell scripts.
+# Shell 脚本共用的 Python 运行时选择器。
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   echo "scripts/lib/python-runtime.sh must be sourced, not executed" >&2

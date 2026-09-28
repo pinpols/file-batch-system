@@ -3,7 +3,7 @@
 平台对象存储底层用 AWS SDK for Java v2(`software.amazon.awssdk:s3`)——一个**通用 S3 协议客户端**。同一套配置(前缀 `batch.storage.s3`)可接
 **自建 MinIO / Ceph、AWS S3、阿里云 OSS（S3 兼容）、腾讯云 COS（S3 兼容）**:换后端只改配置,**不换 SDK、不改业务代码、不加依赖**——后端切换语义不变,客户端始终是通用 S3 协议实现。
 
-> **License 提示**:MinIO Server = AGPL v3(自建场景);AWS SDK for Java v2(`software.amazon.awssdk:s3`)= Apache 2.0;AWS S3 / 阿里 OSS / 腾讯 COS 是商业云服务无 license 问题。**自托管 MinIO 同样无 license 风险**,完整论证(自托管 + 不改源码 + 用户不直连)见 `observability-stack.md` 的 License 提示。
+> **License 提示**:AWS SDK for Java v2(`software.amazon.awssdk:s3`)= Apache 2.0;AWS S3 / 阿里 OSS / 腾讯 COS 是商业云服务,按云厂商合同和组织采购流程管理。自建 MinIO / Ceph / RustFS 等 S3 兼容服务必须在部署前完成镜像来源、版本、许可证、维护支持和业务使用方式审查;本仓本地 MinIO 仅作为开发 / 集成测试默认后端。生产基线见 [`base-services-deployment.md`](./base-services-deployment.md)。
 
 > 非 S3 协议的 Azure Blob / GCS 不在此列——那需要存储抽象层 + 独立后端实现(另见规划)。
 

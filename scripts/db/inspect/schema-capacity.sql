@@ -1,10 +1,9 @@
--- Read-only schema capacity inspection for Docker and host psql environments.
--- Usage: psql "$DATABASE_URL" -f scripts/db/inspect/schema-capacity.sql
+-- 只读检查数据库结构容量，支持 Docker 容器和宿主机上的 psql 环境。
+-- 用法：psql "$DATABASE_URL" -f scripts/db/inspect/schema-capacity.sql
 
 \set ON_ERROR_STOP on
 
--- Hot tables and their default partitions. A non-zero default partition count
--- means the partition window or routing policy needs attention.
+-- 检查热表及其默认分区。默认分区记录数非零时，应检查分区窗口或路由策略。
 WITH partitioned AS (
     SELECT
         n.nspname AS schema_name,
@@ -33,7 +32,7 @@ SELECT
 FROM partitioned
 ORDER BY estimated_rows DESC, schema_name, parent_table;
 
--- Large hot tables, state distribution, and oldest row timestamp.
+-- 检查大型热表、状态分布和最早记录时间。
 SELECT
     n.nspname AS schema_name,
     c.relname AS table_name,
@@ -62,8 +61,7 @@ FROM batch.result_version
 GROUP BY status
 ORDER BY status;
 
--- Payload distribution is intentionally sampled through PostgreSQL statistics;
--- do not scan payload_json in a request path.
+-- Payload 分布通过 PostgreSQL 统计信息抽样获取；请求链路中不要扫描 payload_json。
 SELECT
     count(*) AS rows_with_payload,
     avg(pg_column_size(payload_json)) AS avg_payload_bytes,

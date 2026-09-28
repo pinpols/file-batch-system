@@ -83,10 +83,11 @@ jobs:
       - name: Verify script governance and zero ShellCheck warnings
         shell: bash
         run: |
-          python3 scripts/ci/check-script-governance.py
-          bash scripts/ci/check-shell-scripts.sh
-          python3 scripts/ci/check-shell-linux-portability.py
-          bash scripts/ci/check-postgres-client-fallback.sh
+          source scripts/lib/gate-result.sh
+          gate_run FULL_SCRIPT_GOVERNANCE "脚本治理" python3 scripts/ci/check-script-governance.py
+          gate_run FULL_SHELL_SCRIPTS "Shell 语法与 ShellCheck" bash scripts/ci/check-shell-scripts.sh
+          gate_run FULL_SHELL_LINUX_PORTABILITY "Shell Linux 兼容性" python3 scripts/ci/check-shell-linux-portability.py
+          gate_run FULL_POSTGRES_CLIENT_FALLBACK "PostgreSQL 客户端 fallback" bash scripts/ci/check-postgres-client-fallback.sh
 
       - name: Verify module dependency boundaries
         shell: bash
@@ -105,7 +106,7 @@ jobs:
           if [[ -z "$BASE" || "$BASE" =~ ^0+$ ]]; then
             BASE="$(git rev-parse HEAD^)"
           fi
-          python3 scripts/ci/check-changelog-sync.py --base "$BASE"
+          bash scripts/ci/run-gate.sh FULL_CHANGELOG_SYNC "Changelog 同步" -- python3 scripts/ci/check-changelog-sync.py --base "$BASE"
 
       - name: Verify documentation structure and internal links
         shell: bash
@@ -165,7 +166,7 @@ jobs:
 
       - name: Verify Java readability inventory
         shell: bash
-        run: python3 scripts/ci/report-java-readability-inventory.py --check docs/analysis/java-readability-inventory-2026-08-12.md
+        run: bash scripts/ci/run-gate.sh FULL_JAVA_READABILITY_INVENTORY "Java 可读性快照" -- python3 scripts/ci/report-java-readability-inventory.py --check docs/analysis/java-readability-inventory-2026-08-12.md
 
       - name: Enforce centralized empty checks
         shell: bash
@@ -175,7 +176,7 @@ jobs:
           if [[ -z "$BASE" || "$BASE" =~ ^0+$ ]]; then
             BASE="$(git rev-parse HEAD^)"
           fi
-          python3 scripts/ci/check-empty-checks.py --base "$BASE"
+          bash scripts/ci/run-gate.sh FULL_EMPTY_CHECKS "集中式空值检查" -- python3 scripts/ci/check-empty-checks.py --base "$BASE"
 
       - name: Verify readiness contract documentation sync
         shell: bash
@@ -185,7 +186,7 @@ jobs:
           if [[ -z "$BASE" || "$BASE" =~ ^0+$ ]]; then
             BASE="$(git rev-parse HEAD^)"
           fi
-          python3 scripts/ci/check-readiness-doc-sync.py --base "$BASE"
+          bash scripts/ci/run-gate.sh FULL_READINESS_DOC_SYNC "Readiness 契约文档同步" -- python3 scripts/ci/check-readiness-doc-sync.py --base "$BASE"
 
       - name: Verify Trivy ignore expiry metadata
         shell: bash
@@ -202,18 +203,29 @@ jobs:
           if [[ -z "$BASE" || "$BASE" =~ ^0+$ ]]; then
             BASE="origin/main"
           fi
-          bash scripts/ci/check-db-comment-coverage.sh "$BASE"
+          bash scripts/ci/run-gate.sh FULL_DB_COMMENT_COVERAGE "数据库注释覆盖" -- bash scripts/ci/check-db-comment-coverage.sh "$BASE"
 
       - name: Required Java architecture documentation
         shell: bash
-        run: bash scripts/ci/check-required-java-docs.sh
+        run: bash scripts/ci/run-gate.sh FULL_REQUIRED_JAVA_DOCS "Java 架构文档完整性" -- bash scripts/ci/check-required-java-docs.sh
+
+      - name: Verify e2e shard lists cover all *E2eIT
+        shell: bash
+        # full-ci-gate 自身也做静态侧守护,防绕过 PR 直推 main 时新增 / 重命名 E2E 漏挂 shard。
+        run: bash scripts/ci/run-gate.sh FULL_E2E_SHARD_COVERAGE "E2E shard 覆盖" -- bash scripts/ci/check-e2e-shard-coverage.sh
+
+      - name: Verify full-ci covers all integration test modules
+        shell: bash
+        # 主 reactor 里含 *IntegrationTest / *IT 的模块必须进入下方 unit-it 的
+        # `mvn verify -DskipITs=false` shard;E2E 模块由上面的 shard 守护单独覆盖。
+        run: bash scripts/ci/run-gate.sh FULL_INTEGRATION_TEST_COVERAGE "集成测试覆盖" -- python3 scripts/ci/check-integration-test-coverage.py
 
       - name: PMD + Spotless + dependency boundary
         shell: bash
         run: |
-          python3 scripts/ci/check-java-suppression-registry.py
+          bash scripts/ci/run-gate.sh FULL_JAVA_SUPPRESSION_REGISTRY "Java 抑制项注册表" -- python3 scripts/ci/check-java-suppression-registry.py
           # test-compile 必要(PMD 需要 class 文件分析),不跑 surefire
-          ./mvnw -DskipTests test-compile pmd:check spotless:check -fae -B
+          bash scripts/ci/run-gate.sh FULL_JAVA_STATIC_ANALYSIS "PMD、Spotless 与编译检查" -- ./mvnw -DskipTests test-compile pmd:check spotless:check -fae -B
 
   # ===========================================================================
   # 3 shard 按 IT 压力均化(2026-05-22 实测重排,对齐 pr-gate):
@@ -379,7 +391,7 @@ jobs:
         shell: bash
         # --skip-tests:绕开 security-scan 子模块单测(纯内部 orchestrator/options 逻辑,
         # 跟 scan 业务正确性无关;Java 25 + mockito javaagent 偶发 fork JVM crash 历史多次)
-        run: bash scripts/ci/security-scan.sh --skip-tests -- --mode=secret
+        run: bash scripts/ci/run-gate.sh FULL_SECRET_SCAN "密钥泄漏扫描" -- bash scripts/ci/security-scan.sh --skip-tests -- --mode=secret
 
       - name: Install trivy
         shell: bash
@@ -393,7 +405,7 @@ jobs:
       - name: License compliance + SBOM
         shell: bash
         # 生成 CycloneDX SBOM + 第三方许可证清单,并拦强 copyleft(AGPL/SSPL/CPAL/纯 GPL)。
-        run: bash scripts/ci/check-license-compliance.sh
+        run: bash scripts/ci/run-gate.sh FULL_LICENSE_COMPLIANCE "开源许可证与 SBOM" -- bash scripts/ci/check-license-compliance.sh
 
       - name: Upload SBOM
         if: always()

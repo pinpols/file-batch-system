@@ -4,11 +4,17 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
+# shellcheck source=../lib/gate-result.sh
+source "$ROOT_DIR/scripts/lib/gate-result.sh"
+
+GATE_CODE="DB_COMMENT_COVERAGE"
+GATE_NAME="数据库注释覆盖"
 
 BASE_REF="${1:-${DB_COMMENT_BASE_REF:-origin/main}}"
 
 if ! git rev-parse --verify "$BASE_REF" >/dev/null 2>&1; then
-  echo "❌ 无法解析基线分支: $BASE_REF"
+  echo "无法解析基线分支: $BASE_REF" >&2
+  gate_result FAIL "$GATE_CODE" "$GATE_NAME" 2
   exit 1
 fi
 
@@ -19,15 +25,22 @@ mapfile -t migrations < <(
   } | sort -u
 )
 
-if [[ "${#migrations[@]}" -eq 0 ]]; then
-  echo "✅ 本次无 Flyway 迁移，跳过数据库注释增量检查"
-  exit 0
-fi
-
 fail=0
+checked=0
 key_column_pattern='(status|policy|strategy|type|mode|payload|params|json|dedup|idempotency|secret|key_ref|hash|timeout|window|timezone|version|trace_id|retry|priority|weight|target_ref|source_ref|endpoint|checksum)'
 
 for migration in "${migrations[@]}"; do
+  if git cat-file -e "$BASE_REF:$migration" 2>/dev/null; then
+    added_sql="$(git diff --no-ext-diff --unified=0 "$BASE_REF"...HEAD -- "$migration" \
+      | awk '/^\+\+\+/ {next} /^\+/ {print substr($0, 2)}' | tr '\n' ' ')"
+  else
+    added_sql="$(tr '\n' ' ' < "$migration")"
+  fi
+  if ! grep -Eiq '(^|[[:space:]])create[[:space:]]+table[[:space:]]+(if[[:space:]]+(not[[:space:]]+)?exists[[:space:]]+)?(batch|archive)\.|(^|[[:space:]])alter[[:space:]]+table[[:space:]]+(if[[:space:]]+exists[[:space:]]+)?(batch|archive)\.[a-z0-9_]+[[:space:]]+add[[:space:]]+column' <<< "$added_sql"; then
+    continue
+  fi
+  checked=$((checked + 1))
+
   content="$(tr '[:upper:]' '[:lower:]' < "$migration")"
   while IFS= read -r table; do
     [[ -z "$table" ]] && continue
@@ -86,8 +99,13 @@ for migration in "${migrations[@]}"; do
   )
 done
 
+if [[ "$checked" -eq 0 ]]; then
+  gate_skip "$GATE_CODE" "$GATE_NAME" "变更迁移未新增业务表或字段 DDL"
+  exit 0
+fi
+
 if [[ "$fail" -ne 0 ]]; then
-  echo "💥 新增业务对象的注释检查失败。"
+  gate_result FAIL "$GATE_CODE" "$GATE_NAME" 1
   exit 1
 fi
-echo "✅ 新增业务表与关键字段均已在同一迁移中声明注释"
+gate_result PASS "$GATE_CODE" "$GATE_NAME"
