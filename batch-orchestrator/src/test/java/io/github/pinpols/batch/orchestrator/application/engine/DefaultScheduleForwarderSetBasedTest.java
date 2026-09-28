@@ -19,6 +19,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
 import io.github.pinpols.batch.orchestrator.mapper.EventOutboxRetryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.BeforeEach;
@@ -242,6 +243,42 @@ class DefaultScheduleForwarderSetBasedTest {
         ArgumentCaptor.forClass(EventOutboxRetryEntity.class);
     verify(eventOutboxRetryMapper, times(1)).insert(retryCap.capture());
     assertThat(retryCap.getValue().getOutboxEventId()).isEqualTo(2L);
+  }
+
+  @Test
+  @DisplayName("ACK 等待受 publishingTimeoutSeconds 约束:未完成 future 按 FAILED 回写")
+  void advanceTimesOutIncompletePublishFutureAndMarksFailed() {
+    outboxProperties.setPublishingTimeoutSeconds(1);
+    OutboxEventEntity stalled = event("ta", 4L, 0);
+    when(outboxEventMapper.selectPending(any())).thenReturn(List.of(stalled));
+    when(outboxEventMapper.markPublishingBatch(
+            anyString(), anyList(), anyString(), anyString(), anyString()))
+        .thenReturn(List.of(4L));
+    when(outboxPublisher.publish(stalled)).thenReturn(new CompletableFuture<>());
+    when(outboxEventMapper.markFailedBatch(anyString(), anyList(), anyString(), any(), anyString()))
+        .thenReturn(1);
+
+    long startedNanos = System.nanoTime();
+    ScheduleForwarderResult result = forwarder.advance(null);
+    Duration elapsed = Duration.ofNanos(System.nanoTime() - startedNanos);
+
+    assertThat(elapsed).isLessThan(Duration.ofSeconds(3));
+    assertThat(result.attemptedEvents()).isEqualTo(1);
+    assertThat(result.publishSucceeded()).isZero();
+    assertThat(result.publishFailed()).isEqualTo(1);
+    verify(outboxEventMapper)
+        .markFailedBatch(
+            eq("ta"),
+            eq(List.of(4L)),
+            eq(OutboxPublishStatus.FAILED.code()),
+            any(),
+            eq(OutboxPublishStatus.PUBLISHING.code()));
+    verify(outboxEventMapper, never())
+        .markPublishedBatch(anyString(), anyList(), anyString(), anyString());
+    ArgumentCaptor<EventOutboxRetryEntity> retryCap =
+        ArgumentCaptor.forClass(EventOutboxRetryEntity.class);
+    verify(eventOutboxRetryMapper).insert(retryCap.capture());
+    assertThat(retryCap.getValue().getOutboxEventId()).isEqualTo(4L);
   }
 
   @Test
