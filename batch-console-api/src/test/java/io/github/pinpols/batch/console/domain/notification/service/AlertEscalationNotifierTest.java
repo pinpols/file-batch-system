@@ -13,8 +13,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.config.AlertEscalationNotifyProperties;
+import io.github.pinpols.batch.console.domain.notification.entity.AlertEscalationNotificationOutboxEntity;
+import io.github.pinpols.batch.console.domain.notification.mapper.AlertEscalationNotificationOutboxMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertEventMapper;
 import io.github.pinpols.batch.console.domain.notification.service.AlertEscalationNotifier.AlertEscalationNotifyPayload;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -29,6 +32,8 @@ import org.springframework.context.support.StaticApplicationContext;
 class AlertEscalationNotifierTest {
 
   private AlertEventMapper alertEventMapper;
+  private AlertEscalationNotificationOutboxMapper outboxMapper;
+  private AlertEscalationNotificationOutboxService outboxService;
   private ConsoleRealtimeEventPort domainEventPublisher;
   private LockingTaskExecutor lockExecutor;
   private SimpleMeterRegistry meterRegistry;
@@ -37,6 +42,8 @@ class AlertEscalationNotifierTest {
   @BeforeEach
   void setUp() throws Throwable {
     alertEventMapper = mock(AlertEventMapper.class);
+    outboxMapper = mock(AlertEscalationNotificationOutboxMapper.class);
+    outboxService = mock(AlertEscalationNotificationOutboxService.class);
     domainEventPublisher = mock(ConsoleRealtimeEventPort.class);
     lockExecutor = mock(LockingTaskExecutor.class);
     meterRegistry = new SimpleMeterRegistry();
@@ -47,8 +54,11 @@ class AlertEscalationNotifierTest {
         })
         .when(lockExecutor)
         .executeWithLock(any(Runnable.class), any());
+    when(outboxMapper.selectPending(any(), anyInt(), any(), any())).thenReturn(List.of());
     notifier = new AlertEscalationNotifier(
         alertEventMapper,
+        outboxMapper,
+        outboxService,
         domainEventPublisher,
         lockExecutor,
         new AlertEscalationNotifyProperties(),
@@ -69,6 +79,22 @@ class AlertEscalationNotifierTest {
     return e;
   }
 
+  private static AlertEscalationNotificationOutboxEntity outbox(
+      long id, String tenantId, int tier) {
+    AlertEscalationNotifyPayload payload = new AlertEscalationNotifyPayload(
+        100L + id, "SLA_BREACH", "CRITICAL", "job stuck past SLA", tier, "trace-" + id);
+    AlertEscalationNotificationOutboxEntity row = new AlertEscalationNotificationOutboxEntity();
+    row.setId(id);
+    row.setTenantId(tenantId);
+    row.setAlertEventId(payload.alertId());
+    row.setEscalationTier(tier);
+    row.setStream("alerts");
+    row.setEventType("ALERT_ESCALATED");
+    row.setPayloadJson(JsonUtils.toJson(payload));
+    row.setAttemptCount(0);
+    return row;
+  }
+
   @Test
   void shouldSkipPollWhenNoEligibleRows() {
     when(alertEventMapper.selectEscalatedPendingNotify(anyInt())).thenReturn(List.of());
@@ -76,43 +102,51 @@ class AlertEscalationNotifierTest {
     notifier.poll();
 
     verify(domainEventPublisher, never()).publishChanged(any(), any(), any(), any());
-    verify(alertEventMapper, never()).markEscalationNotified(any(), any(), anyInt(), anyInt());
+    verify(outboxService, never()).enqueue(any(), any(), any(), any());
   }
 
   @Test
-  void shouldPublishEscalatedEventAndBumpWatermark() {
+  void shouldEnqueueEscalatedEventAndPublishPendingOutbox() {
     when(alertEventMapper.selectEscalatedPendingNotify(anyInt()))
         .thenReturn(List.of(escalated(11L, "t1", 2, 1)));
-    when(alertEventMapper.markEscalationNotified("t1", 11L, 1, 2)).thenReturn(1);
+    AlertEscalationNotificationOutboxEntity row = outbox(31L, "t1", 2);
+    when(outboxMapper.selectPending(any(), anyInt(), any(), any())).thenReturn(List.of(row));
+    when(outboxMapper.markPublishing(eq(31L), eq("t1"), any(), any(), any())).thenReturn(1);
+    when(outboxMapper.markPublished(eq(31L), eq("t1"), any(), any())).thenReturn(1);
 
     notifier.poll();
 
+    verify(outboxService)
+        .enqueue(
+            eq(escalated(11L, "t1", 2, 1)),
+            eq("alerts"),
+            eq("ALERT_ESCALATED"),
+            any(AlertEscalationNotifyPayload.class));
     ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
     verify(domainEventPublisher)
         .publishChanged(eq("t1"), eq("alerts"), eq("ALERT_ESCALATED"), payloadCaptor.capture());
     assertThat(payloadCaptor.getValue()).isInstanceOf(AlertEscalationNotifyPayload.class);
     AlertEscalationNotifyPayload payload = (AlertEscalationNotifyPayload) payloadCaptor.getValue();
-    assertThat(payload.alertId()).isEqualTo(11L);
+    assertThat(payload.alertId()).isEqualTo(131L);
     assertThat(payload.escalationTier()).isEqualTo(2);
     assertThat(payload.severity()).isEqualTo("CRITICAL");
     assertThat(payload.alertType()).isEqualTo("SLA_BREACH");
 
-    verify(alertEventMapper).markEscalationNotified("t1", 11L, 1, 2);
+    verify(outboxMapper).markPublished(eq(31L), eq("t1"), any(), any());
     assertThat(meterRegistry.counter("batch.alert.escalation.notifications").count())
         .isEqualTo(1.0);
   }
 
   @Test
-  void shouldNotCountWhenWatermarkCasLoses() {
-    // 并发 ack / 其它实例抢先通知 → markEscalationNotified 返回 0;事件已发(至少一次),但不重复计数。
+  void shouldNotPublishWhenOnlyEnqueueLosesOwnership() {
     when(alertEventMapper.selectEscalatedPendingNotify(anyInt()))
         .thenReturn(List.of(escalated(12L, "t1", 1, 0)));
-    when(alertEventMapper.markEscalationNotified("t1", 12L, 0, 1)).thenReturn(0);
 
     notifier.poll();
 
-    verify(domainEventPublisher)
-        .publishChanged(eq("t1"), eq("alerts"), eq("ALERT_ESCALATED"), any());
+    verify(outboxService)
+        .enqueue(any(AlertEventEntity.class), eq("alerts"), eq("ALERT_ESCALATED"), any());
+    verify(domainEventPublisher, never()).publishChanged(any(), any(), any(), any());
     assertThat(meterRegistry.counter("batch.alert.escalation.notifications").count())
         .isEqualTo(0.0);
   }
@@ -126,26 +160,45 @@ class AlertEscalationNotifierTest {
     notifier.poll();
 
     verify(domainEventPublisher, never()).publishChanged(any(), any(), any(), any());
-    verify(alertEventMapper, never()).markEscalationNotified(any(), any(), anyInt(), anyInt());
+    verify(outboxService, never()).enqueue(any(), any(), any(), any());
   }
 
   @Test
   void shouldContinueBatchWhenOneRowThrows() {
     when(alertEventMapper.selectEscalatedPendingNotify(anyInt()))
         .thenReturn(List.of(escalated(14L, "t1", 1, 0), escalated(15L, "t2", 1, 0)));
-    doThrow(new RuntimeException("publish boom"))
-        .when(domainEventPublisher)
-        .publishChanged(eq("t1"), eq("alerts"), eq("ALERT_ESCALATED"), any());
-    when(alertEventMapper.markEscalationNotified("t2", 15L, 0, 1)).thenReturn(1);
+    doThrow(new RuntimeException("enqueue boom"))
+        .when(outboxService)
+        .enqueue(eq(escalated(14L, "t1", 1, 0)), any(), any(), any());
+    AlertEscalationNotificationOutboxEntity row = outbox(41L, "t2", 1);
+    when(outboxMapper.selectPending(any(), anyInt(), any(), any())).thenReturn(List.of(row));
+    when(outboxMapper.markPublishing(eq(41L), eq("t2"), any(), any(), any())).thenReturn(1);
+    when(outboxMapper.markPublished(eq(41L), eq("t2"), any(), any())).thenReturn(1);
 
     notifier.poll();
 
-    // 第二条仍被处理
+    verify(outboxService)
+        .enqueue(eq(escalated(15L, "t2", 1, 0)), eq("alerts"), eq("ALERT_ESCALATED"), any());
     verify(domainEventPublisher)
         .publishChanged(eq("t2"), eq("alerts"), eq("ALERT_ESCALATED"), any());
-    verify(alertEventMapper).markEscalationNotified("t2", 15L, 0, 1);
-    // 第一条发布抛异常 → 未推进水位线
-    verify(alertEventMapper, never()).markEscalationNotified(eq("t1"), eq(14L), anyInt(), anyInt());
+    verify(outboxMapper).markPublished(eq(41L), eq("t2"), any(), any());
+  }
+
+  @Test
+  void shouldMarkOutboxFailedWhenPublishThrows() {
+    when(alertEventMapper.selectEscalatedPendingNotify(anyInt())).thenReturn(List.of());
+    AlertEscalationNotificationOutboxEntity row = outbox(51L, "t1", 1);
+    row.setAttemptCount(0);
+    when(outboxMapper.selectPending(any(), anyInt(), any(), any())).thenReturn(List.of(row));
+    when(outboxMapper.markPublishing(eq(51L), eq("t1"), any(), any(), any())).thenReturn(1);
+    doThrow(new RuntimeException("publish boom"))
+        .when(domainEventPublisher)
+        .publishChanged(eq("t1"), eq("alerts"), eq("ALERT_ESCALATED"), any());
+
+    notifier.poll();
+
+    verify(outboxMapper).markFailed(eq(51L), eq("t1"), any(), any(), eq("publish boom"), any());
+    verify(outboxMapper, never()).markPublished(eq(51L), eq("t1"), any(), any());
   }
 
   @Test
@@ -162,14 +215,17 @@ class AlertEscalationNotifierTest {
   void shouldPublishOncePerRowAcrossTenants() {
     when(alertEventMapper.selectEscalatedPendingNotify(anyInt()))
         .thenReturn(List.of(escalated(21L, "t1", 1, 0), escalated(22L, "t2", 3, 2)));
-    when(alertEventMapper.markEscalationNotified(any(), any(), anyInt(), anyInt()))
-        .thenReturn(1);
+    when(outboxMapper.selectPending(any(), anyInt(), any(), any()))
+        .thenReturn(List.of(outbox(61L, "t1", 1), outbox(62L, "t2", 3)));
+    when(outboxMapper.markPublishing(any(), any(), any(), any(), any())).thenReturn(1);
+    when(outboxMapper.markPublished(any(), any(), any(), any())).thenReturn(1);
 
     notifier.poll();
 
+    verify(outboxService, times(2))
+        .enqueue(any(AlertEventEntity.class), eq("alerts"), eq("ALERT_ESCALATED"), any());
     verify(domainEventPublisher, times(2))
         .publishChanged(any(), eq("alerts"), eq("ALERT_ESCALATED"), any());
-    verify(alertEventMapper).markEscalationNotified("t1", 21L, 0, 1);
-    verify(alertEventMapper).markEscalationNotified("t2", 22L, 2, 3);
+    verify(outboxMapper, times(2)).markPublished(any(), any(), any(), any());
   }
 }

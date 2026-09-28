@@ -109,7 +109,7 @@ batch-common/*             # 跨模块基础库,改了全部模块都受影响
 | OpenAPI 路径对齐 | `check-console-openapi-paths.py` | 全部（setup-build-env） |
 | 模块依赖边界 | `check-dependency-boundaries.py` | 全部（run-full-regression） |
 | 编译 + 单元测试 | Maven `test` | 全部 |
-| 集成测试 (`*IntegrationTest`) | Maven `test` | full-ci-gate |
+| 集成测试 (`*IntegrationTest` / 非 E2E `*IT`) | Maven `verify -DskipITs=false` | full-ci-gate；`check-integration-test-coverage.py` 守护含集成测试的主 reactor 模块必须进入 full-ci verify shard |
 | E2E 套件 (`*E2eIT`) | Maven `test` `-pl batch-e2e-tests` | full-ci-gate |
 
 ### 提醒项（失败只通知，不阻断流水线）
