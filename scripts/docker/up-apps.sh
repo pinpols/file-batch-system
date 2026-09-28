@@ -95,6 +95,19 @@ if [[ "$COMPOSE_BENCHMARK" == "1" && "$#" -gt 0 ]]; then
     run --rm --no-deps kafka-init
 fi
 
+if [[ "$#" -gt 0 && "$BATCH_UP_APPS_WITH_DEPS" != "1" ]]; then
+  for service in "$@"; do
+    if [[ "$service" == "minio" || "$service" == "minio-init" ]]; then
+      docker compose \
+        --project-name "$COMPOSE_PROJECT_NAME" \
+        --env-file "$COMPOSE_ENV_FILE" \
+        "${compose_files[@]}" \
+        run --rm --no-deps minio-volume-init
+      break
+    fi
+  done
+fi
+
 up_args=(up -d --force-recreate)
 if [[ "$#" -gt 0 && "$BATCH_UP_APPS_WITH_DEPS" != "1" ]]; then
   # 指定服务时只重建目标，避免为一次 profile / 镜像更新连带滚动其健康依赖。

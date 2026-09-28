@@ -64,6 +64,26 @@
 
 Compose 应用服务（Console API、Trigger、Orchestrator 与五类 Worker）默认只绑定 `127.0.0.1`，用于防止内部 API 暴露到外部网卡。需要远程访问时，设置 `APP_BIND_IP=0.0.0.0`，并在主机防火墙限制来源地址；内部接口仍要求服务间凭据。PostgreSQL、Kafka、MinIO、Valkey 等基础设施端口由各自端口变量控制，按本地联调需要单独开放。
 
+## MinIO 卷与运行身份
+
+前后端应用的 `batch:batch`（10001:10001）和 MinIO 的 1001:1001 是版本化的镜像与卷权限契约，不提供单独的运行时 UID/GID 覆盖变量。调整身份时必须一起重建镜像、修改 Compose/Helm、停机处理已有卷所有权并重新验收；仅覆盖 `user` 会导致权限不一致。
+
+MinIO 及 `minio-init` 以 UID/GID 1001 运行。`minio-volume-init` 是非 root 的一次性任务：具名 `minio-data` 卷挂载到镜像内由 1001 持有的目录，预备后 MinIO 再将同一卷以 `nocopy` 挂到实际数据目录 `/bitnami/minio/data`。卷权限不匹配时预备任务会失败，不会自动改动旧数据。
+
+旧版 Compose 把 `minio-data` 挂在 `/data`，但镜像实际把对象写入 `/bitnami/minio/data` 的匿名卷。升级前用 `docker inspect batch-minio` 核对挂载并备份实际数据；改挂正确路径**不会自动迁移匿名卷中的 bucket 和对象**。若选择清空重建，应先停止并移除旧容器，再仅删除确认属于该容器的旧数据卷，随后以原 `minio-data` 名称创建新卷；不要使用会清理其他服务卷的 `docker compose down -v`。
+
+### 非 root 验收
+
+```bash
+docker top batch-minio -eo pid,user,uid,gid,comm
+docker top batch-valkey -eo pid,user,uid,gid,comm
+docker inspect batch-minio --format '{{range .Mounts}}{{println .Destination .Name}}{{end}}'
+docker compose --env-file .env.local run --rm --no-deps minio-volume-init
+docker compose --env-file .env.local ps -a minio-init
+```
+
+MinIO 主进程及 `minio-init` 应为 1001:1001，Valkey 的 PID 1 与服务进程均应为镜像内的 `valkey` 用户；MinIO 数据挂载应是 `/bitnami/minio/data` 对应的具名 `minio-data` 卷。卷预备命令应返回 0；`minio-init` 应以退出码 0 完成。运维脚本以 `run --rm` 执行卷预备任务，结束后不会保留在 `ps -a` 中。Tempo/Collector 的身份与卷检查见[观测栈运行手册](./observability-stack.md)。如预备任务提示旧卷不可写，先停止受影响服务并备份，再离线修正卷权限；不要放宽为 777，也不要让业务容器以 root 运行。已删除的旧 MinIO 卷无法从新空卷恢复。
+
 ## 启动观测栈
 
 ```bash

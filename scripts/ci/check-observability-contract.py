@@ -81,6 +81,47 @@ def main() -> int:
             if not options.get("max-size") or not options.get("max-file"):
                 errors.append(f"{service_name}: Docker logs must define max-size and max-file")
 
+    volume_services = (
+        (base_compose, "minio-volume-init", "1001:1001"),
+        (obs_compose, "tempo-init", "10001:10001"),
+        (obs_compose, "otel-collector-init", "10001:10001"),
+    )
+    for document, name, expected_user in volume_services:
+        service = nested(document, "services", name) or {}
+        if service.get("user") != expected_user:
+            errors.append(f"{name}: volume preparation must run as {expected_user}")
+        if nested(service, "build", "dockerfile") != "deploy/docker/Dockerfile.volume-init":
+            errors.append(f"{name}: volume preparation image is missing")
+        if not service.get("read_only") or service.get("cap_add") or service.get("privileged"):
+            errors.append(f"{name}: volume preparation must not require root privileges")
+
+    runtime_volumes = (
+        (base_compose, "minio", "1001:1001", "minio-data", "/bitnami/minio/data"),
+        (obs_compose, "tempo", "10001:10001", "tempo-data", "/var/tempo"),
+        (
+            obs_compose,
+            "otel-collector",
+            "10001:10001",
+            "otel-collector-data",
+            "/var/lib/otelcol",
+        ),
+    )
+    for document, name, expected_user, source, target in runtime_volumes:
+        service = nested(document, "services", name) or {}
+        if service.get("user") != expected_user:
+            errors.append(f"{name}: runtime must run as {expected_user}")
+        volumes = service.get("volumes") or []
+        if not any(
+            isinstance(volume, dict)
+            and volume.get("source") == source
+            and volume.get("target") == target
+            and nested(volume, "volume", "nocopy") is True
+            for volume in volumes
+        ):
+            errors.append(f"{name}: {source} must mount at {target} with nocopy")
+    if nested(base_compose, "services", "minio-init", "user") != "1001:1001":
+        errors.append("minio-init: bucket initialization must run as 1001:1001")
+
     app_text = (ROOT / "deploy/docker/compose/app.yml").read_text(encoding="utf-8")
     if "LOGGING_FILE_NAME" in app_text or "./logs/current/docker:/app/logs" in app_text:
         errors.append("application containers must not duplicate stdout into mounted log files")

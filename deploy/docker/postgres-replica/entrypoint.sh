@@ -10,10 +10,7 @@
 #   - 主库未就绪时 pg_basebackup 失败 → 脚本 exit 1，docker restart 策略会重启重试
 #   - 已有数据目录直接 exec，不会覆盖；要重新引导需手动清 volume
 #
-# 权限：
-#   官方 postgres 镜像以 root 启动，由 docker-entrypoint.sh chown 后 gosu 切到 postgres。
-#   此脚本作为 entrypoint 替代上述流程：自己 chown PGDATA 后用 gosu 切到 postgres 跑 pg_basebackup
-#   和 postgres 主进程。
+# 权限：容器直接以 postgres 用户运行；数据卷必须由 postgres 拥有。
 
 set -euo pipefail
 
@@ -26,9 +23,12 @@ REPL_PASS="${POSTGRES_REPLICATION_PASSWORD:-repl_pass_dev_only}"
 : "${PGDATA:=/var/lib/postgresql/data/pgdata}"
 export PGDATA
 
-# 确保 PGDATA 目录存在且属 postgres，权限 0700
+# 确保 PGDATA 可由当前非 root 用户写入，权限 0700。
 mkdir -p "$PGDATA"
-chown -R postgres:postgres "$PGDATA"
+if [ "$(stat -c %u "$PGDATA")" != "$(id -u)" ]; then
+  echo "[postgres-replica] PGDATA must be owned by postgres: $PGDATA" >&2
+  exit 1
+fi
 chmod 0700 "$PGDATA"
 
 if [ -z "$(ls -A "$PGDATA" 2>/dev/null)" ]; then
@@ -37,7 +37,7 @@ if [ -z "$(ls -A "$PGDATA" 2>/dev/null)" ]; then
 
   # 等主库就绪（最多 60s）
   for i in $(seq 1 30); do
-    if PGPASSWORD="$REPL_PASS" gosu postgres pg_isready \
+    if PGPASSWORD="$REPL_PASS" pg_isready \
         -h "$PRIMARY_HOST" -p "$PRIMARY_PORT" \
         -U "$REPL_USER" -d postgres -t 2 >/dev/null 2>&1; then
       break
@@ -46,7 +46,7 @@ if [ -z "$(ls -A "$PGDATA" 2>/dev/null)" ]; then
     sleep 2
   done
 
-  PGPASSWORD="$REPL_PASS" gosu postgres pg_basebackup \
+  PGPASSWORD="$REPL_PASS" pg_basebackup \
     -h "$PRIMARY_HOST" -p "$PRIMARY_PORT" -U "$REPL_USER" \
     -D "$PGDATA" -Fp -Xs -P -R
 
@@ -56,4 +56,4 @@ else
   echo "[postgres-replica] PGDATA 已存在，跳过引导，直接启动"
 fi
 
-exec gosu postgres postgres "$@"
+exec postgres "$@"

@@ -61,21 +61,44 @@ services:
     networks:
       - batch-network
 
+  tempo-init:
+    logging: *observability-logging
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.volume-init
+    container_name: batch-tempo-init
+    restart: "no"
+    user: "10001:10001"
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    command: ["test -w /volume/tempo || { echo 'Tempo volume must be owned by 10001:10001' >&2; exit 1; }"]
+    volumes:
+      - tempo-data:/volume/tempo
+
   tempo:
     logging: *observability-logging
     image: grafana/tempo:${TEMPO_IMAGE_TAG:-2.6.1}
     container_name: batch-tempo
     restart: unless-stopped
     command: ["-config.file=/etc/tempo/tempo.yml"]
-    user: "0"  # Tempo 写 /var/tempo 需要 root；本地开发简化
+    user: "10001:10001"
     volumes:
       - ./deploy/docker/observability/tempo.yml:/etc/tempo/tempo.yml:ro
-      - tempo-data:/var/tempo
+      - type: volume
+        source: tempo-data
+        target: /var/tempo
+        volume:
+          nocopy: true
     ports:
       - "${TEMPO_HTTP_PORT:-13200}:3200"   # 查询 API（Grafana datasource 走容器内 tempo:3200）
       - "4317"                              # OTLP gRPC（仅容器间，被 otel-collector 用）
     networks:
       - batch-network
+    depends_on:
+      tempo-init:
+        condition: service_completed_successfully
 
   # ── 日志 ──────────────────────────────────────────────────────────
   loki:
@@ -95,15 +118,19 @@ services:
   # ── OTel Collector ────────────────────────────────────────────────
   otel-collector-init:
     logging: *observability-logging
-    image: alpine:${ALPINE_IMAGE_TAG:-3.20}
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.volume-init
     container_name: batch-otel-collector-init
     restart: "no"
-    user: "0:0"
-    command: ["sh", "-c", "mkdir -p /var/lib/otelcol && chown -R 10001:10001 /var/lib/otelcol"]
+    user: "10001:10001"
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    command: ["test -w /volume/otel || { echo 'Collector volume must be owned by 10001:10001' >&2; exit 1; }"]
     volumes:
-      - otel-collector-data:/var/lib/otelcol
-    networks:
-      - batch-network
+      - otel-collector-data:/volume/otel
 
   otel-collector:
     logging: *observability-logging
@@ -116,7 +143,11 @@ services:
       DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-local}
     volumes:
       - ./deploy/docker/observability/otel-collector.yml:/etc/otelcol/config.yaml:ro
-      - otel-collector-data:/var/lib/otelcol
+      - type: volume
+        source: otel-collector-data
+        target: /var/lib/otelcol
+        volume:
+          nocopy: true
     ports:
       - "${OTEL_GRPC_PORT:-4317}:4317"
       - "${OTEL_HTTP_PORT:-4318}:4318"

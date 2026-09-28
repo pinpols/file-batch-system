@@ -5,7 +5,7 @@
 set -e
 
 MODE="${BATCH_DEPLOY_MODE:-container}"
-TARGET_DIR="/etc/prometheus/targets"
+TARGET_DIR="/prometheus/targets"
 mkdir -p "$TARGET_DIR"
 
 if [ "$MODE" = "local" ]; then
