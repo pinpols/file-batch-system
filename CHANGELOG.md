@@ -40,6 +40,7 @@
 ### Changed
 
 - **本地启动与日志安全**：`start-all.sh` 只停止由本仓 runtime jar 占用的端口，优先 TERM 并仅在显式 `FORCE_KILL=1` 时强杀；当前日志目录自动归档压缩包和手工调试日志，重复业务告警增加时间窗聚合计数。
+- **Compose 应用镜像与端口暴露**：本地应用镜像默认 tag 从 `local` 调整为 `dev`，避免与 Spring `local` profile 混淆；Console、Trigger、Orchestrator 与五类 Worker 默认统一绑定 `127.0.0.1`，需局域网访问时显式设置 `APP_BIND_IP=0.0.0.0`。
 - **Console 启停 REST 契约**：资源队列、批次窗口、业务日历、配额策略、告警路由和 Pipeline 定义统一改为 `PATCH /{id}/enabled`，通过请求体显式提交租户与目标状态；前端及测试已同步切换，旧 `POST /{id}/toggle` 已删除，权限、审计、幂等和持久化语义保持不变。
 - **SDK 与前端运行时及依赖治理**：Go SDK 最低版本升至 1.26，CI 覆盖 Go 1.26/1.27；Python 覆盖 3.12/3.14；TypeScript SDK 覆盖 Node 22/24；Rust、Go、Python SDK 锁文件依兼容范围刷新。前端默认构建运行时改为 Node 24，保留 Node 22 消费兼容，并增加声明与 CI 矩阵对齐门禁。
 
