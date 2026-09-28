@@ -201,7 +201,7 @@
 - PostgreSQL
 - Quartz
 - Kafka
-- MinIO
+- S3 兼容对象存储（本地默认 MinIO）
 - Flyway
 - MyBatis
 - `JdbcTemplate`（基础设施，非默认 CRUD）
@@ -227,7 +227,7 @@
 
 - PostgreSQL：`localhost:15432`
 - Kafka：`localhost:19092`
-- MinIO API：`http://localhost:19000`
+- S3 兼容对象存储 API：`http://localhost:19000`（本地 MinIO）
 - MinIO Console：`http://localhost:19001`
 - Redis：`localhost:16379`
 
@@ -241,8 +241,8 @@
 ### 5.2 其他连接口径
 
 - Kafka Bootstrap Servers：`localhost:19092`
-- MinIO Endpoint：`http://localhost:19000`
-- MinIO Bucket：`batch-dev`
+- S3 Endpoint：`http://localhost:19000`（本地 MinIO）
+- S3 Bucket：`batch-dev`
 
 ### 5.3 配置要求
 
