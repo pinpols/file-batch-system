@@ -114,24 +114,26 @@ public class TenantSchedulerSnapshotService {
               p.quotaResetPolicy(),
               burst,
               resourceSchedulerProperties.getQuotaResetSlidingWindowHours()));
-      policies.add(new SchedulerSnapshotResponse.PolicySnapshot(
-          p.policyCode(),
-          p.fairShareGroup(),
-          p.fairShareWeight(),
-          p.maxRunningJobsPerTenant(),
-          p.burstLimit(),
-          p.partitionBurstLimit(),
-          p.quotaResetPolicy(),
-          runtime.peakBorrowedCount(),
-          runtime.remainingBurst(),
-          runtime.windowStartedAt(),
-          runtime.windowExpiresAt(),
-          p.groupSharedMaxRunningJobs(),
-          tenantActiveJobs,
-          tenantActivePartitions,
-          groupJobs,
-          effJobs,
-          effParts));
+      SchedulerSnapshotResponse.PolicySnapshot policySnapshot =
+          new SchedulerSnapshotResponse.PolicySnapshot(
+              p.policyCode(),
+              p.fairShareGroup(),
+              p.fairShareWeight(),
+              p.maxRunningJobsPerTenant(),
+              p.burstLimit(),
+              p.partitionBurstLimit(),
+              p.quotaResetPolicy(),
+              runtime.peakBorrowedCount(),
+              runtime.remainingBurst(),
+              runtime.windowStartedAt(),
+              runtime.windowExpiresAt(),
+              p.groupSharedMaxRunningJobs(),
+              tenantActiveJobs,
+              tenantActivePartitions,
+              groupJobs,
+              effJobs,
+              effParts);
+      policies.add(policySnapshot);
     }
     return policies;
   }
@@ -157,15 +159,16 @@ public class TenantSchedulerSnapshotService {
     }
     Map<String, QueuePartitionBacklogStats> backlogMap = new HashMap<>();
     if (!queueCodes.isEmpty()) {
+      QueueBacklogQueryParam backlogQuery = new QueueBacklogQueryParam(
+          tenantId,
+          List.copyOf(queueCodes),
+          PartitionStatus.CREATED.code(),
+          PartitionStatus.WAITING.code(),
+          PartitionStatus.READY.code(),
+          PartitionStatus.RUNNING.code(),
+          PartitionStatus.RETRYING.code());
       for (QueuePartitionBacklogStats row :
-          jobPartitionMapper.summarizeQueueBacklogByTenantAndQueueCodes(new QueueBacklogQueryParam(
-              tenantId,
-              List.copyOf(queueCodes),
-              PartitionStatus.CREATED.code(),
-              PartitionStatus.WAITING.code(),
-              PartitionStatus.READY.code(),
-              PartitionStatus.RUNNING.code(),
-              PartitionStatus.RETRYING.code()))) {
+          jobPartitionMapper.summarizeQueueBacklogByTenantAndQueueCodes(backlogQuery)) {
         backlogMap.put(row.queueCode(), row);
       }
     }
@@ -186,33 +189,35 @@ public class TenantSchedulerSnapshotService {
               q.quotaResetPolicy(),
               qburst,
               resourceSchedulerProperties.getQuotaResetSlidingWindowHours()));
-      queues.add(new SchedulerSnapshotResponse.QueueSnapshot(
-          q.queueCode(),
-          q.fairShareGroup(),
-          q.fairShareWeight(),
-          q.maxRunningJobs(),
-          q.maxRunningPartitions(),
-          q.burstLimit(),
-          qeff,
-          partitionCap,
-          q.quotaResetPolicy(),
-          runtime.peakBorrowedCount(),
-          runtime.remainingBurst(),
-          runtime.windowStartedAt(),
-          runtime.windowExpiresAt(),
-          q.groupSharedMaxRunningJobs(),
-          qj,
-          backlog.createdPartitions(),
-          backlog.waitingPartitions(),
-          backlog.readyPartitions(),
-          backlog.runningPartitions(),
-          backlog.retryingPartitions(),
-          backlog.queuedPartitions(),
-          backlog.activePartitions(),
-          backlog.oldestWaitingSeconds(),
-          permille(backlog.waitingPartitions(), tenantWaitingPartitions),
-          permille(backlog.activePartitions(), partitionCap),
-          bottleneckReason(q, qj, qeff, backlog, onlineWorkerGroups)));
+      SchedulerSnapshotResponse.QueueSnapshot queueSnapshot =
+          new SchedulerSnapshotResponse.QueueSnapshot(
+              q.queueCode(),
+              q.fairShareGroup(),
+              q.fairShareWeight(),
+              q.maxRunningJobs(),
+              q.maxRunningPartitions(),
+              q.burstLimit(),
+              qeff,
+              partitionCap,
+              q.quotaResetPolicy(),
+              runtime.peakBorrowedCount(),
+              runtime.remainingBurst(),
+              runtime.windowStartedAt(),
+              runtime.windowExpiresAt(),
+              q.groupSharedMaxRunningJobs(),
+              qj,
+              backlog.createdPartitions(),
+              backlog.waitingPartitions(),
+              backlog.readyPartitions(),
+              backlog.runningPartitions(),
+              backlog.retryingPartitions(),
+              backlog.queuedPartitions(),
+              backlog.activePartitions(),
+              backlog.oldestWaitingSeconds(),
+              permille(backlog.waitingPartitions(), tenantWaitingPartitions),
+              permille(backlog.activePartitions(), partitionCap),
+              bottleneckReason(q, qj, qeff, backlog, onlineWorkerGroups));
+      queues.add(queueSnapshot);
     }
     return queues;
   }

@@ -157,7 +157,7 @@ public class AuditAspect {
       RequestInfo req = currentRequest();
       // canonical record 构造器(豁免参数数量约束),按 DB 列顺序传 16 个字段。
       // 一致性 SUCCESS / FAILED 由 errorCode 是否为 null 决定。
-      mapper.insert(new OperationAuditEvent(
+      OperationAuditEvent event = new OperationAuditEvent(
           op.tenantId(),
           ann.aggregateType(),
           aggregateId,
@@ -173,7 +173,8 @@ public class AuditAspect {
           req.ipHash(),
           req.uaHash(),
           1,
-          Instant.now()));
+          Instant.now());
+      mapper.insert(event);
     } catch (Exception e) {
       // 审计写失败不能拖垮业务事务 —— 业务侧已经做完了真正的事,这里只是留痕
       log.warn("[audit] insert failed action={}", ann.action(), e);

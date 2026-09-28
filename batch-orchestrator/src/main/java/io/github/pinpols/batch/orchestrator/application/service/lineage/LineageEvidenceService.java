@@ -95,20 +95,19 @@ public class LineageEvidenceService {
     evidence.put("pipelineInstances", nullToEmpty(pipelineInstances));
     evidence.put("fileRecords", nullToEmpty(fileRecords));
     evidence.put("dispatchRecords", nullToEmpty(dispatchRecords));
-    evidence.put(
-        "coverage",
-        coverage(new EvidenceCoverageInput(
-            version,
-            resultVersionSource,
-            payloadFileId,
-            jobInstance,
-            jobInstanceSource,
-            pipelineInstances,
-            pipelineSource,
-            fileRecords,
-            fileSource,
-            dispatchRecords,
-            dispatchSource)));
+    EvidenceCoverageInput coverageInput = new EvidenceCoverageInput(
+        version,
+        resultVersionSource,
+        payloadFileId,
+        jobInstance,
+        jobInstanceSource,
+        pipelineInstances,
+        pipelineSource,
+        fileRecords,
+        fileSource,
+        dispatchRecords,
+        dispatchSource);
+    evidence.put("coverage", coverage(coverageInput));
     return evidence;
   }
 

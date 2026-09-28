@@ -141,7 +141,7 @@ public class WorkerRegistryCache {
   private static List<WorkerRegistryEntity> toRecords(List<Entry> entries) {
     List<WorkerRegistryEntity> records = new ArrayList<>(entries.size());
     for (Entry e : entries) {
-      records.add(new WorkerRegistryEntity(
+      WorkerRegistryEntity record = new WorkerRegistryEntity(
           e.id,
           e.tenantId,
           e.workerCode,
@@ -161,7 +161,8 @@ public class WorkerRegistryCache {
           null,
           null,
           null,
-          e.workerPoolCode));
+          e.workerPoolCode);
+      records.add(record);
     }
     return records;
   }

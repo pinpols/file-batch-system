@@ -72,7 +72,7 @@ public class TenantSchedulerSnapshotRecorder {
       }
       SchedulerSnapshotResponse.PolicySnapshot p = snap.policies().getFirst();
       long online = onlineByTenant.getOrDefault(tenantId, 0L);
-      rows.add(new TenantSchedulerSnapshotEntity(
+      TenantSchedulerSnapshotEntity snapshot = new TenantSchedulerSnapshotEntity(
           null,
           tenantId,
           snap.generatedAt(),
@@ -87,7 +87,8 @@ public class TenantSchedulerSnapshotRecorder {
           p.groupSharedMaxRunningJobs(),
           p.quotaResetPolicy(),
           (int) Math.min(Integer.MAX_VALUE, online),
-          JsonbString.of(JsonUtils.toJson(snap))));
+          JsonbString.of(JsonUtils.toJson(snap)));
+      rows.add(snapshot);
     }
     if (!rows.isEmpty()) {
       // 批量 INSERT:单条 SQL 多 VALUES,N 次 round-trip 降为 1 次

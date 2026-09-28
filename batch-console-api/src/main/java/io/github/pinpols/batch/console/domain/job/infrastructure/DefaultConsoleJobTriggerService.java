@@ -149,8 +149,9 @@ public class DefaultConsoleJobTriggerService implements ConsoleJobTriggerService
         status = "FAILED";
         error = e.getMessage();
       }
-      results.add(new ConsoleBatchTriggerEntryResponse(
-          i, item.getJobCode(), item.getBizDate(), dryRunFlag, status, result, instanceNo, error));
+      ConsoleBatchTriggerEntryResponse entry = new ConsoleBatchTriggerEntryResponse(
+          i, item.getJobCode(), item.getBizDate(), dryRunFlag, status, result, instanceNo, error);
+      results.add(entry);
     }
     return results;
   }
