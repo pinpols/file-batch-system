@@ -5,4 +5,4 @@ CREATE INDEX IF NOT EXISTS idx_result_version_archived_cleanup
     WHERE status = 'ARCHIVED';
 
 COMMENT ON INDEX batch.idx_result_version_archived_cleanup IS
-    'Supports bounded cleanup of ARCHIVED result_version rows from the batch hot table; archive mirror is retained separately';
+    '支持分批清理 batch 热表中的 ARCHIVED result_version 记录；归档镜像表保留独立数据';
