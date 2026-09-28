@@ -89,6 +89,8 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
   }
 
   @Override
+  // S2259 无法识别 EmptyChecks.isNull(dispatchMessage) 对可空消息载荷的保护。
+  @SuppressWarnings("java:S2259")
   public CompletableFuture<Boolean> publish(OutboxEventEntity event) {
     // P2-5: dispatch 消息按 routing.mode 走 (tenant|priority|single) 分流；非派发类 fallback 不变
     TaskDispatchMessage dispatchMessage = null;

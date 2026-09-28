@@ -205,6 +205,8 @@ public abstract class AbstractWorkerLoop {
     stopping.set(true);
   }
 
+  // S2259 无法识别 Texts.hasText(instanceId) 已在使用前排除 null。
+  @SuppressWarnings("java:S2259")
   private String buildWorkerId(String poolCode) {
     String instanceId =
         EmptyChecks.isNull(identityProperties) ? null : identityProperties.getInstanceId();
