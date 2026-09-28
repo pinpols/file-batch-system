@@ -6,7 +6,7 @@
 #     --profile apps --profile replica up -d --no-build
 #
 # 作用:
-#   - app.yml 默认 `image: <module>:${APP_IMAGE_TAG:-local}` 走的是本地 build 命名,
+#   - app.yml 默认 `image: <module>:${APP_IMAGE_TAG:-dev}` 走的是本地 build 命名,
 #     部署机要从 GHCR 拉,所以这里覆盖 image 指到 ghcr.io/pinpols/<module>。
 #   - pull_policy: always 按 IMAGE_TAG 拉取指定制品；部署不得依赖可变 latest 标签。
 #   - 镜像短名规则与 .github/workflows/build-image.yml 一致(剥 batch- 前缀):
