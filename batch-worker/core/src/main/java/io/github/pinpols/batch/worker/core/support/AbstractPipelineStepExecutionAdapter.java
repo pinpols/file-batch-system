@@ -168,7 +168,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
           BizException.of(ResultCode.NOT_FOUND, "error.pipeline.step_definition_missing");
       return StepExecutionResponse.failure(exception, ERROR_OBJECT_MAPPER);
     }
-    Long pipelineInstanceId = pipelineRuns.createPipelineInstance(new CreatePipelineInstanceParam(
+    CreatePipelineInstanceParam createParam = new CreatePipelineInstanceParam(
         request.tenantId(),
         pipelineDefinitionId,
         jobCode,
@@ -176,7 +176,8 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
         fileId,
         PlatformRuntimeValues.toLong(attributes.get(PipelineRuntimeKeys.JOB_INSTANCE_ID)),
         resolveInitialStage(pipelineSteps),
-        traceId));
+        traceId);
+    Long pipelineInstanceId = pipelineRuns.createPipelineInstance(createParam);
     attributes.put(PipelineRuntimeKeys.TRACE_ID, traceId);
     attributes.put(PipelineRuntimeKeys.JOB_CODE, jobCode);
     attributes.put(PipelineRuntimeKeys.PIPELINE_DEFINITION_ID, pipelineDefinitionId);

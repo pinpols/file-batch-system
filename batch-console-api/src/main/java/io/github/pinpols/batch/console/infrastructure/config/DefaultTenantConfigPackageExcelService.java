@@ -224,18 +224,20 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
       for (String column : sheet.columns()) {
         ConsoleExcelStyles.ColumnGuide guide = sheet.guides().get(column);
         boolean required = EmptyChecks.isNotNull(guide) && guide.required();
-        columns.add(new TenantConfigPackageExcelGuideResponse.ColumnGuide(
-            column,
-            required,
-            EmptyChecks.isNotNull(guide) && guide.readOnly(),
-            guideLevelFor(sheet.name(), column, required),
-            EmptyChecks.isNull(guide) ? "" : guide.formatHint(),
-            EmptyChecks.isNull(guide) ? List.of() : guide.allowedValues(),
-            EmptyChecks.isNull(guide) ? "" : guide.description(),
-            EmptyChecks.isNull(guide) ? "" : guide.example(),
-            fillExampleFor(sheet.name(), column, guide),
-            defaultBehaviorFor(column, guide),
-            appliesToFor(sheet.name(), column)));
+        TenantConfigPackageExcelGuideResponse.ColumnGuide columnGuide =
+            new TenantConfigPackageExcelGuideResponse.ColumnGuide(
+                column,
+                required,
+                EmptyChecks.isNotNull(guide) && guide.readOnly(),
+                guideLevelFor(sheet.name(), column, required),
+                EmptyChecks.isNull(guide) ? "" : guide.formatHint(),
+                EmptyChecks.isNull(guide) ? List.of() : guide.allowedValues(),
+                EmptyChecks.isNull(guide) ? "" : guide.description(),
+                EmptyChecks.isNull(guide) ? "" : guide.example(),
+                fillExampleFor(sheet.name(), column, guide),
+                defaultBehaviorFor(column, guide),
+                appliesToFor(sheet.name(), column));
+        columns.add(columnGuide);
       }
       sheets.add(new TenantConfigPackageExcelGuideResponse.SheetGuide(
           sheet.name(), sheetAppliesTo, columns));
