@@ -363,7 +363,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
       String numberFormat =
           textValue(firstNonNull(map.get("numberFormat"), map.get("number_format")));
       String dateFormat = textValue(firstNonNull(map.get("dateFormat"), map.get("date_format")));
-      columns.add(new ColumnLayout(
+      ColumnLayout columnLayout = new ColumnLayout(
           header,
           normalizedSource,
           width,
@@ -371,7 +371,8 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
           resolvePadChar(padChar),
           type,
           numberFormat,
-          dateFormat));
+          dateFormat);
+      columns.add(columnLayout);
     }
     return columns;
   }

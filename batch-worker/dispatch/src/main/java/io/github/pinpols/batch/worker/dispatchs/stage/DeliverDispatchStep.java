@@ -96,7 +96,7 @@ public class DeliverDispatchStep implements DispatchStageStep {
     Map<String, Object> latestRecord = fileDispatchRepository.loadLatestDispatchRecord(
         context.getTenantId(), fileId, dispatchPayload.channelCode());
     if (latestRecord.isEmpty()) {
-      int inserted = fileDispatchRepository.insertDispatchRecord(
+      FileDispatchRepository.InsertDispatchParam insertParam =
           new FileDispatchRepository.InsertDispatchParam(
               context.getTenantId(),
               fileId,
@@ -105,7 +105,8 @@ public class DeliverDispatchStep implements DispatchStageStep {
               dispatchPayload.dispatchTarget(),
               dispatchPayload.receiptCode(),
               "NONE",
-              dispatchPayload.externalRequestId()));
+              dispatchPayload.externalRequestId());
+      int inserted = fileDispatchRepository.insertDispatchRecord(insertParam);
       if (inserted <= 0) {
         return DispatchStageResult.failure(
             stage(),
