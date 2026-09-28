@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
+import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -137,8 +138,9 @@ public class DingTalkNotificationSender implements NotificationSender {
   private String signedUrl(String url, String secret) throws GeneralSecurityException {
     long timestamp = epochMillis();
     String stringToSign = timestamp + "\n" + secret;
-    Mac mac = Mac.getInstance("HmacSHA256");
-    mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+    Mac mac = Mac.getInstance(CryptoAlgorithms.HMAC_SHA256);
+    mac.init(
+        new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), CryptoAlgorithms.HMAC_SHA256));
     byte[] digest = mac.doFinal(stringToSign.getBytes(StandardCharsets.UTF_8));
     String sign =
         URLEncoder.encode(Base64.getEncoder().encodeToString(digest), StandardCharsets.UTF_8);

@@ -74,7 +74,7 @@ public class ProcessStepExecutionAdapter
     // payload 显式指定 batchKey 时,保留它做补偿/重跑隔离;否则交给 DefaultProcessStageExecutor 生成。
     // 注意:稳定 batchKey 配合 P0-2 staging tenant/target 强校验,跨 tenant 复用同 batchKey 仍会被
     // commit/feedback 的 WHERE 过滤兜住。
-    if (attributes.get("processPayload") instanceof ProcessPayload typed
+    if (attributes.get(PipelineRuntimeKeys.PROCESS_PAYLOAD) instanceof ProcessPayload typed
         && EmptyChecks.isNotBlank(typed.batchKey())) {
       context.setBatchKey(typed.batchKey());
     }
@@ -99,7 +99,8 @@ public class ProcessStepExecutionAdapter
     // 与 IMPORT/EXPORT 一致:除散开 Map 外,再放一份强类型 ProcessPayload,业务 stage 可按需取
     // attributes["processPayload"] 拿到 typed record(参考 ExportPayload / ImportPayload)。
     attributes.putIfAbsent(
-        "processPayload", objectMapper.readValue(rawPayload, ProcessPayload.class));
+        PipelineRuntimeKeys.PROCESS_PAYLOAD,
+        objectMapper.readValue(rawPayload, ProcessPayload.class));
   }
 
   @Override

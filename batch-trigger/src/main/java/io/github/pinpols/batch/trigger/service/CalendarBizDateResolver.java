@@ -33,6 +33,9 @@ public class CalendarBizDateResolver {
 
   private static final LocalTime DEFAULT_CUTOFF_TIME = LocalTime.of(6, 0);
   private static final int MAX_WORKDAY_SEARCH_DAYS = 365;
+  private static final String HOLIDAY_ROLL_SKIP = "SKIP";
+  private static final String HOLIDAY_ROLL_PREV_WORKDAY = "PREV_WORKDAY";
+  private static final String HOLIDAY_ROLL_NEXT_WORKDAY = "NEXT_WORKDAY";
 
   private final BatchTimezoneProvider timezoneProvider;
 
@@ -71,9 +74,9 @@ public class CalendarBizDateResolver {
     }
     String rollRule = normalize(calendar.holidayRollRule());
     return switch (rollRule) {
-      case "SKIP" -> null;
-      case "PREV_WORKDAY" -> previousWorkday(date, calendar);
-      case "NEXT_WORKDAY" -> nextWorkday(date, calendar);
+      case HOLIDAY_ROLL_SKIP -> null;
+      case HOLIDAY_ROLL_PREV_WORKDAY -> previousWorkday(date, calendar);
+      case HOLIDAY_ROLL_NEXT_WORKDAY -> nextWorkday(date, calendar);
       default -> date;
     };
   }

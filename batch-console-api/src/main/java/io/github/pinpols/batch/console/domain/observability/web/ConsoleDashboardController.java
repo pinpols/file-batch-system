@@ -10,6 +10,7 @@ import io.github.pinpols.batch.console.domain.observability.application.contract
 import io.github.pinpols.batch.console.domain.observability.application.contract.response.ConsoleTriggerStatsResponse;
 import io.github.pinpols.batch.console.domain.observability.application.contract.response.ConsoleWorkerLoadResponse;
 import io.github.pinpols.batch.console.domain.observability.service.ConsoleDashboardQueryService;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -23,8 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @Validated
 @RequestMapping("/api/console/dashboard")
-@PreAuthorize(
-    "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
+@PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
 @RequiredArgsConstructor
 public class ConsoleDashboardController {
 

@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.imports.preprocess;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -99,14 +100,14 @@ public final class ImportPreprocessPipeline {
    * bypass 模式下拒收。
    */
   private static final Map<String, String> IMPLICIT_COMPRESS_STEPS = Map.of(
-      "ZIP", "UNZIP",
-      "GZIP", "GUNZIP",
-      "TAR", "UNTAR",
-      "TAR_GZ", "UNTAR_GZ",
-      "TGZ", "UNTAR_GZ");
+      "ZIP", ImportPreprocessStepTypes.UNZIP,
+      "GZIP", ImportPreprocessStepTypes.GUNZIP,
+      "TAR", ImportPreprocessStepTypes.UNTAR,
+      "TAR_GZ", ImportPreprocessStepTypes.UNTAR_GZ,
+      "TGZ", ImportPreprocessStepTypes.UNTAR_GZ);
 
   private static final Map<String, String> IMPLICIT_ENCRYPT_STEPS =
-      Map.of("AES", "AES_GCM_DECRYPT");
+      Map.of(CryptoAlgorithms.AES, ImportPreprocessStepTypes.AES_GCM_DECRYPT);
 
   private ImportPreprocessPipeline() {}
 
@@ -133,7 +134,7 @@ public final class ImportPreprocessPipeline {
       byte[] current = input;
       boolean hasExplicitDigestStep = steps.stream()
           .map(step -> stringProp(step, KEY_TYPE))
-          .anyMatch("VERIFY_DIGEST"::equalsIgnoreCase);
+          .anyMatch(ImportPreprocessStepTypes.VERIFY_DIGEST::equalsIgnoreCase);
       if (!bypassMode && !hasExplicitDigestStep) {
         // 隐式 checksum 来自 file_record/.chk，语义固定为“入站原始对象字节”完整性校验。
         // 若业务需要在解压/解密/转码之后校验，请在 preprocess_pipeline 中显式放置 VERIFY_DIGEST。
@@ -145,27 +146,30 @@ public final class ImportPreprocessPipeline {
           continue;
         }
         switch (type.toUpperCase(Locale.ROOT)) {
-          case "UNZIP" -> current = unzip(current, step, payload, properties);
-          case "GUNZIP" -> current = gunzip(current, properties);
-          case "UNTAR" -> current = untar(current, step, payload, properties);
-          case "UNTAR_GZ" ->
+          case ImportPreprocessStepTypes.UNZIP ->
+            current = unzip(current, step, payload, properties);
+          case ImportPreprocessStepTypes.GUNZIP -> current = gunzip(current, properties);
+          case ImportPreprocessStepTypes.UNTAR ->
+            current = untar(current, step, payload, properties);
+          case ImportPreprocessStepTypes.UNTAR_GZ ->
             current = untar(gunzip(current, properties), step, payload, properties);
-          case "AES_GCM_DECRYPT" -> {
+          case ImportPreprocessStepTypes.AES_GCM_DECRYPT -> {
             if (!bypassMode) {
               current = aesGcmDecrypt(current, step, payload);
             }
           }
-          case "VERIFY_DIGEST" -> {
+          case ImportPreprocessStepTypes.VERIFY_DIGEST -> {
             if (!bypassMode) {
               verifyDigest(current, step, payload, template);
             }
           }
-          case "VERIFY_RSA_SHA256" -> {
+          case ImportPreprocessStepTypes.VERIFY_RSA_SHA256 -> {
             if (!bypassMode) {
               verifyRsaSha256(current, step, payload);
             }
           }
-          case "CHARSET_TRANSCODE" -> current = charsetTranscode(current, step);
+          case ImportPreprocessStepTypes.CHARSET_TRANSCODE ->
+            current = charsetTranscode(current, step);
           default ->
             throw new ImportPreprocessException(
                 "IMPORT_PREPROCESS_UNKNOWN_STEP", "unknown preprocess step type: " + type);
@@ -371,10 +375,10 @@ public final class ImportPreprocessPipeline {
     }
     byte[] keyBytes = Base64.getDecoder().decode(keyB64);
     byte[] ivBytes = Base64.getDecoder().decode(ivB64);
-    Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+    Cipher cipher = Cipher.getInstance(CryptoAlgorithms.AES_GCM_NO_PADDING);
     cipher.init(
         Cipher.DECRYPT_MODE,
-        new SecretKeySpec(keyBytes, "AES"),
+        new SecretKeySpec(keyBytes, CryptoAlgorithms.AES),
         new GCMParameterSpec(128, ivBytes));
     return cipher.doFinal(input);
   }
@@ -444,16 +448,16 @@ public final class ImportPreprocessPipeline {
       return POLICY_NONE;
     }
     String upper = raw.toUpperCase(Locale.ROOT);
-    if ("SHA-256".equals(upper) || "SHA256".equals(upper)) {
-      return "SHA-256";
+    if (CryptoAlgorithms.SHA_256.equals(upper) || CryptoAlgorithms.SHA_256_COMPACT.equals(upper)) {
+      return CryptoAlgorithms.SHA_256;
     }
     return upper;
   }
 
   private static MessageDigest messageDigestForFileIntegrity(String algorithm)
       throws NoSuchAlgorithmException {
-    if ("SHA-256".equals(algorithm)) {
-      return MessageDigest.getInstance("SHA-256");
+    if (CryptoAlgorithms.SHA_256.equals(algorithm)) {
+      return MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
     }
     throw new ImportPreprocessException(
         "IMPORT_PREPROCESS_DIGEST_ALGORITHM_UNSUPPORTED",

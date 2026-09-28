@@ -117,16 +117,10 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
     }
     String type = scheduleType.trim().toUpperCase(Locale.ROOT);
     try {
-      if (ScheduleType.CRON.code().equals(type)) {
-        return cronAdapter.next(scheduleExpression, zoneId, fireAt);
-      }
-      if (ScheduleType.FIXED_RATE.code().equals(type)) {
-        // FIXED_RATE 表达式格式:纯数字秒(如 "60")或 ISO duration(如 "PT5M")。
-        Duration interval = parseFixedRateInterval(scheduleExpression);
-        return EmptyChecks.isNull(interval) ? null : fireAt.plus(interval);
-      }
-      // MANUAL / 其他类型不算 interval, 走 worker bizDate 回退
-      return null;
+      NextFireCalculator calculator = nextFireCalculators().get(type);
+      return EmptyChecks.isNull(calculator)
+          ? null
+          : calculator.next(scheduleExpression, zoneId, fireAt);
     } catch (RuntimeException ex) {
       log.warn(
           "data_interval next-fire computation failed: scheduleType={}, expr={}, error={}",
@@ -135,6 +129,23 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
           ex.getMessage());
       return null;
     }
+  }
+
+  private Map<String, NextFireCalculator> nextFireCalculators() {
+    return Map.of(
+        ScheduleType.CRON.code(),
+        cronAdapter::next,
+        ScheduleType.FIXED_RATE.code(),
+        (expr, zone, fireAt) -> {
+          // FIXED_RATE 表达式格式:纯数字秒(如 "60")或 ISO duration(如 "PT5M")。
+          Duration interval = parseFixedRateInterval(expr);
+          return EmptyChecks.isNull(interval) ? null : fireAt.plus(interval);
+        });
+  }
+
+  @FunctionalInterface
+  private interface NextFireCalculator {
+    Instant next(String scheduleExpression, ZoneId zoneId, Instant fireAt);
   }
 
   private static Duration parseFixedRateInterval(String expr) {

@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.verifier.ContentVerifier;
 import io.github.pinpols.batch.common.verifier.VerifyContext;
 import io.github.pinpols.batch.common.verifier.VerifyResult;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -32,15 +33,15 @@ public class ExportFileNonEmptyVerifier implements ContentVerifier {
 
   @Override
   public VerifyResult verify(VerifyContext context) {
-    long recordCount = longValue(context.property("recordCount"));
-    long fileSize = longValue(context.property("fileSizeBytes"));
+    long recordCount = longValue(context.property(PipelineRuntimeKeys.RECORD_COUNT));
+    long fileSize = longValue(context.property(PipelineRuntimeKeys.FILE_SIZE_BYTES));
     if (recordCount > 0 || fileSize > 0) {
       return VerifyResult.pass();
     }
     Map<String, Object> evidence = new LinkedHashMap<>();
-    evidence.put("recordCount", recordCount);
-    evidence.put("fileSizeBytes", fileSize);
-    evidence.put("fileId", context.property("fileId"));
+    evidence.put(PipelineRuntimeKeys.RECORD_COUNT, recordCount);
+    evidence.put(PipelineRuntimeKeys.FILE_SIZE_BYTES, fileSize);
+    evidence.put(PipelineRuntimeKeys.FILE_ID, context.property(PipelineRuntimeKeys.FILE_ID));
     return VerifyResult.fail(
         "EXPORT_FILE_EMPTY", "Export task reported success but produced empty file", evidence);
   }

@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.forensic;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -145,7 +146,7 @@ public class ForensicExportService {
     Path outFile = storageDir.resolve(exportId + ".zip");
 
     Map<String, Integer> rowCounts = new LinkedHashMap<>();
-    MessageDigest digest = MessageDigest.getInstance("SHA-256");
+    MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
 
     try (OutputStream raw = Files.newOutputStream(outFile);
         DigestOutputStream digesting = new DigestOutputStream(raw, digest);

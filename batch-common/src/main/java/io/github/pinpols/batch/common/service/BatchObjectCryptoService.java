@@ -3,6 +3,7 @@ package io.github.pinpols.batch.common.service;
 import io.github.pinpols.batch.common.config.BatchKmsProperties;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -107,10 +108,10 @@ public class BatchObjectCryptoService {
     try {
       byte[] iv = new byte[GCM_IV_BYTES];
       SECURE_RANDOM.nextBytes(iv);
-      Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+      Cipher cipher = Cipher.getInstance(CryptoAlgorithms.AES_GCM_NO_PADDING);
       cipher.init(
           Cipher.ENCRYPT_MODE,
-          new SecretKeySpec(resolveKeyBytes(keyRef), "AES"),
+          new SecretKeySpec(resolveKeyBytes(keyRef), CryptoAlgorithms.AES),
           new GCMParameterSpec(GCM_TAG_BITS, iv));
       DataOutputStream dataOutput = new DataOutputStream(encryptedOutput);
       dataOutput.write(MAGIC);
@@ -213,10 +214,10 @@ public class BatchObjectCryptoService {
       String keyRef = dataInputStream.readUTF();
       int ivLength = dataInputStream.readUnsignedByte();
       byte[] iv = dataInputStream.readNBytes(ivLength);
-      Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+      Cipher cipher = Cipher.getInstance(CryptoAlgorithms.AES_GCM_NO_PADDING);
       cipher.init(
           Cipher.DECRYPT_MODE,
-          new SecretKeySpec(resolveKeyBytes(keyRef), "AES"),
+          new SecretKeySpec(resolveKeyBytes(keyRef), CryptoAlgorithms.AES),
           new GCMParameterSpec(GCM_TAG_BITS, iv));
       CipherInputStream cipherInputStream = new CipherInputStream(pushbackInputStream, cipher);
       closeGuard.release();

@@ -76,7 +76,7 @@ public class DefaultExportStageExecutor
   }
 
   private void recordExportRowsMetric(ExportJobContext context) {
-    Object recordCountAttr = context.getAttributes().get("recordCount");
+    Object recordCountAttr = context.getAttributes().get(PipelineRuntimeKeys.RECORD_COUNT);
     if (!(recordCountAttr instanceof Number recordCount)) {
       return;
     }
@@ -177,9 +177,15 @@ public class DefaultExportStageExecutor
     summary.put("message", result.message());
     summary.put("stage", result.stage().name());
     summary.put("fileId", context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
-    summary.put("recordCount", context.getAttributes().get("recordCount"));
-    summary.put("fileSizeBytes", context.getAttributes().get("fileSizeBytes"));
-    summary.put("objectName", context.getAttributes().get("objectName"));
+    summary.put(
+        PipelineRuntimeKeys.RECORD_COUNT,
+        context.getAttributes().get(PipelineRuntimeKeys.RECORD_COUNT));
+    summary.put(
+        PipelineRuntimeKeys.FILE_SIZE_BYTES,
+        context.getAttributes().get(PipelineRuntimeKeys.FILE_SIZE_BYTES));
+    summary.put(
+        PipelineRuntimeKeys.OBJECT_NAME,
+        context.getAttributes().get(PipelineRuntimeKeys.OBJECT_NAME));
     return summary;
   }
 

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.pinpols.batch.common.enums.FileChannelType;
 import java.util.HashSet;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -13,7 +14,14 @@ class DispatchChannelTypePolicyTest {
   @Test
   void allowedTypesAreExplicitAndClosed() {
     assertThat(DispatchChannelTypePolicy.allowedTypes())
-        .containsExactlyInAnyOrder("API", "API_PUSH", "LOCAL", "NAS", "OSS", "SFTP", "EMAIL");
+        .containsExactlyInAnyOrder(
+            FileChannelType.API.code(),
+            FileChannelType.API_PUSH.code(),
+            FileChannelType.LOCAL.code(),
+            FileChannelType.NAS.code(),
+            FileChannelType.OSS.code(),
+            FileChannelType.SFTP.code(),
+            FileChannelType.EMAIL.code());
   }
 
   @Test
@@ -37,7 +45,7 @@ class DispatchChannelTypePolicyTest {
     // arrange:官方类型少了 EMAIL 的一份 profile 覆盖
     Set<String> officialTypes = new HashSet<>(DispatchChannelTypePolicy.allowedTypes());
     Set<String> profileKeys = new HashSet<>(officialTypes);
-    profileKeys.remove("EMAIL");
+    profileKeys.remove(FileChannelType.EMAIL.code());
 
     // act + assert:启动不变量必须 fail-fast
     assertThatThrownBy(
@@ -57,11 +65,15 @@ class DispatchChannelTypePolicyTest {
 
   @Test
   void httpProfilesDeclareTimeoutAndDnsGuard() {
-    assertThat(DispatchChannelTypePolicy.safetyProfiles().get("API").attributes())
+    assertThat(DispatchChannelTypePolicy.safetyProfiles()
+            .get(FileChannelType.API.code())
+            .attributes())
         .contains(
             DispatchChannelSafetyAttribute.TIMEOUT_BOUND,
             DispatchChannelSafetyAttribute.SSRF_DNS_GUARD);
-    assertThat(DispatchChannelTypePolicy.safetyProfiles().get("API_PUSH").attributes())
+    assertThat(DispatchChannelTypePolicy.safetyProfiles()
+            .get(FileChannelType.API_PUSH.code())
+            .attributes())
         .contains(
             DispatchChannelSafetyAttribute.TIMEOUT_BOUND,
             DispatchChannelSafetyAttribute.SSRF_DNS_GUARD,
@@ -70,12 +82,16 @@ class DispatchChannelTypePolicyTest {
 
   @Test
   void filesystemProfilesSeparateCapabilitiesFromKnownGaps() {
-    assertThat(DispatchChannelTypePolicy.safetyProfiles().get("NAS").attributes())
+    assertThat(DispatchChannelTypePolicy.safetyProfiles()
+            .get(FileChannelType.NAS.code())
+            .attributes())
         .contains(
             DispatchChannelSafetyAttribute.PATH_SANITIZED,
             DispatchChannelSafetyAttribute.FILESYSTEM_SANDBOX,
             DispatchChannelSafetyAttribute.SIDECAR_MANIFEST);
-    assertThat(DispatchChannelTypePolicy.safetyProfiles().get("LOCAL").knownGaps())
+    assertThat(DispatchChannelTypePolicy.safetyProfiles()
+            .get(FileChannelType.LOCAL.code())
+            .knownGaps())
         .contains(
             "sandbox root is optional unless batch.worker.dispatch.runtime.local-sandbox-root is"
                 + " set");
@@ -83,13 +99,17 @@ class DispatchChannelTypePolicyTest {
 
   @Test
   void emailProfileDeclaresSocketTimeout() {
-    assertThat(DispatchChannelTypePolicy.safetyProfiles().get("EMAIL").attributes())
+    assertThat(DispatchChannelTypePolicy.safetyProfiles()
+            .get(FileChannelType.EMAIL.code())
+            .attributes())
         .contains(
             DispatchChannelSafetyAttribute.TIMEOUT_BOUND,
             DispatchChannelSafetyAttribute.PAYLOAD_SIZE_BOUND,
             DispatchChannelSafetyAttribute.TLS_IDENTITY_CHECK,
             DispatchChannelSafetyAttribute.HEADER_INJECTION_GUARD);
-    assertThat(DispatchChannelTypePolicy.safetyProfiles().get("EMAIL").knownGaps())
+    assertThat(DispatchChannelTypePolicy.safetyProfiles()
+            .get(FileChannelType.EMAIL.code())
+            .knownGaps())
         .doesNotContain("SMTP dispatch has no explicit socket timeout properties");
   }
 }

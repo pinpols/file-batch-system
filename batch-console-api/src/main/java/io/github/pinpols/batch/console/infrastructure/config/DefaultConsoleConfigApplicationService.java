@@ -43,6 +43,7 @@ import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -589,17 +590,10 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
   public ConfigDependenciesResponse configDependencies(
       String tenantId, String configType, String configCode) {
     String resolved = resolveTenant(tenantId);
-    List<ConfigDependentView> dependentJobs =
-        switch (configType.toUpperCase()) {
-          case "QUEUE", "RESOURCE_QUEUE" ->
-            dashboardQueryMapper.jobsByQueueCode(resolved, configCode);
-          case "CALENDAR", "BUSINESS_CALENDAR" ->
-            dashboardQueryMapper.jobsByCalendarCode(resolved, configCode);
-          case "WINDOW", "BATCH_WINDOW" ->
-            dashboardQueryMapper.jobsByWindowCode(resolved, configCode);
-          case "WORKER_GROUP" -> dashboardQueryMapper.jobsByWorkerGroup(resolved, configCode);
-          default -> List.of();
-        };
+    DependencyQuery dependencyQuery = dependencyQueries().get(canonicalDependencyType(configType));
+    List<ConfigDependentView> dependentJobs = EmptyChecks.isNull(dependencyQuery)
+        ? List.of()
+        : dependencyQuery.find(resolved, configCode);
     return new ConfigDependenciesResponse(
         configType,
         configCode,
@@ -608,6 +602,33 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
                 job.id(), job.code(), EmptyChecks.isNull(job.name()) ? "" : job.name()))
             .toList(),
         dependentJobs.size());
+  }
+
+  private Map<String, DependencyQuery> dependencyQueries() {
+    return Map.of(
+        "RESOURCE_QUEUE",
+        dashboardQueryMapper::jobsByQueueCode,
+        "BUSINESS_CALENDAR",
+        dashboardQueryMapper::jobsByCalendarCode,
+        "BATCH_WINDOW",
+        dashboardQueryMapper::jobsByWindowCode,
+        "WORKER_GROUP",
+        dashboardQueryMapper::jobsByWorkerGroup);
+  }
+
+  private String canonicalDependencyType(String raw) {
+    if (!Texts.hasText(raw)) {
+      return "";
+    }
+    String normalized = raw.trim().toUpperCase(Locale.ROOT);
+    return Map.of(
+            "QUEUE", "RESOURCE_QUEUE", "CALENDAR", "BUSINESS_CALENDAR", "WINDOW", "BATCH_WINDOW")
+        .getOrDefault(normalized, normalized);
+  }
+
+  @FunctionalInterface
+  private interface DependencyQuery {
+    List<ConfigDependentView> find(String tenantId, String configCode);
   }
 
   @Override

@@ -73,6 +73,7 @@
 | `batch.replay.dry-run.enabled` | `true` / `false` | **false** | 整批量日无副作用演练；开启前必须完成五类 Worker 隔离验收 | P1 | `BATCH_REPLAY_DRY_RUN_ENABLED` | ❌ |
 | `batch.console.ai.enabled` | `true` / `false` | **false** | Console AI 入口总开关（开启后仍受角色白名单/独立限流约束） | P1 | `BATCH_CONSOLE_AI_ENABLED` | ❌ |
 | `batch.console.ai.provider` | `anthropic` / `openai` | **ANTHROPIC** | AI provider；枚举绑定，拼写错误启动失败 | P2 | `BATCH_CONSOLE_AI_PROVIDER` | ❌ |
+| `batch.console.ai.failover-enabled` | `true` / `false` | **false** | 跨 Provider 故障切换；会将同一 prompt/context 发送给另一家服务，启用前确认租户授权与数据处理要求 | P1 | `BATCH_CONSOLE_AI_FAILOVER_ENABLED` | ❌ |
 | `batch.console.captcha.provider` | `none` / `cloudflare` / `tencent` / `aliyun` | **none** | 登录验证码实现；selfhosted 会阻止启动；第三方 provider 需站点 key + 外联 | P1 | `BATCH_CONSOLE_CAPTCHA_PROVIDER` | ✅ |
 
 ### 1.D 弹性 / 性能 / 观测

@@ -258,9 +258,11 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     RlsTenantSessionSupport.applyIfPresent(businessDataSource);
     SqlTransformComputeSpec spec = parsedSpec(context);
     String batchKey = requireBatchKey(context);
-    if (spec.stagingMode() == SqlTransformComputeSpec.StagingMode.DIRECT) {
-      return ProcessStageResult.success(ProcessStage.VALIDATE);
-    }
+    return transformModeOps(spec).validate(context, spec, batchKey);
+  }
+
+  private ProcessStageResult validateStaged(
+      ProcessJobContext context, SqlTransformComputeSpec spec, String batchKey) {
     int stagedRows =
         toIntegerOrZero(context.getAttributes().get(ProcessRuntimeKeys.PROCESS_STAGED_COUNT));
     if (stagedRows == 0) {
@@ -327,9 +329,11 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     RlsTenantSessionSupport.applyIfPresent(businessDataSource);
     SqlTransformComputeSpec spec = parsedSpec(context);
     String batchKey = requireBatchKey(context);
-    if (spec.stagingMode() == SqlTransformComputeSpec.StagingMode.DIRECT) {
-      return commitDirect(context, spec);
-    }
+    return transformModeOps(spec).commit(context, spec, batchKey);
+  }
+
+  private ProcessStageResult commitStaged(
+      ProcessJobContext context, SqlTransformComputeSpec spec, String batchKey) {
     Map<String, Object> params = new LinkedHashMap<>();
     params.put(PARAM_BATCH_KEY, batchKey);
     params.put(PARAM_TENANT_ID, context.getTenantId());
@@ -360,14 +364,20 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     RlsTenantSessionSupport.applyIfPresent(businessDataSource);
     String batchKey = requireBatchKey(context);
     SqlTransformComputeSpec spec = parsedSpec(context);
-    if (spec.stagingMode() == SqlTransformComputeSpec.StagingMode.DIRECT) {
-      log.info(
-          "sqlTransformCompute direct fast path feedback skipped staging cleanup: tenantId={},"
-              + " batchKey={}",
-          context.getTenantId(),
-          batchKey);
-      return ProcessStageResult.success(ProcessStage.FEEDBACK);
-    }
+    return transformModeOps(spec).feedback(context, spec, batchKey);
+  }
+
+  private ProcessStageResult feedbackDirect(ProcessJobContext context, String batchKey) {
+    log.info(
+        "sqlTransformCompute direct fast path feedback skipped staging cleanup: tenantId={},"
+            + " batchKey={}",
+        context.getTenantId(),
+        batchKey);
+    return ProcessStageResult.success(ProcessStage.FEEDBACK);
+  }
+
+  private ProcessStageResult feedbackStaged(
+      ProcessJobContext context, SqlTransformComputeSpec spec, String batchKey) {
     Map<String, Object> params = new LinkedHashMap<>();
     params.put(PARAM_BATCH_KEY, batchKey);
     params.put(PARAM_TENANT_ID, context.getTenantId());
@@ -380,6 +390,60 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
         batchKey,
         cleaned);
     return ProcessStageResult.success(ProcessStage.FEEDBACK);
+  }
+
+  private SqlTransformModeOps transformModeOps(SqlTransformComputeSpec spec) {
+    if (spec.stagingMode() == SqlTransformComputeSpec.StagingMode.DIRECT) {
+      return new SqlTransformModeOps() {
+        @Override
+        public ProcessStageResult validate(
+            ProcessJobContext context, SqlTransformComputeSpec spec, String batchKey) {
+          return ProcessStageResult.success(ProcessStage.VALIDATE);
+        }
+
+        @Override
+        public ProcessStageResult commit(
+            ProcessJobContext context, SqlTransformComputeSpec spec, String batchKey) {
+          return commitDirect(context, spec);
+        }
+
+        @Override
+        public ProcessStageResult feedback(
+            ProcessJobContext context, SqlTransformComputeSpec spec, String batchKey) {
+          return feedbackDirect(context, batchKey);
+        }
+      };
+    }
+    return new SqlTransformModeOps() {
+      @Override
+      public ProcessStageResult validate(
+          ProcessJobContext context, SqlTransformComputeSpec spec, String batchKey) {
+        return validateStaged(context, spec, batchKey);
+      }
+
+      @Override
+      public ProcessStageResult commit(
+          ProcessJobContext context, SqlTransformComputeSpec spec, String batchKey) {
+        return commitStaged(context, spec, batchKey);
+      }
+
+      @Override
+      public ProcessStageResult feedback(
+          ProcessJobContext context, SqlTransformComputeSpec spec, String batchKey) {
+        return feedbackStaged(context, spec, batchKey);
+      }
+    };
+  }
+
+  private interface SqlTransformModeOps {
+    ProcessStageResult validate(
+        ProcessJobContext context, SqlTransformComputeSpec spec, String batchKey);
+
+    ProcessStageResult commit(
+        ProcessJobContext context, SqlTransformComputeSpec spec, String batchKey);
+
+    ProcessStageResult feedback(
+        ProcessJobContext context, SqlTransformComputeSpec spec, String batchKey);
   }
 
   // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -471,9 +535,10 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     Map<String, Object> params = new LinkedHashMap<>();
     // 1. 内置参数
     params.put(PARAM_TENANT_ID, context.getTenantId());
-    params.put("jobCode", context.getJobCode());
+    params.put(PipelineRuntimeKeys.JOB_CODE, context.getJobCode());
     params.put("workerId", context.getWorkerId());
-    params.put("traceId", context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID));
+    params.put(
+        PipelineRuntimeKeys.TRACE_ID, context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID));
     params.put(
         "stepCode", context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_CURRENT_STEP_CODE));
     params.put(
@@ -481,13 +546,20 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     params.put(PARAM_BATCH_KEY, context.getBatchKey());
     params.put(PARAM_TARGET_SCHEMA, spec.targetSchema());
     params.put(PARAM_TARGET_TABLE, spec.targetTable());
-    params.put("partitionNo", context.getAttributes().get(PipelineRuntimeKeys.PARTITION_NO));
-    params.put("partitionCount", context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT));
-    params.put("partitionKey", context.getAttributes().get(PipelineRuntimeKeys.PARTITION_KEY));
+    params.put(
+        PipelineRuntimeKeys.PARTITION_NO,
+        context.getAttributes().get(PipelineRuntimeKeys.PARTITION_NO));
+    params.put(
+        PipelineRuntimeKeys.PARTITION_COUNT,
+        context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT));
+    params.put(
+        PipelineRuntimeKeys.PARTITION_KEY,
+        context.getAttributes().get(PipelineRuntimeKeys.PARTITION_KEY));
     // 2. 业务级 bizDate + payload.metadata 展开
-    if (context.getAttributes().get("processPayload") instanceof ProcessPayload typedPayload) {
+    if (context.getAttributes().get(PipelineRuntimeKeys.PROCESS_PAYLOAD)
+        instanceof ProcessPayload typedPayload) {
       if (Texts.hasText(typedPayload.bizDate())) {
-        params.put("bizDate", typedPayload.bizDate());
+        params.put(PipelineRuntimeKeys.BIZ_DATE, typedPayload.bizDate());
       }
       if (EmptyChecks.isNotNull(typedPayload.metadata())) {
         typedPayload.metadata().forEach((key, value) -> putMetadataParam(params, key, value));
@@ -495,9 +567,9 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     } else {
       // 回退:某些路径(如插件单测)可能还没把 ProcessPayload 注入到 attributes,
       // 直接从顶层 attributes 读 bizDate 字符串保持兼容(只读 bizDate 一项,不再全量散开)。
-      Object bizDate = context.getAttributes().get("bizDate");
+      Object bizDate = context.getAttributes().get(PipelineRuntimeKeys.BIZ_DATE);
       if (EmptyChecks.isNotNull(bizDate)) {
-        params.put("bizDate", bizDate);
+        params.put(PipelineRuntimeKeys.BIZ_DATE, bizDate);
       }
     }
     // 3. spec.params 用户自定义(不可覆盖内置)

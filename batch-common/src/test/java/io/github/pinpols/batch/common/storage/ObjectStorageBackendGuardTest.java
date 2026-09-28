@@ -18,12 +18,13 @@ class ObjectStorageBackendGuardTest {
   @Test
   void includesS3EndpointRegionAndBucketInIdentity() {
     S3StorageProperties s3 = s3();
-    MockEnvironment environment = environment().withProperty("batch.storage.backend", "s3");
+    MockEnvironment environment =
+        environment().withProperty("batch.storage.backend", ObjectStorageBackends.S3);
 
     StatefulBackendGuard.DesiredBackend desired =
         guard(s3, filesystem(), environment).desiredBackend();
 
-    assertThat(desired.backend()).isEqualTo("s3");
+    assertThat(desired.backend()).isEqualTo(ObjectStorageBackends.S3);
     assertThat(desired.backendIdentity())
         .isEqualTo("endpoint=http://minio:9000|region=us-east-1|bucket=batch-prod");
   }
@@ -32,12 +33,13 @@ class ObjectStorageBackendGuardTest {
   void includesAbsoluteFilesystemRootAndBucketInIdentity() {
     FilesystemStorageProperties filesystem = filesystem();
     filesystem.setRoot("./target/object-store");
-    MockEnvironment environment = environment().withProperty("batch.storage.backend", "filesystem");
+    MockEnvironment environment =
+        environment().withProperty("batch.storage.backend", ObjectStorageBackends.FILESYSTEM);
 
     StatefulBackendGuard.DesiredBackend desired =
         guard(s3(), filesystem, environment).desiredBackend();
 
-    assertThat(desired.backend()).isEqualTo("filesystem");
+    assertThat(desired.backend()).isEqualTo(ObjectStorageBackends.FILESYSTEM);
     assertThat(desired.backendIdentity())
         .isEqualTo("root="
             + Path.of("./target/object-store").toAbsolutePath().normalize()

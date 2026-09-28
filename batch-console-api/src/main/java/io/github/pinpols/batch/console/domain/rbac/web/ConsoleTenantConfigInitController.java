@@ -11,6 +11,7 @@ import io.github.pinpols.batch.console.application.contract.request.config.Tenan
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigDiffPreviewResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigMatrixResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.web.Idempotent;
@@ -44,7 +45,7 @@ public class ConsoleTenantConfigInitController {
    * dryRun=true：只做查询和校验，不执行写入。
    */
   @PostMapping("/tenant-init")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
   @Idempotent
   public CommonResponse<TenantConfigBatchInitResponse> batchInit(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
@@ -62,7 +63,7 @@ public class ConsoleTenantConfigInitController {
    * <p>从源租户读取配置，转换为 Spec 后推送到目标租户列表。
    */
   @PostMapping("/tenant-copy")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
   @Idempotent
   public CommonResponse<TenantConfigBatchInitResponse> tenantCopy(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
@@ -75,7 +76,7 @@ public class ConsoleTenantConfigInitController {
 
   /** 跨租户复制前预览 add/update/delete-candidate 和影响面，不执行写库。 */
   @PostMapping("/tenant-copy/preview")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
   public CommonResponse<TenantConfigDiffPreviewResponse> tenantCopyPreview(
       @Valid @RequestBody TenantConfigPreviewRequest request) {
     return responseFactory.success(copyService.preview(request));
@@ -83,7 +84,7 @@ public class ConsoleTenantConfigInitController {
 
   /** base package + tenant overlay 预览：返回每个目标租户相对基础租户的差异包。 */
   @PostMapping("/tenant-overlay/preview")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
   public CommonResponse<TenantConfigDiffPreviewResponse> tenantOverlayPreview(
       @Valid @RequestBody TenantConfigPreviewRequest request) {
     return responseFactory.success(copyService.previewOverlay(request));
@@ -91,7 +92,7 @@ public class ConsoleTenantConfigInitController {
 
   /** 同一 job 跨租户矩阵：用于发现 schedule/queue/template/channel 等漂移。 */
   @PostMapping("/tenant-config-matrix")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
   public CommonResponse<TenantConfigMatrixResponse> tenantConfigMatrix(
       @Valid @RequestBody TenantConfigMatrixRequest request) {
     return responseFactory.success(copyService.matrix(request));

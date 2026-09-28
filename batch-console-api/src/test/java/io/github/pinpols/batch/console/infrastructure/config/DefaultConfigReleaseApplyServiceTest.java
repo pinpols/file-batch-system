@@ -29,7 +29,8 @@ class DefaultConfigReleaseApplyServiceTest {
   void setUp() {
     initService = mock(ConsoleTenantConfigInitApplicationService.class);
     invalidationService = mock(ConsoleConfigCacheInvalidationService.class);
-    service = new DefaultConfigReleaseApplyService(initService, invalidationService);
+    service = new DefaultConfigReleaseApplyService(
+        initService, invalidationService, new ConfigReleaseTypeRegistry());
   }
 
   @Test

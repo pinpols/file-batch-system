@@ -6,6 +6,7 @@ import io.github.pinpols.batch.console.domain.ops.application.ConsoleWorkerAppli
 import io.github.pinpols.batch.console.domain.ops.application.contract.request.DrainWorkerRequest;
 import io.github.pinpols.batch.console.domain.ops.application.contract.request.ForceOfflineWorkerRequest;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleWorkerClaimedTaskResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.view.ConsoleWorkerRegistryResponse;
 import io.github.pinpols.batch.console.support.web.Idempotent;
@@ -27,7 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @Validated
 @RequestMapping("/api/console/workers")
-@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+@PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
 @RequiredArgsConstructor
 @Idempotent
 public class ConsoleWorkerController {

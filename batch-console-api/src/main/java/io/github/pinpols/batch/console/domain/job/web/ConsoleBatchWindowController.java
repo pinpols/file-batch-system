@@ -6,6 +6,7 @@ import io.github.pinpols.batch.console.domain.job.application.ConsoleBatchWindow
 import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchWindowCreateRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchWindowUpdateRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchWindowResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.command.EnabledPatchRequest;
 import io.github.pinpols.batch.console.support.web.Idempotent;
@@ -18,7 +19,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @Validated
 @RequestMapping("/api/console/batch-windows")
-@PreAuthorize("hasAuthority('ROLE_ADMIN')")
+@PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
 @RequiredArgsConstructor
 @Idempotent
 public class ConsoleBatchWindowController {

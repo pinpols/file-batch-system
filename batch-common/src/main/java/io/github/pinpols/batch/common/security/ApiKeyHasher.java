@@ -56,7 +56,7 @@ public final class ApiKeyHasher {
   /** 旧 SHA-256 hex hash —— 仅用于 legacy 行兼容比对,**禁用于新签发**。 */
   public static String legacySha256Hex(String input) {
     try {
-      MessageDigest md = MessageDigest.getInstance("SHA-256");
+      MessageDigest md = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
       byte[] digest = md.digest(input.getBytes(StandardCharsets.UTF_8));
       return HexFormat.of().formatHex(digest);
     } catch (NoSuchAlgorithmException e) {

@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.job.web;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleResultVersionResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
@@ -18,7 +19,6 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.client.RestClient;
 
 /**
  * ADR-017 Stage 6 — result_version console 转发 API。{@code /api/console/result-versions}
@@ -42,7 +42,8 @@ public class ConsoleResultVersionController {
       @RequestParam("businessKey") String businessKey,
       @RequestParam(value = "limit", required = false, defaultValue = "50") int limit) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    CommonResponse<List<ConsoleResultVersionResponse>> resp = proxyClient()
+    CommonResponse<List<ConsoleResultVersionResponse>> resp = orchestratorInternalRestClient
+        .build()
         .get()
         .uri(
             "/internal/orchestrator/result-versions?tenantId={tenantId}"
@@ -60,7 +61,8 @@ public class ConsoleResultVersionController {
       @RequestParam(value = "tenantId", required = false) String tenantId,
       @RequestParam("businessKey") String businessKey) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    CommonResponse<ConsoleResultVersionResponse> resp = proxyClient()
+    CommonResponse<ConsoleResultVersionResponse> resp = orchestratorInternalRestClient
+        .build()
         .get()
         .uri(
             "/internal/orchestrator/result-versions/effective?tenantId={tenantId}"
@@ -77,7 +79,8 @@ public class ConsoleResultVersionController {
       @PathVariable("id") Long id,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    CommonResponse<ConsoleResultVersionResponse> resp = proxyClient()
+    CommonResponse<ConsoleResultVersionResponse> resp = orchestratorInternalRestClient
+        .build()
         .get()
         .uri("/internal/orchestrator/result-versions/{id}?tenantId={tenantId}", id, resolved)
         .retrieve()
@@ -87,14 +90,15 @@ public class ConsoleResultVersionController {
 
   // P0-1: promote/reject 是高危结果版本变更，要求管理员/配置管理员权限；P1-6：强制幂等键
   @PostMapping("/{id}/promote")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   @Idempotent
   public CommonResponse<ConsoleResultVersionResponse> promote(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable("id") Long id,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    CommonResponse<ConsoleResultVersionResponse> resp = proxyClient()
+    CommonResponse<ConsoleResultVersionResponse> resp = orchestratorInternalRestClient
+        .build()
         .post()
         .uri(
             "/internal/orchestrator/result-versions/{id}/promote?tenantId={tenantId}", id, resolved)
@@ -104,23 +108,20 @@ public class ConsoleResultVersionController {
   }
 
   @PostMapping("/{id}/reject")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   @Idempotent
   public CommonResponse<ConsoleResultVersionResponse> reject(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable("id") Long id,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    CommonResponse<ConsoleResultVersionResponse> resp = proxyClient()
+    CommonResponse<ConsoleResultVersionResponse> resp = orchestratorInternalRestClient
+        .build()
         .post()
         .uri("/internal/orchestrator/result-versions/{id}/reject?tenantId={tenantId}", id, resolved)
         .retrieve()
         .body(typedResponse());
     return responseFactory.forwardOrchestrator(resp);
-  }
-
-  private RestClient proxyClient() {
-    return orchestratorInternalRestClient.build();
   }
 
   private static ParameterizedTypeReference<CommonResponse<ConsoleResultVersionResponse>>

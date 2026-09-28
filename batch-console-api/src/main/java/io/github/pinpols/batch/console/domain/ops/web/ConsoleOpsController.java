@@ -8,6 +8,7 @@ import io.github.pinpols.batch.console.domain.ops.application.contract.response.
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleOutboxRepublishResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleOutboxStatsResponse;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleKafkaLagQueryService;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.shared.view.ConsoleOpsSummaryResponse;
@@ -30,7 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @Validated
 @RequestMapping("/api/console/ops")
-@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
+@PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
 @RequiredArgsConstructor
 @Idempotent
 public class ConsoleOpsController {
@@ -51,7 +52,7 @@ public class ConsoleOpsController {
 
   /** Kafka consumer group 积压查询。 */
   @GetMapping("/kafka-lag")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR)
   public CommonResponse<List<ConsoleKafkaConsumerLagResponse>> kafkaConsumerLag(
       @RequestParam(value = "groupId", required = false) String groupId) {
     return responseFactory.success(kafkaLagQueryService.consumerGroupLags(groupId));

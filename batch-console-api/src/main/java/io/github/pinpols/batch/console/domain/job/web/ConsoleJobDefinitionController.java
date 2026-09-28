@@ -7,6 +7,7 @@ import io.github.pinpols.batch.console.domain.job.application.contract.request.J
 import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDefinitionCreateRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDefinitionUpdateRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleJobDefinitionResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.shared.command.EnabledPatchRequest;
@@ -20,7 +21,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @Validated
 @RequestMapping("/api/console/job-definitions")
-@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+@PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
 @RequiredArgsConstructor
 @Idempotent
 public class ConsoleJobDefinitionController {
@@ -29,8 +30,7 @@ public class ConsoleJobDefinitionController {
   private final ConsoleResponseFactory responseFactory;
 
   @GetMapping("/{id}")
-  @PreAuthorize(
-      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
+  @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
   public CommonResponse<ConsoleJobDefinitionResponse> detail(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(jobDefinitionApplicationService.detail(id, tenantId));

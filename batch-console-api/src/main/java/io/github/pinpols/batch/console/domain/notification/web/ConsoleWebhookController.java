@@ -8,6 +8,7 @@ import io.github.pinpols.batch.console.domain.notification.application.contract.
 import io.github.pinpols.batch.console.domain.notification.service.ConsoleWebhookService;
 import io.github.pinpols.batch.console.domain.notification.service.ConsoleWebhookService.CreateSubscriptionCommand;
 import io.github.pinpols.batch.console.domain.notification.service.ConsoleWebhookService.UpdateSubscriptionCommand;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.support.web.Idempotent;
@@ -38,7 +39,7 @@ public class ConsoleWebhookController {
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
   @GetMapping
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_TENANT_USER)
   public CommonResponse<List<WebhookSubscriptionResponse>> list(
       @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(webhookService.listSubscriptions(tenantId).stream()
@@ -47,7 +48,7 @@ public class ConsoleWebhookController {
   }
 
   @GetMapping("/delivery-logs")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_TENANT_USER)
   public CommonResponse<List<WebhookDeliveryLogResponse>> deliveryLogs(
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "subscriptionId", required = false) Long subscriptionId,
@@ -61,7 +62,7 @@ public class ConsoleWebhookController {
   }
 
   @GetMapping("/{id}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_TENANT_USER)
   public CommonResponse<WebhookSubscriptionResponse> detail(
       @RequestParam("tenantId") String tenantId, @PathVariable Long id) {
     return responseFactory.success(
@@ -69,7 +70,7 @@ public class ConsoleWebhookController {
   }
 
   @PostMapping
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<WebhookSubscriptionResponse> create(
       @RequestParam("tenantId") String tenantId, @Valid @RequestBody CreateWebhookRequest request) {
     String operator = requestMetadataResolver.current().operatorId();
@@ -87,7 +88,7 @@ public class ConsoleWebhookController {
   }
 
   @PutMapping("/{id}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<WebhookSubscriptionResponse> update(
       @RequestParam("tenantId") String tenantId,
       @PathVariable Long id,
@@ -107,7 +108,7 @@ public class ConsoleWebhookController {
   }
 
   @DeleteMapping("/{id}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<Void> delete(
       @RequestParam("tenantId") String tenantId, @PathVariable Long id) {
     webhookService.deleteSubscription(tenantId, id);

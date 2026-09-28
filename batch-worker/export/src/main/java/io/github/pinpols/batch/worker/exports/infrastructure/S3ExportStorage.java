@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.exports.infrastructure;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.constants.BatchFileConstants;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -148,7 +149,7 @@ public class S3ExportStorage {
       throw new IllegalArgumentException("objectName is required");
     }
     try {
-      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
       try (InputStream inputStream = objectStore.get(properties.getBucket(), objectName)) {
         byte[] buffer = new byte[8192];
         int read;

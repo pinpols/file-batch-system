@@ -6,6 +6,7 @@ import io.github.pinpols.batch.console.domain.ops.application.ConsoleApprovalApp
 import io.github.pinpols.batch.console.domain.ops.application.contract.request.ApprovalActionRequest;
 import io.github.pinpols.batch.console.domain.ops.application.contract.request.BatchApprovalActionRequest;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleBatchApprovalResultResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
@@ -37,7 +38,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/console/approvals")
 @RequiredArgsConstructor
 @Idempotent
-@PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_TENANT_ADMIN')")
+@PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
 public class ConsoleApprovalController {
 
   // R3-P2-6：审计独立 logger。logback.xml 可单独路由 audit 到独立 appender（独立日志文件/SIEM/Kafka）

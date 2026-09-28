@@ -11,6 +11,7 @@ import io.github.pinpols.batch.console.domain.file.application.contract.request.
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileTemplateResponse;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.FileNamePreviewResponse;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.FileTemplateMappingDraftResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.command.EnabledPatchRequest;
 import io.github.pinpols.batch.console.support.web.Idempotent;
@@ -42,7 +43,7 @@ public class ConsoleFileTemplateController {
 
   /** 分页查询文件模板列表。 */
   @GetMapping
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_AUDITOR')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)
   public CommonResponse<PageResponse<ConsoleFileTemplateResponse>> list(
       @Valid @ModelAttribute FileTemplateQueryRequest request) {
     return responseFactory.success(fileTemplateApplicationService.list(request));
@@ -50,7 +51,7 @@ public class ConsoleFileTemplateController {
 
   /** 获取文件模板详情。 */
   @GetMapping("/{id}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_AUDITOR')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)
   public CommonResponse<ConsoleFileTemplateResponse> get(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(fileTemplateApplicationService.get(id, tenantId));
@@ -58,7 +59,7 @@ public class ConsoleFileTemplateController {
 
   /** 新建文件模板。 */
   @PostMapping
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<ConsoleFileTemplateResponse> create(
       @Valid @RequestBody FileTemplateCreateRequest request) {
     return responseFactory.success(fileTemplateApplicationService.create(request));
@@ -66,7 +67,7 @@ public class ConsoleFileTemplateController {
 
   /** 生成字段映射草案，供前端向导带入文件模板创建/更新表单。 */
   @PostMapping("/mapping-draft")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<FileTemplateMappingDraftResponse> draftMapping(
       @Valid @RequestBody FileTemplateMappingDraftRequest request) {
     return responseFactory.success(FileTemplateMappingDraftResponse.from(
@@ -84,7 +85,7 @@ public class ConsoleFileTemplateController {
 
   /** 更新文件模板。 */
   @PutMapping("/{id}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<ConsoleFileTemplateResponse> update(
       @PathVariable Long id, @Valid @RequestBody FileTemplateUpdateRequest request) {
     return responseFactory.success(fileTemplateApplicationService.update(id, request));
@@ -92,7 +93,7 @@ public class ConsoleFileTemplateController {
 
   /** 启用/禁用文件模板。 */
   @PatchMapping("/{id}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<Void> patch(
       @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
     fileTemplateApplicationService.toggle(id, request.getTenantId(), request.getEnabled());

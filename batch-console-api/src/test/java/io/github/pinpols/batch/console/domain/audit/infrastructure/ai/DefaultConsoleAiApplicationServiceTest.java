@@ -19,6 +19,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.application.contract.request.auth.AiChatRequest;
 import io.github.pinpols.batch.console.application.observability.ConsoleQueryApplicationService;
 import io.github.pinpols.batch.console.application.ops.ConsoleClusterDiagnosticService;
+import io.github.pinpols.batch.console.config.ConsoleAiClients;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiChatResponse;
 import io.github.pinpols.batch.console.domain.audit.command.AiAuditCommand;
@@ -32,6 +33,7 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -47,6 +49,9 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.QueryTimeoutException;
+import org.springframework.http.HttpHeaders;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClientResponseException;
 
 /**
  * DefaultConsoleAiApplicationService 单测 — 覆盖多层防护决策路径：
@@ -69,7 +74,7 @@ import org.springframework.dao.QueryTimeoutException;
 class DefaultConsoleAiApplicationServiceTest {
 
   @Mock
-  private ObjectProvider<ChatClient> chatClientProvider;
+  private ObjectProvider<ConsoleAiClients> chatClientsProvider;
 
   @Mock
   private ConsoleRequestMetadataResolver requestMetadataResolver;
@@ -112,7 +117,7 @@ class DefaultConsoleAiApplicationServiceTest {
     meterRegistry = new SimpleMeterRegistry();
     aiMetrics = new ConsoleAiMetrics(meterRegistry);
     service = new DefaultConsoleAiApplicationService(
-        chatClientProvider,
+        chatClientsProvider,
         aiProperties,
         requestMetadataResolver,
         authorizationService,
@@ -145,7 +150,7 @@ class DefaultConsoleAiApplicationServiceTest {
 
     assertThatThrownBy(() -> service.chat(request("t-1", "查询失败的作业"), "idem-1")).isSameAs(denied);
     verify(promptGuard, never()).check(any());
-    verify(chatClientProvider, never()).getIfAvailable();
+    verify(chatClientsProvider, never()).getIfAvailable();
     verify(auditService, never()).record(any());
   }
 
@@ -196,7 +201,7 @@ class DefaultConsoleAiApplicationServiceTest {
     // 防 PII 泄漏：原文不写入数据库，只落哈希 + preview
     assertThat(audit.promptHash()).hasSize(64); // SHA-256 hex
     // ChatClient 完全不被触达
-    verify(chatClientProvider, never()).getIfAvailable();
+    verify(chatClientsProvider, never()).getIfAvailable();
   }
 
   @Test
@@ -233,7 +238,7 @@ class DefaultConsoleAiApplicationServiceTest {
     when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
     when(promptGuard.check(any()))
         .thenReturn(AiPromptGateResult.approved(AiPromptCategory.PLATFORM, "normalized"));
-    when(chatClientProvider.getIfAvailable()).thenReturn(null);
+    when(chatClientsProvider.getIfAvailable()).thenReturn(null);
 
     assertThatThrownBy(() -> service.chat(request("tenant-1", "查询失败作业"), "idem-1"))
         .isInstanceOf(BizException.class)
@@ -334,7 +339,7 @@ class DefaultConsoleAiApplicationServiceTest {
     assertThat(keyCaptor.getValue()).contains("tenant:tenant-1").contains("user:operator-1");
     assertThat(decisionCount("rate_limited")).isEqualTo(1.0);
     verify(promptGuard, never()).check(any());
-    verify(chatClientProvider, never()).getIfAvailable();
+    verify(chatClientsProvider, never()).getIfAvailable();
     verify(auditService, never()).record(any());
   }
 
@@ -391,6 +396,81 @@ class DefaultConsoleAiApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("主模型发生传输故障时切换备用模型，并记录备用模型的实际标识")
+  void shouldFailOverToSecondaryProviderAndRecordItsModel() {
+    aiProperties.getTools().setEnabled(false);
+    aiProperties.setFailoverEnabled(true);
+    when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
+    when(promptGuard.check(any()))
+        .thenReturn(AiPromptGateResult.approved(AiPromptCategory.PLATFORM, "normalized"));
+    when(knowledgeBase.retrieve(any())).thenReturn(List.of());
+    ChatClient primary = mock(ChatClient.class);
+    ChatClient fallback = mock(ChatClient.class);
+    ChatClient.CallResponseSpec primaryCall = stubProviderClient(primary);
+    ChatClient.CallResponseSpec fallbackCall = stubProviderClient(fallback);
+    when(chatClientsProvider.getIfAvailable())
+        .thenReturn(new ConsoleAiClients(
+            new ConsoleAiClients.ProviderClient("openai", primary),
+            new ConsoleAiClients.ProviderClient("anthropic", fallback)));
+    when(primaryCall.chatResponse()).thenThrow(new ResourceAccessException("provider unavailable"));
+    when(fallbackCall.chatResponse())
+        .thenReturn(chatResponseWithModel("fallback answer", "claude-live"));
+
+    AiChatResponse response = service.chat(request("tenant-1", "查询失败作业"), "idem-1");
+
+    assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.APPROVED.code());
+    assertThat(response.getModelName()).isEqualTo("anthropic:claude-live");
+    verify(fallbackCall).chatResponse();
+    ArgumentCaptor<AiAuditCommand> audit = ArgumentCaptor.forClass(AiAuditCommand.class);
+    verify(auditService).record(audit.capture());
+    assertThat(audit.getValue().modelName()).isEqualTo("anthropic:claude-live");
+  }
+
+  @Test
+  @DisplayName("模型返回不可重试的 4xx 时不切换 provider")
+  void shouldNotFailOverForNonRetryableClientError() {
+    aiProperties.getTools().setEnabled(false);
+    when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
+    when(promptGuard.check(any()))
+        .thenReturn(AiPromptGateResult.approved(AiPromptCategory.PLATFORM, "normalized"));
+    when(knowledgeBase.retrieve(any())).thenReturn(List.of());
+    ChatClient primary = mock(ChatClient.class);
+    ChatClient fallback = mock(ChatClient.class);
+    ChatClient.CallResponseSpec primaryCall = stubProviderClient(primary);
+    when(chatClientsProvider.getIfAvailable())
+        .thenReturn(new ConsoleAiClients(
+            new ConsoleAiClients.ProviderClient("openai", primary),
+            new ConsoleAiClients.ProviderClient("anthropic", fallback)));
+    when(primaryCall.chatResponse())
+        .thenThrow(new RestClientResponseException(
+            "bad request", 400, "Bad Request", HttpHeaders.EMPTY, new byte[0], null));
+
+    AiChatResponse response = service.chat(request("tenant-1", "查询失败作业"), "idem-1");
+
+    assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.FAILED.code());
+    verify(fallback, never()).prompt();
+  }
+
+  @Test
+  @DisplayName("包含凭据字段的请求上下文在任何模型或 embedding 调用前被拒绝")
+  void shouldRejectSensitiveContextBeforeExternalModelCalls() {
+    when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
+    when(promptGuard.check(any()))
+        .thenReturn(AiPromptGateResult.approved(AiPromptCategory.PLATFORM, "normalized"));
+    AiChatRequest request = request("tenant-1", "查询失败作业");
+    request.setContext(Map.of("diagnostic", List.of(Map.of("access_token", "secret"))));
+
+    assertThatThrownBy(() -> service.chat(request, "idem-1"))
+        .isInstanceOf(BizException.class)
+        .satisfies(
+            ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT));
+
+    verify(knowledgeBase, never()).retrieve(any());
+    verify(chatClientsProvider, never()).getIfAvailable();
+    verify(auditService, never()).record(any());
+  }
+
+  @Test
   @DisplayName("模型调用超时(超 requestTimeout)→ 优雅降级 FAILED,不无限等")
   void shouldDegradeGracefully_whenModelCallTimesOut() {
     aiProperties.setRequestTimeout(Duration.ofMillis(150));
@@ -412,9 +492,19 @@ class DefaultConsoleAiApplicationServiceTest {
   // ── helpers ───────────────────────────────────────────────────────────────
 
   private static ChatResponse chatResponseWithUsage(String text, int prompt, int completion) {
+    return chatResponseWithModel(text, "test-model", prompt, completion);
+  }
+
+  private static ChatResponse chatResponseWithModel(String text, String model) {
+    return chatResponseWithModel(text, model, 1, 1);
+  }
+
+  private static ChatResponse chatResponseWithModel(
+      String text, String model, int prompt, int completion) {
     return new ChatResponse(
         List.of(new Generation(new AssistantMessage(text))),
         ChatResponseMetadata.builder()
+            .model(model)
             .usage(new DefaultUsage(prompt, completion))
             .build());
   }
@@ -428,9 +518,15 @@ class DefaultConsoleAiApplicationServiceTest {
     when(knowledgeBase.retrieve(any())).thenReturn(List.of());
 
     ChatClient chatClient = mock(ChatClient.class);
+    when(chatClientsProvider.getIfAvailable())
+        .thenReturn(
+            new ConsoleAiClients(new ConsoleAiClients.ProviderClient("openai", chatClient), null));
+    return stubProviderClient(chatClient);
+  }
+
+  private ChatClient.CallResponseSpec stubProviderClient(ChatClient chatClient) {
     ChatClient.ChatClientRequestSpec requestSpec = mock(ChatClient.ChatClientRequestSpec.class);
     ChatClient.CallResponseSpec callSpec = mock(ChatClient.CallResponseSpec.class);
-    when(chatClientProvider.getIfAvailable()).thenReturn(chatClient);
     when(chatClient.prompt()).thenReturn(requestSpec);
     when(requestSpec.system(anyString())).thenReturn(requestSpec);
     when(requestSpec.user(anyString())).thenReturn(requestSpec);

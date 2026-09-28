@@ -8,6 +8,7 @@ import io.github.pinpols.batch.console.domain.job.application.contract.request.H
 import io.github.pinpols.batch.console.domain.job.application.contract.request.HolidaySaveRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleCalendarResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleHolidayResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.command.EnabledPatchRequest;
 import io.github.pinpols.batch.console.support.web.Idempotent;
@@ -21,7 +22,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @Validated
 @RequestMapping("/api/console/calendars")
-@PreAuthorize("hasAuthority('ROLE_ADMIN')")
+@PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
 @RequiredArgsConstructor
 @Idempotent
 public class ConsoleCalendarController {
@@ -30,7 +31,7 @@ public class ConsoleCalendarController {
   private final ConsoleResponseFactory responseFactory;
 
   @GetMapping
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
   public CommonResponse<PageResponse<ConsoleCalendarResponse>> list(
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "calendarCode", required = false) String calendarCode,
@@ -61,7 +62,7 @@ public class ConsoleCalendarController {
   }
 
   @GetMapping("/{id}/holidays")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
   public CommonResponse<List<ConsoleHolidayResponse>> holidays(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(calendarApplicationService.holidays(id, tenantId));

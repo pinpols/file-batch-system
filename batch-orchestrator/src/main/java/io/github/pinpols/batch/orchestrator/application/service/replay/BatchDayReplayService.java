@@ -469,29 +469,41 @@ public class BatchDayReplayService {
       return materializeSchedulePlanEntries(command, scope, now);
     }
     BatchDayReplayScope scopeType = BatchDayReplayScope.fromCodeOrNull(scope);
-    if (scopeType == BatchDayReplayScope.OUTPUTS_ONLY) {
-      return materializeOutputsOnlyEntries(command, now);
+    ReplayScopeMaterializer materializer = replayScopeMaterializers().get(scopeType);
+    if (EmptyChecks.isNull(materializer)) {
+      return List.of();
     }
-    List<String> statuses =
-        switch (scopeType) {
-          case ALL, SUBSET_JOB_CODES ->
-            List.of(
-                BatchLifecycleStatus.SUCCESS.code(),
-                BatchLifecycleStatus.FAILED.code(),
-                JobInstanceStatus.PARTIAL_FAILED.code());
-          case ALL_FAILED ->
-            List.of(BatchLifecycleStatus.FAILED.code(), JobInstanceStatus.PARTIAL_FAILED.code());
-          case OUTPUTS_ONLY -> List.of();
-        };
-    List<String> jobCodes = scopeType == BatchDayReplayScope.SUBSET_JOB_CODES
-            && command.jobCodes() != null
-            && !command.jobCodes().isEmpty()
-        ? command.jobCodes()
-        : List.of();
-    if (scopeType == BatchDayReplayScope.SUBSET_JOB_CODES && jobCodes.isEmpty()) {
+    return materializer.materialize(command, now);
+  }
+
+  private Map<BatchDayReplayScope, ReplayScopeMaterializer> replayScopeMaterializers() {
+    return Map.of(
+        BatchDayReplayScope.ALL,
+        (command, now) -> materializeInstanceEntries(command, now, replayableStatuses(), List.of()),
+        BatchDayReplayScope.ALL_FAILED,
+        (command, now) -> materializeInstanceEntries(command, now, failedStatuses(), List.of()),
+        BatchDayReplayScope.SUBSET_JOB_CODES,
+        this::materializeSubsetJobEntries,
+        BatchDayReplayScope.OUTPUTS_ONLY,
+        this::materializeOutputsOnlyEntries);
+  }
+
+  private List<BatchDayReplayEntryEntity> materializeSubsetJobEntries(
+      BatchDayReplaySubmitCommand command, Instant now) {
+    List<String> jobCodes =
+        EmptyChecks.isEmpty(command.jobCodes()) ? List.of() : command.jobCodes();
+    if (EmptyChecks.isEmpty(jobCodes)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.subset_job_codes_required");
     }
+    return materializeInstanceEntries(command, now, replayableStatuses(), jobCodes);
+  }
+
+  private List<BatchDayReplayEntryEntity> materializeInstanceEntries(
+      BatchDayReplaySubmitCommand command,
+      Instant now,
+      List<String> statuses,
+      List<String> jobCodes) {
     List<JobInstanceEntity> candidates = jobInstanceMapper.selectBatchDayCandidates(
         command.tenantId(), command.calendarCode(), command.bizDate(), statuses, jobCodes);
     if (candidates == null) {
@@ -515,6 +527,22 @@ public class BatchDayReplayService {
           .build());
     }
     return entries;
+  }
+
+  private List<String> replayableStatuses() {
+    return List.of(
+        BatchLifecycleStatus.SUCCESS.code(),
+        BatchLifecycleStatus.FAILED.code(),
+        JobInstanceStatus.PARTIAL_FAILED.code());
+  }
+
+  private List<String> failedStatuses() {
+    return List.of(BatchLifecycleStatus.FAILED.code(), JobInstanceStatus.PARTIAL_FAILED.code());
+  }
+
+  @FunctionalInterface
+  private interface ReplayScopeMaterializer {
+    List<BatchDayReplayEntryEntity> materialize(BatchDayReplaySubmitCommand command, Instant now);
   }
 
   private List<BatchDayReplayEntryEntity> materializeSchedulePlanEntries(

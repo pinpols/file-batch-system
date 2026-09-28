@@ -16,6 +16,7 @@ import io.github.pinpols.batch.console.domain.rbac.application.contract.response
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleTenantResponse;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ProvisionTenantResponse;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.TenantReadinessResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
@@ -51,7 +52,7 @@ public class ConsoleTenantController {
   private final ConsoleResponseFactory responseFactory;
 
   @GetMapping
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<PageResponse<ConsoleTenantResponse>> list(
       @RequestParam(required = false) String keyword,
       @RequestParam(required = false) String status,
@@ -62,7 +63,7 @@ public class ConsoleTenantController {
   }
 
   @GetMapping("/{tenantId}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<ConsoleTenantResponse> get(@PathVariable String tenantId) {
     return responseFactory.success(tenantService.getTenant(tenantId));
   }
@@ -74,13 +75,13 @@ public class ConsoleTenantController {
    * **不看**业务结果对不对(不执行取数、不比对数据),落在 ADR-026 √ 一侧。
    */
   @GetMapping("/{tenantId}/readiness")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<TenantReadinessResponse> readiness(@PathVariable String tenantId) {
     return responseFactory.success(readinessService.check(tenantId));
   }
 
   @PostMapping
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
   @AuditAction(
       action = "tenant.create",
       aggregateType = "tenant",
@@ -101,7 +102,7 @@ public class ConsoleTenantController {
   }
 
   @PostMapping("/batch")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
   @AuditAction(action = "tenant.batchCreate", aggregateType = "tenant", recordParams = false)
   public CommonResponse<BatchCreateTenantsResponse> batchCreate(
       @Validated @RequestBody BatchCreateTenantRequest request, Authentication authentication) {
@@ -117,7 +118,7 @@ public class ConsoleTenantController {
   }
 
   @PutMapping("/{tenantId}")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
   @AuditAction(
       action = "tenant.update",
       aggregateType = "tenant",
@@ -130,7 +131,7 @@ public class ConsoleTenantController {
   }
 
   @PostMapping("/{tenantId}/suspend")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
   @AuditAction(
       action = "tenant.suspend",
       aggregateType = "tenant",
@@ -141,7 +142,7 @@ public class ConsoleTenantController {
   }
 
   @PostMapping("/{tenantId}/activate")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
   @AuditAction(
       action = "tenant.activate",
       aggregateType = "tenant",

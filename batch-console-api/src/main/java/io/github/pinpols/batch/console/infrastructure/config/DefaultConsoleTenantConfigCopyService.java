@@ -1004,39 +1004,78 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
 
   @SuppressWarnings("unchecked")
   private <T> List<T> listOf(ConfigSyncBundlePayload bundle, ConfigType type) {
-    List<?> values =
-        switch (type) {
-          case JOB_DEFINITION -> bundle.getJobDefinitions();
-          case WORKFLOW_DEFINITION -> bundle.getWorkflowDefinitions();
-          case PIPELINE_DEFINITION -> bundle.getPipelineDefinitions();
-          case FILE_CHANNEL -> bundle.getFileChannels();
-          case FILE_TEMPLATE -> bundle.getFileTemplates();
-          case RESOURCE_QUEUE -> bundle.getResourceQueues();
-          case BATCH_WINDOW -> bundle.getBatchWindows();
-          case BUSINESS_CALENDAR -> bundle.getBusinessCalendars();
-          case QUOTA_POLICY -> bundle.getQuotaPolicies();
-          case ALERT_ROUTING -> bundle.getAlertRoutings();
-        };
+    List<?> values = (List<?>) bundleAccessors().get(type).get(bundle);
     return values == null ? List.of() : (List<T>) values;
   }
 
-  @SuppressWarnings("unchecked")
   private void setList(ConfigSyncBundlePayload bundle, ConfigType type, List<?> values) {
     List<?> safeValues = EmptyChecks.isEmpty(values) ? null : values;
-    switch (type) {
-      case JOB_DEFINITION -> bundle.setJobDefinitions((List<JobDefinitionSpec>) safeValues);
-      case WORKFLOW_DEFINITION ->
-        bundle.setWorkflowDefinitions((List<WorkflowDefinitionSpec>) safeValues);
-      case PIPELINE_DEFINITION ->
-        bundle.setPipelineDefinitions((List<PipelineDefinitionSpec>) safeValues);
-      case FILE_CHANNEL -> bundle.setFileChannels((List<FileChannelSpec>) safeValues);
-      case FILE_TEMPLATE -> bundle.setFileTemplates((List<FileTemplateSpec>) safeValues);
-      case RESOURCE_QUEUE -> bundle.setResourceQueues((List<ResourceQueueSpec>) safeValues);
-      case BATCH_WINDOW -> bundle.setBatchWindows((List<BatchWindowSpec>) safeValues);
-      case BUSINESS_CALENDAR ->
-        bundle.setBusinessCalendars((List<BusinessCalendarSpec>) safeValues);
-      case QUOTA_POLICY -> bundle.setQuotaPolicies((List<TenantQuotaPolicySpec>) safeValues);
-      case ALERT_ROUTING -> bundle.setAlertRoutings((List<AlertRoutingSpec>) safeValues);
+    bundleAccessors().get(type).set(bundle, safeValues);
+  }
+
+  @SuppressWarnings("unchecked")
+  private Map<ConfigType, BundleListAccessor> bundleAccessors() {
+    return Map.of(
+        ConfigType.JOB_DEFINITION,
+        accessor(
+            ConfigSyncBundlePayload::getJobDefinitions,
+            (bundle, values) -> bundle.setJobDefinitions((List<JobDefinitionSpec>) values)),
+        ConfigType.WORKFLOW_DEFINITION,
+        accessor(
+            ConfigSyncBundlePayload::getWorkflowDefinitions,
+            (bundle, values) ->
+                bundle.setWorkflowDefinitions((List<WorkflowDefinitionSpec>) values)),
+        ConfigType.PIPELINE_DEFINITION,
+        accessor(
+            ConfigSyncBundlePayload::getPipelineDefinitions,
+            (bundle, values) ->
+                bundle.setPipelineDefinitions((List<PipelineDefinitionSpec>) values)),
+        ConfigType.FILE_CHANNEL,
+        accessor(
+            ConfigSyncBundlePayload::getFileChannels,
+            (bundle, values) -> bundle.setFileChannels((List<FileChannelSpec>) values)),
+        ConfigType.FILE_TEMPLATE,
+        accessor(
+            ConfigSyncBundlePayload::getFileTemplates,
+            (bundle, values) -> bundle.setFileTemplates((List<FileTemplateSpec>) values)),
+        ConfigType.RESOURCE_QUEUE,
+        accessor(
+            ConfigSyncBundlePayload::getResourceQueues,
+            (bundle, values) -> bundle.setResourceQueues((List<ResourceQueueSpec>) values)),
+        ConfigType.BATCH_WINDOW,
+        accessor(
+            ConfigSyncBundlePayload::getBatchWindows,
+            (bundle, values) -> bundle.setBatchWindows((List<BatchWindowSpec>) values)),
+        ConfigType.BUSINESS_CALENDAR,
+        accessor(
+            ConfigSyncBundlePayload::getBusinessCalendars,
+            (bundle, values) -> bundle.setBusinessCalendars((List<BusinessCalendarSpec>) values)),
+        ConfigType.QUOTA_POLICY,
+        accessor(
+            ConfigSyncBundlePayload::getQuotaPolicies,
+            (bundle, values) -> bundle.setQuotaPolicies((List<TenantQuotaPolicySpec>) values)),
+        ConfigType.ALERT_ROUTING,
+        accessor(
+            ConfigSyncBundlePayload::getAlertRoutings,
+            (bundle, values) -> bundle.setAlertRoutings((List<AlertRoutingSpec>) values)));
+  }
+
+  private BundleListAccessor accessor(
+      Function<ConfigSyncBundlePayload, ? extends List<?>> getter,
+      BiConsumer<ConfigSyncBundlePayload, List<?>> setter) {
+    return new BundleListAccessor(
+        getter::apply, (bundle, values) -> setter.accept(bundle, (List<?>) values));
+  }
+
+  private record BundleListAccessor(
+      Function<ConfigSyncBundlePayload, Object> getter,
+      BiConsumer<ConfigSyncBundlePayload, Object> setter) {
+    Object get(ConfigSyncBundlePayload bundle) {
+      return getter.apply(bundle);
+    }
+
+    void set(ConfigSyncBundlePayload bundle, Object values) {
+      setter.accept(bundle, values);
     }
   }
 

@@ -2,10 +2,13 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.constants.BatchFileConstants;
+import io.github.pinpols.batch.common.enums.DictEnum;
+import io.github.pinpols.batch.common.enums.FileChannelType;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
@@ -596,12 +599,17 @@ final class RemoteFilesystemDispatchSupport {
       DispatchRuntimeProperties properties) {
     String channelType =
         String.valueOf(channelConfig.getOrDefault("channel_type", "")).toUpperCase(Locale.ROOT);
-    return switch (channelType) {
-      case "NAS" -> probeNas(channelConfig, properties);
-      case "OSS" -> probeOss(channelConfig, s3Properties, objectStore);
-      case "SFTP" -> probeSftp(channelConfig, dnsGuardEnabled, properties);
-      case "EMAIL" -> probeSmtp(channelConfig, dnsGuardEnabled, properties);
-      case "API", "API_PUSH" -> probeHttp(channelConfig, dnsGuardEnabled, properties);
+    FileChannelType type = DictEnum.fromCode(FileChannelType.class, channelType);
+    if (EmptyChecks.isNull(type)) {
+      return new DispatchChannelProbeResult(
+          false, "unsupported health probe channel type: " + channelType, null);
+    }
+    return switch (type) {
+      case NAS -> probeNas(channelConfig, properties);
+      case OSS -> probeOss(channelConfig, s3Properties, objectStore);
+      case SFTP -> probeSftp(channelConfig, dnsGuardEnabled, properties);
+      case EMAIL -> probeSmtp(channelConfig, dnsGuardEnabled, properties);
+      case API, API_PUSH -> probeHttp(channelConfig, dnsGuardEnabled, properties);
       default ->
         new DispatchChannelProbeResult(
             false, "unsupported health probe channel type: " + channelType, null);

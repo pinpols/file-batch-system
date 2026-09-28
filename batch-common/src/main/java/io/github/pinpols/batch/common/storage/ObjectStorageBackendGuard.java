@@ -50,12 +50,15 @@ public class ObjectStorageBackendGuard implements ApplicationRunner, Ordered {
   }
 
   StatefulBackendGuard.DesiredBackend desiredBackend() {
-    String backend =
-        environment.getProperty("batch.storage.backend", "s3").trim().toLowerCase();
+    String backend = environment
+        .getProperty("batch.storage.backend", ObjectStorageBackends.S3)
+        .trim()
+        .toLowerCase();
     String identity =
         switch (backend) {
-          case "s3" -> StatefulBackendIdentity.s3(s3.getEndpoint(), s3.getRegion(), s3.getBucket());
-          case "filesystem" ->
+          case ObjectStorageBackends.S3 ->
+            StatefulBackendIdentity.s3(s3.getEndpoint(), s3.getRegion(), s3.getBucket());
+          case ObjectStorageBackends.FILESYSTEM ->
             StatefulBackendIdentity.filesystem(filesystem.getRoot(), s3.getBucket());
           default ->
             throw new IllegalStateException("unsupported batch.storage.backend: " + backend);

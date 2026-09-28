@@ -2,6 +2,7 @@ package io.github.pinpols.batch.common.file;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import org.junit.jupiter.api.Test;
 
 class ExportFileNameResolverTest {
@@ -10,7 +11,7 @@ class ExportFileNameResolverTest {
   void resolvesEverySupportedPlaceholder() {
     String result = ExportFileNameResolver.resolve(ExportFileNameResolver.Input.builder()
         .namingRule("${bizType}_${bizDate}_${tenantId}_${batchNo}_${region}_${version}.csv")
-        .fileFormatType("DELIMITED")
+        .fileFormatType(FileTemplateFormat.DELIMITED.code())
         .bizType("SETTLEMENT")
         .bizDate("2026-09-27")
         .tenantId("tenant-a")
@@ -25,7 +26,7 @@ class ExportFileNameResolverTest {
   @Test
   void fallsBackToRuntimeDefaultNameAndExtension() {
     assertThat(ExportFileNameResolver.resolve(ExportFileNameResolver.Input.builder()
-            .fileFormatType("EXCEL")
+            .fileFormatType(FileTemplateFormat.EXCEL.code())
             .bizType("CUSTOMER")
             .bizDate("2026-09-27")
             .tenantId("tenant-a")

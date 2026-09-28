@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.workflow.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService.DagValidationResult;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
@@ -49,22 +50,21 @@ public class ConsoleWorkflowDefinitionController {
   private final WorkflowDesignLockService designLockService;
 
   @GetMapping("/{id}")
-  @PreAuthorize(
-      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
+  @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
   public CommonResponse<WorkflowDefinitionDetailResponse> getById(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(workflowDefinitionService.getById(id, tenantId));
   }
 
   @PostMapping
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<WorkflowDefinitionDetailResponse> create(
       @Valid @RequestBody WorkflowDefinitionSaveRequest request) {
     return responseFactory.success(workflowDefinitionService.create(request));
   }
 
   @PutMapping("/{id}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<WorkflowDefinitionDetailResponse> update(
       @PathVariable Long id, @Valid @RequestBody WorkflowDefinitionSaveRequest request) {
     return responseFactory.success(workflowDefinitionService.update(id, request));
@@ -72,7 +72,7 @@ public class ConsoleWorkflowDefinitionController {
 
   /** 启用/禁用工作流定义。 */
   @PatchMapping("/{id}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<Void> patch(
       @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
     workflowDefinitionService.toggleEnabled(id, request.getTenantId(), request.getEnabled());
@@ -80,7 +80,7 @@ public class ConsoleWorkflowDefinitionController {
   }
 
   @PostMapping("/{id}/validate")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
   public CommonResponse<DagValidationResult> validate(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(workflowDefinitionService.validate(id, tenantId));
@@ -91,8 +91,7 @@ public class ConsoleWorkflowDefinitionController {
    * 两种场景共享同一图形语言。
    */
   @GetMapping("/{id}/mermaid")
-  @PreAuthorize(
-      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
+  @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
   public CommonResponse<WorkflowMermaidResponse> mermaid(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     WorkflowDefinitionDetailResponse detail = workflowDefinitionService.getById(id, tenantId);
@@ -110,8 +109,7 @@ public class ConsoleWorkflowDefinitionController {
    * <p>真实读 {@code workflow_definition_version};历史表无数据(刚迁移后)→ 单条 current 降级兼容。
    */
   @GetMapping("/{id}/versions")
-  @PreAuthorize(
-      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
+  @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
   public CommonResponse<List<WorkflowDefinitionVersionSummaryResponse>> listVersions(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(workflowDefinitionService.listVersions(id, tenantId));
@@ -123,8 +121,7 @@ public class ConsoleWorkflowDefinitionController {
    * <p>不存在的版本 → NOT_FOUND。
    */
   @GetMapping("/{id}/versions/{version}")
-  @PreAuthorize(
-      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
+  @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
   public CommonResponse<WorkflowDefinitionDetailResponse> getVersion(
       @PathVariable Long id,
       @PathVariable Integer version,
@@ -141,7 +138,7 @@ public class ConsoleWorkflowDefinitionController {
    * <p>失败码:CONFLICT(锁不归属/未持锁/expectedVersion 冲突)、INVALID_ARGUMENT(workflowCode 试图改)、NOT_FOUND。
    */
   @PutMapping("/{id}/full")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<WorkflowDefinitionDetailResponse> fullUpdate(
       @PathVariable Long id, @Valid @RequestBody WorkflowDefinitionFullUpdateRequest request) {
     return responseFactory.success(
@@ -150,7 +147,7 @@ public class ConsoleWorkflowDefinitionController {
 
   /** 申请编辑锁(5min TTL)。别人持锁 → 409 CONFLICT 带 lockedBy。 */
   @PutMapping("/{id}/lock")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<WorkflowDesignLockResponse> acquireLock(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     LockHolder holder = designLockService.acquire(tenantId, id, currentUsername());
@@ -159,7 +156,7 @@ public class ConsoleWorkflowDefinitionController {
 
   /** 释放编辑锁(必须持锁人调用);非持锁人 → 403。锁已过期 → 幂等 204。 */
   @DeleteMapping("/{id}/lock")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public ResponseEntity<Void> releaseLock(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     designLockService.release(tenantId, id, currentUsername());
@@ -168,7 +165,7 @@ public class ConsoleWorkflowDefinitionController {
 
   /** 续期编辑锁(再续 5min);锁已过期 → 409(让前端重新 acquire)。 */
   @PutMapping("/{id}/lock/renew")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<WorkflowDesignLockResponse> renewLock(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     LockHolder holder = designLockService.renew(tenantId, id, currentUsername());

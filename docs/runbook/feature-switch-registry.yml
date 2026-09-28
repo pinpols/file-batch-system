@@ -204,6 +204,13 @@ switches:
     composeRequired: true
     helmRequired: true
 
+  - key: batch.console.ai.failover-enabled
+    module: console-api
+    env:
+      - BATCH_CONSOLE_AI_FAILOVER_ENABLED
+    composeRequired: true
+    helmRequired: true
+
   - key: spring.threads.virtual.enabled
     module: console-api
     env:

@@ -197,9 +197,9 @@ public class GenerateStep implements ExportStageStep {
 
       attrs.put("exportBatch", batch);
       attrs.put(PipelineRuntimeKeys.GENERATED_FILE_PATH, generatedFile.toString());
-      attrs.put("recordCount", recordCount);
+      attrs.put(PipelineRuntimeKeys.RECORD_COUNT, recordCount);
       attrs.put("totalAmount", batch.getOrDefault("total_amount", BigDecimal.ZERO));
-      attrs.put("fileSizeBytes", Files.size(generatedFile));
+      attrs.put(PipelineRuntimeKeys.FILE_SIZE_BYTES, Files.size(generatedFile));
       // 2026-06-04 docs/design/pipeline-stage-progress-display.md:stage 结束清 sink,
       // 避免下一个 CLAIM 心跳带上残留;AbstractExportFormat.generatePaged 已在循环里每 1000 行 publish。
       PipelineStageProgressSink.clear();
@@ -414,13 +414,7 @@ public class GenerateStep implements ExportStageStep {
 
   private Path createGeneratedFile(
       ExportJobContext context, ExportPayload payload, String fileFormatType) throws IOException {
-    String suffix =
-        switch (fileFormatType == null ? "" : fileFormatType.toUpperCase()) {
-          case "DELIMITED" -> BatchFileConstants.CSV_SUFFIX;
-          case "EXCEL" -> BatchFileConstants.XLSX_SUFFIX;
-          case "FIXED_WIDTH" -> BatchFileConstants.TXT_SUFFIX;
-          default -> BatchFileConstants.JSON_SUFFIX;
-        };
+    String suffix = formatStrategyRegistry.resolve(fileFormatType).fileSuffix();
     Path dir = privateExportDirectory();
     try {
       return Files.createTempFile(
@@ -476,13 +470,7 @@ public class GenerateStep implements ExportStageStep {
    */
   private Path deterministicGeneratedFile(long pipelineInstanceId, String fileFormatType)
       throws IOException {
-    String suffix =
-        switch (fileFormatType == null ? "" : fileFormatType.toUpperCase()) {
-          case "DELIMITED" -> BatchFileConstants.CSV_SUFFIX;
-          case "EXCEL" -> BatchFileConstants.XLSX_SUFFIX;
-          case "FIXED_WIDTH" -> BatchFileConstants.TXT_SUFFIX;
-          default -> BatchFileConstants.JSON_SUFFIX;
-        };
+    String suffix = formatStrategyRegistry.resolve(fileFormatType).fileSuffix();
     Path path = privateExportDirectory().resolve("inst-" + pipelineInstanceId + suffix);
     if (Files.notExists(path)) {
       createOwnerOnlyFile(path);
@@ -533,9 +521,9 @@ public class GenerateStep implements ExportStageStep {
       throws IOException {
     context.getAttributes().put("exportBatch", batch);
     context.getAttributes().put(PipelineRuntimeKeys.GENERATED_FILE_PATH, generatedFile.toString());
-    context.getAttributes().put("recordCount", recordCount);
+    context.getAttributes().put(PipelineRuntimeKeys.RECORD_COUNT, recordCount);
     context.getAttributes().put("totalAmount", batch.getOrDefault("total_amount", BigDecimal.ZERO));
-    context.getAttributes().put("fileSizeBytes", Files.size(generatedFile));
+    context.getAttributes().put(PipelineRuntimeKeys.FILE_SIZE_BYTES, Files.size(generatedFile));
     PipelineStageProgressSink.clear();
     return ExportStageResult.success(stage());
   }

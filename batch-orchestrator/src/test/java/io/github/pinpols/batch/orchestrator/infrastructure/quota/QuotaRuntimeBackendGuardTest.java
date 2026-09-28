@@ -15,7 +15,7 @@ class QuotaRuntimeBackendGuardTest {
   @Test
   void includesRedisLocationInGuardIdentity() {
     QuotaProperties properties = new QuotaProperties();
-    properties.setRuntimeStore("redis");
+    properties.setRuntimeStore(QuotaRuntimeBackends.REDIS);
     MockEnvironment environment = environment()
         .withProperty("spring.data.redis.host", "valkey")
         .withProperty("spring.data.redis.port", "6379")
@@ -23,19 +23,19 @@ class QuotaRuntimeBackendGuardTest {
 
     StatefulBackendGuard.DesiredBackend desired = guard(properties, environment).desiredBackend();
 
-    assertThat(desired.backend()).isEqualTo("redis");
+    assertThat(desired.backend()).isEqualTo(QuotaRuntimeBackends.REDIS);
     assertThat(desired.backendIdentity()).isEqualTo("host=valkey|port=6379|db=2");
   }
 
   @Test
   void includesPlatformJdbcLocationInGuardIdentity() {
     QuotaProperties properties = new QuotaProperties();
-    properties.setRuntimeStore("database");
+    properties.setRuntimeStore(QuotaRuntimeBackends.DATABASE);
 
     StatefulBackendGuard.DesiredBackend desired =
         guard(properties, environment()).desiredBackend();
 
-    assertThat(desired.backend()).isEqualTo("database");
+    assertThat(desired.backend()).isEqualTo(QuotaRuntimeBackends.DATABASE);
     assertThat(desired.backendIdentity())
         .isEqualTo("jdbc=jdbc:postgresql://platform-db/batch_platform");
   }

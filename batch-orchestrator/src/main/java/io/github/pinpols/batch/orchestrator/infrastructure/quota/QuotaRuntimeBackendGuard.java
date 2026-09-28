@@ -45,14 +45,14 @@ public class QuotaRuntimeBackendGuard implements ApplicationRunner, Ordered {
     String backend = properties.getRuntimeStore().trim().toLowerCase();
     String identity =
         switch (backend) {
-          case "redis" ->
+          case QuotaRuntimeBackends.REDIS ->
             StatefulBackendIdentity.redis(
                 environment.getProperty("spring.data.redis.host", "localhost"),
                 environment.getProperty("spring.data.redis.port", Integer.class, 6379),
                 environment.getProperty("spring.data.redis.database", Integer.class, 0),
                 environment.getProperty("spring.data.redis.sentinel.master"),
                 environment.getProperty("spring.data.redis.sentinel.nodes"));
-          case "database" ->
+          case QuotaRuntimeBackends.DATABASE ->
             StatefulBackendIdentity.database(
                 environment.getRequiredProperty("spring.datasource.url"));
           default ->

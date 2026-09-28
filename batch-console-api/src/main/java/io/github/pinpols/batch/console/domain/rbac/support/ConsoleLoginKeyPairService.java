@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.rbac.support;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import jakarta.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
@@ -46,7 +47,7 @@ import org.springframework.stereotype.Service;
 public class ConsoleLoginKeyPairService {
 
   private static final String RSA_TRANSFORM = "RSA/ECB/OAEPWithSHA-256AndMGF1Padding";
-  private static final String AES_TRANSFORM = "AES/GCM/NoPadding";
+  private static final String AES_TRANSFORM = CryptoAlgorithms.AES_GCM_NO_PADDING;
   private static final int GCM_TAG_BITS = 128;
 
   private final ConsoleSecurityProperties properties;
@@ -113,14 +114,14 @@ public class ConsoleLoginKeyPairService {
       // 显式指定 MGF1 hash = SHA-256，否则 JDK 默认 MGF1-SHA-1，与 Web Crypto
       // RSA-OAEP(SHA-256) 不匹配，密文解不开。
       OAEPParameterSpec oaep = new OAEPParameterSpec(
-          "SHA-256", "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT);
+          CryptoAlgorithms.SHA_256, "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT);
       rsa.init(Cipher.DECRYPT_MODE, privateKey, oaep);
       byte[] aesKeyBytes = rsa.doFinal(wrappedKey);
 
       Cipher aes = Cipher.getInstance(AES_TRANSFORM);
       aes.init(
           Cipher.DECRYPT_MODE,
-          new SecretKeySpec(aesKeyBytes, "AES"),
+          new SecretKeySpec(aesKeyBytes, CryptoAlgorithms.AES),
           new GCMParameterSpec(GCM_TAG_BITS, iv));
       byte[] plaintext = aes.doFinal(ciphertext);
       return new String(plaintext, StandardCharsets.UTF_8);
@@ -187,7 +188,7 @@ public class ConsoleLoginKeyPairService {
 
   private String computeFingerprint(PublicKey pk) {
     try {
-      byte[] sha = MessageDigest.getInstance("SHA-256").digest(pk.getEncoded());
+      byte[] sha = MessageDigest.getInstance(CryptoAlgorithms.SHA_256).digest(pk.getEncoded());
       byte[] head = new byte[8];
       System.arraycopy(sha, 0, head, 0, 8);
       return HexFormat.of().formatHex(head);

@@ -2,9 +2,11 @@ package io.github.pinpols.batch.worker.exports.stage;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.constants.BatchFileConstants;
+import io.github.pinpols.batch.common.enums.FileChecksumType;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.service.DryRunGuard;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -13,6 +15,8 @@ import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import io.github.pinpols.batch.worker.exports.domain.ExportStage;
 import io.github.pinpols.batch.worker.exports.domain.ExportStageResult;
 import io.github.pinpols.batch.worker.exports.infrastructure.S3ExportStorage;
+import io.github.pinpols.batch.worker.exports.stage.format.ExportFormatStrategy;
+import io.github.pinpols.batch.worker.exports.stage.format.ExportFormatStrategyRegistry;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -21,7 +25,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /** 导出存储阶段：将生成的临时文件上传至对象存储（先写 .part 再 copy 提升），并完成 SHA-256 校验。 */
@@ -33,10 +39,20 @@ public class StoreStep implements ExportStageStep {
 
   private final S3ExportStorage s3ExportStorage;
   private final BatchObjectCryptoService cryptoService;
+  private final ExportFormatStrategyRegistry formatStrategyRegistry;
 
-  public StoreStep(S3ExportStorage s3ExportStorage, BatchObjectCryptoService cryptoService) {
+  @Autowired
+  public StoreStep(
+      S3ExportStorage s3ExportStorage,
+      BatchObjectCryptoService cryptoService,
+      ExportFormatStrategyRegistry formatStrategyRegistry) {
     this.s3ExportStorage = s3ExportStorage;
     this.cryptoService = cryptoService;
+    this.formatStrategyRegistry = formatStrategyRegistry;
+  }
+
+  public StoreStep(S3ExportStorage s3ExportStorage, BatchObjectCryptoService cryptoService) {
+    this(s3ExportStorage, cryptoService, null);
   }
 
   @Override
@@ -47,12 +63,10 @@ public class StoreStep implements ExportStageStep {
   @Override
   public ExportStageResult execute(ExportJobContext context) {
     // ADR-026: 演练模式下不上传对象存储/SFTP，仅落 SHA + 占位 objectName 让下游 stage 链路完整跑完
-    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes())
-        .isDryRun()) {
+    if (DryRunGuard.fromAttributes(attributes(context)).isDryRun()) {
       return executeDryRun(context);
     }
-    Object generatedFilePath =
-        context == null ? null : context.getAttributes().get("generatedFilePath");
+    Object generatedFilePath = attribute(context, PipelineRuntimeKeys.GENERATED_FILE_PATH);
     if (!(generatedFilePath instanceof String pathText) || !Texts.hasText(pathText)) {
       return ExportStageResult.failure(
           stage(),
@@ -83,8 +97,10 @@ public class StoreStep implements ExportStageStep {
       boolean encrypt = encryption.encrypted();
 
       String expectedSha = sha256Hex(uploadPath);
-      context.getAttributes().put("checksumType", "SHA-256");
-      context.getAttributes().put("checksumValue", expectedSha);
+      context
+          .getAttributes()
+          .put(PipelineRuntimeKeys.CHECKSUM_TYPE, FileChecksumType.SHA_256.code());
+      context.getAttributes().put(PipelineRuntimeKeys.CHECKSUM_VALUE, expectedSha);
 
       String tempKey = s3ExportStorage.writeObject(
           tempObjectName,
@@ -120,12 +136,12 @@ public class StoreStep implements ExportStageStep {
     // worker 崩溃，重试 context attribute 重建为空，新 UUID → 旧 .part 永远孤儿。
     // 改为基于 jobInstanceId + taskId 的确定性名称：同一个 (instance, task) 重试得到相同 objectName，
     // 重试时直接覆盖旧 .part 文件，不留孤儿。jobInstanceId / taskId 缺失时回退 UUID 保留兼容。
-    Object existing = context.getAttributes().get("objectName");
+    Object existing = context.getAttributes().get(PipelineRuntimeKeys.OBJECT_NAME);
     if (existing instanceof String s && Texts.hasText(s)) {
       return s;
     }
     Object jobInstanceId = context.getAttributes().get(PipelineRuntimeKeys.JOB_INSTANCE_ID);
-    Object taskId = context.getAttributes().get("taskId");
+    Object taskId = context.getAttributes().get(PipelineRuntimeKeys.TASK_ID);
     if (jobInstanceId != null && taskId != null) {
       return BatchFileConstants.EXPORT_OBJECT_PREFIX
           + "job-"
@@ -152,13 +168,10 @@ public class StoreStep implements ExportStageStep {
   private String resolveContentType(ExportJobContext context) {
     String fileFormatType =
         String.valueOf(context.getAttributes().getOrDefault("exportFileFormatType", "JSON"));
-    return switch (fileFormatType == null ? "" : fileFormatType.toUpperCase()) {
-      case "DELIMITED" -> BatchFileConstants.CONTENT_TYPE_CSV;
-      case "EXCEL" -> BatchFileConstants.CONTENT_TYPE_EXCEL;
-      case "FIXED_WIDTH" -> BatchFileConstants.CONTENT_TYPE_TEXT_UTF8;
-      case "XML" -> BatchFileConstants.CONTENT_TYPE_XML;
-      default -> BatchFileConstants.CONTENT_TYPE_JSON;
-    };
+    if (EmptyChecks.isNull(formatStrategyRegistry)) {
+      return ExportFormatStrategy.contentTypeFor(fileFormatType);
+    }
+    return formatStrategyRegistry.resolve(fileFormatType).contentType();
   }
 
   private EncryptionOutcome encryptIfNeeded(ExportJobContext context, Path generatedFile)
@@ -230,7 +243,7 @@ public class StoreStep implements ExportStageStep {
       Path generatedFile,
       Path encryptedPath)
       throws IOException {
-    context.getAttributes().put("objectName", objectName);
+    context.getAttributes().put(PipelineRuntimeKeys.OBJECT_NAME, objectName);
     context.getAttributes().put("tempObjectName", tempKey);
     context.getAttributes().put("exportStoreCommitted", Boolean.TRUE);
     Files.deleteIfExists(generatedFile);
@@ -242,22 +255,23 @@ public class StoreStep implements ExportStageStep {
 
   /** ADR-026 dry-run：本地计算 sha256，不上传，让 attributes 完整给下游验收。 */
   private ExportStageResult executeDryRun(ExportJobContext context) {
-    Object generatedFilePath =
-        context == null ? null : context.getAttributes().get("generatedFilePath");
+    Object generatedFilePath = attribute(context, PipelineRuntimeKeys.GENERATED_FILE_PATH);
     if (generatedFilePath instanceof String pathText && Texts.hasText(pathText)) {
       try {
         Path generatedFile = Path.of(pathText);
         if (Files.exists(generatedFile)) {
-          context.getAttributes().put("checksumType", "SHA-256");
-          context.getAttributes().put("checksumValue", sha256Hex(generatedFile));
+          context
+              .getAttributes()
+              .put(PipelineRuntimeKeys.CHECKSUM_TYPE, FileChecksumType.SHA_256.code());
+          context.getAttributes().put(PipelineRuntimeKeys.CHECKSUM_VALUE, sha256Hex(generatedFile));
         }
       } catch (Exception ignored) {
         SwallowedExceptionLogger.info(StoreStep.class, "catch:dry_run_sha_failure", ignored);
       }
     }
     if (context != null) {
-      context.getAttributes().put("objectName", "dry-run/no-upload");
-      context.getAttributes().put("exportStoreCommitted", Boolean.TRUE);
+      context.getAttributes().put(PipelineRuntimeKeys.OBJECT_NAME, "dry-run/no-upload");
+      context.getAttributes().put(PipelineRuntimeKeys.EXPORT_STORE_COMMITTED, Boolean.TRUE);
     }
     return ExportStageResult.success(stage());
   }
@@ -265,8 +279,7 @@ public class StoreStep implements ExportStageStep {
   private record EncryptionOutcome(Path uploadPath, Path encryptedPath, boolean encrypted) {}
 
   private Map<String, Object> templateSecurity(ExportJobContext context) {
-    Object templateConfig =
-        context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
+    Object templateConfig = attribute(context, PipelineRuntimeKeys.TEMPLATE_CONFIG);
     if (templateConfig instanceof Map<?, ?> map) {
       Map<String, Object> security = new LinkedHashMap<>();
       security.put("content_encryption_enabled", map.get("content_encryption_enabled"));
@@ -275,6 +288,14 @@ public class StoreStep implements ExportStageStep {
       return security;
     }
     return Map.of();
+  }
+
+  private Map<String, Object> attributes(ExportJobContext context) {
+    return Optional.ofNullable(context).map(ExportJobContext::getAttributes).orElse(null);
+  }
+
+  private Object attribute(ExportJobContext context, String key) {
+    return Optional.ofNullable(attributes(context)).map(attrs -> attrs.get(key)).orElse(null);
   }
 
   private String resolveText(Object value, String fallback) {
@@ -286,7 +307,7 @@ public class StoreStep implements ExportStageStep {
   }
 
   private String sha256Hex(Path path) throws NoSuchAlgorithmException, IOException {
-    MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
+    MessageDigest messageDigest = MessageDigest.getInstance(FileChecksumType.SHA_256.code());
     byte[] buffer = new byte[8192];
     try (InputStream inputStream = Files.newInputStream(path)) {
       int read;

@@ -47,8 +47,13 @@ public final class FileTemplateExcelRowParser {
 
   private static final String COL_TEMPLATE_TYPE =
       ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_TYPE;
+  private static final String COL_TEMPLATE_CODE =
+      ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_CODE;
+  private static final String COL_TEMPLATE_NAME =
+      ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_NAME;
   private static final String COL_FILE_FORMAT_TYPE =
       ConfigPackageExcelSchema.FileTemplate.COL_FILE_FORMAT_TYPE;
+  private static final String COL_BIZ_TYPE = ConfigPackageExcelSchema.COL_BIZ_TYPE;
   private static final String COL_CHECKSUM_TYPE =
       ConfigPackageExcelSchema.FileTemplate.COL_CHECKSUM_TYPE;
   private static final String COL_COMPRESS_TYPE =
@@ -56,12 +61,59 @@ public final class FileTemplateExcelRowParser {
   private static final String COL_ENCRYPT_TYPE =
       ConfigPackageExcelSchema.FileTemplate.COL_ENCRYPT_TYPE;
   private static final String COL_WITH_BOM = ConfigPackageExcelSchema.FileTemplate.COL_WITH_BOM;
+  private static final String COL_VERSION = ConfigPackageExcelSchema.COL_VERSION;
   private static final String COL_STREAMING_ENABLED =
       ConfigPackageExcelSchema.FileTemplate.COL_STREAMING_ENABLED;
+  private static final String COL_CHARSET = ConfigPackageExcelSchema.FileTemplate.COL_CHARSET;
+  private static final String COL_TARGET_CHARSET =
+      ConfigPackageExcelSchema.FileTemplate.COL_TARGET_CHARSET;
+  private static final String COL_LINE_SEPARATOR =
+      ConfigPackageExcelSchema.FileTemplate.COL_LINE_SEPARATOR;
+  private static final String COL_DELIMITER = ConfigPackageExcelSchema.FileTemplate.COL_DELIMITER;
+  private static final String COL_QUOTE_CHAR = ConfigPackageExcelSchema.FileTemplate.COL_QUOTE_CHAR;
+  private static final String COL_ESCAPE_CHAR =
+      ConfigPackageExcelSchema.FileTemplate.COL_ESCAPE_CHAR;
+  private static final String COL_RECORD_LENGTH =
+      ConfigPackageExcelSchema.FileTemplate.COL_RECORD_LENGTH;
+  private static final String COL_HEADER_ROWS =
+      ConfigPackageExcelSchema.FileTemplate.COL_HEADER_ROWS;
+  private static final String COL_FOOTER_ROWS =
+      ConfigPackageExcelSchema.FileTemplate.COL_FOOTER_ROWS;
+  private static final String COL_HEADER_TEMPLATE =
+      ConfigPackageExcelSchema.FileTemplate.COL_HEADER_TEMPLATE;
+  private static final String COL_TRAILER_TEMPLATE =
+      ConfigPackageExcelSchema.FileTemplate.COL_TRAILER_TEMPLATE;
+  private static final String COL_NAMING_RULE =
+      ConfigPackageExcelSchema.FileTemplate.COL_NAMING_RULE;
+  private static final String COL_FIELD_MAPPINGS =
+      ConfigPackageExcelSchema.FileTemplate.COL_FIELD_MAPPINGS;
+  private static final String COL_VALIDATION_RULE_SET =
+      ConfigPackageExcelSchema.FileTemplate.COL_VALIDATION_RULE_SET;
+  private static final String COL_DEFAULT_QUERY_CODE =
+      ConfigPackageExcelSchema.FileTemplate.COL_DEFAULT_QUERY_CODE;
+  private static final String COL_DEFAULT_QUERY_SQL =
+      ConfigPackageExcelSchema.FileTemplate.COL_DEFAULT_QUERY_SQL;
+  private static final String COL_QUERY_PARAM_SCHEMA =
+      ConfigPackageExcelSchema.FileTemplate.COL_QUERY_PARAM_SCHEMA;
+  private static final String COL_PAGE_SIZE = ConfigPackageExcelSchema.FileTemplate.COL_PAGE_SIZE;
+  private static final String COL_FETCH_SIZE = ConfigPackageExcelSchema.FileTemplate.COL_FETCH_SIZE;
+  private static final String COL_CHUNK_SIZE = ConfigPackageExcelSchema.FileTemplate.COL_CHUNK_SIZE;
+  private static final String COL_PREVIEW_MASKING_ENABLED =
+      ConfigPackageExcelSchema.FileTemplate.COL_PREVIEW_MASKING_ENABLED;
+  private static final String COL_ERROR_LINE_MASKING_ENABLED =
+      ConfigPackageExcelSchema.FileTemplate.COL_ERROR_LINE_MASKING_ENABLED;
+  private static final String COL_LOG_MASKING_ENABLED =
+      ConfigPackageExcelSchema.FileTemplate.COL_LOG_MASKING_ENABLED;
+  private static final String COL_CONTENT_ENCRYPTION_ENABLED =
+      ConfigPackageExcelSchema.FileTemplate.COL_CONTENT_ENCRYPTION_ENABLED;
+  private static final String COL_ENCRYPTION_KEY_REF =
+      ConfigPackageExcelSchema.FileTemplate.COL_ENCRYPTION_KEY_REF;
   private static final String COL_DOWNLOAD_REQUIRES_APPROVAL =
       ConfigPackageExcelSchema.FileTemplate.COL_DOWNLOAD_REQUIRES_APPROVAL;
-  private static final String COL_ENABLED = "enabled";
-  private static final String COL_DESCRIPTION = "description";
+  private static final String COL_MASKING_RULE_SET =
+      ConfigPackageExcelSchema.FileTemplate.COL_MASKING_RULE_SET;
+  private static final String COL_ENABLED = ConfigPackageExcelSchema.COL_ENABLED;
+  private static final String COL_DESCRIPTION = ConfigPackageExcelSchema.COL_DESCRIPTION;
 
   private FileTemplateExcelRowParser() {}
 
@@ -166,64 +218,64 @@ public final class FileTemplateExcelRowParser {
       TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
     builder
         .templateCode(
-            CodeNormalizer.toConfigFormOrNull(requireText(values, "template_code", 128, issues)))
-        .templateName(requireText(values, "template_name", 256, issues))
+            CodeNormalizer.toConfigFormOrNull(requireText(values, COL_TEMPLATE_CODE, 128, issues)))
+        .templateName(requireText(values, COL_TEMPLATE_NAME, 256, issues))
         .templateType(requireEnum(values, COL_TEMPLATE_TYPE, TEMPLATE_TYPES, 32, issues))
-        .bizType(optionalText(values, "biz_type", 64, issues))
+        .bizType(optionalText(values, COL_BIZ_TYPE, 64, issues))
         .fileFormatType(requireEnum(values, COL_FILE_FORMAT_TYPE, FILE_FORMAT_TYPES, 32, issues))
         .enabled(optionalBoolean(values, COL_ENABLED, true, issues))
-        .version(optionalInteger(values, "version", 1, 1, issues))
+        .version(optionalInteger(values, COL_VERSION, 1, 1, issues))
         .description(optionalText(values, COL_DESCRIPTION, 1024, issues));
   }
 
   private static void extractFieldMappings(
       TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
     builder
-        .charset(optionalText(values, "charset", 32, issues))
-        .targetCharset(optionalText(values, "target_charset", 32, issues))
+        .charset(optionalText(values, COL_CHARSET, 32, issues))
+        .targetCharset(optionalText(values, COL_TARGET_CHARSET, 32, issues))
         .withBom(optionalBoolean(values, COL_WITH_BOM, false, issues))
-        .lineSeparator(optionalText(values, "line_separator", 16, issues))
-        .delimiter(optionalText(values, "delimiter", 8, issues))
-        .quoteChar(optionalText(values, "quote_char", 8, issues))
-        .escapeChar(optionalText(values, "escape_char", 8, issues))
-        .recordLength(optionalInteger(values, "record_length", 0, 0, issues))
-        .headerRows(optionalInteger(values, "header_rows", 0, 0, issues))
-        .footerRows(optionalInteger(values, "footer_rows", 0, 0, issues))
-        .headerTemplateJson(optionalJson(values, "header_template", issues))
-        .trailerTemplateJson(optionalJson(values, "trailer_template", issues))
+        .lineSeparator(optionalText(values, COL_LINE_SEPARATOR, 16, issues))
+        .delimiter(optionalText(values, COL_DELIMITER, 8, issues))
+        .quoteChar(optionalText(values, COL_QUOTE_CHAR, 8, issues))
+        .escapeChar(optionalText(values, COL_ESCAPE_CHAR, 8, issues))
+        .recordLength(optionalInteger(values, COL_RECORD_LENGTH, 0, 0, issues))
+        .headerRows(optionalInteger(values, COL_HEADER_ROWS, 0, 0, issues))
+        .footerRows(optionalInteger(values, COL_FOOTER_ROWS, 0, 0, issues))
+        .headerTemplateJson(optionalJson(values, COL_HEADER_TEMPLATE, issues))
+        .trailerTemplateJson(optionalJson(values, COL_TRAILER_TEMPLATE, issues))
         .checksumType(optionalEnum(values, COL_CHECKSUM_TYPE, CHECKSUM_TYPES, 32, "NONE", issues))
         .compressType(optionalEnum(values, COL_COMPRESS_TYPE, COMPRESS_TYPES, 32, "NONE", issues))
         .encryptType(optionalEnum(values, COL_ENCRYPT_TYPE, ENCRYPT_TYPES, 32, "NONE", issues))
-        .namingRule(optionalText(values, "naming_rule", 512, issues))
-        .fieldMappingsJson(optionalJson(values, "field_mappings", issues))
-        .validationRuleSetJson(optionalJson(values, "validation_rule_set", issues));
+        .namingRule(optionalText(values, COL_NAMING_RULE, 512, issues))
+        .fieldMappingsJson(optionalJson(values, COL_FIELD_MAPPINGS, issues))
+        .validationRuleSetJson(optionalJson(values, COL_VALIDATION_RULE_SET, issues));
   }
 
   private static void extractStepConfig(
       TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
     builder
-        .defaultQueryCode(optionalText(values, "default_query_code", 128, issues))
-        .defaultQuerySql(optionalText(values, "default_query_sql", 10000, issues))
-        .queryParamSchemaJson(optionalJson(values, "query_param_schema", issues))
+        .defaultQueryCode(optionalText(values, COL_DEFAULT_QUERY_CODE, 128, issues))
+        .defaultQuerySql(optionalText(values, COL_DEFAULT_QUERY_SQL, 10000, issues))
+        .queryParamSchemaJson(optionalJson(values, COL_QUERY_PARAM_SCHEMA, issues))
         .streamingEnabled(optionalBoolean(values, COL_STREAMING_ENABLED, true, issues))
-        .pageSize(optionalInteger(values, "page_size", 0, 1000, issues))
-        .fetchSize(optionalInteger(values, "fetch_size", 0, 1000, issues))
-        .chunkSize(optionalInteger(values, "chunk_size", 0, 500, issues));
+        .pageSize(optionalInteger(values, COL_PAGE_SIZE, 0, 1000, issues))
+        .fetchSize(optionalInteger(values, COL_FETCH_SIZE, 0, 1000, issues))
+        .chunkSize(optionalInteger(values, COL_CHUNK_SIZE, 0, 500, issues));
   }
 
   private static void extractSecurityConfig(
       TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
     builder
-        .previewMaskingEnabled(optionalBoolean(values, "preview_masking_enabled", false, issues))
+        .previewMaskingEnabled(optionalBoolean(values, COL_PREVIEW_MASKING_ENABLED, false, issues))
         .errorLineMaskingEnabled(
-            optionalBoolean(values, "error_line_masking_enabled", false, issues))
-        .logMaskingEnabled(optionalBoolean(values, "log_masking_enabled", false, issues))
+            optionalBoolean(values, COL_ERROR_LINE_MASKING_ENABLED, false, issues))
+        .logMaskingEnabled(optionalBoolean(values, COL_LOG_MASKING_ENABLED, false, issues))
         .contentEncryptionEnabled(
-            optionalBoolean(values, "content_encryption_enabled", false, issues))
-        .encryptionKeyRef(optionalText(values, "encryption_key_ref", 128, issues))
+            optionalBoolean(values, COL_CONTENT_ENCRYPTION_ENABLED, false, issues))
+        .encryptionKeyRef(optionalText(values, COL_ENCRYPTION_KEY_REF, 128, issues))
         .downloadRequiresApproval(
             optionalBoolean(values, COL_DOWNLOAD_REQUIRES_APPROVAL, false, issues))
-        .maskingRuleSet(optionalText(values, "masking_rule_set", 256, issues));
+        .maskingRuleSet(optionalText(values, COL_MASKING_RULE_SET, 256, issues));
   }
 
   /** Excel 行模型，单一来源；独立 service 与 9+2 config-package service 共用。 */

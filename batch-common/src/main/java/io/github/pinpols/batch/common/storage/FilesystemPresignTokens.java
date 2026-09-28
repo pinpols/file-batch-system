@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.storage;
 
+import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -19,7 +20,7 @@ import javax.crypto.spec.SecretKeySpec;
  */
 public final class FilesystemPresignTokens {
 
-  private static final String HMAC_ALGORITHM = "HmacSHA256";
+  private static final String HMAC_ALGORITHM = CryptoAlgorithms.HMAC_SHA256;
 
   private FilesystemPresignTokens() {}
 

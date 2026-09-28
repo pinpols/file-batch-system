@@ -8,6 +8,10 @@ import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntime
 import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.toJson;
 import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.toLong;
 
+import io.github.pinpols.batch.common.constants.BatchFileConstants;
+import io.github.pinpols.batch.common.enums.DictEnum;
+import io.github.pinpols.batch.common.enums.FileTemplateFormat;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.FileStateMachine;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
@@ -205,13 +209,17 @@ public class PlatformFileRecordRepository {
 
   private String resolveMimeType(String fileFormatType) {
     if (!Texts.hasText(fileFormatType)) {
-      return "application/octet-stream";
+      return BatchFileConstants.CONTENT_TYPE_OCTET_STREAM;
     }
-    return switch (fileFormatType) {
-      case "JSON" -> "application/json";
-      case "XML" -> "application/xml";
-      case "EXCEL" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-      default -> "text/plain";
+    FileTemplateFormat format = DictEnum.fromCode(FileTemplateFormat.class, fileFormatType);
+    if (EmptyChecks.isNull(format)) {
+      return BatchFileConstants.CONTENT_TYPE_TEXT_UTF8;
+    }
+    return switch (format) {
+      case JSON -> BatchFileConstants.CONTENT_TYPE_JSON;
+      case XML -> BatchFileConstants.CONTENT_TYPE_XML;
+      case EXCEL -> BatchFileConstants.CONTENT_TYPE_EXCEL;
+      default -> BatchFileConstants.CONTENT_TYPE_TEXT_UTF8;
     };
   }
 }

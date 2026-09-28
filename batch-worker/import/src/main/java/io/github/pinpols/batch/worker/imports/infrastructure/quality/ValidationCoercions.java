@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.imports.infrastructure.quality;
 
+import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.imports.domain.ImportValidationErrorCode;
 import java.math.BigDecimal;
@@ -145,7 +146,8 @@ final class ValidationCoercions {
 
   static String digest(String algorithm, String content) {
     try {
-      MessageDigest messageDigest = MessageDigest.getInstance(defaultText(algorithm, "SHA-256"));
+      MessageDigest messageDigest =
+          MessageDigest.getInstance(defaultText(algorithm, CryptoAlgorithms.SHA_256));
       byte[] hash = messageDigest.digest(content.getBytes(StandardCharsets.UTF_8));
       StringBuilder builder = new StringBuilder();
       for (byte item : hash) {

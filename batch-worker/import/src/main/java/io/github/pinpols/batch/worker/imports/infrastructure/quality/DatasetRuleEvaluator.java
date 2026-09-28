@@ -12,7 +12,9 @@ import static io.github.pinpols.batch.worker.imports.infrastructure.quality.Vali
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.stringList;
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.stringValue;
 
+import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import io.github.pinpols.batch.worker.imports.domain.ImportValidationErrorCode;
@@ -186,11 +188,11 @@ public class DatasetRuleEvaluator {
     }
     String configuredAlgorithm = stringValue(firstNonNull(
         rule.get("algorithm"),
-        rule.get("checksumType"),
+        rule.get(PipelineRuntimeKeys.CHECKSUM_TYPE),
         importPayload == null ? null : importPayload.checksumType()));
     String algorithm =
         !Texts.hasText(configuredAlgorithm) || "NONE".equalsIgnoreCase(configuredAlgorithm)
-            ? "SHA-256"
+            ? CryptoAlgorithms.SHA_256
             : configuredAlgorithm;
     String expectedChecksum = stringValue(firstNonNull(
         rule.get("expected"),

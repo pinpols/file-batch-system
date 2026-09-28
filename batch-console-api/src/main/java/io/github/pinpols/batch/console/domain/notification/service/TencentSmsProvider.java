@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
+import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.console.config.SmsProperties;
 import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
 import io.github.pinpols.batch.console.support.notification.ConsoleNotificationCryptoSupport;
@@ -288,7 +289,7 @@ public class TencentSmsProvider implements SmsProvider {
 
   private static String sha256Hex(String input) {
     try {
-      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
       return toHex(digest.digest(input.getBytes(StandardCharsets.UTF_8)));
     } catch (Exception ex) {
       throw new IllegalStateException("sha256 unavailable", ex);
@@ -296,8 +297,8 @@ public class TencentSmsProvider implements SmsProvider {
   }
 
   private static byte[] hmacSha256(byte[] key, String data) throws GeneralSecurityException {
-    Mac mac = Mac.getInstance("HmacSHA256");
-    mac.init(new SecretKeySpec(key, "HmacSHA256"));
+    Mac mac = Mac.getInstance(CryptoAlgorithms.HMAC_SHA256);
+    mac.init(new SecretKeySpec(key, CryptoAlgorithms.HMAC_SHA256));
     return mac.doFinal(data.getBytes(StandardCharsets.UTF_8));
   }
 

@@ -6,6 +6,7 @@ import io.github.pinpols.batch.console.domain.job.application.contract.request.J
 import io.github.pinpols.batch.console.domain.job.application.contract.request.JobBundleImportRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleJobBundleExportResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleJobBundleResultResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
@@ -22,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @Validated
 @RequestMapping("/api/console/jobs/bundle")
-@PreAuthorize("hasAuthority('ROLE_ADMIN')")
+@PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
 @RequiredArgsConstructor
 @Idempotent
 public class ConsoleJobBundleController {
