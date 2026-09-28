@@ -178,6 +178,8 @@ MinIO 对象排查优先用 `mc`。常用命令见 [对象存储后端（S3 协�
 bash scripts/local/strict-verify.sh
 ```
 
+根目录 `make` / `make help` 只展示本地常用目标，不会自动创建 Python 虚拟环境；完整目标清单见 [Makefile](Makefile)。
+
 CI 同步类检查可单独运行：
 
 ```bash

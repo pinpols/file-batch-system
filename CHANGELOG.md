@@ -16,11 +16,13 @@
 - Cron 预览移出匿名白名单，仅允许四类正式 Console 角色调用。
 - 控制台 RBAC 彻底收敛为 `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_TENANT_ADMIN` / `ROLE_TENANT_USER` 四类正式角色；V213 一次性迁移旧 `ROLE_USER` 并增加数据库约束，运行时、菜单、JWT 和账号 API 不再兼容旧角色。
 - 审批写操作收口为平台管理员和租户管理员，审计员维持跨租户只读职责。
+- 本地测试并行执行改为显式 `ALLOW_PARALLEL_TESTS=1` opt-in，并要求生产 Docker Compose overlay 显式传入已验证 `IMAGE_TAG`；Sim SFTP/MockServer 容器名统一加 `batch-sim-*` 前缀且纳入版本对齐检查。
 
 > 当前唯一 GA tag 为 `v1.0.0`（2026-09-02）。历史 `1.1.0` / `1.2.0` 仅为 GA 前开发里程碑，未形成 release tag，已在下文明确标注，避免被误认为正式发布。
 
 ### Added
 
+- **Console AI OpenAI-compatible 接入**：新增 `openai-compatible` provider 模式,支持 DeepSeek、千问、智谱、Kimi、MiniMax 或私有兼容代理通过统一配置接入;聊天端点与 RAG embedding 配置分离,兼容模式禁止自动跨 Provider failover。
 - **控制台运维工具契约**：导出文件命名预览与 Worker 运行时共用同一解析器，支持业务日、租户、批次号、区域和版本占位符，避免前端复制命名规则。
 - **构建与运行告警治理**：Java 主源码和测试源码启用 deprecation/unchecked warning 零容忍；新增当前应用日志 WARN 策略审计，区分预期本地告警、需处理状态和未知回归，并在本地全量启动后自动报告。
 - **用户账号状态筛选**：Console 用户账号列表 API 支持按启用状态筛选，前端分页查询改为服务端过滤，避免仅过滤当前页造成结果遗漏。
@@ -77,6 +79,7 @@
 
 ### Fixed
 
+- Dispatch 渠道适配器选择改为构造期 `channelType -> adapter` 注册表；同一官方渠道被多个 adapter 支持时启动失败，避免插件或 stub 依赖 Spring 顺序静默接管真实分发渠道。
 - 显式管理 `okio-jvm` 版本，避免 `okhttp-jvm` 的传递依赖将 JVM 实现降级至与已管理的 Okio 版本不一致。
 - 修复非旁路环境下 Spring Security 默认 XOR CSRF 解析与前端 Axios 明文 double-submit 协议不一致、导致已登录用户写请求统一返回 403 的问题；保留 cookie/header 双提交校验及现有忽略路径。
 - 修复控制台纯日期结束筛选只精确到毫秒、可能遗漏业务日最后 999 个微秒内记录的问题；结束边界现取 PostgreSQL 可表达的最后一个微秒，并保持既有包含式查询语义。

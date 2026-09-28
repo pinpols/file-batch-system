@@ -7,13 +7,13 @@
 #   bash scripts/sim/02-start-sim.sh
 #
 # 网络:复用主 compose 的 batch-network(由 .env.local COMPOSE_PROJECT_NAME 派生)。
-# 容器命名: container_name 固定 sftp / mockserver,跟 ta/tb/tc tenant config 里
-# channel_config.target_endpoint 一致(sftp:22 / http://mockserver:1080)。
+# Docker 容器使用 batch-sim-* 前缀；服务网络别名仍为 sftp / mockserver，
+# 与 ta/tb/tc tenant config 的 channel_config.target_endpoint 保持一致。
 
 services:
   sftp:
-    image: atmoz/sftp:alpine
-    container_name: sftp
+    image: atmoz/sftp:${SFTP_IMAGE_TAG:-alpine}
+    container_name: batch-sim-sftp
     restart: unless-stopped
     # 3 个 tenant 各一账号(对齐 ta/tb/tc channel_config config_json.username/password)。
     # atmoz/sftp 命令格式:user:pass:uid:gid:dir1,dir2(5 段,GID 空表 fallback)。
@@ -35,8 +35,8 @@ services:
       retries: 6
 
   mockserver:
-    image: mockserver/mockserver:5.15.0
-    container_name: mockserver
+    image: mockserver/mockserver:${MOCKSERVER_IMAGE_TAG:-5.15.0}
+    container_name: batch-sim-mockserver
     restart: unless-stopped
     environment:
       MOCKSERVER_LOG_LEVEL: WARN

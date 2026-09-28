@@ -18,7 +18,7 @@ docker compose --env-file "$ENV_FILE" \
 echo "==> 等 healthy/ready(30s)..."
 healthy=0
 for _ in $(seq 1 30); do
-  status=$(docker inspect sftp --format '{{.State.Health.Status}}' 2>/dev/null || echo "missing")
+  status=$(docker inspect batch-sim-sftp --format '{{.State.Health.Status}}' 2>/dev/null || echo "missing")
   if [[ "$status" == "healthy" ]]; then echo "  ✓ sftp"; healthy=1; break; fi
   sleep 1
 done
@@ -28,7 +28,7 @@ if [[ "$healthy" -ne 1 ]]; then
 fi
 
 echo "==> 验证 endpoint 联通"
-docker exec sftp /bin/sh -c "ls -d /home/ta/inbound /home/tb/inbound /home/tc/inbound" 2>&1 | head
+docker exec batch-sim-sftp /bin/sh -c "ls -d /home/ta/inbound /home/tb/inbound /home/tc/inbound" 2>&1 | head
 # mockserver 镜像的 healthcheck 依赖 /bin/sh,当前镜像没有 shell,会误报 unhealthy。
 # 这里以 host 端口真实 HTTP readiness 为准。
 sm_port="${MOCKSERVER_HOST_PORT:-11080}"

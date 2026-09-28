@@ -1,6 +1,8 @@
+.DEFAULT_GOAL := help
+
 PYTHON_BIN ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 
-.PHONY: dev-build dev-start dev-stop dev-restart dev-restart-clean dev-restart-one python-env governance-checks
+.PHONY: dev-build dev-start dev-stop dev-restart dev-restart-clean dev-restart-one dev-health python-env governance-checks
 .PHONY: test test-unit test-it test-e2e test-all test-build test-parallel
 .PHONY: data-system data-kafka data-minio
 .PHONY: db-reset-flyway
@@ -67,6 +69,7 @@ dev-restart-clean:
 #       make dev-restart-one M="orchestrator trigger"
 #       make dev-restart-one M="console" BUILD=1
 dev-restart-one:
+	@test -n "$(strip $(M))" || { echo 'Usage: make dev-restart-one M="trigger"' >&2; exit 2; }
 	bash scripts/local/restart.sh $(M)
 
 ## ── 测试 ──────────────────────────────────────────────────────────────────────
@@ -91,16 +94,26 @@ test-e2e:
 test-all:
 	bash scripts/local/run-tests.sh --all
 
-# 仅构建（不跑测试），为 test-parallel 提供前置步骤
+# 仅构建（不跑测试）
 test-build:
 	bash scripts/local/run-tests.sh --build-only
 
-# 并行跑三类测试（先构建一次，再并发执行）
-test-parallel: test-build
-	bash scripts/local/run-tests.sh --unit --skip-build & \
-	bash scripts/local/run-tests.sh --it   --skip-build & \
-	bash scripts/local/run-tests.sh --e2e  --skip-build & \
-	wait
+# 并行测试有资源竞争风险；仅在显式 opt-in 后运行，且聚合所有子任务退出码。
+test-parallel:
+	@if [ "$(ALLOW_PARALLEL_TESTS)" != "1" ]; then \
+	  echo "Parallel tests can compete for Docker/CPU/memory; opt in with ALLOW_PARALLEL_TESTS=1" >&2; \
+	  exit 2; \
+	fi
+	bash scripts/local/run-tests.sh --build-only
+	@set +e; \
+	bash scripts/local/run-tests.sh --unit --skip-build & unit_pid=$$!; \
+	bash scripts/local/run-tests.sh --it --skip-build & it_pid=$$!; \
+	bash scripts/local/run-tests.sh --e2e --skip-build & e2e_pid=$$!; \
+	wait $$unit_pid; unit_status=$$?; \
+	wait $$it_pid; it_status=$$?; \
+	wait $$e2e_pid; e2e_status=$$?; \
+	printf 'Parallel test status: unit=%s it=%s e2e=%s\n' "$$unit_status" "$$it_status" "$$e2e_status"; \
+	[ $$unit_status -eq 0 ] && [ $$it_status -eq 0 ] && [ $$e2e_status -eq 0 ]
 
 ## ── 测试数据 ──────────────────────────────────────────────────────────────────
 
@@ -169,6 +182,7 @@ ci-pr:
 
 # 指定模块：make ci-module M=batch-console-api
 ci-module:
+	@test -n "$(strip $(M))" || { echo 'Usage: make ci-module M=batch-console-api' >&2; exit 2; }
 	bash scripts/ci/run-full-regression.sh --skip-it-suite -- --pl $(M) -am -amd
 
 ## ── 静态检查 ──────────────────────────────────────────────────────────────────
@@ -188,6 +202,7 @@ check-version-alignment:
 # 一条命令升级应用版本：同步 pom.xml <revision> 和 Chart.yaml appVersion
 # 用法：make bump-version V=1.0.1
 bump-version:
+	@test -n "$(strip $(V))" || { echo 'Usage: make bump-version V=1.0.1' >&2; exit 2; }
 	bash scripts/ci/bump-version.sh $(V)
 
 # PMD 代码规约（docs/agent-baseline.md 规则）

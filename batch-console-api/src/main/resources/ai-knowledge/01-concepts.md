@@ -1,7 +1,8 @@
 # file-batch-system 核心概念与主链路
 
 ## 系统定位
-批量任务编排控制面 + 文件/任务交付闭环。10 个 Maven 模块:trigger 触发 → orchestrator 派发 → workers 执行 → console-api 控制面。
+批量任务编排控制面 + 文件/任务交付闭环。运行时主链是 trigger 触发 → orchestrator 派发 → workers 执行 → console-api 控制面。
+平台运行时按 10 个逻辑模块理解;仓库还包含 SDK、examples、load-tests、security-scan、测试支撑等 Maven / 非 Maven 工程资产,不要把仓库 pom 数量当成运行时服务数量。
 **不是**数据治理 / 容器资源编排 / 合规审计平台。
 
 ## 主链路(状态流转的唯一路径)
@@ -11,10 +12,16 @@
 - `outbox_event` 的写入**必须与任务状态同事务**(事务性发件箱,保证不丢事件)。
 
 ## Pipeline vs Workflow vs Job(三个不同概念,别混)
-- **Pipeline** = 文件处理流水线(IMPORT/EXPORT/PROCESS/DISPATCH 固定 5-6 个 stage,内置不可扩展),数据在 `pipeline_*` 表,worker 内部记录,运维一般不介入。
+- **Pipeline** = 文件处理流水线(IMPORT/EXPORT/PROCESS/DISPATCH 固定 stage 顺序),数据在 `pipeline_*` 表,worker 内部记录,运维一般不介入。Pipeline 顺序由平台控制,但固定步骤内部存在显式插件/策略点:Import load、Export data/format、Process compute、Dispatch channel adapter。
 - **Workflow** = 用户编排的 DAG(任意 Job 组合 + GATEWAY 分支 + 补偿 + 审批),数据在 `workflow_*` 表,支持人工干预。
 - **Job** = 单个执行单元,数据在 `job_*` 表。
 - 跨域引用是单向的:`workflow_node.related_pipeline_code → pipeline_definition.job_code`,不反向。
+
+## 插件 / SPI 边界
+- 大任务类型 SPI 由 `BatchTaskExecutorRegistry` 按 `taskType()` 注册;同一个 taskType 重复注册会启动失败,不允许外部插件静默覆盖 `IMPORT / EXPORT / PROCESS / DISPATCH / ATOMIC` 主链。
+- Worker 内部插件由配置 id、格式或渠道类型显式选择;不是"有插件就默认优先"。
+- Dispatch 渠道适配器由 `DispatchChannelGateway` 在启动期构建 `channelType -> adapter` 注册表;同一官方渠道被多个 adapter 支持时启动失败,避免依赖 Spring bean 顺序接管真实渠道。
+- 第三方插件只能实现明确扩展点,不能绕过 claim、lease、progress、report、dry-run 和幂等契约。
 
 ## 异步事件三张表(分工,不能互相复用)
 - `outbox_event`:通用业务事件。

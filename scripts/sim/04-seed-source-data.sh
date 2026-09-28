@@ -12,7 +12,7 @@ cd "$ROOT"
 
 BIZ_DATE="${BIZ_DATE:-$(date +%Y%m%d)}"
 BIZ_DAY="${BIZ_DATE:0:4}-${BIZ_DATE:4:2}-${BIZ_DATE:6:2}"
-SFTP_CONTAINER="${SFTP_CONTAINER:-sftp}"
+SFTP_CONTAINER="${SFTP_CONTAINER:-batch-sim-sftp}"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 

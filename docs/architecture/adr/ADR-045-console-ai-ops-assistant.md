@@ -14,7 +14,7 @@
 - ✅ 用自然语言查**已有**的运维只读信息:job 实例状态、执行日志、最近失败实例等(经受控的只读 `@Tool` 暴露,等价于把现有只读 REST 查询包装成对话)
 - ✅ 答「这个任务为什么失败 / 去哪看日志 / 哪些实例最近红了」这类**指路 + 取数**问题
 - ✅ 调用租户绑定的只读实例诊断，汇总分区、任务、Outbox、Worker 容量与既有发现项
-- ✅ 默认**关闭**(`batch.console.ai.enabled=false`),开启需显式配 anthropic/openai api-key,否则启动 fail-fast
+- ✅ 默认**关闭**(`batch.console.ai.enabled=false`),开启需显式配 Anthropic / OpenAI / OpenAI-compatible 端点密钥与模型,否则启动 fail-fast
 - ✅ 全程经 `@PreAuthorize` 鉴权 + 审计(`ConsoleAiAuditLogMapper`)+ prompt guard,与其它 console 操作同权限模型
 
 「**不做**」❌(越界即 reject)
@@ -27,8 +27,9 @@
 ## 决策
 
 1. **定位 = 控制面只读运维助手**,等价于「会查只读 REST + 会指路」的对话壳,**不获得任何超出调用者 RBAC 角色的能力**(工具调用沿用调用者权限)。
-2. **默认关闭 + 可下沉**:`enabled=false` 默认;LLM SDK(`spring-ai-starter-model-{openai,anthropic}`)是可选依赖。若未来确认无真实客户启用,按本 ADR 可无损移除整个模块(端点 + config + ai-knowledge + 依赖),核心不受影响——本 ADR 不构成「必须保留」的承诺,只固化「保留时的边界」。
-3. **审计 + 脱敏**:对话请求/响应经审计写入数据库;凭据 / 明文敏感值不得进 prompt / 知识库(沿用 ADR-039 脱敏纪律)。
+2. **默认关闭 + 可下沉**:`enabled=false` 默认;LLM SDK(`spring-ai-starter-model-{openai,anthropic}`)是可选依赖。DeepSeek、千问、智谱、Kimi、MiniMax 或私有模型优先走 `openai-compatible` 模式,不为每家厂商引入独立 SDK。若未来确认无真实客户启用,按本 ADR 可无损移除整个模块(端点 + config + ai-knowledge + 依赖),核心不受影响——本 ADR 不构成「必须保留」的承诺,只固化「保留时的边界」。
+3. **聊天与 RAG embedding 分离**:OpenAI-compatible 只负责聊天模型;知识库向量化继续使用 `spring.ai.openai.embedding` 配置。兼容模式不支持自动跨 Provider failover,避免 prompt/context 被静默发送给另一家服务。
+4. **审计 + 脱敏**:对话请求/响应经审计写入数据库;凭据 / 明文敏感值不得进 prompt / 知识库(沿用 ADR-039 脱敏纪律)。
 
 ## 后果
 

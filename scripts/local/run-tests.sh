@@ -12,12 +12,12 @@
 #   bash scripts/local/run-tests.sh --unit --skip-build  # 跳过构建，直接跑测试（并行场景专用）
 #   bash scripts/local/run-tests.sh -- -pl batch-orchestrator -am  # 透传 Maven 参数
 #
-# 并行执行三类测试（推荐用 make test-parallel）：
+# 并行执行三类测试（资源充足且明确 opt-in 时）：
 #   bash scripts/local/run-tests.sh --build-only           # 第一步：构建一次
 #   bash scripts/local/run-tests.sh --unit --skip-build &  # 第二步：并发执行
 #   bash scripts/local/run-tests.sh --it   --skip-build &
 #   bash scripts/local/run-tests.sh --e2e  --skip-build &
-#   wait
+#   make test-parallel ALLOW_PARALLEL_TESTS=1
 #
 # --skip-build 会同时跳过 cleanup_test_reports，避免并发时互删报告目录。
 #
@@ -88,12 +88,12 @@ usage() {
   bash scripts/local/run-tests.sh --unit --skip-build
   bash scripts/local/run-tests.sh -- -pl batch-orchestrator -am
 
-并行执行（推荐 make test-parallel）：
+并行执行（Docker/CPU/内存资源充足时显式 opt-in）：
   bash scripts/local/run-tests.sh --build-only
   bash scripts/local/run-tests.sh --unit --skip-build &
   bash scripts/local/run-tests.sh --it   --skip-build &
   bash scripts/local/run-tests.sh --e2e  --skip-build &
-  wait
+  make test-parallel ALLOW_PARALLEL_TESTS=1
 EOF
 }
 

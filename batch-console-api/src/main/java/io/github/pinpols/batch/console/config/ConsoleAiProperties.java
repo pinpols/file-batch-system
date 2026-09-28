@@ -23,13 +23,16 @@ public class ConsoleAiProperties {
   private boolean enabled = false;
 
   /**
-   * 聊天模型提供方:{@code anthropic}(默认,走 Claude,推理质量更高)或 {@code openai}。 嵌入(RAG 向量化)始终走 OpenAI
-   * embedding,与本项无关。
+   * 聊天模型提供方:{@code anthropic}(默认,走 Claude,推理质量更高)、{@code openai} 或 {@code
+   * openai-compatible}。嵌入(RAG 向量化)始终走 {@code spring.ai.openai.embedding} 配置,与本项无关。
    */
   private Provider provider = Provider.ANTHROPIC;
 
   /** 跨 Provider 故障切换需显式启用，避免请求内容未经授权转发到其他模型服务。 */
   private boolean failoverEnabled = false;
+
+  /** OpenAI-compatible 聊天端点配置,用于 DeepSeek、千问、智谱、Kimi、MiniMax 或私有兼容代理。 */
+  private OpenaiCompatible openaiCompatible = new OpenaiCompatible();
 
   /** Prompt 长度上限（字符）。超长直接拒绝，避免成本失控 + DoS。 */
   private int maxPromptLength = 4000;
@@ -138,7 +141,28 @@ public class ConsoleAiProperties {
   /** 支持的聊天模型提供方。使用枚举绑定确保拼写错误在应用启动期失败。 */
   public enum Provider {
     ANTHROPIC,
-    OPENAI
+    OPENAI,
+    OPENAI_COMPATIBLE
+  }
+
+  /** OpenAI-compatible 聊天端点参数。 */
+  @Data
+  public static class OpenaiCompatible {
+
+    /** 审计与日志里展示的 provider 名称,例如 deepseek、qwen、zhipu、kimi、minimax 或 private-llm。 */
+    private String providerName = "openai-compatible";
+
+    /** 兼容 OpenAI Chat Completions 协议的基础地址。 */
+    private String baseUrl = "";
+
+    /** 兼容端点 API Key。生产必须通过密钥管理或环境变量注入。 */
+    private String apiKey = "";
+
+    /** 兼容端点聊天模型名。 */
+    private String model = "";
+
+    /** 兼容端点请求超时。 */
+    private Duration timeout = Duration.ofSeconds(60);
   }
 
   /** L3 工具调用参数。 */

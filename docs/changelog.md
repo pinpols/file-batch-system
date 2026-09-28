@@ -6,6 +6,9 @@
 >
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
+### 2026-09-28
+- **ADR-045 Console AI provider 边界扩展**：Console AI 增加 `openai-compatible` 聊天 provider,用于 DeepSeek、千问、智谱、Kimi、MiniMax 或私有兼容代理；不为每家厂商引入独立 SDK。聊天端点与 RAG embedding 配置分离，兼容模式禁止自动跨 Provider failover，避免 prompt/context 被静默发送到未授权服务。
+
 ### 2026-09-27
 - **ADR-032 四角色运行时边界收紧**：控制台正式角色固定为 `ROLE_ADMIN`、`ROLE_AUDITOR`、`ROLE_TENANT_ADMIN`、`ROLE_TENANT_USER`；旧 `ROLE_USER` 仅由 V213 数据迁移转换，JWT、账号 API、菜单和运行时鉴权不再保留兼容分支。
 
