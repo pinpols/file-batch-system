@@ -80,7 +80,7 @@ public class ExportStepExecutionAdapter
       StepExecutionRequest request, Map<String, Object> contextMap, Long fileId) throws Exception {
     ExportJobContext context = new ExportJobContext();
     populateCommonFields(context, request, contextMap);
-    context.setBizDate(String.valueOf(contextMap.getOrDefault("bizDate", "")));
+    context.setBizDate(String.valueOf(contextMap.getOrDefault(PipelineRuntimeKeys.BIZ_DATE, "")));
     context.setFileId(fileId == null ? "" : String.valueOf(fileId));
     Object exportPayload = contextMap.get("exportPayload");
     if (exportPayload == null
@@ -132,19 +132,33 @@ public class ExportStepExecutionAdapter
   @Override
   protected StepExecutionResponse buildSuccessResponse(
       ExportJobContext context, List<ExportStageResult> results, Map<String, Object> attributes) {
-    String objectName = String.valueOf(context.getAttributes().getOrDefault("objectName", ""));
+    String objectName =
+        String.valueOf(context.getAttributes().getOrDefault(PipelineRuntimeKeys.OBJECT_NAME, ""));
     // ADR-009 Stage 1.2: 把 EXPORT 的关键产出暴露给下游 workflow 节点 DSL 引用
     Map<String, Object> outputs = new LinkedHashMap<>();
     putIfPresent(outputs, "fileId", attributes.get(PipelineRuntimeKeys.FILE_ID));
-    putIfPresent(outputs, "objectName", attributes.get("objectName"));
-    putIfPresent(outputs, "recordCount", attributes.get("recordCount"));
-    putIfPresent(outputs, "fileSizeBytes", attributes.get("fileSizeBytes"));
-    putIfPresent(outputs, "checksumValue", attributes.get("checksumValue"));
-    putIfPresent(outputs, "checksumType", attributes.get("checksumType"));
+    putIfPresent(
+        outputs, PipelineRuntimeKeys.OBJECT_NAME, attributes.get(PipelineRuntimeKeys.OBJECT_NAME));
+    putIfPresent(
+        outputs,
+        PipelineRuntimeKeys.RECORD_COUNT,
+        attributes.get(PipelineRuntimeKeys.RECORD_COUNT));
+    putIfPresent(
+        outputs,
+        PipelineRuntimeKeys.FILE_SIZE_BYTES,
+        attributes.get(PipelineRuntimeKeys.FILE_SIZE_BYTES));
+    putIfPresent(
+        outputs,
+        PipelineRuntimeKeys.CHECKSUM_VALUE,
+        attributes.get(PipelineRuntimeKeys.CHECKSUM_VALUE));
+    putIfPresent(
+        outputs,
+        PipelineRuntimeKeys.CHECKSUM_TYPE,
+        attributes.get(PipelineRuntimeKeys.CHECKSUM_TYPE));
     // ADR-041 Phase1.3:归一化 count 信封。export 读=写,input/output 同取 recordCount(导出行数)。
-    putIfPresent(outputs, "inputCount", attributes.get("recordCount"));
-    putIfPresent(outputs, "outputCount", attributes.get("recordCount"));
-    putIfPresent(outputs, "bizDate", context.getBizDate());
+    putIfPresent(outputs, "inputCount", attributes.get(PipelineRuntimeKeys.RECORD_COUNT));
+    putIfPresent(outputs, "outputCount", attributes.get(PipelineRuntimeKeys.RECORD_COUNT));
+    putIfPresent(outputs, PipelineRuntimeKeys.BIZ_DATE, context.getBizDate());
     if (!outputs.isEmpty()) {
       attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);
     }

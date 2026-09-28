@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.contract.response.BusinessShardCatalogResponse;
 import io.github.pinpols.batch.console.domain.param.BusinessShardCatalogUpsertParam;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleBusinessShardCatalogService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
@@ -33,7 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @Validated
 @RequestMapping("/api/console/ops/shard-catalog")
-@PreAuthorize("hasAuthority('ROLE_ADMIN')")
+@PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
 @RequiredArgsConstructor
 @Idempotent
 public class ConsoleBusinessShardCatalogController {

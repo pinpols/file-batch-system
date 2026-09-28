@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.domain.ops.application.contract.request.ForensicExportRequest;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleForensicExportResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.support.web.Idempotent;
@@ -33,7 +34,7 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 @RestController
 @Validated
 @RequestMapping("/api/console/forensic")
-@PreAuthorize("hasAuthority('ROLE_ADMIN')")
+@PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
 @RequiredArgsConstructor
 @Idempotent
 public class ConsoleForensicController {

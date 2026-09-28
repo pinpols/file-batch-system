@@ -11,6 +11,7 @@ import io.github.pinpols.batch.console.domain.file.application.contract.request.
 import io.github.pinpols.batch.console.domain.file.application.contract.request.RedispatchFileRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileOperationResponse;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFilePresignUploadResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
@@ -39,7 +40,7 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api/console/files")
 @RequiredArgsConstructor
 @Idempotent
-@PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_TENANT_ADMIN')")
+@PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
 public class ConsoleFileController {
 
   private final ConsoleFileApplicationService applicationService;

@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.contract.response.ArchivePolicyResponse;
 import io.github.pinpols.batch.console.domain.param.ArchivePolicyUpsertParam;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleArchivePolicyService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -26,7 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @Validated
 @RequestMapping("/api/console/ops/archive-policies")
-@PreAuthorize("hasAuthority('ROLE_ADMIN')")
+@PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
 @RequiredArgsConstructor
 @Idempotent
 public class ConsoleArchivePolicyController {

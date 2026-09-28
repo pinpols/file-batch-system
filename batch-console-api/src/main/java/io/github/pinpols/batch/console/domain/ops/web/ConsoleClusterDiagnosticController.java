@@ -8,6 +8,7 @@ import io.github.pinpols.batch.console.domain.ops.application.contract.response.
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleShedLockStatusResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleTerminalChildrenHealthResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleWorkerConsistencyResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -20,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** 跨节点一致性诊断：检查 ShedLock 租约、Worker 注册表、Outbox 状态。 */
 @RestController
 @RequestMapping("/api/console/ops/cluster-diagnostic")
-@PreAuthorize("hasAuthority('ROLE_ADMIN')")
+@PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
 @RequiredArgsConstructor
 public class ConsoleClusterDiagnosticController {
 

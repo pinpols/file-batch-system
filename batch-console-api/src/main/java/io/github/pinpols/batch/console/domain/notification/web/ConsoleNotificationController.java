@@ -9,6 +9,7 @@ import io.github.pinpols.batch.console.domain.notification.application.contract.
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleNotificationDeliveryLogResponse;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleNotificationTestResultResponse;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleSubscriptionRuleResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
@@ -41,23 +42,21 @@ public class ConsoleNotificationController {
   private final ConsoleResponseFactory responseFactory;
 
   @GetMapping("/channels")
-  @PreAuthorize(
-      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
+  @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
   public CommonResponse<List<ConsoleNotificationChannelResponse>> listChannels(
       @RequestParam @NotBlank String tenantId) {
     return responseFactory.success(service.listChannels(tenantId));
   }
 
   @GetMapping("/channels/{channelCode}")
-  @PreAuthorize(
-      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
+  @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
   public CommonResponse<ConsoleNotificationChannelResponse> getChannel(
       @RequestParam @NotBlank String tenantId, @PathVariable String channelCode) {
     return responseFactory.success(service.getChannel(tenantId, channelCode));
   }
 
   @PostMapping("/channels")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<Void> createChannel(
       @RequestParam @NotBlank String tenantId,
       @Valid @RequestBody NotificationChannelUpsertRequest request) {
@@ -66,7 +65,7 @@ public class ConsoleNotificationController {
   }
 
   @PutMapping("/channels/{channelCode}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<Void> updateChannel(
       @RequestParam @NotBlank String tenantId,
       @PathVariable String channelCode,
@@ -76,7 +75,7 @@ public class ConsoleNotificationController {
   }
 
   @DeleteMapping("/channels/{channelCode}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<Void> deleteChannel(
       @RequestParam @NotBlank String tenantId, @PathVariable String channelCode) {
     service.deleteChannel(tenantId, channelCode);
@@ -84,30 +83,28 @@ public class ConsoleNotificationController {
   }
 
   @PostMapping("/channels/{channelCode}/test")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<ConsoleNotificationTestResultResponse> testChannel(
       @RequestParam @NotBlank String tenantId, @PathVariable String channelCode) {
     return responseFactory.success(service.testChannel(tenantId, channelCode));
   }
 
   @GetMapping("/rules")
-  @PreAuthorize(
-      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
+  @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
   public CommonResponse<List<ConsoleSubscriptionRuleResponse>> listRules(
       @RequestParam @NotBlank String tenantId) {
     return responseFactory.success(service.listRules(tenantId));
   }
 
   @GetMapping("/rules/{ruleId}")
-  @PreAuthorize(
-      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
+  @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
   public CommonResponse<ConsoleSubscriptionRuleResponse> getRule(
       @RequestParam @NotBlank String tenantId, @PathVariable Long ruleId) {
     return responseFactory.success(service.getRule(tenantId, ruleId));
   }
 
   @PostMapping("/rules")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<Void> createRule(
       @RequestParam @NotBlank String tenantId,
       @Valid @RequestBody SubscriptionRuleUpsertRequest request) {
@@ -116,7 +113,7 @@ public class ConsoleNotificationController {
   }
 
   @PutMapping("/rules/{ruleId}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<Void> updateRule(
       @RequestParam @NotBlank String tenantId,
       @PathVariable Long ruleId,
@@ -126,7 +123,7 @@ public class ConsoleNotificationController {
   }
 
   @DeleteMapping("/rules/{ruleId}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<Void> deleteRule(
       @RequestParam @NotBlank String tenantId, @PathVariable Long ruleId) {
     service.deleteRule(tenantId, ruleId);
@@ -134,8 +131,7 @@ public class ConsoleNotificationController {
   }
 
   @GetMapping("/delivery-logs")
-  @PreAuthorize(
-      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
+  @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
   public CommonResponse<List<ConsoleNotificationDeliveryLogResponse>> deliveryLogs(
       @RequestParam @NotBlank String tenantId,
       @RequestParam(defaultValue = "100") @Positive @Max(500) int limit) {

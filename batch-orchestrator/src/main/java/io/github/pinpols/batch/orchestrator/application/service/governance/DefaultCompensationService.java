@@ -79,6 +79,12 @@ public class DefaultCompensationService implements CompensationService {
         CompensationCommandEntity entity);
   }
 
+  /** 允许返回 null 的 ID 解析器；null 表示当前补偿类型没有可用于冲突判断的目标 ID。 */
+  @FunctionalInterface
+  private interface NullableLongResolver {
+    Long apply(CompensationSubmitCommand command);
+  }
+
   /** 路由表：compensationType → operation。构造时一次性构建；O(1) 查找。 */
   private final Map<String, CompensationOperation> operationsByType = Map.of(
       "JOB", this::rerunJob,
@@ -246,6 +252,15 @@ public class DefaultCompensationService implements CompensationService {
                   jobMappers.jobPartitionMapper.selectById(cmd.tenantId(), cmd.targetId());
               return partition == null ? null : partition.getJobInstanceId();
             });
+  }
+
+  private Map<String, NullableLongResolver> conflictTargetResolvers() {
+    return Map.of(
+        "JOB", CompensationSubmitCommand::targetId,
+        "STEP", CompensationSubmitCommand::targetId,
+        "PARTITION", CompensationSubmitCommand::targetId,
+        "DLQ", CompensationSubmitCommand::targetId,
+        "FILE", cmd -> firstNonNull(cmd.relatedFileId(), cmd.targetId()));
   }
 
   private String resolveTraceIdFromTarget(
@@ -632,18 +647,15 @@ public class DefaultCompensationService implements CompensationService {
 
   private Long resolveConflictTargetId(CompensationSubmitCommand command) {
     String type = normalizeType(command.compensationType());
-    if (type == null) {
+    if (EmptyChecks.isNull(type)) {
       return null;
     }
-    return switch (type) {
-      case "JOB", "STEP", "PARTITION", "DLQ" -> command.targetId();
-      case "FILE" -> firstNonNull(command.relatedFileId(), command.targetId());
-      default -> null;
-    };
+    NullableLongResolver resolver = conflictTargetResolvers().get(type);
+    return EmptyChecks.isNull(resolver) ? null : resolver.apply(command);
   }
 
   private void validate(CompensationSubmitCommand command) {
-    Guard.require(command != null, "compensation command is required");
+    Guard.require(EmptyChecks.isNotNull(command), "compensation command is required");
     if (!Texts.hasText(command.tenantId())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
     }

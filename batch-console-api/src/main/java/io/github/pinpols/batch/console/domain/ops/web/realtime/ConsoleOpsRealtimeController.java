@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.ops.web.realtime;
 
 import io.github.pinpols.batch.console.application.ops.ConsoleOpsSummaryRealtimePort;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -20,8 +21,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RestController
 @Validated
 @RequestMapping("/api/console/ops")
-@PreAuthorize(
-    "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
+@PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
 @RequiredArgsConstructor
 public class ConsoleOpsRealtimeController {
 

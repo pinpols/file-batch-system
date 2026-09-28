@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.job.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.ops.ConsoleTriggerProxyService;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleSchedulerCommandResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.support.web.Idempotent;
@@ -14,7 +15,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @Validated
 @RequestMapping("/api/console/scheduler")
-@PreAuthorize("hasAuthority('ROLE_ADMIN')")
+@PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
 @RequiredArgsConstructor
 @Idempotent
 public class ConsoleSchedulerController {
@@ -23,8 +24,7 @@ public class ConsoleSchedulerController {
   private final ConsoleResponseFactory responseFactory;
 
   @GetMapping("/status")
-  @PreAuthorize(
-      "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN'," + " 'ROLE_TENANT_USER')")
+  @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
   public CommonResponse<ConsoleSchedulerCommandResponse> status() {
     return responseFactory.success(
         ConsoleSchedulerCommandResponse.from(triggerProxyService.schedulerStatus()));

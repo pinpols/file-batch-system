@@ -7,14 +7,14 @@
 
 | 指标 | 数量 |
 |---|---:|
-| 生产 Java 源文件 | 2304 |
+| 生产 Java 源文件 | 2312 |
 | CGLIB 自注入类 | 0 |
-| `Map<String, Object>` 出现次数 | 2077 |
+| `Map<String, Object>` 出现次数 | 2084 |
 | 含 Map 的源文件 | 447 |
 | public Map 契约候选 | 65 |
 | public Map 契约候选文件 | 37 |
-| `@SuppressWarnings` | 221 |
-| 含 suppression 的源文件 | 166 |
+| `@SuppressWarnings` | 222 |
+| 含 suppression 的源文件 | 167 |
 | `@Configuration` 类 | 47 |
 | 大于等于 700 行的源文件 | 10 |
 | `PMD.ExcessiveParameterList` 显式例外 | 35 |
@@ -23,11 +23,11 @@
 
 | 模块 | 生产 Java 文件 |
 |---|---:|
-| `batch-common` | 317 |
-| `batch-console-api` | 911 |
-| `batch-orchestrator` | 537 |
+| `batch-common` | 319 |
+| `batch-console-api` | 915 |
+| `batch-orchestrator` | 538 |
 | `batch-trigger` | 70 |
-| `batch-worker` | 369 |
+| `batch-worker` | 370 |
 | `sdk` | 91 |
 | `security-scan` | 9 |
 
@@ -40,16 +40,16 @@
 
 | 文件 | 行数 |
 |---|---:|
-| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java` | 1106 |
+| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java` | 1145 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageSheetSpecs.java` | 1070 |
-| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java` | 841 |
-| `batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/RemoteFilesystemDispatchSupport.java` | 775 |
+| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java` | 869 |
+| `batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/sql/SqlTransformComputePlugin.java` | 805 |
+| `batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/RemoteFilesystemDispatchSupport.java` | 783 |
 | `batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanner.java` | 768 |
+| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowGraphValidator.java` | 741 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java` | 740 |
-| `batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/sql/SqlTransformComputePlugin.java` | 733 |
-| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowGraphValidator.java` | 715 |
+| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultCompensationService.java` | 719 |
 | `batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/format/AbstractExportFormat.java` | 711 |
-| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultCompensationService.java` | 707 |
 
 ## Public Map 契约候选
 
@@ -72,11 +72,11 @@
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/lineage/LineageEvidenceService.java` | `L31: public Map<String, Object> evidenceForResultVersion`<br>`L44: public Map<String, Object> evidenceForEffective` |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/task/PartitionDispatchService.java` | `L51: public Map<String, Object> effectiveParams` |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowNodePayloadBuilder.java` | `L269: public Map<String, Object> nodeOutput`<br>`L274: public Map<String, Object> workflowRunFields`<br>`L303: public Map<String, Object> nodeOutput`<br>`L308: public Map<String, Object> workflowRunFields`<br>`L331: public static Map<String, Object> parsePayloadMap` |
-| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/file/FileGovernanceRepository.java` | `L71: public Map<String, Object> loadFileRecord`<br>`L80: public Map<String, Object> loadTemplateSecurityForFile`<br>`L125: public Map<String, Object> loadLatestDispatchRecord`<br>`L194: public List<Map<String, Object>> selectArrivalGovernanceCandidates`<br>`L201: public List<Map<String, Object>> selectArrivalGroupSummaries`<br>`L207: public List<Map<String, Object>> selectArrivalGroupFiles`<br>`L211: public List<Map<String, Object>> selectArrivalGroupFiles`<br>`L239: public List<Map<String, Object>> selectArrivalDelaySamples`<br>`L274: public List<Map<String, Object>> selectProcessingDelaySamples`<br>`L475: public Map<String, Object> operationDetail` |
+| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/file/FileGovernanceRepository.java` | `L74: public Map<String, Object> loadFileRecord`<br>`L83: public Map<String, Object> loadTemplateSecurityForFile`<br>`L128: public Map<String, Object> loadLatestDispatchRecord`<br>`L197: public List<Map<String, Object>> selectArrivalGovernanceCandidates`<br>`L204: public List<Map<String, Object>> selectArrivalGroupSummaries`<br>`L210: public List<Map<String, Object>> selectArrivalGroupFiles`<br>`L214: public List<Map<String, Object>> selectArrivalGroupFiles`<br>`L242: public List<Map<String, Object>> selectArrivalDelaySamples`<br>`L277: public List<Map<String, Object>> selectProcessingDelaySamples`<br>`L478: public Map<String, Object> operationDetail` |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/mybatis/MapJsonbTypeHandler.java` | `L36: public Map<String, Object> getNullableResult`<br>`L42: public Map<String, Object> getNullableResult`<br>`L47: public Map<String, Object> getNullableResult` |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/redis/FileGovernanceMetricsCacheService.java` | `L33: public Map<String, Object> load`<br>`L57: public Map<String, Object> compute` |
 | `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/PlatformFileAuditRepository.java` | `L59: public List<Map<String, Object>> loadFileErrorRecords` |
-| `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/PlatformFileRecordRepository.java` | `L30: public Map<String, Object> loadFileRecord`<br>`L48: public Map<String, Object> loadFileRecordByStoragePath` |
+| `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/PlatformFileRecordRepository.java` | `L34: public Map<String, Object> loadFileRecord`<br>`L52: public Map<String, Object> loadFileRecordByStoragePath` |
 | `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/PlatformPipelineDefinitionRepository.java` | `L29: public Map<String, Object> loadLatestTemplateConfig`<br>`L39: public Map<String, Object> loadChannelConfig` |
 | `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/PlatformPipelineRunRepository.java` | `L135: public Map<String, Object> loadLatestSucceededStepOutputSummary` |
 | `batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/ChannelConfigMerge.java` | `L103: public static Map<String, Object> merge` |

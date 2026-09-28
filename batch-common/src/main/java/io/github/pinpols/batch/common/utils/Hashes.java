@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.utils;
 
+import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -33,8 +34,8 @@ public final class Hashes {
       return null;
     }
     try {
-      byte[] full =
-          MessageDigest.getInstance("SHA-256").digest(raw.getBytes(StandardCharsets.UTF_8));
+      byte[] full = MessageDigest.getInstance(CryptoAlgorithms.SHA_256)
+          .digest(raw.getBytes(StandardCharsets.UTF_8));
       byte[] head = new byte[8];
       System.arraycopy(full, 0, head, 0, 8);
       return HexFormat.of().formatHex(head);

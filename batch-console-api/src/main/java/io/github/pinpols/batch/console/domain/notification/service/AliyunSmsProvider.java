@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
+import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.SmsProperties;
 import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
@@ -281,7 +282,7 @@ public class AliyunSmsProvider implements SmsProvider {
 
   private static String sha256Hex(String input) {
     try {
-      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
       byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
       return toHex(hash);
     } catch (Exception ex) {
@@ -290,8 +291,9 @@ public class AliyunSmsProvider implements SmsProvider {
   }
 
   private static String hmacSha256Hex(String secret, String data) throws GeneralSecurityException {
-    Mac mac = Mac.getInstance("HmacSHA256");
-    mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+    Mac mac = Mac.getInstance(CryptoAlgorithms.HMAC_SHA256);
+    mac.init(
+        new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), CryptoAlgorithms.HMAC_SHA256));
     byte[] digest = mac.doFinal(data.getBytes(StandardCharsets.UTF_8));
     return toHex(digest);
   }

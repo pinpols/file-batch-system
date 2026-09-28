@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.exports.stage.format;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import java.util.List;
@@ -41,18 +42,18 @@ class ExportFormatStrategyRegistryTest {
   @Test
   @DisplayName("resolve(): 精确大写匹配命中")
   void shouldReturnStrategy_whenFormatTypeMatchesUpperCase() {
-    ExportFormatStrategy json = stub("JSON");
-    ExportFormatStrategy delimited = stub("DELIMITED");
+    ExportFormatStrategy json = stub(FileTemplateFormat.JSON.code());
+    ExportFormatStrategy delimited = stub(FileTemplateFormat.DELIMITED.code());
     ExportFormatStrategyRegistry registry = newRegistry(json, delimited);
 
-    assertThat(registry.resolve("JSON")).isSameAs(json);
-    assertThat(registry.resolve("DELIMITED")).isSameAs(delimited);
+    assertThat(registry.resolve(FileTemplateFormat.JSON.code())).isSameAs(json);
+    assertThat(registry.resolve(FileTemplateFormat.DELIMITED.code())).isSameAs(delimited);
   }
 
   @Test
   @DisplayName("resolve(): 大小写不敏感 + trim 空白")
   void shouldNormalizeCase_andTrimWhitespace_whenResolving() {
-    ExportFormatStrategy json = stub("JSON");
+    ExportFormatStrategy json = stub(FileTemplateFormat.JSON.code());
     ExportFormatStrategy excel = stub("excel");
     ExportFormatStrategyRegistry registry = newRegistry(json, excel);
 
@@ -64,7 +65,7 @@ class ExportFormatStrategyRegistryTest {
   @Test
   @DisplayName("resolve(): null / 空白 → fallback 到 JSON")
   void shouldFallbackToJson_whenFormatTypeNullOrBlank() {
-    ExportFormatStrategy json = stub("JSON");
+    ExportFormatStrategy json = stub(FileTemplateFormat.JSON.code());
     ExportFormatStrategy other = stub("CSV");
     ExportFormatStrategyRegistry registry = newRegistry(json, other);
 
@@ -76,7 +77,7 @@ class ExportFormatStrategyRegistryTest {
   @Test
   @DisplayName("resolve(): 显式未知格式类型 → 快速失败")
   void shouldRejectUnknownFormatType() {
-    ExportFormatStrategy json = stub("JSON");
+    ExportFormatStrategy json = stub(FileTemplateFormat.JSON.code());
     ExportFormatStrategyRegistry registry = newRegistry(json);
 
     assertThatThrownBy(() -> registry.resolve("PARQUET"))
@@ -88,10 +89,10 @@ class ExportFormatStrategyRegistryTest {
   @Test
   @DisplayName("require(): 命中返回；未命中抛 INVALID_ARGUMENT BizException")
   void shouldThrowBizException_whenRequireUnknownFormat() {
-    ExportFormatStrategy json = stub("JSON");
+    ExportFormatStrategy json = stub(FileTemplateFormat.JSON.code());
     ExportFormatStrategyRegistry registry = newRegistry(json);
 
-    assertThat(registry.require("JSON")).isSameAs(json);
+    assertThat(registry.require(FileTemplateFormat.JSON.code())).isSameAs(json);
     assertThatThrownBy(() -> registry.require("PARQUET"))
         .isInstanceOf(BizException.class)
         .satisfies(
@@ -101,7 +102,7 @@ class ExportFormatStrategyRegistryTest {
   @Test
   @DisplayName("require(null) / require(空) → 抛 BizException（不 fallback）")
   void shouldThrowBizException_whenRequireNullOrBlank() {
-    ExportFormatStrategy json = stub("JSON");
+    ExportFormatStrategy json = stub(FileTemplateFormat.JSON.code());
     ExportFormatStrategyRegistry registry = newRegistry(json);
 
     assertThatThrownBy(() -> registry.require(null)).isInstanceOf(BizException.class);

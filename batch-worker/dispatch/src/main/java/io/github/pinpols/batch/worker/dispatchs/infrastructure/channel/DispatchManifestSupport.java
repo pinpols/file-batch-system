@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
+import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -17,7 +19,7 @@ import java.util.Map;
 /** Dispatch 出站 sidecar manifest 生成工具。默认后缀 .chk，内容为 JSON。 */
 final class DispatchManifestSupport {
 
-  static final String CHECKSUM_TYPE = "SHA-256";
+  static final String CHECKSUM_TYPE = CryptoAlgorithms.SHA_256;
   static final String CONTENT_TYPE = "application/json; charset=utf-8";
   private static final String DEFAULT_SUFFIX = ".chk";
   private static final HexFormat HEX = HexFormat.of();
@@ -58,18 +60,18 @@ final class DispatchManifestSupport {
     body.put("schemaVersion", "dispatch-sidecar-manifest-v1");
     body.put("generatedAt", BatchDateTimeSupport.utcNow().toString());
     body.put("tenantId", command.tenantId());
-    body.put("traceId", command.traceId());
-    body.put("fileId", fileRecord.get("id"));
+    body.put(PipelineRuntimeKeys.TRACE_ID, command.traceId());
+    body.put(PipelineRuntimeKeys.FILE_ID, fileRecord.get("id"));
     body.put("fileName", fileName);
     body.put("targetRef", targetRef);
     body.put("sizeBytes", payloadDigest.sizeBytes());
-    body.put("checksumType", CHECKSUM_TYPE);
-    body.put("checksumValue", payloadDigest.sha256());
+    body.put(PipelineRuntimeKeys.CHECKSUM_TYPE, CHECKSUM_TYPE);
+    body.put(PipelineRuntimeKeys.CHECKSUM_VALUE, payloadDigest.sha256());
     body.put("sourceChecksumType", text(fileRecord.get("checksum_type")));
     body.put("sourceChecksumValue", text(fileRecord.get("checksum_value")));
     body.put("externalRequestId", externalRequestId);
     body.put("receiptCode", receiptCode);
-    body.put("bizDate", fileRecord.get("biz_date"));
+    body.put(PipelineRuntimeKeys.BIZ_DATE, fileRecord.get("biz_date"));
     body.put("channelCode", command.payload() == null ? null : command.payload().channelCode());
     body.put("manifestRef", manifestRef);
     byte[] bytes = JsonUtils.toJson(body).getBytes(StandardCharsets.UTF_8);

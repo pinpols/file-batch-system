@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.job.service.ConsoleSelfServiceJobService;
 import io.github.pinpols.batch.console.domain.job.service.ConsoleSelfServiceJobService.CompensationParam;
 import io.github.pinpols.batch.console.domain.job.service.ConsoleSelfServiceJobService.RerunParam;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.support.web.Idempotent;
@@ -24,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @Validated
 @RequestMapping("/api/console/self-service/jobs")
-@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
+@PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_TENANT_USER)
 @RequiredArgsConstructor
 @Idempotent
 public class ConsoleSelfServiceJobController {

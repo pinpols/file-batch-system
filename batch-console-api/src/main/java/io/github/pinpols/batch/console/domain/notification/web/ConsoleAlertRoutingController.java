@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.console.application.contract.request.config.AlertRoutingSaveRequest;
 import io.github.pinpols.batch.console.domain.notification.application.ConsoleAlertRoutingApplicationService;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertRoutingResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.shared.command.EnabledPatchRequest;
@@ -18,7 +19,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @Validated
 @RequestMapping("/api/console/alert-routings")
-@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+@PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
 @RequiredArgsConstructor
 @Idempotent
 public class ConsoleAlertRoutingController {

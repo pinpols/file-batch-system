@@ -105,10 +105,10 @@ public class PrepareStep implements ExportStageStep {
         exportSnapshot.put("region", region);
       }
       attrs.put(PipelineRuntimeKeys.EXPORT_SNAPSHOT, exportSnapshot);
-      attrs.put("fileName", fileName);
-      attrs.put("exportFileFormatType", fileFormatType);
-      attrs.put("objectName", finalObjectName);
-      attrs.put("tempObjectName", tempObjectName);
+      attrs.put(PipelineRuntimeKeys.FILE_NAME, fileName);
+      attrs.put(PipelineRuntimeKeys.EXPORT_FILE_FORMAT_TYPE, fileFormatType);
+      attrs.put(PipelineRuntimeKeys.OBJECT_NAME, finalObjectName);
+      attrs.put(PipelineRuntimeKeys.TEMP_OBJECT_NAME, tempObjectName);
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(PrepareStep.class, "catch:Exception", ex);
 

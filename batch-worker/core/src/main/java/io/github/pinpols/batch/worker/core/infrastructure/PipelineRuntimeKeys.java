@@ -11,6 +11,7 @@ public final class PipelineRuntimeKeys {
 
   public static final String TASK_ID = "taskId";
   public static final String TRACE_ID = "traceId";
+  public static final String BIZ_DATE = "bizDate";
   public static final String RUN_MODE = RunModeSupport.RUN_MODE;
 
   /** 为兼容旧版 payload map 保留的历史别名。 */
@@ -50,6 +51,16 @@ public final class PipelineRuntimeKeys {
   public static final String PARSED_RECORDS_PATH = "parsedRecordsPath";
   public static final String VALIDATED_RECORDS_PATH = "validatedRecordsPath";
   public static final String GENERATED_FILE_PATH = "generatedFilePath";
+  public static final String FILE_NAME = "fileName";
+  public static final String FILE_SIZE_BYTES = "fileSizeBytes";
+  public static final String RECORD_COUNT = "recordCount";
+  public static final String CHECKSUM_TYPE = "checksumType";
+  public static final String CHECKSUM_VALUE = "checksumValue";
+  public static final String OBJECT_NAME = "objectName";
+  public static final String TEMP_OBJECT_NAME = "tempObjectName";
+  public static final String EXPORT_FILE_FORMAT_TYPE = "exportFileFormatType";
+  public static final String EXPORT_STORE_COMMITTED = "exportStoreCommitted";
+  public static final String PROCESS_PAYLOAD = "processPayload";
 
   /** PREPROCESS 后的原始文件字节（如 Excel .xlsx），文本转换会破坏二进制内容时使用 */
   public static final String IMPORT_BINARY_PAYLOAD = "importBinaryPayload";

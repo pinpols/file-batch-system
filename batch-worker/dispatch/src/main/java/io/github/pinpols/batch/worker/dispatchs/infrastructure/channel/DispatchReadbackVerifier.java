@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.Map;
 
 /**
@@ -24,7 +25,7 @@ public final class DispatchReadbackVerifier {
     }
     Object raw = fileRecord.get("file_size_bytes");
     if (raw == null) {
-      raw = fileRecord.get("fileSizeBytes");
+      raw = fileRecord.get(PipelineRuntimeKeys.FILE_SIZE_BYTES);
     }
     if (raw instanceof Number number) {
       return number.longValue();

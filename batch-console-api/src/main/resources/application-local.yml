@@ -68,8 +68,9 @@ batch:
         public-key-pem: ${BATCH_CONSOLE_LOGIN_ENCRYPTION_PUBLIC_KEY_PEM:}
     ai:
       enabled: false
-      model: ${BATCH_CONSOLE_AI_MODEL:gpt-4o-mini}
+      failover-enabled: ${BATCH_CONSOLE_AI_FAILOVER_ENABLED:false}
       max-prompt-length: 4000
+      max-context-chars: ${BATCH_CONSOLE_AI_MAX_CONTEXT_CHARS:2000}
       max-response-length: 3000
       allowed-users:
       - admin

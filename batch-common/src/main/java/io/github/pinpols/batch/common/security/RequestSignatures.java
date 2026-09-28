@@ -25,14 +25,14 @@ import javax.crypto.spec.SecretKeySpec;
 public final class RequestSignatures {
 
   private static final char[] HEX = "0123456789abcdef".toCharArray();
-  private static final String HMAC_ALG = "HmacSHA256";
+  private static final String HMAC_ALG = CryptoAlgorithms.HMAC_SHA256;
 
   private RequestSignatures() {}
 
   /** body 的 SHA-256 小写 hex；null/空 body 走空字节数组（结果为公认空串常量）。 */
   public static String bodySha256Hex(byte[] body) {
     try {
-      MessageDigest md = MessageDigest.getInstance("SHA-256");
+      MessageDigest md = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
       return toHex(md.digest(body == null ? new byte[0] : body));
     } catch (NoSuchAlgorithmException e) {
       throw new IllegalStateException("SHA-256 unavailable", e);

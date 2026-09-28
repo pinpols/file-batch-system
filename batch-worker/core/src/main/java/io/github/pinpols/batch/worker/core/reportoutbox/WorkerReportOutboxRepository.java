@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.core.reportoutbox;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.domain.TaskExecutionReport;
@@ -20,9 +21,7 @@ public class WorkerReportOutboxRepository {
   static final String STATUS_GIVE_UP = "GIVE_UP";
 
   private final WorkerReportOutboxProperties props;
-  private final WorkerReportOutboxDialect dialect;
-  private final WorkerReportOutboxPgMapper pgMapper;
-  private final WorkerReportOutboxSqliteMapper sqliteMapper;
+  private final WorkerReportOutboxStore store;
 
   public WorkerReportOutboxRepository(
       WorkerReportOutboxProperties props,
@@ -31,21 +30,18 @@ public class WorkerReportOutboxRepository {
       WorkerReportOutboxSqliteMapper sqliteMapper,
       JdbcTemplate sqliteDdlJdbcTemplate) {
     this.props = props;
-    this.dialect = dialect;
     if (dialect == WorkerReportOutboxDialect.POSTGRESQL) {
       if (pgMapper == null) {
         throw new IllegalArgumentException("WorkerReportOutboxPgMapper required for PLATFORM_PG");
       }
-      this.pgMapper = pgMapper;
-      this.sqliteMapper = null;
+      this.store = new PostgresqlReportOutboxStore(pgMapper);
     } else {
       if (sqliteMapper == null || sqliteDdlJdbcTemplate == null) {
         throw new IllegalArgumentException(
             "WorkerReportOutboxSqliteMapper + JdbcTemplate required for SQLITE");
       }
-      this.pgMapper = null;
-      this.sqliteMapper = sqliteMapper;
       initializeSqliteSchema(sqliteDdlJdbcTemplate);
+      this.store = new SqliteReportOutboxStore(sqliteMapper);
     }
   }
 
@@ -92,11 +88,7 @@ public class WorkerReportOutboxRepository {
         now,
         now,
         now);
-    if (dialect == WorkerReportOutboxDialect.POSTGRESQL) {
-      pgMapper.upsert(p);
-    } else {
-      sqliteMapper.upsert(p);
-    }
+    store.upsert(p);
   }
 
   TaskExecutionReport deserializePayload(String payloadJson) {
@@ -105,70 +97,31 @@ public class WorkerReportOutboxRepository {
 
   /** 抢占一行（NEW→PUBLISHING）。须在短事务内调用（见 {@link WorkerReportOutboxPollClaimer}）。 */
   Optional<WorkerReportOutboxRow> claimNext(long nowEpochMillis) {
-    if (dialect == WorkerReportOutboxDialect.POSTGRESQL) {
-      List<WorkerReportOutboxRow> rows =
-          pgMapper.claimNextReturning(nowEpochMillis, STATUS_NEW, STATUS_PUBLISHING);
-      return rows.isEmpty() ? Optional.empty() : Optional.of(rows.getFirst());
-    }
-    Long id = sqliteMapper.pickNextNewId(nowEpochMillis, STATUS_NEW);
-    if (id == null) {
-      return Optional.empty();
-    }
-    WorkerReportOutboxRow row =
-        sqliteMapper.updateClaimReturning(id, STATUS_PUBLISHING, nowEpochMillis, STATUS_NEW);
-    return Optional.ofNullable(row);
+    return store.claimNext(nowEpochMillis);
   }
 
   int resetStalePublishing(long updatedAtBeforeExclusive) {
     long now = BatchDateTimeSupport.utcEpochMillis();
-    if (dialect == WorkerReportOutboxDialect.POSTGRESQL) {
-      return pgMapper.resetStalePublishing(
-          STATUS_NEW, now, STATUS_PUBLISHING, updatedAtBeforeExclusive);
-    }
-    return sqliteMapper.resetStalePublishing(
-        STATUS_NEW, now, STATUS_PUBLISHING, updatedAtBeforeExclusive);
+    return store.resetStalePublishing(now, updatedAtBeforeExclusive);
   }
 
   public WorkerReportOutboxStats stats(long staleUpdatedAtBeforeExclusive) {
-    if (dialect == WorkerReportOutboxDialect.POSTGRESQL) {
-      return new WorkerReportOutboxStats(
-          pgMapper.countByStatus(STATUS_NEW),
-          pgMapper.countByStatus(STATUS_PUBLISHING),
-          pgMapper.countByStatus(STATUS_GIVE_UP),
-          pgMapper.countStalePublishing(STATUS_PUBLISHING, staleUpdatedAtBeforeExclusive));
-    }
-    return new WorkerReportOutboxStats(
-        sqliteMapper.countByStatus(STATUS_NEW),
-        sqliteMapper.countByStatus(STATUS_PUBLISHING),
-        sqliteMapper.countByStatus(STATUS_GIVE_UP),
-        sqliteMapper.countStalePublishing(STATUS_PUBLISHING, staleUpdatedAtBeforeExclusive));
+    return store.stats(staleUpdatedAtBeforeExclusive);
   }
 
   void delete(long id) {
-    if (dialect == WorkerReportOutboxDialect.POSTGRESQL) {
-      pgMapper.deleteById(id);
-    } else {
-      sqliteMapper.deleteById(id);
-    }
+    store.delete(id);
   }
 
   void recordFailure(long id, long nowEpochMillis, RuntimeException cause) {
-    Integer attemptsNullable = dialect == WorkerReportOutboxDialect.POSTGRESQL
-        ? pgMapper.selectAttemptCount(id)
-        : sqliteMapper.selectAttemptCount(id);
+    Integer attemptsNullable = store.selectAttemptCount(id);
     if (attemptsNullable == null) {
       return;
     }
     int attempts = attemptsNullable;
     int nextAttempts = attempts + 1;
     if (nextAttempts >= props.getMaxPublishAttempts()) {
-      int updated;
-      if (dialect == WorkerReportOutboxDialect.POSTGRESQL) {
-        updated = pgMapper.updateGiveUp(
-            id, STATUS_GIVE_UP, nextAttempts, nowEpochMillis, STATUS_PUBLISHING);
-      } else {
-        updated = sqliteMapper.updateGiveUp(id, STATUS_GIVE_UP, nextAttempts, nowEpochMillis);
-      }
+      int updated = store.updateGiveUp(id, nextAttempts, nowEpochMillis);
       if (updated == 0) {
         log.warn(
             "Worker report Outbox updateGiveUp affected 0 rows; another instance took over the event: id={}",
@@ -184,13 +137,7 @@ public class WorkerReportOutboxRepository {
       long jitterMax = Math.max(0L, props.getJitterMillis());
       long jitter = jitterMax == 0 ? 0L : ThreadLocalRandom.current().nextLong(0, jitterMax + 1);
       long nextAt = nowEpochMillis + backoff + jitter;
-      int updated;
-      if (dialect == WorkerReportOutboxDialect.POSTGRESQL) {
-        updated = pgMapper.updateRetry(
-            id, nextAttempts, nextAt, nowEpochMillis, STATUS_NEW, STATUS_PUBLISHING);
-      } else {
-        updated = sqliteMapper.updateRetry(id, nextAttempts, nextAt, nowEpochMillis, STATUS_NEW);
-      }
+      int updated = store.updateRetry(id, nextAttempts, nextAt, nowEpochMillis);
       if (updated == 0) {
         log.warn(
             "Worker report Outbox updateRetry affected 0 rows; another instance took over the event: id={}",
@@ -209,12 +156,7 @@ public class WorkerReportOutboxRepository {
   void markGiveUp(long id, String reason) {
     long now = BatchDateTimeSupport.utcEpochMillis();
     int maxAttempts = props.getMaxPublishAttempts();
-    int updated;
-    if (dialect == WorkerReportOutboxDialect.POSTGRESQL) {
-      updated = pgMapper.giveUpRow(id, STATUS_GIVE_UP, now, maxAttempts, STATUS_PUBLISHING);
-    } else {
-      updated = sqliteMapper.giveUpRow(id, STATUS_GIVE_UP, now, maxAttempts);
-    }
+    int updated = store.giveUpRow(id, now, maxAttempts);
     if (updated == 0) {
       log.warn(
           "Worker report Outbox giveUpRow affected 0 rows; another instance took over the event: id={}",
@@ -230,5 +172,141 @@ public class WorkerReportOutboxRepository {
     long multiplier = 1L << Math.min(exponent, 30);
     long scaled = initial * multiplier;
     return Math.min(cap, scaled);
+  }
+
+  private interface WorkerReportOutboxStore {
+    void upsert(WorkerReportOutboxUpsertParam param);
+
+    Optional<WorkerReportOutboxRow> claimNext(long nowEpochMillis);
+
+    int resetStalePublishing(long nowEpochMillis, long updatedAtBeforeExclusive);
+
+    WorkerReportOutboxStats stats(long staleUpdatedAtBeforeExclusive);
+
+    void delete(long id);
+
+    Integer selectAttemptCount(long id);
+
+    int updateGiveUp(long id, int nextAttempts, long nowEpochMillis);
+
+    int updateRetry(long id, int nextAttempts, long nextAt, long nowEpochMillis);
+
+    int giveUpRow(long id, long nowEpochMillis, int maxAttempts);
+  }
+
+  private record PostgresqlReportOutboxStore(WorkerReportOutboxPgMapper mapper)
+      implements WorkerReportOutboxStore {
+    @Override
+    public void upsert(WorkerReportOutboxUpsertParam param) {
+      mapper.upsert(param);
+    }
+
+    @Override
+    public Optional<WorkerReportOutboxRow> claimNext(long nowEpochMillis) {
+      List<WorkerReportOutboxRow> rows =
+          mapper.claimNextReturning(nowEpochMillis, STATUS_NEW, STATUS_PUBLISHING);
+      return EmptyChecks.isEmpty(rows) ? Optional.empty() : Optional.of(rows.getFirst());
+    }
+
+    @Override
+    public int resetStalePublishing(long nowEpochMillis, long updatedAtBeforeExclusive) {
+      return mapper.resetStalePublishing(
+          STATUS_NEW, nowEpochMillis, STATUS_PUBLISHING, updatedAtBeforeExclusive);
+    }
+
+    @Override
+    public WorkerReportOutboxStats stats(long staleUpdatedAtBeforeExclusive) {
+      return new WorkerReportOutboxStats(
+          mapper.countByStatus(STATUS_NEW),
+          mapper.countByStatus(STATUS_PUBLISHING),
+          mapper.countByStatus(STATUS_GIVE_UP),
+          mapper.countStalePublishing(STATUS_PUBLISHING, staleUpdatedAtBeforeExclusive));
+    }
+
+    @Override
+    public void delete(long id) {
+      mapper.deleteById(id);
+    }
+
+    @Override
+    public Integer selectAttemptCount(long id) {
+      return mapper.selectAttemptCount(id);
+    }
+
+    @Override
+    public int updateGiveUp(long id, int nextAttempts, long nowEpochMillis) {
+      return mapper.updateGiveUp(
+          id, STATUS_GIVE_UP, nextAttempts, nowEpochMillis, STATUS_PUBLISHING);
+    }
+
+    @Override
+    public int updateRetry(long id, int nextAttempts, long nextAt, long nowEpochMillis) {
+      return mapper.updateRetry(
+          id, nextAttempts, nextAt, nowEpochMillis, STATUS_NEW, STATUS_PUBLISHING);
+    }
+
+    @Override
+    public int giveUpRow(long id, long nowEpochMillis, int maxAttempts) {
+      return mapper.giveUpRow(id, STATUS_GIVE_UP, nowEpochMillis, maxAttempts, STATUS_PUBLISHING);
+    }
+  }
+
+  private record SqliteReportOutboxStore(WorkerReportOutboxSqliteMapper mapper)
+      implements WorkerReportOutboxStore {
+    @Override
+    public void upsert(WorkerReportOutboxUpsertParam param) {
+      mapper.upsert(param);
+    }
+
+    @Override
+    public Optional<WorkerReportOutboxRow> claimNext(long nowEpochMillis) {
+      Long id = mapper.pickNextNewId(nowEpochMillis, STATUS_NEW);
+      if (EmptyChecks.isNull(id)) {
+        return Optional.empty();
+      }
+      WorkerReportOutboxRow row =
+          mapper.updateClaimReturning(id, STATUS_PUBLISHING, nowEpochMillis, STATUS_NEW);
+      return Optional.ofNullable(row);
+    }
+
+    @Override
+    public int resetStalePublishing(long nowEpochMillis, long updatedAtBeforeExclusive) {
+      return mapper.resetStalePublishing(
+          STATUS_NEW, nowEpochMillis, STATUS_PUBLISHING, updatedAtBeforeExclusive);
+    }
+
+    @Override
+    public WorkerReportOutboxStats stats(long staleUpdatedAtBeforeExclusive) {
+      return new WorkerReportOutboxStats(
+          mapper.countByStatus(STATUS_NEW),
+          mapper.countByStatus(STATUS_PUBLISHING),
+          mapper.countByStatus(STATUS_GIVE_UP),
+          mapper.countStalePublishing(STATUS_PUBLISHING, staleUpdatedAtBeforeExclusive));
+    }
+
+    @Override
+    public void delete(long id) {
+      mapper.deleteById(id);
+    }
+
+    @Override
+    public Integer selectAttemptCount(long id) {
+      return mapper.selectAttemptCount(id);
+    }
+
+    @Override
+    public int updateGiveUp(long id, int nextAttempts, long nowEpochMillis) {
+      return mapper.updateGiveUp(id, STATUS_GIVE_UP, nextAttempts, nowEpochMillis);
+    }
+
+    @Override
+    public int updateRetry(long id, int nextAttempts, long nextAt, long nowEpochMillis) {
+      return mapper.updateRetry(id, nextAttempts, nextAt, nowEpochMillis, STATUS_NEW);
+    }
+
+    @Override
+    public int giveUpRow(long id, long nowEpochMillis, int maxAttempts) {
+      return mapper.giveUpRow(id, STATUS_GIVE_UP, nowEpochMillis, maxAttempts);
+    }
   }
 }

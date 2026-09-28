@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ApiKeyResponse;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleApiKeyCreateResponse;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleApiKeyService;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -29,7 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @Validated
 @RequestMapping("/api/console/api-keys")
-@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
+@PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_TENANT_USER)
 @RequiredArgsConstructor
 @Idempotent
 public class ConsoleApiKeyController {
@@ -77,7 +78,7 @@ public class ConsoleApiKeyController {
   @DeleteMapping("/{id}")
   // 撤销权与创建权对称:能自助建 key 的 TENANT_USER 也必须能撤销(泄露/轮换自救),
   // 否则"能建不能撤"是更大的安全洞。租户隔离由 service 层保证。
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_TENANT_USER)
   @AuditAction(
       action = "apiKey.revoke",
       aggregateType = "api_key",

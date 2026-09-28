@@ -12,6 +12,7 @@
 
 ### Changed
 
+- Console AI 限制外发上下文为有界 JSON 并递归拒绝凭据字段；跨 Provider 故障切换需显式配置启用，默认关闭；响应与审计模型标识使用实际 provider 响应 metadata。
 - Cron 预览移出匿名白名单，仅允许四类正式 Console 角色调用。
 - 控制台 RBAC 彻底收敛为 `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_TENANT_ADMIN` / `ROLE_TENANT_USER` 四类正式角色；V213 一次性迁移旧 `ROLE_USER` 并增加数据库约束，运行时、菜单、JWT 和账号 API 不再兼容旧角色。
 - 审批写操作收口为平台管理员和租户管理员，审计员维持跨租户只读职责。

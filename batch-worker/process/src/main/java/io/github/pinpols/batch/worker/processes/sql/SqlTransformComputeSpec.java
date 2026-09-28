@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -68,18 +69,18 @@ public record SqlTransformComputeSpec(
    */
   private static final Set<String> RESERVED_PARAMS = Set.of(
       "tenantId",
-      "jobCode",
+      PipelineRuntimeKeys.JOB_CODE,
       "workerId",
-      "highWaterMarkIn",
-      "traceId",
+      PipelineRuntimeKeys.HIGH_WATER_MARK_IN,
+      PipelineRuntimeKeys.TRACE_ID,
       "stepCode",
       "batchKey",
       "targetSchema",
       "targetTable",
-      "partitionNo",
-      "partitionCount",
-      "partitionKey",
-      "bizDate");
+      PipelineRuntimeKeys.PARTITION_NO,
+      PipelineRuntimeKeys.PARTITION_COUNT,
+      PipelineRuntimeKeys.PARTITION_KEY,
+      PipelineRuntimeKeys.BIZ_DATE);
 
   private static final String METADATA_PARAM_PREFIX =
       SqlTransformComputeConstants.METADATA_PARAM_PREFIX;

@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.observability.ConsoleSystemParameterService;
 import io.github.pinpols.batch.console.domain.observability.application.contract.response.ConsoleSystemParameterValueResponse;
 import io.github.pinpols.batch.console.domain.observability.application.contract.response.SystemParameterResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.support.web.Idempotent;
@@ -25,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @Validated
 @RequestMapping("/api/console/system-parameters")
-@PreAuthorize("hasAuthority('ROLE_ADMIN')")
+@PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
 @RequiredArgsConstructor
 @Idempotent
 public class ConsoleSystemParameterController {

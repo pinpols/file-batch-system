@@ -6,6 +6,7 @@ import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import io.github.pinpols.batch.common.config.BatchProfileSupport;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
@@ -420,9 +421,9 @@ public class ConsoleJwtService {
 
   private SecretKey signingKey() {
     try {
-      byte[] keyBytes = MessageDigest.getInstance("SHA-256")
+      byte[] keyBytes = MessageDigest.getInstance(CryptoAlgorithms.SHA_256)
           .digest(properties.getJwtSecret().getBytes(StandardCharsets.UTF_8));
-      return new SecretKeySpec(keyBytes, "HmacSHA256");
+      return new SecretKeySpec(keyBytes, CryptoAlgorithms.HMAC_SHA256);
     } catch (NoSuchAlgorithmException exception) {
       throw new IllegalStateException("SHA-256 is not available", exception);
     }

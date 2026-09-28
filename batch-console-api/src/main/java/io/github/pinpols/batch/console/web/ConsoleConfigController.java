@@ -14,6 +14,7 @@ import io.github.pinpols.batch.console.application.contract.response.config.Conf
 import io.github.pinpols.batch.console.application.contract.response.config.ConsoleConfigChangeLogResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.ConsoleConfigReleaseResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.request.SecretVersionRotateRequest;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.view.ConsoleSecretVersionResponse;
 import io.github.pinpols.batch.console.support.web.Idempotent;
@@ -48,7 +49,7 @@ public class ConsoleConfigController {
 
   /** 查询配置发布单列表。 */
   @GetMapping("/releases")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
   public CommonResponse<List<ConsoleConfigReleaseResponse>> configReleases(
       @Valid @ModelAttribute ConfigReleaseQueryRequest request) {
     return responseFactory.success(applicationService.configReleases(request));
@@ -56,14 +57,14 @@ public class ConsoleConfigController {
 
   /** 查询所有启动期配置绑定点及其生效、重启与敏感级别。 */
   @GetMapping("/governance")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
   public CommonResponse<List<ConfigGovernanceItemResponse>> configGovernanceCatalog() {
     return responseFactory.success(applicationService.configGovernanceCatalog());
   }
 
   /** 创建配置发布单草稿。 */
   @PostMapping("/releases")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
   public CommonResponse<Long> createConfigRelease(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody ConfigReleaseUpsertRequest request) {
@@ -73,7 +74,7 @@ public class ConsoleConfigController {
   /** 已弃用的直接发布端点，仅用于向旧客户端返回明确的终止响应。 */
   @Deprecated
   @PostMapping("/releases/{releaseId}/publish")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
   public ResponseEntity<Void> deprecatedPublishConfigRelease(
       @PathVariable Long releaseId,
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
@@ -84,7 +85,7 @@ public class ConsoleConfigController {
   /** 已弃用的灰度发布端点，仅用于向旧客户端返回明确的终止响应。 */
   @Deprecated
   @PostMapping("/releases/{releaseId}/gray")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
   public ResponseEntity<Void> deprecatedGrayConfigRelease(
       @PathVariable Long releaseId,
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
@@ -94,7 +95,7 @@ public class ConsoleConfigController {
 
   /** 回滚配置发布。 */
   @PostMapping("/releases/{releaseId}/rollback")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
   public CommonResponse<String> rollbackConfigRelease(
       @PathVariable Long releaseId,
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
@@ -104,7 +105,7 @@ public class ConsoleConfigController {
 
   /** 查询密钥版本。 */
   @GetMapping("/secrets")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
   public CommonResponse<List<ConsoleSecretVersionResponse>> secretVersions(
       @Valid @ModelAttribute SecretVersionQueryRequest request) {
     return responseFactory.success(applicationService.secretVersions(request));
@@ -112,7 +113,7 @@ public class ConsoleConfigController {
 
   /** 轮换密钥。 */
   @PostMapping("/secrets/rotate")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
   public CommonResponse<Long> rotateSecretVersion(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody SecretVersionRotateRequest request) {
@@ -121,14 +122,14 @@ public class ConsoleConfigController {
 
   /** 查询配置变更日志。 */
   @GetMapping("/change-logs")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
   public CommonResponse<List<ConsoleConfigChangeLogResponse>> configChangeLogs(
       @Valid @ModelAttribute ConfigChangeLogQueryRequest request) {
     return responseFactory.success(applicationService.configChangeLogs(request));
   }
 
   @GetMapping("/releases/{releaseId}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
   public CommonResponse<ConsoleConfigReleaseResponse> configReleaseDetail(
       @PathVariable Long releaseId, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(applicationService.configReleaseDetail(tenantId, releaseId));
@@ -136,7 +137,7 @@ public class ConsoleConfigController {
 
   /** 查询配置项的依赖关系。 */
   @GetMapping("/dependencies")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
   public CommonResponse<ConfigDependenciesResponse> configDependencies(
       @RequestParam("tenantId") String tenantId,
       @RequestParam("configType") String configType,
@@ -147,7 +148,7 @@ public class ConsoleConfigController {
 
   /** 对比两个配置发布版本的差异。 */
   @GetMapping("/releases/diff")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
   public CommonResponse<ConfigReleaseDiffResponse> diffConfigReleases(
       @RequestParam("tenantId") String tenantId,
       @RequestParam("releaseIdA") Long releaseIdA,
@@ -157,7 +158,7 @@ public class ConsoleConfigController {
   }
 
   @GetMapping("/secrets/{secretVersionId}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
   public CommonResponse<ConsoleSecretVersionResponse> secretVersionDetail(
       @PathVariable Long secretVersionId, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(

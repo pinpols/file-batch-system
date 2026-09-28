@@ -96,6 +96,9 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
   static final String PARAM_TIMEOUT = "timeoutSeconds";
   static final String PARAM_EXPECT_STATUS = "expectStatus";
   static final String PARAM_AUTH = "auth";
+  private static final String AUTH_TYPE_NONE = "none";
+  private static final String AUTH_TYPE_BASIC = "basic";
+  private static final String AUTH_TYPE_BEARER = "bearer";
 
   private static final Set<String> IDEMPOTENT_METHODS = Set.of("GET", "HEAD", "PUT", "DELETE");
 
@@ -394,16 +397,17 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
     }
     @SuppressWarnings("unchecked")
     Map<String, Object> auth = (Map<String, Object>) rawAuth;
-    String type = String.valueOf(auth.getOrDefault("type", "none")).toLowerCase(Locale.ROOT);
+    String type =
+        String.valueOf(auth.getOrDefault("type", AUTH_TYPE_NONE)).toLowerCase(Locale.ROOT);
     if (!props.getAllowedAuthTypes().contains(type)) {
       throw new HttpValidationException(
           "auth type " + type + " not in allowedAuthTypes=" + props.getAllowedAuthTypes());
     }
     switch (type) {
-      case "none" -> {
+      case AUTH_TYPE_NONE -> {
         // 无操作
       }
-      case "basic" -> {
+      case AUTH_TYPE_BASIC -> {
         String user = Objects.toString(auth.get("username"), "");
         // ADR-039 P1:password 若是 ${ENV_NAME} envRef,解出部署侧真实值;明文原样放行。
         String pass = CredentialEnvResolver.resolve(Objects.toString(auth.get("password"), ""));
@@ -411,7 +415,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
             .encodeToString((user + ":" + pass).getBytes(StandardCharsets.UTF_8));
         headers.put("Authorization", "Basic " + token);
       }
-      case "bearer" -> {
+      case AUTH_TYPE_BEARER -> {
         // ADR-039 P1:token 若是 ${ENV_NAME} envRef,解出部署侧真实值;明文原样放行。
         String token = CredentialEnvResolver.resolve(Objects.toString(auth.get("token"), ""));
         if (token.isEmpty()) {

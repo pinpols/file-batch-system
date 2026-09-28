@@ -28,11 +28,14 @@ public class ConsoleAiProperties {
    */
   private Provider provider = Provider.ANTHROPIC;
 
-  /** 聊天模型 ID(仅用于审计记录展示;实际模型由对应 provider 的 spring.ai 配置决定)。 */
-  private String model = "claude-opus-4-8";
+  /** 跨 Provider 故障切换需显式启用，避免请求内容未经授权转发到其他模型服务。 */
+  private boolean failoverEnabled = false;
 
   /** Prompt 长度上限（字符）。超长直接拒绝，避免成本失控 + DoS。 */
   private int maxPromptLength = 4000;
+
+  /** 额外上下文序列化后的最大字符数。 */
+  private int maxContextChars = 2000;
 
   /** 模型回复长度上限（字符）。超出截断。 */
   private int maxResponseLength = 3000;

@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.workflow.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.model.PageResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.domain.workflow.application.PipelineDefinitionService;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.PipelineDefinitionSaveRequest;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsolePipelineDefinitionListItemResponse;
@@ -28,7 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @Validated
 @RequestMapping("/api/console/pipeline-definitions")
-@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+@PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
 @RequiredArgsConstructor
 @Idempotent
 public class ConsolePipelineDefinitionController {

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
@@ -333,8 +334,9 @@ public class WebhookDispatcher {
 
   private String sign(String payloadJson, String secret) {
     try {
-      Mac mac = Mac.getInstance("HmacSHA256");
-      mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+      Mac mac = Mac.getInstance(CryptoAlgorithms.HMAC_SHA256);
+      mac.init(
+          new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), CryptoAlgorithms.HMAC_SHA256));
       byte[] digest = mac.doFinal(payloadJson.getBytes(StandardCharsets.UTF_8));
       return "sha256=" + HexFormat.of().formatHex(digest);
     } catch (Exception ex) {

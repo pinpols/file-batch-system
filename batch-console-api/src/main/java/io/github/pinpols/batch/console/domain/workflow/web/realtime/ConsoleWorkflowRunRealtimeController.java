@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.workflow.web.realtime;
 
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeSubscriptionPort;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -15,7 +16,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RestController
 @Validated
 @RequestMapping("/api/console/workflow-runs")
-@PreAuthorize("hasAuthority('ROLE_ADMIN')")
+@PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
 @RequiredArgsConstructor
 public class ConsoleWorkflowRunRealtimeController {
 

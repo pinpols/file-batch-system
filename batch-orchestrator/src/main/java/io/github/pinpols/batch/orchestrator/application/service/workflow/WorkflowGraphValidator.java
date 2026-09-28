@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowValidationResult.ValidationIssue;
@@ -18,6 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -562,47 +564,71 @@ public class WorkflowGraphValidator {
 
   private void validateSensorSpecByType(
       String sensorType, Map<String, Object> spec, String nodeCode, List<ValidationIssue> errors) {
-    switch (sensorType) {
-      case "FILE_ARRIVAL" -> {
-        if (!Texts.hasText(asString(spec.get("pattern")))) {
-          errors.add(issue(V16C, "FILE_ARRIVAL sensor_spec.pattern required", nodeCode));
-        }
-        Long age = asLong(spec.get("maxAgeSeconds"));
-        if (age == null || age <= 0) {
-          errors.add(issue(V16C, "FILE_ARRIVAL sensor_spec.maxAgeSeconds required", nodeCode));
-        }
-      }
-      case "HTTP_POLL" -> {
-        if (!Texts.hasText(asString(spec.get("url")))) {
-          errors.add(issue(V16C, "HTTP_POLL sensor_spec.url required", nodeCode));
-        }
-        if (!Texts.hasText(asString(spec.get("matchExpr")))) {
-          errors.add(issue(V16C, "HTTP_POLL sensor_spec.matchExpr required", nodeCode));
-        }
-      }
-      case "KAFKA_OFFSET" -> {
-        if (!Texts.hasText(asString(spec.get("topic")))) {
-          errors.add(issue(V16C, "KAFKA_OFFSET sensor_spec.topic required", nodeCode));
-        }
-        if (asLong(spec.get("partition")) == null) {
-          errors.add(issue(V16C, "KAFKA_OFFSET sensor_spec.partition required", nodeCode));
-        }
-        if (asLong(spec.get("minOffset")) == null) {
-          errors.add(issue(V16C, "KAFKA_OFFSET sensor_spec.minOffset required", nodeCode));
-        }
-      }
-      case "DB_ROW_EXISTS" -> {
-        if (!Texts.hasText(asString(spec.get("schema")))) {
-          errors.add(issue(V16C, "DB_ROW_EXISTS sensor_spec.schema required", nodeCode));
-        }
-        if (!Texts.hasText(asString(spec.get("sql")))) {
-          errors.add(issue(V16C, "DB_ROW_EXISTS sensor_spec.sql required", nodeCode));
-        }
-      }
-      default -> {
-        // 不应到此（type 已在外层 V16-b 校验）
-      }
+    SensorSpecValidator validator = sensorSpecValidators().get(sensorType);
+    if (EmptyChecks.isNotNull(validator)) {
+      validator.validate(spec, nodeCode, errors);
     }
+  }
+
+  private Map<String, SensorSpecValidator> sensorSpecValidators() {
+    return Map.of(
+        "FILE_ARRIVAL",
+        this::validateFileArrivalSensorSpec,
+        "HTTP_POLL",
+        this::validateHttpPollSensorSpec,
+        "KAFKA_OFFSET",
+        this::validateKafkaOffsetSensorSpec,
+        "DB_ROW_EXISTS",
+        this::validateDbRowExistsSensorSpec);
+  }
+
+  private void validateFileArrivalSensorSpec(
+      Map<String, Object> spec, String nodeCode, List<ValidationIssue> errors) {
+    if (!Texts.hasText(asString(spec.get("pattern")))) {
+      errors.add(issue(V16C, "FILE_ARRIVAL sensor_spec.pattern required", nodeCode));
+    }
+    long age = Objects.requireNonNullElse(asLong(spec.get("maxAgeSeconds")), 0L);
+    if (age <= 0) {
+      errors.add(issue(V16C, "FILE_ARRIVAL sensor_spec.maxAgeSeconds required", nodeCode));
+    }
+  }
+
+  private void validateHttpPollSensorSpec(
+      Map<String, Object> spec, String nodeCode, List<ValidationIssue> errors) {
+    if (!Texts.hasText(asString(spec.get("url")))) {
+      errors.add(issue(V16C, "HTTP_POLL sensor_spec.url required", nodeCode));
+    }
+    if (!Texts.hasText(asString(spec.get("matchExpr")))) {
+      errors.add(issue(V16C, "HTTP_POLL sensor_spec.matchExpr required", nodeCode));
+    }
+  }
+
+  private void validateKafkaOffsetSensorSpec(
+      Map<String, Object> spec, String nodeCode, List<ValidationIssue> errors) {
+    if (!Texts.hasText(asString(spec.get("topic")))) {
+      errors.add(issue(V16C, "KAFKA_OFFSET sensor_spec.topic required", nodeCode));
+    }
+    if (EmptyChecks.isNull(asLong(spec.get("partition")))) {
+      errors.add(issue(V16C, "KAFKA_OFFSET sensor_spec.partition required", nodeCode));
+    }
+    if (EmptyChecks.isNull(asLong(spec.get("minOffset")))) {
+      errors.add(issue(V16C, "KAFKA_OFFSET sensor_spec.minOffset required", nodeCode));
+    }
+  }
+
+  private void validateDbRowExistsSensorSpec(
+      Map<String, Object> spec, String nodeCode, List<ValidationIssue> errors) {
+    if (!Texts.hasText(asString(spec.get("schema")))) {
+      errors.add(issue(V16C, "DB_ROW_EXISTS sensor_spec.schema required", nodeCode));
+    }
+    if (!Texts.hasText(asString(spec.get("sql")))) {
+      errors.add(issue(V16C, "DB_ROW_EXISTS sensor_spec.sql required", nodeCode));
+    }
+  }
+
+  @FunctionalInterface
+  private interface SensorSpecValidator {
+    void validate(Map<String, Object> spec, String nodeCode, List<ValidationIssue> errors);
   }
 
   private static String asString(Object v) {

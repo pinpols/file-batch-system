@@ -53,7 +53,7 @@ spring:
       api-key: ${OPENAI_API_KEY:}
       chat:
         options:
-          # OpenAI 聊天模型(仅当 provider=openai 或 anthropic 不可用时回退使用)
+          # OpenAI 聊天模型(仅当 provider=openai 或显式启用跨 Provider 故障切换时使用)
           model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
       embedding:
         options:
@@ -148,8 +148,8 @@ batch:
       enabled: ${BATCH_CONSOLE_AI_ENABLED:false}
       # 聊天 provider:anthropic(默认,Claude)/ openai
       provider: ${BATCH_CONSOLE_AI_PROVIDER:anthropic}
-      # AI 模型(仅用于审计展示;实际由对应 provider 的 spring.ai 配置决定)
-      model: ${BATCH_CONSOLE_AI_MODEL:claude-opus-4-8}
+      # 跨 Provider 故障切换会将同一请求发送给另一家模型服务，默认关闭，启用前需确认数据处理策略
+      failover-enabled: ${BATCH_CONSOLE_AI_FAILOVER_ENABLED:false}
       # RAG 检索增强:用系统自身知识库片段给模型作答事实依据
       rag:
         enabled: ${BATCH_CONSOLE_AI_RAG_ENABLED:true}
@@ -160,6 +160,8 @@ batch:
           - classpath:ai-knowledge/*.md
       # prompt 最大长度（防止输入过长导致请求失败/费用不可控）
       max-prompt-length: ${BATCH_CONSOLE_AI_MAX_PROMPT_LENGTH:4000}
+      # 上下文 JSON 字符上限；字段/深度/节点另有固定保护
+      max-context-chars: ${BATCH_CONSOLE_AI_MAX_CONTEXT_CHARS:2000}
       # response 最大长度（防止输出过长）
       max-response-length: ${BATCH_CONSOLE_AI_MAX_RESPONSE_LENGTH:3000}
       # 调用限流:每租户+每用户每分钟最大调用次数(滑动窗口,复用 console 限流器,key 含 tenant)。

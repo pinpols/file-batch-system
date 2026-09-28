@@ -9,6 +9,7 @@ import io.github.pinpols.batch.console.application.contract.response.config.Tena
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigPackageExcelGuideResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigPackageExcelPreviewResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigPackageExcelUploadResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
@@ -57,7 +58,7 @@ public class ConsoleTenantConfigPackageExcelController {
    * <p>R2-P1-9：返回 {@link StreamingResponseBody} 让 workbook 直接写到响应流，不再缓 byte[]。
    */
   @GetMapping("/export")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_AUDITOR')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)
   public ResponseEntity<StreamingResponseBody> export(
       @RequestParam(required = false) String tenantId) {
     return tenantConfigExcelService.exportPackage(tenantId);
@@ -69,14 +70,14 @@ public class ConsoleTenantConfigPackageExcelController {
    * <p>R2-P1-9：streaming 返回避免 byte[] 双拷贝。
    */
   @GetMapping("/template")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_AUDITOR')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)
   public ResponseEntity<StreamingResponseBody> template() {
     return tenantConfigExcelService.downloadTemplate();
   }
 
   /** 下载带示例数据的场景化配置包模板，完整 11-Sheet 结构不变。 */
   @GetMapping("/sample-template")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_AUDITOR')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)
   public ResponseEntity<StreamingResponseBody> sampleTemplate(
       @RequestParam(value = "scenario", required = false) String scenario,
       @RequestParam(value = "scenarios", required = false) List<String> scenarios) {
@@ -85,7 +86,7 @@ public class ConsoleTenantConfigPackageExcelController {
 
   /** 返回 11 个 Sheet 的必填、类型、枚举、默认留空行为和填写示例，供 Console 页面直接展示。 */
   @GetMapping("/guide")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN', 'ROLE_AUDITOR')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)
   public CommonResponse<TenantConfigPackageExcelGuideResponse> guide() {
     return responseFactory.success(tenantConfigExcelService.guide());
   }
@@ -98,7 +99,7 @@ public class ConsoleTenantConfigPackageExcelController {
    *     tenantId）
    */
   @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<TenantConfigPackageExcelUploadResponse> upload(
       @RequestParam("file") MultipartFile file,
       @RequestParam(value = "tenantId", required = false) String tenantId)
@@ -112,7 +113,7 @@ public class ConsoleTenantConfigPackageExcelController {
    * @param uploadToken {@code /upload} 响应中的令牌
    */
   @GetMapping("/preview/{uploadToken}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<TenantConfigPackageExcelPreviewResponse> preview(
       @PathVariable String uploadToken) {
     return responseFactory.success(tenantConfigExcelService.preview(uploadToken));
@@ -125,7 +126,7 @@ public class ConsoleTenantConfigPackageExcelController {
    * @param request 定位 (sheetName, rowNo) + 改动单元格 values
    */
   @PostMapping("/preview/{uploadToken}/patch")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<TenantConfigPackageExcelPreviewResponse> patchPreviewRow(
       @PathVariable String uploadToken,
       @Valid @RequestBody TenantConfigPackageExcelPatchRequest request) {
@@ -139,7 +140,7 @@ public class ConsoleTenantConfigPackageExcelController {
    * @param uploadToken 与预览阶段相同
    */
   @GetMapping("/preview/{uploadToken}/workbook")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public ResponseEntity<StreamingResponseBody> previewWorkbook(@PathVariable String uploadToken) {
     return tenantConfigExcelService.downloadPreviewWorkbook(uploadToken);
   }
@@ -152,7 +153,7 @@ public class ConsoleTenantConfigPackageExcelController {
    * @param request 可选变更说明（见 {@link TenantConfigPackageExcelApplyRequest}）
    */
   @PostMapping("/apply/{uploadToken}")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
   public CommonResponse<TenantConfigPackageExcelApplyResponse> apply(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable String uploadToken,

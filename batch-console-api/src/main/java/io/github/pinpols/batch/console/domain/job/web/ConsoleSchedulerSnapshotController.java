@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.job.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.view.ConsoleSchedulerSnapshotHistoryResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleSchedulerSnapshotResponse;
@@ -18,8 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @Validated
 @RequestMapping("/api/console/scheduler")
-@PreAuthorize(
-    "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
+@PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
 @RequiredArgsConstructor
 public class ConsoleSchedulerSnapshotController {
 

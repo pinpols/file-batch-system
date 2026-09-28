@@ -76,7 +76,8 @@ class ImportPreprocessPipelineTest {
     entries.put("first.csv", "first".getBytes(StandardCharsets.UTF_8));
     entries.put("second.csv", "second".getBytes(StandardCharsets.UTF_8));
     byte[] tar = buildTar(entries);
-    Map<String, Object> step = Map.of("type", "UNTAR", "entryName", "second.csv");
+    Map<String, Object> step =
+        Map.of("type", ImportPreprocessStepTypes.UNTAR, "entryName", "second.csv");
     Map<String, Object> template = Map.of("preprocess_pipeline", List.of(step));
     byte[] out = ImportPreprocessPipeline.run(tar, null, template, true);
     assertThat(out).isEqualTo("second".getBytes(StandardCharsets.UTF_8));
@@ -200,8 +201,13 @@ class ImportPreprocessPipelineTest {
     byte[] raw = "abc".getBytes(StandardCharsets.UTF_8);
     MessageDigest md = MessageDigest.getInstance("SHA-256");
     String expectedHex = HexFormat.of().formatHex(md.digest(raw));
-    Map<String, Object> step =
-        Map.of("type", "VERIFY_DIGEST", "algorithm", "SHA-256", "expectedHex", expectedHex);
+    Map<String, Object> step = Map.of(
+        "type",
+        ImportPreprocessStepTypes.VERIFY_DIGEST,
+        "algorithm",
+        "SHA-256",
+        "expectedHex",
+        expectedHex);
     Map<String, Object> template = Map.of("preprocess_pipeline", List.of(step));
 
     byte[] out = ImportPreprocessPipeline.run(raw, null, template, false);
@@ -212,7 +218,12 @@ class ImportPreprocessPipelineTest {
   void verifyDigestShouldThrowWhenChecksumMismatches() {
     byte[] raw = "abc".getBytes(StandardCharsets.UTF_8);
     Map<String, Object> step = Map.of(
-        "type", "VERIFY_DIGEST", "algorithm", "SHA-256", "expectedHex", "deadbeef".repeat(8));
+        "type",
+        ImportPreprocessStepTypes.VERIFY_DIGEST,
+        "algorithm",
+        "SHA-256",
+        "expectedHex",
+        "deadbeef".repeat(8));
     Map<String, Object> template = Map.of("preprocess_pipeline", List.of(step));
     assertThatThrownBy(() -> ImportPreprocessPipeline.run(raw, null, template, false))
         .isInstanceOf(ImportPreprocessException.class);

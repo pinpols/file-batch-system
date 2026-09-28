@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.rbac.ConsoleMetaQueryService;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleMetaEnumItem;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleMetaOption;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import java.util.List;
 import java.util.Map;
@@ -18,8 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @Validated
 @RequestMapping("/api/console/meta")
-@PreAuthorize(
-    "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
+@PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
 @RequiredArgsConstructor
 public class ConsoleMetaController {
 

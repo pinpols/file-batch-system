@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.AtomicTaskConfigResponse;
 import io.github.pinpols.batch.console.domain.ops.entity.AtomicTaskConfigEntity;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleAtomicTaskConfigService;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
@@ -29,7 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/console/ops/atomic-task-configs")
-@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+@PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
 @RequiredArgsConstructor
 public class ConsoleAtomicTaskConfigController {
 

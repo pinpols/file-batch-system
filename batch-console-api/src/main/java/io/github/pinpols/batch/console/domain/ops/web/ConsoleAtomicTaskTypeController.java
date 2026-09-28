@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.ops.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.ops.dto.AtomicTaskTypeSchema;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleAtomicTaskTypeSchemaService;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/console/atomic-task-types")
-@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+@PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
 @RequiredArgsConstructor
 public class ConsoleAtomicTaskTypeController {
 

@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.exports.stage;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.common.enums.FileChecksumType;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
@@ -36,10 +37,15 @@ public class RegisterStep implements ExportStageStep {
 
   private static final String ERROR_CODE_REGISTER_INVALID = "EXPORT_REGISTER_INVALID";
 
-  private static final String KEY_OBJECT_NAME = "objectName";
+  private static final String KEY_OBJECT_NAME = PipelineRuntimeKeys.OBJECT_NAME;
+  private static final String KEY_TOTAL_AMOUNT = "totalAmount";
 
-  private static final Set<String> RESERVED_METADATA_KEYS =
-      Set.of("recordCount", "totalAmount", "templateCode", KEY_OBJECT_NAME, "exportSnapshot");
+  private static final Set<String> RESERVED_METADATA_KEYS = Set.of(
+      PipelineRuntimeKeys.RECORD_COUNT,
+      KEY_TOTAL_AMOUNT,
+      "templateCode",
+      KEY_OBJECT_NAME,
+      "exportSnapshot");
 
   private static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
@@ -97,10 +103,11 @@ public class RegisterStep implements ExportStageStep {
           ERROR_OBJECT_MAPPER);
     }
     String objectName = String.valueOf(attrs.get(KEY_OBJECT_NAME));
-    String fileName = String.valueOf(attrs.get("fileName"));
-    String fileFormatType = String.valueOf(attrs.getOrDefault("exportFileFormatType", "JSON"));
+    String fileName = String.valueOf(attrs.get(PipelineRuntimeKeys.FILE_NAME));
+    String fileFormatType =
+        String.valueOf(attrs.getOrDefault(PipelineRuntimeKeys.EXPORT_FILE_FORMAT_TYPE, "JSON"));
     String bucket = s3StorageProperties.getBucket();
-    String expectedChecksum = nullableText(attrs.get("checksumValue"));
+    String expectedChecksum = nullableText(attrs.get(PipelineRuntimeKeys.CHECKSUM_VALUE));
     // 相同路径的 file_record 已存在时进行幂等复用（STORE → REGISTER 重试场景）
     if (fileRecords.existsFileRecordByStoragePath(context.getTenantId(), bucket, objectName)) {
       Map<String, Object> existing =
@@ -121,8 +128,8 @@ public class RegisterStep implements ExportStageStep {
     }
 
     Map<String, Object> metadata = new LinkedHashMap<>();
-    metadata.put("recordCount", attrs.get("recordCount"));
-    metadata.put("totalAmount", attrs.get("totalAmount"));
+    metadata.put(PipelineRuntimeKeys.RECORD_COUNT, attrs.get(PipelineRuntimeKeys.RECORD_COUNT));
+    metadata.put(KEY_TOTAL_AMOUNT, attrs.get(KEY_TOTAL_AMOUNT));
     metadata.put("templateCode", exportPayload.templateCode());
     metadata.put(KEY_OBJECT_NAME, objectName);
     mergeSecurityMetadata(metadata, attrs);
@@ -138,7 +145,8 @@ public class RegisterStep implements ExportStageStep {
       metadata.put("exportWithBom", attrs.get("exportWithBom"));
     }
     mergeUserMetadata(metadata, exportPayload.metadata());
-    Long fileSizeBytes = PlatformRuntimeValues.toLong(attrs.get("fileSizeBytes"));
+    Long fileSizeBytes =
+        PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_SIZE_BYTES));
     Long fileId = fileRecords.createFileRecord(FileRecordParam.builder()
         .tenantId(context.getTenantId())
         .fileCode(exportPayload.fileCode())
@@ -150,8 +158,9 @@ public class RegisterStep implements ExportStageStep {
         .fileFormatType(fileFormatType)
         .charset(exportCharset(attrs))
         .fileSizeBytes(EmptyChecks.isNull(fileSizeBytes) ? 0L : fileSizeBytes)
-        .checksumType(String.valueOf(attrs.getOrDefault("checksumType", "SHA-256")))
-        .checksumValue(nullableText(attrs.get("checksumValue")))
+        .checksumType(String.valueOf(
+            attrs.getOrDefault(PipelineRuntimeKeys.CHECKSUM_TYPE, FileChecksumType.SHA_256.code())))
+        .checksumValue(nullableText(attrs.get(PipelineRuntimeKeys.CHECKSUM_VALUE)))
         .storageType("S3")
         .storagePath(objectName)
         .storageBucket(bucket)

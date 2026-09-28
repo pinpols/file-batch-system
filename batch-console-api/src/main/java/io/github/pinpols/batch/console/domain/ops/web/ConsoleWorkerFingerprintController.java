@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.WorkerFingerprintResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.WorkerFingerprintSummaryResponse;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleWorkerFingerprintQueryService;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/console/workers/fingerprints")
-@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')")
+@PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
 @RequiredArgsConstructor
 public class ConsoleWorkerFingerprintController {
 

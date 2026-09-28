@@ -151,6 +151,7 @@ consoleApi:
   ai:
     enabled: false
     provider: "anthropic"
+    failoverEnabled: false
   virtualThreads:
     # 实验开关：只作用于 Console API。完成 A/B 压测前保持关闭。
     enabled: false

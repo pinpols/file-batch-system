@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.rbac.support.captcha;
 
+import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import javax.crypto.Mac;
@@ -14,7 +15,7 @@ import javax.crypto.spec.SecretKeySpec;
 final class CaptchaCrypto {
 
   private static final char[] HEX = "0123456789abcdef".toCharArray();
-  private static final String HMAC_SHA256 = "HmacSHA256";
+  private static final String HMAC_SHA256 = CryptoAlgorithms.HMAC_SHA256;
 
   private CaptchaCrypto() {}
 
@@ -32,7 +33,7 @@ final class CaptchaCrypto {
   /** hex(sha256(utf8(data)))。 */
   static String sha256Hex(String data) {
     try {
-      MessageDigest md = MessageDigest.getInstance("SHA-256");
+      MessageDigest md = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
       return hex(md.digest(data.getBytes(StandardCharsets.UTF_8)));
     } catch (Exception ex) {
       throw new IllegalStateException("SHA-256 unavailable", ex);

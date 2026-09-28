@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.config;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
@@ -14,28 +15,46 @@ import org.springframework.context.annotation.Configuration;
 public class ConsoleAiConfiguration {
 
   /**
-   * 按 {@code batch.console.ai.provider} 选择聊天模型:默认 anthropic(Claude),可选 openai。 两个 starter 都在
-   * classpath 时会有两个 ChatModel bean,这里显式按 provider 取,避免注入歧义; 选中的 provider 不可用时回退另一个,都没有则启动报错(开启 AI
-   * 却没配模型 = 配置错误)。
+   * 按 {@code batch.console.ai.provider} 选择聊天模型。跨 Provider 故障切换仅在 {@code failover-enabled=true} 时启用；所选
+   * Provider 不可用时启动失败，不静默改用其他服务。
    */
   @Bean
   @ConditionalOnProperty(prefix = "batch.console.ai", name = "enabled", havingValue = "true")
-  public ChatClient consoleChatClient(
+  public ConsoleAiClients consoleAiClients(
       ObjectProvider<AnthropicChatModel> anthropicChatModel,
       ObjectProvider<OpenAiChatModel> openAiChatModel,
       ConsoleAiProperties properties) {
     boolean openAiPreferred = properties.getProvider() == ConsoleAiProperties.Provider.OPENAI;
     ChatModel primary =
         openAiPreferred ? openAiChatModel.getIfAvailable() : anthropicChatModel.getIfAvailable();
-    if (primary != null) {
-      return ChatClient.create(primary);
+    ChatModel fallback = null;
+    if (properties.isFailoverEnabled()) {
+      fallback =
+          openAiPreferred ? anthropicChatModel.getIfAvailable() : openAiChatModel.getIfAvailable();
     }
-    ChatModel fallback =
-        openAiPreferred ? anthropicChatModel.getIfAvailable() : openAiChatModel.getIfAvailable();
-    if (fallback != null) {
-      return ChatClient.create(fallback);
+    return createClients(
+        properties.getProvider(), primary, fallback, properties.isFailoverEnabled());
+  }
+
+  static ConsoleAiClients createClients(
+      ConsoleAiProperties.Provider preferredProvider,
+      ChatModel primaryModel,
+      ChatModel fallbackModel,
+      boolean failoverEnabled) {
+    if (EmptyChecks.isNull(primaryModel)) {
+      throw new IllegalStateException(
+          "configured console AI provider is unavailable; check batch.console.ai.provider and its credentials");
     }
-    throw new IllegalStateException(
-        "console AI enabled but no chat model available; configure anthropic or openai api-key");
+    String primaryName =
+        preferredProvider == ConsoleAiProperties.Provider.OPENAI ? "openai" : "anthropic";
+    String fallbackName =
+        preferredProvider == ConsoleAiProperties.Provider.OPENAI ? "anthropic" : "openai";
+    ConsoleAiClients.ProviderClient primary =
+        new ConsoleAiClients.ProviderClient(primaryName, ChatClient.create(primaryModel));
+    ConsoleAiClients.ProviderClient fallback =
+        failoverEnabled && EmptyChecks.isNotNull(fallbackModel)
+            ? new ConsoleAiClients.ProviderClient(fallbackName, ChatClient.create(fallbackModel))
+            : null;
+    return new ConsoleAiClients(primary, fallback);
   }
 }

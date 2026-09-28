@@ -10,6 +10,8 @@ import io.github.pinpols.batch.trigger.infrastructure.TriggerSchedulerFacade;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -155,25 +157,8 @@ public class TriggerReconciler {
         // 判断主调度漂移，否则会 delete-and-add 整个 Job，连恢复 Trigger 一起删掉。
         return false;
       }
-      if (ScheduleType.CRON.code().equalsIgnoreCase(type)) {
-        if (!(quartzTrigger instanceof CronTrigger ct)) {
-          return true;
-        }
-        if (!Objects.equals(ct.getCronExpression(), descriptor.getScheduleExpression())) {
-          return true;
-        }
-        String quartzTz =
-            EmptyChecks.isNull(ct.getTimeZone()) ? null : ct.getTimeZone().getID();
-        return !Objects.equals(quartzTz, descriptor.getTimezone());
-      }
-      if (ScheduleType.FIXED_RATE.code().equalsIgnoreCase(type)) {
-        if (!(quartzTrigger instanceof SimpleTrigger st)) {
-          return true;
-        }
-        long expectedMillis = parseSecondsOrMinusOne(descriptor.getScheduleExpression()) * 1000L;
-        return expectedMillis > 0 && st.getRepeatInterval() != expectedMillis;
-      }
-      return false;
+      ScheduleDriftChecker checker = driftCheckers().get(type.toUpperCase(Locale.ROOT));
+      return EmptyChecks.isNotNull(checker) && checker.hasDrift(quartzTrigger, descriptor);
     } catch (SchedulerException exception) {
       log.warn(
           "failed to inspect quartz trigger for drift check: key={}, reason={}",
@@ -181,6 +166,37 @@ public class TriggerReconciler {
           exception.getMessage());
       return false;
     }
+  }
+
+  private Map<String, ScheduleDriftChecker> driftCheckers() {
+    return Map.of(
+        ScheduleType.CRON.code(), this::hasCronScheduleDrift,
+        ScheduleType.FIXED_RATE.code(), this::hasFixedRateScheduleDrift);
+  }
+
+  private boolean hasCronScheduleDrift(Trigger quartzTrigger, TriggerDescriptor descriptor) {
+    if (!(quartzTrigger instanceof CronTrigger ct)) {
+      return true;
+    }
+    if (!Objects.equals(ct.getCronExpression(), descriptor.getScheduleExpression())) {
+      return true;
+    }
+    String quartzTz =
+        EmptyChecks.isNull(ct.getTimeZone()) ? null : ct.getTimeZone().getID();
+    return !Objects.equals(quartzTz, descriptor.getTimezone());
+  }
+
+  private boolean hasFixedRateScheduleDrift(Trigger quartzTrigger, TriggerDescriptor descriptor) {
+    if (!(quartzTrigger instanceof SimpleTrigger st)) {
+      return true;
+    }
+    long expectedMillis = parseSecondsOrMinusOne(descriptor.getScheduleExpression()) * 1000L;
+    return expectedMillis > 0 && st.getRepeatInterval() != expectedMillis;
+  }
+
+  @FunctionalInterface
+  private interface ScheduleDriftChecker {
+    boolean hasDrift(Trigger quartzTrigger, TriggerDescriptor descriptor);
   }
 
   private Trigger primaryTrigger(JobKey key, List<? extends Trigger> triggers) {

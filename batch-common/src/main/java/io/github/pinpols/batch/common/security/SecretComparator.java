@@ -25,9 +25,9 @@ public final class SecretComparator {
       return false;
     }
     try {
-      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
       byte[] expectedHash = digest.digest(expected.getBytes(StandardCharsets.UTF_8));
-      MessageDigest digest2 = MessageDigest.getInstance("SHA-256");
+      MessageDigest digest2 = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
       byte[] providedHash = digest2.digest(provided.getBytes(StandardCharsets.UTF_8));
       return MessageDigest.isEqual(expectedHash, providedHash);
     } catch (NoSuchAlgorithmException ex) {

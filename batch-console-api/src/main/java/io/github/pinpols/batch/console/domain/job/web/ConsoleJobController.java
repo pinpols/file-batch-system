@@ -12,6 +12,7 @@ import io.github.pinpols.batch.console.domain.job.application.contract.request.B
 import io.github.pinpols.batch.console.domain.job.application.contract.request.CompensateRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayCatchUpResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchTriggerEntryResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.command.CompensationCommandRequest;
 import io.github.pinpols.batch.console.shared.command.ConsoleCatchUpApprovalRequest;
@@ -55,7 +56,7 @@ public class ConsoleJobController {
 
   /** 手工触发作业运行（所有已认证用户均可触发）。dryRun=true 时仅校验不执行。 */
   @PostMapping("/trigger")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_USER')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_USER)
   public CommonResponse<Object> trigger(
       @RequestHeader(value = CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, required = false)
           String idempotencyKey,
@@ -69,7 +70,7 @@ public class ConsoleJobController {
 
   /** 批量触发多个作业。 */
   @PostMapping("/batch-trigger")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_USER')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_USER)
   public CommonResponse<List<ConsoleBatchTriggerEntryResponse>> batchTrigger(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @RequestBody @NotEmpty @Size(max = 50) List<@Valid TriggerRequest> items) {
@@ -78,7 +79,7 @@ public class ConsoleJobController {
 
   /** 登记补偿命令。 */
   @PostMapping("/compensations")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
   public CommonResponse<String> compensation(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody CompensationCommandRequest request) {
@@ -87,7 +88,7 @@ public class ConsoleJobController {
 
   /** 执行补偿。 */
   @PostMapping("/compensate")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
   public CommonResponse<String> compensate(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody CompensateRequest request) {
@@ -96,7 +97,7 @@ public class ConsoleJobController {
 
   /** 重跑实例或分区。 */
   @PostMapping("/rerun")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
   public CommonResponse<String> rerun(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody RerunRequest request) {
@@ -105,7 +106,7 @@ public class ConsoleJobController {
 
   /** 死信重放。 */
   @PostMapping("/dead-letters/replay")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
   public CommonResponse<String> replayDeadLetter(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody DeadLetterReplayRequest request) {
@@ -114,7 +115,7 @@ public class ConsoleJobController {
 
   /** 任务重放（job_task 粒度）。 */
   @PostMapping("/tasks/replay")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
   public CommonResponse<String> replayTask(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody TaskReplayRequest request) {
@@ -123,7 +124,7 @@ public class ConsoleJobController {
 
   /** 分区重放（job_partition 粒度）。 */
   @PostMapping("/partitions/replay")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
   public CommonResponse<String> replayPartition(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody PartitionReplayRequest request) {
@@ -132,7 +133,7 @@ public class ConsoleJobController {
 
   /** 审批通过 Catch-Up 请求。 */
   @PostMapping("/catch-up/approve")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
   public CommonResponse<String> approveCatchUp(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody ConsoleCatchUpApprovalRequest request) {
@@ -141,7 +142,7 @@ public class ConsoleJobController {
 
   /** 按批量日发起 catch-up。 */
   @PostMapping("/batch-days/{bizDate}/catchup")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
   public CommonResponse<ConsoleBatchDayCatchUpResponse> batchDayCatchUp(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable String bizDate,

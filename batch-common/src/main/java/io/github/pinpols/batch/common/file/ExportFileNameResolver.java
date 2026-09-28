@@ -1,7 +1,9 @@
 package io.github.pinpols.batch.common.file;
 
+import io.github.pinpols.batch.common.constants.BatchFileConstants;
+import io.github.pinpols.batch.common.enums.DictEnum;
+import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
-import java.util.Locale;
 import lombok.Builder;
 
 /** 导出文件名解析器。Console 预览与 Worker 运行时必须共用此实现。 */
@@ -42,12 +44,17 @@ public final class ExportFileNameResolver {
   }
 
   static String extension(String fileFormatType) {
-    return switch (defaultText(fileFormatType, "JSON").toUpperCase(Locale.ROOT)) {
-      case "DELIMITED" -> ".csv";
-      case "EXCEL" -> ".xlsx";
-      case "FIXED_WIDTH" -> ".txt";
-      case "XML" -> ".xml";
-      default -> ".json";
+    FileTemplateFormat format = DictEnum.fromCode(
+        FileTemplateFormat.class, defaultText(fileFormatType, FileTemplateFormat.JSON.code()));
+    if (EmptyChecks.isNull(format)) {
+      return BatchFileConstants.JSON_SUFFIX;
+    }
+    return switch (format) {
+      case DELIMITED -> BatchFileConstants.CSV_SUFFIX;
+      case EXCEL -> BatchFileConstants.XLSX_SUFFIX;
+      case FIXED_WIDTH -> BatchFileConstants.TXT_SUFFIX;
+      case XML -> BatchFileConstants.XML_SUFFIX;
+      default -> BatchFileConstants.JSON_SUFFIX;
     };
   }
 

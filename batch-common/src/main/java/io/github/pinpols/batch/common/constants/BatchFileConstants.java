@@ -10,11 +10,13 @@ public final class BatchFileConstants {
   public static final String OUTBOUND_OBJECT_PREFIX = "outbound/";
   public static final String FILE_PART_SUFFIX = ".part";
   public static final String BIN_SUFFIX = ".bin";
+  public static final String DAT_SUFFIX = ".dat";
   public static final String NDJSON_SUFFIX = ".ndjson";
   public static final String CSV_SUFFIX = ".csv";
   public static final String XLSX_SUFFIX = ".xlsx";
   public static final String TXT_SUFFIX = ".txt";
   public static final String JSON_SUFFIX = ".json";
+  public static final String XML_SUFFIX = ".xml";
   public static final String DEFAULT_FILE_NAME = "file.bin";
 
   public static final String CONTENT_TYPE_JSON = "application/json";

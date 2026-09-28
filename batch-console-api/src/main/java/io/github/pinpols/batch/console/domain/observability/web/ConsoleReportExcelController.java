@@ -8,6 +8,7 @@ import io.github.pinpols.batch.console.application.contract.query.OutboxRetryLog
 import io.github.pinpols.batch.console.application.contract.query.SecretVersionQueryRequest;
 import io.github.pinpols.batch.console.application.contract.query.WorkerRegistryQueryRequest;
 import io.github.pinpols.batch.console.domain.observability.application.ConsoleReportExcelApplicationService;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -23,8 +24,7 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 @RestController
 @Validated
 @RequestMapping("/api/console/reports/excel")
-@PreAuthorize(
-    "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
+@PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
 @RequiredArgsConstructor
 public class ConsoleReportExcelController {
 
@@ -39,7 +39,7 @@ public class ConsoleReportExcelController {
 
   /** 导出密钥版本 Excel。 */
   @GetMapping("/secrets")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
   public ResponseEntity<StreamingResponseBody> secrets(
       @ModelAttribute SecretVersionQueryRequest request) {
     return applicationService.exportSecretVersions(request);

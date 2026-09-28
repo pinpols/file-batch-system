@@ -3,7 +3,11 @@ package io.github.pinpols.batch.worker.imports.stage;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.constants.BatchFileConstants;
+import io.github.pinpols.batch.common.enums.DictEnum;
+import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.FileRecordParam;
@@ -212,8 +216,8 @@ public class ReceiveStep implements ImportStageStep {
     backfillBlank(asMap, "originalFileName", fileRecord.get("original_file_name"));
     backfillBlank(asMap, "fileCode", fileRecord.get("file_code"));
     backfillBlank(asMap, "bizType", fileRecord.get("biz_type"));
-    backfillBlank(asMap, "checksumType", fileRecord.get("checksum_type"));
-    backfillBlank(asMap, "checksumValue", fileRecord.get("checksum_value"));
+    backfillBlank(asMap, PipelineRuntimeKeys.CHECKSUM_TYPE, fileRecord.get("checksum_type"));
+    backfillBlank(asMap, PipelineRuntimeKeys.CHECKSUM_VALUE, fileRecord.get("checksum_value"));
     return objectMapper.convertValue(asMap, ImportPayload.class);
   }
 
@@ -341,13 +345,17 @@ public class ReceiveStep implements ImportStageStep {
     if (Texts.hasText(payload.fileName())) {
       return payload.fileName();
     }
+    FileTemplateFormat format = DictEnum.fromCode(FileTemplateFormat.class, fileFormatType);
+    if (EmptyChecks.isNull(format)) {
+      return "import-" + traceId + BatchFileConstants.DAT_SUFFIX;
+    }
     return "import-"
         + traceId
-        + switch (fileFormatType) {
-          case "JSON" -> ".json";
-          case "DELIMITED" -> ".csv";
-          case "EXCEL" -> ".xlsx";
-          default -> ".dat";
+        + switch (format) {
+          case JSON -> BatchFileConstants.JSON_SUFFIX;
+          case DELIMITED -> BatchFileConstants.CSV_SUFFIX;
+          case EXCEL -> BatchFileConstants.XLSX_SUFFIX;
+          default -> BatchFileConstants.DAT_SUFFIX;
         };
   }
 

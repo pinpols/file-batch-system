@@ -20,8 +20,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class CompleteStep implements ExportStageStep {
 
-  private static final String KEY_RECORD_COUNT = "recordCount";
-  private static final String KEY_OBJECT_NAME = "objectName";
+  private static final String KEY_RECORD_COUNT = PipelineRuntimeKeys.RECORD_COUNT;
+  private static final String KEY_OBJECT_NAME = PipelineRuntimeKeys.OBJECT_NAME;
 
   private static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
@@ -71,7 +71,8 @@ public class CompleteStep implements ExportStageStep {
     fileRecords.updateFileStatus(fileId, nextStatus, fileMetadata);
     Map<String, Object> detailSummary = new LinkedHashMap<>();
     detailSummary.put(KEY_RECORD_COUNT, attrs.get(KEY_RECORD_COUNT));
-    detailSummary.put("fileSizeBytes", attrs.get("fileSizeBytes"));
+    detailSummary.put(
+        PipelineRuntimeKeys.FILE_SIZE_BYTES, attrs.get(PipelineRuntimeKeys.FILE_SIZE_BYTES));
     detailSummary.put(KEY_OBJECT_NAME, attrs.get(KEY_OBJECT_NAME));
     fileAudits.appendAudit(FileAuditParam.builder()
         .fileId(fileId)

@@ -6,6 +6,7 @@ import io.github.pinpols.batch.console.application.config.ConsoleConfigApprovalA
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigApprovalActionRequest;
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigReleaseApprovalSubmitRequest;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleConfigApprovalDetailResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
@@ -32,7 +33,7 @@ public class ConsoleConfigApprovalController {
   private final ConsoleResponseFactory responseFactory;
 
   @PostMapping("/releases/{releaseId}/submit-approval")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
   public CommonResponse<ConsoleConfigApprovalDetailResponse> submitApproval(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable Long releaseId,
@@ -41,14 +42,14 @@ public class ConsoleConfigApprovalController {
   }
 
   @GetMapping("/releases/{releaseId}/approval")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
   public CommonResponse<ConsoleConfigApprovalDetailResponse> approvalDetail(
       @PathVariable Long releaseId, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(applicationService.detail(tenantId, releaseId));
   }
 
   @PostMapping("/approvals/{approvalId}/approve")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
   public CommonResponse<ConsoleConfigApprovalDetailResponse> approve(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable Long approvalId,
@@ -57,7 +58,7 @@ public class ConsoleConfigApprovalController {
   }
 
   @PostMapping("/approvals/{approvalId}/reject")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
   public CommonResponse<ConsoleConfigApprovalDetailResponse> reject(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable Long approvalId,

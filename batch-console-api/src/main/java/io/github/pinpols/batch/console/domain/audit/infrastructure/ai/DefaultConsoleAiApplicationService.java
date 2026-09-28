@@ -1,20 +1,28 @@
 package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
+import com.anthropic.errors.AnthropicIoException;
+import com.anthropic.errors.AnthropicRetryableException;
+import com.anthropic.errors.AnthropicServiceException;
+import com.openai.errors.OpenAIIoException;
+import com.openai.errors.OpenAIRetryableException;
+import com.openai.errors.OpenAIServiceException;
 import io.github.pinpols.batch.common.enums.AiPromptCategory;
 import io.github.pinpols.batch.common.enums.AiPromptDecision;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.IdGenerator;
-import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.audit.ConsoleAiTools;
 import io.github.pinpols.batch.console.application.contract.request.auth.AiChatRequest;
 import io.github.pinpols.batch.console.application.observability.ConsoleQueryApplicationService;
 import io.github.pinpols.batch.console.application.ops.ConsoleClusterDiagnosticService;
+import io.github.pinpols.batch.console.config.ConsoleAiClients;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiApplicationService;
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiChatResponse;
@@ -27,6 +35,7 @@ import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimite
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import jakarta.annotation.PreDestroy;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -34,6 +43,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -46,12 +56,15 @@ import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.metadata.ChatResponseMetadata;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClientResponseException;
 
 /**
  * AI 对话入口：集成 Spring AI、多层防护、审计写入数据库，确保助手只能在受控边界内回答。
@@ -87,7 +100,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       AiPromptDecision.REJECTED_SAFETY, "Prompt rejected by safety policy.",
       AiPromptDecision.REJECTED_SCOPE, "Prompt is outside the batch platform scope.");
 
-  private final ObjectProvider<ChatClient> chatClientProvider;
+  private final ObjectProvider<ConsoleAiClients> chatClientsProvider;
   private final ConsoleAiProperties aiProperties;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   private final ConsoleAiAuthorizationService authorizationService;
@@ -152,8 +165,10 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       return response;
     }
 
-    ChatClient chatClient = chatClientProvider.getIfAvailable();
-    if (chatClient == null) {
+    String contextJson =
+        ConsoleAiContextSanitizer.sanitize(request.getContext(), aiProperties.getMaxContextChars());
+    ConsoleAiClients chatClients = chatClientsProvider.getIfAvailable();
+    if (EmptyChecks.isNull(chatClients) || EmptyChecks.isNull(chatClients.primary())) {
       throw BizException.of(ResultCode.FORBIDDEN, "error.ai.assistant_not_configured");
     }
     // RAG:检索系统自身语料,让模型基于事实作答(检索为空时退化为「仅 primer」)。
@@ -161,17 +176,15 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     // L3:按租户绑定只读诊断工具(模型按需拉取实时 job 状态/日志);未启用或不可用则为 null。
     ConsoleAiTools tools = resolveTools(tenantId);
     String promptPayload =
-        buildPrompt(tenantId, sessionId, prompt, request.getContext(), gateResult.category());
-    ChatClient.ChatClientRequestSpec spec =
-        chatClient.prompt().system(buildSystemPrompt(snippets, tools != null)).user(promptPayload);
-    if (tools != null) {
-      spec = spec.tools(tools);
-    }
+        buildPrompt(tenantId, sessionId, prompt, contextJson, gateResult.category());
 
     // 模型调用:失败 / 超时 → 优雅降级(友好提示 + FAILED 审计),不 fail-closed 冒泡成 500。
     ChatResponse chatResponse;
+    String modelName;
     try {
-      chatResponse = callModel(spec);
+      ModelCallResult modelCall = callModel(chatClients, snippets, promptPayload, tools);
+      chatResponse = modelCall.response();
+      modelName = resolveModelName(chatResponse, modelCall.provider());
     } catch (Exception exception) {
       if (exception instanceof InterruptedException) {
         Thread.currentThread().interrupt();
@@ -211,7 +224,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     response.setSessionId(sessionId);
     response.setPromptCategory(gateResult.category().code());
     response.setPromptDecision(AiPromptDecision.APPROVED.code());
-    response.setModelName(aiProperties.getModel());
+    response.setModelName(modelName);
     response.setAnswer(answer);
     response.setRefusalReason(null);
 
@@ -226,7 +239,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         .result(AuditResult.builder()
             .promptCategory(gateResult.category())
             .decision(AiPromptDecision.APPROVED)
-            .modelName(aiProperties.getModel())
+            .modelName(modelName)
             .prompt(prompt)
             .response(ConsoleTextSanitizer.safeInput(answer, aiProperties.getMaxResponseLength()))
             .promptTokens(promptTokens)
@@ -240,12 +253,69 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
    * 应用层硬超时:把 blocking 的 SDK 调用丢到有界线程池,{@code Future.get(timeout)} 封顶等待时间。 超时 / provider 卡死 → 抛异常由上层
    * catch 转优雅降级,Tomcat 线程最多等 {@code requestTimeout}。
    */
-  private ChatResponse callModel(ChatClient.ChatClientRequestSpec spec)
+  private ModelCallResult callModel(
+      ConsoleAiClients providers,
+      List<ConsoleAiKnowledgeBase.Snippet> snippets,
+      String promptPayload,
+      ConsoleAiTools tools)
       throws InterruptedException, ExecutionException, TimeoutException {
-    long timeoutMillis = aiProperties.getRequestTimeout().toMillis();
-    Future<ChatResponse> future = modelCallExecutor.submit(() -> spec.call().chatResponse());
+    long timeoutMillis = Math.max(1, aiProperties.getRequestTimeout().toMillis());
+    long deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+    long primaryBudget =
+        EmptyChecks.isNull(providers.fallback()) ? timeoutMillis : Math.max(1, timeoutMillis / 2);
     try {
-      return future.get(timeoutMillis, TimeUnit.MILLISECONDS);
+      return callProvider(
+          providers.primary(),
+          snippets,
+          promptPayload,
+          tools,
+          Math.min(
+              deadlineNanos, System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(primaryBudget)));
+    } catch (Exception primaryFailure) {
+      if (EmptyChecks.isNull(providers.fallback()) || !isFallbackEligible(primaryFailure)) {
+        throw primaryFailure;
+      }
+      if (Thread.currentThread().isInterrupted()) {
+        throw primaryFailure;
+      }
+      long remainingNanos = deadlineNanos - System.nanoTime();
+      if (remainingNanos <= 0) {
+        throw primaryFailure;
+      }
+      try {
+        return callProvider(providers.fallback(), snippets, promptPayload, tools, deadlineNanos);
+      } catch (Exception fallbackFailure) {
+        fallbackFailure.addSuppressed(primaryFailure);
+        throw fallbackFailure;
+      }
+    }
+  }
+
+  private ModelCallResult callProvider(
+      ConsoleAiClients.ProviderClient provider,
+      List<ConsoleAiKnowledgeBase.Snippet> snippets,
+      String promptPayload,
+      ConsoleAiTools tools,
+      long deadlineNanos)
+      throws InterruptedException, ExecutionException, TimeoutException {
+    ChatClient.ChatClientRequestSpec spec = provider
+        .client()
+        .prompt()
+        .system(buildSystemPrompt(snippets, EmptyChecks.isNotNull(tools)))
+        .user(promptPayload);
+    if (EmptyChecks.isNotNull(tools)) {
+      spec = spec.tools(tools);
+    }
+    ChatClient.ChatClientRequestSpec requestSpec = spec;
+    long remainingNanos = deadlineNanos - System.nanoTime();
+    if (remainingNanos <= 0) {
+      throw new TimeoutException("AI provider request deadline exceeded");
+    }
+    long timeoutMillis = Math.max(1, TimeUnit.NANOSECONDS.toMillis(remainingNanos));
+    Future<ChatResponse> future =
+        modelCallExecutor.submit(() -> requestSpec.call().chatResponse());
+    try {
+      return new ModelCallResult(future.get(timeoutMillis, TimeUnit.MILLISECONDS), provider);
     } catch (InterruptedException interrupted) {
       future.cancel(true);
       Thread.currentThread().interrupt();
@@ -255,6 +325,47 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       throw exception;
     }
   }
+
+  private boolean isFallbackEligible(Throwable failure) {
+    for (Throwable cause = failure; EmptyChecks.isNotNull(cause); cause = cause.getCause()) {
+      if (cause instanceof InterruptedException || cause instanceof CancellationException) {
+        return false;
+      }
+      if (cause instanceof OpenAIServiceException openAiFailure) {
+        return isRetryableStatus(openAiFailure.statusCode());
+      }
+      if (cause instanceof AnthropicServiceException anthropicFailure) {
+        return isRetryableStatus(anthropicFailure.statusCode());
+      }
+      if (cause instanceof RestClientResponseException responseFailure) {
+        return isRetryableStatus(responseFailure.getStatusCode().value());
+      }
+      if (cause instanceof OpenAIRetryableException
+          || cause instanceof OpenAIIoException
+          || cause instanceof AnthropicRetryableException
+          || cause instanceof AnthropicIoException
+          || cause instanceof ResourceAccessException
+          || cause instanceof IOException
+          || cause instanceof TimeoutException) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private boolean isRetryableStatus(int statusCode) {
+    return statusCode == 401 || statusCode == 429 || statusCode >= 500;
+  }
+
+  private String resolveModelName(ChatResponse response, ConsoleAiClients.ProviderClient provider) {
+    String model = Optional.ofNullable(response)
+        .map(ChatResponse::getMetadata)
+        .map(ChatResponseMetadata::getModel)
+        .orElse(null);
+    return provider.provider() + ":" + (Texts.hasText(model) ? model : "unknown");
+  }
+
+  private record ModelCallResult(ChatResponse response, ConsoleAiClients.ProviderClient provider) {}
 
   private String extractContent(ChatResponse chatResponse) {
     return Optional.ofNullable(chatResponse)
@@ -280,7 +391,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     response.setSessionId(request.sessionId());
     response.setPromptCategory(gateResult.category().code());
     response.setPromptDecision(AiPromptDecision.FAILED.code());
-    response.setModelName(aiProperties.getModel());
+    response.setModelName(null);
     response.setAnswer(ConsoleTextSanitizer.safeDisplay(degraded, degraded.length()));
     response.setRefusalReason(null);
 
@@ -289,7 +400,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         .result(AuditResult.builder()
             .promptCategory(gateResult.category())
             .decision(AiPromptDecision.FAILED)
-            .modelName(aiProperties.getModel())
+            .modelName(null)
             .prompt(prompt)
             .response(degraded)
             .refusalReason(reason)
@@ -330,7 +441,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     response.setSessionId(sessionId);
     response.setPromptCategory(gateResult.category().code());
     response.setPromptDecision(gateResult.decision().code());
-    response.setModelName(aiProperties.getModel());
+    response.setModelName(null);
     response.setAnswer(ConsoleTextSanitizer.safeDisplay(
         refusalMessage(gateResult), aiProperties.getMaxResponseLength()));
     response.setRefusalReason(ConsoleTextSanitizer.safeDisplay(gateResult.reason(), 512));
@@ -367,7 +478,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       String tenantId,
       String sessionId,
       String prompt,
-      Map<String, Object> context,
+      String contextJson,
       AiPromptCategory category) {
     StringBuilder builder = new StringBuilder();
     builder
@@ -377,11 +488,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         .append('\n');
     builder.append("[sessionId]").append('\n').append(sessionId).append('\n');
     builder.append("[category]").append('\n').append(category.code()).append('\n');
-    builder
-        .append("[context]")
-        .append('\n')
-        .append(context == null ? "{}" : JsonUtils.toJson(context))
-        .append('\n');
+    builder.append("[context]").append('\n').append(contextJson).append('\n');
     builder.append("[question]").append('\n').append(prompt);
     return builder.toString();
   }
@@ -487,7 +594,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       return null;
     }
     try {
-      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
       return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
     } catch (NoSuchAlgorithmException exception) {
       SwallowedExceptionLogger.info(

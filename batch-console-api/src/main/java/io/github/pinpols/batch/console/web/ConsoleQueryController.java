@@ -55,6 +55,7 @@ import io.github.pinpols.batch.console.domain.job.application.contract.response.
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleRetryScheduleResponse;
 import io.github.pinpols.batch.console.domain.notification.application.contract.query.AlertEventQueryRequest;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertEventResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.query.WorkflowDefinitionQueryRequest;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.query.WorkflowEdgeQueryRequest;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.query.WorkflowNodeQueryRequest;
@@ -95,8 +96,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @Validated
 @RequestMapping("/api/console/queries")
-@PreAuthorize(
-    "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_TENANT_ADMIN', 'ROLE_TENANT_USER')")
+@PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
 @RequiredArgsConstructor
 public class ConsoleQueryController {
 

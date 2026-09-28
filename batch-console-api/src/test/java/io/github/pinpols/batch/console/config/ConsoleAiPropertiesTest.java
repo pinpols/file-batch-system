@@ -19,6 +19,20 @@ class ConsoleAiPropertiesTest {
   }
 
   @Test
+  void crossProviderFailover_shouldBeDisabledByDefaultAndConfigurable() {
+    ConsoleAiProperties defaults = new ConsoleAiProperties();
+    Binder binder = new Binder(
+        new MapConfigurationPropertySource(Map.of("batch.console.ai.failover-enabled", "true")));
+
+    assertThat(defaults.isFailoverEnabled()).isFalse();
+    assertThat(binder
+            .bind("batch.console.ai", Bindable.of(ConsoleAiProperties.class))
+            .get()
+            .isFailoverEnabled())
+        .isTrue();
+  }
+
+  @Test
   void misspelledProvider_shouldFailBinding() {
     assertThatThrownBy(() -> bind("opeani"))
         .hasMessageContaining("batch.console.ai.provider")

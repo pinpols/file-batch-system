@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.FileChannelType;
 import io.github.pinpols.batch.worker.core.infrastructure.WorkerStartupAuditContributor.WorkerStartupAuditResult;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchChannelHealthProperties;
 import java.time.Instant;
@@ -43,11 +44,19 @@ class DispatchChannelStartupAuditContributorTest {
     Map<String, Object> profiles =
         (Map<String, Object>) result.details().get("channelSafetyProfiles");
     assertThat(profiles.keySet())
-        .containsExactlyInAnyOrder("API", "API_PUSH", "LOCAL", "NAS", "OSS", "SFTP", "EMAIL");
-    assertThat(profiles.get("EMAIL").toString())
+        .containsExactlyInAnyOrder(
+            FileChannelType.API.code(),
+            FileChannelType.API_PUSH.code(),
+            FileChannelType.LOCAL.code(),
+            FileChannelType.NAS.code(),
+            FileChannelType.OSS.code(),
+            FileChannelType.SFTP.code(),
+            FileChannelType.EMAIL.code());
+    assertThat(profiles.get(FileChannelType.EMAIL.code()).toString())
         .contains("TIMEOUT_BOUND")
         .doesNotContain("SMTP dispatch has no explicit socket timeout properties");
-    assertThat(profiles.get("LOCAL").toString()).contains("FILESYSTEM_SANDBOX", "SIDECAR_MANIFEST");
+    assertThat(profiles.get(FileChannelType.LOCAL.code()).toString())
+        .contains("FILESYSTEM_SANDBOX", "SIDECAR_MANIFEST");
   }
 
   @Test

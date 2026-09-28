@@ -66,7 +66,7 @@ public class ImportStepExecutionAdapter
       StepExecutionRequest request, Map<String, Object> contextMap, Long fileId) {
     ImportJobContext context = new ImportJobContext();
     populateCommonFields(context, request, contextMap);
-    context.setBizDate(String.valueOf(contextMap.getOrDefault("bizDate", "")));
+    context.setBizDate(String.valueOf(contextMap.getOrDefault(PipelineRuntimeKeys.BIZ_DATE, "")));
     context.setFileId(fileId == null ? "" : String.valueOf(fileId));
     return context;
   }
@@ -104,7 +104,10 @@ public class ImportStepExecutionAdapter
     // ADR-009 Stage 1.2: 把 IMPORT 的关键产出暴露给下游 workflow 节点 DSL 引用
     Map<String, Object> outputs = new LinkedHashMap<>();
     putIfPresent(outputs, "fileId", attributes.get(PipelineRuntimeKeys.FILE_ID));
-    putIfPresent(outputs, "recordCount", attributes.get(PipelineRuntimeKeys.IMPORT_LOADED_COUNT));
+    putIfPresent(
+        outputs,
+        PipelineRuntimeKeys.RECORD_COUNT,
+        attributes.get(PipelineRuntimeKeys.IMPORT_LOADED_COUNT));
     putIfPresent(outputs, "parsedCount", attributes.get(PipelineRuntimeKeys.IMPORT_PARSED_COUNT));
     putIfPresent(
         outputs, "validatedCount", attributes.get(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT));
@@ -113,7 +116,7 @@ public class ImportStepExecutionAdapter
     // import:input=文件原始行数(totalCount),output=入库行数(loadedCount)。
     putIfPresent(outputs, "inputCount", attributes.get(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT));
     putIfPresent(outputs, "outputCount", attributes.get(PipelineRuntimeKeys.IMPORT_LOADED_COUNT));
-    putIfPresent(outputs, "bizDate", context.getBizDate());
+    putIfPresent(outputs, PipelineRuntimeKeys.BIZ_DATE, context.getBizDate());
     if (!outputs.isEmpty()) {
       attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);
     }
