@@ -1,6 +1,6 @@
 # file-batch-system 项目结构
 
-> 2026-09-20 更新。批量任务编排控制面 + 文件 / 任务交付闭环。本文按实际仓库结构区分三件事：平台运行时固定 10 个逻辑模块、根 Maven reactor 10 个 module path、独立语言 SDK / 独立 reactor / 前端配对仓库。
+> 2026-09-28 更新。批量任务编排控制面 + 文件 / 任务交付闭环。本文按实际仓库结构区分四件事：平台运行时固定 10 个逻辑模块、根 Maven reactor 10 个 module path、独立语言 SDK / 独立 reactor / 前端配对仓库、工程治理与示例资产。
 
 ## 顶层结构
 
@@ -17,7 +17,7 @@ file-batch-system/
 │   ├── process/                            PROCESS pipeline(纯业务计算)
 │   ├── dispatch/                           DISPATCH pipeline(下游分发)
 │   └── atomic/                             专用 Task SPI(shell/sql/stored-proc/http 隔离,ADR-029)
-├── batch-console-api/                      控制面 REST API(运维/查询/审批)
+├── batch-console-api/                      控制面 REST API(运维/查询/审批/配置/可观测)
 ├── sdk/
 │   ├── java/{core,spring,testkit}/         Java SDK(纳入根 Maven reactor):核心 + Spring 适配 + testkit
 │   ├── go/                                 Go SDK(独立工具链)
@@ -27,20 +27,24 @@ file-batch-system/
 ├── batch-e2e-tests/                        BE 端到端测试(根 reactor 内)
 ├── load-tests/                             压测(独立 reactor,不入根 reactor)
 ├── security-scan/                          安全扫描编排工具(独立模块,不入根 reactor)
+├── examples/                               自托管 SDK / Task SPI 插件示例(长期示例资产)
 │
-├── db/migration/                           Flyway PostgreSQL migrations(V1 起,当前到 V211)
+├── db/migration/                           Flyway PostgreSQL migrations(V1 起,当前到 V213)
 ├── docs/                                   全文档体系(见下)
 ├── scripts/                                工程脚本(ci/db/dev/docker/local/ops/tools)
 ├── helm/batch-platform/                    Helm Chart(prod 部署)
 ├── docker-compose.yml                      本地基础依赖 Compose 入口
 ├── docker-compose.kafka-ha.yml             本地 Kafka HA 可选叠加层
 ├── deploy/docker/                          Dockerfile + 应用 / 测试 / 观测 Compose
+├── .agents/skills/                         本仓专用 Codex 工程技能(只登记 SKILL.md)
 ├── .github/workflows/                      CI(pr-gate / strict-verify / sdk-publish 等)
 ├── .githooks/                              本地 pre-commit / pre-push 守护
 ├── pom.xml                                 Root POM(flatten + revision 占位)
-├── docs/agent-baseline.md                               项目高频违反红线 + 关键路径指针(权威)
+├── docs/agent-baseline.md                  项目高频违反红线 + 关键路径指针(权威)
 └── AGENTS.md                               Agent / SDK 协议总览
 ```
+
+不作为结构事实来源的目录：`target/`、`build/`、`logs/`、`reports/`、`.venv/`、`.idea/`、`.vscode/`、`.ruff_cache/` 等属于构建、运行、本地工具或 IDE 产物。文档、脚本和 CI 不应依赖这些目录作为长期源码结构。
 
 ## 模块结构图
 
@@ -64,7 +68,7 @@ flowchart TB
   end
 
   COMMON["batch-common\n跨模块基础设施"]
-  DATA["PostgreSQL / Kafka / Redis / MinIO"]
+  DATA["PostgreSQL / Kafka / Redis / S3-compatible Object Storage"]
   FE["../batch-console\n配对前端仓库"]
 
   ROOT --> CONTROL
@@ -88,10 +92,12 @@ flowchart TB
   subgraph CONSOLE_LAYERS["batch-console-api 内部边界"]
     WEB["web\nHTTP / SSE 适配"]
     CONTRACT["application.contract\nRequest / Query / Response"]
-    APP["application\nUse Case / Port / Tx"]
+    APP["application\nUse Case / Config / Realtime / Tx"]
     DOMAIN["domain\nEntity / Rule / Port"]
-    INFRA["infrastructure\nMyBatis / 外部适配器"]
+    SHARED["shared / support\n公共值对象 / Web 支撑"]
+    INFRA["infrastructure\nMyBatis / Redis / Kafka / ObjectStore / AI"]
     WEB --> CONTRACT --> APP --> DOMAIN
+    APP --> SHARED
     APP -. "port implementation" .-> INFRA
     WEB -. "only HTTP adapters" .-> APP
   end
@@ -100,8 +106,9 @@ flowchart TB
 ```
 
 图中两条边界需要同时成立：平台运行时沿 `trigger → orchestrator → worker` 传递任务状态；
-Console 内部沿 `web → application.contract → application/domain` 处理控制面请求，并由
-`infrastructure` 实现外部访问端口。Console 的 DTO 不应下沉到 `batch-common`，Worker 也不能
+Console 内部沿 `web → application.contract → application/domain` 处理控制面请求，`shared` /
+`support` 只提供跨 context 的值对象和轻量支撑，并由 `infrastructure` 实现外部访问端口。
+Console 的 DTO 不应下沉到 `batch-common`，Worker 也不能
 绕过 Orchestrator 直接写实例状态。
 
 配对前端仓库不在本仓内；前后端联调时使用 sibling repo `../batch-console`，约定见根目录 [`../../AGENTS.md`](../../AGENTS.md)。
@@ -135,12 +142,12 @@ batch-e2e-tests
 | `batch-trigger` | `trigger/{quartz,calendar,outbox}` | Quartz 调度 → `trigger_outbox_event`（orchestrator 消费后启动 instance） |
 | `batch-orchestrator` | `orchestrator/{application,domain,infrastructure,controller}` | **状态主机**:CLAIM / EXECUTE / REPORT 状态流转;workflow DAG 编排;outbox 投递 |
 | `batch-worker/core`(artifactId `batch-worker-core`) | `worker/core/{support,infrastructure,mapper,route}` | Worker 执行骨架、阶段上下文、步骤登记、路由统一契约 |
-| `batch-worker/import`(artifactId `batch-worker-import`) | `worker/imports/{stage,domain,infrastructure}` | 文件 IMPORT 5 stages(Preprocess/Validate/Load/...) |
-| `batch-worker/export`(artifactId `batch-worker-export`) | `worker/exports/{stage,renderer,sink}` | 文件 EXPORT 6 stages(Query/Render/Sink/...) |
+| `batch-worker/import`(artifactId `batch-worker-import`) | `worker/imports/{stage,domain,infrastructure}` | 文件 IMPORT 5 stages(Preprocess/Validate/Load/...);预处理策略由固定阶段调用 |
+| `batch-worker/export`(artifactId `batch-worker-export`) | `worker/exports/{stage,renderer,sink}` | 文件 EXPORT 6 stages(Query/Render/Sink/...);导出格式策略由固定阶段调用 |
 | `batch-worker/process`(artifactId `batch-worker-process`) | `worker/processes/{stage,...}` | 纯业务计算(无文件 IO) |
-| `batch-worker/dispatch`(artifactId `batch-worker-dispatch`) | `worker/dispatch/{stage,target,...}` | 下游分发(向外部系统投递) |
-| `batch-worker/atomic`(artifactId `batch-worker-atomic`) | `worker/atomic/{shell,sql,stored-proc,http}` | **专用 Task SPI**:特权执行器隔离(RCE 风险面收敛) |
-| `batch-console-api` | `console/{domain,application,infrastructure,shared,...}` | 控制面 REST + 审批 + 运维操作(唯一允许走读写分离的模块) |
+| `batch-worker/dispatch`(artifactId `batch-worker-dispatch`) | `worker/dispatch/{stage,target,...}` | 下游分发(向外部系统投递);渠道适配器由固定阶段路由 |
+| `batch-worker/atomic`(artifactId `batch-worker-atomic`) | `worker/atomic/{shell,sql,stored-proc,http}` | **专用 Task SPI**:特权执行器隔离(RCE 风险面收敛);插件能力替换原子执行实现 |
+| `batch-console-api` | `console/{application,domain,infrastructure,shared,support,web}` | 控制面 REST + 审批 + 运维操作 + AI Ops + 可观测(唯一允许走读写分离的模块) |
 
 ## 平台模块展开说明
 
@@ -154,12 +161,12 @@ batch-e2e-tests
 | `batch-trigger` | `quartz`、`calendar`、`outbox`、`controller` | 计算触发时间、业务日历、misfire/catch-up，并写入 trigger outbox | 不直接读取或写入 Orchestrator 状态表，不执行 Worker 任务 |
 | `batch-orchestrator` | `controller`、`application`、`domain`、`infrastructure`、`mapper` | 唯一状态主机，负责 launch、claim、report、lease、retry、workflow 编排和任务派发 | 不执行文件/业务处理，不让 Worker 直接改 `job_instance`、`job_task`、`outbox_event` |
 | `batch-worker-core` | `support`、`infrastructure`、`mapper`、`route`、pipeline runtime | Worker SPI、任务领取/续租/上报适配、阶段上下文和通用执行骨架 | 不拥有调度状态，不绕过 Orchestrator 写控制面终态 |
-| `batch-worker-import` | `imports/{stage,domain,infrastructure}` | 文件接收、解析、校验、COPY/UPSERT/分区导入、checkpoint | 不负责调度、跨作业 DAG 决策或外部通知编排 |
-| `batch-worker-export` | `exports/{stage,renderer,sink}` | 查询、渲染、分片导出、multipart 和对象存储落地 | 不负责导出任务 launch、租户审批或调度状态推进 |
+| `batch-worker-import` | `imports/{stage,domain,infrastructure}` | 文件接收、解析、校验、COPY/UPSERT/分区导入、checkpoint；预处理策略由固定阶段调用 | 不负责调度、跨作业 DAG 决策或外部通知编排 |
+| `batch-worker-export` | `exports/{stage,renderer,sink}` | 查询、渲染、分片导出、multipart 和对象存储落地；导出格式策略由固定阶段调用 | 不负责导出任务 launch、租户审批或调度状态推进 |
 | `batch-worker-process` | `processes/{stage,domain,infrastructure}` | staging、计算/聚合、校验、commit 和幂等重跑 | 不承担文件传输和控制面状态机 |
-| `batch-worker-dispatch` | `dispatch/{stage,target,infrastructure}` | SFTP、NAS、HTTP、MinIO 等下游交付、重试和 manifest | 不负责源数据计算、调度编排或权限审批 |
-| `batch-worker-atomic` | `atomic/{shell,sql,stored-proc,http,runtime}` | 隔离的原子 Task SPI，执行受控 shell/SQL/存过/HTTP | 不扩展成通用编排器；必须遵守 allowlist、隔离和超时边界 |
-| `batch-console-api` | `domain.<ctx>.{web,application,infrastructure}` + `application.contract` | REST/BFF、配置、查询、审批、运维动作、审计和可观测性 | 不成为状态主机，不执行长任务，不把 API DTO 下沉到 common/worker |
+| `batch-worker-dispatch` | `dispatch/{stage,target,infrastructure}` | SFTP、NAS、HTTP、S3 兼容对象存储等下游交付、重试和 manifest；渠道适配器由固定阶段路由 | 不负责源数据计算、调度编排或权限审批 |
+| `batch-worker-atomic` | `atomic/{shell,sql,stored-proc,http,runtime}` | 隔离的原子 Task SPI，执行受控 shell/SQL/存过/HTTP；插件能力替换原子执行实现 | 不扩展成通用编排器；必须遵守 allowlist、隔离和超时边界 |
+| `batch-console-api` | `web`、`application`、`domain`、`infrastructure`、`shared`、`support` | REST/BFF、配置、查询、审批、运维动作、审计、AI Ops 和可观测性 | 不成为状态主机，不执行长任务，不把 API DTO 下沉到 common/worker |
 
 ### 平台模块展开图
 
@@ -194,9 +201,11 @@ flowchart TB
   subgraph CONSOLE_MODULE["batch-console-api"]
     CW["web\nController / SSE / file stream"]
     CC["application.contract\nrequest / query / response"]
-    CA["application + domain\nuse case / rule / port"]
-    CX["infrastructure\nMyBatis / Redis / Kafka / MinIO / HTTP"]
+    CA["application + domain\nuse case / config / rule / port"]
+    CS["shared / support\n值对象 / 安全 / Web 支撑"]
+    CX["infrastructure\nMyBatis / Redis / Kafka / ObjectStore / AI / HTTP"]
     CW --> CC --> CA
+    CA --> CS
     CA -. "port implementation" .-> CX
   end
 
@@ -220,13 +229,21 @@ flowchart TB
 | `batch-e2e-tests` | 全链路验收和真实依赖测试 | 可以依赖所有运行模块，但生产代码不得反向依赖它 |
 | `load-tests` | 压测、容量画像和结果校验 | 不进入生产 reactor，不承载业务运行时逻辑 |
 | `security-scan` | DAST/依赖/安全扫描编排 | 只消费应用和构建产物，不参与业务主链 |
+| `examples/self-hosted-sdk` | 租户自托管 SDK 接入示例 | 只展示协议接入方式，不复制平台内部实现 |
+| `examples/task-spi-plugin` | Task SPI 插件示例 | 展示插件打包和注册，不改变固定 pipeline 顺序 |
 | `sdk/*` | 租户自托管 Worker 接入 | 只通过协议接入 Orchestrator，不依赖平台内部 Entity 或数据库 |
 
-Console 内部约定：`domain.<ctx>.web` 只放 HTTP/SSE 适配器；请求、查询、响应契约放在
-`domain.<ctx>.application.contract.{request,query,response}`，跨 context 契约才进入顶层
-`console.application.contract`。应用层和基础设施层不得依赖 `web` 下的契约包。
+Worker 扩展约定：平台固定 `claim → stage pipeline → report` 的执行骨架；Import / Export /
+Dispatch 等 worker 的插件或策略只在对应固定阶段内被调用。没有插件时走内置默认实现；有插件时
+按能力、类型或配置路由到插件实现。插件不得新增一套调度状态机，也不得跳过 Orchestrator 的
+claim、lease、report 和终态 CAS。详细设计见 [`../design/task-spi-design.md`](../design/task-spi-design.md)。
 
-### Console 分层职责结论（2026-09-20）
+Console 内部约定：`web` 只放 HTTP/SSE/文件流适配器；请求、查询、响应契约放在所属 context 的
+`application.contract.{request,query,response}`，跨 context 契约才进入顶层
+`console.application.contract`。`shared` 放跨 context 值对象、事件、查询模型和轻量安全支撑；
+`support` 放 Web、缓存、命名、Excel、限流等技术支撑。应用层和基础设施层不得依赖 `web` 下的契约包。
+
+### Console 分层职责结论（2026-09-28）
 
 | 层 | 允许承担的职责 | 明确不承担的职责 | 允许依赖 |
 |---|---|---|---|
@@ -237,6 +254,7 @@ Console 内部约定：`domain.<ctx>.web` 只放 HTTP/SSE 适配器；请求、�
 | `infrastructure` | MyBatis、对象存储、Kafka/Redis/HTTP 等外部适配器、端口实现 | HTTP 路由、API DTO 组装、跨 context 业务决策 | `application` 端口、`application.contract` 投影、domain、shared、外部库 |
 | `service`（存量） | 尚未迁移的应用服务兼容层；新改动仅允许继续收敛职责 | 新增 Web DTO 依赖、直接承载跨 context 业务编排 | `application.contract`、domain/application port、shared |
 | `shared` | 无业务逻辑的跨 context 值对象、事件、纯工具 | 业务规则、数据库访问、context 专属 DTO 的集中存放 | JDK、明确批准的公共库 |
+| `support` | Web、缓存、Excel、命名、安全表达式、限流等技术支撑 | 业务编排、领域规则、数据库写入 | JDK、Spring 基础设施、shared、轻量第三方库 |
 
 边界方向固定为：
 
@@ -332,6 +350,23 @@ scripts/
 ├── sim-4day/  四日链路模拟脚本
 └── tools/     杂项工具
 ```
+
+## 运行系统边界
+
+| 运行环境 | 支持级别 | 说明 |
+|---|---|---|
+| Linux 容器 / Kubernetes | 生产主路径 | Helm、Dockerfile、JVM 日志/JFR/heap dump 路径和运维脚本均以 Linux 容器为权威目标 |
+| Linux 主机 + Docker Compose | 本地 / staging 验证主路径 | 本地依赖栈、sim、BE acceptance 和压测脚本默认按 Bash + Docker Compose 执行 |
+| Windows + WSL2 + Docker Desktop | 推荐的 Windows 开发形态 | 仓库、JDK、Maven、Python、Git 和脚本放在 WSL2 Linux 文件系统内运行；Windows 宿主机只承载 IDE、浏览器和 Docker Desktop |
+| Windows Server 原生进程 | 暂不承诺 | 当前没有 PowerShell 运维体系、Windows Service 托管脚本、Windows 原生日志 / 临时目录 / kill 语义验证，也没有 Windows runner 门禁 |
+
+WSL2 使用约束：仓库不要放在 `/mnt/c/...` 下跑 Maven、Docker bind mount、脚本或测试；建议放在
+`~/workspace/file-batch-system` 这类 WSL2 Linux 文件系统路径。Git 换行建议 `core.autocrlf=input`，
+脚本仍按 Linux 入口执行，例如 `bash scripts/local/start-all.sh`、`./mvnw` 和 `docker compose ...`。
+
+Netty macOS DNS profile 边界：`netty.version` 由根 POM 统一锁定；`netty-resolver-dns-native-macos`
+只放在可独立启动的应用模块或 worker parent 中，避免 macOS 本地运行时的 DNS warning。不要把该
+native resolver 抽到根 POM 默认依赖，否则会污染非运行时模块、SDK、SBOM 和许可证分析。
 
 ## 构建命令
 

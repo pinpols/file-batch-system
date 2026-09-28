@@ -58,7 +58,7 @@ flowchart LR
     O -->|Outbox 同事务| DB[(PostgreSQL<br/>唯一事实来源)]
     O -->|Kafka 异步驱动| W[batch-worker 集群<br/>CLAIM → EXECUTE → REPORT]
     W --> DB
-    W --> X[MinIO / SFTP / 目标系统]
+    W --> X[S3 兼容对象存储 / SFTP / 目标系统]
     O <--> C[batch-console-api<br/>控制台 · 审计 · AI 辅助]
 ```
 
@@ -124,7 +124,7 @@ flowchart LR
 | 运行时 | JDK 21(LTS), Spring Boot 4.1.1 |
 | 消息队列 | Apache Kafka(版本由 Spring Boot BOM 管理) |
 | 数据库 | PostgreSQL 17（JSONB、TIMESTAMPTZ） |
-| 对象存储 | MinIO（兼容 S3 协议） |
+| 对象存储 | S3 兼容对象存储（本地默认 MinIO） |
 | 调度器 | Quartz Scheduler + JDBC JobStore 集群 |
 | 数据迁移 | Flyway |
 | ORM | MyBatis（`mapper` + XML；配置态与运行态同一套） |
@@ -161,10 +161,10 @@ docker compose --env-file .env.local -f docker-compose.yml up -d
 | Valkey（Redis 协议兼容） | `localhost:16379` |
 | Kafka | `localhost:19092` |
 | Kafka UI | `http://localhost:18090` |
-| MinIO API | `http://localhost:19000`（Bucket: `batch-dev`） |
+| S3 兼容对象存储 API | `http://localhost:19000`（本地 MinIO，Bucket: `batch-dev`） |
 | MinIO Console | `http://localhost:19001` |
 
-MinIO 对象排查优先用 `mc`。常用命令见 [对象存储后端（S3 协议）配置与多云接入](docs/runbook/object-storage-s3-backends.md#本地-minio-mc-常用命令)。
+本地 MinIO 对象排查优先用 `mc`。常用命令见 [对象存储后端（S3 协议）配置与多云接入](docs/runbook/object-storage-s3-backends.md#本地-minio-mc-常用命令)。
 
 ### 编译与基础门禁
 
@@ -374,7 +374,7 @@ DB (job_task: READY)
 | [文档治理](docs/standards/document-governance.md) | 文档索引、状态、待办、归档和漂移检查规则 |
 | [运维手册总入口](docs/runbook/README.md) | 部署、容量、灰度、观测、应急和配置治理 SOP |
 | [设计文档索引](docs/design/README.md) | 系统设计文档入口，含数据模型、流程、接口与专题设计 |
-| [项目结构](docs/architecture/project-structure.md) | 当前 Maven reactor、平台运行时模块、SDK 与文档/脚本目录边界 |
+| [项目结构](docs/architecture/project-structure.md) | 当前 Maven reactor、平台运行时模块、SDK、文档/脚本目录与运行系统边界 |
 | [SDK 总入口](sdk/README.md) | 租户自托管 Worker SDK 使用说明书（选语言 / 安装 / 跑 / 测 / 排障），配套 [docs/sdk/README.md](docs/sdk/README.md) 文档索引 |
 | [架构文档索引](docs/architecture/README.md) | 系统流程、模块通信、扩展性评估与 ADR 决策索引（含推荐阅读顺序） |
 | [AGENTS.md](AGENTS.md) | 工程基线约束，供 AI 辅助开发时参考 |
