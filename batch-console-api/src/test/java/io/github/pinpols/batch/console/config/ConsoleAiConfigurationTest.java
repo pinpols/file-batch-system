@@ -45,4 +45,45 @@ class ConsoleAiConfigurationTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("configured console AI provider is unavailable");
   }
+
+  @Test
+  void createsOpenAiCompatibleClientWithExplicitProviderName() {
+    ConsoleAiProperties properties = openAiCompatibleProperties();
+    properties.getOpenaiCompatible().setProviderName("deepseek");
+
+    ConsoleAiClients clients = ConsoleAiConfiguration.createOpenAiCompatibleClient(properties);
+
+    assertThat(clients.primary().provider()).isEqualTo("deepseek");
+    assertThat(clients.primary().client()).isNotNull();
+    assertThat(clients.fallback()).isNull();
+  }
+
+  @Test
+  void openAiCompatibleProviderFailsWhenEndpointIsIncomplete() {
+    ConsoleAiProperties properties = openAiCompatibleProperties();
+    properties.getOpenaiCompatible().setModel("");
+
+    assertThatThrownBy(() -> ConsoleAiConfiguration.createOpenAiCompatibleClient(properties))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("batch.console.ai.openai-compatible.model");
+  }
+
+  @Test
+  void openAiCompatibleProviderDoesNotAllowCrossProviderFailover() {
+    ConsoleAiProperties properties = openAiCompatibleProperties();
+    properties.setFailoverEnabled(true);
+
+    assertThatThrownBy(() -> ConsoleAiConfiguration.createOpenAiCompatibleClient(properties))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("does not support cross-provider failover");
+  }
+
+  private static ConsoleAiProperties openAiCompatibleProperties() {
+    ConsoleAiProperties properties = new ConsoleAiProperties();
+    properties.setProvider(ConsoleAiProperties.Provider.OPENAI_COMPATIBLE);
+    properties.getOpenaiCompatible().setBaseUrl("https://api.deepseek.com");
+    properties.getOpenaiCompatible().setApiKey("test-key");
+    properties.getOpenaiCompatible().setModel("deepseek-chat");
+    return properties;
+  }
 }

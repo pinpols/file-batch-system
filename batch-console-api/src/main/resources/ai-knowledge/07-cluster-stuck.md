@@ -26,7 +26,7 @@
 - 字段:`pendingEvents`、`activeEvents`、`stalePublishingEvents`(PUBLISHING 超 120s)、`deliveryStats`、`healthy`(pending<1000 且无 stalePublishing)。
 - 症状:状态变了但下游/通知没收到,事件积压。
 - 排查:`pendingEvents` 大量堆积或 `stalePublishingEvents>0` → Kafka 不可用或投递卡住;看 deliveryStats 分布。
-- 建议:经 `ConsoleOrchestratorProxyService` → orchestrator `/internal/outbox/*` 做受控 republish;
+- 建议:经 `ConsoleOrchestratorPort` 的默认实现 `DefaultConsoleOrchestratorProxyService` → orchestrator `/internal/outbox/*` 做受控 republish;
   **console-api 不能直接 UPDATE/DELETE outbox_event**;运维脚本 `scripts/ops/heal-stuck-outbox.sh`。
 
 ## 终态遗留活跃子项(terminalChildren)

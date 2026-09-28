@@ -72,8 +72,9 @@
 | `batch.rate-limit.enabled` | `true` / `false` | **true** | 租户级分布式令牌桶限流总开关（高水位防盗刷） | P1 | `BATCH_RATE_LIMIT_ENABLED` | ✅ |
 | `batch.replay.dry-run.enabled` | `true` / `false` | **false** | 整批量日无副作用演练；开启前必须完成五类 Worker 隔离验收 | P1 | `BATCH_REPLAY_DRY_RUN_ENABLED` | ❌ |
 | `batch.console.ai.enabled` | `true` / `false` | **false** | Console AI 入口总开关（开启后仍受角色白名单/独立限流约束） | P1 | `BATCH_CONSOLE_AI_ENABLED` | ❌ |
-| `batch.console.ai.provider` | `anthropic` / `openai` | **ANTHROPIC** | AI provider；枚举绑定，拼写错误启动失败 | P2 | `BATCH_CONSOLE_AI_PROVIDER` | ❌ |
+| `batch.console.ai.provider` | `anthropic` / `openai` / `openai-compatible` | **ANTHROPIC** | AI chat provider；兼容模式用于 DeepSeek/千问/智谱/Kimi/MiniMax/私有 OpenAI-compatible 端点，RAG embedding 仍单独走 `spring.ai.openai.embedding` | P2 | `BATCH_CONSOLE_AI_PROVIDER` | ❌ |
 | `batch.console.ai.failover-enabled` | `true` / `false` | **false** | 跨 Provider 故障切换；会将同一 prompt/context 发送给另一家服务，启用前确认租户授权与数据处理要求 | P1 | `BATCH_CONSOLE_AI_FAILOVER_ENABLED` | ❌ |
+| `batch.console.ai.openai-compatible.*` | providerName/baseUrl/apiKey/model/timeout | 空/60s | OpenAI-compatible 聊天端点配置；`api-key` 必须走 Secret/env 注入；`failover-enabled=true` 时拒绝启动 | P1 | `BATCH_CONSOLE_AI_OPENAI_COMPATIBLE_*` | ✅ |
 | `batch.console.captcha.provider` | `none` / `cloudflare` / `tencent` / `aliyun` | **none** | 登录验证码实现；selfhosted 会阻止启动；第三方 provider 需站点 key + 外联 | P1 | `BATCH_CONSOLE_CAPTCHA_PROVIDER` | ✅ |
 
 ### 1.D 弹性 / 性能 / 观测

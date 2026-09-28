@@ -22,6 +22,7 @@
 
 ### Added
 
+- **Console AI OpenAI-compatible 接入**：新增 `openai-compatible` provider 模式,支持 DeepSeek、千问、智谱、Kimi、MiniMax 或私有兼容代理通过统一配置接入;聊天端点与 RAG embedding 配置分离,兼容模式禁止自动跨 Provider failover。
 - **控制台运维工具契约**：导出文件命名预览与 Worker 运行时共用同一解析器，支持业务日、租户、批次号、区域和版本占位符，避免前端复制命名规则。
 - **构建与运行告警治理**：Java 主源码和测试源码启用 deprecation/unchecked warning 零容忍；新增当前应用日志 WARN 策略审计，区分预期本地告警、需处理状态和未知回归，并在本地全量启动后自动报告。
 - **用户账号状态筛选**：Console 用户账号列表 API 支持按启用状态筛选，前端分页查询改为服务端过滤，避免仅过滤当前页造成结果遗漏。

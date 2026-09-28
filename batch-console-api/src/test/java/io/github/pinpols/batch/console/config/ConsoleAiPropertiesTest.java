@@ -19,6 +19,13 @@ class ConsoleAiPropertiesTest {
   }
 
   @Test
+  void openAiCompatibleProvider_shouldBindWithHyphenatedValue() {
+    ConsoleAiProperties properties = bind("openai-compatible");
+
+    assertThat(properties.getProvider()).isEqualTo(ConsoleAiProperties.Provider.OPENAI_COMPATIBLE);
+  }
+
+  @Test
   void crossProviderFailover_shouldBeDisabledByDefaultAndConfigurable() {
     ConsoleAiProperties defaults = new ConsoleAiProperties();
     Binder binder = new Binder(

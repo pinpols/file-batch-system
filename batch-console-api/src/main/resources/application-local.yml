@@ -69,6 +69,12 @@ batch:
     ai:
       enabled: false
       failover-enabled: ${BATCH_CONSOLE_AI_FAILOVER_ENABLED:false}
+      openai-compatible:
+        provider-name: ${BATCH_CONSOLE_AI_OPENAI_COMPATIBLE_PROVIDER_NAME:openai-compatible}
+        base-url: ${BATCH_CONSOLE_AI_OPENAI_COMPATIBLE_BASE_URL:}
+        api-key: ${BATCH_CONSOLE_AI_OPENAI_COMPATIBLE_API_KEY:}
+        model: ${BATCH_CONSOLE_AI_OPENAI_COMPATIBLE_CHAT_MODEL:}
+        timeout: ${BATCH_CONSOLE_AI_OPENAI_COMPATIBLE_TIMEOUT:60s}
       max-prompt-length: 4000
       max-context-chars: ${BATCH_CONSOLE_AI_MAX_CONTEXT_CHARS:2000}
       max-response-length: 3000
