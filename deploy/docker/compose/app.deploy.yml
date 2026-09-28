@@ -8,41 +8,41 @@
 # 作用:
 #   - app.yml 默认 `image: <module>:${APP_IMAGE_TAG:-local}` 走的是本地 build 命名,
 #     部署机要从 GHCR 拉,所以这里覆盖 image 指到 ghcr.io/pinpols/<module>。
-#   - pull_policy: always 强制每次 up 前拉最新(对应 :latest 标签);用 sha 标签时也能跑。
+#   - pull_policy: always 按 IMAGE_TAG 拉取指定制品；部署不得依赖可变 latest 标签。
 #   - 镜像短名规则与 .github/workflows/build-image.yml 一致(剥 batch- 前缀):
 #     batch-console-api → ghcr.io/pinpols/console-api,以此类推。
 #
-# IMAGE_TAG 默认 latest;CD 流水线可以传 sha-<full> 精确部署某次构建。
+# IMAGE_TAG 必须显式指定已验证的 sha-<full> 或正式版本标签。
 
 services:
   console-api:
-    image: ghcr.io/pinpols/console-api:${IMAGE_TAG:-latest}
+    image: ghcr.io/pinpols/console-api:${IMAGE_TAG:?Set IMAGE_TAG to a verified immutable image tag}
     pull_policy: always
 
   trigger:
-    image: ghcr.io/pinpols/trigger:${IMAGE_TAG:-latest}
+    image: ghcr.io/pinpols/trigger:${IMAGE_TAG:?Set IMAGE_TAG to a verified immutable image tag}
     pull_policy: always
 
   orchestrator:
-    image: ghcr.io/pinpols/orchestrator:${IMAGE_TAG:-latest}
+    image: ghcr.io/pinpols/orchestrator:${IMAGE_TAG:?Set IMAGE_TAG to a verified immutable image tag}
     pull_policy: always
 
   worker-import:
-    image: ghcr.io/pinpols/worker-import:${IMAGE_TAG:-latest}
+    image: ghcr.io/pinpols/worker-import:${IMAGE_TAG:?Set IMAGE_TAG to a verified immutable image tag}
     pull_policy: always
 
   worker-export:
-    image: ghcr.io/pinpols/worker-export:${IMAGE_TAG:-latest}
+    image: ghcr.io/pinpols/worker-export:${IMAGE_TAG:?Set IMAGE_TAG to a verified immutable image tag}
     pull_policy: always
 
   worker-process:
-    image: ghcr.io/pinpols/worker-process:${IMAGE_TAG:-latest}
+    image: ghcr.io/pinpols/worker-process:${IMAGE_TAG:?Set IMAGE_TAG to a verified immutable image tag}
     pull_policy: always
 
   worker-dispatch:
-    image: ghcr.io/pinpols/worker-dispatch:${IMAGE_TAG:-latest}
+    image: ghcr.io/pinpols/worker-dispatch:${IMAGE_TAG:?Set IMAGE_TAG to a verified immutable image tag}
     pull_policy: always
   # ADR-029 专用 atomic worker(原子任务);服务定义在 app.yml,这里只覆盖镜像
   worker-atomic:
-    image: ghcr.io/pinpols/worker-atomic:${IMAGE_TAG:-latest}
+    image: ghcr.io/pinpols/worker-atomic:${IMAGE_TAG:?Set IMAGE_TAG to a verified immutable image tag}
     pull_policy: always

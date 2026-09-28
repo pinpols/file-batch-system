@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -45,6 +46,7 @@ class DispatchChannelGatewayTest {
 
     gateway = new DispatchChannelGateway(
         List.of(httpAdapter), circuitBreaker, deliveryMetrics, healthService);
+    clearInvocations(httpAdapter);
   }
 
   @Test
@@ -109,6 +111,19 @@ class DispatchChannelGatewayTest {
     assertThatThrownBy(() -> gateway.dispatch(command("t1", "SFTP", "ch-1")))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("unsupported channel type: SFTP");
+  }
+
+  @Test
+  void shouldFailFastWhenMultipleAdaptersSupportSameChannelType() {
+    DispatchChannelAdapter first = mock(DispatchChannelAdapter.class);
+    DispatchChannelAdapter second = mock(DispatchChannelAdapter.class);
+    when(first.supports("SFTP")).thenReturn(true);
+    when(second.supports("SFTP")).thenReturn(true);
+
+    assertThatThrownBy(() -> new DispatchChannelGateway(
+            List.of(first, second), circuitBreaker, deliveryMetrics, healthService))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("duplicate dispatch channel adapter for channelType=SFTP");
   }
 
   // --- I-1 许可泄漏兜底:allow() 后逃逸异常必须配对释放熔断许可,否则 HALF_OPEN 永久 brick ---

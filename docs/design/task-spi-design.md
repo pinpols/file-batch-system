@@ -202,6 +202,34 @@ public class BatchTaskExecutorRegistry {
 
 ## 4. 迁移路径(分阶段,每阶段单独可发布)
 
+### 4.0 当前落地语义:固定 Pipeline + 显式插件点
+
+当前系统不是"有插件就自动覆盖平台默认实现"。扩展点分两层,责任边界不同:
+
+| 层级 | 控制代码 | 选择规则 | 覆盖策略 |
+|---|---|---|---|
+| 大任务类型 SPI | `BatchTaskExecutorRegistry` | 按 `taskType()` 注册和查找 | 同一个 `taskType` 重复注册直接启动失败,不允许静默覆盖 |
+| Import load 插件 | `ImportLoadPluginRegistry` | `load_target_ref` 为空时默认 `jdbc_mapped`,否则按 id 查找 | 重复 id 启动失败 |
+| Export data 插件 | `ExportDataPluginRegistry` | 按模板 `export_data_ref` 查找 | 重复 id 启动失败;缺少 ref 不走隐式默认 |
+| Export format 策略 | `ExportFormatStrategyRegistry` | `file_format_type` 为空时默认 `JSON`,否则按格式查找 | 重复格式启动失败 |
+| Process compute 插件 | `DefaultProcessStageExecutor` | 优先 `COMPUTE` step 的 `impl_code`,再回退 payload `processImplCode` | 显式指定但找不到插件即失败;未指定则走默认 no-op / 标准 5 stage |
+| Dispatch channel adapter | `DispatchChannelGateway` | 按官方 `channel_type` 白名单构建 `channelType -> adapter` 注册表 | 同一渠道多个 adapter 同时支持时启动失败 |
+
+这意味着:
+
+- `IMPORT / EXPORT / PROCESS / DISPATCH / ATOMIC` 这类大 Worker 类型是平台固定主链,插件不能绕过 claim、lease、progress、report、dry-run 和幂等契约直接替换整条链路。
+- 插件只挂在固定步骤内部,例如 Import 的 load、Export 的 data/format、Process 的 compute、Dispatch 的 channel delivery。
+- 默认实现不是"被外部插件优先接管",而是由配置 id、格式或渠道类型显式选择;重复实现必须 fail-fast。
+- 如果确实需要生产覆盖默认实现,应新增显式开关或独立 id,不得依赖 Spring bean 顺序、`@Order` 或 classpath 顺序。
+
+Dispatch 之前曾靠 `List<DispatchChannelAdapter>` 顺序扫描,第一个 `supports(channelType)` 命中即生效。这种方式在插件接入后容易出现同一渠道被非预期 adapter 抢占。当前已收敛为构造期注册表:
+
+```text
+official channel_type -> exactly one DispatchChannelAdapter
+```
+
+注册表只扫描官方渠道白名单。某渠道没有 adapter 时,只有真正使用该渠道才报 `unsupported channel type`；某渠道同时被两个 adapter 支持时,Worker 启动即失败。这样 local/test 的 stub、生产 NAS/OSS/SFTP/HTTP/EMAIL adapter 和未来第三方 adapter 都遵循同一条规则。
+
 ### Phase 1:加 SPI 契约 + Registry + 路由(1 周)
 
 **不动现有 4 worker**,只加新代码 + 改 1 个文件:

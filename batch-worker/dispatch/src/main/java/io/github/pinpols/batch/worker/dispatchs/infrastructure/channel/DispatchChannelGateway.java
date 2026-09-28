@@ -1,14 +1,13 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchDeliveryMetrics;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 /**
@@ -24,19 +23,23 @@ import org.springframework.stereotype.Service;
  * </ul>
  */
 @Service
-@RequiredArgsConstructor
 public class DispatchChannelGateway {
 
-  private final List<DispatchChannelAdapter> adapters;
+  private final Map<String, DispatchChannelAdapter> adaptersByType;
   private final DispatchChannelCircuitBreaker circuitBreaker;
   private final DispatchDeliveryMetrics deliveryMetrics;
   private final DispatchChannelHealthService healthService;
 
-  // 以 channelType(按传入值大小写敏感)为 key 的 adapter 查找缓存 —— 避免每次 dispatch 都做
-  // O(n) 的 adapters.stream().filter().findFirst()。首次未命中时懒加载填充,
-  // 从而保留动态 supports() 契约(单测里 adapter 会 mock 不同类型)。
-  private final ConcurrentMap<String, DispatchChannelAdapter> adapterCache =
-      new ConcurrentHashMap<>();
+  public DispatchChannelGateway(
+      List<DispatchChannelAdapter> adapters,
+      DispatchChannelCircuitBreaker circuitBreaker,
+      DispatchDeliveryMetrics deliveryMetrics,
+      DispatchChannelHealthService healthService) {
+    this.adaptersByType = buildAdapterRegistry(adapters);
+    this.circuitBreaker = circuitBreaker;
+    this.deliveryMetrics = deliveryMetrics;
+    this.healthService = healthService;
+  }
 
   public DispatchResult dispatch(DispatchCommand command) {
     Map<String, Object> channelConfig = command.channelConfig();
@@ -123,16 +126,36 @@ public class DispatchChannelGateway {
   }
 
   private DispatchChannelAdapter resolveAdapter(String channelType) {
-    DispatchChannelAdapter cached = adapterCache.get(channelType);
-    if (cached != null) {
-      return cached;
+    DispatchChannelAdapter adapter = adaptersByType.get(channelType);
+    if (EmptyChecks.isNull(adapter)) {
+      throw new IllegalStateException("unsupported channel type: " + channelType);
     }
-    for (DispatchChannelAdapter adapter : adapters) {
-      if (adapter.supports(channelType)) {
-        adapterCache.putIfAbsent(channelType, adapter);
-        return adapter;
+    return adapter;
+  }
+
+  private static Map<String, DispatchChannelAdapter> buildAdapterRegistry(
+      List<DispatchChannelAdapter> adapters) {
+    Map<String, DispatchChannelAdapter> registry = new LinkedHashMap<>();
+    for (String channelType : DispatchChannelTypePolicy.allowedTypes()) {
+      DispatchChannelAdapter matched = null;
+      for (DispatchChannelAdapter adapter : adapters) {
+        if (!adapter.supports(channelType)) {
+          continue;
+        }
+        if (EmptyChecks.isNotNull(matched) && matched != adapter) {
+          throw new IllegalStateException("duplicate dispatch channel adapter for channelType="
+              + channelType
+              + ": "
+              + matched.getClass().getName()
+              + ", "
+              + adapter.getClass().getName());
+        }
+        matched = adapter;
+      }
+      if (EmptyChecks.isNotNull(matched)) {
+        registry.put(channelType, matched);
       }
     }
-    throw new IllegalStateException("unsupported channel type: " + channelType);
+    return Map.copyOf(registry);
   }
 }

@@ -16,6 +16,7 @@
 - Cron 预览移出匿名白名单，仅允许四类正式 Console 角色调用。
 - 控制台 RBAC 彻底收敛为 `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_TENANT_ADMIN` / `ROLE_TENANT_USER` 四类正式角色；V213 一次性迁移旧 `ROLE_USER` 并增加数据库约束，运行时、菜单、JWT 和账号 API 不再兼容旧角色。
 - 审批写操作收口为平台管理员和租户管理员，审计员维持跨租户只读职责。
+- 本地测试并行执行改为显式 `ALLOW_PARALLEL_TESTS=1` opt-in，并要求生产 Docker Compose overlay 显式传入已验证 `IMAGE_TAG`；Sim SFTP/MockServer 容器名统一加 `batch-sim-*` 前缀且纳入版本对齐检查。
 
 > 当前唯一 GA tag 为 `v1.0.0`（2026-09-02）。历史 `1.1.0` / `1.2.0` 仅为 GA 前开发里程碑，未形成 release tag，已在下文明确标注，避免被误认为正式发布。
 
@@ -77,6 +78,7 @@
 
 ### Fixed
 
+- Dispatch 渠道适配器选择改为构造期 `channelType -> adapter` 注册表；同一官方渠道被多个 adapter 支持时启动失败，避免插件或 stub 依赖 Spring 顺序静默接管真实分发渠道。
 - 显式管理 `okio-jvm` 版本，避免 `okhttp-jvm` 的传递依赖将 JVM 实现降级至与已管理的 Okio 版本不一致。
 - 修复非旁路环境下 Spring Security 默认 XOR CSRF 解析与前端 Axios 明文 double-submit 协议不一致、导致已登录用户写请求统一返回 403 的问题；保留 cookie/header 双提交校验及现有忽略路径。
 - 修复控制台纯日期结束筛选只精确到毫秒、可能遗漏业务日最后 999 个微秒内记录的问题；结束边界现取 PostgreSQL 可表达的最后一个微秒，并保持既有包含式查询语义。
