@@ -180,7 +180,12 @@
                 <artifactId>okio</artifactId>
                 <version>${okio.version}</version>
             </dependency>
-            <!-- okio-jvm 是 okio 的 JVM multi-platform 实现，由 okio 自动传递引入，不需要显式声明 -->
+            <!-- 显式管理 JVM 实现，避免被 okhttp-jvm 的传递版本降级。 -->
+            <dependency>
+                <groupId>com.squareup.okio</groupId>
+                <artifactId>okio-jvm</artifactId>
+                <version>${okio.version}</version>
+            </dependency>
 
             <dependency>
                 <groupId>org.jetbrains</groupId>

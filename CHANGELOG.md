@@ -76,6 +76,7 @@
 
 ### Fixed
 
+- 显式管理 `okio-jvm` 版本，避免 `okhttp-jvm` 的传递依赖将 JVM 实现降级至与已管理的 Okio 版本不一致。
 - 修复非旁路环境下 Spring Security 默认 XOR CSRF 解析与前端 Axios 明文 double-submit 协议不一致、导致已登录用户写请求统一返回 403 的问题；保留 cookie/header 双提交校验及现有忽略路径。
 - 修复控制台纯日期结束筛选只精确到毫秒、可能遗漏业务日最后 999 个微秒内记录的问题；结束边界现取 PostgreSQL 可表达的最后一个微秒，并保持既有包含式查询语义。
 - 修复 RLS 导入 COPY 临时表继承目标表生成列 NOT NULL 约束、导致省略自增 ID 时导入失败的问题；临时表现只包含映射列，并补充 PostgreSQL 集成回归验证。
