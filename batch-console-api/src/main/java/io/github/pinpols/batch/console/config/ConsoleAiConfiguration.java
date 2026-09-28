@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.console.config;
 
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.Texts;
 import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -24,7 +26,11 @@ public class ConsoleAiConfiguration {
       ObjectProvider<AnthropicChatModel> anthropicChatModel,
       ObjectProvider<OpenAiChatModel> openAiChatModel,
       ConsoleAiProperties properties) {
-    boolean openAiPreferred = properties.getProvider() == ConsoleAiProperties.Provider.OPENAI;
+    ConsoleAiProperties.Provider provider = properties.getProvider();
+    if (provider == ConsoleAiProperties.Provider.OPENAI_COMPATIBLE) {
+      return createOpenAiCompatibleClient(properties);
+    }
+    boolean openAiPreferred = provider == ConsoleAiProperties.Provider.OPENAI;
     ChatModel primary =
         openAiPreferred ? openAiChatModel.getIfAvailable() : anthropicChatModel.getIfAvailable();
     ChatModel fallback = null;
@@ -32,8 +38,7 @@ public class ConsoleAiConfiguration {
       fallback =
           openAiPreferred ? anthropicChatModel.getIfAvailable() : openAiChatModel.getIfAvailable();
     }
-    return createClients(
-        properties.getProvider(), primary, fallback, properties.isFailoverEnabled());
+    return createClients(provider, primary, fallback, properties.isFailoverEnabled());
   }
 
   static ConsoleAiClients createClients(
@@ -45,8 +50,7 @@ public class ConsoleAiConfiguration {
       throw new IllegalStateException(
           "configured console AI provider is unavailable; check batch.console.ai.provider and its credentials");
     }
-    String primaryName =
-        preferredProvider == ConsoleAiProperties.Provider.OPENAI ? "openai" : "anthropic";
+    String primaryName = providerName(preferredProvider);
     String fallbackName =
         preferredProvider == ConsoleAiProperties.Provider.OPENAI ? "anthropic" : "openai";
     ConsoleAiClients.ProviderClient primary =
@@ -56,5 +60,43 @@ public class ConsoleAiConfiguration {
             ? new ConsoleAiClients.ProviderClient(fallbackName, ChatClient.create(fallbackModel))
             : null;
     return new ConsoleAiClients(primary, fallback);
+  }
+
+  static ConsoleAiClients createOpenAiCompatibleClient(ConsoleAiProperties properties) {
+    if (properties.isFailoverEnabled()) {
+      throw new IllegalStateException(
+          "openai-compatible console AI provider does not support cross-provider failover");
+    }
+    ConsoleAiProperties.OpenaiCompatible compatible = properties.getOpenaiCompatible();
+    requireCompatibleText(compatible.getBaseUrl(), "batch.console.ai.openai-compatible.base-url");
+    requireCompatibleText(compatible.getApiKey(), "batch.console.ai.openai-compatible.api-key");
+    requireCompatibleText(compatible.getModel(), "batch.console.ai.openai-compatible.model");
+
+    OpenAiChatOptions options = OpenAiChatOptions.builder()
+        .baseUrl(compatible.getBaseUrl().trim())
+        .apiKey(compatible.getApiKey().trim())
+        .model(compatible.getModel().trim())
+        .timeout(compatible.getTimeout())
+        .build();
+    OpenAiChatModel model = OpenAiChatModel.builder().options(options).build();
+    String providerName = Texts.hasText(compatible.getProviderName())
+        ? compatible.getProviderName().trim()
+        : providerName(ConsoleAiProperties.Provider.OPENAI_COMPATIBLE);
+    return new ConsoleAiClients(
+        new ConsoleAiClients.ProviderClient(providerName, ChatClient.create(model)), null);
+  }
+
+  private static String providerName(ConsoleAiProperties.Provider provider) {
+    return switch (provider) {
+      case ANTHROPIC -> "anthropic";
+      case OPENAI -> "openai";
+      case OPENAI_COMPATIBLE -> "openai-compatible";
+    };
+  }
+
+  private static void requireCompatibleText(String value, String propertyName) {
+    if (!Texts.hasText(value)) {
+      throw new IllegalStateException(propertyName + " must be configured for openai-compatible");
+    }
   }
 }

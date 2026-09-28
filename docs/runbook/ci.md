@@ -213,8 +213,8 @@ pr-gate 会根据 PR 变更文件范围决定 Maven 构建粒度：
 >
 > `run-tests.sh` 所有模式在执行测试前均会先运行 `clean install -DskipTests`（通过
 > `maybe_build()` 函数），将最新 JAR 写入 `~/.m2` 来规避此问题。
-> 使用 `--skip-build` 标志可跳过此步骤（仅用于 `make test-parallel` 并行场景，
-> 此时由 `--build-only` 统一完成一次构建）。
+> 使用 `--skip-build` 标志可跳过此步骤（仅用于显式 opt-in 的 `make test-parallel ALLOW_PARALLEL_TESTS=1`，
+> 此时由 `--build-only` 统一完成一次构建）。默认推荐串行运行，避免 Docker/CPU/内存竞争。
 >
 > 若切换至标准 `mvn`，可移除该预装步骤。
 
@@ -236,7 +236,7 @@ make test-it            # 仅集成，需 Docker
 make test-e2e           # E2E 套件
 make test-all           # 单元 + 集成 + E2E（串行）
 make test-build         # 仅构建，不跑测试
-make test-parallel      # 三类测试并行执行（构建一次，unit/it/e2e 并发）
+make test-parallel ALLOW_PARALLEL_TESTS=1  # 显式 opt-in 后并行；汇总所有子任务退出码
 ```
 
 ### CI 回归

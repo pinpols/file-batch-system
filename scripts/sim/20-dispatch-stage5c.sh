@@ -34,7 +34,7 @@ cat > "$STORAGE_PATH" <<JSON
 JSON
 rm -f /tmp/batch/stage5c-local/tb_stage5c_local-"$BATCH_NO"*.json
 rm -f /tmp/batch/stage5c-nas/tb_stage5c_nas-"$BATCH_NO"*.json
-docker exec sftp sh -lc 'rm -f /home/tb/outbound/stage5c-dispatch.json /home/tb/outbound/stage5c-dispatch.json.chk' >/dev/null 2>&1 || true
+docker exec batch-sim-sftp sh -lc 'rm -f /home/tb/outbound/stage5c-dispatch.json /home/tb/outbound/stage5c-dispatch.json.chk' >/dev/null 2>&1 || true
 
 echo "==> seed dispatch stage5c fixtures"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \

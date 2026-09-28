@@ -275,6 +275,8 @@ VALKEY_TAG=$(grep -E '^VALKEY_IMAGE_TAG=' "$ROOT/.env.example" | head -1 | cut -
 REDIS_COMPAT_TAG=$(grep -E '^REDIS_IMAGE_TAG=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
 MINIO_REPOSITORY=$(grep -E '^MINIO_IMAGE_REPOSITORY=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
 MINIO_TAG=$(grep -E '^MINIO_IMAGE_TAG=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
+SFTP_TAG=$(grep -E '^SFTP_IMAGE_TAG=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
+MOCKSERVER_TAG=$(grep -E '^MOCKSERVER_IMAGE_TAG=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
 
 check_image_reference() {
   local file="$1" reference="$2" label="$3"
@@ -300,9 +302,36 @@ check_image_reference ".github/actions/setup-build-env/action.yml" "${MINIO_REPO
 check_image_reference "scripts/local/sim-harness.sh" "postgres:${POSTGRES_TAG}" "Sim harness"
 check_image_reference "docker-compose.yml" 'valkey/valkey:${VALKEY_IMAGE_TAG:-'"${VALKEY_TAG}"'}' "Compose fallback"
 check_image_reference "docker-compose.yml" '${MINIO_IMAGE_REPOSITORY:-'"${MINIO_REPOSITORY}"'}:${MINIO_IMAGE_TAG:-'"${MINIO_TAG}"'}' "Compose fallback"
+check_image_reference "scripts/sim/compose.yml" 'atmoz/sftp:${SFTP_IMAGE_TAG:-'"${SFTP_TAG}"'}' "Sim SFTP"
+check_image_reference "scripts/sim/compose.yml" 'mockserver/mockserver:${MOCKSERVER_IMAGE_TAG:-'"${MOCKSERVER_TAG}"'}' "Sim MockServer"
+check_image_reference "deploy/docker/compose/test.yml" 'atmoz/sftp:${SFTP_IMAGE_TAG:-'"${SFTP_TAG}"'}' "Test SFTP"
+check_image_reference "deploy/docker/compose/test.yml" 'mockserver/mockserver:${MOCKSERVER_IMAGE_TAG:-'"${MOCKSERVER_TAG}"'}' "Test MockServer"
 check_image_reference "docs/runbook/base-services-deployment.md" '${MINIO_IMAGE_REPOSITORY}:${MINIO_IMAGE_TAG}' "部署手册"
 check_image_reference "deploy/ha/30-redis-failover.yaml" "valkey/valkey:${VALKEY_TAG}" "HA manifest"
 check_image_reference "docs/runbook/base-services-deployment.md" 'valkey/valkey:${VALKEY_IMAGE_TAG}' "部署手册"
+for container_name in batch-sim-sftp batch-sim-mockserver; do
+  if ! grep -Fq -- "container_name: ${container_name}" "$ROOT/scripts/sim/compose.yml"; then
+    echo "  ✗ Sim 容器名缺少 batch-sim 前缀: ${container_name}" >&2
+    FAIL=1
+  else
+    echo "  ✓ Sim 容器名 ${container_name}"
+  fi
+done
+if grep -REn -- 'docker (exec|inspect) (sftp|mockserver)([[:space:]]|$)' "$ROOT/scripts/sim"; then
+  echo "  ✗ Sim 脚本仍用服务名作为容器名；请使用 batch-sim-* 容器名" >&2
+  FAIL=1
+else
+  echo "  ✓ Sim 脚本使用带前缀的容器名"
+fi
+if grep -En -- 'image:.*(:latest|\$\{IMAGE_TAG:-latest\})' "$ROOT/deploy/docker/compose/app.deploy.yml"; then
+  echo "  ✗ 后端生产部署 overlay 不得引用 latest" >&2
+  FAIL=1
+elif ! grep -Fq -- '${IMAGE_TAG:?' "$ROOT/deploy/docker/compose/app.deploy.yml"; then
+  echo "  ✗ 后端生产部署 overlay 必须要求显式 IMAGE_TAG" >&2
+  FAIL=1
+else
+  echo "  ✓ 后端生产部署要求显式 IMAGE_TAG"
+fi
 if grep -Fq -- 'redis:7.4' "$ROOT/docs/runbook/base-services-deployment.md"; then
   echo "  ✗ 部署手册仍引用过期的 redis:7.4 镜像" >&2
   FAIL=1

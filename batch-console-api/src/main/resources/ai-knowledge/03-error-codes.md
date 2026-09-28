@@ -13,7 +13,7 @@ HTTP 语义:认证/权限类落 401/403,参数/状态冲突类落 4xx,下游/存
 - `error.common.tenant_id_mismatch`:请求体 tenantId 与 header tenantId 不一致,被拒(防跨租户注入)。
 
 ## 常见错误码(scope = ai / 控制台助手)
-- `error.ai.assistant_not_configured`:AI 已开启(enabled=true)但未配置可用的聊天模型(未注入 ANTHROPIC_API_KEY / OPENAI_API_KEY 或 provider 配错)。
+- `error.ai.assistant_not_configured`:AI 已开启(enabled=true)但未配置可用的聊天模型(未注入 ANTHROPIC_API_KEY / OPENAI_API_KEY / BATCH_CONSOLE_AI_OPENAI_COMPATIBLE_API_KEY,兼容端点缺 base-url/model,或 provider 配错)。
 
 ## 排查错误码的方法
 1. 在 `messages_zh_CN.properties` 搜该 key,看中文释义。

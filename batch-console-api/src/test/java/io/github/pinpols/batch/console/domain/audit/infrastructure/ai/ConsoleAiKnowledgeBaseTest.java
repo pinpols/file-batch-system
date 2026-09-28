@@ -6,11 +6,19 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.JobInstanceStatus;
+import io.github.pinpols.batch.common.enums.PartitionStatus;
+import io.github.pinpols.batch.common.enums.TaskStatus;
+import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.core.io.ClassPathResource;
 
 class ConsoleAiKnowledgeBaseTest {
 
@@ -103,5 +111,42 @@ class ConsoleAiKnowledgeBaseTest {
     when(empty.getIfAvailable()).thenReturn(null);
     ConsoleAiKnowledgeBase base = new ConsoleAiKnowledgeBase(empty, propertiesWithRag(true));
     assertThat(base.retrieve("orchestrator outbox")).isEmpty();
+  }
+
+  @Test
+  void statusKnowledgePackTracksRuntimeEnums() throws IOException {
+    String statusKnowledge = readKnowledge("ai-knowledge/02-status-and-enums.md");
+
+    assertContainsAllCodes(statusKnowledge, JobInstanceStatus.values());
+    assertContainsAllCodes(statusKnowledge, PartitionStatus.values());
+    assertContainsAllCodes(statusKnowledge, TaskStatus.values());
+    assertContainsAllCodes(statusKnowledge, WorkflowRunStatus.values());
+  }
+
+  @Test
+  void governanceKnowledgePackCoversRecentGuardrails() throws IOException {
+    String concepts = readKnowledge("ai-knowledge/01-concepts.md");
+    String operations = readKnowledge("ai-knowledge/05-operations.md");
+    String governance = readKnowledge("ai-knowledge/10-engineering-governance.md");
+
+    assertThat(concepts)
+        .contains("BatchTaskExecutorRegistry")
+        .contains("DispatchChannelGateway")
+        .contains("channelType -> adapter");
+    assertThat(operations)
+        .contains("IMAGE_TAG")
+        .contains("ALLOW_PARALLEL_TESTS=1")
+        .contains("openai-compatible")
+        .contains("BATCH_CONSOLE_AI_OPENAI_COMPATIBLE_CHAT_MODEL");
+    assertThat(governance).contains("EmptyChecks").contains("ai-knowledge/*.md");
+  }
+
+  private static String readKnowledge(String path) throws IOException {
+    return new String(new ClassPathResource(path).getContentAsByteArray(), StandardCharsets.UTF_8);
+  }
+
+  private static void assertContainsAllCodes(String text, Enum<?>[] values) {
+    assertThat(Arrays.stream(values).map(Enum::name).toList())
+        .allSatisfy(code -> assertThat(text).contains(code));
   }
 }

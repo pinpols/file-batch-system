@@ -16,8 +16,8 @@
 **已经完整**,不用我重新写。
 
 模拟器额外补的容器:
-- `sftp`(atmoz/sftp):3 个账户 ta/tb/tc 共享同一容器,各 chroot 到 `/home/<user>/`
-- `mockserver`(mockserver/mockserver):3 个 HTTP stub(`/tb/callback`, `/tb/ingest`, `/tc/ingest`)
+- `batch-sim-sftp`(atmoz/sftp):3 个账户 ta/tb/tc 共享同一容器,各 chroot 到 `/home/<user>/`;网络服务名仍为 `sftp`
+- `batch-sim-mockserver`(mockserver/mockserver):3 个 HTTP stub(`/tb/callback`, `/tb/ingest`, `/tc/ingest`);网络服务名仍为 `mockserver`
 
 ## 文件清单
 
@@ -107,7 +107,7 @@ PG 15432 / Redis 16379 / Kafka 19092 / MinIO 19000 / SFTP 12222 / MockServer 110
 
 ```bash
 # SFTP 内容
-docker exec sftp ls -la /home/ta/inbound/ /home/tb/inbound/ /home/tc/inbound/
+docker exec batch-sim-sftp ls -la /home/ta/inbound/ /home/tb/inbound/ /home/tc/inbound/
 
 # MockServer 收到的所有请求
 curl -X PUT http://localhost:11080/mockserver/retrieve?type=REQUESTS
