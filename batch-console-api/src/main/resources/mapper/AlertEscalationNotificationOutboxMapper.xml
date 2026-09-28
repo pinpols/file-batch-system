@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.console.domain.notification.mapper.AlertEscalationNotificationOutboxMapper">
+
+    <resultMap id="AlertEscalationNotificationOutboxResultMap"
+               type="io.github.pinpols.batch.console.domain.notification.entity.AlertEscalationNotificationOutboxEntity">
+        <id     column="id"                property="id"/>
+        <result column="tenant_id"         property="tenantId"/>
+        <result column="alert_event_id"    property="alertEventId"/>
+        <result column="escalation_tier"   property="escalationTier"/>
+        <result column="stream"            property="stream"/>
+        <result column="event_type"        property="eventType"/>
+        <result column="payload_json"      property="payloadJson"/>
+        <result column="publish_status"    property="publishStatus"/>
+        <result column="attempt_count"     property="attemptCount"/>
+        <result column="next_publish_at"   property="nextPublishAt"/>
+        <result column="last_error"        property="lastError"/>
+        <result column="created_at"        property="createdAt"/>
+        <result column="updated_at"        property="updatedAt"/>
+    </resultMap>
+
+    <insert id="insert"
+            parameterType="io.github.pinpols.batch.console.domain.notification.entity.AlertEscalationNotificationOutboxEntity">
+        INSERT INTO batch.alert_escalation_notification_outbox (
+            tenant_id,
+            alert_event_id,
+            escalation_tier,
+            stream,
+            event_type,
+            payload_json,
+            publish_status,
+            attempt_count,
+            next_publish_at
+        ) VALUES (
+            #{tenantId},
+            #{alertEventId},
+            #{escalationTier},
+            #{stream},
+            #{eventType},
+            #{payloadJson,jdbcType=VARCHAR}::jsonb,
+            #{publishStatus},
+            #{attemptCount},
+            #{nextPublishAt}
+        )
+    </insert>
+
+    <select id="selectPending" resultMap="AlertEscalationNotificationOutboxResultMap">
+        SELECT *
+          FROM batch.alert_escalation_notification_outbox
+         WHERE publish_status IN (#{pendingStatus1}, #{pendingStatus2})
+           AND next_publish_at &lt;= #{now}
+         ORDER BY next_publish_at ASC, id ASC
+         LIMIT #{limit}
+    </select>
+
+    <select id="selectStalePublishing" resultMap="AlertEscalationNotificationOutboxResultMap">
+        SELECT *
+          FROM batch.alert_escalation_notification_outbox
+         WHERE publish_status = #{publishingStatus}
+           AND updated_at &lt; CURRENT_TIMESTAMP - (#{timeoutSeconds} * interval '1 second')
+         ORDER BY updated_at ASC, id ASC
+         LIMIT #{limit}
+    </select>
+
+    <update id="markPublishing">
+        UPDATE batch.alert_escalation_notification_outbox
+           SET publish_status = #{publishingStatus},
+               updated_at     = CURRENT_TIMESTAMP
+         WHERE id = #{id}
+           AND tenant_id = #{tenantId}
+           AND publish_status IN (#{pendingStatus1}, #{pendingStatus2})
+    </update>
+
+    <update id="markPublished">
+        UPDATE batch.alert_escalation_notification_outbox
+           SET publish_status = #{publishedStatus},
+               updated_at     = CURRENT_TIMESTAMP
+         WHERE id = #{id}
+           AND tenant_id = #{tenantId}
+           AND publish_status = #{publishingStatus}
+    </update>
+
+    <update id="markFailed">
+        UPDATE batch.alert_escalation_notification_outbox
+           SET publish_status   = #{failedStatus},
+               attempt_count    = attempt_count + 1,
+               next_publish_at  = #{nextPublishAt},
+               last_error       = #{lastError,jdbcType=VARCHAR},
+               updated_at       = CURRENT_TIMESTAMP
+         WHERE id = #{id}
+           AND tenant_id = #{tenantId}
+           AND publish_status = #{publishingStatus}
+    </update>
+
+    <update id="markGiveUp">
+        UPDATE batch.alert_escalation_notification_outbox
+           SET publish_status = #{giveUpStatus},
+               attempt_count  = attempt_count + 1,
+               last_error     = #{lastError,jdbcType=VARCHAR},
+               updated_at     = CURRENT_TIMESTAMP
+         WHERE id = #{id}
+           AND tenant_id = #{tenantId}
+           AND publish_status = #{publishingStatus}
+    </update>
+
+    <update id="resetStalePublishing">
+        UPDATE batch.alert_escalation_notification_outbox
+           SET publish_status  = #{failedStatus},
+               last_error      = 'stale publishing reset',
+               next_publish_at = CURRENT_TIMESTAMP,
+               updated_at      = CURRENT_TIMESTAMP
+         WHERE id = #{id}
+           AND tenant_id = #{tenantId}
+           AND publish_status = #{publishingStatus}
+    </update>
+</mapper>

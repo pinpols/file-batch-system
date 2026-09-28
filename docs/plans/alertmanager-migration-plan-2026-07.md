@@ -58,8 +58,9 @@
   每升一级打 ERROR 日志 + `batch.alert.escalations` 计数。**headless:只放大可见度,不主动通知。**
 - **console 侧最后一公里(PR#603)**:`AlertEscalationNotifier`(`AlertEscalationNotifier.java`,自管理
   `ScheduledExecutorService` + programmatic ShedLock,默认 60s):取 `escalation_tier > escalation_notified_tier`
-  的行(V181 水位线,`V181__alert_event_escalation_notify.sql:20`)→ 发 `alerts / ALERT_ESCALATED` 领域事件
-  → 走现有 webhook 分发 → CAS 推进 `escalation_notified_tier`,保证每次 tier 抬升只通知一次。
+  的行(V181 水位线,`V181__alert_event_escalation_notify.sql:20`)→ CAS 推进 `escalation_notified_tier`
+  并写入 `alert_escalation_notification_outbox`(V214)→ relay 发 `alerts / ALERT_ESCALATED` 领域事件
+  → 走现有 webhook 分发,保证每次 tier 抬升只入队一次,发布失败可重试。
   领域事件由订阅规则路由到 WEBHOOK、EMAIL、DINGTALK、WECOM、SLACK 或 SMS sender；AM 迁移后该 notifier
   默认关闭，仅保留一版作为回滚路径。
 - **console 治理动作(审计,留 fbs)**:`ConsoleAlertController`(`ConsoleAlertController.java:35/45/55`)
