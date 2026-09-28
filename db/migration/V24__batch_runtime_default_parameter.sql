@@ -1,8 +1,8 @@
 -- =========================================================
 -- V23 - Baseline runtime default parameters (design §20.11)
--- Notes:
+-- 说明：
 -- 1) Mirror Spring YAML / env defaults as an audited catalog for ops docs.
--- 2) Keep the insert list aligned with runtime-default-parameters.md.
+-- 2) 确保插入清单与 runtime-default-parameters.md 保持一致。
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS batch.batch_runtime_default_parameter (

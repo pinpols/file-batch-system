@@ -1,4 +1,4 @@
--- Add forward retry support for trigger_request (issue 5.7).
+-- 为 trigger_request 增加向前重试支持（issue 5.7）。
 -- FORWARD_FAILED : orchestrator HTTP call failed; eligible for retry.
 -- GIVE_UP        : max retries exhausted; manual intervention needed.
 ALTER TABLE batch.trigger_request DROP CONSTRAINT IF EXISTS ck_trigger_request_status;

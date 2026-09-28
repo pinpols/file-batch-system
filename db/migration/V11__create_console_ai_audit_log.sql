@@ -1,5 +1,5 @@
 -- =========================================================
--- V10 - Create console AI audit log table
+-- V10 - 创建控制台 AI 审计日志表
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS batch.console_ai_audit_log (

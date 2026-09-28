@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Shared Maven command resolution for local scripts.
+# 本地脚本共用的 Maven 命令解析逻辑。
 #
-# Order:
-#   1. pinned local mvnd wrapper path (~/.local/bin/mvnd by default)
-#   2. repository Maven Wrapper
-#   3. mvnd on PATH
-#   4. mvn on PATH
+# 命令选择顺序：
+#   1. 本地固定版本 mvnd 包装器（默认 ~/.local/bin/mvnd）
+#   2. 仓库内 Maven Wrapper
+#   3. PATH 中的 mvnd
+#   4. PATH 中的 mvn
 
 batch_detect_mvnd_platform() {
   local os arch

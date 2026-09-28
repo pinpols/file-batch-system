@@ -299,7 +299,7 @@ jobs:
         run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
 
       - name: Check SDK configuration environment parity
-        run: python3 scripts/ci/check-sdk-config-env-parity.py
+        run: bash scripts/ci/run-gate.sh SDK_CONFIG_ENV_PARITY "SDK 配置环境一致性" -- python3 scripts/ci/check-sdk-config-env-parity.py
 
       - name: Install native build deps
         run: sudo apt-get update && sudo apt-get install -y cmake libcurl4-openssl-dev libssl-dev netcat-openbsd

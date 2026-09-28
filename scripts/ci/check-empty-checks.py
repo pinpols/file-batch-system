@@ -73,7 +73,7 @@ def is_pure_merge_revert(base: str | None) -> bool:
             text=True,
         ).stdout.split()
 
-        # pull_request checkouts normally point at a synthetic merge commit.
+        # pull_request 工作流通常检出合成的合并提交。
         candidates = ["HEAD"]
         if len(head_parents) == 3:
             candidates = head_parents[1:]

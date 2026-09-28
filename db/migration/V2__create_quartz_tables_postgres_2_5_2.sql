@@ -1,9 +1,6 @@
 -- =========================================================
--- V2 - Quartz JDBC JobStore tables（PostgreSQL 2.5.2 官方脚本语义，IF NOT EXISTS）
--- Notes:
--- 1) Explicit quartz schema qualification
--- 2) Non-destructive IF NOT EXISTS form
--- 3) No DROP statements
+-- V2 - Quartz JDBC JobStore 表（遵循 PostgreSQL 2.5.2 官方脚本语义）
+-- 说明：显式限定 quartz schema，使用 IF NOT EXISTS，且不包含 DROP 语句。
 -- =========================================================
 
 

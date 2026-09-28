@@ -1,8 +1,8 @@
 -- =========================================================
--- V1 - Create platform schemas
--- Notes:
--- 1) Quartz qrtz_* tables should be initialized by the official Quartz SQL.
--- 2) This migration only creates schema boundaries.
+-- V1 - 创建平台 schema
+-- 说明：
+-- 1) Quartz qrtz_* 表应使用官方 SQL 脚本初始化。
+-- 2) 本迁移仅创建 schema 边界。
 -- =========================================================
 
 CREATE SCHEMA IF NOT EXISTS batch;

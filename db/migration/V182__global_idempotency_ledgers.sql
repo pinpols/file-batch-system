@@ -1,8 +1,8 @@
 -- V182: Restore global idempotency keys weakened by monthly partitioning.
 --
 -- V172/V173 had to include the partition key in UNIQUE constraints, which made
--- outbox_event and job_instance idempotency per-partition. These compact ledger
--- tables hold the original global keys and are written in the same transaction
+-- outbox_event 和 job_instance 分区后的幂等性。精简台账表保留原有全局键，
+-- 并与对应业务写入在同一事务中更新。
 -- as the business row via INSERT ... ON CONFLICT DO NOTHING.
 
 CREATE TABLE IF NOT EXISTS batch.outbox_event_dedup_key (

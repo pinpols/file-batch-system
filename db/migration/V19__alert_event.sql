@@ -1,8 +1,8 @@
 -- =========================================================
 -- V18 - Operational alert event table
--- Notes:
--- 1) Persist deduplicated alert records for console query and operations handling.
--- 2) Track occurrence counts, severity, and status transitions on one table.
+-- 说明：
+-- 1) 持久化去重后的告警记录，供控制台查询和运维处置。
+-- 2) 在同一张表中跟踪发生次数、严重级别和状态变化。
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS batch.alert_event (

@@ -30,8 +30,8 @@ typescript_package = json.loads(read(ROOT / "sdk/typescript/package.json"))
 require(typescript_package.get("engines", {}).get("node") == "^22 || ^24", "TypeScript SDK engines.node must support Node 22 and 24 only")
 require((ROOT / "sdk/typescript/package-lock.json").is_file(), "TypeScript SDK development dependencies must be lockfile-backed")
 
-# The frontend is a separately checked-out repository in CI. Validate it when
-# both repositories are available locally; its own CI remains authoritative.
+# CI 中的前端仓库单独检出。仅在本地同时存在两个仓库时执行此处校验；
+# 前端自身 CI 仍是最终验证依据。
 if FRONTEND.is_dir():
     frontend_package = json.loads(read(FRONTEND / "package.json"))
     require(frontend_package.get("engines", {}).get("node") == "^22 || ^24", "frontend engines.node must support Node 22 and 24 only")

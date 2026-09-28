@@ -23,8 +23,8 @@ SOURCE_PREFIXES = (
 ANNOTATION = re.compile(r"@SuppressWarnings\s*\((?P<body>.*?)\)", re.DOTALL)
 RULE = re.compile(r'"(?P<rule>[^"\\]+)"')
 
-# This is intentionally an exact registry. A new exception must be reviewed and
-# added here together with its reason in docs/standards/java-suppression-registry.md.
+# 此清单采用精确匹配。新增例外必须经过评审，并在此登记及
+# docs/standards/java-suppression-registry.md 中说明原因。
 KNOWN_RULES = {
     "unchecked",
     "rawtypes",

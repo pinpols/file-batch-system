@@ -11,7 +11,7 @@
 | 应用与架构 | `check-application-governance.py`、`check-dependency-boundaries.py`、`check-direct-client-boundaries.py`、`check-infrastructure-abstraction-boundaries.py`、`check-no-enable-preview.sh` |
 | SDK 配置 | `check-sdk-config-env-parity.py`（Java/Python env 工厂和五语言 live transport 前缀）、`check-sdk-runtime-alignment.py`（SDK/前端声明与 CI 版本矩阵） |
 | SDK 双栈 | `run-sdk-happy-eyeballs-gate.sh`（五语言真实 loopback socket 单栈/双栈/黑洞矩阵） |
-| 文档与变更 | `check-docs-structure.py`、`check-doc-timestamp-policy.py`、`check-code-doc-references.py`、`check-changelog-sync.py`、`check-loc-snapshot.py`、`check-readiness-doc-sync.py` |
+| 文档与变更 | `check-docs-structure.py`、`check-doc-timestamp-policy.py`、`check-code-doc-references.py`、`check-changelog-sync.py`、`check-loc-snapshot.py`、`check-readiness-doc-sync.py`、`check-comment-language.py` |
 | 脚本与仓库 | `check-shell-scripts.sh`、`check-shell-linux-portability.py`、`check-script-governance.py`、`check-repository-hygiene.py`、`check-env-file-shell-safety.py`、`check-hardcoded-runtime-config.sh` |
 | 配置与部署 | `check-config-defaults-sync.py`、`check-config-governance.py`、`check-env-variable-governance.py`、`check-feature-switch-registry.py`、`check-five-worker-parity.py`、`check-keda-autoscaling.py`、`check-helm-env-sync.py`、`check-production-overlay-safety.py`、`check-version-alignment.sh`、`validate-kafka-topics.sh` |
 | 数据库与 SQL | `check-biz-table-tenant-rls.py`、`check-db-comment-coverage.sh`、`check-db-scripts-safety.sh`、`check-migration-safety.sh`、`check-mybatis-generated-key-columns.py`、`check-no-positional-insert-select-star.py`、`check-postgres-client-fallback.sh`、`check-sql-config-boundaries.py`、`check-sql-config-boundaries.sh`、`validate-flyway-schema.sh` |
@@ -20,6 +20,10 @@
 | 测试完整性 | `check-e2e-run-completeness.sh`、`check-e2e-shard-coverage.sh`、`check-integration-test-coverage.py`、`check-module-test-coverage.sh`、`check-no-silent-disabled-tests.sh` |
 | 安全与许可 | `check-dependency-licenses.sh`、`check-license-compliance.sh`、`check-trivy-ignore-expiry.py` |
 | 观测 | `check-helm-prometheusrule-sync.sh`、`check-log-lifecycle.sh`、`check-observability-contract.py` |
+
+## 门禁结果格式
+
+Git hook 与 GitHub workflow 的门禁入口统一输出 `状态 | code | gate | exit_code | action`；跳过结果在固定字段后追加 `reason`。具体诊断仍由检查脚本输出，最终状态行由 `scripts/lib/gate-result.sh` / `scripts/ci/run-gate.sh` 生成。workflow 中不要直接调用门禁脚本；多项检查要逐项调用 `gate_run`，避免一项失败掩盖同一步其余门禁的独立状态。扫描器报告、测试清单和运行进度不是门禁状态行，不强行改成该格式。
 
 ## `daily-validation-change-gate.py`
 
@@ -46,6 +50,18 @@ Secret scan 属于跨域检查，仍对所有非 Draft PR 执行，因为凭据�
 ```bash
 python3 scripts/ci/check-code-doc-references.py
 ```
+
+## `check-comment-language.py`
+
+检查源码、配置、脚本和 SQL/Flyway diff 中新增的说明性注释是否为简体中文。机器指令、标准许可证声明和代码示例不判为说明性注释；检查范围仅包括新增行，便于逐步治理已存在的历史内容。可用 `--paths` 对指定目录执行存量扫描。
+
+```bash
+python3 scripts/ci/check-comment-language.py --staged
+python3 scripts/ci/check-comment-language.py --base-ref origin/main
+python3 scripts/ci/check-comment-language.py --paths scripts load-tests/scripts load-tests/sql
+```
+
+当前作为本地增量预检接入 `scripts/local/pre-commit-checks.sh`，仅检查暂存 diff 新增的说明性注释，不扫描存量文件。PR/Full CI 暂不阻断；后续评估历史迁移 checksum 风险及误报率后，再单独启用 CI 门禁。Flyway checksum 校验仍独立生效，不能因改动仅涉及注释就跳过：已应用迁移文件内容变化会造成校验和差异，部署前必须按迁移治理流程处理。
 
 ## `check-empty-checks.py`
 

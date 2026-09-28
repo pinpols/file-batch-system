@@ -1,9 +1,9 @@
 -- =========================================================
 -- V15 - Add scheduler fair-share snapshot and load fields
--- Notes:
--- 1) Extend quota / queue / worker tables with burst and fair-share controls.
--- 2) Persist tenant-level scheduler snapshot for audit and tuning.
--- 3) Keep the snapshot queryable by tenant and capture time.
+-- 说明：
+-- 1) 扩展配额、队列和 Worker 表，增加突发流量与公平调度控制项。
+-- 2) 持久化租户级调度快照，供审计和调优使用。
+-- 3) 支持按租户和采集时间查询快照。
 -- =========================================================
 
 ALTER TABLE batch.tenant_quota_policy

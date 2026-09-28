@@ -1,6 +1,6 @@
 -- =========================================================
 -- V177 - 触发器依赖感知 fire 的上游声明(ADR-043 Phase B)
--- Notes:
+-- 说明：
 -- 1) job_definition 加可选 depends_on_job_code:声明本触发器 fire 前需就绪的上游 job。
 --    非空时,scheduled fire 在 launch 前查上游同 bizDate 是否已 SUCCESS,未就绪则跳过本次
 --    (下个调度点重试),不盲 fire 注定无输入/半输入的批。

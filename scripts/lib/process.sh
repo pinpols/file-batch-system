@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cross-platform helpers for local process/port handling.
+# 本地进程与端口管理的跨平台辅助函数。
 
 process_listen_pids() {
   local port="${1:?port required}"

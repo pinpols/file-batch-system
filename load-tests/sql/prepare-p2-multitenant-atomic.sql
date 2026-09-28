@@ -77,9 +77,8 @@ ON CONFLICT (tenant_id, job_code) DO UPDATE SET
   updated_by = EXCLUDED.updated_by,
   updated_at = now();
 
--- This profile deliberately creates a shared, bounded admission group.  Without
--- these policies the fairness load test only proves that three tenants eventually
--- finish; no partition enters the WAITING scheduler where fairnessScore is used.
+-- 本档案显式创建共享且有容量上限的准入组。若缺少这些策略，公平性压测只能证明三个租户最终完成，
+-- 无法让分区进入使用 fairnessScore 的 WAITING 调度队列。
 INSERT INTO batch.tenant_quota_policy (
   tenant_id,
   policy_code,

@@ -26,6 +26,14 @@ BFS 的下游 readiness 不能只看 `job_instance` 最新 attempt 是否成功�
 
 > **2026-07-01 守卫**:`asset_partition` 不是权威表,不能只因为表里还指着旧 EFFECTIVE 就判 ready。重跑产生更高版本 `PENDING/FAILED` 时,旧版本虽仍可能暂时 EFFECTIVE,但下游 readiness 必须等待最新成功版本生效后再放行。V189 之后,物化读按最新 EFFECTIVE 校验,写入按版本号单调更新,避免乱序提交或旧物化行把下游带回过期结果。
 
+## 调度与清理迁移边界
+
+- V180 将上游 readiness 未满足时的定时触发改为可重检的 defer，并固定原始 fire 时刻对应的 `bizDate`；就绪、超时或放弃后清空 defer 时间。
+- V189 为重放条目和 `asset_partition` 版本指针补充索引约束，支持同一源实例的多版本输出及单调版本校验。
+- V200 仅为 `ARCHIVED` 的 `result_version` 建立清理索引；`EFFECTIVE` 与 `PENDING` 不属于热表清理候选。
+
+以上迁移分别约束调度重检、readiness 物化版本和结果保留清理，不改变 `result_version` 作为权威版本来源的边界。
+
 | 字段 | 来源 |
 |---|---|
 | `tenantId` | `asset_partition.tenant_id` |

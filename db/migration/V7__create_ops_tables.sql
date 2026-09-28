@@ -1,5 +1,5 @@
 -- =========================================================
--- V6 - Create ops, retry, dead letter and outbox tables
+-- V6 - 创建运维、重试、死信与 Outbox 表
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS batch.job_execution_log (

@@ -1,9 +1,9 @@
 -- =========================================================
--- V12 - Create compensation command and step runtime tables
--- Notes:
--- 1) Extend job_instance with rerun / retry / traceability fields.
--- 2) Create job_step_instance for step-level execution tracking.
--- 3) Create compensation_command for manual or automated compensation flow.
+-- V12 - 创建补偿命令和步骤运行态表
+-- 说明：
+-- 1) 扩展 job_instance，增加重跑、重试和追踪字段。
+-- 2) 创建 job_step_instance，用于跟踪步骤级执行状态。
+-- 3) 创建 compensation_command，用于管理人工或自动补偿流程。
 -- =========================================================
 
 ALTER TABLE batch.job_instance

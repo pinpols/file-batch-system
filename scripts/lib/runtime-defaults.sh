@@ -1,7 +1,7 @@
 #!/bin/sh
-# Runtime defaults shared by host scripts and minimal /bin/sh init containers.
-# This file only defines constants; callers decide whether a value is optional or required.
-# Constants are consumed by scripts that source this file.
+# 宿主机脚本与精简 /bin/sh 初始化容器共用的运行时默认值。
+# 本文件仅定义常量，由调用方决定参数是否必需。
+# 常量供显式加载本文件的脚本使用。
 # shellcheck disable=SC2034
 
 BATCH_DEFAULT_POSTGRES_PORT=15432

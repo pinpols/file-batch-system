@@ -20,9 +20,8 @@ TOTAL = int(os.environ.get("FAIRNESS_TOTAL_REQUESTS", "6000"))
 CONCURRENCY = int(os.environ.get("FAIRNESS_CONCURRENCY", "96"))
 LAUNCH_WEIGHTS = os.environ.get("FAIRNESS_LAUNCH_WEIGHTS", "p2fa:1,p2fb:1,p2fc:1")
 WAIT_SECONDS = int(os.environ.get("FAIRNESS_WAIT_SECONDS", "1200"))
-# The trigger endpoint creates the trigger_request that the asynchronous
-# orchestrator consumer requires. Direct orchestrator mode is retained for
-# pre-seeded trigger_request fixtures only.
+# Trigger 入口会创建异步 Orchestrator 消费所需的 trigger_request。
+# 仅预置 trigger_request 测试数据时，才使用 Orchestrator 直连模式。
 MODE = os.environ.get("FAIRNESS_MODE", "trigger")
 
 
@@ -158,8 +157,8 @@ def terminal_counts(tenants):
 
 
 def interleaved_tasks(plan):
-    # Preserve equal ingress opportunity. A tenant's configured fairness score,
-    # not client-side queue ordering, must decide who obtains constrained slots.
+    # 保持各租户获得相同的提交机会；受限资源的分配应由租户公平分值决定，
+    # 不应受客户端队列顺序影响。
     counts = dict(plan)
     for seq in range(max(counts.values(), default=0)):
         for tenant, _ in plan:

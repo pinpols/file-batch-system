@@ -1,7 +1,6 @@
 BEGIN;
 
--- Shared sequences are synchronized below. Serialize only fixture preparation so
--- concurrent load-test runs cannot reset a sequence behind another transaction.
+-- 下方会同步共享序列。仅串行化测试数据准备，避免并发压测在其他事务之后重置序列。
 SELECT pg_advisory_xact_lock(
   hashtext('batch-load-tests:prepare-worker-load-business')::bigint
 );

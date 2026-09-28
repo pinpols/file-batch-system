@@ -520,7 +520,7 @@ write_state() {
   local last_failed_step=""
   [[ "$last_status" == "fail" ]] && last_failed_step="$last_step"
   cat > "$STATE_FILE" <<EOF
-# be-acceptance state — $(date -u +%Y-%m-%dT%H:%M:%SZ)
+# be-acceptance 状态 — $(date -u +%Y-%m-%dT%H:%M:%SZ)
 last_step=$last_step
 last_status=$last_status
 last_failed=$last_failed_step

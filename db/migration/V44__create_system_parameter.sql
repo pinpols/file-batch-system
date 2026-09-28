@@ -1,5 +1,5 @@
 -- =========================================================
--- V44 - System parameter table for runtime configuration
+-- V44 - 创建运行时系统参数表
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS batch.system_parameter (

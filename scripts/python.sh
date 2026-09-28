@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Repository Python entrypoint. Selects .venv first and validates Python 3.
+# 仓库统一 Python 入口：优先使用 .venv，并校验 Python 3 版本。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

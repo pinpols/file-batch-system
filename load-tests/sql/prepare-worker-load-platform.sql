@@ -1,7 +1,6 @@
 BEGIN;
 
--- Pipeline definitions and templates are shared fixtures. Serialize their setup;
--- each benchmark starts independently after this transaction commits.
+-- 流水线定义和模板是共享测试数据，因此串行执行初始化；本事务提交后，各压测可独立运行。
 SELECT pg_advisory_xact_lock(
   hashtext('batch-load-tests:prepare-worker-load-platform')::bigint
 );

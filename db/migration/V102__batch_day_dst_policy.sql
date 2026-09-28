@@ -1,5 +1,5 @@
 -- =========================================================
--- V102: Explicit DST policy for batch-day boundary calculation
+-- V102：显式配置批量日边界的夏令时处理策略
 -- =========================================================
 
 ALTER TABLE batch.business_calendar

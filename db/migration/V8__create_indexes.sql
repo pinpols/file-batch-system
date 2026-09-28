@@ -1,5 +1,5 @@
 -- =========================================================
--- V7 - Create secondary indexes
+-- V7 - 创建辅助索引
 -- =========================================================
 
 CREATE INDEX IF NOT EXISTS idx_resource_queue_type_enabled

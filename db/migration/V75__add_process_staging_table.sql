@@ -1,5 +1,5 @@
 -- =========================================================
--- V75 - PROCESS pipeline staging table for WAP (Write-Audit-Publish)
+-- V75 - 创建 PROCESS 流水线 WAP（写入-审计-发布）暂存表
 -- =========================================================
 -- 设计依据:docs/design/batch-classification-and-gaps.md §4.5。
 -- PROCESS 任务的 5 stage 流水线 PREPARE → COMPUTE → VALIDATE → COMMIT → FEEDBACK

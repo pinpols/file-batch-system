@@ -1,8 +1,8 @@
 -- =========================================================
 -- V11 - Add SLA and arrival governance columns
--- Notes:
+-- 说明：
 -- 1) Track deadline, expected duration, and SLA alert state on job_instance.
--- 2) Support arrival / processing governance queries and alerting.
+-- 2) 支持到达与处理治理查询及告警。
 -- =========================================================
 
 ALTER TABLE batch.job_instance

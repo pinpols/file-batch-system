@@ -1,5 +1,5 @@
 -- =========================================================
--- V2 - Create configuration tables
+-- V2 - 创建配置表
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS batch.resource_queue (
