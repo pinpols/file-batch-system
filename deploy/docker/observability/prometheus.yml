@@ -19,7 +19,7 @@ scrape_configs:
   - job_name: batch-apps
     metrics_path: /actuator/prometheus
     file_sd_configs:
-      - files: ['/etc/prometheus/targets/app-targets.json']
+      - files: ['/prometheus/targets/app-targets.json']
         refresh_interval: 30s
 
   - job_name: redis-exporter

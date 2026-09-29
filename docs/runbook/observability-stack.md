@@ -161,10 +161,22 @@ Collector 配置应使用对应版本官方镜像执行 `validate`；Prometheus 
 ### Collector 重启后积压丢失
 
 - Docker 检查 `otel-collector-data` named volume。
-- 本地脚本会先运行一次性 `otel-collector-init`，把命名卷目录归属设置为 Collector 的 10001 用户；
+- Compose 会先运行非 root 的一次性 `otel-collector-init`，为新卷带入 10001 所有权并检查可写性；
   若手工启动叠加文件，也必须合并根 `docker-compose.yml`，不要单独解析观测 overlay。
 - Helm 内置 Collector 使用 `emptyDir`，仅保证容器重启，不保证 Pod 重建；需要持久保证时切外部
   Collector 并使用持久卷或受管遥测网关。
+
+### 容器身份与卷权限
+
+- 前端 Nginx master/worker 与后端 8 个应用均以固定 `batch:batch`（UID/GID 10001）运行。应用 JAR 和入口脚本由 root 持有、运行用户只读，只有日志和缓存目录由运行用户持有。
+- PostgreSQL 主库/副本/业务分片直接以 `postgres` 用户运行，Valkey 直接以 `valkey` 用户运行；新命名卷已按服务用户验证可启动。副本入口脚本不再执行 `chown`，数据卷所有者不正确时会失败并提示修复，而不是以 root 自动接管。
+- MinIO 及其 bucket 初始化任务以 UID/GID 1001 运行；具名 `minio-data` 卷挂在实际数据目录 `/bitnami/minio/data`，`minio-volume-init` 以同一身份预备并检查新卷。
+- Prometheus 以镜像默认的 `nobody` 用户运行，动态 targets 写入 `/prometheus/targets` 数据卷；Tempo 和 Collector 以 UID 10001 运行。`tempo-init`、`otel-collector-init` 使用同一个卷预备镜像，以 UID/GID 10001 执行可写检查，不再以 root `chown`。服务挂载使用 `nocopy`，避免镜像目录覆盖已预备的卷所有权。
+- cAdvisor 仍是宿主机特权例外：它读取 Docker socket 和 `/var/lib/docker`，实测非 root 模式虽返回 `/metrics`，却无法读取容器层目录，容器指标不完整。需要严格零特权时不要启动 cAdvisor，并同步调整相应抓取与仪表盘；不能仅凭端点 200 判定权限迁移成功。
+
+验收时用 `docker top batch-tempo -eo pid,user,uid,gid,comm` 和 `docker top batch-otel-collector -eo pid,user,uid,gid,comm` 确认主进程均为 10001:10001。对卷预备任务，分别运行 `docker compose -f docker-compose.yml -f deploy/docker/compose/observability.yml --env-file .env.local run --rm --no-deps tempo-init` 和同命令的 `otel-collector-init`，确认返回 0；运维脚本也使用 `run --rm`，任务完成后不会保留在 `ps -a` 中。Tempo `/ready` 与 Collector `:13133/` 健康端点还须分别返回 200，不能只凭卷权限检查判断链路可用。
+
+升级前先备份持久卷并检查实际 UID/GID。若 PostgreSQL、Valkey、MinIO、Tempo 或 Collector 使用旧的 bind mount 或所有者不一致，必须停止对应服务后由宿主机管理员一次性修正目录所有权，再启动新的非 root 容器；卷预备任务只检查权限，不迁移已有数据或修复旧卷。不要对数据目录使用 `chmod 777`，也不要在运行中递归改权限。
 
 ### 磁盘增长
 

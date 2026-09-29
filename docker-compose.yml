@@ -16,6 +16,7 @@ services:
   postgres-primary:
     logging: *container-logging
     image: postgres:${POSTGRES_IMAGE_TAG}
+    user: postgres
     container_name: batch-postgres-primary
     restart: unless-stopped
     # 防止异常查询/连接风暴独占 Docker VM；生产 Operator 使用独立 4Gi Pod 预算。
@@ -100,6 +101,7 @@ services:
     logging: *container-logging
     profiles: ["replica"]
     image: postgres:${POSTGRES_IMAGE_TAG}
+    user: postgres
     container_name: batch-postgres-replica
     restart: unless-stopped
     mem_limit: ${POSTGRES_MEMORY_LIMIT:-3072m}
@@ -161,6 +163,7 @@ services:
     logging: *container-logging
     profiles: ["biz-shard"]
     image: postgres:${POSTGRES_IMAGE_TAG}
+    user: postgres
     container_name: batch-postgres-biz-shard-1
     restart: unless-stopped
     mem_limit: ${POSTGRES_MEMORY_LIMIT:-3072m}
@@ -271,9 +274,25 @@ services:
     networks:
       - batch-network
 
+  minio-volume-init:
+    logging: *container-logging
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.volume-init
+    user: "1001:1001"
+    restart: "no"
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    command: ["test -w /volume/minio || { echo 'MinIO volume must be owned by 1001:1001' >&2; exit 1; }"]
+    volumes:
+      - minio-data:/volume/minio
+
   minio:
     logging: *container-logging
     image: ${MINIO_IMAGE_REPOSITORY:-bitnamilegacy/minio}:${MINIO_IMAGE_TAG:-2025.7.23-debian-12-r1}
+    user: "1001:1001"
     container_name: batch-minio
     restart: unless-stopped
     # 本地依赖也必须有 cgroup 边界，避免异常 multipart/扫描占满宿主机内存。
@@ -290,9 +309,16 @@ services:
       - "${MINIO_API_PORT}:9000"
       - "${MINIO_CONSOLE_PORT}:9001"
     volumes:
-      - minio-data:/data
+      - type: volume
+        source: minio-data
+        target: /bitnami/minio/data
+        volume:
+          nocopy: true
     networks:
       - batch-network
+    depends_on:
+      minio-volume-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/ready >/dev/null"]
       interval: 5s
@@ -303,12 +329,14 @@ services:
     logging: *container-logging
     # 固定复用 MinIO 服务镜像内的 mc，避免依赖不可用的独立客户端镜像。
     image: ${MINIO_IMAGE_REPOSITORY:-bitnamilegacy/minio}:${MINIO_IMAGE_TAG:-2025.7.23-debian-12-r1}
+    user: "1001:1001"
     container_name: batch-minio-init
     depends_on:
       minio:
         condition: service_healthy
     environment:
       <<: *common-runtime-env
+      HOME: /tmp
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
@@ -324,6 +352,7 @@ services:
   valkey:
     logging: *container-logging
     image: valkey/valkey:${VALKEY_IMAGE_TAG:-8.1.10}
+    user: valkey
     container_name: batch-valkey
     restart: unless-stopped
     # 数据上限保留 25% 给复制/AOF fork、连接缓冲和 allocator 碎片。

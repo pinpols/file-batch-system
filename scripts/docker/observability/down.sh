@@ -27,7 +27,7 @@ fi
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-batch-platform}"
 export COMPOSE_PROJECT_NAME
 OBSERVABILITY_SERVICES=(
-  prometheus alertmanager jaeger tempo loki otel-collector otel-collector-init grafana
+  prometheus alertmanager jaeger tempo tempo-init loki otel-collector otel-collector-init grafana
   redis-exporter postgres-exporter kafka-exporter node-exporter cadvisor
 )
 

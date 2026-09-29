@@ -34,7 +34,7 @@ COMPOSE_ENV_FILE=.env.test ./scripts/docker/observability/up.sh
 - 脚本合并根 `docker-compose.yml` 与 `deploy/docker/compose/observability.yml`，但通过 `--no-deps` 只操作观测服务清单
 - 脚本不会自动启动或停止 PostgreSQL、Kafka、Valkey 和业务应用；这些服务由各自脚本管理
 - 观测栈通过共享的 `batch-network` 直接抓取业务容器和 exporter
-- `otel-collector-init` 只负责初始化 Collector 命名卷权限，完成后退出
+- `tempo-init` 与 `otel-collector-init` 以 UID/GID 10001 预备并检查命名卷，完成后退出；不在容器运行时执行 `chown`
 - `Prometheus` 是观测栈的一部分，不是业务运行必需项
 - 如果业务应用容器已经在跑，观测栈可以直接抓取它们的 `/actuator/prometheus`
 - 系统 CPU / 内存 / 磁盘 / 网络 / 负载指标由 node_exporter 和 cAdvisor 提供

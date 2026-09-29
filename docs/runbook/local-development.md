@@ -190,7 +190,7 @@ docker compose down -v
 > # 基础服务
 > docker compose --env-file .env.local up -d
 > # 可观测性（Prometheus / Grafana / Jaeger / Loki）
-> docker compose -f deploy/docker/compose/observability.yml --env-file .env.local up -d
+> docker compose -f docker-compose.yml -f deploy/docker/compose/observability.yml --env-file .env.local up -d
 > ```
 
 ---

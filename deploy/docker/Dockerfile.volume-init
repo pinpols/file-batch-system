@@ -1,0 +1,14 @@
+# syntax=docker/dockerfile:1.7
+FROM alpine:3.20
+
+# Docker copies the ownership of these image directories into fresh named volumes.
+RUN addgroup -S -g 1001 minio \
+    && adduser -S -D -H -u 1001 -G minio minio \
+    && addgroup -S -g 10001 batch \
+    && adduser -S -D -H -u 10001 -G batch batch \
+    && mkdir -p /volume/minio /volume/tempo /volume/otel \
+    && chown minio:minio /volume/minio \
+    && chown batch:batch /volume/tempo /volume/otel
+
+USER batch:batch
+ENTRYPOINT ["sh", "-ec"]

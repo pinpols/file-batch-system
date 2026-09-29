@@ -53,11 +53,13 @@ COMPOSE=(
 )
 
 # --no-deps 保证本脚本不会顺带接管 PostgreSQL、Kafka、Valkey 等基础设施生命周期。
-# Collector 的命名卷权限仍需先同步初始化，避免非 root 进程启动后无法写队列目录。
+# 非 root 预备任务先验证或初始化命名卷，再启动对应服务。
 for service in "${OBSERVABILITY_SERVICES[@]}"; do
+  if [[ "$service" == "tempo" ]]; then
+    "${COMPOSE[@]}" run --rm --no-deps tempo-init
+  fi
   if [[ "$service" == "otel-collector" ]]; then
     "${COMPOSE[@]}" run --rm --no-deps otel-collector-init
-    break
   fi
 done
 

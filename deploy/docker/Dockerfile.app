@@ -160,10 +160,11 @@ RUN app_jar="$(find /app/application -maxdepth 1 -type f -name '*-exec.jar' -pri
          ln -sfn "$dependency" "/app/application/lib/$(basename "$dependency")"; \
        done \
     && mkdir -p /var/log/app /var/cache/app /logs /app/logs \
-    && chmod +x /app/entrypoint.sh \
-    && chown -R batch:batch /app /var/log/app /var/cache/app /logs /app/logs
+    && chmod 0555 /app/entrypoint.sh \
+    && chown -R batch:batch /var/log/app /var/cache/app /logs /app/logs \
+    && chmod 0750 /var/log/app /var/cache/app /logs /app/logs
 
-USER 10001
+USER batch:batch
 
 ENV JAVA_OPTS=""
 ENV JAVA_OPTS_EXTRA=""
