@@ -214,7 +214,8 @@ public class ConsoleJwtService {
   }
 
   /** 签发访问令牌及过期时间。 */
-  @SuppressWarnings("java:S2589")
+  // S2259 无法识别 EmptyChecks.isNotNull(currentRequest) 对请求访问的保护。
+  @SuppressWarnings({"java:S2259", "java:S2589"})
   public ConsoleAuthTokenResponse issueToken(
       String username, String tenantId, Set<String> authorities, long sessionVersion) {
     Guard.requireText(username, "username is required");
@@ -267,6 +268,8 @@ public class ConsoleJwtService {
         false);
   }
 
+  // S2259 无法识别下方 EmptyChecks 对 ObjectProvider 结果的空值保护。
+  @SuppressWarnings("java:S2259")
   public ConsolePrincipal authenticate(String token) {
     Jwt jwt = decoder().decode(token);
     String issuer = jwt.getClaimAsString("iss");
@@ -307,6 +310,8 @@ public class ConsoleJwtService {
   /**
    * P0-3:把当前 token 加入 revocation 黑名单,TTL = token 剩余生命。 调用方:登出 endpoint 拿到当前 cookie 中的 token 后传入。
    */
+  // S2259 无法识别下方 EmptyChecks 对 ObjectProvider 和 JWT 过期时间的空值保护。
+  @SuppressWarnings("java:S2259")
   public void revoke(String token) {
     ConsoleTokenRevocationStore revocationStore = tokenRevocationStoreProvider.getIfAvailable();
     if (EmptyChecks.isNull(revocationStore)) {

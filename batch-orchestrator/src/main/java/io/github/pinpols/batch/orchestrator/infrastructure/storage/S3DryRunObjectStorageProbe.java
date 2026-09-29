@@ -33,6 +33,8 @@ public final class S3DryRunObjectStorageProbe implements DryRunObjectStorageProb
   }
 
   @Override
+  // S2259 无法识别 EmptyChecks 对 ObjectProvider 可空结果的保护。
+  @SuppressWarnings("java:S2259")
   public int probe(Map<String, Object> params, List<DryRunFinding> findings) {
     String bucket = stringValue(params, "s3Bucket");
     if (!Texts.hasText(bucket)) {

@@ -56,6 +56,8 @@ public class ConsoleAuthApplicationService {
     return loginService.login(request);
   }
 
+  // S2259 无法识别 authorities(Authentication) 中 EmptyChecks 提供的空值契约。
+  @SuppressWarnings("java:S2259")
   public ConsoleAuthTokenResponse issueToken(Authentication authentication) {
     String username = username(authentication);
     String tenantId = tenantId(authentication);
@@ -108,6 +110,8 @@ public class ConsoleAuthApplicationService {
         : resolved;
   }
 
+  // S2259 无法识别 EmptyChecks 的空值契约及下方 instanceof 守卫。
+  @SuppressWarnings("java:S2259")
   private Set<String> authorities(Authentication authentication) {
     Set<String> resolved = new LinkedHashSet<>();
     boolean hasConsolePrincipal = EmptyChecks.isNotNull(authentication)

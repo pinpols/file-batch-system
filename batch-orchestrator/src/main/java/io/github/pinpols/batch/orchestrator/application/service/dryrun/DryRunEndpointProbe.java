@@ -45,14 +45,12 @@ final class DryRunEndpointProbe {
             trimmed));
         continue;
       }
-      if (!probeEndpoint(key, trimmed, findings)) {
-        break;
-      }
+      probeEndpoint(key, trimmed, findings);
     }
     return probed;
   }
 
-  private boolean probeEndpoint(String key, String url, List<DryRunFinding> findings) {
+  private void probeEndpoint(String key, String url, List<DryRunFinding> findings) {
     try {
       URI probeUri = URI.create(url);
       String host = probeUri.getHost();
@@ -62,7 +60,7 @@ final class DryRunEndpointProbe {
             SCOPE_EXECUTION,
             key + " endpoint URL has no host; reachability probe skipped",
             url));
-        return true;
+        return;
       }
       // Probe 本身必须保持 fail-closed；transport 侧会在真正建连时再次校验同一规则，
       // 避免测试替身或未来其他实现意外绕过 dry-run 的 SSRF 结论。
@@ -81,21 +79,18 @@ final class DryRunEndpointProbe {
         findings.add(DryRunFinding.warn(
             "EXEC_ENDPOINT_5XX", SCOPE_EXECUTION, key + " HEAD returned " + status, url));
       }
-      return true;
     } catch (BlockedAddressException ex) {
       findings.add(DryRunFinding.warn(
           "EXEC_ENDPOINT_BLOCKED",
           SCOPE_EXECUTION,
           key + " target rejected by egress security policy; reachability probe skipped",
           url));
-      return true;
     } catch (Exception ex) {
       findings.add(DryRunFinding.warn(
           "EXEC_ENDPOINT_UNREACHABLE",
           SCOPE_EXECUTION,
           key + " probe failed: " + ex.getMessage(),
           url));
-      return true;
     }
   }
 }

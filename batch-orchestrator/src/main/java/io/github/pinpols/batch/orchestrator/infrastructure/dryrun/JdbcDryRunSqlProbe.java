@@ -35,6 +35,8 @@ public final class JdbcDryRunSqlProbe implements DryRunSqlProbe {
   }
 
   @Override
+  // S2259 无法识别 EmptyChecks.isNull(jdbcTemplate) 在后续调用前已返回。
+  @SuppressWarnings("java:S2259")
   public int probe(Map<String, Object> params, List<DryRunFinding> findings) {
     JdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
     if (EmptyChecks.isNull(jdbcTemplate)) {

@@ -291,6 +291,31 @@ class DefaultDryRunPlanServiceTest {
   }
 
   @Test
+  void l3ContinuesProbingEndpointsAfterARejectedTarget() {
+    when(configCache.findEnabledJobDefinition("t1", "JOB_A"))
+        .thenReturn(JobDefinitionEntity.builder().id(1L).scheduleType("MANUAL").build());
+    SchedulePlan plan = new SchedulePlan();
+    plan.setPartitionCount(1);
+    plan.getPartitions().add(new SchedulePlan.PartitionPlan());
+    when(planBuilder.build(any())).thenReturn(plan);
+
+    DryRunPlanResult result = service.plan(DryRunPlanRequest.builder()
+        .tenantId("t1")
+        .jobCode("JOB_A")
+        .bizDate(LocalDate.of(2026, Month.MAY, 7))
+        .level(DryRunLevel.EXECUTION_PLAN)
+        .params(Map.of(
+            "callbackUrl", "http://169.254.169.254/latest/meta-data/",
+            "endpointUrl", "http://10.1.2.3:8080/internal"))
+        .build());
+
+    assertThat(result.findings())
+        .extracting(DryRunFinding::code)
+        .filteredOn("EXEC_ENDPOINT_BLOCKED"::equals)
+        .hasSize(2);
+  }
+
+  @Test
   void l3RunsExplainForSingleSelectProbe() {
     DryRunPlanResult result = probeExecutionSql("SELECT count(*) FROM batch.job_instance");
 

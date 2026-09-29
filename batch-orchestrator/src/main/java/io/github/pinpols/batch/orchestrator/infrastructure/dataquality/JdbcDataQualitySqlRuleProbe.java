@@ -23,6 +23,8 @@ public class JdbcDataQualitySqlRuleProbe implements DataQualitySqlRuleProbe {
 
   private final ObjectProvider<NamedParameterJdbcTemplate> jdbcTemplateProvider;
 
+  // S2259 无法识别 EmptyChecks 对 ObjectProvider 和查询结果的空值保护。
+  @SuppressWarnings("java:S2259")
   @Override
   public long evaluateScalar(JobInstanceEntity instance, DataQualityRuleEntity rule) {
     NamedParameterJdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
