@@ -29,7 +29,7 @@
 
 ## 事件语义
 
-- `pull_request`：使用 `base...head`，探测失败直接失败，不静默跳过。
+- `pull_request`：直接比较 `base` 与 `head` 两个提交树，不依赖 merge-base；探测失败直接失败，不静默跳过。
 - `merge_group`、`push`、`schedule`、`workflow_dispatch`：没有可靠 PR diff，输出全域
   `true`，保证发布、合并队列和手工验证不会漏扫。
 - `unknown=true` 或非文档域命中：`docs-only=false`。
