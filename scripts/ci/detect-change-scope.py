@@ -2,7 +2,7 @@
 """Detect changed repository scopes for local and GitHub Actions routing.
 
 The classifier is intentionally conservative. A pull request diff is classified
-from ``base...head``. Events without a trustworthy PR diff fall back to the
+by comparing the ``base`` and ``head`` trees directly. Events without a trustworthy PR diff fall back to the
 full scope so a routing failure cannot silently skip a required gate.
 """
 
@@ -175,7 +175,7 @@ def full_result() -> dict[str, object]:
 
 def changed_paths(base: str, head: str) -> list[str]:
     result = subprocess.run(
-        ["git", "diff", "--name-only", "-z", f"{base}...{head}", "--"],
+        ["git", "diff", "--name-only", "-z", base, head, "--"],
         cwd=ROOT,
         check=True,
         capture_output=True,
@@ -230,10 +230,14 @@ def main() -> int:
         try:
             paths = changed_paths(args.base, args.head)
         except subprocess.CalledProcessError as exc:
-            print(f"unable to compute change scope: git diff exited {exc.returncode}", file=sys.stderr)
+            detail = exc.stderr.decode("utf-8", errors="replace").strip() if exc.stderr else ""
+            message = f"unable to compute change scope: git diff exited {exc.returncode}"
+            if detail:
+                message += f": {detail}"
+            print(message, file=sys.stderr)
             return 2
         result = classify_paths(paths)
-        mode = f"diff:{args.base}...{args.head}"
+        mode = f"tree-diff:{args.base}..{args.head}"
 
     write_outputs(result, args.github_output)
     write_summary(result, args.summary, mode)

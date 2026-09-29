@@ -110,7 +110,7 @@ SDK 纯变更由 SDK workflow 负责，`docs/api/**` 等契约路径不在忽略
 同时写入 Job outputs 和 Step summary。一个文件可以命中多个域，例如 Flyway SQL
 同时命中 `sql` 与 `database`，SDK 共享常量同时命中 `sdk` 与 `docs`/`api`。
 
-安全规则：PR 使用 `base...head` 计算真实差异；merge queue、push、schedule、手工
+安全规则：PR 直接比较 `base` 与 `head` 提交树计算真实差异；merge queue、push、schedule、手工
 触发等没有可靠 PR 差异的事件统一回退全范围；未知文件不算 `docs-only`。新增 workflow
 应复用该探测器，不要重新添加路径 glob。它只负责“哪些范围被改动”，不替代 ruleset
 required checks，也不允许用范围探测绕过跨域 secret scan 或 main full gate。
