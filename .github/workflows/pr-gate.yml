@@ -47,7 +47,7 @@ concurrency:
 
 jobs:
   # ===========================================================================
-  # Job 0: changes — dorny/paths-filter 判定 docs-only PR(C 方案 #2)
+  # Job 0: changes — 统一范围探测器判定按需门禁
   # 文档/示例-only PR 跳过 3 个 unit job(GitHub 把 skipped 算 SUCCESS,ruleset
   # required check 不挂),只保留 static-checks + security-scan 回退。
   # ===========================================================================
@@ -58,81 +58,42 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      # 任一 code 路径命中 => docs-only=false;全无命中 => docs-only=true。
-      # merge_group / push 事件无 PR diff,paths-filter 直接判 true(执行 unit)。
-      docs-only: ${{ steps.filter.outputs.code == 'false' }}
-      java: ${{ steps.filter.outputs.java }}
-      database: ${{ steps.filter.outputs.database }}
-      scripts: ${{ steps.filter.outputs.scripts }}
-      docs: ${{ steps.filter.outputs.docs }}
-      config: ${{ steps.filter.outputs.config }}
-      api: ${{ steps.filter.outputs.api }}
-      ci: ${{ steps.filter.outputs.ci }}
+      docs-only: ${{ steps.scope.outputs.docs-only }}
+      unit-required: ${{ steps.scope.outputs.unit-required }}
+      java: ${{ steps.scope.outputs.java }}
+      sql: ${{ steps.scope.outputs.sql }}
+      database: ${{ steps.scope.outputs.database }}
+      scripts: ${{ steps.scope.outputs.scripts }}
+      docs: ${{ steps.scope.outputs.docs }}
+      config: ${{ steps.scope.outputs.config }}
+      api: ${{ steps.scope.outputs.api }}
+      sdk: ${{ steps.scope.outputs.sdk }}
+      ci: ${{ steps.scope.outputs.ci }}
+      tests: ${{ steps.scope.outputs.tests }}
+      docker: ${{ steps.scope.outputs.docker }}
+      helm: ${{ steps.scope.outputs.helm }}
+      maven: ${{ steps.scope.outputs.maven }}
+      unknown: ${{ steps.scope.outputs.unknown }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           persist-credentials: false
 
-      - name: Detect code changes
-        id: filter
-        uses: dorny/paths-filter@v3
-        with:
-          # PR base 判 diff;非 PR 事件(merge_group / push)无 base,filter 视为 changed=true
-          # (即 code=true / docs-only=false),保证安全 — 回退跑 unit。
-          #
-          # `code` = 平台 Java 源 + schema + 构建配置。只有命中才跑 3 个 unit-it。
-          # **故意排除**(纯改这些 → docs-only=true → 跳 3 类测试,只保 static-checks + security-scan):
-          #   - sdk/**            → 走专用 sdk-contract-parity.yml / sdk-python.yml(path-triggered)
-          #   - scripts/**        → sh/sql/py 脚本;其安全由 static-checks(DB 脚本 lint 等)兜
-          #   - docs/** / *.md    → 不在 code filter 内
-          #   - .github/workflows/** / .github/actions/**(2026-06-22 移除)
-          #       → workflow/composite-action 的 YAML + shellcheck 由专用 workflow-lint
-          #         (actionlint + zizmor)校验,跑 java unit 无意义。此前误含 → 纯 CI PR
-          #         会触发全套 java unit。移除后回归「按需」:改 workflow 不再跑 maven。
-          # db/migration/** 保留:Flyway 平台 schema,IT 跑在其上,语义回归只有 IT 逮得到。
-          filters: |
-            code:
-              - 'batch-*/src/**'
-              - 'db/migration/**'
-              - 'pom.xml'
-              - '**/pom.xml'
-            java:
-              - 'batch-*/src/**/*.java'
-              - 'pom.xml'
-              - '**/pom.xml'
-            database:
-              - 'db/**'
-              - 'scripts/db/**'
-              - '**/src/main/resources/mapper/**'
-            scripts:
-              - 'scripts/**'
-              - 'load-tests/scripts/**'
-              - 'load-tests/sql/**'
-              - '.githooks/**'
-              - 'Makefile'
-            docs:
-              - '**/*.md'
-              - 'docs/**'
-            config:
-              - '.env.example'
-              - '.trivyignore'
-              - '**/src/main/resources/*.yml'
-              - '**/src/main/resources/*.yaml'
-              - 'docker-compose*.yml'
-              - 'docker-bake*.hcl'
-              - 'deploy/**'
-              - 'helm/**'
-            api:
-              - 'docs/api/**'
-              - 'scripts/codegen/**'
-              - 'batch-console-api/src/main/java/**/*Controller.java'
-              - 'batch-orchestrator/src/main/java/**/*Controller.java'
-            ci:
-              - '.github/workflows/pr-gate.yml'
-              - '.github/workflows/full-ci-gate.yml'
-              - '.github/actions/setup-build-env/**'
-              - 'scripts/ci/**'
+      - name: Detect changed scopes
+        id: scope
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python3 scripts/ci/detect-change-scope.py \
+            --event-name "${EVENT_NAME}" \
+            --base "${BASE_SHA}" \
+            --head "${HEAD_SHA}" \
+            --github-output "${GITHUB_OUTPUT}" \
+            --summary "${GITHUB_STEP_SUMMARY}"
 
   # ===========================================================================
   # Job 1: static-checks — yml/dict/openapi/PMD/Spotless 等静态校验
@@ -522,9 +483,9 @@ jobs:
   # ===========================================================================
   unit-it-a:
     needs: changes
-    # docs-only PR skip(skipped == SUCCESS,ruleset 不挂);非 PR 事件 docs-only=false 必跑
+    # 非 Maven 变更(文档、脚本、SDK、CI)跳过 unit;workflow 仍保持 required job 状态上报。
     if: |
-      needs.changes.outputs.docs-only != 'true' &&
+      needs.changes.outputs.unit-required == 'true' &&
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -561,7 +522,7 @@ jobs:
   unit-it-b1:
     needs: changes
     if: |
-      needs.changes.outputs.docs-only != 'true' &&
+      needs.changes.outputs.unit-required == 'true' &&
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -596,7 +557,7 @@ jobs:
   unit-it-b2:
     needs: changes
     if: |
-      needs.changes.outputs.docs-only != 'true' &&
+      needs.changes.outputs.unit-required == 'true' &&
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     timeout-minutes: 20

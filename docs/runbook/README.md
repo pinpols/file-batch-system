@@ -111,3 +111,4 @@
 | [`../architecture/`](../architecture/README.md) | 工程向 / 设计原理 |
 | [`../testing/release-gate.md`](../testing/release-gate.md) | release 前的 CI 门禁清单（与上线 SOP 互补）|
 | [`../analysis/`](../analysis/README.md) | 问题分析 / 硬化 backlog |
+- [CI 变更范围契约](change-scope-contract.md)：按变更域复用 CI 探测结果，避免各 workflow 重复维护路径规则。

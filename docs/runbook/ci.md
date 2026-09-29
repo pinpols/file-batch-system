@@ -63,7 +63,7 @@ gh pr create --base main --head revert/main-broken-<short-sha> --title "revert: 
 
 | 维度 | pr-gate(增量) | full-ci-gate(全量) |
 |---|---|---|
-| **范围探测** | ✅ 有 — `Detect affected scope` step 按 changed files 决定 | ❌ 永远 full reactor |
+| **范围探测** | ✅ 有 — `scripts/ci/detect-change-scope.py` 按 changed files 决定 | ❌ 永远 full reactor |
 | **3 态决策** | `skip` / `partial` / `full` 三档 | 永远 `full` |
 | **Maven 范围** | partial 时 `-pl <module> -am -amd` 只跑受影响模块 | 全 10 模块跑 |
 | **E2E suite** | partial 时跳过 batch-e2e-tests | 拆 `e2e-shard` 独立 job 25 min 并发跑 |
@@ -90,14 +90,30 @@ batch-common/*             # 跨模块基础库,改了全部模块都受影响
 
 | 提交类型 | pr-gate | full-ci-gate |
 |---|---|---|
-| 纯 `docs/**.md` | ⚠️ workflow 触发但 Detect 判 `skip`,maven 不跑(几秒结束) | ✅ 全跑(无 paths-ignore) |
+| 纯 `docs/**.md` | ⚠️ workflow 触发但范围探测判 `docs-only`,Maven 不跑(几秒结束) | ⏭️ `paths-ignore` 不触发 |
 | 纯 `.github/workflows/*.yml` | ✅ workflow 触发 + 升级 full(workflow 自身改要全测) | ✅ 全跑 |
 | 纯 `helm/*` | ✅ workflow 触发 + 升级 full | ✅ 全跑 |
 | 纯 `scripts/local/*` | ✅ workflow 触发 + 升级 full | ✅ 全跑 |
 | 纯 `db/migration/*.sql` | ✅ database 静态检查运行（Flyway、migration safety、注释覆盖）；Maven scope 可跳过 | ✅ 全跑 |
 | 纯 `docs/api/console-api.openapi.yaml` | ✅ api 路由同步与 OpenAPI 破坏性变更检查运行；Maven scope 可跳过 | ✅ 全跑 |
 
-**结论**:full-ci-gate 没配 `paths-ignore` — main 任何 push 都触发,**含纯文档 / 配置**。PR gate 对 database 变更运行 Flyway 结构/checksum、迁移安全和数据库注释检查；这些静态检查不依赖 Maven scope，不应因 Maven `skip` 而漏跑。OpenAPI 有独立路径同步与破坏性变更检查。
+**结论**:`full-ci-gate` 对明确列入 `paths-ignore` 的纯文档/许可证/编辑器配置不触发；
+SDK 纯变更由 SDK workflow 负责，`docs/api/**` 等契约路径不在忽略列表。PR gate 对 database
+变更运行 Flyway 结构/checksum、迁移安全和数据库注释检查；这些静态检查不依赖 Maven scope，
+不应因 Maven `skip` 而漏跑。OpenAPI 有独立路径同步与破坏性变更检查。
+
+### 统一变更范围探测
+
+`scripts/ci/detect-change-scope.py` 是后端仓库 CI 的范围分类唯一实现。它输出
+`java`、`sql`、`database`、`scripts`、`docs`、`config`、`api`、`sdk`、`ci`、
+`tests`、`docker`、`helm`、`maven` 和 `unknown` 布尔字段，并在 GitHub Actions 中
+同时写入 Job outputs 和 Step summary。一个文件可以命中多个域，例如 Flyway SQL
+同时命中 `sql` 与 `database`，SDK 共享常量同时命中 `sdk` 与 `docs`/`api`。
+
+安全规则：PR 使用 `base...head` 计算真实差异；merge queue、push、schedule、手工
+触发等没有可靠 PR 差异的事件统一回退全范围；未知文件不算 `docs-only`。新增 workflow
+应复用该探测器，不要重新添加路径 glob。它只负责“哪些范围被改动”，不替代 ruleset
+required checks，也不允许用范围探测绕过跨域 secret scan 或 main full gate。
 
 ---
 
