@@ -230,7 +230,11 @@ def main() -> int:
         try:
             paths = changed_paths(args.base, args.head)
         except subprocess.CalledProcessError as exc:
-            print(f"unable to compute change scope: git diff exited {exc.returncode}", file=sys.stderr)
+            detail = exc.stderr.decode("utf-8", errors="replace").strip() if exc.stderr else ""
+            message = f"unable to compute change scope: git diff exited {exc.returncode}"
+            if detail:
+                message += f": {detail}"
+            print(message, file=sys.stderr)
             return 2
         result = classify_paths(paths)
         mode = f"diff:{args.base}...{args.head}"
