@@ -10,7 +10,7 @@ name: sdk-contract-parity
 #   (b) pass every fixture's machine-assertable `then.expect` block,
 #   (c) add its `<lang>-contract` job (gated on the `changes` job) here.
 #
-# 触发:总是触发(去 on.paths),由 `changes` job(dorny/paths-filter)探测 sdk 相关
+# 触发:总是触发(去 on.paths),由 `changes` job(统一范围探测器)探测 sdk 相关
 # 变更 → 各 contract job `needs: changes` 条件执行。无关 PR 上各 job skip(skip=success),
 # 不付 Maven/toolchain 冷启动成本,但 required check 仍上报状态(不会卡住无关 PR)。
 # 仅正向 glob 触发(去掉了会反向误判的 !sdk/**/*.md 负向模式)。
@@ -28,7 +28,7 @@ name: sdk-contract-parity
 on:
   # 2026-06-22:契约检查升为 ruleset required(阻塞合并)。required check 必须在
   # **每个** PR 上都上报状态,否则不碰 sdk 的 PR 会因「检查从未上报」被永久卡住。
-  # 故去掉 on.paths(改为总触发),由下方 `changes` job 用 dorny/paths-filter 探测
+  # 故去掉 on.paths(改为总触发),由下方 `changes` job 用统一范围探测器探测
   # sdk 相关变更 → 各 job `needs: changes` 条件执行:无关变更时 skip(skip=success,
   # 满足 required),sdk 变更时真跑。镜像 pr-gate 的同款机制。
   pull_request:
@@ -53,8 +53,8 @@ concurrency:
 
 jobs:
   # Job 0:探测 sdk 相关变更。PR 事件按 base diff 判定;非 PR 事件(merge_group /
-  # workflow_dispatch / schedule)无 base diff,dorny/paths-filter 对非 PR 事件返回
-  # true → 各下游 job 的 `if: ... || github.event_name != 'pull_request'` 再兜一层 →
+  # workflow_dispatch / schedule)无 base diff,探测器对非 PR 事件回退全跑 → 各下游
+  # job 的 `if: ... || github.event_name != 'pull_request'` 再兜一层 →
   # 回退全跑(安全)。schedule(nightly)即走此路径:全语言 contract + live-transport 都真跑。
   changes:
     runs-on: ubuntu-latest
@@ -63,30 +63,26 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      sdk: ${{ steps.filter.outputs.sdk }}
+      sdk: ${{ steps.scope.outputs.sdk }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Detect sdk changes
-        id: filter
-        uses: dorny/paths-filter@v3
-        with:
-          # 仅正向 glob:命中任一即 sdk=true。**不要**加 '!sdk/**/*.md' 之类独立负向模式——
-          # dorny/paths-filter(micromatch)对含负向的列表会把「不匹配该负向」的文件也判为命中,
-          # 导致任何非-sdk-md 改动(如 batch-worker/**)都误判 sdk=true → 触发全套 SDK 契约 CI。
-          # 代价:sdk 下 .md 文档改动也会触发 sdk CI(罕见、无害),换取过滤正确性。
-          filters: |
-            sdk:
-              - 'sdk/**'
-              - 'batch-common/src/main/java/io/github/pinpols/batch/common/enums/**'
-              - 'batch-common/src/main/java/io/github/pinpols/batch/common/security/**'
-              - 'docs/api/sdk-contract-fixtures/**'
-              - 'docs/api/sdk-shared-constants.yaml'
-              - 'docs/api/orchestrator-internal.openapi.yaml'
-              - 'docs/sdk/byo-conformance-contract.md'
-              - '.github/workflows/sdk-contract-parity.yml'
+      - name: Detect changed scopes
+        id: scope
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python3 scripts/ci/detect-change-scope.py \
+            --event-name "${EVENT_NAME}" \
+            --base "${BASE_SHA}" \
+            --head "${HEAD_SHA}" \
+            --github-output "${GITHUB_OUTPUT}" \
+            --summary "${GITHUB_STEP_SUMMARY}"
 
   validate-fixtures:
     name: validate fixtures (JSON Schema)
