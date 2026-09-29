@@ -75,7 +75,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          HEAD_SHA: ${{ github.sha }}
         run: |
           if [[ "${EVENT_NAME}" == "pull_request" ]]; then
             git fetch --no-tags --depth=1 origin "${BASE_SHA}"
