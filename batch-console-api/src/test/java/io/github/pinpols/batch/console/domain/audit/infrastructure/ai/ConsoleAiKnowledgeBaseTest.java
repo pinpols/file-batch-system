@@ -146,7 +146,7 @@ class ConsoleAiKnowledgeBaseTest {
   }
 
   private static void assertContainsAllCodes(String text, Enum<?>[] values) {
-    assertThat(Arrays.stream(values).map(Enum::name).toList())
-        .allSatisfy(code -> assertThat(text).contains(code));
+    List<String> codes = Arrays.stream(values).map(Enum::name).toList();
+    assertThat(codes).isNotEmpty().allSatisfy(code -> assertThat(text).contains(code));
   }
 }

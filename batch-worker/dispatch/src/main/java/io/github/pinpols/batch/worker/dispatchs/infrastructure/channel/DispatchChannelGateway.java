@@ -133,6 +133,8 @@ public class DispatchChannelGateway {
     return adapter;
   }
 
+  // S2259 无法识别 EmptyChecks.isNotNull(matched) 对后续解引用的保护。
+  @SuppressWarnings("java:S2259")
   private static Map<String, DispatchChannelAdapter> buildAdapterRegistry(
       List<DispatchChannelAdapter> adapters) {
     Map<String, DispatchChannelAdapter> registry = new LinkedHashMap<>();
