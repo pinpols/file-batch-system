@@ -46,7 +46,7 @@
 4. 运行 `python3 -m unittest scripts/ci/tests/test_detect_change_scope.py` 与
    `actionlint .github/workflows/*.yml`。
 
-探测器本身不决定 required check，但 `pr-gate-scope`、`sdk-contract-scope` 和 SDK
-契约 job 必须与 GitHub ruleset 中的 required contexts 同步。`full-ci-gate` 仍保持
+探测器本身不决定 required check，但 `pr-gate-scope`、`sdk-contract-scope` 和
+`sdk-contract-required` 必须与 GitHub ruleset 中的 required contexts 同步。`full-ci-gate` 仍保持
 全量，不能因为新增范围域而降级为增量；每周无条件运行一次，用于发现 `paths-ignore`
 和分类规则漂移。

@@ -49,7 +49,7 @@ SDK 变更仍应由各自专项 workflow/静态检查覆盖。SDK 契约 workflo
 
 探测器不属于某个具体业务门禁，后续 workflow 应复用该 composite action 和输出契约；不要复制
 `dorny/paths-filter` 或在 YAML 中新增另一套路径白名单。GitHub ruleset 中应同时要求
-两个 scope check 以及 SDK contract checks；未分类路径必须走全量/保守门禁。
+两个 scope check、`sdk-contract-required` 以及 PR 快速门禁；未分类路径必须走全量/保守门禁。
 
 ```bash
 # 本地查看当前分支相对 main 的范围

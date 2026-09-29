@@ -16,8 +16,8 @@ name: sdk-contract-parity
 # 仅正向 glob 触发(去掉了会反向误判的 !sdk/**/*.md 负向模式)。
 #
 # Ruleset required(2026-06-22):validate-fixtures + {java,python,go,rust,typescript}
-# contract 已设为阻塞门禁。sdk-live-transport(真 kafka,偶发 flake)与 parity-report
-# 保持非必需信号(PR 上非阻塞)。
+# contract 结果由稳定的 `sdk-contract-required` 聚合门禁阻塞合并。sdk-live-transport
+# (真 kafka,偶发 flake)与 parity-report 保持非必需信号(PR 上非阻塞)。
 #
 # nightly 常态化(2026-07-15):sdk-live-transport 这条五语言 live-Kafka 一致性 gate
 # 原先只在碰 sdk 路径的 PR 上跑 → 数周无 sdk PR 时长期 dormant,withhold/HOL 这类
@@ -249,6 +249,57 @@ jobs:
       - name: Compile-check Kafka adapter (--features kafka)
         working-directory: sdk/rust
         run: cargo check --features kafka
+
+  sdk-contract-required:
+    name: sdk-contract-required
+    needs:
+      [
+        changes,
+        validate-fixtures,
+        java-contract,
+        python-contract,
+        typescript-contract,
+        go-contract,
+        rust-contract,
+      ]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Verify SDK contract results
+        env:
+          SCOPE_RESULT: ${{ needs.changes.result }}
+          SDK_SCOPE: ${{ needs.changes.outputs.sdk }}
+          FIXTURES_RESULT: ${{ needs.validate-fixtures.result }}
+          JAVA_RESULT: ${{ needs.java-contract.result }}
+          PYTHON_RESULT: ${{ needs.python-contract.result }}
+          TS_RESULT: ${{ needs.typescript-contract.result }}
+          GO_RESULT: ${{ needs.go-contract.result }}
+          RUST_RESULT: ${{ needs.rust-contract.result }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${SCOPE_RESULT}" != "success" ]]; then
+            echo "scope detection did not complete successfully: ${SCOPE_RESULT}"
+            exit 1
+          fi
+          if [[ "${SDK_SCOPE}" != "true" ]]; then
+            echo "SDK scope is not affected; contract jobs are intentionally skipped."
+            exit 0
+          fi
+          for result in \
+            "${FIXTURES_RESULT}" \
+            "${JAVA_RESULT}" \
+            "${PYTHON_RESULT}" \
+            "${TS_RESULT}" \
+            "${GO_RESULT}" \
+            "${RUST_RESULT}"; do
+            if [[ "${result}" != "success" ]]; then
+              echo "an SDK contract job did not pass: ${result}"
+              exit 1
+            fi
+          done
+          echo "all SDK contract jobs passed"
 
   sdk-live-transport:
     name: sdk live transport (Kafka + HTTP fake)

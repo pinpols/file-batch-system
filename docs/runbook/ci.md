@@ -352,9 +352,9 @@ make ops-compensate     # 触发补偿
 **前置条件**（一次性，repo Settings）：
 - General → "Allow auto-merge" 必须勾上
 - Branch protection / Ruleset 必须要求 `pr-gate-scope`、`sdk-contract-scope`、
-  `static-checks`、`unit-it-a`、`unit-it-b1`、`unit-it-b2`、`security-scan`，以及
-  `validate fixtures (JSON Schema)`、五个语言契约检查（Python/Node/Go 各按矩阵版本分别要求）。
-  否则 `--auto` 可能在部分契约检查完成前合并。
+  `static-checks`、`unit-it-a`、`unit-it-b1`、`unit-it-b2`、`security-scan`、
+  `sdk-contract-required`。后者聚合 `validate fixtures` 和五语言契约矩阵，避免矩阵
+  版本名漂移导致 Ruleset required context 失效。否则 `--auto` 可能在部分契约检查完成前合并。
 - `strict_required_status_checks_policy=true`，并启用 main 的 merge queue，避免多个 PR
   分别通过后合并结果失真。
 
