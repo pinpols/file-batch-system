@@ -2,6 +2,9 @@ name: full-ci-gate
 
 on:
   workflow_dispatch:
+  schedule:
+    # 每周无条件运行一次，发现 paths-ignore 与范围路由漂移。
+    - cron: '0 2 * * 0'
   push:
     branches:
       - main

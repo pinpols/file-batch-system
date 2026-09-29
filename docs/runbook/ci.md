@@ -7,7 +7,8 @@
 | 工作流 | 分类 | 触发时机 | 目标 | 超时 |
 |---|---|---|---|---|
 | `pr-gate` | PR 代码门禁 | PR → main(opened / synchronize / reopened / ready_for_review,非草稿) | 快速反馈，阻断不合格 PR | 45 min |
-| `full-ci-gate` | main 全量门禁 | push main(合并 PR 或直推) | 主干质量基线 + 安全扫描(含 K8s manifest Checkov) | 75 min |
+| `sdk-contract-parity` | SDK 契约门禁 | PR、merge queue、每日 16:00 UTC、手动 | 五语言 fixture、共享常量和 conformance 契约 | — |
+| `full-ci-gate` | main 全量门禁 | push main、每周日 02:00 UTC、手动 | 主干质量基线 + 安全扫描(含 K8s manifest Checkov) | 75 min |
 | `staging-gate` | 补充 E2E 验证 | nightly(每天 18:00 UTC / 北京 02:00)+ workflow_dispatch | 全量 E2E(smoke + critical + regression 全跑,4 shard 并发)，不替代 `full-ci-gate` | — |
 | `daily-sim-strict-validation` | 补充真实数据验证 | nightly(每天 13:31 UTC / 北京 21:31)+ workflow_dispatch | 定时触发按最近一次计划时间对应的北京时间日期检查代码/配置变更，延迟跨午夜仍归属原计划日；手动触发按当前北京时间日期。Markdown/RST、`LICENSE`、`NOTICE` 除外。需要验证时同环境先执行 `sim-harness all`，再执行 BE-ACC step 5(strict real-data verification)；strict step 使用 `always()` 采证，不因 sim 失败被短路 | 240 min |
 | `main-failure-triage` | 失败处理自动化 | main 的 `full-ci-gate` 核心 job 失败 | 自动标记关联 PR 并评论处理要求；无关联 PR 时创建 issue | — |
@@ -24,6 +25,7 @@
 | **PR 到 main** | ✅ | — |
 | **PR 合并 → main 收到 push** | — | ✅ |
 | 直推 main(绕 PR) | — | ✅ |
+| 每周日 02:00 UTC 全量巡检 | — | ✅ |
 | 手动 `workflow_dispatch` | 可手动 | 可手动 |
 
 ## 关键设计
@@ -40,7 +42,7 @@
 多人并行提交时，单个 PR 绿并不能证明“合并后主干仍绿”。本项目按以下规则处理：
 
 1. **main 受保护**：禁止直接 push；所有变更通过 PR、required checks 和 review。管理员 bypass 只用于仓库治理紧急场景，不能作为常规合并方式。
-2. **建议启用 GitHub merge queue**：仓库 Settings → Branches / Rulesets 中对 `main` 开启 merge queue，让候选 PR 在“临时合并结果”上跑 required checks，减少多个 PR 分别绿色但合到一起红的情况。merge queue 是仓库设置，不能完全由代码文件强制。
+2. **启用 GitHub merge queue**：仓库 Settings → Branches / Rulesets 中对 `main` 开启 merge queue，让候选 PR 在“临时合并结果”上跑 required checks，减少多个 PR 分别绿色但合到一起红的情况。merge queue 是仓库设置，不能完全由代码文件强制；Ruleset 同时要求 scope、PR、SDK 契约检查。
 3. **PR gate 是合入门禁，full-ci-gate 是发布门禁**：开源贡献者不要求本地安装完整 hook；关键规则必须在 PR / full CI 中兜底。本地 hook 只减少返工，不承担最终可信边界。
 4. **main full-gate 红即冻结发布**：不以任何单个 PR gate 通过作为上线依据。直到 main 最新 `full-ci-gate` 重新通过，release / deploy 均应暂停。
 5. **失败自动归责**：`full-ci-gate` 内置的 `main-failure-triage` job 会在 main 的核心 job 失败后，根据失败 run 的 `head_sha` 找关联 PR，贴 `main-broken` / `needs-fix` 并评论处理要求；找不到 PR 时创建 issue。该 job 不使用 `workflow_run`，避免高权限跨 workflow 触发风险。
@@ -104,7 +106,8 @@ SDK 纯变更由 SDK workflow 负责，`docs/api/**` 等契约路径不在忽略
 
 ### 统一变更范围探测
 
-`scripts/ci/detect-change-scope.py` 是后端仓库 CI 的范围分类唯一实现。它输出
+`.github/actions/detect-change-scope` 是 workflow 的统一入口，底层使用
+`scripts/ci/detect-change-scope.py`，是后端仓库 CI 的范围分类唯一实现。它输出
 `java`、`sql`、`database`、`scripts`、`docs`、`config`、`api`、`sdk`、`ci`、
 `tests`、`docker`、`helm`、`maven` 和 `unknown` 布尔字段，并在 GitHub Actions 中
 同时写入 Job outputs 和 Step summary。一个文件可以命中多个域，例如 Flyway SQL
@@ -113,7 +116,9 @@ SDK 纯变更由 SDK workflow 负责，`docs/api/**` 等契约路径不在忽略
 安全规则：PR 直接比较 `base` 与 `head` 提交树计算真实差异；merge queue、push、schedule、手工
 触发等没有可靠 PR 差异的事件统一回退全范围；未知文件不算 `docs-only`。新增 workflow
 应复用该探测器，不要重新添加路径 glob。它只负责“哪些范围被改动”，不替代 ruleset
-required checks，也不允许用范围探测绕过跨域 secret scan 或 main full gate。
+required checks，也不允许用范围探测绕过跨域 secret scan 或 main full gate。当前 required
+contexts 由 Ruleset 管理，至少包含 `pr-gate-scope`、`sdk-contract-scope`、PR 快速门禁和
+SDK 五语言契约矩阵。
 
 ---
 
@@ -346,7 +351,12 @@ make ops-compensate     # 触发补偿
 
 **前置条件**（一次性，repo Settings）：
 - General → "Allow auto-merge" 必须勾上
-- Branch protection 必须设了 required status checks（否则 `--auto` 会立即 merge 失去保护）
+- Branch protection / Ruleset 必须要求 `pr-gate-scope`、`sdk-contract-scope`、
+  `static-checks`、`unit-it-a`、`unit-it-b1`、`unit-it-b2`、`security-scan`，以及
+  `validate fixtures (JSON Schema)`、五个语言契约检查（Python/Node/Go 各按矩阵版本分别要求）。
+  否则 `--auto` 可能在部分契约检查完成前合并。
+- `strict_required_status_checks_policy=true`，并启用 main 的 merge queue，避免多个 PR
+  分别通过后合并结果失真。
 
 ---
 
@@ -424,11 +434,13 @@ CI gate 阻断要满足「确定性 fail」前提;flaky 用例第一次 fail 是
 .github/
   workflows/
     pr-gate.yml              # PR 门禁
+    sdk-contract-parity.yml  # 五语言 SDK 契约门禁
     full-ci-gate.yml         # 主干质量门禁(含安全扫 + Checkov)
     staging-gate.yml         # nightly / 手动 全量 E2E 回退闸门
     label-automerge.yml      # automerge 标签自动归并
   actions/
     setup-build-env/         # 共享 setup：JDK、Maven cache、OpenAPI 校验
+    detect-change-scope/     # 共享变更范围探测入口
   renovate.json              # 依赖自动更新配置
 
 scripts/ci/

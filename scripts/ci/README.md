@@ -39,22 +39,24 @@ FORCE_VALIDATION=true python3 scripts/ci/daily-validation-change-gate.py
 ## PR 按需路由
 
 `pr-gate.yml` 始终启动，以保证 ruleset required Job 在每个 PR 上稳定回报状态；
-`scripts/ci/detect-change-scope.py` 统一计算变更范围，`changes` Job 输出稳定的
+`.github/actions/detect-change-scope` 统一调用 `scripts/ci/detect-change-scope.py`，
+`pr-gate-scope` 和 `sdk-contract-scope` 输出稳定的
 `java`、`sql`、`database`、`scripts`、`docs`、`config`、`api`、`sdk`、`ci`、
 `tests`、`docker`、`helm`、`maven`、`unknown` 和 `unit-required` 字段。后续 workflow 应消费这些
 输出，不要重新维护一套路径 glob。`database` 保留为旧门禁兼容别名；`unknown=true`
 时必须按代码变更处理。`unit-required` 只表示 Maven reactor 是否需要启动；CI、脚本、
 SDK 变更仍应由各自专项 workflow/静态检查覆盖。SDK 契约 workflow 与 PR gate 共用同一探测器。
 
-探测器不属于某个具体业务门禁，后续 workflow 可直接复用相同的命令和输出契约；不要复制
-`dorny/paths-filter` 或在 YAML 中新增另一套路径白名单。
+探测器不属于某个具体业务门禁，后续 workflow 应复用该 composite action 和输出契约；不要复制
+`dorny/paths-filter` 或在 YAML 中新增另一套路径白名单。GitHub ruleset 中应同时要求
+两个 scope check 以及 SDK contract checks；未分类路径必须走全量/保守门禁。
 
 ```bash
 # 本地查看当前分支相对 main 的范围
 python3 scripts/ci/detect-change-scope.py --base origin/main --head HEAD --json
 ```
 
-PR 事件使用 `base...head` 真实 diff；merge queue、push、schedule 和手工触发没有
+PR 事件使用 `base` 与已检出的 `head` 提交树直接比较；merge queue、push、schedule 和手工触发没有
 可靠 PR diff 时回退为全范围，避免误跳过门禁。探测器本身只负责分类，不决定哪些检查
 是 required；required check 仍由 ruleset 和 workflow job 名称负责。
 Secret scan 属于跨域检查，仍对所有非 Draft PR 执行，因为凭据可能出现在任意文件类型中。
