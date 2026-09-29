@@ -2,7 +2,8 @@
 
 ## 目的
 
-仓库中的按需 CI 统一使用 `scripts/ci/detect-change-scope.py`。范围探测只回答
+仓库中的按需 CI 统一使用 `.github/actions/detect-change-scope`，底层统一使用
+`scripts/ci/detect-change-scope.py`。范围探测只回答
 “本次变更涉及哪些资产”，各 workflow 再依据自身风险选择扫描；路径规则不应散落在
 多个 YAML 文件中。
 
@@ -45,5 +46,7 @@
 4. 运行 `python3 -m unittest scripts/ci/tests/test_detect_change_scope.py` 与
    `actionlint .github/workflows/*.yml`。
 
-探测器不管理 required check；主干规则仍由 GitHub ruleset 约束，`full-ci-gate` 仍保持
-全量，不能因为新增范围域而降级为增量。
+探测器本身不决定 required check，但 `pr-gate-scope`、`sdk-contract-scope` 和
+`sdk-contract-required` 必须与 GitHub ruleset 中的 required contexts 同步。`full-ci-gate` 仍保持
+全量，不能因为新增范围域而降级为增量；每周无条件运行一次，用于发现 `paths-ignore`
+和分类规则漂移。

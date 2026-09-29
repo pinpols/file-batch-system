@@ -11,7 +11,7 @@ name: pr-gate
 # 这 3 个名字上;改名会导致 ruleset 失配。命令从 `mvn verify`(failsafe IT)改成
 # `mvn test`(只跑 surefire unit)。
 #
-# affected 极小化：workflow 始终触发以回报 required check；`changes` job 按文件域路由，
+# affected 极小化：workflow 始终触发以回报 required check；`pr-gate-scope` job 按文件域路由，
 # Java 单测和 static-checks 内的专项步骤只在对应 java/database/scripts/docs/config/api/ci
 # 变更时执行。跨域 secret scan 保持全 PR 执行。
 
@@ -47,11 +47,12 @@ concurrency:
 
 jobs:
   # ===========================================================================
-  # Job 0: changes — 统一范围探测器判定按需门禁
+  # Job 0: pr-gate-scope — 统一范围探测器判定按需门禁
   # 文档/示例-only PR 跳过 3 个 unit job(GitHub 把 skipped 算 SUCCESS,ruleset
   # required check 不挂),只保留 static-checks + security-scan 回退。
   # ===========================================================================
   changes:
+    name: pr-gate-scope
     runs-on: ubuntu-latest
     timeout-minutes: 3
     permissions:
@@ -82,21 +83,11 @@ jobs:
 
       - name: Detect changed scopes
         id: scope
-        shell: bash
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.sha }}
-        run: |
-          if [[ "${EVENT_NAME}" == "pull_request" ]]; then
-            git fetch --no-tags --depth=1 origin "${BASE_SHA}"
-          fi
-          python3 scripts/ci/detect-change-scope.py \
-            --event-name "${EVENT_NAME}" \
-            --base "${BASE_SHA}" \
-            --head "${HEAD_SHA}" \
-            --github-output "${GITHUB_OUTPUT}" \
-            --summary "${GITHUB_STEP_SUMMARY}"
+        uses: ./.github/actions/detect-change-scope
+        with:
+          event-name: ${{ github.event_name }}
+          base-sha: ${{ github.event.pull_request.base.sha }}
+          head-sha: ${{ github.sha }}
 
   # ===========================================================================
   # Job 1: static-checks — yml/dict/openapi/PMD/Spotless 等静态校验

@@ -1,0 +1,90 @@
+name: Detect Change Scope
+description: Detect repository change scopes using the shared fail-closed classifier
+
+inputs:
+  event-name:
+    description: GitHub event name
+    required: true
+  base-sha:
+    description: Pull request base commit
+    required: false
+    default: ""
+  head-sha:
+    description: Checked-out commit or merge ref
+    required: false
+    default: ""
+
+outputs:
+  docs-only:
+    description: Whether the change contains only recognized documentation files
+    value: ${{ steps.scope.outputs.docs-only }}
+  unit-required:
+    description: Whether the Maven unit reactor is required
+    value: ${{ steps.scope.outputs.unit-required }}
+  java:
+    description: Java scope was changed
+    value: ${{ steps.scope.outputs.java }}
+  sql:
+    description: SQL scope was changed
+    value: ${{ steps.scope.outputs.sql }}
+  database:
+    description: Database scope was changed
+    value: ${{ steps.scope.outputs.database }}
+  scripts:
+    description: Script scope was changed
+    value: ${{ steps.scope.outputs.scripts }}
+  docs:
+    description: Documentation scope was changed
+    value: ${{ steps.scope.outputs.docs }}
+  config:
+    description: Configuration scope was changed
+    value: ${{ steps.scope.outputs.config }}
+  api:
+    description: API scope was changed
+    value: ${{ steps.scope.outputs.api }}
+  sdk:
+    description: SDK scope was changed
+    value: ${{ steps.scope.outputs.sdk }}
+  ci:
+    description: CI scope was changed
+    value: ${{ steps.scope.outputs.ci }}
+  tests:
+    description: Test scope was changed
+    value: ${{ steps.scope.outputs.tests }}
+  docker:
+    description: Docker scope was changed
+    value: ${{ steps.scope.outputs.docker }}
+  helm:
+    description: Helm scope was changed
+    value: ${{ steps.scope.outputs.helm }}
+  maven:
+    description: Maven scope was changed
+    value: ${{ steps.scope.outputs.maven }}
+  unknown:
+    description: An unclassified path was changed
+    value: ${{ steps.scope.outputs.unknown }}
+
+runs:
+  using: composite
+  steps:
+    - name: Fetch pull request base
+      if: inputs.event-name == 'pull_request'
+      env:
+        BASE_SHA: ${{ inputs.base-sha }}
+      shell: bash
+      run: git fetch --no-tags --depth=1 origin "${BASE_SHA}"
+
+    - name: Detect changed scopes
+      id: scope
+      shell: bash
+      env:
+        EVENT_NAME: ${{ inputs.event-name }}
+        BASE_SHA: ${{ inputs.base-sha }}
+        HEAD_SHA: ${{ inputs.head-sha }}
+      run: |
+        python3 scripts/ci/detect-change-scope.py \
+          --event-name "${EVENT_NAME}" \
+          --base "${BASE_SHA}" \
+          --head "${HEAD_SHA}" \
+          --github-output "${GITHUB_OUTPUT}" \
+          --summary "${GITHUB_STEP_SUMMARY}"

@@ -8,27 +8,27 @@ name: sdk-contract-parity
 # docs/sdk/byo-conformance-contract.md. Every new-language SDK MUST:
 #   (a) consume docs/api/sdk-shared-constants.yaml (no re-authored literals),
 #   (b) pass every fixture's machine-assertable `then.expect` block,
-#   (c) add its `<lang>-contract` job (gated on the `changes` job) here.
+#   (c) add its `<lang>-contract` job (gated on the `sdk-contract-scope` job) here.
 #
-# 触发:总是触发(去 on.paths),由 `changes` job(统一范围探测器)探测 sdk 相关
+# 触发:总是触发(去 on.paths),由 `sdk-contract-scope` job(统一范围探测器)探测 sdk 相关
 # 变更 → 各 contract job `needs: changes` 条件执行。无关 PR 上各 job skip(skip=success),
 # 不付 Maven/toolchain 冷启动成本,但 required check 仍上报状态(不会卡住无关 PR)。
 # 仅正向 glob 触发(去掉了会反向误判的 !sdk/**/*.md 负向模式)。
 #
 # Ruleset required(2026-06-22):validate-fixtures + {java,python,go,rust,typescript}
-# contract 已设为阻塞门禁。sdk-live-transport(真 kafka,偶发 flake)与 parity-report
-# 保持非必需信号(PR 上非阻塞)。
+# contract 结果由稳定的 `sdk-contract-required` 聚合门禁阻塞合并。sdk-live-transport
+# (真 kafka,偶发 flake)与 parity-report 保持非必需信号(PR 上非阻塞)。
 #
 # nightly 常态化(2026-07-15):sdk-live-transport 这条五语言 live-Kafka 一致性 gate
 # 原先只在碰 sdk 路径的 PR 上跑 → 数周无 sdk PR 时长期 dormant,withhold/HOL 这类
 # 五语言集体回归会潜伏到某个偶然 PR 才暴露。故加 schedule cron:每天在 main 全跑一次
 # (含 live-transport),把潜伏回归压到 24h 内暴露。schedule 无 base diff → 走与
-# merge_group/workflow_dispatch 相同的「非 PR 事件回退全跑」路径(见 `changes` job)。
+# merge_group/workflow_dispatch 相同的「非 PR 事件回退全跑」路径(见 `sdk-contract-scope` job)。
 
 on:
   # 2026-06-22:契约检查升为 ruleset required(阻塞合并)。required check 必须在
   # **每个** PR 上都上报状态,否则不碰 sdk 的 PR 会因「检查从未上报」被永久卡住。
-  # 故去掉 on.paths(改为总触发),由下方 `changes` job 用统一范围探测器探测
+  # 故去掉 on.paths(改为总触发),由下方 `sdk-contract-scope` job 用统一范围探测器探测
   # sdk 相关变更 → 各 job `needs: changes` 条件执行:无关变更时 skip(skip=success,
   # 满足 required),sdk 变更时真跑。镜像 pr-gate 的同款机制。
   pull_request:
@@ -57,6 +57,7 @@ jobs:
   # job 的 `if: ... || github.event_name != 'pull_request'` 再兜一层 →
   # 回退全跑(安全)。schedule(nightly)即走此路径:全语言 contract + live-transport 都真跑。
   changes:
+    name: sdk-contract-scope
     runs-on: ubuntu-latest
     timeout-minutes: 3
     permissions:
@@ -71,21 +72,11 @@ jobs:
           persist-credentials: false
       - name: Detect changed scopes
         id: scope
-        shell: bash
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.sha }}
-        run: |
-          if [[ "${EVENT_NAME}" == "pull_request" ]]; then
-            git fetch --no-tags --depth=1 origin "${BASE_SHA}"
-          fi
-          python3 scripts/ci/detect-change-scope.py \
-            --event-name "${EVENT_NAME}" \
-            --base "${BASE_SHA}" \
-            --head "${HEAD_SHA}" \
-            --github-output "${GITHUB_OUTPUT}" \
-            --summary "${GITHUB_STEP_SUMMARY}"
+        uses: ./.github/actions/detect-change-scope
+        with:
+          event-name: ${{ github.event_name }}
+          base-sha: ${{ github.event.pull_request.base.sha }}
+          head-sha: ${{ github.sha }}
 
   validate-fixtures:
     name: validate fixtures (JSON Schema)
@@ -258,6 +249,57 @@ jobs:
       - name: Compile-check Kafka adapter (--features kafka)
         working-directory: sdk/rust
         run: cargo check --features kafka
+
+  sdk-contract-required:
+    name: sdk-contract-required
+    needs:
+      [
+        changes,
+        validate-fixtures,
+        java-contract,
+        python-contract,
+        typescript-contract,
+        go-contract,
+        rust-contract,
+      ]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Verify SDK contract results
+        env:
+          SCOPE_RESULT: ${{ needs.changes.result }}
+          SDK_SCOPE: ${{ needs.changes.outputs.sdk }}
+          FIXTURES_RESULT: ${{ needs.validate-fixtures.result }}
+          JAVA_RESULT: ${{ needs.java-contract.result }}
+          PYTHON_RESULT: ${{ needs.python-contract.result }}
+          TS_RESULT: ${{ needs.typescript-contract.result }}
+          GO_RESULT: ${{ needs.go-contract.result }}
+          RUST_RESULT: ${{ needs.rust-contract.result }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${SCOPE_RESULT}" != "success" ]]; then
+            echo "scope detection did not complete successfully: ${SCOPE_RESULT}"
+            exit 1
+          fi
+          if [[ "${SDK_SCOPE}" != "true" ]]; then
+            echo "SDK scope is not affected; contract jobs are intentionally skipped."
+            exit 0
+          fi
+          for result in \
+            "${FIXTURES_RESULT}" \
+            "${JAVA_RESULT}" \
+            "${PYTHON_RESULT}" \
+            "${TS_RESULT}" \
+            "${GO_RESULT}" \
+            "${RUST_RESULT}"; do
+            if [[ "${result}" != "success" ]]; then
+              echo "an SDK contract job did not pass: ${result}"
+              exit 1
+            fi
+          done
+          echo "all SDK contract jobs passed"
 
   sdk-live-transport:
     name: sdk live transport (Kafka + HTTP fake)

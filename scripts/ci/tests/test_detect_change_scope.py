@@ -76,6 +76,30 @@ class DetectChangeScopeTest(unittest.TestCase):
         self.assertTrue(result["sdk"])
         self.assertFalse(result["unknown"])
 
+    def test_workflow_change_is_ci_and_requires_static_checks(self) -> None:
+        result = MODULE.classify_paths([".github/workflows/full-ci-gate.yml"])
+
+        self.assertTrue(result["ci"])
+        self.assertFalse(result["unit-required"])
+        self.assertFalse(result["docs-only"])
+
+    def test_deployment_change_hits_config_docker_and_helm(self) -> None:
+        result = MODULE.classify_paths(
+            ["docker/worker/Dockerfile", "helm/batch-platform/values-prod.yaml"]
+        )
+
+        self.assertTrue(result["config"])
+        self.assertTrue(result["docker"])
+        self.assertTrue(result["helm"])
+        self.assertFalse(result["docs-only"])
+
+    def test_unclassified_file_cannot_be_docs_only(self) -> None:
+        result = MODULE.classify_paths(["new-root-tool.txt", "docs/runbook/ci.md"])
+
+        self.assertTrue(result["unknown"])
+        self.assertTrue(result["unit-required"])
+        self.assertFalse(result["docs-only"])
+
 
 if __name__ == "__main__":
     unittest.main()

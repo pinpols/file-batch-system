@@ -23,6 +23,7 @@
 
 ### Added
 
+- **CI 范围与门禁治理**：统一 PR 和 SDK workflow 的变更范围 composite action，改用稳定且不重名的 scope checks；SDK 五语言契约矩阵通过稳定聚合检查纳入主干 Ruleset required checks；Full Gate 增加每周无条件巡检，防止 `paths-ignore` 和分类规则漂移。
 - **CI 集成测试覆盖守护**：新增主 reactor 集成测试模块发现检查，要求含 `*IntegrationTest` / 非 E2E `*IT` 的模块必须进入 `full-ci-gate` 的 `mvn verify -DskipITs=false` shard；`full-ci-gate` 同步执行 E2E shard 静态覆盖检查，防直推 main 时测试清单漂移。
 - **Console AI OpenAI-compatible 接入**：新增 `openai-compatible` provider 模式,支持 DeepSeek、千问、智谱、Kimi、MiniMax 或私有兼容代理通过统一配置接入;聊天端点与 RAG embedding 配置分离,兼容模式禁止自动跨 Provider failover。
 - **控制台运维工具契约**：导出文件命名预览与 Worker 运行时共用同一解析器，支持业务日、租户、批次号、区域和版本占位符，避免前端复制命名规则。
