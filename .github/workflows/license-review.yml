@@ -18,6 +18,12 @@ on:
   pull_request:
     branches:
       - main
+    # 纯文档 PR 不会改变依赖许可；仅在依赖声明或本检查脚本变化时触发。
+    paths:
+      - 'pom.xml'
+      - '**/pom.xml'
+      - 'scripts/ci/check-dependency-licenses.sh'
+      - '.github/workflows/license-review.yml'
 
 permissions:
   contents: read
