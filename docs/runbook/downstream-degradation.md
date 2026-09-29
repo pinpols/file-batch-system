@@ -1,9 +1,8 @@
 # Downstream 降级策略清单
 
-> P1-B 落地(2026-05-30)— 集中管理 BE 各 `*ProxyService` 调下游服务的降级 / fail-fast 决策。
+> 当前基线：集中管理 BE 各 `*ProxyService` 调下游服务的降级 / fail-fast 决策。完善路线见 [Console 维护与服务降级完善方案](../plans/maintenance-degradation-hardening-plan-2026-09-29.md)。
 >
-> 实现工具:[DownstreamFallback](../../batch-common/src/main/java/io/github/pinpols/batch/common/resilience/DownstreamFallback.java) — 当前是手写 try/catch + Micrometer metrics 的轻量集中模板。
-> 后续 Resilience4j 引入(SB4 兼容性确认后)只需替换本类内部实现,调用方不变。
+> 实现工具:[DownstreamFallback](../../batch-common/src/main/java/io/github/pinpols/batch/common/resilience/DownstreamFallback.java) — 当前内部已使用 Resilience4j CircuitBreaker，并保留统一 fallback / fail-fast 入口。
 
 ## 适用边界
 
@@ -85,7 +84,7 @@ downstream.call.total{service=<svc>, op=<op>, outcome=success|fallback|failure}
 downstream.call.total{service=<svc>, op=<op>, outcome=fallback|failure, exception=<class>}
 ```
 
-Grafana 大盘指标(待建):
+Grafana 大盘和告警仍待接入现有观测栈:
 
 - 每个 `service` 的 fallback rate
 - 每个 `service` 的 P99 latency(需另加 Timer)
@@ -97,18 +96,11 @@ ArchUnit 规则(后续 PR):
 - 所有 `*ProxyService` 的 public 方法体内不允许直接 `try { ... } catch (RestClientException ...)`,必须走 `DownstreamFallback`
 - 所有 `*ProxyService` 必须构造器注入 `DownstreamFallback`
 
-## 未来升级:Resilience4j
+## 当前边界与后续完善
 
-当前实现是手写 try/catch + 集中模板,**缺**:
-
-- ❌ Circuit breaker(failureRate ≥ 阈值 → 自动断开,定时半开探活)
-- ❌ TimeLimiter(超时不阻塞调用方)
-- ❌ Bulkhead(隔离 thread pool)
-- ❌ Rate limiter
-
-升级路径:`DownstreamFallback` 内部实现替换为 `CircuitBreakerRegistry.circuitBreaker(service).executeSupplier(primary)`,API 不变。前提:Resilience4j 出 SB4 兼容版本(预计 2026 Q3)。
-
-待办 issue:`P1-B Phase 2: 引 Resilience4j(SB4 兼容验证)`
+- CircuitBreaker 已接入，配置和调用入口统一在 `DownstreamFallback`。
+- TimeLimiter、Bulkhead 和 RateLimiter 不在当前 Console 降级方案中默认新增；只有出现可复现的线程占用或流量隔离问题时，再按独立变更评估。
+- 当前主要缺口是统一输出 `X-Degraded-Source`、补现有观测指标/告警和增加双实例/真实前端联测，详见完善方案。
 
 ## 迁移指南
 

@@ -12,6 +12,7 @@
 | [AI 助手全局入口与领域/成本治理](./ai-assistant-contextual-experience-and-cost-governance-2026-09-29.md) | Console AI 全局入口、拒绝通用问答、配额/会话/审计与数据治理改造计划 |
 | 配套前端实施方案 | `batch-console` 仓库：`docs/engineering/ai-assistant-frontend-implementation-plan.md`，覆盖全局入口、页面上下文、会话 UI 与前端验收 |
 | [Console 使用率统计方案](./console-usage-statistics-plan-2026-09-29.md) | PostgreSQL 日聚合、业务成功率口径、租户隔离和使用率查询契约 |
+| [Console 维护与服务降级完善方案](./maintenance-degradation-hardening-plan-2026-09-29.md) | 维护窗口、下游降级、前后端契约、多副本一致性和联测门禁 |
 
 ## 计划登记
 
