@@ -1,6 +1,6 @@
 # TODO Master · 当前待办唯一索引
 
-> 核查日期：2026-09-27。本文只登记当前仍有效的事项；`docs/archive/` 的历史待办不计入本表。
+> 核查日期：2026-09-29。本文只登记当前仍有效的事项；`docs/archive/` 的历史待办不计入本表。
 > 状态分类、证据要求和归档规则见 [`../standards/document-governance.md`](../standards/document-governance.md)。
 
 > 本文早期的统计数字和日期快照可能已过期；后续以事项表、证据路径和最后核查日期为准，不以历史总数为准。
@@ -190,6 +190,36 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 | **PLAT-KEDA-1** | KEDA staging 验证：dynamic sharding + backlog / lag 扩缩 + drain | 同上 | P1；需要真实 K8s + KEDA operator |
 | **PLAT-GITOPS-1** | GitOps staging 接入：镜像、ops repo、Argo CD、Helm values、smoke | 同上 | P1；当前只有骨架 |
 | **PLAT-CDC-1** | CDC / Streaming 方案设计 | 同上 | P2；业务触发后再立项 |
+
+### G4. Console AI 助手与成本治理 · P1/P2 · ⏳ 方案已登记，代码未完成
+
+权威方案：[`ai-assistant-contextual-experience-and-cost-governance-2026-09-29.md`](../plans/ai-assistant-contextual-experience-and-cost-governance-2026-09-29.md)。本节只登记仍可能实施的后端工作；AI 方案中的暂缓和不做项单独列出，不能当作当前开发任务。
+
+| ID | 主题 | 状态 |
+|---|---|---|
+| **AI-CTX-1** | 版本化页面上下文、会话语义、租户/角色授权、领域拒答和来源引用契约 | ⏳ 待实现 |
+| **AI-COST-1** | 输入/输出 token 上限、并发舱壁、日/月预算、provider 错误分类、成本与拒答指标 | ⏳ 待实现 |
+| **AI-AUDIT-1** | AI 审计默认只保留元数据/哈希/成本信息，复核原文预览留存策略和查询权限 | ⏳ 待决策并实现 |
+
+以下是已冻结的范围决策，不重新排成开发待办：
+
+| 决策 | 范围 | 状态 |
+|---|---|---|
+| **AI-DEC-1** | Spring AI M3 → GA | 🟡 等上游发布，当前不做升级 |
+| **AI-DEC-2** | 外部 AI provider 契约接入 CI | ❌ 不做；需要外部 secrets，保留人工/受控验证方案 |
+| **AI-DEC-3** | AI 上线判定和受控试生产 | 🟡 暂缓，等待真实质量/成本证据 |
+| **AI-DEC-4** | Phase 3 AI 直接写操作/HITL | 🟡 后置，继续复用现有审批闭环 |
+
+### G5. Console 使用率统计 · P1/P2 · ⏳ 方案已登记，代码未完成
+
+权威方案：[`console-usage-statistics-plan-2026-09-29.md`](../plans/console-usage-statistics-plan-2026-09-29.md)；前端配套清单见配对仓库 `batch-console/docs/backlog/ai-and-usage-statistics-todo-2026-09-29.md`。第一版只做可解释的 PostgreSQL 日聚合，不引入 Kafka、ClickHouse 或通用行为分析平台。
+
+| ID | 主题 | 状态 |
+|---|---|---|
+| **USAGE-1** | 固化指标目录、成功口径、数据来源优先级、权限和保留期 | ⏳ 待完成 |
+| **USAGE-2** | Flyway `console_usage_daily` 月分区、严格 RLS、索引和保留策略 | ⏳ 待实现 |
+| **USAGE-3** | 后端事件标准化、有界批量 upsert、`usage-summary` DTO/API/OpenAPI | ⏳ 待实现 |
+| **USAGE-4** | 与前端埋点、操作审计和业务终态对账，补齐租户隔离/并发/失败语义测试 | ⏳ 待联测 |
 
 ### H. 合规收尾 · P3
 
