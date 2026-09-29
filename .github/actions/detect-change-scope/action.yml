@@ -69,8 +69,10 @@ runs:
   steps:
     - name: Fetch pull request base
       if: inputs.event-name == 'pull_request'
+      env:
+        BASE_SHA: ${{ inputs.base-sha }}
       shell: bash
-      run: git fetch --no-tags --depth=1 origin "${{ inputs.base-sha }}"
+      run: git fetch --no-tags --depth=1 origin "${BASE_SHA}"
 
     - name: Detect changed scopes
       id: scope
