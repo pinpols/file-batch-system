@@ -221,6 +221,20 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 | **USAGE-3** | 后端事件标准化、有界批量 upsert、`usage-summary` DTO/API/OpenAPI | ⏳ 待实现 |
 | **USAGE-4** | 与前端埋点、操作审计和业务终态对账，补齐租户隔离/并发/失败语义测试 | ⏳ 待联测 |
 
+### G6. Console 维护与服务降级完善 · P0/P1 · ⏳ 方案已登记，代码未完成
+
+权威方案：[`../plans/maintenance-degradation-hardening-plan-2026-09-29.md`](../plans/maintenance-degradation-hardening-plan-2026-09-29.md)。本项只完善现有维护模式、下游降级、前后端状态契约和多副本收敛，不扩展为通用服务治理平台。
+
+| ID | 主题 | 状态 |
+|---|---|---|
+| **MAINT-BE-1** | PostgreSQL 维护状态唯一事实源、版本 CAS、实例确认和重启恢复 | ⏳ 待实现 |
+| **MAINT-BE-2** | 维护 503 body/header、权限绕过和审计契约收口 | ⏳ 待实现 |
+| **DEGRADE-BE-1** | `X-Degraded-Source` 标准化输出，读 fallback / 写 fail-fast 守护 | ⏳ 待实现 |
+| **DEGRADE-BE-2** | 复用现有 Micrometer 增加维护状态、维护 503、fallback 比例和耗时告警 | ⏳ 待实现 |
+| **MAINT-JOINT-1** | 双 Console 实例维护切换、下游断路器和恢复联测 | ⏳ 待联测 |
+
+明确不做：服务网格、通用动态路由、工单/通知中心、独立配置中心和写接口自动成功降级。
+
 ### H. 合规收尾 · P3
 
 | ID | 主题 | 来源 | 状态 |

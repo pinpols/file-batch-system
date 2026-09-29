@@ -1,5 +1,7 @@
 # 维护 / 降级模式 SOP
 
+> 当前基线：维护状态的后端拦截、公共状态接口、管理员热更新和前端公告已实现；多副本共享状态、统一写按钮冻结和 503 即时跳转仍是完善项。实施方案见 [Console 维护与服务降级完善方案](../plans/maintenance-degradation-hardening-plan-2026-09-29.md)。
+
 > 适用场景:DB 灰度切换 / 上线滚动期 / 紧急回滚 / 数据修复等需要冻结所有(或仅写)操作的窗口。
 
 ## 1. 工作模式
@@ -21,7 +23,7 @@
 
 ## 3. 开启 / 关闭
 
-### 3.1 环境变量(推荐 — 不改代码不重启 reactor)
+### 3.1 环境变量(启动期配置)
 
 ```bash
 # 全冻结
@@ -70,24 +72,24 @@ curl -i http://localhost:18080/api/console/jobs
 
 ## 5. 前端配合
 
-- 启动 + 每 30s 调一次 `GET /system/maintenance`,根据 `enabled` 切换:
+- 当前实现：启动 + 每 30s 调一次 `GET /system/maintenance`,根据 `enabled` 切换:
   - 顶部全局 banner(`message` + ETA 倒计时)
-  - 写按钮 disable(`readOnly=true` 时)
-- 接到 503 + `maintenance:true` body 时自动跳 `/maintenance` 降级页,该页继续 30s 轮询直到 `enabled=false` 自动返回首页
+  - 维护页状态
+- 统一接入全部业务写按钮、503 后即时跳转和安全回跳，属于 [完善方案](../plans/maintenance-degradation-hardening-plan-2026-09-29.md) 的 P0，不把当前局部页面行为误记为已完成。
 - 移动端 MAppBar 顶部红条,逻辑共享 `useAppStore` 的 `maintenance` 字段
 
 ## 6. 监控
 
-- Grafana 监控 `X-Maintenance` 命中率 / 维护期长度
+- 当前可从 access log 观察 `X-Maintenance` 命中情况；Grafana 维护状态 gauge / 维护期长度告警仍待接入现有观测栈。
 - nginx access log 过滤 `status=503` + `req-header[X-Maintenance]` 区分维护期 vs 真服务异常
-- Prometheus 加 `console_maintenance_active{readOnly="true|false"}` gauge(后续 micrometer registration)
+- 计划增加 `console_maintenance_active{readOnly="true|false"}` gauge，并与维护 503 计数关联。
 
 ## 7. 回滚
 
-只需把 `BATCH_CONSOLE_MAINTENANCE_ENABLED=false` 再次重启即可。前端会在 30s 内自动检测到 `enabled=false`,banner 消失、写按钮恢复、降级页跳回首页。
+启动期环境变量关闭需要滚动重启；管理员热更新关闭可立即生效。前端通过轮询发现 `enabled=false` 后清理公告，具体写按钮恢复和原路由安全回跳以完善方案的 P0 验收为准。
 
 ## 8. 实施位置
 
 - 后端:`batch-console-api/.../config/ConsoleMaintenanceProperties.java`、`support/maintenance/MaintenanceModeFilter.java`、`web/ConsoleSystemController.java`
 - 前端:`stores/app.ts maintenance state`、`composables/useMaintenancePolling.ts`、`components/common/MaintenanceBanner.vue`、`views/error/MaintenancePage.vue`
-- 安全链:`ConsoleSecurityConfiguration` 把 `MaintenanceModeFilter` 放在 RateLimit / Auth 之前,且 permitAll `/api/console/system/maintenance`
+- 安全链:`ConsoleSecurityConfiguration` 在认证后、RateLimit 前执行 `MaintenanceModeFilter`，并放行 `/api/console/system/maintenance`
