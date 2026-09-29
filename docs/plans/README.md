@@ -9,6 +9,9 @@
 | [bfs-open-source-scheduler-boundary-roadmap-2026-06-29.md](./bfs-open-source-scheduler-boundary-roadmap-2026-06-29.md) | 对标开源调度器后的 BFS 调度 / 编排边界、五块强化计划和验证口径 |
 | [spring-boot-engineering-patterns-plan-2026-08-02.md](./spring-boot-engineering-patterns-plan-2026-08-02.md) | Spring Boot 工程化样板落地计划 |
 | [engineering-benchmark-comparison-2026-08-02.md](./engineering-benchmark-comparison-2026-08-02.md) | BFS 与优秀系统的工程能力对照表 |
+| [AI 助手全局入口与领域/成本治理](./ai-assistant-contextual-experience-and-cost-governance-2026-09-29.md) | Console AI 全局入口、拒绝通用问答、配额/会话/审计与数据治理改造计划 |
+| 配套前端实施方案 | `batch-console` 仓库：`docs/engineering/ai-assistant-frontend-implementation-plan.md`，覆盖全局入口、页面上下文、会话 UI 与前端验收 |
+| [Console 使用率统计方案](./console-usage-statistics-plan-2026-09-29.md) | PostgreSQL 日聚合、业务成功率口径、租户隔离和使用率查询契约 |
 
 ## 计划登记
 
@@ -20,7 +23,7 @@
 | 文件与恢复 | [Export keyset](./2026-06-06-export-partition-keyset-range.md)、[Export slice](./2026-06-06-export-partition-slice.md)、[S3 SDK 迁移](./2026-06-06-migrate-minio-sdk-to-aws-sdk-v2.md)、[完整性 sidecar](./file-integrity-sidecar-manifest-plan-2026-06-07.md)、[checkpoint](./checkpoint-resume-design-2026-07.md) |
 | 批量日与结算 | [整批量日 dry-run](./batch-day-dry-run-enhancement-plan-2026-09-08.md)、[结算差距治理](./settlement-gap-remediation-roadmap-2026-06-20.md) |
 | SDK 与前端 | [SDK roadmap](./sdk-roadmap-2026-h2.md)、[roadmap 进度](./sdk-roadmap-2026-h2-progress.md)、[FE 工作清单](./fe-worklist-2026-h2-atomic-sdk.md) |
-| 可观测与扩展 | [Alertmanager 迁移](./alertmanager-migration-plan-2026-07.md)、[AI 接入](./ai-integration-plan-2026-07.md) |
+| 可观测与扩展 | [Alertmanager 迁移](./alertmanager-migration-plan-2026-07.md)、[AI 接入](./ai-integration-plan-2026-07.md)、[AI 助手体验与成本治理](./ai-assistant-contextual-experience-and-cost-governance-2026-09-29.md) |
 | 网络与外部 HTTP | [IPv6 Happy Eyeballs 渐进落地](./ipv6-happy-eyeballs-rollout-2026-09.md) |
 
 历史验证基础设施计划：
