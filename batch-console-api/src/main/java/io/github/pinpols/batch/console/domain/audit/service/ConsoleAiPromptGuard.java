@@ -5,16 +5,82 @@ import io.github.pinpols.batch.common.enums.AiPromptCategory;
 import io.github.pinpols.batch.common.enums.AiPromptDecision;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.support.AiPromptGateResult;
 import java.util.Locale;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
 public class ConsoleAiPromptGuard {
+
+  private static final Set<String> SPECIFIC_DOMAIN_PHRASES = Set.of(
+      "job instance",
+      "job instances",
+      "job_instance",
+      "partition status",
+      "workflow dag",
+      "file import",
+      "file imports",
+      "file export",
+      "file exports",
+      "file governance",
+      "worker lease",
+      "worker heartbeat",
+      "worker pool",
+      "orchestrator",
+      "outbox",
+      "dead letter",
+      "dead-letter",
+      "tenant quota",
+      "business calendar",
+      "business date",
+      "trigger schedule",
+      "readiness defer",
+      "misfire",
+      "batch day",
+      "batch-day",
+      "作业实例",
+      "任务实例",
+      "分片状态",
+      "工作流 dag",
+      "文件导入",
+      "文件导出",
+      "文件治理",
+      "worker 租约",
+      "worker 心跳",
+      "租户配额",
+      "业务日历",
+      "业务日期",
+      "批量日",
+      "批量调度",
+      "触发器",
+      "就绪延迟",
+      "死信队列",
+      "发布箱");
+
+  private static final Set<String> GENERIC_DOMAIN_KEYWORDS = Set.of(
+      "batch",
+      "workflow",
+      "job",
+      "instance",
+      "partition",
+      "task",
+      "file",
+      "worker",
+      "script",
+      "dependency",
+      "version",
+      "release",
+      "docker",
+      "maven",
+      "trivy",
+      "console",
+      "audit");
 
   private final ConsoleAiProperties properties;
 
@@ -41,10 +107,17 @@ public class ConsoleAiPromptGuard {
             CommonErrorMessages.PROMPT_VIOLATES_SAFETY_POLICY);
       }
     }
-    for (String keyword : properties.getDomainKeywords()) {
-      if (contains(normalized, lower, keyword)) {
-        return AiPromptGateResult.approved(resolveCategory(keyword), normalized);
-      }
+    String matchedPhrase = SPECIFIC_DOMAIN_PHRASES.stream()
+        .filter(phrase -> lower.contains(phrase.toLowerCase(Locale.ROOT)))
+        .findFirst()
+        .orElse(null);
+    if (EmptyChecks.isNotNull(matchedPhrase)) {
+      String categoryKeyword = properties.getDomainKeywords().stream()
+          .filter(keyword -> !GENERIC_DOMAIN_KEYWORDS.contains(keyword.toLowerCase(Locale.ROOT)))
+          .filter(keyword -> contains(normalized, lower, keyword))
+          .findFirst()
+          .orElse(matchedPhrase);
+      return AiPromptGateResult.approved(resolveCategory(categoryKeyword), normalized);
     }
     return AiPromptGateResult.rejected(
         AiPromptDecision.REJECTED_SCOPE,

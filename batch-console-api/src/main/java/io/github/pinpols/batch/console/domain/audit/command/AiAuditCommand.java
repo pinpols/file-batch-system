@@ -18,4 +18,6 @@ public record AiAuditCommand(
     String refusalReason,
     Integer promptTokens,
     Integer completionTokens,
+    java.math.BigDecimal estimatedCostUsd,
+    String costStatus,
     Instant createdAt) {}

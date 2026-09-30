@@ -300,7 +300,7 @@ Entity，必须通过 Response DTO 投影。Webhook secret 等敏感字段必须
 - **3 张 outbox 表分工**:`outbox_event`(通用) / `event_outbox_retry`(退避重试) / `trigger_outbox_event`(trigger fire)
 - **持久化统一 MyBatis**(禁 JPA / Spring Data JDBC),entity `*Entity` 后缀(禁 `*Record`)
 - **多租隔离**:所有业务表 `tenant_id` + UNIQUE 含 tenant_id,守护 `MapperXmlTenantGuardArchTest` × 6 模块
-- **archive 1:1 镜像**:`batch.*` 改 schema 必须同 PR 补 `archive.*_archive`(`ArchiveSchemaDriftCheck` 启动期 fail-fast)
+- **archive 1:1 镜像**:纳入归档的 `batch.*` 表改 schema 必须同 PR 补 `archive.*_archive`(`ArchiveSchemaDriftCheck` 启动期 fail-fast);明确不归档的表须有数据保留与隐私依据。V218 的 `console_ai_conversation` / `console_ai_turn` 含用户对话数据，按用户删除和保留期清理，不复制至 archive
 
 ## docs/ 体系
 

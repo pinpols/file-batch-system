@@ -7,6 +7,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-09-30 | **Console AI 会话与费用治理 API**：`AiChatRequest` 增加 `contextVersion=v1` 和仅含 `pageType/objectType/objectId` 的白名单上下文；新增当前操作者会话列表、会话轮次分页、会话删除及租户 UTC 月度估算费用摘要接口。聊天审计响应新增 token、估算 USD 和计价状态字段。会话默认关闭，启用后正文以 AES-GCM/KMS 密文存储并按租户/操作者隔离，必须配置保留期；费用为 provider 用量与运维费率的估算，不是供应商账单对账。 |
 | 2026-09-30 | **控制面治理能力补齐（后端）**：新增共享数据库维护状态版本与 CAS、维护期响应版本字段和实际降级来源响应头；新增租户级操作使用率日聚合查询 `GET /api/console/observability/usage-summary`。新增字段和端点均为后端加法，不改变既有路径、鉴权和租户隔离语义。AI 审计成本/保留配置、容量告警和运行证据脚本属于运维治理，不新增前端必需字段。 |
 | 2026-09-28 | **Result version/readiness BFF 内部治理（wire 不变）**：`ConsoleResultVersionController` 仅去除 web 层直接暴露 `RestClient` 类型，仍通过 `OrchestratorInternalRestClient` 转发到既有 `/internal/orchestrator/result-versions/*`。`/api/console/result-versions`、`/effective`、`/{id}`、`/{id}/promote`、`/{id}/reject` 的路径、请求参数、响应 schema、鉴权和 readiness/result_version 语义均不变；本条作为 readiness 相关 Controller 变更的文档同步证据。 |
 | 2026-09-28 | **运维预览接口授权与契约**：新增 `POST /api/console/file-templates/naming-preview`，按当前租户和导出 Worker 共用的命名解析器返回最终文件名；`GET /api/console/system/cron-preview` 改为正式角色可访问，不再匿名开放。 |
@@ -971,6 +972,13 @@ Deployment note:
 ### AI
 
 - `POST /api/console/ai/chat`
+- `GET /api/console/ai/conversations?limit=` — current user's conversations; session persistence must be enabled.
+- `GET /api/console/ai/conversations/{conversationId}/turns?beforeTurnNo=&limit=` — owner-scoped history, newest first.
+- `DELETE /api/console/ai/conversations/{conversationId}` — delete the current user's conversation and cascading turns.
+- `GET /api/console/ai/cost-summary?month=YYYY-MM` — estimated token cost, reservations and monthly tenant cap for a UTC month.
+- Page context schema `v1` permits only `pageType`, `objectType` and `objectId`; it does not authorize object access or trigger server-side data reads.
+- Session persistence is disabled by default. When enabled, an explicit 1..3650 day retention period is required, security bypass mode is rejected, and content is encrypted with the platform AES-GCM/KMS service before storage.
+- Cost is calculated from provider-reported tokens and deployment-configured USD per-million-token rates. No configured rate means `UNPRICED`; a configured monthly cap without valid rates prevents startup. Costs are estimates, not vendor invoice reconciliation.
 
 ### System Parameters
 

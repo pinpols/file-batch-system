@@ -16,7 +16,14 @@ public class AiChatRequest {
   private String sessionId;
 
   @NotBlank
+  @Size(max = 32)
+  private String contextVersion = "v1";
+
+  @NotBlank
   private String prompt;
 
+  private AiPageContextRequest pageContext;
+
+  /** 兼容旧版请求字段；v1 仅接受 pageType、objectType 和 objectId。 */
   private Map<String, Object> context = new LinkedHashMap<>();
 }

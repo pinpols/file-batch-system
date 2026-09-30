@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -91,6 +92,12 @@ class DefaultConsoleAiApplicationServiceTest {
   private ConsoleAiAuditService auditService;
 
   @Mock
+  private ConsoleAiConversationService conversationService;
+
+  @Mock
+  private ConsoleAiCostService costService;
+
+  @Mock
   private ConsoleAiKnowledgeBase knowledgeBase;
 
   @Mock
@@ -121,6 +128,16 @@ class DefaultConsoleAiApplicationServiceTest {
     aiProperties.setRequestTimeout(Duration.ofSeconds(5));
     meterRegistry = new SimpleMeterRegistry();
     aiMetrics = new ConsoleAiMetrics(meterRegistry);
+    lenient()
+        .when(costService.reserve(anyString(), anyString(), anyString()))
+        .thenReturn(new ConsoleAiCostService.Reservation(null, null, null, false));
+    lenient()
+        .when(costService.settle(
+            any(),
+            org.mockito.ArgumentMatchers.nullable(String.class),
+            org.mockito.ArgumentMatchers.nullable(Integer.class),
+            org.mockito.ArgumentMatchers.nullable(Integer.class)))
+        .thenReturn(new ConsoleAiCostService.CostResult(null, "UNPRICED"));
     service = new DefaultConsoleAiApplicationService(
         chatClientsProvider,
         aiProperties,
@@ -128,6 +145,8 @@ class DefaultConsoleAiApplicationServiceTest {
         authorizationService,
         promptGuard,
         auditService,
+        conversationService,
+        costService,
         knowledgeBase,
         queryServiceProvider,
         diagnosticServiceProvider,
@@ -204,8 +223,9 @@ class DefaultConsoleAiApplicationServiceTest {
     assertThat(audit.promptDecision()).isEqualTo(AiPromptDecision.REJECTED_SAFETY.code());
     assertThat(audit.promptCategory()).isEqualTo(AiPromptCategory.OUT_OF_SCOPE.code());
     assertThat(audit.refusalReason()).isEqualTo("blocked-by-keyword");
-    // 防 PII 泄漏：原文不写入数据库，只落哈希 + preview
+    // 审计默认不保留原文预览。
     assertThat(audit.promptHash()).hasSize(64); // SHA-256 hex
+    assertThat(audit.promptPreview()).isNull();
     // ChatClient 完全不被触达
     verify(chatClientsProvider, never()).getIfAvailable();
   }
@@ -254,7 +274,7 @@ class DefaultConsoleAiApplicationServiceTest {
   }
 
   @Test
-  @DisplayName("prompt 超长 → safeInput 截断到 maxPromptLength（promptPreview 长度 ≤ 512 byhash 仍 SHA-256）")
+  @DisplayName("prompt 超长 → safeInput 截断；默认审计仍不保留预览")
   void shouldTruncatePrompt_whenExceedsMaxLength() {
     aiProperties.setMaxPromptLength(50);
     when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
@@ -267,8 +287,7 @@ class DefaultConsoleAiApplicationServiceTest {
 
     ArgumentCaptor<AiAuditCommand> captor = ArgumentCaptor.forClass(AiAuditCommand.class);
     verify(auditService).record(captor.capture());
-    // preview 长度受 min(maxPromptLength, 512) 双重约束；前者更小所以是 50
-    assertThat(captor.getValue().promptPreview()).hasSize(50);
+    assertThat(captor.getValue().promptPreview()).isNull();
     assertThat(captor.getValue().promptHash()).hasSize(64);
   }
 
@@ -544,6 +563,37 @@ class DefaultConsoleAiApplicationServiceTest {
         .thenReturn(
             new ConsoleAiClients(new ConsoleAiClients.ProviderClient("openai", chatClient), null));
     return stubProviderClient(chatClient);
+  }
+
+  @Test
+  @DisplayName("月度预算拒绝后将持久化会话标记为拒绝，不遗留 IN_PROGRESS")
+  void shouldClosePersistedTurnWhenBudgetReservationIsRejected() {
+    aiProperties.getPersistence().setEnabled(true);
+    when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
+    when(promptGuard.check(any()))
+        .thenReturn(AiPromptGateResult.approved(AiPromptCategory.PLATFORM, "normalized"));
+    when(knowledgeBase.retrieve(any())).thenReturn(List.of());
+    when(chatClientsProvider.getIfAvailable())
+        .thenReturn(new ConsoleAiClients(
+            new ConsoleAiClients.ProviderClient("openai", mock(ChatClient.class)), null));
+    ConsoleAiConversationService.StartedTurn turn =
+        new ConsoleAiConversationService.StartedTurn("conversation-1", 1L, List.of());
+    when(conversationService.beginTurn(anyString(), anyString(), any(), anyString(), anyString()))
+        .thenReturn(turn);
+    BizException budgetDenied =
+        BizException.of(ResultCode.RATE_LIMITED, "error.common.rate_limited_detail");
+    when(costService.reserve(anyString(), anyString(), anyString())).thenThrow(budgetDenied);
+
+    assertThatThrownBy(() -> service.chat(request("tenant-1", "查询失败的作业实例"), "idem-1"))
+        .isSameAs(budgetDenied);
+    verify(conversationService)
+        .completeTurn(ConsoleAiConversationService.TurnCompletion.builder()
+            .tenantId("tenant-1")
+            .conversationId("conversation-1")
+            .turnNo(1L)
+            .decision("REJECTED_BUDGET")
+            .build());
+    verify(auditService, never()).record(any());
   }
 
   private ChatClient.CallResponseSpec stubProviderClient(ChatClient chatClient) {
