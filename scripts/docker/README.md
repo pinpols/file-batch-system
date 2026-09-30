@@ -7,6 +7,7 @@
 - `build-apps.sh`：构建本地应用镜像；单服务自动走 Maven 依赖闭包，多服务共享全 reactor
 - `up-apps.sh`：启动本地基础依赖 + 应用容器
 - `down-apps.sh`：停止本地基础依赖 + 应用容器（只 stop，不 down）
+- `reset-dev.sh`：按 Compose project 精确预览/清空开发容器、命名卷和专用网络；默认不删除镜像
 - `up-observability.sh`：启动本地观测栈
 - `down-observability.sh`：停止本地观测栈（只 stop，不 down）
 - `observability/`：观测栈独立脚本目录
@@ -22,6 +23,19 @@
 - 默认使用 `.env.local`
 - 如需切换环境，可设置 `COMPOSE_ENV_FILE=.env.test` 或 `COMPOSE_ENV_FILE=.env.prod`
 - 这类脚本不管理本地 Java 进程，只管理容器
+- `reset-dev.sh` 默认只预览；执行删除需要 `--apply`，并建议再次确认 Docker context。它拒绝
+  `prod`、`production`、`staging`、`uat`、`preprod` 和 `default` 项目名，不执行全局
+  `docker system prune`。开发环境完整重置示例：
+
+  ```bash
+  bash scripts/docker/reset-dev.sh
+  bash scripts/docker/reset-dev.sh --apply
+  bash scripts/docker/reset-dev.sh --apply --include-images
+  ```
+
+  命名卷包含 PostgreSQL、Kafka、MinIO 和 Valkey 数据；删除后需要重新执行 Flyway、seed 和
+  MinIO/Kafka 初始化。BuildKit 缓存是 Docker 全局资源，不由该脚本处理；按保留周期清理请用
+  `scripts/local/cleanup-disk.sh`。
 - 应用启动前的业务库 bootstrap 使用 `--no-recreate`，仅确保 PostgreSQL 已启动并补齐 DDL/RLS；因此从不同 worktree 定向重启应用不会误滚动数据库容器。无参数全量启动仍会按 Compose 配置正常收敛基础设施。
 - 构建应用镜像时优先使用 `./scripts/docker/build-apps.sh`，这样会默认开启 BuildKit 和 Docker CLI build
 - 只重建 Atomic：`./scripts/docker/build-apps.sh worker-atomic`，脚本会自动传入 `BUILD_MODE=module`

@@ -6,6 +6,7 @@
 
 - `scripts/local/`：本地 JVM 开发——启停、构建、测试
 - `scripts/docker/`：Docker / Docker Compose 容器操作（构建镜像、启停容器、观测栈管理）
+- `scripts/docker/reset-dev.sh`：按 Compose project 清空本地开发容器、数据卷和专用网络（默认预览）
 - `scripts/ops/`：运维巡检与自愈（inspect-*、heal-*、trigger-compensation）
 - `scripts/data/`：数据初始化与加载（init-kafka、init-minio、load-*）
 - `scripts/lib/minio-mc.sh`：通过固定版本的 `minio/mc` CLI 容器访问 MinIO；不要假设 MinIO server 镜像内置 `mc`。
