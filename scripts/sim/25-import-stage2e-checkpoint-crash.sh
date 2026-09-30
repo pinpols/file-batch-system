@@ -82,8 +82,7 @@ MIN_MARKER = int(os.environ["CHECKPOINT_MIN_MARKER"])
 WORKER_PORT = os.environ["WORKER_IMPORT_PORT"]
 MINIO_CONTAINER = os.environ.get("MINIO_CONTAINER", os.environ.get("MINIO_CONTAINER", "batch-minio"))
 MINIO_BUCKET = os.environ["BATCH_S3_BUCKET"]
-MINIO_ACCESS_KEY = os.environ["BATCH_S3_ACCESS_KEY"]
-MINIO_SECRET_KEY = os.environ["BATCH_S3_SECRET_KEY"]
+MINIO_MC_HELPER = os.path.join(os.getcwd(), "scripts", "lib", "minio-mc.sh")
 SQL_DIR = os.path.join(os.getcwd(), "scripts", "sim", "sql")
 print(f"  [config] expectedRows={EXPECTED_ROWS} minMarker={MIN_MARKER}", flush=True)
 
@@ -122,13 +121,9 @@ def xml_payload(rows):
     return "\n".join(body) + "\n"
 
 def upload_object(object_name, data):
-    sh([
-        "docker", "exec", MINIO_CONTAINER, "mc", "alias", "set", "local",
-        "http://localhost:9000", MINIO_ACCESS_KEY, MINIO_SECRET_KEY,
-    ], check=True)
-    sh(["docker", "exec", MINIO_CONTAINER, "mc", "mb", "-p", f"local/{MINIO_BUCKET}"], check=True)
+    sh(["bash", MINIO_MC_HELPER, "mb", "-p", f"local/{MINIO_BUCKET}"], check=True)
     proc = subprocess.run(
-        ["docker", "exec", "-i", MINIO_CONTAINER, "mc", "pipe", f"local/{MINIO_BUCKET}/{object_name}"],
+        ["bash", MINIO_MC_HELPER, "pipe", f"local/{MINIO_BUCKET}/{object_name}"],
         input=data,
         text=True,
         capture_output=True,

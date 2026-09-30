@@ -60,8 +60,7 @@ BATCH = os.environ.get("BATCH_NO", "")
 RUN = str(int(time.time() * 1000) % 100000000)
 MINIO_CONTAINER = os.environ["MINIO_CONTAINER"]
 BUCKET = os.environ["BATCH_S3_BUCKET"]
-AK = os.environ["BATCH_S3_ACCESS_KEY"]
-SK = os.environ["BATCH_S3_SECRET_KEY"]
+MINIO_MC_HELPER = os.path.join(os.getcwd(), "scripts", "lib", "minio-mc.sh")
 JOB_CODE = "TA_BUNDLE_IMPORT"
 TEMPLATE = "ta_import_customer_tpl"
 GROUP = f"bundle-import-{RUN}"
@@ -168,14 +167,12 @@ def csv_rows(prefix, n):
 
 
 def mc_init():
-    sh(["docker", "exec", MINIO_CONTAINER, "mc", "alias", "set", "local",
-        "http://localhost:9000", AK, SK], check=True)
-    sh(["docker", "exec", MINIO_CONTAINER, "mc", "mb", "-p", f"local/{BUCKET}"])
+    sh(["bash", MINIO_MC_HELPER, "mb", "-p", f"local/{BUCKET}"], check=True)
 
 
 def upload(object_name, data):
     p = subprocess.run(
-        ["docker", "exec", "-i", MINIO_CONTAINER, "mc", "pipe", f"local/{BUCKET}/{object_name}"],
+        ["bash", MINIO_MC_HELPER, "pipe", f"local/{BUCKET}/{object_name}"],
         input=data, text=True, capture_output=True)
     if p.returncode != 0:
         raise RuntimeError(f"upload {object_name} failed: {p.stderr.strip()}")

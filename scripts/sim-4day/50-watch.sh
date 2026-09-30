@@ -9,6 +9,7 @@ ROOT="$(cd "$HERE/../.." && pwd)"
 source "$ROOT/scripts/lib/env-common.sh"
 # shellcheck source=scripts/lib/logging.sh
 source "$ROOT/scripts/lib/logging.sh"
+MINIO_MC_HELPER="$ROOT/scripts/lib/minio-mc.sh"
 SQL_DIR="$HERE/sql"
 SIM4DAY_LOG_DIR="${SIM4DAY_LOG_DIR:-$(log_run_dir "$ROOT" sim-4day sim-4day-watch)}"
 log_link_dir "$ROOT" sim-4day "$SIM4DAY_LOG_DIR"
@@ -29,7 +30,9 @@ dash() {
   BQF < "$SQL_DIR/watch-business-counts.sql" \
     | awk -F'|' '{printf "   %-18s %s\n",$1,$2}'
   echo "── 导出文件(MinIO outbound)"
-  echo -n "   "; docker exec "$MINIO_CONTAINER" mc ls --recursive "$MC_ALIAS/$BATCH_S3_BUCKET/outbound/" 2>/dev/null | grep -ivE '\.keep' | wc -l | tr -d ' ';
+  echo -n "   "; MINIO_CONTAINER="$MINIO_CONTAINER" MINIO_MC_ALIAS="$MC_ALIAS" \
+    bash "$MINIO_MC_HELPER" ls --recursive "$MC_ALIAS/$BATCH_S3_BUCKET/outbound/" 2>/dev/null \
+    | grep -ivE '\.keep' | wc -l | tr -d ' ';
   echo "── outbox 积压 / dead_letter"
   PQF < "$SQL_DIR/watch-outbox-deadletter.sql" | sed 's/^/   /'
   echo "── 最近失败(top5)"

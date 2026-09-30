@@ -21,6 +21,21 @@
 | 安全与许可 | `check-dependency-licenses.sh`、`check-license-compliance.sh`、`check-trivy-ignore-expiry.py` |
 | 观测 | `check-helm-prometheusrule-sync.sh`、`check-log-lifecycle.sh`、`check-observability-contract.py` |
 
+## `check-version-alignment.sh`
+
+校验应用发布版本和基础服务镜像版本的一致性。镜像检查以 `.env.example` 为模板，
+并与本机存在的 `.env.local`、`.env.test`、`.env.prod` 比较；同时核对 Testcontainers
+镜像及 CI、Compose、Sim 等运行入口的引用。MinIO 客户端镜像单独使用
+`MINIO_MC_IMAGE_REPOSITORY` / `MINIO_MC_IMAGE_TAG`，并校验 Compose 初始化容器与
+`scripts/lib/minio-mc.sh` 的 fallback 和环境模板一致。
+
+```bash
+bash scripts/ci/check-version-alignment.sh
+```
+
+该检查已接入 PR Gate 与 Full CI Gate；修改基础镜像版本或运行入口时应同步更新
+`.env.example`、各环境文件和对应 fallback。
+
 ## 门禁结果格式
 
 Git hook 与 GitHub workflow 的门禁入口统一输出 `状态 | code | gate | exit_code | action`；跳过结果在固定字段后追加 `reason`。具体诊断仍由检查脚本输出，最终状态行由 `scripts/lib/gate-result.sh` / `scripts/ci/run-gate.sh` 生成。workflow 中不要直接调用门禁脚本；多项检查要逐项调用 `gate_run`，避免一项失败掩盖同一步其余门禁的独立状态。扫描器报告、测试清单和运行进度不是门禁状态行，不强行改成该格式。

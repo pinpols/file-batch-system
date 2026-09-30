@@ -295,6 +295,9 @@ ensure_core_runtime() {
   local log
   log="$SIM_LOG_DIR/restart-core-$(date +%Y%m%d%H%M%S).log"
   echo "  [core-runtime] unhealthy(:$p health=${code:-000}), restart core services → $log"
+  # reset/prereq 为 Docker SQL 操作加载 .env.local，会将 Redis/Valkey 等地址改为容器内主机名。
+  # 下方重启的是宿主机 JVM，因此启动前需要重新设置宿主机可访问的地址。
+  batch_configure_local_jvm_runtime_env
   JAVA_OPTS="${JAVA_OPTS:-$SIM_JAVA_OPTS}" SKIP_CDS=1 \
     bash scripts/local/restart.sh trigger orchestrator console worker-import worker-export worker-process worker-dispatch worker-atomic >"$log" 2>&1
   for p in "${ports[@]}"; do
