@@ -239,15 +239,15 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 
 ### G7. CI 外部 Actions 版本治理 · P2
 
-专题记录：[`../backlog/ci-external-action-upgrade-backlog-2026-09-30.md`](../backlog/ci-external-action-upgrade-backlog-2026-09-30.md)。责任范围：仓库 CI/发布流程维护者；截至 2026-09-30，Trivy 已随当前修复升级，其余版本升级和兼容性验证待单独完成。
+专题记录：[`../backlog/ci-external-action-upgrade-backlog-2026-09-30.md`](../backlog/ci-external-action-upgrade-backlog-2026-09-30.md)。责任范围：仓库 CI/发布流程维护者；截至 2026-09-30，第一批 Actions/扫描工具已更新，Gitleaks Linux artifact 基础正负样例已验证，仍需 PR/Full Gate 实跑收口。
 
 | ID | 主题 | 状态 |
 |---|---|---|
-| **CI-ACTION-1** | checkout、setup-python/java/node/go、upload-artifact 与 Hadolint Action 升级 | ⏳ 待分批更新；升级后运行 actionlint、相关工作流及 Full Gate |
-| **CI-ACTION-2** | Docker Buildx setup action v3→v4 | ⏳ 待评估构建器配置兼容性并验证镜像构建 |
-| **CI-ACTION-3** | 其余第三方 Action、扫描器和浮动版本引用复核 | ⏳ 待核对上游发布、安全公告及本项目调用契约 |
-| **CI-SEC-1** | Gitleaks 8.30.1 CI Linux artifact 正向/负向检测验证 | ⏳ P1；上游有该版本漏检报告，需验证 CI 实际下载的 Linux artifact 并据结果固定版本 |
-| **CI-SEC-2** | 更新 Squawk CLI 与 oasdiff 固定版本 | ⏳ 待升级并回归迁移安全规则和 OpenAPI breaking-change 基线 |
+| **CI-ACTION-1** | checkout、setup-python/java/node/go、upload-artifact 与 Hadolint Action 升级 | 🟡 已统一升级；待 PR/Full Gate 验证 runner、缓存和 artifact 契约 |
+| **CI-ACTION-2** | Docker Buildx setup action v3→v4 | 🟡 已升级到 v4；待镜像构建和 Docker Bake CI 验证 |
+| **CI-ACTION-3** | 其余第三方 Action、扫描器和浮动版本引用复核 | 🟡 已完成盘点并保留兼容引用；GitHub Actions Dependabot 已开启每周版本队列，`trivy-action`、Checkov、发布 Action 等仍按上游安全公告和契约单独复核 |
+| **CI-SEC-1** | Gitleaks 8.30.1 CI Linux artifact 正向/负向检测验证 | 🟡 Docker linux/amd64 已验证：合成 `ghp_...` 正向退出 1、负向退出 0；仍需 PR/Full Gate 实跑，且该样例不代表所有规则 |
+| **CI-SEC-2** | 更新 Squawk CLI 与 oasdiff 固定版本 | 🟡 已升级到 Squawk `2.65.0` / oasdiff `1.32.1`；当前 OpenAPI spec 对比已本地通过，本批无迁移文件因此 Squawk 安全检查按规则跳过；仍待 PR/Full Gate 实跑 |
 
 ### H. 合规收尾 · P3
 

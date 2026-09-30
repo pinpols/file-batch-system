@@ -77,7 +77,7 @@ jobs:
       unknown: ${{ steps.scope.outputs.unknown }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -100,7 +100,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
           # 0 = 全历史:migration-safety / openapi-breaking 守护要相对 base 做 diff。
@@ -133,8 +133,8 @@ jobs:
         if: needs.changes.outputs.database == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         run: |
-          npm install -g squawk-cli@2.58.0
-          OASDIFF_VERSION=1.19.0
+          npm install -g squawk-cli@2.65.0
+          OASDIFF_VERSION=1.32.1
           curl -fsSL "https://github.com/oasdiff/oasdiff/releases/download/v${OASDIFF_VERSION}/oasdiff_${OASDIFF_VERSION}_linux_amd64.tar.gz" \
             | sudo tar -xz -C /usr/local/bin oasdiff
           squawk --version && oasdiff --version
@@ -187,7 +187,7 @@ jobs:
 
       - name: Set up Python for LOC snapshot
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.database == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version-file: .python-version
 
@@ -516,7 +516,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -553,7 +553,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -588,7 +588,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -627,7 +627,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
