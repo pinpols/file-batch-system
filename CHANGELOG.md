@@ -27,6 +27,8 @@
 
 ### Fixed
 
+- 集群诊断的终态子节点检查与批次日汇总分类由 Mapper XML 测试对照 `JobInstanceStatus` 生命周期集合，防止新增实例状态后终态诊断、成功/失败/进行中统计发生漂移；保留 SLA 等业务专用状态口径。
+- 实例诊断改用 `JobInstanceStatus` 派生的活跃态与终态集合；`PARTIAL_FAILED` 存在活跃子节点时报告终态一致性异常，不再误报活跃实例缺少 Worker。
 - AI 会话主动删除与过期清理 SQL 均显式限制 tenant_id，避免依赖连接级租户上下文作为唯一隔离条件；重构轮次完成参数及对话编排以满足架构和 PMD 检查。明确会话/轮次表按用户删除与保留期清理、不进入 archive 的隐私边界。
 - Console AI 控制器通过应用服务访问会话与成本用例；成本摘要 GET 不再触发过期预算清理，清理移入预算预留事务，确保查询无写副作用并满足 CSRF 静态分析。
 - 修正 Console 使用率汇总 MyBatis 对 primitive `long` record 参数的构造映射，并新增真实 PostgreSQL 集成测试覆盖并发累加、租户 RLS 和事务内租户上下文。
