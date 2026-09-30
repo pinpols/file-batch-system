@@ -388,7 +388,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Generate SBOM (syft, 全 sdk/ 目录)
-        uses: anchore/sbom-action@v0.24.0
+        uses: anchore/sbom-action@v0.24.2
         with:
           path: sdk/
           format: spdx-json
