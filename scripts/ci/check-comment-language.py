@@ -32,8 +32,7 @@ CODE_EXAMPLE = re.compile(
     r"^(?:bash|sh|python|python3|mvn|make|docker|git|psql|curl|source|export|"
     r"scripts/|\./|~/|/|-{1,2}[a-z][a-z0-9-]*\b|[A-Z][A-Z0-9_]*=|"
     r"[a-z0-9_.-]+\.(?:sh|py|sql)\b)|"
-    r"\bON CONFLICT\b|\bLIKE\s+batch\.|\b[A-Za-z][A-Za-z0-9_]*\s*[=<>]|\{[^}]*\}|"
-    r"\b[A-Z][A-Z0-9_]{2,}\b",
+    r"\bON CONFLICT\b|\bLIKE\s+batch\.|\b[A-Za-z][A-Za-z0-9_]*\s*[=<>]|\{[^}]*\}",
 )
 SUPPORTED = {
     ".java", ".go", ".py", ".rs", ".ts", ".tsx", ".js", ".jsx", ".sh",
@@ -59,6 +58,7 @@ def prose_comment(line: str, suffix: str) -> str | None:
         return None
     text = stripped[len(marker):].strip()
     text = re.sub(r"(?:\*/|-->)\s*$", "", text).strip()
+    text = text.lstrip("*").strip()
     if not text or HAN.search(text) or DIRECTIVE.match(text) or LICENSE.match(text):
         return None
     if SQL_EXAMPLE.match(text) or re.fullmatch(r"[A-Z0-9_./:= -]+", text):

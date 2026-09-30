@@ -55,6 +55,18 @@ jobs:
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
 
+      - name: Verify repository text encoding
+        shell: bash
+        run: bash scripts/ci/run-gate.sh FULL_UTF8_ENCODING "仓库文本 UTF-8 编码" -- python3 scripts/ci/check-utf8-encoding.py
+
+      - name: Test repository text encoding checker
+        shell: bash
+        run: bash scripts/ci/run-gate.sh FULL_UTF8_ENCODING_TEST "UTF-8 编码门禁测试" -- python3 -m unittest scripts/ci/tests/test_check_utf8_encoding.py
+
+      - name: Verify runtime UTF-8 configuration
+        shell: bash
+        run: bash scripts/ci/run-gate.sh FULL_INFRASTRUCTURE_UTF8 "基础设施 UTF-8 配置" -- python3 scripts/ci/check-infrastructure-utf8.py
+
       - name: Verify SQL/config placement boundaries
         shell: bash
         run: bash scripts/ci/run-gate.sh FULL_SQL_CONFIG_BOUNDARIES "SQL 与配置边界" -- bash scripts/ci/check-sql-config-boundaries.sh
@@ -158,6 +170,14 @@ jobs:
       - name: Verify Java readability conventions
         shell: bash
         run: bash scripts/ci/run-gate.sh FULL_JAVA_READABILITY "Java 可读性约定" -- python3 scripts/ci/check-java-readability.py
+
+      - name: Verify Java Lombok and injection conventions
+        shell: bash
+        run: bash scripts/ci/run-gate.sh FULL_JAVA_LOMBOK_INJECTION "Java Lombok 与依赖注入规约" -- python3 scripts/ci/check-java-lombok-injection.py
+
+      - name: Test Java Lombok and injection checker
+        shell: bash
+        run: bash scripts/ci/run-gate.sh FULL_JAVA_LOMBOK_INJECTION_TEST "Java Lombok 与依赖注入门禁测试" -- python3 -m unittest scripts/ci/tests/test_check_java_lombok_injection.py
 
       - name: Verify Java logging governance
         shell: bash

@@ -9,6 +9,8 @@ public final class TestKafkaContainers {
   private TestKafkaContainers() {}
 
   public static KafkaContainer create() {
-    return new KafkaContainer(DockerImageName.parse(TestContainerImages.KAFKA));
+    return new KafkaContainer(DockerImageName.parse(TestContainerImages.KAFKA))
+        .withEnv("LANG", TestContainerImages.UTF8_LOCALE)
+        .withEnv("LC_ALL", TestContainerImages.UTF8_LOCALE);
   }
 }

@@ -34,7 +34,8 @@
 **通用前置(所有语言)**:
 - 网络可达平台：HTTP `/internal/*` + Kafka broker（`batch.task.dispatch.<tenant>.*`）
 - 平台签发的 **API key**（放入 HTTP header，业务数据不出租户边界）
-- 时区/编码按平台约定(UTF-8;时间统一 UTC 传输)
+- SDK 源码、配置文本、HTTP/JSON 与 Kafka 协议文本统一 UTF-8；时间统一 UTC 传输。
+- 文件导入/导出属于业务数据边界，默认 UTF-8，但可按合作方文件格式显式配置其他字符集；不要把进程 locale 当作文件编码配置。
 
 ## 两种形态(都在每个语言里)
 

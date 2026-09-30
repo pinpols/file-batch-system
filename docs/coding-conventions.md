@@ -193,7 +193,8 @@ java.util.concurrent.TimeUnit.SECONDS.sleep(1);
 
 ### 3.1 唯一方式：构造器注入
 
-项目统一使用 **Lombok `@RequiredArgsConstructor` + `final` 字段** 实现构造器注入。
+项目统一使用 **Lombok `@RequiredArgsConstructor` + `final` 字段** 实现构造器注入。需要自定义校验、
+派生字段初始化或测试构造入口时，可以保留显式构造器；注入方式仍必须是构造器注入。
 
 ```java
 @Service
@@ -209,8 +210,12 @@ public class DefaultTriggerService implements TriggerService {
 ### 3.2 禁止
 
 - **禁止** `@Autowired` 字段注入
-- **禁止** setter 注入
+- **禁止** setter 或其他方法注入
+- **禁止** `@Inject` / `@Resource` 字段或方法注入
 - **禁止** 在非 `@Configuration` 类中使用 `@Bean` 方法注入
+
+唯一构造器不需要 `@Autowired`；存在多个构造器且需指定 Spring 注入入口时，必须在选定构造器上
+显式标注。新增/变更生产 Java 文件由增量门禁检查字段与方法注入；存量全量基线由 Full Gate 检查。
 
 ### 3.3 @Configuration 类
 
@@ -828,6 +833,10 @@ public class DefaultTriggerService {
 - 独立命名 logger 需要被 logback 单独路由（如 `audit.console.approval`）。
 - 抽象基类需要按运行时子类输出 logger 名。
 
+门禁按精确文件路径、调用形式和数量保留以上例外；新增例外需要同步更新规约和门禁登记。不要在 Lombok 已生成
+getter/setter 的类中再写同语义的样板访问器；有派生值、别名映射、验证逻辑、接口契约或框架回调时，
+手写访问器属于显式行为，不应机械改成 Lombok。
+
 生产服务代码禁止 `System.out/err` 和 `printStackTrace()`；CLI 工具、benchmark 输出和测试诊断输出可以保留标准输出。
 
 ### 12.3 日志级别约定
@@ -1257,11 +1266,13 @@ Shell/Python 使用 `#`，SQL/Flyway 使用 `--`。解释性注释单独成行�
 | 层            | 具体约束                                                                                                                                                                                                                      | 代码位置                                                                                    |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | 项目源码 / 构建    | 根 pom `project.build.sourceEncoding=UTF-8` + `maven-compiler-plugin` 显式 `<encoding>UTF-8</encoding>`                                                                                                                      | `pom.xml`                                                                               |
-| 运行时容器 locale | `BATCH_LOCALE=C.UTF-8`，并由部署模板 / 镜像派生 `LANG=C.UTF-8 LC_ALL=C.UTF-8`（Java 21 默认 `file.encoding=UTF-8` via JEP 400，不必再传 `-Dfile.encoding`）                                                                                     | `deploy/docker/Dockerfile.app`、`deploy/docker/compose/app.yml`、Helm ConfigMap                         |
+| 运行时容器 locale | `BATCH_LOCALE=C.UTF-8`，并由应用镜像、Compose、Helm 派生 `LANG=C.UTF-8 LC_ALL=C.UTF-8`（Java 21 默认 `file.encoding=UTF-8` via JEP 400，不必再传 `-Dfile.encoding`）；新建 PostgreSQL 集群显式 `--encoding=UTF8`，不强制更改排序规则                                                                                                                                 | `deploy/docker/Dockerfile.app`、`deploy/docker/compose/app.yml`、Helm ConfigMap                         |
 | HTTP / i18n  | `server.servlet.encoding.charset=UTF-8` + `force=true`；`spring.messages.encoding=UTF-8`                                                                                                                                   | `batch-common/.../batch-defaults.yml`                                                   |
 | 导出（系统→外部）    | 默认 UTF-8；`target_charset` 可配 UTF-8/GBK/GB18030/ISO-8859-1（非法值拒收为 `EXPORT_GENERATE_CONFIG_INVALID`），`with_bom` + `line_separator` 由 GENERATE 落地并在 REGISTER 登记到 file_record.charset / metadata；目标字符集无法表达的字符（如 GBK 遇 emoji）以 `EXPORT_GENERATE_UNMAPPABLE_CHARACTER` 报错并带行号/字段/值                                                                                                                | `batch-worker-export/.../stage/GenerateStep.java`、`format/*ExportFormat.java`、`RegisterStep` |
 | 导入（外部→系统）    | `PreprocessStep.resolveCharset()` 按 `payload.targetCharset → template.charset → UTF-8` 三级降级；文本格式统一字节级剥 UTF-8 BOM；仅 `charset_detect=true` 且未配置 charset 时 UTF-8 解码失败才回退 GB18030（写 `detectedCharset`），默认 fail-fast；`invalid_char_policy=FAIL/REPLACE` 控制非法字符处理，解析后全流转均为 UTF-8                                                                                                                | `batch-worker-import/.../PreprocessStep.java`、`ImportPreprocessPipeline`、`ParseStep`    |
-| 中间件容器 locale | `docker-compose.yml` 的 `postgres` / `kafka` / `minio` / `redis` 均从 `.env` 的 `BATCH_LOCALE`（默认 `C.UTF-8`）派生 `LANG` / `LC_ALL`；`postgres` 额外 `POSTGRES_INITDB_ARGS=--encoding=UTF8`。Test profile（`sftp` / `mockserver`）同样继承 | `docker-compose.yml`、`deploy/docker/compose/test.yml`                                          |
+| 中间件与测试容器 locale | 基础服务、8 个应用服务、SFTP/MockServer、Helm 和 Java Testcontainers 均使用 UTF-8 locale；PostgreSQL 新建数据目录用 `--encoding=UTF8`。                                                                                                                                                  | `docker-compose.yml`、`deploy/docker/compose/`、`batch-test-support/.../Test*Containers.java` |
+| SDK 协议文本 | 五语言 SDK 源码、配置文本、HTTP/JSON 与 Kafka 协议文本使用 UTF-8；文件导入/导出默认 UTF-8，允许在外部文件边界显式指定合作方字符集。                                                                                                                                                           | `sdk/README.md`、`sdk/{java,python,go,typescript,rust}/`                                          |
+| 编码门禁 | PR 对目标分支增量扫描变更文本；提交前扫描暂存文件；Full Gate 全仓扫描。仅登记的 UTF-8 BOM 导入 fixture 例外。                                                                                                                                                                        | `scripts/ci/check-utf8-encoding.py`、`scripts/ci/check-infrastructure-utf8.py`                   |
 
 
 ### 20.4 Java 代码风格

@@ -81,8 +81,8 @@ batch_load_default_env() {
   export BATCH_TIMEZONE_DEFAULT_ZONE="${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}"
   export TZ="${TZ:-$BATCH_TIMEZONE_DEFAULT_ZONE}"
   export BATCH_LOCALE="${BATCH_LOCALE:-C.UTF-8}"
-  export LANG="${LANG:-$BATCH_LOCALE}"
-  export LC_ALL="${LC_ALL:-$BATCH_LOCALE}"
+  export LANG="$BATCH_LOCALE"
+  export LC_ALL="$BATCH_LOCALE"
   batch_configure_python_runtime
 
   export POSTGRES_PORT="${POSTGRES_PORT:-$BATCH_DEFAULT_POSTGRES_PORT}"
