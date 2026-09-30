@@ -318,7 +318,7 @@ bash scripts/ci/check-e2e-run-completeness.sh "<逗号分隔类名>" <surefire-r
 
 ## `install-upstream-modules.sh`
 
-将 E2E / staging 所需的上游 Maven 模块安装到 `~/.m2`。它保持 `batch-e2e-tests`
+将 E2E / staging / Trivy 扫描所需的上游 Maven 模块安装到 `~/.m2`。Full Gate 和 PR 的 Trivy 文件系统扫描会先运行本脚本，缓存依赖元数据并安装本地 reactor 产物，避免扫描器重复向 Maven Central 请求内部模块 POM。它保持 `batch-e2e-tests`
 排除和 `-DskipTests` 约束不变，并对 Maven Central 的临时 5xx / 传输失败使用 Maven
 强制更新、传输层重试和最多三轮退避重试，避免依赖下载瞬时失败被误报为 E2E 业务失败。
 

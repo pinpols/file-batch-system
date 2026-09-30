@@ -445,6 +445,11 @@ jobs:
           dockerfile: deploy/docker/Dockerfile.app
           failure-threshold: warning
 
+      - name: Trivy Maven 依赖缓存预热
+        shell: bash
+        # Trivy 解析 Java 传递依赖时会访问 Maven Central；先缓存外部依赖并安装本地 reactor 产物，避免重复远端 POM 请求。
+        run: bash scripts/ci/run-gate.sh FULL_TRIVY_MAVEN_CACHE "Trivy Maven 依赖缓存预热" -- bash scripts/ci/install-upstream-modules.sh
+
       - name: Repository security scan — Trivy fs
         uses: aquasecurity/trivy-action@v0.36.0
         with:
