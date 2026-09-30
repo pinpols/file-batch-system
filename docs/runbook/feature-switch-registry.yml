@@ -216,6 +216,38 @@ switches:
     composeRequired: true
     helmRequired: true
 
+  - key: batch.console.ai.persistence
+    module: console-api
+    env:
+      - BATCH_CONSOLE_AI_PERSISTENCE_ENABLED
+      - BATCH_CONSOLE_AI_PERSISTENCE_RETENTION_DAYS
+      - BATCH_CONSOLE_AI_PERSISTENCE_MAX_HISTORY_TURNS
+      - BATCH_CONSOLE_AI_PERSISTENCE_MAX_HISTORY_CHARS
+      - BATCH_CONSOLE_AI_PERSISTENCE_PAGE_SIZE
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.console.ai.cost
+    module: console-api
+    env:
+      - BATCH_CONSOLE_AI_COST_MONTHLY_BUDGET_USD
+      - BATCH_CONSOLE_AI_COST_RESERVATION_MARGIN
+      - BATCH_CONSOLE_AI_COST_ANTHROPIC_INPUT_USD_PER_MILLION_TOKENS
+      - BATCH_CONSOLE_AI_COST_ANTHROPIC_OUTPUT_USD_PER_MILLION_TOKENS
+      - BATCH_CONSOLE_AI_COST_OPENAI_INPUT_USD_PER_MILLION_TOKENS
+      - BATCH_CONSOLE_AI_COST_OPENAI_OUTPUT_USD_PER_MILLION_TOKENS
+      - BATCH_CONSOLE_AI_COST_OPENAI_COMPATIBLE_INPUT_USD_PER_MILLION_TOKENS
+      - BATCH_CONSOLE_AI_COST_OPENAI_COMPATIBLE_OUTPUT_USD_PER_MILLION_TOKENS
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.console.ai.audit-preview-enabled
+    module: console-api
+    env:
+      - BATCH_CONSOLE_AI_AUDIT_PREVIEW_ENABLED
+    composeRequired: true
+    helmRequired: true
+
   - key: spring.threads.virtual.enabled
     module: console-api
     env:

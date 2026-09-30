@@ -18,6 +18,8 @@
         <result column="refusal_reason" property="refusalReason"/>
         <result column="prompt_tokens" property="promptTokens"/>
         <result column="completion_tokens" property="completionTokens"/>
+        <result column="estimated_cost_usd" property="estimatedCostUsd"/>
+        <result column="cost_status" property="costStatus"/>
         <result column="created_at" property="createdAt"/>
     </resultMap>
 
@@ -27,12 +29,12 @@
             tenant_id, request_id, trace_id, session_id, operator_id,
             prompt_category, prompt_decision, model_name,
             prompt_hash, prompt_preview, response_hash, response_preview, refusal_reason,
-            prompt_tokens, completion_tokens
+            prompt_tokens, completion_tokens, estimated_cost_usd, cost_status
         ) values (
             #{tenantId}, #{requestId}, #{traceId}, #{sessionId}, #{operatorId},
             #{promptCategory}, #{promptDecision}, #{modelName},
             #{promptHash}, #{promptPreview}, #{responseHash}, #{responsePreview}, #{refusalReason},
-            #{promptTokens}, #{completionTokens}
+            #{promptTokens}, #{completionTokens}, #{estimatedCostUsd}, #{costStatus}
         )
     </insert>
 
@@ -51,6 +53,8 @@
                refusal_reason,
                prompt_tokens,
                completion_tokens,
+               estimated_cost_usd,
+               cost_status,
                created_at
         from batch.console_ai_audit_log
         where tenant_id = #{tenantId}

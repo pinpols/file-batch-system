@@ -2,10 +2,12 @@ openapi: 3.1.0
 info:
   title: Batch Platform Console API
   version: 0.1.0
-  x-last-updated: "2026-09-27"
+  x-last-updated: "2026-09-30"
   x-changelog:
     - date: "2026-09-27"
       summary: "资源队列、批次窗口、业务日历、配额策略、告警路由和 Pipeline 定义统一改用 PATCH /{id}/enabled 显式状态接口，并删除旧 POST /{id}/toggle。"
+    - date: "2026-09-30"
+      summary: "Console AI 增加版本化最小页面上下文、会话列表/历史/删除、租户月度估算费用摘要；聊天请求/审计响应增加成本与计价状态字段。"
     - date: "2026-08-27"
       summary: "新增租户配置治理接口：POST /api/console/config/tenant-copy 支持 jobCodes dependency-aware 最小复制包；新增 /tenant-copy/preview、/tenant-overlay/preview、/tenant-config-matrix，支持 base package + tenant overlay 差异包、跨租户 job 配置矩阵。"
     - date: "2026-08-21"
@@ -3489,6 +3491,99 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseAiChatResponse'
+  /api/console/ai/conversations:
+    get:
+      tags: [AI]
+      summary: List the current user's AI conversations
+      operationId: listConsoleAiConversations
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Owner-scoped conversation list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleAiConversationList'
+  /api/console/ai/conversations/{conversationId}/turns:
+    get:
+      tags: [AI]
+      summary: List turns for a conversation owned by the current user
+      operationId: listConsoleAiConversationTurns
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 128
+        - name: beforeTurnNo
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Conversation history, newest first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleAiTurnList'
+  /api/console/ai/conversations/{conversationId}:
+    delete:
+      tags: [AI]
+      summary: Delete a conversation owned by the current user
+      operationId: deleteConsoleAiConversation
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 128
+      responses:
+        '200':
+          description: Conversation deletion result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/ai/cost-summary:
+    get:
+      tags: [AI]
+      summary: Get this tenant's estimated AI usage for a UTC calendar month
+      operationId: getConsoleAiCostSummary
+      parameters:
+        - name: month
+          in: query
+          required: false
+          description: UTC billing month in YYYY-MM format; defaults to current UTC month.
+          schema:
+            type: string
+          pattern: '^\d{4}-\d{2}$'
+      responses:
+        '200':
+          description: Estimated token usage and monthly budget state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleAiCostSummary'
   /api/console/queries/audits:
     get:
       tags: [Queries]
@@ -11860,6 +11955,31 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/AiChatResponse'
+    CommonResponseConsoleAiConversationList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleAiConversationView'
+    CommonResponseConsoleAiTurnList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleAiTurnView'
+    CommonResponseConsoleAiCostSummary:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleAiCostSummary'
     CommonResponseFileArrivalGroupList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -12647,15 +12767,46 @@ components:
           description: 租户 id;可由请求体或请求头携带(两者都给时须一致)。
         sessionId:
           type: string
-          description: 会话 id,多轮对话续接时回传上一轮响应的 sessionId;不传则后端以本次 requestId 起新会话。
+          maxLength: 128
+          description: 会话 id；服务端持久化开启时续接需由同一租户和操作者所有。
+        contextVersion:
+          type: string
+          default: v1
+          enum: [v1]
+          description: 页面上下文 schema 版本；仅支持 v1。
         prompt:
           type: string
           description: 用户问题(必填,@NotBlank)。
         context:
           type: object
-          additionalProperties: true
-          description: 可选的附加上下文,任意 JSON 键值对(Map<String,Object>)。
+          additionalProperties: false
+          properties:
+            pageType:
+              type: string
+              maxLength: 64
+            objectType:
+              type: string
+              maxLength: 64
+            objectId:
+              type: string
+              maxLength: 128
+          description: v1 兼容字段；只允许 pageType、objectType、objectId 字符串。
+        pageContext:
+          $ref: '#/components/schemas/AiPageContextRequest'
       required: [prompt]
+    AiPageContextRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        pageType:
+          type: string
+          maxLength: 64
+        objectType:
+          type: string
+          maxLength: 64
+        objectId:
+          type: string
+          maxLength: 128
     AiChatResponse:
       type: object
       properties:
@@ -12718,10 +12869,113 @@ components:
           type: string
         refusalReason:
           type: string
+        promptTokens:
+          type: integer
+          format: int32
+          nullable: true
+        completionTokens:
+          type: integer
+          format: int32
+          nullable: true
+        estimatedCostUsd:
+          type: number
+          format: double
+          nullable: true
+        costStatus:
+          type: string
+          enum: [UNPRICED, PRICED, RESERVED]
         createdAt:
           type: string
           format: date-time
-      required: [id, tenantId, requestId, traceId, sessionId, operatorId, promptCategory, promptDecision, modelName, promptPreview, responsePreview, refusalReason, createdAt]
+      required: [id, tenantId, requestId, traceId, sessionId, operatorId, promptCategory, promptDecision, modelName, promptPreview, responsePreview, refusalReason, promptTokens, completionTokens, estimatedCostUsd, costStatus, createdAt]
+    ConsoleAiConversationView:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        contextVersion:
+          type: string
+          enum: [v1]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+      required: [id, title, contextVersion, createdAt, updatedAt, expiresAt]
+    ConsoleAiTurnView:
+      type: object
+      properties:
+        turnNo:
+          type: integer
+          format: int64
+        contextVersion:
+          type: string
+          enum: [v1]
+        prompt:
+          type: string
+        response:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [IN_PROGRESS, COMPLETE, FAILED, REJECTED]
+        promptDecision:
+          type: string
+          nullable: true
+        modelName:
+          type: string
+          nullable: true
+        promptTokens:
+          type: integer
+          format: int32
+          nullable: true
+        completionTokens:
+          type: integer
+          format: int32
+          nullable: true
+        estimatedCostUsd:
+          type: number
+          format: double
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required: [turnNo, contextVersion, prompt, response, status, promptDecision, modelName, promptTokens, completionTokens, estimatedCostUsd, createdAt, completedAt]
+    ConsoleAiCostSummary:
+      type: object
+      properties:
+        month:
+          type: string
+          pattern: '^\d{4}-\d{2}$'
+        requestCount:
+          type: integer
+          format: int64
+        promptTokens:
+          type: integer
+          format: int64
+        completionTokens:
+          type: integer
+          format: int64
+        estimatedCostUsd:
+          type: number
+          format: double
+        reservedCostUsd:
+          type: number
+          format: double
+        monthlyBudgetUsd:
+          type: number
+          format: double
+      required: [month, requestCount, promptTokens, completionTokens, estimatedCostUsd, reservedCostUsd, monthlyBudgetUsd]
     ConsoleAlertEventResponse:
       type: object
       properties:

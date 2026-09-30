@@ -1,9 +1,14 @@
 package io.github.pinpols.batch.console.config;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
+import jakarta.annotation.PostConstruct;
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -78,10 +83,7 @@ public class ConsoleAiProperties {
   private List<String> allowedAuthorities =
       new ArrayList<>(List.of(ConsoleRoles.ADMIN, ConsoleRoles.AUDITOR));
 
-  /**
-   * 域内关键词。Prompt 包含至少一个 → 判为 in-scope（PLATFORM/WORKFLOW/FILE_GOVERNANCE/OPERATIONS）；都不含 →
-   * REJECTED_SCOPE。
-   */
+  /** 用于已识别平台问题的分类提示；单个通用词不能作为范围放行条件。 */
   private List<String> domainKeywords = new ArrayList<>(List.of(
       "batch",
       "workflow",
@@ -150,8 +152,58 @@ public class ConsoleAiProperties {
   /** 检索增强(RAG)配置:把系统自身语料向量化后注入提示词,让模型基于事实作答。 */
   private Rag rag = new Rag();
 
+  /** 服务端会话持久化；默认关闭，开启前必须配置正数保留期。 */
+  private Persistence persistence = new Persistence();
+
+  /** Provider token 单价与每租户月预算；预算为 0 时不执行费用预算，但已配置单价仍写入估算。 */
+  private Cost cost = new Cost();
+
+  /** 审计默认只存哈希和元数据；preview 仅在显式授权后开启。 */
+  private boolean auditPreviewEnabled = false;
+
   /** 只读诊断工具(function-calling):让模型按需拉取实时 job 状态 / 日志 / 失败实例。 */
   private Tools tools = new Tools();
+
+  @PostConstruct
+  void validateGovernanceSettings() {
+    if (persistence.isEnabled()
+        && (persistence.getRetentionDays() < 1 || persistence.getRetentionDays() > 3650)) {
+      throw new IllegalStateException("AI conversation retention must be between 1 and 3650 days");
+    }
+    if (persistence.getMaxHistoryTurns() < 1
+        || persistence.getMaxHistoryChars() < 1
+        || persistence.getConversationPageSize() < 1) {
+      throw new IllegalStateException("AI conversation history and page limits must be positive");
+    }
+    if (EmptyChecks.isNull(cost.getMonthlyBudgetUsd())
+        || cost.getMonthlyBudgetUsd().signum() < 0
+        || EmptyChecks.isNull(cost.getReservationMargin())
+        || cost.getReservationMargin().compareTo(BigDecimal.ONE) < 0) {
+      throw new IllegalStateException(
+          "AI cost budget must be nonnegative and reservation margin at least one");
+    }
+    boolean hasUsableRate = cost.getProviderRates().values().stream()
+        .anyMatch(rate -> EmptyChecks.isNotNull(rate)
+            && EmptyChecks.isNotNull(rate.getInputUsdPerMillionTokens())
+            && EmptyChecks.isNotNull(rate.getOutputUsdPerMillionTokens())
+            && (rate.getInputUsdPerMillionTokens().signum() > 0
+                || rate.getOutputUsdPerMillionTokens().signum() > 0));
+    if (cost.getMonthlyBudgetUsd().signum() > 0 && !hasUsableRate) {
+      throw new IllegalStateException("AI monthly budget requires at least one provider rate");
+    }
+    cost.getProviderRates().forEach((providerName, rate) -> {
+      if (EmptyChecks.isNull(providerName)
+          || EmptyChecks.isBlank(providerName)
+          || EmptyChecks.isNull(rate)
+          || EmptyChecks.isNull(rate.getInputUsdPerMillionTokens())
+          || EmptyChecks.isNull(rate.getOutputUsdPerMillionTokens())
+          || rate.getInputUsdPerMillionTokens().signum() < 0
+          || rate.getOutputUsdPerMillionTokens().signum() < 0) {
+        throw new IllegalStateException(
+            "AI provider rates require names and nonnegative input/output prices");
+      }
+    });
+  }
 
   /** 支持的聊天模型提供方。使用枚举绑定确保拼写错误在应用启动期失败。 */
   public enum Provider {
@@ -209,5 +261,39 @@ public class ConsoleAiProperties {
 
     /** 知识库语料位置(Spring Resource pattern)。默认内置知识包;可追加挂载的 docs 目录。 */
     private List<String> locations = new ArrayList<>(List.of("classpath:ai-knowledge/*.md"));
+  }
+
+  @Data
+  public static class Persistence {
+
+    private boolean enabled = false;
+
+    /** 启用会话存储时必须显式设置为 1..3650 天。 */
+    private int retentionDays = 0;
+
+    private int maxHistoryTurns = 12;
+
+    private int maxHistoryChars = 12000;
+
+    private int conversationPageSize = 20;
+  }
+
+  @Data
+  public static class Cost {
+
+    private BigDecimal monthlyBudgetUsd = BigDecimal.ZERO;
+
+    /** 预算预留系数，按提示词 UTF-8 字节数和最大输出令牌数估算。 */
+    private BigDecimal reservationMargin = new BigDecimal("1.25");
+
+    private Map<String, ProviderRate> providerRates = new LinkedHashMap<>();
+  }
+
+  @Data
+  public static class ProviderRate {
+
+    private BigDecimal inputUsdPerMillionTokens;
+
+    private BigDecimal outputUsdPerMillionTokens;
   }
 }

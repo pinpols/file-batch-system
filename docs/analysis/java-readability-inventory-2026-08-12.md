@@ -7,16 +7,16 @@
 
 | 指标 | 数量 |
 |---|---:|
-| 生产 Java 源文件 | 2326 |
+| 生产 Java 源文件 | 2335 |
 | CGLIB 自注入类 | 0 |
-| `Map<String, Object>` 出现次数 | 2084 |
+| `Map<String, Object>` 出现次数 | 2087 |
 | 含 Map 的源文件 | 447 |
 | public Map 契约候选 | 65 |
 | public Map 契约候选文件 | 37 |
-| `@SuppressWarnings` | 232 |
-| 含 suppression 的源文件 | 172 |
+| `@SuppressWarnings` | 231 |
+| 含 suppression 的源文件 | 171 |
 | `@Configuration` 类 | 47 |
-| 大于等于 700 行的源文件 | 10 |
+| 大于等于 700 行的源文件 | 11 |
 | `PMD.ExcessiveParameterList` 显式例外 | 35 |
 
 ## 模块源文件
@@ -24,7 +24,7 @@
 | 模块 | 生产 Java 文件 |
 |---|---:|
 | `batch-common` | 320 |
-| `batch-console-api` | 928 |
+| `batch-console-api` | 937 |
 | `batch-orchestrator` | 538 |
 | `batch-trigger` | 70 |
 | `batch-worker` | 370 |
@@ -45,6 +45,7 @@
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java` | 869 |
 | `batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/sql/SqlTransformComputePlugin.java` | 805 |
 | `batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/RemoteFilesystemDispatchSupport.java` | 783 |
+| `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | 772 |
 | `batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanner.java` | 768 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowGraphValidator.java` | 741 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java` | 740 |

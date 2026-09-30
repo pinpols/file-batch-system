@@ -27,5 +27,9 @@ public class ConsoleAiAuditLogEntity {
   /** 本次调用生成回复消耗的 token 数(成本可观测；仅成功调用有值,拒绝/降级为 null)。 */
   private Integer completionTokens;
 
+  private java.math.BigDecimal estimatedCostUsd;
+
+  private String costStatus;
+
   private Instant createdAt;
 }
