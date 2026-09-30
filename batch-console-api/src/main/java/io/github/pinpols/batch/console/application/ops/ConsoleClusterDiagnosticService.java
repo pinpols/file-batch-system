@@ -36,10 +36,8 @@ public class ConsoleClusterDiagnosticService {
   private static final long WORKER_STALE_SECONDS = 120L;
   private static final long OUTBOX_STALE_SECONDS = 120L;
   private static final long TASK_HEARTBEAT_STALE_SECONDS = 120L;
-  private static final Set<String> ACTIVE_INSTANCE_STATUSES =
-      Set.of("CREATED", "WAITING", "READY", "RUNNING", "PAUSED", "PARTIAL_FAILED");
-  private static final Set<String> TERMINAL_INSTANCE_STATUSES =
-      Set.of("SUCCESS", "FAILED", "CANCELLED", "TERMINATED", "SUCCESS_DRY_RUN", "FAILED_DRY_RUN");
+  private static final Set<String> ACTIVE_INSTANCE_STATUSES = JobInstanceStatus.activeCodes();
+  private static final Set<String> TERMINAL_INSTANCE_STATUSES = JobInstanceStatus.terminalCodes();
   private static final Set<String> ACTIVE_CHILD_STATUSES =
       Set.of("CREATED", "WAITING", "READY", "RUNNING", "RETRYING");
   private static final Set<String> ACTIVE_OUTBOX_STATUSES =

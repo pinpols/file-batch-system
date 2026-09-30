@@ -174,6 +174,27 @@ class ConsoleClusterDiagnosticServiceTest {
 
   @Test
   @SuppressWarnings("unchecked")
+  void shouldTreatPartialFailureAsTerminalWhenDiagnosingActiveChildren() {
+    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+    Map<String, Object> instance = instance(9L, JobInstanceStatus.PARTIAL_FAILED.code());
+    when(diagnosticMapper.selectJobInstanceSummary("tenant-a", 9L)).thenReturn(instance);
+    when(diagnosticMapper.partitionStatusCounts("tenant-a", 9L))
+        .thenReturn(List.of(Map.of("status", "RUNNING", "count", 1L)));
+    when(diagnosticMapper.taskStatusCounts("tenant-a", 9L)).thenReturn(List.of());
+    when(diagnosticMapper.outboxStatusCountsForInstance("tenant-a", 9L)).thenReturn(List.of());
+    when(diagnosticMapper.activeTaskWorkerIssues("tenant-a", 9L, 120L)).thenReturn(List.of());
+    when(diagnosticMapper.countOnlineWorkersForGroup("tenant-a", "IMPORT")).thenReturn(0L);
+
+    var result = service.instanceDiagnosis("tenant-a", 9L);
+
+    assertThat(result.findings())
+        .extracting(finding -> finding.reasonCode())
+        .contains("TERMINAL_INSTANCE_HAS_ACTIVE_CHILDREN")
+        .doesNotContain("NO_ONLINE_WORKER_FOR_GROUP", "INSTANCE_HAS_NO_CHILDREN");
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
   void shouldDiagnoseWorkerAndOutboxIssues() {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
     Map<String, Object> instance = instance(8L, JobInstanceStatus.RUNNING.code());
