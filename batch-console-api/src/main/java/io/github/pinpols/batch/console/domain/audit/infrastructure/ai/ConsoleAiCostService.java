@@ -57,6 +57,8 @@ public class ConsoleAiCostService {
     BigDecimal monthlyBudget = config.getMonthlyBudgetUsd();
     LocalDate billingMonth = YearMonth.now(ZoneOffset.UTC).atDay(1);
     mapper.setTenantContext(tenantId);
+    mapper.releaseStaleReservations(
+        tenantId, billingMonth, OffsetDateTime.now(ZoneOffset.UTC).minusHours(2));
     if (monthlyBudget.signum() > 0) {
       Boolean reserved = mapper.reserve(tenantId, billingMonth, cap, monthlyBudget);
       if (!Boolean.TRUE.equals(reserved)) {
@@ -105,8 +107,6 @@ public class ConsoleAiCostService {
   public CostSummary summary(String tenantId, YearMonth month) {
     mapper.setTenantContext(tenantId);
     LocalDate billingMonth = month.atDay(1);
-    mapper.releaseStaleReservations(
-        tenantId, billingMonth, OffsetDateTime.now(ZoneOffset.UTC).minusHours(2));
     ConsoleAiMonthlyUsageEntity usage = mapper.find(tenantId, billingMonth);
     if (EmptyChecks.isNull(usage)) {
       return new CostSummary(

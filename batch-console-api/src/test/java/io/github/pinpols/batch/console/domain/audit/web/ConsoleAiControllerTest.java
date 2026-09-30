@@ -15,8 +15,6 @@ import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiApplicationService;
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiChatResponse;
-import io.github.pinpols.batch.console.domain.audit.infrastructure.ai.ConsoleAiConversationService;
-import io.github.pinpols.batch.console.domain.audit.infrastructure.ai.ConsoleAiCostService;
 import io.github.pinpols.batch.console.domain.audit.service.ConsoleAiAuthorizationService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
@@ -50,8 +48,6 @@ class ConsoleAiControllerTest {
     mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleAiController(
             applicationService,
             responseFactory,
-            mock(ConsoleAiConversationService.class),
-            mock(ConsoleAiCostService.class),
             mock(ConsoleAiAuthorizationService.class),
             requestMetadataResolver))
         .setControllerAdvice(exceptionHandler)

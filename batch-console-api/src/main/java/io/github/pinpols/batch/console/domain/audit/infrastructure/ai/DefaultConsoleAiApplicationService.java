@@ -40,6 +40,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.time.YearMonth;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
@@ -263,6 +264,60 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         .snippets(snippets)
         .persistedTurn(persistedTurn)
         .build());
+  }
+
+  @Override
+  public List<ConsoleAiApplicationService.ConversationSummary> conversations(
+      String tenantId, String ownerUserId, int limit) {
+    return conversationService.list(tenantId, ownerUserId, limit).stream()
+        .map(view -> new ConsoleAiApplicationService.ConversationSummary(
+            view.id(),
+            view.title(),
+            view.contextVersion(),
+            view.createdAt(),
+            view.updatedAt(),
+            view.expiresAt()))
+        .toList();
+  }
+
+  @Override
+  public List<ConsoleAiApplicationService.TurnSummary> turns(
+      String tenantId, String ownerUserId, String conversationId, Long beforeTurnNo, int limit) {
+    return conversationService
+        .turns(tenantId, ownerUserId, conversationId, beforeTurnNo, limit)
+        .stream()
+        .map(view -> new ConsoleAiApplicationService.TurnSummary(
+            view.turnNo(),
+            view.contextVersion(),
+            view.prompt(),
+            view.response(),
+            view.status(),
+            view.promptDecision(),
+            view.modelName(),
+            view.promptTokens(),
+            view.completionTokens(),
+            view.estimatedCostUsd(),
+            view.createdAt(),
+            view.completedAt()))
+        .toList();
+  }
+
+  @Override
+  public void deleteConversation(String tenantId, String ownerUserId, String conversationId) {
+    conversationService.delete(tenantId, ownerUserId, conversationId);
+  }
+
+  @Override
+  public ConsoleAiApplicationService.AiCostSummary costSummary(String tenantId, YearMonth month) {
+    ConsoleAiCostService.CostSummary summary = costService.summary(tenantId, month);
+    return new ConsoleAiApplicationService.AiCostSummary(
+        summary.month(),
+        summary.requestCount(),
+        summary.promptTokens(),
+        summary.completionTokens(),
+        summary.estimatedCostUsd(),
+        summary.reservedCostUsd(),
+        summary.monthlyBudgetUsd());
   }
 
   private AiChatResponse completeApprovedChat(ApprovedChatExecution execution) {

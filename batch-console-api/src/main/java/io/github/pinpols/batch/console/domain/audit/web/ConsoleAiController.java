@@ -8,8 +8,6 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.application.contract.request.auth.AiChatRequest;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiApplicationService;
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiChatResponse;
-import io.github.pinpols.batch.console.domain.audit.infrastructure.ai.ConsoleAiConversationService;
-import io.github.pinpols.batch.console.domain.audit.infrastructure.ai.ConsoleAiCostService;
 import io.github.pinpols.batch.console.domain.audit.service.ConsoleAiAuthorizationService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
@@ -42,8 +40,6 @@ public class ConsoleAiController {
 
   private final ConsoleAiApplicationService applicationService;
   private final ConsoleResponseFactory responseFactory;
-  private final ConsoleAiConversationService conversationService;
-  private final ConsoleAiCostService costService;
   private final ConsoleAiAuthorizationService authorizationService;
   private final ConsoleRequestMetadataResolver metadataResolver;
 
@@ -56,22 +52,22 @@ public class ConsoleAiController {
   }
 
   @GetMapping("/conversations")
-  public CommonResponse<List<ConsoleAiConversationService.ConversationView>> conversations(
+  public CommonResponse<List<ConsoleAiApplicationService.ConversationSummary>> conversations(
       @RequestParam(defaultValue = "20") int limit) {
     authorizationService.assertAllowed();
     ConsoleRequestMetadata metadata = metadataResolver.current();
     return responseFactory.success(
-        conversationService.list(metadata.tenantId(), metadata.operatorId(), limit));
+        applicationService.conversations(metadata.tenantId(), metadata.operatorId(), limit));
   }
 
   @GetMapping("/conversations/{conversationId}/turns")
-  public CommonResponse<List<ConsoleAiConversationService.TurnView>> turns(
+  public CommonResponse<List<ConsoleAiApplicationService.TurnSummary>> turns(
       @PathVariable String conversationId,
       @RequestParam(required = false) Long beforeTurnNo,
       @RequestParam(defaultValue = "50") int limit) {
     authorizationService.assertAllowed();
     ConsoleRequestMetadata metadata = metadataResolver.current();
-    return responseFactory.success(conversationService.turns(
+    return responseFactory.success(applicationService.turns(
         metadata.tenantId(), metadata.operatorId(), conversationId, beforeTurnNo, limit));
   }
 
@@ -79,12 +75,13 @@ public class ConsoleAiController {
   public CommonResponse<Void> deleteConversation(@PathVariable String conversationId) {
     authorizationService.assertAllowed();
     ConsoleRequestMetadata metadata = metadataResolver.current();
-    conversationService.delete(metadata.tenantId(), metadata.operatorId(), conversationId);
+    applicationService.deleteConversation(
+        metadata.tenantId(), metadata.operatorId(), conversationId);
     return responseFactory.success(null);
   }
 
   @GetMapping("/cost-summary")
-  public CommonResponse<ConsoleAiCostService.CostSummary> costSummary(
+  public CommonResponse<ConsoleAiApplicationService.AiCostSummary> costSummary(
       @RequestParam(required = false) String month) {
     authorizationService.assertAllowed();
     YearMonth billingMonth;
@@ -95,6 +92,6 @@ public class ConsoleAiController {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument_detail");
     }
     return responseFactory.success(
-        costService.summary(metadataResolver.current().tenantId(), billingMonth));
+        applicationService.costSummary(metadataResolver.current().tenantId(), billingMonth));
   }
 }

@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -9,6 +10,8 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiMonthlyUsageMapper;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
@@ -55,6 +58,11 @@ class ConsoleAiCostServiceTest {
     assertThat(reservation.budgetReserved()).isTrue();
     assertThat(reservation.reservedAmount()).isPositive();
     verify(mapper).setTenantContext("tenant-a");
+    verify(mapper)
+        .releaseStaleReservations(
+            org.mockito.ArgumentMatchers.eq("tenant-a"),
+            org.mockito.ArgumentMatchers.any(LocalDate.class),
+            org.mockito.ArgumentMatchers.any(OffsetDateTime.class));
   }
 
   @Test
@@ -105,5 +113,20 @@ class ConsoleAiCostServiceTest {
   void shouldRequireRatesForEveryConfiguredProvider() {
     assertThatThrownBy(() -> service.validateProviders(List.of("test-provider", "unpriced")))
         .isInstanceOf(BizException.class);
+  }
+
+  @Test
+  void costSummaryMustNotMutateReservations() {
+    when(mapper.find(
+            org.mockito.ArgumentMatchers.eq("tenant-a"), org.mockito.ArgumentMatchers.any()))
+        .thenReturn(null);
+
+    service.summary("tenant-a", YearMonth.of(2026, 9));
+
+    verify(mapper, never())
+        .releaseStaleReservations(
+            org.mockito.ArgumentMatchers.anyString(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any());
   }
 }
