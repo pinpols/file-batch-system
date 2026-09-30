@@ -428,6 +428,8 @@ SELECT owner_type, owner_id, peak_borrowed, updated_at
 
 > ⚠️ **sim/本地遇到问题(2026-06-14)**:`BATCH_SECURITY_BYPASS_MODE=false` 时 CSRF(double-submit cookie)对**所有写请求**生效;sim 的 curl 脚本不带 `X-XSRF-TOKEN` → **全部 403「访问被拒绝」**(租户导入/迁片/上传全挂)。`bypass-mode=true` 时 `BYPASS_MODE_CSRF_IGNORED_MATCHERS={"/**"}` 放行。**跑 sim 必须 `BATCH_SECURITY_BYPASS_MODE=true`**(已纳入 `sim-harness.sh preflight` 检查项)。FE/真实部署走正常 CSRF(axios 回传 XSRF-TOKEN),不受影响。
 
+Console 使用无状态 JWT：每次认证重建不应按有状态会话的“新登录”反复删除 `XSRF-TOKEN`。安全模式验收需连续调用已认证 GET，确认 Cookie 不变为空；随后对非豁免写路径分别验证缺少 `X-XSRF-TOKEN` 返回 403、匹配 Cookie 的头通过 CSRF 校验。登录和登出属于明确豁免路径，不能用于该对照。
+
 ## 4. 翻开关的统一流程
 
 无论开哪个开关，按以下五步：
