@@ -25,6 +25,10 @@
 - 审批写操作收口为平台管理员和租户管理员，审计员维持跨租户只读职责。
 - 本地测试并行执行改为显式 `ALLOW_PARALLEL_TESTS=1` opt-in，并要求生产 Docker Compose overlay 显式传入已验证 `IMAGE_TAG`；Sim SFTP/MockServer 容器名统一加 `batch-sim-*` 前缀且纳入版本对齐检查。
 
+### Fixed
+
+- 修正 Console 使用率汇总 MyBatis 对 primitive `long` record 参数的构造映射，并新增真实 PostgreSQL 集成测试覆盖并发累加、租户 RLS 和事务内租户上下文。
+
 > 当前唯一 GA tag 为 `v1.0.0`（2026-09-02）。历史 `1.1.0` / `1.2.0` 仅为 GA 前开发里程碑，未形成 release tag，已在下文明确标注，避免被误认为正式发布。
 
 ### Added
