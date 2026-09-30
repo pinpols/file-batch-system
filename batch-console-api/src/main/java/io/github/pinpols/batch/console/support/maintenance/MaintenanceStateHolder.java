@@ -64,6 +64,7 @@ public class MaintenanceStateHolder {
                 ? List.of()
                 : properties.getAffectedServices()),
         0L,
+        Instant.now(),
         false));
     refreshFromStore();
     refreshExecutor.scheduleWithFixedDelay(this::refreshFromStore, 5, 5, TimeUnit.SECONDS);
@@ -89,6 +90,7 @@ public class MaintenanceStateHolder {
         next.etaAt(),
         normalizeServices(next.affectedServices()),
         state.get().version(),
+        state.get().updatedAt(),
         true);
     MaintenanceState current = state.get();
     String servicesJson = writeServices(normalized.affectedServices());
@@ -111,6 +113,7 @@ public class MaintenanceStateHolder {
         normalized.etaAt(),
         normalized.affectedServices(),
         current.version() + 1,
+        Instant.now(),
         true);
     state.set(applied);
     return applied;
@@ -141,6 +144,7 @@ public class MaintenanceStateHolder {
           entity.getEtaAt(),
           normalizeServices(services),
           entity.getVersion(),
+          entity.getUpdatedAt(),
           true));
     } catch (Exception ex) {
       state.updateAndGet(current -> current.withSharedStateAvailable(false));
@@ -171,6 +175,7 @@ public class MaintenanceStateHolder {
    * @param etaAt 预计恢复时间(ISO-8601,可空)
    * @param affectedServices 受影响子系统 code 列表(前端按 service 展示,空 list=整站)
    * @param version 共享状态版本,用于乐观 CAS
+   * @param updatedAt 最近一次共享状态更新时间
    * @param sharedStateAvailable 当前副本是否已确认数据库共享状态
    */
   public record MaintenanceState(
@@ -180,6 +185,7 @@ public class MaintenanceStateHolder {
       Instant etaAt,
       List<String> affectedServices,
       long version,
+      Instant updatedAt,
       boolean sharedStateAvailable) {
     public MaintenanceState(
         boolean enabled,
@@ -187,16 +193,16 @@ public class MaintenanceStateHolder {
         String message,
         Instant etaAt,
         List<String> affectedServices) {
-      this(enabled, readOnly, message, etaAt, affectedServices, 0L, false);
+      this(enabled, readOnly, message, etaAt, affectedServices, 0L, null, false);
     }
 
     public static MaintenanceState disabled() {
-      return new MaintenanceState(false, false, null, null, List.of(), 0L, false);
+      return new MaintenanceState(false, false, null, null, List.of(), 0L, null, false);
     }
 
     private MaintenanceState withSharedStateAvailable(boolean available) {
       return new MaintenanceState(
-          enabled, readOnly, message, etaAt, affectedServices, version, available);
+          enabled, readOnly, message, etaAt, affectedServices, version, updatedAt, available);
     }
   }
 }

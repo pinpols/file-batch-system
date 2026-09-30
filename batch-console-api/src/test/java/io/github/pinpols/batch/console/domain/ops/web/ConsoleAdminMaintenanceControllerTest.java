@@ -102,13 +102,15 @@ class ConsoleAdminMaintenanceControllerTest {
         .andExpect(jsonPath("$.data.readOnly").value(true))
         .andExpect(jsonPath("$.data.message").value("DB 灰度中"))
         .andExpect(jsonPath("$.data.affectedServices[0]").value("job-schedule"))
-        .andExpect(jsonPath("$.data.affectedServices[1]").value("file-download"));
+        .andExpect(jsonPath("$.data.affectedServices[1]").value("file-download"))
+        .andExpect(jsonPath("$.data.updatedAt").isNotEmpty());
     // holder 中持有的状态已替换
     MaintenanceState current = stateHolder.current();
     assertThat(current.enabled()).isTrue();
     assertThat(current.readOnly()).isTrue();
     assertThat(current.message()).isEqualTo("DB 灰度中");
     assertThat(current.affectedServices()).containsExactly("job-schedule", "file-download");
+    assertThat(current.updatedAt()).isNotNull();
   }
 
   @Test

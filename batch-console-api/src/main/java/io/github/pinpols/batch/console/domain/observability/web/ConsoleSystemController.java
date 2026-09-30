@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.observability.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.application.contract.response.CronPreviewResponse;
 import io.github.pinpols.batch.console.application.contract.response.MaintenanceStatusResponse;
 import io.github.pinpols.batch.console.domain.observability.application.CronPreviewService;
@@ -36,7 +37,8 @@ public class ConsoleSystemController {
         state.message(),
         state.etaAt() != null ? state.etaAt().toString() : null,
         state.affectedServices(),
-        state.version());
+        state.version(),
+        EmptyChecks.isNull(state.updatedAt()) ? null : state.updatedAt().toString());
     return CommonResponse.success(response);
   }
 

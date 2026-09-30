@@ -84,7 +84,8 @@ class ConsoleSystemControllerTest {
         .andExpect(jsonPath("$.data.enabled").value(true))
         .andExpect(jsonPath("$.data.readOnly").value(true))
         .andExpect(jsonPath("$.data.message").value("DB 灰度中"))
-        .andExpect(jsonPath("$.data.affectedServices[0]").value("job-schedule"));
+        .andExpect(jsonPath("$.data.affectedServices[0]").value("job-schedule"))
+        .andExpect(jsonPath("$.data.updatedAt").isNotEmpty());
   }
 
   @Test

@@ -10359,7 +10359,7 @@ components:
               $ref: '#/components/schemas/CronPreview'
     MaintenanceStatus:
       type: object
-      required: [enabled, readOnly, version]
+      required: [enabled, readOnly, version, updatedAt]
       properties:
         enabled:
           type: boolean
@@ -10386,6 +10386,11 @@ components:
           type: integer
           format: int64
           description: Monotonic shared-state version used for replica convergence and CAS.
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last shared-state update timestamp.
     ConsoleUsageSummaryResponse:
       type: object
       required: [statDate, tenantId, source, metricCode, pageCode, appVersion, eventCount, successCount, failureCount]
