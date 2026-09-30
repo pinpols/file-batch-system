@@ -2,6 +2,8 @@ package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.model.PageResponse;
+import io.github.pinpols.batch.common.page.CursorCodec;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
@@ -21,6 +23,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
@@ -56,14 +59,16 @@ public class ConsoleAiConversationService {
     }
     mapper.setTenantContext(tenantId);
 
-    String conversationId = Texts.hasText(requestedConversationId)
-        ? requestedConversationId
-        : UUID.randomUUID().toString();
+    boolean creating = !Texts.hasText(requestedConversationId);
+    String conversationId = creating ? UUID.randomUUID().toString() : requestedConversationId;
     OffsetDateTime now = nowUtc();
     OffsetDateTime expiresAt =
         now.plus(Duration.ofDays(properties.getPersistence().getRetentionDays()));
-    ConsoleAiConversationEntity conversation = mapper.selectForUpdate(conversationId);
+    ConsoleAiConversationEntity conversation = mapper.selectForUpdate(tenantId, conversationId);
     if (EmptyChecks.isNull(conversation)) {
+      if (!creating) {
+        throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail");
+      }
       conversation = new ConsoleAiConversationEntity();
       conversation.setId(conversationId);
       conversation.setTenantId(tenantId);
@@ -73,16 +78,19 @@ public class ConsoleAiConversationService {
       conversation.setExpiresAt(expiresAt);
       mapper.insertConversation(conversation);
     } else if (!ownerUserId.equals(conversation.getOwnerUserId())) {
-      throw BizException.of(ResultCode.FORBIDDEN, "error.common.forbidden_detail");
+      throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail");
+    } else if (!conversation.getExpiresAt().isAfter(now)) {
+      throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail");
     }
 
     List<ConsoleAiTurnEntity> history = mapper.selectRecentCompleteTurns(
-        conversationId, properties.getPersistence().getMaxHistoryTurns());
+        tenantId, conversationId, properties.getPersistence().getMaxHistoryTurns());
     Collections.reverse(history);
     history = boundHistory(history, properties.getPersistence().getMaxHistoryChars());
-    Long turnNo = mapper.allocateTurnNo(conversationId, ownerUserId, expiresAt, contextVersion);
+    Long turnNo =
+        mapper.allocateTurnNo(tenantId, conversationId, ownerUserId, expiresAt, contextVersion);
     if (EmptyChecks.isNull(turnNo)) {
-      throw BizException.of(ResultCode.FORBIDDEN, "error.common.forbidden_detail");
+      throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail");
     }
     ConsoleAiTurnEntity turn = new ConsoleAiTurnEntity();
     turn.setTenantId(tenantId);
@@ -130,7 +138,7 @@ public class ConsoleAiConversationService {
     mapper.setTenantContext(tenantId);
     int limit = Math.min(
         Math.max(requestedLimit, 1), properties.getPersistence().getConversationPageSize());
-    return mapper.selectByOwner(ownerUserId, limit).stream()
+    return mapper.selectByOwner(tenantId, ownerUserId, limit).stream()
         .map(row -> new ConversationView(
             row.getId(),
             row.getTitle(),
@@ -139,6 +147,57 @@ public class ConsoleAiConversationService {
             row.getUpdatedAt(),
             row.getExpiresAt()))
         .toList();
+  }
+
+  @Transactional(readOnly = true)
+  public PageResponse<ConversationView> page(
+      String tenantId, String ownerUserId, String cursor, int requestedLimit) {
+    requirePersistenceEnabled();
+    requireOwner(ownerUserId);
+    CursorPosition position = decodeCursor(cursor);
+    mapper.setTenantContext(tenantId);
+    int limit = Math.min(
+        Math.max(requestedLimit, 1), properties.getPersistence().getConversationPageSize());
+    List<ConsoleAiConversationEntity> rows = mapper.selectPageByOwner(
+        tenantId, ownerUserId, position.updatedAt(), position.id(), limit + 1);
+    boolean hasMore = rows.size() > limit;
+    List<ConsoleAiConversationEntity> visible = rows.subList(0, Math.min(rows.size(), limit));
+    List<ConversationView> items = visible.stream()
+        .map(row -> new ConversationView(
+            row.getId(),
+            row.getTitle(),
+            row.getContextVersion(),
+            row.getCreatedAt(),
+            row.getUpdatedAt(),
+            row.getExpiresAt()))
+        .toList();
+    String nextCursor = hasMore
+        ? CursorCodec.encode(Map.of(
+            "updatedAt", visible.get(visible.size() - 1).getUpdatedAt().toString(),
+            "id", visible.get(visible.size() - 1).getId()))
+        : null;
+    return PageResponse.cursor(items, limit, nextCursor);
+  }
+
+  private CursorPosition decodeCursor(String cursor) {
+    if (!Texts.hasText(cursor)) {
+      return new CursorPosition(null, null);
+    }
+    if (cursor.length() > 512) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument_detail");
+    }
+    Map<String, Object> values = CursorCodec.decode(cursor);
+    if (!(values.get("updatedAt") instanceof String updatedAt)
+        || !(values.get("id") instanceof String id)
+        || EmptyChecks.isBlank(id)
+        || id.length() > 128) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument_detail");
+    }
+    try {
+      return new CursorPosition(Instant.parse(updatedAt), id);
+    } catch (java.time.format.DateTimeParseException exception) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument_detail");
+    }
   }
 
   @Transactional(readOnly = true)
@@ -151,9 +210,12 @@ public class ConsoleAiConversationService {
     requirePersistenceEnabled();
     requireOwner(ownerUserId);
     mapper.setTenantContext(tenantId);
+    if (EmptyChecks.isNull(mapper.selectActiveByOwner(tenantId, conversationId, ownerUserId))) {
+      throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail");
+    }
     int limit = Math.min(Math.max(requestedLimit, 1), 100);
     List<TurnView> rows =
-        mapper.selectTurns(conversationId, ownerUserId, beforeTurnNo, limit).stream()
+        mapper.selectTurns(tenantId, conversationId, ownerUserId, beforeTurnNo, limit).stream()
             .map(row -> new TurnView(
                 row.getTurnNo(),
                 row.getContextVersion(),
@@ -265,6 +327,8 @@ public class ConsoleAiConversationService {
       Instant createdAt,
       Instant updatedAt,
       OffsetDateTime expiresAt) {}
+
+  private record CursorPosition(Instant updatedAt, String id) {}
 
   public record TurnView(
       long turnNo,

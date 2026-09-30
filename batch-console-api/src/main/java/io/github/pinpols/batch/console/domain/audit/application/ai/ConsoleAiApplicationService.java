@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.audit.application.ai;
 
+import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.console.application.contract.request.auth.AiChatRequest;
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiChatResponse;
 import java.math.BigDecimal;
@@ -15,6 +16,9 @@ public interface ConsoleAiApplicationService {
   AiChatResponse chat(AiChatRequest request, String idempotencyKey);
 
   List<ConversationSummary> conversations(String tenantId, String ownerUserId, int limit);
+
+  PageResponse<ConversationSummary> conversationPage(
+      String tenantId, String ownerUserId, String cursor, int limit);
 
   List<TurnSummary> turns(
       String tenantId, String ownerUserId, String conversationId, Long beforeTurnNo, int limit);

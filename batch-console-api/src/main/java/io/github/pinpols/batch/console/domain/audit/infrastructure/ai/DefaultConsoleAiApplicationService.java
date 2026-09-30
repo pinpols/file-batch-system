@@ -11,6 +11,7 @@ import io.github.pinpols.batch.common.enums.AiPromptDecision;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
@@ -270,14 +271,32 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
   public List<ConsoleAiApplicationService.ConversationSummary> conversations(
       String tenantId, String ownerUserId, int limit) {
     return conversationService.list(tenantId, ownerUserId, limit).stream()
-        .map(view -> new ConsoleAiApplicationService.ConversationSummary(
-            view.id(),
-            view.title(),
-            view.contextVersion(),
-            view.createdAt(),
-            view.updatedAt(),
-            view.expiresAt()))
+        .map(DefaultConsoleAiApplicationService::toConversationSummary)
         .toList();
+  }
+
+  @Override
+  public PageResponse<ConsoleAiApplicationService.ConversationSummary> conversationPage(
+      String tenantId, String ownerUserId, String cursor, int limit) {
+    PageResponse<ConsoleAiConversationService.ConversationView> page =
+        conversationService.page(tenantId, ownerUserId, cursor, limit);
+    return PageResponse.cursor(
+        page.items().stream()
+            .map(DefaultConsoleAiApplicationService::toConversationSummary)
+            .toList(),
+        page.pageSize(),
+        page.nextCursor());
+  }
+
+  private static ConsoleAiApplicationService.ConversationSummary toConversationSummary(
+      ConsoleAiConversationService.ConversationView view) {
+    return new ConsoleAiApplicationService.ConversationSummary(
+        view.id(),
+        view.title(),
+        view.contextVersion(),
+        view.createdAt(),
+        view.updatedAt(),
+        view.expiresAt());
   }
 
   @Override

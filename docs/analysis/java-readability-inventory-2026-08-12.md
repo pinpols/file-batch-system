@@ -9,8 +9,8 @@
 |---|---:|
 | 生产 Java 源文件 | 2335 |
 | CGLIB 自注入类 | 0 |
-| `Map<String, Object>` 出现次数 | 2087 |
-| 含 Map 的源文件 | 447 |
+| `Map<String, Object>` 出现次数 | 2088 |
+| 含 Map 的源文件 | 448 |
 | public Map 契约候选 | 65 |
 | public Map 契约候选文件 | 37 |
 | `@SuppressWarnings` | 231 |
@@ -42,7 +42,7 @@
 |---|---:|
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java` | 1145 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageSheetSpecs.java` | 1070 |
-| `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | 872 |
+| `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | 891 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java` | 869 |
 | `batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/sql/SqlTransformComputePlugin.java` | 805 |
 | `batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/RemoteFilesystemDispatchSupport.java` | 783 |

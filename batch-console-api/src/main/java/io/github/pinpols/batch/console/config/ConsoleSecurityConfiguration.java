@@ -112,7 +112,8 @@ public class ConsoleSecurityConfiguration {
         // Console 是纯 JSON API，前端 Axios 把 cookie 原值复制到请求头。显式使用明文处理器，
         // 避免 Spring Security 默认 XOR 处理器把合法的 double-submit 请求误判为 403。
         .csrfTokenRequestHandler(csrfTokenRequestHandler())
-        // JWT 每次请求都会重建认证上下文，不能按有状态“新登录”反复清除 CSRF cookie。
+        // 无状态 JWT 每个请求都会重新认证；默认会话策略会在认证后的 GET 清除 XSRF-TOKEN，
+        // 导致后续写请求缺少 CSRF 请求头。
         .sessionAuthenticationStrategy(new NullAuthenticatedSessionStrategy())
         .ignoringRequestMatchers(csrfIgnoredMatchers()));
     return http.sessionManagement(
