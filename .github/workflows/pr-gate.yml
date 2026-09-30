@@ -370,11 +370,11 @@ jobs:
           fi
           source scripts/lib/gate-result.sh
           run_trivy_fs_scan() {
-            local trivy_version=0.70.0
+            local trivy_version=0.74.0
             curl -fsSL -o /tmp/trivy.tar.gz "https://github.com/aquasecurity/trivy/releases/download/v${trivy_version}/trivy_${trivy_version}_Linux-64bit.tar.gz"
             tar -xzf /tmp/trivy.tar.gz -C /tmp trivy
             sudo mv /tmp/trivy /usr/local/bin/trivy
-            trivy fs --scanners vuln,config --severity CRITICAL,HIGH --exit-code 1 .
+            trivy fs --scanners vuln,misconfig --severity CRITICAL,HIGH --exit-code 1 .
           }
           gate_run PR_TRIVY_FS_SCAN "Trivy 供应链文件扫描" run_trivy_fs_scan
 

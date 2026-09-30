@@ -1,6 +1,8 @@
 # Console 使用率统计方案
 
-状态：提案，尚未落地
+状态：基础用量摘要已存在；日聚合统计方案尚未落地
+
+> 复核日期：2026-09-30。当前系统已有租户用量摘要和 Dashboard 查询，但没有本文规划的 `console_usage_daily`、事件标准化、有界批量 upsert、独立 `usage-summary` 契约或使用率报表。以下方案仍是后续实施计划，不应把现有基础摘要误认为完整使用率统计。
 
 ## 1. 目标与边界
 
@@ -25,6 +27,10 @@
 ## 2. 当前状态
 
 当前已经存在：
+
+- 基础租户用量摘要接口：`GET /api/console/tenants/usage`；
+- Dashboard 租户用量查询：`GET /api/console/dashboard/tenant-usage`；
+- 对应的固定 DTO 和租户权限测试。
 
 - 前端 `logger.ts`：最多 500 条本地环形日志，每 15 秒按最多 50 条批量上报；默认关闭；
 - `POST /api/console/telemetry/events`：后端校验后通过 SLF4J/MDC 输出结构化日志；
