@@ -419,7 +419,7 @@ jobs:
       - name: Install trivy
         shell: bash
         run: |
-          TRIVY_VERSION=0.70.0
+          TRIVY_VERSION=0.74.0
           curl -fsSL -o /tmp/trivy.tar.gz "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
           tar -xzf /tmp/trivy.tar.gz -C /tmp trivy
           sudo mv /tmp/trivy /usr/local/bin/trivy
@@ -450,10 +450,11 @@ jobs:
         with:
           scan-type: fs
           scan-ref: .
+          version: v0.74.0
           format: table
           exit-code: '1'
           severity: CRITICAL,HIGH
-          scanners: vuln,config
+          scanners: vuln,misconfig
 
       - name: K8s manifest security — Checkov
         uses: bridgecrewio/checkov-action@v12

@@ -29,6 +29,8 @@ description: 用户要求在特性分支交付代码、执行提交检查、创�
 6. **Changelog**：有用户可见功能、重要缺陷/安全修复、生产配置、部署、迁移或外部契约影响时，按根 `CHANGELOG.md` 的 `[Unreleased]` 分类追加条目。只有 `docs/agent-baseline.md` 或 ADR/架构权威约束变化才更新 `docs/changelog.md`。提交后运行 `python3 scripts/ci/check-changelog-sync.py --base origin/main`。
 7. **Sonar**：先确认本地 Sonar 服务/凭据可用及 `origin/main` 已更新。按需运行 `bash scripts/dev/sonar-scan.sh --incremental --base-ref origin/main`；需要刷新覆盖率时添加 `--with-tests`。检查增量 issues、changed-lines 和 hotspots 报告，修复本次引入的问题。报告位于 `reports/sonar/<timestamp>/`，通常是本地产物，不要随意纳入 PR。仓库 `.github/workflows/sonar-gate.yml` 当前默认关闭；若结果为 skipped 或未配置，不得描述为 Sonar 通过。
 8. 根据变更域运行 Shell/文档/配置/依赖/安全/API 等守护。全量 Full Gate、sim、BE-ACC 和 Sonar 是不同验证层级，不要互相替代；未运行则在 PR 中写明。
+9. **实现与文档同步**：所有有语义影响的变更都要检查对应文档、示例、索引和生成物是否需要更新，包括功能与 API 契约、配置/环境变量、数据库结构与表说明、部署和运行方式、脚本运维、测试验收及故障处理。按权威文档归属更新，不复制出相互矛盾的第二事实来源；同步生成类型、清单或快照时要运行对应校验。纯内部重构若不改变用户行为、操作方式或架构约束，可以不改文档，但在 PR 说明中简述判断依据。只完成代码、不核对适用文档，不算交付完成。
+10. **门禁与文档同步**：新增或扩展门禁时，确认脚本已登记在 `scripts/ci/README.md`，并按影响更新 `docs/runbook/ci.md` 的触发/阻断矩阵、`docs/audit/convention-drift-guard-index.md` 的守卫矩阵，以及对应专项 runbook。文档应说明检查范围、触发条件、执行命令和不覆盖的验证；修改 workflow 时还要核对 required check 名称与实际 job 一致。只改门禁实现但不更新适用说明，不算交付完成。
 
 ## 提交与 PR
 
@@ -42,7 +44,7 @@ description: 用户要求在特性分支交付代码、执行提交检查、创�
 1. 只有用户明确要求合并，且仓库保护规则允许、required checks 通过、所需 review 完成时才合并；检查或 review 未完成时停止在开放 PR 状态。
 2. 合并操作返回不等于已合并。记录 PR 的 `baseRefName`、`headRefName`、`headRefOid`、`state` 和 `mergeCommit`；确认 `state=MERGED`，fetch 目标分支，并验证 `mergeCommit` 是目标分支的祖先。仓库使用 squash merge 时，特性分支原始提交通常不是目标分支祖先；不得仅凭 `git branch -d` 的结果判断 PR 是否合并。
 3. 只有确认合并后才清理分支。先确认待清理的分支名及远端 ref 仍对应已核实的 PR head，避免删除该分支上的后续提交。检查 `git worktree list --porcelain`，包括当前 worktree；目标分支仍被任何 worktree 检出时，不得删除。当前 worktree 干净时先切换到已更新的目标分支；其他 worktree 仍检出目标分支时先保留该分支并处理 worktree。只有在 PR 已合并、其 `mergeCommit` 已包含于目标分支且分支指向已记录的 `headRefOid` 时，才可按用户授权删除对应远端分支及本地分支。Squash/rebase 后 `git branch -d` 可能因提交图不相连而拒绝；此时仅在上述证据全部成立后，对明确核实的分支使用 `git branch -D`，不得将强制删除作为常规清理方式。清理后运行 `git fetch --prune` 并复核状态。未合并、检查失败、远端 ref 已变化或仍被 worktree 使用的分支不得删除。
-4. 收尾核对主分支、工作区、远端分支和 PR 状态；报告 commit、PR、检查、merge commit、分支清理结果及任何剩余 worktree。
+4. 用户明确要求“合并并清理”时，将经核实已合并的当前 PR 分支清理作为同一收尾流程继续完成；不扩展清理到其他 PR 或未合并分支。收尾核对主分支、工作区、远端分支和 PR 状态；报告 commit、PR、检查、merge commit、分支清理结果及任何剩余 worktree。
 
 ## Sonar 与快照参考
 

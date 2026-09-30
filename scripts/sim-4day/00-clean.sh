@@ -11,6 +11,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 # shellcheck source=scripts/lib/env-common.sh
 source "$ROOT/scripts/lib/env-common.sh"
+MINIO_MC_HELPER="$ROOT/scripts/lib/minio-mc.sh"
 PG="$PG_CONTAINER"
 PGU="$POSTGRES_USER"
 MINIO="${MINIO_CONTAINER:-$BATCH_DEFAULT_MINIO_CONTAINER}"
@@ -70,10 +71,11 @@ echo "==> 3/5 清 Kafka runtime topic 历史消息"
 clean_kafka_runtime
 
 echo "==> 4/5 清 MinIO bucket + 重建 outbound prefix"
-docker exec "$MINIO" mc alias set "$MC_ALIAS" http://localhost:9000 "$BATCH_S3_ACCESS_KEY" "$BATCH_S3_SECRET_KEY" >/dev/null 2>&1 || true
-docker exec "$MINIO" mc rm --recursive --force "$MC_ALIAS/$BUCKET/" >/dev/null 2>&1 || true
+MINIO_CONTAINER="$MINIO" MINIO_MC_ALIAS="$MC_ALIAS" bash "$MINIO_MC_HELPER" \
+  rm --recursive --force "$MC_ALIAS/$BUCKET/" >/dev/null 2>&1 || true
 for p in ingress ta/outbound/report tb/outbound/statement tc/outbound/risk-alert; do
-  echo "init" | docker exec -i "$MINIO" mc pipe "$MC_ALIAS/$BUCKET/$p/.keep" >/dev/null 2>&1 || true
+  echo "init" | MINIO_CONTAINER="$MINIO" MINIO_MC_ALIAS="$MC_ALIAS" \
+    bash "$MINIO_MC_HELPER" pipe "$MC_ALIAS/$BUCKET/$p/.keep" >/dev/null 2>&1 || true
 done
 echo "    MinIO 已清空并重建 prefix"
 

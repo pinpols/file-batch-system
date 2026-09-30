@@ -8,6 +8,7 @@
 |---|---|
 | [be-acceptance-template.md](./be-acceptance-template.md) | 本地验收报告模板；生成的带日期报告不提交 Git |
 | [adr046-bundle-malformed-group-quarantine-2026-06-21.md](./adr046-bundle-malformed-group-quarantine-2026-06-21.md) | 文件组异常隔离专题 |
+| [ci-external-action-upgrade-backlog-2026-09-30.md](./ci-external-action-upgrade-backlog-2026-09-30.md) | CI 外部 Actions 版本盘点与升级待办 |
 | [cross-platform-scripts-2026-05-24.md](./cross-platform-scripts-2026-05-24.md) | 跨平台脚本治理快照 |
 | [log-noise-2026-06-02.md](./log-noise-2026-06-02.md) | 日志噪声治理快照 |
 | [outstanding-work-2026-06-23.md](./outstanding-work-2026-06-23.md) | 2026-06-23 遗留事项快照 |

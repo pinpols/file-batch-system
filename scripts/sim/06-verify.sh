@@ -7,6 +7,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 SQL_DIR="$ROOT/scripts/sim/sql"
 # shellcheck source=../lib/env-common.sh
 source "$ROOT/scripts/lib/env-common.sh"
+MINIO_MC_HELPER="$ROOT/scripts/lib/minio-mc.sh"
 # shellcheck source=../lib/python-runtime.sh
 source "$ROOT/scripts/lib/python-runtime.sh"
 batch_require_python
@@ -45,9 +46,7 @@ psql_q() {
 }
 psql_b() { psql_q "$BUSINESS_DB" "$@"; }
 minio_mc() {
-  docker exec "$MINIO" sh -c \
-    'mc alias set local http://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null && exec mc "$@"' \
-    sh "$@"
+  MINIO_CONTAINER="$MINIO" bash "$MINIO_MC_HELPER" "$@"
 }
 
 GREEN='\033[32m' RED='\033[31m' YELLOW='\033[33m' BLUE='\033[34m' RST='\033[0m'

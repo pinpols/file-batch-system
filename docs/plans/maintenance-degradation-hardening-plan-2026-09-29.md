@@ -1,5 +1,7 @@
 # Console 维护与服务降级完善方案
 
+> 状态：基础维护能力已落地；多副本一致性、降级来源契约、正式指标告警和联测仍未全部完成。复核日期：2026-09-30。
+
 ## 1. 目标与边界
 
 本方案只完善 BFS 已有的两项能力：
@@ -265,4 +267,4 @@ downstream.call.duration{service,op}
 
 ## 9. 当前状态口径
 
-本文是实施方案，不代表上述缺口已经完成。当前已实现能力以 `docs/runbook/maintenance-mode.md` 和 `docs/runbook/downstream-degradation.md` 为准；完成每个阶段后，必须补充对应测试证据和变更记录。
+本文是“基础能力之上的完善方案”，不是从零实施说明。当前已实现能力包括维护拦截、全冻结/只读、公共状态接口、管理员热切换、503 body/header、Retry-After、审计以及下游读 fallback / 写 fail-fast；当前仍缺 PostgreSQL 共享事实源、版本 CAS、多副本实例确认和重启恢复、后端统一 `X-Degraded-Source`、正式 gauge/告警以及双实例联测。实际运行入口以 `docs/runbook/maintenance-mode.md` 和 `docs/runbook/downstream-degradation.md` 为准；每个增强阶段完成后，必须补充对应测试证据和变更记录。

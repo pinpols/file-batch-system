@@ -130,6 +130,7 @@ SDK 五语言契约矩阵。
 
 | 检查项 | 工具 / 脚本 | 触发流水线 |
 |---|---|---|
+| 应用与基础设施版本对齐 | `check-version-alignment.sh`：应用发布版本、基础服务镜像环境值、Testcontainers 镜像和 Compose/Sim 运行入口对齐 | PR Gate；Full CI Gate |
 | OpenAPI 路径对齐 | `check-console-openapi-paths.py` | 全部（setup-build-env） |
 | Flyway 文件结构与 checksum 漂移 | `validate-flyway-schema.sh` | PR：database / CI 文件域；已有迁移 checksum 变化阻断 |
 | Flyway 危险 DDL | `check-migration-safety.sh`（Squawk，diff-only） | PR：database / CI 文件域；扫描新增或修改的迁移文件，危险 DDL 阻断 |

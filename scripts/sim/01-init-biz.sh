@@ -19,6 +19,8 @@ PG_USER="${PG_USER:-$PGUSER}"
 MINIO_CONTAINER="${MINIO_CONTAINER:-batch-minio}"
 MINIO_AK="${MINIO_AK:-$MINIO_ROOT_USER}"
 MINIO_SK="${MINIO_SK:-$MINIO_ROOT_PASSWORD}"
+export MINIO_CONTAINER MINIO_MC_ACCESS_KEY="$MINIO_AK" MINIO_MC_SECRET_KEY="$MINIO_SK"
+MINIO_MC_HELPER="$ROOT/scripts/lib/minio-mc.sh"
 
 echo "==> 1/2 应用 biz.* 业务表($BUSINESS_DB 业务库)"
 docker exec -i "$PG_CONTAINER" psql -U "$PG_USER" -d "$BUSINESS_DB" \
@@ -28,14 +30,13 @@ applied=$(docker exec -i "$PG_CONTAINER" psql -X -U "$PG_USER" -d "$BUSINESS_DB"
 echo "  biz schema 现有 $applied 张表"
 
 echo "==> 2/2 MinIO bucket / prefix 准备"
-docker exec "$MINIO_CONTAINER" mc alias set local http://localhost:9000 "$MINIO_AK" "$MINIO_SK" >/dev/null 2>&1
-docker exec "$MINIO_CONTAINER" mc mb -p "local/$MINIO_BUCKET" 2>&1 | grep -v "already" || true
+bash "$MINIO_MC_HELPER" mb --ignore-existing "local/$MINIO_BUCKET"
 # 用占位文件提前建好 ta/tb/tc 输出 prefix(channel_config 里的 oss_object_prefix)
 for p in "ta/outbound/report" "tb/outbound/statement" "tc/outbound/risk-alert"; do
-  echo "init-$(date +%s)" | docker exec -i "$MINIO_CONTAINER" \
-    mc pipe "local/$MINIO_BUCKET/$p/.keep" >/dev/null 2>&1 || true
+  echo "init-$(date +%s)" | bash "$MINIO_MC_HELPER" \
+    pipe "local/$MINIO_BUCKET/$p/.keep" >/dev/null
 done
-docker exec "$MINIO_CONTAINER" mc ls --recursive "local/$MINIO_BUCKET" 2>&1 | grep "\.keep" | head -6
+bash "$MINIO_MC_HELPER" ls --recursive "local/$MINIO_BUCKET" 2>&1 | grep "\.keep" | head -6
 
 echo "==> ✅ 初始化完成"
 echo "    biz tables: $applied ($BUSINESS_DB)"

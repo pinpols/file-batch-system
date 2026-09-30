@@ -97,7 +97,7 @@ jobs:
     needs: changes
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -357,6 +357,12 @@ jobs:
         # .trivyignore 的每组 CVE 必须有 owner / reason / expires,过期豁免不得继续放行。
         run: bash scripts/ci/run-gate.sh PR_TRIVY_IGNORE_EXPIRY "Trivy 忽略项有效期" -- python3 scripts/ci/check-trivy-ignore-expiry.py
 
+      - name: Warm Maven cache for Trivy dependency resolution
+        if: needs.changes.outputs.config == 'true' || needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        # Trivy 解析 Java 传递依赖时会访问 Maven Central；先缓存外部依赖并安装本地 reactor 产物，避免重复远端 POM 请求。
+        run: bash scripts/ci/run-gate.sh PR_TRIVY_MAVEN_CACHE "Trivy Maven 依赖缓存预热" -- ./mvnw -B -ntp -DskipTests -Dmaven.test.skip=true -pl '!batch-e2e-tests' install
+
       - name: Trivy fs scan on supply-chain inputs
         if: needs.changes.outputs.config == 'true' || needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
@@ -370,11 +376,11 @@ jobs:
           fi
           source scripts/lib/gate-result.sh
           run_trivy_fs_scan() {
-            local trivy_version=0.70.0
+            local trivy_version=0.74.0
             curl -fsSL -o /tmp/trivy.tar.gz "https://github.com/aquasecurity/trivy/releases/download/v${trivy_version}/trivy_${trivy_version}_Linux-64bit.tar.gz"
             tar -xzf /tmp/trivy.tar.gz -C /tmp trivy
             sudo mv /tmp/trivy /usr/local/bin/trivy
-            trivy fs --scanners vuln,config --severity CRITICAL,HIGH --exit-code 1 .
+            trivy fs --scanners vuln,misconfig --severity CRITICAL,HIGH --exit-code 1 .
           }
           gate_run PR_TRIVY_FS_SCAN "Trivy 供应链文件扫描" run_trivy_fs_scan
 

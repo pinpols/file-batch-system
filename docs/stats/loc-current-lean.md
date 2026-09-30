@@ -1,12 +1,12 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `412dfd37b`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `86e7c2fd0`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,571 | 471,766 | 238,338 | 50.5% |
+| 4,572 | 471,824 | 238,380 | 50.5% |
 
 ## 按用途
 
@@ -14,8 +14,8 @@
 |---|---:|---:|---:|---:|
 | prod | 2,658 | 242,754 | 110,874 | 45.7% |
 | test | 1,171 | 168,368 | 89,547 | 53.2% |
-| script | 599 | 45,220 | 28,301 | 62.6% |
-| config | 52 | 7,998 | 5,672 | 70.9% |
+| script | 600 | 45,261 | 28,331 | 62.6% |
+| config | 52 | 8,015 | 5,684 | 70.9% |
 | infra-config | 32 | 5,204 | 3,779 | 72.6% |
 | sql | 59 | 2,222 | 165 | 7.4% |
 
@@ -24,10 +24,10 @@
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
 | Java | 3,376 | 346,089 | 175,517 | 50.7% |
-| Shell | 182 | 27,607 | 21,350 | 77.3% |
+| Shell | 183 | 27,648 | 21,380 | 77.3% |
 | Python | 216 | 28,755 | 14,692 | 51.1% |
 | YAML | 95 | 12,136 | 9,090 | 74.9% |
-| XML | 170 | 20,784 | 6,455 | 31.1% |
+| XML | 170 | 20,801 | 6,467 | 31.1% |
 | TypeScript | 37 | 6,573 | 3,097 | 47.1% |
 | Rust | 22 | 8,456 | 2,856 | 33.8% |
 | Properties | 5 | 2,871 | 2,345 | 81.7% |
@@ -53,9 +53,9 @@
 | `scripts/ci/run-full-regression.sh` | script | Shell | 647 | 528 |
 | `scripts/local/start-all.sh` | script | Shell | 640 | 512 |
 | `scripts/local/be-acceptance.sh` | script | Shell | 612 | 479 |
-| `pom.xml` | config | XML | 761 | 453 |
+| `pom.xml` | config | XML | 764 | 455 |
 | `scripts/local/pre-push-sdk-checks.sh` | script | Shell | 558 | 424 |
-| `scripts/local/sim-harness.sh` | script | Shell | 554 | 417 |
+| `scripts/local/sim-harness.sh` | script | Shell | 557 | 418 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java` | prod | Java | 869 | 408 |
 | `scripts/dev/sonar-scan.sh` | script | Shell | 488 | 397 |
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleConfigApplicationServiceTest.java` | test | Java | 577 | 395 |

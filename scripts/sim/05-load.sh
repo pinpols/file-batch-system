@@ -90,12 +90,8 @@ def run_cmd(args, input_text=None):
     return subprocess.run(args, input=input_text, capture_output=True, text=True)
 
 def minio_cmd(*args):
-    container = os.environ.get("MINIO_CONTAINER", "batch-minio")
     return run_cmd([
-        "docker", "exec", container, "sh", "-c",
-        'mc alias set local http://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" '
-        '> /dev/null && exec mc "$@"',
-        "sh", *args,
+        "bash", os.path.join(os.getcwd(), "scripts", "lib", "minio-mc.sh"), *args,
     ])
 
 def run_sql_file(sql_file, variables=None, tuples=False):

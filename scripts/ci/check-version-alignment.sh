@@ -195,7 +195,7 @@ echo ""
 echo "── 基础服务镜像（4 个 .env 对比） ─────"
 
 # 注:缓存服务运行 Valkey 镜像,但保留 REDIS_IMAGE_TAG 兼容旧 env / 脚本命名。
-TAGS=(POSTGRES_IMAGE_TAG KAFKA_IMAGE_TAG KAFKA_UI_IMAGE_TAG MINIO_IMAGE_REPOSITORY MINIO_IMAGE_TAG REDIS_IMAGE_TAG VALKEY_IMAGE_TAG \
+TAGS=(POSTGRES_IMAGE_TAG KAFKA_IMAGE_TAG KAFKA_UI_IMAGE_TAG MINIO_IMAGE_REPOSITORY MINIO_IMAGE_TAG MINIO_MC_IMAGE_TAG REDIS_IMAGE_TAG VALKEY_IMAGE_TAG \
       SFTP_IMAGE_TAG MOCKSERVER_IMAGE_TAG PROMETHEUS_IMAGE_TAG ALERTMANAGER_IMAGE_TAG JAEGER_IMAGE_TAG TEMPO_IMAGE_TAG \
       LOKI_IMAGE_TAG OTEL_COLLECTOR_IMAGE_TAG GRAFANA_IMAGE_TAG REDIS_EXPORTER_IMAGE_TAG POSTGRES_EXPORTER_IMAGE_TAG \
       KAFKA_EXPORTER_IMAGE_TAG NODE_EXPORTER_IMAGE_TAG CADVISOR_IMAGE_TAG)
@@ -275,6 +275,8 @@ VALKEY_TAG=$(grep -E '^VALKEY_IMAGE_TAG=' "$ROOT/.env.example" | head -1 | cut -
 REDIS_COMPAT_TAG=$(grep -E '^REDIS_IMAGE_TAG=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
 MINIO_REPOSITORY=$(grep -E '^MINIO_IMAGE_REPOSITORY=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
 MINIO_TAG=$(grep -E '^MINIO_IMAGE_TAG=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
+MINIO_MC_REPOSITORY=$(grep -E '^MINIO_MC_IMAGE_REPOSITORY=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
+MINIO_MC_TAG=$(grep -E '^MINIO_MC_IMAGE_TAG=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
 SFTP_TAG=$(grep -E '^SFTP_IMAGE_TAG=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
 MOCKSERVER_TAG=$(grep -E '^MOCKSERVER_IMAGE_TAG=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
 
@@ -302,6 +304,9 @@ check_image_reference ".github/actions/setup-build-env/action.yml" "${MINIO_REPO
 check_image_reference "scripts/local/sim-harness.sh" "postgres:${POSTGRES_TAG}" "Sim harness"
 check_image_reference "docker-compose.yml" 'valkey/valkey:${VALKEY_IMAGE_TAG:-'"${VALKEY_TAG}"'}' "Compose fallback"
 check_image_reference "docker-compose.yml" '${MINIO_IMAGE_REPOSITORY:-'"${MINIO_REPOSITORY}"'}:${MINIO_IMAGE_TAG:-'"${MINIO_TAG}"'}' "Compose fallback"
+check_image_reference "docker-compose.yml" '${MINIO_MC_IMAGE_REPOSITORY:-'"${MINIO_MC_REPOSITORY}"'}:${MINIO_MC_IMAGE_TAG:-'"${MINIO_MC_TAG}"'}' "MinIO CLI Compose fallback"
+check_image_reference "scripts/lib/minio-mc.sh" 'MINIO_MC_IMAGE_REPOSITORY="${MINIO_MC_IMAGE_REPOSITORY:-'"${MINIO_MC_REPOSITORY}"'}"' "MinIO CLI helper repository"
+check_image_reference "scripts/lib/minio-mc.sh" 'MINIO_MC_IMAGE_TAG="${MINIO_MC_IMAGE_TAG:-'"${MINIO_MC_TAG}"'}"' "MinIO CLI helper tag"
 check_image_reference "scripts/sim/compose.yml" 'atmoz/sftp:${SFTP_IMAGE_TAG:-'"${SFTP_TAG}"'}' "Sim SFTP"
 check_image_reference "scripts/sim/compose.yml" 'mockserver/mockserver:${MOCKSERVER_IMAGE_TAG:-'"${MOCKSERVER_TAG}"'}' "Sim MockServer"
 check_image_reference "deploy/docker/compose/test.yml" 'atmoz/sftp:${SFTP_IMAGE_TAG:-'"${SFTP_TAG}"'}' "Test SFTP"

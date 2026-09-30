@@ -1,9 +1,11 @@
 # TODO Master · 当前待办唯一索引
 
-> 核查日期：2026-09-29。本文只登记当前仍有效的事项；`docs/archive/` 的历史待办不计入本表。
+> 核查日期：2026-09-30。本文只登记当前仍有效的事项；`docs/archive/` 的历史待办不计入本表。
 > 状态分类、证据要求和归档规则见 [`../standards/document-governance.md`](../standards/document-governance.md)。
 
 > 本文早期的统计数字和日期快照可能已过期；后续以事项表、证据路径和最后核查日期为准，不以历史总数为准。
+
+> 本轮复核结论：AI、使用率统计、维护/降级三项均已有部分基础能力，不能再按“从零未实现”处理；剩余项已在各表中拆成明确缺口。五类 Worker 的核心 Runtime/SPI 和本地 Sim 已完成，仍需区分本地证据与 staging/生产证据。最近一次本地 Sim 证据：`logs/runs/sim-harness/sim-harness-20260930-095359-e6f7b3887/sim-summary.txt`，脚本 04–28 全部通过。
 
 ---
 
@@ -180,26 +182,26 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 |---|---|---|---|
 | ~~**API-TOGGLE-1**~~ | 6 个 `POST .../toggle?enabled=` 接口命名与显式状态契约收敛 | [`../backlog/rest-command-api-toggle-governance-2026-09-26.md`](../backlog/rest-command-api-toggle-governance-2026-09-26.md) | ✅ 2026-09-27 统一改为 `PATCH .../enabled`，前端及测试已切换，旧接口已删除 |
 
-### G3. 批量平台能力演进 · P0/P1/P2 · 🟡 待验收
+### G3. 批量平台能力演进 · P0/P1/P2 · 🟡 部分完成，证据待收口
 
 | ID | 主题 | 来源 | 状态 |
 |---|---|---|---|
-| **PLAT-OTEL-1** | OpenTelemetry 全链路运行验收：Console/API → Trigger → Orchestrator → Kafka → Worker → Report | [`../backlog/platform-capability-evolution-backlog-2026-09-26.md`](../backlog/platform-capability-evolution-backlog-2026-09-26.md) | P0；已有观测栈，缺目标链路证据 |
-| **PLAT-BP-1** | 背压与容量大盘收口：admission、claim/report、Outbox、Kafka lag、Hikari、PG 锁等待、Worker lease | 同上 | P0；容量结论必须可定位瓶颈 |
-| **PLAT-WR-1** | 五类 Worker Runtime / SPI 行为一致性复核 | 同上 | P0/P1；不能破坏现有 pipeline 主链 |
+| **PLAT-OTEL-1** | OpenTelemetry 全链路运行验收：Console/API → Trigger → Orchestrator → Kafka → Worker → Report | [`../backlog/platform-capability-evolution-backlog-2026-09-26.md`](../backlog/platform-capability-evolution-backlog-2026-09-26.md) | 🟡 传播工具和观测栈已有；仍缺目标链路的运行证据 |
+| **PLAT-BP-1** | 背压与容量大盘收口：admission、claim/report、Outbox、Kafka lag、Hikari、PG 锁等待、Worker lease | 同上 | 🟡 基础背压和指标已有；统一容量大盘、告警和容量结论待收口 |
+| **PLAT-WR-1** | 五类 Worker Runtime / SPI 行为一致性复核 | 同上 | ✅ 核心实现和本地 Sim 已完成；🔒 staging/生产级证据仍需补齐 |
 | **PLAT-KEDA-1** | KEDA staging 验证：dynamic sharding + backlog / lag 扩缩 + drain | 同上 | P1；需要真实 K8s + KEDA operator |
 | **PLAT-GITOPS-1** | GitOps staging 接入：镜像、ops repo、Argo CD、Helm values、smoke | 同上 | P1；当前只有骨架 |
 | **PLAT-CDC-1** | CDC / Streaming 方案设计 | 同上 | P2；业务触发后再立项 |
 
-### G4. Console AI 助手与成本治理 · P1/P2 · ⏳ 方案已登记，代码未完成
+### G4. Console AI 助手与成本治理 · P1/P2 · 🟡 基线已落地，治理缺口待实施
 
 权威方案：[`ai-assistant-contextual-experience-and-cost-governance-2026-09-29.md`](../plans/ai-assistant-contextual-experience-and-cost-governance-2026-09-29.md)。本节只登记仍可能实施的后端工作；AI 方案中的暂缓和不做项单独列出，不能当作当前开发任务。
 
 | ID | 主题 | 状态 |
 |---|---|---|
-| **AI-CTX-1** | 版本化页面上下文、会话语义、租户/角色授权、领域拒答和来源引用契约 | ⏳ 待实现 |
-| **AI-COST-1** | 输入/输出 token 上限、并发舱壁、日/月预算、provider 错误分类、成本与拒答指标 | ⏳ 待实现 |
-| **AI-AUDIT-1** | AI 审计默认只保留元数据/哈希/成本信息，复核原文预览留存策略和查询权限 | ⏳ 待决策并实现 |
+| **AI-CTX-1** | 版本化页面上下文、会话语义、租户/角色授权、领域拒答和来源引用契约 | 🟡 已有认证、角色、租户校验、上下文脱敏、领域/安全拒答和来源引用；版本化页面上下文与服务端会话持久化未完成 |
+| **AI-COST-1** | 输入/输出 token 上限、并发舱壁、日/月预算、provider 错误分类、成本与拒答指标 | 🟡 已有 RPM 限流、请求超时、有界并发、provider 错误降级和 token 指标；硬 token 上限、日/月预算和严格故障策略未完成 |
+| **AI-AUDIT-1** | AI 审计默认只保留元数据/哈希/成本信息，复核原文预览留存策略和查询权限 | 🟡 已有审计、哈希、token 和成本字段；当前仍保留有限原文预览，留存期限、查询权限和文档口径需收口 |
 
 以下是已冻结的范围决策，不重新排成开发待办：
 
@@ -210,30 +212,42 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 | **AI-DEC-3** | AI 上线判定和受控试生产 | 🟡 暂缓，等待真实质量/成本证据 |
 | **AI-DEC-4** | Phase 3 AI 直接写操作/HITL | 🟡 后置，继续复用现有审批闭环 |
 
-### G5. Console 使用率统计 · P1/P2 · ⏳ 方案已登记，代码未完成
+### G5. Console 使用率统计 · P1/P2 · 🟡 基础摘要已有，日聚合方案未完成
 
 权威方案：[`console-usage-statistics-plan-2026-09-29.md`](../plans/console-usage-statistics-plan-2026-09-29.md)；前端配套清单见配对仓库 `batch-console/docs/backlog/ai-and-usage-statistics-todo-2026-09-29.md`。第一版只做可解释的 PostgreSQL 日聚合，不引入 Kafka、ClickHouse 或通用行为分析平台。
 
 | ID | 主题 | 状态 |
 |---|---|---|
-| **USAGE-1** | 固化指标目录、成功口径、数据来源优先级、权限和保留期 | ⏳ 待完成 |
-| **USAGE-2** | Flyway `console_usage_daily` 月分区、严格 RLS、索引和保留策略 | ⏳ 待实现 |
-| **USAGE-3** | 后端事件标准化、有界批量 upsert、`usage-summary` DTO/API/OpenAPI | ⏳ 待实现 |
-| **USAGE-4** | 与前端埋点、操作审计和业务终态对账，补齐租户隔离/并发/失败语义测试 | ⏳ 待联测 |
+| **USAGE-1** | 固化指标目录、成功口径、数据来源优先级、权限和保留期 | 🟡 既有操作审计、业务结果和前端 telemetry 边界已明确；完整指标目录和保留期仍待冻结 |
+| **USAGE-2** | Flyway `console_usage_daily` 月分区、严格 RLS、索引和保留策略 | ⏳ 尚未实现；当前没有该日聚合表 |
+| **USAGE-3** | 后端事件标准化、有界批量 upsert、`usage-summary` DTO/API/OpenAPI | 🟡 已有基础租户用量摘要和 Dashboard 查询；事件标准化、日聚合 upsert 和独立 summary 契约未完成 |
+| **USAGE-4** | 与前端埋点、操作审计和业务终态对账，补齐租户隔离/并发/失败语义测试 | ⏳ 待联测；当前基础摘要不能替代业务结果对账 |
 
-### G6. Console 维护与服务降级完善 · P0/P1 · ⏳ 方案已登记，代码未完成
+### G6. Console 维护与服务降级完善 · P0/P1 · 🟡 基础能力已落地，增强项未完成
 
 权威方案：[`../plans/maintenance-degradation-hardening-plan-2026-09-29.md`](../plans/maintenance-degradation-hardening-plan-2026-09-29.md)。本项只完善现有维护模式、下游降级、前后端状态契约和多副本收敛，不扩展为通用服务治理平台。
 
 | ID | 主题 | 状态 |
 |---|---|---|
-| **MAINT-BE-1** | PostgreSQL 维护状态唯一事实源、版本 CAS、实例确认和重启恢复 | ⏳ 待实现 |
-| **MAINT-BE-2** | 维护 503 body/header、权限绕过和审计契约收口 | ⏳ 待实现 |
-| **DEGRADE-BE-1** | `X-Degraded-Source` 标准化输出，读 fallback / 写 fail-fast 守护 | ⏳ 待实现 |
-| **DEGRADE-BE-2** | 复用现有 Micrometer 增加维护状态、维护 503、fallback 比例和耗时告警 | ⏳ 待实现 |
-| **MAINT-JOINT-1** | 双 Console 实例维护切换、下游断路器和恢复联测 | ⏳ 待联测 |
+| **MAINT-BE-1** | PostgreSQL 维护状态唯一事实源、版本 CAS、实例确认和重启恢复 | ⏳ 当前仍是单实例内存状态；共享事实源、多副本收敛和重启恢复未实现 |
+| **MAINT-BE-2** | 维护 503 body/header、权限绕过和审计契约收口 | 🟡 503 body、`X-Maintenance`、`Retry-After`、管理员热切换和审计已有；旁路权限细化、版本 Header 和 OpenAPI/前端联测待收口 |
+| **DEGRADE-BE-1** | `X-Degraded-Source` 标准化输出，读 fallback / 写 fail-fast 守护 | 🟡 读 fallback / 写 fail-fast 基础语义已有；后端统一输出来源 Header 未完成 |
+| **DEGRADE-BE-2** | 复用现有 Micrometer 增加维护状态、维护 503、fallback 比例和耗时告警 | ⏳ 正式 gauge、fallback 比例和告警规则未完成 |
+| **MAINT-JOINT-1** | 双 Console 实例维护切换、下游断路器和恢复联测 | 🔒 需多实例/staging 环境验证 |
 
 明确不做：服务网格、通用动态路由、工单/通知中心、独立配置中心和写接口自动成功降级。
+
+### G7. CI 外部 Actions 版本治理 · P2
+
+专题记录：[`../backlog/ci-external-action-upgrade-backlog-2026-09-30.md`](../backlog/ci-external-action-upgrade-backlog-2026-09-30.md)。责任范围：仓库 CI/发布流程维护者；截至 2026-09-30，Trivy 已随当前修复升级，其余版本升级和兼容性验证待单独完成。
+
+| ID | 主题 | 状态 |
+|---|---|---|
+| **CI-ACTION-1** | checkout、setup-python/java/node/go、upload-artifact 与 Hadolint Action 升级 | ⏳ 待分批更新；升级后运行 actionlint、相关工作流及 Full Gate |
+| **CI-ACTION-2** | Docker Buildx setup action v3→v4 | ⏳ 待评估构建器配置兼容性并验证镜像构建 |
+| **CI-ACTION-3** | 其余第三方 Action、扫描器和浮动版本引用复核 | ⏳ 待核对上游发布、安全公告及本项目调用契约 |
+| **CI-SEC-1** | Gitleaks 8.30.1 CI Linux artifact 正向/负向检测验证 | ⏳ P1；上游有该版本漏检报告，需验证 CI 实际下载的 Linux artifact 并据结果固定版本 |
+| **CI-SEC-2** | 更新 Squawk CLI 与 oasdiff 固定版本 | ⏳ 待升级并回归迁移安全规则和 OpenAPI breaking-change 基线 |
 
 ### H. 合规收尾 · P3
 
