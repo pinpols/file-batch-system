@@ -96,6 +96,14 @@ COMMENT ON TABLE batch.console_ai_turn IS
     'Console AI 对话轮次，仅会话持久化显式开启时保存 prompt/response；页面上下文正文不写入本表。';
 COMMENT ON TABLE batch.console_ai_monthly_usage IS
     'Console AI 租户月度 token 与配置费率估算台账；不代表供应商最终账单。';
+COMMENT ON COLUMN batch.console_ai_conversation.context_version IS
+    '创建会话时采用的页面上下文契约版本，用于历史会话兼容。';
+COMMENT ON COLUMN batch.console_ai_turn.context_version IS
+    '本轮请求采用的页面上下文契约版本。';
+COMMENT ON COLUMN batch.console_ai_turn.turn_status IS
+    '对话轮次状态：IN_PROGRESS、COMPLETE、FAILED 或 REJECTED。';
+COMMENT ON COLUMN batch.console_ai_turn.model_name IS
+    '处理本轮请求的模型名称；未完成或未调用模型时为空。';
 COMMENT ON COLUMN batch.console_ai_audit_log.estimated_cost_usd IS
     '按 provider 返回 token usage 和运维配置单价计算的费用估算；不代表供应商账单。';
 COMMENT ON COLUMN batch.console_ai_audit_log.cost_status IS
