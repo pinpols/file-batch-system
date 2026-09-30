@@ -26,7 +26,6 @@ import java.util.Map;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -73,7 +72,6 @@ public class TencentSmsProvider implements SmsProvider {
   private final ObjectMapper objectMapper;
   private final OutboundHttpTransport httpTransport;
 
-  @Autowired
   public TencentSmsProvider(
       SmsProperties properties,
       ObjectMapper objectMapper,

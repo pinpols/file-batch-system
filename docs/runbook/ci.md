@@ -70,6 +70,8 @@ gh pr create --base main --head revert/main-broken-<short-sha> --title "revert: 
 | **Maven 范围** | partial 时 `-pl <module> -am -amd` 只跑受影响模块 | 全 10 模块跑 |
 | **E2E suite** | partial 时跳过 batch-e2e-tests | 拆 `e2e-shard` 独立 job 25 min 并发跑 |
 | **Hadolint / Trivy fs** | ❌ 不跑 | ✅ 跑 |
+| **文本 UTF-8 编码** | PR 相对目标分支扫描变更文本 | 全仓扫描 |
+| **运行时 UTF-8 配置** | Java / SDK / config / CI 变更时核对 Compose、Dockerfile、Helm、Testcontainers | 全量核对 |
 
 ### pr-gate 自动 escalate 到 full 的"敏感路径"
 
@@ -134,6 +136,8 @@ SDK 五语言契约矩阵。
 | Flyway 危险 DDL | `check-migration-safety.sh`（Squawk，diff-only） | PR：database / CI 文件域；扫描新增或修改的迁移文件，危险 DDL 阻断 |
 | 新增数据库对象注释覆盖 | `check-db-comment-coverage.sh`（diff-only） | PR 与 Full CI：database 变更 |
 | 注释语言 | `check-comment-language.py --staged` | 本地 pre-commit 增量预检；暂不阻断 PR / Full CI |
+| 文本编码 | `check-utf8-encoding.py --staged` | 本地只检查暂存文件；PR 检查目标分支差异；Full Gate 全仓扫描 |
+| 应用及基础设施 locale | `check-infrastructure-utf8.py` | 配置/Java/SDK/CI 变更时核对全量配置矩阵 |
 | 模块依赖边界 | `check-dependency-boundaries.py` | 全部（run-full-regression） |
 | 编译 + 单元测试 | Maven `test` | 全部 |
 | 集成测试 (`*IntegrationTest` / 非 E2E `*IT`) | Maven `verify -DskipITs=false` | full-ci-gate；`check-integration-test-coverage.py` 守护含集成测试的主 reactor 模块必须进入 full-ci verify shard |
@@ -185,9 +189,11 @@ pr-gate 会根据 PR 变更文件范围决定 Maven 构建粒度：
 | 触发范围 | 本地检查 | 扫描粒度 |
 |---|---|---|
 | 所有提交 | `git diff --cached --check` | 暂存区 |
+| 所有提交 | `check-utf8-encoding.py --staged` 及编码门禁单测 | **增量**：暂存文件严格 UTF-8 解码，含 NUL 的文本也会检查；已登记二进制后缀跳过，Full Gate 另做全仓扫描 |
 | 所有提交 | `check-comment-language.py --staged` | **增量预检**：仅检查暂存 diff 新增说明性注释；当前不作为 PR / Full CI 阻断项 |
 | Java 暂存文件 | `spotless:apply` | 受 Maven 插件能力限制，执行仓库 Spotless apply；随后重新暂存 Java 文件 |
 | Java 暂存文件 | Java 日志治理、可读性约定、文本块格式、抑制项注册表、`Map/List/Set.of` 空值风险 | **增量**：仅传入暂存 Java 文件；对应 CI 无参全量 |
+| Java 暂存文件 | Lombok 与依赖注入规约及其扫描器单测 | **增量**：pre-commit 检查暂存区涉及的生产 Java 文件并运行扫描器单测；PR 对目标分支变更文件检查并运行单测；Full Gate 全量基线与单测 |
 | MyBatis Mapper XML 暂存文件 | PostgreSQL generated key 列约束、禁止位置式 `INSERT ... SELECT *` | **增量**：仅传入暂存 Mapper 文件；对应 CI 无参全量 |
 | Shell 暂存文件 | `bash -n`、ShellCheck、Shell Linux 可移植性 | **增量**：仅暂存 Shell 文件；对应 CI 无参全量 |
 | Workflow / composite action | `actionlint` | 全仓 workflow 语义检查 |
@@ -195,6 +201,7 @@ pr-gate 会根据 PR 变更文件范围决定 Maven 构建粒度：
 | 文档变更 | 文档结构、文档日期策略、代码与文档路径引用 | 全局文档关系检查 |
 | `.env*` 变更 | 环境文件 Shell 安全 | 全局 env 文件检查 |
 | YAML / Compose / env 默认值变更 | 配置默认值同步、功能开关注册表 | 按域触发的全量一致性检查 |
+| 配置 / Java / SDK 变更 | `check-infrastructure-utf8.py` | **全量矩阵**：核对 8 个应用服务、基础服务、Kafka HA、测试服务、Helm、Dockerfile、Testcontainers 和新建 PostgreSQL 编码参数 |
 | `pom.xml` / `*/pom.xml` 变更 | Maven 模块依赖边界 | 全局依赖图检查 |
 | `helm/*` 变更 | Helm 环境变量同步、Helm 生产 overlay 安全 | 全局 Helm / 配置一致性检查 |
 | tracked 源码/脚本/配置变更 | Lean LOC 快照重生成与校验 | 基于暂存树生成 `docs/stats/loc-current-lean.md` |
@@ -226,6 +233,13 @@ pr-gate 会根据 PR 变更文件范围决定 Maven 构建粒度：
 适合增量的检查：单文件语法、单文件可读性、单文件 Shell 可移植性、只依赖新增行的编码反例。
 
 必须全量的检查：跨文件索引、文档链接、配置矩阵、Helm/Compose/YAML 对齐、模块依赖、直连客户端边界、LOC 快照、安全白名单、SDK/runtime 对齐、Maven/PMD/测试/E2E。把这些改成单文件增量会漏掉跨文件漂移。
+
+### UTF-8 编码治理
+
+- 源码、脚本、SQL、配置、文档和 SDK 协议文本必须以无 BOM UTF-8 保存；唯一例外是登记在 `check-utf8-encoding.py` 中、用于导入兼容测试的 UTF-8 BOM fixture。
+- PR 对目标分支的新增/修改文本做增量扫描；本地 pre-commit 检查暂存路径；Full Gate 重新扫描全仓，防止未触及的历史文件或路径分类缺口漏检。
+- 运行 locale 由 `BATCH_LOCALE` 派生 `LANG` / `LC_ALL`。PostgreSQL `--encoding=UTF8` 只影响新初始化的数据目录，不自动改写已有 PGDATA；既有数据库需单独查询 `server_encoding`，需要变更时走迁移/备份恢复流程。
+- Kafka、对象存储和 Valkey 的协议载荷是字节数据，不存在服务端全局“文本编码开关”；平台 JSON/SDK 协议明确 UTF-8，业务文件的合作方字符集仍在导入/导出边界显式声明。
 
 ---
 

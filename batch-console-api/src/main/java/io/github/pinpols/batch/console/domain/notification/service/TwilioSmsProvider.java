@@ -17,7 +17,6 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -51,7 +50,6 @@ public class TwilioSmsProvider implements SmsProvider {
   private final ObjectMapper objectMapper;
   private final OutboundHttpTransport httpTransport;
 
-  @Autowired
   public TwilioSmsProvider(
       SmsProperties properties,
       ObjectMapper objectMapper,

@@ -26,6 +26,9 @@ public final class TestPostgresContainers {
 
   public static PostgreSQLContainer create(String databaseName) {
     return new PostgreSQLContainer(DockerImageName.parse(TestContainerImages.POSTGRES))
+        .withEnv("LANG", TestContainerImages.UTF8_LOCALE)
+        .withEnv("LC_ALL", TestContainerImages.UTF8_LOCALE)
+        .withEnv("POSTGRES_INITDB_ARGS", "--encoding=UTF8")
         .withDatabaseName(databaseName)
         .withUsername(DEFAULT_USERNAME)
         .withPassword(DEFAULT_TEST_SECRET)

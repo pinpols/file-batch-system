@@ -13,6 +13,9 @@
 ### Changed
 
 - Sim 与本地 MinIO 初始化统一使用独立、固定版本的 `minio/mc` CLI 容器，不再依赖 MinIO 服务镜像内置客户端；镜像版本及 Compose/helper fallback 纳入版本对齐门禁。
+- 依赖注入统一为构造器注入并新增 Lombok/logger 增量门禁；移除 9 个单构造器上的冗余 `@Autowired`，多构造器注入与 logger 例外均按精确规则检查。
+- 仓库文本编码门禁覆盖 PR 变更文件、提交暂存文件与 Full Gate 全仓；应用容器、基础设施及 Testcontainers 统一 UTF-8 locale，SDK 协议文本约定为 UTF-8，含 NUL 的文本仍严格检查，外部文件字符集继续显式配置。
+- Jackson 2.x 与 3.x 升级至已修复 CVE-2026-68497 的补丁版本，覆盖应用和 Java SDK 的受影响依赖链。
 - Docker 前后端应用镜像统一以固定 `batch:batch`（UID/GID 10001）运行，仅日志和缓存等必要目录可写；PostgreSQL、Valkey、MinIO、Tempo 等长驻进程非 root，MinIO 数据具名卷改挂实际数据目录；观测卷改由非 root 一次性任务预备，Prometheus 动态 targets 移到数据卷。
 - Console AI 限制外发上下文为有界 JSON 并递归拒绝凭据字段；跨 Provider 故障切换需显式配置启用，默认关闭；响应与审计模型标识使用实际 provider 响应 metadata。
 - Cron 预览移出匿名白名单，仅允许四类正式 Console 角色调用。

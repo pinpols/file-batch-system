@@ -18,7 +18,6 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -52,7 +51,6 @@ public class AliyunCaptchaVerifier implements CaptchaVerifier {
   private final ObjectMapper objectMapper;
   private final OutboundHttpTransport httpTransport;
 
-  @Autowired
   public AliyunCaptchaVerifier(
       CaptchaProperties properties,
       ObjectMapper objectMapper,

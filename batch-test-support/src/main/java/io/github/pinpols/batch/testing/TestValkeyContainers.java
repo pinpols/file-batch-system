@@ -17,6 +17,8 @@ public final class TestValkeyContainers {
 
   public static GenericContainer<?> create() {
     return new GenericContainer<>(DockerImageName.parse(TestContainerImages.VALKEY))
+        .withEnv("LANG", TestContainerImages.UTF8_LOCALE)
+        .withEnv("LC_ALL", TestContainerImages.UTF8_LOCALE)
         .withExposedPorts(REDIS_PORT);
   }
 

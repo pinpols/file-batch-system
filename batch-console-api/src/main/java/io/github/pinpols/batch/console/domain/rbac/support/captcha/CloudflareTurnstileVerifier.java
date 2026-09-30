@@ -14,7 +14,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -39,7 +38,6 @@ public class CloudflareTurnstileVerifier implements CaptchaVerifier {
   private final ObjectMapper objectMapper;
   private final OutboundHttpTransport httpTransport;
 
-  @Autowired
   public CloudflareTurnstileVerifier(
       CaptchaProperties properties,
       ObjectMapper objectMapper,

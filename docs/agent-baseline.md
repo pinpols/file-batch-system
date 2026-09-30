@@ -506,6 +506,7 @@ Step 可声明：
   - `@Builder`
   - `@Slf4j`
 - 不要在同一个类里同时保留 Lombok 自动方法和手写重复方法
+- 手写访问器仅用于派生值、别名映射、验证逻辑、接口契约或框架回调等明确行为；不要机械重写此类方法
 
 分类约束：
 
@@ -519,8 +520,10 @@ Step 可声明：
 ### 11.3 依赖注入约束
 
 - 禁止字段注入
+- 禁止 `@Autowired` / `@Inject` / `@Resource` setter 或其他方法注入
 - 优先 `final` 字段 + `@RequiredArgsConstructor`
 - `Controller`、`Service`、`Component`、`Configuration` 中的依赖统一走构造器注入
+- 唯一构造器无需 `@Autowired`；多个构造器时按 Spring 选择规则显式标注注入构造器
 
 ### 11.4 其他风格约束
 

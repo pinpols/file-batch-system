@@ -23,6 +23,10 @@ gate_run PRE_COMMIT_COMMENT_LANGUAGE "注释语言增量预检" \
   "$PYTHON_BIN" scripts/ci/check-comment-language.py --staged
 
 gate_run PRE_COMMIT_DIFF_CHECK "暂存区空白与冲突标记" git diff --cached --check
+gate_run PRE_COMMIT_UTF8_ENCODING "仓库文本 UTF-8 编码" \
+  "$PYTHON_BIN" scripts/ci/check-utf8-encoding.py --staged
+gate_run PRE_COMMIT_UTF8_ENCODING_TEST "UTF-8 编码门禁测试" \
+  "$PYTHON_BIN" -m unittest scripts/ci/tests/test_check_utf8_encoding.py
 
 java_files=()
 shell_files=()
@@ -33,6 +37,7 @@ workflow_changed=0
 loc_affecting_changed=0
 env_file_changed=0
 config_default_changed=0
+sdk_changed=0
 feature_switch_changed=0
 env_governance_changed=0
 maven_descriptor_changed=0
@@ -48,6 +53,7 @@ for file in "${staged_files[@]}"; do
   [[ "$file" == .env* ]] && env_file_changed=1
   [[ "$file" == *.yml || "$file" == *.yaml || "$file" == docker-compose*.yml || "$file" == .env* ]] \
     && config_default_changed=1
+  [[ "$file" == sdk/* ]] && sdk_changed=1
   [[ "$file" == docs/runbook/feature-switch-registry.yml || "$file" == *.yml || "$file" == *.yaml || "$file" == docker-compose*.yml ]] \
     && feature_switch_changed=1
   [[ "$file" == .env* || "$file" == docs/runbook/environment-variable-governance.md || "$file" == docs/runbook/feature-switches.md || "$file" == docs/runbook/config-ops-tiering.md || "$file" == scripts/ci/check-env-variable-governance.py ]] \
@@ -70,6 +76,10 @@ if ((${#java_files[@]} > 0)); then
     "$PYTHON_BIN" scripts/ci/check-java-logging-governance.py "${java_files[@]}"
   gate_run PRE_COMMIT_JAVA_READABILITY "Java 可读性约定" \
     "$PYTHON_BIN" scripts/ci/check-java-readability.py "${java_files[@]}"
+  gate_run PRE_COMMIT_JAVA_LOMBOK_INJECTION "Java Lombok 与依赖注入规约" \
+    "$PYTHON_BIN" scripts/ci/check-java-lombok-injection.py --staged
+  gate_run PRE_COMMIT_JAVA_LOMBOK_INJECTION_TEST "Java Lombok 与依赖注入门禁测试" \
+    "$PYTHON_BIN" -m unittest scripts/ci/tests/test_check_java_lombok_injection.py
   gate_run PRE_COMMIT_JAVA_TEXT_BLOCK_STYLE "Java 文本块格式" \
     "$PYTHON_BIN" scripts/ci/check-java-text-block-style.py "${java_files[@]}"
   gate_run PRE_COMMIT_JAVA_SUPPRESSION_REGISTRY "Java 抑制项注册表" \
@@ -136,6 +146,10 @@ fi
 if ((config_default_changed == 1)); then
   gate_run PRE_COMMIT_CONFIG_DEFAULTS_SYNC "配置默认值同步" \
     "$PYTHON_BIN" scripts/ci/check-config-defaults-sync.py --check
+fi
+if ((config_default_changed == 1 || sdk_changed == 1 || ${#java_files[@]} > 0)); then
+  gate_run PRE_COMMIT_INFRASTRUCTURE_UTF8 "基础设施 UTF-8 配置" \
+    "$PYTHON_BIN" scripts/ci/check-infrastructure-utf8.py
 fi
 if ((feature_switch_changed == 1)); then
   gate_run PRE_COMMIT_FEATURE_SWITCH_REGISTRY "功能开关注册表" \

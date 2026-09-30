@@ -54,6 +54,8 @@ else
     -e POSTGRES_USER="$POSTGRES_USER" \
     -e POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
     -e POSTGRES_INITDB_ARGS="--encoding=UTF8" \
+    -e LANG="$BATCH_LOCALE" \
+    -e LC_ALL="$BATCH_LOCALE" \
     -v "$(pwd)/deploy/docker/biz-shard-init:/docker-entrypoint-initdb.d:ro" \
     -v "$(pwd)/scripts/db/business/create_biz_tables.sql:/biz-sql/create_biz_tables.sql:ro" \
     "$IMAGE" >/dev/null

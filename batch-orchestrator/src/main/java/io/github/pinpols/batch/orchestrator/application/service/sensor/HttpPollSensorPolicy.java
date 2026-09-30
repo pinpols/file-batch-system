@@ -20,7 +20,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -66,7 +65,6 @@ public class HttpPollSensorPolicy implements SensorPolicy {
   private final ObjectMapper objectMapper;
   private final OutboundHttpTransport httpTransport;
 
-  @Autowired
   public HttpPollSensorPolicy(
       SensorProperties props,
       ObjectMapper objectMapper,
