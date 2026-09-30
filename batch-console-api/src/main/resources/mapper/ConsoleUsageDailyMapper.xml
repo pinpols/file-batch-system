@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.console.domain.observability.mapper.ConsoleUsageDailyMapper">
+
+    <select id="setTenantContext" resultType="string">
+        SELECT set_config('app.tenant_id', #{tenantId}, true)
+    </select>
+
+    <resultMap id="DailyUsageMap"
+               type="io.github.pinpols.batch.console.domain.observability.mapper.ConsoleUsageDailyMapper$DailyUsageRow">
+        <constructor>
+            <arg column="stat_date" javaType="java.time.LocalDate"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="source" javaType="java.lang.String"/>
+            <arg column="metric_code" javaType="java.lang.String"/>
+            <arg column="page_code" javaType="java.lang.String"/>
+            <arg column="app_version" javaType="java.lang.String"/>
+            <arg column="event_count" javaType="long"/>
+            <arg column="success_count" javaType="long"/>
+            <arg column="failure_count" javaType="long"/>
+            <arg column="last_seen_at" javaType="java.time.OffsetDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="insertDaily">
+        INSERT INTO batch.console_usage_daily (
+            stat_date, tenant_id, source, metric_code, page_code, app_version,
+            event_count, success_count, failure_count, last_seen_at, updated_at
+        ) VALUES (
+            #{row.statDate}, #{row.tenantId}, #{row.source}, #{row.metricCode},
+            #{row.pageCode}, #{row.appVersion}, #{row.eventCount},
+            #{row.successCount}, #{row.failureCount}, #{row.lastSeenAt}, CURRENT_TIMESTAMP
+        )
+        ON CONFLICT (stat_date, tenant_id, source, metric_code, page_code, app_version)
+        DO UPDATE SET event_count = batch.console_usage_daily.event_count + EXCLUDED.event_count,
+                      success_count = batch.console_usage_daily.success_count + EXCLUDED.success_count,
+                      failure_count = batch.console_usage_daily.failure_count + EXCLUDED.failure_count,
+                      last_seen_at = GREATEST(batch.console_usage_daily.last_seen_at, EXCLUDED.last_seen_at),
+                      updated_at = CURRENT_TIMESTAMP
+    </insert>
+
+    <select id="querySummary" resultMap="DailyUsageMap">
+        SELECT stat_date, tenant_id, source, metric_code, page_code, app_version,
+               event_count, success_count, failure_count, last_seen_at
+          FROM batch.console_usage_daily
+         WHERE tenant_id = #{tenantId}
+           AND stat_date BETWEEN #{from} AND #{to}
+        <if test="metricCode != null and metricCode != ''">
+           AND metric_code = #{metricCode}
+        </if>
+        <if test="pageCode != null and pageCode != ''">
+           AND page_code = #{pageCode}
+        </if>
+         ORDER BY stat_date, metric_code, page_code
+    </select>
+</mapper>

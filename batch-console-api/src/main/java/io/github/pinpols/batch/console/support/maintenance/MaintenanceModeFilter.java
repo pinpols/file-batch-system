@@ -55,6 +55,7 @@ public class MaintenanceModeFilter extends OncePerRequestFilter {
   private static final String ROLE_ADMIN = "ROLE_ADMIN";
 
   private final MaintenanceStateHolder stateHolder;
+  private final MaintenanceStateMetrics metrics;
   private final ObjectMapper objectMapper;
   private final AntPathMatcher pathMatcher = new AntPathMatcher();
 
@@ -63,28 +64,37 @@ public class MaintenanceModeFilter extends OncePerRequestFilter {
       HttpServletRequest request, HttpServletResponse response, FilterChain chain)
       throws ServletException, IOException {
     MaintenanceState state = stateHolder.current();
+    String path = request.getRequestURI();
+    if (!state.sharedStateAvailable()
+        && WRITE_METHODS.contains(request.getMethod())
+        && !isAllowedPath(path)) {
+      metrics.recordRequest("shared_state_unavailable");
+      writeMaintenanceResponse(response, state, "maintenance state unavailable; writes blocked");
+      return;
+    }
     if (!state.enabled()) {
       chain.doFilter(request, response);
       return;
     }
-    String path = request.getRequestURI();
     if (isAllowedPath(path)) {
       chain.doFilter(request, response);
       return;
     }
     if (isAdmin()) {
       // admin 旁路:维护期间运维仍可登 console 操作,头部 banner 提示当前为维护期
+      metrics.recordRequest("admin_bypass");
       response.setHeader("X-Maintenance", "admin-bypass");
       chain.doFilter(request, response);
       return;
     }
     if (state.readOnly() && !WRITE_METHODS.contains(request.getMethod())) {
       // 只读模式下 GET/HEAD/OPTIONS 放行;响应头标记维护中以便前端禁写按钮。
+      metrics.recordRequest("read_only");
       response.setHeader("X-Maintenance", "read-only");
       chain.doFilter(request, response);
       return;
     }
-    writeMaintenanceResponse(response, state);
+    writeMaintenanceResponse(response, state, null);
   }
 
   private boolean isAllowedPath(String path) {
@@ -119,15 +129,18 @@ public class MaintenanceModeFilter extends OncePerRequestFilter {
     return false;
   }
 
-  private void writeMaintenanceResponse(HttpServletResponse response, MaintenanceState state)
+  private void writeMaintenanceResponse(
+      HttpServletResponse response, MaintenanceState state, String fallbackMessage)
       throws IOException {
     if (response.isCommitted()) {
       return;
     }
+    metrics.recordRequest(state.readOnly() ? "read_only_blocked" : "blocked");
     response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
     response.setCharacterEncoding(EncodingUtils.UTF_8);
     response.setContentType(MediaType.APPLICATION_JSON_VALUE);
     response.setHeader("X-Maintenance", state.readOnly() ? "read-only" : "blocked");
+    response.setHeader("X-Maintenance-Version", Long.toString(state.version()));
     // Retry-After 给客户端 / Cloudflare / nginx 一个合理的退避值(秒)
     long retryAfter = computeRetryAfterSeconds(state.etaAt());
     response.setHeader(HttpHeaders.RETRY_AFTER, Long.toString(retryAfter));
@@ -135,9 +148,10 @@ public class MaintenanceModeFilter extends OncePerRequestFilter {
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("maintenance", true);
     body.put("readOnly", state.readOnly());
-    body.put("message", state.message());
+    body.put("message", fallbackMessage == null ? state.message() : fallbackMessage);
     body.put("etaAt", state.etaAt() != null ? state.etaAt().toString() : null);
     body.put("affectedServices", state.affectedServices());
+    body.put("version", state.version());
     objectMapper.writeValue(response.getWriter(), body);
   }
 

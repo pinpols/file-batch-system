@@ -27,6 +27,7 @@ GRAFANA_DASHBOARDS = (
     "grafana-dashboard-batch-coverage.json",
     "grafana-dashboard-batch-mainline.json",
     "grafana-dashboard-batch-sre.json",
+    "grafana-dashboard-batch-capacity.json",
 )
 WORKLOAD_TEMPLATES = tuple(
     ROOT / "helm/batch-platform/templates" / name

@@ -1,6 +1,6 @@
 # 维护 / 降级模式 SOP
 
-> 当前基线：维护状态的后端拦截、公共状态接口、管理员热更新和前端公告已实现；多副本共享状态、统一写按钮冻结和 503 即时跳转仍是完善项。实施方案见 [Console 维护与服务降级完善方案](../plans/maintenance-degradation-hardening-plan-2026-09-29.md)。
+> 当前基线：维护状态的后端拦截、公共状态接口、管理员热更新、V215 多副本共享状态、版本 CAS、失联写保护和基础指标已实现；统一写按钮冻结、503 即时跳转和 staging 双实例联测仍是完善项。实施方案见 [Console 维护与服务降级完善方案](../plans/maintenance-degradation-hardening-plan-2026-09-29.md)。
 
 > 适用场景:DB 灰度切换 / 上线滚动期 / 紧急回滚 / 数据修复等需要冻结所有(或仅写)操作的窗口。
 
@@ -80,9 +80,9 @@ curl -i http://localhost:18080/api/console/jobs
 
 ## 6. 监控
 
-- 当前可从 access log 观察 `X-Maintenance` 命中情况；Grafana 维护状态 gauge / 维护期长度告警仍待接入现有观测栈。
+- 当前可从 access log 观察 `X-Maintenance` 命中情况；已接入 `batch.console.maintenance.enabled`、`read_only`、`shared_state_available`、`version` gauge，以及副本缺失和 replay lag 告警。
 - nginx access log 过滤 `status=503` + `req-header[X-Maintenance]` 区分维护期 vs 真服务异常
-- 计划增加 `console_maintenance_active{readOnly="true|false"}` gauge，并与维护 503 计数关联。
+- 维护 503 计数、维护期过长和下游 fallback 比例仍需在 staging 运行证据中校准阈值；不以本地静态规则代替真实告警触发验证。
 
 ## 7. 回滚
 

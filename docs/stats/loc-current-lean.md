@@ -1,33 +1,33 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `86e7c2fd0`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `d1f7eb3ae`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,572 | 471,824 | 238,380 | 50.5% |
+| 4,588 | 472,986 | 239,069 | 50.5% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| prod | 2,658 | 242,754 | 110,874 | 45.7% |
-| test | 1,171 | 168,368 | 89,547 | 53.2% |
-| script | 600 | 45,261 | 28,331 | 62.6% |
-| config | 52 | 8,015 | 5,684 | 70.9% |
-| infra-config | 32 | 5,204 | 3,779 | 72.6% |
+| prod | 2,671 | 243,513 | 111,260 | 45.7% |
+| test | 1,172 | 168,550 | 89,664 | 53.2% |
+| script | 602 | 45,371 | 28,416 | 62.6% |
+| config | 52 | 8,071 | 5,735 | 71.1% |
+| infra-config | 32 | 5,259 | 3,829 | 72.8% |
 | sql | 59 | 2,222 | 165 | 7.4% |
 
 ## 按语言
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,376 | 346,089 | 175,517 | 50.7% |
-| Shell | 183 | 27,648 | 21,380 | 77.3% |
-| Python | 216 | 28,755 | 14,692 | 51.1% |
-| YAML | 95 | 12,136 | 9,090 | 74.9% |
-| XML | 170 | 20,801 | 6,467 | 31.1% |
+| Java | 3,388 | 346,922 | 175,983 | 50.7% |
+| Shell | 185 | 27,757 | 21,465 | 77.3% |
+| Python | 216 | 28,756 | 14,692 | 51.1% |
+| YAML | 95 | 12,256 | 9,196 | 75.0% |
+| XML | 172 | 20,900 | 6,499 | 31.1% |
 | TypeScript | 37 | 6,573 | 3,097 | 47.1% |
 | Rust | 22 | 8,456 | 2,856 | 33.8% |
 | Properties | 5 | 2,871 | 2,345 | 81.7% |
@@ -42,8 +42,8 @@
 | `load-tests/scripts/run-p2-capacity-profile.sh` | script | Shell | 1,378 | 1,264 |
 | `batch-common/src/main/resources/messages.properties` | prod | Properties | 1,425 | 1,172 |
 | `batch-common/src/main/resources/messages_zh_CN.properties` | prod | Properties | 1,423 | 1,172 |
-| `deploy/docker/observability/prometheus-batch-rules.yml` | config | YAML | 1,161 | 966 |
-| `helm/batch-platform/files/prometheus-batch-rules.yml` | infra-config | YAML | 1,161 | 966 |
+| `deploy/docker/observability/prometheus-batch-rules.yml` | config | YAML | 1,216 | 1,016 |
+| `helm/batch-platform/files/prometheus-batch-rules.yml` | infra-config | YAML | 1,216 | 1,016 |
 | `load-tests/scripts/run-control-plane-worker-benchmark.sh` | script | Shell | 789 | 714 |
 | `helm/batch-platform/values.yaml` | infra-config | YAML | 954 | 675 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java` | prod | Java | 1,145 | 644 |

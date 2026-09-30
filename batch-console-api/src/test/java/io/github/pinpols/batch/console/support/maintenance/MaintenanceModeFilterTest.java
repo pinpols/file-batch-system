@@ -1,9 +1,14 @@
 package io.github.pinpols.batch.console.support.maintenance;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.console.config.ConsoleMaintenanceProperties;
+import io.github.pinpols.batch.console.domain.ops.mapper.MaintenanceStateMapper;
 import jakarta.servlet.FilterChain;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.AfterEach;
@@ -18,7 +23,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 class MaintenanceModeFilterTest {
 
   private ConsoleMaintenanceProperties properties;
+  private MaintenanceStateMapper mapper;
   private MaintenanceStateHolder stateHolder;
+  private MaintenanceStateMetrics metrics;
   private MaintenanceModeFilter filter;
   private MockHttpServletResponse response;
   private AtomicBoolean chainInvoked;
@@ -28,9 +35,15 @@ class MaintenanceModeFilterTest {
   void setUp() {
     SecurityContextHolder.clearContext();
     properties = new ConsoleMaintenanceProperties();
-    stateHolder = new MaintenanceStateHolder(properties);
+    mapper = mock(MaintenanceStateMapper.class);
+    when(mapper.selectSingleton()).thenAnswer(invocation -> entityFromProperties());
+    when(mapper.updateIfVersion(
+            any(boolean.class), any(boolean.class), any(), any(), any(), any(), anyLong()))
+        .thenReturn(1);
+    stateHolder = new MaintenanceStateHolder(properties, mapper, new ObjectMapper());
     stateHolder.initFromProperties();
-    filter = new MaintenanceModeFilter(stateHolder, new ObjectMapper());
+    metrics = mock(MaintenanceStateMetrics.class);
+    filter = new MaintenanceModeFilter(stateHolder, metrics, new ObjectMapper());
     response = new MockHttpServletResponse();
     chainInvoked = new AtomicBoolean(false);
     chain = (req, resp) -> chainInvoked.set(true);
@@ -142,5 +155,21 @@ class MaintenanceModeFilterTest {
 
   private MockHttpServletRequest get(String path) {
     return new MockHttpServletRequest("GET", path);
+  }
+
+  private MaintenanceStateEntity entityFromProperties() {
+    MaintenanceStateEntity entity = new MaintenanceStateEntity();
+    entity.setEnabled(properties.isEnabled());
+    entity.setReadOnly(properties.isReadOnly());
+    entity.setMessage(properties.getMessage());
+    entity.setEtaAt(properties.getEtaAt());
+    entity.setAffectedServicesJson(new ObjectMapper()
+        .valueToTree(
+            properties.getAffectedServices() == null
+                ? java.util.List.of()
+                : properties.getAffectedServices())
+        .toString());
+    entity.setVersion(0L);
+    return entity;
   }
 }

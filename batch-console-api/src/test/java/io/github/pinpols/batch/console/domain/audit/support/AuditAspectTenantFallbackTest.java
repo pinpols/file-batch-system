@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
+import io.github.pinpols.batch.console.shared.usage.ConsoleUsageRecorder;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Set;
@@ -23,6 +24,7 @@ import org.slf4j.MDC;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 守护:console_operation_audit.tenant_id NOT NULL。auth.login / auth.logout 等系统级动作
@@ -32,6 +34,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 class AuditAspectTenantFallbackTest {
 
   private OperationAuditMapper mapper;
+  private ConsoleUsageRecorder usageRecorder;
   private AuditAspect aspect;
 
   @AuditAction(aggregateType = "auth", aggregateId = "-", action = "auth.logout")
@@ -55,13 +58,38 @@ class AuditAspectTenantFallbackTest {
   @BeforeEach
   void setUp() {
     mapper = mock(OperationAuditMapper.class);
-    aspect = new AuditAspect(mapper, new ObjectMapper(), mock(PlatformTransactionManager.class));
+    usageRecorder = mock(ConsoleUsageRecorder.class);
+    aspect = new AuditAspect(
+        mapper, new ObjectMapper(), mock(PlatformTransactionManager.class), usageRecorder);
   }
 
   @AfterEach
   void tearDown() {
     SecurityContextHolder.clearContext();
     MDC.clear();
+    TransactionSynchronizationManager.clear();
+  }
+
+  @Test
+  void shouldRecordUsageOnlyAfterAuditTransactionCommits() throws Throwable {
+    TransactionSynchronizationManager.initSynchronization();
+    try {
+      aspect.wrap(buildJoinPoint());
+
+      org.mockito.Mockito.verifyNoInteractions(usageRecorder);
+      assertThat(TransactionSynchronizationManager.getSynchronizations()).hasSize(1);
+
+      TransactionSynchronizationManager.getSynchronizations().getFirst().afterCommit();
+
+      verify(usageRecorder)
+          .record(
+              org.mockito.ArgumentMatchers.eq("system"),
+              org.mockito.ArgumentMatchers.eq("auth.logout"),
+              org.mockito.ArgumentMatchers.eq(true),
+              org.mockito.ArgumentMatchers.any());
+    } finally {
+      TransactionSynchronizationManager.clearSynchronization();
+    }
   }
 
   @Test

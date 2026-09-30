@@ -107,4 +107,9 @@
             and created_at &lt;= #{toTime}
         </if>
     </select>
+
+    <delete id="deleteBefore">
+        delete from batch.console_ai_audit_log
+         where created_at &lt; #{cutoff}
+    </delete>
 </mapper>

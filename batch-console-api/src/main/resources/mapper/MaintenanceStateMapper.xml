@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.console.domain.ops.mapper.MaintenanceStateMapper">
+    <resultMap id="maintenanceStateMap"
+               type="io.github.pinpols.batch.console.support.maintenance.MaintenanceStateEntity">
+        <id column="id" property="id"/>
+        <result column="enabled" property="enabled"/>
+        <result column="read_only" property="readOnly"/>
+        <result column="message" property="message"/>
+        <result column="eta_at" property="etaAt"/>
+        <result column="affected_services_json" property="affectedServicesJson"/>
+        <result column="version" property="version"/>
+        <result column="updated_by" property="updatedBy"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <select id="selectSingleton" resultMap="maintenanceStateMap">
+        select id, enabled, read_only, message, eta_at,
+               affected_services::text as affected_services_json,
+               version, updated_by, updated_at
+          from batch.console_maintenance_state
+         where id = 1
+    </select>
+
+    <update id="updateIfVersion">
+        update batch.console_maintenance_state
+           set enabled = #{enabled},
+               read_only = #{readOnly},
+               message = #{message},
+               eta_at = #{etaAt},
+               affected_services = #{affectedServicesJson}::jsonb,
+               version = version + 1,
+               updated_by = #{updatedBy},
+               updated_at = current_timestamp
+         where id = 1
+           and version = #{expectedVersion}
+    </update>
+</mapper>

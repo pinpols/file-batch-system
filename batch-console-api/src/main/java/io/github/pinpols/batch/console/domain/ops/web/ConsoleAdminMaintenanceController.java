@@ -8,6 +8,7 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder;
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +37,7 @@ public class ConsoleAdminMaintenanceController {
 
   private final MaintenanceStateHolder stateHolder;
   private final ConsoleResponseFactory responseFactory;
+  private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
   @GetMapping("/maintenance")
   public CommonResponse<MaintenanceStatusResponse> get() {
@@ -57,7 +59,8 @@ public class ConsoleAdminMaintenanceController {
         request.getMessage(),
         request.getEtaAt(),
         affected);
-    MaintenanceState applied = stateHolder.update(next);
+    MaintenanceState applied =
+        stateHolder.update(next, requestMetadataResolver.current().operatorId());
     return responseFactory.success(toResponse(applied));
   }
 
@@ -67,6 +70,7 @@ public class ConsoleAdminMaintenanceController {
         state.readOnly(),
         state.message(),
         state.etaAt() != null ? state.etaAt().toString() : null,
-        state.affectedServices());
+        state.affectedServices(),
+        state.version());
   }
 }

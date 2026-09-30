@@ -1,8 +1,8 @@
 # Console 使用率统计方案
 
-状态：基础用量摘要已存在；日聚合统计方案尚未落地
+状态：后端日聚合统计第一版已落地；前端趋势展示和真 PG 联测仍待完成
 
-> 复核日期：2026-09-30。当前系统已有租户用量摘要和 Dashboard 查询，但没有本文规划的 `console_usage_daily`、事件标准化、有界批量 upsert、独立 `usage-summary` 契约或使用率报表。以下方案仍是后续实施计划，不应把现有基础摘要误认为完整使用率统计。
+> 复核日期：2026-09-30。后端已落地 `console_usage_daily`、事件标准化、并发累加 upsert、独立 `usage-summary` 契约；前端使用率报表、业务结果对账和真 PG 联测仍是后续验收项。
 
 ## 1. 目标与边界
 
@@ -37,11 +37,10 @@
 - `batch.console_operation_audit`：由后端 `@AuditAction` 切面写入，支持租户、操作者、动作、结果和 traceId 查询；
 - `GET /api/console/queries/operation-audits`：控制台操作审计查询入口。
 
-当前没有：
+当前仍没有：
 
 - 独立的前端 telemetry 数据库表；
 - `frontend-telemetry` Kafka topic；
-- 日聚合表和使用率查询接口；
 - 前端使用率报表页面。
 
 ## 3. 推荐架构
@@ -171,7 +170,11 @@ eventCount, successCount, failureCount
 
 同一功能的中文、英文文案、按钮文本变化不能改变 `metric_code`。
 
-## 8. 分阶段实施与验收
+## 8. 当前落地状态与分阶段验收
+
+截至 2026-09-30，后端已落地第一版 PostgreSQL 日聚合闭环：V216 月分区表、严格 RLS、操作审计投影、并发安全的累加 upsert、租户上下文设置和 `GET /api/console/queries/usage-summary`。聚合是派生数据，写失败只告警，不影响原始业务和操作审计。
+
+尚未声称完成的部分：前端趋势页面、业务结果对账、聚合写失败/高并发真 PG IT、容量基线和 retention 生产策略验证。
 
 ### P0：指标和契约冻结
 
@@ -182,7 +185,7 @@ eventCount, successCount, failureCount
 
 验收：同一操作在中英文切换、重试和失败时不会产生错误的成功统计。
 
-### P1：PostgreSQL 日聚合
+### P1：PostgreSQL 日聚合（后端已落地）
 
 - 新增 Flyway 表、RLS、月度分区和归档策略；
 - 增加标准化器、有界缓冲和批量 upsert；

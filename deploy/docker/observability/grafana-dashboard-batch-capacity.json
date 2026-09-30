@@ -1,0 +1,103 @@
+{
+  "title": "Batch Platform - capacity and backpressure",
+  "uid": "batch-platform-capacity",
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "editable": true,
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Scheduler queue oldest wait",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "batch_orchestrator_scheduler_queue_oldest_wait_seconds",
+          "legendFormat": "oldest wait"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Worker execution permits",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "batch_worker_semaphore_available",
+          "legendFormat": "{{workerType}} available"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Kafka consumer lag",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "kafka_consumergroup_lag{consumergroup=~\"batch-worker-(import|export|process|dispatch|atomic)\"}",
+          "legendFormat": "{{consumergroup}}/{{topic}}/{{partition}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Outbox and dead-letter backlog",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "batch_outbox_pending_events",
+          "legendFormat": "outbox pending"
+        },
+        {
+          "expr": "batch_dead_letter_tasks_pending",
+          "legendFormat": "dead-letter pending"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Claim and execution latency",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, job) (rate(batch_task_claim_duration_seconds_bucket[5m])))",
+          "legendFormat": "claim p95 {{job}}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, job) (rate(batch_pipeline_step_execution_duration_seconds_bucket[5m])))",
+          "legendFormat": "step p95 {{job}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Database pool pressure",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "targets": [
+        {
+          "expr": "hikaricp_connections_pending",
+          "legendFormat": "{{pool}} pending"
+        },
+        {
+          "expr": "hikaricp_connections_active / clamp_min(hikaricp_connections_max, 1)",
+          "legendFormat": "{{pool}} active ratio"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Replica health",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "targets": [
+        {
+          "expr": "batch_console_replica_replay_lag_seconds",
+          "legendFormat": "replay lag seconds"
+        },
+        {
+          "expr": "batch_console_replica_streaming_count",
+          "legendFormat": "streaming replicas"
+        }
+      ]
+    }
+  ]
+}

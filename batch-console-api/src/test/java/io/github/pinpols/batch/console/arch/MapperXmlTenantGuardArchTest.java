@@ -69,6 +69,10 @@ class MapperXmlTenantGuardArchTest extends BaseMapperXmlTenantGuardArchTest {
         "ConsoleWebhookDeliveryLogMapper#markRetrySuccess",
         "ConsoleWebhookDeliveryLogMapper#markRetryFailure",
         "ConsoleWebhookDeliveryLogMapper#markGiveUp",
+        // AI 审计留存是显式开关控制的后台清理任务，按全局截止时间清理所有租户的过期证据。
+        "ConsoleAiAuditLogMapper#deleteBefore",
+        // 维护模式是单例系统状态，不属于任何租户；CAS 更新必须按 singleton id/version 写入。
+        "MaintenanceStateMapper#updateIfVersion",
         // 工作流定义子表级联删除:按父 workflow_definition_id 删(父定义已按 tenant 校验后整体重建)
         "WorkflowNodeMapper#deleteByWorkflowDefinitionId",
         "WorkflowEdgeMapper#deleteByWorkflowDefinitionId");

@@ -28,6 +28,8 @@
 
 ### Added
 
+- **控制面治理能力**：新增共享维护状态与版本 CAS、维护响应版本头、按租户日使用率聚合、AI 成本/留存治理、容量告警面板，以及运行证据和 Worker 滚动升级验证脚本；后端接口、迁移和运维文档同步更新。
+
 - **CI 范围与门禁治理**：统一 PR 和 SDK workflow 的变更范围 composite action，改用稳定且不重名的 scope checks；SDK 五语言契约矩阵通过稳定聚合检查纳入主干 Ruleset required checks；Full Gate 增加每周无条件巡检，防止 `paths-ignore` 和分类规则漂移。
 - **CI 集成测试覆盖守护**：新增主 reactor 集成测试模块发现检查，要求含 `*IntegrationTest` / 非 E2E `*IT` 的模块必须进入 `full-ci-gate` 的 `mvn verify -DskipITs=false` shard；`full-ci-gate` 同步执行 E2E shard 静态覆盖检查，防直推 main 时测试清单漂移。
 - **Console AI OpenAI-compatible 接入**：新增 `openai-compatible` provider 模式,支持 DeepSeek、千问、智谱、Kimi、MiniMax 或私有兼容代理通过统一配置接入;聊天端点与 RAG embedding 配置分离,兼容模式禁止自动跨 Provider failover。
@@ -45,6 +47,8 @@
 - **容量治理与自适应流控**：补齐 Trigger admission、Outbox 有界释放、Kafka lag 反馈和冷启动保护；增加 PostgreSQL 生产容量 profile、干净环境 preflight 与 10 万任务容量验证入口。
 
 ### Changed
+
+- **控制面运维与可观测性**：维护状态改为数据库共享事实源，增加降级来源响应头、状态指标、容量告警和滚动升级操作说明；使用率写入与业务审计提交顺序保持一致。
 
 - **本地启动与日志安全**：`start-all.sh` 只停止由本仓 runtime jar 占用的端口，优先 TERM 并仅在显式 `FORCE_KILL=1` 时强杀；当前日志目录自动归档压缩包和手工调试日志，重复业务告警增加时间窗聚合计数。
 - **Compose 应用镜像与端口暴露**：本地应用镜像默认 tag 从 `local` 调整为 `dev`，避免与 Spring `local` profile 混淆；Console、Trigger、Orchestrator 与五类 Worker 默认统一绑定 `127.0.0.1`，需局域网访问时显式设置 `APP_BIND_IP=0.0.0.0`。
@@ -88,6 +92,9 @@
 - **迁移与脚本注释规范**：统一历史 Flyway 迁移及 SH/PY/SQL 脚本说明注释的中文表达和头部格式，新增可手动运行的增量/存量扫描器。历史迁移内容变化会导致 Flyway checksum 改变；部署前须核对目标库迁移状态，并安排重建空库或经审查的 checksum repair。PR CI 持续执行迁移 checksum 校验和新增/修改迁移的安全 lint。
 
 ### Fixed
+
+- 修复操作审计外层事务回滚后仍可能产生使用率幽灵计数的问题；派生聚合改为业务事务提交后写入，并补充真实提交时机测试。
+- 修复控制台新增 Mapper 更新、清理 SQL 的租户守卫审计误报；AI 审计保留索引改为并发创建且保持 Flyway 单一非事务语义。
 
 - 修复 Trigger Outbox 锁最长持有时间短于发布超时、以及 Orchestrator Outbox publisher future 永不完成时阻塞 ACK 等待的问题；发布超时现由业务配置兜底并按失败重试路径收敛。
 - 修复告警升级通知在状态 CAS 前直接调用外部通知通道的问题；新增告警升级通知 outbox 表和发布服务，将升级状态写入与通知信封落库放入同一事务，避免单实例 at-least-once 和租约过期跨实例重复破坏通知契约。

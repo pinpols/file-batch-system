@@ -35,7 +35,8 @@ public class ConsoleSystemController {
         state.readOnly(),
         state.message(),
         state.etaAt() != null ? state.etaAt().toString() : null,
-        state.affectedServices());
+        state.affectedServices(),
+        state.version());
     return CommonResponse.success(response);
   }
 
