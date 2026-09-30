@@ -12767,7 +12767,6 @@ components:
           description: 租户 id;可由请求体或请求头携带(两者都给时须一致)。
         sessionId:
           type: string
-          maxLength: 128
           description: 会话 id；服务端持久化开启时续接需由同一租户和操作者所有。
         contextVersion:
           type: string
