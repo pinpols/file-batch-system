@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.support.maintenance;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
@@ -148,7 +149,7 @@ public class MaintenanceModeFilter extends OncePerRequestFilter {
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("maintenance", true);
     body.put("readOnly", state.readOnly());
-    body.put("message", fallbackMessage == null ? state.message() : fallbackMessage);
+    body.put("message", EmptyChecks.isNull(fallbackMessage) ? state.message() : fallbackMessage);
     body.put("etaAt", state.etaAt() != null ? state.etaAt().toString() : null);
     body.put("affectedServices", state.affectedServices());
     body.put("version", state.version());

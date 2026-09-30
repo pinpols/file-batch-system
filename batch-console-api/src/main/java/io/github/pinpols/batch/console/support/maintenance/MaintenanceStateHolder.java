@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.support.maintenance;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsoleMaintenanceProperties;
 import io.github.pinpols.batch.console.domain.ops.mapper.MaintenanceStateMapper;
 import jakarta.annotation.PostConstruct;
@@ -59,7 +60,7 @@ public class MaintenanceStateHolder {
         properties.getMessage(),
         properties.getEtaAt(),
         List.copyOf(
-            properties.getAffectedServices() == null
+            EmptyChecks.isNull(properties.getAffectedServices())
                 ? List.of()
                 : properties.getAffectedServices()),
         0L,
@@ -97,7 +98,7 @@ public class MaintenanceStateHolder {
         normalized.message(),
         normalized.etaAt(),
         servicesJson,
-        operator == null || operator.isBlank() ? "console-admin" : operator,
+        EmptyChecks.isBlank(operator) ? "console-admin" : operator,
         current.version());
     if (updated != 1) {
       refreshFromStore();
@@ -128,7 +129,7 @@ public class MaintenanceStateHolder {
   private void refreshFromStore() {
     try {
       MaintenanceStateEntity entity = mapper.selectSingleton();
-      if (entity == null) {
+      if (EmptyChecks.isNull(entity)) {
         throw new IllegalStateException("maintenance state singleton is missing");
       }
       List<String> services = objectMapper.readValue(
@@ -150,7 +151,7 @@ public class MaintenanceStateHolder {
   }
 
   private List<String> normalizeServices(List<String> services) {
-    return List.copyOf(services == null ? List.of() : services);
+    return List.copyOf(EmptyChecks.isNull(services) ? List.of() : services);
   }
 
   private String writeServices(List<String> services) {

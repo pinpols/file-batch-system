@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.observability.service;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleUsageDailyMapper;
 import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleUsageDailyMapper.DailyUsageRow;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
@@ -24,8 +25,8 @@ public class ConsoleUsageSummaryService {
 
   public List<DailyUsageRow> query(
       String tenantId, LocalDate from, LocalDate to, String metricCode, String pageCode) {
-    if (from == null
-        || to == null
+    if (EmptyChecks.isNull(from)
+        || EmptyChecks.isNull(to)
         || from.isAfter(to)
         || from.plusDays(MAX_DAYS).isBefore(to)) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument_detail");

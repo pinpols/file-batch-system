@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.resilience;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -21,7 +22,7 @@ public final class DegradedResponseHeaders {
    */
   public static void mark(String service) {
     String normalized = normalize(service);
-    if (normalized == null) {
+    if (EmptyChecks.isNull(normalized)) {
       return;
     }
     RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
@@ -29,15 +30,15 @@ public final class DegradedResponseHeaders {
       return;
     }
     HttpServletResponse response = servletAttributes.getResponse();
-    if (response == null || response.isCommitted()) {
+    if (EmptyChecks.isNull(response) || response.isCommitted()) {
       return;
     }
     Set<String> sources = new LinkedHashSet<>();
     String current = response.getHeader(HEADER_NAME);
-    if (current != null && !current.isBlank()) {
+    if (EmptyChecks.isNotBlank(current)) {
       for (String source : current.split(",")) {
         String value = normalize(source);
-        if (value != null) {
+        if (EmptyChecks.isNotNull(value)) {
           sources.add(value);
         }
       }
@@ -47,10 +48,10 @@ public final class DegradedResponseHeaders {
   }
 
   private static String normalize(String value) {
-    if (value == null || value.isBlank()) {
+    if (EmptyChecks.isBlank(value)) {
       return null;
     }
     String normalized = value.trim().replaceAll("[^A-Za-z0-9._-]", "_");
-    return normalized.isBlank() ? null : normalized;
+    return EmptyChecks.isBlank(normalized) ? null : normalized;
   }
 }

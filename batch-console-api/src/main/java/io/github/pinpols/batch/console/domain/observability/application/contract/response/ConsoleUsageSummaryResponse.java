@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.observability.application.contract.response;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleUsageDailyMapper.DailyUsageRow;
 import java.time.LocalDate;
 
@@ -27,6 +28,6 @@ public record ConsoleUsageSummaryResponse(
         row.eventCount(),
         row.successCount(),
         row.failureCount(),
-        row.lastSeenAt() == null ? null : row.lastSeenAt().toString());
+        EmptyChecks.isNull(row.lastSeenAt()) ? null : row.lastSeenAt().toString());
   }
 }

@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.console.config.ConsoleMaintenanceProperties;
 import io.github.pinpols.batch.console.domain.ops.mapper.MaintenanceStateMapper;
 import jakarta.servlet.FilterChain;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -105,7 +106,7 @@ class MaintenanceModeFilterTest {
     refresh();
     SecurityContextHolder.getContext()
         .setAuthentication(new UsernamePasswordAuthenticationToken(
-            "ops-admin", null, java.util.List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+            "ops-admin", null, List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
 
     MockHttpServletRequest post = new MockHttpServletRequest("POST", "/api/console/jobs");
     filter.doFilterInternal(post, response, chain);
@@ -122,7 +123,7 @@ class MaintenanceModeFilterTest {
     refresh();
     SecurityContextHolder.getContext()
         .setAuthentication(new UsernamePasswordAuthenticationToken(
-            "viewer", null, java.util.List.of(new SimpleGrantedAuthority("ROLE_TENANT_USER"))));
+            "viewer", null, List.of(new SimpleGrantedAuthority("ROLE_TENANT_USER"))));
 
     filter.doFilterInternal(get("/api/console/jobs"), response, chain);
 

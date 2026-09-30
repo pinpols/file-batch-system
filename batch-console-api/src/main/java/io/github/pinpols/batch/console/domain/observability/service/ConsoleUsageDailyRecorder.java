@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.observability.service;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleUsageDailyMapper;
 import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleUsageDailyMapper.DailyUsageRow;
@@ -29,7 +30,7 @@ public class ConsoleUsageDailyRecorder implements ConsoleUsageRecorder {
   /** 使用独立事务，避免聚合写失败把外层业务或审计事务标记为回滚。 */
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void record(String tenantId, String action, boolean success, Instant createdAt) {
-    if (!Texts.hasText(tenantId) || createdAt == null) {
+    if (EmptyChecks.isBlank(tenantId) || EmptyChecks.isNull(createdAt)) {
       return;
     }
     mapper.setTenantContext(tenantId);
