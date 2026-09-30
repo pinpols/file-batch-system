@@ -15,9 +15,9 @@
             <arg column="metric_code" javaType="java.lang.String"/>
             <arg column="page_code" javaType="java.lang.String"/>
             <arg column="app_version" javaType="java.lang.String"/>
-            <arg column="event_count" javaType="long"/>
-            <arg column="success_count" javaType="long"/>
-            <arg column="failure_count" javaType="long"/>
+            <arg column="event_count" javaType="_long"/>
+            <arg column="success_count" javaType="_long"/>
+            <arg column="failure_count" javaType="_long"/>
             <arg column="last_seen_at" javaType="java.time.OffsetDateTime"/>
         </constructor>
     </resultMap>

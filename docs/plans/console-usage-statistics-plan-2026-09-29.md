@@ -174,7 +174,7 @@ eventCount, successCount, failureCount
 
 截至 2026-09-30，后端已落地第一版 PostgreSQL 日聚合闭环：V216 月分区表、严格 RLS、操作审计投影、并发安全的累加 upsert、租户上下文设置和 `GET /api/console/queries/usage-summary`。聚合是派生数据，写失败只告警，不影响原始业务和操作审计。
 
-尚未声称完成的部分：前端趋势页面、业务结果对账、聚合写失败/高并发真 PG IT、容量基线和 retention 生产策略验证。
+尚未声称完成的部分：前端趋势页面、业务结果对账、聚合写失败语义验证、容量基线和 retention 生产策略验证。真实 PostgreSQL 集成测试覆盖并发累加、RLS 租户隔离和事务内租户上下文；该测试不替代 staging 容量验证或业务结果对账。
 
 ### P0：指标和契约冻结
 
@@ -190,7 +190,7 @@ eventCount, successCount, failureCount
 - 新增 Flyway 表、RLS、月度分区和归档策略；
 - 增加标准化器、有界缓冲和批量 upsert；
 - 增加 `usage-summary` 查询接口；
-- 增加租户、权限、并发 upsert 和保留策略测试。
+- 增加租户、权限、并发 upsert 和保留策略测试；已补真 PG 并发累加及 RLS 隔离测试，写失败和保留策略仍需单独验证。
 
 验收：
 
@@ -198,7 +198,7 @@ eventCount, successCount, failureCount
 - 重复事件不会无限放大统计；
 - 业务操作失败不会计入成功数；
 - 聚合写失败不影响原始业务请求；
-- 1000 个并发小批次下无连接池耗尽和锁等待扩散。
+- staging 中 1000 个并发小批次下无连接池耗尽和锁等待扩散（本地集成测试不作为容量结论）。
 
 ### P2：前端展示和运行治理
 

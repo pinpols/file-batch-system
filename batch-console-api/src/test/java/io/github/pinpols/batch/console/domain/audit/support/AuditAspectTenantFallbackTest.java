@@ -1,6 +1,11 @@
 package io.github.pinpols.batch.console.domain.audit.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -11,6 +16,7 @@ import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.shared.usage.ConsoleUsageRecorder;
 import java.lang.reflect.Method;
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -87,6 +93,23 @@ class AuditAspectTenantFallbackTest {
               org.mockito.ArgumentMatchers.eq("auth.logout"),
               org.mockito.ArgumentMatchers.eq(true),
               org.mockito.ArgumentMatchers.any());
+    } finally {
+      TransactionSynchronizationManager.clearSynchronization();
+    }
+  }
+
+  @Test
+  void shouldNotPropagateUsageProjectionFailureAfterAuditCommit() throws Throwable {
+    doThrow(new IllegalStateException("usage projection unavailable"))
+        .when(usageRecorder)
+        .record(anyString(), anyString(), anyBoolean(), any(Instant.class));
+    TransactionSynchronizationManager.initSynchronization();
+    try {
+      aspect.wrap(buildJoinPoint());
+
+      assertThatCode(() ->
+              TransactionSynchronizationManager.getSynchronizations().getFirst().afterCommit())
+          .doesNotThrowAnyException();
     } finally {
       TransactionSynchronizationManager.clearSynchronization();
     }
