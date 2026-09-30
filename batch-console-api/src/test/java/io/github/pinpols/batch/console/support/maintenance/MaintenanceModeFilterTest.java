@@ -166,9 +166,7 @@ class MaintenanceModeFilterTest {
     entity.setEtaAt(properties.getEtaAt());
     entity.setAffectedServicesJson(new ObjectMapper()
         .valueToTree(
-            properties.getAffectedServices() == null
-                ? java.util.List.of()
-                : properties.getAffectedServices())
+            properties.getAffectedServices() == null ? List.of() : properties.getAffectedServices())
         .toString());
     entity.setVersion(0L);
     return entity;
