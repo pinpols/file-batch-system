@@ -19,6 +19,15 @@ class CommentLanguageTest(unittest.TestCase):
             "Keep this guard because stale leaders can replay tasks.",
         )
 
+    def test_detects_english_javadoc_with_utf8_term(self) -> None:
+        self.assertEqual(
+            MODULE.prose_comment(
+                "/** UTF-8 locale for test-service processes; database collation remains image-default. */",
+                ".java",
+            ),
+            "UTF-8 locale for test-service processes; database collation remains image-default.",
+        )
+
     def test_allows_chinese_explanation_with_technical_terms(self) -> None:
         self.assertIsNone(MODULE.prose_comment("-- 使用 ON CONFLICT 保证幂等写入。", ".sql"))
 

@@ -26,7 +26,6 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -57,7 +56,6 @@ public class AlertmanagerEmitPublisher {
   private final ExecutorService executor;
   private final String alertsUri;
 
-  @Autowired
   public AlertmanagerEmitPublisher(
       AlertmanagerEmitProperties props,
       ObjectProvider<MeterRegistry> meterRegistryProvider,

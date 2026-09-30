@@ -6,6 +6,9 @@
 >
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
+### 2026-09-30
+- **Java 构造器注入与 Lombok 访问器边界**：生产依赖统一走构造器注入，唯一构造器省略冗余 `@Autowired`，多构造器必须显式指定 Spring 注入入口；Lombok 生成访问器不得与同语义手写样板重复，派生值、别名、校验和框架回调保留显式实现。
+
 ### 2026-09-28
 - **项目结构与运行系统边界校准**：`project-structure.md` 更新实际顶层资产、Console 分层、Worker 固定阶段与插件边界、Flyway 迁移版本和生成目录边界；明确生产主路径是 Linux 容器 / Kubernetes，Windows 仅推荐 WSL2 + Docker Desktop 开发形态，暂不承诺 Windows Server 原生进程部署。对象存储口径同步为“S3 兼容对象存储，本地默认 MinIO”，避免把本地实现误写成生产抽象。
 - **ADR-045 Console AI provider 边界扩展**：Console AI 增加 `openai-compatible` 聊天 provider,用于 DeepSeek、千问、智谱、Kimi、MiniMax 或私有兼容代理；不为每家厂商引入独立 SDK。聊天端点与 RAG embedding 配置分离，兼容模式禁止自动跨 Provider failover，避免 prompt/context 被静默发送到未授权服务。

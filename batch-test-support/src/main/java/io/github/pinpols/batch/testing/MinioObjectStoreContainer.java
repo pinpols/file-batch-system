@@ -32,6 +32,8 @@ public final class MinioObjectStoreContainer extends GenericContainer<MinioObjec
     this.accessKey = accessKey;
     this.secretKey = secretKey;
     this.defaultBucket = defaultBucket;
+    withEnv("LANG", TestContainerImages.UTF8_LOCALE);
+    withEnv("LC_ALL", TestContainerImages.UTF8_LOCALE);
     withExposedPorts(MINIO_API_PORT, MINIO_CONSOLE_PORT);
     withEnv("MINIO_ROOT_USER", accessKey);
     withEnv("MINIO_ROOT_PASSWORD", secretKey);
