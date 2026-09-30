@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.ops.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.application.contract.request.system.UpdateMaintenanceRequest;
 import io.github.pinpols.batch.console.application.contract.response.MaintenanceStatusResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
@@ -71,6 +72,7 @@ public class ConsoleAdminMaintenanceController {
         state.message(),
         state.etaAt() != null ? state.etaAt().toString() : null,
         state.affectedServices(),
-        state.version());
+        state.version(),
+        EmptyChecks.isNull(state.updatedAt()) ? null : state.updatedAt().toString());
   }
 }

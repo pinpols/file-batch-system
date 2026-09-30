@@ -153,6 +153,9 @@ public class MaintenanceModeFilter extends OncePerRequestFilter {
     body.put("etaAt", state.etaAt() != null ? state.etaAt().toString() : null);
     body.put("affectedServices", state.affectedServices());
     body.put("version", state.version());
+    body.put(
+        "updatedAt",
+        EmptyChecks.isNull(state.updatedAt()) ? null : state.updatedAt().toString());
     objectMapper.writeValue(response.getWriter(), body);
   }
 
