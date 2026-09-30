@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.audit.mapper;
 
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiConversationEntity;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiTurnEntity;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
@@ -30,7 +31,16 @@ public interface ConsoleAiConversationMapper {
   int completeTurn(ConsoleAiTurnEntity turn);
 
   List<ConsoleAiConversationEntity> selectByOwner(
-      @Param("ownerUserId") String ownerUserId, @Param("limit") int limit);
+      @Param("tenantId") String tenantId,
+      @Param("ownerUserId") String ownerUserId,
+      @Param("limit") int limit);
+
+  List<ConsoleAiConversationEntity> selectPageByOwner(
+      @Param("tenantId") String tenantId,
+      @Param("ownerUserId") String ownerUserId,
+      @Param("beforeUpdatedAt") Instant beforeUpdatedAt,
+      @Param("beforeId") String beforeId,
+      @Param("limit") int limit);
 
   List<ConsoleAiTurnEntity> selectTurns(
       @Param("conversationId") String conversationId,

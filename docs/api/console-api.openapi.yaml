@@ -3512,6 +3512,33 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleAiConversationList'
+  /api/console/ai/conversations/page:
+    get:
+      tags: [AI]
+      summary: Page through the current user's unexpired AI conversations
+      operationId: pageConsoleAiConversations
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 512
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Owner-scoped cursor page ordered by update time and ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleAiConversationPage'
   /api/console/ai/conversations/{conversationId}/turns:
     get:
       tags: [AI]
@@ -11964,6 +11991,13 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/ConsoleAiConversationView'
+    CommonResponseConsoleAiConversationPage:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleAiConversationPageResponse'
     CommonResponseConsoleAiTurnList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -12907,6 +12941,18 @@ components:
           type: string
           format: date-time
       required: [id, title, contextVersion, createdAt, updatedAt, expiresAt]
+    ConsoleAiConversationPageResponse:
+      type: object
+      required: [total, pageNo, pageSize, items, nextCursor, hasMore]
+      properties:
+        total: { type: integer, format: int64, description: Cursor mode always returns 0 }
+        pageNo: { type: integer, format: int32, description: Cursor mode always returns 0 }
+        pageSize: { type: integer, format: int32 }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ConsoleAiConversationView' }
+        nextCursor: { type: string, nullable: true }
+        hasMore: { type: boolean }
     ConsoleAiTurnView:
       type: object
       properties:

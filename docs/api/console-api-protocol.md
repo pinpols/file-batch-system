@@ -7,6 +7,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-10-01 | **Console AI 会话游标分页**：新增 `GET /api/console/ai/conversations/page?cursor&limit`，返回当前租户和操作者未过期会话的 `PageResponse`；按 `updatedAt` 和 `id` 稳定倒序，非法游标返回参数错误。旧数组列表接口保持兼容，单页大小仍由服务端配置上限约束。 |
 | 2026-09-30 | **Console AI 会话与费用治理 API**：`AiChatRequest` 增加 `contextVersion=v1` 和仅含 `pageType/objectType/objectId` 的白名单上下文；新增当前操作者会话列表、会话轮次分页、会话删除及租户 UTC 月度估算费用摘要接口。聊天审计响应新增 token、估算 USD 和计价状态字段。会话默认关闭，启用后正文以 AES-GCM/KMS 密文存储并按租户/操作者隔离，必须配置保留期；费用为 provider 用量与运维费率的估算，不是供应商账单对账。 |
 | 2026-09-30 | **控制面治理能力补齐（后端）**：新增共享数据库维护状态版本与 CAS、维护期响应版本字段和实际降级来源响应头；新增租户级操作使用率日聚合查询 `GET /api/console/observability/usage-summary`。新增字段和端点均为后端加法，不改变既有路径、鉴权和租户隔离语义。AI 审计成本/保留配置、容量告警和运行证据脚本属于运维治理，不新增前端必需字段。 |
 | 2026-09-28 | **Result version/readiness BFF 内部治理（wire 不变）**：`ConsoleResultVersionController` 仅去除 web 层直接暴露 `RestClient` 类型，仍通过 `OrchestratorInternalRestClient` 转发到既有 `/internal/orchestrator/result-versions/*`。`/api/console/result-versions`、`/effective`、`/{id}`、`/{id}/promote`、`/{id}/reject` 的路径、请求参数、响应 schema、鉴权和 readiness/result_version 语义均不变；本条作为 readiness 相关 Controller 变更的文档同步证据。 |

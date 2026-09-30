@@ -96,7 +96,23 @@
     <select id="selectByOwner" resultMap="ConversationMap">
         SELECT id, tenant_id, owner_user_id, title, context_version, next_turn_no, created_at, updated_at, expires_at
           FROM batch.console_ai_conversation
-         WHERE owner_user_id = #{ownerUserId}
+         WHERE tenant_id = #{tenantId}
+           AND owner_user_id = #{ownerUserId}
+           AND expires_at > CURRENT_TIMESTAMP
+         ORDER BY updated_at DESC, id DESC
+         LIMIT #{limit}
+    </select>
+
+    <select id="selectPageByOwner" resultMap="ConversationMap">
+        SELECT id, tenant_id, owner_user_id, title, context_version, next_turn_no, created_at, updated_at, expires_at
+          FROM batch.console_ai_conversation
+         WHERE tenant_id = #{tenantId}
+           AND owner_user_id = #{ownerUserId}
+           AND expires_at > CURRENT_TIMESTAMP
+        <if test="beforeUpdatedAt != null">
+           AND (updated_at &lt; #{beforeUpdatedAt}
+                OR (updated_at = #{beforeUpdatedAt} AND id &lt; #{beforeId}))
+        </if>
          ORDER BY updated_at DESC, id DESC
          LIMIT #{limit}
     </select>

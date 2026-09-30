@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.application.contract.request.auth.AiChatRequest;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiApplicationService;
@@ -58,6 +59,17 @@ public class ConsoleAiController {
     ConsoleRequestMetadata metadata = metadataResolver.current();
     return responseFactory.success(
         applicationService.conversations(metadata.tenantId(), metadata.operatorId(), limit));
+  }
+
+  @GetMapping("/conversations/page")
+  public CommonResponse<PageResponse<ConsoleAiApplicationService.ConversationSummary>>
+      conversationPage(
+          @RequestParam(required = false) String cursor,
+          @RequestParam(defaultValue = "20") int limit) {
+    authorizationService.assertAllowed();
+    ConsoleRequestMetadata metadata = metadataResolver.current();
+    return responseFactory.success(applicationService.conversationPage(
+        metadata.tenantId(), metadata.operatorId(), cursor, limit));
   }
 
   @GetMapping("/conversations/{conversationId}/turns")
