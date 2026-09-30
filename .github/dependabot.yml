@@ -53,7 +53,8 @@ updates:
       day: "monday"
       time: "03:00"
       timezone: "Asia/Shanghai"
-    open-pull-requests-limit: 0
+    # 保留有限的版本更新队列；安全更新不受该上限影响。
+    open-pull-requests-limit: 5
     commit-message:
       prefix: "chore(ci)"
     labels:

@@ -17,6 +17,34 @@
 >
 > `staging-gate` **仍存在**:作为 nightly schedule / staging 分支的全量 E2E 回退闸门(见上表与 `e2e-tier-strategy.md`)。
 
+## CI 依赖与安全扫描版本基线
+
+2026-09-30 已完成第一批 CI 依赖治理升级。当前工作流统一使用：
+
+| 类别 | 当前版本 | 说明 |
+|---|---|---|
+| `actions/checkout` | v7 | 所有 workflow/composite action 统一 |
+| `actions/setup-python` | v7 | Python 3.x 版本由 workflow 输入决定 |
+| `actions/setup-java` | v6 | JDK/Maven cache 和发布凭据需按原输入验证 |
+| `actions/setup-node` | v7 | npm 发布 job 显式提供 `NODE_AUTH_TOKEN` |
+| `actions/setup-go` | v7 | 保留现有 `go-version` / `go-version-file` 输入 |
+| `actions/upload-artifact` | v7 | artifact 名称和下载配对保持不变 |
+| `docker/setup-buildx-action` | v4 | Buildx/Bake 构建需在 CI 回归 |
+| Hadolint Action | v3.4.0 | Dockerfile lint |
+| SBOM Action | v0.24.0 | 固定具体 release，不再使用浮动 `v0` |
+| Squawk / oasdiff | 2.65.0 / 1.32.1 | 迁移安全和 OpenAPI 破坏性变更守护 |
+| Trivy CLI | 0.74.0 | `vuln,misconfig` 扫描参数统一 |
+
+升级提交当前只代表文件级变更和本地静态检查通过，不代表 PR Gate 或 Full Gate 已通过。每次变更后必须按 [CI 外部 Actions 版本升级待办](../backlog/ci-external-action-upgrade-backlog-2026-09-30.md) 运行对应回归。
+
+运行环境约束：
+
+- setup-python/setup-node/setup-go 的 Node 24 运行时要求 GitHub Actions Runner `v2.327.1` 或更高；GitHub-hosted `ubuntu-latest` 满足该要求，self-hosted runner 必须单独核对。
+- `actions/upload-artifact@v7` 使用当前 artifact 服务契约；迁移到 GHES 前必须确认 GHES 支持该 major，否则保持独立兼容版本或由平台团队提供替代上传方案。
+- Gitleaks `8.30.1` 本轮不盲目更换；已在 Docker `linux/amd64` 用同版 artifact 验证合成 `ghp_...` 正向退出 1、负向退出 0，但仍需 PR/Full Gate 实跑并继续关注上游规则变化。
+- CodeQL、Trivy Action、Checkov、发布 Action 和 Sonar 仍按 G7 定期复核，不因本批版本升级自动视为完成。
+- `.github/dependabot.yml` 对 GitHub Actions 保留每周版本更新队列，上限为 5；安全更新不受该上限影响。Maven/Docker 的现有限制未在本批调整。
+
 ## 触发矩阵(开发者视角)
 
 | 场景 | pr-gate | full-ci-gate |
