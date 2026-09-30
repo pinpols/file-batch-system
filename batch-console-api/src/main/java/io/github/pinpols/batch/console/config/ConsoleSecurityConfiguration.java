@@ -28,6 +28,7 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.authentication.session.NullAuthenticatedSessionStrategy;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.CsrfToken;
@@ -111,6 +112,9 @@ public class ConsoleSecurityConfiguration {
         // Console 是纯 JSON API，前端 Axios 把 cookie 原值复制到请求头。显式使用明文处理器，
         // 避免 Spring Security 默认 XOR 处理器把合法的 double-submit 请求误判为 403。
         .csrfTokenRequestHandler(csrfTokenRequestHandler())
+        // 无状态 JWT 每个请求都会重新认证；默认会话策略会在认证后的 GET 清除 XSRF-TOKEN，
+        // 导致后续写请求缺少 CSRF 请求头。
+        .sessionAuthenticationStrategy(new NullAuthenticatedSessionStrategy())
         .ignoringRequestMatchers(csrfIgnoredMatchers()));
     return http.sessionManagement(
             session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

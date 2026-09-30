@@ -28,6 +28,7 @@
 
 ### Fixed
 
+- Console 无状态 JWT 请求不再因每次认证触发 Spring Security 会话策略而清除 `XSRF-TOKEN`；已认证读请求后写操作仍需 `X-XSRF-TOKEN`，缺少请求头继续返回 403。
 - Console AI 会话续写与历史读取拒绝不存在或过期的会话，避免保留期内的过期记录被继续读取、续写或隐式重建；按 ID 锁定、读取和轮次分配均显式按租户过滤，不只依赖连接级 RLS。
 - 集群诊断的终态子节点检查与批次日汇总分类由 Mapper XML 测试对照 `JobInstanceStatus` 生命周期集合，防止新增实例状态后终态诊断、成功/失败/进行中统计发生漂移；保留 SLA 等业务专用状态口径。
 - 实例诊断改用 `JobInstanceStatus` 派生的活跃态与终态集合；`PARTIAL_FAILED` 存在活跃子节点时报告终态一致性异常，不再误报活跃实例缺少 Worker。
