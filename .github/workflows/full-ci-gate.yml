@@ -440,7 +440,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Lint Dockerfile
-        uses: hadolint/hadolint-action@v3.4.0
+        uses: hadolint/hadolint-action@v3.5.0
         with:
           dockerfile: deploy/docker/Dockerfile.app
           failure-threshold: warning
