@@ -1,8 +1,11 @@
 package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doReturn;
 
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
@@ -212,8 +215,11 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
             assertThat(turn.prompt()).isEqualTo("查询失败的作业实例");
             assertThat(turn.response()).isEqualTo("发现 2 个失败实例");
           });
-      assertThat(conversationService.turns(tenantId, "operator-b", conversationId, null, 20))
-          .isEmpty();
+      assertThatThrownBy(
+              () -> conversationService.turns(tenantId, "operator-b", conversationId, null, 20))
+          .isInstanceOfSatisfying(
+              BizException.class,
+              exception -> assertThat(exception.getCode()).isEqualTo(ResultCode.NOT_FOUND));
     } finally {
       if (started != null) {
         conversationService.delete(tenantId, "operator-a", started.conversationId());
