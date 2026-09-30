@@ -37,6 +37,8 @@ public class DefaultConsoleAiAuditService implements ConsoleAiAuditService {
     entity.setRefusalReason(command.refusalReason());
     entity.setPromptTokens(command.promptTokens());
     entity.setCompletionTokens(command.completionTokens());
+    entity.setEstimatedCostUsd(command.estimatedCostUsd());
+    entity.setCostStatus(command.costStatus());
     consoleAiAuditLogMapper.insert(entity);
   }
 

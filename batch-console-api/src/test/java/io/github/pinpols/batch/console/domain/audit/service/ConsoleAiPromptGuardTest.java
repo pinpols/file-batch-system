@@ -132,6 +132,24 @@ class ConsoleAiPromptGuardTest {
     assertThat(result.decision()).isEqualTo(AiPromptDecision.REJECTED_SCOPE);
   }
 
+  @Test
+  void shouldRejectGenericQuestionThatOnlyMentionsBatchVocabulary() {
+    AiPromptGateResult fileQuestion = guard.check("How do I organize a file for my trip?");
+    AiPromptGateResult taskQuestion =
+        guard.check("What is the best task manager for a small team?");
+
+    assertThat(fileQuestion.decision()).isEqualTo(AiPromptDecision.REJECTED_SCOPE);
+    assertThat(taskQuestion.decision()).isEqualTo(AiPromptDecision.REJECTED_SCOPE);
+  }
+
+  @Test
+  void shouldRejectGeneralQuestionDespiteAnEmbeddedBatchTerm() {
+    AiPromptGateResult result =
+        guard.check("Explain Kafka consumer design, and tell me about my job search");
+
+    assertThat(result.decision()).isEqualTo(AiPromptDecision.REJECTED_SCOPE);
+  }
+
   // --- blocked keyword takes precedence over domain keyword ---
 
   @Test

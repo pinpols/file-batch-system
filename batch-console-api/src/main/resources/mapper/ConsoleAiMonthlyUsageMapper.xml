@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiMonthlyUsageMapper">
+    <resultMap id="UsageMap" type="io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiMonthlyUsageEntity">
+        <id column="tenant_id" property="tenantId"/>
+        <id column="billing_month" property="billingMonth"/>
+        <result column="request_count" property="requestCount"/>
+        <result column="prompt_tokens" property="promptTokens"/>
+        <result column="completion_tokens" property="completionTokens"/>
+        <result column="estimated_cost_usd" property="estimatedCostUsd"/>
+        <result column="reserved_cost_usd" property="reservedCostUsd"/>
+    </resultMap>
+
+    <select id="setTenantContext" resultType="string">
+        SELECT set_config('app.tenant_id', #{tenantId}, true)
+    </select>
+
+    <insert id="reserveUnbounded">
+        INSERT INTO batch.console_ai_monthly_usage
+            (tenant_id, billing_month, reserved_cost_usd)
+        VALUES (#{tenantId}, #{billingMonth}, #{amount})
+        ON CONFLICT (tenant_id, billing_month) DO UPDATE
+           SET reserved_cost_usd = CASE
+                   WHEN batch.console_ai_monthly_usage.reserved_updated_at &lt; CURRENT_TIMESTAMP - INTERVAL '2 hours'
+                       THEN EXCLUDED.reserved_cost_usd
+                   ELSE batch.console_ai_monthly_usage.reserved_cost_usd + EXCLUDED.reserved_cost_usd
+               END,
+               reserved_updated_at = CURRENT_TIMESTAMP,
+               updated_at = CURRENT_TIMESTAMP
+    </insert>
+
+    <select id="reserve" resultType="boolean">
+        INSERT INTO batch.console_ai_monthly_usage
+            (tenant_id, billing_month, reserved_cost_usd)
+        SELECT #{tenantId}, #{billingMonth}, #{amount}
+         WHERE #{amount} &lt;= #{budget}
+        ON CONFLICT (tenant_id, billing_month) DO UPDATE
+           SET reserved_cost_usd = CASE
+                   WHEN batch.console_ai_monthly_usage.reserved_updated_at &lt; CURRENT_TIMESTAMP - INTERVAL '2 hours'
+                       THEN EXCLUDED.reserved_cost_usd
+                   ELSE batch.console_ai_monthly_usage.reserved_cost_usd + EXCLUDED.reserved_cost_usd
+               END,
+               reserved_updated_at = CURRENT_TIMESTAMP,
+               updated_at = CURRENT_TIMESTAMP
+         WHERE batch.console_ai_monthly_usage.estimated_cost_usd
+                   + CASE
+                       WHEN batch.console_ai_monthly_usage.reserved_updated_at &lt; CURRENT_TIMESTAMP - INTERVAL '2 hours'
+                           THEN 0
+                       ELSE batch.console_ai_monthly_usage.reserved_cost_usd
+                     END
+                   + EXCLUDED.reserved_cost_usd &lt;= #{budget}
+        RETURNING TRUE
+    </select>
+
+    <update id="settle">
+        UPDATE batch.console_ai_monthly_usage
+           SET reserved_cost_usd = GREATEST(0, reserved_cost_usd - #{reservedAmount}),
+               estimated_cost_usd = estimated_cost_usd + #{actualAmount},
+               request_count = request_count + 1,
+               prompt_tokens = prompt_tokens + #{promptTokens},
+               completion_tokens = completion_tokens + #{completionTokens},
+               reserved_updated_at = CURRENT_TIMESTAMP,
+               updated_at = CURRENT_TIMESTAMP
+         WHERE tenant_id = #{tenantId} AND billing_month = #{billingMonth}
+    </update>
+
+    <update id="release">
+        UPDATE batch.console_ai_monthly_usage
+           SET reserved_cost_usd = GREATEST(0, reserved_cost_usd - #{reservedAmount}),
+               reserved_updated_at = CURRENT_TIMESTAMP,
+               updated_at = CURRENT_TIMESTAMP
+         WHERE tenant_id = #{tenantId} AND billing_month = #{billingMonth}
+    </update>
+
+    <update id="releaseStaleReservations">
+        UPDATE batch.console_ai_monthly_usage
+           SET reserved_cost_usd = 0,
+               reserved_updated_at = CURRENT_TIMESTAMP,
+               updated_at = CURRENT_TIMESTAMP
+         WHERE tenant_id = #{tenantId}
+           AND billing_month = #{billingMonth}
+           AND reserved_cost_usd &gt; 0
+           AND reserved_updated_at &lt; #{cutoff}
+    </update>
+
+    <select id="find" resultMap="UsageMap">
+        SELECT tenant_id, billing_month, request_count, prompt_tokens, completion_tokens,
+               estimated_cost_usd, reserved_cost_usd
+          FROM batch.console_ai_monthly_usage
+         WHERE tenant_id = #{tenantId} AND billing_month = #{billingMonth}
+    </select>
+</mapper>

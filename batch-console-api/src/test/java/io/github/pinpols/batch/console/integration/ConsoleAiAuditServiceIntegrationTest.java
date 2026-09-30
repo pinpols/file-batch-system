@@ -1,31 +1,63 @@
 package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doReturn;
 
+import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.command.AiAuditCommand;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiAuditLogEntity;
+import io.github.pinpols.batch.console.domain.audit.infrastructure.ai.ConsoleAiConversationService;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiAuditLogMapper;
+import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiConversationMapper;
 import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiAuditLogQuery;
 import io.github.pinpols.batch.console.domain.audit.support.ConsoleAiAuditService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.TestConstructor;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** 集成测试：DefaultConsoleAiAuditService 将 AI 审计日志条目持久化到数据库， 并可通过 ConsoleAiAuditLogMapper 查询。 */
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private ConsoleAiAuditService auditService;
+  private final ConsoleAiAuditService auditService;
+  private final ConsoleAiAuditLogMapper auditLogMapper;
+  private final ConsoleAiConversationService conversationService;
+  private final ConsoleAiProperties aiProperties;
+  private final ConsoleAiConversationMapper conversationMapper;
+  private final JdbcTemplate jdbcTemplate;
+  private final PlatformTransactionManager transactionManager;
 
-  @Autowired
-  private ConsoleAiAuditLogMapper auditLogMapper;
+  ConsoleAiAuditServiceIntegrationTest(
+      ConsoleAiAuditService auditService,
+      ConsoleAiAuditLogMapper auditLogMapper,
+      ConsoleAiConversationService conversationService,
+      ConsoleAiProperties aiProperties,
+      ConsoleAiConversationMapper conversationMapper,
+      JdbcTemplate jdbcTemplate,
+      PlatformTransactionManager transactionManager) {
+    this.auditService = auditService;
+    this.auditLogMapper = auditLogMapper;
+    this.conversationService = conversationService;
+    this.aiProperties = aiProperties;
+    this.conversationMapper = conversationMapper;
+    this.jdbcTemplate = jdbcTemplate;
+    this.transactionManager = transactionManager;
+  }
+
+  @MockitoSpyBean
+  private BatchObjectCryptoService cryptoService;
 
   @Test
   void shouldPersistAuditLogOnRecord() {
@@ -45,6 +77,8 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
         null,
         120,
         45,
+        null,
+        "UNPRICED",
         BatchDateTimeSupport.utcNow());
 
     auditService.record(command);
@@ -87,6 +121,8 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
         "blocked_keyword:password",
         null,
         null,
+        null,
+        "UNPRICED",
         BatchDateTimeSupport.utcNow());
 
     auditService.record(command);
@@ -122,6 +158,8 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
           null,
           null,
           null,
+          null,
+          "UNPRICED",
           BatchDateTimeSupport.utcNow()));
     }
 
@@ -129,6 +167,59 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
         ConsoleAiAuditLogQuery.builder().tenantId("t1").sessionId(sessionId).build();
     List<ConsoleAiAuditLogEntity> results = auditLogMapper.selectByQuery(query);
     assertThat(results).hasSize(3);
+  }
+
+  @Test
+  void shouldPersistEncryptedConversationAndReturnPlaintextWithinTenantAndOwnerScope() {
+    boolean previousEnabled = aiProperties.getPersistence().isEnabled();
+    int previousRetention = aiProperties.getPersistence().getRetentionDays();
+    aiProperties.getPersistence().setEnabled(true);
+    aiProperties.getPersistence().setRetentionDays(30);
+    doReturn(false).when(cryptoService).isBypassMode();
+    String tenantId = "ai-conversation-it-" + BatchDateTimeSupport.utcEpochMillis();
+    ConsoleAiConversationService.StartedTurn started = null;
+    try {
+      started = conversationService.beginTurn(tenantId, "operator-a", null, "v1", "查询失败的作业实例");
+      conversationService.completeTurn(
+          tenantId,
+          started.conversationId(),
+          started.turnNo(),
+          "发现 2 个失败实例",
+          "APPROVED",
+          "test-provider:test-model",
+          20,
+          10,
+          new java.math.BigDecimal("0.00100000"));
+
+      String conversationId = started.conversationId();
+      String encryptedPrompt = new TransactionTemplate(transactionManager).execute(status -> {
+        conversationMapper.setTenantContext(tenantId);
+        return jdbcTemplate.queryForObject(
+            "SELECT prompt_text FROM batch.console_ai_turn WHERE tenant_id = ? AND conversation_id = ?",
+            String.class,
+            tenantId,
+            conversationId);
+      });
+      assertThat(encryptedPrompt).isNotEqualTo("查询失败的作业实例");
+
+      assertThat(conversationService.list(tenantId, "operator-a", 20))
+          .extracting(ConsoleAiConversationService.ConversationView::id)
+          .contains(conversationId);
+      assertThat(conversationService.turns(tenantId, "operator-a", conversationId, null, 20))
+          .singleElement()
+          .satisfies(turn -> {
+            assertThat(turn.prompt()).isEqualTo("查询失败的作业实例");
+            assertThat(turn.response()).isEqualTo("发现 2 个失败实例");
+          });
+      assertThat(conversationService.turns(tenantId, "operator-b", conversationId, null, 20))
+          .isEmpty();
+    } finally {
+      if (started != null) {
+        conversationService.delete(tenantId, "operator-a", started.conversationId());
+      }
+      aiProperties.getPersistence().setEnabled(previousEnabled);
+      aiProperties.getPersistence().setRetentionDays(previousRetention);
+    }
   }
 
   @Test

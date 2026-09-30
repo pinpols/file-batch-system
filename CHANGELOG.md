@@ -33,6 +33,8 @@
 
 ### Added
 
+- Console AI 增加版本化最小页面上下文、租户/操作者隔离且 AES-GCM/KMS 加密的服务端会话与轮次恢复/删除/过期清理，以及基于 provider token usage 的月度估算台账、原子租户预算预留和费用摘要 API；审计预览默认关闭。
+
 - **控制面治理能力**：新增共享维护状态与版本 CAS、维护响应版本头、按租户日使用率聚合、AI 成本/留存治理、容量告警面板，以及运行证据和 Worker 滚动升级验证脚本；后端接口、迁移和运维文档同步更新。
 
 - **CI 范围与门禁治理**：统一 PR 和 SDK workflow 的变更范围 composite action，改用稳定且不重名的 scope checks；SDK 五语言契约矩阵通过稳定聚合检查纳入主干 Ruleset required checks；Full Gate 增加每周无条件巡检，防止 `paths-ignore` 和分类规则漂移。

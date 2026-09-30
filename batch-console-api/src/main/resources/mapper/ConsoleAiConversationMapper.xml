@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiConversationMapper">
+    <resultMap id="ConversationMap" type="io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiConversationEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="owner_user_id" property="ownerUserId"/>
+        <result column="title" property="title"/>
+        <result column="context_version" property="contextVersion"/>
+        <result column="next_turn_no" property="nextTurnNo"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+        <result column="expires_at" property="expiresAt"/>
+    </resultMap>
+    <resultMap id="TurnMap" type="io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiTurnEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="conversation_id" property="conversationId"/>
+        <result column="turn_no" property="turnNo"/>
+        <result column="context_version" property="contextVersion"/>
+        <result column="prompt_text" property="promptText"/>
+        <result column="response_text" property="responseText"/>
+        <result column="turn_status" property="turnStatus"/>
+        <result column="prompt_decision" property="promptDecision"/>
+        <result column="model_name" property="modelName"/>
+        <result column="prompt_tokens" property="promptTokens"/>
+        <result column="completion_tokens" property="completionTokens"/>
+        <result column="estimated_cost_usd" property="estimatedCostUsd"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="completed_at" property="completedAt"/>
+    </resultMap>
+
+    <select id="setTenantContext" resultType="string">
+        SELECT set_config('app.tenant_id', #{tenantId}, true)
+    </select>
+
+    <select id="selectForUpdate" resultMap="ConversationMap">
+        SELECT id, tenant_id, owner_user_id, title, context_version, next_turn_no, created_at, updated_at, expires_at
+          FROM batch.console_ai_conversation
+         WHERE id = #{conversationId}
+         FOR UPDATE
+    </select>
+
+    <insert id="insertConversation">
+        INSERT INTO batch.console_ai_conversation
+            (id, tenant_id, owner_user_id, context_version, expires_at)
+        VALUES
+            (#{id}, #{tenantId}, #{ownerUserId}, #{contextVersion}, #{expiresAt})
+    </insert>
+
+    <select id="allocateTurnNo" resultType="long">
+        UPDATE batch.console_ai_conversation
+           SET next_turn_no = next_turn_no + 1,
+               updated_at = CURRENT_TIMESTAMP,
+               expires_at = #{expiresAt},
+               context_version = #{contextVersion}
+         WHERE id = #{conversationId}
+           AND owner_user_id = #{ownerUserId}
+        RETURNING next_turn_no - 1
+    </select>
+
+    <select id="selectRecentCompleteTurns" resultMap="TurnMap">
+        SELECT id, tenant_id, conversation_id, turn_no, context_version, prompt_text, response_text,
+               turn_status, prompt_decision, model_name, prompt_tokens, completion_tokens,
+               estimated_cost_usd, created_at, completed_at
+          FROM batch.console_ai_turn
+         WHERE conversation_id = #{conversationId}
+           AND turn_status IN ('COMPLETE', 'FAILED')
+         ORDER BY turn_no DESC
+         LIMIT #{limit}
+    </select>
+
+    <insert id="insertTurn">
+        INSERT INTO batch.console_ai_turn
+            (tenant_id, conversation_id, turn_no, context_version, prompt_text, turn_status)
+        VALUES
+            (#{tenantId}, #{conversationId}, #{turnNo}, #{contextVersion}, #{promptText}, 'IN_PROGRESS')
+    </insert>
+
+    <update id="completeTurn">
+        UPDATE batch.console_ai_turn
+           SET response_text = #{responseText},
+               turn_status = #{status},
+               prompt_decision = #{promptDecision},
+               model_name = #{modelName},
+               prompt_tokens = #{promptTokens},
+               completion_tokens = #{completionTokens},
+               estimated_cost_usd = #{estimatedCostUsd},
+               completed_at = CURRENT_TIMESTAMP
+         WHERE tenant_id = #{tenantId}
+           AND conversation_id = #{conversationId}
+           AND turn_no = #{turnNo}
+           AND turn_status = 'IN_PROGRESS'
+    </update>
+
+    <select id="selectByOwner" resultMap="ConversationMap">
+        SELECT id, tenant_id, owner_user_id, title, context_version, next_turn_no, created_at, updated_at, expires_at
+          FROM batch.console_ai_conversation
+         WHERE owner_user_id = #{ownerUserId}
+         ORDER BY updated_at DESC, id DESC
+         LIMIT #{limit}
+    </select>
+
+    <select id="selectTurns" resultMap="TurnMap">
+        SELECT t.id, t.tenant_id, t.conversation_id, t.turn_no, t.context_version, t.prompt_text,
+               t.response_text, t.turn_status, t.prompt_decision, t.model_name, t.prompt_tokens,
+               t.completion_tokens, t.estimated_cost_usd, t.created_at, t.completed_at
+          FROM batch.console_ai_turn t
+          JOIN batch.console_ai_conversation c
+            ON c.tenant_id = t.tenant_id AND c.id = t.conversation_id
+         WHERE c.id = #{conversationId}
+           AND c.owner_user_id = #{ownerUserId}
+        <if test="beforeTurnNo != null">
+           AND t.turn_no &lt; #{beforeTurnNo}
+        </if>
+         ORDER BY t.turn_no DESC
+         LIMIT #{limit}
+    </select>
+
+    <delete id="deleteConversation">
+        DELETE FROM batch.console_ai_conversation
+         WHERE id = #{conversationId}
+           AND owner_user_id = #{ownerUserId}
+    </delete>
+
+    <select id="selectActiveTenantIds" resultType="string">
+        SELECT tenant_id FROM batch.tenant WHERE status = 'ACTIVE' ORDER BY tenant_id
+    </select>
+
+    <delete id="deleteExpired">
+        DELETE FROM batch.console_ai_conversation WHERE expires_at &lt; #{cutoff}
+    </delete>
+</mapper>

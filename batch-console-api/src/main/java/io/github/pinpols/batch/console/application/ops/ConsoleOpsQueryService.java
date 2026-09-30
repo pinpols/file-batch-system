@@ -400,6 +400,10 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
     row.setPromptPreview(ConsoleTextSanitizer.safeDisplay(entity.getPromptPreview(), 512));
     row.setResponsePreview(ConsoleTextSanitizer.safeDisplay(entity.getResponsePreview(), 512));
     row.setRefusalReason(ConsoleTextSanitizer.safeDisplay(entity.getRefusalReason(), 512));
+    row.setPromptTokens(entity.getPromptTokens());
+    row.setCompletionTokens(entity.getCompletionTokens());
+    row.setEstimatedCostUsd(entity.getEstimatedCostUsd());
+    row.setCostStatus(entity.getCostStatus());
     row.setCreatedAt(entity.getCreatedAt());
     return row;
   }

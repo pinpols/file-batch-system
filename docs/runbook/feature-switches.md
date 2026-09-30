@@ -75,6 +75,9 @@
 | `batch.console.ai.provider` | `anthropic` / `openai` / `openai-compatible` | **ANTHROPIC** | AI chat provider；兼容模式用于 DeepSeek/千问/智谱/Kimi/MiniMax/私有 OpenAI-compatible 端点，RAG embedding 仍单独走 `spring.ai.openai.embedding` | P2 | `BATCH_CONSOLE_AI_PROVIDER` | ❌ |
 | `batch.console.ai.failover-enabled` | `true` / `false` | **false** | 跨 Provider 故障切换；会将同一 prompt/context 发送给另一家服务，启用前确认租户授权与数据处理要求 | P1 | `BATCH_CONSOLE_AI_FAILOVER_ENABLED` | ❌ |
 | `batch.console.ai.openai-compatible.*` | providerName/baseUrl/apiKey/model/timeout | 空/60s | OpenAI-compatible 聊天端点配置；`api-key` 必须走 Secret/env 注入；`failover-enabled=true` 时拒绝启动 | P1 | `BATCH_CONSOLE_AI_OPENAI_COMPATIBLE_*` | ✅ |
+| `batch.console.ai.persistence.*` | enabled/retention/history limits | **false / 0 / bounded** | 会话和消息服务端存储；开启必须配置 1..3650 天保留期，按租户及操作者隔离并自动清理 | P1 | `BATCH_CONSOLE_AI_PERSISTENCE_*` | ✅ |
+| `batch.console.ai.cost.*` | monthly budget / provider rates / margin | **0 / 0 / 1.25** | provider token 用量按配置 USD 单价估算；月预算按租户原子预留；不是供应商账单对账，配置费率前成本状态为 UNPRICED | P1 | `BATCH_CONSOLE_AI_COST_*` | ✅ |
+| `batch.console.ai.audit-preview-enabled` | `true` / `false` | **false** | AI 审计是否保存原文预览；默认仅哈希、决策和成本元数据 | P1 | `BATCH_CONSOLE_AI_AUDIT_PREVIEW_ENABLED` | ✅ |
 | `batch.console.captcha.provider` | `none` / `cloudflare` / `tencent` / `aliyun` | **none** | 登录验证码实现；selfhosted 会阻止启动；第三方 provider 需站点 key + 外联 | P1 | `BATCH_CONSOLE_CAPTCHA_PROVIDER` | ✅ |
 
 ### 1.D 弹性 / 性能 / 观测

@@ -83,8 +83,7 @@ import org.springframework.web.client.RestClientResponseException;
  * <p>合规审计（{@link #buildAuditCommand}）：
  *
  * <ul>
- *   <li><b>原文不写入数据库</b>：prompt / response 只落 <b>SHA-256 哈希</b> + 前 512 字符 preview， 防 PII /
- *       敏感业务数据泄露到审计表。
+ *   <li><b>审计默认不保存原文</b>：prompt / response 只落 <b>SHA-256 哈希</b>；preview 必须显式启用。
  *   <li><b>拒绝也记录</b>：被 gate 拦下的请求同样写审计（带 refusalReason），便于安全团队复盘。
  * </ul>
  *
@@ -107,6 +106,8 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
   private final ConsoleAiAuthorizationService authorizationService;
   private final ConsoleAiPromptGuard promptGuard;
   private final ConsoleAiAuditService auditService;
+  private final ConsoleAiConversationService conversationService;
+  private final ConsoleAiCostService costService;
   private final ConsoleAiKnowledgeBase knowledgeBase;
   private final ObjectProvider<ConsoleQueryApplicationService> queryServiceProvider;
   private final ObjectProvider<ConsoleClusterDiagnosticService> diagnosticServiceProvider;
@@ -167,31 +168,84 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       return response;
     }
 
-    String contextJson =
-        ConsoleAiContextSanitizer.sanitize(request.getContext(), aiProperties.getMaxContextChars());
+    String contextJson = ConsoleAiContextSanitizer.sanitize(
+        request.getContextVersion(),
+        request.getContext(),
+        request.getPageContext(),
+        aiProperties.getMaxContextChars());
     ConsoleAiClients chatClients = chatClientsProvider.getIfAvailable();
     if (EmptyChecks.isNull(chatClients) || EmptyChecks.isNull(chatClients.primary())) {
       throw BizException.of(ResultCode.FORBIDDEN, "error.ai.assistant_not_configured");
     }
+    costService.validateProviders(
+        EmptyChecks.isNull(chatClients.fallback())
+            ? List.of(chatClients.primary().provider())
+            : List.of(chatClients.primary().provider(), chatClients.fallback().provider()));
     // RAG:检索系统自身语料,让模型基于事实作答(检索为空时退化为「仅 primer」)。
     List<ConsoleAiKnowledgeBase.Snippet> snippets = knowledgeBase.retrieve(prompt);
     // L3:按租户绑定只读诊断工具(模型按需拉取实时 job 状态/日志);未启用或不可用则为 null。
     ConsoleAiTools tools = resolveTools(tenantId);
-    String promptPayload =
-        buildPrompt(tenantId, sessionId, prompt, contextJson, gateResult.category());
+    ConsoleAiConversationService.StartedTurn persistedTurn = null;
+    if (aiProperties.getPersistence().isEnabled()) {
+      persistedTurn = conversationService.beginTurn(
+          tenantId,
+          requestMetadata.operatorId(),
+          request.getSessionId(),
+          request.getContextVersion(),
+          prompt);
+      sessionId = persistedTurn.conversationId();
+    }
+    String promptPayload = buildPrompt(
+        tenantId,
+        sessionId,
+        prompt,
+        contextJson,
+        gateResult.category(),
+        request.getContextVersion(),
+        EmptyChecks.isNull(persistedTurn) ? List.of() : persistedTurn.history());
+    String systemPrompt = buildSystemPrompt(snippets, EmptyChecks.isNotNull(tools));
+    ConsoleAiCostService.Reservation reservation;
+    try {
+      reservation = costService.reserve(tenantId, promptPayload, systemPrompt);
+    } catch (RuntimeException exception) {
+      if (EmptyChecks.isNotNull(persistedTurn)) {
+        String decision = exception instanceof BizException bizException
+                && bizException.getCode() == ResultCode.RATE_LIMITED
+            ? "REJECTED_BUDGET"
+            : AiPromptDecision.FAILED.code();
+        try {
+          conversationService.completeTurn(
+              tenantId,
+              persistedTurn.conversationId(),
+              persistedTurn.turnNo(),
+              null,
+              decision,
+              null,
+              null,
+              null,
+              null);
+        } catch (RuntimeException completionException) {
+          exception.addSuppressed(completionException);
+        }
+      }
+      throw exception;
+    }
 
     // 模型调用:失败 / 超时 → 优雅降级(友好提示 + FAILED 审计),不 fail-closed 冒泡成 500。
     ChatResponse chatResponse;
     String modelName;
+    ModelCallResult modelCall;
     try {
-      ModelCallResult modelCall = callModel(chatClients, snippets, promptPayload, tools);
+      modelCall = callModel(chatClients, snippets, promptPayload, tools);
       chatResponse = modelCall.response();
       modelName = resolveModelName(chatResponse, modelCall.provider());
     } catch (Exception exception) {
+      ConsoleAiCostService.CostResult failedCost =
+          costService.settle(reservation, null, null, null);
       if (exception instanceof InterruptedException) {
         Thread.currentThread().interrupt();
       }
-      return degradeAndAudit(
+      AiChatResponse degraded = degradeAndAudit(
           AuditRequest.builder()
               .tenantId(tenantId)
               .requestId(requestId)
@@ -201,7 +255,21 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
               .build(),
           prompt,
           gateResult,
-          exception);
+          exception,
+          failedCost);
+      if (EmptyChecks.isNotNull(persistedTurn)) {
+        conversationService.completeTurn(
+            tenantId,
+            persistedTurn.conversationId(),
+            persistedTurn.turnNo(),
+            degraded.getAnswer(),
+            AiPromptDecision.FAILED.code(),
+            null,
+            null,
+            null,
+            failedCost.amount());
+      }
+      return degraded;
     }
 
     // 成本计量:从 ChatResponse metadata 取 token usage 打指标 + 落审计(租户成本靠审计聚合)。
@@ -213,6 +281,8 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       promptTokens = usage.getPromptTokens();
       completionTokens = usage.getCompletionTokens();
     }
+    ConsoleAiCostService.CostResult cost = costService.settle(
+        reservation, modelCall.provider().provider(), promptTokens, completionTokens);
     aiMetrics.recordTokens(promptTokens, completionTokens);
     aiMetrics.recordDecision(ConsoleAiMetrics.DECISION_APPROVED);
 
@@ -230,6 +300,19 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     response.setAnswer(answer);
     response.setRefusalReason(null);
 
+    if (EmptyChecks.isNotNull(persistedTurn)) {
+      conversationService.completeTurn(
+          tenantId,
+          persistedTurn.conversationId(),
+          persistedTurn.turnNo(),
+          answer,
+          AiPromptDecision.APPROVED.code(),
+          modelName,
+          promptTokens,
+          completionTokens,
+          cost.amount());
+    }
+
     auditService.record(buildAuditCommand(AuditContext.builder()
         .request(AuditRequest.builder()
             .tenantId(tenantId)
@@ -246,6 +329,8 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
             .response(ConsoleTextSanitizer.safeInput(answer, aiProperties.getMaxResponseLength()))
             .promptTokens(promptTokens)
             .completionTokens(completionTokens)
+            .estimatedCostUsd(cost.amount())
+            .costStatus(cost.status())
             .build())
         .build()));
     return response;
@@ -381,7 +466,11 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
 
   /** 模型调用失败 / 超时 → 优雅降级响应 + FAILED 审计(不裸抛 500)。 */
   private AiChatResponse degradeAndAudit(
-      AuditRequest request, String prompt, AiPromptGateResult gateResult, Exception exception) {
+      AuditRequest request,
+      String prompt,
+      AiPromptGateResult gateResult,
+      Exception exception,
+      ConsoleAiCostService.CostResult cost) {
     SwallowedExceptionLogger.info(
         DefaultConsoleAiApplicationService.class, "catch:ai-model-call-failed", exception);
     aiMetrics.recordDecision(ConsoleAiMetrics.DECISION_FAILED);
@@ -408,6 +497,8 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
             .prompt(prompt)
             .response(degraded)
             .refusalReason(reason)
+            .estimatedCostUsd(cost.amount())
+            .costStatus(cost.status())
             .build())
         .build()));
     return response;
@@ -494,12 +585,16 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         context.result().decision().code(),
         context.result().modelName(),
         hash(context.result().prompt()),
-        preview(context.result().prompt(), 512),
+        aiProperties.isAuditPreviewEnabled() ? preview(context.result().prompt(), 512) : null,
         hash(context.result().response()),
-        preview(context.result().response(), 512),
+        aiProperties.isAuditPreviewEnabled() ? preview(context.result().response(), 512) : null,
         context.result().refusalReason(),
         context.result().promptTokens(),
         context.result().completionTokens(),
+        context.result().estimatedCostUsd(),
+        EmptyChecks.isNull(context.result().costStatus())
+            ? "UNPRICED"
+            : context.result().costStatus(),
         BatchDateTimeSupport.utcNow());
   }
 
@@ -508,7 +603,9 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       String sessionId,
       String prompt,
       String contextJson,
-      AiPromptCategory category) {
+      AiPromptCategory category,
+      String contextVersion,
+      List<io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiTurnEntity> history) {
     StringBuilder builder = new StringBuilder();
     builder
         .append("[tenantId]")
@@ -517,7 +614,20 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         .append('\n');
     builder.append("[sessionId]").append('\n').append(sessionId).append('\n');
     builder.append("[category]").append('\n').append(category.code()).append('\n');
+    builder.append("[contextVersion]").append('\n').append(contextVersion).append('\n');
     builder.append("[context]").append('\n').append(contextJson).append('\n');
+    for (io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiTurnEntity turn : history) {
+      builder
+          .append("[previousQuestion]")
+          .append('\n')
+          .append(turn.getPromptText())
+          .append('\n');
+      builder
+          .append("[previousAnswer]")
+          .append('\n')
+          .append(turn.getResponseText())
+          .append('\n');
+    }
     builder.append("[question]").append('\n').append(prompt);
     return builder.toString();
   }
@@ -656,5 +766,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       String response,
       String refusalReason,
       Integer promptTokens,
-      Integer completionTokens) {}
+      Integer completionTokens,
+      java.math.BigDecimal estimatedCostUsd,
+      String costStatus) {}
 }

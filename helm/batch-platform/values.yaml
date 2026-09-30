@@ -158,6 +158,26 @@ consoleApi:
       apiKey: ""
       chatModel: ""
       timeout: "60s"
+    auditPreviewEnabled: false
+    persistence:
+      enabled: false
+      retentionDays: 0
+      maxHistoryTurns: 12
+      maxHistoryChars: 12000
+      pageSize: 20
+    cost:
+      monthlyBudgetUsd: "0"
+      reservationMargin: "1.25"
+      providerRates:
+        anthropic:
+          inputUsdPerMillionTokens: "0"
+          outputUsdPerMillionTokens: "0"
+        openai:
+          inputUsdPerMillionTokens: "0"
+          outputUsdPerMillionTokens: "0"
+        openai-compatible:
+          inputUsdPerMillionTokens: "0"
+          outputUsdPerMillionTokens: "0"
   virtualThreads:
     # 实验开关：只作用于 Console API。完成 A/B 压测前保持关闭。
     enabled: false
