@@ -360,8 +360,8 @@ jobs:
       - name: Warm Maven cache for Trivy dependency resolution
         if: needs.changes.outputs.config == 'true' || needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
-        # Trivy 解析 Java 传递依赖时会访问 Maven Central；先通过 Maven 缓存解析 reactor 依赖，避免扫描触发大量远端 POM 请求。
-        run: bash scripts/ci/run-gate.sh PR_TRIVY_MAVEN_CACHE "Trivy Maven 依赖缓存预热" -- ./mvnw -B -ntp -DskipTests dependency:go-offline
+        # Trivy 解析 Java 传递依赖时会访问 Maven Central；先缓存外部依赖并安装本地 reactor 产物，避免重复远端 POM 请求。
+        run: bash scripts/ci/run-gate.sh PR_TRIVY_MAVEN_CACHE "Trivy Maven 依赖缓存预热" -- ./mvnw -B -ntp -DskipTests -Dmaven.test.skip=true -pl '!batch-e2e-tests' install
 
       - name: Trivy fs scan on supply-chain inputs
         if: needs.changes.outputs.config == 'true' || needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
