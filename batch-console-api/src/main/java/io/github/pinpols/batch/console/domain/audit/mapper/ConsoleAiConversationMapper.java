@@ -27,17 +27,7 @@ public interface ConsoleAiConversationMapper {
 
   int insertTurn(ConsoleAiTurnEntity turn);
 
-  int completeTurn(
-      @Param("tenantId") String tenantId,
-      @Param("conversationId") String conversationId,
-      @Param("turnNo") long turnNo,
-      @Param("responseText") String responseText,
-      @Param("status") String status,
-      @Param("promptDecision") String promptDecision,
-      @Param("modelName") String modelName,
-      @Param("promptTokens") Integer promptTokens,
-      @Param("completionTokens") Integer completionTokens,
-      @Param("estimatedCostUsd") java.math.BigDecimal estimatedCostUsd);
+  int completeTurn(ConsoleAiTurnEntity turn);
 
   List<ConsoleAiConversationEntity> selectByOwner(
       @Param("ownerUserId") String ownerUserId, @Param("limit") int limit);
@@ -49,9 +39,11 @@ public interface ConsoleAiConversationMapper {
       @Param("limit") int limit);
 
   int deleteConversation(
-      @Param("conversationId") String conversationId, @Param("ownerUserId") String ownerUserId);
+      @Param("tenantId") String tenantId,
+      @Param("conversationId") String conversationId,
+      @Param("ownerUserId") String ownerUserId);
 
   List<String> selectActiveTenantIds();
 
-  int deleteExpired(@Param("cutoff") OffsetDateTime cutoff);
+  int deleteExpired(@Param("tenantId") String tenantId, @Param("cutoff") OffsetDateTime cutoff);
 }

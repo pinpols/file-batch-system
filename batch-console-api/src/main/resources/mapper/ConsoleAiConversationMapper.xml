@@ -80,7 +80,7 @@
     <update id="completeTurn">
         UPDATE batch.console_ai_turn
            SET response_text = #{responseText},
-               turn_status = #{status},
+               turn_status = #{turnStatus},
                prompt_decision = #{promptDecision},
                model_name = #{modelName},
                prompt_tokens = #{promptTokens},
@@ -120,6 +120,7 @@
     <delete id="deleteConversation">
         DELETE FROM batch.console_ai_conversation
          WHERE id = #{conversationId}
+           AND tenant_id = #{tenantId}
            AND owner_user_id = #{ownerUserId}
     </delete>
 
@@ -128,6 +129,8 @@
     </select>
 
     <delete id="deleteExpired">
-        DELETE FROM batch.console_ai_conversation WHERE expires_at &lt; #{cutoff}
+        DELETE FROM batch.console_ai_conversation
+         WHERE tenant_id = #{tenantId}
+           AND expires_at &lt; #{cutoff}
     </delete>
 </mapper>

@@ -587,8 +587,12 @@ class DefaultConsoleAiApplicationServiceTest {
     assertThatThrownBy(() -> service.chat(request("tenant-1", "查询失败的作业实例"), "idem-1"))
         .isSameAs(budgetDenied);
     verify(conversationService)
-        .completeTurn(
-            "tenant-1", "conversation-1", 1L, null, "REJECTED_BUDGET", null, null, null, null);
+        .completeTurn(ConsoleAiConversationService.TurnCompletion.builder()
+            .tenantId("tenant-1")
+            .conversationId("conversation-1")
+            .turnNo(1L)
+            .decision("REJECTED_BUDGET")
+            .build());
     verify(auditService, never()).record(any());
   }
 

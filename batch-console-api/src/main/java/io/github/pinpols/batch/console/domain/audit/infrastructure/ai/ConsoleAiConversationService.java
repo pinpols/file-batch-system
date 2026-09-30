@@ -11,6 +11,7 @@ import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiConversationEntity;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiTurnEntity;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiConversationMapper;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -21,6 +22,7 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -94,35 +96,28 @@ public class ConsoleAiConversationService {
   }
 
   @Transactional
-  public void completeTurn(
-      String tenantId,
-      String conversationId,
-      long turnNo,
-      String response,
-      String decision,
-      String modelName,
-      Integer promptTokens,
-      Integer completionTokens,
-      java.math.BigDecimal estimatedCostUsd) {
-    mapper.setTenantContext(tenantId);
+  public void completeTurn(TurnCompletion completion) {
+    mapper.setTenantContext(completion.tenantId());
     String status =
-        switch (EmptyChecks.isNull(decision) ? "" : decision) {
+        switch (EmptyChecks.isNull(completion.decision()) ? "" : completion.decision()) {
           case "FAILED" -> FAILED;
           case "REJECTED_SCOPE", "REJECTED_SAFETY", "REJECTED_DISABLED", "REJECTED_BUDGET" ->
             REJECTED;
           default -> COMPLETE;
         };
-    int updated = mapper.completeTurn(
-        tenantId,
-        conversationId,
-        turnNo,
-        encryptText(ConsoleTextSanitizer.safeInput(response, properties.getMaxResponseLength())),
-        status,
-        decision,
-        modelName,
-        promptTokens,
-        completionTokens,
-        estimatedCostUsd);
+    ConsoleAiTurnEntity turn = new ConsoleAiTurnEntity();
+    turn.setTenantId(completion.tenantId());
+    turn.setConversationId(completion.conversationId());
+    turn.setTurnNo(completion.turnNo());
+    turn.setResponseText(encryptText(
+        ConsoleTextSanitizer.safeInput(completion.response(), properties.getMaxResponseLength())));
+    turn.setTurnStatus(status);
+    turn.setPromptDecision(completion.decision());
+    turn.setModelName(completion.modelName());
+    turn.setPromptTokens(completion.promptTokens());
+    turn.setCompletionTokens(completion.completionTokens());
+    turn.setEstimatedCostUsd(completion.estimatedCostUsd());
+    int updated = mapper.completeTurn(turn);
     if (updated != 1) {
       throw new IllegalStateException("AI conversation turn was not in progress");
     }
@@ -181,13 +176,13 @@ public class ConsoleAiConversationService {
     requirePersistenceEnabled();
     requireOwner(ownerUserId);
     mapper.setTenantContext(tenantId);
-    mapper.deleteConversation(conversationId, ownerUserId);
+    mapper.deleteConversation(tenantId, conversationId, ownerUserId);
   }
 
   @Transactional
   public int deleteExpiredForTenant(String tenantId) {
     mapper.setTenantContext(tenantId);
-    return mapper.deleteExpired(nowUtc());
+    return mapper.deleteExpired(tenantId, nowUtc());
   }
 
   private List<ConsoleAiTurnEntity> boundHistory(List<ConsoleAiTurnEntity> turns, int maxChars) {
@@ -251,6 +246,18 @@ public class ConsoleAiConversationService {
   public record StartedTurn(
       String conversationId, long turnNo, List<ConsoleAiTurnEntity> history) {}
 
+  @Builder
+  public record TurnCompletion(
+      String tenantId,
+      String conversationId,
+      long turnNo,
+      String response,
+      String decision,
+      String modelName,
+      Integer promptTokens,
+      Integer completionTokens,
+      BigDecimal estimatedCostUsd) {}
+
   public record ConversationView(
       String id,
       String title,
@@ -269,7 +276,7 @@ public class ConsoleAiConversationService {
       String modelName,
       Integer promptTokens,
       Integer completionTokens,
-      java.math.BigDecimal estimatedCostUsd,
+      BigDecimal estimatedCostUsd,
       Instant createdAt,
       Instant completedAt) {}
 }

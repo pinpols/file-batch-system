@@ -180,16 +180,17 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
     ConsoleAiConversationService.StartedTurn started = null;
     try {
       started = conversationService.beginTurn(tenantId, "operator-a", null, "v1", "查询失败的作业实例");
-      conversationService.completeTurn(
-          tenantId,
-          started.conversationId(),
-          started.turnNo(),
-          "发现 2 个失败实例",
-          "APPROVED",
-          "test-provider:test-model",
-          20,
-          10,
-          new java.math.BigDecimal("0.00100000"));
+      conversationService.completeTurn(ConsoleAiConversationService.TurnCompletion.builder()
+          .tenantId(tenantId)
+          .conversationId(started.conversationId())
+          .turnNo(started.turnNo())
+          .response("发现 2 个失败实例")
+          .decision("APPROVED")
+          .modelName("test-provider:test-model")
+          .promptTokens(20)
+          .completionTokens(10)
+          .estimatedCostUsd(new java.math.BigDecimal("0.00100000"))
+          .build());
 
       String conversationId = started.conversationId();
       String encryptedPrompt = new TransactionTemplate(transactionManager).execute(status -> {

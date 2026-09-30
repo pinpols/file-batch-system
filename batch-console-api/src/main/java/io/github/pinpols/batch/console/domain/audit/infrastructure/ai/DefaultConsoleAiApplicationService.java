@@ -146,26 +146,8 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     String requestId = firstNonBlank(requestMetadata.requestId(), IdGenerator.newBusinessNo("ai"));
     String traceId = firstNonBlank(requestMetadata.traceId(), IdGenerator.newTraceId());
     if (!gateResult.approved()) {
-      aiMetrics.recordDecision(ConsoleAiMetrics.DECISION_REJECTED);
-      AiChatResponse response = buildRejectedResponse(requestId, traceId, sessionId, gateResult);
-      auditService.record(buildAuditCommand(AuditContext.builder()
-          .request(AuditRequest.builder()
-              .tenantId(tenantId)
-              .requestId(requestId)
-              .traceId(traceId)
-              .sessionId(sessionId)
-              .operatorId(requestMetadata.operatorId())
-              .build())
-          .result(AuditResult.builder()
-              .promptCategory(gateResult.category())
-              .decision(gateResult.decision())
-              .prompt(prompt)
-              .response(ConsoleTextSanitizer.safeInput(
-                  response.getAnswer(), aiProperties.getMaxResponseLength()))
-              .refusalReason(ConsoleTextSanitizer.safeInput(gateResult.reason(), 512))
-              .build())
-          .build()));
-      return response;
+      return recordRejectedRequest(
+          tenantId, requestMetadata, requestId, traceId, sessionId, prompt, gateResult);
     }
 
     String contextJson = ConsoleAiContextSanitizer.sanitize(
@@ -214,16 +196,12 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
             ? "REJECTED_BUDGET"
             : AiPromptDecision.FAILED.code();
         try {
-          conversationService.completeTurn(
-              tenantId,
-              persistedTurn.conversationId(),
-              persistedTurn.turnNo(),
-              null,
-              decision,
-              null,
-              null,
-              null,
-              null);
+          conversationService.completeTurn(ConsoleAiConversationService.TurnCompletion.builder()
+              .tenantId(tenantId)
+              .conversationId(persistedTurn.conversationId())
+              .turnNo(persistedTurn.turnNo())
+              .decision(decision)
+              .build());
         } catch (RuntimeException completionException) {
           exception.addSuppressed(completionException);
         }
@@ -258,74 +236,95 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
           exception,
           failedCost);
       if (EmptyChecks.isNotNull(persistedTurn)) {
-        conversationService.completeTurn(
-            tenantId,
-            persistedTurn.conversationId(),
-            persistedTurn.turnNo(),
-            degraded.getAnswer(),
-            AiPromptDecision.FAILED.code(),
-            null,
-            null,
-            null,
-            failedCost.amount());
+        conversationService.completeTurn(ConsoleAiConversationService.TurnCompletion.builder()
+            .tenantId(tenantId)
+            .conversationId(persistedTurn.conversationId())
+            .turnNo(persistedTurn.turnNo())
+            .response(degraded.getAnswer())
+            .decision(AiPromptDecision.FAILED.code())
+            .estimatedCostUsd(failedCost.amount())
+            .build());
       }
       return degraded;
     }
 
-    // 成本计量:从 ChatResponse metadata 取 token usage 打指标 + 落审计(租户成本靠审计聚合)。
+    return completeApprovedChat(ApprovedChatExecution.builder()
+        .tenantId(tenantId)
+        .requestId(requestId)
+        .traceId(traceId)
+        .sessionId(sessionId)
+        .operatorId(requestMetadata.operatorId())
+        .prompt(prompt)
+        .gateResult(gateResult)
+        .chatResponse(chatResponse)
+        .modelCall(modelCall)
+        .modelName(modelName)
+        .reservation(reservation)
+        .snippets(snippets)
+        .persistedTurn(persistedTurn)
+        .build());
+  }
+
+  private AiChatResponse completeApprovedChat(ApprovedChatExecution execution) {
     Integer promptTokens = null;
     Integer completionTokens = null;
-    Usage usage =
-        chatResponse.getMetadata() == null ? null : chatResponse.getMetadata().getUsage();
+    Usage usage = EmptyChecks.isNull(execution.chatResponse().getMetadata())
+        ? null
+        : execution.chatResponse().getMetadata().getUsage();
     if (usage != null) {
       promptTokens = usage.getPromptTokens();
       completionTokens = usage.getCompletionTokens();
     }
     ConsoleAiCostService.CostResult cost = costService.settle(
-        reservation, modelCall.provider().provider(), promptTokens, completionTokens);
+        execution.reservation(),
+        execution.modelCall().provider().provider(),
+        promptTokens,
+        completionTokens);
     aiMetrics.recordTokens(promptTokens, completionTokens);
     aiMetrics.recordDecision(ConsoleAiMetrics.DECISION_APPROVED);
 
-    String answer = extractContent(chatResponse);
-    String grounded = appendCitations(trim(answer, aiProperties.getMaxResponseLength()), snippets);
+    String answer = extractContent(execution.chatResponse());
+    String grounded =
+        appendCitations(trim(answer, aiProperties.getMaxResponseLength()), execution.snippets());
     answer = ConsoleTextSanitizer.safeDisplay(grounded, grounded.length());
 
     AiChatResponse response = new AiChatResponse();
-    response.setRequestId(requestId);
-    response.setTraceId(traceId);
-    response.setSessionId(sessionId);
-    response.setPromptCategory(gateResult.category().code());
+    response.setRequestId(execution.requestId());
+    response.setTraceId(execution.traceId());
+    response.setSessionId(execution.sessionId());
+    response.setPromptCategory(execution.gateResult().category().code());
     response.setPromptDecision(AiPromptDecision.APPROVED.code());
-    response.setModelName(modelName);
+    response.setModelName(execution.modelName());
     response.setAnswer(answer);
     response.setRefusalReason(null);
 
-    if (EmptyChecks.isNotNull(persistedTurn)) {
-      conversationService.completeTurn(
-          tenantId,
-          persistedTurn.conversationId(),
-          persistedTurn.turnNo(),
-          answer,
-          AiPromptDecision.APPROVED.code(),
-          modelName,
-          promptTokens,
-          completionTokens,
-          cost.amount());
+    if (EmptyChecks.isNotNull(execution.persistedTurn())) {
+      conversationService.completeTurn(ConsoleAiConversationService.TurnCompletion.builder()
+          .tenantId(execution.tenantId())
+          .conversationId(execution.persistedTurn().conversationId())
+          .turnNo(execution.persistedTurn().turnNo())
+          .response(answer)
+          .decision(AiPromptDecision.APPROVED.code())
+          .modelName(execution.modelName())
+          .promptTokens(promptTokens)
+          .completionTokens(completionTokens)
+          .estimatedCostUsd(cost.amount())
+          .build());
     }
 
     auditService.record(buildAuditCommand(AuditContext.builder()
         .request(AuditRequest.builder()
-            .tenantId(tenantId)
-            .requestId(requestId)
-            .traceId(traceId)
-            .sessionId(sessionId)
-            .operatorId(requestMetadata.operatorId())
+            .tenantId(execution.tenantId())
+            .requestId(execution.requestId())
+            .traceId(execution.traceId())
+            .sessionId(execution.sessionId())
+            .operatorId(execution.operatorId())
             .build())
         .result(AuditResult.builder()
-            .promptCategory(gateResult.category())
+            .promptCategory(execution.gateResult().category())
             .decision(AiPromptDecision.APPROVED)
-            .modelName(modelName)
-            .prompt(prompt)
+            .modelName(execution.modelName())
+            .prompt(execution.prompt())
             .response(ConsoleTextSanitizer.safeInput(answer, aiProperties.getMaxResponseLength()))
             .promptTokens(promptTokens)
             .completionTokens(completionTokens)
@@ -456,6 +455,22 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
 
   private record ModelCallResult(ChatResponse response, ConsoleAiClients.ProviderClient provider) {}
 
+  @Builder
+  private record ApprovedChatExecution(
+      String tenantId,
+      String requestId,
+      String traceId,
+      String sessionId,
+      String operatorId,
+      String prompt,
+      AiPromptGateResult gateResult,
+      ChatResponse chatResponse,
+      ModelCallResult modelCall,
+      String modelName,
+      ConsoleAiCostService.Reservation reservation,
+      List<ConsoleAiKnowledgeBase.Snippet> snippets,
+      ConsoleAiConversationService.StartedTurn persistedTurn) {}
+
   private String extractContent(ChatResponse chatResponse) {
     return Optional.ofNullable(chatResponse)
         .map(ChatResponse::getResult)
@@ -565,6 +580,36 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     response.setAnswer(ConsoleTextSanitizer.safeDisplay(
         refusalMessage(gateResult), aiProperties.getMaxResponseLength()));
     response.setRefusalReason(ConsoleTextSanitizer.safeDisplay(gateResult.reason(), 512));
+    return response;
+  }
+
+  private AiChatResponse recordRejectedRequest(
+      String tenantId,
+      ConsoleRequestMetadata metadata,
+      String requestId,
+      String traceId,
+      String sessionId,
+      String prompt,
+      AiPromptGateResult gateResult) {
+    aiMetrics.recordDecision(ConsoleAiMetrics.DECISION_REJECTED);
+    AiChatResponse response = buildRejectedResponse(requestId, traceId, sessionId, gateResult);
+    auditService.record(buildAuditCommand(AuditContext.builder()
+        .request(AuditRequest.builder()
+            .tenantId(tenantId)
+            .requestId(requestId)
+            .traceId(traceId)
+            .sessionId(sessionId)
+            .operatorId(metadata.operatorId())
+            .build())
+        .result(AuditResult.builder()
+            .promptCategory(gateResult.category())
+            .decision(gateResult.decision())
+            .prompt(prompt)
+            .response(ConsoleTextSanitizer.safeInput(
+                response.getAnswer(), aiProperties.getMaxResponseLength()))
+            .refusalReason(ConsoleTextSanitizer.safeInput(gateResult.reason(), 512))
+            .build())
+        .build()));
     return response;
   }
 
