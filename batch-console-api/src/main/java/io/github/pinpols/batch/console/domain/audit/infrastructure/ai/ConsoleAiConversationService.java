@@ -78,7 +78,7 @@ public class ConsoleAiConversationService {
       conversation.setExpiresAt(expiresAt);
       mapper.insertConversation(conversation);
     } else if (!ownerUserId.equals(conversation.getOwnerUserId())) {
-      throw BizException.of(ResultCode.FORBIDDEN, "error.common.forbidden_detail");
+      throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail");
     } else if (!conversation.getExpiresAt().isAfter(now)) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail");
     }
@@ -90,7 +90,7 @@ public class ConsoleAiConversationService {
     Long turnNo =
         mapper.allocateTurnNo(tenantId, conversationId, ownerUserId, expiresAt, contextVersion);
     if (EmptyChecks.isNull(turnNo)) {
-      throw BizException.of(ResultCode.FORBIDDEN, "error.common.forbidden_detail");
+      throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail");
     }
     ConsoleAiTurnEntity turn = new ConsoleAiTurnEntity();
     turn.setTenantId(tenantId);

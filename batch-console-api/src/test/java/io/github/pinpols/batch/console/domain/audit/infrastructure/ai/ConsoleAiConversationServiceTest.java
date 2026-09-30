@@ -80,7 +80,31 @@ class ConsoleAiConversationServiceTest {
 
     assertThatThrownBy(() ->
             service.beginTurn("tenant-a", "operator-a", "conversation-1", "v1", "show failed jobs"))
-        .isInstanceOf(BizException.class);
+        .isInstanceOfSatisfying(
+            BizException.class,
+            exception -> assertThat(exception.getCode()).isEqualTo(ResultCode.NOT_FOUND));
+    verify(mapper, never()).insertTurn(any());
+  }
+
+  @Test
+  void shouldHideConversationWhenTurnAllocationLosesOwnership() {
+    ConsoleAiConversationEntity conversation = new ConsoleAiConversationEntity();
+    conversation.setOwnerUserId("operator-a");
+    conversation.setExpiresAt(OffsetDateTime.now(ZoneOffset.UTC).plusDays(1));
+    when(mapper.selectForUpdate("tenant-a", "conversation-1")).thenReturn(conversation);
+    when(mapper.allocateTurnNo(
+            eq("tenant-a"),
+            eq("conversation-1"),
+            eq("operator-a"),
+            any(OffsetDateTime.class),
+            eq("v1")))
+        .thenReturn(null);
+
+    assertThatThrownBy(() ->
+            service.beginTurn("tenant-a", "operator-a", "conversation-1", "v1", "show failed jobs"))
+        .isInstanceOfSatisfying(
+            BizException.class,
+            exception -> assertThat(exception.getCode()).isEqualTo(ResultCode.NOT_FOUND));
     verify(mapper, never()).insertTurn(any());
   }
 
