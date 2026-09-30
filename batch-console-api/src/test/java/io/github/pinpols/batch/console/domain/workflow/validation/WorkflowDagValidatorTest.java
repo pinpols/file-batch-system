@@ -72,6 +72,15 @@ class WorkflowDagValidatorTest {
   }
 
   @Test
+  void rejectsApprovalNodesBeforePersistence() {
+    WorkflowDefinitionSaveRequest req = baseRequest();
+    req.setNodes(List.of(node("start", "START"), node("review", "APPROVAL"), node("end", "END")));
+    req.setEdges(List.of(edge("start", "review"), edge("review", "end")));
+
+    assertBizError(req, "error.common.invalid_argument_detail");
+  }
+
+  @Test
   @DisplayName("节点数超 200 → VALIDATION_ERROR too_many_nodes")
   void shouldFail_whenTooManyNodes() {
     WorkflowDefinitionSaveRequest req = baseRequest();

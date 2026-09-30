@@ -97,6 +97,12 @@ public class WorkflowDagValidator {
       }
       byCode.put(code, n);
       String type = n.getNodeType();
+      if ("APPROVAL".equalsIgnoreCase(type)) {
+        throw BizException.of(
+            ResultCode.VALIDATION_ERROR,
+            "error.common.invalid_argument_detail",
+            "workflow APPROVAL nodes are not supported");
+      }
       if (WorkflowNodeType.START.code().equalsIgnoreCase(type)) {
         startNodes.add(code);
       } else if (WorkflowNodeType.END.code().equalsIgnoreCase(type)) {

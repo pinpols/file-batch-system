@@ -3,6 +3,8 @@
 > 面向"我要让一个作业等另一个作业完成才跑"或者"等多个作业都完成才跑"的人。
 > 系统通过 `workflow_definition` + `workflow_node` + `workflow_edge` 三表把多个 `job_definition` 编排成 DAG。
 
+Workflow 不支持 `APPROVAL` 人工审批节点；设计器与保存接口均不提供该类型。补跑、配置发布等独立运维审批不受此限制。
+
 ---
 
 ## 1. 一图看懂依赖怎么表达
