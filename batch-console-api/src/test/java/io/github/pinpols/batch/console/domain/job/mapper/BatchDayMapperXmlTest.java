@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.model.PageRequest;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.time.LocalDate;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -127,7 +128,7 @@ class BatchDayMapperXmlTest {
 
   private static Set<String> parseStatusCodes(String expression) {
     Matcher matcher = Pattern.compile("'([A-Z_]+)'").matcher(expression);
-    Set<String> statuses = new java.util.HashSet<>();
+    Set<String> statuses = new HashSet<>();
     while (matcher.find()) {
       statuses.add(matcher.group(1));
     }

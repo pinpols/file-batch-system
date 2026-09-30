@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -47,7 +48,7 @@ class ConsoleClusterDiagnosticMapperXmlTest {
     Matcher matcher =
         Pattern.compile("(?is)ji\\.instance_status\\s+in\\s*\\(([^)]*)\\)").matcher(sql);
     assertThat(matcher.find()).as("terminal instance status filter").isTrue();
-    Set<String> statuses = new java.util.HashSet<>();
+    Set<String> statuses = new HashSet<>();
     Matcher codes = Pattern.compile("'([A-Z_]+)'").matcher(matcher.group(1));
     while (codes.find()) {
       statuses.add(codes.group(1));
