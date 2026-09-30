@@ -143,7 +143,6 @@ public class ConsoleAiProperties {
       "secret",
       "token",
       "system prompt",
-      "system prompt",
       "密钥",
       "密码",
       "口令",
