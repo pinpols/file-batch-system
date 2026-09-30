@@ -106,11 +106,13 @@ public class DownstreamFallback {
       recordOutcome(service, operation, "success", null);
       return result;
     } catch (CallNotPermittedException ex) {
+      DegradedResponseHeaders.mark(service);
       recordOutcome(service, operation, "fallback", ex.getClass().getSimpleName());
       log.warn(
           "downstream circuit open: service={}, op={}, cb={}", service, operation, ex.getMessage());
       return fallback.apply(new RestClientException("downstream circuit open: " + service, ex));
     } catch (RestClientException ex) {
+      DegradedResponseHeaders.mark(service);
       recordOutcome(service, operation, "fallback", ex.getClass().getSimpleName());
       log.warn(
           "downstream degraded: service={}, op={}, ex={}: {}",

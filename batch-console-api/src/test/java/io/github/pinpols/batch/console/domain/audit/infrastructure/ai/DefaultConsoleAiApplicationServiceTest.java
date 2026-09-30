@@ -16,6 +16,7 @@ import io.github.pinpols.batch.common.enums.AiPromptCategory;
 import io.github.pinpols.batch.common.enums.AiPromptDecision;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.application.contract.request.auth.AiChatRequest;
 import io.github.pinpols.batch.console.application.observability.ConsoleQueryApplicationService;
 import io.github.pinpols.batch.console.application.ops.ConsoleClusterDiagnosticService;
@@ -32,6 +33,7 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -100,6 +102,9 @@ class DefaultConsoleAiApplicationServiceTest {
   @Mock
   private SlidingWindowRateLimiter rateLimiter;
 
+  @Mock
+  private BatchDateTimeSupport dateTimeSupport;
+
   private ConsoleAiProperties aiProperties;
   private SimpleMeterRegistry meterRegistry;
   private ConsoleAiMetrics aiMetrics;
@@ -127,6 +132,7 @@ class DefaultConsoleAiApplicationServiceTest {
         queryServiceProvider,
         diagnosticServiceProvider,
         rateLimiter,
+        dateTimeSupport,
         aiMetrics);
   }
 
@@ -344,6 +350,22 @@ class DefaultConsoleAiApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("日预算按平台业务自然日隔离，而不是滚动 24 小时")
+  void shouldScopeDailyBudgetToBusinessDate() {
+    aiProperties.setDailyRequestLimit(2);
+    when(dateTimeSupport.todayInDefaultBusinessZone()).thenReturn(LocalDate.of(2026, 9, 30));
+    when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-1", "trace-1"));
+    when(rateLimiter.tryAcquire(
+            eq("ai:budget:tenant:tenant-1:date:2026-09-30"), eq(2), eq(Duration.ofDays(1))))
+        .thenReturn(false);
+
+    assertThatThrownBy(() -> service.chat(request("tenant-1", "查询失败作业"), "idem-1"))
+        .isInstanceOf(BizException.class)
+        .satisfies(
+            ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.RATE_LIMITED));
+  }
+
+  @Test
   @DisplayName("不同租户限流 key 不同 → 跨租户不互相压制")
   void shouldUseTenantScopedKey_soTenantsDoNotSuppressEachOther() {
     aiProperties.setRateLimitPerMinute(20);
@@ -530,6 +552,8 @@ class DefaultConsoleAiApplicationServiceTest {
     when(chatClient.prompt()).thenReturn(requestSpec);
     when(requestSpec.system(anyString())).thenReturn(requestSpec);
     when(requestSpec.user(anyString())).thenReturn(requestSpec);
+    when(requestSpec.options(any(org.springframework.ai.chat.prompt.ChatOptions.Builder.class)))
+        .thenReturn(requestSpec);
     when(requestSpec.call()).thenReturn(callSpec);
     return callSpec;
   }

@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.console.domain.ops.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -9,13 +11,17 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.config.ConsoleMaintenanceProperties;
+import io.github.pinpols.batch.console.domain.ops.mapper.MaintenanceStateMapper;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateEntity;
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder;
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.time.Instant;
 import java.util.List;
@@ -36,6 +42,8 @@ class ConsoleAdminMaintenanceControllerTest {
 
   private final ConsoleRequestMetadataResolver requestMetadataResolver =
       mock(ConsoleRequestMetadataResolver.class);
+  private ConsoleMaintenanceProperties properties;
+  private MaintenanceStateMapper mapper;
   private MaintenanceStateHolder stateHolder;
   private MockMvc mockMvc;
 
@@ -46,16 +54,24 @@ class ConsoleAdminMaintenanceControllerTest {
         ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+    when(requestMetadataResolver.current())
+        .thenReturn(
+            new ConsoleRequestMetadata("req-1", "trace-1", "ta", "tester", null, "127.0.0.1"));
 
-    ConsoleMaintenanceProperties props = new ConsoleMaintenanceProperties();
-    stateHolder = new MaintenanceStateHolder(props);
+    properties = new ConsoleMaintenanceProperties();
+    mapper = mock(MaintenanceStateMapper.class);
+    when(mapper.selectSingleton()).thenAnswer(invocation -> entityFromProperties());
+    when(mapper.updateIfVersion(
+            any(boolean.class), any(boolean.class), any(), any(), any(), any(), anyLong()))
+        .thenReturn(1);
+    stateHolder = new MaintenanceStateHolder(properties, mapper, new ObjectMapper());
     // PostConstruct 在 standalone setup 下需手动调
     ReflectionTestUtils.invokeMethod(stateHolder, "initFromProperties");
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleAdminMaintenanceController(stateHolder, responseFactory))
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleAdminMaintenanceController(
+            stateHolder, responseFactory, requestMetadataResolver))
         .setControllerAdvice(exceptionHandler)
         .setValidator(validator)
         .build();
@@ -119,5 +135,19 @@ class ConsoleAdminMaintenanceControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.affectedServices").isArray())
         .andExpect(jsonPath("$.data.affectedServices.length()").value(0));
+  }
+
+  private MaintenanceStateEntity entityFromProperties() {
+    MaintenanceStateEntity entity = new MaintenanceStateEntity();
+    entity.setEnabled(properties.isEnabled());
+    entity.setReadOnly(properties.isReadOnly());
+    entity.setMessage(properties.getMessage());
+    entity.setEtaAt(properties.getEtaAt());
+    entity.setAffectedServicesJson(new ObjectMapper()
+        .valueToTree(
+            properties.getAffectedServices() == null ? List.of() : properties.getAffectedServices())
+        .toString());
+    entity.setVersion(0L);
+    return entity;
   }
 }

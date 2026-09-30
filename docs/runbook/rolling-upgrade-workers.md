@@ -76,3 +76,15 @@
 - [ ] 能对指定 `workerCode` 发起 drain 并查到 `claimed-tasks`。
 - [ ] 超时后 Orchestrator 能完成接管并将 Worker 标为下线（查 `worker_registry` 或控制台）。
 - [ ] `force-offline` 能在紧急情况下立即移交任务并下线。
+
+## 后端本地验收
+
+以下检查只验证仓库中的后端契约、脚本语法和静态配置，不代替 Kubernetes staging 演练：
+
+```bash
+./mvnw -pl batch-console-api -am -DskipTests -DskipITs package
+python3 scripts/ci/check-observability-contract.py
+bash -n scripts/staging/verify-worker-rolling-upgrade.sh
+```
+
+滚动升级脚本只读取 rollout、Pod 和事件状态，不主动删除 Pod、不强制回滚，也不改变当前集群。真实 staging 仍必须按上文步骤验证 drain、lease 接管、Kafka lag 收敛和业务结果对账。

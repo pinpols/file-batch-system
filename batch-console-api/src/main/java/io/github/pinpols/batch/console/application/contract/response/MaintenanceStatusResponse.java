@@ -10,10 +10,12 @@ import java.util.List;
  * @param message 用户可见提示
  * @param etaAt 预计恢复时间(ISO-8601 字符串)
  * @param affectedServices 受影响子系统 code 列表(空 list=整站)
+ * @param version 共享维护状态版本
  */
 public record MaintenanceStatusResponse(
     boolean enabled,
     boolean readOnly,
     String message,
     String etaAt,
-    List<String> affectedServices) {}
+    List<String> affectedServices,
+    long version) {}

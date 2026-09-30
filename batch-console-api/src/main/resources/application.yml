@@ -172,11 +172,20 @@ batch:
       max-context-chars: ${BATCH_CONSOLE_AI_MAX_CONTEXT_CHARS:2000}
       # response 最大长度（防止输出过长）
       max-response-length: ${BATCH_CONSOLE_AI_MAX_RESPONSE_LENGTH:3000}
+      # provider 输出 token 硬上限，和字符上限双重控制成本
+      max-completion-tokens: ${BATCH_CONSOLE_AI_MAX_COMPLETION_TOKENS:1024}
       # 调用限流:每租户+每用户每分钟最大调用次数(滑动窗口,复用 console 限流器,key 含 tenant)。
       # AI 每次烧 token + 调外部 LLM,比普通接口贵,独立更严;超限返回 429。<=0 关闭。
       rate-limit-per-minute: ${BATCH_CONSOLE_AI_RATE_LIMIT_PER_MINUTE:20}
+      # 每租户自然日请求预算；0 表示关闭，启用后依赖 Redis 原子滑动窗口
+      daily-request-limit: ${BATCH_CONSOLE_AI_DAILY_REQUEST_LIMIT:0}
+      # 日预算无法访问 Redis 时默认拒绝，避免成本护栏失效
+      budget-fail-closed: ${BATCH_CONSOLE_AI_BUDGET_FAIL_CLOSED:true}
       # 单次模型调用应用层硬超时:超时→优雅降级(非 500),防 Tomcat 线程被 provider 拖住。
       request-timeout: ${BATCH_CONSOLE_AI_REQUEST_TIMEOUT:60s}
+      # 审计保留策略默认只配置不自动删除，完成合规评审后再开启
+      audit-retention-days: ${BATCH_CONSOLE_AI_AUDIT_RETENTION_DAYS:365}
+      audit-retention-enabled: ${BATCH_CONSOLE_AI_AUDIT_RETENTION_ENABLED:false}
       # 允许使用 AI 的用户白名单
       allowed-users:
         - ${BATCH_CONSOLE_AI_ALLOWED_USER:admin}

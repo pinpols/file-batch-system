@@ -12,6 +12,39 @@ groups:
           summary: "{{ $labels.job }} is down"
           description: "Prometheus target {{ $labels.instance }} for {{ $labels.job }} is not scraping successfully."
 
+      - alert: BatchConsoleMaintenanceStateUnavailable
+        expr: batch_console_maintenance_shared_state_available == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: console
+        annotations:
+          summary: "Console maintenance state is not confirmed"
+          description: "This Console replica cannot read the shared maintenance state. Console writes are fail-closed until the database path recovers."
+
+      - alert: BatchConsoleReplicaMissing
+        expr: batch_console_replica_streaming_count == 0
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: database
+        annotations:
+          summary: "No streaming PostgreSQL replica is available"
+          description: "The primary reports no streaming replica for five minutes. Read traffic may be running without HA protection."
+
+      - alert: BatchConsoleReplicaReplayLagHigh
+        expr: batch_console_replica_replay_lag_seconds > 30
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: database
+        annotations:
+          summary: "PostgreSQL replica replay lag is high"
+          description: "The worst streaming replica replay lag stayed above 30 seconds. Console routing should quarantine stale replicas."
+
       - alert: BatchTelemetryCollectorDown
         expr: absent(up{job=~".*otel.*collector.*"}) or max(up{job=~".*otel.*collector.*"}) == 0
         for: 2m
@@ -178,6 +211,28 @@ groups:
         annotations:
           summary: "Heap usage is high"
           description: "Heap usage exceeds 85% for one or more batch services."
+
+      - alert: BatchWorkerCapacityExhausted
+        expr: sum by (workerType) (batch_worker_semaphore_available) == 0
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: capacity
+        annotations:
+          summary: "Worker execution capacity is exhausted"
+          description: "All local execution permits for worker {{ $labels.workerType }} have been consumed for five minutes. Check task duration, downstream latency, and horizontal capacity."
+
+      - alert: BatchSchedulerQueueOldestWaitHigh
+        expr: batch_orchestrator_scheduler_queue_oldest_wait_seconds > 300
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: capacity
+        annotations:
+          summary: "Scheduler queue oldest wait is high"
+          description: "The oldest queued partition has waited more than five minutes. Inspect admission limits, worker capacity, Kafka lag, and PostgreSQL contention."
 
       # 需 kafka-exporter（如 danielqsj/kafka-exporter）或 Prometheus Kafka 适配器
       # 暴露 kafka_consumergroup_lag 指标。各 batch worker 使用的消费组为

@@ -1,17 +1,22 @@
 package io.github.pinpols.batch.console.domain.observability.web;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.config.ConsoleMaintenanceProperties;
+import io.github.pinpols.batch.console.domain.ops.mapper.MaintenanceStateMapper;
 import io.github.pinpols.batch.console.infrastructure.cron.QuartzCronPreviewService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateEntity;
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder;
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
@@ -31,6 +36,8 @@ class ConsoleSystemControllerTest {
   private final BatchTimezoneProvider timezoneProvider = mock(BatchTimezoneProvider.class);
   private final ConsoleRequestMetadataResolver requestMetadataResolver =
       mock(ConsoleRequestMetadataResolver.class);
+  private ConsoleMaintenanceProperties properties;
+  private MaintenanceStateMapper mapper;
   private MaintenanceStateHolder stateHolder;
   private MockMvc mockMvc;
 
@@ -43,8 +50,13 @@ class ConsoleSystemControllerTest {
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
     when(timezoneProvider.defaultZone()).thenReturn(ZoneId.of("Asia/Shanghai"));
 
-    ConsoleMaintenanceProperties props = new ConsoleMaintenanceProperties();
-    stateHolder = new MaintenanceStateHolder(props);
+    properties = new ConsoleMaintenanceProperties();
+    mapper = mock(MaintenanceStateMapper.class);
+    when(mapper.selectSingleton()).thenAnswer(invocation -> entityFromProperties());
+    when(mapper.updateIfVersion(
+            any(boolean.class), any(boolean.class), any(), any(), any(), any(), anyLong()))
+        .thenReturn(1);
+    stateHolder = new MaintenanceStateHolder(properties, mapper, new ObjectMapper());
     ReflectionTestUtils.invokeMethod(stateHolder, "initFromProperties");
 
     mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleSystemController(
@@ -112,5 +124,19 @@ class ConsoleSystemControllerTest {
             .param("count", "999"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.nextRuns.length()").value(20));
+  }
+
+  private MaintenanceStateEntity entityFromProperties() {
+    MaintenanceStateEntity entity = new MaintenanceStateEntity();
+    entity.setEnabled(properties.isEnabled());
+    entity.setReadOnly(properties.isReadOnly());
+    entity.setMessage(properties.getMessage());
+    entity.setEtaAt(properties.getEtaAt());
+    entity.setAffectedServicesJson(new ObjectMapper()
+        .valueToTree(
+            properties.getAffectedServices() == null ? List.of() : properties.getAffectedServices())
+        .toString());
+    entity.setVersion(0L);
+    return entity;
   }
 }

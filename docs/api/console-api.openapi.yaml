@@ -366,6 +366,8 @@ paths:
         - Pre-rollout: PUT `{enabled:true, readOnly:false, message:..., etaAt:...,
           affectedServices:["job-schedule"]}`
         - Post-rollout: PUT `{enabled:false}`
+        The state is stored in a database singleton and updated with a version CAS, so all
+        Console replicas converge on the same state. A concurrent update returns 409.
       security:
         - bearerAuth: []
       requestBody:
@@ -393,6 +395,41 @@ paths:
       responses:
         '204':
           description: Authenticated
+  /api/console/queries/usage-summary:
+    get:
+      tags: [Observability]
+      summary: Query backend-derived daily usage aggregates
+      operationId: queryConsoleUsageSummary
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: metricCode
+          in: query
+          required: false
+          schema: { type: string, maxLength: 96 }
+        - name: pageCode
+          in: query
+          required: false
+          schema: { type: string, maxLength: 128 }
+      responses:
+        '200':
+          description: Daily usage rows. These are derived trend data, not audit or billing evidence.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleUsageSummaryList'
         '401':
           description: Not authenticated
   /api/console/auth/logout:
@@ -10322,7 +10359,7 @@ components:
               $ref: '#/components/schemas/CronPreview'
     MaintenanceStatus:
       type: object
-      required: [enabled, readOnly]
+      required: [enabled, readOnly, version]
       properties:
         enabled:
           type: boolean
@@ -10345,6 +10382,32 @@ components:
           description: |
             Service codes that are down during this maintenance (empty list = whole site).
             FE renders a per-service availability badge so users see what's still usable.
+        version:
+          type: integer
+          format: int64
+          description: Monotonic shared-state version used for replica convergence and CAS.
+    ConsoleUsageSummaryResponse:
+      type: object
+      required: [statDate, tenantId, source, metricCode, pageCode, appVersion, eventCount, successCount, failureCount]
+      properties:
+        statDate: { type: string, format: date }
+        tenantId: { type: string }
+        source: { type: string, enum: [OPERATION_AUDIT, BUSINESS_RESULT, FRONTEND] }
+        metricCode: { type: string }
+        pageCode: { type: string }
+        appVersion: { type: string }
+        eventCount: { type: integer, format: int64 }
+        successCount: { type: integer, format: int64 }
+        failureCount: { type: integer, format: int64 }
+        lastSeenAt: { type: string, format: date-time, nullable: true }
+    CommonResponseConsoleUsageSummaryList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/ConsoleUsageSummaryResponse' }
     UpdateMaintenanceRequest:
       type: object
       required: [enabled]

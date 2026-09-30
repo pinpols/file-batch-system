@@ -7,6 +7,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-09-30 | **控制面治理能力补齐（后端）**：新增共享数据库维护状态版本与 CAS、维护期响应版本字段和实际降级来源响应头；新增租户级操作使用率日聚合查询 `GET /api/console/observability/usage-summary`。新增字段和端点均为后端加法，不改变既有路径、鉴权和租户隔离语义。AI 审计成本/保留配置、容量告警和运行证据脚本属于运维治理，不新增前端必需字段。 |
 | 2026-09-28 | **Result version/readiness BFF 内部治理（wire 不变）**：`ConsoleResultVersionController` 仅去除 web 层直接暴露 `RestClient` 类型，仍通过 `OrchestratorInternalRestClient` 转发到既有 `/internal/orchestrator/result-versions/*`。`/api/console/result-versions`、`/effective`、`/{id}`、`/{id}/promote`、`/{id}/reject` 的路径、请求参数、响应 schema、鉴权和 readiness/result_version 语义均不变；本条作为 readiness 相关 Controller 变更的文档同步证据。 |
 | 2026-09-28 | **运维预览接口授权与契约**：新增 `POST /api/console/file-templates/naming-preview`，按当前租户和导出 Worker 共用的命名解析器返回最终文件名；`GET /api/console/system/cron-preview` 改为正式角色可访问，不再匿名开放。 |
 | 2026-09-27 | **用户账号列表状态筛选**：`GET /api/console/users` 新增可选 `enabled` 布尔查询参数；启用/禁用状态由后端分页查询过滤，避免前端仅筛选当前页导致结果遗漏。 |

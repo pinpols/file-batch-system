@@ -1,6 +1,6 @@
 # Console 维护与服务降级完善方案
 
-> 状态：基础维护能力已落地；多副本一致性、降级来源契约、正式指标告警和联测仍未全部完成。复核日期：2026-09-30。
+> 状态：后端共享维护状态、版本 CAS、失联写保护、降级来源 Header、维护请求指标和基础告警已落地；前端统一写保护和双实例/staging 联测仍需按本方案继续验收。复核日期：2026-09-30。
 
 ## 1. 目标与边界
 
@@ -21,11 +21,11 @@
 | 前端公告和维护页 | 已有 | 桌面端、移动端均挂载 |
 | 下游读路径降级 | 已有 | `DownstreamFallback` + Resilience4j |
 | 下游写路径 fail-fast | 已有 | 防止控制面故障时误报成功 |
-| 多副本状态一致性 | 缺口 | 当前状态保存在单实例内存 |
+| 多副本状态一致性 | 已落后端 | V215 单例表为事实源；Console 副本每 5 秒轮询并按 version 收敛 |
 | 服务范围降级 | 部分 | `affectedServices` 目前是展示字段，不参与路由判定 |
 | 前端统一冻结写操作 | 部分 | store 已有 `writesFrozen`，业务页面尚未统一消费 |
-| 降级来源前后端契约 | 缺口 | 前端支持 `X-Degraded-Source`，后端尚未统一写出 |
-| 维护指标和告警 | 缺口 | 尚无正式的维护状态 gauge / fallback rate 告警 |
+| 降级来源前后端契约 | 已落后端 | fallback 实际发生时统一写出 `X-Degraded-Source`，前端消费仍待联测 |
+| 维护指标和告警 | 已落后端 | enabled/read-only/shared-state/version gauge、维护请求结果、fallback 计数和副本 lag 告警已接入；阈值仍需真实流量校准 |
 
 ## 3. 设计原则
 
@@ -52,7 +52,7 @@
 
 #### P0.1 共享维护状态
 
-将当前单实例 `AtomicReference` 改为现有 PostgreSQL 控制面配置表，作为维护状态唯一事实来源。维护开关是低频写、高一致性要求的控制面状态，不把 Redis 作为权威来源，也不新增配置中心。
+当前已将单实例 `AtomicReference` 改为 V215 PostgreSQL 控制面单例表，作为维护状态唯一事实来源。维护开关是低频写、高一致性要求的控制面状态，不把 Redis 作为权威来源，也不新增配置中心。
 
 状态至少包含：
 
@@ -106,11 +106,11 @@ OpenAPI、错误码说明和前端生成类型以该契约为准。
 - 每次绕过记录租户、用户、请求路径、维护版本、原因和结果。
 - 默认不允许管理员绕过批量写操作；确需紧急操作时通过单独权限和审计放行。
 
-### P1：下游降级和前端提示闭环
+### P1：下游降级和前端提示闭环（剩余）
 
-#### P1.1 标准化降级来源
+#### P1.1 标准化降级来源（后端已落地）
 
-`DownstreamFallback` 在实际返回 fallback 时统一写入请求响应上下文，由 Web 层输出：
+`DownstreamFallback` 在实际返回 fallback 时统一向当前 Web 响应写入：
 
 ```text
 X-Degraded-Source: trigger,scheduler-status
@@ -130,7 +130,7 @@ X-Degraded-Source: trigger,scheduler-status
 - 每个读端点登记 fallback 语义：空集合、UNKNOWN 或 stale cache，禁止默认吞错。
 - 保持现有 Resilience4j 配置，不扩展成服务网格或通用路由系统。
 
-#### P1.3 最小观测闭环
+#### P1.3 最小观测闭环（后端已落地）
 
 补充已有 Micrometer 指标：
 
@@ -267,4 +267,4 @@ downstream.call.duration{service,op}
 
 ## 9. 当前状态口径
 
-本文是“基础能力之上的完善方案”，不是从零实施说明。当前已实现能力包括维护拦截、全冻结/只读、公共状态接口、管理员热切换、503 body/header、Retry-After、审计以及下游读 fallback / 写 fail-fast；当前仍缺 PostgreSQL 共享事实源、版本 CAS、多副本实例确认和重启恢复、后端统一 `X-Degraded-Source`、正式 gauge/告警以及双实例联测。实际运行入口以 `docs/runbook/maintenance-mode.md` 和 `docs/runbook/downstream-degradation.md` 为准；每个增强阶段完成后，必须补充对应测试证据和变更记录。
+本文是“基础能力之上的完善方案”，不是从零实施说明。当前已实现能力包括维护拦截、全冻结/只读、公共状态接口、管理员热切换、503 body/header、Retry-After、审计、下游读 fallback / 写 fail-fast、统一 `X-Degraded-Source`、维护请求指标和正式 gauge/告警；当前仍缺前端统一消费、双实例联测和 staging 运行证据。实际运行入口以 `docs/runbook/maintenance-mode.md` 和 `docs/runbook/downstream-degradation.md` 为准；每个增强阶段完成后，必须补充对应测试证据和变更记录。

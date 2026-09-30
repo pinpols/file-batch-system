@@ -186,8 +186,8 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 
 | ID | 主题 | 来源 | 状态 |
 |---|---|---|---|
-| **PLAT-OTEL-1** | OpenTelemetry 全链路运行验收：Console/API → Trigger → Orchestrator → Kafka → Worker → Report | [`../backlog/platform-capability-evolution-backlog-2026-09-26.md`](../backlog/platform-capability-evolution-backlog-2026-09-26.md) | 🟡 传播工具和观测栈已有；仍缺目标链路的运行证据 |
-| **PLAT-BP-1** | 背压与容量大盘收口：admission、claim/report、Outbox、Kafka lag、Hikari、PG 锁等待、Worker lease | 同上 | 🟡 基础背压和指标已有；统一容量大盘、告警和容量结论待收口 |
+| **PLAT-OTEL-1** | OpenTelemetry 全链路运行验收：Console/API → Trigger → Orchestrator → Kafka → Worker → Report | [`../backlog/platform-capability-evolution-backlog-2026-09-26.md`](../backlog/platform-capability-evolution-backlog-2026-09-26.md) | 🟡 运行证据采集脚本和验收步骤已补；真实链路、Tempo/Loki 关联和告警触发仍需 staging 证据 |
+| **PLAT-BP-1** | 背压与容量大盘收口：admission、claim/report、Outbox、Kafka lag、Hikari、PG 锁等待、Worker lease | 同上 | 🟡 容量仪表盘、Prometheus 告警和证据脚本已补；真实压测阈值和容量结论仍需 staging |
 | **PLAT-WR-1** | 五类 Worker Runtime / SPI 行为一致性复核 | 同上 | ✅ 核心实现和本地 Sim 已完成；🔒 staging/生产级证据仍需补齐 |
 | **PLAT-KEDA-1** | KEDA staging 验证：dynamic sharding + backlog / lag 扩缩 + drain | 同上 | P1；需要真实 K8s + KEDA operator |
 | **PLAT-GITOPS-1** | GitOps staging 接入：镜像、ops repo、Argo CD、Helm values、smoke | 同上 | P1；当前只有骨架 |
@@ -200,8 +200,8 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 | ID | 主题 | 状态 |
 |---|---|---|
 | **AI-CTX-1** | 版本化页面上下文、会话语义、租户/角色授权、领域拒答和来源引用契约 | 🟡 已有认证、角色、租户校验、上下文脱敏、领域/安全拒答和来源引用；版本化页面上下文与服务端会话持久化未完成 |
-| **AI-COST-1** | 输入/输出 token 上限、并发舱壁、日/月预算、provider 错误分类、成本与拒答指标 | 🟡 已有 RPM 限流、请求超时、有界并发、provider 错误降级和 token 指标；硬 token 上限、日/月预算和严格故障策略未完成 |
-| **AI-AUDIT-1** | AI 审计默认只保留元数据/哈希/成本信息，复核原文预览留存策略和查询权限 | 🟡 已有审计、哈希、token 和成本字段；当前仍保留有限原文预览，留存期限、查询权限和文档口径需收口 |
+| **AI-COST-1** | 输入/输出 token 上限、并发舱壁、日/月预算、provider 错误分类、成本与拒答指标 | 🟡 已有 RPM 限流、请求超时、有界并发、单次输出 token 上限、可选租户日请求预算和严格 Redis 故障策略；真实费用核算与月预算仍未实现 |
+| **AI-AUDIT-1** | AI 审计默认只保留元数据/哈希/成本信息，复核原文预览留存策略和查询权限 | 🟡 已增加 V217 时间索引和默认关闭的可配置清理任务；原文预览是否保留、查询权限和生产保留期仍需合规确认 |
 
 以下是已冻结的范围决策，不重新排成开发待办：
 
@@ -218,10 +218,10 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 
 | ID | 主题 | 状态 |
 |---|---|---|
-| **USAGE-1** | 固化指标目录、成功口径、数据来源优先级、权限和保留期 | 🟡 既有操作审计、业务结果和前端 telemetry 边界已明确；完整指标目录和保留期仍待冻结 |
-| **USAGE-2** | Flyway `console_usage_daily` 月分区、严格 RLS、索引和保留策略 | ⏳ 尚未实现；当前没有该日聚合表 |
-| **USAGE-3** | 后端事件标准化、有界批量 upsert、`usage-summary` DTO/API/OpenAPI | 🟡 已有基础租户用量摘要和 Dashboard 查询；事件标准化、日聚合 upsert 和独立 summary 契约未完成 |
-| **USAGE-4** | 与前端埋点、操作审计和业务终态对账，补齐租户隔离/并发/失败语义测试 | ⏳ 待联测；当前基础摘要不能替代业务结果对账 |
+| **USAGE-1** | 固化指标目录、成功口径、数据来源优先级、权限和保留期 | ✅ 后端指标来源、成功口径、租户权限和派生数据边界已固化；长期保留期仍需运维策略确认 |
+| **USAGE-2** | Flyway `console_usage_daily` 月分区、严格 RLS、索引和保留策略 | ✅ V216 已落地分区、严格 RLS 和索引；长期分区保留/归档仍需 staging 策略 |
+| **USAGE-3** | 后端事件标准化、有界批量 upsert、`usage-summary` DTO/API/OpenAPI | ✅ 已落地操作审计投影、并发累加 upsert 和独立 summary 契约；当前为同步 best-effort 投影，有界异步批量明确不在本轮范围 |
+| **USAGE-4** | 与前端埋点、操作审计和业务终态对账，补齐租户隔离/并发/失败语义测试 | ⏳ 待真 PG 联测和前端展示对账；当前接口不能替代业务结果对账 |
 
 ### G6. Console 维护与服务降级完善 · P0/P1 · 🟡 基础能力已落地，增强项未完成
 
@@ -229,10 +229,10 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 
 | ID | 主题 | 状态 |
 |---|---|---|
-| **MAINT-BE-1** | PostgreSQL 维护状态唯一事实源、版本 CAS、实例确认和重启恢复 | ⏳ 当前仍是单实例内存状态；共享事实源、多副本收敛和重启恢复未实现 |
-| **MAINT-BE-2** | 维护 503 body/header、权限绕过和审计契约收口 | 🟡 503 body、`X-Maintenance`、`Retry-After`、管理员热切换和审计已有；旁路权限细化、版本 Header 和 OpenAPI/前端联测待收口 |
-| **DEGRADE-BE-1** | `X-Degraded-Source` 标准化输出，读 fallback / 写 fail-fast 守护 | 🟡 读 fallback / 写 fail-fast 基础语义已有；后端统一输出来源 Header 未完成 |
-| **DEGRADE-BE-2** | 复用现有 Micrometer 增加维护状态、维护 503、fallback 比例和耗时告警 | ⏳ 正式 gauge、fallback 比例和告警规则未完成 |
+| **MAINT-BE-1** | PostgreSQL 维护状态唯一事实源、版本 CAS、实例确认和重启恢复 | 🟡 V215 已落地；已实现启动读取、5 秒轮询、版本 CAS 和失联写保护，双实例/staging 证据待补 |
+| **MAINT-BE-2** | 维护 503 body/header、权限绕过和审计契约收口 | ✅ 后端 503 body、`X-Maintenance`、`Retry-After`、版本 Header、管理员热切换和审计已收口；细粒度旁路权限与前端联测仍按后续边界治理 |
+| **DEGRADE-BE-1** | `X-Degraded-Source` 标准化输出，读 fallback / 写 fail-fast 守护 | ✅ 后端 fallback 统一写来源 Header，写路径继续 fail-fast；前端消费和端到端联测待补 |
+| **DEGRADE-BE-2** | 复用现有 Micrometer 增加维护状态、维护 503、fallback 比例和耗时告警 | ✅ 后端维护状态 gauge、维护请求结果、下游 fallback 计数、副本健康和容量/背压告警已补；真实阈值校准待 staging |
 | **MAINT-JOINT-1** | 双 Console 实例维护切换、下游断路器和恢复联测 | 🔒 需多实例/staging 环境验证 |
 
 明确不做：服务网格、通用动态路由、工单/通知中心、独立配置中心和写接口自动成功降级。

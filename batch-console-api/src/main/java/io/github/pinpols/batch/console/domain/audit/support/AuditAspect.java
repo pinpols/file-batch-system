@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
+import io.github.pinpols.batch.console.shared.usage.ConsoleUsageRecorder;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 import java.lang.reflect.Method;
@@ -32,6 +33,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
@@ -67,6 +70,7 @@ public class AuditAspect {
   private final OperationAuditMapper mapper;
   private final ObjectMapper objectMapper;
   private final PlatformTransactionManager transactionManager;
+  private final ConsoleUsageRecorder usageDailyRecorder;
 
   private final ExpressionParser spel = new SpelExpressionParser();
   private final ParameterNameDiscoverer paramNameDiscoverer = new DefaultParameterNameDiscoverer();
@@ -175,9 +179,36 @@ public class AuditAspect {
           1,
           Instant.now());
       mapper.insert(event);
+      recordUsageAfterCommit(event);
     } catch (Exception e) {
       // 审计写失败不能拖垮业务事务 —— 业务侧已经做完了真正的事,这里只是留痕
       log.warn("[audit] insert failed action={}", ann.action(), e);
+    }
+  }
+
+  /** 审计事务提交后再写派生使用率，避免回滚业务留下幽灵计数。 */
+  private void recordUsageAfterCommit(OperationAuditEvent event) {
+    Runnable recorder = () -> {
+      try {
+        usageDailyRecorder.record(
+            event.tenantId(),
+            event.action(),
+            "SUCCESS".equalsIgnoreCase(event.result()),
+            event.createdAt());
+      } catch (Exception usageFailure) {
+        // 使用率是派生数据，写失败只记录告警，不能回滚真实业务或操作审计。
+        log.warn("[usage] daily aggregate write failed action={}", event.action(), usageFailure);
+      }
+    };
+    if (TransactionSynchronizationManager.isSynchronizationActive()) {
+      TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+        @Override
+        public void afterCommit() {
+          recorder.run();
+        }
+      });
+    } else {
+      recorder.run();
     }
   }
 

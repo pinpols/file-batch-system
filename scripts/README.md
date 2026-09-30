@@ -14,6 +14,8 @@
 - `scripts/codegen/`：OpenAPI、错误码字典和契约 fixture 等可复现代码生成
 - `scripts/dev/`：开发期诊断、演示和本机工具，不作为生产运维入口
 - `scripts/ha/`：高可用部署与故障转移演练
+- `scripts/observability/`：运行时指标、健康端点和可观测性证据采集
+- `scripts/staging/`：staging 部署、滚动升级和回滚前置检查
 - `scripts/lib/`：Shell/Python 共享函数库，只供其他脚本引用
 - `scripts/sim/`、`scripts/sim-4day/`：受管环境场景模拟与四日链路验证
 - `scripts/tools/`：不属于运行、运维或 CI 主链的独立维护工具

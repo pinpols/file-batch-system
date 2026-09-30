@@ -39,6 +39,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
@@ -110,6 +111,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
   private final ObjectProvider<ConsoleQueryApplicationService> queryServiceProvider;
   private final ObjectProvider<ConsoleClusterDiagnosticService> diagnosticServiceProvider;
   private final SlidingWindowRateLimiter rateLimiter;
+  private final BatchDateTimeSupport dateTimeSupport;
   private final ConsoleAiMetrics aiMetrics;
 
   /**
@@ -303,6 +305,8 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         .prompt()
         .system(buildSystemPrompt(snippets, EmptyChecks.isNotNull(tools)))
         .user(promptPayload);
+    spec = spec.options(org.springframework.ai.chat.prompt.ChatOptions.builder()
+        .maxTokens(Math.max(1, aiProperties.getMaxCompletionTokens())));
     if (EmptyChecks.isNotNull(tools)) {
       spec = spec.tools(tools);
     }
@@ -409,27 +413,52 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     return response;
   }
 
-  /** AI 调用限流:滑动窗口(Redis),key 含 tenant + user;超限抛 429。Redis 不可达 → fail-open(与限流过滤器一致)。 */
+  /** AI 调用限流和日预算；分钟限流沿用全局 fail-open，成本日预算按配置可 fail-closed。 */
   private void enforceRateLimit(String tenantId, String operatorId) {
     int limit = aiProperties.getRateLimitPerMinute();
-    if (limit <= 0) {
+    if (limit > 0) {
+      String user = Texts.hasText(operatorId) ? operatorId : "anonymous";
+      String key = "ai:chat:tenant:" + tenantId + ":user:" + user;
+      boolean allowed;
+      try {
+        allowed = rateLimiter.tryAcquire(key, limit);
+      } catch (DataAccessException exception) {
+        SwallowedExceptionLogger.info(
+            DefaultConsoleAiApplicationService.class,
+            "catch:ai-rate-limit-redis-unavailable",
+            exception);
+        allowed = true;
+      }
+      if (!allowed) {
+        aiMetrics.recordDecision(ConsoleAiMetrics.DECISION_RATE_LIMITED);
+        throw BizException.of(ResultCode.RATE_LIMITED, "error.ai.rate_limited");
+      }
+    }
+    enforceDailyBudget(tenantId);
+  }
+
+  private void enforceDailyBudget(String tenantId) {
+    int dailyLimit = aiProperties.getDailyRequestLimit();
+    if (dailyLimit <= 0) {
       return;
     }
-    String user = Texts.hasText(operatorId) ? operatorId : "anonymous";
-    String key = "ai:chat:tenant:" + tenantId + ":user:" + user;
-    boolean allowed;
     try {
-      allowed = rateLimiter.tryAcquire(key, limit);
+      boolean allowed = rateLimiter.tryAcquire(
+          "ai:budget:tenant:" + tenantId + ":date:" + dateTimeSupport.todayInDefaultBusinessZone(),
+          dailyLimit,
+          Duration.ofDays(1));
+      if (!allowed) {
+        aiMetrics.recordDecision(ConsoleAiMetrics.DECISION_RATE_LIMITED);
+        throw BizException.of(ResultCode.RATE_LIMITED, "error.ai.rate_limited");
+      }
     } catch (DataAccessException exception) {
       SwallowedExceptionLogger.info(
           DefaultConsoleAiApplicationService.class,
-          "catch:ai-rate-limit-redis-unavailable",
+          "catch:ai-daily-budget-redis-unavailable",
           exception);
-      return;
-    }
-    if (!allowed) {
-      aiMetrics.recordDecision(ConsoleAiMetrics.DECISION_RATE_LIMITED);
-      throw BizException.of(ResultCode.RATE_LIMITED, "error.ai.rate_limited");
+      if (aiProperties.isBudgetFailClosed()) {
+        throw BizException.of(ResultCode.SERVICE_UNAVAILABLE, "error.ai.rate_limited");
+      }
     }
   }
 
