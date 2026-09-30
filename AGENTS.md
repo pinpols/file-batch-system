@@ -19,7 +19,7 @@ These instructions apply to work in this repository. Keep this file focused on d
 - For scripts and SQL, check supported runtimes, quoting, exit status, configuration sources, idempotency, and discoverability.
 - For performance claims, record the build, workload, environment, metrics, acceptance criteria, and limitations.
 - During review, report actionable findings first, ordered by severity and supported by file/line evidence.
-- For MyBatis SQL that classifies job-instance lifecycle states, keep query-specific business buckets explicit; do not add generic status parameters solely to remove SQL literals. When a SQL bucket represents the shared lifecycle categories (active, terminal, success, or unsuccessful terminal), add a mapper test that compares its XML status set with `JobInstanceStatus`-derived codes. Narrower policies such as SLA eligibility or failed-job selection must retain their own documented semantics and focused tests rather than being equated with lifecycle categories.
+- MyBatis SQL 对作业实例生命周期状态分类时，应明确保留各查询自身的业务口径；不要只为消除 SQL 中的状态字面量而增加通用状态参数。如果 SQL 分类对应共享生命周期类别（活跃、终态、成功终态或非成功终态），应增加 Mapper 测试，将 XML 中的状态集合与 `JobInstanceStatus` 派生的状态码对照。SLA 纳入条件、失败作业筛选等更具体的业务策略，应保留各自明确的语义并通过专项测试验证，不要将其等同于通用生命周期分类。
 
 ## Skills
 
