@@ -13,18 +13,27 @@ public interface ConsoleAiConversationMapper {
 
   String setTenantContext(@Param("tenantId") String tenantId);
 
-  ConsoleAiConversationEntity selectForUpdate(@Param("conversationId") String conversationId);
+  ConsoleAiConversationEntity selectForUpdate(
+      @Param("tenantId") String tenantId, @Param("conversationId") String conversationId);
+
+  ConsoleAiConversationEntity selectActiveByOwner(
+      @Param("tenantId") String tenantId,
+      @Param("conversationId") String conversationId,
+      @Param("ownerUserId") String ownerUserId);
 
   int insertConversation(ConsoleAiConversationEntity conversation);
 
   Long allocateTurnNo(
+      @Param("tenantId") String tenantId,
       @Param("conversationId") String conversationId,
       @Param("ownerUserId") String ownerUserId,
       @Param("expiresAt") OffsetDateTime expiresAt,
       @Param("contextVersion") String contextVersion);
 
   List<ConsoleAiTurnEntity> selectRecentCompleteTurns(
-      @Param("conversationId") String conversationId, @Param("limit") int limit);
+      @Param("tenantId") String tenantId,
+      @Param("conversationId") String conversationId,
+      @Param("limit") int limit);
 
   int insertTurn(ConsoleAiTurnEntity turn);
 
@@ -43,6 +52,7 @@ public interface ConsoleAiConversationMapper {
       @Param("limit") int limit);
 
   List<ConsoleAiTurnEntity> selectTurns(
+      @Param("tenantId") String tenantId,
       @Param("conversationId") String conversationId,
       @Param("ownerUserId") String ownerUserId,
       @Param("beforeTurnNo") Long beforeTurnNo,

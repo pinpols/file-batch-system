@@ -8,6 +8,8 @@ import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiConversation
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -48,10 +50,14 @@ class ConsoleAiConversationPageIntegrationTest extends AbstractIntegrationTest {
       insert(tenantA, "owner-a", "conversation-1", updatedAt, false);
       insert(tenantA, "owner-a", "conversation-expired", updatedAt, true);
       insert(tenantA, "owner-b", "conversation-other-owner", updatedAt, false);
+      insertTurn(tenantA, "conversation-3");
+      insertTurn(tenantA, "conversation-expired");
     });
     transactionTemplate.executeWithoutResult(status -> {
       mapper.setTenantContext(tenantB);
       insert(tenantB, "owner-a", "conversation-other-tenant", updatedAt, false);
+      insert(tenantB, "owner-a", "conversation-3", updatedAt, false);
+      insertTurn(tenantB, "conversation-3");
     });
 
     transactionTemplate.executeWithoutResult(status -> {
@@ -70,6 +76,31 @@ class ConsoleAiConversationPageIntegrationTest extends AbstractIntegrationTest {
       assertThat(mapper.selectByOwner(tenantA, "owner-a", 20))
           .extracting(ConsoleAiConversationEntity::getId)
           .containsExactly("conversation-3", "conversation-2", "conversation-1");
+      assertThat(mapper.selectForUpdate(tenantA, "conversation-3").getTenantId())
+          .isEqualTo(tenantA);
+      assertThat(mapper.selectActiveByOwner(tenantA, "conversation-3", "owner-a"))
+          .isNotNull();
+      assertThat(mapper.selectActiveByOwner(tenantA, "conversation-expired", "owner-a"))
+          .isNull();
+      assertThat(mapper.selectActiveByOwner(tenantA, "conversation-other-owner", "owner-a"))
+          .isNull();
+      assertThat(mapper.selectActiveByOwner(tenantA, "conversation-other-tenant", "owner-a"))
+          .isNull();
+      assertThat(mapper.selectTurns(tenantA, "conversation-3", "owner-a", null, 20))
+          .hasSize(1);
+      assertThat(mapper.selectTurns(tenantA, "conversation-expired", "owner-a", null, 20))
+          .isEmpty();
+      assertThat(mapper.selectRecentCompleteTurns(tenantA, "conversation-3", 12))
+          .hasSize(1);
+      assertThat(mapper.allocateTurnNo(
+              tenantA,
+              "conversation-3",
+              "owner-a",
+              OffsetDateTime.now(ZoneOffset.UTC).plusHours(1),
+              "v1"))
+          .isEqualTo(1L);
+      assertThat(mapper.selectForUpdate(tenantB, "conversation-3").getNextTurnNo())
+          .isEqualTo(1L);
     });
   }
 
@@ -87,5 +118,13 @@ class ConsoleAiConversationPageIntegrationTest extends AbstractIntegrationTest {
         Timestamp.from(updatedAt),
         Timestamp.from(updatedAt),
         Timestamp.from(Instant.now().plusSeconds(expired ? -60 : 3600)));
+  }
+
+  private void insertTurn(String tenantId, String conversationId) {
+    jdbcTemplate.update("""
+            INSERT INTO batch.console_ai_turn
+                (tenant_id, conversation_id, turn_no, context_version, prompt_text, turn_status)
+            VALUES (?, ?, 1, 'v1', 'encrypted-test-value', 'COMPLETE')
+            """, tenantId, conversationId);
   }
 }

@@ -3474,7 +3474,7 @@ paths:
   /api/console/ai/chat:
     post:
       tags: [AI]
-      summary: Chat with console AI
+      summary: Chat with console AI; an unknown or expired supplied sessionId is rejected
       operationId: chatWithConsoleAi
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
@@ -3491,6 +3491,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseAiChatResponse'
+        '404':
+          description: Supplied sessionId does not exist or has expired
   /api/console/ai/conversations:
     get:
       tags: [AI]
@@ -3542,7 +3544,7 @@ paths:
   /api/console/ai/conversations/{conversationId}/turns:
     get:
       tags: [AI]
-      summary: List turns for a conversation owned by the current user
+      summary: List turns for an unexpired conversation owned by the current user
       operationId: listConsoleAiConversationTurns
       parameters:
         - name: conversationId
@@ -3572,6 +3574,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleAiTurnList'
+        '404':
+          description: Conversation does not exist or has expired
   /api/console/ai/conversations/{conversationId}:
     delete:
       tags: [AI]
