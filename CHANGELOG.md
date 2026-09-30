@@ -12,6 +12,7 @@
 
 ### Changed
 
+- Sim 与本地 MinIO 初始化统一使用独立、固定版本的 `minio/mc` CLI 容器，不再依赖 MinIO 服务镜像内置客户端；镜像版本及 Compose/helper fallback 纳入版本对齐门禁。
 - Docker 前后端应用镜像统一以固定 `batch:batch`（UID/GID 10001）运行，仅日志和缓存等必要目录可写；PostgreSQL、Valkey、MinIO、Tempo 等长驻进程非 root，MinIO 数据具名卷改挂实际数据目录；观测卷改由非 root 一次性任务预备，Prometheus 动态 targets 移到数据卷。
 - Console AI 限制外发上下文为有界 JSON 并递归拒绝凭据字段；跨 Provider 故障切换需显式配置启用，默认关闭；响应与审计模型标识使用实际 provider 响应 metadata。
 - Cron 预览移出匿名白名单，仅允许四类正式 Console 角色调用。
