@@ -231,7 +231,7 @@
 
 ## §18 安全机制纵深 —— 审批 / 脱敏 / 隔离 / 密钥 / 审计
 
-**审核点**:审批链(MANUAL_APPROVAL catch-up、workflow 审批节点)真拦得住;敏感数据脱敏(log masking);**atomic worker RCE 隔离**(ADR-029,shell/sql/stored-proc/http 特权隔离);SSRF / sensitive-data 拦截;密钥非明文写入数据库 + 强度校验 + 轮换;内部端点鉴权(orchestrator `InternalAuthFilter` + 各 worker `/internal` 同源,刚补 import);审计完整(谁改了什么、敏感操作留痕)。
+**审核点**:审批链(MANUAL_APPROVAL catch-up 等独立审批;Workflow 不支持人工审批节点)真拦得住;敏感数据脱敏(log masking);**atomic worker RCE 隔离**(ADR-029,shell/sql/stored-proc/http 特权隔离);SSRF / sensitive-data 拦截;密钥非明文写入数据库 + 强度校验 + 轮换;内部端点鉴权(orchestrator `InternalAuthFilter` + 各 worker `/internal` 同源,刚补 import);审计完整(谁改了什么、敏感操作留痕)。
 
 **形式化落地红旗**:审批只是 UI 摆设不真拦;敏感数据进日志;atomic worker 能任意 RCE;密钥明文写入数据库;内部端点缺少鉴权(刚发现 import 缺鉴权,**其余 worker 要同样对标**)。
 
