@@ -51,7 +51,8 @@ PR 与 Full Gate 的静态检查 job 设置 `BATCH_GATE_COLLECT=1`。业务门�
 需要语义判断的文件保持人工维护，CI 只读阻断。
 
 `check-sbom-sync.sh` 从当前 Maven reactor 重生成 `target/bom.json`，并与
-`docs/compliance/sbom.json` 逐字节比较。任何 POM 依赖或版本调整都必须同步提交入库
+`docs/compliance/sbom.json` 比较 CycloneDX 版本、组件坐标、版本、许可证、哈希和依赖图。
+数组顺序、描述等跨环境展示字段不参与比较。任何 POM 依赖或版本调整都必须同步提交入库
 SBOM；`check-license-compliance.sh` 复用已生成结果再次校验，避免 Full Gate 只上传动态
 artifact、却放过仓库快照漂移。
 
