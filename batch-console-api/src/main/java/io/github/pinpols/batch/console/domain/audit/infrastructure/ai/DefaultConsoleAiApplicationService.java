@@ -136,8 +136,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
   }
 
   /** 执行一轮 AI 对话并写审计。 */
-  @Override
-  public AiChatResponse chat(AiChatRequest request, String idempotencyKey) {
+  AiChatResponse chat(AiChatRequest request, String idempotencyKey) {
     authorizationService.assertAllowed();
     return executeChat(request, requestMetadataResolver.current(), null);
   }

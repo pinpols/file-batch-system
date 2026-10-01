@@ -21,7 +21,7 @@
 
 - ❌ **不裁定业务对错**:不回答「这笔账对不对 / 该不该放行 / 数据质量达不达标」——这是 ADR-021 明令的「裁定业务对错」红线,AI 更不能碰
 - ❌ **不写状态、不触发动作**:`@Tool` 全部只读;不暴露任何重跑 / 取消 / 改配置 / 派单的工具。运维动作仍走有鉴权 + 幂等的既有 REST 端点,不经对话触发
-- ❌ **不进主链**:只在 `batch-console-api` 暴露 `POST /api/console/ai/chat`;trigger / orchestrator / worker 主链零依赖、零调用。LLM 不可用不影响任何调度 / 执行 / 出账
+- ❌ **不进主链**:只在 `batch-console-api` 暴露 `POST /api/console/ai/chat/stream`;trigger / orchestrator / worker 主链零依赖、零调用。LLM 不可用不影响任何调度 / 执行 / 出账
 - ❌ **不做 RAG 治理平台 / 不训练 / 不微调**:只读 `ai-knowledge/*.md` 静态运维知识 + 受控只读工具,不建向量库、不接外部数据治理
 
 ## 决策

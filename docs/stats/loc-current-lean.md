@@ -1,19 +1,19 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `8e284c548`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `d19b8bdd3`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,609 | 476,724 | 241,084 | 50.6% |
+| 4,609 | 476,706 | 241,081 | 50.6% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| prod | 2,683 | 245,457 | 112,171 | 45.7% |
-| test | 1,180 | 170,030 | 90,502 | 53.2% |
+| prod | 2,683 | 245,445 | 112,165 | 45.7% |
+| test | 1,180 | 170,024 | 90,505 | 53.2% |
 | script | 603 | 45,631 | 28,628 | 62.7% |
 | config | 52 | 8,091 | 5,755 | 71.1% |
 | infra-config | 32 | 5,293 | 3,863 | 73.0% |
@@ -23,7 +23,7 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,406 | 350,063 | 177,650 | 50.7% |
+| Java | 3,406 | 350,045 | 177,647 | 50.7% |
 | Shell | 186 | 28,017 | 21,677 | 77.4% |
 | Python | 216 | 28,756 | 14,692 | 51.1% |
 | YAML | 95 | 12,331 | 9,271 | 75.2% |
@@ -57,7 +57,7 @@
 | `pom.xml` | config | XML | 764 | 455 |
 | `scripts/local/pre-push-sdk-checks.sh` | script | Shell | 558 | 424 |
 | `scripts/local/sim-harness.sh` | script | Shell | 557 | 418 |
-| `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | prod | Java | 948 | 417 |
+| `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | prod | Java | 947 | 416 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java` | prod | Java | 869 | 408 |
 
 ## 复跑

@@ -76,14 +76,6 @@ public class ConsoleAiController {
     streamExecutor.shutdownNow();
   }
 
-  /** AI 聊天一轮对话。 */
-  @PostMapping("/chat")
-  public CommonResponse<AiChatResponse> chat(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @Valid @RequestBody AiChatRequest request) {
-    return responseFactory.success(applicationService.chat(request, idempotencyKey));
-  }
-
   @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
   public SseEmitter chatStream(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
