@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.job.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -14,40 +13,28 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.dto.ResponseMeta;
-import io.github.pinpols.batch.common.enums.ConfigLifecycleStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchDayReplaySubmitRequest;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
-import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatchers;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.web.client.RestClient;
 
 /**
  * 类型化守护:submit/preview 的 body 反序列化为 {@link BatchDayReplaySubmitRequest}(字段名与 orchestrator
- * BatchDayReplaySubmitCommand 一致),tenantId 经 guard 解析后强制覆盖再转发。
+ * BatchDayReplaySubmitCommand 一致),控制器只将类型化请求委托给应用端口。
  */
 class ConsoleBatchDayReplayControllerTest {
 
-  private final OrchestratorInternalRestClient orchestratorInternalRestClient =
-      mock(OrchestratorInternalRestClient.class);
-  private final ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
+  private final ConsoleOrchestratorPort orchestratorProxy = mock(ConsoleOrchestratorPort.class);
   private final ConsoleRequestMetadataResolver requestMetadataResolver =
       mock(ConsoleRequestMetadataResolver.class);
 
-  private RestClient restClient;
-  private RestClient.RequestBodyUriSpec bodyUriSpec;
-  private RestClient.RequestBodySpec bodySpec;
-  private RestClient.ResponseSpec responseSpec;
   private MockMvc mockMvc;
 
   @BeforeEach
@@ -58,30 +45,19 @@ class ConsoleBatchDayReplayControllerTest {
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    restClient = mock(RestClient.class);
-    bodyUriSpec = mock(RestClient.RequestBodyUriSpec.class);
-    bodySpec = mock(RestClient.RequestBodySpec.class);
-    responseSpec = mock(RestClient.ResponseSpec.class);
-    when(orchestratorInternalRestClient.build()).thenReturn(restClient);
-    when(restClient.post()).thenReturn(bodyUriSpec);
-    when(bodyUriSpec.uri(anyString())).thenReturn(bodySpec);
-    when(bodySpec.body(any(Object.class))).thenReturn(bodySpec);
-    when(bodySpec.retrieve()).thenReturn(responseSpec);
-    // orchestrator 返 CommonResponse<...> envelope；控制器按类型化 body 反序列化后 forwardOrchestrator 透传 data。
-    when(responseSpec.body(ArgumentMatchers.<ParameterizedTypeReference<Object>>any()))
-        .thenReturn(CommonResponse.success(
-            Map.of("id", 1, "status", ConfigLifecycleStatus.PENDING_APPROVAL.code())));
+    when(orchestratorProxy.batchDayReplaySubmit(any(BatchDayReplaySubmitRequest.class)))
+        .thenReturn(CommonResponse.success(null));
+    when(orchestratorProxy.batchDayReplayPreview(any(BatchDayReplaySubmitRequest.class)))
+        .thenReturn(CommonResponse.success(null));
 
-    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleBatchDayReplayController(
-            orchestratorInternalRestClient, tenantGuard, responseFactory))
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleBatchDayReplayController(orchestratorProxy, responseFactory))
         .setControllerAdvice(exceptionHandler)
         .build();
   }
 
   @Test
-  void submitShouldDeserializeTypedBodyAndOverwriteTenant() throws Exception {
-    when(tenantGuard.resolveTenant("tb")).thenReturn("ta");
-
+  void submitShouldDeserializeTypedBodyAndDelegateToApplicationPort() throws Exception {
     mockMvc
         .perform(post("/api/console/ops/batch-day-replay/sessions")
             .header("Idempotency-Key", "idem-1")
@@ -102,10 +78,11 @@ class ConsoleBatchDayReplayControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
 
-    ArgumentCaptor<Object> bodyCaptor = ArgumentCaptor.forClass(Object.class);
-    verify(bodySpec).body(bodyCaptor.capture());
-    BatchDayReplaySubmitRequest forwarded = (BatchDayReplaySubmitRequest) bodyCaptor.getValue();
-    assertThat(forwarded.getTenantId()).isEqualTo("ta");
+    ArgumentCaptor<BatchDayReplaySubmitRequest> requestCaptor =
+        ArgumentCaptor.forClass(BatchDayReplaySubmitRequest.class);
+    verify(orchestratorProxy).batchDayReplaySubmit(requestCaptor.capture());
+    BatchDayReplaySubmitRequest forwarded = requestCaptor.getValue();
+    assertThat(forwarded.getTenantId()).isEqualTo("tb");
     assertThat(forwarded.getCalendarCode()).isEqualTo("CAL-CN");
     assertThat(forwarded.getBizDate()).isEqualTo("2026-07-01");
     assertThat(forwarded.getScope()).isEqualTo("SUBSET_JOB_CODES");
@@ -114,7 +91,6 @@ class ConsoleBatchDayReplayControllerTest {
     assertThat(forwarded.getReason()).isEqualTo("rerun after fix");
     assertThat(forwarded.getRequestedBy()).isEqualTo("ops-1");
     assertThat(forwarded.getAutoApprove()).isFalse();
-    verify(bodyUriSpec).uri("/internal/orchestrator/batch-day-replay/sessions");
   }
 
   @Test
@@ -126,13 +102,11 @@ class ConsoleBatchDayReplayControllerTest {
             .contentType(APPLICATION_JSON)
             .content("{\"tenantId\":\"ta\"}"))
         .andExpect(status().isBadRequest());
-    verify(orchestratorInternalRestClient, never()).build();
+    verify(orchestratorProxy, never()).batchDayReplaySubmit(any(BatchDayReplaySubmitRequest.class));
   }
 
   @Test
-  void previewShouldForwardWithResolvedTenant() throws Exception {
-    when(tenantGuard.resolveTenant(null)).thenReturn("ta");
-
+  void previewShouldDelegateTypedRequestToApplicationPort() throws Exception {
     mockMvc
         .perform(post("/api/console/ops/batch-day-replay/sessions/preview")
             .contentType(APPLICATION_JSON)
@@ -148,11 +122,7 @@ class ConsoleBatchDayReplayControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
 
-    ArgumentCaptor<Object> bodyCaptor = ArgumentCaptor.forClass(Object.class);
-    verify(bodySpec).body(bodyCaptor.capture());
-    BatchDayReplaySubmitRequest forwarded = (BatchDayReplaySubmitRequest) bodyCaptor.getValue();
-    assertThat(forwarded.getTenantId()).isEqualTo("ta");
-    verify(bodyUriSpec).uri("/internal/orchestrator/batch-day-replay/sessions/preview");
+    verify(orchestratorProxy).batchDayReplayPreview(any(BatchDayReplaySubmitRequest.class));
   }
 
   @Test
@@ -171,6 +141,6 @@ class ConsoleBatchDayReplayControllerTest {
                     }
                     """))
         .andExpect(status().isBadRequest());
-    verify(orchestratorInternalRestClient, never()).build();
+    verify(orchestratorProxy, never()).batchDayReplaySubmit(any(BatchDayReplaySubmitRequest.class));
   }
 }

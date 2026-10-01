@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.governance.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.observability.ConsoleSystemParameterService;
+import io.github.pinpols.batch.console.domain.governance.application.ConsoleGovernanceParameterPolicy;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
@@ -12,7 +13,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -37,20 +37,8 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleGovernanceController {
 
-  private static final String PREFIX = "governance.";
-
-  /** Well-known governance parameter keys with default values. */
-  private static final Map<String, String> KNOWN_KEYS = Map.of(
-      "governance.outbox.circuit-breaker.failure-threshold", "3",
-      "governance.outbox.circuit-breaker.cooldown-millis", "60000",
-      "governance.dispatch.circuit-breaker.failure-threshold", "5",
-      "governance.dispatch.circuit-breaker.cooldown-millis", "60000",
-      "governance.rate-limit.login-ip-per-minute", "10",
-      "governance.rate-limit.sensitive-op-user-per-minute", "30",
-      "governance.rate-limit.launch-per-tenant-per-minute", "0",
-      "governance.rate-limit.release-per-tenant-per-minute", "0");
-
   private final ConsoleSystemParameterService parameterService;
+  private final ConsoleGovernanceParameterPolicy governancePolicy;
   private final ConsoleResponseFactory responseFactory;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   private final TenantIdResolver tenantGuard;
@@ -60,10 +48,10 @@ public class ConsoleGovernanceController {
   public CommonResponse<Map<String, String>> list(@RequestParam("tenantId") String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     Map<String, String> result = new LinkedHashMap<>();
-    for (Map.Entry<String, String> entry : KNOWN_KEYS.entrySet()) {
-      Optional<String> value = parameterService.getValue(resolved, entry.getKey());
-      result.put(entry.getKey(), value.orElse(entry.getValue()));
-    }
+    governancePolicy
+        .defaultValues()
+        .forEach((key, defaultValue) ->
+            result.put(key, parameterService.getValue(resolved, key).orElse(defaultValue)));
     return responseFactory.success(result);
   }
 
@@ -74,14 +62,12 @@ public class ConsoleGovernanceController {
       @RequestParam("tenantId") String tenantId, @Valid @RequestBody UpdateGovernanceParam param) {
     // 同 list 走 tenantGuard 校验:不能直接信前端 tenantId,需做格式 / 存在性校验。
     String resolved = tenantGuard.resolveTenant(tenantId);
-    if (!param.key().startsWith(PREFIX)) {
+    if (!governancePolicy.isGovernanceKey(param.key())) {
       return responseFactory.success(null);
     }
     String operator = requestMetadataResolver.current().operatorId();
-    String description = KNOWN_KEYS.containsKey(param.key())
-        ? "Governance parameter: " + param.key()
-        : "Custom governance parameter";
-    parameterService.upsert(resolved, param.key(), param.value(), description, operator);
+    parameterService.upsert(
+        resolved, param.key(), param.value(), governancePolicy.description(param.key()), operator);
     return responseFactory.success(null);
   }
 

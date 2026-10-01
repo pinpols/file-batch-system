@@ -2,9 +2,8 @@ package io.github.pinpols.batch.console.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.contract.response.ops.AssetPartitionReadinessResponse;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
-import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
 import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -12,7 +11,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.client.RestClient;
 
 /**
  * Asset partition console 查询 API。
@@ -25,8 +23,7 @@ import org.springframework.web.client.RestClient;
 @RequiredArgsConstructor
 public class ConsoleAssetPartitionController {
 
-  private final OrchestratorInternalRestClient orchestratorInternalRestClient;
-  private final ConsoleTenantGuard tenantGuard;
+  private final ConsoleOrchestratorPort orchestratorProxy;
   private final ConsoleResponseFactory responseFactory;
 
   @GetMapping("/readiness")
@@ -34,20 +31,8 @@ public class ConsoleAssetPartitionController {
       @RequestParam(value = "tenantId", required = false) String tenantId,
       @RequestParam("jobCode") String jobCode,
       @RequestParam("bizDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate bizDate) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    AssetPartitionReadinessResponse resp = proxyClient()
-        .get()
-        .uri(
-            "/internal/readiness/job?tenantId={tenantId}&jobCode={jobCode}&bizDate={bizDate}",
-            resolved,
-            jobCode,
-            bizDate)
-        .retrieve()
-        .body(AssetPartitionReadinessResponse.class);
+    AssetPartitionReadinessResponse resp =
+        orchestratorProxy.assetPartitionReadiness(tenantId, jobCode, bizDate);
     return responseFactory.success(resp);
-  }
-
-  private RestClient proxyClient() {
-    return orchestratorInternalRestClient.build();
   }
 }

@@ -1,11 +1,6 @@
 package io.github.pinpols.batch.console.domain.job.web;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -18,148 +13,101 @@ import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
-import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.web.client.RestClient;
 
-/**
- * P2: ConsoleResultVersionController 5 个端点(list/effective/detail/promote/reject)守 tenantGuard 解析 +
- * URL/HTTP method 正确路由到 orchestrator internal API。
- */
+/** P2: result_version 控制器只负责 HTTP 参数绑定、鉴权入口和应用端口委托。 */
 class ConsoleResultVersionControllerTest {
 
-  private final OrchestratorInternalRestClient orchestratorInternalRestClient =
-      mock(OrchestratorInternalRestClient.class);
-  private final ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
+  private final ConsoleOrchestratorPort orchestratorProxy = mock(ConsoleOrchestratorPort.class);
   private final ConsoleRequestMetadataResolver requestMetadataResolver =
       mock(ConsoleRequestMetadataResolver.class);
-
-  private RestClient restClient;
-  private RestClient.RequestHeadersUriSpec<?> getUriSpec;
-  private RestClient.RequestHeadersSpec<?> getSpec;
-  private RestClient.RequestBodyUriSpec postUriSpec;
-  private RestClient.RequestBodySpec postSpec;
-  private RestClient.ResponseSpec responseSpec;
   private MockMvc mockMvc;
 
   @BeforeEach
-  @SuppressWarnings("unchecked")
   void setUp() {
     ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
     ConsoleApiExceptionHandler exceptionHandler =
         ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-
-    restClient = mock(RestClient.class);
-    getUriSpec = mock(RestClient.RequestHeadersUriSpec.class);
-    getSpec = mock(RestClient.RequestHeadersSpec.class);
-    postUriSpec = mock(RestClient.RequestBodyUriSpec.class);
-    postSpec = mock(RestClient.RequestBodySpec.class);
-    responseSpec = mock(RestClient.ResponseSpec.class);
-
-    when(orchestratorInternalRestClient.build()).thenReturn(restClient);
-    doReturn(getUriSpec).when(restClient).get();
-    when(restClient.post()).thenReturn(postUriSpec);
-    doReturn(getSpec).when(getUriSpec).uri(anyString(), any(Object[].class));
-    when(postUriSpec.uri(anyString(), any(Object[].class))).thenReturn(postSpec);
-    when(getSpec.retrieve()).thenReturn(responseSpec);
-    when(postSpec.retrieve()).thenReturn(responseSpec);
-    // orchestrator 返回 CommonResponse<...> envelope；控制器按类型化 body 反序列化后 forwardOrchestrator 透传 data。
-    when(responseSpec.body(any(ParameterizedTypeReference.class)))
-        .thenReturn(CommonResponse.success(List.of()));
-
-    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleResultVersionController(
-            orchestratorInternalRestClient, tenantGuard, responseFactory))
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleResultVersionController(orchestratorProxy, responseFactory))
         .setControllerAdvice(exceptionHandler)
         .build();
   }
 
   @Test
-  void listShouldPassResolvedTenantAndBusinessKey() throws Exception {
-    when(tenantGuard.resolveTenant("ta")).thenReturn("ta");
+  void listShouldDelegateTenantBusinessKeyAndLimit() throws Exception {
+    when(orchestratorProxy.resultVersions("ta", "BK_A", 50))
+        .thenReturn(CommonResponse.success(List.of()));
     mockMvc
         .perform(get("/api/console/result-versions")
             .param("tenantId", "ta")
             .param("businessKey", "BK_A"))
         .andExpect(status().isOk());
-    verify(tenantGuard).resolveTenant("ta");
-    verify(getUriSpec)
-        .uri(
-            "/internal/orchestrator/result-versions?tenantId={tenantId}&businessKey={businessKey}&limit={limit}",
-            "ta",
-            "BK_A",
-            50);
+    verify(orchestratorProxy).resultVersions("ta", "BK_A", 50);
   }
 
   @Test
-  void effectiveShouldRouteToEffectiveEndpoint() throws Exception {
-    when(tenantGuard.resolveTenant("ta")).thenReturn("ta");
+  void effectiveShouldDelegateBusinessKey() throws Exception {
+    when(orchestratorProxy.effectiveResultVersion("ta", "BK_A"))
+        .thenReturn(CommonResponse.success(null));
     mockMvc
         .perform(get("/api/console/result-versions/effective")
             .param("tenantId", "ta")
             .param("businessKey", "BK_A"))
         .andExpect(status().isOk());
-    verify(getUriSpec)
-        .uri(
-            "/internal/orchestrator/result-versions/effective?tenantId={tenantId}&businessKey={businessKey}",
-            "ta",
-            "BK_A");
+    verify(orchestratorProxy).effectiveResultVersion("ta", "BK_A");
   }
 
   @Test
-  void detailShouldRouteToIdEndpoint() throws Exception {
-    when(tenantGuard.resolveTenant("ta")).thenReturn("ta");
+  void detailShouldDelegateIdAndTenant() throws Exception {
+    when(orchestratorProxy.resultVersion(7L, "ta")).thenReturn(CommonResponse.success(null));
     mockMvc
         .perform(get("/api/console/result-versions/7").param("tenantId", "ta"))
         .andExpect(status().isOk());
-    verify(getUriSpec)
-        .uri("/internal/orchestrator/result-versions/{id}?tenantId={tenantId}", 7L, "ta");
+    verify(orchestratorProxy).resultVersion(7L, "ta");
   }
 
   @Test
-  void promoteShouldPostToPromoteEndpoint() throws Exception {
-    when(tenantGuard.resolveTenant("ta")).thenReturn("ta");
+  void promoteShouldDelegateIdAndTenant() throws Exception {
+    when(orchestratorProxy.promoteResultVersion(7L, "ta")).thenReturn(CommonResponse.success(null));
     mockMvc
         .perform(post("/api/console/result-versions/7/promote")
             .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
             .param("tenantId", "ta"))
         .andExpect(status().isOk());
-    verify(postUriSpec)
-        .uri("/internal/orchestrator/result-versions/{id}/promote?tenantId={tenantId}", 7L, "ta");
+    verify(orchestratorProxy).promoteResultVersion(7L, "ta");
   }
 
   @Test
-  void rejectShouldPostToRejectEndpoint() throws Exception {
-    when(tenantGuard.resolveTenant("ta")).thenReturn("ta");
+  void rejectShouldDelegateIdAndTenant() throws Exception {
+    when(orchestratorProxy.rejectResultVersion(7L, "ta")).thenReturn(CommonResponse.success(null));
     mockMvc
         .perform(post("/api/console/result-versions/7/reject")
             .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
             .param("tenantId", "ta"))
         .andExpect(status().isOk());
-    verify(postUriSpec)
-        .uri("/internal/orchestrator/result-versions/{id}/reject?tenantId={tenantId}", 7L, "ta");
+    verify(orchestratorProxy).rejectResultVersion(7L, "ta");
   }
 
   @Test
-  void shouldBlockWhenTenantGuardRejects() throws Exception {
-    doThrow(BizException.of(ResultCode.FORBIDDEN, "error.tenant.mismatch"))
-        .when(tenantGuard)
-        .resolveTenant("tb");
+  void shouldPropagateApplicationTenantRejection() throws Exception {
+    when(orchestratorProxy.resultVersions("tb", "BK_A", 50))
+        .thenThrow(BizException.of(ResultCode.FORBIDDEN, "error.tenant.mismatch"));
     mockMvc
         .perform(get("/api/console/result-versions")
             .param("tenantId", "tb")
             .param("businessKey", "BK_A"))
         .andExpect(status().isForbidden());
-    verify(orchestratorInternalRestClient, never()).build();
+    verify(orchestratorProxy).resultVersions("tb", "BK_A", 50);
   }
 }
