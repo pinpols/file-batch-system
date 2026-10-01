@@ -86,10 +86,24 @@ data:
   BATCH_CONSOLE_AI_ENABLED: {{ ((.Values.consoleApi).ai).enabled | default false | quote }}
   BATCH_CONSOLE_AI_PROVIDER: {{ ((.Values.consoleApi).ai).provider | default "anthropic" | quote }}
   BATCH_CONSOLE_AI_FAILOVER_ENABLED: {{ ((.Values.consoleApi).ai).failoverEnabled | default false | quote }}
+  BATCH_CONSOLE_AI_IMAGE_INPUT_ENABLED: {{ ((.Values.consoleApi).ai).imageInputEnabled | default false | quote }}
   BATCH_CONSOLE_AI_OPENAI_COMPATIBLE_PROVIDER_NAME: {{ (((.Values.consoleApi).ai).openaiCompatible).providerName | default "openai-compatible" | quote }}
   BATCH_CONSOLE_AI_OPENAI_COMPATIBLE_BASE_URL: {{ (((.Values.consoleApi).ai).openaiCompatible).baseUrl | default "" | quote }}
   BATCH_CONSOLE_AI_OPENAI_COMPATIBLE_CHAT_MODEL: {{ (((.Values.consoleApi).ai).openaiCompatible).chatModel | default "" | quote }}
   BATCH_CONSOLE_AI_OPENAI_COMPATIBLE_TIMEOUT: {{ (((.Values.consoleApi).ai).openaiCompatible).timeout | default "60s" | quote }}
+  BATCH_CONSOLE_AI_OPENAI_COMPATIBLE_IMAGE_INPUT_ENABLED: {{ (((.Values.consoleApi).ai).openaiCompatible).imageInputEnabled | default false | quote }}
+  BATCH_CONSOLE_AI_IMAGE_MAX_FILE_BYTES: {{ (((.Values.consoleApi).ai).image).maxFileBytes | default 5242880 | quote }}
+  BATCH_CONSOLE_AI_IMAGE_MAX_IMAGES: {{ (((.Values.consoleApi).ai).image).maxImages | default 4 | quote }}
+  BATCH_CONSOLE_AI_IMAGE_MAX_TOTAL_BYTES: {{ (((.Values.consoleApi).ai).image).maxTotalBytes | default 12582912 | quote }}
+  BATCH_CONSOLE_AI_IMAGE_MAX_SIDE: {{ (((.Values.consoleApi).ai).image).maxSide | default 4096 | quote }}
+  BATCH_CONSOLE_AI_IMAGE_MAX_PIXELS: {{ (((.Values.consoleApi).ai).image).maxPixels | default 16777216 | quote }}
+  BATCH_CONSOLE_AI_IMAGE_DRAFT_RETENTION_HOURS: {{ (((.Values.consoleApi).ai).image).draftRetentionHours | default 24 | quote }}
+  BATCH_CONSOLE_AI_IMAGE_RESERVATION_TOKENS_PER_IMAGE: {{ (((.Values.consoleApi).ai).image).reservationTokensPerImage | default 65536 | quote }}
+  BATCH_CONSOLE_AI_IMAGE_UPLOAD_LIMIT_PER_MINUTE: {{ (((.Values.consoleApi).ai).image).uploadLimitPerMinute | default 12 | quote }}
+  BATCH_CONSOLE_AI_IMAGE_MAX_DRAFTS_PER_USER: {{ (((.Values.consoleApi).ai).image).maxDraftsPerUser | default 16 | quote }}
+  BATCH_CONSOLE_AI_IMAGE_MAX_DRAFT_BYTES_PER_USER: {{ (((.Values.consoleApi).ai).image).maxDraftBytesPerUser | default 50331648 | quote }}
+  BATCH_CONSOLE_AI_IMAGE_MAX_RETAINED_BYTES_PER_USER: {{ (((.Values.consoleApi).ai).image).maxRetainedBytesPerUser | default 268435456 | quote }}
+  BATCH_CONSOLE_AI_IMAGE_MAX_RETAINED_BYTES_PER_TENANT: {{ (((.Values.consoleApi).ai).image).maxRetainedBytesPerTenant | default 2147483648 | quote }}
   BATCH_CONSOLE_AI_AUDIT_PREVIEW_ENABLED: {{ ((.Values.consoleApi).ai).auditPreviewEnabled | default false | quote }}
   BATCH_CONSOLE_AI_PERSISTENCE_ENABLED: {{ (((.Values.consoleApi).ai).persistence).enabled | default false | quote }}
   BATCH_CONSOLE_AI_PERSISTENCE_RETENTION_DAYS: {{ (((.Values.consoleApi).ai).persistence).retentionDays | default 0 | quote }}

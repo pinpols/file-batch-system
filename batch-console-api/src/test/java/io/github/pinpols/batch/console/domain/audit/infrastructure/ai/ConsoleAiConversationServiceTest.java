@@ -40,6 +40,9 @@ class ConsoleAiConversationServiceTest {
   @Mock
   private BatchObjectCryptoService cryptoService;
 
+  @Mock
+  private ConsoleAiAttachmentService attachmentService;
+
   private ConsoleAiProperties properties;
   private ConsoleAiConversationService service;
 
@@ -48,12 +51,14 @@ class ConsoleAiConversationServiceTest {
     properties = new ConsoleAiProperties();
     properties.getPersistence().setEnabled(true);
     properties.getPersistence().setRetentionDays(30);
-    service = new ConsoleAiConversationService(mapper, properties, cryptoService);
+    service =
+        new ConsoleAiConversationService(mapper, properties, cryptoService, attachmentService);
   }
 
   @Test
   void shouldCreateConversationAndAllocateTurnForCurrentOwner() {
-    when(cryptoService.encrypt(org.mockito.ArgumentMatchers.any(byte[].class), isNull()))
+    when(mapper.insertTurn(any())).thenReturn(1);
+    when(cryptoService.encrypt(any(byte[].class), isNull()))
         .thenAnswer(invocation -> invocation.getArgument(0));
     when(mapper.selectForUpdate(eq("tenant-a"), anyString())).thenReturn(null);
     when(mapper.selectRecentCompleteTurns(eq("tenant-a"), anyString(), eq(12)))
@@ -70,6 +75,22 @@ class ConsoleAiConversationServiceTest {
     verify(mapper).setTenantContext("tenant-a");
     verify(mapper).insertConversation(any(ConsoleAiConversationEntity.class));
     verify(mapper).insertTurn(any());
+  }
+
+  @Test
+  void rejectsConcurrentDuplicateClientTurnIdAsConflict() {
+    when(cryptoService.encrypt(any(byte[].class), isNull()))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+    when(mapper.selectRecentCompleteTurns(eq("tenant-a"), anyString(), eq(12)))
+        .thenReturn(List.of());
+    when(mapper.allocateTurnNo(
+            eq("tenant-a"), anyString(), anyString(), any(OffsetDateTime.class), anyString()))
+        .thenReturn(1L);
+    when(mapper.insertTurn(any())).thenReturn(0);
+
+    assertThatThrownBy(() -> service.beginTurn(
+            "tenant-a", "operator-a", null, "v1", "question", UUID.randomUUID(), List.of()))
+        .isInstanceOf(BizException.class);
   }
 
   @Test

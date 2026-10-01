@@ -38,7 +38,12 @@ public class ConsoleAiConfiguration {
       fallback =
           openAiPreferred ? anthropicChatModel.getIfAvailable() : openAiChatModel.getIfAvailable();
     }
-    return createClients(provider, primary, fallback, properties.isFailoverEnabled());
+    return createClients(
+        provider,
+        primary,
+        fallback,
+        properties.isFailoverEnabled(),
+        properties.isImageInputEnabled());
   }
 
   static ConsoleAiClients createClients(
@@ -46,6 +51,15 @@ public class ConsoleAiConfiguration {
       ChatModel primaryModel,
       ChatModel fallbackModel,
       boolean failoverEnabled) {
+    return createClients(preferredProvider, primaryModel, fallbackModel, failoverEnabled, false);
+  }
+
+  static ConsoleAiClients createClients(
+      ConsoleAiProperties.Provider preferredProvider,
+      ChatModel primaryModel,
+      ChatModel fallbackModel,
+      boolean failoverEnabled,
+      boolean imageInputEnabled) {
     if (EmptyChecks.isNull(primaryModel)) {
       throw new IllegalStateException(
           "configured console AI provider is unavailable; check batch.console.ai.provider and its credentials");
@@ -53,8 +67,8 @@ public class ConsoleAiConfiguration {
     String primaryName = providerName(preferredProvider);
     String fallbackName =
         preferredProvider == ConsoleAiProperties.Provider.OPENAI ? "anthropic" : "openai";
-    ConsoleAiClients.ProviderClient primary =
-        new ConsoleAiClients.ProviderClient(primaryName, ChatClient.create(primaryModel));
+    ConsoleAiClients.ProviderClient primary = new ConsoleAiClients.ProviderClient(
+        primaryName, ChatClient.create(primaryModel), imageInputEnabled);
     ConsoleAiClients.ProviderClient fallback =
         failoverEnabled && EmptyChecks.isNotNull(fallbackModel)
             ? new ConsoleAiClients.ProviderClient(fallbackName, ChatClient.create(fallbackModel))
@@ -83,7 +97,11 @@ public class ConsoleAiConfiguration {
         ? compatible.getProviderName().trim()
         : providerName(ConsoleAiProperties.Provider.OPENAI_COMPATIBLE);
     return new ConsoleAiClients(
-        new ConsoleAiClients.ProviderClient(providerName, ChatClient.create(model)), null);
+        new ConsoleAiClients.ProviderClient(
+            providerName,
+            ChatClient.create(model),
+            properties.isImageInputEnabled() && compatible.isImageInputEnabled()),
+        null);
   }
 
   private static String providerName(ConsoleAiProperties.Provider provider) {

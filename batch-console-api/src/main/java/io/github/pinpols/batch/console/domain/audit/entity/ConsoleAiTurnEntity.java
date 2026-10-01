@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.audit.entity;
 
 import java.time.Instant;
+import java.util.UUID;
 import lombok.Data;
 
 @Data
@@ -10,6 +11,7 @@ public class ConsoleAiTurnEntity {
   private String tenantId;
   private String conversationId;
   private Long turnNo;
+  private UUID clientTurnId;
   private String contextVersion;
   private String promptText;
   private String responseText;

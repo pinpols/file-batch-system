@@ -36,6 +36,9 @@ public class ConsoleAiProperties {
   /** 跨 Provider 故障切换需显式启用，避免请求内容未经授权转发到其他模型服务。 */
   private boolean failoverEnabled = false;
 
+  /** 仅在当前主模型通过真实图片流式探针后开启。 */
+  private boolean imageInputEnabled = false;
+
   /** OpenAI-compatible 聊天端点配置,用于 DeepSeek、千问、智谱、Kimi、MiniMax 或私有兼容代理。 */
   private OpenaiCompatible openaiCompatible = new OpenaiCompatible();
 
@@ -154,6 +157,9 @@ public class ConsoleAiProperties {
   /** 服务端会话持久化；默认关闭，开启前必须配置正数保留期。 */
   private Persistence persistence = new Persistence();
 
+  /** 私有图片上传边界；未经显式验收时能力保持关闭。 */
+  private Image image = new Image();
+
   /** Provider token 单价与每租户月预算；预算为 0 时不执行费用预算，但已配置单价仍写入估算。 */
   private Cost cost = new Cost();
 
@@ -165,6 +171,26 @@ public class ConsoleAiProperties {
 
   @PostConstruct
   void validateGovernanceSettings() {
+    if (image.getMaxFileBytes() < 1
+        || image.getMaxFileBytes() > 20 * 1024 * 1024
+        || image.getMaxImages() < 1
+        || image.getMaxImages() > 8
+        || image.getMaxTotalBytes() < image.getMaxFileBytes()
+        || image.getMaxTotalBytes() > 40L * 1024 * 1024
+        || image.getMaxSide() < 1
+        || image.getMaxSide() > 8192
+        || image.getMaxPixels() < 1
+        || image.getMaxPixels() > 67_108_864L
+        || image.getDraftRetentionHours() < 1
+        || image.getDraftRetentionHours() > 168
+        || image.getReservationTokensPerImage() < 1
+        || image.getUploadLimitPerMinute() < 1
+        || image.getMaxDraftsPerUser() < image.getMaxImages()
+        || image.getMaxDraftBytesPerUser() < image.getMaxTotalBytes()
+        || image.getMaxRetainedBytesPerUser() < image.getMaxDraftBytesPerUser()
+        || image.getMaxRetainedBytesPerTenant() < image.getMaxRetainedBytesPerUser()) {
+      throw new IllegalStateException("AI image limits are outside supported bounds");
+    }
     if (persistence.isEnabled()
         && (persistence.getRetentionDays() < 1 || persistence.getRetentionDays() > 3650)) {
       throw new IllegalStateException("AI conversation retention must be between 1 and 3650 days");
@@ -227,8 +253,27 @@ public class ConsoleAiProperties {
     /** 兼容端点聊天模型名。 */
     private String model = "";
 
+    /** 仅对已验收的兼容端点与模型组合显式允许图片输入。 */
+    private boolean imageInputEnabled = false;
+
     /** 兼容端点请求超时。 */
     private Duration timeout = Duration.ofSeconds(60);
+  }
+
+  @Data
+  public static class Image {
+    private int maxFileBytes = 5 * 1024 * 1024;
+    private int maxImages = 4;
+    private long maxTotalBytes = 12L * 1024 * 1024;
+    private int maxSide = 4096;
+    private long maxPixels = 16_777_216L;
+    private int draftRetentionHours = 24;
+    private int reservationTokensPerImage = 65_536;
+    private int uploadLimitPerMinute = 12;
+    private int maxDraftsPerUser = 16;
+    private long maxDraftBytesPerUser = 48L * 1024 * 1024;
+    private long maxRetainedBytesPerUser = 256L * 1024 * 1024;
+    private long maxRetainedBytesPerTenant = 2L * 1024 * 1024 * 1024;
   }
 
   /** L3 工具调用参数。 */

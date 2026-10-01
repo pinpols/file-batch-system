@@ -6,6 +6,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -38,8 +40,10 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -53,7 +57,11 @@ import org.springframework.ai.chat.metadata.ChatResponseMetadata;
 import org.springframework.ai.chat.metadata.DefaultUsage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.client.ResourceAccessException;
@@ -101,6 +109,9 @@ class DefaultConsoleAiApplicationServiceTest {
   private ConsoleAiConversationService conversationService;
 
   @Mock
+  private ConsoleAiAttachmentService attachmentService;
+
+  @Mock
   private ConsoleAiCostService costService;
 
   @Mock
@@ -125,6 +136,7 @@ class DefaultConsoleAiApplicationServiceTest {
 
   @BeforeEach
   void setUp() {
+    LocaleContextHolder.setLocale(Locale.ENGLISH);
     aiProperties = new ConsoleAiProperties();
     aiProperties.setEnabled(true);
     aiProperties.setMaxPromptLength(4000);
@@ -135,14 +147,11 @@ class DefaultConsoleAiApplicationServiceTest {
     meterRegistry = new SimpleMeterRegistry();
     aiMetrics = new ConsoleAiMetrics(meterRegistry);
     lenient()
-        .when(costService.reserve(anyString(), anyString(), anyString()))
+        .when(costService.reserve(anyString(), anyString(), anyString(), anyInt()))
         .thenReturn(new ConsoleAiCostService.Reservation(null, null, null, false));
     lenient()
         .when(costService.settle(
-            any(),
-            org.mockito.ArgumentMatchers.nullable(String.class),
-            org.mockito.ArgumentMatchers.nullable(Integer.class),
-            org.mockito.ArgumentMatchers.nullable(Integer.class)))
+            any(), nullable(String.class), nullable(Integer.class), nullable(Integer.class)))
         .thenReturn(new ConsoleAiCostService.CostResult(null, "UNPRICED"));
     service = new DefaultConsoleAiApplicationService(
         chatClientsProvider,
@@ -152,13 +161,28 @@ class DefaultConsoleAiApplicationServiceTest {
         promptGuard,
         auditService,
         conversationService,
+        attachmentService,
         costService,
         knowledgeBase,
         queryServiceProvider,
         diagnosticServiceProvider,
         rateLimiter,
         dateTimeSupport,
-        aiMetrics);
+        aiMetrics,
+        messageSource());
+  }
+
+  @AfterEach
+  void clearLocale() {
+    LocaleContextHolder.resetLocaleContext();
+  }
+
+  private static MessageSource messageSource() {
+    ResourceBundleMessageSource source = new ResourceBundleMessageSource();
+    source.setBasename("messages");
+    source.setDefaultEncoding("UTF-8");
+    source.setFallbackToSystemLocale(false);
+    return source;
   }
 
   private static ConsoleRequestMetadata meta(String tenantId, String requestId, String traceId) {
@@ -368,8 +392,7 @@ class DefaultConsoleAiApplicationServiceTest {
     when(chatClient.prompt()).thenReturn(requestSpec);
     when(requestSpec.system(anyString())).thenReturn(requestSpec);
     when(requestSpec.user(anyString())).thenReturn(requestSpec);
-    when(requestSpec.options(any(org.springframework.ai.chat.prompt.ChatOptions.Builder.class)))
-        .thenReturn(requestSpec);
+    when(requestSpec.options(any(ChatOptions.Builder.class))).thenReturn(requestSpec);
     when(requestSpec.stream()).thenReturn(streamSpec);
     when(streamSpec.chatResponse())
         .thenReturn(Flux.just(
@@ -427,8 +450,7 @@ class DefaultConsoleAiApplicationServiceTest {
     when(chatClient.prompt()).thenReturn(requestSpec);
     when(requestSpec.system(anyString())).thenReturn(requestSpec);
     when(requestSpec.user(anyString())).thenReturn(requestSpec);
-    when(requestSpec.options(any(org.springframework.ai.chat.prompt.ChatOptions.Builder.class)))
-        .thenReturn(requestSpec);
+    when(requestSpec.options(any(ChatOptions.Builder.class))).thenReturn(requestSpec);
     when(requestSpec.stream()).thenReturn(streamSpec);
     when(streamSpec.chatResponse())
         .thenReturn(Flux.just(
@@ -468,11 +490,7 @@ class DefaultConsoleAiApplicationServiceTest {
     assertThat(cancelled.get()).isTrue();
     assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.FAILED.code());
     verify(costService)
-        .settle(
-            any(),
-            org.mockito.ArgumentMatchers.nullable(String.class),
-            org.mockito.ArgumentMatchers.nullable(Integer.class),
-            org.mockito.ArgumentMatchers.nullable(Integer.class));
+        .settle(any(), nullable(String.class), nullable(Integer.class), nullable(Integer.class));
     ArgumentCaptor<AiAuditCommand> captor = ArgumentCaptor.forClass(AiAuditCommand.class);
     verify(auditService).record(captor.capture());
     assertThat(captor.getValue().promptDecision()).isEqualTo(AiPromptDecision.FAILED.code());
@@ -577,13 +595,26 @@ class DefaultConsoleAiApplicationServiceTest {
 
     // 关键:不裸抛 500,返回降级响应
     assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.FAILED.code());
-    assertThat(response.getAnswer()).contains("暂时不可用");
+    assertThat(response.getAnswer()).contains("temporarily unavailable");
     assertThat(decisionCount("failed")).isEqualTo(1.0);
 
     ArgumentCaptor<AiAuditCommand> captor = ArgumentCaptor.forClass(AiAuditCommand.class);
     verify(auditService).record(captor.capture());
     assertThat(captor.getValue().promptDecision()).isEqualTo(AiPromptDecision.FAILED.code());
     assertThat(captor.getValue().refusalReason()).startsWith("model_call_failed");
+  }
+
+  @Test
+  @DisplayName("模型降级文案随请求语言切换")
+  void shouldLocalizeDegradedAnswer() {
+    LocaleContextHolder.setLocale(Locale.SIMPLIFIED_CHINESE);
+    ChatClient.CallResponseSpec callSpec = stubApprovedChatClientChain();
+    when(callSpec.chatResponse()).thenThrow(new RuntimeException("provider 503"));
+
+    AiChatResponse response = service.chat(request("tenant-1", "查询失败作业"), "idem-1");
+
+    assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.FAILED.code());
+    assertThat(response.getAnswer()).contains("暂时不可用");
   }
 
   @Test
@@ -728,11 +759,13 @@ class DefaultConsoleAiApplicationServiceTest {
             new ConsoleAiClients.ProviderClient("openai", mock(ChatClient.class)), null));
     ConsoleAiConversationService.StartedTurn turn =
         new ConsoleAiConversationService.StartedTurn("conversation-1", 1L, List.of());
-    when(conversationService.beginTurn(anyString(), anyString(), any(), anyString(), anyString()))
+    when(conversationService.beginTurn(
+            anyString(), anyString(), any(), anyString(), anyString(), isNull(), isNull()))
         .thenReturn(turn);
     BizException budgetDenied =
         BizException.of(ResultCode.RATE_LIMITED, "error.common.rate_limited_detail");
-    when(costService.reserve(anyString(), anyString(), anyString())).thenThrow(budgetDenied);
+    when(costService.reserve(anyString(), anyString(), anyString(), anyInt()))
+        .thenThrow(budgetDenied);
 
     assertThatThrownBy(() -> service.chat(request("tenant-1", "查询失败的作业实例"), "idem-1"))
         .isSameAs(budgetDenied);
@@ -752,8 +785,7 @@ class DefaultConsoleAiApplicationServiceTest {
     when(chatClient.prompt()).thenReturn(requestSpec);
     when(requestSpec.system(anyString())).thenReturn(requestSpec);
     when(requestSpec.user(anyString())).thenReturn(requestSpec);
-    when(requestSpec.options(any(org.springframework.ai.chat.prompt.ChatOptions.Builder.class)))
-        .thenReturn(requestSpec);
+    when(requestSpec.options(any(ChatOptions.Builder.class))).thenReturn(requestSpec);
     when(requestSpec.call()).thenReturn(callSpec);
     return callSpec;
   }

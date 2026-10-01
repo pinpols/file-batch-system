@@ -44,6 +44,7 @@ public class ConsoleAiConversationService {
   private final ConsoleAiConversationMapper mapper;
   private final ConsoleAiProperties properties;
   private final BatchObjectCryptoService cryptoService;
+  private final ConsoleAiAttachmentService attachmentService;
 
   @Transactional
   public StartedTurn beginTurn(
@@ -52,12 +53,30 @@ public class ConsoleAiConversationService {
       String requestedConversationId,
       String contextVersion,
       String prompt) {
+    return beginTurn(
+        tenantId, ownerUserId, requestedConversationId, contextVersion, prompt, null, null);
+  }
+
+  @Transactional
+  public StartedTurn beginTurn(
+      String tenantId,
+      String ownerUserId,
+      String requestedConversationId,
+      String contextVersion,
+      String prompt,
+      UUID clientTurnId,
+      List<UUID> attachmentIds) {
     requirePersistenceEnabled();
     requireOwner(ownerUserId);
     if (!SUPPORTED_CONTEXT_VERSION.equals(contextVersion)) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument_detail");
     }
     mapper.setTenantContext(tenantId);
+
+    if (clientTurnId != null
+        && mapper.selectByClientTurnId(tenantId, ownerUserId, clientTurnId) != null) {
+      throw BizException.of(ResultCode.CONFLICT, "error.common.state_conflict");
+    }
 
     boolean creating = !Texts.hasText(requestedConversationId);
     String conversationId = creating ? UUID.randomUUID().toString() : requestedConversationId;
@@ -96,10 +115,15 @@ public class ConsoleAiConversationService {
     turn.setTenantId(tenantId);
     turn.setConversationId(conversationId);
     turn.setTurnNo(turnNo);
+    turn.setClientTurnId(clientTurnId);
     turn.setContextVersion(contextVersion);
     turn.setPromptText(
         encryptText(ConsoleTextSanitizer.safeInput(prompt, properties.getMaxPromptLength())));
-    mapper.insertTurn(turn);
+    if (mapper.insertTurn(turn) != 1) {
+      throw BizException.of(ResultCode.CONFLICT, "error.common.state_conflict");
+    }
+    attachmentService.bind(
+        tenantId, ownerUserId, attachmentIds, conversationId, turnNo, expiresAt.toInstant());
     return new StartedTurn(conversationId, turnNo, history);
   }
 
@@ -216,21 +240,36 @@ public class ConsoleAiConversationService {
     int limit = Math.min(Math.max(requestedLimit, 1), 100);
     List<TurnView> rows =
         mapper.selectTurns(tenantId, conversationId, ownerUserId, beforeTurnNo, limit).stream()
-            .map(row -> new TurnView(
-                row.getTurnNo(),
-                row.getContextVersion(),
-                decryptText(row.getPromptText()),
-                decryptText(row.getResponseText()),
-                row.getTurnStatus(),
-                row.getPromptDecision(),
-                row.getModelName(),
-                row.getPromptTokens(),
-                row.getCompletionTokens(),
-                row.getEstimatedCostUsd(),
-                row.getCreatedAt(),
-                row.getCompletedAt()))
+            .map(this::toTurnView)
             .toList();
     return rows;
+  }
+
+  @Transactional(readOnly = true)
+  public ClientTurnView byClientTurnId(String tenantId, String ownerUserId, UUID clientTurnId) {
+    requirePersistenceEnabled();
+    requireOwner(ownerUserId);
+    mapper.setTenantContext(tenantId);
+    ConsoleAiTurnEntity row = mapper.selectByClientTurnId(tenantId, ownerUserId, clientTurnId);
+    if (row == null) throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail");
+    return new ClientTurnView(row.getConversationId(), toTurnView(row));
+  }
+
+  private TurnView toTurnView(ConsoleAiTurnEntity row) {
+    return new TurnView(
+        row.getTurnNo(),
+        row.getClientTurnId(),
+        row.getContextVersion(),
+        decryptText(row.getPromptText()),
+        decryptText(row.getResponseText()),
+        row.getTurnStatus(),
+        row.getPromptDecision(),
+        row.getModelName(),
+        row.getPromptTokens(),
+        row.getCompletionTokens(),
+        row.getEstimatedCostUsd(),
+        row.getCreatedAt(),
+        row.getCompletedAt());
   }
 
   @Transactional
@@ -238,13 +277,19 @@ public class ConsoleAiConversationService {
     requirePersistenceEnabled();
     requireOwner(ownerUserId);
     mapper.setTenantContext(tenantId);
+    if (mapper.selectActiveByOwner(tenantId, conversationId, ownerUserId) == null) {
+      throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail");
+    }
+    attachmentService.enqueueConversation(tenantId, conversationId);
     mapper.deleteConversation(tenantId, conversationId, ownerUserId);
   }
 
   @Transactional
   public int deleteExpiredForTenant(String tenantId) {
     mapper.setTenantContext(tenantId);
-    return mapper.deleteExpired(tenantId, nowUtc());
+    OffsetDateTime now = nowUtc();
+    attachmentService.enqueueExpiredConversations(tenantId, now.toInstant());
+    return mapper.deleteExpired(tenantId, now);
   }
 
   private List<ConsoleAiTurnEntity> boundHistory(List<ConsoleAiTurnEntity> turns, int maxChars) {
@@ -332,6 +377,7 @@ public class ConsoleAiConversationService {
 
   public record TurnView(
       long turnNo,
+      UUID clientTurnId,
       String contextVersion,
       String prompt,
       String response,
@@ -343,4 +389,6 @@ public class ConsoleAiConversationService {
       BigDecimal estimatedCostUsd,
       Instant createdAt,
       Instant completedAt) {}
+
+  public record ClientTurnView(String conversationId, TurnView turn) {}
 }

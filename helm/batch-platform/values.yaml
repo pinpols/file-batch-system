@@ -152,12 +152,27 @@ consoleApi:
     enabled: false
     provider: "anthropic"
     failoverEnabled: false
+    imageInputEnabled: false
     openaiCompatible:
       providerName: "openai-compatible"
       baseUrl: ""
       apiKey: ""
       chatModel: ""
       timeout: "60s"
+      imageInputEnabled: false
+    image:
+      maxFileBytes: 5242880
+      maxImages: 4
+      maxTotalBytes: 12582912
+      maxSide: 4096
+      maxPixels: 16777216
+      draftRetentionHours: 24
+      reservationTokensPerImage: 65536
+      uploadLimitPerMinute: 12
+      maxDraftsPerUser: 16
+      maxDraftBytesPerUser: 50331648
+      maxRetainedBytesPerUser: 268435456
+      maxRetainedBytesPerTenant: 2147483648
     auditPreviewEnabled: false
     persistence:
       enabled: false

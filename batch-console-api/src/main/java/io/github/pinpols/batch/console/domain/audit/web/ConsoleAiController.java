@@ -8,9 +8,11 @@ import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.console.application.contract.request.auth.AiChatRequest;
+import io.github.pinpols.batch.console.config.ConsoleAiClients;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiApplicationService;
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiChatResponse;
+import io.github.pinpols.batch.console.domain.audit.infrastructure.ai.ConsoleAiAttachmentService;
 import io.github.pinpols.batch.console.domain.audit.service.ConsoleAiAuthorizationService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
@@ -24,8 +26,10 @@ import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -35,7 +39,11 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -46,6 +54,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
@@ -63,6 +72,8 @@ public class ConsoleAiController {
   private final ConsoleAiAuthorizationService authorizationService;
   private final ConsoleRequestMetadataResolver metadataResolver;
   private final ConsoleAiProperties aiProperties;
+  private final ConsoleAiAttachmentService attachmentService;
+  private final ObjectProvider<ConsoleAiClients> chatClientsProvider;
   private final Map<String, ActiveStream> activeStreams = new ConcurrentHashMap<>();
   private final ExecutorService streamExecutor =
       new ThreadPoolExecutor(0, 16, 60L, TimeUnit.SECONDS, new SynchronousQueue<>(), runnable -> {
@@ -75,6 +86,73 @@ public class ConsoleAiController {
   void shutdownStreamExecutor() {
     streamExecutor.shutdownNow();
   }
+
+  @GetMapping("/capabilities")
+  public CommonResponse<AiCapabilities> capabilities() {
+    authorizationService.assertAllowed();
+    ConsoleAiClients clients = chatClientsProvider.getIfAvailable();
+    boolean imageInput = attachmentService.available()
+        && clients != null
+        && clients.primary() != null
+        && clients.primary().imageInput();
+    return responseFactory.success(new AiCapabilities(
+        imageInput,
+        imageInput ? aiProperties.getImage().getMaxImages() : 0,
+        imageInput ? aiProperties.getImage().getMaxFileBytes() : 0,
+        imageInput ? aiProperties.getImage().getMaxTotalBytes() : 0));
+  }
+
+  @PostMapping(value = "/attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public CommonResponse<ConsoleAiAttachmentService.AttachmentView> uploadAttachment(
+      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+      @RequestParam UUID clientAttachmentId,
+      @RequestParam("file") MultipartFile file)
+      throws IOException {
+    authorizationService.assertAllowed();
+    ConsoleAiClients clients = chatClientsProvider.getIfAvailable();
+    if (clients == null || clients.primary() == null || !clients.primary().imageInput()) {
+      throw BizException.of(ResultCode.FORBIDDEN, "error.ai.assistant_not_configured");
+    }
+    if (file.isEmpty() || file.getSize() > aiProperties.getImage().getMaxFileBytes()) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.ai.image_invalid");
+    }
+    ConsoleRequestMetadata metadata = metadataResolver.current();
+    return responseFactory.success(attachmentService.upload(
+        metadata.tenantId(), metadata.operatorId(), clientAttachmentId, file.getBytes()));
+  }
+
+  @GetMapping("/attachments/by-client-id/{clientAttachmentId}")
+  public CommonResponse<ConsoleAiAttachmentService.AttachmentView> attachmentStatus(
+      @PathVariable UUID clientAttachmentId) {
+    authorizationService.assertAllowed();
+    ConsoleRequestMetadata metadata = metadataResolver.current();
+    return responseFactory.success(
+        attachmentService.status(metadata.tenantId(), metadata.operatorId(), clientAttachmentId));
+  }
+
+  @GetMapping("/attachments/{id}/content")
+  public ResponseEntity<byte[]> attachmentContent(@PathVariable UUID id) {
+    authorizationService.assertAllowed();
+    ConsoleRequestMetadata metadata = metadataResolver.current();
+    ConsoleAiAttachmentService.ImageContent image =
+        attachmentService.content(metadata.tenantId(), metadata.operatorId(), id);
+    return ResponseEntity.ok()
+        .cacheControl(CacheControl.noStore())
+        .header("X-Content-Type-Options", "nosniff")
+        .contentType(MediaType.parseMediaType(image.mediaType()))
+        .body(image.bytes());
+  }
+
+  @DeleteMapping("/attachments/{id}")
+  public CommonResponse<Void> deleteAttachment(@PathVariable UUID id) {
+    authorizationService.assertAllowed();
+    ConsoleRequestMetadata metadata = metadataResolver.current();
+    attachmentService.deleteDraft(metadata.tenantId(), metadata.operatorId(), id);
+    return responseFactory.success(null);
+  }
+
+  public record AiCapabilities(
+      boolean imageInput, int maxImages, int maxImageBytes, long maxTotalBytes) {}
 
   @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
   public SseEmitter chatStream(
@@ -92,6 +170,7 @@ public class ConsoleAiController {
         metadata.operatorId(),
         idempotencyKey,
         metadata.clientIp());
+    Locale requestLocale = LocaleContextHolder.getLocale();
     long timeout = Math.max(1, aiProperties.getRequestTimeout().toMillis()) + 10_000;
     SseEmitter emitter = new SseEmitter(timeout);
     ActiveStream active = new ActiveStream(metadata.tenantId(), metadata.operatorId(), emitter);
@@ -103,6 +182,7 @@ public class ConsoleAiController {
     emitter.onCompletion(active::cancel);
     try {
       streamExecutor.execute(() -> {
+        LocaleContextHolder.setLocale(requestLocale);
         try {
           active.send("started", Map.of("requestId", requestId));
           AiChatResponse result =
@@ -124,6 +204,7 @@ public class ConsoleAiController {
             }
           }
         } finally {
+          LocaleContextHolder.resetLocaleContext();
           active.finish();
           activeStreams.remove(requestId, active);
           emitter.complete();
@@ -236,6 +317,15 @@ public class ConsoleAiController {
     ConsoleRequestMetadata metadata = metadataResolver.current();
     return responseFactory.success(applicationService.turns(
         metadata.tenantId(), metadata.operatorId(), conversationId, beforeTurnNo, limit));
+  }
+
+  @GetMapping("/turns/by-client-id/{clientTurnId}")
+  public CommonResponse<ConsoleAiApplicationService.ClientTurnSummary> turnStatus(
+      @PathVariable UUID clientTurnId) {
+    authorizationService.assertAllowed();
+    ConsoleRequestMetadata metadata = metadataResolver.current();
+    return responseFactory.success(applicationService.turnByClientId(
+        metadata.tenantId(), metadata.operatorId(), clientTurnId));
   }
 
   @DeleteMapping("/conversations/{conversationId}")

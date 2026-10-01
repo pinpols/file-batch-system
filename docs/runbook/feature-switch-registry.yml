@@ -216,6 +216,32 @@ switches:
     composeRequired: true
     helmRequired: true
 
+  - key: batch.console.ai.image-input-enabled
+    module: console-api
+    env:
+      - BATCH_CONSOLE_AI_IMAGE_INPUT_ENABLED
+      - BATCH_CONSOLE_AI_OPENAI_COMPATIBLE_IMAGE_INPUT_ENABLED
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.console.ai.image
+    module: console-api
+    env:
+      - BATCH_CONSOLE_AI_IMAGE_MAX_FILE_BYTES
+      - BATCH_CONSOLE_AI_IMAGE_MAX_IMAGES
+      - BATCH_CONSOLE_AI_IMAGE_MAX_TOTAL_BYTES
+      - BATCH_CONSOLE_AI_IMAGE_MAX_SIDE
+      - BATCH_CONSOLE_AI_IMAGE_MAX_PIXELS
+      - BATCH_CONSOLE_AI_IMAGE_DRAFT_RETENTION_HOURS
+      - BATCH_CONSOLE_AI_IMAGE_RESERVATION_TOKENS_PER_IMAGE
+      - BATCH_CONSOLE_AI_IMAGE_UPLOAD_LIMIT_PER_MINUTE
+      - BATCH_CONSOLE_AI_IMAGE_MAX_DRAFTS_PER_USER
+      - BATCH_CONSOLE_AI_IMAGE_MAX_DRAFT_BYTES_PER_USER
+      - BATCH_CONSOLE_AI_IMAGE_MAX_RETAINED_BYTES_PER_USER
+      - BATCH_CONSOLE_AI_IMAGE_MAX_RETAINED_BYTES_PER_TENANT
+    composeRequired: true
+    helmRequired: true
+
   - key: batch.console.ai.persistence
     module: console-api
     env:

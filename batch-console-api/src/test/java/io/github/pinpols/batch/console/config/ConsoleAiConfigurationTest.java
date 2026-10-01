@@ -59,6 +59,28 @@ class ConsoleAiConfigurationTest {
   }
 
   @Test
+  void compatibleImageInputNeedsBothFeatureAndModelSwitches() {
+    ConsoleAiProperties properties = openAiCompatibleProperties();
+    properties.getOpenaiCompatible().setImageInputEnabled(true);
+    assertThat(ConsoleAiConfiguration.createOpenAiCompatibleClient(properties)
+            .primary()
+            .imageInput())
+        .isFalse();
+
+    properties.setImageInputEnabled(true);
+    assertThat(ConsoleAiConfiguration.createOpenAiCompatibleClient(properties)
+            .primary()
+            .imageInput())
+        .isTrue();
+
+    properties.getOpenaiCompatible().setImageInputEnabled(false);
+    assertThat(ConsoleAiConfiguration.createOpenAiCompatibleClient(properties)
+            .primary()
+            .imageInput())
+        .isFalse();
+  }
+
+  @Test
   void openAiCompatibleProviderFailsWhenEndpointIsIncomplete() {
     ConsoleAiProperties properties = openAiCompatibleProperties();
     properties.getOpenaiCompatible().setModel("");

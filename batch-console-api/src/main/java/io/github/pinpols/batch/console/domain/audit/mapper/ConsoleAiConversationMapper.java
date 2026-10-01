@@ -5,6 +5,7 @@ import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiTurnEntity;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.UUID;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -37,6 +38,11 @@ public interface ConsoleAiConversationMapper {
 
   int insertTurn(ConsoleAiTurnEntity turn);
 
+  ConsoleAiTurnEntity selectByClientTurnId(
+      @Param("tenantId") String tenantId,
+      @Param("ownerUserId") String ownerUserId,
+      @Param("clientTurnId") UUID clientTurnId);
+
   int completeTurn(ConsoleAiTurnEntity turn);
 
   List<ConsoleAiConversationEntity> selectByOwner(
@@ -63,7 +69,7 @@ public interface ConsoleAiConversationMapper {
       @Param("conversationId") String conversationId,
       @Param("ownerUserId") String ownerUserId);
 
-  List<String> selectActiveTenantIds();
+  List<String> selectTenantIds();
 
   int deleteExpired(@Param("tenantId") String tenantId, @Param("cutoff") OffsetDateTime cutoff);
 }

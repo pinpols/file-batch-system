@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiAttachmentMapper">
+    <resultMap id="AttachmentMap" type="io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiAttachmentEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="owner_user_id" property="ownerUserId"/>
+        <result column="client_attachment_id" property="clientAttachmentId"/>
+        <result column="input_sha256" property="inputSha256"/>
+        <result column="object_key" property="objectKey"/>
+        <result column="media_type" property="mediaType"/>
+        <result column="byte_size" property="byteSize"/>
+        <result column="width" property="width"/>
+        <result column="height" property="height"/>
+        <result column="status" property="status"/>
+        <result column="conversation_id" property="conversationId"/>
+        <result column="turn_no" property="turnNo"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="expires_at" property="expiresAt"/>
+    </resultMap>
+
+    <sql id="columns">tenant_id, id, owner_user_id, client_attachment_id, input_sha256, object_key,
+        media_type, byte_size, width, height, status, conversation_id, turn_no, created_at, expires_at</sql>
+
+    <select id="setTenantContext" resultType="string">
+        SELECT set_config('app.tenant_id', #{tenantId}, true)
+    </select>
+
+    <select id="lockUploadQuota" resultType="int">
+        SELECT 1 FROM pg_advisory_xact_lock(hashtext(#{tenantId}), hashtext('ai-image-quota'))
+    </select>
+
+    <select id="activeDraftCount" resultType="int">
+        SELECT COUNT(*) FROM batch.console_ai_attachment
+         WHERE tenant_id = #{tenantId} AND owner_user_id = #{ownerUserId}
+           AND status IN ('UPLOADING', 'DRAFT') AND expires_at > CURRENT_TIMESTAMP
+    </select>
+
+    <select id="activeDraftBytes" resultType="long">
+        SELECT COALESCE(SUM(byte_size), 0) FROM batch.console_ai_attachment
+         WHERE tenant_id = #{tenantId} AND owner_user_id = #{ownerUserId}
+           AND status IN ('UPLOADING', 'DRAFT') AND expires_at > CURRENT_TIMESTAMP
+    </select>
+
+    <select id="retainedBytesForUser" resultType="long">
+        SELECT COALESCE(SUM(byte_size), 0) FROM batch.console_ai_attachment
+         WHERE tenant_id = #{tenantId} AND owner_user_id = #{ownerUserId}
+           AND expires_at > CURRENT_TIMESTAMP
+    </select>
+
+    <select id="retainedBytesForTenant" resultType="long">
+        SELECT COALESCE(SUM(byte_size), 0) FROM batch.console_ai_attachment
+         WHERE tenant_id = #{tenantId} AND expires_at > CURRENT_TIMESTAMP
+    </select>
+
+    <insert id="insert">
+        INSERT INTO batch.console_ai_attachment
+            (tenant_id, id, owner_user_id, client_attachment_id, input_sha256, object_key,
+             byte_size, expires_at)
+        VALUES
+            (#{tenantId}, #{id}, #{ownerUserId}, #{clientAttachmentId}, #{inputSha256}, #{objectKey},
+             #{byteSize}, #{expiresAt})
+        ON CONFLICT (tenant_id, owner_user_id, client_attachment_id) DO NOTHING
+    </insert>
+
+    <select id="byClientId" resultMap="AttachmentMap">
+        SELECT <include refid="columns"/> FROM batch.console_ai_attachment
+         WHERE tenant_id = #{tenantId} AND owner_user_id = #{ownerUserId}
+           AND client_attachment_id = #{clientAttachmentId}
+    </select>
+
+    <select id="byId" resultMap="AttachmentMap">
+        SELECT <include refid="columns"/> FROM batch.console_ai_attachment
+         WHERE tenant_id = #{tenantId} AND id = #{id}
+    </select>
+
+    <update id="markDraft">
+        UPDATE batch.console_ai_attachment
+           SET status = 'DRAFT', media_type = #{mediaType}, byte_size = #{byteSize},
+               width = #{width}, height = #{height}
+         WHERE tenant_id = #{tenantId} AND id = #{id} AND status = 'UPLOADING'
+    </update>
+
+    <update id="bind">
+        UPDATE batch.console_ai_attachment
+           SET status = 'BOUND', conversation_id = #{conversationId}, turn_no = #{turnNo},
+               expires_at = #{expiresAt}
+         WHERE tenant_id = #{tenantId} AND id = #{id} AND owner_user_id = #{ownerUserId}
+           AND status = 'DRAFT' AND expires_at > CURRENT_TIMESTAMP
+    </update>
+
+    <select id="byTurn" resultMap="AttachmentMap">
+        SELECT <include refid="columns"/> FROM batch.console_ai_attachment
+         WHERE tenant_id = #{tenantId} AND conversation_id = #{conversationId}
+           AND turn_no = #{turnNo} AND status = 'BOUND'
+         ORDER BY created_at, id
+    </select>
+
+    <insert id="enqueueForConversation">
+        INSERT INTO batch.console_ai_object_cleanup (tenant_id, object_key)
+        SELECT tenant_id, object_key FROM batch.console_ai_attachment
+         WHERE tenant_id = #{tenantId} AND conversation_id = #{conversationId}
+        ON CONFLICT DO NOTHING
+    </insert>
+
+    <insert id="enqueueExpiredConversations">
+        INSERT INTO batch.console_ai_object_cleanup (tenant_id, object_key)
+        SELECT a.tenant_id, a.object_key FROM batch.console_ai_attachment a
+          JOIN batch.console_ai_conversation c
+            ON c.tenant_id = a.tenant_id AND c.id = a.conversation_id
+         WHERE a.tenant_id = #{tenantId} AND c.expires_at &lt; #{now}
+        ON CONFLICT DO NOTHING
+    </insert>
+
+    <insert id="enqueueExpiredDrafts">
+        INSERT INTO batch.console_ai_object_cleanup (tenant_id, object_key)
+        SELECT tenant_id, object_key FROM batch.console_ai_attachment
+         WHERE tenant_id = #{tenantId} AND status IN ('UPLOADING', 'DRAFT') AND expires_at &lt; #{now}
+        ON CONFLICT DO NOTHING
+    </insert>
+
+    <insert id="enqueueOne">
+        INSERT INTO batch.console_ai_object_cleanup (tenant_id, object_key)
+        SELECT tenant_id, object_key FROM batch.console_ai_attachment
+         WHERE tenant_id = #{tenantId} AND id = #{id} AND status IN ('UPLOADING', 'DRAFT')
+        ON CONFLICT DO NOTHING
+    </insert>
+
+    <delete id="deleteOne">
+        DELETE FROM batch.console_ai_attachment
+         WHERE tenant_id = #{tenantId} AND id = #{id} AND status IN ('UPLOADING', 'DRAFT')
+    </delete>
+
+    <delete id="deleteExpiredDrafts">
+        DELETE FROM batch.console_ai_attachment
+         WHERE tenant_id = #{tenantId} AND status IN ('UPLOADING', 'DRAFT') AND expires_at &lt; #{now}
+    </delete>
+
+    <select id="cleanupKeys" resultType="string">
+        SELECT object_key FROM batch.console_ai_object_cleanup
+         WHERE tenant_id = #{tenantId}
+         ORDER BY created_at, object_key LIMIT #{limit}
+    </select>
+
+    <delete id="deleteCleanupKey">
+        DELETE FROM batch.console_ai_object_cleanup
+         WHERE tenant_id = #{tenantId} AND object_key = #{key}
+    </delete>
+
+    <update id="incrementCleanupAttempts">
+        UPDATE batch.console_ai_object_cleanup SET attempt_count = attempt_count + 1
+         WHERE tenant_id = #{tenantId} AND object_key = #{key}
+    </update>
+</mapper>
