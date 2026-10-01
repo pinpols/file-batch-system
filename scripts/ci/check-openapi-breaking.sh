@@ -82,8 +82,10 @@ for spec in "${SPECS[@]}"; do
       >> "$clarification_ignore_tmp" || true
   # PR #1066（2026-09-27）经用户批准移除六个旧 toggle 路由，统一改用
   # PATCH /{id}/enabled。仅忽略下列精确路径，其他端点移除仍须阻断。
+  # AI 对话已由调用方切换到 SSE，用户明确要求不保留旧 JSON 路由。
   if [[ "$spec" == "docs/api/console-api.openapi.yaml" ]]; then
     printf '%s\n' \
+      'POST /api/console/ai/chat api path removed without deprecation' \
       'POST /api/console/alert-routings/{id}/toggle api path removed without deprecation' \
       'POST /api/console/batch-windows/{id}/toggle api path removed without deprecation' \
       'POST /api/console/calendars/{id}/toggle api path removed without deprecation' \
