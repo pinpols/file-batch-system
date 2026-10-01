@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.constants.CommonErrorMessages;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
+import io.github.pinpols.batch.console.shared.security.ConsoleCapabilityProvider;
 import java.util.Collection;
 import java.util.Objects;
 import java.util.Set;
@@ -18,7 +19,9 @@ import org.springframework.stereotype.Service;
 /** 控制台 AI 功能授权：按配置校验当前登录用户/角色是否允许使用 AI 助手。 */
 @Service
 @RequiredArgsConstructor
-public class ConsoleAiAuthorizationService {
+public class ConsoleAiAuthorizationService implements ConsoleCapabilityProvider {
+
+  public static final String AI_ASSISTANT_USE = "AI_ASSISTANT_USE";
 
   private final ConsoleAiProperties properties;
 
@@ -33,18 +36,28 @@ public class ConsoleAiAuthorizationService {
           "error.common.forbidden_detail",
           CommonErrorMessages.AI_ASSISTANT_REQUIRES_AUTHENTICATED_USER);
     }
-    String username = authentication.getName();
-    Set<String> authorities = authorities(authentication.getAuthorities());
-    boolean allowedByUser =
-        properties.getAllowedUsers().stream().anyMatch(user -> Objects.equals(user, username));
-    boolean allowedByAuthority =
-        properties.getAllowedAuthorities().stream().anyMatch(authorities::contains);
-    if (!allowedByUser && !allowedByAuthority) {
+    if (!isIdentityAllowed(
+        authentication.getName(), authorities(authentication.getAuthorities()))) {
       throw BizException.of(
           ResultCode.FORBIDDEN,
           "error.common.forbidden_detail",
           CommonErrorMessages.AI_ASSISTANT_ACCESS_NOT_GRANTED);
     }
+  }
+
+  @Override
+  public Set<String> resolveCapabilities(String username, Set<String> authorities) {
+    return properties.isEnabled() && isIdentityAllowed(username, authorities)
+        ? Set.of(AI_ASSISTANT_USE)
+        : Set.of();
+  }
+
+  private boolean isIdentityAllowed(String username, Set<String> authorities) {
+    boolean allowedByUser =
+        properties.getAllowedUsers().stream().anyMatch(user -> Objects.equals(user, username));
+    boolean allowedByAuthority =
+        properties.getAllowedAuthorities().stream().anyMatch(authorities::contains);
+    return allowedByUser || allowedByAuthority;
   }
 
   private Set<String> authorities(Collection<? extends GrantedAuthority> grantedAuthorities) {

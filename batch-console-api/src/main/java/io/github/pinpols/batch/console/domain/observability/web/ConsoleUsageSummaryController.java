@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @Validated
 @RequestMapping("/api/console/queries")
-@PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
+@PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
 @RequiredArgsConstructor
 public class ConsoleUsageSummaryController {
 

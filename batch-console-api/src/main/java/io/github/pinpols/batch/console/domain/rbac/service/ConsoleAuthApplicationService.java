@@ -14,10 +14,12 @@ import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSessionRegistry;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleUserAccount;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleUserAccountServiceSupport;
+import io.github.pinpols.batch.console.shared.security.ConsoleCapabilityProvider;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -51,6 +53,7 @@ public class ConsoleAuthApplicationService {
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   private final ConsoleMenuRegistry menuRegistry;
   private final ConsoleUserAccountServiceSupport userAccountService;
+  private final List<ConsoleCapabilityProvider> capabilityProviders;
 
   public ConsoleAuthTokenResponse login(ConsoleLoginRequest request) {
     return loginService.login(request);
@@ -73,7 +76,16 @@ public class ConsoleAuthApplicationService {
         tenantId(authentication),
         auths,
         menuRegistry.filterByAuthorities(auths),
+        capabilities(username, auths),
         mustChangePassword(username));
+  }
+
+  private Set<String> capabilities(String username, Set<String> authorities) {
+    Set<String> resolved = new LinkedHashSet<>();
+    for (ConsoleCapabilityProvider provider : capabilityProviders) {
+      resolved.addAll(provider.resolveCapabilities(username, authorities));
+    }
+    return Set.copyOf(resolved);
   }
 
   private boolean mustChangePassword(String username) {

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.audit.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -7,6 +8,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -101,5 +103,26 @@ class ConsoleAiAuthorizationServiceTest {
             "anyone", null, List.of(new SimpleGrantedAuthority("ROLE_TENANT_USER"))));
     ConsoleAiAuthorizationService service = newService(List.of(), List.of());
     assertThatThrownBy(service::assertAllowed).isInstanceOf(BizException.class);
+  }
+
+  @Test
+  @DisplayName("功能已启用且白名单命中时返回 AI_ASSISTANT_USE 能力")
+  void resolveCapabilities_enabledAndAllowed_returnsCapability() {
+    ConsoleAiProperties properties = new ConsoleAiProperties();
+    properties.setEnabled(true);
+    properties.setAllowedUsers(List.of());
+    properties.setAllowedAuthorities(List.of("ROLE_AUDITOR"));
+    ConsoleAiAuthorizationService service = new ConsoleAiAuthorizationService(properties);
+
+    assertThat(service.resolveCapabilities("auditor", Set.of("ROLE_AUDITOR")))
+        .containsExactly(ConsoleAiAuthorizationService.AI_ASSISTANT_USE);
+  }
+
+  @Test
+  @DisplayName("功能关闭时不下发 AI 能力")
+  void resolveCapabilities_disabled_returnsEmpty() {
+    ConsoleAiAuthorizationService service = newService(List.of("admin"), List.of("ROLE_ADMIN"));
+
+    assertThat(service.resolveCapabilities("admin", Set.of("ROLE_ADMIN"))).isEmpty();
   }
 }

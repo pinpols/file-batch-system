@@ -42,6 +42,7 @@ batch:
             - { title: 全部运行, path: /runs, icon: List, minRole: VIEWER }
             - { title: 综合查询, path: /observability/queries, icon: Reading, minRole: VIEWER }
             - { title: Trace 诊断, path: /observability/trace, icon: Search, minRole: VIEWER }
+            - { title: 使用统计, path: /observability/usage, icon: DataAnalysis, minRole: VIEWER, authorities: [ROLE_ADMIN, ROLE_AUDITOR, ROLE_TENANT_ADMIN] }
             - { title: 运维诊断, path: /ops/diagnostic, icon: Tools, minRole: ADMIN }
             - { title: 血缘证据, path: /observability/lineage, icon: DataLine, minRole: VIEWER }
         - key: alerting
@@ -105,7 +106,7 @@ batch:
             - { title: 操作审计, path: /observability/operation-audits, icon: Document, minRole: VIEWER, authorities: [ROLE_ADMIN, ROLE_TENANT_ADMIN, ROLE_AUDITOR] }
             - { title: 事件目录, path: /system/event-catalog, icon: Collection, minRole: VIEWER }
             - { title: 标签管理, path: /system/tags, icon: PriceTag, minRole: TENANT_ADMIN }
-            - { title: AI 助手, path: /system/ai-chat, icon: Document, minRole: ADMIN }
+            - { title: AI 助手, path: /system/ai-chat, icon: Document, minRole: VIEWER, authorities: [ROLE_ADMIN, ROLE_AUDITOR] }
             - { title: API Key, path: /system/api-keys, icon: Key, minRole: VIEWER, authorities: [ROLE_ADMIN, ROLE_TENANT_ADMIN, ROLE_TENANT_USER] }
             - { title: 系统参数, path: /system/parameters, icon: Setting, minRole: ADMIN }
             - { title: 原子节点配置中心, path: /system/atomic-task-types, icon: Box, minRole: TENANT_ADMIN }

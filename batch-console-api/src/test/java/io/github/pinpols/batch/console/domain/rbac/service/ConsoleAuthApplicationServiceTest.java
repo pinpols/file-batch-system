@@ -70,7 +70,8 @@ class ConsoleAuthApplicationServiceTest {
         securityProperties,
         requestMetadataResolver,
         new ConsoleMenuRegistry(new ConsoleMenuProperties()),
-        userAccountService);
+        userAccountService,
+        List.of((username, authorities) -> Set.of("TEST_CAPABILITY")));
     lenient().when(userAccountService.findByUsername(anyString())).thenReturn(Optional.empty());
   }
 
@@ -113,6 +114,7 @@ class ConsoleAuthApplicationServiceTest {
     assertThat(response.username()).isEqualTo("alice");
     assertThat(response.tenantId()).isEqualTo("t1");
     assertThat(response.authorities()).containsExactly("ROLE_ADMIN");
+    assertThat(response.capabilities()).containsExactly("TEST_CAPABILITY");
     assertThat(response.mustChangePassword()).isFalse();
   }
 
