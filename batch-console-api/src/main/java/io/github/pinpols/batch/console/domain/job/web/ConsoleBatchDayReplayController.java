@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.domain.job.web;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchDayReplaySubmitRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayReplayEntryResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayReplayPreviewResponse;
@@ -10,13 +10,10 @@ import io.github.pinpols.batch.console.domain.job.application.contract.response.
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
-import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
-import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -40,8 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
 public class ConsoleBatchDayReplayController {
 
-  private final OrchestratorInternalRestClient orchestratorInternalRestClient;
-  private final TenantIdResolver tenantGuard;
+  private final ConsoleOrchestratorPort orchestratorProxy;
   private final ConsoleResponseFactory responseFactory;
 
   // P1-5/P1-6 (ADR audit): submit body 的 tenantId 经 guard 解析后强制覆盖回 body，
@@ -55,28 +51,16 @@ public class ConsoleBatchDayReplayController {
   public CommonResponse<ConsoleBatchDayReplaySessionResponse> submit(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody BatchDayReplaySubmitRequest command) {
-    command.setTenantId(tenantGuard.resolveTenant(command.getTenantId()));
-    CommonResponse<ConsoleBatchDayReplaySessionResponse> resp = orchestratorInternalRestClient
-        .build()
-        .post()
-        .uri("/internal/orchestrator/batch-day-replay/sessions")
-        .body(command)
-        .retrieve()
-        .body(sessionResponse());
+    CommonResponse<ConsoleBatchDayReplaySessionResponse> resp =
+        orchestratorProxy.batchDayReplaySubmit(command);
     return responseFactory.forwardOrchestrator(resp);
   }
 
   @PostMapping("/sessions/preview")
   public CommonResponse<ConsoleBatchDayReplayPreviewResponse> preview(
       @Valid @RequestBody BatchDayReplaySubmitRequest command) {
-    command.setTenantId(tenantGuard.resolveTenant(command.getTenantId()));
-    CommonResponse<ConsoleBatchDayReplayPreviewResponse> resp = orchestratorInternalRestClient
-        .build()
-        .post()
-        .uri("/internal/orchestrator/batch-day-replay/sessions/preview")
-        .body(command)
-        .retrieve()
-        .body(new ParameterizedTypeReference<>() {});
+    CommonResponse<ConsoleBatchDayReplayPreviewResponse> resp =
+        orchestratorProxy.batchDayReplayPreview(command);
     return responseFactory.forwardOrchestrator(resp);
   }
 
@@ -85,24 +69,8 @@ public class ConsoleBatchDayReplayController {
       @RequestParam(value = "tenantId", required = false) String tenantId,
       @RequestParam(value = "status", required = false) String status,
       @RequestParam(value = "limit", required = false, defaultValue = "50") int limit) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    boolean hasStatus = EmptyChecks.isNotBlank(status);
-    String uri = hasStatus
-        ? "/internal/orchestrator/batch-day-replay/sessions?tenantId={tenantId}&limit={limit}&status={status}"
-        : "/internal/orchestrator/batch-day-replay/sessions?tenantId={tenantId}&limit={limit}";
-    CommonResponse<List<ConsoleBatchDayReplaySessionResponse>> resp = hasStatus
-        ? orchestratorInternalRestClient
-            .build()
-            .get()
-            .uri(uri, resolved, limit, status)
-            .retrieve()
-            .body(sessionListResponse())
-        : orchestratorInternalRestClient
-            .build()
-            .get()
-            .uri(uri, resolved, limit)
-            .retrieve()
-            .body(sessionListResponse());
+    CommonResponse<List<ConsoleBatchDayReplaySessionResponse>> resp =
+        orchestratorProxy.batchDayReplayList(tenantId, status, limit);
     return responseFactory.forwardOrchestrator(resp);
   }
 
@@ -119,18 +87,8 @@ public class ConsoleBatchDayReplayController {
       @PathVariable("sessionId") Long sessionId,
       @RequestParam(value = "tenantId", required = false) String tenantId,
       @RequestParam("approver") String approver) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    CommonResponse<ConsoleBatchDayReplaySessionResponse> resp = orchestratorInternalRestClient
-        .build()
-        .post()
-        .uri(
-            "/internal/orchestrator/batch-day-replay/sessions/{id}/approve"
-                + "?tenantId={tenantId}&approver={approver}",
-            sessionId,
-            resolved,
-            approver)
-        .retrieve()
-        .body(sessionResponse());
+    CommonResponse<ConsoleBatchDayReplaySessionResponse> resp =
+        orchestratorProxy.batchDayReplayApprove(sessionId, tenantId, approver);
     return responseFactory.forwardOrchestrator(resp);
   }
 
@@ -145,16 +103,8 @@ public class ConsoleBatchDayReplayController {
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable("sessionId") Long sessionId,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    CommonResponse<ConsoleBatchDayReplaySessionResponse> resp = orchestratorInternalRestClient
-        .build()
-        .post()
-        .uri(
-            "/internal/orchestrator/batch-day-replay/sessions/{id}/cancel?tenantId={tenantId}",
-            sessionId,
-            resolved)
-        .retrieve()
-        .body(sessionResponse());
+    CommonResponse<ConsoleBatchDayReplaySessionResponse> resp =
+        orchestratorProxy.batchDayReplayCancel(sessionId, tenantId);
     return responseFactory.forwardOrchestrator(resp);
   }
 
@@ -162,16 +112,8 @@ public class ConsoleBatchDayReplayController {
   public CommonResponse<ConsoleBatchDayReplaySessionResponse> detail(
       @PathVariable("sessionId") Long sessionId,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    CommonResponse<ConsoleBatchDayReplaySessionResponse> resp = orchestratorInternalRestClient
-        .build()
-        .get()
-        .uri(
-            "/internal/orchestrator/batch-day-replay/sessions/{id}?tenantId={tenantId}",
-            sessionId,
-            resolved)
-        .retrieve()
-        .body(sessionResponse());
+    CommonResponse<ConsoleBatchDayReplaySessionResponse> resp =
+        orchestratorProxy.batchDayReplayDetail(sessionId, tenantId);
     return responseFactory.forwardOrchestrator(resp);
   }
 
@@ -183,41 +125,8 @@ public class ConsoleBatchDayReplayController {
       @RequestParam(value = "tenantId", required = false) String tenantId,
       @RequestParam(value = "status", required = false) String status,
       @RequestParam(value = "limit", required = false, defaultValue = "500") int limit) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    boolean statusSpecified = EmptyChecks.isNotBlank(status);
-    String uri = !statusSpecified
-        ? "/internal/orchestrator/batch-day-replay/sessions/{id}/entries?tenantId={tenantId}&limit={limit}"
-        : "/internal/orchestrator/batch-day-replay/sessions/{id}/entries?tenantId={tenantId}&limit={limit}&status={status}";
-    CommonResponse<List<ConsoleBatchDayReplayEntryResponse>> resp = !statusSpecified
-        ? orchestratorInternalRestClient
-            .build()
-            .get()
-            .uri(uri, sessionId, resolved, limit)
-            .retrieve()
-            .body(entryListResponse())
-        : orchestratorInternalRestClient
-            .build()
-            .get()
-            .uri(uri, sessionId, resolved, limit, status)
-            .retrieve()
-            .body(entryListResponse());
+    CommonResponse<List<ConsoleBatchDayReplayEntryResponse>> resp =
+        orchestratorProxy.batchDayReplayEntries(sessionId, tenantId, status, limit);
     return responseFactory.forwardOrchestrator(resp);
-  }
-
-  private static ParameterizedTypeReference<CommonResponse<ConsoleBatchDayReplaySessionResponse>>
-      sessionResponse() {
-    return new ParameterizedTypeReference<>() {};
-  }
-
-  private static ParameterizedTypeReference<
-          CommonResponse<List<ConsoleBatchDayReplaySessionResponse>>>
-      sessionListResponse() {
-    return new ParameterizedTypeReference<>() {};
-  }
-
-  private static ParameterizedTypeReference<
-          CommonResponse<List<ConsoleBatchDayReplayEntryResponse>>>
-      entryListResponse() {
-    return new ParameterizedTypeReference<>() {};
   }
 }

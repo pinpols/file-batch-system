@@ -10,7 +10,7 @@
 
 ## outbox 事件不投递 / 卡住
 - 原因:outbox 写入与状态同事务,投递失败走 `event_outbox_retry` 退避重试;若卡住可能是 Kafka 不可用或重试耗尽。
-- 处理:经 `ConsoleOrchestratorPort` 的默认实现 `DefaultConsoleOrchestratorProxyService` → orchestrator `/internal/outbox/*` 做 republish;**console-api 不能直接 UPDATE/DELETE outbox_event**。运维脚本 `scripts/ops/heal-stuck-outbox.sh`。
+- 处理:经 `ConsoleOrchestratorPort` 的默认实现 `application.ops.infrastructure.DefaultConsoleOrchestratorProxyService` → orchestrator `/internal/outbox/*` 做 republish;**console-api 不能直接 UPDATE/DELETE outbox_event**。运维脚本 `scripts/ops/heal-stuck-outbox.sh`。
 
 ## dispatch(下发)失败 / 渠道熔断
 - 原因:下游渠道(API push / 远程文件系统等)连续失败触发熔断;或渠道配置(endpoint/白名单)不对。

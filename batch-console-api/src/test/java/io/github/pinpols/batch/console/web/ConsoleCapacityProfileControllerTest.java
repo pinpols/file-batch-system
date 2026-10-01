@@ -1,10 +1,7 @@
 package io.github.pinpols.batch.console.web;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -17,69 +14,42 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.application.contract.response.ops.CapacityProfileResponse;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
-import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
-import java.net.URI;
 import java.util.List;
-import java.util.function.Function;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.util.UriBuilder;
 
 class ConsoleCapacityProfileControllerTest {
 
-  private final OrchestratorInternalRestClient orchestratorInternalRestClient =
-      mock(OrchestratorInternalRestClient.class);
-  private final ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
+  private final ConsoleOrchestratorPort orchestratorProxy = mock(ConsoleOrchestratorPort.class);
   private final ConsoleRequestMetadataResolver requestMetadataResolver =
       mock(ConsoleRequestMetadataResolver.class);
-
-  private RestClient restClient;
-  private RestClient.RequestHeadersUriSpec<?> getUriSpec;
-  private RestClient.RequestHeadersSpec<?> getSpec;
-  private RestClient.ResponseSpec responseSpec;
   private MockMvc mockMvc;
 
   @BeforeEach
-  @SuppressWarnings("unchecked")
   void setUp() {
     ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
     ConsoleApiExceptionHandler exceptionHandler =
         ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-
-    restClient = mock(RestClient.class);
-    getUriSpec = mock(RestClient.RequestHeadersUriSpec.class);
-    getSpec = mock(RestClient.RequestHeadersSpec.class);
-    responseSpec = mock(RestClient.ResponseSpec.class);
-
-    when(orchestratorInternalRestClient.build()).thenReturn(restClient);
-    doReturn(getUriSpec).when(restClient).get();
-    doReturn(getSpec).when(getUriSpec).uri(any(Function.class));
-    when(getSpec.retrieve()).thenReturn(responseSpec);
-    when(responseSpec.body(any(ParameterizedTypeReference.class)))
+    when(orchestratorProxy.capacityProfile(
+            "ta", "2026-06-30T00:00:00Z", "2026-06-30T01:00:00Z", "JOB", 10))
         .thenReturn(CommonResponse.success(new CapacityProfileResponse(
             null, "ta", null, "JOB", "BFS_HOT_TABLES", List.of(), null, null)));
-
-    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleCapacityProfileController(
-            orchestratorInternalRestClient, tenantGuard, responseFactory))
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleCapacityProfileController(orchestratorProxy, responseFactory))
         .setControllerAdvice(exceptionHandler)
         .build();
   }
 
   @Test
-  void queryShouldResolveTenantAndProxyToOrchestrator() throws Exception {
-    when(tenantGuard.resolveTenant("ta")).thenReturn("ta");
-
+  void queryShouldDelegateAllQueryParameters() throws Exception {
     mockMvc
         .perform(get("/api/console/capacity-profile")
             .param("tenantId", "ta")
@@ -90,22 +60,18 @@ class ConsoleCapacityProfileControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.scope").value("BFS_HOT_TABLES"))
         .andExpect(jsonPath("$.data.groupBy").value("JOB"));
-
-    verify(tenantGuard).resolveTenant("ta");
-    ArgumentCaptor<Function<UriBuilder, URI>> uriFunction = ArgumentCaptor.captor();
-    verify(getUriSpec).uri(uriFunction.capture());
+    verify(orchestratorProxy)
+        .capacityProfile("ta", "2026-06-30T00:00:00Z", "2026-06-30T01:00:00Z", "JOB", 10);
   }
 
   @Test
-  void shouldBlockWhenTenantGuardRejects() throws Exception {
+  void shouldPropagateTenantRejectionFromApplicationPort() throws Exception {
     doThrow(BizException.of(ResultCode.FORBIDDEN, "error.tenant.mismatch"))
-        .when(tenantGuard)
-        .resolveTenant("tb");
-
+        .when(orchestratorProxy)
+        .capacityProfile("tb", null, null, "TENANT", 50);
     mockMvc
         .perform(get("/api/console/capacity-profile").param("tenantId", "tb"))
         .andExpect(status().isForbidden());
-
-    verify(orchestratorInternalRestClient, never()).build();
+    verify(orchestratorProxy).capacityProfile("tb", null, null, "TENANT", 50);
   }
 }

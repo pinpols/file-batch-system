@@ -1,12 +1,7 @@
 package io.github.pinpols.batch.console.web;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -18,9 +13,8 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.application.contract.response.ops.AssetPartitionReadinessResponse;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
-import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.time.LocalDate;
@@ -29,41 +23,23 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.web.client.RestClient;
 
 class ConsoleAssetPartitionControllerTest {
 
-  private final OrchestratorInternalRestClient orchestratorInternalRestClient =
-      mock(OrchestratorInternalRestClient.class);
-  private final ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
+  private final ConsoleOrchestratorPort orchestratorProxy = mock(ConsoleOrchestratorPort.class);
   private final ConsoleRequestMetadataResolver requestMetadataResolver =
       mock(ConsoleRequestMetadataResolver.class);
-
-  private RestClient restClient;
-  private RestClient.RequestHeadersUriSpec<?> getUriSpec;
-  private RestClient.RequestHeadersSpec<?> getSpec;
-  private RestClient.ResponseSpec responseSpec;
   private MockMvc mockMvc;
 
   @BeforeEach
-  @SuppressWarnings("unchecked")
   void setUp() {
     ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
     ConsoleApiExceptionHandler exceptionHandler =
         ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-
-    restClient = mock(RestClient.class);
-    getUriSpec = mock(RestClient.RequestHeadersUriSpec.class);
-    getSpec = mock(RestClient.RequestHeadersSpec.class);
-    responseSpec = mock(RestClient.ResponseSpec.class);
-
-    when(orchestratorInternalRestClient.build()).thenReturn(restClient);
-    doReturn(getUriSpec).when(restClient).get();
-    doReturn(getSpec).when(getUriSpec).uri(anyString(), any(Object[].class));
-    when(getSpec.retrieve()).thenReturn(responseSpec);
-    when(responseSpec.body(AssetPartitionReadinessResponse.class))
+    when(orchestratorProxy.assetPartitionReadiness(
+            "ta", "settlement_daily", LocalDate.parse("2026-06-30")))
         .thenReturn(new AssetPartitionReadinessResponse(
             true,
             "READY",
@@ -76,17 +52,14 @@ class ConsoleAssetPartitionControllerTest {
             9L,
             "OBJECT_STORE",
             "s3://bucket/path/result.csv"));
-
-    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleAssetPartitionController(
-            orchestratorInternalRestClient, tenantGuard, responseFactory))
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleAssetPartitionController(orchestratorProxy, responseFactory))
         .setControllerAdvice(exceptionHandler)
         .build();
   }
 
   @Test
-  void readinessShouldPassResolvedTenantAndWrapRawReadinessPayload() throws Exception {
-    when(tenantGuard.resolveTenant("ta")).thenReturn("ta");
-
+  void readinessShouldDelegateAndWrapRawReadinessPayload() throws Exception {
     MvcResult result = mockMvc
         .perform(get("/api/console/asset-partitions/readiness")
             .param("tenantId", "ta")
@@ -98,30 +71,24 @@ class ConsoleAssetPartitionControllerTest {
         .andExpect(jsonPath("$.data.assetCode").value("asset-settlement-daily"))
         .andExpect(jsonPath("$.data.versionNo").value(3))
         .andReturn();
-
-    assertThat(result.getResponse().getContentAsString()).contains("\"traceId\":\"trace-1\"");
-    verify(tenantGuard).resolveTenant("ta");
-    verify(getUriSpec)
-        .uri(
-            "/internal/readiness/job?tenantId={tenantId}&jobCode={jobCode}&bizDate={bizDate}",
-            "ta",
-            "settlement_daily",
-            LocalDate.parse("2026-06-30"));
+    org.assertj.core.api.Assertions.assertThat(result.getResponse().getContentAsString())
+        .contains("\"traceId\":\"trace-1\"");
+    verify(orchestratorProxy)
+        .assetPartitionReadiness("ta", "settlement_daily", LocalDate.parse("2026-06-30"));
   }
 
   @Test
-  void readinessShouldBlockWhenTenantGuardRejects() throws Exception {
+  void readinessShouldPropagateTenantRejectionFromApplicationPort() throws Exception {
     doThrow(BizException.of(ResultCode.FORBIDDEN, "error.tenant.mismatch"))
-        .when(tenantGuard)
-        .resolveTenant("tb");
-
+        .when(orchestratorProxy)
+        .assetPartitionReadiness("tb", "settlement_daily", LocalDate.parse("2026-06-30"));
     mockMvc
         .perform(get("/api/console/asset-partitions/readiness")
             .param("tenantId", "tb")
             .param("jobCode", "settlement_daily")
             .param("bizDate", "2026-06-30"))
         .andExpect(status().isForbidden());
-
-    verify(orchestratorInternalRestClient, never()).build();
+    verify(orchestratorProxy)
+        .assetPartitionReadiness("tb", "settlement_daily", LocalDate.parse("2026-06-30"));
   }
 }

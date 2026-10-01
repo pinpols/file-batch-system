@@ -16,6 +16,8 @@ BFS 的下游 readiness 不能只看 `job_instance` 最新 attempt 是否成功�
 - `ReadinessService` 通过 `AssetPartitionService` 判断 readiness,不再直接扫 `job_instance` 状态。
 - `/internal/readiness/job` 保持 `ready/reason` 兼容字段,并追加 asset partition / result_version / job_instance 明细,方便 trigger 日志和运维 drill-down。
 
+> **2026-10-01 分层守卫**:Console 的 readiness、结果版本和批量日回放接口统一通过 `ConsoleOrchestratorPort` 进入应用边界。Controller 只负责 HTTP 绑定与响应适配；租户解析、内部 URL 构造、下游调用和降级语义由 `application.ops.infrastructure.DefaultConsoleOrchestratorProxyService` 承担。本次为内部职责收敛，接口字段和 readiness 裁决语义保持不变。
+
 ## 当前模型
 
 当前新增 `data_asset / asset_partition` 两张最小物化表,但不改变权威来源:

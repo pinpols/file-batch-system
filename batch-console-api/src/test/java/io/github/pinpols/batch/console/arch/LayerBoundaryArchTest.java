@@ -48,6 +48,23 @@ class LayerBoundaryArchTest {
   }
 
   @Test
+  void webMustNotDependOnInternalClientsOrObjectStores() {
+    noClasses()
+        .that()
+        .resideInAPackage("..web..")
+        .and()
+        .haveSimpleNameEndingWith("Controller")
+        .should()
+        .dependOnClassesThat()
+        .resideInAnyPackage(
+            "io.github.pinpols.batch.console.shared.client..",
+            "io.github.pinpols.batch.common.storage..",
+            "org.springframework.web.client..")
+        .because("web 层不得直接持有内部 HTTP 客户端、对象存储或 RestClient，统一经应用端口和适配器")
+        .check(CLASSES);
+  }
+
+  @Test
   void applicationAndInfrastructureMustNotDependOnWebContracts() {
     noClasses()
         .that()

@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.storage.FilesystemPresignTokens;
 import io.github.pinpols.batch.common.storage.ObjectListing;
 import io.github.pinpols.batch.common.storage.ObjectNotFoundException;
+import io.github.pinpols.batch.console.domain.file.infrastructure.DefaultConsoleFilesystemPresignDownloadService;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -48,7 +49,8 @@ class FilesystemPresignDownloadControllerTest {
         new ByteArrayInputStream("payload".getBytes(StandardCharsets.UTF_8)),
         "payload".length(),
         "application/octet-stream");
-    controller = new ConsoleFilesystemPresignDownloadController(stubStore, props, security);
+    controller = new ConsoleFilesystemPresignDownloadController(
+        new DefaultConsoleFilesystemPresignDownloadService(stubStore, props, security));
   }
 
   @Test

@@ -1,7 +1,12 @@
-package io.github.pinpols.batch.console.domain.ops.infrastructure;
+package io.github.pinpols.batch.console.application.ops.infrastructure;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.resilience.DownstreamFallback;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.console.application.contract.response.ops.AssetPartitionReadinessResponse;
+import io.github.pinpols.batch.console.application.contract.response.ops.CapacityProfileResponse;
+import io.github.pinpols.batch.console.application.contract.response.ops.LineageEvidenceResponse;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleBatchDayOperateResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleInstanceActionResponse;
@@ -10,7 +15,16 @@ import io.github.pinpols.batch.console.application.ops.response.ConsoleRetryFail
 import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunActionResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunSkipNodeResponse;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchDayReplaySubmitRequest;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.DryRunPlanRequest;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayReplayEntryResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayReplayPreviewResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayReplaySessionResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleDryRunPlanResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleResultVersionResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleForensicExportResponse;
+import io.github.pinpols.batch.console.domain.ops.infrastructure.OutboxCleanupProxyResponse;
+import io.github.pinpols.batch.console.domain.ops.infrastructure.OutboxRepublishProxyResponse;
 import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.shared.view.ConsolePipelineProgressItemResponse;
@@ -27,6 +41,7 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
+import org.springframework.web.util.UriBuilder;
 
 /**
  * {@link ConsoleOrchestratorPort} 的默认实现：通过 RestClient 转发请求到编排器内部接口。
@@ -383,6 +398,354 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
             .retrieve()
             .body(new ParameterizedTypeReference<List<ConsolePipelineProgressItemResponse>>() {}),
         ex -> List.of());
+  }
+
+  @Override
+  public CommonResponse<ConsoleDryRunPlanResponse> dryRunPlan(DryRunPlanRequest request) {
+    request.setTenantId(tenantGuard.resolveTenant(request.getTenantId()));
+    return downstreamFallback.callOrThrow(
+        SVC,
+        "dry-run-plan",
+        () -> orchestratorInternalRestClient
+            .build()
+            .post()
+            .uri("/internal/orchestrator/dry-run/plan")
+            .body(request)
+            .retrieve()
+            .body(new ParameterizedTypeReference<CommonResponse<ConsoleDryRunPlanResponse>>() {}));
+  }
+
+  @Override
+  public CommonResponse<ConsoleBatchDayReplaySessionResponse> batchDayReplaySubmit(
+      BatchDayReplaySubmitRequest request) {
+    request.setTenantId(tenantGuard.resolveTenant(request.getTenantId()));
+    return postReplay(
+        "batch-day-replay-submit",
+        "/internal/orchestrator/batch-day-replay/sessions",
+        request,
+        new ParameterizedTypeReference<>() {});
+  }
+
+  @Override
+  public CommonResponse<ConsoleBatchDayReplayPreviewResponse> batchDayReplayPreview(
+      BatchDayReplaySubmitRequest request) {
+    request.setTenantId(tenantGuard.resolveTenant(request.getTenantId()));
+    return postReplay(
+        "batch-day-replay-preview",
+        "/internal/orchestrator/batch-day-replay/sessions/preview",
+        request,
+        new ParameterizedTypeReference<>() {});
+  }
+
+  @Override
+  public CommonResponse<List<ConsoleBatchDayReplaySessionResponse>> batchDayReplayList(
+      String tenantId, String status, int limit) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return downstreamFallback.callOrThrow(
+        SVC,
+        "batch-day-replay-list",
+        () -> orchestratorInternalRestClient
+            .build()
+            .get()
+            .uri(uriBuilder -> {
+              UriBuilder builder = uriBuilder
+                  .path("/internal/orchestrator/batch-day-replay/sessions")
+                  .queryParam(PARAM_TENANT_ID, resolved)
+                  .queryParam("limit", limit);
+              if (EmptyChecks.isNotBlank(status)) {
+                builder.queryParam("status", status);
+              }
+              return builder.build();
+            })
+            .retrieve()
+            .body(new ParameterizedTypeReference<>() {}));
+  }
+
+  @Override
+  public CommonResponse<ConsoleBatchDayReplaySessionResponse> batchDayReplayApprove(
+      Long sessionId, String tenantId, String approver) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return postReplayWithoutBody(
+        "batch-day-replay-approve",
+        "/internal/orchestrator/batch-day-replay/sessions/{id}/approve",
+        sessionId,
+        resolved,
+        approver,
+        true);
+  }
+
+  @Override
+  public CommonResponse<ConsoleBatchDayReplaySessionResponse> batchDayReplayCancel(
+      Long sessionId, String tenantId) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return postReplayWithoutBody(
+        "batch-day-replay-cancel",
+        "/internal/orchestrator/batch-day-replay/sessions/{id}/cancel",
+        sessionId,
+        resolved,
+        null,
+        false);
+  }
+
+  @Override
+  public CommonResponse<ConsoleBatchDayReplaySessionResponse> batchDayReplayDetail(
+      Long sessionId, String tenantId) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return downstreamFallback.callOrThrow(
+        SVC,
+        "batch-day-replay-detail",
+        () -> orchestratorInternalRestClient
+            .build()
+            .get()
+            .uri(
+                "/internal/orchestrator/batch-day-replay/sessions/{id}?tenantId={tenantId}",
+                sessionId,
+                resolved)
+            .retrieve()
+            .body(new ParameterizedTypeReference<>() {}));
+  }
+
+  @Override
+  public CommonResponse<List<ConsoleBatchDayReplayEntryResponse>> batchDayReplayEntries(
+      Long sessionId, String tenantId, String status, int limit) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return downstreamFallback.callOrThrow(
+        SVC,
+        "batch-day-replay-entries",
+        () -> orchestratorInternalRestClient
+            .build()
+            .get()
+            .uri(uriBuilder -> {
+              UriBuilder builder = uriBuilder
+                  .path("/internal/orchestrator/batch-day-replay/sessions/{id}/entries")
+                  .queryParam(PARAM_TENANT_ID, resolved)
+                  .queryParam("limit", limit);
+              if (EmptyChecks.isNotBlank(status)) {
+                builder.queryParam("status", status);
+              }
+              return builder.build(sessionId);
+            })
+            .retrieve()
+            .body(new ParameterizedTypeReference<>() {}));
+  }
+
+  @Override
+  public CommonResponse<List<ConsoleResultVersionResponse>> resultVersions(
+      String tenantId, String businessKey, int limit) {
+    return getResultVersionResponse(
+        "result-versions-list",
+        "/internal/orchestrator/result-versions",
+        tenantId,
+        businessKey,
+        limit,
+        new ParameterizedTypeReference<>() {});
+  }
+
+  @Override
+  public CommonResponse<ConsoleResultVersionResponse> effectiveResultVersion(
+      String tenantId, String businessKey) {
+    return getResultVersionResponse(
+        "result-version-effective",
+        "/internal/orchestrator/result-versions/effective",
+        tenantId,
+        businessKey,
+        null,
+        new ParameterizedTypeReference<>() {});
+  }
+
+  @Override
+  public CommonResponse<ConsoleResultVersionResponse> resultVersion(Long id, String tenantId) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return downstreamFallback.callOrThrow(
+        SVC,
+        "result-version-detail",
+        () -> orchestratorInternalRestClient
+            .build()
+            .get()
+            .uri("/internal/orchestrator/result-versions/{id}?tenantId={tenantId}", id, resolved)
+            .retrieve()
+            .body(new ParameterizedTypeReference<>() {}));
+  }
+
+  @Override
+  public CommonResponse<ConsoleResultVersionResponse> promoteResultVersion(
+      Long id, String tenantId) {
+    return postResultVersionAction("result-version-promote", id, tenantId, "promote");
+  }
+
+  @Override
+  public CommonResponse<ConsoleResultVersionResponse> rejectResultVersion(
+      Long id, String tenantId) {
+    return postResultVersionAction("result-version-reject", id, tenantId, "reject");
+  }
+
+  @Override
+  public AssetPartitionReadinessResponse assetPartitionReadiness(
+      String tenantId, String jobCode, LocalDate bizDate) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return downstreamFallback.callOrThrow(
+        SVC,
+        "asset-partition-readiness",
+        () -> orchestratorInternalRestClient
+            .build()
+            .get()
+            .uri(
+                "/internal/readiness/job?tenantId={tenantId}&jobCode={jobCode}&bizDate={bizDate}",
+                resolved,
+                jobCode,
+                bizDate)
+            .retrieve()
+            .body(AssetPartitionReadinessResponse.class));
+  }
+
+  @Override
+  public CommonResponse<LineageEvidenceResponse> lineageByResultVersion(Long id, String tenantId) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return downstreamFallback.callOrThrow(
+        SVC,
+        "lineage-result-version",
+        () -> orchestratorInternalRestClient
+            .build()
+            .get()
+            .uri(
+                "/internal/orchestrator/lineage/result-versions/{id}?tenantId={tenantId}",
+                id,
+                resolved)
+            .retrieve()
+            .body(new ParameterizedTypeReference<>() {}));
+  }
+
+  @Override
+  public CommonResponse<LineageEvidenceResponse> lineageByEffective(
+      String tenantId, String businessKey) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return downstreamFallback.callOrThrow(
+        SVC,
+        "lineage-effective",
+        () -> orchestratorInternalRestClient
+            .build()
+            .get()
+            .uri(
+                "/internal/orchestrator/lineage/effective?tenantId={tenantId}&businessKey={businessKey}",
+                resolved,
+                businessKey)
+            .retrieve()
+            .body(new ParameterizedTypeReference<>() {}));
+  }
+
+  @Override
+  public CommonResponse<CapacityProfileResponse> capacityProfile(
+      String tenantId, String from, String to, String groupBy, Integer limit) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return downstreamFallback.callOrThrow(
+        SVC,
+        "capacity-profile",
+        () -> orchestratorInternalRestClient
+            .build()
+            .get()
+            .uri(uriBuilder -> {
+              UriBuilder builder = uriBuilder
+                  .path("/internal/orchestrator/capacity-profile")
+                  .queryParam(PARAM_TENANT_ID, resolved)
+                  .queryParam("groupBy", groupBy)
+                  .queryParam("limit", limit);
+              if (EmptyChecks.isNotBlank(from)) {
+                builder.queryParam("from", from);
+              }
+              if (EmptyChecks.isNotBlank(to)) {
+                builder.queryParam("to", to);
+              }
+              return builder.build();
+            })
+            .retrieve()
+            .body(new ParameterizedTypeReference<>() {}));
+  }
+
+  private <T> CommonResponse<T> postReplay(
+      String operation,
+      String path,
+      Object body,
+      ParameterizedTypeReference<CommonResponse<T>> responseType) {
+    return downstreamFallback.callOrThrow(
+        SVC,
+        operation,
+        () -> orchestratorInternalRestClient
+            .build()
+            .post()
+            .uri(path)
+            .body(body)
+            .retrieve()
+            .body(responseType));
+  }
+
+  private CommonResponse<ConsoleBatchDayReplaySessionResponse> postReplayWithoutBody(
+      String operation,
+      String path,
+      Long sessionId,
+      String tenantId,
+      String approver,
+      boolean includeApprover) {
+    return downstreamFallback.callOrThrow(
+        SVC,
+        operation,
+        () -> orchestratorInternalRestClient
+            .build()
+            .post()
+            .uri(uriBuilder -> {
+              UriBuilder builder = uriBuilder.path(path).queryParam(PARAM_TENANT_ID, tenantId);
+              if (includeApprover) {
+                builder.queryParam("approver", approver);
+              }
+              return builder.build(sessionId);
+            })
+            .retrieve()
+            .body(new ParameterizedTypeReference<>() {}));
+  }
+
+  private <T> CommonResponse<T> getResultVersionResponse(
+      String operation,
+      String path,
+      String tenantId,
+      String businessKey,
+      Integer limit,
+      ParameterizedTypeReference<CommonResponse<T>> responseType) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return downstreamFallback.callOrThrow(
+        SVC,
+        operation,
+        () -> orchestratorInternalRestClient
+            .build()
+            .get()
+            .uri(uriBuilder -> {
+              UriBuilder builder = uriBuilder
+                  .path(path)
+                  .queryParam(PARAM_TENANT_ID, resolved)
+                  .queryParam("businessKey", businessKey);
+              if (EmptyChecks.isNotNull(limit)) {
+                builder.queryParam("limit", limit);
+              }
+              return builder.build();
+            })
+            .retrieve()
+            .body(responseType));
+  }
+
+  private CommonResponse<ConsoleResultVersionResponse> postResultVersionAction(
+      String operation, Long id, String tenantId, String action) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return downstreamFallback.callOrThrow(
+        SVC,
+        operation,
+        () -> orchestratorInternalRestClient
+            .build()
+            .post()
+            .uri(
+                "/internal/orchestrator/result-versions/{id}/{action}?tenantId={tenantId}",
+                id,
+                action,
+                resolved)
+            .retrieve()
+            .body(new ParameterizedTypeReference<>() {}));
   }
 
   private void publishRefresh(String tenantId) {
