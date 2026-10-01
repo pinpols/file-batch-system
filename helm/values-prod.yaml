@@ -101,6 +101,10 @@ workerAtomicBaseUrl: "http://batch-platform-worker-atomic.batch.svc.cluster.loca
 
 consoleApi:
   replicaCount: 2
+  ai:
+    attachment:
+      # 生产需预建私有桶，并与 objectStorage.bucket 保持物理隔离。
+      storageBucket: "batch-ai-attachments"
   readReplica:
     enabled: true
     primaryUrl: "jdbc:postgresql://pg-primary.db.svc.cluster.local:5432/batch_platform"

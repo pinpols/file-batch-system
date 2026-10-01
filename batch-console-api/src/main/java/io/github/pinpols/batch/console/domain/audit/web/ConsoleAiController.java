@@ -11,8 +11,8 @@ import io.github.pinpols.batch.console.application.contract.request.auth.AiChatR
 import io.github.pinpols.batch.console.config.ConsoleAiClients;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiApplicationService;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentUseCase;
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiChatResponse;
-import io.github.pinpols.batch.console.domain.audit.infrastructure.ai.ConsoleAiAttachmentService;
 import io.github.pinpols.batch.console.domain.audit.service.ConsoleAiAuthorizationService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
@@ -72,7 +72,7 @@ public class ConsoleAiController {
   private final ConsoleAiAuthorizationService authorizationService;
   private final ConsoleRequestMetadataResolver metadataResolver;
   private final ConsoleAiProperties aiProperties;
-  private final ConsoleAiAttachmentService attachmentService;
+  private final ConsoleAiAttachmentUseCase attachmentService;
   private final ObjectProvider<ConsoleAiClients> chatClientsProvider;
   private final Map<String, ActiveStream> activeStreams = new ConcurrentHashMap<>();
   private final ExecutorService streamExecutor =
@@ -103,7 +103,7 @@ public class ConsoleAiController {
   }
 
   @PostMapping(value = "/attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-  public CommonResponse<ConsoleAiAttachmentService.AttachmentView> uploadAttachment(
+  public CommonResponse<ConsoleAiAttachmentUseCase.AttachmentView> uploadAttachment(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @RequestParam UUID clientAttachmentId,
       @RequestParam("file") MultipartFile file)
@@ -124,7 +124,7 @@ public class ConsoleAiController {
   }
 
   @GetMapping("/attachments/by-client-id/{clientAttachmentId}")
-  public CommonResponse<ConsoleAiAttachmentService.AttachmentView> attachmentStatus(
+  public CommonResponse<ConsoleAiAttachmentUseCase.AttachmentView> attachmentStatus(
       @PathVariable UUID clientAttachmentId) {
     authorizationService.assertAllowed();
     ConsoleRequestMetadata metadata = metadataResolver.current();
@@ -136,7 +136,7 @@ public class ConsoleAiController {
   public ResponseEntity<byte[]> attachmentContent(@PathVariable UUID id) {
     authorizationService.assertAllowed();
     ConsoleRequestMetadata metadata = metadataResolver.current();
-    ConsoleAiAttachmentService.ImageContent image =
+    ConsoleAiAttachmentUseCase.ImageContent image =
         attachmentService.content(metadata.tenantId(), metadata.operatorId(), id);
     return ResponseEntity.ok()
         .cacheControl(CacheControl.noStore())

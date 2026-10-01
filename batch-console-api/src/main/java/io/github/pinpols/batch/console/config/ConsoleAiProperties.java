@@ -160,6 +160,9 @@ public class ConsoleAiProperties {
   /** 私有图片上传边界；未经显式验收时能力保持关闭。 */
   private Image image = new Image();
 
+  /** AI 私有附件存储边界；当前仅允许图片，桶名不绑定具体媒体类型。 */
+  private Attachment attachment = new Attachment();
+
   /** Provider token 单价与每租户月预算；预算为 0 时不执行费用预算，但已配置单价仍写入估算。 */
   private Cost cost = new Cost();
 
@@ -274,6 +277,12 @@ public class ConsoleAiProperties {
     private long maxDraftBytesPerUser = 48L * 1024 * 1024;
     private long maxRetainedBytesPerUser = 256L * 1024 * 1024;
     private long maxRetainedBytesPerTenant = 2L * 1024 * 1024 * 1024;
+  }
+
+  @Data
+  public static class Attachment {
+    /** AI 附件专用对象桶，必须与批量文件桶物理隔离。 */
+    private String storageBucket = "batch-ai-attachments";
   }
 
   /** L3 工具调用参数。 */

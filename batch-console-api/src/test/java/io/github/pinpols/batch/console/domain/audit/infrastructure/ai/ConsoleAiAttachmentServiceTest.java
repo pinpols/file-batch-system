@@ -11,7 +11,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
@@ -36,7 +35,6 @@ class ConsoleAiAttachmentServiceTest {
   private final ConsoleAiAttachmentMapper mapper = mock(ConsoleAiAttachmentMapper.class);
   private final BatchObjectCryptoService crypto = mock(BatchObjectCryptoService.class);
   private final BatchObjectStore store = mock(BatchObjectStore.class);
-  private final S3StorageProperties storage = mock(S3StorageProperties.class);
   private final PlatformTransactionManager transactionManager =
       mock(PlatformTransactionManager.class);
   private final SlidingWindowRateLimiter rateLimiter = mock(SlidingWindowRateLimiter.class);
@@ -50,7 +48,7 @@ class ConsoleAiAttachmentServiceTest {
     when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
     when(rateLimiter.tryAcquire(anyString(), eq(12))).thenReturn(true);
     service = new ConsoleAiAttachmentService(
-        mapper, properties, crypto, store, storage, transactionManager, rateLimiter);
+        mapper, properties, crypto, store, transactionManager, rateLimiter);
   }
 
   @Test
@@ -104,7 +102,7 @@ class ConsoleAiAttachmentServiceTest {
     row.setStatus("BOUND");
     row.setExpiresAt(Instant.now().plusSeconds(3600));
     when(mapper.byId("tenant", id)).thenReturn(row);
-    when(storage.getBucket()).thenReturn("private-bucket");
+    properties.getAttachment().setStorageBucket("private-bucket");
     when(store.get("private-bucket", "ai/images/private"))
         .thenReturn(new ByteArrayInputStream(new byte[] {1, 2, 3}));
 

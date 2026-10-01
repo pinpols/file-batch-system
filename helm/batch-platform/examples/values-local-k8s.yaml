@@ -40,6 +40,9 @@ consoleApi:
   replicaCount: 2
   port: 18080
   service: {port: 18080, type: ClusterIP}
+  ai:
+    attachment:
+      storageBucket: "batch-ai-attachments"
 
 trigger:
   replicaCount: 1

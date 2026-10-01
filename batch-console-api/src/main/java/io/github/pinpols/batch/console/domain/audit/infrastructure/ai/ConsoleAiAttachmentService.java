@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
-import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentUseCase;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentUseCase.AttachmentView;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentUseCase.ImageContent;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiAttachmentEntity;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiAttachmentMapper;
 import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
@@ -29,15 +31,15 @@ import org.springframework.transaction.support.TransactionTemplate;
 /** 管理 AI 私有图片存储、所有者校验和持久化对象删除意图。 */
 @Service
 @RequiredArgsConstructor
-public class ConsoleAiAttachmentService {
+public class ConsoleAiAttachmentService implements ConsoleAiAttachmentUseCase {
   private final ConsoleAiAttachmentMapper mapper;
   private final ConsoleAiProperties aiProperties;
   private final BatchObjectCryptoService cryptoService;
   private final BatchObjectStore objectStore;
-  private final S3StorageProperties storageProperties;
   private final PlatformTransactionManager transactionManager;
   private final SlidingWindowRateLimiter rateLimiter;
 
+  @Override
   public AttachmentView upload(
       String tenantId, String ownerUserId, UUID clientAttachmentId, byte[] input) {
     requireEnabled();
@@ -86,7 +88,7 @@ public class ConsoleAiAttachmentService {
     }
     byte[] ciphertext = cryptoService.encrypt(image.bytes(), null);
     objectStore.put(
-        storageProperties.getBucket(),
+        attachmentBucket(),
         row.getObjectKey(),
         new ByteArrayInputStream(ciphertext),
         ciphertext.length,
@@ -108,6 +110,7 @@ public class ConsoleAiAttachmentService {
     }));
   }
 
+  @Override
   public AttachmentView status(String tenantId, String ownerUserId, UUID clientAttachmentId) {
     requireEnabled();
     return template().execute(status -> {
@@ -118,10 +121,11 @@ public class ConsoleAiAttachmentService {
     });
   }
 
+  @Override
   public ImageContent content(String tenantId, String ownerUserId, UUID id) {
     ConsoleAiAttachmentEntity row = owned(tenantId, ownerUserId, id);
     if (!"BOUND".equals(row.getStatus())) throw notFound();
-    try (InputStream stream = objectStore.get(storageProperties.getBucket(), row.getObjectKey())) {
+    try (InputStream stream = objectStore.get(attachmentBucket(), row.getObjectKey())) {
       int limit = aiProperties.getImage().getMaxFileBytes() + 1024;
       byte[] encrypted = stream.readNBytes(limit + 1);
       if (encrypted.length > limit || !cryptoService.isEncryptedContent(encrypted)) {
@@ -135,6 +139,7 @@ public class ConsoleAiAttachmentService {
     }
   }
 
+  @Override
   public void deleteDraft(String tenantId, String ownerUserId, UUID id) {
     template().executeWithoutResult(status -> {
       mapper.setTenantContext(tenantId);
@@ -231,7 +236,7 @@ public class ConsoleAiAttachmentService {
     if (EmptyChecks.isNull(keys)) return;
     for (String key : keys) {
       try {
-        objectStore.delete(storageProperties.getBucket(), key);
+        objectStore.delete(attachmentBucket(), key);
         template().executeWithoutResult(status -> {
           mapper.setTenantContext(tenantId);
           mapper.deleteCleanupKey(tenantId, key);
@@ -243,6 +248,10 @@ public class ConsoleAiAttachmentService {
         });
       }
     }
+  }
+
+  private String attachmentBucket() {
+    return aiProperties.getAttachment().getStorageBucket();
   }
 
   private ConsoleAiAttachmentEntity owned(String tenantId, String ownerUserId, UUID id) {
@@ -272,6 +281,7 @@ public class ConsoleAiAttachmentService {
     }
   }
 
+  @Override
   public boolean available() {
     return aiProperties.isImageInputEnabled()
         && aiProperties.getPersistence().isEnabled()
@@ -313,18 +323,6 @@ public class ConsoleAiAttachmentService {
   private static BizException unavailable() {
     return BizException.of(ResultCode.SERVICE_UNAVAILABLE, "error.ai.image_unavailable");
   }
-
-  public record AttachmentView(
-      UUID id,
-      UUID clientAttachmentId,
-      String status,
-      String mediaType,
-      Long byteSize,
-      Integer width,
-      Integer height,
-      Instant expiresAt) {}
-
-  public record ImageContent(byte[] bytes, String mediaType) {}
 
   private record UploadReservation(ConsoleAiAttachmentEntity row, boolean created) {}
 }

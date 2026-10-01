@@ -150,6 +150,13 @@ class ConsoleAiPromptGuardTest {
     assertThat(result.decision()).isEqualTo(AiPromptDecision.REJECTED_SCOPE);
   }
 
+  @Test
+  void shouldRejectQuestionExplicitlyUnrelatedToBatchScheduling() {
+    AiPromptGateResult result = guard.check("请教我做一道家常菜，与批量调度系统无关。");
+
+    assertThat(result.decision()).isEqualTo(AiPromptDecision.REJECTED_SCOPE);
+  }
+
   // --- blocked keyword takes precedence over domain keyword ---
 
   @Test

@@ -76,6 +76,7 @@
 | `batch.console.ai.failover-enabled` | `true` / `false` | **false** | 跨 Provider 故障切换；会将同一 prompt/context 发送给另一家服务，启用前确认租户授权与数据处理要求 | P1 | `BATCH_CONSOLE_AI_FAILOVER_ENABLED` | ❌ |
 | `batch.console.ai.openai-compatible.*` | providerName/baseUrl/apiKey/model/timeout | 空/60s | OpenAI-compatible 聊天端点配置；`api-key` 必须走 Secret/env 注入；`failover-enabled=true` 时拒绝启动 | P1 | `BATCH_CONSOLE_AI_OPENAI_COMPATIBLE_*` | ✅ |
 | `batch.console.ai.image-input-enabled` + `openai-compatible.image-input-enabled` | `true` / `false` | **false / false** | 图片输入双重显式开关；仅在会话持久化、对象加密及所选模型支持视觉输入时开启 | P1 | `BATCH_CONSOLE_AI_IMAGE_INPUT_ENABLED`, `BATCH_CONSOLE_AI_OPENAI_COMPATIBLE_IMAGE_INPUT_ENABLED` | ✅ |
+| `batch.console.ai.attachment.storage-bucket` | bucket 名 | **batch-ai-attachments** | AI 私有附件专用桶；当前仅允许图片，但配置名不绑定媒体类型；启动期拒绝与批量文件桶相同 | P1 | `BATCH_CONSOLE_AI_ATTACHMENT_STORAGE_BUCKET` | ✅ |
 | `batch.console.ai.image.*` | 上传大小、张数、总字节、像素、草稿保留、模型预留 token、上传速率、草稿及保留配额 | **5 MiB / 4 / 12 MiB / 16777216 / 24h / 65536 / 12次每分钟 / 16张 / 草稿48 MiB / 用户256 MiB / 租户2 GiB** | 防止图片接口成为文件服务；只有绑定对话的图片可读取，草稿定期删除；参数均由 `BATCH_CONSOLE_AI_IMAGE_*` 注入 | P1 | `BATCH_CONSOLE_AI_IMAGE_*` | ✅ |
 
 | `batch.console.ai.persistence.*` | enabled/retention/history limits | **false / 0 / bounded** | 会话和消息服务端存储；开启必须配置 1..3650 天保留期，按租户及操作者隔离并自动清理 | P1 | `BATCH_CONSOLE_AI_PERSISTENCE_*` | ✅ |
@@ -83,7 +84,7 @@
 | `batch.console.ai.audit-preview-enabled` | `true` / `false` | **false** | AI 审计是否保存原文预览；默认仅哈希、决策和成本元数据 | P1 | `BATCH_CONSOLE_AI_AUDIT_PREVIEW_ENABLED` | ✅ |
 | `batch.console.captcha.provider` | `none` / `cloudflare` / `tencent` / `aliyun` | **none** | 登录验证码实现；selfhosted 会阻止启动；第三方 provider 需站点 key + 外联 | P1 | `BATCH_CONSOLE_CAPTCHA_PROVIDER` | ✅ |
 
-AI 图片上线条件：对象桶及 `ai/images/` 前缀不得配置匿名读取、公共 CDN 或客户端直传/预签名访问；只允许 Console API 服务账号读写。服务端把图片重编码为 PNG/JPEG 后加密存储，不保留原文件名或原始字节。监控 `batch.console_ai_object_cleanup` 的待删行数和 `attempt_count`，确认草稿 24 小时过期及会话到期/删除后的对象清理持续运行。若对象存储或 Redis 限流不可用，图片上传应拒绝，不应放宽配额或改为公开链接。
+AI 附件上线条件（当前仅允许图片）：`batch-ai-attachments` 专用桶及 `ai/images/` 前缀不得配置匿名读取、公共 CDN 或客户端直传/预签名访问；只允许 Console API 服务账号读写。托管对象存储需预建该桶，本地 Compose 会幂等创建；服务端把图片重编码为 PNG/JPEG 后加密存储，不保留原文件名或原始字节。监控 `batch.console_ai_object_cleanup` 的待删行数和 `attempt_count`，确认草稿 24 小时过期及会话到期/删除后的对象清理持续运行。若对象存储或 Redis 限流不可用，图片上传应拒绝，不应放宽配额或改为公开链接。
 
 ### 1.D 弹性 / 性能 / 观测
 

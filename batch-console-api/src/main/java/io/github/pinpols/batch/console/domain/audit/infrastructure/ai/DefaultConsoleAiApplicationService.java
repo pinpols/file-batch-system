@@ -26,6 +26,7 @@ import io.github.pinpols.batch.console.application.ops.ConsoleClusterDiagnosticS
 import io.github.pinpols.batch.console.config.ConsoleAiClients;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiApplicationService;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentUseCase;
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiChatResponse;
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiSourceResponse;
 import io.github.pinpols.batch.console.domain.audit.command.AiAuditCommand;
@@ -222,7 +223,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         request.getContextVersion(),
         EmptyChecks.isNull(persistedTurn) ? List.of() : persistedTurn.history());
     String systemPrompt = buildSystemPrompt(snippets, EmptyChecks.isNotNull(tools));
-    List<ConsoleAiAttachmentService.ImageContent> images;
+    List<ConsoleAiAttachmentUseCase.ImageContent> images;
     ConsoleAiCostService.Reservation reservation;
     try {
       images = hasImages
@@ -489,7 +490,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       ConsoleAiClients providers,
       List<ConsoleAiKnowledgeBase.Snippet> snippets,
       String promptPayload,
-      List<ConsoleAiAttachmentService.ImageContent> images,
+      List<ConsoleAiAttachmentUseCase.ImageContent> images,
       ConsoleAiTools tools,
       StreamObserver observer)
       throws InterruptedException, ExecutionException, TimeoutException {
@@ -535,7 +536,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       ConsoleAiClients.ProviderClient provider,
       List<ConsoleAiKnowledgeBase.Snippet> snippets,
       String promptPayload,
-      List<ConsoleAiAttachmentService.ImageContent> images,
+      List<ConsoleAiAttachmentUseCase.ImageContent> images,
       ConsoleAiTools tools,
       StreamObserver observer,
       long deadlineNanos)

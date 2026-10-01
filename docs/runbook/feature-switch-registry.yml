@@ -224,6 +224,13 @@ switches:
     composeRequired: true
     helmRequired: true
 
+  - key: batch.console.ai.attachment
+    module: console-api
+    env:
+      - BATCH_CONSOLE_AI_ATTACHMENT_STORAGE_BUCKET
+    composeRequired: true
+    helmRequired: true
+
   - key: batch.console.ai.image
     module: console-api
     env:

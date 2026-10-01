@@ -20,8 +20,8 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.config.ConsoleAiClients;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiApplicationService;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentUseCase;
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiChatResponse;
-import io.github.pinpols.batch.console.domain.audit.infrastructure.ai.ConsoleAiAttachmentService;
 import io.github.pinpols.batch.console.domain.audit.service.ConsoleAiAuthorizationService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
@@ -65,7 +65,7 @@ class ConsoleAiControllerTest {
             mock(ConsoleAiAuthorizationService.class),
             requestMetadataResolver,
             new ConsoleAiProperties(),
-            mock(ConsoleAiAttachmentService.class),
+            mock(ConsoleAiAttachmentUseCase.class),
             new StaticListableBeanFactory().getBeanProvider(ConsoleAiClients.class)))
         .setControllerAdvice(exceptionHandler)
         .setValidator(validator)

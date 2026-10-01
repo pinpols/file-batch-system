@@ -54,6 +54,21 @@ class ConsoleAiPropertiesTest {
         .contains("readiness", "trivy", "changelog", "dependency", "maven", "docker", "门禁");
   }
 
+  @Test
+  void attachmentStorage_shouldUseDedicatedBucketByDefaultAndAllowBinding() {
+    ConsoleAiProperties defaults = new ConsoleAiProperties();
+    Binder binder = new Binder(new MapConfigurationPropertySource(
+        Map.of("batch.console.ai.attachment.storage-bucket", "tenant-ai-attachments")));
+
+    assertThat(defaults.getAttachment().getStorageBucket()).isEqualTo("batch-ai-attachments");
+    assertThat(binder
+            .bind("batch.console.ai", Bindable.of(ConsoleAiProperties.class))
+            .get()
+            .getAttachment()
+            .getStorageBucket())
+        .isEqualTo("tenant-ai-attachments");
+  }
+
   private static ConsoleAiProperties bind(String provider) {
     Binder binder = new Binder(
         new MapConfigurationPropertySource(Map.of("batch.console.ai.provider", provider)));

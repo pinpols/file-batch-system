@@ -160,6 +160,8 @@ consoleApi:
       chatModel: ""
       timeout: "60s"
       imageInputEnabled: false
+    attachment:
+      storageBucket: "batch-ai-attachments"
     image:
       maxFileBytes: 5242880
       maxImages: 4

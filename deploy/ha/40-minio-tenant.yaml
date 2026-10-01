@@ -51,6 +51,7 @@ spec:
   requestAutoCert: false             # 内网无 TLS;有 CA 则开
   buckets:
     - name: batch-files              # 文件交付
+    - name: batch-ai-attachments     # Console AI 私有附件，当前仅允许图片
     # ⚠️ batch-pgbackup 仅 dev/staging 用。生产严禁把 PG 备份放在这个集群内 MinIO ——
     #    它和应用对象存储是同一故障域,MinIO 整体故障(或集群级灾难)会同时带走数据与备份,
     #    备份失去意义。生产 PG WAL/备份必须指向**集群外独立故障域**(异地 S3 / 另一存储栈),

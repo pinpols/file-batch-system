@@ -60,6 +60,9 @@ spring:
           # RAG 文本嵌入模型(低成本;知识库与提问都用它向量化)
           model: ${OPENAI_EMBED_MODEL:text-embedding-3-small}
 
+mybatis:
+  type-handlers-package: io.github.pinpols.batch.console.config
+
 batch:
   console:
     alertmanager:
@@ -160,6 +163,8 @@ batch:
         model: ${BATCH_CONSOLE_AI_OPENAI_COMPATIBLE_CHAT_MODEL:}
         timeout: ${BATCH_CONSOLE_AI_OPENAI_COMPATIBLE_TIMEOUT:60s}
         image-input-enabled: ${BATCH_CONSOLE_AI_OPENAI_COMPATIBLE_IMAGE_INPUT_ENABLED:false}
+      attachment:
+        storage-bucket: ${BATCH_CONSOLE_AI_ATTACHMENT_STORAGE_BUCKET:batch-ai-attachments}
       image:
         max-file-bytes: ${BATCH_CONSOLE_AI_IMAGE_MAX_FILE_BYTES:5242880}
         max-images: ${BATCH_CONSOLE_AI_IMAGE_MAX_IMAGES:4}

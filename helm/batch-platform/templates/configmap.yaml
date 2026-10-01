@@ -92,6 +92,7 @@ data:
   BATCH_CONSOLE_AI_OPENAI_COMPATIBLE_CHAT_MODEL: {{ (((.Values.consoleApi).ai).openaiCompatible).chatModel | default "" | quote }}
   BATCH_CONSOLE_AI_OPENAI_COMPATIBLE_TIMEOUT: {{ (((.Values.consoleApi).ai).openaiCompatible).timeout | default "60s" | quote }}
   BATCH_CONSOLE_AI_OPENAI_COMPATIBLE_IMAGE_INPUT_ENABLED: {{ (((.Values.consoleApi).ai).openaiCompatible).imageInputEnabled | default false | quote }}
+  BATCH_CONSOLE_AI_ATTACHMENT_STORAGE_BUCKET: {{ (((.Values.consoleApi).ai).attachment).storageBucket | default "batch-ai-attachments" | quote }}
   BATCH_CONSOLE_AI_IMAGE_MAX_FILE_BYTES: {{ (((.Values.consoleApi).ai).image).maxFileBytes | default 5242880 | quote }}
   BATCH_CONSOLE_AI_IMAGE_MAX_IMAGES: {{ (((.Values.consoleApi).ai).image).maxImages | default 4 | quote }}
   BATCH_CONSOLE_AI_IMAGE_MAX_TOTAL_BYTES: {{ (((.Values.consoleApi).ai).image).maxTotalBytes | default 12582912 | quote }}
