@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiAttachmentEntity;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiAttachmentMapper;
@@ -49,7 +50,7 @@ public class ConsoleAiAttachmentService {
       mapper.lockUploadQuota(tenantId);
       ConsoleAiAttachmentEntity existing =
           mapper.byClientId(tenantId, ownerUserId, clientAttachmentId);
-      if (existing != null) return new UploadReservation(existing, false);
+      if (EmptyChecks.isNotNull(existing)) return new UploadReservation(existing, false);
       ConsoleAiProperties.Image limits = aiProperties.getImage();
       if (mapper.activeDraftCount(tenantId, ownerUserId) >= limits.getMaxDraftsPerUser()
           || mapper.activeDraftBytes(tenantId, ownerUserId) + image.bytes().length
@@ -74,8 +75,8 @@ public class ConsoleAiAttachmentService {
       return new UploadReservation(
           mapper.byClientId(tenantId, ownerUserId, clientAttachmentId), inserted);
     });
-    ConsoleAiAttachmentEntity row = reservation == null ? null : reservation.row();
-    if (row == null) throw unavailable();
+    ConsoleAiAttachmentEntity row = EmptyChecks.isNull(reservation) ? null : reservation.row();
+    if (EmptyChecks.isNull(row)) throw unavailable();
     if (!inputSha256.equals(row.getInputSha256())) {
       throw BizException.of(ResultCode.CONFLICT, "error.common.state_conflict");
     }
@@ -112,7 +113,7 @@ public class ConsoleAiAttachmentService {
     return template().execute(status -> {
       mapper.setTenantContext(tenantId);
       ConsoleAiAttachmentEntity row = mapper.byClientId(tenantId, ownerUserId, clientAttachmentId);
-      if (row == null || row.getExpiresAt().isBefore(Instant.now())) throw notFound();
+      if (EmptyChecks.isNull(row) || row.getExpiresAt().isBefore(Instant.now())) throw notFound();
       return view(row);
     });
   }
@@ -138,7 +139,7 @@ public class ConsoleAiAttachmentService {
     template().executeWithoutResult(status -> {
       mapper.setTenantContext(tenantId);
       ConsoleAiAttachmentEntity row = mapper.byId(tenantId, id);
-      if (row == null
+      if (EmptyChecks.isNull(row)
           || !ownerUserId.equals(row.getOwnerUserId())
           || "BOUND".equals(row.getStatus())) throw notFound();
       mapper.enqueueOne(tenantId, id);
@@ -149,8 +150,7 @@ public class ConsoleAiAttachmentService {
   public List<ConsoleAiAttachmentEntity> validateDrafts(
       String tenantId, String ownerUserId, List<UUID> ids) {
     requireEnabled();
-    if (ids == null
-        || ids.isEmpty()
+    if (EmptyChecks.isEmpty(ids)
         || ids.size() > aiProperties.getImage().getMaxImages()
         || ids.stream().distinct().count() != ids.size()) {
       throw invalid();
@@ -159,7 +159,7 @@ public class ConsoleAiAttachmentService {
     List<ConsoleAiAttachmentEntity> rows = ids.stream()
         .map(id -> {
           ConsoleAiAttachmentEntity row = mapper.byId(tenantId, id);
-          if (row == null
+          if (EmptyChecks.isNull(row)
               || !ownerUserId.equals(row.getOwnerUserId())
               || !"DRAFT".equals(row.getStatus())
               || !row.getExpiresAt().isAfter(Instant.now())) {
@@ -182,7 +182,7 @@ public class ConsoleAiAttachmentService {
       String conversationId,
       long turnNo,
       Instant expiresAt) {
-    if (ids == null || ids.isEmpty()) return;
+    if (EmptyChecks.isEmpty(ids)) return;
     validateDrafts(tenantId, ownerUserId, ids);
     for (UUID id : ids) {
       if (mapper.bind(tenantId, id, ownerUserId, conversationId, turnNo, expiresAt) != 1) {
@@ -228,7 +228,7 @@ public class ConsoleAiAttachmentService {
       mapper.setTenantContext(tenantId);
       return mapper.cleanupKeys(tenantId, 100);
     });
-    if (keys == null) return;
+    if (EmptyChecks.isNull(keys)) return;
     for (String key : keys) {
       try {
         objectStore.delete(storageProperties.getBucket(), key);
@@ -250,7 +250,7 @@ public class ConsoleAiAttachmentService {
       mapper.setTenantContext(tenantId);
       return mapper.byId(tenantId, id);
     });
-    if (row == null
+    if (EmptyChecks.isNull(row)
         || !ownerUserId.equals(row.getOwnerUserId())
         || !row.getExpiresAt().isAfter(Instant.now())) throw notFound();
     return row;

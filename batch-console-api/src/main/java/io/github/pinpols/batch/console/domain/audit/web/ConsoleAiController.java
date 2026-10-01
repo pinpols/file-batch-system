@@ -92,8 +92,8 @@ public class ConsoleAiController {
     authorizationService.assertAllowed();
     ConsoleAiClients clients = chatClientsProvider.getIfAvailable();
     boolean imageInput = attachmentService.available()
-        && clients != null
-        && clients.primary() != null
+        && EmptyChecks.isNotNull(clients)
+        && EmptyChecks.isNotNull(clients.primary())
         && clients.primary().imageInput();
     return responseFactory.success(new AiCapabilities(
         imageInput,
@@ -110,10 +110,12 @@ public class ConsoleAiController {
       throws IOException {
     authorizationService.assertAllowed();
     ConsoleAiClients clients = chatClientsProvider.getIfAvailable();
-    if (clients == null || clients.primary() == null || !clients.primary().imageInput()) {
+    if (EmptyChecks.isNull(clients)
+        || EmptyChecks.isNull(clients.primary())
+        || !clients.primary().imageInput()) {
       throw BizException.of(ResultCode.FORBIDDEN, "error.ai.assistant_not_configured");
     }
-    if (file.isEmpty() || file.getSize() > aiProperties.getImage().getMaxFileBytes()) {
+    if (file.getSize() < 1 || file.getSize() > aiProperties.getImage().getMaxFileBytes()) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.ai.image_invalid");
     }
     ConsoleRequestMetadata metadata = metadataResolver.current();

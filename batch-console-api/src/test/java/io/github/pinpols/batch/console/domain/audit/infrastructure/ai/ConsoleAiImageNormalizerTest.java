@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import java.awt.Color;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import javax.imageio.ImageIO;
@@ -24,8 +25,7 @@ class ConsoleAiImageNormalizerTest {
     assertThat(normalized.mediaType()).isEqualTo("image/png");
     assertThat(normalized.width()).isEqualTo(16);
     assertThat(normalized.height()).isEqualTo(16);
-    assertThat(ImageIO.read(new java.io.ByteArrayInputStream(normalized.bytes())))
-        .isNotNull();
+    assertThat(ImageIO.read(new ByteArrayInputStream(normalized.bytes()))).isNotNull();
   }
 
   @Test

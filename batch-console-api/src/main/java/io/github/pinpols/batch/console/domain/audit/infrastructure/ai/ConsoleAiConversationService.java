@@ -73,8 +73,9 @@ public class ConsoleAiConversationService {
     }
     mapper.setTenantContext(tenantId);
 
-    if (clientTurnId != null
-        && mapper.selectByClientTurnId(tenantId, ownerUserId, clientTurnId) != null) {
+    if (EmptyChecks.isNotNull(clientTurnId)
+        && EmptyChecks.isNotNull(
+            mapper.selectByClientTurnId(tenantId, ownerUserId, clientTurnId))) {
       throw BizException.of(ResultCode.CONFLICT, "error.common.state_conflict");
     }
 
@@ -251,7 +252,8 @@ public class ConsoleAiConversationService {
     requireOwner(ownerUserId);
     mapper.setTenantContext(tenantId);
     ConsoleAiTurnEntity row = mapper.selectByClientTurnId(tenantId, ownerUserId, clientTurnId);
-    if (row == null) throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail");
+    if (EmptyChecks.isNull(row))
+      throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail");
     return new ClientTurnView(row.getConversationId(), toTurnView(row));
   }
 
@@ -277,7 +279,7 @@ public class ConsoleAiConversationService {
     requirePersistenceEnabled();
     requireOwner(ownerUserId);
     mapper.setTenantContext(tenantId);
-    if (mapper.selectActiveByOwner(tenantId, conversationId, ownerUserId) == null) {
+    if (EmptyChecks.isNull(mapper.selectActiveByOwner(tenantId, conversationId, ownerUserId))) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail");
     }
     attachmentService.enqueueConversation(tenantId, conversationId);

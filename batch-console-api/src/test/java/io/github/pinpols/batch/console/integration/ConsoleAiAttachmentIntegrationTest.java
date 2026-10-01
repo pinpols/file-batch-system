@@ -12,30 +12,35 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.TestConstructor;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class ConsoleAiAttachmentIntegrationTest extends AbstractIntegrationTest {
-  @Autowired
-  private ConsoleAiAttachmentMapper attachments;
+  private final ConsoleAiAttachmentMapper attachments;
+  private final ConsoleAiAttachmentService attachmentService;
+  private final ConsoleAiConversationMapper conversations;
+  private final JdbcTemplate jdbc;
+  private final PlatformTransactionManager transactionManager;
 
-  @Autowired
-  private ConsoleAiAttachmentService attachmentService;
-
-  @Autowired
-  private ConsoleAiConversationMapper conversations;
-
-  @Autowired
-  private JdbcTemplate jdbc;
-
-  @Autowired
-  private PlatformTransactionManager transactionManager;
+  ConsoleAiAttachmentIntegrationTest(
+      ConsoleAiAttachmentMapper attachments,
+      ConsoleAiAttachmentService attachmentService,
+      ConsoleAiConversationMapper conversations,
+      JdbcTemplate jdbc,
+      PlatformTransactionManager transactionManager) {
+    this.attachments = attachments;
+    this.attachmentService = attachmentService;
+    this.conversations = conversations;
+    this.jdbc = jdbc;
+    this.transactionManager = transactionManager;
+  }
 
   @Test
   void bindsOwnedDraftAndKeepsCleanupKeyAfterConversationCascade() {

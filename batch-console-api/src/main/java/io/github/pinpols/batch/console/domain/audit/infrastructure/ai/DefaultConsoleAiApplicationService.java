@@ -185,13 +185,12 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     if (EmptyChecks.isNull(chatClients) || EmptyChecks.isNull(chatClients.primary())) {
       throw BizException.of(ResultCode.FORBIDDEN, "error.ai.assistant_not_configured");
     }
-    boolean hasImages =
-        request.getAttachmentIds() != null && !request.getAttachmentIds().isEmpty();
+    boolean hasImages = EmptyChecks.isNotEmpty(request.getAttachmentIds());
     if (hasImages
         && (!aiProperties.getPersistence().isEnabled() || !chatClients.primary().imageInput())) {
       throw BizException.of(ResultCode.FORBIDDEN, "error.ai.assistant_not_configured");
     }
-    if (hasImages && request.getClientTurnId() == null) {
+    if (hasImages && EmptyChecks.isNull(request.getClientTurnId())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument_detail");
     }
     costService.validateProviders(
@@ -510,7 +509,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
               deadlineNanos, System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(primaryBudget)));
     } catch (Exception primaryFailure) {
       if (EmptyChecks.isNull(providers.fallback())
-          || (!images.isEmpty() && !providers.fallback().imageInput())
+          || (EmptyChecks.isNotEmpty(images) && !providers.fallback().imageInput())
           || (EmptyChecks.isNotNull(observer) && (observer.isCancelled() || observer.hasEmitted()))
           || !isFallbackEligible(primaryFailure)) {
         throw primaryFailure;
@@ -545,7 +544,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         .client()
         .prompt()
         .system(buildSystemPrompt(snippets, EmptyChecks.isNotNull(tools)));
-    if (images.isEmpty()) {
+    if (EmptyChecks.isEmpty(images)) {
       spec = spec.user(promptPayload);
     } else {
       if (!provider.imageInput())

@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
@@ -18,7 +19,7 @@ public final class ConsoleAiImageNormalizer {
   private ConsoleAiImageNormalizer() {}
 
   public static NormalizedImage normalize(byte[] input, ConsoleAiProperties.Image limits) {
-    if (input == null || input.length == 0 || input.length > limits.getMaxFileBytes()) {
+    if (EmptyChecks.isNull(input) || input.length < 1 || input.length > limits.getMaxFileBytes()) {
       throw invalidImage();
     }
     String detected = detect(input);
