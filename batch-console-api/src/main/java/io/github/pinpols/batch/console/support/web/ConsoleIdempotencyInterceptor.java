@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.console.application.idempotency.ConsoleDurableIdempotencyStore;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -122,16 +123,8 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
         + idempotencyKey.trim();
     String durableKey = durableKey(redisKey);
 
-    String existing;
-    try {
-      existing = idempotencyStore.get(redisKey);
-    } catch (DataAccessException ex) {
-      // R-4.1 fail-closed：幂等拦截器拿不到 Redis 直接 503
-      log.warn(
-          "idempotency Redis GET unavailable — fail-closed: key={}, cause={}",
-          idempotencyKey,
-          ex.getMessage());
-      writeJson(response, HttpStatus.SERVICE_UNAVAILABLE, REDIS_UNAVAILABLE_BODY);
+    String existing = readRedisState(redisKey, idempotencyKey, response);
+    if (existing == null && response.getStatus() == HttpStatus.SERVICE_UNAVAILABLE.value()) {
       return false;
     }
     if (DONE.equals(existing)) {
@@ -143,83 +136,18 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
       writeJson(response, HttpStatus.CONFLICT, CONFLICT_DONE_BODY);
       return false;
     }
-    try {
-      if (durableIdempotencyStore.isCompleted(tenantId, durableKey)) {
-        log.warn(
-            "duplicate idempotency key rejected by durable completion record: key={}, uri={}, tenant={}",
-            idempotencyKey,
-            request.getRequestURI(),
-            tenantId);
-        writeJson(response, HttpStatus.CONFLICT, CONFLICT_DONE_BODY);
-        return false;
-      }
-    } catch (DataAccessException ex) {
-      log.warn(
-          "durable idempotency lookup unavailable — fail-closed: key={}, cause={}",
-          idempotencyKey,
-          ex.getMessage());
-      writeJson(response, HttpStatus.SERVICE_UNAVAILABLE, REDIS_UNAVAILABLE_BODY);
+    if (rejectWhenDurableCompleted(
+        tenantId, durableKey, idempotencyKey, request.getRequestURI(), response)) {
       return false;
     }
 
-    // PENDING 阻止并发重复请求；流式请求的占位有效期比普通写请求更长。
     boolean streamRequest = request.getRequestURI().equals("/api/console/ai/chat/stream");
-    Boolean isNew;
-    try {
-      Duration pendingTtl = streamRequest ? STREAM_PENDING_TTL : Duration.ofSeconds(30);
-      isNew = idempotencyStore.setIfAbsent(redisKey, PENDING, pendingTtl);
-    } catch (DataAccessException ex) {
-      log.warn(
-          "idempotency Redis setIfAbsent unavailable — fail-closed: key={}, cause={}",
-          idempotencyKey,
-          ex.getMessage());
-      writeJson(response, HttpStatus.SERVICE_UNAVAILABLE, REDIS_UNAVAILABLE_BODY);
+    Boolean isNew = reservePending(redisKey, idempotencyKey, streamRequest, response);
+    if (isNew == null) {
       return false;
     }
     if (Boolean.FALSE.equals(isNew)) {
-      // C-2.10: setIfAbsent 失败后重新读一次，区分并发 PENDING 与刚落 DONE 两种情况。
-      // 窗口内另一请求可能刚从 PENDING 晋升为 DONE（取不到锁但已处理完），
-      // 前端应看到"已处理"而不是"稍后重试"，避免无谓轮询。
-      // P0:此二次 get 必须同 catch DataAccessException(对齐 111-121 行 fail-closed 语义),
-      // 否则 Redis 在 setIfAbsent ↔ get 间抖动会抛 DataAccessException 透传到
-      // ExceptionHandler 返回 500 而非约定的 503,且保守回退 CONFLICT_PENDING_BODY
-      // 让客户端走 retry 路径,避免误判"已处理"。
-      String current;
-      try {
-        current = idempotencyStore.get(redisKey);
-      } catch (DataAccessException ex) {
-        log.warn(
-            "idempotency Redis follow-up GET unavailable — fail-closed (treat as pending):"
-                + " key={}, cause={}",
-            idempotencyKey,
-            ex.getMessage());
-        response.setHeader("Retry-After", streamRequest ? "600" : "30");
-        writeJson(
-            response,
-            HttpStatus.CONFLICT,
-            streamRequest ? STREAM_CONFLICT_PENDING_BODY : CONFLICT_PENDING_BODY);
-        return false;
-      }
-      if (DONE.equals(current)) {
-        log.warn(
-            "duplicate idempotency key rejected (raced to DONE): key={}, uri={}, tenant={}",
-            idempotencyKey,
-            request.getRequestURI(),
-            tenantId);
-        writeJson(response, HttpStatus.CONFLICT, CONFLICT_DONE_BODY);
-      } else {
-        log.warn(
-            "concurrent idempotency key rejected (pending): key={}, uri={}, tenant={}",
-            idempotencyKey,
-            request.getRequestURI(),
-            tenantId);
-        // Retry-After 与占位有效期一致。
-        response.setHeader("Retry-After", streamRequest ? "600" : "30");
-        writeJson(
-            response,
-            HttpStatus.CONFLICT,
-            streamRequest ? STREAM_CONFLICT_PENDING_BODY : CONFLICT_PENDING_BODY);
-      }
+      rejectPending(redisKey, idempotencyKey, streamRequest, request, response);
       return false;
     }
 
@@ -227,6 +155,107 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
     request.setAttribute(ATTR_DURABLE_KEY, durableKey);
     request.setAttribute(ATTR_TENANT_ID, tenantId);
     return true;
+  }
+
+  private String readRedisState(
+      String redisKey, String idempotencyKey, HttpServletResponse response) throws IOException {
+    try {
+      return idempotencyStore.get(redisKey);
+    } catch (DataAccessException ex) {
+      // R-4.1 fail-closed：幂等拦截器拿不到 Redis 直接 503
+      log.warn(
+          "idempotency Redis GET unavailable — fail-closed: key={}, cause={}",
+          idempotencyKey,
+          ex.getMessage());
+      writeJson(response, HttpStatus.SERVICE_UNAVAILABLE, REDIS_UNAVAILABLE_BODY);
+      return null;
+    }
+  }
+
+  private boolean rejectWhenDurableCompleted(
+      String tenantId,
+      String durableKey,
+      String idempotencyKey,
+      String requestUri,
+      HttpServletResponse response)
+      throws IOException {
+    try {
+      if (!durableIdempotencyStore.isCompleted(tenantId, durableKey)) {
+        return false;
+      }
+      log.warn(
+          "duplicate idempotency key rejected by durable completion record: key={}, uri={}, tenant={}",
+          idempotencyKey,
+          requestUri,
+          tenantId);
+      writeJson(response, HttpStatus.CONFLICT, CONFLICT_DONE_BODY);
+      return true;
+    } catch (DataAccessException ex) {
+      log.warn(
+          "durable idempotency lookup unavailable — fail-closed: key={}, cause={}",
+          idempotencyKey,
+          ex.getMessage());
+      writeJson(response, HttpStatus.SERVICE_UNAVAILABLE, REDIS_UNAVAILABLE_BODY);
+      return true;
+    }
+  }
+
+  private Boolean reservePending(
+      String redisKey, String idempotencyKey, boolean streamRequest, HttpServletResponse response)
+      throws IOException {
+    try {
+      Duration pendingTtl = streamRequest ? STREAM_PENDING_TTL : Duration.ofSeconds(30);
+      return idempotencyStore.setIfAbsent(redisKey, PENDING, pendingTtl);
+    } catch (DataAccessException ex) {
+      log.warn(
+          "idempotency Redis setIfAbsent unavailable — fail-closed: key={}, cause={}",
+          idempotencyKey,
+          ex.getMessage());
+      writeJson(response, HttpStatus.SERVICE_UNAVAILABLE, REDIS_UNAVAILABLE_BODY);
+      return null;
+    }
+  }
+
+  private void rejectPending(
+      String redisKey,
+      String idempotencyKey,
+      boolean streamRequest,
+      HttpServletRequest request,
+      HttpServletResponse response)
+      throws IOException {
+    String current;
+    try {
+      current = idempotencyStore.get(redisKey);
+    } catch (DataAccessException ex) {
+      log.warn(
+          "idempotency Redis follow-up GET unavailable — fail-closed (treat as pending):"
+              + " key={}, cause={}",
+          idempotencyKey,
+          ex.getMessage());
+      response.setHeader("Retry-After", streamRequest ? "600" : "30");
+      writeJson(
+          response,
+          HttpStatus.CONFLICT,
+          streamRequest ? STREAM_CONFLICT_PENDING_BODY : CONFLICT_PENDING_BODY);
+      return;
+    }
+    if (DONE.equals(current)) {
+      log.warn(
+          "duplicate idempotency key rejected (raced to DONE): key={}, uri={}",
+          idempotencyKey,
+          request.getRequestURI());
+      writeJson(response, HttpStatus.CONFLICT, CONFLICT_DONE_BODY);
+      return;
+    }
+    log.warn(
+        "concurrent idempotency key rejected (pending): key={}, uri={}",
+        idempotencyKey,
+        request.getRequestURI());
+    response.setHeader("Retry-After", streamRequest ? "600" : "30");
+    writeJson(
+        response,
+        HttpStatus.CONFLICT,
+        streamRequest ? STREAM_CONFLICT_PENDING_BODY : CONFLICT_PENDING_BODY);
   }
 
   @Override
