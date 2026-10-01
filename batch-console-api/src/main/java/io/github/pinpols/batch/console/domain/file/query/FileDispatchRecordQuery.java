@@ -5,6 +5,7 @@ import java.time.Instant;
 
 public record FileDispatchRecordQuery(
     String tenantId,
+    String keyword,
     Long fileId,
     String channelCode,
     String dispatchStatus,
@@ -15,6 +16,14 @@ public record FileDispatchRecordQuery(
 
   public FileDispatchRecordQuery withoutPage() {
     return new FileDispatchRecordQuery(
-        tenantId, fileId, channelCode, dispatchStatus, receiptStatus, fromTime, toTime, null);
+        tenantId,
+        keyword,
+        fileId,
+        channelCode,
+        dispatchStatus,
+        receiptStatus,
+        fromTime,
+        toTime,
+        null);
   }
 }

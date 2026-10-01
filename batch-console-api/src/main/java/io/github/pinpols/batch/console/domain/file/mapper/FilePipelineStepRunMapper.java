@@ -11,6 +11,7 @@ public interface FilePipelineStepRunMapper {
 
   List<Map<String, Object>> selectByQuery(
       @Param("tenantId") String tenantId,
+      @Param("keyword") String keyword,
       @Param("pipelineInstanceId") Long pipelineInstanceId,
       @Param("stepCode") String stepCode,
       @Param("stageCode") String stageCode,
@@ -19,6 +20,7 @@ public interface FilePipelineStepRunMapper {
 
   long countByQuery(
       @Param("tenantId") String tenantId,
+      @Param("keyword") String keyword,
       @Param("pipelineInstanceId") Long pipelineInstanceId,
       @Param("stepCode") String stepCode,
       @Param("stageCode") String stageCode,

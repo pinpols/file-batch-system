@@ -121,6 +121,7 @@ public class ConsoleFileQueryService {
     String tenantId = resolveTenant(tenantGuard, request.getTenantId());
     FilePipelineQuery q = FilePipelineQuery.builder()
         .tenantId(tenantId)
+        .keyword(request.getKeyword())
         .fileId(request.getFileId())
         .pipelineInstanceId(request.getPipelineInstanceId())
         .pipelineType(request.getPipelineType())
@@ -141,6 +142,7 @@ public class ConsoleFileQueryService {
     String tenantId = resolveTenant(tenantGuard, request.getTenantId());
     List<Map<String, Object>> rows = fileMappers.filePipelineStepRunMapper.selectByQuery(
         tenantId,
+        request.getKeyword(),
         request.getPipelineInstanceId(),
         request.getStepCode(),
         request.getStageCode(),
@@ -148,6 +150,7 @@ public class ConsoleFileQueryService {
         pageRequest);
     long total = fileMappers.filePipelineStepRunMapper.countByQuery(
         tenantId,
+        request.getKeyword(),
         request.getPipelineInstanceId(),
         request.getStepCode(),
         request.getStageCode(),
@@ -228,6 +231,7 @@ public class ConsoleFileQueryService {
     String tenantId = resolveTenant(tenantGuard, request.getTenantId());
     FileDispatchRecordQuery q = new FileDispatchRecordQuery(
         tenantId,
+        request.getKeyword(),
         request.getFileId(),
         request.getChannelCode(),
         request.getDispatchStatus(),
@@ -294,6 +298,7 @@ public class ConsoleFileQueryService {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
     FileErrorRecordQuery query = new FileErrorRecordQuery(
         resolveTenant(tenantGuard, request.getTenantId()),
+        request.getKeyword(),
         request.getFileId(),
         request.getErrorStage(),
         request.getErrorCode(),

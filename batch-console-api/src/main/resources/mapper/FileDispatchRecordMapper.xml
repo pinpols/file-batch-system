@@ -24,6 +24,11 @@
             updated_at
         from batch.file_dispatch_record
         where tenant_id = #{q.tenantId}
+        <if test="q.keyword != null and q.keyword != ''">
+            and strpos(lower(concat_ws(' ', id, file_id, pipeline_instance_id, channel_code,
+                dispatch_target, dispatch_status, receipt_status, external_request_id,
+                error_code, error_message)), lower(#{q.keyword})) &gt; 0
+        </if>
         <if test="q.fileId != null">
             and file_id = #{q.fileId}
         </if>
@@ -52,6 +57,11 @@
         select count(1)
         from batch.file_dispatch_record
         where tenant_id = #{q.tenantId}
+        <if test="q.keyword != null and q.keyword != ''">
+            and strpos(lower(concat_ws(' ', id, file_id, pipeline_instance_id, channel_code,
+                dispatch_target, dispatch_status, receipt_status, external_request_id,
+                error_code, error_message)), lower(#{q.keyword})) &gt; 0
+        </if>
         <if test="q.fileId != null">
             and file_id = #{q.fileId}
         </if>

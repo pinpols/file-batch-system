@@ -78,6 +78,10 @@
         from batch.pipeline_step_run s
         join batch.pipeline_instance p on p.id = s.pipeline_instance_id
         where p.tenant_id = #{tenantId}
+        <if test="keyword != null and keyword != ''">
+            and strpos(lower(concat_ws(' ', s.id, s.pipeline_instance_id, s.step_code, s.stage_code,
+                s.step_status, s.error_code, s.error_message)), lower(#{keyword})) &gt; 0
+        </if>
         <if test="pipelineInstanceId != null">
             and s.pipeline_instance_id = #{pipelineInstanceId}
         </if>
@@ -101,6 +105,10 @@
         from batch.pipeline_step_run s
         join batch.pipeline_instance p on p.id = s.pipeline_instance_id
         where p.tenant_id = #{tenantId}
+        <if test="keyword != null and keyword != ''">
+            and strpos(lower(concat_ws(' ', s.id, s.pipeline_instance_id, s.step_code, s.stage_code,
+                s.step_status, s.error_code, s.error_message)), lower(#{keyword})) &gt; 0
+        </if>
         <if test="pipelineInstanceId != null">
             and s.pipeline_instance_id = #{pipelineInstanceId}
         </if>

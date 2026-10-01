@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.model.PageRequest;
 
 public record FileErrorRecordQuery(
     String tenantId,
+    String keyword,
     Long fileId,
     String errorStage,
     String errorCode,
@@ -11,11 +12,11 @@ public record FileErrorRecordQuery(
     PageRequest pageRequest) {
 
   public static FileErrorRecordQuery ofFile(String tenantId, Long fileId, PageRequest pageRequest) {
-    return new FileErrorRecordQuery(tenantId, fileId, null, null, null, pageRequest);
+    return new FileErrorRecordQuery(tenantId, null, fileId, null, null, null, pageRequest);
   }
 
   public static FileErrorRecordQuery ofFileAndStage(
       String tenantId, Long fileId, String errorStage) {
-    return new FileErrorRecordQuery(tenantId, fileId, errorStage, null, null, null);
+    return new FileErrorRecordQuery(tenantId, null, fileId, errorStage, null, null, null);
   }
 }

@@ -13,6 +13,9 @@ public class FileErrorRecordQueryRequest extends PageQueryRequest {
   @ValidTenantId
   private String tenantId;
 
+  @Size(max = 128, message = "keyword too long (max 128)")
+  private String keyword;
+
   private Long fileId;
 
   @Size(max = 64, message = "errorStage too long (max 64)")

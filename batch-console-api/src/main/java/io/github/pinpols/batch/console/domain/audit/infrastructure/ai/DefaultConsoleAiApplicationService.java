@@ -27,6 +27,7 @@ import io.github.pinpols.batch.console.config.ConsoleAiClients;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiApplicationService;
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiChatResponse;
+import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiSourceResponse;
 import io.github.pinpols.batch.console.domain.audit.command.AiAuditCommand;
 import io.github.pinpols.batch.console.domain.audit.service.ConsoleAiAuthorizationService;
 import io.github.pinpols.batch.console.domain.audit.service.ConsoleAiPromptGuard;
@@ -388,6 +389,12 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     response.setModelName(execution.modelName());
     response.setAnswer(answer);
     response.setRefusalReason(null);
+    response.setSources(execution.snippets().stream()
+        .map(ConsoleAiKnowledgeBase.Snippet::source)
+        .filter(Texts::hasText)
+        .distinct()
+        .map(AiSourceResponse::new)
+        .toList());
 
     if (EmptyChecks.isNotNull(execution.persistedTurn())) {
       conversationService.completeTurn(ConsoleAiConversationService.TurnCompletion.builder()

@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.observability.web;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -175,10 +176,14 @@ class ConsoleQueryControllerTest {
 
   @Test
   void shouldReturnFilePipelinesPage() throws Exception {
-    when(queryApplicationService.filePipelines(any())).thenReturn(emptyPage());
+    when(queryApplicationService.filePipelines(
+            argThat(request -> "failed".equals(request.getKeyword()))))
+        .thenReturn(emptyPage());
 
     mockMvc
-        .perform(get("/api/console/queries/file-pipelines").param("tenantId", "t1"))
+        .perform(get("/api/console/queries/file-pipelines")
+            .param("tenantId", "t1")
+            .param("keyword", "failed"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.total").value(0));
   }
@@ -195,20 +200,26 @@ class ConsoleQueryControllerTest {
 
   @Test
   void shouldReturnFilePipelineStepsPage() throws Exception {
-    when(queryApplicationService.filePipelineSteps(any())).thenReturn(emptyPage());
+    when(queryApplicationService.filePipelineSteps(
+            argThat(request -> "parse".equals(request.getKeyword()))))
+        .thenReturn(emptyPage());
 
     mockMvc
-        .perform(get("/api/console/queries/file-pipeline-steps"))
+        .perform(get("/api/console/queries/file-pipeline-steps").param("keyword", "parse"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.total").value(0));
   }
 
   @Test
   void shouldReturnFileDispatchesPage() throws Exception {
-    when(queryApplicationService.fileDispatchRecords(any())).thenReturn(emptyPage());
+    when(queryApplicationService.fileDispatchRecords(
+            argThat(request -> "sent".equals(request.getKeyword()))))
+        .thenReturn(emptyPage());
 
     mockMvc
-        .perform(get("/api/console/queries/file-dispatches").param("tenantId", "t1"))
+        .perform(get("/api/console/queries/file-dispatches")
+            .param("tenantId", "t1")
+            .param("keyword", "sent"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.total").value(0));
   }
@@ -235,10 +246,14 @@ class ConsoleQueryControllerTest {
 
   @Test
   void shouldReturnFileErrorsPage() throws Exception {
-    when(queryApplicationService.fileErrorRecords(any())).thenReturn(emptyPage());
+    when(queryApplicationService.fileErrorRecords(
+            argThat(request -> "invalid".equals(request.getKeyword()))))
+        .thenReturn(emptyPage());
 
     mockMvc
-        .perform(get("/api/console/queries/file-errors").param("tenantId", "t1"))
+        .perform(get("/api/console/queries/file-errors")
+            .param("tenantId", "t1")
+            .param("keyword", "invalid"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.total").value(0));
   }

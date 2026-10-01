@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.file.application.contract.query;
 
 import io.github.pinpols.batch.console.application.contract.query.PageQueryRequest;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -10,6 +11,9 @@ public class FilePipelineStepQueryRequest extends PageQueryRequest {
 
   /** 租户 ID；由 ConsoleTenantGuard 在 service 层 resolve 后强制下推到 mapper。 */
   private String tenantId;
+
+  @Size(max = 128)
+  private String keyword;
 
   private Long pipelineInstanceId;
   private String stepCode;
