@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.support.web;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.idempotency.ConsoleDurableIdempotencyStore;
 import jakarta.servlet.DispatcherType;
@@ -124,7 +125,8 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
     String durableKey = durableKey(redisKey);
 
     String existing = readRedisState(redisKey, idempotencyKey, response);
-    if (existing == null && response.getStatus() == HttpStatus.SERVICE_UNAVAILABLE.value()) {
+    if (EmptyChecks.isNull(existing)
+        && response.getStatus() == HttpStatus.SERVICE_UNAVAILABLE.value()) {
       return false;
     }
     if (DONE.equals(existing)) {
@@ -143,7 +145,7 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
 
     boolean streamRequest = request.getRequestURI().equals("/api/console/ai/chat/stream");
     Boolean isNew = reservePending(redisKey, idempotencyKey, streamRequest, response);
-    if (isNew == null) {
+    if (EmptyChecks.isNull(isNew)) {
       return false;
     }
     if (Boolean.FALSE.equals(isNew)) {
