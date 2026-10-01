@@ -40,6 +40,7 @@
 
 ### Fixed
 
+- 修复每日 Sim 的 Trigger stage 6c/6d 夹具依赖默认业务日历节假日数据，导致 Quartz 正常触发但 scheduled request 被业务日历跳过的问题；为定时触发断言增加无节假日专用日历。
 - Kafka 启动时重复输出的 ConsumerConfig/ProducerConfig 完整配置块默认抑制；Worker 启动审计 INFO/WARN 仅保留状态与摘要，完整细节仅在 DEBUG 输出。
 - 修复线上 sim-strict 启动时 `minio/mc` 镜像仓库拒绝拉取的问题：CLI 容器改用已验证内置 `mc` 的固定 Bitnami Legacy 镜像；失败诊断在没有应用日志时不再额外报错。
 - 重新生成 Jackson 2.21.7 / 3.1.7 升级后的 CycloneDX SBOM，并在 POM 变更的 PR 与 Full Gate 中校验入库 SBOM 和 Maven 依赖图一致，避免依赖升级后合规快照继续停留在旧版本。
