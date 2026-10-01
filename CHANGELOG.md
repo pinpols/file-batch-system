@@ -29,6 +29,7 @@
 
 ### Fixed
 
+- Console AI 失败响应的 OpenAPI 契约允许 `modelName` 为空，与模型调用失败时的真实响应一致。
 - Console AI 会话续写对非所有者或并发失效的会话统一返回 `NOT_FOUND`，与历史读取一致，不暴露会话 ID 是否存在。
 - Console 无状态 JWT 请求不再因每次认证触发 Spring Security 会话策略而清除 `XSRF-TOKEN`；已认证读请求后写操作仍需 `X-XSRF-TOKEN`，缺少请求头继续返回 403。
 - Console AI 会话续写与历史读取拒绝不存在或过期的会话，避免保留期内的过期记录被继续读取、续写或隐式重建；按 ID 锁定、读取和轮次分配均显式按租户过滤，不只依赖连接级 RLS。

@@ -12871,6 +12871,7 @@ components:
           enum: [APPROVED, REJECTED_SCOPE, REJECTED_AUTH, REJECTED_DISABLED, REJECTED_SAFETY, FAILED]
         modelName:
           type: string
+          nullable: true
           description: 实际使用的模型名（来自服务端配置）。
         answer:
           type: string
