@@ -33,6 +33,13 @@ CREATE TABLE batch.console_ai_attachment (
             (width > 0 AND height > 0 AND media_type IN ('image/png', 'image/jpeg'))))
 );
 
+COMMENT ON TABLE batch.console_ai_attachment IS
+    'AI 会话私有附件元数据；对象正文存放在隔离的对象存储空间';
+COMMENT ON COLUMN batch.console_ai_attachment.media_type IS
+    '归一化后允许发送给模型的媒体类型，目前仅支持 image/png 和 image/jpeg';
+COMMENT ON COLUMN batch.console_ai_attachment.status IS
+    '附件生命周期状态：UPLOADING 上传中、DRAFT 待绑定、BOUND 已绑定到会话轮次';
+
 CREATE INDEX idx_console_ai_attachment_expiry ON batch.console_ai_attachment (tenant_id, expires_at);
 CREATE INDEX idx_console_ai_attachment_turn ON batch.console_ai_attachment (tenant_id, conversation_id, turn_no);
 
@@ -43,6 +50,9 @@ CREATE TABLE batch.console_ai_object_cleanup (
     attempt_count INTEGER NOT NULL DEFAULT 0,
     CONSTRAINT pk_console_ai_object_cleanup PRIMARY KEY (tenant_id, object_key)
 );
+
+COMMENT ON TABLE batch.console_ai_object_cleanup IS
+    'AI 附件对象删除失败后的持久化重试队列';
 
 ALTER TABLE batch.console_ai_attachment ENABLE ROW LEVEL SECURITY;
 ALTER TABLE batch.console_ai_attachment FORCE ROW LEVEL SECURITY;
