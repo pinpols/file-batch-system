@@ -30,7 +30,7 @@ public final class DegradedResponseHeaders {
       return;
     }
     HttpServletResponse response = servletAttributes.getResponse();
-    if (EmptyChecks.isNull(response) || response.isCommitted()) {
+    if (response == null || response.isCommitted()) { // empty-check: allow - Sonar 需识别响应为空分支
       return;
     }
     Set<String> sources = new LinkedHashSet<>();

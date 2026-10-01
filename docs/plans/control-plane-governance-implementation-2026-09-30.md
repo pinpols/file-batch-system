@@ -1,6 +1,6 @@
 # 控制面治理落地记录
 
-> 复核日期：2026-09-30。本文记录本轮六项治理的代码落地、可重复验证方式和仍需外部环境提供的证据。中文说明是本轮新增内容；不把 staging 或生产演练写成本地已完成。
+> 复核日期：2026-10-01。本文记录本轮治理的代码落地、可重复验证方式和仍需外部环境提供的证据；不把 staging 或生产演练写成本地已完成。
 
 ## 1. 范围
 
@@ -8,12 +8,12 @@
 
 | 工作项 | 本轮落地 | 当前证据边界 |
 |---|---|---|
-| 维护/降级多副本一致性 | V215 共享单例、version CAS、5 秒轮询、失联时写 fail-closed、维护状态 gauge | 本地单元/编译；双 Console staging 收敛和告警触发待实跑 |
-| 使用率日聚合 | V216 月分区、严格 RLS、审计投影、并发累加 upsert、summary API/OpenAPI | 后端契约与编译；真 PG 并发、业务结果对账和前端趋势页待联测 |
+| 维护/降级多副本一致性 | V215 共享单例、version CAS、5 秒轮询、失联时写 fail-closed、维护状态 gauge；配对前端维护写保护和降级来源提示已完成 | 本地真实 HTTP/浏览器故障与恢复验证已完成；双 Console staging 收敛和告警触发仍待外部环境验证 |
+| 使用率日聚合 | V216 月分区、严格 RLS、审计投影、并发累加 upsert、summary API/OpenAPI；配对前端趋势页已完成 | 后端真实 PG RLS/并发测试及本地 API/SQL 对账已完成；业务终态结果对账、生产保留策略与容量验证仍待外部证据 |
 | OTel 运行证据 | 可配置证据采集脚本，记录健康、指标、Collector 和 Prometheus 快照 | 脚本可执行；真实 trace 在 Tempo/Loki 的端到端关联待用环境运行 |
 | 背压和容量大盘 | Grafana capacity dashboard、Worker/队列/副本/Outbox/DLQ 告警 | 配置静态校验待跑；阈值和容量结论需真实压测 |
 | Worker 滚动升级 staging 验证 | 验收脚本只检查 rollout、Pod、事件，明确不自动删除/回滚 | 需要真实 K8s staging、drain、接管和业务对账 |
-| AI 成本/会话/审计治理 | 单次输出 token 上限、可选租户日请求预算、Redis 故障 fail-closed、审计清理开关和 V217 时间索引 | 既有会话字段继续沿用；完整服务端会话持久化、实际费用核算和合规保留期仍未做 |
+| AI 成本/会话/审计治理 | V218 会话/轮次/月用量表；正文加密、可选持久化、预算预留及配对前端会话体验已完成 | 本地代码及联测已完成；真实 provider 账单校准、预算阈值和 staging/合规保留策略仍待验收 |
 
 ## 2. 关键正确性约束
 
@@ -51,7 +51,7 @@ python3 scripts/ci/check-observability-contract.py
 git diff --check
 ```
 
-数据库迁移必须另行用真 PostgreSQL 验证：
+以下迁移与集成验证已在本地真实 PostgreSQL 测试中覆盖；生产分区维护、保留清理策略仍需按部署约束另行验收：
 
 - V215/V216/V217 顺序升级；
 - 两个事务并发 upsert 后 `event_count` 等于事件数；
@@ -83,14 +83,14 @@ bash scripts/staging/verify-worker-rolling-upgrade.sh
 
 发布动作仍按 [Worker 滚动升级 Runbook](../runbook/rolling-upgrade-workers.md) 先 drain、再 rollout；脚本不执行删除 Pod、强制下线或回滚。验收必须补充：非终态任务归零、lease 接管、Kafka lag 收敛、失败任务明确终态和业务结果对账。
 
-## 4. 暂不宣称完成的项目
+## 4. 外部环境与运营验收
 
-1. 真实 staging 的多 Console 副本切换和维护告警触发。
-2. 真 PostgreSQL 的 RLS、并发聚合、迁移升级和保留清理 IT。
+1. 真实 staging 的双 Console 副本切换、维护告警触发和恢复演练。
+2. 使用率聚合与目标生产业务终态结果对账，确认租户、来源和版本口径，并评估生产分区维护、留存策略与容量。
 3. Console → Trigger → Orchestrator → Kafka → Worker → Report 的完整 OTel trace 在 Tempo/Loki 可检索证据。
 4. 真实压力下容量阈值、背压恢复时间和横向扩容结论。
 5. Worker 滚动升级过程中的真实 drain/接管/回滚演练。
-6. AI provider 账单级费用核算、月度金额预算、服务端消息历史持久化和受控试生产。
+6. AI provider 账单对账、月预算阈值校准、并发/失败演练及消息保留期合规审批。
 
 这些是环境或产品决策依赖，不通过增加本地 mock 结果冒充完成。
 
@@ -98,6 +98,6 @@ bash scripts/staging/verify-worker-rolling-upgrade.sh
 
 - 维护状态：`db/migration/V215__create_console_maintenance_state.sql`、`batch-console-api/.../support/maintenance/`
 - 日聚合：`db/migration/V216__create_console_usage_daily.sql`、`batch-console-api/.../domain/observability/`
-- AI 审计治理：`db/migration/V217__index_console_ai_audit_retention.sql`、`batch-console-api/.../domain/audit/infrastructure/ai/`
+- AI 会话/用量/审计治理：`db/migration/V217__index_console_ai_audit_retention.sql`、`db/migration/V218__console_ai_conversations_and_cost_usage.sql`、`batch-console-api/.../domain/audit/infrastructure/ai/`
 - 告警和容量：`deploy/docker/observability/prometheus-batch-rules.yml`、`grafana-dashboard-batch-capacity.json`
 - 运行证据：`scripts/observability/capture-runtime-evidence.sh`、`scripts/staging/verify-worker-rolling-upgrade.sh`

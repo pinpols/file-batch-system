@@ -7,7 +7,7 @@
 #   ./scripts/dev/sonar-scan.sh --incremental # 只编译不跑测试，按 Git 变更行导出报告
 #   ./scripts/dev/sonar-scan.sh --incremental --with-tests # 增量扫描并刷新覆盖率
 #   ./scripts/dev/sonar-scan.sh --incremental --base-ref origin/main
-#   ./scripts/dev/sonar-scan.sh --skip-build  # 跳过 mvn install（已构建时）
+#   ./scripts/dev/sonar-scan.sh --skip-build  # 跳过 Maven Wrapper 构建（已构建时）
 #   ./scripts/dev/sonar-scan.sh --stop        # 停止并删除 SonarQube 容器
 #
 # 输出（reports/sonar/<timestamp>/）：
@@ -15,7 +15,7 @@
 #   sonar-report.md    — 摘要报告（各模块 BLOCKER/CRITICAL 分布 + 关键指标）
 #   reports/sonar/latest -> <timestamp>  （软链，始终指向最新一次）
 #
-# 依赖：docker、mvn（Java 21）、curl、Python 3
+# 依赖：docker、Java 21 JDK、仓库 Maven Wrapper、curl、Python 3
 # =============================================================================
 set -euo pipefail
 
@@ -89,9 +89,11 @@ if $STOP_ONLY; then
 fi
 
 # ── 检查依赖 ──────────────────────────────────────────────────────────────────
-for cmd in docker mvn curl "$PYTHON_BIN"; do
+for cmd in docker curl "$PYTHON_BIN"; do
   command -v "$cmd" &>/dev/null || { error "Required command not found: $cmd"; exit 1; }
 done
+[[ -x "${PROJECT_ROOT}/mvnw" ]] || { error "Executable Maven Wrapper not found: ${PROJECT_ROOT}/mvnw"; exit 1; }
+MAVEN_WRAPPER="${PROJECT_ROOT}/mvnw"
 
 # ── 1. 启动 SonarQube ─────────────────────────────────────────────────────────
 info "Step 1/5 — Starting SonarQube (port ${SONAR_PORT})..."
@@ -225,7 +227,7 @@ if ! $SKIP_BUILD && { [[ "$SCAN_MODE" == "full" ]] || $WITH_TESTS; }; then
   info "Step 4/5 — Running tests and generating JaCoCo XML reports..."
   BUILD_LOG=$(mktemp)
   set +e
-  mvn clean test "org.jacoco:jacoco-maven-plugin:0.8.14:report" -q \
+  "$MAVEN_WRAPPER" clean test "org.jacoco:jacoco-maven-plugin:0.8.15:report" -q \
     --projects '!batch-e2e-tests' 2>&1 \
     | tee "$BUILD_LOG" \
     | grep -E "ERROR|BUILD"
@@ -241,7 +243,7 @@ if ! $SKIP_BUILD && { [[ "$SCAN_MODE" == "full" ]] || $WITH_TESTS; }; then
   ok "Build complete."
 elif ! $SKIP_BUILD; then
   info "Step 4/5 — Compiling production and test bytecode without running tests..."
-  mvn test-compile -q -DskipTests --projects '!batch-e2e-tests'
+  "$MAVEN_WRAPPER" test-compile -q -DskipTests --projects '!batch-e2e-tests'
   ok "Compile complete."
 else
   info "Step 4/5 — Skipping build (--skip-build)."
@@ -272,7 +274,7 @@ if ! $COVERAGE_ENABLED; then
   )
 fi
 set +e
-mvn "org.sonarsource.scanner.maven:sonar-maven-plugin:${SONAR_MAVEN_PLUGIN_VERSION}:sonar" \
+"$MAVEN_WRAPPER" "org.sonarsource.scanner.maven:sonar-maven-plugin:${SONAR_MAVEN_PLUGIN_VERSION}:sonar" \
   --projects '!batch-e2e-tests' \
   -Dsonar.host.url="${SONAR_URL}" \
   -Dsonar.token="${SONAR_TOKEN}" \

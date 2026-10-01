@@ -1,6 +1,6 @@
 # Console 维护与服务降级完善方案
 
-> 状态：后端共享维护状态、版本 CAS、失联写保护、降级来源 Header、维护请求指标和基础告警已落地；前端统一写保护和双实例/staging 联测仍需按本方案继续验收。复核日期：2026-09-30。
+> 状态：后端共享维护状态、版本 CAS、失联写保护、降级来源 Header、指标和告警已落地；配对前端写保护、维护页和降级提示已完成本地真实 HTTP/浏览器联测。双 Console 副本 staging 收敛、告警阈值校准及真实移动设备验收仍待完成。复核日期：2026-10-01。
 
 ## 1. 目标与边界
 
@@ -18,13 +18,13 @@
 | 全冻结 / 只读维护 | 已有 | `MaintenanceModeFilter` 返回 503；只读模式允许 GET |
 | 公共维护状态 | 已有 | `GET /api/console/system/maintenance`，前端轮询 |
 | 管理员热切换 | 已有 | `PUT /api/console/admin/system/maintenance`，带审计 |
-| 前端公告和维护页 | 已有 | 桌面端、移动端均挂载 |
+| 前端公告和维护页 | 已完成 | 桌面端、移动端均挂载；状态 stale/同步失败、维护导航和恢复回跳有测试 |
 | 下游读路径降级 | 已有 | `DownstreamFallback` + Resilience4j |
 | 下游写路径 fail-fast | 已有 | 防止控制面故障时误报成功 |
 | 多副本状态一致性 | 已落后端 | V215 单例表为事实源；Console 副本每 5 秒轮询并按 version 收敛 |
 | 服务范围降级 | 部分 | `affectedServices` 目前是展示字段，不参与路由判定 |
-| 前端统一冻结写操作 | 部分 | store 已有 `writesFrozen`，业务页面尚未统一消费 |
-| 降级来源前后端契约 | 已落后端 | fallback 实际发生时统一写出 `X-Degraded-Source`，前端消费仍待联测 |
+| 前端统一冻结写操作 | 已完成 | 共享写守卫和请求拦截器覆盖维护期间写操作，后端 503 仍为最终防线 |
+| 降级来源前后端契约 | 已联测 | `X-Degraded-Source` 仅在真实 fallback 响应中输出；前端 banner 支持聚合、过期和清除 |
 | 维护指标和告警 | 已落后端 | enabled/read-only/shared-state/version gauge、维护请求结果、fallback 计数和副本 lag 告警已接入；阈值仍需真实流量校准 |
 
 ## 3. 设计原则
@@ -106,7 +106,7 @@ OpenAPI、错误码说明和前端生成类型以该契约为准。
 - 每次绕过记录租户、用户、请求路径、维护版本、原因和结果。
 - 默认不允许管理员绕过批量写操作；确需紧急操作时通过单独权限和审计放行。
 
-### P1：下游降级和前端提示闭环（剩余）
+### P1：下游降级和前端提示闭环（实现已完成，环境验收剩余）
 
 #### P1.1 标准化降级来源（后端已落地）
 
@@ -267,4 +267,4 @@ downstream.call.duration{service,op}
 
 ## 9. 当前状态口径
 
-本文是“基础能力之上的完善方案”，不是从零实施说明。当前已实现能力包括维护拦截、全冻结/只读、公共状态接口、管理员热切换、503 body/header、Retry-After、审计、下游读 fallback / 写 fail-fast、统一 `X-Degraded-Source`、维护请求指标和正式 gauge/告警；当前仍缺前端统一消费、双实例联测和 staging 运行证据。实际运行入口以 `docs/runbook/maintenance-mode.md` 和 `docs/runbook/downstream-degradation.md` 为准；每个增强阶段完成后，必须补充对应测试证据和变更记录。
+本文是“基础能力之上的完善方案”，不是从零实施说明。当前已实现能力包括维护拦截、全冻结/只读、公共状态接口、管理员热切换、503 body/header、Retry-After、审计、下游读 fallback / 写 fail-fast、统一 `X-Degraded-Source`、维护请求指标和告警；配对前端的统一写守卫、维护状态页面及降级 banner 已完成本地真实 HTTP 和浏览器验证，覆盖 Trigger 故障到恢复。仍待双 Console 副本 staging 收敛、不同下游服务及真实移动设备验收、告警阈值按真实流量校准。实际运行入口以 `docs/runbook/maintenance-mode.md` 和 `docs/runbook/downstream-degradation.md` 为准；本地联测不应写成 staging/生产证据。

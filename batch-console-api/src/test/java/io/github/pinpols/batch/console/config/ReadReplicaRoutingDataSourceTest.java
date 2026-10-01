@@ -202,9 +202,10 @@ class ReadReplicaRoutingDataSourceTest {
         .thenThrow(new SQLException("connection reset", "08006"));
 
     Connection actual = ds.getConnection();
-    assertThat(actual.createStatement()).isNotSameAs(statement);
+    Statement actualStatement = actual.createStatement();
+    assertThat(actualStatement).isNotSameAs(statement);
     org.assertj.core.api.Assertions.assertThatThrownBy(
-            () -> actual.createStatement().executeQuery("select 1"))
+            () -> actualStatement.executeQuery("select 1"))
         .isInstanceOf(SQLException.class);
 
     assertThat(ds.currentConsecutiveFailures()).isEqualTo(1);

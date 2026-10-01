@@ -81,10 +81,10 @@ public class ConsoleQueryCacheService {
       StringRedisTemplate redisTemplate, ObjectProvider<MeterRegistry> meterRegistryProvider) {
     this.redisTemplate = redisTemplate;
     MeterRegistry registry = meterRegistryProvider.getIfAvailable();
-    this.readFailureCounter = EmptyChecks.isNull(registry)
+    this.readFailureCounter = registry == null // empty-check: allow - Sonar 需识别可选注册表为空分支
         ? null
         : registry.counter("batch.console.cache.failure", "operation", "read");
-    this.writeFailureCounter = EmptyChecks.isNull(registry)
+    this.writeFailureCounter = registry == null // empty-check: allow - Sonar 需识别可选注册表为空分支
         ? null
         : registry.counter("batch.console.cache.failure", "operation", "write");
   }

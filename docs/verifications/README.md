@@ -7,6 +7,7 @@
 
 | 文档 | 范围 |
 |---|---|
+| [sonar-report-2026-10-01.md](./sonar-report-2026-10-01.md) | 全量 Sonar 扫描、Bug 治理结果与存量 Code Smell 分类 |
 | [worker-local-runtime-performance-2026-09-14.md](./worker-local-runtime-performance-2026-09-14.md) | 本地 JVM Worker 严格阶梯、混合压力与故障恢复复测 |
 | [worker-local-runtime-performance-2026-09-20.md](./worker-local-runtime-performance-2026-09-20.md) | 最新本地构建、BE acceptance、sim 全场景与 30 秒 mixed 严格复测 |
 | [heavy-workload-guarantees-2026-09-14.md](./heavy-workload-guarantees-2026-09-14.md) | 重任务容量、资源池、长任务、下游健康和墙钟吞吐保障 |
@@ -36,5 +37,5 @@
 [预生产 P0 压测](./preprod-worker-p0-pressure-2026-06-08.md)、
 [多租户单机峰值](./multitenant-peak-single-node-ceiling-2026-06-13.md)。
 
-Sonar 快照： [2026-08-05](./sonar-report-2026-08-05.md)、
+历史 Sonar 快照： [2026-08-05](./sonar-report-2026-08-05.md)、
 [原始 CSV](./sonar-report-2026-08-05.csv)、[2026-08-06](./sonar-report-2026-08-06.md)。
