@@ -18,6 +18,8 @@
 
 ### Changed
 
+- nightly 镜像构建接入 `daily-sim-strict-validation`：当天有代码或配置变更时，必须先通过完整 sim + strict，再构建全部应用镜像；无变更时跳过，保留手动和 reusable 调用入口。
+- CI 镜像构建改用 Maven Central 配置并增加依赖下载重试，降低区域 Maven 镜像短暂 502 导致整组镜像失败的概率。
 - PR 与 Full Gate 的静态检查改为执行全部独立门禁后统一汇总失败；基础环境前置仍立即失败，本地提交钩子保持首错即停；POM 对应 SBOM/许可证结果与 `@ConfigurationProperties` 配置治理目录在提交前自动同步；许可证门禁同时阻断 source-available 与未知许可证。
 - Sonar 本地扫描统一使用仓库 Maven Wrapper，并与 CI 对齐到 JaCoCo 0.8.15；补充全量扫描证据及高风险静态分析问题的定向修复，不将本地 Sonar Quality Gate 作为远端必过门禁。
 - 统一文档站支持通过仓库级 `docs/.docsignore` 排除技术试验、测试数据和规模统计；现行架构、API、设计、测试、SDK、运维、合规及其可追溯证据继续发布。

@@ -13,7 +13,7 @@
 # 自包含,不需要 host 端 mvn(适配 Portainer 这类直接跑 `docker compose build` 的 GitOps 工具)。
 
 ARG BUILD_MODE=all
-ARG MAVEN_BUILD_FLAGS="-B -ntp -Dmaven.test.skip=true -DskipITs=true -Dspotless.check.skip=true -Dpmd.skip=true -Dcyclonedx.skip=true -Dlicense.skip=true -Dmaven.javadoc.skip=true -Dflatten.skip=true -Djacoco.skip=true"
+ARG MAVEN_BUILD_FLAGS="-B -ntp -Dmaven.test.skip=true -DskipITs=true -Dspotless.check.skip=true -Dpmd.skip=true -Dcyclonedx.skip=true -Dlicense.skip=true -Dmaven.javadoc.skip=true -Dflatten.skip=true -Djacoco.skip=true -Dmaven.wagon.http.retryHandler.count=5 -Dmaven.wagon.http.retryHandler.requestSentEnabled=true"
 
 # ───── Stage 1: Maven 依赖基层─────
 # Keep the tag for readability, pin the manifest digest for reproducible builds.
@@ -21,8 +21,9 @@ FROM maven:3.9.16-eclipse-temurin-21@sha256:a972570be789ee5c9fa23446a8914ac73275
 
 WORKDIR /workspace
 
-# aliyun mirror 避开 Maven Central 在 18081 代理下的不稳定 HTTPS
-COPY deploy/docker/settings.xml /usr/share/maven/conf/settings.xml
+# 本地默认使用 settings.xml；CI 通过 docker-bake.ci.hcl 注入 Maven Central 配置。
+ARG MAVEN_SETTINGS_FILE=deploy/docker/settings.xml
+COPY ${MAVEN_SETTINGS_FILE} /usr/share/maven/conf/settings.xml
 
 # 先 COPY .mvn 与所有 pom.xml 单独一层 → Maven JVM 参数 / POM 改动才 invalidate deps cache
 COPY pom.xml ./
