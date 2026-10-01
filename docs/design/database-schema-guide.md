@@ -65,6 +65,12 @@ flowchart TB
   pipeStep[pipeline_step_run]
   dispatch[file_dispatch_record]
   audit[file_audit_log]
+  aiAudit[console_ai_audit_log]
+  aiConversation[console_ai_conversation]
+  aiTurn[console_ai_turn]
+  aiUsage[console_ai_monthly_usage]
+  maintenance[console_maintenance_state]
+  usageDaily[console_usage_daily]
   calendar[business_calendar]
   day[batch_day_instance]
   result[result_version]
@@ -102,6 +108,10 @@ flowchart TB
   noderun -. "job_instance_id 运行关联" .-> instance
   asset -->|"FK / asset_id"| assetPart
   result -->|"FK / 成功版本物化"| assetPart
+  aiConversation -->|"复合 FK / tenant_id + conversation_id"| aiTurn
+  tenant -. "tenant_id 逻辑隔离" .-> aiConversation
+  tenant -. "tenant_id 逻辑隔离" .-> aiUsage
+  tenant -. "tenant_id RLS 隔离" .-> usageDaily
 ```
 
 ### 3.1 调度与执行
@@ -176,14 +186,25 @@ Workflow 关系和 DAG 配置示例见 [Workflow 依赖指南](../architecture/w
 | `notification_channel`、`subscription_rule`、`notification_delivery_log` | 通知通道、订阅和投递记录 |
 | `webhook_subscription`、`webhook_delivery_log` | Webhook 订阅及投递重试记录 |
 | `console_user_account`、`console_push_subscription`、`console_push_job_notification`、`console_push_approval_notification` | Console 账号和浏览器推送订阅/投递 |
-| `console_ai_audit_log`、`forensic_export_log` | AI 使用审计和取证导出元数据 |
+| `console_ai_audit_log` | AI 请求审计、token 用量、费用估算和内容哈希；审计表与对话正文分离 |
+| `console_ai_conversation`、`console_ai_turn` | AI 会话和轮次；复合租户键关联，按配置选择持久化，轮次正文由应用加密后保存并按到期时间清理 |
+| `console_ai_monthly_usage` | AI 租户月度 token、已计费用和预算预留台账；不代表供应商最终账单 |
+| `console_maintenance_state` | Console 维护模式共享单例（`id=1`）；跨副本事实源，以 `version` 做 CAS |
+| `console_usage_daily` | Console 操作使用率派生日聚合；按月分区并强制 RLS，不作为审计、计费或业务结果事实源 |
+| `forensic_export_log` | 取证导出元数据 |
 | `step_registry`、`biz_table_schema`、`atomic_task_config`、`custom_task_type_registry` | Worker 能力登记、业务 schema 上报及可配置任务类型 |
 | `business_shard_catalog`、`business_tenant_placement` | 业务分片拓扑和租户分片位置映射 |
 | `stateful_backend_binding`、`stateful_backend_cutover_history` | 有状态后端绑定及切换审计 |
 | `idempotency_record` | 跨业务操作的通用幂等记录 |
 | `shedlock` | ShedLock 定时任务分布式锁；框架维护 |
 
-### 3.6 归档和 Quartz
+### 3.6 AI、维护与使用率表的边界
+
+- AI 表结构定义在 [V218](../../db/migration/V218__console_ai_conversations_and_cost_usage.sql)：`console_ai_conversation` 与 `console_ai_turn` 通过 `(tenant_id, id)` 复合主外键关联；`console_ai_monthly_usage` 以 `(tenant_id, billing_month)` 为主键。会话、轮次和月度用量表启用并强制 RLS。AI 审计表 `console_ai_audit_log` 独立保留审计元数据，不等同于可恢复的会话记录。
+- 维护单例定义在 [V215](../../db/migration/V215__create_console_maintenance_state.sql)，固定只有 `id=1`；`affected_services` 当前仅用于公告展示，不据此动态路由。
+- 使用率表定义在 [V216](../../db/migration/V216__create_console_usage_daily.sql)，主键包含统计日和租户/指标维度，按 `stat_date` 月分区并启用强制 RLS。该表是 best-effort 派生统计，不做 archive 镜像，也不能用作审计、计费或审批证据。
+
+### 3.7 归档和 Quartz
 
 - `archive` schema 保存配置中启用归档的热表历史镜像，常见表包括 `job_instance_archive`、`job_partition_archive`、`job_task_archive`、`outbox_event_archive`、`file_record_archive`、`pipeline_instance_archive` 和 `workflow_run_archive`。主表与归档表的字段同步由迁移和 `ArchiveSchemaDriftCheck` 守护；具体策略见 [删除与归档设计](./delete-strategy.md) 和 [分区运维手册](../runbook/pg-table-partitioning.md)。
 - `quartz` schema 的 `qrtz_*` 表由 Quartz JDBC JobStore 管理，包含 job、trigger、fired trigger、scheduler state、lock、calendar 及各类 trigger 明细表。除升级 Quartz schema 外，不应由业务代码直接维护。
@@ -250,6 +271,7 @@ ORDER BY conrelid::regclass::text, conname;
 ## 6. 相关资料
 
 - [完整迁移目录](../../db/migration/)
+- Console AI / 维护 / 使用率结构：[V215](../../db/migration/V215__create_console_maintenance_state.sql)、[V216](../../db/migration/V216__create_console_usage_daily.sql)、[V218](../../db/migration/V218__console_ai_conversations_and_cost_usage.sql)
 - [数据模型 DDL 与演进背景](./data-model-ddl.md)
 - [Outbox 表关系与生命周期](../architecture/outbox-architecture.md)
 - [Workflow DAG 关系](../architecture/workflow-dependency-guide.md)

@@ -6,14 +6,14 @@
 ## 1. 覆盖范围
 
 - 只扫 Maven reactor 的 Java 模块（命令统一带 `--projects '!batch-e2e-tests'`，e2e 模块不参与）。
-- 覆盖率数据来自 JaCoCo XML（`mvn clean test org.jacoco:jacoco-maven-plugin:0.8.14:report`）。
+- 覆盖率数据来自 JaCoCo XML（仓库 Maven Wrapper 与 POM 对齐至 JaCoCo `0.8.15`）。
 - 质量配置：以 Sonar Way 为底复制出自定义 profile **「Batch Platform Sonar Way」**，唯一定制是 S3776 认知复杂度阈值 15 → 20（避免把 CC 16-21 的轻度越限当作必须重构项）。
 
 ## 2. 本地扫描
 
 ### 前置条件
 
-- `docker`、`mvn`（Java 21）、`curl`、Python 3（默认找 `python3`，可用 `PYTHON_BIN` 或 `PYTHON` 覆盖）
+- `docker`、Java 21 JDK、可执行的仓库 Maven Wrapper `./mvnw`、`curl`、Python 3（默认找 `python3`，可用 `PYTHON_BIN` 或 `PYTHON` 覆盖）；无需单独安装 Maven
 - 首次运行会按脚本内已验证的 SonarQube digest 启动容器（端口 9001，可用 `SONAR_PORT` 覆盖）；升级时通过 `SONAR_IMAGE` 显式指定并验证后再更新默认 digest
 
 ### 命令
@@ -31,6 +31,8 @@
 脚本内置流程：起容器 → 等待 UP → 生成一次性分析 token → 应用自定义 quality profile → 跑分析 → 导出报告。
 
 `--incremental` 不会裁剪 Sonar 的静态分析上下文：它只执行全 reactor 的 `test-compile`，不运行测试，然后以 Git merge-base 到当前工作树的新增/修改 Java 行过滤报告。增量模式使用独立项目键 `<projectKey>-incremental`，且不采集覆盖率，避免污染全量项目的 JaCoCo 基线。需要同时验证覆盖率时显式增加 `--with-tests`。
+
+Java PR 的本地审阅按需运行增量模式，并检查变更行 issues 与待审 Security Hotspots。它仍会分析完整 Maven reactor，再按 Git 变更行生成增量报告，不是只分析改动文件。当前 Sonar CI 工作流默认关闭且不是 required check；只有工作流实际执行并成功完成 Quality Gate 才能报告 CI Sonar 通过，`SKIPPED`、未配置或本地未运行均不是通过证据。
 
 增量文件集同时覆盖分支提交、暂存/未暂存修改和未跟踪 Java 文件。基线默认是 `origin/main`，也可用 `SONAR_BASE_REF` 或 `--base-ref` 覆盖。
 
@@ -67,7 +69,7 @@
   - Variable：`SONAR_HOST_URL`（可选，默认 `https://sonarcloud.io`）
   - Variable：`SONAR_PROJECT_KEY`（可选，默认 `file-batch-system`）
   - Variable：`SONAR_ORGANIZATION`（SonarCloud 必填；自建 SonarQube 可不填）
-- 执行内容：`./mvnw -B clean test org.jacoco:jacoco-maven-plugin:0.8.14:report --projects '!batch-e2e-tests' org.sonarsource.scanner.maven:sonar-maven-plugin:5.7.0.6970:sonar -Dsonar.qualitygate.wait=true`。
+- 执行内容：`./mvnw -B clean test org.jacoco:jacoco-maven-plugin:0.8.15:report --projects '!batch-e2e-tests' org.sonarsource.scanner.maven:sonar-maven-plugin:5.7.0.6970:sonar -Dsonar.qualitygate.wait=true`。
 - 结果以 Sonar 侧 Quality Gate 为准（`-Dsonar.qualitygate.wait=true`）。
 - Sonar **不替代**现有 PMD / Spotless / SpotBugs / 依赖扫描 / 测试门禁。
 
@@ -83,7 +85,7 @@
 |---|---|
 | 端口 9001 被占用 | `SONAR_PORT=9002 ./scripts/dev/sonar-scan.sh` |
 | 容器 3 分钟未就绪 | 脚本会自动打印 `docker logs sonarqube-batch --tail 30`，据此排查镜像拉取 / 内存 |
-| 全量模式 `--skip-build` 报 “No JaCoCo XML report found” | 先不带 `--skip-build` 跑一次，或手动执行 `mvn clean test org.jacoco:jacoco-maven-plugin:0.8.14:report --projects '!batch-e2e-tests'` |
+| 全量模式 `--skip-build` 报 “No JaCoCo XML report found” | 先不带 `--skip-build` 跑一次，或手动执行 `./mvnw clean test org.jacoco:jacoco-maven-plugin:0.8.15:report --projects '!batch-e2e-tests'` |
 | 增量模式提示找不到基线 | 先 `git fetch` 对应远端，或通过 `--base-ref <本地可解析 ref>` 指定基线 |
 | 报告指标出现 `?` | 服务端分析任务未成功完成，查看脚本输出的 task id 与 `docker logs` |
 | 扫描完想清理 | `./scripts/dev/sonar-scan.sh --stop` |
