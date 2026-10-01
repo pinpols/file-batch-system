@@ -30,18 +30,19 @@
 | `actions/setup-go` | v7 | 保留现有 `go-version` / `go-version-file` 输入 |
 | `actions/upload-artifact` | v7 | artifact 名称和下载配对保持不变 |
 | `docker/setup-buildx-action` | v4 | Buildx/Bake 构建需在 CI 回归 |
-| Hadolint Action | v3.4.0 | Dockerfile lint |
-| SBOM Action | v0.24.0 | 固定具体 release，不再使用浮动 `v0` |
+| Hadolint Action | v3.5.0 | Dockerfile lint |
+| SBOM Action | v0.24.2 | 固定具体 release，不再使用浮动 `v0` |
+| Docker Bake Action | v7 | 与 Buildx v4 配套；真实镜像 workflow 仍需升级后运行证据 |
 | Squawk / oasdiff | 2.65.0 / 1.32.1 | 迁移安全和 OpenAPI 破坏性变更守护 |
 | Trivy CLI | 0.74.0 | `vuln,misconfig` 扫描参数统一 |
 
-升级提交当前只代表文件级变更和本地静态检查通过，不代表 PR Gate 或 Full Gate 已通过。每次变更后必须按 [CI 外部 Actions 版本升级待办](../backlog/ci-external-action-upgrade-backlog-2026-09-30.md) 运行对应回归。
+2026-10-01 已确认相关升级 PR 门禁及最新 `main` Full Gate/CodeQL 通过；这只覆盖实际执行到的任务。Docker Buildx/Bake 仍须在下一次真实镜像 workflow 补证据，发布凭据、GHES 与 self-hosted runner 兼容性继续按目标环境验证。后续每次升级仍须按 [CI 外部 Actions 版本升级与验收记录](../backlog/ci-external-action-upgrade-backlog-2026-09-30.md) 运行对应回归。
 
 运行环境约束：
 
 - setup-python/setup-node/setup-go 的 Node 24 运行时要求 GitHub Actions Runner `v2.327.1` 或更高；GitHub-hosted `ubuntu-latest` 满足该要求，self-hosted runner 必须单独核对。
 - `actions/upload-artifact@v7` 使用当前 artifact 服务契约；迁移到 GHES 前必须确认 GHES 支持该 major，否则保持独立兼容版本或由平台团队提供替代上传方案。
-- Gitleaks `8.30.1` 本轮不盲目更换；已在 Docker `linux/amd64` 用同版 artifact 验证合成 `ghp_...` 正向退出 1、负向退出 0，但仍需 PR/Full Gate 实跑并继续关注上游规则变化。
+- Gitleaks `8.30.1` 本轮不盲目更换；已在 Docker `linux/amd64` 用同版 artifact 验证合成 `ghp_...` 正向退出 1、负向退出 0，并通过 PR/Full Gate 安全扫描；继续关注上游规则变化，该样例不代表所有密钥类型。
 - CodeQL、Trivy Action、Checkov、发布 Action 和 Sonar 仍按 G7 定期复核，不因本批版本升级自动视为完成。
 - `.github/dependabot.yml` 对 GitHub Actions 保留每周版本更新队列，上限为 5；安全更新不受该上限影响。Maven/Docker 的现有限制未在本批调整。
 
