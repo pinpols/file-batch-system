@@ -193,7 +193,7 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 | **PLAT-GITOPS-1** | GitOps staging 接入：镜像、ops repo、Argo CD、Helm values、smoke | 同上 | P1；当前只有骨架 |
 | **PLAT-CDC-1** | CDC / Streaming 方案设计 | 同上 | P2；业务触发后再立项 |
 
-### G4. Console AI 助手与成本治理 · P1/P2 · 🟡 基线已落地，治理缺口待实施
+### G4. Console AI 助手与成本治理 · P1/P2 · 🟡 本地开发已收口，治理证据待外部验收
 
 权威方案：[`ai-assistant-contextual-experience-and-cost-governance-2026-09-29.md`](../plans/ai-assistant-contextual-experience-and-cost-governance-2026-09-29.md)。本节只登记仍可能实施的后端工作；AI 方案中的暂缓和不做项单独列出，不能当作当前开发任务。
 
@@ -212,7 +212,7 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 | **AI-DEC-3** | AI 上线判定和受控试生产 | 🟡 暂缓，等待真实质量/成本证据 |
 | **AI-DEC-4** | Phase 3 AI 直接写操作/HITL | 🟡 后置，继续复用现有审批闭环 |
 
-### G5. Console 使用率统计 · P1/P2 · 🟡 基础摘要已有，日聚合方案未完成
+### G5. Console 使用率统计 · P1/P2 · 🟡 本地日聚合已落地，生产对账与保留策略待外部验收
 
 权威方案：[`console-usage-statistics-plan-2026-09-29.md`](../plans/console-usage-statistics-plan-2026-09-29.md)；前端配套清单见配对仓库 `batch-console/docs/backlog/ai-and-usage-statistics-todo-2026-09-29.md`。第一版只做可解释的 PostgreSQL 日聚合，不引入 Kafka、ClickHouse 或通用行为分析平台。
 
