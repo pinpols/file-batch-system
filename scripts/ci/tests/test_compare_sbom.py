@@ -67,6 +67,27 @@ class CompareSbomTest(unittest.TestCase):
 
         self.assertEqual(MODULE.canonicalize(left), MODULE.canonicalize(right))
 
+    def test_ignores_registered_os_specific_component(self) -> None:
+        left = sbom()
+        right = sbom()
+        platform_ref = (
+            "pkg:maven/io.netty/netty-resolver-dns-native-macos@4.2.17.Final"
+            "?classifier=osx-aarch_64&type=jar"
+        )
+        right["components"].append(
+            {
+                "type": "library",
+                "group": "io.netty",
+                "name": "netty-resolver-dns-native-macos",
+                "version": "4.2.17.Final",
+                "purl": platform_ref,
+            }
+        )
+        right["dependencies"][0]["dependsOn"].append(platform_ref)
+        right["dependencies"].append({"ref": platform_ref, "dependsOn": []})
+
+        self.assertEqual(MODULE.canonicalize(left), MODULE.canonicalize(right))
+
     def test_detects_dependency_version_change(self) -> None:
         self.assertNotEqual(
             MODULE.canonicalize(sbom()),

@@ -10,6 +10,15 @@ from pathlib import Path
 from typing import Any
 
 
+PLATFORM_COMPONENT_PREFIXES = (
+    "pkg:maven/io.netty/netty-resolver-dns-native-macos@",
+)
+
+
+def is_platform_component(reference: Any) -> bool:
+    return isinstance(reference, str) and reference.startswith(PLATFORM_COMPONENT_PREFIXES)
+
+
 def component_identity(component: dict[str, Any]) -> dict[str, Any]:
     licenses = component.get("licenses") or []
     hashes = component.get("hashes") or []
@@ -34,7 +43,11 @@ def component_identity(component: dict[str, Any]) -> dict[str, Any]:
 def canonicalize(document: dict[str, Any]) -> dict[str, Any]:
     metadata = document.get("metadata") or {}
     root_component = metadata.get("component") or {}
-    components = [component_identity(value) for value in document.get("components") or []]
+    components = [
+        component_identity(value)
+        for value in document.get("components") or []
+        if not is_platform_component(value.get("purl"))
+    ]
     components.sort(
         key=lambda value: (
             str(value.get("group")),
@@ -47,9 +60,14 @@ def canonicalize(document: dict[str, Any]) -> dict[str, Any]:
     dependencies = [
         {
             "ref": value.get("ref"),
-            "dependsOn": sorted(value.get("dependsOn") or []),
+            "dependsOn": sorted(
+                ref
+                for ref in value.get("dependsOn") or []
+                if not is_platform_component(ref)
+            ),
         }
         for value in document.get("dependencies") or []
+        if not is_platform_component(value.get("ref"))
     ]
     dependencies.sort(key=lambda value: str(value.get("ref")))
 

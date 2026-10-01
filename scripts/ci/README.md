@@ -56,6 +56,10 @@ PR 与 Full Gate 的静态检查 job 设置 `BATCH_GATE_COLLECT=1`。业务门�
 SBOM；`check-license-compliance.sh` 复用已生成结果再次校验，避免 Full Gate 只上传动态
 artifact、却放过仓库快照漂移。
 
+`compare-sbom.py` 仅豁免精确登记的 OS 专属组件。目前只有 Reactor Netty 在 macOS 解析时
+附加的 `io.netty:netty-resolver-dns-native-macos`；比较时同时移除对应组件和依赖边。其他
+组件的坐标、版本、许可证、哈希或依赖关系发生变化仍会阻断。
+
 许可证检查默认每次重建 Maven 许可证清单和 SBOM；只有调用方刚完成同一组生成命令时才可
 显式传 `--reuse-generated`。AGPL、SSPL、BUSL、CPAL、EUPL、Commons Clause、Elastic、
 PolyForm、无 Classpath Exception 的纯 GPL 及未知许可证均阻断。
