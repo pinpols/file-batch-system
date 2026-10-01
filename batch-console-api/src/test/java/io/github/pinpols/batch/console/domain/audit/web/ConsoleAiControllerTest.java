@@ -96,6 +96,19 @@ class ConsoleAiControllerTest {
   }
 
   @Test
+  void shouldNotExposeLegacyJsonChatEndpoint() throws Exception {
+    mockMvc
+        .perform(post("/api/console/ai/chat")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-old")
+            .contentType(APPLICATION_JSON)
+            .content("""
+                {"tenantId":"t1","prompt":"查询失败作业"}
+                """))
+        .andExpect(status().isNotFound());
+    verifyNoInteractions(applicationService);
+  }
+
+  @Test
   void shouldStreamDeltasAndFinalAuditedAnswer() throws Exception {
     when(requestMetadataResolver.current())
         .thenReturn(new ConsoleRequestMetadata(
