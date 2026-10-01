@@ -140,10 +140,11 @@ POST /api/console/telemetry/events
 
 **当前代码**：
 ```
-POST /api/console/ai/chat
+POST /api/console/ai/chat/stream
 {
-  "messages": [...],
-  "context": "batch_day_failure"
+  "contextVersion": "v1",
+  "prompt": "查询批量调度作业状态",
+  "pageContext": { "pageType": "job-instance-list" }
 }
 ```
 

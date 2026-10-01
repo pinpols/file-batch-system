@@ -7,7 +7,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
-| 2026-10-01 | **Console AI 流式对话**：新增 `POST /api/console/ai/chat/stream` SSE（`started`、`delta`、`completed`、`failed` 事件）及同租户、同操作者的 `POST /api/console/ai/chat/stream/{requestId}/cancel`。复用原有鉴权、幂等、限流、预算、会话和审计；旧 `/chat` JSON 接口保持不变。 |
+| 2026-10-01 | **Console AI 统一流式对话**：`POST /api/console/ai/chat/stream` SSE（`started`、`delta`、`completed`、`failed` 事件）及同租户、同操作者的 `POST /api/console/ai/chat/stream/{requestId}/cancel` 成为唯一聊天入口；删除旧 `POST /api/console/ai/chat` JSON 接口。复用原有鉴权、幂等、限流、预算、会话和审计。 |
 | 2026-10-01 | **动态能力与使用统计权限收口**：`GET /api/console/auth/me` 新增 `capabilities`，`AI_ASSISTANT_USE` 同时受 AI 总开关和用户/角色白名单控制；使用统计查询仅允许 `ROLE_ADMIN`、`ROLE_AUDITOR`、`ROLE_TENANT_ADMIN`，并在运行监控菜单下提供独立路径。 |
 | 2026-10-01 | **Console AI 会话游标分页**：新增 `GET /api/console/ai/conversations/page?cursor&limit`，返回当前租户和操作者未过期会话的 `PageResponse`；按 `updatedAt` 和 `id` 稳定倒序，非法游标返回参数错误。旧数组列表接口保持兼容，单页大小仍由服务端配置上限约束。 |
 | 2026-09-30 | **Console AI 会话与费用治理 API**：`AiChatRequest` 增加 `contextVersion=v1` 和仅含 `pageType/objectType/objectId` 的白名单上下文；新增当前操作者会话列表、会话轮次分页、会话删除及租户 UTC 月度估算费用摘要接口。聊天审计响应新增 token、估算 USD 和计价状态字段。会话默认关闭，启用后正文以 AES-GCM/KMS 密文存储并按租户/操作者隔离，必须配置保留期；费用为 provider 用量与运维费率的估算，不是供应商账单对账。 |
@@ -974,7 +974,8 @@ Deployment note:
 
 ### AI
 
-- `POST /api/console/ai/chat`
+- `POST /api/console/ai/chat/stream` — SSE 对话；完成事件携带最终 `AiChatResponse`。
+- `POST /api/console/ai/chat/stream/{requestId}/cancel` — 取消当前操作者的活动流。
 - `GET /api/console/ai/conversations?limit=` — current user's conversations; session persistence must be enabled.
 - `GET /api/console/ai/conversations/{conversationId}/turns?beforeTurnNo=&limit=` — owner-scoped history, newest first.
 - `DELETE /api/console/ai/conversations/{conversationId}` — delete the current user's conversation and cascading turns.

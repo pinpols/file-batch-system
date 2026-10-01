@@ -3473,34 +3473,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleSchedulerSnapshotHistoryList'
-  /api/console/ai/chat:
-    post:
-      tags: [AI]
-      summary: Chat with console AI; an unknown or expired supplied sessionId is rejected
-      operationId: chatWithConsoleAi
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKeyHeader'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AiChatRequest'
-      responses:
-        '200':
-          description: Chat response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CommonResponseAiChatResponse'
-        '404':
-          description: Supplied sessionId does not exist or has expired
   /api/console/ai/chat/stream:
     post:
       tags: [AI]
       summary: Stream an AI chat turn as server-sent events
       description: >-
-        Uses the same authorization, budgets, audit, and conversation retention as /chat.
+        Uses console AI authorization, budgets, audit, and conversation retention.
         Events are started ({requestId}), delta ({text}), and completed (AiChatResponse).
         An unexpected pre-completion error emits failed ({code}). The client must treat
         connection loss without completed as a failed turn. A stopped turn remains audited.
@@ -12029,13 +12007,6 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/PageResponse'
-    CommonResponseAiChatResponse:
-      allOf:
-        - $ref: '#/components/schemas/CommonResponseBase'
-        - type: object
-          properties:
-            data:
-              $ref: '#/components/schemas/AiChatResponse'
     CommonResponseConsoleAiConversationList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'

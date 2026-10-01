@@ -14,9 +14,6 @@ import reactor.core.publisher.Mono;
 /** 控制台 AI 对话应用服务：基于 Spring AI 的聊天与审计写入数据库。 */
 public interface ConsoleAiApplicationService {
 
-  /** 处理一轮 AI 对话请求（幂等键用于防重复计费/重复写入）。 */
-  AiChatResponse chat(AiChatRequest request, String idempotencyKey);
-
   /** 调用方须在异步分派前完成授权并捕获请求元数据。 */
   AiChatResponse chatStream(
       AiChatRequest request,
