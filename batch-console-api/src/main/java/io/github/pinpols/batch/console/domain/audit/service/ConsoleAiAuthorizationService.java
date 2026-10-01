@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.constants.CommonErrorMessages;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleCapabilityProvider;
+import io.github.pinpols.batch.console.shared.security.ConsoleCapabilityProvider;
 import java.util.Collection;
 import java.util.Objects;
 import java.util.Set;
