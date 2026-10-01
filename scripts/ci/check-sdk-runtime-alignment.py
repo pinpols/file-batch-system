@@ -34,11 +34,14 @@ require((ROOT / "sdk/typescript/package-lock.json").is_file(), "TypeScript SDK d
 # 前端自身 CI 仍是最终验证依据。
 if FRONTEND.is_dir():
     frontend_package = json.loads(read(FRONTEND / "package.json"))
-    require(frontend_package.get("engines", {}).get("node") == "^22 || ^24", "frontend engines.node must support Node 22 and 24 only")
+    require(frontend_package.get("engines", {}).get("node") == "^24", "frontend engines.node must require Node 24")
     require("engine-strict=true" in read(FRONTEND / ".npmrc"), "frontend npm must enforce the declared Node engine")
     for version_file in (".node-version", ".nvmrc"):
         require(read(FRONTEND / version_file).strip() == "24", f"frontend {version_file} must select Node 24")
-    require(bool(re.search(r"^FROM node:24-alpine AS build$", read(FRONTEND / "Dockerfile"), re.M)), "frontend Docker build image must use Node 24")
+    require(
+        bool(re.search(r"^FROM node:24\.\d+\.\d+-alpine\d+\.\d+ AS build$", read(FRONTEND / "Dockerfile"), re.M)),
+        "frontend Docker build image must use a fully pinned Node 24 Alpine image",
+    )
 
 go_files = (ROOT / "sdk/go/go.mod", ROOT / "sdk/go/kafka/go.mod")
 for path in go_files:

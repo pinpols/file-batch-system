@@ -11,7 +11,7 @@
 | 后端 JDK | Java 21 | 根 `pom.xml`、Docker、CI | `maven.compiler.release=21`，不支持 JDK 17 或更低版本 |
 | 后端框架 | Spring Boot 4.1.1 | 根 `pom.xml` | 依赖版本由 BOM 和集中属性管理 |
 | Maven | Maven Wrapper / Maven 3.x | `.mvn`、CI | 本地优先使用 `./mvnw`，避免宿主机 Maven 漂移 |
-| 前端 Node.js | Node 22.x 和 24.x；默认 Node 24 | `../batch-console/package.json`、`.nvmrc`、`.node-version`、Dockerfile、配对仓库 CI | `engines.node` 为 `^22 || ^24`；CI 覆盖 Node 22/24 |
+| 前端 Node.js | Node 24.x | `../batch-console/package.json`、`.nvmrc`、`.node-version`、Dockerfile、配对仓库 CI | `engines.node` 为 `^24`；本地、CI 和完整固定版本 Docker 镜像统一使用 Node 24 |
 | 前端包管理 | npm lockfile | `../batch-console/package-lock.json` | CI 使用 `npm ci`，禁止混用 yarn/pnpm lockfile |
 | Python SDK | Python 3.12+ | `sdk/python/pyproject.toml`、`uv.lock`、CI | CI 覆盖最低版本 3.12 和当前稳定版 3.14；async-only |
 | Go SDK | Go 1.26+ | `sdk/go/go.mod`、CI | CI 覆盖 1.26 和 1.27；core 与 Kafka nested module 分离 |
@@ -41,19 +41,19 @@
 - Testcontainers IT/E2E 明确依赖 Docker；无 Docker 时按测试类配置跳过或立即给出明确错误。
 - Sim 全链路和故障注入是 Docker-only，不伪装为纯宿主机测试。
 - 运维和压测脚本不得静默跳过 SQL；无 `psql` 时使用 Python fallback 或明确失败。
-- 前端 CI 在 Node 22/24 执行 `npm ci`、typecheck、lint、unit、build、bundle size 与依赖审计；文档构建在 Node 24 执行。E2E 依赖后端可访问和 Playwright 浏览器，不由该独立仓库 workflow 执行。
+- 前端 CI 在 Node 24 执行 `npm ci`、typecheck、lint、unit、build、bundle size、依赖审计与文档构建。E2E 依赖后端可访问和 Playwright 浏览器，不由该独立仓库 workflow 执行。
 
 ## 构建、运行、部署与 CI
 
 | 阶段 | 后端 | 前端 | 同构结论 |
 |---|---|---|---|
-| 本地构建 | `./mvnw` + JDK 21 | Node 24 + `npm ci` | 前端仍兼容 Node 22，默认开发基线为 24 |
+| 本地构建 | `./mvnw` + JDK 21 | Node 24 + `npm ci` | 前端仅维护 Node 24 构建基线 |
 | Docker 构建 | Maven 3.9.16 + Temurin 21 | Node 24 + 完整 `npm run build` | 与本地基线对齐 |
 | 单元验证 | Maven Surefire | Vitest | 构建与测试分开，均由 CI 执行 |
 | IT/E2E | JDK 21 + Testcontainers/Docker | Node 24 + Playwright | 依赖真实基础设施，不能改成无依赖假运行 |
 | 应用运行 | Temurin 21 JRE | nginx Alpine 静态服务 | 运行镜像不携带构建工具或开发依赖 |
 | Compose 部署 | PG/Kafka/Valkey/MinIO 使用 `.env` tag | 前端通过 `BACKEND_UPSTREAM_HOST` 连接后端 | 容器服务名与宿主机地址严格分开 |
-| CI | setup-build-env 固定 Java 21，Docker/Testcontainers 镜像与 `.env` 对齐 | SDK CI 覆盖 Node 22/24；前端默认 Node 24，锁文件用 `npm ci` | 最低兼容和当前 LTS 分层验证 |
+| CI | setup-build-env 固定 Java 21，Docker/Testcontainers 镜像与 `.env` 对齐 | TypeScript SDK CI 覆盖 Node 22/24；前端仅使用 Node 24，锁文件用 `npm ci` | SDK 兼容矩阵与前端产品构建基线分别治理 |
 
 “同构”在本项目中指版本、镜像和地址契约一致，不要求 Docker 构建重复执行完整 IT。镜像构建跳过 IT 是时间和环境职责边界；IT/E2E 由 CI 在 Docker 环境中执行，不能据此宣称镜像构建本身完成了全量验证。
 

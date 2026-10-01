@@ -40,6 +40,7 @@ public class ConsoleAiConversationService {
   private static final String COMPLETE = "COMPLETE";
   private static final String FAILED = "FAILED";
   private static final String REJECTED = "REJECTED";
+  private static final String NOT_FOUND_DETAIL = "error.common.not_found_detail";
 
   private final ConsoleAiConversationMapper mapper;
   private final ConsoleAiProperties properties;
@@ -87,7 +88,7 @@ public class ConsoleAiConversationService {
     ConsoleAiConversationEntity conversation = mapper.selectForUpdate(tenantId, conversationId);
     if (EmptyChecks.isNull(conversation)) {
       if (!creating) {
-        throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail");
+        throw BizException.of(ResultCode.NOT_FOUND, NOT_FOUND_DETAIL);
       }
       conversation = new ConsoleAiConversationEntity();
       conversation.setId(conversationId);
@@ -98,9 +99,9 @@ public class ConsoleAiConversationService {
       conversation.setExpiresAt(expiresAt);
       mapper.insertConversation(conversation);
     } else if (!ownerUserId.equals(conversation.getOwnerUserId())) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail");
+      throw BizException.of(ResultCode.NOT_FOUND, NOT_FOUND_DETAIL);
     } else if (!conversation.getExpiresAt().isAfter(now)) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail");
+      throw BizException.of(ResultCode.NOT_FOUND, NOT_FOUND_DETAIL);
     }
 
     List<ConsoleAiTurnEntity> history = mapper.selectRecentCompleteTurns(
@@ -110,7 +111,7 @@ public class ConsoleAiConversationService {
     Long turnNo =
         mapper.allocateTurnNo(tenantId, conversationId, ownerUserId, expiresAt, contextVersion);
     if (EmptyChecks.isNull(turnNo)) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail");
+      throw BizException.of(ResultCode.NOT_FOUND, NOT_FOUND_DETAIL);
     }
     ConsoleAiTurnEntity turn = new ConsoleAiTurnEntity();
     turn.setTenantId(tenantId);
@@ -236,7 +237,7 @@ public class ConsoleAiConversationService {
     requireOwner(ownerUserId);
     mapper.setTenantContext(tenantId);
     if (EmptyChecks.isNull(mapper.selectActiveByOwner(tenantId, conversationId, ownerUserId))) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail");
+      throw BizException.of(ResultCode.NOT_FOUND, NOT_FOUND_DETAIL);
     }
     int limit = Math.min(Math.max(requestedLimit, 1), 100);
     List<TurnView> rows =
@@ -252,8 +253,7 @@ public class ConsoleAiConversationService {
     requireOwner(ownerUserId);
     mapper.setTenantContext(tenantId);
     ConsoleAiTurnEntity row = mapper.selectByClientTurnId(tenantId, ownerUserId, clientTurnId);
-    if (EmptyChecks.isNull(row))
-      throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail");
+    if (EmptyChecks.isNull(row)) throw BizException.of(ResultCode.NOT_FOUND, NOT_FOUND_DETAIL);
     return new ClientTurnView(row.getConversationId(), toTurnView(row));
   }
 
@@ -280,7 +280,7 @@ public class ConsoleAiConversationService {
     requireOwner(ownerUserId);
     mapper.setTenantContext(tenantId);
     if (EmptyChecks.isNull(mapper.selectActiveByOwner(tenantId, conversationId, ownerUserId))) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail");
+      throw BizException.of(ResultCode.NOT_FOUND, NOT_FOUND_DETAIL);
     }
     attachmentService.enqueueConversation(tenantId, conversationId);
     mapper.deleteConversation(tenantId, conversationId, ownerUserId);
