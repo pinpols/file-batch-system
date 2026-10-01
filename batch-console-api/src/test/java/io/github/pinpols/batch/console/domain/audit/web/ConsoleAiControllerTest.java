@@ -70,7 +70,8 @@ class ConsoleAiControllerTest {
   @Test
   void shouldReturn400WhenIdempotencyHeaderMissing() throws Exception {
     mockMvc
-        .perform(post("/api/console/ai/chat").contentType(APPLICATION_JSON).content("""
+        .perform(
+            post("/api/console/ai/chat/stream").contentType(APPLICATION_JSON).content("""
                     {"tenantId":"t1","prompt":"列出今日失败的作业"}
                     """))
         .andExpect(status().isBadRequest())
@@ -82,7 +83,7 @@ class ConsoleAiControllerTest {
   @Test
   void shouldReturn400WhenPromptIsBlank() throws Exception {
     mockMvc
-        .perform(post("/api/console/ai/chat")
+        .perform(post("/api/console/ai/chat/stream")
             .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
             .contentType(APPLICATION_JSON)
             .content("""
@@ -95,21 +96,16 @@ class ConsoleAiControllerTest {
   }
 
   @Test
-  void shouldReturn200WhenChatSucceeds() throws Exception {
-    AiChatResponse chatResponse = new AiChatResponse();
-    chatResponse.setAnswer("作业 JOB_001 昨日失败 3 次");
-    when(applicationService.chat(any(), anyString())).thenReturn(chatResponse);
-
+  void shouldNotExposeLegacyJsonChatEndpoint() throws Exception {
     mockMvc
         .perform(post("/api/console/ai/chat")
-            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-old")
             .contentType(APPLICATION_JSON)
             .content("""
-                    {"tenantId":"t1","prompt":"列出今日失败的作业"}
-                    """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data.answer").value("作业 JOB_001 昨日失败 3 次"));
+                {"tenantId":"t1","prompt":"查询失败作业"}
+                """))
+        .andExpect(status().isNotFound());
+    verifyNoInteractions(applicationService);
   }
 
   @Test

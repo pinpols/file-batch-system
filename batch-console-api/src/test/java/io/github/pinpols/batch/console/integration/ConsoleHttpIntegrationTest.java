@@ -14,6 +14,7 @@ import io.github.pinpols.batch.console.application.config.ConsoleConfigApplicati
 import io.github.pinpols.batch.console.application.contract.response.file.ConsolePresignDownloadResponse;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiApplicationService;
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiChatResponse;
+import io.github.pinpols.batch.console.domain.audit.service.ConsoleAiAuthorizationService;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileApplicationService;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileDownloadApplicationService;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileOperationResponse;
@@ -76,6 +77,9 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
 
   @MockitoBean
   private ConsoleAiApplicationService aiApplicationService;
+
+  @MockitoBean
+  private ConsoleAiAuthorizationService aiAuthorizationService;
 
   @MockitoBean
   private ConsoleFileDownloadApplicationService fileDownloadApplicationService;
@@ -290,7 +294,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void shouldChatViaHttp() {
+  void shouldStreamChatViaHttp() {
     AiChatResponse chatResponse = new AiChatResponse();
     chatResponse.setRequestId("req-1");
     chatResponse.setTraceId("trace-1");
@@ -299,11 +303,16 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
     chatResponse.setPromptDecision("APPROVED");
     chatResponse.setModelName("gpt-4o-mini");
     chatResponse.setAnswer("ok");
-    when(aiApplicationService.chat(any(), anyString())).thenReturn(chatResponse);
+    when(aiApplicationService.chatStream(any(), anyString(), any(), any()))
+        .thenAnswer(invocation -> {
+          ConsoleAiApplicationService.StreamObserver observer = invocation.getArgument(3);
+          observer.onDelta("ok");
+          return chatResponse;
+        });
 
     webTestClient
         .post()
-        .uri("/api/console/ai/chat")
+        .uri("/api/console/ai/chat/stream")
         .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-ai-001")
         .contentType(MediaType.APPLICATION_JSON)
         .bodyValue("""
@@ -314,12 +323,14 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
         .isOk()
         .expectBody(String.class)
         .value(body -> {
-          assertThat(body).contains("\"code\":\"SUCCESS\"");
+          assertThat(body).contains("event:started");
+          assertThat(body).contains("event:delta");
+          assertThat(body).contains("event:completed");
           assertThat(body).contains("\"session-1\"");
           assertThat(body).contains("\"ok\"");
         });
 
-    verify(aiApplicationService).chat(any(), anyString());
+    verify(aiApplicationService).chatStream(any(), anyString(), any(), any());
   }
 
   @Test
