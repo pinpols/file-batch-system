@@ -1,12 +1,16 @@
 package io.github.pinpols.batch.e2e.config;
 
+import io.github.pinpols.batch.console.config.ConsoleAiUuidMappingConfiguration;
 import javax.sql.DataSource;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionFactoryBean;
+import org.mybatis.spring.boot.autoconfigure.ConfigurationCustomizer;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
@@ -18,12 +22,15 @@ import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
  * Business mappers are deliberately excluded and use {@code e2eBusinessSqlSessionFactory}.
  */
 @Configuration
+@Import(ConsoleAiUuidMappingConfiguration.class)
 public class E2ePlatformMybatisConfiguration {
 
   @Bean(name = "sqlSessionFactory")
   @Primary
   @ConditionalOnMissingBean(name = "sqlSessionFactory")
-  public SqlSessionFactory sqlSessionFactory(@Qualifier("dataSource") DataSource dataSource)
+  public SqlSessionFactory sqlSessionFactory(
+      @Qualifier("dataSource") DataSource dataSource,
+      ObjectProvider<ConfigurationCustomizer> configurationCustomizers)
       throws Exception {
     SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
     factoryBean.setDataSource(dataSource);
@@ -33,6 +40,9 @@ public class E2ePlatformMybatisConfiguration {
     org.apache.ibatis.session.Configuration mybatisConfig =
         new org.apache.ibatis.session.Configuration();
     mybatisConfig.setMapUnderscoreToCamelCase(true);
+    configurationCustomizers
+        .orderedStream()
+        .forEach(customizer -> customizer.customize(mybatisConfig));
     factoryBean.setConfiguration(mybatisConfig);
     return factoryBean.getObject();
   }

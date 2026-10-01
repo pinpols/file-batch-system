@@ -40,7 +40,8 @@
 
 ### Fixed
 
-- 重新生成 Jackson 2.21.6 / 3.1.6 升级后的 CycloneDX SBOM，并在 POM 变更的 PR 与 Full Gate 中校验入库 SBOM 和 Maven 依赖图一致，避免依赖升级后合规快照继续停留在旧版本。
+- 重新生成 Jackson 2.21.7 / 3.1.7 升级后的 CycloneDX SBOM，并在 POM 变更的 PR 与 Full Gate 中校验入库 SBOM 和 Maven 依赖图一致，避免依赖升级后合规快照继续停留在旧版本。
+- 修复 E2E 自建 MyBatis 工厂未加载并应用统一 UUID `ConfigurationCustomizer`、导致 Console AI 映射阻断全链路测试启动的问题。
 - SDK 幂等键与签名 nonce 随机源收敛到系统 CSPRNG，补齐 Go 随机读取失败处理；服务端业务号随机后缀扩容，并对 KMS key、请求签名 header 增加启动期和输入边界校验。
 - Console 写请求幂等在 Redis 短暂不可用时增加数据库完成态兜底；读副本执行阶段连接异常会触发 quarantine，避免后续只读请求持续打到故障副本。
 - 文件治理的预签名审计和到达确认写入收敛到短事务提交边界，避免对象存储探测期间长时间占用数据库事务。
