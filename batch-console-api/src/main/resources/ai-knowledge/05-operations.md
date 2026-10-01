@@ -1,7 +1,7 @@
 # 运维操作与控制台入口
 
 ## 运维通过控制台/代理做,不直接改状态库
-- console-api 对 `outbox_event` 等只读;清理/重投走 `ConsoleOrchestratorPort` 的默认实现 `DefaultConsoleOrchestratorProxyService` → orchestrator `/internal/outbox/*`。
+- console-api 对 `outbox_event` 等只读;清理/重投走 `ConsoleOrchestratorPort` 的默认实现 `application.ops.infrastructure.DefaultConsoleOrchestratorProxyService` → orchestrator `/internal/outbox/*`。
 - 状态变更最终都由 orchestrator(唯一状态主机)写入数据库。
 
 ## 常用查询(console-api 只读)

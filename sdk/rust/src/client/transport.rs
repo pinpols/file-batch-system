@@ -137,11 +137,10 @@ impl HttpTransport {
     }
 
     fn unimplemented(op: &str) -> HttpResponse {
-        // A real adapter performs the call here. Phase 2 is std-only; never
-        // invoked by the engine tests (which use FakeTransport).
+        // 真实适配器会在这里发起调用。引擎测试使用 FakeTransport,不会触发该 stub。
         unimplemented!(
-            "HttpTransport::{op} requires a real HTTP client adapter (zero-dependency phase-2 \
-             ships only the trait + FakeTransport); see byo-sdk-guide §1.1"
+            "HttpTransport::{op} requires a real HTTP client adapter (phase-2 ships only the \
+             trait + FakeTransport); see byo-sdk-guide §1.1"
         )
     }
 }

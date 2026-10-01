@@ -243,6 +243,12 @@ Console 内部约定：`web` 只放 HTTP/SSE/文件流适配器；请求、查�
 `console.application.contract`。`shared` 放跨 context 值对象、事件、查询模型和轻量安全支撑；
 `support` 放 Web、缓存、命名、Excel、限流等技术支撑。应用层和基础设施层不得依赖 `web` 下的契约包。
 
+Controller 的跨服务查询或运维动作必须依赖应用端口，不得直接持有
+`OrchestratorInternalRestClient`、`RestClient` 或 `BatchObjectStore`。内部 URL、租户解析、降级策略、
+响应 envelope 透传和外部存储的签名/路径校验分别由 application port 的 infrastructure adapter 或文件应用服务负责；
+Controller 只绑定参数、执行 Bean Validation、调用端口并适配 HTTP 响应。治理参数默认值和 allowlist 也属于应用策略，
+由 `ConsoleGovernanceParameterPolicy` 持有，避免在 Controller 中维护业务配置规则。
+
 ### Console 分层职责结论（2026-09-28）
 
 | 层 | 允许承担的职责 | 明确不承担的职责 | 允许依赖 |

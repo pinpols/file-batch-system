@@ -26,6 +26,7 @@
 | `idea-qodana-sonar-cross-review-2026-08-12.md` | IDEA/Qodana/Sonar | 静态扫描交叉复核快照 |
 | `runtime-parameter-tuning-review-2026-09-14.md` | JVM/PG/Redis/Kafka/MinIO | 参数落地状态、已有容量证据和生产压测计划 |
 | `console-api-restful-review-2026-09-26.md` | Console API RESTful 风格 | 资源 CRUD / 查询投影 / Command API 的全量风格审查 |
+| `random-crypto-id-review-2026-10-01.md` | 随机数 / 加密 / ID 生成 | 服务端加密、请求签名、SDK nonce/idempotency-key 和 Snowflake 引入边界审查 |
 
 历史单次审查快照见 [`../archive/review/`](../archive/review/)。
 

@@ -2,15 +2,13 @@ package io.github.pinpols.batch.console.domain.job.web;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleResultVersionResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
-import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
-import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,8 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleResultVersionController {
 
-  private final OrchestratorInternalRestClient orchestratorInternalRestClient;
-  private final TenantIdResolver tenantGuard;
+  private final ConsoleOrchestratorPort orchestratorProxy;
   private final ConsoleResponseFactory responseFactory;
 
   @GetMapping
@@ -41,18 +38,8 @@ public class ConsoleResultVersionController {
       @RequestParam(value = "tenantId", required = false) String tenantId,
       @RequestParam("businessKey") String businessKey,
       @RequestParam(value = "limit", required = false, defaultValue = "50") int limit) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    CommonResponse<List<ConsoleResultVersionResponse>> resp = orchestratorInternalRestClient
-        .build()
-        .get()
-        .uri(
-            "/internal/orchestrator/result-versions?tenantId={tenantId}"
-                + "&businessKey={businessKey}&limit={limit}",
-            resolved,
-            businessKey,
-            limit)
-        .retrieve()
-        .body(new ParameterizedTypeReference<>() {});
+    CommonResponse<List<ConsoleResultVersionResponse>> resp =
+        orchestratorProxy.resultVersions(tenantId, businessKey, limit);
     return responseFactory.forwardOrchestrator(resp);
   }
 
@@ -60,17 +47,8 @@ public class ConsoleResultVersionController {
   public CommonResponse<ConsoleResultVersionResponse> effective(
       @RequestParam(value = "tenantId", required = false) String tenantId,
       @RequestParam("businessKey") String businessKey) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    CommonResponse<ConsoleResultVersionResponse> resp = orchestratorInternalRestClient
-        .build()
-        .get()
-        .uri(
-            "/internal/orchestrator/result-versions/effective?tenantId={tenantId}"
-                + "&businessKey={businessKey}",
-            resolved,
-            businessKey)
-        .retrieve()
-        .body(typedResponse());
+    CommonResponse<ConsoleResultVersionResponse> resp =
+        orchestratorProxy.effectiveResultVersion(tenantId, businessKey);
     return responseFactory.forwardOrchestrator(resp);
   }
 
@@ -78,13 +56,8 @@ public class ConsoleResultVersionController {
   public CommonResponse<ConsoleResultVersionResponse> detail(
       @PathVariable("id") Long id,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    CommonResponse<ConsoleResultVersionResponse> resp = orchestratorInternalRestClient
-        .build()
-        .get()
-        .uri("/internal/orchestrator/result-versions/{id}?tenantId={tenantId}", id, resolved)
-        .retrieve()
-        .body(typedResponse());
+    CommonResponse<ConsoleResultVersionResponse> resp =
+        orchestratorProxy.resultVersion(id, tenantId);
     return responseFactory.forwardOrchestrator(resp);
   }
 
@@ -96,14 +69,8 @@ public class ConsoleResultVersionController {
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable("id") Long id,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    CommonResponse<ConsoleResultVersionResponse> resp = orchestratorInternalRestClient
-        .build()
-        .post()
-        .uri(
-            "/internal/orchestrator/result-versions/{id}/promote?tenantId={tenantId}", id, resolved)
-        .retrieve()
-        .body(typedResponse());
+    CommonResponse<ConsoleResultVersionResponse> resp =
+        orchestratorProxy.promoteResultVersion(id, tenantId);
     return responseFactory.forwardOrchestrator(resp);
   }
 
@@ -114,18 +81,8 @@ public class ConsoleResultVersionController {
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable("id") Long id,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    CommonResponse<ConsoleResultVersionResponse> resp = orchestratorInternalRestClient
-        .build()
-        .post()
-        .uri("/internal/orchestrator/result-versions/{id}/reject?tenantId={tenantId}", id, resolved)
-        .retrieve()
-        .body(typedResponse());
+    CommonResponse<ConsoleResultVersionResponse> resp =
+        orchestratorProxy.rejectResultVersion(id, tenantId);
     return responseFactory.forwardOrchestrator(resp);
-  }
-
-  private static ParameterizedTypeReference<CommonResponse<ConsoleResultVersionResponse>>
-      typedResponse() {
-    return new ParameterizedTypeReference<>() {};
   }
 }

@@ -7,6 +7,8 @@
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
 ### 2026-10-01
+- **ADR-011 幂等边界补强**：Console 写请求幂等在 Redis 短暂不可用时增加数据库完成态兜底，ADR 同步明确 Redis 仍承担短期 in-flight 保护，数据库记录承担完成态 replay 与恢复边界。
+- **统一文档站发布过滤**：新增 `docs/.docsignore`，将技术试验、测试数据和规模统计保留在 Git 中但排除出发布站与搜索索引；现行架构、API、设计、测试、SDK、运维、合规、工程规范及其可追溯证据继续发布。
 - **当前待办与 CI 证据收口**：`todo-master` 对齐已落地的 AI 流式取消、前端会话恢复和降级联测，结构化来源引用继续保留为真实缺口；CI Action 专题同步 Hadolint 3.5.0、SBOM Action 0.24.2、Docker Bake v7 及已通过的 PR/Full Gate 证据，镜像 workflow 未实跑部分继续单列。
 - **Console AI 控制面入口更新**：ADR-045 的只读、非主链边界不变；对话入口统一为 SSE `/api/console/ai/chat/stream`，移除旧 JSON 入口引用。
 

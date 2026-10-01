@@ -18,6 +18,7 @@
 
 ### Changed
 
+- 统一文档站支持通过仓库级 `docs/.docsignore` 排除技术试验、测试数据和规模统计；现行架构、API、设计、测试、SDK、运维、合规及其可追溯证据继续发布。
 - Console 文件 Pipeline、步骤、分发与错误查询增加服务端 `keyword` 筛选，步骤查询增加 Pipeline 实例和阶段筛选；OpenAPI 同步补齐 Job Step 与 Workflow 列表已有筛选参数，供前端直接使用服务端分页。
 - Console 权限契约新增动态 capability，下发的 `AI_ASSISTANT_USE` 同时受 AI 开关和用户/角色白名单控制；使用统计查询收紧为平台管理员、审计员和租户管理员，并在运行监控菜单提供独立入口。
 - Console AI 新增保持旧列表兼容的会话游标分页接口，按租户/所有者及过期时间过滤；旧列表同步补显式租户谓词，避免仅依赖连接级 RLS。
@@ -36,6 +37,9 @@
 
 ### Fixed
 
+- SDK 幂等键与签名 nonce 随机源收敛到系统 CSPRNG，补齐 Go 随机读取失败处理；服务端业务号随机后缀扩容，并对 KMS key、请求签名 header 增加启动期和输入边界校验。
+- Console 写请求幂等在 Redis 短暂不可用时增加数据库完成态兜底；读副本执行阶段连接异常会触发 quarantine，避免后续只读请求持续打到故障副本。
+- 文件治理的预签名审计和到达确认写入收敛到短事务提交边界，避免对象存储探测期间长时间占用数据库事务。
 - Console AI 失败响应的 OpenAPI 契约允许 `modelName` 为空，与模型调用失败时的真实响应一致。
 - Console AI 会话续写对非所有者或并发失效的会话统一返回 `NOT_FOUND`，与历史读取一致，不暴露会话 ID 是否存在。
 - Console 无状态 JWT 请求不再因每次认证触发 Spring Security 会话策略而清除 `XSRF-TOKEN`；已认证读请求后写操作仍需 `X-XSRF-TOKEN`，缺少请求头继续返回 403。

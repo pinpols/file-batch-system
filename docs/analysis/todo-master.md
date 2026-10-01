@@ -104,6 +104,21 @@
 
 ## 三、⏳ 待做
 
+### G6. 资源、并发与事务治理（2026-10-01）
+
+权威审计：[resource-lock-pool-cache-transaction-audit-2026-10-01.md](../audit/resource-lock-pool-cache-transaction-audit-2026-10-01.md)。代码侧 P1 已收口；以下只保留需要运行环境证据的事项。
+
+| ID | 主题 | 状态 | 验收证据 |
+|---|---|---|---|
+| **RES-1** | Redis 完成态失败后的 Console 幂等数据库兜底 | ✅ | `ConsoleIdempotencyInterceptorTest`；V38 `batch.idempotency_record` |
+| **RES-2** | 读副本 JDBC 执行期连接故障隔离 | ✅ | `ReadReplicaRoutingDataSourceTest`；需 staging 主从断链演练 |
+| **RES-3** | 文件治理对象存储 I/O 与数据库短事务分离 | ✅ | `FileGovernanceCommitService`；需 MinIO 延迟/断连压测 |
+| **RES-4** | Outbox scheduler 优雅关闭 | ✅ | `OrchestratorAsyncConfiguration`；outbox 重启后续投验证 |
+| **RES-5** | 多副本连接池总量预算 | 🔒 外部阻塞 | 按 Pod 副本数、池上限、PgBouncer/PG `max_connections` 出具 staging 容量记录 |
+| **RES-6** | 缓存 Redis 故障回源与配置失效告警 | 🟡 代码已补，运行证据待收口 | `batch.console.cache.failure{operation=read|write}`；Redis 故障注入、回源 QPS、失效发布失败告警证据 |
+
+不得把 RES-5/RES-6 的“代码已具备降级”写成“容量和告警已验证”；它们需要真实部署拓扑和故障注入证据。
+
 ### A. POSITIONAL-ARGS 治理（V6-P2-POSITIONAL-ARGS）· P2 · ✅ 已闭环
 
 > 状态：v4 已闭环，并行会话产出 + 守护测试到位。历史方案见 [`../archive/analysis/positional-args-cleanup-plan.md`](../archive/analysis/positional-args-cleanup-plan.md)。docs/agent-baseline.md "调用方约束" 子节由本方案沉淀。
@@ -248,6 +263,19 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 | **CI-ACTION-3** | 其余第三方 Action、扫描器和浮动版本引用复核 | 🟡 已完成盘点并保留兼容引用；GitHub Actions Dependabot 已开启每周版本队列，`trivy-action`、Checkov、发布 Action 等仍按上游安全公告和契约单独复核 |
 | **CI-SEC-1** | Gitleaks 8.30.1 CI Linux artifact 正向/负向检测验证 | ✅ Docker linux/amd64 基础正负样例及 PR/Full Gate 安全扫描已通过；该证据不替代后续规则更新与新增密钥类型回归 |
 | **CI-SEC-2** | 更新 Squawk CLI 与 oasdiff 固定版本 | ✅ 已升级到 Squawk `2.65.0` / oasdiff `1.32.1`，OpenAPI 变更门禁已实跑；无迁移变更时 Squawk 按规则跳过，下一次迁移继续验证兼容/破坏样例 |
+
+### G8. 随机数 / 加密 / ID 治理 · P1/P2 · ✅ 已完成
+
+专题审查：[`../review/random-crypto-id-review-2026-10-01.md`](../review/random-crypto-id-review-2026-10-01.md)。责任范围：后端安全基础库与五语言 SDK。当前结论是服务端主加密算法选型基本正确，未采用 Snowflake；本地可修的 SDK 随机质量、业务编号碰撞余量、KMS 启动期校验和请求签名输入边界已完成。
+
+| ID | 主题 | 状态 |
+|---|---|---|
+| **CRYPTO-ID-1** | TypeScript SDK claim/report `Idempotency-Key` 从 `Math.random()` 改为 `node:crypto.randomUUID()` | ✅ 已完成 |
+| **CRYPTO-ID-2** | Rust SDK idempotency-key / signing nonce 从时间种子 xorshift 改为 `getrandom` CSPRNG | ✅ 已完成 |
+| **CRYPTO-ID-3** | `IdGenerator.newBusinessNo` 随机后缀从 8 hex 扩到 16 hex，修正 `newBusinessNoBatch` 注释/测试 | ✅ 已完成 |
+| **CRYPTO-ID-4** | KMS key 启动期校验 AES key 长度（16/24/32B）和 `defaultKeyRef` 存在性 | ✅ 已完成 |
+| **CRYPTO-ID-5** | 请求签名 header 增加 timestamp / nonce / signature 长度与格式边界 | ✅ 已完成 |
+| **CRYPTO-ID-6** | Go SDK 处理 `crypto/rand.Read` 错误，失败时 fail-fast | ✅ 已完成 |
 
 ### H. 合规收尾 · P3
 

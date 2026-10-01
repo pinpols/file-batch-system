@@ -10,6 +10,8 @@
  * §C (retry / backoff); byo-conformance-contract.md §2 (field semantics).
  */
 
+import { randomUUID } from "node:crypto";
+
 import { SUPPORTED_SCHEMA_VERSIONS } from "./constants.ts";
 import type {
   DecisionAction,
@@ -476,9 +478,6 @@ export function newIdempotencyKey(): string {
   return `ts-${randomUuid()}`;
 }
 
-/** Minimal RFC-4122-ish v4 uuid (no deps); only the shape matters here. */
 function randomUuid(): string {
-  const hex = (n: number) =>
-    Array.from({ length: n }, () => Math.floor(Math.random() * 16).toString(16)).join("");
-  return `${hex(8)}-${hex(4)}-4${hex(3)}-${hex(4)}-${hex(12)}`;
+  return randomUUID();
 }

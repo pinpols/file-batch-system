@@ -6,13 +6,18 @@ import static org.mockito.Mockito.lenient;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.i18n.BizMessageResolver;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.Locale;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -42,6 +47,18 @@ class ConsoleApiExceptionHandlerTest {
         .thenAnswer(inv -> CommonResponse.failure(
             inv.getArgument(0, ResultCode.class), inv.getArgument(1, String.class)));
     return new ConsoleApiExceptionHandler(responseFactory, null);
+  }
+
+  private ConsoleApiExceptionHandler localizedHandler() {
+    lenient()
+        .when(responseFactory.failure(any(), any()))
+        .thenAnswer(inv -> CommonResponse.failure(
+            inv.getArgument(0, ResultCode.class), inv.getArgument(1, String.class)));
+    ResourceBundleMessageSource source = new ResourceBundleMessageSource();
+    source.setBasename("messages");
+    source.setDefaultEncoding("UTF-8");
+    source.setFallbackToSystemLocale(false);
+    return new ConsoleApiExceptionHandler(responseFactory, new BizMessageResolver(source));
   }
 
   private static DataIntegrityViolationException divFrom(String rootMessage) {
@@ -139,6 +156,24 @@ class ConsoleApiExceptionHandlerTest {
 
     assertThat(response.getStatusCode().value()).isEqualTo(400);
     assertThat(bodyOf(response).code()).isEqualTo(ResultCode.INVALID_ARGUMENT);
+  }
+
+  @Test
+  void shouldRenderBizExceptionMessageForCurrentLocale() {
+    BizException exception =
+        BizException.of(ResultCode.NOT_FOUND, "error.tenant.already_exists", "acme");
+    Locale previous = LocaleContextHolder.getLocale();
+    try {
+      LocaleContextHolder.setLocale(Locale.ENGLISH);
+      assertThat(bodyOf(localizedHandler().handleBizException(exception)).message())
+          .isEqualTo("tenant already exists: acme");
+
+      LocaleContextHolder.setLocale(Locale.SIMPLIFIED_CHINESE);
+      assertThat(bodyOf(localizedHandler().handleBizException(exception)).message())
+          .isEqualTo("租户已存在:acme");
+    } finally {
+      LocaleContextHolder.setLocale(previous);
+    }
   }
 
   private static RestClientResponseException restError(HttpStatus status, String body) {

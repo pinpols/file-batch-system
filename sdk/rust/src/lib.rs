@@ -2,7 +2,7 @@
 //!
 //! This crate mirrors the TypeScript (`../typescript`) and Go
 //! (`../go`) reference implementations: same decision behavior,
-//! idiomatic Rust, **zero external dependencies** (std-only).
+//! idiomatic Rust；默认构建仅直接引入轻量系统随机依赖,用于幂等键和签名 nonce。
 //!
 //! * [`constants`] — the 4 cross-language shared constant arrays (parity-guarded
 //!   against `docs/api/sdk-shared-constants.yaml`).
@@ -13,11 +13,11 @@ pub mod client;
 pub mod constants;
 pub mod decide;
 pub mod protocol;
+mod random;
 
 /// Phase 3 — the real Kafka consumer adapter (rdkafka), behind the optional
 /// `kafka` feature. The default build excludes this module entirely, so the
-/// crate stays std-only with zero external dependencies unless `--features
-/// kafka` is passed.
+/// crate avoids the Kafka dependency unless `--features kafka` is passed.
 #[cfg(feature = "kafka")]
 pub mod kafka;
 

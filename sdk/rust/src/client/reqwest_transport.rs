@@ -330,36 +330,8 @@ impl ReqwestTransport {
 
 /// Generate a one-shot idempotency key (`rs-<uuid>`), matching the decision
 /// core's fallback (`crate::decide`) and the Go/Python SDKs' per-attempt key.
-/// std-only — no `rand`/`uuid` crate.
 fn new_idempotency_key() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let mut state = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos() as u64)
-        .unwrap_or(0x9e37_79b9_7f4a_7c15)
-        | 1;
-    let mut next = || {
-        state ^= state << 13;
-        state ^= state >> 7;
-        state ^= state << 17;
-        state
-    };
-    let mut bytes = [0u8; 16];
-    for chunk in bytes.chunks_mut(8) {
-        let r = next().to_le_bytes();
-        chunk.copy_from_slice(&r[..chunk.len()]);
-    }
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    let hex: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
-    format!(
-        "rs-{}-{}-{}-{}-{}",
-        &hex[0..8],
-        &hex[8..12],
-        &hex[12..16],
-        &hex[16..20],
-        &hex[20..32],
-    )
+    format!("rs-{}", crate::random::uuid_v4())
 }
 
 /// Epoch milliseconds for the `X-Batch-Timestamp` signing header.
@@ -371,14 +343,10 @@ fn current_epoch_millis() -> u128 {
         .unwrap_or(0)
 }
 
-/// One-shot signing nonce (uuid-shaped, std-only). Replay protection needs
-/// uniqueness, not crypto-strength — the HMAC binds the nonce. Reuses the
-/// idempotency-key generator's entropy, dropping the `rs-` prefix.
+/// One-shot signing nonce. Replay protection needs uniqueness; using the same
+/// system CSPRNG helper keeps it aligned with idempotency-key generation.
 fn new_nonce() -> String {
-    new_idempotency_key()
-        .strip_prefix("rs-")
-        .map(str::to_owned)
-        .unwrap_or_else(new_idempotency_key)
+    crate::random::uuid_v4()
 }
 
 /// The SDK's current wire-protocol major — the last entry of

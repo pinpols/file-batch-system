@@ -1,11 +1,22 @@
 package io.github.pinpols.batch.console.application.ops;
 
+import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.application.contract.response.ops.AssetPartitionReadinessResponse;
+import io.github.pinpols.batch.console.application.contract.response.ops.CapacityProfileResponse;
+import io.github.pinpols.batch.console.application.contract.response.ops.LineageEvidenceResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleBatchDayOperateResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleInstanceActionResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsolePartitionActionResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleRetryFailedPartitionsResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunActionResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunSkipNodeResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchDayReplaySubmitRequest;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.DryRunPlanRequest;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayReplayEntryResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayReplayPreviewResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayReplaySessionResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleDryRunPlanResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleResultVersionResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleForensicExportResponse;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OutboxCleanupProxyResponse;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.OutboxRepublishProxyResponse;
@@ -122,4 +133,51 @@ public interface ConsoleOrchestratorPort {
    */
   List<ConsolePipelineProgressItemResponse> pipelineProgress(
       String tenantId, List<String> workerCodes);
+
+  /** 转发 dry-run 计划；租户解析和内部 HTTP 细节由实现层负责。 */
+  CommonResponse<ConsoleDryRunPlanResponse> dryRunPlan(DryRunPlanRequest request);
+
+  /** 转发批次日重放 API；Controller 不直接拼接内部 URL。 */
+  CommonResponse<ConsoleBatchDayReplaySessionResponse> batchDayReplaySubmit(
+      BatchDayReplaySubmitRequest request);
+
+  CommonResponse<ConsoleBatchDayReplayPreviewResponse> batchDayReplayPreview(
+      BatchDayReplaySubmitRequest request);
+
+  CommonResponse<List<ConsoleBatchDayReplaySessionResponse>> batchDayReplayList(
+      String tenantId, String status, int limit);
+
+  CommonResponse<ConsoleBatchDayReplaySessionResponse> batchDayReplayApprove(
+      Long sessionId, String tenantId, String approver);
+
+  CommonResponse<ConsoleBatchDayReplaySessionResponse> batchDayReplayCancel(
+      Long sessionId, String tenantId);
+
+  CommonResponse<ConsoleBatchDayReplaySessionResponse> batchDayReplayDetail(
+      Long sessionId, String tenantId);
+
+  CommonResponse<List<ConsoleBatchDayReplayEntryResponse>> batchDayReplayEntries(
+      Long sessionId, String tenantId, String status, int limit);
+
+  CommonResponse<List<ConsoleResultVersionResponse>> resultVersions(
+      String tenantId, String businessKey, int limit);
+
+  CommonResponse<ConsoleResultVersionResponse> effectiveResultVersion(
+      String tenantId, String businessKey);
+
+  CommonResponse<ConsoleResultVersionResponse> resultVersion(Long id, String tenantId);
+
+  CommonResponse<ConsoleResultVersionResponse> promoteResultVersion(Long id, String tenantId);
+
+  CommonResponse<ConsoleResultVersionResponse> rejectResultVersion(Long id, String tenantId);
+
+  AssetPartitionReadinessResponse assetPartitionReadiness(
+      String tenantId, String jobCode, LocalDate bizDate);
+
+  CommonResponse<LineageEvidenceResponse> lineageByResultVersion(Long id, String tenantId);
+
+  CommonResponse<LineageEvidenceResponse> lineageByEffective(String tenantId, String businessKey);
+
+  CommonResponse<CapacityProfileResponse> capacityProfile(
+      String tenantId, String from, String to, String groupBy, Integer limit);
 }
