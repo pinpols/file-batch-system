@@ -1,11 +1,23 @@
 package io.github.pinpols.batch.console.config;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import java.sql.CallableStatement;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
@@ -19,9 +31,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * <ol>
  *   <li><b>force-primary 旁路</b>：{@link RoutingHints#isForcePrimary()} 为 true 时直接返回 PRIMARY， 优先级高于
  *       readOnly 标志（read-after-write 场景）
- *   <li><b>fail-open 降级</b>：从库连接失败累计达 {@code failureThreshold} 次后进入 quarantine， quarantine 期内
- *       readOnly 查询自动落主库（避免从库故障击穿业务）；quarantine 期满后下一次请求重新尝试， 成功即解除，失败则续期。Hikari 自身的连接失败也会被
- *       try-catch 捕获并降级。
+ *   <li><b>fail-open 降级</b>：从库连接获取或执行阶段的连接性失败累计达 {@code failureThreshold} 次后进入
+ *       quarantine，期内 readOnly 查询自动落主库（避免从库故障击穿业务）；quarantine 期满后下一次请求重新尝试，
+ *       成功即解除，失败则续期。已绑定从库连接的当前事务不会中途换库；该请求可能失败，但后续请求会走主库。
  * </ol>
  *
  * <p>暴露的指标（micrometer）：
@@ -89,7 +101,7 @@ public class ReadReplicaRoutingDataSource extends AbstractRoutingDataSource {
       return primary.getConnection();
     }
     try {
-      Connection conn = super.getConnection();
+      Connection conn = observeReplicaConnection(super.getConnection());
       // 成功一次就重置连续失败计数；若曾进入过 quarantine，此次成功即视为"replica 恢复"，
       // 发 info 日志 + recovery counter 让运维明确感知到恢复信号（quarantineUntilMillis
       // 是隐式时间过期，无显式 transition 事件，否则故障 → 恢复对运维静默）。
@@ -122,9 +134,81 @@ public class ReadReplicaRoutingDataSource extends AbstractRoutingDataSource {
     incrementCounter(METRIC_FAILOVER, "reason", "connection_failure");
   }
 
+  /**
+   * 连接成功后，继续观察 JDBC 执行阶段的连接性异常。
+   *
+   * <p>只在取连接时做 fail-open 会漏掉“连接建立成功、执行查询时断链”的故障。当前事务无法在这里安全切换连接，
+   * 但必须立即隔离副本，让后续请求走主库；调用方仍会收到当前查询的原始 SQLException。
+   */
+  private Connection observeReplicaConnection(Connection connection) {
+    return proxyJdbcObject(connection, Connection.class);
+  }
+
+  @SuppressWarnings("unchecked")
+  private <T> T proxyJdbcObject(T target, Class<?> requiredInterface) {
+    if (EmptyChecks.isNull(target) || !requiredInterface.isInterface()) {
+      return target;
+    }
+    LinkedHashSet<Class<?>> interfaceSet = new LinkedHashSet<>();
+    interfaceSet.add(requiredInterface);
+    if (target instanceof PreparedStatement) {
+      interfaceSet.add(PreparedStatement.class);
+    }
+    if (target instanceof CallableStatement) {
+      interfaceSet.add(CallableStatement.class);
+    }
+    if (target instanceof ResultSet) {
+      interfaceSet.add(ResultSet.class);
+    }
+    if (target instanceof Statement) {
+      interfaceSet.add(Statement.class);
+    }
+    List<Class<?>> interfaces = new ArrayList<>(interfaceSet);
+    InvocationHandler handler =
+        (proxy, method, args) -> invokeObserved(target, proxy, method, args);
+    return (T) Proxy.newProxyInstance(
+        target.getClass().getClassLoader(), interfaces.toArray(Class<?>[]::new), handler);
+  }
+
+  private Object invokeObserved(Object target, Object proxy, Method method, Object[] args)
+      throws Throwable {
+    try {
+      Object result = method.invoke(target, args);
+      if (result instanceof Statement statement) {
+        return proxyJdbcObject(statement, Statement.class);
+      }
+      if (result instanceof ResultSet resultSet) {
+        return proxyJdbcObject(resultSet, ResultSet.class);
+      }
+      if (result instanceof Connection returnedConnection) {
+        return proxyJdbcObject(returnedConnection, Connection.class);
+      }
+      return result;
+    } catch (InvocationTargetException exception) {
+      Throwable cause = exception.getCause();
+      if (cause instanceof SQLException sqlException && isConnectionFailure(sqlException)) {
+        handleReplicaFailure(sqlException);
+      }
+      throw cause;
+    }
+  }
+
+  private static boolean isConnectionFailure(SQLException exception) {
+    SQLException current = exception;
+    while (EmptyChecks.isNotNull(current)) {
+      String state = current.getSQLState();
+      if (EmptyChecks.isNotNull(state) && (state.startsWith("08") || state.startsWith("57"))) {
+        return true;
+      }
+      Throwable cause = current.getCause();
+      current = cause instanceof SQLException sqlException ? sqlException : null;
+    }
+    return false;
+  }
+
   private void incrementCounter(String name, String tagKey, String tagValue) {
     MeterRegistry registry = meterRegistryProvider.getIfAvailable();
-    if (registry == null) {
+    if (EmptyChecks.isNull(registry)) {
       return;
     }
     Counter.builder(name).tags(Tags.of(tagKey, tagValue)).register(registry).increment();
@@ -132,7 +216,7 @@ public class ReadReplicaRoutingDataSource extends AbstractRoutingDataSource {
 
   private static String classify(SQLException ex) {
     String state = ex.getSQLState();
-    if (state == null) {
+    if (EmptyChecks.isNull(state)) {
       return "unknown";
     }
     if (state.startsWith("08")) {

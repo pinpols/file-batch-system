@@ -140,11 +140,17 @@ func NewIdempotencyKey() string {
 	return "go-" + randomUUID()
 }
 
-// randomUUID returns an RFC-4122-ish v4 uuid (no deps); only the shape matters.
+// randomUUID 返回由 crypto/rand 支撑的 RFC-4122 v4 UUID。
 func randomUUID() string {
 	var b [16]byte
-	_, _ = rand.Read(b[:])
+	mustReadRandom(b[:])
 	b[6] = (b[6] & 0x0f) | 0x40
 	b[8] = (b[8] & 0x3f) | 0x80
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}
+
+func mustReadRandom(buf []byte) {
+	if _, err := rand.Read(buf); err != nil {
+		panic(fmt.Errorf("batch worker sdk: crypto/rand failed: %w", err))
+	}
 }

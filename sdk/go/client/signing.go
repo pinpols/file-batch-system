@@ -72,8 +72,14 @@ func isWriteMethod(method string) bool {
 // header. Only uniqueness/shape matters (the platform treats it as opaque).
 func newNonce() string {
 	var b [16]byte
-	_, _ = rand.Read(b[:])
+	mustReadRandom(b[:])
 	b[6] = (b[6] & 0x0f) | 0x40
 	b[8] = (b[8] & 0x3f) | 0x80
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}
+
+func mustReadRandom(buf []byte) {
+	if _, err := rand.Read(buf); err != nil {
+		panic(fmt.Errorf("batch worker sdk: crypto/rand failed: %w", err))
+	}
 }

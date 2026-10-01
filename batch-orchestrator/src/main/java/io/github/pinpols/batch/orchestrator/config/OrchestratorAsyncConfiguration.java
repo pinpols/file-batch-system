@@ -38,7 +38,8 @@ public class OrchestratorAsyncConfiguration {
     // 原 setDaemon(true) 的副作用: JVM 退出时 daemon 线程被直接终止, awaitTermination 形同虚设。
     scheduler.setDaemon(false);
     scheduler.setRemoveOnCancelPolicy(true);
-    scheduler.setWaitForTasksToCompleteOnShutdown(false);
+    // outbox 事件已经落库，关闭时允许当前投递轮次完成；未投递事件会由下一副本继续扫描。
+    scheduler.setWaitForTasksToCompleteOnShutdown(true);
     scheduler.setAwaitTerminationSeconds(30);
     scheduler.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
     return scheduler;

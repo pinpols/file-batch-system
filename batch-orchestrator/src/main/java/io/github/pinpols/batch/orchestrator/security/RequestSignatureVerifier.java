@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.security.RequestSignatures;
 import io.github.pinpols.batch.common.security.SecretComparator;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.time.Duration;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -15,6 +16,14 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class RequestSignatureVerifier {
+
+  private static final int TIMESTAMP_MIN_LENGTH = 10;
+  private static final int TIMESTAMP_MAX_LENGTH = 17;
+  private static final int NONCE_MIN_LENGTH = 8;
+  private static final int NONCE_MAX_LENGTH = 128;
+  private static final Pattern TIMESTAMP_PATTERN = Pattern.compile("\\d{10,17}");
+  private static final Pattern NONCE_PATTERN = Pattern.compile("[A-Za-z0-9._:-]{8,128}");
+  private static final Pattern SIGNATURE_PATTERN = Pattern.compile("[0-9a-f]{64}");
 
   public enum Result {
     OK,
@@ -45,9 +54,15 @@ public class RequestSignatureVerifier {
         || !Texts.hasText(req.signature())) {
       return Result.MISSING_HEADERS;
     }
+    if (!hasValidTimestampShape(req.timestamp())) {
+      return Result.CLOCK_SKEW;
+    }
+    if (!hasValidNonceShape(req.nonce()) || !hasValidSignatureShape(req.signature())) {
+      return Result.BAD_SIGNATURE;
+    }
     long ts;
     try {
-      ts = Long.parseLong(req.timestamp().trim());
+      ts = Long.parseLong(req.timestamp());
     } catch (NumberFormatException e) {
       return Result.CLOCK_SKEW;
     }
@@ -65,5 +80,23 @@ public class RequestSignatureVerifier {
       return Result.REPLAY;
     }
     return Result.OK;
+  }
+
+  private static boolean hasValidTimestampShape(String value) {
+    int length = value.length();
+    return length >= TIMESTAMP_MIN_LENGTH
+        && length <= TIMESTAMP_MAX_LENGTH
+        && TIMESTAMP_PATTERN.matcher(value).matches();
+  }
+
+  private static boolean hasValidNonceShape(String value) {
+    int length = value.length();
+    return length >= NONCE_MIN_LENGTH
+        && length <= NONCE_MAX_LENGTH
+        && NONCE_PATTERN.matcher(value).matches();
+  }
+
+  private static boolean hasValidSignatureShape(String value) {
+    return SIGNATURE_PATTERN.matcher(value).matches();
   }
 }

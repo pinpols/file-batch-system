@@ -521,7 +521,7 @@ fn base_headers(cfg: &RequestBuildConfig) -> BTreeMap<String, String> {
 fn idempotency_key(provided: &Option<String>) -> String {
     match provided {
         Some(k) if !k.is_empty() => k.clone(),
-        _ => format!("rs-{}", random_uuid()),
+        _ => format!("rs-{}", crate::random::uuid_v4()),
     }
 }
 
@@ -591,39 +591,6 @@ pub fn build_request(spec: &RequestSpec, cfg: &RequestBuildConfig) -> OutgoingRe
         }
     }
     OutgoingRequest { body, headers }
-}
-
-/// An RFC-4122-ish v4 uuid (std-only; only the shape matters for assertions).
-fn random_uuid() -> String {
-    // Seed a tiny xorshift PRNG from the system clock — no external rand crate.
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let mut state = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos() as u64)
-        .unwrap_or(0x9e3779b97f4a7c15)
-        | 1;
-    let mut next = || {
-        state ^= state << 13;
-        state ^= state >> 7;
-        state ^= state << 17;
-        state
-    };
-    let mut bytes = [0u8; 16];
-    for chunk in bytes.chunks_mut(8) {
-        let r = next().to_le_bytes();
-        chunk.copy_from_slice(&r[..chunk.len()]);
-    }
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    let hex: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
-    format!(
-        "{}-{}-{}-{}-{}",
-        &hex[0..8],
-        &hex[8..12],
-        &hex[12..16],
-        &hex[16..20],
-        &hex[20..32],
-    )
 }
 
 // ---------------------------------------------------------------------------

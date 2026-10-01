@@ -36,6 +36,9 @@
 
 ### Fixed
 
+- SDK 幂等键与签名 nonce 随机源收敛到系统 CSPRNG，补齐 Go 随机读取失败处理；服务端业务号随机后缀扩容，并对 KMS key、请求签名 header 增加启动期和输入边界校验。
+- Console 写请求幂等在 Redis 短暂不可用时增加数据库完成态兜底；读副本执行阶段连接异常会触发 quarantine，避免后续只读请求持续打到故障副本。
+- 文件治理的预签名审计和到达确认写入收敛到短事务提交边界，避免对象存储探测期间长时间占用数据库事务。
 - Console AI 失败响应的 OpenAPI 契约允许 `modelName` 为空，与模型调用失败时的真实响应一致。
 - Console AI 会话续写对非所有者或并发失效的会话统一返回 `NOT_FOUND`，与历史读取一致，不暴露会话 ID 是否存在。
 - Console 无状态 JWT 请求不再因每次认证触发 Spring Security 会话策略而清除 `XSRF-TOKEN`；已认证读请求后写操作仍需 `X-XSRF-TOKEN`，缺少请求头继续返回 403。

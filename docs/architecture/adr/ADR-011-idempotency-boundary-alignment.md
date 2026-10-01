@@ -32,6 +32,7 @@
   - `afterCompletion` 根据 HTTP 响应:2xx → 升级 `DONE`(24h TTL,长期防重复);非 2xx → DELETE,允许调用方安全重试。
 - 失败时**显式释放**占位,不再让"业务异常 / 5xx"把 key 锁 24h。
 - Redis 不可达:fail-closed 503(与限流的 fail-open 形成对照,前者保可用,后者保安全)。
+- 成功完成态同时写入既有 `batch.idempotency_record`，键为 `console-http:` + SHA-256，作为 Redis DONE 丢失时的持久兜底；Redis 仍是并发占位的快速路径。
 - 写方法(POST/PUT/PATCH/DELETE)生效,GET / HEAD / OPTIONS 直接放行;`@Idempotent` 标注的 endpoint 缺 header 直接 400。
 
 **SLA**:同 key 在 24h 内重复提交 → 第二次返回 409 `CONFLICT_DONE`(已处理)或 `CONFLICT_PENDING`(处理中)。
@@ -86,7 +87,7 @@ HTTP POST/PUT/PATCH/DELETE + Idempotency-Key
 
 ## 不变量
 
-1. **Layer 1 的 24h DONE TTL** ≪ **Layer 3 的永久唯一约束** — Layer 1 只是"短期防重复 POST",过期后会让请求穿透到 Layer 2/3,最终事实唯一性靠 Layer 3。
+1. **Layer 1 的 24h DONE TTL** 由 Redis 提供低延迟缓存，成功完成态同时写入平台库；Redis 过期后由持久完成记录继续阻止同一 HTTP 请求重复进入。
 2. **Layer 2 是 best-effort,不是 fail-closed** — 单条查不到不代表绝对没人在做,允许两条同时穿透,Layer 3 回退。
 3. **Layer 3 不可被绕过** — trigger / kafka / direct API / outbox replay 任何路径写入 `job_instance` 都必须命中本约束。
 
@@ -103,7 +104,7 @@ HTTP POST/PUT/PATCH/DELETE + Idempotency-Key
 
 - **Layer 2 的 best-effort 允许极小概率的"两条 trigger_request 都送到 orchestrator"**:接受,理由是 Layer 3 回退成本低(DB UNIQUE 约束 + select),反而比 trigger 层加锁更稳。
 - **Layer 1 PENDING 30s TTL 内的并发请求会被 409**:有意为之,避免突发并发把同 key 双提交到 Layer 2。
-- **Layer 1 fail-closed**:Redis 不可用时 console POST 全部 503,运维需把 Redis 列入主链路 SLO 一档。
+- **Layer 1 fail-closed**:Redis 不可用时 console POST 全部 503,运维需把 Redis 列入主链路 SLO 一档；完成态数据库兜底只覆盖请求已成功、Redis 在结算窗口失败的场景，不把 Redis 降级成可静默放行。
 
 ## 实施验证
 
@@ -131,4 +132,3 @@ HTTP POST/PUT/PATCH/DELETE + Idempotency-Key
 - [deep-issue-analysis.md §5.6](../../analysis/deep-issue-analysis.md) — Trigger 补跑审批接口幂等头未真正使用(已闭环)
 - [deep-issue-analysis.md §5.10](../../analysis/deep-issue-analysis.md) — Trigger 去重策略设计漂移(已闭环)
 - [hardening-backlog.md V6-P2-CONSOLE-IDEMPOTENCY](../../analysis/hardening-backlog.md)
-

@@ -2,25 +2,29 @@ package io.github.pinpols.batch.common.config;
 
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.Base64;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
 
+/** 按配置装配对象存储加解密能力。 */
 @AutoConfiguration
 @EnableConfigurationProperties({BatchSecurityProperties.class, BatchKmsProperties.class})
-/** 按配置装配对象存储加解密能力。 */
 public class BatchObjectCryptoAutoConfiguration {
+
+  private static final Set<Integer> AES_KEY_LENGTHS = Set.of(16, 24, 32);
 
   @Bean
   public BatchObjectCryptoService batchObjectCryptoService(
       BatchSecurityProperties securityProperties,
       BatchKmsProperties kmsProperties,
       Environment environment) {
-    validateKmsKeysNotWeakInProd(kmsProperties, environment);
+    validateKmsKeys(kmsProperties, environment);
     return new BatchObjectCryptoService(securityProperties, kmsProperties);
   }
 
@@ -32,16 +36,26 @@ public class BatchObjectCryptoAutoConfiguration {
   }
 
   /**
-   * 生产 profile 下拒绝弱/占位 KMS 密钥(如 batch-defaults 的 {@code DEFAULT_TEST=AAAA...==} 全零密钥)。否则未注入 {@code
-   * BATCH_SECURITY_KMS_KEYS_*} 时会用公开已知的全零密钥加密生产数据,密文可被直接解密。
+   * 启动期校验 KMS 密钥配置。所有环境都必须保证默认 key 引用存在、密钥能 base64 解码且长度符合 AES 要求；生产 profile 额外拒绝弱/占位密钥(如
+   * batch-defaults 的 {@code DEFAULT_TEST=AAAA...==} 全零密钥)。否则未注入 {@code BATCH_SECURITY_KMS_KEYS_*} 时会用公开已知密钥加密生产数据。
    */
-  static void validateKmsKeysNotWeakInProd(
-      BatchKmsProperties kmsProperties, Environment environment) {
-    if (!BatchProfileSupport.isProductionProfile(environment)) {
-      return;
+  static void validateKmsKeys(BatchKmsProperties kmsProperties, Environment environment) {
+    Map<String, String> keys = kmsProperties.getKeys();
+    String defaultKeyRef = kmsProperties.getDefaultKeyRef();
+    if (EmptyChecks.isBlank(defaultKeyRef) || !keys.containsKey(defaultKeyRef)) {
+      throw new IllegalStateException(
+          "FATAL: batch.security.kms.default-key-ref must reference an existing batch.security.kms.keys entry");
     }
-    for (Map.Entry<String, String> entry : kmsProperties.getKeys().entrySet()) {
-      if (isWeakKey(entry.getValue())) {
+
+    boolean production = BatchProfileSupport.isProductionProfile(environment);
+    for (Map.Entry<String, String> entry : keys.entrySet()) {
+      byte[] decoded = decodeKmsKey(entry.getKey(), entry.getValue());
+      if (!AES_KEY_LENGTHS.contains(decoded.length)) {
+        throw new IllegalStateException("FATAL: batch.security.kms.keys."
+            + entry.getKey()
+            + " must decode to a 16, 24, or 32 byte AES key");
+      }
+      if (production && isAllZero(decoded)) {
         throw new IllegalStateException(
             "FATAL: production batch.security.kms.keys."
                 + entry.getKey()
@@ -50,17 +64,21 @@ public class BatchObjectCryptoAutoConfiguration {
     }
   }
 
-  /** 弱密钥判定:空、非法 base64,或解码后全零字节。 */
-  private static boolean isWeakKey(String value) {
-    if (value == null || value.isBlank()) {
-      return true;
+  private static byte[] decodeKmsKey(String keyRef, String value) {
+    if (EmptyChecks.isBlank(value)) {
+      throw new IllegalStateException(
+          "FATAL: batch.security.kms.keys." + keyRef + " must not be blank");
     }
-    byte[] decoded;
     try {
-      decoded = Base64.getDecoder().decode(value.trim());
+      return Base64.getDecoder().decode(value.trim());
     } catch (IllegalArgumentException ex) {
-      return true; // 非法 base64 当弱密钥拒绝
+      throw new IllegalStateException(
+          "FATAL: batch.security.kms.keys." + keyRef + " must be valid base64", ex);
     }
+  }
+
+  /** 弱密钥判定:解码后全零字节。 */
+  private static boolean isAllZero(byte[] decoded) {
     for (byte b : decoded) {
       if (b != 0) {
         return false;

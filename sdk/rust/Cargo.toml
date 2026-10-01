@@ -5,7 +5,7 @@ edition = "2021"
 # 核心 crate(默认 feature、零运行时依赖)的最低支持 Rust 版本。当前 HTTP/Kafka
 # 当前锁定的可选依赖树要求 Rust 1.88+，生产适配器 CI 因此使用 stable；详见 README。
 rust-version = "1.75"
-description = "BYO worker SDK decision core + conformance runner (Rust reference impl, zero-dependency)"
+description = "BYO worker SDK decision core + conformance runner (Rust reference impl)"
 license = "Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/pinpols/file-batch-system"
@@ -20,15 +20,13 @@ exclude = ["tests/"]
 name = "batch_worker_sdk"
 path = "src/lib.rs"
 
-# The default build is zero-dependency: the decision core, the conformance
-# runner, the constants-parity test, and the minimal JSON / YAML parsers are all
-# std-only. The OPTIONAL `kafka` feature (phase-3 adapter, src/kafka.rs) is the
-# only thing that pulls external crates, and only when explicitly enabled.
+# 默认构建保持运行时逻辑轻量:决策核心、契约 runner、常量对齐测试和最小 JSON / YAML 解析器
+# 仍不依赖框架；仅直接引入 `getrandom` 用于生成安全的幂等键和签名 nonce。HTTP/Kafka
+# 生产适配器继续通过 feature gate 启用。
 [features]
-# Opt-in serde derives for the ADR-037 checkpoint types (`SdkCheckpointState`,
-# `JsonValue`). Off by default so the core build stays zero-dependency; pulled in
-# transitively by `kafka`/`http`. When enabled, `JsonValue` round-trips as plain
-# JSON (wire-compatible with the Java `Map<String,Object>` break position).
+# ADR-037 checkpoint 类型(`SdkCheckpointState`、`JsonValue`)的 serde derive 为显式 opt-in。
+# 默认关闭,核心构建不直接依赖 serde；`kafka`/`http` 会传递启用。启用后 `JsonValue`
+# 以普通 JSON 往返,与 Java `Map<String,Object>` 断点位置线协议兼容。
 serde = ["dep:serde", "dep:serde_json"]
 # Real Kafka consumer adapter (rdkafka). Off by default → default build stays
 # std-only and the phase-1/2 tests are unaffected. Pulls the lightweight `log`
@@ -51,6 +49,7 @@ rdkafka = { version = "0.36", optional = true, default-features = true, features
 reqwest = { version = "0.12", optional = true, default-features = false, features = ["blocking", "json", "rustls-tls"] }
 serde = { version = "1", optional = true, features = ["derive"] }
 serde_json = { version = "1", optional = true }
+getrandom = "0.2"
 # `log` facade behind `kafka`: warn/error records for withheld / dropped / poison
 # / handler-panic messages. A tiny, dependency-light facade — no logger backend is
 # forced on downstream crates (they pick their own: env_logger, tracing, ...).

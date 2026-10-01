@@ -12,6 +12,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.Map;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
@@ -72,7 +73,7 @@ class ReadReplicaRoutingDataSourceTest {
 
     Connection actual = ds.getConnection();
 
-    assertThat(actual).isSameAs(replicaConn);
+    assertThat(actual).isNotSameAs(replicaConn);
     verify(replica).getConnection();
     verify(primary, never()).getConnection();
   }
@@ -187,8 +188,29 @@ class ReadReplicaRoutingDataSourceTest {
 
     // 第 2 次成功 → 重置
     Connection actual = ds.getConnection();
-    assertThat(actual).isSameAs(replicaConn);
+    assertThat(actual).isNotSameAs(replicaConn);
     assertThat(ds.currentConsecutiveFailures()).isZero();
+  }
+
+  @Test
+  void queryConnectionFailureQuarantinesReplicaForFollowingRequests() throws Exception {
+    ReadReplicaRoutingDataSource ds = buildDs(1, 30_000);
+    TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
+    Statement statement = mock(Statement.class);
+    when(replicaConn.createStatement()).thenReturn(statement);
+    when(statement.executeQuery("select 1"))
+        .thenThrow(new SQLException("connection reset", "08006"));
+
+    Connection actual = ds.getConnection();
+    assertThat(actual.createStatement()).isNotSameAs(statement);
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> actual.createStatement().executeQuery("select 1"))
+        .isInstanceOf(SQLException.class);
+
+    assertThat(ds.currentConsecutiveFailures()).isEqualTo(1);
+    assertThat(ds.isReplicaQuarantined()).isTrue();
+    ds.getConnection();
+    verify(primary).getConnection();
   }
 
   // ── quarantine 期满自动恢复 ─────────────────────────────────────────
@@ -212,7 +234,7 @@ class ReadReplicaRoutingDataSourceTest {
 
     // 下一次请求重新尝试 replica，成功 → 触发 recovery 信号
     Connection actual = ds.getConnection();
-    assertThat(actual).isSameAs(replicaConn);
+    assertThat(actual).isNotSameAs(replicaConn);
 
     // v6 hardening：曾 quarantine 过的恢复必须发 recovery counter，否则运维静默无感
     assertThat(meterRegistry.find("batch.console.replica.recovery.count").counter())
