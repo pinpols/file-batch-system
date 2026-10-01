@@ -36,7 +36,7 @@
 | Squawk / oasdiff | 2.65.0 / 1.32.1 | 迁移安全和 OpenAPI 破坏性变更守护 |
 | Trivy CLI | 0.74.0 | `vuln,misconfig` 扫描参数统一 |
 
-2026-10-01 已确认相关升级 PR 门禁及最新 `main` Full Gate/CodeQL 通过；这只覆盖实际执行到的任务。Docker Buildx/Bake 仍须在下一次真实镜像 workflow 补证据，发布凭据、GHES 与 self-hosted runner 兼容性继续按目标环境验证。后续每次升级仍须按 [CI 外部 Actions 版本升级与验收记录](../backlog/ci-external-action-upgrade-backlog-2026-09-30.md) 运行对应回归。
+CI 版本基线与运行结果分开记录。每次核验 Full Gate、CodeQL 或镜像工作流时，按目标分支的实际 commit SHA 检查最新 run；`IN_PROGRESS`、`QUEUED`、`SKIPPED` 或其他 SHA 上的成功都不能作为当前提交通过证据。Docker Buildx/Bake、发布凭据、GHES 与 self-hosted runner 兼容性仍须按目标环境验证。后续每次升级按 [CI 外部 Actions 版本升级与验收记录](../backlog/ci-external-action-upgrade-backlog-2026-09-30.md) 运行对应回归。
 
 运行环境约束：
 
@@ -502,6 +502,7 @@ pom.xml                      # 父 pom：JaCoCo agent、PMD、Spotless 插件配
 
 仓库已预留 `.github/workflows/sonar-gate.yml`，但默认不执行，不纳入当前
 required checks。只有配置仓库变量 `SONAR_GATE_ENABLED=true` 后才会运行。
+Java 生产代码变更应按 [Sonar Runbook](sonar.md) 在本地运行增量审阅；本地执行情况与 CI 门禁状态分开报告。当前工作流关闭或显示 `SKIPPED` 时，不得视为 Sonar 通过。
 
 启用前配置：
 

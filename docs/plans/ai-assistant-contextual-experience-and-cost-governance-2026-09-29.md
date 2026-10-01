@@ -92,19 +92,22 @@ flowchart LR
 
 聊天体验需要可续接，但会话记录和安全审计应分开设计、分开授权。
 
-建议的数据边界：
+已落地的数据边界（字段与约束以迁移定义为准）：
 
 | 数据 | 建议保存方式 | 访问/保留要求 |
 |---|---|---|
-| 用户会话与消息 | PostgreSQL 按需新增会话表和消息表；按 `tenant_id + owner_user_id` 绑定所有权 | 服务端恢复会话前再次校验租户和用户；设定可配置保留期、删除/清理流程；消息内容按组织数据分级采取静态加密和访问审计 |
-| 安全/成本审计 | 现有 `console_ai_audit_log` 保留 request/trace、用户、模型、分类/决策、token、耗时、工具调用摘要和内容哈希 | 不保存原始 prompt/response 预览；限制审计查询角色；制定独立的审计保留期限 |
+| 用户会话 | `batch.console_ai_conversation`，V218；复合主键 `(tenant_id, id)`，记录所有者、上下文版本与过期时间 | 服务端按租户和所有者校验；持久化默认关闭，启用时配置保留期；删除和过期清理由服务端执行 |
+| 会话轮次 | `batch.console_ai_turn`，V218；租户复合外键关联会话，`(tenant_id, conversation_id, turn_no)` 唯一 | 消息正文在应用层经 AES-GCM/KMS 加密后保存；只在授权后解密返回 |
+| 月度用量 | `batch.console_ai_monthly_usage`，V218；主键 `(tenant_id, billing_month)` | 原子维护月预算预留及实际费用估算；启用租户 RLS；估算不等于供应商账单 |
+| 安全/成本审计 | `batch.console_ai_audit_log`，V11 创建、V217 增加清理索引 | 记录 request/trace、用户、模型、分类/决策、token、费用状态和内容哈希；新请求原文预览默认关闭，显式开启时最多 512 字符；审计保留期限单独治理 |
 | 知识文档 | 继续由版本控制的 `ai-knowledge/*.md` 维护 | 发布前检查敏感字段；纳入模型数据出口策略 |
 | RAG embedding | 继续进程内构建和缓存，不写业务数据库 | provider 调用、错误和重新构建应可观测；不得记录向量请求正文 |
 
-会话表建议字段：
+表字段以 V218 为准，核心字段如下：
 
-- `console_ai_conversation`：`id`、`tenant_id`、`owner_user_id`、标题、状态、创建/更新时间、可选来源页面类型和对象引用。
-- `console_ai_turn`：`id`、`tenant_id`、`conversation_id`、单调序号、加密的提问/回答、状态、模型/决策元数据、token 用量、创建时间；必要时保存结构化来源引用，而不是复制整页系统数据。
+- `console_ai_conversation`：`tenant_id`、`id`、`owner_user_id`、标题、上下文版本、`next_turn_no`、创建/更新时间及 `expires_at`。
+- `console_ai_turn`：`tenant_id`、`id`、`conversation_id`、`turn_no`、加密的提问/回答、状态、模型/决策元数据、token 用量和创建时间。
+- `console_ai_monthly_usage`：租户、账期、预算预留和实际费用估算等聚合值，不保存提示词或回答正文。
 - 唯一约束和外键须体现租户边界；所有列表、详情、续接、删除查询都必须同时过滤租户和所有者/授权范围。
 
 对话上下文从服务端读取最近若干条消息，并按字符上限截断；不能只因客户端传入相同 `sessionId` 就认为拥有该会话。会话持久化默认关闭；开启时由部署方显式配置 1..3650 天保留期。用户可删除自己的会话，后台按小时清理过期会话。会话正文在数据库字段中只保存 AES-GCM/KMS 密文，按租户和操作者校验后才解密返回；安全旁路模式禁止启用会话持久化。默认不应将审计预览视为会话存储。
@@ -120,34 +123,34 @@ flowchart LR
 
 ## 7. 分阶段实施
 
-### Phase 0：策略和事实对齐
+### Phase 0：策略和事实对齐（本地实现已完成）
 
 - 决定哪些角色可用、是否向租户角色开放、会话是否持久化、消息/审计保留期和模型出口允许清单。
 - 修正 AI 集成计划、数据库注释和审计说明中“仅保存哈希、不存原文”的漂移；准确记录当前会保存最多 512 字符的 prompt/response 预览。
 - 固化系统问题类别、越界拒绝语义、用户告知文案和数据处理说明。
 
-### Phase 1：服务端范围门禁与费用硬控制
+### Phase 1：服务端范围门禁与费用硬控制（本地实现及自动化验证已完成）
 
 - 实现领域意图决策契约和明确的拒绝路径，拒绝请求不触发 embedding/聊天模型/工具。
 - 增加 token 上限、并发限制、日/月预算、Redis 故障策略及 provider 预算配置。
 - 对当前 `domainKeywords` 设计基准测试集，防止把单个通用词当放行授权；覆盖提示注入、编码/混合语言、引用文本和无关问题夹带系统关键词。
 - 明确工具每次调用的租户、角色、资源权限校验与审计证据。
 
-### Phase 2：多轮会话和数据治理
+### Phase 2：多轮会话和数据治理（本地实现及真实 PostgreSQL 验证已完成）
 
 - 落地会话/消息持久化表、租户/所有者隔离、游标历史查询、删除/过期清理和权限测试。
 - 服务端按会话加载有限历史；拒绝任意跨用户/跨租户 session 续接。
 - 将原文预览从安全审计中移除或改为经批准的显式可配置内容保留；默认审计仅存元数据/哈希/成本信息。
 - 迁移前评估已有审计预览的保留、清理和兼容展示行为；避免历史表数据因字段删除而无计划丢失。
 
-### Phase 3：全局浮层和上下文体验
+### Phase 3：全局浮层和上下文体验（配对前端实现及本地 HTTP/浏览器验证已完成）
 
 - 前端实现全局入口、桌面侧栏、移动端全屏/抽屉、会话切换/新会话/恢复、停止生成和错误重试。
 - 支持当前页面上下文快捷提问，但仅发送允许的类型/ID；UI 明示 AI 获取的上下文和数据来源。
 - 呈现来源深链、实时数据时间、证据不足状态、越界拒绝和成本/配额耗尽提示。
 - 仅对后端授权的能力展示入口；访问拒绝时展示产品级说明而不是通用错误。
 
-### Phase 4：受控试点和扩面
+### Phase 4：受控试点和扩面（待外部环境验收，不属于当前本地代码待办）
 
 - 先对管理员/审计员白名单启用，观察越界拒绝、成本、响应质量、工具权限和数据留存。
 - 通过验收后按租户和角色灰度；支持立即关闭 AI 功能和 provider 的运维开关。
@@ -184,4 +187,6 @@ flowchart LR
 - 调用、审计预览和成本限流：[DefaultConsoleAiApplicationService.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java)
 - RAG 内存索引：[ConsoleAiKnowledgeBase.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/ConsoleAiKnowledgeBase.java)
 - 审计表：[V11__create_console_ai_audit_log.sql](../../db/migration/V11__create_console_ai_audit_log.sql)
+- 会话、轮次与月度用量表：[V218__console_ai_conversations_and_cost_usage.sql](../../db/migration/V218__console_ai_conversations_and_cost_usage.sql)
+- 审计保留索引：[V217__index_console_ai_audit_retention.sql](../../db/migration/V217__index_console_ai_audit_retention.sql)
 - 既有边界：[ADR-045-console-ai-ops-assistant.md](../architecture/adr/ADR-045-console-ai-ops-assistant.md)

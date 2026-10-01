@@ -61,7 +61,7 @@ jobs:
           fi
 
           ./mvnw -B clean test \
-            org.jacoco:jacoco-maven-plugin:0.8.14:report \
+            org.jacoco:jacoco-maven-plugin:0.8.15:report \
             --projects '!batch-e2e-tests' \
             org.sonarsource.scanner.maven:sonar-maven-plugin:5.7.0.6970:sonar \
             "${sonar_args[@]}"

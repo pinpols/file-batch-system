@@ -1,8 +1,8 @@
 # Console 使用率统计方案
 
-状态：后端日聚合统计第一版已落地；前端趋势展示和真 PG 联测仍待完成
+状态：后端聚合、前端趋势页和本地真 PostgreSQL/浏览器对账已实现；业务结果完整对账、生产保留策略和容量验收仍待外部证据
 
-> 复核日期：2026-09-30。后端已落地 `console_usage_daily`、事件标准化、并发累加 upsert、独立 `usage-summary` 契约；前端使用率报表、业务结果对账和真 PG 联测仍是后续验收项。
+> 复核日期：2026-10-01。后端已落地 V216 `console_usage_daily`、操作审计投影、并发累加 upsert、租户隔离和 `usage-summary`；配对前端已实现只读趋势页。真 PostgreSQL 集成测试覆盖并发累加与 RLS；本地浏览器/API/SQL 对账已完成。完整业务终态对账、真实多租户切换数据、保留期运营策略和 staging 容量仍未验收。
 
 ## 1. 目标与边界
 
@@ -41,7 +41,7 @@
 
 - 独立的前端 telemetry 数据库表；
 - `frontend-telemetry` Kafka topic；
-- 前端使用率报表页面。
+- 覆盖所有业务操作到终态结果的完整对账（当前聚合不应被当作该事实源）。
 
 ## 3. 推荐架构
 
@@ -71,13 +71,12 @@
 
 ## 4. 日聚合表设计
 
-建议表名：`batch.console_usage_daily`。
+实现表：`batch.console_usage_daily`，由 V216 创建。以下字段、主键、分区和 RLS 以迁移为准。
 
 ### 4.1 逻辑字段
 
 | 字段 | 类型 | 约束 | 说明 |
 |---|---|---|---|
-| `id` | `bigserial` | PK | 内部标识 |
 | `stat_date` | `date` | NOT NULL | 统计业务日期，按部署时区生成 |
 | `tenant_id` | `varchar(64)` | NOT NULL | 后端认证上下文解析，不信任前端传值 |
 | `source` | `varchar(32)` | NOT NULL | `OPERATION_AUDIT` / `BUSINESS_RESULT` / `FRONTEND` |
@@ -91,7 +90,7 @@
 | `created_at` | `timestamptz` | NOT NULL | 创建时间 |
 | `updated_at` | `timestamptz` | NOT NULL | 更新时间 |
 
-唯一键建议为：
+主键为：
 
 ```text
 (stat_date, tenant_id, source, metric_code, page_code, app_version)
@@ -102,7 +101,8 @@
 - 按 `stat_date` **月度分区**，不按天创建大量分区；
 - 主查询索引：`(tenant_id, stat_date DESC)`；
 - 趋势查询索引：`(metric_code, stat_date DESC)`；
-- 默认保留 400 天，过期分区按现有归档策略清理；
+- 月分区覆盖迁移创建时前一月至未来 14 个月，并有 default 分区；此结构不代表已启用 400 天自动保留。
+- V216 明确不创建 `archive.console_usage_daily_archive`。生产保留期限、分区删除窗口和操作审批仍须由部署策略确定并验收；400 天只是早期建议值。
 - 表启用严格 RLS，租户查询必须带当前租户上下文；
 - `ROLE_ADMIN` 的跨租查询只能通过后端受控接口，不直接放开数据库全表读。
 
@@ -131,7 +131,7 @@
 
 ## 6. 查询接口契约
 
-建议新增：
+已实现接口：
 
 ```text
 GET /api/console/queries/usage-summary
@@ -172,9 +172,9 @@ eventCount, successCount, failureCount
 
 ## 8. 当前落地状态与分阶段验收
 
-截至 2026-09-30，后端已落地第一版 PostgreSQL 日聚合闭环：V216 月分区表、严格 RLS、操作审计投影、并发安全的累加 upsert、租户上下文设置和 `GET /api/console/queries/usage-summary`。聚合是派生数据，写失败只告警，不影响原始业务和操作审计。
+截至 2026-10-01，后端已落地 PostgreSQL 日聚合闭环：V216 月分区表、强制 RLS、操作审计投影、并发安全的累加 upsert、租户上下文设置和 `GET /api/console/queries/usage-summary`。配对前端 `/observability/usage` 页面、metric code 本地化和租户筛选已实现。聚合是派生数据，写失败只告警，不影响原始业务和操作审计。
 
-尚未声称完成的部分：前端趋势页面、业务结果对账、聚合写失败语义验证、容量基线和 retention 生产策略验证。真实 PostgreSQL 集成测试覆盖并发累加、RLS 租户隔离和事务内租户上下文；该测试不替代 staging 容量验证或业务结果对账。
+本地验证已覆盖：真实 PostgreSQL 并发累加、RLS 租户隔离和事务内租户上下文；配对前端浏览器/API/只读 SQL 对账也已执行。尚未声称完成：所有业务动作到聚合的完整结果对账、写失败和重复事件的生产链路语义、具有多个真实业务租户的切换验收、容量基线及正式 retention 策略。已有 IT/本地对账不替代 staging 容量验证。
 
 ### P0：指标和契约冻结
 
@@ -185,7 +185,7 @@ eventCount, successCount, failureCount
 
 验收：同一操作在中英文切换、重试和失败时不会产生错误的成功统计。
 
-### P1：PostgreSQL 日聚合（后端已落地）
+### P1：PostgreSQL 日聚合（已落地）
 
 - 新增 Flyway 表、RLS、月度分区和归档策略；
 - 增加标准化器、有界缓冲和批量 upsert；
@@ -200,12 +200,10 @@ eventCount, successCount, failureCount
 - 聚合写失败不影响原始业务请求；
 - staging 中 1000 个并发小批次下无连接池耗尽和锁等待扩散（本地集成测试不作为容量结论）。
 
-### P2：前端展示和运行治理
+### P2：前端展示（已落地）；运行治理待外部验收
 
-- 增加租户使用率趋势页面；
-- 增加指标、页面、日期范围筛选；
-- 增加聚合队列、丢弃数和写失败告警；
-- 按版本观察埋点 schema 漂移。
+- 已实现 `/observability/usage`、指标/日期筛选、失败/空状态和租户变化时旧响应丢弃。
+- 等待验证：生产数据下操作审计、业务终态与聚合结果的一致性；写失败/丢弃指标告警；真实多租户切换与容量阈值。
 
 验收：页面展示与直接 SQL 汇总结果一致，且可以定位版本和租户。
 

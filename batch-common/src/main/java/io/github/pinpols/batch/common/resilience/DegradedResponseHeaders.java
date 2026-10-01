@@ -30,7 +30,7 @@ public final class DegradedResponseHeaders {
       return;
     }
     HttpServletResponse response = servletAttributes.getResponse();
-    if (EmptyChecks.isNull(response) || response.isCommitted()) {
+    if (response == null || response.isCommitted()) {
       return;
     }
     Set<String> sources = new LinkedHashSet<>();

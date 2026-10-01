@@ -17,6 +17,7 @@
 
 ### Changed
 
+- Sonar 本地扫描统一使用仓库 Maven Wrapper，并与 CI 对齐到 JaCoCo 0.8.15；补充全量扫描证据及高风险静态分析问题的定向修复，不将本地 Sonar Quality Gate 作为远端必过门禁。
 - 统一文档站支持通过仓库级 `docs/.docsignore` 排除技术试验、测试数据和规模统计；现行架构、API、设计、测试、SDK、运维、合规及其可追溯证据继续发布。
 - Console 文件 Pipeline、步骤、分发与错误查询增加服务端 `keyword` 筛选，步骤查询增加 Pipeline 实例和阶段筛选；OpenAPI 同步补齐 Job Step 与 Workflow 列表已有筛选参数，供前端直接使用服务端分页。
 - Console 权限契约新增动态 capability，下发的 `AI_ASSISTANT_USE` 同时受 AI 开关和用户/角色白名单控制；使用统计查询收紧为平台管理员、审计员和租户管理员，并在运行监控菜单提供独立入口。

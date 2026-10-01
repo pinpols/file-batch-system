@@ -16,6 +16,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +29,7 @@ public class ConsoleAiCostService {
   private static final BigDecimal TOKENS_PER_MILLION = new BigDecimal("1000000");
   private static final BigDecimal BYTES_TO_TOKEN_UPPER_BOUND = new BigDecimal("2");
   private static final BigDecimal ZERO_COST = BigDecimal.ZERO.setScale(8, RoundingMode.UP);
+  private static final String AI_NOT_CONFIGURED_ERROR = "error.ai.assistant_not_configured";
 
   private final ConsoleAiMonthlyUsageMapper mapper;
   private final ConsoleAiProperties properties;
@@ -35,12 +37,12 @@ public class ConsoleAiCostService {
   public void validateProviders(List<String> providerNames) {
     if (EmptyChecks.isEmpty(usableRates())) {
       if (properties.getCost().getMonthlyBudgetUsd().signum() > 0) {
-        throw BizException.of(ResultCode.SERVICE_UNAVAILABLE, "error.ai.assistant_not_configured");
+        throw BizException.of(ResultCode.SERVICE_UNAVAILABLE, AI_NOT_CONFIGURED_ERROR);
       }
       return;
     }
     if (providerNames.stream().anyMatch(provider -> EmptyChecks.isNull(rateFor(provider)))) {
-      throw BizException.of(ResultCode.SERVICE_UNAVAILABLE, "error.ai.assistant_not_configured");
+      throw BizException.of(ResultCode.SERVICE_UNAVAILABLE, AI_NOT_CONFIGURED_ERROR);
     }
   }
 
@@ -49,7 +51,7 @@ public class ConsoleAiCostService {
     ConsoleAiProperties.Cost config = properties.getCost();
     if (EmptyChecks.isEmpty(usableRates())) {
       if (config.getMonthlyBudgetUsd().signum() > 0) {
-        throw BizException.of(ResultCode.SERVICE_UNAVAILABLE, "error.ai.assistant_not_configured");
+        throw BizException.of(ResultCode.SERVICE_UNAVAILABLE, AI_NOT_CONFIGURED_ERROR);
       }
       return Reservation.unpriced();
     }
@@ -141,7 +143,7 @@ public class ConsoleAiCostService {
   private BigDecimal calculate(String provider, int promptTokens, int completionTokens) {
     ConsoleAiProperties.ProviderRate rate = rateFor(provider);
     if (EmptyChecks.isNull(rate)) {
-      throw BizException.of(ResultCode.SERVICE_UNAVAILABLE, "error.ai.assistant_not_configured");
+      throw BizException.of(ResultCode.SERVICE_UNAVAILABLE, AI_NOT_CONFIGURED_ERROR);
     }
     return rateCost(
         rate,
@@ -170,6 +172,7 @@ public class ConsoleAiCostService {
 
   private List<ConsoleAiProperties.ProviderRate> usableRates() {
     return properties.getCost().getProviderRates().values().stream()
+        .filter(Objects::nonNull)
         .filter(ConsoleAiCostService::isUsable)
         .toList();
   }
@@ -184,6 +187,7 @@ public class ConsoleAiCostService {
 
   private BigDecimal rateCost(
       ConsoleAiProperties.ProviderRate rate, BigDecimal inputTokens, BigDecimal outputTokens) {
+    Objects.requireNonNull(rate);
     return rate.getInputUsdPerMillionTokens()
         .multiply(inputTokens)
         .add(rate.getOutputUsdPerMillionTokens().multiply(outputTokens))

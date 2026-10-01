@@ -5,7 +5,6 @@ import io.github.pinpols.batch.common.enums.AiPromptCategory;
 import io.github.pinpols.batch.common.enums.AiPromptDecision;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.support.AiPromptGateResult;
@@ -111,7 +110,7 @@ public class ConsoleAiPromptGuard {
         .filter(phrase -> lower.contains(phrase.toLowerCase(Locale.ROOT)))
         .findFirst()
         .orElse(null);
-    if (EmptyChecks.isNotNull(matchedPhrase)) {
+    if (matchedPhrase != null) {
       String categoryKeyword = properties.getDomainKeywords().stream()
           .filter(keyword -> !GENERIC_DOMAIN_KEYWORDS.contains(keyword.toLowerCase(Locale.ROOT)))
           .filter(keyword -> contains(normalized, lower, keyword))
