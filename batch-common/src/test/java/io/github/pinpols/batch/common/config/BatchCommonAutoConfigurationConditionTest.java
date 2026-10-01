@@ -20,6 +20,8 @@ import software.amazon.awssdk.services.s3.S3Client;
 class BatchCommonAutoConfigurationConditionTest {
 
   private final ApplicationContextRunner contextRunner = new ApplicationContextRunner();
+  private static final String KMS_TEST_KEY =
+      "batch.security.kms.keys.DEFAULT_TEST=MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=";
 
   @Test
   void s3AutoConfigurationBacksOffWhenFilesystemBackendIsSelected() {
@@ -47,12 +49,58 @@ class BatchCommonAutoConfigurationConditionTest {
   void objectCryptoAutoConfigurationProvidesSecretPayloadProtector() {
     contextRunner
         .withConfiguration(AutoConfigurations.of(BatchObjectCryptoAutoConfiguration.class))
-        .withPropertyValues("spring.profiles.active=test", "batch.security.bypass-mode=true")
+        .withPropertyValues(
+            "spring.profiles.active=test", "batch.security.bypass-mode=true", KMS_TEST_KEY)
         .run(context -> {
           assertThat(context).hasSingleBean(BatchObjectCryptoService.class);
           assertThat(context).hasSingleBean(SecretPayloadProtector.class);
           assertThat(context).hasNotFailed();
         });
+  }
+
+  @Test
+  void objectCryptoAutoConfigurationRejectsMissingDefaultKeyRef() {
+    contextRunner
+        .withConfiguration(AutoConfigurations.of(BatchObjectCryptoAutoConfiguration.class))
+        .withPropertyValues(
+            "spring.profiles.active=test",
+            "batch.security.bypass-mode=true",
+            "batch.security.kms.default-key-ref=missing",
+            KMS_TEST_KEY)
+        .run(context -> assertThat(context)
+            .hasFailed()
+            .getFailure()
+            .hasMessageContaining("default-key-ref must reference an existing"));
+  }
+
+  @Test
+  void objectCryptoAutoConfigurationRejectsInvalidAesKeyLength() {
+    contextRunner
+        .withConfiguration(AutoConfigurations.of(BatchObjectCryptoAutoConfiguration.class))
+        .withPropertyValues(
+            "spring.profiles.active=test",
+            "batch.security.bypass-mode=true",
+            "batch.security.kms.keys.DEFAULT_TEST=MTIz")
+        .run(context -> assertThat(context)
+            .hasFailed()
+            .getFailure()
+            .hasMessageContaining("must decode to a 16, 24, or 32 byte AES key"));
+  }
+
+  @Test
+  void objectCryptoAutoConfigurationRejectsWeakProdKey() {
+    contextRunner
+        .withConfiguration(AutoConfigurations.of(BatchObjectCryptoAutoConfiguration.class))
+        .withPropertyValues(
+            "spring.profiles.active=prod",
+            "batch.security.bypass-mode=false",
+            "batch.security.internal-secret=prod-internal-secret-2026",
+            "spring.datasource.password=prod-db-secret-2026",
+            "batch.security.kms.keys.DEFAULT_TEST=AAAAAAAAAAAAAAAAAAAAAA==")
+        .run(context -> assertThat(context)
+            .hasFailed()
+            .getFailure()
+            .hasMessageContaining("production batch.security.kms.keys.DEFAULT_TEST is weak"));
   }
 
   @Test

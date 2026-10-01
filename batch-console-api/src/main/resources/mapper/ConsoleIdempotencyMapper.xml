@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.console.mapper.ConsoleIdempotencyMapper">
+
+    <select id="countCompleted" resultType="int">
+        select count(*)
+        from batch.idempotency_record
+        where tenant_id = #{tenantId}
+          and idempotency_key = #{idempotencyKey}
+          and result_payload = 'CONSOLE_HTTP_DONE'
+    </select>
+
+    <insert id="insertCompleted">
+        insert into batch.idempotency_record (tenant_id, idempotency_key, result_payload)
+        values (#{tenantId}, #{idempotencyKey}, 'CONSOLE_HTTP_DONE')
+        on conflict (tenant_id, idempotency_key) do nothing
+    </insert>
+</mapper>

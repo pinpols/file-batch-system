@@ -11,6 +11,7 @@
 | [backend-deep-scan-2026-06-19.md](./backend-deep-scan-2026-06-19.md) | 后端深度扫描快照 |
 | [database-and-class-comment-audit-2026-08-21.md](./database-and-class-comment-audit-2026-08-21.md) | 数据库、字段与类注释覆盖审计 |
 | [sql-java-responsibility-audit-2026-09-08.md](./sql-java-responsibility-audit-2026-09-08.md) | SQL 与 Java 职责边界审计 |
+| [resource-lock-pool-cache-transaction-audit-2026-10-01.md](./resource-lock-pool-cache-transaction-audit-2026-10-01.md) | 资源、锁、线程、缓存、幂等与事务边界审计 |
 | [INDEX-2026-05-23.md](./INDEX-2026-05-23.md) | 2026-05-23 九模块架构审计汇总 |
 | [orchestrator-arch-audit-2026-05-23.md](./orchestrator-arch-audit-2026-05-23.md) | Orchestrator 架构审计 |
 | [common-trigger-arch-audit-2026-05-23.md](./common-trigger-arch-audit-2026-05-23.md) | Common 与 Trigger 架构审计 |

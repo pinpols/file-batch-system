@@ -23,6 +23,7 @@ class IdGeneratorTest {
     String no = IdGenerator.newBusinessNo("JOB");
     assertThat(no).startsWith("JOB-");
     assertThat(no.chars().filter(c -> c == '-').count()).isGreaterThanOrEqualTo(2);
+    assertThat(no.split("-")[2]).hasSize(16).matches("[0-9a-f]+");
   }
 
   @Test

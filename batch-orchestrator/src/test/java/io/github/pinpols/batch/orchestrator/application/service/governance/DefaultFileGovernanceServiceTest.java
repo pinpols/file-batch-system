@@ -67,6 +67,9 @@ class DefaultFileGovernanceServiceTest {
   @Mock
   private S3GovernanceStorage s3GovernanceStorage;
 
+  @Mock
+  private FileGovernanceCommitService fileGovernanceCommitService;
+
   private final FileGovernanceProperties fileGovernanceProperties = new FileGovernanceProperties();
   private final BatchSecurityProperties batchSecurityProperties = new BatchSecurityProperties();
 
@@ -82,7 +85,8 @@ class DefaultFileGovernanceServiceTest {
         taskDispatchOutboxService,
         fileGovernanceProperties,
         s3GovernanceStorage,
-        batchSecurityProperties);
+        batchSecurityProperties,
+        fileGovernanceCommitService);
   }
 
   // ── validateCommand / validateArrivalGroupCommand ────────────────────────
@@ -287,7 +291,7 @@ class DefaultFileGovernanceServiceTest {
     String url = service.presignFileDownload(cmd);
 
     assertThat(url).isEqualTo("https://objectStore/presigned/url");
-    verify(fileGovernanceRepository).appendAudit(any());
+    verify(fileGovernanceCommitService).appendAudit(any());
   }
 
   @Test
@@ -323,7 +327,7 @@ class DefaultFileGovernanceServiceTest {
         .contains("approvalId=appr-1");
     // 加密文件路径不调对象存储直连
     verify(s3GovernanceStorage, never()).createPresignedDownloadUrl(any(), any(), anyInt());
-    verify(fileGovernanceRepository).appendAudit(any());
+    verify(fileGovernanceCommitService).appendAudit(any());
   }
 
   @Test
@@ -694,8 +698,7 @@ class DefaultFileGovernanceServiceTest {
     String result = service.confirmFileArrival(cmd);
 
     assertThat(result).isEqualTo("ARRIVAL_CONFIRMED");
-    verify(fileGovernanceRepository).markFileArrivalConfirmed(eq("t1"), eq(1L), eq(123L), any());
-    verify(fileGovernanceRepository).appendAudit(any());
+    verify(fileGovernanceCommitService).confirmArrival(eq("t1"), eq(1L), eq(123L), any(), any());
   }
 
   @Test

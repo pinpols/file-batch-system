@@ -33,8 +33,7 @@
 //! ## JSON value type
 //!
 //! `break_position` values are arbitrary JSON (a primary key, a range tuple, a
-//! sort key). To keep the default build **zero-dependency** (the crate ships no
-//! `serde`/`serde_json` unless a feature pulls them) the value type is the
+//! sort key)。默认构建不直接依赖 JSON 框架（除非 feature 拉入 `serde`/`serde_json`），因此值类型使用
 //! crate-owned [`JsonValue`]. Its `Serialize`/`Deserialize` impls are derived
 //! (and serialize as plain JSON, indistinguishable from `serde_json::Value`)
 //! whenever the `serde` feature is active — which the `http` and `kafka`
@@ -47,8 +46,8 @@ use std::sync::{Arc, Mutex};
 /// An arbitrary JSON value used for break-position coordinates.
 ///
 /// Mirrors the Java contract's `Object` / TS `unknown` value slot. Kept
-/// crate-local so the default build stays std-only; under the `serde` feature
-/// it derives `Serialize`/`Deserialize` and round-trips as ordinary JSON, so a
+/// crate-local,避免默认构建直接依赖 serde；在 `serde` feature 下会派生
+/// `Serialize`/`Deserialize` 并按普通 JSON 往返,因此
 /// `BTreeMap<String, JsonValue>` is wire-compatible with the Java
 /// `Map<String, Object>` break position.
 #[derive(Debug, Clone, PartialEq)]

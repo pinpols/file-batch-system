@@ -10,7 +10,7 @@ import java.util.UUID;
 /**
  * 全局唯一 ID 生成工具类。 {@code newTraceId()} 优先取当前 OTel active span 的 traceId（让业务持久化字段与 OTel 自动 traceId
  * 一致），无 OTel 上下文时 fallback 到无连字符的 UUID； {@code newBusinessNo(prefix)} 生成带前缀、ISO 时间戳和随机后缀的业务编号，格式为
- * {@code prefix-yyyyMMddTHHmmssZ-xxxxxxxx}。
+ * {@code prefix-yyyyMMddTHHmmssZ-xxxxxxxxxxxxxxxx}。
  *
  * <p>OTel 桥接详见 {@link OtelTraceContext} + {@code
  * docs/architecture/adr/ADR-013-distributed-tracing.md}。
@@ -37,7 +37,7 @@ public final class IdGenerator {
   }
 
   /**
-   * 批量场景:同一事务/同一批次内生成 N 个业务号,共享 timestamp,后缀按行号唯一化。
+   * 批量场景:同一事务/同一批次内生成 N 个业务号,共享 timestamp,每个编号使用独立随机后缀。
    *
    * <p>典型用法:partition 拆分时同事务内 N 个分片号 → 日志聚合 + DB 排序紧凑。
    *
@@ -75,8 +75,8 @@ public final class IdGenerator {
     return COMPACT_UTC.format(BatchDateTimeSupport.utcNow());
   }
 
-  /** 8 位 16 进制随机后缀。 */
+  /** 16 位 16 进制随机后缀。 */
   private static String shortRandomSuffix() {
-    return UUID.randomUUID().toString().substring(0, 8);
+    return UUID.randomUUID().toString().replace("-", "").substring(0, 16);
   }
 }

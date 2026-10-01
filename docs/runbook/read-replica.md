@@ -146,8 +146,10 @@ docker compose stop postgres-replica
 curl -s "http://localhost:18080/api/console/queries/job-instances?tenantId=default-tenant&pageNo=1&pageSize=10" \
   -H "X-Console-User: admin" -H "X-Tenant-Id: default-tenant"
 
-# 预期：500 内部错误（连 postgres-replica 失败）
-# 看 console-api 日志会有 "could not connect to server: postgres-replica"
+# 预期：查询仍返回业务结果或明确的业务响应，不因从库连接失败直接 500。
+# 日志应出现 replica failover/quarantine，指标 batch.console.replica.failover.count 上升。
+# 如果 SQL 已经在从库连接上执行后断链，当前请求可能返回原始 SQLException；
+# quarantine 生效后，后续请求走主库，不能在已绑定的事务内中途替换连接。
 ```
 
 写路径仍然正常（走主库）：
@@ -162,9 +164,10 @@ docker compose start postgres-replica
 
 console-api 的 `ReadReplicaRoutingDataSource` 不是"试一下从库失败就报错"的简单代理，而是带短路保护的电路开关。
 
-### 5.1 连接失败熔断（旧）
+### 5.1 连接获取/执行失败熔断
 - 配置项：`batch.console.read-replica.failure-threshold` / `quarantine-seconds`（默认 3 次 / 30s）
-- 行为：连续 N 次抛 `SQLException` → 进入 quarantine，期内所有读请求改走主库；期满后下一次重试从库
+- 行为：连接获取或 JDBC 执行阶段出现 SQLState `08*` / `57*` 连接性故障时累计失败；连续 N 次后进入 quarantine，期内所有读请求改走主库；期满后下一次重试从库
+- 事务边界：已从从库取得连接的当前事务不会中途替换连接。当前查询可能返回原始 `SQLException`，但副本会立即隔离，后续请求走主库。
 
 ### 5.2 Lag-aware quarantine（2026-05 新增）
 旧的纯连接级熔断有漏洞：从库**连得上但 replay 停滞**（WAL 段被清 / disk 慢 / 主从断了但 replica 进程没死）时检测不出来。

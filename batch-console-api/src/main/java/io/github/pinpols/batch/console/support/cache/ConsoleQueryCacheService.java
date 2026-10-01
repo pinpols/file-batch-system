@@ -1,14 +1,17 @@
 package io.github.pinpols.batch.console.support.cache;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -40,7 +43,6 @@ import org.springframework.stereotype.Service;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 @SuppressWarnings("java:S2583")
 public class ConsoleQueryCacheService {
 
@@ -51,6 +53,9 @@ public class ConsoleQueryCacheService {
 
   private static final int MAX_KEY_SEGMENT_LENGTH = 96;
   private static final int KEY_SEGMENT_PREFIX_LENGTH = 64;
+
+  private final Counter readFailureCounter;
+  private final Counter writeFailureCounter;
 
   /** Meta 枚举（纯静态数据）。 */
   public static final Duration META_ENUM_TTL = Duration.ofMinutes(30);
@@ -71,6 +76,18 @@ public class ConsoleQueryCacheService {
   public static final Duration SNAPSHOT_TTL = Duration.ofSeconds(30);
 
   private final StringRedisTemplate redisTemplate;
+
+  public ConsoleQueryCacheService(
+      StringRedisTemplate redisTemplate, ObjectProvider<MeterRegistry> meterRegistryProvider) {
+    this.redisTemplate = redisTemplate;
+    MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+    this.readFailureCounter = EmptyChecks.isNull(registry)
+        ? null
+        : registry.counter("batch.console.cache.failure", "operation", "read");
+    this.writeFailureCounter = EmptyChecks.isNull(registry)
+        ? null
+        : registry.counter("batch.console.cache.failure", "operation", "write");
+  }
 
   /**
    * 查询缓存：先读 Redis，miss 则执行 loader 并写入缓存。
@@ -104,17 +121,25 @@ public class ConsoleQueryCacheService {
         return decoder.apply(cached);
       }
     } catch (Exception e) {
+      increment(readFailureCounter);
       log.debug("cache read failed, falling back to db: key={}", logValue(fullKey), e);
     }
     T result = loader.get();
     try {
-      if (result != null) {
+      if (EmptyChecks.isNotNull(result)) {
         redisTemplate.opsForValue().set(fullKey, JsonUtils.toJson(result), ttl);
       }
     } catch (Exception e) {
+      increment(writeFailureCounter);
       log.debug("cache write failed: key={}", logValue(fullKey), e);
     }
     return result;
+  }
+
+  private void increment(Counter counter) {
+    if (EmptyChecks.isNotNull(counter)) {
+      counter.increment();
+    }
   }
 
   /**

@@ -77,6 +77,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
   private final FileGovernanceProperties fileGovernanceProperties;
   private final S3GovernanceStorage s3GovernanceStorage;
   private final BatchSecurityProperties batchSecurityProperties;
+  private final FileGovernanceCommitService fileGovernanceCommitService;
 
   @Override
   @Transactional
@@ -104,7 +105,6 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
    * PRESIGN_DOWNLOAD} 审计。
    */
   @Override
-  @Transactional
   public String presignFileDownload(FileGovernanceCommand command) {
     validateCommand(command);
     FileGovernanceViews.FileRecordView fileRecord = FileGovernanceViews.fileRecord(
@@ -139,7 +139,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
                   resolveOperatorType(command.operatorId()), command.operatorId()),
               command.traceId(),
               auditDetail);
-      fileGovernanceRepository.appendAudit(auditCommand);
+      fileGovernanceCommitService.appendAudit(auditCommand);
       return consolePath;
     }
     String storagePath = fileRecord.storagePath();
@@ -175,7 +175,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
                 resolveOperatorType(command.operatorId()), command.operatorId()),
             command.traceId(),
             auditDetail);
-    fileGovernanceRepository.appendAudit(auditCommand);
+    fileGovernanceCommitService.appendAudit(auditCommand);
     return presignedUrl;
   }
 
@@ -239,7 +239,6 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
   }
 
   @Override
-  @Transactional
   public String confirmFileArrival(FileGovernanceCommand command) {
     validateCommand(command);
     FileGovernanceViews.FileRecordView fileRecord = FileGovernanceViews.fileRecord(
@@ -264,8 +263,6 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     metadata.put("arrivalReason", "MANUAL_FILE_CONFIRM");
     metadata.put("arrivalConfirmedBy", command.operatorId());
     metadata.put("uploadedSizeBytes", fileSizeBytes);
-    fileGovernanceRepository.markFileArrivalConfirmed(
-        command.tenantId(), command.fileId(), fileSizeBytes, metadata);
     FileGovernanceRepository.FileAuditCommand auditCommand =
         new FileGovernanceRepository.FileAuditCommand(
             command.tenantId(),
@@ -276,7 +273,8 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
                 resolveOperatorType(command.operatorId()), command.operatorId()),
             command.traceId(),
             metadata);
-    fileGovernanceRepository.appendAudit(auditCommand);
+    fileGovernanceCommitService.confirmArrival(
+        command.tenantId(), command.fileId(), fileSizeBytes, metadata, auditCommand);
     return "ARRIVAL_CONFIRMED";
   }
 

@@ -8,7 +8,11 @@ import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -67,7 +71,11 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
   /** Request attribute：记录本次请求使用的 Redis key，afterCompletion 时读取。 */
   private static final String ATTR_REDIS_KEY = "console.idempotency.redisKey";
 
+  private static final String ATTR_DURABLE_KEY = "console.idempotency.durableKey";
+  private static final String ATTR_TENANT_ID = "console.idempotency.tenantId";
+
   private final ConsoleIdempotencyStore idempotencyStore;
+  private final ConsoleDurableIdempotencyStore durableIdempotencyStore;
   private final BatchSecurityProperties securityProperties;
 
   @Override
@@ -112,6 +120,7 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
         + request.getRequestURI()
         + ":"
         + idempotencyKey.trim();
+    String durableKey = durableKey(redisKey);
 
     String existing;
     try {
@@ -132,6 +141,24 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
           request.getRequestURI(),
           tenantId);
       writeJson(response, HttpStatus.CONFLICT, CONFLICT_DONE_BODY);
+      return false;
+    }
+    try {
+      if (durableIdempotencyStore.isCompleted(tenantId, durableKey)) {
+        log.warn(
+            "duplicate idempotency key rejected by durable completion record: key={}, uri={}, tenant={}",
+            idempotencyKey,
+            request.getRequestURI(),
+            tenantId);
+        writeJson(response, HttpStatus.CONFLICT, CONFLICT_DONE_BODY);
+        return false;
+      }
+    } catch (DataAccessException ex) {
+      log.warn(
+          "durable idempotency lookup unavailable — fail-closed: key={}, cause={}",
+          idempotencyKey,
+          ex.getMessage());
+      writeJson(response, HttpStatus.SERVICE_UNAVAILABLE, REDIS_UNAVAILABLE_BODY);
       return false;
     }
 
@@ -197,6 +224,8 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
     }
 
     request.setAttribute(ATTR_REDIS_KEY, redisKey);
+    request.setAttribute(ATTR_DURABLE_KEY, durableKey);
+    request.setAttribute(ATTR_TENANT_ID, tenantId);
     return true;
   }
 
@@ -207,13 +236,49 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
     if (redisKey == null) {
       return;
     }
+    String durableKey = (String) request.getAttribute(ATTR_DURABLE_KEY);
+    String tenantId = (String) request.getAttribute(ATTR_TENANT_ID);
     int status = response.getStatus();
     if (status >= 200 && status < 300 && ex == null) {
       // 成功：升级为 DONE，长 TTL 阻止重复提交
-      idempotencyStore.set(redisKey, DONE, IDEMPOTENCY_TTL);
+      try {
+        idempotencyStore.set(redisKey, DONE, IDEMPOTENCY_TTL);
+      } catch (DataAccessException redisException) {
+        // 保留 PENDING，避免 Redis 恢复前立即放行重复请求；数据库完成态覆盖 Redis 短暂不可用窗口。
+        log.error(
+            "idempotency Redis completion write failed; durable completion will protect retries: key={}",
+            redisKey,
+            redisException);
+      }
+      try {
+        durableIdempotencyStore.markCompleted(tenantId, durableKey);
+      } catch (DataAccessException databaseException) {
+        log.error(
+            "durable idempotency completion write failed after successful mutation: key={}",
+            redisKey,
+            databaseException);
+      }
     } else {
       // 失败：删除占位，允许安全重试
-      idempotencyStore.delete(redisKey);
+      try {
+        idempotencyStore.delete(redisKey);
+      } catch (DataAccessException deleteException) {
+        log.warn(
+            "idempotency pending marker cleanup failed; it will expire by TTL: key={}",
+            redisKey,
+            deleteException);
+      }
+    }
+  }
+
+  private static String durableKey(String redisKey) {
+    try {
+      byte[] digest =
+          MessageDigest.getInstance("SHA-256").digest(redisKey.getBytes(StandardCharsets.UTF_8));
+      return "console-http:" + HexFormat.of().formatHex(digest);
+    } catch (NoSuchAlgorithmException exception) {
+      throw new IllegalStateException(
+          "SHA-256 is required for durable idempotency keys", exception);
     }
   }
 

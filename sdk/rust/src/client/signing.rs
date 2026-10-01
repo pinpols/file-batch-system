@@ -17,10 +17,8 @@
 //! * `X-Batch-Nonce` — random per request (uuid-shaped).
 //! * `X-Batch-Signature` — the lowercase-hex HMAC.
 //!
-//! **Zero external dependencies**: the core crate is std-only (mirroring the
-//! Kafka/HTTP feature gating), so SHA-256 and HMAC-SHA256 are implemented here
-//! against std rather than pulling `sha2`/`hmac`/`hex`. The implementation is
-//! pinned by the golden vectors, so any drift fails the test loudly.
+//! SHA-256 与 HMAC-SHA256 在本文件实现,避免额外拉入 `sha2`/`hmac`/`hex`。
+//! golden vector 会固定实现行为,任何漂移都会由测试显式失败。
 
 /// `hex(sha256(body))` — lowercase hex of the SHA-256 digest of the raw bytes.
 /// An empty body still hashes (the SHA-256 of zero bytes).

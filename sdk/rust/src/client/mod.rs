@@ -5,11 +5,10 @@
 //! directive, lease renew, backpressure, stop plan, register) routes through the
 //! pure phase-1 functions; this layer adds the IO **seams** (traits), the
 //! synchronous **engine** (schedulers + lifecycle FSM + consumer pipeline), and
-//! std-only **fakes** for testing.
+//! 面向测试的轻量 **fakes**。
 //!
-//! **Zero external dependencies** — std only. Real HTTP/Kafka clients are future
-//! adapters behind [`transport::Transport`] and [`consumer::Consumer`]; here
-//! they are documented stubs ([`transport::HttpTransport`]) plus working fakes.
+//! 真实 HTTP/Kafka 客户端位于 [`transport::Transport`] 与 [`consumer::Consumer`] 适配层之后；
+//! 这里保留文档化 stub([`transport::HttpTransport`])和可运行 fake。
 //! Asynchrony in the TS/Go reference is rendered synchronously with
 //! `Arc<AtomicBool>` cancel flags + per-cycle `tick()` methods, which keeps the
 //! engine deterministic and unit-testable without threads or sockets.
@@ -38,8 +37,8 @@ pub mod testkit;
 pub mod transport;
 
 /// Real blocking control-plane transport (reqwest), behind the optional `http`
-/// feature. The default build excludes this module entirely, keeping the core
-/// crate std-only — mirroring how the `kafka` feature gates the Kafka adapter.
+/// feature. The default build excludes this module entirely, mirroring how the
+/// `kafka` feature gates the Kafka adapter.
 #[cfg(feature = "http")]
 pub mod reqwest_transport;
 

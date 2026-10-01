@@ -8,11 +8,13 @@ directive, lease renew, capacity / stop signal) to a `Decision` whose fields are
 closed `then.expect` vocabulary of the contract fixtures, plus the cross-language
 shared constants kept honest against `docs/api/sdk-shared-constants.yaml`.
 
-The default build has **zero external dependencies** (std-only); the conformance
-runner drives all `docs/api/sdk-contract-fixtures` by routing off each fixture's
-`when` shape (never `then.expect`).
+The default build keeps the runtime core dependency-light: protocol decisions and
+the conformance runner are std-only, with a tiny `getrandom` dependency used only
+for CSPRNG-backed idempotency keys and signing nonces. The runner drives all
+`docs/api/sdk-contract-fixtures` by routing off each fixture's `when` shape
+(never `then.expect`).
 
-**最低环境要求**:默认 feature 的零依赖核心为 **Rust 1.75+**(edition 2021，
+**最低环境要求**:默认 feature 的轻量核心为 **Rust 1.75+**(edition 2021，
 `Cargo.toml` 的 `rust-version` 为核心 MSRV 声明)。启用生产 `http` 或 `kafka`
 适配器时要求 **Rust 1.88+**，该下限来自当前锁定的可选依赖树；适配器 CI 使用 stable。
 

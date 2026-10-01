@@ -248,7 +248,7 @@ Import 在 LOAD 前校验插件幂等能力；`NONE/UNKNOWN` 会以 `IMPORT_LOAD
 - 必须配 `BATCH_CONSOLE_PRIMARY_URL` / `BATCH_CONSOLE_REPLICA_URL` 等 6 项 DB 凭证
 
 **风险**：
-- 从库异常退出 → 🟡 **中 fail-open**：`ReadReplicaRoutingDataSource` 在从库 SQLException 时降级走主库；连续失败 ≥ `failureThreshold`（默认 3）后进入 `quarantineSeconds`（默认 30s）隔离期，期内静默走主库；期满下次请求自动探测，成功即解除。**副作用：主库压力上升**，长期 replica 故障要扩容主库
+- 从库异常退出或执行阶段断链 → 🟡 **中 fail-open**：`ReadReplicaRoutingDataSource` 在连接获取及 JDBC 执行阶段识别 SQLState `08*` / `57*` 连接性故障并降级走主库；连续失败 ≥ `failureThreshold`（默认 3）后进入 `quarantineSeconds`（默认 30s）隔离期，期内静默走主库；期满下次请求自动探测，成功即解除。已绑定从库连接的当前事务不会中途换库，当前请求可能失败，后续请求会走主库。**副作用：主库压力上升**，长期 replica 故障要扩容主库
 - 主从延迟 → "提交后立即读"场景会读到旧数据；用 `@RouteToPrimary` 注解强制走主库（`RouteToPrimaryAspect` 已就位）
 - 多从库扩展 → 当前 routing map 硬编码 PRIMARY/REPLICA，多从库需改 `determineCurrentLookupKey` 加轮询
 
@@ -261,7 +261,7 @@ Import 在 LOAD 前校验插件幂等能力；`NONE/UNKNOWN` 会以 `IMPORT_LOAD
 - `batch.console.replica.failover.count`：每次降级 +1
 - `batch.console.replica.connection.failure`：每次从库 SQLException +1（按 SQLState 打 tag）
 
-**验证**：见 `docs/runbook/read-replica.md` §四（停从库 → 调 GET /api/console/queries 不再 500，自动 fail-open 到主库；指标 `batch.console.replica.failover.count` 同步上升）。
+**验证**：见 `docs/runbook/read-replica.md` §四（停从库 → 调 GET /api/console/queries 自动 fail-open 到主库；连接在执行阶段断开时，当前请求允许返回原始 SQL 异常，但后续请求必须切主；指标 `batch.console.replica.failover.count` 和 `batch.console.replica.connection.failure` 同步上升）。
 
 **回滚**：`BATCH_CONSOLE_READ_REPLICA_ENABLED=false` → 重启 console-api → 走 Spring Boot 默认主 DataSource。
 
