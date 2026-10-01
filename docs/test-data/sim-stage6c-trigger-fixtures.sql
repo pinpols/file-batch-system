@@ -98,6 +98,35 @@ SET calendar_name = EXCLUDED.calendar_name,
     description = EXCLUDED.description,
     updated_at = CURRENT_TIMESTAMP;
 
+-- 定时触发断言不能依赖真实默认日历的节假日数据或仿真运行日期。
+INSERT INTO batch.business_calendar (
+    tenant_id, calendar_code, calendar_name, timezone, holiday_roll_rule,
+    catch_up_policy, catch_up_max_days, enabled, cutoff_time,
+    late_arrival_tolerance_min, sla_offset_min, day_rollover_policy,
+    dst_gap_policy, dst_overlap_policy, description
+)
+VALUES (
+    'ta', 'stage6c_scheduled', 'Stage6c scheduled trigger calendar',
+    'Asia/Shanghai', 'SKIP', 'AUTO', 1, true, '06:00:00',
+    60, 0, 'ALLOW_OVERLAP', 'RUN_AT_NEXT_VALID_TIME', 'RUN_ONCE_EARLIER_OFFSET',
+    'Stage6c deterministic scheduled trigger calendar without holidays'
+)
+ON CONFLICT (tenant_id, calendar_code) DO UPDATE
+SET calendar_name = EXCLUDED.calendar_name,
+    timezone = EXCLUDED.timezone,
+    holiday_roll_rule = EXCLUDED.holiday_roll_rule,
+    catch_up_policy = EXCLUDED.catch_up_policy,
+    catch_up_max_days = EXCLUDED.catch_up_max_days,
+    enabled = EXCLUDED.enabled,
+    cutoff_time = EXCLUDED.cutoff_time,
+    late_arrival_tolerance_min = EXCLUDED.late_arrival_tolerance_min,
+    sla_offset_min = EXCLUDED.sla_offset_min,
+    day_rollover_policy = EXCLUDED.day_rollover_policy,
+    dst_gap_policy = EXCLUDED.dst_gap_policy,
+    dst_overlap_policy = EXCLUDED.dst_overlap_policy,
+    description = EXCLUDED.description,
+    updated_at = CURRENT_TIMESTAMP;
+
 WITH src AS (
   SELECT *
   FROM batch.job_definition
@@ -106,7 +135,7 @@ WITH src AS (
 ),
 jobs(job_code, job_name, calendar_code) AS (
   VALUES
-    ('TA_TRIGGER_STAGE6C_SCHEDULED', 'Stage6c scheduled trigger process', 'default_calendar'),
+    ('TA_TRIGGER_STAGE6C_SCHEDULED', 'Stage6c scheduled trigger process', 'stage6c_scheduled'),
     ('TA_TRIGGER_STAGE6C_MISFIRE', 'Stage6c manual misfire trigger process', 'stage6c_manual_catchup')
 )
 INSERT INTO batch.job_definition (
