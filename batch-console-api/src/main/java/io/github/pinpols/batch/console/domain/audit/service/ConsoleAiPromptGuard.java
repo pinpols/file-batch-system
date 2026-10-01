@@ -110,7 +110,7 @@ public class ConsoleAiPromptGuard {
         .filter(phrase -> lower.contains(phrase.toLowerCase(Locale.ROOT)))
         .findFirst()
         .orElse(null);
-    if (matchedPhrase != null) {
+    if (matchedPhrase != null) { // empty-check: allow - Sonar 需识别匹配结果非空分支
       String categoryKeyword = properties.getDomainKeywords().stream()
           .filter(keyword -> !GENERIC_DOMAIN_KEYWORDS.contains(keyword.toLowerCase(Locale.ROOT)))
           .filter(keyword -> contains(normalized, lower, keyword))
