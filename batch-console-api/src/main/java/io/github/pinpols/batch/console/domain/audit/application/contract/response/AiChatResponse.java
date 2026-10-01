@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.audit.application.contract.response;
 
+import java.util.List;
 import lombok.Data;
 
 @Data
@@ -13,4 +14,5 @@ public class AiChatResponse {
   private String modelName;
   private String answer;
   private String refusalReason;
+  private List<AiSourceResponse> sources = List.of();
 }

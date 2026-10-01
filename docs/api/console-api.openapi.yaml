@@ -4112,8 +4112,7 @@ paths:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
-        - $ref: '#/components/parameters/PageNoQuery'
-        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/KeywordQuery'
       responses:
         '200':
           description: File pipeline list
@@ -4151,6 +4150,7 @@ paths:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/KeywordQuery'
       responses:
         '200':
           description: File pipeline list
@@ -4189,6 +4189,7 @@ paths:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/KeywordQuery'
       responses:
         '200':
           description: File pipeline list
@@ -4226,8 +4227,15 @@ paths:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
-        - $ref: '#/components/parameters/PageNoQuery'
-        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/KeywordQuery'
+        - name: pipelineInstanceId
+          in: query
+          required: false
+          schema: { type: integer, format: int64 }
+        - name: stageCode
+          in: query
+          required: false
+          schema: { type: string }
       responses:
         '200':
           description: File pipeline step list
@@ -4244,8 +4252,7 @@ paths:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
-        - $ref: '#/components/parameters/PageNoQuery'
-        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/KeywordQuery'
       responses:
         '200':
           description: File dispatch list
@@ -4263,6 +4270,7 @@ paths:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/KeywordQuery'
       responses:
         '200':
           description: Channel receipt list
@@ -4320,8 +4328,7 @@ paths:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
-        - $ref: '#/components/parameters/PageNoQuery'
-        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/KeywordQuery'
       responses:
         '200':
           description: File error list
@@ -4491,6 +4498,10 @@ paths:
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
         - $ref: '#/components/parameters/JobInstanceIdFilter'
+        - name: stepStatus
+          in: query
+          required: false
+          schema: { type: string }
       responses:
         '200':
           description: Job step list
@@ -4557,6 +4568,23 @@ paths:
           description: Filter by workflow code (partial match)
           schema:
             type: string
+        - name: workflowName
+          in: query
+          required: false
+          description: Filter by workflow name (partial match)
+          schema:
+            type: string
+        - name: workflowType
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: version
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
         - name: enabled
           in: query
           required: false
@@ -10031,6 +10059,14 @@ components:
         format: int32
         minimum: 1
         default: 20
+    KeywordQuery:
+      name: keyword
+      in: query
+      required: false
+      description: Literal case-insensitive keyword search across the list's visible identity and status fields.
+      schema:
+        type: string
+        maxLength: 128
     # ── Domain-specific optional filter parameters ──
     JobCodeFilter:
       name: jobCode
@@ -12899,7 +12935,20 @@ components:
           type: string
           nullable: true
           description: 拒绝原因；APPROVED 时为 null，被门禁拒绝时给出原因。
-      required: [requestId, traceId, sessionId, promptCategory, promptDecision, modelName, answer, refusalReason]
+        sources:
+          type: array
+          description: 本次回答实际引用的知识库来源；拒绝、失败或未命中知识库时为空数组。
+          items:
+            $ref: '#/components/schemas/AiSourceResponse'
+      required: [requestId, traceId, sessionId, promptCategory, promptDecision, modelName, answer, refusalReason, sources]
+    AiSourceResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        source:
+          type: string
+          description: 知识库来源文件名；不包含知识片段正文或内部相似度。
+      required: [source]
     AiAuditLogResponse:
       type: object
       properties:

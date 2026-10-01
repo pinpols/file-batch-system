@@ -221,6 +221,7 @@ class DefaultConsoleAiApplicationServiceTest {
     assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.REJECTED_SAFETY.code());
     assertThat(response.getAnswer()).contains("safety policy");
     assertThat(response.getRefusalReason()).isEqualTo("blocked-by-keyword");
+    assertThat(response.getSources()).isEmpty();
 
     ArgumentCaptor<AiAuditCommand> captor = ArgumentCaptor.forClass(AiAuditCommand.class);
     verify(auditService).record(captor.capture());
@@ -332,6 +333,24 @@ class DefaultConsoleAiApplicationServiceTest {
     assertThat(captor.getValue().promptTokens()).isEqualTo(120);
     assertThat(captor.getValue().completionTokens()).isEqualTo(45);
     assertThat(captor.getValue().promptDecision()).isEqualTo(AiPromptDecision.APPROVED.code());
+  }
+
+  @Test
+  @DisplayName("模型成功且命中知识库 → 返回去重后的结构化来源，不透出片段正文")
+  void shouldReturnDistinctStructuredSources_whenKnowledgeBaseMatches() {
+    stubApprovedChatClient(chatResponseWithUsage("按需重试即可。", 20, 8));
+    when(knowledgeBase.retrieve(any()))
+        .thenReturn(List.of(
+            new ConsoleAiKnowledgeBase.Snippet("operations.md", "内部片段一", 0.92),
+            new ConsoleAiKnowledgeBase.Snippet("operations.md", "内部片段二", 0.88),
+            new ConsoleAiKnowledgeBase.Snippet("workflow.md", "内部片段三", 0.81)));
+
+    AiChatResponse response = service.chat(request("tenant-1", "查询失败作业"), "idem-1");
+
+    assertThat(response.getSources())
+        .extracting("source")
+        .containsExactly("operations.md", "workflow.md");
+    assertThat(response.getSources().toString()).doesNotContain("内部片段");
   }
 
   @Test

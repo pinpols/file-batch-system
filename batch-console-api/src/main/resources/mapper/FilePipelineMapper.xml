@@ -20,6 +20,10 @@
             updated_at
         from batch.pipeline_instance
         where tenant_id = #{q.tenantId}
+        <if test="q.keyword != null and q.keyword != ''">
+            and strpos(lower(concat_ws(' ', id, job_code, pipeline_type, run_status, trace_id,
+                file_id, current_stage, last_success_stage)), lower(#{q.keyword})) &gt; 0
+        </if>
         <if test="q.fileId != null">
             and file_id = #{q.fileId}
         </if>
@@ -51,6 +55,10 @@
         select count(1)
         from batch.pipeline_instance
         where tenant_id = #{q.tenantId}
+        <if test="q.keyword != null and q.keyword != ''">
+            and strpos(lower(concat_ws(' ', id, job_code, pipeline_type, run_status, trace_id,
+                file_id, current_stage, last_success_stage)), lower(#{q.keyword})) &gt; 0
+        </if>
         <if test="q.fileId != null">
             and file_id = #{q.fileId}
         </if>

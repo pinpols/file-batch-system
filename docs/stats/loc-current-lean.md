@@ -1,19 +1,19 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `08dae6680`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `4b6fe4e58`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,609 | 476,721 | 241,086 | 50.6% |
+| 4,610 | 476,845 | 241,128 | 50.6% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| prod | 2,683 | 245,445 | 112,165 | 45.7% |
-| test | 1,180 | 170,037 | 90,509 | 53.2% |
+| prod | 2,684 | 245,535 | 112,197 | 45.7% |
+| test | 1,180 | 170,071 | 90,519 | 53.2% |
 | script | 603 | 45,633 | 28,629 | 62.7% |
 | config | 52 | 8,091 | 5,755 | 71.1% |
 | infra-config | 32 | 5,293 | 3,863 | 73.0% |
@@ -23,11 +23,11 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,406 | 350,058 | 177,651 | 50.7% |
+| Java | 3,407 | 350,148 | 177,685 | 50.7% |
 | Shell | 186 | 28,019 | 21,678 | 77.4% |
 | Python | 216 | 28,756 | 14,692 | 51.1% |
 | YAML | 95 | 12,331 | 9,271 | 75.2% |
-| XML | 174 | 21,162 | 6,560 | 31.0% |
+| XML | 174 | 21,196 | 6,568 | 31.0% |
 | TypeScript | 37 | 6,573 | 3,097 | 47.1% |
 | Rust | 22 | 8,456 | 2,856 | 33.8% |
 | Properties | 5 | 2,871 | 2,345 | 81.7% |
@@ -53,11 +53,11 @@
 | `scripts/ci/run-full-regression.sh` | script | Shell | 647 | 528 |
 | `scripts/local/start-all.sh` | script | Shell | 640 | 512 |
 | `scripts/local/be-acceptance.sh` | script | Shell | 612 | 479 |
-| `batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationServiceTest.java` | test | Java | 760 | 462 |
+| `batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationServiceTest.java` | test | Java | 779 | 471 |
 | `pom.xml` | config | XML | 764 | 455 |
 | `scripts/local/pre-push-sdk-checks.sh` | script | Shell | 558 | 424 |
+| `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | prod | Java | 954 | 418 |
 | `scripts/local/sim-harness.sh` | script | Shell | 557 | 418 |
-| `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | prod | Java | 947 | 416 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java` | prod | Java | 869 | 408 |
 
 ## 复跑

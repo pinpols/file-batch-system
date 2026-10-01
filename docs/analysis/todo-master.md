@@ -1,6 +1,6 @@
 # TODO Master · 当前待办唯一索引
 
-> 核查日期：2026-09-30。本文只登记当前仍有效的事项；`docs/archive/` 的历史待办不计入本表。
+> 核查日期：2026-10-01。本文只登记当前仍有效的事项；`docs/archive/` 的历史待办不计入本表。
 > 状态分类、证据要求和归档规则见 [`../standards/document-governance.md`](../standards/document-governance.md)。
 
 > 本文早期的统计数字和日期快照可能已过期；后续以事项表、证据路径和最后核查日期为准，不以历史总数为准。
@@ -21,7 +21,7 @@
 | 🟡 **暂缓** | 已明确不立即实施，并记录触发条件和复审周期 |
 | ❌ **不做** | 明确超出系统边界或收益不足，仅保留决策理由 |
 
-### 当前核查边界（2026-09-27）
+### 当前核查边界（2026-10-01）
 
 以下事项仍可从现行文档确认存在，但不能仅凭历史计划宣称“代码未完成”：
 
@@ -199,7 +199,7 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 
 | ID | 主题 | 状态 |
 |---|---|---|
-| **AI-CTX-1** | 版本化页面上下文、会话语义、租户/角色授权、领域拒答和来源引用契约 | ✅ 后端实现 v1 白名单上下文、服务端多轮上下文、会话所有者隔离、删除和过期清理；配对前端恢复/删除体验待完成 |
+| **AI-CTX-1** | 版本化页面上下文、会话语义、租户/角色授权、领域拒答和来源引用契约 | ✅ v1 白名单上下文、SSE 流式回复、服务端取消、多轮上下文、会话所有者隔离、删除和过期清理均已落地；完成响应返回去重后的结构化来源名称，配对前端已展示引用且不暴露片段或相似度 |
 | **AI-COST-1** | 输入/输出 token 上限、并发舱壁、日/月预算、provider 错误分类、成本与拒答指标 | 🟡 后端已实现 provider 费率估算、原子月预算预留、UTC 台账和摘要 API；供应商账单核对、真实价格校准和 staging 并发/故障验证待做 |
 | **AI-AUDIT-1** | AI 审计默认只保留元数据/哈希/成本信息，复核原文预览留存策略和查询权限 | 🟡 新请求原文预览默认关闭并暴露成本/token 字段；历史预览清理、生产留存和审计查询角色合规确认仍待做 |
 
@@ -231,23 +231,23 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 |---|---|---|
 | **MAINT-BE-1** | PostgreSQL 维护状态唯一事实源、版本 CAS、实例确认和重启恢复 | 🟡 V215 已落地；已实现启动读取、5 秒轮询、版本 CAS 和失联写保护，双实例/staging 证据待补 |
 | **MAINT-BE-2** | 维护 503 body/header、权限绕过和审计契约收口 | ✅ 后端 503 body、`X-Maintenance`、`Retry-After`、版本 Header、管理员热切换和审计已收口；细粒度旁路权限与前端联测仍按后续边界治理 |
-| **DEGRADE-BE-1** | `X-Degraded-Source` 标准化输出，读 fallback / 写 fail-fast 守护 | ✅ 后端 fallback 统一写来源 Header，写路径继续 fail-fast；前端消费和端到端联测待补 |
+| **DEGRADE-BE-1** | `X-Degraded-Source` 标准化输出，读 fallback / 写 fail-fast 守护 | ✅ 后端 fallback 统一写来源 Header，写路径继续 fail-fast；配对前端已完成 Header 消费、桌面/移动提示及受控恢复联测，其他下游和真实移动设备仍按环境验收项管理 |
 | **DEGRADE-BE-2** | 复用现有 Micrometer 增加维护状态、维护 503、fallback 比例和耗时告警 | ✅ 后端维护状态 gauge、维护请求结果、下游 fallback 计数、副本健康和容量/背压告警已补；真实阈值校准待 staging |
 | **MAINT-JOINT-1** | 双 Console 实例维护切换、下游断路器和恢复联测 | 🔒 需多实例/staging 环境验证 |
 
 明确不做：服务网格、通用动态路由、工单/通知中心、独立配置中心和写接口自动成功降级。
 
-### G7. CI 外部 Actions 版本治理 · P2
+### G7. CI 外部 Actions 版本治理 · P2 · 🟡 基线升级已验证，镜像链路待补证据
 
-专题记录：[`../backlog/ci-external-action-upgrade-backlog-2026-09-30.md`](../backlog/ci-external-action-upgrade-backlog-2026-09-30.md)。责任范围：仓库 CI/发布流程维护者；截至 2026-09-30，第一批 Actions/扫描工具已更新，Gitleaks Linux artifact 基础正负样例已验证，仍需 PR/Full Gate 实跑收口。
+专题记录：[`../backlog/ci-external-action-upgrade-backlog-2026-09-30.md`](../backlog/ci-external-action-upgrade-backlog-2026-09-30.md)。责任范围：仓库 CI/发布流程维护者。2026-10-01 复核确认通用 Action、Hadolint、SBOM Action、Squawk 和 oasdiff 已升级，相关 PR 门禁及最新 `main` Full Gate/CodeQL 已通过；Docker Buildx/Bake 的真实镜像 workflow 尚无升级后运行记录，继续单列。
 
 | ID | 主题 | 状态 |
 |---|---|---|
-| **CI-ACTION-1** | checkout、setup-python/java/node/go、upload-artifact 与 Hadolint Action 升级 | 🟡 已统一升级；待 PR/Full Gate 验证 runner、缓存和 artifact 契约 |
-| **CI-ACTION-2** | Docker Buildx setup action v3→v4 | 🟡 已升级到 v4；待镜像构建和 Docker Bake CI 验证 |
+| **CI-ACTION-1** | checkout、setup-python/java/node/go、upload-artifact 与 Hadolint Action 升级 | ✅ 已统一升级，相关 PR 门禁及最新 `main` Full Gate/CodeQL 已通过；self-hosted runner 和 GHES 兼容性仍按部署环境单独确认 |
+| **CI-ACTION-2** | Docker Buildx setup action v3→v4、Docker Bake v6→v7 | 🟡 引用和静态门禁已完成；仓库尚无升级后的真实镜像 workflow 运行记录，需在下一次镜像构建时确认缓存、driver 和元数据 |
 | **CI-ACTION-3** | 其余第三方 Action、扫描器和浮动版本引用复核 | 🟡 已完成盘点并保留兼容引用；GitHub Actions Dependabot 已开启每周版本队列，`trivy-action`、Checkov、发布 Action 等仍按上游安全公告和契约单独复核 |
-| **CI-SEC-1** | Gitleaks 8.30.1 CI Linux artifact 正向/负向检测验证 | 🟡 Docker linux/amd64 已验证：合成 `ghp_...` 正向退出 1、负向退出 0；仍需 PR/Full Gate 实跑，且该样例不代表所有规则 |
-| **CI-SEC-2** | 更新 Squawk CLI 与 oasdiff 固定版本 | 🟡 已升级到 Squawk `2.65.0` / oasdiff `1.32.1`；当前 OpenAPI spec 对比已本地通过，本批无迁移文件因此 Squawk 安全检查按规则跳过；仍待 PR/Full Gate 实跑 |
+| **CI-SEC-1** | Gitleaks 8.30.1 CI Linux artifact 正向/负向检测验证 | ✅ Docker linux/amd64 基础正负样例及 PR/Full Gate 安全扫描已通过；该证据不替代后续规则更新与新增密钥类型回归 |
+| **CI-SEC-2** | 更新 Squawk CLI 与 oasdiff 固定版本 | ✅ 已升级到 Squawk `2.65.0` / oasdiff `1.32.1`，OpenAPI 变更门禁已实跑；无迁移变更时 Squawk 按规则跳过，下一次迁移继续验证兼容/破坏样例 |
 
 ### H. 合规收尾 · P3
 

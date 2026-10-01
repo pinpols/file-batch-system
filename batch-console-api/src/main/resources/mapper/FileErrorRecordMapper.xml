@@ -23,6 +23,10 @@
         select *
         from batch.file_error_record
         where tenant_id = #{tenantId}
+        <if test="keyword != null and keyword != ''">
+            and strpos(lower(concat_ws(' ', id, file_id, pipeline_instance_id, record_no,
+                error_code, error_stage, error_message, skip_action)), lower(#{keyword})) &gt; 0
+        </if>
         <if test="fileId != null">
             and file_id = #{fileId}
         </if>
@@ -45,6 +49,10 @@
         select count(1)
         from batch.file_error_record
         where tenant_id = #{tenantId}
+        <if test="keyword != null and keyword != ''">
+            and strpos(lower(concat_ws(' ', id, file_id, pipeline_instance_id, record_no,
+                error_code, error_stage, error_message, skip_action)), lower(#{keyword})) &gt; 0
+        </if>
         <if test="fileId != null">
             and file_id = #{fileId}
         </if>

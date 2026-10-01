@@ -7,6 +7,7 @@ import lombok.Builder;
 @Builder(toBuilder = true)
 public record FilePipelineQuery(
     String tenantId,
+    String keyword,
     Long fileId,
     Long pipelineInstanceId,
     String pipelineType,

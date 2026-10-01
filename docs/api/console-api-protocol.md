@@ -7,6 +7,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-10-01 | **AI 来源与运行态分页契约收口**：`AiChatResponse` 增加 `sources[]`，每项仅含来源名称，不返回检索片段或相似度；文件 Pipeline、步骤、分发与错误查询增加最长 128 字符的 `keyword`，步骤查询增加 `pipelineInstanceId/stageCode`。Job Step 与 Workflow 定义列表同步补齐实现中已有的状态、名称、类型和版本筛选参数。路径、权限、租户隔离和分页 envelope 不变。 |
 | 2026-10-01 | **Console AI 统一流式对话**：`POST /api/console/ai/chat/stream` SSE（`started`、`delta`、`completed`、`failed` 事件）及同租户、同操作者的 `POST /api/console/ai/chat/stream/{requestId}/cancel` 成为唯一聊天入口；删除旧 `POST /api/console/ai/chat` JSON 接口。复用原有鉴权、幂等、限流、预算、会话和审计。 |
 | 2026-10-01 | **动态能力与使用统计权限收口**：`GET /api/console/auth/me` 新增 `capabilities`，`AI_ASSISTANT_USE` 同时受 AI 总开关和用户/角色白名单控制；使用统计查询仅允许 `ROLE_ADMIN`、`ROLE_AUDITOR`、`ROLE_TENANT_ADMIN`，并在运行监控菜单下提供独立路径。 |
 | 2026-10-01 | **Console AI 会话游标分页**：新增 `GET /api/console/ai/conversations/page?cursor&limit`，返回当前租户和操作者未过期会话的 `PageResponse`；按 `updatedAt` 和 `id` 稳定倒序，非法游标返回参数错误。旧数组列表接口保持兼容，单页大小仍由服务端配置上限约束。 |
