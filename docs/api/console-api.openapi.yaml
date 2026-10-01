@@ -434,6 +434,8 @@ paths:
                 $ref: '#/components/schemas/CommonResponseConsoleUsageSummaryList'
         '401':
           description: Not authenticated
+        '403':
+          description: Requires ROLE_ADMIN, ROLE_AUDITOR, or ROLE_TENANT_ADMIN
   /api/console/auth/logout:
     post:
       tags: [Auth]
@@ -14699,10 +14701,15 @@ components:
           description: 按当前用户 authorities 过滤后的侧边栏菜单树，由后端 ConsoleMenuRegistry 下发，前端不再硬编码。
           items:
             $ref: '#/components/schemas/ConsoleMenuGroup'
+        capabilities:
+          type: array
+          description: 当前用户已开通的动态控制台能力；能力同时考虑功能开关和用户/角色白名单。
+          items:
+            type: string
         mustChangePassword:
           type: boolean
           description: 首次登录/重置后建议更新密码提示标志；true 时 FE 显示非阻断提醒。
-      required: [username, tenantId, authorities, menus, mustChangePassword]
+      required: [username, tenantId, authorities, menus, capabilities, mustChangePassword]
     ConsoleMenuGroup:
       type: object
       description: 侧边栏菜单分组。

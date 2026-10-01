@@ -9,4 +9,5 @@ public record ConsoleAuthProfileResponse(
     String tenantId,
     Set<String> authorities,
     List<MenuGroup> menus,
+    Set<String> capabilities,
     boolean mustChangePassword) {}
