@@ -54,6 +54,7 @@ import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
@@ -68,6 +69,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientResponseException;
+import reactor.core.publisher.Flux;
 
 /**
  * AI 对话入口：集成 Spring AI、多层防护、审计写入数据库，确保助手只能在受控边界内回答。
@@ -137,7 +139,20 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
   @Override
   public AiChatResponse chat(AiChatRequest request, String idempotencyKey) {
     authorizationService.assertAllowed();
-    ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
+    return executeChat(request, requestMetadataResolver.current(), null);
+  }
+
+  @Override
+  public AiChatResponse chatStream(
+      AiChatRequest request,
+      String idempotencyKey,
+      ConsoleRequestMetadata metadata,
+      StreamObserver observer) {
+    return executeChat(request, metadata, observer);
+  }
+
+  private AiChatResponse executeChat(
+      AiChatRequest request, ConsoleRequestMetadata requestMetadata, StreamObserver observer) {
     String tenantId = resolveTenantId(request.getTenantId(), requestMetadata.tenantId());
     // 调用限流:AI 每次都烧 token + 调外部 LLM,独立更严;key 含 tenant 防跨租户压制(#779)。超限直接 429。
     enforceRateLimit(tenantId, requestMetadata.operatorId());
@@ -216,7 +231,10 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     String modelName;
     ModelCallResult modelCall;
     try {
-      modelCall = callModel(chatClients, snippets, promptPayload, tools);
+      modelCall = callModel(chatClients, snippets, promptPayload, tools, observer);
+      if (observer != null && observer.isCancelled()) {
+        throw new CancellationException("AI stream cancelled");
+      }
       chatResponse = modelCall.response();
       modelName = resolveModelName(chatResponse, modelCall.provider());
     } catch (Exception exception) {
@@ -417,7 +435,8 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       ConsoleAiClients providers,
       List<ConsoleAiKnowledgeBase.Snippet> snippets,
       String promptPayload,
-      ConsoleAiTools tools)
+      ConsoleAiTools tools,
+      StreamObserver observer)
       throws InterruptedException, ExecutionException, TimeoutException {
     long timeoutMillis = Math.max(1, aiProperties.getRequestTimeout().toMillis());
     long deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
@@ -429,10 +448,13 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
           snippets,
           promptPayload,
           tools,
+          observer,
           Math.min(
               deadlineNanos, System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(primaryBudget)));
     } catch (Exception primaryFailure) {
-      if (EmptyChecks.isNull(providers.fallback()) || !isFallbackEligible(primaryFailure)) {
+      if (EmptyChecks.isNull(providers.fallback())
+          || (observer != null && (observer.isCancelled() || observer.hasEmitted()))
+          || !isFallbackEligible(primaryFailure)) {
         throw primaryFailure;
       }
       if (Thread.currentThread().isInterrupted()) {
@@ -443,7 +465,8 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         throw primaryFailure;
       }
       try {
-        return callProvider(providers.fallback(), snippets, promptPayload, tools, deadlineNanos);
+        return callProvider(
+            providers.fallback(), snippets, promptPayload, tools, observer, deadlineNanos);
       } catch (Exception fallbackFailure) {
         fallbackFailure.addSuppressed(primaryFailure);
         throw fallbackFailure;
@@ -456,6 +479,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       List<ConsoleAiKnowledgeBase.Snippet> snippets,
       String promptPayload,
       ConsoleAiTools tools,
+      StreamObserver observer,
       long deadlineNanos)
       throws InterruptedException, ExecutionException, TimeoutException {
     ChatClient.ChatClientRequestSpec spec = provider
@@ -474,8 +498,9 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       throw new TimeoutException("AI provider request deadline exceeded");
     }
     long timeoutMillis = Math.max(1, TimeUnit.NANOSECONDS.toMillis(remainingNanos));
-    Future<ChatResponse> future =
-        modelCallExecutor.submit(() -> requestSpec.call().chatResponse());
+    Future<ChatResponse> future = modelCallExecutor.submit(() -> observer == null
+        ? requestSpec.call().chatResponse()
+        : streamResponse(requestSpec, observer));
     try {
       return new ModelCallResult(future.get(timeoutMillis, TimeUnit.MILLISECONDS), provider);
     } catch (InterruptedException interrupted) {
@@ -486,6 +511,38 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       future.cancel(true);
       throw exception;
     }
+  }
+
+  private ChatResponse streamResponse(
+      ChatClient.ChatClientRequestSpec requestSpec, StreamObserver observer) {
+    StringBuilder answer = new StringBuilder();
+    AtomicReference<ChatResponseMetadata> metadata = new AtomicReference<>();
+    Flux<ChatResponse> chunks =
+        requestSpec.stream().chatResponse().takeUntilOther(observer.cancellationSignal());
+    chunks
+        .doOnNext(chunk -> {
+          if (observer.isCancelled()) {
+            throw new CancellationException("AI stream cancelled");
+          }
+          if (chunk.getMetadata() != null && chunk.getMetadata().getUsage() != null) {
+            metadata.set(chunk.getMetadata());
+          }
+          String delta = extractContent(chunk);
+          if (delta != null
+              && !delta.isEmpty()
+              && answer.length() < aiProperties.getMaxResponseLength()) {
+            int remaining = aiProperties.getMaxResponseLength() - answer.length();
+            String boundedDelta = delta.substring(0, Math.min(delta.length(), remaining));
+            answer.append(boundedDelta);
+            observer.onDelta(boundedDelta);
+          }
+        })
+        .blockLast();
+    if (observer.isCancelled()) {
+      throw new CancellationException("AI stream cancelled");
+    }
+    return new ChatResponse(
+        List.of(new Generation(new AssistantMessage(answer.toString()))), metadata.get());
   }
 
   private boolean isFallbackEligible(Throwable failure) {
