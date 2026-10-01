@@ -6,7 +6,9 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.console.application.contract.request.auth.AiChatRequest;
+import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiApplicationService;
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiChatResponse;
 import io.github.pinpols.batch.console.domain.audit.service.ConsoleAiAuthorizationService;
@@ -14,12 +16,26 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.support.web.Idempotent;
+import jakarta.annotation.PreDestroy;
 import jakarta.validation.Valid;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,6 +46,9 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
 
 /** 控制台 AI 对话 REST（Spring AI）。 */
 @RestController
@@ -43,6 +62,19 @@ public class ConsoleAiController {
   private final ConsoleResponseFactory responseFactory;
   private final ConsoleAiAuthorizationService authorizationService;
   private final ConsoleRequestMetadataResolver metadataResolver;
+  private final ConsoleAiProperties aiProperties;
+  private final Map<String, ActiveStream> activeStreams = new ConcurrentHashMap<>();
+  private final ExecutorService streamExecutor =
+      new ThreadPoolExecutor(0, 16, 60L, TimeUnit.SECONDS, new SynchronousQueue<>(), runnable -> {
+        Thread thread = new Thread(runnable, "console-ai-stream");
+        thread.setDaemon(true);
+        return thread;
+      });
+
+  @PreDestroy
+  void shutdownStreamExecutor() {
+    streamExecutor.shutdownNow();
+  }
 
   /** AI 聊天一轮对话。 */
   @PostMapping("/chat")
@@ -50,6 +82,137 @@ public class ConsoleAiController {
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody AiChatRequest request) {
     return responseFactory.success(applicationService.chat(request, idempotencyKey));
+  }
+
+  @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+  public SseEmitter chatStream(
+      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+      @Valid @RequestBody AiChatRequest request) {
+    authorizationService.assertAllowed();
+    ConsoleRequestMetadata metadata = metadataResolver.current();
+    String requestId = EmptyChecks.isNull(metadata.requestId())
+        ? IdGenerator.newBusinessNo("ai")
+        : metadata.requestId();
+    ConsoleRequestMetadata streamMetadata = new ConsoleRequestMetadata(
+        requestId,
+        metadata.traceId(),
+        metadata.tenantId(),
+        metadata.operatorId(),
+        idempotencyKey,
+        metadata.clientIp());
+    long timeout = Math.max(1, aiProperties.getRequestTimeout().toMillis()) + 10_000;
+    SseEmitter emitter = new SseEmitter(timeout);
+    ActiveStream active = new ActiveStream(metadata.tenantId(), metadata.operatorId(), emitter);
+    if (EmptyChecks.isNotNull(activeStreams.putIfAbsent(requestId, active))) {
+      throw BizException.of(ResultCode.CONFLICT, "error.common.state_conflict");
+    }
+    emitter.onTimeout(active::cancel);
+    emitter.onError(error -> active.cancel());
+    emitter.onCompletion(active::cancel);
+    try {
+      streamExecutor.execute(() -> {
+        try {
+          active.send("started", Map.of("requestId", requestId));
+          AiChatResponse result =
+              applicationService.chatStream(request, idempotencyKey, streamMetadata, active);
+          if (!active.isCancelled()) {
+            active.send("completed", result);
+          }
+        } catch (CancellationException ignored) {
+          // 客户端已停止；服务仍须结算并审计本轮请求。
+        } catch (Exception exception) {
+          if (!active.isCancelled()) {
+            try {
+              String code = exception instanceof BizException bizException
+                  ? bizException.getCode().code()
+                  : "STREAM_FAILED";
+              active.send("failed", Map.of("code", code));
+            } catch (IOException | UncheckedIOException ignored) {
+              active.cancel();
+            }
+          }
+        } finally {
+          active.finish();
+          activeStreams.remove(requestId, active);
+          emitter.complete();
+        }
+      });
+    } catch (RejectedExecutionException exception) {
+      activeStreams.remove(requestId, active);
+      throw BizException.of(ResultCode.SERVICE_UNAVAILABLE, "error.ai.assistant_not_configured");
+    }
+    return emitter;
+  }
+
+  @PostMapping("/chat/stream/{requestId}/cancel")
+  public CommonResponse<Void> cancelChatStream(@PathVariable String requestId) {
+    authorizationService.assertAllowed();
+    ConsoleRequestMetadata metadata = metadataResolver.current();
+    ActiveStream active = activeStreams.get(requestId);
+    if (EmptyChecks.isNull(active)
+        || !Objects.equals(active.tenantId, metadata.tenantId())
+        || !Objects.equals(active.operatorId, metadata.operatorId())) {
+      throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail");
+    }
+    active.cancel();
+    return responseFactory.success(null);
+  }
+
+  private static final class ActiveStream implements ConsoleAiApplicationService.StreamObserver {
+    private final String tenantId;
+    private final String operatorId;
+    private final SseEmitter emitter;
+    private final Sinks.Empty<Void> cancellation = Sinks.empty();
+    private final AtomicBoolean cancelled = new AtomicBoolean();
+    private final AtomicBoolean emitted = new AtomicBoolean();
+    private final AtomicBoolean finished = new AtomicBoolean();
+
+    private ActiveStream(String tenantId, String operatorId, SseEmitter emitter) {
+      this.tenantId = tenantId;
+      this.operatorId = operatorId;
+      this.emitter = emitter;
+    }
+
+    private void send(String event, Object payload) throws IOException {
+      emitter.send(SseEmitter.event().name(event).data(payload));
+    }
+
+    @Override
+    public void onDelta(String text) {
+      if (isCancelled()) throw new CancellationException("AI stream cancelled");
+      try {
+        send("delta", Map.of("text", text));
+        emitted.set(true);
+      } catch (IOException exception) {
+        cancel();
+        throw new UncheckedIOException(exception);
+      }
+    }
+
+    @Override
+    public boolean isCancelled() {
+      return cancelled.get();
+    }
+
+    @Override
+    public boolean hasEmitted() {
+      return emitted.get();
+    }
+
+    @Override
+    public Mono<Void> cancellationSignal() {
+      return cancellation.asMono();
+    }
+
+    private void cancel() {
+      if (!finished.get() && cancelled.compareAndSet(false, true)) {
+        cancellation.tryEmitEmpty();
+      }
+    }
+
+    private void finish() {
+      finished.set(true);
+    }
   }
 
   @GetMapping("/conversations")

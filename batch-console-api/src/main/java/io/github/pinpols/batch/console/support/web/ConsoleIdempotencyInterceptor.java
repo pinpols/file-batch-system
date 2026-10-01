@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.utils.Texts;
+import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -37,6 +38,7 @@ import org.springframework.web.servlet.HandlerInterceptor;
 public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
 
   private static final Duration IDEMPOTENCY_TTL = Duration.ofHours(24);
+  private static final Duration STREAM_PENDING_TTL = Duration.ofMinutes(10);
   private static final Set<String> MUTATING_METHODS = Set.of("POST", "PUT", "PATCH", "DELETE");
   private static final String KEY_PREFIX = "console:idempotency:";
   private static final String PENDING = "PENDING";
@@ -48,6 +50,10 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
   private static final String CONFLICT_PENDING_BODY = "{\"code\":\""
       + ResultCode.CONFLICT.code()
       + "\",\"message\":\"request currently being processed, retry after 30s with same"
+      + " Idempotency-Key\"}";
+  private static final String STREAM_CONFLICT_PENDING_BODY = "{\"code\":\""
+      + ResultCode.CONFLICT.code()
+      + "\",\"message\":\"AI stream currently being processed, retry after 600s with same"
       + " Idempotency-Key\"}";
   // R-4.1：Redis 不可达时幂等采用 fail-closed（返回 503），宁可拒绝也不双写。
   // 与限流的 fail-open 形成对照——前者保可用，后者保安全。
@@ -67,6 +73,12 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
   @Override
   public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
       throws IOException {
+
+    // 异步 SSE 分派会带同一个请求和键再次进入拦截器。
+    // 初次分派持有占位，完成后只结算一次。
+    if (request.getDispatcherType() == DispatcherType.ASYNC) {
+      return true;
+    }
 
     String method = request.getMethod().toUpperCase(Locale.ROOT);
     if (!MUTATING_METHODS.contains(method)) {
@@ -123,10 +135,12 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
       return false;
     }
 
-    // PENDING 也占问题（防并发双提交），但短 TTL（30s），超时自动释放
+    // PENDING 阻止并发重复请求；流式请求的占位有效期比普通写请求更长。
+    boolean streamRequest = request.getRequestURI().equals("/api/console/ai/chat/stream");
     Boolean isNew;
     try {
-      isNew = idempotencyStore.setIfAbsent(redisKey, PENDING, Duration.ofSeconds(30));
+      Duration pendingTtl = streamRequest ? STREAM_PENDING_TTL : Duration.ofSeconds(30);
+      isNew = idempotencyStore.setIfAbsent(redisKey, PENDING, pendingTtl);
     } catch (DataAccessException ex) {
       log.warn(
           "idempotency Redis setIfAbsent unavailable — fail-closed: key={}, cause={}",
@@ -152,8 +166,11 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
                 + " key={}, cause={}",
             idempotencyKey,
             ex.getMessage());
-        response.setHeader("Retry-After", "30");
-        writeJson(response, HttpStatus.CONFLICT, CONFLICT_PENDING_BODY);
+        response.setHeader("Retry-After", streamRequest ? "600" : "30");
+        writeJson(
+            response,
+            HttpStatus.CONFLICT,
+            streamRequest ? STREAM_CONFLICT_PENDING_BODY : CONFLICT_PENDING_BODY);
         return false;
       }
       if (DONE.equals(current)) {
@@ -169,9 +186,12 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
             idempotencyKey,
             request.getRequestURI(),
             tenantId);
-        // 给前端一个明确的 Retry-After 提示；30s 对齐 PENDING TTL
-        response.setHeader("Retry-After", "30");
-        writeJson(response, HttpStatus.CONFLICT, CONFLICT_PENDING_BODY);
+        // Retry-After 与占位有效期一致。
+        response.setHeader("Retry-After", streamRequest ? "600" : "30");
+        writeJson(
+            response,
+            HttpStatus.CONFLICT,
+            streamRequest ? STREAM_CONFLICT_PENDING_BODY : CONFLICT_PENDING_BODY);
       }
       return false;
     }

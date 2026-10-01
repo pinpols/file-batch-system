@@ -23,6 +23,7 @@ import io.github.pinpols.batch.console.application.observability.ConsoleQueryApp
 import io.github.pinpols.batch.console.application.ops.ConsoleClusterDiagnosticService;
 import io.github.pinpols.batch.console.config.ConsoleAiClients;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiApplicationService;
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiChatResponse;
 import io.github.pinpols.batch.console.domain.audit.command.AiAuditCommand;
 import io.github.pinpols.batch.console.domain.audit.service.ConsoleAiAuthorizationService;
@@ -35,8 +36,10 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -55,6 +58,9 @@ import org.springframework.dao.QueryTimeoutException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientResponseException;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
 
 /**
  * DefaultConsoleAiApplicationService 单测 — 覆盖多层防护决策路径：
@@ -326,6 +332,131 @@ class DefaultConsoleAiApplicationServiceTest {
     assertThat(captor.getValue().promptTokens()).isEqualTo(120);
     assertThat(captor.getValue().completionTokens()).isEqualTo(45);
     assertThat(captor.getValue().promptDecision()).isEqualTo(AiPromptDecision.APPROVED.code());
+  }
+
+  @Test
+  void shouldStreamProviderChunksAndAuditFinalResponse() {
+    aiProperties.getTools().setEnabled(false);
+    when(promptGuard.check(any()))
+        .thenReturn(AiPromptGateResult.approved(AiPromptCategory.PLATFORM, "normalized"));
+    when(knowledgeBase.retrieve(any())).thenReturn(List.of());
+    ChatClient chatClient = mock(ChatClient.class);
+    ChatClient.ChatClientRequestSpec requestSpec = mock(ChatClient.ChatClientRequestSpec.class);
+    ChatClient.StreamResponseSpec streamSpec = mock(ChatClient.StreamResponseSpec.class);
+    when(chatClientsProvider.getIfAvailable())
+        .thenReturn(
+            new ConsoleAiClients(new ConsoleAiClients.ProviderClient("openai", chatClient), null));
+    when(chatClient.prompt()).thenReturn(requestSpec);
+    when(requestSpec.system(anyString())).thenReturn(requestSpec);
+    when(requestSpec.user(anyString())).thenReturn(requestSpec);
+    when(requestSpec.options(any(org.springframework.ai.chat.prompt.ChatOptions.Builder.class)))
+        .thenReturn(requestSpec);
+    when(requestSpec.stream()).thenReturn(streamSpec);
+    when(streamSpec.chatResponse())
+        .thenReturn(Flux.just(
+            chatResponseWithUsage("hello ", 10, 2), chatResponseWithUsage("world", 10, 4)));
+    List<String> deltas = new ArrayList<>();
+    ConsoleAiApplicationService.StreamObserver observer =
+        new ConsoleAiApplicationService.StreamObserver() {
+          @Override
+          public void onDelta(String text) {
+            deltas.add(text);
+          }
+
+          @Override
+          public boolean isCancelled() {
+            return false;
+          }
+
+          @Override
+          public boolean hasEmitted() {
+            return !deltas.isEmpty();
+          }
+
+          @Override
+          public Mono<Void> cancellationSignal() {
+            return Mono.never();
+          }
+        };
+
+    AiChatResponse response = service.chatStream(
+        request("tenant-1", "查询失败作业"),
+        "idem-1",
+        meta("tenant-1", "req-stream", "trace-1"),
+        observer);
+
+    assertThat(deltas).containsExactly("hello ", "world");
+    assertThat(response.getAnswer()).contains("hello world");
+    assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.APPROVED.code());
+    ArgumentCaptor<AiAuditCommand> captor = ArgumentCaptor.forClass(AiAuditCommand.class);
+    verify(auditService).record(captor.capture());
+    assertThat(captor.getValue().completionTokens()).isEqualTo(4);
+  }
+
+  @Test
+  void shouldSettleAndAuditStoppedStreamAsFailed() {
+    aiProperties.getTools().setEnabled(false);
+    when(promptGuard.check(any()))
+        .thenReturn(AiPromptGateResult.approved(AiPromptCategory.PLATFORM, "normalized"));
+    when(knowledgeBase.retrieve(any())).thenReturn(List.of());
+    ChatClient chatClient = mock(ChatClient.class);
+    ChatClient.ChatClientRequestSpec requestSpec = mock(ChatClient.ChatClientRequestSpec.class);
+    ChatClient.StreamResponseSpec streamSpec = mock(ChatClient.StreamResponseSpec.class);
+    when(chatClientsProvider.getIfAvailable())
+        .thenReturn(
+            new ConsoleAiClients(new ConsoleAiClients.ProviderClient("openai", chatClient), null));
+    when(chatClient.prompt()).thenReturn(requestSpec);
+    when(requestSpec.system(anyString())).thenReturn(requestSpec);
+    when(requestSpec.user(anyString())).thenReturn(requestSpec);
+    when(requestSpec.options(any(org.springframework.ai.chat.prompt.ChatOptions.Builder.class)))
+        .thenReturn(requestSpec);
+    when(requestSpec.stream()).thenReturn(streamSpec);
+    when(streamSpec.chatResponse())
+        .thenReturn(Flux.just(
+            chatResponseWithUsage("partial", 10, 2), chatResponseWithUsage(" later", 10, 4)));
+    AtomicBoolean cancelled = new AtomicBoolean();
+    Sinks.Empty<Void> cancellation = Sinks.empty();
+    ConsoleAiApplicationService.StreamObserver observer =
+        new ConsoleAiApplicationService.StreamObserver() {
+          @Override
+          public void onDelta(String text) {
+            cancelled.set(true);
+            cancellation.tryEmitEmpty();
+          }
+
+          @Override
+          public boolean isCancelled() {
+            return cancelled.get();
+          }
+
+          @Override
+          public boolean hasEmitted() {
+            return true;
+          }
+
+          @Override
+          public Mono<Void> cancellationSignal() {
+            return cancellation.asMono();
+          }
+        };
+
+    AiChatResponse response = service.chatStream(
+        request("tenant-1", "查询失败作业"),
+        "idem-1",
+        meta("tenant-1", "req-stream", "trace-1"),
+        observer);
+
+    assertThat(cancelled.get()).isTrue();
+    assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.FAILED.code());
+    verify(costService)
+        .settle(
+            any(),
+            org.mockito.ArgumentMatchers.nullable(String.class),
+            org.mockito.ArgumentMatchers.nullable(Integer.class),
+            org.mockito.ArgumentMatchers.nullable(Integer.class));
+    ArgumentCaptor<AiAuditCommand> captor = ArgumentCaptor.forClass(AiAuditCommand.class);
+    verify(auditService).record(captor.capture());
+    assertThat(captor.getValue().promptDecision()).isEqualTo(AiPromptDecision.FAILED.code());
   }
 
   @Test

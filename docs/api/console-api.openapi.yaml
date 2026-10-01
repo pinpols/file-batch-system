@@ -3495,6 +3495,54 @@ paths:
                 $ref: '#/components/schemas/CommonResponseAiChatResponse'
         '404':
           description: Supplied sessionId does not exist or has expired
+  /api/console/ai/chat/stream:
+    post:
+      tags: [AI]
+      summary: Stream an AI chat turn as server-sent events
+      description: >-
+        Uses the same authorization, budgets, audit, and conversation retention as /chat.
+        Events are started ({requestId}), delta ({text}), and completed (AiChatResponse).
+        An unexpected pre-completion error emits failed ({code}). The client must treat
+        connection loss without completed as a failed turn. A stopped turn remains audited.
+      operationId: streamConsoleAiChat
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AiChatRequest'
+      responses:
+        '200':
+          description: UTF-8 SSE event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '404':
+          description: Supplied sessionId does not exist or has expired
+  /api/console/ai/chat/stream/{requestId}/cancel:
+    post:
+      tags: [AI]
+      summary: Stop the current operator's active AI stream
+      operationId: cancelConsoleAiChatStream
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cancellation accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
+        '404':
+          description: Stream not found or not owned by the current operator
   /api/console/ai/conversations:
     get:
       tags: [AI]
