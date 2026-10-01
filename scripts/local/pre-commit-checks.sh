@@ -42,6 +42,7 @@ feature_switch_changed=0
 env_governance_changed=0
 maven_descriptor_changed=0
 helm_changed=0
+config_registry_changed=0
 for file in "${staged_files[@]}"; do
   [[ "$file" == *.java ]] && java_files+=("$file")
   [[ "$file" == *.sh ]] && shell_files+=("$file")
@@ -60,6 +61,10 @@ for file in "${staged_files[@]}"; do
     && env_governance_changed=1
   [[ "$file" == pom.xml || "$file" == */pom.xml ]] && maven_descriptor_changed=1
   [[ "$file" == helm/* ]] && helm_changed=1
+  if [[ "$file" == */src/main/java/*.java ]] \
+    && grep -Fq "${file}#" docs/runbook/config-governance-registry.yml; then
+    config_registry_changed=1
+  fi
   if [[ "$file" != docs/* && "$file" != db/migration/* ]]; then
     case "$file" in
       *.java|*.sh|*.py|*.yml|*.yaml|*.xml|*.ts|*.tsx|*.rs|*.go|*.toml|*.properties|*.sql)
@@ -68,6 +73,10 @@ for file in "${staged_files[@]}"; do
     esac
   fi
 done
+
+if git diff --cached -G'@ConfigurationProperties' --name-only -- '*.java' | grep -q .; then
+  config_registry_changed=1
+fi
 
 if ((${#java_files[@]} > 0)); then
   gate_run PRE_COMMIT_SPOTLESS "Java Spotless 格式化（${#java_files[@]} 个文件）" \
@@ -89,6 +98,25 @@ if ((${#java_files[@]} > 0)); then
   for file in "${java_files[@]}"; do
     [[ -f "$file" ]] && git add -- "$file"
   done
+fi
+
+if ((config_registry_changed == 1)); then
+  sync_config_governance_registry() {
+    if ! git diff --quiet -- '**/src/main/java/**/*.java'; then
+      echo "生产 Java 文件还有未暂存改动，拒绝自动生成配置治理登记表" >&2
+      return 1
+    fi
+    if [[ -n "$(git ls-files --others --exclude-standard -- '**/src/main/java/**/*.java')" ]]; then
+      echo "存在未暂存的新生产 Java 文件，拒绝自动生成配置治理登记表" >&2
+      return 1
+    fi
+    "$PYTHON_BIN" scripts/ci/check-config-governance.py --write
+    git add -- docs/runbook/config-governance-registry.yml \
+      batch-console-api/src/main/resources/config-governance-registry.json
+    "$PYTHON_BIN" scripts/ci/check-config-governance.py
+  }
+  gate_run PRE_COMMIT_CONFIG_GOVERNANCE_SYNC "配置治理登记表自动同步" \
+    sync_config_governance_registry
 fi
 
 if ((${#mapper_xml_files[@]} > 0)); then
@@ -160,6 +188,22 @@ if ((env_governance_changed == 1)); then
     "$PYTHON_BIN" scripts/ci/check-env-variable-governance.py
 fi
 if ((maven_descriptor_changed == 1)); then
+  sync_maven_compliance_snapshot() {
+    if ! git diff --quiet -- '**/pom.xml' 'pom.xml'; then
+      echo "POM 还有未暂存改动，拒绝自动生成 SBOM" >&2
+      return 1
+    fi
+    if [[ -n "$(git ls-files --others --exclude-standard -- '**/pom.xml' 'pom.xml')" ]]; then
+      echo "存在未暂存的新 POM，拒绝自动生成 SBOM" >&2
+      return 1
+    fi
+    ./mvnw -q -P compliance license:aggregate-add-third-party \
+      cyclonedx:makeAggregateBom -DskipTests
+    cp target/bom.json docs/compliance/sbom.json
+    git add -- docs/compliance/sbom.json
+    bash scripts/ci/check-license-compliance.sh --reuse-generated
+  }
+  gate_run PRE_COMMIT_SBOM_SYNC "SBOM 与许可证自动同步" sync_maven_compliance_snapshot
   gate_run PRE_COMMIT_DEPENDENCY_BOUNDARIES "Maven 模块依赖边界" \
     "$PYTHON_BIN" scripts/ci/check-dependency-boundaries.py
 fi

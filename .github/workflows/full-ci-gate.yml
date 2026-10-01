@@ -45,6 +45,8 @@ jobs:
   static-checks:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      BATCH_GATE_COLLECT: '1'
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -62,6 +64,10 @@ jobs:
       - name: Test repository text encoding checker
         shell: bash
         run: bash scripts/ci/run-gate.sh FULL_UTF8_ENCODING_TEST "UTF-8 编码门禁测试" -- python3 -m unittest scripts/ci/tests/test_check_utf8_encoding.py
+
+      - name: Test gate failure aggregation
+        shell: bash
+        run: bash scripts/ci/run-gate.sh FULL_GATE_COLLECTION_TEST "门禁失败汇总自测" -- bash scripts/ci/tests/test-gate-result-collection.sh
 
       - name: Verify runtime UTF-8 configuration
         shell: bash
@@ -249,6 +255,13 @@ jobs:
           bash scripts/ci/run-gate.sh FULL_JAVA_SUPPRESSION_REGISTRY "Java 抑制项注册表" -- python3 scripts/ci/check-java-suppression-registry.py
           # test-compile 必要(PMD 需要 class 文件分析),不跑 surefire
           bash scripts/ci/run-gate.sh FULL_JAVA_STATIC_ANALYSIS "PMD、Spotless 与编译检查" -- ./mvnw -DskipTests test-compile pmd:check spotless:check -fae -B
+
+      - name: Report all static check failures
+        if: always()
+        shell: bash
+        run: |
+          source scripts/lib/gate-result.sh
+          gate_assert_collected
 
   # ===========================================================================
   # 3 shard 按 IT 压力均化(2026-05-22 实测重排,对齐 pr-gate):

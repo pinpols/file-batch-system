@@ -18,7 +18,7 @@
 | API 与兼容 | `check-console-openapi-paths.py`、`check-openapi-breaking.sh` |
 | Java 质量 | `check-empty-checks.py`、`check-java-lombok-injection.py`、`check-java-logging-governance.py`、`check-java-readability.py`、`check-java-text-block-style.py`、`check-java-suppression-registry.py`、`check-mapof-null-values.py`、`check-required-java-docs.sh` |
 | 测试完整性 | `check-e2e-run-completeness.sh`、`check-e2e-shard-coverage.sh`、`check-integration-test-coverage.py`、`check-module-test-coverage.sh`、`check-no-silent-disabled-tests.sh` |
-| 安全与许可 | `check-dependency-licenses.sh`、`check-license-compliance.sh`、`check-trivy-ignore-expiry.py` |
+| 安全与许可 | `check-dependency-licenses.sh`、`check-license-compliance.sh`、`check-sbom-sync.sh`、`check-trivy-ignore-expiry.py` |
 | 观测 | `check-helm-prometheusrule-sync.sh`、`check-log-lifecycle.sh`、`check-observability-contract.py` |
 
 ## `check-version-alignment.sh`
@@ -39,6 +39,30 @@ bash scripts/ci/check-version-alignment.sh
 ## 门禁结果格式
 
 Git hook 与 GitHub workflow 的门禁入口统一输出 `状态 | code | gate | exit_code | action`；跳过结果在固定字段后追加 `reason`。具体诊断仍由检查脚本输出，最终状态行由 `scripts/lib/gate-result.sh` / `scripts/ci/run-gate.sh` 生成。workflow 中不要直接调用门禁脚本；多项检查要逐项调用 `gate_run`，避免一项失败掩盖同一步其余门禁的独立状态。扫描器报告、测试清单和运行进度不是门禁状态行，不强行改成该格式。
+
+PR 与 Full Gate 的静态检查 job 设置 `BATCH_GATE_COLLECT=1`。业务门禁失败时
+`gate_run` 会记录错误并继续执行后续检查，末尾由 `gate_assert_collected` 汇总全部失败后
+统一返回非零；checkout、运行时安装等前置环境步骤仍保持立即失败。本地钩子未设置该变量，
+继续采用首错即停。
+
+本地 pre-commit 对三类确定性派生产物自动同步并暂存：代码量快照、POM 对应的 SBOM、
+`@ConfigurationProperties` 对应的配置治理目录。自动同步前会检查权威源不存在未暂存或
+未跟踪改动，防止误带工作区内容。Changelog、安全例外、功能开关与许可证风险说明等
+需要语义判断的文件保持人工维护，CI 只读阻断。
+
+`check-sbom-sync.sh` 从当前 Maven reactor 重生成 `target/bom.json`，并与
+`docs/compliance/sbom.json` 比较 CycloneDX 版本、组件坐标、版本、许可证、哈希和依赖图。
+数组顺序、描述等跨环境展示字段不参与比较。任何 POM 依赖或版本调整都必须同步提交入库
+SBOM；`check-license-compliance.sh` 复用已生成结果再次校验，避免 Full Gate 只上传动态
+artifact、却放过仓库快照漂移。
+
+`compare-sbom.py` 仅豁免精确登记的 OS 专属组件。目前只有 Reactor Netty 在 macOS 解析时
+附加的 `io.netty:netty-resolver-dns-native-macos`；比较时同时移除对应组件和依赖边。其他
+组件的坐标、版本、许可证、哈希或依赖关系发生变化仍会阻断。
+
+许可证检查默认每次重建 Maven 许可证清单和 SBOM；只有调用方刚完成同一组生成命令时才可
+显式传 `--reuse-generated`。AGPL、SSPL、BUSL、CPAL、EUPL、Commons Clause、Elastic、
+PolyForm、无 Classpath Exception 的纯 GPL 及未知许可证均阻断。
 
 ## `daily-validation-change-gate.py`
 

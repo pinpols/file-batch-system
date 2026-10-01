@@ -65,6 +65,10 @@ CI 版本基线与运行结果分开记录。每次核验 Full Gate、CodeQL 或
 - **pr-gate 与 full-ci-gate 检查项不完全相同**:见下表(pr-gate 重快速反馈,full-ci-gate 重深度回归 + 安全扫描)
 - **main 红线独立于 PR 绿灯**:PR gate 通过只代表候选变更可合入；合入后的 main 只有最新 `full-ci-gate` 通过才可作为发布基线。
 - **门禁结果行统一**:本地 hook 与 CI 统一输出 `状态 | code | gate | exit_code | action`；跳过时再输出 `reason`。单步中串行运行多个阻断检查时，每项都必须通过共享 `gate_run` 输出独立结果；具体诊断信息可保留各检查器原有内容。
+- **静态门禁失败统一汇总**：PR 与 Full Gate 的 `static-checks` 会继续执行所有相互独立的业务/规范检查，在 job 末尾一次性列出失败代码、名称和退出码后阻断；checkout、构建环境安装等缺失后无法继续的基础前置仍立即失败。本地 pre-commit/pre-push 保持首错即停。
+- **SBOM 快照必须同步**：POM 或 CI 门禁变更时，PR Gate 重生成 CycloneDX SBOM 并与 `docs/compliance/sbom.json` 比较；Full Gate 的许可证检查再次复核。动态 artifact 生成成功不等于入库快照已同步。
+- **确定性派生产物由 hook 维护**：POM 已暂存且没有同文件未暂存改动时，pre-commit 自动重建并暂存 SBOM，同时执行许可证门禁；`@ConfigurationProperties` 增删时自动重建文档与运行时两份配置治理目录；代码量快照沿用 staged-tree 自动同步。CI 始终只读验证，不用机器人账号回写 PR。
+- **语义与安全例外保持人工审批**：Changelog、功能开关说明、环境变量 owner、Java 抑制项、Trivy 忽略项、SQL 例外基线和许可证风险说明不可由门禁自动放宽。CI 应给出修复命令或登记位置，但不替开发者作风险决定。
 
 ## 开源多人协作策略
 

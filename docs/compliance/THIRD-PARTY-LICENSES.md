@@ -3,7 +3,7 @@
 **Product**: `batch-platform`  
 **Version**: `1.0.0` (与根 POM 默认 GA 版本一致)
 **Generated**: `2026-09-25`
-**Source**: curated from the current `pom.xml` / module POM files + `sdk/python/pyproject.toml`;Maven 部分以 `mvn -P compliance` 输出为底（406 components，见 `sbom.json`）。
+**Source**: curated from the current `pom.xml` / module POM files + `sdk/python/pyproject.toml`;Maven 部分以 `mvn -P compliance` 输出为底（组件总数以 `sbom.json` 为准）。
 
 This document is a human-readable snapshot of the third-party components referenced by the repository at the time of generation.
 Internal modules under `io.github.pinpols.batch:*` are excluded.
@@ -57,7 +57,7 @@ These are the main runtime-facing third-party components currently used by the p
 | Flyway PostgreSQL support | 12.4.0 | Apache-2.0 | all | PostgreSQL dialect |
 | Hibernate Validator | 9.1.0.Final | Apache-2.0 | orchestrator | Bean Validation 实现 |
 | AWS SDK for Java v2 (S3) | 2.55.5 | Apache-2.0 | common, orchestrator, workers | Object storage access(S3 协议,兼容 MinIO) |
-| Jackson Databind | 3.1.4 | Apache-2.0 | common | JSON serialization |
+| Jackson Databind | managed by Spring Boot 4.1.1 | Apache-2.0 | common | JSON serialization |
 | Jackson Datatype JSR310 | managed by Spring Boot 4.1.1 | Apache-2.0 | common | Java time module |
 | Micrometer Core | managed by Spring Boot 4.1.1 | Apache-2.0 | worker-core | 应用指标基础 |
 | Micrometer Registry Prometheus | managed by Spring Boot 4.1.1 | Apache-2.0 | orchestrator, workers, trigger, console-api | Metrics export |

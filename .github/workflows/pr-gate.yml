@@ -98,6 +98,8 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      BATCH_GATE_COLLECT: '1'
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -119,6 +121,10 @@ jobs:
       - name: Test repository text encoding checker
         shell: bash
         run: bash scripts/ci/run-gate.sh PR_UTF8_ENCODING_TEST "UTF-8 编码门禁测试" -- python3 -m unittest scripts/ci/tests/test_check_utf8_encoding.py
+
+      - name: Test gate failure aggregation
+        shell: bash
+        run: bash scripts/ci/run-gate.sh PR_GATE_COLLECTION_TEST "门禁失败汇总自测" -- bash scripts/ci/tests/test-gate-result-collection.sh
 
       - name: Verify runtime UTF-8 configuration
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
@@ -363,6 +369,11 @@ jobs:
         # Trivy 解析 Java 传递依赖时会访问 Maven Central；先缓存外部依赖并安装本地 reactor 产物，避免重复远端 POM 请求。
         run: bash scripts/ci/run-gate.sh PR_TRIVY_MAVEN_CACHE "Trivy Maven 依赖缓存预热" -- ./mvnw -B -ntp -DskipTests -Dmaven.test.skip=true -pl '!batch-e2e-tests' install
 
+      - name: Verify tracked SBOM matches Maven dependencies
+        if: needs.changes.outputs.maven == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        run: bash scripts/ci/run-gate.sh PR_SBOM_SYNC "SBOM 依赖快照同步" -- bash scripts/ci/check-sbom-sync.sh
+
       - name: Trivy fs scan on supply-chain inputs
         if: needs.changes.outputs.config == 'true' || needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
@@ -498,6 +509,13 @@ jobs:
         shell: bash
         # test-compile 必要(PMD 需要 class 文件分析),不跑 surefire
         run: bash scripts/ci/run-gate.sh PR_JAVA_STATIC_ANALYSIS "PMD、Spotless 与编译检查" -- ./mvnw -DskipTests test-compile pmd:check spotless:check -fae -B
+
+      - name: Report all static check failures
+        if: always()
+        shell: bash
+        run: |
+          source scripts/lib/gate-result.sh
+          gate_assert_collected
 
   # ===========================================================================
   # 3 个 maven unit shard 按"压力均匀"分配,不按业务领域分。

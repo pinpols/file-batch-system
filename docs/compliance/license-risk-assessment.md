@@ -1,7 +1,7 @@
 # 许可证风险评估（License Risk Assessment）
 
 > 评估时间：2026-08-09  
-> 数据源：`docs/compliance/sbom.json`（CycloneDX 1.6，`mvn -P compliance cyclonedx:makeAggregateBom` 产出，391 个 runtime + transitive 组件）  
+> 数据源：`docs/compliance/sbom.json`（CycloneDX 1.6，`mvn -P compliance cyclonedx:makeAggregateBom` 产出；组件总数以该文件为准）
 > 项目自身许可：**Apache License 2.0**（见 `LICENSE`，`Copyright 2026 Dengchao`）
 
 本文档**只评估 license 兼容性 / 分发义务 / copyleft 传染风险**，不涉及业务运行时的服务条款（OpenAI ToS、云服务 EULA 等）。
@@ -145,7 +145,7 @@
 mvn -P compliance cyclonedx:makeAggregateBom license:aggregate-add-third-party
 
 # 入库的权威产物：
-#   docs/compliance/sbom.json           ← CycloneDX 1.6 完整 SBOM（391 个 component）
+#   docs/compliance/sbom.json           ← CycloneDX 1.6 完整 SBOM（组件总数以文件内容为准）
 # 仅开发期临时产物（不入库）：
 #   target/bom.json + target/bom.xml
 #   target/generated-sources/license/THIRD-PARTY.txt
@@ -204,6 +204,6 @@ jq -r '.components[] | "\(.licenses[0].license.id // .licenses[0].license.name /
 
 - `LICENSE` — 项目自身 Apache-2.0 全文
 - `NOTICE` — 项目自身 attribution（待按 §3.1 升级）
-- `docs/compliance/sbom.json` — **权威依赖清单**，CycloneDX 1.6 SBOM（391 个 component，机器可读，jq 友好）
+- `docs/compliance/sbom.json` — **权威依赖清单**，CycloneDX 1.6 SBOM（机器可读，组件总数可通过 `jq '.components | length'` 查询）
 - `docs/compliance/THIRD-PARTY-LICENSES.md` — 人工 curated 摘要表（按 runtime/test 分类，附 "Used By" 业务上下文）
 - `pom.xml` `<profile id="compliance">` — 生成器配置（cyclonedx → 入库；license-maven-plugin → 临时 target/，不入库）
