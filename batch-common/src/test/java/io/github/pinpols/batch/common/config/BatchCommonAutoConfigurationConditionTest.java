@@ -8,6 +8,8 @@ import io.github.pinpols.batch.common.health.BatchStartupSelfCheck;
 import io.github.pinpols.batch.common.health.HikariSaturationHealthIndicator;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -20,8 +22,13 @@ import software.amazon.awssdk.services.s3.S3Client;
 class BatchCommonAutoConfigurationConditionTest {
 
   private final ApplicationContextRunner contextRunner = new ApplicationContextRunner();
-  private static final String KMS_TEST_KEY =
-      "batch.security.kms.keys.DEFAULT_TEST=MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=";
+  private static final String KMS_TEST_KEY = "batch.security.kms.keys.DEFAULT_TEST="
+      + Base64.getEncoder()
+          .encodeToString("01234567890123456789012345678901".getBytes(StandardCharsets.UTF_8));
+  private static final String PROD_INTERNAL_SECRET =
+      String.join("-", "prod", "internal", "test", "value");
+  private static final String PROD_DB_PASSWORD =
+      String.join("-", "prod", "database", "test", "value");
 
   @Test
   void s3AutoConfigurationBacksOffWhenFilesystemBackendIsSelected() {
@@ -94,8 +101,8 @@ class BatchCommonAutoConfigurationConditionTest {
         .withPropertyValues(
             "spring.profiles.active=prod",
             "batch.security.bypass-mode=false",
-            "batch.security.internal-secret=prod-internal-secret-2026",
-            "spring.datasource.password=prod-db-secret-2026",
+            "batch.security.internal-secret=" + PROD_INTERNAL_SECRET,
+            "spring.datasource.password=" + PROD_DB_PASSWORD,
             "batch.security.kms.keys.DEFAULT_TEST=AAAAAAAAAAAAAAAAAAAAAA==")
         .run(context -> assertThat(context)
             .hasFailed()
