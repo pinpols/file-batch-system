@@ -239,10 +239,10 @@ logging:
   level:
     # 统一由 Spring Boot LoggingSystem 管理，避免模块自带 logback-spring.xml 覆盖结构化 encoder。
     org.springframework.aop.framework.CglibAopProxy: ERROR
-    # Kafka 客户端在构造 Consumer/Producer 时默认以 INFO 转储完整 ConsumerConfig/ProducerConfig
-    # （bootstrap.servers / security.protocol / ssl.* / sasl.jaas.config 等），
-    # 生产走 SASL/SCRAM 时会把明文凭证打进日志。压到 WARN：保留客户端错误，抑制配置转储。
+    # Kafka 客户端常规日志默认收敛至 WARN；完整配置转储由下方 AbstractConfig logger 输出。
     org.apache.kafka.clients: WARN
+    # ConsumerConfig/ProducerConfig 可能包含认证配置，不在 clients 包下；保留告警，抑制 INFO 转储。
+    org.apache.kafka.common.config.AbstractConfig: WARN
     # Flyway 幂等 migration(IF NOT EXISTS / IF EXISTS)在 PG 走 NOTICE → JDBC SQLWarning →
     # Flyway 7+ 默认全转 WARN log,刷屏"schema/column already exists, skipping"假阳。
     # 这些 statement 设计就是为重跑设计的,安全的。压到 ERROR 级别只保留真问题。

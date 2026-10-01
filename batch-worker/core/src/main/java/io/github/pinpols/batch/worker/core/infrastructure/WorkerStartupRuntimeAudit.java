@@ -51,14 +51,20 @@ public class WorkerStartupRuntimeAudit {
     Map<String, Object> contributors = auditContributors(unhealthy);
     boolean healthy = unhealthy.isEmpty();
     if (healthy) {
-      log.info("worker startup runtime audit OK: core={}, contributors={}", core, contributors);
+      log.info(
+          "worker startup runtime audit OK: configurations={}, registeredWorkers={}, contributors={}",
+          core.get("configurationCount"),
+          core.get("registeredWorkers"),
+          contributors.keySet());
     } else {
       log.warn(
-          "worker startup runtime audit WARN: unhealthy={}, core={}, contributors={}",
+          "worker startup runtime audit WARN: unhealthy={}, issues={}, configurations={}, registeredWorkers={}",
           unhealthy,
-          core,
-          contributors);
+          core.get("issues"),
+          core.get("configurationCount"),
+          core.get("registeredWorkers"));
     }
+    log.debug("worker startup runtime audit details: core={}, contributors={}", core, contributors);
   }
 
   Map<String, Object> auditCore() {

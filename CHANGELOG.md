@@ -25,7 +25,7 @@
 - Console 权限契约新增动态 capability，下发的 `AI_ASSISTANT_USE` 同时受 AI 开关和用户/角色白名单控制；使用统计查询收紧为平台管理员、审计员和租户管理员，并在运行监控菜单提供独立入口。
 - Console AI 新增保持旧列表兼容的会话游标分页接口，按租户/所有者及过期时间过滤；旧列表同步补显式租户谓词，避免仅依赖连接级 RLS。
 - 维护状态响应补充共享状态更新时间，时间戳来自数据库维护状态记录，便于控制台判断版本与更新时间，不改变 #1102 的数据库事实源和 CAS 语义。
-- Sim 与本地 MinIO 初始化统一使用独立、固定版本的 `minio/mc` CLI 容器，不再依赖 MinIO 服务镜像内置客户端；镜像版本及 Compose/helper fallback 纳入版本对齐门禁。
+- Sim 与本地 MinIO 初始化统一使用独立运行、固定版本的 CLI 容器，不在 MinIO 服务容器内执行客户端；镜像版本及 Compose/helper fallback 纳入版本对齐门禁。
 - 依赖注入统一为构造器注入并新增 Lombok/logger 增量门禁；移除 9 个单构造器上的冗余 `@Autowired`，多构造器注入与 logger 例外均按精确规则检查。
 - 仓库文本编码门禁覆盖 PR 变更文件、提交暂存文件与 Full Gate 全仓；应用容器、基础设施及 Testcontainers 统一 UTF-8 locale，SDK 协议文本约定为 UTF-8，含 NUL 的文本仍严格检查，外部文件字符集继续显式配置。
 - Jackson 2.x 与 3.x 升级至已修复 CVE-2026-68497、CVE-2026-91776 和 CVE-2026-91777 的补丁版本，覆盖应用和 Java SDK 的受影响依赖链；PR 与 Full Gate 的 Trivy 升至 `0.74.0`，并将配置扫描器参数更新为 `misconfig`。
@@ -40,6 +40,8 @@
 
 ### Fixed
 
+- Kafka 启动时重复输出的 ConsumerConfig/ProducerConfig 完整配置块默认抑制；Worker 启动审计 INFO/WARN 仅保留状态与摘要，完整细节仅在 DEBUG 输出。
+- 修复线上 sim-strict 启动时 `minio/mc` 镜像仓库拒绝拉取的问题：CLI 容器改用已验证内置 `mc` 的固定 Bitnami Legacy 镜像；失败诊断在没有应用日志时不再额外报错。
 - 重新生成 Jackson 2.21.7 / 3.1.7 升级后的 CycloneDX SBOM，并在 POM 变更的 PR 与 Full Gate 中校验入库 SBOM 和 Maven 依赖图一致，避免依赖升级后合规快照继续停留在旧版本。
 - 修复 E2E 自建 MyBatis 工厂未加载并应用统一 UUID `ConfigurationCustomizer`、导致 Console AI 映射阻断全链路测试启动的问题。
 - SDK 幂等键与签名 nonce 随机源收敛到系统 CSPRNG，补齐 Go 随机读取失败处理；服务端业务号随机后缀扩容，并对 KMS key、请求签名 header 增加启动期和输入边界校验。

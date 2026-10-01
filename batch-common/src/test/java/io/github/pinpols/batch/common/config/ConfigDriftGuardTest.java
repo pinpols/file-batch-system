@@ -142,6 +142,15 @@ class ConfigDriftGuardTest {
   }
 
   @Test
+  void kafkaConfigurationDumpIsNotLoggedAtInfo() throws IOException {
+    Map<String, Object> flat = flatten(loadYaml(baselineYml()));
+
+    assertThat(flat)
+        .containsEntry("logging.level.org.apache.kafka.clients", "WARN")
+        .containsEntry("logging.level.org.apache.kafka.common.config.AbstractConfig", "WARN");
+  }
+
+  @Test
   void serviceModulesDoNotRedefineBaselineOwnedKeys() throws IOException {
     Path root = repoRoot();
     Map<String, String> drift = new LinkedHashMap<>();

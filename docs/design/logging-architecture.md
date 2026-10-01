@@ -89,6 +89,10 @@ Console pattern：
 | `INFO` | 关键业务事件、状态变更 |
 | `DEBUG` | 调试信息（生产环境关闭） |
 
+Kafka 客户端配置块由第三方 `AbstractConfig` 以 INFO 发出，共享配置将其 logger 阈值设为
+WARN，默认抑制完整转储（可能包含敏感配置）；运行状态由应用自身的摘要日志提供。Worker
+启动审计在 INFO/WARN 只记录状态和数量（异常时包括问题摘要），完整快照仅在 DEBUG 输出。
+
 ### 2.6 存储方案
 
 **应用运行日志不存数据库**，走结构化 stdout/OTLP + Loki 管道：

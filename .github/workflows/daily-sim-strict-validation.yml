@@ -115,7 +115,10 @@ jobs:
           docker ps -a || true
           docker compose --env-file .env.local logs --no-color --tail=200 || true
           for log in logs/current/app/*.log; do
-            [[ -f "$log" ]] && { echo "===== $log ====="; tail -200 "$log"; }
+            if [[ -f "$log" ]]; then
+              echo "===== $log ====="
+              tail -200 "$log"
+            fi
           done
 
       - name: Upload validation logs
