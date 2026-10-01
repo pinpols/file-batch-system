@@ -48,14 +48,20 @@ public class ConsoleAiCostService {
 
   @Transactional
   public Reservation reserve(String tenantId, String promptPayload, String systemPrompt) {
+    return reserve(tenantId, promptPayload, systemPrompt, 0);
+  }
+
+  @Transactional
+  public Reservation reserve(
+      String tenantId, String promptPayload, String systemPrompt, int imageCount) {
     ConsoleAiProperties.Cost config = properties.getCost();
     if (EmptyChecks.isEmpty(usableRates())) {
-      if (config.getMonthlyBudgetUsd().signum() > 0) {
+      if (imageCount > 0 || config.getMonthlyBudgetUsd().signum() > 0) {
         throw BizException.of(ResultCode.SERVICE_UNAVAILABLE, AI_NOT_CONFIGURED_ERROR);
       }
       return Reservation.unpriced();
     }
-    BigDecimal cap = maximumCost(promptPayload, systemPrompt);
+    BigDecimal cap = maximumCost(promptPayload, systemPrompt, imageCount);
     BigDecimal monthlyBudget = config.getMonthlyBudgetUsd();
     LocalDate billingMonth = YearMonth.now(ZoneOffset.UTC).atDay(1);
     mapper.setTenantContext(tenantId);
@@ -124,10 +130,12 @@ public class ConsoleAiCostService {
         properties.getCost().getMonthlyBudgetUsd());
   }
 
-  private BigDecimal maximumCost(String promptPayload, String systemPrompt) {
+  private BigDecimal maximumCost(String promptPayload, String systemPrompt, int imageCount) {
     long bytes = bytes(promptPayload) + bytes(systemPrompt);
     BigDecimal estimatedInputTokens = BigDecimal.valueOf(bytes)
         .multiply(BYTES_TO_TOKEN_UPPER_BOUND)
+        .add(BigDecimal.valueOf(
+            (long) Math.max(0, imageCount) * properties.getImage().getReservationTokensPerImage()))
         .setScale(0, RoundingMode.CEILING);
     BigDecimal maxOutputTokens =
         BigDecimal.valueOf(Math.max(1, properties.getMaxCompletionTokens()));

@@ -1,6 +1,6 @@
 # file-batch-system 项目结构
 
-> 2026-09-28 更新。批量任务编排控制面 + 文件 / 任务交付闭环。本文按实际仓库结构区分四件事：平台运行时固定 10 个逻辑模块、根 Maven reactor 10 个 module path、独立语言 SDK / 独立 reactor / 前端配对仓库、工程治理与示例资产。
+> 2026-10-01 更新。批量任务编排控制面 + 文件 / 任务交付闭环。本文按实际仓库结构区分四件事：平台运行时固定 10 个逻辑模块、根 Maven reactor 10 个 module path、独立语言 SDK / 独立 reactor / 前端配对仓库、工程治理与示例资产。
 
 ## 顶层结构
 
@@ -29,7 +29,7 @@ file-batch-system/
 ├── security-scan/                          安全扫描编排工具(独立模块,不入根 reactor)
 ├── examples/                               自托管 SDK / Task SPI 插件示例(长期示例资产)
 │
-├── db/migration/                           Flyway PostgreSQL migrations(V1 起,当前到 V213)
+├── db/migration/                           Flyway PostgreSQL migrations(V1 起,当前到 V219)
 ├── docs/                                   全文档体系(见下)
 ├── scripts/                                工程脚本(ci/db/dev/docker/local/ops/tools)
 ├── helm/batch-platform/                    Helm Chart(prod 部署)
@@ -68,7 +68,10 @@ flowchart TB
   end
 
   COMMON["batch-common\n跨模块基础设施"]
-  DATA["PostgreSQL / Kafka / Redis / S3-compatible Object Storage"]
+  DB[("PostgreSQL\n配置 / 状态 / 审计 / 附件元数据")]
+  BUS["Kafka / Redis"]
+  BATCH_OBJECTS["S3 兼容对象存储\n批处理文件"]
+  AI_OBJECTS["独立 S3 bucket / prefix\nAI 会话附件"]
   FE["../batch-console\n配对前端仓库"]
 
   ROOT --> CONTROL
@@ -82,10 +85,15 @@ flowchart TB
   CORE --> PROCESS
   CORE --> DISPATCH
   CORE --> ATOMIC
-  CONSOLE -->|"查询 / 运维 / 配置"| DATA
-  TRIGGER --> DATA
-  ORCH --> DATA
-  CORE --> DATA
+  CONSOLE -->|"查询 / 运维 / 配置 / AI 审计"| DB
+  CONSOLE -->|"AI 附件受控读写"| AI_OBJECTS
+  TRIGGER --> DB
+  TRIGGER --> BUS
+  ORCH --> DB
+  ORCH --> BUS
+  CORE --> DB
+  CORE --> BUS
+  CORE --> BATCH_OBJECTS
   COMMON -. "AutoConfig / Outbox / RLS / Timezone" .-> CONTROL
   COMMON -. "共享运行时契约" .-> EXECUTION
 
@@ -96,7 +104,9 @@ flowchart TB
     DOMAIN["domain\nEntity / Rule / Port"]
     SHARED["shared / support\n公共值对象 / Web 支撑"]
     INFRA["infrastructure\nMyBatis / Redis / Kafka / ObjectStore / AI"]
+    AI_USE_CASE["AI application service\n会话 / 授权 / 附件用例"]
     WEB --> CONTRACT --> APP --> DOMAIN
+    APP --> AI_USE_CASE
     APP --> SHARED
     APP -. "port implementation" .-> INFRA
     WEB -. "only HTTP adapters" .-> APP
@@ -110,6 +120,8 @@ Console 内部沿 `web → application.contract → application/domain` 处理�
 `support` 只提供跨 context 的值对象和轻量支撑，并由 `infrastructure` 实现外部访问端口。
 Console 的 DTO 不应下沉到 `batch-common`，Worker 也不能
 绕过 Orchestrator 直接写实例状态。
+
+AI 会话附件属于 Console 控制面数据：PostgreSQL 保存租户、所有者、会话绑定、对象键、保留期和审计元数据，文件正文进入与批处理业务文件物理隔离的 S3 bucket 或受控 prefix。浏览器只调用 Console API；不得直连对象存储、复用批处理文件下载权限或把对象存储凭据下发前端。存储隔离和生命周期配置见 [`../runbook/object-storage-s3-backends.md`](../runbook/object-storage-s3-backends.md)。
 
 配对前端仓库不在本仓内；前后端联调时使用 sibling repo `../batch-console`，约定见根目录 [`../../AGENTS.md`](../../AGENTS.md)。
 
@@ -185,9 +197,9 @@ flowchart TB
   end
 
   subgraph CORE_MODULE["batch-worker-core"]
-    CS["support / route"]
+    CORE_SUPPORT["support / route"]
     CI["infrastructure / mapper / pipeline runtime"]
-    CS --> CI
+    CORE_SUPPORT --> CI
   end
 
   subgraph PIPELINE_MODULES["pipeline workers"]
@@ -202,10 +214,12 @@ flowchart TB
     CW["web\nController / SSE / file stream"]
     CC["application.contract\nrequest / query / response"]
     CA["application + domain\nuse case / config / rule / port"]
-    CS["shared / support\n值对象 / 安全 / Web 支撑"]
+    CONSOLE_SHARED["shared / support\n值对象 / 安全 / Web 支撑"]
     CX["infrastructure\nMyBatis / Redis / Kafka / ObjectStore / AI / HTTP"]
+    AI_ATTACH["AI attachment use case\n授权 / 归一化 / 元数据 / 保留策略"]
     CW --> CC --> CA
-    CA --> CS
+    CA --> CONSOLE_SHARED
+    CA --> AI_ATTACH
     CA -. "port implementation" .-> CX
   end
 

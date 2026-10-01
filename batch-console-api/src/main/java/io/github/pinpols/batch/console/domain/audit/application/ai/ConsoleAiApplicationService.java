@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.YearMonth;
 import java.util.List;
+import java.util.UUID;
 import reactor.core.publisher.Mono;
 
 /** 控制台 AI 对话应用服务：基于 Spring AI 的聊天与审计写入数据库。 */
@@ -39,6 +40,8 @@ public interface ConsoleAiApplicationService {
   List<TurnSummary> turns(
       String tenantId, String ownerUserId, String conversationId, Long beforeTurnNo, int limit);
 
+  ClientTurnSummary turnByClientId(String tenantId, String ownerUserId, UUID clientTurnId);
+
   void deleteConversation(String tenantId, String ownerUserId, String conversationId);
 
   AiCostSummary costSummary(String tenantId, YearMonth month);
@@ -53,6 +56,7 @@ public interface ConsoleAiApplicationService {
 
   record TurnSummary(
       long turnNo,
+      UUID clientTurnId,
       String contextVersion,
       String prompt,
       String response,
@@ -63,7 +67,13 @@ public interface ConsoleAiApplicationService {
       Integer completionTokens,
       BigDecimal estimatedCostUsd,
       Instant createdAt,
-      Instant completedAt) {}
+      Instant completedAt,
+      List<AttachmentSummary> attachments) {}
+
+  record AttachmentSummary(
+      UUID id, String mediaType, Long byteSize, Integer width, Integer height) {}
+
+  record ClientTurnSummary(String sessionId, TurnSummary turn) {}
 
   record AiCostSummary(
       YearMonth month,

@@ -2,6 +2,9 @@ package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -46,11 +49,7 @@ class ConsoleAiCostServiceTest {
 
   @Test
   void shouldReserveMonthlyBudgetBeforeProviderCall() {
-    when(mapper.reserve(
-            org.mockito.ArgumentMatchers.eq("tenant-a"),
-            org.mockito.ArgumentMatchers.any(),
-            org.mockito.ArgumentMatchers.any(),
-            org.mockito.ArgumentMatchers.eq(new BigDecimal("10.00"))))
+    when(mapper.reserve(eq("tenant-a"), any(), any(), eq(new BigDecimal("10.00"))))
         .thenReturn(true);
 
     ConsoleAiCostService.Reservation reservation = service.reserve("tenant-a", "hello", "system");
@@ -59,19 +58,12 @@ class ConsoleAiCostServiceTest {
     assertThat(reservation.reservedAmount()).isPositive();
     verify(mapper).setTenantContext("tenant-a");
     verify(mapper)
-        .releaseStaleReservations(
-            org.mockito.ArgumentMatchers.eq("tenant-a"),
-            org.mockito.ArgumentMatchers.any(LocalDate.class),
-            org.mockito.ArgumentMatchers.any(OffsetDateTime.class));
+        .releaseStaleReservations(eq("tenant-a"), any(LocalDate.class), any(OffsetDateTime.class));
   }
 
   @Test
   void shouldRejectWhenAtomicMonthlyBudgetReservationFails() {
-    when(mapper.reserve(
-            org.mockito.ArgumentMatchers.eq("tenant-a"),
-            org.mockito.ArgumentMatchers.any(),
-            org.mockito.ArgumentMatchers.any(),
-            org.mockito.ArgumentMatchers.eq(new BigDecimal("10.00"))))
+    when(mapper.reserve(eq("tenant-a"), any(), any(), eq(new BigDecimal("10.00"))))
         .thenReturn(false);
 
     assertThatThrownBy(() -> service.reserve("tenant-a", "hello", "system"))
@@ -110,6 +102,26 @@ class ConsoleAiCostServiceTest {
   }
 
   @Test
+  void shouldReserveAdditionalBudgetForImageInput() {
+    when(mapper.reserve(eq("tenant-a"), any(), any(), any())).thenReturn(true);
+
+    ConsoleAiCostService.Reservation text = service.reserve("tenant-a", "hello", "system", 0);
+    ConsoleAiCostService.Reservation image = service.reserve("tenant-a", "hello", "system", 1);
+
+    assertThat(image.reservedAmount()).isGreaterThan(text.reservedAmount());
+  }
+
+  @Test
+  void shouldRejectImageInputWithoutUsablePricing() {
+    properties.getCost().getProviderRates().clear();
+    properties.getCost().setMonthlyBudgetUsd(BigDecimal.ZERO);
+
+    assertThatThrownBy(() -> service.reserve("tenant-a", "hello", "system", 1))
+        .isInstanceOf(BizException.class);
+    verify(mapper, never()).reserveUnbounded(anyString(), any(), any());
+  }
+
+  @Test
   void shouldRequireRatesForEveryConfiguredProvider() {
     assertThatThrownBy(() -> service.validateProviders(List.of("test-provider", "unpriced")))
         .isInstanceOf(BizException.class);
@@ -117,16 +129,10 @@ class ConsoleAiCostServiceTest {
 
   @Test
   void costSummaryMustNotMutateReservations() {
-    when(mapper.find(
-            org.mockito.ArgumentMatchers.eq("tenant-a"), org.mockito.ArgumentMatchers.any()))
-        .thenReturn(null);
+    when(mapper.find(eq("tenant-a"), any())).thenReturn(null);
 
     service.summary("tenant-a", YearMonth.of(2026, 9));
 
-    verify(mapper, never())
-        .releaseStaleReservations(
-            org.mockito.ArgumentMatchers.anyString(),
-            org.mockito.ArgumentMatchers.any(),
-            org.mockito.ArgumentMatchers.any());
+    verify(mapper, never()).releaseStaleReservations(anyString(), any(), any());
   }
 }

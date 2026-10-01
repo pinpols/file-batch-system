@@ -37,6 +37,7 @@ class ConsoleAiAuthorizationServiceTest {
   private ConsoleAiAuthorizationService newService(
       List<String> allowedUsers, List<String> allowedAuthorities) {
     ConsoleAiProperties properties = new ConsoleAiProperties();
+    properties.setEnabled(true);
     properties.setAllowedUsers(allowedUsers);
     properties.setAllowedAuthorities(allowedAuthorities);
     return new ConsoleAiAuthorizationService(properties);
@@ -121,8 +122,22 @@ class ConsoleAiAuthorizationServiceTest {
   @Test
   @DisplayName("功能关闭时不下发 AI 能力")
   void resolveCapabilities_disabled_returnsEmpty() {
-    ConsoleAiAuthorizationService service = newService(List.of("admin"), List.of("ROLE_ADMIN"));
+    ConsoleAiProperties properties = new ConsoleAiProperties();
+    properties.setAllowedUsers(List.of("admin"));
+    ConsoleAiAuthorizationService service = new ConsoleAiAuthorizationService(properties);
 
     assertThat(service.resolveCapabilities("admin", Set.of("ROLE_ADMIN"))).isEmpty();
+  }
+
+  @Test
+  void assertAllowed_disabledRejectsWhitelistedUser() {
+    SecurityContextHolder.getContext()
+        .setAuthentication(new UsernamePasswordAuthenticationToken("admin", null, List.of()));
+    ConsoleAiProperties properties = new ConsoleAiProperties();
+    properties.setAllowedUsers(List.of("admin"));
+
+    assertThatThrownBy(new ConsoleAiAuthorizationService(properties)::assertAllowed)
+        .isInstanceOf(BizException.class)
+        .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.FORBIDDEN));
   }
 }

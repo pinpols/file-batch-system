@@ -10,12 +10,16 @@ import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.support.AiPromptGateResult;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
 public class ConsoleAiPromptGuard {
+
+  private static final Pattern EXPLICITLY_UNRELATED =
+      Pattern.compile("(?:与|跟|和)(?:本|该|这个)?(?:批量调度|作业调度)(?:系统|平台)?(?:完全)?无关");
 
   private static final Set<String> SPECIFIC_DOMAIN_PHRASES = Set.of(
       "job instance",
@@ -105,6 +109,12 @@ public class ConsoleAiPromptGuard {
             AiPromptCategory.OUT_OF_SCOPE,
             CommonErrorMessages.PROMPT_VIOLATES_SAFETY_POLICY);
       }
+    }
+    if (EXPLICITLY_UNRELATED.matcher(normalized).find()) {
+      return AiPromptGateResult.rejected(
+          AiPromptDecision.REJECTED_SCOPE,
+          AiPromptCategory.OUT_OF_SCOPE,
+          CommonErrorMessages.PROMPT_OUT_OF_SCOPE);
     }
     String matchedPhrase = SPECIFIC_DOMAIN_PHRASES.stream()
         .filter(phrase -> lower.contains(phrase.toLowerCase(Locale.ROOT)))

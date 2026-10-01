@@ -139,6 +139,8 @@ python3 scripts/ci/check-readiness-doc-sync.py --base origin/main
 
 校验 `.trivyignore` 中每组 CVE 白名单必须带 `owner`、`reason`、`expires: YYYY-MM-DD`，
 且 `expires` 未过期。安全漏洞豁免只允许作为有期限的临时措施，不能长期静默留在仓库。
+配置误报使用 `.trivyignore.yaml` 按规则和文件路径精确豁免，并填写原因；
+Trivy 的漏洞扫描和配置扫描分别加载对应白名单，避免配置规则被全仓静默忽略。
 
 ```bash
 python3 scripts/ci/check-trivy-ignore-expiry.py

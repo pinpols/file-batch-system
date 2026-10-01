@@ -3500,6 +3500,91 @@ paths:
                 type: string
         '404':
           description: Supplied sessionId does not exist or has expired
+  /api/console/ai/capabilities:
+    get:
+      tags: [AI]
+      summary: Get the current deployment's approved AI image input capability
+      operationId: getConsoleAiCapabilities
+      responses:
+        '200':
+          description: Image input availability and upload limits
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommonResponseConsoleAiCapabilities' }
+  /api/console/ai/attachments:
+    post:
+      tags: [AI]
+      summary: Upload a private image draft for the current operator
+      operationId: uploadConsoleAiAttachment
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [clientAttachmentId, file]
+              properties:
+                clientAttachmentId: { type: string, format: uuid }
+                file: { type: string, format: binary }
+      responses:
+        '200':
+          description: Normalized image metadata; object bytes and storage key are never returned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommonResponseConsoleAiAttachment' }
+  /api/console/ai/attachments/by-client-id/{clientAttachmentId}:
+    get:
+      tags: [AI]
+      summary: Reconcile an uncertain image upload by stable client ID
+      operationId: getConsoleAiAttachmentByClientId
+      parameters:
+        - name: clientAttachmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Current upload status for the owner
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommonResponseConsoleAiAttachment' }
+        '404': { description: Not found, expired, or not owned by the current operator }
+  /api/console/ai/attachments/{id}/content:
+    get:
+      tags: [AI]
+      summary: Read an owned, unexpired AI image bound to a conversation turn
+      operationId: getConsoleAiAttachmentContent
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Decrypted normalized image with Cache-Control no-store and nosniff; drafts are not downloadable
+          content:
+            image/png: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+        '404': { description: Not found, expired, or not owned by the current operator }
+  /api/console/ai/attachments/{id}:
+    delete:
+      tags: [AI]
+      summary: Remove an unbound image draft owned by the current operator
+      operationId: deleteConsoleAiAttachment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Draft access revoked and object deletion queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommonResponseVoid' }
+        '404': { description: Not found or already bound to a turn }
   /api/console/ai/chat/stream/{requestId}/cancel:
     post:
       tags: [AI]
@@ -3604,6 +3689,23 @@ paths:
                 $ref: '#/components/schemas/CommonResponseConsoleAiTurnList'
         '404':
           description: Conversation does not exist or has expired
+  /api/console/ai/turns/by-client-id/{clientTurnId}:
+    get:
+      tags: [AI]
+      summary: Reconcile a stream result without invoking the model again
+      operationId: getConsoleAiTurnByClientId
+      parameters:
+        - name: clientTurnId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Current persisted turn status for the owner
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommonResponseConsoleAiClientTurn' }
+        '404': { description: Not found, expired, or not owned by the current operator }
   /api/console/ai/conversations/{conversationId}:
     delete:
       tags: [AI]
@@ -12068,6 +12170,24 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/ConsoleAiTurnView'
+    CommonResponseConsoleAiCapabilities:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ConsoleAiCapabilities' }
+    CommonResponseConsoleAiAttachment:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ConsoleAiAttachmentView' }
+    CommonResponseConsoleAiClientTurn:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ConsoleAiClientTurnView' }
     CommonResponseConsoleAiCostSummary:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -12871,6 +12991,14 @@ components:
         prompt:
           type: string
           description: 用户问题(必填,@NotBlank)。
+        clientTurnId:
+          type: string
+          format: uuid
+          description: 稳定客户端轮次 ID；带图片时必填，用于断流后的状态对账。
+        attachmentIds:
+          type: array
+          items: { type: string, format: uuid }
+          description: 已上传且未绑定的图片 ID；由当前操作者持有，服务端在创建轮次时原子绑定。
         context:
           type: object
           additionalProperties: false
@@ -13034,6 +13162,10 @@ components:
         turnNo:
           type: integer
           format: int64
+        clientTurnId:
+          type: string
+          format: uuid
+          nullable: true
         contextVersion:
           type: string
           enum: [v1]
@@ -13070,7 +13202,45 @@ components:
           type: string
           format: date-time
           nullable: true
-      required: [turnNo, contextVersion, prompt, response, status, promptDecision, modelName, promptTokens, completionTokens, estimatedCostUsd, createdAt, completedAt]
+        attachments:
+          type: array
+          items: { $ref: '#/components/schemas/ConsoleAiAttachmentSummary' }
+      required: [turnNo, contextVersion, prompt, response, status, promptDecision, modelName, promptTokens, completionTokens, estimatedCostUsd, createdAt, completedAt, attachments]
+    ConsoleAiCapabilities:
+      type: object
+      required: [imageInput, maxImages, maxImageBytes, maxTotalBytes]
+      properties:
+        imageInput: { type: boolean }
+        maxImages: { type: integer, format: int32 }
+        maxImageBytes: { type: integer, format: int32 }
+        maxTotalBytes: { type: integer, format: int64 }
+    ConsoleAiAttachmentView:
+      type: object
+      required: [id, clientAttachmentId, status, expiresAt]
+      properties:
+        id: { type: string, format: uuid }
+        clientAttachmentId: { type: string, format: uuid }
+        status: { type: string, enum: [UPLOADING, DRAFT, BOUND] }
+        mediaType: { type: string, nullable: true }
+        byteSize: { type: integer, format: int64, nullable: true }
+        width: { type: integer, format: int32, nullable: true }
+        height: { type: integer, format: int32, nullable: true }
+        expiresAt: { type: string, format: date-time }
+    ConsoleAiAttachmentSummary:
+      type: object
+      required: [id, mediaType, byteSize, width, height]
+      properties:
+        id: { type: string, format: uuid }
+        mediaType: { type: string }
+        byteSize: { type: integer, format: int64 }
+        width: { type: integer, format: int32 }
+        height: { type: integer, format: int32 }
+    ConsoleAiClientTurnView:
+      type: object
+      required: [sessionId, turn]
+      properties:
+        sessionId: { type: string }
+        turn: { $ref: '#/components/schemas/ConsoleAiTurnView' }
     ConsoleAiCostSummary:
       type: object
       properties:

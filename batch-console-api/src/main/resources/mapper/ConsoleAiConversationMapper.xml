@@ -17,6 +17,7 @@
         <result column="tenant_id" property="tenantId"/>
         <result column="conversation_id" property="conversationId"/>
         <result column="turn_no" property="turnNo"/>
+        <result column="client_turn_id" property="clientTurnId"/>
         <result column="context_version" property="contextVersion"/>
         <result column="prompt_text" property="promptText"/>
         <result column="response_text" property="responseText"/>
@@ -84,10 +85,23 @@
 
     <insert id="insertTurn">
         INSERT INTO batch.console_ai_turn
-            (tenant_id, conversation_id, turn_no, context_version, prompt_text, turn_status)
+            (tenant_id, conversation_id, turn_no, client_turn_id, context_version, prompt_text, turn_status)
         VALUES
-            (#{tenantId}, #{conversationId}, #{turnNo}, #{contextVersion}, #{promptText}, 'IN_PROGRESS')
+            (#{tenantId}, #{conversationId}, #{turnNo}, #{clientTurnId}, #{contextVersion}, #{promptText}, 'IN_PROGRESS')
+        ON CONFLICT (tenant_id, client_turn_id) WHERE client_turn_id IS NOT NULL DO NOTHING
     </insert>
+
+    <select id="selectByClientTurnId" resultMap="TurnMap">
+        SELECT t.id, t.tenant_id, t.conversation_id, t.turn_no, t.client_turn_id,
+               t.context_version, t.prompt_text, t.response_text, t.turn_status,
+               t.prompt_decision, t.model_name, t.prompt_tokens, t.completion_tokens,
+               t.estimated_cost_usd, t.created_at, t.completed_at
+          FROM batch.console_ai_turn t
+          JOIN batch.console_ai_conversation c
+            ON c.tenant_id = t.tenant_id AND c.id = t.conversation_id
+         WHERE t.tenant_id = #{tenantId} AND t.client_turn_id = #{clientTurnId}
+           AND c.owner_user_id = #{ownerUserId} AND c.expires_at > CURRENT_TIMESTAMP
+    </select>
 
     <update id="completeTurn">
         UPDATE batch.console_ai_turn
@@ -130,7 +144,8 @@
     </select>
 
     <select id="selectTurns" resultMap="TurnMap">
-        SELECT t.id, t.tenant_id, t.conversation_id, t.turn_no, t.context_version, t.prompt_text,
+        SELECT t.id, t.tenant_id, t.conversation_id, t.turn_no, t.client_turn_id,
+               t.context_version, t.prompt_text,
                t.response_text, t.turn_status, t.prompt_decision, t.model_name, t.prompt_tokens,
                t.completion_tokens, t.estimated_cost_usd, t.created_at, t.completed_at
           FROM batch.console_ai_turn t
@@ -154,8 +169,8 @@
            AND owner_user_id = #{ownerUserId}
     </delete>
 
-    <select id="selectActiveTenantIds" resultType="string">
-        SELECT tenant_id FROM batch.tenant WHERE status = 'ACTIVE' ORDER BY tenant_id
+    <select id="selectTenantIds" resultType="string">
+        SELECT tenant_id FROM batch.tenant ORDER BY tenant_id
     </select>
 
     <delete id="deleteExpired">

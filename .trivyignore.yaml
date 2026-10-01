@@ -1,0 +1,5 @@
+misconfigurations:
+  - id: AVD-KSV-0109
+    paths:
+      - "**/batch-platform/templates/configmap.yaml"
+    statement: AI token 单价和图片预留 token 数均为非敏感计量值，不是凭据。

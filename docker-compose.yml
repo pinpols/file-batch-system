@@ -341,6 +341,7 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
       MINIO_BUCKET: ${MINIO_BUCKET}
+      MINIO_AI_ATTACHMENT_BUCKET: ${BATCH_CONSOLE_AI_ATTACHMENT_STORAGE_BUCKET:-batch-ai-attachments}
     volumes:
       - ./scripts/data/init-minio.sh:/scripts/data/init-minio.sh:ro
       - ./scripts/lib/runtime-defaults.sh:/scripts/lib/runtime-defaults.sh:ro

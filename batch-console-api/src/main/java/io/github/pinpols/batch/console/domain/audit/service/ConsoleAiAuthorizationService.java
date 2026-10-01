@@ -36,8 +36,9 @@ public class ConsoleAiAuthorizationService implements ConsoleCapabilityProvider 
           "error.common.forbidden_detail",
           CommonErrorMessages.AI_ASSISTANT_REQUIRES_AUTHENTICATED_USER);
     }
-    if (!isIdentityAllowed(
-        authentication.getName(), authorities(authentication.getAuthorities()))) {
+    if (!properties.isEnabled()
+        || !isIdentityAllowed(
+            authentication.getName(), authorities(authentication.getAuthorities()))) {
       throw BizException.of(
           ResultCode.FORBIDDEN,
           "error.common.forbidden_detail",

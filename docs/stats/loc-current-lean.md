@@ -1,36 +1,36 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `1674786c5`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `ccf81cacb`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,618 | 477,425 | 241,363 | 50.6% |
+| 4,633 | 479,269 | 242,437 | 50.6% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| prod | 2,692 | 246,114 | 112,471 | 45.7% |
-| test | 1,180 | 170,071 | 90,477 | 53.2% |
-| script | 603 | 45,635 | 28,631 | 62.7% |
-| config | 52 | 8,090 | 5,756 | 71.1% |
-| infra-config | 32 | 5,293 | 3,863 | 73.0% |
+| prod | 2,701 | 247,287 | 113,096 | 45.7% |
+| test | 1,185 | 170,672 | 90,862 | 53.2% |
+| script | 603 | 45,645 | 28,637 | 62.7% |
+| config | 53 | 8,111 | 5,776 | 71.2% |
+| infra-config | 32 | 5,332 | 3,901 | 73.2% |
 | sql | 59 | 2,222 | 165 | 7.4% |
 
 ## 按语言
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,413 | 350,749 | 177,931 | 50.7% |
-| Shell | 186 | 28,021 | 21,680 | 77.4% |
-| Python | 216 | 28,756 | 14,692 | 51.1% |
-| YAML | 95 | 12,331 | 9,271 | 75.2% |
-| XML | 175 | 21,214 | 6,571 | 31.0% |
+| Java | 3,426 | 352,316 | 178,862 | 50.8% |
+| Shell | 186 | 28,028 | 21,686 | 77.4% |
+| Python | 216 | 28,759 | 14,692 | 51.1% |
+| YAML | 96 | 12,406 | 9,344 | 75.3% |
+| XML | 176 | 21,390 | 6,619 | 30.9% |
 | TypeScript | 37 | 6,572 | 3,097 | 47.1% |
 | Rust | 23 | 8,405 | 2,833 | 33.7% |
-| Properties | 5 | 2,871 | 2,345 | 81.7% |
+| Properties | 5 | 2,887 | 2,361 | 81.8% |
 | SQL | 427 | 11,209 | 1,440 | 12.8% |
 | Go | 34 | 6,967 | 1,287 | 18.5% |
 | TOML | 7 | 330 | 216 | 65.5% |
@@ -40,23 +40,23 @@
 | File | Group | Language | Physical LOC | Lean logical LOC |
 |---|---|---|---:|---:|
 | `load-tests/scripts/run-p2-capacity-profile.sh` | script | Shell | 1,378 | 1,264 |
-| `batch-common/src/main/resources/messages.properties` | prod | Properties | 1,425 | 1,172 |
-| `batch-common/src/main/resources/messages_zh_CN.properties` | prod | Properties | 1,423 | 1,172 |
+| `batch-common/src/main/resources/messages.properties` | prod | Properties | 1,433 | 1,180 |
+| `batch-common/src/main/resources/messages_zh_CN.properties` | prod | Properties | 1,431 | 1,180 |
 | `deploy/docker/observability/prometheus-batch-rules.yml` | config | YAML | 1,216 | 1,016 |
 | `helm/batch-platform/files/prometheus-batch-rules.yml` | infra-config | YAML | 1,216 | 1,016 |
 | `load-tests/scripts/run-control-plane-worker-benchmark.sh` | script | Shell | 789 | 714 |
-| `helm/batch-platform/values.yaml` | infra-config | YAML | 974 | 695 |
+| `helm/batch-platform/values.yaml` | infra-config | YAML | 991 | 712 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java` | prod | Java | 1,145 | 644 |
-| `deploy/docker/compose/app.yml` | config | YAML | 709 | 628 |
+| `deploy/docker/compose/app.yml` | config | YAML | 718 | 637 |
 | `scripts/local/validate-seed-scenarios.sh` | script | Shell | 768 | 560 |
 | `scripts/fix-fixture-xlsx.py` | script | Python | 979 | 559 |
 | `scripts/ci/run-full-regression.sh` | script | Shell | 647 | 528 |
 | `scripts/local/start-all.sh` | script | Shell | 640 | 512 |
+| `batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationServiceTest.java` | test | Java | 811 | 500 |
 | `scripts/local/be-acceptance.sh` | script | Shell | 612 | 479 |
-| `batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationServiceTest.java` | test | Java | 779 | 471 |
 | `pom.xml` | config | XML | 764 | 455 |
+| `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | prod | Java | 1,028 | 451 |
 | `scripts/local/pre-push-sdk-checks.sh` | script | Shell | 558 | 424 |
-| `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | prod | Java | 954 | 418 |
 | `scripts/local/sim-harness.sh` | script | Shell | 557 | 418 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java` | prod | Java | 869 | 408 |
 

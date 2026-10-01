@@ -3,7 +3,9 @@ package io.github.pinpols.batch.console.application.contract.request.auth;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import lombok.Data;
 
 @Data
@@ -21,6 +23,10 @@ public class AiChatRequest {
 
   @NotBlank
   private String prompt;
+
+  private List<UUID> attachmentIds;
+
+  private UUID clientTurnId;
 
   private AiPageContextRequest pageContext;
 

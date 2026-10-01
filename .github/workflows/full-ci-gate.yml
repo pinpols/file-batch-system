@@ -451,15 +451,10 @@ jobs:
         run: bash scripts/ci/run-gate.sh FULL_TRIVY_MAVEN_CACHE "Trivy Maven 依赖缓存预热" -- bash scripts/ci/install-upstream-modules.sh
 
       - name: Repository security scan — Trivy fs
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          version: v0.74.0
-          format: table
-          exit-code: '1'
-          severity: CRITICAL,HIGH
-          scanners: vuln,misconfig
+        shell: bash
+        run: |
+          trivy fs --scanners vuln --ignorefile .trivyignore --severity CRITICAL,HIGH --exit-code 1 .
+          trivy fs --scanners misconfig --ignorefile .trivyignore.yaml --severity CRITICAL,HIGH --exit-code 1 .
 
       - name: K8s manifest security — Checkov
         uses: bridgecrewio/checkov-action@v12

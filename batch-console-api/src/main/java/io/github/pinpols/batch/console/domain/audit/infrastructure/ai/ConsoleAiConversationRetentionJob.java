@@ -21,6 +21,7 @@ public class ConsoleAiConversationRetentionJob {
 
   private final ConsoleAiConversationMapper mapper;
   private final ConsoleAiConversationService conversationService;
+  private final ConsoleAiAttachmentService attachmentService;
   private final ScheduledExecutorService executor =
       Executors.newSingleThreadScheduledExecutor(runnable -> {
         Thread thread = new Thread(runnable, "console-ai-retention");
@@ -40,8 +41,9 @@ public class ConsoleAiConversationRetentionJob {
 
   private void cleanExpired() {
     try {
-      for (String tenantId : mapper.selectActiveTenantIds()) {
+      for (String tenantId : mapper.selectTenantIds()) {
         conversationService.deleteExpiredForTenant(tenantId);
+        attachmentService.cleanTenant(tenantId);
       }
     } catch (RuntimeException exception) {
       SwallowedExceptionLogger.info(

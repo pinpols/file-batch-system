@@ -17,8 +17,10 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.console.config.ConsoleAiClients;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiApplicationService;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentUseCase;
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiChatResponse;
 import io.github.pinpols.batch.console.domain.audit.service.ConsoleAiAuthorizationService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -30,6 +32,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
@@ -61,7 +64,9 @@ class ConsoleAiControllerTest {
             responseFactory,
             mock(ConsoleAiAuthorizationService.class),
             requestMetadataResolver,
-            new ConsoleAiProperties()))
+            new ConsoleAiProperties(),
+            mock(ConsoleAiAttachmentUseCase.class),
+            new StaticListableBeanFactory().getBeanProvider(ConsoleAiClients.class)))
         .setControllerAdvice(exceptionHandler)
         .setValidator(validator)
         .build();

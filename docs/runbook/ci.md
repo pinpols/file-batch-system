@@ -182,7 +182,7 @@ SDK 五语言契约矩阵。
 | Secret 扫描 | `security-scan.sh --mode=secret` | pr-gate、full-ci-gate | 扫描密钥泄漏 |
 | 依赖漏洞扫描 | Trivy `fs`（vuln） | full-ci-gate | 已知 CVE；OWASP dependency-check 的 NVD 全量下载在 CI 上过慢（5 分钟超时仍下不到 1/5）且不拦门禁，2026-08 起 CI 由 trivy 覆盖，`--mode=deps` 保留本地按需使用 |
 | Dockerfile lint | Hadolint | full-ci-gate | `deploy/docker/Dockerfile.app` |
-| 文件系统安全扫描 | Trivy `fs` | full-ci-gate | CRITICAL/HIGH 漏洞 + IaC 配置；扫描前运行 `bash scripts/ci/install-upstream-modules.sh` 预热 Maven 本地缓存并安装 reactor 产物，降低依赖解析触发 Maven Central 限流的概率 |
+| 文件系统安全扫描 | Trivy `fs` | full-ci-gate | CRITICAL/HIGH 漏洞 + IaC 配置；漏洞扫描读取带治理元数据的 `.trivyignore`，配置误报仅允许在 `.trivyignore.yaml` 中按规则和路径精确豁免；扫描前运行 `bash scripts/ci/install-upstream-modules.sh` 预热 Maven 本地缓存并安装 reactor 产物，降低依赖解析触发 Maven Central 限流的概率 |
 | K8s manifest 安全 | Checkov | full-ci-gate | Helm chart 安全基线 |
 
 > **提醒项升阻断策略**：移除对应步骤的 `continue-on-error: true`（workflow）或脚本中的 `|| true`（run-full-regression.sh），

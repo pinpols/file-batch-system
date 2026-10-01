@@ -369,7 +369,7 @@ jobs:
         # 只在依赖、镜像、部署或安全白名单输入变更时跑,避免普通业务 PR 被漏洞库下载拖慢。
         run: |
           changed="$(git diff --name-only "$GUARD_BASE"...HEAD || true)"
-          if ! printf '%s\n' "$changed" | grep -Eq '(^pom\.xml$|/pom\.xml$|(^|/)Dockerfile[^/]*$|(^|/)docker-bake.*\.hcl$|(^|/)docker-compose.*\.ya?ml$|^deploy/docker/|^helm/|^\.trivyignore$)'; then
+          if ! printf '%s\n' "$changed" | grep -Eq '(^pom\.xml$|/pom\.xml$|(^|/)Dockerfile[^/]*$|(^|/)docker-bake.*\.hcl$|(^|/)docker-compose.*\.ya?ml$|^deploy/docker/|^helm/|^\.trivyignore(\.yaml)?$)'; then
             source scripts/lib/gate-result.sh
             gate_skip PR_TRIVY_FS_SCAN "Trivy 供应链文件扫描" "本次未变更供应链输入"
             exit 0
@@ -380,7 +380,8 @@ jobs:
             curl -fsSL -o /tmp/trivy.tar.gz "https://github.com/aquasecurity/trivy/releases/download/v${trivy_version}/trivy_${trivy_version}_Linux-64bit.tar.gz"
             tar -xzf /tmp/trivy.tar.gz -C /tmp trivy
             sudo mv /tmp/trivy /usr/local/bin/trivy
-            trivy fs --scanners vuln,misconfig --severity CRITICAL,HIGH --exit-code 1 .
+            trivy fs --scanners vuln --ignorefile .trivyignore --severity CRITICAL,HIGH --exit-code 1 .
+            trivy fs --scanners misconfig --ignorefile .trivyignore.yaml --severity CRITICAL,HIGH --exit-code 1 .
           }
           gate_run PR_TRIVY_FS_SCAN "Trivy 供应链文件扫描" run_trivy_fs_scan
 
