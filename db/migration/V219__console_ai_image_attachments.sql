@@ -8,7 +8,7 @@ CREATE TABLE batch.console_ai_attachment (
     id UUID NOT NULL,
     owner_user_id VARCHAR(64) NOT NULL,
     client_attachment_id UUID NOT NULL,
-    input_sha256 CHAR(64) NOT NULL,
+    input_sha256 VARCHAR(64) NOT NULL,
     object_key VARCHAR(256) NOT NULL,
     media_type VARCHAR(32),
     byte_size BIGINT,
