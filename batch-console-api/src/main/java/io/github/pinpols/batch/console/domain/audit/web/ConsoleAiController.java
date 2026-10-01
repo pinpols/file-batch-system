@@ -90,8 +90,9 @@ public class ConsoleAiController {
       @Valid @RequestBody AiChatRequest request) {
     authorizationService.assertAllowed();
     ConsoleRequestMetadata metadata = metadataResolver.current();
-    String requestId =
-        metadata.requestId() == null ? IdGenerator.newBusinessNo("ai") : metadata.requestId();
+    String requestId = EmptyChecks.isNull(metadata.requestId())
+        ? IdGenerator.newBusinessNo("ai")
+        : metadata.requestId();
     ConsoleRequestMetadata streamMetadata = new ConsoleRequestMetadata(
         requestId,
         metadata.traceId(),
@@ -102,7 +103,7 @@ public class ConsoleAiController {
     long timeout = Math.max(1, aiProperties.getRequestTimeout().toMillis()) + 10_000;
     SseEmitter emitter = new SseEmitter(timeout);
     ActiveStream active = new ActiveStream(metadata.tenantId(), metadata.operatorId(), emitter);
-    if (activeStreams.putIfAbsent(requestId, active) != null) {
+    if (EmptyChecks.isNotNull(activeStreams.putIfAbsent(requestId, active))) {
       throw BizException.of(ResultCode.CONFLICT, "error.common.state_conflict");
     }
     emitter.onTimeout(active::cancel);
@@ -148,7 +149,7 @@ public class ConsoleAiController {
     authorizationService.assertAllowed();
     ConsoleRequestMetadata metadata = metadataResolver.current();
     ActiveStream active = activeStreams.get(requestId);
-    if (active == null
+    if (EmptyChecks.isNull(active)
         || !Objects.equals(active.tenantId, metadata.tenantId())
         || !Objects.equals(active.operatorId, metadata.operatorId())) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail");

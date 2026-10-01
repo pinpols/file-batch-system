@@ -232,7 +232,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     ModelCallResult modelCall;
     try {
       modelCall = callModel(chatClients, snippets, promptPayload, tools, observer);
-      if (observer != null && observer.isCancelled()) {
+      if (EmptyChecks.isNotNull(observer) && observer.isCancelled()) {
         throw new CancellationException("AI stream cancelled");
       }
       chatResponse = modelCall.response();
@@ -453,7 +453,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
               deadlineNanos, System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(primaryBudget)));
     } catch (Exception primaryFailure) {
       if (EmptyChecks.isNull(providers.fallback())
-          || (observer != null && (observer.isCancelled() || observer.hasEmitted()))
+          || (EmptyChecks.isNotNull(observer) && (observer.isCancelled() || observer.hasEmitted()))
           || !isFallbackEligible(primaryFailure)) {
         throw primaryFailure;
       }
@@ -498,7 +498,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       throw new TimeoutException("AI provider request deadline exceeded");
     }
     long timeoutMillis = Math.max(1, TimeUnit.NANOSECONDS.toMillis(remainingNanos));
-    Future<ChatResponse> future = modelCallExecutor.submit(() -> observer == null
+    Future<ChatResponse> future = modelCallExecutor.submit(() -> EmptyChecks.isNull(observer)
         ? requestSpec.call().chatResponse()
         : streamResponse(requestSpec, observer));
     try {
@@ -524,12 +524,12 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
           if (observer.isCancelled()) {
             throw new CancellationException("AI stream cancelled");
           }
-          if (chunk.getMetadata() != null && chunk.getMetadata().getUsage() != null) {
+          if (EmptyChecks.isNotNull(chunk.getMetadata())
+              && EmptyChecks.isNotNull(chunk.getMetadata().getUsage())) {
             metadata.set(chunk.getMetadata());
           }
           String delta = extractContent(chunk);
-          if (delta != null
-              && !delta.isEmpty()
+          if (EmptyChecks.isNotEmpty(delta)
               && answer.length() < aiProperties.getMaxResponseLength()) {
             int remaining = aiProperties.getMaxResponseLength() - answer.length();
             String boundedDelta = delta.substring(0, Math.min(delta.length(), remaining));
