@@ -53,8 +53,9 @@ sleep 60                                  # 等 worker 跑完一轮
 bash scripts/sim/06-verify.sh             # 对账产物
 ```
 
-MinIO 操作统一通过 `bash scripts/lib/minio-mc.sh ...` 使用固定版本的
-`minio/mc` CLI 容器；不要在 `batch-minio` server 容器内直接执行 `mc`。
+MinIO 操作统一通过 `bash scripts/lib/minio-mc.sh ...` 使用独立运行的固定版本
+CLI 容器；默认 `bitnamilegacy/minio:2025.7.23-debian-12-r1` 已验证内置 `mc`，
+不要在 `batch-minio` server 容器内直接执行 `mc`。
 
 ## 日常重跑(已 init 过)
 

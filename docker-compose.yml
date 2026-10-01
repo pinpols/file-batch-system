@@ -327,8 +327,8 @@ services:
 
   minio-init:
     logging: *container-logging
-    # MinIO server 镜像不保证包含 mc；初始化容器固定使用独立 CLI 镜像。
-    image: ${MINIO_MC_IMAGE_REPOSITORY:-minio/mc}:${MINIO_MC_IMAGE_TAG:-RELEASE.2025-08-13T08-35-41Z}
+    # 独立 CLI 容器使用已验证内置 mc 的固定镜像，避免失效的 minio/mc 仓库。
+    image: ${MINIO_MC_IMAGE_REPOSITORY:-bitnamilegacy/minio}:${MINIO_MC_IMAGE_TAG:-2025.7.23-debian-12-r1}
     user: "1001:1001"
     container_name: batch-minio-init
     depends_on:

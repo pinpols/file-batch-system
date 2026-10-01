@@ -9,7 +9,7 @@
 - `scripts/docker/reset-dev.sh`：按 Compose project 清空本地开发容器、数据卷和专用网络（默认预览）
 - `scripts/ops/`：运维巡检与自愈（inspect-*、heal-*、trigger-compensation）
 - `scripts/data/`：数据初始化与加载（init-kafka、init-minio、load-*）
-- `scripts/lib/minio-mc.sh`：通过固定版本的 `minio/mc` CLI 容器访问 MinIO；不要假设 MinIO server 镜像内置 `mc`。
+- `scripts/lib/minio-mc.sh`：通过独立运行的固定版本 CLI 容器访问 MinIO；默认镜像 `bitnamilegacy/minio:2025.7.23-debian-12-r1` 已验证内置 `mc`，更换镜像时需重新确认。
 - `scripts/ci/`：CI / staging 统一回归入口和门禁脚本（说明见 [scripts/ci/README.md](ci/README.md)）
 - `scripts/db/`：数据库维护、种子数据、备份恢复和分区迁移演练
 - `scripts/codegen/`：OpenAPI、错误码字典和契约 fixture 等可复现代码生成

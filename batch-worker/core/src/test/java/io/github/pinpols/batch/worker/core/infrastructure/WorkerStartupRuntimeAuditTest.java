@@ -14,9 +14,13 @@ import io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxStats;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.mock.env.MockEnvironment;
 
+@ExtendWith(OutputCaptureExtension.class)
 class WorkerStartupRuntimeAuditTest {
 
   @Test
@@ -74,6 +78,58 @@ class WorkerStartupRuntimeAuditTest {
     @SuppressWarnings("unchecked")
     List<String> issues = (List<String>) details.get("issues");
     assertThat(issues).contains("execution poolSize < maxConcurrentTasks");
+  }
+
+  @Test
+  void healthyStartupLogsSummaryWithoutContributorDetails(CapturedOutput output) {
+    WorkerRuntimeState runtimeState = new WorkerRuntimeState();
+    WorkerRegistration registration = new WorkerRegistration();
+    registration.setWorkerId("worker-1");
+    registration.setStatus("ONLINE");
+    runtimeState.put(registration);
+    WorkerExecutionTimeoutProperties execution = new WorkerExecutionTimeoutProperties();
+    execution.setPoolSize(4);
+    WorkerStartupAuditContributor contributor = mock(WorkerStartupAuditContributor.class);
+    when(contributor.name()).thenReturn("dispatch-channel-health");
+    when(contributor.audit())
+        .thenReturn(WorkerStartupAuditContributor.WorkerStartupAuditResult.healthy(
+            Map.of("channelSafetyProfiles", Map.of("API", "full profile details"))));
+    WorkerStartupRuntimeAudit audit = new WorkerStartupRuntimeAudit(
+        provider(workerConfiguration()),
+        runtimeState,
+        execution,
+        new WorkerReportOutboxProperties(),
+        absentProvider(),
+        provider(List.of(contributor)),
+        new MockEnvironment().withProperty("batch.worker.max-concurrent-tasks", "4"));
+
+    audit.auditOnReady();
+
+    assertThat(output.getOut())
+        .contains("worker startup runtime audit OK: configurations=1, registeredWorkers=1")
+        .contains("contributors=[dispatch-channel-health]")
+        .doesNotContain("channelSafetyProfiles", "full profile details");
+  }
+
+  @Test
+  void unhealthyStartupLogsIssuesWithoutFullCoreSnapshot(CapturedOutput output) {
+    WorkerExecutionTimeoutProperties execution = new WorkerExecutionTimeoutProperties();
+    execution.setPoolSize(4);
+    WorkerStartupRuntimeAudit audit = new WorkerStartupRuntimeAudit(
+        provider(workerConfiguration()),
+        new WorkerRuntimeState(),
+        execution,
+        new WorkerReportOutboxProperties(),
+        absentProvider(),
+        provider(List.of()),
+        new MockEnvironment().withProperty("batch.worker.max-concurrent-tasks", "4"));
+
+    audit.auditOnReady();
+
+    assertThat(output.getOut())
+        .contains("worker startup runtime audit WARN: unhealthy=[worker-core]")
+        .contains("issues=[no registered worker in runtime state]")
+        .doesNotContain("core={", "registeredWorkerIds=");
   }
 
   private WorkerConfiguration workerConfiguration() {
