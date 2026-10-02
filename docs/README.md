@@ -1,5 +1,7 @@
 # docs/ 文档总入口
 
+- [Compose CD → Kubernetes GitOps 路线](runbook/compose-cd-roadmap.md)：前后端统一 digest、staging 自动部署、production 审批、回滚与后续 GitOps 待办。
+
 整个 `docs/` 目录的导航。**新人从这里开始**。
 
 > 根目录 `AGENTS.md` 提供协作指引；`agent-baseline.md` 与 `coding-conventions.md` 是项目工程约束的权威，本目录提供展开与实践材料。
