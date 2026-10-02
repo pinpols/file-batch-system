@@ -1,5 +1,7 @@
 # 运维 Runbook 索引
 
+- [Compose CD → Kubernetes GitOps 路线](./compose-cd-roadmap.md)：前后端统一 release set、immutable digest、staging 自动部署、production 审批、失败回滚与后续 GitOps 实施待办。
+
 部署、监控、灰度、应急、巡检五类 SOP。每份都按线上事件可直接执行的标准维护。
 
 > **应急入口**:发生线上故障时,先看 [04 incident-response.md](./incident-response.md) → [05 troubleshooting-decision-tree.md](./troubleshooting-decision-tree.md)。
