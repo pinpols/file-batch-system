@@ -46,6 +46,14 @@ class DetectChangeScopeTest(unittest.TestCase):
         self.assertFalse(result["unit-required"])
         self.assertTrue(result["ci"])
 
+    def test_known_root_tool_configs_skip_maven_unit(self) -> None:
+        result = MODULE.classify_paths([".nvmrc", ".node-version", "qodana.yaml"])
+
+        self.assertTrue(result["config"])
+        self.assertFalse(result["unknown"])
+        self.assertFalse(result["unit-required"])
+        self.assertFalse(result["docs-only"])
+
     def test_module_test_source_is_marked_as_test_and_unit_scope(self) -> None:
         result = MODULE.classify_paths(["batch-trigger/src/test/java/example/TriggerTest.java"])
 

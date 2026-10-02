@@ -9,7 +9,7 @@
 | 方向 | 守护 |
 |---|---|
 | 应用与架构 | `check-application-governance.py`、`check-dependency-boundaries.py`、`check-direct-client-boundaries.py`、`check-infrastructure-abstraction-boundaries.py`、`check-no-enable-preview.sh` |
-| SDK 配置 | `check-sdk-config-env-parity.py`（Java/Python env 工厂和五语言 live transport 前缀）、`check-sdk-runtime-alignment.py`（SDK/前端声明与 CI 版本矩阵） |
+| SDK 配置 | `check-sdk-config-env-parity.py`（Java/Python env 工厂和五语言 live transport 前缀）、`check-sdk-runtime-alignment.py`（仓库 Node 入口、SDK/前端声明与 CI 版本矩阵） |
 | SDK 双栈 | `run-sdk-happy-eyeballs-gate.sh`（五语言真实 loopback socket 单栈/双栈/黑洞矩阵） |
 | 文档与变更 | `check-docs-structure.py`、`check-doc-timestamp-policy.py`、`check-code-doc-references.py`、`check-changelog-sync.py`、`check-loc-snapshot.py`、`check-readiness-doc-sync.py`、`check-comment-language.py` |
 | 脚本与仓库 | `check-shell-scripts.sh`、`check-shell-linux-portability.py`、`check-script-governance.py`、`check-repository-hygiene.py`、`check-env-file-shell-safety.py`、`check-hardcoded-runtime-config.sh`、`check-utf8-encoding.py`（全仓 UTF-8 字节扫描） |
@@ -84,7 +84,9 @@ FORCE_VALIDATION=true python3 scripts/ci/daily-validation-change-gate.py
 `tests`、`docker`、`helm`、`maven`、`unknown` 和 `unit-required` 字段。后续 workflow 应消费这些
 输出，不要重新维护一套路径 glob。`database` 保留为旧门禁兼容别名；`unknown=true`
 时必须按代码变更处理。`unit-required` 只表示 Maven reactor 是否需要启动；CI、脚本、
-SDK 变更仍应由各自专项 workflow/静态检查覆盖。SDK 契约 workflow 与 PR gate 共用同一探测器。
+SDK 变更仍应由各自专项 workflow/静态检查覆盖。已登记的根目录运行时与质量工具配置归入
+`config`，不因缺少 Java 影响而启动 Maven unit；未登记的新路径仍归入 `unknown` 并保守执行。
+SDK 契约 workflow 与 PR gate 共用同一探测器。
 
 探测器不属于某个具体业务门禁，后续 workflow 应复用该 composite action 和输出契约；不要复制
 `dorny/paths-filter` 或在 YAML 中新增另一套路径白名单。GitHub ruleset 中应同时要求

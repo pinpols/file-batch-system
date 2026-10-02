@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 GATE_CODE = "REPOSITORY_HYGIENE"
 GATE_NAME = "仓库卫生"
 ALLOWED_BUILD_FILES = {"build/pmd-ruleset.xml", "build/spotbugs-npe-filter.xml"}
+FORBIDDEN_ROOT_FILES = {"qodana.yaml": "已由现有 Java 质量门禁替代的 Qodana 配置"}
 TEXT_SUFFIXES = {".java", ".kt", ".py", ".sh", ".md", ".xml", ".yml", ".yaml", ".properties", ".toml", ".json"}
 ABSOLUTE_PATH = re.compile(r"/Users/|/var/folders/|[A-Za-z]:\\\\Users\\\\")
 PATTERN_DEFINITION_FILES = {
@@ -33,6 +34,12 @@ def main() -> int:
     errors: list[str] = []
     for relative in versionable_files():
         path = Path(relative)
+        absolute_path = ROOT / relative
+        # git ls-files 仍会返回工作区中尚未暂存的删除项，删除不应被当成现存违规文件。
+        if not absolute_path.exists():
+            continue
+        if relative in FORBIDDEN_ROOT_FILES:
+            errors.append(f"废弃根目录文件: {relative} ({FORBIDDEN_ROOT_FILES[relative]})")
         if path.name == ".DS_Store" or path.name.startswith("settings.local."):
             errors.append(f"tracked local metadata: {relative}")
         if relative in {".env", ".env.local", ".env.test", ".env.prod"}:
@@ -47,7 +54,7 @@ def main() -> int:
         if relative in PATTERN_DEFINITION_FILES:
             continue
         try:
-            content = (ROOT / relative).read_text(encoding="utf-8")
+            content = absolute_path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
         for line_number, line in enumerate(content.splitlines(), 1):

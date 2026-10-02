@@ -401,7 +401,24 @@ Integration and end-to-end tests start PostgreSQL 17 and Apache Kafka automatica
 
 ## Contributing
 
-1. Follow the engineering baseline constraints in `AGENTS.md`
-2. New features must ship with corresponding integration tests
-3. For persistence changes, maintain only Flyway migrations (`db/migration/`); `platform-init.sql` contains only the V1-equivalent schema — do not copy table DDL
-4. Do not introduce JPA/Hibernate dependencies
+This repository contains the scheduling control plane, five Worker types, database migrations, five language SDKs, deployment assets, and operational tooling. Before editing, identify the owning boundary and the contracts that must move with it:
+
+| Change | Primary location | Required checks |
+|---|---|---|
+| Console APIs and administration | `batch-console-api`, `docs/api/` | OpenAPI, authorization, tenant isolation, error codes, and generated types and callers in the paired frontend |
+| Scheduling, state machines, and compensation | `batch-trigger`, `batch-orchestrator` | Transactions, Outbox, CAS, idempotency, retries, business calendars, and recovery |
+| Worker execution | `batch-worker/*` | Claim/report, leases, cancellation, checkpoints, resource isolation, and failure recovery |
+| Database and persistence | `db/migration`, Mapper XML | Add Flyway migrations only; review locking, constraints, RLS, partitioning, archival, and rollback risk |
+| Five language SDKs | `sdk/`, shared fixtures | Wire contracts, constants, lifecycle behavior, and Java/Python/Go/TypeScript/Rust parity |
+| Deployment and operations | `deploy/`, `helm/`, Compose, `scripts/` | Configuration sources, secrets, environment variables, production overlays, runbooks, and failure exit codes |
+| Documentation and releases | `README*`, `docs/`, `CHANGELOG.md` | Update authoritative docs, indexes, and records for user, deployment, contract, or security changes |
+
+Recommended workflow:
+
+1. Create a short-lived `feature/*` or `fix/*` branch from the latest `main`, and keep each PR focused on one clear intent.
+2. Read [AGENTS.md](AGENTS.md), the [engineering baseline](docs/agent-baseline.md), and the affected module README before editing; do not bypass boundaries by copying logic across modules.
+3. Add unit, integration, or end-to-end verification in proportion to risk. Use `-am` for multi-module Maven commands, and report real-service, simulation, and performance evidence separately from static gates.
+4. Run `bash scripts/local/pre-commit-checks.sh` before committing. Use `make ci-pr` for PR-level checks and `make ci` for broader regression coverage.
+5. In the PR, document behavior, contract, authorization, tenant, database, configuration, deployment, and rollback impact, and distinguish completed, skipped, and unrun verification.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the complete development, validation, and Pull Request rules. Report security issues privately through [SECURITY.md](SECURITY.md); do not disclose credentials, real tenant data, or exploitable vulnerabilities in public issues or PRs.

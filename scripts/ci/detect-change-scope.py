@@ -35,6 +35,17 @@ SCOPE_NAMES = (
     "unknown",
 )
 CODE_SCOPES = set(SCOPE_NAMES) - {"docs", "unknown"}
+ROOT_TOOL_CONFIG_FILES = {
+    ".gitleaks.toml",
+    ".gitleaksignore",
+    ".node-version",
+    ".nvmrc",
+    ".python-version",
+    ".squawk.toml",
+    ".trivyignore",
+    ".trivyignore.yaml",
+    "qodana.yaml",
+}
 
 
 def under(path: str, prefix: str) -> bool:
@@ -49,6 +60,8 @@ def is_config(path: str) -> bool:
     if path.startswith(".github/") or under(path, "docs"):
         return False
     name = PurePosixPath(path).name
+    if path in ROOT_TOOL_CONFIG_FILES:
+        return True
     if name.startswith(".env") or name in {"Makefile", ".editorconfig"}:
         return True
     if name.startswith(("docker-compose", "docker-bake")):

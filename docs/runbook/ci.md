@@ -148,6 +148,8 @@ SDK 纯变更由 SDK workflow 负责，`docs/api/**` 等契约路径不在忽略
 `tests`、`docker`、`helm`、`maven` 和 `unknown` 布尔字段，并在 GitHub Actions 中
 同时写入 Job outputs 和 Step summary。一个文件可以命中多个域，例如 Flyway SQL
 同时命中 `sql` 与 `database`，SDK 共享常量同时命中 `sdk` 与 `docs`/`api`。
+已登记的根目录运行时和质量工具配置归入 `config`，不会单独触发 Maven unit；未登记的新路径
+仍归入 `unknown` 并保守执行，避免新增文件静默绕过 Java 回归。
 
 安全规则：PR 直接比较 `base` 与 `head` 提交树计算真实差异；merge queue、push、schedule、手工
 触发等没有可靠 PR 差异的事件统一回退全范围；未知文件不算 `docs-only`。新增 workflow
