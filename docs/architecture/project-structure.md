@@ -365,7 +365,6 @@ scripts/
 ├── lib/       脚本共享函数库
 ├── local/     本地特定(pre-push-sdk-checks.sh / be-acceptance.sh / sdk-handler-tests.sh)
 ├── ops/       运维(prod 巡检 / 一次性脚本)
-├── ps1/       PowerShell / Windows 兼容辅助
 ├── sim/       场景模拟脚本
 ├── sim-4day/  四日链路模拟脚本
 └── tools/     杂项工具

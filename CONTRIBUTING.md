@@ -4,7 +4,7 @@
 
 ## 基本原则
 
-- 从最新 `main` 创建短生命周期分支；不要直接向受保护的 `main` 推送。
+- 从最新 `main` 创建短生命周期分支；不要直接向受保护的 `main` 推送。分支统一按变更类型命名：`feature/<topic>`（功能）、`fix/<topic>`（缺陷）、`chore/<topic>`（工程/依赖/脚本/CI）、`docs/<topic>`（纯文档）。
 - 修改前先读根目录 [`AGENTS.md`](AGENTS.md)、[`docs/agent-baseline.md`](docs/agent-baseline.md)、[`docs/coding-conventions.md`](docs/coding-conventions.md) 和受影响目录的 README。
 - 先看 `git status` 和现有 diff，保留他人或并行任务留下的改动。
 - 变更保持单一意图。不要把功能、格式化、依赖升级、文档整理和无关修复混在一个 PR。
