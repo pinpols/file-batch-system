@@ -92,6 +92,21 @@ public class ConsoleUserAccountService {
     return toResponse(userAccountMapper.selectByUsername(username));
   }
 
+  /** 批量开户沿用单账号的租户与角色守卫，初始密码只存哈希并标记改密提醒。 */
+  public ConsoleUserAccountResponse createProvisioned(
+      String tenantId, String username, String password, String displayName, String role) {
+    Guard.require(username != null && !username.isBlank(), "username is required");
+    String effectiveTenantId = enforceTenantScope(tenantId);
+    String normalizedRole = normalizeAuthorities(role);
+    enforceGrantableAuthorities(normalizedRole);
+    if (userAccountMapper.selectByUsername(username) != null) {
+      throw BizException.of(ResultCode.CONFLICT, "error.username.already_exists", username);
+    }
+    userAccountMapper.insertProvisioned(
+        effectiveTenantId, username, displayName, passwordHasher.encode(password), normalizedRole);
+    return toResponse(userAccountMapper.selectByUsername(username));
+  }
+
   public ConsoleUserAccountResponse update(long id, String displayName, String authoritiesCsv) {
     Map<String, Object> row = assertExists(id);
     assertSameTenantOrGlobal(str(row, COL_TENANT_ID));

@@ -42,6 +42,7 @@
 | Pipeline / Workflow | [边界定义](./pipeline-vs-workflow-definition.md)、[DAG 设计器](./workflow-dag-designer.md)、[动态 fan-out](./workflow-dynamic-fanout.md)、[状态机](./status-state-machines.md) |
 | 幂等与 readiness | [分区幂等](./partition-idempotency-decision.md)、[资产分区 readiness](./asset-partition-readiness.md) |
 | Worker / SDK | [Task SPI](./task-spi-design.md)、[部署模型](./worker-deployment-models.md)、[task type 配置](./sdk-task-type-configuration.md)、[行业对标](./sdk-industry-benchmark.md) |
+| 账户与权限 | [批量账号开户后端设计](./bulk-user-provisioning.md)：Preview/Apply、租户与角色边界、事务、幂等和凭据交付 |
 
 ## 与 architecture/ 的分工
 

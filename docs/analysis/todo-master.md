@@ -475,15 +475,15 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 
 ## 批量账号开户（Bulk User Provisioning）
 
-**状态：缺口 / P1。** 当前已有批量创建租户、租户配置批量初始化和单账号 CRUD，但缺少正式的批量账号创建能力。
+**状态：前后端已编码 / P1，尚未通过真实环境验收。** 已有批量创建租户、租户配置批量初始化和单账号 CRUD；批量账号开户实现位于独立功能分支。
 
-- [ ] 新增批量账号 Preview / Apply API，并纳入 OpenAPI；不由前端循环调用单账号接口模拟批量。
-- [ ] 单账号与批量账号复用同一 Account Provisioning 领域校验和创建逻辑。
-- [ ] `ROLE_ADMIN` / `ROLE_AUDITOR` 按平台账号处理，归属 `system` 作用域，不依赖业务租户存在。
-- [ ] `ROLE_TENANT_ADMIN` / `ROLE_TENANT_USER` 必须关联实际存在且允许开户的业务租户；创建路径统一校验 tenant 存在/状态。
-- [ ] 保持 username 全局唯一，并支持批次内重复、存量冲突和大小写冲突预检。
-- [ ] 复用四角色授权边界：平台 ADMIN 可创建四类角色；TENANT_ADMIN 只能在本租户创建 TENANT_ADMIN / TENANT_USER；AUDITOR / TENANT_USER 无开户权限。
-- [ ] 明确批量事务语义、幂等键、逐行结果、失败重试和审计关联 batchOperationId。
-- [ ] 初始密码不得以长期明文保存在导入文件；确定随机初始凭据 / 安全交付方案，并统一 `must_change_password` 首次改密策略。
-- [ ] 补单测、真实 PostgreSQL 集成测试、租户越权/角色越授/重复账号/无效租户等安全回归。
+后端设计及验收边界：[批量账号开户后端设计](../design/bulk-user-provisioning.md)；配对前端待办：`batch-console/docs/backlog/bulk-user-provisioning.md`。最后核查：2026-10-03。后端责任域为 Console/RBAC。
 
+- [x] 批量账号模板、Preview、逐行 Patch、原子 Apply、非敏感批次查询 API 与 OpenAPI；前端不循环调用单账号接口。
+- [x] 批量创建复用现有 `ConsoleUserAccountService` 的租户作用域、角色授予和哈希创建守卫；平台角色固定 `system`，租户角色须绑定 ACTIVE 业务租户。
+- [x] V220 增加 `lower(username)` 唯一索引；批次内大小写重复、存量冲突预检与事务回滚由数据库约束兜底。
+- [x] 四角色授权边界；TENANT_ADMIN 只能创建本租户 TENANT_ADMIN / TENANT_USER。
+- [x] 一次性随机初始密码只在 Apply 回包出现；`must_change_password=true`，当前登录改密仅提示不阻断。
+- [ ] 单账号创建路径的业务租户存在/状态校验与批量路径进一步统一；现有单账号创建仍沿用旧校验口径。
+- [ ] 跨租批次按各目标租户分别检索的审计、批次与操作审计 ID 关联；当前只有总操作审计和批次租户集合。
+- [ ] 真实 PG/Redis 联测：V220 历史冲突预检、并发提交、事务回滚、过期/多副本预览、前台丢包恢复、初始密码安全交付与多用户冲突。单测不能替代此项。
