@@ -84,7 +84,9 @@ FORCE_VALIDATION=true python3 scripts/ci/daily-validation-change-gate.py
 `tests`、`docker`、`helm`、`maven`、`unknown` 和 `unit-required` 字段。后续 workflow 应消费这些
 输出，不要重新维护一套路径 glob。`database` 保留为旧门禁兼容别名；`unknown=true`
 时必须按代码变更处理。`unit-required` 只表示 Maven reactor 是否需要启动；CI、脚本、
-SDK 变更仍应由各自专项 workflow/静态检查覆盖。SDK 契约 workflow 与 PR gate 共用同一探测器。
+SDK 变更仍应由各自专项 workflow/静态检查覆盖。已登记的根目录运行时与质量工具配置归入
+`config`，不因缺少 Java 影响而启动 Maven unit；未登记的新路径仍归入 `unknown` 并保守执行。
+SDK 契约 workflow 与 PR gate 共用同一探测器。
 
 探测器不属于某个具体业务门禁，后续 workflow 应复用该 composite action 和输出契约；不要复制
 `dorny/paths-filter` 或在 YAML 中新增另一套路径白名单。GitHub ruleset 中应同时要求
