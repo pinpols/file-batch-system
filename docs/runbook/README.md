@@ -93,7 +93,7 @@
 |---|---|
 | 环境接入 | [首租户配置](./first-tenant-config-quickstart.md)、[移动端隧道](./mobile-frontend-tunnel.md)、[跨主机 SSH 隧道](./ssh-tunnel-cross-host.md)、[IPv6 兼容](./ipv6-runtime-compatibility.md) |
 | 运行控制 | [维护模式](./maintenance-mode.md)、[实例暂停恢复](./instance-pause-resume.md) |
-| 历史治理记录 | [索引治理](./archive/index-consolidation-2026-05.md)、[分区 cutover](./archive/partition-cutover-2026-05.md)、[SQL 审计](./sql-audit-2026-05-20.md)、[E2E/IT 优化](./e2e-it-optimization-2026-05-22.md)、[TIA POC](./tia-poc-2026-05-22.md)、[CI/CD 后续](./ci-cd-followup-2026-05-22.md)、[GitOps 接入](./gitops-onboarding-2026-05-22.md)、[上线真实性审计](./go-live-realism-audit-2026-06-21.md) |
+| 历史治理记录 | [索引治理](./archive/index-consolidation-2026-05.md)、[分区 cutover](./archive/partition-cutover-2026-05.md)、[SQL 审计](./sql-audit-2026-05-20.md)、[E2E/IT 优化](./e2e-it-optimization-2026-05-22.md)、[TIA POC](./tia-poc-2026-05-22.md)、[CI/CD 后续（历史）](./ci-cd-followup-2026-05-22.md)、[GitOps 接入](./gitops-onboarding-2026-05-22.md)、[上线真实性审计](./go-live-realism-audit-2026-06-21.md) |
 
 ## 角色路径
 

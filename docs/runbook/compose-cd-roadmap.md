@@ -155,3 +155,188 @@ Phase 2 继续复用 Phase 1 的 build-once、digest 晋级、release set、stag
 5. 任一部署失败可恢复上一稳定 release set，并产生审计结果。
 6. 部署机无需源码构建工具链。
 7. GitHub run 可追溯 commit、image digest、环境和结果。
+
+
+## 11. 当前推荐生产架构：两节点 Compose
+
+当前阶段的生产基线不是把所有组件永久塞进一台主机，而是优先采用“应用节点 + 基础设施节点”两节点 Compose。开发、Demo 和低成本验证仍允许单机。
+
+```mermaid
+flowchart TB
+  U["用户 / 运维人员"] --> EDGE["HTTPS / Nginx"]
+
+  subgraph APP["App Node · Linux · Docker Compose"]
+    EDGE --> FE["batch-console"]
+    EDGE --> API["console-api"]
+    API --> TR["trigger"]
+    API --> OR["orchestrator"]
+    OR --> WI["worker-import"]
+    OR --> WE["worker-export"]
+    OR --> WP["worker-process"]
+    OR --> WD["worker-dispatch"]
+    OR --> WA["worker-atomic"]
+  end
+
+  subgraph INFRA["Infra Node · Linux · Docker Compose"]
+    PG[("PostgreSQL")]
+    KF["Kafka KRaft"]
+    VK["Valkey"]
+    MO["MinIO / S3"]
+  end
+
+  API --> PG
+  TR --> PG
+  TR --> KF
+  OR --> PG
+  OR --> KF
+  OR --> VK
+  WI --> PG
+  WI --> KF
+  WI --> MO
+  WE --> PG
+  WE --> KF
+  WE --> MO
+  WP --> PG
+  WP --> KF
+  WD --> KF
+  WD --> MO
+  WA --> PG
+  APP <-->|"private network · firewall allowlist"| INFRA
+```
+
+建议起步规格：
+
+| 节点 / 环境 | CPU | 内存 | 磁盘 | 定位 |
+|---|---:|---:|---:|---|
+| Dev / Demo 单机 | 4C | 16 GB | 100 GB SSD | 全栈 Compose，功能验证 |
+| Staging | 8C | 32 GB | 200 GB+ SSD | 完整发布验收、E2E、容量基线 |
+| Production App Node | 8C 起 | 32 GB 起 | 100–200 GB SSD | Nginx、前端、控制面、Worker |
+| Production Infra Node | 16C 起 | 64 GB 起 | 500 GB–1 TB NVMe | PostgreSQL、Kafka、Valkey、MinIO |
+
+这些是**起步规格，不是容量承诺**。最终规格必须用仓库现有 load-tests、capacity profile、Worker throughput、Kafka lag、PostgreSQL TPS/IO、MinIO 吞吐和 JVM RSS 数据校准。基础设施节点优先保证 NVMe IOPS、容量和备份，不以堆 CPU 替代磁盘设计。
+
+扩容顺序优先是：增加/拆分 Worker → 增加 App Node → 将 PostgreSQL / Kafka / MinIO 从共享 Infra Node 拆出 → 满足 HA 进入条件后迁 Kubernetes。
+
+## 12. 最终目标生产架构：Kubernetes + GitOps + 基础设施 HA
+
+最终目标不是“把 Compose 原样搬进 Kubernetes”，而是让无状态控制面和 Worker 由 Kubernetes 调度，有状态基础设施按各自 HA 模型运行，并由 GitOps 管理环境期望状态。
+
+```mermaid
+flowchart TB
+  USER["用户 / 运维"] --> LB["LB / Ingress / TLS"]
+
+  GHA["GitHub Actions"] --> GHCR["GHCR\nimmutable image digests"]
+  GHA --> OPS["Deployment / Ops Repo\nstaging + production desired state"]
+  OPS --> ARGO["Argo CD"]
+  ARGO --> K8S
+
+  subgraph K8S["Kubernetes Cluster · 多节点 / 多故障域"]
+    ING["Ingress Controller"]
+    FE["batch-console × N"]
+    API["console-api × N"]
+    TR["trigger × N"]
+    OR["orchestrator × N"]
+
+    subgraph WORKERS["Worker Pools · 独立扩缩容"]
+      WI["import × N"]
+      WE["export × N"]
+      WP["process × N"]
+      WD["dispatch × N"]
+      WA["atomic × N\n独立权限 / NetworkPolicy"]
+    end
+
+    ING --> FE
+    ING --> API
+    API --> TR
+    API --> OR
+    OR --> WORKERS
+  end
+
+  LB --> ING
+
+  subgraph DATA["HA Data Plane"]
+    PGB["PgBouncer × 2"]
+    PG[("PostgreSQL HA\nPrimary + Replica\nPITR / Backup")]
+    KF["Kafka KRaft × 3\nRF=3 / min.insync=2"]
+    VK["Valkey / Redis HA"]
+    MO["Distributed S3 / MinIO\n多盘 / 多节点"]
+  end
+
+  API --> PGB
+  TR --> PGB
+  OR --> PGB
+  WORKERS --> PGB
+  PGB --> PG
+
+  TR --> KF
+  OR --> KF
+  WORKERS --> KF
+  API --> VK
+  OR --> VK
+  WORKERS --> MO
+
+  OBS["Prometheus / Grafana / OTel / Logs"] -.-> K8S
+  OBS -.-> DATA
+```
+
+目标职责边界：
+
+- **Ingress / Frontend**：唯一公网入口；内部控制面和基础设施端口不直接暴露公网。
+- **Console / Trigger / Orchestrator**：无状态或可协调的控制面，多副本滚动升级。
+- **Worker Pools**：按 IMPORT / EXPORT / PROCESS / DISPATCH / ATOMIC 独立资源池扩缩容；Atomic 保持独立权限和网络隔离。
+- **PostgreSQL**：HA + PgBouncer + 备份/PITR；是否进一步采用分布式 PostgreSQL 必须由容量 benchmark 触发，而不是目标架构默认要求。
+- **Kafka**：KRaft 3 broker 起步，生产 topic 按 RF=3 / min.insync.replicas=2。
+- **Valkey/Redis**：按缓存、锁、quota 的可用性语义设计 HA；不能把所有场景当作可无条件 fail-open。
+- **对象存储**：分布式 S3 兼容存储，批处理文件与 AI 附件保持权限/生命周期隔离。
+- **Observability**：指标、trace、日志和告警覆盖应用与数据平面。
+- **GitOps**：Argo CD 只部署已经构建并通过治理的 immutable digest；不在集群内构建应用。
+
+## 13. 最终生产发布拓扑
+
+```mermaid
+flowchart LR
+  MAIN["main"] --> CI["CI / Build"]
+  CI --> REG["GHCR\nimmutable digests"]
+  REG --> MAN["Release Manifest\nFE + all BE digests"]
+
+  MAN --> STG["Staging"]
+  STG --> VERIFY["Health + Version + Digest\nBE Smoke + FE E2E + Lighthouse"]
+  VERIFY -->|PASS| APPROVE["Production Approval"]
+  VERIFY -->|FAIL| PREV1["Previous Stable"]
+
+  APPROVE --> PROD["Production\nsame release set"]
+  PROD --> CHECK["Post-deploy verify"]
+  CHECK -->|PASS| STABLE["Mark Stable"]
+  CHECK -->|FAIL| PREV2["Rollback Previous Stable"]
+
+  MAN -. "Phase 1 executor" .-> SSH["SSH + Compose"]
+  MAN -. "Phase 2 executor" .-> GITOPS["Ops Repo + Argo CD"]
+```
+
+这里的长期稳定契约是 Release Manifest，而不是 Compose 或 Argo CD 本身。Phase 1 和 Phase 2 只替换部署执行器，因此当前 Compose CD 的投入可以直接迁移到最终 GitOps 架构。
+
+## 14. 从当前到最终目标的演进
+
+```text
+A. Dev / Demo
+   单机 Compose
+       ↓
+B. 当前 Production Baseline
+   App Node + Infra Node
+   GitHub Actions + GHCR + SSH Compose
+       ↓  容量增长
+C. Compose 横向拆分
+   Worker/App 横向扩容
+   PG/Kafka/MinIO 按压力拆机
+       ↓  HA/SLA/K8s 运维条件满足
+D. 最终 Production
+   Kubernetes + Helm + Argo CD
+   App/Worker 多副本
+   PostgreSQL/Kafka/Valkey/Object Storage HA
+```
+
+进入最终架构必须由 SLA、故障域、多节点、自动恢复、滚动升级、弹性或容量需求触发；不能只因为 Helm 文件已经存在就提前迁移。
+
+## 15. 平台级落地待办同步原则
+
+本路线中的 P0/P1/P2 是 CD / 部署领域的权威待办。平台总待办应引用本文件，而不是复制第二份逐项清单。实施 PR 完成某项时同时更新这里的 checkbox 和对应验收证据；硬件规格在完成真实容量测试后按实测结果调整。

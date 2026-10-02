@@ -1,5 +1,10 @@
 # TODO Master · 当前待办唯一索引
 
+
+## 部署与持续交付
+
+Compose CD、生产拓扑、硬件起步规格和 Kubernetes/GitOps 最终目标的权威待办统一维护在 [Compose CD → Kubernetes GitOps 路线](../runbook/compose-cd-roadmap.md#8-待办)。本总表只保留领域入口，避免复制 P0/P1/P2 checkbox 后产生状态漂移。
+
 > 核查日期：2026-10-01。本文只登记当前仍有效的事项；`docs/archive/` 的历史待办不计入本表。
 > 状态分类、证据要求和归档规则见 [`../standards/document-governance.md`](../standards/document-governance.md)。
 
@@ -467,3 +472,18 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 | **LIC-2** | SBOM 嵌入 artifact + 第三方清单 | `[ops]` 部分 | 本地能改 maven 配置，但 CI 注入 + artifact 校验需 ops |
 
 本节只维护逐项状态，不维护易随去重口径变化的汇总数字。FE-1/2/3、CC-1/2 已在 §二标记完成，不再列入待办。
+
+## 批量账号开户（Bulk User Provisioning）
+
+**状态：缺口 / P1。** 当前已有批量创建租户、租户配置批量初始化和单账号 CRUD，但缺少正式的批量账号创建能力。
+
+- [ ] 新增批量账号 Preview / Apply API，并纳入 OpenAPI；不由前端循环调用单账号接口模拟批量。
+- [ ] 单账号与批量账号复用同一 Account Provisioning 领域校验和创建逻辑。
+- [ ] `ROLE_ADMIN` / `ROLE_AUDITOR` 按平台账号处理，归属 `system` 作用域，不依赖业务租户存在。
+- [ ] `ROLE_TENANT_ADMIN` / `ROLE_TENANT_USER` 必须关联实际存在且允许开户的业务租户；创建路径统一校验 tenant 存在/状态。
+- [ ] 保持 username 全局唯一，并支持批次内重复、存量冲突和大小写冲突预检。
+- [ ] 复用四角色授权边界：平台 ADMIN 可创建四类角色；TENANT_ADMIN 只能在本租户创建 TENANT_ADMIN / TENANT_USER；AUDITOR / TENANT_USER 无开户权限。
+- [ ] 明确批量事务语义、幂等键、逐行结果、失败重试和审计关联 batchOperationId。
+- [ ] 初始密码不得以长期明文保存在导入文件；确定随机初始凭据 / 安全交付方案，并统一 `must_change_password` 首次改密策略。
+- [ ] 补单测、真实 PostgreSQL 集成测试、租户越权/角色越授/重复账号/无效租户等安全回归。
+

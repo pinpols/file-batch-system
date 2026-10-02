@@ -1,5 +1,8 @@
 # CI/CD 5 项落地遗留 / 待验证清单
 
+> **历史资料 / 已被取代（2026-10-02）**：本文保留 2026-05-22 时点的 CI/CD 治理记录，不再作为当前部署或 GitOps 实施待办。当前权威路线、生产拓扑和 P0/P1/P2 待办统一见 [Compose CD → Kubernetes GitOps 路线](./compose-cd-roadmap.md)。其中 GitOps / Argo CD 已明确调整为后续高可用阶段，不是当前 Compose CD 上线前置条件。
+>
+
 > **⚠️ 2026-05-23 状态更新**:`promote-staging.yml`(下方多次引用)已删除;`OPS_REPO_TOKEN` 这条 followup 不再适用。涉及 `staging-gate` / `capacity-gate` 的 followup 同样作废(workflow 也删了)。详见 [ci.md](./ci.md) 顶部。
 >
 > 日期:2026-05-22
