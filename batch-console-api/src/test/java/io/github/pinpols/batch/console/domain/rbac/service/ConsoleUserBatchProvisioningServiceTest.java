@@ -14,6 +14,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleUserAccountResponse;
 import io.github.pinpols.batch.console.domain.rbac.infrastructure.ConsoleUserBatchProvisioningStore;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
+import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserBatchOperationMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService.AccountRow;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService.RowIssue;
@@ -59,7 +60,12 @@ class ConsoleUserBatchProvisioningServiceTest {
         .thenAnswer(invocation -> stored.get(invocation.getArgument(0)));
     when(accountMapper.selectByUsername(anyString())).thenReturn(null);
     service = new ConsoleUserBatchProvisioningService(
-        accountService, accountMapper, tenantMapper, store, new ObjectMapper());
+        accountService,
+        accountMapper,
+        mock(ConsoleUserBatchOperationMapper.class),
+        tenantMapper,
+        store,
+        new ObjectMapper());
     asTenantAdmin("ta");
   }
 

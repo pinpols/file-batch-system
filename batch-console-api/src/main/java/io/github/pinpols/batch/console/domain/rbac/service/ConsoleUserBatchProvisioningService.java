@@ -6,9 +6,10 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleUserAccountResponse;
+import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserBatchOperationEntity;
 import io.github.pinpols.batch.console.domain.rbac.infrastructure.ConsoleUserBatchProvisioningStore;
-import io.github.pinpols.batch.console.domain.rbac.infrastructure.ConsoleUserBatchProvisioningStore.OperationRow;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
+import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserBatchOperationMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
@@ -63,6 +64,7 @@ public class ConsoleUserBatchProvisioningService {
 
   private final ConsoleUserAccountService accountService;
   private final ConsoleUserAccountMapper accountMapper;
+  private final ConsoleUserBatchOperationMapper operationMapper;
   private final TenantMapper tenantMapper;
   private final ConsoleUserBatchProvisioningStore store;
   private final ObjectMapper objectMapper;
@@ -174,7 +176,7 @@ public class ConsoleUserBatchProvisioningService {
       tenantIds.add(created.tenantId());
     }
     UUID operationId = UUID.randomUUID();
-    store.insertOperation(
+    operationMapper.insertOperation(
         operationId,
         requestId,
         session.actor(),
@@ -185,20 +187,26 @@ public class ConsoleUserBatchProvisioningService {
   }
 
   public Operation operation(UUID operationId) {
-    OperationRow found = store.findOperation(operationId, actor().username());
+    ConsoleUserBatchOperationEntity found =
+        operationMapper.selectByOperationId(operationId, actor().username());
     if (EmptyChecks.isNull(found))
       throw BizException.of(ResultCode.NOT_FOUND, "batch operation not found");
     return toOperation(found);
   }
 
   public Operation findByRequestId(UUID requestId) {
-    OperationRow found = store.findByRequestId(requestId, actor().username());
+    ConsoleUserBatchOperationEntity found =
+        operationMapper.selectByRequestId(requestId, actor().username());
     return EmptyChecks.isNull(found) ? null : toOperation(found);
   }
 
-  private static Operation toOperation(OperationRow row) {
+  private static Operation toOperation(ConsoleUserBatchOperationEntity row) {
     return new Operation(
-        row.operationId(), row.requestId(), row.accountCount(), row.tenantIds(), row.createdAt());
+        row.getOperationId(),
+        row.getRequestId(),
+        row.getAccountCount(),
+        row.getTenantIds(),
+        row.getCreatedAt().toString());
   }
 
   private Preview validate(String token, Session session) {
