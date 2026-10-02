@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleUserAccountResponse;
+import io.github.pinpols.batch.console.domain.rbac.infrastructure.ConsoleUserBatchProvisioningStore;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService.AccountRow;
@@ -29,9 +30,6 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -41,35 +39,27 @@ class ConsoleUserBatchProvisioningServiceTest {
   private ConsoleUserAccountService accountService;
   private ConsoleUserAccountMapper accountMapper;
   private TenantMapper tenantMapper;
-  private StringRedisTemplate redis;
-  private ValueOperations<String, String> values;
+  private ConsoleUserBatchProvisioningStore store;
   private ConsoleUserBatchProvisioningService service;
   private final Map<String, String> stored = new HashMap<>();
 
   @BeforeEach
-  @SuppressWarnings("unchecked")
   void setUp() {
     accountService = mock(ConsoleUserAccountService.class);
     accountMapper = mock(ConsoleUserAccountMapper.class);
     tenantMapper = mock(TenantMapper.class);
-    redis = mock(StringRedisTemplate.class);
-    values = mock(ValueOperations.class);
-    when(redis.opsForValue()).thenReturn(values);
+    store = mock(ConsoleUserBatchProvisioningStore.class);
     org.mockito.Mockito.doAnswer(invocation -> {
           stored.put(invocation.getArgument(0), invocation.getArgument(1));
           return null;
         })
-        .when(values)
-        .set(anyString(), anyString(), any(Duration.class));
-    when(values.get(anyString())).thenAnswer(invocation -> stored.get(invocation.getArgument(0)));
+        .when(store)
+        .savePreview(anyString(), anyString(), any(Duration.class));
+    when(store.loadPreview(anyString()))
+        .thenAnswer(invocation -> stored.get(invocation.getArgument(0)));
     when(accountMapper.selectByUsername(anyString())).thenReturn(null);
     service = new ConsoleUserBatchProvisioningService(
-        accountService,
-        accountMapper,
-        tenantMapper,
-        redis,
-        new ObjectMapper(),
-        mock(JdbcTemplate.class));
+        accountService, accountMapper, tenantMapper, store, new ObjectMapper());
     asTenantAdmin("ta");
   }
 

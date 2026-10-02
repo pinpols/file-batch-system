@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.persistence.BatchColumnNames;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleUserAccountResponse;
 import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
@@ -74,12 +75,12 @@ public class ConsoleUserAccountService {
       String password,
       String displayName,
       String authoritiesCsv) {
-    Guard.require(username != null && !username.isBlank(), "username is required");
+    Guard.require(Texts.hasText(username), "username is required");
     Guard.require(password != null && !password.isBlank(), "password is required");
     String effectiveTenantId = enforceTenantScope(tenantId);
     String normalizedAuthorities = normalizeAuthorities(authoritiesCsv);
     enforceGrantableAuthorities(normalizedAuthorities);
-    if (userAccountMapper.selectByUsername(username) != null) {
+    if (EmptyChecks.isNotNull(userAccountMapper.selectByUsername(username))) {
       throw BizException.of(ResultCode.CONFLICT, "error.username.already_exists", username);
     }
     userAccountMapper.insert(
@@ -95,11 +96,11 @@ public class ConsoleUserAccountService {
   /** 批量开户沿用单账号的租户与角色守卫，初始密码只存哈希并标记改密提醒。 */
   public ConsoleUserAccountResponse createProvisioned(
       String tenantId, String username, String password, String displayName, String role) {
-    Guard.require(username != null && !username.isBlank(), "username is required");
+    Guard.require(Texts.hasText(username), "username is required");
     String effectiveTenantId = enforceTenantScope(tenantId);
     String normalizedRole = normalizeAuthorities(role);
     enforceGrantableAuthorities(normalizedRole);
-    if (userAccountMapper.selectByUsername(username) != null) {
+    if (EmptyChecks.isNotNull(userAccountMapper.selectByUsername(username))) {
       throw BizException.of(ResultCode.CONFLICT, "error.username.already_exists", username);
     }
     userAccountMapper.insertProvisioned(

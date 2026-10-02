@@ -6,11 +6,14 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleUserAccountResponse;
+import io.github.pinpols.batch.console.domain.rbac.infrastructure.ConsoleUserBatchProvisioningStore;
+import io.github.pinpols.batch.console.domain.rbac.infrastructure.ConsoleUserBatchProvisioningStore.OperationRow;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.web.UploadFileGuard;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.security.MessageDigest;
@@ -38,8 +41,6 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xssf.usermodel.XSSFRelation;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -63,9 +64,8 @@ public class ConsoleUserBatchProvisioningService {
   private final ConsoleUserAccountService accountService;
   private final ConsoleUserAccountMapper accountMapper;
   private final TenantMapper tenantMapper;
-  private final StringRedisTemplate redis;
+  private final ConsoleUserBatchProvisioningStore store;
   private final ObjectMapper objectMapper;
-  private final JdbcTemplate jdbc;
 
   public record AccountRow(
       int rowNo, String tenantId, String username, String displayName, String role) {}
@@ -116,7 +116,7 @@ public class ConsoleUserBatchProvisioningService {
     UploadFileGuard.requireExcel(file);
     String filename = file.getOriginalFilename();
     if (file.getSize() > MAX_BYTES
-        || filename == null
+        || filename == null // empty-check: allow - Sonar 需要直接识别解引用前的空值保护。
         || !filename.toLowerCase(Locale.ROOT).endsWith(".xlsx")) {
       throw invalid("XLSX file exceeds 2 MiB or has an unsupported extension");
     }
@@ -174,10 +174,7 @@ public class ConsoleUserBatchProvisioningService {
       tenantIds.add(created.tenantId());
     }
     UUID operationId = UUID.randomUUID();
-    jdbc.update(
-        "insert into batch.console_user_batch_operation "
-            + "(operation_id, request_id, actor_username, source_digest, account_count, tenant_ids) "
-            + "values (?, ?, ?, ?, ?, ?)",
+    store.insertOperation(
         operationId,
         requestId,
         session.actor(),
@@ -188,35 +185,20 @@ public class ConsoleUserBatchProvisioningService {
   }
 
   public Operation operation(UUID operationId) {
-    List<Operation> found = jdbc.query(
-        "select operation_id, request_id, account_count, tenant_ids, created_at "
-            + "from batch.console_user_batch_operation where operation_id = ? and actor_username = ?",
-        (rs, index) -> new Operation(
-            rs.getObject("operation_id", UUID.class),
-            rs.getObject("request_id", UUID.class),
-            rs.getInt("account_count"),
-            rs.getString("tenant_ids"),
-            rs.getTimestamp("created_at").toInstant().toString()),
-        operationId,
-        actor().username());
-    if (EmptyChecks.isEmpty(found))
+    OperationRow found = store.findOperation(operationId, actor().username());
+    if (EmptyChecks.isNull(found))
       throw BizException.of(ResultCode.NOT_FOUND, "batch operation not found");
-    return found.get(0);
+    return toOperation(found);
   }
 
   public Operation findByRequestId(UUID requestId) {
-    List<Operation> found = jdbc.query(
-        "select operation_id, request_id, account_count, tenant_ids, created_at "
-            + "from batch.console_user_batch_operation where request_id = ? and actor_username = ?",
-        (rs, index) -> new Operation(
-            rs.getObject("operation_id", UUID.class),
-            rs.getObject("request_id", UUID.class),
-            rs.getInt("account_count"),
-            rs.getString("tenant_ids"),
-            rs.getTimestamp("created_at").toInstant().toString()),
-        requestId,
-        actor().username());
-    return EmptyChecks.isEmpty(found) ? null : found.get(0);
+    OperationRow found = store.findByRequestId(requestId, actor().username());
+    return EmptyChecks.isNull(found) ? null : toOperation(found);
+  }
+
+  private static Operation toOperation(OperationRow row) {
+    return new Operation(
+        row.operationId(), row.requestId(), row.accountCount(), row.tenantIds(), row.createdAt());
   }
 
   private Preview validate(String token, Session session) {
@@ -277,7 +259,7 @@ public class ConsoleUserBatchProvisioningService {
   }
 
   private List<AccountRow> parse(byte[] bytes) {
-    try (Workbook workbook = WorkbookFactory.create(new java.io.ByteArrayInputStream(bytes))) {
+    try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
       if (!(workbook instanceof XSSFWorkbook xssf)
           || xssf.getPackagePart()
               .getRelationshipsByType(XSSFRelation.EXTERNAL_LINKS.getRelation())
@@ -341,16 +323,14 @@ public class ConsoleUserBatchProvisioningService {
 
   private void save(String token, Session session) {
     try {
-      redis
-          .opsForValue()
-          .set(PREFIX + token, objectMapper.writeValueAsString(session), PREVIEW_TTL);
+      store.savePreview(PREFIX + token, objectMapper.writeValueAsString(session), PREVIEW_TTL);
     } catch (JsonProcessingException ex) {
       throw new IllegalStateException("Failed to serialize batch preview", ex);
     }
   }
 
   private Session load(String token) {
-    String json = redis.opsForValue().get(PREFIX + token);
+    String json = store.loadPreview(PREFIX + token);
     if (EmptyChecks.isNull(json)) throw BizException.of(ResultCode.NOT_FOUND, "Preview expired");
     try {
       Session session = objectMapper.readValue(json, Session.class);
@@ -365,7 +345,8 @@ public class ConsoleUserBatchProvisioningService {
 
   private ConsolePrincipal actor() {
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-    if (auth == null || !(auth.getPrincipal() instanceof ConsolePrincipal principal)) {
+    if (auth == null // empty-check: allow - Sonar 需要直接识别认证对象的空值保护。
+        || !(auth.getPrincipal() instanceof ConsolePrincipal principal)) {
       throw BizException.of(ResultCode.UNAUTHORIZED, "Authentication required");
     }
     return principal;
