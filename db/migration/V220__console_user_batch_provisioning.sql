@@ -13,5 +13,7 @@ CREATE TABLE batch.console_user_batch_operation (
     CONSTRAINT uk_console_user_batch_actor_request UNIQUE (actor_username, request_id)
 );
 
+COMMENT ON TABLE batch.console_user_batch_operation IS '控制台批量开户操作记录；不保存初始密码明文';
+
 CREATE INDEX idx_console_user_batch_actor_created
     ON batch.console_user_batch_operation (actor_username, created_at DESC);
