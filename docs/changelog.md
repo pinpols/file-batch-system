@@ -1,7 +1,7 @@
 # 变更记录（规范与架构权威条款变化）
 
 ### 2026-10-02
-- **生产部署目标架构收敛**：Compose CD 路线补充当前两节点生产基线、硬件起步规格、Kubernetes + GitOps + 数据平面 HA 最终拓扑、统一 Release Manifest 发布图与演进触发条件；总待办改为引用部署领域权威清单，避免重复状态源。
+- **生产部署目标架构收敛**：Compose CD 路线补充当前两节点生产基线、硬件起步规格、Kubernetes + GitOps + 数据平面 HA 最终拓扑、统一 Release Manifest 发布图与演进触发条件；总待办改为引用部署领域权威清单，避免重复状态源；2026-05-22 CI/CD follow-up 明确降级为历史资料，GitOps backlog 改指当前 roadmap。
 - **Windows 专用脚本清理**：移除根目录 `mvnw.cmd`，保留 Linux/WSL2 的 `./mvnw` 作为 Maven Wrapper 入口；项目结构同步移除已不存在的 PowerShell/Windows 脚本目录声明。
 
 
