@@ -407,7 +407,24 @@ DB (job_task: READY)
 
 ## 贡献指南
 
-1. 遵守 `AGENTS.md` 中的工程基线约束
-2. 新功能必须附带对应的集成测试
-3. 修改持久层时只维护 Flyway 迁移（`db/migration/`）；`platform-init.sql` 仅含与 V1 等价的 schema，勿再复制表 DDL
-4. 不得引入 JPA/Hibernate 依赖
+仓库同时包含调度控制面、五类 Worker、数据库迁移、五语言 SDK、部署和运维资产。开始修改前，先按变更类型确认系统边界和需要同步的契约：
+
+| 改动类型 | 主要位置 | 必须同步核对 |
+|---|---|---|
+| Console API 与管理能力 | `batch-console-api`、`docs/api/` | OpenAPI、权限、租户隔离、错误码，以及配对前端生成类型和调用方 |
+| 调度、状态机与补偿 | `batch-trigger`、`batch-orchestrator` | 事务、Outbox、CAS、幂等、重试、业务日和故障恢复 |
+| Worker 执行链路 | `batch-worker/*` | claim/report、lease、取消、checkpoint、资源隔离与失败恢复 |
+| 数据库与持久层 | `db/migration`、Mapper XML | 只新增 Flyway 迁移；核对锁、约束、RLS、分区、归档和回滚风险 |
+| 五语言 SDK | `sdk/`、共享 fixture | wire contract、常量、生命周期和 Java/Python/Go/TypeScript/Rust 一致性 |
+| 部署与运维 | `deploy/`、`helm/`、Compose、`scripts/` | 配置事实源、Secret、环境变量、生产 overlay、runbook 和失败退出码 |
+| 文档与发布 | `README*`、`docs/`、`CHANGELOG.md` | 更新权威文档、目录索引及用户、部署、契约或安全变更记录 |
+
+推荐流程：
+
+1. 从最新 `main` 创建短生命周期的 `feature/*` 或 `fix/*` 分支，保持一个 PR 只有一个清晰意图。
+2. 修改前阅读 [AGENTS.md](AGENTS.md)、[工程基线](docs/agent-baseline.md)和受影响模块 README；不要跨模块复制逻辑规避边界。
+3. 按风险补充单元、集成或端到端验证；多模块 Maven 命令使用 `-am`，真实服务、sim 和性能验证必须与静态门禁分开说明。
+4. 提交前运行 `bash scripts/local/pre-commit-checks.sh`；PR 级检查可运行 `make ci-pr`，更大范围回归运行 `make ci`。
+5. PR 描述列出行为、契约、权限、租户、数据库、配置、部署和回滚影响，并明确已运行、跳过和未运行的验证。
+
+完整开发、验证和 Pull Request 规则见 [CONTRIBUTING.md](CONTRIBUTING.md)。安全问题请按 [SECURITY.md](SECURITY.md) 私下报告，不要在公开 Issue 或 PR 中披露凭据、真实租户数据或可利用漏洞。

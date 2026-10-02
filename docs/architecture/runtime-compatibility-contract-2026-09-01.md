@@ -11,6 +11,7 @@
 | 后端 JDK | Java 21 | 根 `pom.xml`、Docker、CI | `maven.compiler.release=21`，不支持 JDK 17 或更低版本 |
 | 后端框架 | Spring Boot 4.1.1 | 根 `pom.xml` | 依赖版本由 BOM 和集中属性管理 |
 | Maven | Maven Wrapper / Maven 3.x | `.mvn`、CI | 本地优先使用 `./mvnw`，避免宿主机 Maven 漂移 |
+| 仓库 Node.js 工具 | Node 24.x | `.node-version`、`.nvmrc`、CI | 两个本地版本选择入口必须一致；TypeScript SDK 的兼容矩阵单独覆盖 Node 22 和 24 |
 | 前端 Node.js | Node 24.x | `../batch-console/package.json`、`.nvmrc`、`.node-version`、Dockerfile、配对仓库 CI | `engines.node` 为 `^24`；本地、CI 和完整固定版本 Docker 镜像统一使用 Node 24 |
 | 前端包管理 | npm lockfile | `../batch-console/package-lock.json` | CI 使用 `npm ci`，禁止混用 yarn/pnpm lockfile |
 | Python SDK | Python 3.12+ | `sdk/python/pyproject.toml`、`uv.lock`、CI | CI 覆盖最低版本 3.12 和当前稳定版 3.14；async-only |
@@ -62,7 +63,7 @@
 版本变更必须同时检查：
 
 1. 根 `pom.xml`、所有 Dockerfile 和 Compose tag。
-2. `../batch-console/package.json`、`.nvmrc`、`.node-version`、前端 Dockerfile；SDK 的 Node 声明和矩阵由运行时对齐门禁核对。
+2. 根 `.node-version` 与 `.nvmrc`、`../batch-console/package.json`、前端版本选择文件和 Dockerfile；SDK 的 Node 声明和矩阵由运行时对齐门禁核对。
 3. 五语言 SDK 的 manifest、README 和对应 CI workflow。
 4. 连接地址环境变量、宿主机/容器模式和脚本公共入口。
 5. 运行时镜像、Testcontainers 镜像与本地 Compose 的主版本。

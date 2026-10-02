@@ -42,6 +42,7 @@
 
 ### Fixed
 
+- 修复根目录 `.node-version` 与 `.nvmrc` 分别选择 Node 24/22 的漂移，运行时对齐门禁现同时校验后端仓库和配对前端的 Node 24 本地入口；移除已被现有 Java 质量门禁替代但意外回流的 `qodana.yaml`，仓库卫生检查阻止该废弃配置再次提交，并正确跳过工作区中尚未暂存的删除项。
 - 修复每日 Sim 的 Trigger stage 6c/6d 夹具依赖默认业务日历节假日数据，导致 Quartz 正常触发但 scheduled request 被业务日历跳过的问题；为定时触发断言增加无节假日专用日历。
 - Kafka 启动时重复输出的 ConsumerConfig/ProducerConfig 完整配置块默认抑制；Worker 启动审计 INFO/WARN 仅保留状态与摘要，完整细节仅在 DEBUG 输出。
 - 修复线上 sim-strict 启动时 `minio/mc` 镜像仓库拒绝拉取的问题：CLI 容器改用已验证内置 `mc` 的固定 Bitnami Legacy 镜像；失败诊断在没有应用日志时不再额外报错。
