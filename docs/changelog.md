@@ -1,5 +1,9 @@
 # 变更记录（规范与架构权威条款变化）
 
+### 2026-10-02
+- **Windows 专用脚本清理**：移除根目录 `mvnw.cmd`，保留 Linux/WSL2 的 `./mvnw` 作为 Maven Wrapper 入口；项目结构同步移除已不存在的 PowerShell/Windows 脚本目录声明。
+
+
 > 本文件只记录 **docs/agent-baseline.md 编码规范条款及其对应架构权威约束** 的变化（命名约定、版本策略、领域字典、模块边界、架构硬约束、ADR 状态等文档自身内容变动）。
 >
 > Feature 完成、bug 修复、运维操作、临时数据动作等项目演进信息**不要**写到这里——那些以 git commit + PR 描述 + 对应模块文档（`docs/architecture/*.md`、`docs/runbook/*.md`、`docs/analysis/*.md`）为权威记录。
