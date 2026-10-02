@@ -11,6 +11,7 @@
 | `full-ci-gate` | main 全量门禁 | push main、每周日 02:00 UTC、手动 | 主干质量基线 + 安全扫描(含 K8s manifest Checkov) | 75 min |
 | `staging-gate` | 补充 E2E 验证 | nightly(每天 18:00 UTC / 北京 02:00)+ workflow_dispatch | 全量 E2E(smoke + critical + regression 全跑,4 shard 并发)，不替代 `full-ci-gate` | — |
 | `daily-sim-strict-validation` | 补充真实数据验证 | nightly(每天 13:31 UTC / 北京 21:31)+ workflow_dispatch | 定时触发按最近一次计划时间对应的北京时间日期检查代码/配置变更，延迟跨午夜仍归属原计划日；手动触发按当前北京时间日期。Markdown/RST、`LICENSE`、`NOTICE` 除外。需要验证时同环境先执行 `sim-harness all`，再执行 BE-ACC step 5(strict real-data verification)；strict step 使用 `always()` 采证，不因 sim 失败被短路 | 240 min |
+| `docker-image-build` | nightly 镜像构建 | 由 `daily-sim-strict-validation` 在当天有代码/配置变更且 sim + strict 成功后调用；也支持手动和复用调用 | Docker Bake 构建全部应用镜像；CI 使用 Maven Central 配置并带依赖下载重试；不推送镜像 | 30 min |
 | `main-failure-triage` | 失败处理自动化 | main 的 `full-ci-gate` 核心 job 失败 | 自动标记关联 PR 并评论处理要求；无关联 PR 时创建 issue | — |
 
 > **2026-05-23 删除 `capacity-gate` / `promote-staging`**:`capacity-gate` 目标是 `*.svc.cluster.local`(k8s 集群内 DNS),GitHub-hosted runner 永远连不上 → 100% Connection refused;`promote-staging` 要写 `pinpols/file-batch-system-ops` 但仓 / PAT 都没在用,等同 dead code。Checkov K8s manifest 静态扫已迁到 `full-ci-gate`。若未来要恢复真·生产环境验证 / 容量回归 / ops 仓同步,改用 self-hosted runner 部署到集群内,或 staging 暴露公网 ingress + 配 PAT。
@@ -485,6 +486,8 @@ CI gate 阻断要满足「确定性 fail」前提;flaky 用例第一次 fail 是
     sdk-contract-parity.yml  # 五语言 SDK 契约门禁
     full-ci-gate.yml         # 主干质量门禁(含安全扫 + Checkov)
     staging-gate.yml         # nightly / 手动 全量 E2E 回退闸门
+    daily-sim-strict-validation.yml # nightly sim + strict，成功后调用镜像构建
+    docker-image-build.yml   # 手动 / reusable 镜像构建
     label-automerge.yml      # automerge 标签自动归并
   actions/
     setup-build-env/         # 共享 setup：JDK、Maven cache、OpenAPI 校验

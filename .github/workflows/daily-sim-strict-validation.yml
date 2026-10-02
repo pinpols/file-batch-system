@@ -148,3 +148,13 @@ jobs:
             down -v --remove-orphans || true
           bash scripts/local/clean-stale-test-env.sh || true
           docker network rm batch-platform_batch-network >/dev/null 2>&1 || true
+
+  # 当天有代码/配置变更时，镜像构建必须排在完整 sim + strict 之后；
+  # 无变更时两个任务都跳过，避免 nightly 产生无意义的构建。
+  nightly-image-build:
+    name: Nightly image build after sim-strict
+    needs:
+      - detect-changes
+      - sim-and-strict
+    if: needs.detect-changes.outputs.should_run == 'true' && needs.sim-and-strict.result == 'success'
+    uses: ./.github/workflows/docker-image-build.yml
