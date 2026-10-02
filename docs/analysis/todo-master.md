@@ -1,5 +1,10 @@
 # TODO Master · 当前待办唯一索引
 
+
+## 部署与持续交付
+
+Compose CD、生产拓扑、硬件起步规格和 Kubernetes/GitOps 最终目标的权威待办统一维护在 [Compose CD → Kubernetes GitOps 路线](../runbook/compose-cd-roadmap.md#8-待办)。本总表只保留领域入口，避免复制 P0/P1/P2 checkbox 后产生状态漂移。
+
 > 核查日期：2026-10-01。本文只登记当前仍有效的事项；`docs/archive/` 的历史待办不计入本表。
 > 状态分类、证据要求和归档规则见 [`../standards/document-governance.md`](../standards/document-governance.md)。
 
