@@ -12,7 +12,7 @@
 | 配置治理 | STATIC / DYNAMIC_DB / SECRET / RESTART_REQUIRED、checksum 滚动、禁止 `@RefreshScope` 已有约束 | [`../runbook/config-governance.md`](../runbook/config-governance.md) |
 | 事件驱动到达 | Import event-arrival v1 已实现，默认关闭，轮询兜底仍保留 | [`../runbook/event-driven-arrival.md`](../runbook/event-driven-arrival.md) |
 | 增量 / CDC | FULL / INCREMENTAL 已有水位回路；CDC 仍是占位，不是已实现流式平台 | [`../architecture/system-flow-overview.md`](../architecture/system-flow-overview.md) §7.8 |
-| GitOps | 有 workflow / Helm / runbook 骨架，尚未接 ops repo 与真实 Argo CD 环境 | [`../runbook/ci-cd-followup-2026-05-22.md`](../runbook/ci-cd-followup-2026-05-22.md) |
+| GitOps | 有 workflow / Helm / runbook 骨架，尚未接 ops repo 与真实 Argo CD 环境 | [`../runbook/compose-cd-roadmap.md`](../runbook/compose-cd-roadmap.md) |
 | AI Ops | Console AI 助手已有计划与边界，默认关闭；只读诊断 / 草稿建议，不接主链 | [`../plans/ai-integration-plan-2026-07.md`](../plans/ai-integration-plan-2026-07.md) |
 
 ## 2. P0：上线前必须收口
