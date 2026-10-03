@@ -9,7 +9,7 @@
 | 超时预算 | PG session、调度、依赖 readiness、Worker 执行和优雅停机已有配置与 Runbook；统一清单防止遗漏 | 目标环境需按实际 SLA 校准，不把所有超时强行改成一个值 |
 | 运行时兼容 | Java/Python/Go/TS/Rust、Docker/非 Docker、IPv4/IPv6、`psql` fallback 已有矩阵和脚本门禁 | 外部服务双栈、宿主机工具版本仍需部署环境复验 |
 | 故障注入 | Kafka Outbox、PG/Redis/ShedLock、Worker lease、下游超时已有 IT、sim 和演练入口 | 真正的 PG failover、Kafka broker 故障和整组 Worker 演练必须在 staging 执行 |
-| 告警与 Runbook | Prometheus 规则、Trace/MDC 字段、SLO、故障剧本和恢复动作集中索引 | 告警接收端、静默/升级策略需由目标监控环境确认 |
+| 告警与 Runbook | Prometheus 规则、Trace/MDC 字段、[`SLO / SLI 目录`](../runbook/slo-sli-catalog.md)、故障剧本和恢复动作集中索引 | 告警接收端、静默/升级策略需由目标监控环境确认 |
 | 供应链 | CodeQL、Trivy、license review、SDK SBOM/provenance 入口已纳入发布流程 | 生产镜像签名、SLSA attestation 和制品仓库策略依赖发布环境，不在开发机伪造 |
 
 ## 统一约束

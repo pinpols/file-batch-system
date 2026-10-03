@@ -1,5 +1,14 @@
 # 变更记录（规范与架构权威条款变化）
 
+### 2026-10-03
+- **工程化借鉴清单固化**：工程成熟度路线图补充后端契约链、数据库巡检、可观测性定位字段、批处理 SLO、防误操作、主干保护、本地重建和 PR 变更影响清单，作为后续治理 PR 的长期判断口径。
+- **SLO / SLI 目录治理门禁**：新增 `check-slo-sli-catalog.py`，在文档变更时校验 SLO / SLI 目录、Runbook 入口、应用治理文档、工程成熟度路线和 Prometheus/Helm 告警规则入口，避免核心业务指标口径漂移。
+- **SLO / SLI 目录入口**：新增批量调度平台 SLO / SLI 目录，将调度准点率、批次日完成率、运行积压、Outbox、Kafka lag、文件到达、重试恢复、Worker 心跳、readiness 和数据库迁移一致性映射到信号源、告警和 Runbook。
+- **工程成熟度路线图入口**：新增当前工程成熟度路线图，将 Java 服务边界、API 契约、数据库治理、批处理可靠性、CI/发布、运维灾备和配对前端协作收敛为长期治理入口；历史成熟度评估和历史 P0/P1/P2 方案继续保留为背景证据。
+- **数据库结构治理资产门禁**：新增 `check-schema-governance-assets.py`，在脚本或文档变更时校验 schema governance 巡检脚本、只读 SQL 文件、设计文档和 SQL 使用场景说明同步，避免数据库治理入口漂移。
+- **数据库结构治理入口**：新增表、索引、分区和归档治理文档，补充只读 schema governance 检查入口；明确本地低使用索引只能作为候选证据，DROP 必须结合 staging/生产统计、查询计划和回滚窗口。
+- **SQL 资产治理口径**：补充运维、巡检和治理 SQL 的目录边界与门禁清单；Shell 新增 SQL 必须抽到独立 SQL 文件，避免绕过 SQL/config boundary 守护。
+
 ### 2026-10-02
 - **生产部署目标架构收敛**：Compose CD 路线补充当前两节点生产基线、硬件起步规格、Kubernetes + GitOps + 数据平面 HA 最终拓扑、统一 Release Manifest 发布图与演进触发条件；总待办改为引用部署领域权威清单，避免重复状态源；2026-05-22 CI/CD follow-up 明确降级为历史资料，GitOps backlog 改指当前 roadmap。
 - **Windows 专用脚本清理**：移除根目录 `mvnw.cmd`，保留 Linux/WSL2 的 `./mvnw` 作为 Maven Wrapper 入口；项目结构同步移除已不存在的 PowerShell/Windows 脚本目录声明。

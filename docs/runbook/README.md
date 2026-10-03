@@ -58,6 +58,7 @@
 | # | 文件 | 作用 |
 |---|---|---|
 | 18 | [observability-stack.md](./observability-stack.md) | 一站式观测部署 + 排障 SOP（Prometheus / Loki / Tempo / OTel）|
+| 18a | [slo-sli-catalog.md](./slo-sli-catalog.md) | 批量调度 SLO / SLI 目录：调度、批次日、Outbox、Kafka、文件到达、重试和 Worker 心跳 |
 | 19 | [quartz-capacity-baseline.md](./quartz-capacity-baseline.md) | Quartz 容量基线压测（识别容量拐点）|
 | 20 | [worker-stage-coverage.md](./worker-stage-coverage.md) | 三类 Worker 全 Stage 真实覆盖端到端验证 |
 | 21 | [security-scan.md](./security-scan.md) | 本地安全扫描 SOP（trivy / dependency-check）|
@@ -81,7 +82,7 @@
 | Worker 与恢复 | [重任务容量与资源池](./heavy-workload-operations.md)、[Atomic 隔离](./atomic-worker-production-isolation.md)、[Worker 扩缩容边界](./k8s-worker-scaling-boundary.md)、[checkpoint](./platform-worker-checkpoint-howto.md)、[Dispatch 模板](./dispatch-adapter-template.md) |
 | 文件与对象存储 | [Filesystem](./object-storage-filesystem.md)、[S3 后端](./object-storage-s3-backends.md)、[控制总数对账](./control-total-reconciliation-howto.md) |
 | 安全与权限 | [密码安全](./password-security-backlog.md)、[角色治理](./role-redesign-config-admin-audit.md)、[租户 Worker 接入](./per-tenant-worker-onboarding.md) |
-| 观测与韧性 | [分布式追踪](./distributed-tracing.md)、[锁检查](./distributed-locking-checklist.md)、[维护模式](./maintenance-mode.md)、[降级](./downstream-degradation.md)、[告警升级](./alert-escalation.md)、[OpenLineage](./openlineage-lineage.md)、[本地日志](./local-log-layout.md) |
+| 观测与韧性 | [SLO / SLI 目录](./slo-sli-catalog.md)、[分布式追踪](./distributed-tracing.md)、[锁检查](./distributed-locking-checklist.md)、[维护模式](./maintenance-mode.md)、[降级](./downstream-degradation.md)、[告警升级](./alert-escalation.md)、[OpenLineage](./openlineage-lineage.md)、[本地日志](./local-log-layout.md) |
 | 测试与 CI | [BE 验收](./be-acceptance.md)、[E2E 分层](./e2e-tier-strategy.md)、[种子校验](./seed-validation.md)、[CI 加速](./ci-speedup-2026-06-02.md)、[取证回放](./forensic-replay-howto.md) |
 | SDK 发布 | [双轨灰度](./sdk-dual-rollout.md)、[SDK 发布](./sdk-release.md)、[Python 发布](./sdk-python-release.md) |
 | 故障剧本 | [Playbooks 索引](./playbooks/README.md) |
