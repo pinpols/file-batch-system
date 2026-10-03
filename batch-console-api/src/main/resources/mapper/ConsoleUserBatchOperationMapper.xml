@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserBatchOperationMapper">
+
+    <resultMap id="operationMap" type="io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserBatchOperationEntity">
+        <id column="operation_id" property="operationId"
+            typeHandler="io.github.pinpols.batch.console.config.PostgresUuidTypeHandler"/>
+        <result column="request_id" property="requestId"
+                typeHandler="io.github.pinpols.batch.console.config.PostgresUuidTypeHandler"/>
+        <result column="account_count" property="accountCount"/>
+        <result column="tenant_ids" property="tenantIds"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <insert id="insertOperation">
+        insert into batch.console_user_batch_operation
+            (operation_id, request_id, actor_username, source_digest, account_count, tenant_ids)
+        values (#{operationId,typeHandler=io.github.pinpols.batch.console.config.PostgresUuidTypeHandler},
+                #{requestId,typeHandler=io.github.pinpols.batch.console.config.PostgresUuidTypeHandler},
+                #{actor}, #{sourceDigest}, #{accountCount}, #{tenantIds})
+    </insert>
+
+    <select id="selectByOperationId" resultMap="operationMap">
+        select operation_id, request_id, account_count, tenant_ids, created_at
+          from batch.console_user_batch_operation
+         where operation_id = #{operationId,typeHandler=io.github.pinpols.batch.console.config.PostgresUuidTypeHandler}
+           and actor_username = #{actor}
+    </select>
+
+    <select id="selectByRequestId" resultMap="operationMap">
+        select operation_id, request_id, account_count, tenant_ids, created_at
+          from batch.console_user_batch_operation
+         where request_id = #{requestId,typeHandler=io.github.pinpols.batch.console.config.PostgresUuidTypeHandler}
+           and actor_username = #{actor}
+    </select>
+</mapper>

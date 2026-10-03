@@ -9048,6 +9048,145 @@ paths:
               schema:
                 $ref: '#/components/schemas/CommonResponseObject'
 
+  /api/console/users/batch/template:
+    get:
+      tags: [Users]
+      operationId: downloadUserBatchTemplate
+      summary: Download XLSX account batch template
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Accounts workbook with tenantId, username, displayName, role columns
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+  /api/console/users/batch/preview:
+    post:
+      tags: [Users]
+      operationId: previewUserBatch
+      summary: Validate up to 500 accounts without writing them
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '200':
+          description: Preview with row-level issues and 15-minute token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserBatchPreviewEnvelope'
+  /api/console/users/batch/preview/{token}/patch:
+    post:
+      tags: [Users]
+      operationId: patchUserBatchPreview
+      summary: Correct one row and revalidate the preview
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version, row]
+              properties:
+                version: { type: integer }
+                row: { $ref: '#/components/schemas/UserBatchAccountRow' }
+      responses:
+        '200':
+          description: Revalidated preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserBatchPreviewEnvelope'
+  /api/console/users/batch/apply/{token}:
+    post:
+      tags: [Users]
+      operationId: applyUserBatch
+      summary: Atomically create all previewed accounts
+      description: Initial passwords appear only in this success response. Lost responses require password reset.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version, requestId]
+              properties:
+                version: { type: integer }
+                requestId: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Created accounts and one-time credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserBatchApplyEnvelope'
+  /api/console/users/batch/operations:
+    get:
+      tags: [Users]
+      operationId: findUserBatchOperation
+      summary: Recover non-sensitive operation status by requestId
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: requestId
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Own operation or null if not committed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserBatchOperationEnvelope'
+  /api/console/users/batch/operations/{operationId}:
+    get:
+      tags: [Users]
+      operationId: getUserBatchOperation
+      summary: Get own non-sensitive batch result
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: operationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Operation summary without credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserBatchOperationEnvelope'
   /api/console/users/{id}:
     get:
       tags: [Users]
@@ -10359,6 +10498,87 @@ components:
       schema:
         type: string
   schemas:
+    UserBatchAccountRow:
+      type: object
+      required: [rowNo, tenantId, username, displayName, role]
+      properties:
+        rowNo: { type: integer }
+        tenantId: { type: string }
+        username: { type: string }
+        displayName: { type: string }
+        role: { type: string, enum: [ROLE_ADMIN, ROLE_AUDITOR, ROLE_TENANT_ADMIN, ROLE_TENANT_USER] }
+    UserBatchRowIssue:
+      type: object
+      required: [rowNo, username, errorCode, message]
+      properties:
+        rowNo: { type: integer }
+        username: { type: string }
+        errorCode: { type: string }
+        message: { type: string }
+    UserBatchPreview:
+      type: object
+      required: [previewToken, version, sourceDigest, totalRows, validRows, rows, issues]
+      properties:
+        previewToken: { type: string }
+        version: { type: integer }
+        sourceDigest: { type: string }
+        totalRows: { type: integer }
+        validRows: { type: integer }
+        rows:
+          type: array
+          items: { $ref: '#/components/schemas/UserBatchAccountRow' }
+        issues:
+          type: array
+          items: { $ref: '#/components/schemas/UserBatchRowIssue' }
+    UserBatchCredential:
+      type: object
+      required: [accountId, tenantId, username, initialPassword]
+      properties:
+        accountId: { type: integer, format: int64 }
+        tenantId: { type: string }
+        username: { type: string }
+        initialPassword:
+          type: string
+          description: One-time sensitive value. Never persisted or returned by operation lookup.
+    UserBatchApplyResult:
+      type: object
+      required: [operationId, accountCount, credentials]
+      properties:
+        operationId: { type: string, format: uuid }
+        accountCount: { type: integer }
+        credentials:
+          type: array
+          items: { $ref: '#/components/schemas/UserBatchCredential' }
+    UserBatchOperation:
+      type: object
+      required: [operationId, requestId, accountCount, tenantIds, createdAt]
+      properties:
+        operationId: { type: string, format: uuid }
+        requestId: { type: string, format: uuid }
+        accountCount: { type: integer }
+        tenantIds: { type: string }
+        createdAt: { type: string, format: date-time }
+    UserBatchPreviewEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/UserBatchPreview' }
+    UserBatchApplyEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/UserBatchApplyResult' }
+    UserBatchOperationEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              nullable: true
+              allOf:
+                - $ref: '#/components/schemas/UserBatchOperation'
     WorkerFingerprintResponse:
       type: object
       description: |

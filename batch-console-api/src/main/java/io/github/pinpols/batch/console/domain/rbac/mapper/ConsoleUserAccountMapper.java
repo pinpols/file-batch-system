@@ -38,6 +38,13 @@ public interface ConsoleUserAccountMapper {
       @Param("authoritiesCsv") String authoritiesCsv,
       @Param("createdBy") String createdBy);
 
+  int insertProvisioned(
+      @Param("tenantId") String tenantId,
+      @Param("username") String username,
+      @Param("displayName") String displayName,
+      @Param("passwordHash") String passwordHash,
+      @Param("authoritiesCsv") String authoritiesCsv);
+
   int updateProfile(
       @Param("id") long id,
       @Param("displayName") String displayName,

@@ -92,6 +92,15 @@
             (#{tenantId}, #{username}, #{displayName}, #{passwordHash}, #{authoritiesCsv}, true)
     </insert>
 
+    <insert id="insertProvisioned">
+        insert into batch.console_user_account
+            (tenant_id, username, display_name, password_hash, authorities_csv, enabled,
+             must_change_password)
+        values
+            (#{tenantId}, #{username}, #{displayName}, #{passwordHash}, #{authoritiesCsv}, true,
+             true)
+    </insert>
+
     <update id="updateProfile">
         update batch.console_user_account
         set display_name    = #{displayName},

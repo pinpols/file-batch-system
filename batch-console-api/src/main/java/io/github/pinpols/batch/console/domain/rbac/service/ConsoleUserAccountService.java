@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.persistence.BatchColumnNames;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleUserAccountResponse;
 import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
@@ -30,6 +31,7 @@ public class ConsoleUserAccountService {
 
   private static final String COL_TENANT_ID = BatchColumnNames.TENANT_ID;
   private static final String COL_USERNAME = BatchColumnNames.USERNAME;
+  private static final String USERNAME_REQUIRED = "username is required";
 
   /**
    * TENANT_ADMIN 仅可授予的角色集合。授予 ADMIN / AUDITOR / 任何未列出的角色 一律 {@link ResultCode#FORBIDDEN};升 ADMIN
@@ -74,12 +76,12 @@ public class ConsoleUserAccountService {
       String password,
       String displayName,
       String authoritiesCsv) {
-    Guard.require(username != null && !username.isBlank(), "username is required");
+    Guard.require(Texts.hasText(username), USERNAME_REQUIRED);
     Guard.require(password != null && !password.isBlank(), "password is required");
     String effectiveTenantId = enforceTenantScope(tenantId);
     String normalizedAuthorities = normalizeAuthorities(authoritiesCsv);
     enforceGrantableAuthorities(normalizedAuthorities);
-    if (userAccountMapper.selectByUsername(username) != null) {
+    if (EmptyChecks.isNotNull(userAccountMapper.selectByUsername(username))) {
       throw BizException.of(ResultCode.CONFLICT, "error.username.already_exists", username);
     }
     userAccountMapper.insert(
@@ -89,6 +91,21 @@ public class ConsoleUserAccountService {
         passwordHasher.encode(password),
         normalizedAuthorities,
         null);
+    return toResponse(userAccountMapper.selectByUsername(username));
+  }
+
+  /** 批量开户沿用单账号的租户与角色守卫，初始密码只存哈希并标记改密提醒。 */
+  public ConsoleUserAccountResponse createProvisioned(
+      String tenantId, String username, String password, String displayName, String role) {
+    Guard.require(Texts.hasText(username), USERNAME_REQUIRED);
+    String effectiveTenantId = enforceTenantScope(tenantId);
+    String normalizedRole = normalizeAuthorities(role);
+    enforceGrantableAuthorities(normalizedRole);
+    if (EmptyChecks.isNotNull(userAccountMapper.selectByUsername(username))) {
+      throw BizException.of(ResultCode.CONFLICT, "error.username.already_exists", username);
+    }
+    userAccountMapper.insertProvisioned(
+        effectiveTenantId, username, displayName, passwordHasher.encode(password), normalizedRole);
     return toResponse(userAccountMapper.selectByUsername(username));
   }
 
@@ -116,7 +133,7 @@ public class ConsoleUserAccountService {
    * —— 防止越权改他人密码。旧密码错误 / 新旧相同一律拒绝。
    */
   public void changeOwnPassword(String username, String currentPassword, String newPassword) {
-    Guard.requireText(username, "username is required");
+    Guard.requireText(username, USERNAME_REQUIRED);
     Guard.require(
         currentPassword != null && !currentPassword.isBlank(), "current password is required");
     Guard.require(newPassword != null && !newPassword.isBlank(), "new password is required");
