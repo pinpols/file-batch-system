@@ -13,6 +13,20 @@
 | CI / 发布 | PR gate、Full Gate、staging、镜像构建分层 | 按变更域聚合失败,发布前证据可复查,main 失败可追责 |
 | 运维与灾备 | Runbook 覆盖部署、HA、备份、观测 | 恢复演练、容量压测、故障注入和依赖降级成为定期证据 |
 
+## 工程化借鉴清单
+
+以下内容作为后续治理 PR 的固定判断口径,不是要求一次性重构。
+
+| 领域 | 借鉴做法 | 本项目落点 |
+|---|---|---|
+| 契约链 | Controller DTO、OpenAPI、前端生成类型、权限矩阵、错误码和审计字段组成强契约链 | 改 `/api/console/**` 必须同步 `docs/api/`、配对前端生成类型、测试 fixture 和协议说明 |
+| 数据库治理 | Flyway、表结构、索引、分区、归档、清理脚本、初始化卷和测试库版本进入固定巡检 | `scripts/db/inspect-schema-governance.sh` 输出治理报告,后续可接 nightly 或 full gate |
+| 可观测性 | TraceId、JobId、TenantId、BatchDay、StepId、InstanceId 在日志、接口、审计和前端提示中一致 | 排障目标是 3 分钟内从用户报错定位到租户、实例、步骤和模块 |
+| 批处理 SLO | 不只看服务可用性,还看调度延迟、批次日完成率、重试恢复、积压深度、文件准点和 Worker 心跳 | [`../runbook/slo-sli-catalog.md`](../runbook/slo-sli-catalog.md) 作为指标口径入口 |
+| 防误操作 | 重放、批量取消、配置导入、权限变更、密码重置和租户级操作需要 dry-run、影响预览、二次确认、审计和补偿说明 | 高危能力先在服务端定义影响范围和审计字段,前端只做表达和确认 |
+| 主干保护 | 小 PR、变更影响清单、按需门禁、main full gate 追踪 | PR 描述必须明确 API、DB、权限、迁移、脚本、文档和发布影响 |
+| 本地重建 | 一条权威路径清理容器、重建卷、启动基础件、后端、前端和 smoke | 本地脚本和 runbook 不互相复制;命令漂移由文档/脚本门禁拦截 |
+
 ## P0: 生产准入底座
 
 1. **接口契约链**
@@ -81,6 +95,17 @@
 | P1 | 梳理 SLO / SLI 与告警阈值映射 | [`../runbook/slo-sli-catalog.md`](../runbook/slo-sli-catalog.md) + Prometheus/Grafana 引用 |
 | P1 | 将真实全链路 smoke 输出机器可读结果 | JSON/JUnit 报告 + 失败定位 |
 | P2 | 定期清理历史文档和已关闭待办 | docs 结构门禁 + changelog |
+
+## PR 变更影响清单
+
+每个后端 PR 至少判断一次:
+
+- 是否改 Console API、内部 API、OpenAPI、错误码或响应字段。
+- 是否改数据库 migration、初始化卷、测试种子、索引、分区、归档或清理脚本。
+- 是否改四角色权限、租户隔离、RLS、对象存储桶或密钥注入。
+- 是否改批处理状态机、重试、取消、补偿、重放、审批或幂等语义。
+- 是否改运行脚本、Docker/Helm/Compose、环境变量、CI 门禁或发布路径。
+- 是否需要配对前端生成类型、页面文案、mock、fixture、E2E 或用户文档同步。
 
 ## 不做边界
 
