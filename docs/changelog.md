@@ -1,6 +1,7 @@
 # 变更记录（规范与架构权威条款变化）
 
 ### 2026-10-03
+- **SLO / SLI 目录治理门禁**：新增 `check-slo-sli-catalog.py`，在文档变更时校验 SLO / SLI 目录、Runbook 入口、应用治理文档、工程成熟度路线和 Prometheus/Helm 告警规则入口，避免核心业务指标口径漂移。
 - **SLO / SLI 目录入口**：新增批量调度平台 SLO / SLI 目录，将调度准点率、批次日完成率、运行积压、Outbox、Kafka lag、文件到达、重试恢复、Worker 心跳、readiness 和数据库迁移一致性映射到信号源、告警和 Runbook。
 - **工程成熟度路线图入口**：新增当前工程成熟度路线图，将 Java 服务边界、API 契约、数据库治理、批处理可靠性、CI/发布、运维灾备和配对前端协作收敛为长期治理入口；历史成熟度评估和历史 P0/P1/P2 方案继续保留为背景证据。
 - **数据库结构治理资产门禁**：新增 `check-schema-governance-assets.py`，在脚本或文档变更时校验 schema governance 巡检脚本、只读 SQL 文件、设计文档和 SQL 使用场景说明同步，避免数据库治理入口漂移。

@@ -170,6 +170,8 @@ if ((docs_changed == 1)); then
     "$PYTHON_BIN" scripts/ci/check-code-doc-references.py
   gate_run PRE_COMMIT_SCHEMA_GOVERNANCE_ASSETS_DOCS "数据库结构治理资产" \
     "$PYTHON_BIN" scripts/ci/check-schema-governance-assets.py
+  gate_run PRE_COMMIT_SLO_SLI_CATALOG "SLO / SLI 目录治理" \
+    "$PYTHON_BIN" scripts/ci/check-slo-sli-catalog.py
 fi
 if ((env_file_changed == 1)); then
   gate_run PRE_COMMIT_ENV_FILE_SHELL_SAFETY ".env 文件 Shell 安全" \
