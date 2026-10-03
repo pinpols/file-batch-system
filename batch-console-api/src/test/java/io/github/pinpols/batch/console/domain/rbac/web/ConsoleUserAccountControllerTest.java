@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
+import io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserAccountService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsolePasswordHasher;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSessionRegistry;
@@ -27,6 +28,9 @@ class ConsoleUserAccountControllerTest {
 
   @Mock
   private ConsoleUserAccountMapper userAccountMapper;
+
+  @Mock
+  private TenantMapper tenantMapper;
 
   @Mock
   private ConsolePasswordHasher passwordHasher;
@@ -58,7 +62,8 @@ class ConsoleUserAccountControllerTest {
 
   @BeforeEach
   void setUp() {
-    service = new ConsoleUserAccountService(userAccountMapper, passwordHasher, sessionRegistry);
+    service = new ConsoleUserAccountService(
+        userAccountMapper, tenantMapper, passwordHasher, sessionRegistry);
   }
 
   @Test

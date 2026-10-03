@@ -43,6 +43,7 @@
 
 ### Fixed
 
+- Console 批量开户补齐单账号创建的租户状态终态守卫，并允许按目标租户过滤批量操作查询；`user.batchCreate` 审计以 `requestId` 作为批次操作聚合键，便于和批次记录关联。
 - 修复根目录 `.node-version` 与 `.nvmrc` 分别选择 Node 24/22 的漂移，运行时对齐门禁现同时校验后端仓库和配对前端的 Node 24 本地入口；移除已被现有 Java 质量门禁替代但意外回流的 `qodana.yaml`，仓库卫生检查阻止该废弃配置再次提交，并正确跳过工作区中尚未暂存的删除项；范围探测器将已知根目录工具配置归入 `config`，不再因误判 `unknown` 启动无关 Java 单测。
 - 修复每日 Sim 的 Trigger stage 6c/6d 夹具依赖默认业务日历节假日数据，导致 Quartz 正常触发但 scheduled request 被业务日历跳过的问题；为定时触发断言增加无节假日专用日历。
 - Kafka 启动时重复输出的 ConsumerConfig/ProducerConfig 完整配置块默认抑制；Worker 启动审计 INFO/WARN 仅保留状态与摘要，完整细节仅在 DEBUG 输出。

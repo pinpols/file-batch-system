@@ -9161,6 +9161,11 @@ paths:
           in: query
           required: true
           schema: { type: string, format: uuid }
+        - name: targetTenantId
+          in: query
+          required: false
+          schema: { type: string }
+          description: Optional target tenant filter. Tenant administrators are always scoped to their own tenant.
       responses:
         '200':
           description: Own operation or null if not committed
@@ -9180,6 +9185,11 @@ paths:
           in: path
           required: true
           schema: { type: string, format: uuid }
+        - name: targetTenantId
+          in: query
+          required: false
+          schema: { type: string }
+          description: Optional target tenant filter. Tenant administrators are always scoped to their own tenant.
       responses:
         '200':
           description: Operation summary without credentials

@@ -484,6 +484,6 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 - [x] V220 增加 `lower(username)` 唯一索引；批次内大小写重复、存量冲突预检与事务回滚由数据库约束兜底。
 - [x] 四角色授权边界；TENANT_ADMIN 只能创建本租户 TENANT_ADMIN / TENANT_USER。
 - [x] 一次性随机初始密码只在 Apply 回包出现；`must_change_password=true`，当前登录改密仅提示不阻断。
-- [ ] 单账号创建路径的业务租户存在/状态校验与批量路径进一步统一；现有单账号创建仍沿用旧校验口径。
-- [ ] 跨租批次按各目标租户分别检索的审计、批次与操作审计 ID 关联；当前只有总操作审计和批次租户集合。
+- [x] 单账号创建路径与批量路径统一业务租户存在/状态校验；平台角色只能绑定 `system`，租户角色必须绑定 ACTIVE 业务租户。
+- [x] 跨租批次查询支持按目标租户过滤；`user.batchCreate` 操作审计使用 `requestId` 作为 `user_batch_operation` 聚合键，批次记录用同一 `requestId` 关联。
 - [ ] 真实 PG/Redis 联测：V220 历史冲突预检、并发提交、事务回滚、过期/多副本预览、前台丢包恢复、初始密码安全交付与多用户冲突。单测不能替代此项。

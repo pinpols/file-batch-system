@@ -14,8 +14,12 @@ public interface ConsoleUserBatchOperationMapper {
       @Param("tenantIds") String tenantIds);
 
   ConsoleUserBatchOperationEntity selectByOperationId(
-      @Param("operationId") UUID operationId, @Param("actor") String actor);
+      @Param("operationId") UUID operationId,
+      @Param("actor") String actor,
+      @Param("targetTenantId") String targetTenantId);
 
   ConsoleUserBatchOperationEntity selectByRequestId(
-      @Param("requestId") UUID requestId, @Param("actor") String actor);
+      @Param("requestId") UUID requestId,
+      @Param("actor") String actor,
+      @Param("targetTenantId") String targetTenantId);
 }
