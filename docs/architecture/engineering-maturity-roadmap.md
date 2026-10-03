@@ -78,7 +78,7 @@
 |---|---|---|
 | P0 | 把数据库治理巡检接入 nightly 或本地 full gate 的报告路径 | schema governance 输出 + 失败 / warn 规则 |
 | P0 | 固化前后端上线准入矩阵 | 后端 go-live runbook + 前端 go-live readiness |
-| P1 | 梳理 SLO / SLI 与告警阈值映射 | SLO 文档 + Alertmanager/Grafana 引用 |
+| P1 | 梳理 SLO / SLI 与告警阈值映射 | [`../runbook/slo-sli-catalog.md`](../runbook/slo-sli-catalog.md) + Prometheus/Grafana 引用 |
 | P1 | 将真实全链路 smoke 输出机器可读结果 | JSON/JUnit 报告 + 失败定位 |
 | P2 | 定期清理历史文档和已关闭待办 | docs 结构门禁 + changelog |
 
