@@ -1,5 +1,9 @@
 # 变更记录（规范与架构权威条款变化）
 
+### 2026-10-03
+- **数据库结构治理入口**：新增表、索引、分区和归档治理文档，补充只读 schema governance 检查入口；明确本地低使用索引只能作为候选证据，DROP 必须结合 staging/生产统计、查询计划和回滚窗口。
+- **SQL 资产治理口径**：补充运维、巡检和治理 SQL 的目录边界与门禁清单；Shell 新增 SQL 必须抽到独立 SQL 文件，避免绕过 SQL/config boundary 守护。
+
 ### 2026-10-02
 - **生产部署目标架构收敛**：Compose CD 路线补充当前两节点生产基线、硬件起步规格、Kubernetes + GitOps + 数据平面 HA 最终拓扑、统一 Release Manifest 发布图与演进触发条件；总待办改为引用部署领域权威清单，避免重复状态源；2026-05-22 CI/CD follow-up 明确降级为历史资料，GitOps backlog 改指当前 roadmap。
 - **Windows 专用脚本清理**：移除根目录 `mvnw.cmd`，保留 Linux/WSL2 的 `./mvnw` 作为 Maven Wrapper 入口；项目结构同步移除已不存在的 PowerShell/Windows 脚本目录声明。

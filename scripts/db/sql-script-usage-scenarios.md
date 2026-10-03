@@ -10,6 +10,7 @@
 2. 测试前置脚本（`@Sql` 或测试资源加载）
 3. Docker 初始化脚本（容器首次启动执行）
 4. 手工种子脚本（系统联调用）
+5. 运维 / 巡检 / 治理 SQL（脚本显式调用，只读优先）
 
 ---
 
@@ -128,6 +129,29 @@
 
 ---
 
+## 8) 运维、巡检和治理 SQL
+
+- **目录**：
+  - `scripts/ops/sql/`：线上 / 本地巡检与 heal runbook 使用的 SQL。
+  - `scripts/local/sql/`：本地开发、仿真和验收辅助 SQL。
+  - `scripts/db/inspect/`：数据库结构、容量、分区和索引画像 SQL。
+  - `scripts/db/backup/sql/`：备份、恢复和 DR 演练 SQL。
+- **典型入口**：
+  - `scripts/ops/inspect-db.sh`
+  - `scripts/db/inspect-schema-governance.sh`
+  - `scripts/db/backup/dr-drill.sh`
+- **作用**：
+  - 只读巡检：Flyway 状态、积压、死信、分区默认表、索引候选等。
+  - 受控修复：明确命名为 `heal-*` / `cleanup-*` / `reset-*` 的脚本。
+  - 演练验证：备份恢复、PITR、DR drill、仿真环境检查。
+- **注意事项**：
+  - Shell 脚本中不要新增内联 SQL；SQL 应放入对应 `sql/` 目录，通过 `psql -f` 调用。
+  - 需要参数时使用 `psql -v name=value` 绑定，不在 Shell 中拼接用户输入。
+  - 只读治理脚本不得执行 DDL/DML；需要修改数据时文件名和入口必须体现 `heal`、`cleanup`、`reset` 或 `wipe` 语义。
+  - 对生产有风险的 SQL 必须在脚本头部写清适用环境、预期影响和回滚方式。
+
+---
+
 ## 选型建议（实践规则）
 
 1. **生产结构变更**：只改 `batch-orchestrator/.../db/migration/`，并遵循 Flyway 版本号规则
@@ -135,6 +159,7 @@
 3. **E2E 业务表示例**：维护在 `docs/sql/business/`，由 `batch-e2e-tests` 的 `testResource` 打进测试 classpath
 4. **本地容器起库**：仅改 `deploy/docker/postgres/init/`
 5. **系统联调固定数据**：使用 `docs/sql/system-test/`
+6. **运维巡检查询**：放到 `scripts/ops/sql/` 或 `scripts/db/inspect/`，由脚本入口调用，不写内联 SQL
 
 ---
 
@@ -144,6 +169,24 @@
 - 把生产迁移写到 Docker init：线上/测试环境无法复用历史版本
 - 在多个目录重复维护同一表结构：容易出现 schema 漂移
 - 在 Flyway 里写大量场景数据：升级慢且回滚复杂
+- 在 Shell 中新增 `psql -c "select ..."`：会绕过 SQL 边界治理，必须抽到独立 SQL 文件
+- 只凭本地 `idx_scan=0` 删除索引：本地流量不足以代表生产，DROP 前必须取 staging/生产证据
+
+---
+
+## SQL 门禁
+
+| 风险 | 守护 |
+|---|---|
+| Flyway 文件名、顺序、checksum 漂移 | `bash scripts/ci/validate-flyway-schema.sh` |
+| 新增或改动迁移包含危险 DDL | `bash scripts/ci/check-migration-safety.sh` |
+| 新增表/字段缺数据库注释 | `bash scripts/ci/check-db-comment-coverage.sh` |
+| Shell 脚本新增内联 SQL | `bash scripts/ci/check-sql-config-boundaries.sh` |
+| scripts/db 危险 SQL 无显式标记 | `bash scripts/ci/check-db-scripts-safety.sh` |
+| 归档类 `INSERT ... SELECT *` 错列风险 | `python3 scripts/ci/check-no-positional-insert-select-star.py` |
+| MyBatis PostgreSQL generated keys 返回整行 | `python3 scripts/ci/check-mybatis-generated-key-columns.py` |
+| PostgreSQL 客户端 fallback 失效 | `bash scripts/ci/check-postgres-client-fallback.sh` |
+| 业务库表缺租户键或 RLS | `python3 scripts/ci/check-biz-table-tenant-rls.py` |
 
 建议保持“**结构迁移**”与“**场景数据**”分离：  
 结构走 Flyway，数据走 testdata/system-test。
