@@ -158,6 +158,8 @@ fi
 if ((scripts_changed == 1)); then
   gate_run PRE_COMMIT_SCRIPT_GOVERNANCE "脚本治理" \
     "$PYTHON_BIN" scripts/ci/check-script-governance.py
+  gate_run PRE_COMMIT_SCHEMA_GOVERNANCE_ASSETS "数据库结构治理资产" \
+    "$PYTHON_BIN" scripts/ci/check-schema-governance-assets.py
 fi
 if ((docs_changed == 1)); then
   gate_run PRE_COMMIT_DOCS_STRUCTURE "文档结构" \
@@ -166,6 +168,8 @@ if ((docs_changed == 1)); then
     "$PYTHON_BIN" scripts/ci/check-doc-timestamp-policy.py
   gate_run PRE_COMMIT_CODE_DOC_REFERENCES "代码与文档路径引用" \
     "$PYTHON_BIN" scripts/ci/check-code-doc-references.py
+  gate_run PRE_COMMIT_SCHEMA_GOVERNANCE_ASSETS_DOCS "数据库结构治理资产" \
+    "$PYTHON_BIN" scripts/ci/check-schema-governance-assets.py
 fi
 if ((env_file_changed == 1)); then
   gate_run PRE_COMMIT_ENV_FILE_SHELL_SAFETY ".env 文件 Shell 安全" \
