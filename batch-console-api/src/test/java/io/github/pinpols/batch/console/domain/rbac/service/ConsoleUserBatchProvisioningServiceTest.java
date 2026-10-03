@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -12,6 +14,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleUserAccountResponse;
+import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserBatchOperationEntity;
 import io.github.pinpols.batch.console.domain.rbac.infrastructure.ConsoleUserBatchProvisioningStore;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserBatchOperationMapper;
@@ -23,6 +26,7 @@ import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -39,6 +43,7 @@ class ConsoleUserBatchProvisioningServiceTest {
 
   private ConsoleUserAccountService accountService;
   private ConsoleUserAccountMapper accountMapper;
+  private ConsoleUserBatchOperationMapper operationMapper;
   private TenantMapper tenantMapper;
   private ConsoleUserBatchProvisioningStore store;
   private ConsoleUserBatchProvisioningService service;
@@ -48,6 +53,7 @@ class ConsoleUserBatchProvisioningServiceTest {
   void setUp() {
     accountService = mock(ConsoleUserAccountService.class);
     accountMapper = mock(ConsoleUserAccountMapper.class);
+    operationMapper = mock(ConsoleUserBatchOperationMapper.class);
     tenantMapper = mock(TenantMapper.class);
     store = mock(ConsoleUserBatchProvisioningStore.class);
     org.mockito.Mockito.doAnswer(invocation -> {
@@ -60,12 +66,7 @@ class ConsoleUserBatchProvisioningServiceTest {
         .thenAnswer(invocation -> stored.get(invocation.getArgument(0)));
     when(accountMapper.selectByUsername(anyString())).thenReturn(null);
     service = new ConsoleUserBatchProvisioningService(
-        accountService,
-        accountMapper,
-        mock(ConsoleUserBatchOperationMapper.class),
-        tenantMapper,
-        store,
-        new ObjectMapper());
+        accountService, accountMapper, operationMapper, tenantMapper, store, new ObjectMapper());
     asTenantAdmin("ta");
   }
 
@@ -124,6 +125,45 @@ class ConsoleUserBatchProvisioningServiceTest {
         .allSatisfy(json -> assertThat(json).doesNotContain("initialPassword"));
   }
 
+  @Test
+  void tenantAdminOperationLookupIsAlwaysScopedToOwnTenant() {
+    UUID operationId = UUID.randomUUID();
+    ConsoleUserBatchOperationEntity row = operation(operationId, UUID.randomUUID(), "ta,tb");
+    when(operationMapper.selectByOperationId(eq(operationId), anyString(), eq("ta")))
+        .thenReturn(row);
+
+    var result = service.operation(operationId, "tb");
+
+    assertThat(result.tenantIds()).isEqualTo("ta,tb");
+    verify(operationMapper).selectByOperationId(operationId, "operator-ta", "ta");
+  }
+
+  @Test
+  void adminOperationLookupCanFilterByTargetTenant() {
+    asAdmin();
+    UUID requestId = UUID.randomUUID();
+    ConsoleUserBatchOperationEntity row = operation(UUID.randomUUID(), requestId, "ta,tb");
+    when(operationMapper.selectByRequestId(eq(requestId), eq("admin"), eq("tb")))
+        .thenReturn(row);
+
+    var result = service.findByRequestId(requestId, "tb");
+
+    assertThat(result.requestId()).isEqualTo(requestId);
+    verify(operationMapper).selectByRequestId(requestId, "admin", "tb");
+  }
+
+  @Test
+  void adminOperationLookupKeepsFilterOptional() {
+    asAdmin();
+    UUID requestId = UUID.randomUUID();
+    when(operationMapper.selectByRequestId(eq(requestId), eq("admin"), nullable(String.class)))
+        .thenReturn(null);
+
+    assertThat(service.findByRequestId(requestId, " ")).isNull();
+
+    verify(operationMapper).selectByRequestId(eq(requestId), eq("admin"), nullable(String.class));
+  }
+
   private static MockMultipartFile workbook(String... values) throws IOException {
     try (XSSFWorkbook workbook = new XSSFWorkbook();
         ByteArrayOutputStream out = new ByteArrayOutputStream()) {
@@ -152,5 +192,22 @@ class ConsoleUserBatchProvisioningServiceTest {
         new ConsolePrincipal("operator-" + tenantId, tenantId, Set.of(ConsoleRoles.TENANT_ADMIN));
     SecurityContextHolder.getContext()
         .setAuthentication(new UsernamePasswordAuthenticationToken(principal, null));
+  }
+
+  private void asAdmin() {
+    var principal = new ConsolePrincipal("admin", "system", Set.of(ConsoleRoles.ADMIN));
+    SecurityContextHolder.getContext()
+        .setAuthentication(new UsernamePasswordAuthenticationToken(principal, null));
+  }
+
+  private static ConsoleUserBatchOperationEntity operation(
+      UUID operationId, UUID requestId, String tenantIds) {
+    ConsoleUserBatchOperationEntity row = new ConsoleUserBatchOperationEntity();
+    row.setOperationId(operationId);
+    row.setRequestId(requestId);
+    row.setTenantIds(tenantIds);
+    row.setAccountCount(2);
+    row.setCreatedAt(OffsetDateTime.parse("2026-10-03T00:00:00Z"));
+    return row;
   }
 }

@@ -16,6 +16,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
+import io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsolePasswordHasher;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSessionRegistry;
@@ -49,6 +50,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 class ConsoleUserAccountServiceTest {
 
   private ConsoleUserAccountMapper userAccountMapper;
+  private TenantMapper tenantMapper;
   private ConsolePasswordHasher passwordHasher;
   private ConsoleSessionRegistry sessionRegistry;
   private ConsoleUserAccountService service;
@@ -56,10 +58,12 @@ class ConsoleUserAccountServiceTest {
   @BeforeEach
   void setUp() {
     userAccountMapper = mock(ConsoleUserAccountMapper.class);
+    tenantMapper = mock(TenantMapper.class);
     passwordHasher = mock(ConsolePasswordHasher.class);
     sessionRegistry = mock(ConsoleSessionRegistry.class);
     when(passwordHasher.encode(any())).thenReturn("hashed");
-    service = new ConsoleUserAccountService(userAccountMapper, passwordHasher, sessionRegistry);
+    service = new ConsoleUserAccountService(
+        userAccountMapper, tenantMapper, passwordHasher, sessionRegistry);
   }
 
   @AfterEach
@@ -91,12 +95,17 @@ class ConsoleUserAccountServiceTest {
     return row;
   }
 
+  private void activeTenant(String tenantId) {
+    when(tenantMapper.selectByTenantId(tenantId)).thenReturn(Map.of("status", "ACTIVE"));
+  }
+
   @Nested
   class TenantAdminCreate {
 
     @Test
     void shouldOverrideTenantIdWithPrincipalTenant() {
       asPrincipal("tenant-a", ConsoleRoles.TENANT_ADMIN);
+      activeTenant("tenant-a");
       when(userAccountMapper.selectByUsername("alice")).thenReturn(null);
       when(userAccountMapper.selectByUsername("alice"))
           .thenReturn(null) // first call: existence check
@@ -140,6 +149,7 @@ class ConsoleUserAccountServiceTest {
     @Test
     void shouldAllowGrantingTenantUserAndTenantAdmin() {
       asPrincipal("tenant-a", ConsoleRoles.TENANT_ADMIN);
+      activeTenant("tenant-a");
       when(userAccountMapper.selectByUsername("carol"))
           .thenReturn(null)
           .thenReturn(accountRow(2L, "tenant-a", "carol"));
@@ -168,11 +178,12 @@ class ConsoleUserAccountServiceTest {
     @Test
     void shouldRespectExplicitTenantId() {
       asPrincipal("system", ConsoleRoles.ADMIN);
+      activeTenant("tenant-z");
       when(userAccountMapper.selectByUsername("dave"))
           .thenReturn(null)
           .thenReturn(accountRow(3L, "tenant-z", "dave"));
 
-      service.create("tenant-z", "dave", "pw", "Dave", ConsoleRoles.ADMIN);
+      service.create("tenant-z", "dave", "pw", "Dave", ConsoleRoles.TENANT_ADMIN);
 
       verify(userAccountMapper)
           .insert(
@@ -180,7 +191,7 @@ class ConsoleUserAccountServiceTest {
               eq("dave"),
               eq("Dave"),
               eq("hashed"),
-              eq(ConsoleRoles.ADMIN),
+              eq(ConsoleRoles.TENANT_ADMIN),
               nullable(String.class));
     }
 
@@ -197,23 +208,52 @@ class ConsoleUserAccountServiceTest {
     }
 
     @Test
-    void allowsAllFourFormalRoles() {
+    void shouldRejectMixedPlatformAndTenantRoles() {
       asPrincipal("system", ConsoleRoles.ADMIN);
-      when(userAccountMapper.selectByUsername("security-owner"))
-          .thenReturn(null)
-          .thenReturn(accountRow(4L, "system", "security-owner"));
-      String roles = String.join(",", ConsoleRoles.ALL);
+      String roles = ConsoleRoles.ADMIN + "," + ConsoleRoles.TENANT_USER;
 
-      service.create("system", "security-owner", "pw", "Security Owner", roles);
+      assertThatThrownBy(
+              () -> service.create("system", "security-owner", "pw", "Security Owner", roles))
+          .isInstanceOf(BizException.class)
+          .extracting(e -> ((BizException) e).getCode())
+          .isEqualTo(ResultCode.INVALID_ARGUMENT);
 
-      verify(userAccountMapper)
-          .insert(
-              eq("system"),
-              eq("security-owner"),
-              eq("Security Owner"),
-              eq("hashed"),
-              eq(roles),
-              nullable(String.class));
+      verify(userAccountMapper, never())
+          .insert(any(), any(), any(), any(), any(), nullable(String.class));
+    }
+
+    @Test
+    void shouldRejectPlatformRoleOutsideSystemTenant() {
+      asPrincipal("system", ConsoleRoles.ADMIN);
+
+      assertThatThrownBy(() -> service.create("tenant-z", "root", "pw", "Root", ConsoleRoles.ADMIN))
+          .isInstanceOf(BizException.class)
+          .extracting(e -> ((BizException) e).getCode())
+          .isEqualTo(ResultCode.INVALID_ARGUMENT);
+
+      verify(userAccountMapper, never())
+          .insert(any(), any(), any(), any(), any(), nullable(String.class));
+    }
+
+    @Test
+    void shouldRejectTenantRoleWhenTenantMissingOrInactive() {
+      asPrincipal("system", ConsoleRoles.ADMIN);
+      when(tenantMapper.selectByTenantId("missing")).thenReturn(null);
+      when(tenantMapper.selectByTenantId("paused")).thenReturn(Map.of("status", "SUSPENDED"));
+
+      assertThatThrownBy(
+              () -> service.create("missing", "miss", "pw", "Miss", ConsoleRoles.TENANT_USER))
+          .isInstanceOf(BizException.class)
+          .extracting(e -> ((BizException) e).getCode())
+          .isEqualTo(ResultCode.INVALID_ARGUMENT);
+      assertThatThrownBy(
+              () -> service.create("paused", "pause", "pw", "Pause", ConsoleRoles.TENANT_USER))
+          .isInstanceOf(BizException.class)
+          .extracting(e -> ((BizException) e).getCode())
+          .isEqualTo(ResultCode.INVALID_ARGUMENT);
+
+      verify(userAccountMapper, never())
+          .insert(any(), any(), any(), any(), any(), nullable(String.class));
     }
   }
 
@@ -293,12 +333,12 @@ class ConsoleUserAccountServiceTest {
       // SecurityContextHolder 已 clear,无 principal
       when(userAccountMapper.selectByUsername("eve"))
           .thenReturn(null)
-          .thenReturn(accountRow(4L, "tenant-x", "eve"));
+          .thenReturn(accountRow(4L, "system", "eve"));
 
-      service.create("tenant-x", "eve", "pw", "Eve", ConsoleRoles.ADMIN);
+      service.create("system", "eve", "pw", "Eve", ConsoleRoles.ADMIN);
 
       verify(userAccountMapper)
-          .insert(eq("tenant-x"), eq("eve"), any(), any(), any(), nullable(String.class));
+          .insert(eq("system"), eq("eve"), any(), any(), any(), nullable(String.class));
     }
   }
 

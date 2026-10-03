@@ -11,6 +11,7 @@ import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleUserAccountResponse;
 import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
+import io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsolePasswordHasher;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSessionRegistry;
@@ -41,6 +42,7 @@ public class ConsoleUserAccountService {
       Set.of(ConsoleRoles.TENANT_ADMIN, ConsoleRoles.TENANT_USER);
 
   private final ConsoleUserAccountMapper userAccountMapper;
+  private final TenantMapper tenantMapper;
   private final ConsolePasswordHasher passwordHasher;
   private final ConsoleSessionRegistry sessionRegistry;
 
@@ -81,6 +83,7 @@ public class ConsoleUserAccountService {
     String effectiveTenantId = enforceTenantScope(tenantId);
     String normalizedAuthorities = normalizeAuthorities(authoritiesCsv);
     enforceGrantableAuthorities(normalizedAuthorities);
+    enforceRoleTenantBinding(effectiveTenantId, normalizedAuthorities);
     if (EmptyChecks.isNotNull(userAccountMapper.selectByUsername(username))) {
       throw BizException.of(ResultCode.CONFLICT, "error.username.already_exists", username);
     }
@@ -101,6 +104,7 @@ public class ConsoleUserAccountService {
     String effectiveTenantId = enforceTenantScope(tenantId);
     String normalizedRole = normalizeAuthorities(role);
     enforceGrantableAuthorities(normalizedRole);
+    enforceRoleTenantBinding(effectiveTenantId, normalizedRole);
     if (EmptyChecks.isNotNull(userAccountMapper.selectByUsername(username))) {
       throw BizException.of(ResultCode.CONFLICT, "error.username.already_exists", username);
     }
@@ -217,10 +221,7 @@ public class ConsoleUserAccountService {
 
   /** 所有账号只能使用四个正式角色；TENANT_ADMIN 不可授予 ADMIN/AUDITOR。 */
   private void enforceGrantableAuthorities(String authoritiesCsv) {
-    Set<String> requested = Arrays.stream(authoritiesCsv.split(","))
-        .map(String::trim)
-        .filter(s -> !s.isEmpty())
-        .collect(Collectors.toSet());
+    Set<String> requested = parseAuthorities(authoritiesCsv);
     for (String authority : requested) {
       if (!ConsoleRoles.ALL.contains(authority)) {
         throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.account.invalid_role", authority);
@@ -233,6 +234,46 @@ public class ConsoleUserAccountService {
         throw BizException.of(ResultCode.FORBIDDEN, "error.account.role_grant_denied", authority);
       }
     }
+  }
+
+  /**
+   * 平台角色只能绑定 system 租户,租户角色必须绑定真实 ACTIVE 业务租户。
+   *
+   * <p>批量开户预览也有同口径校验,这里作为最终落库前守卫,避免预览后租户状态变化或单账号路径漏校验。
+   */
+  private void enforceRoleTenantBinding(String tenantId, String authoritiesCsv) {
+    Set<String> requested = parseAuthorities(authoritiesCsv);
+    boolean hasPlatformRole = requested.stream()
+        .anyMatch(role -> Set.of(ConsoleRoles.ADMIN, ConsoleRoles.AUDITOR).contains(role));
+    boolean hasTenantRole = requested.stream()
+        .anyMatch(
+            role -> Set.of(ConsoleRoles.TENANT_ADMIN, ConsoleRoles.TENANT_USER).contains(role));
+    if (hasPlatformRole && hasTenantRole) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.account.mixed_role_scope");
+    }
+    if (hasPlatformRole) {
+      if (!"system".equals(tenantId)) {
+        throw BizException.of(
+            ResultCode.INVALID_ARGUMENT, "error.account.platform_role_requires_system_tenant");
+      }
+      return;
+    }
+    if (!hasTenantRole) return;
+    if (!Texts.hasText(tenantId)) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.account.tenant_not_active");
+    }
+    Map<String, Object> tenant = tenantMapper.selectByTenantId(tenantId);
+    if (EmptyChecks.isNull(tenant) || !"ACTIVE".equals(tenant.get("status"))) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.account.tenant_not_active", tenantId);
+    }
+  }
+
+  private Set<String> parseAuthorities(String authoritiesCsv) {
+    return Arrays.stream(authoritiesCsv.split(","))
+        .map(String::trim)
+        .filter(EmptyChecks::isNotEmpty)
+        .collect(Collectors.toSet());
   }
 
   private ConsoleUserAccountResponse toResponse(Map<String, Object> row) {

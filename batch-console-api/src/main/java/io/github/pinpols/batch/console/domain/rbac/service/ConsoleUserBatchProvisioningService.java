@@ -157,7 +157,7 @@ public class ConsoleUserBatchProvisioningService {
     if (session.version() != version)
       throw BizException.of(ResultCode.CONFLICT, "preview version changed");
     if (EmptyChecks.isNull(requestId)) throw invalid("requestId is required");
-    if (EmptyChecks.isNotNull(findByRequestId(requestId))) {
+    if (EmptyChecks.isNotNull(findByRequestId(requestId, null))) {
       throw BizException.of(ResultCode.CONFLICT, "Batch already applied; query by requestId");
     }
     Preview checked = validate(token, session);
@@ -186,18 +186,24 @@ public class ConsoleUserBatchProvisioningService {
     return new ApplyResult(operationId, credentials.size(), credentials);
   }
 
-  public Operation operation(UUID operationId) {
-    ConsoleUserBatchOperationEntity found =
-        operationMapper.selectByOperationId(operationId, actor().username());
+  public Operation operation(UUID operationId, String targetTenantId) {
+    ConsolePrincipal principal = actor();
+    ConsoleUserBatchOperationEntity found = operationMapper.selectByOperationId(
+        operationId, principal.username(), effectiveTenantFilter(targetTenantId, principal));
     if (EmptyChecks.isNull(found))
       throw BizException.of(ResultCode.NOT_FOUND, "batch operation not found");
     return toOperation(found);
   }
 
-  public Operation findByRequestId(UUID requestId) {
-    ConsoleUserBatchOperationEntity found =
-        operationMapper.selectByRequestId(requestId, actor().username());
+  public Operation findByRequestId(UUID requestId, String targetTenantId) {
+    ConsolePrincipal principal = actor();
+    ConsoleUserBatchOperationEntity found = operationMapper.selectByRequestId(
+        requestId, principal.username(), effectiveTenantFilter(targetTenantId, principal));
     return EmptyChecks.isNull(found) ? null : toOperation(found);
+  }
+
+  public Operation findByRequestId(UUID requestId) {
+    return findByRequestId(requestId, null);
   }
 
   private static Operation toOperation(ConsoleUserBatchOperationEntity row) {
@@ -264,6 +270,13 @@ public class ConsoleUserBatchProvisioningService {
 
   private static String trim(String value) {
     return EmptyChecks.isNull(value) ? "" : value.trim();
+  }
+
+  private static String effectiveTenantFilter(
+      String requestedTenantId, ConsolePrincipal principal) {
+    if (!principal.authorities().contains(ConsoleRoles.ADMIN)) return principal.tenantId();
+    String trimmed = trim(requestedTenantId);
+    return EmptyChecks.isEmpty(trimmed) ? null : trimmed;
   }
 
   private List<AccountRow> parse(byte[] bytes) {

@@ -1,6 +1,6 @@
 # 批量账号开户后端设计
 
-> 状态：前后端已编码；数据库迁移、真实服务联测与生产审计验收尚未完成。优先级和实施状态以 [当前待办](../analysis/todo-master.md#批量账号开户bulk-user-provisioning) 为准。
+> 状态：前后端已编码；数据库迁移已落地；真实 PG/Redis 联测与生产审计验收尚未完成。优先级和实施状态以 [当前待办](../analysis/todo-master.md#批量账号开户bulk-user-provisioning) 为准。
 > 适用范围：Console 给已有租户批量创建登录账户；不改变批量建租户接口的语义。
 
 ## 目标与现状
@@ -33,8 +33,8 @@
 | `POST /api/console/users/batch/preview` | 上传、解析、校验并返回行级问题和 `previewToken`；不创建账户 |
 | `POST /api/console/users/batch/preview/{previewToken}/patch` | 逐行修正；修正后重新校验并增加预览版本 |
 | `POST /api/console/users/batch/apply/{previewToken}` | 以预览版本确认提交，返回 `operationId`、计数和创建结果 |
-| `GET /api/console/users/batch/operations/{operationId}` | 查询已提交批次的非敏感结果，供超时后的确认和运维审计 |
-| `GET /api/console/users/batch/operations?requestId=...` | 响应丢失时以提交前生成的 requestId 查询本人批次摘要；无记录返回 null |
+| `GET /api/console/users/batch/operations/{operationId}` | 查询已提交批次的非敏感结果，供超时后的确认和运维审计；可选 `targetTenantId` 按目标租户过滤 |
+| `GET /api/console/users/batch/operations?requestId=...` | 响应丢失时以提交前生成的 requestId 查询本人批次摘要；可选 `targetTenantId` 按目标租户过滤；无记录返回 null |
 
 预览结果包含文件摘要、总行数、有效/错误行数以及 `{rowNo, username, tenantId, role, errorCode, message}`。Apply 请求带预览版本和 `Idempotency-Key`。版本不符、令牌过期或操作者变化时拒绝提交。不能由前端循环调用单账号接口来模拟 Apply。
 
@@ -55,7 +55,7 @@
 
 现有 `ConsoleIdempotencyInterceptor` 对相同完成态请求返回冲突，不保存成功响应体。因此批量 Apply 除要求 `Idempotency-Key` 外，在持久化批次记录中保存操作者、目标租户集合、文件摘要和请求 ID；预览版本仅在提交时校验，不写入批次记录。当前保留 409 语义，客户端通过请求 ID 查询批次摘要确认结果，不能重放取回一次性凭据。
 
-`@AuditAction` 应使用独立动作名 `user.batchCreate`，记录 `batchOperationId`、操作者、目标租户和行数。跨租户批次的审计须能逐租户检索；不能只把所有目标归在 `system`。上传、Preview 和 Apply 的参数及响应日志均不得包含原始文件或密码；包含凭据的入口显式 `recordParams=false`，审计只写脱敏摘要。
+`@AuditAction` 使用独立动作名 `user.batchCreate` 和聚合类型 `user_batch_operation`，以客户端提交的 `requestId` 作为审计聚合键；批次操作表同时保存 `operationId`、`requestId`、操作者、目标租户集合和行数。跨租户批次通过批次查询的 `targetTenantId` 过滤确认归属，再用 `requestId` 关联通用操作审计。上传、Preview 和 Apply 的参数及响应日志均不得包含原始文件或密码；包含凭据的入口显式 `recordParams=false`，审计只写脱敏摘要。
 
 当前选择：服务端为每个账户生成独立随机初始密码，只保存 Argon2id 哈希，设 `must_change_password=true`，仅在 Apply 成功响应中交付给当前操作者；文件、Redis 预览和可重复查询的批次记录都不保存明文。一次性响应丢失时只能走管理员逐账号重置流程。当前 `must_change_password` 是非阻断提醒，界面明确说明并未强制改密。生产启用前还需确认企业允许管理员一次性查看初始凭据；若要求邀请或强制改密，需另立安全需求。
 
@@ -65,7 +65,7 @@
 
 - 已编码：XLSX 模板与上传、最多 500 行预览、逐行修正、大小写重复校验、租户/角色守卫、Redis 共享会话、原子 Apply、V220 唯一索引与操作表、一次性凭据响应、前端弹窗及中英文文案。
 - 已执行：后端定向单测、前端类型检查、API 单测、隔离 API 桩的 Playwright 页面 E2E（含桌面/390px 预览与结果态）和静态检查；不代替真实链路验收。
-- 待验收：真实 PG 迁移及并发冲突回滚、Redis 多副本与会话过期、前台真实上传/修正/确认/丢包恢复、跨租户和多用户冲突、密码安全交付。平台管理员跨租批次当前只写一条总操作审计，`tenant_ids` 在批次表中；**按每个目标租户分别检索审计尚未实现**，生产放量前需补齐。
+- 待验收：真实 PG 迁移及并发冲突回滚、Redis 多副本与会话过期、前台真实上传/修正/确认/丢包恢复、跨租户和多用户冲突、密码安全交付。平台管理员跨租批次会写一条总操作审计，`tenant_ids` 在批次表中；查询接口已支持按目标租户过滤，生产放量前仍需用真实多租户数据验收审计查询链路。
 
 ## 交付步骤与验收
 

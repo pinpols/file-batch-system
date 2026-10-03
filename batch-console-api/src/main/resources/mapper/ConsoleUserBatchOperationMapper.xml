@@ -25,6 +25,9 @@
           from batch.console_user_batch_operation
          where operation_id = #{operationId,typeHandler=io.github.pinpols.batch.console.config.PostgresUuidTypeHandler}
            and actor_username = #{actor}
+        <if test="targetTenantId != null and targetTenantId != ''">
+           and #{targetTenantId} = any(string_to_array(tenant_ids, ','))
+        </if>
     </select>
 
     <select id="selectByRequestId" resultMap="operationMap">
@@ -32,5 +35,8 @@
           from batch.console_user_batch_operation
          where request_id = #{requestId,typeHandler=io.github.pinpols.batch.console.config.PostgresUuidTypeHandler}
            and actor_username = #{actor}
+        <if test="targetTenantId != null and targetTenantId != ''">
+           and #{targetTenantId} = any(string_to_array(tenant_ids, ','))
+        </if>
     </select>
 </mapper>

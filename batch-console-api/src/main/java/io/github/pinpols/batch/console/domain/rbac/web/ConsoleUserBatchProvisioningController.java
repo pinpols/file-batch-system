@@ -76,19 +76,25 @@ public class ConsoleUserBatchProvisioningController {
 
   @PostMapping("/apply/{token}")
   @Idempotent
-  @AuditAction(action = "user.batchCreate", aggregateType = "user_account", recordParams = false)
+  @AuditAction(
+      action = "user.batchCreate",
+      aggregateType = "user_batch_operation",
+      aggregateId = "#request.requestId",
+      recordParams = false)
   public CommonResponse<ApplyResult> apply(
       @PathVariable String token, @Valid @RequestBody ApplyRequest request) {
     return responseFactory.success(service.apply(token, request.version(), request.requestId()));
   }
 
   @GetMapping("/operations/{operationId}")
-  public CommonResponse<Operation> operation(@PathVariable UUID operationId) {
-    return responseFactory.success(service.operation(operationId));
+  public CommonResponse<Operation> operation(
+      @PathVariable UUID operationId, @RequestParam(required = false) String targetTenantId) {
+    return responseFactory.success(service.operation(operationId, targetTenantId));
   }
 
   @GetMapping("/operations")
-  public CommonResponse<Operation> findOperation(@RequestParam UUID requestId) {
-    return responseFactory.success(service.findByRequestId(requestId));
+  public CommonResponse<Operation> findOperation(
+      @RequestParam UUID requestId, @RequestParam(required = false) String targetTenantId) {
+    return responseFactory.success(service.findByRequestId(requestId, targetTenantId));
   }
 }
