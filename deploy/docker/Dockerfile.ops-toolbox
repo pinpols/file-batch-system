@@ -13,6 +13,9 @@ ARG POSTGRES_CLIENT_MAJOR=17
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
+# 系统工具和 PostgreSQL 客户端不锁死 Debian 包补丁版本：基础镜像与 PGDG 源已固定大版本，
+# 构建时应获取对应仓库的最新安全修复；精确 pin 会在仓库补丁滚动后使镜像不可构建。
+# hadolint ignore=DL3008
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
       bash \
