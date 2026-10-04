@@ -1,21 +1,21 @@
 # 数据初始化脚本
 
-这里放本地、staging 和测试环境的数据初始化入口。
+这里放平台依赖和测试数据的初始化入口。脚本不绑定某一种部署形态；本地 Compose 只是默认 fallback。
 
 ## 脚本
 
 - `init-kafka-topics.sh`：创建平台默认 Kafka topics。
 - `init-tenant-topics.sh`：按租户创建隔离 topic。
 - `init-tenant-kafka-acl.sh`：按租户初始化 Kafka ACL。
-- `init-minio.sh`：初始化 MinIO bucket 和基础策略。
+- `init-minio.sh`：初始化 S3 兼容对象存储 bucket 和基础策略。
 - `load-system-test-data.sh`：加载系统测试数据。
 
 `sql/` 下是这些入口使用的辅助 SQL。正式 schema 变更请放在 [../../db/migration/](../../db/migration/)。
 
-## 非容器环境
+## 外部环境
 
 这些脚本不要求必须进 Docker 容器，但需要本机安装对应客户端并通过环境变量指定连接信息：
 
 - Kafka topic 初始化：安装 Kafka CLI，确保 `kafka-topics.sh` 在 `PATH`，或设置 `KAFKA_BIN_DIR=/path/to/kafka/bin` / `KAFKA_TOPICS_BIN=/path/to/kafka-topics.sh`；连接地址用 `KAFKA_BOOTSTRAP_SERVER`。初始化器始终确保平台核心 topic 存在，`KAFKA_TOPICS` 仅用于追加自定义 topic，不能用旧本地环境文件覆盖核心清单。
-- MinIO 初始化：安装 `mc`；连接地址和凭据用 `MINIO_ENDPOINT`、`MINIO_ROOT_USER`、`MINIO_ROOT_PASSWORD`、`MINIO_BUCKET`。
+- 对象存储初始化：安装 `mc`；连接地址和凭据用 `MINIO_ENDPOINT`、`MINIO_ROOT_USER`、`MINIO_ROOT_PASSWORD`、`MINIO_BUCKET`。托管云对象存储也可由平台侧预建 bucket 和 lifecycle，此脚本只是 S3 兼容初始化适配器。
 - 系统测试数据加载：数据库连接用 `PGHOST`、`PGPORT`、`PGUSER`、`PGPASSWORD`、`PLATFORM_DB`、`BUSINESS_DB`；默认按宿主机 `psql`、Python `psycopg`、Docker 客户端顺序选择，也可设置 `BATCH_PSQL_BIN` 或 `BATCH_PG_CLIENT_MODE`。Python fallback 依赖 `scripts/requirements-postgres.txt`。对象存储用 `BATCH_S3_*`，无可用客户端时明确失败。

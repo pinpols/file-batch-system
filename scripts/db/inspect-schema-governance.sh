@@ -8,6 +8,37 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # shellcheck source=scripts/lib/env-common.sh
 source "$ROOT/scripts/lib/env-common.sh"
 
+usage() {
+  cat <<'USAGE'
+Usage: scripts/db/inspect-schema-governance.sh [--help]
+
+只读输出数据库结构治理画像，不执行 DDL/DML。
+
+连接配置：
+  PGHOST / PGPORT / PGUSER / PGPASSWORD / PGDATABASE
+  BATCH_SCHEMA_GOVERNANCE_SQL      可覆盖巡检 SQL 文件
+  BATCH_SCHEMA_GOVERNANCE_REPORT   可输出报告到指定文件
+
+说明：
+  脚本不要求本地 Docker。未显式传入 PG* 时会加载仓库本地默认值，
+  仅用于开发机 fallback；生产和测试应由 profile、Secret 或 CI 变量注入真实连接。
+USAGE
+}
+
+case "${1:-}" in
+  -h|--help)
+    usage
+    exit 0
+    ;;
+  "")
+    ;;
+  *)
+    printf 'Unknown argument: %s\n' "$1" >&2
+    usage >&2
+    exit 2
+    ;;
+esac
+
 batch_load_default_env
 
 SQL_FILE="${BATCH_SCHEMA_GOVERNANCE_SQL:-$ROOT/scripts/db/inspect/schema-governance.sql}"

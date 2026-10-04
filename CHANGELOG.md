@@ -12,6 +12,8 @@
 
 ### Added
 
+- 新增 PostgreSQL、Kafka、Valkey/Redis、MinIO 四环境基础设施治理 profile，支持本地、场景测试、压测和生产基线参数统一落地；Kafka topic retention 与 MinIO lifecycle 提供显式应用脚本，PostgreSQL/Valkey 保持重启生效的可审计配置边界。
+- 扩展四环境运行时治理 profile，覆盖 LOCAL / NAS / SFTP / OSS / API / API_PUSH / EMAIL 文件通道、Worker Report Outbox、Quota / ShedLock、读副本、业务分片、Quartz、观测和外部端点，并新增只读巡检入口防止治理项漂移。
 - Console 账号管理新增批量开户：提供 Excel 模板、预检与修正、租户权限校验、原子入库及一次性初始密码交付；新增开户操作记录与用户名大小写无关唯一约束。
 - Console AI 增加受控图片附件输入：上传内容经解码、尺寸限制、重编码和加密后存入独立 AI 附件桶，按租户与操作者授权绑定会话轮次；能力默认关闭，配置已对齐本地、Compose、Helm 与生产覆盖入口，并在启动期拒绝复用批量文件桶。
 - Console AI 流式完成响应增加去重后的结构化来源标识；仅返回来源名称，不暴露检索片段、提示词或相似度分数。

@@ -4,6 +4,7 @@
 - **Java 异常日志治理收紧**：预期 fallback、重试和吞异常统一输出脱敏、单行、限长摘要；未预期故障将 `Throwable` 交由 SLF4J 记录完整堆栈。Java 日志门禁新增原始 `getMessage()` / `toString()` 拦截及扫描器自测，SDK 保持 ADR-035 独立依赖边界。
 
 ### 2026-10-03
+- **运行时治理 profile 扩展**：四环境治理基线从 PG/Kafka/Redis/MinIO 扩展到文件通道、Worker Report Outbox、Quota/ShedLock、读副本、业务分片、Quartz、观测和外部端点；新增只读 `inspect-runtime-governance.sh`，生产 profile 强制 host key、egress allowlist、TLS 等 fail-close 基线。
 - **五类 Worker 压测文档口径**：补齐 Import / Export / Dispatch / Process / Atomic 的 1w / 10w 权威命令矩阵和验收留档模板，明确四类业务 worker 与 Atomic 控制面容量画像不可横向混比，未实跑结果不得写成上线容量承诺。
 - **生产保留治理计划入口**：新增 `plan-production-retention.sh` 和只读 PostgreSQL 计划 SQL，覆盖 archive_policy 缺口、终态运行数据候选量、Kafka topic retention、对象存储 lifecycle 和 Redis TTL 抽样；接入 `inspect-all.sh` 与生产容量治理门禁，明确只输出计划项，不执行生产数据清理。
 - **生产容量治理入口**：新增生产容量与存储增长治理 runbook、只读巡检脚本、独立 ops toolbox 镜像入口和 CI 自动化守护，覆盖 PostgreSQL 热表/保留、Kafka topic retention、对象存储 lifecycle 和压测清理边界；支持 PostgreSQL / Kafka / 对象存储分域开关、阈值和严格模式，明确生产应用运行时不依赖 Python / `psql` / Kafka CLI / `mc` / `redis-cli`，本地压测清理不得复用为生产数据清理。

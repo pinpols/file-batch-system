@@ -1,22 +1,24 @@
 #!/bin/sh
 # =========================================================
-# init-kafka-topics.sh - 初始化本地 / 容器 Kafka topics
+# init-kafka-topics.sh - 初始化 Kafka topics
 # 说明：
 # 1) 等待 Kafka 可用后创建平台需要的 topics。
-# 2) 默认使用 kafka:29092，可通过环境变量覆盖。
+# 2) 生产 / 测试 / 托管 Kafka 必须显式传入 KAFKA_BOOTSTRAP_SERVER 和 CLI 路径；
+#    未传时才回退到仓库本地 Compose 默认值。
 # =========================================================
 #   - topic 列表: batch.task.dispatch.import,batch.task.dispatch.export,batch.task.dispatch.process,
 #                batch.task.dispatch.dispatch,batch.task.dispatch.atomic,batch.task.result,
 #                batch.task.retry,batch.task.dead-letter
 #   - 分区数：默认全部 4；可通过 KAFKA_PARTITIONS_DISPATCH / _RESULT / _RETRY / _DEAD_LETTER 单独覆盖
 #   - 副本因子：默认 1（dev）；prod 设 KAFKA_TOPIC_REPLICATION_FACTOR=3 + KAFKA_TOPIC_MIN_INSYNC_REPLICAS=2
+#   - 保留期：默认不覆盖；需要环境级治理时设 KAFKA_TOPIC_RETENTION_MS 或分类型变量
 #
-# 使用方法：
+# 使用方法（显式连接外部或本地端口）：
 #   KAFKA_BOOTSTRAP_SERVER=localhost:19092 \
 #   KAFKA_TOPICS=batch.task.dispatch.import,batch.task.result \
 #     bash scripts/data/init-kafka-topics.sh
 #
-# 非容器环境：
+# 外部环境：
 #   - 安装 Kafka CLI，并设置 KAFKA_BIN_DIR=/path/to/kafka/bin；或
 #   - 直接设置 KAFKA_TOPICS_BIN=/path/to/kafka-topics.sh。
 #
@@ -36,7 +38,7 @@
 set -eu
 
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
-# shellcheck source=../lib/runtime-defaults.sh
+# shellcheck source=scripts/lib/runtime-defaults.sh
 . "$SCRIPT_DIR/../lib/runtime-defaults.sh"
 
 bootstrap_server="${KAFKA_BOOTSTRAP_SERVER:-$BATCH_DEFAULT_KAFKA_CONTAINER_BOOTSTRAP}"
@@ -73,6 +75,20 @@ if ! command -v "${kafka_topics_bin}" >/dev/null 2>&1; then
   echo "kafka-topics.sh not found: set KAFKA_BIN_DIR or KAFKA_TOPICS_BIN" >&2
   exit 2
 fi
+kafka_configs_bin="${KAFKA_CONFIGS_BIN:-}"
+if [ -z "${kafka_configs_bin}" ] && [ -n "${KAFKA_BIN_DIR:-}" ]; then
+  kafka_configs_bin="${KAFKA_BIN_DIR%/}/kafka-configs.sh"
+fi
+if [ -z "${kafka_configs_bin}" ]; then
+  if command -v kafka-configs.sh >/dev/null 2>&1; then
+    kafka_configs_bin="$(command -v kafka-configs.sh)"
+  else
+    kafka_configs_bin="${kafka_container_bin_dir}/kafka-configs.sh"
+  fi
+fi
+if ! command -v "${kafka_configs_bin}" >/dev/null 2>&1; then
+  kafka_configs_bin=""
+fi
 
 # 各 topic 类型分区数（未设置则回退到 default_partitions）
 partitions_dispatch="${KAFKA_PARTITIONS_DISPATCH:-${default_partitions}}"
@@ -98,6 +114,41 @@ resolve_partitions() {
     *)
       echo "${default_partitions}" ;;
   esac
+}
+
+resolve_retention_ms() {
+  topic="$1"
+  case "${topic}" in
+    *.dispatch.import|*.dispatch.export|*.dispatch.process|*.dispatch.dispatch|*.dispatch.atomic|*.node.*)
+      echo "${KAFKA_TOPIC_RETENTION_MS_DISPATCH:-${KAFKA_TOPIC_RETENTION_MS:-}}" ;;
+    *.task.result)
+      echo "${KAFKA_TOPIC_RETENTION_MS_RESULT:-${KAFKA_TOPIC_RETENTION_MS:-}}" ;;
+    *.task.retry)
+      echo "${KAFKA_TOPIC_RETENTION_MS_RETRY:-${KAFKA_TOPIC_RETENTION_MS:-}}" ;;
+    *.dead-letter)
+      echo "${KAFKA_TOPIC_RETENTION_MS_DEAD_LETTER:-${KAFKA_TOPIC_RETENTION_MS:-}}" ;;
+    batch.trigger.launch.v1)
+      echo "${KAFKA_TOPIC_RETENTION_MS_TRIGGER_LAUNCH:-${KAFKA_TOPIC_RETENTION_MS:-}}" ;;
+    *)
+      echo "${KAFKA_TOPIC_RETENTION_MS:-}" ;;
+  esac
+}
+
+apply_topic_config() {
+  topic="$1"
+  key="$2"
+  value="$3"
+  [ -n "${value}" ] || return 0
+  if [ -z "${kafka_configs_bin}" ]; then
+    echo "kafka-configs.sh not found: set KAFKA_BIN_DIR or KAFKA_CONFIGS_BIN before applying ${key}" >&2
+    exit 2
+  fi
+  "${kafka_configs_bin}" \
+    --bootstrap-server "${bootstrap_server}" \
+    --entity-type topics \
+    --entity-name "${topic}" \
+    --alter \
+    --add-config "${key}=${value}" >/dev/null
 }
 
 echo "Waiting for Kafka at ${bootstrap_server} ..."
@@ -157,8 +208,12 @@ for raw_topic in $topics_csv; do
   [ -n "${topic}" ] || continue
 
   partitions="$(resolve_partitions "${topic}")"
+  retention_ms="$(resolve_retention_ms "${topic}")"
 
   ensure_topic "${topic}" "${partitions}"
+  apply_topic_config "${topic}" "retention.ms" "${retention_ms}"
+  apply_topic_config "${topic}" "cleanup.policy" "${KAFKA_TOPIC_CLEANUP_POLICY:-}"
+  apply_topic_config "${topic}" "min.insync.replicas" "${min_insync_replicas}"
 done
 IFS=$old_ifs
 

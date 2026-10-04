@@ -9,6 +9,7 @@
 - `scripts/docker/reset-dev.sh`：按 Compose project 清空本地开发容器、数据卷和专用网络（默认预览）
 - `scripts/ops/`：运维巡检与自愈（inspect-*、heal-*、trigger-compensation）
 - `scripts/data/`：数据初始化与加载（init-kafka、init-minio、load-*）
+- `scripts/minio/`：MinIO / S3 兼容对象存储 lifecycle 策略与下发脚本；生产 apply 必须使用专用账号和显式确认。
 - `scripts/lib/minio-mc.sh`：通过独立运行的固定版本 CLI 容器访问 MinIO；默认镜像 `bitnamilegacy/minio:2025.7.23-debian-12-r1` 已验证内置 `mc`，更换镜像时需重新确认。
 - `scripts/ci/`：CI / staging 统一回归入口和门禁脚本（说明见 [scripts/ci/README.md](ci/README.md)）
 - `scripts/db/`：数据库维护、种子数据、备份恢复和分区迁移演练
@@ -49,7 +50,7 @@
 - **Host/auto**：`scripts/ops/`、`scripts/data/`、`load-tests/scripts/` 中的通用巡检、初始化、压测脚本优先通过环境变量连接外部服务；能本机执行就不要求进容器。
 - **CI 专用**：`scripts/ci/` 内脚本由 GitHub Actions 组合调用，单独执行前先看文件头部说明。
 
-非容器环境建议安装这些本机客户端：
+外部或受管环境建议安装这些本机客户端，或在 CI / bastion / 运维工具箱中提供等价 CLI：
 
 - PostgreSQL client：提供 `psql`、`pg_dump`、`pg_basebackup`。macOS 可用 `brew install libpq`，并把 `libpq/bin` 加入 `PATH`。
 - Kafka CLI：提供 `kafka-topics.sh`、`kafka-consumer-groups.sh`。设置 `KAFKA_BIN_DIR=/path/to/kafka/bin`，或直接设置 `KAFKA_TOPICS_BIN=/path/to/kafka-topics.sh`。

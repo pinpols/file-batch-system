@@ -1,0 +1,34 @@
+{
+  "Rules": [
+    {
+      "ID": "expire-tmp-after-3d",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "tmp/" },
+      "Expiration": { "Days": 3 }
+    },
+    {
+      "ID": "expire-staging-after-7d",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "staging/" },
+      "Expiration": { "Days": 7 }
+    },
+    {
+      "ID": "expire-draft-after-3d",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "draft/" },
+      "Expiration": { "Days": 3 }
+    },
+    {
+      "ID": "expire-error-after-30d",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "error/" },
+      "Expiration": { "Days": 30 }
+    },
+    {
+      "ID": "expire-archive-after-90d",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "archive/" },
+      "Expiration": { "Days": 90 }
+    }
+  ]
+}

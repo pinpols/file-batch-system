@@ -1,12 +1,12 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `bba3b0100`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `1bc0d497a`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,670 | 485,518 | 246,081 | 50.7% |
+| 4,673 | 486,136 | 246,580 | 50.7% |
 
 ## 按用途
 
@@ -14,8 +14,8 @@
 |---|---:|---:|---:|---:|
 | prod | 2,710 | 249,023 | 114,137 | 45.8% |
 | test | 1,197 | 172,527 | 91,957 | 53.3% |
-| script | 617 | 48,255 | 30,098 | 62.4% |
-| config | 53 | 8,120 | 5,819 | 71.7% |
+| script | 620 | 48,837 | 30,561 | 62.6% |
+| config | 53 | 8,156 | 5,855 | 71.8% |
 | infra-config | 32 | 5,332 | 3,901 | 73.2% |
 | sql | 61 | 2,261 | 169 | 7.5% |
 
@@ -24,9 +24,9 @@
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
 | Java | 3,443 | 355,674 | 180,893 | 50.9% |
-| Shell | 193 | 29,262 | 22,772 | 77.8% |
-| Python | 222 | 29,792 | 15,145 | 50.8% |
-| YAML | 95 | 12,401 | 9,381 | 75.6% |
+| Shell | 196 | 29,805 | 23,232 | 77.9% |
+| Python | 222 | 29,831 | 15,148 | 50.8% |
+| YAML | 95 | 12,437 | 9,417 | 75.7% |
 | XML | 178 | 21,437 | 6,638 | 31.0% |
 | TypeScript | 37 | 6,572 | 3,097 | 47.1% |
 | Rust | 23 | 8,405 | 2,833 | 33.7% |
@@ -47,7 +47,7 @@
 | `load-tests/scripts/run-control-plane-worker-benchmark.sh` | script | Shell | 879 | 796 |
 | `helm/batch-platform/values.yaml` | infra-config | YAML | 991 | 712 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java` | prod | Java | 1,145 | 644 |
-| `deploy/docker/compose/app.yml` | config | YAML | 718 | 637 |
+| `deploy/docker/compose/app.yml` | config | YAML | 724 | 643 |
 | `scripts/local/validate-seed-scenarios.sh` | script | Shell | 768 | 560 |
 | `scripts/fix-fixture-xlsx.py` | script | Python | 979 | 559 |
 | `scripts/ci/run-full-regression.sh` | script | Shell | 647 | 528 |

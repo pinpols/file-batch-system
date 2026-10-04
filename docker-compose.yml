@@ -53,6 +53,16 @@ services:
       - synchronous_commit=${POSTGRES_SYNCHRONOUS_COMMIT:-on}
       - -c
       - wal_compression=${POSTGRES_WAL_COMPRESSION:-off}
+      - -c
+      - autovacuum_vacuum_scale_factor=${POSTGRES_AUTOVACUUM_VACUUM_SCALE_FACTOR:-0.1}
+      - -c
+      - autovacuum_analyze_scale_factor=${POSTGRES_AUTOVACUUM_ANALYZE_SCALE_FACTOR:-0.1}
+      - -c
+      - autovacuum_vacuum_insert_scale_factor=${POSTGRES_AUTOVACUUM_VACUUM_INSERT_SCALE_FACTOR:-0.2}
+      - -c
+      - autovacuum_naptime=${POSTGRES_AUTOVACUUM_NAPTIME:-1min}
+      - -c
+      - autovacuum_max_workers=${POSTGRES_AUTOVACUUM_MAX_WORKERS:-3}
       # ── WAL 连续归档(PITR 第 B 层)——**默认关闭,生产再开** ──────────────
       # dev 默认不开:开了会持续往 /wal-archive 写 WAL 段,本地联调无意义且占盘。
       # 生产启用步骤(见 docs/runbook/backup-and-pitr.md §1.1):
@@ -171,6 +181,16 @@ services:
       - postgres
       - -c
       - max_connections=200
+      - -c
+      - autovacuum_vacuum_scale_factor=${POSTGRES_AUTOVACUUM_VACUUM_SCALE_FACTOR:-0.1}
+      - -c
+      - autovacuum_analyze_scale_factor=${POSTGRES_AUTOVACUUM_ANALYZE_SCALE_FACTOR:-0.1}
+      - -c
+      - autovacuum_vacuum_insert_scale_factor=${POSTGRES_AUTOVACUUM_VACUUM_INSERT_SCALE_FACTOR:-0.2}
+      - -c
+      - autovacuum_naptime=${POSTGRES_AUTOVACUUM_NAPTIME:-1min}
+      - -c
+      - autovacuum_max_workers=${POSTGRES_AUTOVACUUM_MAX_WORKERS:-3}
     environment:
       # initdb 引导库用平台同名账号体系(凭据本身经 secrets 注入应用,见 secrets/biz-shards/)
       POSTGRES_DB: ${POSTGRES_DB}
@@ -253,6 +273,13 @@ services:
       KAFKA_PARTITIONS_RETRY: ${KAFKA_PARTITIONS_RETRY:-${KAFKA_DEFAULT_PARTITIONS}}
       KAFKA_PARTITIONS_DEAD_LETTER: ${KAFKA_PARTITIONS_DEAD_LETTER:-${KAFKA_DEFAULT_PARTITIONS}}
       KAFKA_PARTITIONS_TRIGGER_LAUNCH: ${KAFKA_PARTITIONS_TRIGGER_LAUNCH:-12}
+      KAFKA_TOPIC_RETENTION_MS: ${KAFKA_TOPIC_RETENTION_MS:-}
+      KAFKA_TOPIC_RETENTION_MS_DISPATCH: ${KAFKA_TOPIC_RETENTION_MS_DISPATCH:-}
+      KAFKA_TOPIC_RETENTION_MS_RESULT: ${KAFKA_TOPIC_RETENTION_MS_RESULT:-}
+      KAFKA_TOPIC_RETENTION_MS_RETRY: ${KAFKA_TOPIC_RETENTION_MS_RETRY:-}
+      KAFKA_TOPIC_RETENTION_MS_DEAD_LETTER: ${KAFKA_TOPIC_RETENTION_MS_DEAD_LETTER:-}
+      KAFKA_TOPIC_RETENTION_MS_TRIGGER_LAUNCH: ${KAFKA_TOPIC_RETENTION_MS_TRIGGER_LAUNCH:-}
+      KAFKA_TOPIC_CLEANUP_POLICY: ${KAFKA_TOPIC_CLEANUP_POLICY:-}
     volumes:
       - ./scripts/data/init-kafka-topics.sh:/scripts/data/init-kafka-topics.sh:ro
       - ./scripts/lib/runtime-defaults.sh:/scripts/lib/runtime-defaults.sh:ro
@@ -347,9 +374,12 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
       MINIO_BUCKET: ${MINIO_BUCKET}
       MINIO_AI_ATTACHMENT_BUCKET: ${BATCH_CONSOLE_AI_ATTACHMENT_STORAGE_BUCKET:-batch-ai-attachments}
+      MINIO_LIFECYCLE_ENVIRONMENT: ${MINIO_LIFECYCLE_ENVIRONMENT:-local}
+      MINIO_LIFECYCLE_APPLY_ON_INIT: ${MINIO_LIFECYCLE_APPLY_ON_INIT:-true}
     volumes:
       - ./scripts/data/init-minio.sh:/scripts/data/init-minio.sh:ro
       - ./scripts/lib/runtime-defaults.sh:/scripts/lib/runtime-defaults.sh:ro
+      - ./scripts/minio:/scripts/minio:ro
     entrypoint: ["/bin/sh", "/scripts/data/init-minio.sh"]
     restart: "no"
     networks:
@@ -374,11 +404,11 @@ services:
       - --maxmemory
       - ${VALKEY_MAXMEMORY:-384mb}
       - --maxmemory-policy
-      - noeviction
+      - ${VALKEY_MAXMEMORY_POLICY:-noeviction}
       - --appendonly
-      - "yes"
+      - ${VALKEY_APPENDONLY:-yes}
       - --appendfsync
-      - everysec
+      - ${VALKEY_APPENDFSYNC:-everysec}
     volumes:
       - valkey-data:/data
     networks:

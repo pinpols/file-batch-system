@@ -1,17 +1,19 @@
-# MinIO 生命周期策略 runbook
+# S3 兼容对象生命周期策略 runbook
 
-> 针对 R-4.6（错误输出文件永驻 MinIO 无 TTL）的运维 runbook。
+> 针对 R-4.6（错误输出文件永驻对象存储无 TTL）的运维 runbook。
 > 维护人：SRE；每半年复盘一次过期天数是否合理。
 >
 > **License 提示**：MinIO Server = AGPL v3。本系统自托管 + 不改源码 + 用户不直连 → **无 license 风险**（同 Citus / Grafana / Loki / Tempo，license 风险结论一致:无）。
 
 ## 背景
 
-`batch-worker-import` 在 validate / load 失败时会把坏行以 NDJSON 写入 MinIO
-`batch-error-output` bucket（具体名见 `batch.minio.error-bucket`）。
+`batch-worker-import` 在 validate / load 失败时会把坏行以 NDJSON 写入 S3 兼容对象存储
+`batch-error-output` bucket（具体名见 `batch.storage.s3.bucket` 及文件域配置）。
 设计文档 §9.11 约定 `errorOutputRetentionDays`，但 worker 层当前**未实现主动清理**。
-为避免持续累积占用存储，统一使用 **MinIO bucket lifecycle rule** 在存储侧做自动过期，
-零代码改动即可生效。
+为避免持续累积占用存储，统一使用 **对象存储 lifecycle rule** 在存储侧做自动过期，
+零代码改动即可生效。仓库脚本使用 `mc ilm` 作为 MinIO / S3 兼容服务适配器；AWS S3、
+阿里云 OSS、腾讯云 COS 等托管服务也可以用平台侧 lifecycle 配置完成同一目标，不要求
+在生产环境安装或运行本仓脚本。
 
 其他**导入/导出过程中的临时中间产物** bucket（预处理 spool 目录、parsed NDJSON、
 validated NDJSON、export draft）只要命名固定，都适用同一套策略。
@@ -25,42 +27,46 @@ validated NDJSON、export draft）只要命名固定，都适用同一套策略�
 | `batch-export-draft` | 导出生成中文件 | **3 天** | 正常流程会被 StoreStep 移走；留 3 天处理异常 |
 | `batch-dispatch-archive` | 分发归档 | **90 天** | 回溯下游反馈时查原文 |
 
-## 实施步骤（每个环境都做）
+## 实施步骤
 
-### 1. 准备 lifecycle JSON
-
-保存到 `scripts/minio/lifecycle-error-output.json`（已就位则跳过此步）：
-
-```json
-{
-  "Rules": [
-    {
-      "ID": "expire-error-output-after-30d",
-      "Status": "Enabled",
-      "Expiration": { "Days": 30 }
-    }
-  ]
-}
-```
-
-其他 bucket 各自一份，Days 按上表调整。
-
-### 2. 用 `mc` CLI 下发
+### 1. 选择环境 profile
 
 ```bash
-# 假设 alias 已用 mc alias set batch-mc 做好
-mc ilm import batch-mc/batch-error-output < scripts/minio/lifecycle-error-output.json
-mc ilm import batch-mc/batch-import-staging < scripts/minio/lifecycle-import-staging.json
-mc ilm import batch-mc/batch-export-draft   < scripts/minio/lifecycle-export-draft.json
-mc ilm import batch-mc/batch-dispatch-archive < scripts/minio/lifecycle-dispatch-archive.json
+# 只预览，不修改
+scripts/minio/apply-lifecycle.sh --environment local
 
-# 验证
-mc ilm ls batch-mc/batch-error-output
+# 本地 / 测试 / 压测下发
+scripts/minio/apply-lifecycle.sh --environment local --apply
+scripts/minio/apply-lifecycle.sh --environment test --apply
+scripts/minio/apply-lifecycle.sh --environment benchmark --apply
 ```
+
+脚本读取 `scripts/minio/lifecycle-profiles/*.env`，将 `main` 映射到
+`MINIO_BUCKET` / `BATCH_S3_BUCKET`，将 `ai` 映射到
+`MINIO_AI_ATTACHMENT_BUCKET` / `BATCH_CONSOLE_AI_ATTACHMENT_STORAGE_BUCKET`。
+具体 lifecycle JSON 位于 `scripts/minio/lifecycle-*.json`。
+
+### 2. 生产下发保护
+
+生产环境默认不自动下发。必须使用具备 lifecycle 管理权限的专用账号，并显式确认。
+托管对象存储可直接在云平台控制台、Terraform、Helm values 或 Operator 配置中应用同等策略；
+以下命令只是 MinIO / `mc` 兼容环境示例：
+
+```bash
+MINIO_ENDPOINT=https://s3.prod.example.com \
+MINIO_ROOT_USER="$S3_LIFECYCLE_ADMIN_ACCESS_KEY" \
+MINIO_ROOT_PASSWORD="$S3_LIFECYCLE_ADMIN_SECRET_KEY" \
+MINIO_BUCKET=batch-prod \
+MINIO_AI_ATTACHMENT_BUCKET=batch-ai-attachments \
+MINIO_LIFECYCLE_PROD_ACK=I_UNDERSTAND_PRODUCTION_LIFECYCLE \
+  scripts/minio/apply-lifecycle.sh --environment prod --apply
+```
+
+脚本会拒绝使用本地默认 `minioadmin/minioadmin123` 对生产下发。
 
 ### 3. 验证生效
 
-- `mc ilm ls` 能看到规则
+- `mc ilm ls` 或云厂商 lifecycle 查询能看到规则
 - 取一条时间戳 ≥ retention 的旧对象，等下一次 lifecycle scan（默认每天一次），
   `mc stat` 会看到 `X-Amz-Expiration` header
 
@@ -78,7 +84,7 @@ mc ilm ls batch-mc/batch-error-output
    并设独立 rule，**不要**把整个 `batch-error-output` retention 加长。
 3. **生产前必须做灰度**：先在 dev / staging 环境跑 1 周确认规则生效 + 数据不误删，
    再推 prod。
-4. **灾备**：lifecycle 是 MinIO 单集群配置；若走 multi-site 复制需要在主 / 从各自配。
+4. **灾备**：lifecycle 是对象存储集群或云桶级配置；若走 multi-site / 跨区域复制，需要在主 / 从或各区域分别配置。
 
 ## 相关
 

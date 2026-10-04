@@ -1,6 +1,7 @@
 # 运维巡检与自愈脚本
 
-这里放本地和 staging 可复用的巡检、自愈和补偿入口。
+这里放本地、staging、生产跳板机或临时运维 Job 可复用的巡检、自愈和补偿入口。脚本默认
+按环境变量连接目标系统，不要求目标系统运行在本仓库的 Docker Compose 中。
 
 ## 常用入口
 
@@ -11,6 +12,8 @@
 - `inspect-dependencies.sh`：PostgreSQL / Kafka / Valkey / MinIO 基础依赖只读巡检，支持宿主机 CLI 和 Docker fallback。
 - `inspect-production-capacity.sh`：生产容量治理只读巡检，覆盖 PostgreSQL 热表/保留、Kafka topic retention 和对象存储 bucket/lifecycle。
 - `plan-production-retention.sh`：生产保留治理只读计划，输出 PostgreSQL 归档策略缺口、Kafka topic 保留策略、对象存储 lifecycle 和 Redis TTL 候选项；不执行清理。
+- `apply-infra-governance.sh`：按内置 `config/ops-governance/{local,test,benchmark,prod}.env` 或外部 `--profile-file` 预览治理配置；Kafka topic 与 MinIO lifecycle 可显式 apply，PostgreSQL / Valkey 配置需要通过对应部署系统重启或滚动发布生效。
+- `inspect-runtime-governance.sh`：只读检查内置 profile 或外部 `--profile-file` 是否覆盖 LOCAL / NAS / SFTP / OSS / API / API_PUSH / EMAIL 通道、Worker Report Outbox、Quota / ShedLock、读副本、业务分片、Quartz、观测和外部端点治理边界。
 - `run-toolbox.sh`：进入独立运维工具箱，提供 `psql`、Kafka CLI、`mc`、`redis-cli` 和 Python 治理运行时；应用镜像不内置这些工具，容器以非 root 用户运行，生产执行必须使用目标组件的最小权限账号。
 - `trigger-compensation.sh`：触发补偿任务。
 - `manage-trigger.sh`：通过 Trigger 管理 API 执行注册、暂停、恢复、排空和状态查询。

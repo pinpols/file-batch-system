@@ -12,6 +12,11 @@
 | PostgreSQL WAL / 表膨胀 | 正常，压测和批量写入后尤其明显 | WAL 归档、checkpoint、autovacuum、必要时 `pg_repack` | 把 Docker 卷大小等同于业务数据大小 |
 | Kafka topic 日志 | 正常，取决于 retention、segment 和消费 lag | 有界 retention、lag 告警、RF/minISR | 生产随意删 topic、重置 offset |
 | 对象存储 | 正常，导入/导出/附件/坏行文件都会增长 | bucket 分离、lifecycle、manifest/checksum、备份 | 用本地 MinIO 清理经验替代生产 OSS 策略 |
+| 文件通道 | 正常，LOCAL / NAS / SFTP / OSS / API / API_PUSH / EMAIL 都可能产生待投递、回执、暂存和外部失败残留 | 通道沙箱、host key / TLS / egress allowlist、只读探测、失败归档和审计 | 把通道探测失败直接当作可删除目标 |
+| Worker Report Outbox | 正常，orchestrator 不可达或 worker 重启时会积压 | PLATFORM_PG 优先，SQLITE 必须声明路径、备份和切换边界 | 生产多个 worker 共享同一个 SQLite 文件 |
+| Quartz / Trigger 状态 | 正常，misfire、trigger、job detail 和 outbox 会随计划增长 | misfire 保留、Quartz 表容量巡检、Trigger outbox 水位和索引 | 直接改 Quartz 表绕过 Trigger API |
+| 读副本 / 业务分片 | 正常，副本 lag、slot、分片容量和租户 placement 会变化 | lag 阈值、failover 隔离、片级账密、placement 对账 | 把 PG 主库健康等同于副本/分片健康 |
+| 观测栈 | 正常，指标、日志、trace 和告警事件会增长 | Prometheus / Loki / Tempo / Jaeger retention、采样和告警路由 | 无限保留调试日志和 100% trace |
 | 本地压测残留 | 正常但必须清理 | `load-tests/scripts/cleanup-load-test-environment.sh` | 把压测清理脚本用于生产 |
 
 ## 2. 只读巡检入口
@@ -41,6 +46,10 @@ bash scripts/ops/inspect-production-capacity.sh
 - PostgreSQL：数据库逻辑大小、Top 热表、dead tuple、Outbox 积压、Trigger 已接收未建实例、超过保留窗口的热表数据、幂等账本行数、核心分区存在性。
 - Kafka：核心 topic 是否可读、分区数、副本因子、topic retention 和 cleanup policy。
 - 对象存储：业务 bucket / AI 附件 bucket 是否可访问、容量、lifecycle 是否可读取。
+
+运行时 profile 另由 `inspect-runtime-governance.sh` 检查，覆盖 NAS / SFTP / API / API_PUSH /
+EMAIL / OSS / LOCAL 通道、Worker Report Outbox、Quota / ShedLock、读副本、业务分片、Quartz、
+观测和 OpenLineage。该检查只验证 profile 是否完整和生产基线是否 fail-close，不连接外部系统。
 
 默认 `WARN` 不阻断，`BATCH_PROD_CAPACITY_STRICT=true` 会把 warning 作为失败，用于上线准入或定期巡检。
 
@@ -99,6 +108,7 @@ bash scripts/ops/plan-production-retention.sh
 | PostgreSQL | `BATCH_PROD_CAPACITY_CHECK_POSTGRES` | `BATCH_PROD_CAPACITY_POSTGRES_STRICT` | `BATCH_PROD_CAPACITY_TABLE_SIZE_WARN_MB`、`BATCH_PROD_CAPACITY_DEAD_TUPLE_WARN_COUNT`、`BATCH_PROD_CAPACITY_OUTBOX_BACKLOG_WARN_COUNT`、`BATCH_PROD_CAPACITY_TRIGGER_BACKLOG_WARN_COUNT`、`BATCH_PROD_CAPACITY_DEDUP_WARN_COUNT`、`BATCH_PROD_CAPACITY_OLD_RUNTIME_WARN_DAYS` |
 | Kafka | `BATCH_PROD_CAPACITY_CHECK_KAFKA` | `BATCH_PROD_CAPACITY_KAFKA_STRICT` | `BATCH_PROD_CAPACITY_KAFKA_BOOTSTRAP`、`BATCH_PROD_CAPACITY_KAFKA_TOPICS`、`BATCH_PROD_CAPACITY_KAFKA_MIN_REPLICATION_FACTOR`、`BATCH_PROD_CAPACITY_KAFKA_REQUIRE_RETENTION` |
 | 对象存储 | `BATCH_PROD_CAPACITY_CHECK_OBJECT_STORE` | `BATCH_PROD_CAPACITY_OBJECT_STORE_STRICT` | `BATCH_PROD_CAPACITY_OBJECT_STORE_ENDPOINT`、`BATCH_PROD_CAPACITY_OBJECT_STORE_BUCKETS`、`BATCH_PROD_CAPACITY_OBJECT_STORE_REQUIRE_LIFECYCLE` |
+| 运行时治理 profile | `BATCH_INSPECT_SKIP_RUNTIME_GOVERNANCE` | 无分域严格度；生产 profile 内置 fail-close 校验 | `BATCH_DISPATCH_CHANNEL_TYPES_GOVERNED`、`BATCH_DISPATCH_NAS_SANDBOX_ROOT`、`BATCH_WORKER_REPORT_OUTBOX_STORAGE`、`BATCH_TRIGGER_MISFIRE_PENDING_RETENTION_DAYS`、`BATCH_OBSERVABILITY_RETENTION_DAYS` |
 
 示例：上线前要求 PG / Kafka 严格阻断，但对象存储由 SRE 在独立窗口补 lifecycle 证据：
 
@@ -115,7 +125,59 @@ bash scripts/ops/inspect-production-capacity.sh
 `scripts/ci/check-production-capacity-governance.py` 校验脚本、只读 SQL、runbook、索引和 workflow
 入口同步，避免生产容量治理退化成无人维护的文档。
 
-## 5. 运行时依赖边界
+## 5. 四环境治理配置
+
+PostgreSQL、Kafka、Valkey / Redis、MinIO 的治理参数已固化在
+`config/ops-governance/{local,test,benchmark,prod}.env`。同一 profile 也登记文件通道、
+状态后端、调度状态、拓扑、观测和外部端点治理参数。这些 profile 是环境级基线，不是生产批量删除脚本，
+也不绑定本仓库的 Docker Compose。Compose、Helm、Kubernetes Operator、托管服务控制台和跳板机脚本都只是
+把这组基线落到目标环境的适配层。
+
+| 环境 | profile | 覆盖内容 | 生效方式 |
+|---|---|---|---|
+| 本地开发 | `local.env` | PG WAL/checkpoint/autovacuum、Kafka broker/topic retention、Valkey 内存/AOF、对象生命周期和运行时治理边界 | 可由 Compose、裸机脚本或 IDE 环境变量加载 |
+| 场景测试 / sim | `test.env` | 比本地更长的证据保留窗口，仍保持有界增长 | 由测试环境部署系统或脚本显式加载 |
+| 压测 | `benchmark.env` | 更积极的 autovacuum、短 Kafka/Object retention、较大 Valkey 数据预算 | 压测环境独立加载；压测后仍跑专用清理 |
+| 生产 | `prod.env` | 生产基线值、RF/minISR、较长 retention、对象生命周期和 fail-close 安全基线 | 作为 Helm / Operator / 托管服务 / 平台配置对照；生产 apply 必须变更审批 |
+
+预览 profile：
+
+```bash
+bash scripts/ops/apply-infra-governance.sh --profile local
+```
+
+外部环境可使用自己的基线文件，不要求落在仓库目录内：
+
+```bash
+bash scripts/ops/apply-infra-governance.sh --profile-file /etc/batch/prod-governance.env
+bash scripts/ops/inspect-runtime-governance.sh --profile-file /etc/batch/prod-governance.env
+```
+
+对目标 Kafka / S3 兼容对象存储显式下发支持脚本的治理项：
+
+```bash
+bash scripts/ops/apply-infra-governance.sh \
+  --profile-file /etc/batch/prod-governance.env \
+  --apply-kafka-topics \
+  --apply-minio-lifecycle
+```
+
+PostgreSQL 和 Valkey 的参数是启动配置，必须通过对应部署系统、数据库 Operator、托管服务参数组或滚动发布生效；
+禁止用 `ALTER SYSTEM` / `CONFIG SET` 临时改生产，避免留下不可审计状态。Kafka topic retention
+由 `scripts/data/init-kafka-topics.sh` 幂等下发；MinIO lifecycle 由
+`scripts/minio/apply-lifecycle.sh` 下发，生产 `--apply` 必须设置
+`MINIO_LIFECYCLE_PROD_ACK=I_UNDERSTAND_PRODUCTION_LIFECYCLE`，且拒绝本地默认 root 凭据。
+
+运行时治理 profile 只做只读校验：
+
+```bash
+bash scripts/ops/inspect-runtime-governance.sh --profile prod
+```
+
+该入口不连接 NAS / SFTP / SMTP / API 下游，不验证真实凭据，也不创建或删除文件。真实通道连通性、
+host key、TLS 证书、egress allowlist 和目标目录权限必须在对应环境用最小权限账号单独验收。
+
+## 6. 运行时依赖边界
 
 生产应用运行时不需要 Python。Java 服务、Worker 和 SDK 的运行镜像不能因为治理脚本引入 Python
 运行时依赖。
@@ -135,7 +197,9 @@ Python 门禁依赖。`ops-toolbox` 不进入应用发布镜像，也不作为�
 `docker-image-build` CI 会构建该工具箱镜像，作为 Dockerfile、基础镜像 tag 和 CLI 复制路径的发布前校验；
 该校验不表示工具箱进入应用服务镜像或随业务 Pod 常驻运行。
 
-本地和自托管 Compose 环境提供 `ops-toolbox` profile：
+仓库提供的 `ops-toolbox` 是一种可选客户端打包方式，适合本地和自托管 Compose；生产也可以使用
+平台已有的 bastion、Kubernetes Job、CI Runner 或 SRE 工具箱，只要提供等价的 `psql`、Kafka CLI、
+`mc`、`redis-cli` 和只读凭据。
 
 ```bash
 # 进入工具箱 shell
@@ -166,7 +230,7 @@ Kafka 不是只复制一个入口脚本。工具箱会从官方 Kafka 镜像复�
 工具箱同时安装 `redis-cli`，用于 Valkey/Redis 只读巡检、quota / ShedLock / 缓存定位和连接验证。
 生产自愈或删除 key 仍需走对应 runbook 和变更审批，不能把工具箱当作默认清理入口。
 
-## 6. 生产账号与权限边界
+## 7. 生产账号与权限边界
 
 生产容量巡检必须使用最小权限账号，不能复用应用写账号、root / superuser、MinIO 管理员账号或
 Redis 管理账号。工具箱只提供客户端，不降低目标系统的权限要求。
@@ -186,7 +250,7 @@ Redis 管理账号。工具箱只提供客户端，不降低目标系统的权�
 `https://` 外部 URL，避免第三方站点波动阻断 CI。外部链接失效应作为文档维护事项处理，不应影响
 生产运行或容量巡检。
 
-## 7. PostgreSQL 治理口径
+## 8. PostgreSQL 治理口径
 
 生产要同时看三类大小：
 
@@ -207,7 +271,7 @@ Redis 管理账号。工具箱只提供客户端，不降低目标系统的权�
 - [幂等 dedup ledger 留存治理](./dedup-ledger-retention.md)
 - [PostgreSQL 备份 / PITR / 容量护栏](./backup-and-pitr.md)
 
-## 8. Kafka 治理口径
+## 9. Kafka 治理口径
 
 Kafka 增长主要由 topic retention、segment、消费 lag 和副本因子决定。生产核心原则：
 
@@ -218,7 +282,7 @@ Kafka 增长主要由 topic retention、segment、消费 lag 和副本因子决�
 
 本地压测需要快速回收 Kafka 空间时，使用 `load-tests/scripts/cleanup-load-test-environment.sh --apply --kafka-reset-topics`，该命令只用于本地压测环境。
 
-## 9. 对象存储治理口径
+## 10. 对象存储治理口径
 
 对象存储需要物理分桶和生命周期治理：
 
@@ -229,11 +293,11 @@ Kafka 增长主要由 topic retention、segment、消费 lag 和副本因子决�
 
 关联 runbook：
 
-- [MinIO 生命周期策略](./minio-lifecycle-policy.md)
+- [对象存储生命周期策略](./minio-lifecycle-policy.md)
 - [S3 后端](./object-storage-s3-backends.md)
 - [Filesystem](./object-storage-filesystem.md)
 
-## 10. 压测与生产的边界
+## 11. 压测与生产的边界
 
 压测允许批量造数和批量清理；生产不允许。压测脚本新增磁盘水位和清理入口，只证明本地环境可控，不等价于生产容量治理已经达标。
 
@@ -243,7 +307,7 @@ Kafka 增长主要由 topic retention、segment、消费 lag 和副本因子决�
 | staging 压测 | 只清专用测试租户和专用 bucket/prefix，保留报告证据 |
 | 生产 | 只读巡检、归档、生命周期、备份恢复演练和变更审批后的保留策略调整 |
 
-## 11. 上线准入清单
+## 12. 上线准入清单
 
 - [ ] `inspect-production-capacity.sh` 在目标环境可跑通，严格模式没有失败。
 - [ ] `plan-production-retention.sh` 在目标环境可跑通，`PLAN` 项均有对应归档、lifecycle、retention 或 TTL 处置记录。

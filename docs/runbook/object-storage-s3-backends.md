@@ -44,14 +44,14 @@
 
 ## 各后端示例
 
-**自建 MinIO（默认）**
+**自建 S3 兼容服务（MinIO 示例）**
 ```yaml
 batch.storage.s3:
   endpoint: http://minio:9000
   access-key: minioadmin
   secret-key: ${BATCH_S3_SECRET_KEY}
-	  bucket: batch-prod
-	  # region 留空,auto-create-bucket/path-style-enabled 默认 true
+  bucket: batch-prod
+  # region 留空,auto-create-bucket/path-style-enabled 默认 true
 ```
 
 **AWS S3**
@@ -61,9 +61,9 @@ batch.storage.s3:
   region: us-east-1
   access-key: ${AWS_ACCESS_KEY_ID}
   secret-key: ${AWS_SECRET_ACCESS_KEY}
-	  bucket: my-batch-bucket
-	  auto-create-bucket: false
-	  path-style-enabled: false
+  bucket: my-batch-bucket
+  auto-create-bucket: false
+  path-style-enabled: false
 ```
 
 **阿里云 OSS（S3 兼容模式）**
@@ -99,7 +99,8 @@ batch.storage.s3:
 
 ## 本地 MinIO `mc` 常用命令
 
-本地 compose 已包含 `minio-init`，镜像内自带 `mc`。不想在宿主机安装 `mc` 时，先定义一个临时 helper：
+以下仅是本地排障示例。生产和托管对象存储应使用平台侧审计账号、只读查询或受控 lifecycle 配置，
+不要套用本地默认 alias 和凭据。本地 compose 已包含 `minio-init`，镜像内自带 `mc`。不想在宿主机安装 `mc` 时，先定义一个临时 helper：
 
 ```bash
 mcli() {

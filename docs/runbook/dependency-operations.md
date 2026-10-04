@@ -1,4 +1,4 @@
-# Kafka / Valkey / MinIO / PostgreSQL 运维补充
+# Kafka / Valkey / S3 兼容对象存储 / PostgreSQL 运维补充
 
 本文是四个基础依赖的日常巡检和故障边界。应用控制面只依赖这些服务的外部契约；本项目不把基础服务的
 failover、数据修复或重放动作偷偷封装进健康检查。
@@ -6,7 +6,7 @@ failover、数据修复或重放动作偷偷封装进健康检查。
 ## 1. 只读巡检入口
 
 ```bash
-# 本地 Docker 默认端口
+# 默认读取环境变量；未显式传参时使用本地 fallback
 bash scripts/ops/inspect-dependencies.sh all
 
 # 只查单个依赖
@@ -22,14 +22,15 @@ BATCH_INFRA_MINIO_SECRET_KEY="$MINIO_SECRET_KEY" \
 bash scripts/ops/inspect-dependencies.sh all
 ```
 
-脚本支持宿主机 CLI；本地没有 CLI 时，会尝试复用正在运行的 Docker 容器：
+脚本支持宿主机 CLI。Docker fallback 只面向本地或自托管调试；生产、测试、压测环境应显式传入真实地址、
+凭据和 CLI 路径，不依赖本仓库 Compose 服务名或容器名：
 
 | 依赖 | 宿主机检查 | Docker fallback | 失败含义 |
 |---|---|---|---|
 | PostgreSQL | `pg_isready` / `psql` | `batch-postgres-primary` | 连接不可用或状态查询权限不足 |
 | Kafka | `kafka-topics.sh` / `kafka-consumer-groups.sh` | `batch-kafka` | Broker 不可达、CLI 缺失或 group 不存在 |
 | Valkey | `valkey-cli` / `redis-cli` | `batch-valkey` | PING 失败 |
-| MinIO | `/minio/health/ready` / `mc` | 健康端点仍走显式 endpoint | 服务不可用或 bucket/凭据错误 |
+| S3 兼容对象存储 | readiness endpoint / `mc` | 健康端点仍走显式 endpoint | 服务不可用或 bucket/凭据错误 |
 
 没有 CLI 的状态默认是 `WARN`，不会把“无法读取扩展指标”伪装成服务正常。生产门禁可设置
 `BATCH_INFRA_STRICT=true`，将可选检查缺失升级为失败。脚本不会输出密码，也不会自动修改数据。
@@ -76,7 +77,7 @@ Compose 默认使用 `512MiB limit / 384MiB maxmemory`，HA 清单使用 `1Gi li
 显式失败并触发现有熔断/告警，不能静默淘汰锁、配额或 SSE 状态。生产容量压测后可同比例扩大，不能让
 `maxmemory` 等于容器 limit。
 
-## 4. MinIO
+## 4. S3 兼容对象存储 / MinIO
 
 ### 日常检查
 
@@ -94,7 +95,7 @@ Compose 默认使用 `512MiB limit / 384MiB maxmemory`，HA 清单使用 `1Gi li
 | multipart 残留 | 先列出上传、核对保留时间，再按生命周期策略清理；禁止无条件 `abort` 全桶 |
 | 对象缺失/损坏 | 先保留审计证据和 manifest，再从版本/备份恢复；不要覆盖现有对象 |
 
-MinIO Console 地址只用于人工运维，应用统一使用 S3 API endpoint；密钥从 Secret/环境变量注入。
+对象存储 Console 地址只用于人工运维，应用统一使用 S3 API endpoint；密钥从 Secret/环境变量注入。
 
 ## 5. PostgreSQL
 
@@ -122,7 +123,7 @@ MinIO Console 地址只用于人工运维，应用统一使用 S3 API endpoint�
 | 日常只读巡检 | `inspect-dependencies.sh all` + `inspect-all.sh` | 不允许 |
 | Kafka lag | dependency script + observability | 仅扩容/限流按变更流程 |
 | Valkey 故障 | dependency script + ShedLock/quota playbook | 不清锁、不改 fail-open |
-| MinIO 对象异常 | readiness + manifest/checksum + lifecycle SOP | 不全桶清理 |
+| 对象存储异常 | readiness + manifest/checksum + lifecycle SOP | 不全桶清理 |
 | PG 故障 | dependency script + HA/PITR runbook | 不直接改业务状态 |
 
 巡检通过只表示“依赖在当前时刻可访问”，不等价于 HA、RTO/RPO 或数据恢复演练已经达标；这些必须
