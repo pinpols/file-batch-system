@@ -34,3 +34,27 @@ validate_load_test_run_id() {
     return 2
   fi
 }
+
+load_test_available_kib() {
+  local path="${1:-$ROOT_DIR}"
+  df -Pk "$path" | awk 'NR == 2 {print $4}'
+}
+
+require_load_test_disk_headroom() {
+  local label="${1:-load-test}"
+  local min_free_gib="${2:-${LOAD_TEST_MIN_FREE_GIB:-5}}"
+  if ! [[ "$min_free_gib" =~ ^[1-9][0-9]*$ ]]; then
+    echo "LOAD_TEST_MIN_FREE_GIB must be a positive integer, got: ${min_free_gib}" >&2
+    return 2
+  fi
+
+  local available_kib required_kib
+  available_kib="$(load_test_available_kib "$ROOT_DIR")"
+  required_kib="$((min_free_gib * 1024 * 1024))"
+  if [[ -z "$available_kib" || "$available_kib" -lt "$required_kib" ]]; then
+    echo "${label} requires at least ${min_free_gib}GiB free disk; available=$((available_kib / 1024 / 1024))GiB at ${ROOT_DIR}" >&2
+    echo "Run: bash load-tests/scripts/cleanup-load-test-environment.sh --diagnose" >&2
+    echo "For local-only cleanup after review: bash load-tests/scripts/cleanup-load-test-environment.sh --apply --all" >&2
+    return 2
+  fi
+}

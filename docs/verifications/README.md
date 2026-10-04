@@ -7,6 +7,7 @@
 
 | 文档 | 范围 |
 |---|---|
+| [worker-five-load-validation-2026-10-04.md](./worker-five-load-validation-2026-10-04.md) | 五类 Worker 1w / 10w 压测验收记录模板与当前证据入口 |
 | [sonar-report-2026-10-01.md](./sonar-report-2026-10-01.md) | 全量 Sonar 扫描、Bug 治理结果与存量 Code Smell 分类 |
 | [worker-local-runtime-performance-2026-09-14.md](./worker-local-runtime-performance-2026-09-14.md) | 本地 JVM Worker 严格阶梯、混合压力与故障恢复复测 |
 | [worker-local-runtime-performance-2026-09-20.md](./worker-local-runtime-performance-2026-09-20.md) | 最新本地构建、BE acceptance、sim 全场景与 30 秒 mixed 严格复测 |

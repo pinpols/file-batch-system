@@ -9,6 +9,8 @@
 #   2. inspect-db.sh             — Flyway / 告警事件 / 长期停滞作业 / Outbox / 死信 / 重试积压
 #   3. inspect-workers.sh        — Worker 排空超时 / 心跳失联 / 孤儿任务
 #   4. inspect-dependencies.sh   — PostgreSQL / Kafka / Valkey / MinIO 基础依赖只读巡检
+#   5. inspect-production-capacity.sh — PG 热表 / Kafka retention / 对象存储 lifecycle 只读巡检
+#   6. plan-production-retention.sh   — PG / Kafka / 对象存储 / Redis 保留治理只读计划
 #
 # 使用方法：
 #   # 最小配置（DB 巡检 + 服务巡检）
@@ -27,6 +29,8 @@
 #   BATCH_INSPECT_SKIP_DB=true           bash scripts/ops/inspect-all.sh
 #   BATCH_INSPECT_SKIP_WORKERS=true      bash scripts/ops/inspect-all.sh
 #   BATCH_INSPECT_SKIP_DEPENDENCIES=true bash scripts/ops/inspect-all.sh
+#   BATCH_INSPECT_SKIP_PRODUCTION_CAPACITY=true bash scripts/ops/inspect-all.sh
+#   BATCH_INSPECT_SKIP_PRODUCTION_RETENTION_PLAN=true bash scripts/ops/inspect-all.sh
 #
 # 输出格式：
 #   每个脚本的输出以 banner 分隔，最后打印汇总表。
@@ -38,6 +42,8 @@ BATCH_INSPECT_SKIP_OBSERVABILITY="${BATCH_INSPECT_SKIP_OBSERVABILITY:-false}"
 BATCH_INSPECT_SKIP_DB="${BATCH_INSPECT_SKIP_DB:-false}"
 BATCH_INSPECT_SKIP_WORKERS="${BATCH_INSPECT_SKIP_WORKERS:-false}"
 BATCH_INSPECT_SKIP_DEPENDENCIES="${BATCH_INSPECT_SKIP_DEPENDENCIES:-false}"
+BATCH_INSPECT_SKIP_PRODUCTION_CAPACITY="${BATCH_INSPECT_SKIP_PRODUCTION_CAPACITY:-false}"
+BATCH_INSPECT_SKIP_PRODUCTION_RETENTION_PLAN="${BATCH_INSPECT_SKIP_PRODUCTION_RETENTION_PLAN:-false}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -93,11 +99,19 @@ run_script "inspect-dependencies" \
   "${SCRIPT_DIR}/inspect-dependencies.sh" \
   "${BATCH_INSPECT_SKIP_DEPENDENCIES}"
 
+run_script "inspect-production-capacity" \
+  "${SCRIPT_DIR}/inspect-production-capacity.sh" \
+  "${BATCH_INSPECT_SKIP_PRODUCTION_CAPACITY}"
+
+run_script "plan-production-retention" \
+  "${SCRIPT_DIR}/plan-production-retention.sh" \
+  "${BATCH_INSPECT_SKIP_PRODUCTION_RETENTION_PLAN}"
+
 # ── 汇总 ───────────────────────────────────────────────────────────────────
 banner "INSPECTION SUMMARY"
 printf '%-30s  %s\n' "Script" "Result"
 printf '%s\n' "$(printf -- '-%.0s' {1..45})"
-for name in "inspect-observability" "inspect-db" "inspect-workers" "inspect-dependencies"; do
+for name in "inspect-observability" "inspect-db" "inspect-workers" "inspect-dependencies" "inspect-production-capacity" "plan-production-retention"; do
   result="${script_results[${name}]:-UNKNOWN}"
   printf '%-30s  %s\n' "${name}" "${result}"
 done

@@ -99,9 +99,11 @@ TENANT_ID=default-tenant DURATION_SECONDS=300 INTERVAL_SECONDS=5 \
 - `jt_success`、`ji_success` 在稳态窗口内的增量 / 秒，即实际处理吞吐
 - `worker_load / worker_capacity` 是否接近 1；若接近 1 且 backlog 增长，瓶颈在 worker；若未接近 1 且 backlog 增长，优先怀疑调度/派发
 
-### 四类 Worker 端到端压测数据
+### 五类 Worker 端到端压测数据
 
-本地四类 worker 成功基线使用脚本准备可执行数据集，并顺序压测 IMPORT / EXPORT / DISPATCH / PROCESS：
+本地业务 worker 成功基线使用脚本准备可执行数据集，并顺序压测 IMPORT / EXPORT / DISPATCH / PROCESS。
+ATOMIC 的 1w/10w 严格容量画像使用独立 P2 入口，避免把业务文件/SQL 场景和控制面 task storm 混成
+同一个容量结论。
 
 ```bash
 cd ..
@@ -125,7 +127,40 @@ USERS_PER_WORKER=1 IMPORT_PROFILE=medium \
 RUN_ID=<report里的RUN_ID> bash load-tests/scripts/cleanup-worker-load-data.sh
 ```
 
-注意：当前 EXPORT payload 是静态 fileName / targetPath；`USERS_PER_WORKER>1` 会复用同一输出文件，可能触发 `EXPORT_REGISTER_CHECKSUM_CONFLICT`。要做 EXPORT 并发上限，需要扩展为动态 feeder，为每个虚拟用户生成唯一 fileName。
+`cleanup-worker-load-data.sh` 只清理本轮 runId 关联的业务表、平台表和本地临时文件；它不会删除
+Kafka topic 日志段、MinIO 压测前缀或回收 PostgreSQL 已膨胀的数据文件。压测后发现 Docker
+卷持续变大时，先诊断环境产物：
+
+```bash
+bash load-tests/scripts/cleanup-load-test-environment.sh --diagnose
+```
+
+确认是可重建的本地开发环境后，再执行推荐清理：
+
+```bash
+bash load-tests/scripts/cleanup-load-test-environment.sh --apply --all
+```
+
+`--all` 会把压测 topic 调整为安全保留（默认 6 小时）、清理本地 MinIO 压测前缀，并对高频
+PostgreSQL 表执行 `VACUUM ANALYZE`；本地 MinIO 删除回收站也会一并清理。压测前不要把
+`LOAD_TEST_KAFKA_RETENTION_MS` 调到分钟级，否则 trigger 消息可能在 orchestrator 完整消费前被
+broker 回收。若只想单独清理 MinIO 回收站，可执行：
+
+```bash
+bash load-tests/scripts/cleanup-load-test-environment.sh --apply --minio-trash
+```
+
+如果需要立刻释放 Kafka topic 日志空间，可在停写的本地环境显式执行：
+
+```bash
+bash load-tests/scripts/cleanup-load-test-environment.sh --apply --kafka-reset-topics
+```
+
+该命令会删除并重建本地压测 topic，只适合数据可丢弃的开发环境。
+
+注意：IMPORT / EXPORT / PROCESS payload 内置 `#{traceId}` 占位符，Gatling 会为每个虚拟用户生成唯一
+文件名或业务键；Dispatch 也会按请求数预建独立 fileId。若新增自定义 payload，必须保留这一约束，
+否则并发压测会退化为重复文件/重复业务键冲突。
 
 四类 worker 阶梯加压：
 
@@ -301,6 +336,29 @@ P2 容量与多租户公平性 fixture 会自包含创建所需的 Atomic 作业
 - Import / Export / Dispatch / Process 1w/10w：使用 `run-worker-load-tests.sh`
   按 `WORKER_MODULES_CSV=<module>` 单类运行，必要时放宽 `WAIT_TERMINAL_TIMEOUT_SECONDS`，
   并保留每类报告。它验证业务 worker 链路，不得和 Atomic 控制面容量基线直接比较。
+
+权威命令矩阵如下。`RUN_ID` 建议使用可追溯前缀，报告落在 `load-tests/target/`，正式验收结论再摘要到
+`docs/verifications/worker-five-load-validation-<YYYY-MM-DD>.md`。
+
+| Worker | 1w 命令 | 10w 命令 | 口径 |
+|---|---|---|---|
+| Import | `RUN_ID=ltw-import-1w-<ts> WORKER_MODULES_CSV=import USERS_PER_WORKER=10000 IMPORT_PROFILE=medium WAIT_TERMINAL_TIMEOUT_SECONDS=3600 bash load-tests/scripts/run-worker-load-tests.sh` | `RUN_ID=ltw-import-10w-<ts> WORKER_MODULES_CSV=import USERS_PER_WORKER=100000 IMPORT_PROFILE=medium WAIT_TERMINAL_TIMEOUT_SECONDS=7200 bash load-tests/scripts/run-worker-load-tests.sh` | inline import 容量；大文件对象存储导入另建专项，不用 inline large 冒充 |
+| Export | `RUN_ID=ltw-export-1w-<ts> WORKER_MODULES_CSV=export USERS_PER_WORKER=10000 WAIT_TERMINAL_TIMEOUT_SECONDS=3600 bash load-tests/scripts/run-worker-load-tests.sh` | `RUN_ID=ltw-export-10w-<ts> WORKER_MODULES_CSV=export USERS_PER_WORKER=100000 WAIT_TERMINAL_TIMEOUT_SECONDS=7200 bash load-tests/scripts/run-worker-load-tests.sh` | 导出链路和文件登记；关注 checksum 冲突、对象/本地文件膨胀 |
+| Dispatch | `RUN_ID=ltw-dispatch-1w-<ts> WORKER_MODULES_CSV=dispatch USERS_PER_WORKER=10000 WAIT_TERMINAL_TIMEOUT_SECONDS=3600 bash load-tests/scripts/run-worker-load-tests.sh` | `RUN_ID=ltw-dispatch-10w-<ts> WORKER_MODULES_CSV=dispatch USERS_PER_WORKER=100000 WAIT_TERMINAL_TIMEOUT_SECONDS=7200 bash load-tests/scripts/run-worker-load-tests.sh` | 本地 LOCAL channel；真实 SFTP/NAS/EMAIL/OSS 属于外部依赖专项 |
+| Process | `RUN_ID=ltw-process-1w-<ts> WORKER_MODULES_CSV=process USERS_PER_WORKER=10000 WAIT_TERMINAL_TIMEOUT_SECONDS=3600 bash load-tests/scripts/run-worker-load-tests.sh` | `RUN_ID=ltw-process-10w-<ts> WORKER_MODULES_CSV=process USERS_PER_WORKER=100000 WAIT_TERMINAL_TIMEOUT_SECONDS=7200 bash load-tests/scripts/run-worker-load-tests.sh` | launch 数容量；千万行计算吞吐用 `run-process-worker-benchmark.sh` 单独记录 |
+| Atomic | `RUN_ID=p2-atomic-1w-<ts> STORM_TOTAL_REQUESTS=10000 STORM_RPS=100 RUN_10W_STORM=1 RUN_FAIRNESS=0 bash load-tests/scripts/run-p2-capacity-profile.sh` | `RUN_ID=p2-atomic-10w-<ts> STORM_TOTAL_REQUESTS=100000 STORM_RPS=200 RUN_10W_STORM=1 RUN_FAIRNESS=0 bash load-tests/scripts/run-p2-capacity-profile.sh` | 隔离 benchmark 拓扑下的控制面 task storm，不能和四类业务 worker 横向比较 |
+
+正式报告必须记录：
+
+- Git revision、工作树是否 dirty、Docker CPU/内存、PostgreSQL/Kafka/Worker 容器拓扑。
+- 每类 `RUN_ID`、原始报告路径、HTTP OK/KO、实例总数、终态数、`SUCCESS` 数、非终态数。
+- Kafka lag、PostgreSQL 容量/保留计划、磁盘水位和自动清理结果。
+- 是否使用默认 `SKIP_AUTO_CLEANUP=0`；如果保留现场，必须写清后续清理命令。
+- 哪些轮次只是本地容量边界，不得写成生产容量承诺。
+
+压测入口会先检查本机磁盘余量。普通 worker/control-plane 默认要求 `5GiB` 可用空间；P2 10w
+容量画像默认要求 `20GiB`。可通过 `LOAD_TEST_MIN_FREE_GIB=<n>` 显式覆盖，但低磁盘环境下得到的
+延迟和吞吐不可作为容量基线。
 
 - PostgreSQL 客户端：统一入口默认依次尝试宿主机 `psql`、Python `psycopg`、运行中的
   `batch-postgres-primary` 容器；可用 `BATCH_PG_CLIENT_MODE=host|python|docker` 固定模式。本地 Docker

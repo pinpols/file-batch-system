@@ -59,6 +59,7 @@ ALLOW_LOW_RELAY_FOR_LARGE_LOAD="${ALLOW_LOW_RELAY_FOR_LARGE_LOAD:-0}"
 
 RUN_ID="${RUN_ID:-ctlw-$(date +%Y%m%d%H%M%S)}"
 OUT_DIR="${OUT_DIR:-$LOAD_DIR/target/worker-load-data/$RUN_ID}"
+require_load_test_disk_headroom "control-plane worker benchmark" "${LOAD_TEST_MIN_FREE_GIB:-5}"
 if [[ -z "${DISPATCH_FIXTURE_COUNT:-}" ]]; then
   if [[ ",$MODULES_CSV," == *",dispatch,"* ]]; then
     if [[ "$CONTROL_PLANE_MODE" == "parallel" ]]; then

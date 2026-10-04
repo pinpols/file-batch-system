@@ -17,6 +17,7 @@ WAIT_TERMINAL_TIMEOUT_SECONDS="${WAIT_TERMINAL_TIMEOUT_SECONDS:-180}"
 
 RUN_ID="${RUN_ID:-ltw-$(date +%Y%m%d%H%M%S)}"
 RUN_ACCOUNT_PREFIX="$(printf '%s' "$RUN_ID" | tr -cd '[:alnum:]' | cut -c1-16)"
+require_load_test_disk_headroom "worker load test" "${LOAD_TEST_MIN_FREE_GIB:-5}"
 
 csv_contains() {
   local needle="$1" csv=",$2,"

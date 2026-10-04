@@ -9,6 +9,9 @@
 - `inspect-workers.sh`：worker 心跳、排空和任务占用巡检。
 - `inspect-observability.sh`：观测栈连通性巡检。
 - `inspect-dependencies.sh`：PostgreSQL / Kafka / Valkey / MinIO 基础依赖只读巡检，支持宿主机 CLI 和 Docker fallback。
+- `inspect-production-capacity.sh`：生产容量治理只读巡检，覆盖 PostgreSQL 热表/保留、Kafka topic retention 和对象存储 bucket/lifecycle。
+- `plan-production-retention.sh`：生产保留治理只读计划，输出 PostgreSQL 归档策略缺口、Kafka topic 保留策略、对象存储 lifecycle 和 Redis TTL 候选项；不执行清理。
+- `run-toolbox.sh`：进入独立运维工具箱，提供 `psql`、Kafka CLI、`mc`、`redis-cli` 和 Python 治理运行时；应用镜像不内置这些工具，容器以非 root 用户运行，生产执行必须使用目标组件的最小权限账号。
 - `trigger-compensation.sh`：触发补偿任务。
 - `manage-trigger.sh`：通过 Trigger 管理 API 执行注册、暂停、恢复、排空和状态查询。
 
@@ -25,6 +28,8 @@
 
 基础依赖的故障边界和生产处置见
 [`docs/runbook/dependency-operations.md`](../../docs/runbook/dependency-operations.md)。
+生产容量和存储增长治理见
+[`docs/runbook/production-capacity-governance.md`](../../docs/runbook/production-capacity-governance.md)。
 
 ## Trigger 运维边界
 

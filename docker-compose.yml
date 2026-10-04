@@ -220,6 +220,11 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_NUM_PARTITIONS: ${KAFKA_DEFAULT_PARTITIONS}
       KAFKA_HEAP_OPTS: ${KAFKA_HEAP_OPTS:--Xms256m -Xmx768m}
+      # 本地压测会快速放大 trigger launch 日志；生产保留策略由集群运维配置控制。
+      KAFKA_LOG_RETENTION_HOURS: ${KAFKA_LOG_RETENTION_HOURS:-6}
+      KAFKA_LOG_RETENTION_BYTES: ${KAFKA_LOG_RETENTION_BYTES:-1073741824}
+      KAFKA_LOG_SEGMENT_BYTES: ${KAFKA_LOG_SEGMENT_BYTES:-67108864}
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: ${KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS:-60000}
     volumes:
       - kafka-data:/var/lib/kafka/data
     networks:
@@ -383,6 +388,44 @@ services:
       interval: 5s
       timeout: 3s
       retries: 15
+
+  ops-toolbox:
+    logging: *container-logging
+    profiles: ["ops"]
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.ops-toolbox
+      args:
+        PYTHON_VERSION: ${OPS_TOOLBOX_PYTHON_VERSION:-3.12}
+        POSTGRES_CLIENT_MAJOR: ${OPS_TOOLBOX_POSTGRES_CLIENT_MAJOR:-17}
+        KAFKA_IMAGE_TAG: ${KAFKA_IMAGE_TAG:-4.1.2}
+        MINIO_MC_IMAGE_REPOSITORY: ${MINIO_MC_IMAGE_REPOSITORY:-bitnamilegacy/minio}
+        MINIO_MC_IMAGE_TAG: ${MINIO_MC_IMAGE_TAG:-2025.7.23-debian-12-r1}
+    image: batch-ops-toolbox:${OPS_TOOLBOX_IMAGE_TAG:-dev}
+    container_name: batch-ops-toolbox
+    restart: "no"
+    environment:
+      <<: *common-runtime-env
+      COMPOSE_ENV_FILE: /workspace/.env.local
+      BATCH_PG_CLIENT_MODE: host
+      PGHOST: ${OPS_TOOLBOX_PG_HOST:-postgres-primary}
+      PGPORT: ${OPS_TOOLBOX_PG_PORT:-5432}
+      PGDATABASE: ${OPS_TOOLBOX_PG_DATABASE:-${POSTGRES_DB:-batch_platform}}
+      PGUSER: ${OPS_TOOLBOX_PG_USER:-${POSTGRES_USER:-batch_user}}
+      PGPASSWORD: ${OPS_TOOLBOX_PG_PASSWORD:-${POSTGRES_PASSWORD:-batch_pass_123}}
+      BATCH_PROD_CAPACITY_PG_HOST: ${OPS_TOOLBOX_PG_HOST:-postgres-primary}
+      BATCH_PROD_CAPACITY_PG_PORT: ${OPS_TOOLBOX_PG_PORT:-5432}
+      BATCH_PROD_CAPACITY_PG_DATABASE: ${OPS_TOOLBOX_PG_DATABASE:-${POSTGRES_DB:-batch_platform}}
+      BATCH_PROD_CAPACITY_PG_USER: ${OPS_TOOLBOX_PG_USER:-${POSTGRES_USER:-batch_user}}
+      BATCH_PROD_CAPACITY_KAFKA_BOOTSTRAP: ${OPS_TOOLBOX_KAFKA_BOOTSTRAP:-kafka:29092}
+      BATCH_PROD_CAPACITY_KAFKA_BIN_DIR: /opt/kafka-client/bin
+      BATCH_PROD_CAPACITY_OBJECT_STORE_ENDPOINT: ${OPS_TOOLBOX_OBJECT_STORE_ENDPOINT:-http://minio:9000}
+      BATCH_PROD_CAPACITY_OBJECT_STORE_ACCESS_KEY: ${OPS_TOOLBOX_OBJECT_STORE_ACCESS_KEY:-${BATCH_S3_ACCESS_KEY:-minioadmin}}
+      BATCH_PROD_CAPACITY_OBJECT_STORE_SECRET_KEY: ${OPS_TOOLBOX_OBJECT_STORE_SECRET_KEY:-${BATCH_S3_SECRET_KEY:-minioadmin123}}
+    volumes:
+      - .:/workspace:ro
+    networks:
+      - batch-network
 
 volumes:
   postgres-primary-data:

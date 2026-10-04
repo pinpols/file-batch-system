@@ -116,7 +116,13 @@ public class LaunchPipelineCompletionSimulation extends Simulation {
 
   private final ScenarioBuilder scenario =
       scenario("Launch pipeline to terminal (poll)")
-          .exec(group("pipeline_completion").on(exec(launch), exec(pollUntilTerminal)));
+          .exec(
+              group("pipeline_completion")
+                  .on(
+                      exec(launch),
+                      // launch 失败时保留 POST 失败指标，但不能继续用缺失的 instanceNo 轮询。
+                      exitHereIf(session -> !session.contains("instanceNo")),
+                      exec(pollUntilTerminal)));
 
   {
     setUp(
