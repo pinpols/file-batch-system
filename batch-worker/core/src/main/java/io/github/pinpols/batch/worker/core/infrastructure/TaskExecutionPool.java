@@ -5,10 +5,11 @@ import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperti
 import io.github.pinpols.batch.worker.core.config.WorkerRuntimeConfiguration;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
@@ -30,7 +31,7 @@ public class TaskExecutionPool {
 
   private final WorkerExecutionTimeoutProperties properties;
   private final Environment environment;
-  private ExecutorService delegate;
+  private ThreadPoolExecutor delegate;
 
   public TaskExecutionPool(WorkerExecutionTimeoutProperties properties, Environment environment) {
     this.properties = properties;
@@ -61,12 +62,14 @@ public class TaskExecutionPool {
       }
     }
     AtomicLong threadIndex = new AtomicLong();
-    this.delegate = Executors.newFixedThreadPool(size, runnable -> {
-      Thread thread = new Thread(runnable);
-      thread.setName("worker-task-exec-" + threadIndex.incrementAndGet());
-      thread.setDaemon(properties.isDaemonThreads());
-      return thread;
-    });
+    // 最多保留一批等待任务；失联插件占满线程时显式拒绝，不能无限堆积。
+    this.delegate = new ThreadPoolExecutor(
+        size, size, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(size), runnable -> {
+          Thread thread = new Thread(runnable);
+          thread.setName("worker-task-exec-" + threadIndex.incrementAndGet());
+          thread.setDaemon(properties.isDaemonThreads());
+          return thread;
+        });
     log.info(
         "TaskExecutionPool started: poolSize={}, daemonThreads={}",
         size,
@@ -74,7 +77,18 @@ public class TaskExecutionPool {
   }
 
   public <T> Future<T> submit(Callable<T> task) {
-    return delegate.submit(task);
+    ThreadPoolExecutor executor = delegate;
+    FutureTask<T> future = new FutureTask<>(task) {
+      @Override
+      protected void done() {
+        // 取消尚未执行的任务时立即释放排队位置，不等待被卡住的工作线程取走它。
+        if (isCancelled()) {
+          executor.remove(this);
+        }
+      }
+    };
+    executor.execute(future);
+    return future;
   }
 
   @PreDestroy

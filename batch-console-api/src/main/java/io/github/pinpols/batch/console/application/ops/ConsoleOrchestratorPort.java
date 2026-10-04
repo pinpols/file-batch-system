@@ -123,16 +123,9 @@ public interface ConsoleOrchestratorPort {
     outputStream.write(downloadForensicExport(tenantId, exportId));
   }
 
-  /**
-   * 2026-06-03 拉取一组 worker 当前的 pipeline stage 行级进度(仅 IMPORT LOAD / EXPORT GENERATE 流式 stage 有值)。
-   *
-   * <p>详见 {@code docs/design/pipeline-stage-progress-display.md}。orchestrator 端是 in-memory cache,
-   * 调用失败 / 5min 无心跳 → 返回空 list,FE 列展示「—」。
-   *
-   * @return key=workerCode / rowsProcessed / totalRowsHint(可空)/ heartbeatAt
-   */
-  List<ConsolePipelineProgressItemResponse> pipelineProgress(
-      String tenantId, List<String> workerCodes);
+  /** 按 pipelineInstanceId 查询并聚合同一 stage 的并发分片进度。 */
+  List<ConsolePipelineProgressItemResponse> pipelineProgressByInstance(
+      String tenantId, Long pipelineInstanceId);
 
   /** 转发 dry-run 计划；租户解析和内部 HTTP 细节由实现层负责。 */
   CommonResponse<ConsoleDryRunPlanResponse> dryRunPlan(DryRunPlanRequest request);

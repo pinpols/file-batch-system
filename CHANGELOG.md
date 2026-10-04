@@ -44,6 +44,13 @@
 
 ### Fixed
 
+- 批量开户事务收尾日志改用请求 ID，不再输出预览令牌或原始存储异常；幂等占位失败日志仅记录服务端生成的所有者标识和异常类型，避免外部输入注入日志。
+
+- 修复 Orchestrator Outbox 自调度循环在关闭阶段继续安排延迟轮询、导致优雅停机额外等待的问题；销毁阶段会停止调度并取消尚未执行的轮询任务。
+- 修复内置 Worker 以进程级单槽上报 Pipeline 进度导致并发任务互相覆盖的问题，改为 task/pipeline/stage 隔离并在控制面按 stage 聚合分片；删除旧 SDK 标量心跳、workerCode 查询兼容路径及旧参数构造器；修复 Controller 标准化心跳时遗漏结构化进度字段。
+- 收口长生命周期资源所有权：租户业务路由数据源关闭全部子连接池，并在多分片构建失败时回滚已创建连接池；Console 内部 RestClient 与 Kafka AdminClient 复用并随组件关闭，Dispatch/Atomic/通知 HTTP 客户端和 NAS 线程池增加确定性销毁；Import 预处理不再通过静态可变 ObjectMapper 跨应用上下文共享状态。
+- Worker 任务执行池改为有界排队并在饱和或关闭时明确拒绝，线程泄漏 watchdog 改为观察插件实际执行状态；Shell 输出结果不再保存在单例 Map，Export 加密临时文件在成功和失败路径均由创建者清理。
+- Console 写请求幂等占位增加请求所有权、续租和 compare-and-set 结算，旧请求不能覆盖或删除新请求的占位；批量开户预览的并发编辑和 Apply 冻结改为 Redis CAS，事务回滚后恢复原快照。
 - 修复 Worker SQL transform / JDBC mapped import 在部分列映射和空值处理下的边界行为，并为控制面 10w 压测脚本增加大请求量前置校验，避免本地低 relay 或 demo 作业超时被误判为容量回退。
 - Console 批量开户补齐单账号创建的租户状态终态守卫，并允许按目标租户过滤批量操作查询；`user.batchCreate` 审计以 `requestId` 作为批次操作聚合键，便于和批次记录关联。
 - 修复根目录 `.node-version` 与 `.nvmrc` 分别选择 Node 24/22 的漂移，运行时对齐门禁现同时校验后端仓库和配对前端的 Node 24 本地入口；移除已被现有 Java 质量门禁替代但意外回流的 `qodana.yaml`，仓库卫生检查阻止该废弃配置再次提交，并正确跳过工作区中尚未暂存的删除项；范围探测器将已知根目录工具配置归入 `config`，不再因误判 `unknown` 启动无关 Java 单测。

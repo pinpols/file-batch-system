@@ -1,13 +1,13 @@
 package io.github.pinpols.batch.console.domain.ops.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.application.ops.ConsoleKafkaLagQueryPort;
 import io.github.pinpols.batch.console.application.ops.ConsoleOpsSummaryPort;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleOutboxOpsApplicationService;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleKafkaConsumerLagResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleOutboxCleanupResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleOutboxRepublishResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleOutboxStatsResponse;
-import io.github.pinpols.batch.console.domain.ops.service.ConsoleKafkaLagQueryService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
@@ -39,7 +39,7 @@ public class ConsoleOpsController {
   private final ConsoleOpsSummaryPort opsApplicationService;
   private final ConsoleOutboxOpsApplicationService outboxOpsService;
   private final ConsoleResponseFactory responseFactory;
-  private final ConsoleKafkaLagQueryService kafkaLagQueryService;
+  private final ConsoleKafkaLagQueryPort kafkaLagQueryService;
 
   /** 租户运维摘要（Redis 缓存 10s，避免多用户同时刷导致 DB 重复聚合）。 */
   @GetMapping("/summary")

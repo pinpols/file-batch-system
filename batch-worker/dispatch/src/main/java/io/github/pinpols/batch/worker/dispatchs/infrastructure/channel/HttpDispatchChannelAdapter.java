@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.dispatchs.config.HttpDispatchChannelProperties;
+import jakarta.annotation.PreDestroy;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.LinkedHashMap;
@@ -139,5 +140,12 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
           ex.getMessage(),
           endpoint);
     }
+  }
+
+  @PreDestroy
+  void shutdown() {
+    okHttpClient.dispatcher().cancelAll();
+    okHttpClient.dispatcher().executorService().shutdown();
+    okHttpClient.connectionPool().evictAll();
   }
 }

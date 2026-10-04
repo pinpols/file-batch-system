@@ -75,7 +75,6 @@ import io.github.pinpols.batch.console.shared.view.ConsoleAuditLogResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleOutboxDeliveryLogResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleOutboxRetryLogResponse;
 import io.github.pinpols.batch.console.shared.view.ConsolePendingCatchUpResponse;
-import io.github.pinpols.batch.console.shared.view.ConsolePipelineProgressItemResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleTraceSnapshotResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleWorkerRegistryResponse;
 import jakarta.validation.Valid;
@@ -110,25 +109,10 @@ public class ConsoleQueryController {
    *
    * <p>这是 FilePipelineObservability 前端使用的正式契约，返回 {@code {pipelineInstanceId, steps}}。
    */
-  @GetMapping(value = "/pipeline-progress", params = "pipelineInstanceId")
+  @GetMapping("/pipeline-progress")
   public CommonResponse<ConsoleFilePipelineProgressResponse> pipelineProgress(
       @RequestParam("pipelineInstanceId") Long pipelineInstanceId) {
     return responseFactory.success(applicationService.pipelineProgress(pipelineInstanceId));
-  }
-
-  /**
-   * 2026-06-03 GET /pipeline-progress?tenantId&workerCodes — 拉取一组 worker 当前的 pipeline stage 行级进度。
-   *
-   * <p>仅 IMPORT LOAD 流式 stage 在跑时有值;其他 stage / 空闲 worker 不出现在结果列表。详见 {@code
-   * docs/design/pipeline-stage-progress-display.md}。
-   */
-  @GetMapping(
-      value = "/pipeline-progress",
-      params = {"tenantId", "workerCodes"})
-  public CommonResponse<List<ConsolePipelineProgressItemResponse>> workerPipelineProgress(
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam("workerCodes") List<String> workerCodes) {
-    return responseFactory.success(orchestratorProxy.pipelineProgress(tenantId, workerCodes));
   }
 
   /** GET /audits — 审计日志列表(文件操作专用历史接口,沿用 file_audit_log)。 */

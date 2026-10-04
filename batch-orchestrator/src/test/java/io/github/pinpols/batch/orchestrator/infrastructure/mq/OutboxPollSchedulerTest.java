@@ -18,6 +18,7 @@ import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulS
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,21 +50,13 @@ class OutboxPollSchedulerTest {
 
   private OutboxPollScheduler scheduler;
   private SimpleMeterRegistry meterRegistry;
+  private ThreadPoolTaskScheduler executor;
   private Throwable lockingFailure;
 
   @BeforeEach
-  void setUp() throws Throwable {
+  void setUp() {
     when(governance.outbox()).thenReturn(new OutboxProperties());
-    doAnswer(inv -> {
-          if (lockingFailure != null) {
-            throw lockingFailure;
-          }
-          inv.getArgument(0, LockingTaskExecutor.Task.class).call();
-          return null;
-        })
-        .when(lockingTaskExecutor)
-        .executeWithLock(any(LockingTaskExecutor.Task.class), any());
-    ThreadPoolTaskScheduler executor = new ThreadPoolTaskScheduler();
+    executor = new ThreadPoolTaskScheduler();
     executor.setPoolSize(1);
     executor.setThreadNamePrefix("outbox-poll-test-");
     executor.initialize();
@@ -82,8 +75,16 @@ class OutboxPollSchedulerTest {
     // 不调用 onApplicationReady()，避免后台线程干扰单元测试
   }
 
+  @AfterEach
+  void tearDown() {
+    scheduler.stopScheduling();
+    executor.shutdown();
+    meterRegistry.close();
+  }
+
   @Test
-  void shouldAdvanceAndUpdateCircuitBreakerWhenAllowed() {
+  void shouldAdvanceAndUpdateCircuitBreakerWhenAllowed() throws Throwable {
+    stubLockExecution();
     when(outboxPublishCircuitBreaker.allowNow()).thenReturn(true);
     when(scheduleForwarder.advance(any())).thenReturn(ScheduleForwarderResult.of(3, 2, 1));
 
@@ -96,7 +97,8 @@ class OutboxPollSchedulerTest {
   }
 
   @Test
-  void shouldSkipAdvanceWhenCircuitBreakerDeniesPolling() {
+  void shouldSkipAdvanceWhenCircuitBreakerDeniesPolling() throws Throwable {
+    stubLockExecution();
     when(outboxPublishCircuitBreaker.allowNow()).thenReturn(false);
 
     scheduler.poll();
@@ -113,10 +115,35 @@ class OutboxPollSchedulerTest {
 
   @Test
   void shouldPropagateOutOfMemoryError_insteadOfTreatingItAsPollFailure() throws Throwable {
+    stubLockExecution();
     OutOfMemoryError oom = new OutOfMemoryError("test oom");
     lockingFailure = oom;
 
     assertThatThrownBy(() -> scheduler.poll()).isSameAs(oom);
+  }
+
+  @Test
+  void shouldCancelPendingPollWhenContainerStops() {
+    scheduler.onApplicationReady(null);
+    assertThat(executor.getScheduledThreadPoolExecutor().getQueue()).hasSize(1);
+
+    scheduler.stopScheduling();
+
+    assertThat(executor.getScheduledThreadPoolExecutor().getQueue())
+        .allMatch(
+            task -> task instanceof java.util.concurrent.Future<?> future && future.isCancelled());
+  }
+
+  private void stubLockExecution() throws Throwable {
+    doAnswer(inv -> {
+          if (lockingFailure != null) {
+            throw lockingFailure;
+          }
+          inv.getArgument(0, LockingTaskExecutor.Task.class).call();
+          return null;
+        })
+        .when(lockingTaskExecutor)
+        .executeWithLock(any(LockingTaskExecutor.Task.class), any());
   }
 
   // 自适应间隔行为通过 OutboxForwarderE2eIT 验证

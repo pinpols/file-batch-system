@@ -284,8 +284,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
         .build());
     // pipeline stage 行级进度(docs/design/pipeline-stage-progress-display.md):仅 LOAD/GENERATE
     // 在跑时非空,写 in-mem cache(不持久化,5min TTL,FE 经 Console 端点读)
-    pipelineStageProgressCache.publish(
-        request.tenantId(), workerCode, request.rowsProcessed(), request.totalRowsHint());
+    pipelineStageProgressCache.publish(request.tenantId(), workerCode, request.pipelineProgress());
     return workerRegistryMapper.selectByTenantAndWorkerCode(request.tenantId(), workerCode);
   }
 

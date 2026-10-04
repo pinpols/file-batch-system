@@ -2,8 +2,10 @@ openapi: 3.1.0
 info:
   title: Batch Platform Console API
   version: 0.1.0
-  x-last-updated: "2026-09-30"
+  x-last-updated: "2026-10-04"
   x-changelog:
+    - date: "2026-10-04"
+      summary: "移除 pipeline-progress 的 tenantId + workerCodes 旧查询入口，仅保留现有 pipelineInstanceId 必填契约与 steps 响应；缺少 pipelineInstanceId 返回 400，正式前端 schema 不变。"
     - date: "2026-09-27"
       summary: "资源队列、批次窗口、业务日历、配额策略、告警路由和 Pipeline 定义统一改用 PATCH /{id}/enabled 显式状态接口，并删除旧 POST /{id}/toggle。"
     - date: "2026-09-30"

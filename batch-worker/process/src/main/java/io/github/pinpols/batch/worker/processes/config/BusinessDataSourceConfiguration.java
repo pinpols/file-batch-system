@@ -46,7 +46,7 @@ public class BusinessDataSourceConfiguration {
     return new HikariConfig();
   }
 
-  @Bean(name = "processBusinessDataSource")
+  @Bean(name = "processBusinessDataSource", destroyMethod = "close")
   public DataSource processBusinessDataSource(
       BusinessDataSourceProperties properties,
       BusinessRoutingProperties routingProperties,

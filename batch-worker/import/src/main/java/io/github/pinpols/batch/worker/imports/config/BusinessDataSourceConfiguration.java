@@ -43,7 +43,7 @@ public class BusinessDataSourceConfiguration {
     return new HikariConfig();
   }
 
-  @Bean(name = "importBusinessDataSource")
+  @Bean(name = "importBusinessDataSource", destroyMethod = "close")
   public DataSource importBusinessDataSource(
       BusinessDataSourceProperties properties,
       BusinessRoutingProperties routingProperties,

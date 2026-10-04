@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.worker.core.support;
 
+import io.github.pinpols.batch.common.constants.BatchFileConstants;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -76,6 +78,12 @@ public class StaleTempFileCleanup {
           tempDir,
           ex.getMessage());
       return;
+    }
+    try {
+      cleaned += PrivateTempFiles.deleteStaleUnlockedFiles(
+          BatchFileConstants.ENCRYPTED_EXPORT_PREFIX, cutoff);
+    } catch (Exception ex) {
+      log.warn("failed to clean stale encrypted export files", ex);
     }
     log.info("Cleaned {} stale temp files older than {}h", cleaned, hours);
   }

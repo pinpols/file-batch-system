@@ -13,7 +13,8 @@
 | `PMD.ExcessiveParameterList` | record、MyBatis 投影、Spring 构造注入和稳定 SPI 参数顺序 | common、console、orchestrator、SDK | 引入上下文对象后仍能保持语义清晰，并补齐构造/契约测试 |
 | `PMD.NcssCount` | Excel 工作流拓扑校验的一次性图算法 | console | 拆分后仍能保持同一校验事务和中间状态可见性 |
 | `java:S112` | import/export/process/dispatch/atomic 插件 SPI 对外暴露的通用异常契约 | common、SDK、worker import | SPI 改为稳定的领域异常契约并完成五语言 SDK 兼容验证 |
-| `java:S1181` | SDK Kafka consumer 的边界防护，保证 listener 不因不可预期错误中断 | SDK | listener 容器具备等价的统一错误边界和重试语义 |
+| `java:S1181` | SDK Kafka consumer 边界防护；业务多片连接池构建失败时清理已创建资源并原样重抛 Error，不吞异常 | SDK、common | listener 具备等价错误边界；资源构建采用等价的失败自动回收机制 |
+| `java:S2093` | `PrivateTempFiles.createLockedTempFile` 将锁句柄所有权转移给返回的 `LockedTempFile`，调用方在上传结束后关闭，不能在工厂返回时关闭 | common | 分析器可识别跨方法的资源所有权转移 |
 | `java:S1313` | SSRF 防护内置的云元数据地址阻断规则 | worker atomic | 安全规则改由同等强度的集中策略提供 |
 | `java:S2068` | 仅用于检测出厂默认密码常量的安全守卫 | console | 默认凭据改为首次 provision 随机生成且无兼容保留 |
 | `java:S2077` | 动态 SQL/存储过程名称仅在 allowlist、schema 和固定片段校验后执行 | orchestrator、worker | 全部调用改为参数化且不再需要动态标识符 |

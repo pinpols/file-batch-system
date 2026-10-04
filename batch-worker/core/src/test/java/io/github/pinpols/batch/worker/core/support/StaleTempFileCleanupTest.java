@@ -2,7 +2,9 @@ package io.github.pinpols.batch.worker.core.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.pinpols.batch.common.constants.BatchFileConstants;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
@@ -23,6 +25,27 @@ class StaleTempFileCleanupTest {
   void restoreTmpDir() {
     if (originalTmpDir != null) {
       System.setProperty("java.io.tmpdir", originalTmpDir);
+    }
+  }
+
+  @Test
+  void privateCleanupPreservesActiveAndResumableFiles() throws Exception {
+    originalTmpDir = System.getProperty("java.io.tmpdir");
+    System.setProperty("java.io.tmpdir", tempDir.toString());
+    var old = FileTime.from(BatchDateTimeSupport.utcNow().minus(Duration.ofHours(8)));
+    String prefix = BatchFileConstants.ENCRYPTED_EXPORT_PREFIX;
+    Path abandoned = PrivateTempFiles.createTempFile(prefix, ".bin");
+    Path resumable = PrivateTempFiles.createTempFile("batch-export-resumable-", ".part");
+    Files.setLastModifiedTime(abandoned, old);
+    Files.setLastModifiedTime(resumable, old);
+    try (var active = PrivateTempFiles.createLockedTempFile(prefix, ".bin")) {
+      Files.setLastModifiedTime(active.path(), old);
+      StaleTempFileCleanup cleanup = new StaleTempFileCleanup();
+      ReflectionTestUtils.setField(cleanup, "staleTempFileHours", 6L);
+      cleanup.cleanStaleTempFiles();
+      assertThat(abandoned).doesNotExist();
+      assertThat(resumable).exists();
+      assertThat(active.path()).exists();
     }
   }
 

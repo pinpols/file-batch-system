@@ -1,11 +1,9 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
 import io.github.pinpols.batch.orchestrator.infrastructure.progress.PipelineStageProgressCache;
-import io.github.pinpols.batch.orchestrator.infrastructure.progress.PipelineStageProgressCache.Snapshot;
+import io.github.pinpols.batch.orchestrator.infrastructure.progress.PipelineStageProgressCache.PipelineSnapshot;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -27,27 +25,24 @@ public class PipelineProgressInternalController {
 
   private final PipelineStageProgressCache cache;
 
-  /**
-   * 批量查指定 workerCode 列表的最新进度。
-   *
-   * @param tenantId 租户(必填,multi-tenant 隔离)
-   * @param workerCodes 逗号分隔的 workerCode 列表
-   * @return 仅包含**有进度**的 worker 行(无进度 / 已过期的不返回)
-   */
-  @GetMapping
-  public List<ProgressItem> query(
+  /** 按 pipeline 实例查询，并聚合同一 stage 的并发分片。 */
+  @GetMapping("/by-pipeline")
+  public List<PipelineProgressItem> queryByPipeline(
       @RequestParam("tenantId") String tenantId,
-      @RequestParam("workerCodes") List<String> workerCodes) {
-    Map<String, Snapshot> snapshots = cache.snapshot(tenantId, workerCodes);
-    return snapshots.entrySet().stream()
-        .map(e -> new ProgressItem(
-            e.getKey(),
-            e.getValue().rowsProcessed(),
-            e.getValue().totalRowsHint(),
-            e.getValue().heartbeatAt()))
-        .collect(Collectors.toUnmodifiableList());
+      @RequestParam("pipelineInstanceId") Long pipelineInstanceId) {
+    return cache.snapshotByPipeline(tenantId, pipelineInstanceId).stream()
+        .map(PipelineProgressInternalController::toPipelineProgressItem)
+        .toList();
   }
 
-  public record ProgressItem(
-      String workerCode, Long rowsProcessed, Long totalRowsHint, Instant heartbeatAt) {}
+  private static PipelineProgressItem toPipelineProgressItem(PipelineSnapshot snapshot) {
+    return new PipelineProgressItem(
+        snapshot.stageCode(),
+        snapshot.rowsProcessed(),
+        snapshot.totalRowsHint(),
+        snapshot.heartbeatAt());
+  }
+
+  public record PipelineProgressItem(
+      String stageCode, Long rowsProcessed, Long totalRowsHint, Instant heartbeatAt) {}
 }

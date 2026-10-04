@@ -76,6 +76,7 @@ public class StoreStep implements ExportStageStep {
           "export data missing",
           ERROR_OBJECT_MAPPER);
     }
+    EncryptionOutcome encryption = null;
     try {
       String objectName = resolveObjectName(context);
       String tempObjectName = resolveTempObjectName(context, objectName);
@@ -91,9 +92,8 @@ public class StoreStep implements ExportStageStep {
             ERROR_OBJECT_MAPPER);
       }
 
-      EncryptionOutcome encryption = encryptIfNeeded(context, generatedFile);
+      encryption = encryptIfNeeded(context, generatedFile);
       Path uploadPath = encryption.uploadPath();
-      Path encryptedPath = encryption.encryptedPath();
       boolean encrypt = encryption.encrypted();
 
       String expectedSha = sha256Hex(uploadPath);
@@ -106,18 +106,17 @@ public class StoreStep implements ExportStageStep {
           tempObjectName,
           uploadPath,
           encrypt ? BatchFileConstants.CONTENT_TYPE_OCTET_STREAM : contentType);
-      ExportStageResult partVerification = verifyPartUpload(expectedSha, tempKey, encryptedPath);
+      ExportStageResult partVerification = verifyPartUpload(expectedSha, tempKey);
       if (partVerification != null) {
         return partVerification;
       }
 
-      ExportStageResult finalVerification =
-          promoteAndVerifyFinal(expectedSha, tempKey, objectName, encryptedPath);
+      ExportStageResult finalVerification = promoteAndVerifyFinal(expectedSha, tempKey, objectName);
       if (finalVerification != null) {
         return finalVerification;
       }
 
-      return commitStoredObject(context, objectName, tempKey, generatedFile, encryptedPath);
+      return commitStoredObject(context, objectName, tempKey, generatedFile);
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(StoreStep.class, "catch:Exception", ex);
 
@@ -128,6 +127,21 @@ public class StoreStep implements ExportStageStep {
           new Object[] {ex.getMessage()},
           ex.getMessage(),
           ERROR_OBJECT_MAPPER);
+    } finally {
+      if (EmptyChecks.isNotNull(encryption)) {
+        closeEncryptedTempFile(encryption.temporaryFile());
+      }
+    }
+  }
+
+  private void closeEncryptedTempFile(PrivateTempFiles.LockedTempFile file) {
+    if (EmptyChecks.isNull(file)) {
+      return;
+    }
+    try {
+      file.close();
+    } catch (IOException ex) {
+      SwallowedExceptionLogger.warn(StoreStep.class, "encrypted temp cleanup failed", ex);
     }
   }
 
@@ -182,26 +196,33 @@ public class StoreStep implements ExportStageStep {
         .put("downloadRequiresApproval", security.get("download_requires_approval"));
     boolean encrypt = cryptoService.shouldEncrypt(security);
     if (encrypt) {
-      Path encryptedPath =
-          PrivateTempFiles.createTempFile(BatchFileConstants.ENCRYPTED_EXPORT_PREFIX, ".bin");
-      cryptoService.encrypt(generatedFile, encryptedPath, cryptoService.resolveKeyRef(security));
-      context.getAttributes().put("contentEncryptionEnabled", Boolean.TRUE);
-      context.getAttributes().put("encryptionKeyRef", cryptoService.resolveKeyRef(security));
-      context.getAttributes().put("encryptionObjectVersion", "BATCHENC1");
-      return new EncryptionOutcome(encryptedPath, encryptedPath, true);
+      PrivateTempFiles.LockedTempFile temporaryFile =
+          PrivateTempFiles.createLockedTempFile(BatchFileConstants.ENCRYPTED_EXPORT_PREFIX, ".bin");
+      Path encryptedPath = temporaryFile.path();
+      boolean completed = false;
+      try {
+        cryptoService.encrypt(generatedFile, encryptedPath, cryptoService.resolveKeyRef(security));
+        context.getAttributes().put("contentEncryptionEnabled", Boolean.TRUE);
+        context.getAttributes().put("encryptionKeyRef", cryptoService.resolveKeyRef(security));
+        context.getAttributes().put("encryptionObjectVersion", "BATCHENC1");
+        completed = true;
+        return new EncryptionOutcome(encryptedPath, true, temporaryFile);
+      } finally {
+        // encrypt 抛异常时尚未把路径返回给外层，创建者负责清理半成品。
+        if (!completed) {
+          closeEncryptedTempFile(temporaryFile);
+        }
+      }
     }
     context.getAttributes().put("contentEncryptionEnabled", Boolean.FALSE);
-    return new EncryptionOutcome(generatedFile, null, false);
+    return new EncryptionOutcome(generatedFile, false, null);
   }
 
-  private ExportStageResult verifyPartUpload(String expectedSha, String tempKey, Path encryptedPath)
+  private ExportStageResult verifyPartUpload(String expectedSha, String tempKey)
       throws IOException {
     String remotePartSha = s3ExportStorage.sha256Hex(tempKey);
     if (!expectedSha.equalsIgnoreCase(remotePartSha)) {
       s3ExportStorage.removeObject(tempKey);
-      if (encryptedPath != null) {
-        Files.deleteIfExists(encryptedPath);
-      }
       return ExportStageResult.failure(
           stage(),
           "EXPORT_STORE_PART_DIGEST_MISMATCH",
@@ -214,16 +235,12 @@ public class StoreStep implements ExportStageStep {
   }
 
   private ExportStageResult promoteAndVerifyFinal(
-      String expectedSha, String tempKey, String objectName, Path encryptedPath)
-      throws IOException {
+      String expectedSha, String tempKey, String objectName) {
     s3ExportStorage.copyObject(tempKey, objectName);
     String remoteFinalSha = s3ExportStorage.sha256Hex(objectName);
     if (!expectedSha.equalsIgnoreCase(remoteFinalSha)) {
       s3ExportStorage.removeObject(objectName);
       s3ExportStorage.removeObject(tempKey);
-      if (encryptedPath != null) {
-        Files.deleteIfExists(encryptedPath);
-      }
       return ExportStageResult.failure(
           stage(),
           "EXPORT_STORE_FINAL_DIGEST_MISMATCH",
@@ -237,19 +254,12 @@ public class StoreStep implements ExportStageStep {
   }
 
   private ExportStageResult commitStoredObject(
-      ExportJobContext context,
-      String objectName,
-      String tempKey,
-      Path generatedFile,
-      Path encryptedPath)
+      ExportJobContext context, String objectName, String tempKey, Path generatedFile)
       throws IOException {
     context.getAttributes().put(PipelineRuntimeKeys.OBJECT_NAME, objectName);
     context.getAttributes().put("tempObjectName", tempKey);
     context.getAttributes().put("exportStoreCommitted", Boolean.TRUE);
     Files.deleteIfExists(generatedFile);
-    if (encryptedPath != null) {
-      Files.deleteIfExists(encryptedPath);
-    }
     return ExportStageResult.success(stage());
   }
 
@@ -276,7 +286,8 @@ public class StoreStep implements ExportStageStep {
     return ExportStageResult.success(stage());
   }
 
-  private record EncryptionOutcome(Path uploadPath, Path encryptedPath, boolean encrypted) {}
+  private record EncryptionOutcome(
+      Path uploadPath, boolean encrypted, PrivateTempFiles.LockedTempFile temporaryFile) {}
 
   private Map<String, Object> templateSecurity(ExportJobContext context) {
     Object templateConfig = attribute(context, PipelineRuntimeKeys.TEMPLATE_CONFIG);

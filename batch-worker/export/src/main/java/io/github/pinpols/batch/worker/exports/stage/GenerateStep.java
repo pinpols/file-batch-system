@@ -12,7 +12,7 @@ import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineStageProgressSink;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineStageProgressRegistry;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.CheckpointPartitionGuard;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPosition;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
@@ -42,7 +42,6 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -54,7 +53,6 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class GenerateStep implements ExportStageStep {
 
   // 同一 (tenant, jobCode, batchNo, errorClass) 的重复失败在 60s 内只 WARN 一次。
@@ -75,6 +73,23 @@ public class GenerateStep implements ExportStageStep {
   private final WorkerCheckpointProperties checkpointProperties;
   private final ProcessingPositionStore positionStore;
   private final GenerateCursorCodec cursorCodec;
+  private final PipelineStageProgressRegistry progressRegistry;
+
+  public GenerateStep(
+      ExportDataPluginRegistry exportDataPluginRegistry,
+      ExportFormatStrategyRegistry formatStrategyRegistry,
+      ExportWorkerConfiguration workerConfiguration,
+      ObjectMapper objectMapper,
+      GenerateRuntimeSupport runtimeSupport) {
+    this.exportDataPluginRegistry = exportDataPluginRegistry;
+    this.formatStrategyRegistry = formatStrategyRegistry;
+    this.workerConfiguration = workerConfiguration;
+    this.objectMapper = objectMapper;
+    this.checkpointProperties = runtimeSupport.checkpointProperties();
+    this.positionStore = runtimeSupport.positionStore();
+    this.cursorCodec = runtimeSupport.cursorCodec();
+    this.progressRegistry = runtimeSupport.progressRegistry();
+  }
 
   @Override
   public ExportStage stage() {
@@ -187,6 +202,7 @@ public class GenerateStep implements ExportStageStep {
           .withBom(encoding.withBom())
           .lineSeparator(encoding.lineSeparator())
           .checkpoint(checkpoint)
+          .progressRegistry(progressRegistry)
           .build();
       long recordCount = strategy.generate(formatCtx);
 
@@ -200,13 +216,12 @@ public class GenerateStep implements ExportStageStep {
       attrs.put(PipelineRuntimeKeys.RECORD_COUNT, recordCount);
       attrs.put("totalAmount", batch.getOrDefault("total_amount", BigDecimal.ZERO));
       attrs.put(PipelineRuntimeKeys.FILE_SIZE_BYTES, Files.size(generatedFile));
-      // 2026-06-04 docs/design/pipeline-stage-progress-display.md:stage 结束清 sink,
-      // 避免下一个 CLAIM 心跳带上残留;AbstractExportFormat.generatePaged 已在循环里每 1000 行 publish。
-      PipelineStageProgressSink.clear();
+      // stage 结束清理当前 task/stage，避免下一次心跳继续展示已完成任务。
+      progressRegistry.clear(context, stage().name());
       return ExportStageResult.success(stage());
     } catch (Exception ex) {
       // 失败也清,同理
-      PipelineStageProgressSink.clear();
+      progressRegistry.clear(context, stage().name());
       logFailureThrottled(context, exportPayload, ex);
 
       // 续跑激活时故意保留残文件:下次重派 truncate 到 fsync 位点后续写。否则按今天行为删临时文件。
@@ -524,7 +539,7 @@ public class GenerateStep implements ExportStageStep {
     context.getAttributes().put(PipelineRuntimeKeys.RECORD_COUNT, recordCount);
     context.getAttributes().put("totalAmount", batch.getOrDefault("total_amount", BigDecimal.ZERO));
     context.getAttributes().put(PipelineRuntimeKeys.FILE_SIZE_BYTES, Files.size(generatedFile));
-    PipelineStageProgressSink.clear();
+    progressRegistry.clear(context, stage().name());
     return ExportStageResult.success(stage());
   }
 

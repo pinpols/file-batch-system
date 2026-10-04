@@ -63,7 +63,7 @@ public class OrchestratorApprovalClient {
         command.idempotencyKey(),
         ConsoleTextSanitizer.safeInput(command.approvalReason(), 512));
     ApprovalSubmitResponse response = orchestratorInternalRestClient
-        .build()
+        .client()
         .post()
         .uri("/internal/approvals")
         .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, command.idempotencyKey())
@@ -88,7 +88,7 @@ public class OrchestratorApprovalClient {
   public void requireApprovedApproval(
       String tenantId, String approvalNo, ApprovalTargetBinding binding) {
     ApprovalRecordResponse response = orchestratorInternalRestClient
-        .build()
+        .client()
         .get()
         .uri("/internal/approvals/{approvalNo}?tenantId={tenantId}", approvalNo, tenantId)
         .retrieve()

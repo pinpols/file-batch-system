@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -11,23 +12,28 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.console.application.idempotency.ConsoleDurableIdempotencyStore;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.concurrent.ScheduledFuture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessResourceFailureException;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.web.method.HandlerMethod;
 
 class ConsoleIdempotencyInterceptorTest {
 
-  private StringRedisTemplate redisTemplate;
-  private ValueOperations<String, String> valueOps;
+  private ConsoleIdempotencyStore store;
+  private TaskScheduler scheduler;
   private ConsoleIdempotencyInterceptor interceptor;
   private HandlerMethod idempotentHandler;
   private ConsoleDurableIdempotencyStore durableStore;
@@ -35,16 +41,59 @@ class ConsoleIdempotencyInterceptorTest {
   @BeforeEach
   @SuppressWarnings("unchecked")
   void setUp() throws NoSuchMethodException {
-    redisTemplate = mock(StringRedisTemplate.class);
-    valueOps = mock(ValueOperations.class);
-    when(redisTemplate.opsForValue()).thenReturn(valueOps);
+    store = mock(ConsoleIdempotencyStore.class);
+    scheduler = mock(TaskScheduler.class);
     durableStore = mock(ConsoleDurableIdempotencyStore.class);
     interceptor = new ConsoleIdempotencyInterceptor(
-        new RedisConsoleIdempotencyStore(redisTemplate),
-        durableStore,
-        new BatchSecurityProperties());
+        store, durableStore, new BatchSecurityProperties(), scheduler);
     idempotentHandler = new HandlerMethod(
         new SampleController(), SampleController.class.getDeclaredMethod("mutate"));
+  }
+
+  @Test
+  void reservationFailureLogsNoExternalKeyOrExceptionMessage() throws Exception {
+    var request = new MockHttpServletRequest("POST", "/api/console/probe");
+    request.addHeader("X-Tenant-Id", "tenant-a");
+    request.addHeader(
+        CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "external-key\r\nforged-entry");
+    var response = new MockHttpServletResponse();
+    when(store.setIfAbsent(anyString(), anyString(), any(Duration.class)))
+        .thenThrow(
+            new DataAccessResourceFailureException("private-storage-details\r\nforged-entry"));
+    Logger logger = (Logger) LoggerFactory.getLogger(ConsoleIdempotencyInterceptor.class);
+    var appender = new ListAppender<ILoggingEvent>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      assertThat(interceptor.preHandle(request, response, idempotentHandler)).isFalse();
+      assertThat(response.getStatus()).isEqualTo(503);
+      assertThat(appender.list).hasSize(1);
+      var event = appender.list.getFirst();
+      assertThat(event.getFormattedMessage())
+          .contains("owner=PENDING:", "DataAccessResourceFailureException")
+          .doesNotContain("external-key", "private-storage-details", "forged-entry", "\r", "\n");
+      assertThat(event.getThrowableProxy()).isNull();
+    } finally {
+      logger.detachAppender(appender);
+      appender.stop();
+    }
+  }
+
+  @Test
+  void renewalTaskUsesManagedSchedulerAndIsCancelledOnDestroy() {
+    ScheduledFuture<?> renewal = mock(ScheduledFuture.class);
+    doReturn(renewal)
+        .when(scheduler)
+        .scheduleWithFixedDelay(
+            any(Runnable.class), any(Instant.class), eq(Duration.ofSeconds(10)));
+
+    interceptor.startRenewal();
+    interceptor.stopRenewal();
+
+    verify(scheduler)
+        .scheduleWithFixedDelay(
+            any(Runnable.class), any(Instant.class), eq(Duration.ofSeconds(10)));
+    verify(renewal).cancel(false);
   }
 
   @Test
@@ -57,7 +106,7 @@ class ConsoleIdempotencyInterceptorTest {
     assertThat(allowed).isFalse();
     assertThat(response.getStatus()).isEqualTo(400);
     assertThat(response.getContentAsString()).contains("MISSING_IDEMPOTENCY_KEY");
-    verifyNoInteractions(valueOps);
+    verifyNoInteractions(store);
   }
 
   @Test
@@ -67,14 +116,16 @@ class ConsoleIdempotencyInterceptorTest {
     request.addHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "delete-key");
     MockHttpServletResponse response = new MockHttpServletResponse();
     String redisKey = "console:idempotency:tenant-a:DELETE:/api/console/files/42:delete-key";
-    when(valueOps.get(redisKey)).thenReturn(null);
-    when(valueOps.setIfAbsent(redisKey, "PENDING", Duration.ofSeconds(30))).thenReturn(true);
+    when(store.get(redisKey)).thenReturn(null);
+    when(store.setIfAbsent(eq(redisKey), anyString(), eq(Duration.ofSeconds(30))))
+        .thenReturn(true);
 
     boolean allowed = interceptor.preHandle(request, response, idempotentHandler);
 
     assertThat(allowed).isTrue();
     assertThat(request.getAttribute("console.idempotency.redisKey")).isEqualTo(redisKey);
-    verify(valueOps).setIfAbsent(redisKey, "PENDING", Duration.ofSeconds(30));
+    verify(store).setIfAbsent(eq(redisKey), anyString(), eq(Duration.ofSeconds(30)));
+    assertThat(request.getAttribute("console.idempotency.owner").toString()).startsWith("PENDING:");
   }
 
   @Test
@@ -83,14 +134,14 @@ class ConsoleIdempotencyInterceptorTest {
     request.addHeader("X-Tenant-Id", "tenant-a");
     request.addHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "post-key");
     MockHttpServletResponse response = new MockHttpServletResponse();
-    when(valueOps.get(anyString())).thenReturn(null);
+    when(store.get(anyString())).thenReturn(null);
     when(durableStore.isCompleted(eq("tenant-a"), anyString())).thenReturn(true);
 
     boolean allowed = interceptor.preHandle(request, response, idempotentHandler);
 
     assertThat(allowed).isFalse();
     assertThat(response.getStatus()).isEqualTo(409);
-    verify(valueOps, never()).setIfAbsent(anyString(), anyString(), any(Duration.class));
+    verify(store, never()).setIfAbsent(anyString(), anyString(), any(Duration.class));
   }
 
   @Test
@@ -99,13 +150,13 @@ class ConsoleIdempotencyInterceptorTest {
     request.addHeader("X-Tenant-Id", "tenant-a");
     request.addHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "post-key");
     MockHttpServletResponse response = new MockHttpServletResponse();
-    when(valueOps.get(anyString())).thenReturn(null);
-    when(valueOps.setIfAbsent(anyString(), eq("PENDING"), any(Duration.class))).thenReturn(true);
+    when(store.get(anyString())).thenReturn(null);
+    when(store.setIfAbsent(anyString(), anyString(), any(Duration.class))).thenReturn(true);
     interceptor.preHandle(request, response, idempotentHandler);
     response.setStatus(200);
     doThrow(new DataAccessResourceFailureException("redis down"))
-        .when(valueOps)
-        .set(anyString(), eq("DONE"), any(Duration.class));
+        .when(store)
+        .compareAndSet(anyString(), anyString(), eq("DONE"), any(Duration.class));
 
     interceptor.afterCompletion(request, response, idempotentHandler, null);
 
@@ -119,7 +170,7 @@ class ConsoleIdempotencyInterceptorTest {
     request.addHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "patch-key");
     MockHttpServletResponse response = new MockHttpServletResponse();
     String redisKey = "console:idempotency:tenant-a:PATCH:/api/console/jobs/demo:patch-key";
-    when(valueOps.get(redisKey)).thenReturn("DONE");
+    when(store.get(redisKey)).thenReturn("DONE");
 
     boolean allowed = interceptor.preHandle(request, response, idempotentHandler);
 

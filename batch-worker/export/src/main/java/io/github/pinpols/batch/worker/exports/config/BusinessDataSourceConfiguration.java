@@ -45,7 +45,7 @@ public class BusinessDataSourceConfiguration {
     return new HikariConfig();
   }
 
-  @Bean(name = "exportBusinessDataSource")
+  @Bean(name = "exportBusinessDataSource", destroyMethod = "close")
   public DataSource exportBusinessDataSource(
       BusinessDataSourceProperties properties,
       BusinessRoutingProperties routingProperties,

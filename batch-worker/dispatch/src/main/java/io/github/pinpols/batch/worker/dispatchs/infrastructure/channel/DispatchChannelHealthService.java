@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchChannelHealthProperties;
@@ -31,6 +32,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.OkHttpClient;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.ContextClosedEvent;
@@ -68,6 +70,7 @@ public class DispatchChannelHealthService {
   // 复用中心对象存储(底层 client 带超时 + 连接池);ObjectProvider 惰性取,未配对象存储时保持 null(同历史行为)。
   private final ObjectProvider<BatchObjectStore> objectStoreProvider;
   private BatchObjectStore objectStore;
+  private OkHttpClient httpProbeClient;
   private final AtomicBoolean stopping = new AtomicBoolean(false);
   private final AtomicLong probeSuccessCount = new AtomicLong();
   private final AtomicLong probeFailureCount = new AtomicLong();
@@ -133,6 +136,11 @@ public class DispatchChannelHealthService {
     this.probeExecutor = Executors.newFixedThreadPool(PROBE_PARALLELISM, factory);
     // 中心对象存储仅在 S3 配置有效时由 S3AutoConfiguration 建出;未配则 null(OSS 探针按 null 跳过)。
     this.objectStore = objectStoreProvider.getIfAvailable();
+    this.httpProbeClient = new OkHttpClient.Builder()
+        .followRedirects(false)
+        .followSslRedirects(false)
+        .retryOnConnectionFailure(false)
+        .build();
     meterRegistry.gauge("batch.dispatch.channel.probe.successes", probeSuccessCount);
     meterRegistry.gauge("batch.dispatch.channel.probe.failures", probeFailureCount);
   }
@@ -340,6 +348,7 @@ public class DispatchChannelHealthService {
       return;
     }
     if (probeExecutor == null) {
+      stopHttpProbeClient();
       return;
     }
     probeExecutor.shutdown();
@@ -352,6 +361,17 @@ public class DispatchChannelHealthService {
       probeExecutor.shutdownNow();
     }
     log.info("dispatch channel probe executor stopped: source={}", source);
+    stopHttpProbeClient();
+  }
+
+  private void stopHttpProbeClient() {
+    if (EmptyChecks.isNull(httpProbeClient)) {
+      return;
+    }
+    httpProbeClient.dispatcher().cancelAll();
+    httpProbeClient.dispatcher().executorService().shutdown();
+    httpProbeClient.connectionPool().evictAll();
+    httpProbeClient = null;
   }
 
   public DispatchChannelProbeResult probeOne(Map<String, Object> rawRow) {
@@ -379,7 +399,8 @@ public class DispatchChannelHealthService {
         s3StorageProperties,
         objectStore,
         !securityProperties.isBypassMode(),
-        runtimeProperties);
+        runtimeProperties,
+        httpProbeClient);
     recordProbeResult(channelConfig, result);
     if (result.success()) {
       probeSuccessCount.incrementAndGet();

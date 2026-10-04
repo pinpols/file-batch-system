@@ -11,6 +11,7 @@ import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
+import jakarta.annotation.PreDestroy;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -30,6 +31,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
@@ -113,10 +115,18 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
    */
   private final AtomicReference<OkHttpClient> sharedClient = new AtomicReference<>();
 
+  private final AtomicBoolean stopping = new AtomicBoolean();
+
   private OkHttpClient client() {
+    if (stopping.get()) {
+      throw new IllegalStateException("HTTP task executor is stopping");
+    }
     OkHttpClient c = sharedClient.get();
     if (c == null) {
       synchronized (this) {
+        if (stopping.get()) {
+          throw new IllegalStateException("HTTP task executor is stopping");
+        }
         c = sharedClient.get();
         if (c == null) {
           c = new OkHttpClient.Builder()
@@ -130,6 +140,18 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
       }
     }
     return c;
+  }
+
+  @PreDestroy
+  void shutdownHttpClient() {
+    stopping.set(true);
+    OkHttpClient client = sharedClient.getAndSet(null);
+    if (EmptyChecks.isNull(client)) {
+      return;
+    }
+    client.dispatcher().cancelAll();
+    client.dispatcher().executorService().shutdown();
+    client.connectionPool().evictAll();
   }
 
   /**

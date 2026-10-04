@@ -28,7 +28,7 @@ from typing import Any, Final, Protocol, runtime_checkable
 
 from batch_worker_sdk.client.config import BatchPlatformClientConfig
 from batch_worker_sdk.exceptions import PlatformError
-from batch_worker_sdk.internal import _fingerprint, _progress
+from batch_worker_sdk.internal import _fingerprint
 from batch_worker_sdk.internal._http import PlatformHttpClient
 from batch_worker_sdk.scheduler._directive import ParsedDirective, parse_directive
 
@@ -175,14 +175,6 @@ class HeartbeatScheduler:
         body["processId"] = _fingerprint.process_id()
         if self._config.build_id:
             body["buildId"] = self._config.build_id
-        # 2026-06-03 docs/design/pipeline-stage-progress-display.md:流式 stage 行级进度上报。
-        # Python SDK 用 _progress 模块的 sink(LOAD/GENERATE handler 调 publish),tick 时读最新值。
-        rows = _progress.current_rows_processed()
-        if rows is not None:
-            body["rowsProcessed"] = rows
-        total = _progress.current_total_rows_hint()
-        if total is not None:
-            body["totalRowsHint"] = total
         try:
             resp = await self._http.heartbeat(self._config.worker_code, body)
         except PlatformError as ex:

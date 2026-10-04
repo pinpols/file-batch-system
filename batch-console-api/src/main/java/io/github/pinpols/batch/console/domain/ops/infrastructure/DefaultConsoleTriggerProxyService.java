@@ -34,7 +34,7 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
   private final DownstreamFallback downstreamFallback;
 
   private RestClient newClient() {
-    return triggerInternalRestClient.build();
+    return triggerInternalRestClient.client();
   }
 
   @Override

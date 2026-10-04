@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.mq;
 
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.engine.DefaultScheduleForwarder;
 import io.github.pinpols.batch.orchestrator.application.engine.ScheduleForwarderResult;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
@@ -14,11 +15,14 @@ import io.github.pinpols.batch.orchestrator.infrastructure.sharding.ShardAssignm
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
@@ -92,8 +96,10 @@ public class OutboxPollScheduler {
   private final Counter circuitSkippedPollsCounter;
 
   private final AtomicBoolean pollingLoopStarted = new AtomicBoolean(false);
+  private final AtomicBoolean stopping = new AtomicBoolean(false);
   private final AtomicBoolean running = new AtomicBoolean(false);
   private final AtomicLong currentIntervalMillis = new AtomicLong(0);
+  private final AtomicReference<ScheduledFuture<?>> pendingPoll = new AtomicReference<>();
 
   @SuppressWarnings("PMD.ExcessiveParameterList") // 9 项依赖均单一职责,封装 Command 类反而模糊语义
   public OutboxPollScheduler(
@@ -138,8 +144,7 @@ public class OutboxPollScheduler {
     }
     long initialDelay = outbox.getMinPollIntervalMillis();
     currentIntervalMillis.set(initialDelay);
-    executor.schedule(
-        this::pollAndReschedule, BatchDateTimeSupport.utcNow().plusMillis(initialDelay));
+    scheduleAt(BatchDateTimeSupport.utcNow().plusMillis(initialDelay));
     ShardAssignment initial = shardAssignmentProvider.current();
     log.info(
         "OutboxPollScheduler started (adaptive mode): min={}ms max={}ms backoff={}x mode={} shard={}/{}",
@@ -151,10 +156,22 @@ public class OutboxPollScheduler {
         initial.shardTotal());
   }
 
-  // P1 治理: executor 生命周期改由 Spring 容器统一管理 (outboxPollScheduler bean), 这里不再
-  // 手动 shutdown / awaitTermination — Spring 通过 awaitTerminationSeconds=30 等价回退。
-  // 原 setDaemon(true) 副作用 (JVM 退出时 daemon 线程被直接终止, awaitTermination 形同虚设)
-  // 也因 bean 切换为非 daemon 一并修复。
+  /**
+   * 停止自调度循环，但不打断正在投递的当前轮次。
+   *
+   * <p>必须在 Spring 销毁专用 executor 前取消延迟任务。否则 {@code waitForTasksToCompleteOnShutdown=true}
+   * 会等待下一次 poll 的触发时间，容器关闭时可能无意义地耗满 30 秒。
+   */
+  @PreDestroy
+  void stopScheduling() {
+    if (!stopping.compareAndSet(false, true)) {
+      return;
+    }
+    ScheduledFuture<?> future = pendingPoll.getAndSet(null);
+    if (EmptyChecks.isNotNull(future)) {
+      future.cancel(false);
+    }
+  }
 
   /** 供单元测试直接触发一次轮询（不走自调度循环）。 */
   public void poll() {
@@ -178,17 +195,17 @@ public class OutboxPollScheduler {
   }
 
   private void pollAndReschedule() {
+    if (stopping.get()) {
+      return;
+    }
     if (!running.compareAndSet(false, true)) {
       // 上一轮仍在执行，视为繁忙但不累积任务，退避后重试
       scheduleNext(null);
       return;
     }
     if (gracefulShutdown.isDraining()) {
-      // 前置短路：shutdown 已触发时不再去抢 ShedLock（Lettuce 可能已 STOPPED，
-      // 抢锁会抛 IllegalStateException），内层 executeAdvance 的 isDraining 判断
-      // 仅在拿到锁后生效，这里补一层保证 shutdown 期间不产生 ERROR 日志。
+      // 前置短路：shutdown 已触发时不再抢 ShedLock，也不再安排下一轮。
       running.set(false);
-      scheduleNext(null);
       return;
     }
     ScheduleForwarderResult[] holder = new ScheduleForwarderResult[1];
@@ -293,6 +310,9 @@ public class OutboxPollScheduler {
    * </ul>
    */
   private void scheduleNext(ScheduleForwarderResult result) {
+    if (stopping.get() || gracefulShutdown.isDraining()) {
+      return;
+    }
     OutboxProperties outbox = governance.outbox();
     long min = outbox.getMinPollIntervalMillis();
     long max = outbox.getPollIntervalMillis();
@@ -312,14 +332,24 @@ public class OutboxPollScheduler {
         nextDelay,
         result == null ? "n/a" : result.attemptedEvents());
 
-    if (executor.getScheduledExecutor().isShutdown()) {
+    scheduleAt(BatchDateTimeSupport.utcNow().plusMillis(nextDelay));
+  }
+
+  private void scheduleAt(Instant triggerTime) {
+    if (stopping.get() || executor.getScheduledExecutor().isShutdown()) {
       return;
     }
     try {
-      executor.schedule(
-          this::pollAndReschedule, BatchDateTimeSupport.utcNow().plusMillis(nextDelay));
+      ScheduledFuture<?> future = executor.schedule(this::pollAndReschedule, triggerTime);
+      pendingPoll.set(future);
+      // 覆盖 stopScheduling 与 schedule 之间的竞态：若关闭已开始，立即撤销刚创建的任务。
+      if (stopping.get() && pendingPoll.compareAndSet(future, null)) {
+        future.cancel(false);
+      }
     } catch (RejectedExecutionException ex) {
-      if (gracefulShutdown.isDraining() || executor.getScheduledExecutor().isShutdown()) {
+      if (stopping.get()
+          || gracefulShutdown.isDraining()
+          || executor.getScheduledExecutor().isShutdown()) {
         log.debug("Skipping the next Outbox poll: scheduler is shutting down");
         return;
       }

@@ -86,7 +86,8 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
     StateContext stateContext = new StateContext(
         request.owner(), policy.name(), now, request.policy().slidingWindowHours());
     QuotaRuntimeStateEntity state = loadOrCreate(stateContext);
-    state = refreshState(state, policy, now, request.policy().slidingWindowHours());
+    // 刷新窗口与预约合并为一次 CAS，避免刷新写入后再次使用旧版本。
+    state = refreshState(state, policy, now, request.policy().slidingWindowHours(), false);
     if (state == null) {
       return ResourceCheck.allow();
     }

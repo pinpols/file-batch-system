@@ -174,6 +174,9 @@ public class WebhookDispatcher {
       executor.shutdownNow();
       Thread.currentThread().interrupt();
     }
+    httpClient.dispatcher().cancelAll();
+    httpClient.dispatcher().executorService().shutdown();
+    httpClient.connectionPool().evictAll();
   }
 
   private List<PendingWebhookDelivery> persistPendingDeliveries(

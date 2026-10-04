@@ -39,24 +39,6 @@
           and p.id = #{pipelineInstanceId}
     </select>
 
-    <!--
-      缺口1:解析该 pipeline 当前运行中分区的 worker,用于服务端桥接实时行数 cache。
-      链路:pipeline_instance.related_job_instance_id → job_instance → job_partition(运行态且已领取)。
-      取最近更新的一个运行态分区的 worker_code;无运行态分区则返回 null(调用方跳过桥接)。
-    -->
-    <select id="selectRunningWorkerCode" resultType="string">
-        select jp.worker_code
-        from batch.pipeline_instance p
-        join batch.job_instance ji on ji.id = p.related_job_instance_id
-        join batch.job_partition jp on jp.job_instance_id = ji.id
-        where p.tenant_id = #{tenantId}
-          and p.id = #{pipelineInstanceId}
-          and jp.partition_status in ('RUNNING', 'RETRYING')
-          and jp.worker_code is not null
-        order by jp.updated_at desc, jp.id desc
-        limit 1
-    </select>
-
     <select id="selectByQuery" resultType="map">
         select
             s.id,

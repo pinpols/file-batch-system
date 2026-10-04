@@ -7,27 +7,27 @@
 
 | 指标 | 数量 |
 |---|---:|
-| 生产 Java 源文件 | 2356 |
+| 生产 Java 源文件 | 2359 |
 | CGLIB 自注入类 | 0 |
-| `Map<String, Object>` 出现次数 | 2095 |
-| 含 Map 的源文件 | 449 |
+| `Map<String, Object>` 出现次数 | 2093 |
+| 含 Map 的源文件 | 448 |
 | public Map 契约候选 | 65 |
 | public Map 契约候选文件 | 37 |
 | `@SuppressWarnings` | 232 |
-| 含 suppression 的源文件 | 172 |
+| 含 suppression 的源文件 | 173 |
 | `@Configuration` 类 | 48 |
-| 大于等于 700 行的源文件 | 12 |
-| `PMD.ExcessiveParameterList` 显式例外 | 35 |
+| 大于等于 700 行的源文件 | 11 |
+| `PMD.ExcessiveParameterList` 显式例外 | 33 |
 
 ## 模块源文件
 
 | 模块 | 生产 Java 文件 |
 |---|---:|
-| `batch-common` | 320 |
-| `batch-console-api` | 957 |
+| `batch-common` | 321 |
+| `batch-console-api` | 958 |
 | `batch-orchestrator` | 539 |
 | `batch-trigger` | 70 |
-| `batch-worker` | 370 |
+| `batch-worker` | 371 |
 | `sdk` | 91 |
 | `security-scan` | 9 |
 
@@ -45,9 +45,8 @@
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | 1028 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java` | 869 |
 | `batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/sql/SqlTransformComputePlugin.java` | 828 |
-| `batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/RemoteFilesystemDispatchSupport.java` | 783 |
 | `batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanner.java` | 768 |
-| `batch-console-api/src/main/java/io/github/pinpols/batch/console/application/ops/infrastructure/DefaultConsoleOrchestratorProxyService.java` | 756 |
+| `batch-console-api/src/main/java/io/github/pinpols/batch/console/application/ops/infrastructure/DefaultConsoleOrchestratorProxyService.java` | 755 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowGraphValidator.java` | 741 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java` | 740 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultCompensationService.java` | 719 |
@@ -102,7 +101,6 @@
 | 文件 | 例外数 |
 |---|---:|
 | `batch-common/src/main/java/io/github/pinpols/batch/common/dto/LaunchRequest.java` | 2 |
-| `batch-common/src/main/java/io/github/pinpols/batch/common/dto/WorkerHeartbeatDto.java` | 2 |
 | `batch-common/src/main/java/io/github/pinpols/batch/common/kafka/TaskDispatchMessage.java` | 2 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/mapper/OperationAuditMapper.java` | 2 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/observability/view/dashboard/ExecutionProgressView.java` | 1 |

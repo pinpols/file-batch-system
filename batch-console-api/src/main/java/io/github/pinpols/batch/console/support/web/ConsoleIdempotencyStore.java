@@ -9,7 +9,7 @@ public interface ConsoleIdempotencyStore {
 
   Boolean setIfAbsent(String key, String value, Duration ttl);
 
-  void set(String key, String value, Duration ttl);
+  boolean compareAndSet(String key, String expected, String value, Duration ttl);
 
-  void delete(String key);
+  boolean deleteIfValue(String key, String expected);
 }

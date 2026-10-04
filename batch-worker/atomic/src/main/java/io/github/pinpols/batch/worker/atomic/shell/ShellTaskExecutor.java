@@ -28,6 +28,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
@@ -369,22 +370,24 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
     }
     try {
       // 异步读 stdout / stderr,防 buffer full block
-      Thread stdoutThread = startReaderThread(
+      OutputReader stdoutReader = startReaderThread(
           proc.getInputStream(), props.getMaxStdoutBytes(), "stdout-" + invocationId);
-      Thread stderrThread = startReaderThread(
+      OutputReader stderrReader = startReaderThread(
           proc.getErrorStream(), props.getMaxStderrBytes(), "stderr-" + invocationId);
 
       boolean finished = proc.waitFor(inv.timeout.toMillis(), TimeUnit.MILLISECONDS);
-      stdoutThread.join(1000);
-      stderrThread.join(1000);
+      if (!finished) {
+        destroyProcessTree(proc);
+      }
+      stdoutReader.thread().join(1000);
+      stderrReader.thread().join(1000);
 
-      ReaderResult stdout = readerResults.remove(stdoutThread.getName());
-      ReaderResult stderr = readerResults.remove(stderrThread.getName());
+      ReaderResult stdout = stdoutReader.result().get();
+      ReaderResult stderr = stderrReader.result().get();
 
       long duration = System.currentTimeMillis() - start;
 
       if (!finished) {
-        destroyProcessTree(proc);
         return AtomicErrorCode.fail(
             AtomicErrorCode.TIMEOUT,
             "timed out after " + inv.timeout.toSeconds() + "s",
@@ -436,16 +439,15 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
     }
   }
 
-  // 用 ConcurrentMap 接收异步 reader 结果(简化:仅 2 个线程,小 map 够用)
-  private final ConcurrentHashMap<String, ReaderResult> readerResults = new ConcurrentHashMap<>();
-
-  private Thread startReaderThread(InputStream in, int maxBytes, String name) {
+  // 输出只属于本次调用；取消后晚到的 reader 结果不会留在单例 Map 中。
+  private OutputReader startReaderThread(InputStream in, int maxBytes, String name) {
+    AtomicReference<ReaderResult> result = new AtomicReference<>();
     Thread t = new Thread(
         () -> {
           ByteArrayOutputStream buf = new ByteArrayOutputStream();
           boolean truncated = false;
           byte[] tmp = new byte[4096];
-          try {
+          try (in) {
             int n;
             while ((n = in.read(tmp)) != -1) {
               if (buf.size() + n > maxBytes) {
@@ -466,13 +468,15 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
           } catch (IOException e) {
             log.warn("{}: reader IO error: {}", name, e.getMessage());
           }
-          readerResults.put(name, new ReaderResult(buf.toString(), truncated));
+          result.set(new ReaderResult(buf.toString(), truncated));
         },
         name);
     t.setDaemon(true);
     t.start();
-    return t;
+    return new OutputReader(t, result);
   }
+
+  private record OutputReader(Thread thread, AtomicReference<ReaderResult> result) {}
 
   private static String summarize(ReaderResult r) {
     if (r == null || r.text == null) {

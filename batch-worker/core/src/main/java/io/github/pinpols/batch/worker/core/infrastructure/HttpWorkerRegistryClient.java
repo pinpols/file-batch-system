@@ -31,6 +31,7 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
   private final BatchSecurityProperties securityProperties;
   private final ObjectProvider<RestClient.Builder> restClientBuilderProvider;
   private final Environment environment;
+  private final PipelineStageProgressRegistry pipelineStageProgressRegistry;
   private final AtomicReference<RestClient> restClient = new AtomicReference<>();
 
   @Override
@@ -131,14 +132,11 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
         registration.getCurrentLoad(),
         // file-pipeline worker 不声明自定义 taskType(仅 SDK 自托管 worker 用,见 SDK Phase 3 M3.1)
         null,
-        // pipeline-stage 行级进度由 LoadStep/GenerateStep
-        // 透传(docs/design/pipeline-stage-progress-display.md)
-        PipelineStageProgressSink.currentRowsProcessed(),
-        PipelineStageProgressSink.currentTotalRowsHint(),
         // protocolVersion:平台内置 file-pipeline worker 与控制面同仓同步发布,非 BYO 自托管 SDK,
         // 不参与协议门禁(留 null = legacy 放行;门禁只针对外部 SDK worker 上报的 protocolVersion)。
         null,
         registration.getMaxConcurrent(),
-        registration.getWorkerCode());
+        registration.getWorkerCode(),
+        pipelineStageProgressRegistry.snapshots());
   }
 }

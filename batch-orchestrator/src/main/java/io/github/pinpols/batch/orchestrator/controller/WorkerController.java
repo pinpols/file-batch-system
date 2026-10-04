@@ -134,7 +134,7 @@ public class WorkerController {
           ? null
           : new WorkerHeartbeatDto(
               tenantId, null, null, null, null, null, null, null, null, null, null, null, null,
-              null, null, null);
+              null, null, null, null);
     }
     String tenantId = resolveTenant(request, httpRequest);
     return new WorkerHeartbeatDto(
@@ -151,11 +151,10 @@ public class WorkerController {
         request.capabilityTags(),
         request.currentLoad(),
         request.taskTypes(),
-        request.rowsProcessed(),
-        request.totalRowsHint(),
         request.protocolVersion(),
         request.maxConcurrent(),
-        request.workerPoolCode());
+        request.workerPoolCode(),
+        request.pipelineProgress());
   }
 
   private static String resolveTenant(WorkerHeartbeatDto request, HttpServletRequest httpRequest) {

@@ -132,7 +132,7 @@ class DefaultConsoleFileApplicationServiceTest {
     RestClient.RequestBodyUriSpec uriSpec = mock(RestClient.RequestBodyUriSpec.class);
     RestClient.RequestBodySpec bodySpec = mock(RestClient.RequestBodySpec.class);
     RestClient.ResponseSpec responseSpec = mock(RestClient.ResponseSpec.class);
-    when(orchestratorClient.build()).thenReturn(restClient);
+    when(orchestratorClient.client()).thenReturn(restClient);
     when(restClient.post()).thenReturn(uriSpec);
     when(uriSpec.uri(anyString(), any(Object[].class))).thenReturn(bodySpec);
     doReturn(bodySpec).when(bodySpec).header(anyString(), (String[]) any());

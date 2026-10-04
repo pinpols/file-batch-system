@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
 import java.io.ByteArrayInputStream;
@@ -15,6 +16,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.Map;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -22,6 +24,14 @@ class RemoteFilesystemNasPathTest {
 
   @TempDir
   Path tempDir;
+
+  private final DispatchRuntimeProperties runtimeProperties = new DispatchRuntimeProperties();
+  private final NasCopyExecutor copyExecutor = new NasCopyExecutor();
+
+  @AfterEach
+  void shutdownExecutor() {
+    copyExecutor.shutdown();
+  }
 
   @Test
   void probeNas_validWritableDir_returnsSuccess() {
@@ -68,7 +78,8 @@ class RemoteFilesystemNasPathTest {
         Map.of("nas_remote_directory", tempDir.toString(), "nas_remote_file_name", "out.dat"),
         new DispatchPayload("10", null, "NAS_CH", null, "ext-1", "R-1", null, null, null, null));
 
-    DispatchResult result = RemoteFilesystemDispatchSupport.dispatchNas(command, resolver);
+    DispatchResult result = RemoteFilesystemDispatchSupport.dispatchNas(
+        command, resolver, runtimeProperties, copyExecutor);
 
     Path target = tempDir.resolve("out.dat");
     Path manifest = tempDir.resolve("out.dat.chk");
@@ -106,7 +117,8 @@ class RemoteFilesystemNasPathTest {
             "false"),
         new DispatchPayload("11", null, "NAS_CH", null, "ext-2", "R-2", null, null, null, null));
 
-    DispatchResult result = RemoteFilesystemDispatchSupport.dispatchNas(command, resolver);
+    DispatchResult result = RemoteFilesystemDispatchSupport.dispatchNas(
+        command, resolver, runtimeProperties, copyExecutor);
 
     assertThat(result.success()).isTrue();
     assertThat(result.manifestRef()).isNull();
@@ -114,8 +126,8 @@ class RemoteFilesystemNasPathTest {
   }
 
   @Test
-  void dispatchNas_recreatesCopyExecutorAfterShutdown() throws Exception {
-    RemoteFilesystemDispatchSupport.shutdownNasCopyExecutor();
+  void dispatchNas_doesNotResurrectExecutorAfterShutdown() throws Exception {
+    copyExecutor.shutdown();
     byte[] payload = "restartable executor\n".getBytes(StandardCharsets.UTF_8);
     DispatchFileContentResolver resolver = mock(DispatchFileContentResolver.class);
     Map<String, Object> fileRecord = Map.of("id", 12L, "file_name", "source.dat");
@@ -131,10 +143,11 @@ class RemoteFilesystemNasPathTest {
             "after-shutdown.dat"),
         new DispatchPayload("12", null, "NAS_CH", null, "ext-3", "R-3", null, null, null, null));
 
-    DispatchResult result = RemoteFilesystemDispatchSupport.dispatchNas(command, resolver);
+    DispatchResult result = RemoteFilesystemDispatchSupport.dispatchNas(
+        command, resolver, runtimeProperties, copyExecutor);
 
-    assertThat(result.success()).isTrue();
-    assertThat(tempDir.resolve("after-shutdown.dat")).hasContent("restartable executor\n");
+    assertThat(result.success()).isFalse();
+    assertThat(result.message()).contains("stopping");
   }
 
   private static String sha256(byte[] payload) throws Exception {

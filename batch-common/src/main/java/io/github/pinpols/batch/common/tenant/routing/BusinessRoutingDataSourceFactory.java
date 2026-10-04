@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.common.tenant.routing;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
 
@@ -22,8 +23,8 @@ public final class BusinessRoutingDataSourceFactory {
    * @return 路由 DataSource(已 afterPropertiesSet,可直接当 bean 用)
    */
   public static DataSource singleShard(DataSource shard0) {
-    BusinessRoutingDataSource routing =
-        new BusinessRoutingDataSource(new HashAndSiloPlacementResolver(1, Map.of()));
+    BusinessRoutingDataSource routing = new BusinessRoutingDataSource(
+        new HashAndSiloPlacementResolver(1, Map.of()), List.of(shard0));
     routing.setTargetDataSources(
         Map.<Object, Object>of(HashAndSiloPlacementResolver.DEFAULT_KEY, shard0));
     routing.setDefaultTargetDataSource(shard0);
@@ -49,7 +50,7 @@ public final class BusinessRoutingDataSourceFactory {
       throw new IllegalArgumentException(
           "shards must contain default key " + HashAndSiloPlacementResolver.DEFAULT_KEY);
     }
-    BusinessRoutingDataSource routing = new BusinessRoutingDataSource(resolver);
+    BusinessRoutingDataSource routing = new BusinessRoutingDataSource(resolver, shards.values());
     routing.setTargetDataSources(new HashMap<Object, Object>(shards));
     routing.setDefaultTargetDataSource(fallback);
     // 关 lenientFallback:resolver 返回未配置的 key(typo silo / 迁片到不存在的片)时**硬失败**,

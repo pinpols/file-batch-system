@@ -59,6 +59,7 @@
 | worker 接线 | 各 `BusinessDataSourceConfiguration` | import / export / process |
 
 > 只有 import / export / process 三个 worker 持有 biz 数据源;dispatch / atomic / SDK 不碰 biz,无需改。
+> `BusinessRoutingDataSource` 对工厂创建的各分片连接池负责；Spring 销毁 worker 上下文时会关闭去重后的全部子池。多片装配会先校验分片键，并在后续构建失败时回滚已经创建的池，避免启动失败、测试重建上下文或优雅停机后遗留 Hikari 线程和连接。
 
 ## 4. 事务与凭据(设计约束)
 
@@ -172,7 +173,7 @@ scripts/local/verify-biz-shard.sh
 ```
 对两片真实 PG(shard-0=primary、shard-1=provision)跑活体:经路由 DS 读回每片 `__shard_identity`,
 证明每个租户连接物理落到 resolver 选定实例;并证明 TABLE 模式表覆盖 hash、未登记走 hash。
-单测:`HashAndSiloPlacementResolverTest` / `BusinessRoutingDataSource*Test` / `DbTablePlacementResolverTest`。
+单测:`HashAndSiloPlacementResolverTest` / `BusinessRoutingDataSource*Test` / `DbTablePlacementResolverTest`，并验证共享引用的子池只关闭一次。
 活体测试 env-gated(`BIZ_SHARD_0_URL` 未设自动跳过),不进常规 CI。
 
 ## 11. 生产激活清单(代码外的 ops 动作)

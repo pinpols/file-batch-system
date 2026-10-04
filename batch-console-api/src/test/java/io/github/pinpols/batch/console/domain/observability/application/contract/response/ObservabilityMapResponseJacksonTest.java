@@ -111,16 +111,14 @@ class ObservabilityMapResponseJacksonTest {
   @Test
   void pipelineProgressShouldKeepNullTotalRowsHintKey() throws Exception {
     // 透传自 orchestrator record（无 NON_NULL），totalRowsHint 为 null 时显式保留键。
-    Map<String, Object> row = new LinkedHashMap<>();
-    row.put("workerCode", "w-1");
-    row.put("rowsProcessed", 100L);
-    row.put("totalRowsHint", null);
-    row.put("heartbeatAt", Instant.parse("2026-07-11T02:00:00Z"));
+    Map<String, Object> back = roundTrip(new ConsolePipelineProgressItemResponse(
+        "LOAD", 100L, null, Instant.parse("2026-07-11T02:00:00Z")));
 
-    Map<String, Object> back = roundTrip(ConsolePipelineProgressItemResponse.from(row));
-
-    assertThat(back).containsKeys("workerCode", "rowsProcessed", "totalRowsHint", "heartbeatAt");
-    assertThat(back).containsEntry("totalRowsHint", null).containsEntry("rowsProcessed", 100);
+    assertThat(back)
+        .containsOnlyKeys("stageCode", "rowsProcessed", "totalRowsHint", "heartbeatAt")
+        .containsEntry("stageCode", "LOAD")
+        .containsEntry("totalRowsHint", null)
+        .containsEntry("rowsProcessed", 100);
   }
 
   private Map<String, Object> roundTrip(Object value) throws Exception {

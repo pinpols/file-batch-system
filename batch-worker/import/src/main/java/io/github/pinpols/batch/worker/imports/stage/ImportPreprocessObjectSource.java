@@ -33,6 +33,7 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 
 /**
  * PREPROCESS 的对象输入适配器。
@@ -41,7 +42,8 @@ import lombok.extern.slf4j.Slf4j;
  * spool。把这些 IO 与分片边界集中在这里，避免 {@link PreprocessStep} 同时承担编解码和对象存储策略。
  */
 @Slf4j
-final class ImportPreprocessObjectSource {
+@Component
+public final class ImportPreprocessObjectSource {
 
   private static final String ERROR_CODE_OBJECT_LOAD_FAILED =
       "IMPORT_PREPROCESS_OBJECT_LOAD_FAILED";
@@ -51,7 +53,7 @@ final class ImportPreprocessObjectSource {
   private final BatchObjectStore objectStore;
   private final WorkerImportPayloadProperties payloadProperties;
 
-  ImportPreprocessObjectSource(
+  public ImportPreprocessObjectSource(
       PlatformFileRecordRepository fileRecords,
       S3StorageProperties s3StorageProperties,
       BatchObjectStore objectStore,

@@ -97,7 +97,7 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
     // P0-1(2026-05-16):此前直接 restClientBuilder.baseUrl(...).build() 漏装
     // X-Internal-Secret,生产 bypass=false 后 trigger 侧 401。换走
     // TriggerInternalRestClient 统一注入 secret + 超时。
-    RestClient restClient = triggerInternalRestClient.build();
+    RestClient restClient = triggerInternalRestClient.client();
     TriggerLaunchPayload launchPayload = new TriggerLaunchPayload(
         command.tenantId(),
         ConsoleTextSanitizer.safeInput(command.jobCode(), 128),
@@ -122,7 +122,7 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
   @Override
   public String submitCompensation(CompensationPayload payload, String idempotencyKey) {
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-    RestClient restClient = orchestratorInternalRestClient.build();
+    RestClient restClient = orchestratorInternalRestClient.client();
     CompensationResponse response = restClient
         .post()
         .uri("/internal/compensations")
@@ -144,7 +144,7 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
   public String triggerRecovery(
       String tenantId, String uriTemplate, Long targetId, String idempotencyKey) {
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-    RestClient restClient = orchestratorInternalRestClient.build();
+    RestClient restClient = orchestratorInternalRestClient.client();
     CommonResponse<RecoveryOperationResponse> response = restClient
         .post()
         .uri(uriTemplate, targetId)

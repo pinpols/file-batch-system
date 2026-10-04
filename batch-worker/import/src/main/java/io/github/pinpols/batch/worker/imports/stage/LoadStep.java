@@ -11,7 +11,7 @@ import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineStageProgressSink;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineStageProgressRegistry;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.CheckpointPartitionGuard;
@@ -35,8 +35,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -50,7 +50,6 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class LoadStep implements ImportStageStep {
 
   // ── duplicate literal constants ─────────────────────────────────────────
@@ -69,6 +68,42 @@ public class LoadStep implements ImportStageStep {
   // ADR-038 P2:续跑位点(默认禁用,开关 batch.worker.checkpoint.enabled=true 才生效)
   private final WorkerCheckpointProperties checkpointProperties;
   private final ProcessingPositionStore positionStore;
+  private final PipelineStageProgressRegistry progressRegistry;
+
+  public LoadStep(
+      ImportLoadPluginRegistry importLoadPluginRegistry,
+      PlatformFileRecordRepository fileRecords,
+      ImportWorkerConfiguration workerConfiguration,
+      ObjectMapper objectMapper,
+      WorkerCheckpointProperties checkpointProperties,
+      ProcessingPositionStore positionStore) {
+    this(
+        importLoadPluginRegistry,
+        fileRecords,
+        workerConfiguration,
+        objectMapper,
+        checkpointProperties,
+        positionStore,
+        new PipelineStageProgressRegistry());
+  }
+
+  @Autowired
+  public LoadStep(
+      ImportLoadPluginRegistry importLoadPluginRegistry,
+      PlatformFileRecordRepository fileRecords,
+      ImportWorkerConfiguration workerConfiguration,
+      ObjectMapper objectMapper,
+      WorkerCheckpointProperties checkpointProperties,
+      ProcessingPositionStore positionStore,
+      PipelineStageProgressRegistry progressRegistry) {
+    this.importLoadPluginRegistry = importLoadPluginRegistry;
+    this.fileRecords = fileRecords;
+    this.workerConfiguration = workerConfiguration;
+    this.objectMapper = objectMapper;
+    this.checkpointProperties = checkpointProperties;
+    this.positionStore = positionStore;
+    this.progressRegistry = progressRegistry;
+  }
 
   @Override
   public ImportStage stage() {
@@ -138,19 +173,19 @@ public class LoadStep implements ImportStageStep {
         return markLoaded(context, ckpt.processedCount());
       }
       long loadedCount =
-          loadValidatedRecords(validatedRecordsPath, chunkSize, plugin, loadCtx, ckpt);
+          loadValidatedRecords(context, validatedRecordsPath, chunkSize, plugin, loadCtx, ckpt);
       if (partitionStageSwapCopy) {
         ((GenericJdbcMappedImportLoadPlugin) plugin).finishPartitionStageSwap(loadCtx);
       }
       completeCheckpoint(ckpt);
       commit(context, importPayload, loadedCount);
-      PipelineStageProgressSink.clear();
+      progressRegistry.clear(context, stage().name());
       deleteQuietly(validatedRecordsPath);
       deleteQuietly(resolvePath(attrs.get(PipelineRuntimeKeys.PARSED_RECORDS_PATH)));
       return ImportStageResult.success(stage());
     } catch (Exception ex) {
-      // 失败也清掉 progress sink,避免心跳带上失败 stage 的残留(SDK 进程级 sink 跨 stage 共享)
-      PipelineStageProgressSink.clear();
+      // 失败也清掉当前 task/stage 的进度，避免下一次心跳继续展示已失败任务。
+      progressRegistry.clear(context, stage().name());
       // M-5: 失败时故意不删除暂存文件（validatedRecordsPath / PARSED_RECORDS_PATH），
       // 便于运维检查或重放记录，无需重跑之前的 pipeline 阶段。
       // 加载失败多为模板/数据问题(坏 SQL、缺表、配置非法),message 已表达根因;ERROR 留一行,堆栈降 DEBUG,
@@ -178,6 +213,7 @@ public class LoadStep implements ImportStageStep {
   }
 
   private long loadValidatedRecords(
+      ImportJobContext context,
       Path validatedRecordsPath,
       int chunkSize,
       ImportLoadPlugin plugin,
@@ -206,17 +242,20 @@ public class LoadStep implements ImportStageStep {
         }
         chunk.add(objectMapper.readValue(line, MAP_TYPE));
         if (chunk.size() >= chunkSize) {
-          loadedCount = flushAndAdvance(plugin, loadCtx, ckpt, chunk, currentLineNo, loadedCount);
+          loadedCount =
+              flushAndAdvance(context, plugin, loadCtx, ckpt, chunk, currentLineNo, loadedCount);
         }
       }
       if (!chunk.isEmpty()) {
-        loadedCount = flushAndAdvance(plugin, loadCtx, ckpt, chunk, currentLineNo, loadedCount);
+        loadedCount =
+            flushAndAdvance(context, plugin, loadCtx, ckpt, chunk, currentLineNo, loadedCount);
       }
     }
     return loadedCount;
   }
 
   private long flushAndAdvance(
+      ImportJobContext context,
       ImportLoadPlugin plugin,
       ImportLoadContext loadCtx,
       CheckpointHandle ckpt,
@@ -229,7 +268,7 @@ public class LoadStep implements ImportStageStep {
     advanceCheckpoint(ckpt, currentLineNo, written);
     // 流式进度上报(docs/design/pipeline-stage-progress-display.md):totalRowsHint=null
     // 因为预扫整文件估总行数代价大于收益(百万行+一次 O(n) I/O),FE 退化为只显计数器不显 ETA。
-    PipelineStageProgressSink.publish(updatedLoadedCount, null);
+    progressRegistry.publish(context, stage().name(), updatedLoadedCount, null);
     chunk.clear();
     return updatedLoadedCount;
   }

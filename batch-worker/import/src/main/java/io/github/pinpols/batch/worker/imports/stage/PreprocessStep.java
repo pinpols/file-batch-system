@@ -72,6 +72,7 @@ public class PreprocessStep implements ImportStageStep {
   private final BatchObjectCryptoService cryptoService;
   private final WorkerImportPayloadProperties payloadProperties;
   private final ImportPreprocessObjectSource objectSource;
+  private final ObjectMapper objectMapper;
 
   public PreprocessStep(
       PlatformFileRecordRepository fileRecords,
@@ -85,12 +86,9 @@ public class PreprocessStep implements ImportStageStep {
         pipelineDefinitions,
         batchSecurityProperties,
         cryptoService,
-        s3StorageProperties,
-        objectStore,
-        new WorkerImportPayloadProperties());
+        defaultRuntime(fileRecords, s3StorageProperties, objectStore));
   }
 
-  @Autowired
   public PreprocessStep(
       PlatformFileRecordRepository fileRecords,
       PlatformPipelineDefinitionRepository pipelineDefinitions,
@@ -99,14 +97,73 @@ public class PreprocessStep implements ImportStageStep {
       S3StorageProperties s3StorageProperties,
       BatchObjectStore objectStore,
       WorkerImportPayloadProperties payloadProperties) {
+    this(
+        fileRecords,
+        pipelineDefinitions,
+        batchSecurityProperties,
+        cryptoService,
+        runtime(
+            fileRecords, s3StorageProperties, objectStore, payloadProperties, ERROR_OBJECT_MAPPER));
+  }
+
+  @Autowired
+  public PreprocessStep(
+      PlatformFileRecordRepository fileRecords,
+      PlatformPipelineDefinitionRepository pipelineDefinitions,
+      BatchSecurityProperties batchSecurityProperties,
+      BatchObjectCryptoService cryptoService,
+      WorkerImportPayloadProperties payloadProperties,
+      ObjectMapper objectMapper,
+      ImportPreprocessObjectSource objectSource) {
+    this(
+        fileRecords,
+        pipelineDefinitions,
+        batchSecurityProperties,
+        cryptoService,
+        new PreprocessRuntime(payloadProperties, objectMapper, objectSource));
+  }
+
+  private PreprocessStep(
+      PlatformFileRecordRepository fileRecords,
+      PlatformPipelineDefinitionRepository pipelineDefinitions,
+      BatchSecurityProperties batchSecurityProperties,
+      BatchObjectCryptoService cryptoService,
+      PreprocessRuntime runtime) {
     this.fileRecords = fileRecords;
     this.pipelineDefinitions = pipelineDefinitions;
     this.batchSecurityProperties = batchSecurityProperties;
     this.cryptoService = cryptoService;
-    this.payloadProperties = payloadProperties;
-    this.objectSource = new ImportPreprocessObjectSource(
-        fileRecords, s3StorageProperties, objectStore, payloadProperties);
+    this.payloadProperties = runtime.payloadProperties();
+    this.objectMapper = runtime.objectMapper();
+    this.objectSource = runtime.objectSource();
   }
+
+  private static PreprocessRuntime defaultRuntime(
+      PlatformFileRecordRepository fileRecords,
+      S3StorageProperties s3StorageProperties,
+      BatchObjectStore objectStore) {
+    WorkerImportPayloadProperties payloadProperties = new WorkerImportPayloadProperties();
+    return runtime(
+        fileRecords, s3StorageProperties, objectStore, payloadProperties, ERROR_OBJECT_MAPPER);
+  }
+
+  private static PreprocessRuntime runtime(
+      PlatformFileRecordRepository fileRecords,
+      S3StorageProperties s3StorageProperties,
+      BatchObjectStore objectStore,
+      WorkerImportPayloadProperties payloadProperties,
+      ObjectMapper objectMapper) {
+    return new PreprocessRuntime(
+        payloadProperties,
+        objectMapper,
+        new ImportPreprocessObjectSource(
+            fileRecords, s3StorageProperties, objectStore, payloadProperties));
+  }
+
+  private record PreprocessRuntime(
+      WorkerImportPayloadProperties payloadProperties,
+      ObjectMapper objectMapper,
+      ImportPreprocessObjectSource objectSource) {}
 
   @Override
   public ImportStage stage() {
@@ -216,7 +273,8 @@ public class PreprocessStep implements ImportStageStep {
           importPayload,
           templateConfig,
           batchSecurityProperties.isBypassMode(),
-          payloadProperties);
+          payloadProperties,
+          objectMapper);
 
       return completePreprocess(
           context, importPayload, attrs, processed, templateConfig, templateConfigObject);

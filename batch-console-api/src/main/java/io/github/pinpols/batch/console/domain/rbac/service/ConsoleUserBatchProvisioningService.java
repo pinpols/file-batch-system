@@ -32,6 +32,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
@@ -42,15 +43,19 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xssf.usermodel.XSSFRelation;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.dao.DataAccessException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 /** 账号批量开户：Redis 仅保存短期预览，数据库事务是 Apply 的唯一事实源。 */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ConsoleUserBatchProvisioningService {
 
   private static final int MAX_ROWS = 500;
@@ -99,6 +104,10 @@ public class ConsoleUserBatchProvisioningService {
 
   private record Session(String actor, String sourceDigest, int version, List<AccountRow> rows) {}
 
+  private record StoredSession(Session session, String json) {}
+
+  private static final String APPLYING_PREFIX = "APPLYING:";
+
   public byte[] template() {
     try (XSSFWorkbook workbook = new XSSFWorkbook();
         ByteArrayOutputStream out = new ByteArrayOutputStream()) {
@@ -133,7 +142,8 @@ public class ConsoleUserBatchProvisioningService {
   }
 
   public Preview patch(String token, int version, AccountRow replacement) {
-    Session session = load(token);
+    StoredSession stored = load(token);
+    Session session = stored.session();
     if (version != session.version())
       throw BizException.of(ResultCode.CONFLICT, "preview version changed");
     List<AccountRow> rows = new ArrayList<>(session.rows());
@@ -147,13 +157,16 @@ public class ConsoleUserBatchProvisioningService {
     if (index < 0) throw invalid("Unknown preview row");
     rows.set(index, replacement);
     Session updated = new Session(session.actor(), session.sourceDigest(), version + 1, rows);
-    save(token, updated);
+    if (!store.replacePreview(PREFIX + token, stored.json(), serialize(updated), PREVIEW_TTL)) {
+      throw BizException.of(ResultCode.CONFLICT, "preview version changed");
+    }
     return validate(token, updated);
   }
 
   @Transactional
   public ApplyResult apply(String token, int version, UUID requestId) {
-    Session session = load(token);
+    StoredSession stored = load(token);
+    Session session = stored.session();
     if (session.version() != version)
       throw BizException.of(ResultCode.CONFLICT, "preview version changed");
     if (EmptyChecks.isNull(requestId)) throw invalid("requestId is required");
@@ -165,6 +178,57 @@ public class ConsoleUserBatchProvisioningService {
       throw BizException.of(
           ResultCode.CONFLICT, "Preview has validation errors; refresh and correct it");
     }
+    String applying = APPLYING_PREFIX + UUID.randomUUID();
+    if (!store.replacePreview(PREFIX + token, stored.json(), applying, PREVIEW_TTL)) {
+      throw BizException.of(ResultCode.CONFLICT, "preview version changed");
+    }
+    boolean managedTransaction = TransactionSynchronizationManager.isSynchronizationActive();
+    if (managedTransaction) {
+      TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+        @Override
+        public void afterCompletion(int status) {
+          if (status == STATUS_UNKNOWN) {
+            // 提交结果不确定时不能恢复可编辑状态，保留冻结态并通过操作记录核实。
+            log.error("batch preview transaction outcome unknown: requestId={}", requestId);
+            return;
+          }
+          finishApply(token, applying, stored.json(), status == STATUS_COMMITTED, requestId);
+        }
+      });
+    }
+    boolean succeeded = false;
+    try {
+      ApplyResult result = createAccounts(session, checked, requestId);
+      succeeded = true;
+      return result;
+    } finally {
+      // 单测直接调用时无事务代理；生产路径必须等真实提交/回滚后再消费或恢复预览。
+      if (!managedTransaction) {
+        finishApply(token, applying, stored.json(), succeeded, requestId);
+      }
+    }
+  }
+
+  private void finishApply(
+      String token, String applying, String original, boolean committed, UUID requestId) {
+    try {
+      if (committed) {
+        store.deletePreview(PREFIX + token, applying);
+      } else {
+        store.replacePreview(PREFIX + token, applying, original, PREVIEW_TTL);
+      }
+    } catch (DataAccessException ex) {
+      // 提交记录在数据库中；Redis 清理失败时保留冻结态直至 TTL，不误报业务回滚。
+      // 预览令牌及存储异常可能包含账户信息，仅记录操作关联标识和异常类型。
+      log.error(
+          "batch preview finalization failed: requestId={} committed={} cause={}",
+          requestId,
+          committed,
+          ex.getClass().getSimpleName());
+    }
+  }
+
+  private ApplyResult createAccounts(Session session, Preview checked, UUID requestId) {
     List<Credential> credentials = new ArrayList<>();
     Set<String> tenantIds = new HashSet<>();
     for (AccountRow row : checked.rows()) {
@@ -343,22 +407,29 @@ public class ConsoleUserBatchProvisioningService {
   }
 
   private void save(String token, Session session) {
+    store.savePreview(PREFIX + token, serialize(session), PREVIEW_TTL);
+  }
+
+  private String serialize(Session session) {
     try {
-      store.savePreview(PREFIX + token, objectMapper.writeValueAsString(session), PREVIEW_TTL);
+      return objectMapper.writeValueAsString(session);
     } catch (JsonProcessingException ex) {
       throw new IllegalStateException("Failed to serialize batch preview", ex);
     }
   }
 
-  private Session load(String token) {
+  private StoredSession load(String token) {
     String json = store.loadPreview(PREFIX + token);
     if (EmptyChecks.isNull(json)) throw BizException.of(ResultCode.NOT_FOUND, "Preview expired");
+    if (json.startsWith(APPLYING_PREFIX)) {
+      throw BizException.of(ResultCode.CONFLICT, "Preview is being applied");
+    }
     try {
       Session session = objectMapper.readValue(json, Session.class);
       if (!actor().username().equals(session.actor())) {
         throw BizException.of(ResultCode.FORBIDDEN, "Preview belongs to another operator");
       }
-      return session;
+      return new StoredSession(session, json);
     } catch (JsonProcessingException ex) {
       throw new IllegalStateException("Failed to read batch preview", ex);
     }

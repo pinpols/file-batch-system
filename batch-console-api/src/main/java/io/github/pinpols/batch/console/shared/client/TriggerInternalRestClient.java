@@ -5,7 +5,6 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.config.ConsoleTriggerClientProperties;
 import java.time.Duration;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
 import org.springframework.boot.http.client.HttpClientSettings;
@@ -25,22 +24,19 @@ import org.springframework.web.client.RestClient;
  * 审批回调稳定 401。
  */
 @Component
-@RequiredArgsConstructor
 public class TriggerInternalRestClient {
 
   /** batch-trigger {@code InternalSecretFilter} 期望的鉴权 header 名,保持单一字面量来源。 */
   public static final String X_INTERNAL_SECRET_HEADER = CommonConstants.INTERNAL_SECRET_HEADER;
 
-  /** P2-1:见 OrchestratorInternalRestClient 同名字段注释。 */
-  private final ObjectProvider<RestClient.Builder> restClientBuilderProvider;
+  // 构造期只消费一次 prototype builder；请求期复用已冻结配置的线程安全 client。
+  private final RestClient client;
 
-  private final ConsoleTriggerClientProperties triggerClientProperties;
-  private final BatchSecurityProperties batchSecurityProperties;
-  private final Environment environment;
-
-  /** 与 OrchestratorInternalRestClient 同源的保守超时;trigger 抖动时不让 Tomcat worker 永久阻塞。 */
-  /** 构造一个新的 {@link RestClient},已绑定 baseUrl + internal-secret + 5s/30s 超时。 */
-  public RestClient build() {
+  public TriggerInternalRestClient(
+      ObjectProvider<RestClient.Builder> restClientBuilderProvider,
+      ConsoleTriggerClientProperties triggerClientProperties,
+      BatchSecurityProperties batchSecurityProperties,
+      Environment environment) {
     String baseUrl = environment.resolvePlaceholders(triggerClientProperties.getBaseUrl());
     String secret = batchSecurityProperties.getInternalSecret();
     RestClient.Builder builder = restClientBuilderProvider
@@ -55,6 +51,11 @@ public class TriggerInternalRestClient {
     if (Texts.hasText(secret)) {
       builder = builder.defaultHeader(X_INTERNAL_SECRET_HEADER, secret);
     }
-    return builder.build();
+    this.client = builder.build();
+  }
+
+  /** 返回组件生命周期内复用的线程安全客户端，保留底层连接池和 keep-alive。 */
+  public RestClient client() {
+    return client;
   }
 }

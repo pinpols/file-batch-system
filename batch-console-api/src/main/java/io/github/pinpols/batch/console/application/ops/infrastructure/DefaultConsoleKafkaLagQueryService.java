@@ -1,8 +1,12 @@
-package io.github.pinpols.batch.console.domain.ops.service;
+package io.github.pinpols.batch.console.application.ops.infrastructure;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.console.application.ops.ConsoleKafkaLagQueryPort;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleKafkaConsumerLagResponse;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
+import jakarta.annotation.PreDestroy;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -11,6 +15,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.admin.AdminClient;
@@ -23,37 +28,41 @@ import org.apache.kafka.common.TopicPartition;
 import org.springframework.kafka.core.KafkaAdmin;
 import org.springframework.stereotype.Service;
 
-/** Kafka consumer group lag 查询服务：利用 KafkaAdmin 获取消费积压信息。 */
+/** Kafka consumer group lag 查询适配器：复用一个受 Spring 生命周期管理的 AdminClient。 */
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class ConsoleKafkaLagQueryService {
-
-  private final KafkaAdmin kafkaAdmin;
-  private final ConsoleQueryCacheService cacheService;
+public class DefaultConsoleKafkaLagQueryService implements ConsoleKafkaLagQueryPort {
 
   private static final long TIMEOUT_SECONDS = 10;
   private static final String KEY_GROUP_ID = "groupId";
   private static final String KEY_ERROR = "error";
 
+  private final KafkaAdmin kafkaAdmin;
+  private final ConsoleQueryCacheService cacheService;
+  private final Object adminClientMonitor = new Object();
+  private final AtomicBoolean stopping = new AtomicBoolean();
+  private AdminClient adminClient;
+
   /** 列出所有 batch 相关 consumer group 的积压情况。 */
+  @Override
   public List<ConsoleKafkaConsumerLagResponse> consumerGroupLags(String groupIdFilter) {
     return cacheService.getOrLoad(
         "kafka-lag:" + cacheSegment(groupIdFilter),
         ConsoleQueryCacheService.KAFKA_LAG_TTL,
-        new com.fasterxml.jackson.core.type.TypeReference<
-            List<ConsoleKafkaConsumerLagResponse>>() {},
+        new TypeReference<List<ConsoleKafkaConsumerLagResponse>>() {},
         () -> loadConsumerGroupLags(groupIdFilter));
   }
 
   private List<ConsoleKafkaConsumerLagResponse> loadConsumerGroupLags(String groupIdFilter) {
     List<ConsoleKafkaConsumerLagResponse> result = new ArrayList<>();
-    try (AdminClient admin = AdminClient.create(kafkaAdmin.getConfigurationProperties())) {
+    try {
+      AdminClient admin = adminClient();
       Collection<GroupListing> groups =
           admin.listGroups().all().get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
       for (GroupListing group : groups) {
         String groupId = group.groupId();
-        if (groupIdFilter != null && !groupIdFilter.isEmpty() && !groupId.contains(groupIdFilter)) {
+        if (EmptyChecks.isNotEmpty(groupIdFilter) && !groupId.contains(groupIdFilter)) {
           continue;
         }
         if (!groupId.startsWith("batch")) {
@@ -82,8 +91,31 @@ public class ConsoleKafkaLagQueryService {
     return result;
   }
 
+  private AdminClient adminClient() {
+    synchronized (adminClientMonitor) {
+      if (stopping.get()) {
+        throw new IllegalStateException("Kafka lag query service is stopping");
+      }
+      if (EmptyChecks.isNull(adminClient)) {
+        adminClient = AdminClient.create(kafkaAdmin.getConfigurationProperties());
+      }
+      return adminClient;
+    }
+  }
+
+  @PreDestroy
+  void closeAdminClient() {
+    stopping.set(true);
+    synchronized (adminClientMonitor) {
+      if (EmptyChecks.isNotNull(adminClient)) {
+        adminClient.close(Duration.ZERO);
+        adminClient = null;
+      }
+    }
+  }
+
   private static String cacheSegment(String value) {
-    return value == null || value.isBlank() ? "all" : ConsoleQueryCacheService.keySegment(value);
+    return EmptyChecks.isBlank(value) ? "all" : ConsoleQueryCacheService.keySegment(value);
   }
 
   private ConsoleKafkaConsumerLagResponse queryGroupLag(AdminClient admin, String groupId)
@@ -92,7 +124,6 @@ public class ConsoleKafkaLagQueryService {
     Map<TopicPartition, OffsetAndMetadata> committedOffsets =
         offsetsResult.partitionsToOffsetAndMetadata().get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
-    // 查询相同分区的 end offset
     Map<TopicPartition, OffsetSpec> endOffsetRequests = new LinkedHashMap<>();
     for (TopicPartition topicPartition : committedOffsets.keySet()) {
       endOffsetRequests.put(topicPartition, OffsetSpec.latest());
@@ -102,17 +133,17 @@ public class ConsoleKafkaLagQueryService {
     long totalLag = 0;
     List<ConsoleKafkaConsumerLagResponse.PartitionLag> partitionLags = new ArrayList<>();
     for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : committedOffsets.entrySet()) {
-      TopicPartition tp = entry.getKey();
+      TopicPartition topicPartition = entry.getKey();
       long committed = entry.getValue().offset();
       long endOffset = endOffsetsResult
-          .partitionResult(tp)
+          .partitionResult(topicPartition)
           .get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
           .offset();
       long lag = Math.max(0, endOffset - committed);
       totalLag += lag;
       if (lag > 0) {
         partitionLags.add(new ConsoleKafkaConsumerLagResponse.PartitionLag(
-            tp.topic(), tp.partition(), committed, endOffset, lag));
+            topicPartition.topic(), topicPartition.partition(), committed, endOffset, lag));
       }
     }
 

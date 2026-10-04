@@ -6,7 +6,6 @@ import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.config.ConsoleOrchestratorClientProperties;
 import java.time.Duration;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
 import org.springframework.boot.http.client.HttpClientSettings;
@@ -28,29 +27,20 @@ import org.springframework.web.client.RestClient;
  * baseUrl/header。新的代理 service 必须注入本类，禁止重新声明 {@code restClientBuilder.baseUrl(...).build()}。
  */
 @Component
-@RequiredArgsConstructor
 public class OrchestratorInternalRestClient {
 
   /** orchestrator-side {@code InternalAuthFilter} 期望的鉴权 header 名（保持单一字面量来源）。 */
   public static final String X_INTERNAL_SECRET_HEADER = CommonConstants.INTERNAL_SECRET_HEADER;
 
-  /**
-   * P2-1(2026-05-16):RestClient.Builder bean 是 prototype,但字段注入只解析一次, 整个单例生命周期内复用同一 builder,并发
-   * mutate baseUrl/header/requestFactory 会串。 改注入 ObjectProvider,build() 时每次 getObject() 拿独立实例。
-   */
-  private final ObjectProvider<RestClient.Builder> restClientBuilderProvider;
+  // 构造期只消费一次 prototype builder；请求期复用已冻结配置的线程安全 client，避免连接池抖动。
+  private final RestClient client;
 
-  private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
-  private final BatchSecurityProperties batchSecurityProperties;
-  private final Environment environment;
-
-  /**
-   * R7-A2-P1: connect / read 超时。JDK 默认 HttpURLConnection 是 ∞，orchestrator GC 暂停 / DB stall /
-   * 网络黑洞时，Tomcat worker 线程会无限阻塞，整个 console UI 雪崩。这里给一个保守的默认值， 后续可改为 properties 注入。
-   */
-  /** 构造一个新的 {@link RestClient}，已绑定 baseUrl + internal-secret header + connect/read 超时。 */
-  public RestClient build() {
-    String baseUrl = resolveUrl(orchestratorClientProperties.getBaseUrl());
+  public OrchestratorInternalRestClient(
+      ObjectProvider<RestClient.Builder> restClientBuilderProvider,
+      ConsoleOrchestratorClientProperties orchestratorClientProperties,
+      BatchSecurityProperties batchSecurityProperties,
+      Environment environment) {
+    String baseUrl = resolveUrl(environment, orchestratorClientProperties.getBaseUrl());
     Guard.requireText(baseUrl, "orchestrator base url is not configured");
     String secret = batchSecurityProperties.getInternalSecret();
     RestClient.Builder builder = restClientBuilderProvider
@@ -65,13 +55,87 @@ public class OrchestratorInternalRestClient {
     if (Texts.hasText(secret)) {
       builder = builder.defaultHeader(X_INTERNAL_SECRET_HEADER, secret);
     }
-    return builder.build();
+    this.client = builder.build();
   }
 
-  private String resolveUrl(String raw) {
+  /** 返回组件生命周期内复用的线程安全客户端，保留底层连接池和 keep-alive。 */
+  public RestClient client() {
+    return client;
+  }
+
+  public <T> T loadApproval(String tenantId, String approvalNo, Class<T> responseType) {
+    return client
+        .get()
+        .uri("/internal/approvals/{approvalNo}?tenantId={tenantId}", approvalNo, tenantId)
+        .retrieve()
+        .body(responseType);
+  }
+
+  public void approveApproval(
+      String tenantId,
+      String approvalNo,
+      String operatorId,
+      String reason,
+      String requestId,
+      String traceId) {
+    client
+        .post()
+        .uri("/internal/approvals/{approvalNo}/approve", approvalNo)
+        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestId)
+        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId)
+        .body(new ApprovalActionRequest(tenantId, operatorId, reason))
+        .retrieve()
+        .toBodilessEntity();
+  }
+
+  public void rejectApproval(
+      String tenantId,
+      String approvalNo,
+      String operatorId,
+      String reason,
+      String requestId,
+      String traceId) {
+    client
+        .post()
+        .uri("/internal/approvals/{approvalNo}/reject", approvalNo)
+        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestId)
+        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId)
+        .body(new ApprovalActionRequest(tenantId, operatorId, reason))
+        .retrieve()
+        .toBodilessEntity();
+  }
+
+  public void markApprovalExecuted(String tenantId, String approvalNo) {
+    client
+        .post()
+        .uri("/internal/approvals/{approvalNo}/executed", approvalNo)
+        .body(new ApprovalTenantRequest(tenantId))
+        .retrieve()
+        .toBodilessEntity();
+  }
+
+  /** 批次日 replay 审批命令由基础设施客户端封装，避免 application 层直接依赖 HTTP SDK。 */
+  public void approveBatchDayReplay(long sessionId, String tenantId, String approver) {
+    client
+        .post()
+        .uri(
+            "/internal/orchestrator/batch-day-replay/sessions/{id}/approve"
+                + "?tenantId={tenantId}&approver={approver}",
+            sessionId,
+            tenantId,
+            approver)
+        .retrieve()
+        .toBodilessEntity();
+  }
+
+  private static String resolveUrl(Environment environment, String raw) {
     if (raw == null) {
       return null;
     }
     return environment.resolvePlaceholders(raw);
   }
+
+  private record ApprovalActionRequest(String tenantId, String operatorId, String reason) {}
+
+  private record ApprovalTenantRequest(String tenantId) {}
 }

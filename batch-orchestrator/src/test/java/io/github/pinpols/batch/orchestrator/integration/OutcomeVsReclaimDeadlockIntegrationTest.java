@@ -7,7 +7,9 @@ import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.application.service.task.JobInstanceTerminalStatusApplicationService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.domain.command.JobInstanceTerminalStatusCommand;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
@@ -25,24 +27,29 @@ import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * #768 卖点 #2 的真死锁复现:「outcome(report)与 partition-lease reclaim 并发对同 (task, partition) 的行锁顺序反转」是否已消除。
@@ -110,6 +117,90 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
   private WorkerRegistryCache workerRegistryCache;
+
+  private final JobInstanceTerminalStatusApplicationService terminalStatusService;
+  private final PlatformTransactionManager transactionManager;
+
+  @Autowired
+  OutcomeVsReclaimDeadlockIntegrationTest(
+      JobInstanceTerminalStatusApplicationService terminalStatusService,
+      PlatformTransactionManager transactionManager) {
+    this.terminalStatusService = terminalStatusService;
+    this.transactionManager = transactionManager;
+  }
+
+  @Test
+  void terminalUpdateWaitsBeforeTakingParentLockWhileReportHoldsPartition() throws Exception {
+    var instance = launchBundle(1);
+    var shard = claimAllShards(instance).getFirst();
+    String invocation = "terminal-race-" + UUID.randomUUID();
+    resetShardToRunning(shard, instance.seed().workerCode(), invocation);
+    Long version = jobInstanceMapper.selectById(TENANT, instance.instanceId()).getVersion();
+    var reportLocked = new CountDownLatch(1);
+    var releaseReport = new CountDownLatch(1);
+    var terminalPid = new CompletableFuture<Integer>();
+    var pool = Executors.newFixedThreadPool(2);
+    try {
+      Future<?> report = pool.submit(() -> new TransactionTemplate(transactionManager)
+          .executeWithoutResult(status -> {
+            jdbcTemplate.execute("set local lock_timeout = '5s'");
+            jobInstanceMapper.acquireInstanceAdvisoryLock(TENANT, instance.instanceId());
+            jdbcTemplate.queryForObject(
+                "select id from batch.job_partition where tenant_id = ? and id = ? for update",
+                Long.class,
+                TENANT,
+                shard.partitionId());
+            reportLocked.countDown();
+            try {
+              if (!releaseReport.await(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("report barrier timed out");
+              }
+            } catch (InterruptedException interrupted) {
+              Thread.currentThread().interrupt();
+              throw new IllegalStateException(interrupted);
+            }
+            TaskOutcomeCommand command = TaskOutcomeCommand.builder()
+                .tenantId(TENANT)
+                .taskId(shard.taskId())
+                .success(true)
+                .resultSummary("{\"records\":1}")
+                .partitionInvocationId(invocation)
+                .build();
+            taskExecutionService.applyTaskOutcome(command);
+          }));
+      assertThat(reportLocked.await(10, TimeUnit.SECONDS)).isTrue();
+      Future<Integer> terminal =
+          pool.submit(() -> new TransactionTemplate(transactionManager).execute(status -> {
+            jdbcTemplate.execute("set local lock_timeout = '5s'");
+            terminalPid.complete(
+                jdbcTemplate.queryForObject("select pg_backend_pid()", Integer.class));
+            return terminalStatusService.updateTerminalStatusAndReconcileChildren(
+                new JobInstanceTerminalStatusCommand(
+                    TENANT,
+                    instance.instanceId(),
+                    JobInstanceStatus.TERMINATED.code(),
+                    Instant.now(),
+                    version));
+          }));
+      int pid = terminalPid.get(5, TimeUnit.SECONDS);
+      Awaitility.await()
+          .alias("终止事务必须实际进入锁等待")
+          .atMost(3, TimeUnit.SECONDS)
+          .until(() -> Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+              "select exists(select 1 from pg_stat_activity where pid = ? and wait_event_type = 'Lock')",
+              Boolean.class,
+              pid)));
+      releaseReport.countDown();
+      report.get(10, TimeUnit.SECONDS);
+      assertThat(terminal.get(10, TimeUnit.SECONDS)).isZero();
+      assertThat(jobInstanceMapper.selectById(TENANT, instance.instanceId()).getInstanceStatus())
+          .isEqualTo(JobInstanceStatus.SUCCESS.code());
+    } finally {
+      releaseReport.countDown();
+      pool.shutdownNow();
+      assertThat(pool.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+    }
+  }
 
   @BeforeEach
   void refreshWorkers() {

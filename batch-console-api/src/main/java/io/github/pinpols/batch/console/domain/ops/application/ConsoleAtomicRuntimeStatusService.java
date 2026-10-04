@@ -39,7 +39,7 @@ public class ConsoleAtomicRuntimeStatusService {
         OP,
         () -> {
           AtomicRuntimeStatusPayload payload = atomicClient
-              .build()
+              .client()
               .get()
               .uri(ENDPOINT_URI)
               .retrieve()

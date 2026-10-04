@@ -70,6 +70,15 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  void shouldRejectRemovedWorkerCodeProgressQuery() throws Exception {
+    mockMvc
+        .perform(get("/api/console/queries/pipeline-progress")
+            .param("tenantId", "t1")
+            .param("workerCodes", "worker-1"))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
   void shouldReturnApprovalDtos() throws Exception {
     when(queryApplicationService.approvals(any()))
         .thenReturn(new PageResponse<>(

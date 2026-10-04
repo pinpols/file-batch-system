@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.atomic.shell;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
@@ -138,6 +139,26 @@ class ShellTaskExecutorTest {
   }
 
   // ─── Capability / metadata ──────────────────────────────────────────────────
+
+  @Test
+  @DisabledOnOs(OS.WINDOWS)
+  void repeatedTimeoutsReleaseOutputReaderThreads() throws Exception {
+    Set<Thread> existing = Thread.getAllStackTraces().keySet();
+    props.setDefaultTimeout(Duration.ofMillis(100));
+    for (int i = 0; i < 3; i++) {
+      TaskResult result =
+          executor.execute(ctxWithParams(Map.of("command", "/bin/sleep", "args", List.of("5"))));
+      assertThat(result.error()).isInstanceOf(ShellTaskExecutor.ShellTimeoutException.class);
+    }
+    await().atMost(Duration.ofSeconds(3)).untilAsserted(() -> {
+      List<Thread> remaining = Thread.getAllStackTraces().keySet().stream()
+          .filter(thread -> !existing.contains(thread))
+          .filter(thread ->
+              thread.getName().startsWith("stdout-") || thread.getName().startsWith("stderr-"))
+          .toList();
+      assertThat(remaining).isEmpty();
+    });
+  }
 
   @Test
   void capabilityReflectsConfig() {
