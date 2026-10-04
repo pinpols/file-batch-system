@@ -11,6 +11,7 @@
 #   4. inspect-dependencies.sh   — PostgreSQL / Kafka / Valkey / MinIO 基础依赖只读巡检
 #   5. inspect-production-capacity.sh — PG 热表 / Kafka retention / 对象存储 lifecycle 只读巡检
 #   6. plan-production-retention.sh   — PG / Kafka / 对象存储 / Redis 保留治理只读计划
+#   7. inspect-runtime-governance.sh   — 文件通道 / 状态后端 / Quartz / 观测 profile 只读检查
 #
 # 使用方法：
 #   # 最小配置（DB 巡检 + 服务巡检）
@@ -31,6 +32,7 @@
 #   BATCH_INSPECT_SKIP_DEPENDENCIES=true bash scripts/ops/inspect-all.sh
 #   BATCH_INSPECT_SKIP_PRODUCTION_CAPACITY=true bash scripts/ops/inspect-all.sh
 #   BATCH_INSPECT_SKIP_PRODUCTION_RETENTION_PLAN=true bash scripts/ops/inspect-all.sh
+#   BATCH_INSPECT_SKIP_RUNTIME_GOVERNANCE=true bash scripts/ops/inspect-all.sh
 #
 # 输出格式：
 #   每个脚本的输出以 banner 分隔，最后打印汇总表。
@@ -44,6 +46,7 @@ BATCH_INSPECT_SKIP_WORKERS="${BATCH_INSPECT_SKIP_WORKERS:-false}"
 BATCH_INSPECT_SKIP_DEPENDENCIES="${BATCH_INSPECT_SKIP_DEPENDENCIES:-false}"
 BATCH_INSPECT_SKIP_PRODUCTION_CAPACITY="${BATCH_INSPECT_SKIP_PRODUCTION_CAPACITY:-false}"
 BATCH_INSPECT_SKIP_PRODUCTION_RETENTION_PLAN="${BATCH_INSPECT_SKIP_PRODUCTION_RETENTION_PLAN:-false}"
+BATCH_INSPECT_SKIP_RUNTIME_GOVERNANCE="${BATCH_INSPECT_SKIP_RUNTIME_GOVERNANCE:-false}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -107,11 +110,15 @@ run_script "plan-production-retention" \
   "${SCRIPT_DIR}/plan-production-retention.sh" \
   "${BATCH_INSPECT_SKIP_PRODUCTION_RETENTION_PLAN}"
 
+run_script "inspect-runtime-governance" \
+  "${SCRIPT_DIR}/inspect-runtime-governance.sh" \
+  "${BATCH_INSPECT_SKIP_RUNTIME_GOVERNANCE}"
+
 # ── 汇总 ───────────────────────────────────────────────────────────────────
 banner "INSPECTION SUMMARY"
 printf '%-30s  %s\n' "Script" "Result"
 printf '%s\n' "$(printf -- '-%.0s' {1..45})"
-for name in "inspect-observability" "inspect-db" "inspect-workers" "inspect-dependencies" "inspect-production-capacity" "plan-production-retention"; do
+for name in "inspect-observability" "inspect-db" "inspect-workers" "inspect-dependencies" "inspect-production-capacity" "plan-production-retention" "inspect-runtime-governance"; do
   result="${script_results[${name}]:-UNKNOWN}"
   printf '%-30s  %s\n' "${name}" "${result}"
 done

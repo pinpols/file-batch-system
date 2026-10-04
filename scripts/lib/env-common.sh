@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# 公共本地环境入口。只能被 source,不要直接执行。
+# 公共环境入口。只能被 source,不要直接执行。
+# 调用方可通过环境变量或 COMPOSE_ENV_FILE 显式注入外部地址；未显式注入时，
+# 才加载仓库本地默认值，方便开发机和 Compose 环境复用同一套脚本。
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   echo "scripts/lib/env-common.sh must be sourced, not executed" >&2
@@ -72,6 +74,8 @@ batch_load_default_env() {
     return 0
   fi
 
+  # 默认文件仅作为开发机 fallback。生产、测试、压测等外部环境应通过
+  # Secret/Profile/CI 变量显式设置 PG/Kafka/S3/Valkey 等地址和凭据。
   COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-$BATCH_ENV_COMMON_ROOT/.env.local}"
   if [[ "$COMPOSE_ENV_FILE" != "$BATCH_ENV_COMMON_ROOT/.env" && -f "$BATCH_ENV_COMMON_ROOT/.env" ]]; then
     batch_source_env_file "$BATCH_ENV_COMMON_ROOT/.env"

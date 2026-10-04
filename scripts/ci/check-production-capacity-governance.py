@@ -14,6 +14,7 @@ GATE_NAME = "生产容量治理自动化"
 INSPECT_ALL = ROOT / "scripts/ops/inspect-all.sh"
 SCRIPT = ROOT / "scripts/ops/inspect-production-capacity.sh"
 RETENTION_PLAN_SCRIPT = ROOT / "scripts/ops/plan-production-retention.sh"
+RUNTIME_GOVERNANCE_SCRIPT = ROOT / "scripts/ops/inspect-runtime-governance.sh"
 TOOLBOX_SCRIPT = ROOT / "scripts/ops/run-toolbox.sh"
 SQL = ROOT / "scripts/ops/sql/inspect-production-capacity-postgres.sql"
 RETENTION_PLAN_SQL = ROOT / "scripts/ops/sql/plan-production-retention-postgres.sql"
@@ -56,6 +57,7 @@ def main() -> int:
     inspect_all = read(INSPECT_ALL, errors)
     script = read(SCRIPT, errors)
     retention_plan_script = read(RETENTION_PLAN_SCRIPT, errors)
+    runtime_governance_script = read(RUNTIME_GOVERNANCE_SCRIPT, errors)
     toolbox_script = read(TOOLBOX_SCRIPT, errors)
     sql = read(SQL, errors)
     retention_plan_sql = read(RETENTION_PLAN_SQL, errors)
@@ -75,10 +77,13 @@ def main() -> int:
         [
             "inspect-production-capacity.sh",
             "plan-production-retention.sh",
+            "inspect-runtime-governance.sh",
             "BATCH_INSPECT_SKIP_PRODUCTION_CAPACITY",
             "BATCH_INSPECT_SKIP_PRODUCTION_RETENTION_PLAN",
+            "BATCH_INSPECT_SKIP_RUNTIME_GOVERNANCE",
             "inspect-production-capacity",
             "plan-production-retention",
+            "inspect-runtime-governance",
         ],
         errors,
     )
@@ -123,6 +128,30 @@ def main() -> int:
     )
     if "kafka-consumer-groups.sh --reset-offsets" in retention_plan_script:
         errors.append(f"{rel(RETENTION_PLAN_SCRIPT)} 不得包含生产 offset 重置动作")
+    require_contains(
+        rel(RUNTIME_GOVERNANCE_SCRIPT),
+        runtime_governance_script,
+        [
+            "BATCH_DISPATCH_CHANNEL_TYPES_GOVERNED",
+            "LOCAL NAS SFTP OSS API API_PUSH EMAIL",
+            "BATCH_DISPATCH_SFTP_STRICT_HOST_KEY_REQUIRED",
+            "BATCH_DISPATCH_API_EGRESS_ALLOWLIST_REQUIRED",
+            "BATCH_DISPATCH_EMAIL_TLS_REQUIRED",
+            "BATCH_WORKER_REPORT_OUTBOX_STORAGE",
+            "BATCH_QUOTA_REDIS_FAILURE_MODE",
+            "BATCH_SHEDLOCK_PROVIDER",
+            "BATCH_CONSOLE_READ_REPLICA_ENABLED",
+            "BATCH_DATASOURCE_BUSINESS_ROUTING_ENABLED",
+            "BATCH_TRIGGER_MISFIRE_PENDING_RETENTION_DAYS",
+            "BATCH_TRIGGER_QUARTZ_DB_MAX_POOL_SIZE",
+            "BATCH_OBSERVABILITY_RETENTION_DAYS",
+            "BATCH_OPENLINEAGE_ENABLED",
+            "BATCH_EXTERNAL_ENDPOINT_EGRESS_ALLOWLIST_REQUIRED",
+            "--profile-file",
+            "Runtime governance: PASSED",
+        ],
+        errors,
+    )
 
     require_contains(
         rel(TOOLBOX_SCRIPT),
@@ -203,6 +232,15 @@ def main() -> int:
             "不进入应用发布镜像",
             "非 root",
             "10001:10001",
+            "inspect-runtime-governance.sh",
+            "NAS / SFTP / API / API_PUSH /",
+            "Worker Report Outbox",
+            "Quartz",
+            "OpenLineage",
+            "不绑定本仓库的 Docker Compose",
+            "--profile-file /etc/batch/prod-governance.env",
+            "托管服务参数组",
+            "平台已有的 bastion",
             "SUPERUSER",
             "root access key",
             "FLUSH*",
@@ -224,6 +262,7 @@ def main() -> int:
         [
             "inspect-production-capacity.sh",
             "plan-production-retention.sh",
+            "inspect-runtime-governance.sh",
             "run-toolbox.sh",
             "最小权限账号",
             "非 root",

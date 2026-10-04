@@ -18,7 +18,7 @@
 #   WORKER_TYPES=import,export \
 #     sh scripts/data/init-tenant-topics.sh
 #
-# 非容器环境：
+# 外部环境：
 #   - 安装 Kafka CLI，并设置 KAFKA_BIN_DIR=/path/to/kafka/bin；或
 #   - 直接设置 KAFKA_TOPICS_BIN=/path/to/kafka-topics.sh。
 #

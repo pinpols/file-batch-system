@@ -1,0 +1,9 @@
+{
+  "Rules": [
+    {
+      "ID": "expire-ai-attachments-after-30d",
+      "Status": "Enabled",
+      "Expiration": { "Days": 30 }
+    }
+  ]
+}
