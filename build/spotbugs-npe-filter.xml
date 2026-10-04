@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SpotBugs include filter:NPE 治理基线 profile。
+  只统计 NP_*(NullPointer)与 RCN_*(redundant null check)告警族,先把 NPE
+  风险面 baseline 出来;治理完后扩到 BAD_PRACTICE / STYLE。
+
+  启用方式:mvn -P spotbugs verify
+-->
+<FindBugsFilter>
+  <Match>
+    <Bug category="CORRECTNESS"/>
+    <Or>
+      <Bug code="NP"/>
+      <Bug code="RCN"/>
+      <Bug code="UWF"/>
+    </Or>
+  </Match>
+</FindBugsFilter>
