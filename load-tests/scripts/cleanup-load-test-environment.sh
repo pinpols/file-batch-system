@@ -180,7 +180,7 @@ diagnose() {
   echo
   echo "PostgreSQL:"
   docker exec "$POSTGRES_CONTAINER_NAME" sh -lc 'du -sh "$PGDATA" "$PGDATA/pg_wal" 2>/dev/null || true' || true
-  psql_platform -P pager=off -c "select schemaname, relname, pg_size_pretty(pg_total_relation_size((quote_ident(schemaname)||chr(46)||quote_ident(relname))::regclass)) as total_size from pg_stat_user_tables order by pg_total_relation_size((quote_ident(schemaname)||chr(46)||quote_ident(relname))::regclass) desc limit 12;" || true
+  psql_platform -P pager=off -f "$LOAD_DIR/sql/diagnose-load-test-hot-relations.sql" || true
 }
 
 clean_kafka() {
