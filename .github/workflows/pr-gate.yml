@@ -132,7 +132,7 @@ jobs:
         run: bash scripts/ci/run-gate.sh PR_INFRASTRUCTURE_UTF8 "基础设施 UTF-8 配置" -- python3 scripts/ci/check-infrastructure-utf8.py
 
       - name: Setup build environment
-        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true'
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
         uses: ./.github/actions/setup-build-env
 
       - name: Install squawk + oasdiff (迁移/契约守护工具)
