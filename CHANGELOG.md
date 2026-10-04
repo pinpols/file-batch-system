@@ -22,6 +22,7 @@
 ### Changed
 
 - 后端异常日志统一使用安全摘要或 SLF4J `Throwable` 堆栈：摘要会移除控制字符、遮蔽常见凭据并限制长度；PR、Full Gate 和本地提交门禁阻止生产日志重新直接打印异常 message。
+- 核心术语文档按 Java enum 和现行运行模型统一校准，并新增 PR / Full Gate 只读同步门禁，防止实例、工作流、节点、分片、步骤、任务等状态及调度类型再次与代码事实源漂移。
 - Docker 镜像构建 CI 纳入 `ops-toolbox` 运维工具箱镜像，实际构建校验 psql、Kafka CLI、MinIO mc、redis-cli 与非 root 运行时约束；该镜像仍不进入业务服务基础镜像。
 - nightly 镜像构建接入 `daily-sim-strict-validation`：当天有代码或配置变更时，必须先通过完整 sim + strict，再构建全部应用镜像；无变更时跳过，保留手动和 reusable 调用入口。
 - CI 镜像构建改用 Maven Central 配置并增加依赖下载重试，降低区域 Maven 镜像短暂 502 导致整组镜像失败的概率。

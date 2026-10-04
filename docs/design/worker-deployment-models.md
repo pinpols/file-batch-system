@@ -91,27 +91,29 @@ orchestrator 派单按 `taskType` 路由到对应 worker pool / Kafka topic:
 
 **关键断言**:自托管 worker = **平台调度体系的一等公民执行节点**。trigger / workflow / 重试 / 补偿 / 审批 / fan-out / SLA / 优先级,全部对自托管 worker 生效,跟平台 worker 一模一样。
 
-#### A. 触发方式(`batch-trigger` 模块全支持)
+#### A. 调度表达与触发来源
 
-| 触发类型 | 配置示例 | 适用场景 |
+`batch-trigger` 将定义侧的调度表达和运行侧的触发来源分开：
+
+| 维度 | 当前值 | 适用场景 |
 |---|---|---|
-| **CRON** | `cron_expression: "0 0 2 * * ?"` | 每天 / 每周 / 每月定时跑批 |
-| **FIXED_RATE** | `interval: 5m` | 固定频率轮询(不等上次完成) |
-| **FIXED_DELAY** | `delay: 10m` | 固定延迟(等上次完成 + N) |
-| **ONE_SHOT** | `fire_at: 2026-06-01T03:00:00+08:00` | 延迟一次性任务 |
-| **EVENT** | `event_source: kafka / webhook` | 外部事件驱动 |
-| **ON_WORKFLOW_COMPLETE** | `upstream_workflow: xxx` | 上游 workflow 完成级联触发 |
-| **MANUAL** | console "立即运行" 按钮 / API | 手动触发 / 重跑 |
+| `schedule_type` | `CRON` | 按 Cron 表达式定时跑批 |
+| `schedule_type` | `FIXED_RATE` | 按固定频率触发，不等待上次完成 |
+| `schedule_type` | `MANUAL` | 定义不自动注册定时器，由 Console / API 发起 |
+| `trigger_type` | `SCHEDULED / API / MANUAL / EVENT / CATCH_UP / RERUN` | 记录本次实例的真实触发来源 |
+
+当前没有 `FIXED_DELAY`、`ONE_SHOT` 或 `ON_WORKFLOW_COMPLETE` schedule type。一次性、上游完成和文件到达场景应通过 API / EVENT / CATCH_UP 等现有来源进入统一 launch 链，不能把概念示例写成已支持的定义枚举。
 
 **典型配置**:
 
 ```yaml
-trigger_definition:
-  trigger_code: tenant_xyz_daily_import
-  trigger_type: CRON
-  cron_expression: "0 0 2 * * ?"        # 每天 2:00
+job_definition:
+  # WORKFLOW 作业按 job_code 查找同租户、同名且已启用的 workflow_definition
+  job_code: tenant_xyz_import_wf
+  job_type: WORKFLOW
+  schedule_type: CRON
+  schedule_expr: "0 0 2 * * ?"           # 每天 2:00
   timezone: Asia/Shanghai
-  workflow_code: tenant_xyz_import_wf
 
 workflow_definition:
   workflow_code: tenant_xyz_import_wf
@@ -120,6 +122,9 @@ workflow_definition:
 ```
 
 每天 2:00 `batch-trigger` fire → orchestrator launch → 派单到租户 SDK。**租户进程零定时代码**。
+
+`WORKFLOW` 类型作业的 `job_code` 必须与目标 `workflow_code` 一致；当前 launch 链不使用
+`execution_handler` 建立两者关联。
 
 #### B. 编排能力(`workflow_definition` 全支持)
 

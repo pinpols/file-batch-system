@@ -10,7 +10,7 @@
 flowchart TB
   subgraph Workflow["workflow_* — 跨 job 的 DAG 编排"]
     direction LR
-    W1[workflow_definition] --- WN1[workflow_node<br/>JOB / TASK / GATEWAY / END]
+    W1[workflow_definition] --- WN1[workflow_node<br/>WorkflowNodeType]
     WN1 -- related_job_code --> J1[job_definition]
     WN1 -- related_pipeline_code --> P1[pipeline_definition]
     WN1 --- WE[workflow_edge<br/>SUCCESS / FAILURE / CONDITION]
@@ -37,9 +37,9 @@ flowchart TB
 | 主要场景 | "JOB_A 跑完 → JOB_B 跑"、"JOB_A/B/C 等齐 → JOB_D"、catch-up、补数 | 文件 IMPORT / EXPORT / DISPATCH 三类链路的步骤拆分 |
 | 表 | `workflow_definition` / `workflow_node` / `workflow_edge` / `workflow_run` / `workflow_node_run` | `pipeline_definition` / `pipeline_step_definition` / `pipeline_instance` / `pipeline_step_run` |
 | 主消费者 | `batch-orchestrator`（DAG 推进、join 触发、SKIP 级联） | `batch-worker-import` / `batch-worker-export` / `batch-worker-dispatch`（按 step 顺序执行插件） |
-| 节点／步骤类型 | `START / END / TASK / GATEWAY / FILE_STEP / JOB`（`WorkflowNodeType`）| 由 `pipeline_step_definition.impl_code` 决定，按链路领域不同（`PreprocessStep` / `ParseStep` / `ValidateStep` / `LoadStep` / `GenerateStep` ...）|
-| 边／条件 | `SUCCESS / FAILURE / CONDITION / ALWAYS` 边 + GATEWAY join（ALL/N_OF/ANY） | 顺序执行，无条件分支；失败靠 retry / 补偿 |
-| 状态机 | `workflow_run.status`：`CREATED / RUNNING / SUCCESS / FAILED / TERMINATED` | `pipeline_instance.status`：`CREATED / RUNNING / COMPENSATING` 等 |
+| 节点／步骤类型 | <!-- enum-sync:WorkflowNodeType:start -->`TASK`, `GATEWAY`, `FILE_STEP`, `START`, `END`, `JOB`, `WAIT`<!-- enum-sync:WorkflowNodeType:end -->（`WorkflowNodeType`）| 由 `pipeline_step_definition.impl_code` 决定，按链路领域不同（`PreprocessStep` / `ParseStep` / `ValidateStep` / `LoadStep` / `GenerateStep` ...）|
+| 边／条件 | <!-- enum-sync:WorkflowEdgeType:start -->`SUCCESS`, `FAILURE`, `CONDITION`, `ALWAYS`<!-- enum-sync:WorkflowEdgeType:end --> 边 + GATEWAY join（<!-- enum-sync:WorkflowJoinMode:start -->`ALL`, `ANY`, `N_OF`<!-- enum-sync:WorkflowJoinMode:end -->） | 顺序执行，无条件分支；失败靠 retry / 补偿 |
+| 状态机 | `workflow_run.run_status`：<!-- enum-sync:WorkflowRunStatus:start -->`CREATED`, `RUNNING`, `PAUSED`, `SUCCESS`, `FAILED`, `TERMINATED`, `SUCCESS_DRY_RUN`, `FAILED_DRY_RUN`<!-- enum-sync:WorkflowRunStatus:end --> | `pipeline_instance.run_status`：<!-- enum-sync:PipelineRunStatus:start -->`CREATED`, `RUNNING`, `SUCCESS`, `FAILED`, `COMPENSATING`, `TERMINATED`<!-- enum-sync:PipelineRunStatus:end --> |
 | 入口文档 | [workflow-dependency-guide.md](workflow-dependency-guide.md) + [ADR-009 workflow-param-dsl](adr/ADR-009-workflow-param-dsl.md) | [docs/design/file-pipeline-design.md §9](../design/file-pipeline-design.md) |
 
 ---

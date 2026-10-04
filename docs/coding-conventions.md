@@ -1112,15 +1112,15 @@ batch-console-api       ← 控制台 BFF（面向前端）
 
 | 字段                                  | 枚举类                   | 允许值                                                              |
 | ----------------------------------- | --------------------- | ---------------------------------------------------------------- |
-| `job_definition.job_type`           | `JobType`             | `GENERAL` / `IMPORT` / `EXPORT` / `PROCESS` / `DISPATCH` / `WORKFLOW` / `ATOMIC` |
-| `job_definition.schedule_type`      | `ScheduleType`        | `CRON` / `FIXED_RATE` / `MANUAL`                                 |
-| `job_definition.retry_policy`       | `RetryPolicyType`     | `NONE` / `FIXED` / `EXPONENTIAL`                                 |
-| `job_definition.catch_up_policy`    | `CatchUpPolicyType`   | `NONE` / `AUTO` / `MANUAL_APPROVAL`                              |
-| `workflow_definition.workflow_type` | `WorkflowType`        | `DAG` / `PIPELINE` / `MIXED`                                     |
-| `workflow_node.node_type`           | `WorkflowNodeType`    | `START` / `END` / `TASK` / `GATEWAY` / `FILE_STEP` / `JOB`       |
-| `workflow_edge.edge_type`           | `WorkflowEdgeType`    | `SUCCESS` / `FAILURE` / `CONDITION` / `ALWAYS`                   |
-| `file_channel_config.channel_type`  | `FileChannelType`     | `SFTP` / `API` / `API_PUSH` / `EMAIL` / `NAS` / `OSS` / `LOCAL`  |
-| `file_channel_config.auth_type`     | `FileChannelAuthType` | `NONE` / `PASSWORD` / `KEY_PAIR` / `TOKEN` / `OAUTH2` / `CUSTOM` |
+| `job_definition.job_type`           | `JobType`             | <!-- enum-sync:JobType:start -->`GENERAL`, `IMPORT`, `EXPORT`, `PROCESS`, `DISPATCH`, `WORKFLOW`, `ATOMIC`, `BUNDLE_IMPORT`, `BUNDLE_EXPORT`, `BUNDLE_DISPATCH`<!-- enum-sync:JobType:end --> |
+| `job_definition.schedule_type`      | `ScheduleType`        | <!-- enum-sync:ScheduleType:start -->`CRON`, `FIXED_RATE`, `MANUAL`<!-- enum-sync:ScheduleType:end --> |
+| `job_definition.retry_policy`       | `RetryPolicyType`     | <!-- enum-sync:RetryPolicyType:start -->`NONE`, `FIXED`, `EXPONENTIAL`<!-- enum-sync:RetryPolicyType:end --> |
+| `job_definition.catch_up_policy`    | `CatchUpPolicyType`   | <!-- enum-sync:CatchUpPolicyType:start -->`NONE`, `AUTO`, `MANUAL_APPROVAL`<!-- enum-sync:CatchUpPolicyType:end --> |
+| `workflow_definition.workflow_type` | `WorkflowType`        | <!-- enum-sync:WorkflowType:start -->`DAG`, `PIPELINE`, `MIXED`<!-- enum-sync:WorkflowType:end --> |
+| `workflow_node.node_type`           | `WorkflowNodeType`    | <!-- enum-sync:WorkflowNodeType:start -->`TASK`, `GATEWAY`, `FILE_STEP`, `START`, `END`, `JOB`, `WAIT`<!-- enum-sync:WorkflowNodeType:end --> |
+| `workflow_edge.edge_type`           | `WorkflowEdgeType`    | <!-- enum-sync:WorkflowEdgeType:start -->`SUCCESS`, `FAILURE`, `CONDITION`, `ALWAYS`<!-- enum-sync:WorkflowEdgeType:end --> |
+| `file_channel_config.channel_type`  | `FileChannelType`     | <!-- enum-sync:FileChannelType:start -->`SFTP`, `API`, `API_PUSH`, `EMAIL`, `NAS`, `OSS`, `LOCAL`<!-- enum-sync:FileChannelType:end --> |
+| `file_channel_config.auth_type`     | `FileChannelAuthType` | <!-- enum-sync:FileChannelAuthType:start -->`NONE`, `PASSWORD`, `KEY_PAIR`, `TOKEN`, `OAUTH2`, `CUSTOM`<!-- enum-sync:FileChannelAuthType:end --> |
 
 
 ### 18.2 运行域（Orchestrator / 运行态）
@@ -1128,11 +1128,12 @@ batch-console-api       ← 控制台 BFF（面向前端）
 
 | 字段                             | 枚举类                   | 允许值                                                                                                                                         |
 | ------------------------------ | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `outbox_event.publish_status`  | `OutboxPublishStatus` | `NEW` / `PUBLISHING` / `PUBLISHED` / `FAILED` / `GIVE_UP`                                                                                   |
-| `trigger_request.trigger_type` | `TriggerType`         | `API` / `MANUAL` / `EVENT` / `CATCH_UP` / `SCHEDULED` / `RERUN`                                                                             |
-| `job_instance.status`          | `JobInstanceStatus`   | `CREATED` / `WAITING` / `READY` / `RUNNING` / `PARTIAL_FAILED` / `SUCCESS` / `FAILED` / `CANCELLED` / `TERMINATED`                          |
-| `workflow_run.status`          | `WorkflowRunStatus`   | `CREATED` / `RUNNING` / `SUCCESS` / `FAILED` / `TERMINATED`                                                                                 |
-| `file_record.status`           | `FileStatus`          | `RECEIVED` / `PARSING` / `PARSED` / `VALIDATED` / `LOADED` / `GENERATED` / `DISPATCHING` / `DISPATCHED` / `ARCHIVED` / `FAILED` / `DELETED` |
+| `outbox_event.publish_status`      | `OutboxPublishStatus` | <!-- enum-sync:OutboxPublishStatus:start -->`NEW`, `PUBLISHING`, `PUBLISHED`, `FAILED`, `GIVE_UP`<!-- enum-sync:OutboxPublishStatus:end --> |
+| `trigger_request.trigger_type`     | `TriggerType`         | <!-- enum-sync:TriggerType:start -->`API`, `MANUAL`, `EVENT`, `CATCH_UP`, `SCHEDULED`, `RERUN`<!-- enum-sync:TriggerType:end --> |
+| `trigger_request.request_status`   | `TriggerRequestStatus` | <!-- enum-sync:TriggerRequestStatus:start -->`PENDING`, `PROCESSING`, `ACCEPTED`, `WAITING`, `LAUNCHED`, `REJECTED`, `DUPLICATE`, `FORWARD_FAILED`, `GIVE_UP`<!-- enum-sync:TriggerRequestStatus:end --> |
+| `job_instance.instance_status`     | `JobInstanceStatus`   | <!-- enum-sync:JobInstanceStatus:start -->`CREATED`, `WAITING`, `READY`, `RUNNING`, `PAUSED`, `PARTIAL_FAILED`, `SUCCESS`, `FAILED`, `CANCELLED`, `TERMINATED`, `SUCCESS_DRY_RUN`, `FAILED_DRY_RUN`<!-- enum-sync:JobInstanceStatus:end --> |
+| `workflow_run.run_status`          | `WorkflowRunStatus`   | <!-- enum-sync:WorkflowRunStatus:start -->`CREATED`, `RUNNING`, `PAUSED`, `SUCCESS`, `FAILED`, `TERMINATED`, `SUCCESS_DRY_RUN`, `FAILED_DRY_RUN`<!-- enum-sync:WorkflowRunStatus:end --> |
+| `file_record.file_status`          | `FileStatus`          | <!-- enum-sync:FileStatus:start -->`RECEIVED`, `PARSING`, `PARSED`, `VALIDATED`, `LOADED`, `GENERATED`, `DISPATCHING`, `DISPATCHED`, `ARCHIVED`, `FAILED`, `DELETED`<!-- enum-sync:FileStatus:end --> |
 
 
 ---

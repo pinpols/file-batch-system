@@ -23,11 +23,11 @@
 
 - ✅ `JobSlaScheduler`（`batch-orchestrator/.../infrastructure/sla/JobSlaScheduler.java`）周期扫描运行中实例，超时打告警
 - ✅ 字段挂在 `job_definition` + `job_instance` 上
-- 状态枚举（`JobInstanceStatus`）：`CREATED / WAITING / READY / RUNNING / PARTIAL_FAILED / SUCCESS / FAILED / CANCELLED / TERMINATED`，**没有专门的 SLA_TIMEOUT 状态**——超时仅做告警，不改变状态机
+- `JobInstanceStatus` 的完整值表以 [核心模型](../architecture/core-model.md#42-当前统一状态口径) 为准；其中**没有专门的 SLA_TIMEOUT 状态**，超时仅做告警，不改变状态机
 
 ## 2. 文件到达 SLA 与等待策略
 
-针对**上游文件驱动的导入场景**，单独定义"文件到达 SLA"。设计上原本规划在 `job_instance.status` 加 `WAITING_ARRIVAL` 枚举，**实际落地**为 `file_record.metadata_json` 上的 `arrivalState` 字段 + 独立的 `file_arrival_group` 监控视图。
+针对**上游文件驱动的导入场景**，单独定义"文件到达 SLA"。设计上原本规划在 `job_instance.instance_status` 加 `WAITING_ARRIVAL` 枚举，**实际落地**为 `file_record.metadata_json` 上的 `arrivalState` 字段 + 独立的 `file_arrival_group` 监控视图。
 
 ### 2.1 配置字段
 

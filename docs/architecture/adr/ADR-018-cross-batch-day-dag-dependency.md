@@ -1,6 +1,6 @@
 # ADR-018 · 跨批量日 DAG 依赖（pipe 模型）
 
-- **Status**: Accepted（Stage 2-4 已落 V109 + WAITING_DEPENDENCY + BizDateArithmetic + CrossDayDependencyResolver；Stage 5-7 排期中）
+- **Status**: Accepted（Stage 1-5、7 已落地；Stage 6 系统级 E2E 证据待补）
 - **Date**: 2026-05-06（Accepted: 2026-05-06）
 - **Supersedes**: —
 - **Related**: ADR-009（workflow 节点 output / DSL）/ ADR-017（result_version 主模型，本 ADR 强依赖）/ §14.3.2（设计层缺口）/ `docs/architecture/workflow-dependency-guide.md`
@@ -97,10 +97,10 @@ $.crossDay.<jobCode>.range.<rangeTag>.outputs    -- List<Map<String,Object>>，�
 
 ### 状态机扩展
 
-`workflow_node_run.status` 新增 `WAITING_DEPENDENCY`（已有 WAITING / READY 之外）：
+`workflow_node_run.status` 新增 `WAITING_DEPENDENCY`，用于区分普通 READY 与跨日依赖未齐：
 
 ```
-CREATED → READY → WAITING_DEPENDENCY (跨日依赖未齐) → READY → RUNNING → SUCCESS/FAILED
+READY → WAITING_DEPENDENCY (跨日依赖未齐) → READY → RUNNING → SUCCESS/FAILED
                        ▲
                        └── 由 CrossDayDependencyReconciler 推回 READY
 ```
@@ -109,7 +109,7 @@ CREATED → READY → WAITING_DEPENDENCY (跨日依赖未齐) → READY → RUNN
 
 - **Reconciler**：`CrossDayDependencyReconciler` 按 ShedLock 周期扫 `WAITING_DEPENDENCY` 节点，逐一重新跑 resolver；
 - **超时**：`workflow_node.cross_day_dependency_timeout_seconds`（默认 24h），超时后按 `scope` 决策：REQUIRED → 节点 FAIL；OPTIONAL → 跳过引用启动；
-- **审计**：每次 resolver 命中 / 缺失写 `job_execution_log`，便于排查"为什么我等了"；
+- **审计与观测**：节点等待原因写入 `workflow_node_run.error_*`，重新命中记录结构化日志，解析失败或超时通过 `AlertEventService` 产生告警事件；
 - **重放联动**（ADR-020）：上游 EFFECTIVE 切换会发 `result_version.changed` 事件，下游节点 WAITING_DEPENDENCY 可即时唤醒。
 
 ## 影响面
@@ -162,8 +162,8 @@ CREATED → READY → WAITING_DEPENDENCY (跨日依赖未齐) → READY → RUNN
 ## 验收标准
 
 - 单测：`CrossDayDependencyResolverTest`（offset / range / timeout / OPTIONAL fallback / 业务日历跨节假日）
-- IT：T-1 上游 EFFECTIVE 缺失时下游停 WAITING_DEPENDENCY；T-1 promote 后下游唤醒
-- E2E：5 月月度汇总 workflow 拉 31 个日表 EFFECTIVE 跑通
+- IT：真 PostgreSQL 中验证 EFFECTIVE 版本解析和 `WAITING_DEPENDENCY` 约束；当前尚未覆盖完整 launch、promote、reconcile、终态推进全链。
+- E2E：5 月月度汇总 workflow 拉 31 个日表 EFFECTIVE 跑通（待补）。
 - 性能基准：30 条依赖项的解析 < 50ms（连 DB cache hit）
 
 ## 开放问题（已收敛）
@@ -191,6 +191,6 @@ CREATED → READY → WAITING_DEPENDENCY (跨日依赖未齐) → READY → RUNN
 | 2. schema (V109) `workflow_node.cross_day_dependencies` + WAITING_DEPENDENCY | ✓ | `8b5d61c4` |
 | 3. BizDateArithmetic（offset / range，含节假日跳过） | ✓ | `7131a540` |
 | 4. CrossDayDependencyResolver + DSL 扩展 `$.crossDay.X.Y` | ✓ | `c90c8725` |
-| 5. WAITING_DEPENDENCY reconciler + ShedLock | ☐ | pending |
+| 5. WAITING_DEPENDENCY reconciler + ShedLock | ✓ | `e93f7d5b3` |
 | 6. 跨日 workflow E2E（月汇总 demo） | ☐ | pending |
-| 7. 超时治理 + 审计 + 告警 | ☐ | pending |
+| 7. 超时治理 + 日志/告警观测 | ✓ | `e93f7d5b3` |

@@ -2,6 +2,7 @@
 
 ### 2026-10-05
 - **Java 异常日志治理收紧**：预期 fallback、重试和吞异常统一输出脱敏、单行、限长摘要；未预期故障将 `Throwable` 交由 SLF4J 记录完整堆栈。Java 日志门禁新增原始 `getMessage()` / `toString()` 拦截及扫描器自测，SDK 保持 ADR-035 独立依赖边界。
+- **核心术语模型校准与漂移守护**：按当前 Java enum、运行表关联和主链实现校正 glossary、core-model、状态机、pipeline/workflow 边界和运维文档，拆分 schedule_type 与 trigger_type，恢复普通作业树和工作流树的真实关系，明确 retry/rerun/recover/compensate 边界；早期 DDL 设计稿降级为历史逻辑基线，现行 schema 统一以 Flyway 和数据库 catalog 为准；新增 `check-terminology-doc-sync.py` 并接入 PR / Full Gate，阻断核心状态和类型值表再次漂移。
 
 ### 2026-10-03
 - **运行时治理 profile 扩展**：四环境治理基线从 PG/Kafka/Redis/MinIO 扩展到文件通道、Worker Report Outbox、Quota/ShedLock、读副本、业务分片、Quartz、观测和外部端点；新增只读 `inspect-runtime-governance.sh`，生产 profile 强制 host key、egress allowlist、TLS 等 fail-close 基线。

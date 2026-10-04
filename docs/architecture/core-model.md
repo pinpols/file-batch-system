@@ -36,7 +36,7 @@
 
 | 模型 | 关注点 | 统一结论 |
 |---|---|---|
-| 统一实例模型 | 哪些对象算“执行实例” | `job_instance` 是根，`workflow_run` / `job_partition` / `job_task` / `job_step_instance` 是不同层级的执行镜像或子实例 |
+| 统一实例模型 | 哪些对象算“执行实例” | `job_instance` 是单个 job 执行的根；partition / task / step instance 属于作业执行树，workflow_run / node_run 属于可选的工作流执行树 |
 | 统一状态模型 | 状态值怎么解释 | 状态只描述当前生命周期位置，不承载恢复语义；终态不能直接回到非终态 |
 | 统一上下文模型 | 运行时信息怎么传递 | 上下文分成“稳定主键 + 可变 attributes bag”；`run_mode` 是上下文意图，不是状态 |
 | 统一恢复模型 | retry / rerun / recover / compensate 怎么区分 | 这四个词必须分开：系统重试、人工重跑、故障恢复、业务补偿是四种不同动作 |
@@ -47,27 +47,38 @@
 
 ### 3.1 实例层级
 
-推荐统一成下面这条链：
+当前持久化模型是两棵相关但不能串成单链的执行树：
 
-`job_instance` → `workflow_run` → `job_partition` → `job_task` → `job_step_instance`
+```text
+job_instance
+├── job_partition (1:N)
+├── job_task (1:N，通常关联 partition，特殊任务允许为空)
+├── job_step_instance (0:N，引用 task，可选引用 partition)
+└── workflow_run (工作流作业才创建，related_job_instance_id 关联根实例)
+    └── workflow_node_run (1:N，按 node_code + run_seq 区分运行序列)
+```
+
+`JOB` 类型的 workflow 节点会拉起独立的子 `job_instance`。父流程通过节点运行、虚拟 task 和启动参数关联子实例；当前 schema 没有把子实例伪装成 `workflow_run` 的直接子表。
 
 含义如下：
 
 | 对象 | 角色 | 说明 |
 |---|---|---|
-| `job_instance` | 根实例 | 一次业务触发的根对象，承载 tenant / jobCode / bizDate / requestId / dedup 等根信息 |
-| `workflow_run` | 流程运行镜像 | 该 job 在工作流语义下的一次运行视图，负责串起 DAG 节点推进 |
+| `job_instance` | 作业根实例 | 一次 job 触发的根对象，承载 tenant / jobCode / bizDate / requestId / dedup 等根信息 |
+| `workflow_run` | 流程运行镜像 | 工作流作业才创建；通过 `related_job_instance_id` 关联根实例，负责串起 DAG 节点推进 |
+| `workflow_node_run` | 节点运行记录 | workflow_run 的直接子记录，描述一个 DAG 节点某个 run_seq 的状态与输出 |
 | `job_partition` | 分片执行单元 | 调度与并发控制的最小派发粒度，承载 worker 归属、租约、重试次数 |
-| `job_task` | 任务执行单元 | Worker 实际领取和回报的执行单元，通常是一个分片下的单次工作项 |
-| `job_step_instance` | 步骤审计镜像 | 面向 UI、审计和可视化的步骤级镜像，不应和 `job_task` 混为一谈 |
+| `job_task` | 任务执行单元 | Worker 实际领取和回报的执行单元；必属于 job_instance，通常关联 partition，特殊任务可不关联 partition |
+| `job_step_instance` | 步骤审计镜像 | 引用 job_task，可选引用 partition；面向 UI、审计和可视化，不应和 Worker stage 混为一谈 |
 
 ### 3.2 统一原则
 
-1. `job_instance` 是业务根，不是 worker 运行的最小单位。
-2. `workflow_run` 是流程视角，不是 worker 视角。
-3. `job_partition` 是调度视角，不是业务结果视角。
-4. `job_task` 是执行视角，不是 DAG 节点视角。
-5. `job_step_instance` 是展示与审计视角，不是调度核心视角。
+1. `job_instance` 是单个 job 执行的业务根，不是 worker 运行的最小单位。
+2. `workflow_run` 是可选流程视角；普通作业没有 workflow_run，不能假设每个实例都存在该层。
+3. `workflow_node_run` 是 DAG 节点视角，不等于 job_task；`JOB` 节点可以间接拉起新的 job_instance。
+4. `job_partition` 是调度视角，不是业务结果视角。
+5. `job_task` 是执行视角，不是 DAG 节点视角。
+6. `job_step_instance` 是展示与审计视角，不是调度核心视角。
 
 ### 3.3 attempt 不是一等实体
 
@@ -212,81 +223,71 @@ job_instance.expected_       ──┘                ↓
 
 ### 4.2 当前统一状态口径
 
+下列值表由 `scripts/ci/check-terminology-doc-sync.py` 与 Java enum 对照；不要手工增加代码里不存在的状态。
+
+#### JobInstanceStatus
+
+<!-- enum-sync:JobInstanceStatus:start -->
+`CREATED`, `WAITING`, `READY`, `RUNNING`, `PAUSED`, `PARTIAL_FAILED`, `SUCCESS`, `FAILED`, `CANCELLED`, `TERMINATED`, `SUCCESS_DRY_RUN`, `FAILED_DRY_RUN`
+<!-- enum-sync:JobInstanceStatus:end -->
+
+`PAUSED` 是可恢复的非终态；dry-run 使用独立成功/失败终态，不能进入正式结果版本的 EFFECTIVE 链。
+
 #### WorkflowRunStatus
 
-当前代码定义：
-- `CREATED`
-- `RUNNING`
-- `SUCCESS`
-- `FAILED`
-- `TERMINATED`
+<!-- enum-sync:WorkflowRunStatus:start -->
+`CREATED`, `RUNNING`, `PAUSED`, `SUCCESS`, `FAILED`, `TERMINATED`, `SUCCESS_DRY_RUN`, `FAILED_DRY_RUN`
+<!-- enum-sync:WorkflowRunStatus:end -->
 
-含义：
-- `CREATED`：已建档，未真正推进
-- `RUNNING`：流程已开始推进
-- `SUCCESS`：所有节点完成且成功
-- `FAILED`：流程失败终止
-- `TERMINATED`：被人工或系统终止
+workflow_run 没有 WAITING / READY；等待依赖属于节点运行状态。`PAUSED` 是停止推进新节点的可恢复非终态。
+
+#### WorkflowNodeRunStatus
+
+<!-- enum-sync:WorkflowNodeRunStatus:start -->
+`READY`, `WAITING_DEPENDENCY`, `RUNNING`, `SUCCESS`, `FAILED`, `SKIPPED`
+<!-- enum-sync:WorkflowNodeRunStatus:end -->
+
+`WAITING_DEPENDENCY` 表示跨批量日依赖未齐；`SKIPPED` 是 DAG 条件分支的成功式终结，不等于任务失败。
+
+#### PartitionStatus
+
+<!-- enum-sync:PartitionStatus:start -->
+`CREATED`, `WAITING`, `READY`, `RUNNING`, `SUCCESS`, `FAILED`, `RETRYING`, `CANCELLED`, `TERMINATED`
+<!-- enum-sync:PartitionStatus:end -->
+
+partition 承载 lease 和调度重试；`RETRYING` 是非终态。
 
 #### StepInstanceStatus
 
-当前代码定义：
-- `CREATED`
-- `WAITING`
-- `READY`
-- `RUNNING`
-- `RETRYING`
-- `SUCCESS`
-- `FAILED`
-- `CANCELLED`
-- `TERMINATED`
+<!-- enum-sync:StepInstanceStatus:start -->
+`CREATED`, `WAITING`, `READY`, `RUNNING`, `RETRYING`, `SUCCESS`, `FAILED`, `CANCELLED`, `TERMINATED`
+<!-- enum-sync:StepInstanceStatus:end -->
 
-含义：
-- `CREATED`：步骤镜像已创建
-- `WAITING`：等待前置条件
-- `READY`：可以派发
-- `RUNNING`：正在执行
-- `RETRYING`：失败后等待重试或再次认领
-- `SUCCESS`：成功结束
-- `FAILED`：失败结束
-- `CANCELLED`：人工或系统取消
-- `TERMINATED`：被终止
+step instance 是步骤审计镜像；它的 RETRYING 不能外推为 task 或 workflow_run 也有同名状态。
 
 #### TaskStatus
 
-当前代码定义：
-- `CREATED`
-- `READY`
-- `RUNNING`
-- `SUCCESS`
-- `FAILED`
-- `CANCELLED`
-- `TERMINATED`
+<!-- enum-sync:TaskStatus:start -->
+`CREATED`, `READY`, `RUNNING`, `SUCCESS`, `FAILED`, `CANCELLED`, `TERMINATED`
+<!-- enum-sync:TaskStatus:end -->
 
-含义：
-- `CREATED`：任务记录已创建
-- `READY`：已具备领取条件
-- `RUNNING`：worker 已开始执行
-- `SUCCESS`：任务完成成功
-- `FAILED`：任务失败
-- `CANCELLED`：取消执行
-- `TERMINATED`：任务被终止
+task 没有 WAITING / RETRYING；重试等待由 partition、step 或 retry_schedule 表达，新的执行尝试再进入 task 生命周期。
 
 ### 4.3 状态迁移原则
 
 1. 终态不直接回到非终态。
-2. `RETRYING` 不是终态。
+2. `PAUSED`、`WAITING_DEPENDENCY` 和 `RETRYING` 都不是终态，但只属于各自定义它们的层级。
 3. 状态变更必须有前置条件，不能“看起来像对就写进去”。
 4. `workflow_run`、`step_instance`、`task` 三层状态不能随意共用同一枚举值的业务含义。
 5. 不要把恢复动作伪装成状态回滚。
 
 ### 4.4 迁移与恢复的边界
 
-状态迁移只处理“生命周期推进”：
-- `READY -> RUNNING`
-- `RUNNING -> SUCCESS / FAILED`
-- `FAILED -> RETRYING`
-- `READY / RUNNING -> CANCELLED / TERMINATED`
+状态迁移只处理某一层级内的生命周期推进，例如：
+- task：`READY -> RUNNING -> SUCCESS / FAILED`
+- partition / step：失败后可进入 `RETRYING`，再按各自 CAS 规则推进
+- job_instance / workflow_run：`RUNNING <-> PAUSED`，终结后不得复活
+- 支持取消的层级：活动态可进入 `CANCELLED / TERMINATED`
 
 如果是“重新做一遍”，那已经不是普通状态迁移，而是恢复模型的一部分。
 
@@ -470,7 +471,7 @@ job_instance.expected_       ──┘                ↓
 | step instance | 步骤审计镜像，通常指 `job_step_instance` |
 | attempt | 尝试序号，不是一等实体 |
 | context | 运行时输入 + attributes bag |
-| mode | 触发意图，不是状态 |
+| mode | 执行意图，不是状态；值以 `RunMode` 为准 |
 | retry | 系统重试 |
 | rerun | 人工重跑 |
 | recover | 故障恢复 |

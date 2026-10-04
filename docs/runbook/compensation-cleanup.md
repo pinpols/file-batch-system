@@ -9,7 +9,7 @@
 以下 alert 触发时：
 
 - `batch.compensation.failed{handler=*}` Counter 非零
-- 或手动接到排障单："compensation failed，有 job_instance 挂在 PENDING/RUNNING"
+- 或手动接到排障单："compensation failed，有 compensation_command 挂在 PENDING/RUNNING"
 
 先看 `compensation_checkpoint` 表，再按对应 handler 的清理路径逆向操作。
 

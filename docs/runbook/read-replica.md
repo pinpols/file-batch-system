@@ -250,8 +250,8 @@ console-api 启动时不会创建从库连接池，走 Spring Boot 默认主 Dat
 主链路的状态机依赖"**读自己刚写的数据**"（read-after-write）：
 
 ```
-T1: orchestrator INSERT job_instance(status=CREATED) + outbox_event 同事务
-T2: orchestrator 别处 SELECT job_instance WHERE status=CREATED  ← 必须能读到 T1
+T1: orchestrator INSERT job_instance(instance_status=CREATED) + outbox_event 同事务
+T2: orchestrator 别处 SELECT job_instance WHERE instance_status=CREATED  ← 必须能读到 T1
 T3: outbox poller SELECT outbox WHERE status=NEW                ← 必须能读到 T1
 T4: worker CLAIM 后立即 SELECT 验证 lease                        ← 必须能读到自己刚写
 ```

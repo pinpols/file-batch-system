@@ -372,27 +372,27 @@ flowchart LR
     direction TB
     JD[("job_definition<br/>job_code -> workerType")]:::store
     WD[(workflow_definition<br/>workflow_code)]:::store
-    WN[(workflow_node<br/>type=START/TASK/GATEWAY/END<br/>+ join_mode=ALL/ANY/N_OF)]:::store
+    WN[(workflow_node<br/>type=WorkflowNodeType<br/>+ join_mode=ALL/ANY/N_OF)]:::store
     WE[(workflow_edge<br/>edge_type=SUCCESS/FAILURE/<br/>CONDITION/ALWAYS)]:::store
   end
 
   subgraph RUN ["运行态（每次执行的实例）"]
     direction TB
-    WR[(workflow_run<br/>status=RUNNING/SUCCESS/FAILED)]:::store
+    WR[(workflow_run<br/>run_status 见核心模型)]:::store
     WNR[(workflow_node_run<br/>每个 node 一行)]:::store
     JI[(job_instance<br/>node 触发时创建一个)]:::store
   end
 
   ENG["WorkflowDispatchService<br/>(orchestrator)"]:::svc
-  WORKER[(三类 Worker)]:::worker
+  WORKER[(Worker 执行池)]:::worker
 
   WD --> WN
   WN --> WE
-  WN -.->|"node_type=TASK<br/>引用 job_code"| JD
+  WN -.->|"node_type=JOB<br/>引用 related_job_code"| JD
 
   ENG ==>|"launch workflow_code<br/>→ INSERT workflow_run"| WR
   ENG ==>|"按 START → ... DAG 推进<br/>每次一个 node"| WNR
-  ENG ==>|"node_type=TASK<br/>→ INSERT job_instance + outbox"| JI
+  ENG ==>|"node_type=JOB<br/>→ 拉起子 job_instance"| JI
   JI -. "走主图 Outbox → Kafka 链路" .-> WORKER
   WORKER -. "report SUCCESS/FAILED<br/>orchestrator 推进 workflow_node_run<br/>+ 评估 join_mode 决定下一批 node" .-> ENG
 
@@ -403,7 +403,7 @@ flowchart LR
 
 ### 关键决策点
 
-- **node_type**：`START` / `END`（占位，无 job）/ `TASK`（绑 job_code）/ `GATEWAY`（条件分支）/ `FILE_STEP`（短路本地步骤）/ `JOB`（同 TASK 别名兼容）
+- **node_type**：以 [`WorkflowNodeType`](../../batch-common/src/main/java/io/github/pinpols/batch/common/enums/WorkflowNodeType.java) 为准；`JOB` 拉起独立子作业，`TASK / FILE_STEP` 在当前作业内派发执行任务，`WAIT` 承载外部条件等待，三者不是别名。
 - **edge_type**：`SUCCESS`（前 node 成功才走）/ `FAILURE`（前 node 失败才走，常用于补偿/通知）/ `CONDITION`（带表达式）/ `ALWAYS`（无视前态）
 - **join_mode** in `workflow_node`：`ALL`（所有入边都满足才触发）/ `ANY`（任一入边满足即触发）/ `N_OF`（指定数量）—— 详见 `docs/architecture/workflow-dependency-guide.md`
 - 与 worker pipeline stage 的关系：**workflow 编排"多个 job"，stage 编排"一个 job 内的多步"**，两层正交
@@ -881,7 +881,7 @@ sequenceDiagram
     E->>DB: file_record(1065, GENERATED, 1073 bytes, recordCount=5)
     Note over E: COMPLETE
     E->>O: report SUCCESS
-    O->>DB: UPDATE job_instance.status=SUCCESS
+    O->>DB: UPDATE job_instance.instance_status=SUCCESS
 ```
 
 `pipeline_step_run` 记录：
@@ -928,7 +928,7 @@ sequenceDiagram
     Note over I: FEEDBACK: 回写 metadata
     I->>DB: file_record 1066 LOADED<br/>metadata: parsed=5,validated=5,loaded=5
     I->>O: report SUCCESS
-    O->>DB: UPDATE job_instance.status=SUCCESS
+    O->>DB: UPDATE job_instance.instance_status=SUCCESS
 ```
 
 `pipeline_step_run` 记录：
@@ -974,7 +974,7 @@ sequenceDiagram
     Note over D: COMPLETE: 写 file_dispatch_record
     D->>DB: file_dispatch_record(13, ACKED)<br/>file_record 1065 → DISPATCHED
     D->>O: report SUCCESS
-    O->>DB: UPDATE job_instance.status=SUCCESS
+    O->>DB: UPDATE job_instance.instance_status=SUCCESS
 ```
 
 `pipeline_step_run` 记录：

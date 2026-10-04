@@ -37,7 +37,7 @@
 | 凭据 | 权威文档 |
 |---|---|
 | biz 分片片级账密 | `docs/runbook/biz-tenant-routing.md` §6/§9、`secrets/biz-shards/README.md` |
-| 渠道凭据 / `secret_version` 轮换 | `docs/design/multi-tenant-and-security.md` §5/§9、`docs/design/data-model-ddl.md`(`file_channel_config` / `secret_version` DDL) |
+| 渠道凭据 / `secret_version` 轮换 | `docs/design/multi-tenant-and-security.md` §5/§9、`docs/design/database-schema-guide.md`；表结构以 `db/migration/V22*`、`V210*`、`V211*` 为准 |
 | console 密码 / 登录 | `docs/runbook/console-login-encryption.md`、`docs/runbook/first-tenant-config-quickstart.md` §1 |
 | 平台内部密钥 / DB 弱口令 fail-fast | `BatchSecurityProperties`(`batch-common`)、`batch-defaults.yml` |
 | KMS / 内容加密 | `docs/design/multi-tenant-and-security.md` §9 |

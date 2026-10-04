@@ -1,7 +1,9 @@
 ## 14. 数据模型与 PostgreSQL 表结构设计
 ### 14.1 设计目标与落地原则
 
-本章将前文中的任务调度、DAG 编排、文件链路、资源调度、补偿与审计模型统一落成 **可执行 DDL 终版**。目标不是停留在“表清单 + 字段建议”，而是直接给出可用于 Flyway 写入数据库的 PostgreSQL 基线脚本。
+本章保留项目早期将任务调度、DAG 编排、文件链路、资源调度、补偿与审计模型落成 PostgreSQL 表结构的逻辑基线。它用于理解建模出发点，**不是当前可直接执行的完整 schema**。
+
+> **权威边界**：当前表、列、约束和索引以 [`db/migration/`](../../db/migration/) 的 Flyway 迁移和目标数据库 catalog 为准；当前状态枚举以 [`status-state-machines.md`](./status-state-machines.md) 与 Java enum 为准。不得从本文代码块单独初始化或升级环境。
 
 **本章落地原则**：
 
@@ -20,7 +22,7 @@
 - `batch`：业务配置、运行态、审计、补偿、文件资产
 - `quartz`：Quartz JDBC JobStore 元数据表
 
-本章 DDL 终版覆盖以下表：
+本章历史逻辑基线覆盖以下表：
 
 | 分层 | 表名 |
 |---|---|
@@ -38,7 +40,7 @@
 
 ### 14.3 DDL 使用说明
 
-建议按 Flyway 迁移顺序拆分：
+下列为设计当时的 Flyway 拆分草案，不是当前迁移文件清单：
 
 - `V1__create_schema.sql`
 - `V2__create_config_tables.sql`
@@ -47,9 +49,9 @@
 - `V5__create_ops_tables.sql`
 - `V6__create_indexes.sql`
 
-下面给出的 SQL 已按“**可直接执行**”标准整理。若生产环境采用分区表、逻辑复制或对象存储扩展，可在此基线上继续演进。
+下面 SQL 是早期基线快照，保留用于查阅模型演进背景。实际环境只能依次应用 Flyway migration，不能执行该快照替代迁移。
 
-### 14.4 PostgreSQL 可执行 DDL 终版
+### 14.4 PostgreSQL 历史基线 DDL
 
 ```sql
 -- =========================================================
@@ -243,8 +245,8 @@ CREATE TABLE IF NOT EXISTS batch.job_definition (
     created_at               TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at               TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_job_definition_tenant_code UNIQUE (tenant_id, job_code),
-    CONSTRAINT ck_job_definition_job_type CHECK (job_type IN ('GENERAL', 'IMPORT', 'EXPORT', 'DISPATCH', 'WORKFLOW')),
-    CONSTRAINT ck_job_definition_schedule_type CHECK (schedule_type IN ('CRON', 'FIXED_RATE', 'MANUAL', 'EVENT', 'ONE_TIME')),
+    CONSTRAINT ck_job_definition_job_type CHECK (job_type IN ('GENERAL', 'IMPORT', 'EXPORT', 'PROCESS', 'DISPATCH', 'WORKFLOW', 'ATOMIC', 'BUNDLE_IMPORT', 'BUNDLE_EXPORT', 'BUNDLE_DISPATCH')),
+    CONSTRAINT ck_job_definition_schedule_type CHECK (schedule_type IN ('CRON', 'FIXED_RATE', 'MANUAL')),
     CONSTRAINT ck_job_definition_trigger_mode CHECK (trigger_mode IN ('SCHEDULED', 'API', 'MANUAL', 'EVENT', 'MIXED')),
     CONSTRAINT ck_job_definition_shard_strategy CHECK (shard_strategy IN ('NONE', 'STATIC', 'DYNAMIC', 'AUTO')),
     CONSTRAINT ck_job_definition_retry_policy CHECK (retry_policy IN ('NONE', 'FIXED', 'EXPONENTIAL')),
@@ -951,9 +953,9 @@ CREATE INDEX IF NOT EXISTS idx_outbox_aggregate
 - 不在窗口内时按 `WAIT / FAIL` 执行
 - 窗口结束后按 `STOP / FINISH_RUNNING / CONTINUE` 处理
 
-### 14.6 Flyway 写入数据库建议
+### 14.6 历史 Flyway 拆分建议
 
-建议按以下顺序建表：
+以下是初始建模时的逻辑顺序，不得替代当前 `db/migration/V*.sql` 迁移链：
 
 1. schema：`batch`、`quartz`
 2. 配置表：`resource_queue`、`tenant_quota_policy`、`batch_window`、`business_calendar`、`worker_registry`
@@ -969,7 +971,7 @@ CREATE INDEX IF NOT EXISTS idx_outbox_aggregate
 
 - 运行态主对象统一使用 `job_instance / job_partition / job_task`，不再使用 `task_partition` 等旧称谓。
 - 事件最终一致性桥梁统一使用 `outbox_event`，不再混用 `event_outbox`。
-- `job_instance` 与 `job_partition` 的主状态值统一严格以 14 章 DDL 为准；等待类细分语义通过 `WAITING` 结合调度原因、租约字段和审计日志表达。
+- `job_instance` 与 `job_partition` 的主状态值以 Java enum、现行 Flyway CHECK 约束和 [`status-state-machines.md`](./status-state-machines.md) 为准；本章 SQL 仅保留初始建模快照。
 - 文件资产主表统一使用 `file_record`，图示与正文不再引用未写入数据库的 `file_receive_record`。
 
 本章交叉引用校验结论如下：
@@ -985,7 +987,7 @@ CREATE INDEX IF NOT EXISTS idx_outbox_aggregate
 
 ### 14.8 本章结论
 
-至此，14 章已从“表结构设计说明”升级为“**可执行 DDL 终版**”。
+本章作为数据模型的历史逻辑基线保留；现行可部署 schema 由 Flyway migration 链维护，不再在此复制一份会持续漂移的“终版 DDL”。
 
 这一版解决了此前评审中最关键的落地缺口：
 
@@ -999,5 +1001,3 @@ CREATE INDEX IF NOT EXISTS idx_outbox_aggregate
 
 - 大表按月分区或冷热分层
 - 对象存储、审计中心、告警平台的外部集成脚本
-
-
