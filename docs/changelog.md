@@ -1,6 +1,9 @@
 # 变更记录（规范与架构权威条款变化）
 
 ### 2026-10-03
+- **五类 Worker 压测文档口径**：补齐 Import / Export / Dispatch / Process / Atomic 的 1w / 10w 权威命令矩阵和验收留档模板，明确四类业务 worker 与 Atomic 控制面容量画像不可横向混比，未实跑结果不得写成上线容量承诺。
+- **生产保留治理计划入口**：新增 `plan-production-retention.sh` 和只读 PostgreSQL 计划 SQL，覆盖 archive_policy 缺口、终态运行数据候选量、Kafka topic retention、对象存储 lifecycle 和 Redis TTL 抽样；接入 `inspect-all.sh` 与生产容量治理门禁，明确只输出计划项，不执行生产数据清理。
+- **生产容量治理入口**：新增生产容量与存储增长治理 runbook、只读巡检脚本、独立 ops toolbox 镜像入口和 CI 自动化守护，覆盖 PostgreSQL 热表/保留、Kafka topic retention、对象存储 lifecycle 和压测清理边界；支持 PostgreSQL / Kafka / 对象存储分域开关、阈值和严格模式，明确生产应用运行时不依赖 Python / `psql` / Kafka CLI / `mc` / `redis-cli`，本地压测清理不得复用为生产数据清理。
 - **工程化借鉴清单固化**：工程成熟度路线图补充后端契约链、数据库巡检、可观测性定位字段、批处理 SLO、防误操作、主干保护、本地重建和 PR 变更影响清单，作为后续治理 PR 的长期判断口径。
 - **SLO / SLI 目录治理门禁**：新增 `check-slo-sli-catalog.py`，在文档变更时校验 SLO / SLI 目录、Runbook 入口、应用治理文档、工程成熟度路线和 Prometheus/Helm 告警规则入口，避免核心业务指标口径漂移。
 - **SLO / SLI 目录入口**：新增批量调度平台 SLO / SLI 目录，将调度准点率、批次日完成率、运行积压、Outbox、Kafka lag、文件到达、重试恢复、Worker 心跳、readiness 和数据库迁移一致性映射到信号源、告警和 Runbook。

@@ -39,6 +39,7 @@
 | 14 | [minio-lifecycle-policy.md](./minio-lifecycle-policy.md) | MinIO 桶生命周期策略（自动清理） |
 | 15 | [backup-and-pitr.md](./backup-and-pitr.md) | **PG 备份 / PITR / 容量护栏**（上线前必做:base+WAL+逻辑导出、恢复演练、磁盘告警） |
 | 15a | [dedup-ledger-retention.md](./dedup-ledger-retention.md) | 幂等 dedup ledger 留存治理（outbox/instance 双台账无自动清理,季度归档 SOP + 清理 SQL） |
+| 15b | [production-capacity-governance.md](./production-capacity-governance.md) | 生产容量与存储增长治理（PG 热表 / Kafka retention / 对象存储 lifecycle / 压测边界） |
 | 16 | [ha-readiness.md](./ha-readiness.md) | **生产 HA 就绪 Checklist（P0/P1）**——基础件 HA(Kafka/PG Patroni/备份/Redis Sentinel/PgBouncer)逐项 + 应用侧已做对照 |
 | 16a | [heavy-workload-operations.md](./heavy-workload-operations.md) | 重任务定容、专用资源池、灰度、排障与回滚 |
 
@@ -104,7 +105,7 @@
 | 上 staging | 05 → 06 → 11 → 18 |
 | 上 prod | 25（凭据矩阵:逐行核对必配 + prod fail-fast 项）→ 11（部署前 checklist） → 10 → 18 → 02 |
 | 故障处理（长期停滞 / 数据异常） | 02 → 03 → 04 |
-| 容量评估 / 上量 | [`../architecture/scalability-assessment.md`](../architecture/scalability-assessment.md) → 11 → 12 → 13 |
+| 容量评估 / 上量 | [`../architecture/scalability-assessment.md`](../architecture/scalability-assessment.md) → 11 → 12 → 13 → 15b |
 
 ## 与其他子目录的分工
 

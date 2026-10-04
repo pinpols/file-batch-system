@@ -165,6 +165,10 @@ jobs:
         shell: bash
         run: bash scripts/ci/run-gate.sh FULL_PRODUCTION_HELM_OVERLAY "生产 Helm overlay 安全" -- python3 scripts/ci/check-production-overlay-safety.py
 
+      - name: Verify production capacity governance automation
+        shell: bash
+        run: bash scripts/ci/run-gate.sh FULL_PRODUCTION_CAPACITY_GOVERNANCE "生产容量治理自动化" -- python3 scripts/ci/check-production-capacity-governance.py
+
       - name: Verify application governance contract
         shell: bash
         run: bash scripts/ci/run-gate.sh FULL_APPLICATION_GOVERNANCE "应用治理契约" -- python3 scripts/ci/check-application-governance.py

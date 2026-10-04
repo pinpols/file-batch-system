@@ -6,6 +6,7 @@ LOAD_DIR="$ROOT_DIR/load-tests"
 # shellcheck source=env.sh
 source "$LOAD_DIR/scripts/env.sh"
 IMPORT_PROFILE="${IMPORT_PROFILE:-medium}"
+WORKER_MODULES_CSV="${WORKER_MODULES_CSV:-import,export,dispatch,process}"
 USERS_PER_WORKER="${USERS_PER_WORKER:-3}"
 RAMP_SECONDS="${RAMP_SECONDS:-5}"
 PIPELINE_MAX_POLLS="${PIPELINE_MAX_POLLS:-1}"
@@ -16,7 +17,20 @@ WAIT_TERMINAL_TIMEOUT_SECONDS="${WAIT_TERMINAL_TIMEOUT_SECONDS:-180}"
 
 RUN_ID="${RUN_ID:-ltw-$(date +%Y%m%d%H%M%S)}"
 RUN_ACCOUNT_PREFIX="$(printf '%s' "$RUN_ID" | tr -cd '[:alnum:]' | cut -c1-16)"
-DISPATCH_FIXTURE_COUNT="${DISPATCH_FIXTURE_COUNT:-$USERS_PER_WORKER}"
+require_load_test_disk_headroom "worker load test" "${LOAD_TEST_MIN_FREE_GIB:-5}"
+
+csv_contains() {
+  local needle="$1" csv=",$2,"
+  [[ "$csv" == *",$needle,"* ]]
+}
+
+if [[ -z "${DISPATCH_FIXTURE_COUNT:-}" ]]; then
+  if csv_contains dispatch "$WORKER_MODULES_CSV"; then
+    DISPATCH_FIXTURE_COUNT="$USERS_PER_WORKER"
+  else
+    DISPATCH_FIXTURE_COUNT=1
+  fi
+fi
 OUT_DIR="${OUT_DIR:-$LOAD_DIR/target/worker-load-data/$RUN_ID}"
 export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB DISPATCH_FIXTURE_COUNT OUT_DIR
 
@@ -152,10 +166,18 @@ run_one() {
   return 1
 }
 
-run_one import import_customer_job "$IMPORT_PARAMS"
-run_one export export_settlement_job "$EXPORT_PARAMS"
-run_one dispatch lt_dispatch_local_job "$DISPATCH_PARAMS" "$DISPATCH_FILE_IDS_CSV"
-run_one process lt_process_sql_job "$PROCESS_PARAMS"
+if csv_contains import "$WORKER_MODULES_CSV"; then
+  run_one import import_customer_job "$IMPORT_PARAMS"
+fi
+if csv_contains export "$WORKER_MODULES_CSV"; then
+  run_one export export_settlement_job "$EXPORT_PARAMS"
+fi
+if csv_contains dispatch "$WORKER_MODULES_CSV"; then
+  run_one dispatch lt_dispatch_local_job "$DISPATCH_PARAMS" "$DISPATCH_FILE_IDS_CSV"
+fi
+if csv_contains process "$WORKER_MODULES_CSV"; then
+  run_one process lt_process_sql_job "$PROCESS_PARAMS"
+fi
 
 RUN_FINISHED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
@@ -164,6 +186,7 @@ RUN_FINISHED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo
   echo "- Time window UTC: ${RUN_STARTED_AT} - ${RUN_FINISHED_AT}"
   echo "- Tenant: $LOAD_TEST_TENANT_ID"
+  echo "- Modules: ${WORKER_MODULES_CSV}"
   echo "- Users per worker: ${USERS_PER_WORKER}, ramp seconds: ${RAMP_SECONDS}"
   echo "- Import profile: ${IMPORT_PROFILE}"
   echo "- Data dir: ${OUT_DIR}"

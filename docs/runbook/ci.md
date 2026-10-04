@@ -240,6 +240,7 @@ pr-gate 会根据 PR 变更文件范围决定 Maven 构建粒度：
 | 配置 / Java / SDK 变更 | `check-infrastructure-utf8.py` | **全量矩阵**：核对 8 个应用服务、基础服务、Kafka HA、测试服务、Helm、Dockerfile、Testcontainers 和新建 PostgreSQL 编码参数 |
 | `pom.xml` / `*/pom.xml` 变更 | Maven 模块依赖边界 | 全局依赖图检查 |
 | `helm/*` 变更 | Helm 环境变量同步、Helm 生产 overlay 安全 | 全局 Helm / 配置一致性检查 |
+| 数据库 / 脚本 / 文档 / 配置 / CI 变更 | 生产容量治理自动化 | 校验生产容量巡检脚本、只读 SQL、runbook、索引和 workflow 入口同步 |
 | tracked 源码/脚本/配置变更 | Lean LOC 快照重生成与校验 | 基于暂存树生成 `docs/stats/loc-current-lean.md` |
 | 所有提交 | 仓库卫生 | 全局仓库约束 |
 
@@ -259,6 +260,7 @@ pr-gate 会根据 PR 变更文件范围决定 Maven 构建粒度：
 | `check-config-defaults-sync.py --check`、`check-helm-env-sync.py` | 按域触发的全量：配置 / Helm / Compose 变更时运行 |
 | `check-feature-switch-registry.py` | 按域触发的全量：功能开关、YAML、Helm 变更时运行 |
 | `check-config-governance.py`、`check-env-variable-governance.py` | 按域触发的全量：配置绑定、环境变量治理入口变更时运行 |
+| `check-production-capacity-governance.py` | 按域触发的全量：生产容量巡检脚本、只读 SQL、runbook 和 workflow 入口变更时运行 |
 | `check-hardcoded-runtime-config.sh` | 按域触发的全量：运行配置、脚本、容器、测试基础设施变更时运行 |
 | `check-changelog-sync.py --base <base>` | 按域触发的增量：发布敏感配置、契约、迁移或架构规范变更时运行 |
 | Java readability inventory 自动刷新 | Java 变更时刷新全局清单 |

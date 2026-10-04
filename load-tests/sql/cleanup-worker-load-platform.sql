@@ -1,15 +1,20 @@
 BEGIN;
 
 -- 每个压测档案独立生成 run_id，并以此限定清理范围；公平性场景使用 ta/tb/tc，不能限定为默认租户。
--- 优先通过已关联实例反查 Trigger 请求；新 Gatling 场景还会把 run_id 写入请求/追踪标识。
--- 不扫描 trigger_outbox_event.payload：该 JSONB 全表文本匹配在十万级清理时会拖慢回收，且
--- run_id 已有结构化的 request_id / trace_id 归属边界。
+-- 优先通过已关联实例反查 Trigger 请求；Gatling 场景会把 run_id 写入 launchRequest.params.metadata。
+-- 只走结构化 JSON 路径，不做 payload 全表文本匹配，避免十万级清理时拖慢回收。
 CREATE TEMP TABLE cleanup_trigger_requests ON COMMIT DROP AS
 SELECT DISTINCT tr.id, tr.request_id
 FROM batch.trigger_request tr
 WHERE tr.request_id LIKE :'run_id' || '%'
    OR tr.dedup_key LIKE :'run_id' || '%'
    OR tr.trace_id LIKE :'run_id' || '%'
+UNION
+SELECT DISTINCT tr.id, tr.request_id
+FROM batch.trigger_request tr
+JOIN batch.trigger_outbox_event toe
+  ON toe.tenant_id = tr.tenant_id AND toe.request_id = tr.request_id
+WHERE toe.payload #>> '{launchRequest,params,metadata,runId}' = :'run_id'
 UNION
 SELECT DISTINCT tr.id, tr.request_id
 FROM batch.trigger_request tr

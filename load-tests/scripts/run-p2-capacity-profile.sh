@@ -119,6 +119,11 @@ validate_load_test_run_id "$RUN_ID"
 if [[ "$RUN_10W_STORM" == "1" ]]; then
   validate_load_test_run_id "${RUN_ID}-10w" "10w derived RUN_ID"
 fi
+if [[ "$RUN_10W_STORM" == "1" || "${STORM_TOTAL_REQUESTS:-0}" -ge 100000 ]]; then
+  require_load_test_disk_headroom "P2 capacity profile" "${LOAD_TEST_MIN_FREE_GIB:-20}"
+else
+  require_load_test_disk_headroom "P2 capacity profile" "${LOAD_TEST_MIN_FREE_GIB:-5}"
+fi
 export RUN_ID BIZ_DATE PGHOST PGPORT PGUSER PGPASSWORD PLATFORM_DB BUSINESS_DB
 
 REPORT="$LOAD_DIR/target/p2-capacity-profile-${RUN_ID}.md"

@@ -26,6 +26,7 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -131,14 +132,16 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
           spec.table(),
           spec.conflictColumns());
     }
-    int n = records.size();
+    List<Map<String, Object>> orderedRecords =
+        orderedRecordsForConflictColumns(loadContext, spec, insertCols, records);
+    int n = orderedRecords.size();
     // Phase A RLS:显式 tx 包 SET LOCAL + batchUpdate 共享同一 connection,触发 biz.* policy 过滤
     txTemplate.execute(status -> {
       RlsTenantSessionSupport.applyIfPresent(businessDataSource);
       jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
         @Override
         public void setValues(PreparedStatement ps, int i) throws SQLException {
-          Object[] args = buildArgs(insertCols, spec, records.get(i), loadContext);
+          Object[] args = buildArgs(insertCols, spec, orderedRecords.get(i), loadContext);
           for (int j = 0; j < args.length; j++) {
             ps.setObject(j + 1, args[j]);
           }
@@ -152,6 +155,40 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
       return null;
     });
     return n;
+  }
+
+  static List<Map<String, Object>> orderedRecordsForConflictColumns(
+      ImportLoadContext context,
+      JdbcMappedImportSpec spec,
+      List<String> insertCols,
+      List<Map<String, Object>> records) {
+    if (EmptyChecks.isEmpty(spec.conflictColumns()) || records.size() < 2) {
+      return records;
+    }
+    List<Integer> conflictIndexes =
+        spec.conflictColumns().stream().map(insertCols::indexOf).toList();
+    if (conflictIndexes.stream().anyMatch(index -> index < 0)) {
+      return records;
+    }
+    List<Map<String, Object>> ordered = new ArrayList<>(records);
+    ordered.sort(Comparator.comparing(
+        row -> conflictSortKey(context, spec, insertCols, conflictIndexes, row),
+        Comparator.nullsFirst(String::compareTo)));
+    return ordered;
+  }
+
+  private static String conflictSortKey(
+      ImportLoadContext context,
+      JdbcMappedImportSpec spec,
+      List<String> insertCols,
+      List<Integer> conflictIndexes,
+      Map<String, Object> row) {
+    Object[] args = buildArgs(insertCols, spec, row, context);
+    StringBuilder key = new StringBuilder();
+    for (Integer index : conflictIndexes) {
+      key.append('\u0000').append(String.valueOf(args[index]));
+    }
+    return key.toString();
   }
 
   public boolean isPartitionReplaceCopy(ImportLoadContext context) {
@@ -237,7 +274,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     return cols;
   }
 
-  private Object[] buildArgs(
+  private static Object[] buildArgs(
       List<String> insertCols,
       JdbcMappedImportSpec spec,
       Map<String, Object> row,
@@ -249,7 +286,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     return args;
   }
 
-  private Object valueForColumn(
+  private static Object valueForColumn(
       String col, JdbcMappedImportSpec spec, Map<String, Object> row, ImportLoadContext context) {
     if (col.equals(spec.tenantColumn())) {
       return context.tenantId();

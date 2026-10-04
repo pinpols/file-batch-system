@@ -7,6 +7,10 @@ CREATE TEMP TABLE p2_cleanup_job_instance_ids (
   id bigint PRIMARY KEY
 ) ON COMMIT DROP;
 
+CREATE TEMP TABLE p2_cleanup_pipeline_instance_ids (
+  id bigint PRIMARY KEY
+) ON COMMIT DROP;
+
 INSERT INTO p2_cleanup_job_instance_ids (id)
 SELECT ji.id
 FROM batch.job_instance ji
@@ -31,6 +35,14 @@ JOIN batch.trigger_request tr
 WHERE tr.request_id LIKE (:'run_id' || '%')
    OR tr.dedup_key LIKE (:'run_id' || '%')
    OR tr.trace_id LIKE (:'run_id' || '%');
+
+-- 清理压测失败场景时，worker 可能仍在为本轮 pipeline 写 step run。先锁住父行，
+-- 避免删完子表到删父表之间又插入新的 pipeline_step_run，导致 FK 失败回滚。
+INSERT INTO p2_cleanup_pipeline_instance_ids (id)
+SELECT pi.id
+FROM batch.pipeline_instance pi
+WHERE pi.related_job_instance_id IN (SELECT id FROM p2_cleanup_job_instance_ids)
+FOR UPDATE;
 
 WITH ji AS (
   SELECT id FROM p2_cleanup_job_instance_ids
@@ -125,25 +137,21 @@ jt AS (
 DELETE FROM batch.job_step_instance WHERE job_task_id IN (SELECT id FROM jt);
 
 WITH ji AS (
-  SELECT id FROM p2_cleanup_job_instance_ids
+  SELECT id FROM p2_cleanup_pipeline_instance_ids
 )
 DELETE FROM batch.pipeline_step_run
-WHERE pipeline_instance_id IN (
-  SELECT id FROM batch.pipeline_instance WHERE related_job_instance_id IN (SELECT id FROM ji)
-);
+WHERE pipeline_instance_id IN (SELECT id FROM ji);
 
 WITH ji AS (
-  SELECT id FROM p2_cleanup_job_instance_ids
+  SELECT id FROM p2_cleanup_pipeline_instance_ids
 )
 DELETE FROM batch.file_dispatch_record
-WHERE pipeline_instance_id IN (
-  SELECT id FROM batch.pipeline_instance WHERE related_job_instance_id IN (SELECT id FROM ji)
-);
+WHERE pipeline_instance_id IN (SELECT id FROM ji);
 
 WITH ji AS (
-  SELECT id FROM p2_cleanup_job_instance_ids
+  SELECT id FROM p2_cleanup_pipeline_instance_ids
 )
-DELETE FROM batch.pipeline_instance WHERE related_job_instance_id IN (SELECT id FROM ji);
+DELETE FROM batch.pipeline_instance WHERE id IN (SELECT id FROM ji);
 
 WITH ji AS (
   SELECT id FROM p2_cleanup_job_instance_ids

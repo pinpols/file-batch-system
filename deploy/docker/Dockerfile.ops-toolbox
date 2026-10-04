@@ -1,0 +1,63 @@
+# syntax=docker/dockerfile:1.7
+ARG PYTHON_VERSION=3.12
+ARG MINIO_MC_IMAGE_REPOSITORY=bitnamilegacy/minio
+ARG MINIO_MC_IMAGE_TAG=2025.7.23-debian-12-r1
+ARG KAFKA_IMAGE_TAG=4.1.2
+
+FROM ${MINIO_MC_IMAGE_REPOSITORY}:${MINIO_MC_IMAGE_TAG} AS minio-client
+FROM apache/kafka:${KAFKA_IMAGE_TAG} AS kafka-client
+
+FROM python:${PYTHON_VERSION}-slim-bookworm
+
+ARG POSTGRES_CLIENT_MAJOR=17
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+      bash \
+      ca-certificates \
+      curl \
+      gnupg \
+      gzip \
+      jq \
+      less \
+      openjdk-17-jre-headless \
+      procps \
+      redis-tools \
+      tar \
+    && install -d -m 0755 /usr/share/postgresql-common/pgdg \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+      | gpg --dearmor -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg \
+    && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg] http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+      > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends "postgresql-client-${POSTGRES_CLIENT_MAJOR}" \
+    && groupadd --system --gid 10001 batch \
+    && useradd --system --uid 10001 --gid batch --create-home --home-dir /home/batch batch \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=minio-client /opt/bitnami/minio-client/bin/mc /usr/local/bin/mc
+COPY --from=kafka-client /opt/kafka/bin /opt/kafka-client/bin
+COPY --from=kafka-client /opt/kafka/config /opt/kafka-client/config
+COPY --from=kafka-client /opt/kafka/libs /opt/kafka-client/libs
+COPY --from=kafka-client /opt/kafka/licenses /opt/kafka-client/licenses
+
+RUN test -s /opt/kafka-client/libs/kafka-clients-*.jar \
+    && for script in /opt/kafka-client/bin/kafka-*.sh; do \
+      name="$(basename "$script")"; \
+      printf '#!/usr/bin/env bash\nexec /opt/kafka-client/bin/%s "$@"\n' "$name" > "/usr/local/bin/$name"; \
+      chmod 0755 "/usr/local/bin/$name"; \
+    done \
+    && /usr/local/bin/kafka-topics.sh --version >/dev/null
+
+ENV KAFKA_BIN_DIR=/opt/kafka-client/bin \
+    KAFKA_CONTAINER_BIN_DIR=/opt/kafka-client/bin \
+    HOME=/home/batch \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    PATH=/opt/kafka-client/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
+
+WORKDIR /workspace
+USER batch:batch
+CMD ["bash"]

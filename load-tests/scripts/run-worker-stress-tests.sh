@@ -24,6 +24,7 @@ fi
 
 RUN_ID="${RUN_ID:-ltw-stress-$(date +%Y%m%d%H%M%S)}"
 OUT_DIR="${OUT_DIR:-$LOAD_DIR/target/worker-load-data/$RUN_ID}"
+require_load_test_disk_headroom "worker stress test" "${LOAD_TEST_MIN_FREE_GIB:-5}"
 IFS=',' read -r -a STEPS <<< "$STEPS_CSV"
 DISPATCH_FIXTURE_COUNT=0
 for step_users in "${STEPS[@]}"; do
