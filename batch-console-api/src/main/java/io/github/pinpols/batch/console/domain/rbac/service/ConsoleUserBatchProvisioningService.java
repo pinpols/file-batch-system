@@ -189,10 +189,10 @@ public class ConsoleUserBatchProvisioningService {
         public void afterCompletion(int status) {
           if (status == STATUS_UNKNOWN) {
             // 提交结果不确定时不能恢复可编辑状态，保留冻结态并通过操作记录核实。
-            log.error("batch preview transaction outcome unknown: token={}", token);
+            log.error("batch preview transaction outcome unknown: requestId={}", requestId);
             return;
           }
-          finishApply(token, applying, stored.json(), status == STATUS_COMMITTED);
+          finishApply(token, applying, stored.json(), status == STATUS_COMMITTED, requestId);
         }
       });
     }
@@ -204,12 +204,13 @@ public class ConsoleUserBatchProvisioningService {
     } finally {
       // 单测直接调用时无事务代理；生产路径必须等真实提交/回滚后再消费或恢复预览。
       if (!managedTransaction) {
-        finishApply(token, applying, stored.json(), succeeded);
+        finishApply(token, applying, stored.json(), succeeded, requestId);
       }
     }
   }
 
-  private void finishApply(String token, String applying, String original, boolean committed) {
+  private void finishApply(
+      String token, String applying, String original, boolean committed, UUID requestId) {
     try {
       if (committed) {
         store.deletePreview(PREFIX + token, applying);
@@ -218,7 +219,12 @@ public class ConsoleUserBatchProvisioningService {
       }
     } catch (DataAccessException ex) {
       // 提交记录在数据库中；Redis 清理失败时保留冻结态直至 TTL，不误报业务回滚。
-      log.error("batch preview finalization failed: token={} committed={}", token, committed, ex);
+      // 预览令牌及存储异常可能包含账户信息，仅记录操作关联标识和异常类型。
+      log.error(
+          "batch preview finalization failed: requestId={} committed={} cause={}",
+          requestId,
+          committed,
+          ex.getClass().getSimpleName());
     }
   }
 

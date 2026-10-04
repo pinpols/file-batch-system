@@ -7,11 +7,15 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleUserAccountResponse;
@@ -42,6 +46,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -235,6 +241,44 @@ class ConsoleUserBatchProvisioningServiceTest {
           .isInstanceOf(BizException.class);
     } finally {
       TransactionSynchronizationManager.clearSynchronization();
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      ints = {TransactionSynchronization.STATUS_COMMITTED, TransactionSynchronization.STATUS_UNKNOWN
+      })
+  void completionLogsRequestIdWithoutPreviewTokenOrStorageDetails(int status) throws IOException {
+    when(tenantMapper.selectByTenantId("ta")).thenReturn(Map.of("status", "ACTIVE"));
+    when(accountService.createProvisioned(any(), any(), any(), any(), any()))
+        .thenReturn(new ConsoleUserAccountResponse(
+            42L, "ta", "alice", "", ConsoleRoles.TENANT_USER, true, null, null));
+    var preview = service.preview(workbook("ta", "alice", ConsoleRoles.TENANT_USER));
+    doThrow(new DataAccessResourceFailureException(
+            "private-storage-details " + preview.previewToken()))
+        .when(store)
+        .deletePreview(anyString(), anyString());
+    UUID requestId = UUID.randomUUID();
+    Logger logger = (Logger) LoggerFactory.getLogger(ConsoleUserBatchProvisioningService.class);
+    var appender = new ListAppender<ILoggingEvent>();
+    appender.start();
+    logger.addAppender(appender);
+    TransactionSynchronizationManager.initSynchronization();
+    try {
+      service.apply(preview.previewToken(), 1, requestId);
+      TransactionSynchronizationManager.getSynchronizations()
+          .forEach(sync -> sync.afterCompletion(status));
+      assertThat(appender.list).hasSize(1);
+      var event = appender.list.getFirst();
+      assertThat(event.getFormattedMessage())
+          .contains(requestId.toString())
+          .doesNotContain(preview.previewToken(), "private-storage-details");
+      assertThat(event.getThrowableProxy()).isNull();
+      assertThat(stored.values()).allMatch(value -> value.startsWith("APPLYING:"));
+    } finally {
+      TransactionSynchronizationManager.clearSynchronization();
+      logger.detachAppender(appender);
+      appender.stop();
     }
   }
 

@@ -267,9 +267,9 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
       return idempotencyStore.setIfAbsent(redisKey, owner, pendingTtl);
     } catch (DataAccessException ex) {
       log.warn(
-          "idempotency Redis setIfAbsent unavailable — fail-closed: key={}, cause={}",
-          redisKey,
-          ex.getMessage());
+          "idempotency Redis setIfAbsent unavailable — fail-closed: owner={} cause={}",
+          owner,
+          ex.getClass().getSimpleName());
       writeJson(response, HttpStatus.SERVICE_UNAVAILABLE, REDIS_UNAVAILABLE_BODY);
       return null;
     }

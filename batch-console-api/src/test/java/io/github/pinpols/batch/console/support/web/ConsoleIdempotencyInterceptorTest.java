@@ -12,6 +12,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.console.application.idempotency.ConsoleDurableIdempotencyStore;
@@ -20,6 +23,7 @@ import java.time.Instant;
 import java.util.concurrent.ScheduledFuture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -44,6 +48,35 @@ class ConsoleIdempotencyInterceptorTest {
         store, durableStore, new BatchSecurityProperties(), scheduler);
     idempotentHandler = new HandlerMethod(
         new SampleController(), SampleController.class.getDeclaredMethod("mutate"));
+  }
+
+  @Test
+  void reservationFailureLogsNoExternalKeyOrExceptionMessage() throws Exception {
+    var request = new MockHttpServletRequest("POST", "/api/console/probe");
+    request.addHeader("X-Tenant-Id", "tenant-a");
+    request.addHeader(
+        CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "external-key\r\nforged-entry");
+    var response = new MockHttpServletResponse();
+    when(store.setIfAbsent(anyString(), anyString(), any(Duration.class)))
+        .thenThrow(
+            new DataAccessResourceFailureException("private-storage-details\r\nforged-entry"));
+    Logger logger = (Logger) LoggerFactory.getLogger(ConsoleIdempotencyInterceptor.class);
+    var appender = new ListAppender<ILoggingEvent>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      assertThat(interceptor.preHandle(request, response, idempotentHandler)).isFalse();
+      assertThat(response.getStatus()).isEqualTo(503);
+      assertThat(appender.list).hasSize(1);
+      var event = appender.list.getFirst();
+      assertThat(event.getFormattedMessage())
+          .contains("owner=PENDING:", "DataAccessResourceFailureException")
+          .doesNotContain("external-key", "private-storage-details", "forged-entry", "\r", "\n");
+      assertThat(event.getThrowableProxy()).isNull();
+    } finally {
+      logger.detachAppender(appender);
+      appender.stop();
+    }
   }
 
   @Test

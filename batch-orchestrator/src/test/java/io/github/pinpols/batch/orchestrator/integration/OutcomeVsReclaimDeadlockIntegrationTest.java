@@ -159,13 +159,14 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
               Thread.currentThread().interrupt();
               throw new IllegalStateException(interrupted);
             }
-            taskExecutionService.applyTaskOutcome(TaskOutcomeCommand.builder()
+            TaskOutcomeCommand command = TaskOutcomeCommand.builder()
                 .tenantId(TENANT)
                 .taskId(shard.taskId())
                 .success(true)
                 .resultSummary("{\"records\":1}")
                 .partitionInvocationId(invocation)
-                .build());
+                .build();
+            taskExecutionService.applyTaskOutcome(command);
           }));
       assertThat(reportLocked.await(10, TimeUnit.SECONDS)).isTrue();
       Future<Integer> terminal =
