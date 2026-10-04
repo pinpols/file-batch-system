@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
@@ -130,7 +131,7 @@ public class DispatchReceiptPollScheduler {
       httpClient.connectionPool().evictAll();
       log.info("dispatch receipt poll http client stopped: source={}", source);
     } catch (RuntimeException ex) {
-      log.warn("OkHttp shutdown cleanup error: {}", ex.getMessage(), ex);
+      log.warn("OkHttp shutdown cleanup error: {}", SwallowedExceptionLogger.summary(ex), ex);
     }
   }
 
@@ -146,7 +147,9 @@ public class DispatchReceiptPollScheduler {
           properties.getBatchSize(), properties.getPendingMaxAgeSeconds());
     } catch (RuntimeException exception) {
       if (stopping.get()) {
-        log.info("dispatch receipt poll skipped during shutdown: error={}", exception.getMessage());
+        log.info(
+            "dispatch receipt poll skipped during shutdown: error={}",
+            SwallowedExceptionLogger.summary(exception));
         return;
       }
       throw exception;
@@ -161,7 +164,7 @@ public class DispatchReceiptPollScheduler {
         if (stopping.get()) {
           log.info(
               "dispatch receipt poll interrupted during shutdown: error={}",
-              exception.getMessage());
+              SwallowedExceptionLogger.summary(exception));
           return;
         }
         pollFailures.incrementAndGet();
@@ -170,12 +173,12 @@ public class DispatchReceiptPollScheduler {
           // 否则每分钟同一个 PENDING 受体会刷一次 ~66 行 stack trace 把日志淹掉。
           log.warn(
               "dispatch receipt poll failed (transient): error={}, row={}",
-              exception.getMessage(),
+              SwallowedExceptionLogger.summary(exception),
               row);
         } else {
           log.warn(
               "dispatch receipt poll failed: error={}, row={}",
-              exception.getMessage(),
+              SwallowedExceptionLogger.summary(exception),
               row,
               exception);
         }

@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.engine.CountContinuityOutboxService;
@@ -199,7 +200,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     } catch (Exception ex) {
       log.error(
           "Failed to resolve lazy WorkflowNodeDispatchService injection; a circular dependency may exist: {}",
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       throw new IllegalStateException(
           "Failed to resolve WorkflowNodeDispatchService from ObjectProvider; check for circular dependencies",
           ex);

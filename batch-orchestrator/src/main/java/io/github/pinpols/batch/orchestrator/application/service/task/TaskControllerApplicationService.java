@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.observability.BatchMetricsNames;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
@@ -174,7 +175,10 @@ public class TaskControllerApplicationService {
         ok++;
       } catch (RuntimeException e) {
         // 逐项独立:该项失败不影响其余项;worker 只重报 ok=false 的项
-        log.warn("batch report item failed: taskId={} err={}", taskId, e.toString());
+        log.warn(
+            "batch report item failed: taskId={} err={}",
+            taskId,
+            SwallowedExceptionLogger.summary(e));
         results.add(new TaskReportItemResult(taskId, false, e.getMessage()));
       }
     }
@@ -230,7 +234,9 @@ public class TaskControllerApplicationService {
       return objectMapper.writeValueAsString(details);
     } catch (JsonProcessingException e) {
       log.warn(
-          "heartbeat details serialize failed, skipped: taskId={} err={}", taskId, e.toString());
+          "heartbeat details serialize failed, skipped: taskId={} err={}",
+          taskId,
+          SwallowedExceptionLogger.summary(e));
       return null;
     }
   }

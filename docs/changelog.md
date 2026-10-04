@@ -1,5 +1,8 @@
 # 变更记录（规范与架构权威条款变化）
 
+### 2026-10-05
+- **Java 异常日志治理收紧**：预期 fallback、重试和吞异常统一输出脱敏、单行、限长摘要；未预期故障将 `Throwable` 交由 SLF4J 记录完整堆栈。Java 日志门禁新增原始 `getMessage()` / `toString()` 拦截及扫描器自测，SDK 保持 ADR-035 独立依赖边界。
+
 ### 2026-10-03
 - **运行时治理 profile 扩展**：四环境治理基线从 PG/Kafka/Redis/MinIO 扩展到文件通道、Worker Report Outbox、Quota/ShedLock、读副本、业务分片、Quartz、观测和外部端点；新增只读 `inspect-runtime-governance.sh`，生产 profile 强制 host key、egress allowlist、TLS 等 fail-close 基线。
 - **五类 Worker 压测文档口径**：补齐 Import / Export / Dispatch / Process / Atomic 的 1w / 10w 权威命令矩阵和验收留档模板，明确四类业务 worker 与 Atomic 控制面容量画像不可横向混比，未实跑结果不得写成上线容量承诺。

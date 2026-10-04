@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.lineage;
 
 import io.github.pinpols.batch.common.kafka.BatchTopics;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -43,7 +44,7 @@ public class WorkflowTerminalLineageConsumer {
           "OpenLineage terminal event is invalid; skipping poison message: partition={} offset={} cause={}",
           record.partition(),
           record.offset(),
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       acknowledgment.acknowledge();
       return;
     }
@@ -58,7 +59,7 @@ public class WorkflowTerminalLineageConsumer {
           "OpenLineage delivery failed; retaining Kafka offset for retry: workflowRunId={} backoffMs={} cause={}",
           snapshot.run().getId(),
           backoffMs,
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       acknowledgment.nack(Duration.ofMillis(backoffMs));
     }
   }

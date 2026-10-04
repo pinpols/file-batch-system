@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.client.BatchSdkClientException;
 import io.github.pinpols.batch.sdk.internal.EmptyChecks;
+import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import io.github.pinpols.batch.sdk.internal.SdkJsonMapperFactory;
 import io.github.pinpols.batch.sdk.internal.ThrottledLogger;
 import java.time.Duration;
@@ -204,7 +205,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
       try {
         consumer.close();
       } catch (Exception e) {
-        log.warn("kafka consumer close error: {}", e.getMessage());
+        log.warn("kafka consumer close error: {}", ExceptionLogSummary.of(e));
       }
       log.info("KafkaTaskConsumer stopped");
     }
@@ -305,7 +306,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
         }
       }
     } catch (RuntimeException ex) {
-      log.debug("refreshConsumerLag skipped: {}", ex.getMessage());
+      log.debug("refreshConsumerLag skipped: {}", ExceptionLogSummary.of(ex));
     }
   }
 
@@ -361,7 +362,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
           rec.topic(),
           rec.partition(),
           rec.offset(),
-          ex.getMessage());
+          ExceptionLogSummary.of(ex));
       // commit 结果未确认时按 at-least-once 处理:seek 回本条并临时 pause。即便 broker 端实际已
       // commit,重投也由 task 幂等兜底;若不 seek,consumer position 已越过本批记录,后续 commit
       // 可能把失败记录静默跨过。
@@ -382,7 +383,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
           rec.topic(),
           rec.partition(),
           rec.offset(),
-          ex.getMessage());
+          ExceptionLogSummary.of(ex));
     }
   }
 
@@ -399,7 +400,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
           "failed to parse kafka task dispatch message at topic={}, offset={}: {}",
           rec.topic(),
           rec.offset(),
-          ex.getMessage());
+          ExceptionLogSummary.of(ex));
       return TaskDispatcher.DispatchDecision.DROP_TERMINAL;
     }
     // Phase 0 §2.1:reject 未知 major schema(避免老 SDK 误解平台新 v3 消息)。
@@ -443,7 +444,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
     try {
       consumer.wakeup();
     } catch (Exception ex) {
-      log.warn("kafka consumer.wakeup() failed: {}", ex.getMessage());
+      log.warn("kafka consumer.wakeup() failed: {}", ExceptionLogSummary.of(ex));
     }
     Thread t = this.kafkaThread.get();
     if (t != null && t != Thread.currentThread()) {

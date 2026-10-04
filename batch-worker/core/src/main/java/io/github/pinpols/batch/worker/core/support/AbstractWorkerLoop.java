@@ -125,7 +125,7 @@ public abstract class AbstractWorkerLoop {
       log.warn(
           "{} worker start/register failed; will retry on next heartbeat. cause={}",
           workerGroup(),
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       return;
     }
     try {
@@ -137,7 +137,7 @@ public abstract class AbstractWorkerLoop {
       log.warn(
           "{} worker heartbeat unavailable: {} ({})",
           workerGroup(),
-          ex.getMessage(),
+          SwallowedExceptionLogger.summary(ex),
           ex.getClass().getSimpleName());
     }
   }
@@ -194,7 +194,7 @@ public abstract class AbstractWorkerLoop {
         log.warn(
             "{} worker shutdown signal failed: {} ({})",
             workerGroup(),
-            ex.getMessage(),
+            SwallowedExceptionLogger.summary(ex),
             ex.getClass().getSimpleName());
       }
     }

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.config;
 
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -116,7 +117,7 @@ public class OrchestratorKafkaConsumerConfiguration {
                 consumerRecord.partition(),
                 consumerRecord.offset(),
                 consumerRecord.key(),
-                cause.getMessage());
+                SwallowedExceptionLogger.summary(cause));
           } else {
             log.error(
                 "TriggerLaunchConsumer message exceeded the retry limit: topic={} partition={} offset={}"
@@ -126,7 +127,7 @@ public class OrchestratorKafkaConsumerConfiguration {
                 consumerRecord.offset(),
                 consumerRecord.key(),
                 consumerRecord.value(),
-                exception.getMessage());
+                SwallowedExceptionLogger.summary(exception));
             Counter.builder(METRIC_FAILED)
                 .tags(Tags.of("reason", "retries_exhausted"))
                 .register(meterRegistry)

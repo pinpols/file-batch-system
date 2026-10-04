@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.auth;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.ApiKeyHasher;
 import io.github.pinpols.batch.orchestrator.mapper.auth.ApiKeyAuthMapper;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +26,8 @@ class ApiKeyAsyncMaintenance {
     try {
       mapper.touchLastUsedAt(id);
     } catch (Exception ex) {
-      log.debug("touch last_used_at failed for keyId={}: {}", id, ex.getMessage());
+      log.debug(
+          "touch last_used_at failed for keyId={}: {}", id, SwallowedExceptionLogger.summary(ex));
     }
   }
 
@@ -39,7 +41,8 @@ class ApiKeyAsyncMaintenance {
         log.info("api_key keyId={} upgraded sha256 → pbkdf2", id);
       }
     } catch (Exception ex) {
-      log.debug("api_key keyId={} kdf upgrade swallowed: {}", id, ex.getMessage());
+      log.debug(
+          "api_key keyId={} kdf upgrade swallowed: {}", id, SwallowedExceptionLogger.summary(ex));
     }
   }
 }

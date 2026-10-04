@@ -289,8 +289,8 @@ public class DispatchChannelHealthService {
         log.warn(
             "dispatch channel probe exception: error={}, row={}",
             executionEx.getCause() == null
-                ? executionEx.getMessage()
-                : executionEx.getCause().getMessage(),
+                ? SwallowedExceptionLogger.summary(executionEx)
+                : SwallowedExceptionLogger.summary(executionEx.getCause()),
             SecretMasking.maskSensitiveKeys(row),
             executionEx.getCause() == null ? executionEx : executionEx.getCause());
       } catch (InterruptedException interrupted) {
@@ -319,7 +319,7 @@ public class DispatchChannelHealthService {
       if (stopping.get()) {
         log.info(
             "dispatch channel probe skipped during shutdown: error={}, row={}",
-            exception.getMessage(),
+            SwallowedExceptionLogger.summary(exception),
             SecretMasking.maskSensitiveKeys(row));
         return;
       }
@@ -327,7 +327,7 @@ public class DispatchChannelHealthService {
       // R-4.10：row 可能含 password / api_key 等凭证，脱敏后再打日志
       log.warn(
           "dispatch channel probe exception: error={}, row={}",
-          exception.getMessage(),
+          SwallowedExceptionLogger.summary(exception),
           SecretMasking.maskSensitiveKeys(row),
           exception);
     }

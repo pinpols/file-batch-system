@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.atomic.runtime;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
@@ -61,7 +62,7 @@ public abstract class AbstractBatchTaskExecutor implements BatchTaskExecutor {
           this.getClass().getSimpleName(),
           taskType(),
           ctx == null ? null : ctx.taskInstanceId(),
-          t.getMessage(),
+          SwallowedExceptionLogger.summary(t),
           t);
       return TaskResult.fail(
           t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage(), t);
@@ -74,7 +75,7 @@ public abstract class AbstractBatchTaskExecutor implements BatchTaskExecutor {
           log.warn(
               "SPI executor {} cleanup() failed: {}",
               this.getClass().getSimpleName(),
-              cleanupEx.getMessage(),
+              SwallowedExceptionLogger.summary(cleanupEx),
               cleanupEx);
         }
       }

@@ -85,7 +85,7 @@ public class TaskTimeoutEnforcer {
             batchSize);
       }
     } catch (RuntimeException ex) {
-      log.warn("task timeout enforcer tick failed: {}", ex.getMessage(), ex);
+      log.warn("task timeout enforcer tick failed", ex);
     } finally {
       running.set(false);
     }

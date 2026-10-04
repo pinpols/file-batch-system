@@ -3,6 +3,7 @@ package io.github.pinpols.batch.sdk.scheduler;
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
 import io.github.pinpols.batch.sdk.internal.EmptyChecks;
+import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpException;
 import java.time.Duration;
@@ -71,7 +72,7 @@ public class LeaseRenewalScheduler implements AutoCloseable {
         renewOne(taskId);
       }
     } catch (Exception outer) {
-      log.warn("lease renewal tick failed: {}", outer.getMessage());
+      log.warn("lease renewal tick failed: {}", ExceptionLogSummary.of(outer));
     }
   }
 
@@ -112,7 +113,7 @@ public class LeaseRenewalScheduler implements AutoCloseable {
         log.warn("renew failed for taskId={} (HTTP {})", taskId, httpEx.statusCode());
       }
     } catch (Exception t) {
-      log.warn("renew failed for taskId={}: {}", taskId, t.getMessage());
+      log.warn("renew failed for taskId={}: {}", taskId, ExceptionLogSummary.of(t));
     }
   }
 

@@ -2,6 +2,7 @@ package io.github.pinpols.batch.trigger.application;
 
 import io.github.pinpols.batch.common.dto.LaunchEnvelope;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.TriggerOutboxEventEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -201,7 +202,9 @@ public class TriggerOutboxRelay {
             stale);
       }
     } catch (RuntimeException ex) {
-      log.warn("Startup runtime audit failed (trigger; startup continues): {}", ex.getMessage());
+      log.warn(
+          "Startup runtime audit failed (trigger; startup continues): {}",
+          SwallowedExceptionLogger.summary(ex));
     }
   }
 
@@ -222,11 +225,13 @@ public class TriggerOutboxRelay {
       log.warn(
           "TriggerOutboxRelay transient DB failure; retrying on the next cycle: {}",
           EmptyChecks.isNull(dae.getMostSpecificCause())
-              ? dae.getMessage()
-              : dae.getMostSpecificCause().getMessage());
+              ? SwallowedExceptionLogger.summary(dae)
+              : SwallowedExceptionLogger.summary(dae.getMostSpecificCause()));
     } catch (Exception t) {
       if (stopping.get() && isRedisStopping(t)) {
-        log.info("TriggerOutboxRelay poll skipped during shutdown: {}", t.getMessage());
+        log.info(
+            "TriggerOutboxRelay poll skipped during shutdown: {}",
+            SwallowedExceptionLogger.summary(t));
         return;
       }
       log.error("TriggerOutboxRelay failed", t);

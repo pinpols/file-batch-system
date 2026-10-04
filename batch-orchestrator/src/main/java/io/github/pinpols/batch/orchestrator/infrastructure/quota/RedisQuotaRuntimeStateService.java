@@ -207,7 +207,7 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
           request.owner().tenantId(),
           request.owner().quotaScope(),
           request.owner().ownerCode(),
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       if ("FAIL_OPEN".equalsIgnoreCase(redisFailureMode)) {
         return ResourceCheck.allow();
       }
@@ -238,7 +238,7 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
       template.expire(indexKey, INDEX_TTL);
     } catch (DataAccessException ex) {
       // 索引失败不影响主流程；snapshot 拿不到就等下次
-      log.debug("redis quota index update failed: {}", ex.getMessage());
+      log.debug("redis quota index update failed: {}", SwallowedExceptionLogger.summary(ex));
     }
     return ResourceCheck.allow();
   }
@@ -269,7 +269,7 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
           tenantId,
           quotaScope,
           ownerCode,
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       return new QuotaRuntimeSnapshot(policy.name(), burstLimit, 0, burstLimit, null, null, null);
     }
     if (entries == null || entries.isEmpty()) {

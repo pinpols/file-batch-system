@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.metrics;
 
 import io.github.pinpols.batch.common.enums.PartitionStatus;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.orchestrator.domain.entity.QueuePartitionBacklogStats;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
@@ -75,7 +76,9 @@ public class SchedulerQueueBacklogMetricsScheduler {
       queuedPartitions.set(stats.queuedPartitions());
       oldestWaitingSeconds.set(stats.oldestWaitingSeconds());
     } catch (RuntimeException ex) {
-      log.warn("scheduler queue backlog metrics sampling failed: {}", ex.getMessage());
+      log.warn(
+          "scheduler queue backlog metrics sampling failed: {}",
+          SwallowedExceptionLogger.summary(ex));
     }
   }
 }

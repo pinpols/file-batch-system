@@ -7,6 +7,7 @@ import io.github.pinpols.batch.sdk.idempotent.Idempotent;
 import io.github.pinpols.batch.sdk.idempotent.SdkIdempotencyStore;
 import io.github.pinpols.batch.sdk.idempotent.SdkIdempotentHandler;
 import io.github.pinpols.batch.sdk.internal.EmptyChecks;
+import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpException;
 import io.github.pinpols.batch.sdk.internal.SdkJsonMapperFactory;
@@ -255,7 +256,7 @@ public class TaskDispatcher {
     try {
       msg.validate();
     } catch (IllegalArgumentException ex) {
-      log.warn("skipping invalid dispatch message: {}", ex.getMessage());
+      log.warn("skipping invalid dispatch message: {}", ExceptionLogSummary.of(ex));
       return DispatchDecision.DROP_TERMINAL;
     }
     // Lane J §J1:租户自检 fail-safe。Kafka topic 模式 `batch.task.dispatch.<tenant>.*` + consumer group

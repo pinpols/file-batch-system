@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.core.reportoutbox;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -131,7 +132,7 @@ public class WorkerReportOutboxRepository {
           "worker report outbox give up after {} attempts: id={}, cause={}",
           nextAttempts,
           id,
-          cause.toString());
+          SwallowedExceptionLogger.summary(cause));
     } else {
       long backoff = computeBackoffMillis(nextAttempts);
       long jitterMax = Math.max(0L, props.getJitterMillis());
@@ -149,7 +150,7 @@ public class WorkerReportOutboxRepository {
           nextAttempts,
           props.getMaxPublishAttempts(),
           nextAt,
-          cause.toString());
+          SwallowedExceptionLogger.summary(cause));
     }
   }
 

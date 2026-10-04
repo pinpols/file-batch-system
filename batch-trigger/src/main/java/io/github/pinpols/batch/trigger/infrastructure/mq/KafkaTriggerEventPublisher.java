@@ -86,10 +86,9 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
       // 卡 PUBLISHING attempt=0 永远不进 retry/GIVE_UP 路径(A2 agent 发现的真因)。
       log.error(
           "kafka publish failed synchronously (will retry until GIVE_UP):"
-              + " topic={} messageKey={} cause={}",
+              + " topic={} messageKey={}",
           topic,
           messageKey,
-          ex.getMessage(),
           ex);
       return CompletableFuture.completedFuture(
           PublishResult.fail("kafka send sync: " + ex.getMessage()));
@@ -119,10 +118,9 @@ public class KafkaTriggerEventPublisher implements TriggerEventPublisher {
           "kafka send timeout " + kafkaProperties.getSendTimeoutSeconds() + "s");
     }
     log.error(
-        "kafka publish failed (will retry until GIVE_UP): topic={} messageKey={} cause={}",
+        "kafka publish failed (will retry until GIVE_UP): topic={} messageKey={}",
         topic,
         messageKey,
-        cause.getMessage(),
         cause);
     return PublishResult.fail("kafka send: " + cause.getMessage());
   }

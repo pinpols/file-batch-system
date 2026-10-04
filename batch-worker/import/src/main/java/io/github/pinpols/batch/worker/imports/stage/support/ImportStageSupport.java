@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.constants.BatchFileConstants;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -136,7 +137,7 @@ public final class ImportStageSupport {
           context.getTenantId(),
           fileId,
           targetStatus,
-          exception.getMessage());
+          SwallowedExceptionLogger.summary(exception));
     }
   }
 

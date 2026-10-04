@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.support.maintenance;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsoleMaintenanceProperties;
 import io.github.pinpols.batch.console.domain.ops.mapper.MaintenanceStateMapper;
@@ -150,7 +151,7 @@ public class MaintenanceStateHolder {
       state.updateAndGet(current -> current.withSharedStateAvailable(false));
       log.warn(
           "maintenance state refresh failed; writes remain blocked until recovery: {}",
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
     }
   }
 

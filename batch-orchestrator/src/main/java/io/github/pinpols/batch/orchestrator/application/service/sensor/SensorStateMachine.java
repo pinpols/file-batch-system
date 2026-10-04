@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.SensorTimeoutAction;
 import io.github.pinpols.batch.common.enums.SensorType;
 import io.github.pinpols.batch.common.enums.WorkflowNodeCode;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
@@ -138,7 +139,7 @@ public class SensorStateMachine {
           "Sensor policy threw nodeRunId={} type={} err={}",
           nodeRun.getId(),
           cfg.sensorType,
-          e.toString());
+          SwallowedExceptionLogger.summary(e));
       result = SensorProbeResult.error(
           "error.workflow.sensor_probe_failed",
           List.of(
@@ -272,7 +273,7 @@ public class SensorStateMachine {
             wfRun.getId(),
             currentNodeCode,
             next.nodeCode(),
-            e.toString());
+            SwallowedExceptionLogger.summary(e));
       }
     }
   }
@@ -304,7 +305,7 @@ public class SensorStateMachine {
     try {
       return objectMapper.readValue(raw, new TypeReference<Map<String, Object>>() {});
     } catch (JsonProcessingException e) {
-      log.warn("Failed to parse node_params JSON: {}", e.getMessage());
+      log.warn("Failed to parse node_params JSON: {}", SwallowedExceptionLogger.summary(e));
       return Map.of();
     }
   }

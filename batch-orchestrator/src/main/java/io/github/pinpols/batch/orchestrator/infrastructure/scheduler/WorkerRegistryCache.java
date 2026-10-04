@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.value.JsonbString;
@@ -64,7 +65,7 @@ public class WorkerRegistryCache {
           "worker cache read failed; falling back to DB: tenant={}, group={}, cause={}",
           tenantId,
           workerGroup,
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
     }
     List<WorkerRegistryEntity> fresh = loader.get();
     try {
@@ -79,7 +80,7 @@ public class WorkerRegistryCache {
           "worker cache write/delete failed: tenant={}, group={}: {}",
           tenantId,
           workerGroup,
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
     }
     return fresh;
   }
@@ -100,7 +101,7 @@ public class WorkerRegistryCache {
           "worker cache evict failed: tenant={}, group={}, cause={}",
           tenantId,
           workerGroup,
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
     }
   }
 

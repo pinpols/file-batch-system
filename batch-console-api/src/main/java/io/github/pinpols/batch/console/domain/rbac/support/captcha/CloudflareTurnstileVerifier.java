@@ -71,11 +71,7 @@ public class CloudflareTurnstileVerifier implements CaptchaVerifier {
         Thread.currentThread().interrupt();
       }
       // 净化:只打异常类型/消息,绝不打 token(用户可控)或 secret。
-      log.warn(
-          "captcha turnstile verify error: {} ip={}",
-          ex.toString(),
-          CaptchaCrypto.sanitizeForLog(clientIp),
-          ex);
+      log.warn("captcha turnstile verify error: ip={}", CaptchaCrypto.sanitizeForLog(clientIp), ex);
       return CaptchaResult.fail("turnstile verify error");
     }
   }

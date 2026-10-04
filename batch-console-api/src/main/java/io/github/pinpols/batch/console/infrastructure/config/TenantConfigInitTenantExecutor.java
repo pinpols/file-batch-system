@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.InitMode;
@@ -52,7 +53,10 @@ class TenantConfigInitTenantExecutor {
       quotaStats = applyHandlers.applyQuotaPolicies(request.getQuotaPolicies(), ctx);
       alertStats = applyHandlers.applyAlertRoutings(request.getAlertRoutings(), ctx);
     } catch (Exception ex) {
-      log.warn("[TenantConfigBatchInit] failed for tenant={}: {}", tenantId, ex.getMessage());
+      log.warn(
+          "[TenantConfigBatchInit] failed for tenant={}: {}",
+          tenantId,
+          SwallowedExceptionLogger.summary(ex));
       return TenantInitResult.failed(tenantId, ex.getMessage());
     }
     if (request.isStrict()) {

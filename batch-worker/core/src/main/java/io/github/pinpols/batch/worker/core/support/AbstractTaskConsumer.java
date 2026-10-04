@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.core.support;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor;
@@ -235,7 +236,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
                   + " error={}",
               workerConfiguration().workerType(),
               message.taskId(),
-              ex.getMessage());
+              SwallowedExceptionLogger.summary(ex));
           return false; // 由 consume() 显式 nack，Kafka 回退 offset 后重投
         }
         // 不可恢复 / 业务 4xx → DLQ + commit offset
@@ -243,7 +244,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
             "{} task execution failed — publishing to DLQ: taskId={}, error={}",
             workerConfiguration().workerType(),
             message.taskId(),
-            ex.getMessage(),
+            SwallowedExceptionLogger.summary(ex),
             ex);
         // #4-3: 先确认 DLQ 写入成功再提交偏移量，避免消息双重丢失
         if (!publishToDlqSafely(payload, ex.getMessage())) {
@@ -262,7 +263,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
       log.error(
           "{} pre-dispatch failed — publishing to DLQ: error={}",
           workerConfiguration().workerType(),
-          parseOrStartupEx.getMessage(),
+          SwallowedExceptionLogger.summary(parseOrStartupEx),
           parseOrStartupEx);
       return publishToDlqSafely(payload, parseOrStartupEx.getMessage());
     } finally {
@@ -313,7 +314,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
                 + " size={}, error={}",
             workerConfiguration().workerType(),
             n,
-            ex.getMessage());
+            SwallowedExceptionLogger.summary(ex));
         return false; // 由 consumeBatch() 显式 nack，整批回退后重投
       }
       // 不可恢复 → 逐条进 DLQ 后提交(避免整批卡住);任一 DLQ 写失败则不提交、整批重投
@@ -321,7 +322,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
           "{} batch execution failed — publishing {} payloads to DLQ: error={}",
           workerConfiguration().workerType(),
           n,
-          ex.getMessage(),
+          SwallowedExceptionLogger.summary(ex),
           ex);
       boolean allDlq = true;
       for (String payload : payloads) {
@@ -375,7 +376,7 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
       log.error(
           "{} failed to publish to the DLQ: dlqError={}",
           workerConfiguration().workerType(),
-          dlqEx.getMessage(),
+          SwallowedExceptionLogger.summary(dlqEx),
           dlqEx);
       return false;
     }

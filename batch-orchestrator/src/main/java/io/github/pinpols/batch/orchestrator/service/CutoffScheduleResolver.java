@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.time.DayOfWeek;
@@ -53,7 +54,7 @@ public class CutoffScheduleResolver {
           "cutoff_schedule parse failed: bizDate={}, schedule={}, msg={}",
           bizDate,
           cutoffSchedule,
-          parseFailure.getMessage());
+          SwallowedExceptionLogger.summary(parseFailure));
       return defaultCutoffTime;
     }
     if (schedule == null) {

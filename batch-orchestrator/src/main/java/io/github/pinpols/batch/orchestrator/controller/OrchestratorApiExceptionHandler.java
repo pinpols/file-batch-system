@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.controller;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.i18n.BizMessageResolver;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.web.AbstractApiExceptionHandler;
 import io.github.pinpols.batch.orchestrator.application.service.governance.DeadLetterOrphanSourceException;
 import lombok.extern.slf4j.Slf4j;
@@ -63,7 +64,8 @@ public class OrchestratorApiExceptionHandler extends AbstractApiExceptionHandler
   public ResponseEntity<CommonResponse<Void>> handleTransientDataAccess(
       TransientDataAccessException exception) {
     log.warn(
-        "transient DB concurrency failure (retryable, mapped to 503): {}", exception.getMessage());
+        "transient DB concurrency failure (retryable, mapped to 503): {}",
+        SwallowedExceptionLogger.summary(exception));
     return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
         .body(CommonResponse.failure(
             ResultCode.SERVICE_UNAVAILABLE,

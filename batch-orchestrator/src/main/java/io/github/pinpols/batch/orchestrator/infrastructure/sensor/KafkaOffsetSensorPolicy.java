@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.sensor;
 
 import io.github.pinpols.batch.common.enums.SensorType;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorContext;
@@ -106,7 +107,7 @@ public class KafkaOffsetSensorPolicy implements SensorPolicy {
           "KAFKA_OFFSET probe error topic={} partition={} err={}",
           topic,
           partition,
-          e.getMessage());
+          SwallowedExceptionLogger.summary(e));
       return SensorProbeResult.error(
           "error.workflow.sensor_probe_failed",
           List.of(
@@ -117,14 +118,17 @@ public class KafkaOffsetSensorPolicy implements SensorPolicy {
           "KAFKA_OFFSET probe error topic={} partition={} err={}",
           topic,
           partition,
-          e.getMessage());
+          SwallowedExceptionLogger.summary(e));
       return SensorProbeResult.error(
           "error.workflow.sensor_probe_failed",
           List.of(
               "KAFKA_OFFSET",
               Objects.requireNonNullElse(e.getMessage(), e.getClass().getSimpleName())));
     } catch (Exception e) {
-      log.warn("KAFKA_OFFSET unexpected error topic={} err={}", topic, e.toString());
+      log.warn(
+          "KAFKA_OFFSET unexpected error topic={} err={}",
+          topic,
+          SwallowedExceptionLogger.summary(e));
       return SensorProbeResult.error(
           "error.workflow.sensor_probe_failed",
           List.of(

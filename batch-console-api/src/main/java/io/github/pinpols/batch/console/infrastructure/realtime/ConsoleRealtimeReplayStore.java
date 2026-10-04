@@ -85,10 +85,9 @@ public class ConsoleRealtimeReplayStore implements RealtimeReplayStore {
         }
       } catch (Exception exception) {
         log.warn(
-            "console realtime replay buffer decode failed: tenantId={}, stream={}," + " reason={}",
+            "console realtime replay buffer decode failed: tenantId={}, stream={}",
             logValue(tenantId),
             logValue(stream),
-            logValue(exception.getMessage()),
             exception);
         realtimeMetrics.recordReplayDecodeFailure(stream);
       }

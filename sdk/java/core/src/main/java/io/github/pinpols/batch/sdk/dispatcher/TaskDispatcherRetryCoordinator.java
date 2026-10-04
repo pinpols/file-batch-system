@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.sdk.dispatcher;
 
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
+import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpException;
 import io.github.pinpols.batch.sdk.internal.ThrottledLogger;
@@ -103,7 +104,7 @@ final class TaskDispatcherRetryCoordinator {
             "CLAIM client error (HTTP {}) for taskId={}, giving up: {}",
             httpEx.statusCode(),
             message.taskId(),
-            httpEx.getMessage());
+            ExceptionLogSummary.of(httpEx));
         recordClientError(httpEx.statusCode(), message.taskId(), "CLAIM");
         return ClaimResult.notClaimed();
       } catch (IOException ioEx) {
@@ -113,7 +114,7 @@ final class TaskDispatcherRetryCoordinator {
               "CLAIM transport error for taskId={} exhausted {} retries, giving up: {}",
               message.taskId(),
               maxRetries,
-              ioEx.getMessage());
+              ExceptionLogSummary.of(ioEx));
           return ClaimResult.notClaimed();
         }
         long delayMs = backoffWithJitter(baseDelayMs, attempt);
@@ -122,7 +123,7 @@ final class TaskDispatcherRetryCoordinator {
             message.taskId(),
             attempt + 1,
             delayMs,
-            ioEx.getMessage());
+            ExceptionLogSummary.of(ioEx));
         if (!sleepInterruptible(delayMs)) {
           return ClaimResult.notClaimed();
         }
@@ -181,7 +182,7 @@ final class TaskDispatcherRetryCoordinator {
               "REPORT transport error for taskId={} exhausted {} retries, giving up: {}",
               taskId,
               maxRetries,
-              ioEx.getMessage());
+              ExceptionLogSummary.of(ioEx));
           throw ioEx;
         }
         long delayMs = backoffWithJitter(baseDelayMs, attempt);
@@ -190,7 +191,7 @@ final class TaskDispatcherRetryCoordinator {
             taskId,
             attempt + 1,
             delayMs,
-            ioEx.getMessage());
+            ExceptionLogSummary.of(ioEx));
         if (!sleepInterruptible(delayMs)) {
           throw new IOException("report retry interrupted for taskId=" + taskId, ioEx);
         }

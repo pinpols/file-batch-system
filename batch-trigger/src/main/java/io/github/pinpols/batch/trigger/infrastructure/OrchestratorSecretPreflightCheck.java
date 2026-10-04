@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.trigger.infrastructure;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
@@ -62,7 +63,7 @@ public class OrchestratorSecretPreflightCheck {
       log.warn(
           "orchestrator preflight failed (non-auth): cause={} — orchestrator may still be"
               + " warming up; will not block trigger startup",
-          connErr.getMessage());
+          SwallowedExceptionLogger.summary(connErr));
     }
   }
 }

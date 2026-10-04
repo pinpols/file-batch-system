@@ -89,7 +89,9 @@ public class ConsoleApiExceptionHandler {
   @ExceptionHandler(BizException.class)
   public ResponseEntity<CommonResponse<Object>> handleBizException(BizException exception) {
     log.warn(
-        "console biz exception: code={} message={}", exception.getCode(), exception.getMessage());
+        "console biz exception: code={} message={}",
+        exception.getCode(),
+        SwallowedExceptionLogger.summary(exception));
     String message =
         bizMessageResolver == null ? exception.getMessage() : bizMessageResolver.resolve(exception);
     return ResponseEntity.status(exception.getCode().httpStatus())
@@ -106,7 +108,7 @@ public class ConsoleApiExceptionHandler {
   @ExceptionHandler(MethodArgumentNotValidException.class)
   public ResponseEntity<CommonResponse<Object>> handleMethodArgumentNotValidException(
       MethodArgumentNotValidException exception) {
-    log.warn("console validation exception: {}", exception.getMessage());
+    log.warn("console validation exception: {}", SwallowedExceptionLogger.summary(exception));
     String message = exception.getBindingResult().getFieldErrors().stream()
         .map(FieldError::getDefaultMessage)
         .collect(Collectors.joining("; "));
@@ -119,7 +121,8 @@ public class ConsoleApiExceptionHandler {
   @ExceptionHandler(ConstraintViolationException.class)
   public ResponseEntity<CommonResponse<Object>> handleConstraintViolationException(
       ConstraintViolationException exception) {
-    log.warn("console constraint violation exception: {}", exception.getMessage());
+    log.warn(
+        "console constraint violation exception: {}", SwallowedExceptionLogger.summary(exception));
     return ResponseEntity.badRequest()
         .body(responseFactory.failure(ResultCode.VALIDATION_ERROR, exception.getMessage()));
   }
@@ -163,7 +166,7 @@ public class ConsoleApiExceptionHandler {
         "console access denied: {} {} - {}",
         request.getMethod(),
         request.getRequestURI(),
-        exception.getMessage());
+        SwallowedExceptionLogger.summary(exception));
     return ResponseEntity.status(ResultCode.FORBIDDEN.httpStatus())
         .body(responseFactory.failure(ResultCode.FORBIDDEN, CommonErrorMessages.ACCESS_DENIED));
   }
@@ -225,7 +228,7 @@ public class ConsoleApiExceptionHandler {
 
   @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
   public ResponseEntity<CommonResponse<Object>> handleNoResourceFound(Exception exception) {
-    log.warn("console resource not found: {}", exception.getMessage());
+    log.warn("console resource not found: {}", SwallowedExceptionLogger.summary(exception));
     return ResponseEntity.status(404)
         .body(responseFactory.failure(ResultCode.NOT_FOUND, exception.getMessage()));
   }
@@ -238,7 +241,7 @@ public class ConsoleApiExceptionHandler {
         "console missing request param: {} {} — {}",
         request.getMethod(),
         request.getRequestURI(),
-        exception.getMessage());
+        SwallowedExceptionLogger.summary(exception));
     return ResponseEntity.badRequest()
         .body(responseFactory.failure(ResultCode.INVALID_ARGUMENT, exception.getMessage()));
   }
@@ -262,7 +265,7 @@ public class ConsoleApiExceptionHandler {
   @ExceptionHandler(HttpMessageNotReadableException.class)
   public ResponseEntity<CommonResponse<Object>> handleMessageNotReadable(
       HttpMessageNotReadableException exception) {
-    log.warn("console message not readable: {}", exception.getMessage());
+    log.warn("console message not readable: {}", SwallowedExceptionLogger.summary(exception));
     return ResponseEntity.badRequest()
         .body(responseFactory.failure(ResultCode.INVALID_ARGUMENT, exception.getMessage()));
   }
@@ -279,7 +282,7 @@ public class ConsoleApiExceptionHandler {
     HttpMediaTypeNotSupportedException.class,
   })
   public ResponseEntity<CommonResponse<Object>> handleMultipart(Exception exception) {
-    log.warn("console multipart/media-type error: {}", exception.getMessage());
+    log.warn("console multipart/media-type error: {}", SwallowedExceptionLogger.summary(exception));
     return ResponseEntity.badRequest()
         .body(responseFactory.failure(ResultCode.INVALID_ARGUMENT, exception.getMessage()));
   }
@@ -295,7 +298,9 @@ public class ConsoleApiExceptionHandler {
    */
   @ExceptionHandler(AsyncRequestNotUsableException.class)
   public void handleAsyncResponseUnusable(AsyncRequestNotUsableException exception) {
-    log.debug("console async response unusable (client disconnected): {}", exception.getMessage());
+    log.debug(
+        "console async response unusable (client disconnected): {}",
+        SwallowedExceptionLogger.summary(exception));
     // 不写任何 response 内容：客户端早已断开，response 也被锁住，任何写入都会再次失败。
   }
 
@@ -314,7 +319,8 @@ public class ConsoleApiExceptionHandler {
   public ResponseEntity<CommonResponse<Object>> handleDataIntegrityViolation(
       DataIntegrityViolationException exception) {
     log.warn(
-        "console data integrity violation: {}", exception.getMostSpecificCause().getMessage());
+        "console data integrity violation: {}",
+        SwallowedExceptionLogger.summary(exception.getMostSpecificCause()));
     Throwable root = exception.getMostSpecificCause();
     String rawMsg = root == null ? null : root.getMessage();
     PgConstraintViolation kind = PgConstraintViolation.classify(rawMsg);

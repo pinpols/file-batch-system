@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.atomic.runtime;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -134,7 +135,7 @@ public final class AtomicConnectionManager {
           try {
             conn.rollback();
           } catch (SQLException rb) {
-            log.warn("rollback failed: {}", rb.getMessage());
+            log.warn("rollback failed: {}", SwallowedExceptionLogger.summary(rb));
           }
         }
         throw ex;
@@ -142,13 +143,13 @@ public final class AtomicConnectionManager {
         try {
           conn.setAutoCommit(originalAutoCommit);
         } catch (SQLException restore) {
-          log.warn("restore autoCommit failed: {}", restore.getMessage());
+          log.warn("restore autoCommit failed: {}", SwallowedExceptionLogger.summary(restore));
         }
         if (o.readOnly) {
           try {
             conn.setReadOnly(originalReadOnly);
           } catch (SQLException restore) {
-            log.warn("restore readOnly failed: {}", restore.getMessage());
+            log.warn("restore readOnly failed: {}", SwallowedExceptionLogger.summary(restore));
           }
         }
       }

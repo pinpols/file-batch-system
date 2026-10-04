@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.sdk.handler;
 
+import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
@@ -49,7 +50,7 @@ public abstract class SdkAbstractTaskHandler implements SdkTaskHandler {
           getClass().getSimpleName(),
           taskType(),
           ctx == null ? null : ctx.taskId(),
-          t.getMessage(),
+          ExceptionLogSummary.of(t),
           t);
       return SdkTaskResult.fail(
           t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage(), t);
@@ -61,7 +62,7 @@ public abstract class SdkAbstractTaskHandler implements SdkTaskHandler {
           log.warn(
               "SDK handler {} cleanup() failed: {}",
               getClass().getSimpleName(),
-              cleanupEx.getMessage());
+              ExceptionLogSummary.of(cleanupEx));
         }
       }
     }

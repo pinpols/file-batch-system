@@ -152,7 +152,7 @@ public class ValidateStep implements ImportStageStep {
           "validate stage failed: tenantId={}, fileId={}, message={}",
           context.getTenantId(),
           context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
-          exception.getMessage(),
+          SwallowedExceptionLogger.summary(exception),
           exception);
       return ImportStageResult.failure(
           stage(),
@@ -205,7 +205,7 @@ public class ValidateStep implements ImportStageStep {
           "Failed to read manifest expectedRecordCount; skipping record-count reconciliation: tenantId={} fileId={} cause={}",
           context.getTenantId(),
           fileIdRaw,
-          e.getMessage());
+          SwallowedExceptionLogger.summary(e));
     }
   }
 

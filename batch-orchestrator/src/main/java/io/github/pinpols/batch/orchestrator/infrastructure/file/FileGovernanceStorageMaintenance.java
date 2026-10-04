@@ -131,11 +131,7 @@ final class FileGovernanceStorageMaintenance {
               "cleanup-" + fileId,
               auditDetail);
       repository.appendAudit(auditCommand);
-      log.warn(
-          "archived file cleanup failed: fileId={}, error={}",
-          fileId,
-          exception.getMessage(),
-          exception);
+      log.warn("archived file cleanup failed: fileId={}", fileId, exception);
     }
   }
 
@@ -203,10 +199,9 @@ final class FileGovernanceStorageMaintenance {
               auditDetail);
       repository.appendAudit(auditCommand);
       log.warn(
-          "orphan upload session cleanup failed: tenantId={}, fileId={}, error={}",
+          "orphan upload session cleanup failed: tenantId={}, fileId={}",
           tenantId,
           fileId,
-          exception.getMessage(),
           exception);
       return false;
     }

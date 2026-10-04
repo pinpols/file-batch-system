@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -197,7 +198,7 @@ public class TriggerLaunchConsumer {
           tenantId,
           request.requestId(),
           ex.getCode(),
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       counter(METRIC_FAILED, "tenant", tenantTag, "reason", "business").increment();
       ack.acknowledge();
     } catch (RuntimeException ex) {

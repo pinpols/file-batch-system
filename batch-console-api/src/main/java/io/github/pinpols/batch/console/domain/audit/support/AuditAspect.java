@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.audit.support;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
@@ -239,7 +240,10 @@ public class AuditAspect {
       Object v = e.getValue(ctx);
       return v == null ? "-" : String.valueOf(v);
     } catch (Exception ex) {
-      log.warn("[audit] aggregateId SpEL '{}' eval failed: {}", expr, ex.getMessage());
+      log.warn(
+          "[audit] aggregateId SpEL '{}' eval failed: {}",
+          expr,
+          SwallowedExceptionLogger.summary(ex));
       return "-";
     }
   }
@@ -368,7 +372,10 @@ public class AuditAspect {
       }
       return null;
     } catch (Exception ex) {
-      log.warn("[audit] targetTenantParam '{}' eval failed: {}", expr, ex.getMessage());
+      log.warn(
+          "[audit] targetTenantParam '{}' eval failed: {}",
+          expr,
+          SwallowedExceptionLogger.summary(ex));
       return null;
     }
   }

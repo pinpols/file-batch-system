@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.quota;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.orchestrator.config.QuotaProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResourceQueueEntity;
@@ -67,7 +68,10 @@ public class QuotaRuntimeStateSnapshotScheduler {
         snapshotted += delta;
       } catch (DataAccessException ex) {
         // 单个租户失败不影响其他租户：下一轮自然重试
-        log.warn("quota snapshot failed for tenant={}: {}", tenantId, ex.getMessage());
+        log.warn(
+            "quota snapshot failed for tenant={}: {}",
+            tenantId,
+            SwallowedExceptionLogger.summary(ex));
       }
     }
     if (snapshotted > 0) {

@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.startup;
 
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.orchestrator.config.WorkerDrainProperties;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
@@ -106,7 +107,9 @@ public class OrchestratorStartupLeaseAudit {
           outboxStuck);
     } catch (RuntimeException ex) {
       // 审计失败不阻塞应用启动；可能是首次启动时部分表未建（Flyway 还没跑完）
-      log.warn("Startup lease audit failed (startup continues): {}", ex.getMessage());
+      log.warn(
+          "Startup lease audit failed (startup continues): {}",
+          SwallowedExceptionLogger.summary(ex));
     }
   }
 }

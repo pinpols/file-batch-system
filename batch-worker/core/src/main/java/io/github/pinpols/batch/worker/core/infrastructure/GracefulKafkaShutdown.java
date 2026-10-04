@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.support.WorkerSelfRegistrationService;
 import io.micrometer.core.instrument.Counter;
@@ -106,7 +107,7 @@ public class GracefulKafkaShutdown
         log.warn(
             "failed to mark worker draining on shutdown: workerId={}, cause={}",
             registration.getWorkerId(),
-            ex.getMessage());
+            SwallowedExceptionLogger.summary(ex));
       }
     }
 
@@ -114,7 +115,8 @@ public class GracefulKafkaShutdown
       kafkaListenerEndpointRegistry.stop();
       log.info("kafka listener containers stopped");
     } catch (Exception ex) {
-      log.warn("failed to stop kafka listener containers: {}", ex.getMessage(), ex);
+      log.warn(
+          "failed to stop kafka listener containers: {}", SwallowedExceptionLogger.summary(ex), ex);
     }
 
     awaitDrainAndRecord();
@@ -128,7 +130,8 @@ public class GracefulKafkaShutdown
     try {
       AvailabilityChangeEvent.publish(eventPublisher, this, ReadinessState.REFUSING_TRAFFIC);
     } catch (RuntimeException ex) {
-      log.warn("failed to publish worker readiness refusal: {}", ex.getMessage());
+      log.warn(
+          "failed to publish worker readiness refusal: {}", SwallowedExceptionLogger.summary(ex));
     }
   }
 
@@ -147,7 +150,7 @@ public class GracefulKafkaShutdown
         log.warn(
             "failed to deactivate worker on shutdown (heartbeat timeout fallback): workerId={}, cause={}",
             registration.getWorkerId(),
-            ex.getMessage());
+            SwallowedExceptionLogger.summary(ex));
       }
     }
   }
@@ -164,7 +167,8 @@ public class GracefulKafkaShutdown
       drained = activeTaskLeaseRegistry.awaitDrain(
           Duration.ofSeconds(Math.max(0L, gracefulShutdownTimeoutSeconds)));
     } catch (Exception ex) {
-      log.warn("failed to await in-flight tasks drain: {}", ex.getMessage(), ex);
+      log.warn(
+          "failed to await in-flight tasks drain: {}", SwallowedExceptionLogger.summary(ex), ex);
     }
     long elapsedNanos = System.nanoTime() - startNanos;
     if (registry != null) {

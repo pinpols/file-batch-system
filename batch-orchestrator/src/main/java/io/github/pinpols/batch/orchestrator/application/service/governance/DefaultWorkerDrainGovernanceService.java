@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.service.governance;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
@@ -141,7 +142,10 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
             task.getId(),
             OutboxEventKeyGenerator.forReclaim(tenantId, task.getId(), workerCode));
       } catch (RuntimeException ex) {
-        log.warn("drain takeover failed for taskId={}: {}", task.getId(), ex.getMessage());
+        log.warn(
+            "drain takeover failed for taskId={}: {}",
+            task.getId(),
+            SwallowedExceptionLogger.summary(ex));
       }
     }
   }

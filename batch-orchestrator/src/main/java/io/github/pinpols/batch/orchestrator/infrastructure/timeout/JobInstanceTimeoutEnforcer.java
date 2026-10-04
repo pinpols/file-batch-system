@@ -106,7 +106,7 @@ public class JobInstanceTimeoutEnforcer {
             batchSize);
       }
     } catch (RuntimeException ex) {
-      log.warn("timeout enforcer tick failed: {}", ex.getMessage(), ex);
+      log.warn("timeout enforcer tick failed", ex);
     } finally {
       running.set(false);
     }

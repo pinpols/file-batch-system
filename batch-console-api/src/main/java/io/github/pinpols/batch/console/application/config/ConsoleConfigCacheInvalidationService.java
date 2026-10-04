@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.application.config;
 
 import io.github.pinpols.batch.common.config.ConfigCacheInvalidationEvent;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
@@ -172,7 +173,7 @@ public class ConsoleConfigCacheInvalidationService {
       log.warn(
           "config cache redis pattern delete failed: pattern={}, reason={}",
           pattern,
-          exception.getMessage());
+          SwallowedExceptionLogger.summary(exception));
       log.debug("config cache redis pattern delete failure: pattern={}", pattern, exception);
       return false;
     }
@@ -200,7 +201,10 @@ public class ConsoleConfigCacheInvalidationService {
       invalidationStore.delete(key);
     } catch (RuntimeException exception) {
       increment(publishFailureCounter);
-      log.warn("config cache redis delete failed: key={}, reason={}", key, exception.getMessage());
+      log.warn(
+          "config cache redis delete failed: key={}, reason={}",
+          key,
+          SwallowedExceptionLogger.summary(exception));
       log.debug("config cache redis delete failure: key={}", key, exception);
       return;
     }
@@ -228,7 +232,7 @@ public class ConsoleConfigCacheInvalidationService {
           tenantId,
           type,
           code,
-          exception.getMessage());
+          SwallowedExceptionLogger.summary(exception));
       log.debug(
           "config cache invalidation publish failure: tenantId={}, type={}, code={}",
           tenantId,

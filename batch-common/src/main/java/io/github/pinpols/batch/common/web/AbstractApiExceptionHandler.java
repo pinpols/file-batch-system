@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.exception.SystemException;
 import io.github.pinpols.batch.common.i18n.BizMessageResolver;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
@@ -55,7 +56,7 @@ public abstract class AbstractApiExceptionHandler {
           modulePrefix(),
           exception.getCode().code(),
           exception.getMessageKey(),
-          exception.getMessage());
+          SwallowedExceptionLogger.summary(exception));
     }
     return ResponseEntity.status(exception.getCode().httpStatus())
         .body(CommonResponse.failure(exception.getCode(), resolveBizMessage(exception)));
@@ -78,7 +79,7 @@ public abstract class AbstractApiExceptionHandler {
     log.warn(
         "{} optimistic lock conflict (concurrent modification; upstream may retry): {}",
         modulePrefix(),
-        exception.getMessage());
+        SwallowedExceptionLogger.summary(exception));
     return ResponseEntity.status(HttpStatus.CONFLICT)
         .body(CommonResponse.failure(
             ResultCode.CONFLICT, resolveCommonCode(ResultCode.CONFLICT, "并发修改冲突,请重试")));
@@ -93,7 +94,7 @@ public abstract class AbstractApiExceptionHandler {
     log.warn(
         "{} duplicate key conflict (concurrent insert; upstream may retry as update): {}",
         modulePrefix(),
-        exception.getMessage());
+        SwallowedExceptionLogger.summary(exception));
     return ResponseEntity.status(HttpStatus.CONFLICT)
         .body(CommonResponse.failure(
             ResultCode.CONFLICT, resolveCommonCode(ResultCode.CONFLICT, "并发插入冲突,请重试")));

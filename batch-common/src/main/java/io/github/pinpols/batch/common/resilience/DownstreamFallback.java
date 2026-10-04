@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.resilience;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
@@ -109,7 +110,10 @@ public class DownstreamFallback {
       DegradedResponseHeaders.mark(service);
       recordOutcome(service, operation, "fallback", ex.getClass().getSimpleName());
       log.warn(
-          "downstream circuit open: service={}, op={}, cb={}", service, operation, ex.getMessage());
+          "downstream circuit open: service={}, op={}, cb={}",
+          service,
+          operation,
+          SwallowedExceptionLogger.summary(ex));
       return fallback.apply(new RestClientException("downstream circuit open: " + service, ex));
     } catch (RestClientException ex) {
       DegradedResponseHeaders.mark(service);
@@ -119,7 +123,7 @@ public class DownstreamFallback {
           service,
           operation,
           ex.getClass().getSimpleName(),
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       return fallback.apply(ex);
     }
   }
@@ -141,7 +145,7 @@ public class DownstreamFallback {
           "downstream circuit open (fail-fast): service={}, op={}, cb={}",
           service,
           operation,
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       throw new RestClientException("downstream circuit open: " + service, ex);
     } catch (RestClientException ex) {
       recordOutcome(service, operation, "failure", ex.getClass().getSimpleName());
@@ -150,7 +154,7 @@ public class DownstreamFallback {
           service,
           operation,
           ex.getClass().getSimpleName(),
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       throw ex;
     }
   }

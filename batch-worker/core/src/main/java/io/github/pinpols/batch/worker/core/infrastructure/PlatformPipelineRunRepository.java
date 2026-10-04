@@ -13,6 +13,7 @@ import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntime
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.enums.PipelineRunStatus;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
@@ -152,7 +153,7 @@ public class PlatformPipelineRunRepository {
               + " pipelineInstanceId={}, stepCode={}, message={}",
           pipelineInstanceId,
           stepCode,
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       return Map.of();
     }
   }

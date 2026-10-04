@@ -3,6 +3,7 @@ package io.github.pinpols.batch.sdk.handler.typed;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.sdk.handler.SdkAbstractTaskHandler;
 import io.github.pinpols.batch.sdk.handler.SdkRowResult;
+import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.util.List;
@@ -72,7 +73,7 @@ public abstract class SdkAbstractTypedDispatchHandler<I, O, R> extends SdkAbstra
           counts.incSuccess();
         } catch (Exception itemEx) {
           counts.incFailed();
-          log.warn("typed dispatch item failed: {}", itemEx.getMessage());
+          log.warn("typed dispatch item failed: {}", ExceptionLogSummary.of(itemEx));
         }
       }
       return result(input, counts, "dispatched " + counts.success() + "/" + counts.total());

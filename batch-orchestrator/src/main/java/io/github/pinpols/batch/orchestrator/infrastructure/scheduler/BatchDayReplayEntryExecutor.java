@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import io.github.pinpols.batch.common.enums.BatchDayReplayExecutionMode;
 import io.github.pinpols.batch.common.enums.ConfigVersionPolicy;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.governance.CompensationService;
@@ -95,7 +96,7 @@ class BatchDayReplayEntryExecutor {
         session.id(),
         entry.id(),
         entry.jobCode(),
-        failure.getMessage());
+        SwallowedExceptionLogger.summary(failure));
   }
 
   private static String truncate(String text, int max) {
