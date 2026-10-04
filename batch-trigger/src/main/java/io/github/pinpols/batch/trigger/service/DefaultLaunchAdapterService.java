@@ -126,7 +126,7 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
           "data_interval next-fire computation failed: scheduleType={}, expr={}, error={}",
           scheduleType,
           scheduleExpression,
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       return null;
     }
   }

@@ -12,6 +12,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.ResultVersionPolicy;
 import io.github.pinpols.batch.common.enums.ScheduleType;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -346,7 +347,7 @@ public class BatchDayReplayService {
             "batch_day_replay outputs_only entry failed: sessionId={}, entryId={}, msg={}",
             sessionId,
             entry.id(),
-            failure.getMessage());
+            SwallowedExceptionLogger.summary(failure));
       }
     }
     sessionMapper.updateCounts(
@@ -631,7 +632,7 @@ public class BatchDayReplayService {
           definition.tenantId(),
           definition.jobCode(),
           definition.scheduleExpr(),
-          invalidSchedule.getMessage());
+          SwallowedExceptionLogger.summary(invalidSchedule));
       return false;
     }
   }

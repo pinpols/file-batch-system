@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.sensor;
 
 import io.github.pinpols.batch.common.enums.SensorType;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorContext;
@@ -75,7 +76,7 @@ public class FileArrivalSensorPolicy implements SensorPolicy {
           "FILE_ARRIVAL probe error tenant={} pattern={} err={}",
           ctx.tenantId(),
           pattern,
-          e.getMessage());
+          SwallowedExceptionLogger.summary(e));
       return SensorProbeResult.error(
           "error.workflow.sensor_probe_failed",
           List.of(

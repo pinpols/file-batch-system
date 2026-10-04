@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.metrics;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.orchestrator.config.WorkerDrainProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
@@ -65,7 +66,8 @@ public class RuntimeConsistencyMetricsScheduler {
       terminalInstancesWithActiveChildren.set(
           jobInstanceMapper.countTerminalInstancesWithActiveChildren());
     } catch (RuntimeException ex) {
-      log.warn("runtime consistency metrics sampling failed: {}", ex.getMessage());
+      log.warn(
+          "runtime consistency metrics sampling failed: {}", SwallowedExceptionLogger.summary(ex));
     }
   }
 }

@@ -211,7 +211,7 @@ public class WorkflowNodePayloadBuilder {
           tenantId,
           secondArgName,
           secondArg,
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       return null;
     }
   }

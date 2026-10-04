@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.trigger.infrastructure.readiness;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.time.LocalDate;
 import lombok.extern.slf4j.Slf4j;
@@ -58,7 +59,7 @@ public class UpstreamReadinessChecker {
           tenantId,
           upstreamJobCode,
           bizDate,
-          e.getMessage());
+          SwallowedExceptionLogger.summary(e));
       return false;
     }
   }

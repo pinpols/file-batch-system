@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse;
@@ -60,7 +61,7 @@ public class DefaultConsoleTenantConfigInitApplicationService
             "[TenantConfigBatchInit] strict bundle rolled back for tenant={} batchOp={}: {}",
             tenantId,
             batchOperationId,
-            ex.getMessage());
+            SwallowedExceptionLogger.summary(ex));
         results.add(TenantInitResult.failed(tenantId, ex.getMessage()));
         failureCount++;
       } catch (Exception ex) {

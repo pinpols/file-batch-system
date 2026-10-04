@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.atomic.shell;
 
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.SensitiveDataValidator;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
 import io.github.pinpols.batch.common.spi.task.ResourceKind;
@@ -466,7 +467,7 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
               buf.write(tmp, 0, n);
             }
           } catch (IOException e) {
-            log.warn("{}: reader IO error: {}", name, e.getMessage());
+            log.warn("{}: reader IO error: {}", name, SwallowedExceptionLogger.summary(e));
           }
           result.set(new ReaderResult(buf.toString(), truncated));
         },

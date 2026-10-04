@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.core.support;
 
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -54,7 +55,7 @@ final class TaskConsumerBatchExecutionCoordinator {
         log.error(
             "{} batch payload parse failed — publishing only this payload to DLQ: error={}",
             workerTypeSupplier.get(),
-            parseEx.getMessage(),
+            SwallowedExceptionLogger.summary(parseEx),
             parseEx);
         if (!publishToDlq.apply(payload, parseEx.getMessage())) {
           return false;
@@ -93,7 +94,7 @@ final class TaskConsumerBatchExecutionCoordinator {
                   + " batch: taskId={}, error={}",
               workerTypeSupplier.get(),
               execution.message() == null ? null : execution.message().taskId(),
-              execution.error().getMessage());
+              SwallowedExceptionLogger.summary(execution.error()));
           return false;
         }
         String payload = originalPayload(execution, group);
@@ -112,7 +113,7 @@ final class TaskConsumerBatchExecutionCoordinator {
                 + " error={}",
             workerTypeSupplier.get(),
             execution.message() == null ? null : execution.message().taskId(),
-            execution.error().getMessage(),
+            SwallowedExceptionLogger.summary(execution.error()),
             execution.error());
         if (!publishToDlq.apply(payload, execution.error().getMessage())) {
           allDlq = false;

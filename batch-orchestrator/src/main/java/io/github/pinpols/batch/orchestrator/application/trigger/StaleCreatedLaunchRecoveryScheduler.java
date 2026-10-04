@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -93,7 +94,7 @@ public class StaleCreatedLaunchRecoveryScheduler {
             jobInstance.getTenantId(),
             jobInstance.getId(),
             jobInstance.getJobCode(),
-            ex.getMessage());
+            SwallowedExceptionLogger.summary(ex));
         counter(METRIC_FAILED, "tenant", jobInstance.getTenantId()).increment();
       }
     }
@@ -147,7 +148,7 @@ public class StaleCreatedLaunchRecoveryScheduler {
           triggerRequest.getTenantId(),
           triggerRequest.getRequestId(),
           jobInstance.getId(),
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
     }
     counter(METRIC_RECOVERED, "tenant", jobInstance.getTenantId()).increment();
     return true;

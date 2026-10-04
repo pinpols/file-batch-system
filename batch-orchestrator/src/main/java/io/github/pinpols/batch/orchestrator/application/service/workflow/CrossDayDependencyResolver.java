@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionQueryService;
@@ -70,7 +71,7 @@ public class CrossDayDependencyResolver {
           "cross_day_dependencies JSON parse failed: tenantId={}, json={}, msg={}",
           tenantId,
           crossDayDependenciesJson,
-          parseFailure.getMessage());
+          SwallowedExceptionLogger.summary(parseFailure));
       return ResolutionResult.failed("CROSS_DAY_DEPS_PARSE_FAILED");
     }
     if (specs == null || specs.isEmpty()) {
@@ -120,7 +121,7 @@ public class CrossDayDependencyResolver {
             tenantId,
             alias,
             spec.jobCode(),
-            specFailure.getMessage());
+            SwallowedExceptionLogger.summary(specFailure));
         return ResolutionResult.failed("CROSS_DAY_DEP_RESOLVE_ERROR");
       }
     }

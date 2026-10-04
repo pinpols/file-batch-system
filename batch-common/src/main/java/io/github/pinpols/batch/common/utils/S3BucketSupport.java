@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.utils;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import java.time.Duration;
 import java.util.concurrent.ConcurrentHashMap;
@@ -72,7 +73,7 @@ public final class S3BucketSupport {
             "{} s3 bucket ensure failed: bucket={}, cause={}",
             componentName,
             bucket,
-            ex.getMessage());
+            SwallowedExceptionLogger.summary(ex));
       }
       return false;
     }

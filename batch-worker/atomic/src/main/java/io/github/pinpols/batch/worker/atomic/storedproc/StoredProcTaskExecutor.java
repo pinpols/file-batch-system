@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.atomic.storedproc;
 
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.SensitiveDataValidator;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
 import io.github.pinpols.batch.common.spi.task.ResourceKind;
@@ -536,7 +537,7 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
     try (Statement st = conn.createStatement()) {
       st.execute(sql);
     } catch (SQLException | RuntimeException ex) {
-      log.debug("pin search_path skipped: {}", ex.getMessage());
+      log.debug("pin search_path skipped: {}", SwallowedExceptionLogger.summary(ex));
     }
   }
 

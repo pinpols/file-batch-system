@@ -150,10 +150,9 @@ public class FileGovernanceScheduler {
           result.failedSteps());
     } catch (Exception exception) {
       log.warn(
-          "stale running pipeline sweep failed: tenantId={}, staleSeconds={}, error={}",
+          "stale running pipeline sweep failed: tenantId={}, staleSeconds={}",
           tenantId,
           staleSeconds,
-          exception.getMessage(),
           exception);
     }
   }

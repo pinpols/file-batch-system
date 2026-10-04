@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.sharding;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import jakarta.annotation.PostConstruct;
@@ -82,7 +83,7 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
           "RedisShardAssignmentProvider startup heartbeat FAILED: member={}, err={} "
               + "- DYNAMIC sharding will remain degraded to a single instance until Redis recovers",
           memberId,
-          ex.toString());
+          SwallowedExceptionLogger.summary(ex));
     }
   }
 
@@ -98,7 +99,10 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
       coordinationHealthy.set(true);
     } catch (RuntimeException ex) {
       coordinationHealthy.set(false);
-      log.warn("Shard coordinator heartbeat failed: member={}, err={}", memberId, ex.toString());
+      log.warn(
+          "Shard coordinator heartbeat failed: member={}, err={}",
+          memberId,
+          SwallowedExceptionLogger.summary(ex));
     }
   }
 
@@ -109,7 +113,10 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
     try {
       redis.opsForZSet().remove(membersKey, memberId);
     } catch (RuntimeException ex) {
-      log.warn("Shard coordinator leave failed: member={}, err={}", memberId, ex.toString());
+      log.warn(
+          "Shard coordinator leave failed: member={}, err={}",
+          memberId,
+          SwallowedExceptionLogger.summary(ex));
     }
   }
 
@@ -157,7 +164,7 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
           "Redis shard coordinator query failed; falling back to the previous assignment total={} index={}: {}",
           fallback.shardTotal(),
           fallback.shardIndex(),
-          ex.toString());
+          SwallowedExceptionLogger.summary(ex));
       return fallback;
     }
   }

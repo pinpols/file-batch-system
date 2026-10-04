@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.common.config;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.Texts;
 import jakarta.annotation.PostConstruct;
 import java.time.DateTimeException;
@@ -80,7 +81,7 @@ public class BatchTimezoneProvider {
           "invalid preferred timezone='{}', falling back to default {}: {}",
           text,
           defaultZone,
-          invalid.getMessage());
+          SwallowedExceptionLogger.summary(invalid));
       return defaultZone;
     }
   }

@@ -51,6 +51,12 @@ CONTENT_TOUCHPOINTS = (
     re.compile(r"\bresult_version\b", re.IGNORECASE),
 )
 
+LOGGING_ONLY_LINES = (
+    re.compile(r"^import io\.github\.pinpols\.batch\.common\.logging\.SwallowedExceptionLogger;$"),
+    re.compile(r"^[A-Za-z_$][A-Za-z0-9_$.]*\.getMessage\(\)[,;)]*$"),
+    re.compile(r"^SwallowedExceptionLogger\.summary\([^)]*\)[,;)]*$"),
+)
+
 
 def run_git(args: list[str]) -> str:
     result = subprocess.run(["git", *args], check=True, capture_output=True, text=True)
@@ -92,10 +98,34 @@ def diff_contains_touchpoint(path: str, base: str | None) -> bool:
     return False
 
 
+def is_logging_only_change(path: str, base: str | None) -> bool:
+    command = ["diff", "--unified=0"]
+    if base:
+        command.append(f"{base}...HEAD")
+    else:
+        command.append("HEAD")
+    command.extend(["--", path])
+    try:
+        diff = run_git(command)
+    except subprocess.CalledProcessError:
+        return False
+
+    changed_lines: list[str] = []
+    for line in diff.splitlines():
+        if line.startswith(("+++", "---", "@@")) or not line.startswith(("+", "-")):
+            continue
+        changed_lines.append(line[1:].strip())
+    return bool(changed_lines) and all(
+        any(pattern.fullmatch(line) for pattern in LOGGING_ONLY_LINES) for line in changed_lines
+    )
+
+
 def is_readiness_touchpoint(path: str, base: str | None) -> bool:
     if path.startswith(("docs/", ".github/")):
         return False
     if not path.endswith(CODE_OR_CONTRACT_PATHS):
+        return False
+    if is_logging_only_change(path, base):
         return False
     if any(pattern.search(path) for pattern in READINESS_TOUCHPOINTS):
         return True

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.application.ops.infrastructure;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.application.ops.ConsoleKafkaLagQueryPort;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleKafkaConsumerLagResponse;
@@ -72,11 +73,15 @@ public class DefaultConsoleKafkaLagQueryService implements ConsoleKafkaLagQueryP
           result.add(queryGroupLag(admin, groupId));
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
-          log.warn("Kafka lag query interrupted for group {}: {}", groupId, e.getMessage());
+          log.warn(
+              "Kafka lag query interrupted for group {}: {}",
+              groupId,
+              SwallowedExceptionLogger.summary(e));
           result.add(error(groupId, "Kafka admin query interrupted: " + e.getMessage()));
           break;
         } catch (Exception e) {
-          log.warn("Failed to query lag for group {}: {}", groupId, e.getMessage());
+          log.warn(
+              "Failed to query lag for group {}: {}", groupId, SwallowedExceptionLogger.summary(e));
           result.add(error(groupId, e.getMessage()));
         }
       }

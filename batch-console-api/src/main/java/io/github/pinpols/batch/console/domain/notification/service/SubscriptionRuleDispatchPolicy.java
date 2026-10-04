@@ -66,7 +66,7 @@ final class SubscriptionRuleDispatchPolicy {
       log.warn(
           "notification send rate limiter unavailable — fail-open: channelCode={}, cause={}",
           channelCode,
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       return true;
     }
   }
@@ -92,7 +92,7 @@ final class SubscriptionRuleDispatchPolicy {
               + " channelCode={}, eventType={}, cause={}",
           channelCode,
           eventType,
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       Counter.builder("notification.dedup.redis_fallback")
           .register(meterRegistry)
           .increment();
@@ -134,7 +134,7 @@ final class SubscriptionRuleDispatchPolicy {
           channelCode,
           channelType,
           eventType,
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       Counter.builder("notification.ratelimit.redis_fallback")
           .register(meterRegistry)
           .increment();

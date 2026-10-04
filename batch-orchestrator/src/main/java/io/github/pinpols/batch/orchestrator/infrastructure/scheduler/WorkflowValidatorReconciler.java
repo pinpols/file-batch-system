@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
@@ -77,7 +78,7 @@ public class WorkflowValidatorReconciler {
         log.warn(
             "workflow_validator reconcile error: workflowDefId={}, msg={}",
             wf.id(),
-            failure.getMessage());
+            SwallowedExceptionLogger.summary(failure));
       }
     }
     if (invalidCount > 0) {

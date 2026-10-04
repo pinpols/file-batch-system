@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.support.ratelimit;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.common.web.ServletRequestPaths;
 import io.github.pinpols.batch.console.config.ConsoleRateLimitProperties;
@@ -164,7 +165,7 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
           "rate limiter Redis unavailable — fail-open: category={}, identity={}, cause={}",
           category,
           identity,
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       return true;
     }
   }

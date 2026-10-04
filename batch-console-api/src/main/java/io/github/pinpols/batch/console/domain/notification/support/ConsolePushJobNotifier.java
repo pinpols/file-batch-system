@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.notification.support;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.console.config.ConsolePushProperties;
 import io.github.pinpols.batch.console.domain.notification.entity.ConsolePushJobNotificationEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsolePushJobNotificationMapper;
@@ -92,7 +93,9 @@ public class ConsolePushJobNotifier {
       pollOnce();
     } catch (RuntimeException e) {
       if (stopping.get() && isShutdownNoise(e)) {
-        log.info("[push] job-notify poll skipped during shutdown: {}", e.getMessage());
+        log.info(
+            "[push] job-notify poll skipped during shutdown: {}",
+            SwallowedExceptionLogger.summary(e));
         return;
       }
       log.error("[push] job-notify poll failed", e);

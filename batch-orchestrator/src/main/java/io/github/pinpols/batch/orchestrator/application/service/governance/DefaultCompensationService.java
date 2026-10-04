@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -628,7 +629,7 @@ public class DefaultCompensationService implements CompensationService {
           "failed to write compensation pre-insert failure trail: tenant={}, type={}, error={}",
           command == null ? null : command.tenantId(),
           command == null ? null : command.compensationType(),
-          loggingEx.getMessage());
+          SwallowedExceptionLogger.summary(loggingEx));
     }
   }
 

@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.metrics;
 
 import io.github.pinpols.batch.common.enums.DeadLetterReplayStatus;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
@@ -84,7 +85,7 @@ public class BatchBacklogMetricsScheduler {
           BatchDateTimeSupport.utcNow().minus(duplicateDetectionWindow())));
       dlqPending.set(deadLetterTaskMapper.countByReplayStatuses(DLQ_PENDING_STATUSES));
     } catch (RuntimeException ex) {
-      log.warn("batch backlog metrics sampling failed: {}", ex.getMessage());
+      log.warn("batch backlog metrics sampling failed: {}", SwallowedExceptionLogger.summary(ex));
     }
   }
 

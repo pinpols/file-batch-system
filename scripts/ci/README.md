@@ -152,7 +152,8 @@ python3 scripts/ci/check-env-file-shell-safety.py
 
 检查 readiness 相关契约触点的 diff：`readiness`、`AssetPartition`、`ResultVersion`
 以及 trigger 调度主路径变更时，必须在同一 PR 中同步至少一类证据：设计文档、OpenAPI /
-协议文档或 readiness 相关测试。该脚本是轻量同步守护，不替代 IT / E2E 语义验证。
+协议文档或 readiness 相关测试。仅将 `getMessage()` 替换为安全异常摘要且未改动其他代码的
+纯日志差异不视为契约变更。该脚本是轻量同步守护，不替代 IT / E2E 语义验证。
 
 ```bash
 python3 scripts/ci/check-readiness-doc-sync.py
@@ -381,13 +382,17 @@ python3 scripts/ci/check-direct-client-boundaries.py
 ## `check-java-logging-governance.py`
 
 禁止 Java 应用和测试直接写 `System.out` / `System.err`，并禁止直接调用
-`printStackTrace()`。安全扫描 CLI 的终端输出是用户界面，按显式路径白名单保留。
+`printStackTrace()`。生产日志不得直接拼接异常 `getMessage()` / `toString()`：预期 fallback、
+重试或吞异常使用 `SwallowedExceptionLogger.summary()` 输出脱敏、单行、限长摘要；未预期故障将
+`Throwable` 作为 SLF4J 最后一个参数保留完整堆栈。Java SDK 因 ADR-035 不依赖平台 common，
+使用 SDK 内部等价的 `ExceptionLogSummary`。安全扫描 CLI 的终端输出是用户界面，按显式路径白名单保留。
 
 ```bash
 python3 scripts/ci/check-java-logging-governance.py
+python3 -m unittest scripts/ci/tests/test_check_java_logging_governance.py
 ```
 
-已接入 PR、full CI 和本地 pre-commit 的 Java 变更检查。
+治理脚本及其自测已接入 PR、full CI 和本地 pre-commit 的 Java 变更检查。
 
 ## `check-java-readability.py`
 

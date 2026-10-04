@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.rls;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import java.sql.SQLException;
 import java.util.List;
 import javax.sql.DataSource;
@@ -41,7 +42,7 @@ public class RlsPolicyHealthIndicator implements HealthIndicator {
     try {
       result = checker.check();
     } catch (SQLException e) {
-      log.warn("RLS health check failed: {}", e.getMessage());
+      log.warn("RLS health check failed: {}", SwallowedExceptionLogger.summary(e));
       return Health.down().withException(e).build();
     }
 

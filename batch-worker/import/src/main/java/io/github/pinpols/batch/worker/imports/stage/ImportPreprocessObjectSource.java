@@ -221,7 +221,7 @@ public final class ImportPreprocessObjectSource {
           object,
           slice.partitionNo(),
           slice.partitionCount(),
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       return streamObjectToSpoolAndReturn(
           context, importPayload, templateConfig, templateConfigObject);
     }

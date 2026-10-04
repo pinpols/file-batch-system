@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.core.support;
 
 import io.github.pinpols.batch.common.constants.BatchFileConstants;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import java.nio.file.DirectoryStream;
@@ -67,16 +68,22 @@ public class StaleTempFileCleanup {
             cleaned++;
           }
         } catch (RuntimeException ex) {
-          log.warn("failed to delete stale temp file: path={}, error={}", p, ex.getMessage());
+          log.warn(
+              "failed to delete stale temp file: path={}, error={}",
+              p,
+              SwallowedExceptionLogger.summary(ex));
         } catch (Exception ex) {
-          log.warn("failed to delete stale temp file: path={}, error={}", p, ex.getMessage());
+          log.warn(
+              "failed to delete stale temp file: path={}, error={}",
+              p,
+              SwallowedExceptionLogger.summary(ex));
         }
       }
     } catch (Exception ex) {
       log.warn(
           "failed to scan temp dir for stale files: tempDir={}, error={}",
           tempDir,
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       return;
     }
     try {

@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.imports.stage;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -67,7 +68,10 @@ public class DefaultImportStageExecutor
       try {
         recordGovernanceService.finalizeErrorOutput(context);
       } catch (Exception exception) {
-        log.warn("failed to finalize import error output: {}", exception.getMessage(), exception);
+        log.warn(
+            "failed to finalize import error output: {}",
+            SwallowedExceptionLogger.summary(exception),
+            exception);
       }
     }
   }
@@ -115,7 +119,7 @@ public class DefaultImportStageExecutor
           step.implCode(),
           context.getTenantId(),
           context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
-          exception.getMessage());
+          SwallowedExceptionLogger.summary(exception));
       return ImportStageResult.failure(
           stage, StageFailureCode.BUSINESS_ERROR.name(), exception, ERROR_OBJECT_MAPPER);
     } catch (Exception exception) {

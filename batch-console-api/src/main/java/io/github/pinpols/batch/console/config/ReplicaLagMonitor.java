@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.config;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
@@ -167,20 +168,24 @@ public class ReplicaLagMonitor {
       }
     } catch (SQLException ex) {
       if (stopping.get() && isShutdownNoise(ex)) {
-        log.info("replica WAL replay lag sample skipped during shutdown: {}", ex.getMessage());
+        log.info(
+            "replica WAL replay lag sample skipped during shutdown: {}",
+            SwallowedExceptionLogger.summary(ex));
         return;
       }
       latestLagSeconds.set(-1.0);
       latestReplicaCount.set(-1);
-      log.warn("failed to sample replica WAL replay lag: {}", ex.getMessage());
+      log.warn("failed to sample replica WAL replay lag: {}", SwallowedExceptionLogger.summary(ex));
     } catch (RuntimeException ex) {
       if (stopping.get() && isShutdownNoise(ex)) {
-        log.info("replica WAL replay lag sample skipped during shutdown: {}", ex.getMessage());
+        log.info(
+            "replica WAL replay lag sample skipped during shutdown: {}",
+            SwallowedExceptionLogger.summary(ex));
         return;
       }
       latestLagSeconds.set(-1.0);
       latestReplicaCount.set(-1);
-      log.warn("unexpected error sampling replica lag: {}", ex.getMessage(), ex);
+      log.warn("unexpected error sampling replica lag", ex);
     }
   }
 

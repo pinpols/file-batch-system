@@ -372,7 +372,7 @@ public class SubscriptionRuleWebhookDispatcher {
           ctx.channelCode(),
           ctx.eventType(),
           deliveryStatus,
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
     }
   }
 

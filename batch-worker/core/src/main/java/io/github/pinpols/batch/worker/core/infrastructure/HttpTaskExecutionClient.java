@@ -170,14 +170,14 @@ public class HttpTaskExecutionClient
           log.warn(
               "claim-batch transient failure after {} attempts, falling back to single claim: {}",
               state.max(),
-              ex.getMessage());
+              SwallowedExceptionLogger.summary(ex));
           return fallbackClaimChunk(chunk);
         }
         log.warn(
             "claim-batch transient, retrying: attempt={}/{}, message={}",
             state.attempt(),
             state.max(),
-            ex.getMessage());
+            SwallowedExceptionLogger.summary(ex));
         sleepBackoff(state.backoff());
         state = state.advance();
       }
@@ -289,14 +289,14 @@ public class HttpTaskExecutionClient
           log.warn(
               "renew-batch transient failure after {} attempts, falling back to single renew: {}",
               state.max(),
-              ex.getMessage());
+              SwallowedExceptionLogger.summary(ex));
           return fallbackRenewChunk(chunk);
         }
         log.warn(
             "renew-batch transient, retrying: attempt={}/{}, message={}",
             state.attempt(),
             state.max(),
-            ex.getMessage());
+            SwallowedExceptionLogger.summary(ex));
         sleepBackoff(state.backoff());
         state = state.advance();
       }
@@ -380,7 +380,7 @@ public class HttpTaskExecutionClient
             report == null ? null : report.getTaskId(),
             report == null ? null : report.getWorkerId(),
             coordinator == null ? "outbox_disabled" : "outbox_enqueue_failed",
-            rex.toString());
+            SwallowedExceptionLogger.summary(rex));
       }
     } finally {
       recordReportDuration(report, outcome, System.nanoTime() - reportStartNanos);
@@ -474,7 +474,7 @@ public class HttpTaskExecutionClient
         retryHint,
         state.attempt(),
         state.max(),
-        ex.getMessage());
+        SwallowedExceptionLogger.summary(ex));
     sleepBackoff(state.backoff());
     return state.advance();
   }
@@ -503,7 +503,11 @@ public class HttpTaskExecutionClient
         throw ex;
       } catch (HttpServerErrorException | ResourceAccessException ex) {
         if (state.isLastAttempt()) {
-          log.warn("{} failed after {} attempts: {}", operation, state.max(), ex.getMessage());
+          log.warn(
+              "{} failed after {} attempts: {}",
+              operation,
+              state.max(),
+              SwallowedExceptionLogger.summary(ex));
           throw ex instanceof RuntimeException r ? r : new IllegalStateException(ex);
         }
         log.warn(
@@ -511,7 +515,7 @@ public class HttpTaskExecutionClient
             operation,
             state.attempt(),
             state.max(),
-            ex.getMessage());
+            SwallowedExceptionLogger.summary(ex));
         sleepBackoff(state.backoff());
         state = state.advance();
       }
@@ -563,7 +567,7 @@ public class HttpTaskExecutionClient
         reasonCode,
         attempt,
         max,
-        ex.toString());
+        SwallowedExceptionLogger.summary(ex));
   }
 
   private static void sleepBackoff(long millis) {

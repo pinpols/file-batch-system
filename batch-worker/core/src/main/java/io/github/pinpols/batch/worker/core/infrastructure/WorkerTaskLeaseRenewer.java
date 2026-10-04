@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.worker.core.config.WorkerLeaseProperties;
 import io.github.pinpols.batch.worker.core.support.TaskExecutionClient;
 import io.github.pinpols.batch.worker.core.support.TaskLeaseRenewItem;
@@ -135,7 +136,7 @@ public class WorkerTaskLeaseRenewer {
       log.warn(
           "task lease renew batch failed: activeLeases={}, error={}",
           leaseList.size(),
-          ex.getMessage(),
+          SwallowedExceptionLogger.summary(ex),
           ex);
       for (ActiveTaskLeaseRegistry.ActiveTaskLease activeTaskLease : leaseList) {
         trackFailure(activeTaskLease, ex.getClass().getSimpleName());
@@ -245,7 +246,7 @@ public class WorkerTaskLeaseRenewer {
           activeTaskLease.getTaskId(),
           activeTaskLease.getWorkerId(),
           fastRetry,
-          exception.getMessage(),
+          SwallowedExceptionLogger.summary(exception),
           exception);
       trackFailure(activeTaskLease, exception.getClass().getSimpleName());
       return false;

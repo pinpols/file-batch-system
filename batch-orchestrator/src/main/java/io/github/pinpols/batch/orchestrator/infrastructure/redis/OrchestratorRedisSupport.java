@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.redis;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -87,7 +88,7 @@ public class OrchestratorRedisSupport {
       log.warn(
           "Redis cache read unavailable; falling back to DB: key={}, cause={}",
           key,
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       log.debug("Redis cache read failure: key={}", key, ex);
       return null;
     }
@@ -97,7 +98,10 @@ public class OrchestratorRedisSupport {
     try {
       action.run();
     } catch (RedisConnectionFailureException | RedisSystemException ex) {
-      log.debug("Redis cache write/delete skipped: key={}, cause={}", key, ex.getMessage());
+      log.debug(
+          "Redis cache write/delete skipped: key={}, cause={}",
+          key,
+          SwallowedExceptionLogger.summary(ex));
     }
   }
 

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.trigger;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.domain.entity.TriggerRequestLaunchReconcileRow;
@@ -76,7 +77,7 @@ public class TriggerRequestLaunchReconciler {
           "Trigger launch reconciler scan failed; retrying on the next cycle: olderThan={} batchSize={} error={}",
           olderThan,
           batch,
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       return;
     }
     if (EmptyChecks.isEmpty(rows)) {
@@ -102,7 +103,7 @@ public class TriggerRequestLaunchReconciler {
             row.getTenantId(),
             row.getRequestId(),
             row.getJobInstanceId(),
-            ex.getMessage());
+            SwallowedExceptionLogger.summary(ex));
       }
     }
     log.info(

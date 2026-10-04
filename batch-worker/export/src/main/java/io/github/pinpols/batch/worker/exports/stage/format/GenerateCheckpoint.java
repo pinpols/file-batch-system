@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.exports.stage.format;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPosition;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingStage;
@@ -94,7 +95,7 @@ public final class GenerateCheckpoint {
         log.warn(
             "export GENERATE checkpoint marker unusable (instanceId={}): {} — restarting fresh",
             pipelineInstanceId,
-            ex.getMessage());
+            SwallowedExceptionLogger.summary(ex));
       }
     }
     return new GenerateCheckpoint(

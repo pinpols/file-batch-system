@@ -64,7 +64,7 @@ public class LocalizedErrorRenderer {
               + " cause={}",
           errorKey,
           locale,
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       return fallback;
     }
   }

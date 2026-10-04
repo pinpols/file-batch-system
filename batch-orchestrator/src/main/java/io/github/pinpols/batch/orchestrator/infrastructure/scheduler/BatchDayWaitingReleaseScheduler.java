@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayWaitingLaunchEntity;
@@ -130,7 +131,7 @@ public class BatchDayWaitingReleaseScheduler {
             entity.tenantId(),
             entity.calendarCode(),
             previousBizDate,
-            ex.getMessage());
+            SwallowedExceptionLogger.summary(ex));
       }
       if (releasedCount != null) {
         releasedTotal += releasedCount;

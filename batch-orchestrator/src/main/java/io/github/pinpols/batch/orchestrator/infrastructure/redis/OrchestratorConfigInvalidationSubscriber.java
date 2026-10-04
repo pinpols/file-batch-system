@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.redis;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.pinpols.batch.common.config.ConfigCacheInvalidationEvent;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -130,7 +131,9 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
       apply(event);
     } catch (RuntimeException exception) {
       increment(failureCounter);
-      log.warn("config invalidation event apply failed: reason={}", exception.getMessage());
+      log.warn(
+          "config invalidation event apply failed: reason={}",
+          SwallowedExceptionLogger.summary(exception));
       log.debug("config invalidation event apply failure", exception);
     }
   }
@@ -144,7 +147,8 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
           redisTemplate.opsForValue().get(BatchRedisKeys.configInvalidationGlobalRevision());
     } catch (RuntimeException exception) {
       log.debug(
-          "config invalidation revision reconcile skipped: reason={}", exception.getMessage());
+          "config invalidation revision reconcile skipped: reason={}",
+          SwallowedExceptionLogger.summary(exception));
       return;
     }
     if (EmptyChecks.isBlank(rawRevision)) {
@@ -233,7 +237,7 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
     } catch (RuntimeException exception) {
       log.debug(
           "orchestrator config invalidation subscriber stop skipped: reason={}",
-          exception.getMessage(),
+          SwallowedExceptionLogger.summary(exception),
           exception);
     }
     try {
@@ -241,7 +245,7 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
     } catch (Exception exception) {
       log.debug(
           "orchestrator config invalidation subscriber destroy skipped: reason={}",
-          exception.getMessage(),
+          SwallowedExceptionLogger.summary(exception),
           exception);
     }
   }
@@ -249,10 +253,7 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
   private ErrorHandler logErrorHandler() {
     return throwable -> {
       increment(failureCounter);
-      log.warn(
-          "orchestrator config invalidation subscriber error: reason={}",
-          throwable.getMessage(),
-          throwable);
+      log.warn("orchestrator config invalidation subscriber error", throwable);
     };
   }
 

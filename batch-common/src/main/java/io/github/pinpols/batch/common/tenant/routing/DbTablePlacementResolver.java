@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.tenant.routing;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
@@ -76,14 +77,14 @@ public final class DbTablePlacementResolver implements BusinessPlacementResolver
         log.warn(
             "placement reload failed, keep stale mapping ({} entries): {}",
             current.mapping().size(),
-            ex.getMessage());
+            SwallowedExceptionLogger.summary(ex));
         snapshot.set(new Snapshot(current.mapping(), now, true));
         return current.mapping();
       }
       // 冷启动读失败:表里本无 silo 指派可丢,退 hash;不写 snapshot,下次 resolve 重试
       log.warn(
           "initial placement load failed, fall back to hash until table reachable: {}",
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       return Map.of();
     }
   }

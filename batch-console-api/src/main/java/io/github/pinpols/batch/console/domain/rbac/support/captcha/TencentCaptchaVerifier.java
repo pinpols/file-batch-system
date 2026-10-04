@@ -107,11 +107,7 @@ public class TencentCaptchaVerifier implements CaptchaVerifier {
         Thread.currentThread().interrupt();
       }
       // 净化:只打异常类型/消息,绝不打 token / ticket(用户可控)或 secret。
-      log.warn(
-          "captcha tencent verify error: {} ip={}",
-          ex.toString(),
-          CaptchaCrypto.sanitizeForLog(clientIp),
-          ex);
+      log.warn("captcha tencent verify error: ip={}", CaptchaCrypto.sanitizeForLog(clientIp), ex);
       return CaptchaResult.fail("tencent verify error");
     }
   }

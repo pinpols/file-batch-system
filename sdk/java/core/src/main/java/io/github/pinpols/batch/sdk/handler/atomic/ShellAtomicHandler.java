@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.sdk.handler.atomic;
 
 import io.github.pinpols.batch.sdk.handler.SdkAbstractAtomicHandler;
+import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -211,11 +212,11 @@ public class ShellAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Obj
         try {
           Files.deleteIfExists(p);
         } catch (IOException e) {
-          log.warn("failed to delete temp path {}: {}", p, e.getMessage());
+          log.warn("failed to delete temp path {}: {}", p, ExceptionLogSummary.of(e));
         }
       });
     } catch (IOException e) {
-      log.warn("failed to cleanup workdir {}: {}", dir, e.getMessage());
+      log.warn("failed to cleanup workdir {}: {}", dir, ExceptionLogSummary.of(e));
     }
   }
 
@@ -250,7 +251,7 @@ public class ShellAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Obj
           }
         }
       } catch (IOException e) {
-        log.warn("failed reading process output: {}", e.getMessage());
+        log.warn("failed reading process output: {}", ExceptionLogSummary.of(e));
       }
     }
 

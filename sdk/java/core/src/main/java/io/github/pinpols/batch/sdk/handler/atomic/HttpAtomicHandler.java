@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.sdk.handler.atomic;
 
 import io.github.pinpols.batch.sdk.handler.SdkAbstractAtomicHandler;
+import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import java.net.InetAddress;
 import java.net.URI;
@@ -136,7 +137,7 @@ public class HttpAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Obje
           "invalid blocked host pattern '{}', failing closed (blocking host {}): {}",
           pattern,
           host,
-          ex.getMessage());
+          ExceptionLogSummary.of(ex));
       return true;
     }
   }

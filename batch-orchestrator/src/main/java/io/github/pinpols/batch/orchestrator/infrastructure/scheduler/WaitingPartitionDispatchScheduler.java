@@ -112,7 +112,7 @@ public class WaitingPartitionDispatchScheduler {
                   + " error={}",
               partition == null ? null : partition.getTenantId(),
               partition == null ? null : partition.getId(),
-              exception.getMessage());
+              SwallowedExceptionLogger.summary(exception));
         } finally {
           // R3-P2-3：循环结束清 MDC，避免 ThreadLocal 污染下一 partition / 下一 tick；
           // 包括 buildCandidate 抛异常的分支。
@@ -159,7 +159,7 @@ public class WaitingPartitionDispatchScheduler {
                 + " partitionId={}, error={}",
             candidate.partition().getTenantId(),
             candidate.partition().getId(),
-            exception.getMessage());
+            SwallowedExceptionLogger.summary(exception));
       }
     }
   }

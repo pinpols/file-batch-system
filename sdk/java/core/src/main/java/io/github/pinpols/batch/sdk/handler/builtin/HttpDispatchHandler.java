@@ -3,6 +3,7 @@ package io.github.pinpols.batch.sdk.handler.builtin;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.sdk.handler.SdkAbstractTaskHandler;
 import io.github.pinpols.batch.sdk.handler.SdkRowResult;
+import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import io.github.pinpols.batch.sdk.internal.SdkJsonMapperFactory;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
@@ -120,7 +121,7 @@ public class HttpDispatchHandler extends SdkAbstractTaskHandler {
       if (config.failFast()) {
         throw ex;
       }
-      log.warn("push row failed (continuing): {}", ex.getMessage());
+      log.warn("push row failed (continuing): {}", ExceptionLogSummary.of(ex));
     }
   }
 

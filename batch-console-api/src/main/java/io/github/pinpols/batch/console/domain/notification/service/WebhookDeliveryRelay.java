@@ -186,17 +186,21 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
       lockingTaskExecutor.executeWithLock((Runnable) this::pollLocked, lockConfig());
     } catch (DataAccessException dae) {
       if (isShutdownNoise(dae)) {
-        log.info("WebhookDeliveryRelay poll skipped during shutdown: {}", dae.getMessage());
+        log.info(
+            "WebhookDeliveryRelay poll skipped during shutdown: {}",
+            SwallowedExceptionLogger.summary(dae));
         return;
       }
       log.warn(
           "WebhookDeliveryRelay transient DB failure; retrying on the next cycle: {}",
           dae.getMostSpecificCause() == null
-              ? dae.getMessage()
-              : dae.getMostSpecificCause().getMessage());
+              ? SwallowedExceptionLogger.summary(dae)
+              : SwallowedExceptionLogger.summary(dae.getMostSpecificCause()));
     } catch (Exception t) {
       if (isShutdownNoise(t)) {
-        log.info("WebhookDeliveryRelay poll skipped during shutdown: {}", t.getMessage());
+        log.info(
+            "WebhookDeliveryRelay poll skipped during shutdown: {}",
+            SwallowedExceptionLogger.summary(t));
         return;
       }
       log.error("WebhookDeliveryRelay failed", t);

@@ -201,7 +201,10 @@ public class ParseStep implements ImportStageStep {
       Object fid =
           context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.FILE_ID);
       log.warn(
-          "parse stage business error: tenantId={}, fileId={}, key={}", tid, fid, biz.getMessage());
+          "parse stage business error: tenantId={}, fileId={}, key={}",
+          tid,
+          fid,
+          SwallowedExceptionLogger.summary(biz));
       return ImportStageResult.failure(stage(), ERROR_CODE_PARSE_FAILED, biz, ERROR_OBJECT_MAPPER);
     } catch (Exception ex) {
       if (stagingFile != null) {
@@ -213,7 +216,10 @@ public class ParseStep implements ImportStageStep {
       Object fid =
           context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.FILE_ID);
       log.error(
-          "parse stage failed: tenantId={}, fileId={}, message={}", tid, fid, ex.getMessage());
+          "parse stage failed: tenantId={}, fileId={}, message={}",
+          tid,
+          fid,
+          SwallowedExceptionLogger.summary(ex));
       log.debug("parse stage failed stack: tenantId={}, fileId={}", tid, fid, ex);
       return ImportStageResult.failure(
           stage(),

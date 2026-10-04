@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.support.WorkerLifecycleManager;
@@ -96,7 +97,7 @@ public class DefaultWorkerLifecycleManager implements WorkerLifecycleManager {
             attempt,
             workerId,
             targetStatus,
-            ex.getMessage());
+            SwallowedExceptionLogger.summary(ex));
         if (attempt < 3) {
           try {
             Thread.sleep(200L * attempt); // 200ms / 400ms 退避
