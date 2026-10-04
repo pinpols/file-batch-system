@@ -114,9 +114,11 @@ class ObservabilityMapResponseJacksonTest {
     Map<String, Object> back = roundTrip(new ConsolePipelineProgressItemResponse(
         "LOAD", 100L, null, Instant.parse("2026-07-11T02:00:00Z")));
 
-    assertThat(back).containsOnlyKeys("stageCode", "rowsProcessed", "totalRowsHint", "heartbeatAt");
-    assertThat(back).containsEntry("stageCode", "LOAD");
-    assertThat(back).containsEntry("totalRowsHint", null).containsEntry("rowsProcessed", 100);
+    assertThat(back)
+        .containsOnlyKeys("stageCode", "rowsProcessed", "totalRowsHint", "heartbeatAt")
+        .containsEntry("stageCode", "LOAD")
+        .containsEntry("totalRowsHint", null)
+        .containsEntry("rowsProcessed", 100);
   }
 
   private Map<String, Object> roundTrip(Object value) throws Exception {
