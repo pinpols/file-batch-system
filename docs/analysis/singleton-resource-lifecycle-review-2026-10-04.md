@@ -96,9 +96,22 @@ Worker watchdog 检测真实调用是否退出，不把 `Future.cancel(true)` �
 Windows Shell 用例和真实部署滚动升级未在本机验证；加密副本旁路锁与文件关闭顺序做了跨平台兼容处理，
 但这不是 Windows 运行证据。完整 sim、Full Gate、前端联测不在这 113 个用例的范围内。
 
+### 4.4 本次协议收敛复验
+
+在上述 113 用例复验后，按首次上线不保留旧进度协议的决策，移除 DTO 兼容构造器、
+workerCode 进度查询和 Java/Python 心跳标量字段。删除路由分流条件，缺少正式必填参数
+`pipelineInstanceId` 的查询返回 400，不会被误报为 500；回归同时检查未知分片总量、
+worker 所有权交接和心跳租户归一化后不丢失结构化进度。
+
+- 最终定向 Maven Reactor：**199 tests / 0 failures / 0 errors / 0 skipped**，包含真实 PG/Valkey。
+- Python：心跳、wire heartbeat 与 interval hint 定向测试 **23 passed**；完整契约目录 **45 passed**。
+  两组存在重叠，不将其相加作为唯一用例数；显式使用当前工作树的 `PYTHONPATH=src`。
+- Python 本次改动文件 Ruff 检查通过。
+- 配对前端现有调用和生成契约均使用 `pipelineInstanceId`，无需修改该页面接口；本轮未跑浏览器联测。
+
 ## 5. 未扩展事项
 
 - 本轮没有执行完整 `sim-harness all`、性能压测、DAST 或预发布部署演练。
-- 本轮没有改变业务状态机、Kafka topic 或数据库 schema；心跳追加可选结构化进度字段，旧 SDK 标量上报仍兼容。Console 现有响应字段保持不变，内部进度查询增加 pipeline 维度。
-- Python SDK 仅修正文档性注释，没有运行时行为变化。
+- 本轮没有改变业务状态机、Kafka topic 或数据库 schema；心跳追加可选结构化进度字段，删除 Java/Python SDK 标量上报、workerCode 查询和 DTO 旧构造器。Console 前端现用 pipelineInstanceId 路径及响应不变，不再维护未使用的 workerCode 兼容入口。
+- Python SDK 删除内部进程级进度 sink 及心跳标量发送；Go/TS/Rust 没有该标量路径，通用任务进度回调不变。
 - 本轮结论限定为单例、资源所有权、停止生命周期和 Pipeline 进度隔离，不替代系统级容灾或容量验收。

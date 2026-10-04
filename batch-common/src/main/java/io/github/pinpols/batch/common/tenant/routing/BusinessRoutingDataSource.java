@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.common.tenant.routing;
 
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -63,14 +62,14 @@ public class BusinessRoutingDataSource extends AbstractRoutingDataSource impleme
       try {
         closeable.close();
       } catch (Exception ex) {
-        if (EmptyChecks.isNull(firstFailure)) {
+        if (firstFailure == null) { // empty-check: allow - Sonar 需识别累积异常的非空分支。
           firstFailure = ex;
         } else {
           firstFailure.addSuppressed(ex);
         }
       }
     }
-    if (EmptyChecks.isNotNull(firstFailure)) {
+    if (firstFailure != null) { // empty-check: allow - Sonar 需识别抛出值非空。
       throw firstFailure;
     }
   }

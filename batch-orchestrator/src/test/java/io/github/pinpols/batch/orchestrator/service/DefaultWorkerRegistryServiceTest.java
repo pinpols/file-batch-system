@@ -94,9 +94,10 @@ class DefaultWorkerRegistryServiceTest {
         List.of(),
         1,
         null,
+        protocolVersion,
         null,
         null,
-        protocolVersion);
+        null);
   }
 
   private WorkerHeartbeatDto dtoWithSdkVersion(String sdkVersion) {
@@ -113,6 +114,7 @@ class DefaultWorkerRegistryServiceTest {
         Instant.now(),
         List.of(),
         1,
+        null,
         null,
         null,
         null,
@@ -135,10 +137,10 @@ class DefaultWorkerRegistryServiceTest {
         base.capabilityTags(),
         base.currentLoad(),
         base.taskTypes(),
-        base.rowsProcessed(),
-        base.totalRowsHint(),
         base.protocolVersion(),
-        maxConcurrent);
+        maxConcurrent,
+        null,
+        null);
   }
 
   private WorkerHeartbeatDto dtoWithTaskTypes(List<WorkerTaskTypeDescriptorDto> taskTypes) {
@@ -156,6 +158,7 @@ class DefaultWorkerRegistryServiceTest {
         List.of(),
         1,
         taskTypes,
+        null,
         null,
         null,
         null);
@@ -304,6 +307,7 @@ class DefaultWorkerRegistryServiceTest {
         null,
         null,
         null,
+        null,
         null);
     WorkerHeartbeatDto blankGroup = new WorkerHeartbeatDto(
         "ta",
@@ -318,6 +322,7 @@ class DefaultWorkerRegistryServiceTest {
         Instant.now(),
         List.of(),
         1,
+        null,
         null,
         null,
         null,

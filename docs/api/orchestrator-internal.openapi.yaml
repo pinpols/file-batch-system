@@ -5,7 +5,7 @@ info:
   x-last-updated: "2026-10-04"
   x-changelog:
     - date: "2026-10-04"
-      summary: "[Pipeline Progress] 心跳增加可选任务级 pipelineProgress；登记按 worker 和 pipeline 查询进度的内部端点，旧 SDK 标量上报仍兼容。"
+      summary: "[Pipeline Progress] 心跳增加可选任务级 pipelineProgress；仅保留按 pipeline 查询进度；移除 workerCode 查询与 Java/Python SDK 标量上报。"
     - date: "2026-06-30"
       summary: "[Batch Day Replay] 登记 /internal/orchestrator/batch-day-replay/sessions 与 /sessions/preview,供 Console BFF 提交和只读影响预览。"
     - date: "2026-06-30"
@@ -42,39 +42,6 @@ tags:
     description: Console BFF 调用的批次日重放内部接口(`BatchDayReplayController`)
 
 paths:
-  /internal/pipeline-progress:
-    x-protocol-stability: internal-only
-    get:
-      tags: [workers]
-      summary: 按 worker 聚合节点本地实时进度
-      operationId: queryWorkerPipelineProgress
-      parameters:
-        - in: query
-          name: tenantId
-          required: true
-          schema: {type: string}
-        - in: query
-          name: workerCodes
-          required: true
-          schema: {type: array, items: {type: string}}
-      responses:
-        '200':
-          description: 活跃 worker 进度；过期或没有进度的项不返回
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    workerCode: {type: string}
-                    rowsProcessed: {type: integer, format: int64, nullable: true}
-                    totalRowsHint: {type: integer, format: int64, nullable: true}
-                    heartbeatAt: {type: string, format: date-time}
-        '401': {$ref: '#/components/responses/Unauthorized'}
-        '403': {$ref: '#/components/responses/Forbidden'}
-        '5XX': {$ref: '#/components/responses/ServerError'}
-
   /internal/pipeline-progress/by-pipeline:
     x-protocol-stability: internal-only
     get:
@@ -864,12 +831,10 @@ components:
           description: "SDK Phase 3 M3.1 自定义 taskType 描述符;仅 register 上报,heartbeat 不带(null)"
           nullable: true
         protocolVersion: {type: string, nullable: true, description: "SDK wire 协议 schema 主版本(v1/v2);仅 register 上报。缺=legacy 放行,不支持的版本(如 v3)register 拒绝(400 error.worker.unsupported_protocol_version)"}
-        rowsProcessed: {type: integer, format: int64, nullable: true, description: 旧 SDK 单槽已处理行数}
-        totalRowsHint: {type: integer, format: int64, nullable: true, description: 旧 SDK 单槽总行数提示}
         pipelineProgress:
           type: array
           nullable: true
-          description: 内置 Worker 全量活跃任务快照；null/缺省走旧标量路径，空列表清理该 worker 上一轮任务进度。仅观测，不代替 checkpoint。
+          description: 内置 Worker 全量活跃任务快照；null/缺省或空列表均清理该 worker 上一轮任务进度。仅观测，不代替 checkpoint。
           items:
             type: object
             properties:

@@ -95,6 +95,8 @@ async def test_tick_posts_heartbeat_and_applies_directive() -> None:
     assert worker_code == "w-1"
     assert body["tenantId"] == "acme"
     assert body["currentLoad"] == 3
+    assert "rowsProcessed" not in body
+    assert "totalRowsHint" not in body
     assert body["status"] == "RUNNING"
     assert dispatcher.applied == [directive]
 

@@ -377,30 +377,6 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   }
 
   @Override
-  public List<ConsolePipelineProgressItemResponse> pipelineProgress(
-      String tenantId, List<String> workerCodes) {
-    if (workerCodes == null || workerCodes.isEmpty()) {
-      return List.of();
-    }
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    String workerCodesParam = String.join(",", workerCodes);
-    return downstreamFallback.callOrFallback(
-        SVC,
-        "pipeline-progress",
-        () -> orchestratorInternalRestClient
-            .client()
-            .get()
-            .uri(uriBuilder -> uriBuilder
-                .path("/internal/pipeline-progress")
-                .queryParam(PARAM_TENANT_ID, resolved)
-                .queryParam("workerCodes", workerCodesParam)
-                .build())
-            .retrieve()
-            .body(new ParameterizedTypeReference<List<ConsolePipelineProgressItemResponse>>() {}),
-        ex -> List.of());
-  }
-
-  @Override
   public List<ConsolePipelineProgressItemResponse> pipelineProgressByInstance(
       String tenantId, Long pipelineInstanceId) {
     if (EmptyChecks.isNull(pipelineInstanceId) || pipelineInstanceId <= 0) {

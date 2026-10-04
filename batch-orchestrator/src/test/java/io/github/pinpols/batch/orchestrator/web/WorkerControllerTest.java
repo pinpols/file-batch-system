@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.github.pinpols.batch.common.dto.WorkerHeartbeatDto;
+import io.github.pinpols.batch.common.dto.WorkerPipelineProgressDto;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitAction;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
@@ -135,6 +136,31 @@ class WorkerControllerTest {
         .andExpect(jsonPath("$.shouldDrain").value(false))
         .andExpect(jsonPath("$.desiredMaxConcurrent").value(8))
         .andExpect(jsonPath("$.pausedTaskTypes").isEmpty());
+  }
+
+  @Test
+  void heartbeatPreservesTaskProgressDuringTenantNormalization() throws Exception {
+    when(workerRegistryService.heartbeat(eq("worker-1"), any(WorkerHeartbeatDto.class)))
+        .thenReturn(onlineWorker("ONLINE", 8));
+    mockMvc
+        .perform(post("/internal/workers/worker-1/heartbeat")
+            .requestAttr(InternalAuthFilter.ATTR_RESOLVED_TENANT_ID, "t1")
+            .contentType(APPLICATION_JSON)
+            .content("""
+                {
+                  "tenantId": "t1", "workerCode": "worker-1", "status": "RUNNING",
+                  "pipelineProgress": [
+                    {"taskId": 10, "pipelineInstanceId": 20, "stageCode": "LOAD",
+                     "rowsProcessed": 100, "totalRowsHint": 200}
+                  ]
+                }
+                """))
+        .andExpect(status().isOk());
+    ArgumentCaptor<WorkerHeartbeatDto> captor = ArgumentCaptor.forClass(WorkerHeartbeatDto.class);
+    verify(workerRegistryService).heartbeat(eq("worker-1"), captor.capture());
+    assertThat(captor.getValue().tenantId()).isEqualTo("t1");
+    assertThat(captor.getValue().pipelineProgress())
+        .containsExactly(new WorkerPipelineProgressDto(10L, 20L, "LOAD", 100L, 200L));
   }
 
   @Test

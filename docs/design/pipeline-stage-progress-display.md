@@ -1,6 +1,6 @@
 # Pipeline Step 进度展示与 SSE 刷新设计
 
-> 2026-10-04 运行时并发语义复核：内置 Worker 已从进程级单槽升级为 task/pipeline/stage 隔离的注册表，控制面按 pipeline 与 stage 聚合并发分片；旧 SDK 标量字段和 workerCode 查询只作为兼容入口。
+> 2026-10-04 运行时并发语义复核：内置 Worker 已从进程级单槽升级为 task/pipeline/stage 隔离的注册表，控制面按 pipeline 与 stage 聚合并发分片；系统首次上线统一使用当前协议，不保留 SDK 标量字段和 workerCode 查询兼容入口。
 
 ## 1. 目标
 
@@ -38,7 +38,7 @@ Worker step
 2. 控制面按 `pipelineInstanceId + stageCode` 聚合当前分片；`rowsProcessed` 求和，只有所有分片都提供 total 时才汇总 `totalRowsHint`。
 3. `pipeline_progress` 是 checkpoint / resume 的持久真相源；节点本地缓存只补充实时观测，5 分钟未刷新即过期，不承担恢复语义。
 4. heartbeat 频率天然是秒级到几十秒级，不适合做毫秒级动画。
-5. 旧 SDK 仍可上报 `rowsProcessed/totalRowsHint` 标量。旧 workerCode 查询会返回兼容聚合，但无法表达 stage，不能作为新页面主路径。
+5. 删除 Java/Python SDK 的进程级标量上报、全局进度 sink 及 workerCode 查询。BYO SDK 不伪造 pipeline 标识；通用任务进度回调保持独立，不等同于文件 pipeline 的实时行数。
 
 ## 4. SSE 刷新策略
 
@@ -125,11 +125,11 @@ Worker step
 | P0 | FilePipelineObservability 以轮询方式读取 step 进度快照 | 已具备 |
 | P1 | SSE 收到 `pipeline-progress-dirty` 后触发 `loadProgress()` 防抖刷新 | 已做 |
 | P1 | 后端增加低频 `pipeline-progress-dirty` 事件，按 pipeline 节流 | 已做 |
-| P1 | 内置 Worker 任务级进度隔离、并发分片聚合、旧 workerCode 查询兼容 | 已完成 |
+| P1 | 内置 Worker 任务级进度隔离、并发分片聚合、删除旧 workerCode 查询 | 已完成 |
 | P1 | PROCESS copy / aggregate 有稳定行数时接入 `ProgressReporter` | 待做 |
 | P2 | JobInstanceDetail Steps 能通过 job step 映射到 pipeline step 后展示进度列 | 待做 |
 | P2 | 增加前端单测：无 total、stale、终态、SSE 断开降级 | 待做 |
-| P2 | 增加后端测试：并发任务隔离、分片聚合、心跳清理、旧查询兼容 | 已完成 |
+| P2 | 增加后端测试：并发任务隔离、分片聚合、心跳清理、移除旧协议回退 | 已完成 |
 | P2 | 增加后端测试：跨租户公开查询、终态快照、敏感字段过滤 | 待做 |
 | P3 | 增加观测指标：SSE 连接数、dirty event drop / throttle、stale progress 数量 | 待做 |
 

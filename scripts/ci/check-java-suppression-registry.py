@@ -38,6 +38,7 @@ KNOWN_RULES = {
     "java:S1313",
     "java:S2068",
     "java:S2077",
+    "java:S2093",
     "java:S2259",
     "java:S2583",
     "java:S2589",

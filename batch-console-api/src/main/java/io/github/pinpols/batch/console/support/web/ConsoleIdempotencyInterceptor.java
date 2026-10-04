@@ -124,11 +124,9 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
   void renewPendingLeases() {
     pendingLeases.forEach((owner, lease) -> {
       try {
-        if (!idempotencyStore.compareAndSet(
-            lease.key(), lease.value(), lease.value(), lease.ttl())) {
-          if (pendingLeases.remove(owner, lease)) {
-            log.error("idempotency pending ownership lost: key={}", lease.key());
-          }
+        if (!idempotencyStore.compareAndSet(lease.key(), lease.value(), lease.value(), lease.ttl())
+            && pendingLeases.remove(owner, lease)) {
+          log.error("idempotency pending ownership lost: key={}", lease.key());
         }
       } catch (DataAccessException ex) {
         log.error("idempotency pending renewal failed: key={}", lease.key(), ex);

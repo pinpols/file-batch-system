@@ -69,6 +69,7 @@ public final class BusinessDataSourceBuilder {
   }
 
   /** 多片:每片各建一个 Hikari 池(凭据来自 routing.shards),按 resolver(config 或 table 驱动)路由。 */
+  @SuppressWarnings("java:S1181") // 构建失败先回收已创建连接池，再原样抛出，包括 Error。
   private static DataSource buildMultiShard(
       BusinessDataSourceProperties properties,
       BatchPgSessionProperties pgSessionProperties,

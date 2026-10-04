@@ -235,7 +235,7 @@ public class StoreStep implements ExportStageStep {
   }
 
   private ExportStageResult promoteAndVerifyFinal(
-      String expectedSha, String tempKey, String objectName) throws IOException {
+      String expectedSha, String tempKey, String objectName) {
     s3ExportStorage.copyObject(tempKey, objectName);
     String remoteFinalSha = s3ExportStorage.sha256Hex(objectName);
     if (!expectedSha.equalsIgnoreCase(remoteFinalSha)) {

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.atomic.shell;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
@@ -149,17 +150,14 @@ class ShellTaskExecutorTest {
           executor.execute(ctxWithParams(Map.of("command", "/bin/sleep", "args", List.of("5"))));
       assertThat(result.error()).isInstanceOf(ShellTaskExecutor.ShellTimeoutException.class);
     }
-    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
-    List<Thread> remaining;
-    do {
-      remaining = Thread.getAllStackTraces().keySet().stream()
+    await().atMost(Duration.ofSeconds(3)).untilAsserted(() -> {
+      List<Thread> remaining = Thread.getAllStackTraces().keySet().stream()
           .filter(thread -> !existing.contains(thread))
           .filter(thread ->
               thread.getName().startsWith("stdout-") || thread.getName().startsWith("stderr-"))
           .toList();
-      if (!remaining.isEmpty()) Thread.sleep(20);
-    } while (!remaining.isEmpty() && System.nanoTime() < deadline);
-    assertThat(remaining).isEmpty();
+      assertThat(remaining).isEmpty();
+    });
   }
 
   @Test

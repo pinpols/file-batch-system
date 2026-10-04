@@ -44,7 +44,7 @@
 ### Fixed
 
 - 修复 Orchestrator Outbox 自调度循环在关闭阶段继续安排延迟轮询、导致优雅停机额外等待的问题；销毁阶段会停止调度并取消尚未执行的轮询任务。
-- 修复内置 Worker 以进程级单槽上报 Pipeline 进度导致并发任务互相覆盖的问题，改为 task/pipeline/stage 隔离并在控制面按 stage 聚合分片；同时保留旧 SDK 标量心跳和 workerCode 查询兼容。
+- 修复内置 Worker 以进程级单槽上报 Pipeline 进度导致并发任务互相覆盖的问题，改为 task/pipeline/stage 隔离并在控制面按 stage 聚合分片；删除旧 SDK 标量心跳、workerCode 查询兼容路径及旧参数构造器；修复 Controller 标准化心跳时遗漏结构化进度字段。
 - 收口长生命周期资源所有权：租户业务路由数据源关闭全部子连接池，并在多分片构建失败时回滚已创建连接池；Console 内部 RestClient 与 Kafka AdminClient 复用并随组件关闭，Dispatch/Atomic/通知 HTTP 客户端和 NAS 线程池增加确定性销毁；Import 预处理不再通过静态可变 ObjectMapper 跨应用上下文共享状态。
 - Worker 任务执行池改为有界排队并在饱和或关闭时明确拒绝，线程泄漏 watchdog 改为观察插件实际执行状态；Shell 输出结果不再保存在单例 Map，Export 加密临时文件在成功和失败路径均由创建者清理。
 - Console 写请求幂等占位增加请求所有权、续租和 compare-and-set 结算，旧请求不能覆盖或删除新请求的占位；批量开户预览的并发编辑和 Apply 冻结改为 Redis CAS，事务回滚后恢复原快照。

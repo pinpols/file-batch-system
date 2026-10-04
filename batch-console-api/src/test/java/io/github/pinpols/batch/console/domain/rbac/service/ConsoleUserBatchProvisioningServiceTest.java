@@ -192,7 +192,9 @@ class ConsoleUserBatchProvisioningServiceTest {
     var replacement = new AccountRow(2, "ta", "alice", "Edited", ConsoleRoles.TENANT_USER);
     TransactionSynchronizationManager.initSynchronization();
     try {
-      assertThatThrownBy(() -> service.apply(preview.previewToken(), 1, UUID.randomUUID()))
+      String token = preview.previewToken();
+      UUID requestId = UUID.randomUUID();
+      assertThatThrownBy(() -> service.apply(token, 1, requestId))
           .isInstanceOf(IllegalStateException.class);
       assertThatThrownBy(() -> service.patch(preview.previewToken(), 1, replacement))
           .isInstanceOf(BizException.class)

@@ -99,8 +99,7 @@ class ConsoleFilePipelineProgressBridgeTest {
     when(stepRunMapper.selectProgressByPipelineInstance(TENANT, PIPELINE_ID))
         .thenReturn(List.of(step("RUNNING", null)));
     when(orchestratorProxy.pipelineProgressByInstance(TENANT, PIPELINE_ID))
-        .thenReturn(
-            List.of(new ConsolePipelineProgressItemResponse(null, 4200L, 5000L, null, "LOAD")));
+        .thenReturn(List.of(new ConsolePipelineProgressItemResponse("LOAD", 4200L, 5000L, null)));
     stubFileInfo(555L, "customers.csv");
 
     // act
@@ -174,8 +173,8 @@ class ConsoleFilePipelineProgressBridgeTest {
         .thenReturn(List.of(step("LOAD", "RUNNING", null), step("VALIDATE", "SUCCESS", null)));
     when(orchestratorProxy.pipelineProgressByInstance(TENANT, PIPELINE_ID))
         .thenReturn(List.of(
-            new ConsolePipelineProgressItemResponse(null, 42L, 100L, null, "LOAD"),
-            new ConsolePipelineProgressItemResponse(null, 90L, 90L, null, "VALIDATE")));
+            new ConsolePipelineProgressItemResponse("LOAD", 42L, 100L, null),
+            new ConsolePipelineProgressItemResponse("VALIDATE", 90L, 90L, null)));
     stubFileInfo(4L, "mixed.csv");
 
     ConsoleFilePipelineProgressResponse response = service.pipelineProgress(PIPELINE_ID);

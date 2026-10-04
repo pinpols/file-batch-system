@@ -1,41 +1,7 @@
 package io.github.pinpols.batch.console.shared.view;
 
-import static io.github.pinpols.batch.console.shared.query.ConsoleQuerySupport.instantValue;
-import static io.github.pinpols.batch.console.shared.query.ConsoleQuerySupport.longValue;
-import static io.github.pinpols.batch.console.shared.query.ConsoleQuerySupport.stringValue;
-
 import java.time.Instant;
-import java.util.Map;
 
-/**
- * worker pipeline stage 行级进度（列表元素），透传自 orchestrator {@code
- * PipelineProgressInternalController.ProgressItem}，字段 1:1。
- *
- * <p>orchestrator 端为 record（无 {@code @JsonInclude}），{@code totalRowsHint} 为 null 时仍序列化显式 null 键 → 本
- * record 同样不加 {@code NON_NULL}，保持 wire 一致。
- */
+/** Orchestrator 按 pipeline 聚合的阶段进度；不再包含 workerCode 单槽身份。 */
 public record ConsolePipelineProgressItemResponse(
-    String workerCode,
-    Long rowsProcessed,
-    Long totalRowsHint,
-    Instant heartbeatAt,
-    String stageCode) {
-
-  /** 兼容旧 workerCode 查询响应和测试夹具。 */
-  public ConsolePipelineProgressItemResponse(
-      String workerCode, Long rowsProcessed, Long totalRowsHint, Instant heartbeatAt) {
-    this(workerCode, rowsProcessed, totalRowsHint, heartbeatAt, null);
-  }
-
-  public static ConsolePipelineProgressItemResponse from(Map<String, Object> row) {
-    if (row == null) {
-      return null;
-    }
-    return new ConsolePipelineProgressItemResponse(
-        stringValue(row, "workerCode"),
-        longValue(row, "rowsProcessed"),
-        longValue(row, "totalRowsHint"),
-        instantValue(row, "heartbeatAt"),
-        stringValue(row, "stageCode"));
-  }
-}
+    String stageCode, Long rowsProcessed, Long totalRowsHint, Instant heartbeatAt) {}

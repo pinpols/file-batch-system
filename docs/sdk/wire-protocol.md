@@ -51,6 +51,19 @@
 
 ## 2. 控制反向回流(orch → SDK)
 
+### 心跳进度契约
+
+行级进度仅使用 `pipelineProgress` 列表，每项包含 `taskId`、`pipelineInstanceId`、
+`stageCode`、`rowsProcessed` 和可选 `totalRowsHint`。未提供或空列表表示本轮没有活跃的
+stage 进度，并清理该 worker 上一轮的快照；它不改变持久化 checkpoint。
+
+2026-10-04 移除心跳顶层 `rowsProcessed` / `totalRowsHint`、DTO 旧构造器以及
+按 `workerCodes` 查询进度的旧入口。Java/Python SDK 同步移除标量载荷，不保留兼容回退。
+未发布的系统无需维持这条无法隔离并发任务的旧契约；已有本地调用代码需同步更新。
+正式查询为 `/internal/pipeline-progress/by-pipeline` 和
+`/api/console/queries/pipeline-progress?pipelineInstanceId=...`。
+SDK 通用任务进度回调不属于这一心跳协议，本次不删除。
+
 Orch 不主动 push 任何指令。所有"平台→worker"信号搭便车在两个响应体里:
 
 ### 2.1 心跳响应 `WorkerHeartbeatResponse`

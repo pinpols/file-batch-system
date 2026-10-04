@@ -41,6 +41,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -117,11 +118,16 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
   @Autowired
   private WorkerRegistryCache workerRegistryCache;
 
-  @Autowired
-  private JobInstanceTerminalStatusApplicationService terminalStatusService;
+  private final JobInstanceTerminalStatusApplicationService terminalStatusService;
+  private final PlatformTransactionManager transactionManager;
 
   @Autowired
-  private PlatformTransactionManager transactionManager;
+  OutcomeVsReclaimDeadlockIntegrationTest(
+      JobInstanceTerminalStatusApplicationService terminalStatusService,
+      PlatformTransactionManager transactionManager) {
+    this.terminalStatusService = terminalStatusService;
+    this.transactionManager = transactionManager;
+  }
 
   @Test
   void terminalUpdateWaitsBeforeTakingParentLockWhileReportHoldsPartition() throws Exception {
@@ -176,16 +182,13 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
                     version));
           }));
       int pid = terminalPid.get(5, TimeUnit.SECONDS);
-      long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
-      boolean waiting = false;
-      while (System.nanoTime() < deadline && !waiting) {
-        waiting = Boolean.TRUE.equals(jdbcTemplate.queryForObject(
-            "select exists(select 1 from pg_stat_activity where pid = ? and wait_event_type = 'Lock')",
-            Boolean.class,
-            pid));
-        if (!waiting) Thread.sleep(20);
-      }
-      assertThat(waiting).as("终止事务必须实际进入锁等待，不能只证明两个线程启动过").isTrue();
+      Awaitility.await()
+          .alias("终止事务必须实际进入锁等待")
+          .atMost(3, TimeUnit.SECONDS)
+          .until(() -> Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+              "select exists(select 1 from pg_stat_activity where pid = ? and wait_event_type = 'Lock')",
+              Boolean.class,
+              pid)));
       releaseReport.countDown();
       report.get(10, TimeUnit.SECONDS);
       assertThat(terminal.get(10, TimeUnit.SECONDS)).isZero();
