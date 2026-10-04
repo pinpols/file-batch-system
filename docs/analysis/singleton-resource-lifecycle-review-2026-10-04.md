@@ -107,6 +107,8 @@ worker 所有权交接和心跳租户归一化后不丢失结构化进度。
 - Python：心跳、wire heartbeat 与 interval hint 定向测试 **23 passed**；完整契约目录 **45 passed**。
   两组存在重叠，不将其相加作为唯一用例数；显式使用当前工作树的 `PYTHONPATH=src`。
 - Python 本次改动文件 Ruff 检查通过。
+- Java SDK 心跳、动态间隔、指令及进度响应序列化追加复验 **26 tests / 0 failures / 0 errors / 0 skipped**；其中响应序列化 5 例与上述 199 例重叠。
+- 官方 pre-commit、pre-push（含受影响模块 clean compile）及 Changelog 同步检查通过；未绕过门禁。
 - 配对前端现有调用和生成契约均使用 `pipelineInstanceId`，无需修改该页面接口；本轮未跑浏览器联测。
 
 ## 5. 未扩展事项
