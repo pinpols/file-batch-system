@@ -19,6 +19,7 @@
 
 ### Changed
 
+- Docker 镜像构建 CI 纳入 `ops-toolbox` 运维工具箱镜像，实际构建校验 psql、Kafka CLI、MinIO mc、redis-cli 与非 root 运行时约束；该镜像仍不进入业务服务基础镜像。
 - nightly 镜像构建接入 `daily-sim-strict-validation`：当天有代码或配置变更时，必须先通过完整 sim + strict，再构建全部应用镜像；无变更时跳过，保留手动和 reusable 调用入口。
 - CI 镜像构建改用 Maven Central 配置并增加依赖下载重试，降低区域 Maven 镜像短暂 502 导致整组镜像失败的概率。
 - PR 与 Full Gate 的静态检查改为执行全部独立门禁后统一汇总失败；基础环境前置仍立即失败，本地提交钩子保持首错即停；POM 对应 SBOM/许可证结果与 `@ConfigurationProperties` 配置治理目录在提交前自动同步；许可证门禁同时阻断 source-available 与未知许可证。

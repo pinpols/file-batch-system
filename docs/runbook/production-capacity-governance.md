@@ -132,6 +132,8 @@ bash scripts/ops/inspect-production-capacity.sh
 跳板机容器或 Kubernetes Job 运行；应用 Pod / 容器不安装 `psql`、Kafka CLI、`mc`、`redis-cli`、Docker CLI 或
 Python 门禁依赖。`ops-toolbox` 不进入应用发布镜像，也不作为业务服务镜像的基础层。
 工具箱容器必须以非 root 用户运行，默认 UID/GID 为 `10001:10001` 的 `batch` 用户。
+`docker-image-build` CI 会构建该工具箱镜像，作为 Dockerfile、基础镜像 tag 和 CLI 复制路径的发布前校验；
+该校验不表示工具箱进入应用服务镜像或随业务 Pod 常驻运行。
 
 本地和自托管 Compose 环境提供 `ops-toolbox` profile：
 

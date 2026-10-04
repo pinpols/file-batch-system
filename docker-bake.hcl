@@ -6,6 +6,30 @@ variable "BUILD_REVISION" {
   default = "unknown"
 }
 
+variable "OPS_TOOLBOX_IMAGE_TAG" {
+  default = "local"
+}
+
+variable "OPS_TOOLBOX_PYTHON_VERSION" {
+  default = "3.12"
+}
+
+variable "OPS_TOOLBOX_POSTGRES_CLIENT_MAJOR" {
+  default = "17"
+}
+
+variable "KAFKA_IMAGE_TAG" {
+  default = "4.1.2"
+}
+
+variable "MINIO_MC_IMAGE_REPOSITORY" {
+  default = "bitnamilegacy/minio"
+}
+
+variable "MINIO_MC_IMAGE_TAG" {
+  default = "2025.7.23-debian-12-r1"
+}
+
 // CI overlay 可向该抽象目标注入远程缓存，本地构建不依赖 GitHub Actions 环境。
 target "_cache" {}
 
@@ -83,6 +107,19 @@ target "worker-atomic" {
   tags = ["batch-worker-atomic:${APP_IMAGE_TAG}"]
 }
 
+target "ops-toolbox" {
+  context    = "."
+  dockerfile = "deploy/docker/Dockerfile.ops-toolbox"
+  args = {
+    PYTHON_VERSION            = OPS_TOOLBOX_PYTHON_VERSION
+    POSTGRES_CLIENT_MAJOR     = OPS_TOOLBOX_POSTGRES_CLIENT_MAJOR
+    KAFKA_IMAGE_TAG           = KAFKA_IMAGE_TAG
+    MINIO_MC_IMAGE_REPOSITORY = MINIO_MC_IMAGE_REPOSITORY
+    MINIO_MC_IMAGE_TAG        = MINIO_MC_IMAGE_TAG
+  }
+  tags = ["batch-ops-toolbox:${OPS_TOOLBOX_IMAGE_TAG}"]
+}
+
 group "default" {
   targets = [
     "console-api",
@@ -93,5 +130,25 @@ group "default" {
     "worker-process",
     "worker-dispatch",
     "worker-atomic",
+  ]
+}
+
+group "ci" {
+  targets = [
+    "console-api",
+    "trigger",
+    "orchestrator",
+    "worker-import",
+    "worker-export",
+    "worker-process",
+    "worker-dispatch",
+    "worker-atomic",
+    "ops-toolbox",
+  ]
+}
+
+group "tools" {
+  targets = [
+    "ops-toolbox",
   ]
 }
