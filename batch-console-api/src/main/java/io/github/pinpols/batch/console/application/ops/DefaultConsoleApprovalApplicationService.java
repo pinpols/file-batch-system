@@ -140,7 +140,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
               throw BizException.of(
                   ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.invalid_argument");
             }
-            RestClient batchDayReplayClient = orchestratorInternalRestClient.build();
+            RestClient batchDayReplayClient = orchestratorInternalRestClient.client();
             batchDayReplayClient
                 .post()
                 .uri(
@@ -227,7 +227,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
   }
 
   private ApprovalRecordResponse loadApproval(String tenantId, String approvalNo) {
-    RestClient restClient = orchestratorInternalRestClient.build();
+    RestClient restClient = orchestratorInternalRestClient.client();
     ApprovalRecordResponse response = restClient
         .get()
         .uri("/internal/approvals/{approvalNo}?tenantId={tenantId}", approvalNo, tenantId)
@@ -240,7 +240,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
 
   private void approveRemote(String tenantId, String approvalNo, String operatorId, String reason) {
     ConsoleRequestMetadata metadata = requestMetadataResolver.current();
-    RestClient restClient = orchestratorInternalRestClient.build();
+    RestClient restClient = orchestratorInternalRestClient.client();
     ApprovalActionRequest approvalAction = new ApprovalActionRequest(
         tenantId,
         ConsoleTextSanitizer.safeInput(operatorId, 64),
@@ -257,7 +257,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
 
   private void rejectRemote(String tenantId, String approvalNo, String operatorId, String reason) {
     ConsoleRequestMetadata metadata = requestMetadataResolver.current();
-    RestClient restClient = orchestratorInternalRestClient.build();
+    RestClient restClient = orchestratorInternalRestClient.client();
     ApprovalActionRequest approvalAction = new ApprovalActionRequest(
         tenantId,
         ConsoleTextSanitizer.safeInput(operatorId, 64),
@@ -273,7 +273,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
   }
 
   private void markExecutedRemote(String tenantId, String approvalNo) {
-    RestClient restClient = orchestratorInternalRestClient.build();
+    RestClient restClient = orchestratorInternalRestClient.client();
     restClient
         .post()
         .uri("/internal/approvals/{approvalNo}/executed", approvalNo)

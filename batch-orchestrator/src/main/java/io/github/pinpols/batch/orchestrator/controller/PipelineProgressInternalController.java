@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
 import io.github.pinpols.batch.orchestrator.infrastructure.progress.PipelineStageProgressCache;
+import io.github.pinpols.batch.orchestrator.infrastructure.progress.PipelineStageProgressCache.PipelineSnapshot;
 import io.github.pinpols.batch.orchestrator.infrastructure.progress.PipelineStageProgressCache.Snapshot;
 import java.time.Instant;
 import java.util.List;
@@ -48,6 +49,27 @@ public class PipelineProgressInternalController {
         .collect(Collectors.toUnmodifiableList());
   }
 
+  /** 按 pipeline 实例查询，并聚合同一 stage 的并发分片。 */
+  @GetMapping("/by-pipeline")
+  public List<PipelineProgressItem> queryByPipeline(
+      @RequestParam("tenantId") String tenantId,
+      @RequestParam("pipelineInstanceId") Long pipelineInstanceId) {
+    return cache.snapshotByPipeline(tenantId, pipelineInstanceId).stream()
+        .map(PipelineProgressInternalController::toPipelineProgressItem)
+        .toList();
+  }
+
+  private static PipelineProgressItem toPipelineProgressItem(PipelineSnapshot snapshot) {
+    return new PipelineProgressItem(
+        snapshot.stageCode(),
+        snapshot.rowsProcessed(),
+        snapshot.totalRowsHint(),
+        snapshot.heartbeatAt());
+  }
+
   public record ProgressItem(
       String workerCode, Long rowsProcessed, Long totalRowsHint, Instant heartbeatAt) {}
+
+  public record PipelineProgressItem(
+      String stageCode, Long rowsProcessed, Long totalRowsHint, Instant heartbeatAt) {}
 }

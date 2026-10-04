@@ -178,9 +178,10 @@ public class ConsoleFileQueryService {
     // 缺口1:某运行中 step 的持久 rows_processed 为 null 时(未开 checkpoint),
     // 服务端解析该 pipeline 当前 worker 再查 orchestrator 内存 cache 补上实时行数。
     // 前端契约不变(仍按 pipelineInstanceId 查),桥接完全在服务端完成。
-    Long liveRowsProcessed = resolveLiveRowsProcessed(tenantId, pipelineInstanceId, rawSteps);
+    Map<String, ConsolePipelineProgressItemResponse> liveProgress =
+        resolveLiveProgress(tenantId, pipelineInstanceId, rawSteps);
     List<ConsoleFilePipelineStepProgressResponse> steps = rawSteps.stream()
-        .map(row -> toFilePipelineStepProgressResponse(row, liveRowsProcessed))
+        .map(row -> toFilePipelineStepProgressResponse(row, liveProgress))
         .toList();
     // 缺口2:文件名是 pipeline 级(一个 instance 一个文件),放响应顶层。
     Map<String, Object> fileInfo =
@@ -191,33 +192,31 @@ public class ConsoleFileQueryService {
     return new ConsoleFilePipelineProgressResponse(pipelineInstanceId, fileId, fileName, steps);
   }
 
-  /**
-   * 缺口1 桥接:仅当存在「运行中且持久 rows_processed 为 null」的 step 时才触发。命中时多一次 DB 查询解析当前 worker (便宜的单行索引查询),再查
-   * orchestrator 进程内 cache(内存,便宜)。解析不到运行中分区则跳过、不报错。
-   */
-  private Long resolveLiveRowsProcessed(
+  /** 缺口1 桥接：仅当存在「运行中且持久 rows_processed 为 null」的 step 时查询 orchestrator 节点本地缓存。 */
+  private Map<String, ConsolePipelineProgressItemResponse> resolveLiveProgress(
       String tenantId, Long pipelineInstanceId, List<Map<String, Object>> rawSteps) {
     if (EmptyChecks.isEmpty(rawSteps)) {
-      return null;
+      return Map.of();
     }
     boolean needsBridge = rawSteps.stream()
         .anyMatch(row -> EmptyChecks.isNotNull(row)
             && STEP_STATUS_RUNNING.equals(stringValue(row, "step_status"))
             && EmptyChecks.isNull(row.get("rows_processed")));
     if (!needsBridge) {
-      return null;
-    }
-    String workerCode =
-        fileMappers.filePipelineStepRunMapper.selectRunningWorkerCode(tenantId, pipelineInstanceId);
-    if (EmptyChecks.isNull(workerCode)) {
-      return null;
+      return Map.of();
     }
     List<ConsolePipelineProgressItemResponse> cache =
-        orchestratorProxy.pipelineProgress(tenantId, List.of(workerCode));
-    if (EmptyChecks.isEmpty(cache) || EmptyChecks.isNull(cache.get(0))) {
-      return null;
+        orchestratorProxy.pipelineProgressByInstance(tenantId, pipelineInstanceId);
+    if (EmptyChecks.isEmpty(cache)) {
+      return Map.of();
     }
-    return cache.get(0).rowsProcessed();
+    return cache.stream()
+        .filter(EmptyChecks::isNotNull)
+        .filter(item -> EmptyChecks.isNotNull(item.stageCode()))
+        .collect(java.util.stream.Collectors.toUnmodifiableMap(
+            ConsolePipelineProgressItemResponse::stageCode,
+            java.util.function.Function.identity(),
+            (first, ignored) -> first));
   }
 
   private static Long longOrNull(Map<String, Object> row, String key) {
@@ -439,15 +438,28 @@ public class ConsoleFileQueryService {
   }
 
   private ConsoleFilePipelineStepProgressResponse toFilePipelineStepProgressResponse(
-      Map<String, Object> row, Long liveRowsProcessed) {
+      Map<String, Object> row, Map<String, ConsolePipelineProgressItemResponse> liveProgress) {
     Instant lastHeartbeatAt = instantValue(row, "last_heartbeat_at");
-    // 仅当持久值为 null 且该 step 运行中时,才用 cache 桥接的实时行数;total 保持 null(不做百分比)。
+    ConsolePipelineProgressItemResponse live = liveProgress.get(stringValue(row, "stage_code"));
+    // 仅当持久值为 null 且该 step 运行中时，才用同 pipeline、同 stage 的聚合实时值。
     Long rowsProcessed = longOrNull(row, "rows_processed");
-    boolean shouldBridgeLiveRowsProcessed = EmptyChecks.isNull(rowsProcessed)
-        && EmptyChecks.isNotNull(liveRowsProcessed)
-        && STEP_STATUS_RUNNING.equals(stringValue(row, "step_status"));
+    Long totalRowsHint = longOrNull(row, "total_rows_hint");
+    boolean running = STEP_STATUS_RUNNING.equals(stringValue(row, "step_status"));
+    boolean shouldBridgeLiveRowsProcessed = running
+        && EmptyChecks.isNull(rowsProcessed)
+        && EmptyChecks.isNotNull(live)
+        && EmptyChecks.isNotNull(live.rowsProcessed());
     if (shouldBridgeLiveRowsProcessed) {
-      rowsProcessed = liveRowsProcessed;
+      rowsProcessed = live.rowsProcessed();
+      if (lastHeartbeatAt == null) {
+        lastHeartbeatAt = live.heartbeatAt();
+      }
+    }
+    if (running
+        && EmptyChecks.isNull(totalRowsHint)
+        && EmptyChecks.isNotNull(live)
+        && EmptyChecks.isNotNull(live.totalRowsHint())) {
+      totalRowsHint = live.totalRowsHint();
     }
     return new ConsoleFilePipelineStepProgressResponse(
         longValue(row, "step_id"),
@@ -455,7 +467,7 @@ public class ConsoleFileQueryService {
         stringValue(row, "step_code"),
         stringValue(row, "stage_code"),
         rowsProcessed,
-        longOrNull(row, "total_rows_hint"),
+        totalRowsHint,
         EmptyChecks.isNull(lastHeartbeatAt) ? null : lastHeartbeatAt.toEpochMilli());
   }
 

@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.exports.stage.format;
 
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineStageProgressRegistry;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import java.nio.charset.Charset;
 import java.nio.file.Path;
@@ -31,4 +32,5 @@ public record ExportFormatContext(
     String lineSeparator,
     // ADR-038 P3:GENERATE 续跑编排;null = 续跑关闭(开关 off / 无 pipelineInstanceId / Excel 格式),
     // 此时 generate 走与今天完全一致的全量写路径。
-    GenerateCheckpoint checkpoint) {}
+    GenerateCheckpoint checkpoint,
+    PipelineStageProgressRegistry progressRegistry) {}

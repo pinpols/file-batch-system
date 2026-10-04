@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import java.sql.Connection;
@@ -67,5 +69,26 @@ class BusinessRoutingDataSourceFactoryMultiShardTest {
             Map.of("shard-1", mock(DataSource.class)),
             new HashAndSiloPlacementResolver(2, Map.of())))
         .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  @DisplayName("关闭路由数据源时每个真实分片只关闭一次")
+  void closesOwnedDataSourcesExactlyOnce() throws Exception {
+    CloseableDataSource ds0 = mock(CloseableDataSource.class);
+    CloseableDataSource ds1 = mock(CloseableDataSource.class);
+    BusinessRoutingDataSource routing =
+        (BusinessRoutingDataSource) BusinessRoutingDataSourceFactory.multiShard(
+            Map.of("shard-0", ds0, "shard-1", ds1), new HashAndSiloPlacementResolver(2, Map.of()));
+
+    routing.close();
+    routing.close();
+
+    verify(ds0, times(1)).close();
+    verify(ds1, times(1)).close();
+  }
+
+  private interface CloseableDataSource extends DataSource, AutoCloseable {
+    @Override
+    void close() throws Exception;
   }
 }

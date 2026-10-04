@@ -3,6 +3,8 @@ package io.github.pinpols.batch.console.domain.ops.service;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleKafkaConsumerLagResponse;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
+import jakarta.annotation.PreDestroy;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -11,6 +13,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.admin.AdminClient;
@@ -31,6 +34,9 @@ public class ConsoleKafkaLagQueryService {
 
   private final KafkaAdmin kafkaAdmin;
   private final ConsoleQueryCacheService cacheService;
+  private final Object adminClientMonitor = new Object();
+  private final AtomicBoolean stopping = new AtomicBoolean();
+  private AdminClient adminClient;
 
   private static final long TIMEOUT_SECONDS = 10;
   private static final String KEY_GROUP_ID = "groupId";
@@ -48,7 +54,8 @@ public class ConsoleKafkaLagQueryService {
 
   private List<ConsoleKafkaConsumerLagResponse> loadConsumerGroupLags(String groupIdFilter) {
     List<ConsoleKafkaConsumerLagResponse> result = new ArrayList<>();
-    try (AdminClient admin = AdminClient.create(kafkaAdmin.getConfigurationProperties())) {
+    try {
+      AdminClient admin = adminClient();
       Collection<GroupListing> groups =
           admin.listGroups().all().get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
       for (GroupListing group : groups) {
@@ -80,6 +87,29 @@ public class ConsoleKafkaLagQueryService {
       result.add(error(null, "Failed to list consumer groups: " + e.getMessage()));
     }
     return result;
+  }
+
+  private AdminClient adminClient() {
+    synchronized (adminClientMonitor) {
+      if (stopping.get()) {
+        throw new IllegalStateException("Kafka lag query service is stopping");
+      }
+      if (adminClient == null) {
+        adminClient = AdminClient.create(kafkaAdmin.getConfigurationProperties());
+      }
+      return adminClient;
+    }
+  }
+
+  @PreDestroy
+  void closeAdminClient() {
+    stopping.set(true);
+    synchronized (adminClientMonitor) {
+      if (adminClient != null) {
+        adminClient.close(Duration.ZERO);
+        adminClient = null;
+      }
+    }
   }
 
   private static String cacheSegment(String value) {

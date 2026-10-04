@@ -43,6 +43,9 @@
 
 ### Fixed
 
+- 修复 Orchestrator Outbox 自调度循环在关闭阶段继续安排延迟轮询、导致优雅停机额外等待的问题；销毁阶段会停止调度并取消尚未执行的轮询任务。
+- 修复内置 Worker 以进程级单槽上报 Pipeline 进度导致并发任务互相覆盖的问题，改为 task/pipeline/stage 隔离并在控制面按 stage 聚合分片；同时保留旧 SDK 标量心跳和 workerCode 查询兼容。
+- 收口长生命周期资源所有权：租户业务路由数据源关闭全部子连接池，并在多分片构建失败时回滚已创建连接池；Console 内部 RestClient 与 Kafka AdminClient 复用并随组件关闭，Dispatch/Atomic/通知 HTTP 客户端和 NAS 线程池增加确定性销毁；Import 预处理不再通过静态可变 ObjectMapper 跨应用上下文共享状态。
 - 修复 Worker SQL transform / JDBC mapped import 在部分列映射和空值处理下的边界行为，并为控制面 10w 压测脚本增加大请求量前置校验，避免本地低 relay 或 demo 作业超时被误判为容量回退。
 - Console 批量开户补齐单账号创建的租户状态终态守卫，并允许按目标租户过滤批量操作查询；`user.batchCreate` 审计以 `requestId` 作为批次操作聚合键，便于和批次记录关联。
 - 修复根目录 `.node-version` 与 `.nvmrc` 分别选择 Node 24/22 的漂移，运行时对齐门禁现同时校验后端仓库和配对前端的 Node 24 本地入口；移除已被现有 Java 质量门禁替代但意外回流的 `qodana.yaml`，仓库卫生检查阻止该废弃配置再次提交，并正确跳过工作区中尚未暂存的删除项；范围探测器将已知根目录工具配置归入 `config`，不再因误判 `unknown` 启动无关 Java 单测。

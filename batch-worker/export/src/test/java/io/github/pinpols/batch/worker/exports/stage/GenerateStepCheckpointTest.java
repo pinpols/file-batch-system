@@ -13,6 +13,7 @@ import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineStageProgressRegistry;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPosition;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingStage;
@@ -124,9 +125,8 @@ class GenerateStepCheckpointTest {
         formatStrategyRegistry,
         config,
         objectMapper,
-        props,
-        positionStore,
-        new GenerateCursorCodec());
+        new GenerateRuntimeSupport(
+            props, positionStore, new GenerateCursorCodec(), new PipelineStageProgressRegistry()));
 
     deterministicFile = Path.of(
         System.getProperty("java.io.tmpdir"), "file-batch-export", "inst-" + INSTANCE_ID + ".json");

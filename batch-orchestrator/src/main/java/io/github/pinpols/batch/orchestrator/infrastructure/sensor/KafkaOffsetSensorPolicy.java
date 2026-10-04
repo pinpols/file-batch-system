@@ -7,6 +7,8 @@ import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorPol
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorProbeResult;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorSpecs;
 import io.github.pinpols.batch.orchestrator.config.SensorProperties;
+import jakarta.annotation.PreDestroy;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -14,6 +16,7 @@ import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
@@ -51,6 +54,9 @@ public class KafkaOffsetSensorPolicy implements SensorPolicy {
 
   private final KafkaAdmin kafkaAdmin;
   private final SensorProperties props;
+  private final Object adminClientMonitor = new Object();
+  private final AtomicBoolean stopping = new AtomicBoolean();
+  private AdminClient adminClient;
 
   public KafkaOffsetSensorPolicy(KafkaAdmin kafkaAdmin, SensorProperties props) {
     this.kafkaAdmin = kafkaAdmin;
@@ -77,7 +83,8 @@ public class KafkaOffsetSensorPolicy implements SensorPolicy {
     TopicPartition tp = new TopicPartition(topic, partition);
     long timeoutMs = props.getKafkaAdminTimeout().toMillis();
 
-    try (AdminClient client = AdminClient.create(kafkaAdmin.getConfigurationProperties())) {
+    try {
+      AdminClient client = adminClient();
       ListOffsetsResult result = client.listOffsets(Map.of(tp, OffsetSpec.latest()));
       long endOffset =
           result.partitionResult(tp).get(timeoutMs, TimeUnit.MILLISECONDS).offset();
@@ -122,6 +129,29 @@ public class KafkaOffsetSensorPolicy implements SensorPolicy {
           List.of(
               "KAFKA_OFFSET",
               Objects.requireNonNullElse(e.getMessage(), e.getClass().getSimpleName())));
+    }
+  }
+
+  private AdminClient adminClient() {
+    synchronized (adminClientMonitor) {
+      if (stopping.get()) {
+        throw new IllegalStateException("Kafka offset sensor is stopping");
+      }
+      if (adminClient == null) {
+        adminClient = AdminClient.create(kafkaAdmin.getConfigurationProperties());
+      }
+      return adminClient;
+    }
+  }
+
+  @PreDestroy
+  void closeAdminClient() {
+    stopping.set(true);
+    synchronized (adminClientMonitor) {
+      if (adminClient != null) {
+        adminClient.close(Duration.ZERO);
+        adminClient = null;
+      }
     }
   }
 }

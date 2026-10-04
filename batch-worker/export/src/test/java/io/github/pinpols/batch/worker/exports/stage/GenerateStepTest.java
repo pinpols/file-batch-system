@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineStageProgressRegistry;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
 import io.github.pinpols.batch.worker.exports.config.ExportWorkerConfiguration;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
@@ -81,9 +82,11 @@ class GenerateStepTest {
         formatStrategyRegistry,
         config,
         objectMapper,
-        checkpointDisabled,
-        mock(ProcessingPositionStore.class),
-        new GenerateCursorCodec());
+        new GenerateRuntimeSupport(
+            checkpointDisabled,
+            mock(ProcessingPositionStore.class),
+            new GenerateCursorCodec(),
+            new PipelineStageProgressRegistry()));
   }
 
   // ── DELIMITED / CSV ────────────────────────────────────────────────────────

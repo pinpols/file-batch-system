@@ -70,7 +70,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         "instance-action",
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .post()
             .uri("/internal/instances/{id}/{action}?tenantId={tenantId}", id, action, resolved)
             .retrieve()
@@ -84,7 +84,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         "partition-action",
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .post()
             .uri(
                 "/internal/instances/partitions/{id}/{action}?tenantId={tenantId}",
@@ -103,7 +103,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         "retry-failed-partitions",
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .post()
             .uri(
                 "/internal/instances/{id}/partitions/retry-failed?tenantId={tenantId}",
@@ -121,7 +121,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         "workflow-run-action",
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .post()
             .uri("/internal/workflow-runs/{id}/{action}?tenantId={tenantId}", id, action, resolved)
             .retrieve()
@@ -138,7 +138,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         "workflow-run-skip-node",
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .post()
             .uri(
                 "/internal/workflow-runs/{id}/skip-node?tenantId={tenantId}&nodeCode={nodeCode}",
@@ -167,7 +167,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         "scheduler-snapshot",
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .get()
             .uri(uriBuilder -> uriBuilder
                 .path("/internal/scheduler/snapshot")
@@ -194,7 +194,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         "scheduler-snapshot-history",
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .get()
             .uri(uriBuilder -> uriBuilder
                 .path("/internal/scheduler/snapshot/history")
@@ -214,7 +214,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         "outbox-cleanup",
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .post()
             .uri(uriBuilder -> uriBuilder
                 .path("/internal/outbox/cleanup")
@@ -232,7 +232,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         "outbox-republish",
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .post()
             .uri(uriBuilder -> uriBuilder
                 .path("/internal/outbox/republish")
@@ -249,7 +249,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         "admin-test-data-cleanup",
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .delete()
             .uri(uriBuilder -> uriBuilder
                 .path("/internal/admin/test-data")
@@ -266,7 +266,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         "admin-test-data-cleanup-by-ids",
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .delete()
             .uri(uriBuilder -> uriBuilder
                 .path("/internal/admin/test-data/by-ids")
@@ -296,7 +296,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         "batch-day-operate",
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .post()
             .uri("/internal/batch-days/operate")
             .body(body)
@@ -326,7 +326,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         "forensic-export-request",
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .post()
             .uri("/internal/forensic/export")
             .body(body)
@@ -341,7 +341,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         "forensic-export-download",
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .get()
             .uri(uriBuilder -> uriBuilder
                 .path("/internal/forensic/export/{exportId}/download")
@@ -359,7 +359,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         "forensic-export-download-stream",
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .get()
             .uri(uriBuilder -> uriBuilder
                 .path("/internal/forensic/export/{exportId}/download")
@@ -388,12 +388,35 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         "pipeline-progress",
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .get()
             .uri(uriBuilder -> uriBuilder
                 .path("/internal/pipeline-progress")
                 .queryParam(PARAM_TENANT_ID, resolved)
                 .queryParam("workerCodes", workerCodesParam)
+                .build())
+            .retrieve()
+            .body(new ParameterizedTypeReference<List<ConsolePipelineProgressItemResponse>>() {}),
+        ex -> List.of());
+  }
+
+  @Override
+  public List<ConsolePipelineProgressItemResponse> pipelineProgressByInstance(
+      String tenantId, Long pipelineInstanceId) {
+    if (pipelineInstanceId == null || pipelineInstanceId <= 0) {
+      return List.of();
+    }
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return downstreamFallback.callOrFallback(
+        SVC,
+        "pipeline-progress-by-instance",
+        () -> orchestratorInternalRestClient
+            .client()
+            .get()
+            .uri(uriBuilder -> uriBuilder
+                .path("/internal/pipeline-progress/by-pipeline")
+                .queryParam(PARAM_TENANT_ID, resolved)
+                .queryParam("pipelineInstanceId", pipelineInstanceId)
                 .build())
             .retrieve()
             .body(new ParameterizedTypeReference<List<ConsolePipelineProgressItemResponse>>() {}),
@@ -407,7 +430,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         "dry-run-plan",
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .post()
             .uri("/internal/orchestrator/dry-run/plan")
             .body(request)
@@ -445,7 +468,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         "batch-day-replay-list",
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .get()
             .uri(uriBuilder -> {
               UriBuilder builder = uriBuilder
@@ -495,7 +518,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         "batch-day-replay-detail",
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .get()
             .uri(
                 "/internal/orchestrator/batch-day-replay/sessions/{id}?tenantId={tenantId}",
@@ -513,7 +536,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         "batch-day-replay-entries",
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .get()
             .uri(uriBuilder -> {
               UriBuilder builder = uriBuilder
@@ -560,7 +583,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         "result-version-detail",
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .get()
             .uri("/internal/orchestrator/result-versions/{id}?tenantId={tenantId}", id, resolved)
             .retrieve()
@@ -587,7 +610,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         "asset-partition-readiness",
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .get()
             .uri(
                 "/internal/readiness/job?tenantId={tenantId}&jobCode={jobCode}&bizDate={bizDate}",
@@ -605,7 +628,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         "lineage-result-version",
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .get()
             .uri(
                 "/internal/orchestrator/lineage/result-versions/{id}?tenantId={tenantId}",
@@ -623,7 +646,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         "lineage-effective",
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .get()
             .uri(
                 "/internal/orchestrator/lineage/effective?tenantId={tenantId}&businessKey={businessKey}",
@@ -641,7 +664,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         "capacity-profile",
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .get()
             .uri(uriBuilder -> {
               UriBuilder builder = uriBuilder
@@ -670,7 +693,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         operation,
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .post()
             .uri(path)
             .body(body)
@@ -689,7 +712,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         operation,
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .post()
             .uri(uriBuilder -> {
               UriBuilder builder = uriBuilder.path(path).queryParam(PARAM_TENANT_ID, tenantId);
@@ -714,7 +737,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         operation,
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .get()
             .uri(uriBuilder -> {
               UriBuilder builder = uriBuilder
@@ -737,7 +760,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         SVC,
         operation,
         () -> orchestratorInternalRestClient
-            .build()
+            .client()
             .post()
             .uri(
                 "/internal/orchestrator/result-versions/{id}/{action}?tenantId={tenantId}",

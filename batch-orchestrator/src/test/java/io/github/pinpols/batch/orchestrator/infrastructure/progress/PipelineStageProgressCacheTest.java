@@ -2,7 +2,14 @@ package io.github.pinpols.batch.orchestrator.infrastructure.progress;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.pinpols.batch.common.dto.WorkerPipelineProgressDto;
+import io.github.pinpols.batch.orchestrator.infrastructure.progress.PipelineStageProgressCache.PipelineSnapshot;
 import io.github.pinpols.batch.orchestrator.infrastructure.progress.PipelineStageProgressCache.Snapshot;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -11,10 +18,12 @@ import org.junit.jupiter.api.Test;
 class PipelineStageProgressCacheTest {
 
   private PipelineStageProgressCache cache;
+  private MutableClock clock;
 
   @BeforeEach
   void setUp() {
-    cache = new PipelineStageProgressCache();
+    clock = new MutableClock(Instant.parse("2026-10-04T00:00:00Z"));
+    cache = new PipelineStageProgressCache(clock);
   }
 
   @Test
@@ -79,5 +88,117 @@ class PipelineStageProgressCacheTest {
     Map<String, Snapshot> result = cache.snapshot("ta", List.of("w1", "w-unknown", "w2"));
 
     assertThat(result).hasSize(2).containsOnlyKeys("w1", "w2");
+  }
+
+  @Test
+  void shouldAggregateConcurrentTasksByPipelineAndStage() {
+    cache.publish(
+        "ta",
+        "worker-node-1",
+        List.of(
+            new WorkerPipelineProgressDto(11L, 99L, "LOAD", 40L, 100L),
+            new WorkerPipelineProgressDto(12L, 99L, "LOAD", 30L, 100L),
+            new WorkerPipelineProgressDto(13L, 99L, "VALIDATE", 10L, null)),
+        null,
+        null);
+
+    Map<String, PipelineSnapshot> result = cache.snapshotByPipeline("ta", 99L).stream()
+        .collect(java.util.stream.Collectors.toMap(PipelineSnapshot::stageCode, item -> item));
+
+    assertThat(result.get("LOAD").rowsProcessed()).isEqualTo(70L);
+    assertThat(result.get("LOAD").totalRowsHint()).isEqualTo(200L);
+    assertThat(result.get("VALIDATE").rowsProcessed()).isEqualTo(10L);
+    assertThat(result.get("VALIDATE").totalRowsHint()).isNull();
+  }
+
+  @Test
+  void shouldAggregateTaskAwareProgressForLegacyWorkerQuery() {
+    cache.publish(
+        "ta",
+        "worker-node-1",
+        List.of(
+            new WorkerPipelineProgressDto(11L, 99L, "LOAD", 40L, 100L),
+            new WorkerPipelineProgressDto(12L, 99L, "LOAD", 30L, 100L)),
+        null,
+        null);
+
+    Snapshot snapshot = cache.snapshot("ta", List.of("worker-node-1")).get("worker-node-1");
+
+    assertThat(snapshot.rowsProcessed()).isEqualTo(70L);
+    assertThat(snapshot.totalRowsHint()).isEqualTo(200L);
+  }
+
+  @Test
+  void shouldRemoveTaskMissingFromNextWorkerHeartbeat() {
+    cache.publish(
+        "ta",
+        "worker-node-1",
+        List.of(new WorkerPipelineProgressDto(11L, 99L, "LOAD", 40L, null)),
+        null,
+        null);
+    cache.publish("ta", "worker-node-1", List.of(), null, null);
+
+    assertThat(cache.snapshotByPipeline("ta", 99L)).isEmpty();
+  }
+
+  @Test
+  void shouldNotMixPipelinesRunningOnSameWorker() {
+    cache.publish(
+        "ta",
+        "worker-node-1",
+        List.of(
+            new WorkerPipelineProgressDto(11L, 99L, "LOAD", 40L, null),
+            new WorkerPipelineProgressDto(12L, 100L, "LOAD", 900L, null)),
+        null,
+        null);
+
+    assertThat(cache.snapshotByPipeline("ta", 99L))
+        .extracting(PipelineSnapshot::rowsProcessed)
+        .containsExactly(40L);
+    assertThat(cache.snapshotByPipeline("ta", 100L))
+        .extracting(PipelineSnapshot::rowsProcessed)
+        .containsExactly(900L);
+  }
+
+  @Test
+  void shouldRemoveExpiredTaskFromPipelineAndWorkerIndexes() {
+    cache.publish(
+        "ta",
+        "worker-node-1",
+        List.of(new WorkerPipelineProgressDto(11L, 99L, "LOAD", 40L, null)),
+        null,
+        null);
+    clock.advance(Duration.ofMinutes(6));
+
+    assertThat(cache.snapshotByPipeline("ta", 99L)).isEmpty();
+    assertThat(cache.snapshot("ta", List.of("worker-node-1"))).isEmpty();
+  }
+
+  private static final class MutableClock extends Clock {
+
+    private Instant current;
+
+    private MutableClock(Instant current) {
+      this.current = current;
+    }
+
+    @Override
+    public ZoneId getZone() {
+      return ZoneOffset.UTC;
+    }
+
+    @Override
+    public Clock withZone(ZoneId zone) {
+      return Clock.fixed(current, zone);
+    }
+
+    @Override
+    public Instant instant() {
+      return current;
+    }
+
+    private void advance(Duration duration) {
+      current = current.plus(duration);
+    }
   }
 }

@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.file.infrastructure.query;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -69,11 +68,15 @@ class ConsoleFilePipelineProgressBridgeTest {
   }
 
   private Map<String, Object> step(String status, Long rowsProcessed) {
+    return step("LOAD", status, rowsProcessed);
+  }
+
+  private Map<String, Object> step(String stageCode, String status, Long rowsProcessed) {
     Map<String, Object> row = new LinkedHashMap<>();
     row.put("step_id", 1L);
     row.put("pipeline_instance_id", PIPELINE_ID);
-    row.put("step_code", "LOAD");
-    row.put("stage_code", "LOAD");
+    row.put("step_code", stageCode);
+    row.put("stage_code", stageCode);
     row.put("step_status", status);
     row.put("rows_processed", rowsProcessed);
     row.put("total_rows_hint", null);
@@ -95,10 +98,9 @@ class ConsoleFilePipelineProgressBridgeTest {
     stubTenant();
     when(stepRunMapper.selectProgressByPipelineInstance(TENANT, PIPELINE_ID))
         .thenReturn(List.of(step("RUNNING", null)));
-    when(stepRunMapper.selectRunningWorkerCode(TENANT, PIPELINE_ID)).thenReturn("worker-9");
-    when(orchestratorProxy.pipelineProgress(TENANT, List.of("worker-9")))
+    when(orchestratorProxy.pipelineProgressByInstance(TENANT, PIPELINE_ID))
         .thenReturn(
-            List.of(new ConsolePipelineProgressItemResponse("worker-9", 4200L, null, null)));
+            List.of(new ConsolePipelineProgressItemResponse(null, 4200L, 5000L, null, "LOAD")));
     stubFileInfo(555L, "customers.csv");
 
     // act
@@ -109,7 +111,7 @@ class ConsoleFilePipelineProgressBridgeTest {
     assertThat(resp.fileName()).isEqualTo("customers.csv");
     assertThat(resp.steps()).hasSize(1);
     assertThat(resp.steps().get(0).rowsProcessed()).isEqualTo(4200L);
-    assertThat(resp.steps().get(0).totalRowsHint()).isNull();
+    assertThat(resp.steps().get(0).totalRowsHint()).isEqualTo(5000L);
   }
 
   @Test
@@ -126,18 +128,17 @@ class ConsoleFilePipelineProgressBridgeTest {
 
     // assert
     assertThat(resp.steps().get(0).rowsProcessed()).isEqualTo(100L);
-    verify(stepRunMapper, never()).selectRunningWorkerCode(anyString(), anyLong());
-    verify(orchestratorProxy, never()).pipelineProgress(anyString(), any());
+    verify(orchestratorProxy, never()).pipelineProgressByInstance(anyString(), any());
   }
 
   @Test
-  @DisplayName("解析不到运行中 worker 时,运行中 step 行数保持 null,不调用 cache")
-  void shouldKeepNullWhenNoRunningWorkerResolved() {
+  @DisplayName("orchestrator 无实时进度时,运行中 step 行数保持 null")
+  void shouldKeepNullWhenNoLiveProgressExists() {
     // arrange
     stubTenant();
     when(stepRunMapper.selectProgressByPipelineInstance(TENANT, PIPELINE_ID))
         .thenReturn(List.of(step("RUNNING", null)));
-    when(stepRunMapper.selectRunningWorkerCode(TENANT, PIPELINE_ID)).thenReturn(null);
+    when(orchestratorProxy.pipelineProgressByInstance(TENANT, PIPELINE_ID)).thenReturn(List.of());
     stubFileInfo(2L, "trades.csv");
 
     // act
@@ -145,7 +146,7 @@ class ConsoleFilePipelineProgressBridgeTest {
 
     // assert
     assertThat(resp.steps().get(0).rowsProcessed()).isNull();
-    verify(orchestratorProxy, never()).pipelineProgress(anyString(), any());
+    verify(orchestratorProxy).pipelineProgressByInstance(TENANT, PIPELINE_ID);
   }
 
   @Test
@@ -162,8 +163,27 @@ class ConsoleFilePipelineProgressBridgeTest {
 
     // assert
     assertThat(resp.steps().get(0).rowsProcessed()).isNull();
-    verify(stepRunMapper, never()).selectRunningWorkerCode(anyString(), anyLong());
-    verify(orchestratorProxy, never()).pipelineProgress(anyString(), any());
+    verify(orchestratorProxy, never()).pipelineProgressByInstance(anyString(), any());
+  }
+
+  @Test
+  @DisplayName("同一 pipeline 有运行中 step 时,终态 step 不吸收尚未过期的实时快照")
+  void shouldNotApplyLiveSnapshotToTerminalStep() {
+    stubTenant();
+    when(stepRunMapper.selectProgressByPipelineInstance(TENANT, PIPELINE_ID))
+        .thenReturn(List.of(step("LOAD", "RUNNING", null), step("VALIDATE", "SUCCESS", null)));
+    when(orchestratorProxy.pipelineProgressByInstance(TENANT, PIPELINE_ID))
+        .thenReturn(List.of(
+            new ConsolePipelineProgressItemResponse(null, 42L, 100L, null, "LOAD"),
+            new ConsolePipelineProgressItemResponse(null, 90L, 90L, null, "VALIDATE")));
+    stubFileInfo(4L, "mixed.csv");
+
+    ConsoleFilePipelineProgressResponse response = service.pipelineProgress(PIPELINE_ID);
+
+    assertThat(response.steps().get(0).rowsProcessed()).isEqualTo(42L);
+    assertThat(response.steps().get(0).totalRowsHint()).isEqualTo(100L);
+    assertThat(response.steps().get(1).rowsProcessed()).isNull();
+    assertThat(response.steps().get(1).totalRowsHint()).isNull();
   }
 
   @Test

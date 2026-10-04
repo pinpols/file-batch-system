@@ -15,7 +15,6 @@ import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileConte
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.UncheckedIOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -32,17 +31,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.SynchronousQueue;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -73,134 +61,16 @@ final class RemoteFilesystemDispatchSupport {
   private static final ConcurrentMap<String, Boolean> NAS_SYMLINK_WARNED =
       new ConcurrentHashMap<>();
 
-  // R2-P1-10：NAS Files.copy 是阻塞 IO；stale NFS mount → 派发线程永久挂死，circuit breaker 接不到。
-  // 把 copy 跑在守护线程 pool 上，主线程 future.get(timeout) 限时等待；超时则 cancel(true) + 抛 IOException。
-  // 默认 5 分钟（GB 级文件 + 10 MB/s 慢盘 ~100s 留余量），可由 DispatchRuntimeProperties 覆盖。
   // OSS 内联上传需把对象整读入堆(AWS SDK v2 RequestBody 需精确 contentLength,且分发流可能已解密)。
   // 无上限 readAllBytes 遇 GB 级文件 + 多路并发 dispatch → OOM。与 import 侧 MAX_OBJECT_BYTES 同语义,
   // 默认 512 MiB,可由 DispatchRuntimeProperties 调整;超限拒绝该 dispatch(返回 failed,不 OOM)。
-  // R-audit-p0: newCachedThreadPool 无界——stale NFS mount 下线程随并发 dispatch 持续创建且不可中断
-  // 释放，最终线程泄漏拖垮 JVM。改为有界池：core=0(空闲即回收)/max=8/SynchronousQueue(无排队缓冲，
-  // 池满即拒绝)。拒绝时该次 dispatch 走现有失败路径快速失败（见 copyWithTimeout 的
-  // RejectedExecutionException 分支），不再无限堆积等待线程。
-  private static final int NAS_COPY_MAX_THREADS = 8;
-  private static final AtomicLong NAS_COPY_THREAD_INDEX = new AtomicLong();
-  private static final AtomicReference<ExecutorService> NAS_COPY_EXECUTOR =
-      new AtomicReference<>(newNasCopyExecutor());
-
   private RemoteFilesystemDispatchSupport() {}
-
-  static void shutdownNasCopyExecutor() {
-    ExecutorService executor = NAS_COPY_EXECUTOR.get();
-    executor.shutdown();
-    try {
-      if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
-        log.warn("NAS copy executor did not drain within 5s; forcing interruption");
-        executor.shutdownNow();
-      }
-    } catch (InterruptedException ex) {
-      SwallowedExceptionLogger.info(
-          RemoteFilesystemDispatchSupport.class, "catch:InterruptedException", ex);
-      executor.shutdownNow();
-      Thread.currentThread().interrupt();
-    }
-  }
-
-  /** R2-P1-10：有超时保护的 Files.copy。stale NFS mount 时不会让派发线程永久阻塞。 */
-  private static void copyWithTimeout(
-      InputStream in, Path target, DispatchRuntimeProperties properties) throws IOException {
-    Future<?> future;
-    try {
-      future = nasCopyExecutor().submit(() -> {
-        try {
-          Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException ioe) {
-          // 红线 #5:不抛裸 RuntimeException。UncheckedIOException 是 JDK 为"lambda 内包装受检
-          // IOException"准备的语义化类型;它仍是 RuntimeException 子类,下方 ExecutionException
-          // 解包分支(cause instanceof RuntimeException && cause.getCause() instanceof
-          // IOException)照旧命中。
-          throw new UncheckedIOException(ioe);
-        }
-      });
-    } catch (RejectedExecutionException ree) {
-      // 有界池(max=8)+ SynchronousQueue 已满:当前并发 NAS dispatch 已达上限,快速失败而非排队等待,
-      // 走现有失败路径(该次 dispatch 报可重试错误),不阻塞调用线程。
-      log.warn(
-          "NAS copy thread pool exhausted (max={}), rejecting dispatch fast", NAS_COPY_MAX_THREADS);
-      throw new IOException(
-          "NAS copy thread pool exhausted (max=" + NAS_COPY_MAX_THREADS + "); retry later", ree);
-    }
-    try {
-      future.get(properties.getNasCopyTimeoutSeconds(), TimeUnit.SECONDS);
-    } catch (TimeoutException te) {
-      future.cancel(true);
-      throw new IOException(
-          "NAS Files.copy timed out after "
-              + properties.getNasCopyTimeoutSeconds()
-              + "s — likely stale NFS mount or hung remote",
-          te);
-    } catch (InterruptedException ie) {
-      future.cancel(true);
-      Thread.currentThread().interrupt();
-      throw new IOException("NAS Files.copy interrupted", ie);
-    } catch (ExecutionException ee) {
-      Throwable cause = ee.getCause();
-      if (cause instanceof Error error) {
-        throw error;
-      }
-      if (cause instanceof IOException ioe) {
-        throw ioe;
-      }
-      if (cause instanceof RuntimeException re && re.getCause() instanceof IOException ioe2) {
-        throw ioe2;
-      }
-      throw new IOException("NAS Files.copy failed", cause == null ? ee : cause);
-    }
-  }
-
-  private static ExecutorService nasCopyExecutor() {
-    while (true) {
-      ExecutorService current = NAS_COPY_EXECUTOR.get();
-      if (!current.isShutdown() && !current.isTerminated()) {
-        return current;
-      }
-      ExecutorService replacement = newNasCopyExecutor();
-      if (NAS_COPY_EXECUTOR.compareAndSet(current, replacement)) {
-        return replacement;
-      }
-      replacement.shutdownNow();
-    }
-  }
-
-  private static ExecutorService newNasCopyExecutor() {
-    return new ThreadPoolExecutor(
-        0,
-        NAS_COPY_MAX_THREADS,
-        60L,
-        TimeUnit.SECONDS,
-        new SynchronousQueue<>(),
-        new NasCopyThreadFactory(),
-        new ThreadPoolExecutor.AbortPolicy());
-  }
-
-  private static final class NasCopyThreadFactory implements ThreadFactory {
-    @Override
-    public Thread newThread(Runnable r) {
-      Thread t = new Thread(r, "nas-copy-" + NAS_COPY_THREAD_INDEX.incrementAndGet());
-      t.setDaemon(true);
-      return t;
-    }
-  }
-
-  static DispatchResult dispatchNas(
-      DispatchCommand command, DispatchFileContentResolver contentResolver) {
-    return dispatchNas(command, contentResolver, DEFAULT_RUNTIME_PROPERTIES);
-  }
 
   static DispatchResult dispatchNas(
       DispatchCommand command,
       DispatchFileContentResolver contentResolver,
-      DispatchRuntimeProperties properties) {
+      DispatchRuntimeProperties properties,
+      NasCopyExecutor copyExecutor) {
     try {
       Map<String, Object> channelConfig = command.channelConfig();
       String remoteDir =
@@ -224,7 +94,7 @@ final class RemoteFilesystemDispatchSupport {
         try (InputStream in = contentResolver.openInputStream(command.fileRecord());
             DispatchManifestSupport.DigestingInputStream digesting =
                 DispatchManifestSupport.digesting(in)) {
-          copyWithTimeout(digesting, tempTarget, properties);
+          copyExecutor.copy(digesting, tempTarget, properties);
           payloadDigest = digesting.finish();
         }
         movePublishedFile(tempTarget, target);
@@ -541,14 +411,10 @@ final class RemoteFilesystemDispatchSupport {
   }
 
   static DispatchChannelProbeResult probeHttp(
-      Map<String, Object> channelConfig, boolean dnsGuardEnabled) {
-    return probeHttp(channelConfig, dnsGuardEnabled, DEFAULT_RUNTIME_PROPERTIES);
-  }
-
-  static DispatchChannelProbeResult probeHttp(
       Map<String, Object> channelConfig,
       boolean dnsGuardEnabled,
-      DispatchRuntimeProperties properties) {
+      DispatchRuntimeProperties properties,
+      OkHttpClient baseClient) {
     try {
       String endpoint = stringProp(channelConfig, KEY_TARGET_ENDPOINT);
       if (!Texts.hasText(endpoint)) {
@@ -556,7 +422,8 @@ final class RemoteFilesystemDispatchSupport {
       }
       // S-2.6: resolve-then-connect — 校验目标 IP 后把 HTTP 客户端 DNS 钉到该地址,
       // 与真实 API/API_PUSH dispatch 的 SSRF 防护保持一致。
-      OkHttpClient client = new OkHttpClient.Builder()
+      OkHttpClient client = baseClient
+          .newBuilder()
           .connectTimeout(Duration.ofMillis(properties.getProbeConnectTimeoutMillis()))
           .readTimeout(Duration.ofMillis(properties.getProbeReadTimeoutMillis()))
           .build();
@@ -586,17 +453,9 @@ final class RemoteFilesystemDispatchSupport {
       Map<String, Object> channelConfig,
       S3StorageProperties s3Properties,
       BatchObjectStore objectStore,
-      boolean dnsGuardEnabled) {
-    return probeChannel(
-        channelConfig, s3Properties, objectStore, dnsGuardEnabled, DEFAULT_RUNTIME_PROPERTIES);
-  }
-
-  static DispatchChannelProbeResult probeChannel(
-      Map<String, Object> channelConfig,
-      S3StorageProperties s3Properties,
-      BatchObjectStore objectStore,
       boolean dnsGuardEnabled,
-      DispatchRuntimeProperties properties) {
+      DispatchRuntimeProperties properties,
+      OkHttpClient httpProbeClient) {
     String channelType =
         String.valueOf(channelConfig.getOrDefault("channel_type", "")).toUpperCase(Locale.ROOT);
     FileChannelType type = DictEnum.fromCode(FileChannelType.class, channelType);
@@ -609,7 +468,7 @@ final class RemoteFilesystemDispatchSupport {
       case OSS -> probeOss(channelConfig, s3Properties, objectStore);
       case SFTP -> probeSftp(channelConfig, dnsGuardEnabled, properties);
       case EMAIL -> probeSmtp(channelConfig, dnsGuardEnabled, properties);
-      case API, API_PUSH -> probeHttp(channelConfig, dnsGuardEnabled, properties);
+      case API, API_PUSH -> probeHttp(channelConfig, dnsGuardEnabled, properties, httpProbeClient);
       default ->
         new DispatchChannelProbeResult(
             false, "unsupported health probe channel type: " + channelType, null);

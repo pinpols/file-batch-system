@@ -145,7 +145,7 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
     String tenantId = ops.resolveTenant(request.getTenantId());
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
     // P0-1(2026-05-16):同 ConsoleJobOpsSupport.delegateLaunch — 走带 X-Internal-Secret 的 client
-    RestClient restClient = triggerInternalRestClient.build();
+    RestClient restClient = triggerInternalRestClient.client();
     CommonResponse<LaunchResponse> response = restClient
         .post()
         .uri("/api/triggers/catch-up/approve")

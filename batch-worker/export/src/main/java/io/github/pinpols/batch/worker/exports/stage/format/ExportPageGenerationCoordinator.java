@@ -2,7 +2,6 @@ package io.github.pinpols.batch.worker.exports.stage.format;
 
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.worker.core.infrastructure.PipelineStageProgressSink;
 import java.util.List;
 import java.util.Map;
 
@@ -52,7 +51,7 @@ final class ExportPageGenerationCoordinator {
         rowWriter.writeRow(ctx.batch(), detail, recordCount);
         recordCount++;
         if (recordCount % PROGRESS_PUBLISH_EVERY_N_ROWS == 0) {
-          PipelineStageProgressSink.publish(recordCount, null);
+          publishProgress(ctx, recordCount);
         }
       }
       Object cursor = page.nextCursor();
@@ -74,8 +73,14 @@ final class ExportPageGenerationCoordinator {
       page = ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), cursor);
     }
     // 最后一页可能不足节流阈值，终态仍需上报准确计数。
-    PipelineStageProgressSink.publish(recordCount, null);
+    publishProgress(ctx, recordCount);
     return recordCount;
+  }
+
+  private static void publishProgress(ExportFormatContext ctx, long recordCount) {
+    if (ctx.progressRegistry() != null) {
+      ctx.progressRegistry().publish(ctx.jobContext(), "GENERATE", recordCount, null);
+    }
   }
 
   @FunctionalInterface

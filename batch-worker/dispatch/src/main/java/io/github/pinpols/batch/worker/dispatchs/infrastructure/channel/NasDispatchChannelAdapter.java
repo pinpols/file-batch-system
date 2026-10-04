@@ -2,7 +2,6 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
-import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
@@ -22,6 +21,7 @@ public class NasDispatchChannelAdapter implements DispatchChannelAdapter {
 
   private final DispatchFileContentResolver contentResolver;
   private final DispatchRuntimeProperties runtimeProperties;
+  private final NasCopyExecutor copyExecutor;
 
   @Override
   public boolean supports(String channelType) {
@@ -30,11 +30,7 @@ public class NasDispatchChannelAdapter implements DispatchChannelAdapter {
 
   @Override
   public DispatchResult dispatch(DispatchCommand command) {
-    return RemoteFilesystemDispatchSupport.dispatchNas(command, contentResolver, runtimeProperties);
-  }
-
-  @PreDestroy
-  void shutdownNasCopyExecutor() {
-    RemoteFilesystemDispatchSupport.shutdownNasCopyExecutor();
+    return RemoteFilesystemDispatchSupport.dispatchNas(
+        command, contentResolver, runtimeProperties, copyExecutor);
   }
 }

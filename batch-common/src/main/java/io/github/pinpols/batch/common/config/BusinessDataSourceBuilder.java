@@ -4,9 +4,13 @@ import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import io.github.pinpols.batch.common.tenant.routing.BusinessPlacementResolver;
 import io.github.pinpols.batch.common.tenant.routing.BusinessRoutingDataSourceFactory;
+import io.github.pinpols.batch.common.tenant.routing.HashAndSiloPlacementResolver;
 import io.github.pinpols.batch.common.tenant.routing.TenantPlacementRepository;
+import io.github.pinpols.batch.common.utils.Texts;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import javax.sql.DataSource;
 
 /**
@@ -70,31 +74,68 @@ public final class BusinessDataSourceBuilder {
       BusinessRoutingProperties routingProperties,
       TenantPlacementRepository placementRepository,
       String appName) {
-    Map<String, DataSource> shards = new LinkedHashMap<>();
-    for (BusinessRoutingProperties.Shard shard : routingProperties.getShards()) {
-      HikariConfig cfg = new HikariConfig();
-      cfg.setJdbcUrl(shard.getUrl());
-      cfg.setUsername(shard.getUsername());
-      cfg.setPassword(shard.getPassword());
-      applyPoolDefaults(cfg, properties);
-      // 多片:每片池上限可独立调小,控制 片数×池×worker 数 的总连接,防压垮 PG max_connections
-      int shardPool = routingProperties.getShardMaximumPoolSize();
-      if (shardPool > 0) {
-        cfg.setMaximumPoolSize(shardPool);
-        if (cfg.getMinimumIdle() > shardPool) {
-          cfg.setMinimumIdle(shardPool);
-        }
-      }
-      // 多片:启动不验证连接(连接首用时懒建)。否则任一片(尤其本 worker 从不服务的 silo 片)
-      // 在 worker 启动时不可达,会让整个 worker 启动失败——与「按片分布」目标相悖。
-      cfg.setInitializationFailTimeout(-1L);
-      HikariPgSessionSupport.applyBusiness(
-          cfg, pgSessionProperties, appName + "-business-" + shard.getKey());
-      shards.put(shard.getKey(), new HikariDataSource(cfg));
-    }
+    validateShardKeys(routingProperties);
     BusinessPlacementResolver resolver =
         BusinessPlacementResolverFactory.create(routingProperties, placementRepository);
-    return BusinessRoutingDataSourceFactory.multiShard(shards, resolver);
+    Map<String, DataSource> shards = new LinkedHashMap<>();
+    try {
+      for (BusinessRoutingProperties.Shard shard : routingProperties.getShards()) {
+        HikariConfig cfg = new HikariConfig();
+        cfg.setJdbcUrl(shard.getUrl());
+        cfg.setUsername(shard.getUsername());
+        cfg.setPassword(shard.getPassword());
+        applyPoolDefaults(cfg, properties);
+        // 多片:每片池上限可独立调小,控制 片数×池×worker 数 的总连接,防压垮 PG max_connections
+        int shardPool = routingProperties.getShardMaximumPoolSize();
+        if (shardPool > 0) {
+          cfg.setMaximumPoolSize(shardPool);
+          if (cfg.getMinimumIdle() > shardPool) {
+            cfg.setMinimumIdle(shardPool);
+          }
+        }
+        // 多片:启动不验证连接(连接首用时懒建)。否则任一片(尤其本 worker 从不服务的 silo 片)
+        // 在 worker 启动时不可达,会让整个 worker 启动失败——与「按片分布」目标相悖。
+        cfg.setInitializationFailTimeout(-1L);
+        HikariPgSessionSupport.applyBusiness(
+            cfg, pgSessionProperties, appName + "-business-" + shard.getKey());
+        shards.put(shard.getKey(), new HikariDataSource(cfg));
+      }
+      return BusinessRoutingDataSourceFactory.multiShard(shards, resolver);
+    } catch (RuntimeException | Error failure) {
+      closeCreatedPools(shards, failure);
+      throw failure;
+    }
+  }
+
+  private static void validateShardKeys(BusinessRoutingProperties routingProperties) {
+    Set<String> keys = new HashSet<>();
+    for (BusinessRoutingProperties.Shard shard : routingProperties.getShards()) {
+      if (shard == null || !Texts.hasText(shard.getKey())) {
+        throw new IllegalArgumentException("business routing shard key must not be blank");
+      }
+      if (!keys.add(shard.getKey())) {
+        throw new IllegalArgumentException(
+            "duplicate business routing shard key: " + shard.getKey());
+      }
+    }
+    if (!keys.contains(HashAndSiloPlacementResolver.DEFAULT_KEY)) {
+      throw new IllegalArgumentException("business routing shards must contain default key "
+          + HashAndSiloPlacementResolver.DEFAULT_KEY);
+    }
+  }
+
+  private static void closeCreatedPools(
+      Map<String, DataSource> shards, Throwable constructionFailure) {
+    for (DataSource dataSource : shards.values()) {
+      if (!(dataSource instanceof AutoCloseable closeable)) {
+        continue;
+      }
+      try {
+        closeable.close();
+      } catch (Exception closeFailure) {
+        constructionFailure.addSuppressed(closeFailure);
+      }
+    }
   }
 
   /** 业务库连接池回退,避免默认值导致连接耗尽 + 主备切换硬化(逐字保留原 per-worker 语义)。 */

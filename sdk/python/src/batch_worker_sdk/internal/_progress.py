@@ -1,6 +1,6 @@
 """Pipeline stage 行级进度 sink(Python SDK 端)。
 
-与 Java SDK ``PipelineStageProgressSink`` 对齐(2026-06-03 docs/design/pipeline-stage-progress-display.md)。
+该模块保留旧 SDK 标量心跳兼容语义；内置 Java Worker 已使用 task-aware 注册表。
 
 设计要点:
 - 进程级单例 ``_state`` dict,一个 worker JVM/Python 进程同时只跑一个 CLAIM stage,无并发竞争

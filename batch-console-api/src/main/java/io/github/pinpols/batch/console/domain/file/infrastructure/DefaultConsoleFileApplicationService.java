@@ -126,7 +126,7 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
     approvalClient.requireApprovedApproval(
         tenantId, request.getApprovalId(), ApprovalTargetBinding.file(request.getFileId()));
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-    RestClient restClient = orchestratorInternalRestClient.build();
+    RestClient restClient = orchestratorInternalRestClient.client();
     FileOperationRequest fileOperation = new FileOperationRequest(
         tenantId,
         null,
@@ -153,7 +153,7 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
       FileArrivalGroupActionRequest request, String idempotencyKey) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-    RestClient restClient = orchestratorInternalRestClient.build();
+    RestClient restClient = orchestratorInternalRestClient.client();
     ArrivalGroupOperationRequest arrivalGroupOperation = new ArrivalGroupOperationRequest(
         tenantId,
         request.getAction(),
@@ -178,7 +178,7 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
       String tenantId, String channelCode, String fileName, String idempotencyKey) {
     String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-    RestClient restClient = orchestratorInternalRestClient.build();
+    RestClient restClient = orchestratorInternalRestClient.client();
     PresignUploadRequest body = new PresignUploadRequest(
         resolvedTenantId,
         ConsoleTextSanitizer.safeInput(channelCode, 128),
@@ -280,7 +280,7 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
 
   private ConsoleFileOperationResponse executeFileOperation(FileExecContext ctx) {
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-    RestClient restClient = orchestratorInternalRestClient.build();
+    RestClient restClient = orchestratorInternalRestClient.client();
     FileOperationRequest fileOperation = new FileOperationRequest(
         ctx.tenantId(),
         ConsoleTextSanitizer.safeInput(ctx.channelCode(), 128),

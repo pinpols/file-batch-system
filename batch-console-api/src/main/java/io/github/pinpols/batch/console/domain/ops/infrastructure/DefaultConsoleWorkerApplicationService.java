@@ -56,7 +56,7 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
       String workerCode, DrainWorkerRequest request, String idempotencyKey) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     ConsoleRequestMetadata meta = requestMetadataResolver.current();
-    RestClient client = orchestratorInternalRestClient.build();
+    RestClient client = orchestratorInternalRestClient.client();
     Map<String, Object> body = new LinkedHashMap<>();
     body.put(KEY_TENANT_ID, tenantId);
     if (request.getTimeoutSeconds() != null) {
@@ -81,7 +81,7 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
       String workerCode, ForceOfflineWorkerRequest request, String idempotencyKey) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     ConsoleRequestMetadata meta = requestMetadataResolver.current();
-    RestClient client = orchestratorInternalRestClient.build();
+    RestClient client = orchestratorInternalRestClient.client();
     ConsoleWorkerRegistryResponse response = toResponse(client
         .post()
         .uri("/internal/workers/{workerCode}/force-offline", workerCode)
@@ -101,7 +101,7 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
       String workerCode, ForceOfflineWorkerRequest request, String idempotencyKey) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     ConsoleRequestMetadata meta = requestMetadataResolver.current();
-    RestClient client = orchestratorInternalRestClient.build();
+    RestClient client = orchestratorInternalRestClient.client();
     ConsoleWorkerRegistryResponse response = toResponse(client
         .post()
         .uri("/internal/workers/{workerCode}/takeover", workerCode)
@@ -120,7 +120,7 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
   public List<ConsoleWorkerClaimedTaskResponse> claimedTasks(String tenantId, String workerCode) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     ConsoleRequestMetadata meta = requestMetadataResolver.current();
-    RestClient client = orchestratorInternalRestClient.build();
+    RestClient client = orchestratorInternalRestClient.client();
     List<ConsoleWorkerClaimedTaskResponse> tasks = client
         .get()
         .uri(uriBuilder -> uriBuilder
@@ -139,7 +139,7 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
       String workerCode, String tenantId, String idempotencyKey) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     ConsoleRequestMetadata meta = requestMetadataResolver.current();
-    RestClient client = orchestratorInternalRestClient.build();
+    RestClient client = orchestratorInternalRestClient.client();
     ConsoleWorkerRegistryResponse response = toResponse(client
         .post()
         .uri("/internal/workers/{workerCode}/warmup", workerCode)

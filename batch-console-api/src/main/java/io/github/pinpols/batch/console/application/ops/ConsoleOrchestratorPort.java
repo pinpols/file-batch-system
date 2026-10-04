@@ -134,6 +134,10 @@ public interface ConsoleOrchestratorPort {
   List<ConsolePipelineProgressItemResponse> pipelineProgress(
       String tenantId, List<String> workerCodes);
 
+  /** 按 pipelineInstanceId 查询并聚合同一 stage 的并发分片进度。 */
+  List<ConsolePipelineProgressItemResponse> pipelineProgressByInstance(
+      String tenantId, Long pipelineInstanceId);
+
   /** 转发 dry-run 计划；租户解析和内部 HTTP 细节由实现层负责。 */
   CommonResponse<ConsoleDryRunPlanResponse> dryRunPlan(DryRunPlanRequest request);
 

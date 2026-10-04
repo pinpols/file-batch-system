@@ -75,7 +75,7 @@ class DefaultConsoleFileDownloadApplicationServiceTest {
   /** 把 orchestrator 审批查询 stub 成返回给定 targetType/targetId/status 的记录。 */
   private void stubApproval(String status, String targetType, String targetId) {
     RestClient restClient = mock(RestClient.class, RETURNS_DEEP_STUBS);
-    when(orchestratorInternalRestClient.build()).thenReturn(restClient);
+    when(orchestratorInternalRestClient.client()).thenReturn(restClient);
     ApprovalRecordResponse response =
         new ApprovalRecordResponse(new ApprovalRecord(status, targetType, targetId));
     when(restClient

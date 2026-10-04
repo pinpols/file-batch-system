@@ -35,7 +35,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -46,7 +45,7 @@ import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 
 /**
- * 有序二进制预处理管道（工具类，不可实例化）：对原始文件字节按步骤顺序依次执行解压、解密、摘要校验和字符集转码。
+ * 有序二进制预处理管道（无状态工具类）：对原始文件字节按步骤顺序依次执行解压、解密、摘要校验和字符集转码。
  *
  * <p><b>步骤解析规则</b>：优先使用模板配置中的 {@code preprocess_pipeline}（JSON 数组）； 不存在时根据 {@code
  * compress_type}（ZIP / GZIP）和 {@code encrypt_type}（AES）隐式推导步骤。 其他加密类型在隐式模式下抛出 {@code
@@ -76,23 +75,7 @@ public final class ImportPreprocessPipeline {
   private static final String POLICY_NONE = "NONE";
   private static final String EMPTY = "";
 
-  /**
-   * P2: 持有一份默认 ObjectMapper 作 fallback,但 Spring 启动时由 {@link
-   * ImportPreprocessObjectMapperInitializer} 替换为容器管理的全局 bean,确保自定义 Module(JavaTime / Kotlin / 项目内
-   * mixin)与其他模块行为一致。
-   */
-  private static final AtomicReference<ObjectMapper> OBJECT_MAPPER =
-      new AtomicReference<>(JsonUtils.newDefaultMapper());
-
-  /**
-   * 仅由 Spring 启动期(单线程)调用,把 fallback 实例替换为容器管理的 ObjectMapper。后续解析步骤读到的就是项目全局
-   * ObjectMapper。
-   */
-  static void setObjectMapper(ObjectMapper objectMapper) {
-    if (objectMapper != null) {
-      OBJECT_MAPPER.set(objectMapper);
-    }
-  }
+  private static final ObjectMapper DEFAULT_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
   /**
    * 隐式步骤推导表：{@code compress_type} / {@code encrypt_type} 的 UPPERCASE 值 → 对应 preprocess step。
@@ -117,7 +100,13 @@ public final class ImportPreprocessPipeline {
 
   public static byte[] run(
       byte[] input, ImportPayload payload, Map<String, Object> template, boolean bypassMode) {
-    return run(input, payload, template, bypassMode, new WorkerImportPayloadProperties());
+    return run(
+        input,
+        payload,
+        template,
+        bypassMode,
+        new WorkerImportPayloadProperties(),
+        DEFAULT_OBJECT_MAPPER);
   }
 
   public static byte[] run(
@@ -126,11 +115,21 @@ public final class ImportPreprocessPipeline {
       Map<String, Object> template,
       boolean bypassMode,
       WorkerImportPayloadProperties properties) {
+    return run(input, payload, template, bypassMode, properties, DEFAULT_OBJECT_MAPPER);
+  }
+
+  public static byte[] run(
+      byte[] input,
+      ImportPayload payload,
+      Map<String, Object> template,
+      boolean bypassMode,
+      WorkerImportPayloadProperties properties,
+      ObjectMapper objectMapper) {
     try {
       if (input == null) {
         input = new byte[0];
       }
-      List<Map<String, Object>> steps = resolveSteps(template, bypassMode);
+      List<Map<String, Object>> steps = resolveSteps(template, bypassMode, objectMapper);
       byte[] current = input;
       boolean hasExplicitDigestStep = steps.stream()
           .map(step -> stringProp(step, KEY_TYPE))
@@ -184,10 +183,10 @@ public final class ImportPreprocessPipeline {
   }
 
   private static List<Map<String, Object>> resolveSteps(
-      Map<String, Object> template, boolean bypassMode) {
+      Map<String, Object> template, boolean bypassMode, ObjectMapper objectMapper) {
     Object raw = template == null ? null : template.get("preprocess_pipeline");
     if (raw != null) {
-      List<Map<String, Object>> parsed = parsePipeline(raw);
+      List<Map<String, Object>> parsed = parsePipeline(raw, objectMapper);
       if (!parsed.isEmpty()) {
         return parsed;
       }
@@ -226,7 +225,7 @@ public final class ImportPreprocessPipeline {
     return true;
   }
 
-  private static List<Map<String, Object>> parsePipeline(Object raw) {
+  private static List<Map<String, Object>> parsePipeline(Object raw, ObjectMapper objectMapper) {
     if (raw instanceof List<?> list) {
       List<Map<String, Object>> out = new ArrayList<>();
       for (Object item : list) {
@@ -240,9 +239,7 @@ public final class ImportPreprocessPipeline {
     }
     if (raw instanceof String text && Texts.hasText(text)) {
       try {
-        return OBJECT_MAPPER
-            .get()
-            .readValue(text, new TypeReference<List<Map<String, Object>>>() {});
+        return objectMapper.readValue(text, new TypeReference<List<Map<String, Object>>>() {});
       } catch (Exception ex) {
         throw new ImportPreprocessException(
             "IMPORT_PREPROCESS_PIPELINE_JSON", "invalid preprocess_pipeline json", ex);

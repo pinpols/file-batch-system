@@ -44,7 +44,7 @@ class ConsoleSelfServiceJobServiceTest {
     bodySpec = mock(RestClient.RequestBodySpec.class);
     responseSpec = mock(RestClient.ResponseSpec.class);
 
-    when(orchestratorInternalRestClient.build()).thenReturn(restClient);
+    when(orchestratorInternalRestClient.client()).thenReturn(restClient);
     when(restClient.post()).thenReturn(bodyUriSpec);
     when(bodyUriSpec.uri(anyString())).thenReturn(bodySpec);
     // varargs: header(String, String...) — use doReturn with explicit String[] cast

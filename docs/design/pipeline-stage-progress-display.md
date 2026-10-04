@@ -1,6 +1,6 @@
 # Pipeline Step 进度展示与 SSE 刷新设计
 
-> 2026-06-08 上线前设计收敛。第 3 项公开查询契约已经按 `pipelineInstanceId` 修正，本设计只覆盖剩余的展示策略、SSE 刷新边界、Worker 支持矩阵和后续落地计划。
+> 2026-10-04 运行时并发语义复核：内置 Worker 已从进程级单槽升级为 task/pipeline/stage 隔离的注册表，控制面按 pipeline 与 stage 聚合并发分片；旧 SDK 标量字段和 workerCode 查询只作为兼容入口。
 
 ## 1. 目标
 
@@ -23,18 +23,22 @@ Pipeline 进度只解决一个问题：长时间运行的文件处理 step 到�
 
 ```text
 Worker step
-  -> SDK ProgressReporter / PipelineStageProgressSink
-  -> heartbeat / lease renew details
-  -> orchestrator progress cache / pipeline_progress
+  -> SDK ProgressReporter / PipelineStageProgressRegistry
+  -> heartbeat.pipelineProgress[]
+     {taskId, pipelineInstanceId, stageCode, rowsProcessed, totalRowsHint}
+  -> orchestrator task-aware progress cache
+  -> GET /internal/pipeline-progress/by-pipeline
   -> console-api GET /api/console/queries/pipeline-progress?pipelineInstanceId=
   -> FE FilePipelineObservability / detail page snapshot
 ```
 
 说明：
 
-1. `pipeline_progress` 可以作为 checkpoint / resume / 查询补偿来源，但前端不应直接依赖数据库轮询。
-2. heartbeat 频率天然是秒级到几十秒级，不适合做毫秒级动画。
-3. Console 查询返回的是当前 step 快照。历史吞吐、ETA、stale 判断可以在前端按最近几次快照轻量计算。
+1. 运行态缓存按 `tenantId + pipelineInstanceId + taskId + stageCode` 隔离，同一 Worker 并发执行多个分片时不会相互覆盖。
+2. 控制面按 `pipelineInstanceId + stageCode` 聚合当前分片；`rowsProcessed` 求和，只有所有分片都提供 total 时才汇总 `totalRowsHint`。
+3. `pipeline_progress` 是 checkpoint / resume 的持久真相源；节点本地缓存只补充实时观测，5 分钟未刷新即过期，不承担恢复语义。
+4. heartbeat 频率天然是秒级到几十秒级，不适合做毫秒级动画。
+5. 旧 SDK 仍可上报 `rowsProcessed/totalRowsHint` 标量。旧 workerCode 查询会返回兼容聚合，但无法表达 stage，不能作为新页面主路径。
 
 ## 4. SSE 刷新策略
 
@@ -86,8 +90,8 @@ Worker step
 
 | 类型 | 是否展示行级进度 | 推荐字段 | 备注 |
 |---|---|---|---|
-| IMPORT `LOAD` | 是 | `rowsProcessed`, `totalRowsHint`, `lastHeartbeatAt` | 分批 flush 后上报；总量未知时只显示 processed |
-| EXPORT `GENERATE` | 是 | `rowsProcessed`, `totalRowsHint`, `lastHeartbeatAt` | 流式写文件时上报；total 可由查询 count / planner hint 提供 |
+| IMPORT `LOAD` | 是 | `taskId`, `pipelineInstanceId`, `stageCode`, `rowsProcessed`, `totalRowsHint` | 分批 flush 后上报；总量未知时只显示 processed |
+| EXPORT `GENERATE` | 是 | `taskId`, `pipelineInstanceId`, `stageCode`, `rowsProcessed`, `totalRowsHint` | 分页生成时上报；并发分片由控制面聚合 |
 | PROCESS `COMPUTE` / `COMMIT` | 可选 | `rowsProcessed`, `totalRowsHint` | 只有 copy / aggregate / 插件能给出稳定行数时才上报 |
 | DISPATCH | 默认否 | receipt / checksum / retry / channel status | 分发更关心远端回执和完整性，不强行显示行数 |
 | ATOMIC SQL / HTTP / SHELL / STORED_PROC | 默认否 | heartbeat details JSON | 原子任务不制造百分比；业务 handler 可选择上报自定义 progress |
@@ -121,10 +125,12 @@ Worker step
 | P0 | FilePipelineObservability 以轮询方式读取 step 进度快照 | 已具备 |
 | P1 | SSE 收到 `pipeline-progress-dirty` 后触发 `loadProgress()` 防抖刷新 | 已做 |
 | P1 | 后端增加低频 `pipeline-progress-dirty` 事件，按 pipeline 节流 | 已做 |
+| P1 | 内置 Worker 任务级进度隔离、并发分片聚合、旧 workerCode 查询兼容 | 已完成 |
 | P1 | PROCESS copy / aggregate 有稳定行数时接入 `ProgressReporter` | 待做 |
 | P2 | JobInstanceDetail Steps 能通过 job step 映射到 pipeline step 后展示进度列 | 待做 |
 | P2 | 增加前端单测：无 total、stale、终态、SSE 断开降级 | 待做 |
-| P2 | 增加后端测试：跨租户查询、空进度、终态快照、敏感字段过滤 | 待做 |
+| P2 | 增加后端测试：并发任务隔离、分片聚合、心跳清理、旧查询兼容 | 已完成 |
+| P2 | 增加后端测试：跨租户公开查询、终态快照、敏感字段过滤 | 待做 |
 | P3 | 增加观测指标：SSE 连接数、dirty event drop / throttle、stale progress 数量 | 待做 |
 
 ## 10. 不做项

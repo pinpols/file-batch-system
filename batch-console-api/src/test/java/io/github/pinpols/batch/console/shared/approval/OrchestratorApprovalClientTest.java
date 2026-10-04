@@ -45,7 +45,7 @@ class OrchestratorApprovalClientTest {
 
   private void stubApprovalRecord(String status, String targetType, String targetId) {
     RestClient restClient = mock(RestClient.class, RETURNS_DEEP_STUBS);
-    when(orchestratorInternalRestClient.build()).thenReturn(restClient);
+    when(orchestratorInternalRestClient.client()).thenReturn(restClient);
     when(restClient
             .get()
             .uri(anyString(), any(Object[].class))
@@ -59,7 +59,7 @@ class OrchestratorApprovalClientTest {
     RestClient.RequestBodyUriSpec uriSpec = mock(RestClient.RequestBodyUriSpec.class);
     RestClient.RequestBodySpec bodySpec = mock(RestClient.RequestBodySpec.class);
     RestClient.ResponseSpec responseSpec = mock(RestClient.ResponseSpec.class);
-    when(orchestratorInternalRestClient.build()).thenReturn(restClient);
+    when(orchestratorInternalRestClient.client()).thenReturn(restClient);
     when(restClient.post()).thenReturn(uriSpec);
     when(uriSpec.uri(anyString())).thenReturn(bodySpec);
     when(bodySpec.header(anyString(), any(String[].class))).thenReturn(bodySpec);

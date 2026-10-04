@@ -61,7 +61,7 @@ class DefaultConsoleTriggerProxyServiceTest {
       List<Object> downstream, ConsoleTenantGuard guard) {
     TriggerInternalRestClient restClientFactory = mock(TriggerInternalRestClient.class);
     RestClient restClient = mock(RestClient.class, Answers.RETURNS_DEEP_STUBS);
-    when(restClientFactory.build()).thenReturn(restClient);
+    when(restClientFactory.client()).thenReturn(restClient);
     when(restClient
             .get()
             .uri(any(String.class))

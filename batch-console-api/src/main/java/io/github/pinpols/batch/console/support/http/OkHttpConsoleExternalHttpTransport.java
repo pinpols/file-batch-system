@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Proxy;
@@ -117,6 +118,20 @@ public class OkHttpConsoleExternalHttpTransport implements OutboundHttpTransport
 
   private static String stripIpv6Brackets(String host) {
     return host.startsWith("[") && host.endsWith("]") ? host.substring(1, host.length() - 1) : host;
+  }
+
+  @PreDestroy
+  void shutdown() {
+    closeClient(guardedClient);
+    if (trustedClient != guardedClient) {
+      closeClient(trustedClient);
+    }
+  }
+
+  private static void closeClient(OkHttpClient client) {
+    client.dispatcher().cancelAll();
+    client.dispatcher().executorService().shutdown();
+    client.connectionPool().evictAll();
   }
 
   static OkHttpClient guardedClient() {

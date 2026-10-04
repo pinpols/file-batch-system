@@ -15,7 +15,17 @@ import java.util.Map;
  * record 同样不加 {@code NON_NULL}，保持 wire 一致。
  */
 public record ConsolePipelineProgressItemResponse(
-    String workerCode, Long rowsProcessed, Long totalRowsHint, Instant heartbeatAt) {
+    String workerCode,
+    Long rowsProcessed,
+    Long totalRowsHint,
+    Instant heartbeatAt,
+    String stageCode) {
+
+  /** 兼容旧 workerCode 查询响应和测试夹具。 */
+  public ConsolePipelineProgressItemResponse(
+      String workerCode, Long rowsProcessed, Long totalRowsHint, Instant heartbeatAt) {
+    this(workerCode, rowsProcessed, totalRowsHint, heartbeatAt, null);
+  }
 
   public static ConsolePipelineProgressItemResponse from(Map<String, Object> row) {
     if (row == null) {
@@ -25,6 +35,7 @@ public record ConsolePipelineProgressItemResponse(
         stringValue(row, "workerCode"),
         longValue(row, "rowsProcessed"),
         longValue(row, "totalRowsHint"),
-        instantValue(row, "heartbeatAt"));
+        instantValue(row, "heartbeatAt"),
+        stringValue(row, "stageCode"));
   }
 }

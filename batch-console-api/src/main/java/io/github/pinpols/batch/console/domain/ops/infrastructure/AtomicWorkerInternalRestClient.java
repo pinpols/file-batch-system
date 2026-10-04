@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.ops.infrastructure;
 
 import io.github.pinpols.batch.console.config.ConsoleAtomicWorkerClientProperties;
 import java.time.Duration;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
 import org.springframework.boot.http.client.HttpClientSettings;
@@ -20,21 +19,18 @@ import org.springframework.web.client.RestClient;
  * <p>P0-3 单一入口约束:业务类禁止自行 {@code RestClient.create(baseUrl)};新增依赖请注入本类。
  */
 @Component
-@RequiredArgsConstructor
 public class AtomicWorkerInternalRestClient {
 
-  private final ObjectProvider<RestClient.Builder> restClientBuilderProvider;
   private final ConsoleAtomicWorkerClientProperties properties;
-  private final Environment environment;
+  private final RestClient client;
 
-  public boolean isEnabled() {
-    return properties.isEnabled();
-  }
-
-  /** 构造一个新的 {@link RestClient},baseUrl 已绑定 + 短超时(actuator 调用应是毫秒级)。 */
-  public RestClient build() {
+  public AtomicWorkerInternalRestClient(
+      ObjectProvider<RestClient.Builder> restClientBuilderProvider,
+      ConsoleAtomicWorkerClientProperties properties,
+      Environment environment) {
+    this.properties = properties;
     String baseUrl = environment.resolvePlaceholders(properties.getBaseUrl());
-    return restClientBuilderProvider
+    this.client = restClientBuilderProvider
         .getObject()
         .baseUrl(baseUrl)
         .requestFactory(ClientHttpRequestFactoryBuilder.detect()
@@ -42,5 +38,14 @@ public class AtomicWorkerInternalRestClient {
                 .withConnectTimeout(Duration.ofMillis(properties.getConnectTimeoutMillis()))
                 .withReadTimeout(Duration.ofMillis(properties.getReadTimeoutMillis()))))
         .build();
+  }
+
+  public boolean isEnabled() {
+    return properties.isEnabled();
+  }
+
+  /** 返回组件生命周期内复用的线程安全客户端。 */
+  public RestClient client() {
+    return client;
   }
 }
