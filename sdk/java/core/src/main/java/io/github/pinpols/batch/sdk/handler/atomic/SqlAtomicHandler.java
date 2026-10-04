@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.sdk.handler.atomic;
 
 import io.github.pinpols.batch.sdk.handler.SdkAbstractAtomicHandler;
+import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -100,7 +101,7 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
         try {
           conn.rollback();
         } catch (Exception rbEx) {
-          log.warn("rollback failed: {}", rbEx.getMessage());
+          log.warn("rollback failed: {}", ExceptionLogSummary.of(rbEx));
         }
       }
       throw ex;
@@ -108,7 +109,7 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
       try {
         conn.setAutoCommit(originalAutoCommit);
       } catch (Exception restoreEx) {
-        log.warn("restore autoCommit failed: {}", restoreEx.getMessage());
+        log.warn("restore autoCommit failed: {}", ExceptionLogSummary.of(restoreEx));
       }
     }
     if (lastResultSet != null) {

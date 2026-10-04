@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.processes.cleanup;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.processes.mapper.business.ProcessStagingMapper;
@@ -92,7 +93,8 @@ public class ProcessStagingOrphanCleaner {
     try {
       maintainPartitions();
     } catch (RuntimeException ex) {
-      log.warn("process staging partition maintenance failed: {}", ex.getMessage());
+      log.warn(
+          "process staging partition maintenance failed: {}", SwallowedExceptionLogger.summary(ex));
     }
     cleanOnce();
   }
@@ -128,7 +130,10 @@ public class ProcessStagingOrphanCleaner {
         processStagingMapper.createDailyPartition(name, fromTs, toTs);
         created++;
       } catch (RuntimeException ex) {
-        log.warn("create daily partition failed: name={}, cause={}", name, ex.getMessage());
+        log.warn(
+            "create daily partition failed: name={}, cause={}",
+            name,
+            SwallowedExceptionLogger.summary(ex));
       }
     }
 
@@ -145,7 +150,10 @@ public class ProcessStagingOrphanCleaner {
           processStagingMapper.dropPartition(partition);
           dropped++;
         } catch (RuntimeException ex) {
-          log.warn("drop expired partition failed: name={}, cause={}", partition, ex.getMessage());
+          log.warn(
+              "drop expired partition failed: name={}, cause={}",
+              partition,
+              SwallowedExceptionLogger.summary(ex));
         }
       }
     }
@@ -193,7 +201,7 @@ public class ProcessStagingOrphanCleaner {
               0d, (BatchDateTimeSupport.utcNow().toEpochMilli() - at.toEpochMilli()) / 1000d))
           .orElse(0d);
     } catch (RuntimeException ex) {
-      log.warn("oldest staging age gauge query failed: {}", ex.getMessage());
+      log.warn("oldest staging age gauge query failed: {}", SwallowedExceptionLogger.summary(ex));
       return -1d;
     }
   }

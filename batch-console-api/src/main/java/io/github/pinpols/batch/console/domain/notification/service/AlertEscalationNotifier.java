@@ -186,17 +186,21 @@ public class AlertEscalationNotifier {
       lockingTaskExecutor.executeWithLock((Runnable) this::pollLocked, lockConfig());
     } catch (DataAccessException dae) {
       if (stopping.get() && isShutdownNoise(dae)) {
-        log.info("AlertEscalationNotifier poll skipped during shutdown: {}", dae.getMessage());
+        log.info(
+            "AlertEscalationNotifier poll skipped during shutdown: {}",
+            SwallowedExceptionLogger.summary(dae));
         return;
       }
       log.warn(
           "AlertEscalationNotifier transient DB failure; retrying on the next cycle: {}",
           dae.getMostSpecificCause() == null
-              ? dae.getMessage()
-              : dae.getMostSpecificCause().getMessage());
+              ? SwallowedExceptionLogger.summary(dae)
+              : SwallowedExceptionLogger.summary(dae.getMostSpecificCause()));
     } catch (Exception t) {
       if (stopping.get() && isShutdownNoise(t)) {
-        log.info("AlertEscalationNotifier poll skipped during shutdown: {}", t.getMessage());
+        log.info(
+            "AlertEscalationNotifier poll skipped during shutdown: {}",
+            SwallowedExceptionLogger.summary(t));
         return;
       }
       log.error("AlertEscalationNotifier failed", t);

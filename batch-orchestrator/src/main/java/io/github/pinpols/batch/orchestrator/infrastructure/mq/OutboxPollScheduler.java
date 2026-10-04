@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.mq;
 
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.engine.DefaultScheduleForwarder;
@@ -224,8 +225,8 @@ public class OutboxPollScheduler {
       log.warn(
           "Outbox poll transient database failure; retrying on the next cycle: {}",
           dae.getMostSpecificCause() == null
-              ? dae.getMessage()
-              : dae.getMostSpecificCause().getMessage());
+              ? SwallowedExceptionLogger.summary(dae)
+              : SwallowedExceptionLogger.summary(dae.getMostSpecificCause()));
       log.debug("Outbox poll database exception", dae);
     } catch (OutOfMemoryError oom) {
       // 内存溢出 — 严重故障，记录后让 JVM 默认 OOM handler 接管
@@ -291,8 +292,8 @@ public class OutboxPollScheduler {
       log.warn(
           "Failed to reset stale PUBLISHING events (transient database failure; retrying on the next cycle): {}",
           ex.getMostSpecificCause() == null
-              ? ex.getMessage()
-              : ex.getMostSpecificCause().getMessage());
+              ? SwallowedExceptionLogger.summary(ex)
+              : SwallowedExceptionLogger.summary(ex.getMostSpecificCause()));
       log.debug("Failed to reset stale PUBLISHING events", ex);
     }
   }

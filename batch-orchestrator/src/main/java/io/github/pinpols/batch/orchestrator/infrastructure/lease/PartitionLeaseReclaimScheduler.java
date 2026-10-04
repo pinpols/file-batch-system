@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.lease;
 
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.TaskStatus;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
@@ -99,7 +100,8 @@ public class PartitionLeaseReclaimScheduler {
           reclaimUnit.reclaim(partition);
         } catch (ReclaimRetryableException retryable) {
           log.warn(
-              "partition reclaim rolled back, will retry next cycle: {}", retryable.getMessage());
+              "partition reclaim rolled back, will retry next cycle: {}",
+              SwallowedExceptionLogger.summary(retryable));
         } catch (RuntimeException unexpected) {
           // 单条 partition 异常不影响后续行处理：下一行继续。
           log.error(
@@ -149,7 +151,7 @@ public class PartitionLeaseReclaimScheduler {
         try {
           reclaimUnit.reclaim(partition);
         } catch (ReclaimRetryableException retryable) {
-          log.warn("orphan-sweep retryable: {}", retryable.getMessage());
+          log.warn("orphan-sweep retryable: {}", SwallowedExceptionLogger.summary(retryable));
         } catch (RuntimeException unexpected) {
           log.error(
               "orphan-sweep unexpected error: tenantId={}, partitionId={}",

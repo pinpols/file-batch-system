@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.config.SensorProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.http.OrchestratorOutboundTransport;
@@ -117,10 +118,10 @@ public class HttpPollSensorPolicy implements SensorPolicy {
       }
       return SensorProbeResult.notYet();
     } catch (IOException e) {
-      log.debug("HTTP_POLL timeout url={} err={}", url, e.getMessage());
+      log.debug("HTTP_POLL timeout url={} err={}", url, SwallowedExceptionLogger.summary(e));
       return SensorProbeResult.notYet();
     } catch (Exception e) {
-      log.warn("HTTP_POLL probe error url={} err={}", url, e.toString());
+      log.warn("HTTP_POLL probe error url={} err={}", url, SwallowedExceptionLogger.summary(e));
       return SensorProbeResult.error(
           "error.workflow.sensor_probe_failed",
           List.of(
@@ -208,7 +209,7 @@ public class HttpPollSensorPolicy implements SensorPolicy {
         }
         return rhs.equals(found.asText());
       } catch (JsonProcessingException e) {
-        log.debug("HTTP_POLL body not JSON parseable: {}", e.getMessage());
+        log.debug("HTTP_POLL body not JSON parseable: {}", SwallowedExceptionLogger.summary(e));
         return false;
       }
     }

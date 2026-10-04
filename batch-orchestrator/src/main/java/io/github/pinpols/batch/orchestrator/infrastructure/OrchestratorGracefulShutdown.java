@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -61,7 +62,9 @@ public class OrchestratorGracefulShutdown
         try {
           AvailabilityChangeEvent.publish(eventPublisher, this, ReadinessState.REFUSING_TRAFFIC);
         } catch (RuntimeException ex) {
-          log.warn("publish REFUSING_TRAFFIC failed (non-fatal): {}", ex.getMessage());
+          log.warn(
+              "publish REFUSING_TRAFFIC failed (non-fatal): {}",
+              SwallowedExceptionLogger.summary(ex));
         }
       }
     }
@@ -79,7 +82,9 @@ public class OrchestratorGracefulShutdown
         try {
           AvailabilityChangeEvent.publish(eventPublisher, this, ReadinessState.ACCEPTING_TRAFFIC);
         } catch (RuntimeException ex) {
-          log.warn("publish ACCEPTING_TRAFFIC failed (non-fatal): {}", ex.getMessage());
+          log.warn(
+              "publish ACCEPTING_TRAFFIC failed (non-fatal): {}",
+              SwallowedExceptionLogger.summary(ex));
         }
       }
     }

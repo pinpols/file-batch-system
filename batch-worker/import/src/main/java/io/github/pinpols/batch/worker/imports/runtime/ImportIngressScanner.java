@@ -555,7 +555,7 @@ public class ImportIngressScanner {
       log.warn(
           "failed to read/parse sidecar manifest, skip register: marker={}, error={}",
           markerName,
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       return null;
     }
   }
@@ -735,7 +735,9 @@ public class ImportIngressScanner {
       return objectMapper.readValue(bytes, BatchManifest.class);
     } catch (Exception ex) {
       log.warn(
-          "failed to read/parse batch manifest: object={}, error={}", objectName, ex.getMessage());
+          "failed to read/parse batch manifest: object={}, error={}",
+          objectName,
+          SwallowedExceptionLogger.summary(ex));
       return null;
     }
   }

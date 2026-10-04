@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import io.github.pinpols.batch.common.enums.BatchDayReplayScope;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.application.service.governance.CompensationService;
@@ -93,7 +94,7 @@ public class BatchDayReplayDispatcher {
             "batch_day_replay dispatch session error: tenantId={}, sessionId={}, msg={}",
             session.tenantId(),
             session.id(),
-            failure.getMessage());
+            SwallowedExceptionLogger.summary(failure));
       }
     }
   }
@@ -127,8 +128,8 @@ public class BatchDayReplayDispatcher {
               session.id(),
               entry.id(),
               entry.jobCode(),
-              entryFailure.getMessage(),
-              markFailure.getMessage());
+              SwallowedExceptionLogger.summary(entryFailure),
+              SwallowedExceptionLogger.summary(markFailure));
         }
       }
     }

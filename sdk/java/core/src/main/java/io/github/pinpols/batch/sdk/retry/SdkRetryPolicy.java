@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.sdk.retry;
 
+import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import java.time.Duration;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
@@ -61,7 +62,7 @@ public final class SdkRetryPolicy {
               "attempt {}/{} failed: {}, retrying in {}",
               attempt,
               maxAttempts,
-              e.getMessage(),
+              ExceptionLogSummary.of(e),
               delay);
           sleep(delay);
           delay = nextDelay(delay);

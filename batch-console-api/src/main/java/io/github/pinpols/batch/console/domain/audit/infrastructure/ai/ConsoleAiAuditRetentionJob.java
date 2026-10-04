@@ -54,7 +54,7 @@ public class ConsoleAiAuditRetentionJob {
       int deleted = mapper.deleteBefore(cutoff);
       log.info("AI audit retention completed: cutoff={}, deleted={}", cutoff, deleted);
     } catch (RuntimeException exception) {
-      log.warn("AI audit retention failed: {}", exception.getMessage(), exception);
+      log.warn("AI audit retention failed", exception);
     }
   }
 }

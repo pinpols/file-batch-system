@@ -83,6 +83,8 @@ if ((${#java_files[@]} > 0)); then
     ./mvnw -q spotless:apply
   gate_run PRE_COMMIT_JAVA_LOGGING "Java 日志与异常输出治理" \
     "$PYTHON_BIN" scripts/ci/check-java-logging-governance.py "${java_files[@]}"
+  gate_run PRE_COMMIT_JAVA_LOGGING_TEST "Java 日志治理门禁测试" \
+    "$PYTHON_BIN" -m unittest scripts/ci/tests/test_check_java_logging_governance.py
   gate_run PRE_COMMIT_JAVA_READABILITY "Java 可读性约定" \
     "$PYTHON_BIN" scripts/ci/check-java-readability.py "${java_files[@]}"
   gate_run PRE_COMMIT_JAVA_LOMBOK_INJECTION "Java Lombok 与依赖注入规约" \

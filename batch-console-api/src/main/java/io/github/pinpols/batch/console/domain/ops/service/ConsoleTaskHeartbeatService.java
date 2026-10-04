@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.console.domain.ops.dto.TaskHeartbeatDetailsResponse;
 import io.github.pinpols.batch.console.domain.ops.entity.JobTaskHeartbeatEntity;
 import io.github.pinpols.batch.console.domain.ops.mapper.JobTaskMapper;
@@ -47,7 +48,9 @@ public class ConsoleTaskHeartbeatService {
       return objectMapper.readTree(raw);
     } catch (JsonProcessingException e) {
       log.warn(
-          "Failed to parse job_task heartbeat_details (taskId={}): {}", taskId, e.getMessage());
+          "Failed to parse job_task heartbeat_details (taskId={}): {}",
+          taskId,
+          SwallowedExceptionLogger.summary(e));
       return null;
     }
   }

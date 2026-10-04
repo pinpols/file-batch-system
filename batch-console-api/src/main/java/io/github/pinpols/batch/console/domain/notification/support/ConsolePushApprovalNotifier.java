@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.notification.support;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.console.config.ConsolePushProperties;
 import io.github.pinpols.batch.console.domain.notification.entity.ConsolePushApprovalNotificationEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsolePushApprovalNotificationMapper;
@@ -88,7 +89,9 @@ public class ConsolePushApprovalNotifier {
       pollOnce();
     } catch (RuntimeException e) {
       if (stopping.get() && isShutdownNoise(e)) {
-        log.info("[push] approval-notify poll skipped during shutdown: {}", e.getMessage());
+        log.info(
+            "[push] approval-notify poll skipped during shutdown: {}",
+            SwallowedExceptionLogger.summary(e));
         return;
       }
       log.error("[push] approval-notify poll failed", e);

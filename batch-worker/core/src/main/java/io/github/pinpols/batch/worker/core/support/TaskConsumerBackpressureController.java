@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.core.support;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -71,7 +72,10 @@ final class TaskConsumerBackpressureController {
       }
     } catch (Exception ex) {
       log.warn(
-          "failed to pause container: listenerId={}, error={}", containerId, ex.getMessage(), ex);
+          "failed to pause container: listenerId={}, error={}",
+          containerId,
+          SwallowedExceptionLogger.summary(ex),
+          ex);
     }
   }
 
@@ -90,7 +94,10 @@ final class TaskConsumerBackpressureController {
       }
     } catch (Exception ex) {
       log.warn(
-          "failed to resume container: listenerId={}, error={}", containerId, ex.getMessage(), ex);
+          "failed to resume container: listenerId={}, error={}",
+          containerId,
+          SwallowedExceptionLogger.summary(ex),
+          ex);
     }
   }
 

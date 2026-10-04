@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.file.realtime;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsolePipelineProgressDirtyEventResponse;
 import io.github.pinpols.batch.console.domain.file.mapper.ConsolePipelineProgressDirtyMapper;
@@ -117,10 +118,12 @@ public class ConsolePipelineProgressDirtyPublisher {
       pollOnce();
     } catch (RuntimeException ex) {
       if (stopping.get()) {
-        log.info("pipeline progress dirty poll skipped during shutdown: {}", ex.getMessage());
+        log.info(
+            "pipeline progress dirty poll skipped during shutdown: {}",
+            SwallowedExceptionLogger.summary(ex));
         return;
       }
-      log.warn("pipeline progress dirty poll failed: {}", ex.getMessage(), ex);
+      log.warn("pipeline progress dirty poll failed", ex);
     }
   }
 

@@ -109,7 +109,7 @@ public class ForensicExportService {
           result.sha256(),
           null);
     } catch (RuntimeException | IOException | NoSuchAlgorithmException e) {
-      log.warn("forensic export failed exportId={}: {}", exportId, e.getMessage(), e);
+      log.warn("forensic export failed exportId={}", exportId, e);
       forensicExportLogMapper.markFailed(
           request.tenantId(),
           exportId,

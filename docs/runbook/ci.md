@@ -228,7 +228,7 @@ pr-gate 会根据 PR 变更文件范围决定 Maven 构建粒度：
 | 所有提交 | `check-utf8-encoding.py --staged` 及编码门禁单测 | **增量**：暂存文件严格 UTF-8 解码，含 NUL 的文本也会检查；已登记二进制后缀跳过，Full Gate 另做全仓扫描 |
 | 所有提交 | `check-comment-language.py --staged` | **增量预检**：仅检查暂存 diff 新增说明性注释；当前不作为 PR / Full CI 阻断项 |
 | Java 暂存文件 | `spotless:apply` | 受 Maven 插件能力限制，执行仓库 Spotless apply；随后重新暂存 Java 文件 |
-| Java 暂存文件 | Java 日志治理、可读性约定、文本块格式、抑制项注册表、`Map/List/Set.of` 空值风险 | **增量**：仅传入暂存 Java 文件；对应 CI 无参全量 |
+| Java 暂存文件 | Java 日志治理及扫描器自测、可读性约定、文本块格式、抑制项注册表、`Map/List/Set.of` 空值风险 | **增量**：仅传入暂存 Java 文件；日志门禁禁止直接标准输出、`printStackTrace()` 和生产日志中的原始异常 message；对应 CI 无参全量 |
 | Java 暂存文件 | Lombok 与依赖注入规约及其扫描器单测 | **增量**：pre-commit 检查暂存区涉及的生产 Java 文件并运行扫描器单测；PR 对目标分支变更文件检查并运行单测；Full Gate 全量基线与单测 |
 | MyBatis Mapper XML 暂存文件 | PostgreSQL generated key 列约束、禁止位置式 `INSERT ... SELECT *` | **增量**：仅传入暂存 Mapper 文件；对应 CI 无参全量 |
 | Shell 暂存文件 | `bash -n`、ShellCheck、Shell Linux 可移植性 | **增量**：仅暂存 Shell 文件；对应 CI 无参全量 |

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.infrastructure.realtime;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleOpsSummaryRealtimeStream;
@@ -95,12 +96,11 @@ public class ConsoleRealtimeRedisPubSubConsumer implements MessageListener {
               "console realtime pubsub consumer stop skipped during shutdown: instanceId={},"
                   + " reason={}",
               instanceIdProvider.instanceId(),
-              exception.getMessage());
+              SwallowedExceptionLogger.summary(exception));
         } else {
           log.warn(
-              "console realtime pubsub consumer stop failed: instanceId={}, reason={}",
+              "console realtime pubsub consumer stop failed: instanceId={}",
               instanceIdProvider.instanceId(),
-              exception.getMessage(),
               exception);
         }
       }
@@ -110,7 +110,7 @@ public class ConsoleRealtimeRedisPubSubConsumer implements MessageListener {
         log.debug(
             "console realtime pubsub consumer destroy skipped: instanceId={}," + " reason={}",
             instanceIdProvider.instanceId(),
-            exception.getMessage(),
+            SwallowedExceptionLogger.summary(exception),
             exception);
       }
     }
@@ -127,11 +127,7 @@ public class ConsoleRealtimeRedisPubSubConsumer implements MessageListener {
       envelope = JsonUtils.fromJson(payload, ConsoleRealtimeStreamEnvelope.class);
     } catch (IllegalArgumentException exception) {
       realtimeMetrics.recordPubSubDecodeFailure();
-      log.warn(
-          "console realtime pubsub payload decode failed: channel={}, reason={}",
-          CHANNEL_KEY,
-          exception.getMessage(),
-          exception);
+      log.warn("console realtime pubsub payload decode failed: channel={}", CHANNEL_KEY, exception);
       return;
     }
     if (envelope == null) {
@@ -164,11 +160,10 @@ public class ConsoleRealtimeRedisPubSubConsumer implements MessageListener {
       realtimeMetrics.recordPubSubHandleFailure(envelope.stream(), envelope.eventType());
       log.warn(
           "console realtime pubsub record handling failed: tenantId={}, stream={},"
-              + " eventType={}, reason={}",
+              + " eventType={}",
           envelope.tenantId(),
           envelope.stream(),
           envelope.eventType(),
-          exception.getMessage(),
           exception);
     }
   }
@@ -179,14 +174,11 @@ public class ConsoleRealtimeRedisPubSubConsumer implements MessageListener {
         log.info(
             "console realtime pubsub listener skipped during shutdown: channel={}, reason={}",
             CHANNEL_KEY,
-            throwable.getMessage());
+            SwallowedExceptionLogger.summary(throwable));
         return;
       }
       log.error(
-          "console realtime pubsub listener container failed: channel={}, reason={}",
-          CHANNEL_KEY,
-          throwable.getMessage(),
-          throwable);
+          "console realtime pubsub listener container failed: channel={}", CHANNEL_KEY, throwable);
     };
   }
 

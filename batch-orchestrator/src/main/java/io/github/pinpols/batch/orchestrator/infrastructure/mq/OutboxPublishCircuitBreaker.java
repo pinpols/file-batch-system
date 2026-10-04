@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.mq;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.config.OutboxProperties;
@@ -173,7 +174,7 @@ public class OutboxPublishCircuitBreaker {
       log.warn(
           "Outbox circuit breaker: Redis is unreachable; allowNow fails open to the cached state (openUntilMs={}): {}",
           snapshot.openUntilMs(),
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       return snapshot.openUntilMs() <= now;
     }
     // 区分 Redis 返回 0(正常关闭) 与 null(Lua 脚本返回 nil):null 时使用上次缓存的 state
@@ -210,7 +211,7 @@ public class OutboxPublishCircuitBreaker {
       recordFailOpen();
       log.warn(
           "Outbox circuit breaker: Redis is unreachable; skipping cluster-state update in onAdvanceResult: {}",
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       halfOpenProbing.compareAndSet(true, false);
       return;
     }

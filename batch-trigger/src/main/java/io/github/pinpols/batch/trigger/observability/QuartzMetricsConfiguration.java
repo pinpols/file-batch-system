@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.trigger.observability;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import jakarta.annotation.PostConstruct;
@@ -63,7 +64,7 @@ public class QuartzMetricsConfiguration {
     try {
       return scheduler.getJobKeys(GroupMatcher.<JobKey>anyGroup()).size();
     } catch (SchedulerException e) {
-      log.warn("count active triggers failed: {}", e.getMessage());
+      log.warn("count active triggers failed: {}", SwallowedExceptionLogger.summary(e));
       return -1d;
     }
   }

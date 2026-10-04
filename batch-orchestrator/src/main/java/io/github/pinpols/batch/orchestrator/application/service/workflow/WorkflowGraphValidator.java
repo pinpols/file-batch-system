@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -284,7 +285,7 @@ public class WorkflowGraphValidator {
         log.warn(
             "validator skipped job_definition lookup for jobCode={} due to {}",
             jobCode,
-            ex.getMessage());
+            SwallowedExceptionLogger.summary(ex));
       }
     }
     return result;

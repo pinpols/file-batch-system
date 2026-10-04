@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.imports.stage;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.exception.WorkerConfigException;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import io.github.pinpols.batch.common.plugin.ImportLoadContext;
 import io.github.pinpols.batch.common.plugin.ImportLoadPlugin;
@@ -195,7 +196,7 @@ public class LoadStep implements ImportStageStep {
           "load stage (streaming) failed: tenantId={}, fileId={}, message={}",
           context.getTenantId(),
           fid,
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       log.debug(
           "load stage (streaming) failed stack: tenantId={}, fileId={}",
           context.getTenantId(),

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.atomic.sql;
 
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.SensitiveDataValidator;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
 import io.github.pinpols.batch.common.spi.task.ResourceKind;
@@ -517,7 +518,8 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
           try (Statement guard = conn.createStatement()) {
             guard.execute("SET LOCAL statement_timeout = " + (inv.timeoutSec * 1000L));
           } catch (SQLException setEx) {
-            log.warn("SET LOCAL statement_timeout failed: {}", setEx.getMessage());
+            log.warn(
+                "SET LOCAL statement_timeout failed: {}", SwallowedExceptionLogger.summary(setEx));
           }
         }
         for (String sql : inv.statements) {

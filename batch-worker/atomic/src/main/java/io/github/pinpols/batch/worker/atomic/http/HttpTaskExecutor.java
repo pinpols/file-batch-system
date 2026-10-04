@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.atomic.http;
 
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.CredentialEnvResolver;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.security.SensitiveDataValidator;
@@ -521,7 +522,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
               "http I/O error, retrying: attempt={}/{}, ex={}",
               attempt,
               maxAttempts,
-              ex.getMessage());
+              SwallowedExceptionLogger.summary(ex));
           sleep(props.getRetryBackoff().toMillis() * (1L << (attempt - 1)));
         }
       }

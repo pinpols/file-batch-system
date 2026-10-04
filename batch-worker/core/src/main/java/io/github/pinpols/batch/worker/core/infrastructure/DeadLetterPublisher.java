@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
 import io.github.pinpols.batch.common.kafka.BatchTopics;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.mq.MqMessage;
 import io.github.pinpols.batch.common.mq.MqMessagePublisher;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -126,12 +128,13 @@ public class DeadLetterPublisher {
       if (failureCounter != null) {
         failureCounter.increment();
       }
+      Throwable cause = ex.getCause();
       log.error(
           "DLQ publish failed: sourceTopic={}, workerType={}, error={}",
           sourceTopic,
           workerType,
-          ex.getCause() == null ? ex.getMessage() : ex.getCause().getMessage());
-      throw new IllegalStateException("dead letter publish failed", ex.getCause());
+          SwallowedExceptionLogger.summary(EmptyChecks.isNull(cause) ? ex : cause));
+      throw new IllegalStateException("dead letter publish failed", cause);
     } catch (InterruptedException ex) {
       Thread.currentThread().interrupt();
       if (failureCounter != null) {

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.trigger.infrastructure;
 
 import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -81,7 +82,7 @@ public class TriggerGracefulShutdown
       startDraining("context-closed");
       log.info("Trigger scheduler standby complete");
     } catch (SchedulerException e) {
-      log.warn("Error during trigger graceful shutdown: {}", e.getMessage(), e);
+      log.warn("Error during trigger graceful shutdown", e);
     }
   }
 
@@ -140,7 +141,10 @@ public class TriggerGracefulShutdown
     try {
       AvailabilityChangeEvent.publish(eventPublisher, this, state);
     } catch (RuntimeException ex) {
-      log.warn("failed to publish trigger readiness state {}: {}", state, ex.getMessage());
+      log.warn(
+          "failed to publish trigger readiness state {}: {}",
+          state,
+          SwallowedExceptionLogger.summary(ex));
     }
   }
 

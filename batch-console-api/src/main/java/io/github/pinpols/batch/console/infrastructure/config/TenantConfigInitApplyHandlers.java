@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.infrastructure.config;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.Nullables;
@@ -189,7 +190,7 @@ public class TenantConfigInitApplyHandlers {
             handler.typeName(),
             code,
             ctx.tenantId(),
-            ex.getMessage());
+            SwallowedExceptionLogger.summary(ex));
         acc.recordFailed(code, ex.getMessage());
       }
     }

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutorRegistry;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
@@ -104,7 +105,7 @@ public class DefaultStepExecutionAdapter implements StepExecutionAdapter {
     } catch (RuntimeException ex) {
       log.warn(
           "Task payload is not a valid JSON object; executing with empty parameters: {}",
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
     }
     return Map.of();
   }

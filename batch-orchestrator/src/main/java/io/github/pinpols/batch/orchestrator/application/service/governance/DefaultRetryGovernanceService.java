@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -202,14 +203,10 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         log.warn(
             "retry dispatch version conflict, will retry later: retryId={}, error={}",
             retrySchedule.getId(),
-            conflict.getMessage());
+            SwallowedExceptionLogger.summary(conflict));
         // markRunning 已随 REQUIRES_NEW 一起回滚，状态留在 WAITING，无需额外 resetToWaiting
       } catch (Exception exception) {
-        log.warn(
-            "retry dispatch failed: retryId={}, error={}",
-            retrySchedule.getId(),
-            exception.getMessage(),
-            exception);
+        log.warn("retry dispatch failed: retryId={}", retrySchedule.getId(), exception);
         RetryScheduleMapper.MarkFailedParam markFailedParam =
             RetryScheduleMapper.MarkFailedParam.builder()
                 .tenantId(retrySchedule.getTenantId())
@@ -274,7 +271,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
                 + " deadLetterId={}, detail={}",
             tenantId,
             deadLetterId,
-            ex.getMessage());
+            SwallowedExceptionLogger.summary(ex));
       } catch (Exception ex) {
         // markReplayFailure 已在 replayDeadLetter 内部被调用; 这里检查是否已用尽预算, 转 GIVE_UP
         int newReplayCount = currentReplayCount + 1;
@@ -287,7 +284,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
               deadLetterId,
               newReplayCount,
               maxReplayCount,
-              ex.getMessage());
+              SwallowedExceptionLogger.summary(ex));
         } else {
           log.info(
               "dead letter auto-retry failed, will back off: tenantId={},"
@@ -295,7 +292,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
               tenantId,
               deadLetterId,
               newReplayCount,
-              ex.getMessage());
+              SwallowedExceptionLogger.summary(ex));
         }
       }
     }
@@ -447,11 +444,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
             replayAt,
             "REPLAY_ACCEPTED");
       } catch (Exception exception) {
-        log.warn(
-            "dead letter replay failed: deadLetterId={}, error={}",
-            deadLetterTaskId,
-            exception.getMessage(),
-            exception);
+        log.warn("dead letter replay failed: deadLetterId={}", deadLetterTaskId, exception);
         if (isOrphanPartitionReplayFailure(exception)) {
           deadLetterTaskMapper.markGiveUp(tenantId, deadLetterTaskId);
           log.warn(

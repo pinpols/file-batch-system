@@ -74,8 +74,7 @@ public class SensorPollScheduler {
       } catch (Exception e) {
         // R2-P2-6：e.toString() 只给类名 + message 不带 stack；sensor policy 内部 NPE 等代码缺陷
         // 会留下数千行无 actionable 信息的 warn。带 stack 让运维能直接定位根因。
-        log.warn(
-            "Sensor probe tick failed nodeRunId={} err={}", nodeRun.getId(), e.getMessage(), e);
+        log.warn("Sensor probe tick failed nodeRunId={}", nodeRun.getId(), e);
       }
     }
   }

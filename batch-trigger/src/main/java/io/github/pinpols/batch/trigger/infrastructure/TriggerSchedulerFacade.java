@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.trigger.infrastructure;
 
 import io.github.pinpols.batch.common.enums.ScheduleType;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
 import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
@@ -224,7 +225,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
           "skipping invalid trigger descriptor for job={}/{}: {}",
           descriptor.getTenantId(),
           descriptor.getJobCode(),
-          e.getMessage());
+          SwallowedExceptionLogger.summary(e));
     }
   }
 

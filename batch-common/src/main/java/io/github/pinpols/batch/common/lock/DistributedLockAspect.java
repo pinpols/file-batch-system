@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.lock;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import java.lang.reflect.Method;
 import java.time.Duration;
@@ -104,7 +105,7 @@ public class DistributedLockAspect {
               + " error={}",
           method.getName(),
           ann.key(),
-          e.getMessage());
+          SwallowedExceptionLogger.summary(e));
       return prefix + ":" + method.getName();
     }
   }

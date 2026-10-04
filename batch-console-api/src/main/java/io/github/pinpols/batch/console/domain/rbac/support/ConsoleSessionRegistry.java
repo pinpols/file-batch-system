@@ -105,7 +105,7 @@ public class ConsoleSessionRegistry {
         // TTL 刷失败不影响版本号正确性，仅可能让 key 提前 / 延后到期。记 warn 不抛。
         log.warn(
             "Redis expire() failed for session key (value already incremented): {}",
-            expireEx.getMessage());
+            SwallowedExceptionLogger.summary(expireEx));
       }
       return v;
     } catch (DataAccessException ex) {
@@ -116,7 +116,7 @@ public class ConsoleSessionRegistry {
       localMirror.put(key, v);
       log.warn(
           "Redis unavailable during nextSessionVersion; falling back to local mirror: {}",
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       return v;
     }
   }
@@ -146,7 +146,7 @@ public class ConsoleSessionRegistry {
       log.warn(
           "Redis unavailable during currentSessionVersion; local mirror={}, cause={}",
           cached,
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       return cached == null ? 0L : cached;
     }
   }
@@ -158,7 +158,8 @@ public class ConsoleSessionRegistry {
       sessionStore.delete(key);
     } catch (DataAccessException ex) {
       log.warn(
-          "Redis unavailable during invalidateSession; local-only eviction: {}", ex.getMessage());
+          "Redis unavailable during invalidateSession; local-only eviction: {}",
+          SwallowedExceptionLogger.summary(ex));
     }
     localMirror.invalidate(key);
   }
@@ -172,7 +173,9 @@ public class ConsoleSessionRegistry {
       return current > 0L && current == sessionVersion;
     } catch (DataAccessException ex) {
       // 非预期场景（currentSessionVersion 自身已回退），额外 fail-open
-      log.warn("Unexpected Redis failure in isCurrentSession; fail-open: {}", ex.getMessage());
+      log.warn(
+          "Unexpected Redis failure in isCurrentSession; fail-open: {}",
+          SwallowedExceptionLogger.summary(ex));
       return true;
     }
   }

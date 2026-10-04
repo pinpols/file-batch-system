@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.exports.plugin;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
@@ -243,7 +244,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
       log.warn(
           "sql_template_export EXPLAIN check failed unexpectedly (non-fatal), template={}: {}",
           context.templateCode(),
-          e.getMessage());
+          SwallowedExceptionLogger.summary(e));
     }
   }
 

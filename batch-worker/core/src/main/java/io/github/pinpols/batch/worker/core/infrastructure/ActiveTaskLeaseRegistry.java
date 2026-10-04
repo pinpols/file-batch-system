@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
@@ -120,7 +121,10 @@ public class ActiveTaskLeaseRegistry {
       try {
         listener.accept(taskId);
       } catch (RuntimeException ex) {
-        log.warn("lease removal listener threw, taskId={}: {}", taskId, ex.getMessage());
+        log.warn(
+            "lease removal listener threw, taskId={}: {}",
+            taskId,
+            SwallowedExceptionLogger.summary(ex));
       }
     }
     // R-4.5 + R3-P2-2: 每次 remove 都 notifyAll（不再仅在 isEmpty 时通知）。
@@ -173,7 +177,10 @@ public class ActiveTaskLeaseRegistry {
     try {
       callback.run();
     } catch (RuntimeException ex) {
-      log.warn("task cancellation callback threw, taskId={}: {}", taskId, ex.getMessage());
+      log.warn(
+          "task cancellation callback threw, taskId={}: {}",
+          taskId,
+          SwallowedExceptionLogger.summary(ex));
     }
   }
 

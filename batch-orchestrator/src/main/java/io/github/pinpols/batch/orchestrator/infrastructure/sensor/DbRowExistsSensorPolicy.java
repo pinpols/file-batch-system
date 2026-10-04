@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.sensor;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.SensorType;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantSessionSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -108,7 +109,10 @@ public class DbRowExistsSensorPolicy implements SensorPolicy {
       output.put("firstRowJson", writeJson(rows.get(0)));
       return SensorProbeResult.matched(output);
     } catch (Exception e) {
-      log.warn("DB_ROW_EXISTS probe error tenant={} err={}", ctx.tenantId(), e.toString());
+      log.warn(
+          "DB_ROW_EXISTS probe error tenant={} err={}",
+          ctx.tenantId(),
+          SwallowedExceptionLogger.summary(e));
       return SensorProbeResult.error(
           "error.workflow.sensor_probe_failed",
           List.of(

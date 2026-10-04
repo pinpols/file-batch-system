@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -84,7 +85,7 @@ public class CrossDayDependencyReconciler {
             "cross_day_dep reconcile error: nodeRunId={}, nodeCode={}, msg={}",
             entry.getId(),
             entry.getNodeCode(),
-            failure.getMessage());
+            SwallowedExceptionLogger.summary(failure));
       }
     }
   }

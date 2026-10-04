@@ -5,6 +5,7 @@ import io.github.pinpols.batch.sdk.client.WorkerIdentity;
 import io.github.pinpols.batch.sdk.dispatcher.HeartbeatDirective;
 import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
 import io.github.pinpols.batch.sdk.internal.EmptyChecks;
+import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import java.time.Duration;
 import java.time.Instant;
@@ -131,7 +132,7 @@ public class HeartbeatScheduler implements AutoCloseable {
       dispatcher.applyPlatformDirective(directive);
     } catch (Exception t) {
       // 不能让心跳异常杀掉 scheduler — fixed-rate 一旦抛会停
-      log.warn("heartbeat failed: {}", t.getMessage());
+      log.warn("heartbeat failed: {}", ExceptionLogSummary.of(t));
     }
     // Lane I (ADR-035 §11):若 orch 下发 nextHeartbeatHint,据此动态重排下次心跳间隔。
     // 回退:hint < 1s → 1s;hint > 10 × baseline → 10 × baseline(防 orch 配错)。

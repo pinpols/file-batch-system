@@ -4,6 +4,7 @@ import io.github.pinpols.batch.sdk.dispatcher.KafkaTaskConsumer;
 import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
 import io.github.pinpols.batch.sdk.idempotent.SdkIdempotencyStore;
 import io.github.pinpols.batch.sdk.internal.EmptyChecks;
+import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import io.github.pinpols.batch.sdk.scheduler.HeartbeatScheduler;
 import io.github.pinpols.batch.sdk.scheduler.LeaseRenewalScheduler;
@@ -260,7 +261,7 @@ public class BatchPlatformClient {
           httpClient.deactivate(
               config.getWorkerCode(), body, Duration.ofMillis(deactivateTimeoutMs));
         } catch (Exception ex) {
-          log.warn("deactivate call failed (ignored): {}", ex.getMessage());
+          log.warn("deactivate call failed (ignored): {}", ExceptionLogSummary.of(ex));
         }
       }
     }

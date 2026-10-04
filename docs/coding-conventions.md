@@ -839,6 +839,14 @@ getter/setter 的类中再写同语义的样板访问器；有派生值、别名
 
 生产服务代码禁止 `System.out/err` 和 `printStackTrace()`；CLI 工具、benchmark 输出和测试诊断输出可以保留标准输出。
 
+异常日志按控制流分两类：
+
+- 未预期故障需要排障时，将 `Throwable` 作为 SLF4J 最后一个参数传入，保留完整堆栈；不要再同时拼接异常 message。
+- 预期 fallback、周期重试或明确吞异常时，使用 `SwallowedExceptionLogger` 输出异常类型和安全单行摘要，避免周期任务重复打印整栈。
+
+生产日志不得直接使用异常 `getMessage()` / `toString()`。统一摘要会移除控制字符、遮蔽常见凭据并限制长度；
+Java SDK 因 ADR-035 不依赖 `batch-common`，使用 SDK 内部 `ExceptionLogSummary` 保持同等语义。
+
 ### 12.3 日志级别约定
 
 

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.support.HeartbeatService;
 import io.github.pinpols.batch.worker.core.support.WorkerLoadProvider;
@@ -59,7 +60,9 @@ public class DefaultHeartbeatService implements HeartbeatService {
     try {
       return loadProviders.stream().mapToInt(WorkerLoadProvider::currentLoad).sum();
     } catch (RuntimeException ex) {
-      log.warn("WorkerLoadProvider currentLoad sum failed; falling back to 0: {}", ex.getMessage());
+      log.warn(
+          "WorkerLoadProvider currentLoad sum failed; falling back to 0: {}",
+          SwallowedExceptionLogger.summary(ex));
       return 0;
     }
   }

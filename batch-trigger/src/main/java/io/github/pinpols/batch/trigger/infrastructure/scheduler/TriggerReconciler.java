@@ -163,7 +163,7 @@ public class TriggerReconciler {
       log.warn(
           "failed to inspect quartz trigger for drift check: key={}, reason={}",
           key,
-          exception.getMessage());
+          SwallowedExceptionLogger.summary(exception));
       return false;
     }
   }

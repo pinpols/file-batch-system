@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -104,7 +105,7 @@ public class BatchDaySettleScheduler {
             candidate.tenantId(),
             candidate.calendarCode(),
             candidate.bizDate(),
-            conflict.getMessage());
+            SwallowedExceptionLogger.summary(conflict));
       }
     }
   }

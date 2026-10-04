@@ -179,7 +179,7 @@ public class DataQualityCheckExecutor {
               + " thresholdJson={}, cause={}",
           ruleCode,
           thresholdJson.length() <= 200 ? thresholdJson : thresholdJson.substring(0, 200) + "...",
-          ex.getMessage());
+          SwallowedExceptionLogger.summary(ex));
       return actual > 0;
     }
     if (threshold == null) {

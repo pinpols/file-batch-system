@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.quota;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
@@ -186,7 +187,7 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
             state.quotaScope(),
             state.ownerCode(),
             state.id(),
-            ex.getMessage());
+            SwallowedExceptionLogger.summary(ex));
       }
     }
   }

@@ -6,6 +6,7 @@ import io.github.bucket4j.TimeoutException;
 import io.github.bucket4j.TokensInheritanceStrategy;
 import io.github.bucket4j.distributed.BucketProxy;
 import io.github.bucket4j.redis.lettuce.cas.LettuceBasedProxyManager;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.config.RateLimitProperties;
@@ -158,7 +159,7 @@ public class TokenBucketRateLimiter {
         failOpen ? "fail-open" : "fail-closed",
         tenantId,
         action,
-        ex.getMessage());
+        SwallowedExceptionLogger.summary(ex));
     log.debug("Redis rate-limit backend failure", ex);
     return failOpen;
   }

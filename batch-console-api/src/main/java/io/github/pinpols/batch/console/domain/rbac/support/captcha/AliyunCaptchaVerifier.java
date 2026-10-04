@@ -86,11 +86,7 @@ public class AliyunCaptchaVerifier implements CaptchaVerifier {
         Thread.currentThread().interrupt();
       }
       // 净化:只打异常类型/消息,绝不打 token(用户可控)/ AK / 签名。
-      log.warn(
-          "captcha aliyun verify error: {} ip={}",
-          ex.toString(),
-          CaptchaCrypto.sanitizeForLog(clientIp),
-          ex);
+      log.warn("captcha aliyun verify error: ip={}", CaptchaCrypto.sanitizeForLog(clientIp), ex);
       return CaptchaResult.fail("aliyun verify error");
     }
   }

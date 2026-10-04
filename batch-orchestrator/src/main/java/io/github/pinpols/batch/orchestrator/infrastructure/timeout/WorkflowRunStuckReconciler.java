@@ -108,7 +108,7 @@ public class WorkflowRunStuckReconciler {
         meterRegistry.counter("batch.workflow.stuck.finalized.total").increment(finalized);
       }
     } catch (RuntimeException ex) {
-      log.warn("workflow_run stuck reconcile failed: {}", ex.getMessage(), ex);
+      log.warn("workflow_run stuck reconcile failed", ex);
     } finally {
       running.set(false);
     }
