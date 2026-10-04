@@ -2,7 +2,7 @@
 
 **Reference 类文档**（按 Diátaxis 框架）。每个文件是单一类目的权威值表，**不解释为什么**，只列"是什么 / 在哪里"。
 
-> 设计原则：dict 文件是**自动生成**或**自动校验**的，**不允许手工编辑**。改源（Java 枚举 / `@ConfigurationProperties` / DDL），重跑脚本。
+> 设计原则：离散值表应自动生成或自动校验；业务定义允许手工维护，但必须标明事实来源并由适用守卫校验。不要复制出第二套无校验的值表。
 
 ## 文件清单
 
@@ -10,7 +10,7 @@
 |---|---|---|---|
 | 01 | [error-codes.md](./error-codes.md) | `batch-common/.../enums/ResultCode.java` | `python3 scripts/codegen/gen-error-codes-dict.py` |
 | 02 | [config-keys.md](./config-keys.md) | 各模块 `@ConfigurationProperties` | `mvn compile`（Spring Boot configuration-processor 自动生成 metadata.json） |
-| 03 | [glossary.md](./glossary.md) | **手写** | 跨团队术语共识，~50 词上限 |
+| 03 | [glossary.md](./glossary.md) | 业务定义手写；易变枚举块来自 Java enum | `python3 scripts/ci/check-terminology-doc-sync.py` |
 
 ## 自动化机制
 
@@ -30,6 +30,12 @@
 
 → 给字段加 `/** ... */` javadoc，IDE 提示就有说明文字。**这是描述配置键最优的方式**，比手写 markdown 准确且永不漂移。
 
+### glossary.md
+
+- 术语解释由维护者手写，事实来源链接到核心模型、ADR、Java enum 或数据库迁移。
+- `enum-sync` 标记之间的离散值由 Java enum 提供，运行 `python3 scripts/ci/check-terminology-doc-sync.py --write` 刷新。
+- CI 使用同一脚本的只读模式校验，不允许状态、调度类型、触发来源和运行模式静默漂移。
+
 ## 与其他文档的关系
 
 按 **Diátaxis 框架**（事实标准）：
@@ -45,8 +51,8 @@
 
 ## 不进 dict 的内容
 
-- 业务术语（"任务"、"分片"等）→ 散落在各 design 文件中按上下文解释；只在跨团队对接时再考虑独立 glossary
-- 字段含义（具体到表的 column）→ 走 `docs/design/data-model-ddl.md` + 表内字段注释，不重复
+- 只在单个模块内部使用的局部术语 → 留在对应 design / runbook；跨团队和跨模块术语进入 [glossary.md](./glossary.md)
+- 字段含义（具体到表的 column）→ 走 `docs/design/database-schema-guide.md` + Flyway 迁移中的表/列注释，不重复
 - 命名规约 / 编码规范 → 走 `docs/coding-conventions.md`（这是规约，不是 dict）
 
 ## 何时新增 dict 类目
@@ -54,7 +60,7 @@
 只在满足**全部**以下条件时：
 
 1. 内容是离散值表（有限可枚举），不是叙述
-2. 有源代码 / 配置作为权威，**能自动生成**（手写必鬼漂移）
+2. 有源代码 / 配置作为权威，**能自动生成或校验**（无守卫的手写值表易漂移）
 3. 改一处影响全项目（前后端共识需求）
 
 如果手写 + 没有源 + 改动局部 → 不要进 dict，写在对应 design / runbook 即可。

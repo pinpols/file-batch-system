@@ -20,7 +20,7 @@
   - `Attempt to heartbeat failed since group is rebalancing`
   - `Offset commit failed on partition ... due to group rebalance`
   - `the group has already rebalanced and assigned the partitions to another member`
-- **用户反馈**:任务 dispatch 到 worker 后长时间不动;`job_instance.status=RUNNING` 但 `last_heartbeat_at` 不更新。
+- **用户反馈**:任务 dispatch 到 worker 后长时间不动;`job_instance.instance_status=RUNNING` 且关联 Worker 心跳不更新。
 
 ---
 

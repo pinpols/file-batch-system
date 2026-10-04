@@ -1,25 +1,27 @@
 # 状态机汇总
 
-> **status**: 固化（2026-05-03）  
-> **scope**: job_instance / pipeline_instance / workflow_run / job_task / job_partition / outbox 状态机定义、转移规则、是否一致
+> **status**: 持续维护（枚举值由 CI 与 Java 事实源对照）
+> **scope**: trigger_request / job_instance / pipeline_instance / workflow_run / workflow_node_run / job_task / job_partition / step / outbox / compensation / worker registry 状态对照
+
+核心生命周期语义以 [core-model.md](../architecture/core-model.md) 为权威；本文补充跨实体对照和差异说明，不把同名状态强行解释成同一业务规则。
 
 ## 1. 状态机一览
 
 | 实体 | enum 类 | DB 列 | CHECK 约束 | 状态值 |
 |---|---|---|---|---|
-| `job_instance.instance_status` | `JobInstanceStatus` | V5:52 | ✓ | CREATED / WAITING / READY / RUNNING / PAUSED（ADR-044 可逆暂停态,resume 回 RUNNING）/ PARTIAL_FAILED / SUCCESS / FAILED / CANCELLED / TERMINATED |
-| `pipeline_instance.run_status` | `PipelineRunStatus` | V6:103 | ✓ | CREATED / RUNNING / SUCCESS / FAILED / **COMPENSATING** / TERMINATED |
-| `workflow_run.run_status` | `WorkflowRunStatus` | V5:121 | ✓ | CREATED / RUNNING / SUCCESS / FAILED / TERMINATED |
-| `workflow_node_run.node_status` | `WorkflowNodeRunStatus` | V5 | ✓ | CREATED / READY / RUNNING / SUCCESS / FAILED / SKIPPED / TERMINATED |
-| `job_task.task_status` | `TaskStatus` | V5 | ✓ | CREATED / READY / RUNNING / SUCCESS / FAILED / RETRYING / CANCELLED / TERMINATED |
-| `job_partition.partition_status` | `PartitionStatus` | V5 | ✓ | CREATED / READY / RUNNING / SUCCESS / FAILED / TERMINATED |
-| `job_step_instance.step_status` | `StepInstanceStatus` | V13 | ✓ | CREATED / WAITING / READY / RUNNING / SUCCESS / FAILED / RETRYING / CANCELLED / TERMINATED |
-| `outbox_event.publish_status` | `OutboxPublishStatus` | V21 | ✓ | NEW / PUBLISHING / PUBLISHED / FAILED / GIVE_UP |
+| `job_instance.instance_status` | `JobInstanceStatus` | V5 + 后续迁移 | ✓ | <!-- enum-sync:JobInstanceStatus:start -->`CREATED`, `WAITING`, `READY`, `RUNNING`, `PAUSED`, `PARTIAL_FAILED`, `SUCCESS`, `FAILED`, `CANCELLED`, `TERMINATED`, `SUCCESS_DRY_RUN`, `FAILED_DRY_RUN`<!-- enum-sync:JobInstanceStatus:end --> |
+| `pipeline_instance.run_status` | `PipelineRunStatus` | V6 | ✓ | <!-- enum-sync:PipelineRunStatus:start -->`CREATED`, `RUNNING`, `SUCCESS`, `FAILED`, `COMPENSATING`, `TERMINATED`<!-- enum-sync:PipelineRunStatus:end --> |
+| `workflow_run.run_status` | `WorkflowRunStatus` | V5 + 后续迁移 | ✓ | <!-- enum-sync:WorkflowRunStatus:start -->`CREATED`, `RUNNING`, `PAUSED`, `SUCCESS`, `FAILED`, `TERMINATED`, `SUCCESS_DRY_RUN`, `FAILED_DRY_RUN`<!-- enum-sync:WorkflowRunStatus:end --> |
+| `workflow_node_run.node_status` | `WorkflowNodeRunStatus` | V5 + V109 | ✓ | <!-- enum-sync:WorkflowNodeRunStatus:start -->`READY`, `WAITING_DEPENDENCY`, `RUNNING`, `SUCCESS`, `FAILED`, `SKIPPED`<!-- enum-sync:WorkflowNodeRunStatus:end --> |
+| `job_task.task_status` | `TaskStatus` | V5 | ✓ | <!-- enum-sync:TaskStatus:start -->`CREATED`, `READY`, `RUNNING`, `SUCCESS`, `FAILED`, `CANCELLED`, `TERMINATED`<!-- enum-sync:TaskStatus:end --> |
+| `job_partition.partition_status` | `PartitionStatus` | V5 | ✓ | <!-- enum-sync:PartitionStatus:start -->`CREATED`, `WAITING`, `READY`, `RUNNING`, `SUCCESS`, `FAILED`, `RETRYING`, `CANCELLED`, `TERMINATED`<!-- enum-sync:PartitionStatus:end --> |
+| `job_step_instance.step_status` | `StepInstanceStatus` | V13 | ✓ | <!-- enum-sync:StepInstanceStatus:start -->`CREATED`, `WAITING`, `READY`, `RUNNING`, `RETRYING`, `SUCCESS`, `FAILED`, `CANCELLED`, `TERMINATED`<!-- enum-sync:StepInstanceStatus:end --> |
+| `outbox_event.publish_status` | `OutboxPublishStatus` | V21 | ✓ | <!-- enum-sync:OutboxPublishStatus:start -->`NEW`, `PUBLISHING`, `PUBLISHED`, `FAILED`, `GIVE_UP`<!-- enum-sync:OutboxPublishStatus:end --> |
 | `trigger_outbox_event.publish_status` | `OutboxPublishStatus` | V80 | ✓ | 同上 |
-| `event_outbox_retry.retry_status` | 内部 enum | V21 | ✓ | WAITING / RUNNING / SUCCESS / FAILED / EXHAUSTED / CANCELLED |
-| `trigger_request.request_status` | _无 Java enum class，仅 DB CHECK 回退_ | V5 / V39 / V60 | ⚠️ DB-only | PENDING / PROCESSING / ACCEPTED / DUPLICATE / REJECTED / LAUNCHED / FORWARD_FAILED / GIVE_UP（V60 扩展，含 ADR-010 trigger 异步链路 forward retry 状态） |
-| `compensation_command.command_status` | `CompensationCommandStatus` | V13 | ✓ | CREATED / RUNNING / SUCCESS / FAILED / CANCELLED |
-| `worker_registry.status` | `WorkerRegistryStatus` | V7 | ✓ | ONLINE / DRAINING / OFFLINE / DECOMMISSIONED |
+| `event_outbox_retry.retry_status` | `RetryScheduleStatus` | V21 | ✓ | <!-- enum-sync:RetryScheduleStatus:start -->`WAITING`, `RUNNING`, `SUCCESS`, `FAILED`, `EXHAUSTED`, `CANCELLED`<!-- enum-sync:RetryScheduleStatus:end --> |
+| `trigger_request.request_status` | `TriggerRequestStatus` | V5 / V39 / V60 / V100 | ✓ | <!-- enum-sync:TriggerRequestStatus:start -->`PENDING`, `PROCESSING`, `ACCEPTED`, `WAITING`, `LAUNCHED`, `REJECTED`, `DUPLICATE`, `FORWARD_FAILED`, `GIVE_UP`<!-- enum-sync:TriggerRequestStatus:end --> |
+| `compensation_command.command_status` | `CompensationCommandStatus` | V13 | ✓ | <!-- enum-sync:CompensationCommandStatus:start -->`PENDING`, `RUNNING`, `SUCCESS`, `FAILED`, `CANCELLED`<!-- enum-sync:CompensationCommandStatus:end --> |
+| `worker_registry.status` | `WorkerRegistryStatus` | V7 | ✓ | <!-- enum-sync:WorkerRegistryStatus:start -->`ONLINE`, `OFFLINE`, `DRAINING`, `DECOMMISSIONED`<!-- enum-sync:WorkerRegistryStatus:end --> |
 
 ## 2. 不一致点（已知 + 是否要统一）
 
@@ -44,33 +46,27 @@
 
 **结论**：**保持差异**。同名不同义在状态机层面正常，由 `*_status` 列名前缀区分（`instance_status` / `task_status` / `step_status` / `node_status`）。
 
-### 2.3 `WAITING` 仅出现在 job_instance / job_step_instance
+### 2.3 等待与重试状态按层级表达
 
-**语义**：等待外部资源（如等上游文件到达、等审批）。其他状态机走 CREATED → READY 直接转移（无外部等待）。
+`WAITING` 存在于 job_instance、job_partition 和 job_step_instance；workflow_node_run 使用更具体的 `WAITING_DEPENDENCY`。task 没有 WAITING / RETRYING，避免把调度等待误写成 Worker 已领取任务后的状态。
 
-**结论**：**保持差异**。
+`RETRYING` 只属于 partition 和 step instance；task 的新尝试重新进入自己的生命周期。**结论**：保持层级差异，不为表面对齐扩充状态。
 
-### 2.4 `TERMINATED` 全表统一含义
+### 2.4 终止与演练终态不是全表共有
 
-**语义**：人工干预强制终止（运维点 "强制终止"），区别于业务失败 FAILED。状态机进入 TERMINATED 后不再转移，且不会触发自动重试。
+job_instance、workflow_run、pipeline_instance、task、partition 和 step instance 支持 `TERMINATED`；workflow_node_run 不定义 TERMINATED，由 workflow_run 终止收口。`SUCCESS_DRY_RUN / FAILED_DRY_RUN` 只属于 job_instance 和 workflow_run，正式结果消费者不得把它们当作 EFFECTIVE 产物。
 
-**结论**：✓ 设计一致。
+**结论**：同一状态名在支持它的层级保持终态语义，但不要求所有实体拥有同一组终态。
 
 ## 3. 主链路转移图
 
 ### 3.1 job_instance 状态机
 
 ```
-CREATED → WAITING → READY → RUNNING → SUCCESS
-   │                  │        │          │
-   │                  │        ├── PARTIAL_FAILED （部分 partition 失败）
-   │                  │        │
-   │                  │        └── FAILED
-   │                  │
-   │                  ├── CANCELLED （schedule 被取消）
-   │                  │
-   ↓                  ↓
-TERMINATED      TERMINATED
+CREATED → WAITING → READY → RUNNING ─┬→ SUCCESS / FAILED / PARTIAL_FAILED
+   │         │        │       │      └→ SUCCESS_DRY_RUN / FAILED_DRY_RUN (dry_run)
+   │         │        │       ├↔ PAUSED
+   └─────────┴────────┴───────┴→ CANCELLED / TERMINATED
 ```
 
 ### 3.2 outbox_event 状态机
@@ -86,14 +82,10 @@ NEW → PUBLISHING → PUBLISHED
 ### 3.3 trigger_request 状态机（ADR-010）
 
 ```
-PENDING → ACCEPTED → LAUNCHED
-   │         │           ↑
-   │         │           │ TriggerLaunchConsumer 消费成功后回写
-   │         │           │
-   │         └─→ FAILED ─┘
-   │              │
-   ↓              ↓
-   └─→ GIVE_UP ←─┘ （ad-hoc reconciler 回退）
+PENDING → PROCESSING → ACCEPTED ─┬→ LAUNCHED
+   │          │          │       ├→ WAITING (业务日/容量门禁)
+   │          │          │       └→ FORWARD_FAILED → ACCEPTED / GIVE_UP
+   └──────────┴──────────┴→ DUPLICATE / REJECTED
 ```
 
 ## 4. 状态推进的硬约束
@@ -118,9 +110,10 @@ batch-common/src/main/java/io/github/pinpols/batch/common/enums/
   ├─ PartitionStatus.java
   ├─ StepInstanceStatus.java         # 注：类名无 "Job" 前缀
   ├─ OutboxPublishStatus.java
+  ├─ TriggerRequestStatus.java
+  ├─ RetryScheduleStatus.java
   ├─ CompensationCommandStatus.java
   └─ WorkerRegistryStatus.java
-  # trigger_request.request_status 无 Java enum class，仅靠 V60 DB CHECK 约束回退
 ```
 
 所有 enum 实现 `DictEnum` 接口（docs/agent-baseline.md §领域数据字典），提供 `code()` / `label()`，统一通过 `DictEnum.fromCode()` 反查。

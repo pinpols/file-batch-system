@@ -19,7 +19,7 @@
   - `重置 N 条滞留 PUBLISHING 状态的 outbox 事件为 FAILED` — `OutboxPollScheduler` 自愈日志(WARN);**多说明自愈有效**
   - `Outbox 投递熔断已打开:跳过推进(cooldown 中)` — 熔断器 open,需排查 Kafka
   - 长时间没有 `Outbox 下次轮询延迟` debug → poll 长期停滞,看 ShedLock(关联 `redis-shedlock-down.md`)
-- **用户反馈**:任务 LAUNCH 接口已返回成功,但 worker 长时间没看到 dispatch 消息;查 `job_instance` 还在 `INIT`/`READY`,不进 `DISPATCHED`。
+- **用户反馈**:任务 LAUNCH 接口已返回成功,但 Worker 长时间没看到 dispatch 消息;查 `job_instance.instance_status` 仍在 `CREATED` / `READY` / `RUNNING`,关联 outbox 没有进入 `PUBLISHED`。
 
 ---
 

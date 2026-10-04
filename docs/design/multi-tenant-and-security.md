@@ -285,4 +285,4 @@ AI 仅作为 Console 控制面辅助能力，遵循「**先鉴权 → 再裁剪 
 - [`../runbook/security-scan.md`](../runbook/security-scan.md) — 安全扫描 SOP
 - [`../runbook/feature-switches.md`](../runbook/feature-switches.md) — 安全旁路 / 限流 / 配额相关开关
 - [`../coding-conventions.md`](../coding-conventions.md) §21 — `batch.security.bypass-mode` 规范
-- [data-model-ddl.md](./data-model-ddl.md) — 含 `secret_version` / `config_release` / `config_change_log` 等表 DDL
+- [database-schema-guide.md](./database-schema-guide.md) — 当前 schema 权威边界；`secret_version` / `config_release` / `config_change_log` 以 `db/migration/V22*`、`V49*`、`V210*`、`V211*` 为准

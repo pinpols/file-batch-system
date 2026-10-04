@@ -11,7 +11,7 @@
 | 应用与架构 | `check-application-governance.py`、`check-dependency-boundaries.py`、`check-direct-client-boundaries.py`、`check-infrastructure-abstraction-boundaries.py`、`check-no-enable-preview.sh` |
 | SDK 配置 | `check-sdk-config-env-parity.py`（Java/Python env 工厂和五语言 live transport 前缀）、`check-sdk-runtime-alignment.py`（仓库 Node 入口、SDK/前端声明与 CI 版本矩阵） |
 | SDK 双栈 | `run-sdk-happy-eyeballs-gate.sh`（五语言真实 loopback socket 单栈/双栈/黑洞矩阵） |
-| 文档与变更 | `check-docs-structure.py`、`check-doc-timestamp-policy.py`、`check-code-doc-references.py`、`check-changelog-sync.py`、`check-loc-snapshot.py`、`check-readiness-doc-sync.py`、`check-slo-sli-catalog.py`、`check-comment-language.py` |
+| 文档与变更 | `check-docs-structure.py`、`check-doc-timestamp-policy.py`、`check-code-doc-references.py`、`check-terminology-doc-sync.py`、`check-changelog-sync.py`、`check-loc-snapshot.py`、`check-readiness-doc-sync.py`、`check-slo-sli-catalog.py`、`check-comment-language.py` |
 | 脚本与仓库 | `check-shell-scripts.sh`、`check-shell-linux-portability.py`、`check-script-governance.py`、`check-repository-hygiene.py`、`check-env-file-shell-safety.py`、`check-hardcoded-runtime-config.sh`、`check-utf8-encoding.py`（全仓 UTF-8 字节扫描） |
 | 配置与部署 | `check-config-defaults-sync.py`、`check-config-governance.py`、`check-env-variable-governance.py`、`check-feature-switch-registry.py`、`check-five-worker-parity.py`、`check-keda-autoscaling.py`、`check-helm-env-sync.py`、`check-infrastructure-utf8.py`（Compose/Dockerfile/Helm/Testcontainers locale 与数据库编码）、`check-production-capacity-governance.py`、`check-production-overlay-safety.py`、`check-version-alignment.sh`、`validate-kafka-topics.sh` |
 | 数据库与 SQL | `check-biz-table-tenant-rls.py`、`check-db-comment-coverage.sh`、`check-db-scripts-safety.sh`、`check-migration-safety.sh`、`check-mybatis-generated-key-columns.py`、`check-no-positional-insert-select-star.py`、`check-postgres-client-fallback.sh`、`check-schema-governance-assets.py`、`check-sql-config-boundaries.py`、`check-sql-config-boundaries.sh`、`validate-flyway-schema.sh` |
@@ -109,6 +109,21 @@ Secret scan 属于跨域检查，仍对所有非 Draft PR 执行，因为凭据�
 ```bash
 python3 scripts/ci/check-code-doc-references.py
 ```
+
+## `check-terminology-doc-sync.py`
+
+校验 `docs/dict/glossary.md`、`docs/architecture/core-model.md`、
+`docs/design/status-state-machines.md`、`docs/architecture/pipeline-vs-workflow-boundary.md` 和
+`docs/coding-conventions.md` 中标记的枚举值块与
+`batch-common` Java enum 一致，覆盖核心生命周期状态、调度类型、触发来源、工作流节点类型和
+运行模式。修改权威 enum 后先刷新文档，再提交两者：
+
+```bash
+python3 scripts/ci/check-terminology-doc-sync.py --write
+python3 scripts/ci/check-terminology-doc-sync.py
+```
+
+已接入 PR Gate 和 Full Gate；该检查只防离散值漂移，术语解释和实体关系仍需按核心模型审查。
 
 ## `check-comment-language.py`
 

@@ -44,7 +44,7 @@ kubectl get pods -n batch-prod
 │  └─ 看 batch_outbox_publishing_stale_events 是否 > 0
 │     → 走症状 4（OutboxPoll 轮询本身异常退出）
 │
-└─ 看 job_instance.status 分布
+└─ 看 job_instance.instance_status 分布
    ├─ 大量 RUNNING 卡住 → 查 SLA 告警：batch_job_sla_violation_count
    └─ 任务根本没进来 → 查 trigger：curl localhost:18081/actuator/health
 ```

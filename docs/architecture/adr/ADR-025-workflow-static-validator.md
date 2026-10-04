@@ -23,7 +23,7 @@
 
 - **DSL 静态分析缺**：`$.nodes.X.output.fileId` 引用了不存在的 `X`，跑到第 5 个节点才 fail；
 - **跨日依赖时间窗矛盾**：`bizDateOffset = +1` 引用未来日期 / range > 90 天 → 应该启用期拒绝；
-- **GATEWAY join_mode 不一致**：节点声明 `ALL_OF` 但 incoming edges 数量为 1 → 显然写错；
+- **GATEWAY join_mode 不一致**：节点声明 `ALL` 但 incoming edges 数量为 1 → 显然写错；
 - **类型不匹配**：node A output 是 `string`，下游节点 param 期望 `integer`；
 - **OPTIONAL 配错传染性退化**：OPTIONAL 节点跳过依赖后输出仍被下一日依赖（已写入 ADR-018 §不会做，但需要 validator 实际检查）；
 - **dead nodes**：从 START 不可达的节点（多见于复制粘贴遗漏边）。
@@ -46,7 +46,7 @@
 | V6 | 跨日依赖 offset 解析失败（业务日历不识别） | ERROR |
 | V7 | 跨日依赖 range 跨度 > 90 天（接 ADR-018 上限） | ERROR |
 | V8 | 跨日依赖 OPTIONAL 节点的 output 被下一日 REQUIRED 引用（传染性退化） | ERROR |
-| V9 | GATEWAY join_mode = ALL_OF 但 incoming edges < 2 | ERROR |
+| V9 | GATEWAY join_mode = ALL 但 incoming edges < 2 | ERROR |
 | V10 | GATEWAY join_mode = N_OF 但 N > M 或 M ≠ incoming count | ERROR |
 | V11 | edge type 与节点 type 矛盾（如 START 节点有 incoming） | ERROR |
 | V12 | param_schema 类型与上游 outputs 契约类型不匹配 | WARN（contract 不全的 worker 仍能跑） |

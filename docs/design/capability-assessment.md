@@ -6,7 +6,7 @@
 
 相较于前序版本，本版能力评估已纳入以下新增或补强内容：
 
-1. 统一触发模型：`CRON`、`FIXED_RATE`、`FIXED_DELAY`、`ONE_TIME`、`API`、`MANUAL`、`FILE_EVENT`
+1. 统一调度与触发模型：定义侧 `schedule_type` 为 `CRON / FIXED_RATE / MANUAL`；运行侧 `trigger_type` 为 `API / MANUAL / EVENT / CATCH_UP / SCHEDULED / RERUN`
 2. 文件等待策略、文件组到齐启动、文件完整性准入、半文件保护、导出半文件保护
 3. 大文件流式处理、分页/游标读取、边查边写、OOM 防线
 4. skip 策略、catch-up 策略、触发幂等、DB/MQ 一致性边界
@@ -71,7 +71,7 @@
 当前方案已经从“定时任务触发器”提升为“统一触发入口层”。其主要优势包括：
 
 - Trigger 与 Console 分层清晰，控制面与运行触发面职责明确；
-- 触发类型统一收敛为 `CRON`、`FIXED_RATE`、`FIXED_DELAY`、`ONE_TIME`、`API`、`MANUAL`、`FILE_EVENT`；
+- 调度表达方式统一为 `CRON / FIXED_RATE / MANUAL`，触发来源统一为 `API / MANUAL / EVENT / CATCH_UP / SCHEDULED / RERUN`；文件到达通过 EVENT 来源进入同一 launch 链，不另造 FILE_EVENT 枚举；
 - 业务日历、节假日、特殊业务日、catch-up 与 misfire 已纳入调度治理范围；
 - Orchestrator 统一接管触发后的实例创建、依赖判断、分片规划与 Worker 路由；
 - 已明确触发幂等与实例去重键，能够降低 API 重放、文件事件重复投递、人工重复操作带来的重复实例风险。
@@ -225,7 +225,7 @@
 
 | 类别 | 一期必须交付内容 |
 |---|---|
-| 主链路 | CRON/API/FILE_EVENT 触发、实例创建、分片派发、Worker 执行、重试、死信 |
+| 主链路 | SCHEDULED/API/EVENT 触发、实例创建、分片派发、Worker 执行、重试、死信 |
 | 文件能力 | 至少落地一条导入链路、一条导出链路、一条分发链路 |
 | 数据与接口 | Flyway SQL、核心 API、Kafka Topic 与消息体最终版 |
 | 治理能力 | 幂等、审计、告警、基本容量阈值、人工补偿入口 |
