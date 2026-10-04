@@ -63,10 +63,79 @@ public class OrchestratorInternalRestClient {
     return client;
   }
 
+  public <T> T loadApproval(String tenantId, String approvalNo, Class<T> responseType) {
+    return client
+        .get()
+        .uri("/internal/approvals/{approvalNo}?tenantId={tenantId}", approvalNo, tenantId)
+        .retrieve()
+        .body(responseType);
+  }
+
+  public void approveApproval(
+      String tenantId,
+      String approvalNo,
+      String operatorId,
+      String reason,
+      String requestId,
+      String traceId) {
+    client
+        .post()
+        .uri("/internal/approvals/{approvalNo}/approve", approvalNo)
+        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestId)
+        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId)
+        .body(new ApprovalActionRequest(tenantId, operatorId, reason))
+        .retrieve()
+        .toBodilessEntity();
+  }
+
+  public void rejectApproval(
+      String tenantId,
+      String approvalNo,
+      String operatorId,
+      String reason,
+      String requestId,
+      String traceId) {
+    client
+        .post()
+        .uri("/internal/approvals/{approvalNo}/reject", approvalNo)
+        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestId)
+        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId)
+        .body(new ApprovalActionRequest(tenantId, operatorId, reason))
+        .retrieve()
+        .toBodilessEntity();
+  }
+
+  public void markApprovalExecuted(String tenantId, String approvalNo) {
+    client
+        .post()
+        .uri("/internal/approvals/{approvalNo}/executed", approvalNo)
+        .body(new ApprovalTenantRequest(tenantId))
+        .retrieve()
+        .toBodilessEntity();
+  }
+
+  /** 批次日 replay 审批命令由基础设施客户端封装，避免 application 层直接依赖 HTTP SDK。 */
+  public void approveBatchDayReplay(long sessionId, String tenantId, String approver) {
+    client
+        .post()
+        .uri(
+            "/internal/orchestrator/batch-day-replay/sessions/{id}/approve"
+                + "?tenantId={tenantId}&approver={approver}",
+            sessionId,
+            tenantId,
+            approver)
+        .retrieve()
+        .toBodilessEntity();
+  }
+
   private static String resolveUrl(Environment environment, String raw) {
     if (raw == null) {
       return null;
     }
     return environment.resolvePlaceholders(raw);
   }
+
+  private record ApprovalActionRequest(String tenantId, String operatorId, String reason) {}
+
+  private record ApprovalTenantRequest(String tenantId) {}
 }

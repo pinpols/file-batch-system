@@ -20,9 +20,46 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 
 class StoreStepTest {
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void encryptedCopyIsDeletedOnEncryptionOrUploadFailure(boolean failEncryption) throws Exception {
+    S3ExportStorage storage = mock(S3ExportStorage.class);
+    BatchObjectCryptoService crypto = mock(BatchObjectCryptoService.class);
+    when(crypto.shouldEncrypt(any())).thenReturn(true);
+    when(crypto.resolveKeyRef(any())).thenReturn("key");
+    AtomicReference<Path> encrypted = new AtomicReference<>();
+    when(crypto.encrypt(any(Path.class), any(Path.class), anyString())).thenAnswer(invocation -> {
+      Path target = invocation.getArgument(1);
+      encrypted.set(target);
+      Files.writeString(target, "partial cipher text");
+      if (failEncryption) throw new IllegalStateException("encryption failure");
+      return target;
+    });
+    if (!failEncryption) {
+      when(storage.writeObject(anyString(), any(Path.class), anyString()))
+          .thenThrow(new IllegalStateException("upload failure"));
+    }
+    Path generated = Files.createTempFile("export-cleanup-test-", ".json");
+    try {
+      Files.writeString(generated, "{}");
+      ExportJobContext context = new ExportJobContext();
+      context.getAttributes().put(PipelineRuntimeKeys.GENERATED_FILE_PATH, generated.toString());
+      assertThat(new StoreStep(storage, crypto).execute(context).success()).isFalse();
+      assertThat(encrypted.get()).doesNotExist();
+      assertThat(generated).exists();
+    } finally {
+      Files.deleteIfExists(generated);
+      if (encrypted.get() != null) Files.deleteIfExists(encrypted.get());
+    }
+  }
 
   @Test
   void execute_dryRunComputesChecksumWithoutUploadingOrEncrypting() throws Exception {
@@ -149,6 +186,10 @@ class StoreStepTest {
     assertThat(result.success()).isTrue();
     assertThat(ctx.getAttributes()).containsEntry("contentEncryptionEnabled", true);
     verify(crypto).encrypt(eq(generated), any(Path.class), eq("key-ref"));
+    ArgumentCaptor<Path> uploadedPath = ArgumentCaptor.forClass(Path.class);
+    verify(storage)
+        .writeObject(anyString(), uploadedPath.capture(), eq("application/octet-stream"));
+    assertThat(Files.exists(uploadedPath.getValue())).isFalse();
   }
 
   /** Local helper to avoid duplicating StoreStep's sha256 calculation logic in tests. */

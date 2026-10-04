@@ -5,7 +5,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -19,6 +18,7 @@ import io.github.pinpols.batch.orchestrator.infrastructure.quota.DatabaseQuotaRu
 import io.github.pinpols.batch.orchestrator.mapper.QuotaRuntimeStateMapper;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -297,7 +297,47 @@ class DatabaseQuotaRuntimeStateServiceTest {
         .currentActiveCount(8)
         .build());
 
-    verify(quotaRuntimeStateMapper, times(2)).insert(any(QuotaRuntimeStateEntity.class));
+    verify(quotaRuntimeStateMapper).insert(any(QuotaRuntimeStateEntity.class));
+  }
+
+  @Test
+  void expiredPersistedWindowIsRefreshedAndReservedInOneCas() {
+    Instant old = Instant.now().minusSeconds(172800);
+    var state = new QuotaRuntimeStateEntity(
+        1L,
+        "t1",
+        "JOB",
+        "job-sw",
+        "SLIDING_WINDOW",
+        old,
+        old.plusSeconds(3600),
+        2,
+        old,
+        old,
+        old,
+        7L);
+    when(quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", "job-sw"))
+        .thenReturn(state);
+    var databaseVersion = new AtomicLong(7);
+    when(quotaRuntimeStateMapper.updateWithCas(any())).thenAnswer(invocation -> {
+      QuotaRuntimeStateEntity update = invocation.getArgument(0);
+      assertThat(update.peakBorrowedCount()).isEqualTo(3);
+      assertThat(update.windowExpiresAt()).isAfter(Instant.now());
+      return databaseVersion.compareAndSet(update.version(), update.version() + 1) ? 1 : 0;
+    });
+
+    var result = service.evaluateAndReserve(new ReservationSpec()
+        .ownerCode("job-sw")
+        .quotaResetPolicy("SLIDING_WINDOW")
+        .baseCap(5)
+        .burstLimit(10)
+        .currentActiveCount(7)
+        .slidingWindowHours(1)
+        .build());
+
+    assertThat(result.allowed()).isTrue();
+    verify(quotaRuntimeStateMapper).updateWithCas(any());
+    assertThat(databaseVersion.get()).isEqualTo(8);
   }
 
   // ── describe() ────────────────────────────────────────────────────────────

@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.application.ops;
 
-import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
@@ -27,7 +26,6 @@ import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
 
 /**
  * 审批决策入口：approve 成功后按 {@code actionType} 自动执行下游业务。
@@ -140,17 +138,10 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
               throw BizException.of(
                   ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.invalid_argument");
             }
-            RestClient batchDayReplayClient = orchestratorInternalRestClient.client();
-            batchDayReplayClient
-                .post()
-                .uri(
-                    "/internal/orchestrator/batch-day-replay/sessions/{id}/approve"
-                        + "?tenantId={tenantId}&approver={approver}",
-                    payload.getSessionId(),
-                    payload.getTenantId(),
-                    operatorId == null ? "system" : operatorId)
-                .retrieve()
-                .toBodilessEntity();
+            orchestratorInternalRestClient.approveBatchDayReplay(
+                payload.getSessionId(),
+                payload.getTenantId(),
+                operatorId == null ? "system" : operatorId);
             yield approvalNo;
           }
           default ->
@@ -227,12 +218,8 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
   }
 
   private ApprovalRecordResponse loadApproval(String tenantId, String approvalNo) {
-    RestClient restClient = orchestratorInternalRestClient.client();
-    ApprovalRecordResponse response = restClient
-        .get()
-        .uri("/internal/approvals/{approvalNo}?tenantId={tenantId}", approvalNo, tenantId)
-        .retrieve()
-        .body(ApprovalRecordResponse.class);
+    ApprovalRecordResponse response = orchestratorInternalRestClient.loadApproval(
+        tenantId, approvalNo, ApprovalRecordResponse.class);
     Guard.requireFound(
         response == null ? null : response.getRecord(), "approval request not found");
     return response;
@@ -240,46 +227,28 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
 
   private void approveRemote(String tenantId, String approvalNo, String operatorId, String reason) {
     ConsoleRequestMetadata metadata = requestMetadataResolver.current();
-    RestClient restClient = orchestratorInternalRestClient.client();
-    ApprovalActionRequest approvalAction = new ApprovalActionRequest(
+    orchestratorInternalRestClient.approveApproval(
         tenantId,
+        approvalNo,
         ConsoleTextSanitizer.safeInput(operatorId, 64),
-        ConsoleTextSanitizer.safeInput(reason, 512));
-    restClient
-        .post()
-        .uri("/internal/approvals/{approvalNo}/approve", approvalNo)
-        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, metadata.requestId())
-        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, metadata.traceId())
-        .body(approvalAction)
-        .retrieve()
-        .toBodilessEntity();
+        ConsoleTextSanitizer.safeInput(reason, 512),
+        metadata.requestId(),
+        metadata.traceId());
   }
 
   private void rejectRemote(String tenantId, String approvalNo, String operatorId, String reason) {
     ConsoleRequestMetadata metadata = requestMetadataResolver.current();
-    RestClient restClient = orchestratorInternalRestClient.client();
-    ApprovalActionRequest approvalAction = new ApprovalActionRequest(
+    orchestratorInternalRestClient.rejectApproval(
         tenantId,
+        approvalNo,
         ConsoleTextSanitizer.safeInput(operatorId, 64),
-        ConsoleTextSanitizer.safeInput(reason, 512));
-    restClient
-        .post()
-        .uri("/internal/approvals/{approvalNo}/reject", approvalNo)
-        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, metadata.requestId())
-        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, metadata.traceId())
-        .body(approvalAction)
-        .retrieve()
-        .toBodilessEntity();
+        ConsoleTextSanitizer.safeInput(reason, 512),
+        metadata.requestId(),
+        metadata.traceId());
   }
 
   private void markExecutedRemote(String tenantId, String approvalNo) {
-    RestClient restClient = orchestratorInternalRestClient.client();
-    restClient
-        .post()
-        .uri("/internal/approvals/{approvalNo}/executed", approvalNo)
-        .body(new ApprovalTenantRequest(tenantId))
-        .retrieve()
-        .toBodilessEntity();
+    orchestratorInternalRestClient.markApprovalExecuted(tenantId, approvalNo);
   }
 
   /**
@@ -299,10 +268,6 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
       default -> "JOB";
     };
   }
-
-  private record ApprovalActionRequest(String tenantId, String operatorId, String reason) {}
-
-  private record ApprovalTenantRequest(String tenantId) {}
 
   @Getter
   @Setter

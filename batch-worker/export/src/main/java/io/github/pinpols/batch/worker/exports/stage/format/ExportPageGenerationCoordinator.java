@@ -78,7 +78,7 @@ final class ExportPageGenerationCoordinator {
   }
 
   private static void publishProgress(ExportFormatContext ctx, long recordCount) {
-    if (ctx.progressRegistry() != null) {
+    if (EmptyChecks.isNotNull(ctx.progressRegistry())) {
       ctx.progressRegistry().publish(ctx.jobContext(), "GENERATE", recordCount, null);
     }
   }

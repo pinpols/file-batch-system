@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.mq;
 
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.engine.DefaultScheduleForwarder;
 import io.github.pinpols.batch.orchestrator.application.engine.ScheduleForwarderResult;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
@@ -167,7 +168,7 @@ public class OutboxPollScheduler {
       return;
     }
     ScheduledFuture<?> future = pendingPoll.getAndSet(null);
-    if (future != null) {
+    if (EmptyChecks.isNotNull(future)) {
       future.cancel(false);
     }
   }

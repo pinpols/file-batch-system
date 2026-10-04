@@ -17,11 +17,15 @@ import java.time.Duration;
 import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -75,10 +79,30 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
 
   private static final String ATTR_DURABLE_KEY = "console.idempotency.durableKey";
   private static final String ATTR_TENANT_ID = "console.idempotency.tenantId";
+  private static final String ATTR_OWNER = "console.idempotency.owner";
 
   private final ConsoleIdempotencyStore idempotencyStore;
   private final ConsoleDurableIdempotencyStore durableIdempotencyStore;
   private final BatchSecurityProperties securityProperties;
+  private final ConcurrentMap<String, PendingLease> pendingLeases = new ConcurrentHashMap<>();
+
+  private record PendingLease(String key, String value, Duration ttl) {}
+
+  /** 仅续租本请求仍拥有的占位；完成或失去所有权后不能复活旧占位。 */
+  @Scheduled(fixedDelay = 10_000)
+  void renewPendingLeases() {
+    pendingLeases.forEach((owner, lease) -> {
+      try {
+        if (!idempotencyStore.compareAndSet(
+            lease.key(), lease.value(), lease.value(), lease.ttl())) {
+          pendingLeases.remove(owner, lease);
+          log.error("idempotency pending ownership lost: key={}", lease.key());
+        }
+      } catch (DataAccessException ex) {
+        log.error("idempotency pending renewal failed: key={}", lease.key(), ex);
+      }
+    });
+  }
 
   @Override
   public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
@@ -144,7 +168,9 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
     }
 
     boolean streamRequest = request.getRequestURI().equals("/api/console/ai/chat/stream");
-    Boolean isNew = reservePending(redisKey, idempotencyKey, streamRequest, response);
+    String owner = PENDING + ":" + UUID.randomUUID();
+    Duration pendingTtl = streamRequest ? STREAM_PENDING_TTL : Duration.ofSeconds(30);
+    Boolean isNew = reservePending(redisKey, owner, pendingTtl, response);
     if (EmptyChecks.isNull(isNew)) {
       return false;
     }
@@ -156,6 +182,8 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
     request.setAttribute(ATTR_REDIS_KEY, redisKey);
     request.setAttribute(ATTR_DURABLE_KEY, durableKey);
     request.setAttribute(ATTR_TENANT_ID, tenantId);
+    request.setAttribute(ATTR_OWNER, owner);
+    pendingLeases.put(owner, new PendingLease(redisKey, owner, pendingTtl));
     return true;
   }
 
@@ -203,15 +231,14 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
   }
 
   private Boolean reservePending(
-      String redisKey, String idempotencyKey, boolean streamRequest, HttpServletResponse response)
+      String redisKey, String owner, Duration pendingTtl, HttpServletResponse response)
       throws IOException {
     try {
-      Duration pendingTtl = streamRequest ? STREAM_PENDING_TTL : Duration.ofSeconds(30);
-      return idempotencyStore.setIfAbsent(redisKey, PENDING, pendingTtl);
+      return idempotencyStore.setIfAbsent(redisKey, owner, pendingTtl);
     } catch (DataAccessException ex) {
       log.warn(
           "idempotency Redis setIfAbsent unavailable — fail-closed: key={}, cause={}",
-          idempotencyKey,
+          redisKey,
           ex.getMessage());
       writeJson(response, HttpStatus.SERVICE_UNAVAILABLE, REDIS_UNAVAILABLE_BODY);
       return null;
@@ -269,11 +296,18 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
     }
     String durableKey = (String) request.getAttribute(ATTR_DURABLE_KEY);
     String tenantId = (String) request.getAttribute(ATTR_TENANT_ID);
+    String owner = (String) request.getAttribute(ATTR_OWNER);
+    if (EmptyChecks.isNull(owner)) {
+      return;
+    }
+    pendingLeases.remove(owner);
     int status = response.getStatus();
     if (status >= 200 && status < 300 && ex == null) {
       // 成功：升级为 DONE，长 TTL 阻止重复提交
       try {
-        idempotencyStore.set(redisKey, DONE, IDEMPOTENCY_TTL);
+        if (!idempotencyStore.compareAndSet(redisKey, owner, DONE, IDEMPOTENCY_TTL)) {
+          log.error("idempotency completion no longer owns pending marker: key={}", redisKey);
+        }
       } catch (DataAccessException redisException) {
         // 保留 PENDING，避免 Redis 恢复前立即放行重复请求；数据库完成态覆盖 Redis 短暂不可用窗口。
         log.error(
@@ -292,7 +326,7 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
     } else {
       // 失败：删除占位，允许安全重试
       try {
-        idempotencyStore.delete(redisKey);
+        idempotencyStore.deleteIfValue(redisKey, owner);
       } catch (DataAccessException deleteException) {
         log.warn(
             "idempotency pending marker cleanup failed; it will expire by TTL: key={}",

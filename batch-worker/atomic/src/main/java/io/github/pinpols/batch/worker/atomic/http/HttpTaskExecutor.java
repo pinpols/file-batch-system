@@ -146,7 +146,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
   void shutdownHttpClient() {
     stopping.set(true);
     OkHttpClient client = sharedClient.getAndSet(null);
-    if (client == null) {
+    if (EmptyChecks.isNull(client)) {
       return;
     }
     client.dispatcher().cancelAll();

@@ -28,6 +28,8 @@ public class JobInstanceTerminalStatusApplicationService {
   /** CAS 更新实例终态并收敛非终态分区/任务；返回受影响行数（0 表示并发抢占或未命中）。 */
   @Transactional
   public int updateTerminalStatusAndReconcileChildren(JobInstanceTerminalStatusCommand command) {
+    // 与 report 共用实例锁，必须在实例/分区/任务的任何行锁之前获取，避免父子锁序反转。
+    jobInstanceMapper.acquireInstanceAdvisoryLock(command.tenantId(), command.id());
     int rows = jobInstanceMapper.updateStatus(
         command.tenantId(),
         command.id(),

@@ -21,6 +21,7 @@ import io.github.pinpols.batch.worker.core.support.StepExecutionAdapter;
 import io.github.pinpols.batch.worker.core.support.TaskExecutionClient;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -29,7 +30,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 class DefaultTaskExecutionWrapperTest {
@@ -372,6 +375,52 @@ class DefaultTaskExecutionWrapperTest {
         .report(argThat(report -> "WORKER_EXECUTION_TIMEOUT".equals(report.getCode())
             && report.getErrorMessage().contains("1s")));
     assertThat(registry.counter("worker.task.execution.timeout.total").count()).isEqualTo(1.0);
+  }
+
+  @Test
+  void watchdogDetectsExecutionThatIgnoresCancellation() throws Exception {
+    var scheduler = mock(TaskScheduler.class);
+    @SuppressWarnings("unchecked")
+    ObjectProvider<MeterRegistry> provider = mock(ObjectProvider.class);
+    when(provider.getIfAvailable()).thenReturn(registry);
+    var tested = new DefaultTaskExecutionWrapper(
+        stepExecutionAdapter,
+        taskExecutionClient,
+        activeTaskLeaseRegistry,
+        executionPool,
+        timeoutProperties,
+        provider,
+        scheduler);
+    CountDownLatch release = new CountDownLatch(1);
+    CountDownLatch exited = new CountDownLatch(1);
+    when(stepExecutionAdapter.execute(any())).thenAnswer(invocation -> {
+      try {
+        while (release.getCount() > 0) {
+          try {
+            release.await();
+          } catch (InterruptedException ignored) {
+            // 故意模拟不遵守协作式中断的插件，测试结束时由 release 释放。
+          }
+        }
+        return StepExecutionResponse.successResponse();
+      } finally {
+        exited.countDown();
+      }
+    });
+    PulledTask task = sampleTask("1014", "t1", "w1");
+    task.setTimeoutSeconds(1);
+    try {
+      assertThat(tested.execute(task).success()).isFalse();
+      ArgumentCaptor<Runnable> check = ArgumentCaptor.forClass(Runnable.class);
+      verify(scheduler).schedule(check.capture(), any(Instant.class));
+      assertThat(exited.getCount()).isEqualTo(1);
+      check.getValue().run();
+      assertThat(registry.counter("worker.task.execution.thread.leaked.total").count())
+          .isEqualTo(1);
+    } finally {
+      release.countDown();
+      assertThat(exited.await(3, TimeUnit.SECONDS)).isTrue();
+    }
   }
 
   @Test

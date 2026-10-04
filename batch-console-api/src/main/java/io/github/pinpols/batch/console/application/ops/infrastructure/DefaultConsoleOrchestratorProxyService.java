@@ -403,7 +403,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   @Override
   public List<ConsolePipelineProgressItemResponse> pipelineProgressByInstance(
       String tenantId, Long pipelineInstanceId) {
-    if (pipelineInstanceId == null || pipelineInstanceId <= 0) {
+    if (EmptyChecks.isNull(pipelineInstanceId) || pipelineInstanceId <= 0) {
       return List.of();
     }
     String resolved = tenantGuard.resolveTenant(tenantId);

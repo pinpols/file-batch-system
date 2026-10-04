@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.common.tenant.routing;
 
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.sql.DataSource;
@@ -26,7 +28,7 @@ public class BusinessRoutingDataSource extends AbstractRoutingDataSource impleme
   private final AtomicBoolean closed = new AtomicBoolean();
 
   public BusinessRoutingDataSource(BusinessPlacementResolver resolver) {
-    this(resolver, java.util.List.of());
+    this(resolver, List.of());
   }
 
   public BusinessRoutingDataSource(
@@ -61,14 +63,14 @@ public class BusinessRoutingDataSource extends AbstractRoutingDataSource impleme
       try {
         closeable.close();
       } catch (Exception ex) {
-        if (firstFailure == null) {
+        if (EmptyChecks.isNull(firstFailure)) {
           firstFailure = ex;
         } else {
           firstFailure.addSuppressed(ex);
         }
       }
     }
-    if (firstFailure != null) {
+    if (EmptyChecks.isNotNull(firstFailure)) {
       throw firstFailure;
     }
   }

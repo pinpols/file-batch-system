@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.sensor;
 
 import io.github.pinpols.batch.common.enums.SensorType;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorContext;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorPolicy;
@@ -137,7 +138,7 @@ public class KafkaOffsetSensorPolicy implements SensorPolicy {
       if (stopping.get()) {
         throw new IllegalStateException("Kafka offset sensor is stopping");
       }
-      if (adminClient == null) {
+      if (EmptyChecks.isNull(adminClient)) {
         adminClient = AdminClient.create(kafkaAdmin.getConfigurationProperties());
       }
       return adminClient;
@@ -148,7 +149,7 @@ public class KafkaOffsetSensorPolicy implements SensorPolicy {
   void closeAdminClient() {
     stopping.set(true);
     synchronized (adminClientMonitor) {
-      if (adminClient != null) {
+      if (EmptyChecks.isNotNull(adminClient)) {
         adminClient.close(Duration.ZERO);
         adminClient = null;
       }

@@ -27,10 +27,14 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.OffsetDateTime;
-import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +42,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 class ConsoleUserBatchProvisioningServiceTest {
 
@@ -47,7 +53,7 @@ class ConsoleUserBatchProvisioningServiceTest {
   private TenantMapper tenantMapper;
   private ConsoleUserBatchProvisioningStore store;
   private ConsoleUserBatchProvisioningService service;
-  private final Map<String, String> stored = new HashMap<>();
+  private final Map<String, String> stored = new ConcurrentHashMap<>();
 
   @BeforeEach
   void setUp() {
@@ -64,6 +70,15 @@ class ConsoleUserBatchProvisioningServiceTest {
         .savePreview(anyString(), anyString(), any(Duration.class));
     when(store.loadPreview(anyString()))
         .thenAnswer(invocation -> stored.get(invocation.getArgument(0)));
+    when(store.replacePreview(anyString(), anyString(), anyString(), any(Duration.class)))
+        .thenAnswer(invocation -> stored.replace(
+            invocation.getArgument(0), invocation.getArgument(1), invocation.getArgument(2)));
+    org.mockito.Mockito.doAnswer(invocation -> {
+          stored.remove(invocation.getArgument(0), invocation.getArgument(1));
+          return null;
+        })
+        .when(store)
+        .deletePreview(anyString(), anyString());
     when(accountMapper.selectByUsername(anyString())).thenReturn(null);
     service = new ConsoleUserBatchProvisioningService(
         accountService, accountMapper, operationMapper, tenantMapper, store, new ObjectMapper());
@@ -123,6 +138,69 @@ class ConsoleUserBatchProvisioningServiceTest {
     verify(accountService).createProvisioned(any(), any(), any(), any(), any());
     assertThat(stored.values())
         .allSatisfy(json -> assertThat(json).doesNotContain("initialPassword"));
+  }
+
+  @Test
+  void concurrentEditsOfSameVersionHaveExactlyOneWinner() throws Exception {
+    when(tenantMapper.selectByTenantId("ta")).thenReturn(Map.of("status", "ACTIVE"));
+    var preview = service.preview(workbook("ta", "alice", ConsoleRoles.TENANT_USER));
+    CyclicBarrier barrier = new CyclicBarrier(2);
+    when(store.loadPreview(anyString())).thenAnswer(invocation -> {
+      String snapshot = stored.get(invocation.getArgument(0));
+      barrier.await(3, TimeUnit.SECONDS);
+      return snapshot;
+    });
+    var executor = Executors.newFixedThreadPool(2);
+    try {
+      var first = executor.submit(() -> patchAsOperator(preview.previewToken(), "First"));
+      var second = executor.submit(() -> patchAsOperator(preview.previewToken(), "Second"));
+      assertThat(List.of(first.get(5, TimeUnit.SECONDS), second.get(5, TimeUnit.SECONDS)))
+          .containsExactlyInAnyOrder(true, false);
+      assertThat(new ObjectMapper()
+              .readTree(stored.values().iterator().next())
+              .get("version")
+              .asInt())
+          .isEqualTo(2);
+    } finally {
+      executor.shutdownNow();
+      assertThat(executor.awaitTermination(3, TimeUnit.SECONDS)).isTrue();
+    }
+  }
+
+  private boolean patchAsOperator(String token, String displayName) {
+    asTenantAdmin("ta");
+    try {
+      service.patch(
+          token, 1, new AccountRow(2, "ta", "alice", displayName, ConsoleRoles.TENANT_USER));
+      return true;
+    } catch (BizException conflict) {
+      return false;
+    } finally {
+      SecurityContextHolder.clearContext();
+    }
+  }
+
+  @Test
+  void applyFreezesSnapshotUntilTransactionRollbackThenRestoresIt() throws Exception {
+    when(tenantMapper.selectByTenantId("ta")).thenReturn(Map.of("status", "ACTIVE"));
+    var preview = service.preview(workbook("ta", "alice", ConsoleRoles.TENANT_USER));
+    when(accountService.createProvisioned(any(), any(), any(), any(), any()))
+        .thenThrow(new IllegalStateException("injected database failure"));
+    var replacement = new AccountRow(2, "ta", "alice", "Edited", ConsoleRoles.TENANT_USER);
+    TransactionSynchronizationManager.initSynchronization();
+    try {
+      assertThatThrownBy(() -> service.apply(preview.previewToken(), 1, UUID.randomUUID()))
+          .isInstanceOf(IllegalStateException.class);
+      assertThatThrownBy(() -> service.patch(preview.previewToken(), 1, replacement))
+          .isInstanceOf(BizException.class)
+          .hasMessageContaining("being applied");
+      TransactionSynchronizationManager.getSynchronizations()
+          .forEach(sync -> sync.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK));
+      assertThat(service.patch(preview.previewToken(), 1, replacement).version())
+          .isEqualTo(2);
+    } finally {
+      TransactionSynchronizationManager.clearSynchronization();
+    }
   }
 
   @Test

@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchChannelHealthProperties;
@@ -364,7 +365,7 @@ public class DispatchChannelHealthService {
   }
 
   private void stopHttpProbeClient() {
-    if (httpProbeClient == null) {
+    if (EmptyChecks.isNull(httpProbeClient)) {
       return;
     }
     httpProbeClient.dispatcher().cancelAll();

@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.core.infrastructure;
 import io.github.pinpols.batch.common.context.RunModeSupport;
 import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.config.WorkerCoreAsyncConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperties;
@@ -33,8 +34,10 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -82,6 +85,8 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
       "CONFIG",
       "NO_EXECUTOR",
       "CONFIG",
+      "RESOURCE_EXHAUSTED",
+      "INFRASTRUCTURE",
       "EXECUTOR_FAILURE",
       "CONFIG");
 
@@ -213,8 +218,25 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
    */
   private StepExecutionResponse runWithTimeout(
       StepExecutionRequest request, PulledTask task, long timeoutSeconds) {
-    Future<StepExecutionResponse> future =
-        executionPool.submit(() -> stepExecutionAdapter.execute(request));
+    AtomicBoolean executing = new AtomicBoolean();
+    Future<StepExecutionResponse> future;
+    try {
+      future = executionPool.submit(() -> {
+        executing.set(true);
+        try {
+          return stepExecutionAdapter.execute(request);
+        } finally {
+          executing.set(false);
+        }
+      });
+    } catch (RejectedExecutionException rejected) {
+      return new StepExecutionResponse(
+          false,
+          "RESOURCE_EXHAUSTED",
+          "worker execution pool is saturated or shutting down",
+          null,
+          null);
+    }
     activeTaskLeaseRegistry.registerCancellationCallback(task.getTaskId(), () -> {
       boolean cancelled = future.cancel(true);
       log.info(
@@ -236,7 +258,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
           task.getTenantId(),
           task.getTaskId(),
           timeoutSeconds);
-      scheduleThreadLeakWatchdog(task, future);
+      scheduleThreadLeakWatchdog(task, executing);
       return new StepExecutionResponse(
           false,
           TIMEOUT_ERROR_CODE,
@@ -244,6 +266,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
           null,
           null);
     } catch (CancellationException ex) {
+      scheduleThreadLeakWatchdog(task, executing);
       String message = activeTaskLeaseRegistry.isCancellationRequested(task.getTaskId())
           ? "task execution cancelled by orchestrator request"
           : "task execution cancelled";
@@ -251,7 +274,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     } catch (ExecutionException ex) {
       // 业务异常已在 stepExecutionAdapter 里被包成 StepExecutionResponse.failure 返回, 这里到达说明 adapter 自己抛了
       // RuntimeException (典型: 解析 payload 失败 / 框架 bug). 也按失败上报.
-      Throwable cause = ex.getCause() == null ? ex : ex.getCause();
+      Throwable cause = EmptyChecks.isNull(ex.getCause()) ? ex : ex.getCause();
       rethrowFatal(cause);
       log.error(
           "task execution adapter threw: tenantId={}, taskId={}",
@@ -261,11 +284,14 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
       return new StepExecutionResponse(
           false,
           "WORKER_EXECUTION_ERROR",
-          cause.getMessage() == null ? cause.getClass().getSimpleName() : cause.getMessage(),
+          EmptyChecks.isNull(cause.getMessage())
+              ? cause.getClass().getSimpleName()
+              : cause.getMessage(),
           null,
           null);
     } catch (InterruptedException ex) {
       future.cancel(true);
+      scheduleThreadLeakWatchdog(task, executing);
       Thread.currentThread().interrupt();
       throw new IllegalStateException("listener thread interrupted while waiting task", ex);
     }
@@ -279,18 +305,18 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
   }
 
   /**
-   * 派发独立 watchdog: cancelGraceSeconds 后检查 future 是否已 done, 没 done 即记账 (说明业务线程不响应 interrupt). 不会强杀线程
+   * 派发独立 watchdog: 宽限期后检查实际调用是否退出，而非已被 cancel 标为完成的 Future。不会强杀线程
    * (Java 没有安全的强杀); 留给运维通过 metric 告警 + 重启 worker 回退.
    */
-  private void scheduleThreadLeakWatchdog(PulledTask task, Future<?> future) {
+  private void scheduleThreadLeakWatchdog(PulledTask task, AtomicBoolean executing) {
     long graceSeconds = Math.max(1L, timeoutProperties.getCancelGraceSeconds());
-    if (watchdog == null) {
+    if (EmptyChecks.isNull(watchdog)) {
       return;
     }
     watchdog.schedule(
         () -> {
-          if (!future.isDone()) {
-            if (threadLeakedCounter != null) {
+          if (executing.get()) {
+            if (EmptyChecks.isNotNull(threadLeakedCounter)) {
               threadLeakedCounter.increment();
             }
             log.error(

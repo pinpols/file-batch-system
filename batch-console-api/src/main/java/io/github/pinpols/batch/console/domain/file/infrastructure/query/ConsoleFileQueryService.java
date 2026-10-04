@@ -451,7 +451,7 @@ public class ConsoleFileQueryService {
         && EmptyChecks.isNotNull(live.rowsProcessed());
     if (shouldBridgeLiveRowsProcessed) {
       rowsProcessed = live.rowsProcessed();
-      if (lastHeartbeatAt == null) {
+      if (EmptyChecks.isNull(lastHeartbeatAt)) {
         lastHeartbeatAt = live.heartbeatAt();
       }
     }

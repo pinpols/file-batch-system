@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.common.tenant.routing;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
 
@@ -23,7 +24,7 @@ public final class BusinessRoutingDataSourceFactory {
    */
   public static DataSource singleShard(DataSource shard0) {
     BusinessRoutingDataSource routing = new BusinessRoutingDataSource(
-        new HashAndSiloPlacementResolver(1, Map.of()), java.util.List.of(shard0));
+        new HashAndSiloPlacementResolver(1, Map.of()), List.of(shard0));
     routing.setTargetDataSources(
         Map.<Object, Object>of(HashAndSiloPlacementResolver.DEFAULT_KEY, shard0));
     routing.setDefaultTargetDataSource(shard0);
