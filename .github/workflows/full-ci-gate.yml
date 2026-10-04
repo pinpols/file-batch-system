@@ -137,6 +137,10 @@ jobs:
         shell: bash
         run: bash scripts/ci/run-gate.sh FULL_TERMINOLOGY_DOC_SYNC "核心术语文档同步" -- python3 scripts/ci/check-terminology-doc-sync.py
 
+      - name: Test terminology documentation sync guard
+        shell: bash
+        run: bash scripts/ci/run-gate.sh FULL_TERMINOLOGY_DOC_SYNC_TEST "核心术语文档同步门禁测试" -- python3 -m unittest scripts/ci/tests/test_check_terminology_doc_sync.py
+
       - name: Verify documentation timestamp policy
         shell: bash
         run: bash scripts/ci/run-gate.sh FULL_DOC_TIMESTAMP_POLICY "文档日期命名策略" -- python3 scripts/ci/check-doc-timestamp-policy.py
