@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -39,6 +40,8 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -62,7 +65,7 @@ class ConsoleUserBatchProvisioningServiceTest {
     operationMapper = mock(ConsoleUserBatchOperationMapper.class);
     tenantMapper = mock(TenantMapper.class);
     store = mock(ConsoleUserBatchProvisioningStore.class);
-    org.mockito.Mockito.doAnswer(invocation -> {
+    doAnswer(invocation -> {
           stored.put(invocation.getArgument(0), invocation.getArgument(1));
           return null;
         })
@@ -73,7 +76,7 @@ class ConsoleUserBatchProvisioningServiceTest {
     when(store.replacePreview(anyString(), anyString(), anyString(), any(Duration.class)))
         .thenAnswer(invocation -> stored.replace(
             invocation.getArgument(0), invocation.getArgument(1), invocation.getArgument(2)));
-    org.mockito.Mockito.doAnswer(invocation -> {
+    doAnswer(invocation -> {
           stored.remove(invocation.getArgument(0), invocation.getArgument(1));
           return null;
         })
@@ -198,6 +201,36 @@ class ConsoleUserBatchProvisioningServiceTest {
           .forEach(sync -> sync.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK));
       assertThat(service.patch(preview.previewToken(), 1, replacement).version())
           .isEqualTo(2);
+    } finally {
+      TransactionSynchronizationManager.clearSynchronization();
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      ints = {TransactionSynchronization.STATUS_COMMITTED, TransactionSynchronization.STATUS_UNKNOWN
+      })
+  void completedOrUnknownTransactionNeverRestoresEditablePreview(int status) throws IOException {
+    when(tenantMapper.selectByTenantId("ta")).thenReturn(Map.of("status", "ACTIVE"));
+    when(accountService.createProvisioned(any(), any(), any(), any(), any()))
+        .thenReturn(new ConsoleUserAccountResponse(
+            42L, "ta", "alice", "", ConsoleRoles.TENANT_USER, true, null, null));
+    var preview = service.preview(workbook("ta", "alice", ConsoleRoles.TENANT_USER));
+    TransactionSynchronizationManager.initSynchronization();
+    try {
+      service.apply(preview.previewToken(), 1, UUID.randomUUID());
+      assertThat(stored.values()).allMatch(value -> value.startsWith("APPLYING:"));
+      TransactionSynchronizationManager.getSynchronizations()
+          .forEach(sync -> sync.afterCompletion(status));
+      if (status == TransactionSynchronization.STATUS_COMMITTED) {
+        assertThat(stored).isEmpty();
+      } else {
+        assertThat(stored).hasSize(1);
+        assertThat(stored.values()).allMatch(value -> value.startsWith("APPLYING:"));
+      }
+      var replacement = new AccountRow(2, "ta", "alice", "Edited", ConsoleRoles.TENANT_USER);
+      assertThatThrownBy(() -> service.patch(preview.previewToken(), 1, replacement))
+          .isInstanceOf(BizException.class);
     } finally {
       TransactionSynchronizationManager.clearSynchronization();
     }

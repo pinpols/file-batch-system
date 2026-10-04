@@ -263,6 +263,43 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  void shouldRefreshExpiredWindowAndReserveWithOneVersionUpdate() {
+    String ownerCode = "sw-reset-reserve-" + BatchDateTimeSupport.utcEpochMillis();
+    var now = BatchDateTimeSupport.utcNow();
+    quotaRuntimeStateMapper.insert(new QuotaRuntimeStateEntity(
+        null,
+        "t1",
+        "JOB",
+        ownerCode,
+        "SLIDING_WINDOW",
+        now.minusSeconds(7200),
+        now.minusSeconds(3600),
+        9,
+        null,
+        now,
+        now,
+        null));
+    QuotaRuntimeStateEntity before =
+        quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", ownerCode);
+
+    ResourceCheck result = quotaRuntimeStateService.evaluateAndReserve(new ReservationSpec()
+        .ownerCode(ownerCode)
+        .quotaResetPolicy("SLIDING_WINDOW")
+        .baseCap(5)
+        .burstLimit(10)
+        .currentActiveCount(7)
+        .slidingWindowHours(2)
+        .build());
+
+    QuotaRuntimeStateEntity after =
+        quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", ownerCode);
+    assertThat(result.allowed()).isTrue();
+    assertThat(after.version()).isEqualTo(before.version() + 1);
+    assertThat(after.peakBorrowedCount()).isEqualTo(3);
+    assertThat(after.windowExpiresAt()).isAfter(now);
+  }
+
+  @Test
   void shouldFindExpiredStatesViaRepository() {
     String ownerCode = "find-expired-" + BatchDateTimeSupport.utcEpochMillis();
 

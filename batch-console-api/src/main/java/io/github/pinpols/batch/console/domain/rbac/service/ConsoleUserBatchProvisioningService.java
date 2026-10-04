@@ -187,6 +187,11 @@ public class ConsoleUserBatchProvisioningService {
       TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
         @Override
         public void afterCompletion(int status) {
+          if (status == STATUS_UNKNOWN) {
+            // 提交结果不确定时不能恢复可编辑状态，保留冻结态并通过操作记录核实。
+            log.error("batch preview transaction outcome unknown: token={}", token);
+            return;
+          }
           finishApply(token, applying, stored.json(), status == STATUS_COMMITTED);
         }
       });

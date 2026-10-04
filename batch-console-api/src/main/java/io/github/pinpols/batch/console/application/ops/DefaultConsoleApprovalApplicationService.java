@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.contract.response.file.ConsolePresignDownloadResponse;
@@ -141,7 +142,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
             orchestratorInternalRestClient.approveBatchDayReplay(
                 payload.getSessionId(),
                 payload.getTenantId(),
-                operatorId == null ? "system" : operatorId);
+                EmptyChecks.isNull(operatorId) ? "system" : operatorId);
             yield approvalNo;
           }
           default ->

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -15,16 +16,20 @@ import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.console.application.idempotency.ConsoleDurableIdempotencyStore;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.concurrent.ScheduledFuture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.web.method.HandlerMethod;
 
 class ConsoleIdempotencyInterceptorTest {
 
   private ConsoleIdempotencyStore store;
+  private TaskScheduler scheduler;
   private ConsoleIdempotencyInterceptor interceptor;
   private HandlerMethod idempotentHandler;
   private ConsoleDurableIdempotencyStore durableStore;
@@ -33,11 +38,29 @@ class ConsoleIdempotencyInterceptorTest {
   @SuppressWarnings("unchecked")
   void setUp() throws NoSuchMethodException {
     store = mock(ConsoleIdempotencyStore.class);
+    scheduler = mock(TaskScheduler.class);
     durableStore = mock(ConsoleDurableIdempotencyStore.class);
-    interceptor =
-        new ConsoleIdempotencyInterceptor(store, durableStore, new BatchSecurityProperties());
+    interceptor = new ConsoleIdempotencyInterceptor(
+        store, durableStore, new BatchSecurityProperties(), scheduler);
     idempotentHandler = new HandlerMethod(
         new SampleController(), SampleController.class.getDeclaredMethod("mutate"));
+  }
+
+  @Test
+  void renewalTaskUsesManagedSchedulerAndIsCancelledOnDestroy() {
+    ScheduledFuture<?> renewal = mock(ScheduledFuture.class);
+    doReturn(renewal)
+        .when(scheduler)
+        .scheduleWithFixedDelay(
+            any(Runnable.class), any(Instant.class), eq(Duration.ofSeconds(10)));
+
+    interceptor.startRenewal();
+    interceptor.stopRenewal();
+
+    verify(scheduler)
+        .scheduleWithFixedDelay(
+            any(Runnable.class), any(Instant.class), eq(Duration.ofSeconds(10)));
+    verify(renewal).cancel(false);
   }
 
   @Test

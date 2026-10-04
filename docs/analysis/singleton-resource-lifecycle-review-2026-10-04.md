@@ -54,6 +54,7 @@
 - Atomic Worker：225 个测试通过，0 failure / 0 error。
 - Pipeline 进度、数据源启动回滚、Outbox 停止生命周期均增加了定向测试。
 - 幂等 owner-CAS、批量开户预览 CAS、Worker 执行池过载、忽略中断的插件检测、加密临时文件清理均增加了定向测试。
+- 终态收敛与 report 的锁顺序增加真实 PostgreSQL 并发 IT：先确认终态事务实际等待实例锁，再释放 report 并验证最终 SUCCESS 不被旧终态覆盖。
 - 测试过程中实际启动 PostgreSQL、Kafka、MinIO、Valkey Testcontainers，覆盖连接池、消息和对象存储相关路径。
 - 最终变更完成后，受影响模块及其依赖通过 `test-compile` 与 Spotless；新增测试的执行结果以 PR CI 为准。
 
@@ -70,9 +71,34 @@ PR 合入前必须满足：
 - 若 CI 出现真实失败，先定位并修复，再重跑原失败检查；
 - 本轮不跳过门禁、不强制合并。
 
+### 4.3 本次追加复验（基于 `1292f7c5b`）
+
+在原资源生命周期修复之上，补齐终态锁序、配额 CAS、HTTP 幂等所有权与续租、批量开户预览冻结、
+Worker 实际执行状态检测、Shell reader 和加密临时文件清理。业务数据源关闭已由基线提交完成，未重复实现。
+
+本次执行定向 Maven Reactor 测试并追加事务结果回归（均使用 `-am`），Surefire XML 合计 **113 tests / 0 failures /
+0 errors / 0 skipped**：
+
+| 验证范围 | 用例数 | 证据边界 |
+| --- | ---: | --- |
+| 数据源生命周期、终态服务与配额单测、Worker pool/watchdog、Shell、Export 清理、Console 幂等和预览 | 101 | 定向单元/组件测试；包含提交、回滚和结果未知三种预览完成路径，不等同于全量 Reactor |
+| `ConsoleRedisOwnershipIntegrationTest` | 1 | 真实 Valkey Lua：旧 owner 无法删除/覆盖新 owner；两线程快照 CAS 仅一个成功 |
+| `QuotaRuntimeStateIntegrationTest` | 10 | 真实 PostgreSQL：含过期窗口刷新后预约，版本只增加一次 |
+| `OutcomeVsReclaimDeadlockIntegrationTest#terminalUpdateWaitsBeforeTakingParentLockWhileReportHoldsPartition` | 1 | 真实 PostgreSQL：确认终态事务等待锁，再释放 report；旧终态 CAS 不覆盖 SUCCESS |
+
+Console 未启用全局 `@EnableScheduling`，幂等续租显式注册到已有 Spring TaskScheduler，并在销毁时取消；
+普通写请求占位 TTL 30 秒、流式请求 10 分钟，运行期间每 10 秒续租。TTL 不是任务最长运行时间，也不是
+到期后可安全重复写入的承诺。Redis 故障、进程长时间暂停导致失去占位后，不能依赖续租中断已经执行的
+业务副作用，仍须依赖业务事务及唯一约束；非幂等外部操作需要自身的请求身份与结果查询。
+
+Worker watchdog 检测真实调用是否退出，不把 `Future.cancel(true)` 当作退出证据；忽略中断的插件仍无法
+被 Java 安全强杀。有界队列限制堆积并返回 `RESOURCE_EXHAUSTED`，不承诺自动回滚插件已产生的业务写入。
+Windows Shell 用例和真实部署滚动升级未在本机验证；加密副本旁路锁与文件关闭顺序做了跨平台兼容处理，
+但这不是 Windows 运行证据。完整 sim、Full Gate、前端联测不在这 113 个用例的范围内。
+
 ## 5. 未扩展事项
 
 - 本轮没有执行完整 `sim-harness all`、性能压测、DAST 或预发布部署演练。
-- 本轮没有改变业务状态机、Kafka topic、数据库 schema、外部 API wire contract。
+- 本轮没有改变业务状态机、Kafka topic 或数据库 schema；心跳追加可选结构化进度字段，旧 SDK 标量上报仍兼容。Console 现有响应字段保持不变，内部进度查询增加 pipeline 维度。
 - Python SDK 仅修正文档性注释，没有运行时行为变化。
 - 本轮结论限定为单例、资源所有权、停止生命周期和 Pipeline 进度隔离，不替代系统级容灾或容量验收。

@@ -14,12 +14,13 @@ import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.scheduling.TaskScheduler;
 
 class ConsoleIdempotencyOwnershipTest {
   private final ExpiringStore store = new ExpiringStore();
   private final ConsoleDurableIdempotencyStore durable = mock(ConsoleDurableIdempotencyStore.class);
-  private final ConsoleIdempotencyInterceptor interceptor =
-      new ConsoleIdempotencyInterceptor(store, durable, new BatchSecurityProperties());
+  private final ConsoleIdempotencyInterceptor interceptor = new ConsoleIdempotencyInterceptor(
+      store, durable, new BatchSecurityProperties(), mock(TaskScheduler.class));
 
   @Test
   void renewalKeepsLongRequestExclusiveAndStopsAfterCompletion() throws Exception {

@@ -140,6 +140,29 @@ class ShellTaskExecutorTest {
   // ─── Capability / metadata ──────────────────────────────────────────────────
 
   @Test
+  @DisabledOnOs(OS.WINDOWS)
+  void repeatedTimeoutsReleaseOutputReaderThreads() throws Exception {
+    Set<Thread> existing = Thread.getAllStackTraces().keySet();
+    props.setDefaultTimeout(Duration.ofMillis(100));
+    for (int i = 0; i < 3; i++) {
+      TaskResult result =
+          executor.execute(ctxWithParams(Map.of("command", "/bin/sleep", "args", List.of("5"))));
+      assertThat(result.error()).isInstanceOf(ShellTaskExecutor.ShellTimeoutException.class);
+    }
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+    List<Thread> remaining;
+    do {
+      remaining = Thread.getAllStackTraces().keySet().stream()
+          .filter(thread -> !existing.contains(thread))
+          .filter(thread ->
+              thread.getName().startsWith("stdout-") || thread.getName().startsWith("stderr-"))
+          .toList();
+      if (!remaining.isEmpty()) Thread.sleep(20);
+    } while (!remaining.isEmpty() && System.nanoTime() < deadline);
+    assertThat(remaining).isEmpty();
+  }
+
+  @Test
   void capabilityReflectsConfig() {
     assertThat(executor.taskType()).isEqualTo("shell");
     assertThat(executor.capability().resourceKinds())
