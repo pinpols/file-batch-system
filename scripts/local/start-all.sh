@@ -340,12 +340,12 @@ else
   echo "==> read-replica 已显式关闭 → 跳过 postgres-replica 容器"
 fi
 
-echo "==> Docker Compose 启动基础依赖（postgres / kafka / kafka-ui / minio / redis${BATCH_CONSOLE_READ_REPLICA_ENABLED:+ / postgres-replica}）..."
+echo "==> Docker Compose 启动基础依赖（postgres / kafka / kafka-ui / minio / redis$([[ "${BATCH_CONSOLE_READ_REPLICA_ENABLED:-true}" == "true" ]] && echo ' / postgres-replica')）..."
 docker compose --project-name "$COMPOSE_PROJECT_NAME" --env-file "$COMPOSE_ENV_FILE" ${COMPOSE_PROFILES[@]+"${COMPOSE_PROFILES[@]}"} up -d
 
 # postgres / minio / redis / kafka-topics / kafka-ui 相互无依赖，并发 wait 节省 5-10s
 # minio-init 依赖 minio，仍需串行于 minio healthy 之后
-echo "==> 并发等待基础服务就绪（postgres / minio / redis / kafka-topics / kafka-ui${BATCH_CONSOLE_READ_REPLICA_ENABLED:+ / postgres-replica}）..."
+echo "==> 并发等待基础服务就绪（postgres / minio / redis / kafka-topics / kafka-ui$([[ "${BATCH_CONSOLE_READ_REPLICA_ENABLED:-true}" == "true" ]] && echo ' / postgres-replica')）..."
 wait_postgres & _pid_pg=$!
 wait_container_healthy "$MINIO_CONTAINER" "MinIO" & _pid_minio=$!
 wait_container_healthy "$REDIS_CONTAINER" "Redis" & _pid_redis=$!
@@ -466,10 +466,8 @@ START_TRIGGER="${START_TRIGGER:-1}"
 START_WORKERS="${START_WORKERS:-1}"
 WORKERS="${WORKERS:-import,export,process,dispatch,atomic}"
 
-# console-api 读写分离：与 application.yml fallback / docker-compose / .env.example 对齐默认 true。
-# 本地裸 jar 若没起 postgres-replica 容器，ReadReplicaRoutingDataSource fail-open 会
-# 在前几次请求时打 WARN 后进入 quarantine 自动降级到主库；想完全静音可
-# 显式 export BATCH_CONSOLE_READ_REPLICA_ENABLED=false 后再跑本脚本。
+# console-api 读写分离：未配置时默认 true；若 .env.local 或调用方显式配置 false，
+# 必须保持 false，避免裸 JVM 在没有从库凭据时误启读写分离数据源。
 export BATCH_CONSOLE_READ_REPLICA_ENABLED="${BATCH_CONSOLE_READ_REPLICA_ENABLED:-true}"
 
 echo "==> 启动 Spring Boot 进程（profile=local）..."

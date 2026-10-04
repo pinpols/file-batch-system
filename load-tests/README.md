@@ -191,6 +191,12 @@ ATOMIC_JOBS_CSV=atomic_sql_demo,atomic_stored_proc_demo,atomic_http_demo \
 - `MODULES_CSV=process,dispatch`：只跑部分模块
 - `SKIP_AUTO_CLEANUP=1`：保留现场数据和报告引用
 
+`run-control-plane-worker-benchmark.sh` 是通用控制面压测入口，不是 10w 严格容量画像入口。
+当请求数达到 `LARGE_LOAD_REQUESTS`（默认 100000）时，脚本会在发压前校验 Trigger relay
+预算和顺序模式下的作业 timeout，避免把本地 demo 超时或 40/s relay backlog 误判为系统容量回退。
+确需故意测低 relay 下的排队恢复，可显式设置 `ALLOW_LOW_RELAY_FOR_LARGE_LOAD=1`；发布前
+Atomic 10w 严格复验仍使用 `run-p2-capacity-profile.sh`。
+
 真并行小基线示例：
 
 ```bash
@@ -287,6 +293,14 @@ P2 容量与多租户公平性 fixture 会自包含创建所需的 Atomic 作业
 脚本会核验作业类型、worker group 和启用状态，fixture 不完整时在发压前失败，避免生成入口成功但终态无效的报告。
 异常轮次排空 Kafka 后使用 `RUN_ID=<profile-run-id>-10w bash load-tests/scripts/cleanup-worker-load-data.sh`
 统一清理；该入口会先清控制面引用，再清通用平台和业务 fixture，不要手工颠倒 SQL 顺序。
+
+五类 worker 的 1w/10w 复测要拆开记录口径：
+
+- Atomic 10w 严格容量：使用 `run-p2-capacity-profile.sh`，它会启动/校验 benchmark 拓扑、
+  隔离租户、容量作业 timeout、Trigger relay、Kafka 分区、Docker 资源和残留数据。
+- Import / Export / Dispatch / Process 1w/10w：使用 `run-worker-load-tests.sh`
+  按 `WORKER_MODULES_CSV=<module>` 单类运行，必要时放宽 `WAIT_TERMINAL_TIMEOUT_SECONDS`，
+  并保留每类报告。它验证业务 worker 链路，不得和 Atomic 控制面容量基线直接比较。
 
 - PostgreSQL 客户端：统一入口默认依次尝试宿主机 `psql`、Python `psycopg`、运行中的
   `batch-postgres-primary` 容器；可用 `BATCH_PG_CLIENT_MODE=host|python|docker` 固定模式。本地 Docker

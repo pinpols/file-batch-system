@@ -346,6 +346,34 @@ class SqlTransformComputePluginIntegrationTest {
         .containsEntry(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, "3");
   }
 
+  @Test
+  void buildPublishSql_ordersStagedRowsByConflictColumnsBeforeUpsert() {
+    ProcessJobContext context = newContextWithSpec();
+    SqlTransformComputeSpec spec =
+        SqlTransformComputeSpec.parse(currentStepParams(context), new ObjectMapper());
+
+    String sql = SqlTransformComputePlugin.buildPublishSql(spec);
+
+    assertThat(sql)
+        .contains("ORDER BY (rec).\"tenant_id\", (rec).\"account_id\"")
+        .contains("ON CONFLICT (\"tenant_id\", \"account_id\") DO UPDATE SET");
+  }
+
+  @Test
+  void buildDirectPublishSql_ordersSourceRowsByConflictColumnsBeforeUpsert() {
+    ProcessJobContext context = newContextWithSpec();
+    Map<String, Object> specMap = nestedSpec(currentStepParams(context));
+    specMap.put("stagingMode", "DIRECT");
+    SqlTransformComputeSpec spec =
+        SqlTransformComputeSpec.parse(currentStepParams(context), new ObjectMapper());
+
+    String sql = SqlTransformComputePlugin.buildDirectPublishSql(spec);
+
+    assertThat(sql)
+        .contains("ORDER BY base.\"tenant_id\", base.\"account_id\"")
+        .contains("ON CONFLICT (\"tenant_id\", \"account_id\") DO UPDATE SET");
+  }
+
   // ─── 辅助 ────────────────────────────────────────────────────────────────────
 
   private ProcessJobContext newContextWithSpec() {
