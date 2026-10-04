@@ -53,6 +53,8 @@ PG_SAMPLE_INTERVAL_SECONDS="${PG_SAMPLE_INTERVAL_SECONDS:-5}"
 # 结果业务键基数。1 表示所有请求使用同一 bizDate，专测同键重跑；大于 1 时轮换 bizDate，
 # 用于测量独立业务键下的通用控制面吞吐。
 BIZ_DATE_CARDINALITY="${BIZ_DATE_CARDINALITY:-1}"
+LARGE_LOAD_REQUESTS="${LARGE_LOAD_REQUESTS:-100000}"
+ALLOW_LOW_RELAY_FOR_LARGE_LOAD="${ALLOW_LOW_RELAY_FOR_LARGE_LOAD:-0}"
 
 
 RUN_ID="${RUN_ID:-ctlw-$(date +%Y%m%d%H%M%S)}"
@@ -121,6 +123,92 @@ requests_for_rate() {
       expected = rate * duration
       print int(expected) + (expected > int(expected) ? 1 : 0)
     }'
+}
+
+require_positive_int() {
+  local name="$1" value="$2"
+  if ! [[ "$value" =~ ^[1-9][0-9]*$ ]]; then
+    echo "${name} must be a positive integer, got: ${value}" >&2
+    exit 2
+  fi
+}
+
+selected_pipeline_module_count() {
+  local count=0
+  csv_contains process "$MODULES_CSV" && count=$((count + 1))
+  csv_contains dispatch "$MODULES_CSV" && count=$((count + 1))
+  csv_contains atomic "$MODULES_CSV" && count=$((count + 1))
+  printf '%s\n' "$count"
+}
+
+large_load_request_count() {
+  if [[ "$CONTROL_PLANE_MODE" == "parallel" ]]; then
+    if [[ "$WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS" -gt 0 ]]; then
+      printf '%s\n' "$WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS"
+    else
+      printf '%s\n' "$(
+        awk -v process="$PROCESS_LAUNCH_RPS" \
+            -v dispatch="$DISPATCH_LAUNCH_RPS" \
+            -v atomic="$ATOMIC_LAUNCH_RPS" \
+            -v trigger="$TRIGGER_LAUNCH_RPS" \
+            -v duration="$TRIGGER_DURATION_SECONDS" \
+          'BEGIN {
+            total = (process + dispatch + atomic + trigger) * duration
+            print int(total) + (total > int(total) ? 1 : 0)
+          }'
+      )"
+    fi
+  else
+    printf '%s\n' "$((USERS * $(selected_pipeline_module_count)))"
+  fi
+}
+
+trigger_relay_budget_limit() {
+  local metrics
+  if ! metrics="$(curl --fail --silent --show-error "${TRIGGER_BASE_URL}/actuator/prometheus" 2>/dev/null)"; then
+    return 1
+  fi
+  printf '%s\n' "$metrics" \
+    | awk '/^batch_trigger_outbox_release_budget_limit / && !found { print int($2); found=1 }'
+}
+
+assert_capacity_shape() {
+  require_positive_int USERS "$USERS"
+  require_positive_int RAMP_SECONDS "$RAMP_SECONDS"
+  require_positive_int WAIT_TERMINAL_TIMEOUT_SECONDS "$WAIT_TERMINAL_TIMEOUT_SECONDS"
+  require_positive_int LARGE_LOAD_REQUESTS "$LARGE_LOAD_REQUESTS"
+
+  local large_count
+  large_count="$(large_load_request_count)"
+  if [[ "$large_count" -lt "$LARGE_LOAD_REQUESTS" ]]; then
+    return
+  fi
+
+  local relay_budget
+  relay_budget="$(trigger_relay_budget_limit || true)"
+  if [[ -n "$relay_budget" && "$relay_budget" -lt 100 && "$ALLOW_LOW_RELAY_FOR_LARGE_LOAD" != "1" ]]; then
+    echo "large load (${large_count} requests) detected, but trigger relay budget is ${relay_budget}/s." >&2
+    echo "Use load-tests/scripts/run-p2-capacity-profile.sh for 10w capacity validation, or restart Trigger with benchmark relay settings." >&2
+    echo "Set ALLOW_LOW_RELAY_FOR_LARGE_LOAD=1 only when intentionally measuring backlog drain under a low relay budget." >&2
+    exit 2
+  fi
+
+  if [[ "$CONTROL_PLANE_MODE" == "sequential" ]]; then
+    local min_timeout minimum_timeout_seconds
+    minimum_timeout_seconds="$((RAMP_SECONDS + WAIT_TERMINAL_TIMEOUT_SECONDS))"
+    min_timeout="$(
+      psql_platform -At -v tenant_id="$LOAD_TEST_TENANT_ID" \
+        -v modules_csv="$MODULES_CSV" \
+        -v atomic_jobs_csv="$ATOMIC_JOBS_CSV" \
+        -f "$LOAD_DIR/sql/control-selected-job-timeout-min.sql"
+    )"
+    if [[ -n "$min_timeout" && "$min_timeout" -gt 0 && "$min_timeout" -lt "$minimum_timeout_seconds" ]]; then
+      echo "large sequential load (${large_count} requests) would exceed selected job timeout." >&2
+      echo "selected min job_definition.timeout_seconds=${min_timeout}, required >= ramp + terminal wait (${minimum_timeout_seconds})." >&2
+      echo "Use load-tests/scripts/run-p2-capacity-profile.sh or prepare a dedicated capacity job with a long timeout." >&2
+      exit 2
+    fi
+  fi
 }
 
 if [[ "$CONTROL_PLANE_MODE" == "parallel" \
@@ -708,6 +796,7 @@ if ! [[ "$BIZ_DATE_CARDINALITY" =~ ^[1-9][0-9]*$ ]]; then
   echo "BIZ_DATE_CARDINALITY must be a positive integer" >&2
   exit 2
 fi
+assert_capacity_shape
 
 TOKEN="${CONSOLE_ACCESS_TOKEN:-load-test-token}"
 if [[ "$PIPELINE_MAX_POLLS" != "0" || "$SCHEDULING_CONSOLE_READS" == "true" ]]; then

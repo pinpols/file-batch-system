@@ -637,12 +637,14 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
               AND target_schema = :targetSchema
               AND target_table = :targetTable
         ) staged
+        ORDER BY %s
         """.formatted(
             targetName(spec),
             targetColumnList(spec),
             jsonbRecordSelectColumns(spec),
             targetName(spec),
-            STAGING_TABLE);
+            STAGING_TABLE,
+            conflictOrderByColumns(spec, false));
     return appendConflictClause(sql, spec);
   }
 
@@ -654,11 +656,13 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
         FROM (
         %s
         ) base
+        ORDER BY %s
         """.formatted(
             targetName(spec),
             targetColumnList(spec),
             directSourceSelectColumns(spec),
-            spec.sourceSql());
+            spec.sourceSql(),
+            conflictOrderByColumns(spec, true));
     return appendConflictClause(sql, spec);
   }
 
@@ -731,6 +735,25 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     return spec.columns().stream()
         .map(column -> "base." + JdbcMappedSqlValidator.quotePg(column.source()))
         .collect(Collectors.joining(", "));
+  }
+
+  private static String conflictOrderByColumns(SqlTransformComputeSpec spec, boolean direct) {
+    return spec.conflictColumns().stream()
+        .map(target -> conflictOrderByExpression(spec, target, direct))
+        .collect(Collectors.joining(", "));
+  }
+
+  private static String conflictOrderByExpression(
+      SqlTransformComputeSpec spec, String target, boolean direct) {
+    SqlTransformComputeSpec.ColumnMapping mapping = spec.columns().stream()
+        .filter(column -> column.target().equals(target))
+        .findFirst()
+        .orElseThrow(() -> new IllegalArgumentException(
+            "sqlTransformCompute.conflictColumns must appear in target columns: " + target));
+    if (direct) {
+      return "base." + JdbcMappedSqlValidator.quotePg(mapping.source());
+    }
+    return "(rec)." + JdbcMappedSqlValidator.quotePg(mapping.target());
   }
 
   private static String appendConflictClause(String sql, SqlTransformComputeSpec spec) {

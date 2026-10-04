@@ -117,4 +117,21 @@ class GenericJdbcMappedImportLoadPluginTest {
         GenericJdbcMappedImportLoadPlugin.applyRegion(ctx(), spec(null, List.of()));
     assertThat(c.region()).isEqualTo("GD");
   }
+
+  @Test
+  void orderedRecordsForConflictColumns_sortsBatchByConflictKey() {
+    JdbcMappedImportSpec spec = spec(null, List.of());
+    List<Map<String, Object>> records = List.of(
+        Map.of("customer_no", "C-003"),
+        Map.of("customer_no", "A-001"),
+        Map.of("customer_no", "B-002"));
+
+    List<Map<String, Object>> ordered =
+        GenericJdbcMappedImportLoadPlugin.orderedRecordsForConflictColumns(
+            ctx(), spec, List.of("tenant_id", "customer_no"), records);
+
+    assertThat(ordered)
+        .extracting(row -> row.get("customer_no"))
+        .containsExactly("A-001", "B-002", "C-003");
+  }
 }

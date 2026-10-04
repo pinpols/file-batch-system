@@ -419,8 +419,8 @@ fi
 
 echo "==> 按依赖顺序启动..."
 
-# console-api 读写分离：与 start-all.sh / application.yml / docker-compose / .env.example 对齐默认 true。
-# 想完全关掉路由：显式 export BATCH_CONSOLE_READ_REPLICA_ENABLED=false 后再 restart console
+# console-api 读写分离：未配置时默认 true；若 .env.local 或调用方显式配置 false，
+# 必须保持 false，避免裸 JVM 在没有从库凭据时误启读写分离数据源。
 export BATCH_CONSOLE_READ_REPLICA_ENABLED="${BATCH_CONSOLE_READ_REPLICA_ENABLED:-true}"
 
 # 定义全局启动顺序
