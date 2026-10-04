@@ -117,6 +117,7 @@ MinIO 主进程及 `minio-init` 应为 1001:1001，Valkey 的 PID 1 与服务进
 ## 说明
 
 - 应用镜像使用统一的 `deploy/docker/Dockerfile.app`
+- 运维工具箱镜像使用 `deploy/docker/Dockerfile.ops-toolbox`，CI 会随 `docker-image-build` 一起构建校验；该镜像只用于临时巡检容器 / Job，不作为业务服务基础镜像
 - 构建时通过 `MODULE` 参数选择模块
 - 运行时通过 `depends_on` 等待数据库、Kafka topic 初始化和 MinIO bucket 初始化完成
 - 镜像内置 `curl`，用于容器健康检查

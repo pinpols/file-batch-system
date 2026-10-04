@@ -109,6 +109,8 @@ worker 所有权交接和心跳租户归一化后不丢失结构化进度。
 - Python 本次改动文件 Ruff 检查通过。
 - Java SDK 心跳、动态间隔、指令及进度响应序列化追加复验 **26 tests / 0 failures / 0 errors / 0 skipped**；其中响应序列化 5 例与上述 199 例重叠。
 - 官方 pre-commit、pre-push（含受影响模块 clean compile）及 Changelog 同步检查通过；未绕过门禁。
+- 本地增量 Sonar 最终复扫：99 个变更 Java 文件，变更行 **0 OPEN issue / 0 待审安全热点**。
+  本次未刷新覆盖率；两处资源所有权误报使用已登记的精确规则抑制，不代表全仓历史 issue 清零。
 - 配对前端现有调用和生成契约均使用 `pipelineInstanceId`，无需修改该页面接口；本轮未跑浏览器联测。
 
 ## 5. 未扩展事项

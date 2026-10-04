@@ -7,3 +7,8 @@ target "_cache" {
     MAVEN_SETTINGS_FILE = "deploy/docker/settings-ci.xml"
   }
 }
+
+target "ops-toolbox" {
+  cache-from = ["type=gha,scope=batch-ops-toolbox"]
+  cache-to   = ["type=gha,scope=batch-ops-toolbox,mode=max"]
+}
