@@ -51,6 +51,7 @@
 | 16 | [config-governance.md](./config-governance.md) | 配置分类、生效方式、滚动重启、版本 CAS 与实例确认边界 |
 | 16a | [config-ops-tiering.md](./config-ops-tiering.md) | 配置运维入口 L0-L3 分层：哪些必须一等化，哪些保持容量参数 / 应急阀 / 内部实现 |
 | 16b | [environment-variable-governance.md](./environment-variable-governance.md) | 开发、场景测试、压测、生产的环境变量入口、对齐检查和变量治理体系 |
+| 16c | [config-key-access-governance.md](./config-key-access-governance.md) | 程序内直接字符串 key 读取配置的治理边界、保留例外与 CI 增量拦截策略 |
 | 17 | [mq-topic-routing-rollout.md](./mq-topic-routing-rollout.md) | MQ topic 分流（PATTERN / FIXED / TENANT_SCOPED / DIRECT_ONLY）切换 |
 | 17a | [stateful-backend-cutover.md](./stateful-backend-cutover.md) | Quota / Report Outbox / Object Storage 有状态后端切换守卫与 SOP |
 
