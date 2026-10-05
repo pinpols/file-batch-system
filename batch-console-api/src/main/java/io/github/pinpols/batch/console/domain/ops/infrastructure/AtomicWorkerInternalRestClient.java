@@ -1,12 +1,15 @@
 package io.github.pinpols.batch.console.domain.ops.infrastructure;
 
 import io.github.pinpols.batch.console.config.ConsoleAtomicWorkerClientProperties;
+import io.github.pinpols.batch.console.shared.client.ConsoleInternalBaseUrlResolver;
 import java.time.Duration;
+import java.util.function.Supplier;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
 import org.springframework.boot.http.client.HttpClientSettings;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
+import org.springframework.util.function.SingletonSupplier;
 import org.springframework.web.client.RestClient;
 
 /**
@@ -22,22 +25,15 @@ import org.springframework.web.client.RestClient;
 public class AtomicWorkerInternalRestClient {
 
   private final ConsoleAtomicWorkerClientProperties properties;
-  private final RestClient client;
+  private final Supplier<RestClient> clientSupplier;
 
   public AtomicWorkerInternalRestClient(
       ObjectProvider<RestClient.Builder> restClientBuilderProvider,
       ConsoleAtomicWorkerClientProperties properties,
       Environment environment) {
     this.properties = properties;
-    String baseUrl = environment.resolvePlaceholders(properties.getBaseUrl());
-    this.client = restClientBuilderProvider
-        .getObject()
-        .baseUrl(baseUrl)
-        .requestFactory(ClientHttpRequestFactoryBuilder.detect()
-            .build(HttpClientSettings.defaults()
-                .withConnectTimeout(Duration.ofMillis(properties.getConnectTimeoutMillis()))
-                .withReadTimeout(Duration.ofMillis(properties.getReadTimeoutMillis()))))
-        .build();
+    this.clientSupplier =
+        SingletonSupplier.of(() -> buildClient(restClientBuilderProvider, properties, environment));
   }
 
   public boolean isEnabled() {
@@ -46,6 +42,22 @@ public class AtomicWorkerInternalRestClient {
 
   /** 返回组件生命周期内复用的线程安全客户端。 */
   public RestClient client() {
-    return client;
+    return clientSupplier.get();
+  }
+
+  private static RestClient buildClient(
+      ObjectProvider<RestClient.Builder> restClientBuilderProvider,
+      ConsoleAtomicWorkerClientProperties properties,
+      Environment environment) {
+    String baseUrl = ConsoleInternalBaseUrlResolver.resolve(
+        environment, properties.getBaseUrl(), "batch.console.atomic-worker.base-url");
+    return restClientBuilderProvider
+        .getObject()
+        .baseUrl(baseUrl)
+        .requestFactory(ClientHttpRequestFactoryBuilder.detect()
+            .build(HttpClientSettings.defaults()
+                .withConnectTimeout(Duration.ofMillis(properties.getConnectTimeoutMillis()))
+                .withReadTimeout(Duration.ofMillis(properties.getReadTimeoutMillis()))))
+        .build();
   }
 }

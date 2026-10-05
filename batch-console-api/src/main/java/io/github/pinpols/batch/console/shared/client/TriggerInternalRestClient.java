@@ -5,11 +5,13 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.config.ConsoleTriggerClientProperties;
 import java.time.Duration;
+import java.util.function.Supplier;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
 import org.springframework.boot.http.client.HttpClientSettings;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
+import org.springframework.util.function.SingletonSupplier;
 import org.springframework.web.client.RestClient;
 
 /**
@@ -29,15 +31,30 @@ public class TriggerInternalRestClient {
   /** batch-trigger {@code InternalSecretFilter} 期望的鉴权 header 名,保持单一字面量来源。 */
   public static final String X_INTERNAL_SECRET_HEADER = CommonConstants.INTERNAL_SECRET_HEADER;
 
-  // 构造期只消费一次 prototype builder；请求期复用已冻结配置的线程安全 client。
-  private final RestClient client;
+  // RANDOM_PORT 测试在容器初始化完成后才提供 local.server.port；首次请求时构建并在后续复用。
+  private final Supplier<RestClient> clientSupplier;
 
   public TriggerInternalRestClient(
       ObjectProvider<RestClient.Builder> restClientBuilderProvider,
       ConsoleTriggerClientProperties triggerClientProperties,
       BatchSecurityProperties batchSecurityProperties,
       Environment environment) {
-    String baseUrl = environment.resolvePlaceholders(triggerClientProperties.getBaseUrl());
+    this.clientSupplier = SingletonSupplier.of(() -> buildClient(
+        restClientBuilderProvider, triggerClientProperties, batchSecurityProperties, environment));
+  }
+
+  /** 返回组件生命周期内复用的线程安全客户端，保留底层连接池和 keep-alive。 */
+  public RestClient client() {
+    return clientSupplier.get();
+  }
+
+  private static RestClient buildClient(
+      ObjectProvider<RestClient.Builder> restClientBuilderProvider,
+      ConsoleTriggerClientProperties triggerClientProperties,
+      BatchSecurityProperties batchSecurityProperties,
+      Environment environment) {
+    String baseUrl = ConsoleInternalBaseUrlResolver.resolve(
+        environment, triggerClientProperties.getBaseUrl(), "batch.console.trigger.base-url");
     String secret = batchSecurityProperties.getInternalSecret();
     RestClient.Builder builder = restClientBuilderProvider
         .getObject()
@@ -51,11 +68,6 @@ public class TriggerInternalRestClient {
     if (Texts.hasText(secret)) {
       builder = builder.defaultHeader(X_INTERNAL_SECRET_HEADER, secret);
     }
-    this.client = builder.build();
-  }
-
-  /** 返回组件生命周期内复用的线程安全客户端，保留底层连接池和 keep-alive。 */
-  public RestClient client() {
-    return client;
+    return builder.build();
   }
 }

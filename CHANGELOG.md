@@ -48,6 +48,7 @@
 
 ### Fixed
 
+- 修复 Console 内部 RestClient 在 Spring 随机端口确定前提前解析 `${local.server.port}`、导致 E2E 应用上下文启动失败的问题；Orchestrator、Trigger 与可选 Atomic 状态客户端改为首次请求时构建并在组件生命周期内复用。
 - 修复 `ops-toolbox` Dockerfile 因未声明 Debian/PGDG 包版本策略触发 Hadolint DL3008、阻断 Full Gate 的问题；沿用应用镜像约定，显式记录从受控软件源获取最新安全补丁的窄范围例外。PR Gate 在 Dockerfile 等配置输入变化时同步初始化 JDK 21 构建环境，避免 Trivy 依赖预热误用 Runner 默认 JDK 17 后回源触发限流。
 - 批量开户事务收尾日志改用请求 ID，不再输出预览令牌或原始存储异常；幂等占位失败日志仅记录服务端生成的所有者标识和异常类型，避免外部输入注入日志。
 
