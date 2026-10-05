@@ -124,6 +124,18 @@ Compose CD、生产拓扑、硬件起步规格和 Kubernetes/GitOps 最终目标
 
 不得把 RES-5/RES-6 的“代码已具备降级”写成“容量和告警已验证”；它们需要真实部署拓扑和故障注入证据。
 
+### G7. 程序内配置 Key 读取治理 · P1/P2 · ⏳ 当前待做
+
+权威规范：[程序内配置 Key 读取治理](../runbook/config-key-access-governance.md)。本项只治理生产代码中通过字符串 key 读取配置的场景，不一刀切 `@Value`、`spring.*`、JVM 系统属性、测试/压测 `-Dxxx` 参数。
+
+| ID | 主题 | 状态 | 验收证据 |
+|---|---|---|---|
+| **CFGKEY-1** | P1 存量收敛：`batch.*` 直接读取与高风险 / 多字段同前缀 `@Value` 提取到 `@ConfigurationProperties` | ⏳ 当前待做 | `AtomicExecutorProductionGuard`、`ConsoleRealtimeInstanceIdProvider`、`ConsolePipelineProgressDirtyPublisher`、`ReplicaLagMonitor`、`ProductionRuntimeConfigurationGuard`、`BatchSecurityProperties` 等完成收敛；新增配置进入 config governance registry |
+| **CFGKEY-2** | CI 报告模式：生成直接 key / `@Value` inventory，区分 `PROJECT_CONFIG`、`SECRET_CONFIG`、`SPRING_INFRA`、`JVM_SYSTEM`、`TEST_ONLY` | ⏳ 当前待做 | 新增脚本可本地运行并输出机器可读报告；先接 Full Gate 或 nightly，不阻断历史存量 |
+| **CFGKEY-3** | CI 增量拦截：只阻断新增高风险 `batch.*` 直接读取和敏感 `@Value`，历史存量走 baseline | 🟡 待 CFGKEY-2 稳定后实施 | PR Gate 对新增违规失败；白名单记录原因、owner 与复查条件 |
+
+本项不要求把 `local.server.port`、`java.io.tmpdir`、`user.home`、`spring.application.name` 等合理例外强行改造；否则会制造噪声和第二事实来源。
+
 ### A. POSITIONAL-ARGS 治理（V6-P2-POSITIONAL-ARGS）· P2 · ✅ 已闭环
 
 > 状态：v4 已闭环，并行会话产出 + 守护测试到位。历史方案见 [`../archive/analysis/positional-args-cleanup-plan.md`](../archive/analysis/positional-args-cleanup-plan.md)。docs/agent-baseline.md "调用方约束" 子节由本方案沉淀。
