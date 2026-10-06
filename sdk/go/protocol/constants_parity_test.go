@@ -93,6 +93,7 @@ func TestConstantsParity(t *testing.T) {
 		{"worker_runtime_states", WorkerRuntimeStates},
 		{"sensitive_keywords", SensitiveKeywords},
 		{"task_statuses", TaskStatuses},
+		{"report_error_codes", ReportErrorCodes},
 	}
 
 	for _, c := range cases {

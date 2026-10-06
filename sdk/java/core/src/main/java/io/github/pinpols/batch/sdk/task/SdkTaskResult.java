@@ -49,8 +49,13 @@ public record SdkTaskResult(
     return new SdkTaskResult(false, message, Map.of(), error);
   }
 
-  /** 协作式取消终态写入 {@code output['errorCode']} 的错误码,语言无关地对齐 Go/Python(均为 {@code CANCELLED})。 */
-  public static final String CANCELLED_CODE = "CANCELLED";
+  /**
+   * 协作式取消终态写入 {@code output['errorCode']} 的错误码,语言无关地对齐 Go/Python(均为 {@code CANCELLED})。
+   *
+   * <p>直接复用 {@link SdkErrorCode#CANCELLED}:两处若各写一份字面量,改一处而另一处不动不会有任何编译期 / 运行期报错,
+   * 平台按 errorCode 聚合告警时会静默分裂出两个「取消」桶。
+   */
+  public static final String CANCELLED_CODE = SdkErrorCode.CANCELLED;
 
   /**
    * ADR-037 决策三 — 协作式取消的终态。语义上是「正常停止在安全点」而非「失败」:{@code success=false} 复用失败通道(orchestrator 不再推进

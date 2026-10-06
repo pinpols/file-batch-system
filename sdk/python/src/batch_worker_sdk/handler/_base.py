@@ -18,6 +18,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, final
 
+from batch_worker_sdk.constants import ERROR_CODE_CANCELLED
 from batch_worker_sdk.task.context import SdkTaskContext
 from batch_worker_sdk.task.descriptor import SdkTaskTypeDescriptor
 from batch_worker_sdk.task.result import SdkTaskResult
@@ -26,9 +27,11 @@ logger = logging.getLogger(__name__)
 
 # 写入 ``SdkTaskResult.output['errorCode']`` 的模板方法失败路径错误码。
 # 保持短小且稳定,便于平台 atomic-lane 分类体系据此路由。
+# ``CANCELLED_CODE`` 直接复用共享常量家(与 Java ``SdkErrorCode.CANCELLED`` / Go
+# ``protocol.ErrorCodeCancelled`` 同值),避免第二份字面量静默漂移。
 HANDLER_ERROR_CODE: str = "HANDLER_ERROR"
 INVALID_PARAMS_CODE: str = "INVALID_PARAMS"
-CANCELLED_CODE: str = "CANCELLED"
+CANCELLED_CODE: str = ERROR_CODE_CANCELLED
 NULL_RESULT_CODE: str = "NULL_RESULT"
 
 

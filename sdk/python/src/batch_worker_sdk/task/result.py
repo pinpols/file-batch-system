@@ -12,6 +12,8 @@ from typing import Any, Self
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from batch_worker_sdk.constants import ERROR_CODE_CANCELLED
+
 
 class SdkTaskResult(BaseModel):
     """Handler 的返回值;SDK 将其转换为 REPORT 调用。"""
@@ -69,7 +71,7 @@ class SdkTaskResult(BaseModel):
         ``breakPosition``(空 dict),保证终态 output 形状跨语言一致。
         """
         output: dict[str, Any] = {
-            "errorCode": "CANCELLED",
+            "errorCode": ERROR_CODE_CANCELLED,
             "breakPosition": dict(break_position or {}),
         }
         return cls(

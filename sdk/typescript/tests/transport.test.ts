@@ -283,6 +283,41 @@ test("transport: report carries tenantId/workerId + result fields + partitionInv
   await srv.close();
 });
 
+test("transport: failure report without errorCode uses the canonical EXECUTION_FAILED fallback", async () => {
+  let reportBody = "";
+  const srv = await startServer((req, res) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (c: Buffer) => chunks.push(c));
+    req.on("end", () => {
+      reportBody = Buffer.concat(chunks).toString("utf8");
+      res.statusCode = 200;
+      res.end("{}");
+    });
+  });
+
+  const transport = new HttpTransport({
+    baseUrl: srv.url,
+    tenantId: "tenant-A",
+    workerCode: "w1",
+    sleep: async () => {},
+  });
+  // try/finally:断言失败时也必须关掉 loopback server + transport,否则 node --test
+  // 会因残留句柄一直等,红态表现为「挂起」而不是「失败」。
+  try {
+    await transport.report("task-9", { success: false, resultSummary: "boom" }, "rk");
+    const parsed = JSON.parse(reportBody);
+    // 兜底必须是规范错误码(wire-protocol §B),不能是 task 状态值 "FAILED":
+    // 平台按 errorCode 聚合失败告警,值不一致会让同一类失败跨语言分裂成两个桶。
+    assert.deepEqual(JSON.parse(parsed.resultSummary), {
+      code: "EXECUTION_FAILED",
+      message: "boom",
+    });
+  } finally {
+    (transport as unknown as { close(): void }).close();
+    await srv.close();
+  }
+});
+
 test("transport: deactivate sends OFFLINE WorkerHeartbeatDto", async () => {
   let body = "";
   const srv = await startServer((req, res) => {

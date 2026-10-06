@@ -36,6 +36,7 @@ _COVERED: list[tuple[str, str]] = [
     ("worker_runtime_states", "WORKER_RUNTIME_STATES"),
     ("sensitive_keywords", "SENSITIVE_KEYWORDS"),
     ("task_statuses", "TASK_STATUSES"),
+    ("report_error_codes", "REPORT_ERROR_CODES"),
 ]
 
 

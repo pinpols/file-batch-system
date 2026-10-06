@@ -4,6 +4,8 @@
 //! NOT re-authored freely: `tests/constants_parity.rs` deep-equals each array
 //! against the YAML source of truth and fails on any drift (contract §1.1).
 
+use crate::protocol::error_code;
+
 /// `schema_versions_supported`: known major versions the SDK accepts
 /// (wire-protocol §A).
 pub const SUPPORTED_SCHEMA_VERSIONS: &[&str] = &["v1", "v2"];
@@ -40,4 +42,18 @@ pub const TASK_STATUSES: &[&str] = &[
     "FAILED",
     "CANCELLED",
     "TERMINATED",
+];
+
+/// `report_error_codes`:report body 的 errorCode 规范值(§B)。
+///
+/// 由 `protocol::error_code` 派生,保证每个值只有一处定义;parity 测试只按本切片顺序与 YAML 比对。
+pub const REPORT_ERROR_CODES: &[&str] = &[
+    error_code::SUCCESS,
+    error_code::TIMEOUT,
+    error_code::CANCELLED,
+    error_code::KILLED,
+    error_code::SECURITY_REJECTED,
+    error_code::EXECUTION_FAILED,
+    error_code::CONFIG_INVALID,
+    error_code::RESOURCE_EXHAUSTED,
 ];
