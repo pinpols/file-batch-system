@@ -210,6 +210,7 @@ jobs:
           gate_run PR_SCRIPT_GOVERNANCE "脚本治理" python3 scripts/ci/check-script-governance.py
           gate_run PR_SHELL_SCRIPTS "Shell 语法与 ShellCheck" bash scripts/ci/check-shell-scripts.sh
           gate_run PR_SHELL_LINUX_PORTABILITY "Shell Linux 兼容性" python3 scripts/ci/check-shell-linux-portability.py
+          gate_run PR_TESTCONTAINERS_REUSE_LABEL "Testcontainers 复用标签判定" python3 scripts/ci/check-testcontainers-reuse-label.py
           gate_run PR_POSTGRES_CLIENT_FALLBACK "PostgreSQL 客户端 fallback" bash scripts/ci/check-postgres-client-fallback.sh
 
       - name: Verify module dependency boundaries
@@ -265,6 +266,14 @@ jobs:
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.docs == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         run: bash scripts/ci/run-gate.sh PR_CONFIG_GOVERNANCE "配置治理注册表" -- python3 scripts/ci/check-config-governance.py
+
+      - name: Enforce no new direct config key access (baseline)
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        # 阶段 1（CFGKEY-3）：只拦截新增高风险 PROJECT_CONFIG / SECRET_CONFIG 直接读取；
+        # 历史存量走 docs/governance/direct-config-key-access-baseline.txt，不因已有命中阻断无关 PR。
+        # 新增违规应改用 @ConfigurationProperties，口径见 docs/runbook/config-key-access-governance.md。
+        run: bash scripts/ci/run-gate.sh PR_DIRECT_CONFIG_KEY_BASELINE "直接配置 Key 增量拦截" -- python3 scripts/ci/check-direct-config-key-access.py --check-baseline docs/governance/direct-config-key-access-baseline.txt
 
       - name: Verify Helm env switch sync
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
@@ -362,6 +371,22 @@ jobs:
         # 值为 null 时 NPE 把干净 4xx 掩盖成 500(实锤 #752 / 388e43e39)。脚本内含自测,
         # 对 #752 修复前代码必报、对 requireNonNullElse 兜底后不误报。
         run: bash scripts/ci/run-gate.sh PR_MAPOF_NULL_VALUES "不可变集合空值风险" -- python3 scripts/ci/check-mapof-null-values.py
+
+      - name: Verify pipeline summary key contract
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        # 拦两类「编译通过、CI 全绿、运行时静默」的键漂移:
+        #   1) skippedStageCarryForwardKeys() 的回灌键不在 buildOutputSummary() 写入键内
+        #      —— 阶段级续跑跳过时水位/计数静默丢失,下周期 INCREMENTAL 重读重发;
+        #   2) 契约键(会被本类之外按字符串读的 key)同文件内既写字面量又写常量
+        #      —— 常量改名时写方不动,字段名静默分叉。
+        # 同时校验 output_summary 计数键与 batch-console pipelineStepSummary.ts 的声明一致。
+        run: bash scripts/ci/run-gate.sh PR_PIPELINE_SUMMARY_KEYS "Pipeline 摘要键契约" -- python3 scripts/ci/check-pipeline-summary-keys.py
+
+      - name: Test pipeline summary key contract checker
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        run: bash scripts/ci/run-gate.sh PR_PIPELINE_SUMMARY_KEYS_TEST "Pipeline 摘要键契约门禁测试" -- python3 -m unittest scripts/ci/tests/test_check_pipeline_summary_keys.py
 
       - name: Enforce centralized empty checks
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
@@ -525,7 +550,9 @@ jobs:
       - name: Java suppression registry
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
-        run: bash scripts/ci/run-gate.sh PR_JAVA_SUPPRESSION_REGISTRY "Java 抑制项注册表" -- python3 scripts/ci/check-java-suppression-registry.py
+        run: |
+          bash scripts/ci/run-gate.sh PR_JAVA_SUPPRESSION_REGISTRY "Java 抑制项注册表" -- python3 scripts/ci/check-java-suppression-registry.py
+          bash scripts/ci/run-gate.sh PR_JAVA_SUPPRESSION_REGISTRY_TEST "Java 抑制项注册表门禁测试" -- python3 -m unittest scripts/ci/tests/test_check_java_suppression_registry.py
 
       - name: PMD + Spotless + dependency boundary
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'

@@ -56,6 +56,9 @@ import urllib.request
 from pathlib import Path
 
 BIZ = os.environ["BIZ_DATE"]
+# 扫描器用 (?<bizDate>\d{8}) 从对象名抽业务日期,故数据文件名必须带 8 位紧凑日期;
+# 带横线的 BIZ 只会让正则命中 RUN 后缀(如 95048668)→ DateTimeParseException → 该对象不进到达组链路。
+BIZ_COMPACT = BIZ.replace("-", "")
 BATCH = os.environ.get("BATCH_NO", "")
 RUN = str(int(time.time() * 1000) % 100000000)
 MINIO_CONTAINER = os.environ["MINIO_CONTAINER"]
@@ -76,8 +79,10 @@ def sh(args, **kw):
 
 
 def psql_file(db, sql_file, variables=None, tuples=True):
+    # -q 必须有:否则 INSERT/UPDATE 的返回还会带上命令标签(如 "INSERT 0 1"),
+    # 让 int(stdout) 这类解析炸掉(dispatch 段 insert_generated_file 实测踩过)。
     args = ["docker", "exec", "-i", os.environ["PG_CONTAINER"], "psql",
-            "-X", "-U", os.environ["POSTGRES_USER"], "-d", db,
+            "-X", "-q", "-U", os.environ["POSTGRES_USER"], "-d", db,
             "-v", "ON_ERROR_STOP=1", "-P", "pager=off"]
     if tuples:
         args += ["-t", "-A", "-F", "\x1f"]
@@ -180,8 +185,8 @@ def upload(object_name, data):
 
 
 # 1) 生成 2 个数据文件 + v2 清单(声明本束 → TA_BUNDLE_IMPORT,逐文件用 ta_import_customer_tpl 模板)
-f1 = f"bundle-a-{BIZ}-{RUN}.csv"
-f2 = f"bundle-b-{BIZ}-{RUN}.csv"
+f1 = f"bundle-a-{BIZ_COMPACT}-{RUN}.csv"
+f2 = f"bundle-b-{BIZ_COMPACT}-{RUN}.csv"
 data1 = csv_rows("BNDLA", 10)
 data2 = csv_rows("BNDLB", 15)
 manifest = {

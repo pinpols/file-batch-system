@@ -43,7 +43,7 @@ SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 
 bootstrap_server="${KAFKA_BOOTSTRAP_SERVER:-$BATCH_DEFAULT_KAFKA_CONTAINER_BOOTSTRAP}"
 kafka_container_bin_dir="${KAFKA_CONTAINER_BIN_DIR:-$BATCH_DEFAULT_KAFKA_CONTAINER_BIN_DIR}"
-default_topics="batch.task.dispatch.import,batch.task.dispatch.export,batch.task.dispatch.process,batch.task.dispatch.dispatch,batch.task.dispatch.atomic,batch.task.result,batch.task.retry,batch.task.dead-letter,batch.trigger.launch.v1,batch.verifier.failure.v1"
+default_topics="batch.task.dispatch.import,batch.task.dispatch.export,batch.task.dispatch.process,batch.task.dispatch.dispatch,batch.task.dispatch.atomic,batch.task.result,batch.task.retry,batch.task.dead-letter,batch.trigger.launch.v1,batch.verifier.failure.v1,batch.workflow.terminal.v1"
 default_direct_topics="batch.task.dispatch.import.node.import-node-1,batch.task.dispatch.export.node.export-node-1,batch.task.dispatch.process.node.process-node-1,batch.task.dispatch.dispatch.node.dispatch-node-1,batch.task.dispatch.atomic.node.atomic-node-1"
 # 平台核心 topic 和内置 worker direct topic 永远必须存在。KAFKA_TOPICS 与
 # KAFKA_DIRECT_WORKER_TOPICS 都只追加自定义 topic，不能因旧的 gitignored .env 覆盖而漏掉

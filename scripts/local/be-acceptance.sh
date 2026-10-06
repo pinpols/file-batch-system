@@ -229,7 +229,7 @@ wait_for_backend_health() {
 # ── Step 实现 ───────────────────────────────────────────────
 
 # 清理上一次跑残留:
-#   - 孤儿 testcontainers(无 reuse-hash label = 反复 kill -9 / Ryuk 没机会清的容器)
+#   - 孤儿 testcontainers(无 org.testcontainers.hash label = 反复 kill -9 / Ryuk 没机会清的容器)
 #   - 残留 mvn / surefire-booter JVM(上次跑被打断留下来抢端口 / 占容器)
 #   - 残留 mvnd daemon(可能持有旧 classpath / 未释放 lock)
 # 保留 reuse 容器(它们就是为了跨 JVM 复用,不要清)。
@@ -242,11 +242,11 @@ cleanup_stale_runs() {
     sleep 1
   fi
 
-  # 2. 孤儿 testcontainers(label=org.testcontainers=true 但无 reuse-hash)
+  # 2. 孤儿 testcontainers(label=org.testcontainers=true 但无 org.testcontainers.hash)
   if command -v docker >/dev/null 2>&1; then
     local orphans
     orphans=$(docker ps -q --filter "label=org.testcontainers=true" 2>/dev/null | while read -r cid; do
-      if ! docker inspect "$cid" --format '{{json .Config.Labels}}' 2>/dev/null | /usr/bin/grep -q "reuse-hash"; then
+      if ! docker inspect "$cid" --format '{{json .Config.Labels}}' 2>/dev/null | /usr/bin/grep -q "org.testcontainers.hash"; then
         printf '%s\n' "$cid"
       fi
     done)

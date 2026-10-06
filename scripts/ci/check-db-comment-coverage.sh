@@ -21,6 +21,8 @@ fi
 mapfile -t migrations < <(
   {
     git diff --name-only --diff-filter=AM "${BASE_REF}"...HEAD -- 'db/migration/V*.sql'
+    git diff --name-only --diff-filter=AM -- 'db/migration/V*.sql'
+    git diff --cached --name-only --diff-filter=AM -- 'db/migration/V*.sql'
     git ls-files --others --exclude-standard -- 'db/migration/V*.sql'
   } | sort -u
 )

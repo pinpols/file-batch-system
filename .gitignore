@@ -67,3 +67,4 @@ qodana.sarif*.json
 
 # 本地验收脚本生成的汇总报告不入库
 docs/backlog/be-acceptance-*.md
+/.workbuddy-ai/
