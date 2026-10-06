@@ -808,6 +808,7 @@ components:
         hostName: {type: string, nullable: true}
         hostIp: {type: string, nullable: true}
         processId: {type: string, nullable: true}
+        port: {type: integer, nullable: true, description: "Worker 实际监听 HTTP 端口(V221);内置 worker 上报 Spring 运行时绑定端口;缺失=老 worker / 老 SDK / 非 web 上下文"}
         buildId: {type: string, nullable: true, description: "SDK-P5-3 运行指纹:租户应用构建标识;仅 register 上报"}
         sdkVersion: {type: string, nullable: true, description: "SDK-P5-3 运行指纹:worker 链接的 batch-worker-sdk 库版本;仅 register 上报"}
         heartbeatAt: {type: string, format: date-time}
@@ -884,6 +885,10 @@ components:
           description: "稳定 Kafka 路由池代码；旧记录回退为 workerCode"
         status: {type: string}
         lastHeartbeatAt: {type: string, format: date-time}
+        port:
+          type: integer
+          nullable: true
+          description: "Worker 实际监听 HTTP 端口(V221)；null=老 worker / 老 SDK / 非 web 上下文未上报"
 
     WorkerHeartbeatResponse:
       type: object

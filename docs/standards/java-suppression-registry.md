@@ -1,7 +1,9 @@
 # Java Suppression 登记表
 
 > 维护范围：生产 Java（`src/main/java`）。测试代码的局部 `unchecked` 等 fixture 例外不进入本表。
-> 自动校验：`python3 scripts/ci/check-java-suppression-registry.py`。
+> 自动校验：`python3 scripts/ci/check-java-suppression-registry.py`。扫描范围为已跟踪文件加上尚未
+> `git add` 的新文件（`git ls-files --cached --others --exclude-standard`），因此本地在途新增的
+> suppression 在提交前就会被拦下，而不是等到提交后才暴露。
 
 这不是鼓励增加 suppression 的白名单。每个新增例外都必须先确认能否通过类型、结构或安全校验消除；确实不能消除时，才登记规则、模块归属、保留原因和后续移除条件。检查脚本使用精确规则表，未登记的规则会阻断 CI。
 
@@ -22,7 +24,7 @@
 | `java:S3330`, `java:S4502` | Cookie/CSRF 与内部无状态链路的安全配置由代码显式承担 | console、trigger | 安全配置迁移到等价且可审计的框架配置 |
 | `java:S5164` | 导出格式在单次 generate 作用域内复用严格字符编码器，并由 `AutoCloseable` 作用域在长寿命 worker 线程返回前强制 `ThreadLocal.remove()` | worker export | 编码器缓存改为显式 generate 上下文且不增加每字段分配 |
 | `java:S6218` | Java record/数组/协议载荷的不可避免参数形态 | console、orchestrator、worker、SDK | 改为命名对象且不降低传输契约可读性 |
-| `ConfigurationProperties` | 多个 properties 类型共享同一前缀但子键不重叠 | common、worker | 前缀拆分或 Spring 元数据能准确表达同一配置边界 |
+| `ConfigurationProperties` | 多个 properties 类型共享同一前缀但子键不重叠 | common、worker、orchestrator | 前缀拆分或 Spring 元数据能准确表达同一配置边界 |
 | `SpringJavaInjectionPointsAutowiringInspection` | Spring 自动配置的条件 bean / `ObjectProvider` 注入点 IDE 误报 | common | IDE 与 Spring Boot 配置元数据无误报 |
 | `deprecation` | 预留但尚未启用的 `DistributedLock` 配套切面 | common | 该预留 SPI 删除，或正式采用并移除 deprecated 标记 |
 
@@ -33,11 +35,13 @@
 3. `unchecked` 只允许出现在动态 JSON/Map/扩展字段边界；生产 API 和核心状态机不得用它掩盖 DTO 漂移。
 4. 修改现有 suppression 时，必须重新跑 PMD、Spotless、受影响模块测试和本检查脚本。
 5. 删除代码时同步删除对应 suppression；本阶段已移除 `DistributedLockAspect` 中无运行时用途的 `SimpleLock` 编译守卫。
+6. `ConfigurationProperties` 必须标在**所有**共享该前缀的类型上（含跨模块的另一侧），并在行尾注释里点名共享方，便于一眼看出该前缀有多个绑定方。子键**重叠**的共享不适用本条：应改为合并绑定，或保留重复绑定但补一致性测试（当前唯一例外见 `ConsoleReadReplicaProperties`）。
 
 ## 复查命令
 
 ```bash
 bash scripts/python.sh scripts/ci/check-java-suppression-registry.py
+python3 -m unittest scripts/ci/tests/test_check_java_suppression_registry.py
 bash scripts/python.sh scripts/ci/report-java-readability-inventory.py
 ./mvnw -DskipTests test-compile pmd:check spotless:check -fae -B
 ```

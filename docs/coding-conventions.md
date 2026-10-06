@@ -904,7 +904,7 @@ public record ConsoleProperties(
 
 | 配置去处                             | 适合                                            | 不适合                                      | 现存例子                                                                                                          |
 | -------------------------------- | --------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `@ConfigurationProperties` + yml | 启动期注入的静态参数：超时、池大小、开关、阈值、重试次数、表达式格式约束          | 频繁变更的业务规则、租户级差异化、秘钥                      | `BatchSecurityProperties` / `ReadReplicaProperties` / `MqRoutingProperties`（共 ~62 个）                          |
+| `@ConfigurationProperties` + yml | 启动期注入的静态参数：超时、池大小、开关、阈值、重试次数、表达式格式约束          | 频繁变更的业务规则、租户级差异化、秘钥                      | `BatchSecurityProperties` / `ReadReplicaProperties` / `MqRoutingProperties`（共 133 个，以 `python3 scripts/ci/check-config-governance.py` 输出为准）                          |
 | PostgreSQL 表 + Redis cache       | 动态业务规则、多租户 / 多 job 维度差异化、需要审计版本、Console UI 可改 | 启动期就需要的基础设施配置（DB url、Kafka bootstrap）、秘钥 | `tenant_config` / `default_params` / `tenant_quota_policy` / `business_calendar` / `pipeline_step_definition` |
 | 环境变量（`${VAR:default}`）           | 跨环境差异化：URL、端口、profile、秘钥、规模参数（pool size）      | 业务逻辑规则、多租户参数                             | `BATCH_CONSOLE_READ_REPLICA_ENABLED` / `BATCH_SECURITY_BYPASS_MODE` / DB 密码                                   |
 

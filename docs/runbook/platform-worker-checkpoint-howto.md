@@ -220,6 +220,20 @@ ORDER BY completed_at DESC;
 `PlatformFileRuntimeMapperStageSkipIntegrationTest`。跨阶段重复计算是否已成显著 SLA / DB 成本仍需真实负载证据后才建议开启,
 不得仅因设计草案存在就默认打开。
 
+**键一致性守护**:`skippedStageCarryForwardKeys()` 与 `buildOutputSummary()` 是两个独立书写点,靠「拼写一致」
+协作——漂移时编译与 CI 都不报错,只在续跑时静默丢水位 / 计数。因此这两处与 attributes 键表统一引用
+`PipelineRuntimeKeys` / `ProcessRuntimeKeys` 常量(同名同义复用同一常量,不新建键表),并由
+`scripts/ci/check-pipeline-summary-keys.py`(PR Gate `PR_PIPELINE_SUMMARY_KEYS` / Full Gate
+`FULL_PIPELINE_SUMMARY_KEYS`)守护三条契约:
+
+1. 回灌键必须是 `buildOutputSummary()` 写入键的**子集**;
+2. 同一生产文件内,已常量化的契约键不得「读用常量、写用字面量」;
+3. `output_summary` 实际写入的 `*Count` 键集必须等于 batch-console `pipelineStepSummary.ts`
+   (`STAGE_COUNT_KEY` / `COUNT_KEY_FALLBACK`)声明的键集 —— 后端改名而前端不改,UI 只会静默显示「—」。
+
+`stepCode` / `stage` / `implCode` / `tenantId` / `workerId` / `success` / `code` / `message` 只被本类的日志与审计
+消费,属纯展示键,**保持字面量**即可,不在守护范围(全量常量化只会制造噪音、稀释信号)。
+
 ## 相关
 
 - ADR-038(本特性的设计依据)

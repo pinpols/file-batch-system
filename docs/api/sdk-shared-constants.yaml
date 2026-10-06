@@ -12,18 +12,25 @@
 #   - Add value in Java first (enum / list)
 #   - Update this YAML
 #   - SharedConstantsParityTest passes => mirror is correct
-#   - Python (and other) SDKs pick up via Lane Q parity test (follow-up; today a stub)
+#   - 每种语言 SDK 在自己的 parity 测试里断言镜像(Lane Q):Java SharedConstantsParityTest、
+#     Python tests/test_shared_constants_parity.py、Go protocol/constants_parity_test.go、
+#     TypeScript tests/shared-constants-parity.test.ts、Rust tests/constants_parity.rs,
+#     均已接入 .github/workflows/sdk-contract-parity.yml。
+#   - Go / Rust / TypeScript 的 parity 用深比较,列表顺序敏感:YAML 顺序必须与 Java 常量声明顺序一致。
 #
 # Sources (file paths relative to repo root):
 #   schema_versions_supported  : sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/dispatcher/TaskDispatchMessage.java (SUPPORTED_MAJOR_VERSIONS)
 #   worker_runtime_states      : sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/dispatcher/WorkerRuntimeState.java
 #   sensitive_keywords         : batch-common/src/main/java/io/github/pinpols/batch/common/security/SensitiveDataValidator.java (SENSITIVE_KEYWORDS)
 #   task_statuses              : batch-common/src/main/java/io/github/pinpols/batch/common/enums/TaskStatus.java
+#   report_error_codes         : sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/task/SdkErrorCode.java
+#                                (report body errorCode; mirrors Go protocol.ErrorCode*, TS ErrorCode,
+#                                 Rust protocol::error_code, Python constants.EXECUTION_FAILED etc.)
 #   atomic_error_codes         : NOT YET A FORMAL ENUM in main code (per spec, listed as intent placeholder
 #                                for ADR-029 atomic workers; populate when AtomicErrorCode.java lands).
 #
 # version pinning: bump whenever any list changes, so Lane Q / BYO SDKs can detect.
-version: 1
+version: 2
 
 schema_versions_supported:
   - v1
@@ -59,8 +66,19 @@ task_statuses:
   - CANCELLED
   - TERMINATED
 
-# Intent placeholder — AtomicErrorCode is not yet a formal Java enum (ADR-029 atomic
-# workers raise BizException with i18n keys directly). When the enum lands, populate
-# this list and add to SharedConstantsParityTest. Until then this key is informational
-# and NOT enforced by the parity test (see test's `optional_keys`).
+# report body 的 errorCode(§B):权威源 = Java SdkErrorCode;平台按该码聚合失败告警,
+# 故各语言 SDK 的兜底必须是 EXECUTION_FAILED 而不是异常类名。顺序与 SdkErrorCode 声明顺序一致。
+report_error_codes:
+  - SUCCESS
+  - TIMEOUT
+  - CANCELLED
+  - KILLED
+  - SECURITY_REJECTED
+  - EXECUTION_FAILED
+  - CONFIG_INVALID
+  - RESOURCE_EXHAUSTED
+
+# 占位说明 —— AtomicErrorCode 目前还不是正式 Java enum(ADR-029 的 atomic worker 直接抛带
+# i18n key 的 BizException)。等该 enum 落地后:填充本列表,并在每种语言的 parity 测试里补
+# 对应断言;在此之前本键只是登记项,任何 parity 测试都不校验它。
 atomic_error_codes: []

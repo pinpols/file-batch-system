@@ -15116,6 +15116,11 @@ components:
           type: string
           format: date-time
           nullable: true
+        port:
+          type: integer
+          format: int32
+          nullable: true
+          description: Worker 实际监听 HTTP 端口；null=未上报（老 worker / 老 SDK / 非 web 上下文）
       required: [id, tenantId, workerCode, workerGroup, status, heartbeatAt]
     ConsoleAuthTokenResponse:
       type: object
@@ -17855,6 +17860,11 @@ components:
         maxConcurrent: { type: integer, format: int32, nullable: true }
         drainStartedAt: { type: string, format: date-time, nullable: true }
         drainDeadlineAt: { type: string, format: date-time, nullable: true }
+        port:
+          type: integer
+          format: int32
+          nullable: true
+          description: Worker 实际监听 HTTP 端口；null=未上报（老 worker / 老 SDK / 非 web 上下文）
     CommonResponseMyWorkerList:
       type: object
       allOf:

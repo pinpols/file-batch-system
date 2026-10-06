@@ -16,11 +16,24 @@
 
 ### 1.1 常量必须从 `sdk-shared-constants.yaml` 生成,禁手写
 
-`schema_versions_supported` / `worker_runtime_states` / `sensitive_keywords` / `task_statuses` 等跨语言常量,
+`schema_versions_supported` / `worker_runtime_states` / `sensitive_keywords` / `task_statuses` /
+`report_error_codes`(report body `errorCode`,源 `SdkErrorCode`) 等跨语言常量,
 SDK 侧**只能 consume 该 YAML**(codegen 或运行时加载),**严禁在各语言源码里重新声明字面量**。
-每语言必须有一个 parity 测试,断言其常量产物 == YAML(对照 Java `SharedConstantsParityTest`)。
+每语言必须有一个 parity 测试,断言其常量产物 == YAML(对照 Java `SharedConstantsParityTest`):
+Python `tests/test_shared_constants_parity.py`、Go `protocol/constants_parity_test.go`、
+TypeScript `tests/shared-constants-parity.test.ts`、Rust `tests/constants_parity.rs`。
 
 > Authority order(见 YAML 头注释):Java enum → 该 YAML → 其他语言 consume。改值只能从 Java 起,YAML 跟,其他语言自动同步。
+> Go / Rust / TypeScript 的 parity 是**深比较**,故 YAML 列表顺序必须与 Java 常量声明顺序一致。
+
+**尚未纳管的常量族(登记,补的时候按同一模式走)**:
+
+| 缺口 | 现状 | 补齐方式 |
+|---|---|---|
+| wire 协议字段名(`taskId` / `tenantId` / …) | 各语言靠各自习惯:TS 类型 / Rust serde / Go struct tag 单点声明;Python `dict` key、Go map 读写仍是裸字面量 | 先在 Python / Go 建 wire-key 常量表,再加只扫 `sdk/{python,go,typescript,rust}` 的字面量审计 |
+| `BATCH_SDK_*` 配置 env key | `scripts/ci/check-sdk-config-env-parity.py` 只核对 Java + Python 的 8 个 key;Go / TS / Rust 仅被禁止旧名 `KAFKA_BOOTSTRAP`,且实际读取量是 Go 5 / TS 0 / Rust 3(Go、TS 无 `fromEnv` 工厂) | 先补齐三语言的 env 读取,再把守卫扩到全部语言 |
+| Console SDK catalog 的 `sharedConstants` | 只静态镜像 `schema_versions_supported`(见 `ConsoleSdkCatalogService`);其余受控键(含 `report_error_codes`)不在 catalog 响应里,当前只有 `schema_versions_supported` 有 parity 测试 | 需求出现时按「静态镜像 + 每键 parity」扩,不要只加镜像不加测 |
+| 报告错误码的**使用点** | 常量家已由 5 语言 parity 钉住,但运行路径仍可能绕过(如 TS 曾用 task 状态值 `FAILED` 兜底);parity 只保证镜像一致,不保证调用点引用常量 | 逐语言做一次「值 = 常量值」的使用点审计(同类于 Java 侧的字面量审计) |
 
 ### 1.2 必须通过全部 contract fixtures 的 `then.expect`
 

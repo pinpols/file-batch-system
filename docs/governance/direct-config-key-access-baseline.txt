@@ -1,0 +1,4 @@
+# 直接配置 Key 读取基线（高风险 PROJECT_CONFIG / SECRET_CONFIG）。
+# 由 scripts/ci/check-direct-config-key-access.py --write-baseline 生成。
+# 阶段 1（CFGKEY-3）据此只对新增高风险命中失败；收敛一项即从本文件删除对应行。
+# 标识格式：<相对路径>#<读取方式>#<key>，忽略行号漂移。
