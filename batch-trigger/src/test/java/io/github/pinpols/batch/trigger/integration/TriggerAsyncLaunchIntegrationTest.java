@@ -13,6 +13,7 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.trigger.BatchTriggerApplication;
+import io.github.pinpols.batch.trigger.config.TriggerKafkaProducerConfiguration;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
 import io.github.pinpols.batch.trigger.mapper.TriggerOutboxEventMapper;
 import io.github.pinpols.batch.trigger.service.TriggerService;
@@ -78,7 +79,7 @@ class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
   @Autowired
   private TriggerOutboxEventMapper outboxMapper;
 
-  @Value("${spring.kafka.bootstrap-servers}")
+  @Value("${" + TriggerKafkaProducerConfiguration.BOOTSTRAP_SERVERS_KEY + "}")
   private String bootstrapServers;
 
   private Consumer<String, String> kafkaConsumer;

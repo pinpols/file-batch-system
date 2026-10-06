@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.time.LocalDate;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -15,20 +15,22 @@ import org.springframework.web.client.RestClient;
  *
  * <p>fail-closed(结算优先):查询失败时不放行 fire,记 ERROR 让运维介入。
  *
- * <p>emergency switch batch.trigger.readiness-gate.enabled 默认 true;关闭时一律放行。
+ * <p>emergency switch batch.trigger.readiness-gate.enabled 默认 true;关闭时一律放行。开关收敛到
+ * {@link ReadinessGateProperties};本组件上的 {@code @EnableConfigurationProperties} 让该配置随组件自动注册
+ * （batch-trigger 未启用 {@code @ConfigurationPropertiesScan}），与 {@code BatchTimezoneProvider} 同一约定。
  */
 @Slf4j
 @Component
+@EnableConfigurationProperties(ReadinessGateProperties.class)
 public class UpstreamReadinessChecker {
 
   private final RestClient orchestratorRestClient;
   private final boolean enabled;
 
   public UpstreamReadinessChecker(
-      RestClient orchestratorRestClient,
-      @Value("${batch.trigger.readiness-gate.enabled:true}") boolean enabled) {
+      RestClient orchestratorRestClient, ReadinessGateProperties readinessGateProperties) {
     this.orchestratorRestClient = orchestratorRestClient;
-    this.enabled = enabled;
+    this.enabled = readinessGateProperties.isEnabled();
   }
 
   /**

@@ -15,7 +15,7 @@ class TriggerKafkaProducerConfigurationTest {
   private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
       .withUserConfiguration(TriggerKafkaProducerConfiguration.class)
       .withBean(ObservationRegistry.class, () -> ObservationRegistry.NOOP)
-      .withPropertyValues("spring.kafka.bootstrap-servers=broker:9092");
+      .withPropertyValues(TriggerKafkaProducerConfiguration.BOOTSTRAP_SERVERS_KEY + "=broker:9092");
 
   @Test
   void createsProducerAndAdminInfrastructureWithoutKafkaAutoConfiguration() {

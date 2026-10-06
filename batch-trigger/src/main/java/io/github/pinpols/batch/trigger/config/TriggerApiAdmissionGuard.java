@@ -141,7 +141,7 @@ public class TriggerApiAdmissionGuard {
     }
     throw BizException.of(
         ResultCode.RATE_LIMITED,
-        "error.common.rate_limited_detail",
+        ResultCode.RATE_LIMITED.detailKey(),
         "trigger launch admission capacity reached");
   }
 

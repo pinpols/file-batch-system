@@ -98,7 +98,7 @@ public class DefaultTriggerService implements TriggerService {
     if (EmptyChecks.isBlank(idempotencyKey)) {
       throw BizException.of(
           ResultCode.MISSING_IDEMPOTENCY_KEY,
-          "error.common.missing_idempotency_key_detail",
+          ResultCode.MISSING_IDEMPOTENCY_KEY.detailKey(),
           ResultCode.MISSING_IDEMPOTENCY_KEY.defaultMessage());
     }
     TriggerLaunchStatus status = triggerRequestMapper.selectLaunchStatus(tenantId, idempotencyKey);
@@ -358,7 +358,7 @@ public class DefaultTriggerService implements TriggerService {
     if (EmptyChecks.isNull(requestId)) {
       throw BizException.of(
           ResultCode.BUSINESS_ERROR,
-          "error.common.business_error_detail",
+          ResultCode.BUSINESS_ERROR.detailKey(),
           "misfire pending is not linked to catch-up request");
     }
     TriggerRequestEntity request = Guard.requireFound(
@@ -456,7 +456,7 @@ public class DefaultTriggerService implements TriggerService {
       // 不再依赖脆弱的 e.getMessage().contains("tenant is suspended")。
       throw BizException.of(
           ResultCode.TENANT_SUSPENDED,
-          "error.common.business_error_detail",
+          ResultCode.TENANT_SUSPENDED.detailKey(),
           "tenant is suspended, triggers are not allowed: " + tenantId);
     }
   }
@@ -466,7 +466,7 @@ public class DefaultTriggerService implements TriggerService {
     if (EmptyChecks.isBlank(command.idempotencyKey())) {
       throw BizException.of(
           ResultCode.MISSING_IDEMPOTENCY_KEY,
-          "error.common.missing_idempotency_key_detail",
+          ResultCode.MISSING_IDEMPOTENCY_KEY.detailKey(),
           ResultCode.MISSING_IDEMPOTENCY_KEY.defaultMessage());
     }
     if (EmptyChecks.isNull(command.request())) {
