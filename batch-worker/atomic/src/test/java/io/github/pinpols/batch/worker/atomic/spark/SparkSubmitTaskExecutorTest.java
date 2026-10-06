@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -52,7 +53,7 @@ class SparkSubmitTaskExecutorTest {
         Map.of("spark.executor.memory", "2g"),
         "appArgs",
         List.of("--date", "2026-06-15"),
-        "dryRun",
+        PipelineRuntimeKeys.DRY_RUN,
         true)));
 
     assertThat(r.success()).isTrue();
@@ -68,7 +69,7 @@ class SparkSubmitTaskExecutorTest {
 
   @Test
   void missingAppResource_failsConfigInvalid() {
-    TaskResult r = executor.execute(ctx(Map.of("dryRun", true)));
+    TaskResult r = executor.execute(ctx(Map.of(PipelineRuntimeKeys.DRY_RUN, true)));
     assertThat(r.success()).isFalse();
     assertThat(r.output()).containsEntry("error_code", "CONFIG_INVALID");
   }
@@ -76,9 +77,12 @@ class SparkSubmitTaskExecutorTest {
   @Test
   void outputPath_injectsConfAndReturnsOutputUri() {
     TaskResult r = executor.execute(ctx(Map.of(
-        "appResource", "s3a://jobs/etl.jar",
-        "outputPath", "s3a://batch-out/t1/SPARK_JOB/2026-06-15/",
-        "dryRun", true)));
+        "appResource",
+        "s3a://jobs/etl.jar",
+        "outputPath",
+        "s3a://batch-out/t1/SPARK_JOB/2026-06-15/",
+        PipelineRuntimeKeys.DRY_RUN,
+        true)));
 
     assertThat(r.success()).isTrue();
     assertThat(r.output()).containsEntry("outputUri", "s3a://batch-out/t1/SPARK_JOB/2026-06-15/");
@@ -97,8 +101,8 @@ class SparkSubmitTaskExecutorTest {
     props.setAppResourceAllowlist(List.of("s3a://approved/"));
     SparkSubmitTaskExecutor restricted = new SparkSubmitTaskExecutor(props);
 
-    TaskResult r =
-        restricted.execute(ctx(Map.of("appResource", "s3a://evil/x.jar", "dryRun", true)));
+    TaskResult r = restricted.execute(
+        ctx(Map.of("appResource", "s3a://evil/x.jar", PipelineRuntimeKeys.DRY_RUN, true)));
     assertThat(r.success()).isFalse();
     assertThat(r.output()).containsEntry("error_code", "CONFIG_INVALID");
   }
@@ -106,9 +110,12 @@ class SparkSubmitTaskExecutorTest {
   @Test
   void clusterDeployMode_failsConfigInvalid() {
     TaskResult r = executor.execute(ctx(Map.of(
-        "appResource", "s3a://jobs/x.jar",
-        "deployMode", "cluster",
-        "dryRun", true)));
+        "appResource",
+        "s3a://jobs/x.jar",
+        "deployMode",
+        "cluster",
+        PipelineRuntimeKeys.DRY_RUN,
+        true)));
     assertThat(r.success()).isFalse();
     assertThat(r.output()).containsEntry("error_code", "CONFIG_INVALID");
     assertThat(r.message()).contains("cluster");
@@ -122,9 +129,12 @@ class SparkSubmitTaskExecutorTest {
     SparkSubmitTaskExecutor restricted = new SparkSubmitTaskExecutor(props);
 
     TaskResult r = restricted.execute(ctx(Map.of(
-        "appResource", "s3a://jobs/x.jar",
-        "master", "spark://attacker:7077",
-        "dryRun", true)));
+        "appResource",
+        "s3a://jobs/x.jar",
+        "master",
+        "spark://attacker:7077",
+        PipelineRuntimeKeys.DRY_RUN,
+        true)));
     assertThat(r.success()).isFalse();
     assertThat(r.output()).containsEntry("error_code", "CONFIG_INVALID");
   }
@@ -142,7 +152,7 @@ class SparkSubmitTaskExecutorTest {
         "s3a://jobs/x.jar",
         "appArgs",
         List.of("--date", "; rm -rf /"),
-        "dryRun",
+        PipelineRuntimeKeys.DRY_RUN,
         true)));
     assertThat(r.success()).isFalse();
     assertThat(r.output()).containsEntry("error_code", "CONFIG_INVALID");
@@ -161,7 +171,7 @@ class SparkSubmitTaskExecutorTest {
         "s3a://jobs/x.jar",
         "sparkConf",
         Map.of("spark.driver.extraJavaOptions", "-Devil=1"),
-        "dryRun",
+        PipelineRuntimeKeys.DRY_RUN,
         true)));
     assertThat(r.success()).isFalse();
     assertThat(r.output()).containsEntry("error_code", "CONFIG_INVALID");

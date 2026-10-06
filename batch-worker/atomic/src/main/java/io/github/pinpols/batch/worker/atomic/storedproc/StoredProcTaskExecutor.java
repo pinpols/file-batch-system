@@ -13,6 +13,7 @@ import io.github.pinpols.batch.worker.atomic.runtime.AtomicConnectionManager;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
 import io.github.pinpols.batch.worker.atomic.runtime.DataSourceResolver;
 import io.github.pinpols.batch.worker.atomic.runtime.SpringDataSourceResolver;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -127,7 +128,7 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
         String requestedDsBean = stringParam(ctx.parameters(), PARAM_DS_BEAN, null);
         String dsBean = resolveDataSourceBean(requestedDsBean);
         Map<String, Object> planned = new LinkedHashMap<>();
-        planned.put("dryRun", true);
+        planned.put(PipelineRuntimeKeys.DRY_RUN, true);
         planned.put("plannedAction", "storedProc");
         planned.put(PARAM_PROC, inv.procName);
         planned.put("inParamCount", inv.inParams.size());

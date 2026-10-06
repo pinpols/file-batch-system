@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
@@ -65,7 +66,7 @@ class ComputeStepTest {
     ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
     ProcessJobContext context = new ProcessJobContext();
     context.setResolvedPlugin(plugin);
-    context.getAttributes().put("dryRun", true);
+    context.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
 
     ProcessStageResult computeResult = new ComputeStep().execute(context);
     ProcessStageResult validateResult = new ValidateStep().execute(context);
@@ -74,7 +75,7 @@ class ComputeStepTest {
     assertThat(validateResult.success()).isTrue();
     assertThat(context.getAttributes())
         .containsEntry("processedCount", 0)
-        .containsEntry("dryRunSkipped", "PROCESS_STAGING_WRITE");
+        .containsEntry(PipelineRuntimeKeys.DRY_RUN_SKIPPED, "PROCESS_STAGING_WRITE");
     verify(plugin, never()).compute(any());
     verify(plugin, never()).validate(any());
   }

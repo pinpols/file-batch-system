@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
@@ -101,7 +102,7 @@ class FeedbackStepTest {
     ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
     ProcessJobContext ctx = new ProcessJobContext();
     ctx.setResolvedPlugin(plugin);
-    ctx.getAttributes().put("dryRun", Boolean.TRUE);
+    ctx.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, Boolean.TRUE);
 
     assertThat(new FeedbackStep(noopMetrics()).execute(ctx).success()).isTrue();
     verifyNoInteractions(plugin);

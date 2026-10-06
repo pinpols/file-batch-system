@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.processes.stage;
 
+import io.github.pinpols.batch.common.constants.NodeOutputKeys;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
@@ -88,10 +89,18 @@ public class DefaultProcessStageExecutor
   /**
    * P1-1:跳过 COMPUTE/VALIDATE 时,从上次 SUCCESS 的 output_summary 回灌这些产出到 attributes —— 否则跳过 COMPUTE 后
    * highWaterMarkOut 为 null,report 保留旧水位,下周期 INCREMENTAL 重读重发;processedCount/staged/published
-   * 也需回灌以让 NODE_OUTPUTS 与不跳过时一致。键名与 {@link #buildOutputSummary} 写入的一致。
+   * 也需回灌以让 NODE_OUTPUTS 与不跳过时一致。
+   *
+   * <p><b>必须与 {@link #buildOutputSummary} 写入的键逐个相等</b>:回灌走 {@code
+   * AbstractStageExecutor#carryForwardSkippedStageOutputs} 的「按 key 名 get 再 putIfAbsent」路径,两处若拼写不一致
+   * 不会有任何编译期或运行期报错,只会静默丢失水位与计数。因此这里与 buildOutputSummary 统一引用
+   * {@code *RuntimeKeys} 常量,而不是各写一份字面量。
    */
-  private static final Set<String> SKIP_CARRY_FORWARD_KEYS =
-      Set.of("highWaterMarkOut", "processedCount", "stagedCount", "publishedCount");
+  private static final Set<String> SKIP_CARRY_FORWARD_KEYS = Set.of(
+      PipelineRuntimeKeys.HIGH_WATER_MARK_OUT,
+      ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT,
+      ProcessRuntimeKeys.PROCESS_STAGED_COUNT,
+      ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT);
 
   @Override
   protected Set<String> skippedStageCarryForwardKeys() {
@@ -274,10 +283,11 @@ public class DefaultProcessStageExecutor
     summary.put("implCode", step.implCode());
     summary.put("tenantId", context.getTenantId());
     summary.put("workerId", context.getWorkerId());
-    summary.put("jobCode", context.getJobCode());
-    summary.put("batchKey", context.getBatchKey());
+    summary.put(PipelineRuntimeKeys.JOB_CODE, context.getJobCode());
+    summary.put(NodeOutputKeys.BATCH_KEY, context.getBatchKey());
     summary.put(
-        "highWaterMarkIn", context.getAttributes().get(PipelineRuntimeKeys.HIGH_WATER_MARK_IN));
+        PipelineRuntimeKeys.HIGH_WATER_MARK_IN,
+        context.getAttributes().get(PipelineRuntimeKeys.HIGH_WATER_MARK_IN));
     return summary;
   }
 
@@ -289,12 +299,19 @@ public class DefaultProcessStageExecutor
     summary.put("code", result.code());
     summary.put("message", result.message());
     summary.put("stage", result.stage().name());
-    summary.put("batchKey", context.getBatchKey());
+    summary.put(NodeOutputKeys.BATCH_KEY, context.getBatchKey());
     summary.put(
-        "highWaterMarkOut", context.getAttributes().get(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT));
-    summary.put("processedCount", context.getAttributes().get("processedCount"));
-    summary.put("stagedCount", context.getAttributes().get("stagedCount"));
-    summary.put("publishedCount", context.getAttributes().get("publishedCount"));
+        PipelineRuntimeKeys.HIGH_WATER_MARK_OUT,
+        context.getAttributes().get(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT));
+    summary.put(
+        ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT,
+        context.getAttributes().get(ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT));
+    summary.put(
+        ProcessRuntimeKeys.PROCESS_STAGED_COUNT,
+        context.getAttributes().get(ProcessRuntimeKeys.PROCESS_STAGED_COUNT));
+    summary.put(
+        ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT,
+        context.getAttributes().get(ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT));
     return summary;
   }
 
@@ -309,7 +326,7 @@ public class DefaultProcessStageExecutor
     } catch (IllegalArgumentException exception) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ResultCode.INVALID_ARGUMENT.detailKey(),
           exception,
           "unsupported process stage code: " + stageCode);
     }

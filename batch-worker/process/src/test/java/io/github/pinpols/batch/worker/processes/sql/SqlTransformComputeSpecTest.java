@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -138,7 +139,7 @@ class SqlTransformComputeSpecTest {
             "conflictColumns",
             List.of("tenant_id"),
             "params",
-            Map.of("bizDate", "1970-01-01")));
+            Map.of(PipelineRuntimeKeys.BIZ_DATE, "1970-01-01")));
 
     assertThatThrownBy(() -> SqlTransformComputeSpec.parse(stepParams, objectMapper))
         .isInstanceOf(IllegalArgumentException.class)

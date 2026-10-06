@@ -12,6 +12,7 @@ import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import jakarta.annotation.PreDestroy;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -211,7 +212,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
         // ADR-026 §dry-run:不发出 HTTP 请求,只回传将要发的 method + url + header keys + body 长度。
         // 不回传 header value(可能含 auth bearer / cookie),不回传 body 文本(可能含敏感载荷)。
         Map<String, Object> planned = new LinkedHashMap<>();
-        planned.put("dryRun", true);
+        planned.put(PipelineRuntimeKeys.DRY_RUN, true);
         planned.put("plannedAction", "http");
         planned.put(PARAM_METHOD, inv.method);
         planned.put("url", inv.uri.toString());

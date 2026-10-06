@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -48,7 +49,7 @@ class ShellTaskExecutorDryRunTest {
             "command", "/definitely/not/here/should-not-be-forked",
             "args", List.of("--flag"),
             "env", Map.of("FOO", "secret-value")),
-        Map.of("dryRun", true));
+        Map.of(PipelineRuntimeKeys.DRY_RUN, true));
 
     // 执行
     TaskResult result = executor.execute(ctx);
@@ -57,7 +58,7 @@ class ShellTaskExecutorDryRunTest {
     assertThat(result.success()).isTrue();
     assertThat(result.message()).startsWith("dry-run:");
     assertThat(result.output())
-        .containsEntry("dryRun", true)
+        .containsEntry(PipelineRuntimeKeys.DRY_RUN, true)
         .containsEntry("plannedAction", "shell")
         .containsEntry("command", "/definitely/not/here/should-not-be-forked")
         .containsEntry("args", List.of("--flag"))

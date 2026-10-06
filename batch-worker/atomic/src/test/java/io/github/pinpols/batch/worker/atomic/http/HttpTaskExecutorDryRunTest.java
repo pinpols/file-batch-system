@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.sun.net.httpserver.HttpServer;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Map;
@@ -68,7 +69,7 @@ class HttpTaskExecutorDryRunTest {
             Map.of("X-Tenant", "t1", "Authorization", "Bearer SECRET"),
             "body",
             "payload-with-pii"),
-        Map.of("dryRun", true));
+        Map.of(PipelineRuntimeKeys.DRY_RUN, true));
 
     // 执行
     TaskResult result = executor.execute(ctx);
@@ -77,7 +78,7 @@ class HttpTaskExecutorDryRunTest {
     assertThat(result.success()).isTrue();
     assertThat(result.message()).startsWith("dry-run:");
     assertThat(result.output())
-        .containsEntry("dryRun", true)
+        .containsEntry(PipelineRuntimeKeys.DRY_RUN, true)
         .containsEntry("plannedAction", "http")
         .containsEntry("method", "POST")
         .containsEntry("url", url);

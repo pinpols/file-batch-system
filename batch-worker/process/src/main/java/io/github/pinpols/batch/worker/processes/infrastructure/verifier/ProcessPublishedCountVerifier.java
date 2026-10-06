@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.worker.processes.infrastructure.verifier;
 
+import io.github.pinpols.batch.common.constants.NodeOutputKeys;
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.verifier.ContentVerifier;
 import io.github.pinpols.batch.common.verifier.VerifyContext;
 import io.github.pinpols.batch.common.verifier.VerifyResult;
+import io.github.pinpols.batch.worker.processes.stage.ProcessRuntimeKeys;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -34,7 +36,7 @@ public class ProcessPublishedCountVerifier implements ContentVerifier {
 
   @Override
   public VerifyResult verify(VerifyContext context) {
-    Object raw = context.property("publishedCount");
+    Object raw = context.property(ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT);
     if (EmptyChecks.isNull(raw)) {
       // worker 未上报；不属于本 verifier 的判定范围
       return VerifyResult.pass();
@@ -43,15 +45,16 @@ public class ProcessPublishedCountVerifier implements ContentVerifier {
     if (count > 0) {
       return VerifyResult.pass();
     }
-    Object processedRaw = context.property("processedCount");
+    Object processedRaw = context.property(ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT);
     if (isZero(processedRaw)) {
       // 无输入行时没有可发布结果，不能把空批次误判为发布失败。
       return VerifyResult.pass();
     }
+    // evidence 键随 VerifyResult 透传到告警 payload，与 attributes 键同名同义，按既有约定复用同一常量。
     Map<String, Object> evidence = new LinkedHashMap<>();
-    evidence.put("publishedCount", count);
-    evidence.put("processedCount", processedRaw);
-    evidence.put("batchKey", context.property("batchKey"));
+    evidence.put(ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT, count);
+    evidence.put(ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT, processedRaw);
+    evidence.put(NodeOutputKeys.BATCH_KEY, context.property(NodeOutputKeys.BATCH_KEY));
     return VerifyResult.fail(
         "PROCESS_PUBLISHED_ZERO", "PROCESS task reported success but publishedCount=0", evidence);
   }

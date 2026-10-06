@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.Map;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,7 +41,7 @@ class SqlTaskExecutorDryRunTest {
         "ti-1",
         "w-1",
         Map.of("sql", "UPDATE t SET x=1; DELETE FROM t WHERE y=2;"),
-        Map.of("dryRun", true));
+        Map.of(PipelineRuntimeKeys.DRY_RUN, true));
 
     // 执行
     TaskResult result = executor.execute(ctx);
@@ -49,7 +50,7 @@ class SqlTaskExecutorDryRunTest {
     assertThat(result.success()).isTrue();
     assertThat(result.message()).startsWith("dry-run:");
     assertThat(result.output())
-        .containsEntry("dryRun", true)
+        .containsEntry(PipelineRuntimeKeys.DRY_RUN, true)
         .containsEntry("plannedAction", "sql")
         .containsEntry("statementCount", 2)
         .containsKey("statements")
@@ -63,12 +64,17 @@ class SqlTaskExecutorDryRunTest {
   void shouldShortCircuit_whenDryRunFromParametersFallback() throws Exception {
     // 旧调用方可能把 dryRun 塞到 parameters
     TaskContext ctx = new TaskContext(
-        "t1", "job-1", "ti-1", "w-1", Map.of("sql", "SELECT 1;", "dryRun", true), Map.of());
+        "t1",
+        "job-1",
+        "ti-1",
+        "w-1",
+        Map.of("sql", "SELECT 1;", PipelineRuntimeKeys.DRY_RUN, true),
+        Map.of());
 
     TaskResult result = executor.execute(ctx);
 
     assertThat(result.success()).isTrue();
-    assertThat(result.output()).containsEntry("dryRun", true);
+    assertThat(result.output()).containsEntry(PipelineRuntimeKeys.DRY_RUN, true);
     verify(ds, never()).getConnection();
   }
 }

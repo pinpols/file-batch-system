@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.atomic.shell;
 
+import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
@@ -34,7 +35,7 @@ public class ShellExecutorProperties {
   private Set<String> commandWhitelist = Set.of();
 
   /** 工作目录基础路径,每次执行在它下面创建唯一子目录。默认使用 JVM 临时目录下的 batch-shell。 */
-  private Path workdirBase = Path.of(System.getProperty("java.io.tmpdir"), "batch-shell");
+  private Path workdirBase = PrivateTempFiles.resolveUnderTempRoot("batch-shell");
 
   /** 默认超时。业务 parameters.timeoutSeconds 可缩短不可延长。 */
   private Duration defaultTimeout = Duration.ofMinutes(5);

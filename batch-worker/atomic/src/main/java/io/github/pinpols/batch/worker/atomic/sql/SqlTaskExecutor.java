@@ -13,6 +13,7 @@ import io.github.pinpols.batch.worker.atomic.runtime.AtomicConnectionManager;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
 import io.github.pinpols.batch.worker.atomic.runtime.DataSourceResolver;
 import io.github.pinpols.batch.worker.atomic.runtime.SpringDataSourceResolver;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
@@ -148,7 +149,7 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
   private TaskResult buildDryRunResult(TaskContext ctx, SqlInvocation inv) {
     String dsBean = resolveDataSourceBeanName(ctx.parameters());
     Map<String, Object> planned = new LinkedHashMap<>();
-    planned.put("dryRun", true);
+    planned.put(PipelineRuntimeKeys.DRY_RUN, true);
     planned.put("plannedAction", "sql");
     planned.put("statementCount", inv.statements.size());
     planned.put("statements", inv.statements);

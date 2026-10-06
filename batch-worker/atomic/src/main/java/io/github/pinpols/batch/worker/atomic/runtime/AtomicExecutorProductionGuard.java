@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.atomic.runtime;
 
 import io.github.pinpols.batch.common.config.BatchProfileSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.atomic.http.HttpExecutorProperties;
 import io.github.pinpols.batch.worker.atomic.shell.ShellExecutorProperties;
 import io.github.pinpols.batch.worker.atomic.spark.SparkSubmitExecutorProperties;
@@ -16,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.env.Environment;
@@ -36,10 +38,12 @@ import org.springframework.core.env.Environment;
  */
 @Slf4j
 @Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties(AtomicExecutorGuardProperties.class)
 @RequiredArgsConstructor
 public class AtomicExecutorProductionGuard {
 
   private final Environment environment;
+  private final AtomicExecutorGuardProperties guardProperties;
   private final ObjectProvider<SqlExecutorProperties> sqlProps;
   private final ObjectProvider<StoredProcExecutorProperties> storedProcProps;
   private final ObjectProvider<HttpExecutorProperties> httpProps;
@@ -72,23 +76,20 @@ public class AtomicExecutorProductionGuard {
 
   /** 是否在强制拦截范围:prod profile / 配置的 enforce-profiles / always-enforce。 */
   private boolean isEnforcedProfile(String[] activeProfiles) {
-    if (Boolean.TRUE.equals(environment.getProperty(
-        "batch.worker.executors.guard.always-enforce", Boolean.class, false))) {
+    if (guardProperties.isAlwaysEnforce()) {
       return true;
     }
     if (BatchProfileSupport.isProductionProfile(environment)) {
       return true;
     }
-    String configured =
-        environment.getProperty("batch.worker.executors.guard.enforce-profiles", "");
-    if (configured.isBlank() || activeProfiles == null) {
-      return false;
-    }
     Set<String> enforced = new HashSet<>();
-    for (String p : configured.toLowerCase(Locale.ROOT).split(",")) {
-      if (!p.isBlank()) {
-        enforced.add(p.trim());
+    for (String p : guardProperties.getEnforceProfiles()) {
+      if (EmptyChecks.isNotBlank(p)) {
+        enforced.add(p.trim().toLowerCase(Locale.ROOT));
       }
+    }
+    if (EmptyChecks.isEmpty(enforced) || EmptyChecks.isNull(activeProfiles)) {
+      return false;
     }
     for (String active : activeProfiles) {
       if (active != null && enforced.contains(active.trim().toLowerCase(Locale.ROOT))) {

@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -140,7 +141,7 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
       if (ctx.isDryRun()) {
         // ADR-026 §dry-run:演练不 fork 进程、不建 workdir、不透传 env 值,仅返回会执行的 command / args / env keys。
         Map<String, Object> planned = new LinkedHashMap<>();
-        planned.put("dryRun", true);
+        planned.put(PipelineRuntimeKeys.DRY_RUN, true);
         planned.put("plannedAction", "shell");
         planned.put(PARAM_COMMAND, inv.command);
         planned.put("args", inv.args);

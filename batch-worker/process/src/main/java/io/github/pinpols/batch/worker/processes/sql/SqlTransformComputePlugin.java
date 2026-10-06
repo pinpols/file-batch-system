@@ -138,8 +138,8 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     Map<String, Object> params = buildSqlParams(context, spec);
     if (spec.stagingMode() == SqlTransformComputeSpec.StagingMode.DIRECT) {
       attrs.put(ProcessRuntimeKeys.PROCESS_STAGED_COUNT, 0);
-      attrs.put("processedCount", 0);
-      attrs.put("processStagingMode", spec.stagingMode().name());
+      attrs.put(ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT, 0);
+      attrs.put(ProcessRuntimeKeys.PROCESS_STAGING_MODE, spec.stagingMode().name());
       log.info(
           "sqlTransformCompute direct fast path prepared: tenantId={}, batchKey={}, target={}.{}",
           context.getTenantId(),
@@ -192,7 +192,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     String stageSql = buildStagingInsertSql(spec);
     int stagedRows = jdbc.update(stageSql, params);
     attrs.put(ProcessRuntimeKeys.PROCESS_STAGED_COUNT, stagedRows);
-    attrs.put("processedCount", stagedRows);
+    attrs.put(ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT, stagedRows);
     metrics.recordComputeStagedRows(context.getTenantId(), stagedRows);
 
     // P1-6:超过 maxStagedRows 立即清本批 staging,避免后续 stage 处理超大集合 / target 表雪崩。
@@ -476,7 +476,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
       } catch (Exception e) {
         throw BizException.of(
             ResultCode.INVALID_ARGUMENT,
-            "error.common.invalid_argument_detail",
+            ResultCode.INVALID_ARGUMENT.detailKey(),
             e,
             "sqlTransformCompute step_params is not a JSON object: " + e.getMessage());
       }
@@ -542,7 +542,8 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     params.put(
         "stepCode", context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_CURRENT_STEP_CODE));
     params.put(
-        "highWaterMarkIn", context.getAttributes().get(PipelineRuntimeKeys.HIGH_WATER_MARK_IN));
+        PipelineRuntimeKeys.HIGH_WATER_MARK_IN,
+        context.getAttributes().get(PipelineRuntimeKeys.HIGH_WATER_MARK_IN));
     params.put(PARAM_BATCH_KEY, context.getBatchKey());
     params.put(PARAM_TARGET_SCHEMA, spec.targetSchema());
     params.put(PARAM_TARGET_TABLE, spec.targetTable());
@@ -599,7 +600,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
       if (!params.containsKey(name)) {
         throw BizException.of(
             ResultCode.INVALID_ARGUMENT,
-            "error.common.invalid_argument_detail",
+            ResultCode.INVALID_ARGUMENT.detailKey(),
             "sqlTransformCompute SQL references unknown named parameter :" + name);
       }
     }
@@ -699,7 +700,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     }
     context.getAttributes().put(ProcessRuntimeKeys.PROCESS_STAGED_COUNT, publishedRows);
     context.getAttributes().put(ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT, publishedRows);
-    context.getAttributes().put("processedCount", publishedRows);
+    context.getAttributes().put(ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT, publishedRows);
     metrics.recordCommitPublishedRows(context.getTenantId(), publishedRows);
     log.info(
         "sqlTransformCompute direct published: tenantId={}, batchKey={}, target={}.{},"

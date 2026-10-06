@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -137,7 +138,7 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
       if (ctx.isDryRun()) {
         // ADR-026:演练不 fork,仅回传将执行的 spark-submit argv(凭据已被 Lane C 拦,argv 里无密钥)。
         Map<String, Object> planned = new LinkedHashMap<>();
-        planned.put("dryRun", true);
+        planned.put(PipelineRuntimeKeys.DRY_RUN, true);
         planned.put("plannedAction", "spark-submit");
         planned.put("argv", inv.argv);
         if (!inv.outputPath.isBlank()) {

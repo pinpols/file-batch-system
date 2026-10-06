@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutorRegistry;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
 import io.github.pinpols.batch.worker.atomic.BatchWorkerAtomicApplication;
@@ -61,7 +62,7 @@ class BatchWorkerAtomicEndToEndIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("shell:/bin/echo 跑真命令,output 含 exitCode=0")
   void shellEcho_realProcess() throws Exception {
-    Path workdir = Path.of(System.getProperty("java.io.tmpdir"), "batch-atomic-it");
+    Path workdir = PrivateTempFiles.resolveUnderTempRoot("batch-atomic-it");
     Files.createDirectories(workdir);
 
     BatchTaskExecutor shell = registry.find("shell");

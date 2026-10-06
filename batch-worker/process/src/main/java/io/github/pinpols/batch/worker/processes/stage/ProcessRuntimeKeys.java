@@ -13,11 +13,23 @@ public final class ProcessRuntimeKeys {
   // P2-3:plugin 私有状态(原 PROCESS_PARSED_SPEC)已挪到 ProcessJobContext.pluginState 强类型 field,
   // 不再走 attributes Map(避免污染 stage IO + summary 双重契约)。
 
+  /**
+   * plugin.compute() 读入并转换的行数；无 plugin 配置时 ComputeStep 写 0 占位。与 {@link #PROCESS_STAGED_COUNT}
+   * 的区别：processed 是「读进来多少」，staged 是「写进 staging 多少」。
+   */
+  public static final String PROCESS_PROCESSED_COUNT = "processedCount";
+
   /** plugin.validate() 校验时聚合的 staging 行数。 */
   public static final String PROCESS_STAGED_COUNT = "stagedCount";
 
   /** plugin.commit() 实际写入 target 表的行数(可能与 stagedCount 不等,如 ON CONFLICT DO NOTHING)。 */
   public static final String PROCESS_PUBLISHED_COUNT = "publishedCount";
+
+  /**
+   * COMPUTE 选择的 staging 模式名(JSONB / DIRECT,取自 {@code SqlTransformComputeSpec.StagingMode})。
+   * DIRECT 快路径直接落 target 表且不写 staging,续跑与诊断据此判定是否需要回读 staging。
+   */
+  public static final String PROCESS_STAGING_MODE = "processStagingMode";
 
   /**
    * P2-5:显式配的 COMPUTE step impl_code 在 plugin 注册表里找不到时,DefaultProcessStageExecutor 把该 impl_code 标在
