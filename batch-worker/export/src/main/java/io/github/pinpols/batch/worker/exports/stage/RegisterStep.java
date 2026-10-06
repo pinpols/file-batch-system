@@ -2,7 +2,11 @@ package io.github.pinpols.batch.worker.exports.stage;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.common.enums.FileAuditOperationType;
 import io.github.pinpols.batch.common.enums.FileChecksumType;
+import io.github.pinpols.batch.common.enums.FileStatus;
+import io.github.pinpols.batch.common.enums.OperationResult;
+import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
@@ -45,7 +49,7 @@ public class RegisterStep implements ExportStageStep {
       KEY_TOTAL_AMOUNT,
       "templateCode",
       KEY_OBJECT_NAME,
-      "exportSnapshot");
+      PipelineRuntimeKeys.EXPORT_SNAPSHOT);
 
   private static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
@@ -90,8 +94,8 @@ public class RegisterStep implements ExportStageStep {
           ERROR_OBJECT_MAPPER);
     }
     Map<String, Object> attrs = context.getAttributes();
-    Object payload = attrs.get("exportPayload");
-    Object batchObject = attrs.get("exportBatch");
+    Object payload = attrs.get(ExportRuntimeKeys.EXPORT_PAYLOAD);
+    Object batchObject = attrs.get(ExportRuntimeKeys.EXPORT_BATCH);
     if (!(payload instanceof ExportPayload exportPayload)
         || !(batchObject instanceof Map<?, ?> batch)) {
       return ExportStageResult.failure(
@@ -134,15 +138,18 @@ public class RegisterStep implements ExportStageStep {
     metadata.put(KEY_OBJECT_NAME, objectName);
     mergeSecurityMetadata(metadata, attrs);
     if (attrs.get(PipelineRuntimeKeys.EXPORT_SNAPSHOT) != null) {
-      metadata.put("exportSnapshot", attrs.get(PipelineRuntimeKeys.EXPORT_SNAPSHOT));
+      metadata.put(
+          PipelineRuntimeKeys.EXPORT_SNAPSHOT, attrs.get(PipelineRuntimeKeys.EXPORT_SNAPSHOT));
     }
     // 编码资产登记：最终目标编码（file_record.charset 列）+ 换行符 / BOM 策略（metadata），
     // 与 GENERATE 实际写出的字节一致（设计 §9.4 编码规则）。
-    if (attrs.get("exportLineSeparator") != null) {
-      metadata.put("exportLineSeparator", String.valueOf(attrs.get("exportLineSeparator")));
+    if (EmptyChecks.isNotNull(attrs.get(ExportRuntimeKeys.EXPORT_LINE_SEPARATOR))) {
+      metadata.put(
+          ExportRuntimeKeys.EXPORT_LINE_SEPARATOR,
+          String.valueOf(attrs.get(ExportRuntimeKeys.EXPORT_LINE_SEPARATOR)));
     }
-    if (attrs.get("exportWithBom") != null) {
-      metadata.put("exportWithBom", attrs.get("exportWithBom"));
+    if (EmptyChecks.isNotNull(attrs.get(ExportRuntimeKeys.EXPORT_WITH_BOM))) {
+      metadata.put(ExportRuntimeKeys.EXPORT_WITH_BOM, attrs.get(ExportRuntimeKeys.EXPORT_WITH_BOM));
     }
     mergeUserMetadata(metadata, exportPayload.metadata());
     Long fileSizeBytes =
@@ -168,7 +175,7 @@ public class RegisterStep implements ExportStageStep {
         .bizDate(parseBizDate(exportPayload.bizDate(), context.getBizDate()))
         .sourceType("GENERATED")
         .sourceRef(exportPayload.batchNo())
-        .fileStatus("GENERATED")
+        .fileStatus(FileStatus.GENERATED.code())
         .traceId(String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
         .metadata(metadata)
         .build());
@@ -189,7 +196,7 @@ public class RegisterStep implements ExportStageStep {
 
   /** 登记 GENERATE 实际使用的目标编码；未显式下发（旧实例重放等）回退 UTF-8。 */
   private String exportCharset(Map<String, Object> attrs) {
-    String raw = nullableText(attrs.get("exportCharset"));
+    String raw = nullableText(attrs.get(ExportRuntimeKeys.EXPORT_CHARSET));
     return raw == null ? StandardCharsets.UTF_8.name() : EncodingUtils.normalize(raw);
   }
 
@@ -216,7 +223,8 @@ public class RegisterStep implements ExportStageStep {
     Integer exportVersion =
         existing.get("file_generation_no") instanceof Number number ? number.intValue() : 1;
     String traceId = String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID));
-    ExportPayload exportPayload2 = (ExportPayload) context.getAttributes().get("exportPayload");
+    ExportPayload exportPayload2 =
+        (ExportPayload) context.getAttributes().get(ExportRuntimeKeys.EXPORT_PAYLOAD);
     resolvePlugin(context)
         .onRegistered(buildDataContext(context, exportPayload2), batchId, exportVersion, traceId);
     Map<String, Object> audit = new LinkedHashMap<>();
@@ -225,9 +233,9 @@ public class RegisterStep implements ExportStageStep {
     fileAudits.appendAudit(FileAuditParam.builder()
         .fileId(fileId)
         .tenantId(context.getTenantId())
-        .operationType("EXPORT_REGISTER")
-        .operationResult("SUCCESS")
-        .operatorType("SYSTEM")
+        .operationType(FileAuditOperationType.EXPORT_REGISTER.code())
+        .operationResult(OperationResult.SUCCESS.code())
+        .operatorType(AuditLogConstants.OPERATOR_TYPE_SYSTEM)
         .operatorId(context.getWorkerId())
         .traceId(String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID)))
         .evidenceRef(String.valueOf(context.getAttributes().get(KEY_OBJECT_NAME)))
@@ -288,7 +296,8 @@ public class RegisterStep implements ExportStageStep {
   }
 
   private ExportDataPlugin resolvePlugin(ExportJobContext context) {
-    String exportDataRef = nullableText(context.getAttributes().get("exportDataRef"));
+    String exportDataRef =
+        nullableText(context.getAttributes().get(ExportRuntimeKeys.EXPORT_DATA_REF));
     return exportDataPluginRegistry.require(exportDataRef);
   }
 

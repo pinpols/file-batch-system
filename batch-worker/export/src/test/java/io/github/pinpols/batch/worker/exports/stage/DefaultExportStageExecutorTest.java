@@ -85,7 +85,7 @@ class DefaultExportStageExecutorTest {
   void execute_returnsSuccess_whenStepSucceeds() {
     when(prepareStep.execute(any())).thenReturn(ExportStageResult.success(ExportStage.PREPARE));
     ExportJobContext context = buildContext();
-    context.getAttributes().put("recordCount", 3);
+    context.getAttributes().put(PipelineRuntimeKeys.RECORD_COUNT, 3);
 
     List<ExportStageResult> results = executor.execute(context);
 

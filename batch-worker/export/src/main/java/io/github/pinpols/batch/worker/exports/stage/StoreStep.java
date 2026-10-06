@@ -141,7 +141,7 @@ public class StoreStep implements ExportStageStep {
     try {
       file.close();
     } catch (IOException ex) {
-      SwallowedExceptionLogger.warn(StoreStep.class, "encrypted temp cleanup failed", ex);
+      SwallowedExceptionLogger.warn(StoreStep.class, "encrypted-temp-cleanup-failed", ex);
     }
   }
 
@@ -171,7 +171,7 @@ public class StoreStep implements ExportStageStep {
 
   private String resolveTempObjectName(ExportJobContext context, String objectName) {
     String tempObjectName = resolveText(
-        context.getAttributes().get("tempObjectName"),
+        context.getAttributes().get(PipelineRuntimeKeys.TEMP_OBJECT_NAME),
         objectName + BatchFileConstants.FILE_PART_SUFFIX);
     if (!tempObjectName.endsWith(BatchFileConstants.FILE_PART_SUFFIX)) {
       tempObjectName = tempObjectName + BatchFileConstants.FILE_PART_SUFFIX;
@@ -180,8 +180,8 @@ public class StoreStep implements ExportStageStep {
   }
 
   private String resolveContentType(ExportJobContext context) {
-    String fileFormatType =
-        String.valueOf(context.getAttributes().getOrDefault("exportFileFormatType", "JSON"));
+    String fileFormatType = String.valueOf(
+        context.getAttributes().getOrDefault(PipelineRuntimeKeys.EXPORT_FILE_FORMAT_TYPE, "JSON"));
     if (EmptyChecks.isNull(formatStrategyRegistry)) {
       return ExportFormatStrategy.contentTypeFor(fileFormatType);
     }
@@ -257,8 +257,8 @@ public class StoreStep implements ExportStageStep {
       ExportJobContext context, String objectName, String tempKey, Path generatedFile)
       throws IOException {
     context.getAttributes().put(PipelineRuntimeKeys.OBJECT_NAME, objectName);
-    context.getAttributes().put("tempObjectName", tempKey);
-    context.getAttributes().put("exportStoreCommitted", Boolean.TRUE);
+    context.getAttributes().put(PipelineRuntimeKeys.TEMP_OBJECT_NAME, tempKey);
+    context.getAttributes().put(PipelineRuntimeKeys.EXPORT_STORE_COMMITTED, Boolean.TRUE);
     Files.deleteIfExists(generatedFile);
     return ExportStageResult.success(stage());
   }

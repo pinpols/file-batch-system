@@ -1,6 +1,10 @@
 package io.github.pinpols.batch.worker.exports.stage;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.enums.FileAuditOperationType;
+import io.github.pinpols.batch.common.enums.FileStatus;
+import io.github.pinpols.batch.common.enums.OperationResult;
+import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
@@ -57,16 +61,19 @@ public class CompleteStep implements ExportStageStep {
     }
     Map<String, Object> attrs = context.getAttributes();
     ExportPayload exportPayload =
-        attrs.get("exportPayload") instanceof ExportPayload payload ? payload : null;
+        attrs.get(ExportRuntimeKeys.EXPORT_PAYLOAD) instanceof ExportPayload payload
+            ? payload
+            : null;
     Long fileId = PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
     String nextStatus = exportPayload != null && Boolean.TRUE.equals(exportPayload.autoDispatch())
-        ? "DISPATCHING"
-        : "GENERATED";
+        ? FileStatus.DISPATCHING.code()
+        : FileStatus.GENERATED.code();
     Map<String, Object> fileMetadata = new LinkedHashMap<>();
     fileMetadata.put(KEY_RECORD_COUNT, attrs.get(KEY_RECORD_COUNT));
     fileMetadata.put(KEY_OBJECT_NAME, attrs.get(KEY_OBJECT_NAME));
     if (attrs.get(PipelineRuntimeKeys.EXPORT_SNAPSHOT) != null) {
-      fileMetadata.put("exportSnapshot", attrs.get(PipelineRuntimeKeys.EXPORT_SNAPSHOT));
+      fileMetadata.put(
+          PipelineRuntimeKeys.EXPORT_SNAPSHOT, attrs.get(PipelineRuntimeKeys.EXPORT_SNAPSHOT));
     }
     fileRecords.updateFileStatus(fileId, nextStatus, fileMetadata);
     Map<String, Object> detailSummary = new LinkedHashMap<>();
@@ -77,9 +84,9 @@ public class CompleteStep implements ExportStageStep {
     fileAudits.appendAudit(FileAuditParam.builder()
         .fileId(fileId)
         .tenantId(context.getTenantId())
-        .operationType("EXPORT_COMPLETE")
-        .operationResult("SUCCESS")
-        .operatorType("SYSTEM")
+        .operationType(FileAuditOperationType.EXPORT_COMPLETE.code())
+        .operationResult(OperationResult.SUCCESS.code())
+        .operatorType(AuditLogConstants.OPERATOR_TYPE_SYSTEM)
         .operatorId(context.getWorkerId())
         .traceId(String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
         .evidenceRef(String.valueOf(attrs.get(KEY_OBJECT_NAME)))

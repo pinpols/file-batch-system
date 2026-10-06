@@ -7,8 +7,10 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.logging.ThrottledLogger;
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
+import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -98,7 +100,9 @@ public class GenerateStep implements ExportStageStep {
 
   @Override
   public ExportStageResult execute(ExportJobContext context) {
-    Object payload = context == null ? null : context.getAttributes().get("exportPayload");
+    Object payload = EmptyChecks.isNull(context)
+        ? null
+        : context.getAttributes().get(ExportRuntimeKeys.EXPORT_PAYLOAD);
     if (!(payload instanceof ExportPayload exportPayload)
         || !Texts.hasText(exportPayload.batchNo())) {
       return ExportStageResult.failure(
@@ -115,7 +119,7 @@ public class GenerateStep implements ExportStageStep {
     try {
       Map<String, Object> attrs = context.getAttributes();
       String exportDataRef = resolveExportDataRef(context, exportPayload);
-      attrs.put("exportDataRef", exportDataRef);
+      attrs.put(ExportRuntimeKeys.EXPORT_DATA_REF, exportDataRef);
       ExportDataContext dataCtx = buildExportDataContext(context, exportPayload);
       ExportDataPlugin dataPlugin = exportDataPluginRegistry.require(exportDataRef);
       Map<String, Object> batch = dataPlugin.loadBatch(dataCtx);
@@ -146,12 +150,13 @@ public class GenerateStep implements ExportStageStep {
       }
       int pageSize = resolvePageSize(context);
       int chunkSize = resolveChunkSize(context);
-      String fileFormatType = String.valueOf(attrs.getOrDefault("exportFileFormatType", "JSON"));
+      String fileFormatType =
+          String.valueOf(attrs.getOrDefault(PipelineRuntimeKeys.EXPORT_FILE_FORMAT_TYPE, "JSON"));
       // 导出编码选项：target_charset / with_bom / line_separator 由模板声明，透传给格式策略与 REGISTER 登记。
       ExportEncodingOptions encoding = resolveExportEncodingOptions(context, fileFormatType);
-      attrs.put("exportCharset", encoding.charset().name());
-      attrs.put("exportWithBom", encoding.withBom());
-      attrs.put("exportLineSeparator", encoding.lineSeparator());
+      attrs.put(ExportRuntimeKeys.EXPORT_CHARSET, encoding.charset().name());
+      attrs.put(ExportRuntimeKeys.EXPORT_WITH_BOM, encoding.withBom());
+      attrs.put(ExportRuntimeKeys.EXPORT_LINE_SEPARATOR, encoding.lineSeparator());
 
       // ADR-038 P3:续跑开关 + pipelineInstanceId + 非 Excel 才启用续跑。启用时生成文件路径必须确定化
       // (随机 temp 跨崩溃重派会丢残文件);开关关时保持随机 temp,行为与今天完全一致。
@@ -211,7 +216,7 @@ public class GenerateStep implements ExportStageStep {
         checkpoint.complete(recordCount, Files.size(generatedFile));
       }
 
-      attrs.put("exportBatch", batch);
+      attrs.put(ExportRuntimeKeys.EXPORT_BATCH, batch);
       attrs.put(PipelineRuntimeKeys.GENERATED_FILE_PATH, generatedFile.toString());
       attrs.put(PipelineRuntimeKeys.RECORD_COUNT, recordCount);
       attrs.put("totalAmount", batch.getOrDefault("total_amount", BigDecimal.ZERO));
@@ -496,7 +501,7 @@ public class GenerateStep implements ExportStageStep {
   }
 
   private static Path privateExportDirectory() throws IOException {
-    Path dir = Path.of(System.getProperty("java.io.tmpdir"), "file-batch-export");
+    Path dir = PrivateTempFiles.resolveUnderTempRoot("file-batch-export");
     Files.createDirectories(dir);
     setOwnerOnlyPermissions(dir);
     return dir;
@@ -534,7 +539,7 @@ public class GenerateStep implements ExportStageStep {
   private ExportStageResult completeWithoutRegenerate(
       ExportJobContext context, Map<String, Object> batch, Path generatedFile, long recordCount)
       throws IOException {
-    context.getAttributes().put("exportBatch", batch);
+    context.getAttributes().put(ExportRuntimeKeys.EXPORT_BATCH, batch);
     context.getAttributes().put(PipelineRuntimeKeys.GENERATED_FILE_PATH, generatedFile.toString());
     context.getAttributes().put(PipelineRuntimeKeys.RECORD_COUNT, recordCount);
     context.getAttributes().put("totalAmount", batch.getOrDefault("total_amount", BigDecimal.ZERO));
@@ -577,7 +582,7 @@ public class GenerateStep implements ExportStageStep {
           msg);
     } else {
       // 抑制窗口内:留一条 DEBUG 回退,便于 verbose 排查
-      SwallowedExceptionLogger.info(GenerateStep.class, "catch:Exception (throttled)", ex);
+      SwallowedExceptionLogger.info(GenerateStep.class, "catch:Exception-throttled", ex);
     }
   }
 

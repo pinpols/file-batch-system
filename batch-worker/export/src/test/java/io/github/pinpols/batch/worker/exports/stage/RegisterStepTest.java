@@ -53,8 +53,8 @@ class RegisterStepTest {
   @Test
   void execute_dryRunSkipsFileRegistrationAndPluginCallback() {
     ExportJobContext context = baseContext();
-    context.getAttributes().put("dryRun", true);
-    context.getAttributes().put("objectName", "dry-run/no-upload");
+    context.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
+    context.getAttributes().put(PipelineRuntimeKeys.OBJECT_NAME, "dry-run/no-upload");
 
     var result = step.execute(context);
 
@@ -77,8 +77,8 @@ class RegisterStepTest {
   @Test
   void execute_returnsChecksumConflict_whenExistingFileRecordChecksumDiffers() {
     ExportJobContext ctx = baseContext();
-    ctx.getAttributes().put("objectName", "obj.json");
-    ctx.getAttributes().put("checksumValue", "aaa");
+    ctx.getAttributes().put(PipelineRuntimeKeys.OBJECT_NAME, "obj.json");
+    ctx.getAttributes().put(PipelineRuntimeKeys.CHECKSUM_VALUE, "aaa");
 
     when(runtimeRepository.existsFileRecordByStoragePath("t1", "bucket-1", "obj.json"))
         .thenReturn(true);
@@ -95,8 +95,8 @@ class RegisterStepTest {
   @Test
   void execute_registersConfiguredCharsetAndEncodingMetadata() {
     ExportJobContext ctx = baseContext();
-    ctx.getAttributes().put("objectName", "obj.csv");
-    ctx.getAttributes().put("checksumValue", "abc123");
+    ctx.getAttributes().put(PipelineRuntimeKeys.OBJECT_NAME, "obj.csv");
+    ctx.getAttributes().put(PipelineRuntimeKeys.CHECKSUM_VALUE, "abc123");
     ctx.getAttributes().put("exportCharset", "GBK");
     ctx.getAttributes().put("exportLineSeparator", "\r\n");
     ctx.getAttributes().put("exportWithBom", Boolean.FALSE);
@@ -125,8 +125,8 @@ class RegisterStepTest {
   @Test
   void execute_reusesExistingFileRecord_whenChecksumMatches_andBindsToPipeline() {
     ExportJobContext ctx = baseContext();
-    ctx.getAttributes().put("objectName", "obj.json");
-    ctx.getAttributes().put("checksumValue", "aaa");
+    ctx.getAttributes().put(PipelineRuntimeKeys.OBJECT_NAME, "obj.json");
+    ctx.getAttributes().put(PipelineRuntimeKeys.CHECKSUM_VALUE, "aaa");
     ctx.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, 99L);
     ctx.getAttributes().put("exportDataRef", "jdbc_mapped_export");
 
@@ -149,8 +149,8 @@ class RegisterStepTest {
     ctx.setTenantId("t1");
     ctx.setJobCode("JOB_001");
     ctx.setWorkerId("w1");
-    ctx.getAttributes().put("fileName", "f.json");
-    ctx.getAttributes().put("exportFileFormatType", "JSON");
+    ctx.getAttributes().put(PipelineRuntimeKeys.FILE_NAME, "f.json");
+    ctx.getAttributes().put(PipelineRuntimeKeys.EXPORT_FILE_FORMAT_TYPE, "JSON");
     ctx.getAttributes()
         .put(
             "exportPayload",
