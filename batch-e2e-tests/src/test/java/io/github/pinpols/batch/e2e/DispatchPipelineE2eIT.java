@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import io.github.pinpols.batch.common.dto.LaunchRequest;
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.e2e.apps.E2eDispatchApplication;
 import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
@@ -110,7 +111,7 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
     DispatchReceiptVerifier.forTenant(TENANT)
         .fileId(fileId)
         .platformJdbc(jdbcTemplate)
-        .expectedFileStatus("DISPATCHED")
+        .expectedFileStatus(FileStatus.DISPATCHED.code())
         .expectedReceiptCode("R-E2E-DISPATCH")
         .expectedChannelCode("e2e_local_dispatch")
         .expectedMinAuditCount(1)

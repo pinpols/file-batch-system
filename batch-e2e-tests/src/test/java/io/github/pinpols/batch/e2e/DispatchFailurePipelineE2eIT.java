@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import io.github.pinpols.batch.common.dto.LaunchRequest;
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.e2e.apps.E2eDispatchApplication;
 import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
@@ -110,6 +111,6 @@ class DispatchFailurePipelineE2eIT extends AbstractIntegrationTest {
     // File record must NOT have been marked DISPATCHED on failure
     String fileStatus = jdbcTemplate.queryForObject(
         "select file_status from batch.file_record where id = ?", String.class, fileId);
-    assertThat(fileStatus).isNotEqualTo("DISPATCHED");
+    assertThat(fileStatus).isNotEqualTo(FileStatus.DISPATCHED.code());
   }
 }

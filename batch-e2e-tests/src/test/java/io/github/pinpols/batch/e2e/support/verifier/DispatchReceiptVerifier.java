@@ -2,6 +2,7 @@ package io.github.pinpols.batch.e2e.support.verifier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.pinpols.batch.common.enums.FileStatus;
 import java.util.List;
 import java.util.Map;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -23,7 +24,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  */
 public final class DispatchReceiptVerifier implements E2eVerifier {
 
-  private static final String DEFAULT_FILE_STATUS = "DISPATCHED";
+  private static final String DEFAULT_FILE_STATUS = FileStatus.DISPATCHED.code();
 
   private final String tenantId;
   private final Long fileId;
