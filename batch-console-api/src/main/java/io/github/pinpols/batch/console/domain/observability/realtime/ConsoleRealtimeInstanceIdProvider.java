@@ -1,14 +1,16 @@
 package io.github.pinpols.batch.console.domain.observability.realtime;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.console.config.ConsoleInstanceIdProperties;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 /**
  * 控制台实时实例标识。
  *
- * <p>用于标记 Redis Pub/Sub 中事件的来源实例，避免同一实例处理自己刚写入的广播消息时重复推送。
+ * <p>用于标记 Redis Pub/Sub 中事件的来源实例，避免同一实例处理自己刚写入的广播消息时重复推送。实例标识从
+ * {@link ConsoleInstanceIdProperties}（{@code batch.console.instance-id}）读取，未配置时生成随机 UUID 并告警。
  */
 @Component
 @Slf4j
@@ -16,20 +18,18 @@ public class ConsoleRealtimeInstanceIdProvider {
 
   private final String instanceId;
 
-  public ConsoleRealtimeInstanceIdProvider(Environment environment) {
-    this.instanceId = resolveInstanceId(environment);
+  public ConsoleRealtimeInstanceIdProvider(ConsoleInstanceIdProperties properties) {
+    this.instanceId = resolveInstanceId(properties);
   }
 
   public String instanceId() {
     return instanceId;
   }
 
-  private String resolveInstanceId(Environment environment) {
-    String configured = firstNonBlank(
-        environment.getProperty("batch.console.instance-id"),
-        environment.getProperty("BATCH_CONSOLE_INSTANCE_ID"));
-    if (configured != null) {
-      return configured;
+  private String resolveInstanceId(ConsoleInstanceIdProperties properties) {
+    String configured = properties.getInstanceId();
+    if (EmptyChecks.isNotBlank(configured)) {
+      return configured.trim();
     }
     String generated = UUID.randomUUID().toString();
     log.warn(
@@ -37,14 +37,5 @@ public class ConsoleRealtimeInstanceIdProvider {
             + " instance id={}",
         generated);
     return generated;
-  }
-
-  private String firstNonBlank(String... values) {
-    for (String value : values) {
-      if (value != null && !value.isBlank()) {
-        return value.trim();
-      }
-    }
-    return null;
   }
 }

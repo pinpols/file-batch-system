@@ -155,7 +155,7 @@ public class ConsoleJobController {
     if (idempotencyKey == null || idempotencyKey.isBlank()) {
       throw BizException.of(
           ResultCode.MISSING_IDEMPOTENCY_KEY,
-          "error.common.missing_idempotency_key_detail",
+          ResultCode.MISSING_IDEMPOTENCY_KEY.detailKey(),
           CommonErrorMessages.MISSING_IDEMPOTENCY_KEY);
     }
   }

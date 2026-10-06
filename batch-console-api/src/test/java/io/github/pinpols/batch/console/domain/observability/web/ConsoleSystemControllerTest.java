@@ -21,8 +21,10 @@ import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolde
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -59,8 +61,12 @@ class ConsoleSystemControllerTest {
     stateHolder = new MaintenanceStateHolder(properties, mapper, new ObjectMapper());
     ReflectionTestUtils.invokeMethod(stateHolder, "initFromProperties");
 
+    // 固定时钟:Quartz 预览的「当前时刻」来自统一入口 BatchDateTimeSupport.nowInstant(),固定后结果确定。
+    Clock fixedClock = Clock.fixed(Instant.parse("2026-05-20T15:00:00Z"), ZoneOffset.UTC);
+    BatchDateTimeSupport dateTimeSupport = new BatchDateTimeSupport(fixedClock, timezoneProvider);
+
     mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleSystemController(
-            stateHolder, new QuartzCronPreviewService(timezoneProvider)))
+            stateHolder, new QuartzCronPreviewService(timezoneProvider, dateTimeSupport)))
         .setControllerAdvice(exceptionHandler)
         .build();
   }

@@ -117,7 +117,7 @@ public class ConsoleJobQueryService {
     if (cursorMode && "duration".equals(request.getSortBy())) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ResultCode.INVALID_ARGUMENT.detailKey(),
           "sortBy=duration is not supported in cursor mode; remove cursor or use pageNo");
     }
     // cursor 模式忽略 pageNo,统一 pageNo=1(防止意外 OFFSET);其它字段保留以拼 WHERE

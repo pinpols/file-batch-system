@@ -100,7 +100,7 @@ public final class UploadFileGuard {
     } catch (IOException ex) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ResultCode.INVALID_ARGUMENT.detailKey(),
           "failed to read upload: " + ex.getMessage());
     }
     return head;
@@ -121,7 +121,7 @@ public final class UploadFileGuard {
   private static void reject(MultipartFile file, String reason) {
     throw BizException.of(
         ResultCode.INVALID_ARGUMENT,
-        "error.common.invalid_argument_detail",
+        ResultCode.INVALID_ARGUMENT.detailKey(),
         "file rejected: name=" + file.getOriginalFilename() + ", reason=" + reason);
   }
 }

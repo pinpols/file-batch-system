@@ -40,7 +40,6 @@ public class ConsoleAiConversationService {
   private static final String COMPLETE = "COMPLETE";
   private static final String FAILED = "FAILED";
   private static final String REJECTED = "REJECTED";
-  private static final String NOT_FOUND_DETAIL = "error.common.not_found_detail";
 
   private final ConsoleAiConversationMapper mapper;
   private final ConsoleAiProperties properties;
@@ -70,7 +69,7 @@ public class ConsoleAiConversationService {
     requirePersistenceEnabled();
     requireOwner(ownerUserId);
     if (!SUPPORTED_CONTEXT_VERSION.equals(contextVersion)) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument_detail");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
     }
     mapper.setTenantContext(tenantId);
 
@@ -88,7 +87,7 @@ public class ConsoleAiConversationService {
     ConsoleAiConversationEntity conversation = mapper.selectForUpdate(tenantId, conversationId);
     if (EmptyChecks.isNull(conversation)) {
       if (!creating) {
-        throw BizException.of(ResultCode.NOT_FOUND, NOT_FOUND_DETAIL);
+        throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey());
       }
       conversation = new ConsoleAiConversationEntity();
       conversation.setId(conversationId);
@@ -99,9 +98,9 @@ public class ConsoleAiConversationService {
       conversation.setExpiresAt(expiresAt);
       mapper.insertConversation(conversation);
     } else if (!ownerUserId.equals(conversation.getOwnerUserId())) {
-      throw BizException.of(ResultCode.NOT_FOUND, NOT_FOUND_DETAIL);
+      throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey());
     } else if (!conversation.getExpiresAt().isAfter(now)) {
-      throw BizException.of(ResultCode.NOT_FOUND, NOT_FOUND_DETAIL);
+      throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey());
     }
 
     List<ConsoleAiTurnEntity> history = mapper.selectRecentCompleteTurns(
@@ -111,7 +110,7 @@ public class ConsoleAiConversationService {
     Long turnNo =
         mapper.allocateTurnNo(tenantId, conversationId, ownerUserId, expiresAt, contextVersion);
     if (EmptyChecks.isNull(turnNo)) {
-      throw BizException.of(ResultCode.NOT_FOUND, NOT_FOUND_DETAIL);
+      throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey());
     }
     ConsoleAiTurnEntity turn = new ConsoleAiTurnEntity();
     turn.setTenantId(tenantId);
@@ -210,19 +209,19 @@ public class ConsoleAiConversationService {
       return new CursorPosition(null, null);
     }
     if (cursor.length() > 512) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument_detail");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
     }
     Map<String, Object> values = CursorCodec.decode(cursor);
     if (!(values.get("updatedAt") instanceof String updatedAt)
         || !(values.get("id") instanceof String id)
         || EmptyChecks.isBlank(id)
         || id.length() > 128) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument_detail");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
     }
     try {
       return new CursorPosition(Instant.parse(updatedAt), id);
     } catch (java.time.format.DateTimeParseException exception) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument_detail");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
     }
   }
 
@@ -237,7 +236,7 @@ public class ConsoleAiConversationService {
     requireOwner(ownerUserId);
     mapper.setTenantContext(tenantId);
     if (EmptyChecks.isNull(mapper.selectActiveByOwner(tenantId, conversationId, ownerUserId))) {
-      throw BizException.of(ResultCode.NOT_FOUND, NOT_FOUND_DETAIL);
+      throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey());
     }
     int limit = Math.min(Math.max(requestedLimit, 1), 100);
     List<TurnView> rows =
@@ -253,7 +252,9 @@ public class ConsoleAiConversationService {
     requireOwner(ownerUserId);
     mapper.setTenantContext(tenantId);
     ConsoleAiTurnEntity row = mapper.selectByClientTurnId(tenantId, ownerUserId, clientTurnId);
-    if (EmptyChecks.isNull(row)) throw BizException.of(ResultCode.NOT_FOUND, NOT_FOUND_DETAIL);
+    if (EmptyChecks.isNull(row)) {
+      throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey());
+    }
     return new ClientTurnView(row.getConversationId(), toTurnView(row));
   }
 
@@ -280,7 +281,7 @@ public class ConsoleAiConversationService {
     requireOwner(ownerUserId);
     mapper.setTenantContext(tenantId);
     if (EmptyChecks.isNull(mapper.selectActiveByOwner(tenantId, conversationId, ownerUserId))) {
-      throw BizException.of(ResultCode.NOT_FOUND, NOT_FOUND_DETAIL);
+      throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey());
     }
     attachmentService.enqueueConversation(tenantId, conversationId);
     mapper.deleteConversation(tenantId, conversationId, ownerUserId);
@@ -344,7 +345,7 @@ public class ConsoleAiConversationService {
 
   private static void requireOwner(String ownerUserId) {
     if (!Texts.hasText(ownerUserId)) {
-      throw BizException.of(ResultCode.FORBIDDEN, "error.common.forbidden_detail");
+      throw BizException.of(ResultCode.FORBIDDEN, ResultCode.FORBIDDEN.detailKey());
     }
   }
 

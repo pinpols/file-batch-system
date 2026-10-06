@@ -29,7 +29,7 @@ public class ConsoleTaskHeartbeatService {
   public TaskHeartbeatDetailsResponse getHeartbeatDetails(String tenantId, Long taskId) {
     JobTaskHeartbeatEntity entity = jobTaskMapper.selectHeartbeatByTenantAndId(tenantId, taskId);
     if (entity == null) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail", taskId);
+      throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), taskId);
     }
     return new TaskHeartbeatDetailsResponse(
         entity.getId(),

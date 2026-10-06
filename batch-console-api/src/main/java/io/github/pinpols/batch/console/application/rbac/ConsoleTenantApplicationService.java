@@ -269,7 +269,7 @@ public class ConsoleTenantApplicationService {
     if (total > 0) {
       throw BizException.of(
           ResultCode.BUSINESS_ERROR,
-          "error.common.business_error_detail",
+          ResultCode.BUSINESS_ERROR.detailKey(),
           "cannot suspend tenant with active instances"
               + " (jobs="
               + jobs

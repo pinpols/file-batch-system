@@ -156,8 +156,11 @@ class ReadReplicaHappyPathIntegrationTest extends AbstractIntegrationTest {
       //   (a) 静默降级返回 "batch_platform"（pause 后才发起新连接）
       //   (b) 抛 DataAccessResourceFailureException（in-flight 连接被 pause 截断，I/O error）
       // 任一发生 → failover 计数器都会 +1（ReadReplicaRoutingDataSource catch 后递增）。
-      tolerantReadOnlyAttempt("replica 暂停 → 第 1 次 readOnly");
-      tolerantReadOnlyAttempt("replica 暂停 → 第 2 次 readOnly（被 quarantine 静默捕获并抑制）");
+      tolerantReadOnlyAttempt(
+          "replica 暂停 → 第 1 次 readOnly", "tolerated-io-error-readonly-attempt-1");
+      tolerantReadOnlyAttempt(
+          "replica 暂停 → 第 2 次 readOnly（被 quarantine 静默捕获并抑制）",
+          "tolerated-io-error-readonly-attempt-2-quarantined");
       // 第 1 次失败后 quarantine 立即生效，第 2 次不再调 replica → counter 只 +1。
       // 关键证据是「fail-open 触发过 ≥ 1 次」+ 期满后能自动恢复（下方第 4 步断言）。
       assertThat(currentFailoverCount() - failoverBefore)
@@ -195,18 +198,16 @@ class ReadReplicaHappyPathIntegrationTest extends AbstractIntegrationTest {
    *
    * 两类都应递增 failover 计数器 → 由调用方汇总断言。
    */
-  private void tolerantReadOnlyAttempt(String label) {
+  private void tolerantReadOnlyAttempt(String description, String where) {
     try {
       String db = dbFromTransaction(true);
-      assertThat(db).as(label + " — 静默 fail-open 应落 primary").isEqualTo("batch_platform");
+      assertThat(db).as(description + " — 静默 fail-open 应落 primary").isEqualTo("batch_platform");
     } catch (org.springframework.dao.DataAccessResourceFailureException ex) {
       // I/O error 路径：pause 截断 in-flight 连接，等价于 fail-open 触发但没机会切换 routing key。
       // ReadReplicaRoutingDataSource 在 catch 内已递增 failover 计数器；下次请求 quarantine 生效。
       // 这里不 fail，只记日志便于调试。
-      SwallowedExceptionLogger.info(
-          ReadReplicaHappyPathIntegrationTest.class,
-          label + " tolerated I/O error during Docker pause fault injection",
-          ex);
+      // where 用 kebab-case 标签（SwallowedExceptionLogger 口径），中文描述只进断言消息。
+      SwallowedExceptionLogger.info(ReadReplicaHappyPathIntegrationTest.class, where, ex);
     }
   }
 

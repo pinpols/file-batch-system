@@ -41,7 +41,7 @@ public class ConsoleArchivePolicyService {
     if (!VALID_TABLES.contains(normalized)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ResultCode.INVALID_ARGUMENT.detailKey(),
           "target_table must be one of: " + VALID_TABLES);
     }
     if (param.retentionDays() < 1) {

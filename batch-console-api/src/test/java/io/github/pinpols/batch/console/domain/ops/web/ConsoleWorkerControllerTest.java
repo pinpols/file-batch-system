@@ -78,6 +78,7 @@ class ConsoleWorkerControllerTest {
             BatchDateTimeSupport.utcNow(),
             0,
             null,
+            null,
             null));
 
     mockMvc

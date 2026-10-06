@@ -77,7 +77,7 @@ public final class WebhookDeliverySupport {
           JsonUtils.fromJson(configJson, new TypeReference<Map<String, Object>>() {});
       return parsed == null ? Map.of() : parsed;
     } catch (RuntimeException ex) {
-      SwallowedExceptionLogger.info(logOwner, "catch:config_json parse", ex);
+      SwallowedExceptionLogger.info(logOwner, "config-json-parse-failed", ex);
       return Map.of();
     }
   }

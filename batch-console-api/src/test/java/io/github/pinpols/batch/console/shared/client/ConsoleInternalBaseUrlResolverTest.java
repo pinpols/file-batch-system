@@ -20,11 +20,12 @@ class ConsoleInternalBaseUrlResolverTest {
 
   @Test
   void fallsBackToLocalServerPortWhenRandomPortPlaceholderIsStillUnresolved() {
-    MockEnvironment environment = new MockEnvironment().withProperty("local.server.port", "39123");
+    MockEnvironment environment = new MockEnvironment()
+        .withProperty(ConsoleInternalBaseUrlResolver.LOCAL_SERVER_PORT_KEY, "39123");
 
     String resolved = ConsoleInternalBaseUrlResolver.resolve(
         environment,
-        "http://127.0.0.1:${local.server.port}",
+        "http://127.0.0.1:" + ConsoleInternalBaseUrlResolver.LOCAL_SERVER_PORT_PLACEHOLDER,
         "batch.console.orchestrator.base-url");
 
     assertThat(resolved).isEqualTo("http://127.0.0.1:39123");
@@ -36,7 +37,7 @@ class ConsoleInternalBaseUrlResolverTest {
 
     assertThatThrownBy(() -> ConsoleInternalBaseUrlResolver.resolve(
             environment,
-            "http://127.0.0.1:${local.server.port}",
+            "http://127.0.0.1:" + ConsoleInternalBaseUrlResolver.LOCAL_SERVER_PORT_PLACEHOLDER,
             "batch.console.orchestrator.base-url"))
         .isInstanceOf(IllegalStateException.class)
         .hasMessage("batch.console.orchestrator.base-url is required but not configured");
@@ -44,7 +45,8 @@ class ConsoleInternalBaseUrlResolverTest {
 
   @Test
   void doesNotRouteMissingExternalServiceUrlBackToConsole() {
-    MockEnvironment environment = new MockEnvironment().withProperty("local.server.port", "39123");
+    MockEnvironment environment = new MockEnvironment()
+        .withProperty(ConsoleInternalBaseUrlResolver.LOCAL_SERVER_PORT_KEY, "39123");
 
     assertThatThrownBy(() -> ConsoleInternalBaseUrlResolver.resolve(
             environment, null, "batch.console.atomic-worker.base-url"))

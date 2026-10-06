@@ -76,6 +76,6 @@ public class DefaultConfigReleaseApplyService implements ConfigReleaseApplyServi
 
   private BizException invalid(String detail) {
     return BizException.of(
-        ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument_detail", detail);
+        ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey(), detail);
   }
 }

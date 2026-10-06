@@ -10,6 +10,9 @@ public class WorkerRegistryEntity {
   private String tenantId;
   private String workerCode;
   private String workerGroup;
+  /** Worker 实际监听 HTTP 端口（V221）；NULL=未上报（老 worker / 老 SDK / 非 web 上下文）。 */
+  private Integer port;
+
   private String status;
   private Instant heartbeatAt;
   private Integer currentLoad;

@@ -79,7 +79,7 @@ public class ConsoleResourceTagService {
     if (!VALID_RESOURCE_TYPES.contains(normalized)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ResultCode.INVALID_ARGUMENT.detailKey(),
           "resourceType must be one of: " + VALID_RESOURCE_TYPES);
     }
     return normalized;

@@ -51,7 +51,7 @@ class ReplicaLagMonitorTest {
     ObjectProvider<MeterRegistry> provider = mock(ObjectProvider.class);
     lenient().when(provider.getIfAvailable()).thenReturn(meterRegistry);
 
-    monitor = new ReplicaLagMonitor(primary, provider);
+    monitor = new ReplicaLagMonitor(primary, provider, new ReplicaLagMonitorProperties());
   }
 
   @Test

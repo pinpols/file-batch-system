@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.support.web;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.config.ApplicationNameProvider;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.logging.BatchMdc;
@@ -18,12 +19,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.env.MockEnvironment;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.test.util.ReflectionTestUtils;
 
 class ConsoleRequestContextFilterTest {
 
@@ -33,8 +34,9 @@ class ConsoleRequestContextFilterTest {
   void setUp() {
     BatchMdc.clear();
     filter = new ConsoleRequestContextFilter(
-        new ConsoleSecurityResponseWriter(new ObjectMapper().findAndRegisterModules()));
-    ReflectionTestUtils.setField(filter, "applicationName", "batch-console-api");
+        new ConsoleSecurityResponseWriter(new ObjectMapper().findAndRegisterModules()),
+        new ApplicationNameProvider(new MockEnvironment()
+            .withProperty(ApplicationNameProvider.APPLICATION_NAME_KEY, "batch-console-api")));
     SecurityContextHolder.clearContext();
   }
 

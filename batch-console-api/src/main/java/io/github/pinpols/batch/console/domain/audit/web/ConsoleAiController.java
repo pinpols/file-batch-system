@@ -227,7 +227,7 @@ public class ConsoleAiController {
     if (EmptyChecks.isNull(active)
         || !Objects.equals(active.tenantId, metadata.tenantId())
         || !Objects.equals(active.operatorId, metadata.operatorId())) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail");
+      throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey());
     }
     active.cancel();
     return responseFactory.success(null);
@@ -348,7 +348,7 @@ public class ConsoleAiController {
       billingMonth =
           EmptyChecks.isBlank(month) ? YearMonth.now(ZoneOffset.UTC) : YearMonth.parse(month);
     } catch (DateTimeParseException exception) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument_detail");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
     }
     return responseFactory.success(
         applicationService.costSummary(metadataResolver.current().tenantId(), billingMonth));

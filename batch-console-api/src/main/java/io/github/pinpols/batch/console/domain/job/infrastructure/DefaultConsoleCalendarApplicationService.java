@@ -56,7 +56,7 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
     if (existing > 0) {
       throw BizException.of(
           ResultCode.CONFLICT,
-          "error.common.conflict_detail",
+          ResultCode.CONFLICT.detailKey(),
           "calendar code already exists: " + request.getCalendarCode());
     }
     Map<String, Object> params = new HashMap<>();

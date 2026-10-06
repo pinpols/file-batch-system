@@ -94,7 +94,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
     if (existing != null) {
       throw BizException.of(
           ResultCode.CONFLICT,
-          "error.common.conflict_detail",
+          ResultCode.CONFLICT.detailKey(),
           "Workflow definition already exists: " + request.getWorkflowCode());
     }
 

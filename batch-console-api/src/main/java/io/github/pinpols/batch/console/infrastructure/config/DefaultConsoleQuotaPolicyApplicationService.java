@@ -49,7 +49,7 @@ public class DefaultConsoleQuotaPolicyApplicationService
     if (existing != null) {
       throw BizException.of(
           ResultCode.CONFLICT,
-          "error.common.conflict_detail",
+          ResultCode.CONFLICT.detailKey(),
           "policy code already exists: " + request.getPolicyCode());
     }
     TenantQuotaPolicyUpsertParam param = TenantQuotaPolicyUpsertParam.builder()

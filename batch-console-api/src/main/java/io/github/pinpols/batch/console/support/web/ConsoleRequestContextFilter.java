@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.support.web;
 
+import io.github.pinpols.batch.common.config.ApplicationNameProvider;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.constants.CommonErrorMessages;
 import io.github.pinpols.batch.common.enums.ResultCode;
@@ -18,7 +19,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -31,10 +31,8 @@ public class ConsoleRequestContextFilter extends OncePerRequestFilter {
 
   public static final String REQUEST_METADATA_ATTRIBUTE = "consoleRequestMetadata";
 
-  @Value("${spring.application.name:batch-console-api}")
-  private String applicationName;
-
   private final ConsoleSecurityResponseWriter responseWriter;
+  private final ApplicationNameProvider applicationNameProvider;
 
   @Override
   protected void doFilterInternal(
@@ -69,7 +67,7 @@ public class ConsoleRequestContextFilter extends OncePerRequestFilter {
     request.setAttribute(REQUEST_METADATA_ATTRIBUTE, metadata);
     Map<String, String> previousContext = BatchMdc.snapshot();
     try {
-      BatchMdc.put(StructuredLogField.SERVICE, applicationName);
+      BatchMdc.put(StructuredLogField.SERVICE, applicationNameProvider.name("batch-console-api"));
       BatchMdc.put(StructuredLogField.REQUEST_ID, requestId);
       BatchMdc.put(StructuredLogField.TRACE_ID, traceId);
       if (tenantId != null && !tenantId.isBlank()) {

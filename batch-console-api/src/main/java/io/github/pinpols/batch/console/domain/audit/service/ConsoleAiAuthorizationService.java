@@ -33,7 +33,7 @@ public class ConsoleAiAuthorizationService implements ConsoleCapabilityProvider 
         || authentication instanceof AnonymousAuthenticationToken) {
       throw BizException.of(
           ResultCode.FORBIDDEN,
-          "error.common.forbidden_detail",
+          ResultCode.FORBIDDEN.detailKey(),
           CommonErrorMessages.AI_ASSISTANT_REQUIRES_AUTHENTICATED_USER);
     }
     if (!properties.isEnabled()
@@ -41,7 +41,7 @@ public class ConsoleAiAuthorizationService implements ConsoleCapabilityProvider 
             authentication.getName(), authorities(authentication.getAuthorities()))) {
       throw BizException.of(
           ResultCode.FORBIDDEN,
-          "error.common.forbidden_detail",
+          ResultCode.FORBIDDEN.detailKey(),
           CommonErrorMessages.AI_ASSISTANT_ACCESS_NOT_GRANTED);
     }
   }
