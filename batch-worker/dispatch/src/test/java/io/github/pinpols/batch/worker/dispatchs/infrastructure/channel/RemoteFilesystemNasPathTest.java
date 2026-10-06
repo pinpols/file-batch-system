@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
@@ -95,7 +96,7 @@ class RemoteFilesystemNasPathTest {
         new TypeReference<Map<String, Object>>() {});
     assertThat(manifestJson).containsEntry("checksumType", "SHA-256");
     assertThat(manifestJson).containsEntry("sizeBytes", payload.length);
-    assertThat(manifestJson).containsEntry("checksumValue", sha256(payload));
+    assertThat(manifestJson).containsEntry(PipelineRuntimeKeys.CHECKSUM_VALUE, sha256(payload));
   }
 
   @Test

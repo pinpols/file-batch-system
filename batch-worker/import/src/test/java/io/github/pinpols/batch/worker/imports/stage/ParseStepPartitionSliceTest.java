@@ -62,8 +62,9 @@ class ParseStepPartitionSliceTest {
     ImportStageResult result = parseStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes()).containsEntry("totalCount", 9L);
-    assertThat(((Number) context.getAttributes().get("parsedCount")).longValue())
+    assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 9L);
+    assertThat(((Number) context.getAttributes().get(PipelineRuntimeKeys.IMPORT_PARSED_COUNT))
+            .longValue())
         .isEqualTo(9L);
     assertNdjsonLineCount(context, 9);
   }
@@ -77,7 +78,7 @@ class ParseStepPartitionSliceTest {
 
     assertThat(result.success()).isTrue();
     // 关闭后 totalCount = parsedCount = 9(完整文件,不切分)
-    assertThat(context.getAttributes()).containsEntry("totalCount", 9L);
+    assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 9L);
     assertNdjsonLineCount(context, 9);
   }
 
@@ -130,7 +131,7 @@ class ParseStepPartitionSliceTest {
 
     assertThat(result.success()).isTrue();
     // 不再按 lineNo%3 过滤 → 9 行全保留(本片内容由 PREPROCESS 的 range 切分决定,这里输入即全量)
-    assertThat(context.getAttributes()).containsEntry("totalCount", 9L);
+    assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 9L);
     assertNdjsonLineCount(context, 9);
   }
 
@@ -143,7 +144,7 @@ class ParseStepPartitionSliceTest {
     ImportStageResult result = parseStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes()).containsEntry("totalCount", 5L);
+    assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 5L);
     assertNdjsonLineCount(context, 5);
   }
 
@@ -205,7 +206,7 @@ class ParseStepPartitionSliceTest {
     Map<String, Object> attrs = new HashMap<>();
     attrs.put(PipelineRuntimeKeys.FILE_ID, 99L);
     attrs.put(PipelineRuntimeKeys.TASK_ID, 999L);
-    attrs.put("importPayload", importPayload);
+    attrs.put(PipelineRuntimeKeys.IMPORT_PAYLOAD, importPayload);
     Map<String, Object> templateConfig = new HashMap<>();
     templateConfig.put("jdbc_mapped_import", Map.of());
     if (!partitionAware) {

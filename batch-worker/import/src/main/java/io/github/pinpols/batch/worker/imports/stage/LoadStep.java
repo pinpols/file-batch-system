@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.imports.stage;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.exception.WorkerConfigException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
@@ -55,10 +56,8 @@ public class LoadStep implements ImportStageStep {
 
   // ── duplicate literal constants ─────────────────────────────────────────
   private static final String KEY_FILE_NAME = "file_name";
-  private static final String KEY_SUCCESS_COUNT = "successCount";
   private static final String KEY_SKIPPED_COUNT = PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT;
   private static final String KEY_LOADED_COUNT = PipelineRuntimeKeys.IMPORT_LOADED_COUNT;
-  private static final String KEY_MANUAL_REVIEW_REQUIRED = "manualReviewRequired";
 
   private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
@@ -467,22 +466,24 @@ public class LoadStep implements ImportStageStep {
   private void commit(ImportJobContext context, ImportPayload importPayload, long loadedCount) {
     Map<String, Object> attrs = context.getAttributes();
     attrs.put(KEY_LOADED_COUNT, loadedCount);
-    attrs.put(KEY_SUCCESS_COUNT, numberValue(attrs.get(KEY_SUCCESS_COUNT)) + loadedCount);
+    attrs.put(
+        ImportRuntimeKeys.SUCCESS_COUNT,
+        numberValue(attrs.get(ImportRuntimeKeys.SUCCESS_COUNT)) + loadedCount);
     ImportStageSupport.updateFileStatusRecoverAware(
         fileRecords,
         context,
-        "LOADED",
+        FileStatus.LOADED.code(),
         Map.of(
             KEY_LOADED_COUNT,
             loadedCount,
-            KEY_SUCCESS_COUNT,
-            numberValue(attrs.get(KEY_SUCCESS_COUNT)),
+            ImportRuntimeKeys.SUCCESS_COUNT,
+            numberValue(attrs.get(ImportRuntimeKeys.SUCCESS_COUNT)),
             KEY_SKIPPED_COUNT,
             numberValue(attrs.get(KEY_SKIPPED_COUNT)),
             "badRecordCount",
             badRecordCount(context),
-            KEY_MANUAL_REVIEW_REQUIRED,
-            Boolean.TRUE.equals(attrs.get(KEY_MANUAL_REVIEW_REQUIRED)),
+            ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED,
+            Boolean.TRUE.equals(attrs.get(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED)),
             "loadTargetRef",
             resolveLoadTargetRef(context, importPayload)));
   }
@@ -545,18 +546,19 @@ public class LoadStep implements ImportStageStep {
     ImportStageSupport.updateFileStatusRecoverAware(
         fileRecords,
         context,
-        "LOADED",
+        FileStatus.LOADED.code(),
         Map.of(
             KEY_LOADED_COUNT,
             loadedCount,
-            KEY_SUCCESS_COUNT,
-            numberValue(context.getAttributes().get(KEY_SUCCESS_COUNT)),
+            ImportRuntimeKeys.SUCCESS_COUNT,
+            numberValue(context.getAttributes().get(ImportRuntimeKeys.SUCCESS_COUNT)),
             KEY_SKIPPED_COUNT,
             numberValue(context.getAttributes().get(KEY_SKIPPED_COUNT)),
             "badRecordCount",
             badRecordCount(context),
-            KEY_MANUAL_REVIEW_REQUIRED,
-            Boolean.TRUE.equals(context.getAttributes().get(KEY_MANUAL_REVIEW_REQUIRED))));
+            ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED,
+            Boolean.TRUE.equals(
+                context.getAttributes().get(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED))));
     context.getAttributes().put(KEY_LOADED_COUNT, loadedCount);
     return ImportStageResult.success(stage());
   }

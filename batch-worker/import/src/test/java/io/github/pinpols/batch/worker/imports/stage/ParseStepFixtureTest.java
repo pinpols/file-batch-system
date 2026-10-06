@@ -55,7 +55,7 @@ class ParseStepFixtureTest {
     ImportStageResult result = parseStep.execute(ctx);
 
     assertThat(result.success()).as(result.message()).isTrue();
-    assertThat(ctx.getAttributes()).containsEntry("totalCount", 10L);
+    assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 10L);
   }
 
   // ── Pipe-delimited (5 data rows) ───────────────────────────────────────────
@@ -68,7 +68,7 @@ class ParseStepFixtureTest {
     ImportStageResult result = parseStep.execute(ctx);
 
     assertThat(result.success()).as(result.message()).isTrue();
-    assertThat(ctx.getAttributes()).containsEntry("totalCount", 5L);
+    assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 5L);
   }
 
   // ── Tab-separated (5 data rows) ────────────────────────────────────────────
@@ -81,7 +81,7 @@ class ParseStepFixtureTest {
     ImportStageResult result = parseStep.execute(ctx);
 
     assertThat(result.success()).isTrue();
-    assertThat(ctx.getAttributes()).containsEntry("totalCount", 5L);
+    assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 5L);
   }
 
   // ── JSON array fixture (5 records) ─────────────────────────────────────────
@@ -94,7 +94,7 @@ class ParseStepFixtureTest {
     ImportStageResult result = parseStep.execute(ctx);
 
     assertThat(result.success()).isTrue();
-    assertThat(ctx.getAttributes()).containsEntry("totalCount", 5L);
+    assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 5L);
   }
 
   // ── JSON envelope fixture (5 records inside "records" key) ─────────────────
@@ -107,7 +107,7 @@ class ParseStepFixtureTest {
     ImportStageResult result = parseStep.execute(ctx);
 
     assertThat(result.success()).isTrue();
-    assertThat(ctx.getAttributes()).containsEntry("totalCount", 5L);
+    assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 5L);
   }
 
   // ── UTF-8 BOM CSV (header with BOM prefix stripped) ────────────────────────
@@ -131,7 +131,7 @@ class ParseStepFixtureTest {
     ImportStageResult result = parseStep.execute(ctx);
 
     assertThat(result.success()).isTrue();
-    assertThat(ctx.getAttributes()).containsEntry("totalCount", 3L);
+    assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 3L);
   }
 
   // ── Excel fixture (programmatically built, 3 data rows) ───────────────────
@@ -210,7 +210,7 @@ class ParseStepFixtureTest {
     ImportStageResult result = parseStep.execute(ctx);
 
     assertThat(result.success()).isTrue();
-    assertThat(ctx.getAttributes()).containsEntry("totalCount", 3L);
+    assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 3L);
   }
 
   // ── Bad-records CSV (2 valid rows: C001 and C010) ──────────────────────────
@@ -225,7 +225,7 @@ class ParseStepFixtureTest {
 
     // ParseStep 写入每一行（包括坏记录行）（共 10 行减 1 行表头）
     assertThat(result.success()).isTrue();
-    assertThat(ctx.getAttributes()).containsEntry("totalCount", 10L);
+    assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 10L);
   }
 
   @Test
@@ -237,7 +237,7 @@ class ParseStepFixtureTest {
     ImportStageResult result = parseStep.execute(ctx);
 
     assertThat(result.success()).as(result.toString()).isTrue();
-    assertThat(ctx.getAttributes()).containsEntry("totalCount", 2L);
+    assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 2L);
     assertThat(ctx.getAttributes()).containsEntry("declaredRecordCount", 2L);
     assertThat(String.valueOf(ctx.getAttributes().get("declaredControlTotal"))).isEqualTo("30.00");
   }
@@ -341,7 +341,7 @@ class ParseStepFixtureTest {
     Map<String, Object> attrs = new HashMap<>();
     attrs.put(PipelineRuntimeKeys.FILE_ID, 99L);
     attrs.put(PipelineRuntimeKeys.TASK_ID, 999L);
-    attrs.put("importPayload", importPayload);
+    attrs.put(PipelineRuntimeKeys.IMPORT_PAYLOAD, importPayload);
     // 启用 preserveLogicalRow，使行以 map 形式写入（fixture 无需匹配 CustomerImportPayload）。
     attrs.put(PipelineRuntimeKeys.TEMPLATE_CONFIG, Map.of("jdbc_mapped_import", Map.of()));
     context.setAttributes(attrs);
@@ -384,7 +384,7 @@ class ParseStepFixtureTest {
     Map<String, Object> attrs = new HashMap<>();
     attrs.put(PipelineRuntimeKeys.FILE_ID, 100L);
     attrs.put(PipelineRuntimeKeys.TASK_ID, 1000L);
-    attrs.put("importPayload", importPayload);
+    attrs.put(PipelineRuntimeKeys.IMPORT_PAYLOAD, importPayload);
     attrs.put(PipelineRuntimeKeys.TEMPLATE_CONFIG, Map.of("jdbc_mapped_import", Map.of()));
     attrs.put(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD, Base64.getDecoder().decode(contentBase64));
     context.setAttributes(attrs);

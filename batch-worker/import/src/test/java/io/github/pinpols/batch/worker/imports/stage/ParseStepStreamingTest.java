@@ -54,7 +54,7 @@ class ParseStepStreamingTest {
     ImportStageResult result = parseStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes()).containsEntry("totalCount", 2L);
+    assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 2L);
     assertNdjsonRecordCount(context, 2);
   }
 
@@ -86,7 +86,7 @@ class ParseStepStreamingTest {
     ImportStageResult result = parseStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes()).containsEntry("totalCount", 5L);
+    assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 5L);
     assertNdjsonRecordCount(context, 5);
   }
 
@@ -117,7 +117,8 @@ class ParseStepStreamingTest {
     ImportStageResult result = parseStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes()).containsEntry("totalCount", (long) count);
+    assertThat(context.getAttributes())
+        .containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, (long) count);
   }
 
   // ── JSON object without "records" ──────────────────────────────────────────
@@ -131,7 +132,7 @@ class ParseStepStreamingTest {
     ImportStageResult result = parseStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes()).containsEntry("totalCount", 1L);
+    assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 1L);
     assertNdjsonRecordCount(context, 1);
   }
 
@@ -148,7 +149,7 @@ class ParseStepStreamingTest {
     ImportStageResult result = parseStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes()).containsEntry("totalCount", 2L);
+    assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 2L);
   }
 
   // ── helpers ────────────────────────────────────────────────────────────────
@@ -188,7 +189,7 @@ class ParseStepStreamingTest {
     Map<String, Object> attrs = new HashMap<>();
     attrs.put(PipelineRuntimeKeys.FILE_ID, 42L);
     attrs.put(PipelineRuntimeKeys.TASK_ID, 101L);
-    attrs.put("importPayload", importPayload);
+    attrs.put(PipelineRuntimeKeys.IMPORT_PAYLOAD, importPayload);
     attrs.put(PipelineRuntimeKeys.TEMPLATE_CONFIG, Map.of("jdbc_mapped_import", Map.of()));
     context.setAttributes(attrs);
     return context;

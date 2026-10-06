@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.imports.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
@@ -46,11 +47,6 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 @EnabledIf("s3BackendActive")
 class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
 
-  /** fixture 直接写对象存储（S3Client），filesystem 后端下自动跳过。 */
-  static boolean s3BackendActive() {
-    return !"filesystem".equals(System.getProperty("batch.test.storage.backend", "s3"));
-  }
-
   @DynamicPropertySource
   static void orchestratorStub(DynamicPropertyRegistry registry) {
     OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
@@ -92,7 +88,7 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
     assertThat(row).containsEntry("tenant_id", "t1");
     assertThat(row).containsEntry("storage_bucket", bucket);
     assertThat(row).containsEntry("storage_path", objectName);
-    assertThat(row).containsEntry("file_status", "RECEIVED");
+    assertThat(row).containsEntry("file_status", FileStatus.RECEIVED.code());
     assertThat(((Number) row.get("file_size_bytes")).longValue()).isEqualTo(content.length);
   }
 

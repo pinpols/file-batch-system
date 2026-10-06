@@ -20,7 +20,7 @@ public class FileDispatchRepository {
   private static final String KEY_FILE_ID = "fileId";
   private static final String KEY_CHANNEL_CODE = "channelCode";
   private static final String KEY_DISPATCH_STATUS = "dispatchStatus";
-  private static final String KEY_RECEIPT_STATUS = "receiptStatus";
+  private static final String KEY_RECEIPT_STATUS = DispatchRuntimeKeys.RECEIPT_STATUS;
 
   private static final int MAX_DISPATCH_BATCH_SIZE = 500;
 
@@ -85,11 +85,11 @@ public class FileDispatchRepository {
         p.dispatchTarget(),
         KEY_DISPATCH_STATUS,
         FileDispatchStatus.CREATED.name(),
-        "receiptCode",
+        DispatchRuntimeKeys.RECEIPT_CODE,
         p.receiptCode(),
         KEY_RECEIPT_STATUS,
         p.receiptStatus(),
-        "externalRequestId",
+        DispatchRuntimeKeys.EXTERNAL_REQUEST_ID,
         p.externalRequestId()));
   }
 
@@ -114,9 +114,9 @@ public class FileDispatchRepository {
         channelCode,
         KEY_DISPATCH_STATUS,
         FileDispatchStatus.SENT.name(),
-        "externalRequestId",
+        DispatchRuntimeKeys.EXTERNAL_REQUEST_ID,
         externalRequestId,
-        "receiptCode",
+        DispatchRuntimeKeys.RECEIPT_CODE,
         receiptCode,
         KEY_RECEIPT_STATUS,
         receiptStatus));
@@ -134,7 +134,7 @@ public class FileDispatchRepository {
         FileDispatchStatus.ACKED.name(),
         KEY_RECEIPT_STATUS,
         FileReceiptStatus.SUCCESS.name(),
-        "receiptCode",
+        DispatchRuntimeKeys.RECEIPT_CODE,
         receiptCode,
         // 行级 CAS 期望前态:只有仍 SENT 才 ACK(防状态倒流)。不卡 receipt_status——
         // 即时确认渠道在 markSent 已把它写成 SUCCESS,卡 PENDING 会让同步 ACK 落空。

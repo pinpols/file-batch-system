@@ -2,7 +2,10 @@ package io.github.pinpols.batch.worker.dispatchs.stage;
 
 import static io.github.pinpols.batch.worker.core.support.AbstractStageExecutor.ERROR_OBJECT_MAPPER;
 
+import io.github.pinpols.batch.common.enums.FileReceiptStatus;
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.service.DryRunGuard;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
@@ -10,6 +13,7 @@ import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
 import java.util.LinkedHashMap;
@@ -41,7 +45,9 @@ public class AckDispatchStep implements DispatchStageStep {
         .isDryRun()) {
       return DispatchStageResult.success(stage());
     }
-    Object payload = context == null ? null : context.getAttributes().get("dispatchPayload");
+    Object payload = EmptyChecks.isNull(context)
+        ? null
+        : context.getAttributes().get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
     if (!(payload instanceof DispatchPayload dispatchPayload)) {
       return DispatchStageResult.failure(
           stage(),
@@ -54,7 +60,9 @@ public class AckDispatchStep implements DispatchStageStep {
     Map<String, Object> attrs = context.getAttributes();
     Long fileId = PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
     DispatchResult dispatchResult =
-        attrs.get("dispatchResult") instanceof DispatchResult result ? result : null;
+        attrs.get(DispatchRuntimeKeys.DISPATCH_RESULT) instanceof DispatchResult result
+            ? result
+            : null;
     String receiptCode = dispatchPayload.receiptCode();
     if ((receiptCode == null || receiptCode.isBlank()) && dispatchResult != null) {
       receiptCode = dispatchResult.receiptCode();
@@ -70,7 +78,7 @@ public class AckDispatchStep implements DispatchStageStep {
       if (updated <= 0) {
         attrs.put(
             PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE,
-            Boolean.TRUE.equals(attrs.get("retryRequested"))
+            Boolean.TRUE.equals(attrs.get(DispatchRuntimeKeys.RETRY_REQUESTED))
                 ? DispatchStage.RETRY.name()
                 : DispatchStage.COMPENSATE.name());
         return DispatchStageResult.failure(
@@ -82,25 +90,31 @@ public class AckDispatchStep implements DispatchStageStep {
             ERROR_OBJECT_MAPPER);
       }
       fileRecords.updateFileStatus(
-          fileId, "DISPATCHED", buildFileMetadata(dispatchPayload, context, receiptCode));
-      attrs.put("receiptStatus", "SUCCESS");
+          fileId,
+          FileStatus.DISPATCHED.code(),
+          buildFileMetadata(dispatchPayload, context, receiptCode));
+      attrs.put(DispatchRuntimeKeys.RECEIPT_STATUS, FileReceiptStatus.SUCCESS.code());
       return DispatchStageResult.success(stage());
     }
     if (pending || Boolean.TRUE.equals(dispatchPayload.ackRequired())) {
-      attrs.put("receiptStatus", "PENDING");
+      attrs.put(DispatchRuntimeKeys.RECEIPT_STATUS, FileReceiptStatus.PENDING.code());
       return DispatchStageResult.success(stage());
     }
     fileRecords.updateFileStatus(
-        fileId, "DISPATCHED", buildFileMetadata(dispatchPayload, context, receiptCode));
+        fileId,
+        FileStatus.DISPATCHED.code(),
+        buildFileMetadata(dispatchPayload, context, receiptCode));
     return DispatchStageResult.success(stage());
   }
 
   private Map<String, Object> buildFileMetadata(
       DispatchPayload dispatchPayload, DispatchJobContext context, String receiptCode) {
     Map<String, Object> metadata = new LinkedHashMap<>();
-    metadata.put("channelCode", dispatchPayload.channelCode());
-    metadata.put("externalRequestId", context.getAttributes().get("externalRequestId"));
-    metadata.put("receiptCode", receiptCode);
+    metadata.put(DispatchRuntimeKeys.CHANNEL_CODE, dispatchPayload.channelCode());
+    metadata.put(
+        DispatchRuntimeKeys.EXTERNAL_REQUEST_ID,
+        context.getAttributes().get(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID));
+    metadata.put(DispatchRuntimeKeys.RECEIPT_CODE, receiptCode);
     return metadata;
   }
 }

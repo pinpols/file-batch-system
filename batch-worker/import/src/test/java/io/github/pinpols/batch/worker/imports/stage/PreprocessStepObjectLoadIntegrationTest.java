@@ -110,7 +110,7 @@ class PreprocessStepObjectLoadIntegrationTest {
     Map<String, Object> attrs = new HashMap<>();
     attrs.put(PipelineRuntimeKeys.FILE_ID, 1L);
     attrs.put(PipelineRuntimeKeys.TASK_ID, 101L);
-    attrs.put("importPayload", payload);
+    attrs.put(PipelineRuntimeKeys.IMPORT_PAYLOAD, payload);
     context.setAttributes(attrs);
     return context;
   }
@@ -157,7 +157,7 @@ class PreprocessStepObjectLoadIntegrationTest {
     ImportJobContext probe = contextWithBlankRawPayload(objectPayload(key));
     ImportStageResult r2 = newStep(key).execute(probe);
     assertThat(r2.success()).isTrue();
-    Object normalized = probe.getAttributes().get("normalizedPayload");
+    Object normalized = probe.getAttributes().get(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
     assertThat(normalized).isNotNull();
     assertThat(normalized.toString()).contains("OBJ-001").contains("customerNo");
   }
@@ -182,7 +182,7 @@ class PreprocessStepObjectLoadIntegrationTest {
     ImportStageResult result = newStep(registered).execute(context);
 
     assertThat(result.success()).as("cross-tenant object fetch must be refused").isFalse();
-    assertThat(context.getAttributes().get("normalizedPayload"))
+    assertThat(context.getAttributes().get(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD))
         .as("forbidden fetch must not leak object content")
         .isNull();
   }
@@ -207,7 +207,7 @@ class PreprocessStepObjectLoadIntegrationTest {
     // 流式直载:设 spool 路径,PREPROCESS 不落 normalizedPayload(交给 PARSE 流式解码)
     Object spoolPath = context.getAttributes().get(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_PATH);
     assertThat(spoolPath).as("spool path should be set for large object").isNotNull();
-    assertThat(context.getAttributes().get("normalizedPayload"))
+    assertThat(context.getAttributes().get(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD))
         .as("PREPROCESS should NOT materialize normalizedPayload for large object")
         .isNull();
     java.nio.file.Path spool = java.nio.file.Path.of(spoolPath.toString());

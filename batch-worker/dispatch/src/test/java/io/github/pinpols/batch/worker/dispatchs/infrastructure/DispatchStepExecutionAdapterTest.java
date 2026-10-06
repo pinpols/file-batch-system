@@ -67,16 +67,16 @@ class DispatchStepExecutionAdapterTest {
   @Test
   void buildContextParsesPayloadAndPrefersTaskId() throws Exception {
     Map<String, Object> attributes = new LinkedHashMap<>();
-    attributes.put("taskId", 88L);
+    attributes.put(PipelineRuntimeKeys.TASK_ID, 88L);
     attributes.put("dispatchId", "legacy-id");
-    attributes.put("bizDate", "2026-09-11");
+    attributes.put(PipelineRuntimeKeys.BIZ_DATE, "2026-09-11");
     attributes.put("payload", "{\"fileId\":\"42\",\"channelCode\":\"SFTP\"}");
 
     DispatchJobContext context = adapter.buildContext(request(attributes), attributes, 42L);
 
     assertThat(context.getDispatchId()).isEqualTo("88");
     assertThat(context.getBizDate()).isEqualTo("2026-09-11");
-    assertThat(context.getAttributes().get("dispatchPayload"))
+    assertThat(context.getAttributes().get(DispatchRuntimeKeys.DISPATCH_PAYLOAD))
         .isInstanceOfSatisfying(DispatchPayload.class, payload -> {
           assertThat(payload.fileId()).isEqualTo("42");
           assertThat(payload.channelCode()).isEqualTo("SFTP");
@@ -112,10 +112,12 @@ class DispatchStepExecutionAdapterTest {
     DispatchJobContext context = new DispatchJobContext();
     Map<String, Object> attributes = new LinkedHashMap<>();
     attributes.put(PipelineRuntimeKeys.FILE_ID, 42L);
-    attributes.put("receiptCode", "ACK-1");
-    attributes.put("dispatchManifestRef", new DispatchManifestRef("daily.chk", "abc", 128L));
+    attributes.put(DispatchRuntimeKeys.RECEIPT_CODE, "ACK-1");
     attributes.put(
-        "dispatchPayload",
+        DispatchRuntimeKeys.DISPATCH_MANIFEST_REF,
+        new DispatchManifestRef("daily.chk", "abc", 128L));
+    attributes.put(
+        DispatchRuntimeKeys.DISPATCH_PAYLOAD,
         new DispatchPayload("42", "daily", "SFTP", "/in", null, null, true, false, null, Map.of()));
     context.setAttributes(attributes);
 
@@ -123,12 +125,12 @@ class DispatchStepExecutionAdapterTest {
 
     assertThat(response.success()).isTrue();
     assertThat((Map<String, Object>) attributes.get(PipelineRuntimeKeys.NODE_OUTPUTS))
-        .containsEntry("fileId", 42L)
-        .containsEntry("receiptCode", "ACK-1")
+        .containsEntry(PipelineRuntimeKeys.FILE_ID, 42L)
+        .containsEntry(DispatchRuntimeKeys.RECEIPT_CODE, "ACK-1")
         .containsEntry("manifestRef", "daily.chk")
         .containsEntry("manifestChecksum", "abc")
         .containsEntry("manifestSizeBytes", 128L)
-        .containsEntry("channelCode", "SFTP");
+        .containsEntry(DispatchRuntimeKeys.CHANNEL_CODE, "SFTP");
   }
 
   private static StepExecutionRequest request(Map<String, Object> attributes) {

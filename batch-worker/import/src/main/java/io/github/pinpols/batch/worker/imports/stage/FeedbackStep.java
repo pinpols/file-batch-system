@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.worker.imports.stage;
 
+import io.github.pinpols.batch.common.enums.FileAuditOperationType;
+import io.github.pinpols.batch.common.enums.OperationResult;
+import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -54,13 +57,15 @@ public class FeedbackStep implements ImportStageStep {
     detailSummary.put(
         PipelineRuntimeKeys.IMPORT_LOADED_COUNT,
         attrs.get(PipelineRuntimeKeys.IMPORT_LOADED_COUNT));
-    detailSummary.put("pipelineInstanceId", attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
+    detailSummary.put(
+        PipelineRuntimeKeys.PIPELINE_INSTANCE_ID,
+        attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
     fileAudits.appendAudit(FileAuditParam.builder()
         .fileId(fileId)
         .tenantId(context.getTenantId())
-        .operationType("IMPORT_FEEDBACK")
-        .operationResult("SUCCESS")
-        .operatorType("SYSTEM")
+        .operationType(FileAuditOperationType.IMPORT_FEEDBACK.code())
+        .operationResult(OperationResult.SUCCESS.code())
+        .operatorType(AuditLogConstants.OPERATOR_TYPE_SYSTEM)
         .operatorId(context.getWorkerId())
         .traceId(String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
         .evidenceRef(null)

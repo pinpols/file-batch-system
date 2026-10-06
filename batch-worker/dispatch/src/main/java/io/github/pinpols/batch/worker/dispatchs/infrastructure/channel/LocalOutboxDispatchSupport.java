@@ -3,8 +3,11 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -48,7 +51,8 @@ final class LocalOutboxDispatchSupport {
           ? null
           : String.valueOf(channelConfig.get("target_endpoint"));
       if (endpoint == null || endpoint.isBlank()) {
-        endpoint = System.getProperty("java.io.tmpdir") + "/batch-dispatch-outbox";
+        endpoint =
+            PrivateTempFiles.resolveUnderTempRoot("batch-dispatch-outbox").toString();
       }
       Path directory = resolveLocalDirectory(endpoint, properties);
       boolean privateTarget = isDefaultOutboxEndpoint(endpoint);
@@ -61,15 +65,15 @@ final class LocalOutboxDispatchSupport {
 
       Map<String, Object> envelope = new LinkedHashMap<>();
       envelope.put("tenantId", command.tenantId());
-      envelope.put("traceId", command.traceId());
+      envelope.put(PipelineRuntimeKeys.TRACE_ID, command.traceId());
       envelope.put("dispatchedAt", BatchDateTimeSupport.utcNow().toString());
       envelope.put("channelType", channelConfig.get("channel_type"));
-      envelope.put("dispatchTarget", command.payload().dispatchTarget());
-      envelope.put("externalRequestId", externalRequestId);
-      envelope.put("receiptCode", receiptCode);
+      envelope.put(DispatchRuntimeKeys.DISPATCH_TARGET, command.payload().dispatchTarget());
+      envelope.put(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID, externalRequestId);
+      envelope.put(DispatchRuntimeKeys.RECEIPT_CODE, receiptCode);
       envelope.put("acknowledged", receipt.acknowledged());
       envelope.put("receiptPending", receipt.pending());
-      envelope.put("fileRecord", command.fileRecord());
+      envelope.put(PipelineRuntimeKeys.FILE_RECORD, command.fileRecord());
       envelope.put("payload", command.payload());
       if (transportStub) {
         envelope.put("transportStub", Boolean.TRUE);
@@ -143,7 +147,9 @@ final class LocalOutboxDispatchSupport {
   }
 
   private static boolean isDefaultOutboxEndpoint(String endpoint) {
-    return (System.getProperty("java.io.tmpdir") + "/batch-dispatch-outbox").equals(endpoint);
+    return PrivateTempFiles.resolveUnderTempRoot("batch-dispatch-outbox")
+        .toString()
+        .equals(endpoint);
   }
 
   private static void writeOutboxFile(Path path, byte[] bytes, boolean privateTarget)

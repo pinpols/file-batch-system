@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.worker.dispatchs.stage;
 
+import io.github.pinpols.batch.common.enums.FileReceiptStatus;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchCommand;
@@ -25,9 +27,11 @@ final class DispatchInvocationSupport {
   /** 派发结果状态机：根据 ACK / 待回执 / 未确认推导出 receiptStatus 字符串。 */
   static String receiptStatusOf(DispatchResult dispatchResult) {
     if (dispatchResult.acknowledged()) {
-      return "SUCCESS";
+      return FileReceiptStatus.SUCCESS.code();
     }
-    return dispatchResult.receiptPending() ? "PENDING" : "NONE";
+    return dispatchResult.receiptPending()
+        ? FileReceiptStatus.PENDING.code()
+        : FileReceiptStatus.NONE.code();
   }
 
   /**
@@ -56,10 +60,10 @@ final class DispatchInvocationSupport {
   /** 把 DispatchResult 内的识别码与状态写到 context.attributes，供后续 step 与 receipt watcher 使用。 */
   static void propagateIdentifiers(DispatchJobContext context, DispatchResult dispatchResult) {
     Map<String, Object> attrs = context.getAttributes();
-    attrs.put("dispatchResult", dispatchResult);
-    attrs.put("externalRequestId", dispatchResult.externalRequestId());
-    attrs.put("receiptCode", dispatchResult.receiptCode());
-    attrs.put("receiptStatus", receiptStatusOf(dispatchResult));
+    attrs.put(DispatchRuntimeKeys.DISPATCH_RESULT, dispatchResult);
+    attrs.put(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID, dispatchResult.externalRequestId());
+    attrs.put(DispatchRuntimeKeys.RECEIPT_CODE, dispatchResult.receiptCode());
+    attrs.put(DispatchRuntimeKeys.RECEIPT_STATUS, receiptStatusOf(dispatchResult));
     DispatchManifestRef manifestRef = dispatchResult.manifestRef();
     if (manifestRef != null) {
       manifestRef.putAttributes(attrs);

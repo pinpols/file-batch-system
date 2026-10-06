@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
@@ -28,7 +29,8 @@ class DispatchReadbackVerifierTest {
   void expectedSizeBytes_resolution() {
     assertThat(DispatchReadbackVerifier.expectedSizeBytes(Map.of("file_size_bytes", 1024L)))
         .isEqualTo(1024L);
-    assertThat(DispatchReadbackVerifier.expectedSizeBytes(Map.of("fileSizeBytes", "2048")))
+    assertThat(DispatchReadbackVerifier.expectedSizeBytes(
+            Map.of(PipelineRuntimeKeys.FILE_SIZE_BYTES, "2048")))
         .isEqualTo(2048L);
     assertThat(DispatchReadbackVerifier.expectedSizeBytes(Map.of("other", 1))).isNull();
     assertThat(DispatchReadbackVerifier.expectedSizeBytes(Map.of("file_size_bytes", "x")))

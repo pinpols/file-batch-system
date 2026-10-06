@@ -10,6 +10,7 @@ import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
@@ -56,7 +57,7 @@ class RetryDispatchStepTest {
   @Test
   void execute_succeedsWithNoOpWhenRetryNotRequested() {
     DispatchJobContext context = buildContext();
-    context.getAttributes().put("retryRequested", Boolean.FALSE);
+    context.getAttributes().put(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.FALSE);
     DispatchStageResult result = step.execute(context);
     assertThat(result.success()).isTrue();
     assertThat(context.getAttributes())
@@ -77,7 +78,8 @@ class RetryDispatchStepTest {
     assertThat(result.success()).isTrue();
     assertThat(context.getAttributes())
         .containsEntry(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.ACK.name());
-    assertThat(context.getAttributes()).containsEntry("retryRecovered", Boolean.TRUE);
+    assertThat(context.getAttributes())
+        .containsEntry(DispatchRuntimeKeys.RETRY_RECOVERED, Boolean.TRUE);
     verify(fileDispatchRepository).incrementAttempt("t1", 10L, "CH1");
   }
 
@@ -119,7 +121,7 @@ class RetryDispatchStepTest {
         new DispatchPayload("10", null, "CH1", "target", null, null, null, null, null, null);
     DispatchJobContext context = new DispatchJobContext();
     context.setTenantId("t1");
-    context.getAttributes().put("dispatchPayload", payload);
+    context.getAttributes().put(DispatchRuntimeKeys.DISPATCH_PAYLOAD, payload);
     context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, 10L);
     context.getAttributes().put(PipelineRuntimeKeys.FILE_RECORD, Map.of("id", 10L));
     context
@@ -131,7 +133,7 @@ class RetryDispatchStepTest {
 
   private DispatchJobContext buildContextWithRetryRequested() {
     DispatchJobContext context = buildContext();
-    context.getAttributes().put("retryRequested", Boolean.TRUE);
+    context.getAttributes().put(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.TRUE);
     return context;
   }
 }

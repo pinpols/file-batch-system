@@ -69,12 +69,12 @@ public class DispatchStepExecutionAdapter
     context.setBizDate(String.valueOf(contextMap.getOrDefault(PipelineRuntimeKeys.BIZ_DATE, "")));
     context.setDispatchId(String.valueOf(contextMap.getOrDefault(
         PipelineRuntimeKeys.TASK_ID, contextMap.getOrDefault("dispatchId", ""))));
-    Object dispatchPayload = contextMap.get("dispatchPayload");
+    Object dispatchPayload = contextMap.get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
     if (dispatchPayload == null
         && context.getRawPayload() != null
         && !context.getRawPayload().isBlank()) {
       dispatchPayload = objectMapper.readValue(context.getRawPayload(), DispatchPayload.class);
-      context.getAttributes().put("dispatchPayload", dispatchPayload);
+      context.getAttributes().put(DispatchRuntimeKeys.DISPATCH_PAYLOAD, dispatchPayload);
     }
     return context;
   }
@@ -111,15 +111,26 @@ public class DispatchStepExecutionAdapter
       Map<String, Object> attributes) {
     // ADR-009 Stage 1.2: 把 DISPATCH 的关键产出暴露给下游 workflow 节点 DSL 引用
     Map<String, Object> outputs = new LinkedHashMap<>();
-    putIfPresent(outputs, "fileId", attributes.get(PipelineRuntimeKeys.FILE_ID));
-    putIfPresent(outputs, "receiptCode", attributes.get("receiptCode"));
-    putIfPresent(outputs, "receiptStatus", attributes.get("receiptStatus"));
-    putIfPresent(outputs, "externalRequestId", attributes.get("externalRequestId"));
-    if (attributes.get("dispatchManifestRef") instanceof DispatchManifestRef manifestRef) {
+    putIfPresent(outputs, PipelineRuntimeKeys.FILE_ID, attributes.get(PipelineRuntimeKeys.FILE_ID));
+    putIfPresent(
+        outputs,
+        DispatchRuntimeKeys.RECEIPT_CODE,
+        attributes.get(DispatchRuntimeKeys.RECEIPT_CODE));
+    putIfPresent(
+        outputs,
+        DispatchRuntimeKeys.RECEIPT_STATUS,
+        attributes.get(DispatchRuntimeKeys.RECEIPT_STATUS));
+    putIfPresent(
+        outputs,
+        DispatchRuntimeKeys.EXTERNAL_REQUEST_ID,
+        attributes.get(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID));
+    if (attributes.get(DispatchRuntimeKeys.DISPATCH_MANIFEST_REF)
+        instanceof DispatchManifestRef manifestRef) {
       manifestRef.putPipelineOutputs(outputs);
     }
-    if (attributes.get("dispatchPayload") instanceof DispatchPayload dispatchPayload) {
-      putIfPresent(outputs, "channelCode", dispatchPayload.channelCode());
+    if (attributes.get(DispatchRuntimeKeys.DISPATCH_PAYLOAD)
+        instanceof DispatchPayload dispatchPayload) {
+      putIfPresent(outputs, DispatchRuntimeKeys.CHANNEL_CODE, dispatchPayload.channelCode());
     }
     if (!outputs.isEmpty()) {
       attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);

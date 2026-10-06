@@ -101,13 +101,13 @@ class PreprocessStepKmsDecryptTest {
         Map.of());
 
     ImportJobContext context = buildContext(payload);
-    context.getAttributes().put("importPayload", payload);
+    context.getAttributes().put(PipelineRuntimeKeys.IMPORT_PAYLOAD, payload);
 
     ImportStageResult result = preprocessStep.execute(context);
 
     assertThat(result.success()).isTrue();
     // 解密后，normalizedPayload 应与原始 JSON 一致
-    Object normalized = context.getAttributes().get("normalizedPayload");
+    Object normalized = context.getAttributes().get(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
     assertThat(normalized).isNotNull();
     assertThat(normalized.toString()).contains("customerNo");
     assertThat(normalized.toString()).contains("C001");
@@ -122,12 +122,12 @@ class PreprocessStepKmsDecryptTest {
         null, null, null, null, Map.of());
 
     ImportJobContext context = buildContext(payload);
-    context.getAttributes().put("importPayload", payload);
+    context.getAttributes().put(PipelineRuntimeKeys.IMPORT_PAYLOAD, payload);
 
     ImportStageResult result = preprocessStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    Object normalized = context.getAttributes().get("normalizedPayload");
+    Object normalized = context.getAttributes().get(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
     assertThat(normalized).isNotNull();
     assertThat(normalized.toString()).contains("records");
   }

@@ -15,6 +15,7 @@ import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchWorkerType;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.ArrayList;
@@ -150,7 +151,8 @@ public class DefaultDispatchStageExecutor
     summary.put("stage", step.stageCode());
     summary.put("implCode", step.implCode());
     summary.put("tenantId", context.getTenantId());
-    summary.put("fileId", context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+    summary.put(
+        PipelineRuntimeKeys.FILE_ID, context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
     summary.put("dispatchId", context.getDispatchId());
     summary.put("workerId", context.getWorkerId());
     return summary;
@@ -164,10 +166,17 @@ public class DefaultDispatchStageExecutor
     summary.put("code", result.code());
     summary.put("message", result.message());
     summary.put("stage", result.stage().name());
-    summary.put("fileId", context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
-    summary.put("receiptStatus", context.getAttributes().get("receiptStatus"));
-    summary.put("externalRequestId", context.getAttributes().get("externalRequestId"));
-    summary.put("receiptCode", context.getAttributes().get("receiptCode"));
+    summary.put(
+        PipelineRuntimeKeys.FILE_ID, context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+    summary.put(
+        DispatchRuntimeKeys.RECEIPT_STATUS,
+        context.getAttributes().get(DispatchRuntimeKeys.RECEIPT_STATUS));
+    summary.put(
+        DispatchRuntimeKeys.EXTERNAL_REQUEST_ID,
+        context.getAttributes().get(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID));
+    summary.put(
+        DispatchRuntimeKeys.RECEIPT_CODE,
+        context.getAttributes().get(DispatchRuntimeKeys.RECEIPT_CODE));
     return summary;
   }
 
@@ -182,7 +191,7 @@ public class DefaultDispatchStageExecutor
     } catch (IllegalArgumentException exception) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ResultCode.INVALID_ARGUMENT.detailKey(),
           exception,
           "unsupported dispatch stage code: " + stageCode);
     }

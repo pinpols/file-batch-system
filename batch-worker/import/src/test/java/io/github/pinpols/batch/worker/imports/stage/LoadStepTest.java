@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.exception.WorkerConfigException;
 import io.github.pinpols.batch.common.plugin.ImportLoadContext;
 import io.github.pinpols.batch.common.plugin.ImportLoadPlugin;
@@ -129,9 +130,9 @@ class LoadStepTest {
     assertThat(result.success()).isTrue();
     // 3 rows / chunkSize=2 → 2 次 flush
     verify(plugin, times(2)).loadChunk(any(ImportLoadContext.class), any());
-    assertThat(ctx.getAttributes()).containsEntry("loadedCount", 3L);
+    assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_LOADED_COUNT, 3L);
     assertThat(ctx.getAttributes()).containsEntry("successCount", 3L);
-    verify(runtimeRepository).updateFileStatus(eq(99L), eq("LOADED"), any());
+    verify(runtimeRepository).updateFileStatus(eq(99L), eq(FileStatus.LOADED.code()), any());
     // M-5: 成功路径删暂存文件
     assertThat(Files.exists(validated)).isFalse();
     assertThat(Files.exists(parsed)).isFalse();
@@ -169,14 +170,14 @@ class LoadStepTest {
     Path validated = Files.createTempFile("validated-", ".ndjson");
     tempPaths.add(validated);
     ImportJobContext ctx = streamingContext(validated, null);
-    ctx.getAttributes().put("skippedCount", 5L);
+    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT, 5L);
 
     ImportStageResult result = loadStep.execute(ctx);
 
     assertThat(result.success()).isTrue();
-    assertThat(ctx.getAttributes()).containsEntry("loadedCount", 0L);
+    assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_LOADED_COUNT, 0L);
     verify(plugin, never()).loadChunk(any(), any());
-    verify(runtimeRepository).updateFileStatus(eq(99L), eq("LOADED"), any());
+    verify(runtimeRepository).updateFileStatus(eq(99L), eq(FileStatus.LOADED.code()), any());
   }
 
   @Test
@@ -210,9 +211,9 @@ class LoadStepTest {
     ImportStageResult result = loadStep.execute(ctx);
 
     assertThat(result.success()).isTrue();
-    assertThat(ctx.getAttributes()).containsEntry("loadedCount", 3L);
+    assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_LOADED_COUNT, 3L);
     verify(plugin, never()).loadChunk(any(), any());
-    verify(runtimeRepository).updateFileStatus(eq(99L), eq("LOADED"), any());
+    verify(runtimeRepository).updateFileStatus(eq(99L), eq(FileStatus.LOADED.code()), any());
   }
 
   @Test
@@ -223,7 +224,7 @@ class LoadStepTest {
     ImportStageResult result = loadStep.execute(ctx);
 
     assertThat(result.success()).isTrue();
-    assertThat(ctx.getAttributes()).containsEntry("loadedCount", 0L);
+    assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_LOADED_COUNT, 0L);
   }
 
   // ── plugin resolution ──
@@ -259,7 +260,7 @@ class LoadStepTest {
     when(payload.batchNo()).thenReturn("BATCH-42");
     when(payload.bizType()).thenReturn("CUST");
     when(payload.templateCode()).thenReturn("T1");
-    ctx.getAttributes().put("importPayload", payload);
+    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_PAYLOAD, payload);
     when(plugin.loadChunk(any(), any())).thenReturn(1);
 
     loadStep.execute(ctx);

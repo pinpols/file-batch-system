@@ -66,7 +66,7 @@ class ParseStepFixedWidthAndXmlTest {
     ImportStageResult result = parseStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes()).containsEntry("totalCount", 3L);
+    assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 3L);
     assertNdjsonRecordCount(context, 3);
     assertNdjsonContains(context, "C00001", "Alice", "ACTIVE");
     assertNdjsonContains(context, "C00003", "Charlie", "ACTIVE");
@@ -100,7 +100,7 @@ class ParseStepFixedWidthAndXmlTest {
     ImportStageResult result = parseStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes()).containsEntry("totalCount", 2L);
+    assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 2L);
     assertNdjsonRecordCount(context, 2);
   }
 
@@ -124,7 +124,7 @@ class ParseStepFixedWidthAndXmlTest {
     ImportStageResult result = parseStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes()).containsEntry("totalCount", 1L);
+    assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 1L);
     assertNdjsonRecordCount(context, 1);
     assertNdjsonContains(context, "C00004", "Dana", "ACTIVE");
   }
@@ -156,7 +156,7 @@ class ParseStepFixedWidthAndXmlTest {
     ImportStageResult result = parseStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes()).containsEntry("totalCount", 2L);
+    assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 2L);
     assertNdjsonRecordCount(context, 2);
     assertNdjsonContains(context, "C001", "Alice", "ACTIVE");
     assertNdjsonContains(context, "C002", "Bob", "INACTIVE");
@@ -219,7 +219,7 @@ class ParseStepFixedWidthAndXmlTest {
     Map<String, Object> attrs = new HashMap<>();
     attrs.put(PipelineRuntimeKeys.FILE_ID, 99L);
     attrs.put(PipelineRuntimeKeys.TASK_ID, 200L);
-    attrs.put("importPayload", importPayload);
+    attrs.put(PipelineRuntimeKeys.IMPORT_PAYLOAD, importPayload);
     attrs.put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);
     context.setAttributes(attrs);
     return context;

@@ -195,7 +195,7 @@ public class JdbcMappedImportCompensator implements PipelineCompensator {
     if (payloadObj instanceof ImportPayload payload && Texts.hasText(payload.batchNo())) {
       return payload.batchNo();
     }
-    Object bizDate = attributes.get("bizDate");
+    Object bizDate = attributes.get(PipelineRuntimeKeys.BIZ_DATE);
     return bizDate == null ? null : String.valueOf(bizDate);
   }
 

@@ -46,6 +46,20 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
 
   private static final int DEFAULT_SMTP_TIMEOUT_MILLIS = 30_000;
 
+  /** JavaMail 标准属性名；生产装配与测试断言共用，避免字面量在多处漂移。 */
+  public static final String MAIL_SMTP_HOST_KEY = "mail.smtp.host";
+
+  public static final String MAIL_SMTP_PORT_KEY = "mail.smtp.port";
+  public static final String MAIL_SMTP_AUTH_KEY = "mail.smtp.auth";
+  public static final String MAIL_SMTP_CONNECT_TIMEOUT_KEY = "mail.smtp.connectiontimeout";
+  public static final String MAIL_SMTP_READ_TIMEOUT_KEY = "mail.smtp.timeout";
+  public static final String MAIL_SMTP_WRITE_TIMEOUT_KEY = "mail.smtp.writetimeout";
+  public static final String MAIL_MIME_SPLIT_LONG_PARAMETERS_KEY = "mail.mime.splitlongparameters";
+  public static final String MAIL_SMTP_STARTTLS_ENABLE_KEY = "mail.smtp.starttls.enable";
+  public static final String MAIL_SMTP_STARTTLS_REQUIRED_KEY = "mail.smtp.starttls.required";
+  public static final String MAIL_SMTP_CHECK_SERVER_IDENTITY_KEY =
+      "mail.smtp.ssl.checkserveridentity";
+
   private final DispatchFileContentResolver fileContentResolver;
   private final Environment environment;
 
@@ -173,20 +187,20 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
       MailConfig mailConfig, DispatchCommand command, String externalRequestId)
       throws MessagingException {
     Properties props = new Properties();
-    props.put("mail.smtp.host", mailConfig.host());
-    props.put("mail.smtp.port", String.valueOf(mailConfig.port()));
-    props.put("mail.smtp.auth", "true");
-    props.put("mail.smtp.connectiontimeout", String.valueOf(mailConfig.connectTimeoutMillis()));
-    props.put("mail.smtp.timeout", String.valueOf(mailConfig.readTimeoutMillis()));
-    props.put("mail.smtp.writetimeout", String.valueOf(mailConfig.writeTimeoutMillis()));
+    props.put(MAIL_SMTP_HOST_KEY, mailConfig.host());
+    props.put(MAIL_SMTP_PORT_KEY, String.valueOf(mailConfig.port()));
+    props.put(MAIL_SMTP_AUTH_KEY, "true");
+    props.put(MAIL_SMTP_CONNECT_TIMEOUT_KEY, String.valueOf(mailConfig.connectTimeoutMillis()));
+    props.put(MAIL_SMTP_READ_TIMEOUT_KEY, String.valueOf(mailConfig.readTimeoutMillis()));
+    props.put(MAIL_SMTP_WRITE_TIMEOUT_KEY, String.valueOf(mailConfig.writeTimeoutMillis()));
     // S-1.7：避免 MIME 长参数被 jakarta.mail 拆行后编码歧义
-    props.put("mail.mime.splitlongparameters", "false");
+    props.put(MAIL_MIME_SPLIT_LONG_PARAMETERS_KEY, "false");
     if (mailConfig.startTls()) {
-      props.put("mail.smtp.starttls.enable", "true");
+      props.put(MAIL_SMTP_STARTTLS_ENABLE_KEY, "true");
       // S-1.7：prod profile 要求 STARTTLS 成功，否则拒发（不降级为明文）
       if (isProductionProfile()) {
-        props.put("mail.smtp.starttls.required", "true");
-        props.put("mail.smtp.ssl.checkserveridentity", "true");
+        props.put(MAIL_SMTP_STARTTLS_REQUIRED_KEY, "true");
+        props.put(MAIL_SMTP_CHECK_SERVER_IDENTITY_KEY, "true");
       }
     }
     Session session = Session.getInstance(props, null);

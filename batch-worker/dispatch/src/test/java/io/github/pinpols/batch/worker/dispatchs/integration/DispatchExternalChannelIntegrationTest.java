@@ -51,11 +51,6 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 @EnabledIf("s3BackendActive")
 class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
 
-  /** fixture 直接写对象存储（S3Client），filesystem 后端下自动跳过。 */
-  static boolean s3BackendActive() {
-    return !"filesystem".equals(System.getProperty("batch.test.storage.backend", "s3"));
-  }
-
   private static final DockerImageName SFTP_IMAGE = DockerImageName.parse("atmoz/sftp:alpine");
   private static final String SFTP_USER = "batch";
   private static final String SFTP_PASSWORD = "batch-pass";

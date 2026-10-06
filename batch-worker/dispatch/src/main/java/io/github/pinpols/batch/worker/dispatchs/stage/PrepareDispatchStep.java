@@ -11,6 +11,7 @@ import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.ChannelConfigMerge;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import java.util.Map;
 import org.springframework.stereotype.Component;
@@ -58,10 +59,10 @@ public class PrepareDispatchStep implements DispatchStageStep {
     try {
       Map<String, Object> attrs = context.getAttributes();
       DispatchPayload payload =
-          attrs.get("dispatchPayload") instanceof DispatchPayload dispatchPayload
+          attrs.get(DispatchRuntimeKeys.DISPATCH_PAYLOAD) instanceof DispatchPayload dispatchPayload
               ? dispatchPayload
               : objectMapper.readValue(context.getRawPayload(), DispatchPayload.class);
-      attrs.put("dispatchPayload", payload);
+      attrs.put(DispatchRuntimeKeys.DISPATCH_PAYLOAD, payload);
       Long fileId = payload.fileId() == null || payload.fileId().isBlank()
           ? null
           : Long.valueOf(payload.fileId());
@@ -100,8 +101,9 @@ public class PrepareDispatchStep implements DispatchStageStep {
       attrs.put(PipelineRuntimeKeys.FILE_ID, fileId);
       attrs.put(PipelineRuntimeKeys.FILE_RECORD, fileRecord);
       attrs.put(PipelineRuntimeKeys.CHANNEL_CONFIG, channelConfig);
-      attrs.put("retryRequested", Boolean.TRUE.equals(payload.forceRetry()));
-      attrs.put("receiptStatus", channelConfig.getOrDefault("receipt_policy", "NONE"));
+      attrs.put(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.TRUE.equals(payload.forceRetry()));
+      attrs.put(
+          DispatchRuntimeKeys.RECEIPT_STATUS, channelConfig.getOrDefault("receipt_policy", "NONE"));
       pipelineRuns.bindFileToPipelineInstance(
           PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)),
           fileId);

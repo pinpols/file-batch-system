@@ -53,9 +53,9 @@ class FeedbackStepTest {
     context.setTenantId("tenant-1");
     context.setWorkerId("worker-A");
     context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, "1001");
-    context.getAttributes().put("parsedCount", 100L);
-    context.getAttributes().put("validatedCount", 95L);
-    context.getAttributes().put("loadedCount", 90L);
+    context.getAttributes().put(PipelineRuntimeKeys.IMPORT_PARSED_COUNT, 100L);
+    context.getAttributes().put(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT, 95L);
+    context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LOADED_COUNT, 90L);
     context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, 7L);
     context.getAttributes().put(PipelineRuntimeKeys.TRACE_ID, "trace-xyz");
 
@@ -76,17 +76,17 @@ class FeedbackStepTest {
     assertThat(audit.getTraceId()).isEqualTo("trace-xyz");
     assertThat(audit.getDetailSummary())
         .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
-        .containsEntry("parsedCount", 100L)
-        .containsEntry("validatedCount", 95L)
-        .containsEntry("loadedCount", 90L)
-        .containsEntry("pipelineInstanceId", 7L);
+        .containsEntry(PipelineRuntimeKeys.IMPORT_PARSED_COUNT, 100L)
+        .containsEntry(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT, 95L)
+        .containsEntry(PipelineRuntimeKeys.IMPORT_LOADED_COUNT, 90L)
+        .containsEntry(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, 7L);
   }
 
   @Test
   @DisplayName("dry-run 模式：直接返回 success，不写 audit / 不调 runtimeRepository")
   void shouldSkipAudit_whenDryRunFlagSet() {
     ImportJobContext context = new ImportJobContext();
-    context.getAttributes().put("dryRun", Boolean.TRUE);
+    context.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, Boolean.TRUE);
 
     ImportStageResult result = step.execute(context);
 
@@ -116,7 +116,7 @@ class FeedbackStepTest {
   @DisplayName("dryRun=\"true\" 字符串值同样被识别为 dry-run（DryRunGuard 兼容字符串）")
   void shouldSkipAudit_whenDryRunStringTrue() {
     ImportJobContext context = new ImportJobContext();
-    context.getAttributes().put("dryRun", "true");
+    context.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, "true");
 
     ImportStageResult result = step.execute(context);
 

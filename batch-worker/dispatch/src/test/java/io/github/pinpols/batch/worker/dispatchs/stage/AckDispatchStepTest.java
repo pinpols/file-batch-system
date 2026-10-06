@@ -7,12 +7,15 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.FileReceiptStatus;
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,8 +61,9 @@ class AckDispatchStepTest {
     DispatchStageResult result = step.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes()).containsEntry("receiptStatus", "SUCCESS");
-    verify(fileRecords).updateFileStatus(eq(10L), eq("DISPATCHED"), any());
+    assertThat(context.getAttributes())
+        .containsEntry(DispatchRuntimeKeys.RECEIPT_STATUS, FileReceiptStatus.SUCCESS.code());
+    verify(fileRecords).updateFileStatus(eq(10L), eq(FileStatus.DISPATCHED.code()), any());
   }
 
   @Test
@@ -81,7 +85,7 @@ class AckDispatchStepTest {
     when(fileDispatchRepository.markAcked(any(), any(), any(), any())).thenReturn(0);
 
     DispatchJobContext context = buildContextWithAckedResult("R-001");
-    context.getAttributes().put("retryRequested", Boolean.TRUE);
+    context.getAttributes().put(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.TRUE);
     DispatchStageResult result = step.execute(context);
 
     assertThat(result.success()).isFalse();
@@ -99,14 +103,15 @@ class AckDispatchStepTest {
 
     DispatchJobContext context = new DispatchJobContext();
     context.setTenantId("t1");
-    context.getAttributes().put("dispatchPayload", payload);
-    context.getAttributes().put("dispatchResult", dispatchResult);
+    context.getAttributes().put(DispatchRuntimeKeys.DISPATCH_PAYLOAD, payload);
+    context.getAttributes().put(DispatchRuntimeKeys.DISPATCH_RESULT, dispatchResult);
     context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, 10L);
 
     DispatchStageResult result = step.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes()).containsEntry("receiptStatus", "PENDING");
+    assertThat(context.getAttributes())
+        .containsEntry(DispatchRuntimeKeys.RECEIPT_STATUS, FileReceiptStatus.PENDING.code());
     verify(fileDispatchRepository, never()).markAcked(any(), any(), any(), any());
   }
 
@@ -122,8 +127,8 @@ class AckDispatchStepTest {
 
     DispatchJobContext context = new DispatchJobContext();
     context.setTenantId("t1");
-    context.getAttributes().put("dispatchPayload", payload);
-    context.getAttributes().put("dispatchResult", dispatchResult);
+    context.getAttributes().put(DispatchRuntimeKeys.DISPATCH_PAYLOAD, payload);
+    context.getAttributes().put(DispatchRuntimeKeys.DISPATCH_RESULT, dispatchResult);
     context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, 10L);
 
     DispatchStageResult result = step.execute(context);
@@ -142,15 +147,15 @@ class AckDispatchStepTest {
 
     DispatchJobContext context = new DispatchJobContext();
     context.setTenantId("t1");
-    context.getAttributes().put("dispatchPayload", payload);
-    context.getAttributes().put("dispatchResult", dispatchResult);
+    context.getAttributes().put(DispatchRuntimeKeys.DISPATCH_PAYLOAD, payload);
+    context.getAttributes().put(DispatchRuntimeKeys.DISPATCH_RESULT, dispatchResult);
     context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, 10L);
 
     DispatchStageResult result = step.execute(context);
 
     assertThat(result.success()).isTrue();
     verify(fileDispatchRepository, never()).markAcked(any(), any(), any(), any());
-    verify(fileRecords).updateFileStatus(eq(10L), eq("DISPATCHED"), any());
+    verify(fileRecords).updateFileStatus(eq(10L), eq(FileStatus.DISPATCHED.code()), any());
   }
 
   private DispatchJobContext buildContextWithAckedResult(String receiptCode) {
@@ -161,8 +166,8 @@ class AckDispatchStepTest {
 
     DispatchJobContext context = new DispatchJobContext();
     context.setTenantId("t1");
-    context.getAttributes().put("dispatchPayload", payload);
-    context.getAttributes().put("dispatchResult", dispatchResult);
+    context.getAttributes().put(DispatchRuntimeKeys.DISPATCH_PAYLOAD, payload);
+    context.getAttributes().put(DispatchRuntimeKeys.DISPATCH_RESULT, dispatchResult);
     context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, 10L);
     return context;
   }
