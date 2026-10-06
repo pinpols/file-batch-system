@@ -1,17 +1,19 @@
 package io.github.pinpols.batch.common.config;
 
+import io.github.pinpols.batch.common.utils.Texts;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.core.DefaultLockingTaskExecutor;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.env.Environment;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 
 /**
@@ -33,6 +35,7 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
 @AutoConfiguration
 @ConditionalOnClass(LockingTaskExecutor.class)
 @EnableSchedulerLock(defaultLockAtMostFor = "PT2M")
+@EnableConfigurationProperties(BatchShedLockProperties.class)
 public class BatchShedLockAutoConfiguration {
 
   // 不加 @ConditionalOnBean(DataSource.class)：condition 评估发生在 BeanDefinition 注册阶段，
@@ -47,9 +50,8 @@ public class BatchShedLockAutoConfiguration {
   @Bean
   @ConditionalOnMissingBean(LockProvider.class)
   @ConditionalOnProperty(name = "batch.shedlock.provider", havingValue = "jdbc")
-  public LockProvider jdbcLockProvider(
-      DataSource dataSource,
-      @Value("${batch.shedlock.auto-create:false}") boolean autoCreateTable) {
+  public LockProvider jdbcLockProvider(DataSource dataSource, BatchShedLockProperties properties) {
+    boolean autoCreateTable = properties.isAutoCreate();
     LockProvider provider =
         ShedLockProviderFactory.jdbcTemplateLockProvider(dataSource, autoCreateTable);
     log.info(
@@ -67,16 +69,22 @@ public class BatchShedLockAutoConfiguration {
       matchIfMissing = true)
   public LockProvider redisLockProvider(
       RedisConnectionFactory connectionFactory,
-      // 默认用 spring.application.name 做 env prefix(每服务一份命名空间),想跨环境隔离时显式覆盖
-      // batch.shedlock.redis.key-prefix-env / BATCH_SHEDLOCK_REDIS_ENV。
-      @Value("${batch.shedlock.redis.key-prefix-env:${spring.application.name:default}}")
-          String environment) {
+      BatchShedLockProperties properties,
+      Environment environment) {
+    // 未显式配置 batch.shedlock.redis.key-prefix-env 时,用 spring.application.name 做 env prefix
+    // (每服务一份命名空间);两者都缺省时回退 default。
+    // 本类经 auto-configuration imports 装配,测试切片可能不做组件扫描,故用静态 resolve 而非注入
+    // ApplicationNameProvider bean。
+    String configuredEnv = properties.getRedis().getKeyPrefixEnv();
+    String environmentName = Texts.hasText(configuredEnv)
+        ? configuredEnv
+        : ApplicationNameProvider.resolve(environment, "default");
     LockProvider provider =
-        ShedLockProviderFactory.redisLockProvider(connectionFactory, environment);
+        ShedLockProviderFactory.redisLockProvider(connectionFactory, environmentName);
     log.info(
         "ShedLock LockProvider auto-configured: type=Redis ({}), env={}",
         provider.getClass().getSimpleName(),
-        environment);
+        environmentName);
     return provider;
   }
 

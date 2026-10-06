@@ -6,10 +6,12 @@ import java.util.Locale;
 import java.util.regex.Pattern;
 import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.core.env.Environment;
 
 /** 阻止生产环境静默使用本地开发地址或不可发现的管理端口。 */
 @AutoConfiguration
+@EnableConfigurationProperties({StorageBackendProperties.class, ConsoleReadReplicaProperties.class})
 public class ProductionRuntimeConfigurationGuard implements SmartInitializingSingleton {
 
   private static final Pattern LOOPBACK_ENDPOINT =
@@ -26,9 +28,16 @@ public class ProductionRuntimeConfigurationGuard implements SmartInitializingSin
       "batch.console.read-replica.primary.url");
 
   private final Environment environment;
+  private final StorageBackendProperties storageProperties;
+  private final ConsoleReadReplicaProperties readReplicaProperties;
 
-  public ProductionRuntimeConfigurationGuard(Environment environment) {
+  public ProductionRuntimeConfigurationGuard(
+      Environment environment,
+      StorageBackendProperties storageProperties,
+      ConsoleReadReplicaProperties readReplicaProperties) {
     this.environment = environment;
+    this.storageProperties = storageProperties;
+    this.readReplicaProperties = readReplicaProperties;
   }
 
   @Override
@@ -42,13 +51,13 @@ public class ProductionRuntimeConfigurationGuard implements SmartInitializingSin
         .filter(environment::containsProperty)
         .forEach(this::requireRemoteEndpoint);
 
-    if ("s3".equalsIgnoreCase(environment.getProperty("batch.storage.backend", "s3"))) {
+    if ("s3".equalsIgnoreCase(storageProperties.getBackend())) {
       requireRemoteEndpoint("batch.storage.s3.endpoint");
     }
-    if (environment.getProperty("spring.application.name", "").startsWith("batch-worker-")) {
+    if (ApplicationNameProvider.resolve(environment, "").startsWith("batch-worker-")) {
       requireRemoteEndpoint("batch.datasource.business.url");
     }
-    if (environment.getProperty("batch.console.read-replica.enabled", Boolean.class, false)) {
+    if (readReplicaProperties.isEnabled()) {
       requireRemoteEndpoint("batch.console.read-replica.replica.url");
     }
 

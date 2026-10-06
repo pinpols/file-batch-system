@@ -51,7 +51,7 @@ public final class FileStateMachine {
     if (!INITIAL_STATES.contains(status)) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT,
-          "error.common.state_conflict_detail",
+          ResultCode.STATE_CONFLICT.detailKey(),
           "unsupported initial file status: " + statusCode);
     }
   }
@@ -68,7 +68,7 @@ public final class FileStateMachine {
     if (!allowed.contains(next)) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT,
-          "error.common.state_conflict_detail",
+          ResultCode.STATE_CONFLICT.detailKey(),
           "illegal file status transition: " + current.name() + " -> " + next.name());
     }
   }

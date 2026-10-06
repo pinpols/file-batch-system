@@ -65,26 +65,13 @@ public class BatchSecurityProperties implements EnvironmentAware {
       }
       validateNotPlaceholder(
           "POSTGRES_PASSWORD", environment.getProperty("spring.datasource.password"));
-      // #I-1: console-api 的主/从库密码走独立 key(batch.console.read-replica.*),不经
-      // spring.datasource.password,故上面的校验覆盖不到。这些 key 默认值是弱口令 batch_pass_123,
-      // prod 下若未注入 env 会静默用默认密码连生产库。非 console 模块该 property 不存在(null)→ 跳过。
-      validateNotKnownWeakDbPassword(
-          "batch.console.read-replica.primary.password",
-          environment.getProperty("batch.console.read-replica.primary.password"));
-      validateNotKnownWeakDbPassword(
-          "batch.console.read-replica.replica.password",
-          environment.getProperty("batch.console.read-replica.replica.password"));
+      // console-api 的主/从库密码走独立 key(batch.console.read-replica.*)，不由 spring.datasource.password 覆盖，
+      // 其生产弱口令校验由 ReadReplicaCredentialGuard 统一读取 ConsoleReadReplicaProperties 完成。
     } else {
       // 非 prod:不 fail-fast(本地/联调要能起),但把"默认/弱凭据仍在用"显式 WARN 出来——
       // 兜 prod fail-fast 的第二层,防"漏开 prod profile 就静默用默认密钥连真库"(审计 #4)。
       warnIfKnownInsecureDefault(
           "batch.security.internal-secret", internalSecret, "internal-secret");
-      warnIfKnownWeakDbPassword(
-          "batch.console.read-replica.primary.password",
-          environment.getProperty("batch.console.read-replica.primary.password"));
-      warnIfKnownWeakDbPassword(
-          "batch.console.read-replica.replica.password",
-          environment.getProperty("batch.console.read-replica.replica.password"));
     }
   }
 
@@ -95,31 +82,6 @@ public class BatchSecurityProperties implements EnvironmentAware {
           "Non-production profile: {} still uses the shipped placeholder; inject a real high-entropy secret through env / secret manager"
               + " before production (production-like profiles fail fast)",
           key);
-    }
-  }
-
-  /** 非 prod:DB 密码仍为已知弱默认口令 → WARN(不阻断,property 不存在的模块跳过)。 */
-  private void warnIfKnownWeakDbPassword(String key, String value) {
-    if (value != null && KNOWN_WEAK_DB_PASSWORDS.contains(value.trim())) {
-      log.warn(
-          "Non-production profile: {} still uses the shipped weak password; inject real credentials before production"
-              + " (production-like profiles fail fast)",
-          key);
-    }
-  }
-
-  /** prod 库连接默认弱口令清单——出现在 application.yml 默认值里,绝不能进生产。 */
-  private static final Set<String> KNOWN_WEAK_DB_PASSWORDS = Set.of("batch_pass_123");
-
-  /** 仅当 property 实际存在(非 null)且命中已知弱默认口令时 fail-fast;property 不存在的模块跳过。 */
-  private void validateNotKnownWeakDbPassword(String key, String value) {
-    if (value == null) {
-      return;
-    }
-    if (KNOWN_WEAK_DB_PASSWORDS.contains(value.trim())) {
-      throw new IllegalStateException(
-          "FATAL: production database password " + key
-              + " still uses a known weak password; inject real credentials through a secret manager or environment variable");
     }
   }
 

@@ -29,6 +29,9 @@ public final class AuditLogConstants {
   public static final String OPERATOR_TYPE_SYSTEM = "SYSTEM";
   public static final String OPERATOR_TYPE_REQUEST = "REQUEST";
 
+  /** 控制台 API 发起的配置变更等操作，操作者类型记为 API 而非 SYSTEM。 */
+  public static final String OPERATOR_TYPE_API = "API";
+
   public static final String OPERATOR_ID_SYSTEM_SLA_SCHEDULER = "SYSTEM_SLA_SCHEDULER";
   public static final String OPERATOR_ID_SYSTEM_BATCH_DAY_OPEN = "SYSTEM_BATCH_DAY_OPEN";
   public static final String OPERATOR_ID_SYSTEM_BATCH_DAY_CUTOFF = "SYSTEM_BATCH_DAY_CUTOFF";

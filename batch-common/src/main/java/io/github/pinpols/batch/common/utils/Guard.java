@@ -30,7 +30,7 @@ public final class Guard {
    * <pre>{@code
    * // Before
    * JobInstanceEntity entity = mapper.selectById(tenantId, id);
-   * if (entity == null) throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail", "job instance not found");
+   * if (entity == null) throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), "job instance not found");
    *
    * // After
    * JobInstanceEntity entity = Guard.requireFound(mapper.selectById(tenantId, id), "job instance not found");
@@ -39,7 +39,7 @@ public final class Guard {
   @Contract("null, _ -> fail; !null, _ -> param1")
   public static <T> T requireFound(@Nullable T entity, String message) {
     if (entity == null) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail", message);
+      throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), message);
     }
     return entity;
   }
@@ -49,7 +49,7 @@ public final class Guard {
   public static void requireText(@Nullable String str, String message) {
     if (!Texts.hasText(str)) {
       throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument_detail", message);
+          ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey(), message);
     }
   }
 
@@ -58,7 +58,7 @@ public final class Guard {
   public static void require(boolean condition, String message) {
     if (!condition) {
       throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument_detail", message);
+          ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey(), message);
     }
   }
 
