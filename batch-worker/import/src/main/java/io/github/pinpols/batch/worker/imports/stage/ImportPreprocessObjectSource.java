@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.imports.stage;
 
 import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -153,7 +154,7 @@ public final class ImportPreprocessObjectSource {
       fileMetadata.put("sourceObject", object);
       fileMetadata.put("sourceBytes", bytes);
       ImportStageSupport.updateFileStatusRecoverAware(
-          fileRecords, context, "PARSING", fileMetadata);
+          fileRecords, context, FileStatus.PARSING.code(), fileMetadata);
       return ImportStageResult.success(ImportStage.PREPROCESS);
     } catch (Exception ex) {
       deleteQuietly(spool);
@@ -211,7 +212,7 @@ public final class ImportPreprocessObjectSource {
       fileMetadata.put("sourceObject", object);
       fileMetadata.put("rangeSlice", slice.partitionNo() + "/" + slice.partitionCount());
       ImportStageSupport.updateFileStatusRecoverAware(
-          fileRecords, context, "PARSING", fileMetadata);
+          fileRecords, context, FileStatus.PARSING.code(), fileMetadata);
       return ImportStageResult.success(ImportStage.PREPROCESS);
     } catch (Exception ex) {
       deleteQuietly(spool);

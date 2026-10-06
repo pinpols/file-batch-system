@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.common.storage;
 
+import io.github.pinpols.batch.common.config.ApplicationNameProvider;
 import io.github.pinpols.batch.common.config.FilesystemStorageProperties;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.config.StorageBackendGuardProperties;
+import io.github.pinpols.batch.common.config.StorageBackendProperties;
 import io.github.pinpols.batch.common.stateful.StatefulBackendGuard;
 import io.github.pinpols.batch.common.stateful.StatefulBackendIdentity;
 import javax.sql.DataSource;
@@ -22,6 +24,7 @@ public class ObjectStorageBackendGuard implements ApplicationRunner, Ordered {
   private final S3StorageProperties s3;
   private final FilesystemStorageProperties filesystem;
   private final StorageBackendGuardProperties properties;
+  private final StorageBackendProperties backendProperties;
   private final Environment environment;
 
   public ObjectStorageBackendGuard(
@@ -29,11 +32,13 @@ public class ObjectStorageBackendGuard implements ApplicationRunner, Ordered {
       S3StorageProperties s3,
       FilesystemStorageProperties filesystem,
       StorageBackendGuardProperties properties,
+      StorageBackendProperties backendProperties,
       Environment environment) {
     this.guard = new StatefulBackendGuard(platformDataSource);
     this.s3 = s3;
     this.filesystem = filesystem;
     this.properties = properties;
+    this.backendProperties = backendProperties;
     this.environment = environment;
   }
 
@@ -50,10 +55,7 @@ public class ObjectStorageBackendGuard implements ApplicationRunner, Ordered {
   }
 
   StatefulBackendGuard.DesiredBackend desiredBackend() {
-    String backend = environment
-        .getProperty("batch.storage.backend", ObjectStorageBackends.S3)
-        .trim()
-        .toLowerCase();
+    String backend = backendProperties.getBackend().trim().toLowerCase();
     String identity =
         switch (backend) {
           case ObjectStorageBackends.S3 ->
@@ -63,7 +65,7 @@ public class ObjectStorageBackendGuard implements ApplicationRunner, Ordered {
           default ->
             throw new IllegalStateException("unsupported batch.storage.backend: " + backend);
         };
-    String actor = environment.getProperty("spring.application.name", "batch-service");
+    String actor = ApplicationNameProvider.resolve(environment, "batch-service");
     return new StatefulBackendGuard.DesiredBackend(
         FEATURE_KEY, backend, identity, properties.getCutoverId(), actor);
   }

@@ -218,7 +218,7 @@ public class DefaultConsoleReportExcelApplicationService
     } catch (Exception exception) {
       throw BizException.of(
           ResultCode.SYSTEM_ERROR,
-          "error.common.system_error_detail",
+          ResultCode.SYSTEM_ERROR.detailKey(),
           exception,
           "导出报表生成失败:" + exception.getMessage());
     }
@@ -245,7 +245,7 @@ public class DefaultConsoleReportExcelApplicationService
     } catch (Exception exception) {
       throw BizException.of(
           ResultCode.SYSTEM_ERROR,
-          "error.common.system_error_detail",
+          ResultCode.SYSTEM_ERROR.detailKey(),
           exception,
           "导出报表表头解析失败:" + exception.getMessage());
     }
@@ -276,7 +276,7 @@ public class DefaultConsoleReportExcelApplicationService
       } catch (Exception exception) {
         throw BizException.of(
             ResultCode.SYSTEM_ERROR,
-            "error.common.system_error_detail",
+            ResultCode.SYSTEM_ERROR.detailKey(),
             exception,
             "导出报表 record 字段读取失败:" + exception.getMessage());
       }
@@ -299,7 +299,7 @@ public class DefaultConsoleReportExcelApplicationService
     } catch (Exception exception) {
       throw BizException.of(
           ResultCode.SYSTEM_ERROR,
-          "error.common.system_error_detail",
+          ResultCode.SYSTEM_ERROR.detailKey(),
           exception,
           "导出报表 bean 字段读取失败:" + exception.getMessage());
     }

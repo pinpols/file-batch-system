@@ -26,6 +26,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.support.StaticApplicationContext;
+import org.springframework.mock.env.MockEnvironment;
 
 /**
  * AbstractWorkerLoop 单元测试： - ensureStarted() 是幂等的（仅注册一次） - 注册信息从 WorkerConfiguration 正确填充 -
@@ -89,10 +90,55 @@ class AbstractWorkerLoopTest {
     // AbstractWorkerLoop.ensureStarted 源头归一 workerGroup 为大写（防大小写异常数据）
     assertThat(sent.getWorkerGroup()).isEqualTo("TEST");
     assertThat(sent.getPort()).isEqualTo(9999);
-    assertThat(sent.getActive()).isTrue();
     assertThat(sent.getMaxConcurrent()).isEqualTo(8);
     assertThat(sent.getRegisteredAt()).isNotNull();
     assertThat(sent.getLastHeartbeatAt()).isNotNull();
+  }
+
+  @Test
+  void ensureStarted_prefersRuntimeBoundPortOverConfiguredAndFallback() {
+    // local.server.port 是 WebServer 真正绑定后写入的实际端口，必须优先于配置值与子类兜底值。
+    loop.setEnvironment(environmentWith("local.server.port", "19099", "server.port", "18083"));
+
+    assertThat(registered().getPort()).isEqualTo(19099);
+  }
+
+  @Test
+  void ensureStarted_fallsBackToConfiguredServerPort() {
+    loop.setEnvironment(environmentWith("server.port", "18083"));
+
+    assertThat(registered().getPort()).isEqualTo(18083);
+  }
+
+  @Test
+  void ensureStarted_fallsBackToWorkerPortWithoutEnvironment() {
+    // 单元测试直接 new（Spring 不回调 setEnvironment）→ 走子类兜底值，保证既有断言语义不变。
+    assertThat(registered().getPort()).isEqualTo(9999);
+  }
+
+  @Test
+  void ensureStarted_ignoresNonPositivePorts() {
+    // 未绑定阶段 server.port=0 表示随机端口，不能当成有效端口上报。
+    loop.setEnvironment(environmentWith("local.server.port", "0", "server.port", "-1"));
+
+    assertThat(registered().getPort()).isEqualTo(9999);
+  }
+
+  /** 构造带属性的 MockEnvironment；参数按 key/value 成对传入。 */
+  private MockEnvironment environmentWith(String... keyValues) {
+    MockEnvironment environment = new MockEnvironment();
+    for (int index = 0; index < keyValues.length; index += 2) {
+      environment.setProperty(keyValues[index], keyValues[index + 1]);
+    }
+    return environment;
+  }
+
+  /** 触发一次幂等注册并返回实际提交给 WorkerLifecycleManager 的注册信息。 */
+  private WorkerRegistration registered() {
+    loop.ensureStarted();
+    ArgumentCaptor<WorkerRegistration> captor = ArgumentCaptor.forClass(WorkerRegistration.class);
+    verify(workerLifecycleManager).start(captor.capture());
+    return captor.getValue();
   }
 
   @Test

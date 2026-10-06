@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.processes.infrastructure;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.constants.NodeOutputKeys;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
@@ -18,6 +19,7 @@ import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
 import io.github.pinpols.batch.worker.processes.domain.ProcessWorkerType;
 import io.github.pinpols.batch.worker.processes.stage.ComputeStep;
+import io.github.pinpols.batch.worker.processes.stage.ProcessRuntimeKeys;
 import io.github.pinpols.batch.worker.processes.stage.ProcessStageExecutor;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -131,22 +133,39 @@ public class ProcessStepExecutionAdapter
   @Override
   protected StepExecutionResponse buildSuccessResponse(
       ProcessJobContext context, List<ProcessStageResult> results, Map<String, Object> attributes) {
-    // ADR-009 Stage 1.2: 把 PROCESS 的关键产出暴露给下游 workflow 节点 DSL 引用
+    // ADR-009 Stage 1.2: 把 PROCESS 的关键产出暴露给下游 workflow 节点 DSL 引用。
+    // NODE_OUTPUTS 的键是下游 DSL（$.nodes.<X>.output.<key>）的契约面：与 attributes 键同名同义的复用
+    // 各自键表常量（同 DispatchRuntimeKeys 的 detailSummary / payload 口径），ADR-041 count 信封与
+    // batchKey 这类没有 attributes 归属的产出键取 NodeOutputKeys。
     Map<String, Object> outputs = new LinkedHashMap<>();
-    putIfPresent(outputs, "processedCount", attributes.get("processedCount"));
-    putIfPresent(outputs, "stagedCount", attributes.get("stagedCount"));
-    putIfPresent(outputs, "publishedCount", attributes.get("publishedCount"));
+    putIfPresent(
+        outputs,
+        ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT,
+        attributes.get(ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT));
+    putIfPresent(
+        outputs,
+        ProcessRuntimeKeys.PROCESS_STAGED_COUNT,
+        attributes.get(ProcessRuntimeKeys.PROCESS_STAGED_COUNT));
+    putIfPresent(
+        outputs,
+        ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT,
+        attributes.get(ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT));
     // ADR-041 Phase1.3:归一化 count 信封。process:input=processedCount,output=publishedCount(缺省回落
     // stagedCount)。
-    Object processOutputCount = attributes.get("publishedCount");
+    Object processOutputCount = attributes.get(ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT);
     if (EmptyChecks.isNull(processOutputCount)) {
-      processOutputCount = attributes.get("stagedCount");
+      processOutputCount = attributes.get(ProcessRuntimeKeys.PROCESS_STAGED_COUNT);
     }
-    putIfPresent(outputs, "inputCount", attributes.get("processedCount"));
-    putIfPresent(outputs, "outputCount", processOutputCount);
-    putIfPresent(outputs, "batchKey", context.getBatchKey());
     putIfPresent(
-        outputs, "highWaterMarkOut", attributes.get(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT));
+        outputs,
+        NodeOutputKeys.INPUT_COUNT,
+        attributes.get(ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT));
+    putIfPresent(outputs, NodeOutputKeys.OUTPUT_COUNT, processOutputCount);
+    putIfPresent(outputs, NodeOutputKeys.BATCH_KEY, context.getBatchKey());
+    putIfPresent(
+        outputs,
+        PipelineRuntimeKeys.HIGH_WATER_MARK_OUT,
+        attributes.get(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT));
     if (EmptyChecks.isNotEmpty(outputs)) {
       attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);
     }

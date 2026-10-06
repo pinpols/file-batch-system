@@ -47,9 +47,18 @@ class SmtpEmailDispatchChannelAdapterTest {
         command(config),
         "req-1");
 
-    assertThat(message.getSession().getProperty("mail.smtp.connectiontimeout")).isEqualTo("1234");
-    assertThat(message.getSession().getProperty("mail.smtp.timeout")).isEqualTo("2345");
-    assertThat(message.getSession().getProperty("mail.smtp.writetimeout")).isEqualTo("3456");
+    assertThat(message
+            .getSession()
+            .getProperty(SmtpEmailDispatchChannelAdapter.MAIL_SMTP_CONNECT_TIMEOUT_KEY))
+        .isEqualTo("1234");
+    assertThat(message
+            .getSession()
+            .getProperty(SmtpEmailDispatchChannelAdapter.MAIL_SMTP_READ_TIMEOUT_KEY))
+        .isEqualTo("2345");
+    assertThat(message
+            .getSession()
+            .getProperty(SmtpEmailDispatchChannelAdapter.MAIL_SMTP_WRITE_TIMEOUT_KEY))
+        .isEqualTo("3456");
   }
 
   private static Object invoke(

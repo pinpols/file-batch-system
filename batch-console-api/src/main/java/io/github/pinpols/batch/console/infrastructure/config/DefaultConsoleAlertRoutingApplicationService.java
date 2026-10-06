@@ -57,7 +57,7 @@ public class DefaultConsoleAlertRoutingApplicationService
     if (existing != null) {
       throw BizException.of(
           ResultCode.CONFLICT,
-          "error.common.conflict_detail",
+          ResultCode.CONFLICT.detailKey(),
           "route code already exists: " + request.getRouteCode());
     }
     AlertRoutingConfigUpsertParam param = toParam(null, tenantId, request);
@@ -78,7 +78,7 @@ public class DefaultConsoleAlertRoutingApplicationService
       if (duplicate != null) {
         throw BizException.of(
             ResultCode.CONFLICT,
-            "error.common.conflict_detail",
+            ResultCode.CONFLICT.detailKey(),
             "route code already exists: " + request.getRouteCode());
       }
     }

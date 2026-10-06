@@ -5,12 +5,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.orchestrator.config.WorkerCapabilityTagsAuditProperties;
 import io.github.pinpols.batch.orchestrator.domain.param.InvalidCapabilityTagsParam;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.lang.reflect.Field;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,11 +33,12 @@ class WorkerCapabilityTagsAuditSchedulerTest {
   private WorkerCapabilityTagsAuditScheduler scheduler;
 
   @BeforeEach
-  void setUp() throws Exception {
+  void setUp() {
     meterRegistry = new SimpleMeterRegistry();
+    WorkerCapabilityTagsAuditProperties auditProperties = new WorkerCapabilityTagsAuditProperties();
+    auditProperties.setCapabilityTagsLogSampleLimit(10);
     scheduler = new WorkerCapabilityTagsAuditScheduler(
-        workerRegistryMapper, gracefulShutdown, meterRegistry);
-    setLogSampleLimit(scheduler, 10);
+        workerRegistryMapper, gracefulShutdown, meterRegistry, auditProperties);
     scheduler.initializeMeters();
   }
 
@@ -112,12 +113,5 @@ class WorkerCapabilityTagsAuditSchedulerTest {
     Gauge g = meterRegistry.find(METRIC).gauge();
     assertThat(g).isNotNull();
     return g.value();
-  }
-
-  private static void setLogSampleLimit(WorkerCapabilityTagsAuditScheduler target, int value)
-      throws Exception {
-    Field f = WorkerCapabilityTagsAuditScheduler.class.getDeclaredField("logSampleLimit");
-    f.setAccessible(true);
-    f.setInt(target, value);
   }
 }

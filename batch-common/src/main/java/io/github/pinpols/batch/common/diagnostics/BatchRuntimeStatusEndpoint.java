@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.common.diagnostics;
 
+import io.github.pinpols.batch.common.config.ApplicationNameProvider;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.config.FilesystemStorageProperties;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.config.StorageBackendGuardProperties;
+import io.github.pinpols.batch.common.config.StorageBackendProperties;
 import io.github.pinpols.batch.common.lifecycle.BatchLifecyclePhases;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.net.URI;
@@ -28,24 +30,27 @@ public class BatchRuntimeStatusEndpoint {
   private final ObjectProvider<S3StorageProperties> s3Provider;
   private final ObjectProvider<FilesystemStorageProperties> filesystemProvider;
   private final ObjectProvider<StorageBackendGuardProperties> guardProvider;
+  private final StorageBackendProperties backendProperties;
 
   public BatchRuntimeStatusEndpoint(
       Environment environment,
       ObjectProvider<BatchSecurityProperties> securityProvider,
       ObjectProvider<S3StorageProperties> s3Provider,
       ObjectProvider<FilesystemStorageProperties> filesystemProvider,
-      ObjectProvider<StorageBackendGuardProperties> guardProvider) {
+      ObjectProvider<StorageBackendGuardProperties> guardProvider,
+      StorageBackendProperties backendProperties) {
     this.environment = environment;
     this.securityProvider = securityProvider;
     this.s3Provider = s3Provider;
     this.filesystemProvider = filesystemProvider;
     this.guardProvider = guardProvider;
+    this.backendProperties = backendProperties;
   }
 
   @ReadOperation
   public Map<String, Object> status() {
     Map<String, Object> result = new LinkedHashMap<>();
-    result.put("application", environment.getProperty("spring.application.name", "unknown"));
+    result.put("application", ApplicationNameProvider.resolve(environment, "unknown"));
     result.put("profiles", environment.getActiveProfiles());
     result.put("storage", storageStatus());
     result.put("security", securityStatus());
@@ -54,7 +59,7 @@ public class BatchRuntimeStatusEndpoint {
   }
 
   private Map<String, Object> storageStatus() {
-    String backend = environment.getProperty("batch.storage.backend", "s3");
+    String backend = backendProperties.getBackend();
     Map<String, Object> storage = new LinkedHashMap<>();
     storage.put("backend", backend);
     StorageBackendGuardProperties guard = guardProvider.getIfAvailable();

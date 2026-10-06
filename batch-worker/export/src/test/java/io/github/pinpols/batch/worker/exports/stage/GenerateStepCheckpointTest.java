@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
+import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineStageProgressRegistry;
@@ -128,8 +129,8 @@ class GenerateStepCheckpointTest {
         new GenerateRuntimeSupport(
             props, positionStore, new GenerateCursorCodec(), new PipelineStageProgressRegistry()));
 
-    deterministicFile = Path.of(
-        System.getProperty("java.io.tmpdir"), "file-batch-export", "inst-" + INSTANCE_ID + ".json");
+    deterministicFile = PrivateTempFiles.resolveUnderTempRoot("file-batch-export")
+        .resolve("inst-" + INSTANCE_ID + ".json");
     Files.deleteIfExists(deterministicFile);
     Files.deleteIfExists(deterministicFile("DELIMITED"));
   }
@@ -172,7 +173,7 @@ class GenerateStepCheckpointTest {
     ExportStageResult r2 = generateStep.execute(run2);
 
     assertThat(r2.success()).isTrue();
-    assertThat(run2.getAttributes()).containsEntry("recordCount", 3L);
+    assertThat(run2.getAttributes()).containsEntry(PipelineRuntimeKeys.RECORD_COUNT, 3L);
 
     String content = Files.readString(deterministicFile);
     // 收尾后缀只在完成时写一次:整体是合法 JSON。
@@ -198,7 +199,7 @@ class GenerateStepCheckpointTest {
     ExportStageResult result = generateStep.execute(rerun);
 
     assertThat(result.success()).isTrue();
-    assertThat(rerun.getAttributes()).containsEntry("recordCount", 1L);
+    assertThat(rerun.getAttributes()).containsEntry(PipelineRuntimeKeys.RECORD_COUNT, 1L);
     assertThat(positionStore.advanceCalls).isEqualTo(advancesAfterFirst);
   }
 
@@ -292,7 +293,7 @@ class GenerateStepCheckpointTest {
     ExportPayload payload = new ExportPayload(
         null, null, "TMPL_001", "BATCH-001", null, null, null, null, null, null, Map.of());
     context.getAttributes().put("exportPayload", payload);
-    context.getAttributes().put("exportFileFormatType", fileFormatType);
+    context.getAttributes().put(PipelineRuntimeKeys.EXPORT_FILE_FORMAT_TYPE, fileFormatType);
     context.getAttributes().put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);
     context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, INSTANCE_ID);
     return context;
@@ -300,8 +301,8 @@ class GenerateStepCheckpointTest {
 
   private Path deterministicFile(String fileFormatType) {
     String suffix = "DELIMITED".equalsIgnoreCase(fileFormatType) ? ".csv" : ".json";
-    return Path.of(
-        System.getProperty("java.io.tmpdir"), "file-batch-export", "inst-" + INSTANCE_ID + suffix);
+    return PrivateTempFiles.resolveUnderTempRoot("file-batch-export")
+        .resolve("inst-" + INSTANCE_ID + suffix);
   }
 
   private Map<String, Object> trailerTemplate() {

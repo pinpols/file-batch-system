@@ -66,7 +66,7 @@ public class DefaultConsoleFileChannelApplicationService
     if (existing != null) {
       throw BizException.of(
           ResultCode.CONFLICT,
-          "error.common.conflict_detail",
+          ResultCode.CONFLICT.detailKey(),
           "channel code already exists: " + request.getChannelCode());
     }
     String operator = requestMetadataResolver.current().operatorId();

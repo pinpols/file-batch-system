@@ -124,17 +124,94 @@ Compose CD、生产拓扑、硬件起步规格和 Kubernetes/GitOps 最终目标
 
 不得把 RES-5/RES-6 的“代码已具备降级”写成“容量和告警已验证”；它们需要真实部署拓扑和故障注入证据。
 
-### G7. 程序内配置 Key 读取治理 · P1/P2 · ⏳ 当前待做
+### G7. 程序内配置 Key 读取治理 · P1/P2 · ✅ CFGKEY-1/2/3 已闭环，存量已清零；§4「第二批再评估」「第三批（测试源码）」「第四批（全工程字面量）」「第五批（缺归属类补齐）」已收敛
 
 权威规范：[程序内配置 Key 读取治理](../runbook/config-key-access-governance.md)。本项只治理生产代码中通过字符串 key 读取配置的场景，不一刀切 `@Value`、`spring.*`、JVM 系统属性、测试/压测 `-Dxxx` 参数。
 
 | ID | 主题 | 状态 | 验收证据 |
 |---|---|---|---|
-| **CFGKEY-1** | P1 存量收敛：`batch.*` 直接读取与高风险 / 多字段同前缀 `@Value` 提取到 `@ConfigurationProperties` | ⏳ 当前待做 | `AtomicExecutorProductionGuard`、`ConsoleRealtimeInstanceIdProvider`、`ConsolePipelineProgressDirtyPublisher`、`ReplicaLagMonitor`、`ProductionRuntimeConfigurationGuard`、`BatchSecurityProperties` 等完成收敛；新增配置进入 config governance registry |
-| **CFGKEY-2** | CI 报告模式：生成直接 key / `@Value` inventory，区分 `PROJECT_CONFIG`、`SECRET_CONFIG`、`SPRING_INFRA`、`JVM_SYSTEM`、`TEST_ONLY` | ⏳ 当前待做 | 新增脚本可本地运行并输出机器可读报告；先接 Full Gate 或 nightly，不阻断历史存量 |
-| **CFGKEY-3** | CI 增量拦截：只阻断新增高风险 `batch.*` 直接读取和敏感 `@Value`，历史存量走 baseline | 🟡 待 CFGKEY-2 稳定后实施 | PR Gate 对新增违规失败；白名单记录原因、owner 与复查条件 |
+| **CFGKEY-1** | P1 存量收敛：`batch.*` 直接读取与高风险 / 多字段同前缀 `@Value` 提取到 `@ConfigurationProperties` | ✅ 已闭环 | §4 清单 P1 7 条 + P2 3 条全部收敛；新增 `AtomicExecutorGuardProperties`、`ConsoleInstanceIdProperties`、`ConsolePipelineProgressDirtyProperties`、`ReplicaLagMonitorProperties`、`StorageBackendProperties`、`ConsoleReadReplicaProperties`、`ReadReplicaCredentialGuard`、`StaleCompensationReconcilerProperties`、`StaleCreatedLaunchRecoveryProperties`，均已进入 config governance registry（HEAD 116 项 → 当前 133 项，以 `scripts/ci/check-config-governance.py` 输出为准）；直接 key 扫描生产命中 84 → 21（`--check-baseline` 口径：新增高风险 0 项、白名单 1 项） |
+| **CFGKEY-2** | CI 报告模式：生成直接 key / `@Value` inventory，区分 `PROJECT_CONFIG`、`SECRET_CONFIG`、`SPRING_INFRA`、`JVM_SYSTEM`、`TEST_ONLY` | ✅ 已闭环 | `scripts/ci/check-direct-config-key-access.py`（`--report`/`--json`/`--write-baseline`/`--check-baseline`）已登记 `scripts/ci/README.md`，接入 Full Gate `static-checks` 报告模式并上传 `build/config-key-access.json` 产物（30 天），不阻断历史存量 |
+| **CFGKEY-3** | CI 增量拦截：只阻断新增高风险 `batch.*` 直接读取和敏感 `@Value`，历史存量走 baseline | ✅ 已闭环 | `docs/governance/direct-config-key-access-baseline.txt` 已生成；`--check-baseline` 接入 PR Gate `PR_DIRECT_CONFIG_KEY_BASELINE`（java/ci 触发）和 Full Gate `FULL_DIRECT_CONFIG_KEY_BASELINE`（main push 回退），只对相对基线新增的高风险命中失败。基线规模：存量清零 **0 项**（`docs/governance/direct-config-key-access-baseline.txt` 随本批在工作区新增、尚未提交，历史中间态无法从 git 复现；当前仅剩注释头，可直接核对） |
 
 本项不要求把 `local.server.port`、`java.io.tmpdir`、`user.home`、`spring.application.name` 等合理例外强行改造；否则会制造噪声和第二事实来源。
+
+存量清零：第一批收敛后基线仍剩 11 条 `batch.*` 高风险读取，已按明确授权全部提取为 `@ConfigurationProperties`，基线归零（清单见 [治理文档 §4.1](../runbook/config-key-access-governance.md)）；配置治理登记表当前 133 项（HEAD 116 项，以 `scripts/ci/check-config-governance.py` 输出为准）。基线为空意味着此后任何新增高风险 `batch.*` 读取都会被 PR Gate 直接拦下。同时脚本补上“注释不是代码”的口径（`strip_comments`），避免迁移说明里的 `@Value("${...}")` 字面量被当成命中。
+
+第二批再评估（2026-10-06 收敛）：治理文档 §4 明确保留的 4 项已全部完成，均为**去重与集中**、不新增业务配置语义、不迁移 key。
+
+| 项 | 收敛去向 |
+|---|---|
+| `spring.datasource.url` / `spring.data.redis.*` 只读 inspector | `RuntimeInfrastructureInspector`（batch-common），供 `QuotaRuntimeBackendGuard`、`WorkerReportOutboxBackendGuard` 复用；不复制 `spring.*` 默认值 |
+| `spring.application.name` 统一读取 | `ApplicationNameProvider`（batch-common，含供早期装配使用的静态变体）；默认值仍由各调用方传入 |
+| worker `maxConcurrentTasks` 重复 `@Value` | `WorkerConcurrencyProperties`（`batch.worker.max-concurrent-tasks`，保留原 key 与默认值） |
+| worker 本地路径默认值集中 | `PrivateTempFiles.tempRoot()` / `resolveUnderTempRoot()`（batch-common）；`java.io.tmpdir` 仍为 JVM 系统属性，不包装成业务配置 |
+
+`RuntimeInfrastructureInspector` 的引入同时解除了 §6 阶段 2 中 `BatchSecurityProperties#spring.datasource.password` 白名单条目的复查条件（只读 inspector 已就位），该条目的白名单登记仍保留，仅作为“明确允许的例外”。`sdk/java/core` 的 `ShellAtomicHandler` 有意不接入临时目录策略：`batch-worker-sdk` 是对外发布的独立制品，刻意不依赖 `batch-common`。
+
+第三批：测试源码口径与字面量收敛（2026-10-06）：
+
+- **口径**：`src/test` **不拦截、不进基线**（测试本就要用 `MockEnvironment#withProperty(...)` /
+  `@SpringBootTest(properties = ...)`），但扫描器 `--report` / `--json` 新增 TEST_SOURCE 快照，
+  让「测试里新硬编码了哪个 key」可见；新增读取类型 `TEST_PROPERTY_FIXTURE`、`TEST_PROPERTY_ENTRY`。
+- **收敛原则**：精确读取点（`System.getProperty(...)` / `@Value("${...}")` / `withProperty("key", ...)`）
+  若 key 有归属类，一律引用其公开常量，不再重复字面量。
+- **收敛清单**：`java.io.tmpdir` → `PrivateTempFiles.TEMP_ROOT_PROPERTY`（batch-common）/ `ShellAtomicHandler.TEMP_ROOT_PROPERTY`（sdk/java/core，不依赖 batch-common）；`local.server.port` → `ConsoleInternalBaseUrlResolver.LOCAL_SERVER_PORT_KEY` / `LOCAL_SERVER_PORT_PLACEHOLDER`（batch-console-api）；`spring.kafka.bootstrap-servers` → `TriggerKafkaProducerConfiguration.BOOTSTRAP_SERVERS_KEY`（batch-trigger）；`batch.test.storage.backend` → `AbstractIntegrationTest.s3BackendActive()`（batch-test-support，判定与既有 `storageBackend()` 同源，三处 `@EnabledIf` 的本地重复方法删除）。
+- **保留不改**：`user.dir`、`maven.multiModuleProjectDirectory`、`boundedContext.report` —— 由 JVM / Maven / 测试自身注入，无应用侧归属类，扫描器归 `TEST_ONLY` / `JVM_SYSTEM`（原先被误判为 `PROJECT_CONFIG`，本轮修正分类口径）。
+- **夹具字面量 `properties = {"key=value"}` 保留**：量大且多为一次性覆盖，收敛收益低于改动成本，key 改名风险由 TEST_SOURCE 聚合段暴露。
+- **量级变化**：生产命中 27 → 21（`--check-baseline`：新增高风险 0 项、白名单 1 项）；测试源码精确读取点 16 → 5（`TEST_PROPERTY_FIXTURE` 2 → 0、`VALUE_INJECTION` 1 → 0、`SYSTEM_PROPERTY` 13 → 5），夹具字面量 209 → 208（仅 `TriggerKafkaProducerConfigurationTest` 一处改为常量）。
+- **扫描器口径修正**：`VALUE_INJECTION` 的 key 只取标识符形态，使 `@Value("${" + X.KEY + "}")` 这类「已收敛到常量」的写法不再被误报为字面量 key（收敛到常量正是目标状态，报成违规等于惩罚正确做法）。
+
+第四批：全工程字面量收敛（2026-10-06，口径见 [治理文档 §4.2](../runbook/config-key-access-governance.md)）：
+
+- **背景**：仓库里大量「同一字符串概念，一处用常量、一处写裸字面量」；典型是同一个方法里旁边已引用
+  `PipelineRuntimeKeys.TRACE_ID`，紧邻的 `detailSummary.put("externalRequestId", ...)` 仍是字面量。
+- **判据**：字符串**充当键或状态值**且**已有归属类**才收敛；缺归属类的登记待办，不新建常量。
+- **收敛清单**：
+  - 审计字段（`operationType`/`operationResult`/`operatorType`）→ `FileAuditOperationType` /
+    `OperationResult` / `AuditLogConstants`，23 处；
+  - dispatch 链路键 → 新建 `DispatchRuntimeKeys`（模块内键表，29 处）；跨模块的 `dryRunSkipped`
+    登记在 `PipelineRuntimeKeys`；
+  - `batch-worker/*` 的 pipeline attributes 键 → `PipelineRuntimeKeys`，243 处；
+  - 枚举码值 → 对应枚举 `code()`：`FileStatus` / `FileReceiptStatus` / `OperationResult` /
+    `FileAuditOperationType`，脚本 84 处 + 人工 18 处；
+  - 审计操作者 → 新增 `AuditLogConstants.OPERATOR_TYPE_API`，console-api 3 处收敛；
+    `FileGovernanceScheduler.ACTOR_SYSTEM` 改引 `AuditLogConstants.OPERATOR_TYPE_SYSTEM`。
+- **契约补全**：`FileReceiptStatus` 增 `NONE`——DDL `ck_file_dispatch_receipt_status` 允许
+  `('NONE','PENDING','SUCCESS','FAILED')` 且默认 `'NONE'`，枚举此前只有 3 个值，导致 3 处只能写裸 `"NONE"`。
+- **明确不改**：MyBatis mapper 参数名（`params(...)` / `@Param("x")`）、`@JsonAlias`、出站响应体字段名
+  （`plannedAction`，无归属类）、同名不同域的字面量（`retryPolicy` 的 `"NONE"`、`receipt_policy` 的
+  `"NONE"`/`"SYNC"`、`result_version.status` 的 `"ARCHIVED"`）、无归属类的 `sourceType("GENERATED")`。
+- **遗留登记**：`PlatformRuntimeValues`（batch-worker/core）持有一份与 `PipelineRuntimeKeys` /
+  `StructuredLogField` 同值的私有常量表，服务 MyBatis 参数构造；是否合并单独评估。
+- **顺带修复**：`batch-e2e-tests` 的 `ExportStorageFailureE2eIT` 残留本地 `s3BackendActive()`，与第三批
+  在 `AbstractIntegrationTest` 新增的 `public static` 版本签名冲突（子类降权限），本轮删除。
+
+第五批：缺归属类补齐（2026-10-06，口径与清单见 [治理文档 §4.2](../runbook/config-key-access-governance.md)）：
+
+- **背景**：第四批按判据把「缺归属类」的 34 处登记为待办、不新建常量。本轮按明确授权补齐归属类，全部收敛
+  （74 处引用点，另删除 3 个同义别名常量）。
+- **补齐的归属类**：
+  - 新建 `NodeOutputKeys`（batch-common）——ADR-009 节点产出键 / ADR-041 count 信封里**没有 attributes 归属类**
+    的键（`inputCount` / `outputCount` / `batchKey`）。放 batch-common 是因为生产方（各 worker adapter）与消费方
+    （orchestrator `CountContinuityOutboxService` / `WorkflowGraphValidator`）都要看见同一份键名；与 attributes 键
+    同名同义的产出键仍复用各自键表常量，**不**新建同义别名。收敛 14 处。
+  - 新建 `ImportRuntimeKeys`（batch-worker/import）——import 模块内跨类共享的 attributes / file_record metadata
+    键（`successCount` / `failedCount` / `manualReviewRequired` / `charsetSuspect` / `replacementCount` /
+    `detectedCharset` / `lastBadRecord` / `lastProcessedRecordNo` / `lastErrorCode` / `lastErrorMessage`）；
+    `LoadStep` 的两个私有同义常量删除改引本表。收敛 31 处。
+  - 新建 `ExportRuntimeKeys`（batch-worker/export）——export 跨 stage 私有键（`exportPayload` / `exportBatch` /
+    `exportCharset` / `exportWithBom` / `exportLineSeparator` / `exportDataRef`）。收敛 22 处。
+  - 扩 `PipelineRuntimeKeys.PAYLOAD` / `STEP_CODE`（跨模块 pipeline attributes 键），并删除
+    `DefaultStepExecutionAdapter` 的私有同义别名 `CONTEXT_PAYLOAD`、收敛 `DefaultTaskExecutionWrapper` 写入点。
+    收敛 6 处。
+  - 扩 `ProcessRuntimeKeys.PROCESS_STAGING_MODE`（`processStagingMode`）。收敛 1 处。
+- **同批收口**：`DefaultProcessStageExecutor` 的 output_summary `batchKey`、`ProcessPublishedCountVerifier` 的
+  evidence `batchKey` 与产出键同名同义，一并改引 `NodeOutputKeys.BATCH_KEY`。
+- **明确不改**：`SqlTransformComputeSpec.RESERVED_PARAMS` / `PARAM_BATCH_KEY` 等 SQL 参数名；
+  `output_summary` 的 `stepCode` / `stage` / `implCode` / `tenantId` / `workerId` 等展示字段；只在单个类内流通的
+  私有键（`parseSkippedCount` / `snapshotMode` / `totalAmount` 等）保留为类内常量。
+- **顺带满足守护**：改既有行触发的 5 处 `== null` / `!= null` 统一改用 `EmptyChecks`（零行为变更）。
 
 ### A. POSITIONAL-ARGS 治理（V6-P2-POSITIONAL-ARGS）· P2 · ✅ 已闭环
 

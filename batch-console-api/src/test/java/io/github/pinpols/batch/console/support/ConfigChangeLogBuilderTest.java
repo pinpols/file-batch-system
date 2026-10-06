@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -37,7 +38,7 @@ class ConfigChangeLogBuilderTest {
         .action("PUBLISH")
         .summary("{}")
         .versionNo(7)
-        .operatorType("API")
+        .operatorType(AuditLogConstants.OPERATOR_TYPE_API)
         .result("FAILED")
         .build();
 

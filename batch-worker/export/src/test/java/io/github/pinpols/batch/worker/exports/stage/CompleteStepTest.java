@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
@@ -51,9 +52,9 @@ class CompleteStepTest {
     ctx.setTenantId("t-1");
     ctx.setWorkerId("worker-X");
     ctx.getAttributes().put(PipelineRuntimeKeys.FILE_ID, "501");
-    ctx.getAttributes().put("recordCount", 1234L);
-    ctx.getAttributes().put("objectName", "outbound/2026-05-21/x.json");
-    ctx.getAttributes().put("fileSizeBytes", 4096L);
+    ctx.getAttributes().put(PipelineRuntimeKeys.RECORD_COUNT, 1234L);
+    ctx.getAttributes().put(PipelineRuntimeKeys.OBJECT_NAME, "outbound/2026-05-21/x.json");
+    ctx.getAttributes().put(PipelineRuntimeKeys.FILE_SIZE_BYTES, 4096L);
     ctx.getAttributes().put(PipelineRuntimeKeys.TRACE_ID, "trace-abc");
     return ctx;
   }
@@ -80,7 +81,7 @@ class CompleteStepTest {
 
     assertThat(result.success()).isTrue();
     assertThat(result.stage()).isEqualTo(ExportStage.COMPLETE);
-    verify(runtimeRepository).updateFileStatus(eq(501L), eq("DISPATCHING"), any());
+    verify(runtimeRepository).updateFileStatus(eq(501L), eq(FileStatus.DISPATCHING.code()), any());
     ArgumentCaptor<FileAuditParam> auditCaptor = ArgumentCaptor.forClass(FileAuditParam.class);
     verify(fileAudits).appendAudit(auditCaptor.capture());
     FileAuditParam audit = auditCaptor.getValue();
@@ -111,7 +112,7 @@ class CompleteStepTest {
     ExportStageResult result = step.execute(ctx);
 
     assertThat(result.success()).isTrue();
-    verify(runtimeRepository).updateFileStatus(eq(501L), eq("GENERATED"), any());
+    verify(runtimeRepository).updateFileStatus(eq(501L), eq(FileStatus.GENERATED.code()), any());
   }
 
   @Test
@@ -122,7 +123,7 @@ class CompleteStepTest {
     ExportStageResult result = step.execute(ctx);
 
     assertThat(result.success()).isTrue();
-    verify(runtimeRepository).updateFileStatus(eq(501L), eq("GENERATED"), any());
+    verify(runtimeRepository).updateFileStatus(eq(501L), eq(FileStatus.GENERATED.code()), any());
   }
 
   @Test
@@ -154,7 +155,7 @@ class CompleteStepTest {
   @DisplayName("dry-run 模式 → 直接 success，完全跳过 status / audit")
   void shouldSkipAllSideEffects_whenDryRun() {
     ExportJobContext ctx = baseContext();
-    ctx.getAttributes().put("dryRun", Boolean.TRUE);
+    ctx.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, Boolean.TRUE);
 
     ExportStageResult result = step.execute(ctx);
 
@@ -172,7 +173,8 @@ class CompleteStepTest {
     ArgumentCaptor<Map<String, Object>> metadataCaptor = ArgumentCaptor.forClass(Map.class);
     step.execute(ctx);
 
-    verify(runtimeRepository).updateFileStatus(eq(501L), eq("GENERATED"), metadataCaptor.capture());
-    assertThat(metadataCaptor.getValue()).containsKey("exportSnapshot");
+    verify(runtimeRepository)
+        .updateFileStatus(eq(501L), eq(FileStatus.GENERATED.code()), metadataCaptor.capture());
+    assertThat(metadataCaptor.getValue()).containsKey(PipelineRuntimeKeys.EXPORT_SNAPSHOT);
   }
 }

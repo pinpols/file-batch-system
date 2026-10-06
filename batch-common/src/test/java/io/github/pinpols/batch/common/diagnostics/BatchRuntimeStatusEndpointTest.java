@@ -4,11 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.config.ApplicationNameProvider;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.common.config.StorageBackendProperties;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.context.properties.bind.Bindable;
+import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.mock.env.MockEnvironment;
 
 class BatchRuntimeStatusEndpointTest {
@@ -16,8 +20,8 @@ class BatchRuntimeStatusEndpointTest {
   @Test
   void returnsOnlyRedactedEffectiveRuntimeStatus() {
     MockEnvironment environment = new MockEnvironment()
-        .withProperty("spring.application.name", "batch-test")
-        .withProperty("batch.storage.backend", "s3");
+        .withProperty(ApplicationNameProvider.APPLICATION_NAME_KEY, "batch-test")
+        .withProperty(StorageBackendProperties.BACKEND_KEY, "s3");
     BatchSecurityProperties security = new BatchSecurityProperties();
     security.setBypassMode(false);
     security.setInternalSecret("strong-secret-that-must-not-appear");
@@ -28,7 +32,14 @@ class BatchRuntimeStatusEndpointTest {
     s3.setSecretKey("secret-that-must-not-appear");
 
     BatchRuntimeStatusEndpoint endpoint = new BatchRuntimeStatusEndpoint(
-        environment, provider(security), provider(s3), provider(null), provider(null));
+        environment,
+        provider(security),
+        provider(s3),
+        provider(null),
+        provider(null),
+        Binder.get(environment)
+            .bind("batch.storage", Bindable.of(StorageBackendProperties.class))
+            .orElseGet(StorageBackendProperties::new));
 
     Map<String, Object> status = endpoint.status();
 

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.config.WorkerCapabilityTagsAuditProperties;
 import io.github.pinpols.batch.orchestrator.domain.param.InvalidCapabilityTagsParam;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
@@ -14,7 +15,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -49,11 +49,9 @@ public class WorkerCapabilityTagsAuditScheduler {
   private final WorkerRegistryMapper workerRegistryMapper;
   private final OrchestratorGracefulShutdown gracefulShutdown;
   private final MeterRegistry meterRegistry;
+  private final WorkerCapabilityTagsAuditProperties auditProperties;
 
   private final AtomicLong invalidCount = new AtomicLong();
-
-  @Value("${batch.worker.audit.capability-tags-log-sample-limit:10}")
-  private int logSampleLimit;
 
   @PostConstruct
   void initializeMeters() {
@@ -69,6 +67,7 @@ public class WorkerCapabilityTagsAuditScheduler {
     if (gracefulShutdown.isDraining()) {
       return;
     }
+    int logSampleLimit = auditProperties.getCapabilityTagsLogSampleLimit();
     List<InvalidCapabilityTagsParam> rows = workerRegistryMapper.selectInvalidCapabilityTags();
     if (rows == null || rows.isEmpty()) {
       invalidCount.set(0L);

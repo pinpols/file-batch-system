@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.engine;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.constants.NodeOutputKeys;
 import io.github.pinpols.batch.common.event.DomainEvent;
 import io.github.pinpols.batch.common.event.DomainEventPublisher;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
@@ -56,7 +57,7 @@ public class CountContinuityOutboxService {
         || !Texts.hasText(currentOutputJson)) {
       return;
     }
-    Long inputCount = readLong(parse(currentOutputJson), "inputCount");
+    Long inputCount = readLong(parse(currentOutputJson), NodeOutputKeys.INPUT_COUNT);
     if (EmptyChecks.isNull(inputCount)) {
       // 本节点未上报 inputCount(非文件链路节点 / 未启用信封)→ 不参与
       return;
@@ -82,7 +83,7 @@ public class CountContinuityOutboxService {
         workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCodesIn(
             workflowRunId, upstreamCodes);
     for (WorkflowNodeRunEntity upstream : upstreamRuns) {
-      Long upstreamOutput = readLong(parse(upstream.getOutput()), "outputCount");
+      Long upstreamOutput = readLong(parse(upstream.getOutput()), NodeOutputKeys.OUTPUT_COUNT);
       if (EmptyChecks.isNull(upstreamOutput) || upstreamOutput.equals(inputCount)) {
         continue;
       }

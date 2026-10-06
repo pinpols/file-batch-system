@@ -1,33 +1,20 @@
 package io.github.pinpols.batch.trigger.application;
 
-import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
-import org.apache.kafka.clients.admin.OffsetSpec;
-import org.apache.kafka.clients.admin.TopicDescription;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.common.TopicPartition;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
-import org.springframework.kafka.core.KafkaAdmin;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Component;
 
@@ -36,14 +23,16 @@ import org.springframework.stereotype.Component;
  *
  * <p>采样只读 Kafka offset，不消费消息、不提交 offset。查询失败时发布未知样本，由发布治理器收缩到最小速率；
  * 采样在专用调度线程执行，不阻塞 outbox DB/Kafka 发布线程。
+ *
+ * <p>Kafka Admin 交互收敛在 {@link TriggerLaunchLagQueryPort} 适配器内，本类只负责调度、快照发布与降级。
  */
 @Component
 @Slf4j
 public class TriggerLaunchLagMonitor {
 
-  static final long UNKNOWN_LAG = -1L;
+  static final long UNKNOWN_LAG = TriggerLaunchLagQueryPort.UNKNOWN_LAG;
 
-  private final KafkaAdmin kafkaAdmin;
+  private final TriggerLaunchLagQueryPort lagQuery;
   private final TriggerOutboxRelayProperties properties;
   private final ThreadPoolTaskScheduler scheduler;
   private final AtomicReference<LagSnapshot> snapshot =
@@ -52,15 +41,13 @@ public class TriggerLaunchLagMonitor {
   private final AtomicBoolean started = new AtomicBoolean();
   private final AtomicBoolean stopping = new AtomicBoolean();
   private final AtomicReference<ScheduledFuture<?>> scheduledTask = new AtomicReference<>();
-  private final Object adminClientMonitor = new Object();
-  private AdminClient adminClient;
 
   public TriggerLaunchLagMonitor(
-      KafkaAdmin kafkaAdmin,
+      TriggerLaunchLagQueryPort lagQuery,
       TriggerOutboxRelayProperties properties,
       MeterRegistry meterRegistry,
       @Qualifier("triggerLaunchLagMonitorScheduler") ThreadPoolTaskScheduler scheduler) {
-    this.kafkaAdmin = kafkaAdmin;
+    this.lagQuery = lagQuery;
     this.properties = properties;
     this.scheduler = scheduler;
     meterRegistry.gauge(
@@ -83,7 +70,6 @@ public class TriggerLaunchLagMonitor {
     if (task != null) {
       task.cancel(true);
     }
-    closeAdminClient();
   }
 
   LagSnapshot current() {
@@ -105,71 +91,13 @@ public class TriggerLaunchLagMonitor {
       if (!stopping.get()) {
         publishSnapshot(UNKNOWN_LAG);
         SwallowedExceptionLogger.warn(
-            TriggerLaunchLagMonitor.class, "trigger launch consumer lag sample failed", exception);
+            TriggerLaunchLagMonitor.class, "trigger-launch-consumer-lag-sample-failed", exception);
       }
     }
   }
 
   private long queryLag() throws InterruptedException, ExecutionException, TimeoutException {
-    long timeout = properties.getLagQueryTimeoutMillis();
-    AdminClient admin = getOrCreateAdminClient();
-    Map<TopicPartition, OffsetAndMetadata> committed = admin
-        .listConsumerGroupOffsets(properties.getConsumerGroupId())
-        .partitionsToOffsetAndMetadata()
-        .get(timeout, TimeUnit.MILLISECONDS);
-    TopicDescription topic = admin
-        .describeTopics(List.of(BatchTopics.TRIGGER_LAUNCH_V1))
-        .allTopicNames()
-        .get(timeout, TimeUnit.MILLISECONDS)
-        .get(BatchTopics.TRIGGER_LAUNCH_V1);
-    if (topic == null) {
-      return UNKNOWN_LAG;
-    }
-    Map<TopicPartition, OffsetSpec> requests = new LinkedHashMap<>();
-    topic
-        .partitions()
-        .forEach(partition -> requests.put(
-            new TopicPartition(BatchTopics.TRIGGER_LAUNCH_V1, partition.partition()),
-            OffsetSpec.latest()));
-    Map<TopicPartition, ListOffsetsResultInfo> endOffsets =
-        admin.listOffsets(requests).all().get(timeout, TimeUnit.MILLISECONDS);
-    Map<TopicPartition, OffsetSpec> earliestRequests = new LinkedHashMap<>();
-    requests.keySet().stream()
-        .filter(partition -> !committed.containsKey(partition))
-        .forEach(partition -> earliestRequests.put(partition, OffsetSpec.earliest()));
-    Map<TopicPartition, ListOffsetsResultInfo> earliestOffsets =
-        EmptyChecks.isEmpty(earliestRequests)
-            ? Map.<TopicPartition, ListOffsetsResultInfo>of()
-            : admin.listOffsets(earliestRequests).all().get(timeout, TimeUnit.MILLISECONDS);
-    long lag = 0L;
-    for (Map.Entry<TopicPartition, ListOffsetsResultInfo> entry : endOffsets.entrySet()) {
-      OffsetAndMetadata offset = committed.get(entry.getKey());
-      long committedOffset =
-          offset == null ? earliestOffsets.get(entry.getKey()).offset() : offset.offset();
-      lag = Math.addExact(lag, Math.max(0L, entry.getValue().offset() - committedOffset));
-    }
-    return lag;
-  }
-
-  private AdminClient getOrCreateAdminClient() {
-    synchronized (adminClientMonitor) {
-      if (stopping.get()) {
-        throw new IllegalStateException("Trigger launch lag monitor is stopping");
-      }
-      if (adminClient == null) {
-        adminClient = AdminClient.create(kafkaAdmin.getConfigurationProperties());
-      }
-      return adminClient;
-    }
-  }
-
-  private void closeAdminClient() {
-    synchronized (adminClientMonitor) {
-      if (adminClient != null) {
-        adminClient.close(Duration.ZERO);
-        adminClient = null;
-      }
-    }
+    return lagQuery.sampleLag();
   }
 
   private void publishSnapshot(long lag) {

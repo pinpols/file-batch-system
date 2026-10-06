@@ -13,6 +13,7 @@ import {
   WORKER_RUNTIME_STATES,
   SENSITIVE_KEYWORDS,
   TASK_STATUSES,
+  REPORT_ERROR_CODES,
 } from "../src/constants.ts";
 
 const YAML_PATH = new URL("../../../docs/api/sdk-shared-constants.yaml", import.meta.url);
@@ -95,4 +96,8 @@ test("sensitive_keywords parity", () => {
 
 test("task_statuses parity", () => {
   assert.deepEqual([...TASK_STATUSES], lists.get("task_statuses"));
+});
+
+test("report_error_codes parity", () => {
+  assert.deepEqual([...REPORT_ERROR_CODES], lists.get("report_error_codes"));
 });

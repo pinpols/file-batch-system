@@ -36,13 +36,13 @@ public class CapacityProfileService {
     if (!resolvedFrom.isBefore(resolvedTo)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ResultCode.INVALID_ARGUMENT.detailKey(),
           "from must be before to");
     }
     if (Duration.between(resolvedFrom, resolvedTo).compareTo(MAX_WINDOW) > 0) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ResultCode.INVALID_ARGUMENT.detailKey(),
           "capacity profile window must not exceed 31 days");
     }
     CapacityProfileGroupBy resolvedGroupBy =

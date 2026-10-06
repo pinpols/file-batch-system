@@ -135,7 +135,7 @@ public class ExcelFormatParser implements FormatParser {
             } catch (PreviewLimitReachedException stop) {
               // preview_rows 早停信号:已抽样到上限,正常返回已解析的 recordNo。
               SwallowedExceptionLogger.info(
-                  ExcelFormatParser.class, "preview row limit reached", stop);
+                  ExcelFormatParser.class, "preview-row-limit-reached", stop);
             }
             return accumulator.recordNo;
           }

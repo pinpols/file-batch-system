@@ -9,6 +9,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -54,10 +55,13 @@ class ImportStageSupportTest {
     PlatformFileRecordRepository repository = mock(PlatformFileRecordRepository.class);
     ImportJobContext context = context(99L);
     context.getAttributes().put(PipelineRuntimeKeys.PARTITION_COUNT, 2);
-    doThrow(stateConflict()).when(repository).updateFileStatus(eq(99L), eq("PARSING"), any());
-    when(repository.currentFileStatus(99L)).thenReturn("PARSED");
+    doThrow(stateConflict())
+        .when(repository)
+        .updateFileStatus(eq(99L), eq(FileStatus.PARSING.code()), any());
+    when(repository.currentFileStatus(99L)).thenReturn(FileStatus.PARSED.code());
 
-    ImportStageSupport.updateFileStatusRecoverAware(repository, context, "PARSING", Map.of());
+    ImportStageSupport.updateFileStatusRecoverAware(
+        repository, context, FileStatus.PARSING.code(), Map.of());
 
     verify(repository).currentFileStatus(99L);
   }
@@ -66,10 +70,12 @@ class ImportStageSupportTest {
   void updateFileStatusRecoverAwareKeepsStrictStateMachineForNormalImport() {
     PlatformFileRecordRepository repository = mock(PlatformFileRecordRepository.class);
     ImportJobContext context = context(99L);
-    doThrow(stateConflict()).when(repository).updateFileStatus(eq(99L), eq("PARSING"), any());
+    doThrow(stateConflict())
+        .when(repository)
+        .updateFileStatus(eq(99L), eq(FileStatus.PARSING.code()), any());
 
     assertThatThrownBy(() -> ImportStageSupport.updateFileStatusRecoverAware(
-            repository, context, "PARSING", Map.of()))
+            repository, context, FileStatus.PARSING.code(), Map.of()))
         .isInstanceOf(BizException.class)
         .hasMessage("error.common.state_conflict_detail");
   }
@@ -79,11 +85,13 @@ class ImportStageSupportTest {
     PlatformFileRecordRepository repository = mock(PlatformFileRecordRepository.class);
     ImportJobContext context = context(99L);
     context.getAttributes().put(PipelineRuntimeKeys.PARTITION_COUNT, 2);
-    doThrow(stateConflict()).when(repository).updateFileStatus(eq(99L), eq("PARSED"), any());
-    when(repository.currentFileStatus(99L)).thenReturn("PARSING");
+    doThrow(stateConflict())
+        .when(repository)
+        .updateFileStatus(eq(99L), eq(FileStatus.PARSED.code()), any());
+    when(repository.currentFileStatus(99L)).thenReturn(FileStatus.PARSING.code());
 
     assertThatThrownBy(() -> ImportStageSupport.updateFileStatusRecoverAware(
-            repository, context, "PARSED", Map.of()))
+            repository, context, FileStatus.PARSED.code(), Map.of()))
         .isInstanceOf(BizException.class)
         .hasMessage("error.common.state_conflict_detail");
   }

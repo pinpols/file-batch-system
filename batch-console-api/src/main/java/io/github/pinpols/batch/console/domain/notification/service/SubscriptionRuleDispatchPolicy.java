@@ -156,7 +156,7 @@ final class SubscriptionRuleDispatchPolicy {
       return parsed == null ? Map.of() : parsed;
     } catch (RuntimeException ex) {
       SwallowedExceptionLogger.info(
-          SubscriptionRuleWebhookDispatcher.class, "catch:config_json parse", ex);
+          SubscriptionRuleWebhookDispatcher.class, "config-json-parse-failed", ex);
       return Map.of();
     }
   }

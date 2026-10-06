@@ -217,7 +217,7 @@ public class TenantConfigPackageExcelApplyService {
   private static BizException invalidParsedRow(String sheetName, List<String> issues) {
     return BizException.of(
         ResultCode.INVALID_ARGUMENT,
-        "error.common.invalid_argument_detail",
+        ResultCode.INVALID_ARGUMENT.detailKey(),
         "invalid " + sheetName + " row: " + issues);
   }
 
@@ -330,7 +330,7 @@ public class TenantConfigPackageExcelApplyService {
       if (EmptyChecks.isNotEmpty(issues)) {
         throw BizException.of(
             ResultCode.INVALID_ARGUMENT,
-            "error.common.invalid_argument_detail",
+            ResultCode.INVALID_ARGUMENT.detailKey(),
             "invalid file_template_config row: " + issues);
       }
       Map<String, Object> existing = fileTemplateConfigMapper.selectByUniqueKey(

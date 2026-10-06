@@ -158,7 +158,7 @@ public final class ConsoleSingleSheetExcelImportSupport {
     } catch (Exception exception) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ResultCode.INVALID_ARGUMENT.detailKey(),
           "failed to read excel workbook: " + exception.getMessage());
     }
   }
@@ -199,7 +199,7 @@ public final class ConsoleSingleSheetExcelImportSupport {
     } catch (Exception exception) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ResultCode.INVALID_ARGUMENT.detailKey(),
           "failed to read excel workbook (streaming): " + exception.getMessage());
     }
   }
@@ -346,7 +346,7 @@ public final class ConsoleSingleSheetExcelImportSupport {
       return ConsoleExcelPreviewWorkbookSupport.toBytes(workbook);
     } catch (IOException exception) {
       throw BizException.of(
-          ResultCode.SYSTEM_ERROR, "error.common.system_error_detail", systemErrorMessage);
+          ResultCode.SYSTEM_ERROR, ResultCode.SYSTEM_ERROR.detailKey(), systemErrorMessage);
     }
   }
 
@@ -375,7 +375,7 @@ public final class ConsoleSingleSheetExcelImportSupport {
     if (!missingHeaders.isEmpty()) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ResultCode.INVALID_ARGUMENT.detailKey(),
           "excel missing required headers: " + String.join(", ", missingHeaders));
     }
   }

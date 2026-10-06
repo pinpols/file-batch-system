@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigApplicationService;
@@ -172,6 +173,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
             BatchDateTimeSupport.utcNow(),
             0,
             null,
+            null,
             null));
 
     webTestClient
@@ -222,7 +224,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
   @Test
   void shouldArchiveFileViaHttp() {
     when(fileApplicationService.archive(any(), anyString()))
-        .thenReturn(new ConsoleFileOperationResponse("ARCHIVED"));
+        .thenReturn(new ConsoleFileOperationResponse(FileStatus.ARCHIVED.code()));
 
     webTestClient
         .post()

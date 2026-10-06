@@ -33,7 +33,7 @@ public class ConsoleCustomTaskTypeQueryService {
     String resolved = tenantGuard.resolveTenant(tenantId);
     CustomTaskTypeEntity entity = mapper.selectByTenantAndCode(resolved, taskTypeCode);
     if (entity == null) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail", taskTypeCode);
+      throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), taskTypeCode);
     }
     return entity;
   }

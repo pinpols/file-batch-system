@@ -30,7 +30,7 @@ class PipelineVerifierHookTest {
     ContentVerifierRegistry registry = registryWith(failing);
     PipelineVerifierHook hook = new PipelineVerifierHook(providerOf(registry));
     Map<String, Object> attributes = new HashMap<>();
-    attributes.put("recordCount", 0);
+    attributes.put(PipelineRuntimeKeys.RECORD_COUNT, 0);
 
     hook.runVerifiers("t1", "EXPORT", 1L, 2L, "EXPORT_FINALIZE", attributes);
 

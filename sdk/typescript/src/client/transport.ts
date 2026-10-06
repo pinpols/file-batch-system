@@ -25,6 +25,7 @@ import {
   type HttpDecision,
 } from "../decide.ts";
 import type { HeartbeatResponse, RenewResponse } from "../protocol.ts";
+import { ErrorCode } from "../protocol.ts";
 import { signatureHeaders } from "./signing.ts";
 
 /** HTTP methods that carry a request body and are signed when signing is opt-in. */
@@ -471,7 +472,7 @@ export class HttpTransport implements Transport {
     // VALID JSON, not a bare human string (else "invalid input syntax for type json" →
     // report 500). Serialize to a {code,message} object (aligned with the built-in worker
     // DefaultTaskExecutionWrapper contract).
-    const code = body.errorCode ?? (body.success ? "SUCCESS" : "FAILED");
+    const code = body.errorCode ?? (body.success ? ErrorCode.SUCCESS : ErrorCode.EXECUTION_FAILED);
     const wireBody = {
       tenantId: this.#tenantId,
       workerId: this.#workerCode,

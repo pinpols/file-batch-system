@@ -58,10 +58,11 @@ public class PrepareStep implements ExportStageStep {
     }
     try {
       Map<String, Object> attrs = context.getAttributes();
-      ExportPayload payload = attrs.get("exportPayload") instanceof ExportPayload exportPayload
-          ? exportPayload
-          : objectMapper.readValue(context.getRawPayload(), ExportPayload.class);
-      attrs.put("exportPayload", payload);
+      ExportPayload payload =
+          attrs.get(ExportRuntimeKeys.EXPORT_PAYLOAD) instanceof ExportPayload exportPayload
+              ? exportPayload
+              : objectMapper.readValue(context.getRawPayload(), ExportPayload.class);
+      attrs.put(ExportRuntimeKeys.EXPORT_PAYLOAD, payload);
       Map<String, Object> templateConfig = Map.of();
       // 派发未带 templateCode 时,按 seed 命名约定 <jobCode>_TPL 回退加载导出模板;
       // 否则 TEMPLATE_CONFIG 为空 → GenerateStep 报「export_data_ref is required」、导出永久失败转死信。
@@ -239,7 +240,7 @@ public class PrepareStep implements ExportStageStep {
     }
     Object qps = template.get("query_param_schema");
     if (qps instanceof Map<?, ?> schema) {
-      Object nested = schema.get("exportSnapshot");
+      Object nested = schema.get(PipelineRuntimeKeys.EXPORT_SNAPSHOT);
       if (nested instanceof Map<?, ?> snap) {
         snap.forEach((k, v) -> out.put(String.valueOf(k), v));
       }

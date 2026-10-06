@@ -31,18 +31,24 @@ import org.springframework.kafka.core.ProducerFactory;
 @RequiredArgsConstructor
 public class TriggerKafkaProducerConfiguration {
 
+  /**
+   * Spring Kafka 标准 bootstrap servers key。与 Spring Boot {@code KafkaProperties} 同源，不重复登记为自定义
+   * properties；集中定义只为让生产 {@code @Value} 与测试夹具引用同一份字符串。
+   */
+  public static final String BOOTSTRAP_SERVERS_KEY = "spring.kafka.bootstrap-servers";
+
   private final TriggerKafkaProperties kafkaProperties;
   private final BatchKafkaProducerProperties commonProducerProperties;
 
   @Bean
   public KafkaAdmin triggerKafkaAdmin(
-      @Value("${spring.kafka.bootstrap-servers}") String bootstrapServers) {
+      @Value("${" + BOOTSTRAP_SERVERS_KEY + "}") String bootstrapServers) {
     return new KafkaAdmin(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers));
   }
 
   @Bean
   public ProducerFactory<String, String> triggerKafkaProducerFactory(
-      @Value("${spring.kafka.bootstrap-servers}") String bootstrapServers) {
+      @Value("${" + BOOTSTRAP_SERVERS_KEY + "}") String bootstrapServers) {
     // base 统一走全局 spring.kafka.producer.*(acks/retries/幂等/delivery & request 超时/buffer.memory),
     // 与 orchestrator / worker-core 同源,消除三处漂移。
     Map<String, Object> properties =

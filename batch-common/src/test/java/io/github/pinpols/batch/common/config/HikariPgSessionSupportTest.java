@@ -37,7 +37,8 @@ class HikariPgSessionSupportTest {
         .startsWith("SET statement_timeout TO 0; SET idle_in_transaction_session_timeout TO "
             + props.getPlatform().getIdleInTransactionTimeout().toMillis());
     assertThat(cfg.getConnectionInitSql()).endsWith("SELECT 1");
-    assertThat(cfg.getDataSourceProperties().getProperty("ApplicationName"))
+    assertThat(cfg.getDataSourceProperties()
+            .getProperty(HikariPgSessionSupport.PG_APPLICATION_NAME_KEY))
         .isEqualTo("svc-platform");
   }
 

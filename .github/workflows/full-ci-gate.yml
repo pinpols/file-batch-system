@@ -108,6 +108,7 @@ jobs:
           gate_run FULL_SCRIPT_GOVERNANCE "脚本治理" python3 scripts/ci/check-script-governance.py
           gate_run FULL_SHELL_SCRIPTS "Shell 语法与 ShellCheck" bash scripts/ci/check-shell-scripts.sh
           gate_run FULL_SHELL_LINUX_PORTABILITY "Shell Linux 兼容性" python3 scripts/ci/check-shell-linux-portability.py
+          gate_run FULL_TESTCONTAINERS_REUSE_LABEL "Testcontainers 复用标签判定" python3 scripts/ci/check-testcontainers-reuse-label.py
           gate_run FULL_POSTGRES_CLIENT_FALLBACK "PostgreSQL 客户端 fallback" bash scripts/ci/check-postgres-client-fallback.sh
 
       - name: Verify module dependency boundaries
@@ -157,6 +158,29 @@ jobs:
         shell: bash
         run: bash scripts/ci/run-gate.sh FULL_CONFIG_GOVERNANCE "配置治理注册表" -- python3 scripts/ci/check-config-governance.py
 
+      - name: Report direct config key access inventory
+        shell: bash
+        # 阶段 0 报告模式：只输出直接配置 key 读取清单与分类，不阻断历史存量（脚本恒以 0 退出）。
+        # 口径见 docs/runbook/config-key-access-governance.md；JSON 供治理看板 / 后续基线使用。
+        run: |
+          bash scripts/ci/run-gate.sh FULL_DIRECT_CONFIG_KEY_ACCESS "直接配置 Key 读取快照" -- python3 scripts/ci/check-direct-config-key-access.py --report
+          python3 scripts/ci/check-direct-config-key-access.py --json build/config-key-access.json
+
+      - name: Enforce no new direct config key access (baseline)
+        shell: bash
+        # 阶段 1（CFGKEY-3）：main push 也拦截新增高风险 PROJECT_CONFIG / SECRET_CONFIG 直接读取，
+        # 防绕过 PR 直推 main。历史存量走 baseline，不阻断既有命中。
+        run: bash scripts/ci/run-gate.sh FULL_DIRECT_CONFIG_KEY_BASELINE "直接配置 Key 增量拦截" -- python3 scripts/ci/check-direct-config-key-access.py --check-baseline docs/governance/direct-config-key-access-baseline.txt
+
+      - name: Upload direct config key access inventory
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: direct-config-key-access
+          path: build/config-key-access.json
+          retention-days: 30
+          if-no-files-found: warn
+
       - name: Verify Helm env switch sync
         shell: bash
         run: bash scripts/ci/run-gate.sh FULL_HELM_ENV_SYNC "Helm 环境变量同步" -- python3 scripts/ci/check-helm-env-sync.py
@@ -204,6 +228,14 @@ jobs:
       - name: Test Java logging governance checker
         shell: bash
         run: bash scripts/ci/run-gate.sh FULL_JAVA_LOGGING_TEST "Java 日志治理门禁测试" -- python3 -m unittest scripts/ci/tests/test_check_java_logging_governance.py
+
+      - name: Verify pipeline summary key contract
+        shell: bash
+        run: bash scripts/ci/run-gate.sh FULL_PIPELINE_SUMMARY_KEYS "Pipeline 摘要键契约" -- python3 scripts/ci/check-pipeline-summary-keys.py
+
+      - name: Test pipeline summary key contract checker
+        shell: bash
+        run: bash scripts/ci/run-gate.sh FULL_PIPELINE_SUMMARY_KEYS_TEST "Pipeline 摘要键契约门禁测试" -- python3 -m unittest scripts/ci/tests/test_check_pipeline_summary_keys.py
 
       - name: Verify Java text block style
         shell: bash
@@ -272,6 +304,7 @@ jobs:
         shell: bash
         run: |
           bash scripts/ci/run-gate.sh FULL_JAVA_SUPPRESSION_REGISTRY "Java 抑制项注册表" -- python3 scripts/ci/check-java-suppression-registry.py
+          bash scripts/ci/run-gate.sh FULL_JAVA_SUPPRESSION_REGISTRY_TEST "Java 抑制项注册表门禁测试" -- python3 -m unittest scripts/ci/tests/test_check_java_suppression_registry.py
           # test-compile 必要(PMD 需要 class 文件分析),不跑 surefire
           bash scripts/ci/run-gate.sh FULL_JAVA_STATIC_ANALYSIS "PMD、Spotless 与编译检查" -- ./mvnw -DskipTests test-compile pmd:check spotless:check -fae -B
 

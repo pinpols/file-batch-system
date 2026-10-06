@@ -69,11 +69,12 @@ class PrepareStepTest {
     assertThat(ctx.getAttributes().get("exportPayload")).isInstanceOf(ExportPayload.class);
     assertThat(ctx.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG))
         .isInstanceOf(Map.class);
-    assertThat(String.valueOf(ctx.getAttributes().get("exportFileFormatType")))
+    assertThat(String.valueOf(ctx.getAttributes().get(PipelineRuntimeKeys.EXPORT_FILE_FORMAT_TYPE)))
         .isEqualTo("DELIMITED");
-    assertThat(String.valueOf(ctx.getAttributes().get("fileName")))
+    assertThat(String.valueOf(ctx.getAttributes().get(PipelineRuntimeKeys.FILE_NAME)))
         .isEqualTo("exp_2026-03-25_t1_B001_v1");
-    assertThat(String.valueOf(ctx.getAttributes().get("objectName"))).contains("outbound/");
+    assertThat(String.valueOf(ctx.getAttributes().get(PipelineRuntimeKeys.OBJECT_NAME)))
+        .contains("outbound/");
     assertThat(ctx.getAttributes().get(PipelineRuntimeKeys.EXPORT_SNAPSHOT))
         .isInstanceOf(Map.class);
   }
@@ -112,8 +113,10 @@ class PrepareStepTest {
     var result = step.execute(ctx);
 
     assertThat(result.success()).isTrue();
-    assertThat(String.valueOf(ctx.getAttributes().get("fileName"))).isEqualTo("fixed.json");
-    assertThat(String.valueOf(ctx.getAttributes().get("objectName"))).isEqualTo("obj.json");
+    assertThat(String.valueOf(ctx.getAttributes().get(PipelineRuntimeKeys.FILE_NAME)))
+        .isEqualTo("fixed.json");
+    assertThat(String.valueOf(ctx.getAttributes().get(PipelineRuntimeKeys.OBJECT_NAME)))
+        .isEqualTo("obj.json");
   }
 
   @Test
@@ -170,9 +173,12 @@ class PrepareStepTest {
 
     assertThat(result.success()).isTrue();
     // fileName / objectName / tempObjectName 三者均带且仅带一次分片后缀
-    assertThat(String.valueOf(ctx.getAttributes().get("fileName"))).contains("_p2of4.csv");
-    assertThat(String.valueOf(ctx.getAttributes().get("objectName"))).contains("_p2of4.csv");
-    assertThat(String.valueOf(ctx.getAttributes().get("tempObjectName"))).contains("_p2of4");
+    assertThat(String.valueOf(ctx.getAttributes().get(PipelineRuntimeKeys.FILE_NAME)))
+        .contains("_p2of4.csv");
+    assertThat(String.valueOf(ctx.getAttributes().get(PipelineRuntimeKeys.OBJECT_NAME)))
+        .contains("_p2of4.csv");
+    assertThat(String.valueOf(ctx.getAttributes().get(PipelineRuntimeKeys.TEMP_OBJECT_NAME)))
+        .contains("_p2of4");
   }
 
   @Test
@@ -207,9 +213,10 @@ class PrepareStepTest {
     var result = step.execute(ctx);
 
     assertThat(result.success()).isTrue();
-    assertThat(String.valueOf(ctx.getAttributes().get("fileName")))
+    assertThat(String.valueOf(ctx.getAttributes().get(PipelineRuntimeKeys.FILE_NAME)))
         .isEqualTo("BIZ_2026-03-25_B001.csv");
-    assertThat(String.valueOf(ctx.getAttributes().get("fileName"))).doesNotContain("_p");
+    assertThat(String.valueOf(ctx.getAttributes().get(PipelineRuntimeKeys.FILE_NAME)))
+        .doesNotContain("_p");
   }
 
   @Test
@@ -246,7 +253,7 @@ class PrepareStepTest {
     var result = step.execute(ctx);
 
     assertThat(result.success()).isTrue();
-    assertThat(String.valueOf(ctx.getAttributes().get("objectName")))
+    assertThat(String.valueOf(ctx.getAttributes().get(PipelineRuntimeKeys.OBJECT_NAME)))
         .isEqualTo("custom/report_p1of3.json");
   }
 }

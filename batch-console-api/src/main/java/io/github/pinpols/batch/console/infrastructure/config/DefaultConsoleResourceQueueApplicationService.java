@@ -54,7 +54,7 @@ public class DefaultConsoleResourceQueueApplicationService
     if (existing != null) {
       throw BizException.of(
           ResultCode.CONFLICT,
-          "error.common.conflict_detail",
+          ResultCode.CONFLICT.detailKey(),
           "queue code already exists: " + request.getQueueCode());
     }
     Map<String, Object> params = new HashMap<>();

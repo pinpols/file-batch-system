@@ -73,6 +73,7 @@
             <arg column="host_name" javaType="java.lang.String"/>
             <arg column="host_ip" javaType="java.lang.String"/>
             <arg column="process_id" javaType="java.lang.String"/>
+            <arg column="port" javaType="java.lang.Integer"/>
             <arg column="build_id" javaType="java.lang.String"/>
             <arg column="sdk_version" javaType="java.lang.String"/>
             <arg column="worker_pool_code" javaType="java.lang.String"/>
@@ -84,7 +85,7 @@
         capability_tags::text as capability_tags_text,
         resource_tag, status, heartbeat_at, current_load, max_concurrent,
         drain_started_at, drain_deadline_at,
-        host_name, host_ip, process_id, build_id, sdk_version,
+        host_name, host_ip, process_id, port, build_id, sdk_version,
         coalesce(worker_pool_code, worker_code) as worker_pool_code
     </sql>
 
@@ -202,7 +203,7 @@
         insert into batch.worker_registry (
             tenant_id, worker_code, worker_group, capability_tags, resource_tag,
             status, heartbeat_at, current_load, max_concurrent, drain_started_at, drain_deadline_at,
-            host_name, host_ip, process_id, build_id, sdk_version, worker_pool_code,
+            host_name, host_ip, process_id, port, build_id, sdk_version, worker_pool_code,
             created_at, updated_at
         ) values (
             #{tenantId}, #{workerCode}, #{workerGroup},
@@ -210,7 +211,7 @@
             #{resourceTag},
             #{status}, #{heartbeatAt}, #{currentLoad}, #{maxConcurrent},
             #{drainStartedAt}, #{drainDeadlineAt},
-            #{hostName}, #{hostIp}, #{processId}, #{buildId}, #{sdkVersion}, #{workerPoolCode},
+            #{hostName}, #{hostIp}, #{processId}, #{port}, #{buildId}, #{sdkVersion}, #{workerPoolCode},
             current_timestamp, current_timestamp
         )
         on conflict (tenant_id, worker_code) do nothing
@@ -242,6 +243,7 @@
                host_name          = coalesce(#{worker.hostName}, host_name),
                host_ip            = coalesce(#{worker.hostIp}, host_ip),
                process_id         = coalesce(#{worker.processId}, process_id),
+               port               = coalesce(#{worker.port}, port),
                build_id           = coalesce(#{worker.buildId}, build_id),
                sdk_version        = coalesce(#{worker.sdkVersion}, sdk_version),
                worker_pool_code   = coalesce(#{worker.workerPoolCode}, worker_pool_code, worker_code),
@@ -301,6 +303,7 @@
                host_name          = coalesce(#{hostName}, host_name),
                host_ip            = coalesce(#{hostIp}, host_ip),
                process_id         = coalesce(#{processId}, process_id),
+               port               = coalesce(#{port}, port),
                build_id           = coalesce(#{buildId}, build_id),
                sdk_version        = coalesce(#{sdkVersion}, sdk_version),
                worker_pool_code   = coalesce(#{workerPoolCode}, worker_pool_code, worker_code),

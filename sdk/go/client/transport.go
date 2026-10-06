@@ -67,7 +67,7 @@ type ReportRequest struct {
 // the openapi-required identity + success fields. partitionInvocationID is the
 // value cached at claim (empty for non-partition tasks).
 func NewReportRequest(taskID, tenantID, workerID, partitionInvocationID string, result TaskResult) ReportRequest {
-	code := "SUCCESS"
+	code := string(protocol.ErrorCodeSuccess)
 	if !result.IsSuccess() {
 		code = string(result.ErrorCode)
 	}
@@ -77,7 +77,9 @@ func NewReportRequest(taskID, tenantID, workerID, partitionInvocationID string, 
 	// worker contract: a {"code","message"} JSON object (DefaultTaskExecutionWrapper).
 	summaryJSON, err := json.Marshal(map[string]string{"code": code, "message": result.ResultSummary})
 	if err != nil {
-		summaryJSON = []byte(`{"code":"SUCCESS","message":""}`)
+		// map[string]string 的 json.Marshal 实际不会失败;兜底 payload 同样取自规范常量,
+		// 不另写一份字面量。
+		summaryJSON = []byte(fmt.Sprintf(`{"code":%q,"message":""}`, protocol.ErrorCodeSuccess))
 	}
 	return ReportRequest{
 		TaskID:                taskID,

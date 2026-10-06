@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.file.realtime;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
+import io.github.pinpols.batch.console.config.ConsolePipelineProgressDirtyProperties;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsolePipelineProgressDirtyEventResponse;
 import io.github.pinpols.batch.console.domain.file.mapper.ConsolePipelineProgressDirtyMapper;
 import io.github.pinpols.batch.console.domain.file.view.PipelineProgressDirtyView;
@@ -18,7 +19,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
@@ -45,6 +45,7 @@ public class ConsolePipelineProgressDirtyPublisher {
   private static final int MAX_TRACKED_KEYS = 10_000;
   private final ConsolePipelineProgressDirtyMapper dirtyMapper;
   private final ConsoleRealtimeEventPort eventPublisher;
+  private final ConsolePipelineProgressDirtyProperties properties;
 
   private final AtomicBoolean stopping = new AtomicBoolean(false);
   private final Map<String, Instant> lastPublishedUpdateByPipeline = new ConcurrentHashMap<>();
@@ -53,28 +54,19 @@ public class ConsolePipelineProgressDirtyPublisher {
   private ScheduledExecutorService scheduler;
   private volatile Instant lastSeen = Instant.now().minusSeconds(30);
 
-  @Value("${batch.console.pipeline-progress-dirty.interval-millis:5000}")
   private long intervalMillis;
-
-  @Value("${batch.console.pipeline-progress-dirty.initial-delay-millis:10000}")
   private long initialDelayMillis;
-
-  @Value("${batch.console.pipeline-progress-dirty.lookback-overlap-millis:2000}")
   private long lookbackOverlapMillis;
-
-  @Value("${batch.console.pipeline-progress-dirty.throttle-millis:10000}")
   private long throttleMillis;
-
-  @Value("${batch.console.pipeline-progress-dirty.batch-size:500}")
   private int batchSize;
 
   @PostConstruct
   void start() {
-    intervalMillis = Math.max(1_000L, intervalMillis);
-    initialDelayMillis = Math.max(0L, initialDelayMillis);
-    lookbackOverlapMillis = Math.max(0L, lookbackOverlapMillis);
-    throttleMillis = Math.max(intervalMillis, throttleMillis);
-    batchSize = Math.max(1, Math.min(batchSize, 2_000));
+    intervalMillis = Math.max(1_000L, properties.getIntervalMillis());
+    initialDelayMillis = Math.max(0L, properties.getInitialDelayMillis());
+    lookbackOverlapMillis = Math.max(0L, properties.getLookbackOverlapMillis());
+    throttleMillis = Math.max(intervalMillis, properties.getThrottleMillis());
+    batchSize = Math.clamp(properties.getBatchSize(), 1, 2_000);
 
     scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
       Thread t = new Thread(r, "pipeline-progress-dirty-publisher");

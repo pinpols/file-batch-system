@@ -1,20 +1,20 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `71bed4e93`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `6a6899124`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,678 | 486,605 | 246,784 | 50.7% |
+| 4,715 | 491,141 | 248,853 | 50.7% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| prod | 2,711 | 249,083 | 114,159 | 45.8% |
-| test | 1,200 | 172,725 | 92,058 | 53.3% |
-| script | 621 | 49,048 | 30,642 | 62.5% |
+| prod | 2,737 | 250,451 | 114,614 | 45.8% |
+| test | 1,208 | 174,098 | 92,764 | 53.3% |
+| script | 624 | 50,843 | 31,550 | 62.1% |
 | config | 53 | 8,156 | 5,855 | 71.8% |
 | infra-config | 32 | 5,332 | 3,901 | 73.2% |
 | sql | 61 | 2,261 | 169 | 7.5% |
@@ -23,16 +23,16 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,446 | 355,854 | 180,978 | 50.9% |
-| Shell | 196 | 29,805 | 23,232 | 77.9% |
-| Python | 224 | 30,120 | 15,267 | 50.7% |
+| Java | 3,476 | 357,772 | 181,732 | 50.8% |
+| Shell | 196 | 29,916 | 23,307 | 77.9% |
+| Python | 231 | 32,529 | 16,475 | 50.6% |
 | YAML | 95 | 12,437 | 9,417 | 75.7% |
-| XML | 178 | 21,437 | 6,638 | 31.0% |
-| TypeScript | 37 | 6,572 | 3,097 | 47.1% |
-| Rust | 23 | 8,405 | 2,833 | 33.7% |
+| XML | 178 | 21,441 | 6,640 | 31.0% |
+| TypeScript | 37 | 6,632 | 3,124 | 47.1% |
+| Rust | 23 | 8,423 | 2,835 | 33.7% |
 | Properties | 5 | 2,887 | 2,361 | 81.8% |
 | SQL | 433 | 11,791 | 1,458 | 12.4% |
-| Go | 34 | 6,967 | 1,287 | 18.5% |
+| Go | 34 | 6,983 | 1,288 | 18.4% |
 | TOML | 7 | 330 | 216 | 65.5% |
 
 ## 最大文件（按 Lean logical LOC）
@@ -58,7 +58,7 @@
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | prod | Java | 1,028 | 451 |
 | `scripts/local/pre-push-sdk-checks.sh` | script | Shell | 558 | 424 |
 | `scripts/local/sim-harness.sh` | script | Shell | 557 | 418 |
-| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java` | prod | Java | 870 | 409 |
+| `scripts/ci/check-pipeline-summary-keys.py` | script | Python | 838 | 417 |
 
 ## 复跑
 

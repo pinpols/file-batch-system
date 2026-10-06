@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.governance;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.RunMode;
@@ -82,13 +83,13 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
   @Override
   @Transactional
   public String archiveFile(FileGovernanceCommand command) {
-    return changeFileStatus(command, "ARCHIVED", "ARCHIVE");
+    return changeFileStatus(command, FileStatus.ARCHIVED.code(), "ARCHIVE");
   }
 
   @Override
   @Transactional
   public String deleteFile(FileGovernanceCommand command) {
-    return changeFileStatus(command, "DELETED", "DELETE");
+    return changeFileStatus(command, FileStatus.DELETED.code(), "DELETE");
   }
 
   /**
@@ -207,12 +208,18 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
         new FileGovernanceRepository.FileStorage("S3", storagePath, storageBucket);
     FileGovernanceRepository.ReconciledFileRecordCommand recordCommand =
         new FileGovernanceRepository.ReconciledFileRecordCommand(
-            fileIdentity, 0L, fileStorage, "UPLOAD", "RECEIVED", command.traceId(), metadata);
+            fileIdentity,
+            0L,
+            fileStorage,
+            "UPLOAD",
+            FileStatus.RECEIVED.code(),
+            command.traceId(),
+            metadata);
     Long fileId = fileGovernanceRepository.createReconciledFileRecord(recordCommand);
     if (EmptyChecks.isNull(fileId)) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT,
-          "error.common.state_conflict_detail",
+          ResultCode.STATE_CONFLICT.detailKey(),
           "upload storage path already exists");
     }
     FileGovernanceRepository.FileAuditCommand auditCommand =
@@ -228,7 +235,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     fileGovernanceRepository.appendAudit(auditCommand);
     return new FileUploadSessionResponse(
         fileId,
-        "RECEIVED",
+        FileStatus.RECEIVED.code(),
         "APP_MANAGED",
         "PUT",
         "file",
@@ -370,7 +377,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
           default ->
             throw BizException.of(
                 ResultCode.INVALID_ARGUMENT,
-                "error.common.invalid_argument_detail",
+                ResultCode.INVALID_ARGUMENT.detailKey(),
                 "unsupported arrival action: " + command.action());
         };
     if ("EMPTY_RUN".equals(action) && !toBoolean(firstGroupFile.get("allow_empty_run"))) {
@@ -486,7 +493,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
       if (updated <= 0) {
         throw BizException.of(
             ResultCode.STATE_CONFLICT,
-            "error.common.state_conflict_detail",
+            ResultCode.STATE_CONFLICT.detailKey(),
             "file status changed concurrently, expected " + currentStatus);
       }
       FileGovernanceRepository.FileAuditCommand auditCommand =

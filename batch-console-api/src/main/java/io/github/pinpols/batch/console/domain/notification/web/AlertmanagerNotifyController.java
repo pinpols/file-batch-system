@@ -63,7 +63,7 @@ public class AlertmanagerNotifyController {
     if (!Texts.hasText(expected)) {
       log.warn("am-notify rejected: bearer token not configured (fail-closed)");
       throw BizException.of(
-          ResultCode.UNAUTHORIZED, "error.common.unauthorized_detail", "am-notify not configured");
+          ResultCode.UNAUTHORIZED, ResultCode.UNAUTHORIZED.detailKey(), "am-notify not configured");
     }
     String provided = authorization != null && authorization.startsWith(BEARER_PREFIX)
         ? authorization.substring(BEARER_PREFIX.length()).trim()
@@ -71,7 +71,7 @@ public class AlertmanagerNotifyController {
     if (!SecretComparator.constantTimeEquals(expected, provided)) {
       log.warn("am-notify rejected: invalid or missing bearer token");
       throw BizException.of(
-          ResultCode.UNAUTHORIZED, "error.common.unauthorized_detail", "invalid am-notify token");
+          ResultCode.UNAUTHORIZED, ResultCode.UNAUTHORIZED.detailKey(), "invalid am-notify token");
     }
   }
 }

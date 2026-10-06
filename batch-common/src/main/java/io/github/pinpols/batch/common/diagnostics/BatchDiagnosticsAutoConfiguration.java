@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.config.FilesystemStorageProperties;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.config.StorageBackendGuardProperties;
+import io.github.pinpols.batch.common.config.StorageBackendProperties;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -24,8 +25,14 @@ public class BatchDiagnosticsAutoConfiguration {
       ObjectProvider<BatchSecurityProperties> securityProvider,
       ObjectProvider<S3StorageProperties> s3Provider,
       ObjectProvider<FilesystemStorageProperties> filesystemProvider,
-      ObjectProvider<StorageBackendGuardProperties> guardProvider) {
+      ObjectProvider<StorageBackendGuardProperties> guardProvider,
+      StorageBackendProperties backendProperties) {
     return new BatchRuntimeStatusEndpoint(
-        environment, securityProvider, s3Provider, filesystemProvider, guardProvider);
+        environment,
+        securityProvider,
+        s3Provider,
+        filesystemProvider,
+        guardProvider,
+        backendProperties);
   }
 }

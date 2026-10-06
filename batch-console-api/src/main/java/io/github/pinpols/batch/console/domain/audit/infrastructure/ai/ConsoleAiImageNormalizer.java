@@ -88,7 +88,7 @@ public final class ConsoleAiImageNormalizer {
   }
 
   private static BizException invalidImage() {
-    return BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument_detail");
+    return BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
   }
 
   public record NormalizedImage(byte[] bytes, String mediaType, int width, int height) {}

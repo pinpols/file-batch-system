@@ -3,8 +3,11 @@ package io.github.pinpols.batch.worker.imports.infrastructure;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.ErrorSinkType;
+import io.github.pinpols.batch.common.enums.FileAuditOperationType;
+import io.github.pinpols.batch.common.enums.OperationResult;
 import io.github.pinpols.batch.common.enums.SkipAction;
 import io.github.pinpols.batch.common.enums.SkipThresholdMode;
+import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.utils.ContentMaskingUtils;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -18,6 +21,7 @@ import io.github.pinpols.batch.worker.imports.config.ImportSkipProperties;
 import io.github.pinpols.batch.worker.imports.domain.ImportBadRecordEntity;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportStage;
+import io.github.pinpols.batch.worker.imports.stage.ImportRuntimeKeys;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -206,9 +210,11 @@ public class ImportRecordGovernanceService {
     }
     Map<String, Object> metadata = new LinkedHashMap<>();
     metadata.put("badRecordCount", badRecords.size());
-    metadata.put("successCount", numberValue(attrs.get("successCount")));
+    metadata.put(
+        ImportRuntimeKeys.SUCCESS_COUNT, numberValue(attrs.get(ImportRuntimeKeys.SUCCESS_COUNT)));
     metadata.put(KEY_SKIPPED_COUNT, numberValue(attrs.get(KEY_SKIPPED_COUNT)));
-    metadata.put("failedCount", numberValue(attrs.get("failedCount")));
+    metadata.put(
+        ImportRuntimeKeys.FAILED_COUNT, numberValue(attrs.get(ImportRuntimeKeys.FAILED_COUNT)));
     metadata.put(
         PipelineRuntimeKeys.IMPORT_TOTAL_COUNT,
         numberValue(attrs.get(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT)));
@@ -221,8 +227,9 @@ public class ImportRecordGovernanceService {
         PipelineRuntimeKeys.IMPORT_SKIP_THRESHOLD_EXCEEDED,
         Boolean.TRUE.equals(attrs.get(PipelineRuntimeKeys.IMPORT_SKIP_THRESHOLD_EXCEEDED)));
     metadata.put(
-        "manualReviewRequired",
-        Boolean.TRUE.equals(attrs.get("manualReviewRequired")) || shouldManualReview());
+        ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED,
+        Boolean.TRUE.equals(attrs.get(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED))
+            || shouldManualReview());
     if (Texts.hasText(errorOutputPath)) {
       metadata.put("errorOutputPath", errorOutputPath);
     }
@@ -230,9 +237,9 @@ public class ImportRecordGovernanceService {
     fileAudits.appendAudit(FileAuditParam.builder()
         .fileId(fileId)
         .tenantId(context.getTenantId())
-        .operationType("BAD_RECORD_GOVERNANCE")
-        .operationResult("SUCCESS")
-        .operatorType("SYSTEM")
+        .operationType(FileAuditOperationType.BAD_RECORD_GOVERNANCE.code())
+        .operationResult(OperationResult.SUCCESS.code())
+        .operatorType(AuditLogConstants.OPERATOR_TYPE_SYSTEM)
         .operatorId(context.getWorkerId())
         .traceId(stringValue(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
         .evidenceRef("import-error-output")
@@ -301,7 +308,7 @@ public class ImportRecordGovernanceService {
         increment(context, stageScoped);
       }
     } else {
-      increment(context, "failedCount");
+      increment(context, ImportRuntimeKeys.FAILED_COUNT);
       String stageScoped = resolveStageScopedKey(stage, false);
       if (stageScoped != null) {
         increment(context, stageScoped);
@@ -348,14 +355,14 @@ public class ImportRecordGovernanceService {
         .build());
 
     if (skipped && resolveSkipAction() == SkipAction.MANUAL_REVIEW) {
-      attrs.put("manualReviewRequired", true);
+      attrs.put(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED, true);
     }
     if (!skipped) {
-      attrs.put("lastBadRecord", badRecord);
+      attrs.put(ImportRuntimeKeys.LAST_BAD_RECORD, badRecord);
     }
-    attrs.put("lastProcessedRecordNo", recordNo);
-    attrs.put("lastErrorCode", errorCode);
-    attrs.put("lastErrorMessage", errorMessage);
+    attrs.put(ImportRuntimeKeys.LAST_PROCESSED_RECORD_NO, recordNo);
+    attrs.put(ImportRuntimeKeys.LAST_ERROR_CODE, errorCode);
+    attrs.put(ImportRuntimeKeys.LAST_ERROR_MESSAGE, errorMessage);
   }
 
   @SuppressWarnings("unchecked")

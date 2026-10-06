@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.file;
 
+import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -30,7 +31,6 @@ public class FileGovernanceScheduler {
   private static final String SCHEDULER_NAME = "file-governance-scheduler";
   private static final String STATUS_TRIGGERED = "TRIGGERED";
   private static final String STATUS_WAITING_MANUAL_CONFIRM = "WAITING_MANUAL_CONFIRM";
-  private static final String ACTOR_SYSTEM = "SYSTEM";
 
   private record ArrivalGroupUpdateState(String arrivalState, String reason, Instant now) {}
 
@@ -410,7 +410,8 @@ public class FileGovernanceScheduler {
               fileId,
               "ARRIVAL_GROUP_" + context.state().arrivalState(),
               "SUCCESS",
-              new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
+              new FileGovernanceRepository.FileAuditActor(
+                  AuditLogConstants.OPERATOR_TYPE_SYSTEM, SCHEDULER_NAME),
               "arrival-group-" + context.key().fileGroupCode(),
               metadata);
       fileGovernanceRepository.appendAudit(auditCommand);

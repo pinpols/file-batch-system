@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.imports.stage;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -391,7 +392,7 @@ public class ValidateStep implements ImportStageStep {
     ImportStageSupport.updateFileStatusRecoverAware(
         fileRecords,
         context,
-        "VALIDATED",
+        FileStatus.VALIDATED.code(),
         Map.of(
             PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT,
             validatedCount,
@@ -399,11 +400,12 @@ public class ValidateStep implements ImportStageStep {
             numberValue(context.getAttributes().get(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT)),
             "badRecordCount",
             badRecordCount(context),
-            "manualReviewRequired",
-            Boolean.TRUE.equals(context.getAttributes().get("manualReviewRequired")),
+            ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED,
+            Boolean.TRUE.equals(
+                context.getAttributes().get(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED)),
             "qualityChecks",
             session.appliedChecks(),
-            "validatedRecordsPath",
+            PipelineRuntimeKeys.VALIDATED_RECORDS_PATH,
             validatedRecordsPath.toString()));
   }
 

@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.infrastructure.config;
 import io.github.pinpols.batch.common.enums.ConfigLifecycleStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
@@ -83,6 +84,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
   private static final String KEY_TENANT_ID = "tenantId";
   private static final String KEY_GRAY_SCOPE_JSON = "grayScopeJson";
   private static final String KEY_RELEASE_ID = "releaseId";
+  private static final String KEY_SECRET_STATUS = "secretStatus";
   private static final String EMPTY_JSON_OBJECT = "{}";
   private static final String REDACTED_SECRET_PAYLOAD = "{\"redacted\":true}";
 
@@ -229,7 +231,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
             ConfigLifecycleStatus.GRAY.code())
         .contains(nextStatus)) {
       throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument_detail", "secretStatus");
+          ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey(), KEY_SECRET_STATUS);
     }
     boolean currentVersion = !ConfigLifecycleStatus.DRAFT.code().equals(nextStatus);
     if (currentVersion) {
@@ -242,7 +244,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     } catch (IllegalArgumentException exception) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ResultCode.INVALID_ARGUMENT.detailKey(),
           exception.getMessage());
     }
     secretVersionMapper.insertSecretVersion(mapOf(
@@ -254,7 +256,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
         ConsoleTextSanitizer.safeInput(request.getSecretName(), 256),
         "versionNo",
         nextVersionNo,
-        "secretStatus",
+        KEY_SECRET_STATUS,
         nextStatus,
         "currentVersion",
         currentVersion,
@@ -283,7 +285,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
             Map.of(
                 "secretName",
                 ConsoleTextSanitizer.safeInput(request.getSecretName(), 256),
-                "secretStatus",
+                KEY_SECRET_STATUS,
                 nextStatus)));
     logChange(changeLogCommand);
     return Long.valueOf(nextVersionNo);
@@ -407,7 +409,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
         .versionNo(command.target().versionNo())
         .action(command.change().action())
         .result(command.change().result())
-        .operatorType("API")
+        .operatorType(AuditLogConstants.OPERATOR_TYPE_API)
         .summary(JsonUtils.toJson(detailOf(
             ConsoleTextSanitizer.safeInput(command.context().reason(), 512),
             command.change().detail())))
@@ -490,7 +492,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
       return JsonUtils.toJson(request.getSecretPayload());
     }
     throw BizException.of(
-        ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument_detail", "secretPayloadJson");
+        ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey(), "secretPayloadJson");
   }
 
   private record ChangeLogContext(

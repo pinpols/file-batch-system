@@ -15,6 +15,7 @@ import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor;
+import io.github.pinpols.batch.worker.core.config.WorkerConcurrencyProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.domain.WorkerExecutionResult;
 import io.github.pinpols.batch.worker.core.infrastructure.DeadLetterPublisher;
@@ -76,47 +77,48 @@ class AbstractTaskConsumerBackpressureTest {
     ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
     SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
     when(meterRegistryProvider.getIfAvailable()).thenReturn(meterRegistry);
-    AbstractTaskConsumer consumer = new AbstractTaskConsumer(registry, meterRegistryProvider, 1) {
-      @Override
-      protected AbstractWorkerLoop workerLoop() {
-        return new AbstractWorkerLoop(lifecycleManager, heartbeatService, dateTimeSupport, 1) {
+    AbstractTaskConsumer consumer =
+        new AbstractTaskConsumer(registry, meterRegistryProvider, concurrencyProperties(1)) {
+          @Override
+          protected AbstractWorkerLoop workerLoop() {
+            return new AbstractWorkerLoop(lifecycleManager, heartbeatService, dateTimeSupport, 1) {
+              @Override
+              protected WorkerConfiguration workerConfiguration() {
+                return AbstractTaskConsumerBackpressureTest.this.workerConfiguration();
+              }
+
+              @Override
+              protected String workerGroup() {
+                return "test";
+              }
+
+              @Override
+              protected int workerPort() {
+                return 0;
+              }
+            };
+          }
+
           @Override
           protected WorkerConfiguration workerConfiguration() {
             return AbstractTaskConsumerBackpressureTest.this.workerConfiguration();
           }
 
           @Override
-          protected String workerGroup() {
-            return "test";
+          protected TaskDispatchExecutor taskDispatchExecutor() {
+            return executor;
           }
 
           @Override
-          protected int workerPort() {
-            return 0;
+          public String listenerId() {
+            return "test-listener";
+          }
+
+          @Override
+          protected DeadLetterPublisher deadLetterPublisher() {
+            return null;
           }
         };
-      }
-
-      @Override
-      protected WorkerConfiguration workerConfiguration() {
-        return AbstractTaskConsumerBackpressureTest.this.workerConfiguration();
-      }
-
-      @Override
-      protected TaskDispatchExecutor taskDispatchExecutor() {
-        return executor;
-      }
-
-      @Override
-      public String listenerId() {
-        return "test-listener";
-      }
-
-      @Override
-      protected DeadLetterPublisher deadLetterPublisher() {
-        return null;
-      }
-    };
 
     // 强制 permits = 1(通过构造器注入)
     consumer.initSemaphore();
@@ -226,7 +228,8 @@ class AbstractTaskConsumerBackpressureTest {
 
     @SuppressWarnings("unchecked")
     ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
-    return new AbstractTaskConsumer(registry, meterRegistryProvider, maxConcurrentTasks) {
+    return new AbstractTaskConsumer(
+        registry, meterRegistryProvider, concurrencyProperties(maxConcurrentTasks)) {
       @Override
       protected AbstractWorkerLoop workerLoop() {
         return new AbstractWorkerLoop(
@@ -268,5 +271,11 @@ class AbstractTaskConsumerBackpressureTest {
         return null;
       }
     };
+  }
+
+  private static WorkerConcurrencyProperties concurrencyProperties(int maxConcurrentTasks) {
+    WorkerConcurrencyProperties properties = new WorkerConcurrencyProperties();
+    properties.setMaxConcurrentTasks(maxConcurrentTasks);
+    return properties;
   }
 }

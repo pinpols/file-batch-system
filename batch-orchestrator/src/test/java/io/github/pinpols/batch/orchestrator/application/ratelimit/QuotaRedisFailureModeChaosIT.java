@@ -9,6 +9,7 @@ import io.github.pinpols.batch.orchestrator.application.scheduler.QuotaRuntimeSt
 import io.github.pinpols.batch.orchestrator.application.scheduler.QuotaRuntimeStateService.QuotaReservationPolicy;
 import io.github.pinpols.batch.orchestrator.application.scheduler.QuotaRuntimeStateService.QuotaReservationReason;
 import io.github.pinpols.batch.orchestrator.application.scheduler.QuotaRuntimeStateService.QuotaReservationRequest;
+import io.github.pinpols.batch.orchestrator.config.QuotaProperties;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceCheck;
 import io.github.pinpols.batch.orchestrator.infrastructure.quota.RedisQuotaRuntimeStateService;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
@@ -42,10 +43,10 @@ class QuotaRedisFailureModeChaosIT extends AbstractChaosIntegrationTest {
           new OrchestratorRedisSupport(new StringRedisTemplate(factory), new ObjectMapper());
       BatchTimezoneProvider timezoneProvider =
           new BatchTimezoneProvider(new BatchTimezoneProperties());
-      RedisQuotaRuntimeStateService closed =
-          new RedisQuotaRuntimeStateService(redis, timezoneProvider, "FAIL_CLOSED");
+      RedisQuotaRuntimeStateService closed = new RedisQuotaRuntimeStateService(
+          redis, timezoneProvider, quotaProperties("FAIL_CLOSED"));
       RedisQuotaRuntimeStateService open =
-          new RedisQuotaRuntimeStateService(redis, timezoneProvider, "FAIL_OPEN");
+          new RedisQuotaRuntimeStateService(redis, timezoneProvider, quotaProperties("FAIL_OPEN"));
 
       // 健康路径：Redis 可用时两种模式都正常判定额度
       assertThat(closed.evaluateAndReserve(REQUEST).allowed()).isTrue();
@@ -62,6 +63,12 @@ class QuotaRedisFailureModeChaosIT extends AbstractChaosIntegrationTest {
     } finally {
       factory.destroy();
     }
+  }
+
+  private static QuotaProperties quotaProperties(String failureMode) {
+    QuotaProperties properties = new QuotaProperties();
+    properties.getRedis().setFailureMode(failureMode);
+    return properties;
   }
 
   private LettuceConnectionFactory newLettuceFactory() {

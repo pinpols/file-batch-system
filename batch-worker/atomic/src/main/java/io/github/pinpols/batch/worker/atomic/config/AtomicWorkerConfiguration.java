@@ -13,6 +13,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * batch.task.dispatch.atomic(ADR-029)。
  */
 @ConfigurationProperties(prefix = "batch.worker.atomic")
+@SuppressWarnings("ConfigurationProperties") // 与 BatchWorkerAtomicProperties 共享前缀，子键互不重叠。
 public record AtomicWorkerConfiguration(
     String workerCode,
     String workerType,

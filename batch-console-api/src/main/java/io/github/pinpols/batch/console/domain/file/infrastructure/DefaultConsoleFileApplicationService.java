@@ -218,7 +218,7 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
     if ("LOCAL".equalsIgnoreCase(storageType)) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT,
-          "error.common.state_conflict_detail",
+          ResultCode.STATE_CONFLICT.detailKey(),
           "content upload requires object-store backed file record");
     }
     String storagePath = fileRecord.storagePath();

@@ -2,7 +2,12 @@ package io.github.pinpols.batch.worker.dispatchs.stage;
 
 import static io.github.pinpols.batch.worker.core.support.AbstractStageExecutor.ERROR_OBJECT_MAPPER;
 
+import io.github.pinpols.batch.common.enums.FileAuditOperationType;
+import io.github.pinpols.batch.common.enums.FileStatus;
+import io.github.pinpols.batch.common.enums.OperationResult;
+import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.service.DryRunGuard;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
@@ -12,6 +17,7 @@ import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -47,7 +53,9 @@ public class CompensateDispatchStep implements DispatchStageStep {
         .isDryRun()) {
       return DispatchStageResult.success(stage());
     }
-    Object payload = context == null ? null : context.getAttributes().get("dispatchPayload");
+    Object payload = EmptyChecks.isNull(context)
+        ? null
+        : context.getAttributes().get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
     if (!(payload instanceof DispatchPayload dispatchPayload)) {
       return DispatchStageResult.failure(
           stage(),
@@ -76,18 +84,22 @@ public class CompensateDispatchStep implements DispatchStageStep {
     }
     fileRecords.updateFileStatus(
         fileId,
-        "FAILED",
-        Map.of("channelCode", Objects.requireNonNullElse(dispatchPayload.channelCode(), "")));
+        FileStatus.FAILED.code(),
+        Map.of(
+            DispatchRuntimeKeys.CHANNEL_CODE,
+            Objects.requireNonNullElse(dispatchPayload.channelCode(), "")));
     Map<String, Object> detailSummary = new LinkedHashMap<>();
-    detailSummary.put("channelCode", dispatchPayload.channelCode());
-    detailSummary.put("dispatchTarget", dispatchPayload.dispatchTarget());
-    detailSummary.put("externalRequestId", attrs.get("externalRequestId"));
+    detailSummary.put(DispatchRuntimeKeys.CHANNEL_CODE, dispatchPayload.channelCode());
+    detailSummary.put(DispatchRuntimeKeys.DISPATCH_TARGET, dispatchPayload.dispatchTarget());
+    detailSummary.put(
+        DispatchRuntimeKeys.EXTERNAL_REQUEST_ID,
+        attrs.get(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID));
     fileAudits.appendAudit(FileAuditParam.builder()
         .fileId(fileId)
         .tenantId(context.getTenantId())
-        .operationType("DISPATCH_COMPENSATE")
-        .operationResult("FAILED")
-        .operatorType("SYSTEM")
+        .operationType(FileAuditOperationType.DISPATCH_COMPENSATE.code())
+        .operationResult(OperationResult.FAILED.code())
+        .operatorType(AuditLogConstants.OPERATOR_TYPE_SYSTEM)
         .operatorId(context.getWorkerId())
         .traceId(String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
         .evidenceRef(null)

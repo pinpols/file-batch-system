@@ -70,7 +70,7 @@ public class DefaultConsoleJobDefinitionApplicationService
     if (existing != null) {
       throw BizException.of(
           ResultCode.CONFLICT,
-          "error.common.conflict_detail",
+          ResultCode.CONFLICT.detailKey(),
           "job code already exists: " + request.getJobCode());
     }
     JobDefinitionEntity entity = new JobDefinitionEntity();
@@ -225,7 +225,7 @@ public class DefaultConsoleJobDefinitionApplicationService
     if (existing != null) {
       throw BizException.of(
           ResultCode.CONFLICT,
-          "error.common.conflict_detail",
+          ResultCode.CONFLICT.detailKey(),
           "job code already exists: " + request.getNewJobCode());
     }
     String operator = requestMetadataResolver.current().operatorId();

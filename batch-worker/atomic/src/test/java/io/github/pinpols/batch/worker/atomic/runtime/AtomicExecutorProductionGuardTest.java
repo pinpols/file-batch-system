@@ -16,6 +16,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.context.properties.bind.Bindable;
+import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.mock.env.MockEnvironment;
 
 /** {@link AtomicExecutorProductionGuard} 单测:验证 prod profile fail-closed 行为 + dev/local 放行行为。 */
@@ -45,8 +47,11 @@ class AtomicExecutorProductionGuardTest {
   }
 
   private AtomicExecutorProductionGuard newGuard() {
+    AtomicExecutorGuardProperties guardProperties = Binder.get(env)
+        .bind("batch.worker.executors.guard", Bindable.of(AtomicExecutorGuardProperties.class))
+        .orElseGet(AtomicExecutorGuardProperties::new);
     return new AtomicExecutorProductionGuard(
-        env, sqlProvider, spProvider, httpProvider, shellProvider, sparkProvider);
+        env, guardProperties, sqlProvider, spProvider, httpProvider, shellProvider, sparkProvider);
   }
 
   private void stubAllWith(

@@ -448,7 +448,7 @@ class GenerateStepTest {
     ExportStageResult result = generateStep.execute(context);
 
     assertThat(result.success()).isTrue();
-    assertThat(context.getAttributes()).containsEntry("recordCount", 3L);
+    assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.RECORD_COUNT, 3L);
     String content = readGeneratedFile(context);
     assertThat(content).contains("\"1\"").contains("\"2\"").contains("\"3\"");
   }
@@ -493,7 +493,7 @@ class GenerateStepTest {
     ExportPayload payload = new ExportPayload(
         null, null, "TMPL_001", "BATCH-001", null, null, null, null, null, null, Map.of());
     context.getAttributes().put("exportPayload", payload);
-    context.getAttributes().put("exportFileFormatType", fileFormatType);
+    context.getAttributes().put(PipelineRuntimeKeys.EXPORT_FILE_FORMAT_TYPE, fileFormatType);
     context.getAttributes().put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);
     return context;
   }

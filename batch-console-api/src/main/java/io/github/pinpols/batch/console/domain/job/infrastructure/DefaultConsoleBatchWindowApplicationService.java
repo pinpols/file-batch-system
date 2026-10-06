@@ -49,7 +49,7 @@ public class DefaultConsoleBatchWindowApplicationService
     if (existing != null) {
       throw BizException.of(
           ResultCode.CONFLICT,
-          "error.common.conflict_detail",
+          ResultCode.CONFLICT.detailKey(),
           "window code already exists: " + request.getWindowCode());
     }
     Map<String, Object> params = new HashMap<>();

@@ -52,6 +52,9 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ShellAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Object>> {
 
+  /** JVM 临时目录系统属性名（{@code java.io.tmpdir}）；SDK 侧不依赖 batch-common，故本地持有同一份 key。 */
+  public static final String TEMP_ROOT_PROPERTY = "java.io.tmpdir";
+
   /** 进程 kill 后 stdout/stderr reader 线程的有界 join 超时(ms),防 grandchild 持管道致永久挂死。 */
   private static final long READER_JOIN_TIMEOUT_MS = 5000L;
 
@@ -98,7 +101,7 @@ public class ShellAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Obj
   }
 
   private static Path createPrivateWorkdir() throws IOException {
-    Path root = Path.of(System.getProperty("java.io.tmpdir"), "batch-sdk-private");
+    Path root = Path.of(System.getProperty(TEMP_ROOT_PROPERTY), "batch-sdk-private");
     FileAttribute<Set<PosixFilePermission>> directoryPermissions =
         PosixFilePermissions.asFileAttribute(Set.of(
             PosixFilePermission.OWNER_READ,

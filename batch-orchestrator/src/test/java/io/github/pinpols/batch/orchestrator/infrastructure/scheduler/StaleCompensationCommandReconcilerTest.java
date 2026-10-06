@@ -11,16 +11,17 @@ import io.github.pinpols.batch.common.enums.CompensationCommandStatus;
 import io.github.pinpols.batch.orchestrator.mapper.CompensationCommandMapper;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
 
 class StaleCompensationCommandReconcilerTest {
 
   @Test
   void reconcileMarksTimedOutRunningCommandsFailed() {
     CompensationCommandMapper mapper = mock(CompensationCommandMapper.class);
-    StaleCompensationCommandReconciler reconciler = new StaleCompensationCommandReconciler(mapper);
-    ReflectionTestUtils.setField(reconciler, "timeoutSeconds", 300L);
-    ReflectionTestUtils.setField(reconciler, "batchSize", 25);
+    StaleCompensationReconcilerProperties properties = new StaleCompensationReconcilerProperties();
+    properties.setTimeoutSeconds(300L);
+    properties.setBatchSize(25);
+    StaleCompensationCommandReconciler reconciler =
+        new StaleCompensationCommandReconciler(mapper, properties);
     when(mapper.markStaleRunningFailed(any(), any(), any(), any(), any(), anyInt()))
         .thenReturn(2);
 

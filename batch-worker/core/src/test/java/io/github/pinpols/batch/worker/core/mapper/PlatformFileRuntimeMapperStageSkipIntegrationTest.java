@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.testing.TestPostgresContainers;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.List;
@@ -121,7 +123,7 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
 
   private List<String> succeededStepCodes(long instanceId) {
     Map<String, Object> params = new HashMap<>();
-    params.put("pipelineInstanceId", instanceId);
+    params.put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, instanceId);
     try (SqlSession session = sqlSessionFactory.openSession()) {
       return session.getMapper(PlatformFileRuntimeMapper.class).selectSucceededStepCodes(params);
     }
@@ -255,7 +257,7 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
 
   private Map<String, Object> stepRunParams(long pipelineInstanceId) {
     Map<String, Object> params = new HashMap<>();
-    params.put("pipelineInstanceId", pipelineInstanceId);
+    params.put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, pipelineInstanceId);
     params.put("stepCode", "COMPUTE");
     params.put("stageCode", "COMPUTE");
     params.put("stepStatus", "RUNNING");
@@ -281,8 +283,8 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
             + "\"errorArgs\":\"[]\",\"sourceBytes\":74177868}");
 
     Map<String, Object> params = new HashMap<>();
-    params.put("fileId", 700L);
-    params.put("fileStatus", "LOADED");
+    params.put(PipelineRuntimeKeys.FILE_ID, 700L);
+    params.put("fileStatus", FileStatus.LOADED.code());
     params.put("metadataJson", "{\"loadedCount\":800000}");
     try (SqlSession session = sqlSessionFactory.openSession(true)) {
       session.getMapper(PlatformFileRuntimeMapper.class).updateFileRecordStatus(params);
@@ -298,7 +300,7 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
           }
         });
     assertThat(metadata)
-        .containsEntry("loadedCount", 800000)
+        .containsEntry(PipelineRuntimeKeys.IMPORT_LOADED_COUNT, 800000)
         .containsEntry("sourceBytes", 74177868)
         .doesNotContainKeys("errorCode", "errorMessage", "errorKey", "errorArgs");
   }

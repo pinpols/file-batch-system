@@ -137,7 +137,65 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
         .allMatch(w -> WorkerRegistryStatus.DRAINING.code().equals(w.status()));
   }
 
+  @Test
+  void shouldPersistWorkerPortAndReadItBack() {
+    // V221：port 列在 insert 与 resultMap（constructor 映射）两侧都要接对，否则端口只落库读不回。
+    String workerCode = "worker-it-port-" + BatchDateTimeSupport.utcEpochMillis();
+    workerRegistryMapper.saveLikeSdj(workerWithPort("t1", workerCode, 18083));
+
+    WorkerRegistryEntity found = workerRegistryMapper.selectByTenantAndWorkerCode("t1", workerCode);
+
+    assertThat(found).isNotNull();
+    assertThat(found.port()).isEqualTo(18083);
+  }
+
+  @Test
+  void laterHeartbeatWithoutPortKeepsStoredPort() {
+    String workerCode = "worker-it-port-keep-" + BatchDateTimeSupport.utcEpochMillis();
+    WorkerRegistryEntity stored = workerWithPort("t1", workerCode, 18083);
+    workerRegistryMapper.saveLikeSdj(stored);
+
+    // 老 worker / 非 web 上下文的心跳不带 port：coalesce 必须保留已落库的值，不能抹成 NULL。
+    WorkerRegistryEntity heartbeatWithoutPort = stored.withFingerprint(
+        stored.hostName(),
+        stored.hostIp(),
+        stored.processId(),
+        null,
+        stored.buildId(),
+        stored.sdkVersion());
+    int updated = workerRegistryMapper.updateRegistrationIfCurrent(
+        heartbeatWithoutPort, WorkerRegistryStatus.ONLINE.code());
+
+    assertThat(updated).isEqualTo(1);
+    assertThat(
+            workerRegistryMapper.selectByTenantAndWorkerCode("t1", workerCode).port())
+        .isEqualTo(18083);
+  }
+
   // ── helpers ───────────────────────────────────────────────────────────────
+
+  private static WorkerRegistryEntity workerWithPort(String tenantId, String workerCode, int port) {
+    return new WorkerRegistryEntity(
+        null,
+        tenantId,
+        workerCode,
+        "DEFAULT",
+        new JsonbString("{}"),
+        null,
+        WorkerRegistryStatus.ONLINE.code(),
+        BatchDateTimeSupport.utcNow(),
+        0,
+        10,
+        null,
+        null,
+        "host-it",
+        "1.2.3.4",
+        "pid-it",
+        port,
+        "build-it",
+        "sdk-it",
+        workerCode);
+  }
 
   private static WorkerRegistryEntity onlineWorker(
       String tenantId, String workerCode, String workerGroup) {

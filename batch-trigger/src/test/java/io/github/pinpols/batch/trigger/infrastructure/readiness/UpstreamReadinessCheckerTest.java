@@ -39,11 +39,19 @@ class UpstreamReadinessCheckerTest {
         .thenReturn(response);
   }
 
+  /** 构造就绪门禁配置，便于按开关值直测。 */
+  private static ReadinessGateProperties gate(boolean enabled) {
+    ReadinessGateProperties properties = new ReadinessGateProperties();
+    properties.setEnabled(enabled);
+    return properties;
+  }
+
   @Test
   @DisplayName("上游 ready=true → 放行")
   void shouldAllow_whenUpstreamReady() {
     stubBody(new ReadinessResponse(true, null));
-    UpstreamReadinessChecker checker = new UpstreamReadinessChecker(orchestratorRestClient, true);
+    UpstreamReadinessChecker checker =
+        new UpstreamReadinessChecker(orchestratorRestClient, gate(true));
 
     assertThat(checker.isReady("t1", "UP_JOB", BIZ_DATE)).isTrue();
   }
@@ -52,7 +60,8 @@ class UpstreamReadinessCheckerTest {
   @DisplayName("上游 ready=false → 拦截")
   void shouldBlock_whenUpstreamNotReady() {
     stubBody(new ReadinessResponse(false, "upstream-job-not-success"));
-    UpstreamReadinessChecker checker = new UpstreamReadinessChecker(orchestratorRestClient, true);
+    UpstreamReadinessChecker checker =
+        new UpstreamReadinessChecker(orchestratorRestClient, gate(true));
 
     assertThat(checker.isReady("t1", "UP_JOB", BIZ_DATE)).isFalse();
   }
@@ -61,7 +70,8 @@ class UpstreamReadinessCheckerTest {
   @DisplayName("查询抛异常 → fail-closed 拦截")
   void shouldFailClosed_whenQueryThrows() {
     when(orchestratorRestClient.get()).thenThrow(new RuntimeException("orchestrator down"));
-    UpstreamReadinessChecker checker = new UpstreamReadinessChecker(orchestratorRestClient, true);
+    UpstreamReadinessChecker checker =
+        new UpstreamReadinessChecker(orchestratorRestClient, gate(true));
 
     assertThat(checker.isReady("t1", "UP_JOB", BIZ_DATE)).isFalse();
   }
@@ -70,7 +80,7 @@ class UpstreamReadinessCheckerTest {
   @DisplayName("总开关关闭 → 恒放行,不查 orchestrator")
   void shouldAlwaysAllow_whenGateDisabled() {
     RestClient unused = mock(RestClient.class);
-    UpstreamReadinessChecker checker = new UpstreamReadinessChecker(unused, false);
+    UpstreamReadinessChecker checker = new UpstreamReadinessChecker(unused, gate(false));
 
     assertThat(checker.isReady("t1", "UP_JOB", BIZ_DATE)).isTrue();
     verifyNoInteractions(unused);

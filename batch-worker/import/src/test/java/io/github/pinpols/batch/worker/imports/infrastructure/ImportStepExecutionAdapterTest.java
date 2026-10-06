@@ -63,7 +63,7 @@ class ImportStepExecutionAdapterTest {
   @Test
   void buildContextMapsCommonAndImportFields() {
     Map<String, Object> attributes = new LinkedHashMap<>();
-    attributes.put("bizDate", "2026-09-11");
+    attributes.put(PipelineRuntimeKeys.BIZ_DATE, "2026-09-11");
     attributes.put("payload", "{}");
 
     ImportJobContext context = adapter.buildContext(request(attributes), attributes, 42L);
@@ -115,10 +115,10 @@ class ImportStepExecutionAdapterTest {
     assertThat(response.success()).isTrue();
     assertThat(response.message()).isEqualTo("imported 10 row(s)");
     assertThat((Map<String, Object>) attributes.get(PipelineRuntimeKeys.NODE_OUTPUTS))
-        .containsEntry("fileId", 42L)
+        .containsEntry(PipelineRuntimeKeys.FILE_ID, 42L)
         .containsEntry("inputCount", 12L)
         .containsEntry("outputCount", 10L)
-        .containsEntry("bizDate", "2026-09-11");
+        .containsEntry(PipelineRuntimeKeys.BIZ_DATE, "2026-09-11");
   }
 
   private static StepExecutionRequest request(Map<String, Object> attributes) {

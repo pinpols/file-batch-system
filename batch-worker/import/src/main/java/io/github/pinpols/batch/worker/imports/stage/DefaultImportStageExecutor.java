@@ -149,9 +149,10 @@ public class DefaultImportStageExecutor
     summary.put("stage", step.stageCode());
     summary.put("implCode", step.implCode());
     summary.put("tenantId", context.getTenantId());
-    summary.put("fileId", context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+    summary.put(
+        PipelineRuntimeKeys.FILE_ID, context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
     summary.put("workerId", context.getWorkerId());
-    summary.put("jobCode", context.getJobCode());
+    summary.put(PipelineRuntimeKeys.JOB_CODE, context.getJobCode());
     return summary;
   }
 
@@ -163,7 +164,8 @@ public class DefaultImportStageExecutor
     summary.put("code", result.code());
     summary.put("message", result.message());
     summary.put("stage", result.stage().name());
-    summary.put("fileId", context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+    summary.put(
+        PipelineRuntimeKeys.FILE_ID, context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
     summary.put(
         PipelineRuntimeKeys.IMPORT_PARSED_COUNT,
         context.getAttributes().get(PipelineRuntimeKeys.IMPORT_PARSED_COUNT));
@@ -187,7 +189,7 @@ public class DefaultImportStageExecutor
     } catch (IllegalArgumentException exception) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ResultCode.INVALID_ARGUMENT.detailKey(),
           exception,
           "unsupported import stage code: " + stageCode);
     }

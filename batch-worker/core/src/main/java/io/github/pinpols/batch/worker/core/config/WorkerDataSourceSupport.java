@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.core.config;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+import io.github.pinpols.batch.common.config.ApplicationNameProvider;
 import io.github.pinpols.batch.common.config.BatchPgSessionProperties;
 import io.github.pinpols.batch.common.config.BusinessDataSourceBuilder;
 import io.github.pinpols.batch.common.config.BusinessDataSourceProperties;
@@ -51,7 +52,7 @@ public final class WorkerDataSourceSupport {
         || hikariConfig.getDriverClassName().isBlank()) {
       hikariConfig.setDriverClassName(driverClassName);
     }
-    String appName = environment.getProperty("spring.application.name", defaultAppName);
+    String appName = ApplicationNameProvider.resolve(environment, defaultAppName);
     HikariPgSessionSupport.applyPlatform(hikariConfig, pgSessionProperties, appName + "-platform");
     return new HikariDataSource(hikariConfig);
   }
@@ -96,7 +97,7 @@ public final class WorkerDataSourceSupport {
       BusinessTenantPlacementMapper placementMapper,
       Environment environment,
       String defaultAppName) {
-    String appName = environment.getProperty("spring.application.name", defaultAppName);
+    String appName = ApplicationNameProvider.resolve(environment, defaultAppName);
     return BusinessDataSourceBuilder.build(
         hikariConfig,
         properties,

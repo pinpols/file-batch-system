@@ -3,6 +3,10 @@ package io.github.pinpols.batch.worker.imports.runtime;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.common.enums.FileAuditOperationType;
+import io.github.pinpols.batch.common.enums.FileStatus;
+import io.github.pinpols.batch.common.enums.OperationResult;
+import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.storage.ObjectListing;
@@ -197,7 +201,7 @@ public class ImportIngressScanner {
         .bizDate(bizDate)
         .sourceType(scannerProperties.getSourceType())
         .sourceRef(snapshot.objectName())
-        .fileStatus("RECEIVED")
+        .fileStatus(FileStatus.RECEIVED.code())
         .traceId("export-trigger-" + sanitizeTrace(fileName))
         .metadata(metadata)
         .build());
@@ -348,7 +352,7 @@ public class ImportIngressScanner {
         .bizDate(bizDate)
         .sourceType(scannerProperties.getSourceType())
         .sourceRef(snapshot.objectName())
-        .fileStatus("RECEIVED")
+        .fileStatus(FileStatus.RECEIVED.code())
         .traceId("import-scan-" + sanitizeTrace(fileName))
         .metadata(metadata)
         .build());
@@ -358,9 +362,9 @@ public class ImportIngressScanner {
       fileAudits.appendAudit(FileAuditParam.builder()
           .fileId(fileId)
           .tenantId(resolvedTenant)
-          .operationType("ARRIVAL_REGISTER")
-          .operationResult("SUCCESS")
-          .operatorType("SYSTEM")
+          .operationType(FileAuditOperationType.ARRIVAL_REGISTER.code())
+          .operationResult(OperationResult.SUCCESS.code())
+          .operatorType(AuditLogConstants.OPERATOR_TYPE_SYSTEM)
           .operatorId("import-ingress-scanner")
           .traceId("arrival-" + sanitizeTrace(fileName))
           .evidenceRef(snapshot.objectName())
@@ -373,9 +377,9 @@ public class ImportIngressScanner {
     fileAudits.appendAudit(FileAuditParam.builder()
         .fileId(fileId)
         .tenantId(resolvedTenant)
-        .operationType("RECEIVE_SCAN")
-        .operationResult("SUCCESS")
-        .operatorType("SYSTEM")
+        .operationType(FileAuditOperationType.RECEIVE_SCAN.code())
+        .operationResult(OperationResult.SUCCESS.code())
+        .operatorType(AuditLogConstants.OPERATOR_TYPE_SYSTEM)
         .operatorId("import-ingress-scanner")
         .traceId("import-scan-" + sanitizeTrace(fileName))
         .evidenceRef(snapshot.objectName())

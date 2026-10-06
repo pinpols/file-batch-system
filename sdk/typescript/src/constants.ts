@@ -10,6 +10,8 @@
  * parity test deep-equals each array against the YAML and fails on any drift.
  */
 
+import { ErrorCode } from "./protocol.ts";
+
 /** schema_versions_supported — known major versions the SDK accepts (§A). */
 export const SUPPORTED_SCHEMA_VERSIONS: readonly string[] = ["v1", "v2"];
 
@@ -47,4 +49,21 @@ export const TASK_STATUSES: readonly string[] = [
   "FAILED",
   "CANCELLED",
   "TERMINATED",
+];
+
+/**
+ * report_error_codes —— report body 的 errorCode 规范值(§B)。
+ *
+ * 从 protocol.ts 的强类型 `ErrorCode` const object 派生,保证值只有一处来源;
+ * parity 测试按本数组顺序与 YAML 做深比较。
+ */
+export const REPORT_ERROR_CODES: readonly string[] = [
+  ErrorCode.SUCCESS,
+  ErrorCode.TIMEOUT,
+  ErrorCode.CANCELLED,
+  ErrorCode.KILLED,
+  ErrorCode.SECURITY_REJECTED,
+  ErrorCode.EXECUTION_FAILED,
+  ErrorCode.CONFIG_INVALID,
+  ErrorCode.RESOURCE_EXHAUSTED,
 ];

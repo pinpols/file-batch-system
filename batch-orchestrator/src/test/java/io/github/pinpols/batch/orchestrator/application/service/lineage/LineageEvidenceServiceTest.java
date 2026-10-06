@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.FileReceiptStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionQueryService;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
@@ -38,7 +39,7 @@ class LineageEvidenceServiceTest {
     when(lineageEvidenceMapper.selectFileRecords("ta", 101L, 11L))
         .thenReturn(List.of(Map.of("id", 11L, "file_name", "out.csv")));
     when(lineageEvidenceMapper.selectDispatchRecords("ta", 101L, List.of(11L)))
-        .thenReturn(List.of(Map.of("id", 31L, "receipt_status", "SUCCESS")));
+        .thenReturn(List.of(Map.of("id", 31L, "receipt_status", FileReceiptStatus.SUCCESS.code())));
 
     Map<String, Object> evidence = service.evidenceForResultVersion("ta", 7L);
 
@@ -92,7 +93,7 @@ class LineageEvidenceServiceTest {
     when(lineageEvidenceMapper.selectDispatchRecords("ta", 101L, List.of(11L)))
         .thenReturn(List.of());
     when(lineageEvidenceMapper.selectArchivedDispatchRecords("ta", 101L, List.of(11L)))
-        .thenReturn(List.of(Map.of("id", 31L, "receipt_status", "SUCCESS")));
+        .thenReturn(List.of(Map.of("id", 31L, "receipt_status", FileReceiptStatus.SUCCESS.code())));
 
     Map<String, Object> evidence = service.evidenceForResultVersion("ta", 10L);
 
@@ -126,7 +127,7 @@ class LineageEvidenceServiceTest {
     when(lineageEvidenceMapper.selectDispatchRecords("ta", 101L, List.of(11L)))
         .thenReturn(List.of());
     when(lineageEvidenceMapper.selectArchivedDispatchRecords("ta", 101L, List.of(11L)))
-        .thenReturn(List.of(Map.of("id", 31L, "receipt_status", "SUCCESS")));
+        .thenReturn(List.of(Map.of("id", 31L, "receipt_status", FileReceiptStatus.SUCCESS.code())));
 
     Map<String, Object> evidence = service.evidenceForResultVersion("ta", 11L);
 

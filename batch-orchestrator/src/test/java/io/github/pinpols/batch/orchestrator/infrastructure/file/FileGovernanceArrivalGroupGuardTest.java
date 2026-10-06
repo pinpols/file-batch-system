@@ -12,6 +12,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.orchestrator.config.FileGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.FileGovernanceMetricsCacheService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -194,7 +195,7 @@ class FileGovernanceArrivalGroupGuardTest {
     file.put("tenant_id", "default-tenant");
     file.put("biz_date", "2026-06-21");
     file.put("file_name", fileName);
-    file.put("file_status", "RECEIVED");
+    file.put("file_status", FileStatus.RECEIVED.code());
     file.put("file_group_code", "test-group");
     file.put("wait_file_group_mode", "ALL_OF");
     file.put("arrival_timeout_action", "MANUAL_CONFIRM");

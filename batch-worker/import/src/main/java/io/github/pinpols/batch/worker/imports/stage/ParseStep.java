@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.imports.stage;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.constants.BatchFileConstants;
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
@@ -177,7 +178,7 @@ public class ParseStep implements ImportStageStep {
       ImportStageSupport.updateFileStatusRecoverAware(
           fileRecords,
           context,
-          "PARSED",
+          FileStatus.PARSED.code(),
           Map.of(
               KEY_PARSED_COUNT,
               support.numberValue(attrs.get(KEY_PARSED_COUNT)),
@@ -187,7 +188,7 @@ public class ParseStep implements ImportStageStep {
               support.numberValue(attrs.get(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT)),
               "badRecordCount",
               badRecordCount(context),
-              "parsedRecordsPath",
+              PipelineRuntimeKeys.PARSED_RECORDS_PATH,
               stagingFile.toString()));
       return ImportStageResult.success(stage());
     } catch (BizException biz) {

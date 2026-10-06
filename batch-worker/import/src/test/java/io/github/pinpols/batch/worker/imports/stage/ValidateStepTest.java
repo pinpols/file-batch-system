@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration;
@@ -132,7 +133,7 @@ class ValidateStepTest {
     Path parsed = writeNdjson(List.of(row("C1"), row("C2"), row("C3")));
     ImportJobContext ctx = baseContext();
     ctx.getAttributes().put(PipelineRuntimeKeys.PARSED_RECORDS_PATH, parsed.toString());
-    ctx.getAttributes().put("totalCount", 3L);
+    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 3L);
 
     ValidationSession session = session();
     when(qualityService.beginValidation(any(), eq(3L), any())).thenReturn(session);
@@ -142,7 +143,7 @@ class ValidateStepTest {
     ImportStageResult result = step.execute(ctx);
 
     assertThat(result.success()).isTrue();
-    assertThat(ctx.getAttributes()).containsEntry("validatedCount", 3L);
+    assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT, 3L);
     assertThat(ctx.getAttributes()).containsEntry("customerPayloadCount", 3L);
     assertThat(ctx.getAttributes()).containsKey(PipelineRuntimeKeys.VALIDATED_RECORDS_PATH);
     // validated 文件存在且行数 == 3
@@ -152,7 +153,7 @@ class ValidateStepTest {
     long count =
         Files.readAllLines(validated).stream().filter(l -> !l.isBlank()).count();
     assertThat(count).isEqualTo(3);
-    verify(runtimeRepository).updateFileStatus(eq(99L), eq("VALIDATED"), any());
+    verify(runtimeRepository).updateFileStatus(eq(99L), eq(FileStatus.VALIDATED.code()), any());
   }
 
   // ── dataset-level issue ──
@@ -203,7 +204,7 @@ class ValidateStepTest {
     Path parsed = writeNdjson(List.of(row("C1"), row("C2")));
     ImportJobContext ctx = baseContext();
     ctx.getAttributes().put(PipelineRuntimeKeys.PARSED_RECORDS_PATH, parsed.toString());
-    ctx.getAttributes().put("totalCount", 2L);
+    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 2L);
 
     ValidationSession session = session();
     when(qualityService.beginValidation(any(), anyLong(), any())).thenReturn(session);
@@ -218,7 +219,7 @@ class ValidateStepTest {
 
     assertThat(result.success()).isTrue();
     // 只 1 行通过校验，被写到 validated 文件
-    assertThat(ctx.getAttributes()).containsEntry("validatedCount", 1L);
+    assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT, 1L);
     verify(governance)
         .recordSkippedRecord(any(), eq(ImportStage.VALIDATE), eq(1L), eq("ROW_BAD"), any(), any());
   }
@@ -228,7 +229,7 @@ class ValidateStepTest {
     Path parsed = writeNdjson(List.of(row("C1")));
     ImportJobContext ctx = baseContext();
     ctx.getAttributes().put(PipelineRuntimeKeys.PARSED_RECORDS_PATH, parsed.toString());
-    ctx.getAttributes().put("totalCount", 1L);
+    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 1L);
 
     ValidationSession session = session();
     when(qualityService.beginValidation(any(), anyLong(), any())).thenReturn(session);
@@ -279,7 +280,7 @@ class ValidateStepTest {
     Path parsed = writeNdjson(List.of(row("C1")));
     ImportJobContext ctx = baseContext();
     ctx.getAttributes().put(PipelineRuntimeKeys.PARSED_RECORDS_PATH, parsed.toString());
-    ctx.getAttributes().put("totalCount", 1L);
+    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 1L);
 
     ValidationSession session = session();
     when(qualityService.beginValidation(any(), anyLong(), any())).thenReturn(session);

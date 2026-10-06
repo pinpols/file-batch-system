@@ -192,7 +192,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       throw BizException.of(ResultCode.FORBIDDEN, "error.ai.assistant_not_configured");
     }
     if (hasImages && EmptyChecks.isNull(request.getClientTurnId())) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument_detail");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
     }
     costService.validateProviders(
         EmptyChecks.isNull(chatClients.fallback())

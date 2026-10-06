@@ -151,14 +151,14 @@ banner() {
   printf '%s\n\n' "$(printf '=%.0s' {1..64})"
 }
 
-# 清理「孤儿」testcontainers 容器(无 reuse-hash label):
+# 清理「孤儿」testcontainers 容器(无 org.testcontainers.hash label):
 # 反复中断 mvn / kill -9 让 Ryuk 没机会清,withReuse 切换让旧无 hash 容器残留,
-# 累计后 docker daemon 内存吃紧。仅清无 reuse-hash 的孤儿,保留 reuse 容器。
+# 累计后 docker daemon 内存吃紧。仅清无 hash 的孤儿,保留 reuse 容器。
 cleanup_orphan_testcontainers() {
   command -v docker >/dev/null 2>&1 || return 0
   local orphans
   orphans=$(docker ps -q --filter "label=org.testcontainers=true" 2>/dev/null | while read -r cid; do
-    if ! docker inspect "$cid" --format '{{json .Config.Labels}}' 2>/dev/null | grep -q "reuse-hash"; then
+    if ! docker inspect "$cid" --format '{{json .Config.Labels}}' 2>/dev/null | grep -q "org.testcontainers.hash"; then
       printf '%s\n' "$cid"
     fi
   done)

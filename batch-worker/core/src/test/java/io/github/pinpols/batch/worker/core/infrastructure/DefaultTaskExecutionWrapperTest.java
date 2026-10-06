@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.worker.core.config.WorkerConcurrencyProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperties;
 import io.github.pinpols.batch.worker.core.domain.PulledTask;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
@@ -57,7 +58,7 @@ class DefaultTaskExecutionWrapperTest {
     timeoutProperties.setDefaultTimeoutSeconds(60L);
     timeoutProperties.setMaxTimeoutSeconds(120L);
     timeoutProperties.setCancelGraceSeconds(2L);
-    executionPool = new TaskExecutionPool(timeoutProperties, null);
+    executionPool = new TaskExecutionPool(timeoutProperties, concurrencyProperties(4));
     executionPool.start();
     registry = new SimpleMeterRegistry();
     @SuppressWarnings("unchecked")
@@ -508,6 +509,12 @@ class DefaultTaskExecutionWrapperTest {
     task.setTaskSeq(1);
     task.setIdempotencyKey("idem-" + taskId);
     return task;
+  }
+
+  private static WorkerConcurrencyProperties concurrencyProperties(int maxConcurrentTasks) {
+    WorkerConcurrencyProperties properties = new WorkerConcurrencyProperties();
+    properties.setMaxConcurrentTasks(maxConcurrentTasks);
+    return properties;
   }
 
   private static Runnable waitForCancellationCallback(AtomicReference<Runnable> callback)

@@ -41,17 +41,17 @@ class PrivateTempFilesTest {
     Path tempRoot = Files.createTempDirectory("private-temp-test-");
     Path rootAsFile = tempRoot.resolve("file-batch-private");
     Files.createFile(rootAsFile);
-    String original = System.getProperty("java.io.tmpdir");
-    System.setProperty("java.io.tmpdir", tempRoot.toString());
+    String original = System.getProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY);
+    System.setProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY, tempRoot.toString());
     try {
       assertThatThrownBy(() -> PrivateTempFiles.createTempFile("test-", ".tmp"))
           .isInstanceOf(IOException.class)
           .hasMessageContaining("not a directory");
     } finally {
       if (original == null) {
-        System.clearProperty("java.io.tmpdir");
+        System.clearProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY);
       } else {
-        System.setProperty("java.io.tmpdir", original);
+        System.setProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY, original);
       }
       Files.deleteIfExists(rootAsFile);
       Files.deleteIfExists(tempRoot);
@@ -61,8 +61,8 @@ class PrivateTempFilesTest {
   @Test
   void createsRootWhenTempPathIsFresh() throws Exception {
     Path tempRoot = Files.createTempDirectory("private-temp-fresh-");
-    String original = System.getProperty("java.io.tmpdir");
-    System.setProperty("java.io.tmpdir", tempRoot.toString());
+    String original = System.getProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY);
+    System.setProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY, tempRoot.toString());
     Path file = null;
     Path directory = null;
     try {
@@ -73,9 +73,9 @@ class PrivateTempFilesTest {
       assertThat(directory).isDirectory();
     } finally {
       if (original == null) {
-        System.clearProperty("java.io.tmpdir");
+        System.clearProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY);
       } else {
-        System.setProperty("java.io.tmpdir", original);
+        System.setProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY, original);
       }
       Files.deleteIfExists(file);
       Files.deleteIfExists(directory);

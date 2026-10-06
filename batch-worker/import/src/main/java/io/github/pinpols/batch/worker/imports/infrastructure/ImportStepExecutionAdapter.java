@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.imports.infrastructure;
 
+import io.github.pinpols.batch.common.constants.NodeOutputKeys;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -103,19 +104,33 @@ public class ImportStepExecutionAdapter
         context.getAttributes().getOrDefault(PipelineRuntimeKeys.IMPORT_LOADED_COUNT, 0);
     // ADR-009 Stage 1.2: 把 IMPORT 的关键产出暴露给下游 workflow 节点 DSL 引用
     Map<String, Object> outputs = new LinkedHashMap<>();
-    putIfPresent(outputs, "fileId", attributes.get(PipelineRuntimeKeys.FILE_ID));
+    putIfPresent(outputs, PipelineRuntimeKeys.FILE_ID, attributes.get(PipelineRuntimeKeys.FILE_ID));
     putIfPresent(
         outputs,
         PipelineRuntimeKeys.RECORD_COUNT,
         attributes.get(PipelineRuntimeKeys.IMPORT_LOADED_COUNT));
-    putIfPresent(outputs, "parsedCount", attributes.get(PipelineRuntimeKeys.IMPORT_PARSED_COUNT));
     putIfPresent(
-        outputs, "validatedCount", attributes.get(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT));
-    putIfPresent(outputs, "skippedCount", attributes.get(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT));
+        outputs,
+        PipelineRuntimeKeys.IMPORT_PARSED_COUNT,
+        attributes.get(PipelineRuntimeKeys.IMPORT_PARSED_COUNT));
+    putIfPresent(
+        outputs,
+        PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT,
+        attributes.get(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT));
+    putIfPresent(
+        outputs,
+        PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT,
+        attributes.get(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT));
     // ADR-041 Phase1.3:归一化跨阶段 count 信封,供 orchestrator 核 import→process→export 连续性。
     // import:input=文件原始行数(totalCount),output=入库行数(loadedCount)。
-    putIfPresent(outputs, "inputCount", attributes.get(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT));
-    putIfPresent(outputs, "outputCount", attributes.get(PipelineRuntimeKeys.IMPORT_LOADED_COUNT));
+    putIfPresent(
+        outputs,
+        NodeOutputKeys.INPUT_COUNT,
+        attributes.get(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT));
+    putIfPresent(
+        outputs,
+        NodeOutputKeys.OUTPUT_COUNT,
+        attributes.get(PipelineRuntimeKeys.IMPORT_LOADED_COUNT));
     putIfPresent(outputs, PipelineRuntimeKeys.BIZ_DATE, context.getBizDate());
     if (!outputs.isEmpty()) {
       attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);

@@ -9,6 +9,7 @@ import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
@@ -59,7 +60,7 @@ public class RetryDispatchStep implements DispatchStageStep {
           ERROR_OBJECT_MAPPER);
     }
     Map<String, Object> attrs = context.getAttributes();
-    Object payload = attrs.get("dispatchPayload");
+    Object payload = attrs.get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
     if (!(payload instanceof DispatchPayload dispatchPayload)) {
       attrs.put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
       return DispatchStageResult.failure(
@@ -70,7 +71,7 @@ public class RetryDispatchStep implements DispatchStageStep {
           "dispatch payload missing",
           ERROR_OBJECT_MAPPER);
     }
-    if (!Boolean.TRUE.equals(attrs.get("retryRequested"))) {
+    if (!Boolean.TRUE.equals(attrs.get(DispatchRuntimeKeys.RETRY_REQUESTED))) {
       attrs.put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
       return DispatchStageResult.success(stage());
     }
@@ -123,7 +124,7 @@ public class RetryDispatchStep implements DispatchStageStep {
           "failed to mark retry sent",
           ERROR_OBJECT_MAPPER);
     }
-    attrs.put("retryRecovered", Boolean.TRUE);
+    attrs.put(DispatchRuntimeKeys.RETRY_RECOVERED, Boolean.TRUE);
     attrs.put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.ACK.name());
     return DispatchStageResult.success(stage());
   }

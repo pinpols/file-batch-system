@@ -14,6 +14,11 @@ STDERR_WRITE = re.compile(r"\bSystem\s*\.\s*err\b")
 STACK_TRACE = re.compile(r"\bprintStackTrace\s*\(")
 LOGGER_DECLARATION = re.compile(r"\b(?:Logger|ThrottledLogger)\s+([A-Za-z_$][A-Za-z0-9_$]*)")
 RAW_EXCEPTION_SUMMARY = re.compile(r"\.\s*(?:getMessage|toString)\s*\(\s*\)")
+SWALLOWED_LOGGER_CALL = re.compile(r"SwallowedExceptionLogger\s*\.\s*(?:info|warn|error)\s*\(")
+# where 标签口径：稳定、可机器匹配的单行标签，用于日志检索/告警锚点。
+# 两种可接受形式 —— `catch:<被捕获的声明类型 SimpleName>` 或 `<kebab-case 动作 id>`。
+SWALLOWED_LABEL = re.compile(r"^[A-Za-z][A-Za-z0-9]*(?:[-_:.][A-Za-z0-9]+)*$")
+STRING_LITERAL = re.compile(r'"((?:[^"\\]|\\.)*)"')
 CLI_STDOUT_PREFIX = Path("security-scan/src/main/java/")
 GATE_CODE = "JAVA_LOGGING_GOVERNANCE"
 GATE_NAME = "Java 日志治理"
@@ -133,6 +138,86 @@ def raw_exception_summary_count(source: str) -> int:
     )
 
 
+def split_call_arguments(source: str, open_paren: int) -> list[str]:
+    """按顶层逗号切出实参，跳过字符串/字符字面量、注释与嵌套括号。
+
+    必须跳过注释：实参区间里夹一行注释（例如写反例说明）时，
+    注释里的字符串字面量会被误当成实参内容。
+    """
+    args: list[str] = []
+    current: list[str] = []
+    depth = 0
+    index = open_paren
+    while index < len(source):
+        char = source[index]
+        next_char = source[index + 1] if index + 1 < len(source) else ""
+        if char in "\"'":
+            quote = char
+            current.append(char)
+            index += 1
+            while index < len(source):
+                current.append(source[index])
+                if source[index] == "\\":
+                    index += 1
+                    if index < len(source):
+                        current.append(source[index])
+                elif source[index] == quote:
+                    break
+                index += 1
+        elif char == "/" and next_char == "/":
+            while index < len(source) and source[index] != "\n":
+                index += 1
+            current.append(" ")
+            continue
+        elif char == "/" and next_char == "*":
+            index += 2
+            while index + 1 < len(source) and not (
+                source[index] == "*" and source[index + 1] == "/"
+            ):
+                index += 1
+            index += 2
+            current.append(" ")
+            continue
+        elif char in "([{":
+            depth += 1
+            if depth > 1:
+                current.append(char)
+        elif char in ")]}":
+            depth -= 1
+            if depth == 0:
+                break
+            current.append(char)
+        elif char == "," and depth == 1:
+            args.append("".join(current))
+            current = []
+        else:
+            current.append(char)
+        index += 1
+    args.append("".join(current))
+    return args
+
+
+def swallowed_label_violations(source: str) -> list[str]:
+    """返回 SwallowedExceptionLogger 第二实参中不合 where 口径的字符串字面量。
+
+    第二实参是常量引用（如 RemoteFilesystemDispatchSupport.LOG_CATCH_EXCEPTION）时，
+    调用点没有字面量可校验，此处跳过 —— 常量定义处的字面量同样受本规则约束。
+    定位用 mask_literals_and_comments（等长替换，偏移不变），避免注释/字符串里的示例被误报。
+    """
+    masked = mask_literals_and_comments(source)
+    violations: list[str] = []
+    for match in SWALLOWED_LOGGER_CALL.finditer(masked):
+        arguments = split_call_arguments(source, match.end() - 1)
+        if len(arguments) < 2:
+            continue
+        violations.extend(
+            literal
+            for literal in STRING_LITERAL.findall(arguments[1])
+            if not SWALLOWED_LABEL.match(literal)
+        )
+    return violations
+
+
 def java_sources(candidates: list[str] | None = None) -> set[Path]:
     if candidates is not None:
         return {
@@ -173,6 +258,12 @@ def main(argv: list[str] | None = None) -> int:
                     "use SwallowedExceptionLogger.summary() for a safe single-line summary, "
                     "or pass Throwable as the final SLF4J argument"
                 )
+        for label in swallowed_label_violations(source):
+            errors.append(
+                f"{relative}: SwallowedExceptionLogger 的 where 标签 {label!r} 不合口径；"
+                "应为稳定可检索的单行标签（`catch:<异常类型>` 或 kebab-case 动作 id），"
+                "不得含空白/分号/换行，见 docs/design/logging-architecture.md"
+            )
 
     if errors:
         print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1")
@@ -182,7 +273,8 @@ def main(argv: list[str] | None = None) -> int:
 
     print(
         f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME} | "
-        "reason=console output is limited to the security-scan CLI and exception logs use safe summaries"
+        "reason=console output is limited to the security-scan CLI, exception logs use safe summaries, "
+        "and SwallowedExceptionLogger where labels are searchable single-line tokens"
     )
     return 0
 

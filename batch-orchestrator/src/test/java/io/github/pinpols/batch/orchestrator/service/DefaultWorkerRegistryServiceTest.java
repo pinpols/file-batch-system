@@ -44,6 +44,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class DefaultWorkerRegistryServiceTest {
 
+  /**
+   * 固定心跳时间：夹具不依赖 wall clock。服务端一律用 orchestrator JVM 时钟（忽略 request.heartbeatAt），
+   * 因此固定值不影响任何断言，只消除时间相关抖动。
+   */
+  private static final Instant FIXED_HEARTBEAT_AT = Instant.parse("2026-01-01T00:00:00Z");
+
   @Mock
   private WorkerRegistryMapper mapper;
 
@@ -80,88 +86,40 @@ class DefaultWorkerRegistryServiceTest {
   }
 
   private WorkerHeartbeatDto dto(String status, String protocolVersion) {
-    return new WorkerHeartbeatDto(
-        "ta",
-        "w1",
-        "default",
-        status,
-        "host",
-        "1.2.3.4",
-        "pid",
-        "build-1",
-        "sdk-1",
-        Instant.now(),
-        List.of(),
-        1,
-        null,
-        protocolVersion,
-        null,
-        null,
-        null);
+    return WorkerHeartbeatDto.builder()
+        .tenantId("ta")
+        .workerCode("w1")
+        .workerGroup("default")
+        .status(status)
+        .hostName("host")
+        .hostIp("1.2.3.4")
+        .processId("pid")
+        .buildId("build-1")
+        .sdkVersion("sdk-1")
+        .heartbeatAt(FIXED_HEARTBEAT_AT)
+        .capabilityTags(List.of())
+        .currentLoad(1)
+        .protocolVersion(protocolVersion)
+        .build();
   }
 
   private WorkerHeartbeatDto dtoWithSdkVersion(String sdkVersion) {
-    return new WorkerHeartbeatDto(
-        "ta",
-        "w1",
-        "default",
-        WorkerRegistryStatus.ONLINE.code(),
-        "host",
-        "1.2.3.4",
-        "pid",
-        "build-1",
-        sdkVersion,
-        Instant.now(),
-        List.of(),
-        1,
-        null,
-        null,
-        null,
-        null,
-        null);
+    return dto(WorkerRegistryStatus.ONLINE.code()).toBuilder()
+        .sdkVersion(sdkVersion)
+        .build();
   }
 
   private WorkerHeartbeatDto dtoWithMaxConcurrent(int maxConcurrent) {
-    WorkerHeartbeatDto base = dto(WorkerRegistryStatus.ONLINE.code());
-    return new WorkerHeartbeatDto(
-        base.tenantId(),
-        base.workerCode(),
-        base.workerGroup(),
-        base.status(),
-        base.hostName(),
-        base.hostIp(),
-        base.processId(),
-        base.buildId(),
-        base.sdkVersion(),
-        base.heartbeatAt(),
-        base.capabilityTags(),
-        base.currentLoad(),
-        base.taskTypes(),
-        base.protocolVersion(),
-        maxConcurrent,
-        null,
-        null);
+    return dto(WorkerRegistryStatus.ONLINE.code()).toBuilder()
+        .maxConcurrent(maxConcurrent)
+        .build();
   }
 
   private WorkerHeartbeatDto dtoWithTaskTypes(List<WorkerTaskTypeDescriptorDto> taskTypes) {
-    return new WorkerHeartbeatDto(
-        "ta",
-        "w1",
-        "sdk-self-hosted",
-        WorkerRegistryStatus.ONLINE.code(),
-        "host",
-        "1.2.3.4",
-        "pid",
-        "build-1",
-        "sdk-1",
-        Instant.now(),
-        List.of(),
-        1,
-        taskTypes,
-        null,
-        null,
-        null,
-        null);
+    return dto(WorkerRegistryStatus.ONLINE.code()).toBuilder()
+        .workerGroup("sdk-self-hosted")
+        .taskTypes(taskTypes)
+        .build();
   }
 
   private WorkerRegistryEntity entityWithStatus(String status) {
@@ -291,42 +249,10 @@ class DefaultWorkerRegistryServiceTest {
   @Test
   @DisplayName("register: 缺 workerGroup → 400 校验拒(不落库,杜绝 NOT NULL 撞 500 刷日志)")
   void registerMissingWorkerGroupRejected() {
-    WorkerHeartbeatDto noGroup = new WorkerHeartbeatDto(
-        "ta",
-        "w1",
-        null,
-        WorkerRegistryStatus.ONLINE.code(),
-        "host",
-        "1.2.3.4",
-        "pid",
-        "build-1",
-        "sdk-1",
-        Instant.now(),
-        List.of(),
-        1,
-        null,
-        null,
-        null,
-        null,
-        null);
-    WorkerHeartbeatDto blankGroup = new WorkerHeartbeatDto(
-        "ta",
-        "w1",
-        "  ",
-        WorkerRegistryStatus.ONLINE.code(),
-        "host",
-        "1.2.3.4",
-        "pid",
-        "build-1",
-        "sdk-1",
-        Instant.now(),
-        List.of(),
-        1,
-        null,
-        null,
-        null,
-        null,
-        null);
+    WorkerHeartbeatDto noGroup =
+        dto(WorkerRegistryStatus.ONLINE.code()).toBuilder().workerGroup(null).build();
+    WorkerHeartbeatDto blankGroup =
+        dto(WorkerRegistryStatus.ONLINE.code()).toBuilder().workerGroup("  ").build();
 
     assertThatThrownBy(() -> service.register(noGroup))
         .isInstanceOf(BizException.class)

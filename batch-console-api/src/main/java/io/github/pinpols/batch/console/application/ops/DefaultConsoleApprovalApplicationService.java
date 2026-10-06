@@ -148,7 +148,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
           default ->
             throw BizException.of(
                 ResultCode.INVALID_ARGUMENT,
-                "error.common.invalid_argument_detail",
+                ResultCode.INVALID_ARGUMENT.detailKey(),
                 "unsupported approval action: " + actionType);
         };
     markExecutedRemote(tenantId, approvalNo);

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
@@ -27,14 +28,14 @@ public class ComputeStep implements ProcessStageStep {
   public ProcessStageResult execute(ProcessJobContext context) {
     if (DryRunGuard.fromAttributes(EmptyChecks.isNull(context) ? null : context.getAttributes())
         .isDryRun()) {
-      context.getAttributes().put("processedCount", 0);
-      context.getAttributes().put("dryRunSkipped", "PROCESS_STAGING_WRITE");
+      context.getAttributes().put(ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT, 0);
+      context.getAttributes().put(PipelineRuntimeKeys.DRY_RUN_SKIPPED, "PROCESS_STAGING_WRITE");
       return ProcessStageResult.success(stage());
     }
     ProcessComputePlugin plugin = context.getResolvedPlugin();
     if (EmptyChecks.isNull(plugin)) {
       // 没有 plugin 配置时仍允许走通(便于开箱跑通骨架),但写一个 0 行的 processedCount 占位。
-      context.getAttributes().putIfAbsent("processedCount", 0);
+      context.getAttributes().putIfAbsent(ProcessRuntimeKeys.PROCESS_PROCESSED_COUNT, 0);
       return ProcessStageResult.success(stage());
     }
     ProcessStageResult result = plugin.compute(context);

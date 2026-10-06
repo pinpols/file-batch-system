@@ -48,7 +48,7 @@ public final class CodeNormalizer {
     if (!GROUP_PATTERN.matcher(upper).matches()) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ResultCode.INVALID_ARGUMENT.detailKey(),
           "invalid "
               + fieldName
               + " '"
@@ -71,7 +71,7 @@ public final class CodeNormalizer {
     if (!CONFIG_PATTERN.matcher(lower).matches()) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ResultCode.INVALID_ARGUMENT.detailKey(),
           "invalid "
               + fieldName
               + " '"

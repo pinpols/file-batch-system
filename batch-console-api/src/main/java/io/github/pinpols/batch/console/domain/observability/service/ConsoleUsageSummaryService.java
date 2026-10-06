@@ -29,7 +29,7 @@ public class ConsoleUsageSummaryService {
         || EmptyChecks.isNull(to)
         || from.isAfter(to)
         || from.plusDays(MAX_DAYS).isBefore(to)) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument_detail");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
     }
     String resolvedTenant = tenantIdResolver.resolveTenant(tenantId);
     mapper.setTenantContext(resolvedTenant);

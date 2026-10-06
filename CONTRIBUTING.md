@@ -88,7 +88,13 @@ git config core.hooksPath .githooks
 | 本地全链路 | `bash scripts/local/sim-harness.sh all` |
 | 容量 / 性能 | `load-tests/` 对应入口；记录 SHA、镜像、环境、工作负载和业务结果 |
 
-多模块 Maven 命令需要 `-am` 带上依赖模块。PR 描述里应区分：未运行、静态检查通过、编译通过、单测通过、集成测试通过、真实服务验证通过。
+多模块 Maven 命令需要 `-am` 带上依赖模块。`-pl` 的选择器只接受**相对仓库根目录的模块路径**或
+`[groupId]:artifactId`，**不接受裸 artifactId**：`-pl batch-worker/core`、`-pl :batch-worker-core`、
+`-pl io.github.pinpols.batch:batch-worker-core` 都可以，`-pl batch-worker-core` 会直接失败并报
+`Could not find the selected project in the reactor`（该错误出现在构建刚开始时，容易被误读为检查通过，
+不要用 grep 过滤构建输出后把空输出当成成功）。
+
+PR 描述里应区分：未运行、静态检查通过、编译通过、单测通过、集成测试通过、真实服务验证通过。
 
 ## Pull Request 要求
 

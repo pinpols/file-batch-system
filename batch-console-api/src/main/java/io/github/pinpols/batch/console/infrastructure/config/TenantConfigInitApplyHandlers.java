@@ -244,7 +244,7 @@ public class TenantConfigInitApplyHandlers {
         && (spec.getWatermarkField() == null || spec.getWatermarkField().isBlank())) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ResultCode.INVALID_ARGUMENT.detailKey(),
           "watermarkField is required when executionMode=INCREMENTAL for job " + spec.getJobCode());
     }
     entity.setExecutionMode(executionMode);

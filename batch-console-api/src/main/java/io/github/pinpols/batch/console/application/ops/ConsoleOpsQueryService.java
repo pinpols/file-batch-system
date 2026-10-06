@@ -615,6 +615,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
         entity.getHeartbeatAt(),
         null,
         entity.getDrainStartedAt(),
-        entity.getDrainDeadlineAt());
+        entity.getDrainDeadlineAt(),
+        entity.getPort());
   }
 }

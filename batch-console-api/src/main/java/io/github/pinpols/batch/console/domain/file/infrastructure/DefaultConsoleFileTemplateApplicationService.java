@@ -98,7 +98,7 @@ public class DefaultConsoleFileTemplateApplicationService
     if (existing != null) {
       throw BizException.of(
           ResultCode.CONFLICT,
-          "error.common.conflict_detail",
+          ResultCode.CONFLICT.detailKey(),
           "template code + version already exists: " + request.getTemplateCode() + "/" + version);
     }
     String operator = requestMetadataResolver.current().operatorId();
@@ -492,7 +492,7 @@ public class DefaultConsoleFileTemplateApplicationService
     } catch (JsonProcessingException e) {
       throw BizException.of(
           ResultCode.SYSTEM_ERROR,
-          "error.common.system_error_detail",
+          ResultCode.SYSTEM_ERROR.detailKey(),
           "file template json draft failed");
     }
   }

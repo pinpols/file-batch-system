@@ -10,10 +10,10 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.worker.core.config.WorkerGracefulShutdownProperties;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.support.WorkerSelfRegistrationService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.lang.reflect.Field;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,7 +36,7 @@ class GracefulKafkaShutdownTest {
   private GracefulKafkaShutdown shutdown;
 
   @BeforeEach
-  void setUp() throws Exception {
+  void setUp() {
     runtimeState = mock(WorkerRuntimeState.class);
     registryService = mock(WorkerSelfRegistrationService.class);
     kafkaRegistry = mock(KafkaListenerEndpointRegistry.class);
@@ -48,12 +48,17 @@ class GracefulKafkaShutdownTest {
     lenient().when(provider.getIfAvailable()).thenReturn(meterRegistry);
     lenient().when(runtimeState.snapshot()).thenReturn(List.of());
 
-    shutdown = new GracefulKafkaShutdown(
-        runtimeState, registryService, kafkaRegistry, leaseRegistry, provider);
+    WorkerGracefulShutdownProperties gracefulShutdownProperties =
+        new WorkerGracefulShutdownProperties();
+    gracefulShutdownProperties.setTimeoutSeconds(1L); // 短 timeout 加快测试
 
-    Field f = GracefulKafkaShutdown.class.getDeclaredField("gracefulShutdownTimeoutSeconds");
-    f.setAccessible(true);
-    f.set(shutdown, 1L); // 短 timeout 加快测试
+    shutdown = new GracefulKafkaShutdown(
+        runtimeState,
+        registryService,
+        kafkaRegistry,
+        leaseRegistry,
+        provider,
+        gracefulShutdownProperties);
   }
 
   @Test

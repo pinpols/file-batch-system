@@ -11,6 +11,7 @@ import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,7 +52,7 @@ class ExportTaskExecutorTest {
         "ti-9",
         "worker-7",
         Map.of(),
-        Map.of("pipelineInstanceId", 42L));
+        Map.of(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, 42L));
 
     TaskResult r = executor.execute(ctx);
 

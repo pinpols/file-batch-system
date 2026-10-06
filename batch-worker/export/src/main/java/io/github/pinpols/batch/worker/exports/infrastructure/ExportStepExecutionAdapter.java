@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.exports.infrastructure;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.constants.NodeOutputKeys;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
@@ -17,6 +18,7 @@ import io.github.pinpols.batch.worker.exports.domain.ExportPayload;
 import io.github.pinpols.batch.worker.exports.domain.ExportStage;
 import io.github.pinpols.batch.worker.exports.domain.ExportStageResult;
 import io.github.pinpols.batch.worker.exports.domain.ExportWorkerType;
+import io.github.pinpols.batch.worker.exports.stage.ExportRuntimeKeys;
 import io.github.pinpols.batch.worker.exports.stage.ExportStageExecutor;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -82,12 +84,12 @@ public class ExportStepExecutionAdapter
     populateCommonFields(context, request, contextMap);
     context.setBizDate(String.valueOf(contextMap.getOrDefault(PipelineRuntimeKeys.BIZ_DATE, "")));
     context.setFileId(fileId == null ? "" : String.valueOf(fileId));
-    Object exportPayload = contextMap.get("exportPayload");
+    Object exportPayload = contextMap.get(ExportRuntimeKeys.EXPORT_PAYLOAD);
     if (exportPayload == null
         && context.getRawPayload() != null
         && !context.getRawPayload().isBlank()) {
       exportPayload = objectMapper.readValue(context.getRawPayload(), ExportPayload.class);
-      context.getAttributes().put("exportPayload", exportPayload);
+      context.getAttributes().put(ExportRuntimeKeys.EXPORT_PAYLOAD, exportPayload);
     }
     return context;
   }
@@ -136,7 +138,7 @@ public class ExportStepExecutionAdapter
         String.valueOf(context.getAttributes().getOrDefault(PipelineRuntimeKeys.OBJECT_NAME, ""));
     // ADR-009 Stage 1.2: 把 EXPORT 的关键产出暴露给下游 workflow 节点 DSL 引用
     Map<String, Object> outputs = new LinkedHashMap<>();
-    putIfPresent(outputs, "fileId", attributes.get(PipelineRuntimeKeys.FILE_ID));
+    putIfPresent(outputs, PipelineRuntimeKeys.FILE_ID, attributes.get(PipelineRuntimeKeys.FILE_ID));
     putIfPresent(
         outputs, PipelineRuntimeKeys.OBJECT_NAME, attributes.get(PipelineRuntimeKeys.OBJECT_NAME));
     putIfPresent(
@@ -156,8 +158,10 @@ public class ExportStepExecutionAdapter
         PipelineRuntimeKeys.CHECKSUM_TYPE,
         attributes.get(PipelineRuntimeKeys.CHECKSUM_TYPE));
     // ADR-041 Phase1.3:归一化 count 信封。export 读=写,input/output 同取 recordCount(导出行数)。
-    putIfPresent(outputs, "inputCount", attributes.get(PipelineRuntimeKeys.RECORD_COUNT));
-    putIfPresent(outputs, "outputCount", attributes.get(PipelineRuntimeKeys.RECORD_COUNT));
+    putIfPresent(
+        outputs, NodeOutputKeys.INPUT_COUNT, attributes.get(PipelineRuntimeKeys.RECORD_COUNT));
+    putIfPresent(
+        outputs, NodeOutputKeys.OUTPUT_COUNT, attributes.get(PipelineRuntimeKeys.RECORD_COUNT));
     putIfPresent(outputs, PipelineRuntimeKeys.BIZ_DATE, context.getBizDate());
     if (!outputs.isEmpty()) {
       attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);

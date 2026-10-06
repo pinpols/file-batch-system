@@ -4,7 +4,9 @@ import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.config.HttpDispatchChannelProperties;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
 import jakarta.annotation.PreDestroy;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -83,10 +85,10 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
 
     Map<String, Object> requestPayload = new LinkedHashMap<>();
     requestPayload.put("tenantId", command.tenantId());
-    requestPayload.put("traceId", command.traceId());
-    requestPayload.put("externalRequestId", receipt.externalRequestId());
-    requestPayload.put("fileRecord", command.fileRecord());
-    requestPayload.put("dispatchPayload", command.payload());
+    requestPayload.put(PipelineRuntimeKeys.TRACE_ID, command.traceId());
+    requestPayload.put(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID, receipt.externalRequestId());
+    requestPayload.put(PipelineRuntimeKeys.FILE_RECORD, command.fileRecord());
+    requestPayload.put(DispatchRuntimeKeys.DISPATCH_PAYLOAD, command.payload());
 
     Request.Builder builder = new Request.Builder()
         .url(endpoint)

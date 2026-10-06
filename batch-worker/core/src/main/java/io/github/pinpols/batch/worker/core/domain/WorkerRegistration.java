@@ -26,7 +26,6 @@ public class WorkerRegistration {
   private String status;
   private String host;
   private Integer port;
-  private Boolean active;
   private OffsetDateTime registeredAt;
   private OffsetDateTime lastHeartbeatAt;
 

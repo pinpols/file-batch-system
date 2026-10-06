@@ -1,14 +1,14 @@
 package io.github.pinpols.batch.worker.dispatchs.runtime;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.worker.core.config.WorkerConcurrencyProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerIdentityProperties;
-import io.github.pinpols.batch.worker.core.config.WorkerRuntimeConfiguration;
+import io.github.pinpols.batch.worker.core.config.WorkerRegistryStartupProperties;
 import io.github.pinpols.batch.worker.core.support.AbstractWorkerLoop;
 import io.github.pinpols.batch.worker.core.support.HeartbeatService;
 import io.github.pinpols.batch.worker.core.support.WorkerLifecycleManager;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchWorkerConfiguration;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -24,13 +24,15 @@ public class DispatchWorkerLoop extends AbstractWorkerLoop {
       BatchDateTimeSupport dateTimeSupport,
       DispatchWorkerConfiguration configuration,
       WorkerIdentityProperties identityProperties,
-      @Value(WorkerRuntimeConfiguration.MAX_CONCURRENT_TASKS_PLACEHOLDER) int maxConcurrentTasks) {
+      WorkerRegistryStartupProperties workerRegistryStartupProperties,
+      WorkerConcurrencyProperties concurrencyProperties) {
     super(
         workerLifecycleManager,
         heartbeatService,
         dateTimeSupport,
-        maxConcurrentTasks,
-        identityProperties);
+        concurrencyProperties.getMaxConcurrentTasks(),
+        identityProperties,
+        workerRegistryStartupProperties);
     this.configuration = configuration;
   }
 

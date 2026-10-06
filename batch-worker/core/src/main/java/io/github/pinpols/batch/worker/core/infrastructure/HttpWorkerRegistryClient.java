@@ -5,10 +5,12 @@ import io.github.pinpols.batch.common.config.OrchestratorClientProperties;
 import io.github.pinpols.batch.common.dto.WorkerHeartbeatDto;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.support.WorkerRegistryClient;
 import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
@@ -114,29 +116,27 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
 
   // package-private 暴露给同包测试覆盖(LoadStep/GenerateStep 接入测试也用同一签名)
   WorkerHeartbeatDto toHeartbeatDto(WorkerRegistration registration) {
-    return new WorkerHeartbeatDto(
-        registration.getTenantId(),
-        registration.getWorkerId(),
-        registration.getWorkerGroup(),
-        registration.getStatus(),
-        registration.getHost(),
-        null,
-        null,
-        // buildId / sdkVersion: file-pipeline worker 非 SDK 自托管,不上报运行指纹(SDK-P5-3)
-        null,
-        null,
-        registration.getLastHeartbeatAt() == null
-            ? BatchDateTimeSupport.utcNow()
-            : registration.getLastHeartbeatAt().toInstant(),
-        registration.getCapabilityTags(),
-        registration.getCurrentLoad(),
-        // file-pipeline worker 不声明自定义 taskType(仅 SDK 自托管 worker 用,见 SDK Phase 3 M3.1)
-        null,
-        // protocolVersion:平台内置 file-pipeline worker 与控制面同仓同步发布,非 BYO 自托管 SDK,
-        // 不参与协议门禁(留 null = legacy 放行;门禁只针对外部 SDK worker 上报的 protocolVersion)。
-        null,
-        registration.getMaxConcurrent(),
-        registration.getWorkerCode(),
-        pipelineStageProgressRegistry.snapshots());
+    OffsetDateTime lastHeartbeatAt = registration.getLastHeartbeatAt();
+    return WorkerHeartbeatDto.builder()
+        .tenantId(registration.getTenantId())
+        .workerCode(registration.getWorkerId())
+        .workerGroup(registration.getWorkerGroup())
+        .status(registration.getStatus())
+        .hostName(registration.getHost())
+        // worker 实际监听端口：AbstractWorkerLoop 已解析为 Spring 运行时绑定端口（见 resolveWorkerPort）。
+        .port(registration.getPort())
+        .heartbeatAt(
+            EmptyChecks.isNull(lastHeartbeatAt)
+                ? BatchDateTimeSupport.utcNow()
+                : lastHeartbeatAt.toInstant())
+        .capabilityTags(registration.getCapabilityTags())
+        .currentLoad(registration.getCurrentLoad())
+        .maxConcurrent(registration.getMaxConcurrent())
+        .workerPoolCode(registration.getWorkerCode())
+        .pipelineProgress(pipelineStageProgressRegistry.snapshots())
+        // hostIp / processId / buildId / sdkVersion / taskTypes / protocolVersion 保持缺省 null：
+        // file-pipeline worker 非 BYO 自托管 SDK，不上报运行指纹、自定义 taskType 与 wire 协议版本
+        // （协议门禁只针对外部 SDK worker 上报的 protocolVersion）。
+        .build();
   }
 }

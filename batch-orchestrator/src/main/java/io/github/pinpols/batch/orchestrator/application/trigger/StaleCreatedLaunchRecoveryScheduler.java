@@ -23,7 +23,6 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -55,12 +54,7 @@ public class StaleCreatedLaunchRecoveryScheduler {
   private final PartitionDispatchService partitionDispatchService;
   private final OrchestratorGracefulShutdown gracefulShutdown;
   private final MeterRegistry meterRegistry;
-
-  @Value("${batch.trigger.launch.created-recovery.min-age-seconds:60}")
-  private long minAgeSeconds;
-
-  @Value("${batch.trigger.launch.created-recovery.batch-size:50}")
-  private int batchSize;
+  private final StaleCreatedLaunchRecoveryProperties properties;
 
   @Scheduled(
       fixedDelayString = "${batch.trigger.launch.created-recovery.poll-interval-millis:60000}")
@@ -72,8 +66,9 @@ public class StaleCreatedLaunchRecoveryScheduler {
     if (gracefulShutdown.isDraining()) {
       return;
     }
-    Instant olderThan = BatchDateTimeSupport.utcNow().minusSeconds(Math.max(minAgeSeconds, 0));
-    int limit = Math.max(batchSize, 1);
+    Instant olderThan =
+        BatchDateTimeSupport.utcNow().minusSeconds(Math.max(properties.getMinAgeSeconds(), 0));
+    int limit = Math.max(properties.getBatchSize(), 1);
     List<JobInstanceEntity> candidates =
         jobInstanceMapper.selectStaleCreatedLaunchCandidates(olderThan, limit);
     if (EmptyChecks.isEmpty(candidates)) {

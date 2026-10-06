@@ -1,8 +1,18 @@
 package io.github.pinpols.batch.common.dto;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.time.Instant;
 import java.util.List;
+import lombok.Builder;
 
+/**
+ * Worker register / heartbeat / deactivate / updateStatus 的统一请求体。
+ *
+ * <p>字段绝大多数可空，且同一 schema 被四个端点复用：用 {@code @Builder(toBuilder = true)} 命名式构造，
+ * 避免「18 个位置参数里塞一串 null」——那种写法一改字段顺序就静默错位，且完全读不出意图。
+ * 与同包的 {@code LaunchRequest} 同一约定。Jackson 仍走 record 的规范构造器反序列化，wire 格式不变。
+ */
+@Builder(toBuilder = true)
 public record WorkerHeartbeatDto(
     String tenantId,
     String workerCode,
@@ -11,6 +21,9 @@ public record WorkerHeartbeatDto(
     String hostName,
     String hostIp,
     String processId,
+    // Worker 实际监听的 HTTP 端口（健康检查/指标）：内置 worker 上报 Spring 运行时绑定端口；
+    // SDK 自托管 worker 可上报自己的监听端口；缺失=老 worker / 老 SDK / 非 web 上下文，平台存 NULL。
+    Integer port,
     // SDK Phase 5 / SDK-P5-3 运行指纹:租户应用构建标识 + 链接的 SDK 库版本;仅 register 上报,heartbeat 不带(null)。
     String buildId,
     String sdkVersion,
@@ -39,6 +52,10 @@ public record WorkerHeartbeatDto(
     currentLoad = normalizedCurrentLoad;
     if (maxConcurrent != null && maxConcurrent <= 0) {
       maxConcurrent = null;
+    }
+    // 端口只接受有效监听端口；0（随机端口未绑定）与负值一律 normalize 为 null，不落库。
+    if (EmptyChecks.isNotNull(port) && port <= 0) {
+      port = null;
     }
   }
 }

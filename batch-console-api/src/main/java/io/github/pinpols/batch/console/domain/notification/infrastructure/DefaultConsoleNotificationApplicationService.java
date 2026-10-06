@@ -190,7 +190,7 @@ public class DefaultConsoleNotificationApplicationService
     if (!CHANNEL_TYPES.contains(channelType)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ResultCode.INVALID_ARGUMENT.detailKey(),
           "channelType must be one of " + CHANNEL_TYPES);
     }
   }

@@ -351,14 +351,15 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
   private Map<String, Object> buildExecutionContext(PulledTask task) {
     Map<String, Object> executionContext = new LinkedHashMap<>();
     String payload = task.getPayload() == null ? "" : task.getPayload();
-    executionContext.put("payload", payload);
-    executionContext.put("taskId", task.getTaskId());
+    executionContext.put(PipelineRuntimeKeys.PAYLOAD, payload);
+    executionContext.put(PipelineRuntimeKeys.TASK_ID, task.getTaskId());
     executionContext.put("workerId", task.getWorkerId());
     executionContext.put(
-        "jobCode", task.getJobCode() == null ? task.getTaskType() : task.getJobCode());
+        PipelineRuntimeKeys.JOB_CODE,
+        EmptyChecks.isNull(task.getJobCode()) ? task.getTaskType() : task.getJobCode());
     executionContext.put("businessKey", task.getBusinessKey() == null ? "" : task.getBusinessKey());
     if (task.getBizDate() != null) {
-      executionContext.put("bizDate", task.getBizDate().toString());
+      executionContext.put(PipelineRuntimeKeys.BIZ_DATE, task.getBizDate().toString());
     }
     executionContext.put(
         PipelineRuntimeKeys.TRACE_ID, task.getTraceId() == null ? "" : task.getTraceId());

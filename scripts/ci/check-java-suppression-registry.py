@@ -62,7 +62,9 @@ def production_sources(candidates: list[str] | None = None) -> list[Path]:
             and relative.startswith(SOURCE_PREFIXES)
         )
     result = subprocess.run(
-        ["git", "ls-files", "--", *SOURCE_PREFIXES],
+        # --cached 列出已跟踪文件，--others --exclude-standard 补上尚未 add 的新文件；
+        # 只扫已跟踪文件会漏掉本地在途新增的 suppression（CI 检出时全为已跟踪，故 CI 无感知）。
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", *SOURCE_PREFIXES],
         cwd=ROOT,
         check=True,
         capture_output=True,

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.enums.FileStatus;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -17,7 +18,7 @@ class FileMapResponseJacksonTest {
   void presignUploadKeepsNineFixedKeys() throws Exception {
     Map<String, Object> row = new LinkedHashMap<>();
     row.put("fileId", 12L);
-    row.put("status", "RECEIVED");
+    row.put("status", FileStatus.RECEIVED.code());
     row.put("uploadMode", "APP_MANAGED");
     row.put("uploadMethod", "PUT");
     row.put("contentField", "file");

@@ -7,8 +7,8 @@
 # 这样无论上次怎么死的,下次一开跑就自净;也可手动 `bash scripts/local/clean-stale-test-env.sh`。
 #
 # 只清"残留",不碰 batch-local 受管 dev 栈(batch-postgres-primary/valkey/minio/kafka):
-#   - 孤儿 testcontainers:label org.testcontainers=true 且无 reuse-hash(反复 kill-9 / Ryuk
-#     没机会清的;保留显式 withReuse 容器,它们带 reuse-hash)。
+#   - 孤儿 testcontainers:label org.testcontainers=true 且无 org.testcontainers.hash
+#     (反复 kill-9 / Ryuk 没机会清的;保留显式 withReuse 容器,它们带该 hash label)。
 #   - biz-shard:名字 batch-postgres-biz-shard-*(sim routing 用 docker run 直起,不归 compose)。
 #   - SDK E2E 本机样例 worker:go run/java/python/rust/ts 等后台进程若父脚本被 kill,
 #     EXIT trap 来不及执行,会继续消费 Kafka 并干扰后续 sim。
@@ -48,10 +48,10 @@ command -v docker >/dev/null 2>&1 || {
   exit 0
 }
 
-# 1) 孤儿 testcontainers(无 reuse-hash label;running + exited 都清)
+# 1) 孤儿 testcontainers(无 org.testcontainers.hash label;running + exited 都清)
 orphans=$(docker ps -aq --filter "label=org.testcontainers=true" 2>/dev/null | while read -r cid; do
   [ -n "$cid" ] || continue
-  if ! docker inspect "$cid" --format '{{json .Config.Labels}}' 2>/dev/null | grep -q "reuse-hash"; then
+  if ! docker inspect "$cid" --format '{{json .Config.Labels}}' 2>/dev/null | grep -q "org.testcontainers.hash"; then
     printf '%s\n' "$cid"
   fi
 done)

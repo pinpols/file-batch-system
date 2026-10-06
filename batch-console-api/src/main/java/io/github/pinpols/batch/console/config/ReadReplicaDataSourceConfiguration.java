@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.config;
 
 import com.zaxxer.hikari.HikariDataSource;
+import io.github.pinpols.batch.common.config.ApplicationNameProvider;
 import io.github.pinpols.batch.common.config.BatchPgSessionProperties;
 import io.github.pinpols.batch.common.config.HikariPgSessionSupport;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -33,7 +34,7 @@ import org.springframework.jdbc.datasource.LazyConnectionDataSourceProxy;
 @Slf4j
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(name = "batch.console.read-replica.enabled", havingValue = "true")
-@EnableConfigurationProperties(ReadReplicaProperties.class)
+@EnableConfigurationProperties({ReadReplicaProperties.class, ReplicaLagMonitorProperties.class})
 @RequiredArgsConstructor
 public class ReadReplicaDataSourceConfiguration {
 
@@ -98,8 +99,9 @@ public class ReadReplicaDataSourceConfiguration {
   @Bean
   public ReplicaLagMonitor replicaLagMonitor(
       @Qualifier("consolePrimaryDataSource") DataSource primary,
-      ObjectProvider<MeterRegistry> meterRegistryProvider) {
-    return new ReplicaLagMonitor(primary, meterRegistryProvider);
+      ObjectProvider<MeterRegistry> meterRegistryProvider,
+      ReplicaLagMonitorProperties lagMonitorProperties) {
+    return new ReplicaLagMonitor(primary, meterRegistryProvider, lagMonitorProperties);
   }
 
   /** 共用 buildPool（DRY 之前 Primary/Replica 两份重复方法）。 */
@@ -125,6 +127,6 @@ public class ReadReplicaDataSourceConfiguration {
   }
 
   private String pgApplicationName(String suffix) {
-    return environment.getProperty("spring.application.name", "batch-console-api") + suffix;
+    return ApplicationNameProvider.resolve(environment, "batch-console-api") + suffix;
   }
 }

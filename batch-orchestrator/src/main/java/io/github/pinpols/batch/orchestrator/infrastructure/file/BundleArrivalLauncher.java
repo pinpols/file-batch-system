@@ -1,10 +1,15 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.file;
 
 import io.github.pinpols.batch.common.dto.LaunchRequest;
+import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -49,9 +54,13 @@ public class BundleArrivalLauncher {
   private static final String META_BUNDLE_EXPORT_TEMPLATES = "bundleExportTemplates";
 
   private final ObjectProvider<LaunchService> launchServiceProvider;
+  private final TriggerRequestMapper triggerRequestMapper;
 
-  public BundleArrivalLauncher(ObjectProvider<LaunchService> launchServiceProvider) {
+  public BundleArrivalLauncher(
+      ObjectProvider<LaunchService> launchServiceProvider,
+      TriggerRequestMapper triggerRequestMapper) {
     this.launchServiceProvider = launchServiceProvider;
+    this.triggerRequestMapper = triggerRequestMapper;
   }
 
   public enum LaunchOutcome {
@@ -206,13 +215,29 @@ public class BundleArrivalLauncher {
     // 确定性 requestId:同组同 bizDate 只 launch 一次(trigger_request UNIQUE 回退)
     String requestId =
         "bundle-arrival-" + tenantId + "-" + fileGroupCode + "-" + candidate.bizDate();
+    String traceId = IdGenerator.newTraceId();
+    // 与同仓库其它内部 launcher(ChildJobLaunchSupport / DefaultCompensationService /
+    // BatchDaySettleScheduler)保持一致:先把 trigger_request 落成 ACCEPTED,DefaultLaunchService 才能接受
+    // 这个 requestId —— 否则 load() 按 requestId 查不到行直接抛 error.trigger.request_not_found,到达组每轮
+    // sweep 重试、束永不 launch。insertIfAbsent 的 (tenant_id, request_id) 冲突忽略即幂等回退。
+    TriggerRequestEntity triggerRequest = new TriggerRequestEntity();
+    triggerRequest.setTenantId(tenantId);
+    triggerRequest.setRequestId(requestId);
+    triggerRequest.setTriggerType(TriggerType.EVENT.code());
+    triggerRequest.setJobCode(candidate.bundleJobCode());
+    triggerRequest.setBizDate(candidate.bizDate());
+    triggerRequest.setDedupKey(tenantId + ":" + requestId);
+    triggerRequest.setRequestStatus(TriggerRequestStatus.ACCEPTED.code());
+    triggerRequest.setTraceId(traceId);
+    triggerRequestMapper.insertIfAbsent(triggerRequest);
+
     LaunchRequest request = LaunchRequest.builder()
         .tenantId(tenantId)
         .jobCode(candidate.bundleJobCode())
         .bizDate(candidate.bizDate())
         .triggerType(TriggerType.EVENT)
         .requestId(requestId)
-        .traceId(IdGenerator.newTraceId())
+        .traceId(traceId)
         .params(Map.of("bundleFiles", candidate.bundleFiles()))
         .build();
     launchServiceProvider.getObject().launch(request);
@@ -236,7 +261,12 @@ public class BundleArrivalLauncher {
 
   @SuppressWarnings("unchecked")
   private static Map<String, Object> parseMetadata(Object metadataJson) {
-    if (!(metadataJson instanceof String json) || json.isBlank()) {
+    // metadata_json 来自 selectArrivalGroupFiles 的 resultType="map":PG jsonb 列经 JDBC 回来是
+    // org.postgresql.util.PGobject(不是 String)。只认 String 会让本方法恒返回空表 → bundleJobCode 读不到
+    // → 静默 NOT_BUNDLE、到达组永不 launch(无日志无异常)。故用仓库既有 PostgresqlJsonbTexts 归一化。
+    String json =
+        metadataJson instanceof String text ? text : PostgresqlJsonbTexts.tryExtract(metadataJson);
+    if (EmptyChecks.isBlank(json)) {
       return Map.of();
     }
     try {

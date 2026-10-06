@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.redis.BatchRedisKeys;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
+import io.github.pinpols.batch.orchestrator.config.QuotaProperties;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.QuotaResetPolicy;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceCheck;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
@@ -17,7 +18,6 @@ import java.util.Map;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -138,18 +138,18 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
 
   public RedisQuotaRuntimeStateService(
       OrchestratorRedisSupport redis, BatchTimezoneProvider timezoneProvider) {
-    this(redis, timezoneProvider, "FAIL_CLOSED");
+    this(redis, timezoneProvider, new QuotaProperties());
   }
 
   @Autowired
   public RedisQuotaRuntimeStateService(
       OrchestratorRedisSupport redis,
       BatchTimezoneProvider timezoneProvider,
-      @Value("${batch.quota.redis.failure-mode:FAIL_CLOSED}") String redisFailureMode) {
+      QuotaProperties quotaProperties) {
     this.redis = redis;
     this.timezoneProvider = timezoneProvider;
-    this.redisFailureMode =
-        Texts.hasText(redisFailureMode) ? redisFailureMode.trim() : "FAIL_CLOSED";
+    String configuredMode = quotaProperties.getRedis().getFailureMode();
+    this.redisFailureMode = Texts.hasText(configuredMode) ? configuredMode.trim() : "FAIL_CLOSED";
   }
 
   @Override

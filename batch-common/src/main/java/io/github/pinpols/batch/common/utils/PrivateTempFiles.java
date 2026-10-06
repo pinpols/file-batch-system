@@ -17,8 +17,17 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Instant;
 import java.util.Set;
 
-/** 为包含业务数据或凭据的中间文件提供进程级私有临时目录。 */
+/**
+ * 临时目录策略的唯一入口：既为包含业务数据或凭据的中间文件提供进程级私有临时目录，也集中解析各模块本地路径
+ * 默认值所依赖的 {@code java.io.tmpdir} 根目录，避免该 JVM 系统属性被分散读取。
+ *
+ * <p>只读取 JVM 系统属性并做路径拼接，<b>不</b>把 {@code java.io.tmpdir} 包装成业务配置项（配置 Key 治理文档
+ * §7）；业务侧如需可配置的落盘目录，仍由各自的 {@code @ConfigurationProperties} 承载。
+ */
 public final class PrivateTempFiles {
+
+  /** JVM 临时目录系统属性名（{@code java.io.tmpdir}）：测试改属性时复用同一份 key，避免字面量漂移。 */
+  public static final String TEMP_ROOT_PROPERTY = "java.io.tmpdir";
 
   private static final String ROOT_DIRECTORY = "file-batch-private";
   private static final String LOCK_SUFFIX = ".lock";
@@ -32,6 +41,16 @@ public final class PrivateTempFiles {
           Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
 
   private PrivateTempFiles() {}
+
+  /** JVM 临时目录根（{@code java.io.tmpdir}）；供需要遍历临时目录的清理逻辑复用。 */
+  public static Path tempRoot() {
+    return Path.of(System.getProperty(TEMP_ROOT_PROPERTY));
+  }
+
+  /** 解析 JVM 临时目录下的子目录路径；供各模块本地路径默认值统一复用。 */
+  public static Path resolveUnderTempRoot(String subdirectory) {
+    return Path.of(System.getProperty(TEMP_ROOT_PROPERTY), subdirectory);
+  }
 
   /** 在进程私有目录创建 owner-only 临时文件。 */
   public static Path createTempFile(String prefix, String suffix) throws IOException {
@@ -165,7 +184,7 @@ public final class PrivateTempFiles {
   }
 
   private static Path privateDirectory() throws IOException {
-    Path directory = Path.of(System.getProperty("java.io.tmpdir"), ROOT_DIRECTORY);
+    Path directory = resolveUnderTempRoot(ROOT_DIRECTORY);
     try {
       Files.createDirectory(directory, OWNER_ONLY_DIRECTORY);
     } catch (UnsupportedOperationException ignored) {

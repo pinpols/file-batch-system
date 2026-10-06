@@ -3,6 +3,8 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.enums.FileReceiptStatus;
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -254,11 +256,13 @@ public class DispatchReceiptPollScheduler {
       }
       boolean ack = root.path("acknowledged").asBoolean(false)
           || "ACKED".equalsIgnoreCase(root.path("status").asText())
-          || "SUCCESS".equalsIgnoreCase(root.path("receipt_status").asText());
+          || FileReceiptStatus.SUCCESS
+              .code()
+              .equalsIgnoreCase(root.path("receipt_status").asText());
       if (!ack) {
         return;
       }
-      String receiptCode = root.path("receiptCode").asText(null);
+      String receiptCode = root.path(DispatchRuntimeKeys.RECEIPT_CODE).asText(null);
       if (!Texts.hasText(receiptCode)) {
         receiptCode = externalRequestId;
       }
@@ -266,10 +270,10 @@ public class DispatchReceiptPollScheduler {
       if (n > 0) {
         pollSuccesses.incrementAndGet();
         Map<String, Object> meta = new LinkedHashMap<>();
-        meta.put("channelCode", channelCode);
-        meta.put("externalRequestId", externalRequestId);
-        meta.put("receiptCode", receiptCode);
-        fileRecords.updateFileStatus(fileId, "DISPATCHED", meta);
+        meta.put(DispatchRuntimeKeys.CHANNEL_CODE, channelCode);
+        meta.put(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID, externalRequestId);
+        meta.put(DispatchRuntimeKeys.RECEIPT_CODE, receiptCode);
+        fileRecords.updateFileStatus(fileId, FileStatus.DISPATCHED.code(), meta);
         log.info(
             "dispatch receipt acknowledged: tenantId={}, fileId={}, channelCode={}, receiptCode={}",
             tenantId,

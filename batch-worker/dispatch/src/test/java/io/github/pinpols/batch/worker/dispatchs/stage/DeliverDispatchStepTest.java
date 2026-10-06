@@ -8,12 +8,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
@@ -118,7 +120,8 @@ class DeliverDispatchStepTest {
 
     assertThat(result.success()).isFalse();
     assertThat(result.code()).isEqualTo("DISPATCH_SEND_FAILED");
-    assertThat(context.getAttributes()).containsEntry("retryRequested", Boolean.TRUE);
+    assertThat(context.getAttributes())
+        .containsEntry(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.TRUE);
     assertThat(context.getAttributes())
         .containsEntry(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.RETRY.name());
     verify(fileDispatchRepository).markFailed(any(), any(), any(), any(), any());
@@ -162,21 +165,21 @@ class DeliverDispatchStepTest {
     DispatchJobContext context = buildContext();
     step.execute(context);
 
-    verify(fileRecords).updateFileStatus(eq(10L), eq("DISPATCHING"), any());
+    verify(fileRecords).updateFileStatus(eq(10L), eq(FileStatus.DISPATCHING.code()), any());
   }
 
   @Test
   void execute_dryRunSkipsAllDispatchSideEffects() {
     DispatchJobContext context = buildContext();
-    context.getAttributes().put("dryRun", true);
+    context.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
 
     DispatchStageResult result = step.execute(context);
 
     assertThat(result.success()).isTrue();
     assertThat(context.getAttributes())
-        .containsEntry("dryRunSkipped", "DISPATCH_EXTERNAL_DELIVERY")
-        .containsEntry("externalRequestId", "DRY_RUN")
-        .containsEntry("receiptCode", "DRY_RUN_RECEIPT_CH1");
+        .containsEntry(PipelineRuntimeKeys.DRY_RUN_SKIPPED, "DISPATCH_EXTERNAL_DELIVERY")
+        .containsEntry(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID, "DRY_RUN")
+        .containsEntry(DispatchRuntimeKeys.RECEIPT_CODE, "DRY_RUN_RECEIPT_CH1");
     verifyNoInteractions(fileDispatchRepository, dispatchChannelGateway);
     verify(fileRecords, never()).updateFileStatus(any(), any(), any());
   }
@@ -200,7 +203,7 @@ class DeliverDispatchStepTest {
         new DispatchPayload("10", null, "CH1", "target", null, null, null, null, null, null);
     DispatchJobContext context = new DispatchJobContext();
     context.setTenantId("t1");
-    context.getAttributes().put("dispatchPayload", payload);
+    context.getAttributes().put(DispatchRuntimeKeys.DISPATCH_PAYLOAD, payload);
     context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, 10L);
     context.getAttributes().put(PipelineRuntimeKeys.FILE_RECORD, fileRecord);
     context.getAttributes().put(PipelineRuntimeKeys.CHANNEL_CONFIG, channelConfig);

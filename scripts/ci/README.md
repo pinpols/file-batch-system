@@ -12,11 +12,11 @@
 | SDK 配置 | `check-sdk-config-env-parity.py`（Java/Python env 工厂和五语言 live transport 前缀）、`check-sdk-runtime-alignment.py`（仓库 Node 入口、SDK/前端声明与 CI 版本矩阵） |
 | SDK 双栈 | `run-sdk-happy-eyeballs-gate.sh`（五语言真实 loopback socket 单栈/双栈/黑洞矩阵） |
 | 文档与变更 | `check-docs-structure.py`、`check-doc-timestamp-policy.py`、`check-code-doc-references.py`、`check-terminology-doc-sync.py`、`check-changelog-sync.py`、`check-loc-snapshot.py`、`check-readiness-doc-sync.py`、`check-slo-sli-catalog.py`、`check-comment-language.py` |
-| 脚本与仓库 | `check-shell-scripts.sh`、`check-shell-linux-portability.py`、`check-script-governance.py`、`check-repository-hygiene.py`、`check-env-file-shell-safety.py`、`check-hardcoded-runtime-config.sh`、`check-utf8-encoding.py`（全仓 UTF-8 字节扫描） |
-| 配置与部署 | `check-config-defaults-sync.py`、`check-config-governance.py`、`check-env-variable-governance.py`、`check-feature-switch-registry.py`、`check-five-worker-parity.py`、`check-keda-autoscaling.py`、`check-helm-env-sync.py`、`check-infrastructure-utf8.py`（Compose/Dockerfile/Helm/Testcontainers locale 与数据库编码）、`check-production-capacity-governance.py`、`check-production-overlay-safety.py`、`check-version-alignment.sh`、`validate-kafka-topics.sh` |
+| 脚本与仓库 | `check-shell-scripts.sh`、`check-shell-linux-portability.py`、`check-script-governance.py`、`check-repository-hygiene.py`、`check-env-file-shell-safety.py`、`check-hardcoded-runtime-config.sh`、`check-utf8-encoding.py`（全仓 UTF-8 字节扫描）、`check-testcontainers-reuse-label.py`（Testcontainers 复用容器清理谓词） |
+| 配置与部署 | `check-config-defaults-sync.py`、`check-config-governance.py`、`check-direct-config-key-access.py`、`check-env-variable-governance.py`、`check-feature-switch-registry.py`、`check-five-worker-parity.py`、`check-keda-autoscaling.py`、`check-helm-env-sync.py`、`check-infrastructure-utf8.py`（Compose/Dockerfile/Helm/Testcontainers locale 与数据库编码）、`check-production-capacity-governance.py`、`check-production-overlay-safety.py`、`check-version-alignment.sh`、`validate-kafka-topics.sh`（全仓 topic 字面量 ↔ `BatchTopics.java`：env 模板 / `batch-defaults.yml` / helm / init 脚本 / load-tests） |
 | 数据库与 SQL | `check-biz-table-tenant-rls.py`、`check-db-comment-coverage.sh`、`check-db-scripts-safety.sh`、`check-migration-safety.sh`、`check-mybatis-generated-key-columns.py`、`check-no-positional-insert-select-star.py`、`check-postgres-client-fallback.sh`、`check-schema-governance-assets.py`、`check-sql-config-boundaries.py`、`check-sql-config-boundaries.sh`、`validate-flyway-schema.sh` |
 | API 与兼容 | `check-console-openapi-paths.py`、`check-openapi-breaking.sh` |
-| Java 质量 | `check-empty-checks.py`、`check-java-lombok-injection.py`、`check-java-logging-governance.py`、`check-java-readability.py`、`check-java-text-block-style.py`、`check-java-suppression-registry.py`、`check-mapof-null-values.py`、`check-required-java-docs.sh` |
+| Java 质量 | `check-empty-checks.py`、`check-java-lombok-injection.py`、`check-java-logging-governance.py`、`check-java-readability.py`、`check-java-text-block-style.py`、`check-java-suppression-registry.py`、`check-mapof-null-values.py`、`check-pipeline-summary-keys.py`（stage 摘要键 / 续跑回灌键 / 前端计数键契约）、`check-required-java-docs.sh` |
 | 测试完整性 | `check-e2e-run-completeness.sh`、`check-e2e-shard-coverage.sh`、`check-integration-test-coverage.py`、`check-module-test-coverage.sh`、`check-no-silent-disabled-tests.sh` |
 | 安全与许可 | `check-dependency-licenses.sh`、`check-license-compliance.sh`、`check-sbom-sync.sh`、`check-trivy-ignore-expiry.py` |
 | 观测 | `check-helm-prometheusrule-sync.sh`、`check-log-lifecycle.sh`、`check-observability-contract.py` |
@@ -290,11 +290,37 @@ python3 scripts/ci/check-five-worker-parity.py
 
 校验五类内建 Worker 的 KEDA ScaledObject、Kafka topic/consumer group、冷却参数、HPA 互斥和优雅停机模板保持一致。该守护只验证静态部署契约，不能替代 staging 的扩缩容、rebalance 和 lease 回收演练。
 
+**topic 与 consumerGroup 的期望值不写在本脚本里**：topic 从 `BatchTopics.java` 的
+`TASK_DISPATCH_*` 常量读取，consumerGroup 从各 worker 的
+`batch-worker/<x>/src/main/resources/application.yml` 默认值读取。这样改 `BatchTopics.java`
+会立刻反映到本守护，而不是「脚本与自己的副本一致」而给出虚假通过。
+
 ```bash
 python3 scripts/ci/check-keda-autoscaling.py
 ```
 
-成功时打印 `Five-worker parity check passed` 并以退出码 `0` 结束；缺任一 Worker 或破坏 Atomic/Pipeline 边界时列出具体文件并以 `1` 结束。
+成功时打印 `✅ 通过 | code=KEDA_AUTOSCALING | gate=KEDA 自动扩缩容` 并以退出码 `0` 结束；
+缺任一 Worker、helm 值或 consumerGroup 与 worker 声明不一致时，逐条列出文件并以 `1` 结束。
+
+## `validate-kafka-topics.sh`
+
+校验全仓 topic 字面量与 `batch-common/.../kafka/BatchTopics.java`（唯一权威）一致，覆盖 5 处载体：
+
+| 载体 | 校验方向 |
+|---|---|
+| 指定 env 模板的 `KAFKA_TOPICS`（默认 `.env.example`） | 双向 diff（缺 topic / 多 topic 都报） |
+| `batch-common/src/main/resources/batch-defaults.yml` 的 `${BATCH_TOPIC_*:默认值}` | 字面量 ∈ `BatchTopics` |
+| `helm/batch-platform/**` 中带引号的 `"batch.*"` 字面量 | 字面量 ∈ `BatchTopics` |
+| `scripts/data/init-kafka-topics.sh` 的 `default_topics` | 必须覆盖全部 active 常量 |
+| `load-tests/scripts/cleanup-load-test-environment.sh` 的 topic 清单 | 字面量 ∈ `BatchTopics` |
+
+只做「字面量 ∈ 常量」与「常量 ⊆ init 清单」两个方向，不做全等 —— 各载体按设计只承载
+自己关心的子集（如 helm 只管 5 个 dispatch topic）。helm 侧只取**引号形式**，
+避免把 `batch.example.com/...` 这类 k8s label 前缀误判为 topic。
+
+```bash
+bash scripts/ci/validate-kafka-topics.sh .env.example
+```
 
 ## `check-config-governance.py`
 
@@ -309,6 +335,41 @@ python3 scripts/ci/check-config-governance.py --write  # 新增配置类后重�
 
 成功时打印 `configuration governance valid` 并以退出码 `0` 结束；登记表或 Console
 运行时副本漂移、发现运行时刷新违约或引入未经评审的配置中心依赖时，以 `1` 结束并打印修复建议。
+
+## `check-direct-config-key-access.py`
+
+扫描生产 Java 中通过字符串 key 读取配置的写法，输出治理 inventory，覆盖
+`Environment#getProperty` / `getRequiredProperty`、`System#getProperty` 和 `@Value("${...}")`。
+每条命中给出分类建议（`PROJECT_CONFIG`、`SECRET_CONFIG`、`SPRING_INFRA`、`JVM_SYSTEM`、
+`TEST_ONLY`）并标记是否命中白名单。口径见
+[`docs/runbook/config-key-access-governance.md`](../../docs/runbook/config-key-access-governance.md)。
+
+阶段 0（报告模式，当前接入 Full Gate `static-checks`）只输出清单、恒以 `0` 退出，
+不阻断历史存量；同时输出 `build/config-key-access.json` 供治理看板使用：
+
+```bash
+python3 scripts/ci/check-direct-config-key-access.py --report
+python3 scripts/ci/check-direct-config-key-access.py --json build/config-key-access.json
+```
+
+阶段 1（增量拦截，已接入 PR Gate `PR_DIRECT_CONFIG_KEY_BASELINE` 和 Full Gate
+`FULL_DIRECT_CONFIG_KEY_BASELINE`）只对相对基线新增的高风险 `PROJECT_CONFIG` /
+`SECRET_CONFIG` 命中失败，历史存量走 baseline 不阻断。`batch.*` 的 `Environment#getProperty` /
+`System#getProperty` 与 `@Value` 都归入 `PROJECT_CONFIG`，因此阶段 2 的“`batch.*` 默认失败”
+沿用同一拦截范围；阶段 2 额外要求白名单条目写明原因 / owner / 复查条件，缺项即失败。
+收敛一项后从基线删除对应行：
+
+```bash
+python3 scripts/ci/check-direct-config-key-access.py --write-baseline \
+  docs/governance/direct-config-key-access-baseline.txt
+python3 scripts/ci/check-direct-config-key-access.py --check-baseline \
+  docs/governance/direct-config-key-access-baseline.txt
+```
+
+匹配前先剥离 `//` 与 `/* */` 注释（`strip_comments`）：注释里的 `@Value("${...}")` 只是文档，
+不是配置读取。否则迁移说明、反例示例、“已废弃写法”注解都会把检查逼成“删掉解释才过”。
+剥离保持等长并保留换行，因此行号与原文一致。基线当前为 **0 项**（存量已全部收敛），
+意味着此后任何新增高风险 `batch.*` 读取都会被 PR Gate 直接拦下。
 
 ## `check-db-scripts-safety.sh`
 
@@ -465,6 +526,7 @@ python3 scripts/ci/check-java-text-block-style.py
 
 ```bash
 python3 scripts/ci/check-java-suppression-registry.py
+python3 -m unittest scripts/ci/tests/test_check_java_suppression_registry.py
 ```
 
 ## `report-java-readability-inventory.py`
@@ -504,3 +566,23 @@ bash scripts/python.sh scripts/ci/check-docs-structure.py
 ```bash
 python3 scripts/ci/check-doc-timestamp-policy.py
 ```
+
+## `check-testcontainers-reuse-label.py`
+
+守护 Testcontainers 复用容器的清理谓词。`withReuse(true)` 的容器由 Testcontainers 打上
+`org.testcontainers.hash` 标签（定义在 `GenericContainer`），复用逻辑只认该标签；清理脚本
+若改用 `reuse-hash` 之类的字面量判定「复用容器要保留」，谓词恒不匹配，会把正在运行的复用
+容器当孤儿删除，`withReuse` 的跨 JVM 复用加速静默失效。
+
+规则：
+
+- 引用 `org.testcontainers` 的 Shell 脚本不得出现 `reuse-hash` 字面量（产物中不存在）。
+- 过滤 `label=org.testcontainers=true` 的 Shell 脚本必须同时引用 `org.testcontainers.hash`，
+  否则无法把复用容器与真孤儿区分开。
+
+```bash
+python3 scripts/ci/check-testcontainers-reuse-label.py
+python3 -m unittest scripts/ci/tests/test_check_testcontainers_reuse_label.py
+```
+
+已接入 `pr-gate.yml`、`full-ci-gate.yml` 的静态检查和本地 `scripts/local/pre-commit-checks.sh`。

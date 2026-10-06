@@ -68,15 +68,15 @@ class StoreStepTest {
     Path generated = Files.createTempFile("export-dry-run-", ".json");
     Files.writeString(generated, "{\"dryRun\":true}");
     ExportJobContext context = new ExportJobContext();
-    context.getAttributes().put("dryRun", true);
-    context.getAttributes().put("generatedFilePath", generated.toString());
+    context.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
+    context.getAttributes().put(PipelineRuntimeKeys.GENERATED_FILE_PATH, generated.toString());
 
     var result = new StoreStep(storage, crypto).execute(context);
 
     assertThat(result.success()).isTrue();
     assertThat(context.getAttributes())
-        .containsEntry("objectName", "dry-run/no-upload")
-        .containsEntry("exportStoreCommitted", Boolean.TRUE)
+        .containsEntry(PipelineRuntimeKeys.OBJECT_NAME, "dry-run/no-upload")
+        .containsEntry(PipelineRuntimeKeys.EXPORT_STORE_COMMITTED, Boolean.TRUE)
         .containsEntry("checksumType", "SHA-256");
     verifyNoInteractions(storage, crypto);
     Files.deleteIfExists(generated);
@@ -106,7 +106,10 @@ class StoreStepTest {
 
     ExportJobContext ctx = new ExportJobContext();
     ctx.setTenantId("t1");
-    ctx.getAttributes().put("generatedFilePath", "/tmp/not-exist-" + System.nanoTime() + ".json");
+    ctx.getAttributes()
+        .put(
+            PipelineRuntimeKeys.GENERATED_FILE_PATH,
+            "/tmp/not-exist-" + System.nanoTime() + ".json");
 
     var result = step.execute(ctx);
 
@@ -137,13 +140,14 @@ class StoreStepTest {
 
     ExportJobContext ctx = new ExportJobContext();
     ctx.setTenantId("t1");
-    ctx.getAttributes().put("generatedFilePath", generated.toString());
-    ctx.getAttributes().put("exportFileFormatType", "JSON");
+    ctx.getAttributes().put(PipelineRuntimeKeys.GENERATED_FILE_PATH, generated.toString());
+    ctx.getAttributes().put(PipelineRuntimeKeys.EXPORT_FILE_FORMAT_TYPE, "JSON");
 
     var result = step.execute(ctx);
 
     assertThat(result.success()).isTrue();
-    assertThat(ctx.getAttributes()).containsEntry("exportStoreCommitted", Boolean.TRUE);
+    assertThat(ctx.getAttributes())
+        .containsEntry(PipelineRuntimeKeys.EXPORT_STORE_COMMITTED, Boolean.TRUE);
     assertThat(Files.exists(generated)).isFalse();
     verify(storage).copyObject(eq("tmp.part"), anyString());
     verify(storage).removeObject("tmp.part");
@@ -174,8 +178,8 @@ class StoreStepTest {
 
     ExportJobContext ctx = new ExportJobContext();
     ctx.setTenantId("t1");
-    ctx.getAttributes().put("generatedFilePath", generated.toString());
-    ctx.getAttributes().put("exportFileFormatType", "JSON");
+    ctx.getAttributes().put(PipelineRuntimeKeys.GENERATED_FILE_PATH, generated.toString());
+    ctx.getAttributes().put(PipelineRuntimeKeys.EXPORT_FILE_FORMAT_TYPE, "JSON");
     ctx.getAttributes()
         .put(
             PipelineRuntimeKeys.TEMPLATE_CONFIG,

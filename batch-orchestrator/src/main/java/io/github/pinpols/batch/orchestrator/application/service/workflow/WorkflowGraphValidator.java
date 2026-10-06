@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import io.github.pinpols.batch.common.constants.NodeOutputKeys;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -71,17 +72,46 @@ public class WorkflowGraphValidator {
   /**
    * ADR-009 §Worker 暴露的 output key（按业务领域）— 内置 contract，避免依赖 worker SPI 上报。
    *
+   * <p>本表是 orchestrator 侧的契约快照：worker 模块内的 attributes 键表（{@code PipelineRuntimeKeys} /
+   * {@code ProcessRuntimeKeys} / {@code DispatchRuntimeKeys}）对 orchestrator 不可达，因此只有 batch-common
+   * 承载的 {@link NodeOutputKeys} 取常量，其余键名在此以字面量固化，改动必须与 worker adapter 产出侧同步。
+   *
    * <p>未列业务（GENERAL / WORKFLOW）跳过 V5/V12 检查（ADR-025 §V5/V12 行规定向后兼容）。
    */
   private static final Map<String, Set<String>> KNOWN_OUTPUT_CONTRACT_BY_JOB_TYPE = Map.of(
       "IMPORT",
           Set.of(
-              "fileId", "recordCount", "parsedCount", "validatedCount", "skippedCount", "bizDate"),
+              "fileId",
+              "recordCount",
+              "parsedCount",
+              "validatedCount",
+              "skippedCount",
+              "bizDate",
+              // ADR-041 归一化 count 信封：worker 确实写进 nodeOutputs，缺声明会让合法 DSL 引用被误报为未知键。
+              NodeOutputKeys.INPUT_COUNT,
+              NodeOutputKeys.OUTPUT_COUNT),
       "EXPORT",
           Set.of(
-              "fileId", "objectName", "recordCount", "fileSizeBytes", "checksumValue", "bizDate"),
+              "fileId",
+              "objectName",
+              "recordCount",
+              "fileSizeBytes",
+              "checksumValue",
+              "bizDate",
+              // checksumType 的常量在 batch-worker-core，orchestrator 不可达；
+              // 提升到 NodeOutputKeys 会违反其「只收无 attributes 归属的键」约定，故留字面量。
+              "checksumType",
+              NodeOutputKeys.INPUT_COUNT,
+              NodeOutputKeys.OUTPUT_COUNT),
       "PROCESS",
-          Set.of("processedCount", "stagedCount", "publishedCount", "batchKey", "highWaterMarkOut"),
+          Set.of(
+              "processedCount",
+              "stagedCount",
+              "publishedCount",
+              NodeOutputKeys.BATCH_KEY,
+              "highWaterMarkOut",
+              NodeOutputKeys.INPUT_COUNT,
+              NodeOutputKeys.OUTPUT_COUNT),
       "DISPATCH",
           Set.of("fileId", "receiptCode", "receiptStatus", "externalRequestId", "channelCode"));
 

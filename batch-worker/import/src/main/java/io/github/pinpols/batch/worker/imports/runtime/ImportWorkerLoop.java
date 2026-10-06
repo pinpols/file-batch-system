@@ -1,14 +1,14 @@
 package io.github.pinpols.batch.worker.imports.runtime;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.worker.core.config.WorkerConcurrencyProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerIdentityProperties;
-import io.github.pinpols.batch.worker.core.config.WorkerRuntimeConfiguration;
+import io.github.pinpols.batch.worker.core.config.WorkerRegistryStartupProperties;
 import io.github.pinpols.batch.worker.core.support.AbstractWorkerLoop;
 import io.github.pinpols.batch.worker.core.support.HeartbeatService;
 import io.github.pinpols.batch.worker.core.support.WorkerLifecycleManager;
 import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -16,7 +16,8 @@ import org.springframework.stereotype.Service;
  * Import Worker 的心跳循环：定时（默认 15s）调用 {@link AbstractWorkerLoop#doHeartbeat} 向 Orchestrator
  * 续约，并在首次启动时通过 {@link AbstractWorkerLoop} 完成 Worker 注册。
  *
- * <p>Worker 类型标识为 {@code "import"}，默认端口 8083。
+ * <p>Worker 类型标识为 {@code "import"}；注册上报的端口取 Spring 运行时实际绑定端口
+ * （{@code local.server.port}，见 {@code AbstractWorkerLoop#resolveWorkerPort}），{@code workerPort()} 仅作兜底。
  */
 @Service
 public class ImportWorkerLoop extends AbstractWorkerLoop {
@@ -29,13 +30,15 @@ public class ImportWorkerLoop extends AbstractWorkerLoop {
       BatchDateTimeSupport dateTimeSupport,
       ImportWorkerConfiguration configuration,
       WorkerIdentityProperties identityProperties,
-      @Value(WorkerRuntimeConfiguration.MAX_CONCURRENT_TASKS_PLACEHOLDER) int maxConcurrentTasks) {
+      WorkerRegistryStartupProperties workerRegistryStartupProperties,
+      WorkerConcurrencyProperties concurrencyProperties) {
     super(
         workerLifecycleManager,
         heartbeatService,
         dateTimeSupport,
-        maxConcurrentTasks,
-        identityProperties);
+        concurrencyProperties.getMaxConcurrentTasks(),
+        identityProperties,
+        workerRegistryStartupProperties);
     this.configuration = configuration;
   }
 

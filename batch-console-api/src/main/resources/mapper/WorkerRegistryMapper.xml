@@ -6,6 +6,7 @@
         <result column="tenant_id" property="tenantId"/>
         <result column="worker_code" property="workerCode"/>
         <result column="worker_group" property="workerGroup"/>
+        <result column="port" property="port"/>
         <result column="status" property="status"/>
         <result column="heartbeat_at" property="heartbeatAt"/>
         <result column="drain_started_at" property="drainStartedAt"/>

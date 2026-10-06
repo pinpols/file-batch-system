@@ -8,7 +8,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use batch_worker_sdk::constants::{
-    SENSITIVE_KEYWORDS, SUPPORTED_SCHEMA_VERSIONS, TASK_STATUSES, WORKER_RUNTIME_STATES,
+    REPORT_ERROR_CODES, SENSITIVE_KEYWORDS, SUPPORTED_SCHEMA_VERSIONS, TASK_STATUSES,
+    WORKER_RUNTIME_STATES,
 };
 
 fn yaml_path() -> PathBuf {
@@ -107,11 +108,12 @@ fn load_yaml_lists() -> BTreeMap<String, Vec<String>> {
 fn constants_parity() {
     let lists = load_yaml_lists();
 
-    let cases: [(&str, &[&str]); 4] = [
+    let cases: [(&str, &[&str]); 5] = [
         ("schema_versions_supported", SUPPORTED_SCHEMA_VERSIONS),
         ("worker_runtime_states", WORKER_RUNTIME_STATES),
         ("sensitive_keywords", SENSITIVE_KEYWORDS),
         ("task_statuses", TASK_STATUSES),
+        ("report_error_codes", REPORT_ERROR_CODES),
     ];
 
     for (key, got) in cases {

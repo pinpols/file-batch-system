@@ -30,7 +30,8 @@ class StaleCreatedLaunchRecoverySchedulerTest {
         triggerRequestMapper,
         partitionDispatchService,
         gracefulShutdown,
-        new SimpleMeterRegistry());
+        new SimpleMeterRegistry(),
+        new StaleCreatedLaunchRecoveryProperties());
 
     JobInstanceEntity instance = new JobInstanceEntity();
     instance.setId(101L);
@@ -65,7 +66,8 @@ class StaleCreatedLaunchRecoverySchedulerTest {
         triggerRequestMapper,
         partitionDispatchService,
         gracefulShutdown,
-        new SimpleMeterRegistry());
+        new SimpleMeterRegistry(),
+        new StaleCreatedLaunchRecoveryProperties());
 
     JobInstanceEntity instance = new JobInstanceEntity();
     instance.setId(101L);

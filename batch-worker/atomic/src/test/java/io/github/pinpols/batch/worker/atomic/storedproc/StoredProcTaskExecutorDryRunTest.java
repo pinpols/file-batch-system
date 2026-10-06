@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
@@ -45,7 +46,7 @@ class StoredProcTaskExecutorDryRunTest {
             "procedureName", "batch.refresh_metrics",
             "inParams", List.of("sensitive-arg-1", 42),
             "outParams", List.of("INTEGER", "VARCHAR")),
-        Map.of("dryRun", true));
+        Map.of(PipelineRuntimeKeys.DRY_RUN, true));
 
     // 执行
     TaskResult result = executor.execute(ctx);
@@ -54,7 +55,7 @@ class StoredProcTaskExecutorDryRunTest {
     assertThat(result.success()).isTrue();
     assertThat(result.message()).startsWith("dry-run:");
     assertThat(result.output())
-        .containsEntry("dryRun", true)
+        .containsEntry(PipelineRuntimeKeys.DRY_RUN, true)
         .containsEntry("plannedAction", "storedProc")
         .containsEntry("procedureName", "batch.refresh_metrics")
         .containsEntry("inParamCount", 2)

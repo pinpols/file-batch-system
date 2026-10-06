@@ -65,8 +65,44 @@ TASK_STATUSES: Final[tuple[str, ...]] = (
     "TERMINATED",
 )
 
+# 对齐 Java ``SdkErrorCode`` / Go ``protocol.ErrorCode*`` / TS ``ErrorCode`` /
+# Rust ``protocol::error_code``:report body ``errorCode`` 的规范协议码(wire-protocol §B)。
+# 平台按 errorCode 聚合失败告警,因此 Python 兜底必须发规范码(如 EXECUTION_FAILED)而不是
+# 异常类名。注意这些值与 ``TASK_STATUSES`` 里的 SUCCESS / CANCELLED 同名但**不同域**
+# (task 生命周期状态 vs 失败分类),故统一加 ``ERROR_CODE_`` 前缀以免误用。
+ERROR_CODE_SUCCESS: Final[str] = "SUCCESS"
+ERROR_CODE_TIMEOUT: Final[str] = "TIMEOUT"
+ERROR_CODE_CANCELLED: Final[str] = "CANCELLED"
+ERROR_CODE_KILLED: Final[str] = "KILLED"
+ERROR_CODE_SECURITY_REJECTED: Final[str] = "SECURITY_REJECTED"
+ERROR_CODE_EXECUTION_FAILED: Final[str] = "EXECUTION_FAILED"
+ERROR_CODE_CONFIG_INVALID: Final[str] = "CONFIG_INVALID"
+ERROR_CODE_RESOURCE_EXHAUSTED: Final[str] = "RESOURCE_EXHAUSTED"
+
+# yaml ``report_error_codes`` 的镜像(顺序与 Java ``SdkErrorCode`` 声明顺序一致;
+# Go/Rust/TS 侧 parity 用深比较,故顺序必须一致)。
+REPORT_ERROR_CODES: Final[tuple[str, ...]] = (
+    ERROR_CODE_SUCCESS,
+    ERROR_CODE_TIMEOUT,
+    ERROR_CODE_CANCELLED,
+    ERROR_CODE_KILLED,
+    ERROR_CODE_SECURITY_REJECTED,
+    ERROR_CODE_EXECUTION_FAILED,
+    ERROR_CODE_CONFIG_INVALID,
+    ERROR_CODE_RESOURCE_EXHAUSTED,
+)
+
 __all__ = [
     "DRY_RUN_SAFE_CAPABILITY",
+    "ERROR_CODE_CANCELLED",
+    "ERROR_CODE_CONFIG_INVALID",
+    "ERROR_CODE_EXECUTION_FAILED",
+    "ERROR_CODE_KILLED",
+    "ERROR_CODE_RESOURCE_EXHAUSTED",
+    "ERROR_CODE_SECURITY_REJECTED",
+    "ERROR_CODE_SUCCESS",
+    "ERROR_CODE_TIMEOUT",
+    "REPORT_ERROR_CODES",
     "SCHEMA_VERSIONS_SUPPORTED",
     "SENSITIVE_KEYWORDS",
     "TASK_STATUSES",

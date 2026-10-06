@@ -91,7 +91,7 @@ public class TaskControllerApplicationService {
     if (items.size() > cap) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ResultCode.INVALID_ARGUMENT.detailKey(),
           "claim batch size " + items.size() + " exceeds max " + cap);
     }
     List<TaskClaimItemResult> results = new ArrayList<>(items.size());
@@ -158,7 +158,7 @@ public class TaskControllerApplicationService {
     if (items.size() > cap) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ResultCode.INVALID_ARGUMENT.detailKey(),
           "report batch size " + items.size() + " exceeds max " + cap);
     }
     List<TaskReportItemResult> results = new ArrayList<>(items.size());

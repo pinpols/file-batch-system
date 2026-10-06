@@ -16,7 +16,8 @@ import org.springframework.web.client.RestClient;
 
 class InternalRestClientLazyInitializationTest {
 
-  private static final String RANDOM_PORT_URL = "http://127.0.0.1:${local.server.port}";
+  private static final String RANDOM_PORT_URL =
+      "http://127.0.0.1:" + ConsoleInternalBaseUrlResolver.LOCAL_SERVER_PORT_PLACEHOLDER;
 
   @Test
   void orchestratorClientWaitsForRandomPortAndThenReusesClient() {
@@ -26,7 +27,7 @@ class InternalRestClientLazyInitializationTest {
 
     OrchestratorInternalRestClient client = new OrchestratorInternalRestClient(
         restClientBuilders(), properties, new BatchSecurityProperties(), environment);
-    environment.setProperty("local.server.port", "39123");
+    environment.setProperty(ConsoleInternalBaseUrlResolver.LOCAL_SERVER_PORT_KEY, "39123");
 
     assertThat(client.client()).isSameAs(client.client());
   }
@@ -39,7 +40,7 @@ class InternalRestClientLazyInitializationTest {
 
     TriggerInternalRestClient client = new TriggerInternalRestClient(
         restClientBuilders(), properties, new BatchSecurityProperties(), environment);
-    environment.setProperty("local.server.port", "39124");
+    environment.setProperty(ConsoleInternalBaseUrlResolver.LOCAL_SERVER_PORT_KEY, "39124");
 
     assertThat(client.client()).isSameAs(client.client());
   }

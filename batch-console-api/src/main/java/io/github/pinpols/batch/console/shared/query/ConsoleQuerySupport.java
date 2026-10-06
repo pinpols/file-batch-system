@@ -66,14 +66,14 @@ public final class ConsoleQuerySupport {
 
   public static <T> T requireNotNull(T value, String message) {
     if (value == null) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail", message);
+      throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), message);
     }
     return value;
   }
 
   public static Map<String, Object> requireRow(Map<String, Object> row, String message) {
     if (row == null || row.isEmpty()) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail", message);
+      throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), message);
     }
     return row;
   }
@@ -121,7 +121,7 @@ public final class ConsoleQuerySupport {
     } catch (DateTimeParseException ignored) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ResultCode.INVALID_ARGUMENT.detailKey(),
           fieldName + " must be ISO-8601 datetime, yyyy-MM-dd HH:mm:ss, or yyyy-MM-dd");
     }
   }
@@ -192,6 +192,7 @@ public final class ConsoleQuerySupport {
     if (value instanceof LocalDate localDate) {
       return localDate;
     }
+    // 显式类型转换,不依赖 toString() 的隐式格式(coding-conventions §20.1:禁止依赖隐式格式化)。
     if (value instanceof java.sql.Date sqlDate) {
       return sqlDate.toLocalDate();
     }

@@ -43,6 +43,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from batch_worker_sdk.client.config import BatchPlatformClientConfig
+from batch_worker_sdk.constants import ERROR_CODE_EXECUTION_FAILED, ERROR_CODE_SUCCESS
 from batch_worker_sdk.exceptions import AuthError, PlatformError
 from batch_worker_sdk.handler.handler import SdkTaskHandler
 from batch_worker_sdk.idempotent import SdkIdempotencyStore, wrap_idempotent
@@ -122,8 +123,9 @@ DEFAULT_SCHEMA_VERSION = "v1"
 # Java ``SdkErrorCode.EXECUTION_FAILED`` + Go ``protocol.ErrorCodeExecutionFailed`` +
 # TS ``ErrorCode.EXECUTION_FAILED`` + Rust ``error_code::EXECUTION_FAILED``。
 # 早先此处用 ``"SdkDispatchError"`` 兜底,平台按 errorCode 聚合告警时 Python SDK 的
-# 失败与其它语言碎片化不可归并;现统一到 protocol 常量。
-DEFAULT_ERROR_CODE = "EXECUTION_FAILED"
+# 失败与其它语言碎片化不可归并;现统一到 protocol 常量(单一来源 =
+# ``batch_worker_sdk.constants.ERROR_CODE_EXECUTION_FAILED``,由 yaml parity 锁定)。
+DEFAULT_ERROR_CODE = ERROR_CODE_EXECUTION_FAILED
 
 
 class DispatchDisposition(Enum):
@@ -560,7 +562,9 @@ class TaskDispatcher:
             # result_summary 是平台 jsonb 列(#{resultSummary}::jsonb),必须是合法 JSON,
             # 不能是裸人读串(否则 invalid input syntax for type json → report 500)。发
             # {code,message} JSON 对象,对齐内建 worker DefaultTaskExecutionWrapper 的契约。
-            body["resultSummary"] = json.dumps({"code": "SUCCESS", "message": result.message or ""})
+            body["resultSummary"] = json.dumps(
+                {"code": ERROR_CODE_SUCCESS, "message": result.message or ""}
+            )
         self._attach_report_meta(body, msg, task_id)
         try:
             await self._http.report(task_id, _new_idempotency_key(), body)

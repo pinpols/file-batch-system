@@ -67,8 +67,8 @@ class ShellAtomicHandlerTest {
   void createsPrivateRootWhenTempDirectoryDoesNotExist() throws Exception {
     assumeTrue(exists(ECHO), "/bin/echo 不存在,跳过");
     Path tempRoot = Files.createTempDirectory("shell-private-root-test-");
-    String original = System.getProperty("java.io.tmpdir");
-    System.setProperty("java.io.tmpdir", tempRoot.toString());
+    String original = System.getProperty(ShellAtomicHandler.TEMP_ROOT_PROPERTY);
+    System.setProperty(ShellAtomicHandler.TEMP_ROOT_PROPERTY, tempRoot.toString());
     try {
       SdkTaskResult result = handler().execute(ctx(Map.of("command", ECHO, "args", List.of("ok"))));
 
@@ -76,9 +76,9 @@ class ShellAtomicHandlerTest {
       assertThat(result.output()).containsEntry("exitCode", 0);
     } finally {
       if (original == null) {
-        System.clearProperty("java.io.tmpdir");
+        System.clearProperty(ShellAtomicHandler.TEMP_ROOT_PROPERTY);
       } else {
-        System.setProperty("java.io.tmpdir", original);
+        System.setProperty(ShellAtomicHandler.TEMP_ROOT_PROPERTY, original);
       }
       try (var paths = Files.walk(tempRoot)) {
         paths.sorted(Comparator.reverseOrder()).forEach(path -> {

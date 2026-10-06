@@ -2,7 +2,10 @@ package io.github.pinpols.batch.worker.dispatchs.stage;
 
 import static io.github.pinpols.batch.worker.core.support.AbstractStageExecutor.ERROR_OBJECT_MAPPER;
 
+import io.github.pinpols.batch.common.enums.FileReceiptStatus;
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.service.DryRunGuard;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
@@ -10,6 +13,7 @@ import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchCommand;
@@ -57,7 +61,9 @@ public class DeliverDispatchStep implements DispatchStageStep {
 
   @Override
   public DispatchStageResult execute(DispatchJobContext context) {
-    Object payload = context == null ? null : context.getAttributes().get("dispatchPayload");
+    Object payload = EmptyChecks.isNull(context)
+        ? null
+        : context.getAttributes().get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
     if (!(payload instanceof DispatchPayload dispatchPayload)) {
       return DispatchStageResult.failure(
           stage(),
@@ -89,8 +95,8 @@ public class DeliverDispatchStep implements DispatchStageStep {
       DispatchResult dryRunResult = DispatchResult.success(
           "DRY_RUN", "DRY_RUN_RECEIPT_" + dispatchPayload.channelCode(), false);
       DispatchInvocationSupport.propagateIdentifiers(context, dryRunResult);
-      attrs.put("dispatchRecord", dispatchPayload);
-      attrs.put("dryRunSkipped", "DISPATCH_EXTERNAL_DELIVERY");
+      attrs.put(DispatchRuntimeKeys.DISPATCH_RECORD, dispatchPayload);
+      attrs.put(PipelineRuntimeKeys.DRY_RUN_SKIPPED, "DISPATCH_EXTERNAL_DELIVERY");
       return DispatchStageResult.success(stage());
     }
     Map<String, Object> latestRecord = fileDispatchRepository.loadLatestDispatchRecord(
@@ -104,7 +110,7 @@ public class DeliverDispatchStep implements DispatchStageStep {
               dispatchPayload.channelCode(),
               dispatchPayload.dispatchTarget(),
               dispatchPayload.receiptCode(),
-              "NONE",
+              FileReceiptStatus.NONE.code(),
               dispatchPayload.externalRequestId());
       int inserted = fileDispatchRepository.insertDispatchRecord(insertParam);
       if (inserted <= 0) {
@@ -123,17 +129,17 @@ public class DeliverDispatchStep implements DispatchStageStep {
     DispatchResult dispatchResult = DispatchInvocationSupport.invokeAndRecordIdentifiers(
         dispatchChannelGateway, context, fileRecord, channelConfig, dispatchPayload);
     Map<String, Object> fileMetadata = new LinkedHashMap<>();
-    fileMetadata.put("channelCode", dispatchPayload.channelCode());
+    fileMetadata.put(DispatchRuntimeKeys.CHANNEL_CODE, dispatchPayload.channelCode());
     if (dispatchResult.externalRequestId() != null) {
-      fileMetadata.put("externalRequestId", dispatchResult.externalRequestId());
+      fileMetadata.put(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID, dispatchResult.externalRequestId());
     }
     DispatchManifestRef manifestRef = dispatchResult.manifestRef();
     if (manifestRef != null) {
       manifestRef.putFileMetadata(fileMetadata);
     }
-    fileRecords.updateFileStatus(fileId, "DISPATCHING", fileMetadata);
+    fileRecords.updateFileStatus(fileId, FileStatus.DISPATCHING.code(), fileMetadata);
     if (!dispatchResult.success()) {
-      attrs.put("retryRequested", Boolean.TRUE);
+      attrs.put(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.TRUE);
       attrs.put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.RETRY.name());
       fileDispatchRepository.markFailed(
           context.getTenantId(),
@@ -166,7 +172,7 @@ public class DeliverDispatchStep implements DispatchStageStep {
     if (readbackFailure != null) {
       return readbackFailure;
     }
-    attrs.put("dispatchRecord", dispatchPayload);
+    attrs.put(DispatchRuntimeKeys.DISPATCH_RECORD, dispatchPayload);
     return DispatchStageResult.success(stage());
   }
 
@@ -211,7 +217,7 @@ public class DeliverDispatchStep implements DispatchStageStep {
     if (actual.getAsLong() == expected) {
       return null;
     }
-    context.getAttributes().put("retryRequested", Boolean.TRUE);
+    context.getAttributes().put(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.TRUE);
     context
         .getAttributes()
         .put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.RETRY.name());

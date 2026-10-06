@@ -72,7 +72,7 @@ CI 同步并发 2 个杠杆:
 
 | 改动 | commit |
 |---|---|
-| `cleanup_orphan_testcontainers()`:本地 + CI 测前清「无 reuse-hash 的孤儿容器」 | `62190647` |
+| `cleanup_orphan_testcontainers()`:本地 + CI 测前清「无 org.testcontainers.hash 标签的孤儿容器」(初版判定误用不存在的 `reuse-hash`) | `62190647` |
 | `e2e-parallel` profile(本地默认串行 / CI `-De2e.parallel=true` 启 forkCount=2) | `3c3e3cf3`(后被 shard 方案替代但保留) |
 
 ## 实测数据快照(2026-05-22 第 2 次,本地干净环境)

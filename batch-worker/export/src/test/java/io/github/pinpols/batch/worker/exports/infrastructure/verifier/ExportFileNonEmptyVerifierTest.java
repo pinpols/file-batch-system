@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.verifier.VerifyContext;
 import io.github.pinpols.batch.common.verifier.VerifyResult;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -14,23 +15,30 @@ class ExportFileNonEmptyVerifierTest {
 
   @Test
   void passesWhenRecordCountPositive() {
-    VerifyResult result = verifier.verify(contextWith(Map.of("recordCount", 100L)));
+    VerifyResult result =
+        verifier.verify(contextWith(Map.of(PipelineRuntimeKeys.RECORD_COUNT, 100L)));
     assertThat(result.passed()).isTrue();
   }
 
   @Test
   void passesWhenFileSizePositive() {
-    VerifyResult result = verifier.verify(contextWith(Map.of("fileSizeBytes", 1024L)));
+    VerifyResult result =
+        verifier.verify(contextWith(Map.of(PipelineRuntimeKeys.FILE_SIZE_BYTES, 1024L)));
     assertThat(result.passed()).isTrue();
   }
 
   @Test
   void failsWhenBothZero() {
-    VerifyResult result =
-        verifier.verify(contextWith(Map.of("recordCount", 0, "fileSizeBytes", 0, "fileId", 999L)));
+    VerifyResult result = verifier.verify(contextWith(Map.of(
+        PipelineRuntimeKeys.RECORD_COUNT,
+        0,
+        PipelineRuntimeKeys.FILE_SIZE_BYTES,
+        0,
+        PipelineRuntimeKeys.FILE_ID,
+        999L)));
     assertThat(result.passed()).isFalse();
     assertThat(result.code()).isEqualTo("EXPORT_FILE_EMPTY");
-    assertThat(result.evidence()).containsEntry("fileId", 999L);
+    assertThat(result.evidence()).containsEntry(PipelineRuntimeKeys.FILE_ID, 999L);
   }
 
   @Test
@@ -42,7 +50,8 @@ class ExportFileNonEmptyVerifierTest {
 
   @Test
   void parsesStringNumberFromPayload() {
-    VerifyResult result = verifier.verify(contextWith(Map.of("recordCount", "42")));
+    VerifyResult result =
+        verifier.verify(contextWith(Map.of(PipelineRuntimeKeys.RECORD_COUNT, "42")));
     assertThat(result.passed()).isTrue();
   }
 

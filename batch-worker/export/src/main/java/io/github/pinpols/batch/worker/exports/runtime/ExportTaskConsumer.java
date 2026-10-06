@@ -1,15 +1,14 @@
 package io.github.pinpols.batch.worker.exports.runtime;
 
 import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor;
+import io.github.pinpols.batch.worker.core.config.WorkerConcurrencyProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
-import io.github.pinpols.batch.worker.core.config.WorkerRuntimeConfiguration;
 import io.github.pinpols.batch.worker.core.infrastructure.DeadLetterPublisher;
 import io.github.pinpols.batch.worker.core.support.AbstractTaskConsumer;
 import io.github.pinpols.batch.worker.core.support.AbstractWorkerLoop;
 import io.github.pinpols.batch.worker.exports.config.ExportWorkerConfiguration;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.stereotype.Service;
 
@@ -31,8 +30,8 @@ public class ExportTaskConsumer extends AbstractTaskConsumer {
       KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
       DeadLetterPublisher deadLetterPublisher,
       ObjectProvider<MeterRegistry> meterRegistryProvider,
-      @Value(WorkerRuntimeConfiguration.MAX_CONCURRENT_TASKS_PLACEHOLDER) int maxConcurrentTasks) {
-    super(kafkaListenerEndpointRegistry, meterRegistryProvider, maxConcurrentTasks);
+      WorkerConcurrencyProperties concurrencyProperties) {
+    super(kafkaListenerEndpointRegistry, meterRegistryProvider, concurrencyProperties);
     this.workerLoop = workerLoop;
     this.configuration = configuration;
     this.taskDispatchExecutor = taskDispatchExecutor;

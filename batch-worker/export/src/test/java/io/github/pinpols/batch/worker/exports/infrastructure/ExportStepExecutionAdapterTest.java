@@ -66,7 +66,7 @@ class ExportStepExecutionAdapterTest {
   @Test
   void buildContextParsesPayloadAndMapsExportFields() throws Exception {
     Map<String, Object> attributes = new LinkedHashMap<>();
-    attributes.put("bizDate", "2026-09-11");
+    attributes.put(PipelineRuntimeKeys.BIZ_DATE, "2026-09-11");
     attributes.put("payload", "{\"fileCode\":\"daily\",\"objectName\":\"daily.csv\"}");
 
     ExportJobContext context = adapter.buildContext(request(attributes), attributes, 42L);
@@ -110,9 +110,9 @@ class ExportStepExecutionAdapterTest {
     context.setBizDate("2026-09-11");
     Map<String, Object> attributes = new LinkedHashMap<>();
     attributes.put(PipelineRuntimeKeys.FILE_ID, 42L);
-    attributes.put("objectName", "daily.csv");
-    attributes.put("recordCount", 10L);
-    attributes.put("fileSizeBytes", 128L);
+    attributes.put(PipelineRuntimeKeys.OBJECT_NAME, "daily.csv");
+    attributes.put(PipelineRuntimeKeys.RECORD_COUNT, 10L);
+    attributes.put(PipelineRuntimeKeys.FILE_SIZE_BYTES, 128L);
     context.setAttributes(attributes);
 
     StepExecutionResponse response = adapter.buildSuccessResponse(context, List.of(), attributes);
@@ -120,11 +120,11 @@ class ExportStepExecutionAdapterTest {
     assertThat(response.success()).isTrue();
     assertThat(response.message()).isEqualTo("daily.csv");
     assertThat((Map<String, Object>) attributes.get(PipelineRuntimeKeys.NODE_OUTPUTS))
-        .containsEntry("fileId", 42L)
-        .containsEntry("recordCount", 10L)
+        .containsEntry(PipelineRuntimeKeys.FILE_ID, 42L)
+        .containsEntry(PipelineRuntimeKeys.RECORD_COUNT, 10L)
         .containsEntry("inputCount", 10L)
         .containsEntry("outputCount", 10L)
-        .containsEntry("fileSizeBytes", 128L);
+        .containsEntry(PipelineRuntimeKeys.FILE_SIZE_BYTES, 128L);
   }
 
   private static StepExecutionRequest request(Map<String, Object> attributes) {

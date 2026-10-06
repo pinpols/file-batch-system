@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
@@ -14,6 +15,7 @@ import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -76,7 +78,7 @@ class CompensateDispatchStepTest {
     DispatchStageResult result = step.execute(context);
 
     assertThat(result.success()).isTrue();
-    verify(fileRecords).updateFileStatus(eq(10L), eq("FAILED"), any());
+    verify(fileRecords).updateFileStatus(eq(10L), eq(FileStatus.FAILED.code()), any());
   }
 
   @Test
@@ -92,14 +94,14 @@ class CompensateDispatchStepTest {
     DispatchJobContext context = new DispatchJobContext();
     context.setTenantId("t1");
     context.setWorkerId("w1");
-    context.getAttributes().put("dispatchPayload", payload);
+    context.getAttributes().put(DispatchRuntimeKeys.DISPATCH_PAYLOAD, payload);
     context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, 10L);
     context.getAttributes().put(PipelineRuntimeKeys.TRACE_ID, "tr-1");
 
     DispatchStageResult result = step.execute(context);
 
     assertThat(result.success()).isTrue();
-    verify(fileRecords).updateFileStatus(eq(10L), eq("FAILED"), any());
+    verify(fileRecords).updateFileStatus(eq(10L), eq(FileStatus.FAILED.code()), any());
   }
 
   @Test
@@ -110,7 +112,7 @@ class CompensateDispatchStepTest {
     DispatchJobContext context = buildContext();
     context.setWorkerId("w1");
     context.getAttributes().put(PipelineRuntimeKeys.TRACE_ID, "tr-1");
-    context.getAttributes().put("externalRequestId", "ext-1");
+    context.getAttributes().put(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID, "ext-1");
     step.execute(context);
 
     verify(fileAudits).appendAudit(any());
@@ -122,7 +124,7 @@ class CompensateDispatchStepTest {
     DispatchJobContext context = new DispatchJobContext();
     context.setTenantId("t1");
     context.setWorkerId("w1");
-    context.getAttributes().put("dispatchPayload", payload);
+    context.getAttributes().put(DispatchRuntimeKeys.DISPATCH_PAYLOAD, payload);
     context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, 10L);
     context.getAttributes().put(PipelineRuntimeKeys.TRACE_ID, "tr-1");
     return context;

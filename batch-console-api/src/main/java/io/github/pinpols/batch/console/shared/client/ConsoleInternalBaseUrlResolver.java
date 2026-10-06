@@ -7,6 +7,14 @@ import org.springframework.core.env.Environment;
 /** 解析 Console 内部 HTTP 客户端地址，并支持 RANDOM_PORT 测试在服务启动后回调本应用。 */
 public final class ConsoleInternalBaseUrlResolver {
 
+  /**
+   * RANDOM_PORT 测试下由 Spring Boot 注入的本机监听端口属性；占位符与运行时读取必须同源，故在此集中定义。
+   */
+  public static final String LOCAL_SERVER_PORT_KEY = "local.server.port";
+
+  /** 上述属性的占位符写法（{@code ${local.server.port}}）；供配置默认值与测试夹具复用。 */
+  public static final String LOCAL_SERVER_PORT_PLACEHOLDER = "${" + LOCAL_SERVER_PORT_KEY + "}";
+
   private ConsoleInternalBaseUrlResolver() {}
 
   public static String resolve(Environment environment, String raw, String propertyName) {
@@ -15,8 +23,8 @@ public final class ConsoleInternalBaseUrlResolver {
     if (Texts.hasText(resolved) && !resolved.contains("${")) {
       return resolved;
     }
-    if (EmptyChecks.isNotNull(raw) && raw.contains("${local.server.port}")) {
-      String localPort = environment.getProperty("local.server.port");
+    if (EmptyChecks.isNotNull(raw) && raw.contains(LOCAL_SERVER_PORT_PLACEHOLDER)) {
+      String localPort = environment.getProperty(LOCAL_SERVER_PORT_KEY);
       if (Texts.hasText(localPort)) {
         return "http://127.0.0.1:" + localPort.trim();
       }

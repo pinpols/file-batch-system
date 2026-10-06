@@ -45,3 +45,16 @@ var TaskStatuses = []string{
 	"CANCELLED",
 	"TERMINATED",
 }
+
+// ReportErrorCodes — report_error_codes:report body 的 errorCode 规范值(§B)。
+// 从 types.go 的强类型 ErrorCode 常量派生,保证值只有一处定义;parity 测试只比对本切片顺序。
+var ReportErrorCodes = []string{
+	string(ErrorCodeSuccess),
+	string(ErrorCodeTimeout),
+	string(ErrorCodeCancelled),
+	string(ErrorCodeKilled),
+	string(ErrorCodeSecurityRejected),
+	string(ErrorCodeExecutionFailed),
+	string(ErrorCodeConfigInvalid),
+	string(ErrorCodeResourceExhausted),
+}

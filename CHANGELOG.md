@@ -18,6 +18,7 @@
 - Console AI 增加受控图片附件输入：上传内容经解码、尺寸限制、重编码和加密后存入独立 AI 附件桶，按租户与操作者授权绑定会话轮次；能力默认关闭，配置已对齐本地、Compose、Helm 与生产覆盖入口，并在启动期拒绝复用批量文件桶。
 - Console AI 流式完成响应增加去重后的结构化来源标识；仅返回来源名称，不暴露检索片段、提示词或相似度分数。
 - Console AI 对话统一为 SSE 流式端点并新增同操作者取消入口，复用原有权限、速率/成本、会话和审计链路；移除旧 JSON 对话端点。
+- SDK 跨语言共享常量新增 `report_error_codes`（report body `errorCode`，权威源 Java `SdkErrorCode` → `docs/api/sdk-shared-constants.yaml`）；Java / Python / Go / TypeScript / Rust 五门语言的 parity 测试均覆盖该列表，各语言常量从单一来源派生（Go / Rust / TS 不再复制字面量，Python `dispatcher.DEFAULT_ERROR_CODE` 改引 `constants.ERROR_CODE_EXECUTION_FAILED`）；BYO 契约同步登记尚未纳管的 wire 字段名与 `BATCH_SDK_*` 配置 key 缺口。
 
 ### Changed
 
@@ -48,6 +49,7 @@
 
 ### Fixed
 
+- 修复文件束到达组（ADR-046 `BUNDLE_IMPORT` / `BUNDLE_EXPORT` / `BUNDLE_DISPATCH`）到达后永不 launch 的两个缺陷：到达组文件元数据的 `metadata_json` 经 JDBC 返回 `PGobject` 时不再被当作空表（否则读不到 `bundleJobCode` 后静默跳过），并且 launch 前按同仓库其它内部 launcher 的既有模式先落 `trigger_request`（否则按 requestId 查不到行抛 `error.trigger.request_not_found`，到达组每轮 sweep 重试而束永不落地）。
 - 修复 Console 内部 RestClient 在 Spring 随机端口确定前提前解析 `${local.server.port}`、导致 E2E 应用上下文启动失败的问题；Orchestrator、Trigger 与可选 Atomic 状态客户端改为首次请求时构建并在组件生命周期内复用。
 - 修复 `ops-toolbox` Dockerfile 因未声明 Debian/PGDG 包版本策略触发 Hadolint DL3008、阻断 Full Gate 的问题；沿用应用镜像约定，显式记录从受控软件源获取最新安全补丁的窄范围例外。PR Gate 在 Dockerfile 等配置输入变化时同步初始化 JDK 21 构建环境，避免 Trivy 依赖预热误用 Runner 默认 JDK 17 后回源触发限流。
 - 批量开户事务收尾日志改用请求 ID，不再输出预览令牌或原始存储异常；幂等占位失败日志仅记录服务端生成的所有者标识和异常类型，避免外部输入注入日志。

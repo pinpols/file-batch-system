@@ -36,11 +36,27 @@ public final class PipelineRuntimeKeys {
   public static final String JOB_INSTANCE_ID = "jobInstanceId";
 
   /**
+   * task 原始 payload(JSON 字符串)。{@code DefaultTaskExecutionWrapper#buildExecutionContext} 从 PulledTask
+   * 灌进 executionContext;adapter 在 payload 未 flatten 时按顶层字段读取(如 {@code targetJobCode} /
+   * {@code templateCode}),{@code DefaultStepExecutionAdapter} 也用它构造 job context 的原始载荷。
+   */
+  public static final String PAYLOAD = "payload";
+
+  /** 当前 step 的 step_code:adapter 在启动 pipeline 时写入,plugin / stage 代码按名读取本 step 身份。 */
+  public static final String STEP_CODE = "stepCode";
+
+  /**
    * ADR-026 dry-run 演练标记。orchestrator 在 task payload 里塞 {@code dryRun=true}，worker SDK 抽到
    * attributes， step plugin 通过 {@link
    * io.github.pinpols.batch.common.service.DryRunGuard#fromAttributes} 拉取 guard 包裹副作用。
    */
   public static final String DRY_RUN = "dryRun";
+
+  /**
+   * dry-run 短路时记录「被跳过的副作用」标识（如 {@code DISPATCH_EXTERNAL_DELIVERY} /
+   * {@code PROCESS_STAGING_WRITE}）。dispatch 与 process worker 都会写，故登记在跨模块共享键表。
+   */
+  public static final String DRY_RUN_SKIPPED = "dryRunSkipped";
 
   public static final String FILE_ID = "fileId";
   public static final String FILE_RECORD = "fileRecord";

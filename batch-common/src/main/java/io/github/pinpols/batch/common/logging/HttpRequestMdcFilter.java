@@ -9,7 +9,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Map;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -18,8 +17,11 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Order(Ordered.HIGHEST_PRECEDENCE + 20)
 public class HttpRequestMdcFilter extends OncePerRequestFilter {
 
-  @Value("${spring.application.name:batch}")
-  private String applicationName;
+  private final String applicationName;
+
+  public HttpRequestMdcFilter(String applicationName) {
+    this.applicationName = applicationName;
+  }
 
   @Override
   protected void doFilterInternal(

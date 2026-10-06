@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.worker.core.reportoutbox;
 
+import io.github.pinpols.batch.common.config.ApplicationNameProvider;
+import io.github.pinpols.batch.common.config.RuntimeInfrastructureInspector;
 import io.github.pinpols.batch.common.stateful.StatefulBackendGuard;
 import io.github.pinpols.batch.common.stateful.StatefulBackendIdentity;
 import javax.sql.DataSource;
@@ -9,7 +11,6 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.core.Ordered;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 /**
@@ -23,15 +24,18 @@ public class WorkerReportOutboxBackendGuard implements ApplicationRunner, Ordere
 
   private final StatefulBackendGuard guard;
   private final WorkerReportOutboxProperties properties;
-  private final Environment environment;
+  private final ApplicationNameProvider applicationNameProvider;
+  private final RuntimeInfrastructureInspector infrastructureInspector;
 
   public WorkerReportOutboxBackendGuard(
       @Qualifier("dataSource") DataSource platformDataSource,
       WorkerReportOutboxProperties properties,
-      Environment environment) {
+      ApplicationNameProvider applicationNameProvider,
+      RuntimeInfrastructureInspector infrastructureInspector) {
     this.guard = new StatefulBackendGuard(platformDataSource);
     this.properties = properties;
-    this.environment = environment;
+    this.applicationNameProvider = applicationNameProvider;
+    this.infrastructureInspector = infrastructureInspector;
   }
 
   @Override
@@ -48,8 +52,7 @@ public class WorkerReportOutboxBackendGuard implements ApplicationRunner, Ordere
   }
 
   StatefulBackendGuard.DesiredBackend desiredBackend() {
-    String applicationName =
-        environment.getProperty("spring.application.name", "batch-worker-unknown");
+    String applicationName = applicationNameProvider.name("batch-worker-unknown");
     String featureKey = "worker-report-outbox:" + applicationName;
     if (!properties.isEnabled()) {
       return new StatefulBackendGuard.DesiredBackend(
@@ -65,8 +68,7 @@ public class WorkerReportOutboxBackendGuard implements ApplicationRunner, Ordere
     String identity =
         switch (storage) {
           case PLATFORM_PG ->
-            StatefulBackendIdentity.database(
-                environment.getRequiredProperty("spring.datasource.url"));
+            StatefulBackendIdentity.database(infrastructureInspector.datasourceUrl());
           case SQLITE -> StatefulBackendIdentity.sqlite(properties.resolveSqlitePath());
         };
     return new StatefulBackendGuard.DesiredBackend(

@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.imports.stage;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
@@ -330,20 +331,21 @@ public class PreprocessStep implements ImportStageStep {
     fileMetadata.put("preprocessed", Boolean.TRUE);
     fileMetadata.put("preprocessFormat", formatType == null ? "" : formatType);
     // 编码守卫标记：D1 反向错怀疑 + B 残留 U+FFFD 计数，供前端 file_record 详情页/审计查询
-    Object charsetSuspect = attrs.get("charsetSuspect");
+    Object charsetSuspect = attrs.get(ImportRuntimeKeys.CHARSET_SUSPECT);
     if (charsetSuspect != null) {
-      fileMetadata.put("charsetSuspect", charsetSuspect);
+      fileMetadata.put(ImportRuntimeKeys.CHARSET_SUSPECT, charsetSuspect);
     }
-    Object replacementMeta = attrs.get("replacementCount");
+    Object replacementMeta = attrs.get(ImportRuntimeKeys.REPLACEMENT_COUNT);
     if (replacementMeta != null) {
-      fileMetadata.put("replacementCount", replacementMeta);
+      fileMetadata.put(ImportRuntimeKeys.REPLACEMENT_COUNT, replacementMeta);
     }
     // 编码探测回退命中（未配置 charset 时 UTF-8 严格解码失败 → GB18030 成功）的记录
-    Object detectedCharset = attrs.get("detectedCharset");
+    Object detectedCharset = attrs.get(ImportRuntimeKeys.DETECTED_CHARSET);
     if (detectedCharset != null) {
-      fileMetadata.put("detectedCharset", detectedCharset);
+      fileMetadata.put(ImportRuntimeKeys.DETECTED_CHARSET, detectedCharset);
     }
-    ImportStageSupport.updateFileStatusRecoverAware(fileRecords, context, "PARSING", fileMetadata);
+    ImportStageSupport.updateFileStatusRecoverAware(
+        fileRecords, context, FileStatus.PARSING.code(), fileMetadata);
     return ImportStageResult.success(stage());
   }
 
@@ -589,7 +591,7 @@ public class PreprocessStep implements ImportStageStep {
           log.warn(
               "[ImportPreprocess] UTF-8 strict decode failed and no explicit charset configured;"
                   + " detected GB18030 (GBK superset). See file_record.metadata.detectedCharset");
-          context.getAttributes().put("detectedCharset", charset.name());
+          context.getAttributes().put(ImportRuntimeKeys.DETECTED_CHARSET, charset.name());
         } catch (ImportPreprocessException ignored) {
           SwallowedExceptionLogger.info(
               PreprocessStep.class, "catch:ImportPreprocessException", ignored);
@@ -606,7 +608,7 @@ public class PreprocessStep implements ImportStageStep {
           "[ImportPreprocess] declared charset={} but bytes also pass UTF-8 strict decode;"
               + " source may actually be UTF-8. See file_record.metadata.charsetSuspect",
           charset);
-      context.getAttributes().put("charsetSuspect", "LIKELY_UTF8");
+      context.getAttributes().put(ImportRuntimeKeys.CHARSET_SUSPECT, "LIKELY_UTF8");
     }
     long replacementCount = countReplacement(decoded);
     if (replacementCount > 0) {
@@ -615,7 +617,7 @@ public class PreprocessStep implements ImportStageStep {
               + " declared charset likely inaccurate, see file_record.metadata",
           replacementCount,
           charset);
-      context.getAttributes().put("replacementCount", replacementCount);
+      context.getAttributes().put(ImportRuntimeKeys.REPLACEMENT_COUNT, replacementCount);
     }
     return normalizeText(decoded);
   }

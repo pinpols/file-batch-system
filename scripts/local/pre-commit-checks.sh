@@ -95,8 +95,15 @@ if ((${#java_files[@]} > 0)); then
     "$PYTHON_BIN" scripts/ci/check-java-text-block-style.py "${java_files[@]}"
   gate_run PRE_COMMIT_JAVA_SUPPRESSION_REGISTRY "Java 抑制项注册表" \
     "$PYTHON_BIN" scripts/ci/check-java-suppression-registry.py "${java_files[@]}"
+  gate_run PRE_COMMIT_JAVA_SUPPRESSION_REGISTRY_TEST "Java 抑制项注册表门禁测试" \
+    "$PYTHON_BIN" -m unittest scripts/ci/tests/test_check_java_suppression_registry.py
   gate_run PRE_COMMIT_MAPOF_NULL_VALUES "Map/List/Set.of 空值风险" \
     "$PYTHON_BIN" scripts/ci/check-mapof-null-values.py "${java_files[@]}"
+  # 摘要键契约是跨文件的(回灌键 ↔ buildOutputSummary ↔ 前端计数键),不做单文件裁剪,直接全仓扫描。
+  gate_run PRE_COMMIT_PIPELINE_SUMMARY_KEYS "Pipeline 摘要键契约" \
+    "$PYTHON_BIN" scripts/ci/check-pipeline-summary-keys.py
+  gate_run PRE_COMMIT_PIPELINE_SUMMARY_KEYS_TEST "Pipeline 摘要键契约门禁测试" \
+    "$PYTHON_BIN" -m unittest scripts/ci/tests/test_check_pipeline_summary_keys.py
   for file in "${java_files[@]}"; do
     [[ -f "$file" ]] && git add -- "$file"
   done
@@ -160,6 +167,8 @@ fi
 if ((scripts_changed == 1)); then
   gate_run PRE_COMMIT_SCRIPT_GOVERNANCE "脚本治理" \
     "$PYTHON_BIN" scripts/ci/check-script-governance.py
+  gate_run PRE_COMMIT_TESTCONTAINERS_REUSE_LABEL "Testcontainers 复用标签判定" \
+    "$PYTHON_BIN" scripts/ci/check-testcontainers-reuse-label.py
   gate_run PRE_COMMIT_SCHEMA_GOVERNANCE_ASSETS "数据库结构治理资产" \
     "$PYTHON_BIN" scripts/ci/check-schema-governance-assets.py
 fi

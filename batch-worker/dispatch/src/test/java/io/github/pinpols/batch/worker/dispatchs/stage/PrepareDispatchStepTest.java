@@ -11,6 +11,7 @@ import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -122,7 +123,8 @@ class PrepareDispatchStepTest {
         buildContext("{\"fileId\":\"10\",\"channelCode\":\"CH1\",\"forceRetry\":true}");
     step.execute(context);
 
-    assertThat(context.getAttributes()).containsEntry("retryRequested", Boolean.TRUE);
+    assertThat(context.getAttributes())
+        .containsEntry(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.TRUE);
   }
 
   @Test
@@ -137,7 +139,7 @@ class PrepareDispatchStepTest {
     DispatchJobContext context = new DispatchJobContext();
     context.setTenantId("t1");
     context.setRawPayload("INVALID_JSON"); // would fail if re-parsed
-    context.getAttributes().put("dispatchPayload", prebuilt);
+    context.getAttributes().put(DispatchRuntimeKeys.DISPATCH_PAYLOAD, prebuilt);
 
     DispatchStageResult result = step.execute(context);
     assertThat(result.success()).isTrue();

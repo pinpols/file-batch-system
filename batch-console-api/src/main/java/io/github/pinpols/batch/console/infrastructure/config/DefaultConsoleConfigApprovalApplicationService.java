@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.infrastructure.config;
 import io.github.pinpols.batch.common.enums.ConfigLifecycleStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.Guard;
@@ -251,7 +252,7 @@ public class DefaultConsoleConfigApprovalApplicationService
             .withKey(release.getConfigKey())
             .versionNo(release.getVersionNo())
             .action(action)
-            .operatorType("API")
+            .operatorType(AuditLogConstants.OPERATOR_TYPE_API)
             .summary(JsonUtils.toJson(ConsoleMapSupport.mapOf(
                 "reason", ConsoleTextSanitizer.safeInput(reason, 512), "detail", detail)))
             .build());

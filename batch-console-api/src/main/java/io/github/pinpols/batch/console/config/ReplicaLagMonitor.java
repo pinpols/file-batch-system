@@ -17,7 +17,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
 
@@ -56,6 +55,8 @@ public class ReplicaLagMonitor {
           + " FROM pg_stat_replication WHERE state = 'streaming'";
 
   private final DataSource primary;
+  private final long intervalMillis;
+  private final long initialDelayMillis;
   private final AtomicReference<Double> latestLagSeconds = new AtomicReference<>(-1.0);
   private final AtomicReference<Integer> latestReplicaCount = new AtomicReference<>(-1);
   private final AtomicBoolean stopping = new AtomicBoolean(false);
@@ -67,15 +68,13 @@ public class ReplicaLagMonitor {
   /** lag-aware quarantine 阈值(秒);0 表示禁用。 */
   private int lagThresholdSeconds;
 
-  @Value("${batch.console.replica.lag-monitor-interval-millis:30000}")
-  private long intervalMillis;
-
-  @Value("${batch.console.replica.lag-monitor-initial-delay-millis:10000}")
-  private long initialDelayMillis;
-
   public ReplicaLagMonitor(
-      DataSource primary, ObjectProvider<MeterRegistry> meterRegistryProvider) {
+      DataSource primary,
+      ObjectProvider<MeterRegistry> meterRegistryProvider,
+      ReplicaLagMonitorProperties properties) {
     this.primary = primary;
+    this.intervalMillis = properties.getLagMonitorIntervalMillis();
+    this.initialDelayMillis = properties.getLagMonitorInitialDelayMillis();
     MeterRegistry registry = meterRegistryProvider.getIfAvailable();
     if (registry != null) {
       Gauge.builder(METRIC_NAME, latestLagSeconds, ref -> ref.get() == null ? -1.0 : ref.get())

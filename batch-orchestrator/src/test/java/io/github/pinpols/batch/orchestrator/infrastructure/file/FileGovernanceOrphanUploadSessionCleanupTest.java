@@ -11,6 +11,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.storage.ObjectNotFoundException;
 import io.github.pinpols.batch.orchestrator.config.FileGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.FileGovernanceMetricsCacheService;
@@ -66,7 +67,11 @@ class FileGovernanceOrphanUploadSessionCleanupTest {
     when(storage.objectSize(eq("batch-files"), anyString()))
         .thenThrow(new ObjectNotFoundException("missing"));
     when(repository.updateFileStatus(
-            eq("default-tenant"), eq(9001L), eq("RECEIVED"), eq("ARCHIVED"), any()))
+            eq("default-tenant"),
+            eq(9001L),
+            eq(FileStatus.RECEIVED.code()),
+            eq(FileStatus.ARCHIVED.code()),
+            any()))
         .thenReturn(1);
 
     // act
@@ -74,9 +79,19 @@ class FileGovernanceOrphanUploadSessionCleanupTest {
 
     // assert
     verify(repository, times(1))
-        .updateFileStatus(eq("default-tenant"), eq(9001L), eq("RECEIVED"), eq("ARCHIVED"), any());
+        .updateFileStatus(
+            eq("default-tenant"),
+            eq(9001L),
+            eq(FileStatus.RECEIVED.code()),
+            eq(FileStatus.ARCHIVED.code()),
+            any());
     verify(repository, times(1))
-        .updateFileStatus(eq("default-tenant"), eq(9001L), eq("ARCHIVED"), eq("DELETED"), any());
+        .updateFileStatus(
+            eq("default-tenant"),
+            eq(9001L),
+            eq(FileStatus.ARCHIVED.code()),
+            eq(FileStatus.DELETED.code()),
+            any());
     verify(repository, times(1)).appendAudit(any());
   }
 
@@ -105,7 +120,11 @@ class FileGovernanceOrphanUploadSessionCleanupTest {
     when(storage.objectSize(eq("batch-files"), anyString()))
         .thenThrow(new ObjectNotFoundException("missing"));
     when(repository.updateFileStatus(
-            eq("default-tenant"), eq(9003L), eq("RECEIVED"), eq("ARCHIVED"), any()))
+            eq("default-tenant"),
+            eq(9003L),
+            eq(FileStatus.RECEIVED.code()),
+            eq(FileStatus.ARCHIVED.code()),
+            any()))
         .thenReturn(0);
 
     // act
@@ -113,7 +132,12 @@ class FileGovernanceOrphanUploadSessionCleanupTest {
 
     // assert
     verify(repository, never())
-        .updateFileStatus(anyString(), anyLong(), eq("ARCHIVED"), eq("DELETED"), any());
+        .updateFileStatus(
+            anyString(),
+            anyLong(),
+            eq(FileStatus.ARCHIVED.code()),
+            eq(FileStatus.DELETED.code()),
+            any());
     verify(repository, never()).appendAudit(any());
   }
 

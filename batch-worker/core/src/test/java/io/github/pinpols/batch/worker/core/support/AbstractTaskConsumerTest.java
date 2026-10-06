@@ -11,10 +11,12 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
+import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor;
 import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor.BatchItemExecution;
+import io.github.pinpols.batch.worker.core.config.WorkerConcurrencyProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerKafkaSubscribeProperties;
 import io.github.pinpols.batch.worker.core.domain.WorkerExecutionResult;
@@ -262,16 +264,16 @@ class AbstractTaskConsumerTest {
   void doConsume_clearsMdcAfterSuccessfulExecution() {
     TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
     when(executor.execute(any(), any())).thenAnswer(inv -> {
-      MDC.put("tenantId", "should-be-cleared");
+      MDC.put(StructuredLogField.TENANT_ID, "should-be-cleared");
       return new WorkerExecutionResult("1", true, "ok");
     });
     AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, null);
 
     consumer.doConsume(buildImportMessage());
 
-    assertThat(MDC.get("tenantId")).isNull();
-    assertThat(MDC.get("traceId")).isNull();
-    assertThat(MDC.get("taskId")).isNull();
+    assertThat(MDC.get(StructuredLogField.TENANT_ID)).isNull();
+    assertThat(MDC.get(StructuredLogField.TRACE_ID)).isNull();
+    assertThat(MDC.get(StructuredLogField.TASK_ID)).isNull();
   }
 
   @Test
@@ -282,8 +284,8 @@ class AbstractTaskConsumerTest {
 
     consumer.doConsume(buildImportMessage());
 
-    assertThat(MDC.get("tenantId")).isNull();
-    assertThat(MDC.get("traceId")).isNull();
+    assertThat(MDC.get(StructuredLogField.TENANT_ID)).isNull();
+    assertThat(MDC.get(StructuredLogField.TRACE_ID)).isNull();
   }
 
   @Test
@@ -495,7 +497,7 @@ class AbstractTaskConsumerTest {
 
     WorkerConfiguration cfg = workerConfiguration(workerType, workerCode);
 
-    return new AbstractTaskConsumer(registry, meterRegistryProvider, 8) {
+    return new AbstractTaskConsumer(registry, meterRegistryProvider, concurrencyProperties(8)) {
       @Override
       protected AbstractWorkerLoop workerLoop() {
         return new AbstractWorkerLoop(lifecycleManager, heartbeatService, dateTimeSupport(), 8) {
@@ -601,5 +603,11 @@ class AbstractTaskConsumerTest {
         "k",
         null,
         null);
+  }
+
+  private static WorkerConcurrencyProperties concurrencyProperties(int maxConcurrentTasks) {
+    WorkerConcurrencyProperties properties = new WorkerConcurrencyProperties();
+    properties.setMaxConcurrentTasks(maxConcurrentTasks);
+    return properties;
   }
 }

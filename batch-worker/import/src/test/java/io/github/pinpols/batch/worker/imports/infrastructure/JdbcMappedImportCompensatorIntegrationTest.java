@@ -132,7 +132,7 @@ class JdbcMappedImportCompensatorIntegrationTest {
     attributes.put(PipelineRuntimeKeys.TRACE_ID, "trace-xyz");
     // ImportPayload 23 字段；batchNo 是第 16 个（前 15 个 = fileCode..templateCode 置 null）。
     attributes.put(
-        "importPayload",
+        PipelineRuntimeKeys.IMPORT_PAYLOAD,
         new ImportPayload(
             null, null, null, null, null, null, null, null, null, null, null, null, null, null,
             null, batchNo, null, null, null, null, null, null, null));

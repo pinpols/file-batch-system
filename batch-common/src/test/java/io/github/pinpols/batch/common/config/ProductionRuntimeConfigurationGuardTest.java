@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.context.properties.bind.Bindable;
+import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.mock.env.MockEnvironment;
 
 class ProductionRuntimeConfigurationGuardTest {
@@ -13,8 +15,7 @@ class ProductionRuntimeConfigurationGuardTest {
     MockEnvironment environment = new MockEnvironment();
     environment.setActiveProfiles("local");
 
-    assertThatCode(() ->
-            new ProductionRuntimeConfigurationGuard(environment).afterSingletonsInstantiated())
+    assertThatCode(() -> guard(environment).afterSingletonsInstantiated())
         .doesNotThrowAnyException();
   }
 
@@ -22,10 +23,7 @@ class ProductionRuntimeConfigurationGuardTest {
   void shouldFailClosedWhenProfileIsMissing() {
     MockEnvironment environment = new MockEnvironment();
 
-    assertThatThrownBy(() ->
-            new ProductionRuntimeConfigurationGuard(environment).afterSingletonsInstantiated())
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("spring.datasource.url");
+    assertFailsClosed(environment, "spring.datasource.url");
   }
 
   @Test
@@ -33,10 +31,7 @@ class ProductionRuntimeConfigurationGuardTest {
     MockEnvironment environment = validProductionEnvironment();
     environment.setProperty("batch.orchestrator.base-url", "http://localhost:18082");
 
-    assertThatThrownBy(() ->
-            new ProductionRuntimeConfigurationGuard(environment).afterSingletonsInstantiated())
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("batch.orchestrator.base-url");
+    assertFailsClosed(environment, "batch.orchestrator.base-url");
   }
 
   @Test
@@ -44,10 +39,7 @@ class ProductionRuntimeConfigurationGuardTest {
     MockEnvironment environment = validProductionEnvironment();
     environment.setProperty("management.server.port", "0");
 
-    assertThatThrownBy(() ->
-            new ProductionRuntimeConfigurationGuard(environment).afterSingletonsInstantiated())
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("management.server.port");
+    assertFailsClosed(environment, "management.server.port");
   }
 
   @Test
@@ -57,10 +49,7 @@ class ProductionRuntimeConfigurationGuardTest {
     environment.setProperty(
         "batch.datasource.business.url", "jdbc:postgresql://127.0.0.1:5432/biz");
 
-    assertThatThrownBy(() ->
-            new ProductionRuntimeConfigurationGuard(environment).afterSingletonsInstantiated())
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("batch.datasource.business.url");
+    assertFailsClosed(environment, "batch.datasource.business.url");
   }
 
   @Test
@@ -69,19 +58,39 @@ class ProductionRuntimeConfigurationGuardTest {
     environment.setProperty("batch.storage.backend", "s3");
     environment.setProperty("batch.storage.s3.endpoint", "http://[::1]:9000");
 
-    assertThatThrownBy(() ->
-            new ProductionRuntimeConfigurationGuard(environment).afterSingletonsInstantiated())
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("batch.storage.s3.endpoint");
+    assertFailsClosed(environment, "batch.storage.s3.endpoint");
   }
 
   @Test
   void shouldAcceptExplicitRemoteProductionEndpoints() {
     MockEnvironment environment = validProductionEnvironment();
 
-    assertThatCode(() ->
-            new ProductionRuntimeConfigurationGuard(environment).afterSingletonsInstantiated())
+    assertThatCode(() -> guard(environment).afterSingletonsInstantiated())
         .doesNotThrowAnyException();
+  }
+
+  /**
+   * 断言生产配置守卫在给定环境下 fail-closed。
+   *
+   * <p>不直接写 {@code assertThatThrownBy(() -> guard(env).afterSingletonsInstantiated())}：lambda 里有
+   * 两个可能抛异常的调用时，断言无法定位失败发生在哪一步（java:S5778），故把构造守卫的调用提到 lambda
+   * 之外，lambda 内只保留一个可能抛异常的调用。
+   */
+  private static void assertFailsClosed(MockEnvironment environment, String messageFragment) {
+    ProductionRuntimeConfigurationGuard configurationGuard = guard(environment);
+    assertThatThrownBy(configurationGuard::afterSingletonsInstantiated)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining(messageFragment);
+  }
+
+  private static ProductionRuntimeConfigurationGuard guard(MockEnvironment environment) {
+    StorageBackendProperties storage = Binder.get(environment)
+        .bind("batch.storage", Bindable.of(StorageBackendProperties.class))
+        .orElseGet(StorageBackendProperties::new);
+    ConsoleReadReplicaProperties readReplica = Binder.get(environment)
+        .bind("batch.console.read-replica", Bindable.of(ConsoleReadReplicaProperties.class))
+        .orElseGet(ConsoleReadReplicaProperties::new);
+    return new ProductionRuntimeConfigurationGuard(environment, storage, readReplica);
   }
 
   private static MockEnvironment validProductionEnvironment() {

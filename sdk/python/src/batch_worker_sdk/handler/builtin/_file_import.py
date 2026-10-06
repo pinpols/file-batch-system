@@ -22,7 +22,7 @@ from typing import IO, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from batch_worker_sdk.handler._base import SdkRowResult
+from batch_worker_sdk.handler._base import CANCELLED_CODE, SdkRowResult
 from batch_worker_sdk.handler.builtin._delimited import DelimitedFormat, parse_line
 from batch_worker_sdk.handler.handler import SdkTaskHandler  # noqa: F401 — protocol parity
 from batch_worker_sdk.task.context import SdkTaskContext
@@ -112,7 +112,7 @@ class FileImportHandler:
                         ctx.cancel_signal is not None
                         and ctx.cancel_signal.is_cancellation_requested
                     ):
-                        return SdkTaskResult.fail("CANCELLED", "cancelled by platform")
+                        return SdkTaskResult.fail(CANCELLED_CODE, "cancelled by platform")
                     batch.append(row)
                     counts.inc_success()
                     if len(batch) >= self._config.batch_size:

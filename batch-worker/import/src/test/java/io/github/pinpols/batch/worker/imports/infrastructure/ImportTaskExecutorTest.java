@@ -11,6 +11,7 @@ import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -56,7 +57,11 @@ class ImportTaskExecutorTest {
         "ti-9",
         "worker-7",
         Map.of(), // SPI parameters 不映射(Phase 3 不做),走 runtimeAttributes
-        Map.of("pipelineInstanceId", 42L, "traceId", "trace-abc"));
+        Map.of(
+            PipelineRuntimeKeys.PIPELINE_INSTANCE_ID,
+            42L,
+            PipelineRuntimeKeys.TRACE_ID,
+            "trace-abc"));
 
     TaskResult r = executor.execute(ctx);
 
@@ -72,8 +77,8 @@ class ImportTaskExecutorTest {
     assertThat(sent.stepCode()).isEqualTo("IMPORT"); // 跟 DefaultTaskExecutionWrapper 一致
     assertThat(sent.workerId()).isEqualTo("worker-7");
     assertThat(sent.context())
-        .containsEntry("pipelineInstanceId", 42L)
-        .containsEntry("traceId", "trace-abc");
+        .containsEntry(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, 42L)
+        .containsEntry(PipelineRuntimeKeys.TRACE_ID, "trace-abc");
   }
 
   @Test

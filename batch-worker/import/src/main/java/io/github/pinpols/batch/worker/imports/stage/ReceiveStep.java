@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.BatchFileConstants;
 import io.github.pinpols.batch.common.enums.DictEnum;
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -51,8 +52,13 @@ import org.springframework.stereotype.Component;
 @SuppressWarnings("java:S2259")
 public class ReceiveStep implements ImportStageStep {
 
-  private static final Set<String> RESERVED_METADATA_KEYS =
-      Set.of("templateCode", "sourceType", "headerRows", "footerRows", "taskId", "withHeader");
+  private static final Set<String> RESERVED_METADATA_KEYS = Set.of(
+      "templateCode",
+      "sourceType",
+      "headerRows",
+      "footerRows",
+      PipelineRuntimeKeys.TASK_ID,
+      "withHeader");
 
   private final PlatformFileRecordRepository fileRecords;
   private final PlatformPipelineDefinitionRepository pipelineDefinitions;
@@ -146,7 +152,7 @@ public class ReceiveStep implements ImportStageStep {
       metadata.put("sourceType", defaultText(importPayload.sourceType(), "UPLOAD"));
       metadata.put("headerRows", importPayload.headerRows());
       metadata.put("footerRows", importPayload.footerRows());
-      metadata.put("taskId", attrs.get(PipelineRuntimeKeys.TASK_ID));
+      metadata.put(PipelineRuntimeKeys.TASK_ID, attrs.get(PipelineRuntimeKeys.TASK_ID));
       metadata.put("withHeader", importPayload.withHeader());
       mergeSecurityMetadata(
           metadata, resolveTemplateSecurity(context.getTenantId(), importPayload.templateCode()));
@@ -172,7 +178,7 @@ public class ReceiveStep implements ImportStageStep {
           .bizDate(parseBizDate(context.getBizDate()))
           .sourceType(defaultText(importPayload.sourceType(), "UPLOAD"))
           .sourceRef(importPayload.sourceRef())
-          .fileStatus("RECEIVED")
+          .fileStatus(FileStatus.RECEIVED.code())
           .traceId(traceId)
           .metadata(metadata)
           .build());

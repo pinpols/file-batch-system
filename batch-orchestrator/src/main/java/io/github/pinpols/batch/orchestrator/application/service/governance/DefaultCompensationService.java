@@ -293,7 +293,7 @@ public class DefaultCompensationService implements CompensationService {
     if (EmptyChecks.isNull(operation)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ResultCode.INVALID_ARGUMENT.detailKey(),
           "unsupported compensationType: " + command.compensationType());
     }
     return operation.execute(command, commandNo, traceId, entity);

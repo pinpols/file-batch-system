@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.core.support;
 
+import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
@@ -217,7 +218,7 @@ public class PipelineCompensationHook {
     // 持久化审计(file_audit_log)——fileId 存在时。
     Map<String, Object> detail = new LinkedHashMap<>();
     detail.put("pipelineType", pipelineType);
-    detail.put("pipelineInstanceId", pipelineInstanceId);
+    detail.put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, pipelineInstanceId);
     detail.put("outcome", result.outcome().name());
     detail.put("reversedCount", result.reversedCount());
     detail.put("detail", result.detail());
@@ -227,7 +228,7 @@ public class PipelineCompensationHook {
           .fileId(fileId)
           .operationType(AUDIT_OPERATION_TYPE)
           .operationResult(result.outcome().name())
-          .operatorType("SYSTEM")
+          .operatorType(AuditLogConstants.OPERATOR_TYPE_SYSTEM)
           .traceId(traceId)
           .detailSummary(detail)
           .build());

@@ -31,12 +31,15 @@ import org.junit.jupiter.api.Test;
  *   <li>{@code worker_runtime_states} ← {@link WorkerRuntimeState} enum constants
  *   <li>{@code sensitive_keywords} ← platform {@code SensitiveDataValidator}.SENSITIVE_KEYWORDS source
  *   <li>{@code task_statuses} ← platform {@code TaskStatus} enum source
+ *   <li>{@code report_error_codes} ← SDK {@code SdkErrorCode} public static final String source
  * </ul>
  *
  * <p>放行 keys(yaml 可有,Java 暂无):{@code atomic_error_codes}(预留 ADR-029,enum 落地后再纳管)。
  *
- * <p>Python 侧的对应校验已在 {@code sdk/python/tests/test_shared_constants_parity.py} 落地，
- * 与本测试共同锁定 Java、YAML、Python 三方常量集合的一致性。
+ * <p>其余语言 SDK 的同名校验:{@code sdk/python/tests/test_shared_constants_parity.py}、{@code
+ * sdk/go/protocol/constants_parity_test.go}、{@code
+ * sdk/typescript/tests/shared-constants-parity.test.ts}、{@code sdk/rust/tests/constants_parity.rs},
+ * 共同锁定 Java、YAML 与四个消费侧语言常量集合的一致性。
  */
 class SharedConstantsParityTest {
 
@@ -92,6 +95,33 @@ class SharedConstantsParityTest {
         "TaskStatus");
     Set<String> yaml = readList("task_statuses");
     assertParity("task_statuses", java, yaml);
+  }
+
+  @Test
+  void reportErrorCodes_match() throws IOException {
+    Set<String> java = readStringConstantsFromSource(
+        "sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/task/SdkErrorCode.java");
+    Set<String> yaml = readList("report_error_codes");
+    assertParity("report_error_codes", java, yaml);
+  }
+
+  /**
+   * 抽取某类里所有 {@code public static final String X = "v";} 的值。用于「Java 是源头」的常量类:新增常量会自动进入
+   * 断言范围,YAML 未同步即 fail。
+   */
+  private static Set<String> readStringConstantsFromSource(String relativePath) throws IOException {
+    String source = Files.readString(sourcePath(relativePath));
+    Matcher constant = Pattern.compile(
+            "public\\s+static\\s+final\\s+String\\s+[A-Z][A-Z0-9_]*\\s*=\\s*\"([^\"]+)\";")
+        .matcher(source);
+    Set<String> values = new LinkedHashSet<>();
+    while (constant.find()) {
+      values.add(constant.group(1));
+    }
+    assertThat(values)
+        .as("source %s must declare public static final String constants", relativePath)
+        .isNotEmpty();
+    return values;
   }
 
   private static Set<String> readList(String key) throws IOException {

@@ -10,6 +10,9 @@ import io.github.pinpols.batch.common.utils.Texts;
  */
 public final class HikariPgSessionSupport {
 
+  /** PG JDBC 连接属性名；生产与测试共用同一常量，避免字面量在多处漂移。 */
+  public static final String PG_APPLICATION_NAME_KEY = "ApplicationName";
+
   private static final int PG_APPLICATION_NAME_MAX_LEN = 63;
 
   private HikariPgSessionSupport() {}
@@ -43,7 +46,7 @@ public final class HikariPgSessionSupport {
     }
     if (Texts.hasText(pgApplicationName)) {
       cfg.addDataSourceProperty(
-          "ApplicationName", truncate(pgApplicationName, PG_APPLICATION_NAME_MAX_LEN));
+          PG_APPLICATION_NAME_KEY, truncate(pgApplicationName, PG_APPLICATION_NAME_MAX_LEN));
     }
     String sessionSql = buildSessionInitSql(timeouts);
     if (!Texts.hasText(sessionSql)) {

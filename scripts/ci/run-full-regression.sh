@@ -93,17 +93,17 @@ run_step() {
   "$@"
 }
 
-# 清理「孤儿」testcontainers 容器(无 reuse-hash label 即非 reuse 持有):
+# 清理「孤儿」testcontainers 容器(无 org.testcontainers.hash label 即非 reuse 持有):
 #   - 反复 mvn 中断 / kill -9 让 Ryuk 没机会清掉 sessionId 容器
 #   - withReuse(true) 配置反复切换让旧无 hash 容器残留
 #   - 累积到 docker daemon 内存吃紧,后续 IT 跑慢/失败
-# 仅清「无 reuse-hash」的容器,保留 reuse 容器(它们就是为了跨 JVM 复用)。
+# 仅清「无 org.testcontainers.hash」的容器,保留 reuse 容器(它们就是为了跨 JVM 复用)。
 cleanup_orphan_testcontainers() {
   local docker_bin
   docker_bin=$(resolve_docker_bin 2>/dev/null) || return 0
   local orphans
   orphans=$("$docker_bin" ps -q --filter "label=org.testcontainers=true" 2>/dev/null | while read -r cid; do
-    if ! "$docker_bin" inspect "$cid" --format '{{json .Config.Labels}}' 2>/dev/null | /usr/bin/grep -q "reuse-hash"; then
+    if ! "$docker_bin" inspect "$cid" --format '{{json .Config.Labels}}' 2>/dev/null | /usr/bin/grep -q "org.testcontainers.hash"; then
       printf '%s\n' "$cid"
     fi
   done)

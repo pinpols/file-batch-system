@@ -141,7 +141,7 @@ class ImportRecordGovernanceServiceTest {
   void shouldReturnTrue_whenSkipDisabled_regardlessOfCount() {
     service = buildService(props(false, "ABSOLUTE", 0, 0.0, "", "CONTINUE", "BOTH"));
     ImportJobContext ctx = context();
-    ctx.getAttributes().put("skippedCount", 9999L);
+    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT, 9999L);
     assertThat(service.withinThreshold(ctx)).isTrue();
   }
 
@@ -149,9 +149,9 @@ class ImportRecordGovernanceServiceTest {
   void shouldEnforceAbsoluteThreshold() {
     service = buildService(props(true, "ABSOLUTE", 3, 0.5, "", "CONTINUE", "BOTH"));
     ImportJobContext ctx = context();
-    ctx.getAttributes().put("skippedCount", 3L);
+    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT, 3L);
     assertThat(service.withinThreshold(ctx)).isTrue();
-    ctx.getAttributes().put("skippedCount", 4L);
+    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT, 4L);
     assertThat(service.withinThreshold(ctx)).isFalse();
   }
 
@@ -159,10 +159,10 @@ class ImportRecordGovernanceServiceTest {
   void shouldEnforcePercentageThreshold() {
     service = buildService(props(true, "PERCENTAGE", 0, 0.1, "", "CONTINUE", "BOTH"));
     ImportJobContext ctx = context();
-    ctx.getAttributes().put("totalCount", 100L);
-    ctx.getAttributes().put("skippedCount", 10L);
+    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 100L);
+    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT, 10L);
     assertThat(service.withinThreshold(ctx)).isTrue();
-    ctx.getAttributes().put("skippedCount", 11L);
+    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT, 11L);
     assertThat(service.withinThreshold(ctx)).isFalse();
   }
 
@@ -170,8 +170,8 @@ class ImportRecordGovernanceServiceTest {
   void shouldTreatRateAsZero_whenTotalCountZero() {
     service = buildService(props(true, "PERCENTAGE", 0, 0.1, "", "CONTINUE", "BOTH"));
     ImportJobContext ctx = context();
-    ctx.getAttributes().put("totalCount", 0L);
-    ctx.getAttributes().put("skippedCount", 5L);
+    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 0L);
+    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT, 5L);
     assertThat(service.withinThreshold(ctx)).isTrue();
   }
 
@@ -184,7 +184,7 @@ class ImportRecordGovernanceServiceTest {
     ImportJobContext ctx = context();
     service.recordSkippedRecord(ctx, ImportStage.PARSE, 10L, "E1", "msg-1", Map.of("k", "v"));
 
-    assertThat(ctx.getAttributes()).containsEntry("skippedCount", 1L);
+    assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT, 1L);
     assertThat(ctx.getAttributes()).containsEntry("parseSkippedCount", 1L);
     assertThat(ctx.getAttributes()).containsEntry("lastProcessedRecordNo", 10L);
     assertThat(ctx.getAttributes()).containsEntry("lastErrorCode", "E1");
@@ -304,7 +304,7 @@ class ImportRecordGovernanceServiceTest {
     service.recordSkippedRecord(ctx, ImportStage.PARSE, 1L, "E", "m", "raw");
     ctx.getAttributes().put("successCount", 10L);
     ctx.getAttributes().put("failedCount", 1L);
-    ctx.getAttributes().put("totalCount", 12L);
+    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 12L);
 
     service.finalizeErrorOutput(ctx);
 
@@ -315,9 +315,9 @@ class ImportRecordGovernanceServiceTest {
     assertThat(meta)
         .containsEntry("badRecordCount", 1)
         .containsEntry("successCount", 10L)
-        .containsEntry("skippedCount", 1L)
+        .containsEntry(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT, 1L)
         .containsEntry("failedCount", 1L)
-        .containsEntry("totalCount", 12L)
+        .containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 12L)
         .containsEntry("errorOutputPath", "s3://bucket/file");
 
     ArgumentCaptor<FileAuditParam> auditCaptor = ArgumentCaptor.forClass(FileAuditParam.class);

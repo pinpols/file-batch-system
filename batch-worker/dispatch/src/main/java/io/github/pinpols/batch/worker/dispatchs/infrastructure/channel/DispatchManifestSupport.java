@@ -2,9 +2,11 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -62,17 +64,19 @@ final class DispatchManifestSupport {
     body.put("tenantId", command.tenantId());
     body.put(PipelineRuntimeKeys.TRACE_ID, command.traceId());
     body.put(PipelineRuntimeKeys.FILE_ID, fileRecord.get("id"));
-    body.put("fileName", fileName);
+    body.put(PipelineRuntimeKeys.FILE_NAME, fileName);
     body.put("targetRef", targetRef);
     body.put("sizeBytes", payloadDigest.sizeBytes());
     body.put(PipelineRuntimeKeys.CHECKSUM_TYPE, CHECKSUM_TYPE);
     body.put(PipelineRuntimeKeys.CHECKSUM_VALUE, payloadDigest.sha256());
     body.put("sourceChecksumType", text(fileRecord.get("checksum_type")));
     body.put("sourceChecksumValue", text(fileRecord.get("checksum_value")));
-    body.put("externalRequestId", externalRequestId);
-    body.put("receiptCode", receiptCode);
+    body.put(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID, externalRequestId);
+    body.put(DispatchRuntimeKeys.RECEIPT_CODE, receiptCode);
     body.put(PipelineRuntimeKeys.BIZ_DATE, fileRecord.get("biz_date"));
-    body.put("channelCode", command.payload() == null ? null : command.payload().channelCode());
+    body.put(
+        DispatchRuntimeKeys.CHANNEL_CODE,
+        EmptyChecks.isNull(command.payload()) ? null : command.payload().channelCode());
     body.put("manifestRef", manifestRef);
     byte[] bytes = JsonUtils.toJson(body).getBytes(StandardCharsets.UTF_8);
     PayloadDigest manifestDigest = digest(bytes);

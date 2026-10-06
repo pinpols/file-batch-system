@@ -5,6 +5,8 @@ import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.common.verifier.ContentVerifier;
 import io.github.pinpols.batch.common.verifier.VerifyContext;
 import io.github.pinpols.batch.common.verifier.VerifyResult;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -34,14 +36,16 @@ public class DispatchReceiptPresentVerifier implements ContentVerifier {
 
   @Override
   public VerifyResult verify(VerifyContext context) {
-    String receiptCode = stringValue(context.property("receiptCode"));
-    String externalRequestId = stringValue(context.property("externalRequestId"));
+    String receiptCode = stringValue(context.property(DispatchRuntimeKeys.RECEIPT_CODE));
+    String externalRequestId =
+        stringValue(context.property(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID));
     if (Texts.hasText(receiptCode) || Texts.hasText(externalRequestId)) {
       return VerifyResult.pass();
     }
     Map<String, Object> evidence = new LinkedHashMap<>();
-    evidence.put("channelCode", context.property("channelCode"));
-    evidence.put("fileId", context.property("fileId"));
+    evidence.put(
+        DispatchRuntimeKeys.CHANNEL_CODE, context.property(DispatchRuntimeKeys.CHANNEL_CODE));
+    evidence.put(PipelineRuntimeKeys.FILE_ID, context.property(PipelineRuntimeKeys.FILE_ID));
     return VerifyResult.fail(
         "DISPATCH_RECEIPT_MISSING",
         "DISPATCH task reported success but no receiptCode/externalRequestId returned",

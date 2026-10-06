@@ -417,7 +417,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
     } catch (Exception e) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ResultCode.INVALID_ARGUMENT.detailKey(),
           "failed to read excel workbook: " + e.getMessage());
     }
   }
@@ -575,7 +575,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
     if (!missing.isEmpty()) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ResultCode.INVALID_ARGUMENT.detailKey(),
           "sheet [" + sheetName + "] missing required headers: " + missing);
     }
   }

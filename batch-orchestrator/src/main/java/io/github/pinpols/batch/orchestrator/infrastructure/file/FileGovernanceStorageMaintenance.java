@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.file;
 
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.storage.ObjectNotFoundException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.FileStateMachine;
@@ -102,8 +103,9 @@ final class FileGovernanceStorageMaintenance {
       cleanupMetadata.put("cleanupAt", BatchDateTimeSupport.utcNow().toString());
       cleanupMetadata.put("cleanupReason", "ARCHIVE_RETENTION_EXPIRED");
       String currentStatus = file.fileStatus();
-      FileStateMachine.assertTransition(currentStatus, "DELETED");
-      repository.updateFileStatus(tenantId, fileId, currentStatus, "DELETED", cleanupMetadata);
+      FileStateMachine.assertTransition(currentStatus, FileStatus.DELETED.code());
+      repository.updateFileStatus(
+          tenantId, fileId, currentStatus, FileStatus.DELETED.code(), cleanupMetadata);
       Map<String, Object> auditDetail = new LinkedHashMap<>();
       auditDetail.put("storagePath", storagePath);
       auditDetail.put("storageType", storageType);
@@ -161,14 +163,19 @@ final class FileGovernanceStorageMaintenance {
       Map<String, Object> cleanupMetadata = new LinkedHashMap<>();
       cleanupMetadata.put("cleanupAt", BatchDateTimeSupport.utcNow().toString());
       cleanupMetadata.put("cleanupReason", "UPLOAD_SESSION_ORPHAN_EXPIRED");
-      FileStateMachine.assertTransition("RECEIVED", "ARCHIVED");
-      int archived =
-          repository.updateFileStatus(tenantId, fileId, "RECEIVED", "ARCHIVED", cleanupMetadata);
+      FileStateMachine.assertTransition(FileStatus.RECEIVED.code(), FileStatus.ARCHIVED.code());
+      int archived = repository.updateFileStatus(
+          tenantId,
+          fileId,
+          FileStatus.RECEIVED.code(),
+          FileStatus.ARCHIVED.code(),
+          cleanupMetadata);
       if (archived <= 0) {
         return false;
       }
-      FileStateMachine.assertTransition("ARCHIVED", "DELETED");
-      repository.updateFileStatus(tenantId, fileId, "ARCHIVED", "DELETED", null);
+      FileStateMachine.assertTransition(FileStatus.ARCHIVED.code(), FileStatus.DELETED.code());
+      repository.updateFileStatus(
+          tenantId, fileId, FileStatus.ARCHIVED.code(), FileStatus.DELETED.code(), null);
       Map<String, Object> auditDetail = new LinkedHashMap<>();
       auditDetail.put("storageBucket", storageBucket);
       auditDetail.put("storagePath", storagePath);
@@ -267,9 +274,9 @@ final class FileGovernanceStorageMaintenance {
 
   private String resolveFileStatus(String fileCategory) {
     return switch (fileCategory) {
-      case "ARCHIVE" -> "ARCHIVED";
-      case "OUTPUT" -> "GENERATED";
-      default -> "RECEIVED";
+      case "ARCHIVE" -> FileStatus.ARCHIVED.code();
+      case "OUTPUT" -> FileStatus.GENERATED.code();
+      default -> FileStatus.RECEIVED.code();
     };
   }
 

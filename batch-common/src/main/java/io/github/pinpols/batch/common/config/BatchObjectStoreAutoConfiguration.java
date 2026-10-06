@@ -47,6 +47,7 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
   S3StorageProperties.class,
   FilesystemStorageProperties.class,
   StorageBackendGuardProperties.class,
+  StorageBackendProperties.class,
   ObjectStoreEncryptionProperties.class
 })
 @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
@@ -59,9 +60,15 @@ public class BatchObjectStoreAutoConfiguration {
       S3StorageProperties s3Properties,
       FilesystemStorageProperties filesystemProperties,
       StorageBackendGuardProperties backendGuardProperties,
+      StorageBackendProperties backendProperties,
       org.springframework.core.env.Environment environment) {
     return new ObjectStorageBackendGuard(
-        dataSource, s3Properties, filesystemProperties, backendGuardProperties, environment);
+        dataSource,
+        s3Properties,
+        filesystemProperties,
+        backendGuardProperties,
+        backendProperties,
+        environment);
   }
 
   /** S3 后端 raw 实现（默认）。 */
