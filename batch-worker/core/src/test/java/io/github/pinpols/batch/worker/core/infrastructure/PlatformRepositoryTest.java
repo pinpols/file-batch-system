@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -55,7 +56,7 @@ class PlatformRepositoryTest {
     verify(mapper)
         .selectLatestPipelineDefinitionId(
             argThat(params -> "tenant-a".equals(params.get("tenantId"))
-                && "job-a".equals(params.get("jobCode"))
+                && "job-a".equals(params.get(PipelineRuntimeKeys.JOB_CODE))
                 && !params.containsKey("pipelineCode")));
   }
 
@@ -76,7 +77,7 @@ class PlatformRepositoryTest {
     assertThat(pipelineInstanceId).isEqualTo(5301L);
     verify(mapper)
         .insertPipelineInstance(argThat(params -> "tenant-a".equals(params.get("tenantId"))
-            && "job-a".equals(params.get("jobCode"))
+            && "job-a".equals(params.get(PipelineRuntimeKeys.JOB_CODE))
             && !params.containsKey("pipelineCode")));
   }
 
@@ -98,7 +99,7 @@ class PlatformRepositoryTest {
         .storageBucket("batch")
         .storagePath("incoming/orders.csv")
         .sourceType("UPLOAD")
-        .fileStatus("RECEIVED")
+        .fileStatus(FileStatus.RECEIVED.code())
         .build());
 
     assertThat(fileId).isEqualTo(77L);
@@ -129,7 +130,7 @@ class PlatformRepositoryTest {
         .storageType("S3")
         .storagePath("incoming/orders.csv")
         .sourceType("UPLOAD")
-        .fileStatus("RECEIVED")
+        .fileStatus(FileStatus.RECEIVED.code())
         .build());
 
     assertThat(fileId).isEqualTo(78L);

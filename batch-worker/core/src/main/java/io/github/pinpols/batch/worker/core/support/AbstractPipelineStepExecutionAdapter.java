@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.worker.core.support;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
@@ -132,7 +134,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
           "catch:UnsupportedOperationException",
           ignored);
 
-      // Some unit tests pass immutable maps; production execution contexts are mutable.
+      // 部分单测传入不可变 map；生产执行上下文始终可变，故此处吞掉异常继续。
     }
   }
 
@@ -187,7 +189,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
     // step plugin 调用 DryRunGuard.fromAttributes(attributes) 拿 guard 包副作用。
     attributes.putIfAbsent(PipelineRuntimeKeys.DRY_RUN, resolveDryRunFromPayload(attributes));
     attributes.putIfAbsent(PipelineRuntimeKeys.JOB_CODE, request.jobCode());
-    attributes.putIfAbsent("stepCode", request.stepCode());
+    attributes.putIfAbsent(PipelineRuntimeKeys.STEP_CODE, request.stepCode());
     attributes.putIfAbsent(PipelineRuntimeKeys.FILE_ID, fileId);
     if (fileId != null) {
       attributes.put(
@@ -335,7 +337,8 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
         attributes,
         PipelineRuntimeKeys.JOB_CODE,
         PipelineRuntimeKeys.PIPELINE_CODE,
-        "jobCode",
+        // 只留没有归属常量的历史键名:"jobCode" 与 JOB_CODE 同值,再写一份字面量只会在常量改名时
+        // 静默分叉(check-pipeline-summary-keys.py 的 KEY_LITERAL_AND_CONSTANT 规则)。
         "pipelineCode");
     if (Texts.hasText(jobCode)) {
       return jobCode;
@@ -355,7 +358,8 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
    */
   @SuppressWarnings("unchecked")
   private String extractFromPayloadJson(Map<String, Object> attributes, String fieldName) {
-    Object raw = attributes == null ? null : attributes.get("payload");
+    Object raw =
+        EmptyChecks.isNull(attributes) ? null : attributes.get(PipelineRuntimeKeys.PAYLOAD);
     if (!(raw instanceof String payload) || payload.isBlank()) {
       return null;
     }
@@ -392,7 +396,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
     if (direct != null && "true".equalsIgnoreCase(String.valueOf(direct))) {
       return true;
     }
-    Object raw = attributes.get("payload");
+    Object raw = attributes.get(PipelineRuntimeKeys.PAYLOAD);
     if (!(raw instanceof String payload) || payload.isBlank()) {
       return false;
     }
@@ -480,9 +484,10 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
   protected void populateCommonFields(
       C context, StepExecutionRequest request, Map<String, Object> attributes) {
     context.setTenantId(request.tenantId());
-    context.setJobCode(String.valueOf(attributes.getOrDefault("jobCode", request.jobCode())));
+    context.setJobCode(
+        String.valueOf(attributes.getOrDefault(PipelineRuntimeKeys.JOB_CODE, request.jobCode())));
     context.setWorkerId(request.workerId());
-    context.setRawPayload(String.valueOf(attributes.getOrDefault("payload", "")));
+    context.setRawPayload(String.valueOf(attributes.getOrDefault(PipelineRuntimeKeys.PAYLOAD, "")));
     context.setAttributes(attributes);
   }
 
@@ -520,6 +525,6 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
     metadata.put("errorMessage", errorMessage);
     metadata.put("errorKey", errorKey);
     metadata.put("errorArgs", errorArgs);
-    fileRecords.updateFileStatus(fileId, "FAILED", metadata);
+    fileRecords.updateFileStatus(fileId, FileStatus.FAILED.code(), metadata);
   }
 }

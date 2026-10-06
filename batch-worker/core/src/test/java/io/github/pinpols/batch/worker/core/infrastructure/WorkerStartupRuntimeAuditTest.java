@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.worker.core.config.WorkerConcurrencyProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperties;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
@@ -18,7 +19,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
-import org.springframework.mock.env.MockEnvironment;
 
 @ExtendWith(OutputCaptureExtension.class)
 class WorkerStartupRuntimeAuditTest {
@@ -44,7 +44,7 @@ class WorkerStartupRuntimeAuditTest {
         outbox,
         provider(repository),
         provider(List.of()),
-        new MockEnvironment().withProperty("batch.worker.max-concurrent-tasks", "4"));
+        concurrencyProperties(4));
 
     Map<String, Object> details = audit.auditCore();
 
@@ -70,7 +70,7 @@ class WorkerStartupRuntimeAuditTest {
         new WorkerReportOutboxProperties(),
         absentProvider(),
         provider(List.of()),
-        new MockEnvironment().withProperty("batch.worker.max-concurrent-tasks", "2"));
+        concurrencyProperties(2));
 
     Map<String, Object> details = audit.auditCore();
 
@@ -101,7 +101,7 @@ class WorkerStartupRuntimeAuditTest {
         new WorkerReportOutboxProperties(),
         absentProvider(),
         provider(List.of(contributor)),
-        new MockEnvironment().withProperty("batch.worker.max-concurrent-tasks", "4"));
+        concurrencyProperties(4));
 
     audit.auditOnReady();
 
@@ -122,7 +122,7 @@ class WorkerStartupRuntimeAuditTest {
         new WorkerReportOutboxProperties(),
         absentProvider(),
         provider(List.of()),
-        new MockEnvironment().withProperty("batch.worker.max-concurrent-tasks", "4"));
+        concurrencyProperties(4));
 
     audit.auditOnReady();
 
@@ -195,5 +195,11 @@ class WorkerStartupRuntimeAuditTest {
     when(provider.orderedStream())
         .thenReturn((java.util.stream.Stream<WorkerStartupAuditContributor>) values.stream());
     return provider;
+  }
+
+  private static WorkerConcurrencyProperties concurrencyProperties(int maxConcurrentTasks) {
+    WorkerConcurrencyProperties properties = new WorkerConcurrencyProperties();
+    properties.setMaxConcurrentTasks(maxConcurrentTasks);
+    return properties;
   }
 }

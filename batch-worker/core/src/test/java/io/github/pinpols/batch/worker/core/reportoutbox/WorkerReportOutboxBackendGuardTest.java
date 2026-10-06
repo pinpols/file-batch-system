@@ -3,6 +3,8 @@ package io.github.pinpols.batch.worker.core.reportoutbox;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import io.github.pinpols.batch.common.config.ApplicationNameProvider;
+import io.github.pinpols.batch.common.config.RuntimeInfrastructureInspector;
 import io.github.pinpols.batch.common.stateful.StatefulBackendGuard;
 import java.nio.file.Path;
 import javax.sql.DataSource;
@@ -54,8 +56,14 @@ class WorkerReportOutboxBackendGuardTest {
 
   private WorkerReportOutboxBackendGuard guard(WorkerReportOutboxProperties properties) {
     MockEnvironment environment = new MockEnvironment()
-        .withProperty("spring.application.name", "batch-worker-import")
-        .withProperty("spring.datasource.url", "jdbc:postgresql://platform-db/batch_platform");
-    return new WorkerReportOutboxBackendGuard(mock(DataSource.class), properties, environment);
+        .withProperty(ApplicationNameProvider.APPLICATION_NAME_KEY, "batch-worker-import")
+        .withProperty(
+            RuntimeInfrastructureInspector.DATASOURCE_URL_KEY,
+            "jdbc:postgresql://platform-db/batch_platform");
+    return new WorkerReportOutboxBackendGuard(
+        mock(DataSource.class),
+        properties,
+        new ApplicationNameProvider(environment),
+        new RuntimeInfrastructureInspector(environment));
   }
 }

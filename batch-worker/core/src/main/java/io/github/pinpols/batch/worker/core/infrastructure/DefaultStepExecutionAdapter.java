@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutorRegistry;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
@@ -51,12 +52,6 @@ public class DefaultStepExecutionAdapter implements StepExecutionAdapter {
 
   private static final String OUTPUT_ERROR_CODE = "error_code";
 
-  /**
-   * executionContext 里原始 payload(JSON 字符串)的键,见 {@code
-   * DefaultTaskExecutionWrapper#buildExecutionContext}。
-   */
-  private static final String CONTEXT_PAYLOAD = "payload";
-
   @Override
   public StepExecutionResponse execute(StepExecutionRequest request) {
     Map<String, Object> parameters = extractParameters(request);
@@ -91,7 +86,7 @@ public class DefaultStepExecutionAdapter implements StepExecutionAdapter {
   /** 解析 payload(default_params / launch 参数 JSON)为参数 Map;缺失或非法 JSON 对象时返回空 Map。 */
   private static Map<String, Object> extractParameters(StepExecutionRequest request) {
     Map<String, Object> context = request.context();
-    Object payload = context == null ? null : context.get(CONTEXT_PAYLOAD);
+    Object payload = EmptyChecks.isNull(context) ? null : context.get(PipelineRuntimeKeys.PAYLOAD);
     if (!(payload instanceof String payloadJson) || payloadJson.isBlank()) {
       return Map.of();
     }

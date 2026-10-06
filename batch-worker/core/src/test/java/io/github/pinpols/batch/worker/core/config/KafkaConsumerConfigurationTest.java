@@ -14,13 +14,14 @@ class KafkaConsumerConfigurationTest {
   @Test
   void batchListenerFactoryRejectsTotalConcurrentPollCapacityLargerThanWorkerCapacityWhenEnabled() {
     KafkaConsumerConfiguration configuration = new KafkaConsumerConfiguration();
-    ReflectionTestUtils.setField(configuration, "batchClaimEnabled", true);
     ReflectionTestUtils.setField(configuration, "listenerConcurrency", 4);
     ReflectionTestUtils.setField(configuration, "maxPollRecords", 8);
-    ReflectionTestUtils.setField(configuration, "maxConcurrentTasks", 8);
 
     assertThatThrownBy(() -> configuration.batchKafkaListenerContainerFactory(
-            consumerFactory(), ObservationRegistry.NOOP))
+            consumerFactory(),
+            ObservationRegistry.NOOP,
+            batchClaimProperties(true),
+            concurrencyProperties(8)))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("listener-concurrency=4")
         .hasMessageContaining("max-poll-records=8")
@@ -31,27 +32,41 @@ class KafkaConsumerConfigurationTest {
   @Test
   void batchListenerFactoryAllowsSamePollBatchAsWorkerConcurrencyWhenEnabled() {
     KafkaConsumerConfiguration configuration = new KafkaConsumerConfiguration();
-    ReflectionTestUtils.setField(configuration, "batchClaimEnabled", true);
     ReflectionTestUtils.setField(configuration, "maxPollRecords", 8);
-    ReflectionTestUtils.setField(configuration, "maxConcurrentTasks", 32);
     ReflectionTestUtils.setField(configuration, "listenerConcurrency", 4);
 
     assertThatCode(() -> configuration.batchKafkaListenerContainerFactory(
-            consumerFactory(), ObservationRegistry.NOOP))
+            consumerFactory(),
+            ObservationRegistry.NOOP,
+            batchClaimProperties(true),
+            concurrencyProperties(32)))
         .doesNotThrowAnyException();
   }
 
   @Test
   void batchListenerFactoryAllowsInvalidBatchSizingWhenBatchClaimDisabled() {
     KafkaConsumerConfiguration configuration = new KafkaConsumerConfiguration();
-    ReflectionTestUtils.setField(configuration, "batchClaimEnabled", false);
     ReflectionTestUtils.setField(configuration, "maxPollRecords", 10);
-    ReflectionTestUtils.setField(configuration, "maxConcurrentTasks", 8);
     ReflectionTestUtils.setField(configuration, "listenerConcurrency", 1);
 
     assertThatCode(() -> configuration.batchKafkaListenerContainerFactory(
-            consumerFactory(), ObservationRegistry.NOOP))
+            consumerFactory(),
+            ObservationRegistry.NOOP,
+            batchClaimProperties(false),
+            concurrencyProperties(8)))
         .doesNotThrowAnyException();
+  }
+
+  private static WorkerBatchClaimProperties batchClaimProperties(boolean enabled) {
+    WorkerBatchClaimProperties properties = new WorkerBatchClaimProperties();
+    properties.setEnabled(enabled);
+    return properties;
+  }
+
+  private static WorkerConcurrencyProperties concurrencyProperties(int maxConcurrentTasks) {
+    WorkerConcurrencyProperties properties = new WorkerConcurrencyProperties();
+    properties.setMaxConcurrentTasks(maxConcurrentTasks);
+    return properties;
   }
 
   @SuppressWarnings("unchecked")

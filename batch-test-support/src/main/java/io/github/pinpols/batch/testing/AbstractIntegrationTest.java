@@ -152,6 +152,16 @@ public abstract class AbstractIntegrationTest {
     return IntegrationTestInfrastructure.storageBackend();
   }
 
+  /**
+   * 当前测试是否使用 S3 兼容对象存储后端。
+   *
+   * <p>供 {@code @EnabledIf("s3BackendActive")} 直接引用：需要直写对象存储（S3Client）的 fixture 在
+   * filesystem 后端下应整体跳过。判定与 {@link #storageBackend()} 同源，测试类不再各自硬编码后端字面量。
+   */
+  public static boolean s3BackendActive() {
+    return !IntegrationTestInfrastructure.isFilesystemBackend();
+  }
+
   /** filesystem 后端测试根目录；S3 模式下返回的目录不会写入。 */
   public static Path filesystemRoot() {
     return IntegrationTestInfrastructure.filesystemRoot();

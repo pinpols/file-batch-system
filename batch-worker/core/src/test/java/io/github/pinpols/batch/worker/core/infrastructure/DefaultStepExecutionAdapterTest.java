@@ -22,14 +22,14 @@ class DefaultStepExecutionAdapterTest {
       assertThat(ctx.tenantId()).isEqualTo("t1");
       assertThat(ctx.jobCode()).isEqualTo("job-1");
       assertThat(ctx.workerId()).isEqualTo("w-1");
-      assertThat(ctx.runtimeAttributes()).containsEntry("traceId", "trace-1");
+      assertThat(ctx.runtimeAttributes()).containsEntry(PipelineRuntimeKeys.TRACE_ID, "trace-1");
       return TaskResult.ok();
     });
     DefaultStepExecutionAdapter adapter =
         new DefaultStepExecutionAdapter(new BatchTaskExecutorRegistry(List.of(shell)));
 
-    StepExecutionResponse resp = adapter.execute(
-        new StepExecutionRequest("t1", "job-1", "shell", "w-1", Map.of("traceId", "trace-1")));
+    StepExecutionResponse resp = adapter.execute(new StepExecutionRequest(
+        "t1", "job-1", "shell", "w-1", Map.of(PipelineRuntimeKeys.TRACE_ID, "trace-1")));
 
     assertThat(resp.success()).isTrue();
     assertThat(resp.code()).isEqualTo("SUCCESS");

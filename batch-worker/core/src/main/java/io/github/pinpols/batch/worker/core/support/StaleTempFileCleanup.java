@@ -4,13 +4,13 @@ import io.github.pinpols.batch.common.constants.BatchFileConstants;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
+import io.github.pinpols.batch.worker.core.config.WorkerTempFileProperties;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -26,8 +26,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class StaleTempFileCleanup {
 
-  @Value("${batch.worker.stale-temp-file-hours:6}")
-  private long staleTempFileHours;
+  private final WorkerTempFileProperties workerTempFileProperties;
+
+  public StaleTempFileCleanup(WorkerTempFileProperties workerTempFileProperties) {
+    this.workerTempFileProperties = workerTempFileProperties;
+  }
 
   @EventListener(ApplicationReadyEvent.class)
   public void cleanOnReady() {
@@ -41,9 +44,9 @@ public class StaleTempFileCleanup {
   }
 
   void cleanStaleTempFiles() {
-    long hours = Math.max(0L, staleTempFileHours);
+    long hours = Math.max(0L, workerTempFileProperties.getStaleTempFileHours());
     Instant cutoff = BatchDateTimeSupport.utcNow().minus(Duration.ofHours(hours));
-    Path tempDir = Path.of(System.getProperty("java.io.tmpdir"));
+    Path tempDir = PrivateTempFiles.tempRoot();
     int cleaned = 0;
     try (DirectoryStream<Path> stream = Files.newDirectoryStream(tempDir)) {
       for (Path p : stream) {

@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerIdentityProperties;
+import io.github.pinpols.batch.worker.core.config.WorkerRegistryStartupProperties;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import jakarta.annotation.PreDestroy;
 import java.net.ConnectException;
@@ -21,10 +22,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.EnvironmentAware;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.env.Environment;
 
 /**
  * Worker 生命周期模板（所有 worker 通用骨架）。
@@ -33,6 +35,7 @@ import org.springframework.context.event.EventListener;
  *
  * <ul>
  *   <li>子类只提供差异化配置：{@link #workerConfiguration()} / {@link #workerGroup()} / {@link #workerPort()}
+ *       （其中 {@code workerPort()} 只作兜底，生产端口由运行时实际绑定值决定，见 {@link #resolveWorkerPort()}）
  *   <li>子类用一个很薄的 {@code @Scheduled} 方法定期调用 {@link #doHeartbeat()}（避免在抽象类里硬编码配置 key）
  * </ul>
  *
@@ -45,19 +48,26 @@ import org.springframework.context.event.EventListener;
  * </ul>
  */
 @Slf4j
-public abstract class AbstractWorkerLoop {
+public abstract class AbstractWorkerLoop implements EnvironmentAware {
 
   private final WorkerLifecycleManager workerLifecycleManager;
   private final HeartbeatService heartbeatService;
   private final BatchDateTimeSupport dateTimeSupport;
   private final WorkerIdentityProperties identityProperties;
   private final int maxConcurrentTasks;
+  private final boolean failFastOnStartup;
   private final AtomicBoolean started = new AtomicBoolean(false);
   private final AtomicBoolean stopping = new AtomicBoolean(false);
   private final AtomicReference<WorkerRegistration> registration = new AtomicReference<>();
 
-  @Value("${batch.worker.registry.fail-fast-on-startup:true}")
-  private boolean failFastOnStartup;
+  /**
+   * Spring 运行时 Environment：经 {@link EnvironmentAware} 框架回调注入（非 {@code @Autowired} field、非构造器
+   * 参数），与 {@code BatchSecurityProperties} / {@code ConsoleSecurityProperties} / 同包的 {@code
+   * AbstractTaskConsumer}（{@code ApplicationContextAware}）同一先例。这样基类能读到 WebServer 实际绑定的端口，
+   * 而 5 个子类的构造器与既有单测都不必改；单元测试直接 {@code new} 时该字段为 null，自动回落到 {@link
+   * #workerPort()}。
+   */
+  private Environment environment;
 
   protected AbstractWorkerLoop(
       WorkerLifecycleManager workerLifecycleManager,
@@ -69,7 +79,8 @@ public abstract class AbstractWorkerLoop {
         heartbeatService,
         dateTimeSupport,
         maxConcurrentTasks,
-        new WorkerIdentityProperties());
+        new WorkerIdentityProperties(),
+        new WorkerRegistryStartupProperties());
   }
 
   protected AbstractWorkerLoop(
@@ -78,11 +89,28 @@ public abstract class AbstractWorkerLoop {
       BatchDateTimeSupport dateTimeSupport,
       int maxConcurrentTasks,
       WorkerIdentityProperties identityProperties) {
+    this(
+        workerLifecycleManager,
+        heartbeatService,
+        dateTimeSupport,
+        maxConcurrentTasks,
+        identityProperties,
+        new WorkerRegistryStartupProperties());
+  }
+
+  protected AbstractWorkerLoop(
+      WorkerLifecycleManager workerLifecycleManager,
+      HeartbeatService heartbeatService,
+      BatchDateTimeSupport dateTimeSupport,
+      int maxConcurrentTasks,
+      WorkerIdentityProperties identityProperties,
+      WorkerRegistryStartupProperties workerRegistryStartupProperties) {
     this.workerLifecycleManager = workerLifecycleManager;
     this.heartbeatService = heartbeatService;
     this.dateTimeSupport = dateTimeSupport;
     this.maxConcurrentTasks = maxConcurrentTasks;
     this.identityProperties = identityProperties;
+    this.failFastOnStartup = workerRegistryStartupProperties.isFailFastOnStartup();
   }
 
   /** Worker 配置（topic、tenantId、workerType 等）。 */
@@ -91,8 +119,47 @@ public abstract class AbstractWorkerLoop {
   /** worker 逻辑分组，如 {@code import}/{@code export}/{@code dispatch}。 */
   protected abstract String workerGroup();
 
-  /** worker 对外端口（用于注册元数据；E2E 合并进程时通常为 orchestrator 端口）。 */
+  /**
+   * worker 端口**兜底值**：仅单元测试直接 {@code new}、或非 Web 上下文才会走到。
+   *
+   * <p>生产路径优先上报 Spring 实际绑定的端口（见 {@link #resolveWorkerPort()}）。保留本方法的代价是各子类仍留着
+   * 一份历史硬编码端口，那是「不破坏既有子类与测试」换来的——生产路径下不会被使用。
+   */
   protected abstract int workerPort();
+
+  @Override
+  public void setEnvironment(Environment environment) {
+    this.environment = environment;
+  }
+
+  /**
+   * 注册上报的 worker 端口：优先 Spring 运行时**实际绑定**的端口，其次配置值，最后才回落到 {@link #workerPort()}。
+   *
+   * <p>{@code local.server.port} 由 Spring Boot 在 WebServer 真正绑定后写入 Environment，因此 {@code
+   * server.port=0}（随机端口）也能拿到正确值；{@link #onReady()} 由 {@code ApplicationReadyEvent} 触发，此时该键
+   * 必定已可用。{@code server.port} 只作非 Web 上下文兜底。
+   *
+   * <p>不在子类里硬编码端口：端口的所有者是各 worker 的 {@code application.yml}
+   * （{@code ${BATCH_WORKER_*_PORT:1808x}}），Java 侧再抄一份就是第二份事实来源——历史遗留的 {@code 8083} 与真实
+   * {@code 18083} 不一致正是这么来的。
+   */
+  private int resolveWorkerPort() {
+    Integer bound = positivePort("local.server.port");
+    if (EmptyChecks.isNotNull(bound)) {
+      return bound;
+    }
+    Integer configured = positivePort("server.port");
+    return EmptyChecks.isNotNull(configured) ? configured : workerPort();
+  }
+
+  /** 读取正整数端口；缺失 / 非正数（未绑定阶段会出现 {@code 0}）一律视为不可用。 */
+  private Integer positivePort(String key) {
+    if (EmptyChecks.isNull(environment)) {
+      return null;
+    }
+    Integer value = environment.getProperty(key, Integer.class);
+    return EmptyChecks.isNotNull(value) && value > 0 ? value : null;
+  }
 
   @EventListener(ApplicationReadyEvent.class)
   public void onReady() {
@@ -161,8 +228,7 @@ public abstract class AbstractWorkerLoop {
       // 源头归一 workerGroup 为大写，避免 IMPORT / import 同语义字符串被 ResourceScheduler 等值比较误失配
       workerRegistration.setWorkerGroup(CodeNormalizer.toUpperOrNull(workerGroup()));
       workerRegistration.setHost(resolveHostName());
-      workerRegistration.setPort(workerPort());
-      workerRegistration.setActive(Boolean.TRUE);
+      workerRegistration.setPort(resolveWorkerPort());
       OffsetDateTime now = dateTimeSupport.nowOffsetUtc();
       workerRegistration.setRegisteredAt(now);
       workerRegistration.setLastHeartbeatAt(now);

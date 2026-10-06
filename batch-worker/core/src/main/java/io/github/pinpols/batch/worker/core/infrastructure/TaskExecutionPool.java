@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.worker.core.config.WorkerConcurrencyProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerRuntimeConfiguration;
 import jakarta.annotation.PostConstruct;
@@ -13,7 +14,6 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 /**
@@ -30,36 +30,33 @@ import org.springframework.stereotype.Component;
 public class TaskExecutionPool {
 
   private final WorkerExecutionTimeoutProperties properties;
-  private final Environment environment;
+  private final WorkerConcurrencyProperties concurrencyProperties;
   private ThreadPoolExecutor delegate;
 
-  public TaskExecutionPool(WorkerExecutionTimeoutProperties properties, Environment environment) {
+  public TaskExecutionPool(
+      WorkerExecutionTimeoutProperties properties,
+      WorkerConcurrencyProperties concurrencyProperties) {
     this.properties = properties;
-    this.environment = environment;
+    this.concurrencyProperties = concurrencyProperties;
   }
 
   @PostConstruct
   void start() {
     int size = Math.max(1, properties.getPoolSize());
-    if (environment != null) {
-      int maxConcurrentTasks = environment.getProperty(
-          WorkerRuntimeConfiguration.MAX_CONCURRENT_TASKS_PROPERTY,
-          Integer.class,
-          WorkerRuntimeConfiguration.DEFAULT_MAX_CONCURRENT_TASKS);
-      if (maxConcurrentTasks <= 0) {
-        throw new IllegalStateException(WorkerRuntimeConfiguration.MAX_CONCURRENT_TASKS_PROPERTY
-            + " must be positive, got "
-            + maxConcurrentTasks);
-      }
-      if (size < maxConcurrentTasks) {
-        throw new IllegalStateException("batch.worker.execution.pool-size must be >= "
-            + WorkerRuntimeConfiguration.MAX_CONCURRENT_TASKS_PROPERTY
-            + " (poolSize="
-            + size
-            + ", maxConcurrentTasks="
-            + maxConcurrentTasks
-            + ")");
-      }
+    int maxConcurrentTasks = concurrencyProperties.getMaxConcurrentTasks();
+    if (maxConcurrentTasks <= 0) {
+      throw new IllegalStateException(WorkerRuntimeConfiguration.MAX_CONCURRENT_TASKS_PROPERTY
+          + " must be positive, got "
+          + maxConcurrentTasks);
+    }
+    if (size < maxConcurrentTasks) {
+      throw new IllegalStateException("batch.worker.execution.pool-size must be >= "
+          + WorkerRuntimeConfiguration.MAX_CONCURRENT_TASKS_PROPERTY
+          + " (poolSize="
+          + size
+          + ", maxConcurrentTasks="
+          + maxConcurrentTasks
+          + ")");
     }
     AtomicLong threadIndex = new AtomicLong();
     // 最多保留一批等待任务；失联插件占满线程时显式拒绝，不能无限堆积。

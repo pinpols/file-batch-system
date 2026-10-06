@@ -39,7 +39,6 @@ public class DefaultWorkerLifecycleManager implements WorkerLifecycleManager {
       activeRegistration.setWorkerId("worker-" + UUID.randomUUID());
     }
     activeRegistration.setStatus(WorkerRegistryStatus.ONLINE.code());
-    activeRegistration.setActive(Boolean.TRUE);
     OffsetDateTime now = dateTimeSupport.nowOffsetUtc();
     activeRegistration.setRegisteredAt(now);
     activeRegistration.setLastHeartbeatAt(now);
@@ -62,7 +61,6 @@ public class DefaultWorkerLifecycleManager implements WorkerLifecycleManager {
     if (activeRegistration == null) {
       return;
     }
-    activeRegistration.setActive(Boolean.FALSE);
 
     // 先标记为 DRAINING，让 Orchestrator 立即停止分发新任务。
     String finalStatus = hasActiveLeases(workerId)

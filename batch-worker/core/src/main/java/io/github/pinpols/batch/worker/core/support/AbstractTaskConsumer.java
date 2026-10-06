@@ -7,9 +7,9 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor;
+import io.github.pinpols.batch.worker.core.config.WorkerConcurrencyProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerKafkaSubscribeProperties;
-import io.github.pinpols.batch.worker.core.config.WorkerRuntimeConfiguration;
 import io.github.pinpols.batch.worker.core.domain.WorkerExecutionResult;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.infrastructure.DeadLetterPublisher;
@@ -21,7 +21,6 @@ import java.util.concurrent.Semaphore;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -141,11 +140,11 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
   protected AbstractTaskConsumer(
       KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
       ObjectProvider<MeterRegistry> meterRegistryProvider,
-      @Value(WorkerRuntimeConfiguration.MAX_CONCURRENT_TASKS_PLACEHOLDER) int maxConcurrentTasks) {
+      WorkerConcurrencyProperties concurrencyProperties) {
     this.backpressure = new TaskConsumerBackpressureController(
         kafkaListenerEndpointRegistry,
         meterRegistryProvider,
-        maxConcurrentTasks,
+        concurrencyProperties.getMaxConcurrentTasks(),
         () -> workerConfiguration().workerType());
     this.batchExecution = new TaskConsumerBatchExecutionCoordinator(
         () -> workerConfiguration().workerType(),

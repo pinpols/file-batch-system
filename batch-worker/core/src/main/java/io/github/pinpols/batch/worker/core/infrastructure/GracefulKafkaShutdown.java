@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.core.infrastructure;
 
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.worker.core.config.WorkerGracefulShutdownProperties;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.support.WorkerSelfRegistrationService;
 import io.micrometer.core.instrument.Counter;
@@ -13,7 +14,6 @@ import java.util.Collection;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.availability.AvailabilityChangeEvent;
 import org.springframework.boot.availability.ReadinessState;
 import org.springframework.context.ApplicationEventPublisher;
@@ -65,22 +65,22 @@ public class GracefulKafkaShutdown
   private final KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry;
   private final ActiveTaskLeaseRegistry activeTaskLeaseRegistry;
   private final ObjectProvider<MeterRegistry> meterRegistryProvider;
+  private final long gracefulShutdownTimeoutSeconds;
   private ApplicationEventPublisher eventPublisher;
-
-  @Value("${batch.worker.graceful-shutdown.timeout-seconds:120}")
-  private long gracefulShutdownTimeoutSeconds;
 
   public GracefulKafkaShutdown(
       WorkerRuntimeState workerRuntimeState,
       WorkerSelfRegistrationService workerRegistryService,
       KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
       ActiveTaskLeaseRegistry activeTaskLeaseRegistry,
-      ObjectProvider<MeterRegistry> meterRegistryProvider) {
+      ObjectProvider<MeterRegistry> meterRegistryProvider,
+      WorkerGracefulShutdownProperties gracefulShutdownProperties) {
     this.workerRuntimeState = workerRuntimeState;
     this.workerRegistryService = workerRegistryService;
     this.kafkaListenerEndpointRegistry = kafkaListenerEndpointRegistry;
     this.activeTaskLeaseRegistry = activeTaskLeaseRegistry;
     this.meterRegistryProvider = meterRegistryProvider;
+    this.gracefulShutdownTimeoutSeconds = gracefulShutdownProperties.getTimeoutSeconds();
   }
 
   @Override

@@ -4,9 +4,9 @@ import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.worker.core.config.WorkerConcurrencyProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperties;
-import io.github.pinpols.batch.worker.core.config.WorkerRuntimeConfiguration;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxProperties;
 import io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxRepository;
@@ -23,7 +23,6 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 /** Worker 进程启动后的统一业务运行态审计。只读打印，不执行修复。 */
@@ -38,7 +37,7 @@ public class WorkerStartupRuntimeAudit {
   private final WorkerReportOutboxProperties reportOutboxProperties;
   private final ObjectProvider<WorkerReportOutboxRepository> reportOutboxRepositoryProvider;
   private final ObjectProvider<WorkerStartupAuditContributor> contributorProvider;
-  private final Environment environment;
+  private final WorkerConcurrencyProperties concurrencyProperties;
 
   @Order(Ordered.LOWEST_PRECEDENCE)
   @EventListener(ApplicationReadyEvent.class)
@@ -94,10 +93,7 @@ public class WorkerStartupRuntimeAudit {
     if (decommissioned > 0) {
       issues.add("registered worker status is DECOMMISSIONED");
     }
-    int maxConcurrentTasks = environment.getProperty(
-        WorkerRuntimeConfiguration.MAX_CONCURRENT_TASKS_PROPERTY,
-        Integer.class,
-        WorkerRuntimeConfiguration.DEFAULT_MAX_CONCURRENT_TASKS);
+    int maxConcurrentTasks = concurrencyProperties.getMaxConcurrentTasks();
     put(details, "maxConcurrentTasks", maxConcurrentTasks);
     put(details, "executionPoolSize", executionProperties.getPoolSize());
     if (maxConcurrentTasks <= 0) {

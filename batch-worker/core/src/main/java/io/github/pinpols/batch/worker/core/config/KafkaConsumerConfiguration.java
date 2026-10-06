@@ -20,7 +20,8 @@ import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.listener.ContainerProperties;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(BatchKafkaProducerProperties.class)
+@EnableConfigurationProperties({BatchKafkaProducerProperties.class, WorkerBatchClaimProperties.class
+})
 public class KafkaConsumerConfiguration {
 
   @Value("${spring.kafka.bootstrap-servers}")
@@ -31,12 +32,6 @@ public class KafkaConsumerConfiguration {
 
   @Value("${spring.kafka.consumer.max-poll-records:20}")
   private int maxPollRecords;
-
-  @Value(WorkerRuntimeConfiguration.MAX_CONCURRENT_TASKS_PLACEHOLDER)
-  private int maxConcurrentTasks;
-
-  @Value("${batch.worker.batch-claim.enabled:false}")
-  private boolean batchClaimEnabled;
 
   @Value("${spring.kafka.consumer.fetch-min-size:1024}")
   private int fetchMinBytes;
@@ -115,8 +110,10 @@ public class KafkaConsumerConfiguration {
   @Bean(name = "batchKafkaListenerContainerFactory")
   public ConcurrentKafkaListenerContainerFactory<String, String> batchKafkaListenerContainerFactory(
       ConsumerFactory<String, String> kafkaConsumerFactory,
-      ObservationRegistry observationRegistry) {
-    validateBatchBackpressureConfiguration();
+      ObservationRegistry observationRegistry,
+      WorkerBatchClaimProperties batchClaimProperties,
+      WorkerConcurrencyProperties concurrencyProperties) {
+    validateBatchBackpressureConfiguration(batchClaimProperties, concurrencyProperties);
     ConcurrentKafkaListenerContainerFactory<String, String> factory =
         new ConcurrentKafkaListenerContainerFactory<>();
     factory.setConsumerFactory(kafkaConsumerFactory);
@@ -128,10 +125,13 @@ public class KafkaConsumerConfiguration {
     return factory;
   }
 
-  private void validateBatchBackpressureConfiguration() {
-    if (!batchClaimEnabled) {
+  private void validateBatchBackpressureConfiguration(
+      WorkerBatchClaimProperties batchClaimProperties,
+      WorkerConcurrencyProperties concurrencyProperties) {
+    if (!batchClaimProperties.isEnabled()) {
       return;
     }
+    int maxConcurrentTasks = concurrencyProperties.getMaxConcurrentTasks();
     int effectiveListenerConcurrency = Math.max(1, listenerConcurrency);
     long requiredPermits = (long) Math.max(1, maxPollRecords) * effectiveListenerConcurrency;
     if (requiredPermits <= maxConcurrentTasks) {
