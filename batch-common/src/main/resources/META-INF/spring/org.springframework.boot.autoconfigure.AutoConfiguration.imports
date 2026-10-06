@@ -9,6 +9,7 @@ io.github.pinpols.batch.common.config.BatchSchedulingAutoConfiguration
 io.github.pinpols.batch.common.config.BatchJsonAutoConfiguration
 io.github.pinpols.batch.common.config.BatchTimezoneAutoConfiguration
 io.github.pinpols.batch.common.config.BatchObjectCryptoAutoConfiguration
+io.github.pinpols.batch.common.config.BatchRuntimeIdentityAutoConfiguration
 io.github.pinpols.batch.common.config.S3AutoConfiguration
 io.github.pinpols.batch.common.config.BatchObjectStoreAutoConfiguration
 io.github.pinpols.batch.common.config.BatchRetryAutoConfiguration
