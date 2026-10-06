@@ -70,18 +70,29 @@ public class WorkflowGraphValidator {
   private static final String V16C = "V16-c";
 
   /**
+   * 节点产出 {@code fileId} 的 orchestrator 侧局部常量。
+   *
+   * <p>该键在 IMPORT / EXPORT / DISPATCH 三个业务域都出现。它的 attributes 归属类
+   * （{@code PipelineRuntimeKeys.FILE_ID}）在 batch-worker-core，orchestrator 不可达；也不宜提升到
+   * {@link NodeOutputKeys}（后者只收没有 attributes 归属类的键，且跨模块同名键复用同一常量）。故在此固化一次，
+   * 避免同一个字面量散落三处。
+   */
+  private static final String KEY_FILE_ID = "fileId";
+
+  /**
    * ADR-009 §Worker 暴露的 output key（按业务领域）— 内置 contract，避免依赖 worker SPI 上报。
    *
    * <p>本表是 orchestrator 侧的契约快照：worker 模块内的 attributes 键表（{@code PipelineRuntimeKeys} /
    * {@code ProcessRuntimeKeys} / {@code DispatchRuntimeKeys}）对 orchestrator 不可达，因此只有 batch-common
-   * 承载的 {@link NodeOutputKeys} 取常量，其余键名在此以字面量固化，改动必须与 worker adapter 产出侧同步。
+   * 承载的 {@link NodeOutputKeys} 取常量，其余键名在此以字面量固化（跨业务域重复的键提升为本类私有常量，如
+   * {@link #KEY_FILE_ID}），改动必须与 worker adapter 产出侧同步。
    *
    * <p>未列业务（GENERAL / WORKFLOW）跳过 V5/V12 检查（ADR-025 §V5/V12 行规定向后兼容）。
    */
   private static final Map<String, Set<String>> KNOWN_OUTPUT_CONTRACT_BY_JOB_TYPE = Map.of(
       "IMPORT",
           Set.of(
-              "fileId",
+              KEY_FILE_ID,
               "recordCount",
               "parsedCount",
               "validatedCount",
@@ -92,7 +103,7 @@ public class WorkflowGraphValidator {
               NodeOutputKeys.OUTPUT_COUNT),
       "EXPORT",
           Set.of(
-              "fileId",
+              KEY_FILE_ID,
               "objectName",
               "recordCount",
               "fileSizeBytes",
@@ -113,7 +124,7 @@ public class WorkflowGraphValidator {
               NodeOutputKeys.INPUT_COUNT,
               NodeOutputKeys.OUTPUT_COUNT),
       "DISPATCH",
-          Set.of("fileId", "receiptCode", "receiptStatus", "externalRequestId", "channelCode"));
+          Set.of(KEY_FILE_ID, "receiptCode", "receiptStatus", "externalRequestId", "channelCode"));
 
   private final WorkflowNodeMapper workflowNodeMapper;
   private final WorkflowEdgeMapper workflowEdgeMapper;
