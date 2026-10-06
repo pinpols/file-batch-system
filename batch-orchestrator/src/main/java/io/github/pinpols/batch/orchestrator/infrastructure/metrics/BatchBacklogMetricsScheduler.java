@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.DeadLetterReplayStatus;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.orchestrator.config.BacklogMetricsProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.DeadLetterTaskMapper;
@@ -16,7 +17,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -53,9 +53,7 @@ public class BatchBacklogMetricsScheduler {
   private final BatchOrchestratorGovernanceProperties governance;
   private final MeterRegistry meterRegistry;
   private final OrchestratorGracefulShutdown gracefulShutdown;
-
-  @Value("${batch.metrics.backlog.outbox-duplicate-window-hours:24}")
-  private long outboxDuplicateWindowHours;
+  private final BacklogMetricsProperties backlogMetricsProperties;
 
   private final AtomicLong outboxPending = new AtomicLong();
   private final AtomicLong outboxStalePublishing = new AtomicLong();
@@ -90,6 +88,6 @@ public class BatchBacklogMetricsScheduler {
   }
 
   private Duration duplicateDetectionWindow() {
-    return Duration.ofHours(Math.max(1, outboxDuplicateWindowHours));
+    return Duration.ofHours(Math.max(1, backlogMetricsProperties.getOutboxDuplicateWindowHours()));
   }
 }

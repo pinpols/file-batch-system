@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.orchestrator.config.OpenLineageProperties;
 import io.github.pinpols.batch.orchestrator.mapper.OpenLineageDatasetMapper;
@@ -171,7 +172,7 @@ class OpenLineageEmitterTest {
         storageType,
         bucket,
         storagePath,
-        "GENERATED",
+        FileStatus.GENERATED.code(),
         "trace-abc");
   }
 }

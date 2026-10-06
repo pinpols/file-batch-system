@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.RunMode;
 import io.github.pinpols.batch.common.exception.BizException;
@@ -132,18 +133,18 @@ class DefaultFileGovernanceServiceTest {
   void shouldArchiveFile_whenStatusTransitionAllowed() {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
-        .thenReturn(Map.of("file_status", "LOADED"));
+        .thenReturn(Map.of("file_status", FileStatus.LOADED.code()));
     when(fileGovernanceRepository.countActivePipelineInstances("t1", 1L)).thenReturn(0L);
     when(fileGovernanceRepository.countPendingDispatchRecords("t1", 1L)).thenReturn(0L);
     when(fileGovernanceRepository.updateFileStatus(
-            eq("t1"), eq(1L), eq("LOADED"), eq("ARCHIVED"), any()))
+            eq("t1"), eq(1L), eq(FileStatus.LOADED.code()), eq(FileStatus.ARCHIVED.code()), any()))
         .thenReturn(1);
     when(fileGovernanceRepository.operationDetail(anyString(), anyString(), any(), any()))
         .thenReturn(Map.of());
 
     String result = service.archiveFile(cmd);
 
-    assertThat(result).isEqualTo("ARCHIVED");
+    assertThat(result).isEqualTo(FileStatus.ARCHIVED.code());
     // 成功审计写一次 (SUCCESS)，不写 FAILED
     ArgumentCaptor<FileGovernanceRepository.FileAuditCommand> captor =
         ArgumentCaptor.forClass(FileGovernanceRepository.FileAuditCommand.class);
@@ -158,35 +159,35 @@ class DefaultFileGovernanceServiceTest {
     // 把干净的业务流程/错误掩盖成 500。见 DefaultFileGovernanceService#changeFileStatus。
     FileGovernanceCommand cmd = baseCommand().reason(null).build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
-        .thenReturn(Map.of("file_status", "LOADED"));
+        .thenReturn(Map.of("file_status", FileStatus.LOADED.code()));
     when(fileGovernanceRepository.countActivePipelineInstances("t1", 1L)).thenReturn(0L);
     when(fileGovernanceRepository.countPendingDispatchRecords("t1", 1L)).thenReturn(0L);
     when(fileGovernanceRepository.updateFileStatus(
-            eq("t1"), eq(1L), eq("LOADED"), eq("ARCHIVED"), any()))
+            eq("t1"), eq(1L), eq(FileStatus.LOADED.code()), eq(FileStatus.ARCHIVED.code()), any()))
         .thenReturn(1);
     when(fileGovernanceRepository.operationDetail(anyString(), anyString(), any(), any()))
         .thenReturn(Map.of());
 
     // arrange 完成,act + assert:不再抛 NPE,正常返回 ARCHIVED
-    assertThat(service.archiveFile(cmd)).isEqualTo("ARCHIVED");
+    assertThat(service.archiveFile(cmd)).isEqualTo(FileStatus.ARCHIVED.code());
   }
 
   @Test
   void shouldDeleteFile_whenArchivedToDeletedTransitionAllowed() {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
-        .thenReturn(Map.of("file_status", "ARCHIVED"));
+        .thenReturn(Map.of("file_status", FileStatus.ARCHIVED.code()));
     when(fileGovernanceRepository.countActivePipelineInstances("t1", 1L)).thenReturn(0L);
     when(fileGovernanceRepository.countPendingDispatchRecords("t1", 1L)).thenReturn(0L);
     when(fileGovernanceRepository.updateFileStatus(
-            eq("t1"), eq(1L), eq("ARCHIVED"), eq("DELETED"), any()))
+            eq("t1"), eq(1L), eq(FileStatus.ARCHIVED.code()), eq(FileStatus.DELETED.code()), any()))
         .thenReturn(1);
     when(fileGovernanceRepository.operationDetail(anyString(), anyString(), any(), any()))
         .thenReturn(Map.of());
 
     String result = service.deleteFile(cmd);
 
-    assertThat(result).isEqualTo("DELETED");
+    assertThat(result).isEqualTo(FileStatus.DELETED.code());
   }
 
   @Test
@@ -206,7 +207,7 @@ class DefaultFileGovernanceServiceTest {
   void shouldThrowStateConflictAndAuditFailure_whenActivePipelinesExist() {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
-        .thenReturn(Map.of("file_status", "LOADED"));
+        .thenReturn(Map.of("file_status", FileStatus.LOADED.code()));
     when(fileGovernanceRepository.countActivePipelineInstances("t1", 1L)).thenReturn(2L);
 
     assertThatThrownBy(() -> service.archiveFile(cmd))
@@ -224,7 +225,7 @@ class DefaultFileGovernanceServiceTest {
   void shouldThrowAndAuditFailure_whenPendingDispatchesExist() {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
-        .thenReturn(Map.of("file_status", "LOADED"));
+        .thenReturn(Map.of("file_status", FileStatus.LOADED.code()));
     when(fileGovernanceRepository.countActivePipelineInstances("t1", 1L)).thenReturn(0L);
     when(fileGovernanceRepository.countPendingDispatchRecords("t1", 1L)).thenReturn(3L);
 
@@ -240,7 +241,7 @@ class DefaultFileGovernanceServiceTest {
     // DELETED 是终态,不能转 ARCHIVED
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
-        .thenReturn(Map.of("file_status", "DELETED"));
+        .thenReturn(Map.of("file_status", FileStatus.DELETED.code()));
     when(fileGovernanceRepository.countActivePipelineInstances("t1", 1L)).thenReturn(0L);
     when(fileGovernanceRepository.countPendingDispatchRecords("t1", 1L)).thenReturn(0L);
 
@@ -257,7 +258,7 @@ class DefaultFileGovernanceServiceTest {
   void shouldThrowStateConflictAndAuditFailure_whenUpdateReturnsZero() {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
-        .thenReturn(Map.of("file_status", "LOADED"));
+        .thenReturn(Map.of("file_status", FileStatus.LOADED.code()));
     when(fileGovernanceRepository.countActivePipelineInstances("t1", 1L)).thenReturn(0L);
     when(fileGovernanceRepository.countPendingDispatchRecords("t1", 1L)).thenReturn(0L);
     when(fileGovernanceRepository.updateFileStatus(

@@ -100,6 +100,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
           request.hostName(),
           request.hostIp(),
           request.processId(),
+          request.port(),
           request.buildId(),
           request.sdkVersion(),
           resolveWorkerPoolCode(request));
@@ -112,6 +113,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
               request.hostName(),
               request.hostIp(),
               request.processId(),
+              request.port(),
               request.buildId(),
               request.sdkVersion())
           .withWorkerPoolCode(resolveWorkerPoolCode(request));

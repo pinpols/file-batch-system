@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
+import io.github.pinpols.batch.common.config.ApplicationNameProvider;
+import io.github.pinpols.batch.common.config.RuntimeInfrastructureInspector;
 import io.github.pinpols.batch.common.stateful.StatefulBackendGuard;
 import io.github.pinpols.batch.orchestrator.config.QuotaProperties;
 import javax.sql.DataSource;
@@ -17,9 +19,9 @@ class QuotaRuntimeBackendGuardTest {
     QuotaProperties properties = new QuotaProperties();
     properties.setRuntimeStore(QuotaRuntimeBackends.REDIS);
     MockEnvironment environment = environment()
-        .withProperty("spring.data.redis.host", "valkey")
-        .withProperty("spring.data.redis.port", "6379")
-        .withProperty("spring.data.redis.database", "2");
+        .withProperty(RuntimeInfrastructureInspector.REDIS_HOST_KEY, "valkey")
+        .withProperty(RuntimeInfrastructureInspector.REDIS_PORT_KEY, "6379")
+        .withProperty(RuntimeInfrastructureInspector.REDIS_DATABASE_KEY, "2");
 
     StatefulBackendGuard.DesiredBackend desired = guard(properties, environment).desiredBackend();
 
@@ -51,12 +53,18 @@ class QuotaRuntimeBackendGuardTest {
   }
 
   private QuotaRuntimeBackendGuard guard(QuotaProperties properties, MockEnvironment environment) {
-    return new QuotaRuntimeBackendGuard(mock(DataSource.class), properties, environment);
+    return new QuotaRuntimeBackendGuard(
+        mock(DataSource.class),
+        properties,
+        new ApplicationNameProvider(environment),
+        new RuntimeInfrastructureInspector(environment));
   }
 
   private MockEnvironment environment() {
     return new MockEnvironment()
-        .withProperty("spring.application.name", "batch-orchestrator")
-        .withProperty("spring.datasource.url", "jdbc:postgresql://platform-db/batch_platform");
+        .withProperty(ApplicationNameProvider.APPLICATION_NAME_KEY, "batch-orchestrator")
+        .withProperty(
+            RuntimeInfrastructureInspector.DATASOURCE_URL_KEY,
+            "jdbc:postgresql://platform-db/batch_platform");
   }
 }

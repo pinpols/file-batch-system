@@ -132,29 +132,9 @@ public class WorkerController {
       String tenantId = InternalRequestTenantGuard.resolveTenant(httpRequest, null);
       return tenantId == null
           ? null
-          : new WorkerHeartbeatDto(
-              tenantId, null, null, null, null, null, null, null, null, null, null, null, null,
-              null, null, null, null);
+          : WorkerHeartbeatDto.builder().tenantId(tenantId).build();
     }
-    String tenantId = resolveTenant(request, httpRequest);
-    return new WorkerHeartbeatDto(
-        tenantId,
-        request.workerCode(),
-        request.workerGroup(),
-        request.status(),
-        request.hostName(),
-        request.hostIp(),
-        request.processId(),
-        request.buildId(),
-        request.sdkVersion(),
-        request.heartbeatAt(),
-        request.capabilityTags(),
-        request.currentLoad(),
-        request.taskTypes(),
-        request.protocolVersion(),
-        request.maxConcurrent(),
-        request.workerPoolCode(),
-        request.pipelineProgress());
+    return request.toBuilder().tenantId(resolveTenant(request, httpRequest)).build();
   }
 
   private static String resolveTenant(WorkerHeartbeatDto request, HttpServletRequest httpRequest) {

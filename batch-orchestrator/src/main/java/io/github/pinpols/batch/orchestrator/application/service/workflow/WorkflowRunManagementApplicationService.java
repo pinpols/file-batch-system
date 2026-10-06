@@ -86,7 +86,7 @@ public class WorkflowRunManagementApplicationService {
     if (!TERMINABLE.contains(run.getRunStatus())) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT,
-          "error.common.state_conflict_detail",
+          ResultCode.STATE_CONFLICT.detailKey(),
           "cannot terminate from " + run.getRunStatus());
     }
     return flipToTerminated(run, TERMINABLE);
@@ -115,7 +115,7 @@ public class WorkflowRunManagementApplicationService {
     if (!expectedFrom.contains(run.getRunStatus())) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT,
-          "error.common.state_conflict_detail",
+          ResultCode.STATE_CONFLICT.detailKey(),
           "cannot transition from " + run.getRunStatus() + " to " + targetStatus);
     }
     int updated = workflowRunMapper.updateStatus(UpdateWorkflowRunStatusParam.builder()
@@ -155,7 +155,7 @@ public class WorkflowRunManagementApplicationService {
     if (!"FAILED".equals(nodeRun.getNodeStatus())) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT,
-          "error.common.state_conflict_detail",
+          ResultCode.STATE_CONFLICT.detailKey(),
           "can only skip FAILED nodes, current: " + nodeRun.getNodeStatus());
     }
     workflowNodeRunMapper.updateStatus(UpdateNodeRunStatusParam.builder()

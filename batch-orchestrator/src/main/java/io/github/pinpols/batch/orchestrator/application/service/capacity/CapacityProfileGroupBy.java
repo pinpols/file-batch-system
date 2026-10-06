@@ -18,7 +18,7 @@ public enum CapacityProfileGroupBy {
     } catch (IllegalArgumentException ex) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
+          ResultCode.INVALID_ARGUMENT.detailKey(),
           "groupBy must be one of TENANT, JOB, WORKER");
     }
   }

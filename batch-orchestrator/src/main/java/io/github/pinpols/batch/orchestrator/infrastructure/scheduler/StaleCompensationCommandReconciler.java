@@ -6,7 +6,6 @@ import io.github.pinpols.batch.orchestrator.mapper.CompensationCommandMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -30,12 +29,7 @@ public class StaleCompensationCommandReconciler {
   static final String ERROR_CODE = "STALE_RUNNING_TIMEOUT";
 
   private final CompensationCommandMapper compensationCommandMapper;
-
-  @Value("${batch.compensation.stale-running-reconciler.timeout-seconds:3600}")
-  private long timeoutSeconds;
-
-  @Value("${batch.compensation.stale-running-reconciler.batch-size:100}")
-  private int batchSize;
+  private final StaleCompensationReconcilerProperties properties;
 
   @Scheduled(
       initialDelayString =
@@ -46,6 +40,8 @@ public class StaleCompensationCommandReconciler {
       lockAtMostFor = "PT15M",
       lockAtLeastFor = "PT1M")
   public void reconcile() {
+    long timeoutSeconds = properties.getTimeoutSeconds();
+    int batchSize = properties.getBatchSize();
     if (timeoutSeconds <= 0 || batchSize <= 0) {
       return;
     }

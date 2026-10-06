@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.quota;
 
+import io.github.pinpols.batch.common.config.ApplicationNameProvider;
+import io.github.pinpols.batch.common.config.RuntimeInfrastructureInspector;
 import io.github.pinpols.batch.common.stateful.StatefulBackendGuard;
 import io.github.pinpols.batch.common.stateful.StatefulBackendIdentity;
 import io.github.pinpols.batch.orchestrator.config.QuotaProperties;
@@ -8,7 +10,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.Ordered;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 /** Refuses unmarked quota runtime-store or connection-location changes at startup. */
@@ -20,13 +21,18 @@ public class QuotaRuntimeBackendGuard implements ApplicationRunner, Ordered {
 
   private final StatefulBackendGuard guard;
   private final QuotaProperties properties;
-  private final Environment environment;
+  private final ApplicationNameProvider applicationNameProvider;
+  private final RuntimeInfrastructureInspector infrastructureInspector;
 
   public QuotaRuntimeBackendGuard(
-      DataSource dataSource, QuotaProperties properties, Environment environment) {
+      DataSource dataSource,
+      QuotaProperties properties,
+      ApplicationNameProvider applicationNameProvider,
+      RuntimeInfrastructureInspector infrastructureInspector) {
     this.guard = new StatefulBackendGuard(dataSource);
     this.properties = properties;
-    this.environment = environment;
+    this.applicationNameProvider = applicationNameProvider;
+    this.infrastructureInspector = infrastructureInspector;
   }
 
   @Override
@@ -45,16 +51,18 @@ public class QuotaRuntimeBackendGuard implements ApplicationRunner, Ordered {
     String backend = properties.getRuntimeStore().trim().toLowerCase();
     String identity =
         switch (backend) {
-          case QuotaRuntimeBackends.REDIS ->
-            StatefulBackendIdentity.redis(
-                environment.getProperty("spring.data.redis.host", "localhost"),
-                environment.getProperty("spring.data.redis.port", Integer.class, 6379),
-                environment.getProperty("spring.data.redis.database", Integer.class, 0),
-                environment.getProperty("spring.data.redis.sentinel.master"),
-                environment.getProperty("spring.data.redis.sentinel.nodes"));
+          case QuotaRuntimeBackends.REDIS -> {
+            RuntimeInfrastructureInspector.RedisCoordinates redis =
+                infrastructureInspector.redisCoordinates();
+            yield StatefulBackendIdentity.redis(
+                redis.host(),
+                redis.port(),
+                redis.database(),
+                redis.sentinelMaster(),
+                redis.sentinelNodes());
+          }
           case QuotaRuntimeBackends.DATABASE ->
-            StatefulBackendIdentity.database(
-                environment.getRequiredProperty("spring.datasource.url"));
+            StatefulBackendIdentity.database(infrastructureInspector.datasourceUrl());
           default ->
             throw new IllegalStateException(
                 "unsupported batch.quota.runtime-store: " + properties.getRuntimeStore());
@@ -64,7 +72,7 @@ public class QuotaRuntimeBackendGuard implements ApplicationRunner, Ordered {
         backend,
         identity,
         properties.getBackendGuard().getCutoverId(),
-        environment.getProperty("spring.application.name", "batch-orchestrator"));
+        applicationNameProvider.name("batch-orchestrator"));
   }
 
   @Override

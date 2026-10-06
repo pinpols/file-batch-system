@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service.forensic;
 
+import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
@@ -11,7 +12,8 @@ import org.springframework.stereotype.Component;
 public class ForensicExportProperties {
 
   /** 落盘根目录；默认 ${java.io.tmpdir}/batch-forensic。 */
-  private String storageDir = System.getProperty("java.io.tmpdir") + "/batch-forensic";
+  private String storageDir =
+      PrivateTempFiles.resolveUnderTempRoot("batch-forensic").toString();
 
   /** 单次导出 instance 行数硬上限，防 unbounded（v0.1 默认 100k）。 */
   private int instanceRowCap = 100_000;

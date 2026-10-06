@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.scheduler.TenantSchedulerSnapshotService;
+import io.github.pinpols.batch.orchestrator.config.SchedulerSnapshotProperties;
 import io.github.pinpols.batch.orchestrator.controller.response.SchedulerSnapshotResponse;
 import io.github.pinpols.batch.orchestrator.domain.entity.TenantSchedulerSnapshotEntity;
 import io.github.pinpols.batch.orchestrator.domain.value.JsonbString;
@@ -17,7 +18,6 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -31,9 +31,7 @@ public class TenantSchedulerSnapshotRecorder {
   private final TenantSchedulerSnapshotMapper snapshotMapper;
   private final WorkerRegistryMapper workerRegistryMapper;
   private final OrchestratorGracefulShutdown gracefulShutdown;
-
-  @Value("${batch.scheduler.snapshot-persist-enabled:true}")
-  private boolean persistEnabled;
+  private final SchedulerSnapshotProperties schedulerSnapshotProperties;
 
   @Scheduled(fixedDelayString = "${batch.scheduler.snapshot-persist-ms:120000}")
   @SchedulerLock(
@@ -44,7 +42,7 @@ public class TenantSchedulerSnapshotRecorder {
     if (gracefulShutdown.isDraining()) {
       return;
     }
-    if (!persistEnabled) {
+    if (!schedulerSnapshotProperties.isSnapshotPersistEnabled()) {
       return;
     }
     List<String> tenantIds = tenantQuotaPolicyMapper.selectDistinctEnabledTenantIds();

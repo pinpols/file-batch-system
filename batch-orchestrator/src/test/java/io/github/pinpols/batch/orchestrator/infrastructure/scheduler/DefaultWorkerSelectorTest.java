@@ -166,6 +166,7 @@ class DefaultWorkerSelectorTest {
         null,
         null,
         null,
+        null,
         "export-heavy");
     stubCandidates(List.of(general, heavy));
     ResourceSchedulingRequest request = request();
@@ -193,6 +194,7 @@ class DefaultWorkerSelectorTest {
         BatchDateTimeSupport.utcNow(),
         0,
         10,
+        null,
         null,
         null,
         null,

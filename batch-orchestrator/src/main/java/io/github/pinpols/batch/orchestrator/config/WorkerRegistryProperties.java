@@ -3,9 +3,15 @@ package io.github.pinpols.batch.orchestrator.config;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-/** Worker 注册表准入治理配置。 */
+/**
+ * Worker 注册表准入治理配置（{@code batch.worker.registry}）。
+ *
+ * <p>同前缀的 {@code batch.worker.registry.fail-fast-on-startup} 由 worker 侧的
+ * {@code WorkerRegistryStartupProperties} 绑定；两者分属不同进程上下文，子键互不重叠。
+ */
 @Data
 @ConfigurationProperties(prefix = "batch.worker.registry")
+@SuppressWarnings("ConfigurationProperties") // 与 WorkerRegistryStartupProperties 共享前缀，子键互不重叠。
 public class WorkerRegistryProperties {
 
   /**

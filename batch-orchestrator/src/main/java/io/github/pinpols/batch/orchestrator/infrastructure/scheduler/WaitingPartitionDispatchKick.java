@@ -63,7 +63,7 @@ class WaitingPartitionDispatchKick {
       scheduled.set(false);
       SwallowedExceptionLogger.warn(
           WaitingPartitionDispatchKick.class,
-          "schedule waiting-partition dispatch kick failed",
+          "schedule-waiting-partition-dispatch-kick-failed",
           exception);
     }
   }

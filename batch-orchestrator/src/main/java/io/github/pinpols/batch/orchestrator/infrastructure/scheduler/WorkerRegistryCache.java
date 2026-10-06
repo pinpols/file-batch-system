@@ -157,6 +157,9 @@ public class WorkerRegistryCache {
           EmptyChecks.isNull(e.drainDeadlineMillis)
               ? null
               : Instant.ofEpochMilli(e.drainDeadlineMillis),
+          // 运行指纹（hostName/hostIp/processId/port/buildId/sdkVersion）不进缓存快照：selector 路由不需要，
+          // console 展示走 DB 直读。故这里全部置 null，缺失不代表数据丢失。
+          null,
           null,
           null,
           null,

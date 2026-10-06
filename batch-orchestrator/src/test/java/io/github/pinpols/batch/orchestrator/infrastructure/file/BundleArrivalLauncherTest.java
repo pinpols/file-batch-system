@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.file;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -8,7 +9,10 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
+import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
+import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import java.time.LocalDate;
 import java.time.Month;
@@ -19,29 +23,66 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
+import org.postgresql.util.PGobject;
 import org.springframework.beans.factory.ObjectProvider;
 
 class BundleArrivalLauncherTest {
 
   private LaunchService launchService;
+  private TriggerRequestMapper triggerRequestMapper;
   private BundleArrivalLauncher launcher;
 
   @BeforeEach
   @SuppressWarnings("unchecked")
   void setUp() {
     launchService = mock(LaunchService.class);
+    triggerRequestMapper = mock(TriggerRequestMapper.class);
     ObjectProvider<LaunchService> provider = mock(ObjectProvider.class);
     when(provider.getObject()).thenReturn(launchService);
-    launcher = new BundleArrivalLauncher(provider);
+    launcher = new BundleArrivalLauncher(provider, triggerRequestMapper);
   }
 
-  private static Map<String, Object> file(long id, String metadataJson) {
+  private static Map<String, Object> file(long id, Object metadataJson) {
     Map<String, Object> m = new LinkedHashMap<>();
     m.put("id", id);
     m.put("tenant_id", "t1");
     m.put("biz_date", LocalDate.of(2026, Month.JUNE, 21));
     m.put("metadata_json", metadataJson);
     return m;
+  }
+
+  /** 复刻 JDBC 对 PG jsonb 列的映射结果:org.postgresql.util.PGobject(不是 String)。 */
+  private static Object pgJsonb(String json) throws Exception {
+    PGobject pg = new PGobject();
+    pg.setType("jsonb");
+    pg.setValue(json);
+    return pg;
+  }
+
+  @Test
+  void launchesBundleWhenMetadataJsonArrivesAsPgObject() throws Exception {
+    // 回归:selectArrivalGroupFiles 的 metadata_json 是 jsonb → 驱动给 PGobject。
+    // 若只认 String,这里会静默 NOT_BUNDLE,到达组永远不 launch(线上真实缺陷,见 stage 26)。
+    when(launchService.launch(org.mockito.ArgumentMatchers.any()))
+        .thenReturn(new LaunchResponse("INST-1", "trace-1"));
+    List<Map<String, Object>> groupFiles = List.of(
+        file(
+            101,
+            pgJsonb(
+                "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_ORDER\"}")),
+        file(
+            102,
+            pgJsonb(
+                "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_CUST\"}")));
+
+    launcher.launchIfBundle("t1", "bundle-daily", groupFiles);
+
+    ArgumentCaptor<LaunchRequest> captor = ArgumentCaptor.forClass(LaunchRequest.class);
+    verify(launchService).launch(captor.capture());
+    Assertions.assertThat(captor.getValue().jobCode()).isEqualTo("BUNDLE_IMPORT_DAILY");
+    Assertions.assertThat(captor.getValue().bizDate())
+        .isEqualTo(LocalDate.of(2026, Month.JUNE, 21));
   }
 
   @Test
@@ -67,6 +108,20 @@ class BundleArrivalLauncherTest {
     Assertions.assertThat(req.triggerType()).isEqualTo(TriggerType.EVENT);
     // 确定性幂等 requestId(同组同 bizDate → 同 id)
     Assertions.assertThat(req.requestId()).isEqualTo("bundle-arrival-t1-bundle-daily-2026-06-21");
+    // 关键顺序:DefaultLaunchService 按 requestId 查 trigger_request,查不到直接抛
+    // error.trigger.request_not_found → 必须先落 ACCEPTED 行再 launch(与其它内部 launcher 一致)。
+    ArgumentCaptor<TriggerRequestEntity> entityCaptor =
+        ArgumentCaptor.forClass(TriggerRequestEntity.class);
+    InOrder order = inOrder(triggerRequestMapper, launchService);
+    order.verify(triggerRequestMapper).insertIfAbsent(entityCaptor.capture());
+    order.verify(launchService).launch(org.mockito.ArgumentMatchers.any());
+    TriggerRequestEntity entity = entityCaptor.getValue();
+    Assertions.assertThat(entity.getRequestId()).isEqualTo(req.requestId());
+    Assertions.assertThat(entity.getJobCode()).isEqualTo("BUNDLE_IMPORT_DAILY");
+    Assertions.assertThat(entity.getTriggerType()).isEqualTo(TriggerType.EVENT.code());
+    Assertions.assertThat(entity.getRequestStatus())
+        .isEqualTo(TriggerRequestStatus.ACCEPTED.code());
+    Assertions.assertThat(entity.getBizDate()).isEqualTo(LocalDate.of(2026, Month.JUNE, 21));
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> bundleFiles =
         (List<Map<String, Object>>) req.params().get("bundleFiles");

@@ -83,7 +83,7 @@ public class InstanceManagementApplicationService {
     if (!allowedFrom.contains(instance.getInstanceStatus())) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT,
-          "error.common.state_conflict_detail",
+          ResultCode.STATE_CONFLICT.detailKey(),
           "cannot transition from " + instance.getInstanceStatus() + " to " + targetStatus);
     }
     int rows =
@@ -99,7 +99,7 @@ public class InstanceManagementApplicationService {
     if (!PARTITION_CANCELLABLE.contains(partition.getPartitionStatus())) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT,
-          "error.common.state_conflict_detail",
+          ResultCode.STATE_CONFLICT.detailKey(),
           "cannot cancel partition from " + partition.getPartitionStatus());
     }
     int rows = jobPartitionMapper.promoteStatus(
@@ -115,7 +115,7 @@ public class InstanceManagementApplicationService {
     if (!"FAILED".equals(partition.getPartitionStatus())) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT,
-          "error.common.state_conflict_detail",
+          ResultCode.STATE_CONFLICT.detailKey(),
           "can only retry FAILED partitions, current: " + partition.getPartitionStatus());
     }
     retryGovernanceService.retryPartition(tenantId, id, manualRetryEventKey(tenantId, partition));
@@ -177,7 +177,7 @@ public class InstanceManagementApplicationService {
     if (!allowedFrom.contains(instance.getInstanceStatus())) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT,
-          "error.common.state_conflict_detail",
+          ResultCode.STATE_CONFLICT.detailKey(),
           "cannot transition from " + instance.getInstanceStatus() + " to " + targetStatus);
     }
     JobInstanceTerminalStatusCommand cmd = new JobInstanceTerminalStatusCommand(

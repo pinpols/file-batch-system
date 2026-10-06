@@ -12,6 +12,7 @@ import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
+import io.github.pinpols.batch.orchestrator.config.QuotaProperties;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceCheck;
 import io.github.pinpols.batch.orchestrator.infrastructure.quota.RedisQuotaRuntimeStateService;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
@@ -163,7 +164,9 @@ class RedisQuotaRuntimeStateServiceTest {
   @Test
   void shouldFailOpenOnlyWhenExplicitlyConfigured() {
     RedisQuotaRuntimeStateService failOpenService = new RedisQuotaRuntimeStateService(
-        redis, new BatchTimezoneProvider(new BatchTimezoneProperties()), "FAIL_OPEN");
+        redis,
+        new BatchTimezoneProvider(new BatchTimezoneProperties()),
+        quotaProperties("FAIL_OPEN"));
     when(redis.evalList(
             anyString(),
             anyString(),
@@ -262,6 +265,12 @@ class RedisQuotaRuntimeStateServiceTest {
             anyString(),
             anyString(),
             anyString());
+  }
+
+  private static QuotaProperties quotaProperties(String failureMode) {
+    QuotaProperties properties = new QuotaProperties();
+    properties.getRedis().setFailureMode(failureMode);
+    return properties;
   }
 
   private static QuotaRuntimeStateService.QuotaReservationRequest reservation(

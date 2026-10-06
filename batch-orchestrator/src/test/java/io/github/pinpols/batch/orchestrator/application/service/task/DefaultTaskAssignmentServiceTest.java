@@ -549,6 +549,7 @@ class DefaultTaskAssignmentServiceTest {
         null,
         null,
         null,
+        null,
         workerPoolCode);
   }
 }

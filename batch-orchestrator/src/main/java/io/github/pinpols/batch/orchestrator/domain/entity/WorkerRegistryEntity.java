@@ -33,6 +33,8 @@ public record WorkerRegistryEntity(
     String hostName,
     String hostIp,
     String processId,
+    // Worker 实际监听 HTTP 端口（V221）；NULL=老 worker / 老 SDK / 非 web 上下文未上报。
+    Integer port,
     String buildId,
     String sdkVersion,
     String workerPoolCode) {
@@ -71,6 +73,7 @@ public record WorkerRegistryEntity(
         maxConcurrent,
         drainStartedAt,
         drainDeadlineAt,
+        null,
         null,
         null,
         null,
@@ -115,6 +118,7 @@ public record WorkerRegistryEntity(
         hostName,
         hostIp,
         processId,
+        null,
         buildId,
         sdkVersion,
         workerCode);
@@ -143,6 +147,7 @@ public record WorkerRegistryEntity(
         hostName,
         hostIp,
         processId,
+        port,
         buildId,
         sdkVersion,
         newWorkerPoolCode);
@@ -171,6 +176,7 @@ public record WorkerRegistryEntity(
         hostName,
         hostIp,
         processId,
+        port,
         buildId,
         sdkVersion,
         workerPoolCode);
@@ -194,6 +200,7 @@ public record WorkerRegistryEntity(
         hostName,
         hostIp,
         processId,
+        port,
         buildId,
         sdkVersion,
         workerPoolCode);
@@ -218,6 +225,7 @@ public record WorkerRegistryEntity(
         hostName,
         hostIp,
         processId,
+        port,
         buildId,
         sdkVersion,
         workerPoolCode);
@@ -241,14 +249,20 @@ public record WorkerRegistryEntity(
         hostName,
         hostIp,
         processId,
+        port,
         buildId,
         sdkVersion,
         workerPoolCode);
   }
 
-  /** SDK-P5-3：刷新运行指纹（register 路径，worker 重启可能换 host / 升 SDK 版本）。 */
+  /** SDK-P5-3：刷新运行指纹（register 路径，worker 重启可能换 host / 换监听端口 / 升 SDK 版本）。 */
   public WorkerRegistryEntity withFingerprint(
-      String hostName, String hostIp, String processId, String buildId, String sdkVersion) {
+      String hostName,
+      String hostIp,
+      String processId,
+      Integer port,
+      String buildId,
+      String sdkVersion) {
     return new WorkerRegistryEntity(
         id,
         tenantId,
@@ -265,6 +279,7 @@ public record WorkerRegistryEntity(
         hostName,
         hostIp,
         processId,
+        port,
         buildId,
         sdkVersion,
         workerPoolCode);

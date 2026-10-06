@@ -321,7 +321,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     if (EmptyChecks.isNull(finishedTask)) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT,
-          "error.common.state_conflict_detail",
+          ResultCode.STATE_CONFLICT.detailKey(),
           "task already finished by concurrent update: taskId=" + command.taskId());
     }
 

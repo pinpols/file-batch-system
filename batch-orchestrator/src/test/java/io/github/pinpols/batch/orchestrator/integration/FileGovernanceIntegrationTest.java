@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.common.config.BatchClockConfig;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.config.FileGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.BundleArrivalLauncher;
@@ -66,11 +67,6 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
     })
 @EnabledIf("s3BackendActive")
 class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
-
-  /** fixture 直接写对象存储（S3Client），filesystem 后端下自动跳过。 */
-  static boolean s3BackendActive() {
-    return !"filesystem".equals(System.getProperty("batch.test.storage.backend", "s3"));
-  }
 
   private static final class FileRecordSpec {
     private final String tenantId;
@@ -173,7 +169,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
             latencyTenantId,
             "delay-file-" + suffix + ".csv",
             "INPUT",
-            "RECEIVED",
+            FileStatus.RECEIVED.code(),
             "S3",
             "incoming/delay-file-" + suffix + ".csv",
             "{\"expectedArrivalTime\":\"" + now.minusSeconds(7200) + "\"}")
@@ -199,7 +195,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
             TENANT_ID,
             "archive-file-" + suffix() + ".csv",
             "INPUT",
-            "ARCHIVED",
+            FileStatus.ARCHIVED.code(),
             "S3",
             objectName,
             "{}")
@@ -214,7 +210,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
             + " batch.file_record where id = ?",
         fileId);
     assertThat(fileRecord)
-        .containsEntry("file_status", "DELETED")
+        .containsEntry("file_status", FileStatus.DELETED.code())
         .containsEntry("cleanup_reason", "ARCHIVE_RETENTION_EXPIRED");
 
     Integer auditCount = jdbcTemplate.queryForObject("""
@@ -248,7 +244,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
     assertThat(reconciled)
         .containsEntry("file_name", objectName.substring(objectName.lastIndexOf('/') + 1));
     assertThat(reconciled)
-        .containsEntry("file_status", "RECEIVED")
+        .containsEntry("file_status", FileStatus.RECEIVED.code())
         .containsEntry("reconciled_flag", "true")
         .containsEntry("storage_path", objectName);
 
@@ -281,7 +277,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
             TENANT_ID,
             "file-a.csv",
             "INPUT",
-            "RECEIVED",
+            FileStatus.RECEIVED.code(),
             "LOCAL",
             "incoming/" + groupCode + "/file-a.csv",
             metadata)
@@ -291,7 +287,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
             TENANT_ID,
             "file-b.csv",
             "INPUT",
-            "RECEIVED",
+            FileStatus.RECEIVED.code(),
             "LOCAL",
             "incoming/" + groupCode + "/file-b.csv",
             metadata)

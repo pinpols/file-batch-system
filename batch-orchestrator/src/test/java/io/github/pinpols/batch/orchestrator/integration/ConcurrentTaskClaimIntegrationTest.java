@@ -377,6 +377,7 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
         null,
         null,
         null,
+        null,
         workerPoolCode);
   }
 }

@@ -9,6 +9,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * <ul>
  *   <li>{@link #runtimeStore}：运行时状态后端选择，{@code redis}（默认）走 Lua 原子脚本， {@code database} 走 PG @Version
  *       乐观锁（遗留路径，故障降级用）。
+ *   <li>{@link Redis}：Redis 协调后端参数；{@code failureMode} 控制故障时 fail-closed / fail-open。
  *   <li>{@link Snapshot}：Redis → PG 周期 snapshot 配置；仅 {@code runtimeStore=redis} 生效。
  *   <li>{@link BackendGuard}：状态后端切换的一次性 cutover 标记。
  * </ul>
@@ -19,9 +20,17 @@ public class QuotaProperties {
 
   private String runtimeStore = "redis";
 
+  private Redis redis = new Redis();
+
   private Snapshot snapshot = new Snapshot();
 
   private BackendGuard backendGuard = new BackendGuard();
+
+  @Data
+  public static class Redis {
+    /** Redis 协调后端不可用时的策略：{@code FAIL_CLOSED}（默认，不绕过租户配额）或 {@code FAIL_OPEN}（仅本地联调）。 */
+    private String failureMode = "FAIL_CLOSED";
+  }
 
   @Data
   public static class Snapshot {
