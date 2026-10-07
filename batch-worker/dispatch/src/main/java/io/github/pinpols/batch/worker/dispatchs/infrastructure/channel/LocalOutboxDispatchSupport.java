@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.OwnerOnlyFiles;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -13,11 +14,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.nio.file.attribute.PosixFilePermission;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * 将分发命令写入文件系统 outbox 目录（LOCAL 渠道及存根远程渠道）。 存根渠道符合设计意图：持久化载荷供运维核查，但不执行真实的 NAS/OSS/SFTP/EMAIL 传输协议。
@@ -50,14 +48,16 @@ final class LocalOutboxDispatchSupport {
       String endpoint = channelConfig.get("target_endpoint") == null
           ? null
           : String.valueOf(channelConfig.get("target_endpoint"));
-      if (endpoint == null || endpoint.isBlank()) {
-        endpoint =
-            PrivateTempFiles.resolveUnderTempRoot("batch-dispatch-outbox").toString();
-      }
-      Path directory = resolveLocalDirectory(endpoint, properties);
-      boolean privateTarget = isDefaultOutboxEndpoint(endpoint);
+      boolean privateTarget = !Texts.hasText(endpoint) || isDefaultOutboxEndpoint(endpoint);
+      Path directory;
       if (privateTarget) {
-        hardenPrivateDirectory(directory);
+        directory = validateLocalDirectory(
+            OwnerOnlyFiles.createDirectories(
+                PrivateTempFiles.resolveUnderTempRoot("batch-dispatch-outbox")),
+            properties);
+      } else {
+        directory = validateLocalDirectory(
+            Files.createDirectories(Path.of(endpoint).toAbsolutePath().normalize()), properties);
       }
       String channelCode = sanitizeFileSegment(
           String.valueOf(channelConfig.getOrDefault("channel_code", DEFAULT_CHANNEL_CODE)));
@@ -115,10 +115,8 @@ final class LocalOutboxDispatchSupport {
     }
   }
 
-  private static Path resolveLocalDirectory(String endpoint, DispatchRuntimeProperties properties)
+  private static Path validateLocalDirectory(Path directory, DispatchRuntimeProperties properties)
       throws Exception {
-    Path directory = Path.of(endpoint).toAbsolutePath().normalize();
-    Files.createDirectories(directory);
     Path realDirectory = directory.toRealPath();
     String sandboxRootRaw = properties.getLocalSandboxRoot();
     if (Texts.hasText(sandboxRootRaw)) {
@@ -131,19 +129,6 @@ final class LocalOutboxDispatchSupport {
       }
     }
     return realDirectory;
-  }
-
-  private static void hardenPrivateDirectory(Path directory) {
-    try {
-      Files.setPosixFilePermissions(
-          directory,
-          Set.of(
-              PosixFilePermission.OWNER_READ,
-              PosixFilePermission.OWNER_WRITE,
-              PosixFilePermission.OWNER_EXECUTE));
-    } catch (UnsupportedOperationException | IOException ignored) {
-      // The default directory is still isolated by the host filesystem on non-POSIX platforms.
-    }
   }
 
   private static boolean isDefaultOutboxEndpoint(String endpoint) {
@@ -159,22 +144,15 @@ final class LocalOutboxDispatchSupport {
       return;
     }
     if (Files.notExists(path)) {
-      try {
-        Files.createFile(
-            path,
-            PosixFilePermissions.asFileAttribute(
-                Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE)));
-      } catch (UnsupportedOperationException ignored) {
-        Files.createFile(path);
-      }
+      OwnerOnlyFiles.createFile(path);
     }
-    try {
-      Files.setPosixFilePermissions(
-          path, Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
-    } catch (UnsupportedOperationException ignored) {
-      // Windows ACLs are managed by the host.
-    }
-    Files.write(path, bytes, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+    OwnerOnlyFiles.protectExisting(path, false);
+    Files.write(
+        path,
+        bytes,
+        StandardOpenOption.TRUNCATE_EXISTING,
+        StandardOpenOption.WRITE,
+        java.nio.file.LinkOption.NOFOLLOW_LINKS);
   }
 
   private static String sanitizeFileSegment(String raw) {

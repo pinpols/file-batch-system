@@ -463,7 +463,7 @@ bash scripts/ci/install-upstream-modules.sh
 
 ## `check-infrastructure-abstraction-boundaries.py`
 
-diff-only 守护。新增或修改的 application、domain、service、web 主代码禁止直接引用或 import
+diff-only 守护。application、domain、service、web 主代码相对 PR merge-base 新增的引用禁止直接引用或 import
 Kafka、Redis、JDBC、Quartz、RestClient/WebClient、AWS SDK 等具体基础设施类型；应依赖
 Port、Adapter 或业务抽象。config、infrastructure、mapper、support、shared client、common 底层适配包
 继续拥有实现细节。
@@ -473,6 +473,7 @@ python3 scripts/ci/check-infrastructure-abstraction-boundaries.py --base origin/
 ```
 
 该守护已接入 PR gate。历史存量按治理文档分批收敛，不在本守护里一次性清零。
+基线按引用语句及出现次数抵扣,既有引用的纯日志修改或空白排版不触发历史债务阻断;新增引用或重复新增同一引用仍阻断。新文件按空基线检查。回归测试为 `python3 -m unittest scripts/ci/tests/test_check_infrastructure_abstraction_boundaries.py`。
 
 ## `check-direct-client-boundaries.py`
 

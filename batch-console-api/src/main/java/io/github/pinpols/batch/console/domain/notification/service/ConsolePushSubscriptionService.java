@@ -62,8 +62,7 @@ public class ConsolePushSubscriptionService {
   /**
    * 校验订阅载荷,不合法直接抛错。
    *
-   * <p>把校验与写库拆开:写库方法内不再出现由请求字段决定的守卫分支,避免"敏感字段写入被用户可控条件守卫"的
-   * 静态分析形态(CodeQL java/user-controlled-bypass),语义与原先完全一致。
+   * <p>这里只拒绝非法载荷,不承担认证判断。认证由 Controller 方法安全执行,写入前仍经租户守卫解析。
    */
   private static void requireValidSubscription(ConsolePushSubscribeRequest request) {
     if (request == null
@@ -76,7 +75,7 @@ public class ConsolePushSubscriptionService {
     }
   }
 
-  /** 写入订阅:入参已由 {@link #requireValidSubscription} 校验,本方法内无用户可控分支。 */
+  /** 写入订阅:入参校验后仍执行租户守卫,不能由请求字段绕过。 */
   private void persistSubscription(
       String tenantId, String username, ConsolePushSubscribeRequest request, String userAgent) {
     ConsolePushSubscriptionEntity entity = new ConsolePushSubscriptionEntity();

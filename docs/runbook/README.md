@@ -63,7 +63,7 @@
 | 18a | [slo-sli-catalog.md](./slo-sli-catalog.md) | 批量调度 SLO / SLI 目录：调度、批次日、Outbox、Kafka、文件到达、重试和 Worker 心跳 |
 | 19 | [quartz-capacity-baseline.md](./quartz-capacity-baseline.md) | Quartz 容量基线压测（识别容量拐点）|
 | 20 | [worker-stage-coverage.md](./worker-stage-coverage.md) | 三类 Worker 全 Stage 真实覆盖端到端验证 |
-| 21 | [security-scan.md](./security-scan.md) | 本地安全扫描 SOP（trivy / dependency-check）|
+| 21 | [security-scan.md](./security-scan.md) | 本地扫描与 GitHub 告警分类、修复、误报和合并后收尾 |
 | 22 | [ci.md](./ci.md) | CI 流水线说明（pr-gate / full-ci-gate + 触发时机 + 超时）|
 | 23 | [console-login-encryption.md](./console-login-encryption.md) | Console 登录请求体 RSA+AES 加密 + 密钥轮换 SOP |
 | 24 | [jvm-tuning-and-profiling.md](./jvm-tuning-and-profiling.md) | JVM 参数(按模块分档)+ profiling 工具链 + 生产 5 类症状 SOP |

@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
+import io.github.pinpols.batch.common.utils.OwnerOnlyFiles;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -37,9 +38,6 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.FileAttribute;
-import java.nio.file.attribute.PosixFilePermission;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -436,20 +434,11 @@ public class GenerateStep implements ExportStageStep {
       ExportJobContext context, ExportPayload payload, String fileFormatType) throws IOException {
     String suffix = formatStrategyRegistry.resolve(fileFormatType).fileSuffix();
     Path dir = privateExportDirectory();
-    try {
-      return Files.createTempFile(
-          dir,
-          BatchFileConstants.exportStagePrefix(context.getTenantId(), payload.batchNo()),
-          suffix,
-          ownerOnlyFileAttribute());
-    } catch (UnsupportedOperationException ignored) {
-      Path path = Files.createTempFile(
-          dir,
-          BatchFileConstants.exportStagePrefix(context.getTenantId(), payload.batchNo()),
-          suffix);
-      setOwnerOnlyPermissions(path);
-      return path;
-    }
+    Path created = Files.createTempFile(
+        dir, BatchFileConstants.exportStagePrefix(context.getTenantId(), payload.batchNo()),
+        suffix, OwnerOnlyFiles.attributes(dir, false));
+    OwnerOnlyFiles.protectExisting(created, false);
+    return created;
   }
 
   /**
@@ -493,46 +482,17 @@ public class GenerateStep implements ExportStageStep {
     String suffix = formatStrategyRegistry.resolve(fileFormatType).fileSuffix();
     Path path = privateExportDirectory().resolve("inst-" + pipelineInstanceId + suffix);
     if (Files.notExists(path)) {
-      createOwnerOnlyFile(path);
+      OwnerOnlyFiles.createFile(path);
     } else {
-      setOwnerOnlyPermissions(path);
+      OwnerOnlyFiles.protectExisting(path, false);
     }
     return path;
   }
 
   private static Path privateExportDirectory() throws IOException {
     Path dir = PrivateTempFiles.resolveUnderTempRoot("file-batch-export");
-    Files.createDirectories(dir);
-    setOwnerOnlyPermissions(dir);
+    OwnerOnlyFiles.createDirectories(dir);
     return dir;
-  }
-
-  private static FileAttribute<Set<PosixFilePermission>> ownerOnlyFileAttribute() {
-    return PosixFilePermissions.asFileAttribute(
-        Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
-  }
-
-  private static void setOwnerOnlyPermissions(Path path) {
-    try {
-      Files.setPosixFilePermissions(
-          path,
-          Files.isDirectory(path)
-              ? Set.of(
-                  PosixFilePermission.OWNER_READ,
-                  PosixFilePermission.OWNER_WRITE,
-                  PosixFilePermission.OWNER_EXECUTE)
-              : Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
-    } catch (UnsupportedOperationException | IOException ignored) {
-      // Windows ACLs are managed by the host; the file is still created in the private staging dir.
-    }
-  }
-
-  private static void createOwnerOnlyFile(Path path) throws IOException {
-    try {
-      Files.createFile(path, ownerOnlyFileAttribute());
-    } catch (UnsupportedOperationException ignored) {
-      Files.createFile(path);
-    }
   }
 
   /** 幂等跳过(GENERATE 已完成且文件仍在):不重生成,仅补齐下游 STORE/FEEDBACK 需要的 attribute。 */

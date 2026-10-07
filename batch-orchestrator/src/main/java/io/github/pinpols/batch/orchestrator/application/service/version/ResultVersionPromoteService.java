@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.version;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionService;
@@ -58,9 +59,9 @@ public class ResultVersionPromoteService {
     materializePromotedVersion(promoted);
     log.info(
         "result_version promoted: tenantId={}, id={}, businessKey={}, versionNo={}",
-        tenantId,
+        LogSanitizer.value(tenantId),
         versionId,
-        target.businessKey(),
+        LogSanitizer.value(target.businessKey()),
         target.versionNo());
     return promoted;
   }
@@ -79,9 +80,9 @@ public class ResultVersionPromoteService {
     }
     log.info(
         "result_version rejected: tenantId={}, id={}, businessKey={}, versionNo={}",
-        tenantId,
+        LogSanitizer.value(tenantId),
         versionId,
-        target.businessKey(),
+        LogSanitizer.value(target.businessKey()),
         target.versionNo());
     return loadOrThrow(tenantId, versionId);
   }
@@ -109,7 +110,7 @@ public class ResultVersionPromoteService {
       log.warn(
           "asset partition materialization skipped after promote: job_instance missing,"
               + " tenantId={}, resultVersionId={}, jobInstanceId={}",
-          promoted.tenantId(),
+          LogSanitizer.value(promoted.tenantId()),
           promoted.id(),
           promoted.jobInstanceId());
       return;
