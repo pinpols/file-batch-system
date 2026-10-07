@@ -58,7 +58,7 @@
         <!-- Bucket4j:orchestrator 租户动作限流的真令牌桶(Redis 分布式后端,Lettuce 集成)。
              8.10+ groupId 迁 com.bucket4j、artifact 带 _jdk17 后缀;lettuce 模块对 lettuce-core 为 provided,
              复用本仓 spring-data-redis 传递的 lettuce 7.5.x。 -->
-        <bucket4j.version>8.20.0</bucket4j.version>
+        <bucket4j.version>8.21.0</bucket4j.version>
         <!-- Keep the stable OkHttp 5 artifacts aligned; JVM classes are in okhttp-jvm. -->
         <okhttp.version>5.5.0</okhttp.version>
         <okio.version>3.18.2</okio.version>
