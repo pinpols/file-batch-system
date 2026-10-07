@@ -33,6 +33,7 @@ import org.mockito.Mockito;
  *   <li>开关关闭 → 完全不查库
  * </ol>
  */
+@DisplayName("托管上传会话孤儿清理:对象不存在时两步置为删除终态并写审计,对象已上传时保留不动,并发状态变更时放弃本轮,清理开关关闭时不查询数据")
 class FileGovernanceOrphanUploadSessionCleanupTest {
 
   private FileGovernanceRepository repository;

@@ -31,6 +31,7 @@ import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -38,6 +39,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("流程节点派发幂等: 行锁防重与短路返回口径")
 class DefaultWorkflowNodeDispatchServiceIdempotencyTest {
 
   @Mock
@@ -115,6 +117,7 @@ class DefaultWorkflowNodeDispatchServiceIdempotencyTest {
   }
 
   @Test
+  @DisplayName("节点已激活时用行锁查询直接短路返回零, 不再进行就绪判断")
   void dispatchNode_nodeAlreadyActive_usesSelectLatestForUpdate() {
     // C-3: isNodeAlreadyActivated 通过 selectLatestForUpdate 行锁防止 TOCTOU
     WorkflowNodeRunEntity existingRun = new WorkflowNodeRunEntity();

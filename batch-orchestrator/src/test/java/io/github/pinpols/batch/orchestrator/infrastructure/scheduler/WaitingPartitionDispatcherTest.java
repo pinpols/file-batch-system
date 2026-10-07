@@ -30,9 +30,11 @@ import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+@DisplayName("等待中分区的派发推进:限流与容量准入全部通过后才释放分区并写入派发事件")
 class WaitingPartitionDispatcherTest {
 
   private final JobInstanceMapper jobInstanceMapper =
@@ -78,7 +80,8 @@ class WaitingPartitionDispatcherTest {
   }
 
   @Test
-  void stopsBeforeStateMutationWhenTenantDispatchLimitIsExhausted() {
+  @DisplayName("租户派发速率额度耗尽时提前返回,不释放分区,不写入派发事件,也不把实例置为运行中")
+  void shouldStopBeforeStateMutation_whenTenantDispatchLimitExhausted() {
     JobInstanceEntity instance = waitingInstance();
     when(jobInstanceMapper.selectById("tenant-a", 7L)).thenReturn(instance);
     when(tenantActionRateLimiter.tryConsume(eq("tenant-a"), any())).thenReturn(false);
@@ -92,7 +95,8 @@ class WaitingPartitionDispatcherTest {
   }
 
   @Test
-  void writesOutboxAndAdvancesParentStatesOnlyAfterPartitionRelease() {
+  @DisplayName("分区释放成功后写入派发事件,按租户回填实例运行参数,并把关联工作流运行推进为运行中")
+  void shouldWriteOutboxAndAdvanceParentStates_afterPartitionRelease() {
     JobInstanceEntity instance = waitingInstance();
     WorkflowRunEntity workflowRun = new WorkflowRunEntity();
     workflowRun.setTenantId("tenant-a");
@@ -124,7 +128,8 @@ class WaitingPartitionDispatcherTest {
   }
 
   @Test
-  void doesNotReleaseWhenFairShareGroupHasNoCapacity() {
+  @DisplayName("公平份额分组容量不足时拒绝释放分区,也不写入派发事件")
+  void shouldNotRelease_whenFairShareGroupHasNoCapacity() {
     JobInstanceEntity instance = waitingInstance();
     when(jobInstanceMapper.selectById("tenant-a", 7L)).thenReturn(instance);
     when(tenantActionRateLimiter.tryConsume(eq("tenant-a"), any())).thenReturn(true);
@@ -142,7 +147,8 @@ class WaitingPartitionDispatcherTest {
   }
 
   @Test
-  void doesNotReleaseWaitingJobWhenGlobalCapacityIsFull() {
+  @DisplayName("全局容量已满时直接放弃本次派发,不再继续公平份额容量判定")
+  void shouldNotReleaseWaitingJob_whenGlobalCapacityFull() {
     JobInstanceEntity instance = waitingInstance();
     when(jobInstanceMapper.selectById("tenant-a", 7L)).thenReturn(instance);
     when(tenantActionRateLimiter.tryConsume(eq("tenant-a"), any())).thenReturn(true);
@@ -155,7 +161,8 @@ class WaitingPartitionDispatcherTest {
   }
 
   @Test
-  void usesCurrentRunningParentAndDoesNotReconsumeGlobalAdmission() {
+  @DisplayName("数据库中的父实例已处于运行中时沿用最新快照,不重复占用全局容量,也不重复置为运行中")
+  void shouldUseCurrentRunningParentAndSkipGlobalAdmission_whenSnapshotOutdated() {
     JobInstanceEntity staleWaitingSnapshot = waitingInstance();
     JobInstanceEntity currentRunning = waitingInstance();
     currentRunning.setInstanceStatus(JobInstanceStatus.RUNNING.code());
@@ -175,7 +182,8 @@ class WaitingPartitionDispatcherTest {
   }
 
   @Test
-  void doesNotReleaseWhenCurrentParentIsTerminal() {
+  @DisplayName("数据库中的父实例已是取消终态时立即放弃,不消费租户速率额度,也不释放分区")
+  void shouldNotRelease_whenCurrentParentTerminal() {
     JobInstanceEntity staleWaitingSnapshot = waitingInstance();
     JobInstanceEntity cancelled = waitingInstance();
     cancelled.setInstanceStatus(JobInstanceStatus.CANCELLED.code());

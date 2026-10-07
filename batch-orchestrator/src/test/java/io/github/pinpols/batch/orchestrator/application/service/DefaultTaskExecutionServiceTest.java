@@ -16,6 +16,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -26,6 +27,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * collaborators without adding logic of its own.
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("任务执行服务: 创建, 派工, 心跳, 日志与状态更新的委托口径")
 class DefaultTaskExecutionServiceTest {
 
   @Mock
@@ -46,6 +48,7 @@ class DefaultTaskExecutionServiceTest {
   }
 
   @Test
+  @DisplayName("创建任务委托给任务创建服务并原样返回结果")
   void createTask_delegatesToCreationService() {
     JobTaskEntity task = new JobTaskEntity();
     when(taskCreationService.createTask(task)).thenReturn(task);
@@ -57,6 +60,7 @@ class DefaultTaskExecutionServiceTest {
   }
 
   @Test
+  @DisplayName("派工委托给任务分派服务并原样返回任务")
   void assignWorker_delegatesToAssignmentService() {
     JobTaskEntity task = new JobTaskEntity();
     when(taskAssignmentService.assignWorker("t1", 1L, "w1")).thenReturn(task);
@@ -68,6 +72,7 @@ class DefaultTaskExecutionServiceTest {
   }
 
   @Test
+  @DisplayName("续租任务委托给分派服务并透传其返回值")
   void renewTaskLease_delegatesToAssignmentService() {
     when(taskAssignmentService.renewTaskLease("t1", 1L, "w1", null)).thenReturn(true);
 
@@ -78,6 +83,7 @@ class DefaultTaskExecutionServiceTest {
   }
 
   @Test
+  @DisplayName("记录心跳委托给分派服务并原样返回结果")
   void recordHeartbeat_delegatesToAssignmentService() {
     var expected = new TaskAssignmentService.TaskHeartbeatResult(true, true);
     when(taskAssignmentService.recordHeartbeat("t1", 1L, "w1", "inv-1", "{}")).thenReturn(expected);
@@ -89,6 +95,7 @@ class DefaultTaskExecutionServiceTest {
   }
 
   @Test
+  @DisplayName("请求取消委托给分派服务并透传其返回值")
   void requestCancel_delegatesToAssignmentService() {
     when(taskAssignmentService.requestCancel("t1", 1L)).thenReturn(true);
 
@@ -99,6 +106,7 @@ class DefaultTaskExecutionServiceTest {
   }
 
   @Test
+  @DisplayName("更新任务状态委托给分派服务并原样返回任务")
   void updateTaskStatus_delegatesToAssignmentService() {
     JobTaskEntity task = new JobTaskEntity();
     when(taskAssignmentService.updateTaskStatus("t1", 1L, "RUNNING", null, null))
@@ -111,6 +119,7 @@ class DefaultTaskExecutionServiceTest {
   }
 
   @Test
+  @DisplayName("追加执行日志委托给分派服务并原样返回日志")
   void appendLog_delegatesToAssignmentService() {
     JobExecutionLogEntity log = new JobExecutionLogEntity();
     when(taskAssignmentService.appendLog(log)).thenReturn(log);
@@ -122,6 +131,7 @@ class DefaultTaskExecutionServiceTest {
   }
 
   @Test
+  @DisplayName("查询执行日志委托给分派服务并返回日志列表")
   void listLogs_delegatesToAssignmentService() {
     List<JobExecutionLogEntity> logs = List.of(new JobExecutionLogEntity());
     when(taskAssignmentService.listLogs("t1", 1L, 1L)).thenReturn(logs);
@@ -133,6 +143,7 @@ class DefaultTaskExecutionServiceTest {
   }
 
   @Test
+  @DisplayName("标记任务运行中委托给分派服务并原样返回任务")
   void markRunning_delegatesToAssignmentService() {
     Instant now = BatchDateTimeSupport.utcNow();
     JobTaskEntity task = new JobTaskEntity();
@@ -145,6 +156,7 @@ class DefaultTaskExecutionServiceTest {
   }
 
   @Test
+  @DisplayName("应用任务结果委托给结果服务并原样返回任务")
   void applyTaskOutcome_delegatesToOutcomeService() {
     TaskOutcomeCommand command = new TaskOutcomeCommand(
         "t1", 1L, null, true, null, null, null, null, null, null, null, null, null, null);
@@ -158,6 +170,7 @@ class DefaultTaskExecutionServiceTest {
   }
 
   @Test
+  @DisplayName("登记节点运行就绪委托给结果服务并原样返回记录")
   void recordNodeRunReady_delegatesToOutcomeService() {
     WorkflowNodeRunEntity nodeRun = new WorkflowNodeRunEntity();
     when(taskOutcomeService.recordNodeRunReady(1L, "N1", "EXPORT")).thenReturn(nodeRun);

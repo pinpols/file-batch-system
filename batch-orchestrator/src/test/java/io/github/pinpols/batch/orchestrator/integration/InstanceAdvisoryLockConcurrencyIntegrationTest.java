@@ -12,6 +12,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -43,6 +44,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("实例级咨询锁并发集成验证: 同实例读改写串行化无丢更新, 不同实例的锁互不阻塞")
 class InstanceAdvisoryLockConcurrencyIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
@@ -57,6 +59,7 @@ class InstanceAdvisoryLockConcurrencyIntegrationTest extends AbstractIntegration
   private static final String TENANT = "t1";
 
   @Test
+  @DisplayName("同一实例上的并发读改写被实例级咨询锁串行化, 无丢更新且最终计数等于并发线程数, 锁自身不产生死锁")
   void advisoryLock_serializesConcurrentRmwOnSameInstance_noLostUpdate_lockSelfNoDeadlock()
       throws Exception {
     String suffix = "adv-" + System.nanoTime();
@@ -108,6 +111,7 @@ class InstanceAdvisoryLockConcurrencyIntegrationTest extends AbstractIntegration
   }
 
   @Test
+  @DisplayName("不同实例的两把咨询锁互不阻塞, 两组并发读改写各自完成且各实例计数精确")
   void advisoryLock_differentInstances_locksDoNotBlockEachOther_eachRowCorrect() throws Exception {
     String suffixA = "advA-" + System.nanoTime();
     String suffixB = "advB-" + System.nanoTime();

@@ -18,6 +18,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** ADR-037 P1~P3 — 续跑模板断点恢复 / 完成幂等跳过 / 协作取消落 cancelled 的端到端单测(Import 模板)。 */
+@DisplayName("强类型 Import 断点续跑:逐批提交落点与恢复计数,覆盖完成幂等与中途取消终态")
 class SdkTypedImportCheckpointResumeTest {
 
   record ImportRequest(int rows) {}

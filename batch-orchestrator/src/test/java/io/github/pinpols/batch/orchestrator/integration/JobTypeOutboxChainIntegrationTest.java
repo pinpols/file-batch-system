@@ -12,6 +12,7 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -23,6 +24,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("作业类型与发件箱事件的联动链路,验证导入,导出,分发三类作业启动后各自写入匹配类型的事件记录")
 class JobTypeOutboxChainIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -34,7 +36,8 @@ class JobTypeOutboxChainIntegrationTest extends AbstractIntegrationTest {
   private JdbcTemplate jdbcTemplate;
 
   @Test
-  void importJobShouldWriteImportOutboxEvent() {
+  @DisplayName("导入类作业启动后,应至少写入一条导入类型的事件记录")
+  void shouldWriteImportOutboxEvent_whenImportJobLaunched() {
     LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
         jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
 
@@ -54,7 +57,8 @@ class JobTypeOutboxChainIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void exportJobShouldWriteExportOutboxEvent() {
+  @DisplayName("导出类作业启动后,应至少写入一条导出类型的事件记录")
+  void shouldWriteExportOutboxEvent_whenExportJobLaunched() {
     LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
         jdbcTemplate, TENANT, "EXPORT", "EXPORT", TriggerType.MANUAL);
 
@@ -74,7 +78,8 @@ class JobTypeOutboxChainIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void dispatchJobShouldWriteDispatchOutboxEvent() {
+  @DisplayName("分发类作业启动后,应至少写入一条分发类型的事件记录")
+  void shouldWriteDispatchOutboxEvent_whenDispatchJobLaunched() {
     LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
         jdbcTemplate, TENANT, "DISPATCH", "DISPATCH", TriggerType.EVENT);
 

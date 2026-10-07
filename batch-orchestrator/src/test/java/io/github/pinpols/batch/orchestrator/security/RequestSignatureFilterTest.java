@@ -21,6 +21,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("请求签名过滤器,验证开关,请求方法,密钥请求头与验签结果对放行或拒绝的影响")
 class RequestSignatureFilterTest {
 
   @Mock
@@ -51,7 +52,7 @@ class RequestSignatureFilterTest {
 
   @Test
   @DisplayName("开关关闭 → 直通,不验签")
-  void disabledPassthrough() throws Exception {
+  void shouldPassThroughWithoutVerification_whenFilterDisabled() throws Exception {
     newFilter(false).doFilter(post(true), new MockHttpServletResponse(), chain);
     verify(chain).doFilter(any(), any());
     verifyNoInteractions(verifier);
@@ -59,7 +60,7 @@ class RequestSignatureFilterTest {
 
   @Test
   @DisplayName("无 api_key(内部 secret 调用)→ 直通")
-  void noApiKeyPassthrough() throws Exception {
+  void shouldPassThrough_whenApiKeyHeaderAbsent() throws Exception {
     newFilter(true).doFilter(post(false), new MockHttpServletResponse(), chain);
     verify(chain).doFilter(any(), any());
     verifyNoInteractions(verifier);
@@ -67,7 +68,7 @@ class RequestSignatureFilterTest {
 
   @Test
   @DisplayName("GET 读请求 → 直通")
-  void getPassthrough() throws Exception {
+  void shouldPassThrough_whenRequestIsGetRead() throws Exception {
     MockHttpServletRequest req = new MockHttpServletRequest("GET", "/internal/tasks/10/claimed");
     req.addHeader(CommonConstants.BATCH_API_KEY_HEADER, "key-1");
     newFilter(true).doFilter(req, new MockHttpServletResponse(), chain);
@@ -77,7 +78,7 @@ class RequestSignatureFilterTest {
 
   @Test
   @DisplayName("启用+api_key+写方法+验签 OK → 放行")
-  void validProceeds() throws Exception {
+  void shouldProceed_whenSignatureVerificationSucceeds() throws Exception {
     when(verifier.verify(any(), anyLong())).thenReturn(Result.OK);
     newFilter(true).doFilter(post(true), new MockHttpServletResponse(), chain);
     verify(chain).doFilter(any(), any());
@@ -85,7 +86,7 @@ class RequestSignatureFilterTest {
 
   @Test
   @DisplayName("验签失败 → 401,不放行")
-  void invalidRejected() throws Exception {
+  void shouldRejectWith401_whenSignatureInvalid() throws Exception {
     when(verifier.verify(any(), anyLong())).thenReturn(Result.BAD_SIGNATURE);
     MockHttpServletResponse resp = new MockHttpServletResponse();
     newFilter(true).doFilter(post(true), resp, chain);
@@ -95,7 +96,7 @@ class RequestSignatureFilterTest {
 
   @Test
   @DisplayName("启用+api_key+chunked 超大 body → 413,不验签")
-  void oversizedChunkedBodyRejectedBeforeVerify() throws Exception {
+  void shouldRejectWith413_whenChunkedBodyExceedsLimit() throws Exception {
     MockHttpServletRequest req = new MockHttpServletRequest("POST", "/internal/tasks/10/report") {
       @Override
       public int getContentLength() {

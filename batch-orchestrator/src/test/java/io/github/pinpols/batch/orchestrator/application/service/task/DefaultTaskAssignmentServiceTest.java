@@ -52,6 +52,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * </ul>
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("任务分派服务: 派工资格校验, 租约续期与批量续租口径")
 class DefaultTaskAssignmentServiceTest {
 
   @Mock
@@ -98,7 +99,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("assignWorker: task 不存在 → null,不读 worker / 不调 CAS")
-  void assignTaskMissingReturnsNull() {
+  void shouldReturnNull_whenTaskMissing() {
     when(jobTaskMapper.selectById("ta", 100L)).thenReturn(null);
 
     assertThat(service.assignWorker("ta", 100L, "w1")).isNull();
@@ -108,7 +109,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("assignWorker: workerCode 为空 → 返 current,不读 worker")
-  void assignBlankWorkercodeReturnsCurrentUnchanged() {
+  void shouldReturnCurrent_whenWorkerCodeBlank() {
     JobTaskEntity task = task(100L, 1L, TaskStatus.READY.code());
     when(jobTaskMapper.selectById("ta", 100L)).thenReturn(task);
 
@@ -119,7 +120,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("assignWorker: worker 不在线 → 返 current,不 CAS")
-  void assignWorkerOfflineReturnsCurrent() {
+  void shouldReturnCurrent_whenWorkerOffline() {
     JobTaskEntity task = task(100L, 1L, TaskStatus.READY.code());
     when(jobTaskMapper.selectById("ta", 100L)).thenReturn(task);
     when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "w1"))
@@ -132,7 +133,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("assignWorker: worker DRAINING → 返 current,不 CAS")
-  void assignWorkerDrainingReturnsCurrent() {
+  void shouldReturnCurrent_whenWorkerDraining() {
     JobTaskEntity task = task(100L, 1L, TaskStatus.READY.code());
     when(jobTaskMapper.selectById("ta", 100L)).thenReturn(task);
     when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "w1"))
@@ -144,7 +145,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("assignWorker: 主租户同名 worker 已退役时继续走 shared-tenant fallback")
-  void assignWorkerFallsBackWhenPrimaryWorkerIsNotOnline() {
+  void shouldFallBackToSharedTenant_whenPrimaryWorkerNotOnline() {
     resourceProps.setSharedTenantFallback("default-tenant");
     JobTaskEntity initial = task(100L, 1L, TaskStatus.READY.code());
     JobTaskEntity claimed = task(100L, 2L, TaskStatus.RUNNING.code());
@@ -166,7 +167,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("assignWorker: workerGroup 与 partition group 不匹配 → 返 current")
-  void assignWorkerGroupMismatchReturnsCurrent() {
+  void shouldReturnCurrent_whenWorkerGroupMismatch() {
     JobTaskEntity task = task(100L, 1L, TaskStatus.READY.code());
     task.setJobPartitionId(50L);
     when(jobTaskMapper.selectById("ta", 100L)).thenReturn(task);
@@ -183,7 +184,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("assignWorker: CAS 失败 → 重读 DB 返回最新状态")
-  void assignCasConflictReturnsRefreshed() {
+  void shouldReturnRefreshedTask_whenAssignCasConflict() {
     JobTaskEntity initial = task(100L, 1L, TaskStatus.READY.code());
     JobTaskEntity refreshed = task(100L, 2L, TaskStatus.RUNNING.code());
     when(jobTaskMapper.selectById("ta", 100L)).thenReturn(initial, refreshed);
@@ -197,7 +198,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("assignWorker: 稳定资源池授权实例认领，CAS 后记录实际实例 ID")
-  void assignWorkerAcceptsConcreteInstanceFromAssignedPool() {
+  void shouldAssignWorker_whenInstanceBelongsToTargetPool() {
     JobTaskEntity initial = task(100L, 3L, TaskStatus.READY.code());
     initial.setAssignedWorkerCode("import-memory");
     JobTaskEntity claimed = task(100L, 4L, TaskStatus.RUNNING.code());
@@ -218,7 +219,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("assignWorker: 同组但不属于目标资源池的实例不能认领")
-  void assignWorkerRejectsConcreteInstanceFromDifferentPool() {
+  void shouldRejectWorker_whenInstanceBelongsToOtherPool() {
     JobTaskEntity initial = task(100L, 3L, TaskStatus.READY.code());
     initial.setAssignedWorkerCode("import-memory");
     when(jobTaskMapper.selectById("ta", 100L)).thenReturn(initial);
@@ -235,14 +236,14 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("renewTaskLease: task 不存在 → false")
-  void renewTaskMissing() {
+  void shouldReturnFalse_whenTaskMissingOnRenew() {
     when(jobTaskMapper.selectById("ta", 100L)).thenReturn(null);
     assertThat(service.renewTaskLease("ta", 100L, "w1", "inv-1")).isFalse();
   }
 
   @Test
   @DisplayName("renewTaskLease: task 无 partition → false")
-  void renewTaskWithoutPartition() {
+  void shouldReturnFalse_whenTaskHasNoPartition() {
     JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
     t.setJobPartitionId(null);
     when(jobTaskMapper.selectById("ta", 100L)).thenReturn(t);
@@ -251,7 +252,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("renewTaskLease: task 非 RUNNING → false")
-  void renewTaskNotRunning() {
+  void shouldReturnFalse_whenTaskNotRunning() {
     JobTaskEntity t = task(100L, 1L, TaskStatus.READY.code());
     t.setJobPartitionId(50L);
     t.setAssignedWorkerCode("w1");
@@ -261,7 +262,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("renewTaskLease: workerCode 不匹配 → false(防止跨 worker 续他人租)")
-  void renewWorkerMismatch() {
+  void shouldReturnFalse_whenWorkerCodeMismatch() {
     JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
     t.setJobPartitionId(50L);
     t.setAssignedWorkerCode("w-other");
@@ -271,7 +272,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("renewTaskLease: invocationId 缺失 → false(R3-P1-10)")
-  void renewMissingInvocation() {
+  void shouldReturnFalse_whenInvocationIdMissing() {
     JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
     t.setJobPartitionId(50L);
     t.setAssignedWorkerCode("w1");
@@ -284,7 +285,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("renewTaskLease: 全部前置通过 + mapper 命中 → true")
-  void renewSucceedsWhenAllChecksPass() {
+  void shouldReturnTrue_whenAllRenewChecksPass() {
     JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
     t.setJobPartitionId(50L);
     t.setAssignedWorkerCode("w1");
@@ -296,7 +297,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("renewTaskLease: mapper 返 0(并发被抢走)→ false")
-  void renewReturnsFalseWhenMapperMiss() {
+  void shouldReturnFalse_whenRenewUpdateMisses() {
     JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
     t.setJobPartitionId(50L);
     t.setAssignedWorkerCode("w1");
@@ -310,7 +311,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("recordHeartbeat: 续租失败 → leaseRenewed=false,不写 details / 不读取消标记")
-  void recordHeartbeatLeaseFails() {
+  void shouldReportNotRenewed_whenLeaseFails() {
     when(jobTaskMapper.selectById("ta", 100L)).thenReturn(null);
 
     var result = service.recordHeartbeat("ta", 100L, "w1", "inv-1", "{\"p\":1}");
@@ -322,7 +323,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("recordHeartbeat: 续租成功 + details 非空 → 写 details,回带 cancelRequested")
-  void recordHeartbeatWritesDetailsAndReadsCancel() {
+  void shouldWriteDetailsAndReportCancel_whenHeartbeatSucceeds() {
     JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
     t.setJobPartitionId(50L);
     t.setAssignedWorkerCode("w1");
@@ -339,7 +340,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("recordHeartbeat: details 为 null → 不写 details,仅续租 + 读取消标记")
-  void recordHeartbeatSkipsDetailsWhenNull() {
+  void shouldSkipDetails_whenHeartbeatDetailsNull() {
     JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
     t.setJobPartitionId(50L);
     t.setAssignedWorkerCode("w1");
@@ -357,14 +358,14 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("requestCancel: mapper 命中 RUNNING task → true")
-  void requestCancelMarksRunningTask() {
+  void shouldReturnTrue_whenCancellingRunningTask() {
     when(jobTaskMapper.requestCancel("ta", 100L)).thenReturn(1);
     assertThat(service.requestCancel("ta", 100L)).isTrue();
   }
 
   @Test
   @DisplayName("requestCancel: 非 RUNNING / 不存在 / 已请求 → false")
-  void requestCancelNoMatch() {
+  void shouldReturnFalse_whenCancelTargetNotRunning() {
     when(jobTaskMapper.requestCancel("ta", 100L)).thenReturn(0);
     assertThat(service.requestCancel("ta", 100L)).isFalse();
   }
@@ -373,7 +374,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("loadEffectiveConfig: 从 partition input_snapshot 暴露 typed 分区计划契约")
-  void loadEffectiveConfigExposesPartitionPlanContract() {
+  void shouldExposePartitionPlan_whenLoadingEffectiveConfig() {
     JobTaskEntity t = task(100L, 1L, TaskStatus.RUNNING.code());
     t.setJobInstanceId(10L);
     t.setJobPartitionId(50L);
@@ -428,7 +429,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("renewLeaseBatch: 一条 set-based SQL;结果与入参逐位对齐,缺席行=false")
-  void renewLeaseBatchMapsRowsBackToItems() {
+  void shouldMapRowsBackToItems_whenRenewingLeaseBatch() {
     var row1 = new io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseBatchRow();
     row1.setTenantId("ta");
     row1.setTaskId(1L);
@@ -458,7 +459,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("renewLeaseBatch: 入参缺失项(R3-P1-10 invocationId 等)Java 侧判 false,不进 SQL")
-  void renewLeaseBatchFiltersInvalidItemsBeforeSql() {
+  void shouldFilterInvalidItems_whenRenewingLeaseBatch() {
     var results = service.renewLeaseBatch(List.of(
         new TaskAssignmentService.LeaseRenewCommand("ta", 1L, "w1", null),
         new TaskAssignmentService.LeaseRenewCommand("ta", 2L, "w1", "  "),
@@ -471,7 +472,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("renewLeaseBatch: 空入参 → 空结果,不触 SQL")
-  void renewLeaseBatchEmptyInput() {
+  void shouldReturnEmpty_whenLeaseRenewInputEmpty() {
     assertThat(service.renewLeaseBatch(List.of())).isEmpty();
     assertThat(service.renewLeaseBatch(null)).isEmpty();
     verify(jobPartitionMapper, never()).renewLeaseBatch(any(), any(), anyString());
@@ -481,7 +482,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("assignWorker(memo): 同一批内同 (tenant,workerCode) 只查一次 worker_registry(含 miss)")
-  void assignWorkerMemoDeduplicatesWorkerRegistryLookup() {
+  void shouldLookUpWorkerOnce_whenAssigningWithMemo() {
     JobTaskEntity t1 = task(101L, 1L, TaskStatus.READY.code());
     JobTaskEntity t2 = task(102L, 1L, TaskStatus.READY.code());
     when(jobTaskMapper.selectById("ta", 101L)).thenReturn(t1);
@@ -501,7 +502,7 @@ class DefaultTaskAssignmentServiceTest {
 
   @Test
   @DisplayName("updateTaskStatus: task 不存在 → null,不写表")
-  void updateTaskMissing() {
+  void shouldReturnNull_whenUpdatingMissingTask() {
     when(jobTaskMapper.selectById(eq("ta"), anyLong())).thenReturn(null);
 
     assertThat(service.updateTaskStatus("ta", 100L, TaskStatus.SUCCESS.code(), null, null))

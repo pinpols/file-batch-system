@@ -59,6 +59,7 @@ import org.springframework.test.context.TestConstructor;
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
+@DisplayName("分片汇聚晋级闸门,校验真实数据库上实例终态判定,计数幂等与失败分片重试重算")
 class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";

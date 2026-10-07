@@ -16,6 +16,7 @@ import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -23,6 +24,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 /** 单元测试：{@link TaskTimeoutEnforcer} startToClose 超时软取消。 */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("任务超时执行器:关闭中跳过扫描,无候选时不取消,对每个超时任务各发起一次取消并累计取消计数")
 class TaskTimeoutEnforcerTest {
 
   @Mock
@@ -53,7 +55,8 @@ class TaskTimeoutEnforcerTest {
   }
 
   @Test
-  void skipsScanWhenDraining() {
+  @DisplayName("优雅关闭进行中时跳过本轮扫描,不查询任何超时任务候选")
+  void shouldSkipScan_whenDraining() {
     when(gracefulShutdown.isDraining()).thenReturn(true);
 
     enforcer.enforce();
@@ -62,7 +65,8 @@ class TaskTimeoutEnforcerTest {
   }
 
   @Test
-  void noCancelWhenNoCandidates() {
+  @DisplayName("没有超时任务候选时不做任何取消操作")
+  void shouldNotRequestCancel_whenNoTimeoutCandidates() {
     when(gracefulShutdown.isDraining()).thenReturn(false);
     when(governance.timeout()).thenReturn(timeoutProps);
     when(jobTaskMapper.selectTaskTimeoutCandidates(anyInt())).thenReturn(List.of());
@@ -73,7 +77,8 @@ class TaskTimeoutEnforcerTest {
   }
 
   @Test
-  void requestsCancelForEachTimedOutTask() {
+  @DisplayName("每个超时任务各发起一次取消请求,取消计数等于超时任务数量")
+  void shouldRequestCancelForEachTimedOutTask_whenCandidatesPresent() {
     when(gracefulShutdown.isDraining()).thenReturn(false);
     when(governance.timeout()).thenReturn(timeoutProps);
     when(jobTaskMapper.selectTaskTimeoutCandidates(anyInt()))

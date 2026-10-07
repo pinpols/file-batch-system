@@ -10,6 +10,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.QuotaRuntimeStateEntit
 import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.QuotaRuntimeResetScheduler;
 import io.github.pinpols.batch.orchestrator.mapper.QuotaRuntimeStateMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -30,6 +31,7 @@ import org.springframework.test.context.TestPropertySource;
       "batch.resource-scheduler.quota-reset-sliding-window-hours=2",
       "batch.resource-scheduler.quota-reset-scan-interval-millis=600000"
     })
+@DisplayName("配额运行时状态的重置调度与预留评估集成行为,覆盖配置绑定,过期对账与突发额度判定")
 class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
@@ -45,14 +47,16 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
   private ResourceSchedulerProperties resourceSchedulerProperties;
 
   @Test
-  void resourceSchedulerPropertiesAreLoadedCorrectly() {
+  @DisplayName("配额重置相关配置项按测试属性正确绑定,开关,滑动窗口小时数与扫描间隔均生效")
+  void shouldBindQuotaResetProperties_whenConfiguredViaTestProperties() {
     assertThat(resourceSchedulerProperties.isQuotaResetEnabled()).isTrue();
     assertThat(resourceSchedulerProperties.getQuotaResetSlidingWindowHours()).isEqualTo(2);
     assertThat(resourceSchedulerProperties.getQuotaResetScanIntervalMillis()).isEqualTo(600000L);
   }
 
   @Test
-  void schedulerReconcileResetsExpiredSlidingWindowState() {
+  @DisplayName("滑动窗口已过期的配额状态在调度对账后被重置,借用峰值归零")
+  void shouldResetExpiredSlidingWindowState_whenSchedulerReconciles() {
     String ownerCode = "sched-reset-" + BatchDateTimeSupport.utcEpochMillis();
 
     QuotaRuntimeStateEntity expired = new QuotaRuntimeStateEntity(
@@ -80,7 +84,8 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void schedulerReconcileHandlesNoExpiredStatesGracefully() {
+  @DisplayName("不存在已过期状态时调度对账不改动数据,未过期状态的借用峰值保持不变")
+  void shouldKeepUnexpiredState_whenSchedulerReconcilesWithoutExpiredWindows() {
     // 数据库中该 owner 的所有状态要么未过期要么不存在
     String ownerCode = "sched-no-expired-" + BatchDateTimeSupport.utcEpochMillis();
 
@@ -111,7 +116,8 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void evaluateAndReserveWithinWindowHoursAllows() {
+  @DisplayName("活跃数与请求量未超出基础额度加突发额度时,预留申请被允许")
+  void shouldAllowReservation_whenRequestWithinBurstCapacity() {
     String ownerCode = "sched-eval-" + BatchDateTimeSupport.utcEpochMillis();
 
     // base=10, burst=5, active=8, requested=1 — within cap
@@ -131,7 +137,8 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void evaluateAndReserveOverBurstBlocks() {
+  @DisplayName("活跃数超出基础额度导致借用数超过突发上限时,预留申请被拒绝并返回非空原因")
+  void shouldBlockReservation_whenBorrowedCountExceedsBurstLimit() {
     String ownerCode = "sched-burst-" + BatchDateTimeSupport.utcEpochMillis();
 
     // base=5, burst=2, active=10, requested=1 → borrowed=6 > burst=2

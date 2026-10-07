@@ -28,6 +28,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * </ul>
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("流程终态出箱服务: 终态白名单判定与终态事件落库")
 class WorkflowTerminalOutboxServiceTest {
 
   @Mock
@@ -44,7 +45,7 @@ class WorkflowTerminalOutboxServiceTest {
 
   @Test
   @DisplayName("isTerminal: SUCCESS / FAILED / TERMINATED / *_DRY_RUN 都是终态")
-  void terminalWhitelist() {
+  void shouldBeTerminal_whenStatusInTerminalWhitelist() {
     assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.SUCCESS.code()))
         .isTrue();
     assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.FAILED.code()))
@@ -59,7 +60,7 @@ class WorkflowTerminalOutboxServiceTest {
 
   @Test
   @DisplayName("isTerminal: RUNNING / CREATED / null / 未知 → 非终态")
-  void nonTerminal() {
+  void shouldBeNonTerminal_whenStatusRunningCreatedOrUnknown() {
     assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.RUNNING.code()))
         .isFalse();
     assertThat(WorkflowTerminalOutboxService.isTerminal(WorkflowRunStatus.CREATED.code()))
@@ -72,21 +73,21 @@ class WorkflowTerminalOutboxServiceTest {
 
   @Test
   @DisplayName("workflowRun=null → 不写表")
-  void skipWhenWorkflowRunNull() {
+  void shouldSkip_whenWorkflowRunMissing() {
     service.writeTerminalEvent(null, WorkflowRunStatus.SUCCESS.code(), Instant.now());
     verify(domainEventPublisher, never()).publish(any());
   }
 
   @Test
   @DisplayName("非终态 status → 不写表(白名单守护)")
-  void skipWhenStatusNonTerminal() {
+  void shouldSkip_whenStatusNotTerminal() {
     service.writeTerminalEvent(workflowRun(), WorkflowRunStatus.RUNNING.code(), Instant.now());
     verify(domainEventPublisher, never()).publish(any());
   }
 
   @Test
   @DisplayName("SUCCESS 终态 → 落 outbox + payload/aggregate/event_type 完整")
-  void writesOutboxForSuccess() {
+  void shouldPublishTerminalEvent_whenStatusIsSuccess() {
     WorkflowRunEntity run = workflowRun();
     Instant finished = Instant.parse("2026-05-20T10:00:00Z");
     service.writeTerminalEvent(run, WorkflowRunStatus.SUCCESS.code(), finished);
@@ -108,7 +109,7 @@ class WorkflowTerminalOutboxServiceTest {
 
   @Test
   @DisplayName("finishedAt=null → payload.finishedAt 为 null,不抛")
-  void handlesNullFinishedAt() {
+  void shouldPublishWithNullFinishedAt_whenFinishedAtMissing() {
     WorkflowRunEntity run = workflowRun();
     service.writeTerminalEvent(run, WorkflowRunStatus.FAILED.code(), null);
 

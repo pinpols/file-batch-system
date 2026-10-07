@@ -15,6 +15,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -31,6 +32,7 @@ import org.springframework.transaction.support.TransactionTemplate;
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
+@DisplayName("全局活跃作业硬上限在真实数据库事务下的并发准入互斥行为")
 class GlobalJobAdmissionConcurrencyIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT_ID = "t1";
@@ -49,7 +51,8 @@ class GlobalJobAdmissionConcurrencyIntegrationTest extends AbstractIntegrationTe
   }
 
   @Test
-  void concurrentAdmissionAllowsOnlyOneTransactionToConsumeLastSlot() throws Exception {
+  @DisplayName("两个事务同时争夺最后一个全局准入名额时仅一方被接纳,另一事务停留在已创建状态,活跃计数恰好增加一")
+  void shouldAdmitOnlyOneTransaction_whenTwoTransactionsRaceForLastSlot() throws Exception {
     long baseline = jobInstanceMapper.countActiveAll();
     GlobalJobAdmissionGuard admissionGuard = admissionGuardWithCap(baseline + 1);
     String suffix = "global-admission-" + System.nanoTime();

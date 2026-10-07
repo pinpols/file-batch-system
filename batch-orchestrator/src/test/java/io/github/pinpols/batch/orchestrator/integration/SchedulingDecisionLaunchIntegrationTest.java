@@ -12,6 +12,7 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -24,6 +25,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("调度决策派发,验证存在在线执行节点匹配作业组时才产生派发事件,否则分区保持等待且不派发")
 class SchedulingDecisionLaunchIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -35,6 +37,7 @@ class SchedulingDecisionLaunchIntegrationTest extends AbstractIntegrationTest {
   private JdbcTemplate jdbcTemplate;
 
   @Test
+  @DisplayName("存在在线执行节点匹配作业组时,派发事件至少落库一条")
   void shouldCreateOutboxWhenWorkerMatchesWorkerGroup() {
     LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
         jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.SCHEDULED);
@@ -55,6 +58,7 @@ class SchedulingDecisionLaunchIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("无在线执行节点匹配作业组时,新增派发事件为零且分区保持等待")
   void shouldNotWriteDispatchOutboxWhenNoOnlineWorkerForWorkerGroup() {
     long outboxBefore =
         LaunchIntegrationFixture.countOutboxByEventType(jdbcTemplate, TENANT, "IMPORT");

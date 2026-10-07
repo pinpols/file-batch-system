@@ -14,13 +14,16 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+@DisplayName("校验失败出箱服务: 逐条落库, 事件键去重与空入参口径")
 class VerifierFailureOutboxServiceTest {
 
   @Test
-  void writesOneOutboxRowPerFailure() {
+  @DisplayName("每条校验失败写一条事件, 事件类型, 聚合标识与载荷版本一致")
+  void shouldWriteOneEventPerFailure_whenVerificationFails() {
     DomainEventPublisher publisher = mock(DomainEventPublisher.class);
     VerifierFailureOutboxService service = new VerifierFailureOutboxService(publisher);
     Map<String, Object> failureA = new LinkedHashMap<>();
@@ -57,7 +60,8 @@ class VerifierFailureOutboxServiceTest {
   }
 
   @Test
-  void eventKeyIncludesIndexSoSameReasonDoesNotCollide() {
+  @DisplayName("相同原因的多个失败按下标区分事件键, 不互相覆盖")
+  void shouldIncludeIndexInEventKey_whenReasonsRepeat() {
     DomainEventPublisher publisher = mock(DomainEventPublisher.class);
     VerifierFailureOutboxService service = new VerifierFailureOutboxService(publisher);
     Map<String, Object> a = Map.of("code", "DUP_CODE", "message", "first", "evidence", Map.of());
@@ -81,7 +85,8 @@ class VerifierFailureOutboxServiceTest {
   }
 
   @Test
-  void noopWhenFailuresNull() {
+  @DisplayName("失败清单为空值时写入零条且不发布事件")
+  void shouldWriteNothing_whenFailuresMissing() {
     DomainEventPublisher publisher = mock(DomainEventPublisher.class);
     VerifierFailureOutboxService service = new VerifierFailureOutboxService(publisher);
     TaskOutcomeCommand command =
@@ -94,7 +99,8 @@ class VerifierFailureOutboxServiceTest {
   }
 
   @Test
-  void noopWhenFailuresEmpty() {
+  @DisplayName("失败清单为空列表时写入零条且不发布事件")
+  void shouldWriteNothing_whenFailuresEmpty() {
     DomainEventPublisher publisher = mock(DomainEventPublisher.class);
     VerifierFailureOutboxService service = new VerifierFailureOutboxService(publisher);
     TaskOutcomeCommand command = TaskOutcomeCommand.builder()
@@ -111,7 +117,8 @@ class VerifierFailureOutboxServiceTest {
   }
 
   @Test
-  void skipsNullFailureEntries() {
+  @DisplayName("清单中的空条目被跳过, 只写入有效条目")
+  void shouldSkipNullEntries_whenWritingFailures() {
     DomainEventPublisher publisher = mock(DomainEventPublisher.class);
     VerifierFailureOutboxService service = new VerifierFailureOutboxService(publisher);
     Map<String, Object> good = Map.of("code", "X", "message", "y", "evidence", Map.of());

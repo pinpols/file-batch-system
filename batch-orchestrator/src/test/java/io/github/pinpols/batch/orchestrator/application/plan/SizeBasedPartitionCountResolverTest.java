@@ -6,12 +6,15 @@ import io.github.pinpols.batch.common.enums.ShardStrategy;
 import io.github.pinpols.batch.orchestrator.config.PersistenceGranularityProperties;
 import jakarta.validation.Validation;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("按大小切分数量解析器: 目标条数优先, 分档策略与参数校验口径")
 class SizeBasedPartitionCountResolverTest {
 
   @Test
-  void explicitTargetKeepsPriorityWhenTierPolicyIsEnabled() {
+  @DisplayName("显式目标条数优先于分档策略, 按总条数除以目标条数得到分区数")
+  void shouldKeepExplicitTarget_whenTierPolicyEnabled() {
     SizeBasedPartitionCountResolver resolver = resolver(true);
 
     int count = resolver.resolve(
@@ -23,7 +26,8 @@ class SizeBasedPartitionCountResolverTest {
   }
 
   @Test
-  void disabledPolicyKeepsLegacyFallback() {
+  @DisplayName("分档策略关闭时沿用旧的回退逻辑, 解析结果为零")
+  void shouldKeepLegacyFallback_whenPolicyDisabled() {
     SizeBasedPartitionCountResolver resolver = resolver(false);
 
     assertThat(
@@ -32,7 +36,8 @@ class SizeBasedPartitionCountResolverTest {
   }
 
   @Test
-  void enabledPolicyUsesCompactStandardAndLargeItemTiers() {
+  @DisplayName("启用分档策略时按条数档位分别解析出对应的分区数")
+  void shouldUseItemTiers_whenPolicyEnabled() {
     SizeBasedPartitionCountResolver resolver = resolver(true);
 
     assertThat(
@@ -47,7 +52,8 @@ class SizeBasedPartitionCountResolverTest {
   }
 
   @Test
-  void enabledPolicyUsesByteTierWhenItemEstimateIsMissing() {
+  @DisplayName("缺少条数估算时改按文件大小档位解析分区数")
+  void shouldUseByteTier_whenItemEstimateMissing() {
     SizeBasedPartitionCountResolver resolver = resolver(true);
 
     assertThat(resolver.resolve(
@@ -59,7 +65,8 @@ class SizeBasedPartitionCountResolverTest {
   }
 
   @Test
-  void invalidTierConfigurationIsRejectedByBeanValidation() {
+  @DisplayName("分档阈值配置非法时被参数校验拒绝并指出字段名")
+  void shouldRejectInvalidTierConfig_whenBeanValidationRuns() {
     PersistenceGranularityProperties properties = new PersistenceGranularityProperties();
     properties.setLargeTargetItems(0);
 

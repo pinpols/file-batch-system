@@ -14,6 +14,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** ADR-036 Process 模板 {@link SdkAbstractProcessHandler} 单测(经基类 execute 模板序驱动)。 */
+@DisplayName("Process 模板基类:转换跳过与分批回写,覆盖默认批量、异常失败与流关闭")
 class SdkAbstractProcessHandlerTest {
 
   /** 每次执行用<b>独立</b>上下文(ADR-037:context 默认带内存断点协调器,跑完会落 completed 断点;共享 context 会让后续执行被幂等跳过)。 */

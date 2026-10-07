@@ -20,10 +20,12 @@ import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 
+@DisplayName("数据库配额运行态服务的准入判定,快照查询与过期状态回收")
 class DatabaseQuotaRuntimeStateServiceTest {
 
   private static final class ReservationSpec {
@@ -113,6 +115,7 @@ class DatabaseQuotaRuntimeStateServiceTest {
   // ── evaluateAndReserve — guard conditions ─────────────────────────────────
 
   @Test
+  @DisplayName("租户标识为空时不参与配额判定直接放行")
   void shouldAllowWhenTenantIdIsBlank() {
     ResourceCheck result = service.evaluateAndReserve(new ReservationSpec()
         .tenantId("")
@@ -125,6 +128,7 @@ class DatabaseQuotaRuntimeStateServiceTest {
   }
 
   @Test
+  @DisplayName("基础配额上限为零时直接放行")
   void shouldAllowWhenBaseCapIsZero() {
     ResourceCheck result = service.evaluateAndReserve(new ReservationSpec()
         .baseCap(0)
@@ -136,6 +140,7 @@ class DatabaseQuotaRuntimeStateServiceTest {
   }
 
   @Test
+  @DisplayName("基础配额上限为负数时直接放行")
   void shouldAllowWhenBaseCapIsNegative() {
     ResourceCheck result = service.evaluateAndReserve(new ReservationSpec()
         .baseCap(-5)
@@ -149,6 +154,7 @@ class DatabaseQuotaRuntimeStateServiceTest {
   // ── evaluateAndReserve — NONE policy ──────────────────────────────────────
 
   @Test
+  @DisplayName("不重置策略下已用与申请量之和未超基础上限时放行")
   void shouldAllowWhenNonePolicyAndWithinCap() {
     // baseCap=10, burst=0, active=5, requested=1 → 5+1=6 ≤ 10
     ResourceCheck result = service.evaluateAndReserve(
@@ -157,6 +163,7 @@ class DatabaseQuotaRuntimeStateServiceTest {
   }
 
   @Test
+  @DisplayName("不重置策略下已用与申请量之和超过基础上限时拒绝")
   void shouldBlockWhenNonePolicyAndOverCap() {
     // baseCap=10, burst=0, active=10, requested=1 → 11 > 10
     ResourceCheck result = service.evaluateAndReserve(new ReservationSpec()
@@ -169,6 +176,7 @@ class DatabaseQuotaRuntimeStateServiceTest {
   }
 
   @Test
+  @DisplayName("不重置策略下叠加突发额度后总量未超合并上限时放行")
   void shouldAllowWhenNonePolicyWithBurstAndWithinCombinedCap() {
     // baseCap=10, burst=5, combined=15, active=12, requested=1 → 13 ≤ 15
     ResourceCheck result = service.evaluateAndReserve(
@@ -177,6 +185,7 @@ class DatabaseQuotaRuntimeStateServiceTest {
   }
 
   @Test
+  @DisplayName("不重置策略下叠加突发额度后总量超过合并上限时拒绝")
   void shouldBlockWhenNonePolicyWithBurstAndOverCombinedCap() {
     // baseCap=10, burst=5, combined=15, active=15, requested=1 → 16 > 15
     ResourceCheck result = service.evaluateAndReserve(
@@ -187,6 +196,7 @@ class DatabaseQuotaRuntimeStateServiceTest {
   // ── evaluateAndReserve — SLIDING_WINDOW policy ────────────────────────────
 
   @Test
+  @DisplayName("滑动窗口策略下借用额度未超突发上限时放行并写入状态记录")
   void shouldAllowWhenSlidingWindowPolicyAndBorrowedBelowBurst() {
     when(quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", "job-sw"))
         .thenReturn(null);
@@ -207,6 +217,7 @@ class DatabaseQuotaRuntimeStateServiceTest {
   }
 
   @Test
+  @DisplayName("滑动窗口策略下借用额度超过突发上限时拒绝")
   void shouldBlockWhenSlidingWindowPolicyAndBorrowedExceedsBurst() {
     when(quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", "job-sw"))
         .thenReturn(null);
@@ -227,6 +238,7 @@ class DatabaseQuotaRuntimeStateServiceTest {
   }
 
   @Test
+  @DisplayName("滑动窗口策略下已用与申请量之和未超基础上限时放行")
   void shouldAllowWhenActivePlusRequestedWithinBaseCap() {
     when(quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner(
             anyString(), anyString(), anyString()))
@@ -250,6 +262,7 @@ class DatabaseQuotaRuntimeStateServiceTest {
   // ── evaluateAndReserve — CALENDAR_DAY policy ──────────────────────────────
 
   @Test
+  @DisplayName("自然日重置策略下借用额度未超突发上限时放行")
   void shouldAllowWhenCalendarDayPolicyAndBorrowedBelowBurst() {
     when(quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", "job-cal"))
         .thenReturn(null);
@@ -268,6 +281,7 @@ class DatabaseQuotaRuntimeStateServiceTest {
   }
 
   @Test
+  @DisplayName("本次借用高于已有峰值时写入更新后的峰值状态记录")
   void shouldUpdatePeakBorrowedCountWhenHigherBorrowDetected() {
     QuotaRuntimeStateEntity existingState = new QuotaRuntimeStateEntity(
         null,
@@ -301,7 +315,8 @@ class DatabaseQuotaRuntimeStateServiceTest {
   }
 
   @Test
-  void expiredPersistedWindowIsRefreshedAndReservedInOneCas() {
+  @DisplayName("已过期的持久化窗口在单次写入中完成刷新与额度预留,峰值与版本号同步更新")
+  void shouldRefreshExpiredWindowAndReserve_whenPersistedWindowHasExpired() {
     Instant old = Instant.now().minusSeconds(172800);
     var state = new QuotaRuntimeStateEntity(
         1L,
@@ -343,6 +358,7 @@ class DatabaseQuotaRuntimeStateServiceTest {
   // ── describe() ────────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("查询快照时租户标识为空返回默认值,峰值为零且剩余突发等于突发上限")
   void shouldReturnDefaultSnapshotWhenTenantIdIsBlank() {
     QuotaRuntimeStateService.QuotaRuntimeSnapshot snap =
         service.describe(new QuotaRuntimeStateService.QuotaDescribeRequest(
@@ -357,6 +373,7 @@ class DatabaseQuotaRuntimeStateServiceTest {
   }
 
   @Test
+  @DisplayName("突发上限为零或策略为不重置时返回默认快照,峰值归零")
   void shouldReturnDefaultSnapshotWhenBurstLimitZeroOrNone() {
     QuotaRuntimeStateService.QuotaRuntimeSnapshot snap =
         service.describe(new QuotaRuntimeStateService.QuotaDescribeRequest(
@@ -370,6 +387,7 @@ class DatabaseQuotaRuntimeStateServiceTest {
   }
 
   @Test
+  @DisplayName("没有状态记录时返回默认快照,峰值为零且剩余突发等于突发上限")
   void shouldReturnDefaultSnapshotWhenNoStateRecord() {
     when(quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("t1", "JOB", "job-001"))
         .thenReturn(null);
@@ -388,6 +406,7 @@ class DatabaseQuotaRuntimeStateServiceTest {
   // ── reconcileExpiredStates() ───────────────────────────────────────────────
 
   @Test
+  @DisplayName("没有过期状态时只做过期查询,不插入也不更新任何状态")
   void shouldReconcileNoExpiredStatesGracefully() {
     when(quotaRuntimeStateMapper.selectExpired(any(Instant.class))).thenReturn(List.of());
 
@@ -399,6 +418,7 @@ class DatabaseQuotaRuntimeStateServiceTest {
   }
 
   @Test
+  @DisplayName("已过期的滑动窗口状态被重置并重新写入")
   void shouldResetExpiredSlidingWindowState() {
     QuotaRuntimeStateEntity expired = new QuotaRuntimeStateEntity(
         null,

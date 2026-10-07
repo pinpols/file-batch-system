@@ -34,6 +34,7 @@ import io.github.pinpols.batch.orchestrator.mapper.RetryScheduleMapper;
 import io.github.pinpols.batch.testing.TestConstants.DeadLetter;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -41,6 +42,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 
+@DisplayName("重试治理服务: 重试计划生成, 死信转投与死信重放口径")
 class DefaultRetryGovernanceServiceTest {
 
   private RetryScheduleMapper retryScheduleMapper;
@@ -97,6 +99,7 @@ class DefaultRetryGovernanceServiceTest {
   // ── scheduleRetryIfNecessary — null guards ────────────────────────────────
 
   @Test
+  @DisplayName("任务为空时不做重试调度, 返回未排程")
   void shouldReturnFalseWhenTaskIsNull() {
     boolean result =
         service.scheduleRetryIfNecessary(null, partition(1L, 0), jobInstance(1L), "ERR", "err");
@@ -104,6 +107,7 @@ class DefaultRetryGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("分区为空时不做重试调度, 返回未排程")
   void shouldReturnFalseWhenPartitionIsNull() {
     boolean result =
         service.scheduleRetryIfNecessary(task("t1", 1L, 1L), null, jobInstance(1L), "ERR", "err");
@@ -111,6 +115,7 @@ class DefaultRetryGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("作业实例为空时不做重试调度, 返回未排程")
   void shouldReturnFalseWhenJobInstanceIsNull() {
     boolean result =
         service.scheduleRetryIfNecessary(task("t1", 1L, 1L), partition(1L, 0), null, "ERR", "err");
@@ -120,6 +125,7 @@ class DefaultRetryGovernanceServiceTest {
   // ── scheduleRetryIfNecessary — NONE policy → dead letter ─────────────────
 
   @Test
+  @DisplayName("重试策略为不重试时直接生成死信, 不写重试计划")
   void shouldCreateDeadLetterWhenRetryPolicyIsNone() {
     when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "NONE", 3));
 
@@ -132,6 +138,7 @@ class DefaultRetryGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("最大重试次数为零时生成死信, 不写重试计划")
   void shouldCreateDeadLetterWhenMaxRetryCountZero() {
     when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 0));
 
@@ -145,6 +152,7 @@ class DefaultRetryGovernanceServiceTest {
   // ── scheduleRetryIfNecessary — retry count exhausted ─────────────────────
 
   @Test
+  @DisplayName("重试次数已达上限时生成死信, 不写重试计划")
   void shouldCreateDeadLetterWhenRetryCountExhausted() {
     when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 2));
 
@@ -160,6 +168,7 @@ class DefaultRetryGovernanceServiceTest {
   // ── scheduleRetryIfNecessary — schedule retry ─────────────────────────────
 
   @Test
+  @DisplayName("生成重试计划时状态为等待, 次数递增并带上错误码与下次重试时间")
   void shouldInsertRetryScheduleWithCorrectStatusAndDedup() {
     when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 3));
 
@@ -181,6 +190,7 @@ class DefaultRetryGovernanceServiceTest {
   // 3 个畸形夹具任务在 dead_letter 无限循环(653 行 / replay_count 恒 1)。对照上面同 FIXED/3
   // 策略下可重试码会 insert retry_schedule,这里永久码必须 false + BUSINESS 死信 + 不排重试。
   @ParameterizedTest
+  @DisplayName("导入类永久失败错误直接生成业务死信, 不排重试")
   @ValueSource(strings = {"IMPORT_PARSE_FAILED", "IMPORT_PARSE_EMPTY", "IMPORT_LOAD_FAILED"})
   void shouldDeadLetterAsBusinessForPermanentImportErrors(String errorCode) {
     when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 3));
@@ -198,6 +208,7 @@ class DefaultRetryGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("作业定义不存在时使用默认重试策略并生成重试计划")
   void shouldUseDefaultRetryPolicyWhenJobDefinitionNotFound() {
     when(jobDefinitionMapper.selectById(anyLong())).thenReturn(null);
 
@@ -209,6 +220,7 @@ class DefaultRetryGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("作业定义标识为空时使用默认重试策略并生成重试计划")
   void shouldUseDefaultRetryPolicyWhenJobDefinitionIdIsNull() {
     JobInstanceEntity jobInst = jobInstance(null);
     boolean result = service.scheduleRetryIfNecessary(
@@ -220,6 +232,7 @@ class DefaultRetryGovernanceServiceTest {
   // ── replayDeadLetter — guard conditions ──────────────────────────────────
 
   @Test
+  @DisplayName("死信不存在时重放抛出业务异常")
   void shouldThrowWhenDeadLetterNotFound() {
     when(deadLetterTaskMapper.selectById("t1", 999L)).thenReturn(null);
 
@@ -229,6 +242,7 @@ class DefaultRetryGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("死信状态不允许重放时抛出业务异常")
   void shouldThrowWhenDeadLetterNotReplayable() {
     DeadLetterTaskEntity dl = deadLetter(1L, "t1", "REPLAYING");
     when(deadLetterTaskMapper.selectById("t1", 1L)).thenReturn(dl);
@@ -239,6 +253,7 @@ class DefaultRetryGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("死信重放认领未命中时抛出并发冲突异常")
   void shouldThrowWhenDeadLetterReplayConcurrencyConflict() {
     DeadLetterTaskEntity dl = deadLetter(1L, "t1", DeadLetter.NEW);
     when(deadLetterTaskMapper.selectById("t1", 1L)).thenReturn(dl);
@@ -251,6 +266,7 @@ class DefaultRetryGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("死信来源类型不是分区时重放抛出业务异常")
   void shouldThrowWhenDeadLetterSourceTypeIsNotJobPartition() {
     DeadLetterTaskEntity dl = deadLetter(1L, "t1", DeadLetter.NEW);
     dl.setSourceType("JOB_TASK");
@@ -265,6 +281,7 @@ class DefaultRetryGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("死信对应分区行缺失时放弃重放并标记为已放弃")
   void shouldGiveUpWhenDeadLetterPartitionRowMissing() {
     DeadLetterTaskEntity dl = deadLetter(1L, "t1", DeadLetter.NEW);
     when(deadLetterTaskMapper.selectById("t1", 1L)).thenReturn(dl);
@@ -284,6 +301,7 @@ class DefaultRetryGovernanceServiceTest {
   // ── dispatchDueRetries — no retries ──────────────────────────────────────
 
   @Test
+  @DisplayName("没有到期的重试计划时不做任何处理")
   void shouldDoNothingWhenNoRetrySchedulesDue() {
     when(retryScheduleMapper.selectByQuery(any())).thenReturn(List.of());
 
@@ -295,6 +313,7 @@ class DefaultRetryGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("重试计划认领未命中时跳过该条, 不读取分区")
   void shouldSkipRetryWhenMarkRunningFails() {
     RetryScheduleEntity schedule = new RetryScheduleEntity();
     schedule.setId(1L);

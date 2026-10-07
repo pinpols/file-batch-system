@@ -10,6 +10,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -25,6 +26,7 @@ import org.springframework.web.client.RestClient;
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {"batch.security.bypass-mode=true", "batch.request-signing.enabled=true"})
+@DisplayName("请求验签过滤器集成:验证真实 HTTP 链路上携带接口密钥的写请求在未签名与签名被篡改时返回未授权,合法签名放行至路由层")
 class RequestSigningWebIntegrationTest extends AbstractIntegrationTest {
 
   private static final String API_KEY = "it-signing-key";
@@ -42,21 +44,24 @@ class RequestSigningWebIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void unsignedWriteRequestWithApiKeyIsRejected() {
+  @DisplayName("携带接口密钥但未签名时返回未授权,并提示签名无效")
+  void shouldRejectWriteRequest_whenSignatureMissing() {
     Response resp = post(null, null, null);
     assertThat(resp.status()).isEqualTo(401);
     assertThat(resp.body()).contains("SIGNATURE_INVALID");
   }
 
   @Test
-  void tamperedSignatureIsRejected() {
+  @DisplayName("签名被篡改时返回未授权,并提示签名无效")
+  void shouldRejectWriteRequest_whenSignatureTampered() {
     Response resp = post(timestamp(), UUID.randomUUID().toString(), "tampered");
     assertThat(resp.status()).isEqualTo(401);
     assertThat(resp.body()).contains("SIGNATURE_INVALID");
   }
 
   @Test
-  void validSignaturePassesSignatureFilter() {
+  @DisplayName("签名合法时放行至路由层,不再返回未授权与签名无效提示")
+  void shouldPassSignatureFilter_whenSignatureValid() {
     String timestamp = timestamp();
     String nonce = UUID.randomUUID().toString();
     String signature = RequestSignatures.sign(API_KEY, "POST", PATH, timestamp, nonce, BODY);

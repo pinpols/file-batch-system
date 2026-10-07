@@ -35,15 +35,18 @@ import okhttp3.OkHttpClient;
 import okhttp3.Protocol;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("外部出站网络传输 - 校验地址策略选择,双栈连接回退与代理绕过行为")
 class OkHttpOrchestratorExternalHttpTransportTest {
 
   private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(4);
   private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(4);
 
   @Test
-  void selectsTrustedClientForOperatorManagedEndpoint() throws Exception {
+  @DisplayName("运维托管端点走信任策略时由信任通道处理,受保护通道不被调用")
+  void shouldUseTrustedChannel_whenEndpointIsOperatorManaged() throws Exception {
     RecordingInterceptor guarded = new RecordingInterceptor("guarded");
     RecordingInterceptor trusted = new RecordingInterceptor("trusted");
     OkHttpOrchestratorExternalHttpTransport transport =
@@ -62,7 +65,8 @@ class OkHttpOrchestratorExternalHttpTransportTest {
   }
 
   @Test
-  void fallsBackFromUnreachableIpv6ToIpv4BeforeConnectTimeout() throws Exception {
+  @DisplayName("IPv6 候选地址不可达时在连接超时前回退到 IPv4 并完成请求")
+  void shouldFallBackToIpv4_whenIpv6CandidateIsUnreachable() throws Exception {
     InetAddress unreachableIpv6 = InetAddress.getByName("2001:db8::1");
     InetAddress reachableIpv4 = InetAddress.getByName("127.0.0.1");
     try (MockWebServer server = startServer(reachableIpv4, "ipv4")) {
@@ -84,7 +88,8 @@ class OkHttpOrchestratorExternalHttpTransportTest {
   }
 
   @Test
-  void connectsOverIpv6WhenIpv4CandidateIsUnreachable() throws Exception {
+  @DisplayName("IPv4 候选地址不可达时改走 IPv6 完成连接且不尝试 IPv4")
+  void shouldConnectOverIpv6_whenIpv4CandidateIsUnreachable() throws Exception {
     InetAddress unreachableIpv4 = InetAddress.getByName("192.0.2.1");
     InetAddress reachableIpv6 = InetAddress.getByName("::1");
     try (MockWebServer server = startIpv6ServerOrSkip(reachableIpv6, "ipv6")) {
@@ -106,7 +111,8 @@ class OkHttpOrchestratorExternalHttpTransportTest {
   }
 
   @Test
-  void usesFirstReachableAddressWhenBothIpFamiliesAreAvailable() throws Exception {
+  @DisplayName("双栈地址均可达时优先使用 IPv6,IPv4 侧不收到请求")
+  void shouldUseFirstReachableAddress_whenBothIpFamiliesAreReachable() throws Exception {
     InetAddress reachableIpv6 = InetAddress.getByName("::1");
     InetAddress reachableIpv4 = InetAddress.getByName("127.0.0.1");
     try (MockWebServer ipv6Server = startIpv6ServerOrSkip(reachableIpv6, "ipv6")) {
@@ -129,7 +135,8 @@ class OkHttpOrchestratorExternalHttpTransportTest {
   }
 
   @Test
-  void productionGuardedClientKeepsSecurityAndHappyEyeballsPolicy() {
+  @DisplayName("生产受保护通道保持快速回退,不跟随重定向,不自动重试且不使用代理")
+  void shouldKeepFastFallbackAndNoProxy_whenUsingProductionGuardedClient() {
     OkHttpClient client = OkHttpOrchestratorExternalHttpTransport.guardedClient();
 
     assertThat(client.fastFallback()).isTrue();
@@ -140,7 +147,8 @@ class OkHttpOrchestratorExternalHttpTransportTest {
   }
 
   @Test
-  void guardedRequestRejectsPrivateIpLiteralBeforeNetworkCall() {
+  @DisplayName("受保护请求指向私有地址字面量时在发起网络调用之前被拒绝")
+  void shouldRejectPrivateAddressLiteral_whenGuardedRequestIsSent() {
     OkHttpClient client = OkHttpOrchestratorExternalHttpTransport.baseClient()
         .addInterceptor(new RecordingInterceptor("unexpected"))
         .build();
@@ -158,7 +166,8 @@ class OkHttpOrchestratorExternalHttpTransportTest {
   }
 
   @Test
-  void guardedRequestUsesValidatedDnsSnapshotAndBypassesSystemProxy() throws Exception {
+  @DisplayName("受保护请求只解析一次地址并绕过系统代理,最终仅发出一次真实请求")
+  void shouldResolveOnceAndBypassSystemProxy_whenRequestIsGuarded() throws Exception {
     InetAddress reachableIpv4 = InetAddress.getByName("127.0.0.1");
     AtomicInteger resolutions = new AtomicInteger();
     RecordingProxySelector proxySelector = new RecordingProxySelector();

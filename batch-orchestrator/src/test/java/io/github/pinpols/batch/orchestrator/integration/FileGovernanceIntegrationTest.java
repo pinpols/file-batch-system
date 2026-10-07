@@ -25,6 +25,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
 import org.mybatis.spring.annotation.MapperScan;
@@ -66,6 +67,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
       "batch.startup-self-check.enabled=false"
     })
 @EnabledIf("s3BackendActive")
+@DisplayName("文件治理调度在延迟统计,归档清理,对象对账与到达组触发上的验收")
 class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
 
   private static final class FileRecordSpec {
@@ -159,6 +161,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
   private MeterRegistry meterRegistry;
 
   @Test
+  @DisplayName("延迟到达的文件计入送达延迟违规计数,最大延迟秒数不低于实际延迟")
   void shouldCollectLatencyMetricsForDelayedArrivalFiles() {
     // collectLatencyMetrics() scopes queries to reconcile.default-tenant-id (see
     // FileGovernanceScheduler).
@@ -186,6 +189,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("超过保留期的归档文件被清理为已删除状态,写入清理成功审计并移除对象存储中的对象")
   void shouldArchiveExpiredFilesAndWriteCleanupAudit() throws Exception {
     ensureS3Bucket(s3Bucket());
     String objectName = "archive/cleanup/" + suffix() + ".csv";
@@ -227,6 +231,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("对象存储中的孤儿对象被登记为已接收文件记录,并写入对账审计")
   void shouldReconcileOrphanObjectIntoFileRecord() throws Exception {
     String objectName = "incoming/" + suffix() + "-orphan.csv";
     putObject(objectName, "alpha,beta\n1,2\n");
@@ -258,6 +263,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("到达组内文件全部到位后触发组,记录触发状态与原因并汇总触发数量")
   void shouldTriggerArrivalGroupWhenAllFilesArrive() {
     String groupCode = "arrival-group-" + suffix();
     String requiredSet = "file-a.csv,file-b.csv";

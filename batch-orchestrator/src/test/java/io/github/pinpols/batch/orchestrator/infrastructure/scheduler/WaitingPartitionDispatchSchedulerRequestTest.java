@@ -12,11 +12,12 @@ import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("等待分片重派时的调度请求构建: 队列,资源档位与下游通道约束均取自分片输入快照")
 class WaitingPartitionDispatchSchedulerRequestTest {
 
   @Test
   @DisplayName("WAITING 重派保留资源池与下游通道约束")
-  void waitingRetryKeepsResourceAndDownstreamAdmissionFields() {
+  void shouldKeepResourceAndChannelConstraints_whenRebuildingRetryRequest() {
     JobInstanceEntity instance = new JobInstanceEntity();
     instance.setTenantId("ta");
     instance.setJobCode("dispatch-job");

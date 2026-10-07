@@ -14,12 +14,14 @@ import io.github.pinpols.batch.orchestrator.application.service.governance.Defau
 import io.github.pinpols.batch.orchestrator.domain.entity.ApprovalCommandEntity;
 import io.github.pinpols.batch.orchestrator.mapper.ApprovalCommandMapper;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
  * 单元测试：{@link DefaultApprovalWorkflowService} 状态流转。 覆盖
  * submit→PENDING、approve→APPROVED、reject→REJECTED、markExecuted→EXECUTED。
  */
+@DisplayName("审批流服务: 提交, 审批, 驳回与执行标记的状态流转口径")
 class DefaultApprovalWorkflowServiceTest {
 
   private static final class ApprovalSubmissionSpec {
@@ -96,6 +98,7 @@ class DefaultApprovalWorkflowServiceTest {
   // ── submit ────────────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("提交审批时落库为待审批并生成审批单号")
   void shouldInsertApprovalWithPendingStatusOnSubmit() {
     when(approvalCommandMapper.insert(any())).thenReturn(1);
 
@@ -115,6 +118,7 @@ class DefaultApprovalWorkflowServiceTest {
   }
 
   @Test
+  @DisplayName("载荷为空时以空对象落库提交")
   void shouldUseEmptyJsonWhenPayloadIsNull() {
     when(approvalCommandMapper.insert(any())).thenReturn(1);
 
@@ -134,6 +138,7 @@ class DefaultApprovalWorkflowServiceTest {
   // ── approve ───────────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("审批单不存在时审批抛出业务异常")
   void shouldThrowWhenApprovalNotFound() {
     when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-000")).thenReturn(null);
 
@@ -143,6 +148,7 @@ class DefaultApprovalWorkflowServiceTest {
   }
 
   @Test
+  @DisplayName("审批单已通过时重复审批返回当前状态")
   void shouldReturnCurrentStateWhenAlreadyApproved() {
     ApprovalCommandEntity entity = pendingApproval("t1", "apr-001");
     entity.setApprovalStatus("APPROVED");
@@ -155,6 +161,7 @@ class DefaultApprovalWorkflowServiceTest {
   }
 
   @Test
+  @DisplayName("待审批单据被审批时置为已通过并记录审批人")
   void shouldMarkApprovedWhenPending() {
     ApprovalCommandEntity entity = pendingApproval("t1", "apr-002");
     ApprovalCommandEntity approved = pendingApproval("t1", "apr-002");
@@ -182,6 +189,7 @@ class DefaultApprovalWorkflowServiceTest {
   // ── reject ────────────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("驳回不存在的审批单时抛出业务异常")
   void shouldThrowWhenRejectingNonExistentApproval() {
     when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-999")).thenReturn(null);
 
@@ -191,6 +199,7 @@ class DefaultApprovalWorkflowServiceTest {
   }
 
   @Test
+  @DisplayName("待审批单据被驳回时置为已驳回")
   void shouldMarkRejectedWhenPending() {
     ApprovalCommandEntity entity = pendingApproval("t1", "apr-003");
     ApprovalCommandEntity rejected = pendingApproval("t1", "apr-003");
@@ -215,6 +224,7 @@ class DefaultApprovalWorkflowServiceTest {
   }
 
   @Test
+  @DisplayName("审批单已驳回时重复驳回返回当前状态")
   void shouldReturnCurrentStateWhenAlreadyRejected() {
     ApprovalCommandEntity entity = pendingApproval("t1", "apr-004");
     entity.setApprovalStatus("REJECTED");
@@ -229,6 +239,7 @@ class DefaultApprovalWorkflowServiceTest {
   // ── markExecuted ─────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("审批通过后标记为已执行并返回最新状态")
   void shouldMarkExecutedAfterApproval() {
     ApprovalCommandEntity executed = pendingApproval("t1", "apr-005");
     executed.setApprovalStatus("EXECUTED");
@@ -248,6 +259,7 @@ class DefaultApprovalWorkflowServiceTest {
   // ── get ───────────────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("查询审批单时返回租户, 单号与状态等信息")
   void shouldReturnApprovalRecordOnGet() {
     ApprovalCommandEntity entity = pendingApproval("t1", "apr-006");
     when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-006")).thenReturn(entity);
@@ -260,6 +272,7 @@ class DefaultApprovalWorkflowServiceTest {
   }
 
   @Test
+  @DisplayName("查询不存在的审批单时抛出业务异常")
   void shouldThrowOnGetWhenNotFound() {
     when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-000")).thenReturn(null);
 

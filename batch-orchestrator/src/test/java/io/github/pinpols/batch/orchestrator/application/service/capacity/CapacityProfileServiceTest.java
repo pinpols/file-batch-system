@@ -12,16 +12,19 @@ import io.github.pinpols.batch.orchestrator.mapper.CapacityProfileMapper;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+@DisplayName("容量画像服务: 分组查询, 时间窗边界与条数上限的校验口径")
 class CapacityProfileServiceTest {
 
   private final CapacityProfileMapper mapper = mock(CapacityProfileMapper.class);
   private final CapacityProfileService service = new CapacityProfileService(mapper);
 
   @Test
-  void jobProfileShouldReturnRatesTotalsAndCoverageGaps() {
+  @DisplayName("按任务分组查询时返回速率, 汇总与覆盖缺口, 并透传扫描范围")
+  void shouldReturnRatesTotalsAndGaps_whenQueryingByJob() {
     Instant from = Instant.parse("2026-06-30T00:00:00Z");
     Instant to = Instant.parse("2026-06-30T01:00:00Z");
     when(mapper.selectJobProfile("ta", from, to, 10))
@@ -60,6 +63,7 @@ class CapacityProfileServiceTest {
   }
 
   @Test
+  @DisplayName("未指定分组时默认按租户分组, 条数上限被收敛到允许的最大值")
   void shouldClampLimitAndDefaultToTenantGroup() {
     Instant from = Instant.parse("2026-06-30T00:00:00Z");
     Instant to = Instant.parse("2026-06-30T01:00:00Z");
@@ -72,6 +76,7 @@ class CapacityProfileServiceTest {
   }
 
   @Test
+  @DisplayName("查询时间窗超过允许跨度时抛出业务异常")
   void shouldRejectTooWideWindow() {
     Instant from = Instant.parse("2026-05-01T00:00:00Z");
     Instant to = Instant.parse("2026-06-30T00:00:00Z");
@@ -81,6 +86,7 @@ class CapacityProfileServiceTest {
   }
 
   @Test
+  @DisplayName("时间窗恰好为上限天数时查询通过并原样返回区间")
   void window_exactly31Days_isAccepted() {
     Instant from = Instant.parse("2026-05-01T00:00:00Z");
     Instant to = from.plus(Duration.ofDays(31));
@@ -94,6 +100,7 @@ class CapacityProfileServiceTest {
   }
 
   @Test
+  @DisplayName("时间窗比允许上限多出一秒时查询被拒绝")
   void window_justOverMax_isRejected() {
     Instant from = Instant.parse("2026-05-01T00:00:00Z");
     Instant to = from.plus(Duration.ofDays(31)).plusSeconds(1);
@@ -103,6 +110,7 @@ class CapacityProfileServiceTest {
   }
 
   @Test
+  @DisplayName("起点不早于终点时查询被拒绝")
   void window_rejects_whenFromNotBeforeTo() {
     Instant instant = Instant.parse("2026-06-30T00:00:00Z");
 
@@ -118,6 +126,7 @@ class CapacityProfileServiceTest {
   }
 
   @Test
+  @DisplayName("未指定时间窗时默认为最近一天的区间且起点早于终点")
   void window_null_defaultsToBoundedRange() {
     when(mapper.selectTenantProfile(
             org.mockito.ArgumentMatchers.eq("ta"),
@@ -145,6 +154,7 @@ class CapacityProfileServiceTest {
   }
 
   @Test
+  @DisplayName("条数上限低于最小值时被收敛到最小值")
   void limit_belowMin_clampedToMin() {
     Instant from = Instant.parse("2026-06-30T00:00:00Z");
     Instant to = Instant.parse("2026-06-30T01:00:00Z");
@@ -159,6 +169,7 @@ class CapacityProfileServiceTest {
   }
 
   @Test
+  @DisplayName("未指定条数上限时默认为五十")
   void limit_null_defaultsTo50() {
     Instant from = Instant.parse("2026-06-30T00:00:00Z");
     Instant to = Instant.parse("2026-06-30T01:00:00Z");

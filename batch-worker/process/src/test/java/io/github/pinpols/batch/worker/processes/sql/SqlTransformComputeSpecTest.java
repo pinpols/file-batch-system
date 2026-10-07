@@ -7,13 +7,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("SQL 转换计算规格解析:嵌套规格、校验规则、保留参数与直接暂存模式等取舍边界")
 class SqlTransformComputeSpecTest {
 
   private final ObjectMapper objectMapper = new ObjectMapper();
 
   @Test
+  @DisplayName("嵌套规格完整时解析出实现码、目标表、写入模式、列映射、冲突列、水位列与默认空结果策略")
   void parse_acceptsNestedSqlTransformComputeSpec() {
     Map<String, Object> stepParams = Map.of(
         "sqlTransformCompute",
@@ -55,6 +58,7 @@ class SqlTransformComputeSpecTest {
   }
 
   @Test
+  @DisplayName("带校验规则时解析出一条规则,规则名与校验语句原样保留")
   void parse_acceptsValidationRules() {
     Map<String, Object> stepParams = Map.of(
         "sqlTransformCompute",
@@ -86,6 +90,7 @@ class SqlTransformComputeSpecTest {
   }
 
   @Test
+  @DisplayName("缺少列映射时解析失败,并提示缺少列配置")
   void parse_rejectsMissingColumns() {
     Map<String, Object> stepParams = Map.of(
         "sourceSql",
@@ -101,6 +106,7 @@ class SqlTransformComputeSpecTest {
   }
 
   @Test
+  @DisplayName("参数试图覆盖运行时保留参数名时解析失败,并提示触及保留参数")
   void parse_rejectsParamsOverridingReservedRuntimeNames() {
     Map<String, Object> stepParams = Map.of(
         "sqlTransformCompute",
@@ -124,6 +130,7 @@ class SqlTransformComputeSpecTest {
   }
 
   @Test
+  @DisplayName("参数试图覆盖业务日期参数时解析失败,并提示该参数名")
   void parse_rejectsParamsOverridingBizDate() {
     Map<String, Object> stepParams = Map.of(
         "sqlTransformCompute",
@@ -147,6 +154,7 @@ class SqlTransformComputeSpecTest {
   }
 
   @Test
+  @DisplayName("参数使用元数据前缀时解析失败,并提示该前缀被禁止")
   void parse_rejectsParamsUsingMetadataPrefix() {
     Map<String, Object> stepParams = Map.of(
         "sqlTransformCompute",
@@ -170,6 +178,7 @@ class SqlTransformComputeSpecTest {
   }
 
   @Test
+  @DisplayName("空结果策略显式配置为成功时,解析结果保持成功策略")
   void parse_acceptsEmptyResultPolicySuccess() {
     Map<String, Object> stepParams = Map.of(
         "sqlTransformCompute",
@@ -194,6 +203,7 @@ class SqlTransformComputeSpecTest {
   }
 
   @Test
+  @DisplayName("未配置暂存行数上限时,解析结果取默认上限")
   void parse_defaultsMaxStagedRows() {
     Map<String, Object> stepParams = Map.of(
         "sqlTransformCompute",
@@ -215,6 +225,7 @@ class SqlTransformComputeSpecTest {
   }
 
   @Test
+  @DisplayName("自定义暂存行数上限时,解析结果取配置值")
   void parse_acceptsCustomMaxStagedRows() {
     Map<String, Object> stepParams = Map.of(
         "sqlTransformCompute",
@@ -238,6 +249,7 @@ class SqlTransformComputeSpecTest {
   }
 
   @Test
+  @DisplayName("暂存模式配置为直接写入时,解析结果保持直接模式")
   void parse_acceptsDirectStagingMode() {
     Map<String, Object> stepParams = Map.of(
         "sqlTransformCompute",
@@ -261,6 +273,7 @@ class SqlTransformComputeSpecTest {
   }
 
   @Test
+  @DisplayName("直接写入模式仍配置暂存校验时解析失败,并提示该模式不支持校验")
   void parse_rejectsDirectModeWithStagingValidations() {
     Map<String, Object> stepParams = Map.of(
         "sqlTransformCompute",
@@ -291,6 +304,7 @@ class SqlTransformComputeSpecTest {
   }
 
   @Test
+  @DisplayName("直接写入模式搭配空结果判失败策略时解析失败,并提示策略必须为成功")
   void parse_rejectsDirectModeWithFailEmptyResultPolicy() {
     Map<String, Object> stepParams = Map.of(
         "sqlTransformCompute",
@@ -317,6 +331,7 @@ class SqlTransformComputeSpecTest {
   }
 
   @Test
+  @DisplayName("缺少冲突列时解析失败,即使写入模式为插入也要求提供冲突列以防重放双写")
   void parse_rejectsMissingConflictColumnsForInsertMode() {
     // PROCESS at-least-once 安全:即使 writeMode=INSERT 也必须提供 conflictColumns
     // (否则重放双写)。验证空 conflictColumns 一律被拒,不再因 writeMode 网开一面。
@@ -340,6 +355,7 @@ class SqlTransformComputeSpecTest {
   }
 
   @Test
+  @DisplayName("暂存行数上限取非正数时解析失败,并提示该配置项非法")
   void parse_rejectsInvalidMaxStagedRows() {
     Map<String, Object> stepParams = Map.of(
         "sqlTransformCompute",

@@ -12,6 +12,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** ADR-036 Dispatch 模板单测 — 经基类 execute 模板序,验证单条失败不中断整批。 */
+@DisplayName("Dispatch 模板基类:逐条推送时单条失败不中断整批,整体计数与终态符合预期")
 class SdkAbstractDispatchHandlerTest {
 
   private static SdkTaskContext ctx() {

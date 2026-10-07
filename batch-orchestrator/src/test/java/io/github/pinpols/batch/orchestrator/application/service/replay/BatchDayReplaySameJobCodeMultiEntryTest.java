@@ -37,6 +37,7 @@ import org.mockito.ArgumentCaptor;
  * <p>本测试构造"同 sessionId + 同 jobCode + 两条不同 sourceInstanceId"的场景, 断言 reconciler 通过 mapper 的
  * selectBySessionAndSourceInstanceId 精确命中, 而不是回到 selectBySessionId 线性扫。
  */
+@DisplayName("批量日重放同任务多条目: 按来源实例与重跑实例精确回填口径")
 class BatchDayReplaySameJobCodeMultiEntryTest {
 
   private static final String ENTRY_SUCCEEDED = "SUCCEEDED";

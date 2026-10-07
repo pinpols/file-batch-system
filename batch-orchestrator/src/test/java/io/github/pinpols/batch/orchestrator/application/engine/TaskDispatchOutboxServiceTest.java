@@ -42,6 +42,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * </ul>
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("派发出箱服务: 事件键, 优先级分档, 幂等键与调度上下文口径")
 class TaskDispatchOutboxServiceTest {
 
   @Mock
@@ -62,7 +63,7 @@ class TaskDispatchOutboxServiceTest {
 
   @Test
   @DisplayName("eventKey 缺失 → 退化为 tenantId:taskId")
-  void eventKeyFallsBackToTenantTask() {
+  void shouldDeriveEventKey_whenEventKeyMissing() {
     service.writeDispatchEvent(instance(100L, 5), task(500L, null), null, "trace", null);
 
     ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
@@ -72,7 +73,7 @@ class TaskDispatchOutboxServiceTest {
 
   @Test
   @DisplayName("eventKey 显式给出 → 透传")
-  void eventKeyPassthrough() {
+  void shouldPassThroughEventKey_whenProvided() {
     service.writeDispatchEvent(instance(100L, 5), task(500L, null), null, "trace", "custom-key");
 
     ArgumentCaptor<DomainEvent> cap = ArgumentCaptor.forClass(DomainEvent.class);
@@ -84,7 +85,7 @@ class TaskDispatchOutboxServiceTest {
 
   @Test
   @DisplayName("priority 取 task.priority,缺失时回退 jobInstance.priority")
-  void priorityFallsBackToInstanceWhenTaskNull() {
+  void shouldFallBackToInstancePriority_whenTaskPriorityMissing() {
     JobTaskEntity t = task(500L, null);
     t.setPriority(null);
     service.writeDispatchEvent(instance(100L, 7), t, null, "trace", null);
@@ -96,7 +97,7 @@ class TaskDispatchOutboxServiceTest {
 
   @Test
   @DisplayName("priority 优先用 task.priority(覆盖 instance.priority)")
-  void priorityPrefersTask() {
+  void shouldPreferTaskPriority_whenTaskPriorityPresent() {
     JobTaskEntity t = task(500L, null);
     t.setPriority(2);
     service.writeDispatchEvent(instance(100L, 7), t, null, "trace", null);
@@ -109,8 +110,8 @@ class TaskDispatchOutboxServiceTest {
   // ===== aggregate / event type =====
 
   @Test
-  @DisplayName("aggregate_type=JOB_TASK / event_type=task.taskType / publishStatus=NEW")
-  void eventMetadataFieldsCorrect() {
+  @DisplayName("写入派发事件时聚合类型, 事件类型, 聚合标识与追踪标识均正确")
+  void shouldFillEventMetadata_whenWritingDispatchEvent() {
     JobTaskEntity t = task(500L, null);
     t.setTaskType("EXECUTION");
     service.writeDispatchEvent(instance(100L, 5), t, null, "trace", null);
@@ -128,7 +129,7 @@ class TaskDispatchOutboxServiceTest {
 
   @Test
   @DisplayName("priorityBand 映射: 1/2/3 → HIGH")
-  void priorityBandHigh() {
+  void shouldMapToHighBand_whenPriorityIsTop() {
     JobTaskEntity t = task(500L, null);
     t.setPriority(1);
     service.writeDispatchEvent(instance(100L, 1), t, null, "trace", null);
@@ -141,7 +142,7 @@ class TaskDispatchOutboxServiceTest {
 
   @Test
   @DisplayName("priorityBand 映射: 5 → MEDIUM")
-  void priorityBandMedium() {
+  void shouldMapToMediumBand_whenPriorityIsMiddle() {
     JobTaskEntity t = task(500L, null);
     t.setPriority(5);
     service.writeDispatchEvent(instance(100L, 5), t, null, "trace", null);
@@ -154,7 +155,7 @@ class TaskDispatchOutboxServiceTest {
 
   @Test
   @DisplayName("priorityBand 映射: 10 → LOW")
-  void priorityBandLow() {
+  void shouldMapToLowBand_whenPriorityIsLow() {
     JobTaskEntity t = task(500L, null);
     t.setPriority(10);
     service.writeDispatchEvent(instance(100L, 10), t, null, "trace", null);
@@ -169,14 +170,14 @@ class TaskDispatchOutboxServiceTest {
 
   @Test
   @DisplayName("runModeOverride=null → 不写 task.payload")
-  void runModeNullSkipsPayloadUpdate() {
+  void shouldSkipPayloadUpdate_whenRunModeMissing() {
     service.writeDispatchEvent(instance(100L, 5), task(500L, null), null, "trace", null);
     verify(jobTaskMapper, never()).updatePayload(anyString(), anyLong(), anyString());
   }
 
   @Test
   @DisplayName("runModeOverride 非 null → 更新 task.payload + 同步内存对象")
-  void runModeOverridePersistsToPayload() {
+  void shouldPersistRunModeToPayload_whenOverrideGiven() {
     JobTaskEntity t = task(500L, null);
     t.setTaskPayload("{}"); // 初始空 payload
     service.writeDispatchEvent(instance(100L, 5), t, null, "trace", null, RunMode.RECOVER);
@@ -193,7 +194,7 @@ class TaskDispatchOutboxServiceTest {
 
   @Test
   @DisplayName("无 partition + 无 eventKey → idempotencyKey 用 tenantId:task:taskId:instance:instId")
-  void idempotencyKeyNoPartitionNoEventKey() {
+  void shouldDeriveIdempotencyKey_whenPartitionAndEventKeyMissing() {
     JobTaskEntity t = task(500L, null);
     t.setJobInstanceId(100L);
     service.writeDispatchEvent(instance(100L, 5), t, null, "trace", null);
@@ -206,7 +207,7 @@ class TaskDispatchOutboxServiceTest {
 
   @Test
   @DisplayName("有 partition → idempotencyKey 用 partition.idempotencyKey")
-  void idempotencyKeyFromPartition() {
+  void shouldUsePartitionIdempotencyKey_whenPartitionPresent() {
     JobPartitionEntity p = new JobPartitionEntity();
     p.setId(99L);
     p.setIdempotencyKey("partition-idem-99");
@@ -224,7 +225,7 @@ class TaskDispatchOutboxServiceTest {
   @Test
   @DisplayName(
       "schedulingContext 填 bizDate + 前后工作日 + attemptNo + triggerType,且 outbox payload 可往返反序列化")
-  void schedulingContextPopulated() {
+  void shouldPopulateSchedulingContext_whenWritingDispatchEvent() {
     JobInstanceEntity i = instance(100L, 5);
     i.setBizDate(LocalDate.of(2026, Month.JUNE, 1)); // 周一
     i.setRunAttempt(2);

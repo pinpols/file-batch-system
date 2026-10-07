@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.util.Map;
 import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -19,6 +20,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  */
 @Tag("integration")
 @Testcontainers(disabledWithoutDocker = true)
+@DisplayName("平台数据库迁移:本地迁移路径执行后表结构,索引与状态约束的落地结果")
 class LocalFlywayPlatformMigrationsIntegrationTest {
 
   @Container
@@ -26,7 +28,8 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
   private static final PostgreSQLContainer POSTGRES = TestPostgresContainers.platform();
 
   @Test
-  void migrationPlatformCreatesBatchDayInstance() {
+  @DisplayName("执行本地迁移路径后批次日实例表,清理索引,活跃流程唯一索引,归档状态约束与工作者注册表列结构均按预期落地")
+  void shouldCreatePlatformSchemaObjects_whenMigrationPathRuns() {
     Flyway.configure()
         .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
         .schemas("batch", "quartz")

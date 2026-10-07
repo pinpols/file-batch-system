@@ -25,6 +25,7 @@ import java.time.Month;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -45,6 +46,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("作业启动到收尾的端到端链路: 启动落库,任务认领与结果上报后任务与作业实例的状态收敛")
 class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -71,6 +73,7 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
   }
 
   @Test
+  @DisplayName("启动并认领任务后上报成功时候任务与作业实例都进入成功终态")
   void launchThenClaimThenReport_jobInstanceReachesSuccess() {
     LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
         jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
@@ -137,6 +140,7 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
   }
 
   @Test
+  @DisplayName("启动并认领任务后上报失败时候任务与作业实例都进入失败终态")
   void launchThenClaimThenReport_failureTransitionsTaskToFailed() {
     LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
         jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);

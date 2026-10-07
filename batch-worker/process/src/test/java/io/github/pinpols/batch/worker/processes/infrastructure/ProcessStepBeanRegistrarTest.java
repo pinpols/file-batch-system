@@ -10,15 +10,18 @@ import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
 import io.github.pinpols.batch.worker.processes.stage.ProcessComputePlugin;
 import io.github.pinpols.batch.worker.processes.stage.ProcessStageStep;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationContext;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
+@DisplayName("处理阶段 Bean 注册:启动时先清空旧注册,再把阶段步骤与计算插件按模块写入注册表")
 class ProcessStepBeanRegistrarTest {
 
   @Test
+  @DisplayName("启动注册时先按模块清空旧条目,再分别写入阶段步骤与计算插件的实现码")
   void registerStepBeansOnStartup_registersStageStepsAndComputePlugins() {
     ApplicationContext applicationContext = mock(ApplicationContext.class);
     StepRegistryMapper mapper = mock(StepRegistryMapper.class);

@@ -20,6 +20,7 @@ import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceScheduling
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -34,6 +35,7 @@ import org.junit.jupiter.api.Test;
  *       Phase2.3 起默认 {@code QUEUE_DEFER} 有界队列,峰值流量不误拒）
  * </ul>
  */
+@DisplayName("租户配额超额策略在并发准入检查中的转换验证,覆盖硬拒,排队等待,优先级降级与平台默认四类分支")
 class QuotaExceededStrategyLimiterTest {
 
   private DefaultConcurrencyLimiter limiter;
@@ -72,6 +74,7 @@ class QuotaExceededStrategyLimiterTest {
   }
 
   @Test
+  @DisplayName("租户配置硬拒策略时超额请求不放行并标记快速失败,原因码为租户作业数超限")
   void rejectStrategy_shouldFailFast() {
     arrangeBurstExceeded("REJECT");
 
@@ -83,6 +86,7 @@ class QuotaExceededStrategyLimiterTest {
   }
 
   @Test
+  @DisplayName("租户配置排队等待策略时超额请求等待容量,不标记快速失败且原因码为租户作业数超限")
   void queueDeferStrategy_shouldWaitForCapacity() {
     arrangeBurstExceeded("QUEUE_DEFER");
 
@@ -94,6 +98,7 @@ class QuotaExceededStrategyLimiterTest {
   }
 
   @Test
+  @DisplayName("租户配置优先级降级策略时超额请求等待容量,原因码追加降级标记以便后续调度降低优先级")
   void degradePriorityStrategy_shouldMarkReasonWithDegradedSuffix() {
     arrangeBurstExceeded("DEGRADE_PRIORITY");
 
@@ -105,6 +110,7 @@ class QuotaExceededStrategyLimiterTest {
   }
 
   @Test
+  @DisplayName("租户未配置超额策略时按平台默认排队等待处理,不标记快速失败")
   void nullStrategy_shouldDeferByPlatformDefault() {
     // ADR-041 Phase2.3:租户未配策略 → 平台默认 QUEUE_DEFER(有界队列),defer 而非硬拒。
     arrangeBurstExceeded(null);
@@ -117,6 +123,7 @@ class QuotaExceededStrategyLimiterTest {
   }
 
   @Test
+  @DisplayName("平台默认策略配回硬拒时租户未配置策略的超额请求仍标记快速失败")
   void nullStrategy_withRejectPlatformDefault_stillRejects() {
     // 平台默认可配回 REJECT 恢复旧硬拒语义。
     when(resScheduler.getDefaultExceededStrategy()).thenReturn(QuotaExceededStrategy.REJECT);
@@ -128,6 +135,7 @@ class QuotaExceededStrategyLimiterTest {
   }
 
   @Test
+  @DisplayName("租户策略取值无法识别时抛出参数非法异常并在消息中保留原始取值,避免静默放行")
   void unknownTenantStrategy_shouldFailExplicitly() {
     arrangeBurstExceeded("QUEU_DEFER");
 
@@ -138,6 +146,7 @@ class QuotaExceededStrategyLimiterTest {
 
   /** quota 未触顶时 limiter 必须 allow，与 strategy 无关。 */
   @Test
+  @DisplayName("租户配额未触顶时直接放行,不受已启用配额策略的硬拒配置影响")
   void allowedQuota_shouldNotApplyStrategy() {
     when(jobInstanceMapper.countActiveByTenant(anyString())).thenReturn(1L);
     when(configCache.findEnabledQuotaPolicy(anyString())).thenReturn(policy("REJECT"));
@@ -149,6 +158,7 @@ class QuotaExceededStrategyLimiterTest {
   }
 
   @Test
+  @DisplayName("排队预览场景关闭公平份额准入强制后仍放行,仅观测分组容量不占用额外准入额度")
   void waitingQueuePreview_shouldNotAcquireFairShareAdmissionLock() {
     TenantQuotaPolicyEntity fairPolicy = new TenantQuotaPolicyEntity(
         1L, "tenant-x", "fair", 0, 0, 0, 1, "settlement", 0, 0, "NONE", 3, true, "QUEUE_DEFER");
@@ -163,6 +173,7 @@ class QuotaExceededStrategyLimiterTest {
   }
 
   @Test
+  @DisplayName("新作业准入时全局容量判定先于放行发生,确认容量查询被触发")
   void globalLimit_shouldAcquireTransactionLockBeforeCountingNewJob() {
     when(globalJobAdmission.hasCapacity()).thenReturn(true);
 
@@ -172,6 +183,7 @@ class QuotaExceededStrategyLimiterTest {
   }
 
   @Test
+  @DisplayName("已有作业的准入检查不走新作业名额逻辑,不触发全局容量判定")
   void existingJob_shouldNotConsumeAnotherGlobalSlot() {
     ResourceSchedulingRequest request = request();
     request.setNewJobAdmission(false);

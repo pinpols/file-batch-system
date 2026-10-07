@@ -19,6 +19,7 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -39,6 +40,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("作业启动两阶段事务拆分的失败语义验证,第二阶段派发失败后第一阶段写入仍提交且同请求重放命中去重")
 class LaunchT2FailureIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -57,7 +59,8 @@ class LaunchT2FailureIntegrationTest extends AbstractIntegrationTest {
   private PartitionDispatchService partitionDispatchService;
 
   @Test
-  void t1CommitsAndDedupWorksWhenT2Throws() {
+  @DisplayName("派发阶段抛异常时异常向外传播,首次启动写入的作业实例仍然提交,分区与任务无残留,同请求重放返回同一实例")
+  void shouldKeepCommittedInstanceAndDedup_whenDispatchPhaseFails() {
     LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
         jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.MANUAL);
 

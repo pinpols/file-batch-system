@@ -59,11 +59,13 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 
+@DisplayName("默认启动服务:批量日与作业实例落库,迟到事件路由,派发异常失败标记及重复投递幂等")
 class DefaultLaunchServiceTest {
 
   private LaunchValidationService launchValidationService;
@@ -150,6 +152,7 @@ class DefaultLaunchServiceTest {
   }
 
   @Test
+  @DisplayName("首次启动时新增作业实例与批量日记录,回写受理为已启动并保存时限与重跑策略快照")
   void shouldUpsertBatchDayInstanceOnFirstLaunch() {
     LaunchRequest request = new LaunchRequest(
         "t1",
@@ -234,6 +237,7 @@ class DefaultLaunchServiceTest {
   }
 
   @Test
+  @DisplayName("批量日已存在且缺少服务时限时保留原状态与截止时刻,仅补写服务时限")
   void shouldPreserveExistingStatusWhenFillingMissingSlaDeadline() {
     LaunchRequest request = new LaunchRequest(
         "t1",
@@ -306,6 +310,7 @@ class DefaultLaunchServiceTest {
   }
 
   @Test
+  @DisplayName("事件迟到但在容差内时保持原触发类型,累计迟到次数且不增加补跑次数")
   void shouldAcceptLateEventWithinTolerance() {
     LaunchRequest request = new LaunchRequest(
         "t1",
@@ -383,6 +388,7 @@ class DefaultLaunchServiceTest {
   }
 
   @Test
+  @DisplayName("事件超出容差时改写为补跑类型,累计补跑次数且不记迟到")
   void shouldRouteLateEventOutsideToleranceToCatchUp() {
     LaunchRequest request = new LaunchRequest(
         "t1",
@@ -462,6 +468,7 @@ class DefaultLaunchServiceTest {
   }
 
   @Test
+  @DisplayName("实例已落库后派发出现业务异常时标记为失败,回写拒绝受理并记录告警日志与失败分类")
   void shouldMarkPreparedJobFailedWhenDispatchBusinessErrorOccursAfterT1() {
     LaunchRequest request = new LaunchRequest(
         "t1",
@@ -552,6 +559,7 @@ class DefaultLaunchServiceTest {
   }
 
   @Test
+  @DisplayName("重复投递命中已存在实例时沿用原实例编号与链路标识,不标记重复且不再次派发")
   void shouldNotMarkOriginalRequestDuplicateWhenKafkaRedeliversBetweenT1AndT2() {
     LaunchRequest request = new LaunchRequest(
         "t1",

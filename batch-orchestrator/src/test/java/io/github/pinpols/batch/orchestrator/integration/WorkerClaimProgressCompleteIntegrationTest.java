@@ -31,6 +31,7 @@ import java.time.Month;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -54,6 +55,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("工作节点认领到完成的完整链路,验证认领,续约,成功上报后任务与分区及作业实例逐级达到成功终态,并覆盖非认领者续约被拒绝的冲突语义")
 class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -87,6 +89,7 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
   }
 
   @Test
+  @DisplayName("认领后由原工作节点续约并上报成功时,任务与分区及作业实例应逐级达到成功终态,非认领者的续约尝试应被拒绝")
   void worker_claim_renewLease_reportSuccess_taskAndPartitionAndInstanceReachSuccess() {
     LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
         jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
@@ -171,6 +174,7 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
   }
 
   @Test
+  @DisplayName("已有认领者时另一工作节点再次认领,应返回同一任务行且原认领者保持不变,不产生第二个运行中任务")
   void secondWorkerClaim_afterFirstClaim_returnsSameTask_notASecondRunning() {
     LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
         jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);

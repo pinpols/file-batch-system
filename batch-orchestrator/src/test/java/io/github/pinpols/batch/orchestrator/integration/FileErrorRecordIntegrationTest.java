@@ -7,6 +7,7 @@ import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -16,12 +17,14 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("文件错误记录持久化: 单条与多条错误的写入查询,跳过标志过滤,原始记录原文存取,以及租户维度隔离")
 class FileErrorRecordIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
   private JdbcTemplate jdbcTemplate;
 
   @Test
+  @DisplayName("写入单条文件错误后可按租户与文件查询到错误编码,错误阶段与未跳过标志")
   void shouldInsertAndQueryFileErrorRecord() {
     Long fileId = 99000L + BatchDateTimeSupport.utcEpochMillis() % 1000;
 
@@ -42,6 +45,7 @@ class FileErrorRecordIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("同一文件可写入多条错误,按跳过标志过滤只返回被跳过的记录")
   void shouldInsertMultipleErrorsForSameFile() {
     Long fileId = 98000L + BatchDateTimeSupport.utcEpochMillis() % 1000;
 
@@ -71,6 +75,7 @@ class FileErrorRecordIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("原始记录以结构化文本存储后可读回,且保留原始字段值")
   void shouldStoreRawRecordAsJsonb() {
     Long fileId = 97000L + BatchDateTimeSupport.utcEpochMillis() % 1000;
     String rawJson = "{\"customerNo\":\"C-001\",\"amount\":\"abc\"}";
@@ -92,6 +97,7 @@ class FileErrorRecordIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("同一文件标识在不同租户下各自独立计数,互不覆盖")
   void shouldIsolateTenantData() {
     Long fileId = 96000L + BatchDateTimeSupport.utcEpochMillis() % 1000;
 
@@ -119,6 +125,7 @@ class FileErrorRecordIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("按错误阶段统计时候只返回对应阶段的记录数")
   void shouldQueryByErrorStageIndex() {
     Long fileId = 95000L + BatchDateTimeSupport.utcEpochMillis() % 1000;
 

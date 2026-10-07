@@ -41,6 +41,7 @@ import org.mockito.MockitoAnnotations;
  *   <li>非 WORKFLOW 类型不强制 workflow_definition,合法 launch 应能拿到 LaunchLoadResult
  * </ul>
  */
+@DisplayName("启动入口校验: 必填字段与定义缺失时的拒绝行为,以及合法启动的加载结果")
 class DefaultLaunchValidationServiceTest {
 
   @Mock
@@ -103,7 +104,7 @@ class DefaultLaunchValidationServiceTest {
 
   @Test
   @DisplayName("trigger_request 不存在 → NOT_FOUND,且不打 REJECTED(尚未确认 request 存在)")
-  void rejectsWhenTriggerRequestMissing() {
+  void shouldReject_whenTriggerRequestMissing() {
     LaunchRequest req = validRequest();
     when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001")).thenReturn(null);
 
@@ -130,7 +131,7 @@ class DefaultLaunchValidationServiceTest {
 
   @Test
   @DisplayName("WORKFLOW 类型缺 workflow_definition → trigger_request 打 REJECTED + 抛 NOT_FOUND")
-  void rejectsWhenWorkflowTypeMissingWorkflowDef() {
+  void shouldReject_whenWorkflowDefinitionMissing() {
     LaunchRequest req = validRequest();
     when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
         .thenReturn(persistenceContext(triggerRequestEntity(), null));
@@ -145,7 +146,7 @@ class DefaultLaunchValidationServiceTest {
 
   @Test
   @DisplayName("非 WORKFLOW 类型不要求 workflow_definition,合法 launch 返回 LaunchLoadResult")
-  void acceptsNonWorkflowWithoutWorkflowDef() {
+  void shouldLoadWithoutWorkflowDefinition_whenJobTypeNotWorkflow() {
     LaunchRequest req = validRequest();
     TriggerRequestEntity trig = triggerRequestEntity();
     JobDefinitionEntity jobDef = jobDefinitionEntity(JobType.GENERAL.code());
@@ -164,7 +165,7 @@ class DefaultLaunchValidationServiceTest {
 
   @Test
   @DisplayName("WORKFLOW 类型 + workflow_definition 存在 → 正常返回")
-  void acceptsWorkflowWithWorkflowDef() {
+  void shouldLoadWorkflowDefinition_whenJobTypeIsWorkflow() {
     LaunchRequest req = validRequest();
     TriggerRequestEntity trig = triggerRequestEntity();
     JobDefinitionEntity jobDef = jobDefinitionEntity(JobType.WORKFLOW.code());

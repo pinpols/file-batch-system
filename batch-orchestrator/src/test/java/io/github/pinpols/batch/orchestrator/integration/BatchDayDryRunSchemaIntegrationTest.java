@@ -8,6 +8,7 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -20,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Transactional
+@DisplayName("整批量日演练会话与条目的数据契约及冷热表镜像,验证受支持候选形态可写入与非法组合被拒绝")
 class BatchDayDryRunSchemaIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "dry-run-schema-it";
@@ -33,7 +35,8 @@ class BatchDayDryRunSchemaIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void archiveMirrorContainsDryRunColumns() {
+  @DisplayName("归档镜像表与批量日重放会话表,条目表保持一致的演练相关列结构")
+  void shouldMirrorDryRunColumnsInArchiveTables() {
     assertThat(columnsOf("batch", "batch_day_replay_session"))
         .contains("execution_mode", "candidate_source");
     assertThat(columnsOf("archive", "batch_day_replay_session_archive"))
@@ -43,7 +46,8 @@ class BatchDayDryRunSchemaIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void acceptsEverySupportedCandidateShape() {
+  @DisplayName("历史实例,产出结果和计划快照三类候选来源按各自约束写入时均成功落库")
+  void shouldAcceptAllSupportedCandidateSourceShapes() {
     long historicalSession =
         insertSession("historical", "REPLAY", "EXISTING_INSTANCES", "KEEP_BOTH");
     long outputsSession =
@@ -60,7 +64,8 @@ class BatchDayDryRunSchemaIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void rejectsCandidateWithoutSourceVersionOrPlanSnapshot() {
+  @DisplayName("候选条目缺少来源实例,产出结果和计划快照时违反数据完整性约束")
+  void shouldRejectCandidateWithoutAnySourceReference() {
     long sessionId = insertSession("empty", "REPLAY", "EXISTING_INSTANCES", "KEEP_BOTH");
 
     assertThatThrownBy(() -> insertEntry(sessionId, "EMPTY", null, null, null))
@@ -69,7 +74,8 @@ class BatchDayDryRunSchemaIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void rejectsDryRunWithPromotionPolicy() {
+  @DisplayName("演练模式会话搭配创建新版本的结果策略时违反数据完整性约束")
+  void shouldRejectDryRunSessionWithPromotionResultPolicy() {
     assertThatThrownBy(() ->
             insertSession("invalid-policy", "DRY_RUN", "EXISTING_INSTANCES", "CREATE_NEW_VERSION"))
         .isInstanceOf(DataIntegrityViolationException.class)
@@ -77,7 +83,8 @@ class BatchDayDryRunSchemaIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void rejectsDryRunOutputsOnlyScope() {
+  @DisplayName("演练模式会话使用仅产出范围时违反数据完整性约束")
+  void shouldRejectDryRunSessionWithOutputsOnlyScope() {
     assertThatThrownBy(() -> jdbcTemplate.queryForObject(
             sessionInsertSql("OUTPUTS_ONLY"),
             Long.class,

@@ -38,6 +38,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("崩溃与重投场景下的精确一次不变量,验证重复回报,陈旧版本写入与重复事件入账在真实数据库上的收敛")
 class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -52,7 +53,7 @@ class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
   private JdbcTemplate jdbcTemplate;
 
   @Test
-  @DisplayName("REPORT 重投只生效一次——重复回报被终态 CAS 空转,版本只 +1")
+  @DisplayName("REPORT 重投只生效一次,重复回报被终态 CAS 空转,版本只 +1")
   void replayedReport_appliedExactlyOnce_whenFinishDeliveredTwice() {
     long taskId = insertRunningTask("replay-finish-" + System.nanoTime());
     try {
@@ -73,7 +74,7 @@ class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  @DisplayName("GC-pause 旧 leader 的陈旧回报被拒——乐观锁不让覆盖已落定终态")
+  @DisplayName("GC-pause 旧 leader 的陈旧回报被拒,乐观锁不让覆盖已落定终态")
   void staleLeaderReport_rejected_whenVersionAlreadyAdvanced() {
     long taskId = insertRunningTask("stale-leader-" + System.nanoTime());
     try {
@@ -98,7 +99,7 @@ class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  @DisplayName("不重复出账——重投的同一 outbox 事件第二次 insert 被 (tenant_id,event_key) 幂等空转")
+  @DisplayName("不重复出账,重投的同一 outbox 事件第二次 insert 被 (tenant_id, event_key) 幂等空转")
   void duplicateOutboxEvent_dedupedByEventKey_noDoubleEmit() {
     String eventKey = "EVT_" + System.nanoTime();
     try {

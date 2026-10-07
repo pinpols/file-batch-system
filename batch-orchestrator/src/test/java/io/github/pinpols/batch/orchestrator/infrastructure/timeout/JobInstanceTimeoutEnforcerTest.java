@@ -17,6 +17,7 @@ import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -24,6 +25,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 /** 单元测试：{@link JobInstanceTimeoutEnforcer} 仅终止 mapper 已判定为实际执行超时的实例。 */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("作业实例执行超时的收敛器:排空状态下跳过扫描,且只收敛扫描判定为执行超时的实例")
 class JobInstanceTimeoutEnforcerTest {
 
   @Mock
@@ -49,7 +51,8 @@ class JobInstanceTimeoutEnforcerTest {
   }
 
   @Test
-  void skipsScanWhenDraining() {
+  @DisplayName("节点处于排空状态时跳过超时实例扫描")
+  void shouldSkipScan_whenDraining() {
     when(gracefulShutdown.isDraining()).thenReturn(true);
 
     enforcer.enforce();
@@ -58,7 +61,8 @@ class JobInstanceTimeoutEnforcerTest {
   }
 
   @Test
-  void marksOnlyMapperSelectedExecutionTimeout() {
+  @DisplayName("扫描判定实例确为执行超时时收敛为失败终态并累计一次失败计数")
+  void shouldTerminateInstance_whenMapperReportsExecutionTimeout() {
     JobInstanceEntity candidate = new JobInstanceEntity();
     candidate.setId(1L);
     candidate.setTenantId("t1");

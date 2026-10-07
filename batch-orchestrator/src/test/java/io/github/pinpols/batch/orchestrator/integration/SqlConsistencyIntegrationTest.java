@@ -7,6 +7,7 @@ import java.sql.Connection;
 import java.util.Map;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -29,6 +30,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @Tag("integration")
 @ActiveProfiles("test")
 @Testcontainers(disabledWithoutDocker = true)
+@DisplayName("SQL 一致性门禁,在空库上校验迁移脚本完整回放,核心唯一约束存在以及冲突写入幂等")
 class SqlConsistencyIntegrationTest {
 
   @Container
@@ -37,7 +39,8 @@ class SqlConsistencyIntegrationTest {
       TestPostgresContainers.create("batch_sql_guard");
 
   @Test
-  void flywayMigrationsKeyConstraintsAndUpsertProbe() throws Exception {
+  @DisplayName("空库上完整回放迁移后关键唯一约束均存在,且同一冲突写入重复执行不报错")
+  void shouldApplyMigration_whenVerifyingKeyConstraintsAndUpsertIdempotency() throws Exception {
     Flyway.configure()
         .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
         .schemas("batch", "quartz")

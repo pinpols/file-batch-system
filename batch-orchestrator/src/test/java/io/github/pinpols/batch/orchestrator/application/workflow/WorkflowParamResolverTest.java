@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -30,6 +31,7 @@ import org.junit.jupiter.api.Test;
  *   <li>nodes 引用 但 output 缺字段 → 返回 null(非 fail-fast,业务侧回退)
  * </ol>
  */
+@DisplayName("流程参数解析器: 引用语法解析, 递归替换与快速失败口径")
 class WorkflowParamResolverTest {
 
   private final WorkflowParamResolver resolver = new WorkflowParamResolver();
@@ -37,6 +39,7 @@ class WorkflowParamResolverTest {
   // ── 4 类引用 ────────────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("按节点输出引用取到简单字段值")
   void resolve_nodeOutputSimple_returnsValue() {
     WorkflowRunContext ctx =
         ctx(Map.of("SETTLE", Map.of("fileId", 12345L, "recordCount", 100)), Map.of());
@@ -45,6 +48,7 @@ class WorkflowParamResolverTest {
   }
 
   @Test
+  @DisplayName("按多级路径取到节点输出中的嵌套字段值")
   void resolve_nodeOutputNested_dotPath() {
     WorkflowRunContext ctx =
         ctx(Map.of("PROCESS", Map.of("metrics", Map.of("validated", 88, "skipped", 12))), Map.of());
@@ -54,6 +58,7 @@ class WorkflowParamResolverTest {
   }
 
   @Test
+  @DisplayName("按流程运行引用取到营业日与批次号等字段值")
   void resolve_workflowRunField_returnsValue() {
     WorkflowRunContext ctx = ctx(Map.of(), Map.of("bizDate", "2026-04-29", "batchNo", "B001"));
     assertThat(resolver.resolve("$.workflowRun.bizDate", ctx)).isEqualTo("2026-04-29");
@@ -61,6 +66,7 @@ class WorkflowParamResolverTest {
   }
 
   @Test
+  @DisplayName("非引用写法的字符串原样返回, 空值同样返回空")
   void resolve_nonReferenceString_passThrough() {
     WorkflowRunContext ctx = ctx(Map.of(), Map.of());
     assertThat(resolver.resolve("plain text", ctx)).isEqualTo("plain text");
@@ -72,6 +78,7 @@ class WorkflowParamResolverTest {
   // ── 3 类 fail-fast / fallback ──────────────────────────────────────────────
 
   @Test
+  @DisplayName("引用语法缺少根段或路径不全时抛出业务异常")
   void resolve_invalidSyntax_throwsBiz() {
     WorkflowRunContext ctx = ctx(Map.of(), Map.of());
     // 缺少 root segment
@@ -87,6 +94,7 @@ class WorkflowParamResolverTest {
   }
 
   @Test
+  @DisplayName("引用不存在的节点编码时抛出业务异常")
   void resolve_unknownNodeCode_throwsBiz() {
     WorkflowRunContext ctx = ctx(Map.of("SETTLE", Map.of("fileId", 1L)), Map.of());
     assertThatThrownBy(() -> resolver.resolve("$.nodes.WRONG.output.fileId", ctx))
@@ -94,6 +102,7 @@ class WorkflowParamResolverTest {
   }
 
   @Test
+  @DisplayName("节点存在但输出中没有该字段时返回空")
   void resolve_knownNodeButMissingOutputField_returnsNull() {
     // 节点存在,output 上报但没有该 key → null fallback(让业务侧 null check 回退)
     WorkflowRunContext ctx = ctx(Map.of("SETTLE", Map.of("fileId", 1L)), Map.of());
@@ -101,6 +110,7 @@ class WorkflowParamResolverTest {
   }
 
   @Test
+  @DisplayName("节点存在但整个输出未上报时返回空")
   void resolve_knownNodeButOutputNull_returnsNull() {
     // 节点存在但整个 output 没上报(老 worker)→ null fallback
     Map<String, Map<String, Object>> outputs = new HashMap<>();
@@ -112,6 +122,7 @@ class WorkflowParamResolverTest {
   // ── 嵌套结构递归 ───────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("嵌套映射中的引用被递归替换, 字面量保持原样")
   void resolve_nestedMap_recursivelyReplaces() {
     WorkflowRunContext ctx =
         ctx(Map.of("SETTLE", Map.of("fileId", 999L)), Map.of("bizDate", "2026-04-29"));
@@ -132,6 +143,7 @@ class WorkflowParamResolverTest {
   }
 
   @Test
+  @DisplayName("列表元素中的引用被递归替换, 字面量保持原样")
   void resolve_listElements_recursivelyReplaces() {
     WorkflowRunContext ctx = ctx(Map.of("EXPORT", Map.of("fileId", 7L)), Map.of());
     List<Object> params = List.of("$.nodes.EXPORT.output.fileId", "literal", 42);

@@ -12,11 +12,12 @@ import org.junit.jupiter.api.Test;
  * 无任何硬保护，api_key 泄漏即可被过载请求压垮（防接口盗刷审计 P0 缺口）。本测试固化"默认即生效"，防止后续改动悄悄关回去； 阈值设在远高于任何合法单租速率的高水位，只拦截 runaway
  * 滥用，不误伤正常高吞吐。
  */
+@DisplayName("限流配置默认值 - 校验限流默认即开启且各动作每分钟阈值为正向高水位")
 class RateLimitPropertiesTest {
 
   @Test
-  @DisplayName("限流默认开启，桶版本及 claim/report 高水位与发布契约一致")
-  void defaultsEnabledWithPositiveHighWatermarks() {
+  @DisplayName("未显式覆盖配置时限流默认开启,令牌桶版本与各动作阈值符合发布契约")
+  void shouldEnableRateLimitByDefault_whenNoOverrideProvided() {
     RateLimitProperties props = new RateLimitProperties();
 
     assertThat(props.isEnabled()).as("限流默认应开启").isTrue();

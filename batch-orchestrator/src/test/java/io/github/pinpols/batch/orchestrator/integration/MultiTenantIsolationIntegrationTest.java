@@ -16,6 +16,7 @@ import java.time.LocalDate;
 import java.time.Month;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -27,6 +28,7 @@ import org.springframework.test.context.jdbc.Sql;
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Sql(scripts = {PlatformTestdataSql.MULTI_TENANT_SEED})
+@DisplayName("多租户数据隔离: 运行态数据与共享种子配置在租户之间的可见性边界")
 class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
@@ -39,7 +41,8 @@ class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
   private JdbcTemplate jdbcTemplate;
 
   @Test
-  void jobInstanceCreatedForT1IsNotVisibleFromT2() {
+  @DisplayName("按相同去重键跨租户查询时候只能查到本租户的作业实例")
+  void shouldNotExposeJobInstanceAcrossTenants() {
     LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
         jdbcTemplate, "t1", "IMPORT", "IMPORT", TriggerType.API);
 
@@ -66,7 +69,8 @@ class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void outboxEventsCreatedForT1AreNotVisibleFromT2() {
+  @DisplayName("作业启动产生的待发事件不跨租户可见,其它租户查不到同类事件")
+  void shouldNotExposeOutboxEventsAcrossTenants() {
     LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
         jdbcTemplate, "t1", "EXPORT", "EXPORT", TriggerType.MANUAL);
 
@@ -90,7 +94,8 @@ class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void tbJobDefinitionsFromSeedAreAccessibleUnderTbOnly() {
+  @DisplayName("种子里为 tb 租户预置的作业定义只在该租户下可查,其它租户计数为零")
+  void shouldExposeTbSeededJobDefinitionsOnlyToTbTenant() {
     Long tbCount = jdbcTemplate.queryForObject(
         "select count(*) from batch.job_definition where tenant_id = 'tb' and job_code like"
             + " 'TB_%'",
@@ -105,7 +110,8 @@ class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void tcJobDefinitionsFromSeedAreAccessibleUnderTcOnly() {
+  @DisplayName("种子里为 tc 租户预置的作业定义只在该租户下可查,其它租户计数为零")
+  void shouldExposeTcSeededJobDefinitionsOnlyToTcTenant() {
     Long tcCount = jdbcTemplate.queryForObject(
         "select count(*) from batch.job_definition where tenant_id = 'tc' and job_code like"
             + " 'TC_%'",
@@ -120,7 +126,8 @@ class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void quotaPoliciesAreScopedPerTenant() {
+  @DisplayName("配额策略按租户各自维护,不同租户的运行上限与重置策略互不相同")
+  void shouldScopeQuotaPoliciesPerTenant() {
     Long tbPolicies = jdbcTemplate.queryForObject(
         "select count(*) from batch.tenant_quota_policy where tenant_id = 'tb' and policy_code"
             + " = 'DEFAULT'",
@@ -148,7 +155,8 @@ class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void workerRegistriesAreScopedPerTenant() {
+  @DisplayName("工作节点注册表按租户隔离,不同租户的节点编码集合不重叠")
+  void shouldScopeWorkerRegistriesPerTenant() {
     List<Map<String, Object>> tbWorkers = jdbcTemplate.queryForList(
         "select worker_code from batch.worker_registry where tenant_id = 'tb'");
     List<Map<String, Object>> tcWorkers = jdbcTemplate.queryForList(
@@ -170,7 +178,8 @@ class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void launchingT2JobDoesNotAffectT1JobCount() {
+  @DisplayName("在其它租户启动作业不影响本租户既有实例数,新租户自身计数增加")
+  void shouldNotChangeOtherTenantJobCount_whenLaunchingNewJob() {
     long t1Before = countJobInstances("t1");
 
     LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(

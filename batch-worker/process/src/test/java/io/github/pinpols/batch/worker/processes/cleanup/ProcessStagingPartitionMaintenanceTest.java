@@ -21,6 +21,7 @@ import org.springframework.beans.factory.ObjectProvider;
 
 /** {@link ProcessStagingOrphanCleaner#maintainPartitions()} 分区维护逻辑单测。 */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("处理暂存区分区维护:预建日分区、过期分区删除、保留期关闭与日边界格式")
 class ProcessStagingPartitionMaintenanceTest {
 
   @Mock

@@ -30,9 +30,11 @@ import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+@DisplayName("取证导出服务: 打包产物, 请求参数校验与失败标记口径")
 class ForensicExportServiceTest {
 
   @TempDir
@@ -62,6 +64,7 @@ class ForensicExportServiceTest {
   }
 
   @Test
+  @DisplayName("导出成功时生成含清单与业务数据的压缩包, 并给出摘要与文件大小")
   void shouldProduceZipBundleWithManifestAndSha256() throws IOException {
     JobInstanceEntity instance = new JobInstanceEntity();
     instance.setId(1L);
@@ -108,6 +111,7 @@ class ForensicExportServiceTest {
   }
 
   @Test
+  @DisplayName("导出功能关闭时拒绝请求并提示功能未启用")
   void shouldRejectWhenDisabled() {
     properties.setEnabled(false);
     assertThatThrownBy(() -> service.export(ForensicExportRequest.builder()
@@ -120,6 +124,7 @@ class ForensicExportServiceTest {
   }
 
   @Test
+  @DisplayName("营业日区间起止颠倒时拒绝请求")
   void shouldRejectInvalidDateRange() {
     assertThatThrownBy(() -> service.export(ForensicExportRequest.builder()
             .tenantId("t1")
@@ -131,6 +136,7 @@ class ForensicExportServiceTest {
   }
 
   @Test
+  @DisplayName("营业日区间超过配置的跨度上限时拒绝请求")
   void shouldRejectDateRangeBeyondConfiguredCap() {
     properties.setMaxDateRangeDays(2);
     assertThatThrownBy(() -> service.export(ForensicExportRequest.builder()
@@ -143,6 +149,7 @@ class ForensicExportServiceTest {
   }
 
   @Test
+  @DisplayName("租户或营业日缺失时拒绝请求")
   void shouldRejectMissingTenantOrDate() {
     assertThatThrownBy(() -> service.export(ForensicExportRequest.builder()
             .bizDateFrom(LocalDate.of(2026, Month.MARCH, 15))
@@ -153,6 +160,7 @@ class ForensicExportServiceTest {
   }
 
   @Test
+  @DisplayName("查询过程抛异常时导出标记为失败, 并记录失败日志")
   void shouldMarkFailedWhenMapperBlowsUp() {
     when(jobInstanceMapper.selectForensicByBizDateRange(eq("t1"), any(), any(), isNull(), anyInt()))
         .thenThrow(new RuntimeException("boom"));
@@ -170,6 +178,7 @@ class ForensicExportServiceTest {
   }
 
   @Test
+  @DisplayName("指定任务清单时导出清单只包含该过滤条件")
   void shouldHonourJobCodesFilter() {
     when(jobInstanceMapper.selectForensicByBizDateRange(
             eq("t1"), any(), any(), eq(List.of("DAILY_PNL")), anyInt()))

@@ -9,6 +9,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.Test;
  * <p>一旦有人新增"裸 {@code outboxEventMapper.insert(...)}"绕过该入口,NOT EXISTS 去重就被旁路,竞态重新引入且无 DB 回退。本测试静态扫描
  * main src,锁死这个不变量。
  */
+@DisplayName("发件箱事件写入入口的架构守护,验证生产源码中只有唯一发布器可以执行该写入")
 class OutboxWriteChokePointArchTest {
 
   /** 允许调用 outboxEventMapper.insert( 的唯一类。 */
@@ -32,7 +34,8 @@ class OutboxWriteChokePointArchTest {
   private static final String INSERT_CALL = "outboxEventMapper.insert(";
 
   @Test
-  void outboxEventInsertMustOnlyGoThroughDomainEventPublisher() throws IOException {
+  @DisplayName("扫描生产源码时,白名单之外的类若直接写入发件箱事件应被判定为违规")
+  void shouldOnlyAllowPublisherToInsertOutboxEvent_whenScanningMainSources() throws IOException {
     Path mainDir = Paths.get("src/main/java");
     if (!Files.exists(mainDir)) {
       return;

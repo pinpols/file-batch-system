@@ -8,6 +8,7 @@ import io.github.pinpols.batch.orchestrator.mapper.CapacityProfileMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Instant;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -32,6 +33,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("产能画像查询: 多租户隔离下按租户, 作业与执行器三个维度的聚合口径")
 class CapacityProfileMapperIntegrationTest extends AbstractIntegrationTest {
 
   // 时间窗口 bracket 住全部 seeded 时间戳（biz_date 落在 job_instance 月分区覆盖范围内）。
@@ -59,6 +61,7 @@ class CapacityProfileMapperIntegrationTest extends AbstractIntegrationTest {
   private JdbcTemplate jdbcTemplate;
 
   @Test
+  @DisplayName("按租户聚合时只统计本租户的两个实例, 其它租户的文件字节与第三个实例不得渗入")
   void selectTenantProfile_isTenantScoped_doesNotLeakOtherTenantRows() {
     // arrange
     seedTenantA();
@@ -87,6 +90,7 @@ class CapacityProfileMapperIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("按作业聚合时只返回本租户的作业口径, 其它租户作业整体缺席")
   void selectJobProfile_returnsOnlyTenantAJobCode() {
     // arrange
     seedTenantA();
@@ -107,6 +111,7 @@ class CapacityProfileMapperIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("按执行器聚合时只返回本租户的执行器口径, 其它租户执行器整体缺席")
   void selectWorkerProfile_returnsOnlyTenantAWorker() {
     // arrange
     seedTenantA();

@@ -14,6 +14,7 @@ import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorCon
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
 import io.github.pinpols.batch.orchestrator.mapper.*;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
@@ -31,6 +32,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
     classes = OrchestratorConfigCacheServiceIntegrationTest.TestApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE,
     properties = {"batch.startup-self-check.enabled=false"})
+@DisplayName("配置缓存旁路读写:未命中回源并写入 Redis,命中时跳过仓储,失效后重新回源")
 class OrchestratorConfigCacheServiceIntegrationTest extends AbstractIntegrationTest {
 
   @SpringBootConfiguration
@@ -66,7 +68,8 @@ class OrchestratorConfigCacheServiceIntegrationTest extends AbstractIntegrationT
   private StringRedisTemplate redisTemplate;
 
   @Test
-  void cacheMissLoadsFromRepositoryAndPopulatesRedis() {
+  @DisplayName("缓存未命中时从仓储加载配置并写入 Redis,返回值与仓储记录一致")
+  void shouldLoadFromRepositoryAndPopulateRedis_whenCacheMisses() {
     String tenantId = "t-cache-" + System.nanoTime();
     String jobCode = "JOB-" + System.nanoTime();
     JobDefinitionEntity jobRecord = jobDefinitionRecord(tenantId, jobCode);
@@ -82,7 +85,8 @@ class OrchestratorConfigCacheServiceIntegrationTest extends AbstractIntegrationT
   }
 
   @Test
-  void cacheHitSkipsRepository() {
+  @DisplayName("缓存命中时直接返回缓存值,对仓储只查询一次")
+  void shouldSkipRepository_whenCacheHits() {
     String tenantId = "t-hit-" + System.nanoTime();
     String jobCode = "JOB-HIT-" + System.nanoTime();
     JobDefinitionEntity jobRecord = jobDefinitionRecord(tenantId, jobCode);
@@ -97,7 +101,8 @@ class OrchestratorConfigCacheServiceIntegrationTest extends AbstractIntegrationT
   }
 
   @Test
-  void evictClearsRedisKeyAndNextCallHitsRepository() {
+  @DisplayName("配置失效后 Redis 键被清除,再次读取回源仓储并累计两次查询")
+  void shouldClearRedisKeyAndReloadFromRepository_whenEvicted() {
     String tenantId = "t-evict-" + System.nanoTime();
     String jobCode = "JOB-EVICT-" + System.nanoTime();
     JobDefinitionEntity jobRecord = jobDefinitionRecord(tenantId, jobCode);

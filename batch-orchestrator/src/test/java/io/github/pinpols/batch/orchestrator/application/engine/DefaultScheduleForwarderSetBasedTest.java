@@ -43,6 +43,7 @@ import org.mockito.quality.Strictness;
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
+@DisplayName("出箱转发批量推进: 三阶段批量语句, 并行回写与等待超时口径")
 class DefaultScheduleForwarderSetBasedTest {
 
   @Mock
@@ -72,7 +73,7 @@ class DefaultScheduleForwarderSetBasedTest {
 
   @Test
   @DisplayName("三阶段 set-based:抢占/成功/失败/GIVE_UP 各走批量 SQL,单条 mark* 零调用")
-  void advanceUsesSetBasedStatementsPerOutcomeGroup() {
+  void shouldUseBatchStatements_whenAdvancingOutcomeGroups() {
     OutboxEventEntity ok = event("ta", 1L, 0);
     OutboxEventEntity fail = event("ta", 2L, 0);
     // publish_attempt=4 → 本次为第 5 次(=maxRetryAttempts 默认 5)→ GIVE_UP
@@ -139,7 +140,7 @@ class DefaultScheduleForwarderSetBasedTest {
 
   @Test
   @DisplayName("抢占胜出集是发送边界:未胜出(被并发 forwarder 抢走)的事件不发 Kafka")
-  void advanceOnlyPublishesWinnersOfBatchCas() {
+  void shouldPublishOnlyWinners_whenBatchClaimContended() {
     OutboxEventEntity won = event("ta", 1L, 0);
     OutboxEventEntity lost = event("ta", 2L, 0);
     when(outboxEventMapper.selectPending(any())).thenReturn(List.of(won, lost));
@@ -159,7 +160,7 @@ class DefaultScheduleForwarderSetBasedTest {
 
   @Test
   @DisplayName("跨租户批:阶段一按租户分组各一条批量抢占(保留复合分布键裁剪)")
-  void advanceGroupsPhaseOneByTenant() {
+  void shouldGroupClaimByTenant_whenAdvancingAcrossTenants() {
     OutboxEventEntity ta = event("ta", 1L, 0);
     OutboxEventEntity tb = event("tb", 2L, 0);
     when(outboxEventMapper.selectPending(any())).thenReturn(List.of(ta, tb));
@@ -177,7 +178,7 @@ class DefaultScheduleForwarderSetBasedTest {
 
   @Test
   @DisplayName("A6:每轮批填充 attempted/succeeded 进 DistributionSummary(饱和信号)")
-  void advanceRecordsBatchFillDistributionSummaries() {
+  void shouldRecordBatchFillSummaries_whenAdvancing() {
     OutboxEventEntity ok = event("ta", 1L, 0);
     OutboxEventEntity fail = event("ta", 2L, 0);
     when(outboxEventMapper.selectPending(any())).thenReturn(List.of(ok, fail));
@@ -203,7 +204,7 @@ class DefaultScheduleForwarderSetBasedTest {
 
   @Test
   @DisplayName("B2:publish 返回 failedFuture → 阶段三照常回写 FAILED,不整批停摆")
-  void advanceHandlesExceptionallyCompletedFutureWithoutStallingBatch() {
+  void shouldMarkFailedWithoutStalling_whenPublishFutureFails() {
     OutboxEventEntity ok = event("ta", 1L, 0);
     OutboxEventEntity boom = event("ta", 2L, 0);
     when(outboxEventMapper.selectPending(any())).thenReturn(List.of(ok, boom));
@@ -247,7 +248,7 @@ class DefaultScheduleForwarderSetBasedTest {
 
   @Test
   @DisplayName("ACK 等待受 publishingTimeoutSeconds 约束:未完成 future 按 FAILED 回写")
-  void advanceTimesOutIncompletePublishFutureAndMarksFailed() {
+  void shouldMarkFailed_whenPublishFutureTimesOut() {
     outboxProperties.setPublishingTimeoutSeconds(1);
     OutboxEventEntity stalled = event("ta", 4L, 0);
     when(outboxEventMapper.selectPending(any())).thenReturn(List.of(stalled));
@@ -283,7 +284,7 @@ class DefaultScheduleForwarderSetBasedTest {
 
   @Test
   @DisplayName("B2:markPublishedBatch 命中行数 < 期望 → warnOnPartialUpdate 并发守卫分支(不抛)")
-  void advanceTriggersPartialUpdateGuardWhenConcurrentAdvancerStealsRows() {
+  void shouldWarnWithoutThrowing_whenPartialUpdateDetected() {
     OutboxEventEntity a = event("ta", 1L, 0);
     OutboxEventEntity b = event("ta", 2L, 0);
     when(outboxEventMapper.selectPending(any())).thenReturn(List.of(a, b));

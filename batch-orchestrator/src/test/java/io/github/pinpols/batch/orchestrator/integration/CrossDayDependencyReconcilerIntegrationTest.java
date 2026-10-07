@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -37,6 +38,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("跨批量日依赖解析与等待依赖节点落库,校验真实数据库上的生效结果版本解析与状态约束放行")
 class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -57,7 +59,8 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
   private JdbcTemplate jdbcTemplate;
 
   @Test
-  void resolverFindsEffectiveUpstreamVersion() {
+  @DisplayName("上游存在生效结果版本时依赖解析成功,解析结果包含声明中的别名条目")
+  void shouldResolveUpstreamVersion_whenEffectiveVersionExists() {
     long upstreamInstanceId = insertStubJobInstance("INST-Y", "SUCCESS", UPSTREAM_JOB);
     ResultVersionEntity upstream = ResultVersionEntity.builder()
         .tenantId(TENANT)
@@ -86,7 +89,8 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
   }
 
   @Test
-  void waitingDependencyStatusAcceptedByCheckConstraint() {
+  @DisplayName("节点运行以等待依赖状态写入时检查约束放行,按状态查询能查到该记录并带启动时间")
+  void shouldAcceptWaitingDependencyStatus_whenInsertingNodeRun() {
     // V109 把 ck_workflow_node_run_status 扩展到 WAITING_DEPENDENCY；这里直接 INSERT 验证约束放行
     Long workflowRunId = insertStubWorkflowRun();
     WorkflowNodeRunEntity nodeRun = new WorkflowNodeRunEntity();

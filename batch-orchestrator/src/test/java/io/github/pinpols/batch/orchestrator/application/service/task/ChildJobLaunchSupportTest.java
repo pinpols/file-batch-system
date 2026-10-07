@@ -31,6 +31,7 @@ import org.springframework.beans.factory.ObjectProvider;
 
 /** 跨 workflow 嵌套环检测({@link ChildJobLaunchSupport#dispatchJobNode})单测。 */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("子作业拉起支持: 自引用与跨流程环检测口径")
 class ChildJobLaunchSupportTest {
 
   private static final String TENANT = "t1";

@@ -8,6 +8,7 @@ import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.infrastructure.http.OkHttpOrchestratorExternalHttpTransport;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
@@ -22,6 +23,7 @@ import org.springframework.test.context.TestConstructor;
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
+@DisplayName("调度编排应用的启动冒烟,验证上下文可装配,外呼传输选用既定实现且数据库迁移回调已注册")
 class BatchOrchestratorApplicationStartupIntegrationTest extends AbstractIntegrationTest {
 
   private final ApplicationContext applicationContext;
@@ -34,7 +36,8 @@ class BatchOrchestratorApplicationStartupIntegrationTest extends AbstractIntegra
   }
 
   @Test
-  void contextLoads() {
+  @DisplayName("应用上下文可装配,外呼传输为既定实现且数据库迁移回调已注册")
+  void shouldLoadContextAndRegisterMigrationCallback_whenApplicationStarts() {
     assertThat(applicationContext).isNotNull();
     assertThat(applicationContext.getBean(OutboundHttpTransport.class))
         .isInstanceOf(OkHttpOrchestratorExternalHttpTransport.class);

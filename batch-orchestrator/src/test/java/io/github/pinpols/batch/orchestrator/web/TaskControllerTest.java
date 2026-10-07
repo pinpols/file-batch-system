@@ -31,6 +31,7 @@ import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -40,6 +41,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("任务执行接口,验证认领与上报的限流拒绝,认领成功与冲突及任务不存在,租户边界,有效配置下发,续约与批量续约以及取消请求的响应")
 class TaskControllerTest {
 
   @Mock
@@ -68,6 +70,7 @@ class TaskControllerTest {
   }
 
   @Test
+  @DisplayName("认领动作被租户限流时返回请求过多,且不触达任务分配逻辑")
   void shouldReturn429WhenClaimRateLimited() throws Exception {
     when(tenantActionRateLimiter.tryConsume("t1", RateLimitAction.TASK_CLAIM)).thenReturn(false);
 
@@ -81,6 +84,7 @@ class TaskControllerTest {
   }
 
   @Test
+  @DisplayName("上报动作被租户限流时返回请求过多,且不触达结果落库逻辑")
   void shouldReturn429WhenReportRateLimited() throws Exception {
     when(tenantActionRateLimiter.tryConsume("t1", RateLimitAction.TASK_REPORT)).thenReturn(false);
 
@@ -94,6 +98,7 @@ class TaskControllerTest {
   }
 
   @Test
+  @DisplayName("任务可被认领时返回成功状态")
   void shouldReturn200WhenClaimSucceeds() throws Exception {
     JobTaskEntity task = new JobTaskEntity();
     task.setTaskStatus(TaskStatus.RUNNING.code());
@@ -108,6 +113,7 @@ class TaskControllerTest {
   }
 
   @Test
+  @DisplayName("认领成功时返回有效配置,作业编码,执行模式,分片区间,重试与超时参数及高水位取值均与配置源一致")
   void shouldReturnEffectiveConfigBodyWhenClaimSucceeds() throws Exception {
     JobTaskEntity task = new JobTaskEntity();
     task.setTaskStatus(TaskStatus.RUNNING.code());
@@ -169,6 +175,7 @@ class TaskControllerTest {
   }
 
   @Test
+  @DisplayName("接口密钥归属租户与请求体声明租户不一致时认领被拒绝并返回禁止访问")
   void shouldRejectApiKeyTenantMismatchOnClaim() throws Exception {
     mockMvc
         .perform(post("/internal/tasks/10/claim")
@@ -179,6 +186,7 @@ class TaskControllerTest {
   }
 
   @Test
+  @DisplayName("请求体未声明租户时按接口密钥解析出的租户完成认领")
   void shouldUseResolvedTenantWhenApiKeyRequestOmitsBodyTenant() throws Exception {
     JobTaskEntity task = new JobTaskEntity();
     task.setTaskStatus(TaskStatus.RUNNING.code());
@@ -196,6 +204,7 @@ class TaskControllerTest {
   }
 
   @Test
+  @DisplayName("认领的任务不存在时返回未找到")
   void shouldReturn404WhenTaskNotFoundOnClaim() throws Exception {
     when(taskExecutionService.assignWorker(any(), any(), any())).thenReturn(null);
 
@@ -207,6 +216,7 @@ class TaskControllerTest {
   }
 
   @Test
+  @DisplayName("任务已被其它执行节点占用时认领返回冲突")
   void shouldReturn409WhenClaimConflict() throws Exception {
     JobTaskEntity task = new JobTaskEntity();
     task.setTaskStatus(TaskStatus.RUNNING.code());
@@ -221,6 +231,7 @@ class TaskControllerTest {
   }
 
   @Test
+  @DisplayName("上报请求被受理时返回成功状态")
   void shouldReturn200WhenReportAccepted() throws Exception {
     mockMvc
         .perform(post("/internal/tasks/5/report").contentType(APPLICATION_JSON).content("""
@@ -234,6 +245,7 @@ class TaskControllerTest {
   }
 
   @Test
+  @DisplayName("缺少结构化错误字段时,回退取用旧版错误码与错误信息并完整透传给下游")
   void shouldFallbackToLegacyCodeAndMessageWhenErrorFieldsMissing() throws Exception {
     mockMvc
         .perform(post("/internal/tasks/5/report").contentType(APPLICATION_JSON).content("""
@@ -253,6 +265,7 @@ class TaskControllerTest {
   }
 
   @Test
+  @DisplayName("续约处理结果标记无需取消时,响应中取消标记为假")
   void shouldReturn200WithCancelFalseWhenRenewSucceeds() throws Exception {
     when(taskExecutionService.recordHeartbeat("t1", 7L, "w1", null, null))
         .thenReturn(new TaskHeartbeatResult(true, false));
@@ -266,6 +279,7 @@ class TaskControllerTest {
   }
 
   @Test
+  @DisplayName("续约处理结果标记需要取消时,响应中取消标记为真")
   void shouldReturnCancelRequestedTrueWhenPlatformCancelled() throws Exception {
     when(taskExecutionService.recordHeartbeat("t1", 7L, "w1", null, null))
         .thenReturn(new TaskHeartbeatResult(true, true));
@@ -279,6 +293,7 @@ class TaskControllerTest {
   }
 
   @Test
+  @DisplayName("续约携带进度明细时,明细内容被完整透传给心跳记录")
   void shouldPersistHeartbeatDetailsWhenRenewCarriesDetails() throws Exception {
     when(taskExecutionService.recordHeartbeat(eq("t1"), eq(7L), eq("w1"), any(), any()))
         .thenReturn(new TaskHeartbeatResult(true, false));
@@ -296,6 +311,7 @@ class TaskControllerTest {
   }
 
   @Test
+  @DisplayName("续约处理结果标记续约失败时返回冲突")
   void shouldReturn409WhenRenewRejected() throws Exception {
     when(taskExecutionService.recordHeartbeat("t1", 7L, "w1", null, null))
         .thenReturn(new TaskHeartbeatResult(false, false));
@@ -308,6 +324,7 @@ class TaskControllerTest {
   }
 
   @Test
+  @DisplayName("取消登记成功时返回成功状态并记录取消请求")
   void shouldReturn200WhenCancelRequested() throws Exception {
     when(taskExecutionService.requestCancel("t1", 7L)).thenReturn(true);
 
@@ -321,6 +338,7 @@ class TaskControllerTest {
   }
 
   @Test
+  @DisplayName("批量续约逐项返回结果,任务编号与续约结果按入参顺序一一对应")
   void shouldReturn200WithPerTaskResultsForRenewBatch() throws Exception {
     // PERF(5.3): renewBatch 走 set-based renewLeaseBatch,一次下发、逐项结果与入参对齐
     when(taskExecutionService.renewLeaseBatch(any()))

@@ -48,6 +48,7 @@ import org.springframework.beans.factory.ObjectProvider;
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
+@DisplayName("流程节点派发类型分支: 子作业, 网关与起点节点的路由口径")
 class DefaultWorkflowNodeDispatchServiceAllTypesTest {
 
   @Mock
@@ -159,7 +160,7 @@ class DefaultWorkflowNodeDispatchServiceAllTypesTest {
 
   @Test
   @DisplayName("JOB 类型 → 走 childJobLaunchSupport.dispatchJobNode 分支")
-  void jobNodeRoutesToChildJobLaunchSupport() {
+  void shouldRouteToChildJobLaunch_whenNodeIsJob() {
     when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(50L, "n1"))
         .thenReturn(nodeWithType(WorkflowNodeType.JOB.code()));
     when(childJobLaunchSupport.dispatchJobNode(any(), any(), any(), any(), any(), any()))
@@ -178,7 +179,7 @@ class DefaultWorkflowNodeDispatchServiceAllTypesTest {
   @Test
   @DisplayName(
       "GATEWAY 节点 → 走 dispatchGatewayNode (无工作负载),不调 childJobLaunchSupport / schedulePlanBuilder")
-  void gatewayNodeShouldNotInvokeJobOrTaskDispatch() {
+  void shouldRouteToGateway_whenNodeIsGateway() {
     when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(50L, "n1"))
         .thenReturn(nodeWithType(WorkflowNodeType.GATEWAY.code()));
 
@@ -193,7 +194,7 @@ class DefaultWorkflowNodeDispatchServiceAllTypesTest {
 
   @Test
   @DisplayName("START 节点 → 走 gateway 同分支(isGatewayNode 接受 START)")
-  void startNodeShouldBeTreatedAsGateway() {
+  void shouldTreatAsGateway_whenNodeIsStart() {
     when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(50L, "n1"))
         .thenReturn(nodeWithType(WorkflowNodeType.START.code()));
 

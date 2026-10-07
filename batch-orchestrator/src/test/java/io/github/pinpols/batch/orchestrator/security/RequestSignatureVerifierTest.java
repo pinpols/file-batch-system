@@ -18,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("请求签名校验,验证合法请求放行与缺失头部,时钟偏移,签名错误和重放的拒绝分支")
 class RequestSignatureVerifierTest {
 
   private static final long NOW = 1_700_000_000_000L;
@@ -52,62 +53,62 @@ class RequestSignatureVerifierTest {
   }
 
   @Test
-  @DisplayName("合法签名+新 nonce+ts 在窗内 → OK")
-  void validSignaturePasses() {
+  @DisplayName("签名合法且随机数为首次使用时放行请求")
+  void shouldAcceptRequest_whenSignatureValidAndNonceFresh() {
     when(nonceStore.registerIfAbsent(anyString(), anyString(), any())).thenReturn(true);
     Result r = verifier.verify(signed(NOW, "nonce-01", goodSig(NOW, "nonce-01")), NOW);
     assertThat(r).isEqualTo(Result.OK);
   }
 
   @Test
-  @DisplayName("缺签名头 → MISSING_HEADERS")
-  void missingHeaders() {
+  @DisplayName("请求缺少签名头时直接判定为头部缺失")
+  void shouldRejectRequest_whenSignatureHeaderMissing() {
     assertThat(verifier.verify(signed(NOW, "nonce-01", null), NOW))
         .isEqualTo(Result.MISSING_HEADERS);
   }
 
   @Test
-  @DisplayName("时间戳超出偏移窗 → CLOCK_SKEW")
-  void clockSkewRejected() {
+  @DisplayName("时间戳超出允许的时钟偏移窗口时判定为时钟偏移")
+  void shouldRejectRequest_whenTimestampOutsideClockSkewWindow() {
     long stale = NOW - 301_000L;
     assertThat(verifier.verify(signed(stale, "nonce-01", goodSig(stale, "nonce-01")), NOW))
         .isEqualTo(Result.CLOCK_SKEW);
   }
 
   @Test
-  @DisplayName("签名不匹配 → BAD_SIGNATURE")
-  void badSignature() {
+  @DisplayName("签名与服务端计算值不一致时判定为签名错误")
+  void shouldRejectRequest_whenSignatureMismatch() {
     assertThat(verifier.verify(signed(NOW, "nonce-01", "0".repeat(64)), NOW))
         .isEqualTo(Result.BAD_SIGNATURE);
   }
 
   @Test
-  @DisplayName("nonce 已用过(store 返回 false) → REPLAY")
-  void replayRejected() {
+  @DisplayName("随机数已被防重放记录占用时判定为重放")
+  void shouldRejectRequest_whenNonceAlreadyRegistered() {
     when(nonceStore.registerIfAbsent(anyString(), anyString(), any())).thenReturn(false);
     assertThat(verifier.verify(signed(NOW, "nonce-01", goodSig(NOW, "nonce-01")), NOW))
         .isEqualTo(Result.REPLAY);
   }
 
   @Test
-  @DisplayName("非法时间戳格式 → CLOCK_SKEW,不污染 nonce")
-  void malformedTimestampRejectedBeforeNonceStore() {
+  @DisplayName("时间戳格式非法时按时钟偏移拒绝,且不写入防重放记录")
+  void shouldRejectMalformedTimestamp_beforeTouchingNonceStore() {
     assertThat(verifier.verify(signed(" 1700000000000 ", "nonce-01", "0".repeat(64)), NOW))
         .isEqualTo(Result.CLOCK_SKEW);
     verifyNoInteractions(nonceStore);
   }
 
   @Test
-  @DisplayName("非法 nonce 格式 → BAD_SIGNATURE,不污染 nonce")
-  void malformedNonceRejectedBeforeNonceStore() {
+  @DisplayName("随机数格式非法时按签名错误拒绝,且不写入防重放记录")
+  void shouldRejectMalformedNonce_beforeTouchingNonceStore() {
     assertThat(verifier.verify(signed(NOW, "short", "0".repeat(64)), NOW))
         .isEqualTo(Result.BAD_SIGNATURE);
     verifyNoInteractions(nonceStore);
   }
 
   @Test
-  @DisplayName("非法签名格式 → BAD_SIGNATURE,不污染 nonce")
-  void malformedSignatureRejectedBeforeNonceStore() {
+  @DisplayName("签名字符串格式非法时按签名错误拒绝,且不写入防重放记录")
+  void shouldRejectMalformedSignature_beforeTouchingNonceStore() {
     assertThat(verifier.verify(signed(NOW, "nonce-01", "not-hex"), NOW))
         .isEqualTo(Result.BAD_SIGNATURE);
     verifyNoInteractions(nonceStore);

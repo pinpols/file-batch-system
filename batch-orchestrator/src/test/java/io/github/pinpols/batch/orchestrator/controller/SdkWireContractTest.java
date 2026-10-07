@@ -20,6 +20,7 @@ import io.github.pinpols.batch.sdk.wire.ReportRequest;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -36,6 +37,7 @@ import org.junit.jupiter.api.Test;
  *
  * <p>**这测一旦红 → 协议字段被改名 / 删除,SDK / 平台两端必须同步**(plan §15.5 dual-rollout 纪律)。
  */
+@DisplayName("端侧协议报文与平台侧载荷的字段映射契约:防字段改名或删除导致两端语义漂移")
 class SdkWireContractTest {
 
   private static final ObjectMapper MAPPER =
@@ -44,7 +46,8 @@ class SdkWireContractTest {
   // ─── /internal/workers/register ─────────────────────────────────────────
 
   @Test
-  void registerRequestDeserializesToWorkerHeartbeatDto() throws Exception {
+  @DisplayName("注册请求填齐全部字段时,平台侧心跳载荷逐字段取值一致,且不携带任务类型定义")
+  void shouldMapRegisterFields_whenRegisterRequestIsComplete() throws Exception {
     RegisterRequest sdkSide = new RegisterRequest(
         "tenant-acme",
         "worker-1",
@@ -83,7 +86,8 @@ class SdkWireContractTest {
   }
 
   @Test
-  void registerRequestTaskTypeDescriptorDeserializesAcrossBoundary() throws Exception {
+  @DisplayName("注册请求携带任务类型描述时,平台侧还原编码,展示名,版本,默认参数,输入约束与模板变量")
+  void shouldMapTaskTypeDescriptor_whenRegisterCarriesDescriptor() throws Exception {
     // Phase 3 M3.1:SDK SdkTaskTypeDescriptor → 平台 WorkerTaskTypeDescriptorDto 字段名 1:1。
     SdkTaskTypeDescriptor descriptor = new SdkTaskTypeDescriptor(
         "tenant_acme_import",
@@ -124,7 +128,8 @@ class SdkWireContractTest {
   // ─── /internal/workers/{workerCode}/heartbeat ───────────────────────────
 
   @Test
-  void heartbeatRequestDeserializesToWorkerHeartbeatDto() throws Exception {
+  @DisplayName("心跳请求携带工作节点身份信息时,平台侧保留分组,主机名,主机地址,进程号,构建号与能力标签")
+  void shouldMapHeartbeatWorkerIdentity_whenHeartbeatRequestArrives() throws Exception {
     // Python SDK PR #320 / Java SDK fix/sdk-java-heartbeat-fields-align 对齐:
     // heartbeat 必须能携带 workerGroup / hostName / hostIp / processId / capabilityTags / buildId
     // 这 6 字段(register 时已上报,但平台回退降级 register 路径时需要它们消除字段丢失窗口)。
@@ -159,7 +164,8 @@ class SdkWireContractTest {
   }
 
   @Test
-  void heartbeatDoesNotSerializeRemovedScalarProgressFields() throws Exception {
+  @DisplayName("已下线的标量进度字段不再出现在心跳报文中,平台侧读取的流水线进度为空")
+  void shouldOmitRemovedScalarProgress_whenHeartbeatIsSerialized() throws Exception {
     // BYO SDK 不伪造 pipeline 身份，也不再发布无任务身份的进程级进度。
     HeartbeatRequest sdkSide = new HeartbeatRequest(
         "tenant-acme",
@@ -183,7 +189,8 @@ class SdkWireContractTest {
   // ─── /internal/tasks/{taskId}/claim ─────────────────────────────────────
 
   @Test
-  void claimRequestDeserializesToTaskClaimRequest() throws Exception {
+  @DisplayName("任务认领请求到达时,平台侧还原租户,工作节点与分区调用标识")
+  void shouldMapClaimIdentity_whenClaimRequestArrives() throws Exception {
     ClaimRequest sdkSide = new ClaimRequest("tenant-acme", "worker-1", "inv-789");
 
     TaskClaimRequest platformSide =
@@ -197,7 +204,8 @@ class SdkWireContractTest {
   // ─── /internal/tasks/{taskId}/renew ─────────────────────────────────────
 
   @Test
-  void renewRequestDeserializesToTaskHeartbeatRequest() throws Exception {
+  @DisplayName("旧版端侧仅上报三个字段时续期请求仍可解析,缺失的分区调用标识与明细为空")
+  void shouldParseRenewRequest_whenLegacySdkOmitsDetails() throws Exception {
     // ORCH-P4-1:renew 绑定 TaskHeartbeatRequest;旧 SDK 仅发 3 字段,details=null 向前兼容。
     RenewRequest sdkSide = new RenewRequest("tenant-acme", "worker-1", null);
 
@@ -213,7 +221,8 @@ class SdkWireContractTest {
   // ─── /internal/tasks/{taskId}/report ────────────────────────────────────
 
   @Test
-  void reportRequestDeserializesToTaskExecutionReportDto() throws Exception {
+  @DisplayName("成功上报到达时,平台侧还原任务身份,链路标识,结果码,结果摘要,外部水位与输出明细")
+  void shouldMapReportFields_whenSuccessReportArrives() throws Exception {
     ReportRequest sdkSide = new ReportRequest(
         42L,
         "tenant-acme",
@@ -247,7 +256,8 @@ class SdkWireContractTest {
   }
 
   @Test
-  void reportRequestFailureCarriesErrorCodeAndResultSummary() throws Exception {
+  @DisplayName("失败上报到达时,平台侧保留成功标记为假,消息,异常类名,结果摘要,失败分类与校验失败明细")
+  void shouldCarryFailureDetails_whenReportFails() throws Exception {
     ReportRequest sdkSide = new ReportRequest(
         42L,
         "tenant-acme",
@@ -278,7 +288,8 @@ class SdkWireContractTest {
   // ─── 字段命名陷阱回归 ───────────────────────────────────────────────────
 
   @Test
-  void reportRequestUsesOutputsNotOutput() throws Exception {
+  @DisplayName("上报序列化后只出现复数形式的输出字段,单数写法不得产生,否则平台永远读不到输出")
+  void shouldSerializePluralOutputField_whenReportIsSerialized() throws Exception {
     ReportRequest sdkSide = new ReportRequest(
         1L, "t", "w", null, true, null, null, null, null, null, Map.of("k", "v"), null, null, null);
     JsonNode tree = MAPPER.readTree(MAPPER.writeValueAsBytes(sdkSide));
@@ -291,7 +302,8 @@ class SdkWireContractTest {
   }
 
   @Test
-  void reportRequestUsesErrorCodeNotErrorClass() throws Exception {
+  @DisplayName("上报序列化后使用错误码字段承载异常信息,废弃的异常类字段不再出现")
+  void shouldSerializeErrorCodeField_whenReportIsSerialized() throws Exception {
     ReportRequest sdkSide = new ReportRequest(
         1L,
         "t",
@@ -315,7 +327,8 @@ class SdkWireContractTest {
   // ─── Kafka payload 契约 ────────────────────────────────────────────────
 
   @Test
-  void platformTaskDispatchMessageCarriesSchemaVersion() throws Exception {
+  @DisplayName("平台派单报文跨进程传输时携带受支持的协议版本号,端侧可识别并判定兼容")
+  void shouldCarrySupportedSchemaVersion_whenDispatchCrossesWire() throws Exception {
     // 平台侧 TaskDispatchMessage 必须含 schemaVersion 字段(Phase 0 §2.1)。
     TaskDispatchMessage platform = new TaskDispatchMessage(
         "v2",
@@ -344,7 +357,8 @@ class SdkWireContractTest {
   }
 
   @Test
-  void platformWorkerTypeBindsToSdkHandlerKeyOverWire() throws Exception {
+  @DisplayName("平台派单报文的派单路由字段被端侧绑定到处理器路由键,旧版字段名仍解析为同一路由键")
+  void shouldBindWorkerTypeToHandlerKey_whenDispatchCrossesWire() throws Exception {
     // 回归守护(workerType P0):平台派单消息以 JSON 字段名 `workerType` 承载路由键,SDK 必须把它绑定到
     // 自己的 handler 路由键 taskType()(@JsonProperty("workerType") @JsonAlias("taskType"))。
     // 任一端改名 / "瘦身"漏掉这个字段 → register 仍过,但 worker 收到派单后 handlers.get(taskType()) 拿到 null,

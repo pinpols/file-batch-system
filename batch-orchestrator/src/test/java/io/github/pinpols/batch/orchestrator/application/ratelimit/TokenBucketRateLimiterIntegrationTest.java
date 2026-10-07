@@ -17,6 +17,7 @@ import io.lettuce.core.codec.RedisCodec;
 import io.lettuce.core.codec.StringCodec;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
@@ -39,6 +40,7 @@ import org.springframework.context.annotation.Import;
       // 显式固定旧副本版本；发布默认值递增时仍需验证 v1 -> v2 升级，而不是让夹具随默认值漂移。
       "batch.rate-limit.bucket-configuration-version=1"
     })
+@DisplayName("令牌桶限流集成: 配额消耗, 多副本共享与热配置切换口径")
 class TokenBucketRateLimiterIntegrationTest extends AbstractIntegrationTest {
 
   @SpringBootConfiguration
@@ -60,7 +62,8 @@ class TokenBucketRateLimiterIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void consumesUpToCapacityThenRejects() {
+  @DisplayName("配额内的请求全部放行, 超出容量后请求被拒绝")
+  void shouldReject_whenCapacityExhausted() {
     String tenant = uniqueTenant();
     long capacity = 5;
 
@@ -74,7 +77,8 @@ class TokenBucketRateLimiterIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void bucketsAreIsolatedPerTenantAndAction() {
+  @DisplayName("不同租户与不同动作使用各自独立的配额桶")
+  void shouldIsolateBuckets_whenTenantOrActionDiffers() {
     String tenantA = uniqueTenant();
     String tenantB = uniqueTenant();
     long capacity = 2;
@@ -93,7 +97,8 @@ class TokenBucketRateLimiterIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void quotaIsSharedAcrossReplicasViaRedis() {
+  @DisplayName("多个副本共享同一份配额, 合计超出容量后都被拒绝")
+  void shouldShareQuota_whenMultipleReplicasConsume() {
     String tenant = uniqueTenant();
     long capacity = 4;
 
@@ -127,7 +132,8 @@ class TokenBucketRateLimiterIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void perSecondLimitChangeUsesNewBucketWithoutDeploymentVersionBump() {
+  @DisplayName("每秒阈值调整后立即按新桶判定, 无需重启或版本升级")
+  void shouldUseNewBucket_whenPerSecondLimitChanged() {
     String tenant = uniqueTenant();
     String action = "SCHEDULER_DISPATCH_TENANT";
 
@@ -140,7 +146,8 @@ class TokenBucketRateLimiterIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void newerConfigurationVersionReplacesPersistedBucketAndKeepsUtilization() {
+  @DisplayName("配置版本更新后替换已存桶并按比例继承余额, 旧版本副本回写被拒绝")
+  void shouldReplaceBucketAndKeepUtilization_whenConfigVersionNewer() {
     String tenant = uniqueTenant();
     String action = "TASK_REPORT";
     long oldCapacity = 4;
@@ -175,7 +182,8 @@ class TokenBucketRateLimiterIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void greedyRefillReplenishesTokensOverTime() throws InterruptedException {
+  @DisplayName("桶被抽干后请求被拒绝, 等待补充间隔后重新放行")
+  void shouldReplenishTokens_whenRefillElapses() throws InterruptedException {
     String tenant = uniqueTenant();
     // capacity=60/min → greedy 补充 1 token/s。先把桶抽干(容忍抽取期间的少量 greedy 回填),
     // 再等待 ~1.5s 让 refill 至少补回 1 个令牌。
@@ -197,7 +205,8 @@ class TokenBucketRateLimiterIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void nonPositiveMaxAlwaysAllows() {
+  @DisplayName("配置上限非正时请求一律放行")
+  void shouldAlwaysAllow_whenConfiguredMaxNotPositive() {
     String tenant = uniqueTenant();
     assertThat(limiter.tryConsume(tenant, "LAUNCH", 0)).isTrue();
     assertThat(limiter.tryConsume(tenant, "LAUNCH", -1)).isTrue();

@@ -26,10 +26,12 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 @SuppressWarnings("unchecked")
+@DisplayName("出箱事件发布器: 主题选择, 投递失败日志落库, 追踪上下文恢复与逻辑分区映射")
 class KafkaOutboxPublisherTest {
 
   private MqMessagePublisher mqMessagePublisher;
@@ -62,6 +64,7 @@ class KafkaOutboxPublisherTest {
   }
 
   @Test
+  @DisplayName("派发主题发送失败时发布结果异常完成, 同时落一条失败状态投递日志且投递次数记为一")
   void shouldRecordFailedDeliveryWhenDispatchTopicSendFails() {
     batchMqTopicsProperties.setImportDispatch("batch.task.dispatch.import");
     OutboxEventEntity event = dispatchEvent("IMPORT", "dispatch-key-001");
@@ -87,7 +90,8 @@ class KafkaOutboxPublisherTest {
   }
 
   @Test
-  void dispatchTopicUsesPartitionKafkaKeyInsteadOfOutboxEventKey() {
+  @DisplayName("派发事件按分区维度生成消息键, 落在派发主题且不再复用出箱去重键")
+  void shouldUsePartitionMessageKeyInsteadOfOutboxEventKey_whenPublishingDispatchEvent() {
     batchMqTopicsProperties.setExportDispatch("batch.task.dispatch.export");
     OutboxEventEntity event = dispatchEvent("EXPORT", "outbox-dedup-key");
     when(mqMessagePublisher.publish(any(MqMessage.class)))
@@ -103,7 +107,8 @@ class KafkaOutboxPublisherTest {
   }
 
   @Test
-  void dispatchTopicRestoresPersistedTraceContextDuringKafkaSend() {
+  @DisplayName("发送派发事件期间恢复已持久化的追踪上下文, 发布时取到的追踪标识与事件中保存的一致")
+  void shouldRestorePersistedTraceContext_whenSendingDispatchEvent() {
     String traceId = "33333333333333333333333333333333";
     batchMqTopicsProperties.setImportDispatch("batch.task.dispatch.import");
     OutboxEventEntity event = dispatchEvent("IMPORT", "dispatch-key-trace");
@@ -140,7 +145,8 @@ class KafkaOutboxPublisherTest {
   }
 
   @Test
-  void partitionedDispatchKeyMapsLogicalPartitionsAcrossKafkaPartitions() {
+  @DisplayName("四个逻辑分区按分区号生成消息键后分别落到四个不同的消息分区")
+  void shouldMapLogicalPartitionsToDistinctMessagePartitions_whenKeyedByPartitionNo() {
     Set<Integer> kafkaPartitions = new HashSet<>();
     for (int partitionNo = 1; partitionNo <= 4; partitionNo++) {
       String key = KafkaOutboxPublisher.dispatchKafkaKey(
@@ -153,6 +159,7 @@ class KafkaOutboxPublisherTest {
   }
 
   @Test
+  @DisplayName("回退主题发送失败时发布结果异常完成, 同时落失败状态投递日志并记录失败原因与首次投递")
   void shouldRecordFailedDeliveryWhenFallbackTopicSendFails() {
     batchMqTopicsProperties.setImportDispatch("batch.task.dispatch.import");
     outboxProperties.setDefaultTopic(BatchTopics.OUTBOX_EVENT);
@@ -179,7 +186,8 @@ class KafkaOutboxPublisherTest {
   }
 
   @Test
-  void workflowTerminalUsesDedicatedLineageTopic() {
+  @DisplayName("工作流终态事件发往专用血缘主题, 消息键与载荷沿用出箱事件原值")
+  void shouldUseDedicatedLineageTopic_whenPublishingWorkflowTerminalEvent() {
     OutboxEventEntity event = fallbackEvent("WORKFLOW_TERMINAL", "ta:workflow:100:terminal");
     when(mqMessagePublisher.publish(any(MqMessage.class)))
         .thenReturn(CompletableFuture.completedFuture(null));

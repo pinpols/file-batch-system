@@ -58,6 +58,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("批量认领与批量上报的真库集成验证:逐项结果独立返回,已被并发领走的任务跳过且不影响其余任务")
 class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";

@@ -9,6 +9,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.TriggerLaunchPersisten
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -18,6 +19,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("触发器请求持久层:可空关联参数的状态写入与最新一次尝试投影查询在真实数据库上的行为")
 class TriggerRequestMapperIntegrationTest extends AbstractIntegrationTest {
 
   private final String tenantId = "trigger-mapper-" + Long.toUnsignedString(System.nanoTime());
@@ -44,7 +46,8 @@ class TriggerRequestMapperIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void updateAcceptanceAcceptsNullRelatedJobInstanceId() {
+  @DisplayName("关联作业实例标识为空时状态写入仍成功,请求状态被更新且关联实例为空,上下文无既有实例")
+  void shouldAcceptNullRelatedJobInstanceId_whenUpdatingAcceptance() {
     jdbcTemplate.update("""
         insert into batch.trigger_request (
             tenant_id, request_id, trigger_type, job_code, dedup_key, request_status, trace_id
@@ -66,7 +69,8 @@ class TriggerRequestMapperIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void selectLaunchPersistenceContextReturnsLatestAttemptProjection() {
+  @DisplayName("多次重试后查询启动上下文时返回最新一次尝试的实例,并带出所属请求与去重键")
+  void shouldReturnLatestAttemptProjection_whenSelectingLaunchContext() {
     String dedupKey = "dedup-" + requestId;
     Long jobDefinitionId = jdbcTemplate.queryForObject("""
         insert into batch.job_definition (

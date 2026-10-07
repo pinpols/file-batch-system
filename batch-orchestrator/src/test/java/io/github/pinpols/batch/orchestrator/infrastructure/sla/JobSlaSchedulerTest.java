@@ -26,10 +26,12 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 /** 单元测试：{@link JobSlaScheduler#scanViolations()} 各路径。 */
+@DisplayName("作业服务级别协议超时扫描的候选处理与告警升级行为")
 class JobSlaSchedulerTest {
 
   private JobInstanceMapper jobInstanceMapper;
@@ -63,6 +65,7 @@ class JobSlaSchedulerTest {
   }
 
   @Test
+  @DisplayName("扫描开关关闭时跳过本轮扫描,不读取任何违规候选")
   void shouldSkipScanWhenDisabled() {
     properties.setEnabled(false);
 
@@ -72,6 +75,7 @@ class JobSlaSchedulerTest {
   }
 
   @Test
+  @DisplayName("没有违规候选时既不写执行日志也不发送告警")
   void shouldDoNothingWhenNoCandidates() {
     when(jobInstanceMapper.countSlaViolationCandidates()).thenReturn(0L);
     when(jobInstanceMapper.selectSlaViolationCandidates(anyInt())).thenReturn(List.of());
@@ -83,6 +87,7 @@ class JobSlaSchedulerTest {
   }
 
   @Test
+  @DisplayName("候选列表混入空元素时逐个跳过且不写执行日志")
   void shouldSkipNullCandidateInList() {
     when(jobInstanceMapper.countSlaViolationCandidates()).thenReturn(0L);
     when(jobInstanceMapper.selectSlaViolationCandidates(anyInt()))
@@ -94,6 +99,7 @@ class JobSlaSchedulerTest {
   }
 
   @Test
+  @DisplayName("告警标记未命中任何行时跳过该候选,既不写日志也不发送告警")
   void shouldSkipCandidateWhenMarkSlaAlertedReturnZero() {
     JobInstanceEntity candidate =
         slaCandidate("t1", 1L, BatchDateTimeSupport.utcNow().minusSeconds(60));
@@ -108,6 +114,7 @@ class JobSlaSchedulerTest {
   }
 
   @Test
+  @DisplayName("候选已超过截止时间时标记成功并写入两条执行日志,同时发送一次告警")
   void shouldLogAndEmitAlertWhenDeadlineExceeded() {
     JobInstanceEntity candidate =
         slaCandidate("t1", 2L, BatchDateTimeSupport.utcNow().minusSeconds(3600));
@@ -123,6 +130,7 @@ class JobSlaSchedulerTest {
   }
 
   @Test
+  @DisplayName("无截止时间但实际运行时长超过预期耗时上限的候选同样写两条日志并发一次告警")
   void shouldLogAndEmitAlertForExpectedDurationViolation() {
     JobInstanceEntity candidate = new JobInstanceEntity();
     candidate.setTenantId("t1");
@@ -148,6 +156,7 @@ class JobSlaSchedulerTest {
   }
 
   @Test
+  @DisplayName("多个违规候选逐个处理,每个候选各产生两条日志与一次告警")
   void shouldProcessMultipleCandidates() {
     JobInstanceEntity c1 = slaCandidate("t1", 10L, BatchDateTimeSupport.utcNow().minusSeconds(100));
     JobInstanceEntity c2 = slaCandidate("t1", 11L, BatchDateTimeSupport.utcNow().minusSeconds(200));
@@ -163,6 +172,7 @@ class JobSlaSchedulerTest {
   }
 
   @Test
+  @DisplayName("已告警实例超过升级延迟后发送升级类型告警,并带上配置的严重级别")
   void shouldEmitEscalatedAlertForLongRunningAlertedInstance() {
     properties.setEscalationDelaySeconds(300L);
     properties.setEscalationSeverity("ERROR");
@@ -184,6 +194,7 @@ class JobSlaSchedulerTest {
   }
 
   @Test
+  @DisplayName("升级延迟配置为零时不查询升级候选也不发送告警")
   void shouldSkipEscalationWhenDelayIsZero() {
     properties.setEscalationDelaySeconds(0L);
     when(jobInstanceMapper.countSlaViolationCandidates()).thenReturn(0L);

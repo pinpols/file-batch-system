@@ -27,9 +27,11 @@ import java.time.LocalDate;
 import java.time.Month;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+@DisplayName("批量日重放终态对账器: 条目状态收敛与会话终态判定口径")
 class BatchDayReplayTerminalReconcilerTest {
 
   // 字面量集中(单文件内,不进 TestConstants 全局):
@@ -54,7 +56,8 @@ class BatchDayReplayTerminalReconcilerTest {
   }
 
   @Test
-  void successInstanceMovesEntryToSucceededAndCompletesSession() {
+  @DisplayName("作业成功时条目置为成功, 会话计数更新并收敛为成功")
+  void shouldMarkEntrySucceededAndCompleteSession_whenJobSucceeds() {
     when(sessionMapper.selectById("t1", 7L)).thenReturn(session(7L, "RUNNING", 2));
     BatchDayReplayEntryEntity pendingEntry = BatchDayReplayEntryEntity.builder()
         .id(11L)
@@ -88,7 +91,8 @@ class BatchDayReplayTerminalReconcilerTest {
   }
 
   @Test
-  void failedInstanceCompletesSessionAsPartialFailedWhenSomeFailed() {
+  @DisplayName("存在失败条目时会话收敛为部分失败")
+  void shouldCompleteAsPartialFailed_whenSomeEntriesFailed() {
     when(sessionMapper.selectById("t1", 8L)).thenReturn(session(8L, "RUNNING", 2));
     BatchDayReplayEntryEntity entry = BatchDayReplayEntryEntity.builder()
         .id(20L)
@@ -120,7 +124,8 @@ class BatchDayReplayTerminalReconcilerTest {
   }
 
   @Test
-  void runningEntryStillInFlightDoesNotTerminateSession() {
+  @DisplayName("仍有条目在运行时会话不进入终态")
+  void shouldKeepSessionRunning_whenEntryStillInFlight() {
     when(sessionMapper.selectById("t1", 9L)).thenReturn(session(9L, "RUNNING", 2));
     BatchDayReplayEntryEntity entry = BatchDayReplayEntryEntity.builder()
         .id(30L)
@@ -144,7 +149,8 @@ class BatchDayReplayTerminalReconcilerTest {
   }
 
   @Test
-  void recoveredEntryMovesPartialFailedSessionBackToSucceeded() {
+  @DisplayName("失败条目恢复后, 部分失败的会话重新收敛为成功")
+  void shouldMoveBackToSucceeded_whenFailedEntryRecovered() {
     when(sessionMapper.selectById("t1", 10L))
         .thenReturn(session(10L, JobInstanceStatus.PARTIAL_FAILED.code(), 1));
     BatchDayReplayEntryEntity entry = BatchDayReplayEntryEntity.builder()
@@ -175,7 +181,8 @@ class BatchDayReplayTerminalReconcilerTest {
   }
 
   @Test
-  void unknownReplaySessionIsNoop() {
+  @DisplayName("会话不存在时对账不产生任何写入")
+  void shouldDoNothing_whenSessionMissing() {
     when(sessionMapper.selectById("t1", 999L)).thenReturn(null);
 
     reconciler.reconcileOnTerminal("t1", 999L, "JOB_A", 100L, JOB_SUCCESS);
@@ -186,7 +193,8 @@ class BatchDayReplayTerminalReconcilerTest {
   }
 
   @Test
-  void missingEntryIsNoopButSafe() {
+  @DisplayName("会话下没有对应条目时对账安全返回")
+  void shouldDoNothing_whenEntryMissing() {
     when(sessionMapper.selectById("t1", 50L)).thenReturn(session(50L, "RUNNING", 1));
     when(entryMapper.selectBySessionId(50L)).thenReturn(List.of());
 
@@ -199,7 +207,8 @@ class BatchDayReplayTerminalReconcilerTest {
   }
 
   @Test
-  void invalidArgumentsShortCircuit() {
+  @DisplayName("参数缺失时对账直接返回, 不查询会话")
+  void shouldShortCircuit_whenArgumentsInvalid() {
     reconciler.reconcileOnTerminal(null, 1L, "JOB", 1L, JOB_SUCCESS);
     reconciler.reconcileOnTerminal("t1", null, "JOB", 1L, JOB_SUCCESS);
     reconciler.reconcileOnTerminal("t1", 1L, null, 1L, JOB_SUCCESS);
@@ -209,7 +218,8 @@ class BatchDayReplayTerminalReconcilerTest {
   }
 
   @Test
-  void dryRunSessionAcceptsOnlyDryRunTerminalStatus() {
+  @DisplayName("试运行会话接受试运行终态并据此收敛条目")
+  void shouldAcceptDryRunStatus_whenSessionRunsInDryRun() {
     BatchDayReplaySessionEntity dryRunSession = session(60L, "RUNNING", 1).toBuilder()
         .executionMode(BatchDayReplayExecutionMode.DRY_RUN.code())
         .build();
@@ -235,7 +245,8 @@ class BatchDayReplayTerminalReconcilerTest {
   }
 
   @Test
-  void dryRunSessionRejectsNormalSuccessAsModeMismatch() {
+  @DisplayName("试运行会话收到正式终态时按模式不匹配处理, 不更新会话")
+  void shouldSkipNormalStatus_whenSessionRunsInDryRun() {
     BatchDayReplaySessionEntity dryRunSession = session(70L, "RUNNING", 1).toBuilder()
         .executionMode(BatchDayReplayExecutionMode.DRY_RUN.code())
         .build();

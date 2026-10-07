@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.HashSet;
 import java.util.Set;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -11,11 +12,13 @@ import org.junit.jupiter.api.Test;
  *
  * <p>Outbox dedup 完全靠 {@code uk_outbox_event_key},如果两个 scope 撞 key 会 silent 丢失事件,这里集中防回归。
  */
+@DisplayName("出箱事件键生成器: 场景前缀编码, 幂等与超长截断口径")
 class OutboxEventKeyGeneratorTest {
 
   // ── 同输入 → 同 key(幂等)──────────────────────────────────────────────
 
   @Test
+  @DisplayName("相同输入生成的事件键保持一致")
   void shouldProduceSameKeyForSameInput() {
     String k1 = OutboxEventKeyGenerator.forDispatch("t1", 100L);
     String k2 = OutboxEventKeyGenerator.forDispatch("t1", 100L);
@@ -23,6 +26,7 @@ class OutboxEventKeyGeneratorTest {
   }
 
   @Test
+  @DisplayName("各业务场景的事件键按租户与场景前缀编码")
   void shouldEncodeTenantIdAndScopePrefix() {
     assertThat(OutboxEventKeyGenerator.forDispatch("t1", 100L)).isEqualTo("t1:dispatch:100");
     assertThat(OutboxEventKeyGenerator.forFileRedispatch("t1", 100L))
@@ -43,6 +47,7 @@ class OutboxEventKeyGeneratorTest {
   // ── 不同 scope → 不同 key(零撞) ──────────────────────────────────────
 
   @Test
+  @DisplayName("同一租户与标识下不同场景生成的事件键互不冲突")
   void shouldNeverCollideAcrossScopesForSameTenantAndId() {
     long taskId = 100L;
     String tenant = "t1";
@@ -59,6 +64,7 @@ class OutboxEventKeyGeneratorTest {
   }
 
   @Test
+  @DisplayName("同一任务的不同重试次数生成不同事件键")
   void shouldRetryAttemptsBeDistinctKeys() {
     // 同 task 多次 retry 必须产出不同 key,否则 dedup 丢失重试
     Set<String> keys = new HashSet<>();
@@ -71,6 +77,7 @@ class OutboxEventKeyGeneratorTest {
   // ── 长度上限 ─────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("拼接结果超长时截断到长度上限")
   void shouldTruncateOversizedKey() {
     // 拼一个超长 nodeCode 让 key > 256
     String longNodeCode = "X".repeat(300);
@@ -79,6 +86,7 @@ class OutboxEventKeyGeneratorTest {
   }
 
   @Test
+  @DisplayName("正常长度的事件键不被截断")
   void shouldNotTruncateNormalKey() {
     String key = OutboxEventKeyGenerator.forWorkflowNodeDispatch("tenant", 1L, "NORMAL_NODE", 100L);
     assertThat(key.length()).isLessThan(256);

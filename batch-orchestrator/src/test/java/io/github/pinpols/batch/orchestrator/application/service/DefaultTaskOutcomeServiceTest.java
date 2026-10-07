@@ -47,6 +47,7 @@ import io.github.pinpols.batch.orchestrator.observability.JobLifecycleMetricsRec
 import io.github.pinpols.batch.orchestrator.service.failure.FailureClassifier;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -56,6 +57,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("任务结果服务: 结果应用的前置校验, 锁顺序与终态提升口径")
 class DefaultTaskOutcomeServiceTest {
 
   @Mock
@@ -139,6 +141,7 @@ class DefaultTaskOutcomeServiceTest {
   }
 
   @Test
+  @DisplayName("任务查询不到结果上下文时返回空, 不产生副作用")
   void applyTaskOutcome_taskNotFound_returnsNull() {
     when(jobTaskMapper.selectOutcomePersistenceContext(anyString(), anyLong())).thenReturn(null);
 
@@ -149,6 +152,7 @@ class DefaultTaskOutcomeServiceTest {
   }
 
   @Test
+  @DisplayName("租户标识为空时返回空, 不产生副作用")
   void applyTaskOutcome_nullTenantId_returnsNull() {
     when(jobTaskMapper.selectOutcomePersistenceContext(null, 1L)).thenReturn(null);
 
@@ -160,6 +164,7 @@ class DefaultTaskOutcomeServiceTest {
 
   /** ADR-014：worker 上报的 invocation 与分区当前值不一致 → CONFLICT，防止过期 worker 推进状态。 */
   @Test
+  @DisplayName("分片调用次数与结果不匹配时抛出业务异常并给出提示键")
   void applyTaskOutcome_partitionInvocationMismatch_throwsBizException() {
     JobTaskEntity task = new JobTaskEntity();
     task.setId(1L);
@@ -191,6 +196,7 @@ class DefaultTaskOutcomeServiceTest {
   }
 
   @Test
+  @DisplayName("分片计数使用带锁的查询方法, 且接口上存在该方法签名")
   void applyTaskOutcome_selectByQueryForUpdate_usedForPartitionCounting() throws Exception {
     // R3-P0-7：之前的实现只 reflection-check 方法存在性，没有任何业务逻辑断言。
     // 真正测 CAS 分区计数需要构造完整 partition+task+jobInstance mock 链，超出单测范畴
@@ -210,6 +216,7 @@ class DefaultTaskOutcomeServiceTest {
    * partition。任何 outcome 在等待实例锁时都不能持有业务行锁，否则实例收敛可能反向等待该行并形成锁环。
    */
   @Test
+  @DisplayName("写任务与分片前先取实例级咨询锁, 锁顺序为实例, 任务, 分片")
   void applyTaskOutcome_acquiresInstanceAdvisoryLockBeforeTaskAndPartitionWrites() {
     JobTaskEntity task = new JobTaskEntity();
     task.setId(1L);
@@ -280,6 +287,7 @@ class DefaultTaskOutcomeServiceTest {
   }
 
   @Test
+  @DisplayName("全部分片成功后把停留失败的实例提升为成功终态")
   void applyTaskOutcome_promotesStaleFailedInstanceWhenAllPartitionsSucceeded() {
     JobTaskEntity task = new JobTaskEntity();
     task.setId(1L);

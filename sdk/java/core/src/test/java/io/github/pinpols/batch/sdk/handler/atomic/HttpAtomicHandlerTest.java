@@ -17,6 +17,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** {@link HttpAtomicHandler} 用 JDK {@link HttpServer} 起 stub server 跑真 HTTP,经基类 execute 验证终态。 */
+@DisplayName("HTTP 原子处理器:经真实桩服务验证请求发送与响应映射,覆盖方法白名单、地址防护、截断与错误状态")
 class HttpAtomicHandlerTest {
 
   private HttpServer server;

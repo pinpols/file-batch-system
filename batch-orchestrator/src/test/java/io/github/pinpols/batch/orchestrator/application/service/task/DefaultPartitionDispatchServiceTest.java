@@ -37,9 +37,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+@DisplayName("分区派发服务: 版本推进,分区创建,载荷补齐与派发事件写入")
 class DefaultPartitionDispatchServiceTest {
 
   private SchedulePlanBuilder schedulePlanBuilder;
@@ -83,6 +85,7 @@ class DefaultPartitionDispatchServiceTest {
   }
 
   @Test
+  @DisplayName("派发时携带已知版本号推进实例状态,不再回查实例以免覆盖并发更新")
   void dispatch_marksInstanceWithKnownVersionWithoutPrecedingReload() {
     JobInstanceEntity jobInstance = dispatchablePlan(1L);
     when(jobInstanceMapper.markRunning(any())).thenReturn(1);
@@ -99,6 +102,7 @@ class DefaultPartitionDispatchServiceTest {
   }
 
   @Test
+  @DisplayName("版本冲突导致状态推进未命中时抛出业务异常,且不覆盖并发已更新的状态")
   void dispatch_rollsBackOnVersionConflictWithoutOverwritingConcurrentState() {
     JobInstanceEntity jobInstance = dispatchablePlan(3L);
     when(jobInstanceMapper.markRunning(any())).thenReturn(0);
@@ -112,6 +116,7 @@ class DefaultPartitionDispatchServiceTest {
   }
 
   @Test
+  @DisplayName("派发时直接按就绪状态创建分区,不做多余的提升更新,并写入派发事件")
   void dispatch_insertsNewDispatchableRowsAsReadyWithoutRedundantPromotionUpdates() {
     SchedulePlan plan = new SchedulePlan();
     plan.setTenantId("ta");
@@ -159,7 +164,8 @@ class DefaultPartitionDispatchServiceTest {
   }
 
   @Test
-  void initialDagStaysWaitingWhenGlobalCapacityIsFull() {
+  @DisplayName("全局准入容量不足时初始流程保持等待,并记录期望分区数")
+  void shouldWait_whenGlobalCapacityFull() {
     when(globalJobAdmission.hasCapacity()).thenReturn(false);
     when(workflowNodeDispatchService.dispatchNode(any(), any(), any(), any(), any()))
         .thenReturn(2);
@@ -231,6 +237,7 @@ class DefaultPartitionDispatchServiceTest {
   }
 
   @Test
+  @DisplayName("请求载荷缺少派生字段时补齐批次号,营业日与任务编码")
   void enrichPayload_addsDerivedFieldsWhenMissing() {
     LaunchRequest request = new LaunchRequest(
         "tc",
@@ -253,6 +260,7 @@ class DefaultPartitionDispatchServiceTest {
   }
 
   @Test
+  @DisplayName("请求载荷已显式给出字段时保持原值不被覆盖")
   void enrichPayload_keepsExplicitFieldsUntouched() {
     LaunchRequest request = new LaunchRequest(
         "tc",
@@ -277,6 +285,7 @@ class DefaultPartitionDispatchServiceTest {
   }
 
   @Test
+  @DisplayName("束分区派发时向载荷注入带前缀的绑定字段,避免与通用字段重名")
   void enrichBundleBinding_injectsBindingForBundlePartition() {
     JobPartitionEntity partition = new JobPartitionEntity();
     partition.setSourceFileId(42L);
@@ -296,6 +305,7 @@ class DefaultPartitionDispatchServiceTest {
   }
 
   @Test
+  @DisplayName("普通分区的绑定列全为空时载荷不新增任何字段")
   void enrichBundleBinding_leavesNormalPartitionPayloadUnchanged() {
     // 普通(非束)partition 三根绑定列均为空，payload 不得新增任何字段——保证存量导入零影响。
     JobPartitionEntity partition = new JobPartitionEntity();
@@ -307,6 +317,7 @@ class DefaultPartitionDispatchServiceTest {
   }
 
   @Test
+  @DisplayName("分区为空时载荷保持原样,不做任何注入")
   void enrichBundleBinding_nullPartitionIsNoOp() {
     Map<String, Object> payload = new HashMap<>();
     payload.put("batchNo", "2026-04-22");

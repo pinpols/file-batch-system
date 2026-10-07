@@ -20,6 +20,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -28,6 +29,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("发件箱轮询调度器:验证熔断放行与拒绝,错误传播以及容器停机时的任务取消")
 class OutboxPollSchedulerTest {
 
   @Mock
@@ -83,6 +85,7 @@ class OutboxPollSchedulerTest {
   }
 
   @Test
+  @DisplayName("熔断允许轮询时推进计划并把成功数量回写熔断器")
   void shouldAdvanceAndUpdateCircuitBreakerWhenAllowed() throws Throwable {
     stubLockExecution();
     when(outboxPublishCircuitBreaker.allowNow()).thenReturn(true);
@@ -97,6 +100,7 @@ class OutboxPollSchedulerTest {
   }
 
   @Test
+  @DisplayName("熔断拒绝本轮轮询时跳过推进并累加跳过计数")
   void shouldSkipAdvanceWhenCircuitBreakerDeniesPolling() throws Throwable {
     stubLockExecution();
     when(outboxPublishCircuitBreaker.allowNow()).thenReturn(false);
@@ -114,6 +118,7 @@ class OutboxPollSchedulerTest {
   }
 
   @Test
+  @DisplayName("锁内抛出内存溢出错误时原样向上传播,不被当作普通轮询失败吞掉")
   void shouldPropagateOutOfMemoryError_insteadOfTreatingItAsPollFailure() throws Throwable {
     stubLockExecution();
     OutOfMemoryError oom = new OutOfMemoryError("test oom");
@@ -123,6 +128,7 @@ class OutboxPollSchedulerTest {
   }
 
   @Test
+  @DisplayName("容器停机时取消队列中尚未执行的待调度轮询任务")
   void shouldCancelPendingPollWhenContainerStops() {
     scheduler.onApplicationReady(null);
     assertThat(executor.getScheduledThreadPoolExecutor().getQueue()).hasSize(1);

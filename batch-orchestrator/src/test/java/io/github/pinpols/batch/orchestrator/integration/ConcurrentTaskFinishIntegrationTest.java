@@ -14,6 +14,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -27,6 +28,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("任务完成并发防护:两个线程同时完成同一运行中任务时仅一个更新成功,最终任务状态收敛为成功")
 class ConcurrentTaskFinishIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
@@ -39,6 +41,7 @@ class ConcurrentTaskFinishIntegrationTest extends AbstractIntegrationTest {
   private TransactionTemplate transactionTemplate;
 
   @Test
+  @DisplayName("两个线程并发完成同一运行中任务时只有一个成功,另一个因状态校验未命中而失败")
   void finishTask_onlyOneWins_whenTwoThreadsRaceConcurrently() throws Exception {
     String suffix = "finish-" + System.nanoTime();
     String jobCode = "JOB_" + suffix;

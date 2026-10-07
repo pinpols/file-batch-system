@@ -9,6 +9,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.Test;
  * <p>背景:这些入口处于 DB→Outbox→Kafka→CLAIM→EXECUTE→REPORT 主链路最上游,空入参直透到下层 mapper 会变成 NPE 风暴。本测试静态扫描 main
  * src,缺守护 → fail。
  */
+@DisplayName("核心服务入口空值守护与实现类异常抛出约束的静态扫描")
 class ServiceEntryGuardArchTest {
 
   /** 必守护的 service 实现类相对路径(从模块 src/main 起算)。 */
@@ -28,7 +30,8 @@ class ServiceEntryGuardArchTest {
           "src/main/java/io/github/pinpols/batch/orchestrator/service/BatchDayGateService.java"));
 
   @Test
-  void coreServiceEntriesMustGuardAgainstNullInputs() throws IOException {
+  @DisplayName("核心服务入口必须对空入参显式守护,任一实现缺少守护即判定违规")
+  void shouldGuardAgainstNullInputs_whenScanningCoreServiceEntries() throws IOException {
     List<String> violations = new ArrayList<>();
     for (Path rel : GUARDED_SERVICES) {
       if (!Files.exists(rel)) {
@@ -51,7 +54,8 @@ class ServiceEntryGuardArchTest {
   }
 
   @Test
-  void allServiceImplsShouldNotContainBareThrowNew() throws IOException {
+  @DisplayName("服务实现类不得显式抛出空指针异常,扫描到即判定违规")
+  void shouldNotContainBareNullPointerException_whenScanningAllServiceImpls() throws IOException {
     Path mainDir = Paths.get("src/main/java");
     if (!Files.exists(mainDir)) {
       return;

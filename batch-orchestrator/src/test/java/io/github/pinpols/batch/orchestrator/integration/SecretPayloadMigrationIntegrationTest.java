@@ -14,6 +14,7 @@ import java.util.Base64;
 import java.util.Map;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.configuration.FluentConfiguration;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -25,6 +26,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 /** 验证 V209→V210→V211 逐级升级会加密历史载荷，并在应用就绪前收紧最终约束。 */
 @Tag("integration")
 @Testcontainers(disabledWithoutDocker = true)
+@DisplayName("历史密钥载荷迁移:逐级升级加密历史明文,并在就绪前收紧最终约束")
 class SecretPayloadMigrationIntegrationTest {
 
   private static final String LEGACY_PAYLOAD =
@@ -38,7 +40,8 @@ class SecretPayloadMigrationIntegrationTest {
       TestPostgresContainers.create("secret_payload_migration");
 
   @Test
-  void upgradeEncryptsLegacyPayloadAcrossV210AndV211BeforeValidatingConstraint() {
+  @DisplayName("逐级升级过程中历史明文载荷被加密,最终约束生效后明文与字段缺失的写入均被拒绝")
+  void shouldEncryptLegacyPayloadAndValidateConstraint_whenUpgradingMigrations() {
     SecretPayloadFlywayCallback callback =
         new SecretPayloadFlywayCallback(secretPayloadProtector());
     flyway(callback).target("209").load().migrate();

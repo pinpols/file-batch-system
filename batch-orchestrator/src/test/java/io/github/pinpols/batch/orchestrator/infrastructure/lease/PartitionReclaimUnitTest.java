@@ -26,6 +26,7 @@ import io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -35,6 +36,7 @@ import org.mockito.ArgumentCaptor;
  * <p>重点覆盖 v6 hardening：第二步 task CAS 失败必须抛 {@link ReclaimRetryableException} 触发事务回滚， eventKey 必须包含
  * version 作为天然幂等键避免 outbox 唯一约束误吞重试。
  */
+@DisplayName("过期占位的租约回收单元,验证无运行任务时的状态重置,比较交换未命中时的静默放弃以及失败回滚与重试事件键的幂等语义")
 class PartitionReclaimUnitTest {
 
   private JobPartitionMapper jobPartitionMapper;
@@ -68,6 +70,7 @@ class PartitionReclaimUnitTest {
   }
 
   @Test
+  @DisplayName("占位不存在运行中的任务时直接重置为可分派状态,后续可被重新认领且不写入派发事件")
   void shouldResetPartitionForDispatchWhenNoRunningTaskFound() {
     JobPartitionEntity partition = expiredPartition("t1", 1L, 10L, 5L);
     when(jobTaskMapper.selectByQuery(any())).thenReturn(List.of());
@@ -80,6 +83,7 @@ class PartitionReclaimUnitTest {
   }
 
   @Test
+  @DisplayName("占位重置成功后任务状态比较交换失败时抛出可重试异常,异常携带占位与任务标识且不写入派发事件")
   void shouldThrowRetryableWhenTaskCasFailsAfterPartitionReset() {
     JobPartitionEntity partition = expiredPartition("t1", 1L, 10L, 5L);
     JobTaskEntity task = runningTask("t1", 100L, 1L, 7L);
@@ -101,6 +105,7 @@ class PartitionReclaimUnitTest {
   }
 
   @Test
+  @DisplayName("占位重置比较交换未命中时本轮静默放弃,不重置任务状态也不写入派发事件")
   void shouldSilentlyReturnWhenPartitionCasFails() {
     JobPartitionEntity partition = expiredPartition("t1", 1L, 10L, 5L);
     JobTaskEntity task = runningTask("t1", 100L, 1L, 7L);
@@ -119,6 +124,7 @@ class PartitionReclaimUnitTest {
   }
 
   @Test
+  @DisplayName("两次重置均命中时写入一条恢复模式的派发事件,事件键携带占位版本以保证多轮回收不被唯一约束吞掉")
   void shouldWriteOutboxWithVersionedEventKeyOnSuccess() {
     JobPartitionEntity partition = expiredPartition("t1", 1L, 10L, 5L);
     JobTaskEntity task = runningTask("t1", 100L, 1L, 7L);
@@ -147,6 +153,7 @@ class PartitionReclaimUnitTest {
   }
 
   @Test
+  @DisplayName("存在运行中的任务但所属作业实例缺失时放弃回收,不重置占位也不写入派发事件")
   void shouldSkipWhenJobInstanceNotFound() {
     JobPartitionEntity partition = expiredPartition("t1", 1L, 10L, 5L);
     JobTaskEntity task = runningTask("t1", 100L, 1L, 7L);

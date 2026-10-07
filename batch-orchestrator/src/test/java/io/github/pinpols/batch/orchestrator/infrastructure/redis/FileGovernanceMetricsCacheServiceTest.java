@@ -14,12 +14,14 @@ import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceRe
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("文件治理指标缓存服务: 租户参数校验, 缓存命中复用与未命中回源计算")
 class FileGovernanceMetricsCacheServiceTest {
 
   @Mock
@@ -37,7 +39,8 @@ class FileGovernanceMetricsCacheServiceTest {
   }
 
   @Test
-  void blankTenantIdReturnsEmptyMap() {
+  @DisplayName("租户标识为空时直接返回空结果, 不读取缓存条目")
+  void shouldReturnEmptyMap_whenTenantIdBlank() {
     Map<String, Object> result = service.load("", 600, 900, 604800, 10);
 
     assertThat(result).isEmpty();
@@ -45,7 +48,8 @@ class FileGovernanceMetricsCacheServiceTest {
   }
 
   @Test
-  void cacheHitSkipsComputeAndReturnsHashEntries() {
+  @DisplayName("缓存命中时直接复用哈希条目, 不再回源统计违规次数")
+  void shouldReturnCachedEntries_whenCacheHit() {
     Map<Object, Object> cached = Map.of(
         "tenantId", "\"t1\"",
         "arrivalDelayViolations", "2",
@@ -63,7 +67,8 @@ class FileGovernanceMetricsCacheServiceTest {
   }
 
   @Test
-  void cacheMissComputesAndWritesToRedis() {
+  @DisplayName("缓存未命中时回源统计违规次数与最大延迟, 并把结果写入缓存")
+  void shouldComputeAndCache_whenCacheMiss() {
     when(redis.entries(anyString())).thenReturn(Map.of());
     when(fileGovernanceRepository.countArrivalDelayViolations(anyString(), anyLong()))
         .thenReturn(1L);
@@ -83,7 +88,8 @@ class FileGovernanceMetricsCacheServiceTest {
   }
 
   @Test
-  void writeSkipsWhenMetricsMapIsEmpty() {
+  @DisplayName("指标集合为空时跳过写入, 不产生任何缓存写入")
+  void shouldSkipWrite_whenMetricsEmpty() {
     service.write("t1", Map.of());
 
     verify(redis, never()).putHashAll(anyString(), any(), any());

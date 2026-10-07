@@ -56,6 +56,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("任务结果上报的调用围栏,验证认领重派后旧调用的迟到上报被拒绝且新调用的真实结果不丢失")
 class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";

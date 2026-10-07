@@ -14,6 +14,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** A.2 typed Export 模板基类单测 — 验证强类型入参 + 行流写出模板。 */
+@DisplayName("强类型 Export 模板基类:入参反序列化后构建查询并逐行写出,覆盖显式结果与非法参数")
 class SdkAbstractTypedExportHandlerTest {
 
   record ExportRequest(String table, int rows) {}

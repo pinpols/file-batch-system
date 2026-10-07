@@ -24,9 +24,11 @@ import org.junit.jupiter.api.Test;
  *   <li>dry-run → success no-op，不调 plugin（COMMIT 是最大副作用入口）
  * </ul>
  */
+@DisplayName("处理提交阶段:委托插件提交、插件返回空与未解析插件时的成功回退,以及试运行不触碰插件")
 class CommitStepTest {
 
   @Test
+  @DisplayName("阶段标识为处理提交阶段")
   void shouldReturnStageCommit_whenStageAccessed() {
     assertThat(new CommitStep().stage()).isEqualTo(ProcessStage.COMMIT);
   }

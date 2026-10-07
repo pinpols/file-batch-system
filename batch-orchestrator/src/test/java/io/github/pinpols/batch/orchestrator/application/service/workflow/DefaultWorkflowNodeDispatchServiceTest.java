@@ -61,6 +61,7 @@ import org.springframework.beans.factory.ObjectProvider;
  * <p>gateway / JOB / task 三条主路径涉及众多 collaborator,留集成测覆盖。
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("流程节点派发服务: 入参短路, 就绪判断与节点派发口径")
 class DefaultWorkflowNodeDispatchServiceTest {
 
   @Mock
@@ -161,7 +162,7 @@ class DefaultWorkflowNodeDispatchServiceTest {
 
   @Test
   @DisplayName("null jobInstance → 返 0,不读 DB")
-  void nullJobInstanceReturnsZero() {
+  void shouldReturnZero_whenJobInstanceMissing() {
     assertThat(service.dispatchNode(
             null, workflowRun(), new DagNodeResolution("n1", "TASK"), null, "trace"))
         .isZero();
@@ -170,7 +171,7 @@ class DefaultWorkflowNodeDispatchServiceTest {
 
   @Test
   @DisplayName("null workflowRun → 返 0")
-  void nullWorkflowRunReturnsZero() {
+  void shouldReturnZero_whenWorkflowRunMissing() {
     assertThat(service.dispatchNode(
             instance(), null, new DagNodeResolution("n1", "TASK"), null, "trace"))
         .isZero();
@@ -178,7 +179,7 @@ class DefaultWorkflowNodeDispatchServiceTest {
 
   @Test
   @DisplayName("null node → 返 0")
-  void nullNodeReturnsZero() {
+  void shouldReturnZero_whenNodeResolutionMissing() {
     assertThat(service.dispatchNode(instance(), workflowRun(), null, null, "trace"))
         .isZero();
   }
@@ -187,7 +188,7 @@ class DefaultWorkflowNodeDispatchServiceTest {
 
   @Test
   @DisplayName("节点已 READY → 返 0,不走 DAG ready check")
-  void alreadyReadyReturnsZero() {
+  void shouldReturnZero_whenNodeAlreadyReady() {
     WorkflowNodeRunEntity existing = new WorkflowNodeRunEntity();
     existing.setNodeStatus(WorkflowNodeRunStatus.READY.code());
     when(workflowNodeRunMapper.selectLatestForUpdate(10L, "n1")).thenReturn(existing);
@@ -201,7 +202,7 @@ class DefaultWorkflowNodeDispatchServiceTest {
 
   @Test
   @DisplayName("节点已 RUNNING → 返 0")
-  void alreadyRunningReturnsZero() {
+  void shouldReturnZero_whenNodeAlreadyRunning() {
     WorkflowNodeRunEntity existing = new WorkflowNodeRunEntity();
     existing.setNodeStatus(WorkflowNodeRunStatus.RUNNING.code());
     when(workflowNodeRunMapper.selectLatestForUpdate(10L, "n1")).thenReturn(existing);
@@ -213,7 +214,7 @@ class DefaultWorkflowNodeDispatchServiceTest {
 
   @Test
   @DisplayName("节点已 SUCCESS → 返 0(终态去重)")
-  void alreadySuccessReturnsZero() {
+  void shouldReturnZero_whenNodeAlreadySucceeded() {
     WorkflowNodeRunEntity existing = new WorkflowNodeRunEntity();
     existing.setNodeStatus(WorkflowNodeRunStatus.SUCCESS.code());
     when(workflowNodeRunMapper.selectLatestForUpdate(10L, "n1")).thenReturn(existing);
@@ -225,7 +226,7 @@ class DefaultWorkflowNodeDispatchServiceTest {
 
   @Test
   @DisplayName("节点已 FAILED → 不视为 active,继续走 ready check(允许重试)")
-  void alreadyFailedProceedsToDagCheck() {
+  void shouldProceedToReadinessCheck_whenNodeAlreadyFailed() {
     WorkflowNodeRunEntity existing = new WorkflowNodeRunEntity();
     existing.setNodeStatus(WorkflowNodeRunStatus.FAILED.code());
     when(workflowNodeRunMapper.selectLatestForUpdate(10L, "n1")).thenReturn(existing);
@@ -242,7 +243,7 @@ class DefaultWorkflowNodeDispatchServiceTest {
 
   @Test
   @DisplayName("DAG readiness=false → 返 0,不读 workflow_node")
-  void notReadyReturnsZero() {
+  void shouldReturnZero_whenNodeNotReady() {
     when(workflowNodeRunMapper.selectLatestForUpdate(anyLong(), anyString())).thenReturn(null);
     when(workflowDagService.isNodeReadyForDispatch(anyLong(), anyLong(), anyString(), any()))
         .thenReturn(false);
@@ -258,7 +259,7 @@ class DefaultWorkflowNodeDispatchServiceTest {
 
   @Test
   @DisplayName("workflow_node 不存在 → 返 0,不调任何 dispatch 路径")
-  void missingWorkflowNodeReturnsZero() {
+  void shouldReturnZero_whenWorkflowNodeMissing() {
     when(workflowNodeRunMapper.selectLatestForUpdate(anyLong(), anyString())).thenReturn(null);
     when(workflowDagService.isNodeReadyForDispatch(anyLong(), anyLong(), anyString(), any()))
         .thenReturn(true);
@@ -273,7 +274,7 @@ class DefaultWorkflowNodeDispatchServiceTest {
 
   @Test
   @DisplayName("workflow_node 存在但 cross-day 依赖 halt → 返 0,不进入 dispatch 路径")
-  void crossDayDependencyHaltReturnsZero() {
+  void shouldReturnZero_whenCrossDayDependencyHalts() {
     when(workflowNodeRunMapper.selectLatestForUpdate(anyLong(), anyString())).thenReturn(null);
     when(workflowDagService.isNodeReadyForDispatch(anyLong(), anyLong(), anyString(), any()))
         .thenReturn(true);
@@ -300,7 +301,7 @@ class DefaultWorkflowNodeDispatchServiceTest {
 
   @Test
   @DisplayName("TASK 节点资源准入 REJECT → 抛业务拒绝且不创建分区")
-  void taskNodeAdmissionRejectThrowsBusinessError() {
+  void shouldThrowBusinessError_whenAdmissionRejected() {
     when(workflowNodeRunMapper.selectLatestForUpdate(anyLong(), anyString())).thenReturn(null);
     when(workflowDagService.isNodeReadyForDispatch(anyLong(), anyLong(), anyString(), any()))
         .thenReturn(true);

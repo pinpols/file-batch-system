@@ -17,9 +17,11 @@ import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+@DisplayName("流程归档服务: 开关短路, 候选清理顺序与批量判断口径")
 class WorkflowArchiveServiceTest {
 
   private WorkflowRunMapper mapper;
@@ -34,7 +36,8 @@ class WorkflowArchiveServiceTest {
   }
 
   @Test
-  void disabledShouldShortCircuit() {
+  @DisplayName("归档开关关闭时直接返回未执行, 且不查询候选")
+  void shouldShortCircuit_whenArchiveDisabled() {
     props.setEnabled(false);
 
     ArchiveBatchResult result = service.archiveOnce();
@@ -45,7 +48,8 @@ class WorkflowArchiveServiceTest {
   }
 
   @Test
-  void noCandidatesShouldReturnEmptyResult() {
+  @DisplayName("没有候选流程时返回已执行但计数为零, 不产生任何删除")
+  void shouldReturnEmptyResult_whenNoCandidates() {
     props.setEnabled(true);
     when(mapper.selectArchivableIds(any(Instant.class), anyInt())).thenReturn(List.of());
 
@@ -58,7 +62,8 @@ class WorkflowArchiveServiceTest {
   }
 
   @Test
-  void candidatesShouldDeleteNodeRunsBeforeRuns() {
+  @DisplayName("有候选流程时先删节点运行再删流程运行, 并回填两类删除数")
+  void shouldDeleteNodeRunsFirst_whenCandidatesExist() {
     props.setEnabled(true);
     props.setBatchSize(100);
     List<Long> ids = List.of(1L, 2L, 3L);
@@ -79,7 +84,8 @@ class WorkflowArchiveServiceTest {
   }
 
   @Test
-  void hasMoreReturnsTrueWhenCandidatesEqualBatchSize() {
+  @DisplayName("候选数量等于批量大小时判定还有更多待归档")
+  void shouldReportMore_whenCandidatesEqualBatchSize() {
     props.setEnabled(true);
     props.setBatchSize(3);
     when(mapper.selectArchivableIds(any(Instant.class), anyInt())).thenReturn(List.of(1L, 2L, 3L));
@@ -92,7 +98,8 @@ class WorkflowArchiveServiceTest {
   }
 
   @Test
-  void hasMoreReturnsFalseWhenCandidatesUnderBatchSize() {
+  @DisplayName("候选数量小于批量大小时判定没有更多待归档")
+  void shouldReportNoMore_whenCandidatesUnderBatchSize() {
     props.setEnabled(true);
     props.setBatchSize(100);
     when(mapper.selectArchivableIds(any(Instant.class), anyInt())).thenReturn(List.of(1L, 2L));
@@ -105,7 +112,8 @@ class WorkflowArchiveServiceTest {
   }
 
   @Test
-  void retentionDaysClampedToMinimumOne() {
+  @DisplayName("保留天数非正时收敛为一天, 归档截止时间相应前移")
+  void shouldClampRetentionToMinimum_whenRetentionNotPositive() {
     props.setEnabled(true);
     props.setRetentionDays(0); // 0 / 负值 → clamp 到 1，避免删 RUNNING 兄弟事务
     when(mapper.selectArchivableIds(any(Instant.class), anyInt())).thenReturn(List.of());

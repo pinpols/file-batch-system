@@ -11,6 +11,7 @@ import java.time.Month;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -33,6 +34,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("多日历联动调度,验证上游日历依赖拦截,灾害日跳过覆盖以及按工作日差异化的截断时刻落库")
 class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -53,7 +55,8 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void hkBlocksOnCnUntilSettled() {
+  @DisplayName("上游日历未结算时下游日历不开,上游结算后下游日历可开")
+  void shouldBlockDownstreamCalendar_whenUpstreamNotSettled() {
     insertCalendar("CAL_CN", "Asia/Shanghai");
     insertCalendar("CAL_HK", "Asia/Hong_Kong");
     // HK 依赖 CN SETTLED
@@ -90,7 +93,8 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void disasterSkipOverrideShortCircuitsOpen() {
+  @DisplayName("灾害日跳过覆盖生效时批次日进入跳过或延期,而不是正常开启")
+  void shouldSkipBatchDayOpen_whenDisasterOverrideActive() {
     insertCalendar("CAL_US", "America/New_York");
     // NY EDT cutoff=22:00 → 用 NY 本地 22:01 of BIZ 让 scheduler 算出 bizDate=BIZ
     Instant now =
@@ -118,7 +122,8 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void cutoffScheduleJsonbPersists() {
+  @DisplayName("按工作日差异化的截断时刻配置以结构化列落库并可完整读回")
+  void shouldPersistCutoffSchedule_whenJsonbColumnUsed() {
     String cutoffJson = "{\"default\":\"22:00\",\"weekdayPattern\":{\"THURSDAY\":\"12:00\"}}";
     jdbcTemplate.update(
         "insert into batch.business_calendar"

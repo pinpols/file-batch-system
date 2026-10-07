@@ -17,15 +17,18 @@ import java.sql.ResultSetMetaData;
 import java.sql.Statement;
 import java.util.Map;
 import javax.sql.DataSource;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+@DisplayName("查询导出处理器:执行查询按表头写出分隔文件,覆盖引号转义、行数统计与目录缺失失败")
 class QueryExportHandlerTest {
 
   @TempDir
   Path tempDir;
 
   @Test
+  @DisplayName("两行结果带表头导出:含分隔符的字段加引号转义,行数计数为 2 且设置抓取批量")
   void shouldExportWithHeaderAndQuoting() throws Exception {
     Path out = tempDir.resolve("out.csv");
 
@@ -59,6 +62,7 @@ class QueryExportHandlerTest {
   }
 
   @Test
+  @DisplayName("输出目录不存在 → 失败,并提示输出目录不可用")
   void shouldFailWhenOutputDirMissing() {
     DataSource ds = mock(DataSource.class);
     var handler = new QueryExportHandler(QueryExportConfig.defaults("exp", "select 1"), ds);

@@ -5,12 +5,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.io.InputStream;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.session.Configuration;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("血缘数据集映射配置文件的加载与解析正确性")
 class OpenLineageDatasetMapperXmlTest {
 
   @Test
-  void mapperXmlShouldParse() {
+  @DisplayName("血缘数据集映射配置文件能被加载并完成解析,不出现语法或结构错误")
+  void shouldParseMapperXml_whenResourceExists() {
     Configuration configuration = new Configuration();
     String resource = "mapper/OpenLineageDatasetMapper.xml";
 

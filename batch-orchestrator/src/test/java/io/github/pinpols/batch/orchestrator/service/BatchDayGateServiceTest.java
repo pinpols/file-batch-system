@@ -34,9 +34,11 @@ import java.time.LocalTime;
 import java.time.Month;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+@DisplayName("批量日闸门评估:日历重叠策略,当日冻结,前日未结与同作业范围下的放行,等待和拒绝决策")
 class BatchDayGateServiceTest {
 
   private OrchestratorConfigCacheService configCacheService;
@@ -68,6 +70,7 @@ class BatchDayGateServiceTest {
   }
 
   @Test
+  @DisplayName("当日批量日不存在且日历策略允许重叠时直接放行,且不查询前一日批量日")
   void shouldAllowWhenCalendarAllowsOverlap() {
     LaunchRequest request = request();
     LaunchValidationService.LaunchLoadResult loaded = loaded("INHERIT");
@@ -88,6 +91,7 @@ class BatchDayGateServiceTest {
   }
 
   @Test
+  @DisplayName("当日批量日已冻结时拒绝受理,回写拒绝状态并记录执行日志")
   void shouldRejectWhenCurrentBatchDayIsFrozen() {
     LaunchRequest request = request();
     LaunchValidationService.LaunchLoadResult loaded = loaded("INHERIT");
@@ -110,6 +114,7 @@ class BatchDayGateServiceTest {
   }
 
   @Test
+  @DisplayName("补跑类型触发完全跳过冻结检查并直接放行")
   void shouldBypassFrozenForCatchUpTrigger() {
     LaunchRequest request = new LaunchRequest(
         "t1",
@@ -130,6 +135,7 @@ class BatchDayGateServiceTest {
   }
 
   @Test
+  @DisplayName("前一日批量日仍在途时挂起受理,写入等待记录并回写等待状态")
   void shouldWaitWhenPreviousDayIsNotClosed() {
     LaunchRequest request = request();
     LaunchValidationService.LaunchLoadResult loaded = loaded("INHERIT");
@@ -155,6 +161,7 @@ class BatchDayGateServiceTest {
   }
 
   @Test
+  @DisplayName("日历要求前日关闭而前一日已失败时拒绝受理,且不写入等待记录")
   void shouldRejectWhenCalendarRejectsOpenPreviousDay() {
     LaunchRequest request = request();
     LaunchValidationService.LaunchLoadResult loaded = loaded("INHERIT");
@@ -175,6 +182,7 @@ class BatchDayGateServiceTest {
   }
 
   @Test
+  @DisplayName("前一日批量日已结算时放行,且不写入等待记录也不回写受理状态")
   void shouldAllowWhenPreviousDayIsSettled() {
     LaunchRequest request = request();
     LaunchValidationService.LaunchLoadResult loaded = loaded("INHERIT");
@@ -217,6 +225,7 @@ class BatchDayGateServiceTest {
   }
 
   @Test
+  @DisplayName("同作业范围下前一日同类作业实例均已终结时放行")
   void shouldAllowSameJobScopeWhenPreviousJobInstancesAreTerminal() {
     LaunchRequest request = request();
     LaunchValidationService.LaunchLoadResult loaded = loaded("SAME_JOB");
@@ -233,6 +242,7 @@ class BatchDayGateServiceTest {
   }
 
   @Test
+  @DisplayName("同作业范围下前一日仍有未终结实例时挂起,原因指向作业未关闭")
   void shouldWaitSameJobScopeWhenPreviousJobInstancesStillRunning() {
     LaunchRequest request = request();
     LaunchValidationService.LaunchLoadResult loaded = loaded("SAME_JOB");
@@ -253,6 +263,7 @@ class BatchDayGateServiceTest {
   }
 
   @Test
+  @DisplayName("同作业组范围且已配置组编码时按组统计未终结实例,原因指向作业组未关闭")
   void shouldUseGroupQueryWhenSameJobGroupScopeAndGroupConfigured() {
     LaunchRequest request = request();
     LaunchValidationService.LaunchLoadResult loaded = loadedWithGroup("SAME_JOB_GROUP", "settle");
@@ -274,6 +285,7 @@ class BatchDayGateServiceTest {
   }
 
   @Test
+  @DisplayName("同作业组范围缺少组编码时退化为同作业范围统计,统计为空则放行")
   void shouldFallbackToSameJobWhenGroupCodeMissingForSameJobGroupScope() {
     LaunchRequest request = request();
     // SAME_JOB_GROUP 但 jobGroupCode 为空 → 退化为 SAME_JOB

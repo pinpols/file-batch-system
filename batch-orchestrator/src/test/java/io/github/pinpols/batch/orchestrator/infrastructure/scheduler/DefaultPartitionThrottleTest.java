@@ -20,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 /** 单元测试：关闭分区配额时必须短路，避免高吞吐 launch 对活跃分区表执行无效 COUNT。 */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("默认分区节流器: 分区配额关闭时直接放行并跳过活跃分区计数")
 class DefaultPartitionThrottleTest {
 
   @Mock
@@ -43,8 +44,8 @@ class DefaultPartitionThrottleTest {
   }
 
   @Test
-  @DisplayName("租户和队列分区配额均关闭 → 直接放行且不查询活跃分区")
-  void disabledPartitionQuotasSkipActivePartitionCount() {
+  @DisplayName("租户和队列分区配额均关闭时直接放行, 且不查询活跃分区")
+  void shouldPassThroughWithoutActivePartitionCount_whenPartitionQuotasDisabled() {
     ResourceSchedulingRequest request = new ResourceSchedulingRequest();
     request.setTenantId("ta");
     TenantQuotaPolicyEntity disabledLimits = new TenantQuotaPolicyEntity(

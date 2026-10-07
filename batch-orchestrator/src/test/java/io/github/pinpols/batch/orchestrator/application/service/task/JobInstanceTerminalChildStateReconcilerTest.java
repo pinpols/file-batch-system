@@ -29,6 +29,7 @@ import org.mockito.MockitoAnnotations;
  *   <li>未知 code → no-op
  * </ul>
  */
+@DisplayName("作业实例终态子表收敛器: 终态映射与非终态空操作口径")
 class JobInstanceTerminalChildStateReconcilerTest {
 
   @Mock
@@ -52,7 +53,7 @@ class JobInstanceTerminalChildStateReconcilerTest {
 
   @Test
   @DisplayName("SUCCESS → 子表收敛为 SUCCESS")
-  void reconcilesSuccess() {
+  void shouldReconcileSuccess_whenInstanceSucceeded() {
     reconciler.reconcile("ta", 100L, JobInstanceStatus.SUCCESS.code());
 
     verify(partitionMapper)
@@ -63,7 +64,7 @@ class JobInstanceTerminalChildStateReconcilerTest {
 
   @Test
   @DisplayName("FAILED → 子表收敛为 FAILED")
-  void reconcilesFailed() {
+  void shouldReconcileFailed_whenInstanceFailed() {
     reconciler.reconcile("ta", 100L, JobInstanceStatus.FAILED.code());
 
     verify(partitionMapper)
@@ -74,7 +75,7 @@ class JobInstanceTerminalChildStateReconcilerTest {
 
   @Test
   @DisplayName("PARTIAL_FAILED → 子表收敛为 FAILED(部分失败也收敛为 FAILED)")
-  void reconcilesPartialFailedAsFailed() {
+  void shouldReconcileAsFailed_whenInstancePartialFailed() {
     reconciler.reconcile("ta", 100L, JobInstanceStatus.PARTIAL_FAILED.code());
 
     verify(partitionMapper)
@@ -85,7 +86,7 @@ class JobInstanceTerminalChildStateReconcilerTest {
 
   @Test
   @DisplayName("CANCELLED → 子表收敛为 CANCELLED")
-  void reconcilesCancelled() {
+  void shouldReconcileCancelled_whenInstanceCancelled() {
     reconciler.reconcile("ta", 100L, JobInstanceStatus.CANCELLED.code());
 
     verify(partitionMapper)
@@ -97,7 +98,7 @@ class JobInstanceTerminalChildStateReconcilerTest {
 
   @Test
   @DisplayName("TERMINATED → 子表收敛为 TERMINATED")
-  void reconcilesTerminated() {
+  void shouldReconcileTerminated_whenInstanceTerminated() {
     reconciler.reconcile("ta", 100L, JobInstanceStatus.TERMINATED.code());
 
     verify(partitionMapper)
@@ -109,7 +110,7 @@ class JobInstanceTerminalChildStateReconcilerTest {
 
   @Test
   @DisplayName("非业务终态 RUNNING → no-op,不写子表(防止节流计数泄漏)")
-  void noopForNonTerminalRunning() {
+  void shouldDoNothing_whenInstanceRunning() {
     reconciler.reconcile("ta", 100L, JobInstanceStatus.RUNNING.code());
 
     verify(partitionMapper, never())
@@ -120,7 +121,7 @@ class JobInstanceTerminalChildStateReconcilerTest {
 
   @Test
   @DisplayName("非业务终态 WAITING → no-op")
-  void noopForNonTerminalWaiting() {
+  void shouldDoNothing_whenInstanceWaiting() {
     reconciler.reconcile("ta", 100L, JobInstanceStatus.WAITING.code());
 
     verify(partitionMapper, never())
@@ -131,7 +132,7 @@ class JobInstanceTerminalChildStateReconcilerTest {
 
   @Test
   @DisplayName("未知 code → no-op,不抛错")
-  void noopForUnknownCode() {
+  void shouldDoNothing_whenStatusUnknown() {
     reconciler.reconcile("ta", 100L, "UNKNOWN_GARBAGE");
 
     verify(partitionMapper, never())
@@ -140,7 +141,7 @@ class JobInstanceTerminalChildStateReconcilerTest {
 
   @Test
   @DisplayName("null code → no-op,不抛 NPE")
-  void noopForNullCode() {
+  void shouldDoNothing_whenStatusMissing() {
     reconciler.reconcile("ta", 100L, null);
 
     verify(partitionMapper, never())

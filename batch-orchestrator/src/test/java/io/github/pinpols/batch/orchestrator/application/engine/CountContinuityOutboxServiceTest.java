@@ -26,6 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 /** ADR-041 Phase1.3b:跨阶段 count 连续性核对(仅告警)。 */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("条数连续性出箱服务: 上下游条数不一致时的告警口径")
 class CountContinuityOutboxServiceTest {
 
   @Mock

@@ -64,7 +64,8 @@ class ShellAtomicHandlerTest {
   }
 
   @Test
-  void createsPrivateRootWhenTempDirectoryDoesNotExist() throws Exception {
+  @DisplayName("临时根目录不存在时自动创建私有目录,命令仍正常执行成功")
+  void shouldCreatePrivateTempRoot_whenTempDirectoryMissing() throws Exception {
     assumeTrue(exists(ECHO), "/bin/echo 不存在,跳过");
     Path tempRoot = Files.createTempDirectory("shell-private-root-test-");
     String original = System.getProperty(ShellAtomicHandler.TEMP_ROOT_PROPERTY);

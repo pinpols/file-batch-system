@@ -17,6 +17,7 @@ import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -24,6 +25,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("任务创建服务: 版本初始化, 步骤实例生成与批量分片口径")
 class DefaultTaskCreationServiceTest {
 
   @Mock
@@ -40,6 +42,7 @@ class DefaultTaskCreationServiceTest {
   }
 
   @Test
+  @DisplayName("任务版本为空时初始化为零")
   void createTask_setsVersionToZeroWhenNull() {
     JobTaskEntity task = buildTask(null, null, "IMPORT", null);
     service.createTask(task);
@@ -47,6 +50,7 @@ class DefaultTaskCreationServiceTest {
   }
 
   @Test
+  @DisplayName("任务已有版本时保持原值不变")
   void createTask_doesNotOverrideExistingVersion() {
     JobTaskEntity task = buildTask(null, null, "IMPORT", null);
     task.setVersion(3L);
@@ -55,6 +59,7 @@ class DefaultTaskCreationServiceTest {
   }
 
   @Test
+  @DisplayName("创建任务时落库任务并生成对应步骤实例")
   void createTask_insertsTaskAndCreatesStepInstance() {
     JobTaskEntity task = buildTask(100L, "t1", "IMPORT", 1);
     when(jobStepInstanceMapper.selectByJobTaskId("t1", 100L)).thenReturn(null);
@@ -66,6 +71,7 @@ class DefaultTaskCreationServiceTest {
   }
 
   @Test
+  @DisplayName("步骤实例已存在时不重复生成")
   void createTask_skipsStepInstanceWhenAlreadyExists() {
     JobTaskEntity task = buildTask(100L, "t1", "IMPORT", 1);
     when(jobStepInstanceMapper.selectByJobTaskId("t1", 100L))
@@ -77,6 +83,7 @@ class DefaultTaskCreationServiceTest {
   }
 
   @Test
+  @DisplayName("任务标识为空时既不查询也不生成步骤实例")
   void createTask_skipsStepInstanceWhenTaskIdIsNull() {
     JobTaskEntity task = buildTask(null, "t1", "IMPORT", 1);
 
@@ -87,6 +94,7 @@ class DefaultTaskCreationServiceTest {
   }
 
   @Test
+  @DisplayName("载荷带有流程节点编码时按该编码解析步骤并生成实例")
   void createTask_resolvesStepCodeFromWorkflowNodeCodeInPayload() {
     JobTaskEntity task = buildTask(200L, "t1", "EXPORT", 1);
     task.setTaskPayload("{\"workflowNodeCode\":\"NODE-A\",\"workflowNodeType\":\"EXPORT_NODE\"}");
@@ -98,6 +106,7 @@ class DefaultTaskCreationServiceTest {
   }
 
   @Test
+  @DisplayName("载荷没有流程节点编码时回退使用任务类型作为步骤编码")
   void createTask_fallsBackToTaskTypeStepCodeWhenNoWorkflowNodeCode() {
     JobTaskEntity task = buildTask(200L, "t1", "EXPORT", 2);
     task.setTaskPayload("{}");
@@ -109,6 +118,7 @@ class DefaultTaskCreationServiceTest {
   }
 
   @Test
+  @DisplayName("载荷带有相关文件标识时解析后生成步骤实例")
   void createTask_resolvesRelatedFileIdFromPayload() {
     JobTaskEntity task = buildTask(300L, "t1", "IMPORT", 1);
     task.setTaskPayload("{\"relatedFileId\":42}");
@@ -121,6 +131,7 @@ class DefaultTaskCreationServiceTest {
   }
 
   @Test
+  @DisplayName("载荷为空时正常完成创建, 不抛异常")
   void createTask_handlesNullPayloadGracefully() {
     JobTaskEntity task = buildTask(400L, "t1", "IMPORT", 1);
     task.setTaskPayload(null);
@@ -132,6 +143,7 @@ class DefaultTaskCreationServiceTest {
   }
 
   @Test
+  @DisplayName("载荷格式非法时正常完成创建, 不抛异常")
   void createTask_handlesInvalidJsonPayloadGracefully() {
     JobTaskEntity task = buildTask(500L, "t1", "IMPORT", 1);
     task.setTaskPayload("not-valid-json");
@@ -144,6 +156,7 @@ class DefaultTaskCreationServiceTest {
   }
 
   @Test
+  @DisplayName("创建任务返回传入的同一个任务对象")
   void createTask_returnsTheSameTaskObject() {
     JobTaskEntity task = buildTask(100L, "t1", "IMPORT", 1);
     when(jobStepInstanceMapper.selectByJobTaskId("t1", 100L)).thenReturn(null);
@@ -156,6 +169,7 @@ class DefaultTaskCreationServiceTest {
   // ===== PERF(5.1) createTasks 批量 =====
 
   @Test
+  @DisplayName("批量创建时任务与步骤各批量落库一次, 不做逐条预检")
   @SuppressWarnings("unchecked")
   void createTasks_batchInsertsTasksAndStepsOnceEach() {
     JobTaskEntity t1 = buildTask(null, "t1", "IMPORT", 1);
@@ -186,6 +200,7 @@ class DefaultTaskCreationServiceTest {
   }
 
   @Test
+  @DisplayName("批次中存在缺少任务类型的任务时整批快速失败, 不落库")
   void createTasks_failsFastWholeBatchWhenTaskTypeMissing() {
     JobTaskEntity ok = buildTask(null, "t1", "IMPORT", 1);
     JobTaskEntity bad = buildTask(null, "t1", null, 1);
@@ -198,6 +213,7 @@ class DefaultTaskCreationServiceTest {
   }
 
   @Test
+  @DisplayName("超大批次按上限切分落库, 并保持标识回填顺序与步骤归属一致")
   @SuppressWarnings("unchecked")
   void createTasks_chunksLargeBatch_andPreservesIdBackfillOrder() {
     // 1200 > chunk 500 → task/step 各分 3 批(500,500,200);id 回填拼接回原顺序正确。
@@ -239,6 +255,7 @@ class DefaultTaskCreationServiceTest {
   }
 
   @Test
+  @DisplayName("入参为空或空列表时返回空且不执行任何写库")
   void createTasks_emptyOrNullInputNoSql() {
     assertThat(service.createTasks(List.of())).isEmpty();
     assertThat(service.createTasks(null)).isEmpty();

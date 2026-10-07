@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+@DisplayName("调度队列积压指标采集器:验证采样时聚合各状态分区数与排队总数并刷新全局指标,含最老等待时长")
 class SchedulerQueueBacklogMetricsSchedulerTest {
 
   @Mock
@@ -34,8 +35,8 @@ class SchedulerQueueBacklogMetricsSchedulerTest {
   }
 
   @Test
-  @DisplayName("sample: 聚合 job_partition 积压后刷新全局 gauge")
-  void sampleUpdatesBacklogGauges() {
+  @DisplayName("采样时聚合各状态分区数与排队总数并刷新全局指标,含最老等待时长")
+  void shouldRefreshGlobalBacklogGauges_whenSampling() {
     when(gracefulShutdown.isDraining()).thenReturn(false);
     when(jobPartitionMapper.summarizeGlobalQueueBacklog(
             "CREATED", "WAITING", "READY", "RUNNING", "RETRYING"))

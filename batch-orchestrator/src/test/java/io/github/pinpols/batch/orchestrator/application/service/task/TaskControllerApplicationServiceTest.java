@@ -55,6 +55,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * </ul>
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("任务控制应用服务: 认领, 结果上报, 续租与批量处理口径")
 class TaskControllerApplicationServiceTest {
 
   @Mock
@@ -79,7 +80,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("claim: assignWorker 返 null → NOT_FOUND")
-  void claimThrowsNotFoundWhenAssignReturnsNull() {
+  void shouldThrowNotFound_whenClaimAssignReturnsNothing() {
     when(taskExecutionService.assignWorker(anyString(), anyLong(), anyString())).thenReturn(null);
 
     assertThatThrownBy(() -> service.claim(100L, new TaskClaimCommand("ta", "w1", "inv-1")))
@@ -89,7 +90,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("claim: 状态非 RUNNING → CONFLICT,不返 config")
-  void claimThrowsConflictWhenNotRunning() {
+  void shouldThrowConflict_whenClaimedTaskNotRunning() {
     JobTaskEntity task = task(TaskStatus.READY.code(), "w1");
     when(taskExecutionService.assignWorker("ta", 100L, "w1")).thenReturn(task);
 
@@ -100,7 +101,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("claim: workerId 不匹配 → CONFLICT")
-  void claimThrowsConflictWhenWorkerMismatch() {
+  void shouldThrowConflict_whenClaimWorkerMismatch() {
     JobTaskEntity task = task(TaskStatus.RUNNING.code(), "w-other");
     when(taskExecutionService.assignWorker(anyString(), anyLong(), anyString())).thenReturn(task);
 
@@ -110,7 +111,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("claim: 状态 RUNNING + workerId 匹配 → 返回 effective config")
-  void claimSucceedsAndReturnsConfig() {
+  void shouldReturnConfig_whenClaimSucceeds() {
     JobTaskEntity task = task(TaskStatus.RUNNING.code(), "w1");
     when(taskExecutionService.assignWorker("ta", 100L, "w1")).thenReturn(task);
     // PERF(5.2b): claim 成功后复用 assignWorker 返回的 task 实体拉 config,不再按 id 重查
@@ -125,7 +126,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("claimBatch: 逐项独立 —— 领到/被抢/不存在 三种各自返回,不抛异常")
-  void claimBatchReturnsPerItemResultsWithoutThrowing() {
+  void shouldReturnPerItemResults_whenClaimingBatch() {
     // task 1:领到(RUNNING + w1)
     JobTaskEntity claimedTask = task(TaskStatus.RUNNING.code(), "w1");
     when(taskExecutionService.assignWorker(eq("ta"), eq(1L), eq("w1"), any()))
@@ -155,7 +156,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("claimBatch: 超过 maxBatchSize → 直接拒绝(保护 orchestrator)")
-  void claimBatchRejectsOversizeBatch() {
+  void shouldRejectBatch_whenClaimSizeExceedsLimit() {
     batchClaimProperties.setMaxBatchSize(2);
 
     assertThatThrownBy(() -> service.claimBatch(new TaskClaimBatchCommand(List.of(
@@ -169,14 +170,14 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("claimBatch: 空/null 入参 → 空结果")
-  void claimBatchEmptyInputReturnsEmpty() {
+  void shouldReturnEmpty_whenClaimBatchInputEmpty() {
     assertThat(service.claimBatch(new TaskClaimBatchCommand(null)).results()).isEmpty();
     assertThat(service.claimBatch(null).results()).isEmpty();
   }
 
   @Test
   @DisplayName("claimBatch: null 项按未认领返回,不触发底层调用")
-  void claimBatchNullItemIsSkipped() {
+  void shouldReportUnclaimed_whenClaimBatchItemMissing() {
     List<TaskClaimItemCommand> items = new ArrayList<>();
     items.add(null);
 
@@ -194,7 +195,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("reportBatch: 批内某项失败只标记该项,其余照常推进(逐项独立)")
-  void reportBatchPartialFailureIsolatesFailingItem() {
+  void shouldIsolateFailure_whenReportingBatchPartially() {
     // taskId=2 的 applyTaskOutcome 抛(模拟版本 CAS 冲突);1/3 正常
     when(taskExecutionService.applyTaskOutcome(any())).thenAnswer(inv -> {
       TaskOutcomeCommand c = inv.getArgument(0);
@@ -218,7 +219,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("reportBatch: 超过 maxBatchSize → 拒绝,不推进任何项")
-  void reportBatchRejectsOversize() {
+  void shouldRejectBatch_whenReportSizeExceedsLimit() {
     batchClaimProperties.setMaxBatchSize(2);
 
     assertThatThrownBy(() -> service.reportBatch(
@@ -229,14 +230,14 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("reportBatch: 空/null 入参 → 空结果")
-  void reportBatchEmptyInputReturnsEmpty() {
+  void shouldReturnEmpty_whenReportBatchInputEmpty() {
     assertThat(service.reportBatch(new TaskReportBatchCommand(null)).results()).isEmpty();
     assertThat(service.reportBatch(null).results()).isEmpty();
   }
 
   @Test
   @DisplayName("reportBatch: null 项只返回失败结果,不阻断后续项")
-  void reportBatchNullItemIsolated() {
+  void shouldReturnFailedItem_whenReportBatchItemMissing() {
     List<TaskExecutionReportCommand> items = new ArrayList<>();
     items.add(null);
     items.add(reportDto(2L));
@@ -254,7 +255,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("批量指标:claim/report 记录批大小分布 + 逐项 outcome 计数")
-  void batchMetricsRecordSizeAndOutcomes() {
+  void shouldRecordBatchMetrics_whenClaimingAndReporting() {
     // claim:1 领到(taskId=1)+ 1 跳过(taskId=2 被抢)
     when(taskExecutionService.assignWorker(eq("ta"), eq(1L), eq("w1"), any()))
         .thenReturn(task(TaskStatus.RUNNING.code(), "w1"));
@@ -306,7 +307,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("report: success=true → errorCode/message 强制 null,即使 DTO 里有")
-  void reportSuccessClearsErrorFields() {
+  void shouldClearErrorFields_whenReportingSuccess() {
     TaskExecutionReportCommand dto = reportCommand(null, true, null, null, "OLD", "msg", null);
 
     service.report(100L, dto);
@@ -319,7 +320,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("report: success=false + errorCode 优先于旧 code 字段")
-  void reportFailureUsesNewFieldFirst() {
+  void shouldPreferNewErrorFields_whenReportingFailure() {
     TaskExecutionReportCommand dto =
         reportCommand(null, false, "OLD_ERR", "old msg", "NEW_ERR", "new msg", null);
 
@@ -333,7 +334,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("report: success=false + 仅旧 code 字段 → 回退到 code")
-  void reportFailureFallsBackToOldField() {
+  void shouldFallBackToLegacyErrorField_whenReportingFailure() {
     TaskExecutionReportCommand dto =
         reportCommand(null, false, "OLD_ERR", "old msg", null, null, null);
 
@@ -347,7 +348,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("report: success=false 且都没填 → 降级 UNKNOWN")
-  void reportFailureFallsBackToUnknown() {
+  void shouldFallBackToUnknown_whenErrorFieldsMissing() {
     TaskExecutionReportCommand dto = reportCommand(null, false, null, null, null, null, null);
 
     service.report(100L, dto);
@@ -360,7 +361,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("report: success=false → verifierFailures 强制 null(失败路径不再带 verifier 信息)")
-  void reportFailureDropsVerifierFailures() {
+  void shouldDropVerifierFailures_whenReportingFailure() {
     TaskExecutionReportCommand dto = reportCommand(null, false, null, null, null, null, List.of());
 
     service.report(100L, dto);
@@ -374,7 +375,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("renew: 续租失败(leaseRenewed=false)→ 抛 CONFLICT")
-  void renewThrowsWhenLeaseRejected() {
+  void shouldThrowConflict_whenLeaseRenewRejected() {
     when(taskExecutionService.recordHeartbeat(anyString(), anyLong(), anyString(), any(), any()))
         .thenReturn(new TaskHeartbeatResult(false, false));
     assertThatThrownBy(
@@ -384,7 +385,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("renew: 续租成功且未取消 → 返回 cancelRequested=false")
-  void renewSucceedsWithoutCancel() {
+  void shouldReturnNoCancel_whenRenewSucceeds() {
     when(taskExecutionService.recordHeartbeat(eq("ta"), eq(100L), eq("w1"), eq("inv-1"), any()))
         .thenReturn(new TaskHeartbeatResult(true, false));
     var resp = service.renew(100L, new TaskHeartbeatCommand("ta", "w1", "inv-1", null));
@@ -393,7 +394,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("renew: 平台已请求取消 → 返回 cancelRequested=true(cancel push)")
-  void renewReturnsCancelRequested() {
+  void shouldReturnCancelRequested_whenCancelPending() {
     when(taskExecutionService.recordHeartbeat(eq("ta"), eq(100L), eq("w1"), eq("inv-1"), any()))
         .thenReturn(new TaskHeartbeatResult(true, true));
     var resp = service.renew(100L, new TaskHeartbeatCommand("ta", "w1", "inv-1", null));
@@ -402,7 +403,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("renew: details 非空 → 序列化为 JSON 文本透传给 recordHeartbeat")
-  void renewSerializesDetails() {
+  void shouldSerializeDetails_whenRenewingWithProgress() {
     when(taskExecutionService.recordHeartbeat(anyString(), anyLong(), anyString(), any(), any()))
         .thenReturn(new TaskHeartbeatResult(true, false));
     service.renew(
@@ -416,7 +417,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("renew: details 为 null → 传 null,仅续租不写进度")
-  void renewWithoutDetailsPassesNull() {
+  void shouldPassNullDetails_whenRenewingWithoutProgress() {
     when(taskExecutionService.recordHeartbeat(anyString(), anyLong(), anyString(), any(), any()))
         .thenReturn(new TaskHeartbeatResult(true, false));
     service.renew(100L, new TaskHeartbeatCommand("ta", "w1", "inv-1", null));
@@ -427,7 +428,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("cancel: 委托 requestCancel;非 RUNNING / 不存在也不抛(幂等)")
-  void cancelDelegatesAndSwallows() {
+  void shouldDelegateAndSwallow_whenCancellingTask() {
     when(taskExecutionService.requestCancel("ta", 100L)).thenReturn(false);
     service.cancel(100L, new TaskCancelCommand("ta", "manual abort"));
     verify(taskExecutionService).requestCancel("ta", 100L);
@@ -480,7 +481,7 @@ class TaskControllerApplicationServiceTest {
 
   @Test
   @DisplayName("renewBatch: null 项保持结果位置,只把有效项下发到底层")
-  void renewBatchNullItemPreservesOrder() {
+  void shouldPreserveOrder_whenRenewBatchItemMissing() {
     when(taskExecutionService.renewLeaseBatch(any()))
         .thenReturn(List.of(new TaskAssignmentService.TaskHeartbeatResult(true, false)));
     List<TaskLeaseRenewItemCommand> items = new ArrayList<>();

@@ -24,6 +24,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("作业终态指标记录,验证提交后回调复用实例快照与回查权威实例两类路径")
 class JobLifecycleMetricsRecorderTest {
 
   @Mock
@@ -50,8 +51,8 @@ class JobLifecycleMetricsRecorderTest {
   }
 
   @Test
-  @DisplayName("worker 终态指标复用实例快照，不在提交后重复查询 job_instance")
-  void recordsFromExistingInstanceSnapshotWithoutReloadingInstance() {
+  @DisplayName("工作节点上报终态时直接复用实例快照,按作业类型与失败分类记录完成和失败指标")
+  void shouldRecordTerminalMetricsFromSnapshot_forWorkerReportedState() {
     JobInstanceEntity instance = instance(100L, 200L, true);
     when(jobDefinitionMapper.selectById(200L))
         .thenReturn(JobDefinitionEntity.builder().jobType("ATOMIC").build());
@@ -77,7 +78,7 @@ class JobLifecycleMetricsRecorderTest {
 
   @Test
   @DisplayName("运维终态没有现成快照时仍在提交后读取权威实例")
-  void reloadsInstanceForOperationalTerminalPath() {
+  void shouldReloadInstance_whenOperationalTerminalStateHasNoSnapshot() {
     JobInstanceEntity instance = instance(100L, 200L, false);
     instance.setFailureClass("BUSINESS");
     when(jobInstanceMapper.selectById("ta", 100L)).thenReturn(instance);

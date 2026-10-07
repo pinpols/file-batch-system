@@ -16,11 +16,13 @@ import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
 
+@DisplayName("出箱归档服务: 开关短路, 冷热表搬运顺序与保留期口径")
 class OutboxArchiveServiceTest {
 
   private OutboxEventMapper mapper;
@@ -35,7 +37,8 @@ class OutboxArchiveServiceTest {
   }
 
   @Test
-  void disabledShouldShortCircuit() {
+  @DisplayName("归档开关关闭时直接返回未执行, 且不查询候选")
+  void shouldShortCircuit_whenArchiveDisabled() {
     props.setEnabled(false);
 
     ArchiveBatchResult result = service.archivePublished();
@@ -45,7 +48,8 @@ class OutboxArchiveServiceTest {
   }
 
   @Test
-  void noCandidatesReturnsEmpty() {
+  @DisplayName("没有候选事件时返回已执行但计数为零, 不产生删除")
+  void shouldReturnEmptyResult_whenNoCandidates() {
     props.setEnabled(true);
     when(mapper.selectArchivableIds(anyString(), any(Instant.class), anyInt()))
         .thenReturn(List.of());
@@ -59,7 +63,8 @@ class OutboxArchiveServiceTest {
   }
 
   @Test
-  void candidatesShouldArchiveColdTablesBeforeDeletingHotRows() {
+  @DisplayName("有候选事件时先归档事件与投递日志, 再删除对应热表行")
+  void shouldArchiveColdTablesBeforeDeleting_whenCandidatesExist() {
     props.setEnabled(true);
     props.setBatchSize(100);
     List<Long> ids = List.of(1L, 2L, 3L);
@@ -84,7 +89,8 @@ class OutboxArchiveServiceTest {
   }
 
   @Test
-  void publishedAndGiveUpUseDifferentRetention() {
+  @DisplayName("已发布与已放弃状态使用不同保留时长, 已放弃的截止时间更早")
+  void shouldUseDifferentRetention_whenSelectingCandidates() {
     props.setEnabled(true);
     props.setPublishedRetentionDays(7);
     props.setGiveUpRetentionDays(30);
@@ -105,7 +111,8 @@ class OutboxArchiveServiceTest {
   }
 
   @Test
-  void hasMoreReturnsTrueWhenCandidatesEqualBatchSize() {
+  @DisplayName("候选数量等于批量大小时判定还有更多待归档")
+  void shouldReportMore_whenCandidatesEqualBatchSize() {
     props.setEnabled(true);
     props.setBatchSize(3);
     when(mapper.selectArchivableIds(anyString(), any(Instant.class), anyInt()))

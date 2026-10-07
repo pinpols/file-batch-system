@@ -24,6 +24,7 @@ import java.time.LocalDate;
 import java.util.Map;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -46,6 +47,7 @@ import org.springframework.web.server.ResponseStatusException;
  * </ol>
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("触发启动消费: 报文校验, 去重冲突与限流重投口径")
 class TriggerLaunchConsumerTest {
 
   @Mock
@@ -66,6 +68,7 @@ class TriggerLaunchConsumerTest {
   }
 
   @Test
+  @DisplayName("报文合法时发起启动并确认消息, 累计已消费计数")
   void consume_validEnvelope_launchesAndAcks() {
     LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-1");
     when(launchApplicationService.launchFromTrustedQueue(any(LaunchRequest.class)))
@@ -82,6 +85,7 @@ class TriggerLaunchConsumerTest {
   }
 
   @Test
+  @DisplayName("报文格式非法时不发起启动, 确认消息并累计反序列化失败计数")
   void consume_invalidJson_acksAndSkips() {
     ConsumerRecord<String, String> consumerRecord =
         new ConsumerRecord<>(BatchTopics.TRIGGER_LAUNCH_V1, 0, 0L, "key", "{not-json");
@@ -94,6 +98,7 @@ class TriggerLaunchConsumerTest {
   }
 
   @Test
+  @DisplayName("报文体为空时不发起启动, 确认消息并累计空报文计数")
   void consume_emptyEnvelope_acksAndSkips() {
     ConsumerRecord<String, String> consumerRecord = consumerRecord(null);
 
@@ -105,6 +110,7 @@ class TriggerLaunchConsumerTest {
   }
 
   @Test
+  @DisplayName("启动返回去重冲突时按成功处理并确认消息")
   void consume_dedupConflict_treatedAsSuccessAndAcks() {
     LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-dup");
     when(launchApplicationService.launchFromTrustedQueue(any(LaunchRequest.class)))
@@ -117,6 +123,7 @@ class TriggerLaunchConsumerTest {
   }
 
   @Test
+  @DisplayName("启动被限流时不确认消息, 按延迟重投并累计限流失败计数")
   void consume_rateLimited_doesNotAckSoKafkaCanRedeliver() {
     LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-rate");
     when(launchApplicationService.launchFromTrustedQueue(any(LaunchRequest.class)))
@@ -130,6 +137,7 @@ class TriggerLaunchConsumerTest {
   }
 
   @Test
+  @DisplayName("启动抛运行时异常时向监听器传播以便重试, 不确认消息")
   void consume_runtimeException_propagatesForListenerRetry() {
     LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-err");
     when(launchApplicationService.launchFromTrustedQueue(any(LaunchRequest.class)))

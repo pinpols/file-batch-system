@@ -7,6 +7,7 @@ import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.infrastructure.archive.ArchiveSchemaDriftCheck;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -19,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Transactional(propagation = Propagation.NEVER)
+@DisplayName("归档表结构漂移启动期守护对冷热表列集合与列类型的校验")
 class ArchiveSchemaDriftCheckIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
@@ -36,13 +38,15 @@ class ArchiveSchemaDriftCheckIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void noDriftWhenSchemasMatch() {
+  @DisplayName("冷热表结构一致时启动期结构校验不抛异常")
+  void shouldPassStartupCheck_whenArchiveSchemasMatch() {
     // 正常状态(V71 migration 跑完后,所有冷热表 column 一致)— 不抛异常
     check.checkOnStartup();
   }
 
   @Test
-  void driftDetectedWhenHotTableHasExtraColumn() {
+  @DisplayName("热表新增列而归档表未同步时校验失败,并提示通过迁移补齐归档表结构")
+  void shouldDetectDrift_whenHotTableHasExtraColumn() {
     // 模拟:运维给 batch.outbox_event 加了 column,但忘了同步 archive.outbox_event_archive
     jdbcTemplate.execute("alter table batch.outbox_event add column drift_test_col varchar(64)");
 
@@ -53,7 +57,8 @@ class ArchiveSchemaDriftCheckIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void columnsOfReturnsExpectedColumns() {
+  @DisplayName("热表与归档表列集合抽样比对结果一致且两侧均非空")
+  void shouldReturnSameColumns_whenComparingHotAndArchiveTables() {
     // 抽样验证 columnsOf 工具方法行为正确
     var hotCols = check.columnsOf("batch", "outbox_event");
     var coldCols = check.columnsOf("archive", "outbox_event_archive");
@@ -63,7 +68,8 @@ class ArchiveSchemaDriftCheckIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void everyArchivedTablePairMatchesColumnByColumn() {
+  @DisplayName("逐表比对冷热表列集合,任一侧多列或缺失列即列出全部差异")
+  void shouldMatchColumnsForEveryTablePair_whenEnumeratingArchivedTables() {
     // checkOnStartup 内部仅 driftCount 总数,本 case 显式 per-table 比对,失败时
     // 一眼看出哪张表漂移 + 哪些列对不上。V139/V140 新加 trigger_outbox_event /
     // dead_letter_task 后是首次显式守护。
@@ -89,7 +95,8 @@ class ArchiveSchemaDriftCheckIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void everyArchiveTableHasPrimaryKey() {
+  @DisplayName("每张归档表都必须存在主键约束,缺失会破坏归档写入幂等")
+  void shouldHavePrimaryKeyForEveryArchiveTable() {
     // V71 DO $$ 块在每张 archive.*_archive 上加 pk_*_archive 约束,本 case 验证
     // 后续 migration 加新归档表(V139 trigger_outbox_event_archive / V140 dead_letter_task_archive)
     // 时是否也按同款式补了 PK。无 PK 会破坏归档 UPSERT 幂等(ON CONFLICT (id) DO NOTHING 找不到 target)。
@@ -118,7 +125,8 @@ class ArchiveSchemaDriftCheckIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void columnTypeDriftDetectedWhenHotColumnTypeChanges() {
+  @DisplayName("热表列类型变更而归档表未同步时列类型校验抛出状态异常")
+  void shouldDetectColumnTypeDrift_whenHotColumnTypeWidened() {
     // 模拟:运维 ALTER batch.outbox_event ALTER COLUMN tenant_id TYPE varchar(128),
     // 但 archive.outbox_event_archive.tenant_id 仍是 varchar(64) — 列名集合相等,
     // 但 archive INSERT 在 tenantId 超过 64 字符时会截断 / 失败,checkOnStartup() 看不到。

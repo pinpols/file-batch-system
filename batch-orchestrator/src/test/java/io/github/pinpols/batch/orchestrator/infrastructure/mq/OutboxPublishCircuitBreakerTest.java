@@ -12,6 +12,7 @@ import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorG
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -23,6 +24,7 @@ import org.springframework.data.redis.RedisConnectionFailureException;
 /** T-1: OutboxPublishCircuitBreaker 测试——验证 CLOSED → OPEN → HALF_OPEN → CLOSED 状态机。 */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
+@DisplayName("出站事件投递熔断器:冷却恢复与探测成败下的集群熔断状态流转,缓存不可达时的放行与降级,以及打开态指标计数")
 class OutboxPublishCircuitBreakerTest {
 
   @Mock
@@ -48,6 +50,7 @@ class OutboxPublishCircuitBreakerTest {
   }
 
   @Test
+  @DisplayName("熔断开关未启用时直接放行投递,不读取集群熔断状态")
   void shouldAllowWhenCircuitBreakerDisabled() {
     OutboxProperties props = new OutboxProperties();
     props.setCircuitBreakerEnabled(false);
@@ -58,6 +61,7 @@ class OutboxPublishCircuitBreakerTest {
   }
 
   @Test
+  @DisplayName("集群熔断状态为闭合时允许本轮投递并缓存该状态")
   void shouldAllowWhenRedisReturnsClosed() {
     when(redis.evalLong(anyString(), anyString(), anyString())).thenReturn(0L);
 
@@ -65,6 +69,7 @@ class OutboxPublishCircuitBreakerTest {
   }
 
   @Test
+  @DisplayName("集群熔断处于打开且冷却未到期时拒绝本轮投递,连续调用沿用本地缓存状态")
   void shouldDenyWhenRedisReturnsOpenUntilFuture() {
     long futureMs = BatchDateTimeSupport.utcEpochMillis() + 60_000;
     when(redis.evalLong(anyString(), anyString(), anyString())).thenReturn(futureMs);
@@ -76,6 +81,7 @@ class OutboxPublishCircuitBreakerTest {
   }
 
   @Test
+  @DisplayName("冷却期已过时放行一次探测请求,推进到半开状态")
   void shouldTransitionToHalfOpenAfterCooldown() {
     // Simulate: breaker was open but cooldown has passed
     long pastMs = BatchDateTimeSupport.utcEpochMillis() - 1000;
@@ -88,6 +94,7 @@ class OutboxPublishCircuitBreakerTest {
   }
 
   @Test
+  @DisplayName("半开探测成功时清空连续失败计数并恢复闭合状态")
   void onAdvanceResult_shouldResetHalfOpenProbeOnSuccess() {
     long pastMs = BatchDateTimeSupport.utcEpochMillis() - 1000;
     when(redis.evalLong(anyString(), anyString(), anyString())).thenReturn(pastMs);
@@ -106,6 +113,7 @@ class OutboxPublishCircuitBreakerTest {
   }
 
   @Test
+  @DisplayName("读取集群状态返回空值时沿用本地已知打开状态,继续保持拒绝")
   void shouldUseCachedStateWhenRedisReturnsNull() {
     // First: simulate Redis open state cached
     long futureMs = BatchDateTimeSupport.utcEpochMillis() + 60_000;
@@ -122,6 +130,7 @@ class OutboxPublishCircuitBreakerTest {
   }
 
   @Test
+  @DisplayName("半开探测失败时重新打开熔断,冷却期内继续拒绝投递")
   void onAdvanceResult_shouldReOpenOnProbeFailure() {
     long pastMs = BatchDateTimeSupport.utcEpochMillis() - 1000;
     when(redis.evalLong(anyString(), anyString(), anyString())).thenReturn(pastMs);
@@ -140,6 +149,7 @@ class OutboxPublishCircuitBreakerTest {
   }
 
   @Test
+  @DisplayName("缓存不可达且本地无已知打开状态时放行投递,避免事件投递整体停摆")
   void allowNow_shouldFailOpen_whenRedisConnectionFails() {
     // Redis 不可达(慢速路径 evalLong 抛连接异常)→ 无本地已知开态时 fail-open 放行。
     // outbox 事件已与状态同事务落 PG,熔断器不应把 Redis 故障放大成投递停摆。
@@ -150,6 +160,7 @@ class OutboxPublishCircuitBreakerTest {
   }
 
   @Test
+  @DisplayName("缓存不可达时跳过本轮集群状态更新,且不向调用方抛出异常")
   void onAdvanceResult_shouldNotThrow_whenRedisConnectionFails() {
     // best-effort:Redis 不可达时本轮跳过集群态更新,绝不把异常抛回 OutboxPollScheduler
     // (否则每轮栽在 Redis 上,outbox→Kafka 投递停摆)。
@@ -162,6 +173,7 @@ class OutboxPublishCircuitBreakerTest {
   // ─── O1: cluster-wide 熔断可观测 ──────────────────────────────────────────
 
   @Test
+  @DisplayName("熔断闭合时集群打开状态指标取值为零")
   void openGauge_isZero_whenCircuitClosed() {
     when(redis.evalLong(anyString(), anyString(), anyString())).thenReturn(0L);
     breaker.allowNow();
@@ -169,6 +181,7 @@ class OutboxPublishCircuitBreakerTest {
   }
 
   @Test
+  @DisplayName("熔断打开时集群打开状态指标取值为一")
   void openGauge_isOne_whenCircuitOpen() {
     // 熔断打开(openUntilMs 在未来):首个 allowNow 走慢速路径查 Redis → 发布 open 快照 → gauge = 1
     long futureMs = BatchDateTimeSupport.utcEpochMillis() + 60_000;
@@ -178,6 +191,7 @@ class OutboxPublishCircuitBreakerTest {
   }
 
   @Test
+  @DisplayName("缓存不可达时放行判断与状态推进两条路径各累计一次降级放行计数")
   void failopenCounter_incrementsOnRedisFailureInBothPaths() {
     when(redis.evalLong(anyString(), anyString(), anyString()))
         .thenThrow(new RedisConnectionFailureException("redis down"));

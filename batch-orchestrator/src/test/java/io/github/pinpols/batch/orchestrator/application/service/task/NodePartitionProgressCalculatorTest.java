@@ -7,12 +7,15 @@ import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.NodePartitionAssignment;
 import io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusRef;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("节点分区进度计算器: 归属当前节点的分区统计口径")
 class NodePartitionProgressCalculatorTest {
 
   @Test
-  void countsOnlyPartitionsBelongingToCurrentNode() {
+  @DisplayName("只统计归属当前节点的分区, 汇总成功与失败数量并判定全部完成")
+  void shouldCountOnlyPartitions_whenAssignedToCurrentNode() {
     NodePartitionProgressCalculator.Result result = NodePartitionProgressCalculator.calculate(
         List.of(
             new PartitionStatusRef(1L, PartitionStatus.SUCCESS.code()),
@@ -33,7 +36,8 @@ class NodePartitionProgressCalculatorTest {
   }
 
   @Test
-  void usesTheSingleActiveNodeWhenAssignmentPayloadIsMissing() {
+  @DisplayName("归属信息缺失时按唯一的活跃节点统计分区进度")
+  void shouldUseSingleActiveNode_whenAssignmentInfoMissing() {
     WorkflowRunEntity workflowRun = new WorkflowRunEntity();
     workflowRun.setCurrentNodeCode("LOAD");
 

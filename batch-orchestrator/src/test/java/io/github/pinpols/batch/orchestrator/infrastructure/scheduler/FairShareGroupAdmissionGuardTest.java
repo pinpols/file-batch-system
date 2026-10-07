@@ -9,9 +9,11 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 
+@DisplayName("公平份额分组准入守卫:验证准入校验的加锁顺序,硬上限拒绝与只读容量观测")
 class FairShareGroupAdmissionGuardTest {
 
   private final JobInstanceMapper jobInstanceMapper = mock(JobInstanceMapper.class);
@@ -19,7 +21,8 @@ class FairShareGroupAdmissionGuardTest {
       new FairShareGroupAdmissionGuard(jobInstanceMapper);
 
   @Test
-  void acquiresTransactionLockBeforeReadingGroupUsage() {
+  @DisplayName("校验准入容量时先获取分组咨询锁再统计在用实例数")
+  void shouldAcquireAdvisoryLockBeforeCounting_whenCheckingCapacity() {
     TenantQuotaPolicyEntity policy = groupPolicy(3);
     when(jobInstanceMapper.countActiveByFairShareGroup("settlement")).thenReturn(2L);
 
@@ -31,14 +34,16 @@ class FairShareGroupAdmissionGuardTest {
   }
 
   @Test
-  void deniesWhenActiveInstancesReachHardCap() {
+  @DisplayName("在用实例数达到硬上限时拒绝继续准入")
+  void shouldDenyAdmission_whenActiveCountReachesHardCap() {
     when(jobInstanceMapper.countActiveByFairShareGroup("settlement")).thenReturn(3L);
 
     assertThat(guard.hasCapacity(groupPolicy(3))).isFalse();
   }
 
   @Test
-  void observesCapacityWithoutAcquiringAdmissionLock() {
+  @DisplayName("只读观测容量时返回可用结论且不获取准入锁")
+  void shouldReportCapacityWithoutLock_whenObservingOnly() {
     when(jobInstanceMapper.countActiveByFairShareGroup("settlement")).thenReturn(2L);
 
     assertThat(guard.hasObservedCapacity(groupPolicy(3))).isTrue();

@@ -14,9 +14,11 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
+@DisplayName("血缘事件生成器: 运行态事件类型与时间映射, 输入输出数据集归类及文件附加信息")
 class OpenLineageEmitterTest {
 
   private OpenLineageProperties props(boolean enabled, String endpoint) {
@@ -55,6 +57,7 @@ class OpenLineageEmitterTest {
   }
 
   @Test
+  @DisplayName("成功结束时生成完成态运行事件, 事件时间取结束时刻, 作业与运行标识按租户与定义映射")
   void buildRunEvent_successMapsToComplete() {
     OpenLineageEmitter emitter = new OpenLineageEmitter(
         props(true, "http://localhost:5000/api/v1/lineage"),
@@ -78,6 +81,7 @@ class OpenLineageEmitterTest {
   }
 
   @Test
+  @DisplayName("按文件流向归类数据集: 输入进入输入集合, 输出携带文件标识, 类别与字节数附加信息")
   void buildRunEvent_includesInputAndOutputDatasets() {
     OpenLineageEmitter emitter = new OpenLineageEmitter(
         props(true, "http://localhost:5000/api/v1/lineage"),
@@ -110,6 +114,7 @@ class OpenLineageEmitterTest {
   }
 
   @Test
+  @DisplayName("非输入类别的数据集只出现在输出集合, 输入集合保持为空")
   void buildRunEvent_treatsNonInputDatasetsAsOutputs() {
     OpenLineageEmitter emitter = new OpenLineageEmitter(
         props(true, "http://localhost:5000/api/v1/lineage"),
@@ -134,6 +139,7 @@ class OpenLineageEmitterTest {
   }
 
   @Test
+  @DisplayName("失败结束时生成失败态运行事件")
   void buildRunEvent_failedMapsToFail() {
     OpenLineageEmitter emitter = new OpenLineageEmitter(
         props(true, "http://localhost:5000/api/v1/lineage"),
@@ -146,6 +152,7 @@ class OpenLineageEmitterTest {
   }
 
   @Test
+  @DisplayName("同一运行标识重复计算结果一致, 且符合通用唯一标识的文本格式")
   void deterministicRunId_isStableAndUuid() {
     String a = OpenLineageEmitter.deterministicRunId(42L);
     String b = OpenLineageEmitter.deterministicRunId(42L);

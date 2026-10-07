@@ -15,12 +15,15 @@ import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("滞留创建态启动恢复调度: 结构空实例与历史重复实例的恢复口径")
 class StaleCreatedLaunchRecoverySchedulerTest {
 
   @Test
-  void recoversStructurallyEmptyCreatedInstanceWhenRequestWasAlreadyMarkedLaunched() {
+  @DisplayName("请求已标记启动而实例结构为空时触发恢复派发")
+  void shouldRecover_whenCreatedInstanceEmptyAndRequestMarkedLaunched() {
     JobInstanceMapper jobInstanceMapper = mock(JobInstanceMapper.class);
     TriggerRequestMapper triggerRequestMapper = mock(TriggerRequestMapper.class);
     PartitionDispatchService partitionDispatchService = mock(PartitionDispatchService.class);
@@ -56,7 +59,8 @@ class StaleCreatedLaunchRecoverySchedulerTest {
   }
 
   @Test
-  void recoversLegacyDuplicateOnlyWhenRequestCreatedTheInstance() {
+  @DisplayName("仅当请求确实创建了该实例时才恢复历史重复实例并回写对账")
+  void shouldRecoverLegacyDuplicate_whenRequestCreatedInstance() {
     JobInstanceMapper jobInstanceMapper = mock(JobInstanceMapper.class);
     TriggerRequestMapper triggerRequestMapper = mock(TriggerRequestMapper.class);
     PartitionDispatchService partitionDispatchService = mock(PartitionDispatchService.class);

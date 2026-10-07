@@ -35,11 +35,13 @@ import java.time.Month;
 import java.util.List;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+@DisplayName("批量日重放调度器;验证开关与停机短路,会话范围筛选,条目派发与补偿提交失败处理,锁与事务配置")
 class BatchDayReplayDispatcherTest {
 
   private BatchDayReplaySessionMapper sessionMapper;
@@ -74,21 +76,24 @@ class BatchDayReplayDispatcherTest {
   }
 
   @Test
-  void disabledShortCircuits() {
+  @DisplayName("调度开关关闭时不做任何会话扫描,避免无效派发")
+  void shouldSkipDispatch_whenDispatcherDisabled() {
     properties.setEnabled(false);
     dispatcher.scheduledDispatch();
     verify(sessionMapper, never()).selectByStatus(anyString(), anyInt());
   }
 
   @Test
-  void drainingShutdownShortCircuits() {
+  @DisplayName("停机排水期间跳过派发,不再查询待处理的会话")
+  void shouldSkipDispatch_whenGracefulShutdownDraining() {
     when(gracefulShutdown.isDraining()).thenReturn(true);
     dispatcher.scheduledDispatch();
     verify(sessionMapper, never()).selectByStatus(anyString(), anyInt());
   }
 
   @Test
-  void replayLockUsesConfigurableDurations() throws Exception {
+  @DisplayName("调度锁的持有时长由外部配置提供,取值为配置占位符且默认值与占位符回退值一致")
+  void shouldUseConfigurableLockDurations_whenReplayDispatchScheduled() throws Exception {
     Method scheduledDispatch =
         BatchDayReplayDispatcher.class.getDeclaredMethod("scheduledDispatch");
     SchedulerLock lock = scheduledDispatch.getAnnotation(SchedulerLock.class);
@@ -100,7 +105,8 @@ class BatchDayReplayDispatcherTest {
   }
 
   @Test
-  void noRunningSessionsIsNoop() {
+  @DisplayName("没有处于运行中的重放会话时不派发任何条目")
+  void shouldDoNothing_whenNoRunningSessions() {
     when(sessionMapper.selectByStatus("RUNNING", 10)).thenReturn(List.of());
     dispatcher.scheduledDispatch();
     verify(entryMapper, never())
@@ -108,7 +114,8 @@ class BatchDayReplayDispatcherTest {
   }
 
   @Test
-  void outputsOnlySessionsAreSkippedByDispatcher() {
+  @DisplayName("仅重放产物的会话被跳过,既不查询待处理条目也不提交补偿请求")
+  void shouldSkipDispatch_whenSessionScopeIsOutputsOnly() {
     BatchDayReplaySessionEntity outputs =
         sessionAt(7L, BatchDayReplayScope.OUTPUTS_ONLY.code(), "RUNNING", "CREATE_NEW_VERSION");
     when(sessionMapper.selectByStatus("RUNNING", 10)).thenReturn(List.of(outputs));
@@ -119,7 +126,8 @@ class BatchDayReplayDispatcherTest {
   }
 
   @Test
-  void allFailedSessionDispatchesPendingEntries() {
+  @DisplayName("全失败范围的会话逐条派发待处理条目,并透传会话的结果策略")
+  void shouldDispatchEveryPendingEntry_whenSessionScopeIsAllFailed() {
     BatchDayReplaySessionEntity session =
         sessionAt(8L, "ALL_FAILED", "RUNNING", "CREATE_NEW_VERSION");
     when(sessionMapper.selectByStatus("RUNNING", 10)).thenReturn(List.of(session));
@@ -157,7 +165,8 @@ class BatchDayReplayDispatcherTest {
   }
 
   @Test
-  void compensationSubmitFailureMarksEntryFailed() {
+  @DisplayName("补偿提交抛错时把该条目标记为失败,避免条目停留在待处理状态")
+  void shouldMarkEntryFailed_whenCompensationSubmitThrows() {
     BatchDayReplaySessionEntity session =
         sessionAt(9L, "ALL_FAILED", "RUNNING", "CREATE_NEW_VERSION");
     when(sessionMapper.selectByStatus("RUNNING", 10)).thenReturn(List.of(session));
@@ -181,7 +190,8 @@ class BatchDayReplayDispatcherTest {
   }
 
   @Test
-  void schedulePlanDryRunUsesFrozenSnapshotAndDryRunMode() {
+  @DisplayName("调度计划候选的试运行派发使用冻结快照,配置版本与启动参数从快照还原且保持试运行标记")
+  void shouldUseFrozenSnapshotAndDryRun_whenCandidateSourceIsSchedulePlan() {
     BatchDayReplaySessionEntity session =
         sessionAt(10L, "ALL", "RUNNING", "DRY_RUN_ONLY").toBuilder()
             .executionMode(BatchDayReplayExecutionMode.DRY_RUN.code())
@@ -214,7 +224,8 @@ class BatchDayReplayDispatcherTest {
   }
 
   @Test
-  void eachEntryUsesRequiresNewTransaction() throws Exception {
+  @DisplayName("条目派发与失败标记各自开启独立事务,单个条目失败不影响其它条目")
+  void shouldOpenNewTransactionPerEntry_whenDispatchingAndMarkingFailed() throws Exception {
     Method dispatch = BatchDayReplayEntryExecutor.class.getDeclaredMethod(
         "dispatch", BatchDayReplaySessionEntity.class, BatchDayReplayEntryEntity.class);
 

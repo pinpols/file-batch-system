@@ -15,8 +15,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("跨天依赖解析器: 生效版本注入, 依赖缺失等待与失败态口径")
 class CrossDayDependencyResolverTest {
 
   private ResultVersionQueryService queryService;
@@ -29,14 +31,16 @@ class CrossDayDependencyResolverTest {
   }
 
   @Test
-  void emptyDependenciesIsResolved() {
+  @DisplayName("未配置跨天依赖时判定为已解析, 且不注入任何上游产出")
+  void shouldResolve_whenDependencyConfigEmpty() {
     var result = resolver.resolve("t1", LocalDate.of(2026, Month.MAY, 4), null);
     assertThat(result.isResolved()).isTrue();
     assertThat(result.getResolved()).isEmpty();
   }
 
   @Test
-  void offsetEffectiveHitInjectsPayload() {
+  @DisplayName("按偏移日命中生效版本时注入上游产出, 并带出版本号与状态")
+  void shouldInjectPayload_whenOffsetDependencyEffective() {
     String json = "[{\"alias\":\"t_minus_1\",\"jobCode\":\"DAILY_PNL\",\"bizDateOffset\":-1,"
         + "\"scope\":\"REQUIRED\",\"consumeVersionStrategy\":\"EFFECTIVE_ONLY\"}]";
     ResultVersionEntity hit = ResultVersionEntity.builder()
@@ -61,7 +65,8 @@ class CrossDayDependencyResolverTest {
   }
 
   @Test
-  void requiredMissingPutsResolutionInWaitingState() {
+  @DisplayName("必需依赖缺失时进入等待状态并给出等待原因")
+  void shouldWait_whenRequiredDependencyMissing() {
     String json = "[{\"alias\":\"t_minus_1\",\"jobCode\":\"DAILY_PNL\",\"bizDateOffset\":-1,"
         + "\"scope\":\"REQUIRED\"}]";
     when(queryService.findEffectiveByJob("t1", "DAILY_PNL", LocalDate.of(2026, Month.MAY, 3)))
@@ -79,7 +84,8 @@ class CrossDayDependencyResolverTest {
   }
 
   @Test
-  void optionalMissingStillResolves() {
+  @DisplayName("可选依赖缺失时仍判定为已解析, 不注入对应上游产出")
+  void shouldResolve_whenOptionalDependencyMissing() {
     String json = "[{\"alias\":\"market_data\",\"jobCode\":\"MARKET_DATA\",\"bizDateOffset\":-1,"
         + "\"scope\":\"OPTIONAL\"}]";
     when(queryService.findEffectiveByJob("t1", "MARKET_DATA", LocalDate.of(2026, Month.MAY, 3)))
@@ -92,7 +98,8 @@ class CrossDayDependencyResolverTest {
   }
 
   @Test
-  void rangeAggregatesMultipleHits() {
+  @DisplayName("按区间依赖解析时聚合多日命中结果, 逐日输出上游产出")
+  void shouldAggregateHits_whenDependencySpansRange() {
     String json =
         "[{\"alias\":\"prev_5\",\"jobCode\":\"DAILY_PNL\",\"bizDateRange\":\"PREV_5_BIZ_DAYS\","
             + "\"scope\":\"REQUIRED\"}]";
@@ -117,7 +124,8 @@ class CrossDayDependencyResolverTest {
   }
 
   @Test
-  void invalidJsonPutsResolutionInFailedState() {
+  @DisplayName("跨天依赖配置格式非法时进入失败状态并给出解析失败原因")
+  void shouldFail_whenDependencyConfigMalformed() {
     ResolutionResult result =
         resolver.resolve("t1", LocalDate.of(2026, Month.MAY, 4), "not-json{[");
     assertThat(result.isFailed()).isTrue();
@@ -125,7 +133,8 @@ class CrossDayDependencyResolverTest {
   }
 
   @Test
-  void specWithoutJobCodeFails() {
+  @DisplayName("依赖项未给出任务编码时进入失败状态并给出配置非法原因")
+  void shouldFail_whenSpecMissesJobCode() {
     String json = "[{\"alias\":\"x\",\"bizDateOffset\":-1}]";
     ResolutionResult result = resolver.resolve("t1", LocalDate.of(2026, Month.MAY, 4), json);
     assertThat(result.isFailed()).isTrue();
@@ -133,7 +142,8 @@ class CrossDayDependencyResolverTest {
   }
 
   @Test
-  void unknownStrategyTreatsAsMissing() {
+  @DisplayName("消费版本策略无法识别时按必需依赖缺失处理, 进入等待状态")
+  void shouldWait_whenConsumeStrategyUnknown() {
     String json = "[{\"alias\":\"t1\",\"jobCode\":\"DAILY_PNL\",\"bizDateOffset\":-1,"
         + "\"scope\":\"REQUIRED\",\"consumeVersionStrategy\":\"BOGUS\"}]";
 
@@ -143,7 +153,8 @@ class CrossDayDependencyResolverTest {
   }
 
   @Test
-  void specificVersionStrategyFiltersByVersionNo() {
+  @DisplayName("按指定版本号消费时过滤出对应版本并判定为已解析")
+  void shouldResolve_whenSpecifyingVersionNo() {
     String json = "[{\"alias\":\"v1\",\"jobCode\":\"DAILY_PNL\",\"bizDateOffset\":-1,"
         + "\"scope\":\"REQUIRED\",\"consumeVersionStrategy\":\"SPECIFIC_VERSION\","
         + "\"specificVersionNo\":1}]";

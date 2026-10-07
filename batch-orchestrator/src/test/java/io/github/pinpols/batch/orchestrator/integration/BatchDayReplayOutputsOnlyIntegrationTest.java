@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -32,6 +33,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("批次日重放仅输出范围 - 校验待生效版本提升,会话与明细终态及唯一生效约束")
 class BatchDayReplayOutputsOnlyIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -53,7 +55,8 @@ class BatchDayReplayOutputsOnlyIntegrationTest extends AbstractIntegrationTest {
   private JdbcTemplate jdbcTemplate;
 
   @Test
-  void outputsOnlyPromotesPendingVersionAndCompletesSession() {
+  @DisplayName("仅输出范围重放把待生效版本提升为生效,会话与明细全部成功且同一业务键仅保留一个生效版本")
+  void shouldPromotePendingVersionAndCompleteSession_whenReplayOutputsOnly() {
     // Step 1: seed 两版 result_version：v1 EFFECTIVE，v2 PENDING（要 promote 的目标）
     long sourceInstanceId = insertStubJobInstance("INST-A", "SUCCESS");
     long secondInstanceId = insertStubJobInstance("INST-B", "SUCCESS");

@@ -12,8 +12,10 @@ import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntit
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceCheck;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("派发准入限流器: 队列与租户配额耗尽时的拒绝原因及零值兼容口径")
 class DefaultDispatchAdmissionLimiterTest {
 
   private final OrchestratorConfigCacheService cache = mock(OrchestratorConfigCacheService.class);
@@ -22,7 +24,8 @@ class DefaultDispatchAdmissionLimiterTest {
       new DefaultDispatchAdmissionLimiter(cache, limiter);
 
   @Test
-  void tenantQpsExhaustionDefersDispatch() {
+  @DisplayName("租户级每秒配额耗尽时拒绝本次派发,拒绝原因指向租户级限流")
+  void shouldRejectByTenantQps_whenTenantQuotaExhausted() {
     ResourceSchedulingRequest request = request();
     when(cache.findEnabledQuotaPolicy("t1")).thenReturn(policy(20));
     when(limiter.tryConsumePerSecond("t1", "SCHEDULER_DISPATCH_QUEUE_q1", 10)).thenReturn(true);
@@ -35,7 +38,8 @@ class DefaultDispatchAdmissionLimiterTest {
   }
 
   @Test
-  void queueQpsIsCheckedBeforeTenantToAvoidCrossQueueStarvation() {
+  @DisplayName("队列配额耗尽时先按队列维度拒绝,不再消耗租户级配额")
+  void shouldCheckQueueQpsFirst_whenQueueQuotaExhausted() {
     ResourceSchedulingRequest request = request();
     when(cache.findEnabledQuotaPolicy("t1")).thenReturn(policy(20));
     when(limiter.tryConsumePerSecond("t1", "SCHEDULER_DISPATCH_QUEUE_q1", 10)).thenReturn(false);
@@ -49,7 +53,8 @@ class DefaultDispatchAdmissionLimiterTest {
   }
 
   @Test
-  void zeroLimitsKeepBackwardCompatibleUnlimitedBehavior() {
+  @DisplayName("队列与租户配额均为零时视为不限制,准入直接放行")
+  void shouldAllow_whenAllQpsLimitsAreZero() {
     ResourceSchedulingRequest request = request();
     when(cache.findEnabledQuotaPolicy("t1")).thenReturn(policy(0));
 

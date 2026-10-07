@@ -5,11 +5,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.common.enums.SensorType;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("传感策略注册表: 类型解析与重复注册拒绝口径")
 class SensorPolicyRegistryTest {
 
   @Test
+  @DisplayName("按传感类型解析出已注册策略, 未注册类型返回空")
   void resolve_returnsRegisteredPolicy() {
     SensorPolicy p1 = new StubPolicy(SensorType.FILE_ARRIVAL);
     SensorPolicy p2 = new StubPolicy(SensorType.HTTP_POLL);
@@ -21,6 +24,7 @@ class SensorPolicyRegistryTest {
   }
 
   @Test
+  @DisplayName("同一传感类型重复注册时构造失败")
   void construct_duplicateSensorType_fails() {
     SensorPolicy a = new StubPolicy(SensorType.FILE_ARRIVAL);
     SensorPolicy b = new StubPolicy(SensorType.FILE_ARRIVAL);

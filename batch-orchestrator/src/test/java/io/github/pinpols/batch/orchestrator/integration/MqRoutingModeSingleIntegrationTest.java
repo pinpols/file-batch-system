@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -35,6 +36,7 @@ import org.springframework.test.context.TestConstructor;
     webEnvironment = SpringBootTest.WebEnvironment.NONE,
     properties = "batch.mq.routing.mode=SINGLE")
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
+@DisplayName("单一路由模式下消息落到基础主题且不带租户后缀的发布验证")
 class MqRoutingModeSingleIntegrationTest extends AbstractIntegrationTest {
 
   private final DefaultScheduleForwarder scheduleForwarder;
@@ -51,7 +53,8 @@ class MqRoutingModeSingleIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void singleModePublishesToBaseTopicWithoutTenantSuffix() throws Exception {
+  @DisplayName("单模式开关开启时事件发布状态转为已发布,基础主题上能消费到该消息")
+  void shouldPublishToBaseTopic_whenSingleRoutingModeEnabled() throws Exception {
     String idempotencyKey = "mq-single-it-" + System.nanoTime();
     OutboxEventEntity event = buildImportDispatchEvent("t1", idempotencyKey);
     outboxEventMapper.insert(event);

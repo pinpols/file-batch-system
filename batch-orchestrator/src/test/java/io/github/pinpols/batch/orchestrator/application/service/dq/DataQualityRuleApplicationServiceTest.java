@@ -12,6 +12,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("数据质量规则应用服务: 调用方租户覆盖与标识绑定口径")
 class DataQualityRuleApplicationServiceTest {
 
   @Mock
@@ -19,7 +20,7 @@ class DataQualityRuleApplicationServiceTest {
 
   @Test
   @DisplayName("create 以调用方 tenantId 覆盖 body 租户")
-  void createOverridesBodyTenant() {
+  void shouldOverrideBodyTenant_whenCreating() {
     DataQualityRuleEntity rule = new DataQualityRuleEntity();
     rule.setTenantId("attacker-tenant");
     DataQualityRuleApplicationService service = new DataQualityRuleApplicationService(mapper);
@@ -32,7 +33,7 @@ class DataQualityRuleApplicationServiceTest {
 
   @Test
   @DisplayName("update 以调用方 tenantId 覆盖 body 租户并绑定 id")
-  void updateOverridesBodyTenantAndBindsId() {
+  void shouldOverrideTenantAndBindId_whenUpdating() {
     DataQualityRuleEntity rule = new DataQualityRuleEntity();
     rule.setTenantId("attacker-tenant");
     DataQualityRuleApplicationService service = new DataQualityRuleApplicationService(mapper);

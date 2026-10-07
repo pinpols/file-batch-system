@@ -56,6 +56,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  *   <li><b>COMMIT 恒不跳</b>:COMMIT 不在 skip-safe 集,原子发布决策每次重派都重做。
  * </ol>
  */
+@DisplayName("处理阶段级续跑:提交前崩溃后复用暂存不重算,未成功的阶段不误跳,提交阶段恒不跳过")
 class ProcessStageSkipCrashResumeIntegrationTest {
 
   private static final String TENANT = "t1";

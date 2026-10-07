@@ -29,6 +29,7 @@ import java.time.LocalTime;
 import java.time.Month;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -36,6 +37,7 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
+@DisplayName("批次日自动开启调度的到期判定,覆盖截止时刻,上游日历结算依赖与灾难日覆盖动作的处理分支")
 class BatchDayOpenSchedulerTest {
 
   private BusinessCalendarMapper businessCalendarMapper;
@@ -89,6 +91,7 @@ class BatchDayOpenSchedulerTest {
   }
 
   @Test
+  @DisplayName("当前时刻已过当日开启截止点后,按租户时区打开当日批次日实例并写入执行日志")
   void shouldOpenCurrentBizDateAfterCutoff() {
     Instant now = Instant.parse("2026-05-05T00:30:00Z"); // 08:30 Asia/Shanghai
     when(businessCalendarMapper.selectByEnabled(true)).thenReturn(List.of(calendar()));
@@ -113,6 +116,7 @@ class BatchDayOpenSchedulerTest {
   }
 
   @Test
+  @DisplayName("当前时刻未到当日开启截止点时,打开前一业务日实例并沿用前一日的截止时刻")
   void shouldOpenPreviousBizDateBeforeCutoff() {
     Instant now = Instant.parse("2026-05-04T21:30:00Z"); // 05:30 Asia/Shanghai
     when(businessCalendarMapper.selectByEnabled(true)).thenReturn(List.of(calendar()));
@@ -131,6 +135,7 @@ class BatchDayOpenSchedulerTest {
   }
 
   @Test
+  @DisplayName("上游日历未结算时推迟打开当日批次日,不写入任何实例")
   void shouldDeferOpenWhenUpstreamCalendarNotSettled() {
     Instant now = Instant.parse("2026-05-05T00:30:00Z");
     when(businessCalendarMapper.selectByEnabled(true)).thenReturn(List.of(calendar()));
@@ -163,6 +168,7 @@ class BatchDayOpenSchedulerTest {
   }
 
   @Test
+  @DisplayName("上游日历已结算时正常打开当日批次日实例")
   void shouldOpenWhenUpstreamCalendarSettled() {
     Instant now = Instant.parse("2026-05-05T00:30:00Z");
     when(businessCalendarMapper.selectByEnabled(true)).thenReturn(List.of(calendar()));
@@ -196,6 +202,7 @@ class BatchDayOpenSchedulerTest {
   }
 
   @Test
+  @DisplayName("灾难日覆盖动作为跳过时,写入已跳过状态的实例并记录审批人与操作原因")
   void shouldWriteSkippedDayWhenDisasterOverrideSkip() {
     Instant now = Instant.parse("2026-05-05T00:30:00Z");
     when(businessCalendarMapper.selectByEnabled(true)).thenReturn(List.of(calendar()));
@@ -229,6 +236,7 @@ class BatchDayOpenSchedulerTest {
   }
 
   @Test
+  @DisplayName("灾难日覆盖动作为顺延至下一业务日时,推迟打开且不写入实例")
   void shouldDeferOpenWhenDisasterOverrideDefer() {
     Instant now = Instant.parse("2026-05-05T00:30:00Z");
     when(businessCalendarMapper.selectByEnabled(true)).thenReturn(List.of(calendar()));
@@ -256,6 +264,7 @@ class BatchDayOpenSchedulerTest {
   }
 
   @Test
+  @DisplayName("目标业务日的批次日实例已存在时跳过开启,且不写入执行日志")
   void shouldSkipExistingBatchDay() {
     Instant now = Instant.parse("2026-05-05T00:30:00Z");
     BusinessCalendarEntity calendar = calendar();

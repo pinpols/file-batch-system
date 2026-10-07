@@ -13,8 +13,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("流水线阶段进度缓存,验证多租户与多流水线之间的进度隔离,同阶段并行任务的聚合口径以及心跳缺失与过期任务的清理行为")
 class PipelineStageProgressCacheTest {
 
   private PipelineStageProgressCache cache;
@@ -27,6 +29,7 @@ class PipelineStageProgressCacheTest {
   }
 
   @Test
+  @DisplayName("不同租户上报相同流水线与阶段时进度互不串扰,未上报的租户查询为空")
   void shouldNotMixTenants() {
     cache.publish("ta", "w1", List.of(new WorkerPipelineProgressDto(1L, 99L, "LOAD", 1L, null)));
     cache.publish("tb", "w1", List.of(new WorkerPipelineProgressDto(1L, 99L, "LOAD", 2L, null)));
@@ -40,7 +43,8 @@ class PipelineStageProgressCacheTest {
   }
 
   @Test
-  void missingOrInvalidSnapshotDoesNotKeepOldProgress() {
+  @DisplayName("心跳负载缺失或任务标识缺失时清空既有进度,且流水线标识缺失时查询为空")
+  void shouldClearPreviousProgress_whenHeartbeatMissingOrTaskIdAbsent() {
     cache.publish("ta", "w1", List.of(new WorkerPipelineProgressDto(1L, 99L, "LOAD", 1L, null)));
     cache.publish("ta", "w1", null);
     assertThat(cache.snapshotByPipeline("ta", 99L)).isEmpty();
@@ -50,6 +54,7 @@ class PipelineStageProgressCacheTest {
   }
 
   @Test
+  @DisplayName("同一流水线同一阶段由多个任务并行上报时进度累加,总量在各方都给出时才汇总")
   void shouldAggregateConcurrentTasksByPipelineAndStage() {
     cache.publish(
         "ta",
@@ -69,6 +74,7 @@ class PipelineStageProgressCacheTest {
   }
 
   @Test
+  @DisplayName("执行节点下一次心跳不再上报某任务时移除该任务进度,避免陈旧数据长期残留")
   void shouldRemoveTaskMissingFromNextWorkerHeartbeat() {
     cache.publish(
         "ta", "worker-node-1", List.of(new WorkerPipelineProgressDto(11L, 99L, "LOAD", 40L, null)));
@@ -78,6 +84,7 @@ class PipelineStageProgressCacheTest {
   }
 
   @Test
+  @DisplayName("同一执行节点上报多个流水线的进度时按流水线标识隔离,互不串扰")
   void shouldNotMixPipelinesRunningOnSameWorker() {
     cache.publish(
         "ta",
@@ -95,7 +102,8 @@ class PipelineStageProgressCacheTest {
   }
 
   @Test
-  void oldWorkerCleanupDoesNotRemoveNewWorkerSnapshot() {
+  @DisplayName("旧执行节点上报空心跳时只清理自身任务,不影响新节点已上报的进度")
+  void shouldKeepNewNodeSnapshot_whenOldNodeReportsEmptyHeartbeat() {
     cache.publish(
         "ta", "old-worker", List.of(new WorkerPipelineProgressDto(11L, 99L, "LOAD", 1L, 100L)));
     cache.publish(
@@ -108,7 +116,8 @@ class PipelineStageProgressCacheTest {
   }
 
   @Test
-  void oneUnknownShardTotalPreventsPartialPercentage() {
+  @DisplayName("任一分片缺少总量提示时不汇总总量,避免给出不完整的进度占比")
+  void shouldWithholdAggregatedTotal_whenAnyShardTotalMissing() {
     cache.publish("ta", "w1", List.of(new WorkerPipelineProgressDto(11L, 99L, "LOAD", 40L, 100L)));
     cache.publish("ta", "w2", List.of(new WorkerPipelineProgressDto(12L, 99L, "LOAD", 30L, null)));
 
@@ -119,6 +128,7 @@ class PipelineStageProgressCacheTest {
   }
 
   @Test
+  @DisplayName("任务超过心跳有效期后自动过期移除,查询结果为空")
   void shouldRemoveExpiredTaskFromPipeline() {
     cache.publish(
         "ta", "worker-node-1", List.of(new WorkerPipelineProgressDto(11L, 99L, "LOAD", 40L, null)));

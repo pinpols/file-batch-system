@@ -6,6 +6,7 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
 import io.github.pinpols.batch.worker.processes.BatchWorkerProcessApplication;
 import javax.sql.DataSource;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -18,6 +19,7 @@ import org.springframework.test.context.DynamicPropertySource;
 @SpringBootTest(
     classes = BatchWorkerProcessApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("处理 Worker 应用启动集成:上下文装配,以及平台库与业务库物理分离的部署约束")
 class BatchWorkerProcessApplicationIntegrationTest extends AbstractIntegrationTest {
 
   @DynamicPropertySource
@@ -40,12 +42,14 @@ class BatchWorkerProcessApplicationIntegrationTest extends AbstractIntegrationTe
   }
 
   @Test
-  void contextLoads() {
+  @DisplayName("应用上下文成功启动,容器实例可注入")
+  void shouldLoadApplicationContext_whenStarted() {
     assertThat(applicationContext).isNotNull();
   }
 
   @Test
-  void platformAndBusinessDataSourcesArePhysicallySeparated() {
+  @DisplayName("平台库与业务库是两个不同的数据库,且业务库上存在处理暂存表")
+  void shouldSeparatePlatformAndBusinessDatabases_whenDataSourcesInspected() {
     JdbcTemplate platform = new JdbcTemplate(platformDataSource);
     JdbcTemplate business = new JdbcTemplate(businessDataSource);
 

@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.service.governance.ApprovalWorkflowService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -20,6 +21,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("审批流程服务在真实数据库上的状态流转,验证提交后的待审批落库以及批准,驳回,执行的状态迁移与重复操作幂等")
 class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
 
   private static final class ApprovalSubmissionSpec {
@@ -85,6 +87,7 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
   private ApprovalWorkflowService approvalWorkflowService;
 
   @Test
+  @DisplayName("提交审批后生成非空审批单号,记录处于待审批状态并保留租户与审批类型")
   void shouldSubmitApprovalAndReturnApprovalNo() {
     String approvalNo = approvalWorkflowService.submit(new ApprovalSubmissionSpec()
         .actionType("DLQ_REPLAY")
@@ -106,6 +109,7 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("待审批记录经批准后状态变为已批准,并记录实际审批人")
   void shouldTransitionFromPendingToApproved() {
     String approvalNo = approvalWorkflowService.submit(new ApprovalSubmissionSpec()
         .actionType("RETRY")
@@ -124,6 +128,7 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("待审批记录经驳回后状态变为已驳回,不再进入已批准分支")
   void shouldTransitionFromPendingToRejected() {
     String approvalNo = approvalWorkflowService.submit(new ApprovalSubmissionSpec()
         .actionType("DLQ_REPLAY")
@@ -141,6 +146,7 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("已批准记录标记执行后状态变为已执行,完成审批闭环")
   void shouldTransitionFromApprovedToExecuted() {
     String approvalNo = approvalWorkflowService.submit(new ApprovalSubmissionSpec()
         .actionType("RETRY")
@@ -160,6 +166,7 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("对已批准记录重复批准时保持幂等,仍返回已批准状态而不产生二次迁移")
   void shouldReturnCurrentStateWhenAlreadyApproved() {
     String approvalNo = approvalWorkflowService.submit(new ApprovalSubmissionSpec()
         .actionType("RETRY")
@@ -179,6 +186,7 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("查询不存在的审批单号时抛出业务异常,错误信息提示审批记录不存在")
   void shouldThrowWhenGettingNonExistentApproval() {
     assertThatThrownBy(() -> approvalWorkflowService.get(
             "t1", "apr-nonexistent-" + BatchDateTimeSupport.utcEpochMillis()))
@@ -187,6 +195,7 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("审批单在提交到查询的链路上原样保留业务载荷,读取到的结构化内容与提交时一致")
   void shouldPreservePayloadJsonThroughApprovalLifecycle() throws Exception {
     String payload = "{\"deadLetterId\":999,\"reason\":\"retry needed\"}";
     String approvalNo = approvalWorkflowService.submit(new ApprovalSubmissionSpec()

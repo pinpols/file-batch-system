@@ -35,11 +35,13 @@ import java.time.LocalTime;
 import java.time.Month;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 
+@DisplayName("批量日结算定时任务: 候选批量日筛选,活跃实例推进,全部成功或失败时的终态收敛,以及失败日补跑与人工审批分支")
 class BatchDaySettleSchedulerTest {
 
   private BatchDayInstanceMapper batchDayInstanceMapper;
@@ -76,6 +78,7 @@ class BatchDaySettleSchedulerTest {
   }
 
   @Test
+  @DisplayName("没有待结算的批量日时候不查询作业实例指标")
   void shouldDoNothingWhenNoCandidates() {
     when(batchDayInstanceMapper.selectByDayStatusIn(any())).thenReturn(List.of());
 
@@ -85,6 +88,7 @@ class BatchDaySettleSchedulerTest {
   }
 
   @Test
+  @DisplayName("存在活跃实例时候批量日推进为进行中,且不写结算时间")
   void shouldPromoteToInFlightWhenActiveInstancesExist() {
     BatchDayInstanceEntity candidate = candidate("CUTOFF");
     BatchDayInstanceMetrics metrics = metrics(3L, 2L, 1L, 0L);
@@ -104,6 +108,7 @@ class BatchDaySettleSchedulerTest {
   }
 
   @Test
+  @DisplayName("实例全部成功时候批量日先从进行中转为结算中再落定为结算完成")
   void shouldSettleWhenAllInstancesSucceeded() {
     BatchDayInstanceEntity candidate = candidate("IN_FLIGHT");
     BatchDayInstanceEntity settling = candidate("SETTLING");
@@ -127,6 +132,7 @@ class BatchDaySettleSchedulerTest {
   }
 
   @Test
+  @DisplayName("实例全部终态且存在失败时候批量日落定为失败并写结算时间")
   void shouldFailWhenAllInstancesTerminalAndAnyFailed() {
     BatchDayInstanceEntity candidate = candidate("IN_FLIGHT");
     BatchDayInstanceEntity settling = candidate("SETTLING");
@@ -149,6 +155,7 @@ class BatchDaySettleSchedulerTest {
   }
 
   @Test
+  @DisplayName("失败批量日配置为自动补跑时候写入触发请求并发起补跑执行")
   void shouldLaunchAutoCatchUpWhenBatchDayFailed() {
     BatchDayInstanceEntity candidate = candidate("IN_FLIGHT");
     BatchDayInstanceEntity settling = candidate("SETTLING");
@@ -183,6 +190,7 @@ class BatchDaySettleSchedulerTest {
   }
 
   @Test
+  @DisplayName("失败批量日需要人工审批时候只登记补跑请求而不发起执行")
   void shouldCreatePendingCatchUpWhenApprovalRequired() {
     BatchDayInstanceEntity candidate = candidate("IN_FLIGHT");
     BatchDayInstanceEntity settling = candidate("SETTLING");
@@ -209,6 +217,7 @@ class BatchDaySettleSchedulerTest {
   }
 
   @Test
+  @DisplayName("遗留的结算中批量日在实例全部成功时候直接落定为结算完成")
   void shouldFinalizeStuckSettlingFromPreviousRun() {
     BatchDayInstanceEntity stuck = candidate("SETTLING");
     BatchDayInstanceMetrics metrics = metrics(3L, 0L, 3L, 0L);
@@ -228,6 +237,7 @@ class BatchDaySettleSchedulerTest {
   }
 
   @Test
+  @DisplayName("遗留的结算中批量日重新出现活跃实例时候回退为进行中")
   void shouldRevertStuckSettlingToInFlightWhenActiveCameBack() {
     BatchDayInstanceEntity stuck = candidate("SETTLING");
     BatchDayInstanceMetrics metrics = metrics(4L, 1L, 3L, 0L);

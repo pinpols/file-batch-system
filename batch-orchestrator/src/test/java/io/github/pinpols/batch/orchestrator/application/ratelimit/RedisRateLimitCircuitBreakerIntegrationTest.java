@@ -28,6 +28,7 @@ import org.testcontainers.containers.GenericContainer;
  * <p>场景：真 Redis 容器建连后停机 → 连续几次 {@code tryConsume} 各阻塞至多 requestTimeout(500ms) 才 fail-open、并累积失败 →
  * 熔断 OPEN → <b>后续请求不再发 Redis 命令，near-instant fail-open</b>（elapsed 远小于 500ms），证明短路省掉了阻塞。
  */
+@DisplayName("限流熔断集成: 真实后端停机后的熔断开路与快速失败口径")
 class RedisRateLimitCircuitBreakerIntegrationTest {
 
   private static RateLimitProperties.CircuitBreaker config() {
@@ -41,7 +42,7 @@ class RedisRateLimitCircuitBreakerIntegrationTest {
 
   @Test
   @DisplayName("真 Redis 停机 → 连续失败开熔断 → 后续请求短路 near-instant fail-open(不再阻塞 500ms)")
-  void sustainedRealRedisFailureOpensCircuitAndStopsStalling() {
+  void shouldOpenCircuitAndFailFast_whenBackendKeepsFailing() {
     @SuppressWarnings("resource")
     GenericContainer<?> redis = TestValkeyContainers.create();
     redis.start();
