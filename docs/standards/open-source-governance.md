@@ -19,7 +19,7 @@
 |---|---|---|
 | 私密漏洞报告 | 启用 GitHub Private Vulnerability Reporting，公开 Issue/PR 不接收漏洞细节 | 根 [`SECURITY.md`](../../SECURITY.md) + GitHub Security Settings |
 | 密钥防护 | 启用 Secret Scanning 和 Push Protection；non-provider patterns、validity checks 在当前仓库能力不可用时保持关闭，平台支持后再启用 | GitHub Security Settings |
-| 依赖安全更新 | Dependabot security updates 开启；Maven、Actions、Docker 非 major 普通更新按生态分组并保留有限队列，跨生态汇总由维护者人工执行 | [`.github/dependabot.yml`](../../.github/dependabot.yml) |
+| 依赖安全更新 | Dependabot security updates 保持即时；普通版本按月检查，Maven 与 Actions 仅自动聚合 patch，minor 单独评审，Docker 保留单项 PR，major 人工升级 | [`.github/dependabot.yml`](../../.github/dependabot.yml) |
 | 主干保护 | 必须经 PR、required checks、讨论解决；只允许 squash；不保留永久 bypass actor | GitHub `main protection` ruleset |
 | CodeQL | PR 必须稳定产生 `Analyze (java)` 状态；纯文档可由范围探测安全跳过重分析。只有该 workflow 已在 main 生效后，才能把此状态加入 required checks，避免 PR 永久等待 | GitHub ruleset + [`codeql.yml`](../../.github/workflows/codeql.yml) |
 | Action 供应链 | 外部 Action 固定 40 位 commit SHA，尾部保留版本注释 | [`../runbook/ci.md`](../runbook/ci.md) + [`check-github-action-pinning.py`](../../scripts/ci/check-github-action-pinning.py) |
@@ -74,10 +74,12 @@
 
 Dependabot 的分组边界是 package ecosystem 与目录，不能把 Maven、Docker 和 GitHub Actions 原生合成一张 PR。仓库采用以下规则控制噪声和风险：
 
-1. Maven、GitHub Actions、Docker 的非 major 更新各形成一个生态组；major 更新继续人工评审；
-2. `maven` Docker 构建镜像不自动升级，因为镜像 tag 同时携带 JDK 主版本，必须与 Java 运行时基线同步；
-3. 需要跨生态单 PR 时，维护者创建人工汇总分支，逐项记录来源 PR、核对最终版本并运行全部受影响门禁；
-4. 只有汇总 PR 已推送且确认包含等价变更后，才能关闭被替代的机器人 PR；不得先关闭再依赖未提交的本地状态。
+1. 普通版本按月检查，安全更新保持即时；Maven 和 GitHub Actions 的 patch 更新分别形成生态组，minor 保留单项 PR，major 继续人工评审；
+2. Docker tag 和 digest 没有可信的统一 semver 语义，保留单项 PR，通过真实镜像构建与启动回归后再合入；
+3. `maven` Docker 构建镜像不自动升级，因为镜像 tag 同时携带 JDK 主版本，必须与 Java 运行时基线同步；
+4. 需要跨生态单 PR 时，只汇总风险等级相当且可由同一组门禁验证的更新；运行时 minor、基础镜像跨发行版和 Java 基线不得为了减少 PR 数量强行捆绑；
+5. Maven 依赖变更必须在同一 PR 重建并提交 `docs/compliance/sbom.json`，CI 只读比对，不在高权限 workflow 中执行 PR 内 Maven 配置并回写代码；
+6. 只有汇总 PR 已推送且确认包含等价变更后，才能关闭被替代的机器人 PR；不得先关闭再依赖未提交的本地状态。
 
 ## 验证
 

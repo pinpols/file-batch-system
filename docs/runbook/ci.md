@@ -57,7 +57,7 @@ CodeQL 的 `Analyze (java)` 只有在 `codeql.yml` 已于 main 生效、并确�
 - `actions/upload-artifact@v7` 使用当前 artifact 服务契约；迁移到 GHES 前必须确认 GHES 支持该 major，否则保持独立兼容版本或由平台团队提供替代上传方案。
 - Gitleaks `8.30.1` 本轮不盲目更换；已在 Docker `linux/amd64` 用同版 artifact 验证合成 `ghp_...` 正向退出 1、负向退出 0，并通过 PR/Full Gate 安全扫描；继续关注上游规则变化，该样例不代表所有密钥类型。
 - CodeQL、Trivy Action、Checkov、发布 Action 和 Sonar 仍按 G7 定期复核，不因本批版本升级自动视为完成。
-- `.github/dependabot.yml` 对 Maven、GitHub Actions 和 Docker 分别把非 major 周更收敛为单个生态组，安全更新在 GitHub 平台启用。Dependabot 不能跨 package ecosystem 生成一张 PR；需要同一维护窗口时，由维护者在单独分支核对补丁等价性后人工汇总。Docker 只扫描实际存放 Dockerfile 的 `deploy/docker`；`maven` 构建镜像因 tag 同时携带 JDK 主版本而排除自动升级，随 Java 基线人工评审。
+- `.github/dependabot.yml` 对普通版本按月检查，安全更新保持即时；仅对 Maven 和 GitHub Actions 的 patch 按生态分组，minor 保留单项 PR，Docker 不做宽泛分组，major 人工升级。Dependabot 不能跨 package ecosystem 生成一张 PR；跨生态汇总只适用于风险等级相当、验证边界相同的更新。Maven 更新还必须同步入库 SBOM；CI 保持只读校验，避免在高权限 workflow 中执行 PR 提供的 Maven 配置并回写分支。Docker 只扫描 `deploy/docker`；`maven` 构建镜像因 tag 携带 JDK 主版本而排除自动升级。
 - 所有外部 Action 必须使用 40 位提交 SHA；尾部版本注释仅用于可读性。`check-github-action-pinning.py` 在本地、PR 和 Full Gate 阻止浮动 tag/branch 回流。
 
 ## 触发矩阵(开发者视角)

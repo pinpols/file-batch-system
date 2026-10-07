@@ -4,11 +4,10 @@ updates:
   - package-ecosystem: "maven"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
       time: "03:00"
       timezone: "Asia/Shanghai"
-    # 保留有限队列，避免正常版本更新永久停摆；major 仍由下方规则人工评审。
+    # 保留有限队列；patch 聚合，minor 单独评审，major 人工升级。
     open-pull-requests-limit: 5
     commit-message:
       prefix: "chore(deps)"
@@ -21,16 +20,15 @@ updates:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
     groups:
-      maven-minor-patch:
+      maven-patch:
         patterns: ["*"]
-        update-types: ["minor", "patch"]
+        update-types: ["patch"]
 
   # ==== GitHub Actions ====
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
       time: "03:00"
       timezone: "Asia/Shanghai"
     # 保留有限的版本更新队列；安全更新不受该上限影响。
@@ -41,16 +39,15 @@ updates:
       - "dependencies"
       - "github-actions"
     groups:
-      github-actions-minor-patch:
+      github-actions-patch:
         patterns: ["*"]
-        update-types: ["minor", "patch"]
+        update-types: ["patch"]
 
   # ==== Docker base image ====
   - package-ecosystem: "docker"
     directory: "/deploy/docker"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
       time: "03:00"
       timezone: "Asia/Shanghai"
     open-pull-requests-limit: 3
@@ -65,6 +62,4 @@ updates:
       - dependency-name: "maven"
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
-    groups:
-      docker-minor-patch:
-        patterns: ["*"]
+    # Docker tag/digest 不具有统一的 semver 语义，保留单项 PR 便于镜像回归和回滚。
