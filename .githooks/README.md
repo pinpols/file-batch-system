@@ -28,8 +28,10 @@ Maven 单测、Helm、Zizmor、镜像和依赖扫描保留在 pre-push / CI，�
 2. 应用层不得直接依赖基础设施适配器或 Redis/Kafka 等直连客户端
 3. readiness 文档、Trivy ignore、SDK 配置环境变量和 Java 可读性清单保持同步
 4. Java 变更执行受影响模块 clean compile
+5. Java、POM 或相关 CI 路由变更执行全部 `*ArchTest` / `*ConventionTest`
 
-本机依赖：`python3`；提交 Shell 变更需 `shellcheck`，提交 Workflow 变更需 `actionlint`。
+本机依赖：`python3`、JDK；提交 Shell 变更需 `shellcheck`，提交 Workflow 变更需 `actionlint`。
+`--skip-build` 同时跳过 clean compile 和 Java 治理测试，仅用于快速人工预检；正式 push 不应使用。
 
 > **跳过 hook**（不推荐）：`git commit --no-verify`
 >

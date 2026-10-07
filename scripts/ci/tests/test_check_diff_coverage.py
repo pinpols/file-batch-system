@@ -25,6 +25,10 @@ class DiffCoverageTest(unittest.TestCase):
             coverage = MODULE.jacoco_lines(report, root)
             changed = {Path("module/src/main/java/example/Demo.java"): {10, 11, 12}}
             self.assertEqual((1, 2), MODULE.evaluate(changed, coverage))
+            self.assertEqual(
+                {Path("module/src/main/java/example/Demo.java"): [11]},
+                MODULE.uncovered_lines(changed, coverage),
+            )
 
 
 if __name__ == "__main__":

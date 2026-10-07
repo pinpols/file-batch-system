@@ -63,6 +63,18 @@ def evaluate(changed: dict[Path, set[int]], coverage: dict[Path, dict[int, bool]
     return covered, total
 
 
+def uncovered_lines(
+    changed: dict[Path, set[int]], coverage: dict[Path, dict[int, bool]]
+) -> dict[Path, list[int]]:
+    result: dict[Path, list[int]] = {}
+    for path, lines in changed.items():
+        executable = coverage.get(path, {})
+        missed = [line for line in sorted(lines) if line in executable and not executable[line]]
+        if missed:
+            result[path] = missed
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base", required=True)
@@ -86,6 +98,8 @@ def main() -> int:
     ratio = covered / total
     print(f"差异覆盖率：{covered}/{total} = {ratio:.1%}（最低 {args.minimum:.0%}）")
     if ratio < args.minimum:
+        for path, lines in uncovered_lines(changed, coverage).items():
+            print(f"未覆盖：{path}:{','.join(map(str, lines))}", file=sys.stderr)
         print("差异覆盖率低于阈值，请补充针对本次变更的测试", file=sys.stderr)
         return 1
     return 0

@@ -10,6 +10,7 @@ name: staging-gate
 # 与 pr-gate 关系:
 #   - pr-gate 只跑按模块路由的单元分片；E2E 由 main Full Gate 和本 nightly 回退。
 #   - 本 workflow 跑全量 28 个 E2eIT,6 shard 并发,目标 4-5min wall-clock。
+#   - Java 架构/约定守卫独立并发执行,不计入 E2E shard 的业务验收结果与耗时。
 #
 # 与 full-ci-gate 关系:
 #   - full-ci-gate(main push)已并行跑全量 e2e-shard,本 workflow 是 staging branch
@@ -31,6 +32,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Java 架构/约定守卫与 E2E 并发，防止 nightly 只跑业务 E2E 而漏掉治理测试。
+  java-governance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+        with:
+          cache-testcontainers: 'false'
+
+      - name: Verify governance test inventory
+        shell: bash
+        run: python3 scripts/ci/check-java-governance-test-coverage.py
+
+      - name: Run Java architecture and convention guards
+        shell: bash
+        run: bash scripts/ci/run-java-governance-tests.sh
+
+      - name: Upload Java governance reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: staging-gate-java-governance-reports
+          path: '**/target/surefire-reports/**'
+          retention-days: 14
+
   # ===========================================================================
   # e2e-shard:全量 E2E 6 shard 并发,无 tag 过滤(smoke + critical + regression
   # 全跑)。分组沿用 full-ci-gate 的 2026-10-07 实测 LPT 均衡结果。

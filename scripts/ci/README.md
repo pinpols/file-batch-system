@@ -474,6 +474,21 @@ e2e 运行侧闭环守护。`-Dsurefire.failIfNoSpecifiedTests=false` 会把「s
 bash scripts/ci/check-e2e-run-completeness.sh "<逗号分隔类名>" <surefire-reports-dir>
 ```
 
+### Java 治理测试完整性
+
+`check-java-governance-test-coverage.py` 统一发现 `*ArchTest` 和 `*ConventionTest`。PR、
+Full 和 Staging Gate 的 `java-governance` job 单独执行这些测试；业务 unit/IT 分片不再重复执行。
+
+```bash
+python3 scripts/ci/check-java-governance-test-coverage.py
+python3 scripts/ci/check-java-governance-test-coverage.py --verify-reports
+```
+
+第二条命令必须在 Maven 执行后运行，任一源码类没有对应 `TEST-<FQCN>.xml` 就失败。
+实际执行统一使用 `bash scripts/ci/run-java-governance-tests.sh`；该入口同时接入本地 pre-push，
+防止本地与三个在线 workflow 的模块清单和 Maven 参数漂移。pre-commit 只运行源码清单检查，
+避免每次提交承担 Maven 构建成本。
+
 ## `install-upstream-modules.sh`
 
 将 E2E / staging / Trivy 扫描所需的上游 Maven 模块安装到 `~/.m2`。Full Gate 和 PR 的 Trivy 文件系统扫描会先运行本脚本，缓存依赖元数据并安装本地 reactor 产物，避免扫描器重复向 Maven Central 请求内部模块 POM。它保持 `batch-e2e-tests`

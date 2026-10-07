@@ -200,6 +200,8 @@ gate_run PRE_COMMIT_SOFT_GATES "软门禁治理" \
   "$PYTHON_BIN" scripts/ci/check-soft-gate-governance.py
 gate_run PRE_COMMIT_FLAKY_QUARANTINE "flaky 测试隔离治理" \
   "$PYTHON_BIN" scripts/ci/check-flaky-test-governance.py
+gate_run PRE_COMMIT_JAVA_GOVERNANCE_INVENTORY "Java 治理测试清单" \
+  "$PYTHON_BIN" scripts/ci/check-java-governance-test-coverage.py
 
 if ((scripts_changed == 1)); then
   gate_run PRE_COMMIT_SCRIPT_GOVERNANCE "脚本治理" \
@@ -210,6 +212,7 @@ if ((scripts_changed == 1)); then
     scripts/ci/tests/test_check_flaky_test_governance.py \
     scripts/ci/tests/test_check_soft_gate_governance.py \
     scripts/ci/tests/test_check_diff_coverage.py \
+    scripts/ci/tests/test_check_java_governance_test_coverage.py \
     scripts/ci/tests/test_report_ci_quality_trends.py
   gate_run PRE_COMMIT_TESTCONTAINERS_REUSE_LABEL "Testcontainers 复用标签判定" \
     "$PYTHON_BIN" scripts/ci/check-testcontainers-reuse-label.py

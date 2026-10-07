@@ -15,7 +15,7 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 | `pr-gate` | PR 代码门禁 | PR → main(opened / synchronize / reopened / ready_for_review,非草稿) | 快速反馈，阻断不合格 PR | 45 min |
 | `sdk-contract-parity` | SDK 契约门禁 | PR、merge queue、每日 16:00 UTC、手动 | 五语言 fixture、共享常量和 conformance 契约 | — |
 | `full-ci-gate` | main 全量门禁 | push main、每周日 02:00 UTC、手动 | 主干质量基线 + 安全扫描(含 K8s manifest Checkov) | 75 min |
-| `staging-gate` | 补充 E2E 验证 | nightly(每天 18:00 UTC / 北京 02:00)+ workflow_dispatch | 全量 E2E(smoke + critical + regression 全跑,6 shard 并发)，不替代 `full-ci-gate` | — |
+| `staging-gate` | 补充 E2E 验证 | nightly(每天 18:00 UTC / 北京 02:00)+ workflow_dispatch | 全量 E2E(smoke + critical + regression 全跑,6 shard 并发)；Java 架构/约定守卫独立并发，不替代 `full-ci-gate` | — |
 | `daily-sim-strict-validation` | 补充真实数据验证 | nightly(每天 13:31 UTC / 北京 21:31)+ workflow_dispatch | 定时触发按最近一次计划时间对应的北京时间日期检查代码/配置变更，延迟跨午夜仍归属原计划日；手动触发按当前北京时间日期。Markdown/RST、`LICENSE`、`NOTICE` 除外。需要验证时同环境先执行 `sim-harness all`，再执行 BE-ACC step 5(strict real-data verification)；strict step 使用 `always()` 采证，不因 sim 失败被短路 | 240 min |
 | `docker-image-build` | nightly / 可选发布镜像构建 | 由 `daily-sim-strict-validation` 在当天有代码/配置变更且 sim + strict 成功后调用；也支持手动和复用调用 | 默认只用 Docker Bake 构建全部应用镜像和运维工具箱镜像；显式 `publish=true` 时登录 GHCR、推送 SHA 镜像并上传含 immutable digest 的 backend image set。CI 使用 Maven Central 配置并带依赖下载重试 | 30 min |
 | `OpenSSF Scorecard` | 供应链治理报告 | push main、每周三、手动 | 生成 SARIF 并上传 Code Scanning；不按总分阻断 PR | 20 min |
@@ -117,7 +117,7 @@ gh pr create --base main --head revert/main-broken-<short-sha> --title "revert: 
 |---|---|---|
 | **范围探测** | ✅ 有 — `scripts/ci/detect-change-scope.py` 按 changed files 决定 | ❌ 永远 full reactor |
 | **单元测试路由** | 四个保守分片信号；公共边界全跑，叶子模块只跑所属分片 | 永远全跑 |
-| **Maven 范围** | 每个被选分片使用固定 `-pl ... -am` 依赖闭包 | 全部固定分片并发执行 |
+| **Maven 范围** | 每个被选分片先用 `install -DskipTests -am` 构建依赖，再只测试本分片模块；PR unit 分片排除 `*IntegrationTest` | 全部固定分片并发执行；依赖只构建一次/分片，目标模块执行完整 unit + IT |
 | **E2E suite** | 不运行，由合入后门禁回退 | 28 个测试按实测 LPT 拆为 6 个并发 shard |
 | **Hadolint / Trivy fs** | ❌ 不跑 | ✅ 跑 |
 | **文本 UTF-8 编码** | PR 相对目标分支扫描变更文本 | 全仓扫描 |
@@ -196,8 +196,13 @@ SDK 五语言契约矩阵。
 | E2E 套件 (`*E2eIT`) | Maven `test` `-pl batch-e2e-tests` | full-ci-gate |
 
 > 约定/架构守护（`*ArchTest`、`*ConventionTest`，如 `RepositoryMapReturnConventionTest`、`PositionalArgsConventionTest`）
-> 不单独接线 workflow：它们随上述「编译 + 单元测试」的 Maven `test` 全量执行并阻断，触发范围即该行的「全部」。
+> 由 PR / Full / Staging 的 `java-governance` job 独立执行，业务 unit/IT 显式排除这两类后缀。
+> `check-java-governance-test-coverage.py --verify-reports` 要求每个源码类都产生 Surefire XML，零用例或漏跑会阻断。
 > 这类测试型守卫的登记入口是 [约定约束与漂移防护总账](../audit/convention-drift-guard-index.md) 的守卫矩阵（`check-*` / `validate-*` 脚本另由 [scripts/ci/README.md](../../scripts/ci/README.md) 登记）。
+> Python / Shell / 配置/契约守卫在 `static-checks` 中独立命名执行，不混入 Maven unit/IT；
+> 为避免重复 checkout 和 JDK 初始化，它们暂不拆成额外 runner job。
+> 本地 pre-commit 只核对治理测试源码清单；pre-push 在 Java、POM 或相关 CI 路由变化时调用
+> `run-java-governance-tests.sh` 真实执行同一组测试，在线 workflow 也复用该入口。
 
 ### 提醒项（失败只通知，不阻断流水线）
 
@@ -224,7 +229,7 @@ pr-gate 会根据 PR 变更文件范围决定 Maven 构建粒度：
 | 变更范围 | Maven 行为 |
 |---|---|
 | 公共代码、测试基础设施、数据库迁移、POM/Maven Wrapper、未知路径 | 四个单元分片全部执行 |
-| 仅单个叶子模块（如 `batch-console-api/`） | 仅执行所属分片，Maven 用 `-pl ... -am` 构建依赖 |
+| 仅单个叶子模块（如 `batch-console-api/`） | 仅执行所属分片；Maven 先构建依赖闭包，再只测试叶子模块 |
 | Worker Core | 执行 Core 自身和三组 Worker 分片，不启动 Console 分片 |
 | 仅 CI、脚本、部署配置或文档 | 跳过 Maven 单元测试，保留命中域的静态门禁 |
 | 无 Java 相关变更 | 跳过 Maven gate |
@@ -476,7 +481,7 @@ bash scripts/ci/run-flaky-quarantine.sh
 | pr-gate | 20 | 8:10 | 8:58 | P50 3:30-5:00 |
 | PR CodeQL | 18 | 8:19 | 9:58 | P50 3:00-5:00 |
 | full-ci-gate | 20 | 8:26 | 11:44 | P50 4:30-6:00 |
-| staging-gate | 未纳入本轮样本 | — | — | 六片全量 E2E 4:00-5:30 |
+| staging-gate | 未纳入本轮样本 | — | — | 六片全量 E2E 4:00-5:30；Java 治理组并发，不进入关键路径 |
 
 ### Job 级分布
 
@@ -488,7 +493,8 @@ bash scripts/ci/run-flaky-quarantine.sh
 **full-ci-gate（优化前）**
 
 - 最近一次最长 Unit / E2E job 分别为 475 / 477 秒。
-- 优化后 Unit B2 拆分，E2E 从 4 片改为实测 LPT 六片；每片测试体基线 148-179 秒。
+- 优化后 Unit B2 拆分，四个 Java shard 不再通过 `-am` 重复执行上游测试；E2E 从 4 片改为实测 LPT 六片，每片测试体基线 148-179 秒。
+- 静态守卫与 unit/IT 分离且去掉 action-pinning 重复执行；Java Arch/Convention 守卫单独并发执行，统一入口本地基线约 68 秒。
 
 **CodeQL（优化前）**
 

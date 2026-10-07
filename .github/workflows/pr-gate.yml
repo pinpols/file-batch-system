@@ -3,7 +3,8 @@ name: pr-gate
 # C 方案(2026-06-02):PR 只跑 unit + 文档全跳 + Merge Queue 入口。
 # 历史背景:Round-1 TOP-7 把 e2e 分级到 smoke(本 workflow)+ regression(staging-gate)。
 # C 方案进一步把 IT 也从 PR-gate 移除,IT/E2E 全部交给 full-ci-gate(main push 后回退)+
-# staging-gate(nightly)。PR-gate 只保留 static-checks + unit + security-scan 三类快速反馈。
+# staging-gate(nightly)。PR-gate 保留 static-checks + unit + java-governance +
+# security-scan 四类快速反馈。
 # 风险:main 偶尔会被 full-ci-gate 拦,该 PR 作者负责立即 revert + 修复。
 # 详见 docs/runbook/ci-speedup-2026-06-02.md。
 #
@@ -215,15 +216,6 @@ jobs:
         run: |
           source scripts/lib/gate-result.sh
           gate_run PR_SCRIPT_GOVERNANCE "脚本治理" python3 scripts/ci/check-script-governance.py
-          gate_run PR_ACTION_PINNING "GitHub Actions SHA 固定" python3 scripts/ci/check-github-action-pinning.py
-          gate_run PR_SOFT_GATES "软门禁治理" python3 scripts/ci/check-soft-gate-governance.py
-          gate_run PR_FLAKY_QUARANTINE "flaky 测试隔离治理" python3 scripts/ci/check-flaky-test-governance.py
-          gate_run PR_CI_QUALITY_GUARD_TESTS "CI 质量治理门禁测试" python3 -m unittest \
-            scripts/ci/tests/test_check_github_action_pinning.py \
-            scripts/ci/tests/test_check_flaky_test_governance.py \
-            scripts/ci/tests/test_check_soft_gate_governance.py \
-            scripts/ci/tests/test_check_diff_coverage.py \
-            scripts/ci/tests/test_report_ci_quality_trends.py
           gate_run PR_SHELL_SCRIPTS "Shell 语法与 ShellCheck" bash scripts/ci/check-shell-scripts.sh
           gate_run PR_SHELL_LINUX_PORTABILITY "Shell Linux 兼容性" python3 scripts/ci/check-shell-linux-portability.py
           gate_run PR_TESTCONTAINERS_REUSE_LABEL "Testcontainers 复用标签判定" python3 scripts/ci/check-testcontainers-reuse-label.py
@@ -236,6 +228,20 @@ jobs:
           source scripts/lib/gate-result.sh
           gate_run PR_ACTION_PINNING "GitHub Actions SHA 固定" python3 scripts/ci/check-github-action-pinning.py
           gate_run PR_ACTION_PINNING_TEST "GitHub Actions SHA 固定门禁测试" python3 -m unittest scripts/ci/tests/test_check_github_action_pinning.py
+
+      - name: Verify CI quality governance guards
+        if: needs.changes.outputs.ci == 'true'
+        shell: bash
+        run: |
+          source scripts/lib/gate-result.sh
+          gate_run PR_SOFT_GATES "软门禁治理" python3 scripts/ci/check-soft-gate-governance.py
+          gate_run PR_FLAKY_QUARANTINE "flaky 测试隔离治理" python3 scripts/ci/check-flaky-test-governance.py
+          gate_run PR_CI_QUALITY_GUARD_TESTS "CI 质量治理门禁测试" python3 -m unittest \
+            scripts/ci/tests/test_check_flaky_test_governance.py \
+            scripts/ci/tests/test_check_soft_gate_governance.py \
+            scripts/ci/tests/test_check_diff_coverage.py \
+            scripts/ci/tests/test_check_java_governance_test_coverage.py \
+            scripts/ci/tests/test_report_ci_quality_trends.py
 
       - name: Verify module dependency boundaries
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
@@ -649,10 +655,14 @@ jobs:
 
       - name: Run unit tests (orchestrator + worker-core + sdk×3)
         shell: bash
-        # -am 编译上游;-DskipITs=true 跳 failsafe IT;跳 PMD/Spotless(在 static-checks job)
-        # IT 由 full-ci-gate(main push 后)+ staging-gate(nightly)回退
+        # 先安装依赖闭包但不运行上游测试,再只测当前分片;避免 batch-common /
+        # batch-test-support 的守卫与 Testcontainers 用例被多分片重复执行。
         run: |
-          ./mvnw test -pl batch-orchestrator,batch-worker/core,sdk/java/core,sdk/java/spring,sdk/java/testkit -am \
+          MODULES="batch-orchestrator,batch-worker/core,sdk/java/core,sdk/java/spring,sdk/java/testkit"
+          ./mvnw install -pl "$MODULES" -am -DskipTests \
+            -Dspotless.check.skip=true -Dpmd.skip=true -B
+          ./mvnw test -pl "$MODULES" \
+            -Dtest='!*IntegrationTest,!*ArchTest,!*ConventionTest' \
             -DskipITs=true -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
 
@@ -698,7 +708,11 @@ jobs:
       - name: Run unit tests (common + test-support + trigger + worker-process + worker-dispatch)
         shell: bash
         run: |
-          ./mvnw test -pl batch-common,batch-test-support,batch-trigger,batch-worker/process,batch-worker/dispatch -am \
+          MODULES="batch-common,batch-test-support,batch-trigger,batch-worker/process,batch-worker/dispatch"
+          ./mvnw install -pl "$MODULES" -am -DskipTests \
+            -Dspotless.check.skip=true -Dpmd.skip=true -B
+          ./mvnw test -pl "$MODULES" \
+            -Dtest='!*IntegrationTest,!*ArchTest,!*ConventionTest' \
             -DskipITs=true -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
 
@@ -744,7 +758,11 @@ jobs:
       - name: Run unit tests (worker-import + worker-export + worker-atomic)
         shell: bash
         run: |
-          ./mvnw test -pl batch-worker/import,batch-worker/export,batch-worker/atomic -am \
+          MODULES="batch-worker/import,batch-worker/export,batch-worker/atomic"
+          ./mvnw install -pl "$MODULES" -am -DskipTests \
+            -Dspotless.check.skip=true -Dpmd.skip=true -B
+          ./mvnw test -pl "$MODULES" \
+            -Dtest='!*IntegrationTest,!*ArchTest,!*ConventionTest' \
             -DskipITs=true -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
 
@@ -790,7 +808,11 @@ jobs:
       - name: Run unit tests (console-api)
         shell: bash
         run: |
-          ./mvnw test -pl batch-console-api -am \
+          MODULES="batch-console-api"
+          ./mvnw install -pl "$MODULES" -am -DskipTests \
+            -Dspotless.check.skip=true -Dpmd.skip=true -B
+          ./mvnw test -pl "$MODULES" \
+            -Dtest='!*IntegrationTest,!*ArchTest,!*ConventionTest' \
             -DskipITs=true -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
 
@@ -812,14 +834,52 @@ jobs:
           retention-days: 14
 
   # ===========================================================================
-  # Required context 稳定聚合器：Ruleset 继续只依赖 unit-it-b2。
+  # Java 架构/约定守卫独立执行，不与业务 unit/IT 混合；失败仍汇入稳定 required context。
+  # ==========================================================================
+  java-governance:
+    needs: changes
+    if: |
+      (needs.changes.outputs.unit-required == 'true' || needs.changes.outputs.ci == 'true') &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+        with:
+          cache-testcontainers: 'false'
+
+      - name: Verify governance test inventory
+        shell: bash
+        run: python3 scripts/ci/check-java-governance-test-coverage.py
+
+      - name: Run Java architecture and convention guards
+        shell: bash
+        run: bash scripts/ci/run-java-governance-tests.sh
+
+      - name: Upload Java governance reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pr-gate-java-governance-reports
+          path: '**/target/surefire-reports/**'
+          retention-days: 14
+
+  # ===========================================================================
+  # Required context 稳定聚合器：Ruleset 继续只依赖 unit-it-b2，
+  # 同时将独立 Java 治理守卫的失败纳入必需 context。
   # ===========================================================================
   unit-it-b2:
     name: unit-it-b2
     if: >-
       always() &&
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
-    needs: [changes, unit-it-b2-workers, unit-it-b2-console]
+    needs: [changes, unit-it-b2-workers, unit-it-b2-console, java-governance]
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
@@ -828,11 +888,13 @@ jobs:
           SCOPE_RESULT: ${{ needs.changes.result }}
           WORKERS_RESULT: ${{ needs.unit-it-b2-workers.result }}
           CONSOLE_RESULT: ${{ needs.unit-it-b2-console.result }}
+          GOVERNANCE_RESULT: ${{ needs.java-governance.result }}
         shell: bash
         run: |
           [[ "$SCOPE_RESULT" == "success" ]]
           [[ "$WORKERS_RESULT" == "success" || "$WORKERS_RESULT" == "skipped" ]]
           [[ "$CONSOLE_RESULT" == "success" || "$CONSOLE_RESULT" == "skipped" ]]
+          [[ "$GOVERNANCE_RESULT" == "success" || "$GOVERNANCE_RESULT" == "skipped" ]]
 
   # ===========================================================================
   # NOTE: e2e-smoke 已从 pr-gate 移除(C 方案 #1)。

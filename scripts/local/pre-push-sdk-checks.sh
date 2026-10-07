@@ -8,7 +8,8 @@
 #   3. 轻量契约门禁(EmptyChecks、readiness 文档同步、Trivy ignore 到期)
 #
 # 设计原则:
-#   - 只检查"本 PR 改过的文件",不扫全仓(快,< 30s)
+#   - 静态项只检查本 PR 改过的文件；Java 相关变更额外运行全量架构/约定守卫
+#   - 无 Java 变更通常 < 30s；Java 治理测试本地基线约 1-2min
 #   - fast-fail:第一类 fail 立刻退出,不跑后面的
 #   - 可通过 SKIP_SDK_CHECKS=1 跳过(应急用,正常 PR 必跑)
 #   - CI=1 时关闭颜色 + 简化输出
@@ -122,6 +123,7 @@ done <<< "$CHANGED_JAVA"
 CHANGED_ENV_GOVERNANCE=$(echo "$CHANGED_FILES" | grep -E "^(\.env\.example|docs/runbook/(environment-variable-governance|feature-switch|config-ops-tiering)|scripts/ci/check-(feature-switch-registry|config-defaults-sync|helm-env-sync|config-governance)\.py|deploy/docker/compose/|helm/)" || true)
 CHANGED_RUNTIME_CONFIG=$(echo "$CHANGED_FILES" | grep -E "^((scripts|load-tests/scripts)/.*\.sh|deploy/docker/|helm/|docker-compose.*\.ya?ml|Makefile|batch-.*/src/(main|test)/.*\.(java|ya?ml)|\.env[^/]*)$" || true)
 CHANGED_RELEASE_SENSITIVE=$(echo "$CHANGED_FILES" | grep -E "^(db/migration/|deploy/docker/|deploy/ha/|helm/batch-platform/(templates|files)/|docs/api/sdk-contract-fixtures/|pom\.xml|\.env\.example|docker-compose(\.kafka-ha)?\.yml|helm/batch-platform/(Chart|values|values-canary)\.yaml|helm/values-prod\.yaml|docs/api/(console-api\.openapi|orchestrator-internal\.openapi|sdk-shared-constants)\.yaml|docs/agent-baseline\.md|docs/architecture/adr/)" || true)
+CHANGED_JAVA_GOVERNANCE=$(echo "$CHANGED_FILES" | grep -E "(^|/)(pom\.xml|.*\.java)$|^scripts/ci/(check-java-governance-test-coverage\.py|run-java-governance-tests\.sh)$|^\.github/workflows/(pr-gate|full-ci-gate|staging-gate)\.yml$" || true)
 
 info "本次 push 涉及:"
 [[ -n "$CHANGED_JAVA" ]]     && info "  Java 文件 $(echo "$CHANGED_JAVA" | wc -l | tr -d ' ') 个"
@@ -254,6 +256,15 @@ if [[ -n "$CHANGED_DOCKER_BUILD" ]]; then
     fi
   else
     warn "检测到 Docker/Helm 构建配置变更,但本机 docker buildx 不可用;CI 会继续校验"
+  fi
+fi
+
+if [[ -n "$CHANGED_JAVA_GOVERNANCE" && $SKIP_BUILD -eq 0 ]]; then
+  info "──────────────────────────────────────"
+  info "Java 架构/约定守卫"
+  info "──────────────────────────────────────"
+  if ! bash scripts/ci/run-java-governance-tests.sh; then
+    errors=$((errors+1))
   fi
 fi
 

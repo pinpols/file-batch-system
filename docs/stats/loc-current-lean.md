@@ -1,20 +1,20 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `2a0251547`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `9eb562a37`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,776 | 504,300 | 259,345 | 51.4% |
+| 4,779 | 504,523 | 259,495 | 51.4% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
 | prod | 2,757 | 251,564 | 115,160 | 45.8% |
-| test | 1,237 | 183,943 | 101,094 | 55.0% |
-| script | 636 | 52,958 | 33,096 | 62.5% |
+| test | 1,238 | 184,033 | 101,152 | 55.0% |
+| script | 638 | 53,091 | 33,188 | 62.5% |
 | config | 53 | 8,230 | 5,914 | 71.9% |
 | infra-config | 32 | 5,344 | 3,912 | 73.2% |
 | sql | 61 | 2,261 | 169 | 7.5% |
@@ -23,9 +23,9 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,515 | 367,594 | 189,957 | 51.7% |
-| Shell | 201 | 30,367 | 23,700 | 78.0% |
-| Python | 248 | 35,264 | 18,209 | 51.6% |
+| Java | 3,515 | 367,634 | 189,986 | 51.7% |
+| Shell | 202 | 30,396 | 23,722 | 78.0% |
+| Python | 250 | 35,418 | 18,308 | 51.7% |
 | YAML | 95 | 12,461 | 9,439 | 75.7% |
 | XML | 178 | 21,568 | 6,758 | 31.3% |
 | TypeScript | 37 | 6,632 | 3,124 | 47.1% |
@@ -58,7 +58,7 @@
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | prod | Java | 1,028 | 451 |
 | `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultFileGovernanceServiceTest.java` | test | Java | 793 | 438 |
 | `batch-worker/core/src/test/java/io/github/pinpols/batch/worker/core/support/AbstractTaskConsumerTest.java` | test | Java | 698 | 433 |
-| `batch-console-api/src/test/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleConfigApplicationServiceTest.java` | test | Java | 610 | 428 |
+| `scripts/local/pre-push-sdk-checks.sh` | script | Shell | 569 | 433 |
 
 ## 复跑
 
