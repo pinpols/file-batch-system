@@ -24,6 +24,6 @@ public class ForensicExportProperties {
   /** 单次导出的 batch-day 审计行数上限。 */
   private int auditRowCap = 100_000;
 
-  /** v0.1 默认是否启用（false 时 export endpoint 返回 503）。 */
+  /** 默认启用;显式关闭时 export endpoint 返回 503。 */
   private boolean enabled = true;
 }

@@ -67,9 +67,9 @@ public class ImportEventArrivalController {
   /**
    * 日志注入防护:用**白名单**只保留安全可打印字符,其余(含 CR/LF 及任意控制字符)替换为 '_'。
    *
-   * <p>原实现是删 CR/LF 黑名单——功能上够防 log forging,但 CodeQL 污点分析不把黑名单 replace 当 有效
-   * sanitizer(java/log-injection 仍报 open)。改为正向白名单过滤后,CodeQL 识别为净化,
-   * 同时语义更强(任何控制字符都挡)。tenantId/bucket/objectKey 合法值本就落在该白名单内。
+   * <p>CodeQL 同时认可合规白名单及单独替换换行的常量模式(如共享 LogSanitizer 的 \R),并非仅白名单有效。
+   * 此处保留原有的领域日志展示规则,继续过滤所有控制字符及白名单外字符;它不是对象 Key 的输入校验,
+   * 不决定扫描器发现或接收哪些文件。
    */
   private static String logSafe(String value) {
     if (value == null) {

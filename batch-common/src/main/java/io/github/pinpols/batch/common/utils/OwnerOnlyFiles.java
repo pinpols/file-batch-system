@@ -19,15 +19,15 @@ public final class OwnerOnlyFiles {
   private OwnerOnlyFiles() {}
 
   public static Path createDirectories(Path path) throws IOException {
-    Files.createDirectories(path, attributes(path, true));
-    protectExisting(path, true);
-    return path;
+    Path created = Files.createDirectories(path, attributes(path, true));
+    protectExisting(created, true);
+    return created;
   }
 
   public static Path createFile(Path path) throws IOException {
-    Files.createFile(path, attributes(path, false));
-    protectExisting(path, false);
-    return path;
+    Path created = Files.createFile(path, attributes(path, false));
+    protectExisting(created, false);
+    return created;
   }
 
   public static void protectExisting(Path path, boolean directory) throws IOException {
