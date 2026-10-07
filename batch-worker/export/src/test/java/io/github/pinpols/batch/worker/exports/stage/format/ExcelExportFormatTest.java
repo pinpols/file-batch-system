@@ -1,12 +1,19 @@
 package io.github.pinpols.batch.worker.exports.stage.format;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.mockStatic;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
+import io.github.pinpols.batch.common.utils.PrivateTempFiles;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -16,11 +23,15 @@ import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.util.DefaultTempFileCreationStrategy;
+import org.apache.poi.util.TempFile;
 import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.MockedStatic;
 
 /** ExcelExportFormat 类型化写入 / 多 sheet 拆分 / 表头样式 + 向后兼容验证。 */
 @DisplayName("表格导出格式单测:类型化写入,多工作表拆分与表头样式及向后兼容语义")
@@ -165,6 +176,137 @@ class ExcelExportFormatTest {
     }
   }
 
+  @Test
+  @DisplayName("新建表格文件仅允许所有者读写")
+  void shouldRestrictPermissions_whenCreatingWorkbook() throws Exception {
+    Path file = tempDir.resolve("private.xlsx");
+    format.generate(ctx(file, Map.of(), List.of(rowOf("id", "1"))));
+
+    if (Files.getFileStore(file).supportsFileAttributeView("posix")) {
+      assertThat(Files.getPosixFilePermissions(file))
+          .isEqualTo(PosixFilePermissions.fromString("rw-------"));
+    }
+    try (Workbook workbook = open(file)) {
+      assertThat(workbook.getSheetAt(0).getRow(1).getCell(0).getStringCellValue())
+          .isEqualTo("1");
+    }
+  }
+
+  @Test
+  @DisplayName("已有表格文件写入前收紧所有者权限")
+  void shouldRestrictPermissions_whenReplacingWorkbook() throws Exception {
+    Path file = Files.createFile(tempDir.resolve("existing.xlsx"));
+    if (Files.getFileStore(file).supportsFileAttributeView("posix")) {
+      Files.setPosixFilePermissions(file, PosixFilePermissions.fromString("rw-r--r--"));
+    }
+    format.generate(ctx(file, Map.of(), List.of(rowOf("id", "2"))));
+
+    if (Files.getFileStore(file).supportsFileAttributeView("posix")) {
+      assertThat(Files.getPosixFilePermissions(file))
+          .isEqualTo(PosixFilePermissions.fromString("rw-------"));
+    }
+    try (Workbook workbook = open(file)) {
+      assertThat(workbook.getSheetAt(0).getRow(1).getCell(0).getStringCellValue())
+          .isEqualTo("2");
+    }
+  }
+
+  @Test
+  @DisplayName("表格输出拒绝符号链接且不覆盖链接目标")
+  void shouldRejectSymbolicLink_whenOpeningWorkbook() throws Exception {
+    Path target = Files.writeString(tempDir.resolve("target.txt"), "unchanged");
+    Path link = tempDir.resolve("linked.xlsx");
+    try {
+      Files.createSymbolicLink(link, target);
+    } catch (UnsupportedOperationException | IOException unavailable) {
+      Assumptions.abort("Symbolic links unavailable: " + unavailable.getMessage());
+    }
+
+    assertThatThrownBy(() -> format.generate(ctx(link, Map.of(), List.of(rowOf("id", "3")))))
+        .isInstanceOf(IOException.class);
+    assertThat(Files.readString(target)).isEqualTo("unchanged");
+  }
+
+  @Test
+  @DisplayName("POI 中间 XML 和模板使用私有文件且完成后恢复线程策略")
+  void shouldProtectPoiIntermediates_whenGeneratingWorkbook() throws Exception {
+    List<Path> intermediates = new ArrayList<>();
+    TempFile.setThreadLocalTempFileCreationStrategy(
+        new DefaultTempFileCreationStrategy(tempDir.toFile()));
+    try (MockedStatic<PrivateTempFiles> privateFiles =
+        mockStatic(PrivateTempFiles.class, CALLS_REAL_METHODS)) {
+      privateFiles
+          .when(() -> PrivateTempFiles.createTempFile(anyString(), anyString()))
+          .thenAnswer(invocation -> {
+            Path file = (Path) invocation.callRealMethod();
+            intermediates.add(file);
+            if (Files.getFileStore(file).supportsFileAttributeView("posix")) {
+              assertThat(Files.getPosixFilePermissions(file))
+                  .isEqualTo(PosixFilePermissions.fromString("rw-------"));
+            }
+            return file;
+          });
+      format.generate(ctx(tempDir.resolve("scoped.xlsx"), Map.of(), List.of(rowOf("id", "1"))));
+      assertThat(intermediates)
+          .anyMatch(path -> path.getFileName().toString().startsWith("poi-sxssf-sheet"));
+      assertThat(intermediates)
+          .anyMatch(path -> path.getFileName().toString().startsWith("poi-sxssf-template"));
+      assertThat(intermediates).allMatch(path -> !Files.exists(path));
+      Path restored = TempFile.createTempFile("restored", ".tmp").toPath();
+      assertThat(restored).hasParentRaw(tempDir);
+      Files.delete(restored);
+    } finally {
+      TempFile.setThreadLocalTempFileCreationStrategy(null);
+    }
+  }
+
+  @Test
+  @DisplayName("Excel 失败后恢复调用线程原有 POI 临时策略")
+  void shouldRestorePoiStrategy_whenWorkbookFails() throws Exception {
+    TempFile.setThreadLocalTempFileCreationStrategy(
+        new DefaultTempFileCreationStrategy(tempDir.toFile()));
+    try {
+      Path directory = Files.createDirectory(tempDir.resolve("not-a-file.xlsx"));
+      assertThatThrownBy(() -> format.generate(ctx(directory, Map.of(), List.of(rowOf("id", "1")))))
+          .isInstanceOf(IOException.class);
+      Path restored = TempFile.createTempFile("restored", ".tmp").toPath();
+      assertThat(restored).hasParentRaw(tempDir);
+      Files.delete(restored);
+    } finally {
+      TempFile.setThreadLocalTempFileCreationStrategy(null);
+    }
+  }
+
+  @Test
+  @DisplayName("分页失败保留原异常并清理已创建的 POI 中间文件")
+  void shouldCleanPoiIntermediates_whenNextPageFails() throws Exception {
+    List<Path> intermediates = new ArrayList<>();
+    IllegalStateException failure = new IllegalStateException("next page unavailable");
+    TempFile.setThreadLocalTempFileCreationStrategy(
+        new DefaultTempFileCreationStrategy(tempDir.toFile()));
+    try (MockedStatic<PrivateTempFiles> privateFiles =
+        mockStatic(PrivateTempFiles.class, CALLS_REAL_METHODS)) {
+      privateFiles
+          .when(() -> PrivateTempFiles.createTempFile(anyString(), anyString()))
+          .thenAnswer(invocation -> {
+            Path file = (Path) invocation.callRealMethod();
+            intermediates.add(file);
+            return file;
+          });
+      ExportFormatContext context =
+          ctx(tempDir.resolve("failed.xlsx"), Map.of(), List.of(rowOf("id", "1")), () -> {
+            throw failure;
+          });
+      assertThatThrownBy(() -> format.generate(context)).isSameAs(failure);
+      assertThat(intermediates).isNotEmpty().allMatch(path -> !Files.exists(path));
+      Path restored = TempFile.createTempFile("restored", ".tmp").toPath();
+      assertThat(restored).hasParentRaw(tempDir);
+      Files.delete(restored);
+    } finally {
+      TempFile.setThreadLocalTempFileCreationStrategy(null);
+    }
+  }
+
   private Workbook open(Path file) throws Exception {
     return new XSSFWorkbook(Files.newInputStream(file));
   }
@@ -179,6 +321,14 @@ class ExcelExportFormatTest {
 
   private ExportFormatContext ctx(
       Path file, Map<String, Object> templateConfig, List<Map<String, Object>> rows) {
+    return ctx(file, templateConfig, rows, null);
+  }
+
+  private ExportFormatContext ctx(
+      Path file,
+      Map<String, Object> templateConfig,
+      List<Map<String, Object>> rows,
+      Runnable nextPage) {
     ExportDataContext dataCtx =
         new ExportDataContext("t1", "job", "B1", "tpl", templateConfig, Map.of());
     ExportDataPlugin plugin = new ExportDataPlugin() {
@@ -197,9 +347,10 @@ class ExcelExportFormatTest {
           ExportDataContext context, Long batchId, int pageSize, Object cursor) {
         // 单页返回全部行,cursor=null 表示无后继页(Excel 不续跑)。
         if (cursor != null) {
+          nextPage.run();
           return DetailPage.empty();
         }
-        return new DetailPage(rows, null);
+        return new DetailPage(rows, nextPage == null ? null : 1);
       }
     };
     return ExportFormatContext.builder()

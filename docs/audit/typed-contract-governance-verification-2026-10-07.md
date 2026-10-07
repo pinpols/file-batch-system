@@ -68,7 +68,19 @@ Sonar S1075 对固定 Trigger API 路由的误报只允许该代理文件一次 
 
 修复复验：`./mvnw clean test -pl batch-console-api -am -DskipITs=true -DboundedContext.report=/tmp/bfs-pr1160-boundary-after.tsv -B` 已完成并返回 0，日志 `/tmp/bfs-pr1160-console-after.log`。Console 的 1543 个用例、上游模块的 1091 个用例均无 failure/error，合计 7 个既有条件跳过，不计为通过用例；两个原失败的架构测试均通过，逐类 TSV 无违规记录。clean 构建排除旧包残留 `.class`；该命令不是全量 IT / E2E 验收。退出阶段出现 Surefire 等待 30 秒后回收 fork 的日志，未将其作为应用正常关闭的证据。固定契约全量守卫、模块依赖与 400 条 OpenAPI 路由一致性检查同时通过；新提交的远端 CI 待验。
 
+## 合入后的安全与空值分析收尾
+
+PR #1160 已合入。后续核查 CodeQL #268 的 SARIF（主线分析 `1906730816`）显示数据流从临时根目录经 GenerateStep 到 Excel 写流。生产入口已经预创建私有文件，且 Excel 不启用确定路径 checkpoint，因此不能将报告路径直接等同于已复现的生产泄露。格式策略自身仍允许默认权限创建及跟随符号链接；补测在修复前复现了新建/既存文件权限与符号链接三项失败，修复后全部通过。
+
+同时检查 POI 5.5.1 实现，发现 SXSSF 的 sheet XML 和模板 XLSX 使用独立默认临时策略，并不继承最终输出的权限边界。默认 `poifiles` 目录若被其他本地用户抢占，文件创建后的重新打开存在条件性风险；未声称本机已遭攻击。现在以 `TempFile.withStrategy` 将整个工作簿生成、写入和关闭纳入线程局部私有策略，不修改全局 POI 策略或 `java.io.tmpdir`。输出创建经过 OwnerOnlyFiles，写流不带 CREATE 并使用 NOFOLLOW_LINKS；正常输出路径、格式和非 Excel checkpoint 不变。
+
+Trigger 代理的两条新增 Sonar S2259 属于分析器不能识别自定义空值谓词的告警；改用 JDK 明确的响应信封归一化，不添加 suppression。真实 RestClient JSON 测试区分无响应、已有响应但 data=null、正常数据，保持原运维返回语义。
+
+本轮定向 reactor 测试（`-pl batch-worker/export,batch-console-api -am`）共 54 个用例，0 failure/error/skip，日志 `/tmp/bfs-codeql268-final-tests.log`；覆盖 11 个 Excel 格式用例、21 个 GenerateStep 用例、7 个私有文件用例、13 个 Trigger 代理用例和 2 个架构用例。POI 用例调用真实创建方法，确认 XML/模板权限、删除、分页失败后的中间文件清理以及成功/失败后的线程策略恢复；不等同于完整 sim 或本地攻击竞态复现。本机未安装 CodeQL CLI，告警关闭需由新提交的 GitHub CodeQL 分析及主线扫描确认，未手工 dismiss。
+
 ## 未声称完成的验证
+
+本轮全 reactor Sonar 分析已完成，服务端 task `9dfce324-6de0-458a-a76a-99edecf646c1`，报告 `reports/sonar/2026-10-07_17-05-10/`。4 个 Java 变更文件中，生产代码无 OPEN issue，之前两条 S2259 已消失，待审 hotspot 为零；测试文件发现 3 条 MINOR S5838。随后将三处 Path 父级断言改为 `hasParentRaw`，Excel 的 11 个用例再次通过（`/tmp/bfs-codeql268-assertions.log`），没有重复计入上述 54 个用例。修正后未再执行第二次全 reactor Sonar，因此不把该报告描述为增量零告警；GitHub Sonar gate 默认跳过，也不视为通过证据。PMD、Spotless、完整提交预检及正常推送 hook 均已通过。
 
 - GitHub PR 检查已触发，尚未获得全部通过结果；本轮没有完整 sim、全量 Maven 测试、真实浏览器前后端操作或 staging 证据，也不以进行中的检查声称 Full Gate 通过。
 - MockMvc/RestClient JSON 与 Testcontainers IT 是契约和投影证据，不等于真实长任务或生产高可用验收。
