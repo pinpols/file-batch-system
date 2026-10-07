@@ -268,7 +268,7 @@ class BundleArrivalLauncherTest {
   void shouldBoundRequestId_whenTenantAndGroupCodesAreLong() {
     when(launchService.launch(org.mockito.ArgumentMatchers.any()))
         .thenReturn(new LaunchResponse("INST-1", "trace-1"));
-    List<Map<String, Object>> files = List.of(file(
+    List<FileGovernanceArrivalViews.ArrivalCandidateView> files = List.of(file(
         101, "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_ORDER\"}"));
     String tenant = "t".repeat(64);
     String group = "g".repeat(64);
@@ -292,7 +292,7 @@ class BundleArrivalLauncherTest {
         .thenReturn(null, null, waiting, waiting);
     when(launchService.launch(org.mockito.ArgumentMatchers.any()))
         .thenReturn(LaunchResponse.skipped("trace-1"));
-    List<Map<String, Object>> files = List.of(file(
+    List<FileGovernanceArrivalViews.ArrivalCandidateView> files = List.of(file(
         101, "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_ORDER\"}"));
     Assertions.assertThat(launcher.launchIfBundle("t1", "g", files))
         .isEqualTo(BundleArrivalLauncher.LaunchOutcome.WAITING);
@@ -310,7 +310,7 @@ class BundleArrivalLauncherTest {
     when(triggerRequestMapper.selectByTenantAndRequestId(anyString(), anyString()))
         .thenReturn(null, null, rejected);
     when(launchService.launch(any())).thenReturn(LaunchResponse.skipped("trace-1"));
-    List<Map<String, Object>> files = List.of(file(
+    List<FileGovernanceArrivalViews.ArrivalCandidateView> files = List.of(file(
         101, "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_ORDER\"}"));
     Assertions.assertThat(launcher.launchIfBundle("t1", "g", files))
         .isEqualTo(BundleArrivalLauncher.LaunchOutcome.REJECTED);
@@ -328,7 +328,7 @@ class BundleArrivalLauncherTest {
     launched.setRequestStatus(TriggerRequestStatus.LAUNCHED.code());
     when(triggerRequestMapper.selectByTenantAndRequestId(anyString(), anyString()))
         .thenReturn(null, launched);
-    List<Map<String, Object>> files = List.of(file(
+    List<FileGovernanceArrivalViews.ArrivalCandidateView> files = List.of(file(
         101, "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_ORDER\"}"));
     Assertions.assertThat(launcher.launchIfBundle("t1", "g", files))
         .isEqualTo(BundleArrivalLauncher.LaunchOutcome.LAUNCHED);
@@ -342,7 +342,7 @@ class BundleArrivalLauncherTest {
     rejected.setRequestStatus(TriggerRequestStatus.REJECTED.code());
     when(triggerRequestMapper.selectByTenantAndRequestId(anyString(), anyString()))
         .thenReturn(rejected);
-    List<Map<String, Object>> files = List.of(file(
+    List<FileGovernanceArrivalViews.ArrivalCandidateView> files = List.of(file(
         101, "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_ORDER\"}"));
     Assertions.assertThat(launcher.launchIfBundle("t1", "g", files))
         .isEqualTo(BundleArrivalLauncher.LaunchOutcome.REJECTED);

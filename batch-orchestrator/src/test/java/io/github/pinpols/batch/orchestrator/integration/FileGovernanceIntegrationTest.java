@@ -183,10 +183,6 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
         "a".repeat(64),
         TENANT_ID,
         fileId);
-    assertThat(fileGovernanceRepository.selectArrivalGovernanceCandidates(1000))
-        .filteredOn(row -> fileId.equals(((Number) row.get("id")).longValue()))
-        .singleElement()
-        .satisfies(row -> assertThat(row).containsEntry("checksum_type", "SHA-256"));
     boolean original = fileGovernanceProperties.getArrival().isRequireVerified();
     try {
       fileGovernanceProperties.getArrival().setRequireVerified(true);

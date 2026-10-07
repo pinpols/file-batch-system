@@ -157,7 +157,8 @@ class FileGovernanceArrivalGroupGuardTest {
     Map<String, Object> file =
         baseFile(5501L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
     file.put("required_file_set", "ready.csv");
-    when(repository.selectArrivalGovernanceCandidates(anyInt())).thenReturn(List.of(file));
+    when(repository.selectArrivalGovernanceCandidates(anyInt()))
+        .thenReturn(candidateViews(List.of(file)));
     when(bundleArrivalLauncher.launchIfBundle(anyString(), anyString(), any()))
         .thenReturn(
             BundleArrivalLauncher.LaunchOutcome.WAITING,
@@ -170,6 +171,8 @@ class FileGovernanceArrivalGroupGuardTest {
         .containsEntry("arrivalReason", "BUNDLE_LAUNCH_WAITING");
     file.put("arrival_reason", "BUNDLE_LAUNCH_WAITING");
     file.put("latest_tolerable_time", "2020-01-01T00:00:00Z");
+    when(repository.selectArrivalGovernanceCandidates(anyInt()))
+        .thenReturn(candidateViews(List.of(file)));
     scheduler.manageFileArrivalGroups();
     verify(repository, times(2))
         .updateFileMetadata(eq("default-tenant"), eq(5501L), metadata.capture());
@@ -182,7 +185,8 @@ class FileGovernanceArrivalGroupGuardTest {
     Map<String, Object> file =
         baseFile(5502L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
     file.put("required_file_set", "ready.csv");
-    when(repository.selectArrivalGovernanceCandidates(anyInt())).thenReturn(List.of(file));
+    when(repository.selectArrivalGovernanceCandidates(anyInt()))
+        .thenReturn(candidateViews(List.of(file)));
     when(bundleArrivalLauncher.launchIfBundle(anyString(), anyString(), any()))
         .thenReturn(BundleArrivalLauncher.LaunchOutcome.REJECTED);
     scheduler.manageFileArrivalGroups();
