@@ -15,6 +15,7 @@ import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import java.util.Set;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.stereotype.Controller;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
  *   <li>#4 {@code @Transactional} 只放 Service 公共方法,禁放 Controller / Mapper。
  * </ul>
  */
+@DisplayName("接口契约守护: 控制器端点统一返回响应信封, 事务注解只允许放在服务层方法上")
 class ConsoleApiContractArchTest {
 
   private static final JavaClasses CLASSES = new ClassFileImporter()
@@ -70,7 +72,8 @@ class ConsoleApiContractArchTest {
       };
 
   @Test
-  void endpointMethodsReturnCommonResponse() {
+  @DisplayName("控制器端点方法只能返回统一信封, 二进制下载与流式响应的框架类型除外")
+  void shouldReturnUnifiedEnvelope_whenMethodIsControllerEndpoint() {
     methods()
         .that()
         .areDeclaredInClassesThat()
@@ -81,7 +84,8 @@ class ConsoleApiContractArchTest {
   }
 
   @Test
-  void transactionalNotOnControllers() {
+  @DisplayName("控制器与映射器的方法上不得标注事务注解, 事务边界只属于服务层")
+  void shouldRejectTransactionalMethod_whenDeclaredInControllerOrMapper() {
     noMethods()
         .that()
         .areAnnotatedWith(Transactional.class)
@@ -91,7 +95,8 @@ class ConsoleApiContractArchTest {
   }
 
   @Test
-  void transactionalClassNotOnControllers() {
+  @DisplayName("控制器与映射器类型上不得整类标注事务注解, 避免事务范围失控")
+  void shouldRejectTransactionalClass_whenControllerOrMapper() {
     noClasses()
         .that(isControllerOrMapper())
         .should()

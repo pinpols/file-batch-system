@@ -6,12 +6,15 @@ import io.github.pinpols.batch.console.domain.workflow.application.contract.resp
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowNodeResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowDefinitionDetailResponse;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("工作流图形渲染器: 节点形状、连线箭头与文本转义输出")
 class WorkflowMermaidRendererTest {
 
   @Test
-  void rendersStartTaskEndChainWithCorrectShapes() {
+  @DisplayName("起点、任务与终点渲染为对应形状, 成功连线带小写标签")
+  void shouldRenderStartTaskEndChain_whenRenderingNodesAndEdges() {
     WorkflowDefinitionDetailResponse detail = detail(
         List.of(
             node("START_0", "起点", "START"), node("LOAD", "加载", "TASK"), node("END_0", "终点", "END")),
@@ -29,7 +32,8 @@ class WorkflowMermaidRendererTest {
   }
 
   @Test
-  void rendersGatewayWithConditionEdgeLabel() {
+  @DisplayName("网关渲染为菱形, 条件连线带引号包裹的条件标签")
+  void shouldRenderGatewayShapesAndConditionLabels_whenRenderingGateway() {
     WorkflowDefinitionDetailResponse detail = detail(
         List.of(
             node("START_0", null, "START"),
@@ -51,7 +55,8 @@ class WorkflowMermaidRendererTest {
   }
 
   @Test
-  void shapesForFileStepAndWaitNodes() {
+  @DisplayName("文件步骤与等待节点分别渲染为平行四边形与子程序形状")
+  void shouldRenderFileStepAndWaitShapes_whenRenderingNodes() {
     WorkflowDefinitionDetailResponse detail = detail(
         List.of(
             node("START_0", null, "START"),
@@ -69,7 +74,8 @@ class WorkflowMermaidRendererTest {
   }
 
   @Test
-  void failureEdgeUsesDottedArrow() {
+  @DisplayName("失败连线渲染为带失败标签的点线箭头")
+  void shouldRenderDottedArrow_whenEdgeIsFailure() {
     WorkflowDefinitionDetailResponse detail = detail(
         List.of(
             node("START_0", null, "START"),
@@ -88,20 +94,23 @@ class WorkflowMermaidRendererTest {
   }
 
   @Test
-  void sanitizesNonAsciiNodeCodeIntoValidMermaidId() {
+  @DisplayName("节点编码含非字母数字字符时, 归一化为合法标识且数字开头补前缀")
+  void shouldSanitizeNodeCode_whenCodeContainsNonAscii() {
     assertThat(WorkflowMermaidRenderer.sanitizeId("订单-A.1")).matches("^[A-Za-z][A-Za-z0-9_]*$");
     assertThat(WorkflowMermaidRenderer.sanitizeId("123start")).startsWith("n");
   }
 
   @Test
-  void escapeLabelStripsQuotesAndNewlines() {
+  @DisplayName("标签转义后不再包含引号与换行符")
+  void shouldStripQuotesAndNewlines_whenEscapingLabel() {
     assertThat(WorkflowMermaidRenderer.escapeLabel("a \"quoted\"\nlabel"))
         .doesNotContain("\"")
         .doesNotContain("\n");
   }
 
   @Test
-  void nullDetailReturnsHeaderOnly() {
+  @DisplayName("工作流定义为空时只输出流程图声明头")
+  void shouldReturnHeaderOnly_whenDetailMissing() {
     assertThat(WorkflowMermaidRenderer.render(null)).isEqualTo("flowchart LR\n");
   }
 

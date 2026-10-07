@@ -19,9 +19,11 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+@DisplayName("文件模板应用服务: 映射草稿生成、更新与插件引用落库")
 class DefaultConsoleFileTemplateApplicationServiceTest {
 
   private final FileTemplateConfigMapper mapper = mock(FileTemplateConfigMapper.class);
@@ -40,6 +42,7 @@ class DefaultConsoleFileTemplateApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("导入方向映射草稿生成字段映射与查询参数结构")
   void draftMapping_generatesImportTemplateJson() {
     when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
     FileTemplateMappingDraftCommand command = new FileTemplateMappingDraftCommand(
@@ -70,6 +73,7 @@ class DefaultConsoleFileTemplateApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("更新模板时持久化加载与导出插件引用")
   void update_shouldPersistPluginRefs() {
     when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
     when(mapper.selectById("t1", 1L))
@@ -115,6 +119,7 @@ class DefaultConsoleFileTemplateApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("更新时忽略传入版本号并就地更新既有行")
   void update_shouldIgnoreIncomingVersionAndPinToExistingRow() {
     // #9 (adv-review 2026-07-13):update 携带新 version 不得改 upsert 的 version 键,
     // 否则 on conflict(tenant,code,version)不命中 path id 的现有行 → INSERT 幽灵行(新 id),

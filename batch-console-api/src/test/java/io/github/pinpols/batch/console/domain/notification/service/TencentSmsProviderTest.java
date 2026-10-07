@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 
@@ -25,6 +26,7 @@ import org.slf4j.LoggerFactory;
  *
  * <p>注：TC3 端到端签名无官方 golden 向量，本测仅验结构 / 确定性 + 分支；真实签名正确性需对接真 API 联调验签。
  */
+@DisplayName("腾讯云短信通道: 配置校验, 响应码判定与日志脱敏")
 class TencentSmsProviderTest {
 
   private final ObjectMapper objectMapper = new ObjectMapper();
@@ -53,7 +55,8 @@ class TencentSmsProviderTest {
   }
 
   @Test
-  void supportsIsCaseInsensitive() {
+  @DisplayName("渠道标识大小写不敏感地识别该通道, 其它渠道与空值不支持")
+  void shouldSupportTencentCaseInsensitively() {
     TencentSmsProvider provider =
         new TencentSmsProvider(properties(), objectMapper, failOnRequest());
     assertThat(provider.supports("tencent")).isTrue();
@@ -64,7 +67,8 @@ class TencentSmsProviderTest {
   }
 
   @Test
-  void missingSdkAppIdFailsWithoutNetworkCall() {
+  @DisplayName("缺少应用标识时直接失败, 不发起任何网络请求")
+  void shouldFailWithoutNetworkCall_whenSdkAppIdMissing() {
     AtomicBoolean called = new AtomicBoolean(false);
     TencentSmsProvider provider = providerRecording(called, "{\"Response\":{}}");
 
@@ -77,7 +81,8 @@ class TencentSmsProviderTest {
   }
 
   @Test
-  void missingSignNameFailsWithoutNetworkCall() {
+  @DisplayName("缺少短信签名时直接失败, 不发起任何网络请求")
+  void shouldFailWithoutNetworkCall_whenSignNameMissing() {
     AtomicBoolean called = new AtomicBoolean(false);
     TencentSmsProvider provider = providerRecording(called, "{\"Response\":{}}");
 
@@ -90,7 +95,8 @@ class TencentSmsProviderTest {
   }
 
   @Test
-  void missingTemplateIdFailsWithoutNetworkCall() {
+  @DisplayName("缺少模板编号时直接失败, 不发起任何网络请求")
+  void shouldFailWithoutNetworkCall_whenTemplateIdMissing() {
     AtomicBoolean called = new AtomicBoolean(false);
     TencentSmsProvider provider = providerRecording(called, "{\"Response\":{}}");
 
@@ -103,7 +109,8 @@ class TencentSmsProviderTest {
   }
 
   @Test
-  void emptyPhoneNumbersFailsWithoutNetworkCall() {
+  @DisplayName("手机号清单为空时直接失败, 不发起任何网络请求")
+  void shouldFailWithoutNetworkCall_whenPhoneNumbersEmpty() {
     AtomicBoolean called = new AtomicBoolean(false);
     TencentSmsProvider provider = providerRecording(called, "{\"Response\":{}}");
 
@@ -115,7 +122,8 @@ class TencentSmsProviderTest {
   }
 
   @Test
-  void codeOkIsSuccess() {
+  @DisplayName("发送状态码为成功时判定成功, 请求体与鉴权头按规范构造且签名稳定")
+  void shouldSucceed_whenStatusSetCodeOk() {
     AtomicReference<String> sentUrl = new AtomicReference<>();
     AtomicReference<Map<String, String>> sentHeaders = new AtomicReference<>();
     AtomicReference<String> sentBody = new AtomicReference<>();
@@ -161,7 +169,8 @@ class TencentSmsProviderTest {
   }
 
   @Test
-  void nonOkCodeFails() {
+  @DisplayName("发送状态码非成功时判定失败, 错误摘要带业务码")
+  void shouldFail_whenStatusSetCodeNotOk() {
     TencentSmsProvider provider =
         new TencentSmsProvider(properties(), objectMapper, failOnRequest()) {
           @Override
@@ -179,7 +188,8 @@ class TencentSmsProviderTest {
   }
 
   @Test
-  void responseErrorFails() {
+  @DisplayName("响应体带错误对象时判定失败, 错误摘要带错误码")
+  void shouldFail_whenResponseCarriesError() {
     TencentSmsProvider provider =
         new TencentSmsProvider(properties(), objectMapper, failOnRequest()) {
           @Override
@@ -197,7 +207,8 @@ class TencentSmsProviderTest {
   }
 
   @Test
-  void logsDoNotContainPlainPhoneNumber() {
+  @DisplayName("任何一条日志都不出现手机号明文, 只留脱敏信息")
+  void shouldMaskPhoneNumberInLogs() {
     Logger logger = (Logger) LoggerFactory.getLogger(TencentSmsProvider.class);
     ListAppender appender = new ListAppender();
     appender.start();

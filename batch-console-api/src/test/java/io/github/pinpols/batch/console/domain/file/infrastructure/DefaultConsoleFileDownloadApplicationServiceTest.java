@@ -27,6 +27,7 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import java.io.ByteArrayInputStream;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.client.RestClient;
 
@@ -34,6 +35,7 @@ import org.springframework.web.client.RestClient;
  * {@link DefaultConsoleFileDownloadApplicationService} 审批门控单测,聚焦审查修复:加密文件下载的审批必须绑定 fileId,
  * 同租户内不得拿一个 file 的 APPROVED 单去解锁另一个 file。
  */
+@DisplayName("加密文件下载服务: 审批单与文件标识的绑定校验")
 class DefaultConsoleFileDownloadApplicationServiceTest {
 
   private final ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
@@ -103,6 +105,7 @@ class DefaultConsoleFileDownloadApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("审批单目标为本次文件时允许下载")
   void shouldDownload_whenApprovalTargetsSameFile() {
     stubEncryptedFile(100L);
     stubApproval("APPROVED", "FILE", "100");
@@ -117,6 +120,7 @@ class DefaultConsoleFileDownloadApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("审批单目标为其它文件时按无权访问拒绝")
   void shouldReject403_whenApprovalTargetsDifferentFile() {
     stubEncryptedFile(100L);
     // 审批单是给 file 200 批的,却被拿来下载 file 100 → 同租越权,必须 403。
@@ -129,6 +133,7 @@ class DefaultConsoleFileDownloadApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("审批单目标类型非文件时按无权访问拒绝")
   void shouldReject403_whenApprovalTargetTypeIsNotFile() {
     stubEncryptedFile(100L);
     // targetType 非 FILE（如对账/导出单)同样不能解锁文件下载。
@@ -141,6 +146,7 @@ class DefaultConsoleFileDownloadApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("审批单尚未通过时按状态冲突拒绝")
   void shouldReject409_whenApprovalNotApprovedYet() {
     stubEncryptedFile(100L);
     stubApproval("PENDING", "FILE", "100");

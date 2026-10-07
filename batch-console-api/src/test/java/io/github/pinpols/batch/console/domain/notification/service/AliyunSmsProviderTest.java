@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 
@@ -24,6 +25,7 @@ import org.slf4j.LoggerFactory;
  *
  * <p>注：ACS3 端到端签名无官方 golden 向量，本测仅验结构 / 确定性 + 分支；真实签名正确性需对接真 API 联调验签。
  */
+@DisplayName("阿里云短信通道: 配置校验, 响应码判定与日志脱敏")
 class AliyunSmsProviderTest {
 
   private final ObjectMapper objectMapper = new ObjectMapper();
@@ -51,7 +53,8 @@ class AliyunSmsProviderTest {
   }
 
   @Test
-  void supportsIsCaseInsensitive() {
+  @DisplayName("渠道标识大小写不敏感地识别该通道, 其它渠道与空值不支持")
+  void shouldSupportAliyunCaseInsensitively() {
     AliyunSmsProvider provider = new AliyunSmsProvider(properties(), objectMapper, failOnRequest());
     assertThat(provider.supports("aliyun")).isTrue();
     assertThat(provider.supports("ALIYUN")).isTrue();
@@ -61,7 +64,8 @@ class AliyunSmsProviderTest {
   }
 
   @Test
-  void missingSignNameFailsWithoutNetworkCall() {
+  @DisplayName("缺少短信签名时直接失败, 不发起任何网络请求")
+  void shouldFailWithoutNetworkCall_whenSignNameMissing() {
     AtomicBoolean called = new AtomicBoolean(false);
     AliyunSmsProvider provider = providerRecording(called, null, "{\"Code\":\"OK\"}");
 
@@ -74,7 +78,8 @@ class AliyunSmsProviderTest {
   }
 
   @Test
-  void missingTemplateCodeFailsWithoutNetworkCall() {
+  @DisplayName("缺少模板编号时直接失败, 不发起任何网络请求")
+  void shouldFailWithoutNetworkCall_whenTemplateCodeMissing() {
     AtomicBoolean called = new AtomicBoolean(false);
     AliyunSmsProvider provider = providerRecording(called, null, "{\"Code\":\"OK\"}");
 
@@ -86,7 +91,8 @@ class AliyunSmsProviderTest {
   }
 
   @Test
-  void codeOkIsSuccess() {
+  @DisplayName("响应码为成功时判定投递成功, 请求参数与鉴权头按规范构造且签名稳定")
+  void shouldSucceed_whenResponseCodeOk() {
     AtomicReference<String> sentUrl = new AtomicReference<>();
     AtomicReference<Map<String, String>> sentHeaders = new AtomicReference<>();
     AliyunSmsProvider provider =
@@ -128,7 +134,8 @@ class AliyunSmsProviderTest {
   }
 
   @Test
-  void nonOkCodeFails() {
+  @DisplayName("响应码非成功时判定失败, 保留原始业务码作为错误摘要")
+  void shouldFail_whenResponseCodeNotOk() {
     AliyunSmsProvider provider =
         new AliyunSmsProvider(properties(), objectMapper, failOnRequest()) {
           @Override
@@ -145,7 +152,8 @@ class AliyunSmsProviderTest {
   }
 
   @Test
-  void logsDoNotContainPlainPhoneNumber() {
+  @DisplayName("任何一条日志都不出现手机号明文, 只留脱敏信息")
+  void shouldMaskPhoneNumberInLogs() {
     // 通过自定义 appender 捕获本类日志,断言任何一条都不含手机号明文。
     Logger logger = (Logger) LoggerFactory.getLogger(AliyunSmsProvider.class);
     ListAppender appender = new ListAppender();

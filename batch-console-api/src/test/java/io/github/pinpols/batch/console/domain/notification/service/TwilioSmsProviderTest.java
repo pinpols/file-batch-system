@@ -15,6 +15,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 
@@ -22,6 +23,7 @@ import org.slf4j.LoggerFactory;
  * 单测覆盖 supports / accountSid·authToken·fromNumber 缺失（不走网络）/ 201 成功 / 4xx 失败 / 多号其一失败整体失败 / 请求断言
  * Authorization 为 Basic 且日志不泄 token·手机号明文。
  */
+@DisplayName("Twilio 短信通道: 凭据校验, 状态码判定与日志脱敏")
 class TwilioSmsProviderTest {
 
   private final ObjectMapper objectMapper = new ObjectMapper();
@@ -50,7 +52,8 @@ class TwilioSmsProviderTest {
   }
 
   @Test
-  void supportsIsCaseInsensitive() {
+  @DisplayName("渠道标识大小写不敏感地识别该通道, 其它渠道与空值不支持")
+  void shouldSupportTwilioCaseInsensitively() {
     TwilioSmsProvider provider = new TwilioSmsProvider(properties(), objectMapper, failOnRequest());
     assertThat(provider.supports("twilio")).isTrue();
     assertThat(provider.supports("TWILIO")).isTrue();
@@ -60,7 +63,8 @@ class TwilioSmsProviderTest {
   }
 
   @Test
-  void missingAccountSidFailsWithoutNetworkCall() {
+  @DisplayName("缺少账户标识时直接失败, 不发起任何网络请求")
+  void shouldFailWithoutNetworkCall_whenAccountSidMissing() {
     AtomicBoolean called = new AtomicBoolean(false);
     SmsProperties props = properties();
     props.setTwilioAccountSid("");
@@ -75,7 +79,8 @@ class TwilioSmsProviderTest {
   }
 
   @Test
-  void missingAuthTokenFailsWithoutNetworkCall() {
+  @DisplayName("缺少鉴权令牌时直接失败, 不发起任何网络请求")
+  void shouldFailWithoutNetworkCall_whenAuthTokenMissing() {
     AtomicBoolean called = new AtomicBoolean(false);
     SmsProperties props = properties();
     props.setTwilioAuthToken("");
@@ -89,7 +94,8 @@ class TwilioSmsProviderTest {
   }
 
   @Test
-  void missingFromNumberFailsWithoutNetworkCall() {
+  @DisplayName("缺少发送号码时直接失败, 不发起任何网络请求")
+  void shouldFailWithoutNetworkCall_whenFromNumberMissing() {
     AtomicBoolean called = new AtomicBoolean(false);
     SmsProperties props = properties();
     props.setTwilioFromNumber("");
@@ -103,7 +109,8 @@ class TwilioSmsProviderTest {
   }
 
   @Test
-  void status201IsSuccessAndUsesBasicAuth() {
+  @DisplayName("状态码为已创建时判定成功, 请求按基本鉴权构造且表单参数经地址编码")
+  void shouldSucceedWithBasicAuth_whenStatusCreated() {
     AtomicReference<String> sentUrl = new AtomicReference<>();
     AtomicReference<String> sentAuth = new AtomicReference<>();
     AtomicReference<String> sentBody = new AtomicReference<>();
@@ -137,7 +144,8 @@ class TwilioSmsProviderTest {
   }
 
   @Test
-  void status4xxFails() {
+  @DisplayName("状态码为客户端错误时判定失败, 错误摘要带状态码")
+  void shouldFail_whenStatusClientError() {
     TwilioSmsProvider provider =
         new TwilioSmsProvider(properties(), objectMapper, failOnRequest()) {
           @Override
@@ -154,7 +162,8 @@ class TwilioSmsProviderTest {
   }
 
   @Test
-  void multipleNumbersOneFailureFailsWhole() {
+  @DisplayName("多个号码中任一失败则整体失败, 保留首个失败状态")
+  void shouldFailWhole_whenAnyNumberFails() {
     AtomicReference<Integer> calls = new AtomicReference<>(0);
     TwilioSmsProvider provider =
         new TwilioSmsProvider(properties(), objectMapper, failOnRequest()) {
@@ -177,7 +186,8 @@ class TwilioSmsProviderTest {
   }
 
   @Test
-  void logsDoNotLeakTokenOrPhone() {
+  @DisplayName("日志既不出现鉴权令牌与账户标识, 也不出现手机号明文")
+  void shouldNotLeakCredentialOrPhoneInLogs() {
     Logger logger = (Logger) LoggerFactory.getLogger(TwilioSmsProvider.class);
     ListAppender appender = new ListAppender();
     appender.start();

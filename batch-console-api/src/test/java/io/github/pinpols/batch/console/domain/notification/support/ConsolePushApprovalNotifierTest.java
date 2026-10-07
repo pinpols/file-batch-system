@@ -15,6 +15,7 @@ import io.github.pinpols.batch.console.domain.notification.support.ConsolePushSe
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -23,6 +24,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 /** ConsolePushApprovalNotifier 单测:覆盖跳过/幂等/标签映射/payload 拼装。 */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("审批结果推送通知器: 轮询待发记录, 幂等去重与推送内容拼装")
 class ConsolePushApprovalNotifierTest {
 
   @Mock
@@ -45,6 +47,7 @@ class ConsolePushApprovalNotifierTest {
   }
 
   @Test
+  @DisplayName("没有待推送记录时不写去重表也不调用推送")
   void shouldNoopWhenNoPending() {
     when(notificationMapper.findPending(10, 50)).thenReturn(List.of());
 
@@ -55,6 +58,7 @@ class ConsolePushApprovalNotifierTest {
   }
 
   @Test
+  @DisplayName("审批通过时推送给申请人, 标题含申请类型且正文含审批人与通过意见")
   void shouldPushApprovedWithReasonToRequester() {
     PendingApprovalNotification p =
         approval("ap-1", "ta", "CATCH_UP", "APPROVED", "alice", "bob", "OK to retry", null);
@@ -72,6 +76,7 @@ class ConsolePushApprovalNotifierTest {
   }
 
   @Test
+  @DisplayName("审批驳回时标题为已驳回且正文采用驳回原因")
   void shouldUseRejectionReasonWhenRejected() {
     PendingApprovalNotification p = approval(
         "ap-2", "ta", "COMPENSATION", "REJECTED", "alice", "bob", null, "blocked by policy");
@@ -87,6 +92,7 @@ class ConsolePushApprovalNotifierTest {
   }
 
   @Test
+  @DisplayName("审批意见为空白时正文回退为默认文本并保留审批单号")
   void shouldFallBackBodyWhenReasonBlank() {
     PendingApprovalNotification p =
         approval("ap-3", "ta", "DOWNLOAD", "EXECUTED", "alice", null, "", null);
@@ -102,6 +108,7 @@ class ConsolePushApprovalNotifierTest {
   }
 
   @Test
+  @DisplayName("去重记录写入冲突时跳过推送")
   void shouldSkipPushWhenInsertConflicts() {
     PendingApprovalNotification p =
         approval("ap-4", "tb", "DLQ_REPLAY", "APPROVED", "carol", "dan", "ok", null);
@@ -115,6 +122,7 @@ class ConsolePushApprovalNotifierTest {
   }
 
   @Test
+  @DisplayName("去重记录携带租户标识与审批单号")
   void shouldDedupRecordCarriesTenantAndApprovalNo() {
     PendingApprovalNotification p =
         approval("ap-5", "tc", "CATCH_UP", "APPROVED", "alice", "bob", "ok", null);
@@ -131,7 +139,8 @@ class ConsolePushApprovalNotifierTest {
   }
 
   @Test
-  void pollSafelyShouldSwallowRuntimeExceptionsSoSchedulerSurvives() {
+  @DisplayName("轮询遇到运行时异常时不向外抛出, 保证调度不被中断")
+  void shouldSwallowRuntimeException_whenPollSafelyRuns() {
     when(notificationMapper.findPending(10, 50))
         .thenThrow(new RuntimeException("transient DB error"));
 
@@ -141,6 +150,7 @@ class ConsolePushApprovalNotifierTest {
   }
 
   @Test
+  @DisplayName("批量待发记录中只为去重成功的记录发送推送")
   void shouldProcessMultipleAndSendForEachAccepted() {
     PendingApprovalNotification p1 =
         approval("ap-a", "ta", "CATCH_UP", "APPROVED", "alice", "bob", "ok", null);

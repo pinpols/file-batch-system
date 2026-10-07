@@ -23,6 +23,7 @@ import io.github.pinpols.batch.console.shared.view.ConsoleTraceSnapshotResponse;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -30,6 +31,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("查询应用服务: 链路快照的分域查询, 时间线汇总与超限标记")
 class DefaultConsoleQueryApplicationServiceTest {
 
   @Mock
@@ -72,6 +74,7 @@ class DefaultConsoleQueryApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("链路快照按追踪编号下查节点运行与执行日志, 编号去除首尾空白且分页大小固定")
   void traceSnapshot_queriesWorkflowNodeRunsAndExecutionLogsByTraceId() {
     stubEmptyPages();
 
@@ -95,6 +98,7 @@ class DefaultConsoleQueryApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("时间线按发生时间排序汇总, 且不改动各分域的原始列表")
   void traceSnapshot_buildsChronologicalTimelineWithoutChangingSourceLists() {
     stubEmptyPages();
     when(jobQueryService.jobInstances(any()))
@@ -141,6 +145,7 @@ class DefaultConsoleQueryApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("分域结果条数超过快照上限时标记该分域已被截断")
   void traceSnapshot_reportsDomainsTruncatedBySnapshotLimit() {
     stubEmptyPages();
     when(jobQueryService.jobInstances(any()))

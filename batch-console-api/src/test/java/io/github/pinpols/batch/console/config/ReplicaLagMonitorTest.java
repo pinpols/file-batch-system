@@ -16,6 +16,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.event.ContextClosedEvent;
@@ -27,6 +28,7 @@ import org.springframework.context.support.StaticApplicationContext;
  * <p>覆盖：sampleReplayLag 成功 / SQLException 失败时 gauge 行为、gauge 注册、metric name 正确性。 不覆盖
  * ScheduledExecutorService 自身的调度循环（属 JDK 已验证组件）。
  */
+@DisplayName("只读副本延迟监控: 指标注册,采样成功与异常回退")
 class ReplicaLagMonitorTest {
 
   private DataSource primary;
@@ -55,6 +57,7 @@ class ReplicaLagMonitorTest {
   }
 
   @Test
+  @DisplayName("启动后注册副本延迟指标,初始观测值为负数表示尚未采样")
   void shouldRegisterGaugeWithExpectedName() {
     assertThat(meterRegistry.find("batch.console.replica.replay_lag_seconds").gauge())
         .isNotNull();
@@ -62,6 +65,7 @@ class ReplicaLagMonitorTest {
   }
 
   @Test
+  @DisplayName("采样成功时,当前延迟与指标值同步刷新为查询结果")
   void shouldUpdateGaugeOnSuccessfulSample() throws SQLException {
     when(rs.next()).thenReturn(true);
     when(rs.getDouble(1)).thenReturn(1.42);
@@ -77,6 +81,7 @@ class ReplicaLagMonitorTest {
   }
 
   @Test
+  @DisplayName("复制视图无数据行但聚合查询仍返回一行时,延迟按零处理")
   void shouldHandleEmptyReplicationView() throws SQLException {
     // pg_stat_replication 没行（无 streaming replica）→ COALESCE 返回 0；ResultSet 仍有 1 行（聚合查询）
     when(rs.next()).thenReturn(true);
@@ -88,6 +93,7 @@ class ReplicaLagMonitorTest {
   }
 
   @Test
+  @DisplayName("建连抛出数据库异常时,延迟回退为负数占位值")
   void shouldFallBackToMinusOneOnSqlException() throws SQLException {
     when(primary.getConnection()).thenThrow(new SQLException("connection refused", "08001"));
 
@@ -98,6 +104,7 @@ class ReplicaLagMonitorTest {
   }
 
   @Test
+  @DisplayName("结果集读取抛出运行时异常时,延迟回退为负数占位值")
   void shouldFallBackToMinusOneOnRuntimeException() throws SQLException {
     when(rs.next()).thenThrow(new RuntimeException("driver bug"));
 
@@ -107,6 +114,7 @@ class ReplicaLagMonitorTest {
   }
 
   @Test
+  @DisplayName("首次采样失败后,下一次采样恢复正常并刷新延迟")
   void shouldRecoverFromTransientFailureOnNextSample() throws SQLException {
     // 第一次失败
     when(primary.getConnection()).thenThrow(new SQLException("blip", "08001")).thenReturn(conn);
@@ -122,6 +130,7 @@ class ReplicaLagMonitorTest {
   }
 
   @Test
+  @DisplayName("容器关闭事件到达后,采样直接跳过且不再获取连接")
   void shouldSkipSamplingAfterContextClosed() throws SQLException {
     monitor.stopOnContextClosed(new ContextClosedEvent(new StaticApplicationContext()));
 

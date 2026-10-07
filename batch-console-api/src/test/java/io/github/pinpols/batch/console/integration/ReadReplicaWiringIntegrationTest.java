@@ -7,6 +7,7 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import javax.sql.DataSource;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -42,6 +43,7 @@ import org.springframework.transaction.support.TransactionTemplate;
       "batch.console.read-replica.failure-threshold=1",
       "batch.console.read-replica.quarantine-seconds=1"
     })
+@DisplayName("读副本装配: 副本不可达时只读查询降级到主库并累计失败切换计数")
 class ReadReplicaWiringIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
@@ -65,7 +67,8 @@ class ReadReplicaWiringIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void wiringInjectsRoutingDataSourceAndFailOpenOnReplicaUnreachable() {
+  @DisplayName("副本不可达: 只读查询降级到主库仍返回正确结果,失败切换计数被记录")
+  void shouldFailOpenToPrimaryAndCountFailover_whenReplicaUnreachable() {
     assertThat(dataSource)
         .as("read-replica.enabled=true 应让 @Primary DataSource 走 LazyConnectionDataSourceProxy 包裹的"
             + " routing DS")

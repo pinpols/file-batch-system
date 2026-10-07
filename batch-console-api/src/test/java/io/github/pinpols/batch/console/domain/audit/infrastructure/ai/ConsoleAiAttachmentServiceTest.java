@@ -27,10 +27,12 @@ import java.time.Instant;
 import java.util.UUID;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
+@DisplayName("AI 附件服务:图片上传开关、草稿配额与对象加密约束")
 class ConsoleAiAttachmentServiceTest {
   private final ConsoleAiAttachmentMapper mapper = mock(ConsoleAiAttachmentMapper.class);
   private final BatchObjectCryptoService crypto = mock(BatchObjectCryptoService.class);
@@ -52,7 +54,8 @@ class ConsoleAiAttachmentServiceTest {
   }
 
   @Test
-  void imageUploadRemainsDisabledWithoutExplicitFeatureSwitch() throws Exception {
+  @DisplayName("图片上传开关关闭:拒绝上传且不写入对象存储")
+  void shouldRejectUpload_whenImageSwitchOff() throws Exception {
     properties.setImageInputEnabled(false);
 
     assertThatThrownBy(() -> service.upload("tenant", "owner", UUID.randomUUID(), png()))
@@ -64,7 +67,8 @@ class ConsoleAiAttachmentServiceTest {
   }
 
   @Test
-  void rejectsChangedContentForAnExistingClientAttachmentId() throws Exception {
+  @DisplayName("同一客户端附件标识内容变更:按冲突拒绝且不写入对象存储")
+  void shouldRejectUpload_whenContentDiffersFromExistingId() throws Exception {
     UUID clientId = UUID.randomUUID();
     ConsoleAiAttachmentEntity existing = new ConsoleAiAttachmentEntity();
     existing.setInputSha256("0".repeat(64));
@@ -80,7 +84,8 @@ class ConsoleAiAttachmentServiceTest {
   }
 
   @Test
-  void rejectsUploadWhenDraftQuotaIsFull() throws Exception {
+  @DisplayName("草稿配额已满:按限流拒绝且不插入记录,也不写入对象存储")
+  void shouldRejectUpload_whenDraftQuotaFull() throws Exception {
     when(mapper.activeDraftCount("tenant", "owner")).thenReturn(16);
 
     assertThatThrownBy(() -> service.upload("tenant", "owner", UUID.randomUUID(), png()))
@@ -93,7 +98,8 @@ class ConsoleAiAttachmentServiceTest {
   }
 
   @Test
-  void rejectsUnencryptedObjectsEvenForAnOwnedBoundImage() {
+  @DisplayName("已绑定归属的图片:对象未加密时拒绝读取,且不触发解密")
+  void shouldRejectContent_whenObjectNotEncrypted() {
     UUID id = UUID.randomUUID();
     ConsoleAiAttachmentEntity row = new ConsoleAiAttachmentEntity();
     row.setId(id);

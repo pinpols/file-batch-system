@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.Test;
  *   <li>{@code .addAllowedOriginPattern("*")} 同等暴露面也拒(允许显式 wildcard 模式有需要时单独 review 加白)
  * </ul>
  */
+@DisplayName("跨域来源配置守护: 生产代码不得把放行来源写成任意通配符, 与携带凭证不兼容")
 class CorsWildcardArchTest {
 
   private static final Path MAIN_SOURCES =
@@ -37,7 +39,8 @@ class CorsWildcardArchTest {
           + "[^)]*\"\\*\"");
 
   @Test
-  void noWildcardOriginInCorsApi() throws IOException {
+  @DisplayName("生产源码中不存在把放行来源写成通配符的调用, 违例文件清单必须为空")
+  void shouldRejectWildcardOrigin_whenScanningProductionSources() throws IOException {
     if (!Files.isDirectory(MAIN_SOURCES)) {
       Assumptions.assumeTrue(
           false, "CORS source directory is unavailable in this build layout: " + MAIN_SOURCES);

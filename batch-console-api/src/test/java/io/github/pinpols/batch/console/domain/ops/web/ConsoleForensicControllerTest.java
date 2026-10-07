@@ -28,6 +28,7 @@ import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.io.OutputStream;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -35,6 +36,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 /** P0: ConsoleForensicController (admin-only 取证导出)。 */
+@DisplayName("取证导出接口:非法租户格式拒绝, 合法请求透传编排层, 下载以附件头返回压缩字节流")
 class ConsoleForensicControllerTest {
 
   private final ConsoleOrchestratorPort proxy = mock(ConsoleOrchestratorPort.class);
@@ -66,7 +68,8 @@ class ConsoleForensicControllerTest {
   // Idempotency-Key 缺失场景由 ConsoleIdempotencyInterceptorTest 专项覆盖
 
   @Test
-  void requestExportShouldRejectInvalidTenantIdFormat() throws Exception {
+  @DisplayName("非法租户:包含路径穿越字符的租户标识返回参数错误")
+  void shouldRejectInvalidTenantIdFormat_whenRequestingExport() throws Exception {
     mockMvc
         .perform(post("/api/console/forensic/export")
             .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
@@ -78,7 +81,8 @@ class ConsoleForensicControllerTest {
   }
 
   @Test
-  void requestExportShouldPassThroughToProxy() throws Exception {
+  @DisplayName("导出透传:租户与请求参数提交编排层, 且请求人取自认证上下文")
+  void shouldPassThroughToProxy_whenRequestingExport() throws Exception {
     when(proxy.requestForensicExport(anyString(), any(), any(), any(), anyString(), anyString()))
         .thenReturn(new ConsoleForensicExportResponse("fx-001", "READY", null, null, null, null));
     mockMvc
@@ -97,7 +101,8 @@ class ConsoleForensicControllerTest {
   }
 
   @Test
-  void downloadShouldReturnZipBytesWithAttachmentHeader() throws Exception {
+  @DisplayName("下载导出:异步完成后以附件头返回压缩字节, 内容与预期一致")
+  void shouldReturnZipWithAttachmentHeader_whenDownloadingExport() throws Exception {
     byte[] payload = new byte[] {1, 2, 3};
     doAnswer(invocation -> {
           invocation.getArgument(2, OutputStream.class).write(payload);

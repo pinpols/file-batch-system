@@ -9,18 +9,21 @@ import io.github.pinpols.batch.console.config.ConsoleAtomicWorkerClientPropertie
 import io.github.pinpols.batch.console.config.ConsoleOrchestratorClientProperties;
 import io.github.pinpols.batch.console.config.ConsoleTriggerClientProperties;
 import io.github.pinpols.batch.console.domain.ops.infrastructure.AtomicWorkerInternalRestClient;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.web.client.RestClient;
 
+@DisplayName("内部 REST 客户端懒初始化: 随机端口等待与实例复用")
 class InternalRestClientLazyInitializationTest {
 
   private static final String RANDOM_PORT_URL =
       "http://127.0.0.1:" + ConsoleInternalBaseUrlResolver.LOCAL_SERVER_PORT_PLACEHOLDER;
 
   @Test
-  void orchestratorClientWaitsForRandomPortAndThenReusesClient() {
+  @DisplayName("编排服务客户端在随机端口就绪后才初始化,并复用同一实例")
+  void shouldWaitForRandomPortThenReuseClient_whenOrchestratorClient() {
     MockEnvironment environment = new MockEnvironment();
     ConsoleOrchestratorClientProperties properties = new ConsoleOrchestratorClientProperties();
     properties.setBaseUrl(RANDOM_PORT_URL);
@@ -33,7 +36,8 @@ class InternalRestClientLazyInitializationTest {
   }
 
   @Test
-  void triggerClientWaitsForRandomPortAndThenReusesClient() {
+  @DisplayName("触发服务客户端在随机端口就绪后才初始化,并复用同一实例")
+  void shouldWaitForRandomPortThenReuseClient_whenTriggerClient() {
     MockEnvironment environment = new MockEnvironment();
     ConsoleTriggerClientProperties properties = new ConsoleTriggerClientProperties();
     properties.setBaseUrl(RANDOM_PORT_URL);
@@ -46,7 +50,8 @@ class InternalRestClientLazyInitializationTest {
   }
 
   @Test
-  void disabledAtomicClientDoesNotRequireUrlDuringApplicationStartup() {
+  @DisplayName("原子任务客户端处于禁用状态时,启动阶段不应因缺少服务地址失败且实例保持复用")
+  void shouldNotRequireUrlAtStartup_whenAtomicClientDisabled() {
     MockEnvironment environment = new MockEnvironment();
     ConsoleAtomicWorkerClientProperties properties = new ConsoleAtomicWorkerClientProperties();
     properties.setEnabled(false);

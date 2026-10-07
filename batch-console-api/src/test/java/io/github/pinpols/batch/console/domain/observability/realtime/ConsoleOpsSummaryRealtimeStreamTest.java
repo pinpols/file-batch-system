@@ -17,6 +17,7 @@ import io.github.pinpols.batch.console.infrastructure.realtime.ConsoleRealtimeRe
 import io.github.pinpols.batch.console.shared.view.ConsoleOpsSummaryResponse;
 import java.time.Clock;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -30,6 +31,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 // 被部分用例不触发,符合 docs/agent-baseline.md §测试约定豁免场景。
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
+@DisplayName("运维概览实时流: 订阅的首帧策略与重复刷新节流")
 class ConsoleOpsSummaryRealtimeStreamTest {
 
   @Mock
@@ -76,6 +78,7 @@ class ConsoleOpsSummaryRealtimeStreamTest {
   }
 
   @Test
+  @DisplayName("订阅时关闭首帧推送则不查询概览也不发布事件")
   void shouldSkipInitialSnapshotWhenDisabled() {
     SseEmitter emitter = stream.subscribe("t1", null, false);
 
@@ -86,6 +89,7 @@ class ConsoleOpsSummaryRealtimeStreamTest {
   }
 
   @Test
+  @DisplayName("节流窗口内连续两次刷新请求只查询并发布一次")
   void shouldThrottleRepeatedRefreshRequests() {
     when(opsApplicationService.summary("t1"))
         .thenReturn(new ConsoleOpsSummaryResponse("t1", 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11));
@@ -104,6 +108,7 @@ class ConsoleOpsSummaryRealtimeStreamTest {
   }
 
   @Test
+  @DisplayName("订阅时开启首帧推送会立即查询概览并发布事件")
   void shouldForceInitialSnapshotWhenSubscribed() {
     when(opsApplicationService.summary("t1"))
         .thenReturn(new ConsoleOpsSummaryResponse("t1", 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11));

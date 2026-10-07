@@ -60,8 +60,8 @@ batch-common/
 - 从根 `pom.xml` `<modules>` 移除 `<module>batch-config-defaults</module>`
 - 9 个服务模块 pom 移除对 `batch-config-defaults` 的显式依赖 + 相关注释
 - `batch-defaults.yml` 物理移动到 `batch-common/src/main/resources/`
-- `ConfigDriftGuardTest` 增 `baselineYamlExistsAtCanonicalLocation` +
-  `baselineYamlIsReachableFromClasspath` 两个测试方法,改 repoRoot 定位逻辑
+- `ConfigDriftGuardTest` 增 `shouldKeepBaselineConfigAtCanonicalLocation` +
+  `shouldExposeBaselineConfigOnClasspath` 两个测试方法（方法名随 2026-10-07 测试命名统一改名）,改 repoRoot 定位逻辑
 - docs/agent-baseline.md §模块边界 同步更新
 
 ### 兼容性影响

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
@@ -25,6 +26,7 @@ import org.springframework.http.MediaType;
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+@DisplayName("工作流定义写路径: DAG 三表落库,嵌套节点与边编码校验及唯一约束")
 class ConsoleWorkflowDefinitionMutationIntegrationTest extends AbstractMutationIntegrationTest {
 
   private String body(String workflowCode, String node1Code, String fromCode) {
@@ -55,6 +57,7 @@ class ConsoleWorkflowDefinitionMutationIntegrationTest extends AbstractMutationI
   }
 
   @Test
+  @DisplayName("创建 DAG 工作流: 定义,节点与边三张表分别落 1,3,2 行")
   void shouldCreateWorkflowWithAllThreeTables() {
     String wfCode = "int_wf_create_" + System.currentTimeMillis();
 
@@ -93,6 +96,7 @@ class ConsoleWorkflowDefinitionMutationIntegrationTest extends AbstractMutationI
   }
 
   @Test
+  @DisplayName("嵌套节点编码含空格: 返回校验错误且不落库")
   void shouldRejectNestedInvalidNodeCode() {
     // 嵌套 nodes[].nodeCode 含空格 → @Valid 下钻 → 400
     client
@@ -116,6 +120,7 @@ class ConsoleWorkflowDefinitionMutationIntegrationTest extends AbstractMutationI
   }
 
   @Test
+  @DisplayName("嵌套边起点编码为中文: 返回请求不合法")
   void shouldRejectNestedChineseEdgeNodeCode() {
     client
         .post()
@@ -129,6 +134,7 @@ class ConsoleWorkflowDefinitionMutationIntegrationTest extends AbstractMutationI
   }
 
   @Test
+  @DisplayName("工作流编码重复: 第二次写入失败,不产生重复定义")
   void shouldRejectDuplicateWorkflowCode() {
     String wfCode = "int_wf_dup_" + System.currentTimeMillis();
     // 首次成功
@@ -166,6 +172,7 @@ class ConsoleWorkflowDefinitionMutationIntegrationTest extends AbstractMutationI
   }
 
   @Test
+  @DisplayName("工作流编码含空格: 返回请求不合法")
   void shouldRejectInvalidWorkflowCode() {
     client
         .post()

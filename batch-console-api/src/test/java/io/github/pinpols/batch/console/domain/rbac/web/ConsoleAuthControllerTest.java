@@ -21,10 +21,12 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import java.time.Instant;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+@DisplayName("认证控制器: 账号登录与令牌下发接口")
 class ConsoleAuthControllerTest {
 
   private MockMvc mockMvc;
@@ -55,6 +57,7 @@ class ConsoleAuthControllerTest {
   }
 
   @Test
+  @DisplayName("内置账号登录成功返回令牌与租户信息")
   void shouldLoginWithBuiltInAccount() throws Exception {
     when(authApplicationService.login(any()))
         .thenReturn(new ConsoleAuthTokenResponse(

@@ -22,11 +22,13 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import java.time.LocalTime;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+@DisplayName("资产新鲜度策略控制器: 列表查询、创建参数组装与启停委托")
 class ConsoleAssetFreshnessPolicyControllerTest {
 
   private final ConsoleAssetFreshnessPolicyService policyService =
@@ -58,6 +60,7 @@ class ConsoleAssetFreshnessPolicyControllerTest {
   }
 
   @Test
+  @DisplayName("查询策略列表时, 响应返回资产编码与严重级别")
   void shouldListPolicies() throws Exception {
     AssetFreshnessPolicyEntity entity = new AssetFreshnessPolicyEntity(
         1L,
@@ -86,6 +89,7 @@ class ConsoleAssetFreshnessPolicyControllerTest {
   }
 
   @Test
+  @DisplayName("创建策略时, 请求体字段组装成服务入参")
   void shouldCreatePolicy() throws Exception {
     mockMvc
         .perform(post("/api/console/asset-freshness-policies")
@@ -119,6 +123,7 @@ class ConsoleAssetFreshnessPolicyControllerTest {
   }
 
   @Test
+  @DisplayName("回溯天数超出允许范围时, 返回参数错误")
   void create_returns400_whenLookbackDaysOutOfRange() throws Exception {
     mockMvc
         .perform(post("/api/console/asset-freshness-policies")
@@ -139,6 +144,7 @@ class ConsoleAssetFreshnessPolicyControllerTest {
   }
 
   @Test
+  @DisplayName("资产编码为空时, 返回参数错误")
   void create_returns400_whenAssetCodeBlank() throws Exception {
     mockMvc
         .perform(post("/api/console/asset-freshness-policies")
@@ -159,6 +165,7 @@ class ConsoleAssetFreshnessPolicyControllerTest {
   }
 
   @Test
+  @DisplayName("启停策略时, 租户、策略标识与目标状态传给服务")
   void shouldTogglePolicy() throws Exception {
     mockMvc
         .perform(patch("/api/console/asset-freshness-policies/9/enabled")

@@ -9,6 +9,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -17,6 +18,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@DisplayName("BatchDayMapper 批次日汇总查询: 排除 dry-run 实例,暂停态计入在途")
 class BatchDayMapperIntegrationTest extends AbstractIntegrationTest {
 
   private final JdbcTemplate jdbcTemplate;
@@ -29,7 +31,8 @@ class BatchDayMapperIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void jobSummariesExcludeDryRunAndTreatPausedAsInFlight() {
+  @DisplayName("汇总只统计真实实例,成功 / 失败 / 在途三个计数各归各口")
+  void shouldExcludeDryRunAndCountPausedAsInFlight_whenSummarisingBatchDay() {
     String tenantId = unique("tenant");
     String calendarCode = unique("calendar");
     String jobCode = unique("job");

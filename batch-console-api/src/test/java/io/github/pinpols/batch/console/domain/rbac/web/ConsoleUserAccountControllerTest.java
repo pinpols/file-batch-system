@@ -18,12 +18,14 @@ import io.github.pinpols.batch.console.domain.rbac.support.ConsolePasswordHasher
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSessionRegistry;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("用户账号服务: 停用启用、重置密码与会话失效联动")
 class ConsoleUserAccountControllerTest {
 
   @Mock
@@ -67,6 +69,7 @@ class ConsoleUserAccountControllerTest {
   }
 
   @Test
+  @DisplayName("停用账号后使该用户既有会话失效")
   @SuppressWarnings("unchecked")
   void disable_invalidatesSession() {
     when(userAccountMapper.selectById(42L)).thenReturn(ACCOUNT, DISABLED_ACCOUNT);
@@ -78,6 +81,7 @@ class ConsoleUserAccountControllerTest {
   }
 
   @Test
+  @DisplayName("停用不存在的账号时按业务异常拒绝且不更新状态")
   void disable_nonExistentAccount_throwsBizException() {
     when(userAccountMapper.selectById(99L)).thenReturn(null);
 
@@ -92,6 +96,7 @@ class ConsoleUserAccountControllerTest {
   }
 
   @Test
+  @DisplayName("重置密码后使该用户既有会话失效并要求下次改密")
   void resetPassword_invalidatesSession() {
     when(userAccountMapper.selectById(42L)).thenReturn(ACCOUNT);
     when(passwordHasher.encode("newSecurePass")).thenReturn("$argon2id$...");
@@ -104,6 +109,7 @@ class ConsoleUserAccountControllerTest {
   }
 
   @Test
+  @DisplayName("重置不存在账号的密码时按业务异常拒绝")
   void resetPassword_nonExistentAccount_throwsBizException() {
     when(userAccountMapper.selectById(99L)).thenReturn(null);
 
@@ -119,6 +125,7 @@ class ConsoleUserAccountControllerTest {
   }
 
   @Test
+  @DisplayName("启用账号不触发会话失效")
   void enable_doesNotInvalidateSession() {
     when(userAccountMapper.selectById(42L)).thenReturn(ACCOUNT);
 

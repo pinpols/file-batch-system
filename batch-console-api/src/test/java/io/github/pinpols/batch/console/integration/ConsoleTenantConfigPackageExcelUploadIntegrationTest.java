@@ -20,6 +20,7 @@ import java.util.Map;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -29,6 +30,7 @@ import org.springframework.http.HttpStatus;
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+@DisplayName("租户配置包 Excel 上传: 解析成功并回显各工作表命中行数")
 class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractIntegrationTest {
 
   private static final String EXCEL_CONTENT_TYPE =
@@ -38,6 +40,7 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
   private int port;
 
   @Test
+  @DisplayName("上传租户配置包: 返回成功,并回显文件通道与文件模板各命中一行")
   void shouldUploadMultipartTenantPackageWorkbookIncludingFileSheets() throws Exception {
     byte[] workbook = tenantPackageWorkbook();
     String boundary = "excel-upload-it-boundary";

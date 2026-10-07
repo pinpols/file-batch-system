@@ -21,10 +21,12 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+@DisplayName("血缘证据控制器: 按结果版本与业务键查询, 并透传租户越权拒绝")
 class ConsoleLineageEvidenceControllerTest {
 
   private final ConsoleOrchestratorPort orchestratorProxy = mock(ConsoleOrchestratorPort.class);
@@ -58,7 +60,8 @@ class ConsoleLineageEvidenceControllerTest {
   }
 
   @Test
-  void byResultVersionShouldDelegateAndForwardEvidence() throws Exception {
+  @DisplayName("按结果版本查询血缘时, 响应返回版本明细、文件记录与覆盖统计")
+  void shouldDelegateAndForwardEvidence_whenQueryingByResultVersion() throws Exception {
     mockMvc
         .perform(get("/api/console/lineage/result-versions/7").param("tenantId", "ta"))
         .andExpect(status().isOk())
@@ -70,7 +73,8 @@ class ConsoleLineageEvidenceControllerTest {
   }
 
   @Test
-  void effectiveShouldDelegateBusinessKey() throws Exception {
+  @DisplayName("按业务键查询生效血缘时, 业务键原样传给编排端口")
+  void shouldDelegateBusinessKey_whenQueryingEffectiveLineage() throws Exception {
     mockMvc
         .perform(get("/api/console/lineage/effective")
             .param("tenantId", "ta")
@@ -81,6 +85,7 @@ class ConsoleLineageEvidenceControllerTest {
   }
 
   @Test
+  @DisplayName("租户不匹配被应用端口拒绝时, 接口返回禁止访问")
   void shouldPropagateTenantRejectionFromApplicationPort() throws Exception {
     doThrow(BizException.of(ResultCode.FORBIDDEN, "error.tenant.mismatch"))
         .when(orchestratorProxy)

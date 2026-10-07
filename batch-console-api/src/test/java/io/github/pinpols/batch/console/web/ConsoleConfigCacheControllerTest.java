@@ -14,11 +14,13 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /** P2: ConsoleConfigCacheController 6 个 evict 动作正确按 (tenantId, code) 委托到 invalidation service。 */
+@DisplayName("配置缓存失效控制器: 各类缓存清理动作按租户与编码委托到失效服务")
 class ConsoleConfigCacheControllerTest {
 
   private final ConsoleConfigCacheInvalidationService service =
@@ -41,7 +43,8 @@ class ConsoleConfigCacheControllerTest {
   }
 
   @Test
-  void evictJobDefinitionShouldCallService() throws Exception {
+  @DisplayName("清理单个作业定义缓存时, 按租户与作业编码委托并返回清理键")
+  void shouldCallService_whenEvictingJobDefinition() throws Exception {
     mockMvc
         .perform(post("/api/console/ops/cache/evict-job-definition")
             .param("tenantId", "ta")
@@ -52,7 +55,8 @@ class ConsoleConfigCacheControllerTest {
   }
 
   @Test
-  void evictAllJobDefinitionsShouldCallService() throws Exception {
+  @DisplayName("清理租户下全部作业定义缓存时, 只按租户委托")
+  void shouldCallService_whenEvictingAllJobDefinitions() throws Exception {
     mockMvc
         .perform(post("/api/console/ops/cache/evict-all-job-definitions").param("tenantId", "ta"))
         .andExpect(status().isOk());
@@ -60,7 +64,8 @@ class ConsoleConfigCacheControllerTest {
   }
 
   @Test
-  void evictWorkflowDefinitionShouldPassCode() throws Exception {
+  @DisplayName("清理工作流定义缓存时, 租户与工作流编码传给服务")
+  void shouldPassCode_whenEvictingWorkflowDefinition() throws Exception {
     mockMvc
         .perform(post("/api/console/ops/cache/evict-workflow-definition")
             .param("tenantId", "ta")
@@ -70,7 +75,8 @@ class ConsoleConfigCacheControllerTest {
   }
 
   @Test
-  void evictBusinessCalendarAndBatchWindowShouldDelegate() throws Exception {
+  @DisplayName("清理业务日历与批次窗口缓存时, 两者各自编码分别传给服务")
+  void shouldDelegate_whenEvictingCalendarAndBatchWindow() throws Exception {
     mockMvc
         .perform(post("/api/console/ops/cache/evict-business-calendar")
             .param("tenantId", "ta")
@@ -86,7 +92,8 @@ class ConsoleConfigCacheControllerTest {
   }
 
   @Test
-  void evictQuotaPoliciesShouldDelegate() throws Exception {
+  @DisplayName("清理配额策略缓存时, 只按租户委托")
+  void shouldDelegate_whenEvictingQuotaPolicies() throws Exception {
     mockMvc
         .perform(post("/api/console/ops/cache/evict-quota-policies").param("tenantId", "ta"))
         .andExpect(status().isOk());

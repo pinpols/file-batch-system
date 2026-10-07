@@ -13,6 +13,7 @@ import java.util.Collection;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
@@ -57,6 +58,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
       "batch.console.replica.lag-monitor-interval-millis=600000"
     })
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@DisplayName("读副本路由: 只读事务命中副本,写事务与强制主库提示命中主库,隔离期满自动恢复")
 class ReadReplicaHappyPathIntegrationTest extends AbstractIntegrationTest {
 
   private static final String REPLICA_DB_NAME = "batch_replica";
@@ -111,7 +113,8 @@ class ReadReplicaHappyPathIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   @Order(1)
-  void wiringInjectsRoutingDataSource() {
+  @DisplayName("装配检查: 启用副本后主数据源被延迟路由代理包裹")
+  void shouldInjectRoutingDataSource_whenReplicaEnabled() {
     assertThat(dataSource)
         .as("read-replica.enabled=true 应让 @Primary DataSource 走 routing DS")
         .isInstanceOf(LazyConnectionDataSourceProxy.class);
@@ -119,7 +122,8 @@ class ReadReplicaHappyPathIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   @Order(2)
-  void readOnlyTransactionRoutesToReplica() {
+  @DisplayName("只读事务: 查询实际落在副本库")
+  void shouldRouteToReplica_whenTransactionReadOnly() {
     assertThat(dbFromTransaction(true))
         .as("readOnly 事务应命中独立 replica 容器")
         .isEqualTo(REPLICA_DB_NAME);
@@ -127,7 +131,8 @@ class ReadReplicaHappyPathIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   @Order(3)
-  void writeTransactionRoutesToPrimary() {
+  @DisplayName("非只读事务: 查询实际落在主库")
+  void shouldRouteToPrimary_whenTransactionWrites() {
     assertThat(dbFromTransaction(false))
         .as("非 readOnly 事务应命中 primary 容器")
         .isEqualTo("batch_platform");
@@ -135,7 +140,8 @@ class ReadReplicaHappyPathIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   @Order(4)
-  void forcePrimaryHintOverridesReadOnly() {
+  @DisplayName("强制主库提示: 只读事务内仍路由到主库")
+  void shouldForcePrimary_whenHintAppliedInReadOnlyTransaction() {
     String[] db = new String[1];
     RoutingHints.forcePrimary(() -> db[0] = dbFromTransaction(true));
     assertThat(db[0])
@@ -145,7 +151,8 @@ class ReadReplicaHappyPathIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   @Order(5)
-  void quarantineRecoversWhenReplicaResumes() throws Exception {
+  @DisplayName("副本暂停再恢复: 先降级到主库并累计计数,隔离期满后只读事务自动回到副本")
+  void shouldRecoverAfterQuarantine_whenReplicaResumes() throws Exception {
     double failoverBefore = currentFailoverCount();
 
     // 1. pause replica 容器（cgroup 冻结，端口映射保留），后续 readOnly 查询连接超时 → fail-open

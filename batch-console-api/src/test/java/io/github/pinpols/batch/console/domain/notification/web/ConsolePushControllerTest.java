@@ -20,12 +20,14 @@ import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 /** P2: ConsolePushController VAPID 公开 + subscribe/unsubscribe 透传 endpoint+keys。 */
+@DisplayName("浏览器推送接口: 公钥读取与订阅注册注销的透传")
 class ConsolePushControllerTest {
 
   private final ConsolePushSubscriptionService subscriptionService =
@@ -55,7 +57,8 @@ class ConsolePushControllerTest {
   }
 
   @Test
-  void vapidPublicKeyShouldReturnConfiguredKey() throws Exception {
+  @DisplayName("读取推送公钥时, 返回服务端配置的密钥")
+  void shouldReturnConfiguredKey_whenReadingPublicKey() throws Exception {
     when(subscriptionService.vapidPublicKey()).thenReturn("BPK-xxx");
     mockMvc
         .perform(get("/api/console/push/vapid-public-key"))
@@ -64,7 +67,8 @@ class ConsolePushControllerTest {
   }
 
   @Test
-  void subscribeShouldReturn201AndForwardToService() throws Exception {
+  @DisplayName("订阅请求以创建状态返回, 租户, 操作人与订阅体透传给服务")
+  void shouldReturnCreatedAndForward_whenSubscribing() throws Exception {
     mockMvc
         .perform(
             post("/api/console/push/subscribe")
@@ -78,7 +82,8 @@ class ConsolePushControllerTest {
   }
 
   @Test
-  void unsubscribeShouldReturnSuccessAndForwardEndpoint() throws Exception {
+  @DisplayName("注销请求返回统一成功响应, 端点原样透传给服务")
+  void shouldForwardEndpoint_whenUnsubscribing() throws Exception {
     // unsubscribe 改返 CommonResponse(对齐 §Java 规则 #6,不再裸 204 no-content)
     mockMvc
         .perform(post("/api/console/push/unsubscribe")

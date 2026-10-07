@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -37,6 +38,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("认证应用服务: 登录委托、令牌签发与个人资料组装的租户解析")
 class ConsoleAuthApplicationServiceTest {
 
   @Mock
@@ -76,6 +78,7 @@ class ConsoleAuthApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("登录请求原样委托给登录服务, 返回结果与下游一致")
   void login_delegatesToLoginService() {
     ConsoleLoginRequest request = new ConsoleLoginRequest();
     request.setUsername("admin");
@@ -90,6 +93,7 @@ class ConsoleAuthApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("存在已认证主体时按其用户名与租户签发令牌, 并带上会话版本")
   void issueToken_usesConsolePrincipalWhenPresent() {
     ConsolePrincipal principal = new ConsolePrincipal("alice", "t1", Set.of("ROLE_ADMIN"));
     UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
@@ -104,6 +108,7 @@ class ConsoleAuthApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("存在已认证主体时资料回包用户名、租户、权限与能力集")
   void profile_returnsConsolePrincipalFieldsWhenPresent() {
     ConsolePrincipal principal = new ConsolePrincipal("alice", "t1", Set.of("ROLE_ADMIN"));
     UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
@@ -119,6 +124,7 @@ class ConsoleAuthApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("账号要求强制改密时资料回包该标记为真")
   void profile_includesMustChangePasswordFromUserAccount() {
     ConsolePrincipal principal = new ConsolePrincipal("alice", "t1", Set.of("ROLE_ADMIN"));
     UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
@@ -133,6 +139,7 @@ class ConsoleAuthApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("无已认证主体时仍返回资料, 租户取默认值")
   void profile_usesRequestMetadataTenantWhenNoConsolePrincipal() {
     UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
         "non-principal-user", "creds", List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
@@ -146,6 +153,7 @@ class ConsoleAuthApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("权限为租户级用户且请求元数据无租户时, 租户回落默认值")
   void profile_fallsBackToDefaultTenantWhenMetadataEmpty() {
     UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
         "user", "creds", List.of(new SimpleGrantedAuthority("ROLE_TENANT_USER")));
@@ -158,6 +166,7 @@ class ConsoleAuthApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("租户级用户权限在资料回包中原样保留")
   void profile_keepsTenantUserAuthority() {
     UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
         "user", "creds", List.of(new SimpleGrantedAuthority("ROLE_TENANT_USER")));
@@ -170,6 +179,7 @@ class ConsoleAuthApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("携带历史遗留权限查询资料时抛出业务异常")
   void profile_rejectsLegacyAuthority() {
     ConsolePrincipal principal = new ConsolePrincipal("legacy", "t1", Set.of("ROLE_USER"));
     UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
@@ -179,6 +189,7 @@ class ConsoleAuthApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("认证上下文为空时资料回包用户名为空且租户取默认值")
   void profile_handlesNullAuthentication() {
     when(requestMetadataResolver.current())
         .thenReturn(new ConsoleRequestMetadata("req-1", "tr-1", null, null, null, "127.0.0.1"));

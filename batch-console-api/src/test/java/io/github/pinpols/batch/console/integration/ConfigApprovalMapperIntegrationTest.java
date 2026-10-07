@@ -7,6 +7,7 @@ import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.domain.ops.mapper.ConfigApprovalMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -15,6 +16,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@DisplayName("配置审批查询映射: 结果键保持驼峰形态,审批通过只影响一行")
 class ConfigApprovalMapperIntegrationTest extends AbstractIntegrationTest {
 
   private final ConfigApprovalMapper configApprovalMapper;
@@ -28,6 +30,7 @@ class ConfigApprovalMapperIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("查询与审批: 最新记录与按主键查询都保留驼峰键,审批写入返回一行")
   void shouldPreserveCamelCaseKeysForPostgresMapResults() {
     long suffix = BatchDateTimeSupport.utcEpochMillis();
     String tenantId = "t-config-approval-" + suffix;

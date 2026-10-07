@@ -9,6 +9,7 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.BeanPostProcessor;
@@ -28,6 +29,7 @@ import org.springframework.test.web.reactive.server.WebTestClient;
       "batch.console.ai.enabled=false"
     })
 @Import(ConsoleCsrfCookieIntegrationTest.SecurityMode.class)
+@DisplayName("控制台 CSRF 防护链路: 读请求的 Cookie 续期口径与写请求的请求头校验")
 class ConsoleCsrfCookieIntegrationTest extends AbstractIntegrationTest {
 
   @TestConfiguration(proxyBeanMethods = false)
@@ -72,7 +74,8 @@ class ConsoleCsrfCookieIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void authenticatedReadsKeepCsrfCookieAndWritesStillRequireHeader() {
+  @DisplayName("已带 Cookie 的读请求不再下发新 Cookie,写请求缺请求头被拒,补齐后落回方法不允许")
+  void shouldKeepCsrfCookieOnReadsAndRequireHeaderOnWrites_whenCsrfEnabled() {
     assertThat(securityProperties.isBypassMode()).isFalse();
     String jwt = jwtService
         .issueToken("csrf-test-admin", "system", Set.of("ROLE_ADMIN"), 0L)

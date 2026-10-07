@@ -19,6 +19,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -30,6 +31,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("控制台限流过滤器: 登录、高开销与文件操作三个维度的拦截")
 class ConsoleRateLimitFilterTest {
 
   @Mock
@@ -59,6 +61,7 @@ class ConsoleRateLimitFilterTest {
   // ── disabled ──────────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("限流关闭时连续五次登录请求全部放行, 且不触达限流器")
   void shouldPassThroughWhenDisabled() throws Exception {
     ConsoleRateLimitProperties disabledProps = new ConsoleRateLimitProperties();
     disabledProps.setEnabled(false);
@@ -82,6 +85,7 @@ class ConsoleRateLimitFilterTest {
   // ── login IP rate limit ───────────────────────────────────────────────────
 
   @Test
+  @DisplayName("登录限流放行时请求继续执行, 且不写任何错误响应")
   void shouldAllowLoginWhenRateLimiterPermits() throws Exception {
     when(rateLimiter.tryAcquire(contains("login:ip:"), anyInt())).thenReturn(true);
 
@@ -94,6 +98,7 @@ class ConsoleRateLimitFilterTest {
   }
 
   @Test
+  @DisplayName("登录限流拒绝时请求被中断, 返回请求过多状态且提示访问频繁")
   void shouldRejectLoginWhenRateLimiterDenies() throws Exception {
     when(rateLimiter.tryAcquire(contains("login:ip:"), anyInt())).thenReturn(false);
 
@@ -117,6 +122,7 @@ class ConsoleRateLimitFilterTest {
    * 的 XFF 分支。
    */
   @Test
+  @DisplayName("启用转发头信任时, 取转发链首个地址作为限流键")
   void shouldResolveXForwardedForAsIpKeyWhenTrustEnabled() throws Exception {
     ConsoleSecurityProperties trustProps = new ConsoleSecurityProperties();
     trustProps.setTrustForwardedHeaders(true);
@@ -141,6 +147,7 @@ class ConsoleRateLimitFilterTest {
 
   /** 默认 trust=false 时, XFF header 必须被忽略,key 走 remoteAddr 防伪造(curl -H 'XFF: 1.2.3.4' 绕过限流)。 */
   @Test
+  @DisplayName("未启用转发头信任时忽略转发头, 以远端地址作为限流键")
   void shouldIgnoreXForwardedForWhenTrustDisabled() throws Exception {
     when(rateLimiter.tryAcquire(contains("10.0.0.3"), anyInt())).thenReturn(true);
 
@@ -156,6 +163,7 @@ class ConsoleRateLimitFilterTest {
   // ── non-login requests not limited ───────────────────────────────────────
 
   @Test
+  @DisplayName("查询方法的登录路径不参与限流, 请求直接放行且不触达限流器")
   void shouldNotRateLimitGetRequests() throws Exception {
     MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/console/auth/login");
     request.setRemoteAddr("1.2.3.4");
@@ -168,6 +176,7 @@ class ConsoleRateLimitFilterTest {
   }
 
   @Test
+  @DisplayName("非登录的提交路径不参与登录限流, 请求直接放行且不触达限流器")
   void shouldNotRateLimitOtherPostEndpoints() throws Exception {
     MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/console/jobs/launch");
     request.setRemoteAddr("1.2.3.4");
@@ -186,6 +195,7 @@ class ConsoleRateLimitFilterTest {
   }
 
   @Test
+  @DisplayName("已认证用户超出高开销接口配额时被拦截, 返回请求过多状态并提示访问频繁")
   void shouldRejectExpensiveEndpointWhenUserOverLimit() throws Exception {
     authenticateAs("alice");
     when(rateLimiter.tryAcquire(eq("expensive:user:alice"), anyInt())).thenReturn(false);
@@ -204,6 +214,7 @@ class ConsoleRateLimitFilterTest {
   }
 
   @Test
+  @DisplayName("已认证用户在高开销接口配额内时请求正常放行")
   void shouldAllowExpensiveEndpointWhenUnderLimit() throws Exception {
     authenticateAs("alice");
     when(rateLimiter.tryAcquire(eq("expensive:user:alice"), anyInt())).thenReturn(true);
@@ -216,6 +227,7 @@ class ConsoleRateLimitFilterTest {
   }
 
   @Test
+  @DisplayName("未认证请求不适用高开销接口限流, 放行且不触达限流器")
   void shouldNotApplyExpensiveLimitToUnauthenticatedRequest() throws Exception {
     MockHttpServletRequest request =
         new MockHttpServletRequest("GET", "/api/console/reports/excel");
@@ -228,6 +240,7 @@ class ConsoleRateLimitFilterTest {
   // ── file-op endpoint rate limit (下载/错误导出/归档/重派/到达组,按用户,任意方法) ──────────
 
   @Test
+  @DisplayName("已认证用户超出文件操作配额时下载被拦截, 返回请求过多状态并提示访问频繁")
   void shouldRejectFileDownloadWhenUserOverLimit() throws Exception {
     authenticateAs("alice");
     when(rateLimiter.tryAcquire(eq("fileop:user:alice"), anyInt())).thenReturn(false);
@@ -246,6 +259,7 @@ class ConsoleRateLimitFilterTest {
   }
 
   @Test
+  @DisplayName("已认证用户在文件操作配额内时归档请求放行")
   void shouldAllowFileMutationWhenUnderLimit() throws Exception {
     authenticateAs("alice");
     when(rateLimiter.tryAcquire(eq("fileop:user:alice"), anyInt())).thenReturn(true);
@@ -259,6 +273,7 @@ class ConsoleRateLimitFilterTest {
 
   /** presign 下载（fs-download）无登录态，取不到用户名 → 文件操作限流自然跳过，不应触达 rateLimiter。 */
   @Test
+  @DisplayName("无登录态的预签名下载不适用文件操作限流, 放行且不触达限流器")
   void shouldNotApplyFileOpLimitToUnauthenticatedPresignDownload() throws Exception {
     MockHttpServletRequest request =
         new MockHttpServletRequest("GET", "/api/console/files/fs-download");

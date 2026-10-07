@@ -25,6 +25,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@DisplayName("分区失败原因映射: 失败分区透出最近一次错误,非失败分区错误字段为空")
 class JobPartitionErrorReasonMapperIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired

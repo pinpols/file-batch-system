@@ -18,11 +18,14 @@ import java.util.List;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("报表导出服务: 配置发布记录的表格输出结构与表头")
 class DefaultConsoleReportExcelApplicationServiceTest {
 
   @Test
+  @DisplayName("导出配置发布返回成功状态, 工作簿包含两个工作表且首表名称与列头符合预期")
   void shouldExportConfigReleasesWorkbook() throws Exception {
     ConsoleConfigApplicationService configService = mock(ConsoleConfigApplicationService.class);
     ConsoleQueryApplicationService queryService = mock(ConsoleQueryApplicationService.class);

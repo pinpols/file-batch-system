@@ -11,13 +11,16 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import javax.imageio.ImageIO;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("AI 图片归一化:格式重写与输入体积上限校验")
 class ConsoleAiImageNormalizerTest {
   private final ConsoleAiProperties.Image limits = new ConsoleAiProperties.Image();
 
   @Test
-  void rewritesPngToPixelOnlyImage() throws IOException {
+  @DisplayName("PNG 归一化:输出像素图,并返回尺寸与媒体类型")
+  void shouldRewritePng_whenInputIsPng() throws IOException {
     byte[] input = image("png");
     ConsoleAiImageNormalizer.NormalizedImage normalized =
         ConsoleAiImageNormalizer.normalize(input, limits);
@@ -29,7 +32,8 @@ class ConsoleAiImageNormalizerTest {
   }
 
   @Test
-  void rewritesJpegWithoutPreservingSourceBytes() throws IOException {
+  @DisplayName("JPEG 归一化:重新编码,输出字节与原始输入不同")
+  void shouldReencodeJpeg_whenInputIsJpeg() throws IOException {
     byte[] input = image("jpeg");
     ConsoleAiImageNormalizer.NormalizedImage normalized =
         ConsoleAiImageNormalizer.normalize(input, limits);
@@ -39,7 +43,8 @@ class ConsoleAiImageNormalizerTest {
   }
 
   @Test
-  void rejectsUnknownOrOversizedInputBeforeDecode() {
+  @DisplayName("格式未知或超出体积上限:在解码之前即拒绝")
+  void shouldRejectInput_whenFormatUnknownOrTooLarge() {
     assertThatThrownBy(() -> ConsoleAiImageNormalizer.normalize(new byte[] {1, 2, 3}, limits))
         .isInstanceOf(BizException.class);
     assertThatThrownBy(() ->

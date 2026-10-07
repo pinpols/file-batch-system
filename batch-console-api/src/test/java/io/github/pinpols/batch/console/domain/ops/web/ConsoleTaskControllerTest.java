@@ -8,6 +8,7 @@ import io.github.pinpols.batch.console.domain.ops.dto.TaskHeartbeatDetailsRespon
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleTaskHeartbeatService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -15,6 +16,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("任务心跳接口:先解析租户再读取心跳详情, 返回任务标识与状态")
 class ConsoleTaskControllerTest {
 
   @Mock
@@ -30,7 +32,8 @@ class ConsoleTaskControllerTest {
   private ConsoleTaskController controller;
 
   @Test
-  void resolvesTenantThenReturnsDetails() {
+  @DisplayName("心跳详情:先解析租户再查询, 返回任务标识与状态")
+  void shouldResolveTenantThenReturnDetails_whenReadingHeartbeat() {
     TaskHeartbeatDetailsResponse dto =
         new TaskHeartbeatDetailsResponse(42L, "RUNNING", null, null, false);
     when(tenantGuard.resolveTenant("tx")).thenReturn("tx");

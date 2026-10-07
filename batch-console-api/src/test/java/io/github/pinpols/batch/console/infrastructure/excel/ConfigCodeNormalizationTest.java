@@ -4,12 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.ArrayList;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("配置包行解析器:配置编码在写库前统一规范化为小写下划线形式")
 class ConfigCodeNormalizationTest {
 
   @Test
-  void excelParsersShouldNormalizeConfigurationCodesBeforeValidationAndPersistence() {
+  @DisplayName("四类配置解析器:大写与连字符编码均被规范化为小写下划线")
+  void shouldNormalizeConfigCodes_whenParsingRows() {
     assertThat(BusinessCalendarExcelRowParser.parseRow(
                 "ta", 1, Map.of("calendar_code", "Default-Calendar"), new ArrayList<>())
             .calendarCode())

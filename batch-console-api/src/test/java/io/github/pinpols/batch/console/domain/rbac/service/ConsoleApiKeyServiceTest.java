@@ -17,8 +17,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("访问密钥服务: 列表、详情、创建与吊销的租户隔离与冲突校验")
 class ConsoleApiKeyServiceTest {
 
   private ConsoleApiKeyMapper repository;
@@ -34,6 +36,7 @@ class ConsoleApiKeyServiceTest {
   }
 
   @Test
+  @DisplayName("按租户查询访问密钥列表, 返回该租户下的记录")
   void shouldListApiKeys() {
     ApiKeyEntity entity = new ApiKeyEntity();
     entity.setId(1L);
@@ -47,6 +50,7 @@ class ConsoleApiKeyServiceTest {
   }
 
   @Test
+  @DisplayName("按租户与标识查询访问密钥详情, 返回对应记录")
   void shouldReturnDetailById() {
     ApiKeyEntity entity = new ApiKeyEntity();
     entity.setId(1L);
@@ -59,6 +63,7 @@ class ConsoleApiKeyServiceTest {
   }
 
   @Test
+  @DisplayName("详情查询未命中时抛出资源不存在异常")
   void shouldThrowNotFoundWhenDetailMissing() {
     when(repository.findByTenantAndId("t1", 99L)).thenReturn(Optional.empty());
 
@@ -68,6 +73,7 @@ class ConsoleApiKeyServiceTest {
   }
 
   @Test
+  @DisplayName("创建访问密钥返回带固定前缀的明文密钥, 并按散列算法写库")
   void shouldCreateApiKeyWithBkPrefix() {
     when(repository.findByTenantAndName("t1", "new-key")).thenReturn(Optional.empty());
 
@@ -98,6 +104,7 @@ class ConsoleApiKeyServiceTest {
   }
 
   @Test
+  @DisplayName("名称已存在时创建抛出冲突异常")
   void shouldThrowConflictWhenNameExists() {
     ApiKeyEntity existing = new ApiKeyEntity();
     existing.setKeyName("dup-key");
@@ -110,6 +117,7 @@ class ConsoleApiKeyServiceTest {
   }
 
   @Test
+  @DisplayName("吊销访问密钥按租户与标识下发下游")
   void shouldRevokeApiKey() {
     ApiKeyEntity entity = new ApiKeyEntity();
     entity.setId(1L);
@@ -121,6 +129,7 @@ class ConsoleApiKeyServiceTest {
   }
 
   @Test
+  @DisplayName("吊销目标不存在时抛出资源不存在异常")
   void shouldThrowNotFoundWhenRevokeIdMissing() {
     when(repository.findByTenantAndId("t1", 99L)).thenReturn(Optional.empty());
 

@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.Test;
  * <p>新增生产 {@code JdbcTemplate} 使用点时必须先判断边界：如果是平台表读写，请改成 MyBatis mapper；如果是动态业务库
  * SQL、框架适配或本地存储初始化，先补充本测试的允许清单，并在代码侧保留参数绑定、SQL 校验和租户约束。
  */
+@DisplayName("持久化边界守护: 主源码使用模板类必须命中显式允许清单")
 class JdbcTemplateBoundaryGuardTest {
 
   private static final Set<String> ALLOWED_MAIN_JAVA_FILES = Set.of(
@@ -44,7 +46,8 @@ class JdbcTemplateBoundaryGuardTest {
       "import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;");
 
   @Test
-  void springJdbcTemplateUsageStaysOnExplicitAllowList() throws IOException {
+  @DisplayName("扫描主源码时, 引入模板类的文件必须全部命中允许清单, 越界文件被逐条列出")
+  void shouldKeepSpringJdbcTemplateUsageOnAllowList_whenScanningMainSources() throws IOException {
     Path repoRoot = locateRepositoryRoot();
     List<String> violations = new ArrayList<>();
     try (Stream<Path> files = Files.walk(repoRoot)) {

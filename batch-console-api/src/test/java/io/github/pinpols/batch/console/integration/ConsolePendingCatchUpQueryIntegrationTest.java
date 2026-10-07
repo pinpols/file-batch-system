@@ -10,6 +10,7 @@ import io.github.pinpols.batch.console.domain.job.mapper.PendingCatchUpMapper;
 import io.github.pinpols.batch.console.domain.job.query.PendingCatchUpQuery;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -24,6 +25,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@DisplayName("补跑待审列表查询: 业务日期,关键字与作业编码的服务端筛选")
 class ConsolePendingCatchUpQueryIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
@@ -33,6 +35,7 @@ class ConsolePendingCatchUpQueryIntegrationTest extends AbstractIntegrationTest 
   private JdbcTemplate jdbcTemplate;
 
   @Test
+  @DisplayName("按业务日期过滤: 只返回该日期的两条记录,计数同为 2")
   void shouldFilterByBizDate() {
     String tenantId = "t-catchup-" + BatchDateTimeSupport.utcEpochMillis();
     insertCatchUp(tenantId, "JOB_A", "2026-06-20");
@@ -54,6 +57,7 @@ class ConsolePendingCatchUpQueryIntegrationTest extends AbstractIntegrationTest 
   }
 
   @Test
+  @DisplayName("业务日期留空: 返回该租户全部待审记录,计数一致")
   void shouldReturnAllWhenBizDateBlank() {
     String tenantId = "t-catchup-all-" + BatchDateTimeSupport.utcEpochMillis();
     insertCatchUp(tenantId, "JOB_A", "2026-06-20");
@@ -69,6 +73,7 @@ class ConsolePendingCatchUpQueryIntegrationTest extends AbstractIntegrationTest 
   }
 
   @Test
+  @DisplayName("关键字过滤: 大小写不敏感,只命中作业编码匹配的一条")
   void shouldFilterByKeywordAcrossColumns() {
     String tenantId = "t-catchup-kw-" + BatchDateTimeSupport.utcEpochMillis();
     insertCatchUp(tenantId, "PAYROLL_DAILY", "2026-06-21");
@@ -87,6 +92,7 @@ class ConsolePendingCatchUpQueryIntegrationTest extends AbstractIntegrationTest 
   }
 
   @Test
+  @DisplayName("业务日期与作业编码组合过滤: 只返回同时满足的一条")
   void shouldCombineBizDateWithJobCode() {
     String tenantId = "t-catchup-combo-" + BatchDateTimeSupport.utcEpochMillis();
     insertCatchUp(tenantId, "JOB_A", "2026-06-21");

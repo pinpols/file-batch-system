@@ -11,12 +11,14 @@ import io.github.pinpols.batch.console.domain.ops.dto.TaskHeartbeatDetailsRespon
 import io.github.pinpols.batch.console.domain.ops.entity.JobTaskHeartbeatEntity;
 import io.github.pinpols.batch.console.domain.ops.mapper.JobTaskMapper;
 import java.time.Instant;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("任务心跳详情读取:JSON 明细解析, 空值与非法内容降级, 缺失或跨租户抛业务异常")
 class ConsoleTaskHeartbeatServiceTest {
 
   @Mock
@@ -40,7 +42,8 @@ class ConsoleTaskHeartbeatServiceTest {
   }
 
   @Test
-  void parsesJsonDetailsAndMapsFields() {
+  @DisplayName("明细映射:心跳明细解析为结构化节点, 任务标识与状态原样回填")
+  void shouldParseJsonDetails_whenReadingHeartbeat() {
     when(jobTaskMapper.selectHeartbeatByTenantAndId("tx", 42L))
         .thenReturn(entity("{\"processed\":1200,\"total\":5000}", false));
 
@@ -54,7 +57,8 @@ class ConsoleTaskHeartbeatServiceTest {
   }
 
   @Test
-  void nullDetailsYieldsNull() {
+  @DisplayName("空明细:明细为空时返回空值, 取消标记按未请求处理")
+  void shouldReturnNullDetails_whenHeartbeatDetailsNull() {
     when(jobTaskMapper.selectHeartbeatByTenantAndId("tx", 42L)).thenReturn(entity(null, null));
 
     TaskHeartbeatDetailsResponse resp = service().getHeartbeatDetails("tx", 42L);
@@ -64,7 +68,8 @@ class ConsoleTaskHeartbeatServiceTest {
   }
 
   @Test
-  void malformedDetailsDegradeToNull() {
+  @DisplayName("非法明细:内容无法解析时降级为空值, 不抛异常")
+  void shouldDegradeToNull_whenHeartbeatDetailsMalformed() {
     when(jobTaskMapper.selectHeartbeatByTenantAndId("tx", 42L))
         .thenReturn(entity("{not-json", false));
 
@@ -72,7 +77,8 @@ class ConsoleTaskHeartbeatServiceTest {
   }
 
   @Test
-  void throwsNotFoundWhenMissingOrCrossTenant() {
+  @DisplayName("记录缺失:未命中或跨租户查询时抛出业务异常")
+  void shouldThrowBizException_whenHeartbeatMissingOrCrossTenant() {
     when(jobTaskMapper.selectHeartbeatByTenantAndId("tx", 99L)).thenReturn(null);
 
     assertThatThrownBy(() -> service().getHeartbeatDetails("tx", 99L))

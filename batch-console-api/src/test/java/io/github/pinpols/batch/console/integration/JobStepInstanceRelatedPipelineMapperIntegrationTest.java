@@ -25,6 +25,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@DisplayName("作业步骤关联流水线映射: 文件类作业反查出关联实例,普通作业为空")
 class JobStepInstanceRelatedPipelineMapperIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired

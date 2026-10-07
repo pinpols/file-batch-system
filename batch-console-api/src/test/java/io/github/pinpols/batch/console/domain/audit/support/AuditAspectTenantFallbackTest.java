@@ -24,6 +24,7 @@ import org.aspectj.lang.Signature;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.slf4j.MDC;
@@ -37,6 +38,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * principal.tenantId() 为 null 时,AuditAspect 必须 fallback 到 MDC tenant 或 "system", 否则 PSQLException
  * violates not-null constraint,审计行直接丢失。
  */
+@DisplayName("审计切面租户回退: 主体、请求上下文与目标参数的取值优先级")
 class AuditAspectTenantFallbackTest {
 
   private OperationAuditMapper mapper;
@@ -77,6 +79,7 @@ class AuditAspectTenantFallbackTest {
   }
 
   @Test
+  @DisplayName("审计事务提交后才记录用量, 提交前不发生调用")
   void shouldRecordUsageOnlyAfterAuditTransactionCommits() throws Throwable {
     TransactionSynchronizationManager.initSynchronization();
     try {
@@ -99,6 +102,7 @@ class AuditAspectTenantFallbackTest {
   }
 
   @Test
+  @DisplayName("提交后用量投影失败不阻断审计主流程")
   void shouldNotPropagateUsageProjectionFailureAfterAuditCommit() throws Throwable {
     doThrow(new IllegalStateException("usage projection unavailable"))
         .when(usageRecorder)
@@ -116,6 +120,7 @@ class AuditAspectTenantFallbackTest {
   }
 
   @Test
+  @DisplayName("主体与请求上下文均无租户时回退到系统哨兵值")
   void shouldFallbackToSystemSentinelWhenPrincipalAndMdcAreEmpty() throws Throwable {
     SecurityContextHolder.clearContext();
 
@@ -128,6 +133,7 @@ class AuditAspectTenantFallbackTest {
   }
 
   @Test
+  @DisplayName("主体租户为空时回退到请求上下文租户")
   void shouldFallbackToMdcTenantWhenPrincipalTenantIsNull() throws Throwable {
     MDC.put("tenant", "ten-x");
     ConsolePrincipal principal =
@@ -144,6 +150,7 @@ class AuditAspectTenantFallbackTest {
   }
 
   @Test
+  @DisplayName("主体租户存在时以其为准且忽略请求上下文")
   void shouldUsePrincipalTenantWhenPresent() throws Throwable {
     ConsolePrincipal principal =
         new ConsolePrincipal("alice", "tenant-a", Set.of("ROLE_TENANT_USER"));
@@ -160,6 +167,7 @@ class AuditAspectTenantFallbackTest {
   }
 
   @Test
+  @DisplayName("全局角色跨租操作时以目标租户参数为准")
   void shouldUseTargetTenantParamForRoleAdminCrossTenantOperation() throws Throwable {
     // ROLE_ADMIN 改 "tenant-x":principal.tenantId() = null,但 targetTenantParam=#tenantId 指向入参
     // → audit 行 tenant_id 必须是 "tenant-x",而不是默认回退 "system",否则取证按目标租户查会漏。
@@ -178,6 +186,7 @@ class AuditAspectTenantFallbackTest {
   }
 
   @Test
+  @DisplayName("目标租户参数解析为空时继续按主体租户回退")
   void shouldStillFallbackWhenTargetTenantParamResolvesToNull() throws Throwable {
     // targetTenantParam=#tenantId 但入参传 null → 必须继续 principal → MDC → "system" 回退链
     ConsolePrincipal principal =

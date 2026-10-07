@@ -20,12 +20,14 @@ import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("AI 成本服务:预算预留、结算与供应商定价校验")
 class ConsoleAiCostServiceTest {
 
   @Mock
@@ -48,6 +50,7 @@ class ConsoleAiCostServiceTest {
   }
 
   @Test
+  @DisplayName("成本预留:调用模型前先预留月度预算,并释放过期预留")
   void shouldReserveMonthlyBudgetBeforeProviderCall() {
     when(mapper.reserve(eq("tenant-a"), any(), any(), eq(new BigDecimal("10.00"))))
         .thenReturn(true);
@@ -62,6 +65,7 @@ class ConsoleAiCostServiceTest {
   }
 
   @Test
+  @DisplayName("月度预算原子预留失败:直接拒绝本次请求")
   void shouldRejectWhenAtomicMonthlyBudgetReservationFails() {
     when(mapper.reserve(eq("tenant-a"), any(), any(), eq(new BigDecimal("10.00"))))
         .thenReturn(false);
@@ -71,6 +75,7 @@ class ConsoleAiCostServiceTest {
   }
 
   @Test
+  @DisplayName("成本结算:按供应商上报的输入输出令牌用量计价入账")
   void shouldSettleUsingProviderReportedTokenUsage() {
     ConsoleAiCostService.Reservation reservation = new ConsoleAiCostService.Reservation(
         "tenant-a", YearMonth.now(ZoneOffset.UTC).atDay(1), new BigDecimal("0.01"), true);
@@ -91,6 +96,7 @@ class ConsoleAiCostServiceTest {
   }
 
   @Test
+  @DisplayName("令牌用量缺失:按预留金额保守结算")
   void shouldConservativelySettleReservationWhenUsageIsMissing() {
     ConsoleAiCostService.Reservation reservation = new ConsoleAiCostService.Reservation(
         "tenant-a", YearMonth.now(ZoneOffset.UTC).atDay(1), new BigDecimal("0.01"), true);
@@ -102,6 +108,7 @@ class ConsoleAiCostServiceTest {
   }
 
   @Test
+  @DisplayName("图片输入:预留金额高于纯文本输入")
   void shouldReserveAdditionalBudgetForImageInput() {
     when(mapper.reserve(eq("tenant-a"), any(), any(), any())).thenReturn(true);
 
@@ -112,6 +119,7 @@ class ConsoleAiCostServiceTest {
   }
 
   @Test
+  @DisplayName("图片输入缺少可用定价:拒绝请求,且不使用无上限预留")
   void shouldRejectImageInputWithoutUsablePricing() {
     properties.getCost().getProviderRates().clear();
     properties.getCost().setMonthlyBudgetUsd(BigDecimal.ZERO);
@@ -122,13 +130,15 @@ class ConsoleAiCostServiceTest {
   }
 
   @Test
+  @DisplayName("供应商定价校验:存在缺费率的供应商时触发拒绝")
   void shouldRequireRatesForEveryConfiguredProvider() {
     assertThatThrownBy(() -> service.validateProviders(List.of("test-provider", "unpriced")))
         .isInstanceOf(BizException.class);
   }
 
   @Test
-  void costSummaryMustNotMutateReservations() {
+  @DisplayName("成本汇总:只读查询,不释放过期预留")
+  void shouldNotReleaseReservations_whenSummarizingCost() {
     when(mapper.find(eq("tenant-a"), any())).thenReturn(null);
 
     service.summary("tenant-a", YearMonth.of(2026, 9));

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
@@ -23,6 +24,7 @@ import org.springframework.http.MediaType;
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+@DisplayName("文件模板写路径: 编码格式校验,落库字段透传与唯一约束")
 class ConsoleFileTemplateMutationIntegrationTest extends AbstractMutationIntegrationTest {
 
   private String body(String code) {
@@ -47,6 +49,7 @@ class ConsoleFileTemplateMutationIntegrationTest extends AbstractMutationIntegra
   }
 
   @Test
+  @DisplayName("创建文件模板: 返回成功,落库的租户,编码,类型,字符集与加密方式与请求一致")
   void shouldCreateFileTemplateWithValidCode() {
     String code = "int_ft_create_" + System.currentTimeMillis();
 
@@ -74,6 +77,7 @@ class ConsoleFileTemplateMutationIntegrationTest extends AbstractMutationIntegra
   }
 
   @Test
+  @DisplayName("编码含空格: 返回校验错误且不落库")
   void shouldRejectInvalidTemplateCodeWithSpaces() {
     client
         .post()
@@ -95,6 +99,7 @@ class ConsoleFileTemplateMutationIntegrationTest extends AbstractMutationIntegra
   }
 
   @Test
+  @DisplayName("编码为中文: 返回请求不合法")
   void shouldRejectChineseTemplateCode() {
     client
         .post()
@@ -108,6 +113,7 @@ class ConsoleFileTemplateMutationIntegrationTest extends AbstractMutationIntegra
   }
 
   @Test
+  @DisplayName("编码重复: 第二次写入失败,不产生重复模板")
   void shouldRejectDuplicateTemplateCode() {
     String code = "int_ft_dup_" + System.currentTimeMillis();
     client

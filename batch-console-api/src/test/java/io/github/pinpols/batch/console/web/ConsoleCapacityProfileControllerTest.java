@@ -20,10 +20,12 @@ import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+@DisplayName("容量画像控制器: 查询参数透传与租户越权拒绝")
 class ConsoleCapacityProfileControllerTest {
 
   private final ConsoleOrchestratorPort orchestratorProxy = mock(ConsoleOrchestratorPort.class);
@@ -49,7 +51,8 @@ class ConsoleCapacityProfileControllerTest {
   }
 
   @Test
-  void queryShouldDelegateAllQueryParameters() throws Exception {
+  @DisplayName("查询容量画像时, 分组、时间范围与条数上限全部透传到编排端口")
+  void shouldDelegateAllQueryParameters_whenQueryingCapacity() throws Exception {
     mockMvc
         .perform(get("/api/console/capacity-profile")
             .param("tenantId", "ta")
@@ -65,6 +68,7 @@ class ConsoleCapacityProfileControllerTest {
   }
 
   @Test
+  @DisplayName("租户不匹配被应用端口拒绝时, 接口返回禁止访问")
   void shouldPropagateTenantRejectionFromApplicationPort() throws Exception {
     doThrow(BizException.of(ResultCode.FORBIDDEN, "error.tenant.mismatch"))
         .when(orchestratorProxy)

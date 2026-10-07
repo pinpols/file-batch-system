@@ -27,8 +27,10 @@ import nl.martijndwars.webpush.PushAsyncService;
 import org.asynchttpclient.Response;
 import org.bouncycastle.jce.interfaces.ECPublicKey;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("推送发送器: 开关判定, 初始化失败兜底与投递目标查找的生命周期")
 class ConsolePushSenderTest {
 
   private final ConsolePushProperties properties = new ConsolePushProperties();
@@ -39,6 +41,7 @@ class ConsolePushSenderTest {
       new ConsolePushSender(properties, repository, objectMapper);
 
   @Test
+  @DisplayName("推送未开启时单发与广播都不访问订阅存储")
   void shouldSkipRepositoryWhenPushServiceIsDisabled() {
     PushPayload payload = new PushPayload("title", "body", "tag", "/m/jobs");
 
@@ -49,6 +52,7 @@ class ConsolePushSenderTest {
   }
 
   @Test
+  @DisplayName("开启推送后密钥非法导致初始化失败时清空推送服务实例")
   void shouldClearPushServiceWhenEnabledInitFails() throws Exception {
     properties.setEnabled(true);
     properties.setPublicKey("not-a-public-key");
@@ -60,6 +64,7 @@ class ConsolePushSenderTest {
   }
 
   @Test
+  @DisplayName("订阅信息有效时经推送服务下发并刷新最近推送时间")
   void shouldSendNotificationThroughConfiguredPushService() throws Exception {
     PushAsyncService service = mock(PushAsyncService.class);
     Response response = mock(Response.class);
@@ -77,6 +82,7 @@ class ConsolePushSenderTest {
   }
 
   @Test
+  @DisplayName("查找订阅期间推送服务被清空则不再发送")
   void shouldSkipSendWhenPushServiceIsClearedAfterLookup() throws Exception {
     PushAsyncService service = mock(PushAsyncService.class);
     AtomicReference<PushAsyncService> ref = pushServiceRef(sender);

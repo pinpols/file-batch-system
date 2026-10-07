@@ -43,6 +43,7 @@ import java.util.concurrent.TimeUnit;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -54,6 +55,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+@DisplayName("用户批量开通服务: 预览校验、并发版本控制与事务回滚后的快照恢复")
 class ConsoleUserBatchProvisioningServiceTest {
 
   private ConsoleUserAccountService accountService;
@@ -100,7 +102,8 @@ class ConsoleUserBatchProvisioningServiceTest {
   }
 
   @Test
-  void tenantAdminPreviewOverridesTenantAndRejectsPlatformRole() throws IOException {
+  @DisplayName("租户管理员预览时租户被覆盖为自身租户, 平台角色所在行记为角色非法")
+  void shouldOverrideTenantAndRejectPlatformRole_whenTenantAdminPreviews() throws IOException {
     var preview = service.preview(workbook("tb", "alice", ConsoleRoles.ADMIN));
     assertThat(preview.rows()).extracting(AccountRow::tenantId).containsExactly("ta");
     assertThat(preview.issues()).extracting(RowIssue::errorCode).containsExactly("INVALID_ROLE");
@@ -108,7 +111,8 @@ class ConsoleUserBatchProvisioningServiceTest {
   }
 
   @Test
-  void duplicateUsernamesUseCaseInsensitiveLoginSemantics() throws IOException {
+  @DisplayName("同一文件内用户名仅大小写不同时记为重复行")
+  void shouldReportDuplicate_whenUsernamesDifferOnlyByCase() throws IOException {
     when(tenantMapper.selectByTenantId("ta")).thenReturn(Map.of("status", "ACTIVE"));
     var preview = service.preview(
         workbook("ta", "Alice", ConsoleRoles.TENANT_USER, "ta", "alice", ConsoleRoles.TENANT_USER));
@@ -119,7 +123,8 @@ class ConsoleUserBatchProvisioningServiceTest {
   }
 
   @Test
-  void rejectsChangedVersionAndForeignOperator() throws IOException {
+  @DisplayName("版本已变更或操作者跨租户时补丁被拒")
+  void shouldRejectPatch_whenVersionChangedOrOperatorForeign() throws IOException {
     var preview = service.preview(workbook("ta", "alice", ConsoleRoles.TENANT_USER));
     String token = preview.previewToken();
     AccountRow tenantRow = new AccountRow(2, "ta", "alice", "", ConsoleRoles.TENANT_USER);
@@ -130,7 +135,8 @@ class ConsoleUserBatchProvisioningServiceTest {
   }
 
   @Test
-  void applyCreatesAllAccountsAndReturnsCredentialsOnlyOnce() throws IOException {
+  @DisplayName("提交后逐个创建账号, 明文初始口令只返回一次且不落存储")
+  void shouldCreateAllAccountsAndReturnCredentialsOnce_whenApplySucceeds() throws IOException {
     when(tenantMapper.selectByTenantId("ta")).thenReturn(Map.of("status", "ACTIVE"));
     when(accountService.createProvisioned(any(), any(), any(), any(), any()))
         .thenReturn(new ConsoleUserAccountResponse(
@@ -150,7 +156,8 @@ class ConsoleUserBatchProvisioningServiceTest {
   }
 
   @Test
-  void concurrentEditsOfSameVersionHaveExactlyOneWinner() throws Exception {
+  @DisplayName("同一版本并发修改只有一个请求成功, 版本号只递增一次")
+  void shouldAllowExactlyOneWinner_whenEditingSameVersionConcurrently() throws Exception {
     when(tenantMapper.selectByTenantId("ta")).thenReturn(Map.of("status", "ACTIVE"));
     var preview = service.preview(workbook("ta", "alice", ConsoleRoles.TENANT_USER));
     CyclicBarrier barrier = new CyclicBarrier(2);
@@ -190,7 +197,8 @@ class ConsoleUserBatchProvisioningServiceTest {
   }
 
   @Test
-  void applyFreezesSnapshotUntilTransactionRollbackThenRestoresIt() throws Exception {
+  @DisplayName("提交期间冻结快照, 事务回滚后恢复为可编辑并递增版本")
+  void shouldFreezeSnapshotThenRestore_whenApplyTransactionRollsBack() throws Exception {
     when(tenantMapper.selectByTenantId("ta")).thenReturn(Map.of("status", "ACTIVE"));
     var preview = service.preview(workbook("ta", "alice", ConsoleRoles.TENANT_USER));
     when(accountService.createProvisioned(any(), any(), any(), any(), any()))
@@ -215,10 +223,11 @@ class ConsoleUserBatchProvisioningServiceTest {
   }
 
   @ParameterizedTest
+  @DisplayName("事务已提交或状态未知时不恢复可编辑, 快照保持提交中状态")
   @ValueSource(
       ints = {TransactionSynchronization.STATUS_COMMITTED, TransactionSynchronization.STATUS_UNKNOWN
       })
-  void completedOrUnknownTransactionNeverRestoresEditablePreview(int status) throws IOException {
+  void shouldKeepPreviewLocked_whenTransactionCompletedOrUnknown(int status) throws IOException {
     when(tenantMapper.selectByTenantId("ta")).thenReturn(Map.of("status", "ACTIVE"));
     when(accountService.createProvisioned(any(), any(), any(), any(), any()))
         .thenReturn(new ConsoleUserAccountResponse(
@@ -245,10 +254,12 @@ class ConsoleUserBatchProvisioningServiceTest {
   }
 
   @ParameterizedTest
+  @DisplayName("完成回调只记录请求标识, 不记录预览令牌与存储细节")
   @ValueSource(
       ints = {TransactionSynchronization.STATUS_COMMITTED, TransactionSynchronization.STATUS_UNKNOWN
       })
-  void completionLogsRequestIdWithoutPreviewTokenOrStorageDetails(int status) throws IOException {
+  void shouldLogRequestIdWithoutTokenOrStorageDetails_whenCompletionRuns(int status)
+      throws IOException {
     when(tenantMapper.selectByTenantId("ta")).thenReturn(Map.of("status", "ACTIVE"));
     when(accountService.createProvisioned(any(), any(), any(), any(), any()))
         .thenReturn(new ConsoleUserAccountResponse(
@@ -283,7 +294,8 @@ class ConsoleUserBatchProvisioningServiceTest {
   }
 
   @Test
-  void tenantAdminOperationLookupIsAlwaysScopedToOwnTenant() {
+  @DisplayName("租户管理员查询操作记录时始终收敛到自身租户")
+  void shouldScopeLookupToOwnTenant_whenTenantAdminQueries() {
     UUID operationId = UUID.randomUUID();
     ConsoleUserBatchOperationEntity row = operation(operationId, UUID.randomUUID(), "ta,tb");
     when(operationMapper.selectByOperationId(eq(operationId), anyString(), eq("ta")))
@@ -296,7 +308,8 @@ class ConsoleUserBatchProvisioningServiceTest {
   }
 
   @Test
-  void adminOperationLookupCanFilterByTargetTenant() {
+  @DisplayName("平台管理员查询操作记录时可按目标租户筛选")
+  void shouldFilterByTargetTenant_whenPlatformAdminQueries() {
     asAdmin();
     UUID requestId = UUID.randomUUID();
     ConsoleUserBatchOperationEntity row = operation(UUID.randomUUID(), requestId, "ta,tb");
@@ -310,7 +323,8 @@ class ConsoleUserBatchProvisioningServiceTest {
   }
 
   @Test
-  void adminOperationLookupKeepsFilterOptional() {
+  @DisplayName("目标租户为空白时筛选条件视为未传, 查询返回空")
+  void shouldKeepFilterOptional_whenTargetTenantBlank() {
     asAdmin();
     UUID requestId = UUID.randomUUID();
     when(operationMapper.selectByRequestId(eq(requestId), eq("admin"), nullable(String.class)))

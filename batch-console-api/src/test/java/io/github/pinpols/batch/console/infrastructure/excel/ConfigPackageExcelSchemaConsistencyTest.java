@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.infrastructure.excel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -9,10 +10,12 @@ import org.junit.jupiter.api.Test;
  *
  * <p>新增字段时应优先改 {@link ConfigPackageExcelSchema}，配置包导入导出与模板下载统一从这里派生，避免多处维护字符串列表。
  */
+@DisplayName("配置包 Excel 列定义:各 sheet 与共享 schema 的一致性")
 class ConfigPackageExcelSchemaConsistencyTest {
 
   @Test
-  void configPackageWorkbookColumnsUseSharedSchema() {
+  @DisplayName("配置包写出列:11 个 sheet 全部取自共享 schema 定义")
+  void shouldUseSharedSchemaColumns_whenWritingWorkbook() {
     assertThat(ConfigPackageExcelWorkbookWriter.RESOURCE_QUEUE_COLUMNS)
         .isEqualTo(ConfigPackageExcelSchema.ResourceQueue.COLUMNS);
     assertThat(ConfigPackageExcelWorkbookWriter.BUSINESS_CALENDAR_COLUMNS)
@@ -38,7 +41,8 @@ class ConfigPackageExcelSchemaConsistencyTest {
   }
 
   @Test
-  void jobDefinitionSchemaIncludesDependsOnJobCodeNearScheduleColumns() {
+  @DisplayName("作业定义列顺序:依赖作业编码列位于调度表达式与日历编码之间")
+  void shouldKeepDependsOnColumnNearSchedule_whenSchemaChanges() {
     assertThat(ConfigPackageExcelSchema.JobDefinition.COLUMNS)
         .containsSubsequence("schedule_expr", "depends_on_job_code", "calendar_code");
   }

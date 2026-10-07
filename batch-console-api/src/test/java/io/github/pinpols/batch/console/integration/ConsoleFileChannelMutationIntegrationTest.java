@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
@@ -23,6 +24,7 @@ import org.springframework.http.MediaType;
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+@DisplayName("文件通道写路径: 编码与通道类型校验,落库字段透传与唯一约束")
 class ConsoleFileChannelMutationIntegrationTest extends AbstractMutationIntegrationTest {
 
   private String body(String code) {
@@ -48,6 +50,7 @@ class ConsoleFileChannelMutationIntegrationTest extends AbstractMutationIntegrat
   }
 
   @Test
+  @DisplayName("创建文件通道: 返回成功,落库的租户,编码与通道类型与请求一致")
   void shouldCreateFileChannelWithValidCode() {
     String code = "int_fc_create_" + System.currentTimeMillis();
 
@@ -73,6 +76,7 @@ class ConsoleFileChannelMutationIntegrationTest extends AbstractMutationIntegrat
   }
 
   @Test
+  @DisplayName("编码含空格: 返回校验错误且不落库")
   void shouldRejectInvalidChannelCodeWithSpaces() {
     client
         .post()
@@ -94,6 +98,7 @@ class ConsoleFileChannelMutationIntegrationTest extends AbstractMutationIntegrat
   }
 
   @Test
+  @DisplayName("编码为中文: 返回请求不合法")
   void shouldRejectChineseChannelCode() {
     client
         .post()
@@ -107,6 +112,7 @@ class ConsoleFileChannelMutationIntegrationTest extends AbstractMutationIntegrat
   }
 
   @Test
+  @DisplayName("创建时传入不支持的通道类型: 返回参数非法且不落库")
   void shouldRejectUnsupportedChannelTypeBeforeDatabaseWrite() {
     String code = "int_fc_bad_type_" + System.currentTimeMillis();
 
@@ -128,6 +134,7 @@ class ConsoleFileChannelMutationIntegrationTest extends AbstractMutationIntegrat
   }
 
   @Test
+  @DisplayName("更新为不支持的通道类型: 返回参数非法,库内通道类型保持原值")
   void shouldRejectUnsupportedChannelTypeOnUpdate() {
     String code = "int_fc_upd_bad_type_" + System.currentTimeMillis();
 
@@ -168,6 +175,7 @@ class ConsoleFileChannelMutationIntegrationTest extends AbstractMutationIntegrat
   }
 
   @Test
+  @DisplayName("编码重复: 第二次写入失败,不产生重复通道")
   void shouldRejectDuplicateChannelCode() {
     String code = "int_fc_dup_" + System.currentTimeMillis();
     client

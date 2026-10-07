@@ -18,6 +18,7 @@ import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 import org.springframework.test.web.servlet.MockMvc;
@@ -30,6 +31,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
  * <p>历史异常数据案例：FE 已加 jobCode pattern,但 BE 未拦,被直接 INSERT `q q q` 含空格的 job_code,
  * 后续路由跳转崩。本测试守护 @ValidResourceCode 在 jobCode / newJobCode 两条入口都生效。
  */
+@DisplayName("作业定义控制器: 作业编码与作业类型校验在入口生效")
 class ConsoleJobDefinitionControllerValidationTest {
 
   private final ConsoleJobDefinitionApplicationService service =
@@ -79,6 +81,7 @@ class ConsoleJobDefinitionControllerValidationTest {
   }
 
   @Test
+  @DisplayName("作业编码含空格时返回参数校验失败, 且不写入下游")
   void rejects_jobCode_with_space() throws Exception {
     mockMvc
         .perform(post("/api/console/job-definitions")
@@ -91,6 +94,7 @@ class ConsoleJobDefinitionControllerValidationTest {
   }
 
   @Test
+  @DisplayName("作业编码含中文时返回参数校验失败")
   void rejects_jobCode_chinese() throws Exception {
     mockMvc
         .perform(post("/api/console/job-definitions")
@@ -101,6 +105,7 @@ class ConsoleJobDefinitionControllerValidationTest {
   }
 
   @Test
+  @DisplayName("作业编码以数字开头时返回参数校验失败")
   void rejects_jobCode_starts_with_digit() throws Exception {
     mockMvc
         .perform(post("/api/console/job-definitions")
@@ -111,6 +116,7 @@ class ConsoleJobDefinitionControllerValidationTest {
   }
 
   @Test
+  @DisplayName("作业编码为空时返回参数校验失败")
   void rejects_jobCode_blank() throws Exception {
     mockMvc
         .perform(post("/api/console/job-definitions")
@@ -121,6 +127,7 @@ class ConsoleJobDefinitionControllerValidationTest {
   }
 
   @Test
+  @DisplayName("作业编码符合格式要求时创建放行并触达下游")
   void accepts_valid_jobCode() throws Exception {
     // service mock 返回 null,responseFactory.success(null) 会被 controller 包成 SUCCESS;
     // 本测试只关心 validation 是否放行,不关心返回体的具体字段
@@ -137,7 +144,8 @@ class ConsoleJobDefinitionControllerValidationTest {
   }
 
   @Test
-  void acceptsEveryJobTypeDeclaredByTheSharedEnum() throws Exception {
+  @DisplayName("共享枚举声明的每种作业类型逐一创建均成功, 不留缺口")
+  void shouldAcceptEveryJobType_whenEnumeratingDeclaredValues() throws Exception {
     when(service.create(ArgumentMatchers.any())).thenReturn(null);
 
     for (JobType jobType : JobType.values()) {
@@ -150,7 +158,8 @@ class ConsoleJobDefinitionControllerValidationTest {
   }
 
   @Test
-  void rejectsUnknownJobTypeBeforePersistence() throws Exception {
+  @DisplayName("未声明的作业类型返回参数校验失败, 且不写入下游")
+  void shouldRejectUnknownJobType_whenNotDeclared() throws Exception {
     mockMvc
         .perform(post("/api/console/job-definitions")
             .contentType(APPLICATION_JSON)
@@ -162,6 +171,7 @@ class ConsoleJobDefinitionControllerValidationTest {
   }
 
   @Test
+  @DisplayName("克隆入参的新作业编码含空格时返回参数校验失败")
   void rejects_clone_newJobCode_with_space() throws Exception {
     String body = "{\"tenantId\":\"ta\",\"newJobCode\":\"q q q\"}";
     mockMvc

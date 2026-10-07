@@ -12,6 +12,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -22,6 +23,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@DisplayName("AI 会话分页查询映射: 时间戳并列,租户与属主隔离,过期会话过滤")
 class ConsoleAiConversationPageIntegrationTest extends AbstractIntegrationTest {
 
   private final ConsoleAiConversationMapper mapper;
@@ -39,7 +41,8 @@ class ConsoleAiConversationPageIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void cursorKeepsTimestampTiesAndTenantOwnerAndExpiryBoundaries() {
+  @DisplayName("游标分页: 时间戳并列时按既定顺序翻页,并隔离租户,属主与过期会话")
+  void shouldPageByCursorAndRespectTenantOwnerExpiry_whenTimestampsTie() {
     String tenantA = "ai-page-a-" + UUID.randomUUID();
     String tenantB = "ai-page-b-" + UUID.randomUUID();
     Instant updatedAt = Instant.now().minusSeconds(60);

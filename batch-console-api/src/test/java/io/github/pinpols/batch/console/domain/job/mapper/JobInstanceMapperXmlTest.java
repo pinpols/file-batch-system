@@ -13,12 +13,15 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.session.Configuration;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("作业实例查询语句的状态过滤口径: 各筛选保留自身业务语义的状态集合")
 class JobInstanceMapperXmlTest {
 
   @Test
-  void slaFilterKeepsItsBusinessStatusSetIncludingPartialFailure() {
+  @DisplayName("超期筛选保留自身业务口径的状态集合, 并包含部分失败状态")
+  void shouldKeepBusinessStatusSet_whenSlaFilterApplied() {
     String resource = "mapper/JobInstanceMapper.xml";
     Configuration configuration = new Configuration();
     try {

@@ -17,6 +17,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -27,6 +28,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@DisplayName("控制台用量日汇总: 并发累加计数,保留最新时间戳与数据库行级安全隔离")
 class ConsoleUsageDailyIntegrationTest extends AbstractIntegrationTest {
 
   private static final String RLS_ROLE = "console_usage_rls_test";
@@ -70,7 +72,8 @@ class ConsoleUsageDailyIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void concurrentRecordsAccumulateCountsAndPreserveLatestTimestamp() throws Exception {
+  @DisplayName("并发写入: 记录累加为事件总数,成功与失败分别计数,时间戳取最新一条")
+  void shouldAccumulateCounts_whenRecordingConcurrently() throws Exception {
     String tenantId = unique("usage-concurrent");
     Instant baseTime = LocalDate.now(timezoneProvider.defaultZone())
         .atTime(12, 0)
@@ -108,7 +111,8 @@ class ConsoleUsageDailyIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void summaryQueryRemainsTenantIsolatedUnderDatabaseRls() {
+  @DisplayName("数据库行级安全: 汇总查询只看到本租户数据,未设置租户上下文时返回空")
+  void shouldKeepTenantIsolated_whenQueryingSummaryUnderRls() {
     String tenantA = unique("usage-tenant-a");
     String tenantB = unique("usage-tenant-b");
     Instant eventTime = Instant.now();

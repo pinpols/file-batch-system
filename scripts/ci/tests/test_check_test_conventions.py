@@ -405,8 +405,13 @@ class BaselineTest(unittest.TestCase):
 
 class RealRepoTest(unittest.TestCase):
     def test_scan_is_stable_and_identities_unique(self) -> None:
+        """扫描必须真的覆盖到仓库测试源码，且标识唯一。
+
+        注意**不**断言「存在缺口」：治理到位后缺口就是 0，这是目标态而非异常。
+        """
+        scanned = MODULE.test_java_files()
+        self.assertGreater(len(scanned), 500)
         findings = MODULE.scan()
-        self.assertGreater(len(findings), 0)
         identities = [finding.identity for finding in findings]
         self.assertEqual(len(identities), len(set(identities)))
         for finding in findings:

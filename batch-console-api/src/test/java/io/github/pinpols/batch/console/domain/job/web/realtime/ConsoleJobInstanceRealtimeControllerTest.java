@@ -16,11 +16,13 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+@DisplayName("作业实例实时控制器: 服务器推送流的建立与订阅委托")
 class ConsoleJobInstanceRealtimeControllerTest {
 
   private final ConsoleRealtimeSubscriptionPort realtimeEventHub =
@@ -49,6 +51,7 @@ class ConsoleJobInstanceRealtimeControllerTest {
   }
 
   @Test
+  @DisplayName("建立实例事件推送流, 按租户解析后委托订阅")
   void shouldExposeJobInstanceRealtimeStream() throws Exception {
     mockMvc
         .perform(get("/api/console/stream/job-instances/events").param("tenantId", "t1"))

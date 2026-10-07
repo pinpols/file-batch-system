@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
@@ -26,6 +27,7 @@ import org.springframework.http.MediaType;
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+@DisplayName("作业定义写路径: 编码校验,落库租户强一致,更新与依赖作业字段")
 class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegrationTest {
 
   private String createBody(String jobCode) {
@@ -46,6 +48,7 @@ class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegr
   }
 
   @Test
+  @DisplayName("创建作业定义: 返回成功,落库行的租户与编码与请求一致")
   void shouldCreateJobDefinitionWithValidCode() {
     String jobCode = "int_test_create_" + System.currentTimeMillis();
 
@@ -77,6 +80,7 @@ class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegr
   }
 
   @Test
+  @DisplayName("编码含空格: 返回校验错误且不落库")
   void shouldRejectInvalidJobCodeWithSpaces() {
     client
         .post()
@@ -97,6 +101,7 @@ class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegr
   }
 
   @Test
+  @DisplayName("编码为中文: 返回请求不合法")
   void shouldRejectChineseJobCode() {
     client
         .post()
@@ -110,6 +115,7 @@ class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegr
   }
 
   @Test
+  @DisplayName("编码重复: 第二次写入失败,不产生重复定义")
   void shouldRejectDuplicateJobCode() {
     String jobCode = "int_test_dup_" + System.currentTimeMillis();
     // 第一次成功
@@ -139,6 +145,7 @@ class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegr
   }
 
   @Test
+  @DisplayName("更新作业定义: 返回成功,库内名称改为新值")
   void shouldUpdateJobDefinitionRow() {
     String jobCode = "int_test_update_" + System.currentTimeMillis();
     client
@@ -177,6 +184,7 @@ class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegr
   }
 
   @Test
+  @DisplayName("依赖作业字段: 创建与更新后库内依赖编码分别与请求一致")
   void shouldCreateAndUpdateDependsOnJobCode() {
     String jobCode = "int_test_dep_" + System.currentTimeMillis();
     try {

@@ -21,6 +21,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -28,6 +29,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("AI 工具集:租户绑定、只读查询与结果渲染")
 class ConsoleAiToolsTest {
 
   private static final String TENANT = "tenant-1";
@@ -74,7 +76,8 @@ class ConsoleAiToolsTest {
   }
 
   @Test
-  void getJobInstanceRendersStatusAndBindsTenant() {
+  @DisplayName("作业实例工具:渲染状态与失败分类,并按当前租户查询")
+  void shouldRenderStatusAndBindTenant_whenGettingJobInstance() {
     when(queryService.jobInstance(TENANT, 42L))
         .thenReturn(instance(42L, "FAILED", "DOWNSTREAM_ERROR"));
 
@@ -89,13 +92,15 @@ class ConsoleAiToolsTest {
   }
 
   @Test
-  void getJobInstanceReturnsNotFoundMessage() {
+  @DisplayName("作业实例工具:实例不存在时返回未找到提示")
+  void shouldReturnNotFoundMessage_whenJobInstanceMissing() {
     when(queryService.jobInstance(TENANT, 99L)).thenReturn(null);
     assertThat(tools().getJobInstance(99L)).contains("未找到").contains("99");
   }
 
   @Test
-  void getJobExecutionLogsBindsTenantAndInstance() {
+  @DisplayName("执行日志工具:渲染日志内容,并按当前租户与实例查询")
+  void shouldBindTenantAndInstance_whenGettingExecutionLogs() {
     PageResponse<ConsoleJobExecutionLogResponse> page = new PageResponse<>(
         1,
         1,
@@ -125,7 +130,8 @@ class ConsoleAiToolsTest {
   }
 
   @Test
-  void listRecentFailedFiltersByTenantAndFailedStatus() {
+  @DisplayName("失败列表工具:按当前租户与失败状态筛选,并渲染结果")
+  void shouldFilterByTenantAndFailedStatus_whenListingRecentFailures() {
     when(queryService.jobInstances(any()))
         .thenReturn(new PageResponse<>(1, 1, 10, List.of(instance(7L, "FAILED", "TIMEOUT"))));
 
@@ -140,7 +146,8 @@ class ConsoleAiToolsTest {
   }
 
   @Test
-  void getClusterDiagnosticsRendersHealthAndBindsTenant() {
+  @DisplayName("集群诊断工具:渲染健康状态,并按当前租户诊断")
+  void shouldRenderHealthAndBindTenant_whenGettingClusterDiagnostics() {
     Map<String, Object> shedLock = new LinkedHashMap<>();
     shedLock.put("totalLocks", 3);
     shedLock.put("activeLocks", 1);
@@ -179,13 +186,15 @@ class ConsoleAiToolsTest {
   }
 
   @Test
-  void getClusterDiagnosticsHandlesEmptyResult() {
+  @DisplayName("集群诊断工具:诊断结果为空时仍返回非空文本")
+  void shouldReturnNonBlankOutput_whenClusterDiagnosticsEmpty() {
     when(diagnosticService.diagnose(TENANT)).thenReturn(null);
     assertThat(tools().getClusterDiagnostics()).isNotBlank();
   }
 
   @Test
-  void diagnoseJobInstanceUsesTenantBoundReadOnlyDiagnostic() {
+  @DisplayName("实例诊断工具:按当前租户只读诊断,并渲染问题与建议")
+  void shouldUseTenantBoundDiagnostic_whenDiagnosingInstance() {
     Map<String, Object> instance = new LinkedHashMap<>();
     instance.put("id", 42L);
     instance.put("instanceStatus", "RUNNING");
@@ -241,7 +250,8 @@ class ConsoleAiToolsTest {
   }
 
   @Test
-  void getOpenAlertsBindsTenantAndOpenStatus() {
+  @DisplayName("未处理告警工具:按当前租户与未处理状态查询,并渲染结果")
+  void shouldBindTenantAndOpenStatus_whenGettingOpenAlerts() {
     when(queryService.alertEvents(any()))
         .thenReturn(new PageResponse<>(
             1, 1, 10, List.of(alert(5L, "JOB_SLA_VIOLATION", "CRITICAL", "OPEN", 7))));
@@ -262,13 +272,15 @@ class ConsoleAiToolsTest {
   }
 
   @Test
-  void getOpenAlertsReturnsEmptyMessageWhenNone() {
+  @DisplayName("未处理告警工具:无数据时返回空结果提示")
+  void shouldReturnEmptyMessage_whenNoOpenAlerts() {
     when(queryService.alertEvents(any())).thenReturn(new PageResponse<>(0, 1, 10, List.of()));
     assertThat(tools().getOpenAlerts()).contains("无").contains("OPEN");
   }
 
   @Test
-  void getRecentAlertsBindsTenantWithoutStatusFilter() {
+  @DisplayName("最近告警工具:按当前租户查询,且不附加状态过滤")
+  void shouldBindTenantWithoutStatusFilter_whenGettingRecentAlerts() {
     when(queryService.alertEvents(any()))
         .thenReturn(new PageResponse<>(
             1, 1, 10, List.of(alert(9L, "ASSET_FRESHNESS_STALE", "WARN", "ACKED", 2))));

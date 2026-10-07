@@ -13,6 +13,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -26,6 +27,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 // 部分 consumer 路径仅读 body 不读 channel,strict 会误判 UnnecessaryStubbing。
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
+@DisplayName("实时事件订阅消费者: 跨实例去重与快照类消息的分流")
 class ConsoleRealtimeRedisPubSubConsumerTest {
 
   @Mock
@@ -57,6 +59,7 @@ class ConsoleRealtimeRedisPubSubConsumerTest {
   }
 
   @Test
+  @DisplayName("消息来源实例与自身相同时不向本地事件中心转发")
   void shouldIgnoreMessagesPublishedBySameInstance() {
     ConsoleRealtimeStreamEnvelope envelope = new ConsoleRealtimeStreamEnvelope(
         "console-a",
@@ -74,6 +77,7 @@ class ConsoleRealtimeRedisPubSubConsumerTest {
   }
 
   @Test
+  @DisplayName("消息来源实例为其它实例时向本地事件中心转发")
   void shouldForwardMessagesFromOtherInstances() {
     ConsoleRealtimeStreamEnvelope envelope = new ConsoleRealtimeStreamEnvelope(
         "console-b",
@@ -91,6 +95,7 @@ class ConsoleRealtimeRedisPubSubConsumerTest {
   }
 
   @Test
+  @DisplayName("概览快照类消息直接用消息体发布快照, 不重新查询数据库")
   void shouldUseSummarySnapshotFromPayloadWithoutReloadingDb() {
     ConsoleRealtimeStreamEnvelope envelope = new ConsoleRealtimeStreamEnvelope(
         "console-b",

@@ -17,11 +17,13 @@ import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+@DisplayName("自助作业控制器: 重跑与补偿申请的提交与受理编号回包")
 class ConsoleSelfServiceJobControllerTest {
 
   private final ConsoleSelfServiceJobService selfServiceJobService =
@@ -53,6 +55,7 @@ class ConsoleSelfServiceJobControllerTest {
   }
 
   @Test
+  @DisplayName("提交重跑申请后返回受理编号, 回包为成功状态")
   void shouldSubmitRerunRequest() throws Exception {
     when(selfServiceJobService.requestRerun(
             any(ConsoleSelfServiceJobService.RerunParam.class), anyString(), anyString()))
@@ -77,6 +80,7 @@ class ConsoleSelfServiceJobControllerTest {
   }
 
   @Test
+  @DisplayName("提交补偿申请后返回受理编号, 回包为成功状态")
   void shouldSubmitCompensationRequest() throws Exception {
     when(selfServiceJobService.requestCompensation(
             any(ConsoleSelfServiceJobService.CompensationParam.class), anyString(), anyString()))

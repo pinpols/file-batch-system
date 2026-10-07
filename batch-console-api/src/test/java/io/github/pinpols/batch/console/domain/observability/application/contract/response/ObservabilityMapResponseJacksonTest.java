@@ -9,18 +9,21 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
  * wire 红线守护：observability 域类型化 response record 的 JSON key 必须与历史 Map 响应逐字一致。 覆盖动态维度键映射 （byStatus
  * additionalProperties）、嵌套列表、NON_NULL 省略、Instant 归一。
  */
+@DisplayName("可观测域响应记录序列化契约: 动态维度键, 嵌套列表与空值键省略")
 class ObservabilityMapResponseJacksonTest {
 
   private final ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
 
   @Test
-  void jobStatsShouldKeepDynamicByStatusKeysAndNestedTrend() throws Exception {
+  @DisplayName("作业统计保留按状态动态生成的键与嵌套趋势列表, 数值按原样输出")
+  void shouldKeepDynamicStatusKeysAndNestedTrend_whenJobStatsRowMapped() throws Exception {
     Map<String, Object> byStatus = new LinkedHashMap<>();
     byStatus.put("SUCCESS", 8L);
     byStatus.put("FAILED", 2L);
@@ -47,7 +50,8 @@ class ObservabilityMapResponseJacksonTest {
   }
 
   @Test
-  void executionProgressShouldPreserveNullTemporalKeys() throws Exception {
+  @DisplayName("执行进度显式写入的结束时间为空时仍保留该键, 并还原开始时间")
+  void shouldPreserveNullTemporalKeys_whenExecutionProgressRowMapped() throws Exception {
     // service 用 LinkedHashMap 显式 put startedAt/finishedAt（可为 null）→ 键必须保留（不加 NON_NULL）。
     Map<String, Object> row = new LinkedHashMap<>();
     row.put("id", 9L);
@@ -84,7 +88,8 @@ class ObservabilityMapResponseJacksonTest {
   }
 
   @Test
-  void slaComplianceShouldKeepNullAvgDurationKey() throws Exception {
+  @DisplayName("超期合规统计中平均时长为空时保留该键, 其余计数按原值输出")
+  void shouldKeepNullAvgDurationKey_whenSlaComplianceRowMapped() throws Exception {
     Map<String, Object> row = new LinkedHashMap<>();
     row.put("breached", 1L);
     row.put("onTime", 9L);
@@ -99,7 +104,8 @@ class ObservabilityMapResponseJacksonTest {
   }
 
   @Test
-  void systemParameterValueShouldOmitValueWhenMissing() throws Exception {
+  @DisplayName("系统参数命中时输出键与值, 未命中时只输出参数键")
+  void shouldOmitValueKey_whenSystemParameterValueMissing() throws Exception {
     // 命中：{key,value}；未命中：仅 {key}（NON_NULL 省略 value）。
     Map<String, Object> hit = roundTrip(ConsoleSystemParameterValueResponse.of("k1", "v1"));
     assertThat(hit).containsOnlyKeys("key", "value").containsEntry("value", "v1");
@@ -109,7 +115,8 @@ class ObservabilityMapResponseJacksonTest {
   }
 
   @Test
-  void pipelineProgressShouldKeepNullTotalRowsHintKey() throws Exception {
+  @DisplayName("流水线进度中总行数提示为空时仍保留该键, 其余字段按原值输出")
+  void shouldKeepNullTotalRowsHintKey_whenPipelineProgressSerialized() throws Exception {
     // 透传自 orchestrator record（无 NON_NULL），totalRowsHint 为 null 时显式保留键。
     Map<String, Object> back = roundTrip(new ConsolePipelineProgressItemResponse(
         "LOAD", 100L, null, Instant.parse("2026-07-11T02:00:00Z")));

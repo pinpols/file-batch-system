@@ -21,12 +21,14 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+@DisplayName("文件控制器: 归档、预签名下载与内容上传的接口行为")
 class ConsoleFileControllerTest {
 
   private final ConsoleFileApplicationService applicationService =
@@ -55,6 +57,7 @@ class ConsoleFileControllerTest {
   }
 
   @Test
+  @DisplayName("缺少幂等键请求头时返回 400 且不进入业务处理")
   void shouldReturn400WhenIdempotencyHeaderMissing() throws Exception {
     mockMvc
         .perform(
@@ -68,6 +71,7 @@ class ConsoleFileControllerTest {
   }
 
   @Test
+  @DisplayName("归档成功返回统一响应与操作状态")
   void shouldArchiveAndReturnCommonResponseOnSuccess() throws Exception {
     when(applicationService.archive(any(), anyString()))
         .thenReturn(new ConsoleFileOperationResponse("OK"));
@@ -85,6 +89,7 @@ class ConsoleFileControllerTest {
   }
 
   @Test
+  @DisplayName("预签名下载成功返回统一响应与审批单号")
   void shouldPresignDownloadAndReturnCommonResponseOnSuccess() throws Exception {
     when(applicationService.presignDownload(any(), anyString()))
         .thenReturn(new ConsolePresignDownloadResponse("appr-001", null));
@@ -102,6 +107,7 @@ class ConsoleFileControllerTest {
   }
 
   @Test
+  @DisplayName("上传内容成功返回统一响应与上传状态")
   void shouldUploadContentAndReturnCommonResponseOnSuccess() throws Exception {
     when(applicationService.uploadContent(anyString(), any(), any(), anyString()))
         .thenReturn(new ConsoleFileOperationResponse("UPLOADED"));

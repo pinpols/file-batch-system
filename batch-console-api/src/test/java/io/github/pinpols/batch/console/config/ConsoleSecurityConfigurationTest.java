@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.env.Environment;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -30,6 +31,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.csrf.DefaultCsrfToken;
 
+@DisplayName("控制台安全配置与认证过滤器: 租户白名单,开放模式与令牌 cookie 取值")
 class ConsoleSecurityConfigurationTest {
 
   private ConsoleSecurityProperties properties;
@@ -64,6 +66,7 @@ class ConsoleSecurityConfigurationTest {
   }
 
   @Test
+  @DisplayName("旁路模式下租户不在允许列表内,返回禁止且不进入过滤器链")
   void shouldRejectTenantOutsideAllowedListInBypassMode() throws Exception {
     batchSecurityProperties.setBypassMode(true);
     MockHttpServletRequest request = baseRequest();
@@ -80,6 +83,7 @@ class ConsoleSecurityConfigurationTest {
   }
 
   @Test
+  @DisplayName("测试环境开放模式下未带令牌入站,以管理员身份通过认证")
   void shouldAuthenticateAsAdminInTestingOpenModeWithoutToken() throws Exception {
     batchSecurityProperties.setBypassMode(true);
     MockHttpServletRequest request = baseRequest();
@@ -102,6 +106,7 @@ class ConsoleSecurityConfigurationTest {
   }
 
   @Test
+  @DisplayName("仅携带受保护 cookie 形式的令牌时,认证出用户名与租户")
   void shouldAuthenticateWithHttpOnlyCookie() throws Exception {
     // ADR-030 §D7 Stage B 收尾：JWT 通过 HttpOnly cookie batch_console_token 入站
     String token =
@@ -130,6 +135,7 @@ class ConsoleSecurityConfigurationTest {
   }
 
   @Test
+  @DisplayName("跨站令牌可从请求头取值,且与 cookie 中的值一致")
   void shouldAcceptCookieTokenValueFromAxiosHeader() {
     String tokenValue = "csrf-token-from-cookie";
     MockHttpServletRequest request = baseRequest();

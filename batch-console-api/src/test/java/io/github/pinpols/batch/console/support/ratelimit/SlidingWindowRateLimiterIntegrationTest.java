@@ -12,11 +12,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
+@DisplayName("滑动窗口限流: 配额边界、键隔离与并发下的原子性")
 class SlidingWindowRateLimiterIntegrationTest extends AbstractIntegrationTest {
 
   private SlidingWindowRateLimiter rateLimiter;
@@ -36,6 +38,7 @@ class SlidingWindowRateLimiterIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("配额为五时前五次请求全部放行, 第六次被拒绝")
   void shouldAllowExactlyLimitRequests() {
     for (int i = 0; i < 5; i++) {
       assertThat(rateLimiter.tryAcquire("test:exact", 5)).isTrue();
@@ -44,6 +47,7 @@ class SlidingWindowRateLimiterIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("其中一个键用尽配额后, 另一个键仍可正常获取配额")
   void shouldIsolateDifferentKeys() {
     for (int i = 0; i < 5; i++) {
       rateLimiter.tryAcquire("test:keyA", 5);
@@ -52,6 +56,7 @@ class SlidingWindowRateLimiterIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("二十个线程并发争抢十个配额时, 最终只有十次被放行")
   void shouldBeThreadSafeUnderConcurrency() throws InterruptedException {
     int threads = 20;
     int limit = 10;

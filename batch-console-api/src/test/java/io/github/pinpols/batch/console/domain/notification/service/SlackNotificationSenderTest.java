@@ -25,6 +25,7 @@ class SlackNotificationSenderTest {
   }
 
   @Test
+  @DisplayName("渠道标识大小写不敏感地识别该通道, 其它渠道与空值不支持")
   void shouldSupportSlackCaseInsensitive() {
     SlackNotificationSender sender = new SlackNotificationSender(objectMapper, failOnRequest());
 
@@ -35,6 +36,7 @@ class SlackNotificationSenderTest {
   }
 
   @Test
+  @DisplayName("缺少回调地址时直接失败, 不发起网络请求且无响应状态")
   void shouldFailWithoutGoingNetwork_whenUrlMissing() {
     SlackNotificationSender sender = new SlackNotificationSender(objectMapper, failOnRequest());
 
@@ -46,6 +48,7 @@ class SlackNotificationSenderTest {
   }
 
   @Test
+  @DisplayName("响应体为成功标记时判定成功, 请求体带文本字段且走在受保护地址策略上")
   void shouldReturnOk_whenBodyIsOk() {
     AtomicReference<OutboundHttpRequest> captured = new AtomicReference<>();
     SlackNotificationSender sender = new SlackNotificationSender(objectMapper, request -> {
@@ -62,6 +65,7 @@ class SlackNotificationSenderTest {
   }
 
   @Test
+  @DisplayName("响应状态非成功时判定失败, 错误摘要取响应体内容")
   void shouldFail_whenBodyNotOk() {
     SlackNotificationSender sender = new SlackNotificationSender(
         objectMapper, request -> new OutboundHttpResponse(400, "invalid_payload"));
@@ -75,6 +79,7 @@ class SlackNotificationSenderTest {
   }
 
   @Test
+  @DisplayName("域名解析到内网地址时拦截, 不发起真实投递")
   void shouldBlock_whenHostResolvesToInternalAddress() {
     SlackNotificationSender sender =
         new SlackNotificationSender(objectMapper, new OkHttpConsoleExternalHttpTransport());
@@ -87,6 +92,7 @@ class SlackNotificationSenderTest {
   }
 
   @Test
+  @DisplayName("地址为字面量元数据内网地址时拦截, 不发起真实投递")
   void shouldBlock_whenUrlIsLiteralInternalIp() {
     SlackNotificationSender sender =
         new SlackNotificationSender(objectMapper, new OkHttpConsoleExternalHttpTransport());

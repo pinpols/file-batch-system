@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
@@ -23,6 +24,7 @@ import org.springframework.http.MediaType;
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+@DisplayName("原子任务配置写路径: 参数文档落库,按类型列表查询与参数安全校验")
 class ConsoleAtomicTaskConfigMutationIntegrationTest extends AbstractMutationIntegrationTest {
 
   private static final String TENANT = "int-atc-ta";
@@ -41,6 +43,7 @@ class ConsoleAtomicTaskConfigMutationIntegrationTest extends AbstractMutationInt
   }
 
   @Test
+  @DisplayName("创建 SQL 类型配置: 返回成功,落库的类型,名称与参数内容与请求一致")
   void shouldCreateSqlConfigAndPersistParametersJsonb() {
     String name = "it_create_" + System.currentTimeMillis();
 
@@ -68,6 +71,7 @@ class ConsoleAtomicTaskConfigMutationIntegrationTest extends AbstractMutationInt
   }
 
   @Test
+  @DisplayName("按任务类型列表查询: 返回刚创建的那条配置")
   void shouldListByTaskTypeAfterCreate() {
     String name = "it_list_" + System.currentTimeMillis();
     client
@@ -97,6 +101,7 @@ class ConsoleAtomicTaskConfigMutationIntegrationTest extends AbstractMutationInt
   }
 
   @Test
+  @DisplayName("参数含密码类字段: 返回请求不合法,敏感配置不入库")
   void shouldRejectSensitiveKeyInParameters() {
     // parameters 含 password 关键字 → SensitiveDataValidator 拒入
     client
@@ -119,6 +124,7 @@ class ConsoleAtomicTaskConfigMutationIntegrationTest extends AbstractMutationInt
   }
 
   @Test
+  @DisplayName("参数含未定义字段: 返回请求不合法")
   void shouldRejectExtraneousParameterKey() {
     // 含 schema 未定义 key → 400
     client
@@ -135,6 +141,7 @@ class ConsoleAtomicTaskConfigMutationIntegrationTest extends AbstractMutationInt
   }
 
   @Test
+  @DisplayName("列表查询传入未知任务类型: 返回请求不合法")
   void shouldRejectUnknownTaskTypeOnList() {
     client
         .get()

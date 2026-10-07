@@ -210,7 +210,7 @@ class TencentCaptchaVerifierTest {
 
   @Test
   @DisplayName("provider 标识 = tencent")
-  void providerName() {
+  void shouldReportTencent_whenQueryingProviderName() {
     assertThat(new StubVerifier(properties, "{}", 1L).provider()).isEqualTo("tencent");
   }
 }

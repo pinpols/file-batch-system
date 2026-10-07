@@ -27,6 +27,7 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -37,6 +38,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 /** P2: ConsoleConfigSyncController export/preview/import/logs 透传到 application service。 */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("配置同步控制器: 导出、预检、导入与日志查询的入参委托")
 class ConsoleConfigSyncControllerTest {
 
   @Mock
@@ -65,7 +67,8 @@ class ConsoleConfigSyncControllerTest {
   }
 
   @Test
-  void exportShouldDelegateWithIdempotencyHeader() throws Exception {
+  @DisplayName("导出配置时, 请求体组装成入参并带幂等键, 响应返回来源租户与汇总")
+  void shouldDelegateExportWithIdempotencyHeader_whenExporting() throws Exception {
     when(service.export(any(ConfigSyncExportRequest.class)))
         .thenReturn(new ConfigSyncExportResponse("ta", "dev", "prod", summary(), null));
     mockMvc
@@ -80,7 +83,8 @@ class ConsoleConfigSyncControllerTest {
   }
 
   @Test
-  void previewShouldDelegateWithIdempotencyHeader() throws Exception {
+  @DisplayName("预检配置同步时, 请求体组装成入参并带幂等键")
+  void shouldDelegatePreviewWithIdempotencyHeader_whenPreviewing() throws Exception {
     when(service.preview(any(ConfigSyncPreviewRequest.class)))
         .thenReturn(new ConfigSyncPreviewResponse("tb", "ta", "dev", "prod", summary()));
     mockMvc
@@ -95,7 +99,8 @@ class ConsoleConfigSyncControllerTest {
   }
 
   @Test
-  void importBundleShouldDelegateWithBundleAndDryRun() throws Exception {
+  @DisplayName("导入配置包时, 包内容与试运行开关组装成入参, 响应返回同步日志标识")
+  void shouldDelegateImportWithBundleAndDryRun_whenImporting() throws Exception {
     when(service.importBundle(any(ConfigSyncImportRequest.class)))
         .thenReturn(new ConfigSyncImportResponse(7L, summary(), null));
     mockMvc
@@ -110,7 +115,8 @@ class ConsoleConfigSyncControllerTest {
   }
 
   @Test
-  void logsShouldPassTenantAndLimit() throws Exception {
+  @DisplayName("查询同步日志时, 租户与条数上限传给服务, 未指定上限时取缺省值")
+  void shouldPassTenantAndLimit_whenQueryingLogs() throws Exception {
     when(service.logs("ta", 50))
         .thenReturn(List.of(new ConfigSyncLogResponse(
             1L,

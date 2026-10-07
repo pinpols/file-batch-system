@@ -93,7 +93,7 @@ class CloudflareTurnstileVerifierTest {
 
   @Test
   @DisplayName("provider 标识 = cloudflare")
-  void providerName() {
+  void shouldReportCloudflare_whenQueryingProviderName() {
     StubVerifier verifier = new StubVerifier(properties, "{\"success\":true}");
     assertThat(verifier.provider()).isEqualTo("cloudflare");
   }

@@ -17,6 +17,7 @@ import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 import org.springframework.test.web.servlet.MockMvc;
@@ -26,6 +27,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 /**
  * 守护 ConsoleBatchWindowController 的 BatchWindowCreateRequest.windowCode 走 @ValidResourceCode 拦截。
  */
+@DisplayName("批量窗口控制器: 窗口编码格式校验的拒绝与通过路径")
 class ConsoleBatchWindowControllerValidationTest {
 
   private final ConsoleBatchWindowApplicationService service =
@@ -70,6 +72,7 @@ class ConsoleBatchWindowControllerValidationTest {
   }
 
   @Test
+  @DisplayName("窗口编码含空格时返回参数校验失败, 且不写入下游")
   void rejects_windowCode_with_space() throws Exception {
     mockMvc
         .perform(
@@ -80,6 +83,7 @@ class ConsoleBatchWindowControllerValidationTest {
   }
 
   @Test
+  @DisplayName("窗口编码含中文时返回参数校验失败")
   void rejects_windowCode_chinese() throws Exception {
     mockMvc
         .perform(
@@ -89,6 +93,7 @@ class ConsoleBatchWindowControllerValidationTest {
   }
 
   @Test
+  @DisplayName("窗口编码以数字开头时返回参数校验失败")
   void rejects_windowCode_starts_with_digit() throws Exception {
     mockMvc
         .perform(
@@ -98,6 +103,7 @@ class ConsoleBatchWindowControllerValidationTest {
   }
 
   @Test
+  @DisplayName("窗口编码为空时返回参数校验失败")
   void rejects_windowCode_blank() throws Exception {
     mockMvc
         .perform(
@@ -107,6 +113,7 @@ class ConsoleBatchWindowControllerValidationTest {
   }
 
   @Test
+  @DisplayName("窗口编码符合格式要求时创建成功并触达下游")
   void accepts_valid_windowCode() throws Exception {
     when(service.create(ArgumentMatchers.any())).thenReturn(null);
     mockMvc

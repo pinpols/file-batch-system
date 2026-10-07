@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
@@ -22,6 +23,7 @@ import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
  *
  * <p>新增枚举忘记登记时，CI 阶段就会失败。
  */
+@DisplayName("字典枚举注册守护: 枚举契约、注册清单与排除白名单一致性")
 class ConsoleMetaEnumRegistrationTest {
 
   private static final String ENUM_PACKAGE = "io.github.pinpols.batch.common.enums";
@@ -35,7 +37,8 @@ class ConsoleMetaEnumRegistrationTest {
       );
 
   @Test
-  void everyCommonEnumImplementsDictEnum() {
+  @DisplayName("扫描到的公共枚举应全部实现字典契约,提供编码与标签")
+  void shouldImplementDictionaryContract_whenScanningPublicEnums() {
     Set<String> scanned = scanEnumSimpleNames();
     assertThat(scanned).as("扫描器应能发现至少 50 个公共枚举，否则说明扫描失败").hasSizeGreaterThan(50);
 
@@ -50,7 +53,8 @@ class ConsoleMetaEnumRegistrationTest {
   }
 
   @Test
-  void everyCommonEnumIsRegisteredOrExplicitlyExcluded() {
+  @DisplayName("每个公共枚举都必须注册到对外字典,或出现在带原因的排除白名单中")
+  void shouldBeRegisteredOrExplicitlyExcluded_whenEnumIsPublic() {
     Set<String> scanned = scanEnumSimpleNames();
     Set<String> registered = ConsoleMetaQueryService.registeredEnumClasses().stream()
         .map(Class::getSimpleName)
@@ -67,7 +71,8 @@ class ConsoleMetaEnumRegistrationTest {
   }
 
   @Test
-  void excludedEnumsAreNotRegistered() {
+  @DisplayName("排除白名单中的枚举不应同时出现在对外注册清单中")
+  void shouldNotBeRegistered_whenEnumIsInExclusionWhitelist() {
     assertThat(EXCLUDED)
         .as("EXCLUDED 白名单为空时 doesNotContainAnyElementsOf 无法提供有效断言")
         .isNotEmpty();
@@ -82,7 +87,8 @@ class ConsoleMetaEnumRegistrationTest {
   }
 
   @Test
-  void excludedEntriesReferExistingEnums() {
+  @DisplayName("排除白名单条目必须对应真实存在的枚举,防止说明注释滞留")
+  void shouldReferExistingEnums_whenCheckingWhitelistEntries() {
     Set<String> scanned = scanEnumSimpleNames();
     assertThat(scanned).as("EXCLUDED 白名单条目必须对应真实存在的枚举（防止原因注释滞留、枚举已删除）").containsAll(EXCLUDED);
   }

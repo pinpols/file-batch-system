@@ -31,6 +31,7 @@ import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -45,6 +46,7 @@ import org.springframework.test.web.reactive.server.WebTestClient;
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+@DisplayName("控制台 HTTP 写端点: 触发,导出,排水,审批,文件与密钥等链路的响应与入参校验")
 class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
 
   @LocalServerPort
@@ -98,6 +100,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("触发作业: 返回成功并回显实例编号,应用服务被调用一次")
   void shouldTriggerJobViaHttp() {
     when(jobTriggerService.trigger(any(), anyString())).thenReturn("job-instance-001");
 
@@ -122,6 +125,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("导出配置发布报表: 返回成功,响应体字节与导出内容一致")
   void shouldExportConfigReleasesReportViaHttp() {
     byte[] content = "config-releases-report".getBytes(StandardCharsets.UTF_8);
     // R2-P1-9: 应用服务签名已切到 StreamingResponseBody，直接 lambda 写响应流
@@ -141,6 +145,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("缺少作业编码: 返回校验错误且不触达应用服务")
   void shouldReturnValidationErrorWhenJobCodeMissing() {
     webTestClient
         .post()
@@ -160,6 +165,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("排水工作节点: 返回成功且响应体状态为排水中,应用服务被调用")
   void shouldDrainWorkerViaHttp() {
     when(workerApplicationService.drain(anyString(), any(), anyString()))
         .thenReturn(new ConsoleWorkerRegistryResponse(
@@ -197,6 +203,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("审批通过: 返回成功并回显审批结果,应用服务按请求入参被调用")
   void shouldApproveApprovalViaHttp() {
     when(approvalApplicationService.approve(anyString(), anyString(), anyString(), anyString()))
         .thenReturn("APPROVED");
@@ -222,6 +229,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("归档文件: 返回成功且响应体状态为已归档")
   void shouldArchiveFileViaHttp() {
     when(fileApplicationService.archive(any(), anyString()))
         .thenReturn(new ConsoleFileOperationResponse(FileStatus.ARCHIVED.code()));
@@ -247,6 +255,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("预签名下载: 返回成功并回显审批单号")
   void shouldPresignDownloadFileViaHttp() {
     when(fileApplicationService.presignDownload(any(), anyString()))
         .thenReturn(new ConsolePresignDownloadResponse("appr-001", null));
@@ -272,6 +281,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("轮换密钥: 返回成功并在响应体带出新版本号")
   void shouldRotateSecretViaHttp() {
     when(configApplicationService.rotateSecretVersion(any())).thenReturn(11L);
 
@@ -296,6 +306,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("流式对话: 依次推送开始,增量与完成事件,会话标识与增量内容可见")
   void shouldStreamChatViaHttp() {
     AiChatResponse chatResponse = new AiChatResponse();
     chatResponse.setRequestId("req-1");
@@ -336,6 +347,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("下载文件: 返回成功,响应体内容与文件一致,应用服务按入参被调用")
   void shouldDownloadFileViaHttp() {
     byte[] content = "hello-batch".getBytes(StandardCharsets.UTF_8);
     when(fileDownloadApplicationService.download(anyString(), any(), anyString()))

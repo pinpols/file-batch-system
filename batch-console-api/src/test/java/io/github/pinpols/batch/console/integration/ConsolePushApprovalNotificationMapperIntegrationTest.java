@@ -9,6 +9,7 @@ import io.github.pinpols.batch.console.domain.notification.mapper.ConsolePushApp
 import io.github.pinpols.batch.console.domain.notification.support.PendingApprovalNotification;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -18,6 +19,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@DisplayName("审批通知待发查询映射: 终态筛选,申请人与时窗过滤及幂等写入")
 class ConsolePushApprovalNotificationMapperIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
@@ -27,7 +29,8 @@ class ConsolePushApprovalNotificationMapperIntegrationTest extends AbstractInteg
   private JdbcTemplate jdbc;
 
   @Test
-  void findPendingShouldReturnTerminalApprovalsWithRequester() {
+  @DisplayName("筛选待通知审批单: 已批准的终态单被选中,申请人,审批人与类型字段带出")
+  void shouldReturnTerminalApprovals_whenApprovalEligible() {
     String tenant = "t-papp-" + BatchDateTimeSupport.utcEpochMillis();
     String no = insertApproval(tenant, "CATCH_UP", "APPROVED", "alice", "bob", "ok", "0 minute");
 
@@ -42,7 +45,8 @@ class ConsolePushApprovalNotificationMapperIntegrationTest extends AbstractInteg
   }
 
   @Test
-  void findPendingShouldExcludePending() {
+  @DisplayName("仍待审批的单: 不出现在待通知列表中")
+  void shouldExcludeApprovals_whenStatusNotTerminal() {
     String tenant = "t-papp-" + BatchDateTimeSupport.utcEpochMillis();
     String no = insertApproval(tenant, "CATCH_UP", "PENDING", "alice", null, null, "0 minute");
     String controlNo = insertEligibleApproval(tenant);
@@ -56,7 +60,8 @@ class ConsolePushApprovalNotificationMapperIntegrationTest extends AbstractInteg
   }
 
   @Test
-  void findPendingShouldExcludeNullRequester() {
+  @DisplayName("缺少申请人的单: 不出现在待通知列表中")
+  void shouldExcludeApprovals_whenRequesterMissing() {
     String tenant = "t-papp-" + BatchDateTimeSupport.utcEpochMillis();
     String no = insertApproval(tenant, "COMPENSATION", "APPROVED", null, "bob", "ok", "0 minute");
     String controlNo = insertEligibleApproval(tenant);
@@ -70,7 +75,8 @@ class ConsolePushApprovalNotificationMapperIntegrationTest extends AbstractInteg
   }
 
   @Test
-  void findPendingShouldExcludeOutsideLookbackWindow() {
+  @DisplayName("审批时间超出回溯窗口的单: 不出现在待通知列表中")
+  void shouldExcludeApprovals_whenOutsideLookbackWindow() {
     String tenant = "t-papp-" + BatchDateTimeSupport.utcEpochMillis();
     String no = insertApproval(tenant, "DOWNLOAD", "REJECTED", "alice", "bob", "no", "30 minute");
     String controlNo = insertEligibleApproval(tenant);
@@ -84,7 +90,8 @@ class ConsolePushApprovalNotificationMapperIntegrationTest extends AbstractInteg
   }
 
   @Test
-  void findPendingShouldExcludeAlreadyNotified() {
+  @DisplayName("已登记通知的单: 不出现在待通知列表中")
+  void shouldExcludeApprovals_whenAlreadyNotified() {
     String tenant = "t-papp-" + BatchDateTimeSupport.utcEpochMillis();
     String no = insertApproval(tenant, "CATCH_UP", "EXECUTED", "alice", "bob", "done", "0 minute");
     ConsolePushApprovalNotificationEntity n = new ConsolePushApprovalNotificationEntity();
@@ -102,7 +109,8 @@ class ConsolePushApprovalNotificationMapperIntegrationTest extends AbstractInteg
   }
 
   @Test
-  void insertIgnoreShouldReturnOneFirstThenZeroOnConflict() {
+  @DisplayName("同一审批单重复登记: 首次写入一行,第二次忽略且不影响行数")
+  void shouldInsertOnceAndIgnoreConflict_whenSameApprovalNotifiedTwice() {
     String tenant = "t-papp-" + BatchDateTimeSupport.utcEpochMillis();
     ConsolePushApprovalNotificationEntity n = new ConsolePushApprovalNotificationEntity();
     n.setTenantId(tenant);

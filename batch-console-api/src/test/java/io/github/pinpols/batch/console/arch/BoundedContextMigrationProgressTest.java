@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestReporter;
 
@@ -43,6 +44,7 @@ import org.junit.jupiter.api.TestReporter;
  *
  * <p>{@link BoundedContextDependencyArchTest} 当前已切换为严格隔离规则;本测试保留逐类清单输出能力。
  */
+@DisplayName("限界上下文迁移进度快照: 汇总各上下文之间的越界依赖矩阵并校验越界计数为 0")
 class BoundedContextMigrationProgressTest {
 
   /**
@@ -151,7 +153,8 @@ class BoundedContextMigrationProgressTest {
       Map.entry("support", "ADAPTER_OR_SUPPORT"));
 
   @Test
-  void reportCurrentViolationCount(TestReporter testReporter) {
+  @DisplayName("输出逐类跨域依赖清单与上下文矩阵, 未豁免的越界依赖计数必须为 0")
+  void shouldReportViolationInventory_whenScanningDomainClasses(TestReporter testReporter) {
     JavaClasses classes = new ClassFileImporter()
         .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
         .importPackages("io.github.pinpols.batch.console..");

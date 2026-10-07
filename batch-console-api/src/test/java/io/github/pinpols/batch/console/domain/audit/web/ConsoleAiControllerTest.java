@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.test.web.servlet.MockMvc;
@@ -39,6 +40,7 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+@DisplayName("AI 助手控制器: 请求校验、流式应答与取消的归属校验")
 class ConsoleAiControllerTest {
 
   private final ConsoleAiApplicationService applicationService =
@@ -73,6 +75,7 @@ class ConsoleAiControllerTest {
   }
 
   @Test
+  @DisplayName("缺少幂等键请求头时返回 400 且不进入业务处理")
   void shouldReturn400WhenIdempotencyHeaderMissing() throws Exception {
     mockMvc
         .perform(
@@ -86,6 +89,7 @@ class ConsoleAiControllerTest {
   }
 
   @Test
+  @DisplayName("提示词为空白时返回 400 校验错误")
   void shouldReturn400WhenPromptIsBlank() throws Exception {
     mockMvc
         .perform(post("/api/console/ai/chat/stream")
@@ -101,6 +105,7 @@ class ConsoleAiControllerTest {
   }
 
   @Test
+  @DisplayName("旧版对话端点不再暴露并返回 404")
   void shouldNotExposeLegacyJsonChatEndpoint() throws Exception {
     mockMvc
         .perform(post("/api/console/ai/chat")
@@ -114,6 +119,7 @@ class ConsoleAiControllerTest {
   }
 
   @Test
+  @DisplayName("流式应答按增量与结束事件推送完整答案")
   void shouldStreamDeltasAndFinalAuditedAnswer() throws Exception {
     when(requestMetadataResolver.current())
         .thenReturn(new ConsoleRequestMetadata(
@@ -151,6 +157,7 @@ class ConsoleAiControllerTest {
   }
 
   @Test
+  @DisplayName("非会话归属人取消他人流式请求时返回 404")
   void shouldRejectCrossOperatorCancellation() throws Exception {
     when(requestMetadataResolver.current())
         .thenReturn(
@@ -187,6 +194,7 @@ class ConsoleAiControllerTest {
   }
 
   @Test
+  @DisplayName("会话分页按当前租户与操作人范围返回")
   void shouldReturnOwnerScopedConversationPage() throws Exception {
     when(requestMetadataResolver.current())
         .thenReturn(

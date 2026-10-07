@@ -9,6 +9,7 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -24,6 +25,7 @@ import org.springframework.test.web.reactive.server.WebTestClient;
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+@DisplayName("内部测试数据清理接口: 转发编排器并包装响应,前缀参数校验")
 class ConsoleAdminTestDataControllerIntegrationTest extends AbstractIntegrationTest {
 
   @LocalServerPort
@@ -47,7 +49,8 @@ class ConsoleAdminTestDataControllerIntegrationTest extends AbstractIntegrationT
   }
 
   @Test
-  void cleanupShouldForwardToOrchestratorAndWrapResponse() {
+  @DisplayName("按前缀清理: 转发到编排器,并把清理条数包装进成功响应")
+  void shouldForwardToOrchestratorAndWrapResponse_whenPrefixValid() {
     webTestClient
         .delete()
         .uri("/api/console/admin/test-data?prefix=" + PREFIX)
@@ -66,7 +69,8 @@ class ConsoleAdminTestDataControllerIntegrationTest extends AbstractIntegrationT
   }
 
   @Test
-  void cleanupShouldRejectBlankPrefix() {
+  @DisplayName("前缀为空: 返回请求不合法")
+  void shouldRejectBlankPrefix_whenCleaningTestData() {
     webTestClient
         .delete()
         .uri("/api/console/admin/test-data?prefix=")
@@ -76,7 +80,8 @@ class ConsoleAdminTestDataControllerIntegrationTest extends AbstractIntegrationT
   }
 
   @Test
-  void cleanupShouldRejectIllegalPrefixCharacters() {
+  @DisplayName("前缀含非法字符: 返回客户端错误")
+  void shouldRejectIllegalPrefixCharacters_whenCleaningTestData() {
     // % / ' / ; 等 @Pattern 拦截
     webTestClient
         .delete()

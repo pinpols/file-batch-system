@@ -88,6 +88,7 @@ import reactor.core.publisher.Sinks;
  * mock，避免脆弱。
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("AI 应用服务:防护决策、流式对话与审计结算边界")
 class DefaultConsoleAiApplicationServiceTest {
 
   @Mock
@@ -378,6 +379,7 @@ class DefaultConsoleAiApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("流式对话:逐片下发内容,并按最终用量记录审计")
   void shouldStreamProviderChunksAndAuditFinalResponse() {
     aiProperties.getTools().setEnabled(false);
     when(promptGuard.check(any()))
@@ -436,6 +438,7 @@ class DefaultConsoleAiApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("流式对话中断:按失败结算与审计,且不再继续下发")
   void shouldSettleAndAuditStoppedStreamAsFailed() {
     aiProperties.getTools().setEnabled(false);
     when(promptGuard.check(any()))

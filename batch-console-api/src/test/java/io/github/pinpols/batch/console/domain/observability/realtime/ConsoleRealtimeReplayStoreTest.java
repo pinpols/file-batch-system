@@ -12,6 +12,7 @@ import io.github.pinpols.batch.console.infrastructure.realtime.ConsoleRealtimeRe
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -26,6 +27,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 // executePipelined 不读 opsForList,strict 模式会报 UnnecessaryStubbing。
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
+@DisplayName("实时回放存储: 游标续传读取与写入时的裁剪过期")
 class ConsoleRealtimeReplayStoreTest {
 
   @Mock
@@ -35,6 +37,7 @@ class ConsoleRealtimeReplayStoreTest {
   private ListOperations<String, String> listOperations;
 
   @Test
+  @DisplayName("按游标从回放缓冲续传, 只返回游标之后的事件")
   void shouldReplayEventsAfterCursor() {
     when(redisTemplate.opsForList()).thenReturn(listOperations);
     ConsoleRealtimeReplayStore store = new ConsoleRealtimeReplayStore(
@@ -69,6 +72,7 @@ class ConsoleRealtimeReplayStoreTest {
   }
 
   @Test
+  @DisplayName("写入回放缓冲时在同一次管道操作内完成裁剪与过期设置")
   void shouldTrimAndExpireReplayBufferUsingConfiguredRetention() {
     when(redisTemplate.opsForList()).thenReturn(listOperations);
     ConsoleRealtimeReplayStore store = new ConsoleRealtimeReplayStore(

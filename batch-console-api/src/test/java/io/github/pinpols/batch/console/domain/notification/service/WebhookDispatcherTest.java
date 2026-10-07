@@ -14,8 +14,10 @@ import java.util.Collections;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("回调分发器: 事件类型匹配, 回调地址安全拦截与载荷签名")
 class WebhookDispatcherTest {
 
   private ConsoleWebhookService webhookService;
@@ -33,6 +35,7 @@ class WebhookDispatcherTest {
   }
 
   @Test
+  @DisplayName("租户无启用订阅时异步分发直接早返回, 不写投递日志")
   void shouldNotDispatchWhenNoSubscriptions() throws InterruptedException {
     // R3-P1-11：原 Thread.sleep(200) flaky；CI 低 CPU 时异步任务可能还没运行就被 verifyNoInteractions
     // 假阳通过。改用 CountDownLatch — stub findEnabledSubscriptions 在被调用时 countDown，
@@ -52,6 +55,7 @@ class WebhookDispatcherTest {
   }
 
   @Test
+  @DisplayName("订阅事件类型为通配符时, 任意事件都匹配")
   void shouldMatchWildcardEventType() throws Exception {
     Method matches =
         WebhookDispatcher.class.getDeclaredMethod("matches", String.class, String.class);
@@ -63,6 +67,7 @@ class WebhookDispatcherTest {
   }
 
   @Test
+  @DisplayName("订阅事件类型清单包含该事件时, 判定为匹配")
   void shouldMatchSpecificEventType() throws Exception {
     Method matches =
         WebhookDispatcher.class.getDeclaredMethod("matches", String.class, String.class);
@@ -74,6 +79,7 @@ class WebhookDispatcherTest {
   }
 
   @Test
+  @DisplayName("订阅事件类型清单不含该事件时, 判定为不匹配")
   void shouldNotMatchUnrelatedEventType() throws Exception {
     Method matches =
         WebhookDispatcher.class.getDeclaredMethod("matches", String.class, String.class);
@@ -85,6 +91,7 @@ class WebhookDispatcherTest {
   }
 
   @Test
+  @DisplayName("事件类型统一转为大写后, 再参与匹配")
   void shouldNormalizeEventTypeToUpperCase() throws Exception {
     Method normalizeEventType =
         WebhookDispatcher.class.getDeclaredMethod("normalizeEventType", String.class);
@@ -96,6 +103,7 @@ class WebhookDispatcherTest {
   }
 
   @Test
+  @DisplayName("事件类型为空时, 归一为未知类型")
   void shouldNormalizeNullEventTypeToUnknown() throws Exception {
     Method normalizeEventType =
         WebhookDispatcher.class.getDeclaredMethod("normalizeEventType", String.class);
@@ -107,6 +115,7 @@ class WebhookDispatcherTest {
   }
 
   @Test
+  @DisplayName("回调地址域名解析到内网回环时投递被拦, 失败原因指向受限网段")
   void shouldBlockDeliveryWhenCallbackHostResolvesToInternalAddress() {
     // 真 per-request pin 的端到端证明:回调用**主机名**(rebinding 的实际攻击形态),它解析到内网回环,
     // OkHttp 建连前经 SsrfGuardedDns 校验被拦,投递折叠为 failure。若 guard 是装饰性的(未接进真实 client),
@@ -123,6 +132,7 @@ class WebhookDispatcherTest {
   }
 
   @Test
+  @DisplayName("回调地址为字面量元数据内网地址时投递被拦, 失败原因指向受限网段")
   void shouldBlockDeliveryWhenCallbackIsLiteralInternalIp() {
     // Critical 回归防护:OkHttp 对字面量 IP 短路不走 SsrfGuardedDns,故 deliver 里补 guard 兜底拦字面量内网/元数据 IP。
     // 若没有这道兜底,租户建 WEBHOOK 渠道 url=169.254.169.254 点测试即打云 metadata。
@@ -138,6 +148,7 @@ class WebhookDispatcherTest {
   }
 
   @Test
+  @DisplayName("载荷签名带算法前缀, 摘要为十六进制定长")
   void shouldSignPayloadWithHmacSha256() throws Exception {
     Method sign = WebhookDispatcher.class.getDeclaredMethod("sign", String.class, String.class);
     sign.setAccessible(true);

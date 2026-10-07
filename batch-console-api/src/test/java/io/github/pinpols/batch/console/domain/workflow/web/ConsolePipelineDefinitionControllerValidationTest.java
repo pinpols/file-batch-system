@@ -17,6 +17,7 @@ import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 import org.springframework.test.web.servlet.MockMvc;
@@ -27,6 +28,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
  * 守护 ConsolePipelineDefinitionController 的 PipelineDefinitionSaveRequest.jobCode + 嵌套 steps
  * 的 @Valid 拦截。
  */
+@DisplayName("流水线定义控制器入参校验: 作业编码与嵌套步骤非法时均拒绝请求")
 class ConsolePipelineDefinitionControllerValidationTest {
 
   private final PipelineDefinitionService service = mock(PipelineDefinitionService.class);
@@ -68,6 +70,7 @@ class ConsolePipelineDefinitionControllerValidationTest {
   }
 
   @Test
+  @DisplayName("作业编码含空格时, 请求被校验拦截并返回参数错误, 不落库")
   void rejects_jobCode_with_space() throws Exception {
     mockMvc
         .perform(post("/api/console/pipeline-definitions")
@@ -79,6 +82,7 @@ class ConsolePipelineDefinitionControllerValidationTest {
   }
 
   @Test
+  @DisplayName("作业编码含中文时, 请求被校验拦截并返回参数错误")
   void rejects_jobCode_chinese() throws Exception {
     mockMvc
         .perform(post("/api/console/pipeline-definitions")
@@ -89,6 +93,7 @@ class ConsolePipelineDefinitionControllerValidationTest {
   }
 
   @Test
+  @DisplayName("作业编码以数字开头时, 请求被校验拦截并返回参数错误")
   void rejects_jobCode_starts_with_digit() throws Exception {
     mockMvc
         .perform(post("/api/console/pipeline-definitions")
@@ -99,6 +104,7 @@ class ConsolePipelineDefinitionControllerValidationTest {
   }
 
   @Test
+  @DisplayName("作业编码为空时, 请求被校验拦截并返回参数错误")
   void rejects_jobCode_blank() throws Exception {
     mockMvc
         .perform(post("/api/console/pipeline-definitions")
@@ -109,6 +115,7 @@ class ConsolePipelineDefinitionControllerValidationTest {
   }
 
   @Test
+  @DisplayName("顶层作业编码合法但嵌套步骤编码为空时, 校验下钻并拒绝请求, 不落库")
   void rejects_nested_step_with_blank_stepCode() throws Exception {
     // 顶层 jobCode 合法,但 steps[0].stepCode 为空 → @Valid 应下钻 → 400
     String body = "{\"tenantId\":\"ta\",\"jobCode\":\"pl_ok\",\"pipelineName\":\"pl\","
@@ -125,6 +132,7 @@ class ConsolePipelineDefinitionControllerValidationTest {
   }
 
   @Test
+  @DisplayName("流水线类型不在允许取值内时, 请求被校验拦截并返回参数错误")
   void rejects_invalid_pipelineType() throws Exception {
     String body = "{\"tenantId\":\"ta\",\"jobCode\":\"pl_ok\",\"pipelineName\":\"pl\","
         + "\"pipelineType\":\"UNKNOWN\"}";
@@ -137,7 +145,8 @@ class ConsolePipelineDefinitionControllerValidationTest {
   }
 
   @Test
-  void acceptsValidRequestWithNestedSteps() throws Exception {
+  @DisplayName("作业编码与嵌套步骤均合法时, 请求通过校验并创建成功")
+  void shouldAcceptValidRequest_whenNestedStepsProvided() throws Exception {
     when(service.create(ArgumentMatchers.any())).thenReturn(null);
     String body = "{\"tenantId\":\"ta\",\"jobCode\":\"pl_ok\",\"pipelineName\":\"pl\","
         + "\"pipelineType\":\"IMPORT\","

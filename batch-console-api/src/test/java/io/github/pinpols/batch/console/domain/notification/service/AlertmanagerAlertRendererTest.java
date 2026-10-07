@@ -7,8 +7,10 @@ import io.github.pinpols.batch.console.domain.notification.application.contract.
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("告警渲染器: 单条与多条告警的标题, 正文与结构化字段组装")
 class AlertmanagerAlertRendererTest {
 
   private final AlertmanagerAlertRenderer renderer = new AlertmanagerAlertRenderer();
@@ -20,7 +22,8 @@ class AlertmanagerAlertRendererTest {
   }
 
   @Test
-  void rendersSingleFiringAlertWithSummaryAndDescription() {
+  @DisplayName("单条触发中的告警提取摘要与描述, 标题带接收方与告警名")
+  void shouldRenderSingleAlert_withSummaryAndDescription() {
     AlertmanagerWebhookPayload payload = new AlertmanagerWebhookPayload(
         "4",
         "gk",
@@ -53,7 +56,8 @@ class AlertmanagerAlertRendererTest {
   }
 
   @Test
-  void groupsMultipleAlertsIntoOneSummary() {
+  @DisplayName("多条告警合并为一条通知, 标题条数与正文实例清单同步")
+  void shouldGroupAlerts_intoSingleSummary() {
     AlertmanagerWebhookPayload payload = new AlertmanagerWebhookPayload(
         "4",
         "gk",
@@ -76,7 +80,8 @@ class AlertmanagerAlertRendererTest {
   }
 
   @Test
-  void rendersResolvedStatus() {
+  @DisplayName("已恢复的告警标题前缀标记为已恢复, 正文同样标明恢复状态")
+  void shouldRenderResolvedStatus_whenAlertRecovered() {
     AlertmanagerWebhookPayload payload = new AlertmanagerWebhookPayload(
         "4",
         "gk",
@@ -96,7 +101,8 @@ class AlertmanagerAlertRendererTest {
   }
 
   @Test
-  void toleratesMissingFieldsWithPlaceholders() {
+  @DisplayName("接收方, 告警名与标签全都缺失时用占位符兜底, 不抛异常")
+  void shouldUsePlaceholders_whenFieldsMissing() {
     AlertmanagerWebhookPayload payload = new AlertmanagerWebhookPayload(
         "4",
         null,
@@ -116,7 +122,8 @@ class AlertmanagerAlertRendererTest {
   }
 
   @Test
-  void truncatesBeyondMaxAlerts() {
+  @DisplayName("告警条数超过上限时正文只展开前若干条, 并提示剩余条数")
+  void shouldTruncate_whenAlertsExceedMax() {
     AlertmanagerWebhookPayload payload = new AlertmanagerWebhookPayload(
         "4",
         "gk",
@@ -142,6 +149,7 @@ class AlertmanagerAlertRendererTest {
   }
 
   @Test
+  @DisplayName("超大告警批量下结构化告警名清单按上限截断, 总数仍记原始值")
   void boundsAlertnamesToMaxAlerts_whenOversizedBatch() {
     List<AlertmanagerAlert> many = new ArrayList<>();
     for (int i = 0; i < 500; i++) {
@@ -168,7 +176,8 @@ class AlertmanagerAlertRendererTest {
   }
 
   @Test
-  void emptyAlertsListDoesNotThrow() {
+  @DisplayName("告警清单为空时输出零条通知, 总数记零且不抛异常")
+  void shouldReturnZeroCount_whenAlertListEmpty() {
     AlertmanagerWebhookPayload payload = new AlertmanagerWebhookPayload(
         "4",
         "gk",

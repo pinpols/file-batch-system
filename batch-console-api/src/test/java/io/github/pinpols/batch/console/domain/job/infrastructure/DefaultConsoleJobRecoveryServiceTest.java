@@ -21,6 +21,7 @@ import io.github.pinpols.batch.console.shared.command.PartitionReplayRequest;
 import io.github.pinpols.batch.console.shared.command.RerunRequest;
 import io.github.pinpols.batch.console.shared.command.TaskReplayRequest;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -29,6 +30,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("作业恢复服务: 审批前置分流, 补偿类型默认值与重跑版本策略校验")
 class DefaultConsoleJobRecoveryServiceTest {
 
   private static final String TENANT = "t1";
@@ -48,6 +50,7 @@ class DefaultConsoleJobRecoveryServiceTest {
   // ── compensation: approval-first path ───────────────────────────────────
 
   @Test
+  @DisplayName("补偿未带审批单号时转为提交审批, 审批上下文按目标实例与幂等键组装")
   void shouldSubmitApproval_whenCompensationHasNoApprovalId() {
     CompensationCommandRequest req = compensationRequest(null);
     when(ops.hasText(null)).thenReturn(false);
@@ -72,6 +75,7 @@ class DefaultConsoleJobRecoveryServiceTest {
   // ── compensation: with approval id ──────────────────────────────────────
 
   @Test
+  @DisplayName("补偿带审批单号且审批通过时直接下发补偿指令并刷新视图")
   void shouldSubmitCompensation_whenCompensationHasApprovalId() {
     CompensationCommandRequest req = compensationRequest("APR-001");
     when(ops.hasText("APR-001")).thenReturn(true);
@@ -89,6 +93,7 @@ class DefaultConsoleJobRecoveryServiceTest {
   // ── compensate (no approval gating) ─────────────────────────────────────
 
   @Test
+  @DisplayName("直接补偿时采用请求指定的补偿类型下发指令")
   void shouldCompensateDirectly_withProvidedType() {
     CompensateRequest req = compensateRequest("WORKFLOW");
     when(ops.parseOptionalBizDate(any())).thenReturn(null);
@@ -105,6 +110,7 @@ class DefaultConsoleJobRecoveryServiceTest {
   }
 
   @Test
+  @DisplayName("补偿类型为空白串时回退为作业类型下发指令")
   void shouldCompensateDirectly_withDefaultJobType_whenTypeBlank() {
     CompensateRequest req = compensateRequest("");
     when(ops.parseOptionalBizDate(any())).thenReturn(null);
@@ -118,6 +124,7 @@ class DefaultConsoleJobRecoveryServiceTest {
   }
 
   @Test
+  @DisplayName("补偿类型缺省时回退为作业类型下发指令")
   void shouldCompensateDirectly_withDefaultJobType_whenTypeNull() {
     CompensateRequest req = compensateRequest(null);
     when(ops.parseOptionalBizDate(any())).thenReturn(null);
@@ -133,6 +140,7 @@ class DefaultConsoleJobRecoveryServiceTest {
   // ── rerun ───────────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("重跑指定目标作业编号时按作业粒度下发补偿指令")
   void shouldRerun_asJob_whenTargetIdPresent() {
     RerunRequest req = rerunRequest();
     req.setTargetId(99L);
@@ -147,6 +155,7 @@ class DefaultConsoleJobRecoveryServiceTest {
   }
 
   @Test
+  @DisplayName("重跑指定目标实例编号时按作业粒度下发补偿指令")
   void shouldRerun_asJob_whenTargetInstanceNoPresent() {
     RerunRequest req = rerunRequest();
     req.setTargetInstanceNo("INST-1");
@@ -161,6 +170,7 @@ class DefaultConsoleJobRecoveryServiceTest {
   }
 
   @Test
+  @DisplayName("重跑未指定目标时按批次粒度下发补偿指令")
   void shouldRerun_asBatch_whenNoTarget() {
     RerunRequest req = rerunRequest();
     when(ops.parseOptionalBizDate(any())).thenReturn(null);
@@ -174,6 +184,7 @@ class DefaultConsoleJobRecoveryServiceTest {
   }
 
   @Test
+  @DisplayName("指定配置版本策略却缺少版本号时返回参数错误且不下发指令")
   void shouldThrowBizException_whenRerunUseSpecifiedVersionMissingConfigVersion() {
     RerunRequest req = rerunRequest();
     req.setConfigVersionPolicy("USE_SPECIFIED_VERSION");
@@ -187,6 +198,7 @@ class DefaultConsoleJobRecoveryServiceTest {
   }
 
   @Test
+  @DisplayName("指定配置版本策略且版本号齐备时正常下发并返回指令编号")
   void shouldRerun_whenUseSpecifiedVersionWithConfigVersion() {
     RerunRequest req = rerunRequest();
     req.setConfigVersionPolicy("USE_SPECIFIED_VERSION");
@@ -201,6 +213,7 @@ class DefaultConsoleJobRecoveryServiceTest {
   // ── replayDeadLetter ────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("死信重放未带审批单号时转为提交审批, 审批类型与目标类型按死信场景组装")
   void shouldSubmitApproval_whenDeadLetterReplayHasNoApprovalId() {
     DeadLetterReplayRequest req = deadLetterRequest(null);
     when(ops.hasText(null)).thenReturn(false);
@@ -217,6 +230,7 @@ class DefaultConsoleJobRecoveryServiceTest {
   }
 
   @Test
+  @DisplayName("死信重放带审批单号且审批通过时按死信补偿类型下发指令")
   void shouldReplayDeadLetter_whenApprovalIdProvided() {
     DeadLetterReplayRequest req = deadLetterRequest("APR-DLQ");
     when(ops.hasText("APR-DLQ")).thenReturn(true);
@@ -235,6 +249,7 @@ class DefaultConsoleJobRecoveryServiceTest {
   // ── replayTask ──────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("任务重放未带审批单号时转为提交审批, 动作类型为重试且目标为作业任务")
   void shouldSubmitApproval_whenTaskReplayHasNoApprovalId() {
     TaskReplayRequest req = taskReplayRequest(null);
     when(ops.hasText(null)).thenReturn(false);
@@ -251,6 +266,7 @@ class DefaultConsoleJobRecoveryServiceTest {
   }
 
   @Test
+  @DisplayName("任务重放带审批单号且审批通过时触发恢复并返回操作编号")
   void shouldReplayTask_whenApprovalIdProvided() {
     TaskReplayRequest req = taskReplayRequest("APR-TASK");
     when(ops.hasText("APR-TASK")).thenReturn(true);
@@ -266,6 +282,7 @@ class DefaultConsoleJobRecoveryServiceTest {
   // ── replayPartition ─────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("分区重放未带审批单号时转为提交审批, 目标类型为作业分区")
   void shouldSubmitApproval_whenPartitionReplayHasNoApprovalId() {
     PartitionReplayRequest req = partitionReplayRequest(null);
     when(ops.hasText(null)).thenReturn(false);
@@ -281,6 +298,7 @@ class DefaultConsoleJobRecoveryServiceTest {
   }
 
   @Test
+  @DisplayName("分区重放带审批单号且审批通过时触发恢复并返回操作编号")
   void shouldReplayPartition_whenApprovalIdProvided() {
     PartitionReplayRequest req = partitionReplayRequest("APR-PART");
     when(ops.hasText("APR-PART")).thenReturn(true);

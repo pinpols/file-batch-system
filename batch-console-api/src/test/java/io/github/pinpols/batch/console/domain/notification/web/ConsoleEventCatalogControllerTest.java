@@ -12,12 +12,14 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+@DisplayName("事件目录接口: 事件类型与消息主题清单的输出口径")
 class ConsoleEventCatalogControllerTest {
 
   private final ConsoleRequestMetadataResolver requestMetadataResolver =
@@ -48,6 +50,7 @@ class ConsoleEventCatalogControllerTest {
   }
 
   @Test
+  @DisplayName("事件类型清单返回成功, 首项编码与总数固定且含告警升级事件")
   void shouldReturnEventTypes() throws Exception {
     mockMvc
         .perform(get("/api/console/event-catalog/event-types"))
@@ -59,6 +62,7 @@ class ConsoleEventCatalogControllerTest {
   }
 
   @Test
+  @DisplayName("消息主题清单返回成功, 每项带主题名且总数固定")
   void shouldReturnTopics() throws Exception {
     mockMvc
         .perform(get("/api/console/event-catalog/topics"))

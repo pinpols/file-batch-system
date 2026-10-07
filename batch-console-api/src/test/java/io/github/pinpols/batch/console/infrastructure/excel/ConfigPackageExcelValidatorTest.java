@@ -15,12 +15,15 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("配置包 Excel 校验器:模板取值、跨表引用与字段规则校验")
 class ConfigPackageExcelValidatorTest {
 
   @Test
-  void processPipelineTypeAllowsProcessStages() {
+  @DisplayName("PROCESS 流水线:允许准备、计算、校验、提交、反馈五类阶段")
+  void shouldAllowProcessStages_whenPipelineTypeIsProcess() {
     assertThat(ConfigPackageExcelValidator.STAGES_BY_TYPE).containsKey("PROCESS");
     assertThat(ConfigPackageExcelValidator.STAGES_BY_TYPE.get("PROCESS"))
         .containsExactlyInAnyOrder("PREPARE", "COMPUTE", "VALIDATE", "COMMIT", "FEEDBACK");
@@ -28,7 +31,8 @@ class ConfigPackageExcelValidatorTest {
   }
 
   @Test
-  void validatesFileTemplateConfigSheetRows() {
+  @DisplayName("文件模板 sheet:同编码同版本重复行被判定非法并给出提示")
+  void shouldReportDuplicates_whenTemplateCodeAndVersionRepeat() {
     ConfigPackageExcelValidator validator = validator();
     PackageExcelSession session = session(List.of(
         fileTemplateRow("TPL_IMPORT_CUSTOMER", "1"), fileTemplateRow("TPL_IMPORT_CUSTOMER", "1")));
@@ -45,7 +49,8 @@ class ConfigPackageExcelValidatorTest {
   }
 
   @Test
-  void reportsUnknownTemplateCodeReferencesFromJobDefaultParams() {
+  @DisplayName("作业默认参数:引用不存在的模板编码时上报校验问题")
+  void shouldReportUnknownTemplate_whenDefaultParamsReferenceMissingCode() {
     ConfigPackageExcelValidator validator = validator();
     PackageExcelSession session = session(
         List.of(),
@@ -73,7 +78,8 @@ class ConfigPackageExcelValidatorTest {
   }
 
   @Test
-  void validatesOptionalDependencySheetsAndCrossReferences() {
+  @DisplayName("依赖 sheet 与跨表引用:队列、日历、窗口均可解析时校验通过")
+  void shouldAcceptDependencySheets_whenCrossReferencesResolve() {
     ConfigPackageExcelValidator validator = validator();
     PackageExcelSession session = sessionWithDependencies(
         List.of(resourceQueueRow("import-queue")),
@@ -90,7 +96,8 @@ class ConfigPackageExcelValidatorTest {
   }
 
   @Test
-  void crossReferenceIssuesKeepOriginalExcelRowNumberAfterInvalidRowsAreFiltered() {
+  @DisplayName("跨表引用问题:过滤非法行后仍保留原始 Excel 行号")
+  void shouldKeepOriginalRowNumber_whenInvalidRowsFilteredBeforeCrossRef() {
     ConfigPackageExcelValidator validator = validator();
     Map<String, String> invalidRow = new LinkedHashMap<>(jobRow("missing-queue", "", ""));
     invalidRow.put("job_code", "BROKEN_JOB");
@@ -108,7 +115,8 @@ class ConfigPackageExcelValidatorTest {
   }
 
   @Test
-  void flagsCronScheduleMissingExpr() {
+  @DisplayName("CRON 调度:缺少调度表达式时被标记为问题")
+  void shouldFlagMissingExpr_whenScheduleTypeIsCron() {
     PackageExcelSession session = session(
         List.of(),
         List.of(Map.of(
@@ -126,7 +134,8 @@ class ConfigPackageExcelValidatorTest {
   }
 
   @Test
-  void flagsCronScheduleWithLinuxFiveFieldExpr() {
+  @DisplayName("CRON 调度:五段式 Linux 表达式被判定为非法格式")
+  void shouldFlagFiveFieldExpr_whenScheduleTypeIsCron() {
     PackageExcelSession session = session(
         List.of(),
         List.of(Map.of(
@@ -144,7 +153,8 @@ class ConfigPackageExcelValidatorTest {
   }
 
   @Test
-  void flagsDelimitedFormatMissingDelimiter() {
+  @DisplayName("分隔符格式:未填写分隔符时被标记为问题")
+  void shouldFlagMissingDelimiter_whenFileFormatIsDelimited() {
     Map<String, String> row = new LinkedHashMap<>(fileTemplateRow("TPL", "1"));
     row.remove("delimiter");
 
@@ -157,7 +167,8 @@ class ConfigPackageExcelValidatorTest {
   }
 
   @Test
-  void flagsJdbcMappedImportMissingTable() {
+  @DisplayName("JDBC 映射导入:缺少目标表配置时被标记为问题")
+  void shouldFlagMissingTable_whenJdbcMappedImportConfigured() {
     Map<String, String> row = new LinkedHashMap<>(fileTemplateRow("TPL", "1"));
     row.put("query_param_schema", "{\"jdbcMappedImport\":{\"tenantColumn\":\"tenant_id\"}}");
 
@@ -170,7 +181,8 @@ class ConfigPackageExcelValidatorTest {
   }
 
   @Test
-  void flagsFieldMappingsEntryWithoutName() {
+  @DisplayName("字段映射:条目缺少映射名称时被标记为问题")
+  void shouldFlagEntryWithoutName_whenFieldMappingsEntryMissesName() {
     Map<String, String> row = new LinkedHashMap<>(fileTemplateRow("TPL", "1"));
     row.put("field_mappings", "[{\"targetColumn\":\"c\"}]");
 
@@ -183,7 +195,8 @@ class ConfigPackageExcelValidatorTest {
   }
 
   @Test
-  void flagsExportSqlSelectStar() {
+  @DisplayName("导出 SQL:使用全列通配查询时被标记为问题")
+  void shouldFlagSelectStar_whenExportSqlQueries() {
     Map<String, String> row = new LinkedHashMap<>(fileTemplateRow("TPL", "1"));
     row.put("default_query_sql", "SELECT * FROM biz.customer_account WHERE tenant_id = :tenantId");
 

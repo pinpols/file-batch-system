@@ -11,11 +11,13 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.scheduling.TaskScheduler;
 
+@DisplayName("控制台幂等归属: 续期独占,旧持有者失效与迟到完成不覆盖")
 class ConsoleIdempotencyOwnershipTest {
   private final ExpiringStore store = new ExpiringStore();
   private final ConsoleDurableIdempotencyStore durable = mock(ConsoleDurableIdempotencyStore.class);
@@ -23,7 +25,8 @@ class ConsoleIdempotencyOwnershipTest {
       store, durable, new BatchSecurityProperties(), mock(TaskScheduler.class));
 
   @Test
-  void renewalKeepsLongRequestExclusiveAndStopsAfterCompletion() throws Exception {
+  @DisplayName("长请求持续续期保持独占,完成后不再续期并标记已完成")
+  void shouldKeepLeaseExclusiveAndStopAfterCompletion_whenRenewalRuns() throws Exception {
     var first = request();
     assertThat(interceptor.preHandle(first, response(200), this)).isTrue();
     for (int i = 0; i < 10; i++) {
@@ -42,7 +45,8 @@ class ConsoleIdempotencyOwnershipTest {
   }
 
   @Test
-  void failedOldOwnerCannotDeleteOrRenewNewOwnersReservation() throws Exception {
+  @DisplayName("旧持有者已失效时,既不能续期也不能删除新持有者的占位")
+  void shouldNotRenewOrDelete_whenOldOwnerHasLostReservation() throws Exception {
     var first = request();
     assertThat(interceptor.preHandle(first, response(200), this)).isTrue();
     store.now += 31_000;
@@ -56,7 +60,8 @@ class ConsoleIdempotencyOwnershipTest {
   }
 
   @Test
-  void successfulOldOwnerCannotOverwriteNewOwnersMarker() throws Exception {
+  @DisplayName("旧持有者迟到完成时,不能覆盖新持有者写入的完成标记")
+  void shouldNotOverwriteMarker_whenOldOwnerCompletesLate() throws Exception {
     var first = request();
     assertThat(interceptor.preHandle(first, response(200), this)).isTrue();
     store.now += 31_000;

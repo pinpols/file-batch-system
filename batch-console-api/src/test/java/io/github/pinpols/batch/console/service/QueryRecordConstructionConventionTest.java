@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.Test;
  *   <li>测试 fixture / Excel SheetSpec / Registry 等声明式上下文(目前无命中,预留)
  * </ul>
  */
+@DisplayName("查询记录构造规约守护: 字段较多的查询记录禁止在调用处内联构造并传多个空占位参数")
 class QueryRecordConstructionConventionTest {
 
   private static final Path REPO_ROOT = Path.of(System.getProperty("user.dir")).getParent();
@@ -58,7 +60,8 @@ class QueryRecordConstructionConventionTest {
       "/test/java/io/github/pinpols/batch/e2e/WorkerProcessRestartRecoveryE2eIT.java");
 
   @Test
-  void noInlineQueryConstructorWithMultipleNullPlaceholders() throws IOException {
+  @DisplayName("全仓扫描调用处内联构造, 出现两个及以上空占位参数即判为违例")
+  void shouldRejectInlineQueryConstruction_whenMultipleNullPlaceholders() throws IOException {
     List<String> violations = new ArrayList<>();
     try (Stream<Path> paths = Files.walk(REPO_ROOT)) {
       paths

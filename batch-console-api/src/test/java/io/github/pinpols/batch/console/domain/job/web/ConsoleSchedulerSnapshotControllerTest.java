@@ -17,11 +17,13 @@ import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+@DisplayName("调度器快照控制器: 实时快照与历史快照查询的转发")
 class ConsoleSchedulerSnapshotControllerTest {
 
   private final ConsoleOrchestratorPort orchestratorProxyService =
@@ -50,6 +52,7 @@ class ConsoleSchedulerSnapshotControllerTest {
   }
 
   @Test
+  @DisplayName("查询实时快照返回成功, 回包携带租户与快照内容")
   void shouldReturn200WhenGetLiveSnapshot() throws Exception {
     when(orchestratorProxyService.schedulerSnapshot(anyString()))
         .thenReturn(new ConsoleSchedulerSnapshotResponse(
@@ -63,6 +66,7 @@ class ConsoleSchedulerSnapshotControllerTest {
   }
 
   @Test
+  @DisplayName("查询历史快照返回成功, 支持租户与条数参数")
   void shouldReturn200WhenGetSnapshotHistory() throws Exception {
     when(orchestratorProxyService.schedulerSnapshotHistory(anyString(), anyInt()))
         .thenReturn(List.of());

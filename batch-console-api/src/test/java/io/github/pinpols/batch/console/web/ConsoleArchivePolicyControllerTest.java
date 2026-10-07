@@ -20,11 +20,13 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+@DisplayName("归档策略控制器: 列表查询透传与写入参数组装")
 class ConsoleArchivePolicyControllerTest {
 
   private final ConsoleArchivePolicyService archivePolicyService =
@@ -56,6 +58,7 @@ class ConsoleArchivePolicyControllerTest {
   }
 
   @Test
+  @DisplayName("查询归档策略列表时, 响应返回目标表与保留天数")
   void shouldListPolicies() throws Exception {
     ArchivePolicyEntity entity = new ArchivePolicyEntity();
     entity.setId(1L);
@@ -76,6 +79,7 @@ class ConsoleArchivePolicyControllerTest {
   }
 
   @Test
+  @DisplayName("写入归档策略时, 请求体字段与操作人组装成服务入参")
   void shouldUpsertPolicy() throws Exception {
     mockMvc
         .perform(put("/api/console/ops/archive-policies")

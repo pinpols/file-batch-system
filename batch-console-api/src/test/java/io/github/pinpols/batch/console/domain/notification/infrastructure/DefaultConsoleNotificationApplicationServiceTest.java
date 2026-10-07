@@ -34,10 +34,12 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 
+@DisplayName("通知渠道与订阅规则服务: 参数校验, 持久化字段组装与测试发送链路")
 class DefaultConsoleNotificationApplicationServiceTest {
 
   private ConsoleTenantGuard tenantGuard;
@@ -80,6 +82,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("按租户列出通知渠道并转换为对外响应对象")
   void shouldListChannels() {
     when(channelMapper.selectByTenant("tenant-a"))
         .thenReturn(List.of(Map.of("channel_code", "email-1")));
@@ -91,6 +94,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("按渠道编码查询单个通知渠道的详情")
   void shouldGetChannel() {
     when(channelMapper.selectByCode("tenant-a", "email-1"))
         .thenReturn(Map.of("channel_code", "email-1"));
@@ -101,6 +105,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("渠道记录缺失时抛出未找到业务异常")
   void shouldThrowWhenChannelMissing() {
     when(channelMapper.selectByCode("tenant-a", "missing")).thenReturn(null);
 
@@ -120,6 +125,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("创建渠道时写入租户, 渠道字段与创建人更新人")
   void shouldCreateChannel() {
     when(channelMapper.selectByCode("tenant-a", "email-1")).thenReturn(null);
 
@@ -142,6 +148,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("回调地址属于受限网段时创建渠道被拒绝且不写库")
   void shouldValidateWebhookChannelUrlOnCreateAndRejectRestrictedAddress() {
     // Critical 回归堵口:WEBHOOK 渠道 url 存前经 CallbackUrlValidator fail-closed,拦字面量内网/元数据 IP,
     // 不让它入库(OkHttp Dns pin 对字面量 IP 短路不生效,此处是主修)。
@@ -166,6 +173,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("非回调类渠道创建时不触发地址安全检查仍正常写库")
   void shouldNotValidateUrlForNonWebhookChannel() {
     // 非 WEBHOOK 渠道(EMAIL/SMS 等)不经 callbackUrl SSRF 校验,避免误伤。
     when(channelMapper.selectByCode("tenant-a", "email-1")).thenReturn(null);
@@ -180,6 +188,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("渠道编码已存在时拒绝创建并提示编码重复")
   void shouldRejectDuplicateChannelCode() {
     when(channelMapper.selectByCode("tenant-a", "email-1"))
         .thenReturn(Map.of("channelCode", "email-1"));
@@ -191,6 +200,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("更新渠道时按最新字段与当前操作人写库")
   void shouldUpdateChannel() {
     when(channelMapper.selectByCode("tenant-a", "email-1"))
         .thenReturn(Map.of("channelCode", "email-1"));
@@ -215,6 +225,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("创建订阅规则时写入规则字段与创建人更新人")
   void shouldCreateRule() {
     when(channelMapper.selectByCode("tenant-a", "email-1"))
         .thenReturn(Map.of("channelCode", "email-1"));
@@ -238,6 +249,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("订阅规则引用的渠道缺失时抛出未找到业务异常")
   void shouldRejectRuleWhenChannelMissing() {
     when(channelMapper.selectByCode("tenant-a", "missing")).thenReturn(null);
 
@@ -258,6 +270,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("更新订阅规则时按最新字段与当前操作人写库")
   void shouldUpdateRule() {
     when(ruleMapper.selectById("tenant-a", 7L)).thenReturn(Map.of("id", 7L));
 
@@ -281,6 +294,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("订阅规则记录缺失时抛出未找到业务异常")
   void shouldThrowWhenRuleMissing() {
     when(ruleMapper.selectById("tenant-a", 99L)).thenReturn(null);
 
@@ -333,6 +347,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("查询投递日志时请求条数超过上限被收敛为五百条")
   void shouldReturnLogsAndCapLimit() {
     when(deliveryLogMapper.selectByTenant("tenant-a", 500)).thenReturn(List.of(Map.of("id", 1L)));
 
@@ -343,6 +358,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("渠道测试会真实调用发送器, 成功后返回正常状态并写入投递日志")
   void shouldTestChannelBySendingRealMessageAndLogSuccess() {
     when(channelMapper.selectByCode("tenant-a", "wecom-1"))
         .thenReturn(Map.of(
@@ -381,6 +397,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("发送失败时返回失败状态并透传错误摘要, 日志记录失败原因")
   void shouldReportFailureAndPassThroughErrorWhenSendFails() {
     when(channelMapper.selectByCode("tenant-a", "wecom-1"))
         .thenReturn(Map.of(
@@ -410,6 +427,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("回调类型渠道改走专用投递通道并携带密钥, 不经发送器注册表")
   void shouldRouteWebhookChannelThroughWebhookDispatcher() {
     when(channelMapper.selectByCode("tenant-a", "hook-1"))
         .thenReturn(Map.of(
@@ -439,6 +457,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("渠道测试触发限流时返回限流错误, 且不发起投递也不写日志")
   void shouldRejectTestChannelWhenRateLimited() {
     // deliverTest 是可重复触发的 SSRF 放大点(赢 DNS-rebinding 竞态);超频时限流拦下,不再建连投递。
     when(channelMapper.selectByCode("tenant-a", "hook-1"))

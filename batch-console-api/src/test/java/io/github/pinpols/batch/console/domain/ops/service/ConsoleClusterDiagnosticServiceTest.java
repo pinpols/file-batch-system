@@ -20,8 +20,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("集群诊断服务:Worker 一致性, 投递健康, 终态子实例与实例级诊断的判定规则")
 class ConsoleClusterDiagnosticServiceTest {
 
   private ConsoleTenantGuard tenantGuard;
@@ -49,6 +51,7 @@ class ConsoleClusterDiagnosticServiceTest {
   }
 
   @Test
+  @DisplayName("Worker 一致性:存在在线 Worker 且作业在跑时判定健康, 并回填在线数与运行数")
   void shouldReturnWorkerConsistencyHealthyWhenOnlineGt0() {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
     when(workerRegistryMapper.countByStatus("tenant-a", WorkerRegistryStatus.ONLINE.code()))
@@ -69,6 +72,7 @@ class ConsoleClusterDiagnosticServiceTest {
   }
 
   @Test
+  @DisplayName("Worker 一致性:无在线 Worker 但仍有运行实例时判定不健康, 运行计数仍回填")
   void shouldReturnWorkerConsistencyUnhealthyWhenNoOnlineAndRunning() {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
     when(workerRegistryMapper.countByStatus("tenant-a", WorkerRegistryStatus.ONLINE.code()))
@@ -89,6 +93,7 @@ class ConsoleClusterDiagnosticServiceTest {
   }
 
   @Test
+  @DisplayName("Worker 一致性:已下线 Worker 仍持有活跃任务时判定不健康, 并标记该违规计数")
   void shouldReturnWorkerConsistencyUnhealthyWhenInvariantBroken() {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
     when(workerRegistryMapper.countByStatus("tenant-a", WorkerRegistryStatus.ONLINE.code()))
@@ -102,6 +107,7 @@ class ConsoleClusterDiagnosticServiceTest {
   }
 
   @Test
+  @DisplayName("投递健康:待处理积压低于阈值时判定健康, 并回填积压数")
   void shouldReturnOutboxHealthyWhenPendingLow() {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
     DeliveryStatusCountView view = deliveryView("SUCCESS", 100L);
@@ -115,6 +121,7 @@ class ConsoleClusterDiagnosticServiceTest {
   }
 
   @Test
+  @DisplayName("投递健康:待处理积压超出阈值时判定不健康, 并回填积压数")
   void shouldReturnOutboxUnhealthyWhenPendingHigh() {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
     DeliveryStatusCountView view = deliveryView("FAILED", 500L);
@@ -128,6 +135,7 @@ class ConsoleClusterDiagnosticServiceTest {
   }
 
   @Test
+  @DisplayName("投递健康:存在长时间停留发布中的事件时判定不健康, 并回填陈旧发布计数")
   void shouldReturnOutboxUnhealthyWhenStalePublishingExists() {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
     when(diagnosticMapper.countPendingOutboxEvents("tenant-a")).thenReturn(10L);
@@ -142,6 +150,7 @@ class ConsoleClusterDiagnosticServiceTest {
   }
 
   @Test
+  @DisplayName("终态子实例:终态实例仍含活跃子任务时上报不一致, 并标记不健康")
   void shouldReportTerminalChildrenInconsistency() {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
     when(diagnosticMapper.countTerminalInstancesWithActiveChildren("tenant-a")).thenReturn(2L);
@@ -153,6 +162,7 @@ class ConsoleClusterDiagnosticServiceTest {
   }
 
   @Test
+  @DisplayName("实例诊断:活跃实例无任何子任务时报出无子节点问题, 判定不健康")
   @SuppressWarnings("unchecked")
   void shouldDiagnoseActiveInstanceWithNoChildren() {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
@@ -173,6 +183,7 @@ class ConsoleClusterDiagnosticServiceTest {
   }
 
   @Test
+  @DisplayName("实例诊断:部分失败按终态处理, 只报活跃子节点且不误报无子节点与无在线 Worker")
   @SuppressWarnings("unchecked")
   void shouldTreatPartialFailureAsTerminalWhenDiagnosingActiveChildren() {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
@@ -194,6 +205,7 @@ class ConsoleClusterDiagnosticServiceTest {
   }
 
   @Test
+  @DisplayName("实例诊断:同时报出投递未终态与任务心跳陈旧, 两类问题并存")
   @SuppressWarnings("unchecked")
   void shouldDiagnoseWorkerAndOutboxIssues() {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");

@@ -22,6 +22,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.ScheduledFuture;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessResourceFailureException;
@@ -30,6 +31,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.web.method.HandlerMethod;
 
+@DisplayName("控制台幂等拦截器: 键校验,待完成占位与完成记录持久化")
 class ConsoleIdempotencyInterceptorTest {
 
   private ConsoleIdempotencyStore store;
@@ -51,7 +53,8 @@ class ConsoleIdempotencyInterceptorTest {
   }
 
   @Test
-  void reservationFailureLogsNoExternalKeyOrExceptionMessage() throws Exception {
+  @DisplayName("预留幂等位失败时,日志不落外部键与异常原文并返回 503")
+  void shouldNotLogKeyOrMessage_whenReservationFails() throws Exception {
     var request = new MockHttpServletRequest("POST", "/api/console/probe");
     request.addHeader("X-Tenant-Id", "tenant-a");
     request.addHeader(
@@ -80,7 +83,8 @@ class ConsoleIdempotencyInterceptorTest {
   }
 
   @Test
-  void renewalTaskUsesManagedSchedulerAndIsCancelledOnDestroy() {
+  @DisplayName("续期任务注册到受管调度器,并在销毁时被取消")
+  void shouldScheduleAndCancelRenewal_whenLifecycleRuns() {
     ScheduledFuture<?> renewal = mock(ScheduledFuture.class);
     doReturn(renewal)
         .when(scheduler)
@@ -97,7 +101,8 @@ class ConsoleIdempotencyInterceptorTest {
   }
 
   @Test
-  void putOnIdempotentEndpointRequiresIdempotencyKey() throws Exception {
+  @DisplayName("幂等端点的更新请求缺少幂等键时,返回 400 并提示缺少幂等键")
+  void shouldRejectPut_whenIdempotencyKeyIsMissing() throws Exception {
     MockHttpServletRequest request = new MockHttpServletRequest("PUT", "/api/console/jobs/demo");
     MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -110,7 +115,8 @@ class ConsoleIdempotencyInterceptorTest {
   }
 
   @Test
-  void deleteWithIdempotencyKeyReservesPendingSlot() throws Exception {
+  @DisplayName("删除请求携带幂等键时,预留待完成占位并记录键与归属")
+  void shouldReservePendingSlot_whenDeleteCarriesIdempotencyKey() throws Exception {
     MockHttpServletRequest request = new MockHttpServletRequest("DELETE", "/api/console/files/42");
     request.addHeader("X-Tenant-Id", "tenant-a");
     request.addHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "delete-key");
@@ -129,7 +135,8 @@ class ConsoleIdempotencyInterceptorTest {
   }
 
   @Test
-  void durableCompletionRecordRejectsRequestAfterRedisEntryExpired() throws Exception {
+  @DisplayName("缓存记录已过期但持久化记录显示完成时,请求返回 409")
+  void shouldRejectRequest_whenDurableRecordMarksCompletion() throws Exception {
     MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/console/jobs/demo");
     request.addHeader("X-Tenant-Id", "tenant-a");
     request.addHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "post-key");
@@ -145,7 +152,8 @@ class ConsoleIdempotencyInterceptorTest {
   }
 
   @Test
-  void successfulRequestPersistsDurableCompletionWhenRedisCompletionFails() throws Exception {
+  @DisplayName("缓存写入完成标记失败时,成功请求仍写入持久化完成记录")
+  void shouldPersistDurableCompletion_whenCacheCompletionFails() throws Exception {
     MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/console/jobs/demo");
     request.addHeader("X-Tenant-Id", "tenant-a");
     request.addHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "post-key");
@@ -164,7 +172,8 @@ class ConsoleIdempotencyInterceptorTest {
   }
 
   @Test
-  void patchWithDoneIdempotencyKeyReturnsConflict() throws Exception {
+  @DisplayName("幂等键已完成时,重复请求返回 409 并提示重复提交")
+  void shouldReturnConflict_whenIdempotencyKeyAlreadyCompleted() throws Exception {
     MockHttpServletRequest request = new MockHttpServletRequest("PATCH", "/api/console/jobs/demo");
     request.addHeader("X-Tenant-Id", "tenant-a");
     request.addHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "patch-key");

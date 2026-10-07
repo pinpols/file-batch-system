@@ -11,6 +11,7 @@ import io.github.pinpols.batch.console.domain.ops.entity.CustomTaskTypeEntity;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleCustomTaskTypeQueryService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -18,6 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("自定义任务类型接口:列表, 计数与详情透传查询服务结果, 记录缺失时抛出业务异常")
 class ConsoleCustomTaskTypeControllerTest {
 
   @Mock
@@ -37,7 +39,8 @@ class ConsoleCustomTaskTypeControllerTest {
   }
 
   @Test
-  void listResolvesTenantAndQueriesActiveOnly() {
+  @DisplayName("列表查询:先解析租户再查有效类型, 返回结果按任务类型编码回填")
+  void shouldResolveTenantAndListActive_whenListingCustomTaskTypes() {
     CustomTaskTypeEntity e = entity("tenant_tx_import");
     when(queryService.listActive("tx")).thenReturn(List.of(e));
     CustomTaskTypeResponse expected = CustomTaskTypeResponse.from(e);
@@ -53,7 +56,8 @@ class ConsoleCustomTaskTypeControllerTest {
   }
 
   @Test
-  void countReturnsMapperResult() {
+  @DisplayName("计数查询:返回查询服务的统计结果")
+  void shouldReturnMapperCount_whenCountingActiveTypes() {
     when(queryService.countActive("tx")).thenReturn(3L);
     when(responseFactory.success(3L)).thenReturn(CommonResponse.success(3L));
 
@@ -61,7 +65,8 @@ class ConsoleCustomTaskTypeControllerTest {
   }
 
   @Test
-  void detailReturnsEntityWhenFound() {
+  @DisplayName("详情命中:按租户与类型返回记录, 任务类型编码与入参一致")
+  void shouldReturnEntity_whenDetailFound() {
     CustomTaskTypeEntity e = entity("tenant_tx_import");
     when(queryService.detail("tx", "tenant_tx_import")).thenReturn(e);
     CustomTaskTypeResponse expected = CustomTaskTypeResponse.from(e);
@@ -72,7 +77,8 @@ class ConsoleCustomTaskTypeControllerTest {
   }
 
   @Test
-  void detailThrowsNotFoundWhenMissing() {
+  @DisplayName("详情缺失:查询服务抛异常时原样向上抛出")
+  void shouldPropagateBizException_whenDetailMissing() {
     when(queryService.detail("tx", "missing")).thenThrow(BizException.class);
 
     assertThatThrownBy(() -> controller.detail("missing", "tx")).isInstanceOf(BizException.class);

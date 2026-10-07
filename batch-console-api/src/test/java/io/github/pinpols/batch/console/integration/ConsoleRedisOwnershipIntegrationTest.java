@@ -10,14 +10,17 @@ import java.util.List;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 /** 使用真实 Redis 兼容服务验证 Lua 的 owner 校验和预览 CAS，不启动整套应用。 */
+@DisplayName("Redis 占位归属: 陈旧持有者不能改写,并发预览更新只有一个赢家")
 class ConsoleRedisOwnershipIntegrationTest {
   @Test
-  void staleOwnersCannotMutateAndConcurrentPreviewUpdatesHaveOneWinner() throws Exception {
+  @DisplayName("占位归属校验: 过期持有者改写被拒,并发替换只有一个请求成功")
+  void shouldRejectStaleOwnersAndLetOnlyOneConcurrentPreviewWin_whenReplacing() throws Exception {
     try (var redis = TestValkeyContainers.create()) {
       redis.start();
       var connectionFactory = new LettuceConnectionFactory(

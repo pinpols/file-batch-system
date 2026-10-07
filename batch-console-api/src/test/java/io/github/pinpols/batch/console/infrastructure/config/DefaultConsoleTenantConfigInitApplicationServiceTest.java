@@ -37,6 +37,7 @@ import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -54,10 +55,12 @@ import org.springframework.transaction.support.SimpleTransactionStatus;
  * counts, partial tenant failure isolation.
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("租户配置批量初始化服务: 多租户扇出,跳过与覆盖模式及条目失败统计")
 class DefaultConsoleTenantConfigInitApplicationServiceTest {
 
   @Test
-  void tenantExecutorRetainsPerTenantTransactionBoundary() throws Exception {
+  @DisplayName("租户执行器方法带有事务注解,保证按租户划分事务边界")
+  void shouldKeepPerTenantBoundary_whenExecutorMethodIsAnnotated() throws Exception {
     Method execute = TenantConfigInitTenantExecutor.class.getDeclaredMethod(
         "execute", String.class, TenantConfigBatchInitRequest.class, String.class, boolean.class);
 
@@ -149,6 +152,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   // ------------------------------------------------------------------ job definitions
 
   @Test
+  @DisplayName("作业定义不存在时,新建并写入上游依赖字段")
   void batchInit_createsJobDefinitionWhenNotExists() {
     TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
     request.getJobDefinitions().get(0).setDependsOnJobCode("upstream-job");
@@ -165,6 +169,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("请求携带增量执行模式与水位字段时,原样透传到落库实体")
   void batchInit_passesThroughExecutionModeAndWatermarkField() {
     // 回归:bundle/init 的 JobDefinitionSpec 曾漏 executionMode/watermarkField,
     // 致向导填 INCREMENTAL + 水位字段被静默丢弃、落库退化为 FULL。
@@ -181,6 +186,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("规格未指定执行模式时,默认按全量模式落库")
   void batchInit_defaultsExecutionModeToFullWhenSpecOmitsIt() {
     TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
     when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1")).thenReturn(null);
@@ -191,6 +197,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("增量执行模式缺少水位字段时,直接拒绝且不写库")
   void batchInit_rejectsIncrementalWithoutWatermark() {
     // 回归:INCREMENTAL 缺 watermarkField 的 spec 应被拒(不 insert),避免建出跑不起来的增量作业。
     TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
@@ -203,6 +210,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("跳过模式下作业定义已存在时,计入跳过数且不写库")
   void batchInit_skipsJobDefinitionWhenExistsInSkipMode() {
     TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
     request.setMode(InitMode.SKIP_EXISTING);
@@ -217,6 +225,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("覆盖模式下作业定义已存在时,更新维护字段并计入更新数")
   void batchInit_updatesJobDefinitionWhenExistsInUpsertMode() {
     TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
     request.getJobDefinitions().get(0).setDependsOnJobCode("next-upstream");
@@ -237,6 +246,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   // ------------------------------------------------------------------ file channels
 
   @Test
+  @DisplayName("文件通道不存在时,新建并计入创建数")
   void batchInit_createsFileChannelWhenNotExists() {
     TenantConfigBatchInitRequest request = requestWithChannel("ch-1", List.of("t1"));
     when(fileChannelConfigMapper.selectByUniqueKey("t1", "ch-1")).thenReturn(null);
@@ -248,6 +258,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("跳过模式下文件通道已存在时,计入跳过数且不写库")
   void batchInit_skipsFileChannelWhenExistsInSkipMode() {
     TenantConfigBatchInitRequest request = requestWithChannel("ch-1", List.of("t1"));
     when(fileChannelConfigMapper.selectByUniqueKey("t1", "ch-1")).thenReturn(Map.of("id", 1));
@@ -259,6 +270,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("覆盖模式下文件通道已存在时,执行更新并计入更新数")
   void batchInit_upsertsFileChannelInUpsertMode() {
     TenantConfigBatchInitRequest request = requestWithChannel("ch-1", List.of("t1"));
     request.setMode(InitMode.UPSERT);
@@ -273,6 +285,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   // ------------------------------------------------------------------ file templates
 
   @Test
+  @DisplayName("文件模板不存在时,新建并计入创建数")
   void batchInit_createsFileTemplateWhenNotExists() {
     TenantConfigBatchInitRequest request = requestWithTemplate("tpl-1", List.of("t1"));
     when(fileTemplateConfigMapper.selectByUniqueKey("t1", "tpl-1", 1)).thenReturn(null);
@@ -284,6 +297,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("跳过模式下文件模板已存在时,计入跳过数且不写库")
   void batchInit_skipsFileTemplateWhenExistsInSkipMode() {
     TenantConfigBatchInitRequest request = requestWithTemplate("tpl-1", List.of("t1"));
     when(fileTemplateConfigMapper.selectByUniqueKey("t1", "tpl-1", 1)).thenReturn(Map.of("id", 1));
@@ -297,6 +311,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   // ------------------------------------------------------------------ multi-tenant fan-out
 
   @Test
+  @DisplayName("批量初始化覆盖多个目标租户时,每个租户都写入作业定义")
   void batchInit_appliesConfigToAllTargetTenants() {
     TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1", "t2", "t3"));
     when(jobDefinitionMapper.selectByUniqueKey(anyString(), eq("job-1"))).thenReturn(null);
@@ -309,6 +324,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("单个条目失败只计入失败数,该租户整体仍判定成功")
   void batchInit_itemFailureTrackedInStatsBothTenantsStillSuccess() {
     // Per-item exceptions are caught at item level → tracked as failed count, tenant = success
     TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1", "t2"));
@@ -342,6 +358,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("严格模式下条目失败时,整体回滚并标记该租户失败")
   void batchInit_strictModeRollsBackOnItemFailure() {
     // strict=true (Job Bundle 路径): 任一 spec failed 即整体回滚,tenant 结果标 failed
     TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
@@ -360,6 +377,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("配置列表为空时,各租户仍返回成功且计数全部为零")
   void batchInit_handlesEmptyConfigLists() {
     TenantConfigBatchInitRequest request = new TenantConfigBatchInitRequest();
     request.setTargetTenantIds(List.of("t1", "t2"));
@@ -378,6 +396,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   // ------------------------------------------------------------------ workflow definitions
 
   @Test
+  @DisplayName("工作流定义不存在时,新建并计入创建数")
   void batchInit_createsWorkflowWhenNotExists() {
     TenantConfigBatchInitRequest request = requestWithWorkflow("wf-1", List.of("t1"));
     when(workflowDefinitionMapper.selectByUniqueKey("t1", "wf-1", 1)).thenReturn(null);
@@ -397,6 +416,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("跳过模式下工作流定义已存在时,计入跳过数且不写库")
   void batchInit_skipsWorkflowWhenExistsInSkipMode() {
     TenantConfigBatchInitRequest request = requestWithWorkflow("wf-1", List.of("t1"));
     WorkflowDefinitionEntity existing = new WorkflowDefinitionEntity();
@@ -412,6 +432,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   // ------------------------------------------------------------------ dry-run & batchOperationId
 
   @Test
+  @DisplayName("试运行模式下只统计不做写入,并回传本次批次操作号")
   void batchInit_dryRunSkipsAllWrites() {
     TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
     request.setDryRun(true);
@@ -426,6 +447,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("批量初始化结束后,响应回传批次操作号且标记为非试运行")
   void batchInit_returnsBatchOperationId() {
     TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
     when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1")).thenReturn(null);

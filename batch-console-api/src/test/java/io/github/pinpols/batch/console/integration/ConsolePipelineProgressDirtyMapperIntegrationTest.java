@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -19,6 +20,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@DisplayName("流水线进度查询映射: 每个实例只取最新进度,跨租户关联不串号")
 class ConsolePipelineProgressDirtyMapperIntegrationTest extends AbstractIntegrationTest {
 
   private final JdbcTemplate jdbcTemplate;
@@ -32,7 +34,8 @@ class ConsolePipelineProgressDirtyMapperIntegrationTest extends AbstractIntegrat
   }
 
   @Test
-  void selectsLatestProgressWithoutCrossTenantJoinLeakage() {
+  @DisplayName("进度查询: 每个实例只返回最新一条,他租户关联实例不会污染结果")
+  void shouldSelectLatestProgressPerInstance_whenJoiningAcrossTenants() {
     String tenantA = unique("tenant-a");
     String tenantB = unique("tenant-b");
     Long relatedJobInstanceId =

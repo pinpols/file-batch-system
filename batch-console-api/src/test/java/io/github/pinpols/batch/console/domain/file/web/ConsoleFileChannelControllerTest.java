@@ -23,11 +23,13 @@ import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+@DisplayName("文件通道控制器: 查询、创建、启停与更新的参数校验")
 class ConsoleFileChannelControllerTest {
 
   private final ConsoleFileChannelApplicationService applicationService =
@@ -56,6 +58,7 @@ class ConsoleFileChannelControllerTest {
   }
 
   @Test
+  @DisplayName("按标识查询通道返回成功与租户信息")
   void shouldReturn200WhenGetChannelById() throws Exception {
     when(applicationService.get(anyLong(), anyString()))
         .thenReturn(ConsoleFileProjectionMapper.channel(Map.of("id", 1L, "tenant_id", "t1")));
@@ -68,6 +71,7 @@ class ConsoleFileChannelControllerTest {
   }
 
   @Test
+  @DisplayName("创建通道缺少必填字段时返回校验错误")
   void shouldReturn400WhenCreateRequestMissingRequired() throws Exception {
     mockMvc
         .perform(
@@ -79,6 +83,7 @@ class ConsoleFileChannelControllerTest {
   }
 
   @Test
+  @DisplayName("启停通道返回成功")
   void shouldReturn200WhenToggleChannel() throws Exception {
     mockMvc
         .perform(patch("/api/console/file-channels/1")
@@ -89,6 +94,7 @@ class ConsoleFileChannelControllerTest {
   }
 
   @Test
+  @DisplayName("启停通道缺少租户标识时返回校验错误")
   void shouldReturn400WhenToggleChannelMissingTenantId() throws Exception {
     mockMvc
         .perform(patch("/api/console/file-channels/1")
@@ -101,6 +107,7 @@ class ConsoleFileChannelControllerTest {
   }
 
   @Test
+  @DisplayName("更新通道返回成功")
   void shouldReturn200WhenUpdateChannel() throws Exception {
     when(applicationService.update(anyLong(), any()))
         .thenReturn(ConsoleFileProjectionMapper.channel(Map.of("id", 1L, "tenant_id", "t1")));

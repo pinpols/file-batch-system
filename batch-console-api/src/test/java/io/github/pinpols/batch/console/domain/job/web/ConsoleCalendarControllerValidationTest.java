@@ -17,6 +17,7 @@ import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 import org.springframework.test.web.servlet.MockMvc;
@@ -24,6 +25,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 /** 守护 ConsoleCalendarController 的 CalendarSaveRequest.calendarCode 走 @ValidResourceCode 拦截。 */
+@DisplayName("日历控制器: 日历编码格式校验的拒绝与通过路径")
 class ConsoleCalendarControllerValidationTest {
 
   private final ConsoleCalendarApplicationService service =
@@ -66,6 +68,7 @@ class ConsoleCalendarControllerValidationTest {
   }
 
   @Test
+  @DisplayName("日历编码含空格时返回参数校验失败, 且不写入下游")
   void rejects_calendarCode_with_space() throws Exception {
     mockMvc
         .perform(
@@ -76,6 +79,7 @@ class ConsoleCalendarControllerValidationTest {
   }
 
   @Test
+  @DisplayName("日历编码含中文时返回参数校验失败")
   void rejects_calendarCode_chinese() throws Exception {
     mockMvc
         .perform(post("/api/console/calendars").contentType(APPLICATION_JSON).content(body("中文日历")))
@@ -84,6 +88,7 @@ class ConsoleCalendarControllerValidationTest {
   }
 
   @Test
+  @DisplayName("日历编码以数字开头时返回参数校验失败")
   void rejects_calendarCode_starts_with_digit() throws Exception {
     mockMvc
         .perform(post("/api/console/calendars").contentType(APPLICATION_JSON).content(body("1abc")))
@@ -92,6 +97,7 @@ class ConsoleCalendarControllerValidationTest {
   }
 
   @Test
+  @DisplayName("日历编码为空时返回参数校验失败")
   void rejects_calendarCode_blank() throws Exception {
     mockMvc
         .perform(post("/api/console/calendars").contentType(APPLICATION_JSON).content(body("")))
@@ -100,6 +106,7 @@ class ConsoleCalendarControllerValidationTest {
   }
 
   @Test
+  @DisplayName("日历编码符合格式要求时创建成功并触达下游")
   void accepts_valid_calendarCode() throws Exception {
     when(service.create(ArgumentMatchers.any())).thenReturn(null);
     mockMvc

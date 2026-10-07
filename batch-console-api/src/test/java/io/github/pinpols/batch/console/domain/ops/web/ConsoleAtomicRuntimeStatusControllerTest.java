@@ -15,6 +15,7 @@ import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -23,6 +24,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
  * Round-3 #8:{@link ConsoleAtomicRuntimeStatusController} MockMvc 测试 — 验证 endpoint path / 鉴权
  * annotation / 响应 envelope 结构。
  */
+@DisplayName("原子运行时状态接口:Worker 可用时返回各分组明细, 反向通道关闭时返回不可用原因")
 class ConsoleAtomicRuntimeStatusControllerTest {
 
   private final ConsoleAtomicRuntimeStatusService runtimeStatusService =
@@ -45,6 +47,7 @@ class ConsoleAtomicRuntimeStatusControllerTest {
   }
 
   @Test
+  @DisplayName("可用状态:返回成功响应并回填 Worker 与各分组字段")
   void shouldReturnRuntimeStatus_whenAtomicWorkerAvailable() throws Exception {
     ConsoleAtomicRuntimeStatusResponse resp = new ConsoleAtomicRuntimeStatusResponse(
         true,
@@ -75,6 +78,7 @@ class ConsoleAtomicRuntimeStatusControllerTest {
   }
 
   @Test
+  @DisplayName("不可用状态:反向通道关闭时标记不可用, 并给出原因")
   void shouldReturnUnavailable_whenAtomicWorkerReverseChannelDisabled() throws Exception {
     when(runtimeStatusService.fetch())
         .thenReturn(ConsoleAtomicRuntimeStatusResponse.unavailable(

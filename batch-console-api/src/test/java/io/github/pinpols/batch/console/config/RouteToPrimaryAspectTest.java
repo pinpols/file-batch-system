@@ -6,8 +6,10 @@ import static org.mockito.Mockito.when;
 
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("强制主库切面: 提示的进入,嵌套保留与异常还原")
 class RouteToPrimaryAspectTest {
 
   @AfterEach
@@ -16,7 +18,8 @@ class RouteToPrimaryAspectTest {
   }
 
   @Test
-  void aspectSetsForcePrimaryDuringInvocationAndRestoresAfter() throws Throwable {
+  @DisplayName("切面在调用期间开启强制主库提示,调用结束后恢复原状")
+  void shouldSetHintDuringInvocation_andRestoreAfterReturning() throws Throwable {
     RouteToPrimaryAspect aspect = new RouteToPrimaryAspect();
     ProceedingJoinPoint pjp = mock(ProceedingJoinPoint.class);
     boolean[] insideHint = new boolean[1];
@@ -33,7 +36,8 @@ class RouteToPrimaryAspectTest {
   }
 
   @Test
-  void aspectRestoresPriorHintOnNestedCall() throws Throwable {
+  @DisplayName("嵌套调用返回后,外层已开启的强制主库提示仍然保留")
+  void shouldRestorePriorHint_whenInvocationIsNested() throws Throwable {
     RouteToPrimaryAspect aspect = new RouteToPrimaryAspect();
     Boolean prev = RoutingHints.enterForcePrimary();
     try {
@@ -51,7 +55,8 @@ class RouteToPrimaryAspectTest {
   }
 
   @Test
-  void aspectStillRestoresHintIfMethodThrows() throws Throwable {
+  @DisplayName("被通知方法抛出异常时,强制主库提示同样被还原")
+  void shouldRestoreHint_whenInvocationThrows() throws Throwable {
     RouteToPrimaryAspect aspect = new RouteToPrimaryAspect();
     ProceedingJoinPoint pjp = mock(ProceedingJoinPoint.class);
     when(pjp.proceed()).thenThrow(new RuntimeException("boom"));

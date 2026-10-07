@@ -25,6 +25,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -32,6 +33,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("作业执行日志查询: 偏移分页与游标分页的结果映射")
 class ConsoleJobExecutionLogQueryTest {
 
   @Mock
@@ -85,6 +87,7 @@ class ConsoleJobExecutionLogQueryTest {
   }
 
   @Test
+  @DisplayName("偏移分页模式统计总数并映射条目, 查询条件含实例编号与日志级别且游标为空")
   void offsetMode_queriesCountAndMapsRows() {
     when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
     when(jobExecutionLogMapper.selectByQuery(any())).thenReturn(List.of(log(2), log(1)));
@@ -110,6 +113,7 @@ class ConsoleJobExecutionLogQueryTest {
   }
 
   @Test
+  @DisplayName("游标分页模式不做计数, 按游标编号推进查询并返回后续游标与还有更多标记")
   void cursorMode_skipsCountAndReturnsNextCursor() {
     when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
     when(jobExecutionLogMapper.selectByQuery(any())).thenReturn(List.of(log(5), log(4)));
@@ -133,6 +137,7 @@ class ConsoleJobExecutionLogQueryTest {
   }
 
   @Test
+  @DisplayName("仅携带追踪标识时实例编号可为空, 仍返回匹配的日志快照条目")
   void traceMode_allowsTraceWithoutJobInstanceForSnapshot() {
     when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
     when(jobExecutionLogMapper.selectByQuery(any())).thenReturn(List.of(log(7)));

@@ -12,6 +12,7 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Date;
 import java.time.LocalDate;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -21,6 +22,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@DisplayName("作业实例查询映射: 按状态,作业编码,链路标识过滤与分页上限")
 class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
@@ -30,6 +32,7 @@ class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
   private JdbcTemplate jdbcTemplate;
 
   @Test
+  @DisplayName("无数据租户: 查询返回空列表")
   void shouldReturnEmptyWhenNoJobInstancesExist() {
     JobInstanceQuery query = JobInstanceQuery.builder()
         .tenantId("no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis())
@@ -40,6 +43,7 @@ class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("按状态过滤: 只返回运行中的那一条实例")
   void shouldQueryJobInstancesByStatus() {
     String tenantId = "t-job-query-" + BatchDateTimeSupport.utcEpochMillis();
     String jobCode = "TEST_JOB_" + BatchDateTimeSupport.utcEpochMillis();
@@ -72,6 +76,7 @@ class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("按作业编码过滤: 只返回该作业的一条实例")
   void shouldQueryJobInstancesByJobCode() {
     String tenantId = "t-job-code-" + BatchDateTimeSupport.utcEpochMillis();
     String jobCodeA = "JOB_A_" + BatchDateTimeSupport.utcEpochMillis();
@@ -99,6 +104,7 @@ class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("按链路标识过滤: 只命中唯一标识对应的一条实例")
   void shouldQueryJobInstancesByTraceId() {
     String tenantId = "t-trace-" + BatchDateTimeSupport.utcEpochMillis();
     String traceId = "trace-unique-" + BatchDateTimeSupport.utcEpochMillis();
@@ -119,6 +125,7 @@ class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("分页上限: 写入五条,首页只返回三条")
   void shouldRespectPageLimit() {
     String tenantId = "t-page-" + BatchDateTimeSupport.utcEpochMillis();
 

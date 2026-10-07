@@ -9,10 +9,12 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletResponse;
 
+@DisplayName("安全响应写入:链路标识头部与响应体元信息保持一致")
 class ConsoleSecurityResponseWriterTest {
 
   private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
@@ -25,6 +27,7 @@ class ConsoleSecurityResponseWriterTest {
   }
 
   @Test
+  @DisplayName("响应写入:请求与追踪标识同时出现在头部与元信息, 时间戳非空")
   void shouldExposeCorrelationHeadersAndResponseMeta() throws Exception {
     BatchMdc.put(StructuredLogField.REQUEST_ID, "req-security-1");
     BatchMdc.put(StructuredLogField.TRACE_ID, "trace-security-1");

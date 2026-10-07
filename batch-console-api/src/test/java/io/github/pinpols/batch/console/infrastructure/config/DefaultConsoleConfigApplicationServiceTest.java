@@ -41,6 +41,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -49,6 +50,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("控制台配置应用服务: 发布单,密钥版本,依赖关系与差异对比")
 class DefaultConsoleConfigApplicationServiceTest {
 
   private static final String TENANT = "t1";
@@ -101,6 +103,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   // ── 配置发布单查询 ─────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("按条件查询配置发布单时,空灰度与空载荷回填为空对象")
   void shouldListConfigReleases_whenQueried() {
     when(configReleaseMapper.selectByQuery(any())).thenReturn(List.of(release(1L, "JOB", "k", 1)));
 
@@ -120,6 +123,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("返回的灰度范围与载荷保持原始 JSON,不做转义处理")
   void shouldReturnMachineReadableJson_withoutHtmlEscaping() {
     ConfigReleaseEntity entity = release(1L, "JOB", "k", 1);
     entity.setGrayScope("{\"tenant\":\"t1\"}");
@@ -138,6 +142,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   // ── 创建配置发布单 ─────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("创建配置发布单时,版本号递增并同步写入变更日志")
   void shouldCreateConfigRelease_andIncrementVersion() {
     when(configReleaseMapper.selectLatestVersionNo(anyMap())).thenReturn(2);
     ConfigReleaseUpsertRequest req = upsertRequest();
@@ -152,6 +157,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("此前没有历史版本时,新建发布单版本号从 1 开始")
   void shouldCreateConfigRelease_withVersionOne_whenNoPrior() {
     when(configReleaseMapper.selectLatestVersionNo(anyMap())).thenReturn(null);
     ConfigReleaseUpsertRequest req = upsertRequest();
@@ -162,6 +168,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("载荷字段写成字面量空值时,按参数非法拒绝")
   void shouldThrowBizException_whenConfigPayloadJsonIsLiteralNull() {
     ConfigReleaseUpsertRequest req = upsertRequest();
     req.setConfigPayloadJson("null");
@@ -173,6 +180,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("载荷不是合法 JSON 时,直接抛出业务异常")
   void shouldThrowBizException_whenConfigPayloadJsonIsMalformed() {
     ConfigReleaseUpsertRequest req = upsertRequest();
     req.setConfigPayloadJson("{not json");
@@ -181,6 +189,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("生效时间不符合标准时间格式时,直接抛出业务异常")
   void shouldThrowBizException_whenEffectiveFromAtNotIso() {
     ConfigReleaseUpsertRequest req = upsertRequest();
     req.setEffectiveFromAt("not-a-date");
@@ -191,6 +200,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   // ── 回滚 ───────────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("回滚时找不到目标发布单,抛出业务异常")
   void shouldThrow_whenLoadReleaseNotFound() {
     when(configReleaseMapper.selectById(anyMap())).thenReturn(null);
 
@@ -200,6 +210,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("对草稿状态的发布单执行回滚时,按状态冲突拒绝")
   void shouldReject_whenRollbackDraftRelease() {
     // 回归:rollback 只能作用于已上线发布,DRAFT 无可回滚内容。release() 默认 DRAFT。
     when(configReleaseMapper.selectById(anyMap())).thenReturn(release(10L, "JOB", "k", 1));
@@ -211,6 +222,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("回滚已上线发布单时,记录回滚时间并重新应用上一版本")
   void shouldRollbackConfigRelease_andSetRolledBackAt() {
     // rollback 只能作用于已上线发布(状态机守卫),用 PUBLISHED release。
     ConfigReleaseEntity published = release(10L, "JOB", "k", 1);
@@ -232,6 +244,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("期望版本号已过期时,按状态冲突拒绝且不更新状态")
   void shouldReject_whenExpectedVersionIsStale() {
     ConfigReleaseEntity published = release(10L, "JOB", "k", 2);
     published.setConfigStatus(ConfigLifecycleStatus.PUBLISHED.code());
@@ -245,6 +258,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("目标发布单不是最新版本时,拒绝回滚且不更新状态")
   void shouldReject_whenReleaseIsNotLatestVersion() {
     when(configReleaseMapper.selectById(anyMap())).thenReturn(release(10L, "JOB", "k", 1));
     when(configReleaseMapper.selectLatestVersionNo(anyMap())).thenReturn(2);
@@ -260,6 +274,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("状态更新竞争失败时,抛出状态冲突异常")
   void shouldReject_whenStatusCasLosesRace() {
     ConfigReleaseEntity published = release(10L, "JOB", "k", 1);
     published.setConfigStatus(ConfigLifecycleStatus.PUBLISHED.code());
@@ -278,6 +293,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   // ── 密钥版本查询与轮换 ─────────────────────────────────────────────────
 
   @Test
+  @DisplayName("查询密钥版本时,返回脱敏后的载荷内容")
   void shouldListSecretVersions_whenQueried() {
     when(secretVersionMapper.selectByQuery(any())).thenReturn(List.of(secret(1L, "ref")));
 
@@ -294,6 +310,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("轮换密钥时,版本号递增且状态去除空白并转为大写")
   void shouldRotateSecret_andIncrementVersion() {
     when(secretVersionMapper.selectLatestVersionNo(anyMap())).thenReturn(2);
 
@@ -312,6 +329,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("密钥载荷不是合法 JSON 时,轮换直接抛出业务异常")
   void shouldThrowBizException_whenSecretPayloadJsonIsMalformed() {
     SecretVersionRotateRequest req = rotateRequest();
     req.setSecretPayloadJson("{not json");
@@ -320,6 +338,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("未指定密钥版本状态时,默认按已发布状态落库")
   void shouldRotateSecret_withDefaultStatus_whenBlank() {
     when(secretVersionMapper.selectLatestVersionNo(anyMap())).thenReturn(null);
 
@@ -338,6 +357,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   // ── 配置变更日志 ───────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("按条件查询配置变更日志时,返回命中的记录")
   void shouldListConfigChangeLogs() {
     ConfigChangeLogEntity entity = new ConfigChangeLogEntity();
     entity.setId(1L);
@@ -367,6 +387,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   // ── 详情、依赖关系与差异 ───────────────────────────────────────────────
 
   @Test
+  @DisplayName("按主键查询配置发布单详情时,返回对应记录")
   void shouldReturnConfigReleaseDetail() {
     when(configReleaseMapper.selectById(anyMap())).thenReturn(release(10L, "JOB", "k", 1));
     ConsoleConfigReleaseResponse resp = service.configReleaseDetail(TENANT, 10L);
@@ -374,6 +395,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("查询配置发布单详情时记录不存在,抛出业务异常")
   void shouldThrow_whenConfigReleaseDetailNotFound() {
     when(configReleaseMapper.selectById(anyMap())).thenReturn(null);
     assertThatThrownBy(() -> service.configReleaseDetail(TENANT, 99L))
@@ -381,6 +403,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("旧结构以对象形式提交密钥载荷时,统一走加密保护")
   void shouldEncryptLegacyObjectSecretPayload() {
     SecretVersionRotateRequest req = rotateRequest();
     req.setSecretPayloadJson(null);
@@ -392,6 +415,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("查询密钥版本详情时,返回脱敏后的载荷")
   void shouldReturnSecretVersionDetail() {
     when(secretVersionMapper.selectById(anyMap())).thenReturn(secret(7L, "ref"));
     ConsoleSecretVersionResponse resp = service.secretVersionDetail(TENANT, 7L);
@@ -400,6 +424,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("查询密钥版本详情时记录不存在,抛出业务异常")
   void shouldThrow_whenSecretVersionDetailNotFound() {
     when(secretVersionMapper.selectById(anyMap())).thenReturn(null);
     assertThatThrownBy(() -> service.secretVersionDetail(TENANT, 99L))
@@ -407,6 +432,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("按资源队列查询依赖时,统计引用该队列的作业数量")
   void shouldReturnConfigDependencies_forQueueType() {
     when(dashboardQueryMapper.jobsByQueueCode(TENANT, "q1"))
         .thenReturn(List.of(new ConfigDependentView(1L, "JOB-1", "Job One")));
@@ -418,6 +444,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("按业务日历查询依赖时,统计引用该日历的作业数量")
   void shouldReturnConfigDependencies_forCalendarType() {
     when(dashboardQueryMapper.jobsByCalendarCode(TENANT, "c1"))
         .thenReturn(List.of(new ConfigDependentView(2L, "JOB-2", null)));
@@ -428,6 +455,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("按批次日窗口查询依赖时,没有作业引用则数量为零")
   void shouldReturnConfigDependencies_forWindowType() {
     when(dashboardQueryMapper.jobsByWindowCode(TENANT, "w1")).thenReturn(List.of());
     ConfigDependenciesResponse result = service.configDependencies(TENANT, "BATCH_WINDOW", "w1");
@@ -435,6 +463,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("按工作组查询依赖时,统计引用该组的作业数量")
   void shouldReturnConfigDependencies_forWorkerGroupType() {
     when(dashboardQueryMapper.jobsByWorkerGroup(TENANT, "g1"))
         .thenReturn(List.of(new ConfigDependentView(3L, "JOB-3", "Three")));
@@ -443,12 +472,14 @@ class DefaultConsoleConfigApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("配置类型无法识别时,依赖数量为零")
   void shouldReturnEmptyDependencies_forUnknownType() {
     ConfigDependenciesResponse result = service.configDependencies(TENANT, "UNKNOWN", "x");
     assertThat(result.dependentJobCount()).isZero();
   }
 
   @Test
+  @DisplayName("对比两个发布单时,载荷,灰度范围与状态的变化都被识别")
   void shouldDiffConfigReleases_whenPayloadDiffers() {
     ConfigReleaseEntity a = release(1L, "JOB", "k", 1);
     a.setConfigPayload("{\"a\":1}");
@@ -470,6 +501,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("历史记录里存在损坏 JSON 时,降级为空值比较而不抛异常")
   void shouldDiffConfigReleases_andTolerateMalformedHistoricalJson() {
     // 历史 DB 数据可能含坏 JSON(validateJson 守卫加入前的写入);
     // diff 必须降级为 null 比较,而不是穿透 IllegalArgumentException 变 500。
@@ -488,6 +520,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("两个发布单内容一致时,三项变化标记全为否")
   void shouldDiffConfigReleases_whenPayloadSame() {
     ConfigReleaseEntity a = release(1L, "JOB", "k", 1);
     ConfigReleaseEntity b = release(2L, "JOB", "k", 2);

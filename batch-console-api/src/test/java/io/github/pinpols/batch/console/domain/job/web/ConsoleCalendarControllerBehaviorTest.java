@@ -29,6 +29,7 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -37,6 +38,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 /**
  * P1: ConsoleCalendarController CRUD + holiday 子表行为测试(原 ValidationTest 仅守 @ValidResourceCode 约束)。
  */
+@DisplayName("日历控制器: 日历与节假日子资源的增改查删转发行为")
 class ConsoleCalendarControllerBehaviorTest {
 
   private final ConsoleCalendarApplicationService service =
@@ -63,7 +65,8 @@ class ConsoleCalendarControllerBehaviorTest {
   }
 
   @Test
-  void listShouldDelegateWithDefaultPagingAndOptionalFilters() throws Exception {
+  @DisplayName("未传筛选条件时按默认页码与页大小下查, 回包与查询结果一致")
+  void shouldDelegateListWithDefaultPaging_whenFiltersAbsent() throws Exception {
     when(service.list(eq("ta"), any(), any(), eq(1), eq(20)))
         .thenReturn(new PageResponse<>(0L, 1, 20, List.of()));
     mockMvc
@@ -74,7 +77,8 @@ class ConsoleCalendarControllerBehaviorTest {
   }
 
   @Test
-  void createShouldReturnPersistedRow() throws Exception {
+  @DisplayName("新建成功后回包携带持久化标识与日历编码")
+  void shouldReturnPersistedRow_whenCreateSucceeds() throws Exception {
     when(service.create(any(CalendarSaveRequest.class)))
         .thenReturn(new ConsoleCalendarResponse(
             1L,
@@ -101,7 +105,8 @@ class ConsoleCalendarControllerBehaviorTest {
   }
 
   @Test
-  void updateShouldPassPathIdToService() throws Exception {
+  @DisplayName("更新请求以路径标识定位目标日历, 报文原样下发给下游")
+  void shouldPassPathId_whenUpdateRequested() throws Exception {
     when(service.update(eq(7L), any(CalendarSaveRequest.class)))
         .thenReturn(new ConsoleCalendarResponse(
             7L, "ta", "c1", "n", "Asia/Shanghai", null, null, null, true, null, null, null));
@@ -116,7 +121,8 @@ class ConsoleCalendarControllerBehaviorTest {
   }
 
   @Test
-  void setEnabledShouldDelegateWithRequestBody() throws Exception {
+  @DisplayName("启停操作以路径标识与报文中的目标状态下发下游")
+  void shouldPassBody_whenToggleRequested() throws Exception {
     mockMvc
         .perform(patch("/api/console/calendars/9/enabled")
             .contentType(APPLICATION_JSON)
@@ -126,7 +132,8 @@ class ConsoleCalendarControllerBehaviorTest {
   }
 
   @Test
-  void holidaysShouldReturnListForTenant() throws Exception {
+  @DisplayName("按日历标识查询节假日列表, 回包为该租户下的明细")
+  void shouldReturnHolidayList_whenCalendarHasHolidays() throws Exception {
     when(service.holidays(3L, "ta"))
         .thenReturn(List.of(new ConsoleHolidayResponse(
             1L, 3L, LocalDate.parse("2026-05-20"), "HOLIDAY", "N1", null, null, null)));
@@ -137,7 +144,8 @@ class ConsoleCalendarControllerBehaviorTest {
   }
 
   @Test
-  void importHolidaysShouldPassPathId() throws Exception {
+  @DisplayName("节假日导入以路径标识定位目标日历, 请求报文下发给下游")
+  void shouldPassPathId_whenImportingHolidays() throws Exception {
     mockMvc
         .perform(
             post("/api/console/calendars/3/holidays")
@@ -149,7 +157,8 @@ class ConsoleCalendarControllerBehaviorTest {
   }
 
   @Test
-  void deleteHolidayShouldPassBothIdsAndTenant() throws Exception {
+  @DisplayName("删除节假日同时下发日历标识、节假日标识与租户")
+  void shouldPassBothIdsAndTenant_whenDeletingHoliday() throws Exception {
     mockMvc
         .perform(delete("/api/console/calendars/3/holidays/5").param("tenantId", "ta"))
         .andExpect(status().isOk());
@@ -157,7 +166,8 @@ class ConsoleCalendarControllerBehaviorTest {
   }
 
   @Test
-  void updateHolidayShouldPassBothIdsAndBody() throws Exception {
+  @DisplayName("更新节假日时两个路径标识与请求报文一并下发, 回包为更新后的明细")
+  void shouldPassBothIdsAndBody_whenUpdatingHoliday() throws Exception {
     when(service.updateHoliday(eq(3L), eq(5L), any(HolidaySaveRequest.class)))
         .thenReturn(new ConsoleHolidayResponse(
             5L, 3L, LocalDate.parse("2026-05-20"), "HOLIDAY", "N1", null, null, null));

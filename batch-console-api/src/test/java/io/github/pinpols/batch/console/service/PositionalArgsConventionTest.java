@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.Test;
  *
  * <p>方案见 {@code docs/archive/analysis/positional-args-cleanup-plan.md} v3。
  */
+@DisplayName("方法位置参数规约守护: 已治理类型禁止长位置构造与实参位置内联构建")
 class PositionalArgsConventionTest {
 
   /** 已治理的类型白名单。新增治理类型追加到此即受守护。 */
@@ -114,7 +116,8 @@ class PositionalArgsConventionTest {
   private static final List<String> SCAN_SCOPES = List.of("main", "test");
 
   @Test
-  void noRawLongCtorOfGuardedType() throws IOException {
+  @DisplayName("已治理类型不得在方法实参位置出现六个及以上参数的位置构造")
+  void shouldRejectRawLongConstructor_whenGuardedTypeUsedInArguments() throws IOException {
     List<String> violations = new ArrayList<>();
     for (String module : SCAN_MODULES) {
       for (String scope : SCAN_SCOPES) {
@@ -136,7 +139,8 @@ class PositionalArgsConventionTest {
   }
 
   @Test
-  void noInlineBuilderOfGuardedType() throws IOException {
+  @DisplayName("已治理类型不得在方法实参位置内联构建, 需先提取引用变量再传参")
+  void shouldRejectInlineBuilder_whenGuardedTypeUsedInArguments() throws IOException {
     List<String> violations = new ArrayList<>();
     for (String module : SCAN_MODULES) {
       for (String scope : SCAN_SCOPES) {

@@ -11,6 +11,7 @@ import io.github.pinpols.batch.console.domain.notification.service.WebhookDispat
 import io.github.pinpols.batch.console.shared.event.ConsoleRealtimeDomainEvent;
 import java.time.Instant;
 import java.util.concurrent.Executor;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -24,9 +25,11 @@ import org.springframework.transaction.support.AbstractPlatformTransactionManage
 import org.springframework.transaction.support.DefaultTransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
 
+@DisplayName("领域事件的事务边界: 仅提交后分发, 回滚事件被丢弃")
 class ConsoleWebhookDomainEventTransactionTest {
 
   @Test
+  @DisplayName("事务提交后才触发外部通知与订阅规则分发, 回滚的事件不产生任何投递")
   void shouldDispatchOnlyAfterCommitAndDiscardRolledBackEvent() {
     try (var context = new AnnotationConfigApplicationContext(TestConfiguration.class)) {
       WebhookDispatcher webhook = context.getBean(WebhookDispatcher.class);

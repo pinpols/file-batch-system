@@ -27,12 +27,14 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /** P2: ConsoleSystemController 维护状态查询(读 MaintenanceStateHolder)+ Cron 预览(Quartz 解析 + 时区)。 */
+@DisplayName("系统状态接口:维护状态读取与 Cron 表达式预览")
 class ConsoleSystemControllerTest {
 
   private final BatchTimezoneProvider timezoneProvider = mock(BatchTimezoneProvider.class);
@@ -72,7 +74,8 @@ class ConsoleSystemControllerTest {
   }
 
   @Test
-  void maintenanceStatusShouldReturnDisabledByDefault() throws Exception {
+  @DisplayName("维护状态:未启用时返回关闭且非只读")
+  void shouldReturnDisabled_whenMaintenanceNotConfigured() throws Exception {
     mockMvc
         .perform(get("/api/console/system/maintenance"))
         .andExpect(status().isOk())
@@ -81,7 +84,8 @@ class ConsoleSystemControllerTest {
   }
 
   @Test
-  void maintenanceStatusShouldReflectHolderState() throws Exception {
+  @DisplayName("维护状态:更新后返回启用、只读、提示文案与受影响服务")
+  void shouldReflectHolderState_whenMaintenanceUpdated() throws Exception {
     stateHolder.update(new MaintenanceState(
         true, true, "DB 灰度中", Instant.parse("2026-05-20T15:00:00Z"), List.of("job-schedule")));
     mockMvc
@@ -95,7 +99,8 @@ class ConsoleSystemControllerTest {
   }
 
   @Test
-  void cronPreviewShouldReturnNextFireTimesForValidExpression() throws Exception {
+  @DisplayName("Cron 预览:合法表达式返回时区与最近三次触发时间")
+  void shouldReturnNextFireTimes_whenCronExpressionValid() throws Exception {
     mockMvc
         .perform(get("/api/console/system/cron-preview").param("expr", "0 0 12 * * ?"))
         .andExpect(status().isOk())
@@ -106,7 +111,8 @@ class ConsoleSystemControllerTest {
   }
 
   @Test
-  void cronPreviewShouldRejectInvalidExpressionWithValidFalse() throws Exception {
+  @DisplayName("Cron 预览:非法表达式返回校验失败与错误信息,不抛服务端异常")
+  void shouldReturnInvalidWithout5xx_whenCronExpressionMalformed() throws Exception {
     // 非法 Quartz 表达式 → valid=false,error 非空,nextRuns 空 list,不抛 500
     mockMvc
         .perform(get("/api/console/system/cron-preview").param("expr", "not a cron"))
@@ -116,7 +122,8 @@ class ConsoleSystemControllerTest {
   }
 
   @Test
-  void cronPreviewShouldRejectBlankExpression() throws Exception {
+  @DisplayName("Cron 预览:表达式为空时返回参数非法")
+  void shouldRejectBlankExpr_whenCronPreviewRequested() throws Exception {
     mockMvc
         .perform(get("/api/console/system/cron-preview").param("expr", "   "))
         .andExpect(status().isBadRequest())
@@ -124,7 +131,8 @@ class ConsoleSystemControllerTest {
   }
 
   @Test
-  void cronPreviewShouldCapCountToMax() throws Exception {
+  @DisplayName("Cron 预览:请求次数超过上限时按最大次数返回")
+  void shouldCapCountToMax_whenCountTooLarge() throws Exception {
     mockMvc
         .perform(get("/api/console/system/cron-preview")
             .param("expr", "0 0 12 * * ?")

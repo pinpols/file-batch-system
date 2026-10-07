@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
@@ -17,6 +18,7 @@ import org.springframework.http.MediaType;
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+@DisplayName("告警路由配置写路径: 编码校验,落库字段与唯一约束")
 class ConsoleAlertRoutingMutationIntegrationTest extends AbstractMutationIntegrationTest {
 
   private String body(String code) {
@@ -39,6 +41,7 @@ class ConsoleAlertRoutingMutationIntegrationTest extends AbstractMutationIntegra
   }
 
   @Test
+  @DisplayName("创建告警路由: 返回成功,落库的租户,编码与等级与请求一致")
   void shouldCreateAlertRoutingWithValidCode() {
     String code = "int_ar_create_" + System.currentTimeMillis();
 
@@ -64,6 +67,7 @@ class ConsoleAlertRoutingMutationIntegrationTest extends AbstractMutationIntegra
   }
 
   @Test
+  @DisplayName("编码含空格: 返回校验错误,且不落库")
   void shouldRejectInvalidRouteCodeWithSpaces() {
     client
         .post()
@@ -85,6 +89,7 @@ class ConsoleAlertRoutingMutationIntegrationTest extends AbstractMutationIntegra
   }
 
   @Test
+  @DisplayName("编码为中文: 返回请求不合法")
   void shouldRejectChineseRouteCode() {
     client
         .post()
@@ -98,6 +103,7 @@ class ConsoleAlertRoutingMutationIntegrationTest extends AbstractMutationIntegra
   }
 
   @Test
+  @DisplayName("编码重复: 第二次写入失败,不产生重复配置")
   void shouldRejectDuplicateRouteCode() {
     String code = "int_ar_dup_" + System.currentTimeMillis();
     client

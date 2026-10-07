@@ -25,12 +25,14 @@ import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 /** P1: ConsoleBatchWindowController CRUD 行为(原 ValidationTest 仅守 @ValidResourceCode)。 */
+@DisplayName("批量窗口控制器: 列表查询、新建、更新与启停的路由转发行为")
 class ConsoleBatchWindowControllerBehaviorTest {
 
   private final ConsoleBatchWindowApplicationService service =
@@ -57,7 +59,8 @@ class ConsoleBatchWindowControllerBehaviorTest {
   }
 
   @Test
-  void listShouldDelegateWithDefaults() throws Exception {
+  @DisplayName("未传筛选条件时按默认页码与页大小下查, 响应与查询结果一致")
+  void shouldDelegateListWithDefaultPaging_whenFiltersAbsent() throws Exception {
     when(service.list(eq("ta"), any(), any(), eq(1), eq(20)))
         .thenReturn(new PageResponse<>(0L, 1, 20, List.of()));
     mockMvc
@@ -67,7 +70,8 @@ class ConsoleBatchWindowControllerBehaviorTest {
   }
 
   @Test
-  void createShouldReturnRow() throws Exception {
+  @DisplayName("新建成功后返回持久化后的数据行, 响应字段沿用历史键名")
+  void shouldReturnCreatedRow_whenCreateSucceeds() throws Exception {
     when(service.create(any(BatchWindowCreateRequest.class)))
         .thenReturn(new ConsoleBatchWindowResponse(
             1L,
@@ -96,7 +100,8 @@ class ConsoleBatchWindowControllerBehaviorTest {
   }
 
   @Test
-  void updateShouldPassPathId() throws Exception {
+  @DisplayName("更新请求以路径标识定位目标记录, 报文原样下发给下游")
+  void shouldPassPathId_whenUpdateRequested() throws Exception {
     when(service.update(eq(7L), any(BatchWindowUpdateRequest.class)))
         .thenReturn(new ConsoleBatchWindowResponse(
             7L,
@@ -124,7 +129,8 @@ class ConsoleBatchWindowControllerBehaviorTest {
   }
 
   @Test
-  void setEnabledShouldPassRequestBody() throws Exception {
+  @DisplayName("启停操作以路径标识与报文中的目标状态下发下游")
+  void shouldPassBody_whenToggleRequested() throws Exception {
     mockMvc
         .perform(patch("/api/console/batch-windows/9/enabled")
             .contentType(APPLICATION_JSON)

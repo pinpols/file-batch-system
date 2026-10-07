@@ -18,6 +18,7 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.env.Environment;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -36,6 +37,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
  *   <li>合法请求只转发给 orchestrator proxy，console 不再直接写运行态表
  * </ul>
  */
+@DisplayName("测试数据清理接口:生产环境拒绝启用, 非法前缀拦截, 合法请求只转发编排层")
 class ConsoleAdminTestDataControllerTest {
 
   private final ConsoleRequestMetadataResolver requestMetadataResolver =
@@ -73,6 +75,7 @@ class ConsoleAdminTestDataControllerTest {
   }
 
   @Test
+  @DisplayName("生产环境守卫:以生产配置启用时构造即抛出状态异常, 并给出拒绝原因")
   void shouldRejectInProductionProfileAtConstruction() {
     when(environment.getActiveProfiles()).thenReturn(new String[] {"prod"});
     ConsoleResponseFactory rf = new ConsoleResponseFactory(requestMetadataResolver);
@@ -84,6 +87,7 @@ class ConsoleAdminTestDataControllerTest {
   }
 
   @Test
+  @DisplayName("空前缀守卫:仅空白的前缀返回参数错误, 且不触达编排层")
   void shouldRejectBlankPrefixAtMethodGuard() throws Exception {
     // controller 内部 if (prefix.isBlank()) 回退,@Pattern 在 standalone MockMvc 不触发
     // (MethodValidationPostProcessor 需要 Spring context),所以这里走方法内 guard
@@ -95,6 +99,7 @@ class ConsoleAdminTestDataControllerTest {
   }
 
   @Test
+  @DisplayName("前缀清理:合法前缀按表计数回填成功响应, 并转发编排层")
   void shouldForwardValidPrefixCleanupToOrchestrator() throws Exception {
     mockMvc
         .perform(delete("/api/console/admin/test-data").param("prefix", "e2e"))
@@ -106,6 +111,7 @@ class ConsoleAdminTestDataControllerTest {
   }
 
   @Test
+  @DisplayName("精确清理:逗号分隔的标识列表解析后转发, 并回填清理计数")
   void shouldForwardExactIdsCleanupToOrchestrator() throws Exception {
     mockMvc
         .perform(delete("/api/console/admin/test-data/by-ids").param("ids", "td,te"))

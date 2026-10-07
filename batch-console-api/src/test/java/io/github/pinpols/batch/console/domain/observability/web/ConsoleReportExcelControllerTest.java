@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import io.github.pinpols.batch.console.domain.observability.application.ConsoleReportExcelApplicationService;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -22,6 +23,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("报表导出接口:配置发布与调度快照的流式导出")
 class ConsoleReportExcelControllerTest {
 
   @Mock
@@ -36,6 +38,7 @@ class ConsoleReportExcelControllerTest {
   }
 
   @Test
+  @DisplayName("导出接口:配置发布与调度快照均以流式响应返回字节内容")
   void shouldExportConfigReleasesAndSchedulerSnapshotExcel() throws Exception {
     byte[] configBytes = "config-releases".getBytes(StandardCharsets.UTF_8);
     byte[] snapshotBytes = "scheduler-snapshot".getBytes(StandardCharsets.UTF_8);

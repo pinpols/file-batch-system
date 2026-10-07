@@ -17,11 +17,13 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+@DisplayName("集群诊断接口:诊断与实例诊断两个端点透传服务层结果, 并以成功响应包裹")
 class ConsoleClusterDiagnosticControllerTest {
 
   private final ConsoleClusterDiagnosticService diagnosticService =
@@ -50,6 +52,7 @@ class ConsoleClusterDiagnosticControllerTest {
   }
 
   @Test
+  @DisplayName("集群诊断:各分组明细按服务层结果回填, 响应码为成功")
   void shouldReturnDiagnostic() throws Exception {
     // 键与真实 ConsoleClusterDiagnosticService.loadDiagnose
     // 输出一致：shedLock/workers/outbox/terminalChildren。
@@ -73,6 +76,7 @@ class ConsoleClusterDiagnosticControllerTest {
   }
 
   @Test
+  @DisplayName("实例诊断:实例标识与健康标记按服务层结果回填")
   void shouldReturnInstanceDiagnosis() throws Exception {
     when(diagnosticService.instanceDiagnosis("t1", 7L))
         .thenReturn(

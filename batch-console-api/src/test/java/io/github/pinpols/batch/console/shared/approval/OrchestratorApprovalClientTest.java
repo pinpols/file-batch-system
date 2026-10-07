@@ -22,11 +22,13 @@ import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestCli
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.web.client.RestClient;
 
 /** 共享审批客户端单测：目标绑定、空响应、状态校验、入参清洗。 */
+@DisplayName("编排审批客户端: 目标绑定校验、审批提交结果与入参清洗")
 class OrchestratorApprovalClientTest {
 
   private final OrchestratorInternalRestClient orchestratorInternalRestClient =
@@ -72,6 +74,7 @@ class OrchestratorApprovalClientTest {
   // ── requireApprovedApproval：目标绑定 ──────────────────────────────────
 
   @Test
+  @DisplayName("审批已通过且目标类型与标识均匹配时,目标绑定校验应放行")
   void shouldPass_whenApprovedAndTargetMatches() {
     stubApprovalRecord("APPROVED", "FILE", "100");
     assertThatCode(
@@ -80,6 +83,7 @@ class OrchestratorApprovalClientTest {
   }
 
   @Test
+  @DisplayName("审批状态为已执行时视同已通过,目标匹配校验应放行")
   void shouldPass_whenExecutedTreatedAsApproved() {
     stubApprovalRecord("EXECUTED", "FILE", "100");
     assertThatCode(
@@ -88,6 +92,7 @@ class OrchestratorApprovalClientTest {
   }
 
   @Test
+  @DisplayName("审批记录的目标标识与申请不一致时,应返回禁止访问错误")
   void shouldRejectForbidden_whenTargetIdMismatch() {
     stubApprovalRecord("APPROVED", "FILE", "200");
     assertThatThrownBy(
@@ -98,6 +103,7 @@ class OrchestratorApprovalClientTest {
   }
 
   @Test
+  @DisplayName("审批记录的目标类型与申请不一致时,应返回禁止访问错误")
   void shouldRejectForbidden_whenTargetTypeMismatch() {
     stubApprovalRecord("APPROVED", "EXPORT", "100");
     assertThatThrownBy(
@@ -108,6 +114,7 @@ class OrchestratorApprovalClientTest {
   }
 
   @Test
+  @DisplayName("审批仍处于待处理状态时,应返回状态冲突错误")
   void shouldRejectStateConflict_whenNotApprovedYet() {
     stubApprovalRecord("PENDING", "FILE", "100");
     assertThatThrownBy(
@@ -118,6 +125,7 @@ class OrchestratorApprovalClientTest {
   }
 
   @Test
+  @DisplayName("显式声明不绑定目标时,仅校验审批状态而不校验目标")
   void shouldSkipBinding_whenExplicitNone() {
     // none() 是既有作业运维路径的显式过渡声明：仅校验状态,不校验目标。
     stubApprovalRecord("APPROVED", "JOB", "999");
@@ -128,6 +136,7 @@ class OrchestratorApprovalClientTest {
   // ── submitApproval ──────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("提交审批成功时,应返回服务端生成的审批编号")
   void shouldReturnApprovalNo_onSuccessfulSubmit() {
     stubSubmit(new ApprovalSubmitResponse("APR-9"));
     String approvalNo = client.submitApproval(ApprovalSubmitCommand.builder()
@@ -142,6 +151,7 @@ class OrchestratorApprovalClientTest {
   }
 
   @Test
+  @DisplayName("提交审批返回空响应时,应使用默认错误消息键抛出业务异常")
   void shouldThrowDefaultKey_whenSubmitResponseEmpty() {
     stubSubmit(null);
     assertThatThrownBy(() -> client.submitApproval(
@@ -151,6 +161,7 @@ class OrchestratorApprovalClientTest {
   }
 
   @Test
+  @DisplayName("调用方给出自定义消息键且响应为空时,应使用调用方提供的消息键")
   void shouldThrowCallerKey_whenSubmitResponseEmptyAndCustomKeyGiven() {
     stubSubmit(new ApprovalSubmitResponse("  "));
     assertThatThrownBy(() -> client.submitApproval(ApprovalSubmitCommand.builder()
@@ -163,6 +174,7 @@ class OrchestratorApprovalClientTest {
   }
 
   @Test
+  @DisplayName("提交审批时应清除申请人标识与审批理由中的空白与控制字符")
   void shouldSanitizeRequesterIdAndReason() {
     RestClient.RequestBodySpec bodySpec = stubSubmit(new ApprovalSubmitResponse("APR-10"));
     client.submitApproval(ApprovalSubmitCommand.builder()
@@ -184,6 +196,7 @@ class OrchestratorApprovalClientTest {
   }
 
   @Test
+  @DisplayName("未提供申请人标识时,应回退为当前操作人并带上来源追踪与幂等标识")
   void shouldFallbackRequesterIdToOperator_whenNotProvided() {
     RestClient.RequestBodySpec bodySpec = stubSubmit(new ApprovalSubmitResponse("APR-11"));
     client.submitApproval(

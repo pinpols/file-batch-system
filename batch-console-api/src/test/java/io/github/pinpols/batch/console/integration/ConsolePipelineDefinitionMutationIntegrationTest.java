@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
@@ -24,6 +25,7 @@ import org.springframework.http.MediaType;
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+@DisplayName("流水线定义写路径: 作业编码与流水线类型校验,落库字段透传与唯一约束")
 class ConsolePipelineDefinitionMutationIntegrationTest extends AbstractMutationIntegrationTest {
 
   private String body(String jobCode, String pipelineType) {
@@ -44,6 +46,7 @@ class ConsolePipelineDefinitionMutationIntegrationTest extends AbstractMutationI
   }
 
   @Test
+  @DisplayName("创建流水线定义: 返回成功,落库的租户,类型与业务类型与请求一致")
   void shouldCreatePipelineDefinitionWithValidCode() {
     String code = "int_pd_create_" + System.currentTimeMillis();
 
@@ -69,6 +72,7 @@ class ConsolePipelineDefinitionMutationIntegrationTest extends AbstractMutationI
   }
 
   @Test
+  @DisplayName("作业编码含空格: 返回校验错误且不落库")
   void shouldRejectInvalidJobCodeWithSpaces() {
     client
         .post()
@@ -88,6 +92,7 @@ class ConsolePipelineDefinitionMutationIntegrationTest extends AbstractMutationI
   }
 
   @Test
+  @DisplayName("流水线类型不在允许集合内: 返回请求不合法且不落库")
   void shouldRejectInvalidPipelineType() {
     String code = "int_pd_bad_type_" + System.currentTimeMillis();
     client
@@ -106,6 +111,7 @@ class ConsolePipelineDefinitionMutationIntegrationTest extends AbstractMutationI
   }
 
   @Test
+  @DisplayName("作业编码重复: 第二次写入失败,不产生重复定义")
   void shouldRejectDuplicateJobCode() {
     String code = "int_pd_dup_" + System.currentTimeMillis();
     client

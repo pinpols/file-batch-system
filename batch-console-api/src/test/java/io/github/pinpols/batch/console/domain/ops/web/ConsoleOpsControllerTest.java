@@ -18,12 +18,14 @@ import io.github.pinpols.batch.console.shared.view.ConsoleOpsSummaryResponse;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+@DisplayName("运维概览接口:汇总响应结构与字段回填正确, 且允许租户用户读取")
 class ConsoleOpsControllerTest {
 
   private final ConsoleOpsSummaryPort opsApplicationService = mock(ConsoleOpsSummaryPort.class);
@@ -55,6 +57,7 @@ class ConsoleOpsControllerTest {
   }
 
   @Test
+  @DisplayName("汇总查询:返回成功响应并回填租户与各项计数")
   void shouldReturn200AndCommonResponseStructureOnSuccess() throws Exception {
     when(opsApplicationService.summary(anyString()))
         .thenReturn(
@@ -71,6 +74,7 @@ class ConsoleOpsControllerTest {
   }
 
   @Test
+  @DisplayName("读权限:汇总方法的授权注解包含租户用户角色")
   void shouldAllowTenantUserToReadSummary() throws Exception {
     PreAuthorize authorization = ConsoleOpsController.class
         .getMethod("summary", String.class)

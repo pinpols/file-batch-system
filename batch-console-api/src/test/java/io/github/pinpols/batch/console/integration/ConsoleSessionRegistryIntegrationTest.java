@@ -7,6 +7,7 @@ import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSessionRegistry;
 import io.github.pinpols.batch.console.infrastructure.rbac.RedisConsoleSessionStore;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
@@ -25,6 +26,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
       "batch.console.security.session-state-ttl=30d",
       "batch.startup-self-check.enabled=false"
     })
+@DisplayName("控制台会话版本注册表: 版本自增,存储键过期时间与当前会话判定")
 class ConsoleSessionRegistryIntegrationTest extends AbstractIntegrationTest {
 
   @SpringBootConfiguration
@@ -40,7 +42,8 @@ class ConsoleSessionRegistryIntegrationTest extends AbstractIntegrationTest {
   private StringRedisTemplate redisTemplate;
 
   @Test
-  void nextSessionVersionIncrementsMonotonically() {
+  @DisplayName("连续推进会话版本: 返回值从 1 开始单调递增")
+  void shouldIncrementMonotonically_whenAdvancingSessionVersion() {
     String username = "user-" + System.nanoTime();
     String tenantId = "t-sess-" + System.nanoTime();
 
@@ -54,7 +57,8 @@ class ConsoleSessionRegistryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void nextSessionVersionSetsTtlOnRedisKey() {
+  @DisplayName("推进会话版本: 存储键被设置正数过期时间")
+  void shouldSetTtlOnStoredKey_whenAdvancingSessionVersion() {
     String username = "user-ttl-" + System.nanoTime();
     String tenantId = "t-ttl-" + System.nanoTime();
 
@@ -66,7 +70,8 @@ class ConsoleSessionRegistryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void isCurrentSessionReturnsTrueForCurrentVersionAndFalseForStale() {
+  @DisplayName("会话判定: 最新版本有效,旧版本判定失效")
+  void shouldAcceptCurrentVersionAndRejectStale_whenCheckingSession() {
     String username = "user-cur-" + System.nanoTime();
     String tenantId = "t-cur-" + System.nanoTime();
 
@@ -78,7 +83,8 @@ class ConsoleSessionRegistryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void isCurrentSessionReturnsFalseWhenNoSessionExists() {
+  @DisplayName("会话不存在: 任意版本号都判定为失效")
+  void shouldRejectAnyVersion_whenNoSessionExists() {
     String username = "user-new-" + System.nanoTime();
     String tenantId = "t-new-" + System.nanoTime();
 

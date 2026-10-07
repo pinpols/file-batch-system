@@ -11,6 +11,7 @@ import io.github.pinpols.batch.console.domain.ops.query.RetryScheduleQuery;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Timestamp;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -20,6 +21,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@DisplayName("重试计划查询映射: 按重试状态,重试策略与关联类型过滤,无数据返回空")
 class ConsoleRetryScheduleQueryIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
@@ -29,6 +31,7 @@ class ConsoleRetryScheduleQueryIntegrationTest extends AbstractIntegrationTest {
   private JdbcTemplate jdbcTemplate;
 
   @Test
+  @DisplayName("无数据租户: 查询返回空列表")
   void shouldReturnEmptyWhenNoRetrySchedulesExist() {
     List<RetryScheduleEntity> results =
         retryScheduleMapper.selectByQuery(RetryScheduleQuery.ofTenant(
@@ -38,6 +41,7 @@ class ConsoleRetryScheduleQueryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("按重试状态过滤: 只返回该状态的一条记录")
   void shouldQueryRetrySchedulesByStatus() {
     String tenantId = "t-retry-" + BatchDateTimeSupport.utcEpochMillis();
     insertRetrySchedule(tenantId, "JOB_PARTITION", 100L, "FIXED", "WAITING", 1);
@@ -52,6 +56,7 @@ class ConsoleRetryScheduleQueryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("按重试策略过滤: 只返回该策略的一条记录")
   void shouldQueryRetrySchedulesByRetryPolicy() {
     String tenantId = "t-retry-policy-" + BatchDateTimeSupport.utcEpochMillis();
     insertRetrySchedule(tenantId, "JOB_PARTITION", 200L, "FIXED", "WAITING", 1);
@@ -65,6 +70,7 @@ class ConsoleRetryScheduleQueryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("按关联类型过滤: 返回该类型的两条记录")
   void shouldQueryRetrySchedulesByRelatedType() {
     String tenantId = "t-retry-type-" + BatchDateTimeSupport.utcEpochMillis();
     insertRetrySchedule(tenantId, "JOB_PARTITION", 300L, "FIXED", "WAITING", 1);

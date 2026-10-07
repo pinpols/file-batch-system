@@ -20,11 +20,13 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+@DisplayName("资源标签控制器: 按资源与标签查询、写入与删除委托")
 class ConsoleResourceTagControllerTest {
 
   private final ConsoleResourceTagService tagService = mock(ConsoleResourceTagService.class);
@@ -55,6 +57,7 @@ class ConsoleResourceTagControllerTest {
   }
 
   @Test
+  @DisplayName("按资源查询标签时, 响应返回标签键与标签值")
   void shouldListTagsByResource() throws Exception {
     ResourceTagEntity entity = new ResourceTagEntity();
     entity.setId(1L);
@@ -77,6 +80,7 @@ class ConsoleResourceTagControllerTest {
   }
 
   @Test
+  @DisplayName("按标签键值搜索资源时, 响应返回命中的资源编码")
   void shouldSearchByTag() throws Exception {
     ResourceTagEntity entity = new ResourceTagEntity();
     entity.setId(1L);
@@ -98,6 +102,7 @@ class ConsoleResourceTagControllerTest {
   }
 
   @Test
+  @DisplayName("写入资源标签时, 租户、资源、标签与操作人组装成入参")
   void shouldUpsertTag() throws Exception {
     mockMvc
         .perform(post("/api/console/tags")
@@ -118,6 +123,7 @@ class ConsoleResourceTagControllerTest {
   }
 
   @Test
+  @DisplayName("删除资源标签时, 租户、资源与标签键传给服务")
   void shouldDeleteTag() throws Exception {
     mockMvc
         .perform(delete("/api/console/tags")

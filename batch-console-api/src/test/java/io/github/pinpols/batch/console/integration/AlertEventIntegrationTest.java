@@ -12,6 +12,7 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -21,6 +22,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@DisplayName("告警事件映射: 按等级,状态,类型与最近出现时间范围查询及条数上限")
 class AlertEventIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
@@ -30,6 +32,7 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
   private JdbcTemplate jdbcTemplate;
 
   @Test
+  @DisplayName("无数据租户: 查询返回空列表")
   void shouldReturnEmptyWhenNoAlertsExist() {
     List<AlertEventEntity> results = alertEventMapper.selectByQuery(AlertEventQuery.ofTenant(
         "no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis(), new PageRequest(1, 10)));
@@ -38,6 +41,7 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("按等级过滤: 只返回严重等级的一条,标题与写入一致")
   void shouldPersistAndQueryAlertEventBySeverity() {
     String tenantId = "t-alert-" + BatchDateTimeSupport.utcEpochMillis();
     insertAlertEvent(tenantId, "SLA_BREACH", "CRITICAL", "OPEN", "Job SLA exceeded");
@@ -52,6 +56,7 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("按状态过滤: 只返回未关闭的一条")
   void shouldFilterAlertsByStatus() {
     String tenantId = "t-alert-status-" + BatchDateTimeSupport.utcEpochMillis();
     insertAlertEvent(tenantId, "DISK_USAGE", "WARN", "OPEN", "Disk 85% used");
@@ -65,6 +70,7 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("按告警类型过滤: 只返回该类型的一条")
   void shouldFilterAlertsByAlertType() {
     String tenantId = "t-alert-type-" + BatchDateTimeSupport.utcEpochMillis();
     insertAlertEvent(tenantId, "SLA_BREACH", "CRITICAL", "OPEN", "SLA alert");
@@ -78,6 +84,7 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("分页上限: 写入五条,首页只返回三条")
   void shouldRespectLimit() {
     String tenantId = "t-alert-limit-" + BatchDateTimeSupport.utcEpochMillis();
     for (int i = 0; i < 5; i++) {
@@ -91,6 +98,7 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("按最近出现时间范围过滤: 只命中窗口内的一条,计数一致")
   void shouldFilterAlertsByLastSeenTimeRange() {
     String tenantId = "t-alert-time-" + BatchDateTimeSupport.utcEpochMillis();
     Instant now = BatchDateTimeSupport.utcNow();

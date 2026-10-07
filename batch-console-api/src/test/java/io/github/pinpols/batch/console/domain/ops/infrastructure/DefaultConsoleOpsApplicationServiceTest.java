@@ -21,11 +21,14 @@ import io.github.pinpols.batch.console.shared.view.ConsoleOpsSummaryResponse;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import java.util.List;
 import java.util.function.Supplier;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("运维概览聚合:按租户分别统计审批, 告警, 作业, Worker 与投递积压计数")
 class DefaultConsoleOpsApplicationServiceTest {
 
   @Test
+  @DisplayName("租户维度汇总:各来源计数原样进入概览响应, 待审批与告警等字段逐一对应")
   void shouldAggregateOpsSummaryByTenant() {
     ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
     ApprovalCommandMapper approvalCommandMapper = mock(ApprovalCommandMapper.class);

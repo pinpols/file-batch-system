@@ -6,15 +6,18 @@ import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinition
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("编排定义详情组装: 定义主体与节点边字段映射契约")
 class WorkflowDefinitionResponseAssemblerTest {
 
   private final WorkflowDefinitionResponseAssembler assembler =
       new WorkflowDefinitionResponseAssembler();
 
   @Test
-  void assemblesStableDefinitionNodeAndEdgeContract() {
+  @DisplayName("组装详情响应时保留定义主体, 并完整映射单个节点与边的标识和编码字段")
+  void shouldAssembleStableNodeAndEdgeContract_whenDefinitionHasNodesAndEdges() {
     WorkflowDefinitionEntity definition = new WorkflowDefinitionEntity();
     definition.setId(7L);
     definition.setTenantId("tenant-a");

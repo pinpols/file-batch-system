@@ -13,6 +13,7 @@ import org.apache.poi.ss.usermodel.DataValidation;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.support.StaticMessageSource;
 
@@ -21,6 +22,7 @@ import org.springframework.context.support.StaticMessageSource;
  * 表头/行数与设计一致; ② 「字段说明」sheet 新增「填写示例」列且最难字段给出真实非空片段(import vs export 两套结构都覆盖); ③ 五类Worker示例的
  * worker_type / pipeline_type 与后端 enum 集合一致(enum 新增成员而示例未同步即挂)。
  */
+@DisplayName("配置包模板引导内容:示例 sheet、填写顺序与字段说明的防漂移校验")
 class ConfigPackageWorkbookGuidanceTest {
 
   private XSSFWorkbook buildTemplate() throws Exception {
@@ -50,7 +52,8 @@ class ConfigPackageWorkbookGuidanceTest {
   }
 
   @Test
-  void sampleTemplateContainsScenarioRowsAndKeepsQueueTypeValid() throws Exception {
+  @DisplayName("示例模板:各场景数据行完整,且队列类型取值保持合法")
+  void shouldContainScenarioRows_whenBuildingSampleTemplate() throws Exception {
     try (XSSFWorkbook importWb = buildSampleTemplate("IMPORT")) {
       assertThat(importWb
               .getSheet(ConfigPackageExcelValidator.JOB_SHEET)
@@ -84,7 +87,8 @@ class ConfigPackageWorkbookGuidanceTest {
   }
 
   @Test
-  void sampleTemplateCanCombineSelectedScenarios() throws Exception {
+  @DisplayName("示例模板:多场景组合时作业行合并且队列类型合法")
+  void shouldCombineScenarios_whenMultipleSelected() throws Exception {
     try (XSSFWorkbook wb = buildSampleTemplate(List.of("IMPORT", "PROCESS"))) {
       Sheet jobSheet = wb.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
       List<String> jobCodes = new ArrayList<>();
@@ -101,7 +105,8 @@ class ConfigPackageWorkbookGuidanceTest {
   }
 
   @Test
-  void fillOrderSheetExistsWithRequiredColumnsAndDefaultHint() throws Exception {
+  @DisplayName("填写顺序 sheet:必需列、超链接与留空默认提示均已生成")
+  void shouldProvideFillOrderSheet_whenBuildingTemplate() throws Exception {
     try (XSSFWorkbook wb = buildTemplate()) {
       Sheet sheet = wb.getSheet(ConfigPackageWorkbookSupplementWriter.SHEET_NAME_FILL_ORDER);
       assertThat(sheet).as("填写顺序 sheet 必须存在").isNotNull();
@@ -122,7 +127,8 @@ class ConfigPackageWorkbookGuidanceTest {
   }
 
   @Test
-  void dataSheetsHaveExcelFriendlyRequiredColumnValidation() throws Exception {
+  @DisplayName("数据 sheet:必填列通过公式校验强制非空")
+  void shouldApplyRequiredColumnValidation_whenBuildingDataSheets() throws Exception {
     try (XSSFWorkbook wb = buildTemplate()) {
       Sheet jobSheet = wb.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
       List<String> formulas = new ArrayList<>();
@@ -136,7 +142,8 @@ class ConfigPackageWorkbookGuidanceTest {
   }
 
   @Test
-  void fiveWorkerExampleSheetExistsWithFiveRowsAndHeaders() throws Exception {
+  @DisplayName("五类 Worker 示例 sheet:表头与五行数据齐全,类型取值与枚举一致")
+  void shouldProvideFiveWorkerSheet_whenBuildingTemplate() throws Exception {
     try (XSSFWorkbook wb = buildTemplate()) {
       Sheet sheet = wb.getSheet(ConfigPackageWorkbookSupplementWriter.SHEET_NAME_FIVE_WORKER);
       assertThat(sheet).as("五类Worker示例 sheet 必须存在").isNotNull();
@@ -167,7 +174,8 @@ class ConfigPackageWorkbookGuidanceTest {
   }
 
   @Test
-  void bundleExampleSheetExistsWithThreeBundleTypesAndManifestExamples() throws Exception {
+  @DisplayName("文件束示例 sheet:三种束类型与真实清单示例齐备")
+  void shouldProvideBundleSheetWithManifestExamples_whenBuildingTemplate() throws Exception {
     try (XSSFWorkbook wb = buildTemplate()) {
       Sheet sheet = wb.getSheet(ConfigPackageWorkbookSupplementWriter.SHEET_NAME_BUNDLE);
       assertThat(sheet).as("文件束示例 sheet 必须存在").isNotNull();
@@ -204,7 +212,8 @@ class ConfigPackageWorkbookGuidanceTest {
   }
 
   @Test
-  void dependencySheetExistsWithHeadersAndCoreRows() throws Exception {
+  @DisplayName("依赖说明 sheet:表头与关键引用关系行齐备")
+  void shouldProvideDependencySheet_whenBuildingTemplate() throws Exception {
     try (XSSFWorkbook wb = buildTemplate()) {
       Sheet sheet = wb.getSheet(ConfigPackageWorkbookSupplementWriter.SHEET_NAME_DEPENDENCY);
       assertThat(sheet).as("依赖说明 sheet 必须存在").isNotNull();
@@ -224,7 +233,8 @@ class ConfigPackageWorkbookGuidanceTest {
   }
 
   @Test
-  void fieldGuideHasFillExampleColumnWithRealNonEmptyExamples() throws Exception {
+  @DisplayName("字段说明 sheet:填写示例列给出导入导出两套真实非空结构")
+  void shouldProvideRealFillExamples_whenFieldGuideRendered() throws Exception {
     try (XSSFWorkbook wb = buildTemplate()) {
       Sheet sheet = wb.getSheet("字段说明");
       assertThat(sheet).isNotNull();

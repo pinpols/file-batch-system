@@ -26,6 +26,7 @@ import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.web.servlet.MockMvc;
@@ -33,6 +34,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 /** P0: ConsoleJobBundleController create/export/import + strict 语义透传。 */
+@DisplayName("作业包控制器: 创建、导出与导入的报文校验及服务转发")
 class ConsoleJobBundleControllerTest {
 
   private final ConsoleJobBundleApplicationService applicationService =
@@ -62,7 +64,8 @@ class ConsoleJobBundleControllerTest {
   // ConsoleIdempotencyInterceptorTest
 
   @Test
-  void createShouldForwardToApplicationService() throws Exception {
+  @DisplayName("创建请求转发到应用服务, 捕获到的租户与报文一致")
+  void shouldForwardCreate_whenRequestValid() throws Exception {
     when(applicationService.create(any(JobBundleCreateRequest.class)))
         .thenReturn(new ConsoleJobBundleResultResponse(
             "t1",
@@ -83,14 +86,16 @@ class ConsoleJobBundleControllerTest {
   }
 
   @Test
-  void exportShouldRequireQueryParams() throws Exception {
+  @DisplayName("导出缺少必填查询参数时返回参数错误")
+  void shouldRejectExport_whenRequiredQueryParamMissing() throws Exception {
     mockMvc
         .perform(get("/api/console/jobs/bundle/export").param("tenantId", "t1"))
         .andExpect(status().isBadRequest());
   }
 
   @Test
-  void exportShouldReturnBundlePayload() throws Exception {
+  @DisplayName("导出成功后回包携带来源租户与作业包内容")
+  void shouldReturnBundlePayload_whenExportSucceeds() throws Exception {
     ConfigSyncBundlePayload bundle = new ConfigSyncBundlePayload();
     when(applicationService.exportBundle("t1", "JOB_A"))
         .thenReturn(new ConsoleJobBundleExportResponse(
@@ -104,7 +109,8 @@ class ConsoleJobBundleControllerTest {
   }
 
   @Test
-  void importShouldRejectEmptyTargetTenantIds() throws Exception {
+  @DisplayName("导入目标租户列表为空时返回参数错误")
+  void shouldRejectImport_whenTargetTenantIdsEmpty() throws Exception {
     // BE Request 上 targetTenantIds 是 @NotEmpty;空数组 → 400
     mockMvc
         .perform(post("/api/console/jobs/bundle/import")
@@ -115,7 +121,8 @@ class ConsoleJobBundleControllerTest {
   }
 
   @Test
-  void importShouldForwardToApplicationService() throws Exception {
+  @DisplayName("导入请求转发到应用服务, 回包汇总目标租户数量")
+  void shouldForwardImport_whenRequestValid() throws Exception {
     when(applicationService.importBundle(any(JobBundleImportRequest.class)))
         .thenReturn(new ConsoleJobBundleResultResponse(
             "t1",

@@ -10,6 +10,7 @@ import io.github.pinpols.batch.console.domain.rbac.application.contract.response
 import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -17,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("控制台登录服务:已初始化用户签发令牌, 口令错误或账号不存在时拒绝并隐藏原因")
 class ConsoleLoginServiceTest {
 
   @Mock
@@ -42,6 +44,7 @@ class ConsoleLoginServiceTest {
   private ConsoleLoginService loginService;
 
   @Test
+  @DisplayName("登录成功:签发令牌并回填用户名, 租户与角色集合")
   void shouldIssueJwtForSeededUser() {
     ConsoleLoginRequest request = new ConsoleLoginRequest();
     request.setUsername("admin");
@@ -77,6 +80,7 @@ class ConsoleLoginServiceTest {
   }
 
   @Test
+  @DisplayName("口令错误:返回凭据无效错误, 不泄露账号是否存在")
   void shouldRejectWrongPassword() {
     ConsoleLoginRequest request = new ConsoleLoginRequest();
     request.setUsername("admin");
@@ -98,6 +102,7 @@ class ConsoleLoginServiceTest {
   }
 
   @Test
+  @DisplayName("账号不存在:同样返回凭据无效错误, 与口令错误不可区分")
   void shouldRejectUnknownUsername() {
     ConsoleLoginRequest request = new ConsoleLoginRequest();
     request.setUsername("nonexistent");

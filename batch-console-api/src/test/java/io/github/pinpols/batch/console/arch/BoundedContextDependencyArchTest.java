@@ -7,6 +7,7 @@ import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -33,6 +34,7 @@ import org.junit.jupiter.api.Test;
  * <p><b>当前状态</b>:Stage 1 已完成,本测试以严格 0 断言运行。配套 {@link BoundedContextMigrationProgressTest}
  * 继续输出逐类清单,用于边界回归诊断。
  */
+@DisplayName("限界上下文依赖隔离守护: 各上下文之间禁止跨域直接依赖, 豁免须显式声明")
 class BoundedContextDependencyArchTest {
 
   /** 9 个有界上下文的子包名,对应 {@code io.github.pinpols.batch.console.domain.<ctx>}. */
@@ -48,7 +50,8 @@ class BoundedContextDependencyArchTest {
       .importPackages("io.github.pinpols.batch.console..");
 
   @Test
-  void crossBoundedContextDependenciesAreForbidden() {
+  @DisplayName("不同限界上下文之间不得直接依赖, 扫描到的跨域违例计数必须为 0")
+  void shouldForbidCrossContextDependency_whenScanningDomainClasses() {
     int total = countCrossContextViolations(CLASSES);
     assertThat(total)
         .as("bounded-context cross dependencies must be eliminated")
