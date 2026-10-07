@@ -1,6 +1,7 @@
 # 变更记录（规范与架构权威条款变化）
 
 ### 2026-10-07
+- **技术异常与就绪探测边界收口**：Orchestrator 应用层通过 `TechnicalFailureClassificationPort` 消费归一化失败类别，通过 `PersistenceConflictDetectionPort` 判断唯一约束冲突，JDBC / Spring DAO / HTTP 异常识别下沉到各自 infrastructure adapter；Trigger 通过 `UpstreamReadinessPort` 使用上游就绪查询，保持既有 HTTP fail-closed 语义而不直接依赖实现类。结果版本 CAS 冲突统一返回 `STATE_CONFLICT`，不再泄漏 Spring DAO 异常。
 - **测试约定统一（编码规约 §14.4 / §14.5 收紧）**：测试方法名只接受 `shouldXxx_whenYyy` 或 `方法名_条件_预期结果` 两种形状（禁 `testXxx` / `test1` / `test_xxx` / `xxx_test`）；每个含测试方法的类必须有**类级**、每个测试方法必须有**方法级中文** `@DisplayName`。新增 `scripts/ci/check-test-conventions.py`，接入 PR Gate / Full Gate / 本地 pre-commit，按 `docs/governance/test-conventions-baseline.txt` 只拦**新增**缺口；全仓存量按模块分批收敛完毕，基线清零。
 - **ADR-029 测试方法名引用同步**：`ConfigDriftGuardTest` 的两个测试方法随上述命名统一改名，ADR-029 内引用同步更新；历史归档文档保持原样。
 
