@@ -16,7 +16,7 @@ class TriggerCodingConventionsArchTest {
       .importPackages("io.github.pinpols.batch.trigger..");
 
   @Test
-  @DisplayName("trigger 包内禁止调用 ZoneId.systemDefault(),时区须由注入的 BatchTimezoneProvider 提供")
+  @DisplayName("trigger 包内禁止取默认时区,时区须由注入的 BatchTimezoneProvider 提供")
   void zoneIdSystemDefault_isForbidden() {
     CodingConventionsArchRules.zoneIdSystemDefaultRule().check(CLASSES);
   }

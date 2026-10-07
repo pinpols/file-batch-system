@@ -1030,7 +1030,9 @@ class ConsoleQueryControllerTest {
 | 文本内容 | **必须含中文**；描述**业务意图或验收点**，不是方法名直译（反例：`@DisplayName("shouldPauseWhenPermitsExhausted")`、`@DisplayName("XxxController")`） |
 
 写法：类级写明**被测对象 + 验证范围**，方法级写明**该用例的验收点**；一条用例覆盖多个断言点时用
-`;` / `+` 串起；标点沿用半角 `,` `:`，与仓库存量多数写法一致。
+`;` / `+` 串起；标点沿用半角 `,` `:`，与仓库存量多数写法一致。描述里**不要内嵌代码片段或 API 调用名**
+（例如不要写 `ZoneId.systemDefault()`）——既更好读，也避免触发按新增行扫描的红线条与契约关键词守护
+（`pre-push` 的 `ZoneId`/`Charset` 红线、`check-readiness-doc-sync.py` 的触点匹配）。
 
 **存量与增量**：2026-10-07 起口径由「复杂用例才推荐」收紧为「**全量必填**」——终态是每个测试类都有
 类级、每个测试方法都有方法级中文 `@DisplayName`，基线文件归零。`docs/governance/test-conventions-baseline.txt`
