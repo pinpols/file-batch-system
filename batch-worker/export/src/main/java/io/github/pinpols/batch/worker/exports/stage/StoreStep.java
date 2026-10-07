@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.exports.stage;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.constants.BatchFileConstants;
 import io.github.pinpols.batch.common.enums.FileChecksumType;
+import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.service.DryRunGuard;
@@ -34,6 +35,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class StoreStep implements ExportStageStep {
 
+  private static final String KEY_DOWNLOAD_REQUIRES_APPROVAL = "download_requires_approval";
   private static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
   private static final String ERROR_CODE_STORE_INVALID = "EXPORT_STORE_INVALID";
 
@@ -180,8 +182,9 @@ public class StoreStep implements ExportStageStep {
   }
 
   private String resolveContentType(ExportJobContext context) {
-    String fileFormatType = String.valueOf(
-        context.getAttributes().getOrDefault(PipelineRuntimeKeys.EXPORT_FILE_FORMAT_TYPE, "JSON"));
+    String fileFormatType = String.valueOf(context
+        .getAttributes()
+        .getOrDefault(PipelineRuntimeKeys.EXPORT_FILE_FORMAT_TYPE, FileTemplateFormat.JSON.code()));
     if (EmptyChecks.isNull(formatStrategyRegistry)) {
       return ExportFormatStrategy.contentTypeFor(fileFormatType);
     }
@@ -193,7 +196,7 @@ public class StoreStep implements ExportStageStep {
     Map<String, Object> security = templateSecurity(context);
     context
         .getAttributes()
-        .put("downloadRequiresApproval", security.get("download_requires_approval"));
+        .put("downloadRequiresApproval", security.get(KEY_DOWNLOAD_REQUIRES_APPROVAL));
     boolean encrypt = cryptoService.shouldEncrypt(security);
     if (encrypt) {
       PrivateTempFiles.LockedTempFile temporaryFile =
@@ -295,7 +298,7 @@ public class StoreStep implements ExportStageStep {
       Map<String, Object> security = new LinkedHashMap<>();
       security.put("content_encryption_enabled", map.get("content_encryption_enabled"));
       security.put("encryption_key_ref", map.get("encryption_key_ref"));
-      security.put("download_requires_approval", map.get("download_requires_approval"));
+      security.put(KEY_DOWNLOAD_REQUIRES_APPROVAL, map.get(KEY_DOWNLOAD_REQUIRES_APPROVAL));
       return security;
     }
     return Map.of();

@@ -9,4 +9,5 @@ public record DryRunTriggerResult(
     String jobCode,
     String bizDate,
     Boolean valid,
-    List<String> errors) {}
+    List<String> errors)
+    implements JobTriggerResult {}

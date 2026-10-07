@@ -11,11 +11,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.application.ops.ConsoleTriggerProxyService;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleTriggerActionResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleTriggerStatusResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -48,7 +49,9 @@ class ConsoleTriggerControllerTest {
   @Test
   @DisplayName("查询触发器列表, 回包保留下游返回的作业编码")
   void shouldDelegateTriggerList_whenListRequested() throws Exception {
-    when(proxy.triggerList()).thenReturn(List.of(Map.of("jobCode", "J1")));
+    when(proxy.triggerList())
+        .thenReturn(List.of(new ConsoleTriggerStatusResponse(
+            null, "J1", null, null, null, null, null, null, null)));
     mockMvc
         .perform(get("/api/console/ops/triggers"))
         .andExpect(status().isOk())
@@ -58,7 +61,8 @@ class ConsoleTriggerControllerTest {
   @Test
   @DisplayName("注册动作下发的租户与作业编码与请求一致")
   void shouldPassTenantAndJobCode_whenRegisterRequested() throws Exception {
-    when(proxy.triggerAction("ta", "JOB_A", "register")).thenReturn(Map.of("status", "ok"));
+    when(proxy.triggerAction("ta", "JOB_A", "register"))
+        .thenReturn(new ConsoleTriggerActionResponse("ta", "JOB_A", "ok"));
     mockMvc
         .perform(post("/api/console/ops/triggers/JOB_A/register").param("tenantId", "ta"))
         .andExpect(status().isOk());
@@ -68,8 +72,10 @@ class ConsoleTriggerControllerTest {
   @Test
   @DisplayName("暂停与恢复分别按各自动作下发, 两次调用互不串用")
   void shouldUseDistinctActions_whenPauseAndResumeRequested() throws Exception {
-    when(proxy.triggerAction("ta", "JOB_A", "pause")).thenReturn(Map.of("status", "paused"));
-    when(proxy.triggerAction("ta", "JOB_A", "resume")).thenReturn(Map.of("status", "resumed"));
+    when(proxy.triggerAction("ta", "JOB_A", "pause"))
+        .thenReturn(new ConsoleTriggerActionResponse("ta", "JOB_A", "paused"));
+    when(proxy.triggerAction("ta", "JOB_A", "resume"))
+        .thenReturn(new ConsoleTriggerActionResponse("ta", "JOB_A", "resumed"));
     mockMvc
         .perform(post("/api/console/ops/triggers/JOB_A/pause").param("tenantId", "ta"))
         .andExpect(status().isOk());

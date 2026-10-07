@@ -26,21 +26,18 @@ public class ConsoleSchedulerController {
   @GetMapping("/status")
   @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
   public CommonResponse<ConsoleSchedulerCommandResponse> status() {
-    return responseFactory.success(
-        ConsoleSchedulerCommandResponse.from(triggerProxyService.schedulerStatus()));
+    return responseFactory.success(triggerProxyService.schedulerStatus());
   }
 
   @PostMapping("/pause-all")
   @AuditAction(action = "scheduler.pauseAll", aggregateType = "scheduler")
   public CommonResponse<ConsoleSchedulerCommandResponse> pauseAll() {
-    return responseFactory.success(
-        ConsoleSchedulerCommandResponse.from(triggerProxyService.schedulerPauseAll()));
+    return responseFactory.success(triggerProxyService.schedulerPauseAll());
   }
 
   @PostMapping("/resume-all")
   @AuditAction(action = "scheduler.resumeAll", aggregateType = "scheduler")
   public CommonResponse<ConsoleSchedulerCommandResponse> resumeAll() {
-    return responseFactory.success(
-        ConsoleSchedulerCommandResponse.from(triggerProxyService.schedulerResumeAll()));
+    return responseFactory.success(triggerProxyService.schedulerResumeAll());
   }
 }

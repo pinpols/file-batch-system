@@ -34,6 +34,7 @@ KNOWN_RULES = {
     "PMD.ExcessiveParameterList",
     "PMD.NcssCount",
     "java:S112",
+    "java:S1075",
     "java:S1181",
     "java:S1313",
     "java:S1452",
@@ -47,6 +48,12 @@ KNOWN_RULES = {
     "java:S4502",
     "java:S5164",
     "java:S6218",
+}
+# 路由常量不是部署 URL；该误报只允许在已评审代理内使用一次，不能扩成全仓路径豁免。
+SCOPED_RULES = {
+    "java:S1075": {
+        "batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/ops/infrastructure/DefaultConsoleTriggerProxyService.java": 1,
+    },
 }
 GATE_CODE = "JAVA_SUPPRESSION_REGISTRY"
 GATE_NAME = "Java SuppressWarnings 登记"
@@ -90,10 +97,22 @@ def scan(candidates: list[str] | None = None) -> list[tuple[str, int, str]]:
     return findings
 
 
+def unregistered(findings: list[tuple[str, int, str]]) -> list[tuple[str, int, str]]:
+    counts = Counter((path, rule) for path, _, rule in findings)
+    return [
+        finding for finding in findings
+        if finding[2] not in KNOWN_RULES
+        or (
+            finding[2] in SCOPED_RULES
+            and counts[(finding[0], finding[2])] > SCOPED_RULES[finding[2]].get(finding[0], 0)
+        )
+    ]
+
+
 def main(argv: list[str] | None = None) -> int:
     candidates = argv if argv else None
     findings = scan(candidates)
-    unknown = [finding for finding in findings if finding[2] not in KNOWN_RULES]
+    unknown = unregistered(findings)
     counts = Counter(rule for _, _, rule in findings)
     print(f"Java production suppressions: {len(findings)}")
     print("Reviewed rules: " + ", ".join(f"{rule}={counts[rule]}" for rule in sorted(counts)))

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
+import io.github.pinpols.batch.common.enums.FileChannelType;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
 import java.util.Set;
 import org.springframework.context.annotation.Profile;
@@ -26,7 +27,7 @@ public class StubRemoteFilesystemDispatchChannelAdapter implements DispatchChann
     this.runtimeProperties = runtimeProperties;
   }
 
-  private static final Set<String> SUPPORTED_TYPES = Set.of("NAS");
+  private static final Set<String> SUPPORTED_TYPES = Set.of(FileChannelType.NAS.code());
 
   private static final String STUB_DETAIL =
       "Dedicated channel adapter not implemented; envelope written for operations (see"

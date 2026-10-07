@@ -1,0 +1,256 @@
+{
+  "schema_version": 1,
+  "enum_scopes": [
+    {
+      "path": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/task/InstanceManagementApplicationService.java",
+      "enums": [
+        "JobInstanceStatus",
+        "PartitionStatus"
+      ]
+    },
+    {
+      "path": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowRunManagementApplicationService.java",
+      "enums": [
+        "WorkflowRunStatus",
+        "WorkflowNodeRunStatus"
+      ]
+    },
+    {
+      "path": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowGraphValidator.java",
+      "enums": [
+        "WorkflowNodeType",
+        "SensorType",
+        "SensorTimeoutAction"
+      ]
+    },
+    {
+      "path": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/health/OutboxLagHealthIndicator.java",
+      "enums": [
+        "OutboxPublishStatus"
+      ]
+    },
+    {
+      "path": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/OutboxOpsApplicationService.java",
+      "enums": [
+        "OutboxPublishStatus"
+      ]
+    },
+    {
+      "path": "batch-console-api/src/main/java/io/github/pinpols/batch/console/application/rbac/ConsoleTenantApplicationService.java",
+      "enums": [
+        "JobInstanceStatus",
+        "PipelineRunStatus",
+        "WorkflowRunStatus",
+        "TenantStatus"
+      ]
+    },
+    {
+      "path": "batch-console-api/src/main/java/io/github/pinpols/batch/console/service/ConsoleAssetFreshnessPolicyService.java",
+      "enums": [
+        "AlertSeverity"
+      ]
+    },
+    {
+      "path": "batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/infrastructure/DefaultConsoleNotificationApplicationService.java",
+      "enums": [
+        "NotificationChannelType"
+      ]
+    },
+    {
+      "path": "batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchReceiptSupport.java",
+      "enums": [
+        "FileReceiptPolicy"
+      ]
+    },
+    {
+      "path": "batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/RemoteFilesystemDispatchSupport.java",
+      "enums": [
+        "FileReceiptPolicy"
+      ]
+    },
+    {
+      "path": "batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/LocalOutboxDispatchSupport.java",
+      "enums": [
+        "FileReceiptPolicy"
+      ]
+    },
+    {
+      "path": "batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/HttpDispatchChannelAdapter.java",
+      "enums": [
+        "FileReceiptPolicy"
+      ]
+    },
+    {
+      "path": "batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/SmtpEmailDispatchChannelAdapter.java",
+      "enums": [
+        "FileReceiptPolicy"
+      ]
+    },
+    {
+      "path": "batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/SftpDispatchChannelAdapter.java",
+      "enums": [
+        "FileReceiptPolicy"
+      ]
+    },
+    {
+      "path": "batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/LocalDispatchChannelAdapter.java",
+      "enums": [
+        "FileChannelType"
+      ]
+    },
+    {
+      "path": "batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/OssDispatchChannelAdapter.java",
+      "enums": [
+        "FileChannelType"
+      ]
+    },
+    {
+      "path": "batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/NasDispatchChannelAdapter.java",
+      "enums": [
+        "FileChannelType"
+      ]
+    },
+    {
+      "path": "batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/StubRemoteFilesystemDispatchChannelAdapter.java",
+      "enums": [
+        "FileChannelType"
+      ]
+    },
+    {
+      "path": "batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanner.java",
+      "enums": [
+        "FileTemplateFormat"
+      ]
+    },
+    {
+      "path": "batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/ReceiveStep.java",
+      "enums": [
+        "FileTemplateFormat"
+      ]
+    },
+    {
+      "path": "batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/ParseStep.java",
+      "enums": [
+        "FileTemplateFormat"
+      ]
+    },
+    {
+      "path": "batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/ImportPreprocessObjectSource.java",
+      "enums": [
+        "FileTemplateFormat"
+      ]
+    },
+    {
+      "path": "batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/GenerateStep.java",
+      "enums": [
+        "FileTemplateFormat"
+      ]
+    },
+    {
+      "path": "batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/PrepareStep.java",
+      "enums": [
+        "FileTemplateFormat"
+      ]
+    },
+    {
+      "path": "batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/StoreStep.java",
+      "enums": [
+        "FileTemplateFormat"
+      ]
+    },
+    {
+      "path": "batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/RegisterStep.java",
+      "enums": [
+        "FileTemplateFormat"
+      ]
+    },
+    {
+      "path": "batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/format/JsonExportFormat.java",
+      "enums": [
+        "FileTemplateFormat"
+      ]
+    },
+    {
+      "path": "batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/format/DelimitedExportFormat.java",
+      "enums": [
+        "FileTemplateFormat"
+      ]
+    },
+    {
+      "path": "batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/format/FixedWidthExportFormat.java",
+      "enums": [
+        "FileTemplateFormat"
+      ]
+    },
+    {
+      "path": "batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/format/ExcelExportFormat.java",
+      "enums": [
+        "FileTemplateFormat"
+      ]
+    },
+    {
+      "path": "batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/format/ExportFormatStrategyRegistry.java",
+      "enums": [
+        "FileTemplateFormat"
+      ]
+    }
+  ],
+  "exceptions": [
+    {
+      "rule": "JCON-1",
+      "path": "batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/governance/web/ConsoleGovernanceController.java",
+      "signature": "list(@RequestParam( ) String tenantId):CommonResponse<Map<String,String>>",
+      "detail": "CommonResponse<Map<String,String>>",
+      "reason": "运行时治理参数按注册参数 key 返回，支持新增治理参数的动态字典。"
+    },
+    {
+      "rule": "JCON-1",
+      "path": "batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/ops/web/ConsoleAdminTestDataController.java",
+      "signature": "cleanup(@RequestParam @Pattern( regexp = PREFIX_PATTERN, message = ) String prefix):CommonResponse<Map<String,Integer>>",
+      "detail": "CommonResponse<Map<String,Integer>>",
+      "reason": "测试数据清理以实际表名为动态键，值为删除数量，不是固定字段响应。"
+    },
+    {
+      "rule": "JCON-1",
+      "path": "batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/ops/web/ConsoleAdminTestDataController.java",
+      "signature": "cleanupByExactIds(@RequestParam @Pattern( regexp = , message = ) String ids):CommonResponse<Map<String,Integer>>",
+      "detail": "CommonResponse<Map<String,Integer>>",
+      "reason": "测试数据清理以实际表名为动态键，值为删除数量，不是固定字段响应。"
+    },
+    {
+      "rule": "JCON-1",
+      "path": "batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/web/ConsoleMetaController.java",
+      "signature": "enums():CommonResponse<Map<String,List<ConsoleMetaEnumItem>>>",
+      "detail": "CommonResponse<Map<String,List<ConsoleMetaEnumItem>>>",
+      "reason": "字典/流水线类型编码是动态 key，新增枚举或阶段不改变返回容器结构。"
+    },
+    {
+      "rule": "JCON-1",
+      "path": "batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/web/ConsoleMetaController.java",
+      "signature": "pipelineStages():CommonResponse<Map<String,List<String>>>",
+      "detail": "CommonResponse<Map<String,List<String>>>",
+      "reason": "字典/流水线类型编码是动态 key，新增枚举或阶段不改变返回容器结构。"
+    },
+    {
+      "rule": "JCON-1",
+      "path": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/task/PartitionDispatchService.java",
+      "signature": "effectiveParams():Map<String,Object>",
+      "detail": "Map<String,Object>",
+      "reason": "合并后的插件参数由租户作业配置定义，字段开放且并非固定 DTO。"
+    },
+    {
+      "rule": "JCON-1",
+      "path": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/controller/AdminTestDataCleanupController.java",
+      "signature": "cleanup(@RequestParam @Pattern( regexp = PREFIX_PATTERN, message = ) String prefix):Map<String,Integer>",
+      "detail": "Map<String,Integer>",
+      "reason": "测试数据清理以实际表名为动态键，值为删除数量，不是固定字段响应。"
+    },
+    {
+      "rule": "JCON-1",
+      "path": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/controller/AdminTestDataCleanupController.java",
+      "signature": "cleanupByExactIds(@RequestParam @Pattern( regexp = , message = ) String ids):Map<String,Integer>",
+      "detail": "Map<String,Integer>",
+      "reason": "测试数据清理以实际表名为动态键，值为删除数量，不是固定字段响应。"
+    }
+  ]
+}

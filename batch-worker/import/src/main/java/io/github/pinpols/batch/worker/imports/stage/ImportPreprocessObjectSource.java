@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.imports.stage;
 
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.enums.FileStatus;
+import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -271,7 +272,8 @@ public final class ImportPreprocessObjectSource {
       return false;
     }
     String normalized = formatType.trim().toUpperCase(Locale.ROOT);
-    return "EXCEL".equals(normalized) || "BINARY".equals(normalized);
+    return FileTemplateFormat.EXCEL.code().equals(normalized)
+        || FileTemplateFormat.BINARY.code().equals(normalized);
   }
 
   static String resolveFileFormatType(
@@ -413,10 +415,13 @@ public final class ImportPreprocessObjectSource {
       return false;
     }
     String normalized = format.trim().toUpperCase(Locale.ROOT);
-    if ("FIXED_WIDTH".equals(normalized) || "FIXEDWIDTH".equals(normalized)) {
+    if (FileTemplateFormat.FIXED_WIDTH.code().equals(normalized)
+        || "FIXEDWIDTH".equals(normalized)) {
       return true;
     }
-    if ("DELIMITED".equals(normalized) || "CSV".equals(normalized) || "TSV".equals(normalized)) {
+    if (FileTemplateFormat.DELIMITED.code().equals(normalized)
+        || "CSV".equals(normalized)
+        || "TSV".equals(normalized)) {
       Object optIn = templateConfig == null ? null : templateConfig.get("partition_range_slice");
       return optIn != null && "true".equalsIgnoreCase(String.valueOf(optIn).trim());
     }

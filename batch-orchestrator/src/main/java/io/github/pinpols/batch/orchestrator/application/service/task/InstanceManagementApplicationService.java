@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
+import io.github.pinpols.batch.common.enums.JobInstanceStatus;
+import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -33,12 +35,16 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class InstanceManagementApplicationService {
 
-  private static final Set<String> CANCELLABLE = Set.of("CREATED", "WAITING", "READY");
-  private static final Set<String> TERMINABLE = Set.of("RUNNING");
-  private static final Set<String> PARTITION_CANCELLABLE = Set.of("CREATED", "WAITING", "READY");
+  private static final Set<String> CANCELLABLE = Set.of(
+      JobInstanceStatus.CREATED.code(),
+      JobInstanceStatus.WAITING.code(),
+      JobInstanceStatus.READY.code());
+  private static final Set<String> TERMINABLE = Set.of(JobInstanceStatus.RUNNING.code());
+  private static final Set<String> PARTITION_CANCELLABLE = Set.of(
+      PartitionStatus.CREATED.code(), PartitionStatus.WAITING.code(), PartitionStatus.READY.code());
   // ADR-044:仅 RUNNING 可暂停(停发新分区,在途自然终结);PAUSED 可恢复回 RUNNING。
-  private static final Set<String> PAUSABLE = Set.of("RUNNING");
-  private static final Set<String> RESUMABLE = Set.of("PAUSED");
+  private static final Set<String> PAUSABLE = Set.of(JobInstanceStatus.RUNNING.code());
+  private static final Set<String> RESUMABLE = Set.of(JobInstanceStatus.PAUSED.code());
 
   private final JobInstanceMapper jobInstanceMapper;
   private final JobPartitionMapper jobPartitionMapper;
@@ -50,25 +56,25 @@ public class InstanceManagementApplicationService {
   public InstanceAction cancel(String tenantId, Long id) {
     JobInstanceEntity instance =
         Guard.requireFound(jobInstanceMapper.selectById(tenantId, id), "job instance not found");
-    if ("RUNNING".equals(instance.getInstanceStatus())) {
+    if (JobInstanceStatus.RUNNING.code().equals(instance.getInstanceStatus())) {
       int requested = jobTaskMapper.requestCancelByInstance(tenantId, id);
       return new InstanceAction(id, instance.getInstanceNo(), "CANCEL_REQUESTED", requested);
     }
-    return transition(instance, tenantId, id, CANCELLABLE, "CANCELLED");
+    return transition(instance, tenantId, id, CANCELLABLE, JobInstanceStatus.CANCELLED.code());
   }
 
   public InstanceAction terminate(String tenantId, Long id) {
-    return transition(tenantId, id, TERMINABLE, "TERMINATED");
+    return transition(tenantId, id, TERMINABLE, JobInstanceStatus.TERMINATED.code());
   }
 
   /** ADR-044 暂停 RUNNING → PAUSED:停发新分区,在途自然终结,不破坏性 kill。 */
   public InstanceAction pause(String tenantId, Long id) {
-    return lifecycleTransition(tenantId, id, PAUSABLE, "PAUSED");
+    return lifecycleTransition(tenantId, id, PAUSABLE, JobInstanceStatus.PAUSED.code());
   }
 
   /** ADR-044 恢复 PAUSED → RUNNING:重新纳入派发,已成功分区不重跑(靠幂等)。 */
   public InstanceAction resume(String tenantId, Long id) {
-    return lifecycleTransition(tenantId, id, RESUMABLE, "RUNNING");
+    return lifecycleTransition(tenantId, id, RESUMABLE, JobInstanceStatus.RUNNING.code());
   }
 
   /**
@@ -103,30 +109,34 @@ public class InstanceManagementApplicationService {
           "cannot cancel partition from " + partition.getPartitionStatus());
     }
     int rows = jobPartitionMapper.promoteStatus(
-        tenantId, id, partition.getPartitionStatus(), "CANCELLED", partition.getVersion());
+        tenantId,
+        id,
+        partition.getPartitionStatus(),
+        PartitionStatus.CANCELLED.code(),
+        partition.getVersion());
     if (rows == 0) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
     }
-    return new PartitionAction(id, "CANCELLED");
+    return new PartitionAction(id, PartitionStatus.CANCELLED.code());
   }
 
   public PartitionAction retryPartition(String tenantId, Long id) {
     JobPartitionEntity partition = findPartition(tenantId, id);
-    if (!"FAILED".equals(partition.getPartitionStatus())) {
+    if (!PartitionStatus.FAILED.code().equals(partition.getPartitionStatus())) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT,
           ResultCode.STATE_CONFLICT.detailKey(),
           "can only retry FAILED partitions, current: " + partition.getPartitionStatus());
     }
     retryGovernanceService.retryPartition(tenantId, id, manualRetryEventKey(tenantId, partition));
-    return new PartitionAction(id, "READY");
+    return new PartitionAction(id, PartitionStatus.READY.code());
   }
 
   public RetryFailedPartitions retryFailedPartitions(String tenantId, Long instanceId) {
     JobInstanceEntity instance = Guard.requireFound(
         jobInstanceMapper.selectById(tenantId, instanceId), "job instance not found");
     List<JobPartitionEntity> failedPartitions = jobPartitionMapper.selectByQuery(
-        new JobPartitionQuery(tenantId, instanceId, "FAILED", null));
+        new JobPartitionQuery(tenantId, instanceId, PartitionStatus.FAILED.code(), null));
     if (EmptyChecks.isEmpty(failedPartitions)) {
       return new RetryFailedPartitions(instanceId, instance.getInstanceNo(), 0, 0, 0, List.of());
     }

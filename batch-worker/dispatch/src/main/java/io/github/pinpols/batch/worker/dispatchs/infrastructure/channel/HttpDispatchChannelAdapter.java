@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -81,7 +82,7 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
       return new DispatchResult(false, null, null, false, false, "target endpoint missing", null);
     }
     DispatchReceiptSupport.Receipt receipt =
-        DispatchReceiptSupport.resolve(command, channelConfig, "SYNC");
+        DispatchReceiptSupport.resolve(command, channelConfig, FileReceiptPolicy.SYNC.code());
 
     Map<String, Object> requestPayload = new LinkedHashMap<>();
     requestPayload.put("tenantId", command.tenantId());

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.exports.stage.format;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -21,7 +22,7 @@ public class FixedWidthExportFormat extends AbstractExportFormat {
 
   @Override
   public String formatType() {
-    return "FIXED_WIDTH";
+    return FileTemplateFormat.FIXED_WIDTH.code();
   }
 
   @Override

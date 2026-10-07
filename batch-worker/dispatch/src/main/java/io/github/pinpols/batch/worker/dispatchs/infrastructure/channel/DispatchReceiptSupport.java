@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
+import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
 import java.util.Map;
 import java.util.UUID;
 
@@ -17,10 +18,10 @@ final class DispatchReceiptSupport {
     String receiptCode = hasText(command.payload().receiptCode())
         ? command.payload().receiptCode()
         : "R-" + externalRequestId;
-    boolean acknowledged =
-        "NONE".equalsIgnoreCase(receiptPolicy) || "SYNC".equalsIgnoreCase(receiptPolicy);
-    boolean pending =
-        "ASYNC".equalsIgnoreCase(receiptPolicy) || "POLLING".equalsIgnoreCase(receiptPolicy);
+    boolean acknowledged = FileReceiptPolicy.NONE.code().equalsIgnoreCase(receiptPolicy)
+        || FileReceiptPolicy.SYNC.code().equalsIgnoreCase(receiptPolicy);
+    boolean pending = FileReceiptPolicy.ASYNC.code().equalsIgnoreCase(receiptPolicy)
+        || FileReceiptPolicy.POLLING.code().equalsIgnoreCase(receiptPolicy);
     return new Receipt(externalRequestId, receiptCode, acknowledged, pending);
   }
 

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.health;
 
+import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
 import java.util.List;
@@ -21,8 +22,8 @@ import org.springframework.boot.health.contributor.HealthIndicator;
  */
 public class OutboxLagHealthIndicator implements HealthIndicator {
 
-  private static final List<String> PENDING_STATUSES = List.of("NEW", "FAILED");
-  private static final String PUBLISHING_STATUS = "PUBLISHING";
+  private static final List<String> PENDING_STATUSES =
+      List.of(OutboxPublishStatus.NEW.code(), OutboxPublishStatus.FAILED.code());
 
   private final OutboxEventMapper mapper;
   private final OutboxLagHealthProperties properties;
@@ -36,8 +37,8 @@ public class OutboxLagHealthIndicator implements HealthIndicator {
   public Health health() {
     try {
       long backlog = mapper.countByStatuses(PENDING_STATUSES);
-      long stalePublishing =
-          mapper.countStalePublishing(PUBLISHING_STATUS, properties.getStalePublishingSeconds());
+      long stalePublishing = mapper.countStalePublishing(
+          OutboxPublishStatus.PUBLISHING.code(), properties.getStalePublishingSeconds());
       Health.Builder builder = (backlog >= properties.getBacklogThreshold() || stalePublishing > 0
               ? Health.down()
               : Health.up())

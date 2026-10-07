@@ -79,6 +79,7 @@ import org.springframework.util.StringUtils;
 public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfigCopyService {
 
   // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String KEY_TIMEZONE = "timezone";
   private static final String KEY_ENABLED = "enabled";
   private static final String KEY_DESCRIPTION = "description";
 
@@ -485,10 +486,10 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     }
     List<String> fields = new ArrayList<>();
     addDrift(fields, "exists", row.exists(), baseline.exists());
-    addDrift(fields, "enabled", row.enabled(), baseline.enabled());
+    addDrift(fields, KEY_ENABLED, row.enabled(), baseline.enabled());
     addDrift(fields, "scheduleType", row.scheduleType(), baseline.scheduleType());
     addDrift(fields, "scheduleExpr", row.scheduleExpr(), baseline.scheduleExpr());
-    addDrift(fields, "timezone", row.timezone(), baseline.timezone());
+    addDrift(fields, KEY_TIMEZONE, row.timezone(), baseline.timezone());
     addDrift(fields, "queueCode", row.queueCode(), baseline.queueCode());
     addDrift(fields, "calendarCode", row.calendarCode(), baseline.calendarCode());
     addDrift(fields, "windowCode", row.windowCode(), baseline.windowCode());
@@ -830,7 +831,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
       BatchWindowSpec s = new BatchWindowSpec();
       s.setWindowCode(str(r, "window_code"));
       s.setWindowName(str(r, "window_name"));
-      s.setTimezone(str(r, "timezone"));
+      s.setTimezone(str(r, KEY_TIMEZONE));
       s.setStartTime(str(r, "start_time"));
       s.setEndTime(str(r, "end_time"));
       s.setEndStrategy(str(r, "end_strategy"));
@@ -851,7 +852,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
       BusinessCalendarSpec s = new BusinessCalendarSpec();
       s.setCalendarCode(str(r, "calendar_code"));
       s.setCalendarName(str(r, "calendar_name"));
-      s.setTimezone(str(r, "timezone"));
+      s.setTimezone(str(r, KEY_TIMEZONE));
       s.setHolidayRollRule(str(r, "holiday_roll_rule"));
       s.setCatchUpPolicy(str(r, "catch_up_policy"));
       s.setCatchUpMaxDays(intVal(r, "catch_up_max_days"));

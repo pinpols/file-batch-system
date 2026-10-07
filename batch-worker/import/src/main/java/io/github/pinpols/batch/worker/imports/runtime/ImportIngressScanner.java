@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.enums.FileAuditOperationType;
 import io.github.pinpols.batch.common.enums.FileStatus;
+import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.enums.OperationResult;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
@@ -77,6 +78,8 @@ public class ImportIngressScanner {
   private final Map<String, ObservedObjectState> observedObjects = new ConcurrentHashMap<>();
 
   /** sidecar manifest(.chk JSON)上限,防异常大对象拖垮扫描;manifest 本应是 KB 级小文件。 */
+  private static final String KEY_REQUIRED_FILE_SET = "requiredFileSet";
+
   private static final long MAX_MANIFEST_BYTES = 64L * 1024;
 
   /** 扫描器只负责“安全发现 + 登记”，不绕过 Trigger/Orchestrator 直接起任务。 */
@@ -369,9 +372,12 @@ public class ImportIngressScanner {
           .traceId("arrival-" + sanitizeTrace(fileName))
           .evidenceRef(snapshot.objectName())
           .detailSummary(Map.of(
-              "fileGroupCode", effectiveGroupCode,
-              "requiredFileSet", effectiveRequiredFileSet,
-              "arrivalState", "WAITING_ARRIVAL"))
+              "fileGroupCode",
+              effectiveGroupCode,
+              KEY_REQUIRED_FILE_SET,
+              effectiveRequiredFileSet,
+              "arrivalState",
+              "WAITING_ARRIVAL"))
           .build());
     }
     fileAudits.appendAudit(FileAuditParam.builder()
@@ -569,7 +575,7 @@ public class ImportIngressScanner {
       Map<String, Object> metadata, String groupCode, String requiredFileSet) {
     metadata.put("fileGroupCode", groupCode);
     metadata.put("waitFileGroupMode", scannerProperties.getArrival().getWaitFileGroupMode());
-    metadata.put("requiredFileSet", requiredFileSet);
+    metadata.put(KEY_REQUIRED_FILE_SET, requiredFileSet);
     metadata.put("arrivalTimeoutAction", scannerProperties.getArrival().getArrivalTimeoutAction());
     metadata.put(
         "expectedArrivalTime",
@@ -691,7 +697,7 @@ public class ImportIngressScanner {
 
   /** 已登记记录的 metadata_json 是否已含非空 requiredFileSet(回填幂等判据)。 */
   private boolean hasRequiredFileSet(Map<String, Object> metadata) {
-    Object value = metadata.get("requiredFileSet");
+    Object value = metadata.get(KEY_REQUIRED_FILE_SET);
     return value != null && Texts.hasText(String.valueOf(value));
   }
 
@@ -753,15 +759,15 @@ public class ImportIngressScanner {
     // .xls 落 BINARY,真正解析时由 ExcelFormatParser/上游格式路由给出明确报错(转 .xlsx 提示),
     // 而非在 PARSE 阶段静默产出坏数据。详见 ExcelFormatParser 的 OLE2 fail-fast。
     Map<String, String> formatMap = Map.ofEntries(
-        Map.entry(".csv", "DELIMITED"),
-        Map.entry(".xlsx", "EXCEL"),
-        Map.entry(".xml", "XML"),
-        Map.entry(".json", "JSON"));
+        Map.entry(".csv", FileTemplateFormat.DELIMITED.code()),
+        Map.entry(".xlsx", FileTemplateFormat.EXCEL.code()),
+        Map.entry(".xml", FileTemplateFormat.XML.code()),
+        Map.entry(".json", FileTemplateFormat.JSON.code()));
     return formatMap.entrySet().stream()
         .filter(e -> lower.endsWith(e.getKey()))
         .map(Map.Entry::getValue)
         .findFirst()
-        .orElse("BINARY");
+        .orElse(FileTemplateFormat.BINARY.code());
   }
 
   private String sanitizeTrace(String fileName) {

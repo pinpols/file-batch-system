@@ -1,12 +1,12 @@
 package io.github.pinpols.batch.trigger.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.trigger.domain.TriggerSchedulerStatus;
 import io.github.pinpols.batch.trigger.domain.TriggerStatusInfo;
 import io.github.pinpols.batch.trigger.domain.TriggerStatusQueryService;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown.TriggerDrainStatus;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.quartz.SchedulerException;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,8 +19,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class TriggerStatusController {
 
-  private static final String KEY_STATUS = "status";
-
   private final TriggerStatusQueryService triggerStatusQueryService;
   private final TriggerGracefulShutdown gracefulShutdown;
 
@@ -30,8 +28,9 @@ public class TriggerStatusController {
   }
 
   @GetMapping("/scheduler-status")
-  public CommonResponse<Map<String, String>> schedulerStatus() {
-    return CommonResponse.success(Map.of(KEY_STATUS, triggerStatusQueryService.schedulerStatus()));
+  public CommonResponse<TriggerSchedulerStatus> schedulerStatus() {
+    return CommonResponse.success(
+        new TriggerSchedulerStatus(triggerStatusQueryService.schedulerStatus()));
   }
 
   @GetMapping("/drain/status")

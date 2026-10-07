@@ -13,6 +13,11 @@ SPEC.loader.exec_module(MODULE)
 
 
 class DetectChangeScopeTest(unittest.TestCase):
+    def test_contract_policy_is_not_docs_only(self) -> None:
+        result = MODULE.classify_paths(["docs/governance/java-contract-governance.json"])
+        self.assertTrue(result["ci"])
+        self.assertFalse(result["docs-only"])
+
     def test_docs_only_has_no_code_scope(self) -> None:
         result = MODULE.classify_paths(["docs/runbook/ci.md", "CHANGELOG.md"])
 

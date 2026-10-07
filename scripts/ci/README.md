@@ -1,5 +1,17 @@
 # CI 脚本说明
 
+## Java 固定契约与协议值守卫
+
+`check-java-contract-governance.py` 分三类检查：JCON-1 保护 Controller 和 Application Service 接口的固定返回类型；JCON-2 只复扫注册类及权威枚举 code；JCON-3 只检查同类已有 KEY/PARAM/MDC 常量却在 key 消费点重新写字面量。注释、SQL 文本块、测试 fixture、日志文案和不同类的同值键不混入判断。
+
+- 精确例外：`docs/governance/java-contract-governance.json`，必须包含方法签名及业务理由。
+- 违规基线：`docs/governance/java-contract-governance-baseline.json`，当前为空；标识不依赖行号，禁止增加相同缺口数量。
+- 权威枚举变化时，增量扫描扩展到登记消费者；例外必须精确，基线计数不得使用负数或布尔值。
+- 本地：`python3 scripts/ci/check-java-contract-governance.py --base-ref origin/main`；全量：省略 `--base-ref`；只报告：`--mode report --json`。
+- 自测：`python3 -m unittest scripts/ci/tests/test_check_java_contract_governance.py`。
+- PR 对 Java 改动增量检查；规则、workflow 或注册表变化触发全量复扫。Full Gate 全量检查；pre-commit 检查暂存 Java，规则文件变化额外全量复扫。
+- Sonar S1192 继续提供人工候选，不作为无差别字符串清零门禁。见 [治理计划](../../docs/plans/typed-contract-enum-constant-governance-plan-2026-10-07.md)。
+
 本目录存放 GitHub Actions 与本地均可复用的 CI 门禁脚本。
 
 ## 完整守护清单

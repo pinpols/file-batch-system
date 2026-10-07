@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
+import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -41,7 +42,7 @@ final class LocalOutboxDispatchSupport {
     try {
       Map<String, Object> channelConfig = command.channelConfig();
       DispatchReceiptSupport.Receipt receipt =
-          DispatchReceiptSupport.resolve(command, channelConfig, "NONE");
+          DispatchReceiptSupport.resolve(command, channelConfig, FileReceiptPolicy.NONE.code());
       String externalRequestId = receipt.externalRequestId();
       String receiptCode = receipt.receiptCode();
 

@@ -86,7 +86,10 @@ def classify_path(path: str) -> set[str]:
 
     if normalized.startswith((".github/workflows/", ".github/actions/")) or under(
         normalized, "scripts/ci"
-    ):
+    ) or normalized in {
+        "docs/governance/java-contract-governance.json",
+        "docs/governance/java-contract-governance-baseline.json",
+    }:
         scopes.add("ci")
 
     if normalized.endswith(".java"):

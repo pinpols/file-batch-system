@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.exports.stage.format;
 
+import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -35,7 +36,7 @@ public class ExportFormatStrategyRegistry {
    */
   public ExportFormatStrategy resolve(String fileFormatType) {
     if (EmptyChecks.isBlank(fileFormatType)) {
-      return require("JSON");
+      return require(FileTemplateFormat.JSON.code());
     }
     return require(fileFormatType);
   }

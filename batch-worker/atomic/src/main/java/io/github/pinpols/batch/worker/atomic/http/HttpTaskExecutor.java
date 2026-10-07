@@ -215,7 +215,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
         planned.put(PipelineRuntimeKeys.DRY_RUN, true);
         planned.put("plannedAction", "http");
         planned.put(PARAM_METHOD, inv.method);
-        planned.put("url", inv.uri.toString());
+        planned.put(PARAM_URL, inv.uri.toString());
         planned.put("headerKeys", List.copyOf(inv.headers.keySet()));
         planned.put(
             "bodyBytes", inv.body == null ? 0 : inv.body.getBytes(StandardCharsets.UTF_8).length);

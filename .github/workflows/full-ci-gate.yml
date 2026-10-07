@@ -225,6 +225,14 @@ jobs:
         shell: bash
         run: bash scripts/ci/run-gate.sh FULL_JAVA_LOGGING "Java 日志与异常输出治理" -- python3 scripts/ci/check-java-logging-governance.py
 
+      - name: Verify Java fixed contracts and protocol values
+        shell: bash
+        run: bash scripts/ci/run-gate.sh FULL_JAVA_CONTRACT "Java 固定契约与协议值治理" -- python3 scripts/ci/check-java-contract-governance.py
+
+      - name: Test Java contract governance checker
+        shell: bash
+        run: bash scripts/ci/run-gate.sh FULL_JAVA_CONTRACT_TEST "Java 契约治理门禁测试" -- python3 -m unittest scripts/ci/tests/test_check_java_contract_governance.py
+
       - name: Test Java logging governance checker
         shell: bash
         run: bash scripts/ci/run-gate.sh FULL_JAVA_LOGGING_TEST "Java 日志治理门禁测试" -- python3 -m unittest scripts/ci/tests/test_check_java_logging_governance.py

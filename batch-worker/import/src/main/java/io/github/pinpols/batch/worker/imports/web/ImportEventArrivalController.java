@@ -4,7 +4,6 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.worker.imports.config.ImportScannerProperties;
 import io.github.pinpols.batch.worker.imports.runtime.ImportIngressScanner;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,15 +38,17 @@ public class ImportEventArrivalController {
   private final AtomicBoolean scanInFlight = new AtomicBoolean(false);
 
   @PostMapping("/object-arrival")
-  public CommonResponse<Map<String, Object>> objectArrival(
+  public CommonResponse<ImportEventArrivalResponse> objectArrival(
       @RequestBody(required = false) ObjectArrivalNotification notification) {
     if (!scannerProperties.getEventArrival().isEnabled()) {
-      return CommonResponse.success(Map.of("triggered", false, "reason", "event-arrival-disabled"));
+      return CommonResponse.success(
+          new ImportEventArrivalResponse(false, "event-arrival-disabled"));
     }
     meterRegistry.counter("batch.import.event_arrival.notifications").increment();
     if (!scanInFlight.compareAndSet(false, true)) {
       // 已有扫描在途,合并本次通知(扫描器单次全量扫已覆盖此对象),避免事件风暴重复扫。
-      return CommonResponse.success(Map.of("triggered", false, "reason", "scan-already-in-flight"));
+      return CommonResponse.success(
+          new ImportEventArrivalResponse(false, "scan-already-in-flight"));
     }
     try {
       log.info(
@@ -58,7 +59,7 @@ public class ImportEventArrivalController {
           logSafe(notification == null ? null : notification.getObjectKey()));
       importIngressScanner.scan();
       meterRegistry.counter("batch.import.event_arrival.scans").increment();
-      return CommonResponse.success(Map.of("triggered", true));
+      return CommonResponse.success(new ImportEventArrivalResponse(true, null));
     } finally {
       scanInFlight.set(false);
     }

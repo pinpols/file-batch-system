@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.exports.stage;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.constants.BatchFileConstants;
+import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.exception.WorkerConfigException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.logging.ThrottledLogger;
@@ -148,8 +149,8 @@ public class GenerateStep implements ExportStageStep {
       }
       int pageSize = resolvePageSize(context);
       int chunkSize = resolveChunkSize(context);
-      String fileFormatType =
-          String.valueOf(attrs.getOrDefault(PipelineRuntimeKeys.EXPORT_FILE_FORMAT_TYPE, "JSON"));
+      String fileFormatType = String.valueOf(attrs.getOrDefault(
+          PipelineRuntimeKeys.EXPORT_FILE_FORMAT_TYPE, FileTemplateFormat.JSON.code()));
       // 导出编码选项：target_charset / with_bom / line_separator 由模板声明，透传给格式策略与 REGISTER 登记。
       ExportEncodingOptions encoding = resolveExportEncodingOptions(context, fileFormatType);
       attrs.put(ExportRuntimeKeys.EXPORT_CHARSET, encoding.charset().name());
@@ -376,7 +377,7 @@ public class GenerateStep implements ExportStageStep {
    */
   private ExportEncodingOptions resolveExportEncodingOptions(
       ExportJobContext context, String fileFormatType) {
-    if ("EXCEL".equalsIgnoreCase(fileFormatType)) {
+    if (FileTemplateFormat.EXCEL.code().equalsIgnoreCase(fileFormatType)) {
       return new ExportEncodingOptions(StandardCharsets.UTF_8, Boolean.FALSE, "\n");
     }
     Map<String, Object> tc = templateConfigMap(context);
@@ -455,7 +456,7 @@ public class GenerateStep implements ExportStageStep {
     if (checkpointProperties == null
         || !checkpointProperties.isEnabled()
         || positionStore == null
-        || "EXCEL".equalsIgnoreCase(fileFormatType)) {
+        || FileTemplateFormat.EXCEL.code().equalsIgnoreCase(fileFormatType)) {
       return null;
     }
     Object rawPartitionCount = context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT);

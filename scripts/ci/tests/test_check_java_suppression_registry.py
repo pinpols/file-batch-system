@@ -21,6 +21,13 @@ SPEC.loader.exec_module(MODULE)
 
 class JavaSuppressionRegistryTest(unittest.TestCase):
 
+    def test_contract_path_exception_is_exact_and_cannot_grow(self) -> None:
+        path = next(iter(MODULE.SCOPED_RULES["java:S1075"]))
+        allowed = (path, 23, "java:S1075")
+        self.assertEqual(MODULE.unregistered([allowed]), [])
+        self.assertEqual(len(MODULE.unregistered([allowed, allowed])), 2)
+        self.assertEqual(len(MODULE.unregistered([("Other.java", 23, "java:S1075")])), 1)
+
     def test_default_enumeration_includes_untracked_files(self) -> None:
         """默认扫描必须覆盖尚未 git add 的新文件。
 

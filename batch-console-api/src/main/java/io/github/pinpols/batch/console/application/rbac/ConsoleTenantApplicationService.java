@@ -2,7 +2,11 @@ package io.github.pinpols.batch.console.application.rbac;
 
 import io.github.pinpols.batch.common.config.BatchProfileSupport;
 import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.enums.JobInstanceStatus;
+import io.github.pinpols.batch.common.enums.PipelineRunStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.enums.TenantStatus;
+import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
@@ -40,11 +44,18 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ConsoleTenantApplicationService {
 
-  private static final List<String> ACTIVE_JOB_STATUSES =
-      List.of("CREATED", "WAITING", "READY", "RUNNING", "PARTIAL_FAILED");
-  private static final List<String> ACTIVE_PIPELINE_STATUSES =
-      List.of("CREATED", "RUNNING", "COMPENSATING");
-  private static final List<String> ACTIVE_WORKFLOW_STATUSES = List.of("CREATED", "RUNNING");
+  private static final List<String> ACTIVE_JOB_STATUSES = List.of(
+      JobInstanceStatus.CREATED.code(),
+      JobInstanceStatus.WAITING.code(),
+      JobInstanceStatus.READY.code(),
+      JobInstanceStatus.RUNNING.code(),
+      JobInstanceStatus.PARTIAL_FAILED.code());
+  private static final List<String> ACTIVE_PIPELINE_STATUSES = List.of(
+      PipelineRunStatus.CREATED.code(),
+      PipelineRunStatus.RUNNING.code(),
+      PipelineRunStatus.COMPENSATING.code());
+  private static final List<String> ACTIVE_WORKFLOW_STATUSES =
+      List.of(WorkflowRunStatus.CREATED.code(), WorkflowRunStatus.RUNNING.code());
 
   private final TenantMapper tenantMapper;
   private final ConsoleUserAccountMapper userAccountMapper;
@@ -257,7 +268,7 @@ public class ConsoleTenantApplicationService {
     // 先调远端 trigger pause(fail-fast,callOrThrow 失败即抛),成功后才改 console DB,
     // 避免「DB 已 commit 但 trigger runtime 未变」的状态分裂(P1-5)。
     triggerProxyService.pauseByTenant(tenantId);
-    tenantMapper.updateStatus(tenantId, "SUSPENDED");
+    tenantMapper.updateStatus(tenantId, TenantStatus.SUSPENDED.code());
     return toResponse(tenantMapper.selectByTenantId(tenantId));
   }
 
@@ -287,7 +298,7 @@ public class ConsoleTenantApplicationService {
     // 先调远端 trigger resume(fail-fast,callOrThrow 失败即抛),成功后才改 console DB,
     // 避免「DB 已 commit 但 trigger runtime 未变」的状态分裂(P1-5)。
     triggerProxyService.resumeByTenant(tenantId);
-    tenantMapper.updateStatus(tenantId, "ACTIVE");
+    tenantMapper.updateStatus(tenantId, TenantStatus.ACTIVE.code());
     return toResponse(tenantMapper.selectByTenantId(tenantId));
   }
 
@@ -301,7 +312,7 @@ public class ConsoleTenantApplicationService {
     TenantUpsertParam param = new TenantUpsertParam();
     param.setTenantId(tenantId);
     param.setTenantName(tenantName);
-    param.setStatus("ACTIVE");
+    param.setStatus(TenantStatus.ACTIVE.code());
     param.setDescription(description);
     param.setCreatedBy(operator);
     tenantMapper.insert(param);

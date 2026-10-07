@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.exports.stage.format;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -19,7 +20,7 @@ public class JsonExportFormat extends AbstractExportFormat {
 
   @Override
   public String formatType() {
-    return "JSON";
+    return FileTemplateFormat.JSON.code();
   }
 
   @Override

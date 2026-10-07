@@ -75,6 +75,14 @@ for spec in "${SPECS[@]}"; do
   oasdiff breaking "$base_tmp" "$spec" --format singleline 2>/dev/null \
     | grep -E "in API (GET|POST|PUT|DELETE|PATCH) ${string_fix_paths} .*response.s property type/format changed from \`string\`/\`\` to \`object\`/\`\`.*\[response-property-type-changed\]" \
       >> "$clarification_ignore_tmp" || true
+  # trigger 的 dryRun 从首次实现即返回校验对象，普通触发始终返回字符串。
+  # 仅允许补录该既有分支，不放行其他端点、其他 data 子结构或新增 union 成员。
+  oasdiff breaking "$base_tmp" "$spec" --format singleline 2>/dev/null \
+    | grep -E 'in API POST /api/console/jobs/trigger .*added `#/components/schemas/DryRunTriggerResult, subschema #1` to the `allOf\[subschema #2\]/data` response property `oneOf` list.*\[response-property-one-of-added\]' \
+      >> "$clarification_ignore_tmp" || true
+  oasdiff breaking "$base_tmp" "$spec" --format singleline 2>/dev/null \
+    | grep -E 'in API POST /api/console/jobs/trigger .*the `allOf\[subschema #2\]/data` response.s property type/format changed from `string`/`` to ``/``.*\[response-property-type-changed\]' \
+      >> "$clarification_ignore_tmp" || true
   # configPayloadJson 自该端点落地起就在 Java DTO 上使用 @NotBlank，缺失请求始终返回 400；
   # 此处只把既有运行时契约补录进 spec。精确限定 path + property，其他新增 required 仍会失败。
   oasdiff breaking "$base_tmp" "$spec" --format singleline 2>/dev/null \

@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse;
 import io.github.pinpols.batch.orchestrator.application.service.lineage.LineageEvidenceService;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,13 +19,13 @@ public class LineageEvidenceController {
   private final LineageEvidenceService lineageEvidenceService;
 
   @GetMapping("/result-versions/{id}")
-  public CommonResponse<Map<String, Object>> byResultVersion(
+  public CommonResponse<LineageEvidenceResponse> byResultVersion(
       @PathVariable("id") Long id, @RequestParam("tenantId") String tenantId) {
     return CommonResponse.success(lineageEvidenceService.evidenceForResultVersion(tenantId, id));
   }
 
   @GetMapping("/effective")
-  public CommonResponse<Map<String, Object>> byEffectiveBusinessKey(
+  public CommonResponse<LineageEvidenceResponse> byEffectiveBusinessKey(
       @RequestParam("tenantId") String tenantId, @RequestParam("businessKey") String businessKey) {
     return CommonResponse.success(
         lineageEvidenceService.evidenceForEffective(tenantId, businessKey));

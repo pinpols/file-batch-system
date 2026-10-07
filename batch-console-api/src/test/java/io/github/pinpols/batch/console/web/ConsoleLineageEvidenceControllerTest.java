@@ -19,7 +19,6 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -42,13 +41,28 @@ class ConsoleLineageEvidenceControllerTest {
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
     LineageEvidenceResponse response = new LineageEvidenceResponse(
-        Map.of("id", 7, "businessKey", "job:daily:2026-06-30"),
+        LineageEvidenceResponse.ResultVersion.builder()
+            .id(7L)
+            .businessKey("job:daily:2026-06-30")
+            .build(),
         null,
         List.of(),
-        List.of(Map.of("id", 11, "fileName", "out.csv")),
+        List.of(LineageEvidenceResponse.FileRecord.builder()
+            .id(11L)
+            .fileName("out.csv")
+            .build()),
         List.of(),
         new LineageEvidenceResponse.LineageCoverage(
-            "BFS_HOT_TABLES", 7L, Map.of(), true, 11L, true, 0, 1, 1, List.of()));
+            "BFS_HOT_TABLES",
+            7L,
+            new LineageEvidenceResponse.LineageSources("HOT", "NONE", "NONE", "HOT", "NONE"),
+            true,
+            11L,
+            true,
+            0,
+            1,
+            1,
+            List.of()));
     when(orchestratorProxy.lineageByResultVersion(7L, "ta"))
         .thenReturn(CommonResponse.success(response));
     when(orchestratorProxy.lineageByEffective("ta", "job:daily:2026-06-30"))

@@ -2,8 +2,10 @@ openapi: 3.1.0
 info:
   title: Batch Platform Console API
   version: 0.1.0
-  x-last-updated: "2026-10-04"
+  x-last-updated: "2026-10-07"
   x-changelog:
+    - date: "2026-10-07"
+      summary: "固定响应类型化：trigger 正常实例号与 dry-run 校验对象改为明确 oneOf；Trigger 列表与 lineage 固定投影补齐 schema，字段命名保持不变，文件 metadata 使用动态 JSON 对象。"
     - date: "2026-10-04"
       summary: "移除 pipeline-progress 的 tenantId + workerCodes 旧查询入口，仅保留现有 pipelineInstanceId 必填契约与 steps 响应；缺少 pipelineInstanceId 返回 400，正式前端 schema 不变。"
     - date: "2026-09-27"
@@ -1085,7 +1087,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseString'
+                $ref: '#/components/schemas/CommonResponseJobTrigger'
   /api/console/jobs/compensations:
     post:
       tags: [Jobs]
@@ -5732,19 +5734,13 @@ paths:
       operationId: listTriggers
       security:
         - bearerAuth: []
-      parameters:
-        - name: tenantId
-          in: query
-          required: true
-          schema:
-            type: string
       responses:
         '200':
           description: Trigger list
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseTriggerStatusList'
   /api/console/ops/triggers/{jobCode}/register:
     post:
       tags: [Triggers]
@@ -10837,6 +10833,46 @@ components:
           type: array
           items: {}
       required: [total, pageNo, pageSize, items]
+    DryRunTriggerResult:
+      type: object
+      required: [dryRun, tenantId, jobCode, bizDate, valid, errors]
+      properties:
+        dryRun: { type: boolean, enum: [true] }
+        tenantId: { type: string }
+        jobCode: { type: string }
+        bizDate: { type: string, format: date }
+        valid: { type: boolean }
+        errors: { type: array, items: { type: string } }
+    CommonResponseJobTrigger:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              description: 普通触发返回实例号；dryRun 返回校验结果。保留既有 JSON 形态。
+              oneOf:
+                - type: string
+                - $ref: '#/components/schemas/DryRunTriggerResult'
+    ConsoleTriggerStatusResponse:
+      type: object
+      properties:
+        tenantId: { type: string, nullable: true }
+        jobCode: { type: string, nullable: true }
+        scheduleType: { type: string, nullable: true }
+        scheduleExpression: { type: string, nullable: true }
+        timezone: { type: string, nullable: true }
+        triggerMode: { type: string, nullable: true }
+        status: { type: string, nullable: true }
+        previousFireTime: { type: string, format: date-time, nullable: true }
+        nextFireTime: { type: string, format: date-time, nullable: true }
+    CommonResponseTriggerStatusList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/ConsoleTriggerStatusResponse' }
     CommonResponseString:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -11414,15 +11450,116 @@ components:
         - type: object
           properties:
             data: { $ref: '#/components/schemas/CapacityProfileResponse' }
+    LineageJobInstance:
+      type: object
+      properties:
+        id: { type: integer, format: int64, nullable: true }
+        tenant_id: { type: string, nullable: true }
+        job_code: { type: string, nullable: true }
+        biz_date: { type: string, format: date, nullable: true }
+        instance_status: { type: string, nullable: true }
+        run_attempt: { type: integer, format: int32, nullable: true }
+        trace_id: { type: string, nullable: true }
+        related_file_id: { type: integer, format: int64, nullable: true }
+        parent_instance_id: { type: integer, format: int64, nullable: true }
+        replay_session_id: { type: integer, format: int64, nullable: true }
+        started_at: { type: string, format: date-time, nullable: true }
+        finished_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time, nullable: true }
+        updated_at: { type: string, format: date-time, nullable: true }
+    LineagePipelineInstance:
+      type: object
+      properties:
+        id: { type: integer, format: int64, nullable: true }
+        tenant_id: { type: string, nullable: true }
+        pipeline_definition_id: { type: integer, format: int64, nullable: true }
+        job_code: { type: string, nullable: true }
+        pipeline_type: { type: string, nullable: true }
+        file_id: { type: integer, format: int64, nullable: true }
+        related_job_instance_id: { type: integer, format: int64, nullable: true }
+        current_stage: { type: string, nullable: true }
+        last_success_stage: { type: string, nullable: true }
+        run_status: { type: string, nullable: true }
+        trace_id: { type: string, nullable: true }
+        started_at: { type: string, format: date-time, nullable: true }
+        finished_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time, nullable: true }
+        updated_at: { type: string, format: date-time, nullable: true }
+    LineageFileRecord:
+      type: object
+      properties:
+        id: { type: integer, format: int64, nullable: true }
+        tenant_id: { type: string, nullable: true }
+        file_code: { type: string, nullable: true }
+        biz_type: { type: string, nullable: true }
+        file_category: { type: string, nullable: true }
+        file_name: { type: string, nullable: true }
+        file_format_type: { type: string, nullable: true }
+        file_size_bytes: { type: integer, format: int64, nullable: true }
+        checksum_type: { type: string, nullable: true }
+        checksum_value: { type: string, nullable: true }
+        storage_type: { type: string, nullable: true }
+        storage_bucket: { type: string, nullable: true }
+        storage_path: { type: string, nullable: true }
+        file_status: { type: string, nullable: true }
+        biz_date: { type: string, format: date, nullable: true }
+        trace_id: { type: string, nullable: true }
+        metadata_json: { type: object, additionalProperties: true, nullable: true }
+        created_at: { type: string, format: date-time, nullable: true }
+        updated_at: { type: string, format: date-time, nullable: true }
+    LineageDispatchRecord:
+      type: object
+      properties:
+        id: { type: integer, format: int64, nullable: true }
+        tenant_id: { type: string, nullable: true }
+        file_id: { type: integer, format: int64, nullable: true }
+        pipeline_instance_id: { type: integer, format: int64, nullable: true }
+        channel_code: { type: string, nullable: true }
+        dispatch_target: { type: string, nullable: true }
+        dispatch_status: { type: string, nullable: true }
+        dispatch_attempt: { type: integer, format: int32, nullable: true }
+        receipt_code: { type: string, nullable: true }
+        receipt_status: { type: string, nullable: true }
+        external_request_id: { type: string, nullable: true }
+        error_code: { type: string, nullable: true }
+        error_message: { type: string, nullable: true }
+        dispatched_at: { type: string, format: date-time, nullable: true }
+        ack_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time, nullable: true }
+        updated_at: { type: string, format: date-time, nullable: true }
+    LineageResultVersion:
+      type: object
+      properties:
+        id: { type: integer, format: int64, nullable: true }
+        tenantId: { type: string, nullable: true }
+        businessKey: { type: string, nullable: true }
+        versionNo: { type: integer, format: int32, nullable: true }
+        jobInstanceId: { type: integer, format: int64, nullable: true }
+        status: { type: string, nullable: true }
+        effectiveAt: { type: string, format: date-time, nullable: true }
+        deactivatedAt: { type: string, format: date-time, nullable: true }
+        payloadStorage: { type: string, nullable: true }
+        payloadRef: { type: string, nullable: true }
+        generatedAt: { type: string, format: date-time, nullable: true }
+        generatedBy: { type: string, nullable: true }
+        promotionPolicy: { type: string, nullable: true }
+        dqGateStatus: { type: string, nullable: true }
+    LineageSources:
+      type: object
+      required: [resultVersion, jobInstance, pipelineInstances, fileRecords, dispatchRecords]
+      properties:
+        resultVersion: { type: string }
+        jobInstance: { type: string }
+        pipelineInstances: { type: string }
+        fileRecords: { type: string }
+        dispatchRecords: { type: string }
     LineageCoverage:
       type: object
       required: [scope, resultVersionId, sources, jobInstanceFound, payloadFileResolved, pipelineInstanceCount, fileRecordCount, dispatchRecordCount, knownGaps]
       properties:
         scope: { type: string }
         resultVersionId: { type: integer, format: int64 }
-        sources:
-          type: object
-          additionalProperties: { type: string }
+        sources: { $ref: '#/components/schemas/LineageSources' }
         jobInstanceFound: { type: boolean }
         payloadFileId: { type: integer, format: int64, nullable: true }
         payloadFileResolved: { type: boolean }
@@ -11434,17 +11571,21 @@ components:
       type: object
       required: [resultVersion, pipelineInstances, fileRecords, dispatchRecords, coverage]
       properties:
-        resultVersion: { type: object, additionalProperties: true }
-        jobInstance: { type: object, additionalProperties: true, nullable: true }
+        resultVersion: { $ref: '#/components/schemas/LineageResultVersion' }
+        jobInstance:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/LineageJobInstance'
         pipelineInstances:
           type: array
-          items: { type: object, additionalProperties: true }
+          items: { $ref: '#/components/schemas/LineagePipelineInstance' }
         fileRecords:
           type: array
-          items: { type: object, additionalProperties: true }
+          items: { $ref: '#/components/schemas/LineageFileRecord' }
         dispatchRecords:
           type: array
-          items: { type: object, additionalProperties: true }
+          items: { $ref: '#/components/schemas/LineageDispatchRecord' }
         coverage: { $ref: '#/components/schemas/LineageCoverage' }
     CommonResponseLineageEvidence:
       allOf:

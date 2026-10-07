@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
+import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
@@ -95,7 +96,7 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     }
 
     DispatchReceiptSupport.Receipt receipt =
-        DispatchReceiptSupport.resolve(command, channelConfig, "SYNC");
+        DispatchReceiptSupport.resolve(command, channelConfig, FileReceiptPolicy.SYNC.code());
 
     try {
       MimeMessage message = buildMimeMessage(mailConfig, command, receipt.externalRequestId());

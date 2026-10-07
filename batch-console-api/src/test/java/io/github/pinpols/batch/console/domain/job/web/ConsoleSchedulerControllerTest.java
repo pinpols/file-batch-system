@@ -11,10 +11,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.application.ops.ConsoleTriggerProxyService;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleSchedulerCommandResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -47,7 +47,7 @@ class ConsoleSchedulerControllerTest {
   @DisplayName("查询调度器运行状态并回包, 字段名与生产接口对齐")
   void shouldReturnSchedulerState_whenStatusQueried() throws Exception {
     // 下游 TriggerManagementController 真实返回键为 status（非 state），DTO 对齐生产 wire。
-    when(proxy.schedulerStatus()).thenReturn(Map.of("status", "RUNNING"));
+    when(proxy.schedulerStatus()).thenReturn(new ConsoleSchedulerCommandResponse("RUNNING"));
     mockMvc
         .perform(get("/api/console/scheduler/status"))
         .andExpect(status().isOk())
@@ -57,8 +57,8 @@ class ConsoleSchedulerControllerTest {
   @Test
   @DisplayName("全局暂停与全局恢复分别下发, 两次调用各自触达下游")
   void shouldPauseAllAndResumeAll_whenBothRequested() throws Exception {
-    when(proxy.schedulerPauseAll()).thenReturn(Map.of("status", "ALL_PAUSED"));
-    when(proxy.schedulerResumeAll()).thenReturn(Map.of("status", "ALL_RESUMED"));
+    when(proxy.schedulerPauseAll()).thenReturn(new ConsoleSchedulerCommandResponse("ALL_PAUSED"));
+    when(proxy.schedulerResumeAll()).thenReturn(new ConsoleSchedulerCommandResponse("ALL_RESUMED"));
     mockMvc.perform(post("/api/console/scheduler/pause-all")).andExpect(status().isOk());
     mockMvc
         .perform(post("/api/console/scheduler/resume-all"))

@@ -1,20 +1,20 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `fa3633c37`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `332956cb3` + 当前工作区改动。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,746 | 501,796 | 257,697 | 51.4% |
+| 4,758 | 502,885 | 258,425 | 51.4% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| prod | 2,749 | 251,034 | 114,849 | 45.8% |
-| test | 1,224 | 182,982 | 100,497 | 54.9% |
-| script | 627 | 52,007 | 32,404 | 62.3% |
+| prod | 2,756 | 251,454 | 115,098 | 45.8% |
+| test | 1,228 | 183,336 | 100,723 | 54.9% |
+| script | 628 | 52,322 | 32,657 | 62.4% |
 | config | 53 | 8,168 | 5,866 | 71.8% |
 | infra-config | 32 | 5,344 | 3,912 | 73.2% |
 | sql | 61 | 2,261 | 169 | 7.5% |
@@ -23,11 +23,11 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,501 | 366,630 | 189,434 | 51.7% |
-| Shell | 197 | 30,258 | 23,608 | 78.0% |
-| Python | 236 | 33,980 | 17,297 | 50.9% |
+| Java | 3,511 | 367,192 | 189,743 | 51.7% |
+| Shell | 197 | 30,283 | 23,630 | 78.0% |
+| Python | 238 | 34,397 | 17,621 | 51.2% |
 | YAML | 95 | 12,461 | 9,439 | 75.7% |
-| XML | 178 | 21,421 | 6,637 | 31.0% |
+| XML | 178 | 21,506 | 6,710 | 31.2% |
 | TypeScript | 37 | 6,632 | 3,124 | 47.1% |
 | Rust | 23 | 8,423 | 2,835 | 33.7% |
 | Properties | 5 | 2,887 | 2,361 | 81.8% |
@@ -46,7 +46,7 @@
 | `helm/batch-platform/files/prometheus-batch-rules.yml` | infra-config | YAML | 1,228 | 1,027 |
 | `load-tests/scripts/run-control-plane-worker-benchmark.sh` | script | Shell | 879 | 796 |
 | `helm/batch-platform/values.yaml` | infra-config | YAML | 991 | 712 |
-| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java` | prod | Java | 1,146 | 645 |
+| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java` | prod | Java | 1,147 | 646 |
 | `deploy/docker/compose/app.yml` | config | YAML | 724 | 643 |
 | `scripts/local/validate-seed-scenarios.sh` | script | Shell | 768 | 560 |
 | `scripts/fix-fixture-xlsx.py` | script | Python | 979 | 559 |

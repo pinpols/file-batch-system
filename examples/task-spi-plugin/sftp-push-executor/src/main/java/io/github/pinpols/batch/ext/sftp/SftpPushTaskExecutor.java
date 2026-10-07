@@ -134,7 +134,7 @@ public class SftpPushTaskExecutor implements BatchTaskExecutor {
     Map<String, Object> output = new HashMap<>();
     output.put("bytesTransferred", 0L);
     output.put("durationMillis", System.currentTimeMillis() - start);
-    output.put("remotePath", inv.remotePath());
+    output.put(PARAM_REMOTE_PATH, inv.remotePath());
     output.put("mock", true);
 
     return TaskResult.ok(

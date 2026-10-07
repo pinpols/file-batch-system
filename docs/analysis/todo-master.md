@@ -1,5 +1,8 @@
 # TODO Master · 当前待办唯一索引
 
+## 固定契约与协议值治理（2026-10-07）
+
+本地实现与定向验收已完成，当前仅待提交授权和实际 CI 验收；不能按“全仓 S1192 清零”扩展范围或将动态 Map、SQL 业务状态集合机械统一。权威范围与状态见 [治理计划](../plans/typed-contract-enum-constant-governance-plan-2026-10-07.md)，本地证据见 [验收记录](../audit/typed-contract-governance-verification-2026-10-07.md)。未经授权不提交、推送或合并。
 
 ## 部署与持续交付
 

@@ -26,6 +26,9 @@
 
 ### Changed
 
+- Console、Trigger 与 Import 通知的固定响应改用具名类型，Pipeline 列表不再在应用层传播原始 Map；Job trigger 保留普通实例号/dry-run 对象两种 wire 形态，OpenAPI 与配对前端类型同步。Lineage 热表/归档证据使用显式构造映射，文件 metadata 解析为 JSON 对象，不透传 JDBC 驱动封装。
+- 已有生命周期、Outbox、文件格式、分发策略和通知枚举统一复用稳定 code，保留各运维操作原有状态集合与配置 DSL。新增低误报 Java 契约守卫，按固定边界、确认的有限域和已有协议键复用阻断新增退化；动态契约按方法签名登记例外。
+
 - 后端异常日志统一使用安全摘要或 SLF4J `Throwable` 堆栈：摘要会移除控制字符、遮蔽常见凭据并限制长度；PR、Full Gate 和本地提交门禁阻止生产日志重新直接打印异常 message。
 - 核心术语文档按 Java enum 和现行运行模型统一校准，并新增 PR / Full Gate 只读同步门禁，防止实例、工作流、节点、分片、步骤、任务等状态及调度类型再次与代码事实源漂移。
 - Docker 镜像构建 CI 纳入 `ops-toolbox` 运维工具箱镜像，实际构建校验 psql、Kafka CLI、MinIO mc、redis-cli 与非 root 运行时约束；该镜像仍不进入业务服务基础镜像。

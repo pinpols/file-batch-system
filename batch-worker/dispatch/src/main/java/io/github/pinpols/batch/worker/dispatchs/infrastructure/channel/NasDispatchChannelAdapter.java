@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
+import io.github.pinpols.batch.common.enums.FileChannelType;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +26,7 @@ public class NasDispatchChannelAdapter implements DispatchChannelAdapter {
 
   @Override
   public boolean supports(String channelType) {
-    return channelType != null && "NAS".equalsIgnoreCase(channelType);
+    return FileChannelType.NAS.code().equalsIgnoreCase(channelType);
   }
 
   @Override
