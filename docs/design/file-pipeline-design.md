@@ -274,6 +274,15 @@ MANIFEST 模式的**完整性校验链**（复用既有阶段，不重复下载�
 3. **recordCount**：注入 metadata → validate `row_count_check` 作为期望行数。
 
 > 到达组「成员都正确」由各成员各自的 MANIFEST 校验保证（一文件一 `.chk`）。组判定默认按 `requiredFileSet` 文件名满足条件触发；开 `file-governance.arrival.require-verified=true` 后，**还要求每个成员都已完整性背书**（`checksum_type != NONE`），否则文件名虽齐也保持 `WAITING_ARRIVAL`（reason `ARRIVED_PENDING_VERIFY`），超时仍走 `timeout-action`。
+
+束作业启动以持久化触发请求和启动响应为准，不把门禁的“无实例”响应当成启动成功：
+
+- 已派发：到达组推进为 `TRIGGERED`。
+- 批次日等待：保留 `WAITING_ARRIVAL`，原因 `BUNDLE_LAUNCH_WAITING`；后续扫描仅观察已有等待请求，由批次日恢复流程推进，不重复登记等待载荷。交接后的到达超时不覆盖批次日恢复结果。
+- 已拒绝或放弃：进入 `WAITING_MANUAL_CONFIRM`，原因 `BUNDLE_LAUNCH_REJECTED`，不自动复活原请求。
+- 启动异常或结果无法确认：保持可重试，不报告成功。
+
+束到达请求号沿用已有短键；仅超过数据库 `request_id` 的 128 字符上限时，使用租户、到达组和业务日的完整 SHA-256 摘要，保证长编码可登记且重扫保持同一幂等键。
 - 传输完整性：文件大小、哈希值（MD5 / SHA-256）校验
 - 结构完整性：表头、表尾、记录类型、列数一致性校验
 - 内容完整性：记录数、汇总金额、业务日期、批次号一致性校验

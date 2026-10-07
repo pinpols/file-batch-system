@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.file;
 
 import io.github.pinpols.batch.common.dto.LaunchRequest;
+import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
+import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -11,8 +13,12 @@ import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,7 +71,9 @@ public class BundleArrivalLauncher {
 
   public enum LaunchOutcome {
     NOT_BUNDLE,
-    LAUNCHED
+    LAUNCHED,
+    WAITING,
+    REJECTED
   }
 
   /** 到达组满足条件时调用;非束组(无 bundleJobCode)直接返回,不发 launch。 */
@@ -81,8 +89,7 @@ public class BundleArrivalLauncher {
       return LaunchOutcome.NOT_BUNDLE; // 普通到达组,不是文件束
     }
     validateCandidate(tenantId, fileGroupCode, candidate);
-    launchCandidate(tenantId, fileGroupCode, candidate);
-    return LaunchOutcome.LAUNCHED;
+    return launchCandidate(tenantId, fileGroupCode, candidate);
   }
 
   private BundleLaunchCandidate collectCandidate(
@@ -214,11 +221,14 @@ public class BundleArrivalLauncher {
     }
   }
 
-  private void launchCandidate(
+  private LaunchOutcome launchCandidate(
       String tenantId, String fileGroupCode, BundleLaunchCandidate candidate) {
     // 确定性 requestId:同组同 bizDate 只 launch 一次(trigger_request UNIQUE 回退)
-    String requestId =
-        "bundle-arrival-" + tenantId + "-" + fileGroupCode + "-" + candidate.bizDate();
+    String requestId = requestId(tenantId, fileGroupCode, candidate.bizDate());
+    LaunchOutcome existingOutcome = persistedOutcome(tenantId, requestId);
+    if (EmptyChecks.isNotNull(existingOutcome)) {
+      return existingOutcome;
+    }
     String traceId = IdGenerator.newTraceId();
     // 与同仓库其它内部 launcher(ChildJobLaunchSupport / DefaultCompensationService /
     // BatchDaySettleScheduler)保持一致:先把 trigger_request 落成 ACCEPTED,DefaultLaunchService 才能接受
@@ -235,6 +245,12 @@ public class BundleArrivalLauncher {
     triggerRequest.setTraceId(traceId);
     triggerRequestMapper.insertIfAbsent(triggerRequest);
 
+    // 并发扫描可能已推进同一请求;等待载荷由批次日恢复流程负责,不能再次登记。
+    existingOutcome = persistedOutcome(tenantId, requestId);
+    if (EmptyChecks.isNotNull(existingOutcome)) {
+      return existingOutcome;
+    }
+
     LaunchRequest request = LaunchRequest.builder()
         .tenantId(tenantId)
         .jobCode(candidate.bundleJobCode())
@@ -244,16 +260,61 @@ public class BundleArrivalLauncher {
         .traceId(traceId)
         .params(Map.of("bundleFiles", candidate.bundleFiles()))
         .build();
-    launchServiceProvider.getObject().launch(request);
+    LaunchResponse response = launchServiceProvider.getObject().launch(request);
+    LaunchOutcome outcome = EmptyChecks.isNotNull(response) && Texts.hasText(response.instanceNo())
+        ? LaunchOutcome.LAUNCHED
+        : persistedOutcome(tenantId, requestId);
+    if (EmptyChecks.isNull(outcome)) {
+      throw new IllegalStateException("bundle launch returned no instance or durable outcome");
+    }
     log.info(
-        "bundle arrival launched: tenantId={}, fileGroupCode={}, jobCode={}, fileCount={},"
+        "bundle arrival outcome={}: tenantId={}, fileGroupCode={}, jobCode={}, fileCount={},"
             + " bizDate={}, requestId={}",
+        outcome,
         tenantId,
         fileGroupCode,
         candidate.bundleJobCode(),
         candidate.bundleFiles().size(),
         candidate.bizDate(),
         requestId);
+    return outcome;
+  }
+
+  private LaunchOutcome persistedOutcome(String tenantId, String requestId) {
+    TriggerRequestEntity existing =
+        triggerRequestMapper.selectByTenantAndRequestId(tenantId, requestId);
+    if (EmptyChecks.isNull(existing)) {
+      return null;
+    }
+    TriggerRequestStatus status = TriggerRequestStatus.fromCodeOrNull(existing.getRequestStatus());
+    if (status == TriggerRequestStatus.WAITING) {
+      return LaunchOutcome.WAITING;
+    }
+    if (status == TriggerRequestStatus.LAUNCHED) {
+      return LaunchOutcome.LAUNCHED;
+    }
+    if (status == TriggerRequestStatus.REJECTED
+        || status == TriggerRequestStatus.GIVE_UP
+        || status == TriggerRequestStatus.DUPLICATE) {
+      return LaunchOutcome.REJECTED;
+    }
+    return null;
+  }
+
+  private static String requestId(String tenantId, String fileGroupCode, LocalDate bizDate) {
+    String legacy = "bundle-arrival-" + tenantId + "-" + fileGroupCode + "-" + bizDate;
+    // 已落库的短键必须保持不变;仅超出 request_id 的 128 字符上限时改用完整摘要。
+    if (legacy.length() <= 128) {
+      return legacy;
+    }
+    String identity = JsonUtils.toJson(List.of(tenantId, fileGroupCode, bizDate.toString()));
+    try {
+      byte[] hash = MessageDigest.getInstance(CryptoAlgorithms.SHA_256)
+          .digest(identity.getBytes(StandardCharsets.UTF_8));
+      return "bundle-arrival-sha256-" + HexFormat.of().formatHex(hash);
+    } catch (NoSuchAlgorithmException unavailable) {
+      throw new IllegalStateException("SHA-256 unavailable", unavailable);
+    }
   }
 
   private record BundleLaunchCandidate(

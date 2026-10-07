@@ -30,6 +30,7 @@ public class FileGovernanceScheduler {
   private static final String STATUS_TIMEOUT = "TIMEOUT";
   private static final String SCHEDULER_NAME = "file-governance-scheduler";
   private static final String STATUS_TRIGGERED = "TRIGGERED";
+  private static final String STATUS_WAITING_ARRIVAL = "WAITING_ARRIVAL";
   private static final String STATUS_WAITING_MANUAL_CONFIRM = "WAITING_MANUAL_CONFIRM";
 
   private record ArrivalGroupUpdateState(String arrivalState, String reason, Instant now) {}
@@ -201,7 +202,7 @@ public class FileGovernanceScheduler {
         continue;
       }
       switch (decision.state()) {
-        case "WAITING_ARRIVAL", "WAITING_FILE_GROUP", STATUS_WAITING_MANUAL_CONFIRM ->
+        case STATUS_WAITING_ARRIVAL, "WAITING_FILE_GROUP", STATUS_WAITING_MANUAL_CONFIRM ->
           waitingGroups++;
         case STATUS_TRIGGERED -> triggeredGroups++;
         case STATUS_TIMEOUT -> timeoutGroups++;
@@ -248,6 +249,11 @@ public class FileGovernanceScheduler {
     }
     Set<String> missingFiles = new HashSet<>(requiredFiles);
     missingFiles.removeAll(arrivedFiles);
+    // 文件已齐且请求已交给批次日等待队列后,到达超时不再覆盖该请求的真实恢复结果。
+    if ("BUNDLE_LAUNCH_WAITING".equals(firstFile.arrivalReason())) {
+      return triggerArrivalGroup(
+          key, groupFiles, requiredFiles, missingFiles, "ALL_FILES_ARRIVED", now);
+    }
     Instant latestTolerableTime = parseInstant(firstFile.latestTolerableTime());
     boolean triggerOnComplete =
         parseBoolean(firstFile.triggerOnComplete(), properties.getArrival().isTriggerOnComplete());
@@ -284,13 +290,13 @@ public class FileGovernanceScheduler {
       if (properties.getArrival().isRequireVerified() && !allMembersVerified(groupFiles)) {
         // 文件名虽齐,但有成员缺完整性背书(checksum_type=NONE)→ 保持等待,不放行;超时已在上方走 timeoutAction
         ArrivalGroupUpdateState updateState =
-            new ArrivalGroupUpdateState("WAITING_ARRIVAL", "ARRIVED_PENDING_VERIFY", now);
+            new ArrivalGroupUpdateState(STATUS_WAITING_ARRIVAL, "ARRIVED_PENDING_VERIFY", now);
         ArrivalGroupUpdateFiles updateFiles =
             new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles);
         ArrivalGroupUpdateContext updateContext =
             new ArrivalGroupUpdateContext(key, updateState, updateFiles);
         updateGroupState(updateContext);
-        return new ArrivalGroupDecision("WAITING_ARRIVAL");
+        return new ArrivalGroupDecision(STATUS_WAITING_ARRIVAL);
       }
       if (triggerOnComplete) {
         return triggerArrivalGroup(
@@ -319,13 +325,13 @@ public class FileGovernanceScheduler {
       return new ArrivalGroupDecision(null);
     }
     ArrivalGroupUpdateState updateState =
-        new ArrivalGroupUpdateState("WAITING_ARRIVAL", "WAITING_REQUIRED_FILES", now);
+        new ArrivalGroupUpdateState(STATUS_WAITING_ARRIVAL, "WAITING_REQUIRED_FILES", now);
     ArrivalGroupUpdateFiles updateFiles =
         new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles);
     ArrivalGroupUpdateContext updateContext =
         new ArrivalGroupUpdateContext(key, updateState, updateFiles);
     updateGroupState(updateContext);
-    return new ArrivalGroupDecision("WAITING_ARRIVAL");
+    return new ArrivalGroupDecision(STATUS_WAITING_ARRIVAL);
   }
 
   private ArrivalGroupDecision triggerArrivalGroup(
@@ -335,8 +341,10 @@ public class FileGovernanceScheduler {
       Set<String> missingFiles,
       String reason,
       Instant now) {
+    BundleArrivalLauncher.LaunchOutcome outcome;
     try {
-      bundleArrivalLauncher.launchIfBundle(key.tenantId(), key.fileGroupCode(), groupFiles);
+      outcome =
+          bundleArrivalLauncher.launchIfBundle(key.tenantId(), key.fileGroupCode(), groupFiles);
     } catch (RuntimeException exception) {
       // P1-2:束 launch 失败 → 保持组 retryable(不丢触发)。但永久畸形组(混 jobCode/bizDate)会每轮
       // sweep 重试,只 ERROR 日志运维不可见 → 加 counter 供告警(瞬时故障可恢复,永久故障靠该 metric
@@ -349,16 +357,23 @@ public class FileGovernanceScheduler {
           key.fileGroupCode(),
           reason,
           exception);
-      return new ArrivalGroupDecision("WAITING_ARRIVAL");
+      return new ArrivalGroupDecision(STATUS_WAITING_ARRIVAL);
     }
-    ArrivalGroupUpdateState updateState =
-        new ArrivalGroupUpdateState(STATUS_TRIGGERED, reason, now);
+    String state = STATUS_TRIGGERED;
+    if (outcome == BundleArrivalLauncher.LaunchOutcome.WAITING) {
+      state = STATUS_WAITING_ARRIVAL;
+      reason = "BUNDLE_LAUNCH_WAITING";
+    } else if (outcome == BundleArrivalLauncher.LaunchOutcome.REJECTED) {
+      state = STATUS_WAITING_MANUAL_CONFIRM;
+      reason = "BUNDLE_LAUNCH_REJECTED";
+    }
+    ArrivalGroupUpdateState updateState = new ArrivalGroupUpdateState(state, reason, now);
     ArrivalGroupUpdateFiles updateFiles =
         new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles);
     ArrivalGroupUpdateContext updateContext =
         new ArrivalGroupUpdateContext(key, updateState, updateFiles);
     updateGroupState(updateContext);
-    return new ArrivalGroupDecision(STATUS_TRIGGERED);
+    return new ArrivalGroupDecision(state);
   }
 
   private void updateGroupState(ArrivalGroupUpdateContext context) {

@@ -123,6 +123,7 @@
     <select id="selectArrivalGovernanceCandidates" resultType="map">
         select id,
                tenant_id,
+               checksum_type,
                file_name,
                biz_date,
                file_status,

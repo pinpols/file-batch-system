@@ -4,10 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
+import java.time.Instant;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -24,7 +24,7 @@ class PrivateTempFilesTest {
       assertThat(file.getParent().getFileName()).hasToString("file-batch-private");
       assertThat(Files.isRegularFile(file)).isTrue();
       assertThat(Files.isDirectory(directory)).isTrue();
-      if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
+      if (Files.getFileStore(file).supportsFileAttributeView("posix")) {
         assertThat(Files.getPosixFilePermissions(file))
             .containsExactlyInAnyOrder(
                 PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE);
@@ -38,6 +38,25 @@ class PrivateTempFilesTest {
       Files.deleteIfExists(file);
       Files.deleteIfExists(directory);
     }
+  }
+
+  @Test
+  @DisplayName("活跃临时副本持有锁时清理器不删除,关闭句柄后文件与锁均移除")
+  void shouldPreserveActiveFileAndCleanOnClose_whenFileIsLocked() throws Exception {
+    Path path;
+    Path lockPath;
+    try (PrivateTempFiles.LockedTempFile file =
+        PrivateTempFiles.createLockedTempFile("lock-review-", ".tmp")) {
+      path = file.path();
+      lockPath = file.lockPath();
+      assertThat(PrivateTempFiles.deleteStaleUnlockedFiles(
+              "lock-review-", Instant.now().plusSeconds(60)))
+          .isZero();
+      assertThat(path).exists();
+      assertThat(lockPath).exists();
+    }
+    assertThat(path).doesNotExist();
+    assertThat(lockPath).doesNotExist();
   }
 
   @Test
