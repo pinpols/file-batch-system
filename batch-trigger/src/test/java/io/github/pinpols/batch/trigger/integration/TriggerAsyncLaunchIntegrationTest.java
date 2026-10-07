@@ -35,6 +35,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -71,6 +72,7 @@ import org.springframework.boot.test.context.SpringBootTest;
       "spring.quartz.job-store-type=jdbc",
       "spring.quartz.jdbc.initialize-schema=always",
     })
+@DisplayName("Trigger 异步投递端到端:真实 PG 与 Kafka 验证落库投递、幂等去重、崩溃补投与坏 payload 拦截")
 class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
@@ -107,6 +109,7 @@ class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
   // ───────────────────────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("一次 launch 后 relay 投递到 Kafka,outbox 置 PUBLISHED 且 envelope 关键字段完整")
   void happyPath_writesOutboxAndPublishesToKafka() {
     String requestId = "req-happy-" + UUID.randomUUID();
     LaunchResponse response = triggerService.launch(new TriggerLaunchCommand(
@@ -139,6 +142,7 @@ class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
   // ───────────────────────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("同一幂等键二次 launch 返回同一实例号,outbox 只留一行并成功投递")
   void duplicateRequest_writesOnlyOneOutboxRow() {
     String requestId = "req-dup-" + UUID.randomUUID();
     String idem = "idem-" + requestId;
@@ -166,6 +170,7 @@ class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
   // ───────────────────────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("模拟崩溃遗留的 NEW outbox 行,relay 自动补投并推进到 PUBLISHED")
   void processCrashRecovery_relayResumesPublishing() {
     // 模拟"fire 写了 outbox 但 trigger 崩溃前没等到 relay 投":手工 INSERT 一条 NEW
     String requestId = "req-recover-" + UUID.randomUUID();
@@ -207,6 +212,7 @@ class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
   // ───────────────────────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("payload 反序列化失败的 outbox 行直接置 GIVE_UP 并记录原因,不重试也不投递 Kafka")
   void corruptedPayload_marksGiveUpAndDoesNotPublish() {
     // 模拟"DB 行的 payload 是坏 JSON":relay 反序列化失败应直接 GIVE_UP,不重试,不投递
     String requestId = "req-corrupt-" + UUID.randomUUID();

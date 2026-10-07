@@ -4,11 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
 import java.util.concurrent.atomic.AtomicLong;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("Trigger outbox 发布限流预算:按每秒令牌上限与轮询节奏计算单轮可领取事件数")
 class TriggerOutboxReleaseBudgetTest {
 
   @Test
+  @DisplayName("同一秒内领取量封顶为配置上限 40,再领为 0,跨秒后窗口重置并重新发放")
   void reserve_capsCurrentSecondAndResetsInNextSecond() {
     TriggerOutboxRelayProperties properties = new TriggerOutboxRelayProperties();
     properties.setMaxPublishEventsPerSecond(40);
@@ -27,6 +30,7 @@ class TriggerOutboxReleaseBudgetTest {
   }
 
   @Test
+  @DisplayName("每秒上限配置为 0 时视为不限流,请求多少即发放多少")
   void reserve_isUnlimitedWhenLimitIsDisabled() {
     TriggerOutboxRelayProperties properties = new TriggerOutboxRelayProperties();
     properties.setMaxPublishEventsPerSecond(0);
@@ -37,6 +41,7 @@ class TriggerOutboxReleaseBudgetTest {
   }
 
   @Test
+  @DisplayName("轮询比配置节奏慢时按实际耗时补发令牌,间隔 250ms 后单轮领取由 8 升到 10")
   void reserveAtPace_compensatesForPollsSlowerThanConfiguredInterval() {
     TriggerOutboxRelayProperties properties = new TriggerOutboxRelayProperties();
     properties.setMaxPublishEventsPerSecond(40);
@@ -54,6 +59,7 @@ class TriggerOutboxReleaseBudgetTest {
   }
 
   @Test
+  @DisplayName("长时间暂停后的追赶突发被截断,单轮最多补满一个完整秒的 40 个令牌")
   void reserveAtPace_capsCatchUpBurstToOneSecondOfTokens() {
     TriggerOutboxRelayProperties properties = new TriggerOutboxRelayProperties();
     properties.setMaxPublishEventsPerSecond(40);

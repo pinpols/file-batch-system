@@ -38,6 +38,7 @@ import java.time.LocalDate;
 import java.time.Month;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -46,6 +47,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("Trigger 服务:幂等校验、人工补跑审批、定时触发的业务日历与上游就绪闸、租户停用拦截")
 class DefaultTriggerServiceTest {
 
   @Mock
@@ -95,6 +97,7 @@ class DefaultTriggerServiceTest {
   }
 
   @Test
+  @DisplayName("手工触发缺少幂等键时以 MISSING_IDEMPOTENCY_KEY 直接拒绝")
   void shouldRejectBlankIdempotencyKey() {
     assertThatThrownBy(() ->
             service.launch(new TriggerLaunchCommand(validRequest(), " ", "req-001", "trace-001")))
@@ -104,6 +107,7 @@ class DefaultTriggerServiceTest {
   }
 
   @Test
+  @DisplayName("按租户与幂等键查询触发状态,原样返回库中记录")
   void shouldFindLaunchStatusByTenantAndIdempotencyKey() {
     TriggerLaunchStatus expected = new TriggerLaunchStatus(
         "req-001", "trace-001", "ACCEPTED", null, null, Instant.parse("2026-08-26T15:00:00Z"));
@@ -114,6 +118,7 @@ class DefaultTriggerServiceTest {
   }
 
   @Test
+  @DisplayName("幂等键命中已有请求时复用其 traceId 返回,不再落库也不发 outbox")
   void shouldShortCircuitWhenDedupRequestAlreadyExists() {
     TriggerLaunchCommand command =
         new TriggerLaunchCommand(validRequest(), "idem-001", "req-001", "trace-001");
@@ -143,6 +148,7 @@ class DefaultTriggerServiceTest {
   }
 
   @Test
+  @DisplayName("审批补跑:CAS 从 ACCEPTED 抢占后经 outbox 发起,并把请求推进为 LAUNCHED")
   void shouldApprovePendingCatchUpAndMarkRequestLaunched() {
     PendingCatchUpApprovalCommand command = new PendingCatchUpApprovalCommand();
     command.setTenantId("t1");
@@ -177,6 +183,7 @@ class DefaultTriggerServiceTest {
   }
 
   @Test
+  @DisplayName("按 misfire 待办 id 审批时先标记待办通过,再驱动关联补跑请求走同一发布链路")
   void shouldApproveMisfirePendingByPendingIdAndLaunchLinkedRequest() {
     PendingCatchUpApprovalCommand command = new PendingCatchUpApprovalCommand();
     command.setTenantId("t1");
@@ -218,6 +225,7 @@ class DefaultTriggerServiceTest {
   }
 
   @Test
+  @DisplayName("非补跑类型的请求不允许走审批补跑,以 not_catch_up 直接拒绝")
   void shouldRejectApprovalForNonCatchUpRequest() {
     PendingCatchUpApprovalCommand command = new PendingCatchUpApprovalCommand();
     command.setTenantId("t1");
@@ -237,6 +245,7 @@ class DefaultTriggerServiceTest {
   }
 
   @Test
+  @DisplayName("业务日历解析不出业务日期时定时触发返回 skipped,不落库也不发消息")
   void shouldSkipScheduledTriggerWhenBizDateResolutionReturnsNull() {
     ScheduledTriggerCommand command = new ScheduledTriggerCommand(
         scheduledDescriptor(),
@@ -265,6 +274,7 @@ class DefaultTriggerServiceTest {
   }
 
   @Test
+  @DisplayName("声明了依赖且上游未就绪时抛 UpstreamNotReadyException,交由 Quartz 延迟重检而不丢批")
   void launchScheduled_upstreamNotReady_throwsUpstreamNotReadyException() {
     // ADR-043:声明了 dependsOn 且上游未就绪 → 不再返回 skipped 丢批,改抛 UpstreamNotReadyException,
     // 由 QuartzLaunchJob 创建 one-shot retry trigger。
@@ -300,6 +310,7 @@ class DefaultTriggerServiceTest {
   }
 
   @Test
+  @DisplayName("上游就绪后定时触发正常落 trigger_request 并进入转发")
   void launchScheduled_upstreamReady_proceedsToForward() {
     TriggerDescriptor descriptor = scheduledDescriptor();
     descriptor.setDependsOnJobCode("UPSTREAM_SETTLE");
@@ -331,6 +342,7 @@ class DefaultTriggerServiceTest {
   }
 
   @Test
+  @DisplayName("人工补跑登记生成待审批记录,并把 misfire 待办关联到该补跑请求")
   void createPendingCatchUpShouldLinkMisfirePendingToCatchUpRequest() {
     ScheduledTriggerCommand command = new ScheduledTriggerCommand(
         scheduledDescriptor(),
@@ -372,6 +384,7 @@ class DefaultTriggerServiceTest {
   }
 
   @Test
+  @DisplayName("租户被停用时手工触发以 BizException 拒绝,不落库也不投递")
   void launch_suspendedTenant_throwsBizException() {
     when(tenantStatusMapper.selectStatus("t1")).thenReturn("SUSPENDED");
 
@@ -388,6 +401,7 @@ class DefaultTriggerServiceTest {
   }
 
   @Test
+  @DisplayName("租户被停用时定时触发同样以 BizException 拒绝,错误参数含 suspended")
   void launchScheduled_suspendedTenant_throwsBizException() {
     when(tenantStatusMapper.selectStatus("t1")).thenReturn("SUSPENDED");
 

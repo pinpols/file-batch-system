@@ -1024,7 +1024,8 @@ class ConsoleQueryControllerTest {
 | 测试方法 | 每个 `@Test` / `@ParameterizedTest` / `@RepeatedTest` / `@TestFactory` 方法**必须**有方法级 `@DisplayName` |
 | 文本内容 | **必须含中文**；描述**业务意图或验收点**，不是方法名直译（反例：`@DisplayName("shouldPauseWhenPermitsExhausted")`、`@DisplayName("XxxController")`） |
 
-参考 `SoftDeleteRecoveryIntegrationTest`（类级 + 方法级成对使用）。
+写法：类级写明**被测对象 + 验证范围**，方法级写明**该用例的验收点**；一条用例覆盖多个断言点时用
+`;` / `+` 串起；标点沿用半角 `,` `:`，与仓库存量多数写法一致。
 
 **存量与增量**：2026-10-07 起口径由「复杂用例才推荐」收紧为「全量必填」。存量测试类按
 `docs/governance/test-conventions-baseline.txt` 渐进收敛，守护脚本

@@ -17,6 +17,7 @@ import java.time.LocalDate;
 import java.time.Month;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.quartz.Scheduler;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +42,7 @@ import org.springframework.web.client.RestClient;
       // ADR-010: 默认 true，test 1 走异步路径写 outbox；test 2 的 approvePendingCatchUp 仍直接调 adapter
     })
 @Import(TriggerServiceIntegrationTest.TestConfig.class)
+@DisplayName("Trigger 启动链路集成:同一幂等键重复提交只落一条 ACCEPTED 请求,审批补跑同事务写出箱事件而非直连编排服务")
 class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
@@ -59,6 +61,7 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("同幂等键的两次启动只落一条 ACCEPTED 请求与一条 outbox 事件,且按 requestId/traceId 回查状态一致")
   void shouldPersistAcceptedRequestAndDeduplicateRepeatedLaunch() {
     TriggerLaunchRequest request = new TriggerLaunchRequest();
     request.setTenantId("t1");
@@ -106,6 +109,7 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("审批补跑请求后本地标记 LAUNCHED 并同事务写出一条 outbox 事件,且不通过编排 RestClient 发起 POST")
   void shouldApprovePendingCatchUpAndMarkRowLaunched() {
     jdbcTemplate.update(
         """

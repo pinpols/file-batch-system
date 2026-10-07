@@ -101,6 +101,69 @@ class OrderTest {
             )
             self.assertEqual(kinds(MODULE.scan_file(path, "demo/OrderTest.java")), [])
 
+    def test_display_name_before_value_source_is_accepted(self) -> None:
+        """@ValueSource 的数组初始化大括号深度 ≥1，不得被当成成员边界（真实仓库写法）。"""
+        with tempfile.TemporaryDirectory() as raw:
+            path = write(
+                Path(raw),
+                "ValueSourceTest.java",
+                '''
+@DisplayName("参数化:注解参数里的数组大括号不得干扰判定")
+class ValueSourceTest {
+
+  @ParameterizedTest
+  @DisplayName("常见与边界 cron 连续 24 次 next 计算须与 Quartz 序列逐项一致")
+  @ValueSource(
+      strings = {
+        "0 0 * * * ?",
+        "30 * * * * ?",
+      })
+  void series(String cron) {}
+}
+''',
+            )
+            self.assertEqual(MODULE.scan_file(path, "demo/ValueSourceTest.java"), [])
+
+    def test_display_name_before_csv_source_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            path = write(
+                Path(raw),
+                "CsvTest.java",
+                '''
+@DisplayName("参数化:CSV 入参")
+class CsvTest {
+
+  @ParameterizedTest
+  @DisplayName("租户与状态组合逐项校验")
+  @CsvSource({
+    "t1, OPEN",
+    "t2, CLOSED",
+  })
+  void cases(String tenant, String status) {}
+}
+''',
+            )
+            self.assertEqual(MODULE.scan_file(path, "demo/CsvTest.java"), [])
+
+    def test_missing_display_after_value_source_is_still_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            path = write(
+                Path(raw),
+                "StillMissingTest.java",
+                '''
+@DisplayName("参数化:确实缺方法级标注时必须报出")
+class StillMissingTest {
+
+  @ParameterizedTest
+  @ValueSource(strings = {"a", "b"})
+  void series(String v) {}
+}
+''',
+            )
+            findings = MODULE.scan_file(path, "demo/StillMissingTest.java")
+            self.assertEqual(kinds(findings), [MODULE.MISSING_METHOD])
+            self.assertEqual(findings[0].qualified, "StillMissingTest.series")
+
     def test_missing_class_display_is_reported(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             path = write(

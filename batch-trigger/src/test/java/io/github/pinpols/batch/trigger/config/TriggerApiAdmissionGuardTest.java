@@ -7,11 +7,14 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("手工 launch 本地准入闸门:并发耗尽即限流、队列等待放行与慢请求自适应收缩恢复")
 class TriggerApiAdmissionGuardTest {
 
   @Test
+  @DisplayName("并发已达上限且队列容量为 0 时,后来的请求立即以限流错误被拒绝")
   void shouldRejectWhenApiLaunchConcurrencyIsExhausted() throws Exception {
     TriggerRuntimeProperties properties = new TriggerRuntimeProperties();
     properties.setApiLaunchMaxConcurrency(1);
@@ -40,6 +43,7 @@ class TriggerApiAdmissionGuardTest {
   }
 
   @Test
+  @DisplayName("队列尚未满时突发请求会排队,等在飞请求释放许可后正常执行且不报错")
   void shouldServeBriefBurstAfterAnInFlightRequestReleasesItsPermit() throws Exception {
     TriggerRuntimeProperties properties = new TriggerRuntimeProperties();
     properties.setApiLaunchMaxConcurrency(1);
@@ -86,6 +90,7 @@ class TriggerApiAdmissionGuardTest {
   }
 
   @Test
+  @DisplayName("自适应开启时慢请求把许可从 8 减半到 4,紧接的快请求再回升到 5")
   void shouldShrinkAdaptiveBudgetAfterSlowRequestAndRecoverAfterFastRequest() {
     TriggerRuntimeProperties properties = new TriggerRuntimeProperties();
     properties.setApiLaunchMaxConcurrency(8);

@@ -19,8 +19,10 @@ import java.time.LocalTime;
 import java.time.Month;
 import java.util.Map;
 import java.util.Set;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("触发命令到 LaunchRequest 的适配:API 字段透传,定时触发推导 bizDate 与半开数据区间")
 class DefaultLaunchAdapterServiceTest {
 
   private static final BatchTimezoneProvider TIMEZONE_PROVIDER =
@@ -32,6 +34,7 @@ class DefaultLaunchAdapterServiceTest {
       new CronExpressionAdapter());
 
   @Test
+  @DisplayName("API 请求转 LaunchRequest 时原样透传租户、作业、业务日期、请求与链路标识及参数")
   void shouldBuildApiLaunchRequestFromControllerPayload() {
     TriggerLaunchRequest request = new TriggerLaunchRequest();
     request.setTenantId("t1");
@@ -53,6 +56,7 @@ class DefaultLaunchAdapterServiceTest {
   }
 
   @Test
+  @DisplayName("定时补跑按日历推导业务日期,并在参数中写入 MANUAL_APPROVAL 补跑与待审批标记")
   void shouldDeriveBizDateAndCatchUpMetadataFromScheduledTrigger() {
     TriggerDescriptor descriptor = new TriggerDescriptor();
     descriptor.setTenantId("t1");
@@ -87,6 +91,7 @@ class DefaultLaunchAdapterServiceTest {
 
   /** V94: CRON 触发计算 [thisFireAt, nextFireAt) 半开区间. 0 15 0 * * ? → 每天 00:15:00 fire. */
   @Test
+  @DisplayName("CRON 触发以本次 fire 时刻为区间起点,取表达式推得的下一个整点作为半开区间终点")
   void shouldComputeDataIntervalForCronTrigger() {
     TriggerDescriptor descriptor = new TriggerDescriptor();
     descriptor.setTenantId("t1");
@@ -109,6 +114,7 @@ class DefaultLaunchAdapterServiceTest {
 
   /** V94: FIXED_RATE 表达式 "300" (秒) → end = start + 5 分钟. */
   @Test
+  @DisplayName("FIXED_RATE 纯数字表达式按秒解析,区间终点落在触发时刻之后 5 分钟")
   void shouldComputeDataIntervalForFixedRateSeconds() {
     TriggerDescriptor descriptor = new TriggerDescriptor();
     descriptor.setTenantId("t1");
@@ -129,6 +135,7 @@ class DefaultLaunchAdapterServiceTest {
 
   /** V94: FIXED_RATE 用 ISO duration "PT1H" → end = start + 1 小时. */
   @Test
+  @DisplayName("FIXED_RATE 支持 ISO-8601 duration 表达式,PT1H 推导出的区间终点延后 1 小时")
   void shouldComputeDataIntervalForFixedRateIsoDuration() {
     TriggerDescriptor descriptor = new TriggerDescriptor();
     descriptor.setTenantId("t1");
@@ -148,6 +155,7 @@ class DefaultLaunchAdapterServiceTest {
 
   /** V94: 非法 CRON / 未识别 scheduleType → null interval, 不阻断 launch. */
   @Test
+  @DisplayName("无法推导下次触发时刻时区间终点为 null,起点仍透传 fire time 且不阻断本次 launch")
   void shouldFallbackToNullDataIntervalWhenComputationFails() {
     TriggerDescriptor descriptor = new TriggerDescriptor();
     descriptor.setTenantId("t1");
@@ -169,6 +177,7 @@ class DefaultLaunchAdapterServiceTest {
 
   /** V94: API 触发显式提供 interval, 透传给 LaunchRequest. */
   @Test
+  @DisplayName("API 触发显式指定的数据区间原样透传,适配层不覆盖调用方给定的起止时刻")
   void shouldPropagateApiProvidedDataInterval() {
     TriggerLaunchRequest request = new TriggerLaunchRequest();
     request.setTenantId("t1");
@@ -187,6 +196,7 @@ class DefaultLaunchAdapterServiceTest {
   }
 
   @Test
+  @DisplayName("命令未携带触发类型时默认为 SCHEDULED,补跑与待审批标记均写为 false")
   void shouldDefaultScheduledTriggerTypeWhenCommandTriggerTypeIsMissing() {
     TriggerDescriptor descriptor = new TriggerDescriptor();
     descriptor.setTenantId("t1");

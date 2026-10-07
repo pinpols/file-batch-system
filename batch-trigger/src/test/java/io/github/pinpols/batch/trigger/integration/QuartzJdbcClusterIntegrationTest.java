@@ -8,6 +8,7 @@ import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
 import java.time.LocalTime;
 import java.util.Properties;
 import javax.sql.DataSource;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.quartz.JobKey;
 import org.quartz.Scheduler;
@@ -19,6 +20,7 @@ import org.springframework.scheduling.quartz.SchedulerFactoryBean;
 @SpringBootTest(
     classes = BatchTriggerApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("Quartz JDBC 集群:注册的 Job 与 Trigger 落 QRTZ 表,且多实例互相可见")
 class QuartzJdbcClusterIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
@@ -34,6 +36,7 @@ class QuartzJdbcClusterIntegrationTest extends AbstractIntegrationTest {
   private DataSource dataSource;
 
   @Test
+  @DisplayName("注册的 cron 任务在 QRTZ 表各落一条 JobDetail 与 CronTrigger,且 JobStore 具备持久化与集群能力")
   void shouldPersistQuartzJobAndTriggerIntoJdbcStore() throws Exception {
     String tenantId = "t-quartz-" + System.nanoTime();
     String jobCode = "JOB_QUARTZ_" + System.nanoTime();
@@ -91,6 +94,7 @@ class QuartzJdbcClusterIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("第二个 Quartz 节点启动后 QRTZ_SCHEDULER_STATE 中可见至少两个集群实例")
   void shouldShowClusterMembersWhenASecondQuartzNodeStarts() throws Exception {
     SchedulerFactoryBean secondaryFactory = new SchedulerFactoryBean();
     secondaryFactory.setSchedulerName(scheduler.getSchedulerName());

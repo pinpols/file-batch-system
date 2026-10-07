@@ -12,6 +12,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -31,6 +32,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
  * <p>不开 Spring 上下文,直接构造 {@link
  * io.github.pinpols.batch.trigger.config.TriggerSecurityConfiguration.InternalSecretFilter},单测速度。
  */
+@DisplayName("Trigger 内部密钥过滤器:校验 X-Internal-Secret 头在缺失/不匹配/匹配/豁免路径下的放行与拒绝")
 class TriggerSecurityFilterTest {
 
   private static final String SECRET = "trigger-internal-secret";
@@ -54,6 +56,7 @@ class TriggerSecurityFilterTest {
   }
 
   @Test
+  @DisplayName("缺少内部密钥请求头时返回 401 UNAUTHORIZED,且不继续执行过滤器链")
   void rejects401WhenHeaderMissing() throws Exception {
     MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/triggers/launch");
     MockHttpServletResponse response = new MockHttpServletResponse();
@@ -67,6 +70,7 @@ class TriggerSecurityFilterTest {
   }
 
   @Test
+  @DisplayName("请求头密钥与配置值不一致时返回 401,且不放行到后续过滤器链")
   void rejects401WhenHeaderMismatched() throws Exception {
     MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/triggers/launch");
     request.addHeader(HEADER, "wrong-secret");
@@ -80,6 +84,7 @@ class TriggerSecurityFilterTest {
   }
 
   @Test
+  @DisplayName("密钥匹配时放行请求,并在 SecurityContext 写入已认证的 internal 身份")
   void passesAndSetsAuthenticatedWhenHeaderMatches() throws Exception {
     MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/triggers/launch");
     request.addHeader(HEADER, SECRET);
@@ -99,6 +104,7 @@ class TriggerSecurityFilterTest {
   }
 
   @Test
+  @DisplayName("/actuator 健康探针路径直接放行,不校验密钥也不向 SecurityContext 写认证")
   void skipsFilterForActuatorEndpoints() throws Exception {
     MockHttpServletRequest request = new MockHttpServletRequest("GET", "/actuator/health");
     MockHttpServletResponse response = new MockHttpServletResponse();
@@ -114,6 +120,7 @@ class TriggerSecurityFilterTest {
   }
 
   @Test
+  @DisplayName("bypass-mode 打开时无密钥请求也放行,并写入 internal 身份供本地联调")
   void allowsAnyRequestInBypassMode() throws Exception {
     securityProperties.setBypassMode(true);
     MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/triggers/launch");

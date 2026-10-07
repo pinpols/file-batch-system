@@ -216,15 +216,27 @@ def enclosing_class(nodes: list[ClassNode], position: int) -> int | None:
 
 
 def declaration_block(masked: str, end_index: int, window: int = 4000) -> str:
-    """取注解块：从上一个成员/代码块边界（``}`` / ``;`` / ``{``）到声明位置之间的文本。
+    """取注解块：从上一个**成员/代码块**边界到声明位置之间的文本。
 
-    ``{`` 也必须算边界——否则类体开始处的成员（或内部类声明）会把**外层类的** ``@DisplayName``
-    误当成自己的注解，造成漏报。
+    边界只认括号深度为 0 的 ``}`` / ``;`` / ``{``。这一条是必须的：``@ValueSource(strings = {...})``
+    / ``@CsvSource({...})`` 这类注解参数里的数组初始化大括号深度 ≥1，若也算边界，注解块就会从
+    数组内部开始切，导致**已经把 @DisplayName 写在 @ParameterizedTest 下一行的方法被误报为缺失**。
+    从声明处**反向**扫描并记录括号深度，遇到第一个深度 0 边界即停（通常是上一个成员的 ``}``），
+    因此开销与「距上一个成员的距离」成正比，而不是窗口大小。
     """
     start = max(0, end_index - window)
-    segment = masked[start:end_index]
-    cut = max(segment.rfind("}"), segment.rfind(";"), segment.rfind("{"))
-    return segment[cut + 1 :]
+    depth = 0
+    i = end_index - 1
+    while i >= start:
+        ch = masked[i]
+        if ch == ")":
+            depth += 1
+        elif ch == "(":
+            depth = max(0, depth - 1)
+        elif depth == 0 and ch in "{};":
+            return masked[i + 1 : end_index]
+        i -= 1
+    return masked[start:end_index]
 
 
 def display_name_span(masked: str, block_start: int, block_end: int) -> tuple[int, int] | None:

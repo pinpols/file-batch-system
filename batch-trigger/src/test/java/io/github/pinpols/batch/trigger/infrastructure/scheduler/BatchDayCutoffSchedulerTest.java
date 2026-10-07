@@ -21,9 +21,11 @@ import java.time.LocalTime;
 import java.time.Month;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+@DisplayName("批处理日切扫描器:按租户时区与 cutoffTime 判定到点候选,再做 CAS 切日")
 class BatchDayCutoffSchedulerTest {
 
   private BatchDayInstanceMapper batchDayInstanceMapper;
@@ -43,6 +45,7 @@ class BatchDayCutoffSchedulerTest {
   }
 
   @Test
+  @DisplayName("已到 cutoffTime 的候选按 CAS 标记切日并带上当前时间,未到点的候选不得被切日")
   void shouldCutoffDueCandidatesAndSkipFutureCandidates() {
     BatchDayCutoffCandidate due = candidate(1L, LocalTime.MIN);
     BatchDayCutoffCandidate future = candidate(2L, LocalTime.MAX);
@@ -62,6 +65,7 @@ class BatchDayCutoffSchedulerTest {
   }
 
   @Test
+  @DisplayName("没有 OPEN 候选时扫描直接返回,不产生任何切日更新,避免空转打库")
   void shouldDoNothingWhenNoCandidates() {
     when(batchDayInstanceMapper.selectOpenCutoffCandidates()).thenReturn(List.of());
 

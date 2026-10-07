@@ -19,6 +19,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.Date;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -32,6 +33,7 @@ import org.quartz.Scheduler;
 import org.quartz.Trigger;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("Quartz 触发入口 misfire 决策:按漂移时长与补跑策略分派人工审批、自动补跑、降级或未就绪重试")
 class QuartzLaunchJobTest {
 
   @Mock
@@ -67,6 +69,7 @@ class QuartzLaunchJobTest {
   }
 
   @Test
+  @DisplayName("MANUAL_APPROVAL 策略发生 misfire 时只登记待审批补跑,不直接启动并由人工确认")
   void shouldCreatePendingCatchUpWhenManualApprovalPolicyMisfires() throws Exception {
     when(context.getMergedJobDataMap())
         .thenReturn(jobDataMap(CatchUpPolicyType.MANUAL_APPROVAL.code(), 2));
@@ -88,6 +91,7 @@ class QuartzLaunchJobTest {
   }
 
   @Test
+  @DisplayName("misfire 恢复触发器带回原始计划时刻时,待审批补跑沿用该时刻而非当前触发时间")
   void shouldUsePreservedFireTimeFromMisfireRecoveryTrigger() throws Exception {
     Instant originalFireTime = Instant.parse("2026-03-27T00:00:00Z");
     JobDataMap data = jobDataMap(CatchUpPolicyType.MANUAL_APPROVAL.code(), 2);
@@ -105,6 +109,7 @@ class QuartzLaunchJobTest {
   }
 
   @Test
+  @DisplayName("AUTO 策略且漂移未超最大天数时直接以 CATCH_UP 类型补跑,并保留上游依赖作业")
   void shouldLaunchCatchUpWhenAutoPolicyIsWithinMaxDays() throws Exception {
     when(context.getMergedJobDataMap()).thenReturn(jobDataMap(CatchUpPolicyType.AUTO.code(), 2));
     when(context.getScheduledFireTime())
@@ -125,6 +130,7 @@ class QuartzLaunchJobTest {
   }
 
   @Test
+  @DisplayName("NONE 策略即使漂移很大也只按 SCHEDULED 正常触发,不产生任何补跑记录")
   void shouldSkipApplicationCatchUpWhenPolicyIsNoneDespiteDrift() throws Exception {
     when(context.getMergedJobDataMap()).thenReturn(jobDataMap(CatchUpPolicyType.NONE.code(), 2));
     when(context.getScheduledFireTime())
@@ -142,6 +148,7 @@ class QuartzLaunchJobTest {
   }
 
   @Test
+  @DisplayName("AUTO 策略漂移超过最大补跑天数时降级为 SCHEDULED,避免无边界追赶历史数据")
   void shouldFallBackToScheduledWhenMisfireExceedsMaxDays() throws Exception {
     when(context.getMergedJobDataMap()).thenReturn(jobDataMap(CatchUpPolicyType.AUTO.code(), 1));
     when(context.getScheduledFireTime())
@@ -159,6 +166,7 @@ class QuartzLaunchJobTest {
   }
 
   @Test
+  @DisplayName("上游未就绪时注册 30 秒后的 Quartz 重试触发器,并携带原始计划时刻与触发类型续跑")
   void shouldScheduleQuartzRetryWhenUpstreamIsNotReady() throws Exception {
     Instant originalFireTime = Instant.parse("2026-03-27T00:00:00Z");
     Instant actualFireTime = Instant.parse("2026-03-27T00:00:05Z");
@@ -185,6 +193,7 @@ class QuartzLaunchJobTest {
   }
 
   @Test
+  @DisplayName("未就绪等待超过 readiness 窗口 2 小时后放弃本轮触发,不再注册新的重试触发器")
   void shouldStopReadinessRetryAfterWindowExpires() throws Exception {
     Instant originalFireTime = Instant.parse("2026-03-27T00:00:00Z");
     Instant deferredSince = Instant.parse("2026-03-27T00:00:05Z");

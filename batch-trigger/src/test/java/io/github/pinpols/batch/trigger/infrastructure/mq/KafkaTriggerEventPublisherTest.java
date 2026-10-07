@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -43,6 +44,7 @@ import org.mockito.quality.Strictness;
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
+@DisplayName("Kafka 触发器事件发布:校验发送消息头与 trace 透传,并覆盖序列化与发送失败的返回值")
 class KafkaTriggerEventPublisherTest {
 
   @Mock
@@ -58,6 +60,7 @@ class KafkaTriggerEventPublisherTest {
   }
 
   @Test
+  @DisplayName("合法 envelope 发布返回成功,消息头带上 traceId、租户与 envelope 版本")
   void publish_validEnvelope_sendsWithHeadersAndReturnsOk() {
     LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-1");
     when(mqMessagePublisher.publish(any(MqMessage.class)))
@@ -78,6 +81,7 @@ class KafkaTriggerEventPublisherTest {
   }
 
   @Test
+  @DisplayName("envelope 带已持久化 W3C trace 时,发送期间以该 traceId 作为当前父上下文")
   void publish_withPersistedTraceContext_restoresParentDuringKafkaSend() {
     String traceId = "11111111111111111111111111111111";
     LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-trace")
@@ -96,6 +100,7 @@ class KafkaTriggerEventPublisherTest {
   }
 
   @Test
+  @DisplayName("envelope 为 null 时直接返回失败并说明原因,不调用底层 MQ 发布")
   void publish_nullEnvelope_failsWithoutSending() {
     TriggerEventPublisher.PublishResult result =
         publisher.publish(BatchTopics.TRIGGER_LAUNCH_V1, "key", null, "trace");
@@ -106,6 +111,7 @@ class KafkaTriggerEventPublisherTest {
   }
 
   @Test
+  @DisplayName("Kafka 发送抛 ExecutionException 时返回失败,错误信息标明是 kafka send 问题")
   void publish_kafkaExecutionException_returnsFailure() {
     LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-2");
     CompletableFuture<MqPublishResult> failed = new CompletableFuture<>();

@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.TimeZone;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -30,6 +31,7 @@ import org.quartz.CronExpression;
  *
  * <p>测试覆盖常见 cron 模式 + Quartz 扩展字符 (L / W / #) + 跨夏令时 / 跨年。
  */
+@DisplayName("CronExpressionAdapter:next 计算与表达式校验,并与 Quartz 触发序列逐项对齐")
 class CronExpressionAdapterTest {
 
   private final CronExpressionAdapter adapter = new CronExpressionAdapter();
@@ -38,6 +40,7 @@ class CronExpressionAdapterTest {
   // ── 基础算法 ────────────────────────────────────────────
 
   @Test
+  @DisplayName("整点 cron 从基准时刻推算出下一个整点触发时刻")
   void nextSimpleHourly() {
     Instant base =
         LocalDateTime.of(2026, Month.APRIL, 26, 10, 0, 0).atZone(SHANGHAI).toInstant();
@@ -48,6 +51,7 @@ class CronExpressionAdapterTest {
   }
 
   @Test
+  @DisplayName("同一 cron 在不同时区按各自本地时刻触发,两地问差 8 小时")
   void nextRespectsTimezone() {
     Instant base = LocalDateTime.of(2026, Month.APRIL, 26, 0, 0, 0)
         .atZone(ZoneId.of("UTC"))
@@ -60,6 +64,7 @@ class CronExpressionAdapterTest {
   }
 
   @Test
+  @DisplayName("非法 cron 计算下一次触发时抛 IllegalArgumentException 并给出原因")
   void invalidExpressionThrowsIAE() {
     assertThatThrownBy(() -> adapter.next("invalid", SHANGHAI, BatchDateTimeSupport.utcNow()))
         .isInstanceOf(IllegalArgumentException.class)
@@ -67,6 +72,7 @@ class CronExpressionAdapterTest {
   }
 
   @Test
+  @DisplayName("标准 6 字段与含 L 字符的合法表达式均应校验通过")
   void isValidReturnsTrueForValidExpressions() {
     assertThat(adapter.isValid("0 0 * * * ?")).isTrue();
     assertThat(adapter.isValid("0 30 4 ? * SUN")).isTrue();
@@ -74,6 +80,7 @@ class CronExpressionAdapterTest {
   }
 
   @Test
+  @DisplayName("空串、null 与无意义字符串都应判定为非法表达式")
   void isValidReturnsFalseForInvalid() {
     assertThat(adapter.isValid("")).isFalse();
     assertThat(adapter.isValid(null)).isFalse();
@@ -81,6 +88,7 @@ class CronExpressionAdapterTest {
   }
 
   @Test
+  @DisplayName("对已进入缓存的表达式执行 evict 清理不应抛异常")
   void evictRemovesFromCache() {
     String expr = "0 0 * * * ?";
     adapter.next(expr, SHANGHAI, BatchDateTimeSupport.utcNow()); // 进缓存
@@ -94,6 +102,7 @@ class CronExpressionAdapterTest {
    * / 跨周。
    */
   @ParameterizedTest
+  @DisplayName("常见与边界 cron 连续 24 次 next 计算须与 Quartz 触发序列逐项一致")
   @ValueSource(
       strings = {
         "0 0 * * * ?", // 每小时整点
@@ -145,6 +154,7 @@ class CronExpressionAdapterTest {
    * 03:00。
    */
   @Test
+  @DisplayName("跨美东夏令时跳变时,连续 5 次 next 计算仍与 Quartz 对齐不抖动")
   void daylightSavingTransitionMatchesQuartz() throws ParseException {
     String cron = "0 0 2 * * ?"; // 每天 02:00 — 春令时这天 02:00 不存在
     ZoneId nyc = ZoneId.of("America/New_York");
@@ -164,6 +174,7 @@ class CronExpressionAdapterTest {
 
   /** 跨年的 cron 计算应该正确。 */
   @Test
+  @DisplayName("跨年 cron 的 next 计算结果与 Quartz 一致,并落在 2027 元旦零点")
   void crossYearMatchesQuartz() throws ParseException {
     String cron = "0 0 0 1 1 ?"; // 每年 1 月 1 日 00:00
     Instant base =
