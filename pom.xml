@@ -104,7 +104,7 @@
         <!-- CVE-2026-54399 / CVE-2026-54428: Anthropic client 2.16.1 经 Spring AI BOM
              传入 httpcore5 5.4.2；5.4.3 起包含修复。统一覆盖 core 与 HTTP/2 变体，避免
              仅覆盖一个工件后依赖树再次漂移。 -->
-        <httpcomponents-core5.version>5.4.3</httpcomponents-core5.version>
+        <httpcomponents-core5.version>5.4.4</httpcomponents-core5.version>
 
         <!-- Resilience4j version validated against Spring Boot 4.1 and Java 21. -->
         <resilience4j.version>2.4.0</resilience4j.version>
