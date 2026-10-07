@@ -18,10 +18,10 @@ import io.github.pinpols.batch.sdk.scheduler.LeaseRenewalScheduler;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
+import io.github.pinpols.batch.sdk.wire.RegisterRequest;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.time.Duration;
-import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -102,7 +102,7 @@ class BatchPlatformClientStartTest {
     BatchPlatformClient client =
         BatchPlatformClient.builder(cfg()).register(stub("type-a")).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
-    ArgumentCaptor<Map<String, Object>> registerBody = ArgumentCaptor.captor();
+    ArgumentCaptor<RegisterRequest> registerBody = ArgumentCaptor.captor();
     when(http.register(registerBody.capture()))
         .thenThrow(new IOException("orchestrator unreachable"));
     inject(client, "httpClient", http);
@@ -125,7 +125,8 @@ class BatchPlatformClientStartTest {
     assertThat(m.started()).isFalse();
     assertThat(m.healthy()).isFalse();
     assertThat(m.inFlightTaskCount()).isZero();
-    assertThat(registerBody.getValue()).containsEntry("maxConcurrent", 4);
+    assertThat(registerBody.getValue().maxConcurrent()).isEqualTo(4);
+    assertThat(registerBody.getValue().taskTypes()).isNull();
   }
 
   @Test

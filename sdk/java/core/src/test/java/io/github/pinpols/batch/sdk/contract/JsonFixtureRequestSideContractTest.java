@@ -125,22 +125,13 @@ class JsonFixtureRequestSideContractTest {
 
     switch (kind) {
       case "register":
-        return new RegisterRequest(
-            tenantId,
-            workerCode,
-            "sdk-self-hosted",
-            "RUNNING",
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            maxConcurrent,
-            null,
-            null);
+        return RegisterRequest.builder()
+            .tenantId(tenantId)
+            .workerCode(workerCode)
+            .workerGroup("sdk-self-hosted")
+            .status("RUNNING")
+            .maxConcurrent(maxConcurrent)
+            .build();
       case "claim":
       case "renew":
         return new RenewRequest(tenantId, workerCode, inv);
