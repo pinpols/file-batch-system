@@ -162,6 +162,9 @@ public final class PipelineRuntimeKeys {
    */
   public static final String PARTITION_COUNT = "partitionCount";
 
+  /** 文件束分区绑定的独立来源文件；分区总数是文件数，不表示还要对文件内容切片。 */
+  public static final String BUNDLE_SOURCE_FILE_ID = "bundleSourceFileId";
+
   /**
    * IMPORT range-slice 标记:PREPROCESS 已按 {@link #PARTITION_NO}/{@link #PARTITION_COUNT} 用对象存储 range
    * GET(offset/length)只下载本片字节(行边界对齐),spool 文件已只含本片记录。 置 {@code true} 时 PARSE 的 line-mod 过滤({@code

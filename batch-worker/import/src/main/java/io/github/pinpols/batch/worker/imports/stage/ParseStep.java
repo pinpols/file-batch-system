@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
@@ -553,6 +554,11 @@ public class ParseStep implements ImportStageStep {
   private long applyPartitionFilter(
       ImportJobContext context, Path stagingFile, long totalCount, Object templateConfig)
       throws Exception {
+    // 文件束已经按来源文件分区，再对每个独立文件取模会漏掉其他分区不会读取的记录。
+    if (EmptyChecks.isNotNull(
+        context.getAttributes().get(PipelineRuntimeKeys.BUNDLE_SOURCE_FILE_ID))) {
+      return totalCount;
+    }
     Integer partitionNo = intOrNull(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_NO));
     Integer partitionCount =
         intOrNull(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT));

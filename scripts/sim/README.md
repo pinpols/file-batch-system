@@ -51,6 +51,14 @@ bash scripts/local/sim-harness.sh all
 
 直接执行 26/27 时不会自动配置 Worker，也不会跳过；调用方必须先提供脚本头部说明的运行配置。
 
+26 文件束导入中，每个 partition 绑定一份完整来源文件，`partitionCount` 表示束中文件数，
+不是对每份文件再次切片的份数。Worker 保留 `bundleSourceFileId` 绑定，PREPROCESS 不做
+range 切片，PARSE 不做行取模；普通单文件分片和 checkpoint 多分区保护不变。
+本轮实例按 requestId 定位，分区来源必须与上传路径一致，客户业务键带本轮标识，
+分别断言两文件为 10/15 行、合计 25 行，防止旧数据掩盖漏数或污染重跑结果。
+对应回归位于 `ParseStepPartitionSliceTest`、`PreprocessRangeSliceTest`、
+`PreprocessStepObjectLoadIntegrationTest` 和 `ImportPipelineE2eIT`。
+
 ## 跑通顺序(首次)
 
 ```bash

@@ -291,7 +291,9 @@ class DefaultTaskExecutionWrapperTest {
 
     when(stepExecutionAdapter.execute(any(StepExecutionRequest.class))).thenAnswer(invocation -> {
       StepExecutionRequest req = invocation.getArgument(0);
-      assertThat(req.context()).containsEntry(PipelineRuntimeKeys.FILE_ID, 42);
+      assertThat(req.context())
+          .containsEntry(PipelineRuntimeKeys.FILE_ID, 42)
+          .containsEntry(PipelineRuntimeKeys.BUNDLE_SOURCE_FILE_ID, 42);
       return StepExecutionResponse.successResponse();
     });
 
@@ -307,7 +309,9 @@ class DefaultTaskExecutionWrapperTest {
 
     when(stepExecutionAdapter.execute(any(StepExecutionRequest.class))).thenAnswer(invocation -> {
       StepExecutionRequest req = invocation.getArgument(0);
-      assertThat(req.context()).doesNotContainKey(PipelineRuntimeKeys.FILE_ID);
+      assertThat(req.context())
+          .doesNotContainKeys(
+              PipelineRuntimeKeys.FILE_ID, PipelineRuntimeKeys.BUNDLE_SOURCE_FILE_ID);
       return StepExecutionResponse.successResponse();
     });
 
@@ -326,7 +330,9 @@ class DefaultTaskExecutionWrapperTest {
 
     when(stepExecutionAdapter.execute(any(StepExecutionRequest.class))).thenAnswer(invocation -> {
       StepExecutionRequest req = invocation.getArgument(0);
-      assertThat(req.context()).doesNotContainKey(PipelineRuntimeKeys.FILE_ID);
+      assertThat(req.context())
+          .doesNotContainKeys(
+              PipelineRuntimeKeys.FILE_ID, PipelineRuntimeKeys.BUNDLE_SOURCE_FILE_ID);
       return StepExecutionResponse.successResponse();
     });
 

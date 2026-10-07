@@ -236,6 +236,7 @@ jobs:
             scripts/ci/tests/test_check_soft_gate_governance.py \
             scripts/ci/tests/test_check_diff_coverage.py \
             scripts/ci/tests/test_check_java_governance_test_coverage.py \
+            scripts/ci/tests/test_daily_validation_workflow.py \
             scripts/ci/tests/test_report_ci_quality_trends.py
 
       - name: Verify module dependency boundaries

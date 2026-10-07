@@ -14,10 +14,14 @@ import io.github.pinpols.batch.e2e.support.E2eStatusLogger;
 import io.github.pinpols.batch.e2e.support.E2eTestSql;
 import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -123,5 +127,91 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
         "E2E001");
     assertThat(rows).isNotNull();
     assertThat(rows).isGreaterThanOrEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("文件束经真实派发与认领后完整导入两个独立文件,分别十行与十五行且两片均成功")
+  void shouldImportEveryRecord_whenBundlePartitionsBindIndependentFiles() {
+    String prefix = "BNDL" + Long.toUnsignedString(System.nanoTime()) + "-";
+    long first = insertBundleInput(prefix + "A", 10);
+    long second = insertBundleInput(prefix + "B", 15);
+    LaunchSeed seed = E2eScenarioFixture.prepareBundleLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "BUNDLE_IMPORT", "import");
+    Map<String, Object> params = Map.of(
+        "bundleFiles",
+        List.of(
+            Map.of("sourceFileId", first, "templateCode", "IMP-CUSTOMER-JSON-ARRAY"),
+            Map.of("sourceFileId", second, "templateCode", "IMP-CUSTOMER-JSON-ARRAY")));
+
+    launchService.launch(new LaunchRequest(
+        TENANT,
+        seed.jobCode(),
+        LocalDate.of(2026, 1, 15),
+        TriggerType.EVENT,
+        seed.requestId(),
+        "e2e-tr-bundle-import",
+        params));
+    e2eOutboxPublishSupport.publishAllPending(TENANT);
+
+    await().atMost(Duration.ofSeconds(180)).untilAsserted(() -> {
+      Integer successfulTasks =
+          jdbcTemplate.queryForObject("""
+              select count(*)::int from batch.job_task t
+              join batch.job_instance i on i.id = t.job_instance_id and i.tenant_id = t.tenant_id
+              where i.tenant_id = ? and i.dedup_key = ? and t.task_status = 'SUCCESS'
+              """, Integer.class, TENANT, seed.dedupKey());
+      assertThat(successfulTasks).isEqualTo(2);
+      String instanceStatus =
+          jdbcTemplate.queryForObject("""
+              select instance_status from batch.job_instance where tenant_id = ? and dedup_key = ?
+              """, String.class, TENANT, seed.dedupKey());
+      assertThat(instanceStatus).isEqualTo("SUCCESS");
+    });
+    JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
+    assertThat(businessJdbc.queryForObject(
+            "select count(*)::int from biz.customer_account where tenant_id = ? and customer_no like ?",
+            Integer.class,
+            TENANT,
+            prefix + "A%"))
+        .isEqualTo(10);
+    assertThat(businessJdbc.queryForObject(
+            "select count(*)::int from biz.customer_account where tenant_id = ? and customer_no like ?",
+            Integer.class,
+            TENANT,
+            prefix + "B%"))
+        .isEqualTo(15);
+  }
+
+  private long insertBundleInput(String prefix, int rows) {
+    String json = IntStream.rangeClosed(1, rows)
+        .mapToObj(index -> "{\"customerNo\":\"" + prefix + index
+            + "\",\"customerName\":\"Bundle customer\",\"customerType\":\"PERSONAL\","
+            + "\"certificateNo\":\"ID-" + prefix + index + "\",\"status\":\"ACTIVE\"}")
+        .collect(Collectors.joining(",", "[", "]"));
+    byte[] content = json.getBytes(StandardCharsets.UTF_8);
+    String key = "ingress/" + TENANT + "/" + prefix + ".json";
+    ensureBucket(s3Bucket());
+    putObject(s3Bucket(), key, content);
+    Long fileId = jdbcTemplate.queryForObject(
+        """
+            insert into batch.file_record (
+                tenant_id, file_code, biz_type, file_category, file_name, original_file_name, file_ext,
+                file_format_type, charset, mime_type, file_size_bytes, checksum_type, storage_type,
+                storage_bucket, storage_path, source_type, file_status, biz_date, trace_id
+            ) values (?, ?, 'CUSTOMER', 'INPUT', ?, ?, 'json', 'JSON', 'UTF-8', 'application/json',
+                      ?, 'NONE', 'S3', ?, ?, 'SYSTEM', 'RECEIVED', date '2026-01-15', ?)
+            returning id
+            """,
+        Long.class,
+        TENANT,
+        prefix,
+        prefix + ".json",
+        prefix + ".json",
+        content.length,
+        s3Bucket(),
+        key,
+        "e2e-tr-bundle-import");
+    assertThat(fileId).isNotNull();
+    return fileId;
   }
 }

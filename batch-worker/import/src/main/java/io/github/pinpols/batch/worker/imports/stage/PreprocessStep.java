@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
@@ -238,7 +239,9 @@ public class PreprocessStep implements ImportStageStep {
         Integer partitionCount = intOrNull(attrs.get(PipelineRuntimeKeys.PARTITION_COUNT));
         Charset directCharset = resolveCharset(importPayload, templateConfigObject);
         // 加密装饰层不支持明文 offset range 读(statSize 也是密文长度,不能做切片计算)→ 回退整份流式。
-        if (objectSource.supportsRangeRead()
+        // 文件束每片绑定整份独立文件，只允许普通单文件分片使用字节范围下载。
+        if (EmptyChecks.isNull(attrs.get(PipelineRuntimeKeys.BUNDLE_SOURCE_FILE_ID))
+            && objectSource.supportsRangeRead()
             && ImportPreprocessObjectSource.rangeSliceEligible(
                 importPayload, templateConfig, partitionNo, partitionCount, directCharset)) {
           return objectSource.streamObjectRangeToSpool(

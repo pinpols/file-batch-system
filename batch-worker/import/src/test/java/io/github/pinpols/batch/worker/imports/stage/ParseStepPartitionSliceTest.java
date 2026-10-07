@@ -89,6 +89,23 @@ class ParseStepPartitionSliceTest {
   // ── 切分场景 ──────────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("文件束两片各绑定独立文件时完整保留十行与十五行,不再次按行切分")
+  void shouldKeepAllRowsForIndependentBundleFiles() {
+    ImportJobContext first = buildContext(buildJsonArray(10), 1, 2, true);
+    ImportJobContext second = buildContext(buildJsonArray(15), 2, 2, true);
+    first.getAttributes().put(PipelineRuntimeKeys.BUNDLE_SOURCE_FILE_ID, 80L);
+    second.getAttributes().put(PipelineRuntimeKeys.BUNDLE_SOURCE_FILE_ID, 81L);
+
+    assertThat(parseStep.execute(first).success()).isTrue();
+    assertThat(parseStep.execute(second).success()).isTrue();
+
+    assertNdjsonLineCount(first, 10);
+    assertNdjsonLineCount(second, 15);
+    assertThat(first.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_PARSED_COUNT, 10L);
+    assertThat(second.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_PARSED_COUNT, 15L);
+  }
+
+  @Test
   @DisplayName("3 个分片各取三分之一:两两不重叠且并集等于原始全集")
   void shouldSliceWithoutOverlapAcrossPartitions() {
     String json = buildJsonArray(9);
