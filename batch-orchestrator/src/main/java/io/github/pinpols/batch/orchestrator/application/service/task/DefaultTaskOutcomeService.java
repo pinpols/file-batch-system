@@ -343,7 +343,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
               "high_water_mark_out CAS no-op for jobInstance {}: incoming={} (regression or"
                   + " malformed)",
               task.getJobInstanceId(),
-              command.highWaterMarkOut());
+              String.valueOf(command.highWaterMarkOut()).replaceAll("\\R", "_"));
         }
       }
     } else {

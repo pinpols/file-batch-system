@@ -130,9 +130,9 @@ public class ConsoleApprovalController {
         "action={} actor={} tenant={} target={} operatorId={} reasonLength={}",
         action,
         actor,
-        tenantId,
-        target,
-        operatorId,
+        String.valueOf(tenantId).replaceAll("\\R", "_"),
+        String.valueOf(target).replaceAll("\\R", "_"),
+        String.valueOf(operatorId).replaceAll("\\R", "_"),
         reasonLen);
   }
 }

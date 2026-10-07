@@ -106,7 +106,7 @@ public class AliyunSmsProvider implements SmsProvider {
     } catch (Exception ex) {
       log.warn(
           "aliyun sms config parse failed channel={} reason={}",
-          message.channelCode(),
+          String.valueOf(message.channelCode()).replaceAll("\\R", "_"),
           ex.getClass().getSimpleName());
       return WebhookDeliveryResult.failure(null, "invalid sms config");
     }
@@ -139,7 +139,7 @@ public class AliyunSmsProvider implements SmsProvider {
     } catch (Exception ex) {
       log.warn(
           "aliyun sms sign failed channel={} reason={}",
-          message.channelCode(),
+          String.valueOf(message.channelCode()).replaceAll("\\R", "_"),
           ex.getClass().getSimpleName());
       return WebhookDeliveryResult.failure(null, "sms sign failed");
     }
@@ -164,14 +164,14 @@ public class AliyunSmsProvider implements SmsProvider {
       // 不打印 Message(可能含被风控的内容),只打脱敏 Code。
       log.warn(
           "aliyun sms rejected channel={} recipients={} code={}",
-          message.channelCode(),
+          String.valueOf(message.channelCode()).replaceAll("\\R", "_"),
           recipientCount(phoneNumbers),
           code);
       return WebhookDeliveryResult.failure(200, "sms code=" + code);
     } catch (HttpStatusException ex) {
       log.warn(
           "aliyun sms http failed channel={} recipients={} status={}",
-          message.channelCode(),
+          String.valueOf(message.channelCode()).replaceAll("\\R", "_"),
           recipientCount(phoneNumbers),
           ex.status());
       return WebhookDeliveryResult.failure(ex.status(), "sms http status=" + ex.status());
@@ -181,7 +181,7 @@ public class AliyunSmsProvider implements SmsProvider {
       }
       log.warn(
           "aliyun sms delivery failed channel={} recipients={} reason={}",
-          message.channelCode(),
+          String.valueOf(message.channelCode()).replaceAll("\\R", "_"),
           recipientCount(phoneNumbers),
           ex.getClass().getSimpleName());
       return WebhookDeliveryResult.failure(null, ex.getClass().getSimpleName());

@@ -76,7 +76,7 @@ public class VerifierFailureOutboxService {
     if (log.isInfoEnabled()) {
       log.info(
           "ContentVerifier failures persisted as outbox events: tenantId={}, taskId={}, count={}",
-          command.tenantId(),
+          String.valueOf(command.tenantId()).replaceAll("\\R", "_"),
           command.taskId(),
           written);
     }

@@ -76,7 +76,10 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
       String ip = resolveClientIp(request);
       String key = "login:ip:" + ip;
       if (!tryAcquireFailOpen(key, properties.getLoginIpLimitPerMinute(), "login", ip)) {
-        log.warn("Login rate limit triggered: ip={} path={}", ip, path);
+        log.warn(
+            "Login rate limit triggered: ip={} path={}",
+            String.valueOf(ip).replaceAll("\\R", "_"),
+            String.valueOf(path).replaceAll("\\R", "_"));
         responseWriter.write(
             response, HttpStatus.TOO_MANY_REQUESTS, ResultCode.RATE_LIMITED, "登录请求过于频繁，请稍后重试");
         return;
@@ -90,7 +93,10 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
         String key = "sensitive:user:" + username;
         if (!tryAcquireFailOpen(
             key, properties.getSensitiveOpUserLimitPerMinute(), "sensitive", username)) {
-          log.warn("Sensitive-operation rate limit triggered: user={} path={}", username, path);
+          log.warn(
+              "Sensitive-operation rate limit triggered: user={} path={}",
+              String.valueOf(username).replaceAll("\\R", "_"),
+              String.valueOf(path).replaceAll("\\R", "_"));
           responseWriter.write(
               response, HttpStatus.TOO_MANY_REQUESTS, ResultCode.RATE_LIMITED, "操作请求过于频繁，请稍后重试");
           return;
@@ -105,7 +111,10 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
         String key = "expensive:user:" + username;
         if (!tryAcquireFailOpen(
             key, properties.getExpensiveOpUserLimitPerMinute(), "expensive", username)) {
-          log.warn("Expensive-operation rate limit triggered: user={} path={}", username, path);
+          log.warn(
+              "Expensive-operation rate limit triggered: user={} path={}",
+              String.valueOf(username).replaceAll("\\R", "_"),
+              String.valueOf(path).replaceAll("\\R", "_"));
           responseWriter.write(
               response, HttpStatus.TOO_MANY_REQUESTS, ResultCode.RATE_LIMITED, "操作请求过于频繁，请稍后重试");
           return;
@@ -120,7 +129,10 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
         String key = "fileop:user:" + username;
         if (!tryAcquireFailOpen(
             key, properties.getFileOpUserLimitPerMinute(), "fileop", username)) {
-          log.warn("File-operation rate limit triggered: user={} path={}", username, path);
+          log.warn(
+              "File-operation rate limit triggered: user={} path={}",
+              String.valueOf(username).replaceAll("\\R", "_"),
+              String.valueOf(path).replaceAll("\\R", "_"));
           responseWriter.write(
               response, HttpStatus.TOO_MANY_REQUESTS, ResultCode.RATE_LIMITED, "操作请求过于频繁，请稍后重试");
           return;
@@ -163,8 +175,8 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
       redisCircuitBreaker.recordFailure();
       log.warn(
           "rate limiter Redis unavailable — fail-open: category={}, identity={}, cause={}",
-          category,
-          identity,
+          String.valueOf(category).replaceAll("\\R", "_"),
+          String.valueOf(identity).replaceAll("\\R", "_"),
           SwallowedExceptionLogger.summary(ex));
       return true;
     }

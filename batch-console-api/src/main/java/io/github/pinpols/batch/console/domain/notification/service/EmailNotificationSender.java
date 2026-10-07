@@ -72,7 +72,7 @@ public class EmailNotificationSender implements NotificationSender {
     if (recipients.length == 0) {
       log.warn(
           "EMAIL all recipients blocked by domain allowlist; skipping: channelCode={}, declared={}",
-          message.channelCode(),
+          String.valueOf(message.channelCode()).replaceAll("\\R", "_"),
           declared.length);
       return WebhookDeliveryResult.failure(null, "no allowed email recipients");
     }
@@ -82,7 +82,7 @@ public class EmailNotificationSender implements NotificationSender {
       log.warn(
           "EMAIL channel selected but JavaMailSender not configured; skipping:"
               + " channelCode={}, recipients={}",
-          message.channelCode(),
+          String.valueOf(message.channelCode()).replaceAll("\\R", "_"),
           recipients.length);
       return WebhookDeliveryResult.failure(null, "mail not configured");
     }
@@ -102,7 +102,7 @@ public class EmailNotificationSender implements NotificationSender {
     } catch (MailException ex) {
       log.warn(
           "EMAIL delivery failed: channelCode={}, recipients={}, cause={}",
-          message.channelCode(),
+          String.valueOf(message.channelCode()).replaceAll("\\R", "_"),
           recipients.length,
           ex.getClass().getSimpleName());
       return WebhookDeliveryResult.failure(null, ex.getClass().getSimpleName());

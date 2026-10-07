@@ -64,8 +64,8 @@ public class SlackNotificationSender implements NotificationSender {
     } catch (RuntimeException | IOException e) {
       log.warn(
           "[slack] payload serialize failed tenant={} channel={} ex={}",
-          message.tenantId(),
-          message.channelCode(),
+          String.valueOf(message.tenantId()).replaceAll("\\R", "_"),
+          String.valueOf(message.channelCode()).replaceAll("\\R", "_"),
           e.getClass().getSimpleName());
       return WebhookDeliveryResult.failure(null, e.getClass().getSimpleName());
     }
@@ -86,15 +86,15 @@ public class SlackNotificationSender implements NotificationSender {
       }
       log.warn(
           "[slack] delivery rejected tenant={} channel={} status={}",
-          message.tenantId(),
-          message.channelCode(),
+          String.valueOf(message.tenantId()).replaceAll("\\R", "_"),
+          String.valueOf(message.channelCode()).replaceAll("\\R", "_"),
           status);
       return WebhookDeliveryResult.failure(status, truncate(responseBody, ERROR_SUMMARY_MAX_CHARS));
     } catch (RuntimeException | IOException e) {
       log.warn(
           "[slack] delivery failed tenant={} channel={} ex={}",
-          message.tenantId(),
-          message.channelCode(),
+          String.valueOf(message.tenantId()).replaceAll("\\R", "_"),
+          String.valueOf(message.channelCode()).replaceAll("\\R", "_"),
           e.getClass().getSimpleName());
       return WebhookDeliveryResult.failure(null, e.getClass().getSimpleName());
     }

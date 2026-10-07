@@ -75,9 +75,9 @@ public class RequestSignatureFilter extends OncePerRequestFilter {
       log.warn(
           "request signature rejected: result={} tenant={} method={} uri={}",
           result,
-          tenantId,
-          request.getMethod(),
-          request.getRequestURI());
+          String.valueOf(tenantId).replaceAll("\\R", "_"),
+          String.valueOf(request.getMethod()).replaceAll("\\R", "_"),
+          String.valueOf(request.getRequestURI()).replaceAll("\\R", "_"));
       writeUnauthorized(response, result);
       return;
     }

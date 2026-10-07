@@ -36,9 +36,9 @@ public class JobInstanceTerminalChildStateReconciler {
       log.info(
           "job_instance terminal child-state reconcile: tenantId={} jobInstanceId={}"
               + " instanceStatus={} partitionsClosed={} tasksClosed={}",
-          tenantId,
+          String.valueOf(tenantId).replaceAll("\\R", "_"),
           jobInstanceId,
-          terminalInstanceStatus,
+          String.valueOf(terminalInstanceStatus).replaceAll("\\R", "_"),
           partitions,
           tasks);
     }

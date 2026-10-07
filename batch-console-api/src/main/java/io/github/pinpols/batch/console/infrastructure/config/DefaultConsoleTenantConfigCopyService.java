@@ -134,12 +134,12 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
 
     log.info(
         "[TenantConfigCopy] source={} targets={} types={} jobCodes={} dryRun={} batchOp={}",
-        request.getSourceTenantId(),
-        request.getTargetTenantIds(),
-        request.getConfigTypes(),
-        request.getJobCodes(),
+        String.valueOf(request.getSourceTenantId()).replaceAll("\\R", "_"),
+        String.valueOf(request.getTargetTenantIds()).replaceAll("\\R", "_"),
+        String.valueOf(request.getConfigTypes()).replaceAll("\\R", "_"),
+        String.valueOf(request.getJobCodes()).replaceAll("\\R", "_"),
         request.isDryRun(),
-        batchOperationId);
+        String.valueOf(batchOperationId).replaceAll("\\R", "_"));
 
     return initService.batchInit(initRequest, operator, batchOperationId);
   }

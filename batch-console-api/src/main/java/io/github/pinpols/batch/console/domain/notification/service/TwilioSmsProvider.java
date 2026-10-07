@@ -108,8 +108,8 @@ public class TwilioSmsProvider implements SmsProvider {
         if (status / 100 != 2) {
           log.warn(
               "[twilio] delivery rejected tenant={} channel={} recipients={} status={}",
-              message.tenantId(),
-              message.channelCode(),
+              String.valueOf(message.tenantId()).replaceAll("\\R", "_"),
+              String.valueOf(message.channelCode()).replaceAll("\\R", "_"),
               phoneNumbers.size(),
               status);
           return WebhookDeliveryResult.failure(status, "twilio http status=" + status);
@@ -118,15 +118,15 @@ public class TwilioSmsProvider implements SmsProvider {
         Thread.currentThread().interrupt();
         log.warn(
             "[twilio] delivery interrupted tenant={} channel={} recipients={}",
-            message.tenantId(),
-            message.channelCode(),
+            String.valueOf(message.tenantId()).replaceAll("\\R", "_"),
+            String.valueOf(message.channelCode()).replaceAll("\\R", "_"),
             phoneNumbers.size());
         return WebhookDeliveryResult.failure(null, ie.getClass().getSimpleName());
       } catch (Exception e) {
         log.warn(
             "[twilio] delivery failed tenant={} channel={} recipients={} ex={}",
-            message.tenantId(),
-            message.channelCode(),
+            String.valueOf(message.tenantId()).replaceAll("\\R", "_"),
+            String.valueOf(message.channelCode()).replaceAll("\\R", "_"),
             phoneNumbers.size(),
             e.getClass().getSimpleName());
         return WebhookDeliveryResult.failure(null, e.getClass().getSimpleName());

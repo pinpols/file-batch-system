@@ -188,8 +188,8 @@ public class TenantConfigInitApplyHandlers {
         log.warn(
             "[TenantConfigBatchInit] {} code={} tenant={} failed: {}",
             handler.typeName(),
-            code,
-            ctx.tenantId(),
+            String.valueOf(code).replaceAll("\\R", "_"),
+            String.valueOf(ctx.tenantId()).replaceAll("\\R", "_"),
             SwallowedExceptionLogger.summary(ex));
         acc.recordFailed(code, ex.getMessage());
       }

@@ -160,9 +160,9 @@ public final class TaskOutcomeInstanceProgressor {
       log.info(
           "promoting stale failed job instance to success after all partitions completed:"
               + " tenantId={} jobInstanceId={} previousStatus={} successPartitions={}",
-          command.tenantId(),
+          String.valueOf(command.tenantId()).replaceAll("\\R", "_"),
           jobInstance.getId(),
-          jobInstance.getInstanceStatus(),
+          String.valueOf(jobInstance.getInstanceStatus()).replaceAll("\\R", "_"),
           successCount);
     }
     String instanceFailureClass = TaskOutcomeStatePolicy.isTerminalJobInstanceStatus(instanceStatus)

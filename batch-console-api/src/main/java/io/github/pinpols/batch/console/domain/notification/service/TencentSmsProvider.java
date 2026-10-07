@@ -103,7 +103,7 @@ public class TencentSmsProvider implements SmsProvider {
     } catch (Exception ex) {
       log.warn(
           "tencent sms config parse failed channel={} reason={}",
-          message.channelCode(),
+          String.valueOf(message.channelCode()).replaceAll("\\R", "_"),
           ex.getClass().getSimpleName());
       return WebhookDeliveryResult.failure(null, "invalid sms config");
     }
@@ -132,7 +132,7 @@ public class TencentSmsProvider implements SmsProvider {
     } catch (Exception ex) {
       log.warn(
           "tencent sms sign failed channel={} reason={}",
-          message.channelCode(),
+          String.valueOf(message.channelCode()).replaceAll("\\R", "_"),
           ex.getClass().getSimpleName());
       return WebhookDeliveryResult.failure(null, "sms sign failed");
     }
@@ -158,7 +158,7 @@ public class TencentSmsProvider implements SmsProvider {
         String errCode = error.path("Code").asText("");
         log.warn(
             "tencent sms api error channel={} recipients={} code={}",
-            message.channelCode(),
+            String.valueOf(message.channelCode()).replaceAll("\\R", "_"),
             phoneNumbers.size(),
             errCode);
         return WebhookDeliveryResult.failure(200, "sms error=" + errCode);
@@ -168,7 +168,7 @@ public class TencentSmsProvider implements SmsProvider {
       if (!statusSet.isArray() || statusSet.isEmpty()) {
         log.warn(
             "tencent sms empty status channel={} recipients={}",
-            message.channelCode(),
+            String.valueOf(message.channelCode()).replaceAll("\\R", "_"),
             phoneNumbers.size());
         return WebhookDeliveryResult.failure(200, "sms empty status");
       }
@@ -178,7 +178,7 @@ public class TencentSmsProvider implements SmsProvider {
           // 不打 Message(可能含被风控的内容),只打首个非 Ok code。
           log.warn(
               "tencent sms rejected channel={} recipients={} code={}",
-              message.channelCode(),
+              String.valueOf(message.channelCode()).replaceAll("\\R", "_"),
               phoneNumbers.size(),
               code);
           return WebhookDeliveryResult.failure(200, "sms code=" + code);
@@ -188,7 +188,7 @@ public class TencentSmsProvider implements SmsProvider {
     } catch (HttpStatusException ex) {
       log.warn(
           "tencent sms http failed channel={} recipients={} status={}",
-          message.channelCode(),
+          String.valueOf(message.channelCode()).replaceAll("\\R", "_"),
           phoneNumbers.size(),
           ex.status());
       return WebhookDeliveryResult.failure(ex.status(), "sms http status=" + ex.status());
@@ -198,7 +198,7 @@ public class TencentSmsProvider implements SmsProvider {
       }
       log.warn(
           "tencent sms delivery failed channel={} recipients={} reason={}",
-          message.channelCode(),
+          String.valueOf(message.channelCode()).replaceAll("\\R", "_"),
           phoneNumbers.size(),
           ex.getClass().getSimpleName());
       return WebhookDeliveryResult.failure(null, ex.getClass().getSimpleName());

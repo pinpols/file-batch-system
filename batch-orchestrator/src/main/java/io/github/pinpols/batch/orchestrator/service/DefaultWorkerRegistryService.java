@@ -216,8 +216,8 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     if (reportedMajor == null) {
       log.warn(
           "Could not parse the major version from worker {} sdkVersion=\"{}\"; skipping the minimum SDK version gate",
-          request.workerCode(),
-          reportedSdkVersion);
+          String.valueOf(request.workerCode()).replaceAll("\\R", "_"),
+          String.valueOf(reportedSdkVersion).replaceAll("\\R", "_"));
       return;
     }
     if (reportedMajor < requiredMajor) {

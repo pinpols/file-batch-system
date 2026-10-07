@@ -54,7 +54,7 @@ public class SmsNotificationSender implements NotificationSender {
       log.warn(
           "SMS channel selected but no provider impl for '{}'; skipping: channelCode={}",
           providerName,
-          message.channelCode());
+          String.valueOf(message.channelCode()).replaceAll("\\R", "_"));
       return WebhookDeliveryResult.failure(null, "sms provider not available: " + providerName);
     }
     return provider.send(phoneNumbers, message);

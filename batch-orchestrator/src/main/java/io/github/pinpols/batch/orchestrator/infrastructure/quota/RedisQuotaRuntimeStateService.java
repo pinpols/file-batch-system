@@ -266,9 +266,9 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
       log.warn(
           "redis quota describe failed; returning empty snapshot: tenant={}, scope={}, owner={},"
               + " cause={}",
-          tenantId,
-          quotaScope,
-          ownerCode,
+          String.valueOf(tenantId).replaceAll("\\R", "_"),
+          String.valueOf(quotaScope).replaceAll("\\R", "_"),
+          String.valueOf(ownerCode).replaceAll("\\R", "_"),
           SwallowedExceptionLogger.summary(ex));
       return new QuotaRuntimeSnapshot(policy.name(), burstLimit, 0, burstLimit, null, null, null);
     }

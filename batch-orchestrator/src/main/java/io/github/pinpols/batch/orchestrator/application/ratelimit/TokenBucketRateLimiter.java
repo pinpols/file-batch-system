@@ -157,8 +157,8 @@ public class TokenBucketRateLimiter {
     log.warn(
         "Redis rate-limit unavailable; {}: tenantId={}, action={}, cause={}",
         failOpen ? "fail-open" : "fail-closed",
-        tenantId,
-        action,
+        String.valueOf(tenantId).replaceAll("\\R", "_"),
+        String.valueOf(action).replaceAll("\\R", "_"),
         SwallowedExceptionLogger.summary(ex));
     log.debug("Redis rate-limit backend failure", ex);
     return failOpen;

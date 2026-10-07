@@ -62,7 +62,10 @@ public class AlertmanagerNotifyService {
       // 固定标识符 am_notify_skipped 便于日志告警规则反查;计数器供 Prometheus 再告警。
       // 告警系统最不该有的失败:告警渠道没预建 → 告警静默蒸发。运维须为每个 receiver 预建同名渠道。
       meterRegistry.counter(METRIC_SKIPPED, "receiver", receiver).increment();
-      log.warn("am_notify_skipped receiver={} tenantId={} reason=no_channel", receiver, tenantId);
+      log.warn(
+          "am_notify_skipped receiver={} tenantId={} reason=no_channel",
+          String.valueOf(receiver).replaceAll("\\R", "_"),
+          String.valueOf(tenantId).replaceAll("\\R", "_"));
       return new AmNotifyOutcome(
           receiver, channelCode, false, "SKIPPED", "no channel configured for receiver");
     }
@@ -91,15 +94,15 @@ public class AlertmanagerNotifyService {
     if (result.success()) {
       log.info(
           "AM notify delivered: receiver={} channel={} alertCount={}",
-          receiver,
-          channelCode,
+          String.valueOf(receiver).replaceAll("\\R", "_"),
+          String.valueOf(channelCode).replaceAll("\\R", "_"),
           payload.safeAlerts().size());
       return new AmNotifyOutcome(receiver, channelCode, true, "SUCCESS", null);
     }
     log.warn(
         "AM notify delivery failed: receiver={} channel={} error={}",
-        receiver,
-        channelCode,
+        String.valueOf(receiver).replaceAll("\\R", "_"),
+        String.valueOf(channelCode).replaceAll("\\R", "_"),
         result.errorSummary());
     return new AmNotifyOutcome(receiver, channelCode, false, "FAILED", result.errorSummary());
   }
@@ -173,7 +176,10 @@ public class AlertmanagerNotifyService {
       deliveryLogMapper.insert(row);
     } catch (RuntimeException ex) {
       // 日志写入是 off 关键路径的审计动作,失败只 warn,不影响回执 AM。
-      log.warn("AM notify delivery log persist failed: channel={}", channelCode, ex);
+      log.warn(
+          "AM notify delivery log persist failed: channel={}",
+          String.valueOf(channelCode).replaceAll("\\R", "_"),
+          ex);
     }
   }
 }

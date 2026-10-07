@@ -45,8 +45,13 @@ public class OrchestratorRedisSupport {
     try {
       return objectMapper.readValue(raw, type);
     } catch (JsonProcessingException exception) {
-      log.warn("Redis cache JSON is corrupt; evicting and falling back to DB: key={}", key);
-      log.debug("Redis cache JSON deserialize failure: key={}", key, exception);
+      log.warn(
+          "Redis cache JSON is corrupt; evicting and falling back to DB: key={}",
+          String.valueOf(key).replaceAll("\\R", "_"));
+      log.debug(
+          "Redis cache JSON deserialize failure: key={}",
+          String.valueOf(key).replaceAll("\\R", "_"),
+          exception);
       evictCache(key);
       return null;
     }
@@ -87,9 +92,9 @@ public class OrchestratorRedisSupport {
     } catch (RedisConnectionFailureException | RedisSystemException ex) {
       log.warn(
           "Redis cache read unavailable; falling back to DB: key={}, cause={}",
-          key,
+          String.valueOf(key).replaceAll("\\R", "_"),
           SwallowedExceptionLogger.summary(ex));
-      log.debug("Redis cache read failure: key={}", key, ex);
+      log.debug("Redis cache read failure: key={}", String.valueOf(key).replaceAll("\\R", "_"), ex);
       return null;
     }
   }
@@ -100,7 +105,7 @@ public class OrchestratorRedisSupport {
     } catch (RedisConnectionFailureException | RedisSystemException ex) {
       log.debug(
           "Redis cache write/delete skipped: key={}, cause={}",
-          key,
+          String.valueOf(key).replaceAll("\\R", "_"),
           SwallowedExceptionLogger.summary(ex));
     }
   }

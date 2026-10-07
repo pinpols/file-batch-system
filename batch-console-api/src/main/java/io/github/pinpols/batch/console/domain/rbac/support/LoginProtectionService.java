@@ -44,8 +44,8 @@ public class LoginProtectionService {
       boolean provided = captchaToken != null && !captchaToken.isBlank();
       log.warn(
           "login captcha required: user={} ip={} failures={} provider={} provided={} reason={}",
-          sanitizeForLog(username),
-          sanitizeForLog(clientIp),
+          truncateForLog(String.valueOf(username).replaceAll("\\R", "_")),
+          truncateForLog(String.valueOf(clientIp).replaceAll("\\R", "_")),
           failures,
           captchaVerifier.provider(),
           provided,
@@ -89,12 +89,13 @@ public class LoginProtectionService {
     }
   }
 
-  /** 净化用户可控值后再进日志:去除 CR/LF 防日志注入(伪造日志行),并截断防超长。 null 归一为 {@code "null"} 字面量。 */
-  private static String sanitizeForLog(String value) {
-    if (value == null) {
-      return "null";
-    }
-    String cleaned = value.replaceAll("[\\r\\n]", "_");
+  /**
+   * 截断日志字段,避免用户可控值撑爆日志行。
+   *
+   * <p>CR/LF 防注入由调用点的内联 {@code replaceAll("\\R", "_")} 完成(CodeQL 只承认内联形态),
+   * 本方法只保留原先"超长截断"这一条语义,避免内联改写丢掉它。
+   */
+  private static String truncateForLog(String cleaned) {
     return cleaned.length() > 200 ? cleaned.substring(0, 200) + "…" : cleaned;
   }
 }

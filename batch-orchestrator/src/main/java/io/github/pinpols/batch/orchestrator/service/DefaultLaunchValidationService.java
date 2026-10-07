@@ -90,8 +90,8 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
     if (updatedRows == 0) {
       log.warn(
           "updateAcceptance(REJECTED) affected 0 rows; the row is already terminal: tenantId={} requestId={}",
-          request.tenantId(),
-          request.requestId());
+          String.valueOf(request.tenantId()).replaceAll("\\R", "_"),
+          String.valueOf(request.requestId()).replaceAll("\\R", "_"));
     }
   }
 

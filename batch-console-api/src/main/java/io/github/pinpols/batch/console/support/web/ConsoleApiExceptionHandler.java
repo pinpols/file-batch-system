@@ -151,8 +151,8 @@ public class ConsoleApiExceptionHandler {
     // 不打 stack trace（避免 console.log 噪音 + 让运维一眼看出问题）。
     log.warn(
         "console method not supported: {} {} (supported: {})",
-        request.getMethod(),
-        request.getRequestURI(),
+        String.valueOf(request.getMethod()).replaceAll("\\R", "_"),
+        String.valueOf(request.getRequestURI()).replaceAll("\\R", "_"),
         exception.getSupportedHttpMethods());
     return ResponseEntity.status(405)
         .body(responseFactory.failure(ResultCode.INVALID_ARGUMENT, exception.getMessage()));
@@ -164,8 +164,8 @@ public class ConsoleApiExceptionHandler {
     // 403 同样是 client / config 问题非 server bug，打印请求行 + 异常 message。
     log.warn(
         "console access denied: {} {} - {}",
-        request.getMethod(),
-        request.getRequestURI(),
+        String.valueOf(request.getMethod()).replaceAll("\\R", "_"),
+        String.valueOf(request.getRequestURI()).replaceAll("\\R", "_"),
         SwallowedExceptionLogger.summary(exception));
     return ResponseEntity.status(ResultCode.FORBIDDEN.httpStatus())
         .body(responseFactory.failure(ResultCode.FORBIDDEN, CommonErrorMessages.ACCESS_DENIED));
@@ -239,8 +239,8 @@ public class ConsoleApiExceptionHandler {
     // 带上请求 URI + method 让排查能定位前端调用点(原日志只有 param name 排查不了)
     log.warn(
         "console missing request param: {} {} — {}",
-        request.getMethod(),
-        request.getRequestURI(),
+        String.valueOf(request.getMethod()).replaceAll("\\R", "_"),
+        String.valueOf(request.getRequestURI()).replaceAll("\\R", "_"),
         SwallowedExceptionLogger.summary(exception));
     return ResponseEntity.badRequest()
         .body(responseFactory.failure(ResultCode.INVALID_ARGUMENT, exception.getMessage()));
@@ -251,10 +251,10 @@ public class ConsoleApiExceptionHandler {
       MethodArgumentTypeMismatchException exception, HttpServletRequest request) {
     log.warn(
         "console request param type mismatch: {} {} param={} value={} requiredType={}",
-        request.getMethod(),
-        request.getRequestURI(),
-        exception.getName(),
-        exception.getValue(),
+        String.valueOf(request.getMethod()).replaceAll("\\R", "_"),
+        String.valueOf(request.getRequestURI()).replaceAll("\\R", "_"),
+        String.valueOf(exception.getName()).replaceAll("\\R", "_"),
+        String.valueOf(exception.getValue()).replaceAll("\\R", "_"),
         exception.getRequiredType() == null
             ? "<unknown>"
             : exception.getRequiredType().getSimpleName());

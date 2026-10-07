@@ -55,7 +55,7 @@ class TenantConfigInitTenantExecutor {
     } catch (Exception ex) {
       log.warn(
           "[TenantConfigBatchInit] failed for tenant={}: {}",
-          tenantId,
+          String.valueOf(tenantId).replaceAll("\\R", "_"),
           SwallowedExceptionLogger.summary(ex));
       return TenantInitResult.failed(tenantId, ex.getMessage());
     }

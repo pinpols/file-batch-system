@@ -59,16 +59,16 @@ public class DefaultConsoleTenantConfigInitApplicationService
         // strict=true 且任一 spec failed → @Transactional 已回滚,组装 failed 结果让前端看到原因
         log.warn(
             "[TenantConfigBatchInit] strict bundle rolled back for tenant={} batchOp={}: {}",
-            tenantId,
-            batchOperationId,
+            String.valueOf(tenantId).replaceAll("\\R", "_"),
+            String.valueOf(batchOperationId).replaceAll("\\R", "_"),
             SwallowedExceptionLogger.summary(ex));
         results.add(TenantInitResult.failed(tenantId, ex.getMessage()));
         failureCount++;
       } catch (Exception ex) {
         log.error(
             "[TenantConfigBatchInit] unexpected error for tenant={} batchOp={}",
-            tenantId,
-            batchOperationId,
+            String.valueOf(tenantId).replaceAll("\\R", "_"),
+            String.valueOf(batchOperationId).replaceAll("\\R", "_"),
             ex);
         results.add(TenantInitResult.failed(tenantId, ex.getMessage()));
         failureCount++;

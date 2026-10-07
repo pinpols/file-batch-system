@@ -165,16 +165,22 @@ public class ConsoleConfigCacheInvalidationService {
     try {
       long deleted = invalidationStore.scanAndDelete(pattern, SCAN_BATCH_SIZE);
       if (deleted > 0) {
-        log.debug("evicted {} redis keys matching pattern={}", deleted, pattern);
+        log.debug(
+            "evicted {} redis keys matching pattern={}",
+            deleted,
+            String.valueOf(pattern).replaceAll("\\R", "_"));
       }
       return true;
     } catch (RuntimeException exception) {
       increment(publishFailureCounter);
       log.warn(
           "config cache redis pattern delete failed: pattern={}, reason={}",
-          pattern,
+          String.valueOf(pattern).replaceAll("\\R", "_"),
           SwallowedExceptionLogger.summary(exception));
-      log.debug("config cache redis pattern delete failure: pattern={}", pattern, exception);
+      log.debug(
+          "config cache redis pattern delete failure: pattern={}",
+          String.valueOf(pattern).replaceAll("\\R", "_"),
+          exception);
       return false;
     }
   }
@@ -203,9 +209,12 @@ public class ConsoleConfigCacheInvalidationService {
       increment(publishFailureCounter);
       log.warn(
           "config cache redis delete failed: key={}, reason={}",
-          key,
+          String.valueOf(key).replaceAll("\\R", "_"),
           SwallowedExceptionLogger.summary(exception));
-      log.debug("config cache redis delete failure: key={}", key, exception);
+      log.debug(
+          "config cache redis delete failure: key={}",
+          String.valueOf(key).replaceAll("\\R", "_"),
+          exception);
       return;
     }
     publishInvalidation(tenantId, type, code);
@@ -229,15 +238,15 @@ public class ConsoleConfigCacheInvalidationService {
       increment(publishFailureCounter);
       log.warn(
           "config cache invalidation publish failed: tenantId={}, type={}, code={}, reason={}",
-          tenantId,
-          type,
-          code,
+          String.valueOf(tenantId).replaceAll("\\R", "_"),
+          String.valueOf(type).replaceAll("\\R", "_"),
+          String.valueOf(code).replaceAll("\\R", "_"),
           SwallowedExceptionLogger.summary(exception));
       log.debug(
           "config cache invalidation publish failure: tenantId={}, type={}, code={}",
-          tenantId,
-          type,
-          code,
+          String.valueOf(tenantId).replaceAll("\\R", "_"),
+          String.valueOf(type).replaceAll("\\R", "_"),
+          String.valueOf(code).replaceAll("\\R", "_"),
           exception);
     }
   }
