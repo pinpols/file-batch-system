@@ -48,7 +48,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
  */
 @E2eSpringBootTest(
     classes = E2eImportApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE,
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
       "batch.outbox.poll-interval-millis=200",
       "batch.outbox.min-poll-interval-millis=200",

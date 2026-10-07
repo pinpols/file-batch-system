@@ -73,7 +73,8 @@ import org.springframework.test.annotation.DirtiesContext;
       // 是唯一为 CREATED/WAITING 任务写入派发 outbox 的路径。
       "batch.resource-scheduler.waiting-dispatch-interval-millis=500",
       "batch.resource-scheduler.quota-reset-scan-interval-millis=600000",
-      "batch.scheduler.snapshot-persist-enabled=false"
+      "batch.scheduler.snapshot-persist-enabled=false",
+      "batch.security.internal-secret=restart-e2e-internal-secret-32chars"
     })
 // 杀真 subprocess Worker 后 Spring context 里 Lettuce/RedisTemplate 会进入 STOPPED 状态，污染
 // 后续 IT class 共用的同一个 ApplicationContext。AFTER_CLASS 强制 Spring 在本 IT 跑完后销毁
@@ -106,6 +107,9 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
 
   @Value("${spring.kafka.bootstrap-servers}")
   private String kafkaBootstrapServers;
+
+  @Value("${batch.security.internal-secret}")
+  private String internalSecret;
 
   @LocalServerPort
   private int localServerPort;
@@ -397,7 +401,7 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
         "-jar",
         workerExecJar.toString(),
         "--spring.profiles.active=test,e2e",
-        "--spring.main.web-application-type=none",
+        "--server.port=0",
         "--spring.datasource.url=" + platformJdbcUrl(),
         "--spring.datasource.username=batch_user",
         "--spring.datasource.password=batch_pass_123",
@@ -407,6 +411,7 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
         "--batch.worker.task-client.base-url=http://127.0.0.1:" + localServerPort,
         "--batch.worker.registry.fail-fast-on-startup=false",
         "--batch.security.bypass-mode=true",
+        "--batch.security.internal-secret=" + internalSecret,
         "--batch.security.kms.default-key-ref=DEFAULT_TEST",
         "--batch.security.kms.keys.DEFAULT_TEST=AAAAAAAAAAAAAAAAAAAAAA==",
         "--batch.storage.s3.endpoint=" + s3Endpoint(),
