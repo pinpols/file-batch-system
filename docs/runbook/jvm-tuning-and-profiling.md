@@ -282,12 +282,12 @@ tar czf /tmp/diag-$(date +%s).tar.gz /tmp/{sysprops,flags,threads,heap,histo,nmt
 
 ## §4 落地检查清单
 
-- [ ] §1.3 Helm values 模板写入 `helm/values-prod.yaml`,各模块加 `javaOptsExtra`
-- [ ] `helm/batch-platform/templates/configmap.yaml` 拼接 `JAVA_OPTS = javaOpts + javaOptsExtra`
-- [ ] `helm/batch-platform/templates/*-deployment.yaml` 给每个 service mount `/var/log/app` PVC 或 emptyDir(否则 heap dump / GC log / JFR 丢)
-- [ ] Dockerfile.app 加 `RUN mkdir -p /var/log/app /var/cache/app && apt-get install async-profiler`(可选 sidecar 代替)
+- [x] Helm values 已按模块提供 `javaOptsExtra`;生产 overlay 复用同一 Chart 配置结构。
+- [x] Chart 以 `JAVA_OPTS` + `JAVA_OPTS_EXTRA` 两层注入,由统一 JVM 启动入口组合,避免 ConfigMap 与 Deployment 相互覆盖。
+- [x] 所有应用 workload 均通过共享 helper 挂载带 `sizeLimit` 的 `/var/log/app` `emptyDir`,覆盖 heap dump / GC log / JFR。
+- [x] 运行镜像不内置 async-profiler；按需使用受控临时容器/诊断镜像,避免扩大生产镜像和 native 工具攻击面。
 - [x] Console API 提供默认关闭的虚拟线程实验开关；生产启用仍需 A/B 性能报告
-- [ ] `docs/runbook/jvm-tuning-and-profiling.md` 即本文加进 `docs/runbook/README.md` 索引
+- [x] `docs/runbook/jvm-tuning-and-profiling.md` 已加入 `docs/runbook/README.md` 索引
 
 ---
 

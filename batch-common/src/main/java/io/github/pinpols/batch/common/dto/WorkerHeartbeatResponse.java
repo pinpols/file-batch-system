@@ -22,8 +22,8 @@ import java.util.List;
  *   <li>{@code nextHeartbeatHint}:平台建议的下次心跳间隔(秒);null = 不下发,SDK 用本地配置。
  * </ul>
  *
- * <p>向后兼容:老 SDK 忽略整个响应体(worker-core 用 {@code toBodilessEntity()},SDK 当前不消费心跳回包), 因此本响应从"返回
- * WorkerRegistryEntity"切到本 DTO 不破坏任何现有 worker。
+ * <p>向后兼容:老 SDK 可以忽略整个响应体；内置 worker-core 与支持该协议的 SDK 会消费指令。 因此本响应从“返回
+ * WorkerRegistryEntity”切到本 DTO 不破坏旧 worker，同时允许新 worker 在心跳周期内响应排空。
  */
 public record WorkerHeartbeatResponse(
     String platformStatus,

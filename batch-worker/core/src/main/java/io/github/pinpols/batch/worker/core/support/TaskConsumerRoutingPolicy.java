@@ -112,7 +112,7 @@ final class TaskConsumerRoutingPolicy {
     return tenantScope.test(configuration, message);
   }
 
-  private static String resolveBaseTopic(WorkerConfiguration configuration) {
+  static String resolveBaseTopic(WorkerConfiguration configuration) {
     String configuredWorkerCode = configuration.workerCode();
     String baseTopic = configuration.topic();
     if (EmptyChecks.isBlank(baseTopic)) {

@@ -6,9 +6,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.config.OrchestratorClientProperties;
 import io.github.pinpols.batch.common.dto.WorkerHeartbeatDto;
+import io.github.pinpols.batch.common.dto.WorkerHeartbeatResponse;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -73,6 +75,29 @@ class HttpWorkerRegistryClientTest {
 
     assertThat(json).contains("\"port\":18085");
     assertThat(parsed.port()).isEqualTo(18085);
+  }
+
+  @Test
+  @DisplayName("心跳响应要求排空时把本地注册状态切换为 DRAINING")
+  void shouldApplyDrainingStatus_whenHeartbeatRequestsDrain() {
+    WorkerRegistration registration = registration();
+
+    client.applyHeartbeatResponse(
+        registration, new WorkerHeartbeatResponse("DRAINING", 4, true, List.of(), null));
+
+    assertThat(registration.getStatus()).isEqualTo(WorkerRegistryStatus.DRAINING.code());
+  }
+
+  @Test
+  @DisplayName("心跳响应恢复正常时把本地注册状态切换为 ONLINE")
+  void shouldApplyOnlineStatus_whenHeartbeatReturnsToNormal() {
+    WorkerRegistration registration = registration();
+    registration.setStatus(WorkerRegistryStatus.DRAINING.code());
+
+    client.applyHeartbeatResponse(
+        registration, new WorkerHeartbeatResponse("NORMAL", 4, false, List.of(), null));
+
+    assertThat(registration.getStatus()).isEqualTo(WorkerRegistryStatus.ONLINE.code());
   }
 
   private static WorkerRegistration registration() {

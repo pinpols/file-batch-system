@@ -9,7 +9,12 @@ public final class StructuredLogField {
   public static final String TRACE_ID = "traceId";
   public static final String REQUEST_ID = "requestId";
   public static final String JOB_INSTANCE_ID = "jobInstanceId";
+  public static final String WORKFLOW_RUN_ID = "workflowRunId";
+  public static final String PARTITION_ID = "partitionId";
   public static final String TASK_ID = "taskId";
+  public static final String BATCH_DAY = "batchDay";
+  public static final String ATTEMPT = "attempt";
+  public static final String TOPIC = "topic";
   public static final String WORKER_ID = "workerId";
   public static final String WORKER_TYPE = "workerType";
   public static final String RUN_MODE = "runMode";

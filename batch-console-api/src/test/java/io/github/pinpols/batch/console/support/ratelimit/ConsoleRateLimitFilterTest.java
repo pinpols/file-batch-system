@@ -14,9 +14,11 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.console.config.ConsoleRateLimitProperties;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityResponseWriter;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -223,6 +225,41 @@ class ConsoleRateLimitFilterTest {
         new MockHttpServletRequest("POST", "/api/console/config/sync/export");
     filter.doFilter(request, new MockHttpServletResponse(), filterChain);
 
+    verify(filterChain).doFilter(any(), any());
+  }
+
+  @Test
+  @DisplayName("前端遥测复用高开销接口配额, 防止高频上报压垮 Console")
+  void shouldRateLimitTelemetryEndpointAsExpensiveOperation() throws Exception {
+    authenticateAs("alice");
+    when(rateLimiter.tryAcquire(eq("expensive:user:alice"), anyInt())).thenReturn(false);
+
+    MockHttpServletRequest request =
+        new MockHttpServletRequest("POST", "/api/console/telemetry/events");
+    filter.doFilter(request, new MockHttpServletResponse(), filterChain);
+
+    verify(filterChain, never()).doFilter(any(), any());
+    verify(responseWriter)
+        .write(
+            any(HttpServletResponse.class),
+            eq(HttpStatus.TOO_MANY_REQUESTS),
+            eq(ResultCode.RATE_LIMITED),
+            contains("频繁"));
+  }
+
+  @Test
+  @DisplayName("控制台认证主体按用户名生成限流键, 不把租户和角色文本混入身份")
+  void shouldUseConsolePrincipalUsernameAsRateLimitIdentity() throws Exception {
+    ConsolePrincipal principal = new ConsolePrincipal("alice", "tenant-a", Set.of("ROLE_AUDITOR"));
+    SecurityContextHolder.getContext()
+        .setAuthentication(new UsernamePasswordAuthenticationToken(principal, "n/a", List.of()));
+    when(rateLimiter.tryAcquire(eq("expensive:user:alice"), anyInt())).thenReturn(true);
+
+    MockHttpServletRequest request =
+        new MockHttpServletRequest("GET", "/api/console/reports/excel");
+    filter.doFilter(request, new MockHttpServletResponse(), filterChain);
+
+    verify(rateLimiter).tryAcquire(eq("expensive:user:alice"), anyInt());
     verify(filterChain).doFilter(any(), any());
   }
 

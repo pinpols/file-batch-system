@@ -2,12 +2,14 @@ package io.github.pinpols.batch.worker.core.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
+import io.github.pinpols.batch.worker.core.support.WorkerConsumptionControl;
 import io.github.pinpols.batch.worker.core.support.WorkerLoadProvider;
 import io.github.pinpols.batch.worker.core.support.WorkerSelfRegistrationService;
 import java.util.stream.Stream;
@@ -43,11 +45,15 @@ class DefaultHeartbeatServiceTest {
   @Mock
   private ObjectProvider<WorkerLoadProvider> loadProviders;
 
+  @Mock
+  private ObjectProvider<WorkerConsumptionControl> consumptionControls;
+
   private DefaultHeartbeatService service;
 
   @BeforeEach
   void setUp() {
-    service = new DefaultHeartbeatService(registrationService, runtimeState, loadProviders);
+    service = new DefaultHeartbeatService(
+        registrationService, runtimeState, loadProviders, consumptionControls);
   }
 
   @Test
@@ -135,5 +141,25 @@ class DefaultHeartbeatServiceTest {
     ArgumentCaptor<WorkerRegistration> captor = ArgumentCaptor.forClass(WorkerRegistration.class);
     verify(registrationService).renew(captor.capture());
     assertThat(captor.getValue().getCurrentLoad()).isZero();
+  }
+
+  @Test
+  @DisplayName("平台心跳返回排空状态时通知所有消费控制器停止拉取")
+  void beat_drainingDirectivePausesConsumers() {
+    WorkerRegistration current = new WorkerRegistration();
+    current.setWorkerId("w-drain");
+    when(runtimeState.get("w-drain")).thenReturn(current);
+    when(loadProviders.stream()).thenReturn(Stream.empty());
+
+    WorkerRegistration renewed = new WorkerRegistration();
+    renewed.setWorkerId("w-drain");
+    renewed.setStatus(io.github.pinpols.batch.common.enums.WorkerRegistryStatus.DRAINING.code());
+    when(registrationService.renew(any())).thenReturn(renewed);
+    WorkerConsumptionControl control = mock(WorkerConsumptionControl.class);
+    when(consumptionControls.orderedStream()).thenReturn(Stream.of(control));
+
+    service.beat("w-drain");
+
+    verify(control).setPlatformDraining(true);
   }
 }

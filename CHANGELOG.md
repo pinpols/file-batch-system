@@ -8,10 +8,14 @@
 
 ## [Unreleased]
 
+- 收口后端待办：Console Telemetry 纳入用户限流并保留有界扩展类型兼容性，ShedLock provider 增加故障计数/健康指标和告警，并校正 SDK、租户 Worker、JVM/Helm 与 CD 文档中的陈旧待办状态。
+
 滚动合并中的变更入口；有发布影响的 PR 合入 `main` 时更新，冻结发版时整段下移到正式版本标题下。
 
 ### Added
 
+- 新增后端不可变镜像发布输出、统一 release manifest schema / 校验器，以及 Compose 按 digest 部署、健康校验、失败快照、稳定版本回滚和留存审计脚本；生产自动部署、审批和 SSH 凭据仍由后续环境接入完成。
+- 补齐 Process Worker 业务库路由、Console 真实 HTTP 限流、批量开户真实 PG/Valkey 事务、JDBC ShedLock、Worker drain、对象存储加密装配和 S3 自动建桶的集成或专项验证。
 - 新增 PostgreSQL、Kafka、Valkey/Redis、MinIO 四环境基础设施治理 profile，支持本地、场景测试、压测和生产基线参数统一落地；Kafka topic retention 与 MinIO lifecycle 提供显式应用脚本，PostgreSQL/Valkey 保持重启生效的可审计配置边界。
 - 扩展四环境运行时治理 profile，覆盖 LOCAL / NAS / SFTP / OSS / API / API_PUSH / EMAIL 文件通道、Worker Report Outbox、Quota / ShedLock、读副本、业务分片、Quartz、观测和外部端点，并新增只读巡检入口防止治理项漂移。
 - Console 账号管理新增批量开户：提供 Excel 模板、预检与修正、租户权限校验、原子入库及一次性初始密码交付；新增开户操作记录与用户名大小写无关唯一约束。
@@ -49,6 +53,8 @@
 
 ### Fixed
 
+- 修复内置 Worker 忽略心跳排空指令的问题：收到 `DRAINING` 后暂停单条与批量 Kafka listener，未 claim 消息回退重投；平台恢复 `NORMAL` 且本地有执行许可后再恢复消费。
+- 修复对象存储 raw backend 导致加密装饰 Bean 永远退避的问题；raw 实现改由内部持有者隔离，业务注入只暴露外层装饰器，并保留按类型提供完整 `BatchObjectStore` 的覆盖能力。修复 Console 真实认证主体被按整个对象字符串构造限流键、角色变化可绕开用户级限流的问题。
 - 取证 ZIP 与 Atomic shell 工作目录接入共享私有权限边界,不再依赖默认 umask;验证码日志覆盖 Unicode 换行并保留 null 归空语义,同步修正 CodeQL 净化模型与取证默认开关说明。
 
 - 修复束文件到达组长编码请求号溢出、完整性查询遗漏校验类型及等待/拒绝误报触发。

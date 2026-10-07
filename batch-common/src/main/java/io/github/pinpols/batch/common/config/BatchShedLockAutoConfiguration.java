@@ -1,12 +1,15 @@
 package io.github.pinpols.batch.common.config;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.micrometer.core.instrument.MeterRegistry;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.core.DefaultLockingTaskExecutor;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -50,7 +53,10 @@ public class BatchShedLockAutoConfiguration {
   @Bean
   @ConditionalOnMissingBean(LockProvider.class)
   @ConditionalOnProperty(name = "batch.shedlock.provider", havingValue = "jdbc")
-  public LockProvider jdbcLockProvider(DataSource dataSource, BatchShedLockProperties properties) {
+  public LockProvider jdbcLockProvider(
+      DataSource dataSource,
+      BatchShedLockProperties properties,
+      ObjectProvider<MeterRegistry> meterRegistryProvider) {
     boolean autoCreateTable = properties.isAutoCreate();
     LockProvider provider =
         ShedLockProviderFactory.jdbcTemplateLockProvider(dataSource, autoCreateTable);
@@ -58,7 +64,7 @@ public class BatchShedLockAutoConfiguration {
         "ShedLock LockProvider auto-configured: type=JDBC ({}), autoCreate={}",
         provider.getClass().getSimpleName(),
         autoCreateTable);
-    return provider;
+    return observe(provider, "jdbc", meterRegistryProvider);
   }
 
   @Bean
@@ -70,7 +76,8 @@ public class BatchShedLockAutoConfiguration {
   public LockProvider redisLockProvider(
       RedisConnectionFactory connectionFactory,
       BatchShedLockProperties properties,
-      Environment environment) {
+      Environment environment,
+      ObjectProvider<MeterRegistry> meterRegistryProvider) {
     // 未显式配置 batch.shedlock.redis.key-prefix-env 时,用 spring.application.name 做 env prefix
     // (每服务一份命名空间);两者都缺省时回退 default。
     // 本类经 auto-configuration imports 装配,测试切片可能不做组件扫描,故用静态 resolve 而非注入
@@ -85,7 +92,7 @@ public class BatchShedLockAutoConfiguration {
         "ShedLock LockProvider auto-configured: type=Redis ({}), env={}",
         provider.getClass().getSimpleName(),
         environmentName);
-    return provider;
+    return observe(provider, "redis", meterRegistryProvider);
   }
 
   // 不加 @ConditionalOnBean(LockProvider.class)：condition 评估发生在 bean 注册前，
@@ -97,5 +104,15 @@ public class BatchShedLockAutoConfiguration {
   @ConditionalOnMissingBean(LockingTaskExecutor.class)
   public LockingTaskExecutor lockingTaskExecutor(LockProvider lockProvider) {
     return new DefaultLockingTaskExecutor(lockProvider);
+  }
+
+  private static LockProvider observe(
+      LockProvider provider,
+      String providerType,
+      ObjectProvider<MeterRegistry> meterRegistryProvider) {
+    MeterRegistry meterRegistry = meterRegistryProvider.getIfAvailable();
+    return EmptyChecks.isNull(meterRegistry)
+        ? provider
+        : new MeteredLockProvider(provider, providerType, meterRegistry);
   }
 }

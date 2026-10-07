@@ -106,6 +106,14 @@ public abstract class AbstractIntegrationTest {
     return BUSINESS_POSTGRES.getJdbcUrl();
   }
 
+  protected static String businessJdbcUsername() {
+    return BUSINESS_POSTGRES.getUsername();
+  }
+
+  protected static String businessJdbcPassword() {
+    return BUSINESS_POSTGRES.getPassword();
+  }
+
   protected static String kafkaBootstrapServers() {
     return KAFKA.getBootstrapServers();
   }

@@ -13,7 +13,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import sys
 import tempfile
 import unittest
@@ -384,7 +386,11 @@ class BaselineTest(unittest.TestCase):
             ]
             MODULE.write_baseline(baseline, findings)
             self.assertEqual(len(MODULE.read_baseline(baseline)), 2)
-            self.assertEqual(MODULE.check_baseline(baseline, findings), 0)
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                result = MODULE.check_baseline(baseline, findings)
+            self.assertEqual(result, 0)
+            self.assertIn("✅ 通过", output.getvalue())
 
     def test_new_finding_fails(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -392,7 +398,11 @@ class BaselineTest(unittest.TestCase):
             known = [MODULE.Finding(MODULE.MISSING_METHOD, "a/A.java", "A.m", 3)]
             MODULE.write_baseline(baseline, known)
             added = known + [MODULE.Finding(MODULE.MISSING_METHOD, "a/A.java", "A.n", 9)]
-            self.assertEqual(MODULE.check_baseline(baseline, added), 1)
+            output = io.StringIO()
+            with contextlib.redirect_stderr(output):
+                result = MODULE.check_baseline(baseline, added)
+            self.assertEqual(result, 1)
+            self.assertIn("❌ 新增 1 处", output.getvalue())
 
     def test_identity_ignores_line_drift(self) -> None:
         first = MODULE.Finding(MODULE.MISSING_METHOD, "a/A.java", "A.m", 3)

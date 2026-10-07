@@ -154,6 +154,17 @@ Collector 前永久丢失，必须记录变更窗口并尽快恢复。
 - 在没有 OTel context 的内部触发（如某些 unit test / 后台脚本入口），`IdGenerator.newTraceId()` 仍生成 UUID 格式（也是 32 hex chars）
 - 入参带 `trace_id` 的请求（如 trigger 重发）会保留入参值，不会被 OTel 覆盖（`resolveTraceId` 优先级）
 
+### 4.4 Worker 结构化日志字段
+
+Worker 消费及执行主路径统一注入以下 MDC 字段：`traceId`、`tenantId`、`jobInstanceId`、
+`workflowRunId`、`partitionId`、`taskId`、`batchDay`、`workerId`、`workerType`、`attempt` 和
+`topic`。字段键由 `StructuredLogField` 统一维护，消息处理完成后统一清理，避免消费者线程复用时串任务。
+
+`topic` 当前记录 Worker 配置解析出的**基础路由 topic**，用于关联 Import / Export / Process /
+Dispatch / Atomic 消费通道；TENANT / PRIORITY / node 直达模式的实际物理后缀 topic 未包含在消息对象中，
+因此不能用该字段证明某条记录来自哪个后缀分区。需要物理 topic/partition/offset 证据时，应结合 Kafka
+consumer observation 或 broker 日志查询。
+
 ---
 
 ## 5. 采样 + 性能开销参考

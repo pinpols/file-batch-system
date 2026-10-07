@@ -19,10 +19,10 @@
 
 | ID | 待办 | 验收口径 | 备注 |
 |---|---|---|---|
-| **PLAT-OTEL-1** | 做一次完整业务链路 OTel 验收：Console/API → Trigger → Orchestrator → Kafka → Worker → Report | 同一 `traceId` / `jobInstanceId` 能在 Tempo 查 trace、Loki 查日志、Prometheus 查关键指标；租户字段必须来自认证身份 | 不是只跑静态 `check-observability-contract.py` |
-| **PLAT-OTEL-2** | 定义批量主链 span / MDC 字段最小集 | 至少覆盖 `traceId`、`tenantId`、`jobInstanceId`、`workflowRunId`、`partitionId`、`taskId`、`batchDay`、`workerId`、`attempt`、`topic` | 高基数字段不进 Prometheus label |
-| **PLAT-BP-1** | 背压与容量大盘收口 | Dashboard 同屏展示 admission、claim/report 延迟、Outbox backlog、Kafka lag、Hikari、PG 锁等待、Worker lease circuit、终态残留 | 容量结论必须能定位“控制面 / 执行面 / Kafka / PG”瓶颈 |
-| **PLAT-WR-1** | Worker Runtime / SPI 行为一致性复核 | 五类 Worker 均能说明 claim、lease renew、取消、优雅停机、report outbox、progress、metrics、trace 的统一边界 | 已有 SPI 不能破坏现有 pipeline 主链 |
+| **PLAT-OTEL-1** | 🔒 做一次完整业务链路 OTel 验收：Console/API → Trigger → Orchestrator → Kafka → Worker → Report | 同一 `traceId` / `jobInstanceId` 能在 Tempo 查 trace、Loki 查日志、Prometheus 查关键指标；租户字段必须来自认证身份 | 本地字段与静态契约已完成；剩余是 staging 真实查询证据 |
+| **PLAT-OTEL-2** | ✅ 定义批量主链 span / MDC 字段最小集 | Worker 消费和执行路径已覆盖 `traceId`、`tenantId`、`jobInstanceId`、`workflowRunId`、`partitionId`、`taskId`、`batchDay`、`workerId`、`attempt`、`topic`；`topic` 表示消费者基础路由 topic，不伪装成实际后缀 topic | 高基数字段只进入结构化日志/trace，不进入 Prometheus label |
+| **PLAT-BP-1** | 🟡 背压与容量大盘收口 | Dashboard、Prometheus 告警和容量检查脚本已覆盖 admission、claim/report、Outbox、Kafka lag、Hikari、PG 锁等待、Worker lease circuit 与终态残留 | 本地代码已完成；真实压测阈值和容量结论仍需 staging |
+| **PLAT-WR-1** | ✅ Worker Runtime / SPI 行为一致性复核 | 五类 Worker 共用 claim、lease renew、取消、优雅停机、report outbox、progress、metrics、trace 和心跳排空指令边界 | 核心实现、本地 Sim 与 drain E2E 已完成；staging 只补生产级证据 |
 
 ## 3. P1：值得做，但以 staging / ops 接入为验收边界
 

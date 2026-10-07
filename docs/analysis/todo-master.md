@@ -5,7 +5,7 @@
 
 Compose CD、生产拓扑、硬件起步规格和 Kubernetes/GitOps 最终目标的权威待办统一维护在 [Compose CD → Kubernetes GitOps 路线](../runbook/compose-cd-roadmap.md#8-待办)。本总表只保留领域入口，避免复制 P0/P1/P2 checkbox 后产生状态漂移。
 
-> 核查日期：2026-10-01。本文只登记当前仍有效的事项；`docs/archive/` 的历史待办不计入本表。
+> 核查日期：2026-10-07。本文只登记当前仍有效的事项；`docs/archive/` 的历史待办不计入本表。
 > 状态分类、证据要求和归档规则见 [`../standards/document-governance.md`](../standards/document-governance.md)。
 
 > 本文早期的统计数字和日期快照可能已过期；后续以事项表、证据路径和最后核查日期为准，不以历史总数为准。
@@ -26,7 +26,7 @@ Compose CD、生产拓扑、硬件起步规格和 Kubernetes/GitOps 最终目标
 | 🟡 **暂缓** | 已明确不立即实施，并记录触发条件和复审周期 |
 | ❌ **不做** | 明确超出系统边界或收益不足，仅保留决策理由 |
 
-### 当前核查边界（2026-10-01）
+### 当前核查边界（2026-10-07）
 
 以下事项仍可从现行文档确认存在，但不能仅凭历史计划宣称“代码未完成”：
 
@@ -295,7 +295,7 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 
 | ID | 主题 | 来源 | 状态 |
 |---|---|---|---|
-| **PLAT-OTEL-1** | OpenTelemetry 全链路运行验收：Console/API → Trigger → Orchestrator → Kafka → Worker → Report | [`../backlog/platform-capability-evolution-backlog-2026-09-26.md`](../backlog/platform-capability-evolution-backlog-2026-09-26.md) | 🟡 运行证据采集脚本和验收步骤已补；真实链路、Tempo/Loki 关联和告警触发仍需 staging 证据 |
+| **PLAT-OTEL-1** | OpenTelemetry 全链路运行验收：Console/API → Trigger → Orchestrator → Kafka → Worker → Report | [`../backlog/platform-capability-evolution-backlog-2026-09-26.md`](../backlog/platform-capability-evolution-backlog-2026-09-26.md) | 🟡 Worker MDC 最小字段集已补齐；运行证据采集脚本和验收步骤已补；真实链路、Tempo/Loki 关联和告警触发仍需 staging 证据 |
 | **PLAT-BP-1** | 背压与容量大盘收口：admission、claim/report、Outbox、Kafka lag、Hikari、PG 锁等待、Worker lease | 同上 | 🟡 容量仪表盘、Prometheus 告警和证据脚本已补；真实压测阈值和容量结论仍需 staging |
 | **PLAT-WR-1** | 五类 Worker Runtime / SPI 行为一致性复核 | 同上 | ✅ 核心实现和本地 Sim 已完成；🔒 staging/生产级证据仍需补齐 |
 | **PLAT-KEDA-1** | KEDA staging 验证：dynamic sharding + backlog / lag 扩缩 + drain | 同上 | P1；需要真实 K8s + KEDA operator |
@@ -381,13 +381,13 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 
 ### I. Worker 灰度升级 runbook 验证 · P2
 
-> 🔒 完整端到端验证需 staging worker 集群，本地仅能补 IT 模拟 — 见 §九
+> 本地 E2E 已覆盖 drain 发起与 claimed-tasks 查询、心跳指令驱动真实 Kafka listener 暂停、超时接管和 force-offline 回收；真实 Pod 驱逐、负载均衡与多副本滚动升级仍需 staging worker 集群 — 见 §九。
 
 | ID | 主题 | 来源 |
 |---|---|---|
-| **WK-up-1** | drain 接口能否发起并查询 claimed-tasks | rolling-upgrade-workers:76 |
-| **WK-up-2** | 超时后 Orchestrator 接管确认 | rolling-upgrade-workers:77 |
-| **WK-up-3** | force-offline 紧急场景验证 | rolling-upgrade-workers:78 |
+| **WK-up-1** | ✅ 本地 E2E 已验证 drain 发起、claimed-tasks 查询和心跳驱动 Kafka listener 暂停；staging 验证真实 Pod | rolling-upgrade-workers:76 |
+| **WK-up-2** | ✅ 本地 E2E 已验证超时后 Orchestrator 回收；staging 验证真实重调度 | rolling-upgrade-workers:77 |
+| **WK-up-3** | ✅ 本地 E2E 已验证 force-offline 即时回收；staging 验证紧急操作流程 | rolling-upgrade-workers:78 |
 
 ### J. @Deprecated forRemoval 物删积压 · P3
 
@@ -555,18 +555,20 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 | ID | 主题 | 阻塞类型 | 卡在哪 |
 |---|---|---|---|
 | **ADR10-S6/S7** | 异步路径灰度与同步入口清理 | — | 已完成；历史灰度步骤不再适用 |
-| **WK-up-1** | drain 接口能否发起并查询 claimed-tasks（完整验证）| `[staging]` | 本地可补 IT 模拟，完整端到端验证需 staging worker 集群 |
-| **WK-up-2** | 超时后 Orchestrator 接管确认（完整验证）| `[staging]` | 同上 |
-| **WK-up-3** | force-offline 紧急场景验证（完整验证）| `[staging]` | 同上 |
+| **WK-up-1** | drain 接口和 claimed-tasks 的真实集群验证 | `[staging]` | 本地 E2E 已完成；剩余真实 Pod drain / 负载均衡验证 |
+| **WK-up-2** | 超时后接管的真实集群验证 | `[staging]` | 本地 E2E 已完成；剩余 Pod 驱逐后的真实重调度验证 |
+| **WK-up-3** | force-offline 紧急流程的真实集群验证 | `[staging]` | 本地 E2E 已完成；剩余多副本和运维操作留痕验证 |
 | **LIC-2** | SBOM 嵌入 artifact + 第三方清单 | `[ops]` 部分 | 本地能改 maven 配置，但 CI 注入 + artifact 校验需 ops |
 
 本节只维护逐项状态，不维护易随去重口径变化的汇总数字。FE-1/2/3、CC-1/2 已在 §二标记完成，不再列入待办。
 
+2026-10-07 复扫结论：当前权威待办中没有可脱离外部环境独立完成的后端编码项。旧专题文档里 Python SDK 心跳退避/暂停类型、租户 Worker 模板与 Topic 脚本、JVM Helm 诊断挂载、Telemetry 收敛、ShedLock provider 失败观测等陈旧勾选项已按真实代码状态校正；剩余均为本节所列 staging/ops/生产验收边界。
+
 ## 批量账号开户（Bulk User Provisioning）
 
-**状态：前后端已编码 / P1，尚未通过真实环境验收。** 已有批量创建租户、租户配置批量初始化和单账号 CRUD；批量账号开户实现位于独立功能分支。
+**状态：前后端已编码 / P1，本地真实 PG/Redis 核心事务已验，尚未通过 staging/生产验收。** 已有批量创建租户、租户配置批量初始化和单账号 CRUD。
 
-后端设计及验收边界：[批量账号开户后端设计](../design/bulk-user-provisioning.md)；配对前端待办：`batch-console/docs/backlog/bulk-user-provisioning.md`。最后核查：2026-10-03。后端责任域为 Console/RBAC。
+后端设计及验收边界：[批量账号开户后端设计](../design/bulk-user-provisioning.md)；配对前端实现位于 `batch-console` 的账户管理页面。最后核查：2026-10-07。后端责任域为 Console/RBAC。
 
 - [x] 批量账号模板、Preview、逐行 Patch、原子 Apply、非敏感批次查询 API 与 OpenAPI；前端不循环调用单账号接口。
 - [x] 批量创建复用现有 `ConsoleUserAccountService` 的租户作用域、角色授予和哈希创建守卫；平台角色固定 `system`，租户角色须绑定 ACTIVE 业务租户。
@@ -575,4 +577,5 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 - [x] 一次性随机初始密码只在 Apply 回包出现；`must_change_password=true`，当前登录改密仅提示不阻断。
 - [x] 单账号创建路径与批量路径统一业务租户存在/状态校验；平台角色只能绑定 `system`，租户角色必须绑定 ACTIVE 业务租户。
 - [x] 跨租批次查询支持按目标租户过滤；`user.batchCreate` 操作审计使用 `requestId` 作为 `user_batch_operation` 聚合键，批次记录用同一 `requestId` 关联。
-- [ ] 真实 PG/Redis 联测：V220 历史冲突预检、并发提交、事务回滚、过期/多副本预览、前台丢包恢复、初始密码安全交付与多用户冲突。单测不能替代此项。
+- [x] 本地真实 PG/Redis 联测：成功原子提交、预览删除、约束失败整批回滚并恢复预览、并发 Apply 仅一个成功。
+- [ ] staging/前台验收：V220 历史冲突预检、过期/多副本预览、前台丢包恢复、初始密码安全交付与多用户冲突。

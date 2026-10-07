@@ -3,11 +3,13 @@ package io.github.pinpols.batch.console.support.ratelimit;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.common.web.ServletRequestPaths;
 import io.github.pinpols.batch.console.config.ConsoleRateLimitProperties;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityResponseWriter;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -205,6 +207,12 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
 
   private String resolveUsername() {
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-    return (auth != null && auth.isAuthenticated()) ? auth.getName() : null;
+    if (EmptyChecks.isNull(auth) || !auth.isAuthenticated()) {
+      return null;
+    }
+    if (auth.getPrincipal() instanceof ConsolePrincipal principal) {
+      return principal.username();
+    }
+    return auth.getName();
   }
 }

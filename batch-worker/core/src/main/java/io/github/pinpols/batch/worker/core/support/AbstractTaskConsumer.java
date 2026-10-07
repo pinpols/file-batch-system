@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor;
 import io.github.pinpols.batch.worker.core.config.WorkerConcurrencyProperties;
@@ -53,7 +54,8 @@ import org.springframework.kafka.support.Acknowledgment;
  */
 @Slf4j
 @SuppressWarnings("java:S2259")
-public abstract class AbstractTaskConsumer implements WorkerLoadProvider, ApplicationContextAware {
+public abstract class AbstractTaskConsumer
+    implements WorkerLoadProvider, WorkerConsumptionControl, ApplicationContextAware {
 
   /**
    * 平台端短暂不可达时，显式回退 Kafka offset 的等待时间。
@@ -171,12 +173,20 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
     return backpressure.currentLoad();
   }
 
+  @Override
+  public void setPlatformDraining(boolean draining) {
+    backpressure.setPlatformDraining(draining, listenerId(), batchListenerId());
+  }
+
   /**
    * 由子类的 {@code @KafkaListener} 方法调用。
    *
    * <p>把监听注解留在子类，避免抽象类强耦合 listener 配置与 topic 表达式。
    */
   protected boolean doConsume(String payload) {
+    if (backpressure.isPlatformDraining()) {
+      return false;
+    }
     Semaphore sem = backpressure.semaphore();
     boolean acquired = sem.tryAcquire();
     if (!acquired) {
@@ -275,6 +285,11 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
           StructuredLogField.TRACE_ID,
           StructuredLogField.TASK_ID,
           StructuredLogField.JOB_INSTANCE_ID,
+          StructuredLogField.WORKFLOW_RUN_ID,
+          StructuredLogField.PARTITION_ID,
+          StructuredLogField.BATCH_DAY,
+          StructuredLogField.ATTEMPT,
+          StructuredLogField.TOPIC,
           StructuredLogField.WORKER_TYPE,
           StructuredLogField.WORKER_ID,
           StructuredLogField.RUN_MODE);
@@ -296,6 +311,9 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
     if (payloads == null || payloads.isEmpty()) {
       return true;
     }
+    if (backpressure.isPlatformDraining()) {
+      return false;
+    }
     Semaphore sem = backpressure.semaphore();
     int n = payloads.size();
     if (!sem.tryAcquire(n)) {
@@ -303,6 +321,9 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
       backpressure.pause(batchListenerId());
       return false;
     }
+    BatchMdc.put(
+        StructuredLogField.TOPIC,
+        TaskConsumerRoutingPolicy.resolveBaseTopic(workerConfiguration()));
     try {
       WorkerRegistration registration = workerLoop().ensureStarted();
       return batchExecution.process(payloads, registration);
@@ -338,6 +359,11 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
           StructuredLogField.TRACE_ID,
           StructuredLogField.TASK_ID,
           StructuredLogField.JOB_INSTANCE_ID,
+          StructuredLogField.WORKFLOW_RUN_ID,
+          StructuredLogField.PARTITION_ID,
+          StructuredLogField.BATCH_DAY,
+          StructuredLogField.ATTEMPT,
+          StructuredLogField.TOPIC,
           StructuredLogField.WORKER_TYPE,
           StructuredLogField.WORKER_ID,
           StructuredLogField.RUN_MODE);
@@ -386,13 +412,41 @@ public abstract class AbstractTaskConsumer implements WorkerLoadProvider, Applic
     BatchMdc.put(StructuredLogField.TRACE_ID, message.traceId());
     BatchMdc.put(
         StructuredLogField.TASK_ID,
-        message.taskId() == null ? null : String.valueOf(message.taskId()));
+        EmptyChecks.isNull(message.taskId()) ? null : String.valueOf(message.taskId()));
     BatchMdc.put(
         StructuredLogField.JOB_INSTANCE_ID,
-        message.jobInstanceId() == null ? null : String.valueOf(message.jobInstanceId()));
+        EmptyChecks.isNull(message.jobInstanceId())
+            ? null
+            : String.valueOf(message.jobInstanceId()));
+    BatchMdc.put(
+        StructuredLogField.PARTITION_ID,
+        EmptyChecks.isNull(message.jobPartitionId())
+            ? null
+            : String.valueOf(message.jobPartitionId()));
+    if (EmptyChecks.isNotNull(message.schedulingContext())) {
+      BatchMdc.put(
+          StructuredLogField.WORKFLOW_RUN_ID,
+          EmptyChecks.isNull(message.schedulingContext().workflowRunId())
+              ? null
+              : String.valueOf(message.schedulingContext().workflowRunId()));
+      BatchMdc.put(
+          StructuredLogField.BATCH_DAY,
+          EmptyChecks.isNull(message.schedulingContext().bizDate())
+              ? null
+              : message.schedulingContext().bizDate().toString());
+      BatchMdc.put(
+          StructuredLogField.ATTEMPT,
+          EmptyChecks.isNull(message.schedulingContext().attemptNo())
+              ? null
+              : String.valueOf(message.schedulingContext().attemptNo()));
+    }
+    BatchMdc.put(
+        StructuredLogField.TOPIC,
+        TaskConsumerRoutingPolicy.resolveBaseTopic(workerConfiguration()));
     BatchMdc.put(StructuredLogField.WORKER_TYPE, workerConfiguration().workerType());
     BatchMdc.put(
-        StructuredLogField.WORKER_ID, registration == null ? null : registration.getWorkerId());
+        StructuredLogField.WORKER_ID,
+        EmptyChecks.isNull(registration) ? null : registration.getWorkerId());
     // P1-2.2:RUN_MODE 不再注入到 pre-claim MDC(payload 已从 message 移除);
     // worker 业务 pipeline 通过 ExecutionContext.attributes 拿 run_mode(由
     // DefaultTaskExecutionWrapper 在 claim 后注入),业务日志依然能看到。

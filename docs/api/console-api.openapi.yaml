@@ -9667,7 +9667,7 @@ paths:
                       type:
                         type: string
                         maxLength: 20
-                        description: "Event category: route, click, api, error"
+                        description: "Preferred event categories: route, click, api, error; bounded extension values remain compatible"
                       name:
                         type: string
                         maxLength: 200

@@ -164,42 +164,42 @@ UPDATE job_instance
 
 ### 1. ShedLock 锁获取失败监控
 
-**当前**：统一使用 ShedLock 官方 `RedisLockProvider`。Redis 不可达时锁获取会抛连接异常，由各 scheduler 外层按任务类型记录 warn/error 并等待下一轮；不会被当作普通竞争失败。
+**当前**：统一使用 ShedLock 官方 `RedisLockProvider`，并在共享自动配置边界包裹 `MeteredLockProvider`。Redis 不可达时锁获取会抛连接异常，由各 scheduler 外层按任务类型记录 warn/error 并等待下一轮；不会被当作普通竞争失败。
 
 **风险**：Redis 长时间不可用 → 默认 Redis provider 下所有 scheduler 无法获得锁并跳过本轮；如果只有业务日志没有指标，运维仍可能晚发现。
 
-**该补**：
+**已落地**：
 
-- [ ] Prometheus counter `shed_lock_acquire_failed_total{reason="redis_error"}`，区分 "正常 contend miss" vs "Redis 不可达"
-- [ ] Grafana 告警：`rate(shed_lock_acquire_failed_total{reason="redis_error"}[5m]) > 0` 持续 5 分钟 → P2 告警
-- [ ] 加一条独立 `health/lockprovider` endpoint，每 30s 主动 acquire+release 一次伪锁，失败计入 `lockprovider.health` gauge
+- [x] Prometheus counter `batch_shedlock_acquire_failed_total{provider="redis",reason="redis_error"}` 只统计 provider 异常；正常 contend miss 不计失败。
+- [x] `batch_shedlock_provider_healthy{provider="redis"}` 记录最近一次真实锁调用状态，避免主动探针制造额外锁副作用。
+- [x] `BatchShedLockProviderFailure` 对持续 5 分钟的 provider 异常告警。
+
+不增加独立 `health/lockprovider` 主动抢锁端点。应用已有 Redis/JDBC health，锁层指标应观察真实调用；主动创建伪锁会引入额外写入和“探针健康但业务锁命名空间错误”的假阳性。
 
 ### 2. ShedLock 任务执行时长追踪
 
-**目标**：发现哪个 `@SchedulerLock` 实际执行时长接近 `lockAtMostFor`，提前预警 TTL 不足。
+**决策**：不为每个 scheduler 统一增加通用 `Timer`。定时任务差异大，无差别埋点会重复已有的归档、Outbox、补偿和扫描器专项指标，也会形成难以维护的锁 TTL 元数据副本。
 
-**该补**：
-
-- [ ] 给每个 scheduler 加 `Timer` 指标 `scheduler_run_duration_seconds{name="..."}`
-- [ ] Grafana 告警：`histogram_quantile(0.99, ...) > lockAtMostFor × 0.5` → P3 告警
+- [x] 高风险任务继续使用各自的执行时长、积压量和最后成功时间指标。
+- [x] 只有出现任务超时、锁 TTL 接近或对应 SLO 时，才增加该任务的专项时长告警；告警阈值与同一处 `lockAtMostFor` 配置共同评审。
 
 ### 3. PG 锁等待监控
 
 **目标**：发现 `FOR UPDATE` 锁等待 / 死锁。
 
-**该补**：
+**边界**：应用仓库负责提供巡检 SQL、容量脚本和告警模板；`log_min_duration_statement`、`pg_stat_activity` 采集和生产查询计划留档必须在目标 PostgreSQL 环境验收，不能由应用默认值替生产 DBA 做决定。
 
-- [ ] PG 慢查询日志（`log_min_duration_statement = 1000`）+ `pg_stat_activity` 监控阻塞
-- [ ] `idx_*_pending` partial index 命中率 / scan 类型监控（`EXPLAIN ANALYZE` 抽查）
+- [x] 本地提供 PostgreSQL 锁等待、慢查询和索引巡检入口。
+- [ ] 目标环境启用慢查询采集，并对热点 partial index 留存 `EXPLAIN (ANALYZE, BUFFERS)` 证据。
 
 ### 4. 乐观锁冲突频次
 
 **目标**：CAS 冲突过多 = 业务热点行 / 客户端 retry 风暴。
 
-**该补**：
+**决策**：不在所有 CAS Mapper 上统一增加高基数 `table/action` 指标。CAS 冲突可能是预期竞争，也可能是业务热点，脱离调用语义的统一阈值容易产生误报。
 
-- [ ] Counter `optimistic_lock_conflict_total{table="job_instance",action="markRunning"}`
-- [ ] Grafana 告警：单 action 每分钟冲突 > 100 持续 5 分钟 → 可能业务热点
+- [x] 状态推进、领取、租约和重试链路保留各自的失败/重试/停滞指标与日志。
+- [x] 仅在某条 CAS 链路出现持续冲突证据时，为该链路增加低基数专项 counter 和告警。
 
 ---
 

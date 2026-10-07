@@ -99,7 +99,7 @@
 
 ## 4. 已识别的中小越界/模糊点
 
-### 4.1 [中度越界] ConsoleTelemetryController
+### 4.1 [已收敛] ConsoleTelemetryController
 
 **当前代码**：
 ```
@@ -115,24 +115,13 @@ POST /api/console/telemetry/events
 }
 ```
 
-**问题**：
-- ❌ 接前端任意埋点事件，变成了"前端日志接收平台"
-- ❌ INFO/ERROR 打到批量系统日志，污染告警视图
-- ❌ 前端流量 QPS 可能远超调度路径，压垮 console-api
-- ❌ 各团队都想往这里塞事件，无限扩张
+**当前边界**：
+- Console 自身只产生 `route` / `click` / `api` / `error` 四类事件；服务端保留长度受限的扩展类型兼容性，字段和批次数量受 Bean Validation 约束。
+- `props` 有 key 数、深度、列表项和单事件 8 KiB 上限，且值不写应用日志，只记录 key 数量，避免敏感值和日志放大。
+- 端点复用 Console 高开销接口的认证用户限流桶，默认 10 次/分钟；前端默认关闭，仅在排障时开启。
+- 不写业务表，不建设遥测查询、留存或归档能力；日志保留期由外部 Loki/日志平台统一治理。
 
-**风险等级**：🟡 中
-
-**建议方案**：
-
-**Option A（推荐删除）**：彻底删掉 `/api/console/telemetry/events`，前端日志走 Sentry / 字节火山引擎应用监控。
-
-**Option B（严格收敛）**：
-- 只接受 `console_error` 和 `console_action` 两个 type
-- body 大小限制 8KB
-- QPS rate-limit（例如 per-user 10 req/min）
-- 只记到 WARN 日志不发告警
-- 3 个月自动归档删除
+**风险等级**：🟢 已收敛，不再扩展为通用 RUM/Telemetry 平台。
 
 ---
 
@@ -313,34 +302,19 @@ GET /api/console/topics
 
 ### P0 — 本月内
 
-- [ ] **删除或严格收敛 ConsoleTelemetryController**
-  - Option A：删掉，前端接 Sentry
-  - Option B：如选收敛，加 rate-limit + 字段白名单 + 3 个月自动删除
-  - 关联 PR：修改 batch-console-api
+- [x] **严格收敛 ConsoleTelemetryController**：载荷边界、认证用户限流、不落业务库；四类标准事件之外保留有界扩展兼容性，留存交给外部日志平台。
 
-- [ ] **AI 接口路径收敛 + ADR 声明**
-  - 改 `/api/console/ai/chat` → `/api/console/ai/explain-failure`, `/api/console/ai/recommend-cron`
-  - 在 ADR-021 / ADR-026 中加 §AI 不直接执行写接口
-  - 关联 PR：修改 batch-console-api + 更新 ADR
+- [x] **AI 边界已由 ADR-045 固化**：保留统一 `/api/console/ai/chat/stream` 契约，但只允许批量运维只读分析；不直接执行 launch/cancel/retry 等写操作。为路径形式改名会制造前后端破坏性变更，不能代替权限和工具白名单。
 
 ### P1 — 2 周内
 
-- [ ] **SqlTransform 加强 Validator + 文档**
-  - 补 checkNoJoinOutsideBiz / checkTimeoutMs
-  - 在 ADR-021 中加 §SqlTransform 使用规范
-  - 关联 PR：修改 batch-worker-process + ADR
+- [x] **SqlTransform Validator 与执行边界已收口**：仅接受 SELECT/WITH AST，强制 schema allowlist、禁 SELECT *、禁危险函数，可选强制 LIMIT；执行路径统一设置 query timeout。无需再增加基于 SQL 字符串的 `checkNoJoinOutsideBiz`。
 
-- [ ] **Resource Tag 约束 + 预定义白名单**
-  - 代码加 ALLOWED_TAG_KEYS 白名单
-  - 在 ADR-027 中加 §Resource Tag 使用范围
-  - 关联 PR：修改 batch-console-api + ADR
+- [x] **Resource Tag 范围已约束**：写入口只允许 `JOB` / `WORKFLOW` / `FILE_CHANNEL` / `FILE_TEMPLATE` 四类本平台资源并经过租户守卫。标签 key 保持租户自定义；再加全局 key 白名单会把正常扩展变成发版事项，且不能增强资源类型边界。
 
 ### P2 — 本月底前完成
 
-- [ ] **Event Catalog 删掉写接口**
-  - 确认没有 POST /api/console/topics / POST /api/console/event-types
-  - 如有，删掉；只保留 GET 只读
-  - 关联 PR：修改 batch-console-api
+- [x] **Event Catalog 保持只读**：仅有 `GET /event-types` 与 `GET /topics`，没有用户注册事件或 Topic 的写接口。
 
 ---
 

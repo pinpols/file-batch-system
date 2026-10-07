@@ -35,7 +35,8 @@ public class ConsoleRateLimitProperties {
   private List<String> expensiveOpPathPrefixes = List.of(
       "/api/console/config/sync/",
       "/api/console/config/tenant-package/excel/",
-      "/api/console/reports/excel");
+      "/api/console/reports/excel",
+      "/api/console/telemetry/");
 
   /**
    * 文件操作接口（下载、错误导出、归档、重派、到达组操作等）：每个已认证用户每分钟最多请求次数。 任意 HTTP 方法都计入（下载/导出常为 GET）。高水位默认

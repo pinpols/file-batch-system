@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
+import io.github.pinpols.batch.common.kafka.SchedulingContext;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -26,7 +27,11 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.lang.reflect.Field;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.LocalDate;
+import java.time.Month;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -64,7 +69,11 @@ class AbstractTaskConsumerTest {
   @DisplayName("同一租户的多条消息合并为一次批量执行, 整批成功即允许提交偏移量")
   void doConsumeBatch_groupsAcceptedMessagesByTenantAndExecutesBatch() {
     TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
-    when(executor.executeBatchDetailed(any(), anyString())).thenReturn(List.of());
+    AtomicReference<String> executionTopic = new AtomicReference<>();
+    when(executor.executeBatchDetailed(any(), anyString())).thenAnswer(invocation -> {
+      executionTopic.set(MDC.get(StructuredLogField.TOPIC));
+      return List.of();
+    });
     AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, null);
 
     String j1 = JsonUtils.toJson(buildMessage(1L, "t1", "IMPORT", null));
@@ -77,6 +86,8 @@ class AbstractTaskConsumerTest {
     verify(executor).executeBatchDetailed(cap.capture(), anyString()); // 同租户一次 executeBatch
     assertThat(cap.getValue()).hasSize(2);
     verify(executor, never()).execute(any(), anyString()); // 不走单条路径
+    assertThat(executionTopic.get()).isEqualTo("batch.task.dispatch.import");
+    assertThat(MDC.get(StructuredLogField.TOPIC)).isNull();
   }
 
   @Test
@@ -292,6 +303,49 @@ class AbstractTaskConsumerTest {
     assertThat(MDC.get(StructuredLogField.TENANT_ID)).isNull();
     assertThat(MDC.get(StructuredLogField.TRACE_ID)).isNull();
     assertThat(MDC.get(StructuredLogField.TASK_ID)).isNull();
+  }
+
+  @Test
+  @DisplayName("执行期间注入批量主链最小日志字段, 完成后清理线程上下文")
+  void doConsume_exposesMinimumBatchTraceFieldsDuringExecution() {
+    AtomicReference<Map<String, String>> executionMdc = new AtomicReference<>();
+    TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
+    when(executor.execute(any(), any())).thenAnswer(invocation -> {
+      executionMdc.set(MDC.getCopyOfContextMap());
+      return new WorkerExecutionResult("1", true, "ok");
+    });
+    AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, null);
+    SchedulingContext schedulingContext = new SchedulingContext(
+        LocalDate.of(2026, Month.OCTOBER, 7), null, null, false, 3, "API", null, 901L);
+    TaskDispatchMessage message = new TaskDispatchMessage(
+        "v2",
+        "t1",
+        1L,
+        11L,
+        101L,
+        null,
+        "JOB-1",
+        "IMPORT",
+        null,
+        null,
+        "tr",
+        "k",
+        null,
+        schedulingContext);
+
+    consumer.doConsume(JsonUtils.toJson(message));
+
+    assertThat(executionMdc.get())
+        .containsEntry(StructuredLogField.TRACE_ID, "tr")
+        .containsEntry(StructuredLogField.TENANT_ID, "t1")
+        .containsEntry(StructuredLogField.JOB_INSTANCE_ID, "1")
+        .containsEntry(StructuredLogField.WORKFLOW_RUN_ID, "901")
+        .containsEntry(StructuredLogField.PARTITION_ID, "11")
+        .containsEntry(StructuredLogField.TASK_ID, "101")
+        .containsEntry(StructuredLogField.BATCH_DAY, "2026-10-07")
+        .containsEntry(StructuredLogField.ATTEMPT, "3")
+        .containsEntry(StructuredLogField.TOPIC, "batch.task.dispatch.import");
+    assertThat(MDC.getCopyOfContextMap()).isNullOrEmpty();
   }
 
   @Test
