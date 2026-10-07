@@ -26,6 +26,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.application.service.failure.PersistenceConflictDetectionPort;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.application.service.task.PartitionDispatchService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
@@ -145,7 +146,8 @@ class DefaultLaunchServiceTest {
         launchParamResolver,
         jobExecutionLogMapper,
         batchDayTransactionManager,
-        new LaunchPhaseMetrics(new SimpleMeterRegistry()));
+        new LaunchPhaseMetrics(new SimpleMeterRegistry()),
+        mock(PersistenceConflictDetectionPort.class));
     when(batchDayGateService.evaluateAndApply(any(), any(), any(), anyString()))
         .thenReturn(
             new BatchDayGateService.GateDecision(BatchDayGateService.GateDecisionType.ALLOW, null));

@@ -19,13 +19,13 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerMisfirePendingEntity;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
+import io.github.pinpols.batch.trigger.application.UpstreamReadinessPort;
 import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
 import io.github.pinpols.batch.trigger.domain.TriggerLaunchStatus;
 import io.github.pinpols.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
 import io.github.pinpols.batch.trigger.event.TriggerOutboxDomainEventPublisher;
-import io.github.pinpols.batch.trigger.infrastructure.readiness.UpstreamReadinessChecker;
 import io.github.pinpols.batch.trigger.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.trigger.mapper.TenantStatusMapper;
 import io.github.pinpols.batch.trigger.mapper.TriggerMisfirePendingMapper;
@@ -75,7 +75,7 @@ class DefaultTriggerServiceTest {
   private TransactionStatus transactionStatus;
 
   @Mock
-  private UpstreamReadinessChecker upstreamReadinessChecker;
+  private UpstreamReadinessPort upstreamReadiness;
 
   private DefaultTriggerService service;
 
@@ -92,7 +92,7 @@ class DefaultTriggerServiceTest {
         businessCalendarMapper,
         tenantStatusMapper,
         transactionManager,
-        upstreamReadinessChecker,
+        upstreamReadiness,
         runtimeProperties);
   }
 
@@ -296,8 +296,7 @@ class DefaultTriggerServiceTest {
         Map.of("calendarCode", "BIZ_CAL"));
 
     when(launchAdapterService.fromScheduledTrigger(eq(command), any())).thenReturn(launchRequest);
-    when(upstreamReadinessChecker.isReady(
-            "t1", "UPSTREAM_SETTLE", LocalDate.of(2026, Month.MARCH, 28)))
+    when(upstreamReadiness.isReady("t1", "UPSTREAM_SETTLE", LocalDate.of(2026, Month.MARCH, 28)))
         .thenReturn(false);
 
     assertThatThrownBy(() -> service.launchScheduled(command))
@@ -330,8 +329,7 @@ class DefaultTriggerServiceTest {
         Map.of("calendarCode", "BIZ_CAL"));
 
     when(launchAdapterService.fromScheduledTrigger(eq(command), any())).thenReturn(launchRequest);
-    when(upstreamReadinessChecker.isReady(
-            "t1", "UPSTREAM_SETTLE", LocalDate.of(2026, Month.MARCH, 28)))
+    when(upstreamReadiness.isReady("t1", "UPSTREAM_SETTLE", LocalDate.of(2026, Month.MARCH, 28)))
         .thenReturn(true);
 
     LaunchResponse response = service.launchScheduled(command);

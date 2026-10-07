@@ -12,7 +12,6 @@ import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,11 +52,7 @@ public class ResultVersionPromoteService {
     // 2) 当前 PENDING → EFFECTIVE（CAS 在 status='PENDING' 上守护，并发 promote 抢同一行只允许一份成功）
     int updated = resultVersionMapper.promoteToEffective(tenantId, versionId, now);
     if (updated == 0) {
-      throw new OptimisticLockingFailureException("result_version promote race lost: tenantId="
-          + tenantId
-          + ", id="
-          + versionId
-          + ", expected status=PENDING");
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
     }
     ResultVersionEntity promoted = loadOrThrow(tenantId, versionId);
     materializePromotedVersion(promoted);
@@ -80,8 +75,7 @@ public class ResultVersionPromoteService {
     Instant now = dateTimeSupport.nowInstant();
     int updated = resultVersionMapper.rejectPending(tenantId, versionId, now);
     if (updated == 0) {
-      throw new OptimisticLockingFailureException(
-          "result_version reject race lost: tenantId=" + tenantId + ", id=" + versionId);
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
     }
     log.info(
         "result_version rejected: tenantId={}, id={}, businessKey={}, versionNo={}",
