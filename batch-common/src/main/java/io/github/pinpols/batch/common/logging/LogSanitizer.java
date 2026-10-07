@@ -10,10 +10,11 @@ package io.github.pinpols.batch.common.logging;
  *   <li>{@code String.valueOf} 保证 null 安全，且对非 String 值输出与 SLF4J 一致；
  *   <li>{@code replaceAll("\\R", ...)} 是 CodeQL {@code java/log-injection} 识别为有效净化的形态
  *       （见 {@code semmle/code/java/security/LogInjection.qll}：常量参 {@code \R} / {@code \n} /
- *       {@code \r} 才被当作 sanitizer；黑名单写法如 {@code [\r\n]} 不被识别）。
+ *       {@code \r} 以及不含换行的合规白名单均可被识别;黑名单写法如 {@code [\r\n]} 不被识别）。
  * </ul>
  *
- * <p>不要把本方法改写成"先拼接再过滤"或换用其它正则形态，否则 CodeQL 污点分析会重新报 open。
+ * <p>共享入口保持按字段处理与完整换行覆盖;变更正则时须同时验证运行语义和当前 CodeQL 模型,
+ * 不能把扫描器识别某种写法等同于其它写法必然不安全。
  */
 public final class LogSanitizer {
 

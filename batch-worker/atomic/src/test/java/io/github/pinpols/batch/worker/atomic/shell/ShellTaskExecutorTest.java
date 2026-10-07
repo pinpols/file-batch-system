@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -302,12 +303,18 @@ class ShellTaskExecutorTest {
 
     @Test
     @DisplayName("关闭清理时执行结束后应保留工作目录, 便于问题排查")
-    void shouldKeepWorkdir_whenCleanupDisabled() {
+    void shouldKeepWorkdir_whenCleanupDisabled() throws Exception {
       props.setCleanupWorkdir(false);
       TaskResult r =
           executor.execute(ctxWithParams(Map.of("command", "/bin/echo", "args", List.of("x"))));
       String workdir = (String) r.output().get("workdir");
       assertThat(Files.exists(Path.of(workdir))).isTrue();
+      if (Files.getFileStore(tempDir).supportsFileAttributeView("posix")) {
+        assertThat(Files.getPosixFilePermissions(tempDir))
+            .isEqualTo(PosixFilePermissions.fromString("rwx------"));
+        assertThat(Files.getPosixFilePermissions(Path.of(workdir)))
+            .isEqualTo(PosixFilePermissions.fromString("rwx------"));
+      }
     }
 
     @Test

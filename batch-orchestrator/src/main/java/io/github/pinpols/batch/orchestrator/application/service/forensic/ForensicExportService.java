@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.OwnerOnlyFiles;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayOperationAuditEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ForensicExportLogEntity;
@@ -17,7 +18,9 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -141,14 +144,15 @@ public class ForensicExportService {
 
   private ExportResult doExport(ForensicExportRequest request, String exportId)
       throws IOException, NoSuchAlgorithmException {
-    Path storageDir = Path.of(properties.getStorageDir());
-    Files.createDirectories(storageDir);
-    Path outFile = storageDir.resolve(exportId + ".zip");
+    // 取证包包含租户运行证据;私有权限必须在写入前生效,不能依赖宿主机 umask。
+    Path storageDir = OwnerOnlyFiles.createDirectories(Path.of(properties.getStorageDir()));
 
     Map<String, Integer> rowCounts = new LinkedHashMap<>();
     MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
 
-    try (OutputStream raw = Files.newOutputStream(outFile);
+    Path outFile = OwnerOnlyFiles.createFile(storageDir.resolve(exportId + ".zip"));
+    try (OutputStream raw =
+            Files.newOutputStream(outFile, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
         DigestOutputStream digesting = new DigestOutputStream(raw, digest);
         ZipOutputStream zip = new ZipOutputStream(digesting, StandardCharsets.UTF_8)) {
 

@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.OwnerOnlyFiles;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.io.ByteArrayOutputStream;
@@ -300,14 +301,16 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
 
   private Path createIsolatedWorkdir(TaskContext ctx) {
     try {
-      Files.createDirectories(props.getWorkdirBase());
+      // 子进程可写业务中间数据;根和工作目录均须私有,随机目录名不能替代访问控制。
+      OwnerOnlyFiles.createDirectories(props.getWorkdirBase());
       String subdir = String.format(
           "%s-%s-%s",
           safeForPath(ctx.tenantId()),
           safeForPath(ctx.jobCode()),
           UUID.randomUUID().toString().substring(0, 8));
       Path dir = props.getWorkdirBase().resolve(subdir);
-      Files.createDirectory(dir);
+      Files.createDirectory(dir, OwnerOnlyFiles.attributes(props.getWorkdirBase(), true));
+      OwnerOnlyFiles.protectExisting(dir, true);
       return dir;
     } catch (IOException e) {
       // 用 JDK 标准 UncheckedIOException 而非裸 RuntimeException(docs/agent-baseline.md #5):语义精确(IO 失败),
