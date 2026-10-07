@@ -183,7 +183,8 @@ psql() {
     return 127
   fi
 
-  if ! command -v docker >/dev/null 2>&1 || ! docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null | grep -q '^true$'; then
+  if ! command -v docker >/dev/null 2>&1 || ! docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null \
+    | grep -Fx true >/dev/null; then
     printf 'PostgreSQL client unavailable: install psql or start container %s\n' "$container" >&2
     return 127
   fi

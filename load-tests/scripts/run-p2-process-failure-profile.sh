@@ -49,14 +49,15 @@ require_tooling() {
 
 worker_process_pid() {
   ps -ax -o pid= -o command= \
-    | awk '/build\/runtime-jars\/worker-process\.jar/ && /java/ {print $1; exit}'
+    | awk '/build\/runtime-jars\/worker-process\.jar/ && /java/ && !found {pid=$1; found=1}
+           END {if (found) print pid}'
 }
 
 wait_worker_health() {
   local deadline=$((SECONDS + WORKER_RESTART_WAIT_SECONDS))
   while (( SECONDS < deadline )); do
     if curl -fsS --max-time 3 "http://localhost:${WORKER_PROCESS_PORT}/actuator/health" \
-      | grep -q '"status":"UP"'; then
+      | grep -F '"status":"UP"' >/dev/null; then
       return 0
     fi
     sleep 2
@@ -118,7 +119,7 @@ request_status() {
     -v tenant_id="$PROCESS_TENANT_ID" \
     -v request_id="$request_id" \
     -f "$LOAD_DIR/sql/p2-request-instance-task-status.sql" \
-    | head -1
+    | awk 'NR == 1 { first = $0 } END { if (NR > 0) print first }'
 }
 
 wait_task_running() {
@@ -166,7 +167,8 @@ terminate_active_process_backend() {
   local deadline=$((SECONDS + 60))
   while (( SECONDS < deadline )); do
     local pid
-    pid="$(psql_business -At -f "$LOAD_DIR/sql/p2-active-process-copy-backend.sql" | head -1)"
+    pid="$(psql_business -At -f "$LOAD_DIR/sql/p2-active-process-copy-backend.sql" \
+      | awk 'NR == 1 { first = $0 } END { if (NR > 0) print first }')"
     if [[ "$pid" =~ ^[0-9]+$ ]]; then
       psql_business -At -v backend_pid="$pid" \
         -f "$LOAD_DIR/sql/p2-terminate-backend.sql" > "$LOG_DIR/pg-terminate-${pid}.txt"

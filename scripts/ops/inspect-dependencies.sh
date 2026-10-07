@@ -37,7 +37,7 @@ optional_issue() { if [[ "$STRICT" == "true" ]]; then fail "$*"; else warn "$*";
 
 docker_running() {
   [[ "$USE_DOCKER" == "true" ]] && command -v docker >/dev/null 2>&1 \
-    && docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null | grep -qx true
+    && docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null | grep -Fx true >/dev/null
 }
 run_docker() { local container="$1"; shift; docker exec "$container" "$@"; }
 

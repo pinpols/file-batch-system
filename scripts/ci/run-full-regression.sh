@@ -253,7 +253,8 @@ rollout_and_probe_release() {
         rm -f "$pf_log"
         return 1
       fi
-      if curl -fsS "http://127.0.0.1:${local_port}/actuator/health/readiness" | grep -q '"status":"UP"'; then
+      if curl -fsS "http://127.0.0.1:${local_port}/actuator/health/readiness" \
+        | grep -F '"status":"UP"' >/dev/null; then
         kill "$pf_pid" >/dev/null 2>&1 || true
         wait "$pf_pid" 2>/dev/null || true
         rm -f "$pf_log"

@@ -19,7 +19,8 @@ if [[ -z "${LAN_HOST:-}" ]]; then
     LAN_HOST=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null)
   fi
   if [[ -z "${LAN_HOST:-}" ]] && command -v ip >/dev/null 2>&1; then
-    LAN_HOST=$(ip route get 1.1.1.1 2>/dev/null | awk '/src/ {print $7; exit}')
+    LAN_HOST=$(ip route get 1.1.1.1 2>/dev/null \
+      | awk '/src/ && !found {host=$7; found=1} END {if (found) print host}')
   fi
   LAN_HOST="${LAN_HOST:-localhost}"
 fi

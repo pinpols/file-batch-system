@@ -143,8 +143,12 @@ sdk_e2e_kafka_topics() {
 
 # 检查本地/CI 栈可达。返回非 0 让入口决定是否自己 boot。
 sdk_e2e_check_stack() {
-  curl -fsS "${ORCH_URL}/actuator/health" 2>/dev/null | grep -q '"status":"UP"' || { sdk_e2e_fail "orchestrator not UP at ${ORCH_URL}"; return 1; }
-  curl -fsS "${TRIGGER_URL}/actuator/health" 2>/dev/null | grep -q '"status":"UP"' || { sdk_e2e_fail "trigger not UP at ${TRIGGER_URL}"; return 1; }
+  curl -fsS "${ORCH_URL}/actuator/health" 2>/dev/null \
+    | grep -F '"status":"UP"' >/dev/null \
+    || { sdk_e2e_fail "orchestrator not UP at ${ORCH_URL}"; return 1; }
+  curl -fsS "${TRIGGER_URL}/actuator/health" 2>/dev/null \
+    | grep -F '"status":"UP"' >/dev/null \
+    || { sdk_e2e_fail "trigger not UP at ${TRIGGER_URL}"; return 1; }
   sdk_e2e_q_file check-database-ready.sql >/dev/null \
     || { sdk_e2e_fail "postgres not reachable ${PGHOST}:${PGPORT}"; return 1; }
   sdk_e2e_kafka_topics --list >/dev/null 2>&1 || { sdk_e2e_fail "kafka not reachable"; return 1; }

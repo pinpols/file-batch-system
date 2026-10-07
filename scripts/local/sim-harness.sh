@@ -7,7 +7,7 @@
 #   reset         数据重制到基线(清运行态 + biz 数据,保留 definition/config/tenant/user)
 #   prereq        幂等装配先决条件(biz 表+RLS+只读角色、shard-1、下游 sftp/mockserver、租户导入)
 #   verify-data   真实数据验证(两片真实 PG 活体路由,幂等可重复)
-#   sim           跑全量 sim 阶段 04→25(前置:preflight + prereq 已过)
+#   sim           跑全量 sim 阶段 04→28(前置:preflight + prereq 已过,不跳过阶段)
 #   all           preflight → reset → prereq → verify-data → sim 一条龙
 #
 # 本 harness 固化了若干踩过的问题(见各 check 注释):
@@ -334,26 +334,28 @@ ensure_worker_registrations() {
 }
 
 # ---------------------------------------------------------
-# sim:全量阶段 04→25
+# sim:全量阶段 04→28
 # restart_import:为特定 stage 切换 worker-import 互斥配置。
 #   default    = checkpoint off + no skip(17 PARTITION_REPLACE_COPY 需 checkpoint=false)
 #                注:checkpoint 默认值已在 P0 翻 true,故 default 基线必须**显式** -D=false,
 #                否则 17 会撞"PARTITION_REPLACE_COPY 与续跑开关互斥"拒跑。
 #   skip       = skip-profile(23 import-stage2d 的 skip 阈值场景)
 #   checkpoint = checkpoint=true(25 import-stage2e 真实崩溃续跑)
+#   bundle     = batch-manifest + arrival(26 文件束导入全链)
 # 用 build/runtime-jars(与 start-all 一致);env 由调用方子 shell 的 source env-common 提供。
 restart_import() {
   local mode="${1:-default}" extra="-Dbatch.worker.checkpoint.enabled=false"
   case "$mode" in
     skip) extra="-Dbatch.worker.checkpoint.enabled=false -Dbatch.worker.import.skip.enabled=true -Dbatch.worker.import.skip.threshold-mode=ABSOLUTE -Dbatch.worker.import.skip.max-skip-count=1 -Dbatch.worker.import.skip.error-sink-type=ERROR_TABLE" ;;
     checkpoint) extra="-Dbatch.worker.checkpoint.enabled=true" ;;
+    bundle) extra="-Dbatch.worker.checkpoint.enabled=false -Dbatch.worker.import.scanner.batch-manifest-enabled=true -Dbatch.worker.import.scanner.arrival.enabled=true -Dbatch.worker.import.scanner.stability-window-seconds=0 -Dbatch.worker.import.scanner.poll-interval-millis=2000 -Dbatch.worker.import.scanner.biz-date-pattern=(?<bizDate>[0-9]{8})" ;;
   esac
   if [[ "${BATCH_SCRIPT_RUNTIME:-auto}" == "host" ]]; then
     JAVA_OPTS="${JAVA_OPTS:-$SIM_JAVA_OPTS} $extra" \
       bash scripts/local/restart.sh worker-import >"$SIM_LOG_DIR/worker-import-${mode}.log" 2>&1
     for _ in $(seq 1 40); do
       curl -s -o /dev/null -w '%{http_code}' "http://localhost:${WORKER_IMPORT_PORT}/actuator/health" 2>/dev/null \
-        | grep -q 200 && { echo "  [worker-import:$mode ready]"; return 0; }
+        | grep -F 200 >/dev/null && { echo "  [worker-import:$mode ready]"; return 0; }
       sleep 3
     done
     echo "  [worker-import:$mode NOT ready] 见 $SIM_LOG_DIR/worker-import-${mode}.log" >&2
@@ -381,7 +383,7 @@ restart_import() {
       bash scripts/local/restart.sh worker-import
     return $?
   fi
-  local pid; pid="$(process_listen_pids "$WORKER_IMPORT_PORT" | head -1)"
+  local pid; pid="$(process_first_listen_pid "$WORKER_IMPORT_PORT")"
   if [ -n "$pid" ]; then
     kill "$pid" 2>/dev/null
     for _ in $(seq 1 15); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
@@ -393,27 +395,65 @@ restart_import() {
     -jar build/runtime-jars/worker-import.jar --spring.profiles.active=local >"$SIM_LOG_DIR/worker-import-${mode}.log" 2>&1 &
   disown
   for _ in $(seq 1 40); do
-    curl -s -o /dev/null -w '%{http_code}' "http://localhost:${WORKER_IMPORT_PORT}/actuator/health" 2>/dev/null | grep -q 200 && { echo "  [worker-import:$mode ready]"; return 0; }
+    curl -s -o /dev/null -w '%{http_code}' "http://localhost:${WORKER_IMPORT_PORT}/actuator/health" 2>/dev/null \
+      | grep -F 200 >/dev/null && { echo "  [worker-import:$mode ready]"; return 0; }
     sleep 3
   done
   echo "  [worker-import:$mode NOT ready] 见 $SIM_LOG_DIR/worker-import-${mode}.log" >&2; return 1
 }
 
+# 27 需要真实命中批量 listener。PROCESS 默认 max-poll-records=1 且并发为 4，
+# 只翻 enabled 仍会退化为 K=1；这里把独占 sim 窗口规整为单 listener、每 poll 5 条，
+# 同时满足启动期背压守卫。阶段结束后恢复模块默认值。
+restart_process_batch_claim() {
+  local mode="${1:-default}"
+  local extra="-Dbatch.worker.batch-claim.enabled=false"
+  if [[ "$mode" == enabled ]]; then
+    extra="-Dbatch.worker.batch-claim.enabled=true -Dbatch.worker.batch-claim.max-batch-size=5 -Dspring.kafka.listener.concurrency=1 -Dspring.kafka.consumer.max-poll-records=5 -Dspring.kafka.consumer.fetch-max-wait=2000 -Dbatch.worker.max-concurrent-tasks=5 -Dbatch.worker.execution.pool-size=5"
+  fi
+  JAVA_OPTS="${JAVA_OPTS:-$SIM_JAVA_OPTS} $extra" SKIP_CDS=1 \
+    bash scripts/local/restart.sh worker-process >"$SIM_LOG_DIR/worker-process-batch-claim-${mode}.log" 2>&1
+  for _ in $(seq 1 40); do
+    curl -s -o /dev/null -w '%{http_code}' "http://localhost:${WORKER_PROCESS_PORT}/actuator/health" 2>/dev/null \
+      | grep -F 200 >/dev/null && { echo "  [worker-process:batch-claim-$mode ready]"; return 0; }
+    sleep 3
+  done
+  echo "  [worker-process:batch-claim-$mode NOT ready] 见 $SIM_LOG_DIR/worker-process-batch-claim-${mode}.log" >&2
+  return 1
+}
+
 # ---------------------------------------------------------
 sim() {
-  echo "== sim:全量 04→25 =="
+  echo "== sim:全量 04→28(零跳过) =="
   clean_stale_env
   ( unset BATCH_ENV_LOADED BATCH_ENV_COMMON_ROOT; source scripts/sim/env-common.sh >/dev/null 2>&1
+    local active_import_mode=default active_process_batch_claim=default
+    restore_sim_worker_profiles() {
+      local original_rc=$? restore_failed=0
+      trap - EXIT
+      set +e
+      if [[ "$active_import_mode" != default ]]; then
+        restart_import default || restore_failed=1
+      fi
+      if [[ "$active_process_batch_claim" != default ]]; then
+        restart_process_batch_claim default || restore_failed=1
+      fi
+      if [[ "$original_rc" == 0 && "$restore_failed" != 0 ]]; then
+        echo "  [sim-cleanup] worker 默认配置恢复失败" >&2
+        exit 1
+      fi
+      exit "$original_rc"
+    }
+    trap restore_sim_worker_profiles EXIT
     ensure_core_runtime
     restart_import default   # 基线 worker:checkpoint=false(17 REPLACE 需要) + no skip
+    restart_process_batch_claim default
     ensure_worker_registrations || exit 1
     local sum="$SIM_LOG_DIR/sim-summary.txt"; : > "$sum"
     local sim_failed=0
     while IFS= read -r s; do
       local n; n=$(basename "$s")
       # 00-03 是前置(reset/seed/租户导入),harness 单独跑,遍历跳过。
-      # 26+(bundle-import 等)保留在遍历里:各自带 opt-in 门(如 RUN_BUNDLE_SIM=1),
-      # 未开启时脚本内自跳 exit 0,对标准 sim 零影响;开启后 sim() 全量才能带上它们。
       case "$n" in 00-*|01-*|02-*|03-*) continue;; esac
       # per-stage batchNo 隔离:全局 BATCH_NO 会让各 stage 共享 batchNo,致断言/清理跨 stage
       # 撞数据(12 断言按 source_ref=batchNo 查到他人 file_record、24 DELETE 撞他人
@@ -425,8 +465,22 @@ sim() {
         *) unset BATCH_NO RUN_ID REPORT_DIR ;;
       esac
       case "$n" in
-        23-*) restart_import skip ;;        # skip-profile
-        25-*) restart_import checkpoint ;;  # checkpoint=true
+        23-*)
+          active_import_mode=skip
+          restart_import skip
+          ;;
+        25-*)
+          active_import_mode=checkpoint
+          restart_import checkpoint
+          ;;
+        26-*)
+          active_import_mode=bundle
+          restart_import bundle
+          ;;
+        27-*)
+          active_process_batch_claim=enabled
+          restart_process_batch_claim enabled
+          ;;
       esac
       ensure_core_runtime || exit 1
       ensure_worker_registrations || exit 1
@@ -441,7 +495,16 @@ sim() {
         echo "FAIL $n (exit $rc)" | tee -a "$sum"
         tail -6 "$stage_log" | sed 's/^/   /' | tee -a "$sum"
       fi
-      case "$n" in 23-*|25-*) restart_import default ;; esac   # 恢复基线
+      case "$n" in
+        23-*|25-*|26-*)
+          restart_import default
+          active_import_mode=default
+          ;;
+        27-*)
+          restart_process_batch_claim default
+          active_process_batch_claim=default
+          ;;
+      esac
       case "$n" in *load*|*stage*) sleep 20;; esac
     done < <(find scripts/sim -maxdepth 1 -type f -name '[0-2][0-9]-*.sh' | sort)
     echo "== sim 完成 ==" | tee -a "$sum"
@@ -474,7 +537,7 @@ routing_overlay_clear() {
 # 不删就会残留到下一轮)。只在退出时调,run 中途用 routing_overlay_clear。
 routing_sim_teardown() {
   routing_overlay_clear
-  if docker ps -aq --filter "name=${BIZ_SHARD_1_CONTAINER}" 2>/dev/null | grep -q .; then
+  if docker ps -aq --filter "name=${BIZ_SHARD_1_CONTAINER}" 2>/dev/null | grep . >/dev/null; then
     docker rm -f "$BIZ_SHARD_1_CONTAINER" >/dev/null 2>&1 \
       && c_ylw "  biz-shard-1 容器已删(routing-sim 直起,退出即清)" || true
   fi
@@ -520,7 +583,11 @@ routing_sim() {
   } >> .env.local
   unset BATCH_ENV_LOADED BATCH_ENV_COMMON_ROOT
   bash scripts/local/restart.sh worker-import worker-export worker-process >"$SIM_LOG_DIR/rs-restart.log" 2>&1
-  for _ in $(seq 1 30); do curl -s -o /dev/null -w '%{http_code}' "http://localhost:${WORKER_IMPORT_PORT}/actuator/health" 2>/dev/null | grep -q 200 && break; sleep 3; done
+  for _ in $(seq 1 30); do
+    curl -s -o /dev/null -w '%{http_code}' "http://localhost:${WORKER_IMPORT_PORT}/actuator/health" 2>/dev/null \
+      | grep -F 200 >/dev/null && break
+    sleep 3
+  done
   ok "3 biz worker 已带 routing 重启"
 
   echo "-- 4) 跑导入(04-seed + 05-load)--"

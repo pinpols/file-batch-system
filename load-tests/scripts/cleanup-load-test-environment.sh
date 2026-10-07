@@ -147,10 +147,69 @@ kafka_configs_cli() {
     --bootstrap-server "$BATCH_DEFAULT_KAFKA_CONTAINER_BOOTSTRAP" "$@"
 }
 
-kafka_topic_partitions() {
-  local topic="$1"
-  kafka_cli --describe --topic "$topic" 2>/dev/null \
-    | awk -F'PartitionCount: ' 'NF > 1 { split($2, a, " "); print a[1]; exit }'
+kafka_init_all_topics() {
+  local compose_env_file="${COMPOSE_ENV_FILE:-$ROOT_DIR/.env.local}"
+  local compose_project_name="${COMPOSE_PROJECT_NAME:-batch-platform}"
+  if [[ "$compose_env_file" != /* ]]; then
+    compose_env_file="$ROOT_DIR/$compose_env_file"
+  fi
+  local -a compose_args=(
+    --project-name "$compose_project_name"
+    -f "$ROOT_DIR/docker-compose.yml"
+  )
+  if [[ -f "$compose_env_file" ]]; then
+    compose_args+=(--env-file "$compose_env_file")
+  fi
+  KAFKA_TOPICS="${KAFKA_TOPICS:-},${KAFKA_TOPICS_CSV}" \
+    docker compose "${compose_args[@]}" run --rm --no-deps kafka-init
+}
+
+wait_kafka_topics_deleted() {
+  local topics_csv="$1"
+  local listed remaining topic
+  local -a topics
+  IFS=',' read -r -a topics <<< "$topics_csv"
+
+  for _ in $(seq 1 30); do
+    if ! listed="$(kafka_cli --list 2>/dev/null)"; then
+      echo "Kafka topic list failed while waiting for deletion" >&2
+      return 1
+    fi
+    remaining=""
+    for topic in "${topics[@]}"; do
+      topic="$(echo "$topic" | xargs)"
+      [[ -n "$topic" ]] || continue
+      if grep -Fqx -- "$topic" <<< "$listed"; then
+        remaining+="${remaining:+,}${topic}"
+      fi
+    done
+    if [[ -z "$remaining" ]]; then
+      return 0
+    fi
+    sleep 2
+  done
+
+  echo "Kafka topic deletion timed out: ${remaining}" >&2
+  return 1
+}
+
+verify_kafka_topics_restored() {
+  local topics_csv="$1"
+  local listed topic missing=""
+  local -a topics
+  IFS=',' read -r -a topics <<< "$topics_csv"
+  listed="$(kafka_cli --list)"
+  for topic in "${topics[@]}"; do
+    topic="$(echo "$topic" | xargs)"
+    [[ -n "$topic" ]] || continue
+    if ! grep -Fqx -- "$topic" <<< "$listed"; then
+      missing+="${missing:+,}${topic}"
+    fi
+  done
+  if [[ -n "$missing" ]]; then
+    echo "Kafka topic restore verification failed: ${missing}" >&2
+    return 1
+  fi
 }
 
 psql_platform() {
@@ -186,39 +245,35 @@ diagnose() {
 clean_kafka() {
   IFS=',' read -r -a topics <<< "$KAFKA_TOPICS_CSV"
   if [[ "$RESET_KAFKA_TOPICS" == "true" ]]; then
+    local reset_failed=0
     echo "Kafka topic reset: ${KAFKA_TOPICS_CSV}"
     for topic in "${topics[@]}"; do
       topic="$(echo "$topic" | xargs)"
       [[ -n "$topic" ]] || continue
-      run_or_preview kafka_cli --delete --if-exists --topic "$topic"
+      if ! run_or_preview kafka_cli --delete --if-exists --topic "$topic"; then
+        echo "Kafka topic delete failed: ${topic}" >&2
+        reset_failed=1
+      fi
     done
     if [[ "$APPLY" == "true" ]]; then
       echo "等待 Kafka 完成 topic 删除..."
-      sleep 10
-      for topic in "${topics[@]}"; do
-        topic="$(echo "$topic" | xargs)"
-        [[ -n "$topic" ]] || continue
-        local partitions
-        case "$topic" in
-          batch.trigger.launch.v1)
-            partitions="${KAFKA_PARTITIONS_TRIGGER_LAUNCH:-12}" ;;
-          batch.task.result)
-            partitions="${KAFKA_PARTITIONS_RESULT:-${KAFKA_DEFAULT_PARTITIONS:-4}}" ;;
-          batch.task.retry)
-            partitions="${KAFKA_PARTITIONS_RETRY:-${KAFKA_DEFAULT_PARTITIONS:-4}}" ;;
-          batch.task.dead-letter)
-            partitions="${KAFKA_PARTITIONS_DEAD_LETTER:-${KAFKA_DEFAULT_PARTITIONS:-4}}" ;;
-          *)
-            partitions="${KAFKA_PARTITIONS_DISPATCH:-${KAFKA_DEFAULT_PARTITIONS:-4}}" ;;
-        esac
-        kafka_cli --create --if-not-exists --topic "$topic" --partitions "$partitions" --replication-factor 1
-        current_partitions="$(kafka_topic_partitions "$topic")"
-        if [[ -n "$current_partitions" && "$current_partitions" -lt "$partitions" ]]; then
-          kafka_cli --alter --topic "$topic" --partitions "$partitions"
-        fi
-      done
+      if ! wait_kafka_topics_deleted "$KAFKA_TOPICS_CSV"; then
+        reset_failed=1
+      fi
+      echo "通过统一 Kafka 初始化入口恢复全部平台 topic..."
+      if ! kafka_init_all_topics; then
+        echo "Kafka 统一初始化失败，请修复 broker/Compose 后重跑 kafka-init" >&2
+        return 1
+      fi
+      if ! verify_kafka_topics_restored "$KAFKA_TOPICS_CSV"; then
+        return 1
+      fi
+      if [[ "$reset_failed" -ne 0 ]]; then
+        echo "Kafka topic 已统一恢复，但删除阶段存在失败，清理结果不记为成功" >&2
+        return 1
+      fi
     else
-      echo "[预览] 删除后会通过 batch-kafka 容器内 kafka-topics.sh 重建 topic"
+      echo "[预览] 删除完成后会通过 Compose kafka-init 统一入口恢复全部平台 topic"
     fi
     return
   fi

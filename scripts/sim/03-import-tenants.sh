@@ -129,4 +129,5 @@ fi
 echo
 echo "==> ✅ 导入完成,验证"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
-  -f /dev/stdin < "$ROOT/docs/test-data/sim-import-tenants-verify.sql" 2>&1 | head -10
+  -f /dev/stdin < "$ROOT/docs/test-data/sim-import-tenants-verify.sql" 2>&1 \
+  | awk 'NR <= 10 { print }'

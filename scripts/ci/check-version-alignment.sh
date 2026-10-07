@@ -12,6 +12,17 @@ FAIL=0
 source "$ROOT/scripts/lib/python-runtime.sh"
 batch_require_python
 
+env_value() {
+  local key="$1" file="$2"
+  awk -v key="$key" '
+    !found && index($0, key "=") == 1 {
+      value = substr($0, length(key) + 2)
+      found = 1
+    }
+    END { if (found) print value }
+  ' "$file"
+}
+
 # ─── 1. 应用版本对齐 ──────────────────────────────────────────────
 POM_REV="$("$PYTHON_BIN" -c "
 import re
@@ -202,7 +213,7 @@ TAGS=(POSTGRES_IMAGE_TAG KAFKA_IMAGE_TAG KAFKA_UI_IMAGE_TAG MINIO_IMAGE_REPOSITO
 # .env.example 是仓内模板（tracked），.env.local/test/prod 由开发者各自持有（.gitignore）。
 # 校验逻辑：以 .env.example 为基准，所有本地存在的 .env.* 必须匹配。
 for tag in "${TAGS[@]}"; do
-  base=$(grep -E "^${tag}=" "$ROOT/.env.example" 2>/dev/null | head -1 | cut -d= -f2-)
+  base="$(env_value "$tag" "$ROOT/.env.example")"
   if [[ -z "$base" ]]; then
     echo "  ✗ ${tag} 在 .env.example 缺失（模板必须给出）" >&2
     FAIL=1
@@ -213,7 +224,7 @@ for tag in "${TAGS[@]}"; do
   for env in local test prod; do
     f="$ROOT/.env.${env}"
     [[ ! -f "$f" ]] && continue                    # 本机没有该环境文件 → 跳过
-    v=$(grep -E "^${tag}=" "$f" 2>/dev/null | head -1 | cut -d= -f2-)
+    v="$(env_value "$tag" "$f")"
     if [[ -z "$v" ]]; then
       drift+=" ${env}=MISSING"
     elif [[ "$v" != "$base" ]]; then
@@ -248,9 +259,9 @@ declare -A CORE_IMAGE_TAGS=(
 
 for service in POSTGRES KAFKA MINIO VALKEY; do
   tag_name="${CORE_IMAGE_TAGS[$service]}"
-  tag_value=$(grep -E "^${tag_name}=" "$ROOT/.env.example" | head -1 | cut -d= -f2-)
+  tag_value="$(env_value "$tag_name" "$ROOT/.env.example")"
   if [[ "$service" == "MINIO" ]]; then
-    repo_value=$(grep -E "^MINIO_IMAGE_REPOSITORY=" "$ROOT/.env.example" | head -1 | cut -d= -f2-)
+    repo_value="$(env_value MINIO_IMAGE_REPOSITORY "$ROOT/.env.example")"
     expected="${repo_value}:${tag_value}"
   else
     expected="${CORE_IMAGE_PREFIXES[$service]}:${tag_value}"
@@ -269,15 +280,15 @@ for service in POSTGRES KAFKA MINIO VALKEY; do
 done
 
 # 这些运行入口使用字面镜像或 Compose fallback，不能由 Testcontainers 守卫覆盖。
-POSTGRES_TAG=$(grep -E '^POSTGRES_IMAGE_TAG=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
-VALKEY_TAG=$(grep -E '^VALKEY_IMAGE_TAG=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
-REDIS_COMPAT_TAG=$(grep -E '^REDIS_IMAGE_TAG=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
-MINIO_REPOSITORY=$(grep -E '^MINIO_IMAGE_REPOSITORY=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
-MINIO_TAG=$(grep -E '^MINIO_IMAGE_TAG=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
-MINIO_MC_REPOSITORY=$(grep -E '^MINIO_MC_IMAGE_REPOSITORY=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
-MINIO_MC_TAG=$(grep -E '^MINIO_MC_IMAGE_TAG=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
-SFTP_TAG=$(grep -E '^SFTP_IMAGE_TAG=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
-MOCKSERVER_TAG=$(grep -E '^MOCKSERVER_IMAGE_TAG=' "$ROOT/.env.example" | head -1 | cut -d= -f2-)
+POSTGRES_TAG="$(env_value POSTGRES_IMAGE_TAG "$ROOT/.env.example")"
+VALKEY_TAG="$(env_value VALKEY_IMAGE_TAG "$ROOT/.env.example")"
+REDIS_COMPAT_TAG="$(env_value REDIS_IMAGE_TAG "$ROOT/.env.example")"
+MINIO_REPOSITORY="$(env_value MINIO_IMAGE_REPOSITORY "$ROOT/.env.example")"
+MINIO_TAG="$(env_value MINIO_IMAGE_TAG "$ROOT/.env.example")"
+MINIO_MC_REPOSITORY="$(env_value MINIO_MC_IMAGE_REPOSITORY "$ROOT/.env.example")"
+MINIO_MC_TAG="$(env_value MINIO_MC_IMAGE_TAG "$ROOT/.env.example")"
+SFTP_TAG="$(env_value SFTP_IMAGE_TAG "$ROOT/.env.example")"
+MOCKSERVER_TAG="$(env_value MOCKSERVER_IMAGE_TAG "$ROOT/.env.example")"
 
 check_image_reference() {
   local file="$1" reference="$2" label="$3"

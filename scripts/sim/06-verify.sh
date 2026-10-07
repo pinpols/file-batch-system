@@ -85,7 +85,7 @@ else
 fi
 
 # (b) worker-export 进程是否在听 18084 / 容器是否在
-if docker ps --format '{{.Names}}' | grep -q '^batch-worker-export$'; then
+if docker ps --format '{{.Names}}' | grep -Fx 'batch-worker-export' >/dev/null; then
   ok "worker-export 容器" "running"
 elif process_port_is_listening 18084; then
   ok "worker-export :18084" "LISTEN(本地 mvn 进程)"
@@ -127,7 +127,7 @@ for prefix in "outbound/TA_EXPORT_REPORT" "outbound/TB_EXPORT_STATEMENT" "outbou
     minio_mc ls --recursive "local/$BUCKET/$prefix" 2>/dev/null \
       | grep -v '/$' \
       | grep -v '\.keep$' \
-      | head -3 | sed 's/^/      /'
+      | awk 'NR <= 3 { print "      " $0 }'
   else
     note "$prefix" "0 文件(EXPORT 可能未跑)"
   fi
@@ -211,7 +211,8 @@ verify_dispatch_case "tb" "TB_DISPATCH_SETTLE" "tb_api_ingest" "/tb/ingest"
 verify_dispatch_case "tc" "TC_DISPATCH_REVIEW" "tc_api_risk_push" "/tc/ingest"
 
 hdr "WORKFLOW + 全局 job_instance 状态"
-psql_q "$PLATFORM_DB" select-sim-recent-instance-statuses.sql | head -10 | sed 's/^/    /'
+psql_q "$PLATFORM_DB" select-sim-recent-instance-statuses.sql \
+  | awk 'NR <= 10 { print "    " $0 }'
 
 hdr "Outbox 积压检查(健康度)"
 backlog=$(psql_q "$PLATFORM_DB" count-sim-outbox-backlog.sql | tr -dc '0-9')

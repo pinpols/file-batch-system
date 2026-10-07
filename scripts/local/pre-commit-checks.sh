@@ -80,7 +80,7 @@ for file in "${staged_files[@]}"; do
   fi
 done
 
-if git diff --cached -G'@ConfigurationProperties' --name-only -- '*.java' | grep -q .; then
+if git diff --cached -G'@ConfigurationProperties' --name-only -- '*.java' | grep . >/dev/null; then
   config_registry_changed=1
 fi
 

@@ -47,7 +47,8 @@ echo "==> analyze-soak: 生成 $REPORT"
       echo "### $(basename "$jfr")"
       echo '```text'
       if command -v jfr >/dev/null 2>&1; then
-        jfr summary "$jfr" 2>&1 | grep -E "jdk\.(GCHeapSummary|MetaspaceSummary)" | head -10 || \
+        jfr summary "$jfr" 2>&1 | grep -E "jdk\.(GCHeapSummary|MetaspaceSummary)" \
+          | awk 'NR <= 10 { print }' || \
           echo "(no GCHeapSummary in summary)"
       else
         echo "(jfr CLI not available — 用 JDK 提供的 'jfr summary $jfr')"
@@ -63,7 +64,8 @@ echo "==> analyze-soak: 生成 $REPORT"
   if (( ${#jfrs[@]} > 0 )) && command -v jfr >/dev/null 2>&1; then
     for jfr in "${jfrs[@]}"; do
       echo "-- $(basename "$jfr") --"
-      jfr summary "$jfr" 2>&1 | grep -E "jdk\.(ThreadCPULoad|ThreadStart|ThreadEnd|JavaMonitorWait)" | head -10
+      jfr summary "$jfr" 2>&1 | grep -E "jdk\.(ThreadCPULoad|ThreadStart|ThreadEnd|JavaMonitorWait)" \
+        | awk 'NR <= 10 { print }'
     done
   else
     echo "(JFR not available)"
@@ -86,7 +88,8 @@ echo "==> analyze-soak: 生成 $REPORT"
   if (( ${#jfrs[@]} > 0 )) && command -v jfr >/dev/null 2>&1; then
     for jfr in "${jfrs[@]}"; do
       echo "-- $(basename "$jfr") --"
-      jfr summary "$jfr" 2>&1 | grep -E "jdk\.(GarbageCollection|GCPhasePause|YoungGarbageCollection|OldGarbageCollection)" | head -10
+      jfr summary "$jfr" 2>&1 | grep -E "jdk\.(GarbageCollection|GCPhasePause|YoungGarbageCollection|OldGarbageCollection)" \
+        | awk 'NR <= 10 { print }'
     done
   else
     echo "(JFR not available)"

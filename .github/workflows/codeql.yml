@@ -100,50 +100,6 @@ jobs:
           ./mvnw -B -ntp -DskipTests -pl '!batch-e2e-tests' compile
 
       - name: Perform CodeQL Analysis
-        id: codeql-analysis
         uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
         with:
-          category: "/language:java"
-          # 分析与上传分离，避免短时上传故障迫使整套 Java 编译和查询重跑。
-          # 分析失败仍直接阻断；仅 SARIF 上传执行有界重试。
-          upload: failure-only
-
-      - name: Upload CodeQL results
-        id: codeql-upload-primary
-        # non-gate-failure-policy: 首次上传失败后重试，最终上传仍会硬失败。
-        continue-on-error: true
-        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
-        with:
-          sarif_file: ${{ steps.codeql-analysis.outputs.sarif-output }}
-          category: "/language:java"
-
-      - name: Wait before CodeQL upload retry
-        if: steps.codeql-upload-primary.outcome == 'failure'
-        shell: bash
-        run: sleep 20
-
-      - name: Retry CodeQL results upload
-        id: codeql-upload-retry
-        if: steps.codeql-upload-primary.outcome == 'failure'
-        # non-gate-failure-policy: 第二次失败后由后续最终上传步骤硬失败。
-        continue-on-error: true
-        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
-        with:
-          sarif_file: ${{ steps.codeql-analysis.outputs.sarif-output }}
-          category: "/language:java"
-
-      - name: Wait before final CodeQL upload attempt
-        if: >-
-          steps.codeql-upload-primary.outcome == 'failure' &&
-          steps.codeql-upload-retry.outcome == 'failure'
-        shell: bash
-        run: sleep 40
-
-      - name: Final CodeQL results upload
-        if: >-
-          steps.codeql-upload-primary.outcome == 'failure' &&
-          steps.codeql-upload-retry.outcome == 'failure'
-        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
-        with:
-          sarif_file: ${{ steps.codeql-analysis.outputs.sarif-output }}
           category: "/language:java"

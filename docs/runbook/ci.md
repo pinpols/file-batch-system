@@ -16,7 +16,7 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 | `sdk-contract-parity` | SDK 契约门禁 | PR、merge queue、每日 16:00 UTC、手动 | 五语言 fixture、共享常量和 conformance 契约 | — |
 | `full-ci-gate` | main 全量门禁 | push main、每周日 02:00 UTC、手动 | 主干质量基线 + 安全扫描(含 K8s manifest Checkov) | 75 min |
 | `staging-gate` | 补充 E2E 验证 | nightly(每天 18:00 UTC / 北京 02:00)+ workflow_dispatch | 全量 E2E(smoke + critical + regression 全跑,6 shard 并发)；Java 架构/约定守卫独立并发，不替代 `full-ci-gate` | — |
-| `daily-sim-strict-validation` | 补充真实数据验证 | nightly(每天 13:31 UTC / 北京 21:31)+ workflow_dispatch | 定时触发按最近一次计划时间对应的北京时间日期检查代码/配置变更，延迟跨午夜仍归属原计划日；手动触发按当前北京时间日期。Markdown/RST、`LICENSE`、`NOTICE` 除外。需要验证时同环境先执行 `sim-harness all`，再执行 BE-ACC step 5(strict real-data verification)；strict step 使用 `always()` 采证，不因 sim 失败被短路 | 240 min |
+| `daily-sim-strict-validation` | 补充真实数据验证 | nightly(每天 13:31 UTC / 北京 21:31)+ workflow_dispatch | 定时触发按最近一次计划时间对应的北京时间日期检查代码/配置变更，延迟跨午夜仍归属原计划日；手动触发按当前北京时间日期。Markdown/RST、`LICENSE`、`NOTICE` 除外。需要验证时同环境执行 `sim-harness all` 的 04-28 全阶段且不允许 SKIP；harness 为文件束与 batch-claim 临时切换 Worker 配置并负责恢复。随后执行 BE-ACC step 5(strict real-data verification)；strict step 使用 `always()` 采证，不因 sim 失败被短路 | 240 min |
 | `docker-image-build` | nightly / 可选发布镜像构建 | 由 `daily-sim-strict-validation` 在当天有代码/配置变更且 sim + strict 成功后调用；也支持手动和复用调用 | 默认只用 Docker Bake 构建全部应用镜像和运维工具箱镜像；显式 `publish=true` 时登录 GHCR、推送 SHA 镜像并上传含 immutable digest 的 backend image set。CI 使用 Maven Central 配置并带依赖下载重试 | 30 min |
 | `OpenSSF Scorecard` | 供应链治理报告 | push main、每周三、手动 | 生成 SARIF 并上传 Code Scanning；不按总分阻断 PR | 20 min |
 | `quarterly-dependency-review` | 依赖集中治理盘点 | 每季度首日、手动 | 生成多生态 artifact 与 Actions Summary；不创建 Issue/PR | 25 min |
@@ -540,6 +540,7 @@ pom.xml                      # 父 pom：JaCoCo agent、PMD、Spotless 插件配
 
 - PR：`build-mode: none`，使用 CodeQL 默认高精度查询并上传 SARIF，作为 `Analyze (java)` 检查。
 - main push、schedule、workflow_dispatch：`build-mode: manual`，执行跳过测试的全 reactor 编译，并使用 `security-extended` 分析。
+- SARIF 由 `github/codeql-action/analyze` 原生上传。同一 job 内不得针对同一 tool/category 再调用 `upload-sarif` 重试；GitHub 会将后续调用判定为重复上传。上传故障通过重新运行 job 处理。
 - 无构建模式只适用于当前纯 Java 仓库；引入 Kotlin 或发现生成源码漏析时必须恢复 PR 手工构建。
 - PR 与 main 告警差异需要人工解释，不能仅因 PR 更快就认定覆盖等价。
 

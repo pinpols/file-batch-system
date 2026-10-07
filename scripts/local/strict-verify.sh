@@ -86,14 +86,15 @@ hdr "0. 前置依赖检查"
 
 PRECHECK_FAIL=0
 if command -v docker >/dev/null 2>&1; then
-  pass "docker CLI 可用" "$(docker --version 2>/dev/null | head -1)"
+  pass "docker CLI 可用" "$(docker --version 2>/dev/null)"
 else
   fail "docker CLI 缺失" "本脚本依赖 docker exec 访问 PG 容器"
   PRECHECK_FAIL=1
 fi
 
 if command -v curl >/dev/null 2>&1; then
-  pass "curl 可用" "$(curl --version 2>/dev/null | head -1)"
+  pass "curl 可用" "$(curl --version 2>/dev/null \
+    | awk 'NR == 1 { first = $0 } END { if (NR > 0) print first }')"
 else
   fail "curl 缺失" "本脚本依赖 curl 调 console-api HTTP 接口"
   PRECHECK_FAIL=1
@@ -124,7 +125,7 @@ fi
 
 # 非 dry-run 模式继续验证 PG 容器可达 + console-api 探活,失败直接整体退出
 # (不算 FAIL 计数,因为这是环境问题不是数据问题)
-if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${PG_CONTAINER}$"; then
+if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -Fx "$PG_CONTAINER" >/dev/null; then
   printf "${RED}[fatal]${RST} PG 容器 '%s' 未运行 — 请先 'docker compose up -d postgres' 或本地启动\n" "$PG_CONTAINER" >&2
   exit 2
 fi
@@ -278,16 +279,20 @@ if [[ "${RUN_MAINTENANCE_SWITCH:-0}" == "1" ]]; then
     }
     # 全冻结
     _restart_with BATCH_CONSOLE_MAINTENANCE_ENABLED=true BATCH_CONSOLE_MAINTENANCE_MESSAGE="strict-verify blocked"
-    blocked=$(curl -sI --max-time 30 --connect-timeout 5 "$BASE/api/console/queries/instances" | head -1 | awk '{print $2}')
-    xmaint=$(curl -sI --max-time 30 --connect-timeout 5 "$BASE/api/console/queries/instances" | grep -i "x-maintenance" | head -1)
+    blocked=$(curl -sI --max-time 30 --connect-timeout 5 "$BASE/api/console/queries/instances" \
+      | awk 'NR == 1 { code=$2 } END { print code }')
+    xmaint=$(curl -sI --max-time 30 --connect-timeout 5 "$BASE/api/console/queries/instances" \
+      | awk 'tolower($0) ~ /x-maintenance/ && !found { header=$0; found=1 } END { if (found) print header }')
     [[ "$blocked" == "503" && -n "$xmaint" ]] \
       && pass "全冻结:GET → 503 + $(echo $xmaint | tr -d '\r')" "" \
       || fail "全冻结异常" "http=$blocked xmaint='$xmaint'"
 
     # readOnly
     _restart_with BATCH_CONSOLE_MAINTENANCE_ENABLED=true BATCH_CONSOLE_MAINTENANCE_READ_ONLY=true BATCH_CONSOLE_MAINTENANCE_MESSAGE="strict-verify readonly"
-    get_code=$(curl -sI --max-time 30 --connect-timeout 5 "$BASE/api/console/queries/instances" | head -1 | awk '{print $2}')
-    post_code=$(curl -sI --max-time 30 --connect-timeout 5 -X POST "$BASE/api/console/jobs/bundle/create" | head -1 | awk '{print $2}')
+    get_code=$(curl -sI --max-time 30 --connect-timeout 5 "$BASE/api/console/queries/instances" \
+      | awk 'NR == 1 { code=$2 } END { print code }')
+    post_code=$(curl -sI --max-time 30 --connect-timeout 5 -X POST "$BASE/api/console/jobs/bundle/create" \
+      | awk 'NR == 1 { code=$2 } END { print code }')
     [[ "$get_code" != "503" && "$post_code" == "503" ]] \
       && pass "readOnly:GET=$get_code (pass) / POST=$post_code (block)" "X-Maintenance: read-only" \
       || fail "readOnly 模式异常" "get=$get_code post=$post_code(期望 GET 非 503,POST 503)"

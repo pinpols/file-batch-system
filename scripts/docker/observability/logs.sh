@@ -17,7 +17,9 @@ COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
 TAIL_LINES="${TAIL_LINES:-100}"
 REQUESTED_COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-}"
 if [[ -f "$COMPOSE_ENV_FILE" ]]; then
-  COMPOSE_PROJECT_NAME="$(sed -n -E 's/^[[:space:]]*(export[[:space:]]+)?COMPOSE_PROJECT_NAME[[:space:]]*=[[:space:]]*//p' "$COMPOSE_ENV_FILE" | head -n 1 | sed 's/[[:space:]]*#.*$//' | sed 's/[[:space:]]*$//')"
+  COMPOSE_PROJECT_NAME="$(sed -n -E 's/^[[:space:]]*(export[[:space:]]+)?COMPOSE_PROJECT_NAME[[:space:]]*=[[:space:]]*//p' "$COMPOSE_ENV_FILE" \
+    | awk 'NR == 1 { first = $0 } END { if (NR > 0) print first }' \
+    | sed 's/[[:space:]]*#.*$//; s/[[:space:]]*$//')"
 fi
 if [[ -n "$REQUESTED_COMPOSE_PROJECT_NAME" ]]; then
   COMPOSE_PROJECT_NAME="$REQUESTED_COMPOSE_PROJECT_NAME"

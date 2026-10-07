@@ -39,6 +39,18 @@ scripts/sim/
 └── 99-stop.sh                     # 停模拟器容器(volume 保留)
 ```
 
+## 推荐入口
+
+标准本地与 nightly 验证统一使用 harness。`sim` 会执行 04-28 全部阶段；26 文件束与
+27 batch-claim 会由 harness 临时切换 Worker 配置，结束或异常退出时恢复默认配置。
+任何阶段未执行、未命中目标路径或未达业务终态都返回失败，不以 `SKIP` 或编排侧部分成功代替。
+
+```bash
+bash scripts/local/sim-harness.sh all
+```
+
+直接执行 26/27 时不会自动配置 Worker，也不会跳过；调用方必须先提供脚本头部说明的运行配置。
+
 ## 跑通顺序(首次)
 
 ```bash

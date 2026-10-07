@@ -31,7 +31,7 @@ MODULES=(trigger orchestrator console worker-import worker-export worker-process
 
 is_running() {
   local mod="$1"
-  jps -l 2>/dev/null | grep -q "build/runtime-jars/${mod}.jar" && return 0 || return 1
+  jps -l 2>/dev/null | grep -F "build/runtime-jars/${mod}.jar" >/dev/null && return 0 || return 1
 }
 
 restart_missing() {

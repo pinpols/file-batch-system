@@ -215,7 +215,7 @@ wait_for_backend_health() {
     name="${endpoint%%:*}"
     port="${endpoint##*:}"
     until curl -sf --max-time 5 --connect-timeout 2 "http://127.0.0.1:${port}/actuator/health" \
-      | grep -q '"status":"UP"'; do
+      | grep -F '"status":"UP"' >/dev/null; do
       if (( $(date +%s) > deadline )); then
         ng "${name} 未在 180s 内健康(端口 ${port})"
         return 1
@@ -409,7 +409,9 @@ step_7_fe() {
   # 自动探测 cloudflared tunnel URL(从最近 cloudflared 进程 stdout 找 trycloudflare URL),
   # 没起 tunnel 跳过;有则探活
   local tunnel_url=""
-  local cf_pid; cf_pid=$(pgrep -f "cloudflared.*tunnel" | head -1)
+  local cf_pid
+  cf_pid="$(pgrep -f "cloudflared.*tunnel" \
+    | awk 'NR == 1 { first = $0 } END { if (NR > 0) print first }')"
   if [[ -n "$cf_pid" ]]; then
     # 可选读取 agent 会话输出；agent 自身目录由调用方提供。
     local log_paths=(/tmp/cloudflared-*.log /tmp/vite-preview.log)

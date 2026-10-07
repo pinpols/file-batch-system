@@ -156,7 +156,9 @@ bash load-tests/scripts/cleanup-load-test-environment.sh --apply --minio-trash
 bash load-tests/scripts/cleanup-load-test-environment.sh --apply --kafka-reset-topics
 ```
 
-该命令会删除并重建本地压测 topic，只适合数据可丢弃的开发环境。
+该命令会等待目标 topic 删除完成，再通过 Compose `kafka-init` 统一入口恢复全部平台 topic，
+并校验压测 topic 清单全部存在。初始化失败或恢复不完整会明确返回失败，不再在清理脚本中维护
+第二套 topic 创建与分区规则。该操作只适合数据可丢弃的开发环境。
 
 注意：IMPORT / EXPORT / PROCESS payload 内置 `#{traceId}` 占位符，Gatling 会为每个虚拟用户生成唯一
 文件名或业务键；Dispatch 也会按请求数预建独立 fileId。若新增自定义 payload，必须保留这一约束，

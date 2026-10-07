@@ -316,7 +316,8 @@ wait_orchestrator_healthy() {
   fi
   local i
   for i in $(seq 1 "$rounds"); do
-    if curl -sf --connect-timeout 2 --max-time 8 "$url" 2>/dev/null | grep -q '"status"[[:space:]]*:[[:space:]]*"UP"'; then
+    if curl -sf --connect-timeout 2 --max-time 8 "$url" 2>/dev/null \
+      | grep -E '"status"[[:space:]]*:[[:space:]]*"UP"' >/dev/null; then
       echo "  Orchestrator 已就绪（UP）"
       return 0
     fi
@@ -569,7 +570,7 @@ wait_all_apps_healthy() {
       port="$(_port_for_app "$name")"
       url="http://127.0.0.1:${port}/actuator/health"
       if curl -sf --connect-timeout 2 --max-time 5 "$url" 2>/dev/null \
-          | grep -q '"status"[[:space:]]*:[[:space:]]*"UP"'; then
+          | grep -E '"status"[[:space:]]*:[[:space:]]*"UP"' >/dev/null; then
         _mark_up "$name"
         printf '  ✓ %-18s UP  (port %s)\n' "$name" "$port"
       else

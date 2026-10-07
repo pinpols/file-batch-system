@@ -270,7 +270,7 @@ _check_port_residual() {
     local name="${names[$i]}"
     local port="${ports[$i]}"
     local pid
-    pid="$(process_listen_pids "$port" | head -1)"
+    pid="$(process_first_listen_pid "$port")"
     if [[ -n "$pid" ]]; then
       residuals+=("  ✗ ${name} 端口 ${port} 仍被 pid=${pid} 占用")
     fi

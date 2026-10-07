@@ -60,7 +60,7 @@ for f in "${files[@]}"; do
 
   # ② 关键约束级危险 DDL → 要求头部有禁令标记,否则 FAIL。
   if grep -qiE "$DANGEROUS_DDL_RE" "$f"; then
-    if head -n "$HEADER_LINES" "$f" | grep -qiE "$DANGER_MARKER_RE"; then
+    if head -n "$HEADER_LINES" "$f" | grep -iE "$DANGER_MARKER_RE" >/dev/null; then
       echo "✅ [OK]   $f 含危险 DDL(改约束/DROP),头部已有禁令标记。"
     else
       echo "❌ [FAIL] $f 含危险 DDL(改 UNIQUE/PK 列集 / DROP TABLE / DROP CONSTRAINT),"

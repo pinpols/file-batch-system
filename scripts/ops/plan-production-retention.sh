@@ -65,7 +65,7 @@ optional_issue() {
 
 docker_running() {
   command -v docker >/dev/null 2>&1 \
-    && docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null | grep -qx true
+    && docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null | grep -Fx true >/dev/null
 }
 
 psql_retention_plan() {
@@ -151,8 +151,8 @@ check_kafka_retention_plan() {
       optional_issue "$KAFKA_STRICT" "Kafka topic 不存在或无法读取配置：${topic}"
       continue
     fi
-    retention="$(grep -o 'retention.ms=[^, ]*' <<<"$configs" | head -n 1 | cut -d= -f2-)"
-    cleanup_policy="$(grep -o 'cleanup.policy=[^, ]*' <<<"$configs" | head -n 1 | cut -d= -f2-)"
+    retention="$(awk '!found && match($0, /retention.ms=[^, ]*/) {value=substr($0, RSTART + 13, RLENGTH - 13); found=1} END {if (found) print value}' <<<"$configs")"
+    cleanup_policy="$(awk '!found && match($0, /cleanup.policy=[^, ]*/) {value=substr($0, RSTART + 15, RLENGTH - 15); found=1} END {if (found) print value}' <<<"$configs")"
     if [[ "$KAFKA_REQUIRE_TOPIC_RETENTION" == "true" && ( -z "$retention" || "$retention" == "-1" ) ]]; then
       optional_issue "$KAFKA_STRICT" "Kafka topic ${topic}: 未设置 topic 级有界 retention.ms，需在生产环境固化"
     else

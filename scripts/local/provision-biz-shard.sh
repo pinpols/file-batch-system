@@ -36,7 +36,7 @@ BIZ_READONLY_PASSWORD="${BIZ_READONLY_PASSWORD:-$POSTGRES_PASSWORD}"
 BIZ_READONLY_ALL_PASSWORD="${BIZ_READONLY_ALL_PASSWORD:-$POSTGRES_PASSWORD}"
 
 echo "==> [${KEY}] 1/5 起 PG 容器(挂运行栈网络)"
-if ! docker ps --format '{{.Names}}' | grep -qx "$PRIMARY_NAME"; then
+if ! docker ps --format '{{.Names}}' | grep -Fx "$PRIMARY_NAME" >/dev/null; then
   echo "    ✗ 基线栈 $PRIMARY_NAME 未运行(取网络/镜像/凭据参照)" >&2
   exit 1
 fi
@@ -44,7 +44,7 @@ NETWORK="$(docker inspect "$PRIMARY_NAME" --format '{{range $k,$v := .NetworkSet
 IMAGE="$(docker inspect "$PRIMARY_NAME" --format '{{.Config.Image}}')"
 echo "    network=$NETWORK image=$IMAGE container=$CONTAINER host=:$PORT"
 
-if docker ps -a --format '{{.Names}}' | grep -qx "$CONTAINER"; then
+if docker ps -a --format '{{.Names}}' | grep -Fx "$CONTAINER" >/dev/null; then
   echo "    复用已存在容器"
   docker start "$CONTAINER" >/dev/null
 else

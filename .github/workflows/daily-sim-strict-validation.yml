@@ -157,4 +157,9 @@ jobs:
       - detect-changes
       - sim-and-strict
     if: needs.detect-changes.outputs.should_run == 'true' && needs.sim-and-strict.result == 'success'
+    # 被调用工作流的 publish 路径需要 packages:write。GitHub 会在启动阶段校验
+    # reusable workflow 的最大权限，即使本次默认 publish=false 也必须由调用方显式授权。
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/docker-image-build.yml

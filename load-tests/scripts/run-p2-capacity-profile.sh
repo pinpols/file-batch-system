@@ -227,7 +227,9 @@ capture_load_generator_environment() {
   host_release="$(uname -r 2>/dev/null || echo unknown)"
   host_memory="$(host_total_memory_bytes)"
   cpu_model="$(host_cpu_model | tr ';\n' '  ' | sed -E 's/[[:space:]]+/ /g; s/^ //; s/ $//')"
-  java_runtime="$(java -version 2>&1 | head -n 1 | tr ';' ',' || echo unavailable)"
+  java_runtime="$(java -version 2>&1 \
+    | awk 'NR == 1 { first = $0 } END { if (NR > 0) print first }' \
+    | tr ';' ',' || echo unavailable)"
   LOAD_GENERATOR_ENVIRONMENT_SIGNATURE="host-v1;os=${host_os};release=${host_release};arch=${host_arch};cpus=$(host_cpu_count);memory=${host_memory};cpu=${cpu_model};java=${java_runtime}"
 }
 
