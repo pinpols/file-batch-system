@@ -79,7 +79,7 @@ class ExportKeysetRangePlannerTest {
 
 - [ ] **Step 2: 运行确认失败**
 
-Run: `mvn -q -pl batch-worker-export test -Dtest=ExportKeysetRangePlannerTest#equalWidth_4partitions_disjoint_and_cover`
+Run: `mvn -q -pl batch-worker-export test -Dtest=ExportKeysetRangePlannerTest#equalWidth_4partitions_firstIsHalfOpen_lastIncludesUpper`
 Expected: 编译失败 `cannot find symbol ExportKeysetRange`
 
 - [ ] **Step 3: 实现 ExportKeysetRange**
@@ -118,7 +118,7 @@ public record ExportKeysetRange(boolean active, BigDecimal loN, BigDecimal hiN, 
 
 - [ ] **Step 4: 运行确认通过**
 
-Run: `mvn -q -pl batch-worker-export test -Dtest=ExportKeysetRangePlannerTest#equalWidth_4partitions_disjoint_and_cover`
+Run: `mvn -q -pl batch-worker-export test -Dtest=ExportKeysetRangePlannerTest#equalWidth_4partitions_firstIsHalfOpen_lastIncludesUpper`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
