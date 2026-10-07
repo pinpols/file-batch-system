@@ -26,12 +26,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("AI 会话服务:会话创建、归属校验、分页与持久化开关")
 class ConsoleAiConversationServiceTest {
 
   @Mock
@@ -56,6 +58,7 @@ class ConsoleAiConversationServiceTest {
   }
 
   @Test
+  @DisplayName("会话创建:为当前用户新建会话,并分配起始轮次")
   void shouldCreateConversationAndAllocateTurnForCurrentOwner() {
     when(mapper.insertTurn(any())).thenReturn(1);
     when(cryptoService.encrypt(any(byte[].class), isNull()))
@@ -78,7 +81,8 @@ class ConsoleAiConversationServiceTest {
   }
 
   @Test
-  void rejectsConcurrentDuplicateClientTurnIdAsConflict() {
+  @DisplayName("客户端轮次标识重复:按并发冲突拒绝")
+  void shouldRejectAsConflict_whenClientTurnIdDuplicated() {
     when(cryptoService.encrypt(any(byte[].class), isNull()))
         .thenAnswer(invocation -> invocation.getArgument(0));
     when(mapper.selectRecentCompleteTurns(eq("tenant-a"), anyString(), eq(12)))
@@ -94,6 +98,7 @@ class ConsoleAiConversationServiceTest {
   }
 
   @Test
+  @DisplayName("会话归属他人:按不存在处理,且不写入轮次")
   void shouldDenyConversationOwnedByAnotherUser() {
     ConsoleAiConversationEntity conversation = new ConsoleAiConversationEntity();
     conversation.setOwnerUserId("operator-b");
@@ -108,6 +113,7 @@ class ConsoleAiConversationServiceTest {
   }
 
   @Test
+  @DisplayName("轮次分配未命中归属:按不存在处理,且不写入轮次")
   void shouldHideConversationWhenTurnAllocationLosesOwnership() {
     ConsoleAiConversationEntity conversation = new ConsoleAiConversationEntity();
     conversation.setOwnerUserId("operator-a");
@@ -130,6 +136,7 @@ class ConsoleAiConversationServiceTest {
   }
 
   @Test
+  @DisplayName("会话缺失或已过期:不重建会话,也不写入轮次")
   void shouldNotRecreateMissingOrExpiredConversation() {
     when(mapper.selectForUpdate("tenant-a", "missing")).thenReturn(null);
     assertThatThrownBy(() -> service.beginTurn("tenant-a", "operator-a", "missing", "v1", "prompt"))
@@ -151,6 +158,7 @@ class ConsoleAiConversationServiceTest {
   }
 
   @Test
+  @DisplayName("会话缺失或已过期:拒绝查询历史,且不访问明细查询")
   void shouldRejectHistoryForMissingOrExpiredConversation() {
     assertThatThrownBy(() -> service.turns("tenant-a", "operator-a", "expired", null, 50))
         .isInstanceOfSatisfying(
@@ -160,6 +168,7 @@ class ConsoleAiConversationServiceTest {
   }
 
   @Test
+  @DisplayName("上下文版本未知:在访问数据库之前即拒绝")
   void shouldRejectUnknownContextVersionBeforeDatabaseAccess() {
     assertThatThrownBy(() ->
             service.beginTurn("tenant-a", "operator-a", "conversation-1", "v2", "show failed jobs"))
@@ -168,6 +177,7 @@ class ConsoleAiConversationServiceTest {
   }
 
   @Test
+  @DisplayName("会话持久化关闭:列表查询被拒绝,且不访问数据库")
   void shouldRejectPersistenceWhenDisabled() {
     properties.getPersistence().setEnabled(false);
 
@@ -177,6 +187,7 @@ class ConsoleAiConversationServiceTest {
   }
 
   @Test
+  @DisplayName("会话分页:按更新时间与标识游标翻页,末页无游标")
   void shouldPageConversationsWithStableTimestampAndIdCursor() {
     properties.getPersistence().setConversationPageSize(2);
     Instant updatedAt = Instant.parse("2026-09-30T12:00:00Z");
@@ -208,6 +219,7 @@ class ConsoleAiConversationServiceTest {
   }
 
   @Test
+  @DisplayName("分页游标非法:在访问数据库之前即拒绝")
   void shouldRejectInvalidPageCursorBeforeDatabaseAccess() {
     assertThatThrownBy(() -> service.page("tenant-a", "operator-a", "not-a-cursor", 20))
         .isInstanceOf(BizException.class);

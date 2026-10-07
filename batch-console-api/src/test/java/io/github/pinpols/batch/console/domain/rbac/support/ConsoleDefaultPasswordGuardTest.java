@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -15,6 +16,7 @@ import org.springframework.mock.env.MockEnvironment;
 
 /** 部署期默认密码守护:prod fail-fast vs 非 prod WARN。 */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("部署期默认密码守护:生产环境命中出厂口令即失败, 非生产仅告警, 改密或无内置账号时放行")
 class ConsoleDefaultPasswordGuardTest {
 
   @Mock
@@ -36,6 +38,7 @@ class ConsoleDefaultPasswordGuardTest {
   }
 
   @Test
+  @DisplayName("生产环境:内置账号仍为出厂口令时快速失败, 并报出账号名")
   void shouldFailFast_whenProdAndBuiltinStillFactoryDefault() {
     MockEnvironment env = new MockEnvironment();
     env.setActiveProfiles("prod");
@@ -49,6 +52,7 @@ class ConsoleDefaultPasswordGuardTest {
   }
 
   @Test
+  @DisplayName("非生产环境:仍为出厂口令时不抛异常, 仅记录告警")
   void shouldOnlyWarn_whenNonProdAndStillFactoryDefault() {
     MockEnvironment env = new MockEnvironment();
     env.setActiveProfiles("local"); // 显式非 prod(空 profile 会被 fail-secure 当 prod)
@@ -60,6 +64,7 @@ class ConsoleDefaultPasswordGuardTest {
   }
 
   @Test
+  @DisplayName("已改密:内置账号口令变更后直接放行")
   void shouldPass_whenBuiltinPasswordChanged() {
     MockEnvironment env = new MockEnvironment();
     env.setActiveProfiles("prod");
@@ -71,6 +76,7 @@ class ConsoleDefaultPasswordGuardTest {
   }
 
   @Test
+  @DisplayName("无内置账号:未查到内置账号时直接放行")
   void shouldPass_whenNoBuiltinAccounts() {
     MockEnvironment env = new MockEnvironment();
     env.setActiveProfiles("prod");
@@ -81,7 +87,8 @@ class ConsoleDefaultPasswordGuardTest {
   }
 
   @Test
-  void builtinUsernamesCoverSeededAccounts() {
+  @DisplayName("内置账号清单:与初始化种子账号完全一致")
+  void shouldCoverSeededAccounts_whenListingBuiltinUsernames() {
     assertThat(ConsoleDefaultPasswordGuard.BUILTIN_USERNAMES)
         .containsExactlyInAnyOrder("admin", "auditor", "config-admin");
   }

@@ -8,6 +8,7 @@ import io.github.pinpols.batch.orchestrator.application.service.workflow.Workflo
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowValidationResult;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +24,7 @@ import org.springframework.test.context.jdbc.Sql;
 @ActiveProfiles({"test", "e2e"})
 @Sql(scripts = {E2eTestSql.MULTI_TENANT_SEED})
 @Tag("e2e")
+@DisplayName("多租户种子夹具端到端:ta 租户的种子必须包含可用的等待文件到达工作流,并通过工作流图校验")
 class SensorWaitFixtureE2eIT extends AbstractIntegrationTest {
 
   @Autowired
@@ -32,7 +34,8 @@ class SensorWaitFixtureE2eIT extends AbstractIntegrationTest {
   private WorkflowGraphValidator workflowGraphValidator;
 
   @Test
-  void taSeedContainsValidWaitFileArrivalWorkflow() {
+  @DisplayName("ta 租户种子里的等待文件到达工作流合法:等待节点参数与前后两条连线齐备,图校验无错误")
+  void shouldContainValidWaitFileArrivalWorkflow_whenTaTenantSeedLoaded() {
     Long workflowDefinitionId = jdbcTemplate.queryForObject("""
             select id
               from batch.workflow_definition

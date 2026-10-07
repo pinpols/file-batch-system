@@ -5,6 +5,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.Test;
  * <p>HTTP 请求、查询和响应契约统一放在对应 context 的 {@code application.contract} 包，应用层和基础设施层不得重新依赖
  * {@code web.request/query/response}。Controller 仍位于 {@code web}，只负责 HTTP 适配和契约转换。
  */
+@DisplayName("分层边界守护: 冻结 Web 层对映射器、基础设施、内部客户端与对象存储的依赖方向")
 class LayerBoundaryArchTest {
 
   private static final JavaClasses CLASSES = new ClassFileImporter()
@@ -24,7 +26,8 @@ class LayerBoundaryArchTest {
       .importPackages("io.github.pinpols.batch.console..");
 
   @Test
-  void webMustNotDependOnMapper() {
+  @DisplayName("Web 层不得直接依赖映射器, 数据访问只能经应用层或基础设施层")
+  void shouldRejectWebDependencyOnMapper_whenLayersChecked() {
     noClasses()
         .that()
         .resideInAPackage("..web..")
@@ -36,7 +39,8 @@ class LayerBoundaryArchTest {
   }
 
   @Test
-  void webMustNotDependOnInfrastructure() {
+  @DisplayName("Web 层不得直接依赖基础设施实现, 只允许经应用层接口访问")
+  void shouldRejectWebDependencyOnInfrastructure_whenLayersChecked() {
     noClasses()
         .that()
         .resideInAPackage("..web..")
@@ -48,7 +52,8 @@ class LayerBoundaryArchTest {
   }
 
   @Test
-  void webMustNotDependOnInternalClientsOrObjectStores() {
+  @DisplayName("控制器不得直接持有内部客户端或对象存储, 统一经应用端口与适配器")
+  void shouldRejectControllerDependencyOnInternalClients_whenLayersChecked() {
     noClasses()
         .that()
         .resideInAPackage("..web..")
@@ -65,7 +70,8 @@ class LayerBoundaryArchTest {
   }
 
   @Test
-  void applicationAndInfrastructureMustNotDependOnWebContracts() {
+  @DisplayName("应用层与基础设施层不得依赖 Web 层请求与响应契约, 契约统一归应用契约包")
+  void shouldRejectAppDependencyOnWebContracts_whenLayersChecked() {
     noClasses()
         .that()
         .resideInAnyPackage("..application..", "..infrastructure..", "..service..")

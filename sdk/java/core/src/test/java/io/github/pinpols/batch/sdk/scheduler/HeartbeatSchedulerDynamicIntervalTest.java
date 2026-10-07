@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
  *
  * <p>覆盖:hint=null / 极小 / 极大 / 正常 / cancel-after-stop / 多次相同 hint 不重排。
  */
+@DisplayName("HeartbeatScheduler — 心跳回应动态间隔的采用、上下界收敛与重排幂等")
 class HeartbeatSchedulerDynamicIntervalTest {
 
   private static BatchPlatformClientConfig cfg(Duration heartbeat) {

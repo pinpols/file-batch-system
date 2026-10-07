@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
 import org.apache.ibatis.session.SqlSessionFactory;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.springframework.beans.factory.ObjectProvider;
@@ -31,10 +32,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.RestClient;
 
 /** ADR-015：HTTP REPORT 失败后写入 SQLite outbox，poller 抢占并重投 orchestrator。 */
+@DisplayName("上报发件箱协调器: 上报失败落库待投与轮询重投")
 class WorkerReportOutboxCoordinatorTest {
 
   @Test
-  void defersFailedReportThenPollSucceeds() throws Exception {
+  @DisplayName("上报失败时结果落入本地发件箱待投, 轮询重投成功后记录被清理")
+  void shouldDeferFailedReport_thenResendOnPoll() throws Exception {
     Path dbFile = Files.createTempFile("worker-outbox-", ".db");
     dbFile.toFile().deleteOnExit();
 

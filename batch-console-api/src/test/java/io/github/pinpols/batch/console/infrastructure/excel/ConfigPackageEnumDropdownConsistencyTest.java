@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.enums.PipelineType;
 import io.github.pinpols.batch.common.enums.ScheduleType;
 import java.util.Arrays;
 import java.util.Set;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -26,10 +27,12 @@ import org.junit.jupiter.api.Test;
  * <p>本测试在 enum 改动或 validator 集合调整时立即把模板下拉漂移暴露在编译期，确保用户拿到的 Excel 模板 不会因为"按字段说明填了一个 validator 不认识的值"而
  * preview 失败。
  */
+@DisplayName("配置包 Excel 下拉:与后端枚举及校验集合的防漂移一致性")
 class ConfigPackageEnumDropdownConsistencyTest {
 
   @Test
-  void jobTypeDropdownEqualsJobTypeEnum() {
+  @DisplayName("作业类型下拉:与后端枚举取值及校验集合完全一致,漏列成员会被拦截")
+  void shouldKeepJobTypeDropdownAligned_whenEnumChanges() {
     assertThat(ConfigPackageExcelWorkbookWriter.JOB_TYPE_DROPDOWN)
         .as("job_type 下拉必须包含 enum 全部 code，PROCESS 等漏列将被本断言拦截")
         .containsExactlyInAnyOrderElementsOf(DictEnum.codes(JobType.class));
@@ -38,7 +41,8 @@ class ConfigPackageEnumDropdownConsistencyTest {
   }
 
   @Test
-  void scheduleTypeDropdownEqualsScheduleTypeEnum() {
+  @DisplayName("调度类型下拉:与后端枚举取值一致,已废弃取值不得再次出现")
+  void shouldKeepScheduleTypeDropdownAligned_whenEnumChanges() {
     assertThat(ConfigPackageExcelWorkbookWriter.SCHEDULE_TYPE_DROPDOWN)
         .as("schedule_type 下拉必须 == enum；EVENT / ONE_TIME 等已废弃值不得再次出现")
         .containsExactlyInAnyOrderElementsOf(DictEnum.codes(ScheduleType.class));
@@ -47,7 +51,8 @@ class ConfigPackageEnumDropdownConsistencyTest {
   }
 
   @Test
-  void pipelineTypeDropdownEqualsPipelineTypeEnum() {
+  @DisplayName("流水线类型下拉:与后端枚举取值及校验集合完全一致")
+  void shouldKeepPipelineTypeDropdownAligned_whenEnumChanges() {
     assertThat(ConfigPackageExcelWorkbookWriter.PIPELINE_TYPE_DROPDOWN)
         .as("pipeline_type 下拉必须包含 enum 全部 code，PROCESS 漏列将被本断言拦截")
         .containsExactlyInAnyOrderElementsOf(DictEnum.codes(PipelineType.class));
@@ -56,7 +61,8 @@ class ConfigPackageEnumDropdownConsistencyTest {
   }
 
   @Test
-  void stageCodeDropdownEqualsValidatorStageCodes() {
+  @DisplayName("阶段编码下拉:与校验器阶段集合一致,历史取值已删除")
+  void shouldKeepStageCodeDropdownAligned_whenValidatorChanges() {
     // stage_code 是跨 worker module 的 union，没单个 enum；以 validator STAGE_CODES 为权威。
     assertThat(asSet(ConfigPackageExcelWorkbookWriter.STAGE_CODE_DROPDOWN))
         .as("stage_code 下拉必须 == validator STAGE_CODES；TRANSFER 等历史值已删除")
@@ -64,7 +70,8 @@ class ConfigPackageEnumDropdownConsistencyTest {
   }
 
   @Test
-  void dropdownOrderFollowsEnumDeclarationOrder() {
+  @DisplayName("下拉取值顺序:与枚举声明顺序一致,避免无序集合影响模板展示")
+  void shouldKeepDropdownOrder_whenEnumDeclaresOrder() {
     // 业务认知顺序锁定，防止 Set#toArray unordered 行为污染 Excel 下拉展示。
     assertThat(ConfigPackageExcelWorkbookWriter.JOB_TYPE_DROPDOWN)
         .containsExactlyElementsOf(DictEnum.codeList(JobType.class));

@@ -28,6 +28,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
  * resolver.resolve(tenant)} 比对——相等即证明路由 DS 真的连到了选定实例。
  */
 @EnabledIfEnvironmentVariable(named = "BIZ_SHARD_0_URL", matches = ".+")
+@DisplayName("多分片真实路由活体验证:租户经路由数据源落到解析器选定实例,表映射覆盖哈希")
 class BusinessMultiShardRoutingLiveTest {
 
   @AfterEach
@@ -37,7 +38,7 @@ class BusinessMultiShardRoutingLiveTest {
 
   @Test
   @DisplayName("两片真实 PG:每个租户路由到 resolver 选定实例(读回 shard identity 比对)")
-  void routesTenantsToResolvedRealInstance() throws Exception {
+  void shouldRouteTenantToResolvedInstance_whenRealShardsAvailable() throws Exception {
     DataSource direct0 = directDataSource(0);
     DataSource direct1 = directDataSource(1);
     try (HikariDataSource ds0 = (HikariDataSource) direct0;
@@ -64,7 +65,7 @@ class BusinessMultiShardRoutingLiveTest {
 
   @Test
   @DisplayName("表驱动:placement 表显式映射覆盖 hash(table wins),未登记租户仍走 hash")
-  void placementTableOverridesHash() throws Exception {
+  void shouldPreferPlacementTableOverHash() throws Exception {
     DataSource direct0 = directDataSource(0);
     DataSource direct1 = directDataSource(1);
     DataSource platform = platformDataSource();

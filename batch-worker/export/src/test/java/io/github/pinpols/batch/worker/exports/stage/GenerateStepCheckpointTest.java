@@ -35,12 +35,14 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
  * ADR-038 P3 端到端续跑测试:模拟 GENERATE 在第二页崩溃 → 位点记下首页 cursor → 重派从该 cursor 续写 → 最终文件完整有效。 验证「单文件 +
  * 字节位点截断」方案的核心正确性:不重复、不丢行、JSON 收尾后缀只写一次。
  */
+@DisplayName("导出生成阶段断点续跑单测:崩溃重派续写,幂等跳过与指纹不符重算语义")
 class GenerateStepCheckpointTest {
 
   private static final String PLUGIN_ID = "test.export.plugin";
@@ -142,6 +144,7 @@ class GenerateStepCheckpointTest {
   }
 
   @Test
+  @DisplayName("第二页崩溃后重派:从残文件续写,最终文件行数完整且不重复")
   void crashOnSecondPage_thenResume_producesCompleteValidJsonWithoutDuplication() throws Exception {
     List<Map<String, Object>> page1 = List.of(Map.of("id", "1"), Map.of("id", "2"));
     List<Map<String, Object>> page2 = List.of(Map.of("id", "3"));
@@ -186,6 +189,7 @@ class GenerateStepCheckpointTest {
   }
 
   @Test
+  @DisplayName("已完成且文件仍在:重派幂等跳过,不再推进位点也不重读明细")
   void completedAndFileExists_isIdempotentlySkipped() throws Exception {
     // 先正常完整跑一遍(单页结束)。
     when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
@@ -204,6 +208,7 @@ class GenerateStepCheckpointTest {
   }
 
   @Test
+  @DisplayName("标记已完成但文件字节数不符:放弃跳过,全量重写恢复完整文件")
   void completedButFileFingerprintMismatch_regeneratesFreshInsteadOfSkipping() throws Exception {
     // 先正常完整跑一遍(单页结束)→ 完成 marker 记录了真实文件字节数指纹。
     when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
@@ -230,6 +235,7 @@ class GenerateStepCheckpointTest {
   }
 
   @Test
+  @DisplayName("多分区共享同一实例:整体降级为不可续跑,不写位点也不走确定化路径")
   void multiPartition_degradesToNonResumableFullRun() throws Exception {
     // ADR-046 bundle export / 多分区任务:K 个 partition 共享同一 pipelineInstanceId
     // (pipeline_instance UPSERT on related_job_instance_id),GENERATE 位点行会跨 partition 互写
@@ -251,6 +257,7 @@ class GenerateStepCheckpointTest {
   }
 
   @Test
+  @DisplayName("分隔符格式续跑收尾:trailer 采用批次控制总额,而非分页累加值")
   void delimitedTrailerAfterResume_usesBatchControlTotal() throws Exception {
     when(dataPlugin.loadBatch(any()))
         .thenReturn(Map.of("id", 1L, "batchCode", "B001", "total_amount", "60.00"));

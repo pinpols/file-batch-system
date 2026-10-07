@@ -42,6 +42,7 @@ import org.mockito.MockitoAnnotations;
  * <p>releaseForDispatch 涉及 @Transactional 回滚语义(TransactionAspectSupport), 用纯单元测无法准确还原 Spring
  * 事务行为,留给集成测覆盖。
  */
+@DisplayName("分区生命周期服务: 认领, 续租, 过期回收与派发放行口径")
 class DefaultPartitionLifecycleServiceTest {
 
   @Mock
@@ -62,7 +63,7 @@ class DefaultPartitionLifecycleServiceTest {
 
   @Test
   @DisplayName("claimPartition: 分片不存在 → 返 null,不写表")
-  void claimReturnsNullWhenPartitionMissing() {
+  void shouldReturnNull_whenClaimedPartitionMissing() {
     when(jobPartitionMapper.selectById("ta", 100L)).thenReturn(null);
 
     JobPartitionEntity result = service.claimPartition("ta", 100L, "worker-1", Instant.now());
@@ -72,7 +73,7 @@ class DefaultPartitionLifecycleServiceTest {
 
   @Test
   @DisplayName("claimPartition: CAS 成功 → 重新读 DB 拿最新")
-  void claimReturnsFreshWhenCasSucceeds() {
+  void shouldReturnFreshPartition_whenClaimCasHits() {
     JobPartitionEntity existing = partition(100L, 1L);
     JobPartitionEntity fresh = partition(100L, 2L);
     when(jobPartitionMapper.selectById("ta", 100L)).thenReturn(existing);
@@ -91,7 +92,7 @@ class DefaultPartitionLifecycleServiceTest {
 
   @Test
   @DisplayName("claimPartition: CAS 失败 → 返已读到的原对象,不再读 DB")
-  void claimReturnsExistingWhenCasFails() {
+  void shouldReturnExistingPartition_whenClaimCasMisses() {
     JobPartitionEntity existing = partition(100L, 5L);
     when(jobPartitionMapper.selectById("ta", 100L)).thenReturn(existing);
     when(jobPartitionMapper.claimPartition(any(ClaimPartitionParam.class))).thenReturn(null);
@@ -106,7 +107,7 @@ class DefaultPartitionLifecycleServiceTest {
 
   @Test
   @DisplayName("renewLease: 分片不存在 → 返 null")
-  void renewReturnsNullWhenPartitionMissing() {
+  void shouldReturnNull_whenRenewedPartitionMissing() {
     when(jobPartitionMapper.selectById("ta", 200L)).thenReturn(null);
 
     JobPartitionEntity result = service.renewLease("ta", 200L, "worker-1", Instant.now());
@@ -116,7 +117,7 @@ class DefaultPartitionLifecycleServiceTest {
 
   @Test
   @DisplayName("renewLease: 续约成功 → 返新版本")
-  void renewReturnsFreshWhenSucceeds() {
+  void shouldReturnFreshPartition_whenRenewSucceeds() {
     JobPartitionEntity existing = partition(200L, 3L);
     JobPartitionEntity fresh = partition(200L, 4L);
     when(jobPartitionMapper.selectById("ta", 200L)).thenReturn(existing, fresh);
@@ -128,7 +129,7 @@ class DefaultPartitionLifecycleServiceTest {
 
   @Test
   @DisplayName("renewLease: CAS 失败 → 返原对象")
-  void renewReturnsExistingWhenCasFails() {
+  void shouldReturnExistingPartition_whenRenewCasMisses() {
     JobPartitionEntity existing = partition(200L, 3L);
     when(jobPartitionMapper.selectById("ta", 200L)).thenReturn(existing);
     when(jobPartitionMapper.renewLease(any(RenewLeaseParam.class))).thenReturn(0);
@@ -141,7 +142,7 @@ class DefaultPartitionLifecycleServiceTest {
 
   @Test
   @DisplayName("reclaimExpiredPartitions: 过期分片状态推回 WAITING(非 READY)")
-  void reclaimPushesBackToWaitingNotReady() {
+  void shouldPushBackToWaiting_whenReclaimingExpired() {
     JobPartitionEntity p1 = partition(300L, 1L);
     JobPartitionEntity p2 = partition(301L, 2L);
     when(jobPartitionMapper.selectExpiredLeases(
@@ -164,7 +165,7 @@ class DefaultPartitionLifecycleServiceTest {
 
   @Test
   @DisplayName("reclaimExpiredPartitions: 无过期分片 → 返 0,不调 markStatus")
-  void reclaimReturnsZeroWhenNoExpired() {
+  void shouldReturnZero_whenNoExpiredLease() {
     when(jobPartitionMapper.selectExpiredLeases(anyString(), anyString(), anyString()))
         .thenReturn(List.of());
 
@@ -174,7 +175,7 @@ class DefaultPartitionLifecycleServiceTest {
 
   @Test
   @DisplayName("reclaimExpiredPartitions: CAS 部分失败 → 计数仅累加成功的")
-  void reclaimOnlyCountsSuccessfulCas() {
+  void shouldCountOnlySuccessfulCas_whenReclaiming() {
     JobPartitionEntity p1 = partition(300L, 1L);
     JobPartitionEntity p2 = partition(301L, 2L);
     JobPartitionEntity p3 = partition(302L, 3L);
@@ -190,7 +191,7 @@ class DefaultPartitionLifecycleServiceTest {
 
   @Test
   @DisplayName("releaseForDispatch: null 入参 → 返 false,不写表")
-  void releaseReturnsFalseForNullInputs() {
+  void shouldReturnFalse_whenReleaseInputsMissing() {
     assertThat(service.releaseForDispatch(null, null, "x", "y")).isFalse();
     assertThat(service.releaseForDispatch(partition(1L, 0L), null, "x", "y")).isFalse();
     assertThat(service.releaseForDispatch(null, task(1L, 0L), "x", "y")).isFalse();
@@ -202,7 +203,7 @@ class DefaultPartitionLifecycleServiceTest {
 
   @Test
   @DisplayName("releaseForDispatch: partition CAS 失败 → 返 false,不再推 task")
-  void releaseReturnsFalseWhenPartitionCasFails() {
+  void shouldReturnFalse_whenReleaseCasMisses() {
     JobPartitionEntity p = partition(1L, 0L);
     p.setTenantId("ta");
     JobTaskEntity t = task(1L, 0L);
@@ -219,7 +220,7 @@ class DefaultPartitionLifecycleServiceTest {
 
   @Test
   @DisplayName("releaseForDispatch: 全成功 → 返 true + 内存对象状态/版本号同步推进")
-  void releaseSucceedsAndBumpsInMemoryState() {
+  void shouldReturnTrueAndBumpState_whenReleaseSucceeds() {
     JobPartitionEntity p = partition(1L, 0L);
     p.setTenantId("ta");
     JobTaskEntity t = task(1L, 0L);
@@ -242,7 +243,7 @@ class DefaultPartitionLifecycleServiceTest {
   @Test
   @DisplayName("createPartitions: input_snapshot 固化 partition plan contract")
   @SuppressWarnings("unchecked")
-  void createPartitionsPersistsPartitionPlanContractInInputSnapshot() {
+  void shouldPersistPartitionPlanContract_whenCreatingPartitions() {
     SchedulePlan plan = new SchedulePlan();
     plan.setTenantId("ta");
     plan.setJobCode("JOB_A");
@@ -285,7 +286,7 @@ class DefaultPartitionLifecycleServiceTest {
   @Test
   @DisplayName("createPartitions: 分发束按分区固化各自的下游渠道")
   @SuppressWarnings("unchecked")
-  void createPartitionsPersistsPartitionSpecificDispatchChannel() {
+  void shouldPersistPartitionChannel_whenCreatingDispatchBundle() {
     SchedulePlan plan = new SchedulePlan();
     plan.setTenantId("ta");
     plan.setJobCode("DISPATCH_BUNDLE");

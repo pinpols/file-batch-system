@@ -13,6 +13,7 @@ import io.github.pinpols.batch.console.domain.ops.service.ConsoleWorkerFingerpri
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import java.time.Instant;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentMatchers;
@@ -22,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 /** SDK Phase 5 / SDK-P5-3(console Lane D):验证 ConsoleWorkerFingerprintController 两端点返回包装。 */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("Worker 指纹接口:列表与汇总两端点透传查询服务结果, 并包装为统一响应")
 class ConsoleWorkerFingerprintControllerTest {
 
   @Mock
@@ -34,7 +36,8 @@ class ConsoleWorkerFingerprintControllerTest {
   private ConsoleWorkerFingerprintController controller;
 
   @Test
-  void listReturnsResponsesFromQueryService() {
+  @DisplayName("指纹列表:查询结果逐字段回填, 版本与状态与构造一致")
+  void shouldReturnQueryServiceRows_whenListingFingerprints() {
     WorkerFingerprintResponse row = new WorkerFingerprintResponse(
         1L,
         "tx",
@@ -64,7 +67,8 @@ class ConsoleWorkerFingerprintControllerTest {
   }
 
   @Test
-  void summaryReturnsResponsesFromQueryService() {
+  @DisplayName("指纹汇总:按构建分组返回, 数量与构造一致")
+  void shouldReturnQueryServiceSummary_whenSummarizingFingerprints() {
     when(queryService.summary("tx"))
         .thenReturn(List.of(new WorkerFingerprintSummaryResponse("build-A", "1.4.0", 5L)));
     when(responseFactory.success(ArgumentMatchers.<List<WorkerFingerprintSummaryResponse>>any()))

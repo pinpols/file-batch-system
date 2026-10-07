@@ -12,6 +12,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** A.2 typed Dispatch 模板基类单测 — 验证强类型入参 + 逐条推送 + 单条失败计 failed 不中断。 */
+@DisplayName("强类型 Dispatch 模板基类:入参反序列化后逐条推送,覆盖单条失败计数与非法参数")
 class SdkAbstractTypedDispatchHandlerTest {
 
   record DispatchRequest(int count) {}

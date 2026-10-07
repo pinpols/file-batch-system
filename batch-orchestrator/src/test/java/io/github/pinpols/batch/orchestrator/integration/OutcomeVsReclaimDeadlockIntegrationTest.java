@@ -83,6 +83,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("作业结果上报与分区租约回收的并发锁竞争:生产链路并发风暴下无死锁,收尾后状态与计数一致收敛")
 class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -130,7 +131,8 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void terminalUpdateWaitsBeforeTakingParentLockWhileReportHoldsPartition() throws Exception {
+  @DisplayName("上报事务持有分区行锁时,终止态更新先等待锁再执行,且不覆盖实例的成功终态")
+  void shouldWaitForReleasedPartitionLock_whenTerminalUpdateTakesParentLock() throws Exception {
     var instance = launchBundle(1);
     var shard = claimAllShards(instance).getFirst();
     String invocation = "terminal-race-" + UUID.randomUUID();

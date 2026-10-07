@@ -71,7 +71,7 @@ class JdbcMappedImportCompensatorIntegrationTest {
 
   @Test
   @DisplayName("opt-in on + 绑定 source_batch_no=${batchNo}：只删 t1/BATCH-1 的行")
-  void reversesOnlyThisRunRows() {
+  void shouldReverseOnlyCurrentRunRows_whenCompensating() {
     Map<String, Object> attributes = attributes("BATCH-1", templateConfigWithBatchNoBinding());
 
     CompensationResult result = compensator.compensate("t1", 100L, 5L, attributes);
@@ -85,7 +85,7 @@ class JdbcMappedImportCompensatorIntegrationTest {
 
   @Test
   @DisplayName("重复跑幂等：第二次删 0 行，结果一致")
-  void idempotentOnSecondRun() {
+  void shouldReverseNothing_whenCompensatedTwice() {
     Map<String, Object> attributes = attributes("BATCH-1", templateConfigWithBatchNoBinding());
 
     compensator.compensate("t1", 100L, 5L, attributes);
@@ -97,7 +97,7 @@ class JdbcMappedImportCompensatorIntegrationTest {
 
   @Test
   @DisplayName("模板没绑任何 run 标识列：SKIP 不删，所有行原样保留")
-  void skipsWhenNoRunIdentifierColumn() {
+  void shouldSkip_whenNoRunIdentifierColumn() {
     Map<String, Object> attributes = attributes("BATCH-1", templateConfigWithoutRunBinding());
 
     CompensationResult result = compensator.compensate("t1", 100L, 5L, attributes);

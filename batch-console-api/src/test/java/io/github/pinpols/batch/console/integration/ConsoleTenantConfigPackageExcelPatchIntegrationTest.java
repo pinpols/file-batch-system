@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -24,6 +25,7 @@ import org.springframework.boot.test.context.SpringBootTest;
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.MOCK,
     properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+@DisplayName("租户配置包 Excel 预览与行内修正: 出错行透出,单元格修订后重校验通过")
 class ConsoleTenantConfigPackageExcelPatchIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
@@ -33,6 +35,7 @@ class ConsoleTenantConfigPackageExcelPatchIntegrationTest extends AbstractIntegr
   private TenantConfigPackageExcelImportStore importStore;
 
   @Test
+  @DisplayName("预览暴露校验失败行及其单元格值,补齐必填列后该行通过重校验且失败行数下降")
   void shouldExposeErrorRowsThenFixViaPatch() {
     String tenantId = "excel-patch-ta";
     // channel 行:channel_name 留空 → 校验不过(其余字段齐全)
@@ -63,6 +66,7 @@ class ConsoleTenantConfigPackageExcelPatchIntegrationTest extends AbstractIntegr
   }
 
   @Test
+  @DisplayName("传入不存在的列键被忽略: 不凭空塞键也不抛异常,出错行仍然保留")
   void shouldIgnoreUnknownColumnKeyOnPatch() {
     String tenantId = "excel-patch-tb";
     String token = importStore.save(session(tenantId, List.of(channelRow(tenantId, ""))));
@@ -74,6 +78,7 @@ class ConsoleTenantConfigPackageExcelPatchIntegrationTest extends AbstractIntegr
   }
 
   @Test
+  @DisplayName("行号早于表头: 拒绝并返回参数非法,不出现整数下溢")
   void shouldRejectRowNumberBeforeHeaderWithoutIntegerUnderflow() {
     String tenantId = "excel-patch-tc";
     String token = importStore.save(session(tenantId, List.of(channelRow(tenantId, "Channel"))));

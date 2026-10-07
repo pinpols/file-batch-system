@@ -21,12 +21,14 @@ import java.time.Month;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("启动参数解析:批次号取值与回退,运行模式判定,截止时间解析,以及描述符默认参数的合并优先级")
 class LaunchParamResolverTest {
 
   @Mock
@@ -86,6 +88,7 @@ class LaunchParamResolverTest {
   }
 
   @Test
+  @DisplayName("参数中显式提供批次号时优先采用参数值")
   void shouldResolveBatchNoFromParams() {
     Map<String, Object> params = new HashMap<>();
     params.put("batchNo", "B001");
@@ -96,6 +99,7 @@ class LaunchParamResolverTest {
   }
 
   @Test
+  @DisplayName("参数未提供批次号时回退为业务日期文本")
   void shouldFallbackBatchNoToBizDate() {
     Map<String, Object> params = new HashMap<>();
 
@@ -105,6 +109,7 @@ class LaunchParamResolverTest {
   }
 
   @Test
+  @DisplayName("从参数中取到操作人标识")
   void shouldResolveOperatorId() {
     Map<String, Object> params = new HashMap<>();
     params.put("operatorId", "user1");
@@ -115,6 +120,7 @@ class LaunchParamResolverTest {
   }
 
   @Test
+  @DisplayName("参数显式声明重跑标记时判定为重跑")
   void shouldResolveRerunFlagFromParams() {
     Map<String, Object> params = new HashMap<>();
     params.put("rerunFlag", true);
@@ -125,6 +131,7 @@ class LaunchParamResolverTest {
   }
 
   @Test
+  @DisplayName("补跑触发类型即使未带参数也判定为重跑")
   void shouldResolveRerunFlagFromCatchUpTrigger() {
     Map<String, Object> params = new HashMap<>();
 
@@ -134,6 +141,7 @@ class LaunchParamResolverTest {
   }
 
   @Test
+  @DisplayName("参数显式声明重试标记时判定为重试")
   void shouldResolveRetryFlagFromParams() {
     Map<String, Object> params = new HashMap<>();
     params.put("retryFlag", true);
@@ -144,6 +152,7 @@ class LaunchParamResolverTest {
   }
 
   @Test
+  @DisplayName("手工触发且未声明补偿操作时运行模式为普通")
   void shouldResolveRunModeNormal() {
     Map<String, Object> params = new HashMap<>();
 
@@ -153,6 +162,7 @@ class LaunchParamResolverTest {
   }
 
   @Test
+  @DisplayName("参数声明补偿操作时运行模式为补偿")
   void shouldResolveRunModeCompensate() {
     Map<String, Object> params = new HashMap<>();
     params.put("operationType", "COMPENSATE");
@@ -163,6 +173,7 @@ class LaunchParamResolverTest {
   }
 
   @Test
+  @DisplayName("截止时间传入标准时间戳文本时解析出对应时间点")
   void shouldParseDeadlineFromInstantString() {
     Instant result = resolver.parseDeadlineInstant("2026-04-10T12:00:00Z", null);
 
@@ -170,6 +181,7 @@ class LaunchParamResolverTest {
   }
 
   @Test
+  @DisplayName("截止时间为空时返回空值而不报错")
   void shouldReturnNullForNullDeadline() {
     Instant result = resolver.parseDeadlineInstant(null, null);
 
@@ -177,6 +189,7 @@ class LaunchParamResolverTest {
   }
 
   @Test
+  @DisplayName("两个时间点比较时取更早的一个")
   void shouldFindEarliestInstant() {
     Instant earlier = Instant.parse("2026-04-10T10:00:00Z");
     Instant later = Instant.parse("2026-04-10T14:00:00Z");
@@ -187,6 +200,7 @@ class LaunchParamResolverTest {
   }
 
   @Test
+  @DisplayName("布尔真值与常见真值文本识别为真,布尔假值与否定文本识别为假")
   void shouldConvertToBoolean() {
     assertThat(LaunchParamResolver.toBoolean(true)).isTrue();
     assertThat(LaunchParamResolver.toBoolean("true")).isTrue();
@@ -197,6 +211,7 @@ class LaunchParamResolverTest {
   }
 
   @Test
+  @DisplayName("文本值去除首尾空白后返回,空值或全空白返回空")
   void shouldExtractTextValue() {
     assertThat(LaunchParamResolver.textValue(null)).isNull();
     assertThat(LaunchParamResolver.textValue(" hello ")).isEqualTo("hello");
@@ -204,6 +219,7 @@ class LaunchParamResolverTest {
   }
 
   @Test
+  @DisplayName("计数自增:入参为空时按起步值计算,否则在入参基础上加一")
   void shouldSafeIncrement() {
     assertThat(LaunchParamResolver.safeIncrement(null)).isEqualTo(1);
     assertThat(LaunchParamResolver.safeIncrement(5)).isEqualTo(6);
@@ -212,6 +228,7 @@ class LaunchParamResolverTest {
   // ===== mergeLaunchParams: descriptor.defaults 注入 + 优先级 (SDK Phase 3 M3.1) =====
 
   @Test
+  @DisplayName("描述符默认参数优先级最低,作业默认参数与请求参数依次覆盖")
   void shouldMergeDescriptorDefaultsAsLowestPriority() {
     when(customTaskTypeRegistryMapper.selectByTenantAndCode("ta", "tenant_ta_import"))
         .thenReturn(descriptorEntity(
@@ -227,6 +244,7 @@ class LaunchParamResolverTest {
   }
 
   @Test
+  @DisplayName("请求参数覆盖描述符默认参数")
   void shouldLetRequestParamsOverrideDescriptorDefaults() {
     when(customTaskTypeRegistryMapper.selectByTenantAndCode("ta", "tenant_ta_import"))
         .thenReturn(descriptorEntity("{\"defaults\":{\"batchSize\":500}}"));
@@ -239,6 +257,7 @@ class LaunchParamResolverTest {
   }
 
   @Test
+  @DisplayName("描述符默认参数中的模板变量按业务日期替换")
   void shouldSubstituteTemplateVariablesInDescriptorDefaults() {
     when(customTaskTypeRegistryMapper.selectByTenantAndCode("ta", "tenant_ta_import"))
         .thenReturn(descriptorEntity("{\"defaults\":{\"path\":\"/data/${bizDate}/in\"}}"));
@@ -251,6 +270,7 @@ class LaunchParamResolverTest {
   }
 
   @Test
+  @DisplayName("描述符默认参数中的未知模板变量原样保留")
   void shouldKeepUnknownTemplateTokenAsIs() {
     when(customTaskTypeRegistryMapper.selectByTenantAndCode("ta", "tenant_ta_import"))
         .thenReturn(descriptorEntity("{\"defaults\":{\"path\":\"/data/${unknownVar}/in\"}}"));
@@ -263,6 +283,7 @@ class LaunchParamResolverTest {
   }
 
   @Test
+  @DisplayName("作业类型未注册描述符时跳过默认参数注入,仅保留作业自身默认参数")
   void shouldSkipDescriptorDefaultsWhenJobTypeNotRegistered() {
     JobDefinitionEntity jobDef = jobDef("file-import", Map.of("region", "cn"));
     LaunchRequest request = launchRequest(Map.of(), null);
@@ -273,6 +294,7 @@ class LaunchParamResolverTest {
   }
 
   @Test
+  @DisplayName("描述符内容非法时忽略默认参数注入且不影响作业自身默认参数")
   void shouldNotFailWhenDescriptorJsonMalformed() {
     when(customTaskTypeRegistryMapper.selectByTenantAndCode("ta", "tenant_ta_import"))
         .thenReturn(descriptorEntity("{not-json"));

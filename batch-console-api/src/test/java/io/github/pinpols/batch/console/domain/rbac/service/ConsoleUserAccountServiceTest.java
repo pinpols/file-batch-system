@@ -28,6 +28,7 @@ import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -47,6 +48,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
  *   <li>无 principal 上下文(@Async / 内部脚本)豁免
  * </ul>
  */
+@DisplayName("用户账号服务: 租户隔离、角色授予守卫与账号本人改密流程")
 class ConsoleUserAccountServiceTest {
 
   private ConsoleUserAccountMapper userAccountMapper;
@@ -100,9 +102,11 @@ class ConsoleUserAccountServiceTest {
   }
 
   @Nested
+  @DisplayName("租户管理员创建账号: 租户覆盖与角色授予边界")
   class TenantAdminCreate {
 
     @Test
+    @DisplayName("租户管理员创建账号时租户被覆盖为自身租户, 落库参数一致")
     void shouldOverrideTenantIdWithPrincipalTenant() {
       asPrincipal("tenant-a", ConsoleRoles.TENANT_ADMIN);
       activeTenant("tenant-a");
@@ -124,6 +128,7 @@ class ConsoleUserAccountServiceTest {
     }
 
     @Test
+    @DisplayName("租户管理员授予平台管理员角色被拒, 且不写入账号")
     void shouldRejectGrantingAdminAuthority() {
       asPrincipal("tenant-a", ConsoleRoles.TENANT_ADMIN);
 
@@ -137,6 +142,7 @@ class ConsoleUserAccountServiceTest {
     }
 
     @Test
+    @DisplayName("租户管理员授予审计角色被拒")
     void shouldRejectGrantingAuditorAuthority() {
       asPrincipal("tenant-a", ConsoleRoles.TENANT_ADMIN);
 
@@ -147,6 +153,7 @@ class ConsoleUserAccountServiceTest {
     }
 
     @Test
+    @DisplayName("租户管理员可同时授予租户用户与租户管理员角色")
     void shouldAllowGrantingTenantUserAndTenantAdmin() {
       asPrincipal("tenant-a", ConsoleRoles.TENANT_ADMIN);
       activeTenant("tenant-a");
@@ -173,9 +180,11 @@ class ConsoleUserAccountServiceTest {
   }
 
   @Nested
+  @DisplayName("平台管理员创建账号: 显式租户、角色组合与租户状态校验")
   class AdminCreate {
 
     @Test
+    @DisplayName("平台管理员创建账号时按显式租户落库")
     void shouldRespectExplicitTenantId() {
       asPrincipal("system", ConsoleRoles.ADMIN);
       activeTenant("tenant-z");
@@ -196,7 +205,8 @@ class ConsoleUserAccountServiceTest {
     }
 
     @Test
-    void rejectsLegacyRoleUser() {
+    @DisplayName("授予历史遗留角色时被拒, 且不写入账号")
+    void shouldRejectLegacyRole_whenGranted() {
       asPrincipal("system", ConsoleRoles.ADMIN);
 
       assertThatThrownBy(() -> service.create("tenant-z", "legacy", "pw", "Legacy", "ROLE_USER"))
@@ -208,6 +218,7 @@ class ConsoleUserAccountServiceTest {
     }
 
     @Test
+    @DisplayName("平台角色与租户角色混合授予被拒, 且不写入账号")
     void shouldRejectMixedPlatformAndTenantRoles() {
       asPrincipal("system", ConsoleRoles.ADMIN);
       String roles = ConsoleRoles.ADMIN + "," + ConsoleRoles.TENANT_USER;
@@ -223,6 +234,7 @@ class ConsoleUserAccountServiceTest {
     }
 
     @Test
+    @DisplayName("非系统租户下授予平台角色被拒, 且不写入账号")
     void shouldRejectPlatformRoleOutsideSystemTenant() {
       asPrincipal("system", ConsoleRoles.ADMIN);
 
@@ -236,6 +248,7 @@ class ConsoleUserAccountServiceTest {
     }
 
     @Test
+    @DisplayName("目标租户不存在或已停用时授予租户角色被拒")
     void shouldRejectTenantRoleWhenTenantMissingOrInactive() {
       asPrincipal("system", ConsoleRoles.ADMIN);
       when(tenantMapper.selectByTenantId("missing")).thenReturn(null);
@@ -258,10 +271,12 @@ class ConsoleUserAccountServiceTest {
   }
 
   @Nested
+  @DisplayName("租户管理员写操作范围: 跨租户改密与禁用拦截")
   class TenantScopeOnMutate {
 
     @Test
-    void tenantAdminCannotResetCrossTenantPassword() {
+    @DisplayName("租户管理员重置他租户账号密码被拒, 且不更新密码")
+    void shouldRejectCrossTenantPasswordReset_whenTenantAdmin() {
       asPrincipal("tenant-a", ConsoleRoles.TENANT_ADMIN);
       when(userAccountMapper.selectById(99L)).thenReturn(accountRow(99L, "tenant-b", "victim"));
 
@@ -274,7 +289,8 @@ class ConsoleUserAccountServiceTest {
     }
 
     @Test
-    void tenantAdminCannotDisableCrossTenantAccount() {
+    @DisplayName("租户管理员禁用他租户账号被拒")
+    void shouldRejectCrossTenantDisable_whenTenantAdmin() {
       asPrincipal("tenant-a", ConsoleRoles.TENANT_ADMIN);
       when(userAccountMapper.selectById(99L)).thenReturn(accountRow(99L, "tenant-b", "victim"));
 
@@ -285,7 +301,8 @@ class ConsoleUserAccountServiceTest {
     }
 
     @Test
-    void adminCanResetAcrossTenants() {
+    @DisplayName("平台管理员可跨租户重置密码, 并强制下次改密")
+    void shouldAllowCrossTenantReset_whenPlatformAdmin() {
       asPrincipal("system", ConsoleRoles.ADMIN);
       when(userAccountMapper.selectById(99L)).thenReturn(accountRow(99L, "tenant-b", "victim"));
 
@@ -295,10 +312,12 @@ class ConsoleUserAccountServiceTest {
   }
 
   @Nested
+  @DisplayName("租户管理员列表范围: 按自身租户自动收敛")
   class TenantScopeOnList {
 
     @Test
-    void tenantAdminListIsAutoFilteredToOwnTenant() {
+    @DisplayName("租户管理员传入他租户时查询仍收敛到自身租户")
+    void shouldFilterListToOwnTenant_whenTenantAdmin() {
       asPrincipal("tenant-a", ConsoleRoles.TENANT_ADMIN);
       when(userAccountMapper.selectByQuery(eq("tenant-a"), any(), any(), any()))
           .thenReturn(List.of());
@@ -312,7 +331,8 @@ class ConsoleUserAccountServiceTest {
     }
 
     @Test
-    void adminListRespectsExplicitTenantFilter() {
+    @DisplayName("平台管理员按显式租户筛选查询")
+    void shouldRespectExplicitTenantFilter_whenPlatformAdmin() {
       asPrincipal("system", ConsoleRoles.ADMIN);
       when(userAccountMapper.selectByQuery(eq("tenant-b"), any(), any(), any()))
           .thenReturn(List.of());
@@ -326,9 +346,11 @@ class ConsoleUserAccountServiceTest {
   }
 
   @Nested
+  @DisplayName("无认证上下文: 内部调用豁免角色守卫")
   class NoPrincipalContext {
 
     @Test
+    @DisplayName("无认证上下文时创建放行, 按入参租户落库")
     void shouldPassThroughWhenNoSecurityContext() {
       // SecurityContextHolder 已 clear,无 principal
       when(userAccountMapper.selectByUsername("eve"))
@@ -343,6 +365,7 @@ class ConsoleUserAccountServiceTest {
   }
 
   @Nested
+  @DisplayName("账号本人改密: 原密码校验、新旧一致与强制改密标记")
   class ChangeOwnPassword {
 
     private ConsoleUserAccountEntity entity(String username, String tenantId, String hash) {
@@ -356,6 +379,7 @@ class ConsoleUserAccountServiceTest {
     }
 
     @Test
+    @DisplayName("原密码正确时更新密码并清除强制改密标记, 同时失效会话")
     void shouldClearMustChange_whenCurrentPasswordCorrect() {
       // arrange
       when(userAccountMapper.findByUsernameIgnoreCase("admin"))
@@ -372,6 +396,7 @@ class ConsoleUserAccountServiceTest {
     }
 
     @Test
+    @DisplayName("原密码错误时抛出未认证异常, 且不更新密码")
     void shouldReject_whenCurrentPasswordWrong() {
       when(userAccountMapper.findByUsernameIgnoreCase("admin"))
           .thenReturn(Optional.of(entity("admin", "system", "old-hash")));
@@ -386,6 +411,7 @@ class ConsoleUserAccountServiceTest {
     }
 
     @Test
+    @DisplayName("新密码与原密码相同时抛出参数非法异常")
     void shouldReject_whenNewPasswordSameAsCurrent() {
       when(userAccountMapper.findByUsernameIgnoreCase("admin"))
           .thenReturn(Optional.of(entity("admin", "system", "old-hash")));
@@ -398,6 +424,7 @@ class ConsoleUserAccountServiceTest {
     }
 
     @Test
+    @DisplayName("账号不存在时改密抛出资源不存在异常")
     void shouldThrow_whenAccountNotFound() {
       when(userAccountMapper.findByUsernameIgnoreCase("ghost")).thenReturn(Optional.empty());
 

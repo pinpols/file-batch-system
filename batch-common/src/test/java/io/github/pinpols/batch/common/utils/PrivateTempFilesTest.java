@@ -8,12 +8,16 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("私有临时文件工具: 私有根目录下的文件与目录创建, 权限收紧及异常路径")
 class PrivateTempFilesTest {
 
   @Test
-  void createsFileAndDirectoryUnderPrivateRoot() throws Exception {
+  @DisplayName("私有根目录: 文件与目录均落在私有根下, 仅属主可读写, 目录可执行")
+  void shouldCreateFileAndDirectoryWithOwnerOnlyPermissions_whenPrivateRootIsUsed()
+      throws Exception {
     Path file = PrivateTempFiles.createTempFile("test-", ".tmp");
     Path directory = PrivateTempFiles.createTempDirectory("test-");
     try {
@@ -37,7 +41,8 @@ class PrivateTempFilesTest {
   }
 
   @Test
-  void rejectsPrivateRootWhenTempPathContainsARegularFile() throws Exception {
+  @DisplayName("私有根路径被普通文件占用: 创建临时文件抛出 IO 异常")
+  void shouldReject_whenPrivateRootPathPointsToARegularFile() throws Exception {
     Path tempRoot = Files.createTempDirectory("private-temp-test-");
     Path rootAsFile = tempRoot.resolve("file-batch-private");
     Files.createFile(rootAsFile);
@@ -59,7 +64,8 @@ class PrivateTempFilesTest {
   }
 
   @Test
-  void createsRootWhenTempPathIsFresh() throws Exception {
+  @DisplayName("临时路径尚无私有根: 自动创建根目录并成功创建文件与目录")
+  void shouldCreatePrivateRoot_whenTempPathHasNoRootYet() throws Exception {
     Path tempRoot = Files.createTempDirectory("private-temp-fresh-");
     String original = System.getProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY);
     System.setProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY, tempRoot.toString());

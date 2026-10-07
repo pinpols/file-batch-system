@@ -11,10 +11,12 @@ import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.Map;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.BeanFactory;
 
 /** ADR-026 §dry-run 守护:dry-run 上下文下 SQL executor 必须不发任何 SQL,直接回 success + plannedAction 摘要。 */
+@DisplayName("数据库执行器 dry-run 短路: 不发起任何语句")
 class SqlTaskExecutorDryRunTest {
 
   private SqlExecutorProperties props;
@@ -33,6 +35,7 @@ class SqlTaskExecutorDryRunTest {
   }
 
   @Test
+  @DisplayName("运行属性标记 dry-run 时应返回语句计划, 且不获取任何数据库连接")
   void shouldShortCircuit_whenDryRunFromRuntimeAttributes() throws Exception {
     // 准备
     TaskContext ctx = new TaskContext(
@@ -61,6 +64,7 @@ class SqlTaskExecutorDryRunTest {
   }
 
   @Test
+  @DisplayName("兼容旧调用方把标记放在参数里时, 同样应短路且不触达数据库")
   void shouldShortCircuit_whenDryRunFromParametersFallback() throws Exception {
     // 旧调用方可能把 dryRun 塞到 parameters
     TaskContext ctx = new TaskContext(

@@ -9,6 +9,7 @@ import java.lang.reflect.Field;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -35,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Transactional(propagation = Propagation.NEVER)
+@DisplayName("归档表登记清单与物理归档表之间的双向漂移守护")
 class ArchiveSchemaDriftCoverageIntegrationTest extends AbstractIntegrationTest {
 
   /** 已知未注册但故意豁免的 archive 表(临时归档 / 工具表)。 任何新增豁免必须带注释说明原因,代码审查时拒收"无故跳过登记"。 */
@@ -47,7 +49,8 @@ class ArchiveSchemaDriftCoverageIntegrationTest extends AbstractIntegrationTest 
   private JdbcTemplate jdbcTemplate;
 
   @Test
-  void everyArchiveTableMustBeRegisteredInArchivedTables() {
+  @DisplayName("数据库中存在的每张物理归档表都能在登记清单中找到对应登记项")
+  void shouldRegisterEveryPhysicalArchiveTable_whenComparingWithRegistry() {
     List<String> physicalArchiveTables = jdbcTemplate.queryForList(
         "SELECT table_name FROM information_schema.tables"
             + " WHERE table_schema = 'archive' AND table_name LIKE '%_archive'"
@@ -73,7 +76,8 @@ class ArchiveSchemaDriftCoverageIntegrationTest extends AbstractIntegrationTest 
   }
 
   @Test
-  void everyRegisteredTableMustHaveBothHotAndColdPhysicalTables() {
+  @DisplayName("登记清单中的每张表都同时存在热表与冷表物理结构")
+  void shouldHaveHotAndColdTables_whenTableIsRegistered() {
     Set<String> registered = registeredArchivedTables();
     Set<String> missingHot = new HashSet<>();
     Set<String> missingCold = new HashSet<>();
@@ -88,7 +92,8 @@ class ArchiveSchemaDriftCoverageIntegrationTest extends AbstractIntegrationTest 
   }
 
   @Test
-  void registeredCountMatchesPhysicalArchiveCount() {
+  @DisplayName("扣除豁免项后,登记项数量与物理归档表数量一致")
+  void shouldMatchPhysicalArchiveCount_whenRegistryCompared() {
     // 数量级冗余守护:登记数应与 DB 中物理 archive 表数(去豁免后)一致
     int physical = jdbcTemplate.queryForObject(
             "SELECT count(*)::int FROM information_schema.tables"

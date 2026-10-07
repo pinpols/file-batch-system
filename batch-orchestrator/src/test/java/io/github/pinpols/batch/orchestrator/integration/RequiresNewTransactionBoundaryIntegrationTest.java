@@ -26,6 +26,7 @@ import java.time.LocalDate;
 import java.time.Month;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -46,6 +47,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("独立新事务传播边界的提交独立性验证,内部事务提交不受外部回滚影响且非法状态操作被拒绝")
 class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -78,6 +80,7 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
   // ── retryTask: REQUIRES_NEW 内部提交独立于外部回滚 ────────────────────────
 
   @Test
+  @DisplayName("外部事务回滚时重试的内部事务仍独立提交,派发事件数量增加且任务状态被重置为就绪")
   void retryTask_innerCommitSurvivesOuterRollback() {
     LaunchedJob job = launchAndFail("RETRY_TASK_BOUNDARY");
 
@@ -108,6 +111,7 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
   // ── reclaimTask: REQUIRES_NEW 内部提交独立于外部回滚 ──────────────────────
 
   @Test
+  @DisplayName("租约过期后回收的内部事务在外部事务回滚时仍独立提交,派发事件数量增加且任务状态被重置为就绪")
   void reclaimTask_innerCommitSurvivesOuterRollback() {
     LaunchedJob job = launchAndClaim("RECLAIM_BOUNDARY");
     // D4 修复：resetForDispatch 现在守护 lease_expire_at < now 防止 reclaim 抢答活 worker。
@@ -141,6 +145,7 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
   // ── replayDeadLetter: REQUIRES_NEW 内部提交独立于外部回滚 ────────────────
 
   @Test
+  @DisplayName("外部事务回滚时死信重放的内部事务仍独立提交,派发事件数量增加且重放状态标记为成功")
   void replayDeadLetter_innerCommitSurvivesOuterRollback() {
     LaunchedJob job = launchAndExhaustRetries("REPLAY_DL_BOUNDARY");
 
@@ -173,6 +178,7 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
   // ── retryTask: 非终态任务拒绝重试 ────────────────────────────────────────
 
   @Test
+  @DisplayName("任务处于运行中非终态时重试被拒绝,并给出终态校验错误提示")
   void retryTask_rejectsNonTerminalStatus() {
     LaunchedJob job = launchAndClaim("RETRY_GUARD");
 
@@ -186,6 +192,7 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
   // ── reclaimTask: 非法状态拒绝 ────────────────────────────────────────────
 
   @Test
+  @DisplayName("任务仍处于创建或就绪阶段时回收被拒绝,抛出状态非法异常")
   void reclaimTask_rejectsCreatedStatus() {
     LaunchedJob job = launchJob("RECLAIM_GUARD");
 

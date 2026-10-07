@@ -25,8 +25,10 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("结果版本保留调度器: 过期版本降级归档, 归档清理与试运行版本归档的批次处理")
 class ResultVersionRetentionSchedulerTest {
 
   private ResultVersionMapper mapper;
@@ -54,7 +56,8 @@ class ResultVersionRetentionSchedulerTest {
   }
 
   @Test
-  void demotesEachStaleSupersededRow() {
+  @DisplayName("扫描出过期的被取代版本时逐条降级归档, 返回值等于成功归档条数")
+  void shouldDemoteEachStaleRow_whenBatchScanned() {
     ResultVersionEntity r1 =
         ResultVersionEntity.builder().id(1L).tenantId("t1").status("SUPERSEDED").build();
     ResultVersionEntity r2 =
@@ -69,7 +72,8 @@ class ResultVersionRetentionSchedulerTest {
   }
 
   @Test
-  void emptyResultIsNoop() {
+  @DisplayName("查询无命中时不执行任何归档, 返回零")
+  void shouldArchiveNothing_whenQueryReturnsEmpty() {
     when(mapper.selectSupersededOlderThan(any(), anyInt())).thenReturn(List.of());
 
     int archived = scheduler.demoteSupersededBatch(Instant.now());
@@ -79,7 +83,8 @@ class ResultVersionRetentionSchedulerTest {
   }
 
   @Test
-  void purgesOnlyArchivedRowsReturnedByRetentionQuery() {
+  @DisplayName("清理阶段只删除保留期查询返回的归档行, 返回实际删除条数")
+  void shouldPurgeOnlyRowsFromRetentionQuery() {
     ResultVersionEntity row =
         ResultVersionEntity.builder().id(7L).tenantId("t1").status("ARCHIVED").build();
     when(mapper.selectArchivedOlderThan(any(), eq(500))).thenReturn(List.of(row));
@@ -92,7 +97,8 @@ class ResultVersionRetentionSchedulerTest {
   }
 
   @Test
-  void doesNotPurgeWhenNoArchivedRowsAreEligible() {
+  @DisplayName("没有达到清理条件的归档行时不执行删除, 返回零")
+  void shouldSkipPurge_whenNoRowEligible() {
     when(mapper.selectArchivedOlderThan(any(), eq(500))).thenReturn(List.of());
 
     int deleted = scheduler.purgeArchivedBatch(Instant.now());
@@ -102,7 +108,8 @@ class ResultVersionRetentionSchedulerTest {
   }
 
   @Test
-  void archivesDryRunRowsAfterIndependentRetentionWindow() {
+  @DisplayName("试运行版本按独立保留天数计算窗口并归档, 查询下界随该天数前移")
+  void shouldArchiveDryRunRows_whenIndependentWindowElapsed() {
     ResultVersionEntity row =
         ResultVersionEntity.builder().id(8L).tenantId("t1").status("DRY_RUN").build();
     when(mapper.selectDryRunOlderThan(any(), eq(500))).thenReturn(List.of(row));
@@ -116,7 +123,8 @@ class ResultVersionRetentionSchedulerTest {
   }
 
   @Test
-  void disabledSchedulerSkipsScan() {
+  @DisplayName("调度开关关闭时跳过整批扫描, 不查询过期版本")
+  void shouldSkipScan_whenSchedulerDisabled() {
     properties.setEnabled(false);
 
     scheduler.scheduledScan();
@@ -125,7 +133,8 @@ class ResultVersionRetentionSchedulerTest {
   }
 
   @Test
-  void drainingShutdownSkipsScan() {
+  @DisplayName("应用处于停机排空阶段时跳过整批扫描, 不查询过期版本")
+  void shouldSkipScan_whenShutdownDraining() {
     when(gracefulShutdown.isDraining()).thenReturn(true);
 
     scheduler.scheduledScan();

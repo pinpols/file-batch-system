@@ -10,18 +10,22 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
  * wire 红线守护：ops 域类型化 response record 的 JSON key 必须与历史 Map 响应逐字一致。 覆盖嵌套 MyBatis 行 NON_NULL 省略、 动态
  * evidence 负载、Kafka lag 两种混合形态、Instant 归一。
  */
+@DisplayName("运维响应记录的 JSON 键契约:与历史映射响应逐字一致, 嵌套空列省略与动态负载均保持")
 class OpsMapResponseJacksonTest {
 
   private final ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
 
   @Test
-  void configApprovalDetailShouldOmitNullApprovalColumnsButKeepApprovalKey() throws Exception {
+  @DisplayName("审批明细:嵌套审批行的空列被省略, 顶层审批键恒在且时间归一")
+  void shouldOmitNullApprovalColumnsButKeepKey_whenSerializingConfigApprovalDetail()
+      throws Exception {
     // 顶层 approval 键恒定（无审批时为 null）；嵌套 approval 行来自 MyBatis map，pending 时省略 reviewedBy 等 null 列。
     Map<String, Object> approvalRow = new LinkedHashMap<>();
     approvalRow.put("id", 100L);
@@ -58,7 +62,8 @@ class OpsMapResponseJacksonTest {
   }
 
   @Test
-  void configApprovalDetailShouldKeepExplicitNullApprovalWhenAbsent() throws Exception {
+  @DisplayName("审批明细:无审批时保留显式空值键, 序列化后仍是空值")
+  void shouldKeepExplicitNullApproval_whenApprovalAbsent() throws Exception {
     Map<String, Object> row = new LinkedHashMap<>();
     row.put("releaseId", 7L);
     row.put("tenantId", "ta");
@@ -72,7 +77,8 @@ class OpsMapResponseJacksonTest {
   }
 
   @Test
-  void workerConsistencyShouldOmitNullWorkerGroupKey() throws Exception {
+  @DisplayName("Worker 一致性:分组内空的分组名键被省略, 外层计数保留")
+  void shouldOmitNullWorkerGroupKey_whenSerializingWorkerConsistency() throws Exception {
     Map<String, Object> nullGroupRow = new LinkedHashMap<>();
     nullGroupRow.put("totalWorkers", 2L);
     nullGroupRow.put("onlineWorkers", 1L);
@@ -89,7 +95,8 @@ class OpsMapResponseJacksonTest {
   }
 
   @Test
-  void instanceDiagnosisShouldTypeSummaryAndKeepDynamicEvidence() throws Exception {
+  @DisplayName("实例诊断:摘要结构化并保留显式空键, 动态证据原样透传")
+  void shouldTypeSummaryAndKeepDynamicEvidence_whenSerializingInstanceDiagnosis() throws Exception {
     Map<String, Object> instance = new LinkedHashMap<>();
     instance.put("id", 9L);
     instance.put("instanceNo", "INS-9");
@@ -151,7 +158,8 @@ class OpsMapResponseJacksonTest {
   }
 
   @Test
-  void kafkaConsumerLagShouldPreserveNormalAndErrorShapes() throws Exception {
+  @DisplayName("消费积压:正常, 无积压与出错三种形态的键集合各自保持不变")
+  void shouldPreserveNormalAndErrorShapes_whenSerializingKafkaConsumerLag() throws Exception {
     Map<String, Object> normal = new LinkedHashMap<>();
     normal.put("groupId", "batch-a");
     normal.put("totalLag", 5L);
@@ -186,7 +194,8 @@ class OpsMapResponseJacksonTest {
   }
 
   @Test
-  void forensicExportShouldKeepNullDownloadUrlKey() throws Exception {
+  @DisplayName("取证导出:空下载地址键保留, 文件大小按数值回填")
+  void shouldKeepNullDownloadUrlKey_whenSerializingForensicExport() throws Exception {
     Map<String, Object> row = new LinkedHashMap<>();
     row.put("exportId", "exp-1");
     row.put("status", "COMPLETED");
@@ -203,7 +212,8 @@ class OpsMapResponseJacksonTest {
   }
 
   @Test
-  void shedLockStatusShouldTypeNestedLockEntries() throws Exception {
+  @DisplayName("调度锁状态:嵌套锁条目的时间与标识字段完整保留")
+  void shouldTypeNestedLockEntries_whenSerializingShedLockStatus() throws Exception {
     Map<String, Object> lock = new LinkedHashMap<>();
     lock.put("name", "job-scheduler");
     lock.put("lockUntil", Instant.parse("2026-07-11T02:05:00Z"));

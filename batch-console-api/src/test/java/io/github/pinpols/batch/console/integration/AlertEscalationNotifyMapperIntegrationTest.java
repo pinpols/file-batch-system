@@ -17,6 +17,7 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DuplicateKeyException;
@@ -33,6 +34,7 @@ import org.springframework.test.context.TestConstructor;
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
+@DisplayName("升级通知映射与水位线: 真库验证筛选谓词,CAS 推进与待发记录状态流转")
 class AlertEscalationNotifyMapperIntegrationTest extends AbstractIntegrationTest {
 
   private final AlertEventMapper alertEventMapper;
@@ -55,6 +57,7 @@ class AlertEscalationNotifyMapperIntegrationTest extends AbstractIntegrationTest
   }
 
   @Test
+  @DisplayName("筛选已升级未通知的未关闭告警: 只命中该条,CAS 推进水位线后不再被选中")
   void shouldSelectOnlyEscalatedPendingOpenRowsThenStopAfterWatermarkBump() {
     String tenantId = "t-esc-notify-" + BatchDateTimeSupport.utcEpochMillis();
     // 已升级未通知:应被选中
@@ -81,6 +84,7 @@ class AlertEscalationNotifyMapperIntegrationTest extends AbstractIntegrationTest
   }
 
   @Test
+  @DisplayName("期望水位线与实际不符: 比较并交换不命中,水位线保持不变")
   void shouldNotBumpWatermarkWhenExpectedTierMismatches() {
     String tenantId = "t-esc-cas-" + BatchDateTimeSupport.utcEpochMillis();
     long alertId = insertAlert(tenantId, "SLA_BREACH", "OPEN", 1, 0);
@@ -93,6 +97,7 @@ class AlertEscalationNotifyMapperIntegrationTest extends AbstractIntegrationTest
   }
 
   @Test
+  @DisplayName("告警非未关闭状态: 水位线不推进")
   void shouldNotBumpWatermarkOnNonOpenAlert() {
     String tenantId = "t-esc-closed-" + BatchDateTimeSupport.utcEpochMillis();
     long alertId = insertAlert(tenantId, "SLA_BREACH", "CLOSED", 2, 0);
@@ -102,6 +107,7 @@ class AlertEscalationNotifyMapperIntegrationTest extends AbstractIntegrationTest
   }
 
   @Test
+  @DisplayName("入队与水位线同事务: 待发记录落库,事项内容与层级正确,水位线同步推进")
   void shouldCreateOutboxInSameTransactionAsWatermarkBump() {
     String tenantId = "t-esc-outbox-" + BatchDateTimeSupport.utcEpochMillis();
     long alertId = insertAlert(tenantId, "SLA_BREACH", "OPEN", 2, 0);
@@ -127,6 +133,7 @@ class AlertEscalationNotifyMapperIntegrationTest extends AbstractIntegrationTest
   }
 
   @Test
+  @DisplayName("已有同键待发记录: 入队抛出重复键异常并回滚水位线")
   void shouldRollbackWatermarkWhenOutboxInsertViolatesUniqueKey() {
     String tenantId = "t-esc-outbox-rollback-" + BatchDateTimeSupport.utcEpochMillis();
     long alertId = insertAlert(tenantId, "SLA_BREACH", "OPEN", 3, 0);
@@ -147,6 +154,7 @@ class AlertEscalationNotifyMapperIntegrationTest extends AbstractIntegrationTest
   }
 
   @Test
+  @DisplayName("同租户同告警同层级重复写入: 第二次触发唯一键冲突")
   void shouldEnforceUniqueOutboxPerTenantAlertAndTier() {
     String tenantId = "t-esc-outbox-unique-" + BatchDateTimeSupport.utcEpochMillis();
     long alertId = insertAlert(tenantId, "SLA_BREACH", "OPEN", 1, 0);
@@ -160,6 +168,7 @@ class AlertEscalationNotifyMapperIntegrationTest extends AbstractIntegrationTest
   }
 
   @Test
+  @DisplayName("待发记录状态流转: 发布成功,发布失败与放弃重试三种终态各归其位")
   void shouldMoveOutboxThroughPublishStatusLifecycle() {
     String tenantId = "t-esc-outbox-flow-" + BatchDateTimeSupport.utcEpochMillis();
     long alertId = insertAlert(tenantId, "SLA_BREACH", "OPEN", 1, 0);

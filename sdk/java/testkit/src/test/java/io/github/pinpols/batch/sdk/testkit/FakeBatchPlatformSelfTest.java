@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
  * 真发派单 → handler 执行 → REPORT 回到 HTTP stub → {@link FakeBatchPlatform#awaitReport} 拿到结果。
  */
 @BatchWorkerTest
+@DisplayName("testkit 端到端自测:内嵌消息代理与 HTTP 桩下,派单、执行、回执全链路在 5 秒内跑完")
 class FakeBatchPlatformSelfTest {
 
   /** 成功路径:handler 返回 ok + outputs,平台收到 success=true 的 report。 */

@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
  * <p>本模块 test 仅 mockito-core(无 mockito-junit-jupiter),为保持轻量这里用手写 fake store(InMemoryStore /
  * RecordingStore)而非 {@code @Mock} / MockitoExtension。
  */
+@DisplayName("SdkIdempotentHandler — 声明式幂等装饰的命中跳过、结果回填与异常传播")
 class SdkIdempotentHandlerTest {
 
   /** 标注幂等的测试 handler:key 含上下文 + 参数占位符;记录执行次数。 */

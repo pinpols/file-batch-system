@@ -24,11 +24,13 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.support.StaticApplicationContext;
 
+@DisplayName("告警升级通知轮询器: 水位过滤, 待发补投与单行失败隔离")
 class AlertEscalationNotifierTest {
 
   private AlertEventMapper alertEventMapper;
@@ -96,6 +98,7 @@ class AlertEscalationNotifierTest {
   }
 
   @Test
+  @DisplayName("没有待升级的告警事件时, 既不投递实时事件也不写入待发记录")
   void shouldSkipPollWhenNoEligibleRows() {
     when(alertEventMapper.selectEscalatedPendingNotify(anyInt())).thenReturn(List.of());
 
@@ -106,6 +109,7 @@ class AlertEscalationNotifierTest {
   }
 
   @Test
+  @DisplayName("升级事件入队成功后同一轮把待发记录投递出去, 并累加通知计数")
   void shouldEnqueueEscalatedEventAndPublishPendingOutbox() {
     when(alertEventMapper.selectEscalatedPendingNotify(anyInt()))
         .thenReturn(List.of(escalated(11L, "t1", 2, 1)));
@@ -138,6 +142,7 @@ class AlertEscalationNotifierTest {
   }
 
   @Test
+  @DisplayName("升级事件入队未取得所有权时不投递, 通知计数保持零")
   void shouldNotPublishWhenOnlyEnqueueLosesOwnership() {
     when(alertEventMapper.selectEscalatedPendingNotify(anyInt()))
         .thenReturn(List.of(escalated(12L, "t1", 1, 0)));
@@ -152,6 +157,7 @@ class AlertEscalationNotifierTest {
   }
 
   @Test
+  @DisplayName("事件当前层级不高于已通知层级时跳过, 既不下发也不入队")
   void shouldSkipRowAlreadyNotifiedAtCurrentTier() {
     // 防御:即便 select 漏过滤,tier <= notifiedTier 也不发。
     when(alertEventMapper.selectEscalatedPendingNotify(anyInt()))
@@ -164,6 +170,7 @@ class AlertEscalationNotifierTest {
   }
 
   @Test
+  @DisplayName("单条事件入队抛异常时只跳过该条, 同批其余租户继续投递")
   void shouldContinueBatchWhenOneRowThrows() {
     when(alertEventMapper.selectEscalatedPendingNotify(anyInt()))
         .thenReturn(List.of(escalated(14L, "t1", 1, 0), escalated(15L, "t2", 1, 0)));
@@ -185,6 +192,7 @@ class AlertEscalationNotifierTest {
   }
 
   @Test
+  @DisplayName("待发记录投递抛异常时标记失败, 不记为已发布")
   void shouldMarkOutboxFailedWhenPublishThrows() {
     when(alertEventMapper.selectEscalatedPendingNotify(anyInt())).thenReturn(List.of());
     AlertEscalationNotificationOutboxEntity row = outbox(51L, "t1", 1);
@@ -202,6 +210,7 @@ class AlertEscalationNotifierTest {
   }
 
   @Test
+  @DisplayName("上下文关闭后不再取锁, 也不查询待升级事件")
   void shouldSkipPollAfterContextClosedWithoutTakingLock() throws Throwable {
     notifier.stopOnContextClosed(new ContextClosedEvent(new StaticApplicationContext()));
 
@@ -212,6 +221,7 @@ class AlertEscalationNotifierTest {
   }
 
   @Test
+  @DisplayName("多租户多条记录各自投递一次, 并逐条标记已发布")
   void shouldPublishOncePerRowAcrossTenants() {
     when(alertEventMapper.selectEscalatedPendingNotify(anyInt()))
         .thenReturn(List.of(escalated(21L, "t1", 1, 0), escalated(22L, "t2", 3, 2)));

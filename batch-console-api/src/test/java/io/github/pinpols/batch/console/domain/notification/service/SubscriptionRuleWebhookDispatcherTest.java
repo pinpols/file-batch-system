@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -30,6 +31,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataAccessResourceFailureException;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("订阅规则回调分发器: 规则匹配, 限流去重与投递日志落库")
 class SubscriptionRuleWebhookDispatcherTest {
 
   @Mock
@@ -72,6 +74,7 @@ class SubscriptionRuleWebhookDispatcherTest {
   }
 
   @Test
+  @DisplayName("渠道类型为回调的规则命中时, 用规则配置的地址与密钥合成投递目标")
   void shouldGeneratePendingDelivery_whenWebhookChannelRuleMatches() {
     // arrange: 一条 WEBHOOK 类型规则,config_json 带 url + secret
     Map<String, Object> rule = Map.of(
@@ -99,6 +102,7 @@ class SubscriptionRuleWebhookDispatcherTest {
   }
 
   @Test
+  @DisplayName("去重限流查询异常时按放行处理并累加回退计数, 不误判为重复")
   void shouldFailOpenAndRecordCounter_whenDedupRateLimiterThrows() {
     // arrange: dedup 键(notify:dedup:*)查询 Redis 时抛 DataAccessException,其余键正常放行。
     // fail-open 语义:不误判为重复,继续投递;同时须留痕(log.warn + counter),而非静默吞掉。
@@ -134,6 +138,7 @@ class SubscriptionRuleWebhookDispatcherTest {
   }
 
   @Test
+  @DisplayName("渠道类型不是回调时记录跳过原因, 不调用回调投递")
   void shouldSkipAndLog_whenChannelTypeNotWebhook() throws InterruptedException {
     // arrange: EMAIL 渠道规则 —— 本轮不投递,必须 log 跳过而非静默丢弃
     CountDownLatch queried = new CountDownLatch(1);
@@ -158,6 +163,7 @@ class SubscriptionRuleWebhookDispatcherTest {
   }
 
   @Test
+  @DisplayName("事件载荷级别不在规则级别白名单内时不命中, 不投递")
   void shouldNotMatch_whenSeverityFilterMissesPayload() {
     // arrange: 规则要求 severity=CRITICAL,但事件 payload 是 WARN → 不命中,不投递
     Map<String, Object> rule = Map.of(
@@ -185,6 +191,7 @@ class SubscriptionRuleWebhookDispatcherTest {
   }
 
   @Test
+  @DisplayName("事件载荷级别命中规则级别白名单时投递, 且忽略大小写")
   void shouldDeliver_whenSeverityFilterMatchesPayload() {
     // arrange: severity=CRITICAL 命中
     Map<String, Object> rule = Map.of(
@@ -214,6 +221,7 @@ class SubscriptionRuleWebhookDispatcherTest {
   }
 
   @Test
+  @DisplayName("不同租户同名渠道的限流与去重键各自带租户前缀, 互不共享窗口")
   void shouldTenantScopeRateLimitKeys_whenSameChannelCodeAcrossTenants() {
     // 两租户可合法配置同名 channelCode(唯一约束是 (tenant_id, channel_code))。
     // 限流/去重/目标 key 必须带 tenant 前缀,否则 A 打满后 B 同名渠道合法告警被静默压制(跨租串扰)。
@@ -254,6 +262,7 @@ class SubscriptionRuleWebhookDispatcherTest {
   }
 
   @Test
+  @DisplayName("渠道发送限流拒绝时累加丢弃计数, 原因为渠道限流")
   void shouldIncrementDropCounter_whenChannelSendRateLimitExceeded() {
     Map<String, Object> rule = Map.of(
         "tenant_id", "tenant-a",
@@ -283,6 +292,7 @@ class SubscriptionRuleWebhookDispatcherTest {
   }
 
   @Test
+  @DisplayName("渠道类型无可用发送器时累加丢弃计数, 原因为缺少发送器")
   void shouldIncrementDropCounter_whenNoSenderForChannelType() throws InterruptedException {
     CountDownLatch queried = new CountDownLatch(1);
     Map<String, Object> rule = Map.of(
@@ -310,6 +320,7 @@ class SubscriptionRuleWebhookDispatcherTest {
   }
 
   @Test
+  @DisplayName("渠道发送限流拒绝时直接丢弃, 不触达投递")
   void shouldDropDelivery_whenChannelSendRateLimitExceeded() {
     Map<String, Object> rule = Map.of(
         "tenant_id", "tenant-a",
@@ -335,6 +346,7 @@ class SubscriptionRuleWebhookDispatcherTest {
   }
 
   @Test
+  @DisplayName("告警升级事件类型与事件目录一致时, 命中规则并投递")
   void shouldMatchAndDispatch_escalationEventAlignedWithCatalog() {
     // Bug4:AlertEscalationNotifier 发 ALERT_ESCALATED(与事件目录一致),前端可配 subscription_rule
     // event_types=ALERT_ESCALATED 来订阅升级告警;此处验证该事件类型能匹配到规则并投递。
@@ -363,6 +375,7 @@ class SubscriptionRuleWebhookDispatcherTest {
   }
 
   @Test
+  @DisplayName("回调投递成功时写入成功交付日志, 记录规则, 渠道与事件标识")
   void shouldPersistSuccessDeliveryLog_whenWebhookDelivered() {
     Map<String, Object> rule = Map.of(
         "id", 42L,
@@ -393,6 +406,7 @@ class SubscriptionRuleWebhookDispatcherTest {
   }
 
   @Test
+  @DisplayName("发送器返回失败时写入失败交付日志, 记录错误摘要")
   void shouldPersistFailedDeliveryLog_whenSenderExhausts() {
     Map<String, Object> rule = Map.of(
         "id", 9L,

@@ -42,6 +42,7 @@ class WeComNotificationSenderTest {
   }
 
   @Test
+  @DisplayName("渠道标识大小写不敏感地识别该通道, 其它渠道与空值不支持")
   void shouldSupportWecomChannelTypeCaseInsensitive() {
     WeComNotificationSender sender = newSender(200, "{\"errcode\":0}");
 
@@ -53,6 +54,7 @@ class WeComNotificationSenderTest {
   }
 
   @Test
+  @DisplayName("缺少机器人地址时直接失败, 未捕获到任何出站请求")
   void shouldFailWithoutHittingNetwork_whenUrlMissing() {
     WeComNotificationSender sender = new WeComNotificationSender(objectMapper, failOnRequest());
 
@@ -65,6 +67,7 @@ class WeComNotificationSenderTest {
   }
 
   @Test
+  @DisplayName("响应错误码为零时判定成功, 请求体为文本消息且走在受保护地址策略上")
   void shouldReturnOk_whenErrcodeZero() {
     WeComNotificationSender sender = newSender(200, "{\"errcode\":0,\"errmsg\":\"ok\"}");
 
@@ -79,6 +82,7 @@ class WeComNotificationSenderTest {
   }
 
   @Test
+  @DisplayName("响应错误码非零时判定失败, 错误摘要带业务码")
   void shouldReturnFailure_whenErrcodeNonZero() {
     WeComNotificationSender sender =
         newSender(200, "{\"errcode\":93000,\"errmsg\":\"invalid webhook url\"}");
@@ -92,6 +96,7 @@ class WeComNotificationSenderTest {
   }
 
   @Test
+  @DisplayName("域名解析到内网地址时拦截, 不发起真实投递")
   void shouldBlock_whenHostResolvesToInternalAddress() {
     WeComNotificationSender sender =
         new WeComNotificationSender(objectMapper, new OkHttpConsoleExternalHttpTransport());
@@ -104,6 +109,7 @@ class WeComNotificationSenderTest {
   }
 
   @Test
+  @DisplayName("地址为字面量元数据内网地址时拦截, 不发起真实投递")
   void shouldBlock_whenUrlIsLiteralInternalIp() {
     WeComNotificationSender sender =
         new WeComNotificationSender(objectMapper, new OkHttpConsoleExternalHttpTransport());

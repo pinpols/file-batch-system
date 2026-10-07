@@ -11,6 +11,7 @@ import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiConversation
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Instant;
 import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -22,6 +23,7 @@ import org.springframework.transaction.support.TransactionTemplate;
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
+@DisplayName("AI 附件归属与清理: 草稿绑定,配额统计,租户隔离与级联后清理键保留")
 class ConsoleAiAttachmentIntegrationTest extends AbstractIntegrationTest {
   private final ConsoleAiAttachmentMapper attachments;
   private final ConsoleAiAttachmentService attachmentService;
@@ -43,7 +45,8 @@ class ConsoleAiAttachmentIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void bindsOwnedDraftAndKeepsCleanupKeyAfterConversationCascade() {
+  @DisplayName("附件绑定: 非属主绑定不生效,属主绑定成功,会话级联删除后对象键仍待清理")
+  void shouldBindOwnedDraftAndKeepCleanupKey_whenConversationCascades() {
     String tenant = "ai-attachment-" + UUID.randomUUID();
     String otherTenant = "ai-attachment-" + UUID.randomUUID();
     UUID attachmentId = UUID.randomUUID();
@@ -117,7 +120,8 @@ class ConsoleAiAttachmentIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void draftImageCannotBeReadAsAFileService() {
+  @DisplayName("草稿图片不能按文件服务读取: 属主与他人都被拒绝")
+  void shouldRejectDraftImageRead_whenRequestedAsFileService() {
     String tenant = "ai-private-" + UUID.randomUUID();
     UUID id = UUID.randomUUID();
     new TransactionTemplate(transactionManager).executeWithoutResult(status -> {

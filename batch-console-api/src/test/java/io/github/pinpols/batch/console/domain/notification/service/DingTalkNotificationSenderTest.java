@@ -10,8 +10,10 @@ import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.console.support.http.OkHttpConsoleExternalHttpTransport;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("钉钉群机器人发送器: 渠道识别, 响应码判定与地址安全拦截")
 class DingTalkNotificationSenderTest {
 
   private final ObjectMapper objectMapper = new ObjectMapper();
@@ -24,7 +26,8 @@ class DingTalkNotificationSenderTest {
   }
 
   @Test
-  void supportsIsCaseInsensitive() {
+  @DisplayName("渠道标识大小写不敏感地识别该通道, 其它渠道与空值不支持")
+  void shouldSupportDingTalkCaseInsensitively() {
     DingTalkNotificationSender sender =
         new DingTalkNotificationSender(objectMapper, failOnRequest());
 
@@ -36,7 +39,8 @@ class DingTalkNotificationSenderTest {
   }
 
   @Test
-  void missingUrlFailsWithoutNetworkCall() {
+  @DisplayName("缺少机器人地址时直接失败, 不发起网络请求且无响应状态")
+  void shouldFailWithoutNetworkCall_whenUrlMissing() {
     DingTalkNotificationSender sender =
         new DingTalkNotificationSender(objectMapper, failOnRequest());
 
@@ -48,7 +52,8 @@ class DingTalkNotificationSenderTest {
   }
 
   @Test
-  void errcodeZeroIsOk() {
+  @DisplayName("响应错误码为零时判定成功, 请求体为文本消息且走在受保护地址策略上")
+  void shouldSucceed_whenErrorCodeZero() {
     AtomicReference<OutboundHttpRequest> captured = new AtomicReference<>();
     DingTalkNotificationSender sender = new DingTalkNotificationSender(objectMapper, request -> {
       captured.set(request);
@@ -64,7 +69,8 @@ class DingTalkNotificationSenderTest {
   }
 
   @Test
-  void nonZeroErrcodeFails() {
+  @DisplayName("响应错误码非零时判定失败, 错误摘要带业务码")
+  void shouldFail_whenErrorCodeNotZero() {
     DingTalkNotificationSender sender = new DingTalkNotificationSender(
         objectMapper,
         request -> new OutboundHttpResponse(
@@ -79,7 +85,8 @@ class DingTalkNotificationSenderTest {
   }
 
   @Test
-  void secretAppendsTimestampAndSignToUrl() {
+  @DisplayName("配置加签密钥时地址追加时间戳与签名, 签名不回显密钥")
+  void shouldAppendTimestampAndSign_whenSecretConfigured() {
     AtomicReference<OutboundHttpRequest> captured = new AtomicReference<>();
     DingTalkNotificationSender sender =
         new DingTalkNotificationSender(objectMapper, request -> {
@@ -103,7 +110,8 @@ class DingTalkNotificationSenderTest {
   }
 
   @Test
-  void ssrfHostResolvingToInternalIsBlockedBeforeNetwork() {
+  @DisplayName("域名解析到内网回环时在建连前拦截, 失败原因指向地址被拦")
+  void shouldBlockAddress_whenHostResolvesToInternal() {
     DingTalkNotificationSender sender =
         new DingTalkNotificationSender(objectMapper, new OkHttpConsoleExternalHttpTransport());
 
@@ -115,7 +123,8 @@ class DingTalkNotificationSenderTest {
   }
 
   @Test
-  void ssrfLiteralInternalIpIsBlocked() {
+  @DisplayName("地址为字面量元数据内网地址时直接拦截, 不发起真实请求")
+  void shouldBlockAddress_whenUrlIsLiteralInternalIp() {
     DingTalkNotificationSender sender =
         new DingTalkNotificationSender(objectMapper, new OkHttpConsoleExternalHttpTransport());
 

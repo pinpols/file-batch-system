@@ -197,7 +197,7 @@ public class PlatformPipelineRunRepository {
       String errorKey,
       String errorArgs,
       Object outputSummary) {
-    finishStepRun(FinishStepRunParam.builder()
+    FinishStepRunParam param = FinishStepRunParam.builder()
         .stepRunId(stepRunId)
         .status("FAILED")
         .errorCode(errorCode)
@@ -205,18 +205,20 @@ public class PlatformPipelineRunRepository {
         .errorKey(errorKey)
         .errorArgs(errorArgs)
         .outputSummary(outputSummary)
-        .build());
+        .build();
+    finishStepRun(param);
   }
 
   private void finishStepRun(
       Long stepRunId, String status, String errorCode, String errorMessage, Object outputSummary) {
-    finishStepRun(FinishStepRunParam.builder()
+    FinishStepRunParam param = FinishStepRunParam.builder()
         .stepRunId(stepRunId)
         .status(status)
         .errorCode(errorCode)
         .errorMessage(errorMessage)
         .outputSummary(outputSummary)
-        .build());
+        .build();
+    finishStepRun(param);
   }
 
   private void finishStepRun(FinishStepRunParam param) {

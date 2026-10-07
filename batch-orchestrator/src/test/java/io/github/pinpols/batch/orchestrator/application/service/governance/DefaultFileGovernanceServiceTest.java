@@ -36,6 +36,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -48,6 +49,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * <p>覆盖:5 个 @Transactional 公共方法的 happy path + 主要错误分支;校验状态机/安静期/审计写入/outbox 写入等关键侧效。
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("文件治理服务: 状态流转, 失败审计, 下载授权与到达组操作口径")
 class DefaultFileGovernanceServiceTest {
 
   @Mock
@@ -93,6 +95,7 @@ class DefaultFileGovernanceServiceTest {
   // ── validateCommand / validateArrivalGroupCommand ────────────────────────
 
   @Test
+  @DisplayName("归档时租户标识为空则抛出参数非法异常")
   void shouldThrow_whenTenantIdBlank_onArchive() {
     FileGovernanceCommand cmd = baseCommand().tenantId("").build();
     assertThatThrownBy(() -> service.archiveFile(cmd))
@@ -102,12 +105,14 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("删除时文件标识为空则抛出参数非法异常")
   void shouldThrow_whenFileIdNull_onDelete() {
     FileGovernanceCommand cmd = baseCommand().fileId(null).build();
     assertThatThrownBy(() -> service.deleteFile(cmd)).isInstanceOf(BizException.class);
   }
 
   @Test
+  @DisplayName("到达组操作时文件组编码为空则抛出参数非法异常")
   void shouldThrow_whenArrivalGroupCodeBlank() {
     ArrivalGroupGovernanceCommand cmd = ArrivalGroupGovernanceCommand.builder()
         .tenantId("t1")
@@ -118,6 +123,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("到达组操作未给出动作时抛出参数非法异常")
   void shouldThrow_whenArrivalActionBlank() {
     ArrivalGroupGovernanceCommand cmd = ArrivalGroupGovernanceCommand.builder()
         .tenantId("t1")
@@ -130,6 +136,7 @@ class DefaultFileGovernanceServiceTest {
   // ── archiveFile / deleteFile (changeFileStatus) ──────────────────────────
 
   @Test
+  @DisplayName("状态流转允许归档时更新为已归档, 并写成功审计")
   void shouldArchiveFile_whenStatusTransitionAllowed() {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
@@ -154,6 +161,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("归档原因为空时正常完成流转, 不发生空指针")
   void shouldArchiveFile_whenReasonNull_withoutNpe() {
     // 回归:reason 为 null 时,changeFileStatus 内构造审计 detail 的 Map.of 曾 NPE,
     // 把干净的业务流程/错误掩盖成 500。见 DefaultFileGovernanceService#changeFileStatus。
@@ -173,6 +181,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("已归档文件允许删除时更新为已删除状态")
   void shouldDeleteFile_whenArchivedToDeletedTransitionAllowed() {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
@@ -191,6 +200,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("文件记录不存在时抛出业务异常, 且不写审计")
   void shouldThrowAndWriteFailedAudit_whenFileRecordMissing() {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(Map.of());
@@ -204,6 +214,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("仍有活跃流水线实例时归档抛出状态冲突, 并写失败审计")
   void shouldThrowStateConflictAndAuditFailure_whenActivePipelinesExist() {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
@@ -222,6 +233,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("仍有待处理派发记录时归档抛出异常并写失败审计")
   void shouldThrowAndAuditFailure_whenPendingDispatchesExist() {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
@@ -237,6 +249,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("终态文件再归档被状态机拒绝, 抛出异常且写失败审计")
   void shouldThrowAndAuditFailure_whenStateMachineRejectsTransition() {
     // DELETED 是终态,不能转 ARCHIVED
     FileGovernanceCommand cmd = baseCommand().build();
@@ -255,6 +268,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("状态更新未命中任何行时归档抛出状态冲突并写失败审计")
   void shouldThrowStateConflictAndAuditFailure_whenUpdateReturnsZero() {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
@@ -278,6 +292,7 @@ class DefaultFileGovernanceServiceTest {
   // ── presignFileDownload ──────────────────────────────────────────────────
 
   @Test
+  @DisplayName("普通文件下载返回对象存储直连地址, 并记录审计")
   void shouldReturnPresignedUrl_forPlainFile() {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
@@ -296,6 +311,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("配置的下载地址有效期低于下限时按最短有效期生成")
   void shouldEnforceMinimum60sExpiry_whenPropConfiguredTooLow() {
     FileGovernanceCommand cmd = baseCommand().build();
     fileGovernanceProperties.getAccess().setPresignExpirySeconds(10); // 低于 60
@@ -311,6 +327,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("开启内容加密时返回控制台代理地址, 不走对象存储直连")
   void shouldReturnConsoleProxyUrl_whenContentEncryptionEnabled() {
     FileGovernanceCommand cmd = baseCommand().approvalId("appr-1").build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
@@ -332,6 +349,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("文件记录不存在时生成下载地址抛出未找到异常")
   void shouldThrowNotFound_whenFileRecordMissingOnPresign() {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(Map.of());
@@ -342,6 +360,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("模板要求下载审批但审批缺失时抛出业务异常")
   void shouldThrowBusinessError_whenApprovalRequiredButMissing() {
     FileGovernanceCommand cmd = baseCommand().approvalId(null).build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
@@ -356,6 +375,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("文件缺少存储路径时生成下载地址抛出状态冲突")
   void shouldThrowStateConflict_whenStoragePathMissing() {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
@@ -369,6 +389,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("开启绕过模式时忽略审批与加密要求, 直接走对象存储直连")
   void shouldBypassApprovalAndEncryption_whenBypassModeEnabled() {
     batchSecurityProperties.setBypassMode(true);
     FileGovernanceCommand cmd = baseCommand().build();
@@ -390,6 +411,7 @@ class DefaultFileGovernanceServiceTest {
   // ── redispatchFile ───────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("相关资源均可解析时重置派发记录与分区任务, 并写成功审计")
   void shouldRedispatch_whenAllResourcesResolvable() {
     FileGovernanceCommand cmd = baseCommand().channelCode("CH1").build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(Map.of("id", 1L));
@@ -437,6 +459,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("重新派发时文件记录不存在则抛出未找到异常")
   void shouldThrowNotFound_whenFileRecordMissingOnRedispatch() {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(Map.of());
@@ -447,6 +470,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("重新派发时派发记录不存在则抛出未找到异常")
   void shouldThrowNotFound_whenDispatchRecordMissing() {
     FileGovernanceCommand cmd = baseCommand().channelCode("CH1").build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(Map.of("id", 1L));
@@ -458,6 +482,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("派发记录未关联作业实例时重新派发抛出状态冲突")
   void shouldThrowStateConflict_whenPipelineUnbound() {
     FileGovernanceCommand cmd = baseCommand().channelCode("CH1").build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(Map.of("id", 1L));
@@ -472,6 +497,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("作业任务中没有派发任务时重新派发抛出未找到异常")
   void shouldThrowNotFound_whenNoDispatchTaskAmongJobTasks() {
     FileGovernanceCommand cmd = baseCommand().channelCode("CH1").build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L)).thenReturn(Map.of("id", 1L));
@@ -496,6 +522,7 @@ class DefaultFileGovernanceServiceTest {
   // ── operateArrivalGroup ──────────────────────────────────────────────────
 
   @Test
+  @DisplayName("到达组下没有任何文件时抛出未找到异常")
   void shouldThrowNotFound_whenArrivalGroupHasNoFiles() {
     ArrivalGroupGovernanceCommand cmd = arrivalCmd("CONTINUE_WAITING");
     when(fileGovernanceRepository.selectArrivalGroupFiles("t1", "grp")).thenReturn(List.of());
@@ -506,6 +533,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("继续等待动作下更新组内全部文件并返回等待到达")
   void shouldReturnWaitingArrival_andUpdateAllFiles_whenContinueWaiting() {
     ArrivalGroupGovernanceCommand cmd = ArrivalGroupGovernanceCommand.builder()
         .tenantId("t1")
@@ -528,6 +556,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("立即触发动作下返回已触发状态")
   void shouldReturnTriggered_whenTriggerNow() {
     ArrivalGroupGovernanceCommand cmd = arrivalCmd("TRIGGER_NOW");
     when(fileGovernanceRepository.selectArrivalGroupFiles("t1", "grp"))
@@ -537,6 +566,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("到达组跨营业日但未指定营业日时抛出状态冲突, 且不更新文件")
   void shouldThrowStateConflict_whenArrivalGroupSpansBizDatesWithoutBizDate() {
     ArrivalGroupGovernanceCommand cmd = arrivalCmd("TRIGGER_NOW");
     when(fileGovernanceRepository.selectArrivalGroupFiles("t1", "grp"))
@@ -552,6 +582,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("指定营业日时按该营业日筛选组内文件并更新元数据")
   void shouldScopeArrivalGroupOperationByBizDateWhenProvided() {
     ArrivalGroupGovernanceCommand cmd = ArrivalGroupGovernanceCommand.builder()
         .tenantId("t1")
@@ -574,6 +605,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("允许空跑时动作返回已触发状态")
   void shouldReturnTriggered_whenEmptyRunAllowed() {
     ArrivalGroupGovernanceCommand cmd = arrivalCmd("EMPTY_RUN");
     when(fileGovernanceRepository.selectArrivalGroupFiles("t1", "grp"))
@@ -583,6 +615,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("不允许空跑时动作抛出状态冲突")
   void shouldThrowStateConflict_whenEmptyRunNotAllowed() {
     ArrivalGroupGovernanceCommand cmd = arrivalCmd("EMPTY_RUN");
     when(fileGovernanceRepository.selectArrivalGroupFiles("t1", "grp"))
@@ -594,6 +627,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("允许跳过批次时动作返回超时状态")
   void shouldReturnTimeout_whenSkipBatchAllowed() {
     ArrivalGroupGovernanceCommand cmd = arrivalCmd("SKIP_BATCH");
     when(fileGovernanceRepository.selectArrivalGroupFiles("t1", "grp"))
@@ -603,6 +637,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("不允许跳过批次时动作抛出状态冲突")
   void shouldThrowStateConflict_whenSkipBatchNotAllowed() {
     ArrivalGroupGovernanceCommand cmd = arrivalCmd("SKIP_BATCH");
     when(fileGovernanceRepository.selectArrivalGroupFiles("t1", "grp"))
@@ -614,6 +649,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("不支持的动作被拒绝并抛出参数非法异常")
   void shouldThrowInvalidArgument_whenUnsupportedAction() {
     ArrivalGroupGovernanceCommand cmd = arrivalCmd("UNKNOWN");
     when(fileGovernanceRepository.selectArrivalGroupFiles("t1", "grp"))
@@ -625,6 +661,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("组内文件缺少标识时跳过该文件, 只对有效文件写元数据与审计")
   void shouldSkipFilesWithoutId_whenIteratingArrivalGroup() {
     // 验证 toLong(null) 时 continue 分支
     ArrivalGroupGovernanceCommand cmd = arrivalCmd("CONTINUE_WAITING");
@@ -642,6 +679,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("延长等待秒数为空或零时使用默认延长值, 流程不中断")
   void shouldUseDefaultManualWaitExtension_whenExtendSecondsNullOrZero() {
     fileGovernanceProperties.getArrival().setManualWaitExtensionSeconds(999L);
     ArrivalGroupGovernanceCommand cmd = ArrivalGroupGovernanceCommand.builder()
@@ -662,6 +700,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("创建上传会话时登记对象存储记录, 路径含租户前缀且不含上级目录")
   void shouldCreateUploadSessionAsObjectStoreBackedRecord() {
     when(s3GovernanceStorage.defaultBucket()).thenReturn("bucket-a");
     when(fileGovernanceRepository.createReconciledFileRecord(any())).thenReturn(42L);
@@ -690,6 +729,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("文件已存在于对象存储时确认到达并回写文件大小")
   void shouldConfirmFileArrivalAfterObjectExists() {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))
@@ -703,6 +743,7 @@ class DefaultFileGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("对象存储中文件缺失时拒绝确认到达, 且不回写文件")
   void shouldRejectConfirmArrivalWhenContentMissing() {
     FileGovernanceCommand cmd = baseCommand().build();
     when(fileGovernanceRepository.loadFileRecord("t1", 1L))

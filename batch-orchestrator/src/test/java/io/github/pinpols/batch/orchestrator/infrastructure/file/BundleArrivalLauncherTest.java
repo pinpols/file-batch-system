@@ -21,12 +21,14 @@ import java.util.List;
 import java.util.Map;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.postgresql.util.PGobject;
 import org.springframework.beans.factory.ObjectProvider;
 
+@DisplayName("束文件到达启动器,校验到达组内束作业识别,文件绑定解析与失败快速返回")
 class BundleArrivalLauncherTest {
 
   private LaunchService launchService;
@@ -61,7 +63,8 @@ class BundleArrivalLauncherTest {
   }
 
   @Test
-  void launchesBundleWhenMetadataJsonArrivesAsPgObject() throws Exception {
+  @DisplayName("元数据由数据库驱动以对象形式返回时仍识别为束作业并启动,启动请求携带作业编码与业务日期")
+  void shouldLaunchBundle_whenMetadataJsonArrivesAsDriverObject() throws Exception {
     // 回归:selectArrivalGroupFiles 的 metadata_json 是 jsonb → 驱动给 PGobject。
     // 若只认 String,这里会静默 NOT_BUNDLE,到达组永远不 launch(线上真实缺陷,见 stage 26)。
     when(launchService.launch(org.mockito.ArgumentMatchers.any()))
@@ -86,7 +89,8 @@ class BundleArrivalLauncherTest {
   }
 
   @Test
-  void launchesBundleWhenGroupCarriesBundleJobCode() {
+  @DisplayName("到达组携带束作业编码时先登记触发请求再启动,请求号按组与业务日期确定,载荷含每个源文件的模板绑定")
+  void shouldLaunchBundle_whenGroupCarriesBundleJobCode() {
     when(launchService.launch(org.mockito.ArgumentMatchers.any()))
         .thenReturn(new LaunchResponse("INST-1", "trace-1"));
     List<Map<String, Object>> groupFiles = List.of(
@@ -133,7 +137,8 @@ class BundleArrivalLauncherTest {
   }
 
   @Test
-  void launchesDispatchBundleWithTargetRefChannelBinding() {
+  @DisplayName("分发束文件携带下游渠道引用时按渠道生成文件清单,条目不含模板绑定")
+  void shouldLaunchDispatchBundle_whenFilesCarryTargetRef() {
     // ADR-046 Phase3:分发束——文件到达带 bundleTargetRef(下游渠道),emit {sourceFileId, targetRef}
     when(launchService.launch(org.mockito.ArgumentMatchers.any()))
         .thenReturn(new LaunchResponse("INST-2", "trace-2"));
@@ -161,7 +166,8 @@ class BundleArrivalLauncherTest {
   }
 
   @Test
-  void launchesExportBundleFromManifestTemplateList() {
+  @DisplayName("导出束清单声明模板列表时逐项展开为模板绑定条目,条目不含源文件标识")
+  void shouldLaunchExportBundle_whenManifestListsTemplates() {
     // ADR-046 Phase3:导出束 manifest-only——一条 trigger 记录的 bundleExportTemplates 列表展成 N 项
     // {templateCode}(无 sourceFileId)。
     when(launchService.launch(org.mockito.ArgumentMatchers.any()))
@@ -188,7 +194,8 @@ class BundleArrivalLauncherTest {
   }
 
   @Test
-  void skipsNonBundleGroup() {
+  @DisplayName("到达组元数据不含束作业编码时判定为非束组并不发起启动调用")
+  void shouldSkipLaunch_whenGroupHasNoBundleJobCode() {
     // 普通到达组:metadata 无 bundleJobCode → 不发 launch
     List<Map<String, Object>> groupFiles =
         List.of(file(1, "{\"scanner\":\"objectStore-import\",\"fileGroupCode\":\"plain\"}"));
@@ -200,7 +207,8 @@ class BundleArrivalLauncherTest {
   }
 
   @Test
-  void failsWhenBundleJobCodePresentButNoUsableFileBinding() {
+  @DisplayName("存在束作业编码但所有文件都缺少可用绑定时快速失败且不发起启动调用,使到达组保持可重试")
+  void shouldFailFast_whenBundleJobCodeHasNoUsableBinding() {
     // 有 bundleJobCode 但所有文件都缺 binding → fail-fast,由到达组调度保持 retryable
     List<Map<String, Object>> groupFiles =
         List.of(file(1, "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\"}"));
@@ -213,7 +221,8 @@ class BundleArrivalLauncherTest {
   }
 
   @Test
-  void propagatesLaunchExceptionSoArrivalGroupCanRetry() {
+  @DisplayName("启动过程抛出运行时异常时原样向上传递,使到达组调度可重试")
+  void shouldPropagateException_whenLaunchFails() {
     when(launchService.launch(org.mockito.ArgumentMatchers.any()))
         .thenThrow(new RuntimeException("launch boom"));
     List<Map<String, Object>> groupFiles = List.of(file(
@@ -225,7 +234,8 @@ class BundleArrivalLauncherTest {
   }
 
   @Test
-  void rejectsMixedBundleJobCodeInSameArrivalGroup() {
+  @DisplayName("同一到达组混用不同束作业编码时拒绝启动,且不发起任何启动调用")
+  void shouldRejectLaunch_whenGroupMixesBundleJobCodes() {
     List<Map<String, Object>> groupFiles = List.of(
         file(101, "{\"bundleJobCode\":\"BUNDLE_IMPORT_A\",\"bundleTemplateCode\":\"TPL_A\"}"),
         file(102, "{\"bundleJobCode\":\"BUNDLE_IMPORT_B\",\"bundleTemplateCode\":\"TPL_B\"}"));
@@ -237,7 +247,8 @@ class BundleArrivalLauncherTest {
   }
 
   @Test
-  void rejectsBindingWithoutBundleJobCodeWhenGroupIsBundle() {
+  @DisplayName("已判定为束组的到达组中出现缺少束作业编码的绑定时拒绝启动,且不发起任何启动调用")
+  void shouldRejectLaunch_whenBindingMissesBundleJobCode() {
     List<Map<String, Object>> groupFiles = List.of(
         file(101, "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_A\"}"),
         file(102, "{\"bundleTemplateCode\":\"TPL_B\"}"));
@@ -249,7 +260,8 @@ class BundleArrivalLauncherTest {
   }
 
   @Test
-  void skipsEmptyGroup() {
+  @DisplayName("到达组文件列表为空时不发起任何启动调用")
+  void shouldSkipLaunch_whenGroupIsEmpty() {
     launcher.launchIfBundle("t1", "g", List.of());
     verify(launchService, never()).launch(org.mockito.ArgumentMatchers.any());
   }

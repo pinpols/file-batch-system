@@ -14,6 +14,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** A.2 typed Process 模板基类单测 — 验证强类型入参 + transform/skip + 分批 upsert。 */
+@DisplayName("强类型 Process 模板基类:入参反序列化后转换与分批回写,覆盖空值跳过与非法参数")
 class SdkAbstractTypedProcessHandlerTest {
 
   record ProcessRequest(int rows, int modulo) {}

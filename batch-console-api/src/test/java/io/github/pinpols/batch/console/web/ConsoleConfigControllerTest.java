@@ -22,11 +22,13 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+@DisplayName("配置管理控制器: 发布单与密钥、变更日志查询及废弃发布端点")
 class ConsoleConfigControllerTest {
 
   private final ConsoleConfigApplicationService configApplicationService =
@@ -55,6 +57,7 @@ class ConsoleConfigControllerTest {
   }
 
   @Test
+  @DisplayName("查询配置发布单列表时, 响应返回配置键")
   void shouldReturnConfigReleaseListAsDtos() throws Exception {
     when(configApplicationService.configReleases(any()))
         .thenReturn(List.of(new ConsoleConfigReleaseResponse(
@@ -88,6 +91,7 @@ class ConsoleConfigControllerTest {
   }
 
   @Test
+  @DisplayName("调用已废弃的直接发布端点时, 返回资源已下线")
   void shouldReturnGoneForDeprecatedDirectPublishEndpoint() throws Exception {
     mockMvc
         .perform(post("/api/console/config/releases/1/publish")
@@ -100,6 +104,7 @@ class ConsoleConfigControllerTest {
   }
 
   @Test
+  @DisplayName("查询密钥版本与变更日志时, 响应分别返回密钥引用与变更动作")
   void shouldReturnSecretVersionAndChangeLogDtos() throws Exception {
     when(configApplicationService.secretVersions(any()))
         .thenReturn(List.of(new ConsoleSecretVersionResponse(

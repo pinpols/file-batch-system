@@ -8,12 +8,15 @@ import java.util.Map;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.mapping.MappedStatement;
 import org.apache.ibatis.session.Configuration;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("作业实例状态与映射文件的 SQL 契约,验证批量日门禁查询覆盖全部终态状态码")
 class JobInstanceStatusSqlContractTest {
 
   @Test
-  void batchDayGateQueriesRecognizeEveryTerminalStatus() {
+  @DisplayName("批量日门禁相关统计查询在拼接条件后包含每一个终态状态码")
+  void shouldRecognizeEveryTerminalStatus_whenBatchDayGateQueriesRun() {
     Configuration configuration = loadJobInstanceMapper();
 
     assertContainsEveryTerminalStatus(configuration, "countNonTerminalByJobCodeAndBizDate");

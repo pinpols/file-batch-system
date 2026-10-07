@@ -5,15 +5,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import java.util.Locale;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.support.ResourceBundleMessageSource;
 
 /** {@link BizMessageResolver} 五条路径回归测试。 */
+@DisplayName("异常消息本地化解析:资源命中, 兜底, 空值与旧式构造的返回约定")
 class BizMessageResolverTest {
 
   private final BizMessageResolver resolver = new BizMessageResolver(messageSource());
 
   @Test
+  @DisplayName("消息键命中资源文件:按语言返回对应译文并填充参数")
   void resolve_messageKey_hits_resource() {
     BizException ex = BizException.of(ResultCode.NOT_FOUND, "error.tenant.already_exists", "acme");
 
@@ -22,7 +25,8 @@ class BizMessageResolverTest {
   }
 
   @Test
-  void resolveDispatchBusinessErrorRendersCodeAndHumanMessage() {
+  @DisplayName("派发业务错误:渲染结果拼接业务码与可读信息, 且两种语言一致")
+  void shouldRenderCodeAndHumanMessage_whenDispatchBusinessError() {
     BizException ex = BizException.of(
         ResultCode.BUSINESS_ERROR,
         "error.partition.dispatch_business_error",
@@ -36,6 +40,7 @@ class BizMessageResolverTest {
   }
 
   @Test
+  @DisplayName("消息键在资源中缺失:回退到通用结果码的默认文案")
   void resolve_messageKey_missing_falls_back_to_literal_message() {
     // messageKey 写错 / 资源不存在,回退到 super.message(本例 = key 本身,
     // BizMessageResolver 检测 literal == key 时进一步回退到 ResultCode.label())
@@ -46,7 +51,8 @@ class BizMessageResolverTest {
   }
 
   @Test
-  void resolveLegacyLiteralPassthrough() {
+  @DisplayName("旧式构造传入的完整文案:不做键解析, 原样透出")
+  void shouldPassThroughLiteralMessage_whenLegacyConstruction() {
     // 老 (code, message) 构造器:messageKey=null,直接透出 message
     BizException ex = new BizException(ResultCode.INVALID_ARGUMENT, "动态错误信息:foo");
 
@@ -54,6 +60,7 @@ class BizMessageResolverTest {
   }
 
   @Test
+  @DisplayName("结果码解析:按语言返回通用码文案")
   void resolve_resultCode_returns_common_code_label() {
     assertThat(resolver.resolve(ResultCode.RATE_LIMITED, Locale.SIMPLIFIED_CHINESE))
         .isEqualTo("请求过于频繁");
@@ -62,6 +69,7 @@ class BizMessageResolverTest {
   }
 
   @Test
+  @DisplayName("资源中无该结果码条目:回退到结果码自带默认文案")
   void resolve_resultCode_missing_falls_back_to_label() {
     // 用一个故意不存在的 ResultCode key — 走 ResourceBundleMessageSource fallback 到 ResultCode.label()
     BizMessageResolver isolatedResolver = new BizMessageResolver(emptyMessageSource());
@@ -71,7 +79,8 @@ class BizMessageResolverTest {
   }
 
   @Test
-  void resolveNullReturnsNull() {
+  @DisplayName("结果码为空:两种语言下均返回空值")
+  void shouldReturnNull_whenResultCodeIsNull() {
     assertThat(resolver.resolve((ResultCode) null)).isNull();
     assertThat(resolver.resolve((ResultCode) null, Locale.ENGLISH)).isNull();
   }

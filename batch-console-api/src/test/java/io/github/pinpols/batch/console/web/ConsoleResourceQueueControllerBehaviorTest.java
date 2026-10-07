@@ -14,11 +14,13 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+@DisplayName("资源队列控制器行为: 启停动作的入参委托")
 class ConsoleResourceQueueControllerBehaviorTest {
 
   private final ConsoleResourceQueueApplicationService service =
@@ -45,7 +47,8 @@ class ConsoleResourceQueueControllerBehaviorTest {
   }
 
   @Test
-  void setEnabledShouldDelegate() throws Exception {
+  @DisplayName("启停资源队列时, 队列标识、租户与目标状态传给服务")
+  void shouldDelegateToggle_whenSettingQueueEnabled() throws Exception {
     mockMvc
         .perform(patch("/api/console/queues/9/enabled")
             .contentType(APPLICATION_JSON)

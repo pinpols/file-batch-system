@@ -19,12 +19,14 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
  * 单元测试：ParseStep 流式路径，校验设计文档 9.12「边查边写」约定。 数组、{@code {"records":[...]}}、单对象等 JSON 形态均需按条经 NDJSON
  * 落盘，不得整包载入内存。
  */
+@DisplayName("导入解析阶段流式路径单测:多种 JSON 形态与分隔符按条落盘语义")
 class ParseStepStreamingTest {
 
   private ParseStep parseStep;
@@ -45,6 +47,7 @@ class ParseStepStreamingTest {
   // ── JSON array path ────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("JSON 数组逐条解析,计数与明细行数一致")
   void shouldParseJsonArray_streamingOnRecord() {
     String json = "[{\"customerNo\":\"C001\",\"customerName\":\"Alice\"},"
         + "{\"customerNo\":\"C002\",\"customerName\":\"Bob\"}]";
@@ -59,6 +62,7 @@ class ParseStepStreamingTest {
   }
 
   @Test
+  @DisplayName("上下文为空时解析失败,返回解析失败错误码")
   void shouldFail_whenContextIsNull() {
     ImportStageResult result = parseStep.execute(null);
 
@@ -69,6 +73,7 @@ class ParseStepStreamingTest {
   // ── JSON {"records":[...]} envelope — streaming path ──────────────────────
 
   @Test
+  @DisplayName("记录信封形态逐条解析,五条记录全部落盘")
   void shouldParseRecordsEnvelope_streamingWithoutFullLoad() {
     // Build a {"records":[...]} payload with 5 records
     String records = IntStream.rangeClosed(1, 5)
@@ -91,6 +96,7 @@ class ParseStepStreamingTest {
   }
 
   @Test
+  @DisplayName("记录信封为空数组时判定为空内容,返回解析为空")
   void shouldReturnEmpty_forEmptyRecordsEnvelope() {
     String json = "{\"records\":[]}";
 
@@ -103,6 +109,7 @@ class ParseStepStreamingTest {
   }
 
   @Test
+  @DisplayName("大批量记录信封仍能流式解析,总数准确")
   void shouldHandleLargeRecordsEnvelope_streaming() {
     // 500 条记录包装在 {"records":[...]} 信封中 — 验证流式路径
     // 可处理大量数据而不会导致 StackOverflow 或过度 GC
@@ -124,6 +131,7 @@ class ParseStepStreamingTest {
   // ── JSON object without "records" ──────────────────────────────────────────
 
   @Test
+  @DisplayName("不含记录字段的普通对象按单条记录处理")
   void shouldReturnEmpty_forJsonObjectWithoutRecordsField() {
     // 不含 "records" 字段的普通 JSON 对象 → 视为 1 条记录
     String json = "{\"batchId\":\"B001\",\"totalAmount\":100}";
@@ -139,6 +147,7 @@ class ParseStepStreamingTest {
   // ── DELIMITED path ─────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("分隔符格式逐行流式解析,跳过表头后计数正确")
   void shouldParseDelimited_streamingLineByLine() {
     String csv = "customerNo,customerName,customerType,certificateNo,mobileNo,email,status\n"
         + "C001,Alice,PERSONAL,ID001,13800000001,alice@example.com,ACTIVE\n"

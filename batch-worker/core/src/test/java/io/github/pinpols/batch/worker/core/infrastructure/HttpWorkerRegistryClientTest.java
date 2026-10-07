@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.dto.WorkerHeartbeatDto;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.Test;
  * <p>本测试盯 V221 新增 {@code port} 的「解析 → 上报」最后一跳：{@code AbstractWorkerLoop} 解析出的端口必须真的进
  * DTO，否则 orchestrator 与 console 永远拿不到值——端口解析侧的单测覆盖不到这一跳。
  */
+@DisplayName("Worker 注册客户端: 心跳请求体的身份与端口映射")
 class HttpWorkerRegistryClientTest {
 
   /**
@@ -31,7 +33,8 @@ class HttpWorkerRegistryClientTest {
       new PipelineStageProgressRegistry());
 
   @Test
-  void toHeartbeatDtoCarriesWorkerPort() {
+  @DisplayName("映射心跳请求体时携带 Worker 真实监听端口")
+  void shouldCarryWorkerPort_whenMappingHeartbeatDto() {
     WorkerRegistration registration = registration();
     registration.setPort(18083);
 
@@ -39,7 +42,8 @@ class HttpWorkerRegistryClientTest {
   }
 
   @Test
-  void toHeartbeatDtoMapsInstanceIdentityAndPoolCode() {
+  @DisplayName("映射心跳请求体时, 实例标识, 实例池编码, 分组与主机名逐项对应")
+  void shouldMapInstanceIdentityAndPoolCode_whenMappingHeartbeatDto() {
     WorkerRegistration registration = registration();
     registration.setWorkerId("import-node-1-pod-a");
     registration.setWorkerCode("import-node-1");
@@ -57,7 +61,8 @@ class HttpWorkerRegistryClientTest {
   }
 
   @Test
-  void portSurvivesJsonRoundTrip() throws Exception {
+  @DisplayName("端口经序列化再反序列化后保持不变, 且序列化文本中包含该端口字段")
+  void shouldPreservePort_whenSerializedAndParsed() throws Exception {
     // wire 契约：port 必须能序列化再反序列化回来（@Builder 不改变 record 的 wire 格式与 Jackson 绑定方式）。
     WorkerRegistration registration = registration();
     registration.setPort(18085);

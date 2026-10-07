@@ -31,6 +31,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -38,6 +39,7 @@ import org.junit.jupiter.api.Test;
  * quoting / escaping), FIXED_WIDTH (padding / truncation / alignment), EXCEL (sheet name, header,
  * cursor pagination), and JSON (cursor pagination).
  */
+@DisplayName("导出生成阶段单测:分隔符,定长,表格与 JSON 四种格式的落盘与边界语义")
 class GenerateStepTest {
 
   private GenerateStep generateStep;
@@ -92,6 +94,7 @@ class GenerateStepTest {
   // ── DELIMITED / CSV ────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("分隔符格式:写出表头与全部数据行")
   void delimited_shouldWriteHeaderAndDataRows() throws Exception {
     stubSinglePage(List.of(
         Map.of("name", "Alice", "amount", "100.00"), Map.of("name", "Bob", "amount", "200.50")));
@@ -108,6 +111,7 @@ class GenerateStepTest {
   }
 
   @Test
+  @DisplayName("值里含分隔符时按引用策略加双引号包裹")
   void delimited_shouldQuoteValueContainingDelimiter() throws Exception {
     stubSinglePage(List.of(Map.of("name", "Smith, Jr.", "amount", "50.00")));
 
@@ -127,6 +131,7 @@ class GenerateStepTest {
   }
 
   @Test
+  @DisplayName("值内双引号按加倍转义,不破坏列边界")
   void delimited_shouldEscapeQuoteWithDoubleQuote() throws Exception {
     stubSinglePage(List.of(Map.of("description", "He said \"hello\"", "amount", "10")));
 
@@ -146,6 +151,7 @@ class GenerateStepTest {
   }
 
   @Test
+  @DisplayName("值里含换行时整体加引号包裹")
   void delimited_shouldQuoteValueContainingNewline() throws Exception {
     stubSinglePage(List.of(Map.of("note", "line1\nline2", "id", "1")));
 
@@ -160,6 +166,7 @@ class GenerateStepTest {
   }
 
   @Test
+  @DisplayName("开启字节序标记时文件以标记开头,编码信息同时写入上下文")
   void delimited_utf8WithBom_shouldWriteBomPrefix() throws Exception {
     stubSinglePage(List.of(Map.of("name", "客户", "amount", "100.00")));
 
@@ -178,6 +185,7 @@ class GenerateStepTest {
   }
 
   @Test
+  @DisplayName("指定 GBK 与回车换行时:内容按目标编码可解码,行尾统一为回车换行")
   void delimited_gbkCrlf_shouldWriteConfiguredCharsetAndLineSeparator() throws Exception {
     stubSinglePage(List.of(Map.of("name", "客户", "amount", "100.00")));
 
@@ -204,6 +212,7 @@ class GenerateStepTest {
   }
 
   @Test
+  @DisplayName("目标编码无法表示字符时失败,并回报行号,列名与编码")
   void delimited_gbkUnmappableCharacter_shouldReportRowAndColumn() throws Exception {
     stubSinglePage(List.of(Map.of("name", "客户😀", "amount", "100.00")));
 
@@ -221,6 +230,7 @@ class GenerateStepTest {
   }
 
   @Test
+  @DisplayName("目标编码不受支持时返回配置非法,不产出文件")
   void unsupportedTargetCharset_shouldReturnConfigInvalid() throws Exception {
     stubSinglePage(List.of(Map.of("name", "x")));
 
@@ -234,6 +244,7 @@ class GenerateStepTest {
   }
 
   @Test
+  @DisplayName("行分隔符归一化:空值,转义写法与别名都映射到对应字符")
   void normalizeExportLineSeparator_shouldAcceptEscapesAndAliases() {
     assertThat(GenerateStep.normalizeExportLineSeparator(null)).isEqualTo("\n");
     assertThat(GenerateStep.normalizeExportLineSeparator("\\n")).isEqualTo("\n");
@@ -245,6 +256,7 @@ class GenerateStepTest {
   }
 
   @Test
+  @DisplayName("全引用策略下每个单元格都加引号,表头也不例外")
   void delimited_quoteAll_shouldQuoteEveryValue() throws Exception {
     stubSinglePage(List.of(Map.of("code", "A", "name", "Alice")));
 
@@ -260,6 +272,7 @@ class GenerateStepTest {
   }
 
   @Test
+  @DisplayName("以制表符作分隔符时,相邻列用制表符拼接")
   void delimited_tabSeparated_shouldUseTabs() throws Exception {
     Map<String, Object> row = new LinkedHashMap<>();
     row.put("col1", "val1");
@@ -283,6 +296,7 @@ class GenerateStepTest {
   // ── FIXED_WIDTH ────────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("定长格式:左对齐右侧补空格,右对齐左侧补零")
   void fixedWidth_shouldPadShortValue() throws Exception {
     stubSinglePage(List.of(Map.of("code", "A", "amount", "10")));
 
@@ -310,6 +324,7 @@ class GenerateStepTest {
   }
 
   @Test
+  @DisplayName("定长格式:超宽值按列宽截断")
   void fixedWidth_shouldTruncateLongValue() throws Exception {
     stubSinglePage(List.of(Map.of("name", "AliceLongName", "id", "1")));
 
@@ -332,6 +347,7 @@ class GenerateStepTest {
   }
 
   @Test
+  @DisplayName("定长格式:每条记录补齐或截断到声明长度")
   void fixedWidth_shouldEnforceRecordLength() throws Exception {
     stubSinglePage(List.of(Map.of("code", "A", "val", "B")));
 
@@ -362,6 +378,7 @@ class GenerateStepTest {
   // ── EXCEL ──────────────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("表格格式:生成非空工作簿文件并回填生成路径")
   void excel_shouldCreateWorkbookWithHeaderAndData() throws Exception {
     stubSinglePage(
         List.of(Map.of("id", "1", "label", "First"), Map.of("id", "2", "label", "Second")));
@@ -381,6 +398,7 @@ class GenerateStepTest {
   }
 
   @Test
+  @DisplayName("工作表名含非法字符时自动替换,生成过程不失败")
   void excel_sheetNameShouldBeSanitized_whenContainsIllegalChars() throws Exception {
     stubSinglePage(List.of(Map.of("col", "val")));
 
@@ -394,6 +412,7 @@ class GenerateStepTest {
   }
 
   @Test
+  @DisplayName("工作表名超长时截断处理,生成过程不失败")
   void excel_shouldHandleLongSheetName() throws Exception {
     stubSinglePage(List.of(Map.of("col", "val")));
 
@@ -413,6 +432,7 @@ class GenerateStepTest {
   // ── JSON ───────────────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("JSON 格式:写出快照,批次与明细,整体仍是合法结构")
   void json_shouldWriteSnapshotBatchAndDetails() throws Exception {
     stubSinglePage(
         List.of(Map.of("txId", "TX001", "amount", 99.5, "note", "test <special> & \"chars\"")));
@@ -433,6 +453,7 @@ class GenerateStepTest {
   }
 
   @Test
+  @DisplayName("JSON 格式分页:多页游标拉取后记录数累加正确,明细齐全")
   void json_shouldHandleCursorPagination_multiplePages() throws Exception {
     // Simulate two pages of data
     List<Map<String, Object>> page1 = List.of(Map.of("id", "1"), Map.of("id", "2"));
@@ -454,6 +475,7 @@ class GenerateStepTest {
   }
 
   @Test
+  @DisplayName("批次查不到时失败,并返回批次不存在")
   void generate_shouldReturnFailure_whenBatchNotFound() throws Exception {
     when(dataPlugin.loadBatch(any())).thenReturn(Map.of());
 
@@ -466,6 +488,7 @@ class GenerateStepTest {
   }
 
   @Test
+  @DisplayName("缺少导出载荷时失败,阶段仍标记为生成阶段")
   void generate_shouldReturnFailure_whenPayloadMissing() {
     ExportJobContext context = new ExportJobContext();
     context.setTenantId("t1");

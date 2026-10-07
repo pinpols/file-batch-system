@@ -23,11 +23,13 @@ import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+@DisplayName("租户自助控制器: 配额查询与用量汇总接口")
 class ConsoleTenantSelfServiceControllerTest {
 
   private final ConsoleQuotaPolicyApplicationService quotaPolicyService =
@@ -73,6 +75,7 @@ class ConsoleTenantSelfServiceControllerTest {
   }
 
   @Test
+  @DisplayName("按租户返回配额策略分页列表")
   void shouldReturnQuota() throws Exception {
     QuotaPolicyResponse policy =
         new QuotaPolicyResponse(1L, "t1", "max-jobs", 100, 0, 0, 1, true, null, null, null);
@@ -87,6 +90,7 @@ class ConsoleTenantSelfServiceControllerTest {
   }
 
   @Test
+  @DisplayName("按租户汇总运行作业、日触发与文件数量")
   void shouldReturnUsage() throws Exception {
     when(parameterService.getValue("t1", "tenant.usage.running-jobs")).thenReturn(Optional.of("5"));
     when(parameterService.getValue("t1", "tenant.usage.daily-triggers"))

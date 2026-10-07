@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
 import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -20,6 +21,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("批量日实例指标与终态门禁查询,校验真实数据库上的计数口径与批量日写入默认值")
 class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
 
   private final JdbcTemplate jdbcTemplate;
@@ -37,7 +39,8 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void metricsExcludeDryRunAndTreatPausedAsActive() {
+  @DisplayName("汇总指标时排除试运行实例并把暂停计入活跃,总数与成功失败活跃计数分别符合预期")
+  void shouldExcludeDryRunAndCountPausedAsActive_whenAggregatingMetrics() {
     String tenantId = unique("tenant");
     String calendarCode = unique("calendar");
     LocalDate bizDate = LocalDate.of(2026, 9, 8);
@@ -59,7 +62,8 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void batchDayGateTreatsEveryLifecycleTerminalStatusAsComplete() {
+  @DisplayName("门禁把部分失败与试运行等已终结状态都算作完成,只有暂停实例会同时抬高作业与分组的未终结计数")
+  void shouldTreatEveryTerminalStatusAsComplete_whenCountingNonTerminal() {
     String tenantId = unique("tenant");
     String calendarCode = unique("calendar");
     String jobCode = unique("gate-job");
@@ -85,7 +89,8 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void batchDayInsertPersistsJavaProvidedDefaults() {
+  @DisplayName("写入批量日实例时由应用侧提供的状态,计数与快照默认值如实落库")
+  void shouldPersistJavaProvidedDefaults_whenInsertingBatchDay() {
     String tenantId = unique("tenant");
     String calendarCode = unique("calendar");
     LocalDate bizDate = LocalDate.of(2026, 9, 9);

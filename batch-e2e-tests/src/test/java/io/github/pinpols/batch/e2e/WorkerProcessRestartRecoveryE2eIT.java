@@ -40,6 +40,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.TopicExistsException;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -83,6 +84,7 @@ import org.springframework.test.context.ActiveProfiles;
 // 上下文，下个 IT 重建一份干净的，避免 ImportFailurePipeline / ExportPipeline / ExportContent /
 // MultiTenantConcurrent 等被级联污染（实证：4 个隔离运行皆 ✅，全模块顺序跑则 fail）。
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+@DisplayName("Worker 进程重启恢复端到端:派发 worker 被杀后以同消费组重启,重新注册并恢复消费,派发任务最终成功")
 class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
 
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, 1, 15);
@@ -113,7 +115,8 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
   private int localServerPort;
 
   @Test
-  void workerProcessCanRestartAndContinueDispatching() throws Exception {
+  @DisplayName("派发 worker 进程重启后继续消费:新进程重新注册上线,派发任务成功且目标目录产出文件")
+  void shouldContinueDispatching_whenWorkerProcessRestarted() throws Exception {
     String suffix = Long.toUnsignedString(System.nanoTime());
     String tenantId = "t-restart-" + suffix;
     String workerCode = "restart-dispatch-" + suffix;

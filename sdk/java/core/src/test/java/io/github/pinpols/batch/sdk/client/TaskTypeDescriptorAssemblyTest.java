@@ -8,12 +8,14 @@ import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import io.github.pinpols.batch.sdk.task.SdkTaskTypeDescriptor;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
  * SDK Phase 3 M3.1:register 装配 taskTypes[] —— code 以 handler.taskType() 为权威 + 过滤无 descriptor 的
  * handler。
  */
+@DisplayName("BatchPlatformClient 任务类型描述符装配 — 采集范围与编码优先级")
 class TaskTypeDescriptorAssemblyTest {
 
   private static BatchPlatformClientConfig cfg() {
@@ -63,12 +65,14 @@ class TaskTypeDescriptorAssemblyTest {
   }
 
   @Test
-  void defaultDescriptorIsNull() {
+  @DisplayName("未声明描述符的 handler 取描述符为空")
+  void shouldReturnNullDescriptor_whenHandlerDoesNotDeclare() {
     assertThat(plainHandler("t").descriptor()).isNull();
   }
 
   @Test
-  void collectsOnlyHandlersThatDeclareDescriptor() {
+  @DisplayName("装配时只采集声明了描述符的 handler,其余忽略")
+  void shouldCollectOnlyHandlersWithDescriptor_whenBuilding() {
     BatchPlatformClient client = BatchPlatformClient.builder(cfg())
         .register(handlerWithDescriptor(
             "tenant_tx_import",
@@ -89,7 +93,8 @@ class TaskTypeDescriptorAssemblyTest {
   }
 
   @Test
-  void taskTypeOverridesDescriptorCode() {
+  @DisplayName("描述符编码与 handler 声明冲突时以 handler 为准,保证派单路由一致")
+  void shouldPreferHandlerTaskType_whenDescriptorCodeConflicts() {
     // descriptor 里写错 / 漏填 code,装配时一律以 handler.taskType() 为权威,保证派单路由一致
     BatchPlatformClient client = BatchPlatformClient.builder(cfg())
         .register(handlerWithDescriptor(

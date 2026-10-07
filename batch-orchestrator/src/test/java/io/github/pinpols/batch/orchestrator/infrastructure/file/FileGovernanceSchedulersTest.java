@@ -4,12 +4,14 @@ import static org.mockito.Mockito.verify;
 
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("文件治理调度入口 - 校验各治理调度触发后均把执行委派给文件治理服务")
 class FileGovernanceSchedulersTest {
 
   @Mock
@@ -39,6 +41,7 @@ class FileGovernanceSchedulersTest {
   }
 
   @Test
+  @DisplayName("归档文件清理调度触发时委派治理服务执行归档清理")
   void shouldDelegateArchiveCleanup() {
     archiveCleanupScheduler.cleanupArchivedFiles();
 
@@ -46,6 +49,7 @@ class FileGovernanceSchedulersTest {
   }
 
   @Test
+  @DisplayName("对象存储对账调度触发时委派治理服务执行对账")
   void shouldDelegateReconcile() {
     reconcileScheduler.reconcileObjectStorage();
 
@@ -53,6 +57,7 @@ class FileGovernanceSchedulersTest {
   }
 
   @Test
+  @DisplayName("文件到达分组管理调度触发时委派治理服务执行分组管理")
   void shouldDelegateArrivalGroupManagement() {
     arrivalGroupScheduler.manageFileArrivalGroups();
 
@@ -60,6 +65,7 @@ class FileGovernanceSchedulersTest {
   }
 
   @Test
+  @DisplayName("孤儿上传会话清理调度触发时委派治理服务执行会话清理")
   void shouldDelegateOrphanUploadSessionCleanup() {
     uploadSessionCleanupScheduler.cleanupOrphanUploadSessions();
 
@@ -67,6 +73,7 @@ class FileGovernanceSchedulersTest {
   }
 
   @Test
+  @DisplayName("时延指标采集调度触发时委派治理服务执行指标采集")
   void shouldDelegateLatencyCollection() {
     latencyScheduler.collectLatencyMetrics();
 

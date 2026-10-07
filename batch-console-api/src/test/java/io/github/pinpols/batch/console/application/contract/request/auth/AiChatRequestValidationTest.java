@@ -7,11 +7,12 @@ import jakarta.validation.ValidatorFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("AI 对话请求参数校验: 会话标识长度上限守护")
 class AiChatRequestValidationTest {
 
   @Test
   @DisplayName("sessionId 超过 audit 列上限 128 时请求校验拒绝")
-  void rejectsSessionIdLongerThanAuditColumn() {
+  void shouldReject_whenSessionIdExceedsAuditColumnLimit() {
     AiChatRequest request = new AiChatRequest();
     request.setPrompt("diagnose");
     request.setSessionId("s".repeat(129));

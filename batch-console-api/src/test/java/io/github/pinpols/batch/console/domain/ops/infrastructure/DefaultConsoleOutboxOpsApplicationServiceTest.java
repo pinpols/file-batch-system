@@ -19,8 +19,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("Outbox 运维编排:统计, 清理与重投递委托下游, 响应回填租户与计数")
 class DefaultConsoleOutboxOpsApplicationServiceTest {
 
   private ConsoleTenantGuard tenantGuard;
@@ -52,6 +54,7 @@ class DefaultConsoleOutboxOpsApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("统计查询:按状态分组的明细原样返回, 并回填请求租户")
   void shouldReturnStats() {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
     List<Map<String, Object>> breakdown =
@@ -65,6 +68,7 @@ class DefaultConsoleOutboxOpsApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("清理委托:保留天数与删除计数透传编排层, 已发布与放弃数分别回填")
   void shouldDelegateCleanupToOrchestrator() {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
     when(orchestratorProxy.outboxCleanup("tenant-a", 30))
@@ -81,6 +85,7 @@ class DefaultConsoleOutboxOpsApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("重投递委托:请求标识列表提交编排层, 请求数与重置数按返回值回填")
   void shouldDelegateRepublishToOrchestrator() {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
     List<Long> ids = List.of(1L, 2L, 3L);

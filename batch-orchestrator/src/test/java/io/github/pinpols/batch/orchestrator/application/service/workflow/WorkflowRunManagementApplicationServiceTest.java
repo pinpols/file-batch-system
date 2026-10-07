@@ -10,13 +10,16 @@ import io.github.pinpols.batch.orchestrator.application.service.task.Orchestrato
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 
+@DisplayName("流程运行管理应用服务: 节点跳过入口与状态返回口径")
 class WorkflowRunManagementApplicationServiceTest {
 
   @Test
-  void supportsBothSkipNodeEntrypoints() {
+  @DisplayName("两个跳过节点入口都可用, 分别返回跳过状态与操作人信息")
+  void shouldSupportBothSkipEntrypoints_whenSkippingNode() {
     WorkflowRunMapper workflowRunMapper = mock(WorkflowRunMapper.class);
     WorkflowNodeRunMapper workflowNodeRunMapper = mock(WorkflowNodeRunMapper.class);
     WorkflowRunEntity run = new WorkflowRunEntity();

@@ -22,6 +22,7 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -53,6 +54,7 @@ import org.springframework.test.context.ActiveProfiles;
 @E2eBusinessSchema
 @Tag("e2e")
 @Tag("critical")
+@DisplayName("原子任务主链路端到端: 触发后建任务并写入事件, 经 Kafka 专属主题派发, 子执行器按任务协议路由执行并回执, 任务终态落库为成功")
 class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -67,7 +69,8 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
   private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
   @Test
-  void sqlTaskRunsThroughKafkaAndReportsSuccess() {
+  @DisplayName("sql 原子任务全链路: 触发后经专属主题派发并路由到对应执行器, 任务终态落库为成功")
+  void shouldRunSqlAtomicTask_whenDispatchedThroughKafka() {
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("taskType", "sql");
     params.put("sql", "SELECT 1");
@@ -76,7 +79,8 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
   }
 
   @Test
-  void shellTaskRunsThroughKafkaAndReportsSuccess() {
+  @DisplayName("shell 原子任务全链路: 触发后经专属主题派发并路由到对应执行器执行无害命令, 任务终态落库为成功")
+  void shouldRunShellAtomicTask_whenDispatchedThroughKafka() {
     // shell 走 adapter 的 payload.taskType 路由 + RCE 最敏感执行器,真链路只跑无害的 /bin/echo。
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("taskType", "shell");
@@ -87,7 +91,8 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
   }
 
   @Test
-  void storedProcTaskRunsThroughKafkaAndReportsSuccess() {
+  @DisplayName("存储过程原子任务全链路: 先建真实过程, 触发后经专属主题派发并按过程定义调用, 任务终态落库为成功")
+  void shouldRunStoredProcAtomicTask_whenDispatchedThroughKafka() {
     // 真 PROCEDURE:executor 经 pg_proc.prokind 判定后发原生 CALL(PG 默认 {call}→SELECT 调真过程会报错)。
     jdbcTemplate.execute(
         "CREATE OR REPLACE PROCEDURE batch.e2e_spi_proc() LANGUAGE plpgsql AS $$ BEGIN END; $$");
@@ -100,7 +105,8 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
   }
 
   @Test
-  void httpTaskRunsThroughKafkaAndReportsSuccess() throws IOException {
+  @DisplayName("http 原子任务全链路: 触发后经专属主题派发并请求本地服务, 任务终态落库为成功")
+  void shouldRunHttpAtomicTask_whenDispatchedThroughKafka() throws IOException {
     HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     server.createContext("/ok", exchange -> {
       byte[] body = "ok".getBytes(StandardCharsets.UTF_8);

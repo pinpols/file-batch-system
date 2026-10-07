@@ -12,7 +12,6 @@ import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntime
 
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
-import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
@@ -54,24 +53,6 @@ public class PlatformFileAuditRepository {
         truncate(param.getSourceColumn(), 256));
     mapper.insertFileErrorRecord(values);
     return toLong(values.get(ID));
-  }
-
-  public List<Map<String, Object>> loadFileErrorRecords(
-      String tenantId, Long fileId, String errorCode, String errorStage, int limit) {
-    if (!Texts.hasText(tenantId) || limit <= 0) {
-      return List.of();
-    }
-    return mapper.selectFileErrorRecords(params(
-        TENANT_ID,
-        tenantId,
-        FILE_ID,
-        fileId,
-        "errorCode",
-        errorCode,
-        "errorStage",
-        errorStage,
-        "limit",
-        limit));
   }
 
   public void appendAudit(FileAuditParam param) {

@@ -30,8 +30,10 @@ import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.RetryScheduleMapper;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("重试重排队协调器: 认领丢失, 分区与任务复位及重试派发事件")
 class RetryRequeueCoordinatorTest {
 
   private RetryScheduleMapper retryScheduleMapper;
@@ -60,6 +62,7 @@ class RetryRequeueCoordinatorTest {
   }
 
   @Test
+  @DisplayName("重试计划认领失败时保持等待状态, 不读取分区与任务")
   void shouldLeaveRetryScheduleWaitingWhenClaimIsLost() {
     RetryScheduleEntity schedule = retrySchedule(7L, 10L);
     when(retryScheduleMapper.markRunning(
@@ -74,6 +77,7 @@ class RetryRequeueCoordinatorTest {
   }
 
   @Test
+  @DisplayName("分区重排队时复位首个任务及其步骤, 并发出重试派发事件")
   void shouldResetFirstTaskAndEmitRetryDispatchForPartition() {
     JobPartitionEntity partition = partition(10L, 20L, 4L);
     JobInstanceEntity instance = instance(20L);
@@ -106,6 +110,7 @@ class RetryRequeueCoordinatorTest {
   }
 
   @Test
+  @DisplayName("分区复位因版本冲突未命中时中止重排队, 不发重试派发事件")
   void shouldAbortPartitionRequeueOnVersionConflictBeforeDispatch() {
     JobPartitionEntity partition = partition(10L, 20L, 4L);
     JobInstanceEntity instance = instance(20L);
@@ -126,6 +131,7 @@ class RetryRequeueCoordinatorTest {
   }
 
   @Test
+  @DisplayName("没有分区时只复位任务并发出重试派发事件")
   void shouldResetTaskAndEmitRetryDispatchWithoutPartition() {
     JobInstanceEntity instance = instance(20L);
     JobTaskEntity task = task(30L, 20L, 0, 8L);
@@ -150,6 +156,7 @@ class RetryRequeueCoordinatorTest {
   }
 
   @Test
+  @DisplayName("来源分区不存在时拒绝重排队并抛出业务异常")
   void shouldRejectPartitionRequeueWhenSourcePartitionIsMissing() {
     when(jobPartitionMapper.selectById("tenant-a", 10L)).thenReturn(null);
 

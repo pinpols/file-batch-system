@@ -20,6 +20,7 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.web.servlet.MockMvc;
@@ -29,6 +30,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
  * 类型化守护:submit/preview 的 body 反序列化为 {@link BatchDayReplaySubmitRequest}(字段名与 orchestrator
  * BatchDayReplaySubmitCommand 一致),控制器只将类型化请求委托给应用端口。
  */
+@DisplayName("批量日重放控制器: 提交与预览的报文绑定及必填字段校验")
 class ConsoleBatchDayReplayControllerTest {
 
   private final ConsoleOrchestratorPort orchestratorProxy = mock(ConsoleOrchestratorPort.class);
@@ -57,7 +59,8 @@ class ConsoleBatchDayReplayControllerTest {
   }
 
   @Test
-  void submitShouldDeserializeTypedBodyAndDelegateToApplicationPort() throws Exception {
+  @DisplayName("提交报文完整绑定为类型化请求后委托下游, 各字段取值与报文一致")
+  void shouldDeserializeTypedBodyAndDelegate_whenSubmitRequestComplete() throws Exception {
     mockMvc
         .perform(post("/api/console/ops/batch-day-replay/sessions")
             .header("Idempotency-Key", "idem-1")
@@ -94,7 +97,8 @@ class ConsoleBatchDayReplayControllerTest {
   }
 
   @Test
-  void submitShouldRejectMissingRequiredFieldsWith400() throws Exception {
+  @DisplayName("必填字段缺失时返回参数错误, 且不触达下游端口")
+  void shouldRejectSubmit_whenRequiredFieldsMissing() throws Exception {
     // calendarCode/bizDate/scope/reason/requestedBy @NotBlank —— 缺失直接 400,不触达 orchestrator。
     mockMvc
         .perform(post("/api/console/ops/batch-day-replay/sessions")
@@ -106,7 +110,8 @@ class ConsoleBatchDayReplayControllerTest {
   }
 
   @Test
-  void previewShouldDelegateTypedRequestToApplicationPort() throws Exception {
+  @DisplayName("预览报文绑定后委托下游, 返回成功响应")
+  void shouldDelegatePreviewRequest_whenBodyTyped() throws Exception {
     mockMvc
         .perform(post("/api/console/ops/batch-day-replay/sessions/preview")
             .contentType(APPLICATION_JSON)
@@ -126,7 +131,8 @@ class ConsoleBatchDayReplayControllerTest {
   }
 
   @Test
-  void submitShouldRejectInvalidBizDateWith400() throws Exception {
+  @DisplayName("业务日期格式不合法时返回参数错误, 且不触达下游端口")
+  void shouldRejectSubmit_whenBizDateMalformed() throws Exception {
     mockMvc
         .perform(post("/api/console/ops/batch-day-replay/sessions")
             .header("Idempotency-Key", "idem-3")

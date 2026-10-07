@@ -10,6 +10,7 @@ import java.sql.DatabaseMetaData;
 import java.sql.SQLException;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.BeanFactory;
 
@@ -22,6 +23,7 @@ import org.springframework.beans.factory.BeanFactory;
  *       OS 角色、 而本闸在该方言下无法核验,静默放行等于安全控制 no-op,故拒绝执行(要跑非 PG 须显式 {@code forbidOsCapableRole=false})。
  * </ul>
  */
+@DisplayName("数据库执行器方言守卫: 非目标方言下的默认拒绝")
 class SqlTaskExecutorDialectGuardTest {
 
   private SqlExecutorProperties props;
@@ -36,6 +38,7 @@ class SqlTaskExecutorDialectGuardTest {
   }
 
   @Test
+  @DisplayName("数据库为非目标方言时应默认拒绝执行, 并说明仅支持目标方言")
   void shouldFailClosed_whenDatabaseIsMySql() throws SQLException {
     Connection conn = mock(Connection.class);
     DatabaseMetaData md = mock(DatabaseMetaData.class);
@@ -49,6 +52,7 @@ class SqlTaskExecutorDialectGuardTest {
   }
 
   @Test
+  @DisplayName("另一非目标方言同样应默认拒绝, 不让安全校验静默失效")
   void shouldFailClosed_whenDatabaseIsOracle() throws SQLException {
     Connection conn = mock(Connection.class);
     DatabaseMetaData md = mock(DatabaseMetaData.class);
@@ -61,6 +65,7 @@ class SqlTaskExecutorDialectGuardTest {
   }
 
   @Test
+  @DisplayName("无法识别数据库方言时应默认拒绝, 避免核验被跳过")
   void shouldFailClosed_whenDatabaseProductNameNull() throws SQLException {
     Connection conn = mock(Connection.class);
     DatabaseMetaData md = mock(DatabaseMetaData.class);
@@ -73,6 +78,7 @@ class SqlTaskExecutorDialectGuardTest {
   }
 
   @Test
+  @DisplayName("读取元数据失败时应抛出校验异常, 保留原始失败语义")
   void shouldPropagateSqlValidationException_whenMetadataThrows() throws SQLException {
     Connection conn = mock(Connection.class);
     when(conn.getMetaData()).thenThrow(new SQLException("conn closed"));
@@ -83,7 +89,8 @@ class SqlTaskExecutorDialectGuardTest {
   }
 
   @Test
-  void productPropertiesShouldDocumentPostgresOnlyInJavadoc() {
+  @DisplayName("禁止高权限角色的开关默认应保持开启, 防止字段重命名导致契约漂移")
+  void shouldKeepForbidOsCapableRoleDefaultTrue() {
     // 行为测不到 javadoc;仅留一个 sentinel 防回归字段重命名(下游 yaml key 不变)
     assertThat(props.isForbidOsCapableRole()).isTrue(); // 默认 true 不变
   }

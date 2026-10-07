@@ -9,13 +9,16 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
+@DisplayName("内容校验器注册表:按作业类型与阶段筛选、执行指标记录与异常兜底")
 class ContentVerifierRegistryTest {
 
   @Test
-  void verifiersForFiltersByJobTypeAndStage() {
+  @DisplayName("按作业类型与阶段筛选校验器,阶段无关项保留而不匹配类型落选")
+  void shouldFilterByJobTypeAndStage_whenResolvingVerifiers() {
     ContentVerifier exportAlways =
         new StubVerifier("EXPORT_NON_EMPTY", Set.of(JobType.EXPORT), null, VerifyResult.pass());
     ContentVerifier exportFetchOnly = new StubVerifier(
@@ -38,7 +41,8 @@ class ContentVerifierRegistryTest {
   }
 
   @Test
-  void runRecordsTimerAndFailureCounter() {
+  @DisplayName("校验失败时记录耗时计时器与失败计数,并原样返回失败结果")
+  void shouldRecordTimerAndFailureCounter_whenVerifierFails() {
     StubVerifier failing = new StubVerifier(
         "EXPORT_NON_EMPTY",
         Set.of(JobType.EXPORT),
@@ -68,7 +72,8 @@ class ContentVerifierRegistryTest {
   }
 
   @Test
-  void runSwallowsExceptionAndRecordsErrorOutcome() {
+  @DisplayName("校验器抛异常时吞掉异常并记录错误结局")
+  void shouldRecordErrorOutcome_whenVerifierThrows() {
     ContentVerifier throwing = new ContentVerifier() {
       @Override
       public String code() {
@@ -102,7 +107,8 @@ class ContentVerifierRegistryTest {
   }
 
   @Test
-  void runWithoutMeterRegistryIsSafe() {
+  @DisplayName("缺少指标注册表时校验照常执行且不影响结果")
+  void shouldRunNormally_whenMeterRegistryIsAbsent() {
     ContentVerifier verifier =
         new StubVerifier("OK", Set.of(JobType.IMPORT), null, VerifyResult.pass());
     ContentVerifierRegistry registry =

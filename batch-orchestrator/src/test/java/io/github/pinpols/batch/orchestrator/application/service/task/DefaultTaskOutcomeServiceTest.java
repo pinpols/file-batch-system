@@ -52,11 +52,12 @@ import org.springframework.dao.DuplicateKeyException;
  *
  * <p>applyTaskOutcome 主流程涉及 11 个 collaborator + 复杂状态机分支,留给 Testcontainers 集成测覆盖。
  */
+@DisplayName("任务结果服务: 节点运行记录的并发幂等, 序号推进与字段落库")
 class DefaultTaskOutcomeServiceTest {
 
   @Test
   @DisplayName("active nodes:忽略已完成的 FORK/END，并保留最新一轮仍等待的节点")
-  void resolveActiveNodeCodesUsesLatestNodeRunState() {
+  void shouldResolveActiveNodeCodes_whenUsingLatestRunState() {
     WorkflowNodeRunEntity fork = nodeRun("FORK", 1, WorkflowNodeRunStatus.SUCCESS.code());
     WorkflowNodeRunEntity end = nodeRun("END", 1, WorkflowNodeRunStatus.SUCCESS.code());
     WorkflowNodeRunEntity oldBranch = nodeRun("BRANCH", 1, WorkflowNodeRunStatus.RUNNING.code());
@@ -164,7 +165,7 @@ class DefaultTaskOutcomeServiceTest {
 
   @Test
   @DisplayName("recordNodeRunReady: 首次插入 → runSeq=1,状态 READY")
-  void readyFirstInsertSetsRunSeq1() {
+  void shouldSetRunSeqToOne_whenFirstReadyInsert() {
     when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "n1"))
         .thenReturn(null);
 
@@ -178,7 +179,7 @@ class DefaultTaskOutcomeServiceTest {
 
   @Test
   @DisplayName("recordNodeRunReady: 已有 runSeq=2 → 新 runSeq=3")
-  void readySubsequentInsertsIncrementRunSeq() {
+  void shouldIncrementRunSeq_whenReadyInsertRepeats() {
     WorkflowNodeRunEntity existing = new WorkflowNodeRunEntity();
     existing.setRunSeq(2);
     when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "n1"))
@@ -191,7 +192,7 @@ class DefaultTaskOutcomeServiceTest {
 
   @Test
   @DisplayName("recordNodeRunReady: 并发 insert 撞唯一约束 → 不抛错,返回已有记录")
-  void readyHandlesDuplicateKey() {
+  void shouldReturnExistingRecord_whenReadyInsertConflicts() {
     when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "n1"))
         .thenReturn(null) // nextRunSeq 读
         .thenReturn(existingRunSeq(5)); // catch block 重读
@@ -209,7 +210,7 @@ class DefaultTaskOutcomeServiceTest {
 
   @Test
   @DisplayName("recordNodeRunStart: 首次插入 → 状态 RUNNING + startedAt 透传")
-  void startFirstInsertRunningWithStartedAt() {
+  void shouldStartRunning_whenFirstStartInsert() {
     when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "n1"))
         .thenReturn(null);
 
@@ -223,7 +224,7 @@ class DefaultTaskOutcomeServiceTest {
 
   @Test
   @DisplayName("recordNodeRunStart: 并发 insert 撞唯一约束 → 返回已有记录,不抛")
-  void startHandlesDuplicateKey() {
+  void shouldReturnExistingRecord_whenStartInsertConflicts() {
     when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "n1"))
         .thenReturn(null)
         .thenReturn(existingRunSeq(2));
@@ -239,7 +240,7 @@ class DefaultTaskOutcomeServiceTest {
 
   @Test
   @DisplayName("recordNodeRunStart: insert 的 entity 字段都齐(nodeCode/nodeType/runSeq)")
-  void startPersistsFullEntity() {
+  void shouldPersistFullEntity_whenStartingNodeRun() {
     when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(anyLong(), any()))
         .thenReturn(null);
 

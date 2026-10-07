@@ -16,6 +16,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledOnOs;
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.io.TempDir;
  *
  * <p>分两组:Validation(无进程) + Execution(真进程,跑 /bin/echo / sleep / false 等)。
  */
+@DisplayName("命令执行器: 参数校验, 能力声明与真实进程执行")
 class ShellTaskExecutorTest {
 
   @TempDir
@@ -52,24 +54,28 @@ class ShellTaskExecutorTest {
   // ─── Validation ──────────────────────────────────────────────────────────────
 
   @Nested
+  @DisplayName("参数校验: 命令, 参数, 环境变量与超时的准入判定")
   class Validation {
 
     @Test
-    void rejectsMissingCommand() {
+    @DisplayName("缺少命令时执行应失败, 并提示参数必填")
+    void shouldReject_whenCommandMissing() {
       TaskResult r = executor.execute(ctxWithParams(Map.of()));
       assertThat(r.success()).isFalse();
       assertThat(r.message()).contains("parameters.command required");
     }
 
     @Test
-    void rejectsBlankCommand() {
+    @DisplayName("命令为纯空白时同样应判为缺失并失败")
+    void shouldReject_whenCommandBlank() {
       TaskResult r = executor.execute(ctxWithParams(Map.of("command", "   ")));
       assertThat(r.success()).isFalse();
       assertThat(r.message()).contains("parameters.command required");
     }
 
     @Test
-    void rejectsNonStringArgsType() {
+    @DisplayName("参数类型不是列表时执行应失败, 提示取值类型不合法")
+    void shouldReject_whenArgsNotList() {
       TaskResult r =
           executor.execute(ctxWithParams(Map.of("command", "/bin/echo", "args", "not-a-list")));
       assertThat(r.success()).isFalse();
@@ -77,7 +83,8 @@ class ShellTaskExecutorTest {
     }
 
     @Test
-    void rejectsCommandOutsideWhitelist() {
+    @DisplayName("命令不在白名单内时应拒绝执行, 不调度任何进程")
+    void shouldReject_whenCommandOutsideWhitelist() {
       props.setCommandWhitelist(Set.of("/bin/echo"));
       TaskResult r = executor.execute(ctxWithParams(Map.of("command", "/bin/rm")));
       assertThat(r.success()).isFalse();
@@ -85,7 +92,8 @@ class ShellTaskExecutorTest {
     }
 
     @Test
-    void allowsCommandInWhitelist() {
+    @DisplayName("命令命中白名单时应正常执行并返回成功")
+    void shouldExecute_whenCommandInWhitelist() {
       props.setCommandWhitelist(Set.of("/bin/echo"));
       // 命中白名单后继续真实执行,exitCode 0 即成功
       TaskResult r =
@@ -94,7 +102,8 @@ class ShellTaskExecutorTest {
     }
 
     @Test
-    void rejectsTooManyArgs() {
+    @DisplayName("参数个数超过上限时应拒绝执行, 并说明数量越界")
+    void shouldReject_whenArgsExceedLimit() {
       props.setMaxArgs(2);
       TaskResult r = executor.execute(
           ctxWithParams(Map.of("command", "/bin/echo", "args", List.of("a", "b", "c"))));
@@ -103,7 +112,8 @@ class ShellTaskExecutorTest {
     }
 
     @Test
-    void rejectsEnvKeyNotInAllowList() {
+    @DisplayName("环境变量键不在允许清单内时应拒绝执行")
+    void shouldReject_whenEnvKeyNotAllowed() {
       // 默认 allowedEnvKeys 空 → 任何 env key 都被拒
       TaskResult r = executor.execute(
           ctxWithParams(Map.of("command", "/bin/echo", "env", Map.of("MY_VAR", "x"))));
@@ -112,7 +122,8 @@ class ShellTaskExecutorTest {
     }
 
     @Test
-    void rejectsBadCharactersInArg() {
+    @DisplayName("参数含不允许的字符时应拒绝执行, 阻断命令注入")
+    void shouldReject_whenArgHasDisallowedCharacters() {
       // 默认 regex 不允许引号 / 反斜杠等
       TaskResult r = executor.execute(
           ctxWithParams(Map.of("command", "/bin/echo", "args", List.of("'; rm -rf /'"))));
@@ -121,7 +132,8 @@ class ShellTaskExecutorTest {
     }
 
     @Test
-    void rejectsNonPositiveTimeoutSeconds() {
+    @DisplayName("超时秒数非正数时应拒绝执行")
+    void shouldReject_whenTimeoutNotPositive() {
       TaskResult r =
           executor.execute(ctxWithParams(Map.of("command", "/bin/echo", "timeoutSeconds", 0)));
       assertThat(r.success()).isFalse();
@@ -129,6 +141,7 @@ class ShellTaskExecutorTest {
     }
 
     @Test
+    @DisplayName("参数携带敏感凭据字段时应被凭据闸门拒绝, 并返回敏感数据标识")
     void rejectsSensitiveCredentialInParameters_LaneC() {
       // Lane C:parameters 含 password 字段直接 FAILED,error 含 SENSITIVE_DATA_IN_PARAMETERS 标识
       TaskResult r =
@@ -142,7 +155,8 @@ class ShellTaskExecutorTest {
 
   @Test
   @DisabledOnOs(OS.WINDOWS)
-  void repeatedTimeoutsReleaseOutputReaderThreads() throws Exception {
+  @DisplayName("连续超时后输出读取线程应及时回收, 不残留线程泄漏")
+  void shouldReleaseOutputReaderThreads_whenTimeoutsRepeat() throws Exception {
     Set<Thread> existing = Thread.getAllStackTraces().keySet();
     props.setDefaultTimeout(Duration.ofMillis(100));
     for (int i = 0; i < 3; i++) {
@@ -161,7 +175,8 @@ class ShellTaskExecutorTest {
   }
 
   @Test
-  void capabilityReflectsConfig() {
+  @DisplayName("能力声明应反映配置: 任务类型为命令执行, 占用计算与磁盘资源且可取消, 非幂等")
+  void shouldExposeCapability_whenExecutorConfigured() {
     assertThat(executor.taskType()).isEqualTo("shell");
     assertThat(executor.capability().resourceKinds())
         .contains(
@@ -176,10 +191,12 @@ class ShellTaskExecutorTest {
 
   @Nested
   @DisabledOnOs(OS.WINDOWS)
+  @DisplayName("真实进程执行: 退出码, 超时, 取消与输出处理")
   class RealProcess {
 
     @Test
-    void echoSuccess() {
+    @DisplayName("命令正常结束时退出码应为零, 且标准输出包含预期内容")
+    void shouldReturnStdoutAndZeroExit_whenCommandSucceeds() {
       TaskResult r =
           executor.execute(ctxWithParams(Map.of("command", "/bin/echo", "args", List.of("hello"))));
       assertThat(r.success()).isTrue();
@@ -188,7 +205,8 @@ class ShellTaskExecutorTest {
     }
 
     @Test
-    void nonZeroExitMarksFailure() {
+    @DisplayName("进程以非零码退出时应判失败, 输出只带错误码并在消息中保留退出摘要")
+    void shouldMarkFailure_whenExitCodeNonZero() {
       TaskResult r = executor.execute(ctxWithParams(Map.of("command", "/usr/bin/false")));
       assertThat(r.success()).isFalse();
       // K3:失败路径只填 error_code(无其它 output),保持 message 携带 exit/stderr 摘要
@@ -199,7 +217,8 @@ class ShellTaskExecutorTest {
     }
 
     @Test
-    void timeoutKillsProcess() {
+    @DisplayName("执行超过超时上限时应终止进程并返回超时异常")
+    void shouldKillProcess_whenTimeoutExceeded() {
       props.setDefaultTimeout(Duration.ofMillis(300));
       TaskResult r =
           executor.execute(ctxWithParams(Map.of("command", "/bin/sleep", "args", List.of("5"))));
@@ -209,7 +228,8 @@ class ShellTaskExecutorTest {
     }
 
     @Test
-    void cancelTerminatesRunningProcess() throws Exception {
+    @DisplayName("取消信号应终止正在运行的进程, 并返回失败结果")
+    void shouldTerminateProcess_whenCancelled() throws Exception {
       ExecutorService executorService = Executors.newSingleThreadExecutor();
       try {
         Future<TaskResult> result = executorService.submit(() ->
@@ -224,7 +244,8 @@ class ShellTaskExecutorTest {
     }
 
     @Test
-    void requestedTimeoutLongerThanDefaultIsClampedToDefault() {
+    @DisplayName("请求超时长于默认值时应按默认值封顶, 不允许业务自行放宽")
+    void shouldClampToDefault_whenRequestedTimeoutLonger() {
       // 业务请求 timeoutSeconds=30(远大于 default),只能缩短不能拉长 → 实际用 default(0.3s)。
       // sleep 5s 远超 default,故应按 default 超时被杀(而非按 30s 等待)。
       props.setDefaultTimeout(Duration.ofMillis(300));
@@ -239,7 +260,8 @@ class ShellTaskExecutorTest {
     }
 
     @Test
-    void requestedTimeoutShorterThanDefaultIsHonored() {
+    @DisplayName("请求超时短于默认值时应按请求值生效, 允许业务收紧上限")
+    void shouldHonorRequestedTimeout_whenShorterThanDefault() {
       // 请求值 < default → 取请求值(缩短允许)。default 10s,请求 1s,sleep 5s → 按 1s 超时。
       props.setDefaultTimeout(Duration.ofSeconds(10));
       long start = System.currentTimeMillis();
@@ -253,7 +275,8 @@ class ShellTaskExecutorTest {
     }
 
     @Test
-    void envIsScrubbedAndBatchVarsInjected() {
+    @DisplayName("执行时应清洗父进程环境变量, 只注入批次上下文相关变量")
+    void shouldScrubEnvAndInjectBatchVars_whenExecuting() {
       // /usr/bin/env 打印所有 env vars
       TaskResult r = executor.execute(ctxWithParams(Map.of("command", "/usr/bin/env")));
       assertThat(r.success()).isTrue();
@@ -268,7 +291,8 @@ class ShellTaskExecutorTest {
     }
 
     @Test
-    void cleansUpWorkdirAfterExecution() {
+    @DisplayName("开启清理时执行结束后应删除工作目录")
+    void shouldRemoveWorkdir_whenCleanupEnabled() {
       TaskResult r =
           executor.execute(ctxWithParams(Map.of("command", "/bin/echo", "args", List.of("x"))));
       String workdir = (String) r.output().get("workdir");
@@ -277,7 +301,8 @@ class ShellTaskExecutorTest {
     }
 
     @Test
-    void keepsWorkdirWhenCleanupDisabled() {
+    @DisplayName("关闭清理时执行结束后应保留工作目录, 便于问题排查")
+    void shouldKeepWorkdir_whenCleanupDisabled() {
       props.setCleanupWorkdir(false);
       TaskResult r =
           executor.execute(ctxWithParams(Map.of("command", "/bin/echo", "args", List.of("x"))));
@@ -286,7 +311,8 @@ class ShellTaskExecutorTest {
     }
 
     @Test
-    void truncatesLargeStdout() {
+    @DisplayName("标准输出超过上限时应截断, 抓取内容长度不超过限制")
+    void shouldTruncateStdout_whenOutputExceedsLimit() {
       // 用 yes + head 模拟大量输出;直接 head 限制不行(进程会被 SIGPIPE 杀)
       // 改用 /bin/echo 重复 yes 串
       props.setMaxStdoutBytes(50);

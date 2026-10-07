@@ -23,11 +23,13 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+@DisplayName("访问密钥控制器: 列表、创建与吊销接口")
 class ConsoleApiKeyControllerTest {
 
   private final ConsoleApiKeyService apiKeyService = mock(ConsoleApiKeyService.class);
@@ -58,6 +60,7 @@ class ConsoleApiKeyControllerTest {
   }
 
   @Test
+  @DisplayName("按租户查询访问密钥列表并返回名称与前缀")
   void shouldListApiKeys() throws Exception {
     ApiKeyEntity entity = new ApiKeyEntity();
     entity.setId(1L);
@@ -76,6 +79,7 @@ class ConsoleApiKeyControllerTest {
   }
 
   @Test
+  @DisplayName("创建访问密钥返回名称与一次性明文密钥")
   void shouldCreateApiKey() throws Exception {
     ApiKeyEntity entity = new ApiKeyEntity();
     entity.setId(1L);
@@ -99,6 +103,7 @@ class ConsoleApiKeyControllerTest {
   }
 
   @Test
+  @DisplayName("吊销访问密钥按租户与操作人记录")
   void shouldRevokeApiKey() throws Exception {
     mockMvc
         .perform(delete("/api/console/api-keys/1").param("tenantId", "t1"))

@@ -25,8 +25,10 @@ import io.github.pinpols.batch.testing.TestConstants.Edge;
 import io.github.pinpols.batch.testing.TestConstants.Workflow;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("流程有向图服务: 出边解析, 汇聚就绪判定与不可达下游级联跳过口径")
 class DefaultWorkflowDagServiceTest {
 
   private WorkflowEdgeMapper edgeMapper;
@@ -87,16 +89,19 @@ class DefaultWorkflowDagServiceTest {
   // ── resolveNextNodes ──────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("定义标识为空时解析下一节点返回空")
   void shouldReturnEmptyWhenDefinitionIdIsNull() {
     assertThat(dagService.resolveNextNodes(null, "START", true, null)).isEmpty();
   }
 
   @Test
+  @DisplayName("当前节点编码为空白时解析下一节点返回空")
   void shouldReturnEmptyWhenCurrentNodeCodeIsBlank() {
     assertThat(dagService.resolveNextNodes(1L, "  ", true, null)).isEmpty();
   }
 
   @Test
+  @DisplayName("当前节点没有出边时解析下一节点返回空")
   void shouldReturnEmptyWhenNoOutgoingEdges() {
     when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of());
 
@@ -104,6 +109,7 @@ class DefaultWorkflowDagServiceTest {
   }
 
   @Test
+  @DisplayName("无条件边在成功与失败两种情况下都按原样跟随")
   void shouldFollowAlwaysEdgeRegardlessOfSuccess() {
     WorkflowEdgeEntity edge = edge("NODE_A", "NODE_B", Edge.ALWAYS, null);
     when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
@@ -118,6 +124,7 @@ class DefaultWorkflowDagServiceTest {
   }
 
   @Test
+  @DisplayName("成功边只在成功时跟随, 失败时不跟随")
   void shouldFollowSuccessEdgeOnlyWhenSuccessTrue() {
     WorkflowEdgeEntity edge = edge("NODE_A", "NODE_B", Edge.SUCCESS, null);
     when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
@@ -129,6 +136,7 @@ class DefaultWorkflowDagServiceTest {
   }
 
   @Test
+  @DisplayName("失败边只在失败时跟随, 成功时不跟随")
   void shouldFollowFailureEdgeOnlyWhenSuccessFalse() {
     WorkflowEdgeEntity edge = edge("NODE_A", "NODE_ERROR", Edge.FAILURE, null);
     when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
@@ -140,6 +148,7 @@ class DefaultWorkflowDagServiceTest {
   }
 
   @Test
+  @DisplayName("成功且条件成立时跟随条件边")
   void shouldFollowConditionEdgeWhenSuccessAndConditionMet() {
     WorkflowEdgeEntity edge = edge("NODE_A", "NODE_B", Edge.CONDITION, "amount > 100");
     when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
@@ -152,6 +161,7 @@ class DefaultWorkflowDagServiceTest {
   }
 
   @Test
+  @DisplayName("条件不成立时跳过条件边")
   void shouldSkipConditionEdgeWhenConditionNotMet() {
     WorkflowEdgeEntity edge = edge("NODE_A", "NODE_B", Edge.CONDITION, "amount > 100");
     when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
@@ -162,6 +172,7 @@ class DefaultWorkflowDagServiceTest {
   }
 
   @Test
+  @DisplayName("上游失败时条件边一律跳过")
   void shouldSkipConditionEdgeOnFailure() {
     WorkflowEdgeEntity edge = edge("NODE_A", "NODE_B", Edge.CONDITION, "x = 1");
     when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
@@ -171,6 +182,7 @@ class DefaultWorkflowDagServiceTest {
   }
 
   @Test
+  @DisplayName("下一节点查不到定义时按终点类型返回, 节点编码保持不变")
   void shouldReturnEndTypeWhenNextNodeNotInMapper() {
     WorkflowEdgeEntity edge = edge("NODE_A", "NODE_UNKNOWN", Edge.ALWAYS, null);
     when(edgeMapper.selectOutgoingEdges(1L, "NODE_A")).thenReturn(List.of(edge));
@@ -187,21 +199,25 @@ class DefaultWorkflowDagServiceTest {
   // ── isNodeReadyForDispatch ────────────────────────────────────────────────
 
   @Test
+  @DisplayName("流程运行标识为空时判定节点不可派发")
   void shouldReturnFalseWhenWorkflowRunIdIsNull() {
     assertThat(dagService.isNodeReadyForDispatch(null, 1L, "NODE_A", null)).isFalse();
   }
 
   @Test
+  @DisplayName("定义标识为空时判定节点不可派发")
   void shouldReturnFalseWhenDefinitionIdIsNull() {
     assertThat(dagService.isNodeReadyForDispatch(1L, null, "NODE_A", null)).isFalse();
   }
 
   @Test
+  @DisplayName("节点编码为空白时判定节点不可派发")
   void shouldReturnFalseWhenNodeCodeIsBlank() {
     assertThat(dagService.isNodeReadyForDispatch(1L, 1L, "", null)).isFalse();
   }
 
   @Test
+  @DisplayName("节点没有入边时判定可以派发")
   void shouldReturnTrueWhenNoIncomingEdges() {
     when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(any(), anyString()))
         .thenReturn(node("NODE_A", WorkflowNodeType.TASK.code()));
@@ -211,6 +227,7 @@ class DefaultWorkflowDagServiceTest {
   }
 
   @Test
+  @DisplayName("全量汇聚模式下上游全部成功时判定可以派发")
   void shouldReturnTrueForAllJoinWhenAllPredecessorsSucceeded() {
     WorkflowEdgeEntity edge1 = edge("PRED_1", "NODE_A", Edge.SUCCESS, null);
     WorkflowEdgeEntity edge2 = edge("PRED_2", "NODE_A", Edge.SUCCESS, null);
@@ -227,6 +244,7 @@ class DefaultWorkflowDagServiceTest {
   }
 
   @Test
+  @DisplayName("全量汇聚模式下存在未终态的上游时判定不可派发")
   void shouldReturnFalseForAllJoinWhenOnePredecessorNotTerminal() {
     WorkflowEdgeEntity edge1 = edge("PRED_1", "NODE_A", Edge.SUCCESS, null);
     WorkflowEdgeEntity edge2 = edge("PRED_2", "NODE_A", Edge.SUCCESS, null);
@@ -243,6 +261,7 @@ class DefaultWorkflowDagServiceTest {
   }
 
   @Test
+  @DisplayName("任一汇聚模式下存在命中的上游时判定可以派发")
   void shouldReturnTrueForAnyJoinWhenAtLeastOnePredecessorMatches() {
     WorkflowEdgeEntity edge1 = edge("PRED_1", "NODE_A", Edge.SUCCESS, null);
     WorkflowEdgeEntity edge2 = edge("PRED_2", "NODE_A", Edge.SUCCESS, null);
@@ -260,6 +279,7 @@ class DefaultWorkflowDagServiceTest {
   }
 
   @Test
+  @DisplayName("按数量汇聚模式下命中数达到阈值时判定可以派发")
   void shouldReturnTrueForNOfJoinWhenThresholdMet() {
     WorkflowEdgeEntity e1 = edge("P1", "NODE_A", Edge.SUCCESS, null);
     WorkflowEdgeEntity e2 = edge("P2", "NODE_A", Edge.SUCCESS, null);
@@ -280,6 +300,7 @@ class DefaultWorkflowDagServiceTest {
   }
 
   @Test
+  @DisplayName("按数量汇聚模式下命中数未达阈值时判定不可派发")
   void shouldReturnFalseForNOfJoinWhenThresholdNotMet() {
     WorkflowEdgeEntity e1 = edge("P1", "NODE_A", Edge.SUCCESS, null);
     WorkflowEdgeEntity e2 = edge("P2", "NODE_A", Edge.SUCCESS, null);
@@ -302,14 +323,16 @@ class DefaultWorkflowDagServiceTest {
   // ── cascadeSkipDownstream ─────────────────────────────────────────────────
 
   @Test
-  void cascadeSkipShouldReturnEmptyOnNullInputs() {
+  @DisplayName("级联跳过的输入缺失时返回空集合")
+  void shouldReturnEmpty_whenCascadeSkipInputsMissing() {
     assertThat(dagService.cascadeSkipDownstream(null, 1L, "X")).isEmpty();
     assertThat(dagService.cascadeSkipDownstream(10L, null, "X")).isEmpty();
     assertThat(dagService.cascadeSkipDownstream(10L, 1L, " ")).isEmpty();
   }
 
   @Test
-  void cascadeSkipShouldWriteSkippedRowForUnreachableSuccessEdgeDownstream() {
+  @DisplayName("成功边因上游失败而永不可触发时, 为下游写入跳过记录")
+  void shouldWriteSkippedRow_whenSuccessEdgeCannotFire() {
     // FAIL_NODE --SUCCESS--> NEXT (NEXT 仅此一条入边，FAIL_NODE 已 FAILED → NEXT 永远无法触发)
     WorkflowEdgeEntity outgoing = edge("FAIL_NODE", "NEXT", Edge.SUCCESS, null);
     WorkflowEdgeEntity incoming = edge("FAIL_NODE", "NEXT", Edge.SUCCESS, null);
@@ -329,7 +352,8 @@ class DefaultWorkflowDagServiceTest {
   }
 
   @Test
-  void cascadeSkipShouldNotSkipWhenJoinNodeStillHasLiveSuccessUpstream() {
+  @DisplayName("汇聚节点仍有存活的上游时不被级联跳过")
+  void shouldNotSkip_whenJoinNodeHasLiveUpstream() {
     // FAIL_NODE --SUCCESS--> JOIN
     // OK_NODE  --SUCCESS--> JOIN  (OK_NODE 还 RUNNING，JOIN 不应被预先 skip)
     WorkflowEdgeEntity outgoing = edge("FAIL_NODE", "JOIN", Edge.SUCCESS, null);
@@ -349,7 +373,8 @@ class DefaultWorkflowDagServiceTest {
   }
 
   @Test
-  void cascadeSkipShouldNotSkipWhenFailureEdgeMatches() {
+  @DisplayName("失败边能匹配上游状态时下游不被级联跳过")
+  void shouldNotSkip_whenFailureEdgeMatchesPredecessor() {
     // FAIL_NODE --FAILURE--> CATCH (FAILURE 边匹配 FAILED 上游，CATCH 仍可正常派发)
     WorkflowEdgeEntity outgoing = edge("FAIL_NODE", "CATCH", Edge.FAILURE, null);
     when(edgeMapper.selectOutgoingEdges(1L, "FAIL_NODE")).thenReturn(List.of(outgoing));
@@ -361,7 +386,8 @@ class DefaultWorkflowDagServiceTest {
   }
 
   @Test
-  void cascadeSkipShouldRecurseThroughChain() {
+  @DisplayName("失败节点之后沿成功边成链时逐级向下游传播跳过")
+  void shouldRecurseSkipping_whenChainFollowsFailedNode() {
     // FAIL_NODE --SUCCESS--> A --SUCCESS--> B (两条 SUCCESS 边，FAIL_NODE FAILED → A、B 都 skip)
     WorkflowEdgeEntity failToA = edge("FAIL_NODE", "A", Edge.SUCCESS, null);
     WorkflowEdgeEntity aToB = edge("A", "B", Edge.SUCCESS, null);
@@ -386,7 +412,8 @@ class DefaultWorkflowDagServiceTest {
   }
 
   @Test
-  void cascadeSkipShouldNotTouchEndNode() {
+  @DisplayName("终点节点不被写入跳过记录, 交由调度路径处理")
+  void shouldNotWriteSkippedRow_whenNodeIsEnd() {
     // FAIL_NODE --SUCCESS--> END (END 节点不写 SKIPPED 行，由调度路径处理)
     WorkflowEdgeEntity outgoing = edge("FAIL_NODE", "END", Edge.SUCCESS, null);
     when(edgeMapper.selectOutgoingEdges(1L, "FAIL_NODE")).thenReturn(List.of(outgoing));

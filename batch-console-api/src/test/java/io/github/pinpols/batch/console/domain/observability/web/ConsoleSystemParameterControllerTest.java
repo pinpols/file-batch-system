@@ -21,11 +21,13 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+@DisplayName("系统参数接口:参数查询、写入与删除")
 class ConsoleSystemParameterControllerTest {
 
   private final ConsoleSystemParameterService parameterService =
@@ -57,6 +59,7 @@ class ConsoleSystemParameterControllerTest {
   }
 
   @Test
+  @DisplayName("系统参数列表:按租户返回参数键与值")
   void shouldListParameters() throws Exception {
     SystemParameterEntity entity = new SystemParameterEntity();
     entity.setId(1L);
@@ -74,6 +77,7 @@ class ConsoleSystemParameterControllerTest {
   }
 
   @Test
+  @DisplayName("系统参数取值:按键返回参数键与值")
   void shouldGetParameterByKey() throws Exception {
     when(parameterService.getValue("t1", "retry.max-count")).thenReturn(Optional.of("3"));
 
@@ -88,6 +92,7 @@ class ConsoleSystemParameterControllerTest {
   }
 
   @Test
+  @DisplayName("系统参数写入:按当前操作人提交键值、值与描述")
   void shouldUpsertParameter() throws Exception {
     mockMvc
         .perform(put("/api/console/system-parameters")
@@ -103,6 +108,7 @@ class ConsoleSystemParameterControllerTest {
   }
 
   @Test
+  @DisplayName("系统参数删除:按租户与参数键执行删除")
   void shouldDeleteParameter() throws Exception {
     mockMvc
         .perform(delete("/api/console/system-parameters")

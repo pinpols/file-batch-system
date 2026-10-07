@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.common.health.BatchStartupSelfCheck;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -26,6 +27,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("编排器启动自检 - 校验迁移后批处理域与调度域结构齐备且自检组件已装配")
 class StartupSelfCheckIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
@@ -35,19 +37,22 @@ class StartupSelfCheckIntegrationTest extends AbstractIntegrationTest {
   private JdbcTemplate jdbcTemplate;
 
   @Test
-  void startupSelfCheckBeanIsPresent() {
+  @DisplayName("应用上下文启动完成后启动自检组件已装配且非空")
+  void shouldExposeSelfCheckComponent_whenContextStarts() {
     assertThat(startupSelfCheck).isNotNull();
   }
 
   @Test
-  void batchSchemaExistsAfterMigration() {
+  @DisplayName("迁移执行完成后批处理域结构存在且仅有一个")
+  void shouldCreateBatchSchema_whenMigrationRuns() {
     Long cnt = jdbcTemplate.queryForObject(
         "select count(*) from information_schema.schemata where schema_name = 'batch'", Long.class);
     assertThat(cnt).isEqualTo(1L);
   }
 
   @Test
-  void quartzSchemaExistsAfterMigration() {
+  @DisplayName("迁移执行完成后定时调度域结构存在且仅有一个")
+  void shouldCreateSchedulerSchema_whenMigrationRuns() {
     Long cnt = jdbcTemplate.queryForObject(
         "select count(*) from information_schema.schemata where schema_name = 'quartz'",
         Long.class);
@@ -55,7 +60,8 @@ class StartupSelfCheckIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void batchDayInstanceTableExistsAfterV31Migration() {
+  @DisplayName("迁移执行完成后批次日实例表存在且仅有一个")
+  void shouldCreateBatchDayInstanceTable_whenMigrationRuns() {
     Long cnt = jdbcTemplate.queryForObject("""
             select count(*) from information_schema.tables
             where table_schema = 'batch' and table_name = 'batch_day_instance'
@@ -64,7 +70,8 @@ class StartupSelfCheckIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void businessCalendarV31ColumnsExistAfterMigration() {
+  @DisplayName("迁移执行完成后业务日历的截止时刻,迟到容忍与时限偏移列均存在")
+  void shouldAddCalendarTimingColumns_whenMigrationRuns() {
     for (String column :
         new String[] {"cutoff_time", "late_arrival_tolerance_min", "sla_offset_min"}) {
       Long cnt = jdbcTemplate.queryForObject("""
@@ -78,7 +85,8 @@ class StartupSelfCheckIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void allQuartzTablesExistAfterMigration() {
+  @DisplayName("迁移执行完成后定时调度域的全部调度表均存在")
+  void shouldCreateAllSchedulerTables_whenMigrationRuns() {
     for (String table : new String[] {
       "qrtz_job_details", "qrtz_triggers", "qrtz_simple_triggers",
       "qrtz_cron_triggers", "qrtz_simprop_triggers", "qrtz_blob_triggers",

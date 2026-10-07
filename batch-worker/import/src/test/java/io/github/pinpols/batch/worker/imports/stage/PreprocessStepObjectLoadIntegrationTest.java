@@ -23,6 +23,7 @@ import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -42,6 +43,7 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
  * normalizedPayload。
  */
 @Tag("integration")
+@DisplayName("导入预处理对象拉取集成测试:对象下载流入载荷,越权拒绝与大对象流式直载")
 class PreprocessStepObjectLoadIntegrationTest {
 
   private static MinioObjectStoreContainer objectStore;
@@ -145,6 +147,7 @@ class PreprocessStepObjectLoadIntegrationTest {
   }
 
   @Test
+  @DisplayName("无内联内容但给出对象路径时,从对象存储下载并流入规整载荷")
   void loadsObjectFromStorage_whenNoInlineContentButStoragePathPresent() throws Exception {
     String key = "ingress/objload-it/cust.json";
     String content = "{\"records\":[{\"customerNo\":\"OBJ-001\"},{\"customerNo\":\"OBJ-002\"}]}";
@@ -163,6 +166,7 @@ class PreprocessStepObjectLoadIntegrationTest {
   }
 
   @Test
+  @DisplayName("对象不存在时预处理失败,不静默按空内容继续")
   void fails_whenStoragePathObjectMissing() {
     // 对象不存在 → downloadObjectBytes 抛错 → PREPROCESS 失败(而非静默空载)
     String key = "ingress/objload-it/nope.json";
@@ -171,6 +175,7 @@ class PreprocessStepObjectLoadIntegrationTest {
   }
 
   @Test
+  @DisplayName("对象路径不属于本租户时拒绝拉取,且不泄漏对象内容")
   void fails_whenStoragePathNotOwnedByTenant() throws Exception {
     // 越权防护:对象真实存在,但 payload.storagePath 与本租户 file_record 登记路径不符 →
     // 归属校验拒绝拉取(IMPORT_PREPROCESS_OBJECT_FORBIDDEN),PREPROCESS 失败,不读他租户对象。
@@ -188,6 +193,7 @@ class PreprocessStepObjectLoadIntegrationTest {
   }
 
   @Test
+  @DisplayName("超大对象走流式直载:落盘中转文件,不整体驻留内存")
   void largeObject_streamsToSpoolWithoutHeapBuffering() throws Exception {
     // ≥16MB(spool 阈值)的对象走流式直载:落 spool 文件 + 设 IMPORT_LARGE_TEXT_PATH 交 PARSE 流式消费,
     // 不读进堆(normalizedPayload 不在 PREPROCESS 设置)。生成 ~17MB CSV 验证。

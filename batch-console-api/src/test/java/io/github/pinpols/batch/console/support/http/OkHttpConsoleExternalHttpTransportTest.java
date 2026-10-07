@@ -21,12 +21,15 @@ import okhttp3.Protocol;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 import okio.Buffer;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("外部出站 HTTP 传输: 受控客户端选择与请求响应映射")
 class OkHttpConsoleExternalHttpTransportTest {
 
   @Test
-  void mapsPostAndSelectsGuardedClient() throws Exception {
+  @DisplayName("受控策略下由受控客户端发出请求, 方法、头部、请求体与连接读超时按要求映射")
+  void shouldMapPostAndSelectGuardedClient_whenPolicyIsGuarded() throws Exception {
     RecordingInterceptor guarded = new RecordingInterceptor("guarded", "accepted");
     RecordingInterceptor trusted = new RecordingInterceptor("trusted", "unused");
     OkHttpConsoleExternalHttpTransport transport = new OkHttpConsoleExternalHttpTransport(
@@ -52,7 +55,8 @@ class OkHttpConsoleExternalHttpTransportTest {
   }
 
   @Test
-  void productionGuardedClientKeepsSecurityAndHappyEyeballsPolicy() {
+  @DisplayName("生产受控客户端启用快速回退, 并关闭重定向、安全重定向与连接失败重试且不使用代理")
+  void shouldKeepSecurityOptions_whenBuildingGuardedClient() {
     OkHttpClient client = OkHttpConsoleExternalHttpTransport.guardedClient();
 
     assertThat(client.fastFallback()).isTrue();
@@ -63,7 +67,8 @@ class OkHttpConsoleExternalHttpTransportTest {
   }
 
   @Test
-  void guardedRequestRejectsPrivateIpLiteralBeforeNetworkCall() {
+  @DisplayName("受控策略下请求内网地址字面量时在建连前即被拒绝")
+  void shouldRejectPrivateIpLiteral_whenPolicyIsGuarded() {
     OkHttpClient client = client(new RecordingInterceptor("unexpected", "unexpected"));
     OkHttpConsoleExternalHttpTransport transport = new OkHttpConsoleExternalHttpTransport(
         client, client, DnsResolveGuard::resolveAllAndValidate);
@@ -79,7 +84,8 @@ class OkHttpConsoleExternalHttpTransportTest {
   }
 
   @Test
-  void rejectsOversizedResponse() {
+  @DisplayName("受信策略下响应体超出上限时抛出带超限提示的异常")
+  void shouldRejectOversizedResponse_whenBodyExceedsLimit() {
     RecordingInterceptor trusted = new RecordingInterceptor("trusted", "x".repeat(1024 * 1024 + 1));
     OkHttpConsoleExternalHttpTransport transport = new OkHttpConsoleExternalHttpTransport(
         client(new RecordingInterceptor("g", "")), client(trusted));

@@ -17,6 +17,7 @@ import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -28,6 +29,7 @@ import org.springframework.beans.factory.ObjectProvider;
  * 要求——防止 selector 在单值 {@code resource_tag} 外静默阻塞。
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("工作节点选择组件,验证资源标签与能力标签的匹配,大小写处理及非法标签内容的兜底行为")
 class DefaultWorkerSelectorTest {
 
   private static final String TENANT = "default-tenant";
@@ -54,7 +56,8 @@ class DefaultWorkerSelectorTest {
   }
 
   @Test
-  void matchesWhenQueueHasNoTag() {
+  @DisplayName("队列未设置资源标签时,应选中在线的工作节点")
+  void shouldMatchWorker_whenQueueHasNoTag() {
     WorkerRegistryEntity worker = worker("w-1", null, null);
     stubCandidates(List.of(worker));
 
@@ -65,7 +68,8 @@ class DefaultWorkerSelectorTest {
   }
 
   @Test
-  void matchesWhenQueueTagEqualsWorkerSingleTag() {
+  @DisplayName("队列标签与工作节点的单值资源标签一致时,应选中该工作节点")
+  void shouldMatchWorker_whenQueueTagEqualsWorkerTag() {
     WorkerRegistryEntity worker = worker("w-1", "report", null);
     stubCandidates(List.of(worker));
 
@@ -76,7 +80,8 @@ class DefaultWorkerSelectorTest {
   }
 
   @Test
-  void matchesWhenQueueTagHitsCapabilityTagsArray() {
+  @DisplayName("队列标签命中工作节点能力标签数组中的任一项时,应选中该工作节点")
+  void shouldMatchWorker_whenQueueTagHitsCapabilityArray() {
     WorkerRegistryEntity worker =
         worker("w-1", null, new JsonbString("[\"report\", \"workflow\"]"));
     stubCandidates(List.of(worker));
@@ -88,7 +93,8 @@ class DefaultWorkerSelectorTest {
   }
 
   @Test
-  void capabilityTagsMatchIsCaseInsensitive() {
+  @DisplayName("能力标签与队列标签仅大小写不同时,仍应匹配并选中该工作节点")
+  void shouldMatchWorker_whenCapabilityCaseDiffers() {
     WorkerRegistryEntity worker = worker("w-1", null, new JsonbString("[\"Report\"]"));
     stubCandidates(List.of(worker));
 
@@ -98,7 +104,8 @@ class DefaultWorkerSelectorTest {
   }
 
   @Test
-  void returnsNoMatchWhenNeitherResourceTagNorCapabilityMatches() {
+  @DisplayName("资源标签与能力标签都无法满足队列要求时,应返回无可用工作节点的结果")
+  void shouldReturnNoMatch_whenNoTagOrCapabilityMatches() {
     WorkerRegistryEntity worker = worker("w-1", "delivery", new JsonbString("[\"ingest\"]"));
     stubCandidates(List.of(worker));
 
@@ -109,7 +116,8 @@ class DefaultWorkerSelectorTest {
   }
 
   @Test
-  void malformedCapabilityTagsJsonDoesNotCrashSelector() {
+  @DisplayName("能力标签内容结构非法时,应返回无可用工作节点的结果且不抛出异常")
+  void shouldReturnNoMatch_whenCapabilityJsonMalformed() {
     WorkerRegistryEntity worker = worker("w-1", null, new JsonbString("{not-an-array}"));
     stubCandidates(List.of(worker));
 
@@ -119,7 +127,8 @@ class DefaultWorkerSelectorTest {
   }
 
   @Test
-  void dryRunRequestOnlySelectsWorkerWithExplicitCapability() {
+  @DisplayName("试运行请求要求特定能力时,只能选中显式声明该能力的工作节点")
+  void shouldSelectExplicitCapableWorker_whenDryRunRequested() {
     WorkerRegistryEntity unsafe = worker("w-unsafe", null, new JsonbString("[\"PROCESS\"]"));
     WorkerRegistryEntity safe =
         worker("w-safe", null, new JsonbString("[\"PROCESS\", \"dry-run-safe\"]"));
@@ -134,7 +143,8 @@ class DefaultWorkerSelectorTest {
   }
 
   @Test
-  void dryRunRequestFailsClosedWhenCapabilityIsMissing() {
+  @DisplayName("试运行要求的能力没有任何工作节点声明时,应返回无可用工作节点的结果")
+  void shouldReturnNoMatch_whenDryRunCapabilityMissing() {
     stubCandidates(List.of(worker("w-unsafe", null, new JsonbString("[\"PROCESS\"]"))));
     ResourceSchedulingRequest request = request();
     request.setRequiredCapability(WorkerCapabilities.DRY_RUN_SAFE);
@@ -145,7 +155,8 @@ class DefaultWorkerSelectorTest {
   }
 
   @Test
-  void resourceProfileSelectsMatchingPoolAndReturnsStablePoolCode() {
+  @DisplayName("请求指定资源档位时,应选中匹配档位的节点池并返回稳定的池标识")
+  void shouldSelectStablePoolCode_whenResourceProfileMatches() {
     WorkerRegistryEntity general =
         worker("export-general-pod", null, new JsonbString("[\"report\"]"));
     WorkerRegistryEntity heavy = new WorkerRegistryEntity(
@@ -180,7 +191,8 @@ class DefaultWorkerSelectorTest {
   }
 
   @Test
-  void jobResourceProfileOverridesQueueDefaultProfile() {
+  @DisplayName("作业侧资源档位与队列默认档位不同时,应优先按作业侧档位选择节点池")
+  void shouldPreferJobProfile_whenQueueDefaultProfileDiffers() {
     WorkerRegistryEntity queueDefault =
         worker("export-general-pod", "standard", new JsonbString("[\"standard\"]"));
     WorkerRegistryEntity heavy = new WorkerRegistryEntity(

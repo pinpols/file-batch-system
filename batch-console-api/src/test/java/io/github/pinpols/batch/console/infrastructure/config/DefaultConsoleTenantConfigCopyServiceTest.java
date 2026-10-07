@@ -35,9 +35,11 @@ import io.github.pinpols.batch.console.domain.workflow.query.WorkflowDefinitionQ
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+@DisplayName("控制台租户配置复制服务: 显式引用组装与最小依赖委派")
 class DefaultConsoleTenantConfigCopyServiceTest {
 
   private JobDefinitionMapper jobDefinitionMapper;
@@ -94,7 +96,8 @@ class DefaultConsoleTenantConfigCopyServiceTest {
   }
 
   @Test
-  void buildJobBundleUsesExplicitTemplateAndChannelReferences() {
+  @DisplayName("组装作业同步包时,文件模板与通道只保留显式引用到的项")
+  void shouldBuildBundleWithExplicitReferences_whenJobBundleIsAssembled() {
     stubExplicitReferenceBundle();
 
     ConfigSyncBundlePayload bundle = service.buildJobBundle("ta", "JOB_A");
@@ -106,7 +109,8 @@ class DefaultConsoleTenantConfigCopyServiceTest {
   }
 
   @Test
-  void copyWithJobCodesDelegatesMinimalDependencyBundleToBatchInit() {
+  @DisplayName("按作业编码发起复制时,只向下游委派最小依赖包")
+  void shouldDelegateMinimalBundle_whenCopyIsRequestedByJobCodes() {
     stubExplicitReferenceBundle();
     when(initService.batchInit(any(TenantConfigBatchInitRequest.class), anyString(), anyString()))
         .thenReturn(new TenantConfigBatchInitResponse("op-1", 1, 1, 0, false, List.of()));

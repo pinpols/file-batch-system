@@ -11,6 +11,7 @@ import io.github.resilience4j.springboot.retry.autoconfigure.RetryAutoConfigurat
 import io.github.resilience4j.springboot.retry.autoconfigure.RetryMetricsAutoConfiguration;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
@@ -50,6 +51,7 @@ import org.springframework.test.context.TestPropertySource;
       "resilience4j.retry.instances.test.max-attempts=3",
       "spring.main.web-application-type=none",
     })
+@DisplayName("熔断与重试自动配置在新基线上的兼容性冒烟验证")
 class Resilience4jSb4CompatSpikeTest {
 
   @Autowired
@@ -62,6 +64,7 @@ class Resilience4jSb4CompatSpikeTest {
   private MeterRegistry meterRegistry;
 
   @Test
+  @DisplayName("属性中定义的熔断实例被注册, 失败率阈值与滑动窗口大小与配置一致")
   void shouldLoadCircuitBreakerInstanceFromProperties() {
     CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("test");
     assertThat(cb.getCircuitBreakerConfig().getFailureRateThreshold()).isEqualTo(50f);
@@ -69,11 +72,13 @@ class Resilience4jSb4CompatSpikeTest {
   }
 
   @Test
+  @DisplayName("属性中定义的重试实例被注册, 最大尝试次数与配置一致")
   void shouldLoadRetryInstanceFromProperties() {
     assertThat(retryRegistry.retry("test").getRetryConfig().getMaxAttempts()).isEqualTo(3);
   }
 
   @Test
+  @DisplayName("连续四次强制失败后熔断器状态转为打开")
   void shouldTripCircuitBreakerOpenAfterRepeatedFailures() {
     CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("test");
     for (int i = 0; i < 4; i++) {
@@ -91,6 +96,7 @@ class Resilience4jSb4CompatSpikeTest {
   }
 
   @Test
+  @DisplayName("成功调用后自动注册熔断前缀命名的指标计量器")
   void shouldExposeMicrometerCounter() {
     CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("test");
     cb.executeSupplier(() -> "ok");

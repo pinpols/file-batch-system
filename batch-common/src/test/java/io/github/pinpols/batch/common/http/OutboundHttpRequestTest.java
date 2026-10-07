@@ -6,12 +6,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("出站请求构造:请求头防御性拷贝、方法形态与地址校验")
 class OutboundHttpRequestTest {
 
   @Test
-  void copiesHeadersAndUsesTypedMethod() {
+  @DisplayName("构造请求时拷贝请求头快照,外部后续修改不影响已建请求")
+  void shouldCopyHeadersDefensively_whenBuildingTypedRequest() {
     Map<String, String> headers = new HashMap<>();
     headers.put("X-Test", "one");
 
@@ -36,7 +39,8 @@ class OutboundHttpRequestTest {
   }
 
   @Test
-  void rejectsNonHttpScheme() {
+  @DisplayName("非超文本传输协议地址被拒绝并提示仅支持两种协议")
+  void shouldRejectRequest_whenSchemeIsNotHttpOrHttps() {
     Map<String, String> headers = Map.of();
     Duration connectTimeout = Duration.ofSeconds(1);
     Duration requestTimeout = Duration.ofSeconds(2);
@@ -52,7 +56,8 @@ class OutboundHttpRequestTest {
   }
 
   @Test
-  void rejectsUriWithoutHost() {
+  @DisplayName("缺少主机名的地址被拒绝并提示必须包含主机")
+  void shouldRejectRequest_whenUriHasNoHost() {
     Map<String, String> headers = Map.of();
     Duration connectTimeout = Duration.ofSeconds(1);
     Duration requestTimeout = Duration.ofSeconds(2);
@@ -68,7 +73,8 @@ class OutboundHttpRequestTest {
   }
 
   @Test
-  void rejectsInvalidTimeoutAndMissingPostMediaType() {
+  @DisplayName("超时非正数或表单提交缺少媒体类型时被拒绝")
+  void shouldRejectRequest_whenTimeoutInvalidOrMediaTypeMissing() {
     Map<String, String> headers = Map.of();
     Duration requestTimeout = Duration.ofSeconds(2);
 

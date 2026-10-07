@@ -24,6 +24,7 @@ import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.RetryScheduleMapper;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
@@ -39,6 +40,7 @@ import org.springframework.transaction.TransactionStatus;
  *   <li>BUSINESS / max=0 不会被 selectDueAutoRetries 选出（mapper 行为，依靠 SQL；这里只测 service 边界）
  * </ul>
  */
+@DisplayName("死信自动重试调度: 到期判定, 次数耗尽与空批次口径")
 class DeadLetterAutoRetryTest {
 
   private DeadLetterTaskMapper deadLetterTaskMapper;
@@ -88,6 +90,7 @@ class DeadLetterAutoRetryTest {
    * 数据迁移可能让 max=0 漏进来；scheduler 必须主动转 GIVE_UP, 不允许进入 replayDeadLetter 无限循环.
    */
   @Test
+  @DisplayName("重试次数已达上限时直接放弃, 不再重放")
   void recordWithMaxAlreadyReached_shouldGiveUpWithoutReplay() {
     DeadLetterTaskEntity dl = entity(7L, "tA", 3, 3);
     when(deadLetterTaskMapper.selectDueAutoRetries(anyInt())).thenReturn(List.of(dl));
@@ -100,6 +103,7 @@ class DeadLetterAutoRetryTest {
 
   /** replay 抛异常 + 新 replayCount 已用尽预算 → 转 GIVE_UP（关闭后续自动重放）. */
   @Test
+  @DisplayName("重放失败后次数达到上限时标记放弃")
   void exhaustedAfterReplayFailure_shouldGiveUp() {
     DeadLetterTaskEntity dl = entity(8L, "tB", 2, 3); // 重放后会变 3 = max
     when(deadLetterTaskMapper.selectDueAutoRetries(anyInt())).thenReturn(List.of(dl));
@@ -113,6 +117,7 @@ class DeadLetterAutoRetryTest {
 
   /** replay 抛异常但还有自动重放预算 → scheduler 不额外动 status，保留 markReplayFailure 内部已写入的 next_replay_at. */
   @Test
+  @DisplayName("重试次数未达上限时保持失败状态等待退避")
   void notExhausted_shouldKeepFailedStatusForBackoff() {
     DeadLetterTaskEntity dl = entity(9L, "tC", 0, 3); // 重放后会变 1 < 3
     when(deadLetterTaskMapper.selectDueAutoRetries(anyInt())).thenReturn(List.of(dl));
@@ -125,6 +130,7 @@ class DeadLetterAutoRetryTest {
 
   /** 一批 0 条 → 不调用任何下游. */
   @Test
+  @DisplayName("没有到期的死信时不做任何处理")
   void emptyBatch_shouldDoNothing() {
     when(deadLetterTaskMapper.selectDueAutoRetries(anyInt())).thenReturn(List.of());
 

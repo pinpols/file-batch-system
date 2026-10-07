@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -44,6 +45,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("待发布事件经调度转发投递到消息队列:入库事件被拾取发布,状态转为已发布,并可按幂等键从租户主题消费")
 class OutboxEventToKafkaDispatchIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
@@ -56,6 +58,7 @@ class OutboxEventToKafkaDispatchIntegrationTest extends AbstractIntegrationTest 
   private JdbcTemplate jdbcTemplate;
 
   @Test
+  @DisplayName("单条新建事件经转发后发布到租户专属主题,数据库状态转为已发布,下游可按幂等键消费到该消息")
   void newOutboxEvent_advanceForwarder_publishesToKafkaAndMarksPublished() throws Exception {
     String idempotencyKey = "dispatch-it-kafka-" + System.nanoTime();
     OutboxEventEntity event = buildImportDispatchEvent("t1", idempotencyKey);
@@ -108,6 +111,7 @@ class OutboxEventToKafkaDispatchIntegrationTest extends AbstractIntegrationTest 
   }
 
   @Test
+  @DisplayName("同一批次内多条新建事件在转发轮次中全部完成发布,数据库状态各自转为已发布")
   void multipleNewEvents_advanceForwarder_publishesAll() {
     String key1 = "multi-it-001-" + System.nanoTime();
     String key2 = "multi-it-002-" + System.nanoTime();

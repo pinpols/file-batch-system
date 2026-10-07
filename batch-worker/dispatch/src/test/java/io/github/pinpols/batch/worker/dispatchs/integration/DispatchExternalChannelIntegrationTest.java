@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,6 +50,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
     classes = BatchWorkerDispatchApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @EnabledIf("s3BackendActive")
+@DisplayName("外部渠道真实投递集成:对象存储、SFTP 与邮件三条链路端到端送达并回读校验")
 class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
 
   private static final DockerImageName SFTP_IMAGE = DockerImageName.parse("atmoz/sftp:alpine");
@@ -89,6 +91,7 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
   private DispatchChannelGateway gateway;
 
   @Test
+  @DisplayName("投递到真实对象存储后目标对象可读,回执引用指向目标对象且内容与源文件一致")
   void shouldDispatchFileToRealMinioObjectStorage() throws Exception {
     String tenantId = "tenant-oss";
     String channelCode = "oss-" + UUID.randomUUID();
@@ -131,6 +134,7 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("投递到真实 SFTP 服务器后远端文件存在,回执引用为远端地址且内容与源文件一致")
   void shouldDispatchFileToRealSftpServer() throws Exception {
     String tenantId = "tenant-sftp";
     String channelCode = "sftp-" + UUID.randomUUID();
@@ -166,6 +170,7 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("投递到真实邮件服务器后收件人收到邮件:主题前缀、发件人、收件人与附件内容均符合预期")
   void shouldDispatchFileToRealSmtpServer() throws Exception {
     String tenantId = "tenant-email";
     String channelCode = "email-" + UUID.randomUUID();

@@ -19,6 +19,7 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import javax.sql.DataSource;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,6 +57,7 @@ import org.springframework.test.context.jdbc.Sql;
       E2eTestSql.EXPORT_TEMPLATE_SEED,
     })
 @Tag("e2e")
+@DisplayName("导出成功链路内容级验收端到端:在任务终态成功之上校验导出产物非空且含关键业务字段,并确认结算批次主数据与汇总金额仍可查询")
 class ExportContentVerificationE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -86,7 +88,8 @@ class ExportContentVerificationE2eIT extends AbstractIntegrationTest {
    * </ol>
    */
   @Test
-  void exportJobProducesNonEmptyFileAndUpdatesSettlementAmount() throws Exception {
+  @DisplayName("导出任务终态成功后做内容级复核:文件记录有存储路径,产物达到最小非空行数且包含两条结算明细编号,结算批次汇总金额非空且主数据仍可查询")
+  void shouldProduceNonEmptyExportFileAndKeepSettlementData_whenExportSucceeds() throws Exception {
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
 
     Long batchId = businessJdbc.queryForObject("""

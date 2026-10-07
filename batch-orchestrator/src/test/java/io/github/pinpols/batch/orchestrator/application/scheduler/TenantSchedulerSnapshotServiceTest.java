@@ -38,6 +38,7 @@ import org.mockito.MockitoAnnotations;
  *   <li>history: limit 被 clamp 到 [1, 100],防止恶意翻页拖库
  * </ul>
  */
+@DisplayName("租户调度快照服务: 入参约束, 队列积压判定与历史条数收敛口径")
 class TenantSchedulerSnapshotServiceTest {
 
   @Mock
@@ -102,7 +103,7 @@ class TenantSchedulerSnapshotServiceTest {
 
   @Test
   @DisplayName("buildLive: queue snapshot 带出分区积压、等待年龄和饱和度")
-  void buildLiveIncludesQueueBacklog() {
+  void shouldIncludeBacklog_whenBuildingLiveSnapshot() {
     when(jobInstanceMapper.countActiveByTenant("ta")).thenReturn(2L);
     when(jobPartitionMapper.countActiveByTenant(
             anyString(), anyString(), anyString(), anyString(), anyString()))
@@ -142,7 +143,7 @@ class TenantSchedulerSnapshotServiceTest {
 
   @Test
   @DisplayName("buildLive: WAITING 队列无在线 worker group → bottleneckReason=NO_ONLINE_WORKER")
-  void buildLiveMarksQueueWithoutOnlineWorker() {
+  void shouldMarkNoOnlineWorker_whenQueueHasNoOnlineWorker() {
     when(jobInstanceMapper.countActiveByTenant("ta")).thenReturn(0L);
     when(jobPartitionMapper.countActiveByTenant(
             anyString(), anyString(), anyString(), anyString(), anyString()))
@@ -169,7 +170,7 @@ class TenantSchedulerSnapshotServiceTest {
 
   @Test
   @DisplayName("history: limit > 100 → clamp 到 100")
-  void historyClampsUpperBound() {
+  void shouldClampToUpperBound_whenHistoryLimitTooLarge() {
     when(snapshotMapper.listRecent(anyString(), anyInt())).thenReturn(List.of());
 
     service.history("ta", 9999);
@@ -181,7 +182,7 @@ class TenantSchedulerSnapshotServiceTest {
 
   @Test
   @DisplayName("history: limit < 1 → clamp 到 1")
-  void historyClampsLowerBound() {
+  void shouldClampToLowerBound_whenHistoryLimitTooSmall() {
     when(snapshotMapper.listRecent(anyString(), anyInt())).thenReturn(List.of());
 
     service.history("ta", 0);
@@ -193,7 +194,7 @@ class TenantSchedulerSnapshotServiceTest {
 
   @Test
   @DisplayName("history: 负数 limit → clamp 到 1")
-  void historyNegativeClampsToOne() {
+  void shouldClampToOne_whenHistoryLimitNegative() {
     when(snapshotMapper.listRecent(anyString(), anyInt())).thenReturn(List.of());
 
     service.history("ta", -50);
@@ -205,7 +206,7 @@ class TenantSchedulerSnapshotServiceTest {
 
   @Test
   @DisplayName("history: 合法范围内 limit 透传")
-  void historyPassesThroughValidLimit() {
+  void shouldPassThroughLimit_whenHistoryLimitValid() {
     when(snapshotMapper.listRecent(anyString(), anyInt())).thenReturn(List.of());
 
     service.history("ta", 25);
@@ -216,7 +217,7 @@ class TenantSchedulerSnapshotServiceTest {
   @Test
   @DisplayName("history: 返回 mapper 的列表(无需关心 entity 字段)")
   @SuppressWarnings("unchecked")
-  void historyReturnsMapperResult() {
+  void shouldReturnMapperResult_whenQueryingHistory() {
     @SuppressWarnings("rawtypes")
     List mockList = List.of();
     when(snapshotMapper.listRecent("ta", 10)).thenReturn(mockList);

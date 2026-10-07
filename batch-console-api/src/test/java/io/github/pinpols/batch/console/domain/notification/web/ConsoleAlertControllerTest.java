@@ -20,11 +20,13 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+@DisplayName("告警操作接口: 幂等键校验, 请求体校验与确认结果返回")
 class ConsoleAlertControllerTest {
 
   private final ConsoleAlertApplicationService alertApplicationService =
@@ -53,6 +55,7 @@ class ConsoleAlertControllerTest {
   }
 
   @Test
+  @DisplayName("缺少幂等键头时返回参数错误, 不触达应用服务")
   void shouldReturn400WhenIdempotencyHeaderMissing() throws Exception {
     mockMvc
         .perform(
@@ -66,6 +69,7 @@ class ConsoleAlertControllerTest {
   }
 
   @Test
+  @DisplayName("确认告警成功后返回统一响应, 数据中状态为已确认")
   void shouldAckAlertAndReturnCommonResponseOnSuccess() throws Exception {
     when(alertApplicationService.ack(anyLong(), any(), anyString()))
         .thenReturn(new ConsoleAlertActionResponse(100L, "t1", "ack", "ACKED"));
@@ -83,6 +87,7 @@ class ConsoleAlertControllerTest {
   }
 
   @Test
+  @DisplayName("请求体必填字段为空时, 返回校验错误")
   void shouldReturn400WhenRequestBodyInvalid() throws Exception {
     mockMvc
         .perform(post("/api/console/alerts/100/close")

@@ -19,6 +19,7 @@ import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiAuditLogQuery
 import io.github.pinpols.batch.console.domain.audit.support.ConsoleAiAuditService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -32,6 +33,7 @@ import org.springframework.transaction.support.TransactionTemplate;
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
+@DisplayName("AI 审计服务: 审计条目落库与查询,加密会话在租户与属主范围内回读明文")
 class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
 
   private final ConsoleAiAuditService auditService;
@@ -63,6 +65,7 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
   private BatchObjectCryptoService cryptoService;
 
   @Test
+  @DisplayName("记录审计条目: 落库租户,会话与决策与请求一致,提示词与补全用量一并写入")
   void shouldPersistAuditLogOnRecord() {
     AiAuditCommand command = new AiAuditCommand(
         "t1",
@@ -107,6 +110,7 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("记录被安全策略拒绝的条目: 拒绝原因落库且可按会话查询到")
   void shouldPersistRejectedAuditLogWithRefusalReason() {
     AiAuditCommand command = new AiAuditCommand(
         "t1",
@@ -141,6 +145,7 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("同一会话连续三次记录: 按会话查询返回三条")
   void shouldReturnMultipleEntriesForSameSession() {
     String sessionId = "session-multi-" + BatchDateTimeSupport.utcEpochMillis();
 
@@ -173,6 +178,7 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("会话持久化: 库内提示词为密文,属主可读回明文,他人读取返回未找到")
   void shouldPersistEncryptedConversationAndReturnPlaintextWithinTenantAndOwnerScope() {
     boolean previousEnabled = aiProperties.getPersistence().isEnabled();
     int previousRetention = aiProperties.getPersistence().getRetentionDays();
@@ -230,6 +236,7 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("无匹配会话: 查询返回空列表")
   void shouldReturnEmptyWhenNoMatchingEntries() {
     ConsoleAiAuditLogQuery query = ConsoleAiAuditLogQuery.builder()
         .tenantId("t1")

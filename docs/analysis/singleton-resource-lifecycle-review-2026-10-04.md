@@ -84,7 +84,7 @@ Worker 实际执行状态检测、Shell reader 和加密临时文件清理。业
 | 数据源生命周期、终态服务与配额单测、Worker pool/watchdog、Shell、Export 清理、Console 幂等和预览 | 101 | 定向单元/组件测试；包含提交、回滚和结果未知三种预览完成路径，不等同于全量 Reactor |
 | `ConsoleRedisOwnershipIntegrationTest` | 1 | 真实 Valkey Lua：旧 owner 无法删除/覆盖新 owner；两线程快照 CAS 仅一个成功 |
 | `QuotaRuntimeStateIntegrationTest` | 10 | 真实 PostgreSQL：含过期窗口刷新后预约，版本只增加一次 |
-| `OutcomeVsReclaimDeadlockIntegrationTest#terminalUpdateWaitsBeforeTakingParentLockWhileReportHoldsPartition` | 1 | 真实 PostgreSQL：确认终态事务等待锁，再释放 report；旧终态 CAS 不覆盖 SUCCESS |
+| `OutcomeVsReclaimDeadlockIntegrationTest#shouldWaitForReleasedPartitionLock_whenTerminalUpdateTakesParentLock` | 1 | 真实 PostgreSQL：确认终态事务等待锁，再释放 report；旧终态 CAS 不覆盖 SUCCESS |
 
 Console 未启用全局 `@EnableScheduling`，幂等续租显式注册到已有 Spring TaskScheduler，并在销毁时取消；
 普通写请求占位 TTL 30 秒、流式请求 10 分钟，运行期间每 10 秒续租。TTL 不是任务最长运行时间，也不是

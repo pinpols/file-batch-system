@@ -45,6 +45,7 @@ import org.mockito.MockitoAnnotations;
  *
  * <p>checkBatchWindow 走 service 内部 private 方法,与 BatchWindowEntity 紧耦合,留集成测覆盖。
  */
+@DisplayName("资源调度准入决策: 并发,分片与节点可用性检查的短路顺序,拒绝与延迟动作的区分,以及等待时长带来的公平性加分")
 class DefaultResourceSchedulerTest {
 
   @Mock
@@ -125,7 +126,7 @@ class DefaultResourceSchedulerTest {
 
   @Test
   @DisplayName("concurrency block → dispatchable=false, short-circuit (不再调 partition/worker)")
-  void concurrencyBlockShortCircuits() {
+  void shouldDeferAndSkipLaterChecks_whenConcurrencyLimited() {
     when(concurrencyLimiter.check(any(), any()))
         .thenReturn(ResourceCheck.waitForCapacity("CONCURRENCY_LIMIT", "max running reached"));
 
@@ -139,7 +140,7 @@ class DefaultResourceSchedulerTest {
 
   @Test
   @DisplayName("partition block → dispatchable=false, short-circuit (不再调 worker)")
-  void partitionBlockShortCircuits() {
+  void shouldDeferAndSkipWorkerSelection_whenPartitionThrottled() {
     when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
     when(partitionThrottle.check(any(), any()))
         .thenReturn(ResourceCheck.waitForCapacity("PARTITION_THROTTLE", "throttled"));
@@ -153,7 +154,7 @@ class DefaultResourceSchedulerTest {
 
   @Test
   @DisplayName("worker 不可用 → blocked + reasonCode=NO_AVAILABLE_WORKER")
-  void noAvailableWorkerBlocks() {
+  void shouldDefer_whenNoWorkerRouteAvailable() {
     when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
     when(partitionThrottle.check(any(), any())).thenReturn(ResourceCheck.allow());
     when(workerSelector.select(any(), any(), any())).thenReturn(null);
@@ -166,7 +167,7 @@ class DefaultResourceSchedulerTest {
 
   @Test
   @DisplayName("worker.available=false → 同样 blocked")
-  void workerUnavailableBlocks() {
+  void shouldDefer_whenWorkerRouteMarkedUnavailable() {
     when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
     when(partitionThrottle.check(any(), any())).thenReturn(ResourceCheck.allow());
     WorkerRouteModel route = new WorkerRouteModel();
@@ -180,7 +181,7 @@ class DefaultResourceSchedulerTest {
 
   @Test
   @DisplayName("全通过 → dispatchable=true + 决策字段齐全")
-  void allPassReturnsDispatchable() {
+  void shouldAcceptWithFullDecision_whenAllChecksPass() {
     when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
     when(partitionThrottle.check(any(), any())).thenReturn(ResourceCheck.allow());
     WorkerRouteModel route = new WorkerRouteModel();
@@ -204,7 +205,7 @@ class DefaultResourceSchedulerTest {
 
   @Test
   @DisplayName("blocker reasonCode 含 _DEGRADED 后缀 → 决策 priority 降到 1 / band=LOW (fairness 沉到队尾)")
-  void degradedLowersPriorityToMinimum() {
+  void shouldLowerPriorityToMinimum_whenBlockerDegraded() {
     when(concurrencyLimiter.check(any(), any()))
         .thenReturn(ResourceCheck.waitForCapacity("CONCURRENCY_LIMIT_DEGRADED", "degraded"));
 
@@ -216,7 +217,7 @@ class DefaultResourceSchedulerTest {
 
   @Test
   @DisplayName("WAITING 分片等待越久 → fairnessScore 获得 aging bonus")
-  void waitingAgeAddsFairnessBonus() {
+  void shouldAddFairnessBonus_whenWaitingLonger() {
     when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
     when(partitionThrottle.check(any(), any())).thenReturn(ResourceCheck.allow());
     WorkerRouteModel route = new WorkerRouteModel();
@@ -237,8 +238,8 @@ class DefaultResourceSchedulerTest {
   }
 
   @Test
-  @DisplayName("failFast block → admissionAction=REJECT")
-  void failFastBlockBecomesRejectAdmission() {
+  @DisplayName("阻塞项属于快速失败类型时候准入动作直接拒绝,且不再进入后续资源检查")
+  void shouldRejectAdmission_whenBlockerIsFailFast() {
     when(concurrencyLimiter.check(any(), any()))
         .thenReturn(ResourceCheck.reject("TENANT_JOB_LIMIT", "tenant quota exceeded"));
 
@@ -251,7 +252,7 @@ class DefaultResourceSchedulerTest {
 
   @Test
   @DisplayName("队列字段 windowCode 为空 → 跳过 batch window 检查,允许后续 pipeline")
-  void emptyWindowCodeSkipsWindowCheck() {
+  void shouldSkipWindowLookup_whenQueueWindowCodeBlank() {
     when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
     when(partitionThrottle.check(any(), any())).thenReturn(ResourceCheck.allow());
     WorkerRouteModel route = new WorkerRouteModel();

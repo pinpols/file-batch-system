@@ -25,12 +25,14 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 /** P1: ConsoleAlertRoutingController CRUD 行为(原 ValidationTest 仅守 @ValidResourceCode)。 */
+@DisplayName("告警路由接口: 条件查询, 新增改与启停的入参透传")
 class ConsoleAlertRoutingControllerBehaviorTest {
 
   private final ConsoleAlertRoutingApplicationService service =
@@ -70,7 +72,8 @@ class ConsoleAlertRoutingControllerBehaviorTest {
   }
 
   @Test
-  void listShouldPassAllFilters() throws Exception {
+  @DisplayName("清单查询把租户, 路由编码, 团队, 级别与启用状态全部透传给服务")
+  void shouldPassAllFilters_whenListingRoutings() throws Exception {
     when(service.list("ta", "RT_A", "ops", "WARN", true, 1, 20))
         .thenReturn(new PageResponse<>(0L, 1, 20, List.of()));
     mockMvc
@@ -85,7 +88,8 @@ class ConsoleAlertRoutingControllerBehaviorTest {
   }
 
   @Test
-  void createShouldReturnRow() throws Exception {
+  @DisplayName("新增路由返回该行, 响应字段保持下划线命名")
+  void shouldReturnRow_whenCreatingRouting() throws Exception {
     // 生产 AlertRoutingConfigMapper 以 resultType=map 返回 snake_case 列键（route_code），
     // 类型化响应经 @JsonProperty 保持 snake_case wire 一字不差。
     when(service.create(any(AlertRoutingSaveRequest.class)))
@@ -99,7 +103,8 @@ class ConsoleAlertRoutingControllerBehaviorTest {
   }
 
   @Test
-  void updateShouldPassPathId() throws Exception {
+  @DisplayName("更新路由以路径主键为准, 请求体随附提交")
+  void shouldPassPathId_whenUpdatingRouting() throws Exception {
     when(service.update(eq(7L), any(AlertRoutingSaveRequest.class)))
         .thenReturn(ConsoleAlertRoutingResponse.from(Map.of("id", 7L)));
     mockMvc
@@ -111,7 +116,8 @@ class ConsoleAlertRoutingControllerBehaviorTest {
   }
 
   @Test
-  void setEnabledShouldDelegate() throws Exception {
+  @DisplayName("启停路由时, 按路径主键与租户委托服务处理")
+  void shouldDelegate_whenTogglingEnabled() throws Exception {
     mockMvc
         .perform(patch("/api/console/alert-routings/9/enabled")
             .contentType(APPLICATION_JSON)

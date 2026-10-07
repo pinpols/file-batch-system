@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.Test;
  * 键保留、jsonb 字段原样透传、NON_NULL 省略、test 结果显式 null 键保留、alert-routing 单 record 同服务 list(列子集)与
  * create(select * 全列)两种键集。
  */
+@DisplayName("通知域响应记录序列化契约: 蛇形键保留, 配置内容透传与空列省略")
 class NotificationMapResponseJacksonTest {
 
   private final ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
@@ -23,7 +25,8 @@ class NotificationMapResponseJacksonTest {
   }
 
   @Test
-  void channelKeepsSnakeCaseKeysAndJsonbPassthroughAndOmitsNullColumns() throws Exception {
+  @DisplayName("渠道行序列化后保留蛇形键, 配置内容原样透传且未提供的列被省略")
+  void shouldKeepSnakeCaseKeysAndPassthroughConfig_whenChannelRowMapped() throws Exception {
     // MyBatis resultType=map 省略 null 列：不放入 updated_by / config_json。
     Map<String, Object> config = new LinkedHashMap<>();
     config.put("url", "https://hooks.example/x");
@@ -61,7 +64,8 @@ class NotificationMapResponseJacksonTest {
   }
 
   @Test
-  void subscriptionRuleKeepsSnakeCaseKeys() throws Exception {
+  @DisplayName("订阅规则行保留蛇形键, 未提供的审计列不出现")
+  void shouldKeepSnakeCaseKeys_whenSubscriptionRuleRowMapped() throws Exception {
     Map<String, Object> row = new LinkedHashMap<>();
     row.put("id", 9L);
     row.put("tenant_id", "acme");
@@ -90,7 +94,8 @@ class NotificationMapResponseJacksonTest {
   }
 
   @Test
-  void deliveryLogKeepsJsonbAndSnakeCaseKeys() throws Exception {
+  @DisplayName("投递日志保留蛇形键与消息载荷, 未提供的错误列被省略")
+  void shouldKeepPayloadAndSnakeCaseKeys_whenDeliveryLogRowMapped() throws Exception {
     Map<String, Object> row = new LinkedHashMap<>();
     row.put("id", 3L);
     row.put("tenant_id", "acme");
@@ -124,6 +129,7 @@ class NotificationMapResponseJacksonTest {
   }
 
   @Test
+  @DisplayName("测试结果中显式写入的空值键必须保留, 不允许被省略")
   void result_preservesExplicitNullKeys() throws Exception {
     // service 用 LinkedHashMap 显式 put httpStatus/errorSummary（可为 null）→ 键必须保留（无 NON_NULL）。
     Map<String, Object> row = new LinkedHashMap<>();
@@ -151,7 +157,8 @@ class NotificationMapResponseJacksonTest {
   }
 
   @Test
-  void alertRoutingListRowOmitsAuditColumnsButCreateRowKeepsThem() throws Exception {
+  @DisplayName("告警路由列表行省略审计列, 全列行保留审计列与分组字段")
+  void shouldKeepDifferentKeySets_whenAlertRoutingListRowVersusFullRow() throws Exception {
     // list（selectByQuery 显式列，不含 created_by/updated_by/is_deleted）。
     Map<String, Object> listRow = new LinkedHashMap<>();
     listRow.put("id", 1L);
@@ -189,7 +196,8 @@ class NotificationMapResponseJacksonTest {
   }
 
   @Test
-  void eventCatalogRecordsKeepFixedKeys() throws Exception {
+  @DisplayName("事件类型与事件主题记录的键集固定为编码与描述")
+  void shouldKeepFixedKeys_whenEventCatalogRecordSerialized() throws Exception {
     Map<String, Object> type = roundTrip(new ConsoleEventTypeResponse("JOB_FAILED", "作业失败"));
     assertThat(type).containsOnlyKeys("code", "description").containsEntry("code", "JOB_FAILED");
 

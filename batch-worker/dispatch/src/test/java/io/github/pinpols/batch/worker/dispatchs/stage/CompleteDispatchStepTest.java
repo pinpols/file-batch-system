@@ -16,12 +16,14 @@ import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("分发完成阶段:缺载荷错误码,回执成功才联动文件状态,以及审计落库与空回执状态兜底")
 class CompleteDispatchStepTest {
 
   @Mock
@@ -38,11 +40,13 @@ class CompleteDispatchStepTest {
   }
 
   @Test
+  @DisplayName("阶段标识为分发完成阶段")
   void stage_returnsComplete() {
     assertThat(step.stage()).isEqualTo(DispatchStage.COMPLETE);
   }
 
   @Test
+  @DisplayName("上下文缺少分发载荷时判定失败,并给出缺载荷错误码")
   void execute_failsWhenNoPayload() {
     DispatchJobContext context = new DispatchJobContext();
     DispatchStageResult result = step.execute(context);
@@ -51,6 +55,7 @@ class CompleteDispatchStepTest {
   }
 
   @Test
+  @DisplayName("回执状态为成功时判定成功,并把文件状态更新为已分发")
   void execute_updatesFileStatusToDispatchedWhenReceiptStatusIsSuccess() {
 
     DispatchJobContext context = buildContext("SUCCESS", "R-001");
@@ -61,6 +66,7 @@ class CompleteDispatchStepTest {
   }
 
   @Test
+  @DisplayName("回执状态非成功时仍判定成功,但不更新文件状态")
   void execute_doesNotUpdateFileStatusWhenReceiptNotSuccess() {
 
     DispatchJobContext context = buildContext("PENDING", null);
@@ -71,6 +77,7 @@ class CompleteDispatchStepTest {
   }
 
   @Test
+  @DisplayName("回执状态为无回执时也写入一条文件审计记录")
   void execute_alwaysWritesAuditLog() {
 
     DispatchJobContext context = buildContext("NONE", null);
@@ -80,6 +87,7 @@ class CompleteDispatchStepTest {
   }
 
   @Test
+  @DisplayName("上下文带回调码时执行不报错,并写入一条文件审计记录")
   void execute_includesReceiptCodeInMetadataWhenPresent() {
 
     DispatchJobContext context = buildContext("SUCCESS", "R-001");
@@ -91,6 +99,7 @@ class CompleteDispatchStepTest {
   }
 
   @Test
+  @DisplayName("上下文缺少回执状态时按无回执处理,判定成功且不更新文件状态")
   void execute_handlesNullReceiptStatusGracefully() {
 
     DispatchPayload payload =

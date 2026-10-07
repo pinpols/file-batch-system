@@ -28,12 +28,14 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+@DisplayName("通知配置接口: 渠道与订阅规则的字段绑定和必填校验")
 class ConsoleNotificationControllerTest {
 
   private final ConsoleNotificationApplicationService applicationService =
@@ -65,6 +67,7 @@ class ConsoleNotificationControllerTest {
   }
 
   @Test
+  @DisplayName("按租户返回渠道清单, 响应字段保持下划线命名")
   void shouldListChannels() throws Exception {
     // 生产 NotificationChannelMapper 以 resultType=map 返回 snake_case 列键（channel_code），
     // 类型化响应经 @JsonProperty 保持 snake_case wire 一字不差。
@@ -80,6 +83,7 @@ class ConsoleNotificationControllerTest {
   }
 
   @Test
+  @DisplayName("创建订阅规则时字段逐一绑定到请求对象, 未给的作业编码过滤为空")
   void shouldCreateRule() throws Exception {
     mockMvc
         .perform(post("/api/console/notifications/rules")
@@ -111,6 +115,7 @@ class ConsoleNotificationControllerTest {
   }
 
   @Test
+  @DisplayName("创建渠道按类型化请求体绑定字段, 未给启用标记时默认为启用")
   void shouldCreateChannelWithTypedBodyAndDefaultEnabled() throws Exception {
     // 反序列化守护:JSON 字段名与旧 Map 消费键逐一对应;enabled 缺省为 true。
     mockMvc
@@ -141,6 +146,7 @@ class ConsoleNotificationControllerTest {
   }
 
   @Test
+  @DisplayName("创建渠道缺少渠道编码时返回参数错误, 不调用应用服务")
   void shouldRejectChannelCreateWithoutChannelCode() throws Exception {
     mockMvc
         .perform(post("/api/console/notifications/channels")
@@ -153,6 +159,7 @@ class ConsoleNotificationControllerTest {
   }
 
   @Test
+  @DisplayName("更新渠道不要求请求体带渠道编码, 以路径参数为准")
   void shouldUpdateChannelWithoutChannelCodeInBody() throws Exception {
     // 兼容守护:update body 不要求 channelCode(路径参数为准),字段名与旧 Map 消费键一致。
     mockMvc
@@ -181,6 +188,7 @@ class ConsoleNotificationControllerTest {
   }
 
   @Test
+  @DisplayName("创建规则缺少规则名称时返回参数错误, 不调用应用服务")
   void shouldRejectRuleCreateWithoutRuleName() throws Exception {
     mockMvc
         .perform(post("/api/console/notifications/rules")

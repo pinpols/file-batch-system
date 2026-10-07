@@ -22,11 +22,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 /** {@link ConsoleFilesystemPresignDownloadController} 单测：HMAC 校验通过 / 篡改 / 过期 / traversal。 */
+@DisplayName("文件系统预签名下载控制器: 签名校验、过期与路径穿越防护")
 class FilesystemPresignDownloadControllerTest {
 
   private static final String BUCKET = "test-bucket";
@@ -54,6 +56,7 @@ class FilesystemPresignDownloadControllerTest {
   }
 
   @Test
+  @DisplayName("签名有效时以流式响应返回文件内容")
   void shouldStreamPayloadWhenSignatureIsValid() throws Exception {
     long exp = Instant.now().plusSeconds(60).getEpochSecond();
     String sig = FilesystemPresignTokens.sign(BUCKET, KEY, Instant.ofEpochSecond(exp), SECRET);
@@ -68,6 +71,7 @@ class FilesystemPresignDownloadControllerTest {
   }
 
   @Test
+  @DisplayName("签名被篡改时按业务异常拒绝")
   void shouldRejectTamperedSignature() {
     long exp = Instant.now().plusSeconds(60).getEpochSecond();
     assertThatThrownBy(() -> controller.download(BUCKET, KEY, exp, "tampered"))
@@ -75,6 +79,7 @@ class FilesystemPresignDownloadControllerTest {
   }
 
   @Test
+  @DisplayName("下载链接已过期时按业务异常拒绝")
   void shouldRejectExpiredToken() {
     long exp = Instant.now().minusSeconds(60).getEpochSecond();
     String sig = FilesystemPresignTokens.sign(BUCKET, KEY, Instant.ofEpochSecond(exp), SECRET);
@@ -83,6 +88,7 @@ class FilesystemPresignDownloadControllerTest {
   }
 
   @Test
+  @DisplayName("对象键含路径穿越时按业务异常拒绝")
   void shouldRejectTraversalKey() {
     long exp = Instant.now().plusSeconds(60).getEpochSecond();
     String key = "../etc/passwd";

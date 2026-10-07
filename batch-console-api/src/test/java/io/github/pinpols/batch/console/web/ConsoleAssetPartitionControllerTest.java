@@ -19,11 +19,13 @@ import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+@DisplayName("资产分区就绪查询控制器: 原始结果信封包装与租户越权透传")
 class ConsoleAssetPartitionControllerTest {
 
   private final ConsoleOrchestratorPort orchestratorProxy = mock(ConsoleOrchestratorPort.class);
@@ -59,7 +61,8 @@ class ConsoleAssetPartitionControllerTest {
   }
 
   @Test
-  void readinessShouldDelegateAndWrapRawReadinessPayload() throws Exception {
+  @DisplayName("查询就绪状态时, 原始结果包装为统一信封并带出追踪标识")
+  void shouldWrapRawPayload_whenQueryingReadiness() throws Exception {
     MvcResult result = mockMvc
         .perform(get("/api/console/asset-partitions/readiness")
             .param("tenantId", "ta")
@@ -78,7 +81,8 @@ class ConsoleAssetPartitionControllerTest {
   }
 
   @Test
-  void readinessShouldPropagateTenantRejectionFromApplicationPort() throws Exception {
+  @DisplayName("租户不匹配被应用端口拒绝时, 接口返回禁止访问")
+  void shouldPropagateTenantRejection_whenTenantNotPermitted() throws Exception {
     doThrow(BizException.of(ResultCode.FORBIDDEN, "error.tenant.mismatch"))
         .when(orchestratorProxy)
         .assetPartitionReadiness("tb", "settlement_daily", LocalDate.parse("2026-06-30"));

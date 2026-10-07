@@ -36,7 +36,7 @@ class QuotaRedisFailureModeChaosIT extends AbstractChaosIntegrationTest {
 
   @Test
   @DisplayName("Redis 断 → FAIL_CLOSED 返回 QUOTA_BACKEND_UNAVAILABLE；FAIL_OPEN 放行")
-  void redisDownRespectsFailureMode() throws Exception {
+  void shouldRespectFailureMode_whenBackendDown() throws Exception {
     LettuceConnectionFactory factory = newLettuceFactory();
     try {
       OrchestratorRedisSupport redis =

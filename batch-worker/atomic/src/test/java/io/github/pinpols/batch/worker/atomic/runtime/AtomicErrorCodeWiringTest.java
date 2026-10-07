@@ -16,6 +16,7 @@ import io.github.pinpols.batch.worker.atomic.storedproc.StoredProcTaskExecutor;
 import java.nio.file.Path;
 import java.util.Map;
 import javax.sql.DataSource;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.BeanFactory;
@@ -25,6 +26,7 @@ import org.springframework.beans.factory.BeanFactory;
  * 选一条最便捷的失败路径 — Shell:缺 command(CONFIG_INVALID);Sql:缺 sql(CONFIG_INVALID);StoredProc:缺
  * procedureName(CONFIG_INVALID); Http:缺 url(CONFIG_INVALID)。覆盖"失败必填 code"的契约即可。
  */
+@DisplayName("原子执行器错误码填充: 失败路径的归因契约")
 class AtomicErrorCodeWiringTest {
 
   @TempDir
@@ -35,7 +37,8 @@ class AtomicErrorCodeWiringTest {
   }
 
   @Test
-  void shellFailureShouldFillErrorCode() {
+  @DisplayName("命令执行器缺少命令时应判失败, 并填充配置无效错误码")
+  void shouldFillConfigInvalid_whenShellCommandMissing() {
     ShellExecutorProperties props = new ShellExecutorProperties();
     props.setEnabled(true);
     props.setWorkdirBase(tempDir);
@@ -48,7 +51,8 @@ class AtomicErrorCodeWiringTest {
   }
 
   @Test
-  void shellSensitiveCredentialShouldFillSecurityRejected() {
+  @DisplayName("命令执行器参数携带敏感凭据时应判失败, 并填充安全拒绝错误码")
+  void shouldFillSecurityRejected_whenShellParamHasCredential() {
     ShellExecutorProperties props = new ShellExecutorProperties();
     props.setEnabled(true);
     props.setWorkdirBase(tempDir);
@@ -61,7 +65,8 @@ class AtomicErrorCodeWiringTest {
   }
 
   @Test
-  void sqlMissingParamShouldFillErrorCode() {
+  @DisplayName("数据库执行器缺少语句时应判失败, 并填充配置无效错误码")
+  void shouldFillConfigInvalid_whenSqlParamMissing() {
     SqlExecutorProperties props = new SqlExecutorProperties();
     props.setForbidOsCapableRole(false);
     SqlTaskExecutor executor =
@@ -74,7 +79,8 @@ class AtomicErrorCodeWiringTest {
   }
 
   @Test
-  void storedProcMissingParamShouldFillErrorCode() {
+  @DisplayName("存储过程执行器缺少过程名时应判失败, 并填充配置无效错误码")
+  void shouldFillConfigInvalid_whenProcedureMissing() {
     StoredProcExecutorProperties props = new StoredProcExecutorProperties();
     StoredProcTaskExecutor executor =
         new StoredProcTaskExecutor(props, mock(BeanFactory.class), mock(DataSource.class));
@@ -86,7 +92,8 @@ class AtomicErrorCodeWiringTest {
   }
 
   @Test
-  void httpMissingUrlShouldFillErrorCode() {
+  @DisplayName("接口执行器缺少目标地址时应判失败, 并填充配置无效错误码")
+  void shouldFillConfigInvalid_whenHttpUrlMissing() {
     HttpExecutorProperties props = new HttpExecutorProperties();
     HttpTaskExecutor executor = new HttpTaskExecutor(props);
 
@@ -97,7 +104,8 @@ class AtomicErrorCodeWiringTest {
   }
 
   @Test
-  void httpBlockedHostShouldFillSecurityRejected() {
+  @DisplayName("接口执行器命中默认封禁主机时应判失败, 并填充安全拒绝错误码")
+  void shouldFillSecurityRejected_whenHttpHostBlocked() {
     HttpExecutorProperties props = new HttpExecutorProperties();
     // 默认 blockedHostPatterns 含 localhost / 169.254.169.254
     HttpTaskExecutor executor = new HttpTaskExecutor(props);

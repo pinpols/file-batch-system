@@ -15,12 +15,14 @@ import io.github.pinpols.batch.sdk.scheduler.HeartbeatScheduler;
 import io.github.pinpols.batch.sdk.scheduler.LeaseRenewalScheduler;
 import java.lang.reflect.Field;
 import java.time.Duration;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
  * Lane E #4-Java + #5:{@link BatchPlatformClient#stop(Duration)} 预算重分配 + fatal-auth 跳 deactivate
  * 的端到端验证。Stop 顺序 / drain WARN 已在 {@link BatchPlatformClientStopTimeoutTest} 覆盖,这里只关心 Lane E 新增不变量。
  */
+@DisplayName("BatchPlatformClient 停止预算 — 预算切分与认证失败时的注销跳过")
 class BatchPlatformClientStopBudgetTest {
 
   private static BatchPlatformClientConfig cfg() {
@@ -43,7 +45,8 @@ class BatchPlatformClientStopBudgetTest {
 
   /** Lane E #4-Java:Kafka fatal auth 失败时 deactivate 跳过(凭据已坏,HTTP 也会 401)。 */
   @Test
-  void stopSkipsDeactivateWhenKafkaAuthFatal() throws Exception {
+  @DisplayName("消费端认证致命失败时跳过注销上报,仅做本地资源关闭")
+  void shouldSkipDeactivate_whenKafkaAuthFatal() throws Exception {
     BatchPlatformClient client = BatchPlatformClient.builder(cfg()).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
@@ -74,7 +77,8 @@ class BatchPlatformClientStopBudgetTest {
 
   /** Lane E #4-Java:正常路径(无 fatal auth)仍会调 deactivate。 */
   @Test
-  void stopCallsDeactivateWhenKafkaHealthy() throws Exception {
+  @DisplayName("消费端正常时停止流程仍会发起注销上报")
+  void shouldCallDeactivate_whenKafkaHealthy() throws Exception {
     BatchPlatformClient client = BatchPlatformClient.builder(cfg()).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
@@ -98,7 +102,8 @@ class BatchPlatformClientStopBudgetTest {
 
   /** Lane E #5:Kafka close 收到的 Duration 应基于总预算的 ~15% 算出(±jitter)。 */
   @Test
-  void stopAllocates15PercentOfBudgetToKafkaJoin() throws Exception {
+  @DisplayName("停止预算按比例切分,消费端关闭拿到约一成半且余量留给任务排空")
+  void shouldAllocateBudgetShareToKafka_whenStopping() throws Exception {
     BatchPlatformClient client = BatchPlatformClient.builder(cfg()).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
@@ -135,7 +140,8 @@ class BatchPlatformClientStopBudgetTest {
 
   /** Lane E #5:总耗时不超 stop 总预算(allmocks 接近 0ms 返回 → 总耗时应远小于 timeout)。 */
   @Test
-  void stopRespectsTotalTimeoutBudget() throws Exception {
+  @DisplayName("各阶段快速返回时整体停止耗时远低于给定预算")
+  void shouldReturnWithinBudget_whenAllStagesFast() throws Exception {
     BatchPlatformClient client = BatchPlatformClient.builder(cfg()).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);

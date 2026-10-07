@@ -16,6 +16,7 @@ import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import java.time.Duration;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -35,6 +36,7 @@ import org.springframework.test.util.ReflectionTestUtils;
  *   <li>非 prod 不强制
  * </ul>
  */
+@DisplayName("控制台令牌服务:签发与验证往返, 发行方与会话版本校验, 生产环境密钥强度启动期强校验")
 class ConsoleJwtServiceTest {
 
   private static final String STRONG_SECRET = "a-very-strong-jwt-secret-2026-with-enough-entropy";
@@ -66,6 +68,7 @@ class ConsoleJwtServiceTest {
   // ─── 完整签发 + 验证往返 ────────────────────────────────────────────
 
   @Test
+  @DisplayName("签发验证往返:令牌非空且解析出用户名, 租户与角色集合一致")
   void issueAndAuthenticate_roundtripSucceeds() {
     ConsoleJwtService svc = newService();
     ConsoleAuthTokenResponse resp =
@@ -79,6 +82,7 @@ class ConsoleJwtServiceTest {
   }
 
   @Test
+  @DisplayName("签发入参:租户标识为空时抛出业务异常")
   void issueToken_blankTenantId_throws() {
     ConsoleJwtService svc = newService();
     assertThatThrownBy(() -> svc.issueToken("alice", "", Set.of("ROLE_ADMIN")))
@@ -88,6 +92,7 @@ class ConsoleJwtServiceTest {
   // ─── tokenType 门 ────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("发行方校验:其它发行方签发的令牌被拒, 报无效令牌")
   void authenticate_wrongIssuerRejected() {
     properties.setJwtIssuer("other-issuer");
     ConsoleJwtService otherSvc = newService();
@@ -104,6 +109,7 @@ class ConsoleJwtServiceTest {
   // ─── singleSession ───────────────────────────────────────────────────
 
   @Test
+  @DisplayName("会话版本:单会话开启后旧版本令牌被拒, 报无效令牌")
   void authenticate_singleSession_oldVersionRejected() {
     properties.setSingleSessionEnabled(true);
     when(sessionRegistry.currentSessionVersion("alice", "t1")).thenReturn(5L);
@@ -121,6 +127,7 @@ class ConsoleJwtServiceTest {
   }
 
   @Test
+  @DisplayName("会话版本:当前版本令牌通过校验, 解析出用户名")
   void authenticate_singleSession_currentVersionAccepted() {
     properties.setSingleSessionEnabled(true);
     when(sessionRegistry.currentSessionVersion("alice", "t1")).thenReturn(7L);
@@ -136,6 +143,7 @@ class ConsoleJwtServiceTest {
   // ─── prod profile 启动期强校验 ───────────────────────────────────────
 
   @Test
+  @DisplayName("生产密钥:仍为占位符时启动期抛出状态异常")
   void prodProfile_placeholderJwtSecret_fatalAtConstruct() {
     environment.setActiveProfiles("prod");
     properties.setJwtSecret("change-me-jwt-secret-not-real");
@@ -146,6 +154,7 @@ class ConsoleJwtServiceTest {
   }
 
   @Test
+  @DisplayName("生产密钥:长度不足 32 字符时启动期抛出状态异常")
   void prodProfile_jwtSecretTooShort_fatalAtConstruct() {
     environment.setActiveProfiles("prod");
     properties.setJwtSecret("only31charsxxxxxxxxxxxxxxxxxxxx"); // 31 < 32
@@ -156,6 +165,7 @@ class ConsoleJwtServiceTest {
   }
 
   @Test
+  @DisplayName("生产密钥:密钥为空时启动期抛出状态异常")
   void prodProfile_blankJwtSecret_fatalAtConstruct() {
     environment.setActiveProfiles("prod");
     properties.setJwtSecret("");
@@ -166,6 +176,7 @@ class ConsoleJwtServiceTest {
   }
 
   @Test
+  @DisplayName("类生产环境:预发配置同样执行强校验并抛出状态异常")
   void stagingProfile_isProductionLike_strongCheck() {
     environment.setActiveProfiles("staging");
     properties.setJwtSecret("change-me-jwt");
@@ -175,6 +186,7 @@ class ConsoleJwtServiceTest {
   }
 
   @Test
+  @DisplayName("本地环境:弱密钥不强制, 启动校验通过")
   void localProfile_weakSecretAllowed() {
     environment.setActiveProfiles("local");
     properties.setJwtSecret("change-me-anything-goes-locally");
@@ -187,6 +199,7 @@ class ConsoleJwtServiceTest {
   // ─── encoder/decoder 缓存 + clock skew ───────────────────────────────
 
   @Test
+  @DisplayName("延迟初始化:未执行启动校验时仍可签发并解析令牌")
   void decoder_lazyInitAppliesClockSkewValidator() {
     // R4-P2-6：fallback 路径也必须带 JwtTimestampValidator(skew)；通过完整签发→验证 roundtrip 间接验证 decoder 可用
     ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment);
@@ -197,6 +210,7 @@ class ConsoleJwtServiceTest {
   }
 
   @Test
+  @DisplayName("角色集合:空集合时拒绝签发, 报角色集合非法")
   void issueToken_emptyAuthorities_rejected() {
     ConsoleJwtService svc = newService();
     assertThatThrownBy(() -> svc.issueToken("alice", "t1", Set.of()))
@@ -205,6 +219,7 @@ class ConsoleJwtServiceTest {
   }
 
   @Test
+  @DisplayName("角色集合:空值时拒绝签发, 报角色集合非法")
   void issueToken_nullAuthorities_rejected() {
     ConsoleJwtService svc = newService();
     assertThatThrownBy(() -> svc.issueToken("alice", "t1", null))
@@ -213,6 +228,7 @@ class ConsoleJwtServiceTest {
   }
 
   @Test
+  @DisplayName("角色集合:含历史或未知角色时拒绝签发, 报角色集合非法")
   void issueToken_legacyOrUnknownAuthorities_rejected() {
     ConsoleJwtService svc = newService();
     assertThatThrownBy(() -> svc.issueToken("alice", "t1", Set.of("ROLE_ADMIN", "ROLE_USER")))
@@ -223,6 +239,7 @@ class ConsoleJwtServiceTest {
   // ─── 不可使用其它 issuer 签发的 JWT ──────────────────────────────────
 
   @Test
+  @DisplayName("非法令牌:格式错误的内容解析失败并抛出令牌异常")
   void authenticate_garbageTokenRejected() {
     ConsoleJwtService svc = newService();
     assertThatThrownBy(() -> svc.authenticate("not.a.jwt"))

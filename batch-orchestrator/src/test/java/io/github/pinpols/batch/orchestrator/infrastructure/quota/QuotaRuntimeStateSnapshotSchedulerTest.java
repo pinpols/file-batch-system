@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
  * Mockito 单测,不起 Spring —— gate 语义与 DB / Redis 无关。
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("配额运行态快照调度器: 快照开关门控语义与单条写入的事务边界")
 class QuotaRuntimeStateSnapshotSchedulerTest {
 
   @Mock
@@ -56,7 +57,7 @@ class QuotaRuntimeStateSnapshotSchedulerTest {
   }
 
   @Test
-  @DisplayName("关态:snapshot.enabled=false → 早退,不枚举租户、不写任何快照")
+  @DisplayName("开关关闭时直接早退, 不枚举租户也不写入任何快照")
   void disabled_shortCircuitsBeforeEnumeratingTenants() {
     when(gracefulShutdown.isDraining()).thenReturn(false);
 
@@ -67,7 +68,7 @@ class QuotaRuntimeStateSnapshotSchedulerTest {
   }
 
   @Test
-  @DisplayName("开态:snapshot.enabled=true → 进入租户枚举流程")
+  @DisplayName("开关开启时进入租户枚举流程, 租户列表为空时不产生写入")
   void enabled_enumeratesTenants() {
     when(gracefulShutdown.isDraining()).thenReturn(false);
     when(tenantQuotaPolicyMapper.selectDistinctEnabledTenantIds()).thenReturn(List.of());
@@ -78,8 +79,8 @@ class QuotaRuntimeStateSnapshotSchedulerTest {
   }
 
   @Test
-  @DisplayName("单条快照写入保留独立 Spring 事务边界")
-  void writerRetainsTransactionalBoundary() throws Exception {
+  @DisplayName("单条快照写入保留独立事务边界, 保证按条提交而非整批共享事务")
+  void shouldKeepTransactionalBoundary_whenWritingSingleSnapshot() throws Exception {
     Method write = QuotaRuntimeStateSnapshotWriter.class.getDeclaredMethod(
         "writeIfActive", String.class, String.class, String.class, String.class, int.class);
 

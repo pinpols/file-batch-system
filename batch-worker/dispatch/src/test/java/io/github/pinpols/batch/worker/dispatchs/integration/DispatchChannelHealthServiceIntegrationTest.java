@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -26,6 +27,7 @@ import org.springframework.test.context.DynamicPropertySource;
 @SpringBootTest(
     classes = BatchWorkerDispatchApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("渠道健康服务集成:真实业务库上的健康快照落库、失败退避累积与放行判定")
 class DispatchChannelHealthServiceIntegrationTest extends AbstractIntegrationTest {
 
   @DynamicPropertySource
@@ -40,6 +42,7 @@ class DispatchChannelHealthServiceIntegrationTest extends AbstractIntegrationTes
   private DispatchChannelHealthRepository healthRepository;
 
   @Test
+  @DisplayName("投递成功落库健康快照:状态健康、连续失败数为零,并记录最后成功时间与探测信息")
   void shouldPersistHealthySnapshotOnSuccessfulDispatch() {
     Map<String, Object> channelConfig = channelConfig("t1", "ch-001", "API");
 
@@ -57,6 +60,7 @@ class DispatchChannelHealthServiceIntegrationTest extends AbstractIntegrationTes
   }
 
   @Test
+  @DisplayName("连续两次投递失败后,连续失败数累加到二且健康状态降级")
   void shouldIncrementConsecutiveFailuresOnFailure() {
     Map<String, Object> channelConfig = channelConfig("t1", "ch-002", "SFTP");
 
@@ -72,7 +76,8 @@ class DispatchChannelHealthServiceIntegrationTest extends AbstractIntegrationTes
   }
 
   @Test
-  void concurrentFailuresShouldKeepLatestExponentialBackoff() throws Exception {
+  @DisplayName("八路并发记录失败时失败次数不丢,退避窗口按最新一次失败推算且不少于十四分钟")
+  void shouldKeepLatestExponentialBackoff_whenFailuresAreConcurrent() throws Exception {
     int concurrency = 8;
     Map<String, Object> channelConfig = channelConfig("t1", "ch-concurrent", "API");
     CountDownLatch ready = new CountDownLatch(concurrency);
@@ -100,6 +105,7 @@ class DispatchChannelHealthServiceIntegrationTest extends AbstractIntegrationTes
   }
 
   @Test
+  @DisplayName("失败之后投递成功时,状态恢复健康且连续失败数清零")
   void shouldResetConsecutiveFailuresAfterSuccess() {
     Map<String, Object> channelConfig = channelConfig("t1", "ch-003", "NAS");
 
@@ -115,6 +121,7 @@ class DispatchChannelHealthServiceIntegrationTest extends AbstractIntegrationTes
   }
 
   @Test
+  @DisplayName("渠道尚无健康快照时默认放行投递")
   void shouldAllowDispatchWhenNoHealthSnapshotExists() {
     Map<String, Object> channelConfig = channelConfig("t1", "ch-new-999", "API");
     // no prior health record — should default to allow
@@ -122,6 +129,7 @@ class DispatchChannelHealthServiceIntegrationTest extends AbstractIntegrationTes
   }
 
   @Test
+  @DisplayName("渠道健康快照为健康状态时放行投递")
   void shouldAllowDispatchForHealthyChannel() {
     Map<String, Object> channelConfig = channelConfig("t1", "ch-004", "API");
     healthService.recordDispatchOutcome(channelConfig, true, "ok", null);
@@ -130,6 +138,7 @@ class DispatchChannelHealthServiceIntegrationTest extends AbstractIntegrationTes
   }
 
   @Test
+  @DisplayName("渠道连续失败进入不健康且退避尚未到期时,投递被拒绝放行")
   void shouldBlockDispatchForUnhealthyChannelBeforeBackoffExpires() {
     Map<String, Object> channelConfig = channelConfig("t1", "ch-005", "API");
     // trigger enough failures to set UNHEALTHY (default threshold is 5)

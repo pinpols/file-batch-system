@@ -14,11 +14,13 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
 @SuppressWarnings("unchecked")
+@DisplayName("系统参数服务: 缓存优先读取, 数据库回退与写后清缓存")
 class ConsoleSystemParameterServiceTest {
 
   private ConsoleSystemParameterMapper repository;
@@ -40,6 +42,7 @@ class ConsoleSystemParameterServiceTest {
   }
 
   @Test
+  @DisplayName("按租户列出全部系统参数")
   void shouldListParameters() {
     SystemParameterEntity entity = new SystemParameterEntity();
     entity.setParamKey("batch.size");
@@ -52,6 +55,7 @@ class ConsoleSystemParameterServiceTest {
   }
 
   @Test
+  @DisplayName("缓存命中时直接返回缓存中的参数值")
   void shouldReturnCachedValueFromRedis() {
     when(valueOperations.get("sys-param:t1:batch.size")).thenReturn("500");
 
@@ -61,6 +65,7 @@ class ConsoleSystemParameterServiceTest {
   }
 
   @Test
+  @DisplayName("缓存未命中时回退查询数据库并回填缓存")
   void shouldFallbackToDbWhenCacheMiss() {
     when(valueOperations.get("sys-param:t1:batch.size")).thenReturn(null);
     SystemParameterEntity entity = new SystemParameterEntity();
@@ -74,6 +79,7 @@ class ConsoleSystemParameterServiceTest {
   }
 
   @Test
+  @DisplayName("缓存与数据库均未命中时返回空结果")
   void shouldReturnEmptyWhenCacheMissAndDbMiss() {
     when(valueOperations.get("sys-param:t1:missing")).thenReturn(null);
     when(repository.findByTenantAndKey("t1", "missing")).thenReturn(Optional.empty());
@@ -84,6 +90,7 @@ class ConsoleSystemParameterServiceTest {
   }
 
   @Test
+  @DisplayName("写入参数后清除对应的缓存键")
   void shouldUpsertAndClearCache() {
     service.upsert("t1", "batch.size", "300", "batch size config", "admin");
 
@@ -92,6 +99,7 @@ class ConsoleSystemParameterServiceTest {
   }
 
   @Test
+  @DisplayName("删除参数后清除对应的缓存键")
   void shouldDeleteAndClearCache() {
     service.delete("t1", "batch.size");
 

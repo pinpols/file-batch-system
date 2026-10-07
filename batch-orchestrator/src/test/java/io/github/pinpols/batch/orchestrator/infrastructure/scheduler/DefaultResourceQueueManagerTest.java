@@ -18,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 /** 单元测试：资源池解析只从启用队列中选,且专用队列优先于 MIXED 回退队列。 */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("默认资源队列管理器: 显式队列命中, 专用队列优选与空结果查询缓存")
 class DefaultResourceQueueManagerTest {
 
   @Mock
@@ -31,8 +32,8 @@ class DefaultResourceQueueManagerTest {
   }
 
   @Test
-  @DisplayName("显式 queueCode 命中启用队列 → 返回该队列")
-  void explicitQueueCodeSelectsEnabledQueue() {
+  @DisplayName("显式指定队列代码且命中启用队列时, 返回该队列对象本身")
+  void shouldReturnMatchingQueue_whenExplicitQueueCodeIsEnabled() {
     ResourceQueueEntity importQueue = queue("import-fast", "IMPORT", 1, 10, 10);
     when(mapper.selectByTenantAndEnabled("ta", true))
         .thenReturn(List.of(queue("mixed", "MIXED", 100, 100, 100), importQueue));
@@ -43,8 +44,8 @@ class DefaultResourceQueueManagerTest {
   }
 
   @Test
-  @DisplayName("未显式 queueCode → workerType 专用队列优先于 MIXED")
-  void exactWorkerTypeWinsOverMixedFallback() {
+  @DisplayName("未指定队列代码时, 与工作节点类型一致的专用队列优先于混合回退队列")
+  void shouldPreferDedicatedQueue_whenQueueCodeAbsentButWorkerTypeMatches() {
     ResourceQueueEntity mixed = queue("mixed-heavy", "MIXED", 100, 100, 100);
     ResourceQueueEntity dedicated = queue("import-small", "IMPORT", 1, 1, 1);
     when(mapper.selectByTenantAndEnabled("ta", true)).thenReturn(List.of(mixed, dedicated));
@@ -55,8 +56,8 @@ class DefaultResourceQueueManagerTest {
   }
 
   @Test
-  @DisplayName("显式 queueCode 未命中启用队列 → 返回 null")
-  void explicitQueueMissingFromEnabledListReturnsNull() {
+  @DisplayName("显式指定的队列代码不在启用队列中时返回空结果, 不再回退其它队列")
+  void shouldReturnNull_whenExplicitQueueCodeIsNotEnabled() {
     when(mapper.selectByTenantAndEnabled("ta", true))
         .thenReturn(List.of(queue("import", "IMPORT", 1, 1, 1)));
 
@@ -66,8 +67,8 @@ class DefaultResourceQueueManagerTest {
   }
 
   @Test
-  @DisplayName("租户没有启用队列 → 返回 null,由后续调度逻辑走默认语义")
-  void noEnabledQueueReturnsNull() {
+  @DisplayName("租户没有启用队列时返回空结果, 由后续调度逻辑走默认语义")
+  void shouldReturnNull_whenTenantHasNoEnabledQueue() {
     when(mapper.selectByTenantAndEnabled("ta", true)).thenReturn(List.of());
 
     ResourceQueueEntity resolved = manager.resolveQueue(request(null, "IMPORT"));
@@ -76,8 +77,8 @@ class DefaultResourceQueueManagerTest {
   }
 
   @Test
-  @DisplayName("同一租户短时重复解析 → 空队列结果也只查询数据库一次")
-  void repeatedResolutionCachesEmptyQueueResult() {
+  @DisplayName("同一租户短时间重复解析且结果为空时, 数据库只被查询一次")
+  void shouldQueryDatabaseOnce_whenEmptyQueueResolvedRepeatedly() {
     when(mapper.selectByTenantAndEnabled("ta", true)).thenReturn(List.of());
 
     assertThat(manager.resolveQueue(request(null, "IMPORT"))).isNull();

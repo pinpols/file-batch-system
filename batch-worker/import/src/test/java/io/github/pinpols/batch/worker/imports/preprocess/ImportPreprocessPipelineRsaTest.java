@@ -18,6 +18,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -31,6 +32,7 @@ import org.junit.jupiter.api.Test;
  *   openssl rsa -in test-rsa-private.pem -pubout -out test-rsa-public.pem
  * </pre>
  */
+@DisplayName("导入预处理签名校验单测:签名通过,内容篡改与公钥缺失的失败语义")
 class ImportPreprocessPipelineRsaTest {
 
   private static final byte[] PAYLOAD =
@@ -55,6 +57,7 @@ class ImportPreprocessPipelineRsaTest {
   // ── valid signature passes ─────────────────────────────────────────────────
 
   @Test
+  @DisplayName("签名有效时校验通过,载荷原样输出")
   void shouldPassVerification_withValidRsaSignature() {
     Map<String, Object> step = Map.of(
         "type", ImportPreprocessStepTypes.VERIFY_RSA_SHA256,
@@ -70,6 +73,7 @@ class ImportPreprocessPipelineRsaTest {
   // ── tampered payload rejected ──────────────────────────────────────────────
 
   @Test
+  @DisplayName("载荷被篡改时校验失败,并抛出预处理异常")
   void shouldFailVerification_whenPayloadTampered() {
     byte[] tamperedPayload =
         "customerNo,customerName\nC001,Eve Test\n".getBytes(StandardCharsets.UTF_8);
@@ -88,6 +92,7 @@ class ImportPreprocessPipelineRsaTest {
   // ── missing public key config rejected ────────────────────────────────────
 
   @Test
+  @DisplayName("未提供公钥时校验失败,并在消息中点明公钥缺失")
   void shouldFail_whenPublicKeyPemMissing() {
     Map<String, Object> step = Map.of(
         "type", ImportPreprocessStepTypes.VERIFY_RSA_SHA256, "signatureBase64", validSignatureB64
@@ -103,6 +108,7 @@ class ImportPreprocessPipelineRsaTest {
   // ── signature supplied via payload metadata ────────────────────────────────
 
   @Test
+  @DisplayName("签名改由载荷元数据提供时,校验同样通过")
   void shouldPassVerification_signatureViaPayloadMetadata() {
     ImportPayload payload = new ImportPayload(
         null,
@@ -143,6 +149,7 @@ class ImportPreprocessPipelineRsaTest {
   // ── bypassMode bypasses RSA check ─────────────────────────────────────────
 
   @Test
+  @DisplayName("测试旁路开关开启时,完全跳过签名校验")
   void shouldBypassRsaVerification_whenTestingOpen() {
     Map<String, Object> step = Map.of(
         "type",

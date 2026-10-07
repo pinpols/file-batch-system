@@ -23,9 +23,11 @@ import java.time.LocalDate;
 import java.time.Month;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+@DisplayName("结果版本写入器: 首次生效, 重跑策略与质量门禁阻断口径")
 class ResultVersionWriterTest {
 
   private ResultVersionMapper mapper;
@@ -59,7 +61,8 @@ class ResultVersionWriterTest {
   }
 
   @Test
-  void firstSuccessRunWritesV1Effective() {
+  @DisplayName("首次成功作业写入第一个生效版本, 状态为生效并物化分区")
+  void shouldWriteFirstVersionEffective_whenJobSucceeds() {
     JobInstanceEntity instance =
         success("t1", 100L, "DAILY_PNL", LocalDate.of(2026, Month.MAY, 4), null);
     when(mapper.selectByJobInstanceId("t1", 100L)).thenReturn(null);
@@ -83,7 +86,8 @@ class ResultVersionWriterTest {
   }
 
   @Test
-  void rerunWithCreateNewVersionPromotesV2EffectiveAndSupersedesV1() {
+  @DisplayName("重跑采取新建版本策略时生成新版本并置为生效, 同时作废旧版本")
+  void shouldPromoteNewVersionAndSupersede_whenRerunCreatesVersion() {
     JobInstanceEntity instance = success(
         "t1",
         101L,
@@ -103,7 +107,8 @@ class ResultVersionWriterTest {
   }
 
   @Test
-  void rerunWithKeepBothCreatesPendingVersion() {
+  @DisplayName("重跑保留双版本时生成待生效版本, 不作废旧版本也不物化")
+  void shouldCreatePendingVersion_whenRerunKeepsBoth() {
     JobInstanceEntity instance = success(
         "t1",
         102L,
@@ -126,7 +131,8 @@ class ResultVersionWriterTest {
   }
 
   @Test
-  void rerunWithManualConfirmEffectiveCreatesPendingVersion() {
+  @DisplayName("重跑要求人工确认生效时生成待生效版本并递增版本号")
+  void shouldCreatePendingVersion_whenManualConfirmRequired() {
     JobInstanceEntity instance = success(
         "t1",
         103L,
@@ -145,7 +151,8 @@ class ResultVersionWriterTest {
   }
 
   @Test
-  void duplicateReportIsIdempotent() {
+  @DisplayName("同一作业实例重复上报时只加锁, 不重复写入版本")
+  void shouldStayIdempotent_whenTerminalReportRepeats() {
     JobInstanceEntity instance =
         success("t1", 200L, "JOB_A", LocalDate.of(2026, Month.MAY, 4), null);
     when(mapper.selectByJobInstanceId("t1", 200L))
@@ -160,7 +167,8 @@ class ResultVersionWriterTest {
   }
 
   @Test
-  void nonSuccessTerminalIsSkipped() {
+  @DisplayName("实例不是成功终态时不写版本, 也不查询与加锁")
+  void shouldSkip_whenInstanceNotSuccessful() {
     JobInstanceEntity instance =
         success("t1", 300L, "JOB_A", LocalDate.of(2026, Month.MAY, 4), null);
     instance.setInstanceStatus("FAILED");
@@ -173,7 +181,8 @@ class ResultVersionWriterTest {
   }
 
   @Test
-  void missingJobCodeIsSkipped() {
+  @DisplayName("实例缺少任务编码时不写版本")
+  void shouldSkip_whenJobCodeMissing() {
     JobInstanceEntity instance = success("t1", 301L, null, LocalDate.of(2026, Month.MAY, 4), null);
 
     writer.writeOnTerminal(instance, Map.of());
@@ -182,7 +191,8 @@ class ResultVersionWriterTest {
   }
 
   @Test
-  void missingBizDateIsSkipped() {
+  @DisplayName("实例缺少营业日时不写版本")
+  void shouldSkip_whenBizDateMissing() {
     JobInstanceEntity instance = success("t1", 302L, "JOB_A", null, null);
 
     writer.writeOnTerminal(instance, Map.of());
@@ -191,7 +201,8 @@ class ResultVersionWriterTest {
   }
 
   @Test
-  void partialFailedTerminalWritesPendingNotEffective() {
+  @DisplayName("部分失败终态只写待生效版本并转人工审批, 不作废旧版本也不物化")
+  void shouldWritePendingOnly_whenInstancePartialFailed() {
     // PARTIAL_FAILED（部分分片失败）不得自动进 EFFECTIVE：否则下游 readiness/asset_partition 会把不
     // 完整结果当完整消费。落 PENDING/MANUAL_APPROVAL、不 supersede 旧 EFFECTIVE、不物化 readiness。
     JobInstanceEntity instance =
@@ -214,7 +225,8 @@ class ResultVersionWriterTest {
   }
 
   @Test
-  void dryRunInstanceWritesDryRunStatusWithoutSupersede() {
+  @DisplayName("试运行实例写入试运行状态的版本, 不作废旧版本也不物化")
+  void shouldWriteDryRunStatus_whenInstanceIsDryRun() {
     JobInstanceEntity instance =
         success("t1", 400L, "DAILY_PNL", LocalDate.of(2026, Month.MAY, 4), null);
     instance.setDryRun(true);
@@ -234,7 +246,8 @@ class ResultVersionWriterTest {
   }
 
   @Test
-  void dqGateBlockedForcesPendingAndManualApprovalEvenWithCreateNewVersion() {
+  @DisplayName("数据质量门禁阻断时强制待生效并转人工审批, 并记录门禁状态")
+  void shouldForcePendingAndManualApproval_whenQualityGateBlocked() {
     JobInstanceEntity instance = success(
         "t1",
         500L,
@@ -265,7 +278,8 @@ class ResultVersionWriterTest {
   }
 
   @Test
-  void emptyOutputsSerializeAsEmptyObject() {
+  @DisplayName("产出为空时载荷序列化为空对象")
+  void shouldSerializeEmptyObject_whenOutputsEmpty() {
     JobInstanceEntity instance =
         success("t1", 304L, "JOB_A", LocalDate.of(2026, Month.MAY, 4), null);
     when(mapper.selectByJobInstanceId("t1", 304L)).thenReturn(null);

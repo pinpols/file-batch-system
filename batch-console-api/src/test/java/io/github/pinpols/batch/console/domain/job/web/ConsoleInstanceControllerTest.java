@@ -17,11 +17,13 @@ import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /** P2: ConsoleInstanceController cancel/terminate + 分区 cancel/retry 透传到 proxy。 */
+@DisplayName("实例控制器: 取消、终止、暂停恢复与分区操作的路由转发")
 class ConsoleInstanceControllerTest {
 
   private final ConsoleOrchestratorPort proxy = mock(ConsoleOrchestratorPort.class);
@@ -42,7 +44,8 @@ class ConsoleInstanceControllerTest {
   }
 
   @Test
-  void cancelShouldUseCancelAction() throws Exception {
+  @DisplayName("取消请求按取消动作语义下发给下游并返回成功")
+  void shouldRouteCancel_whenCancelRequested() throws Exception {
     when(proxy.instanceAction(3L, "ta", "cancel"))
         .thenReturn(new ConsoleInstanceActionResponse(3L, null, "cancelled", null));
     mockMvc
@@ -52,7 +55,8 @@ class ConsoleInstanceControllerTest {
   }
 
   @Test
-  void terminateShouldUseTerminateAction() throws Exception {
+  @DisplayName("终止请求按终止动作语义下发给下游并返回成功")
+  void shouldRouteTerminate_whenTerminateRequested() throws Exception {
     when(proxy.instanceAction(3L, "ta", "terminate"))
         .thenReturn(new ConsoleInstanceActionResponse(3L, null, "terminated", null));
     mockMvc
@@ -62,7 +66,8 @@ class ConsoleInstanceControllerTest {
   }
 
   @Test
-  void pauseShouldUsePauseAction() throws Exception {
+  @DisplayName("暂停请求按暂停动作语义下发给下游并返回成功")
+  void shouldRoutePause_whenPauseRequested() throws Exception {
     when(proxy.instanceAction(3L, "ta", "pause"))
         .thenReturn(new ConsoleInstanceActionResponse(3L, null, "PAUSED", null));
     mockMvc
@@ -72,7 +77,8 @@ class ConsoleInstanceControllerTest {
   }
 
   @Test
-  void resumeShouldUseResumeAction() throws Exception {
+  @DisplayName("恢复请求按恢复动作语义下发给下游并返回成功")
+  void shouldRouteResume_whenResumeRequested() throws Exception {
     when(proxy.instanceAction(3L, "ta", "resume"))
         .thenReturn(new ConsoleInstanceActionResponse(3L, null, "RUNNING", null));
     mockMvc
@@ -82,7 +88,8 @@ class ConsoleInstanceControllerTest {
   }
 
   @Test
-  void cancelPartitionAndRetryPartitionShouldRouteToPartitionAction() throws Exception {
+  @DisplayName("分区取消与分区重试分别按各自动作下发给下游")
+  void shouldRoutePartitionActions_whenCancelAndRetryRequested() throws Exception {
     when(proxy.partitionAction(5L, "ta", "cancel"))
         .thenReturn(new ConsolePartitionActionResponse(5L, "ok"));
     when(proxy.partitionAction(5L, "ta", "retry"))
@@ -98,7 +105,8 @@ class ConsoleInstanceControllerTest {
   }
 
   @Test
-  void retryFailedPartitionsShouldRouteToInstanceBatchAction() throws Exception {
+  @DisplayName("重试失败分区按实例批量重试语义下发给下游")
+  void shouldRouteInstanceBatchAction_whenRetryFailedPartitionsRequested() throws Exception {
     when(proxy.retryFailedPartitions(3L, "ta"))
         .thenReturn(new ConsoleRetryFailedPartitionsResponse(3L, null, 2, 2, 0, List.of()));
 

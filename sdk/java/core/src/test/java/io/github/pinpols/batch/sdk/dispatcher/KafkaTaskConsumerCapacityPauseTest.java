@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
  * maxConcurrentTasks} 时调用 {@code consumer.pause(...)},降下来后调 {@code resume(...)}。 防 worker 因 Kafka
  * consumer 持续 poll 把消息囤进内存 OOM(Zeebe maxJobsActive 模式)。
  */
+@DisplayName("KafkaTaskConsumer 容量背压 — 在途任务达上限时暂停分区,回落后续订")
 class KafkaTaskConsumerCapacityPauseTest {
 
   private TaskDispatcher dispatcher;
@@ -47,7 +48,8 @@ class KafkaTaskConsumerCapacityPauseTest {
   }
 
   @Test
-  void pausesAssignedPartitionsWhenInFlightAtCapacity() {
+  @DisplayName("在途任务达到并发上限时暂停已分配分区,避免继续拉取消息")
+  void shouldPauseAssignedPartitions_whenInFlightAtCapacity() {
     when(dispatcher.submittedCount()).thenReturn(2); // == maxConcurrentTasks
     when(dispatcher.platformAcceptsNewTasks()).thenReturn(true);
     when(dispatcher.platformState()).thenReturn(WorkerRuntimeState.NORMAL);
@@ -63,7 +65,8 @@ class KafkaTaskConsumerCapacityPauseTest {
   }
 
   @Test
-  void resumesAssignedPartitionsAfterInFlightDropsBelowCapacity() {
+  @DisplayName("在途任务回落到上限以下时恢复订阅已分配分区")
+  void shouldResumeAssignedPartitions_whenInFlightDropsBelowCapacity() {
     when(dispatcher.submittedCount()).thenReturn(2, 0); // 第一次满,第二次空
     when(dispatcher.platformAcceptsNewTasks()).thenReturn(true);
     when(dispatcher.platformState()).thenReturn(WorkerRuntimeState.NORMAL);
@@ -83,7 +86,8 @@ class KafkaTaskConsumerCapacityPauseTest {
   }
 
   @Test
-  void doesNotRepeatPauseWhileAlreadyPaused() {
+  @DisplayName("持续满负载下重复触发背压,暂停分区集合保持不变")
+  void shouldNotRepeatPause_whenAlreadyPaused() {
     when(dispatcher.submittedCount()).thenReturn(5); // 持续满
     when(dispatcher.platformAcceptsNewTasks()).thenReturn(true);
     when(dispatcher.platformState()).thenReturn(WorkerRuntimeState.NORMAL);
@@ -103,7 +107,8 @@ class KafkaTaskConsumerCapacityPauseTest {
   }
 
   @Test
-  void doesNotPauseWhenInFlightBelowCapacity() {
+  @DisplayName("在途任务未达上限时不暂停任何分区")
+  void shouldNotPause_whenInFlightBelowCapacity() {
     when(dispatcher.submittedCount()).thenReturn(1);
     when(dispatcher.platformAcceptsNewTasks()).thenReturn(true);
     try (MockConsumer<String, byte[]> mockConsumer = new MockConsumer<>("latest")) {
@@ -122,7 +127,8 @@ class KafkaTaskConsumerCapacityPauseTest {
    * 4(<5)才 resume。防 max-1 / max 抖动反复颠簸 Kafka client。
    */
   @Test
-  void keepsPausedUntilInFlightDropsBelowHalfMaxHysteresis() {
+  @DisplayName("恢复阈值取并发上限一半,在途回落到半数以下才恢复订阅")
+  void shouldKeepPaused_whenInFlightAtOrAboveHalfLimit() {
     BatchPlatformClientConfig bigConfig = BatchPlatformClientConfig.builder()
         .baseUrl("http://localhost:0")
         .tenantId("tx")
@@ -159,7 +165,7 @@ class KafkaTaskConsumerCapacityPauseTest {
   /** withhold 不再 pause 分区;容量 pause/resume 仍必须完整覆盖 assignment。 */
   @Test
   @DisplayName("withhold ceiling 不干扰容量维度 pause/resume")
-  void capacityResumeCoversWithheldPartition() {
+  void shouldCoverWithheldPartition_whenCapacityResumes() {
     TopicPartition withheld = new TopicPartition("batch.task.dispatch.tx.t0", 0);
     TopicPartition healthy = new TopicPartition("batch.task.dispatch.tx.t1", 0);
     // 容量先满(pause 整个 assignment),再跌破阈值(resume)
@@ -191,7 +197,8 @@ class KafkaTaskConsumerCapacityPauseTest {
   }
 
   @Test
-  void capacityPauseSkippedWhenNoPartitionsAssigned() {
+  @DisplayName("未分配到任何分区时跳过暂停与恢复,不触发客户端异常")
+  void shouldSkipPauseAndResume_whenNoPartitionsAssigned() {
     when(dispatcher.submittedCount()).thenReturn(10);
     when(dispatcher.platformAcceptsNewTasks()).thenReturn(true);
     try (MockConsumer<String, byte[]> mockConsumer = new MockConsumer<>("latest")) {

@@ -7,26 +7,31 @@ import io.github.pinpols.batch.common.verifier.VerifyContext;
 import io.github.pinpols.batch.common.verifier.VerifyResult;
 import java.util.HashMap;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("处理发布数量校验:发布数为零且确有处理行时判失败,缺字段或空输入时放行")
 class ProcessPublishedCountVerifierTest {
 
   private final ProcessPublishedCountVerifier verifier = new ProcessPublishedCountVerifier();
 
   @Test
-  void passesWhenPublishedCountPositive() {
+  @DisplayName("发布数量为正数时校验通过")
+  void shouldPass_whenPublishedCountPositive() {
     assertThat(verifier.verify(contextWith(Map.of("publishedCount", 10L))).passed())
         .isTrue();
   }
 
   @Test
-  void passesWhenPublishedCountMissing() {
+  @DisplayName("载荷未上报发布数量时不归本校验判定,直接通过")
+  void shouldPass_whenPublishedCountMissing() {
     // worker 未上报该字段 → 不归本 verifier 判
     assertThat(verifier.verify(contextWith(Map.of())).passed()).isTrue();
   }
 
   @Test
-  void failsWhenPublishedCountZero() {
+  @DisplayName("发布数为零但处理行数为正数时校验失败,并以批次号作为证据回带")
+  void shouldFail_whenPublishedCountZero() {
     Map<String, Object> payload = new HashMap<>();
     payload.put("publishedCount", 0);
     payload.put("processedCount", 100);
@@ -38,7 +43,8 @@ class ProcessPublishedCountVerifierTest {
   }
 
   @Test
-  void passesWhenNoRowsWereProcessed() {
+  @DisplayName("发布数为零且处理行数也为零时视为空输入,校验通过")
+  void shouldPass_whenNoRowsWereProcessed() {
     assertThat(verifier
             .verify(contextWith(Map.of("publishedCount", 0, "processedCount", 0)))
             .passed())
@@ -46,7 +52,8 @@ class ProcessPublishedCountVerifierTest {
   }
 
   @Test
-  void doesNotTreatMalformedProcessedCountAsEmptyInput() {
+  @DisplayName("处理行数不是数字时按非空输入处理,校验失败")
+  void shouldFail_whenProcessedCountNotANumber() {
     Map<String, Object> payload = new HashMap<>();
     payload.put("publishedCount", 0);
     payload.put("processedCount", "unknown");
@@ -54,7 +61,8 @@ class ProcessPublishedCountVerifierTest {
   }
 
   @Test
-  void parsesStringNumber() {
+  @DisplayName("发布数量以数字字符串给出时解析后判定通过")
+  void shouldPass_whenPublishedCountIsNumericString() {
     assertThat(verifier.verify(contextWith(Map.of("publishedCount", "5"))).passed())
         .isTrue();
   }

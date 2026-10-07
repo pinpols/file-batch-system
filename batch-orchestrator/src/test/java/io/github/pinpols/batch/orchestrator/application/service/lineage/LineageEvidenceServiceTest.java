@@ -16,8 +16,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("血缘证据服务: 热表与归档表回退, 覆盖缺口与生效版本查询口径")
 class LineageEvidenceServiceTest {
 
   private final ResultVersionMapper resultVersionMapper = mock(ResultVersionMapper.class);
@@ -28,8 +30,9 @@ class LineageEvidenceServiceTest {
       resultVersionMapper, resultVersionQueryService, lineageEvidenceMapper);
 
   @Test
+  @DisplayName("按结果版本收集时装配作业实例, 流水线, 文件与派发记录, 且无覆盖缺口")
   @SuppressWarnings("unchecked")
-  void evidenceForResultVersionShouldAssembleHotTableChain() {
+  void shouldAssembleHotTableChain_whenQueryingByResultVersion() {
     ResultVersionEntity version = version(7L, "FILE_RECORD", "file_record:11");
     when(resultVersionMapper.selectById("ta", 7L)).thenReturn(version);
     when(lineageEvidenceMapper.selectJobInstance("ta", 101L))
@@ -55,8 +58,9 @@ class LineageEvidenceServiceTest {
   }
 
   @Test
+  @DisplayName("载荷文件无法解析时如实给出覆盖缺口, 不伪装完整")
   @SuppressWarnings("unchecked")
-  void evidenceShouldExposeKnownGapsInsteadOfPretendingCompleteness() {
+  void shouldExposeKnownGaps_whenPayloadFileUnresolved() {
     ResultVersionEntity version = version(8L, "FILE_RECORD", "file_record:99");
     when(resultVersionMapper.selectById("ta", 8L)).thenReturn(version);
     when(lineageEvidenceMapper.selectPipelineInstances("ta", 101L)).thenReturn(List.of());
@@ -77,8 +81,9 @@ class LineageEvidenceServiceTest {
   }
 
   @Test
+  @DisplayName("热表查不到时回退归档表, 覆盖范围标记为热表与归档")
   @SuppressWarnings("unchecked")
-  void evidenceShouldFallbackToArchiveTables() {
+  void shouldFallbackToArchiveTables_whenHotTablesMiss() {
     ResultVersionEntity version = version(10L, "FILE_RECORD", "file_record:11");
     when(resultVersionMapper.selectById("ta", 10L)).thenReturn(null);
     when(resultVersionMapper.selectArchivedById("ta", 10L)).thenReturn(version);
@@ -110,8 +115,9 @@ class LineageEvidenceServiceTest {
   }
 
   @Test
+  @DisplayName("热表文件记录查不到时回退归档文件记录")
   @SuppressWarnings("unchecked")
-  void evidenceShouldFallbackToArchiveFileRecords() {
+  void shouldFallbackToArchiveFileRecords_whenHotRecordsMiss() {
     ResultVersionEntity version = version(11L, "FILE_RECORD", "file_record:11");
     when(resultVersionMapper.selectById("ta", 11L)).thenReturn(null);
     when(resultVersionMapper.selectArchivedById("ta", 11L)).thenReturn(version);
@@ -141,7 +147,8 @@ class LineageEvidenceServiceTest {
   }
 
   @Test
-  void evidenceForEffectiveShouldUseResultVersionQueryService() {
+  @DisplayName("查询生效版本证据时委托生效版本查询服务解析")
+  void shouldUseVersionQueryService_whenQueryingEffective() {
     ResultVersionEntity version = version(9L, "INLINE_JSON", null);
     when(resultVersionQueryService.findEffective("ta", "job:daily:2026-06-30"))
         .thenReturn(Optional.of(version));
@@ -156,7 +163,8 @@ class LineageEvidenceServiceTest {
   }
 
   @Test
-  void missingResultVersionShouldRaiseNotFound() {
+  @DisplayName("结果版本不存在时抛出未找到异常")
+  void shouldRaiseNotFound_whenResultVersionMissing() {
     when(resultVersionMapper.selectById("ta", 404L)).thenReturn(null);
 
     assertThatThrownBy(() -> service.evidenceForResultVersion("ta", 404L))

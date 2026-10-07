@@ -15,9 +15,11 @@ import io.github.pinpols.batch.console.domain.notification.mapper.AlertEscalatio
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertEventMapper;
 import io.github.pinpols.batch.console.domain.notification.service.AlertEscalationNotifier.AlertEscalationNotifyPayload;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+@DisplayName("告警升级通知待发落库: 水位标记与插入失败的判定口径")
 class AlertEscalationNotificationOutboxServiceTest {
 
   private AlertEventMapper alertEventMapper;
@@ -33,7 +35,8 @@ class AlertEscalationNotificationOutboxServiceTest {
   }
 
   @Test
-  void enqueueMarksWatermarkAndInsertsOutboxWhenCasWins() {
+  @DisplayName("水位比较交换成功时标记已通知层级, 并按升级层级写入待发记录")
+  void shouldEnqueue_whenWatermarkCompareAndSwapWins() {
     AlertEventEntity alert = alert(11L, "t1", 2, 1);
     when(alertEventMapper.markEscalationNotified("t1", 11L, 1, 2)).thenReturn(1);
 
@@ -54,7 +57,8 @@ class AlertEscalationNotificationOutboxServiceTest {
   }
 
   @Test
-  void enqueueDoesNotInsertOutboxWhenCasLoses() {
+  @DisplayName("水位比较交换失败时视为已被其它实例接管, 不写入待发记录")
+  void shouldSkipInsert_whenWatermarkCompareAndSwapLoses() {
     AlertEventEntity alert = alert(12L, "t1", 1, 0);
     when(alertEventMapper.markEscalationNotified("t1", 12L, 0, 1)).thenReturn(0);
 
@@ -65,7 +69,8 @@ class AlertEscalationNotificationOutboxServiceTest {
   }
 
   @Test
-  void enqueueFailsFastWhenOutboxInsertDoesNotCreateRow() {
+  @DisplayName("待发记录插入影响行数为零时立即抛出异常, 不静默吞掉")
+  void shouldFailFast_whenInsertAffectsNoRow() {
     AlertEventEntity alert = alert(14L, "t1", 2, 1);
     when(alertEventMapper.markEscalationNotified("t1", 14L, 1, 2)).thenReturn(1);
     when(outboxMapper.insert(any())).thenReturn(0);
@@ -76,7 +81,8 @@ class AlertEscalationNotificationOutboxServiceTest {
   }
 
   @Test
-  void enqueueSkipsRowsAlreadyNotifiedAtCurrentTier() {
+  @DisplayName("当前层级已标记通知过时直接跳过, 不再更新水位也不写待发记录")
+  void shouldSkip_whenAlreadyNotifiedAtSameTier() {
     AlertEventEntity alert = alert(13L, "t1", 2, 2);
 
     boolean enqueued = service.enqueue(alert, "alerts", "ALERT_ESCALATED", payload(13L, 2));

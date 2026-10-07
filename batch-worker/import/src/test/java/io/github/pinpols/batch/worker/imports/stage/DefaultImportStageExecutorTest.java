@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -38,6 +39,7 @@ import org.mockito.quality.Strictness;
 // 但 STEP_NOT_FOUND / PIPELINE_STEP_MISSING 等用例不会触发其中部分调用,严格模式会误报 UnnecessaryStubbing。
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
+@DisplayName("导入阶段执行器单测:成功,业务异常,基础设施异常与步骤缺失的结果归类")
 class DefaultImportStageExecutorTest {
 
   @Mock
@@ -73,6 +75,7 @@ class DefaultImportStageExecutorTest {
   }
 
   @Test
+  @DisplayName("步骤成功时返回成功结果,并收尾错误输出且登记步骤运行成功")
   void execute_returnsSuccess_whenStepSucceeds() {
     when(receiveStep.execute(any())).thenReturn(ImportStageResult.success(ImportStage.RECEIVE));
     ImportJobContext context = buildContext();
@@ -87,6 +90,7 @@ class DefaultImportStageExecutorTest {
   }
 
   @Test
+  @DisplayName("步骤抛业务异常时归类为业务错误,错误码与明细一并记账")
   void execute_returnsBusinessError_whenStepThrowsBizException() {
     when(receiveStep.execute(any()))
         .thenThrow(BizException.of(
@@ -110,6 +114,7 @@ class DefaultImportStageExecutorTest {
   }
 
   @Test
+  @DisplayName("步骤抛运行时异常时归类为基础设施错误,并原样保留异常消息")
   void execute_returnsInfraError_whenStepThrowsRuntimeException() {
     when(receiveStep.execute(any())).thenThrow(new RuntimeException("sftp connection refused"));
     ImportJobContext context = buildContext();
@@ -124,6 +129,7 @@ class DefaultImportStageExecutorTest {
   }
 
   @Test
+  @DisplayName("实现编码未注册时返回步骤未找到结果,不执行任何阶段")
   void execute_returnsStepNotFound_whenImplCodeNotRegistered() {
     ImportJobContext context = buildContext("UNKNOWN_IMPL");
 
@@ -135,6 +141,7 @@ class DefaultImportStageExecutorTest {
   }
 
   @Test
+  @DisplayName("管道未配置任何步骤时返回步骤缺失结果")
   void execute_returnsPipelineStepMissing_whenNoStepsConfigured() {
     ImportJobContext context = new ImportJobContext();
     context.setTenantId("t1");

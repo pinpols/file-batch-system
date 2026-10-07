@@ -29,6 +29,7 @@ import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.ObjectProvider;
@@ -39,6 +40,7 @@ import org.springframework.transaction.support.SimpleTransactionStatus;
 
 /** 单元测试：{@link DefaultCompensationService} 的校验与守卫条件。 */
 @SuppressWarnings("unchecked")
+@DisplayName("补偿服务: 提交参数校验与各类补偿路径的执行口径")
 class DefaultCompensationServiceTest {
 
   private CompensationCommandMapper compensationCommandMapper;
@@ -90,23 +92,27 @@ class DefaultCompensationServiceTest {
   // ── validate() ────────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("补偿提交对象为空时抛出业务异常")
   void shouldThrowWhenCommandIsNull() {
     assertThatThrownBy(() -> service.submit(null)).isInstanceOf(BizException.class);
   }
 
   @Test
+  @DisplayName("租户标识为空白时提交抛出业务异常")
   void shouldThrowWhenTenantIdIsBlank() {
     CompensationSubmitCommand cmd = command("", "JOB", 1L);
     assertThatThrownBy(() -> service.submit(cmd)).isInstanceOf(BizException.class);
   }
 
   @Test
+  @DisplayName("补偿类型为空白时提交抛出业务异常")
   void shouldThrowWhenCompensationTypeIsBlank() {
     CompensationSubmitCommand cmd = command("t1", "", 1L);
     assertThatThrownBy(() -> service.submit(cmd)).isInstanceOf(BizException.class);
   }
 
   @Test
+  @DisplayName("补偿类型不在支持范围内时提交抛出业务异常")
   void shouldThrowWhenCompensationTypeIsUnsupported() {
     // UNKNOWN type → execute() switch default → BizException
     CompensationSubmitCommand cmd = command("t1", "UNKNOWN_TYPE", 1L);
@@ -119,6 +125,7 @@ class DefaultCompensationServiceTest {
   }
 
   @Test
+  @DisplayName("分区类补偿缺少目标标识时抛出业务异常")
   void shouldThrowWhenPartitionTargetIdIsNull() {
     CompensationSubmitCommand cmd = command("t1", "PARTITION", null);
     when(compensationCommandMapper.countRunningByTarget(
@@ -129,6 +136,7 @@ class DefaultCompensationServiceTest {
   }
 
   @Test
+  @DisplayName("步骤类补偿缺少目标标识时抛出业务异常")
   void shouldThrowWhenStepTargetIdIsNull() {
     CompensationSubmitCommand cmd = command("t1", "STEP", null);
     when(compensationCommandMapper.countRunningByTarget(
@@ -139,6 +147,7 @@ class DefaultCompensationServiceTest {
   }
 
   @Test
+  @DisplayName("死信类补偿缺少目标标识时抛出业务异常")
   void shouldThrowWhenDlqTargetIdIsNull() {
     CompensationSubmitCommand cmd = command("t1", "DLQ", null);
     when(compensationCommandMapper.countRunningByTarget(
@@ -149,6 +158,7 @@ class DefaultCompensationServiceTest {
   }
 
   @Test
+  @DisplayName("批量类补偿缺少任务编码时抛出业务异常")
   void shouldThrowWhenBatchJobCodeIsBlank() {
     CompensationSubmitCommand cmd = new CompensationSubmitCommand(
         "t1",
@@ -173,6 +183,7 @@ class DefaultCompensationServiceTest {
   }
 
   @Test
+  @DisplayName("文件类补偿缺少目标文件标识时抛出业务异常")
   void shouldThrowWhenFileTargetIdAndRelatedFileIdAreNull() {
     CompensationSubmitCommand cmd = new CompensationSubmitCommand(
         "t1", "FILE", null, null, null, null, null, null, "CH1", null, null, null, null, null);
@@ -190,6 +201,7 @@ class DefaultCompensationServiceTest {
   // 真正调到对应下游服务），不依赖返回值结构。
 
   @Test
+  @DisplayName("分区类补偿成功时返回非空补偿单号并触发分区重试")
   void shouldRetryPartitionSuccessfully_PARTITION_path() {
     CompensationSubmitCommand cmd = command("t1", "PARTITION", 10L);
     when(compensationCommandMapper.countRunningByTarget(
@@ -204,6 +216,7 @@ class DefaultCompensationServiceTest {
   }
 
   @Test
+  @DisplayName("死信类补偿成功时触发死信重放")
   void shouldReplayDeadLetterSuccessfully_DLQ_path() {
     CompensationSubmitCommand cmd = command("t1", "DLQ", 999L);
     when(compensationCommandMapper.countRunningByTarget(
@@ -217,6 +230,7 @@ class DefaultCompensationServiceTest {
   }
 
   @Test
+  @DisplayName("步骤类补偿成功时按目标步骤触发重跑")
   void shouldRerunStepSuccessfully_STEP_path() {
     CompensationSubmitCommand cmd = command("t1", "STEP", 5L);
     when(compensationCommandMapper.countRunningByTarget(
@@ -238,6 +252,7 @@ class DefaultCompensationServiceTest {
   }
 
   @Test
+  @DisplayName("文件类补偿成功时触发文件重新派发")
   void shouldReprocessFileSuccessfully_FILE_path() {
     CompensationSubmitCommand cmd = new CompensationSubmitCommand(
         "t1",
@@ -266,6 +281,7 @@ class DefaultCompensationServiceTest {
   }
 
   @Test
+  @DisplayName("作业类补偿成功时拉起新实例并登记触发请求")
   void shouldRerunJobSuccessfully_JOB_path() {
     CompensationSubmitCommand cmd = command("t1", "JOB", 100L);
     when(compensationCommandMapper.countRunningByTarget(
@@ -296,6 +312,7 @@ class DefaultCompensationServiceTest {
   }
 
   @Test
+  @DisplayName("批量类补偿成功时拉起批量实例并登记触发请求")
   void shouldRerunBatchSuccessfully_BATCH_path() {
     LocalDate bizDate = LocalDate.now();
     CompensationSubmitCommand cmd = new CompensationSubmitCommand(

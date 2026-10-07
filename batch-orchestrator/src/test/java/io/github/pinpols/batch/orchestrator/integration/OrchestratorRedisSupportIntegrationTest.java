@@ -7,6 +7,7 @@ import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRed
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
@@ -20,6 +21,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
     classes = OrchestratorRedisSupportIntegrationTest.TestApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE,
     properties = {"batch.startup-self-check.enabled=false"})
+@DisplayName("Redis 支撑组件在真实容器中的核心读写行为,验证结构化载荷往返,删除后读取为空,哈希批量写入带有效期以及脚本求值")
 class OrchestratorRedisSupportIntegrationTest extends AbstractIntegrationTest {
 
   @SpringBootConfiguration
@@ -34,7 +36,8 @@ class OrchestratorRedisSupportIntegrationTest extends AbstractIntegrationTest {
   private StringRedisTemplate redisTemplate;
 
   @Test
-  void setJsonAndGetJsonRoundTrip() {
+  @DisplayName("写入结构化载荷后可原样读回,文本字段与数值字段取值一致")
+  void shouldRoundTripJsonPayload_whenReadBackImmediately() {
     String key = "test:it:json:" + System.nanoTime();
     Map<String, Object> payload = Map.of("name", "hello", "count", 42);
 
@@ -48,7 +51,8 @@ class OrchestratorRedisSupportIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void getJsonReturnsNullAfterDelete() {
+  @DisplayName("删除键之后再读取返回空,不残留历史值")
+  void shouldReturnNull_whenReadingDeletedKey() {
     String key = "test:it:delete:" + System.nanoTime();
     redis.setJson(key, Map.of("x", "y"), Duration.ofMinutes(1));
 
@@ -60,7 +64,8 @@ class OrchestratorRedisSupportIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void putHashAllAndEntriesRoundTripWithTtl() {
+  @DisplayName("批量写入哈希字段后可读回全部条目,且键的剩余有效期为正")
+  void shouldRoundTripHashEntries_whenTtlConfigured() {
     String key = "test:it:hash:" + System.nanoTime();
     Map<String, String> fields = Map.of("k1", "v1", "k2", "v2");
 
@@ -72,7 +77,8 @@ class OrchestratorRedisSupportIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void evalLongExecutesLuaScriptAgainstRealRedis() {
+  @DisplayName("对真实 Redis 执行脚本求值,返回可解析为长整型的数值结果")
+  void shouldReturnNumericResult_whenEvaluatingScript() {
     String key = "test:it:lua:" + System.nanoTime();
     redisTemplate.opsForValue().set(key, "99");
 

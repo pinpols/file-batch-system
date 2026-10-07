@@ -9,15 +9,18 @@ import java.time.Duration;
 import java.util.List;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.content.Media;
 import org.springframework.util.MimeTypeUtils;
 
+@DisplayName("兼容协议多模态客户端冒烟: 图片与文本流式链路,依赖外部密钥方可执行")
 class ConsoleAiCompatibleImageLiveTest {
   @Test
-  void streamsAnImageThroughTheConfiguredSpringAiAdapter() throws Exception {
+  @DisplayName("发送红绿测试图片后,流式回答描述出两种颜色且上报用量统计")
+  void shouldDescribeBothColors_whenImageIsSentToCompatibleModel() throws Exception {
     ConsoleAiClients clients = deepSeekClients();
 
     Media image =
@@ -50,7 +53,8 @@ class ConsoleAiCompatibleImageLiveTest {
   }
 
   @Test
-  void streamsTextThroughTheSameConfiguredAdapter() {
+  @DisplayName("发送纯文本提示后,流式回答包含约定标记且上报用量统计")
+  void shouldReturnConventionMarker_whenTextPromptIsSentToSameAdapter() {
     ConsoleAiClients clients = deepSeekClients();
     List<ChatResponse> chunks = clients
         .primary()

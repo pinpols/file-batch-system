@@ -16,8 +16,10 @@ import java.time.LocalDate;
 import java.time.Month;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("资产分区服务: 生效分区查询, 就绪判定与物化口径")
 class AssetPartitionServiceTest {
 
   private AssetPartitionMapper assetPartitionMapper;
@@ -32,7 +34,8 @@ class AssetPartitionServiceTest {
   }
 
   @Test
-  void findEffectiveJobPartitionPrefersMaterializedPartition() {
+  @DisplayName("存在已物化分区时优先返回该快照, 不再回退查询生效版本")
+  void shouldPreferMaterializedPartition_whenQueryingEffective() {
     LocalDate bizDate = LocalDate.of(2026, Month.JUNE, 30);
     AssetPartitionSnapshot snapshot = new AssetPartitionSnapshot(
         "t1",
@@ -65,7 +68,8 @@ class AssetPartitionServiceTest {
   }
 
   @Test
-  void findEffectiveJobPartitionIgnoresStaleMaterializedPartitionWhenLatestEffectiveIsNewer() {
+  @DisplayName("已物化分区落后于最新生效版本时忽略快照, 返回最新版本投影")
+  void shouldIgnoreStaleMaterialized_whenLatestEffectiveIsNewer() {
     LocalDate bizDate = LocalDate.of(2026, Month.JUNE, 30);
     AssetPartitionSnapshot stale = new AssetPartitionSnapshot(
         "t1",
@@ -103,7 +107,8 @@ class AssetPartitionServiceTest {
   }
 
   @Test
-  void findEffectiveJobPartitionFallsBackToResultVersionProjection() {
+  @DisplayName("没有已物化分区时回退为按最新生效版本构造投影")
+  void shouldFallBackToVersionProjection_whenNoMaterializedPartition() {
     LocalDate bizDate = LocalDate.of(2026, Month.JUNE, 30);
     ResultVersionEntity version = ResultVersionEntity.builder()
         .tenantId("t1")
@@ -131,7 +136,8 @@ class AssetPartitionServiceTest {
   }
 
   @Test
-  void findEffectiveJobPartitionReturnsEmptyForInvalidInput() {
+  @DisplayName("资产编码为空或营业日缺失时返回空, 且不访问存储")
+  void shouldReturnEmpty_whenInputInvalid() {
     assertThat(service.findEffectiveJobPartition("t1", " ", LocalDate.of(2026, Month.JUNE, 30)))
         .isEmpty();
     assertThat(service.findEffectiveJobPartition("t1", "JOB_A", null)).isEmpty();
@@ -140,7 +146,8 @@ class AssetPartitionServiceTest {
   }
 
   @Test
-  void isJobPartitionReadyRequiresEffectiveVersion() {
+  @DisplayName("最新产出不是生效版本时判定为未就绪")
+  void shouldNotBeReady_whenLatestAttemptNotEffective() {
     LocalDate bizDate = LocalDate.of(2026, Month.JUNE, 30);
     when(resultVersionQueryService.findLatestByJob("t1", "JOB_A", bizDate))
         .thenReturn(Optional.of(ResultVersionEntity.builder()
@@ -154,7 +161,8 @@ class AssetPartitionServiceTest {
   }
 
   @Test
-  void findEffectiveJobPartitionBlocksOldEffectiveWhenLatestAttemptPending() {
+  @DisplayName("最新产出处于待生效状态时屏蔽旧的生效版本, 返回空")
+  void shouldReturnEmpty_whenLatestAttemptStillPending() {
     LocalDate bizDate = LocalDate.of(2026, Month.JUNE, 30);
     when(resultVersionQueryService.findLatestByJob("t1", "JOB_A", bizDate))
         .thenReturn(Optional.of(ResultVersionEntity.builder()
@@ -172,7 +180,8 @@ class AssetPartitionServiceTest {
   }
 
   @Test
-  void materializeEffectiveJobPartitionUpsertsDataAssetAndPartition() {
+  @DisplayName("物化生效分区时补齐数据资产并写入分区快照")
+  void shouldUpsertDataAssetAndPartition_whenMaterializing() {
     JobInstanceEntity instance = new JobInstanceEntity();
     instance.setTenantId("t1");
     instance.setId(100L);
@@ -213,7 +222,8 @@ class AssetPartitionServiceTest {
   }
 
   @Test
-  void materializeEffectiveJobPartitionIgnoresNonEffectiveVersion() {
+  @DisplayName("版本不是生效状态时不物化数据资产与分区")
+  void shouldSkipMaterialization_whenVersionNotEffective() {
     JobInstanceEntity instance = new JobInstanceEntity();
     instance.setTenantId("t1");
     instance.setId(100L);

@@ -17,12 +17,14 @@ import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("传感器探测轮询调度,验证排空期间跳过扫描与探测期间租户上下文的建立和清理")
 class SensorPollSchedulerTest {
 
   @Mock
@@ -40,7 +42,8 @@ class SensorPollSchedulerTest {
   }
 
   @Test
-  void drainingSkipsDatabaseScan() {
+  @DisplayName("编排器处于排空状态时跳过待探测任务扫描,不触发数据库取数")
+  void shouldSkipDatabaseScan_whenDraining() {
     when(gracefulShutdown.isDraining()).thenReturn(true);
 
     scheduler().scan();
@@ -49,7 +52,8 @@ class SensorPollSchedulerTest {
   }
 
   @Test
-  void probeRunsInsideResolvedTenantContextAndAlwaysCleansIt() {
+  @DisplayName("探测执行期间使用工作流运行归属的租户上下文,轮询结束后清理该上下文")
+  void shouldProbeWithinOwnedTenantContext_andClearItAfterPolling() {
     WorkflowNodeRunEntity nodeRun = new WorkflowNodeRunEntity();
     nodeRun.setId(7L);
     nodeRun.setWorkflowRunId(11L);

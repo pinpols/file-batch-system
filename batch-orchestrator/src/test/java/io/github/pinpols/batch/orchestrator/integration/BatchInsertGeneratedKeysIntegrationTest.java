@@ -52,6 +52,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * 关闭 FK 触发器（本 IT 只验证 SQL 形状与驱动行为，不验证业务链路——业务链路由 PartitionJoinPromotionIntegrationTest 等全栈 IT 覆盖）。
  */
 @Testcontainers
+@DisplayName("真实数据库上的批量语句机制,验证多行插入的主键按序回填,批量续租的命中集合与调用标识比较,以及事件抢占与后续标记的守卫语义")
 class BatchInsertGeneratedKeysIntegrationTest {
 
   @Container
@@ -102,8 +103,8 @@ class BatchInsertGeneratedKeysIntegrationTest {
   }
 
   @Test
-  @DisplayName("5.1: job_partition/job_task insertBatch 多行生成主键按序回填(下游硬依赖)")
-  void insertBatchBackfillsGeneratedIdsInOrder() {
+  @DisplayName("批量插入多行时按序回填生成主键,回填标识与数据库行一一对应且任务插入同样按序回填")
+  void shouldBackfillGeneratedIdsInOrder_whenBatchInserting() {
     try (SqlSession session = sqlSessionFactory.openSession(true)) {
       JobPartitionMapper partitionMapper = session.getMapper(JobPartitionMapper.class);
       List<JobPartitionEntity> partitions =
@@ -137,8 +138,8 @@ class BatchInsertGeneratedKeysIntegrationTest {
   }
 
   @Test
-  @DisplayName("5.3: renewLeaseBatch 一条 UPDATE...RETURNING — 命中集/cancel 回读/CAS 谓词")
-  void renewLeaseBatchUpdatesLeaseAndReturnsCancelFlag() {
+  @DisplayName("批量续租只命中调用标识匹配的占位,回读取消标记并真正写入租约到期时间")
+  void shouldUpdateLeaseAndReturnCancelFlag_whenBatchRenewing() {
     try (SqlSession session = sqlSessionFactory.openSession(true)) {
       JobPartitionMapper partitionMapper = session.getMapper(JobPartitionMapper.class);
       JobTaskMapper taskMapper = session.getMapper(JobTaskMapper.class);
@@ -183,8 +184,8 @@ class BatchInsertGeneratedKeysIntegrationTest {
   }
 
   @Test
-  @DisplayName("5.4: markPublishingBatch UPDATE...RETURNING 抢占 + attempt 递增 + PUBLISHING 守卫")
-  void markPublishingBatchClaimsAndGuardsFollowUpUpdates() {
+  @DisplayName("批量抢占发布中状态时只命中可发布的行,递增发布尝试次数且已发布行不被后续标记误改")
+  void shouldClaimOnlyPublishableRows_whenBatchMarkingPublishing() {
     try (SqlSession session = sqlSessionFactory.openSession(true)) {
       OutboxEventMapper outboxMapper = session.getMapper(OutboxEventMapper.class);
       jdbc.update(

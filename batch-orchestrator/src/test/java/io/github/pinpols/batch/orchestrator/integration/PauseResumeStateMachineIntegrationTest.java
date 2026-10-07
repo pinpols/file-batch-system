@@ -10,6 +10,7 @@ import io.github.pinpols.batch.orchestrator.application.service.workflow.Workflo
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.LocalDate;
 import java.time.Month;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -18,6 +19,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("作业实例与工作流运行的暂停恢复状态机,验证真实数据库条件更新下的状态流转与终态不可复活")
 class PauseResumeStateMachineIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "pause-it";
@@ -33,7 +35,8 @@ class PauseResumeStateMachineIntegrationTest extends AbstractIntegrationTest {
   private WorkflowRunManagementApplicationService workflowRunService;
 
   @Test
-  void jobInstancePauseResumeUsesRealDbCasAndDoesNotReviveTerminalState() {
+  @DisplayName("运行中的作业实例可暂停再恢复,而终态实例恢复被拒绝且状态保持不变")
+  void shouldPauseResumeAndRejectTerminalRevive_whenJobInstanceRunning() {
     Long runningId = insertJobInstance("RUNNING");
 
     assertThat(instanceService.pause(TENANT, runningId).status()).isEqualTo("PAUSED");
@@ -49,7 +52,8 @@ class PauseResumeStateMachineIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void workflowRunPauseResumeUsesRealDbCasAndDoesNotReviveTerminalState() {
+  @DisplayName("运行中的工作流运行可暂停再恢复,而终态运行恢复被拒绝且状态保持不变")
+  void shouldPauseResumeAndRejectTerminalRevive_whenWorkflowRunRunning() {
     Long runningId = insertWorkflowRun("RUNNING");
 
     assertThat(workflowRunService.pause(TENANT, runningId).status()).isEqualTo("PAUSED");

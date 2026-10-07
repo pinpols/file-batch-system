@@ -7,11 +7,14 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("导出数据插件注册中心单测:标识解析,大小写归一与重复注册的失败语义")
 class ExportDataPluginRegistryTest {
 
   @Test
+  @DisplayName("按标识精确解析到已注册的插件实例")
   void shouldResolvePluginById() {
     ExportDataPlugin plugin = stubPlugin("settlement");
     ExportDataPluginRegistry registry = new ExportDataPluginRegistry(List.of(plugin));
@@ -20,6 +23,7 @@ class ExportDataPluginRegistryTest {
   }
 
   @Test
+  @DisplayName("标识大小写不敏感,大写输入同样命中同一插件")
   void shouldNormalizeIdToLowerCase() {
     ExportDataPlugin plugin = stubPlugin("settlement");
     ExportDataPluginRegistry registry = new ExportDataPluginRegistry(List.of(plugin));
@@ -28,6 +32,7 @@ class ExportDataPluginRegistryTest {
   }
 
   @Test
+  @DisplayName("未提供导出数据引用时快速失败,并提示该引用为必填")
   void shouldThrowWhenIdIsNull() {
     ExportDataPluginRegistry registry = new ExportDataPluginRegistry(List.of());
 
@@ -37,6 +42,7 @@ class ExportDataPluginRegistryTest {
   }
 
   @Test
+  @DisplayName("导出数据引用为空白字符串时快速失败,并提示必填")
   void shouldThrowWhenIdIsBlank() {
     ExportDataPluginRegistry registry = new ExportDataPluginRegistry(List.of());
 
@@ -46,6 +52,7 @@ class ExportDataPluginRegistryTest {
   }
 
   @Test
+  @DisplayName("引用未注册时快速失败,并在消息中回显该标识")
   void shouldThrowWhenPluginNotFound() {
     ExportDataPluginRegistry registry = new ExportDataPluginRegistry(List.of());
 
@@ -55,6 +62,7 @@ class ExportDataPluginRegistryTest {
   }
 
   @Test
+  @DisplayName("同一标识注册两个插件时,注册阶段即失败并提示重复")
   void shouldThrowOnDuplicatePluginId() {
     ExportDataPlugin p1 = stubPlugin("settlement");
     ExportDataPlugin p2 = stubPlugin("settlement");
@@ -65,6 +73,7 @@ class ExportDataPluginRegistryTest {
   }
 
   @Test
+  @DisplayName("多个不同标识的插件可同时注册,并各自解析到对应实例")
   void shouldSupportMultipleDistinctPlugins() {
     ExportDataPlugin p1 = stubPlugin("settlement");
     ExportDataPlugin p2 = stubPlugin("jdbc_mapped_export");

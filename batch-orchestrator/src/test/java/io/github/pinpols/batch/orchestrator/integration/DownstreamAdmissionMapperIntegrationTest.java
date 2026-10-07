@@ -6,6 +6,7 @@ import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.mapper.DownstreamAdmissionMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -16,6 +17,7 @@ import org.springframework.test.context.TestConstructor;
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
+@DisplayName("下游准入查询组件,验证多渠道请求中任一渠道不健康即判定阻断以及租户之间的数据隔离")
 class DownstreamAdmissionMapperIntegrationTest extends AbstractIntegrationTest {
 
   private final String tenant = "downstream-admission-" + System.nanoTime();
@@ -30,7 +32,8 @@ class DownstreamAdmissionMapperIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void reportsBlockedWhenAnyRequestedChannelIsUnhealthy() {
+  @DisplayName("请求的多个渠道中任一处于不健康状态时,应判定为需要阻断")
+  void shouldReportBlocked_whenAnyRequestedChannelUnhealthy() {
     insertHealth(tenant, "SFTP_A", "HEALTHY");
     insertHealth(tenant, "OSS_B", "UNHEALTHY");
 
@@ -41,7 +44,8 @@ class DownstreamAdmissionMapperIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void ignoresUnhealthyRowsFromAnotherTenant() {
+  @DisplayName("不健康记录仅属于其它租户时,不应阻断当前租户的渠道请求")
+  void shouldIgnoreUnhealthyRowsFromAnotherTenant() {
     insertHealth(tenant + "-other", "SFTP_A", "UNHEALTHY");
 
     boolean blocked =

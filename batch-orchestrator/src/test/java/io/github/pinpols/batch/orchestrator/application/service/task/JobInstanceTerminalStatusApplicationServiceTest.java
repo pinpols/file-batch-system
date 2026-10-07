@@ -37,6 +37,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  *   <li>CAS miss(rows == 0): 不能调 reconcileChildren,也不上报 metrics(避免污染)
  * </ul>
  */
+@DisplayName("作业实例终态应用服务: 终态条件更新与子表收敛口径")
 class JobInstanceTerminalStatusApplicationServiceTest {
 
   @Mock
@@ -69,7 +70,7 @@ class JobInstanceTerminalStatusApplicationServiceTest {
 
   @Test
   @DisplayName("CAS 成功(rows=1) → 触发 reconcile,返 1")
-  void reconcilesOnCasHit() {
+  void shouldReconcileChildren_whenTerminalUpdateHits() {
     when(jobInstanceMapper.updateStatus(anyString(), anyLong(), anyString(), any(), anyLong()))
         .thenReturn(1);
     JobInstanceEntity instance = new JobInstanceEntity();
@@ -107,7 +108,7 @@ class JobInstanceTerminalStatusApplicationServiceTest {
 
   @Test
   @DisplayName("CAS miss(rows=0) → 不触发 reconcile,返 0(避免抹掉并发结果)")
-  void skipsReconcileOnCasMiss() {
+  void shouldSkipReconcile_whenTerminalUpdateMisses() {
     when(jobInstanceMapper.updateStatus(anyString(), anyLong(), anyString(), any(), anyLong()))
         .thenReturn(0);
 
@@ -122,7 +123,7 @@ class JobInstanceTerminalStatusApplicationServiceTest {
 
   @Test
   @DisplayName("CAS 成功对 PARTIAL_FAILED / TERMINATED / CANCELLED 等所有终态都触发 reconcile")
-  void reconcilesForAllTerminalStatuses() {
+  void shouldReconcile_whenStatusIsAnyTerminal() {
     when(jobInstanceMapper.updateStatus(anyString(), anyLong(), anyString(), any(), anyLong()))
         .thenReturn(1);
 

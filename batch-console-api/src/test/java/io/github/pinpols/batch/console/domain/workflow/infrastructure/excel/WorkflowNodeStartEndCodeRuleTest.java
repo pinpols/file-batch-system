@@ -7,11 +7,14 @@ import io.github.pinpols.batch.console.support.excel.ConsoleExcelPreviewWorkbook
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("编排节点起止编码规则: 起止节点唯一性与类型匹配校验")
 class WorkflowNodeStartEndCodeRuleTest {
 
   @Test
+  @DisplayName("起止节点编码规范时校验通过, 不产生任何问题项")
   void shouldPass_whenStartAndEndPresentWithCanonicalCodes() {
     List<Map<String, Object>> rows = List.of(
         node("ta", "WF_A", "1", "START", "START", 2),
@@ -24,6 +27,7 @@ class WorkflowNodeStartEndCodeRuleTest {
   }
 
   @Test
+  @DisplayName("节点类型为起始而编码不是起始码时报出一个问题, 指向编码列且行号为 2")
   void shouldReport_whenNodeTypeStartButCodeIsNotStart() {
     List<Map<String, Object>> rows = List.of(
         node("ta", "WF_B", "1", "NODE_START", "START", 2),
@@ -40,6 +44,7 @@ class WorkflowNodeStartEndCodeRuleTest {
   }
 
   @Test
+  @DisplayName("缺少起始节点时报错, 提示起始节点数应为 1 而实际为 0")
   void shouldReport_whenStartNodeMissing() {
     List<Map<String, Object>> rows = List.of(
         node("ta", "WF_C", "1", "NODE_JOB", "JOB", 2), node("ta", "WF_C", "1", "END", "END", 3));
@@ -51,6 +56,7 @@ class WorkflowNodeStartEndCodeRuleTest {
   }
 
   @Test
+  @DisplayName("同一编排内出现两个结束节点时报错, 提示结束节点数应为 1 而实际为 2")
   void shouldReport_whenTwoEndNodesInSameWorkflow() {
     List<Map<String, Object>> rows = List.of(
         node("ta", "WF_D", "1", "START", "START", 2),
@@ -64,6 +70,7 @@ class WorkflowNodeStartEndCodeRuleTest {
   }
 
   @Test
+  @DisplayName("编码为起始码但节点类型不匹配时报错, 问题指向节点类型列")
   void shouldReport_whenNodeCodeIsStartButNodeTypeMismatched() {
     List<Map<String, Object>> rows = List.of(
         node("ta", "WF_E", "1", "START", "JOB", 2), node("ta", "WF_E", "1", "END", "END", 3));
@@ -77,6 +84,7 @@ class WorkflowNodeStartEndCodeRuleTest {
   }
 
   @Test
+  @DisplayName("空行集合与空引用输入均返回空问题列表")
   void shouldHandleEmptyRows() {
     assertThat(WorkflowNodeStartEndCodeRule.validate(List.of())).isEmpty();
     assertThat(WorkflowNodeStartEndCodeRule.validate(null)).isEmpty();

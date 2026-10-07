@@ -17,6 +17,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,6 +44,7 @@ import org.springframework.test.context.ActiveProfiles;
 @ActiveProfiles({"test", "e2e"})
 @E2eBusinessSchema
 @Tag("e2e")
+@DisplayName("派发失败链路端到端归因:渠道配置缺失时派发任务收敛失败,验证任务终态为失败,且文件记录不会被错误标记为已派发")
 class DispatchFailurePipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -57,7 +59,8 @@ class DispatchFailurePipelineE2eIT extends AbstractIntegrationTest {
   private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
   @Test
-  void dispatchJobReportsFailedWhenChannelDoesNotExist() {
+  @DisplayName("投放引用不存在渠道的派发任务:验证任务终态为失败,且输出文件记录状态不会被写成已派发")
+  void shouldMarkTaskFailed_whenChannelConfigMissing() {
     String path = "/tmp/e2e-dispatch-fail-" + System.nanoTime() + ".json";
     Long fileId = jdbcTemplate.queryForObject("""
             insert into batch.file_record (

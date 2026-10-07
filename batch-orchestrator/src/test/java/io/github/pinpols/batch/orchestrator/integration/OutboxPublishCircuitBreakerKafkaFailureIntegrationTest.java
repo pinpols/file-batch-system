@@ -22,6 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
@@ -57,6 +58,7 @@ import org.springframework.test.annotation.DirtiesContext;
 // 标 DirtiesContext 避免污染后续 IT（如 OutboxPublishIntegrationTest）。
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@DisplayName("消息队列故障下的待发布事件熔断:连续失败达到阈值后开启熔断,恢复后失败事件重新发布并累加尝试次数")
 class OutboxPublishCircuitBreakerKafkaFailureIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "it-cb";
@@ -77,7 +79,8 @@ class OutboxPublishCircuitBreakerKafkaFailureIntegrationTest extends AbstractInt
 
   @Test
   @Order(2)
-  void kafkaBrokerFailureOpensOutboxCircuitBreakerAfterThreshold() {
+  @DisplayName("消息队列不可用时事件发布失败并记为失败状态,连续失败达到阈值后熔断开启,不再放行发布")
+  void shouldOpenOutboxCircuitBreaker_whenKafkaFailuresReachThreshold() {
     assertThat(circuitBreaker.allowNow()).isTrue();
 
     stopKafkaForFaultInjection();
@@ -104,7 +107,8 @@ class OutboxPublishCircuitBreakerKafkaFailureIntegrationTest extends AbstractInt
 
   @Test
   @Order(1)
-  void failedEventIsPublishedAfterKafkaRecovers() {
+  @DisplayName("消息队列恢复后此前失败的事件重新发布成功,发布尝试次数继续累加")
+  void shouldPublishFailedEvent_whenKafkaRecovers() {
     OutboxEventEntity event = seedOutboxEvent("cb-recover-" + System.nanoTime());
     jdbcTemplate.update(
         "update batch.outbox_event set publish_status = 'FAILED', publish_attempt = 1, "

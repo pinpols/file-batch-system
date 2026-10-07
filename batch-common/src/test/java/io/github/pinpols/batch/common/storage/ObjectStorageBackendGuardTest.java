@@ -12,15 +12,18 @@ import io.github.pinpols.batch.common.config.StorageBackendProperties;
 import io.github.pinpols.batch.common.stateful.StatefulBackendGuard;
 import java.nio.file.Path;
 import javax.sql.DataSource;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.mock.env.MockEnvironment;
 
+@DisplayName("对象存储后端守护:验证各后端身份指纹的组成要素以及未支持后端的拒绝")
 class ObjectStorageBackendGuardTest {
 
   @Test
-  void includesS3EndpointRegionAndBucketInIdentity() {
+  @DisplayName("选择远端对象存储后端时,身份指纹包含接入地址、区域与桶名")
+  void shouldIncludeEndpointRegionAndBucket_whenBackendIsRemote() {
     S3StorageProperties s3 = s3();
     MockEnvironment environment =
         environment().withProperty(StorageBackendProperties.BACKEND_KEY, ObjectStorageBackends.S3);
@@ -34,7 +37,8 @@ class ObjectStorageBackendGuardTest {
   }
 
   @Test
-  void includesAbsoluteFilesystemRootAndBucketInIdentity() {
+  @DisplayName("选择本地文件后端时,身份指纹包含规范化后的绝对根路径与桶名")
+  void shouldIncludeAbsoluteRootAndBucket_whenBackendIsFilesystem() {
     FilesystemStorageProperties filesystem = filesystem();
     filesystem.setRoot("./target/object-store");
     MockEnvironment environment = environment()
@@ -51,7 +55,8 @@ class ObjectStorageBackendGuardTest {
   }
 
   @Test
-  void rejectsUnknownStorageBackend() {
+  @DisplayName("配置了未支持的后端取值时,解析期望后端即抛出异常并提示不受支持")
+  void shouldReject_whenBackendValueUnsupported() {
     MockEnvironment environment =
         environment().withProperty(StorageBackendProperties.BACKEND_KEY, "local");
 

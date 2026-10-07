@@ -22,10 +22,12 @@ import java.util.List;
 import java.util.Optional;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.support.StaticApplicationContext;
 
+@DisplayName("回调投递重试中继: 抢占, 退避与放弃判定的口径")
 class WebhookDeliveryRelayTest {
 
   private ConsoleWebhookDeliveryLogMapper deliveryLogRepository;
@@ -63,6 +65,7 @@ class WebhookDeliveryRelayTest {
   }
 
   @Test
+  @DisplayName("上下文关闭后不再取锁, 也不查询可重试记录")
   void shouldSkipPollAfterContextClosedWithoutTakingLock() throws Throwable {
     relay.stopOnContextClosed(new ContextClosedEvent(new StaticApplicationContext()));
 
@@ -73,6 +76,7 @@ class WebhookDeliveryRelayTest {
   }
 
   @Test
+  @DisplayName("取锁期间连接工厂正在停止时按关闭噪声降级, 不记为失败")
   void shouldDowngradeRedisStoppingDuringShutdown() throws Throwable {
     doAnswer(inv -> {
           relay.stopOnContextClosed(new ContextClosedEvent(new StaticApplicationContext()));
@@ -87,6 +91,7 @@ class WebhookDeliveryRelayTest {
   }
 
   @Test
+  @DisplayName("连接工厂已停止的异常, 被识别为生命周期噪声")
   void shouldRecognizeRedisStoppedLifecycleNoise() {
     assertThat(WebhookDeliveryRelay.isShutdownNoise(new IllegalStateException(
             "LettuceConnectionFactory has been STOPPED. Use start() to initialize it")))
@@ -94,6 +99,7 @@ class WebhookDeliveryRelayTest {
   }
 
   @Test
+  @DisplayName("没有可重试记录时, 既不抢占也不投递")
   void shouldSkipPollWhenNoEligibleRows() {
     when(deliveryLogRepository.findEligibleRetries(any(Instant.class), eq(50)))
         .thenReturn(List.of());
@@ -105,6 +111,7 @@ class WebhookDeliveryRelayTest {
   }
 
   @Test
+  @DisplayName("投递成功时按尝试次数加一标记成功, 不写失败也不放弃")
   void shouldMarkRetrySuccessWhenDeliveryReturns200() {
     WebhookDeliveryLogEntity row = exhaustedRow(101L, 3);
     WebhookSubscriptionEntity subscription = enabledSubscription(7L);
@@ -124,6 +131,7 @@ class WebhookDeliveryRelayTest {
   }
 
   @Test
+  @DisplayName("未达绝对上限的失败按退避记录重试, 放弃计数保持零")
   void shouldMarkRetryFailureWithBackoffWhenBelowAbsoluteMax() {
     WebhookDeliveryLogEntity row = exhaustedRow(102L, 3); // next attempt = 4, 还没到 max 8
     WebhookSubscriptionEntity subscription = enabledSubscription(7L);
@@ -144,6 +152,7 @@ class WebhookDeliveryRelayTest {
   }
 
   @Test
+  @DisplayName("达到绝对最大尝试次数时, 放弃该行并累加放弃计数")
   void shouldMarkGiveUpAndIncrementCounterWhenAbsoluteMaxReached() {
     // 当前 attempt=7,下一次 nextAttempt=8,正好达到绝对最大重试次数。
     WebhookDeliveryLogEntity row = exhaustedRow(103L, 7);
@@ -162,6 +171,7 @@ class WebhookDeliveryRelayTest {
   }
 
   @Test
+  @DisplayName("订阅已停用时直接放弃并累加计数, 不尝试投递")
   void shouldGiveUpWhenSubscriptionDisabled() {
     WebhookDeliveryLogEntity row = exhaustedRow(104L, 3);
     WebhookSubscriptionEntity disabled = enabledSubscription(7L);
@@ -180,6 +190,7 @@ class WebhookDeliveryRelayTest {
   }
 
   @Test
+  @DisplayName("订阅已被删除时直接放弃并累加计数, 不尝试投递")
   void shouldGiveUpWhenSubscriptionMissing() {
     WebhookDeliveryLogEntity row = exhaustedRow(105L, 3);
     when(deliveryLogRepository.findEligibleRetries(any(), anyInt())).thenReturn(List.of(row));
@@ -194,6 +205,7 @@ class WebhookDeliveryRelayTest {
   }
 
   @Test
+  @DisplayName("抢占失败时跳过该行, 既不查订阅也不投递")
   void shouldSkipRowWhenClaimLost() {
     WebhookDeliveryLogEntity row = exhaustedRow(106L, 3);
     when(deliveryLogRepository.findEligibleRetries(any(), anyInt())).thenReturn(List.of(row));
@@ -207,6 +219,7 @@ class WebhookDeliveryRelayTest {
   }
 
   @Test
+  @DisplayName("载荷反序列化失败时放弃该行, 原因指明载荷解析失败")
   void shouldGiveUpOnPayloadDeserializationFailure() {
     WebhookDeliveryLogEntity row = exhaustedRow(107L, 3);
     row.setPayloadJson("{ this is not valid json"); // 故意坏掉
@@ -229,6 +242,7 @@ class WebhookDeliveryRelayTest {
   }
 
   @Test
+  @DisplayName("退避秒数按指数增长, 并在上限处截断")
   void shouldComputeBackoffWithExponentialCap() {
     // nextAttempt 4 → 5min(基数), 5 → 10min, 6 → 20min, 7 → 30min(截断)
     assertThat(relay.computeBackoffSeconds(4)).isEqualTo(5L * 60L);
@@ -239,6 +253,7 @@ class WebhookDeliveryRelayTest {
   }
 
   @Test
+  @DisplayName("单行投递抛异常时, 同批其余记录仍被处理")
   void shouldContinueProcessingBatchOnSingleRowError() {
     WebhookDeliveryLogEntity okRow = exhaustedRow(201L, 3);
     WebhookDeliveryLogEntity badRow = exhaustedRow(202L, 3);

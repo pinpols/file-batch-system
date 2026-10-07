@@ -27,6 +27,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * HashAndSiloPlacementResolver}(config 路由)与 {@link DbTablePlacementResolver}(表覆盖)在<b>真实跨实例</b>
  * 下把每个租户的连接物理路由到选定片。识别落片:经路由 DS 读回各片 {@code biz.__shard_identity}。
  */
+@DisplayName("业务多分片路由集成(双真实 PG 容器):按配置哈希分片的租户物理落到选定片;placement 表显式映射覆盖哈希结果,未登记租户回退哈希")
 class BusinessMultiShardRoutingIntegrationTest {
 
   @SuppressWarnings("resource")
@@ -71,7 +72,7 @@ class BusinessMultiShardRoutingIntegrationTest {
 
   @Test
   @DisplayName("config 路由:每租户经 multiShard 物理落到 hash 选定片(双真实 PG)")
-  void configHashRoutesToResolvedShard() throws Exception {
+  void configHashRouting_shouldRouteTenantToResolvedShard() throws Exception {
     HashAndSiloPlacementResolver resolver = new HashAndSiloPlacementResolver(2, Map.of());
     DataSource routing = BusinessRoutingDataSourceFactory.multiShard(shardMap(), resolver);
 
@@ -86,7 +87,7 @@ class BusinessMultiShardRoutingIntegrationTest {
 
   @Test
   @DisplayName("table 路由:placement 表显式映射覆盖 hash(table wins),未登记走 hash")
-  void tablePlacementOverridesHash() throws Exception {
+  void tablePlacement_shouldOverrideHash() throws Exception {
     HashAndSiloPlacementResolver hash = new HashAndSiloPlacementResolver(2, Map.of());
     String tenant = "table-driven-tenant";
     String tableKey = "shard-0".equals(hash.resolve(tenant)) ? "shard-1" : "shard-0"; // 反片

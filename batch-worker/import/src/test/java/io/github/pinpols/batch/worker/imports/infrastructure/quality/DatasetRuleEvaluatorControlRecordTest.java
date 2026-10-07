@@ -14,6 +14,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** ADR-041 Phase1.1:trailer 声明笔数 vs 实际解析记录数对账(controlRecordCheck)。 */
+@DisplayName("数据集规则控制记录对账单测:声明笔数与实际不符时的阻断与告警语义")
 class DatasetRuleEvaluatorControlRecordTest {
 
   private final DatasetRuleEvaluator evaluator =

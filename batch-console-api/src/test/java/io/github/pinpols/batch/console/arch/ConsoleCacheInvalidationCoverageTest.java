@@ -15,6 +15,7 @@ import com.tngtech.archunit.lang.syntax.ArchRuleDefinition;
 import java.util.List;
 import java.util.Set;
 import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -40,6 +41,7 @@ import org.junit.jupiter.api.Test;
  *
  * <p>只对这 5 个类施加（{@link #CACHED_SERVICE_FQNS}）。其余 console service 写的是非缓存表，不在护栏内。
  */
+@DisplayName("配置缓存失效覆盖守护: 受缓存约束的服务写库时必须同时失效缓存, 并校验受守护服务可解析")
 class ConsoleCacheInvalidationCoverageTest {
 
   private static final JavaClasses CLASSES = new ClassFileImporter()
@@ -70,7 +72,8 @@ class ConsoleCacheInvalidationCoverageTest {
    * 如果后续把 mapper 写操作重新放回受守护 service，必须同时补充 evict 或登记明确的非缓存表理由。
    */
   @Test
-  void everyWriteMethodInCachedServicesMustEvictCache() {
+  @DisplayName("受缓存约束的服务方法写库时必须同时失效缓存, 否则热路径会读到陈旧配置")
+  void shouldInvalidateCache_whenCachedServicePerformsWrite() {
     // 硬化:5 个受守护 service 必须都能解析到。若有人改名/移包,FQN 失配会让护栏"无方法可查"而静默通过
     // (空守护)——这里显式断言它们都在,改名即红,逼着同步更新 CACHED_SERVICE_FQNS。
     for (String fqn : CACHED_SERVICE_FQNS) {

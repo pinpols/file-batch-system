@@ -11,6 +11,7 @@ import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Instant;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -19,12 +20,14 @@ import org.springframework.boot.test.context.SpringBootTest;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("工作节点注册表持久化集成:验证真实数据库上注册写入与按键查询 + 排空及退役状态流转 + 条件更新防止旧状态覆盖 + 端口落库回读与不带端口的心跳保留")
 class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
   private WorkerRegistryMapper workerRegistryMapper;
 
   @Test
+  @DisplayName("在线节点入库后可按键读回,状态与所属分组保持写入值")
   void shouldSaveAndFindOnlineWorker() {
     WorkerRegistryEntity worker = onlineWorker("t1", "worker-it-001", "DEFAULT");
     workerRegistryMapper.saveLikeSdj(worker);
@@ -38,6 +41,7 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("节点处于在线状态时启动排空生效,状态转为排空中并写入排空起始与截止时刻")
   void shouldTransitionToDrainingStatus() {
     WorkerRegistryEntity worker = onlineWorker("t1", "worker-it-drain", "DEFAULT");
     workerRegistryMapper.saveLikeSdj(worker);
@@ -54,7 +58,8 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void staleStatusUpdateCannotOverwriteDrainingState() {
+  @DisplayName("节点已进入排空后,基于旧在线状态的条件更新不生效,排空状态不被覆盖")
+  void shouldKeepDrainingStatus_whenStaleUpdateArrives() {
     String workerCode = "worker-it-cas-" + BatchDateTimeSupport.utcEpochMillis();
     workerRegistryMapper.saveLikeSdj(onlineWorker("t1", workerCode, "DEFAULT"));
     assertThat(workerRegistryMapper.startDrainIfCurrent(
@@ -71,6 +76,7 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("节点退役后状态转为已退役,且排空起始与截止时刻被清空")
   void shouldTransitionToDecommissionedStatus() {
     WorkerRegistryEntity worker = onlineWorker("t1", "worker-it-decom", "DEFAULT");
     worker = workerRegistryMapper.saveLikeSdj(worker);
@@ -86,6 +92,7 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("按分组与在线状态查询只返回在线节点,同组离线节点被排除")
   void shouldFindWorkersByStatusAndGroup() {
     String uniqueGroup = "GROUP-IT-" + BatchDateTimeSupport.utcEpochMillis();
     WorkerRegistryEntity w1 = onlineWorker("t1", "w-grp-1-" + uniqueGroup, uniqueGroup);
@@ -104,6 +111,7 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("按分组统计在线节点数量,结果与库中在线条目数一致")
   void shouldCountActiveWorkersByGroup() {
     String uniqueGroup = "CNT-" + BatchDateTimeSupport.utcEpochMillis();
     WorkerRegistryEntity w1 = onlineWorker("t1", "cnt-w1-" + uniqueGroup, uniqueGroup);
@@ -118,6 +126,7 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("按状态查询排空节点返回全部排空中条目,且每条状态一致")
   void shouldFindDrainingWorkers() {
     Instant pastDeadline = BatchDateTimeSupport.utcNow().minusSeconds(10);
     WorkerRegistryEntity draining = onlineWorker(
@@ -138,6 +147,7 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("节点端口写入后可完整读回,写入侧与读取映射两侧一致")
   void shouldPersistWorkerPortAndReadItBack() {
     // V221：port 列在 insert 与 resultMap（constructor 映射）两侧都要接对，否则端口只落库读不回。
     String workerCode = "worker-it-port-" + BatchDateTimeSupport.utcEpochMillis();
@@ -150,7 +160,8 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void laterHeartbeatWithoutPortKeepsStoredPort() {
+  @DisplayName("后续心跳未携带端口时保留库中已登记的端口,不被覆盖为空")
+  void shouldKeepStoredPort_whenHeartbeatWithoutPort() {
     String workerCode = "worker-it-port-keep-" + BatchDateTimeSupport.utcEpochMillis();
     WorkerRegistryEntity stored = workerWithPort("t1", workerCode, 18083);
     workerRegistryMapper.saveLikeSdj(stored);

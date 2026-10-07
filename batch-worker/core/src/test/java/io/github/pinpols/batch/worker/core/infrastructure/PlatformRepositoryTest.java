@@ -11,13 +11,16 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.annotation.Transactional;
 
+@DisplayName("平台仓储: 聚焦拆分的构造与事务契约, 查询过滤与文件记录写入")
 class PlatformRepositoryTest {
 
   @Test
-  void focusedRepositoriesShouldPreserveConstructorsAndTransactionBoundary()
+  @DisplayName("仓储拆分后各自保留构造函数, 写入方法使用独立事务与读已提交隔离级别")
+  void shouldPreserveConstructorsAndTransactionBoundary_whenRepositoriesAreFocused()
       throws NoSuchMethodException {
     assertThat(PlatformPipelineDefinitionRepository.class.getConstructor(
             PlatformFileRuntimeMapper.class))
@@ -43,7 +46,8 @@ class PlatformRepositoryTest {
   }
 
   @Test
-  void findPipelineDefinitionShouldReadOnlyByTenantAndJobCode() {
+  @DisplayName("查询流水线定义时按租户与作业编码过滤, 查询条件不含流水线编码")
+  void shouldFilterByTenantAndJobCode_whenFindingPipelineDefinition() {
     PlatformFileRuntimeMapper mapper = mock(PlatformFileRuntimeMapper.class);
     PlatformPipelineDefinitionRepository repository =
         new PlatformPipelineDefinitionRepository(mapper);
@@ -61,7 +65,8 @@ class PlatformRepositoryTest {
   }
 
   @Test
-  void createPipelineInstanceShouldUseJobCodeForInstanceTable() {
+  @DisplayName("创建流水线实例时以作业编码写入实例表, 参数中不含流水线编码")
+  void shouldUseJobCode_whenCreatingPipelineInstance() {
     PlatformFileRuntimeMapper mapper = mock(PlatformFileRuntimeMapper.class);
     PlatformPipelineRunRepository repository = new PlatformPipelineRunRepository(mapper);
 
@@ -82,7 +87,8 @@ class PlatformRepositoryTest {
   }
 
   @Test
-  void createFileRecordShouldPreserveDedupPrecheck() {
+  @DisplayName("命中同存储路径的已有记录时返回既有文件标识并标记历史文件, 不重复插入")
+  void shouldPreserveDedupPrecheck_whenCreatingFileRecord() {
     PlatformFileRuntimeMapper mapper = mock(PlatformFileRuntimeMapper.class);
     PlatformFileRecordRepository repository = new PlatformFileRecordRepository(mapper);
     when(mapper.selectMaxFileGenerationNo(anyMap())).thenReturn(2);
@@ -110,7 +116,8 @@ class PlatformRepositoryTest {
   }
 
   @Test
-  void createFileRecordShouldPreserveGenerationParameters() {
+  @DisplayName("新增文件记录时按已有最大代号递增写入代号与版本号")
+  void shouldPreserveGenerationParameters_whenCreatingFileRecord() {
     PlatformFileRuntimeMapper mapper = mock(PlatformFileRuntimeMapper.class);
     PlatformFileRecordRepository repository = new PlatformFileRecordRepository(mapper);
     when(mapper.selectMaxFileGenerationNo(anyMap())).thenReturn(2);

@@ -56,6 +56,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  *   <li><b>COMMIT 恒不跳</b>:COMMIT 不在 skip-safe 集,原子发布决策每次重派都重做。
  * </ol>
  */
+@DisplayName("处理阶段级续跑:提交前崩溃后复用暂存不重算,未成功的阶段不误跳,提交阶段恒不跳过")
 class ProcessStageSkipCrashResumeIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -261,7 +262,7 @@ class ProcessStageSkipCrashResumeIntegrationTest {
           stage == ProcessStage.COMPUTE ? SqlTransformComputePlugin.PLUGIN_ID : "PROCESS_" + stage;
       Map<String, Object> stepParams =
           stage == ProcessStage.COMPUTE ? computeStepParams() : Map.of();
-      steps.add(PipelineStepDefinition.builder()
+      PipelineStepDefinition definition = PipelineStepDefinition.builder()
           .id((long) order)
           .pipelineDefinitionId(1L)
           .stepCode("PROCESS_" + stage.name())
@@ -274,7 +275,8 @@ class ProcessStageSkipCrashResumeIntegrationTest {
           .retryPolicy("NONE")
           .retryMaxCount(0)
           .enabled(true)
-          .build());
+          .build();
+      steps.add(definition);
       if (stage == lastStage) {
         break;
       }

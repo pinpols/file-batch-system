@@ -24,11 +24,13 @@ import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+@DisplayName("作业控制器: 触发、批量触发与试运行的幂等头与响应契约")
 class ConsoleJobControllerTest {
 
   private final ConsoleJobTriggerService triggerService = mock(ConsoleJobTriggerService.class);
@@ -58,6 +60,7 @@ class ConsoleJobControllerTest {
   }
 
   @Test
+  @DisplayName("缺少幂等头时返回参数错误, 且不触达触发服务")
   void shouldReturn400WhenIdempotencyHeaderMissing() throws Exception {
     mockMvc
         .perform(post("/api/console/jobs/trigger").contentType(APPLICATION_JSON).content("""
@@ -70,6 +73,7 @@ class ConsoleJobControllerTest {
   }
 
   @Test
+  @DisplayName("携带幂等头时触发成功, 回包为统一响应结构且携带服务返回值")
   void shouldTriggerAndReturnCommonResponseOnSuccess() throws Exception {
     when(triggerService.trigger(any(), anyString())).thenReturn("OK");
 
@@ -86,6 +90,7 @@ class ConsoleJobControllerTest {
   }
 
   @Test
+  @DisplayName("试运行模式无需幂等头, 回包标记试运行且校验通过")
   void shouldAllowDryRunWithoutIdempotencyHeader() throws Exception {
     when(triggerService.dryRunTrigger(any()))
         .thenReturn(new DryRunTriggerResult(true, "ta", "JOB_A", "2026-05-20", true, null));
@@ -103,6 +108,7 @@ class ConsoleJobControllerTest {
   }
 
   @Test
+  @DisplayName("批量触发逐条返回结果, 含状态与实例编号")
   void shouldBatchTriggerJobs() throws Exception {
     when(triggerService.batchTrigger(any(), anyString()))
         .thenReturn(List.of(new ConsoleBatchTriggerEntryResponse(

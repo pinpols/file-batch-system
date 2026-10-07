@@ -12,12 +12,15 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.session.Configuration;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("集群诊断终态查询:SQL 中过滤的状态集合须与作业实例生命周期枚举一致, 不得硬编码漂移")
 class ConsoleClusterDiagnosticMapperXmlTest {
 
   @Test
-  void terminalChildrenQueryTracksJobInstanceLifecycleEnum() {
+  @DisplayName("终态过滤:解析出的状态码集合与枚举派生的终态集合完全一致")
+  void shouldMatchLifecycleEnum_whenParsingTerminalStatuses() {
     String resource = "mapper/ConsoleClusterDiagnosticMapper.xml";
     Configuration configuration = new Configuration();
     try (InputStream inputStream =

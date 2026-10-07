@@ -31,6 +31,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 
@@ -38,6 +39,7 @@ import org.slf4j.LoggerFactory;
  * P0 hardening — {@link BatchPlatformClient#stop(Duration)} 必须在给定超时内返回(不死等), dispatcher drain
  * 超时未结束的 in-flight task id 必须出现在 WARN 日志里(运维可见 SIGKILL 前哪些任务被打断)。
  */
+@DisplayName("BatchPlatformClient 停止超时 — 限时返回与在飞任务告警")
 class BatchPlatformClientStopTimeoutTest {
 
   private final ExecutorService busyPool = Executors.newSingleThreadExecutor();
@@ -72,7 +74,8 @@ class BatchPlatformClientStopTimeoutTest {
 
   /** dispatcher.stop(timeout) 直接验证:跑一个 1s 的慢 task,200ms 超时应在 ~200ms 内返回 + WARN 列出未完成 task id。 */
   @Test
-  void dispatcherStopReturnsWithinTimeoutAndWarnsAboutInFlightTasks() throws Exception {
+  @DisplayName("排空超出预算时限时返回,并告警列出仍未完成的在飞任务标识")
+  void shouldReturnNearTimeoutAndWarnInFlight_whenDrainExceedsBudget() throws Exception {
     attachWarnCapture();
     SdkTaskHandler dummy = new SdkTaskHandler() {
       @Override
@@ -112,7 +115,8 @@ class BatchPlatformClientStopTimeoutTest {
 
   /** BatchPlatformClient.stop(Duration) 端到端:与 stop() 走同一顺序,且把超时透传给 dispatcher。 */
   @Test
-  void clientStopWithTimeoutDelegatesToDispatcherStopWithBudget() throws Exception {
+  @DisplayName("带超时停止按同一顺序走完,并把预算透传给排空阶段")
+  void shouldDelegateTimeoutToDispatcher_whenClientStops() throws Exception {
     BatchPlatformClient client = BatchPlatformClient.builder(cfg()).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
@@ -151,7 +155,8 @@ class BatchPlatformClientStopTimeoutTest {
    * "drain timeout" WARN(in-flight 都 drain 干净了)。
    */
   @Test
-  void dispatcherStopReturnsEarlyWhenInFlightDrainsBeforeTimeout() throws Exception {
+  @DisplayName("在飞任务先于预算耗尽而跑完时提前返回,且不产生排空超时告警")
+  void shouldReturnEarly_whenInFlightDrainsBeforeTimeout() throws Exception {
     attachWarnCapture();
     SdkTaskHandler dummy = new SdkTaskHandler() {
       @Override
@@ -183,7 +188,8 @@ class BatchPlatformClientStopTimeoutTest {
 
   /** null timeout 视为 0ms — 立刻 forceful 关,验证不 NPE。 */
   @Test
-  void dispatcherStopHandlesNullTimeoutAsZero() {
+  @DisplayName("停止超时传空值视为立即截止,不抛空指针且进入排空状态")
+  void shouldTreatNullTimeoutAsZero_whenStopping() {
     TaskDispatcher dispatcher = new TaskDispatcher(cfg(), Map.of(), mock(PlatformHttpClient.class));
     dispatcher.stop(null);
     assertThat(dispatcher.isDraining()).isTrue();

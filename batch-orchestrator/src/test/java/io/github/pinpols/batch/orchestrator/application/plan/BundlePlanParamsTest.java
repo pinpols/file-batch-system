@@ -6,12 +6,15 @@ import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.orchestrator.application.plan.BundlePlanParams.BundleFile;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("束计划参数解析: 按作业类型提取必需绑定字段的口径")
 class BundlePlanParamsTest {
 
   @Test
-  void extractsValidBundleFiles() {
+  @DisplayName("束文件清单合法时按顺序提取文件标识, 模板与目标引用")
+  void shouldExtractValidFiles_whenBundleFilesGiven() {
     Map<String, Object> params = Map.of(
         "bundleFiles",
         List.of(
@@ -27,7 +30,8 @@ class BundlePlanParamsTest {
   }
 
   @Test
-  void skipsEntriesMissingFileIdOrTemplate() {
+  @DisplayName("导入类型缺少文件标识或模板的条目被跳过, 只保留完整条目")
+  void shouldSkipEntries_whenRequiredBindingMissing() {
     // BUNDLE_IMPORT:缺 sourceFileId 或 templateCode 的项跳过(承重信息,绝不落一个无绑定 partition)
     Map<String, Object> params = Map.of(
         "bundleFiles",
@@ -41,6 +45,7 @@ class BundlePlanParamsTest {
   }
 
   @Test
+  @DisplayName("导出类型只要求模板, 允许条目没有源文件")
   void exportBundleRequiresTemplateOnly_noSourceFile() {
     // BUNDLE_EXPORT:导出无源文件,承重 = templateCode(=源表/查询);仅缺模板的项跳过。
     Map<String, Object> params = Map.of(
@@ -57,6 +62,7 @@ class BundlePlanParamsTest {
   }
 
   @Test
+  @DisplayName("分发类型要求文件标识与目标引用, 不要求模板")
   void dispatchBundleRequiresFileAndTarget_noTemplate() {
     // BUNDLE_DISPATCH:分发无模板,承重 = sourceFileId(待分发文件) + targetRef(下游渠道)。
     Map<String, Object> params = Map.of(
@@ -74,7 +80,8 @@ class BundlePlanParamsTest {
   }
 
   @Test
-  void returnsEmptyForNonBundleTypeOrNullParamsOrNonList() {
+  @DisplayName("非束类型, 参数为空或清单不是列表时返回空")
+  void shouldReturnEmpty_whenJobTypeOrParamsInvalid() {
     Map<String, Object> valid =
         Map.of("bundleFiles", List.of(Map.of("sourceFileId", 1, "templateCode", "T")));
     // 非束类型 → 空(走原同构路径)

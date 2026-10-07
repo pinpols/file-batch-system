@@ -5,12 +5,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.io.InputStream;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.session.Configuration;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("容量档位映射配置:验证映射文件可从类路径加载并解析通过")
 class CapacityProfileMapperXmlTest {
 
   @Test
-  void mapperXmlShouldParse() {
+  @DisplayName("映射文件能从类路径加载且解析不报错")
+  void shouldParseMapperXml_whenResourceIsPresent() {
     Configuration configuration = new Configuration();
     String resource = "mapper/CapacityProfileMapper.xml";
 

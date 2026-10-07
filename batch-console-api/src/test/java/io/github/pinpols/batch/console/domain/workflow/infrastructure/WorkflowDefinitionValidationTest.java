@@ -25,9 +25,11 @@ import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitio
 import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionWriteSupport;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** WF-design-5 / WF-design-6: JOB 节点 related_job_code + CONDITION 边 condition_expr 校验。 */
+@DisplayName("编排定义保存前校验: 作业节点关联与条件边表达式约束")
 class WorkflowDefinitionValidationTest {
 
   private static final String TENANT = "t1";
@@ -74,6 +76,7 @@ class WorkflowDefinitionValidationTest {
   }
 
   @Test
+  @DisplayName("作业节点缺少关联作业编码时校验不通过, 并指出该节点")
   void shouldFailWhenJobNodeMissingRelatedJobCode() {
     stub(
         List.of(node("n1", "START"), node("n2", "JOB", null), node("n3", "END")),
@@ -86,6 +89,7 @@ class WorkflowDefinitionValidationTest {
   }
 
   @Test
+  @DisplayName("作业节点关联的作业定义不存在时校验不通过, 并报出该作业编码")
   void shouldFailWhenJobNodeReferencesNonExistentJobDefinition() {
     stub(
         List.of(node("n1", "START"), node("n2", "JOB", "GHOST_JOB"), node("n3", "END")),
@@ -100,6 +104,7 @@ class WorkflowDefinitionValidationTest {
   }
 
   @Test
+  @DisplayName("作业节点关联的作业定义已停用时校验不通过, 并报出该作业编码")
   void shouldFailWhenJobNodeReferencesDisabledJobDefinition() {
     JobDefinitionEntity disabled = new JobDefinitionEntity();
     disabled.setEnabled(false);
@@ -116,6 +121,7 @@ class WorkflowDefinitionValidationTest {
   }
 
   @Test
+  @DisplayName("作业节点关联的作业定义已启用时校验通过且无错误项")
   void shouldPassWhenJobNodeReferencesEnabledJobDefinition() {
     JobDefinitionEntity enabled = new JobDefinitionEntity();
     enabled.setEnabled(true);
@@ -131,6 +137,7 @@ class WorkflowDefinitionValidationTest {
   }
 
   @Test
+  @DisplayName("条件边缺少条件表达式时校验不通过, 并报出该边的两端节点")
   void shouldFailWhenConditionEdgeMissingConditionExpr() {
     stub(
         List.of(node("n1", "START"), node("n2", "TASK"), node("n3", "END")),
@@ -146,6 +153,7 @@ class WorkflowDefinitionValidationTest {
   }
 
   @Test
+  @DisplayName("条件边带条件表达式时校验通过且无错误项")
   void shouldPassWhenConditionEdgeHasConditionExpr() {
     stub(
         List.of(node("n1", "START"), node("n2", "TASK"), node("n3", "END")),
@@ -158,6 +166,7 @@ class WorkflowDefinitionValidationTest {
   }
 
   @Test
+  @DisplayName("成功与失败类型边不要求填写条件表达式, 校验通过")
   void shouldNotRequireConditionExprForOtherEdgeTypes() {
     stub(
         List.of(node("n1", "START"), node("n2", "TASK"), node("n3", "END")),

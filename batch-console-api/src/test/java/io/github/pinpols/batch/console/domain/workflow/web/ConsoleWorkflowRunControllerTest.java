@@ -15,11 +15,13 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /** P2: ConsoleWorkflowRunController cancel/terminate/skip-node 透传到 proxy。 */
+@DisplayName("工作流运行控制器: 取消、终止、暂停、恢复与跳过节点动作透传到编排端口")
 class ConsoleWorkflowRunControllerTest {
 
   private final ConsoleOrchestratorPort proxy = mock(ConsoleOrchestratorPort.class);
@@ -41,7 +43,8 @@ class ConsoleWorkflowRunControllerTest {
   }
 
   @Test
-  void cancelShouldDelegate() throws Exception {
+  @DisplayName("取消工作流运行时, 运行标识、租户与动作标识透传到编排端口")
+  void shouldDelegateCancelAction_whenCancellingRun() throws Exception {
     when(proxy.workflowRunAction(3L, "ta", "cancel"))
         .thenReturn(new ConsoleWorkflowRunActionResponse(3L, "ok"));
     mockMvc
@@ -51,7 +54,8 @@ class ConsoleWorkflowRunControllerTest {
   }
 
   @Test
-  void terminateShouldDelegate() throws Exception {
+  @DisplayName("终止工作流运行时, 运行标识、租户与动作标识透传到编排端口")
+  void shouldDelegateTerminateAction_whenTerminatingRun() throws Exception {
     when(proxy.workflowRunAction(3L, "ta", "terminate"))
         .thenReturn(new ConsoleWorkflowRunActionResponse(3L, "ok"));
     mockMvc
@@ -61,7 +65,8 @@ class ConsoleWorkflowRunControllerTest {
   }
 
   @Test
-  void pauseShouldDelegate() throws Exception {
+  @DisplayName("暂停工作流运行时, 运行标识、租户与动作标识透传到编排端口")
+  void shouldDelegatePauseAction_whenPausingRun() throws Exception {
     when(proxy.workflowRunAction(3L, "ta", "pause"))
         .thenReturn(new ConsoleWorkflowRunActionResponse(3L, "PAUSED"));
     mockMvc
@@ -71,7 +76,8 @@ class ConsoleWorkflowRunControllerTest {
   }
 
   @Test
-  void resumeShouldDelegate() throws Exception {
+  @DisplayName("恢复工作流运行时, 运行标识、租户与动作标识透传到编排端口")
+  void shouldDelegateResumeAction_whenResumingRun() throws Exception {
     when(proxy.workflowRunAction(3L, "ta", "resume"))
         .thenReturn(new ConsoleWorkflowRunActionResponse(3L, "RUNNING"));
     mockMvc
@@ -81,7 +87,8 @@ class ConsoleWorkflowRunControllerTest {
   }
 
   @Test
-  void skipNodeShouldPassNodeCode() throws Exception {
+  @DisplayName("跳过指定节点时, 运行标识、租户与节点编码透传到编排端口")
+  void shouldPassNodeCode_whenSkippingNode() throws Exception {
     when(proxy.workflowRunSkipNode(3L, "ta", "NODE_A"))
         .thenReturn(new ConsoleWorkflowRunSkipNodeResponse(3L, "NODE_A", "SKIPPED"));
     mockMvc

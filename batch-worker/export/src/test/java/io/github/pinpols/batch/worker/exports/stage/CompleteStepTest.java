@@ -36,6 +36,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * </ul>
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("导出完成阶段单测:文件状态推进,派发开关与关键字段缺失的失败语义")
 class CompleteStepTest {
 
   @Mock

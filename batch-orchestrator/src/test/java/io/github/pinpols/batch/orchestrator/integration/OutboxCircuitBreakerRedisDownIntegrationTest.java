@@ -31,12 +31,12 @@ import org.springframework.data.redis.core.StringRedisTemplate;
  * Lettuce → Toxiproxy → Redis 链路验证 Redis 真断时抛出的实际异常类型也被 fail-open 兜住(防 catch 过窄漏掉
  * QueryTimeoutException 等 DataAccessException 子类)。
  */
-@DisplayName("Redis 全断注入 — outbox 熔断器 allowNow/onAdvanceResult fail-open,不抛(投递不因 Redis 停摆)")
+@DisplayName("Redis 全断注入场景:outbox 熔断器放行判定与推进结果写入均不抛异常,投递不因 Redis 停摆")
 class OutboxCircuitBreakerRedisDownIntegrationTest extends AbstractChaosIntegrationTest {
 
   @Test
-  @DisplayName("Redis 断 → allowNow 不抛且放行、onAdvanceResult 不抛(真实 Lettuce 异常类型也被兜住)")
-  void outboxCircuitBreakerShouldFailOpenWhenRedisDown() throws Exception {
+  @DisplayName("Redis 断开时放行判定不抛异常并放行,推进结果写入静默跳过,真实客户端异常类型同样被兜住")
+  void shouldFailOpen_whenRedisIsDown() throws Exception {
     LettuceConnectionFactory factory = newLettuceFactory();
     try {
       OutboxProperties props = new OutboxProperties();

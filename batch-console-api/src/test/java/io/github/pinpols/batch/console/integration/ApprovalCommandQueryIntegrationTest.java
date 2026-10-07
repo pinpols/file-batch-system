@@ -8,6 +8,7 @@ import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.domain.ops.mapper.ApprovalCommandMapper;
 import io.github.pinpols.batch.console.domain.ops.query.ApprovalCommandQuery;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -16,6 +17,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@DisplayName("审批命令查询映射: 状态,申请人,关键字三类过滤与配套计数口径")
 class ApprovalCommandQueryIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
@@ -25,6 +27,7 @@ class ApprovalCommandQueryIntegrationTest extends AbstractIntegrationTest {
   private JdbcTemplate jdbcTemplate;
 
   @Test
+  @DisplayName("无数据租户: 列表查询返回空结果")
   void shouldReturnEmptyWhenNoApprovalsExist() {
     ApprovalCommandQuery query = new ApprovalCommandQuery();
     query.setTenantId("no-such-tenant-" + BatchDateTimeSupport.utcEpochMillis());
@@ -33,6 +36,7 @@ class ApprovalCommandQueryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("按状态过滤: 只返回该状态的审批单,同口径计数为 1")
   void shouldQueryApprovalsByStatusAndCount() {
     String tenantId = "t-approval-" + BatchDateTimeSupport.utcEpochMillis();
     insertApproval(tenantId, "apr-1", "COMPENSATION", "COMPENSATION", "PENDING");
@@ -48,6 +52,7 @@ class ApprovalCommandQueryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("按申请人过滤: 只返回该申请人的审批单,计数口径与列表一致")
   void shouldQueryApprovalsByRequesterId() {
     String tenantId = "t-approval-req-" + BatchDateTimeSupport.utcEpochMillis();
     insertApprovalRich(tenantId, "apr-r1", "alice", "JOB", "100");
@@ -63,6 +68,7 @@ class ApprovalCommandQueryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("关键字过滤: 大小写不敏感,审批单号与目标类型两列各命中一行")
   void shouldQueryApprovalsByKeywordAcrossColumns() {
     String tenantId = "t-approval-kw-" + BatchDateTimeSupport.utcEpochMillis();
     insertApprovalRich(tenantId, "PAYROLL-001", "alice", "JOB", "100");

@@ -9,6 +9,7 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.BeanWrapper;
 import org.springframework.beans.BeanWrapperImpl;
@@ -23,15 +24,17 @@ import org.springframework.beans.BeanWrapperImpl;
  * <p>本测试能捕获两类回归：
  *
  * <ul>
- *   <li>任一侧新增/删除字段导致重叠键集合变化 → {@link #overlappingLeafKeysAreExactlyTheDocumentedSet()} 失败，
- *       迫使作者确认新重叠键的默认值是否也一致；
- *   <li>{@code enabled} 的 Java 默认值在两侧被改成不同值 → {@link #overlappingKeysShareTheSameDefault()} 失败
- *       （这是历史隐患：{@code check-config-defaults-sync.py} 只比对 yml 与 compose 的环境变量默认值，
+ *   <li>任一侧新增/删除字段导致重叠键集合变化 → {@link #shouldMatchDocumentedSet_whenOverlappingLeafKeysAreCollected()}
+ *       失败，迫使作者确认新重叠键的默认值是否也一致；
+ *   <li>{@code enabled} 的 Java 默认值在两侧被改成不同值 →
+ *       {@link #shouldShareSameDefault_whenOverlappingKeysAreCompared()} 失败（这是历史隐患：
+ *       {@code check-config-defaults-sync.py} 只比对 yml 与 compose 的环境变量默认值，
  *       <b>不覆盖 Java 字段默认值</b>，且该脚本的立项动机正是本前缀出过一次默认值静默不一致）。
  * </ul>
  *
  * <p>重叠键集合变化时，除本测试外还需同步更新 {@link ConsoleReadReplicaProperties} 的类注释。
  */
+@DisplayName("只读副本配置的双绑定方: 重叠键集合与默认值一致性契约守护")
 class ReadReplicaPropertiesOverlapConsistencyTest {
 
   /** 当前已知的重叠叶子键；任何增减都必须是有意为之并同步更新类注释。 */
@@ -39,7 +42,8 @@ class ReadReplicaPropertiesOverlapConsistencyTest {
       new TreeSet<>(Set.of("enabled", "primary.password", "replica.password"));
 
   @Test
-  void overlappingLeafKeysAreExactlyTheDocumentedSet() {
+  @DisplayName("收集两侧叶子键后的重叠集合,必须与文档记录的唯一集合一致")
+  void shouldMatchDocumentedSet_whenOverlappingLeafKeysAreCollected() {
     Set<String> overlap = new TreeSet<>(leafPaths(new ConsoleReadReplicaProperties()));
     overlap.retainAll(leafPaths(new ReadReplicaProperties()));
 
@@ -49,7 +53,8 @@ class ReadReplicaPropertiesOverlapConsistencyTest {
   }
 
   @Test
-  void overlappingKeysShareTheSameDefault() {
+  @DisplayName("重叠键在两侧的 Java 默认值必须一致,密码类键双方都不得有默认值")
+  void shouldShareSameDefault_whenOverlappingKeysAreCompared() {
     ConsoleReadReplicaProperties view = new ConsoleReadReplicaProperties();
     ReadReplicaProperties full = new ReadReplicaProperties();
 

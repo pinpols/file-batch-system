@@ -37,7 +37,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * <p>Pipeline 存在性校验:mock PipelineDefinitionMapper.countByJobCode,只在涉及 FILE_STEP 的 case 调用。
  */
 @ExtendWith(MockitoExtension.class)
-@DisplayName("WorkflowDagValidator")
+@DisplayName("编排 DAG 校验: 节点拓扑、网关汇聚与跨编排环检测")
 class WorkflowDagValidatorTest {
 
   private static final String TENANT = "ta";
@@ -72,7 +72,8 @@ class WorkflowDagValidatorTest {
   }
 
   @Test
-  void rejectsApprovalNodesBeforePersistence() {
+  @DisplayName("包含审批类型节点时保存前校验抛参数非法异常")
+  void shouldReject_whenApprovalNodePresent() {
     WorkflowDefinitionSaveRequest req = baseRequest();
     req.setNodes(List.of(node("start", "START"), node("review", "APPROVAL"), node("end", "END")));
     req.setEdges(List.of(edge("start", "review"), edge("review", "end")));

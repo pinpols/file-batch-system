@@ -115,7 +115,7 @@ class AliyunCaptchaVerifierTest {
 
   @Test
   @DisplayName("发送请求带齐 ACS3 签名头(Authorization + x-acs-* + body 含 SceneId)")
-  void sendsSignedHeaders() {
+  void shouldSendAcs3SignedHeaders_whenVerifying() {
     StubVerifier verifier = new StubVerifier(
         properties, "{\"Body\":{\"Result\":{\"VerifyResult\":true},\"Success\":true}}");
 
@@ -139,7 +139,7 @@ class AliyunCaptchaVerifierTest {
 
   @Test
   @DisplayName("provider 标识 = aliyun")
-  void providerName() {
+  void shouldReportAliyun_whenQueryingProviderName() {
     StubVerifier verifier = new StubVerifier(
         properties, "{\"Body\":{\"Result\":{\"VerifyResult\":true},\"Success\":true}}");
     assertThat(verifier.provider()).isEqualTo("aliyun");

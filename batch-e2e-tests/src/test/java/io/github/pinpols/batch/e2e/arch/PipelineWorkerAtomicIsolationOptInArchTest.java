@@ -24,6 +24,7 @@ import org.yaml.snakeyaml.Yaml;
  *
  * <p>失败消息要求引用 ADR-029 + 给出 yml 绝对路径,运维 / 评审者直接能定位漏配点。
  */
+@DisplayName("流水线 worker 配置守护:读取四类流水线 worker 模块源码中的应用配置,校验原子执行隔离检查开关显式开启")
 class PipelineWorkerAtomicIsolationOptInArchTest {
 
   /** 期望 key 路径:batch.worker.atomic.isolation-check.enabled。 */
@@ -43,25 +44,25 @@ class PipelineWorkerAtomicIsolationOptInArchTest {
 
   @Test
   @DisplayName("ADR-029 守护:batch-worker-import application.yml 必须显式 opt-in isolation-check")
-  void importWorkerOptsIn() {
+  void shouldOptInIsolationCheck_whenImportWorker() {
     assertOptIn("batch-worker-import");
   }
 
   @Test
   @DisplayName("ADR-029 守护:batch-worker-export application.yml 必须显式 opt-in isolation-check")
-  void exportWorkerOptsIn() {
+  void shouldOptInIsolationCheck_whenExportWorker() {
     assertOptIn("batch-worker-export");
   }
 
   @Test
   @DisplayName("ADR-029 守护:batch-worker-process application.yml 必须显式 opt-in isolation-check")
-  void processWorkerOptsIn() {
+  void shouldOptInIsolationCheck_whenProcessWorker() {
     assertOptIn("batch-worker-process");
   }
 
   @Test
   @DisplayName("ADR-029 守护:batch-worker-dispatch application.yml 必须显式 opt-in isolation-check")
-  void dispatchWorkerOptsIn() {
+  void shouldOptInIsolationCheck_whenDispatchWorker() {
     assertOptIn("batch-worker-dispatch");
   }
 

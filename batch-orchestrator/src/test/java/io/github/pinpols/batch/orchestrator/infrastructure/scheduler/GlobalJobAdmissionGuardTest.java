@@ -10,8 +10,10 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("全局作业准入守卫;验证准入锁与活跃数读取顺序,全局上限判定以及上限关闭时的数据库访问省略")
 class GlobalJobAdmissionGuardTest {
 
   private final JobInstanceMapper mapper = mock(JobInstanceMapper.class);
@@ -25,7 +27,8 @@ class GlobalJobAdmissionGuardTest {
   }
 
   @Test
-  void hardAdmissionLocksBeforeReadingActiveCount() {
+  @DisplayName("开启全局上限时先获取准入锁再统计活跃作业数,保证并发判定不超卖")
+  void shouldAcquireAdmissionLockBeforeCountingActiveJobs_whenCapEnabled() {
     properties.setGlobalMaxRunningJobs(10);
     when(mapper.countActiveAll()).thenReturn(9L);
 
@@ -37,7 +40,8 @@ class GlobalJobAdmissionGuardTest {
   }
 
   @Test
-  void hardAdmissionRejectsWhenCapIsReached() {
+  @DisplayName("活跃作业数达到全局上限时拒绝新的准入请求")
+  void shouldRejectAdmission_whenActiveJobsReachCap() {
     properties.setGlobalMaxRunningJobs(10);
     when(mapper.countActiveAll()).thenReturn(10L);
 
@@ -45,7 +49,8 @@ class GlobalJobAdmissionGuardTest {
   }
 
   @Test
-  void disabledCapAvoidsDatabaseRoundTrip() {
+  @DisplayName("全局上限关闭时直接放行,既不获取准入锁也不统计活跃作业数")
+  void shouldSkipDatabaseAccess_whenGlobalCapDisabled() {
     properties.setGlobalMaxRunningJobs(0);
 
     assertThat(guard.hasCapacity()).isTrue();

@@ -44,10 +44,12 @@ import java.time.Month;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DuplicateKeyException;
 
+@DisplayName("批量日重放服务: 预览与提交的候选筛选, 影响面统计, 会话流转与试运行口径")
 class BatchDayReplayServiceTest {
 
   private BatchDayReplaySessionMapper sessionMapper;
@@ -85,7 +87,8 @@ class BatchDayReplayServiceTest {
   }
 
   @Test
-  void submitAllFailedScopeMaterializesEntriesFromCandidates() {
+  @DisplayName("全失败范围提交时按候选实例生成重放条目并创建会话")
+  void shouldMaterializeEntries_whenSubmittingAllFailedScope() {
     when(jobInstanceMapper.selectBatchDayCandidates(
             eq("t1"), eq("CAL"), eq(LocalDate.of(2026, Month.MAY, 4)), anyList(), anyList()))
         .thenReturn(List.of(jobInstance(101L, "JOB_A"), jobInstance(102L, "JOB_B")));
@@ -110,7 +113,8 @@ class BatchDayReplayServiceTest {
   }
 
   @Test
-  void submitNormalizesLegacyConfigVersionPolicy() {
+  @DisplayName("提交时历史配置版本策略被归一化为使用最新配置")
+  void shouldNormalizePolicy_whenLegacyConfigVersionPolicyGiven() {
     when(jobInstanceMapper.selectBatchDayCandidates(
             eq("t1"), eq("CAL"), eq(LocalDate.of(2026, Month.MAY, 4)), anyList(), anyList()))
         .thenReturn(List.of(jobInstance(101L, "JOB_A")));
@@ -136,7 +140,8 @@ class BatchDayReplayServiceTest {
   }
 
   @Test
-  void previewNormalizesLegacySpecificVersionPolicy() {
+  @DisplayName("预览时历史指定版本策略被归一化为使用指定版本")
+  void shouldNormalizePolicy_whenPreviewUsesLegacySpecificVersionPolicy() {
     when(jobInstanceMapper.selectBatchDayCandidates(
             eq("t1"), eq("CAL"), eq(LocalDate.of(2026, Month.MAY, 4)), anyList(), anyList()))
         .thenReturn(List.of(jobInstance(101L, "JOB_A")));
@@ -156,7 +161,8 @@ class BatchDayReplayServiceTest {
   }
 
   @Test
-  void previewAllFailedScopeReturnsImpactWithoutWritingSession() {
+  @DisplayName("预览返回影响面统计, 不落库会话与条目")
+  void shouldReturnImpactWithoutWriting_whenPreviewing() {
     when(jobInstanceMapper.selectBatchDayCandidates(
             eq("t1"), eq("CAL"), eq(LocalDate.of(2026, Month.MAY, 4)), anyList(), anyList()))
         .thenReturn(List.of(jobInstance(101L, "JOB_A"), jobInstance(102L, "JOB_B")));
@@ -184,7 +190,8 @@ class BatchDayReplayServiceTest {
   }
 
   @Test
-  void previewShouldIncludeAssetPartitionAndDispatchImpacts() {
+  @DisplayName("预览结果同时包含资产分区影响与派发影响明细")
+  void shouldIncludeImpacts_whenPreviewing() {
     when(jobInstanceMapper.selectBatchDayCandidates(
             eq("t1"), eq("CAL"), eq(LocalDate.of(2026, Month.MAY, 4)), anyList(), anyList()))
         .thenReturn(List.of(jobInstance(101L, "JOB_A")));
@@ -215,7 +222,8 @@ class BatchDayReplayServiceTest {
   }
 
   @Test
-  void previewWithoutCandidatesReturnsWarningInsteadOfCreatingEmptySession() {
+  @DisplayName("没有候选实例时预览返回提示, 不创建空会话")
+  void shouldReturnWarning_whenNoCandidates() {
     when(jobInstanceMapper.selectBatchDayCandidates(
             eq("t1"), eq("CAL"), eq(LocalDate.of(2026, Month.MAY, 4)), anyList(), anyList()))
         .thenReturn(List.of());
@@ -236,7 +244,8 @@ class BatchDayReplayServiceTest {
   }
 
   @Test
-  void submitWithoutCandidatesThrows() {
+  @DisplayName("没有候选实例时提交被拒绝并抛出业务异常")
+  void shouldThrow_whenSubmittingWithoutCandidates() {
     when(jobInstanceMapper.selectBatchDayCandidates(
             eq("t1"), eq("CAL"), eq(LocalDate.of(2026, Month.MAY, 4)), anyList(), anyList()))
         .thenReturn(List.of());
@@ -254,7 +263,8 @@ class BatchDayReplayServiceTest {
   }
 
   @Test
-  void dryRunSubmitIsDisabledByDefault() {
+  @DisplayName("试运行提交默认关闭时被拒绝, 且不写会话")
+  void shouldRejectDryRunSubmit_whenDisabledByDefault() {
     when(jobInstanceMapper.selectBatchDayCandidates(
             anyString(), anyString(), any(), anyList(), anyList()))
         .thenReturn(List.of(jobInstance(101L, "JOB_A")));
@@ -265,7 +275,8 @@ class BatchDayReplayServiceTest {
   }
 
   @Test
-  void dryRunSubmitForcesInternalResultPolicy() {
+  @DisplayName("启用试运行提交时会话的执行模式与结果策略被强制为仅试运行")
+  void shouldForceDryRunPolicy_whenDryRunSubmitEnabled() {
     BatchDayReplayService dryRunService = dryRunService(true);
     when(jobInstanceMapper.selectBatchDayCandidates(
             anyString(), anyString(), any(), anyList(), anyList()))
@@ -284,7 +295,8 @@ class BatchDayReplayServiceTest {
   }
 
   @Test
-  void schedulePlanPreviewMaterializesImmutableSnapshot() {
+  @DisplayName("按计划预览时生成不可变快照条目, 条目不关联来源实例")
+  void shouldMaterializeImmutableSnapshot_whenPreviewingSchedulePlan() {
     JobDefinitionMapper definitionMapper = mock(JobDefinitionMapper.class);
     SchedulePlanBuilder planBuilder = mock(SchedulePlanBuilder.class);
     BatchDayPlanCalendarMapper calendarMapper = mock(BatchDayPlanCalendarMapper.class);
@@ -324,7 +336,8 @@ class BatchDayReplayServiceTest {
   }
 
   @Test
-  void submitDuplicateActiveSessionThrows() {
+  @DisplayName("同日历营业日已有活动会话时提交抛出业务异常")
+  void shouldThrow_whenActiveSessionAlreadyExists() {
     when(jobInstanceMapper.selectBatchDayCandidates(
             anyString(), anyString(), any(), anyList(), anyList()))
         .thenReturn(List.of(jobInstance(101L, "JOB_A")));
@@ -344,7 +357,8 @@ class BatchDayReplayServiceTest {
   }
 
   @Test
-  void submitSubsetWithoutJobCodesIsRejected() {
+  @DisplayName("子集范围未给出任务清单时提交被拒绝")
+  void shouldRejectSubmit_whenSubsetScopeHasNoJobCodes() {
     assertThatThrownBy(() -> service.submit(BatchDayReplaySubmitCommand.builder()
             .tenantId("t1")
             .calendarCode("CAL")
@@ -358,7 +372,8 @@ class BatchDayReplayServiceTest {
   }
 
   @Test
-  void submitOutputsOnlyMaterializesFromVersionIds() {
+  @DisplayName("仅产出范围提交时按结果版本批量生成条目, 不查询作业实例")
+  void shouldMaterializeFromVersionIds_whenSubmittingOutputsOnly() {
     // R7-A3-P1: materializeOutputsOnlyEntries 改用 selectByIds 批量预取替代 N+1。
     when(resultVersionMapper.selectByIds(eq("t1"), any()))
         .thenReturn(List.of(
@@ -386,7 +401,8 @@ class BatchDayReplayServiceTest {
   }
 
   @Test
-  void previewOutputsOnlyShowsPromotedResultVersions() {
+  @DisplayName("仅产出范围预览展示待提升的结果版本及其影响")
+  void shouldShowPromotedVersions_whenPreviewingOutputsOnly() {
     when(resultVersionMapper.selectByIds(eq("t1"), any()))
         .thenReturn(List.of(resultVersion(11L, "job:JOB_A:2026-05-04", 100L)));
 
@@ -413,7 +429,8 @@ class BatchDayReplayServiceTest {
   }
 
   @Test
-  void approveAdvancesPendingToRunning() {
+  @DisplayName("审批待处理会话后状态推进为运行中")
+  void shouldAdvanceToRunning_whenApprovingPendingSession() {
     when(sessionMapper.selectById("t1", 1L))
         .thenReturn(
             sessionAt("t1", 1L, ConfigLifecycleStatus.PENDING_APPROVAL.code(), "ALL_FAILED"))
@@ -428,7 +445,8 @@ class BatchDayReplayServiceTest {
   }
 
   @Test
-  void approveWhenAlreadyRunningThrows() {
+  @DisplayName("会话已在运行中时审批被拒绝")
+  void shouldThrow_whenApprovingRunningSession() {
     when(sessionMapper.selectById("t1", 1L))
         .thenReturn(sessionAt("t1", 1L, "RUNNING", "ALL_FAILED"));
 
@@ -437,7 +455,8 @@ class BatchDayReplayServiceTest {
   }
 
   @Test
-  void cancelMovesActiveToCancelled() {
+  @DisplayName("取消运行中的会话后状态变为已取消")
+  void shouldMoveToCancelled_whenCancellingActiveSession() {
     when(sessionMapper.selectById("t1", 1L))
         .thenReturn(sessionAt("t1", 1L, "RUNNING", "ALL_FAILED"))
         .thenReturn(sessionAt("t1", 1L, "CANCELLED", "ALL_FAILED"));
@@ -451,7 +470,8 @@ class BatchDayReplayServiceTest {
   }
 
   @Test
-  void cancelOnTerminalSessionThrows() {
+  @DisplayName("会话已处于终态时取消被拒绝")
+  void shouldThrow_whenCancellingTerminalSession() {
     when(sessionMapper.selectById("t1", 1L))
         .thenReturn(sessionAt("t1", 1L, "SUCCEEDED", "ALL_FAILED"));
 
@@ -459,7 +479,8 @@ class BatchDayReplayServiceTest {
   }
 
   @Test
-  void executeOutputsOnlyPromotesEachEntryAndCompletesSession() {
+  @DisplayName("执行仅产出会话时逐条提升结果版本, 完成后会话置为成功")
+  void shouldPromoteEachEntryAndComplete_whenExecutingOutputsOnly() {
     when(sessionMapper.selectById("t1", 5L))
         .thenReturn(sessionAt("t1", 5L, "RUNNING", BatchDayReplayScope.OUTPUTS_ONLY.code()))
         .thenReturn(sessionAt("t1", 5L, "SUCCEEDED", BatchDayReplayScope.OUTPUTS_ONLY.code()));
@@ -489,7 +510,8 @@ class BatchDayReplayServiceTest {
   }
 
   @Test
-  void executeOutputsOnlyOnNonOutputsScopeThrows() {
+  @DisplayName("对非仅产出范围的会话执行提升时被拒绝")
+  void shouldThrow_whenExecutingNonOutputsOnlyScope() {
     when(sessionMapper.selectById("t1", 5L))
         .thenReturn(sessionAt("t1", 5L, "RUNNING", "ALL_FAILED"));
 
@@ -497,7 +519,8 @@ class BatchDayReplayServiceTest {
   }
 
   @Test
-  void executeOutputsOnlyOnNonRunningSessionThrows() {
+  @DisplayName("会话不处于运行中时执行提升被拒绝")
+  void shouldThrow_whenExecutingSessionNotRunning() {
     when(sessionMapper.selectById("t1", 5L))
         .thenReturn(sessionAt(
             "t1",

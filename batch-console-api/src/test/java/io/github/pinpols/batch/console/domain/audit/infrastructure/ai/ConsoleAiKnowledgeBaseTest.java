@@ -15,11 +15,13 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.io.ClassPathResource;
 
+@DisplayName("AI 知识库检索:排序结果、降级开关与语料一致性")
 class ConsoleAiKnowledgeBaseTest {
 
   /** 词袋伪嵌入:同一文本里出现的词散列进 64 维,词重叠越多余弦越高 —— 足以确定性验证检索排序。 */
@@ -63,7 +65,8 @@ class ConsoleAiKnowledgeBaseTest {
   }
 
   @Test
-  void retrievesRankedKnowledgePackSnippetsForInDomainQuery() {
+  @DisplayName("知识检索:域内查询返回按得分降序的片段,且来源为文档")
+  void shouldReturnRankedSnippets_whenQueryInDomain() {
     ConsoleAiKnowledgeBase base =
         new ConsoleAiKnowledgeBase(providerOf(fakeEmbeddingModel()), propertiesWithRag(true));
 
@@ -83,7 +86,8 @@ class ConsoleAiKnowledgeBaseTest {
   }
 
   @Test
-  void retrievesAlertTriageAndDataQualityCorpus() {
+  @DisplayName("知识检索:告警分诊与数据质量两份语料均可命中")
+  void shouldRetrieveCorpus_whenQueryingAlertTriageAndDataQuality() {
     ConsoleAiKnowledgeBase base =
         new ConsoleAiKnowledgeBase(providerOf(fakeEmbeddingModel()), propertiesWithRag(true));
 
@@ -99,14 +103,16 @@ class ConsoleAiKnowledgeBaseTest {
   }
 
   @Test
-  void returnsEmptyWhenRagDisabled() {
+  @DisplayName("检索开关关闭:返回空结果")
+  void shouldReturnEmpty_whenRetrievalDisabled() {
     ConsoleAiKnowledgeBase base =
         new ConsoleAiKnowledgeBase(providerOf(fakeEmbeddingModel()), propertiesWithRag(false));
     assertThat(base.retrieve("orchestrator outbox")).isEmpty();
   }
 
   @Test
-  void returnsEmptyWhenEmbeddingModelUnavailable() {
+  @DisplayName("嵌入模型不可用:返回空结果")
+  void shouldReturnEmpty_whenEmbeddingModelMissing() {
     ObjectProvider<EmbeddingModel> empty = mockEmbeddingProvider();
     when(empty.getIfAvailable()).thenReturn(null);
     ConsoleAiKnowledgeBase base = new ConsoleAiKnowledgeBase(empty, propertiesWithRag(true));
@@ -114,7 +120,8 @@ class ConsoleAiKnowledgeBaseTest {
   }
 
   @Test
-  void statusKnowledgePackTracksRuntimeEnums() throws IOException {
+  @DisplayName("状态语料:覆盖作业实例、分区、任务与工作流运行的全部状态码")
+  void shouldCoverAllRuntimeStatusCodes_whenStatusPackRead() throws IOException {
     String statusKnowledge = readKnowledge("ai-knowledge/02-status-and-enums.md");
 
     assertContainsAllCodes(statusKnowledge, JobInstanceStatus.values());
@@ -124,7 +131,8 @@ class ConsoleAiKnowledgeBaseTest {
   }
 
   @Test
-  void governanceKnowledgePackCoversRecentGuardrails() throws IOException {
+  @DisplayName("治理语料:覆盖近期工程护栏关键词")
+  void shouldCoverRecentGuardrails_whenGovernancePackRead() throws IOException {
     String concepts = readKnowledge("ai-knowledge/01-concepts.md");
     String operations = readKnowledge("ai-knowledge/05-operations.md");
     String governance = readKnowledge("ai-knowledge/10-engineering-governance.md");

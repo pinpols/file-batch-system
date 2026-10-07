@@ -18,6 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("多分片路由数据源工厂:按解析结果选取分片连接,独占实例路由,默认分片校验与资源释放")
 class BusinessRoutingDataSourceFactoryMultiShardTest {
 
   @AfterEach
@@ -27,7 +28,7 @@ class BusinessRoutingDataSourceFactoryMultiShardTest {
 
   @Test
   @DisplayName("多片:每个租户路由到 resolver 选定 shard 的连接")
-  void routesTenantToResolvedShard() throws Exception {
+  void shouldRouteToResolvedShard_whenTenantPresent() throws Exception {
     DataSource ds0 = mock(DataSource.class);
     DataSource ds1 = mock(DataSource.class);
     Connection c0 = mock(Connection.class);
@@ -49,7 +50,7 @@ class BusinessRoutingDataSourceFactoryMultiShardTest {
 
   @Test
   @DisplayName("silo 租户路由到 silo 数据源连接")
-  void routesSiloTenant() throws Exception {
+  void shouldRouteToSiloDataSource_whenSiloTenant() throws Exception {
     DataSource ds0 = mock(DataSource.class);
     DataSource siloDs = mock(DataSource.class);
     Connection cs = mock(Connection.class);
@@ -64,7 +65,7 @@ class BusinessRoutingDataSourceFactoryMultiShardTest {
 
   @Test
   @DisplayName("shards 缺 default key(shard-0)拒绝")
-  void rejectsMissingDefaultKey() {
+  void shouldReject_whenDefaultShardKeyMissing() {
     assertThatThrownBy(() -> BusinessRoutingDataSourceFactory.multiShard(
             Map.of("shard-1", mock(DataSource.class)),
             new HashAndSiloPlacementResolver(2, Map.of())))
@@ -73,7 +74,7 @@ class BusinessRoutingDataSourceFactoryMultiShardTest {
 
   @Test
   @DisplayName("关闭路由数据源时每个真实分片只关闭一次")
-  void closesOwnedDataSourcesExactlyOnce() throws Exception {
+  void shouldCloseEachOwnedDataSourceOnce_whenClosedRepeatedly() throws Exception {
     CloseableDataSource ds0 = mock(CloseableDataSource.class);
     CloseableDataSource ds1 = mock(CloseableDataSource.class);
     BusinessRoutingDataSource routing =

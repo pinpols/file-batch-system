@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchReceiptPollProperties;
+import io.github.pinpols.batch.worker.dispatchs.domain.PendingReceiptPollRow;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -143,7 +144,7 @@ public class DispatchReceiptPollScheduler {
     if (!properties.isEnabled() || stopping.get()) {
       return;
     }
-    List<Map<String, Object>> rows;
+    List<PendingReceiptPollRow> rows;
     try {
       rows = fileDispatchRepository.listPendingReceiptPolls(
           properties.getBatchSize(), properties.getPendingMaxAgeSeconds());
@@ -156,7 +157,7 @@ public class DispatchReceiptPollScheduler {
       }
       throw exception;
     }
-    for (Map<String, Object> row : rows) {
+    for (PendingReceiptPollRow row : rows) {
       if (stopping.get()) {
         return;
       }
@@ -199,13 +200,11 @@ public class DispatchReceiptPollScheduler {
     return false;
   }
 
-  private void pollOne(Map<String, Object> row) throws Exception {
-    String tenantId = String.valueOf(row.get("tenant_id"));
-    Long fileId = toLong(row.get("file_id"));
-    String channelCode = String.valueOf(row.get("channel_code"));
-    String externalRequestId = row.get("external_request_id") == null
-        ? null
-        : String.valueOf(row.get("external_request_id"));
+  private void pollOne(PendingReceiptPollRow row) throws Exception {
+    String tenantId = row.tenantId();
+    Long fileId = row.fileId();
+    String channelCode = row.channelCode();
+    String externalRequestId = row.externalRequestId();
     if (fileId == null || !Texts.hasText(channelCode) || !Texts.hasText(externalRequestId)) {
       return;
     }
@@ -290,15 +289,5 @@ public class DispatchReceiptPollScheduler {
             receiptCode);
       }
     }
-  }
-
-  private static Long toLong(Object v) {
-    if (v instanceof Number n) {
-      return n.longValue();
-    }
-    if (v == null) {
-      return null;
-    }
-    return Long.parseLong(String.valueOf(v));
   }
 }

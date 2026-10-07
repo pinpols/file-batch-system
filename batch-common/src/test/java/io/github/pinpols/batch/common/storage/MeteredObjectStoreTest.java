@@ -15,9 +15,11 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** {@link MeteredObjectStore} 单测:成功/失败都打点(operation+outcome 标签),且不改语义透传委托。 */
+@DisplayName("计量对象存储:验证成功与失败调用的指标打点标签、原始异常透传以及能力探测不打点")
 class MeteredObjectStoreTest {
 
   private static final String TIMER = "batch.objectstore.op";
@@ -29,6 +31,7 @@ class MeteredObjectStoreTest {
   private final MeteredObjectStore metered = new MeteredObjectStore(delegate, registry);
 
   @Test
+  @DisplayName("读取成功时按操作与结果标签累计一次耗时计数,并原样返回底层数据流")
   void shouldRecordSuccessTimerForGet() {
     byte[] payload = "hi".getBytes(StandardCharsets.UTF_8);
     when(delegate.get(BUCKET, KEY)).thenReturn(new ByteArrayInputStream(payload));
@@ -44,6 +47,7 @@ class MeteredObjectStoreTest {
   }
 
   @Test
+  @DisplayName("写入成功时按操作与结果标签累计一次耗时计数,并透传到底层")
   void shouldRecordSuccessTimerForPut() {
     byte[] payload = "x".getBytes(StandardCharsets.UTF_8);
 
@@ -57,6 +61,7 @@ class MeteredObjectStoreTest {
   }
 
   @Test
+  @DisplayName("删除失败时记录失败结果标签,并把原始异常向上抛出")
   void shouldRecordErrorTimerAndPropagateException() {
     doThrow(new RuntimeException("boom")).when(delegate).delete(BUCKET, KEY);
 
@@ -71,6 +76,7 @@ class MeteredObjectStoreTest {
   }
 
   @Test
+  @DisplayName("能力探测直接返回底层配置,且不产生任何耗时指标")
   void shouldDelegateCapabilityFlagsWithoutTiming() {
     when(delegate.supportsRangeRead()).thenReturn(true);
     when(delegate.supportsPresignPut()).thenReturn(false);

@@ -19,12 +19,14 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
  * PREPROCESS 文件编码处理单测：UTF-8 BOM 字节级剥离、未配置 charset 时的 GB18030 探测回退、invalid_char_policy
  * FAIL/REPLACE。全部走内联 content/contentBase64 路径，不需要对象存储容器。
  */
+@DisplayName("导入预处理编码处理单测:字节序标记剥离,编码探测与非法字节策略语义")
 class PreprocessStepEncodingTest {
 
   private PlatformFileRecordRepository runtimeRepository;
@@ -53,6 +55,7 @@ class PreprocessStepEncodingTest {
   }
 
   @Test
+  @DisplayName("解码前剥离字节序标记,载荷不再残留该标记")
   void utf8Bom_shouldBeStrippedBeforeDecode() {
     ImportJobContext context = contextWithRawPayload("\uFEFFname,amount\nAlice,100");
 
@@ -64,6 +67,7 @@ class PreprocessStepEncodingTest {
   }
 
   @Test
+  @DisplayName("开启编码探测后识别为兼容中文编码,内容不出现替换符")
   void gb18030_shouldBeDetected_whenDetectionOptedIn() {
     templateConfig = Map.of("file_format_type", "DELIMITED", "charset_detect", true);
     byte[] gbkBytes = gbk("客户,金额\n张三,100");
@@ -78,6 +82,7 @@ class PreprocessStepEncodingTest {
   }
 
   @Test
+  @DisplayName("未开启编码探测时,非目标编码文件快速失败而不静默乱码")
   void gbkFile_shouldFailFast_whenDetectionNotEnabled() {
     // 默认保守：不配置 charset_detect 时，非 UTF-8 文件保持原有 fail-fast，不允许静默乱码入库。
     ImportJobContext context =
@@ -91,6 +96,7 @@ class PreprocessStepEncodingTest {
   }
 
   @Test
+  @DisplayName("显式指定编码时按指定编码解码,不触发探测")
   void explicitCharset_shouldDecodeWithoutDetection() {
     templateConfig = Map.of(
         "file_format_type", "DELIMITED",
@@ -106,6 +112,7 @@ class PreprocessStepEncodingTest {
   }
 
   @Test
+  @DisplayName("替换策略下非法字节被替换符取代,并记录替换次数")
   void invalidCharPolicyReplace_shouldReplaceWithReplacementChar() {
     templateConfig = Map.of(
         "file_format_type", "DELIMITED",
@@ -122,6 +129,7 @@ class PreprocessStepEncodingTest {
   }
 
   @Test
+  @DisplayName("失败策略下遇到非法字节,直接判定解码失败")
   void invalidCharPolicyFail_shouldFailDecode_whenBytesInvalid() {
     templateConfig = Map.of(
         "file_format_type", "DELIMITED",

@@ -11,6 +11,7 @@ import io.github.pinpols.batch.console.domain.observability.realtime.RealtimeRep
 import io.github.pinpols.batch.console.infrastructure.realtime.ConsoleRealtimeReplayStore;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
@@ -29,6 +30,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
       "batch.console.realtime.replay-ttl=1h",
       "batch.startup-self-check.enabled=false"
     })
+@DisplayName("实时回放存储: 基于真实 Redis 的追加与游标回放语义")
 class ConsoleRealtimeReplayStoreIntegrationTest extends AbstractIntegrationTest {
 
   @SpringBootConfiguration
@@ -44,7 +46,8 @@ class ConsoleRealtimeReplayStoreIntegrationTest extends AbstractIntegrationTest 
   private ConsoleRealtimeReplayStore replayStore;
 
   @Test
-  void appendAndReplayReturnsEventsAfterCursor() {
+  @DisplayName("从已知游标回放: 判定游标命中,只返回其后的两条事件")
+  void shouldReturnEventsAfterCursor_whenReplayingFromKnownCursor() {
     String tenantId = "t-replay-" + System.nanoTime();
     String stream = "job-instance";
 
@@ -65,7 +68,8 @@ class ConsoleRealtimeReplayStoreIntegrationTest extends AbstractIntegrationTest 
   }
 
   @Test
-  void replayWithUnknownCursorReturnsAllEventsAndCursorNotFound() {
+  @DisplayName("游标未知: 返回全部事件并标记游标未命中")
+  void shouldReturnAllEventsAndReportCursorMissing_whenCursorUnknown() {
     String tenantId = "t-nocursor-" + System.nanoTime();
     String stream = "ops";
 
@@ -79,7 +83,8 @@ class ConsoleRealtimeReplayStoreIntegrationTest extends AbstractIntegrationTest 
   }
 
   @Test
-  void replayWithEventTypeFilterReturnsOnlyMatchingEvents() {
+  @DisplayName("按事件类型过滤: 只返回该类型的两条事件")
+  void shouldReturnOnlyMatchingEvents_whenEventTypeFilterGiven() {
     String tenantId = "t-filter-" + System.nanoTime();
     String stream = "pipeline";
 
@@ -94,7 +99,8 @@ class ConsoleRealtimeReplayStoreIntegrationTest extends AbstractIntegrationTest 
   }
 
   @Test
-  void replayWithBlankParamsReturnsCursorFoundTrueWithEmptyEvents() {
+  @DisplayName("租户,流或游标为空: 判定游标命中但事件列表为空")
+  void shouldReturnEmptyBatchWithCursorFound_whenParamsBlank() {
     ReplayBatch blankTenant = replayStore.replay("", "stream", "cursor", null);
     ReplayBatch blankStream = replayStore.replay("tenant", "", "cursor", null);
     ReplayBatch blankCursor = replayStore.replay("tenant", "stream", "", null);

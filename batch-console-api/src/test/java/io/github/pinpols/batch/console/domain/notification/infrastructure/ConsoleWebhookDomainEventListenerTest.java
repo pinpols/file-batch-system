@@ -17,6 +17,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+@DisplayName("领域事件监听器: 分发前置条件与事务提交后的异步投递声明")
 class ConsoleWebhookDomainEventListenerTest {
 
   private WebhookDispatcher webhookDispatcher;
@@ -32,6 +33,7 @@ class ConsoleWebhookDomainEventListenerTest {
   }
 
   @Test
+  @DisplayName("收到领域事件后同时触发外部通知与订阅规则分发, 字段逐项透传")
   void shouldDispatchEvent() {
     Instant now = BatchDateTimeSupport.utcNow();
     ConsoleRealtimeDomainEvent event =
@@ -51,6 +53,7 @@ class ConsoleWebhookDomainEventListenerTest {
   }
 
   @Test
+  @DisplayName("事件对象缺失时不触发任何分发")
   void shouldSkipNullEvent() {
     listener.onDomainEvent(null);
 
@@ -58,6 +61,7 @@ class ConsoleWebhookDomainEventListenerTest {
   }
 
   @Test
+  @DisplayName("租户标识仅含空白字符时不触发任何分发")
   void shouldSkipEventWithBlankTenantId() {
     ConsoleRealtimeDomainEvent event = ConsoleRealtimeDomainEvent.builder().tenantId("  ").stream(
             "job-instance")

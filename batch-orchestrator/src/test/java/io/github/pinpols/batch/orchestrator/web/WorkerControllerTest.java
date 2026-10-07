@@ -23,6 +23,7 @@ import io.github.pinpols.batch.orchestrator.controller.WorkerController;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.orchestrator.service.WorkerRegistryServerService;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -32,6 +33,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("工作节点注册与心跳接口的控制器行为,覆盖限流,租户归一,进度保留与下线指令下发")
 class WorkerControllerTest {
 
   @Mock
@@ -54,6 +56,7 @@ class WorkerControllerTest {
   }
 
   @Test
+  @DisplayName("下线请求体中的超时秒数被正确绑定并透传给治理服务")
   void shouldBindDrainRequestTimeoutSeconds() throws Exception {
     when(workerDrainGovernanceService.startDrain("t1", "worker-1", 1))
         .thenReturn(new WorkerRegistryEntity(
@@ -85,6 +88,7 @@ class WorkerControllerTest {
   }
 
   @Test
+  @DisplayName("预热请求路由到治理服务并返回成功状态")
   void shouldRouteWarmupToGovernanceService() throws Exception {
     when(workerDrainGovernanceService.warmup("t1", "worker-1"))
         .thenReturn(new WorkerRegistryEntity(
@@ -111,6 +115,7 @@ class WorkerControllerTest {
   }
 
   @Test
+  @DisplayName("鉴权上下文租户与请求体租户不一致时拒绝治理请求并返回禁止访问")
   void shouldRejectApiKeyTenantMismatchOnWorkerGovernanceRequest() throws Exception {
     mockMvc
         .perform(post("/internal/workers/worker-1/drain")
@@ -123,7 +128,8 @@ class WorkerControllerTest {
   // SDK Phase 2 §2.3:心跳回包下发 platform directive
 
   @Test
-  void heartbeatReturnsNormalDirectiveForOnlineWorker() throws Exception {
+  @DisplayName("在线工作节点心跳返回常规调度指令,包含期望并发上限且不下发下线动作")
+  void shouldReturnNormalDirective_whenHeartbeatFromOnlineWorker() throws Exception {
     when(workerRegistryService.heartbeat(eq("worker-1"), any(WorkerHeartbeatDto.class)))
         .thenReturn(onlineWorker("ONLINE", 8));
 
@@ -139,7 +145,8 @@ class WorkerControllerTest {
   }
 
   @Test
-  void heartbeatPreservesTaskProgressDuringTenantNormalization() throws Exception {
+  @DisplayName("心跳携带的租户标识经鉴权上下文归一后,管道任务进度明细仍完整保留")
+  void shouldPreserveTaskProgress_whenHeartbeatTenantIsNormalized() throws Exception {
     when(workerRegistryService.heartbeat(eq("worker-1"), any(WorkerHeartbeatDto.class)))
         .thenReturn(onlineWorker("ONLINE", 8));
     mockMvc
@@ -164,7 +171,8 @@ class WorkerControllerTest {
   }
 
   @Test
-  void heartbeatReturnsDrainDirectiveForDrainingWorker() throws Exception {
+  @DisplayName("处于下线中的工作节点心跳返回下线指令,并要求停止接收新任务")
+  void shouldReturnDrainDirective_whenWorkerIsDraining() throws Exception {
     when(workerRegistryService.heartbeat(eq("worker-1"), any(WorkerHeartbeatDto.class)))
         .thenReturn(onlineWorker("DRAINING", 8));
 
@@ -180,7 +188,8 @@ class WorkerControllerTest {
   // 缺口①: per-tenant worker 注册限流 (opt-in)
 
   @Test
-  void registerAllowedWhenRateLimiterPasses() throws Exception {
+  @DisplayName("租户级限流放行时工作节点注册成功并完成落库")
+  void shouldRegisterWorker_whenRateLimiterAllowsRequest() throws Exception {
     when(tenantActionRateLimiter.tryConsume("t1", RateLimitAction.WORKER_REGISTER))
         .thenReturn(true);
     when(workerRegistryService.register(any(WorkerHeartbeatDto.class)))
@@ -196,7 +205,8 @@ class WorkerControllerTest {
   }
 
   @Test
-  void registerPreservesStableWorkerPoolCodeDuringTenantNormalization() throws Exception {
+  @DisplayName("注册请求携带的稳定工作节点池编码在租户归一后保持不变,不回退为节点编码")
+  void shouldPreserveWorkerPoolCode_whenRegisterTenantIsNormalized() throws Exception {
     when(tenantActionRateLimiter.tryConsume("t1", RateLimitAction.WORKER_REGISTER))
         .thenReturn(true);
     when(workerRegistryService.register(any(WorkerHeartbeatDto.class)))
@@ -221,7 +231,8 @@ class WorkerControllerTest {
   }
 
   @Test
-  void registerRejectedWith429WhenRateLimited() throws Exception {
+  @DisplayName("租户级限流拒绝时注册返回限流状态码,且不触发落库")
+  void shouldRejectRegistration_whenRateLimiterDeniesRequest() throws Exception {
     when(tenantActionRateLimiter.tryConsume("t1", RateLimitAction.WORKER_REGISTER))
         .thenReturn(false);
 

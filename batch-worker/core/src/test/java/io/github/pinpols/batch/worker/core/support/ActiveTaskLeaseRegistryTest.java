@@ -9,8 +9,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("活跃任务租约注册表: 租约生命周期与排空等待语义")
 class ActiveTaskLeaseRegistryTest {
 
   private ActiveTaskLeaseRegistry registry;
@@ -21,6 +23,7 @@ class ActiveTaskLeaseRegistryTest {
   }
 
   @Test
+  @DisplayName("登记租约后快照可见, 且任务, 租户与 Worker 标识完整")
   void shouldRegisterAndSnapshotLease() {
     registry.register("task-1", "tenant-A", "worker-1");
 
@@ -33,6 +36,7 @@ class ActiveTaskLeaseRegistryTest {
   }
 
   @Test
+  @DisplayName("移除租约后快照为空")
   void shouldRemoveLease() {
     registry.register("task-1", "tenant-A", "worker-1");
     registry.remove("task-1");
@@ -41,7 +45,8 @@ class ActiveTaskLeaseRegistryTest {
   }
 
   @Test
-  void completingLeaseShouldBeExcludedFromRenewSnapshotButStillBlockDrain() {
+  @DisplayName("置为完成中的租约不再出现在续期快照中, 但仍计入数量并阻止排空")
+  void shouldExcludeCompletingLeaseFromRenewSnapshot_butStillBlockDrain() {
     registry.register("task-1", "tenant-A", "worker-1");
 
     boolean marked = registry.markCompletingUnlessLost("task-1");
@@ -53,7 +58,8 @@ class ActiveTaskLeaseRegistryTest {
   }
 
   @Test
-  void markLostShouldNotOverrideCompletingLease() {
+  @DisplayName("已置为完成中的租约不会被后续的丢失标记覆盖")
+  void shouldNotOverrideCompletingLease_whenMarkingLost() {
     registry.register("task-1", "tenant-A", "worker-1");
 
     assertThat(registry.markCompletingUnlessLost("task-1")).isTrue();
@@ -63,7 +69,8 @@ class ActiveTaskLeaseRegistryTest {
   }
 
   @Test
-  void markCompletingShouldFailWhenLeaseAlreadyLost() {
+  @DisplayName("租约已标记丢失时, 再置为完成中返回失败且丢失状态保持")
+  void shouldFailMarkingCompleting_whenLeaseAlreadyLost() {
     registry.register("task-1", "tenant-A", "worker-1");
     registry.markLost("task-1");
 
@@ -72,6 +79,7 @@ class ActiveTaskLeaseRegistryTest {
   }
 
   @Test
+  @DisplayName("登记参数含空值时忽略该次登记, 快照保持为空")
   void shouldIgnoreRegisterWithNullArguments() {
     registry.register(null, "tenant-A", "worker-1");
     registry.register("task-1", null, "worker-1");
@@ -81,6 +89,7 @@ class ActiveTaskLeaseRegistryTest {
   }
 
   @Test
+  @DisplayName("任务标识为空时移除操作不抛异常, 已有租约保留")
   void shouldIgnoreRemoveWithNullTaskId() {
     registry.register("task-1", "tenant-A", "worker-1");
     registry.remove(null); // should not throw
@@ -89,6 +98,7 @@ class ActiveTaskLeaseRegistryTest {
   }
 
   @Test
+  @DisplayName("可以同时登记多个租约, 快照包含全部")
   void shouldSupportMultipleLeases() {
     registry.register("task-1", "t1", "w1");
     registry.register("task-2", "t1", "w2");
@@ -98,6 +108,7 @@ class ActiveTaskLeaseRegistryTest {
   }
 
   @Test
+  @DisplayName("相同任务标识重复登记时覆盖原租约")
   void shouldOverwriteExistingLeaseWithSameTaskId() {
     registry.register("task-1", "tenant-A", "worker-1");
     registry.register("task-1", "tenant-A", "worker-2");
@@ -107,11 +118,13 @@ class ActiveTaskLeaseRegistryTest {
   }
 
   @Test
+  @DisplayName("没有任何租约时快照为空")
   void shouldReturnEmptySnapshotWhenNoLeases() {
     assertThat(registry.snapshot()).isEmpty();
   }
 
   @Test
+  @DisplayName("租约被移除后等待排空立即返回成功且快照清空")
   void awaitDrain_shouldReturnTrueAfterLeasesRemoved() throws Exception {
     // R3-P1-11：原 Thread.sleep(200) 在 CI 低 CPU 环境下不保证 awaitDrain 线程已进入 wait()，
     // 导致 R3-P2-2 修复（remove 总是 notifyAll）尚未引入前可能 missed-notify 假阴超时。
@@ -138,6 +151,7 @@ class ActiveTaskLeaseRegistryTest {
   }
 
   @Test
+  @DisplayName("仍有租约时等待排空到点超时返回失败, 租约保留")
   void awaitDrain_shouldReturnFalseOnTimeout() {
     registry.register("task-1", "t1", "w1");
 

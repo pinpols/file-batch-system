@@ -39,9 +39,11 @@ import java.time.Month;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
+@DisplayName("跨天依赖对账调度器:验证开关关闭与停机排空时短路 + 依赖就绪后派发下游节点 + 等待超时/依赖定义缺失/解析失败时置失败并告警")
 class CrossDayDependencyReconcilerTest {
 
   private OrchestratorWorkflowMappers workflowMappers;
@@ -96,21 +98,24 @@ class CrossDayDependencyReconcilerTest {
   }
 
   @Test
-  void disabledScheduleShortCircuits() {
+  @DisplayName("对账开关关闭时不查询任何等待依赖的节点,避免无效扫描")
+  void shouldSkipReconcile_whenScheduleDisabled() {
     properties.setEnabled(false);
     reconciler.scheduledReconcile();
     verify(nodeRunMapper, never()).selectByNodeStatus(anyString(), anyInt());
   }
 
   @Test
-  void drainingShutdownShortCircuits() {
+  @DisplayName("停机排空期间不发起对账查询,避免与关闭流程争抢资源")
+  void shouldSkipReconcile_whenShutdownDraining() {
     when(gracefulShutdown.isDraining()).thenReturn(true);
     reconciler.scheduledReconcile();
     verify(nodeRunMapper, never()).selectByNodeStatus(anyString(), anyInt());
   }
 
   @Test
-  void resolvedDependencyTriggersDispatchNode() {
+  @DisplayName("跨天依赖全部就绪时派发下游节点,且不改写节点运行状态")
+  void shouldDispatchNode_whenDependencyResolved() {
     WorkflowNodeRunEntity waiting =
         waitingNodeRun(101L, "AGG", "TASK", Instant.now().minusSeconds(60), 7L);
     WorkflowRunEntity workflowRun = workflowRun("t1", 7L, 200L, 333L);
@@ -142,7 +147,8 @@ class CrossDayDependencyReconcilerTest {
   }
 
   @Test
-  void waitingTimeoutMarksNodeFailedAndAlerts() {
+  @DisplayName("等待依赖超过节点超时窗口时置节点失败并发出告警,且不再派发")
+  void shouldMarkNodeFailedAndAlert_whenWaitingBeyondTimeout() {
     Instant farPast = Instant.now().minusSeconds(100_000L);
     WorkflowNodeRunEntity waiting = waitingNodeRun(102L, "AGG", "TASK", farPast, 8L);
     WorkflowRunEntity workflowRun = workflowRun("t1", 8L, 200L, 334L);
@@ -171,7 +177,8 @@ class CrossDayDependencyReconcilerTest {
   }
 
   @Test
-  void specRemovedSinceWaitingMarksFailed() {
+  @DisplayName("节点依赖定义已被移除时直接置失败,不再尝试解析跨天依赖")
+  void shouldMarkNodeFailed_whenDependencySpecRemoved() {
     WorkflowNodeRunEntity waiting =
         waitingNodeRun(103L, "AGG", "TASK", Instant.now().minusSeconds(30), 9L);
     WorkflowRunEntity workflowRun = workflowRun("t1", 9L, 200L, 335L);
@@ -192,7 +199,8 @@ class CrossDayDependencyReconcilerTest {
   }
 
   @Test
-  void waitingWithinTimeoutWindowDoesNotChangeAnything() {
+  @DisplayName("等待时长仍在超时窗口内时保持等待,既不置失败也不告警")
+  void shouldKeepWaiting_whenWithinTimeoutWindow() {
     WorkflowNodeRunEntity waiting =
         waitingNodeRun(104L, "AGG", "TASK", Instant.now().minusSeconds(10), 10L);
     WorkflowRunEntity workflowRun = workflowRun("t1", 10L, 200L, 336L);
@@ -220,7 +228,8 @@ class CrossDayDependencyReconcilerTest {
   }
 
   @Test
-  void resolverFailureMarksNodeFailedAndAlerts() {
+  @DisplayName("依赖解析返回失败时置节点失败并发出告警")
+  void shouldMarkNodeFailedAndAlert_whenResolverFails() {
     WorkflowNodeRunEntity waiting =
         waitingNodeRun(105L, "AGG", "TASK", Instant.now().minusSeconds(30), 11L);
     WorkflowRunEntity workflowRun = workflowRun("t1", 11L, 200L, 337L);

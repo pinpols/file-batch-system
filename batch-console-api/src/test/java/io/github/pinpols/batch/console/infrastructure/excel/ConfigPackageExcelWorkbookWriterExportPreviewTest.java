@@ -16,6 +16,7 @@ import java.util.Map;
 import org.apache.poi.ss.usermodel.Comment;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.support.StaticMessageSource;
 
@@ -23,6 +24,7 @@ import org.springframework.context.support.StaticMessageSource;
  * Writer 导出/预览路径的 characterization 测试：锁定 buildExportWorkbook / buildPreviewWorkbook 的
  * 行为基线（sheet 顺序与数量、表头、数据单元格、错误批注与校验明细），防止拆分重构时行为漂移。
  */
+@DisplayName("配置包 Excel 写出器:导出与预览工作簿的行为基线")
 class ConfigPackageExcelWorkbookWriterExportPreviewTest {
 
   private static final List<String> DATA_SHEET_NAMES = List.of(
@@ -48,7 +50,8 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
       ConsoleExcelStyles.SHEET_NAME_VALIDATION);
 
   @Test
-  void exportWorkbookContainsAllDataAndSupplementSheetsInStableOrder() throws Exception {
+  @DisplayName("导出工作簿:数据与说明 sheet 的数量和顺序保持稳定")
+  void shouldKeepStableSheetOrder_whenBuildingExportWorkbook() throws Exception {
     List<List<Map<String, Object>>> sheetData = exportDataRows();
     try (XSSFWorkbook wb = read(workbookWriter().buildExportWorkbook(sheetData, Map.of()))) {
       assertThat(sheetNames(wb))
@@ -60,7 +63,8 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
   }
 
   @Test
-  void exportWorkbookWritesHeadersAndEscapesFormulaCells() throws Exception {
+  @DisplayName("导出工作簿:表头取自列定义,公式注入内容被转义为文本")
+  void shouldWriteHeadersAndEscapeFormulas_whenBuildingExportWorkbook() throws Exception {
     List<Map<String, Object>> jobRows = List.of(
         row("job_code", "JOB_IMPORT_CUSTOMER", "job_name", "导入客户", "default_params", "=1+1"));
     List<List<Map<String, Object>>> sheetData = emptyExportData();
@@ -82,7 +86,8 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
   }
 
   @Test
-  void exportWorkbookAppliesStepImplCodeDropdownFromRegistry() throws Exception {
+  @DisplayName("导出工作簿:步骤实现编码列按注册表生成动态下拉")
+  void shouldApplyStepImplDropdown_whenRegistryProvidesImplCodes() throws Exception {
     List<List<Map<String, Object>>> sheetData = emptyExportData();
     sheetData.set(
         7, List.of(row("job_code", "JOB_PROCESS", "version", "1", "impl_code", "sqlCompute")));
@@ -99,7 +104,8 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
   }
 
   @Test
-  void previewWorkbookWritesSessionRowsAndIssueComments() throws Exception {
+  @DisplayName("预览工作簿:写入会话数据行、单元格批注与校验明细")
+  void shouldWriteRowsAndIssueComments_whenBuildingPreviewWorkbook() throws Exception {
     Map<String, String> badJob = new LinkedHashMap<>();
     badJob.put("tenant_id", "t1");
     badJob.put("job_code", "JOB_MISSING_QUEUE");

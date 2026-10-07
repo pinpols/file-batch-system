@@ -18,12 +18,15 @@ import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("导入阶段支撑工具单测:分块大小上限与文件状态恢复感知更新的语义")
 class ImportStageSupportTest {
 
   @Test
-  void resolveChunkSizeUsesTemplateValueWithinMax() {
+  @DisplayName("模板分块大小在上限内时,按模板值生效")
+  void shouldUseTemplateChunkSize_whenWithinMax() {
     ImportJobContext context = new ImportJobContext();
     context.getAttributes().put(PipelineRuntimeKeys.TEMPLATE_CONFIG, Map.of("chunk_size", 5000));
     ImportWorkerConfiguration config = config(2000, 10000);
@@ -32,7 +35,8 @@ class ImportStageSupportTest {
   }
 
   @Test
-  void resolveChunkSizeRejectsTemplateValueAboveMax() {
+  @DisplayName("模板分块大小超过上限时抛参数非法,并提示超限")
+  void shouldRejectTemplateChunkSize_whenAboveMax() {
     ImportJobContext context = new ImportJobContext();
     context.getAttributes().put(PipelineRuntimeKeys.TEMPLATE_CONFIG, Map.of("chunk_size", 20000));
     ImportWorkerConfiguration config = config(2000, 10000);
@@ -43,7 +47,8 @@ class ImportStageSupportTest {
   }
 
   @Test
-  void resolveChunkSizeRejectsFallbackAboveMax() {
+  @DisplayName("未配置模板且回退值超过上限时,同样抛参数非法")
+  void shouldRejectFallbackChunkSize_whenAboveMax() {
     assertThatThrownBy(
             () -> ImportStageSupport.resolveChunkSize(new ImportJobContext(), config(20000, 10000)))
         .isInstanceOf(IllegalArgumentException.class)
@@ -51,7 +56,8 @@ class ImportStageSupportTest {
   }
 
   @Test
-  void updateFileStatusRecoverAwareSkipsRollbackConflictForPartitionedImport() {
+  @DisplayName("多分区导入遇到状态冲突时读取当前状态后放行,不抛异常")
+  void shouldIgnoreStatusConflict_whenImportIsPartitioned() {
     PlatformFileRecordRepository repository = mock(PlatformFileRecordRepository.class);
     ImportJobContext context = context(99L);
     context.getAttributes().put(PipelineRuntimeKeys.PARTITION_COUNT, 2);
@@ -67,7 +73,8 @@ class ImportStageSupportTest {
   }
 
   @Test
-  void updateFileStatusRecoverAwareKeepsStrictStateMachineForNormalImport() {
+  @DisplayName("非分区导入遇到状态冲突时保持严格状态机,抛业务异常")
+  void shouldKeepStrictStateMachine_whenImportIsNotPartitioned() {
     PlatformFileRecordRepository repository = mock(PlatformFileRecordRepository.class);
     ImportJobContext context = context(99L);
     doThrow(stateConflict())
@@ -81,7 +88,8 @@ class ImportStageSupportTest {
   }
 
   @Test
-  void updateFileStatusRecoverAwareRejectsPartitionConflictWhenCurrentStatusIsBehindTarget() {
+  @DisplayName("多分区导入但当前状态落后于目标状态时,仍抛状态冲突异常")
+  void shouldRejectConflict_whenPartitionedStatusBehindTarget() {
     PlatformFileRecordRepository repository = mock(PlatformFileRecordRepository.class);
     ImportJobContext context = context(99L);
     context.getAttributes().put(PipelineRuntimeKeys.PARTITION_COUNT, 2);

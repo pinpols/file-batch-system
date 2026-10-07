@@ -13,10 +13,12 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /** {@link EncryptingObjectStore} 单测：覆盖 put/get round-trip / bypass 透传 / getFrom 拒绝 / 其它透传。 */
+@DisplayName("加密对象存储:验证写入加密与读取解密、直传写入与范围读取的拒绝、超限与未知长度拦截、绕过模式透传及委托行为")
 class EncryptingObjectStoreTest {
 
   private static final String BUCKET = "enc-bucket";
@@ -41,6 +43,7 @@ class EncryptingObjectStoreTest {
   }
 
   @Test
+  @DisplayName("写入后底层存放的是带加密标识的密文,经加密层读取可还原明文")
   void shouldEncryptOnPutAndDecryptOnGet(@TempDir Path root) throws Exception {
     BatchSecurityProperties security = new BatchSecurityProperties();
     security.setBypassMode(false);
@@ -65,6 +68,7 @@ class EncryptingObjectStoreTest {
   }
 
   @Test
+  @DisplayName("不支持直传写入预签名,调用即抛异常以避免绕过加密写明文")
   void shouldBlockPresignPutToAvoidPlaintextBypass(@TempDir Path root) {
     BatchSecurityProperties security = new BatchSecurityProperties();
     security.setBypassMode(false);
@@ -78,7 +82,8 @@ class EncryptingObjectStoreTest {
   }
 
   @Test
-  void deleteManyShouldDelegate(@TempDir Path root) {
+  @DisplayName("批量删除直接委托底层实现,目标对象被真实移除")
+  void shouldDelegateDeleteMany_whenBatchDelete(@TempDir Path root) {
     BatchSecurityProperties security = new BatchSecurityProperties();
     security.setBypassMode(false);
     FilesystemObjectStore raw = newRaw(root);
@@ -95,6 +100,7 @@ class EncryptingObjectStoreTest {
   }
 
   @Test
+  @DisplayName("载荷超过内存加密上限时拒绝写入,底层不落任何文件")
   void shouldRejectPayloadAboveInMemoryEncryptLimit(@TempDir Path root) {
     BatchSecurityProperties security = new BatchSecurityProperties();
     security.setBypassMode(false);
@@ -111,6 +117,7 @@ class EncryptingObjectStoreTest {
   }
 
   @Test
+  @DisplayName("调用方低报长度但实际字节超限时拒绝写入,底层不落文件")
   void shouldRejectActualBytesAboveLimitWhenCallerUnderReportsSize(@TempDir Path root) {
     BatchSecurityProperties security = new BatchSecurityProperties();
     security.setBypassMode(false);
@@ -127,6 +134,7 @@ class EncryptingObjectStoreTest {
   }
 
   @Test
+  @DisplayName("长度未知时拒绝加密写入,底层不落文件")
   void shouldRejectUnknownSizeWhenEncrypting(@TempDir Path root) {
     BatchSecurityProperties security = new BatchSecurityProperties();
     security.setBypassMode(false);
@@ -143,7 +151,8 @@ class EncryptingObjectStoreTest {
   }
 
   @Test
-  void bypassModeShouldPassThrough(@TempDir Path root) throws Exception {
+  @DisplayName("开启绕过模式后底层存放明文,读取也原样透传")
+  void shouldPassThroughPlaintext_whenBypassEnabled(@TempDir Path root) throws Exception {
     BatchSecurityProperties security = new BatchSecurityProperties();
     security.setBypassMode(true);
     FilesystemObjectStore raw = newRaw(root);
@@ -164,7 +173,8 @@ class EncryptingObjectStoreTest {
   }
 
   @Test
-  void getFromShouldAlwaysThrowEvenInBypass(@TempDir Path root) {
+  @DisplayName("即使处于绕过模式,范围读取仍被拒绝并给出明确提示")
+  void shouldRejectRangeRead_whenRangeReadRequestedInBypass(@TempDir Path root) {
     BatchSecurityProperties security = new BatchSecurityProperties();
     security.setBypassMode(true);
     FilesystemObjectStore raw = newRaw(root);
@@ -177,7 +187,8 @@ class EncryptingObjectStoreTest {
   }
 
   @Test
-  void otherOperationsShouldDelegate(@TempDir Path root) {
+  @DisplayName("存在性判断、大小统计、复制、列举、预签名与删除均委托底层并返回一致结果")
+  void shouldDelegateOtherOperations_whenCalled(@TempDir Path root) {
     BatchSecurityProperties security = new BatchSecurityProperties();
     security.setBypassMode(true);
     FilesystemObjectStore raw = newRaw(root);

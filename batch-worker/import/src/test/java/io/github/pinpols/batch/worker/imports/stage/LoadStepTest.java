@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -46,6 +47,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * 的通用治理逻辑。
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("导入加载阶段单测:流式分批,演练估算,插件配置错误与暂存文件清理语义")
 class LoadStepTest {
 
   @Mock
@@ -103,11 +105,13 @@ class LoadStepTest {
   // ── stage() ──
 
   @Test
+  @DisplayName("访问阶段属性时返回加载阶段标识")
   void shouldReturnLoadStage() {
     assertThat(loadStep.stage()).isEqualTo(ImportStage.LOAD);
   }
 
   @Test
+  @DisplayName("上下文为空时失败,返回上下文缺失错误码")
   void shouldFail_whenContextIsNull() {
     ImportStageResult result = loadStep.execute(null);
 
@@ -118,6 +122,7 @@ class LoadStepTest {
   // ── streaming happy path ──
 
   @Test
+  @DisplayName("流式加载按块分批写出,成功后清理暂存文件并推进文件状态")
   void shouldStreamingLoad_andCleanupValidatedFile_whenSuccess() throws Exception {
     Path validated = writeNdjson(List.of(row("C001"), row("C002"), row("C003")));
     Path parsed = writeNdjson(List.of(row("C001")));
@@ -139,6 +144,7 @@ class LoadStepTest {
   }
 
   @Test
+  @DisplayName("插件抛异常时加载失败,且保留暂存文件便于排查")
   void shouldKeepValidatedFile_whenPluginThrows() throws Exception {
     Path validated = writeNdjson(List.of(row("C001"), row("C002")));
     ImportJobContext ctx = streamingContext(validated, null);
@@ -153,6 +159,7 @@ class LoadStepTest {
   }
 
   @Test
+  @DisplayName("插件抛配置异常时返回配置非法错误码")
   void shouldReturnConfigInvalid_whenWorkerConfigExceptionRaised() throws Exception {
     Path validated = writeNdjson(List.of(row("C001")));
     ImportJobContext ctx = streamingContext(validated, null);
@@ -165,6 +172,7 @@ class LoadStepTest {
   }
 
   @Test
+  @DisplayName("记录全部被跳过时直接标记加载完成,不再调用插件")
   void shouldShortCircuit_whenAllRecordsSkipped() throws Exception {
     // skippedCount > 0 且 validated 文件为空 → 直接 markLoaded(0)，不调 plugin
     Path validated = Files.createTempFile("validated-", ".ndjson");
@@ -181,6 +189,7 @@ class LoadStepTest {
   }
 
   @Test
+  @DisplayName("声明了暂存路径但文件不存在时,返回无载荷失败")
   void shouldFailNoPayload_whenValidatedPathSetButFileMissing() {
     ImportJobContext ctx = streamingContext(tempDir.resolve("ghost.ndjson"), null);
     // streaming path: validated 文件不存在 → IMPORT_LOAD_NO_PAYLOAD(ADR-038 P3 legacy 已下线)
@@ -191,6 +200,7 @@ class LoadStepTest {
   }
 
   @Test
+  @DisplayName("未声明暂存路径时返回无载荷失败")
   void shouldFailNoPayload_whenValidatedPathMissing() {
     ImportJobContext ctx = baseContext();
 
@@ -203,6 +213,7 @@ class LoadStepTest {
   // ── dry-run ──
 
   @Test
+  @DisplayName("演练模式按暂存文件行数估算加载数,不调用插件")
   void shouldDryRun_estimateLoadedCountFromValidatedFile() throws Exception {
     Path validated = writeNdjson(List.of(row("C1"), row("C2"), row("C3")));
     ImportJobContext ctx = streamingContext(validated, null);
@@ -217,6 +228,7 @@ class LoadStepTest {
   }
 
   @Test
+  @DisplayName("演练模式且暂存文件缺失时,加载数计为零")
   void shouldDryRun_returnZero_whenValidatedPathMissing() {
     ImportJobContext ctx = baseContext();
     ctx.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
@@ -230,6 +242,7 @@ class LoadStepTest {
   // ── plugin resolution ──
 
   @Test
+  @DisplayName("模板配置指定加载目标时,调用对应插件而非默认插件")
   void shouldUseLoadTargetRefFromTemplateConfig() throws Exception {
     ImportLoadPlugin custom = mock(ImportLoadPlugin.class);
     when(custom.id()).thenReturn("custom_plugin");
@@ -253,6 +266,7 @@ class LoadStepTest {
   }
 
   @Test
+  @DisplayName("加载上下文从导入载荷继承批次,业务类型与模板编码")
   void shouldBuildLoadContext_withImportPayloadFields() throws Exception {
     Path validated = writeNdjson(List.of(row("C1")));
     ImportJobContext ctx = streamingContext(validated, null);
@@ -274,6 +288,7 @@ class LoadStepTest {
   }
 
   @Test
+  @DisplayName("存在文件记录时,加载上下文取其中的源文件名")
   void shouldUseFileRecordFileName_whenAvailable() throws Exception {
     Path validated = writeNdjson(List.of(row("C1")));
     ImportJobContext ctx = streamingContext(validated, null);

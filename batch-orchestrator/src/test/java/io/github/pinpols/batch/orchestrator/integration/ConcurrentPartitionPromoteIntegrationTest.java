@@ -11,6 +11,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -20,6 +21,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("分区状态并发推进的乐观并发控制验证,两个线程同时竞争时仅一方成功且版本号只递增一次")
 class ConcurrentPartitionPromoteIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
@@ -32,6 +34,7 @@ class ConcurrentPartitionPromoteIntegrationTest extends AbstractIntegrationTest 
   private TransactionTemplate transactionTemplate;
 
   @Test
+  @DisplayName("两个线程并发把同一等待态分区推进到就绪时仅一个线程更新成功,最终状态为就绪且版本号加一")
   void promoteStatus_onlyOneWins_whenTwoThreadsRaceConcurrently() throws Exception {
     String tenantId = "t1";
     String suffix = "promote-" + System.nanoTime();

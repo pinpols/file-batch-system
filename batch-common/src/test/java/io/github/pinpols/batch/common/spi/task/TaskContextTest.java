@@ -5,12 +5,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("任务上下文:参数与运行属性的不可变快照及缺失映射归一")
 class TaskContextTest {
 
   @Test
-  void preservesExplicitNullValuesInImmutableSnapshots() {
+  @DisplayName("快照语义:显式空值保留, 事后改动不入快照, 且取值不可修改")
+  void shouldPreserveExplicitNullValues_whenSnapshotTaken() {
     Map<String, Object> parameters = new LinkedHashMap<>();
     parameters.put("optionalParameter", null);
     Map<String, Object> attributes = new LinkedHashMap<>();
@@ -30,7 +33,8 @@ class TaskContextTest {
   }
 
   @Test
-  void normalizesMissingMapsToEmptyImmutableMaps() {
+  @DisplayName("参数与属性均为空:归一为空集合, 且写入被拒绝")
+  void shouldNormalizeToEmptyImmutableMaps_whenMapsMissing() {
     TaskContext context = new TaskContext("tenant", "job", null, null, null, null);
 
     assertThat(context.parameters()).isEmpty();

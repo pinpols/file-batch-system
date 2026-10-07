@@ -21,6 +21,7 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -31,6 +32,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 /** ConsoleBusinessTenantPlacementController list/upsert/delete + 校验。 */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("业务租户放置控制器: 列表查询、写入委托、参数校验与删除")
 class ConsoleBusinessTenantPlacementControllerTest {
 
   @Mock
@@ -59,7 +61,8 @@ class ConsoleBusinessTenantPlacementControllerTest {
   }
 
   @Test
-  void listShouldReturnPlacements() throws Exception {
+  @DisplayName("查询租户放置列表时, 响应返回放置键")
+  void shouldReturnPlacements_whenListing() throws Exception {
     BusinessTenantPlacementEntity row = new BusinessTenantPlacementEntity();
     row.setTenantId("t-1");
     row.setPlacementKey("silo-big");
@@ -72,7 +75,8 @@ class ConsoleBusinessTenantPlacementControllerTest {
   }
 
   @Test
-  void upsertShouldDelegateWithOperator() throws Exception {
+  @DisplayName("写入租户放置时, 请求体与操作人组装成入参交给服务")
+  void shouldDelegateUpsertWithOperator_whenSavingPlacement() throws Exception {
     when(requestMetadataResolver.current())
         .thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", null, "ops:alice", null, null));
 
@@ -85,7 +89,8 @@ class ConsoleBusinessTenantPlacementControllerTest {
   }
 
   @Test
-  void upsertShouldRejectInvalidPlacementKey() throws Exception {
+  @DisplayName("放置键格式非法时, 返回客户端错误")
+  void shouldRejectRequest_whenPlacementKeyInvalid() throws Exception {
     mockMvc
         .perform(put("/api/console/ops/tenant-placements")
             .contentType(APPLICATION_JSON)
@@ -94,7 +99,8 @@ class ConsoleBusinessTenantPlacementControllerTest {
   }
 
   @Test
-  void deleteShouldDelegate() throws Exception {
+  @DisplayName("删除租户放置时, 路径中的租户标识传给服务")
+  void shouldDelegateDelete_whenRemovingPlacement() throws Exception {
     when(service.delete("t-1")).thenReturn(true);
     mockMvc
         .perform(delete("/api/console/ops/tenant-placements/t-1"))

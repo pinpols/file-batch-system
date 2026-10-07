@@ -23,12 +23,14 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+@DisplayName("订阅接口: 清单查询, 新增与写操作权限约束")
 class ConsoleWebhookControllerTest {
 
   private final ConsoleWebhookService webhookService = mock(ConsoleWebhookService.class);
@@ -59,6 +61,7 @@ class ConsoleWebhookControllerTest {
   }
 
   @Test
+  @DisplayName("按租户返回订阅清单, 含名称与回调地址")
   void shouldListWebhookSubscriptions() throws Exception {
     WebhookSubscriptionEntity entity = new WebhookSubscriptionEntity();
     entity.setId(1L);
@@ -78,6 +81,7 @@ class ConsoleWebhookControllerTest {
   }
 
   @Test
+  @DisplayName("创建订阅返回成功, 事件类型统一大写后透出")
   void shouldCreateWebhookSubscription() throws Exception {
     WebhookSubscriptionEntity entity = new WebhookSubscriptionEntity();
     entity.setId(1L);
@@ -109,6 +113,7 @@ class ConsoleWebhookControllerTest {
   }
 
   @Test
+  @DisplayName("新增, 更新与删除仅管理员或租户管理员可写, 清单查询含租户用户")
   void shouldRestrictWebhookWritesToAdminOrTenantAdmin() throws Exception {
     assertThat(preAuthorize("create", String.class, CreateWebhookRequest.class))
         .isEqualTo("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_ADMIN')");

@@ -19,9 +19,11 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 
+@DisplayName("调度计划构建器: 分区数量解析, 束作业展开与准入参数装配口径")
 class DefaultSchedulePlanBuilderTest {
 
   private OrchestratorConfigCacheService configCacheService;
@@ -58,6 +60,7 @@ class DefaultSchedulePlanBuilderTest {
   // --- null / missing job definition ---
 
   @Test
+  @DisplayName("作业定义缺失时退化为单分区计划并套用默认优先级")
   void shouldBuildPlanWithSinglePartitionWhenJobDefinitionMissing() {
     when(configCacheService.findEnabledJobDefinition(anyString(), anyString())).thenReturn(null);
     when(configCacheService.findEnabledWorkflowDefinition(anyString(), anyString()))
@@ -76,6 +79,7 @@ class DefaultSchedulePlanBuilderTest {
   // --- NONE shard strategy ---
 
   @Test
+  @DisplayName("不切分策略下只生成一个分区")
   void shouldProduceSinglePartitionForNoneStrategy() {
     when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
         .thenReturn(jobDef("NONE", 3, null));
@@ -90,6 +94,7 @@ class DefaultSchedulePlanBuilderTest {
   // --- STATIC shard strategy ---
 
   @Test
+  @DisplayName("静态策略下按参数给出的数量生成分区")
   void shouldUseStaticPartitionCountFromParams() {
     when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
         .thenReturn(jobDef("STATIC", 5, null));
@@ -102,6 +107,7 @@ class DefaultSchedulePlanBuilderTest {
   }
 
   @Test
+  @DisplayName("静态策略缺少参数时回退为单分区")
   void shouldFallbackToOnePartitionWhenStaticParamsMissing() {
     when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
         .thenReturn(jobDef("STATIC", 5, null));
@@ -115,6 +121,7 @@ class DefaultSchedulePlanBuilderTest {
   // --- DYNAMIC shard strategy ---
 
   @Test
+  @DisplayName("动态策略有数据量估算时按大小解析分区数量")
   void shouldUseSizeBasedPartitionCountForDynamicStrategy() {
     when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
         .thenReturn(jobDef("DYNAMIC", 5, null));
@@ -131,6 +138,7 @@ class DefaultSchedulePlanBuilderTest {
   }
 
   @Test
+  @DisplayName("动态策略缺少数据量估算时按历史时长解析分区数量")
   void shouldUseRuntimeBasedPartitionCountWhenSizeNotAvailable() {
     when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
         .thenReturn(jobDef("DYNAMIC", 5, null));
@@ -146,6 +154,7 @@ class DefaultSchedulePlanBuilderTest {
   }
 
   @Test
+  @DisplayName("请求的分区数量超过上限时收敛到允许的最大值")
   void shouldCapPartitionCountAtMaxLimit() {
     when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
         .thenReturn(jobDef("STATIC", 5, null));
@@ -161,6 +170,7 @@ class DefaultSchedulePlanBuilderTest {
   // --- resolver chain shadow logging (2026-05-01 hardening) ---
 
   @Test
+  @DisplayName("显式数量与大小解析同时可用时显式优先, 并记录被覆盖的解析结果")
   void shouldLogShadowedResolverWhenExplicitOverridesSize() {
     when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
         .thenReturn(jobDef("DYNAMIC", 5, null));
@@ -184,6 +194,7 @@ class DefaultSchedulePlanBuilderTest {
   }
 
   @Test
+  @DisplayName("只有一个解析器产出数量时不记录覆盖日志")
   void shouldNotLogShadowWhenOnlyOneResolverProducesValue() {
     when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
         .thenReturn(jobDef("DYNAMIC", 5, null));
@@ -200,6 +211,7 @@ class DefaultSchedulePlanBuilderTest {
   // --- partition key format ---
 
   @Test
+  @DisplayName("分区键按任务编码, 营业日与序号拼接, 业务键不带序号")
   void shouldGenerateCorrectPartitionKeyFormat() {
     when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
         .thenReturn(jobDef("STATIC", 5, null));
@@ -215,6 +227,7 @@ class DefaultSchedulePlanBuilderTest {
   }
 
   @Test
+  @DisplayName("按期望行数均分生成确定性的分片范围契约")
   void shouldPopulateDeterministicPartitionContractFromExpectedRows() {
     when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
         .thenReturn(jobDef("STATIC", 5, null));
@@ -241,6 +254,7 @@ class DefaultSchedulePlanBuilderTest {
   // --- priority inheritance ---
 
   @Test
+  @DisplayName("计划优先级继承作业定义中的配置")
   void shouldInheritPriorityFromJobDefinition() {
     JobDefinitionEntity jobDef = jobDef("NONE", 8, null);
     when(configCacheService.findEnabledJobDefinition(anyString(), anyString())).thenReturn(jobDef);
@@ -254,6 +268,7 @@ class DefaultSchedulePlanBuilderTest {
   // --- ADR-046 文件束:异构 partition 展开 ---
 
   @Test
+  @DisplayName("束作业按文件清单展开为各自绑定的分区")
   void shouldExpandBundleJobIntoHeterogeneousPartitions() {
     when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
         .thenReturn(bundleJobDef("DYNAMIC", 5));
@@ -279,6 +294,7 @@ class DefaultSchedulePlanBuilderTest {
   }
 
   @Test
+  @DisplayName("导出束按模板展开分区, 允许没有源文件")
   void shouldExpandExportBundleByTemplateWithoutSourceFile() {
     // BUNDLE_EXPORT:导出无源文件,各 partition 绑导出模板(=源表/查询),sourceFileId 为空。
     when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
@@ -300,6 +316,7 @@ class DefaultSchedulePlanBuilderTest {
   }
 
   @Test
+  @DisplayName("分发束按待分发文件与下游渠道展开分区, 不绑定模板")
   void shouldExpandDispatchBundleByFileAndChannelWithoutTemplate() {
     // BUNDLE_DISPATCH:分发无模板,各 partition 绑待分发文件 + 下游渠道(targetRef)。
     when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
@@ -322,6 +339,7 @@ class DefaultSchedulePlanBuilderTest {
   }
 
   @Test
+  @DisplayName("束文件数量与分区数量不一致时快速失败, 不静默丢文件")
   void shouldFailFastWhenBundleCountMismatchesPartitionCount() {
     // 束作业配成 NONE 策略 → partitionCount=1,但 bundleFiles 有 2 个 → 配置错,fail-fast 不静默丢文件
     when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
@@ -340,6 +358,7 @@ class DefaultSchedulePlanBuilderTest {
   }
 
   @Test
+  @DisplayName("束作业没有任何可用绑定时快速失败")
   void shouldFailFastWhenBundleJobHasNoUsableBinding() {
     when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
         .thenReturn(bundleJobDef("DYNAMIC", 5));
@@ -353,6 +372,7 @@ class DefaultSchedulePlanBuilderTest {
   }
 
   @Test
+  @DisplayName("非束作业即使参数误带束文件清单也不做绑定")
   void shouldNotBindFilesForNonBundleJob() {
     // 非束作业即便 params 误带 bundleFiles 也不绑定(jobType 不是 BUNDLE_IMPORT)
     when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
@@ -371,6 +391,7 @@ class DefaultSchedulePlanBuilderTest {
   }
 
   @Test
+  @DisplayName("资源画像与下游渠道一路带入准入计划与准入请求")
   void shouldCarryResourceProfileAndDispatchChannelIntoAdmissionPlan() {
     when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
         .thenReturn(bundleJobDef("DYNAMIC", 5, "BUNDLE_DISPATCH"));
@@ -393,6 +414,7 @@ class DefaultSchedulePlanBuilderTest {
   }
 
   @Test
+  @DisplayName("分发束的每个下游渠道都进入准入请求的渠道清单")
   void shouldCarryEveryDispatchBundleTargetIntoAdmissionRequest() {
     when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
         .thenReturn(bundleJobDef("DYNAMIC", 5, "BUNDLE_DISPATCH"));

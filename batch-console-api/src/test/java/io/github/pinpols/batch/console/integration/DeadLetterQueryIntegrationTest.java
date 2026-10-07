@@ -11,6 +11,7 @@ import io.github.pinpols.batch.console.domain.governance.query.DeadLetterTaskQue
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.testing.TestConstants.DeadLetter;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -20,6 +21,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@DisplayName("死信任务查询映射: 按重放状态,来源类型与链路标识过滤,无过滤返回全量")
 class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
@@ -29,6 +31,7 @@ class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
   private JdbcTemplate jdbcTemplate;
 
   @Test
+  @DisplayName("无数据租户: 查询返回空列表")
   void shouldReturnEmptyWhenNoDeadLettersExist() {
     List<DeadLetterTaskEntity> results =
         deadLetterTaskMapper.selectByQuery(DeadLetterTaskQuery.ofTenant(
@@ -38,6 +41,7 @@ class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("按重放状态过滤: 只返回该状态的一条记录,来源主键正确")
   void shouldQueryDeadLettersByTenantAndReplayStatus() {
     String tenantId = "t-dlq-" + BatchDateTimeSupport.utcEpochMillis();
     insertDeadLetter(tenantId, "JOB_PARTITION", 100L, DeadLetter.NEW, "trace-dlq-001");
@@ -53,6 +57,7 @@ class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("按来源类型过滤: 返回该类型的两条记录")
   void shouldQueryDeadLettersBySourceType() {
     String tenantId = "t-dlq-type-" + BatchDateTimeSupport.utcEpochMillis();
     insertDeadLetter(tenantId, "JOB_PARTITION", 200L, DeadLetter.NEW, "trace-type-001");
@@ -65,6 +70,7 @@ class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("按链路标识过滤: 只命中唯一标识对应的一条记录")
   void shouldQueryDeadLettersByTraceId() {
     String tenantId = "t-dlq-trace-" + BatchDateTimeSupport.utcEpochMillis();
     String uniqueTrace = "unique-trace-dlq-" + BatchDateTimeSupport.utcEpochMillis();
@@ -78,6 +84,7 @@ class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("不带过滤条件: 返回该租户的全部三条死信")
   void shouldReturnAllDeadLettersForTenantWithNoFilter() {
     String tenantId = "t-dlq-all-" + BatchDateTimeSupport.utcEpochMillis();
     insertDeadLetter(tenantId, "JOB_PARTITION", 400L, DeadLetter.NEW, "trace-all-1");

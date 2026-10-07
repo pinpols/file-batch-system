@@ -52,7 +52,7 @@ class RedisDownToxicIT extends AbstractChaosIntegrationTest {
 
   @Test
   @DisplayName("Redis 断 + RedisLockProvider.lock → 抛连接异常(应用可 catch 走 jdbc fallback 分支)")
-  void redisLockProviderShouldThrowWhenRedisDown() throws Exception {
+  void redisLockProvider_whenRedisDown_shouldThrow() throws Exception {
     LettuceConnectionFactory factory = newLettuceFactory();
     try {
       LockProvider provider = ShedLockProviderFactory.redisLockProvider(factory, "chaos");

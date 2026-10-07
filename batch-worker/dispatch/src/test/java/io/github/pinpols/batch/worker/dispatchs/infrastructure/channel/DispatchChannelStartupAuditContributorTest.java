@@ -10,12 +10,15 @@ import io.github.pinpols.batch.worker.core.infrastructure.WorkerStartupAuditCont
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchChannelHealthProperties;
 import java.time.Instant;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("渠道启动审计:不健康渠道告警、官方渠道安全画像暴露与首轮探测待定的判定边界")
 class DispatchChannelStartupAuditContributorTest {
 
   @Test
-  void auditWarnsWhenUnhealthyChannelsExist() {
+  @DisplayName("存在真实不健康渠道时审计判不健康,明细给出不健康数量且不标记首轮探测待定")
+  void shouldWarn_whenUnhealthyChannelsExist() {
     DispatchChannelHealthRepository repository = mock(DispatchChannelHealthRepository.class);
     when(repository.countByHealthStatus("DEGRADED")).thenReturn(2L);
     when(repository.countByHealthStatus("UNHEALTHY")).thenReturn(1L);
@@ -32,7 +35,8 @@ class DispatchChannelStartupAuditContributorTest {
   }
 
   @Test
-  void auditExposesOfficialChannelSafetyProfiles() {
+  @DisplayName("审计明细列出全部官方渠道类型的安全画像,邮件渠道标注超时受控,本地渠道含沙箱与旁挂清单")
+  void shouldExposeOfficialChannelSafetyProfiles_whenAudited() {
     DispatchChannelHealthRepository repository = mock(DispatchChannelHealthRepository.class);
     DispatchChannelStartupAuditContributor contributor = new DispatchChannelStartupAuditContributor(
         repository, new DispatchChannelHealthProperties());
@@ -60,7 +64,8 @@ class DispatchChannelStartupAuditContributorTest {
   }
 
   @Test
-  void auditTreatsStartupOverdueUnhealthyAsPendingFirstProbe() {
+  @DisplayName("启动瞬间不健康渠道全部处于探测逾期时,审计判健康并标记首轮探测待定")
+  void shouldTreatOverdueUnhealthyAsPendingFirstProbe_whenAtStartup() {
     DispatchChannelHealthRepository repository = mock(DispatchChannelHealthRepository.class);
     when(repository.countByHealthStatus("DEGRADED")).thenReturn(0L);
     when(repository.countByHealthStatus("UNHEALTHY")).thenReturn(1L);
@@ -76,7 +81,8 @@ class DispatchChannelStartupAuditContributorTest {
   }
 
   @Test
-  void auditDoesNotMarkPendingWhenOverdueExceedsUnhealthy() {
+  @DisplayName("探测逾期数超过不健康数时,审计仍判不健康且不标记首轮探测待定")
+  void shouldNotMarkPending_whenOverdueCountExceedsUnhealthyCount() {
     // 反例：1 个真故障 UNHEALTHY（已被 probe 验证）+ overdue 同样为 1 之外还有
     // 真故障早已 overdue → 经过 mapper SQL 收紧后，countProbeOverdue 只数 UNHEALTHY-overdue。
     // 但万一 mapper 行为又回退（DEGRADED 进入计数），strict == 仍能挡住误吞。

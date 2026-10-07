@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -43,6 +44,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 // KAFKA 容器，重启后端口变更；其它共享 fingerprint 的缓存 context 仍指向旧端口，发布会 60s metadata 超时。
 @org.springframework.test.annotation.DirtiesContext(
     classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.BEFORE_CLASS)
+@DisplayName("发件箱事件发布到 Kafka 并落库投递日志的端到端验证,覆盖默认主题兜底与按租户路由的导入导出派发")
 class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
 
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -87,6 +89,7 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("自定义事件类型无法匹配派发路由时发布到默认主题,落库一条成功投递日志且消息可被消费")
   void shouldPublishFallbackEventToDefaultTopicAndPersistDeliveryLog() throws Exception {
     OutboxEventEntity event = pendingEvent("CUSTOM_EVENT_TYPE", "AGG_TYPE", "key-fallback-001");
     outboxEventMapper.insert(event);
@@ -120,6 +123,7 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("导入派发事件按租户后缀路由到导入主题,投递日志记录实际主题且消息体含导入类型与幂等键")
   void shouldPublishImportDispatchEventToImportTopicAndPersistDeliveryLog() throws Exception {
     OutboxEventEntity event = pendingEvent("IMPORT", "JOB_PARTITION", "key-import-001");
     outboxEventMapper.insert(event);
@@ -156,6 +160,7 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("导出派发事件按租户后缀路由到导出主题,投递日志记录实际主题且消息体含导出类型与幂等键")
   void shouldPublishExportDispatchEventToExportTopicAndPersistDeliveryLog() throws Exception {
     OutboxEventEntity event = pendingEvent("EXPORT", "JOB_PARTITION", "key-export-001");
     outboxEventMapper.insert(event);

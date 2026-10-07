@@ -21,6 +21,7 @@ import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -59,6 +60,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
     })
 @ActiveProfiles({"test", "e2e"})
 @Tag("e2e")
+@DisplayName("待发事件投递状态机与重试审计:以替身投递器精确控制成功与失败序列,验证重试耗尽与短暂失败恢复两种语义")
 class OutboxForwarderRetryE2eIT extends AbstractIntegrationTest {
 
   @DynamicPropertySource
@@ -81,6 +83,7 @@ class OutboxForwarderRetryE2eIT extends AbstractIntegrationTest {
   // ── Scenario A ────────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("投递持续失败时按配置上限耗尽重试,事件进入放弃终态,投递次数等于上限,审计表出现已耗尽记录")
   void retryExhaustion_marksGiveUp_andWritesExhaustedAuditRecord() {
     // publisher always fails
     when(outboxPublisher.publish(any())).thenReturn(CompletableFuture.completedFuture(false));
@@ -118,6 +121,7 @@ class OutboxForwarderRetryE2eIT extends AbstractIntegrationTest {
   // ── Scenario B ────────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("首次投递失败后下一次成功,事件最终进入已发布终态,审计表保留至少一条失败轨迹记录")
   void transientFailure_thenRecovery_eventIsPublishedEventually() {
     // fail on first publish attempt, succeed on the second
     when(outboxPublisher.publish(any()))

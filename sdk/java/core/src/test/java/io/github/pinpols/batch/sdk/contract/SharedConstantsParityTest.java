@@ -17,6 +17,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -41,6 +42,7 @@ import org.junit.jupiter.api.Test;
  * sdk/typescript/tests/shared-constants-parity.test.ts}、{@code sdk/rust/tests/constants_parity.rs},
  * 共同锁定 Java、YAML 与四个消费侧语言常量集合的一致性。
  */
+@DisplayName("SDK 共享常量 — Java 源头集合与 docs/api 契约文件的双向等值校验")
 class SharedConstantsParityTest {
 
   private static final YAMLMapper YAML = new YAMLMapper();
@@ -64,6 +66,7 @@ class SharedConstantsParityTest {
   }
 
   @Test
+  @DisplayName("调度消息支持的主版本集合与契约文件完全一致")
   void schemaVersionsSupported_match() throws IOException {
     Set<String> java = TaskDispatchMessage.SUPPORTED_MAJOR_VERSIONS;
     Set<String> yaml = readList("schema_versions_supported");
@@ -71,6 +74,7 @@ class SharedConstantsParityTest {
   }
 
   @Test
+  @DisplayName("worker 运行时状态枚举常量与契约文件完全一致")
   void workerRuntimeStates_match() throws IOException {
     Set<String> java = Arrays.stream(WorkerRuntimeState.values())
         .map(Enum::name)
@@ -80,6 +84,7 @@ class SharedConstantsParityTest {
   }
 
   @Test
+  @DisplayName("敏感字段关键词清单与契约文件完全一致")
   void sensitiveKeywords_match() throws Exception {
     Set<String> java = readStringListFromSource(
         "batch-common/src/main/java/io/github/pinpols/batch/common/security/SensitiveDataValidator.java",
@@ -89,6 +94,7 @@ class SharedConstantsParityTest {
   }
 
   @Test
+  @DisplayName("任务状态枚举常量与契约文件完全一致")
   void taskStatuses_match() throws IOException {
     Set<String> java = readEnumConstantsFromSource(
         "batch-common/src/main/java/io/github/pinpols/batch/common/enums/TaskStatus.java",
@@ -98,6 +104,7 @@ class SharedConstantsParityTest {
   }
 
   @Test
+  @DisplayName("SDK 上报错误码常量与契约文件完全一致")
   void reportErrorCodes_match() throws IOException {
     Set<String> java = readStringConstantsFromSource(
         "sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/task/SdkErrorCode.java");

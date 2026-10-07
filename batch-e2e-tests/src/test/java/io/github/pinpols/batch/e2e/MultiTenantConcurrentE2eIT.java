@@ -27,6 +27,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -69,6 +70,7 @@ import org.springframework.test.context.jdbc.Sql;
     })
 @Tag("e2e")
 @Tag("critical")
+@DisplayName("多租户并发端到端: 两租户栅栏对齐后同时触发导入任务, 校验实例, 任务, 事件, 错误明细与配额峰值均按租户隔离, 且双方任务终态均为成功")
 class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
 
   private static final String T1 = "t1";
@@ -88,7 +90,8 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
    * job instances, tasks, or outbox events.
    */
   @Test
-  void concurrentTenantJobsAreIsolatedAndBothSucceed() throws Exception {
+  @DisplayName("并发导入隔离验收: 两租户同时触发并等待终态, 实例与任务互不可见, 事件不挂到对方租户, 错误明细无跨租户污染, 配额峰值各自独立")
+  void shouldKeepTenantsIsolated_whenConcurrentImportJobsBothSucceed() throws Exception {
     awaitWorkerOnline(T1, "e2e-import-1", "IMPORT");
     seedTenantTemplates(T2);
     seedWorkerRegistry(T2, "e2e-import-1", "import");
@@ -324,7 +327,8 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
    * deterministic, non-concurrent check.
    */
   @Test
-  void jobInstancesAreIsolatedBetweenTenants() {
+  @DisplayName("非并发实例隔离验收: 两租户分别触发后各自实例计数为一, 按对方去重键查询均为零")
+  void shouldIsolateJobInstances_whenTwoTenantsLaunchSeparately() {
     seedTenantTemplates(T2);
     LaunchSeed t1Seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, T1, "IMPORT", "import", TriggerType.API);
@@ -384,7 +388,8 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
 
   /** Outbox isolation: outbox_events created for t1 are not visible under t2. */
   @Test
-  void outboxEventsAreIsolatedBetweenTenants() {
+  @DisplayName("事件隔离验收: 单租户触发后本租户事件计数至少为一, 另一租户无导入类型事件")
+  void shouldIsolateOutboxEvents_whenSingleTenantLaunches() {
     LaunchSeed t1Seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, T1, "IMPORT", "import", TriggerType.API);
 

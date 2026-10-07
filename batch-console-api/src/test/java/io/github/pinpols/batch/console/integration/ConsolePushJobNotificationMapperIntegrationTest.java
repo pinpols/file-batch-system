@@ -11,6 +11,7 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Date;
 import java.time.LocalDate;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -20,6 +21,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@DisplayName("作业通知待发查询映射: 终态筛选,执行人与时窗过滤及幂等写入")
 class ConsolePushJobNotificationMapperIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
@@ -29,7 +31,8 @@ class ConsolePushJobNotificationMapperIntegrationTest extends AbstractIntegratio
   private JdbcTemplate jdbc;
 
   @Test
-  void findPendingShouldReturnTerminalInstancesWithOperator() {
+  @DisplayName("筛选待通知作业实例: 成功的终态实例被选中,执行人,状态与作业编码带出")
+  void shouldReturnTerminalInstances_whenInstanceEligible() {
     String tenant = "t-push-" + BatchDateTimeSupport.utcEpochMillis();
     long defId = ensureJobDefinition(tenant, "JOB_OK");
     long instanceId = insertJobInstance(tenant, defId, "JOB_OK", "SUCCESS", "alice", "0 minute");
@@ -47,7 +50,8 @@ class ConsolePushJobNotificationMapperIntegrationTest extends AbstractIntegratio
   }
 
   @Test
-  void findPendingShouldExcludeNullOperator() {
+  @DisplayName("缺少执行人的实例: 不出现在待通知列表中")
+  void shouldExcludeInstances_whenOperatorMissing() {
     String tenant = "t-push-" + BatchDateTimeSupport.utcEpochMillis();
     long defId = ensureJobDefinition(tenant, "JOB_SCHED");
     long instanceId = insertJobInstance(tenant, defId, "JOB_SCHED", "SUCCESS", null, "0 minute");
@@ -62,7 +66,8 @@ class ConsolePushJobNotificationMapperIntegrationTest extends AbstractIntegratio
   }
 
   @Test
-  void findPendingShouldExcludeNonTerminalStatus() {
+  @DisplayName("非终态实例: 不出现在待通知列表中")
+  void shouldExcludeInstances_whenStatusNotTerminal() {
     String tenant = "t-push-" + BatchDateTimeSupport.utcEpochMillis();
     long defId = ensureJobDefinition(tenant, "JOB_RUN");
     long instanceId = insertJobInstance(tenant, defId, "JOB_RUN", "RUNNING", "alice", "0 minute");
@@ -79,7 +84,8 @@ class ConsolePushJobNotificationMapperIntegrationTest extends AbstractIntegratio
   }
 
   @Test
-  void findPendingShouldExcludeOutsideLookbackWindow() {
+  @DisplayName("完成时间超出回溯窗口的实例: 不出现在待通知列表中")
+  void shouldExcludeInstances_whenOutsideLookbackWindow() {
     String tenant = "t-push-" + BatchDateTimeSupport.utcEpochMillis();
     long defId = ensureJobDefinition(tenant, "JOB_OLD");
     long instanceId = insertJobInstance(tenant, defId, "JOB_OLD", "SUCCESS", "alice", "30 minute");
@@ -94,7 +100,8 @@ class ConsolePushJobNotificationMapperIntegrationTest extends AbstractIntegratio
   }
 
   @Test
-  void findPendingShouldExcludeAlreadyNotified() {
+  @DisplayName("已登记通知的实例: 不出现在待通知列表中")
+  void shouldExcludeInstances_whenAlreadyNotified() {
     String tenant = "t-push-" + BatchDateTimeSupport.utcEpochMillis();
     long defId = ensureJobDefinition(tenant, "JOB_DONE");
     long instanceId = insertJobInstance(tenant, defId, "JOB_DONE", "SUCCESS", "alice", "0 minute");
@@ -113,7 +120,8 @@ class ConsolePushJobNotificationMapperIntegrationTest extends AbstractIntegratio
   }
 
   @Test
-  void insertIgnoreShouldReturnOneFirstThenZeroOnConflict() {
+  @DisplayName("同一实例重复登记: 首次写入一行,第二次忽略且不影响行数")
+  void shouldInsertOnceAndIgnoreConflict_whenSameInstanceNotifiedTwice() {
     String tenant = "t-push-" + BatchDateTimeSupport.utcEpochMillis();
     ConsolePushJobNotificationEntity n = new ConsolePushJobNotificationEntity();
     n.setTenantId(tenant);

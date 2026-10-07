@@ -18,12 +18,14 @@ import io.github.pinpols.batch.orchestrator.mapper.TenantQuotaPolicyMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowDefinitionMapper;
 import java.time.Duration;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("编排配置缓存服务:验证空参数短路,远端缓存命中与回源,以及本地缓存失效后的重读")
 class OrchestratorConfigCacheServiceTest {
 
   @Mock
@@ -59,7 +61,8 @@ class OrchestratorConfigCacheServiceTest {
   }
 
   @Test
-  void nullOrBlankTenantIdReturnsNull() {
+  @DisplayName("租户标识为空或空白时直接返回空结果,不访问远端缓存")
+  void shouldReturnNull_whenTenantIdNullOrBlank() {
     assertThat(service.findEnabledJobDefinition(null, "JOB1")).isNull();
     assertThat(service.findEnabledJobDefinition("", "JOB1")).isNull();
     assertThat(service.findEnabledJobDefinition("  ", "JOB1")).isNull();
@@ -67,14 +70,16 @@ class OrchestratorConfigCacheServiceTest {
   }
 
   @Test
-  void nullOrBlankJobCodeReturnsNull() {
+  @DisplayName("作业编码为空或空白时直接返回空结果,不访问远端缓存")
+  void shouldReturnNull_whenJobCodeNullOrBlank() {
     assertThat(service.findEnabledJobDefinition("t1", null)).isNull();
     assertThat(service.findEnabledJobDefinition("t1", "")).isNull();
     verify(redis, never()).getJson(anyString(), any());
   }
 
   @Test
-  void cacheHitReturnsValueWithoutCallingRepository() {
+  @DisplayName("远端缓存命中时直接返回缓存值,既不查询数据库也不回写缓存")
+  void shouldReturnCachedValue_whenRemoteCacheHit() {
     JobDefinitionEntity cached = jobDefinitionRecord("t1", "JOB1");
     when(redis.getJson(anyString(), eq(JobDefinitionEntity.class))).thenReturn(cached);
 
@@ -86,7 +91,8 @@ class OrchestratorConfigCacheServiceTest {
   }
 
   @Test
-  void repeatedJobDefinitionReadUsesLocalPositiveCache() {
+  @DisplayName("同一作业定义连续读取两次时只有第一次访问远端缓存")
+  void shouldHitRemoteCacheOnce_whenSameJobDefinitionReadTwice() {
     JobDefinitionEntity cached = jobDefinitionRecord("t1", "JOB1");
     when(redis.getJson(anyString(), eq(JobDefinitionEntity.class))).thenReturn(cached);
 
@@ -97,7 +103,8 @@ class OrchestratorConfigCacheServiceTest {
   }
 
   @Test
-  void evictClearsLocalPositiveCache() {
+  @DisplayName("作业定义缓存被清除后重新读取远端缓存,远端无数据时返回空结果")
+  void shouldReadThroughAfterEvict_whenJobDefinitionCacheCleared() {
     JobDefinitionEntity cached = jobDefinitionRecord("t1", "JOB3");
     when(redis.getJson(anyString(), eq(JobDefinitionEntity.class)))
         .thenReturn(cached)
@@ -111,7 +118,8 @@ class OrchestratorConfigCacheServiceTest {
   }
 
   @Test
-  void cacheMissCallsRepositoryAndCachesResult() {
+  @DisplayName("远端缓存未命中时查询数据库并把结果写回远端缓存")
+  void shouldQueryRepositoryAndWriteCache_whenRemoteCacheMiss() {
     JobDefinitionEntity fromDb = jobDefinitionRecord("t1", "JOB2");
     when(redis.getJson(anyString(), eq(JobDefinitionEntity.class))).thenReturn(null);
     when(jobDefinitionMapper.selectFirstByTenantAndCodeAndEnabled("t1", "JOB2", true))
@@ -124,14 +132,16 @@ class OrchestratorConfigCacheServiceTest {
   }
 
   @Test
-  void evictDeletesRedisKey() {
+  @DisplayName("清除作业定义缓存时删除对应的远端缓存键")
+  void shouldDeleteRemoteKey_whenJobDefinitionEvicted() {
     service.evictJobDefinition("t1", "JOB3");
 
     verify(redis).delete("config:t1:job-definition:JOB3");
   }
 
   @Test
-  void repeatedQuotaPolicyReadUsesLocalPositiveCache() {
+  @DisplayName("同一租户配额策略连续读取两次时只有第一次访问远端缓存")
+  void shouldHitRemoteCacheOnce_whenSameQuotaPolicyReadTwice() {
     TenantQuotaPolicyEntity cached = quotaPolicyRecord("t1");
     when(redis.getJson(anyString(), eq(TenantQuotaPolicyEntity.class))).thenReturn(cached);
 
@@ -142,7 +152,8 @@ class OrchestratorConfigCacheServiceTest {
   }
 
   @Test
-  void evictQuotaPoliciesClearsLocalPositiveCache() {
+  @DisplayName("租户配额策略缓存被清除后重新读取远端缓存,并删除远端缓存键")
+  void shouldReadThroughAndDeleteKey_whenQuotaPolicyCacheCleared() {
     TenantQuotaPolicyEntity cached = quotaPolicyRecord("t1");
     when(redis.getJson(anyString(), eq(TenantQuotaPolicyEntity.class)))
         .thenReturn(cached)

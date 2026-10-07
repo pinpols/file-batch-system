@@ -16,6 +16,7 @@ import io.github.pinpols.batch.worker.core.support.WorkerSelfRegistrationService
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.event.ContextClosedEvent;
@@ -26,6 +27,7 @@ import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
  *
  * <p>覆盖 v6 hardening：drain 完成后必须发出 duration / initial_active_leases / outcome 三个 metric。
  */
+@DisplayName("优雅关闭: 排空结果指标与注册状态流转顺序")
 class GracefulKafkaShutdownTest {
 
   private WorkerRuntimeState runtimeState;
@@ -62,6 +64,7 @@ class GracefulKafkaShutdownTest {
   }
 
   @Test
+  @DisplayName("没有活跃任务租约时排空立即成功, 记录耗时与成功结果计数")
   void shouldRecordSuccessOutcomeWhenNoActiveLeases() {
     shutdown.onApplicationEvent(new ContextClosedEvent(mock(ApplicationContextStub.class)));
 
@@ -81,6 +84,7 @@ class GracefulKafkaShutdownTest {
   }
 
   @Test
+  @DisplayName("等待超时后仍有活跃租约时按超时结果计数, 并记录初始租约数量")
   void shouldRecordTimeoutOutcomeWhenLeasesRemainAfterTimeout() {
     leaseRegistry.register("task-1", "t1", "w1"); // 不会被 remove → 必触发 timeout
 
@@ -106,6 +110,7 @@ class GracefulKafkaShutdownTest {
   }
 
   @Test
+  @DisplayName("关闭时先把注册状态置为排空再注销, 两步顺序不可颠倒")
   void shouldMarkDrainingThenDeactivateOnShutdown() {
     WorkerRegistration reg = mock(WorkerRegistration.class);
     lenient().when(reg.getWorkerId()).thenReturn("w1");
@@ -120,6 +125,7 @@ class GracefulKafkaShutdownTest {
   }
 
   @Test
+  @DisplayName("注册信息缺少有效标识时跳过注销动作")
   void shouldSkipDeactivateForInvalidRegistration() {
     WorkerRegistration blank = mock(WorkerRegistration.class);
     lenient().when(blank.getWorkerId()).thenReturn("  ");

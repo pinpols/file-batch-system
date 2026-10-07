@@ -25,6 +25,7 @@ import org.springframework.beans.factory.ObjectProvider;
  *   <li>plugin 缺失 / null 返回 / dry-run → 直接 success
  * </ul>
  */
+@DisplayName("处理反馈阶段:插件缺失与返回空时回退成功,插件异常被吞掉并计数,试运行不触碰插件")
 class FeedbackStepTest {
 
   private static ProcessMetrics noopMetrics() {
@@ -57,6 +58,7 @@ class FeedbackStepTest {
   }
 
   @Test
+  @DisplayName("阶段标识为处理反馈阶段")
   void shouldReturnStageFeedback_whenStageAccessed() {
     assertThat(new FeedbackStep(noopMetrics()).stage()).isEqualTo(ProcessStage.FEEDBACK);
   }

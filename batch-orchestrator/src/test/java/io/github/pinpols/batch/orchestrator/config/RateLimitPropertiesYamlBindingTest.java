@@ -22,6 +22,7 @@ import org.springframework.core.io.ClassPathResource;
  * ${ENV:default}} 的 fallback 写错(历史上 enabled fallback 是 false、阈值 fallback 是 0),生产实际加载的是 yml
  * 值而非类默认,会与文档/类默认相反且无测试发现。本类加载真 yml 并把 {@code ${...:default}} 解析成默认值(不设 env), 固化 yml 与文档一致。
  */
+@DisplayName("限流参数与真实配置文件绑定,验证无环境变量覆盖时默认开启且各项阈值与文档口径一致")
 class RateLimitPropertiesYamlBindingTest {
 
   private static RateLimitProperties bindFromApplicationYaml() throws IOException {
@@ -37,8 +38,8 @@ class RateLimitPropertiesYamlBindingTest {
   }
 
   @Test
-  @DisplayName("真 application.yml 无 env 覆盖时 rate-limit 默认开且阈值=文档口径")
-  void applicationYamlDefaultsMatchDocumentedContract() throws IOException {
+  @DisplayName("生产配置未设置环境变量时默认开启限流,各项阈值与文档口径一致")
+  void shouldEnableRateLimitAndMatchDocumentedThresholds_whenNoEnvOverride() throws IOException {
     RateLimitProperties props = bindFromApplicationYaml();
 
     assertThat(props.isEnabled()).as("yml 默认应开启限流").isTrue();

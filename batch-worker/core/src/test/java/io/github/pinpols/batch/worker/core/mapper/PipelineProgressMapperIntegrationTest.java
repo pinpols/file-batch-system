@@ -32,6 +32,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * delete 的正确性;advance/markCompleted 的语义已由 {@code DefaultProcessingPositionStoreTest} + 崩溃恢复 IT 覆盖。
  */
 @Testcontainers(disabledWithoutDocker = true)
+@DisplayName("流水线进度映射器: 按实例删除位点的范围隔离与幂等性")
 class PipelineProgressMapperIntegrationTest {
 
   @Container
@@ -138,7 +139,7 @@ class PipelineProgressMapperIntegrationTest {
 
   @Test
   @DisplayName("mapper XML 与列定义可解析装配(select/insert/delete 全绑定)")
-  void mapperStatementsResolve() {
+  void shouldResolveAllMapperStatements_whenXmlIsParsed() {
     List<String> ids =
         List.of("findByInstanceAndStage", "advance", "markCompleted", "deleteByInstance");
     for (String id : ids) {

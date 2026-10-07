@@ -293,7 +293,7 @@ public abstract class AbstractStageExecutor<
     List<PipelineStepTemplate> templates = new ArrayList<>();
     int order = 1;
     for (StageStepDescriptor descriptor : orderedSteps) {
-      templates.add(PipelineStepTemplate.builder()
+      PipelineStepTemplate template = PipelineStepTemplate.builder()
           .stepCode(descriptor.stepCode())
           .stepName(descriptor.stepName())
           .stageCode(descriptor.stageCode())
@@ -304,7 +304,8 @@ public abstract class AbstractStageExecutor<
           .retryPolicy("NONE")
           .retryMaxCount(0)
           .enabled(true)
-          .build());
+          .build();
+      templates.add(template);
     }
     return List.copyOf(templates);
   }

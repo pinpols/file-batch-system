@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Test;
  *   <li>Redis 健康时熔断不触发，限流正常（拒绝不计失败、不误熔断）。
  * </ul>
  */
+@DisplayName("限流熔断行为: 连续故障开路, 半开探测恢复与健康态不误熔断口径")
 class RedisRateLimitCircuitBreakerTest {
 
   private static RateLimitProperties.CircuitBreaker config(
@@ -64,7 +65,7 @@ class RedisRateLimitCircuitBreakerTest {
 
   @Test
   @DisplayName("连续 N 次 Redis 故障 → 熔断 OPEN → 后续请求短路 fail-open 且不再发 Redis 命令(无 500ms 阻塞)")
-  void sustainedFailureOpensCircuitThenShortCircuitsWithoutHittingRedis() {
+  void shouldOpenCircuitAndShortCircuit_whenFailuresSustain() {
     // arrange: getProxy 恒抛 RedisException(模拟慢故障命令级失败)
     @SuppressWarnings("unchecked")
     LettuceBasedProxyManager<String> proxyManager = mock(LettuceBasedProxyManager.class);
@@ -116,7 +117,7 @@ class RedisRateLimitCircuitBreakerTest {
 
   @Test
   @DisplayName("OPEN 窗口到期 → HALF_OPEN 探测成功 → CLOSED 恢复正常限流")
-  void halfOpenProbeSuccessRecoversToClosed() throws InterruptedException {
+  void shouldRecoverToClosed_whenHalfOpenProbeSucceeds() throws InterruptedException {
     // arrange: fail=true 时 getProxy 抛错;fail=false 时返回放行的 BucketProxy
     AtomicBoolean fail = new AtomicBoolean(true);
     BucketProxy bucketProxy = mock(BucketProxy.class);
@@ -168,7 +169,7 @@ class RedisRateLimitCircuitBreakerTest {
 
   @Test
   @DisplayName("Redis 健康时熔断不触发,限流正常工作(拒绝不计失败,不误熔断)")
-  void healthyRedisDoesNotTripCircuitAndLimitingWorks() {
+  void shouldKeepCircuitClosed_whenBackendHealthy() {
     // arrange: getProxy 返回 BucketProxy;前 2 次放行,之后拒绝(桶耗尽)
     BucketProxy bucketProxy = mock(BucketProxy.class);
     when(bucketProxy.tryConsume(1)).thenReturn(true, true, false, false, false);

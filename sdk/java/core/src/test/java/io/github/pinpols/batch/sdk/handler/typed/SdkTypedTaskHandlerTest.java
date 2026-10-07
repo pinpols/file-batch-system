@@ -8,8 +8,10 @@ import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("强类型任务处理器:入参反序列化与出参序列化,覆盖空参、非法参数与业务异常透传")
 class SdkTypedTaskHandlerTest {
 
   record ImportRequest(String sourcePath, int batchSize, LocalDate bizDate) {}
@@ -41,7 +43,8 @@ class SdkTypedTaskHandlerTest {
   }
 
   @Test
-  void deserializesParametersIntoTypedInput() {
+  @DisplayName("参数完整时反序列化为强类型入参:各字段取值正确且执行成功")
+  void shouldDeserializeParameters_whenTypedInputProvided() {
     ImportHandler handler = new ImportHandler();
 
     SdkTaskResult result = handler.execute(
@@ -54,7 +57,8 @@ class SdkTypedTaskHandlerTest {
   }
 
   @Test
-  void serializesTypedOutputIntoResultOutputMap() {
+  @DisplayName("业务返回强类型结果 → 字段序列化进结果输出,成功消息由自定义实现生成")
+  void shouldSerializeTypedOutput_whenHandleReturnsResult() {
     ImportHandler handler = new ImportHandler();
 
     SdkTaskResult result = handler.execute(ctxWith(Map.of("sourcePath", "/x", "batchSize", 10)));
@@ -64,7 +68,8 @@ class SdkTypedTaskHandlerTest {
   }
 
   @Test
-  void invalidParametersFailWithoutEnteringBusiness() {
+  @DisplayName("参数类型非法 → 反序列化阶段即失败,不进入业务处理")
+  void shouldFail_whenParametersInvalid() {
     ImportHandler handler = new ImportHandler();
 
     SdkTaskResult result = handler.execute(ctxWith(Map.of("batchSize", "not-a-number")));
@@ -75,7 +80,8 @@ class SdkTypedTaskHandlerTest {
   }
 
   @Test
-  void emptyParametersDeserializeToNullableFields() {
+  @DisplayName("参数为空 → 强类型入参字段取空值,执行仍然成功")
+  void shouldDeserializeToNullFields_whenParametersEmpty() {
     ImportHandler handler = new ImportHandler();
 
     SdkTaskResult result = handler.execute(ctxWith(Map.of()));
@@ -86,7 +92,8 @@ class SdkTypedTaskHandlerTest {
   }
 
   @Test
-  void handleExceptionBubblesUpToDispatcher() {
+  @DisplayName("业务处理抛异常 → 异常原样向上抛出,不由执行框架吞掉")
+  void shouldBubbleUpException_whenHandleThrows() {
     // 契约:handle() 抛异常不被 execute() 吞,透传给 TaskDispatcher 统一回退转 fail + REPORT failure。
     // 仅入参反序列化失败(IllegalArgumentException 来自 convertValue)才在 execute 内转 fail。
     SdkTypedTaskHandler<ImportRequest, ImportResult> handler = new SdkTypedTaskHandler<>() {
@@ -107,7 +114,8 @@ class SdkTypedTaskHandlerTest {
   }
 
   @Test
-  void nullOutputYieldsEmptyOutputMap() {
+  @DisplayName("业务返回空结果 → 输出映射为空,成功消息回退默认值")
+  void shouldYieldEmptyOutput_whenHandleReturnsNull() {
     SdkTypedTaskHandler<ImportRequest, ImportResult> handler = new SdkTypedTaskHandler<>() {
       @Override
       public String taskType() {

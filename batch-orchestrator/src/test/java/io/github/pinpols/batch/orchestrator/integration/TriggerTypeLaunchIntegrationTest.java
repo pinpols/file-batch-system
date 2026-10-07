@@ -15,6 +15,7 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +29,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("按触发类型发起作业:每种触发类型都生成对应实例记录,并至少派发一条导入事件")
 class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -43,6 +45,7 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
 
   @ParameterizedTest
   @EnumSource(TriggerType.class)
+  @DisplayName("每种触发类型都能发起成功,实例记录持久化对应触发类型,且至少产生一条导入派发事件")
   void shouldLaunchAndPersistTriggerTypeForEachTriggerType(TriggerType triggerType) {
     LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
         jdbcTemplate, TENANT, "DISPATCH", "DISPATCH", triggerType);

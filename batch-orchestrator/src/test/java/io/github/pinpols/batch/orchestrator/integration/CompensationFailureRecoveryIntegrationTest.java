@@ -14,6 +14,7 @@ import io.github.pinpols.batch.orchestrator.application.service.governance.Retry
 import io.github.pinpols.batch.orchestrator.domain.command.CompensationSubmitCommand;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -23,6 +24,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("补偿命令失败恢复集成:验证真实数据库与真实服务下补偿中途失败时命令置失败并留下错误信息,同一目标再次提交可成功且记录累计两条")
 class CompensationFailureRecoveryIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "it-comp";
@@ -38,7 +40,8 @@ class CompensationFailureRecoveryIntegrationTest extends AbstractIntegrationTest
   private RetryGovernanceService retryGovernanceService;
 
   @Test
-  void failedCompensationCommandIsPersistedAndSameTargetCanRecoverOnNextSubmit() {
+  @DisplayName("补偿执行中途失败时命令置为失败并落库错误信息,失败后同一目标再次提交可成功恢复且累计两条命令记录")
+  void shouldPersistFailedCommandAndRecover_whenSameTargetResubmitted() {
     doThrow(new IllegalStateException("simulated mid-compensation failure"))
         .when(retryGovernanceService)
         .retryPartition(eq(TENANT), eq(PARTITION_ID), org.mockito.ArgumentMatchers.anyString());

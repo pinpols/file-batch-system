@@ -339,7 +339,7 @@ PROCESS 只有一个 dispatch topic。大 SQL 加工可能堵住小而急的补�
 
 必须补的测试：
 
-1. ~~双库 E2E：platform/business 分离，确认 staging DDL 与 datasource 设计一致。~~ 已完成，证据见 `BatchWorkerProcessApplicationIntegrationTest#platformAndBusinessDataSourcesArePhysicallySeparated`。
+1. ~~双库 E2E：platform/business 分离，确认 staging DDL 与 datasource 设计一致。~~ 已完成，证据见 `BatchWorkerProcessApplicationIntegrationTest#shouldSeparatePlatformAndBusinessDatabases_whenDataSourcesInspected`。
 2. tenant 隔离测试：相同 batchKey、不同 tenant/target 的 staging 不会串读/串删。
 3. watermark 一致性测试：source 在 staging 后新增更高 watermark，不应推进到新增行。
 4. console Excel validator 测试：`sqlTransformCompute` 是合法 PROCESS COMPUTE plugin。

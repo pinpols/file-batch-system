@@ -15,10 +15,12 @@ import io.github.pinpols.batch.orchestrator.mapper.SuccessInstanceArchiveMapper;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
 
+@DisplayName("成功实例归档服务: 开关短路, 候选清理顺序与保留期下限口径")
 class SuccessInstanceArchiveServiceTest {
 
   private SuccessInstanceArchiveMapper mapper;
@@ -33,7 +35,8 @@ class SuccessInstanceArchiveServiceTest {
   }
 
   @Test
-  void disabledShouldShortCircuit() {
+  @DisplayName("归档开关关闭时直接返回未执行, 且不查询候选")
+  void shouldShortCircuit_whenArchiveDisabled() {
     props.setEnabled(false);
 
     ArchiveBatchResult result = service.archiveOnce();
@@ -43,7 +46,8 @@ class SuccessInstanceArchiveServiceTest {
   }
 
   @Test
-  void noCandidatesShouldReturnEmpty() {
+  @DisplayName("没有候选实例时返回已执行但计数为零, 不产生删除")
+  void shouldReturnEmptyResult_whenNoCandidates() {
     props.setEnabled(true);
     when(mapper.selectArchivableInstanceIds(any(Instant.class), anyInt())).thenReturn(List.of());
 
@@ -55,7 +59,8 @@ class SuccessInstanceArchiveServiceTest {
   }
 
   @Test
-  void archiveColdTablesBeforeCascadeDelete() {
+  @DisplayName("有候选实例时先归档各冷表, 再按外键依赖顺序级联删除")
+  void shouldArchiveColdTablesBeforeCascadeDelete_whenCandidatesExist() {
     props.setEnabled(true);
     props.setBatchSize(100);
     List<Long> ids = List.of(1L, 2L, 3L);
@@ -99,7 +104,8 @@ class SuccessInstanceArchiveServiceTest {
   }
 
   @Test
-  void hasMoreReturnsTrueAtBatchSize() {
+  @DisplayName("候选数量达到批量大小时判定还有更多待归档")
+  void shouldReportMore_whenCandidatesEqualBatchSize() {
     props.setEnabled(true);
     props.setBatchSize(3);
     when(mapper.selectArchivableInstanceIds(any(Instant.class), anyInt()))
@@ -111,7 +117,8 @@ class SuccessInstanceArchiveServiceTest {
   }
 
   @Test
-  void retentionDaysClampedToOne() {
+  @DisplayName("保留天数非正时收敛为一天, 归档截止时间相应前移")
+  void shouldClampRetentionToOneDay_whenRetentionNotPositive() {
     props.setEnabled(true);
     props.setRetentionDays(-5);
     when(mapper.selectArchivableInstanceIds(any(Instant.class), anyInt())).thenReturn(List.of());

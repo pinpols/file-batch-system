@@ -30,6 +30,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@DisplayName("卡死诊断统计映射: outbox 状态聚合的租户隔离与终态父子一致性")
 class ConsoleClusterDiagnosticMapperIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
@@ -104,7 +105,7 @@ class ConsoleClusterDiagnosticMapperIntegrationTest extends AbstractIntegrationT
 
   @Test
   @DisplayName("终态父子一致性诊断覆盖 dry-run 成功与失败终态")
-  void terminalChildDiagnosticIncludesDryRunTerminalStates() {
+  void shouldIncludeDryRunTerminalStates_whenCountingTerminalInstancesWithActiveChildren() {
     String tenantId = "ta-dry-run-" + System.nanoTime();
     long successId = insertJobInstanceWithActivePartition(tenantId, "SUCCESS_DRY_RUN");
     long failedId = insertJobInstanceWithActivePartition(tenantId, "FAILED_DRY_RUN");

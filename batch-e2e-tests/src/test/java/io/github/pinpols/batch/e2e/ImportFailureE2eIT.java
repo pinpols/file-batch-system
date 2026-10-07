@@ -18,6 +18,7 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -64,6 +65,7 @@ import org.springframework.test.context.jdbc.Sql;
 // 长时间 churn 共享 worker 后 scenarioA/B 抢不到 Kafka 消息超时。alphabetical
 // 把 C 放到最后,A/B 在 clean worker state 下完成,C 自己跑完不影响他人。
 @TestMethodOrder(MethodOrderer.MethodName.class)
+@DisplayName("Import 链路失败场景端到端测试:覆盖未知模板、必填字段缺失与重试预算耗尽三类故障,校验任务与实例状态、错误明细及死信治理")
 class ImportFailureE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -90,6 +92,7 @@ class ImportFailureE2eIT extends AbstractIntegrationTest {
    * </ul>
    */
   @Test
+  @DisplayName("模板编码不存在时,任务与作业实例必须进入失败态且任务错误码非空")
   void scenarioA_importFailsWhenTemplateCodeIsUnknown() {
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
@@ -164,6 +167,7 @@ class ImportFailureE2eIT extends AbstractIntegrationTest {
    * performed conditionally to keep the test robust across configuration variants.
    */
   @Test
+  @DisplayName("必填字段缺失时,任务与实例必须失败并写入逐行错误明细且任务错误码非空")
   void scenarioB_importFailsWhenRequiredFieldIsMissing() {
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
@@ -260,6 +264,7 @@ class ImportFailureE2eIT extends AbstractIntegrationTest {
    * non-zero retry budget must schedule partition retries and eventually emit a dead-letter row.
    */
   @Test
+  @DisplayName("持续失败且重试预算耗尽时,必须为分区生成死信记录并保留分区重试计数")
   void scenarioC_retryBudgetExhaustedCreatesDeadLetter() {
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         new E2eScenarioFixture.LaunchPreparationSpec(

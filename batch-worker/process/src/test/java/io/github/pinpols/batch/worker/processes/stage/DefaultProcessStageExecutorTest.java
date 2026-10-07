@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -38,6 +39,7 @@ import org.mockito.quality.Strictness;
 // 但 defaultStepDefinitions / 缺 PREPARE bean 直接抛错等用例并不触达这些 stub,严格模式会误报 UnnecessaryStubbing。
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
+@DisplayName("处理阶段执行器:默认步骤定义、五阶段顺序与失败短路、插件解析回退,以及阶段级续跑的开关与降级边界")
 class DefaultProcessStageExecutorTest {
 
   @Mock
@@ -55,6 +57,7 @@ class DefaultProcessStageExecutorTest {
   }
 
   @Test
+  @DisplayName("默认步骤定义按准备、计算、校验、提交、反馈顺序排列,阶段码与步骤码一一对应")
   void defaultStepDefinitions_useWapBookendsOrder() {
     DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
         allStageStepBeans(),
@@ -80,6 +83,7 @@ class DefaultProcessStageExecutorTest {
   }
 
   @Test
+  @DisplayName("流水线声明完整时按序跑完五个阶段且全部成功,同时解析出插件、生成批次键并把处理数写回上下文")
   void execute_runsAll5Stages_inOrder_whenPipelineDeclared() {
     ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
     when(plugin.implCode()).thenReturn("dailySummary");
@@ -125,6 +129,7 @@ class DefaultProcessStageExecutorTest {
   }
 
   @Test
+  @DisplayName("计算阶段失败即短路:只执行准备与计算,校验、提交与反馈都不再执行")
   void execute_skipsRemainingStages_whenComputeFails() {
     ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
     when(plugin.implCode()).thenReturn("failingPlugin");
@@ -157,6 +162,7 @@ class DefaultProcessStageExecutorTest {
   }
 
   @Test
+  @DisplayName("插件准备抛业务异常时不向上传播,结果映射为业务错误码并回带错误键与参数摘要")
   void execute_returnsBusinessError_whenPluginPrepareThrowsBizException() {
     ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
     when(plugin.implCode()).thenReturn("p1");
@@ -197,6 +203,7 @@ class DefaultProcessStageExecutorTest {
   }
 
   @Test
+  @DisplayName("插件准备抛运行时异常时不向上传播,结果映射为基础设施错误码并回带异常信息")
   void execute_returnsInfraError_whenPluginPrepareThrowsRuntimeException() {
     ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
     when(plugin.implCode()).thenReturn("p1");
@@ -224,6 +231,7 @@ class DefaultProcessStageExecutorTest {
   }
 
   @Test
+  @DisplayName("计算步骤的实现码为默认占位时,回退按载荷里的插件码解析插件并执行计算")
   void execute_resolvesPluginViaPayloadFallback_whenComputeStepImplCodeIsSentinel() {
     ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
     when(plugin.implCode()).thenReturn("payloadDriven");
@@ -251,6 +259,7 @@ class DefaultProcessStageExecutorTest {
   }
 
   @Test
+  @DisplayName("未配置任何插件时五个阶段都空操作成功,不解析插件且处理数置零")
   void execute_runsAll5StagesAsNoOp_whenNoPluginConfigured() {
     DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
         allStageStepBeans(),
@@ -273,6 +282,7 @@ class DefaultProcessStageExecutorTest {
   }
 
   @Test
+  @DisplayName("上下文与库中都没有流水线步骤定义时,结果映射为流水线步骤缺失")
   void execute_returnsPipelineStepMissing_whenNoStepsConfigured() {
     DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
         allStageStepBeans(),
@@ -294,6 +304,7 @@ class DefaultProcessStageExecutorTest {
   }
 
   @Test
+  @DisplayName("计算步骤指定的插件码未注册时准备阶段快速失败:给出插件未找到错误码与插件名,且不解析插件")
   void execute_failsFastWithPluginNotFound_whenComputeImplCodeNotRegistered() {
     // P2-5:COMPUTE step 显式配了 impl_code "ghostPlugin"(非默认 sentinel),但 plugin 注册表里没有
     // → PrepareStep 应直接返回 PROCESS_COMPUTE_PLUGIN_NOT_FOUND failure,后续 stage 全部跳过。
@@ -323,6 +334,7 @@ class DefaultProcessStageExecutorTest {
   }
 
   @Test
+  @DisplayName("缺少某个阶段的步骤 Bean 时执行器构造即失败,并提示该阶段缺少步骤 Bean")
   void execute_failsWithStepNotFound_whenStageBeanMissingForConfiguredStage() {
     // 故意构造缺 PREPARE bean 的 step 列表(模拟 Spring DI 漏注册)
     List<ProcessStageStep> incomplete = new ArrayList<>();
@@ -346,6 +358,7 @@ class DefaultProcessStageExecutorTest {
   // ─── P1 阶段级续跑(stage-skip)────────────────────────────────────────────────
 
   @Test
+  @DisplayName("开关开启且上一轮计算与校验已成功时跳过二者,只跑准备、提交与反馈,不重算")
   void stageSkip_skipsPriorSucceededComputeAndValidate_stillRunsCommitAndFeedback() {
     // 上一 attempt COMPUTE + VALIDATE 已成功(pipeline_step_run 有 SUCCESS 记录),COMMIT 前崩溃重派。
     // 开关开:跳过 COMPUTE/VALIDATE(不重算),COMMIT/FEEDBACK 恒跑(原子发布决策每次重做)。
@@ -382,6 +395,7 @@ class DefaultProcessStageExecutorTest {
   }
 
   @Test
+  @DisplayName("跳过计算时把上一轮成功产出的水位与处理数回灌上下文,避免下游重读重发")
   void stageSkip_carriesForwardWatermarkFromPriorSuccessOutputSummary() {
     // P1-1:跳过 COMPUTE 时,须从上次 SUCCESS 的 output_summary 回灌 highWaterMarkOut / processedCount 到
     // attributes,否则 report 水位 null → 下周期 INCREMENTAL 重读重发。
@@ -415,6 +429,7 @@ class DefaultProcessStageExecutorTest {
   }
 
   @Test
+  @DisplayName("没有历史成功记录时,即使开关开启也全量跑完五个阶段")
   void stageSkip_runsFullPipeline_whenNoPriorSuccess() {
     // 首次运行(无历史 SUCCESS 记录):即使开关开,也全量跑(回归保护)。
     when(pipelineRuns.loadSucceededStepCodes(PIPELINE_INSTANCE_ID)).thenReturn(Set.of());
@@ -443,6 +458,7 @@ class DefaultProcessStageExecutorTest {
   }
 
   @Test
+  @DisplayName("开关关闭时即使存在历史成功记录也全量重跑,且完全不查询历史成功记录")
   void stageSkip_disabled_runsFullPipeline_evenWithPriorSuccess() {
     // 开关关(本 PR 默认):即使有历史 SUCCESS 记录,也从首 stage 全量重跑(彻底回归保护)。
     // 关开关时甚至不查历史记录 —— 验证 loadSucceededStepCodes 从不被调用。
@@ -472,6 +488,7 @@ class DefaultProcessStageExecutorTest {
   }
 
   @Test
+  @DisplayName("提交阶段不在可跳过集合:即使历史提交曾经成功,重派仍然重跑提交")
   void stageSkip_neverSkipsCommit_evenIfPriorCommitSucceeded() {
     // COMMIT 不在 skip-safe 集:即便历史上 COMMIT 也成功过(极端场景),重派仍重跑 COMMIT
     // (原子发布幂等:staging 已清则发布 0 行),绝不因"曾成功"跳过发布决策。
@@ -502,6 +519,7 @@ class DefaultProcessStageExecutorTest {
   }
 
   @Test
+  @DisplayName("多分区任务整体降级为不跳:兄弟分区的成功不会让本任务跳过,且不再查询历史成功记录")
   void stageSkip_degradedByMultiPartition_siblingSuccessDoesNotCauseSkip() {
     // Critical 守卫(与 P0 LoadStep.checkpointDegradedByMultiPartition 对称):
     // partitionCount=2 时 K 个 partition task 共享同一 pipeline_instance,但 staging 副作用是
@@ -535,6 +553,7 @@ class DefaultProcessStageExecutorTest {
   }
 
   @Test
+  @DisplayName("显式单分区不触发降级,跳过逻辑照常生效:只跑准备、提交与反馈")
   void stageSkip_singlePartition_partitionCountOne_stillSkips() {
     // 边界:partitionCount=1(显式单分区)不触发降级,跳过逻辑照常生效。
     when(pipelineRuns.loadSucceededStepCodes(PIPELINE_INSTANCE_ID))

@@ -13,8 +13,10 @@ import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.mapper.ConsoleArchivePolicyMapper;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("归档策略服务: 列表查询、目标表白名单校验与保留天数、批量大小归一化")
 class ConsoleArchivePolicyServiceTest {
 
   private ConsoleArchivePolicyMapper repository;
@@ -30,6 +32,7 @@ class ConsoleArchivePolicyServiceTest {
   }
 
   @Test
+  @DisplayName("按租户查询归档策略时, 返回持久层给出的策略记录")
   void shouldListPolicies() {
     ArchivePolicyEntity entity = new ArchivePolicyEntity();
     when(repository.findAllByTenant("t1")).thenReturn(List.of(entity));
@@ -66,6 +69,7 @@ class ConsoleArchivePolicyServiceTest {
   }
 
   @Test
+  @DisplayName("目标表在允许清单内时, 归一化后的参数交给仓储落库")
   void shouldUpsertValidTable() {
     ArchivePolicyUpsertParam input = paramOf("job_instance", 500);
     service.upsert(input);
@@ -75,6 +79,7 @@ class ConsoleArchivePolicyServiceTest {
   }
 
   @Test
+  @DisplayName("目标表不在允许清单内时, 抛业务异常并提示可选表取值")
   void shouldRejectInvalidTable() {
     ArchivePolicyUpsertParam invalid = paramOf("unknown_table", 500);
     assertThatThrownBy(() -> service.upsert(invalid))
@@ -85,6 +90,7 @@ class ConsoleArchivePolicyServiceTest {
   }
 
   @Test
+  @DisplayName("保留天数小于 1 时, 抛业务异常并返回下限提示")
   void shouldRejectRetentionDaysLessThan1() {
     ArchivePolicyUpsertParam invalid = paramOfRetention("job_instance", 0);
     assertThatThrownBy(() -> service.upsert(invalid))
@@ -95,6 +101,7 @@ class ConsoleArchivePolicyServiceTest {
   }
 
   @Test
+  @DisplayName("目标表名含大写字母时, 落库前统一转为小写")
   void shouldNormalizeTableToLowercase() {
     ArchivePolicyUpsertParam input = paramOf("JOB_INSTANCE", 500);
     service.upsert(input);
@@ -104,6 +111,7 @@ class ConsoleArchivePolicyServiceTest {
   }
 
   @Test
+  @DisplayName("批量大小低于下限时, 落库前抬升到允许的最小值")
   void shouldEnforceBatchSizeMinimum() {
     ArchivePolicyUpsertParam input = paramOf("job_instance", 50);
     service.upsert(input);

@@ -22,7 +22,7 @@
 - **范围**:1.4 `HeartbeatScheduler.start()` 把 `scheduleAtFixedRate` 换成 `scheduleWithFixedDelay`(平台短暂卡顿后不追赶式连发心跳雪崩 orchestrator);1.5 `PlatformHttpClient` 非 2xx 路径把 errBody 从 exception message 拿掉(避免错误链一路 INFO/WARN 时把平台错误 payload + 潜在 token 写满日志),完整 body 只在 DEBUG 级输出 `non-2xx response: status=... url=... body=...`。
 - **实际 vs plan**:工作量 ~1.5h(plan 估 2h)略低。比 plan 多做:`HeartbeatScheduler` 加包内可见构造(注入 `ScheduledExecutorService`)让单测能直接 verify `scheduleWithFixedDelay` 被调用 + `scheduleAtFixedRate` 不被调用(否则只能跑实时定时测,慢且 flaky)。比 plan 少做:无,本 PR 严格 1.4 + 1.5,没有顺手并入其它项。
 - **环境问题**:当时存在 JDK 25 临时前置(见顶部历史环境说明)。该问题已随 #698 回到 JDK 21 后失效。
-- **测试结果**:`mvn -pl sdk/java/core test` 162/162 绿(原 161 + 新 1 `startUsesFixedDelayNotFixedRate`,旧 `non2xxThrows` 改名为 `non2xxThrowsWithoutErrBodyLeak` 并断言 `hasMessageNotContaining("FORBIDDEN", "secret-abc", "body=")` —— 验证敏感字段不再泄露到 message)。
+- **测试结果**:`mvn -pl sdk/java/core test` 162/162 绿(原 161 + 新 1 `shouldUseFixedDelay_notFixedRate_onStart`(2026-10-07 改名),旧 `non2xxThrows` 改名为 `non2xxThrowsWithoutErrBodyLeak` 并断言 `hasMessageNotContaining("FORBIDDEN", "secret-abc", "body=")` —— 验证敏感字段不再泄露到 message)。
 - **后续**:#SDK-P1-4 接力(`BatchPlatformClient.metrics()` POJO + `isHealthy()` boolean + `KafkaTaskConsumer` 异常退出反映到 `isHealthy()=false`),依赖 #SDK-P1-2 已暴露的 `TaskDispatcher.isFatal()` + 本 PR 已稳的 heartbeat 路径;Phase 1 完成后才能开 Phase 2 协议变更(dual-rollout 2 周窗口起算)。
 
 ---

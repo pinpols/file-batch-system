@@ -52,7 +52,7 @@ export no_proxy="localhost,127.0.0.1,::1${no_proxy:+,$no_proxy}"
 
 echo "[sdk-he] Java real socket matrix"
 (cd "$ROOT" && ./mvnw -B -ntp -q -pl sdk/java/core \
-  -Dtest=PlatformHttpClientTest#realSocketHappyEyeballsMatrix \
+  -Dtest=PlatformHttpClientTest#shouldValidateScenarioMatrix_whenMatrixFileProvided \
   -Dsurefire.rerunFailingTestsCount=0 test)
 
 echo "[sdk-he] Python real socket matrix"

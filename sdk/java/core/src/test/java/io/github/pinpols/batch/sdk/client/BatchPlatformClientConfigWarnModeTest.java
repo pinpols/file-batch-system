@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
  *   <li>{@code BATCH_SDK_STRICT_TIMING} env 覆盖按预期解析
  * </ul>
  */
+@DisplayName("BatchPlatformClientConfig 时序校验严格度开关 — 违反规则时抛错或降级为告警")
 class BatchPlatformClientConfigWarnModeTest {
 
   private static BatchPlatformClientConfig.BatchPlatformClientConfigBuilder valid() {

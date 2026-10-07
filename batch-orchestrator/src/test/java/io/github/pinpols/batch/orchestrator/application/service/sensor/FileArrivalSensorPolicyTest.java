@@ -13,6 +13,7 @@ import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -20,6 +21,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("文件到达传感策略: 到达命中, 记录缺失与查询异常口径")
 class FileArrivalSensorPolicyTest {
 
   @Mock
@@ -33,6 +35,7 @@ class FileArrivalSensorPolicyTest {
   }
 
   @Test
+  @DisplayName("查询到最新到达记录时判定为命中并带出文件标识")
   void probe_matched_returnsHit() {
     Map<String, Object> hit = new LinkedHashMap<>();
     hit.put("fileId", 42L);
@@ -46,6 +49,7 @@ class FileArrivalSensorPolicyTest {
   }
 
   @Test
+  @DisplayName("没有到达记录时判定为未就绪")
   void probe_noHit_returnsNotYet() {
     when(mapper.selectLatestArrival(any(), any(), any(), any())).thenReturn(null);
     SensorProbeResult r = policy.probe(ctx(Map.of("pattern", "x-*", "maxAgeSeconds", 600)));
@@ -53,6 +57,7 @@ class FileArrivalSensorPolicyTest {
   }
 
   @Test
+  @DisplayName("命名规则缺失时判定为配置错误并给出错误键")
   void probe_missingPattern_returnsError() {
     SensorProbeResult r = policy.probe(ctx(Map.of("maxAgeSeconds", 600)));
     assertThat(r.status()).isEqualTo(SensorProbeStatus.ERROR);
@@ -60,6 +65,7 @@ class FileArrivalSensorPolicyTest {
   }
 
   @Test
+  @DisplayName("查询过程抛异常时判定为探针失败并给出错误键")
   void probe_mapperThrows_returnsError() {
     when(mapper.selectLatestArrival(any(), any(), any(), any()))
         .thenThrow(new RuntimeException("db down"));
@@ -69,6 +75,7 @@ class FileArrivalSensorPolicyTest {
   }
 
   @Test
+  @DisplayName("渠道来源为文件传输时按该来源类型过滤并带出时间下界")
   void probe_channelCodeSftp_filterSftpSourceType() {
     when(mapper.selectLatestArrival(any(), any(), any(), any())).thenReturn(null);
     policy.probe(ctx(Map.of(

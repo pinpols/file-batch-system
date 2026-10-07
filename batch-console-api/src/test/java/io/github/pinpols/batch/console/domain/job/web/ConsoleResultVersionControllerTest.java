@@ -19,11 +19,13 @@ import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /** P2: result_version 控制器只负责 HTTP 参数绑定、鉴权入口和应用端口委托。 */
+@DisplayName("结果版本控制器: 查询与状态流转的参数绑定及端口委托")
 class ConsoleResultVersionControllerTest {
 
   private final ConsoleOrchestratorPort orchestratorProxy = mock(ConsoleOrchestratorPort.class);
@@ -45,7 +47,8 @@ class ConsoleResultVersionControllerTest {
   }
 
   @Test
-  void listShouldDelegateTenantBusinessKeyAndLimit() throws Exception {
+  @DisplayName("列表查询按租户与业务键下发下游, 未传条数时使用默认值")
+  void shouldDelegateList_whenTenantAndBusinessKeyProvided() throws Exception {
     when(orchestratorProxy.resultVersions("ta", "BK_A", 50))
         .thenReturn(CommonResponse.success(List.of()));
     mockMvc
@@ -57,7 +60,8 @@ class ConsoleResultVersionControllerTest {
   }
 
   @Test
-  void effectiveShouldDelegateBusinessKey() throws Exception {
+  @DisplayName("生效版本查询按租户与业务键下发下游")
+  void shouldDelegateEffectiveLookup_whenBusinessKeyProvided() throws Exception {
     when(orchestratorProxy.effectiveResultVersion("ta", "BK_A"))
         .thenReturn(CommonResponse.success(null));
     mockMvc
@@ -69,7 +73,8 @@ class ConsoleResultVersionControllerTest {
   }
 
   @Test
-  void detailShouldDelegateIdAndTenant() throws Exception {
+  @DisplayName("详情查询按记录标识与租户下发下游")
+  void shouldDelegateDetail_whenIdAndTenantProvided() throws Exception {
     when(orchestratorProxy.resultVersion(7L, "ta")).thenReturn(CommonResponse.success(null));
     mockMvc
         .perform(get("/api/console/result-versions/7").param("tenantId", "ta"))
@@ -78,7 +83,8 @@ class ConsoleResultVersionControllerTest {
   }
 
   @Test
-  void promoteShouldDelegateIdAndTenant() throws Exception {
+  @DisplayName("晋升操作按记录标识与租户下发下游并返回成功")
+  void shouldDelegatePromote_whenIdAndTenantProvided() throws Exception {
     when(orchestratorProxy.promoteResultVersion(7L, "ta")).thenReturn(CommonResponse.success(null));
     mockMvc
         .perform(post("/api/console/result-versions/7/promote")
@@ -89,7 +95,8 @@ class ConsoleResultVersionControllerTest {
   }
 
   @Test
-  void rejectShouldDelegateIdAndTenant() throws Exception {
+  @DisplayName("驳回操作按记录标识与租户下发下游并返回成功")
+  void shouldDelegateReject_whenIdAndTenantProvided() throws Exception {
     when(orchestratorProxy.rejectResultVersion(7L, "ta")).thenReturn(CommonResponse.success(null));
     mockMvc
         .perform(post("/api/console/result-versions/7/reject")
@@ -100,6 +107,7 @@ class ConsoleResultVersionControllerTest {
   }
 
   @Test
+  @DisplayName("跨租户访问被应用层拒绝时返回禁止状态, 仍完成一次调用")
   void shouldPropagateApplicationTenantRejection() throws Exception {
     when(orchestratorProxy.resultVersions("tb", "BK_A", 50))
         .thenThrow(BizException.of(ResultCode.FORBIDDEN, "error.tenant.mismatch"));

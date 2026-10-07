@@ -13,11 +13,12 @@ import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("任务结果摘要构建器: 输出聚合, 分片计数与分片过滤口径")
 class TaskOutcomeSummaryBuilderTest {
 
   @Test
   @DisplayName("buildOutputSummary: 持久化 worker outputs 和 verifierFailures")
-  void buildOutputSummaryPersistsOutputsAndVerifierFailures() {
+  void shouldPersistOutputsAndVerifierFailures_whenBuildingOutputSummary() {
     TaskOutcomeCommand command = TaskOutcomeCommand.builder()
         .tenantId("ta")
         .taskId(10L)
@@ -36,7 +37,7 @@ class TaskOutcomeSummaryBuilderTest {
 
   @Test
   @DisplayName("aggregateSuccessfulPartitionOutputs: 单分片保持旧 outputs 形状")
-  void aggregateSinglePartitionKeepsLegacyOutputShape() {
+  void shouldKeepLegacyOutputShape_whenSinglePartition() {
     JobPartitionEntity partition =
         partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of("rows", 100));
 
@@ -48,7 +49,7 @@ class TaskOutcomeSummaryBuilderTest {
 
   @Test
   @DisplayName("aggregateSuccessfulPartitionOutputs: 多分片包装为 partitionedOutputs")
-  void aggregateMultiplePartitionsWrapsPartitionedOutputs() {
+  void shouldWrapPartitionedOutputs_whenMultiplePartitions() {
     JobPartitionEntity first =
         partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of("rows", 100));
     JobPartitionEntity second =
@@ -90,7 +91,7 @@ class TaskOutcomeSummaryBuilderTest {
 
   @Test
   @DisplayName("failed partition count: FAILED/CANCELLED/TERMINATED 都计入失败分片")
-  void failedPartitionCountIncludesCancelledAndTerminated() {
+  void shouldCountFailedCancelledAndTerminated_whenCountingFailedPartitions() {
     JobPartitionEntity success =
         partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of("rows", 100));
     JobPartitionEntity secondSuccess =
@@ -109,7 +110,7 @@ class TaskOutcomeSummaryBuilderTest {
 
   @Test
   @DisplayName("perf(#5): 计数版 buildJobInstanceResultSummary 与列表版逐字段等价")
-  void countBasedResultSummaryEqualsListBased() {
+  void shouldEqualListBased_whenBuildingCountBasedSummary() {
     io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity jobInstance =
         new io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity();
     jobInstance.setId(77L);
@@ -159,7 +160,7 @@ class TaskOutcomeSummaryBuilderTest {
 
   @Test
   @DisplayName("filterPartitionsByIds: 只保留当前 workflow node 的分片")
-  void filterPartitionsByIdsSelectsCurrentNodePartitions() {
+  void shouldKeepCurrentNodePartitions_whenFilteringByIds() {
     JobPartitionEntity first = partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of());
     JobPartitionEntity second = partition(2L, 2, "p2", PartitionStatus.SUCCESS.code(), Map.of());
 

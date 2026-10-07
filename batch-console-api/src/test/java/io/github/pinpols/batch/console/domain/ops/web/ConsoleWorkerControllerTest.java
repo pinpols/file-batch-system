@@ -19,11 +19,13 @@ import io.github.pinpols.batch.console.shared.view.ConsoleWorkerRegistryResponse
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+@DisplayName("Worker 操作接口:缺少幂等键时拒绝, 排空成功时返回状态变更结果")
 class ConsoleWorkerControllerTest {
 
   private final ConsoleWorkerApplicationService applicationService =
@@ -52,6 +54,7 @@ class ConsoleWorkerControllerTest {
   }
 
   @Test
+  @DisplayName("幂等缺失:未携带幂等键时返回参数错误, 且不调用业务服务")
   void shouldReturn400WhenIdempotencyHeaderMissing() throws Exception {
     mockMvc
         .perform(
@@ -65,6 +68,7 @@ class ConsoleWorkerControllerTest {
   }
 
   @Test
+  @DisplayName("排空成功:返回成功响应并回填排空后状态")
   void shouldDrainAndReturnCommonResponseOnSuccess() throws Exception {
     when(applicationService.drain(anyString(), any(), anyString()))
         .thenReturn(new ConsoleWorkerRegistryResponse(

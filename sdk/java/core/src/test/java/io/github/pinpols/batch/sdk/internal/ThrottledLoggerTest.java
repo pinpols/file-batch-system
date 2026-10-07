@@ -16,13 +16,16 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 
 /** Lane J §J2:{@link ThrottledLogger} 行为单测。 */
+@DisplayName("ThrottledLogger — 窗口内抑制、跨窗口放行与并发去重")
 class ThrottledLoggerTest {
 
   @Test
+  @DisplayName("构造参数为空或窗口非正时直接拒绝")
   void shouldRejectInvalidConstructorArgs() {
     Logger l = mock(Logger.class);
     assertThatThrownBy(() -> ThrottledLogger.create(null, Duration.ofSeconds(1)))
@@ -36,6 +39,7 @@ class ThrottledLoggerTest {
   }
 
   @Test
+  @DisplayName("同一键在窗口内连续输出只放行首条")
   void shouldSuppressWithinWindow_andEmitOnlyFirst() {
     Logger delegate = mock(Logger.class);
     when(delegate.isWarnEnabled()).thenReturn(true);
@@ -51,6 +55,7 @@ class ThrottledLoggerTest {
   }
 
   @Test
+  @DisplayName("跨窗口后再次放行,并附带窗口内被抑制的条数")
   void shouldEmitAcrossWindow_withSuppressedCount() throws Exception {
     Logger delegate = mock(Logger.class);
     when(delegate.isWarnEnabled()).thenReturn(true);
@@ -69,6 +74,7 @@ class ThrottledLoggerTest {
   }
 
   @Test
+  @DisplayName("不同键各自独立计数,互不抑制")
   void shouldTrackDifferentKeysIndependently() {
     Logger delegate = mock(Logger.class);
     when(delegate.isInfoEnabled()).thenReturn(true);
@@ -85,6 +91,7 @@ class ThrottledLoggerTest {
   }
 
   @Test
+  @DisplayName("下游日志级别关闭时不输出")
   void shouldRespectDelegateLevelToggle() {
     Logger delegate = mock(Logger.class);
     when(delegate.isErrorEnabled()).thenReturn(false);
@@ -96,6 +103,7 @@ class ThrottledLoggerTest {
   }
 
   @Test
+  @DisplayName("信息与错误级别分别路由到对应输出通道")
   void shouldRouteToErrorAndInfoChannels() {
     Logger delegate = mock(Logger.class);
     when(delegate.isInfoEnabled()).thenReturn(true);
@@ -110,6 +118,7 @@ class ThrottledLoggerTest {
   }
 
   @Test
+  @DisplayName("高并发下同一键恰好只放行一次")
   void shouldNeverDoubleEmit_underConcurrentSameKey() throws Exception {
     Logger delegate = mock(Logger.class);
     when(delegate.isWarnEnabled()).thenReturn(true);

@@ -9,6 +9,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** ADR-041 Phase1.5:投递后回读校验纯函数辅助。 */
+@DisplayName("投递回读校验:回读开关的取值识别,以及期望文件大小的解析与空值兜底")
 class DispatchReadbackVerifierTest {
 
   @Test

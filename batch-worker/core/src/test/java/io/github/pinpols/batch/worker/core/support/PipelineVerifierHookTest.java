@@ -16,13 +16,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
+@DisplayName("流水线校验钩子: 校验失败的明细写入与致命判定")
 class PipelineVerifierHookTest {
 
   @Test
-  void writesFailuresIntoAttributes() {
+  @DisplayName("校验器返回失败时把失败明细写入运行时属性, 并带上失败码")
+  void shouldWriteFailuresIntoAttributes_whenVerifierFails() {
     StubVerifier failing = new StubVerifier(
         "EXPORT_NON_EMPTY",
         Set.of(JobType.EXPORT),
@@ -43,7 +46,8 @@ class PipelineVerifierHookTest {
   }
 
   @Test
-  void doesNotWriteWhenAllPass() {
+  @DisplayName("全部校验通过时不写入任何失败明细")
+  void shouldNotWriteFailures_whenAllVerifiersPass() {
     StubVerifier passing =
         new StubVerifier("EXPORT_NON_EMPTY", Set.of(JobType.EXPORT), VerifyResult.pass());
     ContentVerifierRegistry registry = registryWith(passing);
@@ -56,7 +60,8 @@ class PipelineVerifierHookTest {
   }
 
   @Test
-  void skipsWhenRegistryAbsent() {
+  @DisplayName("校验器注册表缺失时跳过校验, 运行时属性保持不变")
+  void shouldSkipVerification_whenRegistryAbsent() {
     PipelineVerifierHook hook = new PipelineVerifierHook(providerOf());
     Map<String, Object> attributes = new HashMap<>();
 
@@ -66,7 +71,8 @@ class PipelineVerifierHookTest {
   }
 
   @Test
-  void skipsForUnknownPipelineType() {
+  @DisplayName("流水线类型未知时跳过校验, 运行时属性保持不变")
+  void shouldSkipVerification_whenPipelineTypeUnknown() {
     ContentVerifierRegistry registry =
         registryWith(new StubVerifier("ANY", Set.of(JobType.EXPORT), VerifyResult.pass()));
     PipelineVerifierHook hook = new PipelineVerifierHook(providerOf(registry));
@@ -78,7 +84,8 @@ class PipelineVerifierHookTest {
   }
 
   @Test
-  void nullAttributesIsSafe() {
+  @DisplayName("运行时属性为空时安全返回非致命结果")
+  void shouldReturnNoFatal_whenAttributesNull() {
     PipelineVerifierHook hook = new PipelineVerifierHook(providerOf());
 
     PipelineVerifierHook.VerifierHookResult result =
@@ -88,7 +95,8 @@ class PipelineVerifierHookTest {
   }
 
   @Test
-  void returnsFatalFailureWhenFatalVerifierFails() {
+  @DisplayName("致命校验器失败时返回致命结果并记录首个致命失败码")
+  void shouldReportFatalFailure_whenFatalVerifierFails() {
     FatalStubVerifier failing = new FatalStubVerifier(
         "DISPATCH_RECEIPT_PRESENT",
         Set.of(JobType.DISPATCH),
@@ -110,7 +118,8 @@ class PipelineVerifierHookTest {
   }
 
   @Test
-  void softFailureDoesNotMarkFatal() {
+  @DisplayName("非致命校验器失败时不标记致命, 首个致命失败码为空")
+  void shouldNotMarkFatal_whenVerifierFailsSoftly() {
     StubVerifier failing = new StubVerifier(
         "EXPORT_NON_EMPTY",
         Set.of(JobType.EXPORT),

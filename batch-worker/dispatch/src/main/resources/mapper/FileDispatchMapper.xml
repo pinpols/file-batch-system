@@ -16,8 +16,10 @@
           and is_deleted = false
     </select>
 
-    <select id="selectLatestDispatchRecord" resultType="map">
-        select *
+    <!-- 调用方(DELIVER)只判「该(file,channel)是否已有分发记录」——有则自增尝试、无则首插,
+         不读任何列,故只取 id,避免 select * 白拉整行。 -->
+    <select id="selectLatestDispatchRecordId" resultType="java.lang.Long">
+        select id
         from batch.file_dispatch_record
         where tenant_id = #{tenantId}
           and file_id = #{fileId}
@@ -88,8 +90,20 @@
           and channel_code = #{channelCode}
     </update>
 
-    <select id="listPendingReceiptPolls" resultType="map">
-        select *
+    <!-- 显式列清单 + <constructor> 显式映射（约定见 docs/coding-conventions.md §1.2）：
+         record 不可变，<arg> 顺序必须与 canonical constructor 一致，不依赖列序自动映射。 -->
+    <resultMap id="pendingReceiptPollRowMap"
+               type="io.github.pinpols.batch.worker.dispatchs.domain.PendingReceiptPollRow">
+        <constructor>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="file_id" javaType="java.lang.Long"/>
+            <arg column="channel_code" javaType="java.lang.String"/>
+            <arg column="external_request_id" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <select id="listPendingReceiptPolls" resultMap="pendingReceiptPollRowMap">
+        select tenant_id, file_id, channel_code, external_request_id
         from batch.file_dispatch_record
         where dispatch_status = #{dispatchStatus}
           and receipt_status = #{receiptStatus}

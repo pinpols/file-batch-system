@@ -16,12 +16,15 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.session.Configuration;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("批量日统计语句的状态口径: 正式统计隔离试运行数据并区分在途与失败")
 class BatchDayMapperXmlTest {
 
   @Test
-  void formalStatisticsStayDryRunIsolatedAndPausedAware() {
+  @DisplayName("正式统计口径排除试运行实例, 在途与失败计数分别覆盖各自的状态集合")
+  void shouldIsolateDryRunAndCoverPausedStates_whenFormalStatistics() {
     List<String> statements = List.of("selectByQuery", "selectWindow", "selectJobSummaries");
     Configuration configuration = loadMapper("mapper/BatchDayMapper.xml");
 

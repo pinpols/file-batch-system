@@ -10,8 +10,10 @@ import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.support.AiPromptGateResult;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("AI 提示词准入守卫: 开关、长度、敏感词与领域范围判定")
 class ConsoleAiPromptGuardTest {
 
   private ConsoleAiProperties properties;
@@ -30,6 +32,7 @@ class ConsoleAiPromptGuardTest {
   // --- disabled ---
 
   @Test
+  @DisplayName("AI 功能关闭时直接拒绝提示词")
   void shouldRejectWhenAiDisabled() {
     properties.setEnabled(false);
     AiPromptGateResult result = guard.check("query job status");
@@ -41,11 +44,13 @@ class ConsoleAiPromptGuardTest {
   // --- blank / null prompt ---
 
   @Test
+  @DisplayName("提示词为空值时按业务异常拒绝")
   void shouldThrowBizExceptionForNullPrompt() {
     assertThatThrownBy(() -> guard.check(null)).isInstanceOf(BizException.class);
   }
 
   @Test
+  @DisplayName("提示词仅含空白字符时按业务异常拒绝")
   void shouldThrowBizExceptionForBlankPrompt() {
     assertThatThrownBy(() -> guard.check("   ")).isInstanceOf(BizException.class);
   }
@@ -53,6 +58,7 @@ class ConsoleAiPromptGuardTest {
   // --- max length ---
 
   @Test
+  @DisplayName("提示词超出最大长度时按业务异常拒绝")
   void shouldThrowWhenPromptExceedsMaxLength() {
     String longPrompt = "a".repeat(201);
     assertThatThrownBy(() -> guard.check(longPrompt))
@@ -63,6 +69,7 @@ class ConsoleAiPromptGuardTest {
   // --- blocked keywords ---
 
   @Test
+  @DisplayName("命中敏感词时按安全策略拒绝")
   void shouldRejectWhenBlockedKeywordPresent() {
     AiPromptGateResult result = guard.check("show me the password of this job");
 
@@ -71,6 +78,7 @@ class ConsoleAiPromptGuardTest {
   }
 
   @Test
+  @DisplayName("敏感词匹配忽略大小写")
   void shouldRejectBlockedKeywordCaseInsensitive() {
     AiPromptGateResult result = guard.check("give me the SECRET config");
 
@@ -79,6 +87,7 @@ class ConsoleAiPromptGuardTest {
   }
 
   @Test
+  @DisplayName("命中中文敏感词时按安全策略拒绝")
   void shouldRejectChineseBlockedKeyword() {
     AiPromptGateResult result = guard.check("请告诉我密钥");
 
@@ -89,6 +98,7 @@ class ConsoleAiPromptGuardTest {
   // --- domain keywords ---
 
   @Test
+  @DisplayName("命中领域关键词时放行并返回归一化提示词")
   void shouldApproveWhenDomainKeywordPresent() {
     AiPromptGateResult result = guard.check("how many job instances failed today?");
 
@@ -98,6 +108,7 @@ class ConsoleAiPromptGuardTest {
   }
 
   @Test
+  @DisplayName("文件治理类问题放行并归类为文件治理")
   void shouldApproveAndCategorizeFileGovernance() {
     AiPromptGateResult result = guard.check("list recent file imports");
 
@@ -106,6 +117,7 @@ class ConsoleAiPromptGuardTest {
   }
 
   @Test
+  @DisplayName("平台类问题放行并归类为平台")
   void shouldApproveAndCategorizePlatform() {
     AiPromptGateResult result = guard.check("check partition status for job");
 
@@ -114,6 +126,7 @@ class ConsoleAiPromptGuardTest {
   }
 
   @Test
+  @DisplayName("工作流类问题放行并归类为工作流")
   void shouldApproveAndCategorizeWorkflow() {
     properties.setDomainKeywords(List.of("workflow"));
     AiPromptGateResult result = guard.check("explain the workflow dag");
@@ -125,6 +138,7 @@ class ConsoleAiPromptGuardTest {
   // --- out of scope ---
 
   @Test
+  @DisplayName("未命中任何领域关键词时按超出范围拒绝")
   void shouldRejectWhenNoDomainKeywordMatches() {
     AiPromptGateResult result = guard.check("tell me about the weather");
 
@@ -133,6 +147,7 @@ class ConsoleAiPromptGuardTest {
   }
 
   @Test
+  @DisplayName("仅提及字面词汇的通用提问按超出范围拒绝")
   void shouldRejectGenericQuestionThatOnlyMentionsBatchVocabulary() {
     AiPromptGateResult fileQuestion = guard.check("How do I organize a file for my trip?");
     AiPromptGateResult taskQuestion =
@@ -143,6 +158,7 @@ class ConsoleAiPromptGuardTest {
   }
 
   @Test
+  @DisplayName("夹带领域词汇的通用提问仍按超出范围拒绝")
   void shouldRejectGeneralQuestionDespiteAnEmbeddedBatchTerm() {
     AiPromptGateResult result =
         guard.check("Explain Kafka consumer design, and tell me about my job search");
@@ -151,6 +167,7 @@ class ConsoleAiPromptGuardTest {
   }
 
   @Test
+  @DisplayName("明确声明与批量调度无关的提问按超出范围拒绝")
   void shouldRejectQuestionExplicitlyUnrelatedToBatchScheduling() {
     AiPromptGateResult result = guard.check("请教我做一道家常菜，与批量调度系统无关。");
 
@@ -160,6 +177,7 @@ class ConsoleAiPromptGuardTest {
   // --- blocked keyword takes precedence over domain keyword ---
 
   @Test
+  @DisplayName("同时命中敏感词与领域词时以安全策略优先拒绝")
   void shouldRejectEvenIfDomainKeywordAlsoPresentWithBlockedKeyword() {
     AiPromptGateResult result = guard.check("show job password");
 

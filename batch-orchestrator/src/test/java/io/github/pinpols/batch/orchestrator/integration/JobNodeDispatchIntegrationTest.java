@@ -17,6 +17,7 @@ import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -36,6 +37,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("工作流子任务节点分派集成验证: 子实例与虚拟分区创建, 子任务结果向父实例回传")
 class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t-job-node";
@@ -154,6 +156,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
   // ── tests ─────────────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("父任务含子任务节点时启动后自动创建子实例, 并在父实例内建立运行中的虚拟分区, 虚拟任务与就绪的节点运行记录")
   void parentJobWithJobNode_shouldLaunchChildInstanceAndCreateVirtualPartition() {
     String workerGroup = "WG_JN_" + System.nanoTime();
     String childCode = seedChildJob(workerGroup);
@@ -214,6 +217,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("子任务成功后回传信号, 子实例与父实例均收敛为成功, 节点运行状态同步为成功")
   void childJobCompletion_shouldSignalParentAndCompleteParentJobAsSuccess() {
     String workerGroup = "WG_JN_COMP_" + System.nanoTime();
     String childCode = seedChildJob(workerGroup);
@@ -289,6 +293,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("子任务失败且无重试时回传信号, 父实例收敛为失败, 节点运行状态同步为失败")
   void childJobFailure_shouldSignalParentAndCompleteParentJobAsFailed() {
     String workerGroup = "WG_JN_FAIL_" + System.nanoTime();
     String childCode = seedChildJob(workerGroup);

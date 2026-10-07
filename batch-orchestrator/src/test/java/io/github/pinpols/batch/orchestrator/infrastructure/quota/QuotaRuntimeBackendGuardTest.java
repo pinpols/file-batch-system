@@ -9,13 +9,16 @@ import io.github.pinpols.batch.common.config.RuntimeInfrastructureInspector;
 import io.github.pinpols.batch.common.stateful.StatefulBackendGuard;
 import io.github.pinpols.batch.orchestrator.config.QuotaProperties;
 import javax.sql.DataSource;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
 
+@DisplayName("配额运行态后端守卫,验证期望后端的标识解析与未知存储类型的快速失败")
 class QuotaRuntimeBackendGuardTest {
 
   @Test
-  void includesRedisLocationInGuardIdentity() {
+  @DisplayName("运行存储配置为 Redis 时,后端标识应包含主机,端口与库序号")
+  void shouldIncludeRedisLocationInGuardIdentity_whenRuntimeStoreIsRedis() {
     QuotaProperties properties = new QuotaProperties();
     properties.setRuntimeStore(QuotaRuntimeBackends.REDIS);
     MockEnvironment environment = environment()
@@ -30,7 +33,8 @@ class QuotaRuntimeBackendGuardTest {
   }
 
   @Test
-  void includesPlatformJdbcLocationInGuardIdentity() {
+  @DisplayName("运行存储配置为数据库时,后端标识应包含平台数据库连接地址")
+  void shouldIncludePlatformJdbcLocationInGuardIdentity_whenRuntimeStoreIsDatabase() {
     QuotaProperties properties = new QuotaProperties();
     properties.setRuntimeStore(QuotaRuntimeBackends.DATABASE);
 
@@ -43,7 +47,8 @@ class QuotaRuntimeBackendGuardTest {
   }
 
   @Test
-  void rejectsUnknownRuntimeStoreInsteadOfSilentlySelectingNoImplementation() {
+  @DisplayName("运行存储配置为无法识别的取值时应直接失败,不得静默退化为无实现")
+  void shouldRejectUnknownRuntimeStore_whenNoImplementationMatches() {
     QuotaProperties properties = new QuotaProperties();
     properties.setRuntimeStore("redsi");
 

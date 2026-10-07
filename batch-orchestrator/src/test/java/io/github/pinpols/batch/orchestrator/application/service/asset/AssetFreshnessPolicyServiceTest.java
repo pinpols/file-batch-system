@@ -23,9 +23,11 @@ import java.time.Month;
 import java.time.ZoneId;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+@DisplayName("资产新鲜度策略服务: 到期扫描, 缺失与滞后告警口径")
 class AssetFreshnessPolicyServiceTest {
 
   private AssetFreshnessPolicyMapper policyMapper;
@@ -46,7 +48,8 @@ class AssetFreshnessPolicyServiceTest {
   }
 
   @Test
-  void scanDuePoliciesEmitsMissingAlertWhenExpectedTimePassed() {
+  @DisplayName("超过期望产出时间仍未就绪时发出资产缺失告警")
+  void shouldEmitMissingAlert_whenExpectedTimePassed() {
     AssetFreshnessPolicyRecord policy = policy("09:00", 14_400, 1, "Asia/Shanghai", "WARN");
     when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
     when(assetPartitionService.isJobPartitionReady(
@@ -64,7 +67,8 @@ class AssetFreshnessPolicyServiceTest {
   }
 
   @Test
-  void scanDuePoliciesEmitsStaleAlertAfterGraceWindow() {
+  @DisplayName("超过宽限期仍未就绪时发出资产滞后告警")
+  void shouldEmitStaleAlert_whenGraceWindowElapsed() {
     AssetFreshnessPolicyRecord policy = policy("09:00", 60, 1, "Asia/Shanghai", "WARN");
     when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
     when(assetPartitionService.isJobPartitionReady(
@@ -81,7 +85,8 @@ class AssetFreshnessPolicyServiceTest {
   }
 
   @Test
-  void scanDuePoliciesSkipsBeforeExpectedTime() {
+  @DisplayName("未到期望产出时间时不查询就绪状态也不告警")
+  void shouldSkip_whenBeforeExpectedTime() {
     AssetFreshnessPolicyRecord policy = policy("12:00", 3600, 1, "Asia/Shanghai", "WARN");
     when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
 
@@ -93,7 +98,8 @@ class AssetFreshnessPolicyServiceTest {
   }
 
   @Test
-  void scanDuePoliciesSkipsReadyPartition() {
+  @DisplayName("资产已就绪时不发出任何告警")
+  void shouldSkip_whenPartitionReady() {
     AssetFreshnessPolicyRecord policy = policy("09:00", 60, 1, "Asia/Shanghai", "WARN");
     when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
     when(assetPartitionService.isJobPartitionReady(
@@ -107,7 +113,8 @@ class AssetFreshnessPolicyServiceTest {
   }
 
   @Test
-  void scanDuePoliciesHonorsLookbackDays() {
+  @DisplayName("按配置的回看天数扫描对应营业日并逐日告警")
+  void shouldScanLookbackDays_whenPolicyConfigured() {
     AssetFreshnessPolicyRecord policy = policy("09:00", 60, 2, "Asia/Shanghai", "ERROR");
     when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
     when(assetPartitionService.isJobPartitionReady(
@@ -123,6 +130,7 @@ class AssetFreshnessPolicyServiceTest {
   }
 
   @Test
+  @DisplayName("重复扫描同一滞后资产时告警去重键保持稳定, 不会产生重复告警")
   void freshnessAlert_usesStableDedupKey_soRescanDoesNotStorm() {
     // arrange: same stale asset (same tenant/assetCode/bizDate), scan runs twice ~60s apart
     AssetFreshnessPolicyRecord policy = policy("09:00", 14_400, 1, "Asia/Shanghai", "WARN");
@@ -156,7 +164,8 @@ class AssetFreshnessPolicyServiceTest {
   }
 
   @Test
-  void scanDuePoliciesShortCircuitsInvalidLimit() {
+  @DisplayName("扫描条数上限非正时直接返回零, 不查询策略")
+  void shouldReturnZero_whenScanLimitNotPositive() {
     assertThat(service.scanDuePolicies(0)).isZero();
     verify(policyMapper, never()).selectEnabledPolicies(0);
   }

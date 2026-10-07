@@ -8,9 +8,11 @@ import io.github.pinpols.batch.common.spi.task.TaskResult;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** {@link AbstractBatchTaskExecutor} 模板方法执行序 + 异常路径 + cleanup 必跑测试。 */
+@DisplayName("原子任务执行器模板方法: 钩子执行顺序与异常路径")
 class AbstractBatchTaskExecutorTest {
 
   private static TaskContext ctx() {
@@ -18,7 +20,8 @@ class AbstractBatchTaskExecutorTest {
   }
 
   @Test
-  void successPathRunsAllHooksInOrder() {
+  @DisplayName("执行成功时应依次经过校验, 前置, 执行, 后置与清理五个阶段")
+  void shouldRunAllHooksInOrder_whenExecutionSucceeds() {
     List<String> log = new java.util.ArrayList<>();
     AbstractBatchTaskExecutor exec = new AbstractBatchTaskExecutor() {
       @Override
@@ -65,7 +68,8 @@ class AbstractBatchTaskExecutorTest {
   }
 
   @Test
-  void doExecuteExceptionStillRunsCleanup() {
+  @DisplayName("执行阶段抛异常时应返回失败结果, 且清理钩子仍然执行一次")
+  void shouldStillRunCleanup_whenExecuteThrows() {
     AtomicInteger cleanupCount = new AtomicInteger();
     AbstractBatchTaskExecutor exec = new AbstractBatchTaskExecutor() {
       @Override
@@ -97,7 +101,8 @@ class AbstractBatchTaskExecutorTest {
   }
 
   @Test
-  void validateFailureSkipsBeforeAndCleanup() {
+  @DisplayName("校验失败时应直接返回失败, 前置与清理钩子都不执行")
+  void shouldSkipBeforeAndCleanup_whenValidationFails() {
     AtomicInteger cleanupCount = new AtomicInteger();
     AtomicInteger beforeCount = new AtomicInteger();
     AbstractBatchTaskExecutor exec = new AbstractBatchTaskExecutor() {
@@ -140,7 +145,8 @@ class AbstractBatchTaskExecutorTest {
   }
 
   @Test
-  void beforeFailureSkipsDoExecuteAndCleanup() {
+  @DisplayName("前置钩子抛异常时应保留该异常, 执行与清理钩子都不运行")
+  void shouldSkipExecuteAndCleanup_whenBeforeFails() {
     // before 抛异常时 started 仍为 false(在 started=true 之前抛),cleanup 不应跑;
     // 与 validate 失败一样落在 started=false 分支,但 before 确实被调用过。
     AtomicInteger beforeCount = new AtomicInteger();
@@ -185,7 +191,8 @@ class AbstractBatchTaskExecutorTest {
   }
 
   @Test
-  void nullResultTreatedAsFailure() {
+  @DisplayName("执行阶段返回空结果时应按失败处理, 并提示结果缺失")
+  void shouldTreatAsFailure_whenResultIsNull() {
     AbstractBatchTaskExecutor exec = new AbstractBatchTaskExecutor() {
       @Override
       public String taskType() {
@@ -209,7 +216,8 @@ class AbstractBatchTaskExecutorTest {
   }
 
   @Test
-  void cleanupExceptionDoesNotMaskOriginalResult() {
+  @DisplayName("清理钩子抛异常时不应覆盖原有成功结果与消息")
+  void shouldKeepOriginalResult_whenCleanupThrows() {
     AbstractBatchTaskExecutor exec = new AbstractBatchTaskExecutor() {
       @Override
       public String taskType() {

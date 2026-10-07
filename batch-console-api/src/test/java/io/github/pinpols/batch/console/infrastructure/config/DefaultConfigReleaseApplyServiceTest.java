@@ -16,9 +16,11 @@ import io.github.pinpols.batch.console.application.contract.response.config.Tena
 import io.github.pinpols.batch.console.domain.entity.ConfigReleaseEntity;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+@DisplayName("配置发布单应用服务: 严格上送,载荷校验与类型别名规范化")
 class DefaultConfigReleaseApplyServiceTest {
 
   private ConsoleTenantConfigInitApplicationService initService;
@@ -34,7 +36,8 @@ class DefaultConfigReleaseApplyServiceTest {
   }
 
   @Test
-  void appliesJobReleaseThroughStrictTenantConfigHandler() {
+  @DisplayName("应用作业类发布单时,按严格模式上送并清理对应缓存")
+  void shouldApplyJobReleaseThroughStrictHandler_whenReleaseIsApplied() {
     ConfigReleaseEntity release = release("JOB", "JOB1", "{\"jobCode\":\"JOB1\"}");
     when(initService.batchInit(any(), eq("approver"), eq("operation-1")))
         .thenReturn(new TenantConfigBatchInitResponse("operation-1", 1, 1, 0, false, List.of()));
@@ -55,19 +58,22 @@ class DefaultConfigReleaseApplyServiceTest {
   }
 
   @Test
-  void rejectsPayloadWhoseIdentityDiffersFromReleaseKey() {
+  @DisplayName("载荷内的标识与发布单键不一致时,校验直接拒绝")
+  void shouldReject_whenPayloadIdentityDiffersFromReleaseKey() {
     assertThatThrownBy(() -> service.validate("JOB", "JOB1", "{\"jobCode\":\"JOB2\"}"))
         .isInstanceOf(BizException.class);
   }
 
   @Test
-  void rejectsUnsupportedConfigType() {
+  @DisplayName("配置类型不在支持范围内时,校验直接拒绝")
+  void shouldReject_whenConfigTypeIsUnsupported() {
     assertThatThrownBy(() -> service.validate("UNKNOWN", "KEY1", "{}"))
         .isInstanceOf(BizException.class);
   }
 
   @Test
-  void canonicalizesSupportedTypeAliases() {
+  @DisplayName("受支持的配置类型别名,被规范化成标准类型码")
+  void shouldCanonicalize_whenConfigTypeAliasIsSupported() {
     assertThat(service.canonicalType(" job_definition ")).isEqualTo("JOB");
     assertThat(service.canonicalType("queue")).isEqualTo("RESOURCE_QUEUE");
   }

@@ -18,6 +18,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -26,6 +27,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+@DisplayName("控制台请求上下文过滤器: 租户一致性校验,操作人取值与日志上下文还原")
 class ConsoleRequestContextFilterTest {
 
   private ConsoleRequestContextFilter filter;
@@ -41,6 +43,7 @@ class ConsoleRequestContextFilterTest {
   }
 
   @Test
+  @DisplayName("租户用户提交的租户与令牌不一致时,返回禁止并回填请求标识")
   void shouldRejectTenantMismatchForTenantUser() throws Exception {
     SecurityContextHolder.getContext()
         .setAuthentication(new UsernamePasswordAuthenticationToken(
@@ -67,6 +70,7 @@ class ConsoleRequestContextFilterTest {
   }
 
   @Test
+  @DisplayName("全局角色可以跨租户访问,并写入解析后的租户与操作人")
   void shouldAllowGlobalRoleToCrossTenant() throws Exception {
     SecurityContextHolder.getContext()
         .setAuthentication(new UsernamePasswordAuthenticationToken(
@@ -89,6 +93,7 @@ class ConsoleRequestContextFilterTest {
   }
 
   @Test
+  @DisplayName("客户端自行提交的操作人头被忽略,以认证身份为准")
   void shouldIgnoreClientSuppliedOperatorHeader() throws Exception {
     SecurityContextHolder.getContext()
         .setAuthentication(new UsernamePasswordAuthenticationToken(
@@ -107,6 +112,7 @@ class ConsoleRequestContextFilterTest {
   }
 
   @Test
+  @DisplayName("过滤器链内可见解析后的租户,链结束后恢复外层日志上下文")
   void shouldExposeResolvedTenantInChainAndRestoreOuterMdc() throws Exception {
     SecurityContextHolder.getContext()
         .setAuthentication(new UsernamePasswordAuthenticationToken(
@@ -130,6 +136,7 @@ class ConsoleRequestContextFilterTest {
   }
 
   @Test
+  @DisplayName("全局角色未提交租户头时,回退到自身所属租户")
   void shouldFallbackToOwnTenantWhenGlobalRoleOmitsHeader() throws Exception {
     SecurityContextHolder.getContext()
         .setAuthentication(new UsernamePasswordAuthenticationToken(

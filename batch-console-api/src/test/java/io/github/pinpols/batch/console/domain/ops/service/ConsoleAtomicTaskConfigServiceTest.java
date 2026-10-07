@@ -16,6 +16,7 @@ import io.github.pinpols.batch.console.domain.ops.param.AtomicTaskConfigCreatePa
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -37,6 +38,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * </ul>
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("原子任务配置服务:合法创建落库回读, 并对未知类型, 缺参, 多余键与凭据字段逐项拒入")
 class ConsoleAtomicTaskConfigServiceTest {
 
   private static final String TENANT = "ta";
@@ -56,6 +58,7 @@ class ConsoleAtomicTaskConfigServiceTest {
   private ConsoleAtomicTaskConfigService service;
 
   @Test
+  @DisplayName("合法创建:参数与类型契约匹配时写入并回读, 返回带主键的实体")
   void shouldCreateSqlConfig_whenParametersMatchSchema() {
     // 准备
     Map<String, Object> params = new LinkedHashMap<>();
@@ -74,6 +77,7 @@ class ConsoleAtomicTaskConfigServiceTest {
   }
 
   @Test
+  @DisplayName("类型未知:创建前即拒绝, 且不产生任何写入")
   void shouldReject_whenTaskTypeUnknown() {
     assertThatThrownBy(
             () -> service.create(TENANT, "totally_unknown", "x", Map.of("sql", "select 1"), null))
@@ -83,6 +87,7 @@ class ConsoleAtomicTaskConfigServiceTest {
   }
 
   @Test
+  @DisplayName("必填缺失:空字符串等同缺失, 校验失败且不写入")
   void shouldReject_whenRequiredParameterMissing() {
     // sql.PARAM "sql" 必填,空字符串等同缺失
     assertThatThrownBy(() -> service.create(TENANT, "sql", "missing", Map.of("sql", ""), null))
@@ -92,6 +97,7 @@ class ConsoleAtomicTaskConfigServiceTest {
   }
 
   @Test
+  @DisplayName("多余键拒入:未在契约声明的参数键触发校验失败, 且不写入")
   void shouldReject_whenParametersContainExtraneousKey() {
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("sql", "select 1");
@@ -103,6 +109,7 @@ class ConsoleAtomicTaskConfigServiceTest {
   }
 
   @Test
+  @DisplayName("凭据闸:顶层参数含敏感字段时被拒, 且不写入")
   void shouldRejectSensitiveKeyInParameters_viaSensitiveDataValidator() {
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("sql", "select 1");
@@ -114,6 +121,7 @@ class ConsoleAtomicTaskConfigServiceTest {
   }
 
   @Test
+  @DisplayName("嵌套凭据闸:嵌套映射内的敏感字段同样被拦截, 创建失败")
   void shouldRejectSensitiveKeyInNestedMap() {
     Map<String, Object> auth = new LinkedHashMap<>();
     auth.put("type", "basic");
@@ -127,6 +135,7 @@ class ConsoleAtomicTaskConfigServiceTest {
   }
 
   @Test
+  @DisplayName("列表查询:类型已知时按租户与类型返回全部记录")
   void shouldListByTaskType_whenTaskTypeIsKnown() {
     when(mapper.selectByTenantAndTaskType(TENANT, "sql"))
         .thenReturn(List.of(fixtureEntity(1L, "sql", "a"), fixtureEntity(2L, "sql", "b")));
@@ -138,6 +147,7 @@ class ConsoleAtomicTaskConfigServiceTest {
   }
 
   @Test
+  @DisplayName("列表类型未知:查询前拒绝, 且不触达数据访问层")
   void shouldRejectListing_whenTaskTypeUnknown() {
     assertThatThrownBy(() -> service.listByTaskType(TENANT, "unknown"))
         .isInstanceOf(BizException.class)
@@ -146,6 +156,7 @@ class ConsoleAtomicTaskConfigServiceTest {
   }
 
   @Test
+  @DisplayName("类型空白:仅空白字符的类型视为缺失, 拒绝创建")
   void shouldRejectBlankTaskType() {
     assertThatThrownBy(() -> service.create(TENANT, " ", "x", Map.of(), null))
         .isInstanceOf(BizException.class)
@@ -153,6 +164,7 @@ class ConsoleAtomicTaskConfigServiceTest {
   }
 
   @Test
+  @DisplayName("名称空白:仅空白字符的名称视为缺失, 拒绝创建")
   void shouldRejectBlankName() {
     assertThatThrownBy(() -> service.create(TENANT, "sql", "  ", Map.of("sql", "select 1"), null))
         .isInstanceOf(BizException.class)

@@ -26,11 +26,13 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+@DisplayName("文件模板控制器: 查询、创建、启停、更新与命名预览接口")
 class ConsoleFileTemplateControllerTest {
 
   private final ConsoleFileTemplateApplicationService applicationService =
@@ -59,6 +61,7 @@ class ConsoleFileTemplateControllerTest {
   }
 
   @Test
+  @DisplayName("按标识查询模板返回成功与租户信息")
   void shouldReturn200WhenGetTemplateById() throws Exception {
     when(applicationService.get(anyLong(), anyString()))
         .thenReturn(ConsoleFileProjectionMapper.template(Map.of("id", 1L, "tenant_id", "t1")));
@@ -71,6 +74,7 @@ class ConsoleFileTemplateControllerTest {
   }
 
   @Test
+  @DisplayName("创建模板缺少模板编码时返回校验错误")
   void shouldReturn400WhenCreateRequestMissingTemplateCode() throws Exception {
     mockMvc
         .perform(
@@ -82,6 +86,7 @@ class ConsoleFileTemplateControllerTest {
   }
 
   @Test
+  @DisplayName("启停模板返回成功")
   void shouldReturn200WhenToggleTemplate() throws Exception {
     mockMvc
         .perform(patch("/api/console/file-templates/1")
@@ -92,6 +97,7 @@ class ConsoleFileTemplateControllerTest {
   }
 
   @Test
+  @DisplayName("启停模板缺少租户标识时返回校验错误")
   void shouldReturn400WhenToggleTemplateMissingTenantId() throws Exception {
     mockMvc
         .perform(patch("/api/console/file-templates/1")
@@ -104,6 +110,7 @@ class ConsoleFileTemplateControllerTest {
   }
 
   @Test
+  @DisplayName("更新模板返回成功")
   void shouldReturn200WhenUpdateTemplate() throws Exception {
     when(applicationService.update(anyLong(), any()))
         .thenReturn(ConsoleFileProjectionMapper.template(Map.of("id", 1L, "tenant_id", "t1")));
@@ -117,6 +124,7 @@ class ConsoleFileTemplateControllerTest {
   }
 
   @Test
+  @DisplayName("生成映射草稿返回方向与字段映射结构")
   void shouldReturn200WhenDraftMapping() throws Exception {
     when(applicationService.draftMapping(any()))
         .thenReturn(new FileTemplateMappingDraftResult(
@@ -135,6 +143,7 @@ class ConsoleFileTemplateControllerTest {
   }
 
   @Test
+  @DisplayName("命名预览返回与执行端兼容的文件名")
   void shouldReturnWorkerCompatibleFileNamePreview() throws Exception {
     when(applicationService.previewFileName(any()))
         .thenReturn(new FileNamePreviewResponse("orders_2026-09-27.csv"));

@@ -16,11 +16,13 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+@DisplayName("投递重试与投递结果实时流:按通道订阅事件流, 并先解析租户")
 class ConsoleOutboxRealtimeControllerTest {
 
   private final ConsoleRealtimeSubscriptionPort realtimeEventHub =
@@ -49,6 +51,7 @@ class ConsoleOutboxRealtimeControllerTest {
   }
 
   @Test
+  @DisplayName("重试流:解析租户后按重试通道订阅, 异步请求已启动")
   void shouldExposeOutboxRetryRealtimeStream() throws Exception {
     mockMvc
         .perform(get("/api/console/stream/outbox-retries/events").param("tenantId", "t1"))
@@ -60,6 +63,7 @@ class ConsoleOutboxRealtimeControllerTest {
   }
 
   @Test
+  @DisplayName("投递流:解析租户后按投递通道订阅, 异步请求已启动")
   void shouldExposeOutboxDeliveryRealtimeStream() throws Exception {
     mockMvc
         .perform(get("/api/console/stream/outbox-deliveries/events").param("tenantId", "t2"))

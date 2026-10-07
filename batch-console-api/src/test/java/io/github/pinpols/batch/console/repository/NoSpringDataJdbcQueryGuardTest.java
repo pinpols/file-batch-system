@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.Test;
  * {@code spring-boot-starter-data-jdbc} 依赖由 {@code scripts/ci/check-dependency-boundaries.py}
  * 把关,与本测试互补。
  */
+@DisplayName("持久化选型守护: 九个业务模块主源码不得再引入关系式查询类型")
 class NoSpringDataJdbcQueryGuardTest {
 
   private static final Path REPO_ROOT = Path.of("..").toAbsolutePath().normalize();
@@ -50,7 +52,8 @@ class NoSpringDataJdbcQueryGuardTest {
       "org.springframework.data.relational.core.mapping.Column");
 
   @Test
-  void noSpringDataJdbcQueryInMain() throws IOException {
+  @DisplayName("遍历受管模块主源码时, 不出现被禁的查询注解与仓储类型")
+  void shouldNotFindSpringDataJdbcTypes_whenScanningMainSources() throws IOException {
     List<String> violations = new ArrayList<>();
     for (String module : SCAN_MODULES) {
       Path mainJava = REPO_ROOT.resolve(module).resolve("src/main/java");

@@ -14,6 +14,7 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -40,6 +41,7 @@ import org.springframework.test.web.reactive.server.WebTestClient;
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+@DisplayName("审计切面端到端: 真实 HTTP 写操作后审计行落库,动作与聚合标识与声明一致")
 class AuditLogEndToEndIntegrationTest extends AbstractIntegrationTest {
 
   private static final String CSRF_TOKEN = "audit-e2e-csrf-token";
@@ -68,7 +70,8 @@ class AuditLogEndToEndIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void alertCloseShouldWriteAuditRowWithResolvedAggregateId() {
+  @DisplayName("关闭告警: 审计表落一行且结果为成功,动作,聚合类型与解析出的聚合标识都正确")
+  void shouldWriteAuditRowWithResolvedAggregateId_whenClosingAlert() {
     when(alertService.close(anyLong(), any(), any()))
         .thenReturn(new ConsoleAlertActionResponse(7L, "t1", "close", "CLOSED"));
 
@@ -109,7 +112,8 @@ class AuditLogEndToEndIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void alertCloseShouldRecordParamsByDefault() {
+  @DisplayName("关闭告警: 默认记录请求参数,审计参数列包含提交的原因")
+  void shouldRecordParamsByDefault_whenClosingAlert() {
     when(alertService.close(anyLong(), any(), any()))
         .thenReturn(new ConsoleAlertActionResponse(9L, "t1", "close", "CLOSED"));
 

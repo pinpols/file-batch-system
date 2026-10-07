@@ -18,9 +18,11 @@ import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestCli
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.client.RestClient;
 
+@DisplayName("自助作业服务的审批提交链路: 重跑与补偿请求经共享客户端下发并处理响应缺失")
 class ConsoleSelfServiceJobServiceTest {
 
   private OrchestratorInternalRestClient orchestratorInternalRestClient;
@@ -62,6 +64,7 @@ class ConsoleSelfServiceJobServiceTest {
   }
 
   @Test
+  @DisplayName("重跑申请提交成功后返回审批单号")
   void shouldSubmitRerunApproval() {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
     when(responseSpec.body(ApprovalSubmitResponse.class))
@@ -74,6 +77,7 @@ class ConsoleSelfServiceJobServiceTest {
   }
 
   @Test
+  @DisplayName("补偿申请提交成功后返回审批单号")
   void shouldSubmitCompensationApproval() {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
     when(responseSpec.body(ApprovalSubmitResponse.class))
@@ -87,6 +91,7 @@ class ConsoleSelfServiceJobServiceTest {
   }
 
   @Test
+  @DisplayName("审批响应体缺失时抛出业务异常并提示提交失败")
   void shouldThrowWhenApprovalResponseMissing() {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
     when(responseSpec.body(ApprovalSubmitResponse.class)).thenReturn(null);

@@ -26,6 +26,7 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
@@ -38,6 +39,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
  * <p>覆盖:GET 当前状态、PUT 部分字段更新、affectedServices 透传、AtomicReference 不可变替换、@AuditAction
  * 注解仍写审计(本测试不验证审计写入数据库, 由 AuditAspect 单测覆盖)。
  */
+@DisplayName("维护模式管理接口:查询初始状态, 热更新部分字段并在关闭后恢复, 空服务列表归一为空数组")
 class ConsoleAdminMaintenanceControllerTest {
 
   private final ConsoleRequestMetadataResolver requestMetadataResolver =
@@ -78,7 +80,8 @@ class ConsoleAdminMaintenanceControllerTest {
   }
 
   @Test
-  void getShouldReturnInitialDisabledState() throws Exception {
+  @DisplayName("初始查询:未开启维护时返回成功响应, 启用与只读标记均为假")
+  void shouldReturnInitialDisabledState_whenQuerying() throws Exception {
     mockMvc
         .perform(get("/api/console/admin/system/maintenance"))
         .andExpect(status().isOk())
@@ -88,7 +91,8 @@ class ConsoleAdminMaintenanceControllerTest {
   }
 
   @Test
-  void putShouldHotUpdateStateInPlace() throws Exception {
+  @DisplayName("热更新:部分字段更新后状态就地替换, 服务列表与更新时间一并回填")
+  void shouldHotUpdateState_whenUpdating() throws Exception {
     String body = """
         {"enabled":true,"readOnly":true,"message":"DB 灰度中","etaAt":"2026-05-20T15:00:00Z",
          "affectedServices":["job-schedule","file-download"]}
@@ -114,7 +118,8 @@ class ConsoleAdminMaintenanceControllerTest {
   }
 
   @Test
-  void putShouldRestoreToDisabledOnEnabledFalse() throws Exception {
+  @DisplayName("关闭维护:仅传启用为假时状态复位, 查询结果同步为假")
+  void shouldRestoreToDisabled_whenEnabledFalse() throws Exception {
     // 先开
     stateHolder.update(new MaintenanceState(
         true, false, "x", Instant.parse("2026-05-20T16:00:00Z"), List.of("a")));
@@ -129,7 +134,8 @@ class ConsoleAdminMaintenanceControllerTest {
   }
 
   @Test
-  void putShouldNormalizeNullAffectedServicesToEmptyList() throws Exception {
+  @DisplayName("空列表归一:未提供受影响服务时返回空数组, 长度为 0")
+  void shouldNormalizeToEmptyList_whenAffectedServicesAbsent() throws Exception {
     mockMvc
         .perform(put("/api/console/admin/system/maintenance")
             .contentType(APPLICATION_JSON)

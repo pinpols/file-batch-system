@@ -33,6 +33,7 @@ import org.junit.jupiter.api.Test;
  * <p>经 {@code processInWorkerThread}(同步测试入口)端到端跑 claim → execute(decorated)→ report,断言织入行为。 本模块
  * test 仅 mockito-core,故用手写 fake store + 计数 handler。
  */
+@DisplayName("TaskDispatcher 自动织入 — 幂等与重试注解的识别及装饰执行语义")
 class TaskDispatcherAutoWrapTest {
 
   private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()

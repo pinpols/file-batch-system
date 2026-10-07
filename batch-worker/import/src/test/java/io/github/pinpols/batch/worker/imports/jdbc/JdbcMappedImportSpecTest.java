@@ -9,14 +9,17 @@ import io.github.pinpols.batch.common.exception.WorkerConfigException;
 import io.github.pinpols.batch.worker.imports.jdbc.JdbcMappedImportSpec.ColumnMapping;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.postgresql.util.PGobject;
 
+@DisplayName("JDBC 映射导入规格解析单测:列映射推断,冲突键补全与标识符校验语义")
 class JdbcMappedImportSpecTest {
 
   private final ObjectMapper objectMapper = new ObjectMapper();
 
   @Test
+  @DisplayName("解析顶层规格:库名,表名,租户列,列映射与加载策略都正确取出")
   void shouldParseTopLevelJdbcMappedImport() {
     Map<String, Object> template = Map.of(
         "jdbc_mapped_import",
@@ -42,6 +45,7 @@ class JdbcMappedImportSpecTest {
   }
 
   @Test
+  @DisplayName("缺少规格配置时抛参数非法")
   void shouldRejectMissingSpec() {
     assertThatThrownBy(() -> JdbcMappedImportSpec.parse(Map.of(), objectMapper))
         .isInstanceOf(WorkerConfigException.class)
@@ -49,6 +53,7 @@ class JdbcMappedImportSpecTest {
   }
 
   @Test
+  @DisplayName("未提供列映射时,从字段映射推断出列对应关系")
   void shouldInferColumnMappingsFromFieldMappingsWhenOmitted() {
     Map<String, Object> template = Map.of(
         "field_mappings",
@@ -74,7 +79,8 @@ class JdbcMappedImportSpecTest {
   }
 
   @Test
-  void explicitMappingsInheritFieldMappingTypeAndFormat() {
+  @DisplayName("显式列映射未写类型与格式时,从字段映射继承")
+  void shouldInheritTypeAndFormat_whenExplicitMappingsIncomplete() {
     Map<String, Object> template = Map.of(
         "field_mappings",
         List.of(Map.of(
@@ -98,6 +104,7 @@ class JdbcMappedImportSpecTest {
   }
 
   @Test
+  @DisplayName("列映射为空数组时,仍按字段映射推断")
   void shouldInferWhenColumnMappingsIsEmptyJsonArray() {
     Map<String, Object> template = Map.of(
         "field_mappings",
@@ -116,6 +123,7 @@ class JdbcMappedImportSpecTest {
   }
 
   @Test
+  @DisplayName("显式列映射按来源合并覆盖推断结果,仅差异项生效")
   void explicitMappingsOverrideInferredByFrom_onlyDiffsNeeded() {
     Map<String, Object> template = Map.of(
         "field_mappings",
@@ -136,6 +144,7 @@ class JdbcMappedImportSpecTest {
   }
 
   @Test
+  @DisplayName("列映射与字段映射都缺失时抛参数非法")
   void shouldRejectWhenNeitherColumnMappingsNorFieldMappingsPresent() {
     Map<String, Object> template = Map.of(
         "jdbc_mapped_import",
@@ -147,6 +156,7 @@ class JdbcMappedImportSpecTest {
   }
 
   @Test
+  @DisplayName("同一来源列映射到多个目标列时校验失败")
   void shouldRejectFanOutOneSourceToMultipleColumns() {
     JdbcMappedImportSpec spec = mappingSpec(List.of(
         new JdbcMappedImportSpec.ColumnMapping("fieldA", "col_x"),
@@ -158,6 +168,7 @@ class JdbcMappedImportSpecTest {
   }
 
   @Test
+  @DisplayName("多个来源列映射到同一目标列时校验失败")
   void shouldRejectCollisionMultipleSourcesToOneColumn() {
     JdbcMappedImportSpec spec = mappingSpec(List.of(
         new JdbcMappedImportSpec.ColumnMapping("fieldA", "col_x"),
@@ -169,7 +180,8 @@ class JdbcMappedImportSpecTest {
   }
 
   @Test
-  void normalizeColumnHandlesCamelUnderscoreAndCase() {
+  @DisplayName("列名归一化覆盖驼峰,全大写与下划线写法")
+  void shouldNormalizeColumnNames_whenCamelOrUpperGiven() {
     assertThat(JdbcMappedImportSpec.normalizeColumn("customerNo")).isEqualTo("customer_no");
     assertThat(JdbcMappedImportSpec.normalizeColumn("CUSTOMER_NO")).isEqualTo("customer_no");
     assertThat(JdbcMappedImportSpec.normalizeColumn("customer_no")).isEqualTo("customer_no");
@@ -179,7 +191,8 @@ class JdbcMappedImportSpecTest {
   }
 
   @Test
-  void conflictColumnsAutoPrependsTenantWhenMissing() {
+  @DisplayName("冲突键未含租户列时,自动前置补上租户列")
+  void shouldPrependTenantColumn_whenConflictColumnsMissingTenant() {
     Map<String, Object> template = Map.of(
         "jdbc_mapped_import",
         Map.of(
@@ -195,7 +208,8 @@ class JdbcMappedImportSpecTest {
   }
 
   @Test
-  void conflictColumnsKeptWhenTenantAlreadyPresent() {
+  @DisplayName("冲突键已含租户列时,保持原样不重复补")
+  void shouldKeepConflictColumns_whenTenantAlreadyPresent() {
     Map<String, Object> template = Map.of(
         "jdbc_mapped_import",
         Map.of(
@@ -211,7 +225,8 @@ class JdbcMappedImportSpecTest {
   }
 
   @Test
-  void emptyConflictColumnsStayEmpty() {
+  @DisplayName("未配置冲突键时,结果保持为空")
+  void shouldKeepConflictColumnsEmpty_whenNoneConfigured() {
     Map<String, Object> template = Map.of(
         "jdbc_mapped_import",
         Map.of(
@@ -226,7 +241,8 @@ class JdbcMappedImportSpecTest {
   }
 
   @Test
-  void standardAuditBindingsExpandWithExplicitOverride() {
+  @DisplayName("标准审计字段绑定展开,显式配置可覆盖默认值")
+  void shouldExpandStandardAuditBindings_whenExplicitOverrideGiven() {
     Map<String, Object> template = Map.of(
         "jdbc_mapped_import",
         Map.of(
@@ -271,6 +287,7 @@ class JdbcMappedImportSpecTest {
   }
 
   @Test
+  @DisplayName("查询参数模板以数据库 json 对象给出时,规格同样解析正确")
   void shouldParseJdbcMappedImportWhenQueryParamSchemaIsPgJsonObject() throws Exception {
     Map<String, Object> qps = Map.of(
         "jdbcMappedImport",
@@ -295,6 +312,7 @@ class JdbcMappedImportSpecTest {
   }
 
   @Test
+  @DisplayName("分区替换策略被解析,并带上替换分区列")
   void shouldParsePartitionReplaceCopyStrategy() {
     JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(
         Map.of(
@@ -321,6 +339,7 @@ class JdbcMappedImportSpecTest {
   }
 
   @Test
+  @DisplayName("分区阶段交换策略被解析,含中间分区表名")
   void shouldParsePartitionStageSwapCopyStrategy() {
     JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(
         Map.of(
@@ -353,7 +372,8 @@ class JdbcMappedImportSpecTest {
   }
 
   @Test
-  void strictIdempotencyAllowsPartitionReplaceCopyWithoutConflictColumns() {
+  @DisplayName("开启严格幂等时,分区替换策略允许不配冲突键")
+  void shouldAllowPartitionReplaceCopy_whenStrictIdempotencyEnabled() {
     JdbcMappedImportSpec spec =
         partitionReplaceSpec(List.of("tenant_id", "biz_date"), Map.of("biz_date", "${bizDate}"));
 
@@ -361,7 +381,8 @@ class JdbcMappedImportSpecTest {
   }
 
   @Test
-  void partitionReplaceCopyRequiresReplacePartitionColumns() {
+  @DisplayName("分区替换策略未声明替换分区列时,校验失败")
+  void shouldRejectPartitionReplaceCopy_whenReplacePartitionColumnsMissing() {
     JdbcMappedImportSpec spec = partitionReplaceSpec(List.of(), Map.of("biz_date", "${bizDate}"));
 
     assertThatThrownBy(() -> spec.validateIdentifiers(List.of("biz"), true))
@@ -370,7 +391,8 @@ class JdbcMappedImportSpecTest {
   }
 
   @Test
-  void partitionReplaceColumnsMustBeResolvableBeforeReadingRows() {
+  @DisplayName("替换分区列无法解析到映射时,读取行之前即校验失败")
+  void shouldReject_whenReplacePartitionColumnsUnresolvable() {
     JdbcMappedImportSpec spec = partitionReplaceSpec(List.of("customer_no"), Map.of());
 
     assertThatThrownBy(() -> spec.validateIdentifiers(List.of("biz"), false))

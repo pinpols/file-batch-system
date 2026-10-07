@@ -16,6 +16,7 @@ import java.time.LocalDate;
 import java.time.Month;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -32,6 +33,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("文件束启动的分区展开集成:验证真实数据库与真实服务下导入/导出/分发三类束按束文件展开为各自绑定源文件 + 模板 + 下游渠道的分区记录")
 class BundleLaunchPartitionExpansionIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -76,6 +78,7 @@ class BundleLaunchPartitionExpansionIntegrationTest extends AbstractIntegrationT
   }
 
   @Test
+  @DisplayName("导入束按束文件数量展开分区,每个分区各自绑定源文件与模板")
   void bundleImport_expandsIntoBoundHeterogeneousPartitions() {
     List<Map<String, Object>> partitions = launchBundleAndReadPartitions(
         "BUNDLE_IMPORT",
@@ -92,6 +95,7 @@ class BundleLaunchPartitionExpansionIntegrationTest extends AbstractIntegrationT
   }
 
   @Test
+  @DisplayName("导出束按模板数量展开分区,模板各自绑定且源文件为空")
   void bundleExport_expandsByTemplateWithoutSourceFile() {
     List<Map<String, Object>> partitions = launchBundleAndReadPartitions(
         "BUNDLE_EXPORT",
@@ -105,6 +109,7 @@ class BundleLaunchPartitionExpansionIntegrationTest extends AbstractIntegrationT
   }
 
   @Test
+  @DisplayName("分发束按源文件展开分区并各自绑定下游渠道,模板为空")
   void bundleDispatch_expandsByFileAndChannelWithoutTemplate() {
     List<Map<String, Object>> partitions = launchBundleAndReadPartitions(
         "BUNDLE_DISPATCH",

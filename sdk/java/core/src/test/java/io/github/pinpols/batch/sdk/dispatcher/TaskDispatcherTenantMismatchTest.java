@@ -13,12 +13,14 @@ import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
  * Lane J §J1:租户自检 fail-safe — Kafka ACL 漂移 / consumer group 配置失误导致拿到非本租户消息时,立即 ERROR log +
  * WITHHOLD,不投递到 executor 也不调用 HTTP claim,本进程不串任务;consumer 继续服务本租户消息。
  */
+@DisplayName("TaskDispatcher 租户自检 — 非本租户消息拒收与租户一致时的正常派发")
 class TaskDispatcherTenantMismatchTest {
 
   private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
@@ -39,6 +41,7 @@ class TaskDispatcherTenantMismatchTest {
   }
 
   @Test
+  @DisplayName("消息租户与本工作节点不一致时拒收,不认领不执行且不误判致命")
   void shouldDropMessage_whenTenantMismatch() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     SdkTaskHandler handler = mock(SdkTaskHandler.class);
@@ -61,6 +64,7 @@ class TaskDispatcherTenantMismatchTest {
   }
 
   @Test
+  @DisplayName("租户一致的消息正常认领并进入执行链路")
   void shouldDispatchNormally_whenTenantMatches() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     SdkTaskHandler handler = mock(SdkTaskHandler.class);

@@ -20,6 +20,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -31,6 +32,7 @@ import org.mockito.quality.Strictness;
 /** 租户就绪自检:验证 template / channel / queue 三类阻断与警告判定。 */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT) // 各用例只触发部分 mapper,共享 setUp stub
+@DisplayName("租户就绪自检服务: 模板、通道与队列配置的阻断与警告判定")
 class ConsoleTenantReadinessServiceTest {
 
   @Mock
@@ -72,6 +74,7 @@ class ConsoleTenantReadinessServiceTest {
   }
 
   @Test
+  @DisplayName("全部配置齐备时就绪通过, 既无阻断项也无警告项")
   void shouldBeReady_whenAllConfigComplete() {
     TenantReadinessResponse r = service.check("t1");
     assertThat(r.ready()).isTrue();
@@ -81,6 +84,7 @@ class ConsoleTenantReadinessServiceTest {
 
   /** SEC-IDOR(S2):非全局角色对他租户跑就绪自检 → 守卫抛 FORBIDDEN,不落任何只读查询。 */
   @Test
+  @DisplayName("跨租户自检被守卫拒绝, 不执行任何只读查询")
   void shouldDenyCrossTenantReadiness_beforeQuerying() {
     doThrow(BizException.of(ResultCode.FORBIDDEN, "error.tenant.mismatch"))
         .when(tenantGuard)
@@ -94,6 +98,7 @@ class ConsoleTenantReadinessServiceTest {
   }
 
   @Test
+  @DisplayName("启用的导出模板缺少取数语句时判定阻断, 并给出可操作提示与文档引用")
   void shouldBlock_whenEnabledExportTemplateMissingQuerySql() {
     when(templateMapper.selectReadinessRows("t1"))
         .thenReturn(List.of(row(
@@ -118,6 +123,7 @@ class ConsoleTenantReadinessServiceTest {
   }
 
   @Test
+  @DisplayName("未启用的模板配置不完整时只告警不阻断")
   void shouldWarnNotBlock_whenDisabledTemplateIncomplete() {
     when(templateMapper.selectReadinessRows("t1"))
         .thenReturn(List.of(row(
@@ -142,6 +148,7 @@ class ConsoleTenantReadinessServiceTest {
   }
 
   @Test
+  @DisplayName("启用的通道配置体为空对象时判定阻断")
   void shouldBlock_whenEnabledChannelHasEmptyConfigJson() {
     when(channelMapper.selectReadinessRows("t1"))
         .thenReturn(List.of(row(
@@ -161,6 +168,7 @@ class ConsoleTenantReadinessServiceTest {
   }
 
   @Test
+  @DisplayName("通道免认证时不判定阻断")
   void shouldNotBlock_whenChannelAuthNone() {
     when(channelMapper.selectReadinessRows("t1"))
         .thenReturn(List.of(row(
@@ -176,6 +184,7 @@ class ConsoleTenantReadinessServiceTest {
   }
 
   @Test
+  @DisplayName("作业引用了不存在的队列时判定阻断, 并给出可操作提示与文档引用")
   void shouldBlock_whenJobReferencesMissingQueue() {
     when(resourceQueueMapper.selectQueueCodes("t1")).thenReturn(List.of("q-existing"));
     when(jobDefinitionMapper.selectEnabledJobQueueRefs("t1"))
@@ -192,6 +201,7 @@ class ConsoleTenantReadinessServiceTest {
   }
 
   @Test
+  @DisplayName("租户不存在时自检抛出业务异常")
   void shouldThrow_whenTenantNotFound() {
     when(tenantMapper.selectByTenantId("nope")).thenReturn(null);
     assertThatThrownBy(() -> service.check("nope")).isInstanceOf(BizException.class);

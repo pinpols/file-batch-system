@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -32,6 +33,7 @@ import org.springframework.test.web.reactive.server.WebTestClient;
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+@DisplayName("控制台遥测写路径: 入参校验口径与成功受理响应")
 class TelemetryWritePathIntegrationTest extends AbstractIntegrationTest {
 
   @LocalServerPort
@@ -48,7 +50,8 @@ class TelemetryWritePathIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void acceptsValidTelemetry() {
+  @DisplayName("合规上报: 返回成功响应")
+  void shouldAcceptTelemetry_whenPayloadValid() {
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("app", "console");
     body.put("events", List.of(Map.of("type", "info", "name", "page_view", "page", "/home")));
@@ -66,7 +69,8 @@ class TelemetryWritePathIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void rejectsEmptyEventsList() {
+  @DisplayName("事件列表为空: 返回请求不合法")
+  void shouldRejectEventsList_whenEmpty() {
     webTestClient
         .post()
         .uri("/api/console/telemetry/events")
@@ -78,7 +82,8 @@ class TelemetryWritePathIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void rejectsMissingApp() {
+  @DisplayName("缺少应用标识: 返回请求不合法")
+  void shouldRejectPayload_whenAppMissing() {
     webTestClient
         .post()
         .uri("/api/console/telemetry/events")
@@ -90,7 +95,8 @@ class TelemetryWritePathIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void rejectsTooManyEvents() {
+  @DisplayName("事件条数超过上限: 返回请求不合法")
+  void shouldRejectEvents_whenCountAboveLimit() {
     // events @Size(max=50)
     List<Map<String, Object>> events = new java.util.ArrayList<>();
     for (int i = 0; i < 51; i++) {
@@ -107,7 +113,8 @@ class TelemetryWritePathIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void rejectsPropsExceedingByteLimit() {
+  @DisplayName("单条事件的附加字段超过字节上限: 返回请求不合法")
+  void shouldRejectEvent_whenPropsExceedByteLimit() {
     // props 单 event 最大 8KB,构造 10KB 字符串触发 validateProps 拦截
     String big = "x".repeat(10_000);
     Map<String, Object> bigProps = Map.of("payload", big);
@@ -127,7 +134,8 @@ class TelemetryWritePathIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void acceptsNullEventPropsField() {
+  @DisplayName("附加字段为空对象: 仍返回成功")
+  void shouldAcceptEvent_whenPropsFieldEmpty() {
     Map<String, Object> event = new LinkedHashMap<>();
     event.put("type", "info");
     event.put("name", "x");

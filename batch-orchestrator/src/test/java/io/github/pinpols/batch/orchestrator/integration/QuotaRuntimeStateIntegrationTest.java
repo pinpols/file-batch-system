@@ -10,6 +10,7 @@ import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceCheck;
 import io.github.pinpols.batch.orchestrator.mapper.QuotaRuntimeStateMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -25,6 +26,7 @@ import org.springframework.boot.test.context.SpringBootTest;
       "batch.quota.runtime-store=database",
       "batch.quota.backend-guard.cutover-id=quota-it-database"
     })
+@DisplayName("配额运行态服务在真实数据库上的集成验证,覆盖滑动窗口与自然日重置,峰值追踪,快照查询,过期对账与预留更新")
 class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
 
   private static final class ReservationSpec {
@@ -99,6 +101,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
   private QuotaRuntimeStateMapper quotaRuntimeStateMapper;
 
   @Test
+  @DisplayName("当前活跃数低于基础额度且无需借用突发额度时,预留请求应被放行")
   void shouldAllowWhenWithinBaseCapNoBurstNeeded() {
     ResourceCheck result = quotaRuntimeStateService.evaluateAndReserve(new ReservationSpec()
         .ownerCode("quota-test-basic-" + BatchDateTimeSupport.utcEpochMillis())
@@ -112,6 +115,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("当前活跃数已达基础额度且未配置突发额度时,预留请求应被拒绝")
   void shouldBlockWhenOverBaseCapNoBurst() {
     ResourceCheck result = quotaRuntimeStateService.evaluateAndReserve(new ReservationSpec()
         .ownerCode("quota-test-block-" + BatchDateTimeSupport.utcEpochMillis())
@@ -125,6 +129,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("首次按滑动窗口预留时应落库状态记录,窗口起止时间均非空且结束时间晚于开始时间")
   void shouldCreateNewStateRecordForSlidingWindow() {
     String ownerCode = "sw-test-" + BatchDateTimeSupport.utcEpochMillis();
 
@@ -148,6 +153,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("滑动窗口下发生额度借用时应记录大于零的峰值借用数")
   void shouldTrackPeakBorrowedCountForSlidingWindow() {
     String ownerCode = "sw-peak-" + BatchDateTimeSupport.utcEpochMillis();
 
@@ -169,6 +175,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("借用数超过突发上限时,预留请求应被拒绝")
   void shouldBlockWhenBorrowedExceedsBurst() {
     String ownerCode = "sw-burst-" + BatchDateTimeSupport.utcEpochMillis();
 
@@ -187,6 +194,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("首次按自然日重置预留时应落库状态记录并写入窗口开始时间")
   void shouldCreateNewStateRecordForCalendarDay() {
     String ownerCode = "cd-test-" + BatchDateTimeSupport.utcEpochMillis();
 
@@ -207,6 +215,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("状态已存在时查询快照应回填重置策略,突发上限,峰值借用数与剩余突发额度")
   void shouldDescribeExistingState() {
     String ownerCode = "describe-test-" + BatchDateTimeSupport.utcEpochMillis();
 
@@ -234,6 +243,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("滑动窗口已过期时对账应将该状态的峰值借用数重置为零")
   void shouldReconcileExpiredSlidingWindowState() {
     String ownerCode = "reconcile-sw-" + BatchDateTimeSupport.utcEpochMillis();
 
@@ -263,6 +273,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("窗口已过期时再次预留应在一次版本更新内刷新窗口,并同时记录借用峰值与新的过期时间")
   void shouldRefreshExpiredWindowAndReserveWithOneVersionUpdate() {
     String ownerCode = "sw-reset-reserve-" + BatchDateTimeSupport.utcEpochMillis();
     var now = BatchDateTimeSupport.utcNow();
@@ -300,6 +311,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("已过期的状态应能被过期状态查询检索到")
   void shouldFindExpiredStatesViaRepository() {
     String ownerCode = "find-expired-" + BatchDateTimeSupport.utcEpochMillis();
 

@@ -9,6 +9,7 @@ import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.ResultVersi
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Instant;
 import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -32,6 +33,7 @@ import org.springframework.test.context.TestPropertySource;
       "batch.result-version.retention.batch-size=10",
       "batch.replay.dry-run.retention-days=1"
     })
+@DisplayName("冷存储归档:出站事件,成功实例运行树与结果版本的归档顺序,以及保留期清理与引用保护边界")
 class ArchiveColdStorageIntegrationTest extends AbstractIntegrationTest {
 
   private final JdbcTemplate jdbcTemplate;
@@ -52,7 +54,8 @@ class ArchiveColdStorageIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void outboxArchiveCopiesRowsToColdTablesBeforeDeletingHotRows() {
+  @DisplayName("已发布出站事件归档时先把事件行与投递日志写入冷表,再删除热表行")
+  void shouldCopyOutboxRowsToColdTablesBeforeDeletingHotRows() {
     String tenantId = unique("tenant");
     Long outboxId = insertOldPublishedOutbox(tenantId);
     Long deliveryLogId = insertDeliveryLog(tenantId, outboxId);
@@ -67,7 +70,8 @@ class ArchiveColdStorageIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void successInstanceArchiveCopiesRuntimeTreeToColdTablesBeforeDeletingHotRows() {
+  @DisplayName("成功实例归档时先把实例,分区,任务与步骤整棵运行树写入冷表,再清理热表行")
+  void shouldCopySuccessInstanceRuntimeTreeToColdTablesBeforeHotCleanup() {
     String tenantId = unique("tenant");
     Long definitionId = insertJobDefinition(tenantId);
     Long instanceId = insertOldSuccessInstance(tenantId, definitionId);
@@ -92,7 +96,8 @@ class ArchiveColdStorageIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void successInstanceArchiveAlsoArchivesDryRunTerminalStates() {
+  @DisplayName("成功实例归档同时覆盖试运行成功与试运行失败的终态实例")
+  void shouldArchiveDryRunTerminalStatesAlongWithSuccessInstances() {
     String tenantId = unique("tenant");
     Long definitionId = insertJobDefinition(tenantId);
     Long successId = insertOldTerminalInstance(tenantId, definitionId, "SUCCESS_DRY_RUN", true);
@@ -107,7 +112,8 @@ class ArchiveColdStorageIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void resultVersionRetentionArchivesBeforeHotCleanupAndKeepsReferencedRows() {
+  @DisplayName("被取代的结果版本先标记归档并保留归档副本,热表行待宽限期结束后再清理")
+  void shouldArchiveSupersededResultVersionsBeforeHotCleanupAndKeepReferencedRows() {
     String tenantId = unique("tenant");
     Long definitionId = insertJobDefinition(tenantId);
     Long instanceId = insertOldSuccessInstance(tenantId, definitionId);
@@ -132,7 +138,8 @@ class ArchiveColdStorageIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void resultVersionRetentionDoesNotDeleteReadModelReferences() {
+  @DisplayName("已归档结果版本仍被读模型分区引用时跳过清理,热表行保持不变")
+  void shouldNotPurgeArchivedResultVersionsStillReferencedByReadModel() {
     String tenantId = unique("tenant");
     Long definitionId = insertJobDefinition(tenantId);
     Long instanceId = insertOldSuccessInstance(tenantId, definitionId);
@@ -159,7 +166,8 @@ class ArchiveColdStorageIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void dryRunResultRetentionArchivesBeforeDeletingHotRow() {
+  @DisplayName("试运行结果版本先移入归档表并删除热表行,归档记录保留试运行状态与负载")
+  void shouldArchiveDryRunResultVersionsBeforeDeletingHotRow() {
     String tenantId = unique("tenant");
     Long definitionId = insertJobDefinition(tenantId);
     Long instanceId = insertOldSuccessInstance(tenantId, definitionId);

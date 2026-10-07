@@ -17,10 +17,12 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 /** {@link HttpTaskExecutor} 单测 — validation / 黑白名单 / 真实 HTTP server(JDK {@link HttpServer})。 */
+@DisplayName("HTTP 任务执行器: 入参校验, 主机黑白名单与真实请求行为")
 class HttpTaskExecutorTest {
 
   private HttpExecutorProperties props;
@@ -63,31 +65,36 @@ class HttpTaskExecutorTest {
   // ─── Validation ──────────────────────────────────────────────────────────────
 
   @Nested
+  @DisplayName("入参校验: 缺失, 非法与越界配置一律快速失败")
   class Validation {
 
     @Test
-    void rejectsMissingUrl() {
+    @DisplayName("缺少目标地址时执行应失败, 并提示参数必填")
+    void shouldReject_whenUrlMissing() {
       TaskResult r = executor.execute(ctxWithParams(Map.of()));
       assertThat(r.success()).isFalse();
       assertThat(r.message()).contains("parameters.url required");
     }
 
     @Test
-    void rejectsInvalidUrl() {
+    @DisplayName("目标地址非法时执行应失败, 并给出地址格式错误提示")
+    void shouldReject_whenUrlMalformed() {
       TaskResult r = executor.execute(ctxWithParams(Map.of("url", "not a uri @@@")));
       assertThat(r.success()).isFalse();
       assertThat(r.message()).contains("not a valid URI");
     }
 
     @Test
-    void rejectsUrlWithoutHost() {
+    @DisplayName("地址缺少主机名时执行应失败, 避免请求落到本地文件等非网络资源")
+    void shouldReject_whenUrlHasNoHost() {
       TaskResult r = executor.execute(ctxWithParams(Map.of("url", "file:///etc/passwd")));
       assertThat(r.success()).isFalse();
       assertThat(r.message()).contains("URL must have host");
     }
 
     @Test
-    void rejectsMethodNotInWhitelist() {
+    @DisplayName("请求方法不在允许清单内时执行应失败, 并指出方法受限")
+    void shouldReject_whenMethodOutsideAllowedMethods() {
       props.setAllowedMethods(Set.of("GET"));
       TaskResult r = executor.execute(
           ctxWithParams(Map.of("url", "http://api.example.com", "method", "DELETE")));
@@ -96,7 +103,8 @@ class HttpTaskExecutorTest {
     }
 
     @Test
-    void rejectsBadExpectStatusType() {
+    @DisplayName("期望状态码传入非数字时执行应失败, 提示取值类型不合法")
+    void shouldReject_whenExpectStatusNotNumeric() {
       TaskResult r = executor.execute(
           ctxWithParams(Map.of("url", "http://api.example.com", "expectStatus", "not-a-number")));
       assertThat(r.success()).isFalse();
@@ -104,7 +112,8 @@ class HttpTaskExecutorTest {
     }
 
     @Test
-    void rejectsRequestBodyBeyondConfiguredLimit() {
+    @DisplayName("请求体超过配置上限时执行应失败, 并在提示中带出上限值")
+    void shouldReject_whenBodyExceedsConfiguredLimit() {
       props.setMaxRequestBodyBytes(4);
       TaskResult r = executor.execute(ctxWithParams(
           Map.of("url", "http://api.example.com", "method", "POST", "body", "12345")));
@@ -114,7 +123,8 @@ class HttpTaskExecutorTest {
     }
 
     @Test
-    void rejectsBadAuthType() {
+    @DisplayName("认证类型不在允许清单内时执行应失败, 提示类型受限")
+    void shouldReject_whenAuthTypeNotAllowed() {
       TaskResult r = executor.execute(
           ctxWithParams(Map.of("url", "http://api.example.com", "auth", Map.of("type", "oauth"))));
       assertThat(r.success()).isFalse();
@@ -122,7 +132,8 @@ class HttpTaskExecutorTest {
     }
 
     @Test
-    void rejectsBearerWithoutToken() {
+    @DisplayName("持有者认证缺少令牌时执行应失败, 提示令牌必填")
+    void shouldReject_whenBearerTokenMissing() {
       TaskResult r = executor.execute(
           ctxWithParams(Map.of("url", "http://api.example.com", "auth", Map.of("type", "bearer"))));
       assertThat(r.success()).isFalse();
@@ -130,6 +141,7 @@ class HttpTaskExecutorTest {
     }
 
     @Test
+    @DisplayName("参数顶层出现敏感凭据字段时应被凭据闸门拒绝, 并返回敏感数据错误码")
     void rejectsSensitiveCredentialInParameters_LaneC() {
       // 顶层 password 字段(非 auth 协议)直接拒
       TaskResult r = executor.execute(
@@ -139,6 +151,7 @@ class HttpTaskExecutorTest {
     }
 
     @Test
+    @DisplayName("认证子树是协议显式字段, 凭据闸门应放行而不误报敏感数据")
     void allowsAuthSubtreeAsHttpProtocol_LaneC() {
       // auth.password / auth.token 是 HTTP executor 显式协议,允许通过 Lane C 闸门(继续按 protocol 走)
       TaskResult r = executor.execute(ctxWithParams(Map.of(
@@ -151,10 +164,12 @@ class HttpTaskExecutorTest {
   // ─── Host black/whitelist ───────────────────────────────────────────────────
 
   @Nested
+  @DisplayName("主机黑白名单: 默认封禁与白名单优先级的判定")
   class HostFiltering {
 
     @Test
-    void blocksMetadataServiceByDefault() {
+    @DisplayName("云元数据地址进入封禁列表后, 请求应被拒绝并提示主机受限")
+    void shouldBlock_whenHostIsMetadataService() {
       props.setBlockedHostPatterns(Set.of("169.254.169.254", "metadata.google.internal"));
       TaskResult r = executor.execute(
           ctxWithParams(Map.of("url", "http://169.254.169.254/latest/meta-data/")));
@@ -163,7 +178,8 @@ class HttpTaskExecutorTest {
     }
 
     @Test
-    void blocksLocalhostByDefault() {
+    @DisplayName("本机主机名与回环网段进入封禁列表后, 请求应被拒绝")
+    void shouldBlock_whenHostIsLocalhost() {
       props.setBlockedHostPatterns(Set.of("localhost", "127.*"));
       TaskResult r = executor.execute(ctxWithParams(Map.of("url", "http://localhost:9999/foo")));
       assertThat(r.success()).isFalse();
@@ -171,7 +187,8 @@ class HttpTaskExecutorTest {
     }
 
     @Test
-    void whitelistRejectsNonMatch() {
+    @DisplayName("主机不匹配白名单通配模式时, 请求应在发起前被拒绝")
+    void shouldReject_whenHostOutsideAllowedPatterns() {
       props.setAllowedHostPatterns(Set.of("*.example.com"));
       TaskResult r = executor.execute(ctxWithParams(Map.of("url", "http://api.evil.com/x")));
       assertThat(r.success()).isFalse();
@@ -179,7 +196,8 @@ class HttpTaskExecutorTest {
     }
 
     @Test
-    void whitelistAllowsMatch() {
+    @DisplayName("主机命中白名单模式时应通过校验, 后续失败仅来自网络不可达")
+    void shouldPassHostCheck_whenHostMatchesAllowedPattern() {
       // 不发真请求,host 校验过 → 后面真请求会因找不到 host fail,但不是 validation fail
       props.setAllowedHostPatterns(Set.of("*.unreachable.test"));
       // 用很短超时避免长时间 hang
@@ -191,7 +209,8 @@ class HttpTaskExecutorTest {
     }
 
     @Test
-    void blockedTakesPriorityOverAllowed() {
+    @DisplayName("同一主机同时命中白名单与黑名单时, 应以封禁优先拒绝")
+    void shouldPreferBlocklist_whenHostBothAllowedAndBlocked() {
       props.setAllowedHostPatterns(Set.of("*"));
       props.setBlockedHostPatterns(Set.of("evil.com"));
       TaskResult r = executor.execute(ctxWithParams(Map.of("url", "http://evil.com/x")));
@@ -203,16 +222,19 @@ class HttpTaskExecutorTest {
   // ─── Glob matching ─────────────────────────────────────────────────────────
 
   @Nested
+  @DisplayName("主机通配匹配: 通配符分段语义")
   class GlobMatch {
 
     @Test
-    void starMatchesNonDotSegment() {
+    @DisplayName("通配符位于中段时只匹配一层标签, 不跨点号贪婪匹配")
+    void shouldMatchSingleSegment_whenWildcardInMiddle() {
       assertThat(HttpTaskExecutor.matchesGlob("api.*.com", "api.foo.com")).isTrue();
       assertThat(HttpTaskExecutor.matchesGlob("api.*.com", "api.foo.bar.com")).isFalse();
     }
 
     @Test
-    void plainHostMatches() {
+    @DisplayName("无通配符的主机模式应精确匹配, 域名后缀不同则不命中")
+    void shouldMatchExactly_whenPatternHasNoWildcard() {
       assertThat(HttpTaskExecutor.matchesGlob("api.example.com", "api.example.com"))
           .isTrue();
       assertThat(HttpTaskExecutor.matchesGlob("api.example.com", "api.example.org"))
@@ -220,7 +242,8 @@ class HttpTaskExecutorTest {
     }
 
     @Test
-    void starPrefix() {
+    @DisplayName("通配符前导模式应匹配子域, 但不匹配裸域本身")
+    void shouldMatchSubdomains_whenPatternStartsWithWildcard() {
       assertThat(HttpTaskExecutor.matchesGlob("*.example.com", "foo.example.com"))
           .isTrue();
       assertThat(HttpTaskExecutor.matchesGlob("*.example.com", "example.com")).isFalse();
@@ -230,7 +253,8 @@ class HttpTaskExecutorTest {
   // ─── Capability ─────────────────────────────────────────────────────────────
 
   @Test
-  void capabilityReflectsConfig() {
+  @DisplayName("执行器能力应反映配置: 任务类型为接口调用, 资源类型为网络且非幂等")
+  void shouldExposeCapability_whenExecutorConfigured() {
     assertThat(executor.taskType()).isEqualTo("http");
     assertThat(executor.capability().resourceKinds()).containsExactly(ResourceKind.NET);
     assertThat(executor.capability().idempotent()).isFalse();
@@ -239,10 +263,12 @@ class HttpTaskExecutorTest {
   // ─── Real HTTP ──────────────────────────────────────────────────────────────
 
   @Nested
+  @DisplayName("真实请求链路: 状态码, 重试, 截断与重定向")
   class RealHttp {
 
     @Test
-    void getSuccess() {
+    @DisplayName("请求成功时应返回状态码与响应体原文")
+    void shouldReturnBodyAndStatus_whenGetSucceeds() {
       server.createContext("/hello", ex -> {
         byte[] body = "world".getBytes(StandardCharsets.UTF_8);
         ex.sendResponseHeaders(200, body.length);
@@ -258,7 +284,8 @@ class HttpTaskExecutorTest {
     }
 
     @Test
-    void postWithBody() {
+    @DisplayName("提交请求时应把请求体完整送达服务端, 且响应状态符合期望")
+    void shouldSendBody_whenPostWithExpectedStatus() {
       AtomicInteger received = new AtomicInteger();
       server.createContext("/echo", ex -> {
         byte[] body = ex.getRequestBody().readAllBytes();
@@ -284,7 +311,8 @@ class HttpTaskExecutorTest {
     }
 
     @Test
-    void expectStatusMismatchFails() {
+    @DisplayName("实际状态码与期望不一致时执行应失败, 并在提示中带出实际值")
+    void shouldFail_whenStatusNotExpected() {
       server.createContext("/notfound", ex -> {
         ex.sendResponseHeaders(404, -1);
         ex.close();
@@ -298,7 +326,8 @@ class HttpTaskExecutorTest {
     }
 
     @Test
-    void basicAuthHeaderInjected() {
+    @DisplayName("配置基础认证时应在请求头注入对应凭据")
+    void shouldInjectBasicAuthHeader_whenAuthConfigured() {
       AtomicInteger gotAuth = new AtomicInteger();
       server.createContext("/auth", ex -> {
         String h = ex.getRequestHeaders().getFirst("Authorization");
@@ -315,7 +344,8 @@ class HttpTaskExecutorTest {
     }
 
     @Test
-    void bearerAuthHeaderInjected() {
+    @DisplayName("配置持有者认证时应在请求头注入令牌")
+    void shouldInjectBearerToken_whenAuthConfigured() {
       AtomicInteger gotBearer = new AtomicInteger();
       server.createContext("/bearer", ex -> {
         String h = ex.getRequestHeaders().getFirst("Authorization");
@@ -331,7 +361,8 @@ class HttpTaskExecutorTest {
     }
 
     @Test
-    void truncatesLargeResponse() {
+    @DisplayName("响应体超过上限时应截断到上限长度, 并标记已截断")
+    void shouldTruncateResponse_whenBodyExceedsLimit() {
       props.setMaxResponseBytes(10);
       server.createContext("/big", ex -> {
         byte[] body = new byte[1000];
@@ -349,7 +380,8 @@ class HttpTaskExecutorTest {
     }
 
     @Test
-    void emptyBodyYieldsEmptyResponseBodyNotTruncated() {
+    @DisplayName("无响应体时应返回空字符串, 且不误标为已截断")
+    void shouldReturnEmptyBody_whenNoContent() {
       // 空 body(sendResponseHeaders(200,-1) → 无内容):responseBody="" 且 truncated=false。
       server.createContext("/empty", ex -> {
         ex.sendResponseHeaders(204, -1);
@@ -365,7 +397,8 @@ class HttpTaskExecutorTest {
     }
 
     @Test
-    void keepsExactFirstMaxBytesWhenBodyExceedsMax() {
+    @DisplayName("响应体超过上限时应保留最前面的固定字节, 且内容逐字节一致")
+    void shouldKeepFirstBytes_whenBodyExceedsLimit() {
       // 响应恰好 max+N 字节:kept 必须是前 max 字节(逐字节等于原内容),truncated=true。
       props.setMaxResponseBytes(10);
       byte[] payload = "0123456789ABCDEFGHIJ".getBytes(StandardCharsets.UTF_8); // 20 字节
@@ -383,7 +416,8 @@ class HttpTaskExecutorTest {
     }
 
     @Test
-    void readsAtMostMaxPlusOneBytesFromHugeStream() throws IOException {
+    @DisplayName("超大响应流下应有界读取并在读满上限后立即关闭, 防止内存膨胀")
+    void shouldReadBoundedBytes_whenStreamIsHuge() throws IOException {
       // OOM 回归守护:有界读取的硬契约是客户端最多读取 max+1 字节并关闭流。
       // 服务端是否能在本机回环网络上感知 TCP 断连受内核/客户端缓冲影响,不是 HTTP API 可保证的语义。
       int max = 16;
@@ -426,7 +460,8 @@ class HttpTaskExecutorTest {
     }
 
     @Test
-    void retriesIdempotentOn5xx() {
+    @DisplayName("幂等请求遇到服务端错误时应重试, 直到成功并记录尝试次数")
+    void shouldRetry_whenIdempotentRequestReturnsServerError() {
       props.setMaxRetries(2);
       props.setRetryBackoff(Duration.ofMillis(10));
       AtomicInteger calls = new AtomicInteger();
@@ -450,7 +485,8 @@ class HttpTaskExecutorTest {
     }
 
     @Test
-    void doesNotRetryNonIdempotentOn5xx() {
+    @DisplayName("非幂等请求遇到服务端错误时不应重试, 避免重复副作用")
+    void shouldNotRetry_whenNonIdempotentRequestReturnsServerError() {
       props.setMaxRetries(2);
       AtomicInteger calls = new AtomicInteger();
       server.createContext("/post-fail", ex -> {
@@ -466,7 +502,8 @@ class HttpTaskExecutorTest {
     }
 
     @Test
-    void getExhaustsAllRetriesAndFailMessageContainsAttemptCount() {
+    @DisplayName("重试耗尽后执行应失败, 并在提示中给出总尝试次数")
+    void shouldReportAttemptCount_whenAllRetriesExhausted() {
       // GET 幂等:连接持续失败(I/O 异常)→ 用尽 maxRetries+1 次,fail message 含次数。
       // 用一个保留为不可路由的端口(server 已起但 path 未注册不会触发 I/O 失败,故指向已关端口)。
       props.setMaxRetries(2);
@@ -485,7 +522,8 @@ class HttpTaskExecutorTest {
     }
 
     @Test
-    void doesNotFollowRedirectToInternalHost() {
+    @DisplayName("服务端跳转到内网地址时不应跟随, 直接返回原始跳转状态")
+    void shouldNotFollowRedirect_whenLocationPointsToInternalHost() {
       // SSRF 加固:服务端 301 指向内网/metadata,执行器禁止跟随 → 直接拿到 30x,不打内网。
       server.createContext("/redirect", ex -> {
         ex.getResponseHeaders().add("Location", "http://169.254.169.254/latest/meta-data/");
@@ -505,10 +543,12 @@ class HttpTaskExecutorTest {
   // ─── P2-3: 响应头脱敏 ─────────────────────────────────────────────────────────
 
   @Nested
+  @DisplayName("响应头脱敏: 敏感头在落库前被替换")
   class ResponseHeaderRedaction {
 
     @Test
-    void redactsSetCookieAndAuthorizationHeadersInOutput() {
+    @DisplayName("写回结果时应对会话与认证类响应头脱敏, 非敏感头仍透传")
+    void shouldRedactSensitiveHeaders_whenWritingOutput() {
       // P2-3(2026-06-03):出口响应若回声 Set-Cookie / Authorization,落 task_result.output
       // 会形成 forensic 期间凭据泄漏。executor 在写 output 前先按固定黑名单脱敏(case-insensitive)。
       server.createContext("/echo", ex -> {
@@ -539,7 +579,8 @@ class HttpTaskExecutorTest {
     }
 
     @Test
-    void sanitizeHelperRedactsKnownSensitiveHeadersCaseInsensitive() {
+    @DisplayName("脱敏规则应忽略大小写, 并覆盖代理认证与旧版会话头")
+    void shouldRedactSensitiveHeaders_whenCaseDiffers() {
       // 直接驱动静态 helper,避免 HTTP server 编排成本;case-insensitive 全覆盖。
       Map<String, java.util.List<String>> in = new java.util.LinkedHashMap<>();
       in.put("Set-Cookie", java.util.List.of("s=1"));
@@ -561,7 +602,8 @@ class HttpTaskExecutorTest {
     }
 
     @Test
-    void sanitizeHelperHandlesNullAndEmpty() {
+    @DisplayName("响应头为空或缺失时应返回空结果而不是直接报错")
+    void shouldReturnEmpty_whenHeadersNullOrEmpty() {
       assertThat(HttpTaskExecutor.sanitizeResponseHeaders(null)).isEmpty();
       assertThat(HttpTaskExecutor.sanitizeResponseHeaders(Map.of())).isEmpty();
     }
@@ -570,10 +612,12 @@ class HttpTaskExecutorTest {
   // ─── enforce allowlist (deny-all) ────────────────────────────────────────────
 
   @Nested
+  @DisplayName("白名单强制模式: 空名单下的默认拒绝")
   class EnforceAllowlist {
 
     @Test
-    void emptyAllowlistDeniesAllWhenEnforced() {
+    @DisplayName("开启强制模式且白名单为空时应拒绝所有请求, 默认拒绝而非默认放行")
+    void shouldDenyAll_whenAllowlistEmptyAndEnforced() {
       // enforceAllowlist=true + 空 allowedHostPatterns → fail-closed 拒绝全部。
       props.setEnforceAllowlist(true);
       props.setAllowedHostPatterns(Set.of());

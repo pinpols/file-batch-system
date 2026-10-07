@@ -15,6 +15,7 @@ import io.github.pinpols.batch.console.domain.notification.support.ConsolePushSe
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -23,6 +24,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 /** ConsolePushJobNotifier 单测:覆盖跳过/幂等/状态映射/payload 拼装。 */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("作业完成推送通知器: 轮询待发记录, 幂等去重与终态文案映射")
 class ConsolePushJobNotifierTest {
 
   @Mock
@@ -45,6 +47,7 @@ class ConsolePushJobNotifierTest {
   }
 
   @Test
+  @DisplayName("没有待推送记录时不写去重表也不调用推送")
   void shouldNoopWhenNoPending() {
     when(notificationMapper.findPending(10, 50)).thenReturn(List.of());
 
@@ -55,6 +58,7 @@ class ConsolePushJobNotifierTest {
   }
 
   @Test
+  @DisplayName("每条待发记录写一条去重记录并推送一次, 内容含租户与实例编号")
   void shouldSendOncePerPendingAndInsertDedup() {
     PendingJobNotification p = pending(101L, "ta", "alice", "ETL_DAILY", "SUCCESS");
     when(notificationMapper.findPending(10, 50)).thenReturn(List.of(p));
@@ -77,6 +81,7 @@ class ConsolePushJobNotifierTest {
   }
 
   @Test
+  @DisplayName("去重记录已被其它实例抢占时跳过推送")
   void shouldSkipPushWhenInsertConflicts() {
     PendingJobNotification p = pending(202L, "tb", "bob", "EXPORT", "FAILED");
     when(notificationMapper.findPending(10, 50)).thenReturn(List.of(p));
@@ -89,6 +94,7 @@ class ConsolePushJobNotifierTest {
   }
 
   @Test
+  @DisplayName("多条待发记录中只为去重成功的那几条发送推送")
   void shouldOnlySendForSuccessfullyInsertedAmongMany() {
     PendingJobNotification p1 = pending(301L, "ta", "alice", "J1", "SUCCESS");
     PendingJobNotification p2 = pending(302L, "ta", "alice", "J2", "FAILED");
@@ -103,7 +109,8 @@ class ConsolePushJobNotifierTest {
   }
 
   @Test
-  void pollSafelyShouldSwallowRuntimeExceptionsSoSchedulerSurvives() {
+  @DisplayName("轮询遇到运行时异常时不向外抛出, 保证定时间隔任务继续触发")
+  void shouldSwallowRuntimeException_whenPollSafelyRuns() {
     when(notificationMapper.findPending(10, 50))
         .thenThrow(new RuntimeException("transient DB error"));
 
@@ -114,6 +121,7 @@ class ConsolePushJobNotifierTest {
   }
 
   @Test
+  @DisplayName("各终态分别映射为对应的中文标题后缀")
   void shouldMapStatusToZhLabel() {
     assertPayloadTitleForStatus("SUCCESS", "已成功");
     assertPayloadTitleForStatus("FAILED", "已失败");

@@ -3,6 +3,7 @@ package io.github.pinpols.batch.common.spi.task;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -11,9 +12,11 @@ import org.junit.jupiter.api.Test;
  * <p>覆盖两条路径:① canary 缺席 → 放行(batch-common 单测 classpath 默认不会有 atomic 模块 class);② canary 命中 →
  * fail-fast(用 自定义 ClassLoader 假装命中)。
  */
+@DisplayName("工作线程类路径隔离校验:哨兵类缺席时放行, 命中时快速失败")
 class PipelineWorkerAtomicClasspathCheckTest {
 
   @Test
+  @DisplayName("默认测试类路径不含哨兵类:校验放行, 不抛异常")
   void shouldPass_whenCanaryClassAbsent() {
     // batch-common 测试 classpath 默认不含 batch-worker-atomic 类,canary 应找不到 → 放行
     PipelineWorkerAtomicClasspathCheck check = new PipelineWorkerAtomicClasspathCheck();
@@ -21,6 +24,7 @@ class PipelineWorkerAtomicClasspathCheckTest {
   }
 
   @Test
+  @DisplayName("哨兵类出现在类路径上:校验快速失败, 提示架构约束被违反")
   void shouldFailFast_whenCanaryPresent() {
     // 通过子类 override isCanaryPresent() 模拟「atomic 类在 pipeline worker classpath 上」
     PipelineWorkerAtomicClasspathCheck check = new PipelineWorkerAtomicClasspathCheck() {
@@ -36,6 +40,7 @@ class PipelineWorkerAtomicClasspathCheckTest {
   }
 
   @Test
+  @DisplayName("重写判定为缺席:校验同样放行, 不抛异常")
   void shouldPass_whenCanaryAbsent_viaOverride() {
     PipelineWorkerAtomicClasspathCheck check = new PipelineWorkerAtomicClasspathCheck() {
       @Override

@@ -14,6 +14,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** ADR-040:sidecar(.chk manifest)声明的 expectedRecordCount 与实际累加行数对账。 */
+@DisplayName("数据集规则清单行数对账单测:与模板显式校验的优先级及参与条件")
 class DatasetRuleEvaluatorManifestRowCountTest {
 
   private final DatasetRuleEvaluator evaluator =

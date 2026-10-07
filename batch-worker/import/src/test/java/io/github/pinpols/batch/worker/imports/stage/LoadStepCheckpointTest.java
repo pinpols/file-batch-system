@@ -44,6 +44,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * <p>共享原测的 fixture 风格(@TempDir / 不 transactional / mock plugin)。
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("导入续跑位点行为单测:开关,幂等跳过与多分区降级语义")
 class LoadStepCheckpointTest {
 
   private static final String TENANT = "tenant-A";

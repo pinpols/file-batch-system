@@ -19,9 +19,11 @@ import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.QueryTimeoutException;
 
+@DisplayName("工作节点注册表缓存,验证开关,命中,未命中,读写故障与脏数据场景下的加载与回填行为")
 class WorkerRegistryCacheTest {
 
   private OrchestratorRedisSupport redis;
@@ -36,7 +38,8 @@ class WorkerRegistryCacheTest {
   }
 
   @Test
-  void disabledShouldBypassRedisAndCallLoader() {
+  @DisplayName("缓存开关关闭时不读取缓存,直接调用加载器并返回其结果")
+  void shouldBypassCacheAndCallLoader_whenCacheDisabled() {
     props.setEnabled(false);
     AtomicInteger calls = new AtomicInteger();
     List<WorkerRegistryEntity> result = cache.getOrLoad("t1", "EXPORT", () -> {
@@ -49,7 +52,8 @@ class WorkerRegistryCacheTest {
   }
 
   @Test
-  void cacheMissShouldLoadAndStore() {
+  @DisplayName("缓存未命中时调用加载器一次,并按配置的过期时长回填缓存")
+  void shouldLoadAndStore_whenCacheMiss() {
     props.setEnabled(true);
     when(redis.getStringCache(anyString())).thenReturn(null);
     AtomicInteger calls = new AtomicInteger();
@@ -71,7 +75,8 @@ class WorkerRegistryCacheTest {
   }
 
   @Test
-  void cacheHitShouldNotCallLoader() throws Exception {
+  @DisplayName("缓存命中时跳过加载器,并按缓存内容还原节点编码,路由编码与心跳时间")
+  void shouldReturnCachedResult_whenCacheHit() throws Exception {
     props.setEnabled(true);
     String json = new ObjectMapper()
         .writeValueAsString(List.of(new WorkerRegistryCache.Entry(
@@ -104,7 +109,8 @@ class WorkerRegistryCacheTest {
   }
 
   @Test
-  void redisFailureOnReadShouldFallThroughToLoader() {
+  @DisplayName("缓存读取抛出超时时降级调用加载器,并返回本次加载结果")
+  void shouldFallThroughToLoader_whenReadFails() {
     props.setEnabled(true);
     when(redis.getStringCache(anyString())).thenThrow(new QueryTimeoutException("redis down"));
     AtomicInteger calls = new AtomicInteger();
@@ -120,7 +126,8 @@ class WorkerRegistryCacheTest {
   }
 
   @Test
-  void redisFailureOnWriteShouldStillReturnFreshResults() {
+  @DisplayName("缓存写入失败时仍返回本次加载的新鲜结果,不向调用方抛出异常")
+  void shouldReturnFreshResults_whenWriteFails() {
     props.setEnabled(true);
     when(redis.getStringCache(anyString())).thenReturn(null);
     doThrow(new QueryTimeoutException("redis down"))
@@ -140,7 +147,8 @@ class WorkerRegistryCacheTest {
   }
 
   @Test
-  void corruptCacheJsonShouldFallThroughToLoader() {
+  @DisplayName("缓存内容无法解析时降级调用加载器,避免脏数据导致查询失败")
+  void shouldFallThroughToLoader_whenCachedPayloadCorrupt() {
     props.setEnabled(true);
     when(redis.getStringCache(anyString())).thenReturn("not-a-json");
     AtomicInteger calls = new AtomicInteger();
@@ -156,7 +164,8 @@ class WorkerRegistryCacheTest {
   }
 
   @Test
-  void cacheMissWithEmptyLoaderShouldDeleteKeyWithoutSet() {
+  @DisplayName("加载器返回空集合时不回填缓存,并清除该缓存键")
+  void shouldDeleteKeyWithoutStoring_whenLoaderReturnsEmpty() {
     props.setEnabled(true);
     when(redis.getStringCache(anyString())).thenReturn(null);
     AtomicInteger calls = new AtomicInteger();
@@ -171,7 +180,8 @@ class WorkerRegistryCacheTest {
   }
 
   @Test
-  void cachedEmptyJsonArrayShouldIgnoreAndReload() {
+  @DisplayName("缓存中为空数组时视为未命中,重新加载并按过期时长写回缓存")
+  void shouldIgnoreAndReload_whenCachedArrayEmpty() {
     props.setEnabled(true);
     when(redis.getStringCache(anyString())).thenReturn("[]");
     AtomicInteger calls = new AtomicInteger();

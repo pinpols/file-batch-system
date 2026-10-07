@@ -99,9 +99,9 @@ public class DeliverDispatchStep implements DispatchStageStep {
       attrs.put(PipelineRuntimeKeys.DRY_RUN_SKIPPED, "DISPATCH_EXTERNAL_DELIVERY");
       return DispatchStageResult.success(stage());
     }
-    Map<String, Object> latestRecord = fileDispatchRepository.loadLatestDispatchRecord(
+    boolean dispatchRecordExists = fileDispatchRepository.existsLatestDispatchRecord(
         context.getTenantId(), fileId, dispatchPayload.channelCode());
-    if (latestRecord.isEmpty()) {
+    if (!dispatchRecordExists) {
       FileDispatchRepository.InsertDispatchParam insertParam =
           new FileDispatchRepository.InsertDispatchParam(
               context.getTenantId(),

@@ -30,12 +30,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
+@DisplayName("任务执行包装器: 租约登记, 执行上下文装配, 超时取消与结果上报")
 class DefaultTaskExecutionWrapperTest {
 
   private StepExecutionAdapter stepExecutionAdapter;
@@ -87,6 +89,7 @@ class DefaultTaskExecutionWrapperTest {
   }
 
   @Test
+  @DisplayName("领取请求直接委托给任务执行客户端并返回任务配置")
   void shouldDelegateClaimToTaskExecutionClient() {
     EffectiveTaskConfig sample = new EffectiveTaskConfig(
         "t1",
@@ -130,6 +133,7 @@ class DefaultTaskExecutionWrapperTest {
   }
 
   @Test
+  @DisplayName("领取被拒绝时返回空结果")
   void shouldReturnEmptyWhenClaimDenied() {
     when(taskExecutionClient.claim("t1", 42L, "w1")).thenReturn(Optional.empty());
 
@@ -137,6 +141,7 @@ class DefaultTaskExecutionWrapperTest {
   }
 
   @Test
+  @DisplayName("执行成功后登记租约, 标记完成中, 结束时移除租约并上报结果")
   void shouldRegisterLeaseExecuteAndRemoveOnSuccess() {
     PulledTask task = sampleTask("1001", "t1", "w1");
     when(stepExecutionAdapter.execute(any(StepExecutionRequest.class)))
@@ -154,6 +159,7 @@ class DefaultTaskExecutionWrapperTest {
   }
 
   @Test
+  @DisplayName("步骤执行失败时上报失败码与错误信息, 并移除租约")
   void shouldReportFailureWhenStepExecutionFails() {
     PulledTask task = sampleTask("1002", "t1", "w1");
     when(stepExecutionAdapter.execute(any(StepExecutionRequest.class)))
@@ -178,6 +184,7 @@ class DefaultTaskExecutionWrapperTest {
    * resultSummary 构造。
    */
   @Test
+  @DisplayName("失败响应缺少错误描述时仍正常上报, 不因空值抛异常")
   void shouldReportFailureWhenResponseMessageNull_withoutNpe() {
     PulledTask task = sampleTask("1014", "t1", "w1");
     when(stepExecutionAdapter.execute(any(StepExecutionRequest.class)))
@@ -191,6 +198,7 @@ class DefaultTaskExecutionWrapperTest {
   }
 
   @Test
+  @DisplayName("完成前租约已丢失时中止上报, 返回租约丢失失败并清理登记")
   void shouldAbortReportWhenLeaseLostBeforeCompletion() {
     PulledTask task = sampleTask("1009", "t1", "w1");
     when(stepExecutionAdapter.execute(any(StepExecutionRequest.class)))
@@ -212,6 +220,7 @@ class DefaultTaskExecutionWrapperTest {
    * 失败上报, listener 始终能继续派下个 task.
    */
   @Test
+  @DisplayName("适配器抛出运行时异常时转换为执行错误上报, 租约正常清理")
   void shouldConvertAdapterExceptionToFailureReport() {
     PulledTask task = sampleTask("1003", "t1", "w1");
     when(stepExecutionAdapter.execute(any(StepExecutionRequest.class)))
@@ -229,6 +238,7 @@ class DefaultTaskExecutionWrapperTest {
   }
 
   @Test
+  @DisplayName("任务字段大多为空时仍能构造执行请求并进入适配器")
   void shouldBuildExecutionContextWithNullSafeDefaults() {
     PulledTask task = new PulledTask();
     task.setTaskId("9001");
@@ -243,6 +253,7 @@ class DefaultTaskExecutionWrapperTest {
   }
 
   @Test
+  @DisplayName("执行请求携带任务上的作业编码")
   void shouldIncludeJobCodeInExecutionRequest() {
     PulledTask task = sampleTask("1004", "t1", "w1");
     task.setJobCode("MY_JOB");
@@ -257,6 +268,7 @@ class DefaultTaskExecutionWrapperTest {
   }
 
   @Test
+  @DisplayName("任务载荷中的运行模式透传到执行上下文")
   void shouldExposeRunModeFromTaskPayload() {
     PulledTask task = sampleTask("1005", "t1", "w1");
     task.setPayload("{\"run_mode\":\"RETRY\"}");
@@ -272,6 +284,7 @@ class DefaultTaskExecutionWrapperTest {
 
   /** ADR-046 文件束:task payload 携带 bundleSourceFileId 时落到 FILE_ID,基类适配器据此复用既有 file_record。 */
   @Test
+  @DisplayName("文件束载荷中的来源文件标识透传为执行上下文中的文件标识")
   void shouldExposeFileIdFromBundleSourceFileId() {
     PulledTask task = sampleTask("1006", "t1", "w1");
     task.setPayload("{\"bundleSourceFileId\":42,\"templateCode\":\"RISK_IMPORT_V2\"}");
@@ -287,6 +300,7 @@ class DefaultTaskExecutionWrapperTest {
 
   /** 普通(非束)导入 payload 无 bundleSourceFileId,执行上下文不得带 FILE_ID,保证存量导入零影响。 */
   @Test
+  @DisplayName("普通导入载荷不含文件束标识时, 执行上下文不带文件标识")
   void shouldNotExposeFileIdForNonBundlePayload() {
     PulledTask task = sampleTask("1007", "t1", "w1");
     task.setPayload("{\"templateCode\":\"PLAIN_IMPORT\"}");
@@ -305,6 +319,7 @@ class DefaultTaskExecutionWrapperTest {
    * bundle 前缀的 {@code bundleSourceFileId}。
    */
   @Test
+  @DisplayName("仅带通用来源文件字段的载荷不被当作文件束绑定, 执行上下文不带文件标识")
   void shouldNotExposeFileIdForPlainSourceFileIdKey() {
     PulledTask task = sampleTask("1008", "t1", "w1");
     task.setPayload("{\"sourceFileId\":99,\"templateCode\":\"PLAIN_IMPORT\"}");
@@ -319,6 +334,7 @@ class DefaultTaskExecutionWrapperTest {
   }
 
   @Test
+  @DisplayName("分区计划版本, 分片序号与总量, 区间边界与预期行数全部透传到执行上下文")
   void shouldExposePartitionPlanContractInExecutionContext() {
     PulledTask task = sampleTask("1013", "t1", "w1");
     task.setPartitionPlanVersion(1);
@@ -348,6 +364,7 @@ class DefaultTaskExecutionWrapperTest {
    * WORKER_EXECUTION_TIMEOUT, 不让 listener 永久阻塞.
    */
   @Test
+  @DisplayName("适配器超时未返回时按限时中断执行并上报超时失败, 同时累加超时计数")
   void shouldTimeoutAndCancelWhenAdapterHangs() throws InterruptedException {
     PulledTask task = sampleTask("1010", "t1", "w1");
     task.setTimeoutSeconds(1); // 1 秒超时
@@ -379,7 +396,8 @@ class DefaultTaskExecutionWrapperTest {
   }
 
   @Test
-  void watchdogDetectsExecutionThatIgnoresCancellation() throws Exception {
+  @DisplayName("任务不响应取消时看门狗检测到线程未退出, 累加线程泄漏计数")
+  void shouldDetectLeakedExecution_whenTaskIgnoresCancellation() throws Exception {
     var scheduler = mock(TaskScheduler.class);
     @SuppressWarnings("unchecked")
     ObjectProvider<MeterRegistry> provider = mock(ObjectProvider.class);
@@ -425,6 +443,7 @@ class DefaultTaskExecutionWrapperTest {
   }
 
   @Test
+  @DisplayName("注册表请求取消并已中断执行时上报取消失败码")
   void shouldReportCancelledWhenRegistryCancellationInterruptsExecution() throws Exception {
     PulledTask task = sampleTask("1013", "t1", "w1");
     task.setTimeoutSeconds(30);
@@ -466,6 +485,7 @@ class DefaultTaskExecutionWrapperTest {
 
   /** P0-1: clamp — task 配 timeout 超过 maxTimeoutSeconds 必须截断, 防呆配置错误把 worker 长期停滞 2 小时以上. */
   @Test
+  @DisplayName("任务配置的超时超过上限时被截断, 任务仍能正常完成")
   void shouldClampTimeoutToMax() {
     PulledTask task = sampleTask("1011", "t1", "w1");
     task.setTimeoutSeconds(99999); // 远超 maxTimeoutSeconds=120
@@ -480,6 +500,7 @@ class DefaultTaskExecutionWrapperTest {
 
   /** P0-1: task 没配 timeout (null/0) 走默认 (defaultTimeoutSeconds=60s 这里). */
   @Test
+  @DisplayName("任务未配置超时时回退到默认超时并正常上报")
   void shouldFallbackToDefaultTimeoutWhenTaskTimeoutIsNull() {
     PulledTask task = sampleTask("1012", "t1", "w1");
     task.setTimeoutSeconds(null);

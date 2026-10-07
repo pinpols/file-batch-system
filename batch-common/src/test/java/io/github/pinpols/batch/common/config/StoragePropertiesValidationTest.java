@@ -4,14 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("存储属性校验:对象存储端点与超时边界、文件系统扫描上限的显式无限制模式,以及内存加密上限的拒绝规则")
 class StoragePropertiesValidationTest {
 
   private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
 
   @Test
-  void rejectsInvalidS3EndpointAndTimeouts() {
+  @DisplayName("对象存储端点为空白、桶名为空、连接与读取超时非正、分片阈值与分片大小非正时逐项给出校验失败")
+  void shouldRejectInvalidEndpointAndTimeoutBounds_whenObjectStorageMisconfigured() {
     S3StorageProperties properties = new S3StorageProperties();
     properties.setEndpoint(" ");
     properties.setBucket("");
@@ -31,7 +34,8 @@ class StoragePropertiesValidationTest {
   }
 
   @Test
-  void allowsZeroFilesystemScanLimitAsExplicitUnlimitedMode() {
+  @DisplayName("文件系统扫描条数上限设为零表示不做限制,校验结果为空")
+  void shouldAllowZeroScanLimit_whenFilesystemUnlimitedModeRequested() {
     FilesystemStorageProperties properties = new FilesystemStorageProperties();
     properties.setMaxListScanEntries(0);
 
@@ -39,7 +43,8 @@ class StoragePropertiesValidationTest {
   }
 
   @Test
-  void rejectsUnboundedInMemoryEncryptionConfiguration() {
+  @DisplayName("内存加密字节上限设为零时给出校验失败提示,禁止无上限占用内存")
+  void shouldRejectZeroInMemoryEncryptionLimit_whenEncryptionMisconfigured() {
     ObjectStoreEncryptionProperties properties = new ObjectStoreEncryptionProperties();
     properties.setMaxInMemoryEncryptBytes(0);
 

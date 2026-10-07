@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -21,6 +22,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+@DisplayName("维护模式过滤器: 全屏拦截、只读放行与管理员旁路")
 class MaintenanceModeFilterTest {
 
   private ConsoleMaintenanceProperties properties;
@@ -60,7 +62,8 @@ class MaintenanceModeFilterTest {
   }
 
   @Test
-  void passThroughWhenMaintenanceDisabled() throws Exception {
+  @DisplayName("维护开关关闭时请求直接放行且响应保持 200")
+  void shouldPassThrough_whenMaintenanceDisabled() throws Exception {
     properties.setEnabled(false);
     filter.doFilterInternal(get("/api/console/jobs"), response, chain);
     assertThat(chainInvoked).isTrue();
@@ -68,7 +71,8 @@ class MaintenanceModeFilterTest {
   }
 
   @Test
-  void block503WhenEnabledForRegularPath() throws Exception {
+  @DisplayName("维护开启时普通路径被拦截, 返回 503 与维护标记并带出自定义提示")
+  void shouldBlockWith503_whenMaintenanceEnabledForRegularPath() throws Exception {
     properties.setEnabled(true);
     properties.setMessage("DB switch in progress");
     refresh();
@@ -81,7 +85,8 @@ class MaintenanceModeFilterTest {
   }
 
   @Test
-  void allowWhitelistedPathsDuringMaintenance() throws Exception {
+  @DisplayName("维护期白名单路径被放行, 过滤链继续执行且响应为 200")
+  void shouldAllowWhitelistedPath_whenMaintenanceEnabled() throws Exception {
     properties.setEnabled(true);
     refresh();
     filter.doFilterInternal(get("/api/console/system/maintenance"), response, chain);
@@ -90,7 +95,8 @@ class MaintenanceModeFilterTest {
   }
 
   @Test
-  void allowActuatorWildcardDuringMaintenance() throws Exception {
+  @DisplayName("维护期健康检查通配路径被放行, 过滤链继续执行")
+  void shouldAllowActuatorWildcard_whenMaintenanceEnabled() throws Exception {
     properties.setEnabled(true);
     refresh();
     filter.doFilterInternal(get("/actuator/health"), response, chain);
@@ -98,7 +104,8 @@ class MaintenanceModeFilterTest {
   }
 
   @Test
-  void adminBypassAllowsWriteEvenInFullBlockMode() throws Exception {
+  @DisplayName("维护全屏拦截时管理员写请求仍被放行, 响应头标记管理员旁路")
+  void shouldAllowAdminWrite_whenMaintenanceFullBlock() throws Exception {
     // 维护期全屏 503,但 ROLE_ADMIN 可旁路继续操作(运维场景);响应头标 admin-bypass,
     // 前端 banner 据此显示"当前为维护期 admin 旁路"提示。
     properties.setEnabled(true);
@@ -117,7 +124,8 @@ class MaintenanceModeFilterTest {
   }
 
   @Test
-  void nonAdminBlockedEvenWithAuthenticationDuringMaintenance() throws Exception {
+  @DisplayName("维护期已认证的普通用户仍被拦截, 返回 503 与维护标记")
+  void shouldBlockNonAdmin_whenMaintenanceEnabledEvenIfAuthenticated() throws Exception {
     // 普通租户用户(非 ADMIN)维护期仍被 503;防止 admin 判定逻辑放宽到任何 authority。
     properties.setEnabled(true);
     refresh();
@@ -133,7 +141,8 @@ class MaintenanceModeFilterTest {
   }
 
   @Test
-  void readOnlyAllowsGetButBlocksWrite() throws Exception {
+  @DisplayName("维护只读模式下查询放行并标记只读, 写请求被拦截返回 503")
+  void shouldAllowGetAndBlockWrite_whenMaintenanceReadOnly() throws Exception {
     properties.setEnabled(true);
     properties.setReadOnly(true);
     refresh();

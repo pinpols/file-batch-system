@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.worker.processes.BatchWorkerProcessApplication;
 import io.github.pinpols.batch.worker.processes.cleanup.ProcessStagingCleanupProperties;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -16,13 +17,15 @@ import org.springframework.test.context.ActiveProfiles;
  */
 @SpringBootTest(classes = BatchWorkerProcessApplication.class)
 @ActiveProfiles("test")
+@DisplayName("处理暂存清理测试配置:测试档位下关闭暂存孤儿清理调度,避免暂存表缺失时刷错误")
 class ProcessStagingCleanupYamlIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
   private ProcessStagingCleanupProperties processStagingCleanupProperties;
 
   @Test
-  void applicationTestYamlDisablesStagingOrphanCleaner() {
+  @DisplayName("测试档位下暂存孤儿清理开关为关闭,避免暂存表缺失时报错")
+  void shouldDisableStagingOrphanCleaner_whenTestProfileActive() {
     assertThat(processStagingCleanupProperties.isEnabled()).isFalse();
   }
 }

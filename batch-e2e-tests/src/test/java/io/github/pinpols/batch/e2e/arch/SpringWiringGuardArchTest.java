@@ -11,6 +11,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Import;
@@ -30,6 +31,7 @@ import org.springframework.context.annotation.Import;
  *
  * <p>规则定义在 {@code batch-common.test-jar} 里的 {@link CodingConventionsArchRules},本类只做 wiring + 触发。
  */
+@DisplayName("Spring 装配守护:校验全部 Spring Boot 应用类的组件扫描包覆盖范围与多构造器注入标注,防启动期装配失败")
 class SpringWiringGuardArchTest {
 
   /** 项目所有生产 + 测试 class(含 e2e app)。 */
@@ -38,14 +40,16 @@ class SpringWiringGuardArchTest {
       .importPackages("io.github.pinpols.batch");
 
   @Test
-  void componentScanCoversSharedSpiAndResiliencePackages() {
+  @DisplayName("所有 Spring Boot 应用类的组件扫描范围必须覆盖共享任务接口包与容错包,否则启动期找不到 bean")
+  void shouldCoverSharedSpiAndResiliencePackages_whenScanningSpringBootApps() {
     CodingConventionsArchRules.componentScanCoversRule(
             "io.github.pinpols.batch.common.spi.task", "io.github.pinpols.batch.common.resilience")
         .check(ALL_CLASSES);
   }
 
   @Test
-  void multipleCtorsRequireAutowired() {
+  @DisplayName("Spring 组件类存在多个公开构造器时必须显式标注注入入口,防构造器回退导致启动失败")
+  void shouldRequireExplicitInjection_whenMultiplePublicConstructors() {
     CodingConventionsArchRules.multipleCtorsRequireAutowiredRule().check(ALL_CLASSES);
   }
 
@@ -58,7 +62,8 @@ class SpringWiringGuardArchTest {
    * E2eConsoleImportApplication 的 basePackages 覆盖(mapper/web 由 MapperScan/自身包覆盖,同样计入校验)。
    */
   @Test
-  void e2eConsoleAppScanCoversAllConsoleBeanPackages() {
+  @DisplayName("控制台各子包中含组件注解的包必须被端到端控制台应用的组件扫描覆盖,否则端到端上下文启动期找不到 bean")
+  void shouldCoverAllConsoleComponentPackages_whenE2eConsoleAppScans() {
     ComponentScan scan = E2eConsoleImportApplication.class.getAnnotation(ComponentScan.class);
     List<String> scanned = List.of(scan.basePackages());
 
@@ -83,7 +88,8 @@ class SpringWiringGuardArchTest {
   }
 
   @Test
-  void e2eConsoleAppImportsSharedSecretPayloadProtector() {
+  @DisplayName("端到端控制台应用必须显式引入共享的密钥载荷保护组件,因其组件扫描未覆盖公共模块服务")
+  void shouldImportSharedSecretPayloadProtector_whenE2eConsoleAppDeclaresImports() {
     Import imports = E2eConsoleImportApplication.class.getAnnotation(Import.class);
 
     Assertions.assertNotNull(imports, "E2eConsoleImportApplication must declare @Import");

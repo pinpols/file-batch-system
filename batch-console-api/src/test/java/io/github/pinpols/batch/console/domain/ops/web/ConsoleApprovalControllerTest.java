@@ -19,11 +19,13 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+@DisplayName("审批接口:缺少幂等键与请求体非法时拒绝, 成功时透传操作人与原因并返回业务结果")
 class ConsoleApprovalControllerTest {
 
   private final ConsoleApprovalApplicationService approvalApplicationService =
@@ -58,6 +60,7 @@ class ConsoleApprovalControllerTest {
   }
 
   @Test
+  @DisplayName("幂等缺失:未携带幂等键时返回参数错误, 且不调用审批服务")
   void shouldReturn400WhenIdempotencyHeaderMissing() throws Exception {
     mockMvc
         .perform(post("/api/console/approvals/appr-001/approve")
@@ -72,6 +75,7 @@ class ConsoleApprovalControllerTest {
   }
 
   @Test
+  @DisplayName("审批成功:通过后返回成功响应, 并以租户与审批人参数调用服务")
   void shouldApproveAndReturnCommonResponseOnSuccess() throws Exception {
     when(approvalApplicationService.approve(anyString(), anyString(), anyString(), anyString()))
         .thenReturn("OK");
@@ -91,6 +95,7 @@ class ConsoleApprovalControllerTest {
   }
 
   @Test
+  @DisplayName("请求体非法:租户与操作人为空时返回校验错误, 不进入业务处理")
   void shouldReturn400WhenRequestBodyInvalid() throws Exception {
     mockMvc
         .perform(post("/api/console/approvals/appr-001/reject")

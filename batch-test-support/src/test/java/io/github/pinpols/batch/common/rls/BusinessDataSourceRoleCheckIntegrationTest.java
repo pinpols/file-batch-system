@@ -48,7 +48,7 @@ class BusinessDataSourceRoleCheckIntegrationTest {
 
   @Test
   @DisplayName("SUPERUSER/BYPASSRLS 账号使健康检查 DOWN 且阻止启动")
-  void unsafeRoleFailsHealthAndStartup() {
+  void shouldFailHealthAndStartup_whenRoleUnsafe() {
     assertThat(
             new BusinessDataSourceRoleHealthIndicator(adminDataSource).health().getStatus())
         .isEqualTo(Status.DOWN);
@@ -61,7 +61,7 @@ class BusinessDataSourceRoleCheckIntegrationTest {
 
   @Test
   @DisplayName("NOSUPERUSER/NOBYPASSRLS writer 账号通过健康检查与启动守门")
-  void writerRolePassesHealthAndStartup() {
+  void shouldPassHealthAndStartup_whenWriterRoleConstrained() {
     assertThat(
             new BusinessDataSourceRoleHealthIndicator(writerDataSource).health().getStatus())
         .isEqualTo(Status.UP);

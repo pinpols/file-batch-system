@@ -19,9 +19,11 @@ import java.sql.PreparedStatement;
 import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+@DisplayName("文件导入处理器:按表头解析分隔文件并分批绑定入库,覆盖成功、列数不符与参数缺失")
 class FileImportHandlerTest {
 
   @TempDir
@@ -33,6 +35,7 @@ class FileImportHandlerTest {
   }
 
   @Test
+  @DisplayName("跳过表头导入两行:每行各绑定一次后统一提交,成功计数与总数均为 2")
   void shouldImportRowsSkippingHeaderAndCommit() throws Exception {
     Path csv = tempDir.resolve("in.csv");
     Files.writeString(csv, "a,b\n1,x\n2,\"y,z\"\n", StandardCharsets.UTF_8);
@@ -58,6 +61,7 @@ class FileImportHandlerTest {
   }
 
   @Test
+  @DisplayName("第二行列数与表头不一致 → 整体失败,并提示出错所在行")
   void shouldFailWhenColumnCountMismatch() throws Exception {
     Path csv = tempDir.resolve("bad.csv");
     Files.writeString(csv, "a,b\n1\n", StandardCharsets.UTF_8);
@@ -78,6 +82,7 @@ class FileImportHandlerTest {
   }
 
   @Test
+  @DisplayName("缺少文件路径参数 → 直接失败,并提示缺失的参数名")
   void shouldFailWhenFilePathMissing() {
     DataSource ds = mock(DataSource.class);
     var handler =

@@ -23,10 +23,12 @@ import java.time.Month;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+@DisplayName("试运行计划服务: 定义校验, 计划生成与执行探针拦截口径")
 class DefaultDryRunPlanServiceTest {
 
   private OrchestratorConfigCacheService configCache;
@@ -58,7 +60,8 @@ class DefaultDryRunPlanServiceTest {
   }
 
   @Test
-  void l1ReportsErrorWhenJobDefinitionMissing() {
+  @DisplayName("作业定义与流程定义都不存在时给出错误提示, 计划判定失败")
+  void shouldReportError_whenJobDefinitionMissing() {
     when(configCache.findEnabledJobDefinition("t1", "JOB_A")).thenReturn(null);
     when(configCache.findEnabledWorkflowDefinition("t1", "JOB_A")).thenReturn(null);
 
@@ -75,7 +78,8 @@ class DefaultDryRunPlanServiceTest {
   }
 
   @Test
-  void l1PassesWhenCronExpressionValid() {
+  @DisplayName("调度表达式合法时计划通过并给出表达式正常提示")
+  void shouldPass_whenCronExpressionValid() {
     when(configCache.findEnabledJobDefinition("t1", "JOB_A"))
         .thenReturn(JobDefinitionEntity.builder()
             .id(1L)
@@ -97,7 +101,8 @@ class DefaultDryRunPlanServiceTest {
   }
 
   @Test
-  void l1ReportsErrorWhenCronExpressionInvalid() {
+  @DisplayName("调度表达式非法时给出错误提示, 计划判定失败")
+  void shouldReportError_whenCronExpressionInvalid() {
     when(configCache.findEnabledJobDefinition("t1", "JOB_A"))
         .thenReturn(JobDefinitionEntity.builder()
             .id(1L)
@@ -121,7 +126,8 @@ class DefaultDryRunPlanServiceTest {
   }
 
   @Test
-  void l2ErrorsWhenBizDateMissing() {
+  @DisplayName("缺少营业日时给出参数缺失提示, 计划判定失败")
+  void shouldReportError_whenBizDateMissing() {
     DryRunPlanResult result = service.plan(DryRunPlanRequest.builder()
         .tenantId("t1")
         .jobCode("JOB_A")
@@ -133,7 +139,8 @@ class DefaultDryRunPlanServiceTest {
   }
 
   @Test
-  void l2EmitsScheduleSummary() {
+  @DisplayName("生成调度计划时给出分区数量等汇总信息")
+  void shouldEmitScheduleSummary_whenPlanBuilt() {
     when(configCache.findEnabledJobDefinition("t1", "JOB_A"))
         .thenReturn(JobDefinitionEntity.builder()
             .id(1L)
@@ -168,7 +175,8 @@ class DefaultDryRunPlanServiceTest {
   }
 
   @Test
-  void l3InheritsL2AndAddsExecutionStub() {
+  @DisplayName("执行级试运行继承计划能力并给出执行侧汇总提示")
+  void shouldInheritPlanAndEmitExecutionSummary_whenLevelThree() {
     when(configCache.findEnabledJobDefinition("t1", "JOB_A"))
         .thenReturn(JobDefinitionEntity.builder().id(1L).scheduleType("MANUAL").build());
     SchedulePlan plan = new SchedulePlan();
@@ -195,7 +203,8 @@ class DefaultDryRunPlanServiceTest {
   }
 
   @Test
-  void l1RequiresParamsWhenSchemaSaysSo() {
+  @DisplayName("参数模板声明必填但未提供时给出参数缺失提示")
+  void shouldRequireParams_whenSchemaDeclaresRequired() {
     when(configCache.findEnabledJobDefinition("t1", "JOB_A"))
         .thenReturn(JobDefinitionEntity.builder()
             .id(1L)
@@ -231,7 +240,8 @@ class DefaultDryRunPlanServiceTest {
   }
 
   @Test
-  void l3RejectsStackedQuerySqlProbeAndDoesNotExecuteSecondStatement() {
+  @DisplayName("探针语句包含多条语句时拒绝执行, 第二条语句不会下发数据库")
+  void shouldRejectMultiStatement_whenProbingSql() {
     DryRunPlanResult result = probeExecutionSql("SELECT 1; DROP TABLE job_definition");
 
     assertThat(result.findings())
@@ -243,7 +253,8 @@ class DefaultDryRunPlanServiceTest {
   }
 
   @Test
-  void l3RejectsMultipleSelectStatements() {
+  @DisplayName("探针语句包含多条查询时同样被拒绝且不下发执行")
+  void shouldRejectMultipleSelects_whenProbingSql() {
     DryRunPlanResult result = probeExecutionSql("SELECT 1; SELECT 2");
 
     assertThat(result.findings())
@@ -270,7 +281,8 @@ class DefaultDryRunPlanServiceTest {
   }
 
   @Test
-  void l3RejectsEndpointProbeToCloudMetadataIp() {
+  @DisplayName("探针地址指向云元数据地址时判定为拦截, 不做外呼")
+  void shouldBlockProbe_whenEndpointIsCloudMetadataAddress() {
     // 169.254.169.254 是 IP literal(无 DNS),出口守卫在 send 前判定 blocked → 绝不外呼。
     DryRunPlanResult result = probeExecutionEndpoint("http://169.254.169.254/latest/meta-data/");
 
@@ -281,7 +293,8 @@ class DefaultDryRunPlanServiceTest {
   }
 
   @Test
-  void l3RejectsEndpointProbeToPrivateNetwork() {
+  @DisplayName("探针地址指向私网地址时判定为拦截, 不做外呼")
+  void shouldBlockProbe_whenEndpointIsPrivateAddress() {
     DryRunPlanResult result = probeExecutionEndpoint("http://10.1.2.3:8080/internal");
 
     assertThat(result.findings())
@@ -291,7 +304,8 @@ class DefaultDryRunPlanServiceTest {
   }
 
   @Test
-  void l3ContinuesProbingEndpointsAfterARejectedTarget() {
+  @DisplayName("单个地址被拦截后继续探测其余地址并如实汇总")
+  void shouldContinueProbing_whenOneEndpointBlocked() {
     when(configCache.findEnabledJobDefinition("t1", "JOB_A"))
         .thenReturn(JobDefinitionEntity.builder().id(1L).scheduleType("MANUAL").build());
     SchedulePlan plan = new SchedulePlan();
@@ -316,7 +330,8 @@ class DefaultDryRunPlanServiceTest {
   }
 
   @Test
-  void l3RunsExplainForSingleSelectProbe() {
+  @DisplayName("单条查询探针走执行计划校验并给出通过提示")
+  void shouldRunExplain_whenProbingSingleSelect() {
     DryRunPlanResult result = probeExecutionSql("SELECT count(*) FROM batch.job_instance");
 
     assertThat(result.findings())

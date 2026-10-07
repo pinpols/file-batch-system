@@ -2,7 +2,9 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure;
 
 import io.github.pinpols.batch.common.enums.FileDispatchStatus;
 import io.github.pinpols.batch.common.enums.FileReceiptStatus;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.worker.dispatchs.domain.PendingReceiptPollRow;
 import io.github.pinpols.batch.worker.dispatchs.mapper.FileDispatchMapper;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -51,14 +53,12 @@ public class FileDispatchRepository {
     return channelConfig == null ? Map.of() : channelConfig;
   }
 
-  public Map<String, Object> loadLatestDispatchRecord(
-      String tenantId, Long fileId, String channelCode) {
+  public boolean existsLatestDispatchRecord(String tenantId, Long fileId, String channelCode) {
     if (!Texts.hasText(tenantId) || fileId == null || !Texts.hasText(channelCode)) {
-      return Map.of();
+      return false;
     }
-    Map<String, Object> dispatchRecord = fileDispatchMapper.selectLatestDispatchRecord(
-        params(KEY_TENANT_ID, tenantId, KEY_FILE_ID, fileId, KEY_CHANNEL_CODE, channelCode));
-    return dispatchRecord == null ? Map.of() : dispatchRecord;
+    return EmptyChecks.isNotNull(fileDispatchMapper.selectLatestDispatchRecordId(
+        params(KEY_TENANT_ID, tenantId, KEY_FILE_ID, fileId, KEY_CHANNEL_CODE, channelCode)));
   }
 
   public record InsertDispatchParam(
@@ -182,7 +182,7 @@ public class FileDispatchRepository {
         errorMessage));
   }
 
-  public List<Map<String, Object>> listPendingReceiptPolls(int limit, long maxAgeSeconds) {
+  public List<PendingReceiptPollRow> listPendingReceiptPolls(int limit, long maxAgeSeconds) {
     int safe = Math.max(1, Math.min(limit, MAX_DISPATCH_BATCH_SIZE));
     return fileDispatchMapper.listPendingReceiptPolls(params(
         "limit",

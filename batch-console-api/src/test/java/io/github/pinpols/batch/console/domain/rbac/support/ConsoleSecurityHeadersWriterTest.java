@@ -3,13 +3,16 @@ package io.github.pinpols.batch.console.domain.rbac.support;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import jakarta.servlet.http.HttpServletRequest;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
+@DisplayName("安全响应头写入:内容安全策略, 框架防护, 传输安全等头部一次写齐")
 class ConsoleSecurityHeadersWriterTest {
 
   @Test
+  @DisplayName("头部写入:各项安全头按预期取值, 传输安全含长期有效期与子域")
   void shouldWriteSecurityHeaders() {
     ConsoleSecurityHeadersWriter writer = new ConsoleSecurityHeadersWriter();
     HttpServletRequest request = new MockHttpServletRequest("GET", "/api/console/ops/summary");

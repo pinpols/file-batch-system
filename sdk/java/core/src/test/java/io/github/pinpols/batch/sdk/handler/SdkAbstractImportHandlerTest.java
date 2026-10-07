@@ -13,6 +13,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** ADR-036 Import 模板基类单测 — 走基类 execute 整条模板序。 */
+@DisplayName("Import 模板基类:行流分批装载与提交,覆盖分批边界、异常失败与流关闭")
 class SdkAbstractImportHandlerTest {
 
   /** 每次执行用<b>独立</b>上下文(ADR-037:context 默认带内存断点协调器,跑完会落 completed 断点;共享 context 会让后续执行被幂等跳过)。 */

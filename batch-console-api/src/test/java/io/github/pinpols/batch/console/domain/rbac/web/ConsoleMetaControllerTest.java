@@ -18,11 +18,13 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /** P2: ConsoleMetaController 8 元数据端点透传 + 新增的 pipeline-stages / step-impls。 */
+@DisplayName("元数据控制器: 枚举、队列、日历与流水线元数据接口")
 class ConsoleMetaControllerTest {
 
   private final ConsoleMetaQueryService service = mock(ConsoleMetaQueryService.class);
@@ -43,7 +45,8 @@ class ConsoleMetaControllerTest {
   }
 
   @Test
-  void enumsShouldReturnMap() throws Exception {
+  @DisplayName("枚举元数据端点返回按枚举类型分组的映射")
+  void shouldReturnMapForEnums() throws Exception {
     when(service.enums())
         .thenReturn(Map.of("scheduleType", List.of(new ConsoleMetaEnumItem("CRON", "CRON"))));
     mockMvc
@@ -53,7 +56,9 @@ class ConsoleMetaControllerTest {
   }
 
   @Test
-  void queuesAndCalendarsAndWindowsAndWorkerGroupsAndBizTypesShouldPassTenantId() throws Exception {
+  @DisplayName("队列、日历、时间窗、工作组与业务类型五类端点均按请求租户下传查询")
+  void shouldPassTenantIdForQueuesAndCalendarsAndWindowsAndWorkerGroupsAndBizTypes()
+      throws Exception {
     List<ConsoleMetaOption> opt = List.of(new ConsoleMetaOption("c1", "C1"));
     when(service.queues("ta")).thenReturn(opt);
     when(service.calendars("ta")).thenReturn(opt);
@@ -83,7 +88,8 @@ class ConsoleMetaControllerTest {
   }
 
   @Test
-  void pipelineStagesShouldReturnPerTypeMap() throws Exception {
+  @DisplayName("流水线阶段按业务类型分组返回对应阶段列表")
+  void shouldReturnPerTypeMapForPipelineStages() throws Exception {
     when(service.pipelineStages())
         .thenReturn(Map.of("IMPORT", List.of("PARSE", "VALIDATE", "LOAD")));
     mockMvc
@@ -93,7 +99,8 @@ class ConsoleMetaControllerTest {
   }
 
   @Test
-  void stepImplsShouldPassModuleFilter() throws Exception {
+  @DisplayName("步骤实现列表按模块过滤参数下传查询")
+  void shouldPassModuleFilterForStepImpls() throws Exception {
     when(service.stepImpls("IMPORT")).thenReturn(List.of("jdbcMappedImport", "csvParse"));
     mockMvc
         .perform(get("/api/console/meta/step-impls").param("module", "IMPORT"))
@@ -103,7 +110,8 @@ class ConsoleMetaControllerTest {
   }
 
   @Test
-  void stepImplsWithoutModuleShouldReturnAll() throws Exception {
+  @DisplayName("未指定模块时返回全部步骤实现")
+  void shouldReturnAllForStepImplsWithoutModule() throws Exception {
     when(service.stepImpls(null)).thenReturn(List.of("any"));
     mockMvc.perform(get("/api/console/meta/step-impls")).andExpect(status().isOk());
     verify(service).stepImpls(null);

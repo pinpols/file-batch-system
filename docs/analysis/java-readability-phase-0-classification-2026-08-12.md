@@ -59,7 +59,7 @@
 | Orchestrator 操作接口 | `InstanceManagementApplicationService`、`WorkflowRunManagementApplicationService` 及对应 Controller | Controller/应用服务测试、内部 OpenAPI、worker/console 调用方 |
 | Orchestrator 状态接口 | `OrchestratorDrainController`、`OrchestratorGracefulShutdown`、`TriggerGracefulShutdown`、`AtomicRuntimeStatus` | Actuator/Controller 测试、容器健康检查 |
 | 文件治理与 lineage | `DefaultFileGovernanceService`、`LineageEvidenceService`、`FileGovernanceController`、`FileGovernanceScheduler`、`FileGovernanceMetricsCacheService` | 文件治理 IT、对象存储 sim、内部 OpenAPI；延迟指标已由 `FileGovernanceLatencyMetrics` 固定输出 |
-| 固定数据库投影 | `FileGovernanceRepository`、`PlatformFileRuntimeRepository`、`FileDispatchRepository`、`DispatchChannelHealthRepository` | mapper/真 PG IT、import/export/dispatch E2E |
+| 固定数据库投影 | `FileGovernanceRepository`（待做）；`PlatformFileRuntimeRepository`、`FileDispatchRepository`、`DispatchChannelHealthRepository` 已逐条复核——固定行类型化，对外透传/动态合并入参按 §4.2 保留 Map | mapper/真 PG IT、import/export/dispatch E2E |
 | Java SDK 固定 transport | `PlatformHttpClient` 的 register/heartbeat/deactivate/claim/report/renew 响应 | SDK contract、live transport、Java testkit |
 
 ### 4.2 合理保留 Map
@@ -71,6 +71,8 @@
 | Console 兼容/工具 | `ConsoleJobOpsSupport.parsePayload`、`ConfigPackageExcelSchema.toExportRow`、`ConsoleQuerySupport`、`ConfigChangeLogBuilder`、`ConsoleMapSupport`、`ConsoleResponseFieldReader` | JSON/Excel 行、审计详情或兼容转换边界；不得继续向固定 API 扩散 |
 | 运行参数/载荷 | `PartitionDispatchService.effectiveParams`、`WorkflowNodePayloadBuilder`、`MapJsonbTypeHandler` | job params、workflow payload、JSONB 为用户/插件可扩展结构 |
 | worker 动态数据 | `ChannelConfigMerge`、`ExportConfigValueSupport`、两类 export data plugin、`ValidationConfigSupport`、`ValidationRuleSetMerger`、`ParseSupport` | 渠道配置、业务数据行、校验 DSL、解析 hints 字段不固定 |
+| worker 对外透传 | `PlatformFileRecordRepository.loadFileRecord` / `loadFileRecordByStoragePath`、`FileDispatchRepository.loadFile`(×2) / `loadChannel` | 行经 attributes 的 `FILE_RECORD` / `CHANNEL_CONFIG` 原样进**出站**报文（`LocalOutboxDispatchSupport`、`HttpDispatchChannelAdapter` 的 `envelope`/`requestPayload`）；`DispatchExternalChannelIntegrationTest` 钉的是 snake_case 键，改 camelCase record 等于改外部契约。属 §1.2「透传的外部扩展字段」 |
+| worker 动态合并入参 | `DispatchChannelHealthRepository.findEnabledProbeChannels` | 行立刻交给 `ChannelConfigMerge.merge` 做动态渠道配置合并（`DispatchChannelHealthService.probeOne`）；同类的 `findHealth` 已是 typed view（`DispatchChannelHealthSnapshot`） |
 | SDK 业务扩展 | `TaskDispatcher.progressSnapshot`、`SdkRowResult`、`SdkTypedParameters.toOutputMap`、`ProgressReporter`、`SdkTaskStoppedException.breakPosition` | progress/output/checkpoint 是租户 handler 扩展载荷 |
 | Testkit | `FakeBatchPlatform.registrations` | 测试 fixture，可保留 Map 以检查 raw wire |
 
@@ -79,16 +81,17 @@
 | 文件 | 当前判断 | 决策条件 |
 |---|---|---|
 | `DefaultFileGovernanceService.createUploadSession` | 返回字段固定，随文件治理批次类型化 | 先确认 Console 与 worker 两个调用方 wire 是否相同 |
-| `FileGovernanceRepository` | 多数查询列固定，应拆 typed projection；`operationDetail` 可能含动态 evidence | 固定列类型化，动态 evidence 留在具名字段 Map 内 |
+| `FileGovernanceRepository` | 已复核全部 10 处，**无「必须改」违例**：`loadFileRecord` / `loadTemplateSecurityForFile` / `loadLatestDispatchRecord` 的 typed view 已存在于 `FileGovernanceViews`（`FileRecordView` / `TemplateSecurityView` / `DispatchRecordView`）；`selectArrivalDelaySamples` / `selectProcessingDelaySamples` 供 `FileGovernanceMetricsCacheService`，属下方登记的缓存序列化边界；`selectArrivalGovernanceCandidates` 已派生 `ArrivalGroupKey` 类型化 view；`selectArrivalGroupSummaries` 仅 `FileGovernanceIntegrationTest` 消费；`selectArrivalGroupFiles` 的 Map 只活在 `DefaultFileGovernanceService.operateArrivalGroup` 内部，其 Console 端点返回类型化 `FileOperationResponse` | 剩余 4 处（`selectArrivalGovernanceCandidates` / `selectArrivalGroupSummaries` / `selectArrivalGroupFiles`×2）是**无 Views 的内部行映射**，属 §1.2 允许的阶段性行映射，非违例；若要收口，按既有 `FileGovernanceViews` 模式补 view。`operationDetail` 固定列类型化、动态 evidence 留具名字段 Map |
 | `FileGovernanceMetricsCacheService` | 外层 latency 指标固定、缓存载荷当前为 JSON Map | Controller/调度器使用 `FileGovernanceLatencyMetrics`；缓存序列化边界保留 Map 以兼容历史 Redis 数据 |
 | `PlatformFileRuntimeRepository` | 当前兼容 facade 聚合多个 repository | typed view 应在实际子 repository 定义，facade 只保留必要兼容重载 |
-| `FileDispatchRepository` | 文件/渠道/dispatch/receipt poll 都是固定投影 | 按四个 view 分拆，不建立一个万能 DTO |
+| `FileDispatchRepository` | 四个 view 已分拆：receipt poll 与 dispatch 两个 view 已类型化，file/channel 两个 view 保留 Map | 已完成：receipt poll → `PendingReceiptPollRow`（显式列清单 + `<resultMap><constructor>`）、dispatch 存在性 → `selectLatestDispatchRecordId`（不再 `select *` 拉整行）。file/channel 是出站报文透传，类型化会改外部 wire 键名，见 §4.2 |
 
 ## 5. 阶段 1/3 收口记录
 
 - 阶段 1：请求路径参数与 body 的命令拼装已提取为命名转换方法；后续只在触及模块时治理局部表达，不做机械全仓改写。
 - 阶段 3：固定的文件治理延迟指标已从 Controller 返回 Map 改为 record；样本行、JSONB、metadata、插件参数、动态聚合和兼容解析仍保留 Map，并由本清单登记原因。
 - 文件治理 Repository、worker runtime facade 和 dispatch facade 中仍存在的 Map 是内部兼容/动态载荷边界；在没有稳定字段集合或需要保持历史 `SELECT *` 兼容时，不继续强行 DTO 化。
+- 阶段 3 增量（2026-10-07 worker 批次）：删除 2 个仓库内零调用的 public Map 方法及其 mapper/XML 成员（`PlatformPipelineDefinitionRepository.loadChannelConfig`、`PlatformFileAuditRepository.loadFileErrorRecords`）；`FileDispatchRepository` 按 §4.3 完成 receipt poll 与 dispatch 两个 view。行映射迁 record 统一用显式 `<resultMap><constructor>`（口径见 `docs/coding-conventions.md` §1.2）；**未**启用 `argNameBasedConstructorAutoMapping` 全局开关——该开关只作用于无默认构造器的 resultType（显式 `<constructor>` 映射优先级更高），开它是为同一问题引入第二套机制。`FileGovernanceRepository` 的 10 处固定投影仍待做。
 
 ## 6. 大类裁定
 

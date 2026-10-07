@@ -13,18 +13,21 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
  * wire 红线守护:类型化 response record 的 JSON key 必须与历史 Map 响应逐字一致。 覆盖三个易错形态:snake_case 键(batch
  * window)、条件字段 NON_NULL 省略、嵌套 list。
  */
+@DisplayName("任务域响应记录序列化契约: 键名形态, 空列省略与嵌套列表保真")
 class JobMapResponseJacksonTest {
 
   private final ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
 
   @Test
-  void batchWindowShouldSerializeSnakeCaseKeysMatchingMapperRow() throws Exception {
+  @DisplayName("批量窗口行序列化后保持历史蛇形键名, 未提供的列不输出显式空值")
+  void shouldSerializeSnakeCaseKeys_whenBatchWindowRowMapped() throws Exception {
     // mapper `select *` 返回 snake_case 键 + TIME/timestamptz 列。
     Map<String, Object> row = Map.of(
         "id",
@@ -69,7 +72,8 @@ class JobMapResponseJacksonTest {
   }
 
   @Test
-  void instanceActionShouldOmitCancelRequestedTasksWhenNull() throws Exception {
+  @DisplayName("取消请求任务数为空时省略该键, 有值时按原值输出")
+  void shouldOmitCancelRequestedTasks_whenCountNull() throws Exception {
     // terminate/pause/resume 无 cancelRequestedTasks —— 历史 Map 不含该键,NON_NULL 必须省略。
     String terminate = mapper.writeValueAsString(ConsoleInstanceActionResponse.from(
         Map.of("id", 9L, "instanceNo", "INS-9", "status", "TERMINATED")));
@@ -84,7 +88,8 @@ class JobMapResponseJacksonTest {
   }
 
   @Test
-  void retryFailedPartitionsShouldPreserveNestedPartitionIds() throws Exception {
+  @DisplayName("重试失败分区的结果保留嵌套分区编号列表及其顺序")
+  void shouldPreserveNestedPartitionIds_whenRetryFailedPartitions() throws Exception {
     Map<String, Object> row = Map.of(
         "id",
         12L,
@@ -108,7 +113,8 @@ class JobMapResponseJacksonTest {
   }
 
   @Test
-  void calendarShouldNormalizeTimestampAndCamelKeys() throws Exception {
+  @DisplayName("日历行映射后时间戳统一为瞬时点, 且键集只含已提供的列")
+  void shouldNormalizeTimestamp_whenCalendarRowMapped() throws Exception {
     Instant updatedAt = Instant.parse("2026-07-11T04:00:00Z");
     ConsoleCalendarResponse response = ConsoleCalendarResponse.from(Map.of(
         "id",
@@ -132,7 +138,8 @@ class JobMapResponseJacksonTest {
   }
 
   @Test
-  void holidayShouldOmitNullColumnsLikeMapperRow() throws Exception {
+  @DisplayName("节假日行只序列化已提供的列, 空列不产生显式空键")
+  void shouldOmitNullColumns_whenHolidayRowMapped() throws Exception {
     ConsoleHolidayResponse response = ConsoleHolidayResponse.from(Map.of(
         "id", 5L, "calendarId", 3L, "bizDate", Date.valueOf("2026-05-20"), "dayType", "HOLIDAY"));
 

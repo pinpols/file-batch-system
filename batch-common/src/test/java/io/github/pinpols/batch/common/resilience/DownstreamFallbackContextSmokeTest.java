@@ -7,6 +7,7 @@ import io.github.resilience4j.springboot.circuitbreaker.autoconfigure.CircuitBre
 import io.github.resilience4j.springboot.circuitbreaker.autoconfigure.CircuitBreakerMetricsAutoConfiguration;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +29,7 @@ import org.springframework.test.context.TestPropertySource;
 @SpringBootTest(classes = DownstreamFallbackContextSmokeTest.SmokeApp.class)
 @ActiveProfiles("test")
 @TestPropertySource(properties = "spring.main.web-application-type=none")
+@DisplayName("下游熔断降级组件的窄上下文冒烟:自动装配可装配,降级调用可用且指标绑定生效")
 class DownstreamFallbackContextSmokeTest {
 
   @Autowired
@@ -40,7 +42,8 @@ class DownstreamFallbackContextSmokeTest {
   private MeterRegistry meterRegistry;
 
   @Test
-  void contextLoadsWithResilience4jAutoconfigAndFallbackWorks() {
+  @DisplayName("窄上下文装配成功:共享熔断注册表可注入,主调用返回成功值")
+  void shouldLoadContextWithAutoconfigAndRunFallback() {
     assertThat(circuitBreakerRegistry)
         .as("R4J autoconfig must provide CircuitBreakerRegistry")
         .isNotNull();
@@ -55,7 +58,8 @@ class DownstreamFallbackContextSmokeTest {
    * {@code resilience4j.circuitbreaker.state} 真被埋进 registry,守护绑定链本身。
    */
   @Test
-  void circuitBreakerStateMeterIsActuallyBound() {
+  @DisplayName("首次调用创建熔断器后,状态指标真实注册进指标注册表,守护绑定链")
+  void shouldBindCircuitBreakerStateMeter_whenBreakerCreated() {
     // 触发一次调用确保 "smoke" 熔断器被创建并被 metrics binder 注册。
     downstreamFallback.callOrFallback("smoke", "op", () -> "ok", ex -> "fb");
 

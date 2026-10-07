@@ -29,9 +29,11 @@ import java.time.Month;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+@DisplayName("批量日操作服务:验证冻结,跳过,手工释放的状态流转与操作审计记录")
 class BatchDayOperationServiceTest {
 
   private BatchDayInstanceMapper batchDayInstanceMapper;
@@ -59,6 +61,7 @@ class BatchDayOperationServiceTest {
   }
 
   @Test
+  @DisplayName("冻结未结账的批量日时保持打开状态并置为冻结,同时记录操作日志与审计明细")
   void shouldFreezeOpenBatchDay() {
     BatchDayInstanceEntity current = batchDay("OPEN");
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
@@ -94,6 +97,7 @@ class BatchDayOperationServiceTest {
   }
 
   @Test
+  @DisplayName("跳过未进入终态的批量日时状态置为已跳过并补齐结账时间")
   void shouldSkipNonTerminalBatchDay() {
     BatchDayInstanceEntity current = batchDay("CUTOFF");
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
@@ -118,6 +122,7 @@ class BatchDayOperationServiceTest {
   }
 
   @Test
+  @DisplayName("对已结账的批量日执行冻结时抛出业务异常且不更新状态")
   void shouldRejectFreezeOnTerminalBatchDay() {
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
             "t1", "CAL", LocalDate.of(2026, Month.MAY, 4)))
@@ -137,6 +142,7 @@ class BatchDayOperationServiceTest {
   }
 
   @Test
+  @DisplayName("手工释放失败的批量日时补发下一业务日的等待作业并标记为已释放")
   void shouldReleaseWaitingLaunchesForNextBizDate() {
     BatchDayInstanceEntity current = batchDay("FAILED");
     when(batchDayInstanceMapper.selectByTenantCalendarBizDate(

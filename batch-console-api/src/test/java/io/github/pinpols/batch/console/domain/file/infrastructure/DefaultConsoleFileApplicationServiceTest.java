@@ -30,12 +30,14 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.multipart.MultipartFile;
 
+@DisplayName("文件应用服务: 审批目标绑定、越权拦截与内容上传落库")
 class DefaultConsoleFileApplicationServiceTest {
 
   private final OrchestratorInternalRestClient orchestratorClient =
@@ -64,6 +66,7 @@ class DefaultConsoleFileApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("带审批单预签名下载时审批目标必须绑定本次文件")
   void shouldRequireApprovalBoundToDownloadedFile_whenPresignDownloadWithApprovalId() {
     // 回归守护本次安全修复:presignDownload 带 approvalId 时,审批二次校验必须绑定
     // targetType=FILE + targetId=本次 fileId(而非 none()),否则同租任一 APPROVED 单可越权解锁。
@@ -86,6 +89,7 @@ class DefaultConsoleFileApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("审批单为空时提交的审批目标同样绑定本次文件与租户")
   void shouldNotSkipApprovalBinding_whenApprovalIdBlank() {
     // approvalId 空白走"发起审批"分支,提交目标同样是 FILE/fileId(与校验侧对称)。
     when(approvalClient.submitApproval(any())).thenReturn("APR-NEW");
@@ -108,6 +112,7 @@ class DefaultConsoleFileApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("请求体租户与会话租户不一致时拒绝提交审批")
   void shouldRejectCrossTenantApprovalSubmission_whenBodyTenantMismatchesSession() {
     // P0 (adv-review 2026-07-13):租户 A 会话带 body tenantId=victimB 且无 approvalId → 走
     // submitApproval;必须经 tenantGuard.resolveTenant 拦截(不匹配抛 FORBIDDEN),
@@ -141,6 +146,7 @@ class DefaultConsoleFileApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("上传内容按文件记录写入对象存储对应桶与路径")
   void shouldWriteUploadedContentToObjectStore() {
     when(fileRecordMapper.selectFileRecordById("t1", 1L))
         .thenReturn(new FileRecordStorageView(
@@ -161,6 +167,7 @@ class DefaultConsoleFileApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("内容写入对象存储后关闭上传输入流")
   void shouldCloseUploadInputStreamAfterStorePut() {
     when(fileRecordMapper.selectFileRecordById("t1", 1L))
         .thenReturn(new FileRecordStorageView(
@@ -175,6 +182,7 @@ class DefaultConsoleFileApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("本地路径文件记录不允许上传内容")
   void shouldRejectLocalPathFileRecordForUploadContent() {
     when(fileRecordMapper.selectFileRecordById("t1", 1L))
         .thenReturn(

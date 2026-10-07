@@ -23,6 +23,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -30,6 +31,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("分发步骤执行适配器:流水线描述、上下文构建、阶段委派、结果访问与成功响应产出字段")
 class DispatchStepExecutionAdapterTest {
 
   @Mock
@@ -59,13 +61,15 @@ class DispatchStepExecutionAdapterTest {
   }
 
   @Test
-  void descriptorsMatchDispatchPipeline() {
+  @DisplayName("适配器描述分发流水线:类型为分发,起始阶段为准备阶段")
+  void shouldExposeDispatchPipelineDescriptor_whenQueried() {
     assertThat(adapter.pipelineType()).isEqualTo(DispatchWorkerType.DISPATCH);
     assertThat(adapter.initialStage()).isEqualTo(DispatchStage.PREPARE.name());
   }
 
   @Test
-  void buildContextParsesPayloadAndPrefersTaskId() throws Exception {
+  @DisplayName("构建上下文时优先取任务号,并解析出业务日期与载荷中的文件号与渠道号")
+  void shouldPreferTaskIdAndParsePayload_whenBuildingContext() throws Exception {
     Map<String, Object> attributes = new LinkedHashMap<>();
     attributes.put(PipelineRuntimeKeys.TASK_ID, 88L);
     attributes.put("dispatchId", "legacy-id");
@@ -84,7 +88,8 @@ class DispatchStepExecutionAdapterTest {
   }
 
   @Test
-  void executeStagesDelegatesToExecutor() {
+  @DisplayName("执行阶段时原样委派给阶段执行器,并返回同一份阶段结果")
+  void shouldDelegateStageExecution_whenExecutingStages() {
     DispatchJobContext context = new DispatchJobContext();
     List<DispatchStageResult> expected =
         List.of(DispatchStageResult.success(DispatchStage.PREPARE));
@@ -95,7 +100,8 @@ class DispatchStepExecutionAdapterTest {
   }
 
   @Test
-  void resultAccessorsPreserveStageResultContract() {
+  @DisplayName("结果访问器读出阶段名、失败码与失败原因,空结果同样判定为不成功")
+  void shouldExposeStageResultFields_whenReadingResultAccessors() {
     DispatchStageResult result =
         DispatchStageResult.failure(DispatchStage.DISPATCH, "DELIVERY_FAILED", "delivery failed");
 
@@ -107,8 +113,9 @@ class DispatchStepExecutionAdapterTest {
   }
 
   @Test
+  @DisplayName("构建成功响应时把文件号、回执码、清单引用与渠道号写入节点输出")
   @SuppressWarnings("unchecked")
-  void successResponsePublishesReceiptManifestAndChannelForWorkflow() {
+  void shouldPublishReceiptManifestAndChannel_whenBuildingSuccessResponse() {
     DispatchJobContext context = new DispatchJobContext();
     Map<String, Object> attributes = new LinkedHashMap<>();
     attributes.put(PipelineRuntimeKeys.FILE_ID, 42L);

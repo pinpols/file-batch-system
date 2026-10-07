@@ -35,11 +35,13 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+@DisplayName("控制台查询接口:分页返回、详情返回与参数校验")
 class ConsoleQueryControllerTest {
 
   private final ConsoleQueryApplicationService queryApplicationService =
@@ -70,6 +72,7 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  @DisplayName("流水线进度查询:已下线的 Worker 编码参数被拒绝")
   void shouldRejectRemovedWorkerCodeProgressQuery() throws Exception {
     mockMvc
         .perform(get("/api/console/queries/pipeline-progress")
@@ -79,6 +82,7 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  @DisplayName("审批查询:分页返回审批单号与审批状态")
   void shouldReturnApprovalDtos() throws Exception {
     when(queryApplicationService.approvals(any()))
         .thenReturn(new PageResponse<>(
@@ -115,6 +119,7 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  @DisplayName("告警查询:分页返回告警等级与标题")
   void shouldReturnAlertDtos() throws Exception {
     when(queryApplicationService.alertEvents(any()))
         .thenReturn(new PageResponse<>(
@@ -147,6 +152,7 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  @DisplayName("执行日志查询:分页返回操作类型等审计字段")
   void shouldReturnExecutionLogDtos() throws Exception {
     when(queryApplicationService.executionLogs(any()))
         .thenReturn(new PageResponse<>(
@@ -174,6 +180,7 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  @DisplayName("文件链路查询:返回空分页且总数为 0")
   void shouldReturnFileChainsPage() throws Exception {
     when(queryApplicationService.fileChains(any())).thenReturn(emptyPage());
 
@@ -184,6 +191,7 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  @DisplayName("文件流水线查询:关键字参数透传后返回分页")
   void shouldReturnFilePipelinesPage() throws Exception {
     when(queryApplicationService.filePipelines(
             argThat(request -> "failed".equals(request.getKeyword()))))
@@ -198,6 +206,7 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  @DisplayName("历史流水线定义查询:返回分页且总数为 0")
   void shouldReturnLegacyPipelineDefinitionsPage() throws Exception {
     when(queryApplicationService.filePipelines(any())).thenReturn(emptyPage());
 
@@ -208,6 +217,7 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  @DisplayName("文件流水线步骤查询:关键字参数透传后返回分页")
   void shouldReturnFilePipelineStepsPage() throws Exception {
     when(queryApplicationService.filePipelineSteps(
             argThat(request -> "parse".equals(request.getKeyword()))))
@@ -220,6 +230,7 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  @DisplayName("文件分发记录查询:关键字参数透传后返回分页")
   void shouldReturnFileDispatchesPage() throws Exception {
     when(queryApplicationService.fileDispatchRecords(
             argThat(request -> "sent".equals(request.getKeyword()))))
@@ -234,6 +245,7 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  @DisplayName("文件通道查询:返回分页且总数为 0")
   void shouldReturnFileChannelsPage() throws Exception {
     when(queryApplicationService.fileChannels(any())).thenReturn(emptyPage());
 
@@ -244,6 +256,7 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  @DisplayName("文件到达组查询:返回分页且总数为 0")
   void shouldReturnFileArrivalGroupsPage() throws Exception {
     when(queryApplicationService.fileArrivalGroups(any())).thenReturn(emptyPage());
 
@@ -254,6 +267,7 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  @DisplayName("文件错误记录查询:关键字参数透传后返回分页")
   void shouldReturnFileErrorsPage() throws Exception {
     when(queryApplicationService.fileErrorRecords(
             argThat(request -> "invalid".equals(request.getKeyword()))))
@@ -268,6 +282,7 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  @DisplayName("文件模板查询:返回分页且总数为 0")
   void shouldReturnFileTemplatesPage() throws Exception {
     when(queryApplicationService.fileTemplates(any())).thenReturn(emptyPage());
 
@@ -278,6 +293,7 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  @DisplayName("工作流定义查询:返回分页且总数为 0")
   void shouldReturnWorkflowDefinitionsPage() throws Exception {
     when(queryApplicationService.workflowDefinitions(any())).thenReturn(emptyPage());
 
@@ -288,6 +304,7 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  @DisplayName("工作流节点查询:返回分页且总数为 0")
   void shouldReturnWorkflowNodesPage() throws Exception {
     when(queryApplicationService.workflowNodes(any())).thenReturn(emptyPage());
 
@@ -298,6 +315,7 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  @DisplayName("工作流连线查询:返回分页且总数为 0")
   void shouldReturnWorkflowEdgesPage() throws Exception {
     when(queryApplicationService.workflowEdges(any())).thenReturn(emptyPage());
 
@@ -308,6 +326,7 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  @DisplayName("工作流拓扑查询:返回节点与连线数组")
   void shouldReturnWorkflowTopology() throws Exception {
     when(queryApplicationService.workflowTopology(any()))
         .thenReturn(
@@ -322,6 +341,7 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  @DisplayName("历史流水线定义详情:返回作业编码与运行状态")
   void shouldReturnLegacyPipelineDefinitionsDetail() throws Exception {
     when(queryApplicationService.filePipelineDetail(anyString(), anyLong()))
         .thenReturn(new ConsoleFilePipelineResponse(
@@ -349,6 +369,7 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  @DisplayName("AI 审计查询:返回分页且总数为 0")
   void shouldReturnAiAuditsPage() throws Exception {
     when(queryApplicationService.aiAuditLogs(any())).thenReturn(emptyPage());
 
@@ -359,6 +380,7 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  @DisplayName("发件箱重试查询:分页返回重试记录标识与事件编号")
   void shouldReturnOutboxRetriesPage() throws Exception {
     when(queryApplicationService.outboxRetries(any()))
         .thenReturn(new PageResponse<>(
@@ -387,6 +409,7 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  @DisplayName("发件箱投递查询:返回分页且总数为 0")
   void shouldReturnOutboxDeliveriesPage() throws Exception {
     when(queryApplicationService.outboxDeliveries(any())).thenReturn(emptyPage());
 
@@ -397,6 +420,7 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  @DisplayName("作业实例详情:返回实例编号与实例状态")
   void shouldReturnJobInstanceDetail() throws Exception {
     when(queryApplicationService.jobInstance(anyString(), anyLong()))
         .thenReturn(new ConsoleJobInstanceResponse(
@@ -436,6 +460,7 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  @DisplayName("作业步骤实例详情:返回步骤编码与步骤状态")
   void shouldReturnJobStepInstanceDetail() throws Exception {
     when(queryApplicationService.jobStepInstance(anyString(), anyLong()))
         .thenReturn(new ConsoleJobStepInstanceResponse(
@@ -464,6 +489,7 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  @DisplayName("工作流运行详情:返回运行状态与当前节点")
   void shouldReturnWorkflowRunDetail() throws Exception {
     when(queryApplicationService.workflowRun(anyString(), anyLong()))
         .thenReturn(new ConsoleWorkflowRunResponse(
@@ -488,6 +514,7 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  @DisplayName("工作流节点运行详情:返回节点编码与节点状态")
   void shouldReturnWorkflowNodeRunDetail() throws Exception {
     when(queryApplicationService.workflowNodeRun(anyString(), anyLong()))
         .thenReturn(new ConsoleWorkflowNodeRunResponse(
@@ -512,6 +539,7 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  @DisplayName("批量实例状态查询:按多个实例编号返回实例编号与实例状态")
   void shouldReturnBatchInstanceStatus() throws Exception {
     when(queryApplicationService.batchInstanceStatus(anyString(), any()))
         .thenReturn(List.of(new ConsoleJobInstanceResponse(

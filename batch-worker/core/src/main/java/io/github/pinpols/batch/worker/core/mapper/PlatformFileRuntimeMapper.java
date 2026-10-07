@@ -13,8 +13,6 @@ public interface PlatformFileRuntimeMapper {
 
   Map<String, Object> selectLatestTemplateConfig(Map<String, Object> params);
 
-  Map<String, Object> selectChannelConfig(Map<String, Object> params);
-
   Long selectLatestPipelineDefinitionId(Map<String, Object> params);
 
   List<Map<String, Object>> selectPipelineStepDefinitions(Map<String, Object> params);
@@ -56,8 +54,6 @@ public interface PlatformFileRuntimeMapper {
   int updateFileRecordMetadata(Map<String, Object> params);
 
   int insertFileErrorRecord(Map<String, Object> params);
-
-  List<Map<String, Object>> selectFileErrorRecords(Map<String, Object> params);
 
   int insertFileAuditLog(Map<String, Object> params);
 }

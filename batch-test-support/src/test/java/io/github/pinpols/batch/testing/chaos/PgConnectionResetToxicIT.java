@@ -28,7 +28,7 @@ class PgConnectionResetToxicIT extends AbstractChaosIntegrationTest {
 
   @Test
   @DisplayName("正在使用的连接遭遇 PG RST → 抛 SQLException(应用走重试路径)")
-  void inUseConnectionShouldFailWhenPgGoesDown() throws Exception {
+  void inUseConnection_whenPgGoesDown_shouldThrowSqlException() throws Exception {
     try (HikariDataSource ds = newHikariDataSource()) {
       try (Connection conn = ds.getConnection();
           Statement stmt = conn.createStatement()) {
@@ -45,7 +45,7 @@ class PgConnectionResetToxicIT extends AbstractChaosIntegrationTest {
 
   @Test
   @DisplayName("PG 恢复 → Hikari 池可重新 borrow 连接、可读写,验证池自愈(outbox 写路径不丢)")
-  void hikariPoolShouldSelfHealAfterPgRecovers() throws Exception {
+  void hikariPool_afterPgRecovers_shouldSelfHeal() throws Exception {
     // 不预热 — 池里没有 idle 连接,getConnection 必触发"新建连接"路径,
     // 这样故障期间走 toxiproxy 真实失败,不被 Hikari 的 idle fast-path 绕过。
     try (HikariDataSource ds = newHikariDataSource()) {

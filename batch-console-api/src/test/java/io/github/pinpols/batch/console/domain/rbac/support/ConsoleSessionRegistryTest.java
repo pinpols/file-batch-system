@@ -10,12 +10,14 @@ import io.github.pinpols.batch.console.infrastructure.rbac.RedisConsoleSessionSt
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
 @SuppressWarnings("unchecked")
+@DisplayName("控制台会话注册表:会话版本自增与过期, 当前版本比对, 失效后旧令牌不可用")
 class ConsoleSessionRegistryTest {
 
   private StringRedisTemplate redisTemplate;
@@ -38,6 +40,7 @@ class ConsoleSessionRegistryTest {
   }
 
   @Test
+  @DisplayName("版本自增:返回自增后的版本并按配置设置过期时间")
   void shouldIncrementAndPersistSessionVersion() {
     when(valueOperations.increment("batch:console:auth:session:tenant-a:alice")).thenReturn(3L);
 
@@ -48,6 +51,7 @@ class ConsoleSessionRegistryTest {
   }
 
   @Test
+  @DisplayName("版本比对:与当前版本一致为真, 不一致为假")
   void shouldMatchCurrentSessionVersion() {
     when(valueOperations.get("batch:console:auth:session:tenant-a:alice")).thenReturn("5");
 
@@ -56,6 +60,7 @@ class ConsoleSessionRegistryTest {
   }
 
   @Test
+  @DisplayName("会话失效:删除存储键使既有令牌失效")
   void invalidateSession_deletesRedisKey_makingExistingJwtInvalid() {
     registry.invalidateSession("alice", "tenant-a");
 
@@ -63,6 +68,7 @@ class ConsoleSessionRegistryTest {
   }
 
   @Test
+  @DisplayName("失效查询:删除后任何版本都不再是当前会话")
   void invalidateSession_afterDeletion_isCurrentSessionReturnsFalse() {
     when(valueOperations.get("batch:console:auth:session:tenant-a:alice")).thenReturn(null);
 

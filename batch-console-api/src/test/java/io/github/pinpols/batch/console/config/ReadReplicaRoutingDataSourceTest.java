@@ -17,6 +17,7 @@ import java.util.Map;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockingDetails;
 import org.mockito.Mockito;
@@ -24,6 +25,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /** ReadReplicaRoutingDataSource 单元测试：覆盖路由决策、force-primary 旁路、fail-open 降级、quarantine 闭环。 */
+@DisplayName("只读副本路由数据源: 路由决策,强制主库旁路与失败隔离恢复")
 class ReadReplicaRoutingDataSourceTest {
 
   private DataSource primary;
@@ -67,7 +69,8 @@ class ReadReplicaRoutingDataSourceTest {
   // ── 路由决策 ───────────────────────────────────────────────────────
 
   @Test
-  void readOnlyTransactionRoutesToReplica() throws SQLException {
+  @DisplayName("只读事务下获取连接走副本,主库连接不被调用")
+  void shouldRouteToReplica_whenTransactionIsReadOnly() throws SQLException {
     ReadReplicaRoutingDataSource ds = buildDs(3, 30_000);
     TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
 
@@ -79,7 +82,8 @@ class ReadReplicaRoutingDataSourceTest {
   }
 
   @Test
-  void writeTransactionRoutesToPrimary() throws SQLException {
+  @DisplayName("可写事务下获取连接走主库,副本连接不被调用")
+  void shouldRouteToPrimary_whenTransactionIsWritable() throws SQLException {
     ReadReplicaRoutingDataSource ds = buildDs(3, 30_000);
     TransactionSynchronizationManager.setCurrentTransactionReadOnly(false);
 
@@ -91,7 +95,8 @@ class ReadReplicaRoutingDataSourceTest {
   }
 
   @Test
-  void noTransactionRoutesToPrimary() throws SQLException {
+  @DisplayName("没有活跃事务时,一律使用主库连接")
+  void shouldRouteToPrimary_whenNoTransactionIsActive() throws SQLException {
     ReadReplicaRoutingDataSource ds = buildDs(3, 30_000);
     // no transaction synchronization
 
@@ -103,7 +108,8 @@ class ReadReplicaRoutingDataSourceTest {
   // ── force-primary 旁路 ─────────────────────────────────────────────
 
   @Test
-  void forcePrimaryHintOverridesReadOnly() throws SQLException {
+  @DisplayName("强制走主库提示生效时,即使只读事务也旁路到主库")
+  void shouldRouteToPrimary_whenForcePrimaryHintIsSet() throws SQLException {
     ReadReplicaRoutingDataSource ds = buildDs(3, 30_000);
     TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
     Boolean prev = RoutingHints.enterForcePrimary();
@@ -119,7 +125,8 @@ class ReadReplicaRoutingDataSourceTest {
   // ── fail-open 单次降级 ─────────────────────────────────────────────
 
   @Test
-  void replicaSqlExceptionFailsOverToPrimary() throws SQLException {
+  @DisplayName("副本建连抛出异常时,当次请求降级到主库并累计失败次数")
+  void shouldFailOverToPrimary_whenReplicaConnectThrows() throws SQLException {
     ReadReplicaRoutingDataSource ds = buildDs(3, 30_000);
     TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
     when(replica.getConnection()).thenThrow(new SQLException("connect refused", "08001"));
@@ -138,7 +145,8 @@ class ReadReplicaRoutingDataSourceTest {
   // ── quarantine 进入 ─────────────────────────────────────────────────
 
   @Test
-  void replicaEntersQuarantineAfterThresholdFailures() throws SQLException {
+  @DisplayName("副本连续失败达到阈值后,进入隔离状态")
+  void shouldEnterQuarantine_whenReplicaFailuresReachThreshold() throws SQLException {
     ReadReplicaRoutingDataSource ds = buildDs(3, 30_000);
     TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
     when(replica.getConnection()).thenThrow(new SQLException("down", "08006"));
@@ -153,7 +161,8 @@ class ReadReplicaRoutingDataSourceTest {
   }
 
   @Test
-  void quarantineRoutesAllReadsToPrimaryWithoutTryingReplica() throws SQLException {
+  @DisplayName("隔离期内不再尝试副本,所有读取直接走主库")
+  void shouldSkipReplica_whenQuarantineIsActive() throws SQLException {
     ReadReplicaRoutingDataSource ds = buildDs(2, 30_000);
     TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
     when(replica.getConnection()).thenThrow(new SQLException("down", "08006"));
@@ -175,7 +184,8 @@ class ReadReplicaRoutingDataSourceTest {
   // ── 成功后失败计数重置 ──────────────────────────────────────────────
 
   @Test
-  void successfulReplicaConnectionResetsFailureCount() throws SQLException {
+  @DisplayName("副本建连恢复成功后,连续失败次数归零")
+  void shouldResetFailureCount_whenReplicaConnectionSucceeds() throws SQLException {
     ReadReplicaRoutingDataSource ds = buildDs(3, 30_000);
     TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
 
@@ -193,7 +203,8 @@ class ReadReplicaRoutingDataSourceTest {
   }
 
   @Test
-  void queryConnectionFailureQuarantinesReplicaForFollowingRequests() throws Exception {
+  @DisplayName("副本连接上的查询失败时,后续请求进入隔离并改用主库")
+  void shouldQuarantineReplica_whenQueryOnReplicaConnectionFails() throws Exception {
     ReadReplicaRoutingDataSource ds = buildDs(1, 30_000);
     TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
     Statement statement = mock(Statement.class);
@@ -217,7 +228,8 @@ class ReadReplicaRoutingDataSourceTest {
   // ── quarantine 期满自动恢复 ─────────────────────────────────────────
 
   @Test
-  void quarantineExpiresAfterTimeout() throws Exception {
+  @DisplayName("隔离期满后自动恢复,重新尝试副本并只上报一次恢复计数")
+  void shouldExitQuarantine_whenTimeoutElapses() throws Exception {
     // 注意：构造器对 quarantineMillis 有 Math.max(1_000L, ...) 下限，本测试用 1100ms 才能跨过这个 floor
     ReadReplicaRoutingDataSource ds = buildDs(1, 1100);
     TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
@@ -252,7 +264,8 @@ class ReadReplicaRoutingDataSourceTest {
   }
 
   @Test
-  void transientFailureDoesNotEmitRecoverySignal() throws SQLException {
+  @DisplayName("单次失败未达到隔离阈值时,恢复成功也不上报恢复信号")
+  void shouldNotEmitRecoverySignal_whenFailureNeverReachedQuarantine() throws SQLException {
     // 单次失败未达阈值，不进 quarantine → 后续成功不应发 recovery（避免与"短抖动"混淆）
     ReadReplicaRoutingDataSource ds = buildDs(3, 30_000);
     TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);

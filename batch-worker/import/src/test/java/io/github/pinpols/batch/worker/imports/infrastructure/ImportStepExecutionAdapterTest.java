@@ -20,6 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -27,6 +28,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("导入步骤执行适配器单测:上下文映射,阶段委派与成功响应计数语义")
 class ImportStepExecutionAdapterTest {
 
   @Mock
@@ -55,13 +57,15 @@ class ImportStepExecutionAdapterTest {
   }
 
   @Test
-  void descriptorsMatchImportPipeline() {
+  @DisplayName("适配器的管道类型与起始阶段同导入流程保持一致")
+  void shouldMatchImportPipeline_whenDescribingAdapter() {
     assertThat(adapter.pipelineType()).isEqualTo(ImportWorkerType.IMPORT);
     assertThat(adapter.initialStage()).isEqualTo(ImportStage.RECEIVE.name());
   }
 
   @Test
-  void buildContextMapsCommonAndImportFields() {
+  @DisplayName("构建上下文时映射租户,作业,执行器与业务日期,并复用属性映射")
+  void shouldMapCommonFieldsAndAttributes_whenBuildingContext() {
     Map<String, Object> attributes = new LinkedHashMap<>();
     attributes.put(PipelineRuntimeKeys.BIZ_DATE, "2026-09-11");
     attributes.put("payload", "{}");
@@ -77,7 +81,8 @@ class ImportStepExecutionAdapterTest {
   }
 
   @Test
-  void executeStagesDelegatesToExecutor() {
+  @DisplayName("执行阶段时原样委派给阶段执行器,并返回其结果")
+  void shouldDelegateStages_whenExecuting() {
     ImportJobContext context = new ImportJobContext();
     List<ImportStageResult> expected = List.of(ImportStageResult.success(ImportStage.RECEIVE));
     when(stageExecutor.execute(context)).thenReturn(expected);
@@ -87,7 +92,8 @@ class ImportStepExecutionAdapterTest {
   }
 
   @Test
-  void resultAccessorsPreserveStageResultContract() {
+  @DisplayName("结果访问器如实反映阶段,错误码与消息,空结果判定为失败")
+  void shouldPreserveStageResultContract_whenReadingAccessors() {
     ImportStageResult result =
         ImportStageResult.failure(ImportStage.VALIDATE, "INVALID_ROW", "invalid row");
 
@@ -99,8 +105,9 @@ class ImportStepExecutionAdapterTest {
   }
 
   @Test
+  @DisplayName("成功响应把文件标识,输入输出计数与业务日期写入节点输出")
   @SuppressWarnings("unchecked")
-  void successResponsePublishesImportCountsForWorkflow() {
+  void shouldPublishImportCounts_whenBuildingSuccessResponse() {
     ImportJobContext context = new ImportJobContext();
     context.setBizDate("2026-09-11");
     Map<String, Object> attributes = new LinkedHashMap<>();

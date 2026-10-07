@@ -11,10 +11,12 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.client.ResourceAccessException;
 
+@DisplayName("下游调用降级与熔断:成功与失败的回退路径,熔断状态机以及开关旁路")
 class DownstreamFallbackTest {
 
   private MeterRegistry meterRegistry;
@@ -27,7 +29,8 @@ class DownstreamFallbackTest {
   }
 
   @Test
-  void returnsPrimaryWhenSuccess() {
+  @DisplayName("主调用成功:返回主结果并计一次成功计数")
+  void shouldReturnPrimaryResult_whenCallSucceeds() {
     String r = fallback.callOrFallback("svc", "op", () -> "value", ex -> "fallback");
     assertThat(r).isEqualTo("value");
     assertThat(meterRegistry
@@ -37,7 +40,8 @@ class DownstreamFallbackTest {
   }
 
   @Test
-  void returnsFallbackWhenRestClientException() {
+  @DisplayName("下游访问异常:返回回退值并按异常类型打点回退计数")
+  void shouldReturnFallback_whenRestClientExceptionThrown() {
     String r = fallback.callOrFallback(
         "trigger",
         "list",
@@ -62,7 +66,8 @@ class DownstreamFallbackTest {
   }
 
   @Test
-  void propagatesNonRestClientException() {
+  @DisplayName("业务异常不属于可降级类型:原样向上抛出,不静默吞掉")
+  void shouldPropagateException_whenNotRestClientFailure() {
     assertThatThrownBy(() -> fallback.callOrFallback(
             "svc",
             "op",
@@ -74,7 +79,8 @@ class DownstreamFallbackTest {
   }
 
   @Test
-  void callOrThrowSucceeds() {
+  @DisplayName("只抛不降级调用成功:返回结果并计一次成功计数")
+  void shouldReturnResult_whenCallOrThrowSucceeds() {
     List<Integer> r = fallback.callOrThrow("svc", "op", () -> List.of(1, 2));
     assertThat(r).hasSize(2);
     assertThat(meterRegistry
@@ -84,7 +90,8 @@ class DownstreamFallbackTest {
   }
 
   @Test
-  void callOrThrowRecordsFailureAndRethrows() {
+  @DisplayName("只抛不降级调用失败:记录失败计数后原异常继续抛出")
+  void shouldRecordFailureAndRethrow_whenCallOrThrowFails() {
     assertThatThrownBy(() -> fallback.callOrThrow("trigger", "pause", () -> {
           throw new ResourceAccessException("dead");
         }))
@@ -105,7 +112,8 @@ class DownstreamFallbackTest {
   }
 
   @Test
-  void worksWithoutMeterRegistry() {
+  @DisplayName("指标注册表缺失时仍正常返回主结果,不抛空指针异常")
+  void shouldNotFail_whenMeterRegistryAbsent() {
     DownstreamFallback noMetrics =
         new DownstreamFallback(providerOf(null), emptyProvider(), defaultProps());
     String r = noMetrics.callOrFallback("svc", "op", () -> "ok", ex -> "fb");
@@ -116,7 +124,8 @@ class DownstreamFallbackTest {
   // ─── 熔断状态机(spike Phase 2-B 新增)────────────────────────────────────────
 
   @Test
-  void opensAfterRepeatedFailuresThenShortCircuitsToFallbackWithoutCallingPrimary() {
+  @DisplayName("连续失败达阈值后熔断打开:后续调用直接走回退且主逻辑不再被调用")
+  void shouldOpenThenShortCircuit_whenFailuresReachThreshold() {
     DownstreamFallback cb =
         new DownstreamFallback(providerOf(meterRegistry), emptyProvider(), tunedProps());
     AtomicInteger primaryCalls = new AtomicInteger();
@@ -151,7 +160,8 @@ class DownstreamFallbackTest {
   }
 
   @Test
-  void callOrThrowShortCircuitsWithRestClientExceptionWhenOpen() {
+  @DisplayName("熔断打开时只抛不降级调用:仍以下游异常短路抛出,调用方捕获语义不变")
+  void shouldThrowRestClientException_whenOpenAndCallOrThrow() {
     DownstreamFallback cb =
         new DownstreamFallback(providerOf(meterRegistry), emptyProvider(), tunedProps());
     for (int i = 0; i < 4; i++) {
@@ -167,7 +177,8 @@ class DownstreamFallbackTest {
   }
 
   @Test
-  void recoversToClosedViaHalfOpenProbe() throws InterruptedException {
+  @DisplayName("等待窗口过后半开试探成功:熔断闭合,后续调用正常放行")
+  void shouldRecoverToClosed_whenHalfOpenProbeSucceeds() throws InterruptedException {
     DownstreamCircuitBreakerProperties props = tunedProps();
     props.setWaitDurationInOpenStateMillis(20L); // 短 wait-duration,便于测试 HALF_OPEN
     DownstreamFallback cb =
@@ -195,7 +206,8 @@ class DownstreamFallbackTest {
   }
 
   @Test
-  void disabledKillSwitchBypassesCircuitBreaker() {
+  @DisplayName("熔断开关关闭时:即使持续失败也永不熔断,主逻辑每次都被调用")
+  void shouldBypassCircuitBreaker_whenDisabled() {
     DownstreamCircuitBreakerProperties props = tunedProps();
     props.setEnabled(false);
     DownstreamFallback cb =

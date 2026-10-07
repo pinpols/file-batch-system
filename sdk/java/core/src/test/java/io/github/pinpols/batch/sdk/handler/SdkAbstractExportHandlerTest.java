@@ -15,6 +15,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** ADR-036 — Export 模板基类单测,经 {@link SdkAbstractTaskHandler#execute} 走全模板序。 */
+@DisplayName("Export 模板基类:查询结果透传与行流写出,覆盖计数回退、异常失败与资源释放")
 class SdkAbstractExportHandlerTest {
 
   private static SdkTaskContext ctx() {
@@ -158,7 +159,7 @@ class SdkAbstractExportHandlerTest {
 
   @Test
   @DisplayName("buildQuery 结果透传给 streamRows")
-  void passesBuildQueryResultToStreamRows() {
+  void shouldPassQueryResultToStreamRows_whenBuildQueryRuns() {
     // 准备
     ProbeExportHandler h = ProbeExportHandler.ofRows(rows(3), null);
 

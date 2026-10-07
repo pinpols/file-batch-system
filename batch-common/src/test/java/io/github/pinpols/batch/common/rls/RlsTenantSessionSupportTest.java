@@ -3,6 +3,7 @@ package io.github.pinpols.batch.common.rls;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -10,9 +11,11 @@ import org.junit.jupiter.api.Test;
  *
  * <p>实际 set_config 语义走 {@code RlsTenantIsolationIntegrationTest}(连真 PG)。
  */
+@DisplayName("租户会话加固:缺少或非法租户上下文时在建立连接前快速失败,以及租户标识形态白名单")
 class RlsTenantSessionSupportTest {
 
   @Test
+  @DisplayName("缺少租户上下文时在打开连接前失败关闭")
   void applyWithoutTenantContext_failsClosedBeforeOpeningConnection() {
     RlsTenantContextHolder.clear();
 
@@ -22,6 +25,7 @@ class RlsTenantSessionSupportTest {
   }
 
   @Test
+  @DisplayName("租户上下文形态非法时在打开连接前失败关闭")
   void applyWithInvalidTenantContext_failsClosedBeforeOpeningConnection() {
     RlsTenantContextHolder.set("tenant with spaces");
     try {
@@ -34,6 +38,7 @@ class RlsTenantSessionSupportTest {
   }
 
   @Test
+  @DisplayName("租户标识白名单接受字母数字、连字符与下划线,长度上限内均通过")
   void tenantIdPattern_acceptsAsciiAlnumDashUnderscore() {
     // 准备 / 执行 / 断言
     assertThat(RlsTenantSessionSupport.TENANT_ID_PATTERN.matcher("ta").matches())
@@ -45,6 +50,7 @@ class RlsTenantSessionSupportTest {
   }
 
   @Test
+  @DisplayName("注入形态、控制字符与超长标识一律拒绝")
   void tenantIdPattern_rejectsInjectionShapes() {
     // 单引号 / 反斜杠 / 注释 / 分号 / 控制字符 / Unicode escape 全拒
     assertThat(RlsTenantSessionSupport.TENANT_ID_PATTERN.matcher("ta'; DROP--").matches())

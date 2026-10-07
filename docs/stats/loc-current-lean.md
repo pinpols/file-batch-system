@@ -1,19 +1,19 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `05f7cfdb7`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `4c41291c3`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,718 | 492,413 | 249,631 | 50.7% |
+| 4,720 | 498,750 | 255,906 | 51.3% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| prod | 2,738 | 250,496 | 114,630 | 45.8% |
-| test | 1,209 | 174,785 | 93,159 | 53.3% |
+| prod | 2,739 | 250,446 | 114,617 | 45.8% |
+| test | 1,210 | 181,172 | 99,447 | 54.9% |
 | script | 625 | 51,383 | 31,917 | 62.1% |
 | config | 53 | 8,156 | 5,855 | 71.8% |
 | infra-config | 32 | 5,332 | 3,901 | 73.2% |
@@ -23,11 +23,11 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,477 | 358,039 | 181,970 | 50.8% |
+| Java | 3,479 | 364,381 | 188,245 | 51.7% |
 | Shell | 196 | 29,922 | 23,311 | 77.9% |
-| Python | 233 | 33,528 | 17,011 | 50.7% |
+| Python | 233 | 33,544 | 17,014 | 50.7% |
 | YAML | 95 | 12,437 | 9,417 | 75.7% |
-| XML | 178 | 21,441 | 6,640 | 31.0% |
+| XML | 178 | 21,420 | 6,637 | 31.0% |
 | TypeScript | 37 | 6,632 | 3,124 | 47.1% |
 | Rust | 23 | 8,423 | 2,835 | 33.7% |
 | Properties | 5 | 2,887 | 2,361 | 81.8% |
@@ -52,13 +52,13 @@
 | `scripts/fix-fixture-xlsx.py` | script | Python | 979 | 559 |
 | `scripts/ci/run-full-regression.sh` | script | Shell | 647 | 528 |
 | `scripts/local/start-all.sh` | script | Shell | 638 | 512 |
-| `batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationServiceTest.java` | test | Java | 811 | 500 |
+| `batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationServiceTest.java` | test | Java | 814 | 503 |
 | `scripts/local/be-acceptance.sh` | script | Shell | 612 | 479 |
 | `pom.xml` | config | XML | 764 | 455 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | prod | Java | 1,028 | 451 |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultFileGovernanceServiceTest.java` | test | Java | 790 | 437 |
+| `batch-console-api/src/test/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleConfigApplicationServiceTest.java` | test | Java | 610 | 428 |
 | `scripts/local/pre-push-sdk-checks.sh` | script | Shell | 558 | 424 |
-| `scripts/local/sim-harness.sh` | script | Shell | 557 | 418 |
-| `scripts/ci/check-pipeline-summary-keys.py` | script | Python | 838 | 417 |
 
 ## 复跑
 

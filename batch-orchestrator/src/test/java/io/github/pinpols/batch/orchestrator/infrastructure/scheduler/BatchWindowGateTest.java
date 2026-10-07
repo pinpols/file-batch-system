@@ -29,6 +29,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -42,6 +43,7 @@ import org.junit.jupiter.api.Test;
  *   <li>当前时间 out-of-window + outOfWindowAction=FAIL → reject failFast=true
  * </ul>
  */
+@DisplayName("资源调度中的业务日历窗口门禁,验证窗口内放行,窗口外的等待与快速失败两种策略,以及未指定窗口时直接放行")
 class BatchWindowGateTest {
 
   private OrchestratorConfigCacheService configCacheService;
@@ -91,6 +93,7 @@ class BatchWindowGateTest {
 
   /** in-window：当前时间在窗口内，schedule 不被门禁挡住（allow 路径，可能后续被并发 / worker 等其他门禁挡，但不是 batch_window 挡的）。 */
   @Test
+  @DisplayName("当前时刻落在启用窗口内时,调度结果不被窗口门禁拦截,原因码不指向窗口外")
   void shouldAllow_whenCurrentTimeIsWithinWindow() {
     LocalTime now = ZonedDateTime.now(ZoneId.of("Asia/Shanghai")).toLocalTime();
     LocalTime start = now.minusHours(1);
@@ -107,6 +110,7 @@ class BatchWindowGateTest {
 
   /** out-of-window + WAIT：partition 状态保持 WAITING，等下次 tick 在 window 内重试。 */
   @Test
+  @DisplayName("当前时刻在窗口外且策略为等待时,判定为等待容量,原因信息提示等待窗口且不快速失败")
   void shouldWaitForCapacity_whenOutOfWindow_andActionIsWAIT() {
     // 故意构造一个 1 分钟前刚结束的窗口（绝对在 out-of-window）
     LocalTime now = ZonedDateTime.now(ZoneId.of("Asia/Shanghai")).toLocalTime();
@@ -124,6 +128,7 @@ class BatchWindowGateTest {
 
   /** out-of-window + FAIL：reject + failFast=true，应 fail-fast 不再等待。 */
   @Test
+  @DisplayName("当前时刻在窗口外且策略为失败时,判定为拒绝并快速失败,原因信息指向执行时刻超出窗口")
   void shouldRejectFailFast_whenOutOfWindow_andActionIsFAIL() {
     LocalTime now = ZonedDateTime.now(ZoneId.of("Asia/Shanghai")).toLocalTime();
     LocalTime start = now.minusHours(2);
@@ -141,6 +146,7 @@ class BatchWindowGateTest {
 
   /** 未配 windowCode → 跳过门禁直接 allow。 */
   @Test
+  @DisplayName("未指定窗口编码时跳过窗口门禁,原因码既不指向窗口外也不指向等待窗口")
   void shouldAllow_whenWindowCodeIsMissing() {
     ResourceSchedulingRequest req = request();
     req.setWindowCode(null);

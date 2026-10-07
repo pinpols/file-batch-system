@@ -9,6 +9,7 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -26,7 +27,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  *       job_instance / pipeline_instance / file_record / file_dispatch_record 只存在于 archive.* 冷表 （热表
  *       batch.* 全无）。驱动 SERVICE 方法，断言证据链完整重建且 coverage 的每一段 source 都标 ARCHIVE、
  *       scope=BFS_HOT_AND_ARCHIVE、file/dispatch 非空。
- *   <li>{@code archiveEvidenceIsTenantScoped} —— 冷表里为租户 A、B 各种一条链；断言四条 selectArchived* 只返回本租户行：跨租户
+ *   <li>{@code shouldScopeArchivedEvidenceByTenant} —— 冷表里为租户 A、B 各种一条链；断言四条 selectArchived* 只返回本租户行：跨租户
  *       id / 跨租户 payloadFileId / 跨租户 fileId 都不泄漏。
  * </ul>
  *
@@ -37,6 +38,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("血缘证据链在热表缺失时的归档回退查询,以及归档证据的租户隔离")
 class LineageEvidenceArchiveFallbackIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
@@ -50,6 +52,7 @@ class LineageEvidenceArchiveFallbackIntegrationTest extends AbstractIntegrationT
 
   @Test
   @SuppressWarnings("unchecked")
+  @DisplayName("热表没有对应行时候从归档冷表重建完整证据链,且每段来源都标记为归档")
   void evidenceFallsBackToArchive_whenLiveRowsAbsent() {
     // arrange: 整条链只种在 archive.* 冷表；热表 batch.* 除 result_version 外一无所有
     String tenant = unique("tenant");
@@ -97,7 +100,8 @@ class LineageEvidenceArchiveFallbackIntegrationTest extends AbstractIntegrationT
   }
 
   @Test
-  void archiveEvidenceIsTenantScoped() {
+  @DisplayName("用跨租户标识查询归档证据时候只返回本租户数据,不泄漏其它租户的链路")
+  void shouldScopeArchivedEvidenceByTenant() {
     // arrange: 租户 A、B 各种一条完整冷表链（id 各自由序列生成，天然不同）
     String tenantA = unique("tenant-a");
     String tenantB = unique("tenant-b");

@@ -27,6 +27,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
  *   <li>两个白名单都不命中 → FORBIDDEN
  * </ol>
  */
+@DisplayName("AI 助手鉴权服务: 登录态与白名单决策路径及能力下发")
 class ConsoleAiAuthorizationServiceTest {
 
   @AfterEach
@@ -54,7 +55,7 @@ class ConsoleAiAuthorizationServiceTest {
   }
 
   @Test
-  @DisplayName("AnonymousAuthenticationToken → FORBIDDEN")
+  @DisplayName("匿名认证令牌按未登录处理并拒绝访问")
   void assertAllowed_anonymousToken_throwsForbidden() {
     SecurityContextHolder.getContext()
         .setAuthentication(new AnonymousAuthenticationToken(
@@ -130,6 +131,7 @@ class ConsoleAiAuthorizationServiceTest {
   }
 
   @Test
+  @DisplayName("功能未启用时即使命中白名单也拒绝访问")
   void assertAllowed_disabledRejectsWhitelistedUser() {
     SecurityContextHolder.getContext()
         .setAuthentication(new UsernamePasswordAuthenticationToken("admin", null, List.of()));

@@ -16,11 +16,13 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+@DisplayName("流水线进度实时推送控制器: 订阅建立与租户解析")
 class ConsolePipelineProgressRealtimeControllerTest {
 
   private final ConsoleRealtimeSubscriptionPort realtimeEventHub =
@@ -49,6 +51,7 @@ class ConsolePipelineProgressRealtimeControllerTest {
   }
 
   @Test
+  @DisplayName("订阅流水线进度事件流并按租户建立推送通道")
   void shouldExposePipelineProgressRealtimeStream() throws Exception {
     mockMvc
         .perform(get("/api/console/stream/pipeline-progress/events").param("tenantId", "t1"))

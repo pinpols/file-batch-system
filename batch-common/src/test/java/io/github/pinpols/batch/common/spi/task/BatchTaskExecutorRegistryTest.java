@@ -4,11 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("任务执行器注册表:注册查找, 空表容忍与非法类型快速失败")
 class BatchTaskExecutorRegistryTest {
 
   @Test
+  @DisplayName("注册全部执行器:类型集合完整, 且按类型可查到同一实例")
   void shouldRegisterAllProvidedExecutors() {
     BatchTaskExecutor shell = new StubExecutor("shell");
     BatchTaskExecutor http = new StubExecutor("http");
@@ -21,6 +24,7 @@ class BatchTaskExecutorRegistryTest {
   }
 
   @Test
+  @DisplayName("查找未知类型与空类型:均返回空值, 不抛异常")
   void shouldReturnNullForUnknownType() {
     BatchTaskExecutorRegistry registry =
         new BatchTaskExecutorRegistry(List.of(new StubExecutor("shell")));
@@ -30,6 +34,7 @@ class BatchTaskExecutorRegistryTest {
   }
 
   @Test
+  @DisplayName("空注册表:类型集合为空, 任意查找均返回空值")
   void shouldAllowEmptyRegistry() {
     BatchTaskExecutorRegistry registry = new BatchTaskExecutorRegistry(List.of());
 
@@ -38,6 +43,7 @@ class BatchTaskExecutorRegistryTest {
   }
 
   @Test
+  @DisplayName("重复任务类型:构造时快速失败, 并提示类型重复")
   void shouldFailFastOnDuplicateTaskType() {
     BatchTaskExecutor a = new StubExecutor("dup");
     BatchTaskExecutor b = new StubExecutor("dup");
@@ -48,6 +54,7 @@ class BatchTaskExecutorRegistryTest {
   }
 
   @Test
+  @DisplayName("任务类型为空白串:构造时快速失败")
   void shouldFailFastOnBlankTaskType() {
     BatchTaskExecutor blank = new StubExecutor("");
     assertThatThrownBy(() -> new BatchTaskExecutorRegistry(List.of(blank)))
@@ -56,6 +63,7 @@ class BatchTaskExecutorRegistryTest {
   }
 
   @Test
+  @DisplayName("任务类型为空值:构造时快速失败")
   void shouldFailFastOnNullTaskType() {
     BatchTaskExecutor nullType = new StubExecutor(null);
     assertThatThrownBy(() -> new BatchTaskExecutorRegistry(List.of(nullType)))
@@ -64,6 +72,7 @@ class BatchTaskExecutorRegistryTest {
   }
 
   @Test
+  @DisplayName("诊断导出:按类型列出执行器实现类全名")
   void shouldExposeDumpForDiagnostics() {
     BatchTaskExecutorRegistry registry =
         new BatchTaskExecutorRegistry(List.of(new StubExecutor("shell")));

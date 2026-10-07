@@ -18,6 +18,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -25,6 +26,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("告警通知投递服务: 渠道解析, 租户反查与投递日志落库")
 class AlertmanagerNotifyServiceTest {
 
   @Mock
@@ -77,7 +79,8 @@ class AlertmanagerNotifyServiceTest {
   }
 
   @Test
-  void deliversToResolvedSenderAndLogsSuccess() {
+  @DisplayName("解析到渠道发送器后投递成功, 并按成功状态写入投递日志")
+  void shouldDeliverAndLogSuccess_whenChannelResolved() {
     when(channelMapper.selectByCode("system", "batch-dispatch"))
         .thenReturn(Map.of("channel_type", "WECOM", "config_json", "{\"url\":\"https://x\"}"));
     when(senderRegistry.resolve("WECOM")).thenReturn(sender);
@@ -102,7 +105,8 @@ class AlertmanagerNotifyServiceTest {
   }
 
   @Test
-  void logsFailedWhenSenderFails() {
+  @DisplayName("发送器返回失败时结论为失败, 日志记录失败原因")
+  void shouldLogFailed_whenSenderReturnsFailure() {
     when(channelMapper.selectByCode("system", "batch-sla"))
         .thenReturn(Map.of("channel_type", "DINGTALK", "config_json", "{}"));
     when(senderRegistry.resolve("DINGTALK")).thenReturn(sender);
@@ -120,7 +124,8 @@ class AlertmanagerNotifyServiceTest {
   }
 
   @Test
-  void skipsWhenNoChannelConfiguredAndDoesNotLog() {
+  @DisplayName("未配置渠道时跳过投递且不写日志, 缺渠道计数自增")
+  void shouldSkipWithoutLog_whenChannelMissing() {
     when(channelMapper.selectByCode("system", "batch-unknown")).thenReturn(null);
 
     AmNotifyOutcome outcome = service.deliver("batch-unknown", payload("batch-unknown"));
@@ -137,7 +142,8 @@ class AlertmanagerNotifyServiceTest {
   }
 
   @Test
-  void eventTypeStaysConstantEvenWithCrlfAlertname() {
+  @DisplayName("告警名含换行注入时, 事件类型仍是稳定常量且不含换行")
+  void shouldKeepStableEventType_whenAlertnameHasLineBreak() {
     when(channelMapper.selectByCode("system", "batch-dispatch"))
         .thenReturn(Map.of("channel_type", "WECOM", "config_json", "{}"));
     when(senderRegistry.resolve("WECOM")).thenReturn(sender);
@@ -171,7 +177,8 @@ class AlertmanagerNotifyServiceTest {
   }
 
   @Test
-  void reverseLooksUpTenantFromCommonLabels() {
+  @DisplayName("公共标签带租户时按该租户反查渠道, 不再固定用配置租户")
+  void shouldLookUpTenant_whenCommonLabelPresent() {
     // §4/§7 硬前置:按 payload 的 tenant label 反查该租户渠道,而非一律落 system。
     AlertmanagerWebhookPayload payload = new AlertmanagerWebhookPayload(
         "4",
@@ -198,7 +205,8 @@ class AlertmanagerNotifyServiceTest {
   }
 
   @Test
-  void fallsBackToPropertiesTenantWhenNoTenantLabel() {
+  @DisplayName("公共标签无租户时, 回退到配置的默认租户查询渠道")
+  void shouldFallBackToConfiguredTenant_whenLabelAbsent() {
     when(channelMapper.selectByCode("system", "batch-sla"))
         .thenReturn(Map.of("channel_type", "WECOM", "config_json", "{}"));
     when(senderRegistry.resolve("WECOM")).thenReturn(sender);
@@ -211,7 +219,8 @@ class AlertmanagerNotifyServiceTest {
   }
 
   @Test
-  void routesWebhookChannelThroughDispatcher() {
+  @DisplayName("渠道为回调类型时走分发器投递, 不解析普通发送器")
+  void shouldRouteToDispatcher_whenChannelIsCallback() {
     when(channelMapper.selectByCode("system", "batch-default"))
         .thenReturn(Map.of("channel_type", "WEBHOOK", "config_json", "{\"url\":\"https://hook\"}"));
     when(webhookDispatcher.attemptDelivery(any(), any(), anyString()))

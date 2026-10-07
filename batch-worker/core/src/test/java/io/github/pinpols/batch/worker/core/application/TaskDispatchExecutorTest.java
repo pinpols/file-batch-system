@@ -19,6 +19,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -26,6 +27,7 @@ import org.mockito.ArgumentCaptor;
  * P1-2.2 行为:CLAIM 失败时 execute 不被调用;CLAIM 成功时业务字段从 EffectiveTaskConfig 读、task key 从 message v2 读, 不再
  * fallback (message v2 已无 payload/businessKey/taskSeq/highWaterMarkIn 等业务字段)。
  */
+@DisplayName("任务派发执行器: 领取结果驱动的字段装配与批量执行边界")
 class TaskDispatchExecutorTest {
 
   private TaskExecutionWrapper taskExecutionWrapper;
@@ -38,6 +40,7 @@ class TaskDispatchExecutorTest {
   }
 
   @Test
+  @DisplayName("领取被拒绝时返回空结果, 不进入执行阶段")
   void shouldReturnNullWhenClaimDenied() {
     TaskDispatchMessage message = sampleMessage();
     when(taskExecutionWrapper.claim("t1", 42L, "w1")).thenReturn(Optional.empty());
@@ -49,6 +52,7 @@ class TaskDispatchExecutorTest {
   }
 
   @Test
+  @DisplayName("业务字段取自领取到的任务配置, 任务键与追踪标识取自派发消息")
   void shouldReadBusinessFieldsFromClaimAndKeysFromMessage() {
     TaskDispatchMessage message = sampleMessage();
     EffectiveTaskConfig fresh = new EffectiveTaskConfig(
@@ -117,6 +121,7 @@ class TaskDispatchExecutorTest {
   }
 
   @Test
+  @DisplayName("消息或 Worker 标识缺失时直接返回空, 不发起领取")
   void shouldRejectInvalidInputs() {
     assertThat(executor.execute(null, "w1")).isNull();
     assertThat(executor.execute(sampleMessage(), null)).isNull();
@@ -125,7 +130,8 @@ class TaskDispatchExecutorTest {
   }
 
   @Test
-  void executeBatchClaimsOnceAndExecutesOnlyClaimedItems() {
+  @DisplayName("批量派发只发起一次领取, 仅执行领取成功的任务")
+  void shouldClaimOnceAndExecuteOnlyClaimedItems_whenBatchDispatch() {
     TaskDispatchMessage m1 = messageWithTaskId(1L);
     TaskDispatchMessage m2 = messageWithTaskId(2L);
     // claim-batch:taskId 1 领到(含 config),taskId 2 没领到
@@ -144,7 +150,8 @@ class TaskDispatchExecutorTest {
   }
 
   @Test
-  void executeBatchEmptyOrInvalidInputReturnsEmpty() {
+  @DisplayName("批量列表为空或 Worker 标识无效时返回空结果, 不发起领取")
+  void shouldReturnEmptyBatchResult_whenInputEmptyOrInvalid() {
     assertThat(executor.executeBatch(List.of(), "w1")).isEmpty();
     assertThat(executor.executeBatch(null, "w1")).isEmpty();
     assertThat(executor.executeBatch(List.of(sampleMessage()), "")).isEmpty();

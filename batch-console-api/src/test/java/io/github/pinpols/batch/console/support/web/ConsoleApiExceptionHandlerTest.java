@@ -12,6 +12,7 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.Locale;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -35,6 +36,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  * </ul>
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("控制台接口异常处理器: 约束冲突分流,下游错误映射与本地化文案")
 class ConsoleApiExceptionHandlerTest {
 
   @Mock
@@ -71,6 +73,7 @@ class ConsoleApiExceptionHandlerTest {
   }
 
   @Test
+  @DisplayName("唯一约束冲突时,返回 409 与冲突业务码")
   void shouldReturn409Conflict_whenUniqueConstraintViolation() {
     ResponseEntity<?> response = handler()
         .handleDataIntegrityViolation(
@@ -81,6 +84,7 @@ class ConsoleApiExceptionHandlerTest {
   }
 
   @Test
+  @DisplayName("外键约束冲突时,返回 409 与冲突业务码")
   void shouldReturn409Conflict_whenForeignKeyConstraintViolation() {
     ResponseEntity<?> response = handler()
         .handleDataIntegrityViolation(
@@ -92,6 +96,7 @@ class ConsoleApiExceptionHandlerTest {
   }
 
   @Test
+  @DisplayName("检查约束冲突时,返回 400 与参数校验错误码")
   void shouldReturn400Validation_whenCheckConstraintViolation() {
     ResponseEntity<?> response = handler()
         .handleDataIntegrityViolation(
@@ -102,6 +107,7 @@ class ConsoleApiExceptionHandlerTest {
   }
 
   @Test
+  @DisplayName("非空约束冲突时,返回 400 与参数校验错误码")
   void shouldReturn400Validation_whenNotNullConstraintViolation() {
     ResponseEntity<?> response = handler()
         .handleDataIntegrityViolation(
@@ -112,6 +118,7 @@ class ConsoleApiExceptionHandlerTest {
   }
 
   @Test
+  @DisplayName("无法识别的完整性约束错误时,按参数校验错误处理")
   void shouldReturn400Validation_whenUnknownConstraintViolation() {
     ResponseEntity<?> response =
         handler().handleDataIntegrityViolation(divFrom("ERROR: some unrecognized integrity error"));
@@ -121,6 +128,7 @@ class ConsoleApiExceptionHandlerTest {
   }
 
   @Test
+  @DisplayName("下游返回冲突状态且响应体无法解析时,仍映射为冲突错误")
   void shouldMapDownstream409ToConflict_whenBodyUnparseable() {
     ResponseEntity<?> response =
         handler().handleDownstreamRestError(restError(HttpStatus.CONFLICT, "not-json"));
@@ -130,6 +138,7 @@ class ConsoleApiExceptionHandlerTest {
   }
 
   @Test
+  @DisplayName("下游返回资源不存在且响应体无法解析时,仍映射为未找到")
   void shouldMapDownstream404ToNotFound_whenBodyUnparseable() {
     ResponseEntity<?> response =
         handler().handleDownstreamRestError(restError(HttpStatus.NOT_FOUND, "<<garbage>>"));
@@ -139,6 +148,7 @@ class ConsoleApiExceptionHandlerTest {
   }
 
   @Test
+  @DisplayName("下游返回服务端错误且响应体无法解析时,回退为系统错误")
   void shouldFallBackToSystemError_whenDownstream500WithUnparseableBody() {
     ResponseEntity<?> response = handler()
         .handleDownstreamRestError(restError(HttpStatus.INTERNAL_SERVER_ERROR, "boom not json"));
@@ -148,6 +158,7 @@ class ConsoleApiExceptionHandlerTest {
   }
 
   @Test
+  @DisplayName("请求参数类型转换失败时,返回 400 与参数非法错误码")
   void shouldReturn400InvalidArgument_whenRequestParameterTypeMismatch() {
     ResponseEntity<?> response = handler()
         .handleTypeMismatch(
@@ -159,6 +170,7 @@ class ConsoleApiExceptionHandlerTest {
   }
 
   @Test
+  @DisplayName("业务异常文案按当前语言环境渲染,中英文各取对应文本")
   void shouldRenderBizExceptionMessageForCurrentLocale() {
     BizException exception =
         BizException.of(ResultCode.NOT_FOUND, "error.tenant.already_exists", "acme");

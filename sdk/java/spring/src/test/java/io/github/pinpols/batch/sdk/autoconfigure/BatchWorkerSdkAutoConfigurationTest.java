@@ -13,19 +13,22 @@ import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.lang.reflect.Field;
 import java.time.Duration;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+@DisplayName("BatchWorkerSdkAutoConfiguration — 属性绑定、条件退让与生命周期开关")
 class BatchWorkerSdkAutoConfigurationTest {
 
   private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
       .withConfiguration(AutoConfigurations.of(BatchWorkerSdkAutoConfiguration.class));
 
   @Test
-  void bindsPropertiesToBatchPlatformClientConfig() {
+  @DisplayName("配置项全量绑定到客户端配置,含超时、重试与签名开关")
+  void shouldBindAllProperties_whenConfigured() {
     contextRunner
         .withPropertyValues(
             "batch.worker-sdk.enabled=false",
@@ -79,7 +82,8 @@ class BatchWorkerSdkAutoConfigurationTest {
   }
 
   @Test
-  void backsOffWhenUserProvidesBatchPlatformClientConfig() {
+  @DisplayName("用户自定义配置存在时自动配置退让")
+  void shouldBackOff_whenUserProvidesClientConfig() {
     contextRunner
         .withUserConfiguration(CustomConfigConfiguration.class)
         .withPropertyValues(
@@ -98,7 +102,8 @@ class BatchWorkerSdkAutoConfigurationTest {
   }
 
   @Test
-  void registersAllSdkTaskHandlerBeans() {
+  @DisplayName("容器内所有任务处理器都注册到客户端")
+  void shouldRegisterAllTaskHandlers_whenHandlersPresent() {
     contextRunner
         .withUserConfiguration(HandlerConfiguration.class)
         .withPropertyValues(defaultPropertiesWithLifecycleDisabled())
@@ -109,7 +114,8 @@ class BatchWorkerSdkAutoConfigurationTest {
   }
 
   @Test
-  void injectsIdempotencyStoreWhenPresent() {
+  @DisplayName("存在幂等存储时注入到客户端")
+  void shouldInjectIdempotencyStore_whenBeanPresent() {
     contextRunner
         .withUserConfiguration(HandlerAndIdempotencyConfiguration.class)
         .withPropertyValues(defaultPropertiesWithLifecycleDisabled())
@@ -120,7 +126,8 @@ class BatchWorkerSdkAutoConfigurationTest {
   }
 
   @Test
-  void skipsIdempotencyStoreWhenMissing() {
+  @DisplayName("缺少幂等存储时客户端保持未设置")
+  void shouldLeaveIdempotencyStoreUnset_whenBeanMissing() {
     contextRunner
         .withUserConfiguration(HandlerConfiguration.class)
         .withPropertyValues(defaultPropertiesWithLifecycleDisabled())
@@ -131,7 +138,8 @@ class BatchWorkerSdkAutoConfigurationTest {
   }
 
   @Test
-  void disabledPropertyKeepsBeansButDisablesLifecycle() {
+  @DisplayName("开关关闭时保留核心 Bean 但不装配生命周期")
+  void shouldKeepBeansButSkipLifecycle_whenDisabled() {
     contextRunner
         .withUserConfiguration(HandlerConfiguration.class)
         .withPropertyValues(defaultPropertiesWithLifecycleDisabled())
@@ -143,7 +151,8 @@ class BatchWorkerSdkAutoConfigurationTest {
   }
 
   @Test
-  void lifecycleStartsAndStopsClientWhenEnabled() {
+  @DisplayName("启用时生命周期随容器启动与关闭客户端")
+  void shouldStartAndStopClient_whenLifecycleEnabled() {
     BatchPlatformClient client = mock(BatchPlatformClient.class);
     contextRunner
         .withBean(BatchPlatformClient.class, () -> client)

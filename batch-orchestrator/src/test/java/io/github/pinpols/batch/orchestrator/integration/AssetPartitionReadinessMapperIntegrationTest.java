@@ -10,6 +10,7 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -36,6 +37,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("资产分区就绪快照映射的真实语句回归,覆盖最新版本守卫与物化指针的版本单调性")
 class AssetPartitionReadinessMapperIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "ta";
@@ -51,6 +53,7 @@ class AssetPartitionReadinessMapperIntegrationTest extends AbstractIntegrationTe
   private JdbcTemplate jdbcTemplate;
 
   @Test
+  @DisplayName("已物化生效版本之后出现更高版本的待生效记录时查询结果为空,避免旧版本继续被下游消费")
   void
       selectEffectiveJobPartition_returnsEmpty_whenNewerVersionPendingSupersedesMaterializedEffective() {
     // arrange
@@ -73,6 +76,7 @@ class AssetPartitionReadinessMapperIntegrationTest extends AbstractIntegrationTe
   }
 
   @Test
+  @DisplayName("物化版本即为最新生效版本时返回完整快照,覆盖租户,资产编码,分区与新鲜度字段")
   void selectEffectiveJobPartition_returnsPartition_whenMaterializedVersionIsLatestEffective() {
     // arrange：只有 v1 EFFECTIVE，没有更新版本 —— 正向对照，证明本测不是恒空
     String assetCode = "READINESS_POSITIVE";
@@ -96,6 +100,7 @@ class AssetPartitionReadinessMapperIntegrationTest extends AbstractIntegrationTe
   }
 
   @Test
+  @DisplayName("迟到写入引用更旧版本时版本单调守卫拦下更新,物化指针不回退")
   void upsertEffectiveJobPartition_doesNotRegressPointer_whenNewerUpsertReferencesOlderVersion() {
     // arrange
     String assetCode = "READINESS_MONOTONIC";

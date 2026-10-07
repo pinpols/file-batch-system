@@ -19,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("处理位点存储: 位点读取语义, 委托透传与失败指标")
 class DefaultProcessingPositionStoreTest {
 
   private static final String TENANT = "t1";
@@ -174,7 +175,7 @@ class DefaultProcessingPositionStoreTest {
 
   @Test
   @DisplayName("load 是只读路径,不会触发 advance / markCompleted")
-  void loadShouldNotMutate() {
+  void shouldNotMutate_whenLoadingPosition() {
     when(mapper.findByInstanceAndStage(TENANT, INSTANCE, "LOAD")).thenReturn(null);
 
     store.load(TENANT, INSTANCE, ProcessingStage.LOAD);

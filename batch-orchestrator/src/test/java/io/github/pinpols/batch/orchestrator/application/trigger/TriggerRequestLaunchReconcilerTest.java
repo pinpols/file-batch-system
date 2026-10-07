@@ -16,6 +16,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -33,6 +34,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * </ol>
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("触发请求启动对账器: 停机排水跳过,超时请求补偿回写与计数上报")
 class TriggerRequestLaunchReconcilerTest {
 
   @Mock
@@ -58,6 +60,7 @@ class TriggerRequestLaunchReconcilerTest {
   }
 
   @Test
+  @DisplayName("应用处于停机排水状态时整体跳过对账,不查询也不回写")
   void reconcile_skipsWhenDraining() {
     when(gracefulShutdown.isDraining()).thenReturn(true);
 
@@ -68,6 +71,7 @@ class TriggerRequestLaunchReconcilerTest {
   }
 
   @Test
+  @DisplayName("没有超时未回写的请求时安静返回,不执行任何回写")
   void reconcile_noCandidates_returnsQuietly() {
     when(gracefulShutdown.isDraining()).thenReturn(false);
     when(triggerRequestMapper.selectStaleAcceptedWithJobInstance(any(Instant.class), eq(200)))
@@ -79,6 +83,7 @@ class TriggerRequestLaunchReconcilerTest {
   }
 
   @Test
+  @DisplayName("正常回写多行启动结果,累加已对账计数且跳过计数保持为零")
   void reconcile_happyPath_writesBackAndIncrementsCounter() {
     when(gracefulShutdown.isDraining()).thenReturn(false);
     TriggerRequestLaunchReconcileRow row1 = row("tenant-a", "req-1", 101L);
@@ -96,6 +101,7 @@ class TriggerRequestLaunchReconcilerTest {
   }
 
   @Test
+  @DisplayName("条件更新未命中说明已被消费端回写时累加跳过计数,不增加已对账计数")
   void reconcile_casMiss_incrementsSkippedCounter() {
     when(gracefulShutdown.isDraining()).thenReturn(false);
     TriggerRequestLaunchReconcileRow row = row("tenant-b", "req-conc", 201L);
@@ -111,6 +117,7 @@ class TriggerRequestLaunchReconcilerTest {
   }
 
   @Test
+  @DisplayName("单行回写抛异常时继续处理同批后续行,只把成功的行计入已对账")
   void reconcile_singleRowThrows_continuesBatch() {
     when(gracefulShutdown.isDraining()).thenReturn(false);
     TriggerRequestLaunchReconcileRow bad = row("tenant-c", "req-bad", 301L);

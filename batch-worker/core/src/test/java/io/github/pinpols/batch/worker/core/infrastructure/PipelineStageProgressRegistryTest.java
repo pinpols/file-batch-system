@@ -6,14 +6,17 @@ import io.github.pinpols.batch.common.dto.WorkerPipelineProgressDto;
 import io.github.pinpols.batch.worker.core.support.ExecutionContext;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("流水线阶段进度注册表: 并发任务隔离与不可识别进度的过滤")
 class PipelineStageProgressRegistryTest {
 
   private final PipelineStageProgressRegistry registry = new PipelineStageProgressRegistry();
 
   @Test
-  void keepsConcurrentTasksIsolatedAndClearsOnlyTargetTask() {
+  @DisplayName("清理目标任务进度时不影响其它并发任务, 快照只保留剩余任务")
+  void shouldKeepConcurrentTasksIsolated_whenClearingTargetTask() {
     TestContext first = context(11L, 101L);
     TestContext second = context(12L, 102L);
 
@@ -26,7 +29,8 @@ class PipelineStageProgressRegistryTest {
   }
 
   @Test
-  void ignoresProgressWithoutStableTaskIdentity() {
+  @DisplayName("缺少稳定任务标识时不上报进度, 快照为空")
+  void shouldIgnoreProgress_whenTaskIdentityIsMissing() {
     TestContext context = new TestContext();
     context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, 101L);
 

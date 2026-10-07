@@ -6,15 +6,18 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.config.OutboxProperties;
 import java.time.Duration;
 import java.time.Instant;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
  * 2026-05-01 hardening:验证 {@link DefaultScheduleForwarder#computeNextRetryAt} 指数退避 + jitter 的边界 —
  * clamp 到 [base, max] 区间,默认参数下 5 次 attempt 时间序列符合预期。
  */
+@DisplayName("出箱转发重试退避: 指数退避, 抖动与上下界收敛口径")
 class DefaultScheduleForwarderRetryBackoffTest {
 
   @Test
+  @DisplayName("首次重试使用基础退避时长")
   void shouldUseBaseDelayForFirstAttempt() {
     OutboxProperties props = props(60, 2.0, 600, 0.0); // jitter 关
     Instant before = BatchDateTimeSupport.utcNow();
@@ -24,6 +27,7 @@ class DefaultScheduleForwarderRetryBackoffTest {
   }
 
   @Test
+  @DisplayName("关闭抖动时退避时长按指数序列逐次倍增")
   void shouldExponentiallyBackoffWithoutJitter() {
     OutboxProperties props = props(60, 2.0, 1000, 0.0);
     // 验证 attempt 1..5 的 base × 2^(N-1) 序列(无 jitter,允许 ±1s clock drift)
@@ -39,6 +43,7 @@ class DefaultScheduleForwarderRetryBackoffTest {
   }
 
   @Test
+  @DisplayName("退避时长超过上限时收敛到最大时长")
   void shouldClampToMaxDelay() {
     OutboxProperties props = props(60, 2.0, 600, 0.0); // max 600s
     // attempt 6 = 60 × 2^5 = 1920s,被 clamp 到 600s
@@ -49,6 +54,7 @@ class DefaultScheduleForwarderRetryBackoffTest {
   }
 
   @Test
+  @DisplayName("开启抖动时退避时长落在上下界内且确实产生波动")
   void shouldApplyJitterWithinBounds() {
     OutboxProperties props = props(100, 1.0, 100, 0.5); // 100s ± 50%
     // 跑 50 次,所有结果都应在 [50, 150]s 区间内,且不全相同(jitter 真在生效)
@@ -71,6 +77,7 @@ class DefaultScheduleForwarderRetryBackoffTest {
   }
 
   @Test
+  @DisplayName("退避因子小于一时仍保证退避时长不低于基础值")
   void shouldNeverGoBelowBase() {
     OutboxProperties props = props(60, 0.5, 600, 0.0); // 退避因子 < 1 应被强制为 ≥ 1
     Instant before = BatchDateTimeSupport.utcNow();
@@ -80,6 +87,7 @@ class DefaultScheduleForwarderRetryBackoffTest {
   }
 
   @Test
+  @DisplayName("重试次数为零时按首次重试处理")
   void shouldHandleAttemptZeroAsAttemptOne() {
     OutboxProperties props = props(60, 2.0, 600, 0.0);
     Instant before = BatchDateTimeSupport.utcNow();

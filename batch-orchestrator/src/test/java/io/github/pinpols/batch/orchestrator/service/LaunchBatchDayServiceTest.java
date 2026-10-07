@@ -45,6 +45,7 @@ import org.springframework.transaction.PlatformTransactionManager;
  *
  * <p>upsert 主流程(insert / update / 审计 / SLA 计算) 已被 DefaultLaunchServiceTest 4 个集成测试覆盖。
  */
+@DisplayName("批次日实例维护的早退分支:启动请求上下文缺失时跳过数据库读写,以及补跑启动与迟到接受的判定口径")
 class LaunchBatchDayServiceTest {
 
   @Mock
@@ -126,15 +127,15 @@ class LaunchBatchDayServiceTest {
   // ===== isMissingLaunchContext 早退 =====
 
   @Test
-  @DisplayName("request=null → 早退,不读 batch_day")
-  void nullRequestShortCircuits() {
+  @DisplayName("启动请求为空时跳过批次日实例维护,不发起数据库查询")
+  void shouldSkipBatchDayUpsert_whenLaunchRequestIsNull() {
     service.doUpsertBatchDayInstance(null, jobDef("cal-1"), Map.of(), Instant.now());
     verify(batchDayInstanceMapper, never())
         .selectByTenantCalendarBizDate(anyString(), anyString(), any());
   }
 
   @Test
-  @DisplayName("bizDate=null → 早退")
+  @DisplayName("业务日期为空时跳过批次日实例维护,不发起数据库查询")
   void null_bizDate_short_circuits() {
     LaunchRequest r = req("j1", null, TriggerType.SCHEDULED);
     service.doUpsertBatchDayInstance(r, jobDef("cal-1"), Map.of(), Instant.now());
@@ -143,7 +144,7 @@ class LaunchBatchDayServiceTest {
   }
 
   @Test
-  @DisplayName("jobDefinition=null → 早退")
+  @DisplayName("作业定义为空时跳过批次日实例维护,不发起数据库查询")
   void null_jobDefinition_short_circuits() {
     LaunchRequest r = req("j1", LocalDate.of(2026, Month.MAY, 20), TriggerType.SCHEDULED);
     service.doUpsertBatchDayInstance(r, null, Map.of(), Instant.now());
@@ -152,8 +153,8 @@ class LaunchBatchDayServiceTest {
   }
 
   @Test
-  @DisplayName("calendarCode 缺失 → 早退,不维护 batch_day")
-  void missingCalendarCodeShortCircuits() {
+  @DisplayName("日历编码缺失或仅含空白时跳过批次日实例维护,不发起数据库查询")
+  void shouldSkipBatchDayUpsert_whenCalendarCodeMissing() {
     LaunchRequest r = req("j1", LocalDate.of(2026, Month.MAY, 20), TriggerType.SCHEDULED);
     service.doUpsertBatchDayInstance(r, jobDef(null), Map.of(), Instant.now());
     verify(batchDayInstanceMapper, never())
@@ -167,8 +168,8 @@ class LaunchBatchDayServiceTest {
   // ===== isCatchUpLaunch =====
 
   @Test
-  @DisplayName("isCatchUpLaunch: 仅 CATCH_UP 视为补跑;其他 trigger 返 false")
-  void catchUpLaunchOnlyForCatchUpTrigger() {
+  @DisplayName("仅补跑触发类型判定为补跑启动,其余触发类型与空请求均判定为非补跑")
+  void shouldMarkCatchUpLaunchOnly_whenTriggerTypeIsCatchUp() {
     assertThat(service.isCatchUpLaunch(req("j1", LocalDate.now(), TriggerType.CATCH_UP)))
         .isTrue();
     assertThat(service.isCatchUpLaunch(req("j1", LocalDate.now(), TriggerType.SCHEDULED)))
@@ -183,8 +184,8 @@ class LaunchBatchDayServiceTest {
   // ===== isLateAccepted =====
 
   @Test
-  @DisplayName("isLateAccepted: lateArrival=true 且 arrivalStatus=LATE_ACCEPTED 才算迟到接受")
-  void lateAcceptedRequiresBothFlags() {
+  @DisplayName("迟到标志与接受状态同时命中才判定为迟到接受,其余组合与空入参均判定为非迟到接受")
+  void shouldAcceptLateArrivalOnly_whenBothFlagsMatched() {
     assertThat(
             service.isLateAccepted(Map.of("lateArrival", true, "arrivalStatus", "LATE_ACCEPTED")))
         .isTrue();
@@ -203,8 +204,8 @@ class LaunchBatchDayServiceTest {
   }
 
   @Test
-  @DisplayName("isLateAccepted: arrivalStatus 大小写不敏感")
-  void lateAcceptedCaseInsensitive() {
+  @DisplayName("接受状态取值大小写不同时仍判定为迟到接受")
+  void shouldTreatLateAccepted_whenStatusLetterCaseDiffers() {
     assertThat(
             service.isLateAccepted(Map.of("lateArrival", true, "arrivalStatus", "late_accepted")))
         .isTrue();

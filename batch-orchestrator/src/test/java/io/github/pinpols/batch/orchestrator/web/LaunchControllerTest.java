@@ -21,6 +21,7 @@ import io.github.pinpols.batch.orchestrator.controller.OrchestratorApiExceptionH
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -30,6 +31,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("作业启动接口,验证成功响应内容,接口密钥租户与请求体租户不一致时的拒绝,租户回填以及业务异常到统一错误响应的映射")
 class LaunchControllerTest {
 
   @Mock
@@ -54,6 +56,7 @@ class LaunchControllerTest {
   }
 
   @Test
+  @DisplayName("限流放行且启动成功后返回成功状态,响应中携带实例编号与链路标识")
   void shouldReturnLaunchResponseOnSuccess() throws Exception {
     when(tenantActionRateLimiter.tryConsume(any(), any())).thenReturn(true);
     when(launchService.launch(any())).thenReturn(new LaunchResponse("inst-001", "trace-001"));
@@ -77,6 +80,7 @@ class LaunchControllerTest {
   }
 
   @Test
+  @DisplayName("接口密钥归属租户与请求体声明租户不一致时返回禁止访问,错误信息指向租户不匹配")
   void shouldRejectWhenApiKeyResolvedTenantMismatchesBody() throws Exception {
     // arrange: filter 解析出 API-Key 真实租户 t-real,但 body 声明的是 t-fake
     // act + assert: 租户边界守卫拒绝,不应落到 launch
@@ -100,6 +104,7 @@ class LaunchControllerTest {
   }
 
   @Test
+  @DisplayName("请求体未声明租户时,下游服务收到的租户为接口密钥解析出的租户")
   void shouldUseApiKeyResolvedTenantWhenBodyTenantBlank() throws Exception {
     // arrange: API-Key 解析出 t-real,body 未声明 tenantId
     when(tenantActionRateLimiter.tryConsume(any(), any())).thenReturn(true);
@@ -129,6 +134,7 @@ class LaunchControllerTest {
   }
 
   @Test
+  @DisplayName("业务异常被映射为统一失败响应,状态码与错误码及错误信息与异常内容一致")
   void shouldMapBizExceptionToCommonResponseFailure() throws Exception {
     when(tenantActionRateLimiter.tryConsume(any(), any())).thenReturn(true);
     when(launchService.launch(any()))

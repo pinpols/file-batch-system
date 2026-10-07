@@ -10,6 +10,7 @@ import java.util.Objects;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
 import org.flywaydb.core.api.configuration.FluentConfiguration;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -20,6 +21,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 @Tag("integration")
 @Testcontainers(disabledWithoutDocker = true)
+@DisplayName("批次日相关数据库迁移 - 校验空库全量迁移,旧库升级路径与重复执行幂等性")
 class BatchDaySqlMigrationsIntegrationTest {
 
   @Container
@@ -28,6 +30,7 @@ class BatchDaySqlMigrationsIntegrationTest {
       TestPostgresContainers.create("batch_day_sql_guard");
 
   @Test
+  @DisplayName("空库全量迁移后批次日实例表,业务日历新增列与乐观锁列齐备且唯一约束生效")
   void emptyDb_migration_createsBatchDayInstanceAndBusinessCalendarColumns() {
     resetDb();
 
@@ -72,6 +75,7 @@ class BatchDaySqlMigrationsIntegrationTest {
   }
 
   @Test
+  @DisplayName("旧库先停在早期版本时新结构缺失,补跑全量迁移后补齐且重复迁移不追加已应用记录")
   void existingDb_upgradeFromBeforeV31_appliesV31AndIsIdempotent() {
     resetDb();
 
@@ -118,6 +122,7 @@ class BatchDaySqlMigrationsIntegrationTest {
   }
 
   @Test
+  @DisplayName("迁移连续执行两次时第二次得到的已应用版本集合与首次一致")
   void flywayMigrate_isIdempotent_secondRunSameAppliedSet() {
     resetDb();
 

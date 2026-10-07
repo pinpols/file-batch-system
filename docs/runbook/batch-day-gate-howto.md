@@ -142,7 +142,7 @@ SELECT tenant_id, request_id, released_at, released_by
 
 ### Q3. 等待行 `wait_status` 永远在 WAITING
 
-查 `BatchDayOperationServiceTest#shouldReleaseWaitingLaunchesOnRelease` 验证逻辑;若线上确实卡住,可能命中已知边界:同 requestId 二次 launch 被 gate 再次卡为 WAIT 时,`on conflict do nothing` 会让原行保留 — 此时 `wait_status` 仍是 WAITING,等下一轮 settle 完成会被 auto-release 重试。若反复多次仍未释放,人工 `RELEASE` 操作回退。
+查 `BatchDayOperationServiceTest#shouldReleaseWaitingLaunchesForNextBizDate` 验证逻辑;若线上确实卡住,可能命中已知边界:同 requestId 二次 launch 被 gate 再次卡为 WAIT 时,`on conflict do nothing` 会让原行保留 — 此时 `wait_status` 仍是 WAITING,等下一轮 settle 完成会被 auto-release 重试。若反复多次仍未释放,人工 `RELEASE` 操作回退。
 
 ## 8. 相关代码 / 文档
 

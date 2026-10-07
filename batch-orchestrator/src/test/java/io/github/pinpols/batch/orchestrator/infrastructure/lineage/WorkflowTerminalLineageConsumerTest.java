@@ -14,9 +14,11 @@ import java.time.Duration;
 import java.time.Instant;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.kafka.support.Acknowledgment;
 
+@DisplayName("工作流终态血缘消费:有效事件投递,投递失败重投,非法报文丢弃")
 class WorkflowTerminalLineageConsumerTest {
 
   private OpenLineageEmitter emitter;
@@ -34,7 +36,8 @@ class WorkflowTerminalLineageConsumerTest {
   }
 
   @Test
-  void validTerminalEventIsDeliveredBeforeOffsetCommit() {
+  @DisplayName("有效的终态事件在提交位点前完成投递,且不请求延迟重投")
+  void shouldDeliverTerminalEventBeforeOffsetCommit_whenEventIsValid() {
     consumer.consume(record(validPayload()), acknowledgment);
 
     verify(emitter)
@@ -45,7 +48,8 @@ class WorkflowTerminalLineageConsumerTest {
   }
 
   @Test
-  void deliveryFailureRetainsOffsetForRetry() {
+  @DisplayName("投递失败时按配置的退避时长请求延迟重投,且不提交位点")
+  void shouldRetainOffsetForRetry_whenDeliveryFails() {
     doThrow(new IllegalStateException("endpoint unavailable"))
         .when(emitter)
         .emitWorkflowTerminalReliably(any(), any(), any());
@@ -57,7 +61,8 @@ class WorkflowTerminalLineageConsumerTest {
   }
 
   @Test
-  void poisonMessageIsAcknowledgedWithoutCallingEndpoint() {
+  @DisplayName("运行状态非终态的消息直接确认位点,且不触发对外投递")
+  void shouldAcknowledgePoisonMessage_whenRunStatusIsNotTerminal() {
     consumer.consume(
         record("{\"tenantId\":\"ta\",\"workflowRunId\":100,\"runStatus\":\"RUNNING\"}"),
         acknowledgment);
@@ -67,7 +72,8 @@ class WorkflowTerminalLineageConsumerTest {
   }
 
   @Test
-  void parserRestoresLineageFields() {
+  @DisplayName("解析终态报文时还原租户,运行标识,定义标识,关联作业实例,业务日期,开始时间与链路标识")
+  void shouldRestoreLineageFields_whenTerminalSnapshotIsParsed() {
     WorkflowTerminalLineageConsumer.TerminalSnapshot snapshot =
         WorkflowTerminalLineageConsumer.parse(validPayload());
 

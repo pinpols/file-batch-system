@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
@@ -30,10 +31,12 @@ import org.springframework.web.client.RestClient;
  * Worker → Orchestrator HTTP 的弹性测试：5xx / I/O 错误 / 429 均按退避重试，R6 P0-7 起 429 不再立即失败， 避免高峰期 worker
  * REPORT 数据被静默丢弃。
  */
+@DisplayName("HTTP 任务执行客户端: 端点轮询, 重试退避与批量领取续期")
 class HttpTaskExecutionClientTest {
 
   @Test
-  void configuredEndpointsRoundRobinClaimAndReportRequests() throws Exception {
+  @DisplayName("配置多个端点时领取与上报请求轮流分发, 两个端点各承担一半")
+  void shouldRoundRobinClaimsAndReports_whenMultipleEndpointsConfigured() throws Exception {
     try (MockWebServer first = new MockWebServer();
         MockWebServer second = new MockWebServer()) {
       first.enqueue(jsonResponse("{}"));
@@ -58,7 +61,8 @@ class HttpTaskExecutionClientTest {
   }
 
   @Test
-  void reportRetryFailsOverToNextConfiguredEndpoint() throws Exception {
+  @DisplayName("上报在首个端点遇到服务不可用时故障转移到下一个端点并成功")
+  void shouldFailOverToNextEndpoint_whenReportNeedsAnotherAttempt() throws Exception {
     try (MockWebServer first = new MockWebServer();
         MockWebServer second = new MockWebServer()) {
       first.enqueue(new MockResponse.Builder().code(503).build());
@@ -81,7 +85,8 @@ class HttpTaskExecutionClientTest {
   }
 
   @Test
-  void reportRetriesOn503ThenSucceeds() throws Exception {
+  @DisplayName("上报收到服务端错误后按退避重试并成功, 同时按失败原因累加计数")
+  void shouldRetryReportAndSucceed_whenServerReturnsServiceUnavailable() throws Exception {
     try (MockWebServer server = new MockWebServer()) {
       server.enqueue(new MockResponse.Builder().code(503).build());
       server.enqueue(new MockResponse.Builder().code(200).build());
@@ -120,7 +125,8 @@ class HttpTaskExecutionClientTest {
   }
 
   @Test
-  void claimBatchMapsPerItemResultsFromSingleHttpCall() throws Exception {
+  @DisplayName("一次批量领取调用返回多项结果, 逐项映射领取状态与任务配置")
+  void shouldMapPerItemResults_whenClaimBatchReturnsOneResponse() throws Exception {
     try (MockWebServer server = new MockWebServer()) {
       // 一次 /claim-batch 调用返回 2 项:1 领到(含 config)+ 1 没领到
       server.enqueue(new MockResponse.Builder()
@@ -146,7 +152,8 @@ class HttpTaskExecutionClientTest {
   }
 
   @Test
-  void claimBatchFallsBackToSingleClaimOn404() throws Exception {
+  @DisplayName("批量领取接口不存在时降级为逐条领取, 每项领取状态仍正确返回")
+  void shouldFallBackToSingleClaim_whenBatchClaimEndpointMissing() throws Exception {
     try (MockWebServer server = new MockWebServer()) {
       server.enqueue(new MockResponse.Builder().code(404).build()); // claim-batch 不支持
       server.enqueue(new MockResponse.Builder().code(200).build()); // 单条 claim task1
@@ -211,7 +218,8 @@ class HttpTaskExecutionClientTest {
    * 计数固化,不依赖独占全栈压测窗口。
    */
   @Test
-  void claimBatchReducesClaimRoundTripsToCeilNOverK() throws Exception {
+  @DisplayName("攒批开启且分片数超过单批上限时按向上取整的批次数发起调用, 每项结果完整且不重复")
+  void shouldReduceClaimRoundTripsByChunking_whenBatchClaimEnabled() throws Exception {
     int n = 25;
     int k = 10;
     try (MockWebServer server = new MockWebServer()) {
@@ -264,7 +272,8 @@ class HttpTaskExecutionClientTest {
   }
 
   @Test
-  void reportRetriesOn429AndSucceedsWhenLimitClears() throws Exception {
+  @DisplayName("上报被限流后按退避重试, 限流解除即成功并按限流原因累加计数")
+  void shouldRetryReportAndSucceed_whenRateLimitedThenCleared() throws Exception {
     // R6 P0-7：429 = orchestrator sliding-window 限流的瞬时拒绝，过去 worker 直接放弃 REPORT 等于把
     // task 数据丢掉（orchestrator 端只能等 lease 过期回收）。改为按退避重试，与 5xx / I/O 同处理。
     try (MockWebServer server = new MockWebServer()) {
@@ -303,7 +312,8 @@ class HttpTaskExecutionClientTest {
   }
 
   @Test
-  void reportSwallowsAfterHttpExhaustionWhenOutboxUnavailable() throws Exception {
+  @DisplayName("重试耗尽且本地发件箱不可用时抑制异常, 按丢弃原因累加计数避免重复投递")
+  void shouldSwallowReportFailure_whenHttpExhaustedAndOutboxUnavailable() throws Exception {
     // P0 #16: HTTP 重试耗尽 + outbox 不可用时,report() 必须捕获并抑制异常(避免 listener 抛回触发 Kafka
     // 重投导致 task 双执行)。改为记 worker.report.dropped.total{reason=outbox_disabled} 由
     // orchestrator lease reclaim 回退。
@@ -346,7 +356,8 @@ class HttpTaskExecutionClientTest {
   }
 
   @Test
-  void reportSwallowsAfterHttpExhaustionWhenOutboxEnqueueFails() throws Exception {
+  @DisplayName("重试耗尽且发件箱入队失败时抑制异常, 按入队失败原因累加丢弃计数")
+  void shouldSwallowReportFailure_whenOutboxEnqueueFails() throws Exception {
     // P0 #16: outbox 启用但 enqueue 失败(DB 抖动 / repository RuntimeException)亦走 dropped 路径,
     // 不能让异常上抛触发 Kafka 重投。
     try (MockWebServer server = new MockWebServer()) {
@@ -388,7 +399,8 @@ class HttpTaskExecutionClientTest {
   }
 
   @Test
-  void renewLeasesBatchUsesSingleHttpCallForChunk() throws Exception {
+  @DisplayName("批量续期按分块只发起一次调用, 逐项映射续期结果与取消请求")
+  void shouldRenewLeaseChunkInSingleCall_whenBatchRenewRequested() throws Exception {
     try (MockWebServer server = new MockWebServer()) {
       server.enqueue(new MockResponse.Builder()
           .code(200)

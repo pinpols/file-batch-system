@@ -36,6 +36,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -49,6 +50,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("真实数据库下任务并发认领的唯一胜出者保证与分区归属一致性")
 class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -85,6 +87,7 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("两个执行器同时认领同一任务时数据库只落一个胜出者,分区状态与归属同步收敛")
   void assignWorker_onlyOneWorkerWins_whenTwoWorkersRaceConcurrently() throws Exception {
     LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
         jdbcTemplate, TENANT, "IMPORT", "DEFAULT", TriggerType.MANUAL);
@@ -144,6 +147,7 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("连续多次发起新批次时每次仍只有一个认领胜出者")
   void assignWorker_onlyOneWorkerWins_acrossRepeatedLaunches() throws Exception {
     for (int i = 0; i < 5; i++) {
       assertOneClaimWinnerForFreshLaunch();
@@ -151,6 +155,7 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("任务登记在执行器池上时,认领后用具体实例替换并同步分区归属")
   void assignWorker_poolRouteIsReplacedByConcreteInstanceOnClaim() {
     LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
         jdbcTemplate, TENANT, "IMPORT", "DEFAULT", TriggerType.MANUAL);
@@ -194,6 +199,7 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("同一执行器池内两个实例并发认领时仍只有一个胜出者")
   void assignWorker_onlyOneConcreteInstanceWinsWithinSamePool() throws Exception {
     LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
         jdbcTemplate, TENANT, "IMPORT", "DEFAULT", TriggerType.MANUAL);

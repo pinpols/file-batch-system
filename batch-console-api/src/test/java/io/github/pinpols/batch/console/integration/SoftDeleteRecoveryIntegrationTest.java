@@ -30,6 +30,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+@DisplayName("配置表软删除复活语义: 软删后不可见,同编码重建走 upsert 复活且保留原主键")
 class SoftDeleteRecoveryIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "int-sdr-ta";

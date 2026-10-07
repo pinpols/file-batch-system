@@ -27,8 +27,10 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("控制台配置审批应用服务: 提交校验,审批通过与自我审批拦截")
 class DefaultConsoleConfigApprovalApplicationServiceTest {
 
   private ConsoleTenantGuard tenantGuard;
@@ -65,6 +67,7 @@ class DefaultConsoleConfigApprovalApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("提交配置审批时,先校验载荷再写入审批记录与变更日志")
   void shouldSubmitApproval() {
     ConfigReleaseEntity release = release(ConfigLifecycleStatus.DRAFT.code());
     when(configReleaseMapper.selectById(anyMap())).thenReturn(release);
@@ -83,6 +86,7 @@ class DefaultConsoleConfigApprovalApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("草稿载荷缺失时,提交被拒绝且不写审批记录与发布状态")
   void shouldRejectSubmit_whenDraftPayloadIsMissing() {
     ConfigReleaseEntity release = release(ConfigLifecycleStatus.DRAFT.code());
     release.setConfigPayload(null);
@@ -101,6 +105,7 @@ class DefaultConsoleConfigApprovalApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("审批通过后,执行发布单应用并同步更新状态与变更日志")
   void shouldApproveAndPublishRelease() {
     ConfigReleaseEntity release = release(ConfigLifecycleStatus.PENDING_APPROVAL.code());
     when(configApprovalMapper.selectById("t1", 9L))
@@ -125,6 +130,7 @@ class DefaultConsoleConfigApprovalApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("审批人正是提交人本人时,拦截自我审批并抛出业务异常")
   void shouldRejectSelfApproval() {
     when(configApprovalMapper.selectById("t1", 9L))
         .thenReturn(Map.of(
@@ -138,7 +144,8 @@ class DefaultConsoleConfigApprovalApplicationServiceTest {
   }
 
   @Test
-  void shouldNotPublishReleaseWhenRuntimeApplyFails() {
+  @DisplayName("运行时应用失败时,不更新发布状态并向上抛出异常")
+  void shouldNotPublishRelease_whenRuntimeApplyFails() {
     ConfigReleaseEntity release = release(ConfigLifecycleStatus.PENDING_APPROVAL.code());
     when(configApprovalMapper.selectById("t1", 9L))
         .thenReturn(Map.of(

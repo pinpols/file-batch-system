@@ -24,12 +24,14 @@ import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 /** P1: ConsoleQuotaPolicyController CRUD 行为(原 ValidationTest 仅守 @ValidResourceCode)。 */
+@DisplayName("配额策略控制器行为: 列表筛选、新建、更新与启停的委托与响应")
 class ConsoleQuotaPolicyControllerBehaviorTest {
 
   private final ConsoleQuotaPolicyApplicationService service =
@@ -67,7 +69,8 @@ class ConsoleQuotaPolicyControllerBehaviorTest {
   }
 
   @Test
-  void listShouldPassFilters() throws Exception {
+  @DisplayName("按租户与策略编码查询配额策略时, 筛选条件原样传给服务")
+  void shouldPassFilters_whenListingQuotaPolicies() throws Exception {
     when(service.list("ta", "QP_A", true, 1, 20))
         .thenReturn(new PageResponse<>(0L, 1, 20, List.of()));
     mockMvc
@@ -80,7 +83,8 @@ class ConsoleQuotaPolicyControllerBehaviorTest {
   }
 
   @Test
-  void createShouldReturnRow() throws Exception {
+  @DisplayName("新建配额策略时, 响应返回新建的策略编码")
+  void shouldReturnCreatedRow_whenCreatingQuotaPolicy() throws Exception {
     when(service.create(any(QuotaPolicySaveRequest.class))).thenReturn(policy(1L, "QP_NEW"));
     mockMvc
         .perform(post("/api/console/quota-policies")
@@ -91,7 +95,8 @@ class ConsoleQuotaPolicyControllerBehaviorTest {
   }
 
   @Test
-  void updateShouldPassPathId() throws Exception {
+  @DisplayName("更新配额策略时, 路径标识作为入参传给服务")
+  void shouldPassPathId_whenUpdatingQuotaPolicy() throws Exception {
     when(service.update(eq(7L), any(QuotaPolicySaveRequest.class))).thenReturn(policy(7L, "QP_U"));
     mockMvc
         .perform(put("/api/console/quota-policies/7")
@@ -102,7 +107,8 @@ class ConsoleQuotaPolicyControllerBehaviorTest {
   }
 
   @Test
-  void setEnabledShouldDelegate() throws Exception {
+  @DisplayName("启停配额策略时, 策略标识、租户与目标状态传给服务")
+  void shouldDelegateToggle_whenSettingQuotaPolicyEnabled() throws Exception {
     mockMvc
         .perform(patch("/api/console/quota-policies/9/enabled")
             .contentType(APPLICATION_JSON)

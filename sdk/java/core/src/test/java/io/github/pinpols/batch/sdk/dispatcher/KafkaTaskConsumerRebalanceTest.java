@@ -11,6 +11,7 @@ import java.util.Map;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.Test;
  * ConsumerRebalanceListener.onPartitionsAssigned()} 重新 pause 新分到的 partition,否则 backpressure
  * 期间也会拉新消息绕过 maxConcurrent 上限。
  */
+@DisplayName("Kafka 重平衡 — 背压生效时新分配分区补暂停,空闲时保持可消费")
 class KafkaTaskConsumerRebalanceTest {
 
   private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
@@ -44,7 +46,8 @@ class KafkaTaskConsumerRebalanceTest {
   }
 
   @Test
-  void onPartitionsAssignedRestoresPauseWhenBackpressureActive() {
+  @DisplayName("背压生效期间重平衡新分配的分区立即暂停,不绕过并发上限")
+  void shouldRestorePause_whenBackpressureActive() {
     dispatcher = newDispatcher();
     mockConsumer = new MockConsumer<>("latest");
     try (KafkaTaskConsumer kafka =
@@ -67,7 +70,8 @@ class KafkaTaskConsumerRebalanceTest {
   }
 
   @Test
-  void onPartitionsAssignedDoesNotPauseWhenNoBackpressure() {
+  @DisplayName("无背压时新分配分区保持可消费,不额外暂停")
+  void shouldNotPause_whenBackpressureInactive() {
     dispatcher = newDispatcher();
     mockConsumer = new MockConsumer<>("latest");
     try (KafkaTaskConsumer kafka =
@@ -86,7 +90,8 @@ class KafkaTaskConsumerRebalanceTest {
   }
 
   @Test
-  void onPartitionsAssignedEmptyListIsNoop() {
+  @DisplayName("重平衡回调收到空分区列表时不暂停也不报错")
+  void shouldBeNoop_whenAssignedPartitionsEmpty() {
     dispatcher = newDispatcher();
     mockConsumer = new MockConsumer<>("latest");
     try (KafkaTaskConsumer kafka =

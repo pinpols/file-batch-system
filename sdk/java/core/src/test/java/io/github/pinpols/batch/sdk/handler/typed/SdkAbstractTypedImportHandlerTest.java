@@ -14,6 +14,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** A.2 typed Import 模板基类单测 — 验证强类型入参反序列化 + 行流分批模板。 */
+@DisplayName("强类型 Import 模板基类:入参反序列化后分批装载,覆盖汇总回退、非法参数与流关闭")
 class SdkAbstractTypedImportHandlerTest {
 
   record ImportRequest(String sourcePath, int rows) {}

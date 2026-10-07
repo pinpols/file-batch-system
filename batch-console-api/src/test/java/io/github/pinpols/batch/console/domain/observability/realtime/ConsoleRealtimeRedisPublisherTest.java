@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.infrastructure.realtime.ConsoleRealtimeRedisPublisher;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -19,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("实时事件发布器: 空事件短路与回放缓冲加频道的双写")
 class ConsoleRealtimeRedisPublisherTest {
 
   @Mock
@@ -38,7 +40,8 @@ class ConsoleRealtimeRedisPublisherTest {
   }
 
   @Test
-  void publishNullEventIsNoOp() {
+  @DisplayName("事件为空时不写回放缓冲也不发往通知频道")
+  void shouldSkipPublish_whenEventNull() {
     publisher.publish(null);
 
     verify(replayStore, never()).append(any());
@@ -46,7 +49,8 @@ class ConsoleRealtimeRedisPublisherTest {
   }
 
   @Test
-  void publishAppendsToReplayStoreAndSendsToChannel() {
+  @DisplayName("事件有效时写回放缓冲并发送到通知频道, 信封字段取自事件内容")
+  void shouldAppendToReplayStoreAndPublish_whenEventValid() {
     when(instanceIdProvider.instanceId()).thenReturn("instance-1");
     ConsoleSseEvent event = new ConsoleSseEvent(
         "t1", "job-instance", "JOB_STATUS", "cursor-abc", "payload", BatchDateTimeSupport.utcNow());
@@ -68,7 +72,8 @@ class ConsoleRealtimeRedisPublisherTest {
   }
 
   @Test
-  void publishNullDataSerializesAsEmptyString() {
+  @DisplayName("事件载荷为空时写入回放缓冲的载荷内容为空串")
+  void shouldSerializeEmptyData_whenEventPayloadNull() {
     when(instanceIdProvider.instanceId()).thenReturn("instance-2");
     ConsoleSseEvent event = new ConsoleSseEvent(
         "t1", "ops", "SUMMARY", "cursor-1", null, BatchDateTimeSupport.utcNow());

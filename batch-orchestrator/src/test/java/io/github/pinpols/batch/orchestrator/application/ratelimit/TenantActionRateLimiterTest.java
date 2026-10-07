@@ -19,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 /** 验证 action→配额映射与短路放行逻辑（防 TASK_* 误接到错误阈值键）+ 拒绝计数。 */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("租户动作限流器: 动作配额解析, 拒绝计数与短路口径")
 class TenantActionRateLimiterTest {
 
   @Mock
@@ -36,7 +37,7 @@ class TenantActionRateLimiterTest {
 
   @Test
   @DisplayName("TASK_CLAIM 用 claim 阈值,TASK_REPORT 用 report 阈值")
-  void taskActionsResolveToTheirOwnQuota() {
+  void shouldResolveOwnQuota_whenTaskActionGiven() {
     RateLimitProperties props = new RateLimitProperties();
     props.setMaxClaimRequestsPerTenantPerMinute(111L);
     props.setMaxReportRequestsPerTenantPerMinute(222L);
@@ -57,7 +58,7 @@ class TenantActionRateLimiterTest {
 
   @Test
   @DisplayName("命中限流拒绝时按 action 自增 batch.ratelimit.rejected.total,放行时不计数")
-  void rejectionIncrementsCounterByAction() {
+  void shouldIncrementCounterByAction_whenRejected() {
     RateLimitProperties props = new RateLimitProperties();
     props.setMaxClaimRequestsPerTenantPerMinute(1L);
     props.setMaxReportRequestsPerTenantPerMinute(1L);
@@ -84,7 +85,7 @@ class TenantActionRateLimiterTest {
 
   @Test
   @DisplayName("总开关关闭时直接放行,不触达底层限流器")
-  void disabledShortCircuits() {
+  void shouldAllow_whenLimiterDisabled() {
     RateLimitProperties props = new RateLimitProperties();
     props.setEnabled(false);
     TenantActionRateLimiter rl = newLimiter(props);
@@ -95,7 +96,7 @@ class TenantActionRateLimiterTest {
 
   @Test
   @DisplayName("tenantId 为空时放行(无法归属租户的内部调用)")
-  void blankTenantShortCircuits() {
+  void shouldAllow_whenTenantBlank() {
     TenantActionRateLimiter rl = newLimiter(new RateLimitProperties());
 
     assertThat(rl.tryConsume(null, RateLimitAction.TASK_CLAIM)).isTrue();

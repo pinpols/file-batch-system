@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -40,6 +41,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 // LENIENT:setUp 共享 stub(mapper.count/query)被 reject 类用例不触发,符合 §测试约定豁免。
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
+@DisplayName("操作审计查询服务: 租户隔离校验与游标分页行为")
 class OperationAuditQueryServiceTenantGuardTest {
 
   @Mock
@@ -69,6 +71,7 @@ class OperationAuditQueryServiceTenantGuardTest {
   }
 
   @Test
+  @DisplayName("租户用户未带租户标识且认证无租户声明时拒绝查询")
   void shouldRejectTenantUserPassingNullTenantId() {
     // 租户角色,JWT 未注入,requestTenantId=null → guard 抛 UNAUTHORIZED / required
     SecurityContextHolder.getContext()
@@ -81,6 +84,7 @@ class OperationAuditQueryServiceTenantGuardTest {
   }
 
   @Test
+  @DisplayName("租户用户请求租户与认证租户不一致时按越权拒绝")
   void shouldOverrideRequestTenantIdWithJwtTenantForTenantRole() {
     // 租户角色,JWT tenantId=ta;请求传 tb(越权尝试)→ FORBIDDEN
     SecurityContextHolder.getContext()
@@ -94,6 +98,7 @@ class OperationAuditQueryServiceTenantGuardTest {
   }
 
   @Test
+  @DisplayName("租户用户请求租户与认证租户一致时以该租户下传查询")
   void shouldPassResolvedTenantIdToMapperForTenantUser() {
     SecurityContextHolder.getContext()
         .setAuthentication(new UsernamePasswordAuthenticationToken(
@@ -109,6 +114,7 @@ class OperationAuditQueryServiceTenantGuardTest {
   }
 
   @Test
+  @DisplayName("全局管理员未指定目标租户时拒绝查询")
   void shouldRequireTenantIdForGlobalAdmin() {
     // 全局角色 ROLE_ADMIN 但未指定 tenantId → 必须明确目标租户
     SecurityContextHolder.getContext()
@@ -122,6 +128,7 @@ class OperationAuditQueryServiceTenantGuardTest {
   }
 
   @Test
+  @DisplayName("全局管理员显式指定租户时允许跨租户查询")
   void shouldAllowGlobalAdminToQueryAnyTenantExplicitly() {
     SecurityContextHolder.getContext()
         .setAuthentication(new UsernamePasswordAuthenticationToken(
@@ -136,6 +143,7 @@ class OperationAuditQueryServiceTenantGuardTest {
   }
 
   @Test
+  @DisplayName("携带游标查询时跳过总数统计并按游标首页分页")
   void shouldUseCursorWithoutCountingForOperationAuditList() {
     SecurityContextHolder.getContext()
         .setAuthentication(new UsernamePasswordAuthenticationToken(
@@ -166,6 +174,7 @@ class OperationAuditQueryServiceTenantGuardTest {
   }
 
   @Test
+  @DisplayName("空游标按游标首页处理且不触发总数统计")
   void shouldTreatEmptyCursorAsCursorFirstPage() {
     SecurityContextHolder.getContext()
         .setAuthentication(new UsernamePasswordAuthenticationToken(
@@ -196,6 +205,7 @@ class OperationAuditQueryServiceTenantGuardTest {
   }
 
   @Test
+  @DisplayName("返回历史审计记录前脱敏密码等凭据字段")
   void shouldRedactHistoricalCredentialsBeforeReturningAuditRows() {
     SecurityContextHolder.getContext()
         .setAuthentication(new UsernamePasswordAuthenticationToken(

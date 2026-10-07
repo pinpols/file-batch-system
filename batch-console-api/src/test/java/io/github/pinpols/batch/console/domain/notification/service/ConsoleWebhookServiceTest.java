@@ -17,8 +17,10 @@ import io.github.pinpols.batch.console.support.CallbackUrlValidator;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("订阅管理服务: 增删改查, 名称冲突与事件类型规范化")
 class ConsoleWebhookServiceTest {
 
   private ConsoleWebhookSubscriptionMapper subscriptionRepository;
@@ -39,6 +41,7 @@ class ConsoleWebhookServiceTest {
   }
 
   @Test
+  @DisplayName("按租户列出全部订阅, 条目与名称原样透出")
   void shouldListSubscriptions() {
     WebhookSubscriptionEntity entity = new WebhookSubscriptionEntity();
     entity.setName("hook-1");
@@ -51,6 +54,7 @@ class ConsoleWebhookServiceTest {
   }
 
   @Test
+  @DisplayName("按租户与主键查询订阅, 命中时返回该行")
   void shouldGetSubscription() {
     WebhookSubscriptionEntity entity = new WebhookSubscriptionEntity();
     entity.setId(1L);
@@ -63,6 +67,7 @@ class ConsoleWebhookServiceTest {
   }
 
   @Test
+  @DisplayName("订阅不存在时抛出业务异常, 提示未找到")
   void shouldThrowNotFoundWhenSubscriptionMissing() {
     when(subscriptionRepository.findByTenantAndId("t1", 99L)).thenReturn(Optional.empty());
 
@@ -72,6 +77,7 @@ class ConsoleWebhookServiceTest {
   }
 
   @Test
+  @DisplayName("名称未被占用时创建订阅, 入库字段与请求逐项一致")
   void shouldCreateSubscription() {
     when(subscriptionRepository.findByTenantAndName("t1", "hook-new")).thenReturn(Optional.empty());
     WebhookSubscriptionEntity created = new WebhookSubscriptionEntity();
@@ -99,6 +105,7 @@ class ConsoleWebhookServiceTest {
   }
 
   @Test
+  @DisplayName("同名订阅已存在时抛出业务异常, 提示重复")
   void shouldThrowConflictWhenNameExists() {
     WebhookSubscriptionEntity existing = new WebhookSubscriptionEntity();
     existing.setName("hook-dup");
@@ -120,6 +127,7 @@ class ConsoleWebhookServiceTest {
   }
 
   @Test
+  @DisplayName("订阅存在时更新回调地址与事件类型, 返回更新后结果")
   void shouldUpdateSubscription() {
     WebhookSubscriptionEntity existing = new WebhookSubscriptionEntity();
     existing.setId(1L);
@@ -151,6 +159,7 @@ class ConsoleWebhookServiceTest {
   }
 
   @Test
+  @DisplayName("更新不存在的订阅时抛出业务异常, 提示未找到")
   void shouldThrowNotFoundWhenUpdatingMissing() {
     when(subscriptionRepository.findByTenantAndId("t1", 99L)).thenReturn(Optional.empty());
 
@@ -169,6 +178,7 @@ class ConsoleWebhookServiceTest {
   }
 
   @Test
+  @DisplayName("按租户与主键删除订阅, 删除条件与入参一致")
   void shouldDeleteSubscription() {
     service.deleteSubscription("t1", 1L);
 
@@ -176,6 +186,7 @@ class ConsoleWebhookServiceTest {
   }
 
   @Test
+  @DisplayName("事件类型统一转为大写, 并以半角逗号连接后入库")
   void shouldNormalizeEventTypes() {
     when(subscriptionRepository.findByTenantAndName("t1", "hook-norm"))
         .thenReturn(Optional.empty());

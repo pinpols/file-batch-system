@@ -7,6 +7,7 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -20,6 +21,7 @@ import org.springframework.web.client.RestClient;
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {"batch.security.bypass-mode=true"})
+@DisplayName("内部测试数据清理接口的真库验证:按前缀清理只命中受试数据,按租户标识清理覆盖全部映射删除目标")
 class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationTest {
 
   @LocalServerPort
@@ -76,7 +78,8 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
   }
 
   @Test
-  void cleanupShouldDeleteOnlyHyphenPrefixedRecords() {
+  @DisplayName("按前缀清理只删除连字符前缀的作业与流程定义,邻近的同名前缀作业保留")
+  void shouldDeleteOnlyHyphenPrefixedRecords_whenCleaningByPrefix() {
     assertThat(jdbcTemplate.queryForObject(
             "SELECT count(*)::int FROM batch.job_definition WHERE job_code LIKE 'itadmin-%'",
             Integer.class))
@@ -111,7 +114,8 @@ class AdminTestDataCleanupControllerIntegrationTest extends AbstractIntegrationT
   }
 
   @Test
-  void exactTenantCleanupExecutesEveryMappedDeletionTarget() {
+  @DisplayName("按租户标识清理返回全部映射的删除目标且各目标命中数为零,不返回内部父级清理步骤")
+  void shouldExecuteEveryMappedDeletionTarget_whenCleaningByTenantIds() {
     String tenantId = "itcleanup_" + System.nanoTime();
 
     Map<String, Integer> response = restClient

@@ -25,18 +25,9 @@
         log_masking_enabled, content_encryption_enabled, encryption_key_ref,
         download_requires_approval, masking_rule_set, export_data_ref, load_target_ref, is_deleted
     </sql>
-    <sql id="fileChannelConfigColumns">
-        id, tenant_id, channel_code, channel_name, channel_type, target_endpoint, auth_type,
-        config_json, receipt_policy, timeout_seconds, enabled, created_at, updated_at, is_deleted
-    </sql>
     <sql id="pipelineStepDefinitionColumns">
         id, pipeline_definition_id, step_code, step_name, stage_code, step_order, impl_code,
         step_params, timeout_seconds, retry_policy, retry_max_count, enabled, created_at, updated_at
-    </sql>
-    <sql id="fileErrorRecordColumns">
-        id, tenant_id, file_id, pipeline_instance_id, pipeline_step_run_id, record_no, error_code,
-        error_message, error_stage, is_skipped, skip_action, raw_record, created_at, error_key,
-        error_args, source_row_num, source_column
     </sql>
 
     <select id="selectFileRecord" resultType="map">
@@ -76,15 +67,6 @@
         </if>
         order by version desc
         limit 1
-    </select>
-
-    <select id="selectChannelConfig" resultType="map">
-        select <include refid="fileChannelConfigColumns"/>
-        from batch.file_channel_config
-        where tenant_id = #{tenantId}
-          and channel_code = #{channelCode}
-          and enabled = true
-          and is_deleted = false
     </select>
 
     <select id="selectLatestPipelineDefinitionId" resultType="java.lang.Long">
@@ -338,23 +320,6 @@
             #{sourceRowNum,jdbcType=BIGINT}, #{sourceColumn,jdbcType=VARCHAR}, current_timestamp
         )
     </insert>
-
-    <select id="selectFileErrorRecords" resultType="map">
-        select <include refid="fileErrorRecordColumns"/>
-        from batch.file_error_record
-        where tenant_id = #{tenantId}
-        <if test="fileId != null">
-            and file_id = #{fileId}
-        </if>
-        <if test="errorCode != null and errorCode != ''">
-            and error_code = #{errorCode}
-        </if>
-        <if test="errorStage != null and errorStage != ''">
-            and error_stage = #{errorStage}
-        </if>
-        order by id desc
-        limit #{limit}
-    </select>
 
     <insert id="insertFileAuditLog">
         insert into batch.file_audit_log (

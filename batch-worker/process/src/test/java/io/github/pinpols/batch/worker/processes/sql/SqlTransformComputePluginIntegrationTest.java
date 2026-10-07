@@ -20,6 +20,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -41,6 +42,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * biz.customer_account} 等 是其它测试依赖的种子数据；共享 {@code platformPostgres} 里 {@code batch.shedlock /
  * outbox_event} 等是其它测试运行时状态。 在共享容器上跑会把这些数据全删干净，破坏并行 / 后续测试。
  */
+@DisplayName("SQL 转换计算插件:五阶段端到端链路、校验中止、租户与目标过滤、水位推进及直接模式")
 class SqlTransformComputePluginIntegrationTest {
 
   private static final PostgreSQLContainer POSTGRES = TestPostgresContainers.create();
@@ -119,6 +121,7 @@ class SqlTransformComputePluginIntegrationTest {
   }
 
   @Test
+  @DisplayName("五阶段全链路成功:目标表落两行聚合结果,暂存清空,行数、处理数与水位都写回上下文")
   void wapLifecycle_executesEndToEnd_andAdvancesWatermark() {
     ProcessJobContext context = newContextWithSpec();
 
@@ -158,6 +161,7 @@ class SqlTransformComputePluginIntegrationTest {
   }
 
   @Test
+  @DisplayName("用户校验规则不通过时校验失败并中止提交:目标表为空,暂存两行保留待取证")
   void validate_failsAndAbortsBeforeCommit_whenUserRuleReturnsFalse() {
     ProcessJobContext context = newContextWithSpec();
     Map<String, Object> stepParams = currentStepParams(context);
@@ -191,6 +195,7 @@ class SqlTransformComputePluginIntegrationTest {
   }
 
   @Test
+  @DisplayName("提交与反馈按租户与目标过滤:其它租户的暂存行既不发布也不被清理")
   void commitAndFeedback_filterStagingByTenantAndTarget() {
     ProcessJobContext context = newContextWithSpec();
 
@@ -217,6 +222,7 @@ class SqlTransformComputePluginIntegrationTest {
   }
 
   @Test
+  @DisplayName("水位取自暂存行而不是再查一次源表,本批水位推进到二")
   void compute_advancesWatermarkFromStagingRows_notSecondSourceQuery() {
     jdbcTemplate.execute("drop sequence if exists biz.watermark_seq");
     jdbcTemplate.execute("create sequence biz.watermark_seq start 1 increment 1");
@@ -242,6 +248,7 @@ class SqlTransformComputePluginIntegrationTest {
   }
 
   @Test
+  @DisplayName("空结果策略为成功且无新数据时校验通过:暂存与处理数均为零,也不产生新水位")
   void validate_allowsEmptyResultWhenPolicyIsSuccess() {
     ProcessJobContext context = newContextWithSpec();
     context.getAttributes().put(PipelineRuntimeKeys.HIGH_WATER_MARK_IN, 999L);
@@ -261,6 +268,7 @@ class SqlTransformComputePluginIntegrationTest {
   }
 
   @Test
+  @DisplayName("目标表不存在时准备阶段快速失败:给出目标表未找到的错误键与表名参数,暂存保持为空")
   void prepare_failsFast_whenTargetTableDoesNotExist() {
     ProcessJobContext context = newContextWithSpec();
     Map<String, Object> spec = nestedSpec(currentStepParams(context));
@@ -280,6 +288,7 @@ class SqlTransformComputePluginIntegrationTest {
   }
 
   @Test
+  @DisplayName("目标库不在允许清单内时准备阶段快速失败,并说明该库未被允许")
   void prepare_failsFast_whenSchemaNotInAllowlist() {
     ProcessJobContext context = newContextWithSpec();
     Map<String, Object> spec = nestedSpec(currentStepParams(context));
@@ -291,6 +300,7 @@ class SqlTransformComputePluginIntegrationTest {
   }
 
   @Test
+  @DisplayName("暂存行数超过上限时计算失败,并立即清理本批暂存以免污染后续阶段,目标表仍为空")
   void compute_failsAndCleansStaging_whenStagedRowsExceedMaxStagedRows() {
     // P1-6:把 maxStagedRows 设为 1,源数据 t1 有 A/B 两个 account → 聚合后 2 行 staging > 1 → overflow
     ProcessJobContext context = newContextWithSpec();
@@ -315,6 +325,7 @@ class SqlTransformComputePluginIntegrationTest {
   }
 
   @Test
+  @DisplayName("直接写入模式下不落暂存也能发布:目标表两行结果正确,行数、处理数与水位照常回写")
   void directMode_publishesWithoutJsonbStaging() {
     ProcessJobContext context = newContextWithSpec();
     Map<String, Object> spec = nestedSpec(currentStepParams(context));
@@ -347,6 +358,7 @@ class SqlTransformComputePluginIntegrationTest {
   }
 
   @Test
+  @DisplayName("发布语句在冲突更新之前按冲突列排序暂存记录,保证同键多行顺序稳定")
   void buildPublishSql_ordersStagedRowsByConflictColumnsBeforeUpsert() {
     ProcessJobContext context = newContextWithSpec();
     SqlTransformComputeSpec spec =
@@ -360,6 +372,7 @@ class SqlTransformComputePluginIntegrationTest {
   }
 
   @Test
+  @DisplayName("直接发布语句在冲突更新之前按冲突列排序源记录,保证同键多行顺序稳定")
   void buildDirectPublishSql_ordersSourceRowsByConflictColumnsBeforeUpsert() {
     ProcessJobContext context = newContextWithSpec();
     Map<String, Object> specMap = nestedSpec(currentStepParams(context));

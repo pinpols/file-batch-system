@@ -11,15 +11,18 @@ import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
  * P2-B 后,ComputeStep 不再持有 plugin 列表;plugin 解析在 DefaultProcessStageExecutor 启动时完成并 stash 到
  * context.resolvedPlugin。本测试只验 ComputeStep 的薄委托语义。
  */
+@DisplayName("处理计算阶段:薄委托给已解析插件,插件返回空与未解析插件时的语义,以及试运行跳过副作用")
 class ComputeStepTest {
 
   @Test
+  @DisplayName("上下文已解析插件时把计算委托给插件,并返回插件的阶段结果")
   void execute_invokesResolvedPluginFromContext() {
     ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
     when(plugin.compute(any())).thenReturn(ProcessStageResult.success(ProcessStage.COMPUTE));
@@ -36,6 +39,7 @@ class ComputeStepTest {
   }
 
   @Test
+  @DisplayName("插件计算返回空结果时判定失败,并给出空结果错误码")
   void execute_returnsFailure_whenPluginReturnsNull() {
     ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
     when(plugin.compute(any())).thenReturn(null);
@@ -51,6 +55,7 @@ class ComputeStepTest {
   }
 
   @Test
+  @DisplayName("上下文未解析插件时空操作成功,处理数置零")
   void execute_succeedsAsNoOp_whenNoPluginResolved() {
     ComputeStep step = new ComputeStep();
     ProcessJobContext context = new ProcessJobContext();
@@ -62,7 +67,8 @@ class ComputeStepTest {
   }
 
   @Test
-  void dryRunSkipsComputeAndValidatePluginSideEffects() {
+  @DisplayName("试运行模式下计算与校验都成功但不调用插件:处理数置零,并记录被跳过的暂存写入")
+  void shouldSkipComputeAndValidateSideEffects_whenDryRun() {
     ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
     ProcessJobContext context = new ProcessJobContext();
     context.setResolvedPlugin(plugin);

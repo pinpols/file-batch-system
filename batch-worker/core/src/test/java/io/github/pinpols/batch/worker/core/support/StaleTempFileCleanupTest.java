@@ -11,9 +11,11 @@ import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.time.Duration;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+@DisplayName("过期临时文件清理: 清理范围与可续传文件的保留判定")
 class StaleTempFileCleanupTest {
 
   @TempDir
@@ -29,7 +31,8 @@ class StaleTempFileCleanupTest {
   }
 
   @Test
-  void privateCleanupPreservesActiveAndResumableFiles() throws Exception {
+  @DisplayName("清理过期文件时, 仍被占用与可续传的文件必须保留, 孤立文件被删除")
+  void shouldPreserveActiveAndResumableFiles_whenCleaningStaleFiles() throws Exception {
     originalTmpDir = System.getProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY);
     System.setProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY, tempDir.toString());
     var old = FileTime.from(BatchDateTimeSupport.utcNow().minus(Duration.ofHours(8)));
@@ -49,6 +52,7 @@ class StaleTempFileCleanupTest {
   }
 
   @Test
+  @DisplayName("只删除超过保留时长且带批处理前缀的临时文件, 未过期文件与无关文件不受影响")
   void shouldDeleteOnlyBatchPrefixedFilesOlderThanCutoff() throws Exception {
     originalTmpDir = System.getProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY);
     System.setProperty(PrivateTempFiles.TEMP_ROOT_PROPERTY, tempDir.toString());

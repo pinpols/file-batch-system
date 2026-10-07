@@ -25,6 +25,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestReporter;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -40,6 +41,8 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 /** Opt-in live S3 contract check against a locally managed S3-compatible service. */
 @EnabledIfEnvironmentVariable(named = "S3_COMPAT_POC_ENDPOINT", matches = "https?://.+")
+@DisplayName(
+    "S3 兼容对象存储适配层活体契约(需环境变量开启):非法凭证被拒,上传下载与偏移读取内容一致,对象复制可用,列举分页游标推进,预签名上传与下载链接可用,超阈值对象分段上传往返完整,批量删除生效,多线程混合读写负载可完成")
 class S3CompatibleObjectStorePocTest {
 
   private static final String RUN_ID = UUID.randomUUID().toString().replace("-", "");
@@ -99,6 +102,7 @@ class S3CompatibleObjectStorePocTest {
   }
 
   @Test
+  @DisplayName("非法访问凭证调用桶列举:被服务端拒绝并返回 403,证明真实端点鉴权生效")
   void shouldRejectInvalidCredentials() {
     try (S3Client client = S3Client.builder()
         .endpointOverride(URI.create(endpoint))
@@ -127,6 +131,8 @@ class S3CompatibleObjectStorePocTest {
   }
 
   @Test
+  @DisplayName(
+      "应用层对象存储契约全链路:上传后存在性与大小可查,整对象与偏移读取内容一致,复制对象内容相同,列举分页游标推进,预签名上传与下载可用,超阈值对象分段上传往返完整,批量删除后键不再存在")
   void shouldExerciseApplicationS3Contract() throws Exception {
     String objectKey = PREFIX + "roundtrip.txt";
     byte[] content = "S3-compatible object store contract".getBytes(StandardCharsets.UTF_8);
@@ -199,6 +205,7 @@ class S3CompatibleObjectStorePocTest {
   }
 
   @Test
+  @DisplayName("多线程混合读写负载:就绪后按设定时长持续上传与下载,上传次数为正且下载次数与上传相等,线程池按时终止")
   void shouldRunComparableThirtySecondMixedLoad(TestReporter testReporter) throws Exception {
     int workers = intEnv("S3_COMPAT_POC_LOAD_WORKERS", 4);
     int payloadSize = intEnv("S3_COMPAT_POC_LOAD_PAYLOAD_BYTES", 1024 * 1024);

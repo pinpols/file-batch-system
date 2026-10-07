@@ -32,6 +32,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * 补上;持久有值则完全不触发下游调用。文件名(缺口2)从 selectFileInfoByPipelineInstance 取,放响应顶层。
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("文件流水线进度桥接: 实时行数补齐与终态隔离")
 class ConsoleFilePipelineProgressBridgeTest {
 
   private static final long PIPELINE_ID = 77L;

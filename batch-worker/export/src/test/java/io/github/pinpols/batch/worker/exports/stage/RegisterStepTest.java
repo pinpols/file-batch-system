@@ -24,8 +24,10 @@ import io.github.pinpols.batch.worker.exports.domain.ExportPayload;
 import io.github.pinpols.batch.worker.exports.plugin.ExportDataPluginRegistry;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("导出登记阶段单测:文件记录新建,校验和冲突与复用绑定的语义")
 class RegisterStepTest {
 
   private PlatformFileRecordRepository runtimeRepository;
@@ -51,6 +53,7 @@ class RegisterStepTest {
   }
 
   @Test
+  @DisplayName("演练模式下跳过文件登记与插件回调,不产生任何仓储交互")
   void execute_dryRunSkipsFileRegistrationAndPluginCallback() {
     ExportJobContext context = baseContext();
     context.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
@@ -63,6 +66,7 @@ class RegisterStepTest {
   }
 
   @Test
+  @DisplayName("对象名缺失时返回登记阶段非法,且不新建文件记录")
   void execute_returnsInvalid_whenObjectNameMissing() {
     ExportJobContext ctx = new ExportJobContext();
     ctx.setTenantId("t1");
@@ -75,6 +79,7 @@ class RegisterStepTest {
   }
 
   @Test
+  @DisplayName("同名文件已存在但校验和不一致时返回冲突,且不新建记录")
   void execute_returnsChecksumConflict_whenExistingFileRecordChecksumDiffers() {
     ExportJobContext ctx = baseContext();
     ctx.getAttributes().put(PipelineRuntimeKeys.OBJECT_NAME, "obj.json");
@@ -93,6 +98,7 @@ class RegisterStepTest {
   }
 
   @Test
+  @DisplayName("新建文件记录时带上目标编码与换行等编码元数据")
   void execute_registersConfiguredCharsetAndEncodingMetadata() {
     ExportJobContext ctx = baseContext();
     ctx.getAttributes().put(PipelineRuntimeKeys.OBJECT_NAME, "obj.csv");
@@ -123,6 +129,7 @@ class RegisterStepTest {
   }
 
   @Test
+  @DisplayName("校验和一致时复用已有文件记录,并绑定到管道实例且通知插件")
   void execute_reusesExistingFileRecord_whenChecksumMatches_andBindsToPipeline() {
     ExportJobContext ctx = baseContext();
     ctx.getAttributes().put(PipelineRuntimeKeys.OBJECT_NAME, "obj.json");

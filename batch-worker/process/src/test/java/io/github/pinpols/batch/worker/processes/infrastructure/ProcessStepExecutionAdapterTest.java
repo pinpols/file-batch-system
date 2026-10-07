@@ -37,6 +37,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("处理步骤执行适配器:流水线描述、插件码传递、失败错误本地化与成功信封的计数归一")
 class ProcessStepExecutionAdapterTest {
 
   @Mock
@@ -52,8 +53,9 @@ class ProcessStepExecutionAdapterTest {
   private PlatformFileRecordRepository fileRecords;
 
   @Test
+  @DisplayName("适配器描述处理流水线:类型为处理,起始阶段为准备阶段")
   @SuppressWarnings("unchecked")
-  void descriptorsMatchProcessPipeline() {
+  void shouldExposeProcessPipelineDescriptor_whenQueried() {
     ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
         processStageExecutor,
         new ObjectMapper(),
@@ -68,6 +70,7 @@ class ProcessStepExecutionAdapterTest {
   }
 
   @Test
+  @DisplayName("执行时创建流水线实例,把载荷中的插件码放进上下文,并标记流水线准备阶段成功")
   @SuppressWarnings("unchecked")
   void execute_createsProcessPipelineAndPassesPluginCodeFromPayload() {
     ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
@@ -103,6 +106,7 @@ class ProcessStepExecutionAdapterTest {
   }
 
   @Test
+  @DisplayName("阶段失败结果带本地化业务异常时,响应保留错误码、错误键与参数摘要,且默认不进入补偿")
   @SuppressWarnings("unchecked")
   void execute_preservesLocalizedErrorFromFailedStageResult() {
     ObjectMapper objectMapper = new ObjectMapper();

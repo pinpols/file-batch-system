@@ -18,12 +18,14 @@ import io.github.pinpols.batch.console.domain.notification.service.AlertmanagerN
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("告警接入接口: 令牌鉴权, 开关关闭与投递结论透出")
 class AlertmanagerNotifyControllerTest {
 
   @Mock
@@ -44,7 +46,8 @@ class AlertmanagerNotifyControllerTest {
   }
 
   @Test
-  void deliversWhenBearerTokenMatches() {
+  @DisplayName("携带的令牌与配置一致时接收告警, 并透出投递结论")
+  void shouldDeliver_whenBearerTokenMatches() {
     properties.setBearerToken("s3cr3t");
     when(notifyService.deliver(eq("batch-default"), any()))
         .thenReturn(new AmNotifyOutcome("batch-default", "batch-default", true, "SUCCESS", null));
@@ -57,7 +60,8 @@ class AlertmanagerNotifyControllerTest {
   }
 
   @Test
-  void rejectsWhenTokenMissing() {
+  @DisplayName("未携带鉴权头时以未授权拒绝, 不调用投递服务")
+  void shouldReject_whenTokenMissing() {
     properties.setBearerToken("s3cr3t");
 
     assertThatThrownBy(() -> controller.receive(null, "batch-default", payload()))
@@ -68,7 +72,8 @@ class AlertmanagerNotifyControllerTest {
   }
 
   @Test
-  void rejectsWhenTokenWrong() {
+  @DisplayName("令牌与配置不一致时以未授权拒绝, 不调用投递服务")
+  void shouldReject_whenTokenMismatch() {
     properties.setBearerToken("s3cr3t");
 
     assertThatThrownBy(() -> controller.receive("Bearer nope", "batch-default", payload()))
@@ -79,7 +84,8 @@ class AlertmanagerNotifyControllerTest {
   }
 
   @Test
-  void failClosedWhenNoTokenConfigured() {
+  @DisplayName("服务端未配置令牌时按失败关闭处理, 以未授权拒绝")
+  void shouldReject_whenNoTokenConfigured() {
     properties.setBearerToken("  ");
 
     assertThatThrownBy(() -> controller.receive("Bearer anything", "batch-default", payload()))
@@ -90,7 +96,8 @@ class AlertmanagerNotifyControllerTest {
   }
 
   @Test
-  void rejectsWithServiceUnavailableWhenDisabled() {
+  @DisplayName("接入开关关闭时以服务不可用拒绝, 不调用投递服务")
+  void shouldReject_whenEndpointDisabled() {
     properties.setEnabled(false);
     properties.setBearerToken("s3cr3t");
 

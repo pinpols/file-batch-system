@@ -5,12 +5,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("配置映射响应: 下划线列名归一化与时间字段类型转换")
 class ConfigMapResponseTest {
 
   @Test
-  void quotaPolicyShouldNormalizeSnakeCaseColumns() {
+  @DisplayName("配额策略行使用下划线列名时,租户、策略编码、并发上限与更新时间应正确映射")
+  void shouldNormalizeQuotaPolicy_whenColumnsAreSnakeCase() {
     Instant updatedAt = Instant.parse("2026-07-11T04:00:00Z");
 
     QuotaPolicyResponse response = QuotaPolicyResponse.from(Map.of(
@@ -34,7 +37,8 @@ class ConfigMapResponseTest {
   }
 
   @Test
-  void resourceQueueShouldNormalizeSnakeCaseColumns() {
+  @DisplayName("资源队列行使用下划线列名时,队列编码、队列类型与分区并发上限应正确映射")
+  void shouldNormalizeResourceQueue_whenColumnsAreSnakeCase() {
     ResourceQueueResponse response = ResourceQueueResponse.from(Map.of(
         "id",
         9L,
@@ -55,7 +59,8 @@ class ConfigMapResponseTest {
   }
 
   @Test
-  void syncLogShouldExposeTypedTimestamp() {
+  @DisplayName("配置同步日志的创建时间应由数据库时间戳转换为同一瞬间")
+  void shouldExposeTypedTimestamp_whenSyncLogCreatedAtPresent() {
     Instant createdAt = Instant.parse("2026-07-11T04:00:00Z");
 
     ConfigSyncLogResponse response = ConfigSyncLogResponse.from(Map.of(

@@ -5,12 +5,15 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
+@DisplayName("处理指标采集:注册表缺失时的空实现,以及暂存行数、发布行数、校验失败与阶段耗时的埋点语义")
 class ProcessMetricsTest {
 
   @Test
+  @DisplayName("注册表缺失时的空实现:暂存、发布、校验失败与阶段耗时各埋点调用都不抛异常")
   void noopFactory_doesNotThrow_whenRegistryAbsent() {
     ProcessMetrics metrics = ProcessMetrics.noop();
 
@@ -24,6 +27,7 @@ class ProcessMetricsTest {
   }
 
   @Test
+  @DisplayName("注册表可用时各埋点创建指标:暂存与发布行数按摘要累计,校验失败按次计数,阶段耗时进计时器")
   void recordsCreateMetersInRegistry_whenRegistryAvailable() {
     SimpleMeterRegistry registry = new SimpleMeterRegistry();
     ProcessMetrics metrics = new ProcessMetrics(asProvider(registry));
@@ -49,6 +53,7 @@ class ProcessMetricsTest {
   }
 
   @Test
+  @DisplayName("阶段耗时按阶段与成功标记区分计时器:三种标签组合各一个,同组合的两次记录累计在一个计时器上")
   void timerTagsByStageTenantAndSuccess_distinguishMeters() {
     SimpleMeterRegistry registry = new SimpleMeterRegistry();
     ProcessMetrics metrics = new ProcessMetrics(asProvider(registry));
@@ -70,6 +75,7 @@ class ProcessMetricsTest {
   }
 
   @Test
+  @DisplayName("租户与规则名为空或空白时归入同一未知标签计数器,两次调用累计为二")
   void normalizesNullOrBlankTags_toUnknown() {
     SimpleMeterRegistry registry = new SimpleMeterRegistry();
     ProcessMetrics metrics = new ProcessMetrics(asProvider(registry));

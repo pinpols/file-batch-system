@@ -12,6 +12,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -21,6 +22,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("配置缓存失效订阅事件消费与修订号缺口对账的验证")
 class OrchestratorConfigInvalidationSubscriberTest {
 
   @Mock
@@ -41,14 +43,16 @@ class OrchestratorConfigInvalidationSubscriberTest {
   }
 
   @Test
-  void appliesConfigInvalidationEventToLocalCache() {
+  @DisplayName("收到配置失效事件后,本地缓存中对应条目被立即清除")
+  void shouldEvictLocalCache_whenInvalidationEventReceived() {
     subscriber.onMessage(message(event(1, 1)), null);
 
     verify(cacheService).evictLocal("t1", "job-definition", "JOB1");
   }
 
   @Test
-  void rejectsStaleKeyRevision() {
+  @DisplayName("同一配置键收到修订号更小的事件时忽略,已应用的修订号不被回退")
+  void shouldIgnoreEvent_whenKeyRevisionOlderThanApplied() {
     subscriber.onMessage(message(event(2, 2)), null);
     subscriber.onMessage(message(event(3, 1)), null);
 
@@ -56,7 +60,8 @@ class OrchestratorConfigInvalidationSubscriberTest {
   }
 
   @Test
-  void wildcardEventClearsTypeLocalCache() {
+  @DisplayName("事件配置键为通配符时,清除该类型下全部本地缓存条目")
+  void shouldEvictWholeTypeCache_whenWildcardEventReceived() {
     ConfigCacheInvalidationEvent event =
         new ConfigCacheInvalidationEvent("t1", "job-definition", "*", 4, 1, Instant.now());
 
@@ -66,7 +71,8 @@ class OrchestratorConfigInvalidationSubscriberTest {
   }
 
   @Test
-  void eventRevisionGapClearsAllLocalCachesBeforeApplyingEvent() {
+  @DisplayName("事件修订号出现缺口时先清空全部本地缓存,再应用新事件")
+  void shouldClearAllLocalCaches_whenEventRevisionGapDetected() {
     subscriber.onMessage(message(event(1, 1)), null);
     subscriber.onMessage(message(event(3, 2)), null);
 
@@ -75,7 +81,8 @@ class OrchestratorConfigInvalidationSubscriberTest {
   }
 
   @Test
-  void reconcileRevisionGapClearsAllLocalCaches() {
+  @DisplayName("对账发现全局修订号落后时清空全部本地缓存")
+  void shouldClearAllLocalCaches_whenReconcileFindsRevisionGap() {
     when(redisTemplate.opsForValue()).thenReturn(valueOperations);
     when(valueOperations.get(BatchRedisKeys.configInvalidationGlobalRevision())).thenReturn("10");
 
@@ -85,7 +92,8 @@ class OrchestratorConfigInvalidationSubscriberTest {
   }
 
   @Test
-  void reconcileDoesNothingWhenRevisionAlreadyApplied() {
+  @DisplayName("全局修订号已应用时重复对账不再触发本地缓存清空")
+  void shouldNotClearLocalCaches_whenRevisionAlreadyApplied() {
     when(redisTemplate.opsForValue()).thenReturn(valueOperations);
     when(valueOperations.get(BatchRedisKeys.configInvalidationGlobalRevision())).thenReturn("10");
 

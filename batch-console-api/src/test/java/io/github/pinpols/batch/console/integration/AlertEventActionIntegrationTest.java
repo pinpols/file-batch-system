@@ -12,6 +12,7 @@ import io.github.pinpols.batch.console.domain.notification.mapper.AlertEventMapp
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Timestamp;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -24,6 +25,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@DisplayName("告警事件操作: 确认,抑制,关闭三个动作的响应与落库状态流转")
 class AlertEventActionIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
@@ -36,6 +38,7 @@ class AlertEventActionIntegrationTest extends AbstractIntegrationTest {
   private JdbcTemplate jdbcTemplate;
 
   @Test
+  @DisplayName("确认告警: 响应状态为已确认,且库内记录状态同步更新")
   void shouldAckAlert() {
     String tenantId = "t-alert-ack-" + BatchDateTimeSupport.utcEpochMillis();
     long alertId = insertAlertEvent(tenantId, "FILE_STUCK", "WARN", "OPEN", "File stalled");
@@ -50,6 +53,7 @@ class AlertEventActionIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("抑制告警: 响应状态为已抑制,且库内记录状态同步更新")
   void shouldSilenceAlert() {
     String tenantId = "t-alert-silence-" + BatchDateTimeSupport.utcEpochMillis();
     long alertId = insertAlertEvent(tenantId, "SLA_BREACH", "CRITICAL", "OPEN", "SLA breach");
@@ -64,6 +68,7 @@ class AlertEventActionIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("关闭告警: 响应状态为已关闭,且库内记录状态同步更新")
   void shouldCloseAlert() {
     String tenantId = "t-alert-close-" + BatchDateTimeSupport.utcEpochMillis();
     long alertId = insertAlertEvent(tenantId, "DISK_USAGE", "ERROR", "OPEN", "Disk issue");

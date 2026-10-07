@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -33,6 +34,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 /** {@link ExcelFormatParser} 单元测试:覆盖 .xls fail-fast、物理行号/列定位、表头校验、表头直通、preview、按名选 sheet。 */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("表格格式解析单测:旧二进制格式拒绝,表头映射与工作表选择及坏行定位语义")
 class ExcelFormatParserTest {
 
   @Mock
@@ -50,6 +52,7 @@ class ExcelFormatParserTest {
   // ── Item 1: 二进制 .xls (OLE2/HSSF) fail-fast ──────────────────────────────
 
   @Test
+  @DisplayName("旧版二进制表格格式被拒绝,并给出明确的不支持提示")
   void shouldRejectLegacyBinaryXls_withClearError() throws Exception {
     // arrange: 用 HSSF 生成真二进制 .xls(OLE2)字节
     byte[] xlsBytes = buildHssfBytes();
@@ -63,7 +66,8 @@ class ExcelFormatParserTest {
   }
 
   @Test
-  void usesPrivateFileBackedPathForOversizedExcelPayload() {
+  @DisplayName("超大载荷改用私有落地文件路径处理,超限时抛异常")
+  void shouldUseFileBackedPath_whenPayloadOversized() {
     byte[] oversizedPayload = new byte[16 * 1024 * 1024 + 1];
 
     assertThatThrownBy(() ->
@@ -74,6 +78,7 @@ class ExcelFormatParserTest {
   // ── Item 4: 无 field_mappings → 按 Excel 实际表头直通 ────────────────────────
 
   @Test
+  @DisplayName("无字段映射时直通实际表头作字段名,不套用固定结构")
   void shouldPassThroughActualHeaders_whenNoFieldMappings() throws Exception {
     byte[] xlsx = TestExcelFileBuilder.builder()
         .headers(List.of("订单号", "金额"))
@@ -93,6 +98,7 @@ class ExcelFormatParserTest {
   // ── Item 3: 表头存在性校验,缺列 fail-fast ──────────────────────────────────
 
   @Test
+  @DisplayName("映射的来源列在表头缺失时立即失败,并提示表头缺列")
   void shouldFailFast_whenMappedSourceHeaderMissing() {
     byte[] xlsx = TestExcelFileBuilder.builder()
         .headers(List.of("订单号", "金额"))
@@ -113,6 +119,7 @@ class ExcelFormatParserTest {
   }
 
   @Test
+  @DisplayName("映射列全部存在时,按映射投影出目标字段")
   void shouldProject_whenMappedHeadersAllPresent() throws Exception {
     byte[] xlsx = TestExcelFileBuilder.builder()
         .headers(List.of("订单号", "金额"))
@@ -132,6 +139,7 @@ class ExcelFormatParserTest {
   // ── Item 3: preview_rows 抽样早停 ──────────────────────────────────────────
 
   @Test
+  @DisplayName("配置预览行数时,只解析前若干行")
   void shouldStopAfterPreviewRows() throws Exception {
     TestExcelFileBuilder b = TestExcelFileBuilder.builder().headers(List.of("订单号"));
     for (int i = 0; i < 50; i++) {
@@ -150,6 +158,7 @@ class ExcelFormatParserTest {
   // ── Item 5: 按名选 sheet ───────────────────────────────────────────────────
 
   @Test
+  @DisplayName("按配置的工作表名解析对应工作表")
   void shouldSelectSheetByName() throws Exception {
     byte[] xlsx = TestExcelFileBuilder.builder()
         .sheetName("数据页")
@@ -166,6 +175,7 @@ class ExcelFormatParserTest {
   }
 
   @Test
+  @DisplayName("指定工作表不存在时立即失败,并提示工作表未找到")
   void shouldFailFast_whenNamedSheetNotFound() {
     byte[] xlsx = TestExcelFileBuilder.builder()
         .sheetName("数据页")
@@ -184,6 +194,7 @@ class ExcelFormatParserTest {
   // ── Item 2: 坏行携带物理行号 + 列名 ─────────────────────────────────────────
 
   @Test
+  @DisplayName("坏行按物理行号与列名定位,并回传位置信息")
   void shouldCarryPhysicalRowNumber_onBadRow() throws Exception {
     // 表头(物理行1)+ good(物理行2)+ boom(物理行3);boom 记录序列化时抛异常 → 走 endRow 坏行 catch。
     byte[] xlsx = TestExcelFileBuilder.builder()
@@ -211,6 +222,7 @@ class ExcelFormatParserTest {
   }
 
   @Test
+  @DisplayName("全部行解析正常时,不触发坏记录治理回调")
   void shouldNotInvokeGovernance_onCleanParse() throws Exception {
     byte[] xlsx =
         TestExcelFileBuilder.builder().headers(List.of("a")).row(List.of("x")).build();

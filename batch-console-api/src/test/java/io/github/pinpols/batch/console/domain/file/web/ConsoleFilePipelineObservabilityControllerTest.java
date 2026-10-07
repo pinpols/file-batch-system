@@ -20,11 +20,13 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+@DisplayName("文件流水线可观测控制器: 列表与详情查询接口")
 class ConsoleFilePipelineObservabilityControllerTest {
 
   private final ConsoleQueryApplicationService queryApplicationService =
@@ -53,6 +55,7 @@ class ConsoleFilePipelineObservabilityControllerTest {
   }
 
   @Test
+  @DisplayName("兼容旧路径的文件流水线列表查询返回分页数据")
   void shouldReturnFilePipelinesFromLegacyPath() throws Exception {
     when(queryApplicationService.filePipelines(any()))
         .thenReturn(new PageResponse<>(
@@ -85,6 +88,7 @@ class ConsoleFilePipelineObservabilityControllerTest {
   }
 
   @Test
+  @DisplayName("兼容旧路径的文件流水线详情查询返回运行状态")
   void shouldReturnFilePipelineDetailFromLegacyPath() throws Exception {
     when(queryApplicationService.filePipelineDetail(anyString(), anyLong()))
         .thenReturn(new ConsoleFilePipelineResponse(

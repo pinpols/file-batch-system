@@ -9,13 +9,16 @@ import io.github.pinpols.batch.orchestrator.infrastructure.storage.S3DryRunObjec
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import software.amazon.awssdk.services.s3.S3Client;
 
+@DisplayName("试运行对象存储探测: 桶名称校验与客户端不可用时的降级口径")
 class DryRunObjectStorageProbeTest {
 
   @Test
+  @DisplayName("按配置的存储桶名称探测,名称非法时记录桶配置非法的发现项")
   void shouldUseConfiguredBucketAndRejectInvalidName() {
     ObjectProvider<S3Client> clientProvider = provider(null);
     S3StorageProperties properties = new S3StorageProperties();
@@ -31,6 +34,7 @@ class DryRunObjectStorageProbeTest {
   }
 
   @Test
+  @DisplayName("存储客户端不可用时退化为仅按命名规则匹配,仍完成一次探测")
   void shouldKeepRegexOnlyFallbackWhenClientUnavailable() {
     DryRunObjectStorageProbe probe = new S3DryRunObjectStorageProbe(provider(null), provider(null));
     List<DryRunFinding> findings = new ArrayList<>();

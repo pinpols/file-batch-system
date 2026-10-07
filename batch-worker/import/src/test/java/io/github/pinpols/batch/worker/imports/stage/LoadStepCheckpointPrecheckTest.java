@@ -44,6 +44,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * 任何 cap 都 pass。
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("导入续跑前置校验单测:插件幂等能力自报与开关关闭时的放行语义")
 class LoadStepCheckpointPrecheckTest {
 
   private static final String TENANT = "tenant-A";

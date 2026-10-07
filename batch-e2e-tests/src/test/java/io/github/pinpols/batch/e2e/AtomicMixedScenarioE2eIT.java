@@ -24,6 +24,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,6 +44,8 @@ import org.springframework.test.context.ActiveProfiles;
 @ActiveProfiles({"test", "e2e"})
 @E2eBusinessSchema
 @Tag("e2e")
+@DisplayName(
+    "原子任务混合执行器端到端:同一 worker 进程交错处理数据库查询,命令行脚本,存储过程与 HTTP 调用四类任务,连续三轮投放,验证混合流量下派发与执行链路全部收敛到终态成功")
 class AtomicMixedScenarioE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -58,7 +61,8 @@ class AtomicMixedScenarioE2eIT extends AbstractIntegrationTest {
   private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
   @Test
-  void mixedExecutorTrafficAllReachesSuccess() throws IOException {
+  @DisplayName("连续三轮各投放四类执行器任务:验证每个任务都走到终态成功,成功任务数与投放数完全一致")
+  void shouldReachSuccessForAllTasks_whenMixedExecutorsRunInRepeatedRounds() throws IOException {
     jdbcTemplate.execute(
         "CREATE OR REPLACE PROCEDURE batch.e2e_mixed_proc() LANGUAGE plpgsql AS $$ BEGIN END; $$");
 

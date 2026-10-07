@@ -16,12 +16,14 @@ import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
 import java.time.Instant;
 import java.util.Arrays;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("工作节点排空超时调度,验证开关关闭时跳过扫描与仅对超期节点执行接管")
 class WorkerDrainTimeoutSchedulerTest {
 
   @Mock
@@ -48,6 +50,7 @@ class WorkerDrainTimeoutSchedulerTest {
   }
 
   @Test
+  @DisplayName("排空超时调度开关关闭时不扫描排空节点,也不执行超时接管")
   void shouldSkipWhenDisabled() {
     workerDrainProperties.setEnabled(false);
 
@@ -59,6 +62,7 @@ class WorkerDrainTimeoutSchedulerTest {
   }
 
   @Test
+  @DisplayName("仅对排空截止时间已过期的节点执行超时接管,截止时间未到或缺失的节点保持原状")
   void shouldTakeOverOnlyExpiredDrainingWorkers() {
     Instant now = BatchDateTimeSupport.utcNow();
     WorkerRegistryEntity expired =

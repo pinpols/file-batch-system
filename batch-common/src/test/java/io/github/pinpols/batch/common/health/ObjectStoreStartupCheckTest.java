@@ -24,10 +24,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /** {@link ObjectStoreStartupCheck} 单测:探针成功跑通 + 各失败点 fail-fast + 失败也清理探针。 */
+@DisplayName("对象存储启动自检:探针读写校验通过,以及桶名、内容、长度、预签名、上传与清理各失败点的快速失败")
 class ObjectStoreStartupCheckTest {
 
   private static final String BUCKET = "probe-bucket";
@@ -41,6 +43,7 @@ class ObjectStoreStartupCheckTest {
   }
 
   @Test
+  @DisplayName("可用存储上探针读写校验通过,且探针对象被清理")
   void shouldPassAgainstWorkingStore(@TempDir Path root) {
     ObjectStoreStartupCheck check = new ObjectStoreStartupCheck(realStore(root), BUCKET);
 
@@ -52,6 +55,7 @@ class ObjectStoreStartupCheckTest {
   }
 
   @Test
+  @DisplayName("桶名为空白时在自检开始前快速失败")
   void shouldFailFastWhenBucketBlank(@TempDir Path root) {
     ObjectStoreStartupCheck check = new ObjectStoreStartupCheck(realStore(root), "  ");
 
@@ -61,6 +65,7 @@ class ObjectStoreStartupCheckTest {
   }
 
   @Test
+  @DisplayName("回读内容与写入不一致时快速失败并清理探针")
   void shouldFailFastWhenGetReturnsWrongContent() {
     BatchObjectStore store = mock(BatchObjectStore.class);
     when(store.exists(anyString(), anyString())).thenReturn(true);
@@ -77,6 +82,7 @@ class ObjectStoreStartupCheckTest {
   }
 
   @Test
+  @DisplayName("对象长度小于探针写入长度时快速失败")
   void shouldFailFastWhenStatSizeMismatch() {
     BatchObjectStore store = mock(BatchObjectStore.class);
     when(store.exists(anyString(), anyString())).thenReturn(true);
@@ -91,6 +97,7 @@ class ObjectStoreStartupCheckTest {
   }
 
   @Test
+  @DisplayName("预签名地址为空白时快速失败")
   void shouldFailFastWhenPresignReturnsBlank() {
     BatchObjectStore store = mock(BatchObjectStore.class);
     AtomicReference<String> probeKey = new AtomicReference<>();
@@ -122,6 +129,7 @@ class ObjectStoreStartupCheckTest {
   }
 
   @Test
+  @DisplayName("对象长度大于明文长度时不误判失败")
   void shouldPassWhenStatSizeExceedsPayload(@TempDir Path root) {
     // 回归:加密装饰层 statSize 返回密文字节数(> 明文),探针不得据此误判失败。
     // 用真实 FS store + 只放大 statSize 的薄委托模拟「密文比明文长」。
@@ -136,6 +144,7 @@ class ObjectStoreStartupCheckTest {
   }
 
   @Test
+  @DisplayName("上传探针抛出异常时快速失败")
   void shouldFailFastWhenPutThrows() {
     BatchObjectStore store = mock(BatchObjectStore.class);
     doThrow(new RuntimeException("connection refused"))
@@ -150,6 +159,7 @@ class ObjectStoreStartupCheckTest {
   }
 
   @Test
+  @DisplayName("清理探针失败时不掩盖自检失败原因")
   void shouldNotThrowWhenCleanupFails() {
     BatchObjectStore store = mock(BatchObjectStore.class);
     when(store.exists(anyString(), anyString())).thenReturn(true);

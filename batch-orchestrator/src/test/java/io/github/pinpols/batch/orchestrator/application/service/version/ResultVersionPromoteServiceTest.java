@@ -22,9 +22,11 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.Month;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.OptimisticLockingFailureException;
 
+@DisplayName("结果版本生效服务: 生效,驳回,并发冲突与参数校验的处理口径")
 class ResultVersionPromoteServiceTest {
 
   private ResultVersionMapper mapper;
@@ -44,7 +46,8 @@ class ResultVersionPromoteServiceTest {
   }
 
   @Test
-  void promotePendingDemotesPriorEffectiveAndPromotes() {
+  @DisplayName("待生效版本成功抢占时先作废旧生效版本,再置为新生效并物化分区")
+  void shouldPromoteAndSupersedePrior_whenPendingVersionConfirmed() {
     ResultVersionEntity pending = ResultVersionEntity.builder()
         .id(2L)
         .tenantId("t1")
@@ -78,7 +81,8 @@ class ResultVersionPromoteServiceTest {
   }
 
   @Test
-  void promoteRejectsNonPendingState() {
+  @DisplayName("版本不处于待生效状态时抛出业务异常,且不写生效记录")
+  void shouldRejectPromotion_whenStateNotPending() {
     ResultVersionEntity row = ResultVersionEntity.builder()
         .id(1L)
         .tenantId("t1")
@@ -94,7 +98,8 @@ class ResultVersionPromoteServiceTest {
   }
 
   @Test
-  void promoteRaceLossThrowsOptimisticLockingFailure() {
+  @DisplayName("并发导致生效更新未命中任何行时抛出乐观锁异常,且不物化分区")
+  void shouldFailOnRaceLoss_whenUpdateAffectsNoRow() {
     ResultVersionEntity pending = ResultVersionEntity.builder()
         .id(3L)
         .tenantId("t1")
@@ -110,7 +115,8 @@ class ResultVersionPromoteServiceTest {
   }
 
   @Test
-  void rejectPendingArchivesIt() {
+  @DisplayName("驳回待生效版本时将其置为归档,且不影响已有生效版本")
+  void shouldArchive_whenPendingVersionRejected() {
     ResultVersionEntity pending = ResultVersionEntity.builder()
         .id(4L)
         .tenantId("t1")
@@ -134,14 +140,16 @@ class ResultVersionPromoteServiceTest {
   }
 
   @Test
-  void notFoundThrows() {
+  @DisplayName("版本不存在时抛出业务异常")
+  void shouldThrow_whenVersionMissing() {
     when(mapper.selectById("t1", 999L)).thenReturn(null);
 
     assertThatThrownBy(() -> service.promote("t1", 999L)).isInstanceOf(BizException.class);
   }
 
   @Test
-  void invalidArgumentsThrow() {
+  @DisplayName("租户或版本标识为空时抛出业务异常")
+  void shouldThrow_whenArgumentsInvalid() {
     assertThatThrownBy(() -> service.promote(null, 1L)).isInstanceOf(BizException.class);
     assertThatThrownBy(() -> service.rejectPending("t1", null)).isInstanceOf(BizException.class);
   }

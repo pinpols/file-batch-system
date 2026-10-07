@@ -14,6 +14,7 @@ import io.github.pinpols.batch.sdk.scheduler.LeaseRenewalScheduler;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.time.Duration;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
@@ -25,6 +26,7 @@ import org.mockito.Mockito;
  * <p>正确顺序保护:drain 期间 heartbeat / lease 仍在跑维持租约,避免 orchestrator 在 worker 完成 in-flight 任务过程中误判 worker
  * 死了把同 task 派给别人。
  */
+@DisplayName("BatchPlatformClient 停止顺序 — 关闭次序与注销异常兜底")
 class BatchPlatformClientStopOrderTest {
 
   private static BatchPlatformClientConfig cfg() {
@@ -46,7 +48,8 @@ class BatchPlatformClientStopOrderTest {
   }
 
   @Test
-  void stopClosesKafkaThenDispatcherThenSchedulersThenDeactivate() throws Exception {
+  @DisplayName("停止时先关消费端并排空派发,再取消在飞请求、关心跳与租约并注销")
+  void shouldCloseInFixedOrder_whenStopping() throws Exception {
     BatchPlatformClient client = BatchPlatformClient.builder(cfg()).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
@@ -78,7 +81,8 @@ class BatchPlatformClientStopOrderTest {
   }
 
   @Test
-  void deactivateFailureSwallowedSoStopAlwaysFinishes() throws Exception {
+  @DisplayName("注销上报失败被吞掉,停止流程仍完整走完")
+  void shouldSwallowDeactivateFailure_whenStopping() throws Exception {
     BatchPlatformClient client = BatchPlatformClient.builder(cfg()).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     doThrow(new IOException("network down"))
@@ -95,7 +99,8 @@ class BatchPlatformClientStopOrderTest {
   }
 
   @Test
-  void stopWhenNotStartedIsNoop() throws Exception {
+  @DisplayName("未启动时调用停止不对任何组件发起操作")
+  void shouldDoNothing_whenStopCalledBeforeStart() throws Exception {
     BatchPlatformClient client = BatchPlatformClient.builder(cfg()).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     inject(client, "httpClient", http);

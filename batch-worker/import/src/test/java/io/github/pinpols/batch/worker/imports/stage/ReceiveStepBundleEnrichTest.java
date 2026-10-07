@@ -12,6 +12,7 @@ import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -22,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * 为空的字段,且不覆盖 payload 已带的字段(对既有 existing-file 导入流零影响)。
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("导入接收阶段文件记录回填单测:存储坐标补全与已带字段不被覆盖语义")
 class ReceiveStepBundleEnrichTest {
 
   @Mock
@@ -93,6 +95,7 @@ class ReceiveStepBundleEnrichTest {
   }
 
   @Test
+  @DisplayName("文件记录里的存储坐标与校验信息回填到空字段,已有模板编码不受影响")
   void enrichFromFileRecord_backfillsStorageCoordinatesForBundlePartition() {
     ImportPayload enriched =
         receiveStep.enrichFromFileRecord(payloadWithTemplateOnly("RISK_IMPORT_V2"), fileRecord());
@@ -111,6 +114,7 @@ class ReceiveStepBundleEnrichTest {
   }
 
   @Test
+  @DisplayName("载荷自带的存储信息优先,文件记录不覆盖已填字段")
   void enrichFromFileRecord_doesNotOverrideFieldsPayloadAlreadyCarries() {
     ImportPayload payload = new ImportPayload(
         null,
@@ -148,6 +152,7 @@ class ReceiveStepBundleEnrichTest {
   }
 
   @Test
+  @DisplayName("文件记录为空或结构不符时,原样返回载荷")
   void enrichFromFileRecord_nullOrEmptyFileRecordReturnsPayloadUnchanged() {
     ImportPayload payload = payloadWithTemplateOnly("RISK_IMPORT_V2");
 

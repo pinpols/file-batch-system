@@ -21,11 +21,13 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+@DisplayName("治理参数控制台接口: 查询、更新与重置的响应契约")
 class ConsoleGovernanceControllerTest {
 
   private final ConsoleSystemParameterService parameterService =
@@ -63,6 +65,7 @@ class ConsoleGovernanceControllerTest {
   }
 
   @Test
+  @DisplayName("查询治理参数返回成功, 且已配置项以字符串值出现在数据体中")
   void shouldListGovernanceParams() throws Exception {
     when(parameterService.getValue("t1", "governance.outbox.circuit-breaker.failure-threshold"))
         .thenReturn(Optional.of("5"));
@@ -79,6 +82,7 @@ class ConsoleGovernanceControllerTest {
   }
 
   @Test
+  @DisplayName("更新治理参数返回成功, 并按操作人与默认说明写入新值")
   void shouldUpdateGovernanceParam() throws Exception {
     mockMvc
         .perform(post("/api/console/ops/governance")
@@ -100,6 +104,7 @@ class ConsoleGovernanceControllerTest {
   }
 
   @Test
+  @DisplayName("重置治理参数返回成功, 并按指定键执行删除")
   void shouldResetGovernanceParam() throws Exception {
     mockMvc
         .perform(post("/api/console/ops/governance/reset")

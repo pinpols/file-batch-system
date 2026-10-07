@@ -28,6 +28,7 @@ import java.time.LocalDate;
 import java.time.Month;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -50,6 +51,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("任务失败后重试计划落库与到期重投递的端到端流程验证")
 class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -80,6 +82,7 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
   private JdbcTemplate jdbcTemplate;
 
   @Test
+  @DisplayName("任务执行失败后创建等待中的重试计划,到期重投递时新增发送事件使分区重新入队")
   void taskFailure_withRetryPolicy_schedulesRetryAndDispatchDueRetries_requeuesPartition() {
     String suffix = Long.toUnsignedString(System.nanoTime());
     String jobCode = "IT_RETRY_" + suffix;

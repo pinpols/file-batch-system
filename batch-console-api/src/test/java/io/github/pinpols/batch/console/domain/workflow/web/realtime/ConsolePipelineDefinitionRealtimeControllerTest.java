@@ -16,11 +16,13 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+@DisplayName("流水线定义实时事件流: 订阅接口开启异步流, 并按租户与频道注册订阅")
 class ConsolePipelineDefinitionRealtimeControllerTest {
 
   private final ConsoleRealtimeSubscriptionPort realtimeEventHub =
@@ -50,6 +52,7 @@ class ConsolePipelineDefinitionRealtimeControllerTest {
   }
 
   @Test
+  @DisplayName("请求流水线定义事件流时, 订阅按租户与频道标识注册且异步响应已启动")
   void shouldExposeDomainRealtimeStreamOnPipelineDefinitionsController() throws Exception {
     mockMvc
         .perform(get("/api/console/pipeline-definitions/events").param("tenantId", "t1"))

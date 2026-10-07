@@ -24,12 +24,14 @@ import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 /** P2: ConsoleConfigApprovalController submit/detail/approve/reject 4 端点透传 + idempotency. */
+@DisplayName("配置发布审批接口:提交, 详情, 通过, 驳回四端点透传参数与幂等键, 并校验租户绑定")
 class ConsoleConfigApprovalControllerTest {
 
   private final ConsoleConfigApprovalApplicationService service =
@@ -56,7 +58,8 @@ class ConsoleConfigApprovalControllerTest {
   }
 
   @Test
-  void submitApprovalShouldPassReleaseIdAndForwardBody() throws Exception {
+  @DisplayName("提交审批:发布标识与请求体透传服务层, 返回状态改为待审批")
+  void shouldForwardReleaseIdAndBody_whenSubmittingApproval() throws Exception {
     // 键与真实 detail() 输出一致：releaseId/tenantId/configType/configKey/configStatus/approval。
     when(service.submit(eq(7L), any(ConfigReleaseApprovalSubmitRequest.class)))
         .thenReturn(ConsoleConfigApprovalDetailResponse.from(Map.of(
@@ -82,7 +85,8 @@ class ConsoleConfigApprovalControllerTest {
   }
 
   @Test
-  void approvalDetailShouldPassReleaseIdAndTenant() throws Exception {
+  @DisplayName("审批详情:租户与发布标识透传服务层, 返回待审批与挂起中的审批态")
+  void shouldForwardReleaseIdAndTenant_whenReadingApprovalDetail() throws Exception {
     when(service.detail("ta", 7L))
         .thenReturn(ConsoleConfigApprovalDetailResponse.from(Map.of(
             "releaseId",
@@ -103,7 +107,8 @@ class ConsoleConfigApprovalControllerTest {
   }
 
   @Test
-  void approveShouldPassApprovalIdAndBody() throws Exception {
+  @DisplayName("审批通过:审批标识与请求体透传, 返回已发布与已通过状态")
+  void shouldForwardApprovalIdAndBody_whenApproving() throws Exception {
     when(service.approve(eq(100L), any(ConfigApprovalActionRequest.class)))
         .thenReturn(ConsoleConfigApprovalDetailResponse.from(Map.of(
             "releaseId",
@@ -124,7 +129,8 @@ class ConsoleConfigApprovalControllerTest {
   }
 
   @Test
-  void rejectShouldPassApprovalIdAndBody() throws Exception {
+  @DisplayName("审批驳回:审批标识与请求体透传, 返回草稿与已驳回状态")
+  void shouldForwardApprovalIdAndBody_whenRejecting() throws Exception {
     when(service.reject(eq(100L), any(ConfigApprovalActionRequest.class)))
         .thenReturn(ConsoleConfigApprovalDetailResponse.from(Map.of(
             "releaseId",
@@ -145,7 +151,8 @@ class ConsoleConfigApprovalControllerTest {
   }
 
   @Test
-  void approveShouldRejectMissingTenantId() throws Exception {
+  @DisplayName("租户缺失:请求体未绑定租户时返回参数错误, 不进入业务处理")
+  void shouldRejectMissingTenantId_whenApproving() throws Exception {
     // 操作人来自认证上下文；请求体只校验租户绑定。
     mockMvc
         .perform(post("/api/console/config/approvals/100/approve")

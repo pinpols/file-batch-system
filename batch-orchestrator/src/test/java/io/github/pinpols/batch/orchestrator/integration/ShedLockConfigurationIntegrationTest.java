@@ -17,6 +17,7 @@ import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.core.SimpleLock;
 import net.javacrumbs.shedlock.provider.redis.spring.RedisLockProvider;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -31,6 +32,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("分布式锁配置:锁表迁移结果,锁提供者装配类型,以及互斥获取与到期重入行为")
 class ShedLockConfigurationIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
@@ -43,6 +45,7 @@ class ShedLockConfigurationIntegrationTest extends AbstractIntegrationTest {
   DataSource dataSource;
 
   @Test
+  @DisplayName("数据库迁移后锁表存在,且装配的锁提供者为 Redis 实现并注入数据源")
   void shouldCreateShedLockTableFromFlywayAndConfigureRedisLockProvider() {
     Integer tableCount = jdbcTemplate.queryForObject("""
             select count(*)
@@ -57,6 +60,7 @@ class ShedLockConfigurationIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("同一锁名称被两个线程同时争抢时只有一个获取成功")
   void shouldEnforceMutualExclusion() throws Exception {
     String lockName = "it-lock-mutual-exclusion-" + System.nanoTime();
     ExecutorService pool = Executors.newFixedThreadPool(2);
@@ -84,6 +88,7 @@ class ShedLockConfigurationIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("锁未主动释放时最大持有时长到期后可再次获取")
   void shouldAllowReacquireAfterExpiry() throws Exception {
     String lockName = "it-lock-reacquire-after-expiry";
     Optional<SimpleLock> first = lockProvider.lock(new LockConfiguration(

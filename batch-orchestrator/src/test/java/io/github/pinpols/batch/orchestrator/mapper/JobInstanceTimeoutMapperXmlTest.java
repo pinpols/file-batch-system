@@ -6,15 +6,18 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.session.Configuration;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** 防回归：实例已派发但 worker 尚未 claim 时，不得被业务硬超时终止。 */
+@DisplayName("作业实例超时候选查询: 仅在存在运行中任务时才判定业务硬超时")
 class JobInstanceTimeoutMapperXmlTest {
 
   private static final String RESOURCE = "mapper/JobInstanceMapper.xml";
 
   @Test
-  void timedOutCandidatesMustRequireAnActivelyRunningTask() throws Exception {
+  @DisplayName("超时终止候选必须关联运行中的任务,避免已派发未认领的实例被误终止")
+  void shouldOnlySelectTimedOutCandidates_whenTaskIsRunning() throws Exception {
     byte[] xml;
     try (InputStream inputStream = resource()) {
       assertThat(inputStream).as(RESOURCE).isNotNull();

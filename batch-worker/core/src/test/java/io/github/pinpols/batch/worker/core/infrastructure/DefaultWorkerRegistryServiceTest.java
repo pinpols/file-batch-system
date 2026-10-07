@@ -30,6 +30,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * </ul>
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("Worker 注册服务: 注册与心跳时间戳补齐, 状态回退与透传")
 class DefaultWorkerRegistryServiceTest {
 
   @Mock

@@ -15,13 +15,16 @@ import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantQuotaPolicyMapper;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+@DisplayName("租户运营配置落地支持: 业务日历上送与节假日行重建")
 class TenantOperationalConfigApplySupportTest {
 
   @Test
-  void updatingCalendarShouldReplaceHolidayRowsInOriginalOrder() {
+  @DisplayName("更新业务日历后,节假日行按原顺序整体重建并写入创建人")
+  void shouldReplaceHolidayRowsInOriginalOrder_whenCalendarIsUpserted() {
     ResourceQueueMapper resourceQueueMapper = mock(ResourceQueueMapper.class);
     BatchWindowMapper batchWindowMapper = mock(BatchWindowMapper.class);
     BusinessCalendarMapper calendarMapper = mock(BusinessCalendarMapper.class);

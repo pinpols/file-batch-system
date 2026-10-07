@@ -6,11 +6,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.github.pinpols.batch.console.config.ConsoleMenuProperties;
 import java.util.List;
 import java.util.Set;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("控制台菜单注册:按角色过滤可见菜单, 未配置授权时回退最小角色, 历史角色配置直接拒绝")
 class ConsoleMenuRegistryTest {
 
   @Test
+  @DisplayName("显式授权:角色层级无法表达时按授权集合过滤, 无授权角色看不到条目")
   void shouldUseExplicitAuthorities_whenRoleHierarchyCannotExpressAccess() {
     ConsoleMenuRegistry registry = registryWithItem("ADMIN", List.of("ROLE_TENANT_USER"), "VIEWER");
 
@@ -22,6 +25,7 @@ class ConsoleMenuRegistryTest {
   }
 
   @Test
+  @DisplayName("查看者可见:分组对查看者开放时子条目保留")
   void shouldKeepViewerChildren_whenGroupIsVisibleToViewer() {
     ConsoleMenuRegistry registry = registryWithItem("VIEWER", List.of(), "VIEWER");
 
@@ -33,6 +37,7 @@ class ConsoleMenuRegistryTest {
   }
 
   @Test
+  @DisplayName("回退最小角色:未配置授权时按最小角色判定可见性")
   void shouldFallBackToMinRole_whenAuthoritiesAreNotConfigured() {
     ConsoleMenuRegistry registry = registryWithItem("VIEWER", List.of(), "TENANT_ADMIN");
 
@@ -44,6 +49,7 @@ class ConsoleMenuRegistryTest {
   }
 
   @Test
+  @DisplayName("历史角色:菜单授权含旧角色时构造即抛出参数异常")
   void shouldRejectLegacyRoleInMenuAuthorities() {
     assertThatThrownBy(() -> registryWithItem("VIEWER", List.of("ROLE_USER"), "VIEWER"))
         .isInstanceOf(IllegalArgumentException.class)

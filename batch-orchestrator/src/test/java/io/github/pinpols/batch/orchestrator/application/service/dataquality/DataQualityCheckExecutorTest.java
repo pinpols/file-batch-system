@@ -21,11 +21,13 @@ import java.time.LocalDate;
 import java.time.Month;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
+@DisplayName("数据质量检查执行器: 规则模式, 严重度判定与门禁状态口径")
 class DataQualityCheckExecutorTest {
 
   private DataQualityRuleMapper ruleMapper;
@@ -48,7 +50,8 @@ class DataQualityCheckExecutorTest {
   }
 
   @Test
-  void noRulesReturnsNoRulesStatus() {
+  @DisplayName("没有启用规则时门禁状态为无规则, 不落库检查记录")
+  void shouldReportNoRules_whenNoEnabledRules() {
     when(ruleMapper.selectEnabledByBusinessKey("t1", "job:JOB:2026-05-07")).thenReturn(List.of());
 
     var outcome = executor.execute(instance("t1", 1L), "job:JOB:2026-05-07");
@@ -58,7 +61,8 @@ class DataQualityCheckExecutorTest {
   }
 
   @Test
-  void tableLevelPassWithMinThresholdEmitsPass() {
+  @DisplayName("表级规则达到最小阈值时门禁通过并落库检查记录")
+  void shouldPass_whenTableLevelRuleMeetsThreshold() {
     DataQualityRuleEntity rule = rule(
         "ROW_COUNT_OK",
         "TABLE_LEVEL",
@@ -77,7 +81,8 @@ class DataQualityCheckExecutorTest {
   }
 
   @Test
-  void tableLevelBlockerFailGatesEffective() {
+  @DisplayName("阻断级规则不达标时门禁阻断并记录失败明细")
+  void shouldBlock_whenBlockerRuleFails() {
     DataQualityRuleEntity rule = rule(
         "ROW_COUNT_LOW",
         "TABLE_LEVEL",
@@ -97,7 +102,8 @@ class DataQualityCheckExecutorTest {
   }
 
   @Test
-  void warnSeverityFailDowngradesToWarnNotBlocked() {
+  @DisplayName("告警级规则不达标时降级为告警而不阻断")
+  void shouldWarn_whenWarnSeverityRuleFails() {
     DataQualityRuleEntity rule =
         rule("FRESHNESS", "TABLE_LEVEL", "WARN", "SELECT 0", "{\"min\":1}");
     when(ruleMapper.selectEnabledByBusinessKey(anyString(), anyString())).thenReturn(List.of(rule));
@@ -111,7 +117,8 @@ class DataQualityCheckExecutorTest {
   }
 
   @Test
-  void rejectsDdlExpression() {
+  @DisplayName("规则表达式不是查询语句时记错误明细并阻断")
+  void shouldBlock_whenExpressionIsNotSelect() {
     DataQualityRuleEntity rule =
         rule("BAD_DDL", "TABLE_LEVEL", "BLOCKER", "DROP TABLE batch.batch_day_instance", null);
     when(ruleMapper.selectEnabledByBusinessKey(anyString(), anyString())).thenReturn(List.of(rule));
@@ -124,7 +131,8 @@ class DataQualityCheckExecutorTest {
   }
 
   @Test
-  void rejectsForbiddenFunctionExpressionWithoutExecuting() {
+  @DisplayName("规则表达式使用禁用函数时在校验阶段记错误并阻断, 不下发执行")
+  void shouldBlock_whenExpressionUsesForbiddenFunction() {
     DataQualityRuleEntity rule = rule(
         "DOS_SLEEP",
         "TABLE_LEVEL",
@@ -143,7 +151,8 @@ class DataQualityCheckExecutorTest {
   }
 
   @Test
-  void rowLevelRuleSkippedForNowAsPass() {
+  @DisplayName("行级规则本轮按跳过处理并记为跳过, 不影响门禁通过")
+  void shouldSkipRowLevelRule_whenExecuting() {
     DataQualityRuleEntity rule = rule("ROW_AMT_POS", "ROW_LEVEL", "BLOCKER", "amount > 0", null);
     when(ruleMapper.selectEnabledByBusinessKey(anyString(), anyString())).thenReturn(List.of(rule));
 
@@ -155,7 +164,8 @@ class DataQualityCheckExecutorTest {
   }
 
   @Test
-  void offModeDoesNotLoadOrExecuteRules() {
+  @DisplayName("关闭模式下不加载也不执行规则, 不落库检查记录")
+  void shouldNotLoadRules_whenModeOff() {
     properties.setMode(DataQualityProperties.Mode.OFF);
 
     var outcome = executor.execute(instance("t1", 1L), "job:JOB:2026-05-07");
@@ -166,7 +176,8 @@ class DataQualityCheckExecutorTest {
   }
 
   @Test
-  void shadowModeRecordsBlockerButDoesNotBlockPromotion() {
+  @DisplayName("影子模式下记录失败明细但降级为告警, 不阻断生效")
+  void shouldRecordFailWithoutBlocking_whenInShadowMode() {
     properties.setMode(DataQualityProperties.Mode.SHADOW);
     DataQualityRuleEntity rule =
         rule("CROSS_TOTAL", "CROSS_TABLE", "BLOCKER", "SELECT 0", "{\"min\":1}");
@@ -183,7 +194,8 @@ class DataQualityCheckExecutorTest {
   }
 
   @Test
-  void crossDayRuleUsesValidatedScalarSqlPath() {
+  @DisplayName("跨天规则走校验后的标量查询路径, 结果达标时门禁通过")
+  void shouldPass_whenCrossDayRuleMatches() {
     DataQualityRuleEntity rule =
         rule("CROSS_DAY_TOTAL", "CROSS_DAY", "BLOCKER", "SELECT 5", "{\"expected\":5}");
     when(ruleMapper.selectEnabledByBusinessKey(anyString(), anyString())).thenReturn(List.of(rule));

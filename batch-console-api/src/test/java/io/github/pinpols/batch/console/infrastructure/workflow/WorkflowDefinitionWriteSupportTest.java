@@ -11,12 +11,15 @@ import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowNodeUpsertParam;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+@DisplayName("编排定义写入支持: 节点写入字段透传")
 class WorkflowDefinitionWriteSupportTest {
 
   @Test
+  @DisplayName("写入节点时跨天依赖表达式与超时秒数完整透传到写入参数")
   void shouldPropagateCrossDayDependencyFieldsToNodeWrite() {
     WorkflowNodeMapper nodeMapper = mock(WorkflowNodeMapper.class);
     WorkflowDefinitionWriteSupport writeSupport = new WorkflowDefinitionWriteSupport(

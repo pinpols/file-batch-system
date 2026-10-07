@@ -7,12 +7,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.github.pinpols.batch.common.enums.FileChannelType;
 import java.util.HashSet;
 import java.util.Set;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("分发渠道类型策略:允许类型的闭集、归一化、安全画像覆盖度与各类渠道的安全属性")
 class DispatchChannelTypePolicyTest {
 
   @Test
-  void allowedTypesAreExplicitAndClosed() {
+  @DisplayName("允许的渠道类型是显式闭集,恰好覆盖全部官方类型")
+  void shouldExposeClosedSetOfAllowedTypes_whenQueried() {
     assertThat(DispatchChannelTypePolicy.allowedTypes())
         .containsExactlyInAnyOrder(
             FileChannelType.API.code(),
@@ -25,22 +28,26 @@ class DispatchChannelTypePolicyTest {
   }
 
   @Test
-  void normalizeReturnsCanonicalType() {
+  @DisplayName("输入带空格且大小写不一时,归一化得到规范渠道类型")
+  void shouldReturnCanonicalType_whenInputHasSpacesAndLowercase() {
     assertThat(DispatchChannelTypePolicy.normalize(" api_push ")).contains("API_PUSH");
   }
 
   @Test
-  void normalizeRejectsUnknownType() {
+  @DisplayName("未知渠道类型归一化返回空,不会被当成官方类型放行")
+  void shouldReturnEmpty_whenTypeUnknown() {
     assertThat(DispatchChannelTypePolicy.normalize("WEBHOOK_RAW")).isEmpty();
   }
 
   @Test
-  void safetyProfilesCoverEveryOfficialType() {
+  @DisplayName("安全画像的键集合与官方渠道类型集合完全一致,不留未覆盖类型")
+  void shouldCoverEveryOfficialType_whenListingSafetyProfiles() {
     assertThat(DispatchChannelTypePolicy.safetyProfiles().keySet())
         .containsExactlyInAnyOrderElementsOf(DispatchChannelTypePolicy.allowedTypes());
   }
 
   @Test
+  @DisplayName("官方类型缺少一份安全画像时,启动不变量校验立即失败并说明覆盖要求")
   void requireFullCoverage_throws_whenAProfileIsMissing() {
     // arrange:官方类型少了 EMAIL 的一份 profile 覆盖
     Set<String> officialTypes = new HashSet<>(DispatchChannelTypePolicy.allowedTypes());
@@ -55,6 +62,7 @@ class DispatchChannelTypePolicyTest {
   }
 
   @Test
+  @DisplayName("安全画像与官方类型完全对齐时,启动不变量校验通过且不抛异常")
   void requireFullCoverage_passes_whenProfilesExactlyMatchOfficialTypes() {
     Set<String> officialTypes = new HashSet<>(DispatchChannelTypePolicy.allowedTypes());
 
@@ -64,7 +72,8 @@ class DispatchChannelTypePolicyTest {
   }
 
   @Test
-  void httpProfilesDeclareTimeoutAndDnsGuard() {
+  @DisplayName("接口类渠道画像声明超时受控与域名防护,推送类渠道额外声明凭据取自渠道配置")
+  void shouldDeclareTimeoutAndDnsGuard_whenHttpProfilesInspected() {
     assertThat(DispatchChannelTypePolicy.safetyProfiles()
             .get(FileChannelType.API.code())
             .attributes())
@@ -81,7 +90,8 @@ class DispatchChannelTypePolicyTest {
   }
 
   @Test
-  void filesystemProfilesSeparateCapabilitiesFromKnownGaps() {
+  @DisplayName("文件系统类画像把已有能力与已知缺口分开标注,本地沙箱根未配置时计入已知缺口")
+  void shouldSeparateCapabilitiesFromKnownGaps_whenFilesystemProfilesInspected() {
     assertThat(DispatchChannelTypePolicy.safetyProfiles()
             .get(FileChannelType.NAS.code())
             .attributes())
@@ -98,7 +108,8 @@ class DispatchChannelTypePolicyTest {
   }
 
   @Test
-  void emailProfileDeclaresSocketTimeout() {
+  @DisplayName("邮件渠道画像声明超时与报文大小受控、传输身份校验与请求头注入防护,且不再列套接字超时缺口")
+  void shouldDeclareSocketTimeout_whenEmailProfileInspected() {
     assertThat(DispatchChannelTypePolicy.safetyProfiles()
             .get(FileChannelType.EMAIL.code())
             .attributes())

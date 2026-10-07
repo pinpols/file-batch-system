@@ -24,12 +24,14 @@ import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowRunMapper;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("租户应用服务: 停用启用的实例占用校验、开通编排与跨租户读取范围")
 class ConsoleTenantApplicationServiceTest {
 
   @Mock
@@ -94,6 +96,7 @@ class ConsoleTenantApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("存在活跃作业实例时停用被拒, 提示活跃数量且不更新状态")
   void suspendTenant_withActiveJobInstances_throwsBizException() {
     when(tenantMapper.selectByTenantId("tenant-a")).thenReturn(ACTIVE_TENANT);
     when(jobInstanceMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(2L);
@@ -114,6 +117,7 @@ class ConsoleTenantApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("存在活跃流水线实例时停用被拒, 提示流水线数量")
   void suspendTenant_withActivePipelineInstances_throwsBizException() {
     when(tenantMapper.selectByTenantId("tenant-a")).thenReturn(ACTIVE_TENANT);
     when(jobInstanceMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(0L);
@@ -129,6 +133,7 @@ class ConsoleTenantApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("存在活跃工作流运行时停用被拒, 提示工作流数量")
   void suspendTenant_withActiveWorkflowRuns_throwsBizException() {
     when(tenantMapper.selectByTenantId("tenant-a")).thenReturn(ACTIVE_TENANT);
     when(jobInstanceMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(0L);
@@ -154,6 +159,7 @@ class ConsoleTenantApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("无活跃实例时停用成功, 更新状态并暂停该租户的触发")
   void suspendTenant_noActiveInstances_proceedsSuspend() {
     when(tenantMapper.selectByTenantId("tenant-a")).thenReturn(ACTIVE_TENANT);
     when(jobInstanceMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(0L);
@@ -167,6 +173,7 @@ class ConsoleTenantApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("停用前按约定的活跃状态集合分别统计三类实例")
   void suspendTenant_countsCorrectActiveStatuses() {
     List<String> expectedJobStatuses =
         List.of("CREATED", "WAITING", "READY", "RUNNING", "PARTIAL_FAILED");
@@ -191,6 +198,7 @@ class ConsoleTenantApplicationServiceTest {
   // 远端先于 DB 写调用,且 callOrThrow fail-fast,故抛异常时 updateStatus 不应被触达。
 
   @Test
+  @DisplayName("远端暂停失败时抛异常且不改写本地状态, 避免状态分裂")
   void suspendTenant_whenRemotePauseFails_doesNotUpdateStatus() {
     when(tenantMapper.selectByTenantId("tenant-a")).thenReturn(ACTIVE_TENANT);
     when(jobInstanceMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(0L);
@@ -209,6 +217,7 @@ class ConsoleTenantApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("远端恢复失败时抛异常且不改写本地状态, 避免状态分裂")
   void activateTenant_whenRemoteResumeFails_doesNotUpdateStatus() {
     when(tenantMapper.selectByTenantId("tenant-a")).thenReturn(ACTIVE_TENANT);
     when(triggerProxyService.resumeByTenant("tenant-a"))
@@ -234,6 +243,7 @@ class ConsoleTenantApplicationServiceTest {
       "updated_at", "2026-01-01T00:00:00");
 
   @Test
+  @DisplayName("未选择配置初始化时跳过配置复制, 但仍执行就绪自检")
   void provisionTenant_withoutInitConfig_skipsCopyButRunsReadiness() {
     when(tenantMapper.selectByTenantId("acme")).thenReturn(null).thenReturn(ACME_TENANT);
     when(userAccountMapper.selectByUsername("acme-admin")).thenReturn(null);
@@ -257,9 +267,11 @@ class ConsoleTenantApplicationServiceTest {
   // ── SEC-IDOR(S2):租户管理只读端点跨租户越权修复 ──────────────────────────────
 
   @org.junit.jupiter.api.Nested
+  @DisplayName("租户查询的跨租户范围: 守卫拒绝、同租户放行与按角色收敛")
   class TenantScopeOnRead {
 
     @Test
+    @DisplayName("跨租户查询被守卫拒绝, 且不触达数据查询")
     void getTenant_crossTenant_deniedByGuard_neverQueries() {
       // arrange:守卫对越权 tenantId 抛 FORBIDDEN(等价 TENANT_ADMIN 读他租户)
       doThrow(io.github.pinpols.batch.common.exception.BizException.of(
@@ -276,6 +288,7 @@ class ConsoleTenantApplicationServiceTest {
     }
 
     @Test
+    @DisplayName("同租户查询守卫放行, 返回对应租户记录")
     void getTenant_sameTenant_allowed_returnsRow() {
       // 守卫放行(same-tenant / 全局角色)→ 正常返回
       when(tenantMapper.selectByTenantId("tenant-a")).thenReturn(ACTIVE_TENANT);
@@ -285,6 +298,7 @@ class ConsoleTenantApplicationServiceTest {
     }
 
     @Test
+    @DisplayName("租户级角色只看到自身租户, 不发起全量分页查询")
     void listTenants_tenantRole_scopedToOwnTenantOnly() {
       // 租户角色:currentTenantScopeOrNull 返回自身租户 → 只返回自身,不发全量查询
       when(tenantGuard.currentTenantScopeOrNull()).thenReturn("tenant-a");
@@ -299,6 +313,7 @@ class ConsoleTenantApplicationServiceTest {
     }
 
     @Test
+    @DisplayName("全局角色走全量分页查询, 返回全部租户")
     void listTenants_globalRole_returnsFullQuery() {
       // 全局角色:scope 为 null → 走原全量分页查询
       when(tenantGuard.currentTenantScopeOrNull()).thenReturn(null);
@@ -314,6 +329,7 @@ class ConsoleTenantApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("选择配置初始化时先复制配置, 再执行就绪自检")
   void provisionTenant_withInitConfig_copiesThenRunsReadiness() {
     when(tenantMapper.selectByTenantId("acme")).thenReturn(null).thenReturn(ACME_TENANT);
     when(userAccountMapper.selectByUsername("acme-admin")).thenReturn(null);

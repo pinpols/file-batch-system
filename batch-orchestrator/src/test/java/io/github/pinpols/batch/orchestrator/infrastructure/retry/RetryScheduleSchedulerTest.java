@@ -12,12 +12,14 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("重试调度轮询组件,验证到期重试的派发以及并发轮询时的重复执行防护")
 class RetryScheduleSchedulerTest {
 
   @Mock
@@ -34,6 +36,7 @@ class RetryScheduleSchedulerTest {
   }
 
   @Test
+  @DisplayName("轮询触发时,应派发所有已到期的重试任务")
   void shouldDispatchDueRetries() {
     scheduler.poll();
 
@@ -41,6 +44,7 @@ class RetryScheduleSchedulerTest {
   }
 
   @Test
+  @DisplayName("并发轮询且首次派发尚未结束时,应只派发一次,避免同一批到期重试被重复处理")
   void shouldDispatchOnlyOnceWhenPollIsCalledConcurrently() throws Exception {
     CountDownLatch entered = new CountDownLatch(1);
     CountDownLatch release = new CountDownLatch(1);

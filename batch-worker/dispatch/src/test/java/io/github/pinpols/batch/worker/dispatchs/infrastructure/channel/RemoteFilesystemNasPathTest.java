@@ -18,9 +18,11 @@ import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+@DisplayName("远端文件系统渠道:目录探测的成功与失败判定,以及投递落盘、旁挂清单开关与线程池停机后的行为")
 class RemoteFilesystemNasPathTest {
 
   @TempDir
@@ -35,6 +37,7 @@ class RemoteFilesystemNasPathTest {
   }
 
   @Test
+  @DisplayName("远端目录存在且可写时探测成功,并回执探测通过")
   void probeNas_validWritableDir_returnsSuccess() {
     Map<String, Object> config = Map.of("nas_remote_directory", tempDir.toString());
     DispatchChannelProbeResult result = RemoteFilesystemDispatchSupport.probeNas(config);
@@ -43,6 +46,7 @@ class RemoteFilesystemNasPathTest {
   }
 
   @Test
+  @DisplayName("渠道配置未给出远端目录时探测失败,并回执目录缺失")
   void probeNas_missingDirectory_returnsFailure() {
     Map<String, Object> config = Map.of();
     DispatchChannelProbeResult result = RemoteFilesystemDispatchSupport.probeNas(config);
@@ -51,6 +55,7 @@ class RemoteFilesystemNasPathTest {
   }
 
   @Test
+  @DisplayName("远端目录尚不存在时自动创建,创建后探测成功")
   void probeNas_nonExistentDir_createsAndSucceeds() {
     Path newDir = tempDir.resolve("newsubdir");
     Map<String, Object> config = Map.of("nas_remote_directory", newDir.toString());
@@ -59,6 +64,7 @@ class RemoteFilesystemNasPathTest {
   }
 
   @Test
+  @DisplayName("未配置远端目录时回退到目标端点目录探测,探测成功")
   void probeNas_usesTargetEndpointAsFallback() {
     Map<String, Object> config = Map.of("target_endpoint", tempDir.toString());
     DispatchChannelProbeResult result = RemoteFilesystemDispatchSupport.probeNas(config);
@@ -66,6 +72,7 @@ class RemoteFilesystemNasPathTest {
   }
 
   @Test
+  @DisplayName("默认写出旁挂清单,清单带 SHA-256 校验和与字节数,目标文件内容与源文件一致")
   void dispatchNas_writesSidecarManifestByDefault() throws Exception {
     byte[] payload = "hello dispatch\n".getBytes(StandardCharsets.UTF_8);
     DispatchFileContentResolver resolver = mock(DispatchFileContentResolver.class);
@@ -100,6 +107,7 @@ class RemoteFilesystemNasPathTest {
   }
 
   @Test
+  @DisplayName("旁挂清单开关关闭时投递仍成功,但不生成清单引用与清单文件")
   void dispatchNas_respectsManifestDisabledFlag() throws Exception {
     DispatchFileContentResolver resolver = mock(DispatchFileContentResolver.class);
     Map<String, Object> fileRecord = Map.of("id", 11L, "file_name", "source.dat");
@@ -127,6 +135,7 @@ class RemoteFilesystemNasPathTest {
   }
 
   @Test
+  @DisplayName("拷贝线程池已停机时投递失败并回执停机中,不会把线程池重新拉起")
   void dispatchNas_doesNotResurrectExecutorAfterShutdown() throws Exception {
     copyExecutor.shutdown();
     byte[] payload = "restartable executor\n".getBytes(StandardCharsets.UTF_8);

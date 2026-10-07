@@ -28,6 +28,7 @@ import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.time.Instant;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -41,6 +42,7 @@ import org.springframework.beans.factory.ObjectProvider;
 // 部分用例(如 invalidSpec/policyNotFound)不触发,符合 docs/agent-baseline.md §测试约定豁免场景。
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
+@DisplayName("传感状态机: 探针结果到节点完结判定与下游派发的推进口径")
 class SensorStateMachineTest {
 
   @Mock
@@ -98,6 +100,7 @@ class SensorStateMachineTest {
   }
 
   @Test
+  @DisplayName("探测命中时记录节点完结并标记成功, 输出中带出探测结果")
   void matched_callsRecordNodeRunFinishSuccess() {
     seedHappyPath();
     when(filePolicy.probe(any())).thenReturn(SensorProbeResult.matched(Map.of("fileId", 42L)));
@@ -111,6 +114,7 @@ class SensorStateMachineTest {
   }
 
   @Test
+  @DisplayName("探测未就绪时只更新探针状态与下次探测时间, 不记录完结")
   void notYet_updatesProbeStateOnly_noFinish() {
     seedHappyPath();
     when(filePolicy.probe(any())).thenReturn(SensorProbeResult.notYet());
@@ -123,6 +127,7 @@ class SensorStateMachineTest {
   }
 
   @Test
+  @DisplayName("错误次数低于阈值时只累加错误并按退避延后探测, 不判定失败")
   void error_belowThreshold_increments_no_finish() {
     seedHappyPath();
     when(filePolicy.probe(any()))
@@ -136,6 +141,7 @@ class SensorStateMachineTest {
   }
 
   @Test
+  @DisplayName("探针抛出无消息异常时不发生空指针, 按一次错误计数处理")
   void probeThrowsExceptionWithNullMessage_doesNotNpe() {
     // 回归:policy.probe 抛出无 message 的异常(getMessage()==null,如 new RuntimeException())时,
     // catch 内构造 List.of(cfg.sensorType.code(), e.getMessage()) 曾 NPE,把探针错误掩盖成崩溃。
@@ -150,6 +156,7 @@ class SensorStateMachineTest {
   }
 
   @Test
+  @DisplayName("错误次数达到阈值时判定节点失败并给出探针失败原因")
   void error_atThreshold_triggersFailure() {
     seedHappyPath();
     when(filePolicy.probe(any()))
@@ -166,6 +173,7 @@ class SensorStateMachineTest {
   }
 
   @Test
+  @DisplayName("等待超过超时上限时直接判定超时失败, 不再执行探测")
   void elapsedExceedsTimeout_triggersTimeoutFailure_doesNotProbe() {
     seedHappyPath();
     WorkflowNodeRunEntity stale = nodeRun(10, 0);
@@ -182,6 +190,7 @@ class SensorStateMachineTest {
   }
 
   @Test
+  @DisplayName("等待节点参数不完整时快速失败, 不执行探测")
   void invalidNodeParams_failsFast() {
     WorkflowRunEntity wfRun = new WorkflowRunEntity();
     wfRun.setId(1L);
@@ -202,6 +211,7 @@ class SensorStateMachineTest {
   }
 
   @Test
+  @DisplayName("传感类型无法识别时记录节点完结, 不执行探测")
   void unknownSensorType_failsFast() {
     WorkflowRunEntity wfRun = new WorkflowRunEntity();
     wfRun.setId(1L);
@@ -221,6 +231,7 @@ class SensorStateMachineTest {
   // ── S3.1 downstream advancement ────────────────────────────────────────────
 
   @Test
+  @DisplayName("探测命中后解析下一节点并派发下游作业节点")
   void matched_dispatchesDownstreamJobNode() {
     seedHappyPathWithJobInstance();
     when(filePolicy.probe(any())).thenReturn(SensorProbeResult.matched(Map.of("fileId", 7L)));
@@ -239,6 +250,7 @@ class SensorStateMachineTest {
   }
 
   @Test
+  @DisplayName("探测命中后下一节点为终点时只记录完结, 不派发下游")
   void matched_endNode_recordsFinishWithoutDispatch() {
     seedHappyPathWithJobInstance();
     when(filePolicy.probe(any())).thenReturn(SensorProbeResult.matched(Map.of()));
@@ -255,6 +267,7 @@ class SensorStateMachineTest {
   }
 
   @Test
+  @DisplayName("缺少作业实例时下游派发被跳过, 等待节点仍标记成功")
   void matched_noJobInstance_skipsDownstreamGracefully() {
     seedHappyPath(); // no jobInstance stubbed
     when(filePolicy.probe(any())).thenReturn(SensorProbeResult.matched(Map.of()));
@@ -269,6 +282,7 @@ class SensorStateMachineTest {
   }
 
   @Test
+  @DisplayName("等待超时后走失败分支派发对应的下游节点")
   void timeout_dispatchesFailureBranch() {
     seedHappyPathWithJobInstance();
     WorkflowNodeRunEntity stale = nodeRun(10, 0);
