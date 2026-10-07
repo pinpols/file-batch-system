@@ -55,6 +55,12 @@ PR 描述模板 — 编辑时仅删除不适用段落,保留勾选/填写部分�
 - [ ] 新增/删除 CI 守护已登记 `scripts/ci/README.md`、接入对应 workflow，并同步守护总账
 - [ ] 文档与 Shell 脚本分别通过 `check-docs-structure.py`、`check-shell-scripts.sh`
 
+## 涉及高风险跨模块变更（若适用）
+
+- [ ] 已按 `docs/standards/open-source-governance.md` 判断是否需要 BEP；需要时已链接 BEP/ADR
+- [ ] 上线前已完成生产就绪评审，或说明为什么本次不适用
+- [ ] 已写清兼容、灰度、回滚、告警、容量和真实环境验证边界
+
 ---
 
 ## 验证

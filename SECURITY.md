@@ -39,6 +39,16 @@ Security fixes are applied to the current main development line.
 If you find a security issue, report it privately instead of opening a public
 issue.
 
+Use GitHub's private vulnerability reporting entry for this repository:
+
+- [Report a vulnerability privately](https://github.com/pinpols/file-batch-system/security/advisories/new)
+
+Do not include credentials, production data, tenant data, or active exploit
+material in a public issue, discussion, pull request, or CI log. If the GitHub
+private reporting entry is temporarily unavailable, contact the repository
+owner through a previously verified private channel and only send the minimum
+information needed to establish a secure follow-up channel.
+
 Please include:
 
 - A short description of the issue
@@ -47,10 +57,6 @@ Please include:
 - Expected impact
 - Any proposed mitigation
 
-## Contact
-
-Use the repository owner contact or a private security channel. Replace the
-placeholder below before publishing the repository publicly:
-
-- `security@your-domain.example`
-
+The maintainer will acknowledge a valid private report, coordinate remediation,
+and publish a GitHub Security Advisory when disclosure is appropriate. No fixed
+response SLA is promised until a staffed security rotation exists.

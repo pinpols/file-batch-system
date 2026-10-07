@@ -176,6 +176,13 @@ if ((${#shell_files[@]} > 0)); then
     "$PYTHON_BIN" scripts/ci/check-shell-linux-portability.py "${shell_files[@]}"
 fi
 
+if ((workflow_changed == 1 || scripts_changed == 1)); then
+  gate_run PRE_COMMIT_ACTION_PINNING "GitHub Actions SHA 固定" \
+    "$PYTHON_BIN" scripts/ci/check-github-action-pinning.py
+  gate_run PRE_COMMIT_ACTION_PINNING_TEST "GitHub Actions SHA 固定门禁测试" \
+    "$PYTHON_BIN" -m unittest scripts/ci/tests/test_check_github_action_pinning.py
+fi
+
 if ((workflow_changed == 1)); then
   check_workflows() {
     command -v actionlint >/dev/null 2>&1 || {

@@ -6,7 +6,8 @@ name: codeql
 # 触发:
 #   - 主分支 push + 任意 PR(覆盖回归)
 #   - 每周一 03:00 UTC cron(catch 新规则发布)
-# 路径过滤:纯文档 / yaml-only 改动不跑(省 ~8min)。
+# 纯文档 PR 仍创建 required check，但由范围探测跳过重分析，避免 required check
+# 因 workflow 未触发而永久等待。main push / 定时任务保持完整分析。
 
 on:
   push:
@@ -18,29 +19,50 @@ on:
       - 'NOTICE'
   pull_request:
     branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
   schedule:
     - cron: '0 3 * * 1'
 
 permissions:
   contents: read
-  security-events: write
-  actions: read
 
 concurrency:
   group: codeql-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  analyze:
-    name: Analyze (java)
+  scope:
+    name: codeql-scope
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 3
+    outputs:
+      docs-only: ${{ steps.scope.outputs.docs-only }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Detect changed scopes
+        id: scope
+        uses: ./.github/actions/detect-change-scope
+        with:
+          event-name: ${{ github.event_name }}
+          base-sha: ${{ github.event.pull_request.base.sha }}
+          head-sha: ${{ github.sha }}
+
+  analyze:
+    name: Analyze (java)
+    needs: scope
+    if: github.event_name != 'pull_request' || needs.scope.outputs.docs-only != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           # zizmor[artipacked]:防 checkout 写入的 .git/config token 被后续 action
           # 误打包到 artifact 泄漏。CodeQL 全程读源码 + upload-sarif,不需要 token persist。
@@ -50,7 +72,7 @@ jobs:
         uses: ./.github/actions/setup-build-env
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4
+        uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
         with:
           languages: java
           # security-extended 比 default 多 ~30 条规则(性能 / 安全热点),
@@ -66,7 +88,7 @@ jobs:
 
       - name: Perform CodeQL Analysis
         id: codeql-analysis
-        uses: github/codeql-action/analyze@v4
+        uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
         with:
           category: "/language:java"
           # 分析与上传分离，避免短时上传故障迫使整套 Java 编译和查询重跑。
@@ -76,7 +98,7 @@ jobs:
       - name: Upload CodeQL results
         id: codeql-upload-primary
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
         with:
           sarif_file: ${{ steps.codeql-analysis.outputs.sarif-output }}
           category: "/language:java"
@@ -90,7 +112,7 @@ jobs:
         id: codeql-upload-retry
         if: steps.codeql-upload-primary.outcome == 'failure'
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
         with:
           sarif_file: ${{ steps.codeql-analysis.outputs.sarif-output }}
           category: "/language:java"
@@ -106,7 +128,7 @@ jobs:
         if: >-
           steps.codeql-upload-primary.outcome == 'failure' &&
           steps.codeql-upload-retry.outcome == 'failure'
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
         with:
           sarif_file: ${{ steps.codeql-analysis.outputs.sarif-output }}
           category: "/language:java"

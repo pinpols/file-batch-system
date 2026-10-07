@@ -23,8 +23,8 @@
 |---|---:|---|---|
 | ADR | 47 个 ADR 文件 | [docs/architecture/adr/](../architecture/adr/) | 包含架构边界、SDK、checkpoint、capacity、依赖调度等决策 |
 | 专项审计报告 | 13 个文件 | [docs/audit/](./) | 包含全仓架构审计、治理总账和后续后端深扫 |
-| CI 守卫脚本 | 73 个 `check-*` / `validate-*` 文件 | [scripts/ci/README.md](../../scripts/ci/README.md) | 覆盖文档、脚本、仓库卫生、租户隔离、迁移、OpenAPI、配置、版本、许可、测试完整性、测试 `@DisplayName` 约定、Java 固定契约/协议值及 suppression/快照防漂移等 |
-| GitHub Actions | 17 个 workflow | `.github/workflows/` | PR gate、full CI、staging、SDK parity、CodeQL、workflow lint |
+| CI 守卫脚本 | 74 个 `check-*` / `validate-*` 文件 | [scripts/ci/README.md](../../scripts/ci/README.md) | 覆盖文档、脚本、仓库卫生、租户隔离、迁移、OpenAPI、配置、版本、许可、测试完整性、测试 `@DisplayName` 约定、Java 固定契约/协议值、Action SHA 及 suppression/快照防漂移等 |
+| GitHub Actions | 18 个 workflow | `.github/workflows/` | PR gate、full CI、staging、SDK parity、CodeQL、workflow lint、OpenSSF Scorecard |
 | SDK 契约 fixture | 31 个 case | [docs/api/sdk-contract-fixtures/](../api/sdk-contract-fixtures/) | 覆盖注册、心跳、claim、renew、report、Kafka schema 兼容等 |
 | 顶层规范文档 | 3 个核心入口 | [docs/README.md](../README.md) | `agent-baseline`、`coding-conventions`、`changelog` |
 
@@ -40,7 +40,7 @@
 | 配置与环境 | [runbook/](../runbook/); [dict/config-keys.md](../dict/config-keys.md); ADR-039 | `check-config-defaults-sync.py`; `check-feature-switch-registry.py`; `check-helm-env-sync.py`; `check-production-overlay-safety.py`; `check-version-alignment.sh`（应用、基础服务与 MinIO CLI 镜像版本及运行入口）；`check-helm-prometheusrule-sync.sh`; `validate-kafka-topics.sh`; `check-sql-config-boundaries.sh` | yml、docker、helm、env、topic、PrometheusRule 不一致; SQL 和配置混在 shell |
 | 文档、脚本与仓库卫生 | [document-governance.md](../standards/document-governance.md); [scripts/README.md](../../scripts/README.md) | `check-docs-structure.py`; `check-terminology-doc-sync.py`; `check-changelog-sync.py`; `check-script-governance.py`; `check-shell-scripts.sh`; `check-repository-hygiene.py` | 链接或图片失效;核心枚举与术语值表漂移;索引漏项;守护未登记;Shell 告警增长;本机路径或产物入库 |
 | 测试与验收 | [testing/](../testing/); [verifications/](../verifications/) | `check-e2e-shard-coverage.sh`; `check-e2e-run-completeness.sh`; `check-module-test-coverage.sh`; `check-no-silent-disabled-tests.sh`; `check-test-conventions.py`; `select-affected-tests.py`; workflow `full-ci-gate.yml`; `staging-gate.yml`; `strict-verify.yml` | 只保留 happy path; disabled test 静默增加; sim/IT 覆盖和业务场景脱节; 测试类/方法的 `@DisplayName` 与测试方法命名约定静默发散 |
-| 安全与合规 | [compliance/](../compliance/); `docs/agent-baseline.md` 安全红线 | `security-scan.sh`; `check-license-compliance.sh`; `check-sbom-sync.sh`; `check-dependency-licenses.sh`; `install-upstream-modules.sh`（PR/Full Gate Trivy 扫描前预热 Maven 缓存）; `.trivyignore`（漏洞例外元数据）; `.trivyignore.yaml`（配置误报按规则和路径精确豁免）; workflow `codeql.yml`; `full-ci-gate.yml`; `workflow-lint.yml` | 依赖许可不清; 入库 SBOM 与 Maven 依赖图漂移; Maven Central 限流导致 Trivy 误失败; 配置误报豁免范围过宽; bypass 开关 fail-open; workflow 权限过大; secret 泄露到日志 |
+| 安全与合规 | [compliance/](../compliance/); [open-source-governance.md](../standards/open-source-governance.md); `docs/agent-baseline.md` 安全红线 | `security-scan.sh`; `check-license-compliance.sh`; `check-sbom-sync.sh`; `check-dependency-licenses.sh`; `check-github-action-pinning.py`; `install-upstream-modules.sh`（PR/Full Gate Trivy 扫描前预热 Maven 缓存）; `.trivyignore`（漏洞例外元数据）; `.trivyignore.yaml`（配置误报按规则和路径精确豁免）; workflow `codeql.yml`; `full-ci-gate.yml`; `workflow-lint.yml`; `scorecard.yml` | 依赖许可不清; 入库 SBOM 与 Maven 依赖图漂移; Action 使用可变引用; Maven Central 限流导致 Trivy 误失败; 配置误报豁免范围过宽; bypass 开关 fail-open; workflow 权限过大; secret 泄露到日志 |
 | 运维与恢复 | [runbook/incident-response.md](../runbook/incident-response.md); [runbook/troubleshooting-decision-tree.md](../runbook/troubleshooting-decision-tree.md); ADR-042/044 | `scripts/ops/inspect-all.sh`; `scripts/ops/heal-stuck-workflows.sh`; 相关 sim / drill / staging gate | Console 只能看不能救; DLQ/outbox/卡实例缺少幂等恢复动作 |
 
 ## 复扫频率
