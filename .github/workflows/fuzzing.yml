@@ -1,0 +1,40 @@
+name: Security boundary fuzzing
+
+on:
+  schedule:
+    - cron: '15 3 * * 2'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-boundary-fuzzing
+  cancel-in-progress: false
+
+jobs:
+  jazzer:
+    name: Jazzer cursor and logging boundaries
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up build environment
+        uses: ./.github/actions/setup-build-env
+        with:
+          cache-testcontainers: 'false'
+
+      - name: Run bounded coverage-guided fuzzing
+        env:
+          JAZZER_FUZZ: '1'
+        run: >-
+          ./mvnw -B -ntp -pl batch-common
+          -Dtest=SecurityBoundaryFuzzTest
+          -Dtest.excluded-groups=flaky
+          -Dlogback.configurationFile=${{ github.workspace }}/batch-common/src/test/resources/logback-fuzz.xml
+          '-Djazzer.instrumentation_includes=io.github.pinpols.batch.common.**'
+          test

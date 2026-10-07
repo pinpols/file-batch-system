@@ -6,6 +6,8 @@
 .env.*.local
 .ruff_cache/
 .venv/
+node_modules/
+.cifuzz-corpus/
 __pycache__/
 *.py[cod]
 /.remember

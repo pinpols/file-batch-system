@@ -27,13 +27,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Setup Python 3.12
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          version: '0.11.14'
           python-version: '3.12'
-
-      - name: Install hatch
-        run: pip install --upgrade pip hatch
 
       # 防「打 sdk-python-v1.2.3 却发 __version__=0.5.0a0」的漂移:tag 推送时断言
       # git tag 后缀 == _version.py 的 __version__,不一致直接失败(dry-run 跳过)。
@@ -50,7 +48,7 @@ jobs:
 
       - name: Build wheel + sdist
         working-directory: sdk/python
-        run: hatch build --clean
+        run: uv build --no-sources
 
       - name: Verify artifacts present
         working-directory: sdk/python

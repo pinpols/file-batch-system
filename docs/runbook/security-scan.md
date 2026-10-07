@@ -73,6 +73,18 @@ gh api 'repos/pinpols/file-batch-system/code-scanning/alerts?state=open&ref=refs
 
 OpenSSF Scorecard 由 `.github/workflows/scorecard.yml` 在 main 推送、每周计划和手动触发时运行，SARIF 上传到 Code Scanning。它只用于发现分支保护、Action 固定、依赖更新和安全响应等治理漂移：低分或单项发现不会直接阻断 PR，扫描执行失败仍应修复，具体风险仍按可利用性和项目边界人工复核。
 
+### 2026-10-07 Scorecard 基线处置
+
+本轮复核 `main` 上 28 个开放 Code Scanning 告警，均来自 OpenSSF Scorecard，而不是 CodeQL 业务代码路径。处置口径如下：
+
+- `PinnedDependencies` 21 项与 `TokenPermissions` 2 项：外部 Action、Docker Action、Docker 基础镜像和 CI 工具均改为不可变版本或哈希，并增加仓库守卫；是否关闭以变更合入后的下一次 Scorecard 扫描为准。
+- `Vulnerabilities` 1 项：当前 Dependabot 开放漏洞为 0；该项同样等待 Scorecard 重新计算，不能依据本地盘点手工标记已修复。
+- `Fuzzing` 1 项：新增每周 Jazzer 覆盖引导 fuzz，当前覆盖游标解析和日志单行边界。自定义 workflow 是否被 Scorecard 识别由扫描器判定；即使评分未变化，真实 fuzz 任务仍保留。
+- `BranchProtection`、`CodeReview` 各 1 项：仓库为单维护者模式，保留 PR 和 required checks，不伪造双人审批或自我审批。它们是已知治理残余，不以降低扫描规则或批量 dismiss 方式清零。
+- `CIIBestPractices` 1 项：属于外部认证状态，不是代码缺陷；待项目确有认证需求时单独办理。
+
+已关闭的历史告警须通过 GitHub API 核对 `dismissed_reason` 与 `fixed_at`。`fixed` 表示后续分析不再发现对应问题；人工关闭只在误报或明确接受风险时使用，并保留理由。不得把“closed”数量直接等同于代码修复数量。
+
 私密漏洞报告入口和披露边界以根 [`SECURITY.md`](../../SECURITY.md) 为准。发现真实密钥时先撤销/轮换，再清理历史和修复注入路径。
 
 ## 报告位置

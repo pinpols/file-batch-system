@@ -80,9 +80,11 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Set up Rust (stable; HTTP/Kafka adapters require 1.88+)
+      - name: Set up Rust (locked baseline; HTTP/Kafka adapters require 1.88+)
         if: matrix.lang == 'rust'
         uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+        with:
+          toolchain: '1.96.0'
 
       - name: Prepare env file
         # .env.example 故意不含 3 个 :? required 密钥(BATCH_PLATFORM/BUSINESS_DB_PASSWORD、

@@ -1,0 +1,136 @@
+name: Quarterly dependency review
+
+on:
+  schedule:
+    - cron: '0 3 1 1,4,7,10 *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quarterly-dependency-review
+  cancel-in-progress: false
+
+jobs:
+  inventory:
+    name: dependency inventory
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      security-events: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up build environment
+        uses: ./.github/actions/setup-build-env
+        with:
+          cache-testcontainers: 'false'
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: '.node-version'
+          package-manager-cache: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: '0.11.14'
+          python-version: '3.12'
+
+      - name: Build dependency inventory
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p target/dependency-review
+          report=target/dependency-review/report.md
+          {
+            echo '# 季度依赖盘点'
+            echo
+            echo "- commit: \`${GITHUB_SHA}\`"
+            echo "- run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "- generatedAt: $(date -u +%FT%TZ)"
+            echo
+            echo '## Dependabot 安全告警'
+            gh api --paginate "repos/${GITHUB_REPOSITORY}/dependabot/alerts?state=open&per_page=100" \
+              --jq '.[] | "- [\(.security_advisory.severity)] \(.dependency.package.ecosystem):\(.dependency.package.name) (\(.dependency.manifest_path))"' \
+              || true
+            echo
+            echo '## Maven 可用更新'
+            echo '```text'
+          } > "$report"
+          ./mvnw -B -ntp versions:display-dependency-updates versions:display-plugin-updates \
+            >> "$report" 2>&1 || true
+          {
+            echo '```'
+            echo
+            echo '## TypeScript 可用更新'
+            echo '```json'
+          } >> "$report"
+          npm --prefix sdk/typescript outdated --json >> "$report" 2>&1 || true
+          {
+            echo '```'
+            echo
+            echo '## Python 锁文件升级预览'
+            echo '```text'
+          } >> "$report"
+          (cd sdk/python && uv lock --upgrade --dry-run) >> "$report" 2>&1 || true
+          {
+            echo '```'
+            echo
+            echo '## Rust 锁文件升级预览'
+            echo '```text'
+          } >> "$report"
+          (cd sdk/rust && cargo update --dry-run) >> "$report" 2>&1 || true
+          echo '```' >> "$report"
+
+      - name: Upload inventory
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: quarterly-dependency-review
+          path: target/dependency-review/report.md
+          if-no-files-found: error
+          retention-days: 90
+
+  issue:
+    name: open quarterly review issue
+    needs: inventory
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Open one quarterly review issue
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          month=$((10#$(date -u +%m)))
+          quarter=$((((month - 1) / 3) + 1))
+          title="依赖集中治理 $(date -u +%Y)-Q${quarter}"
+          if gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "$title in:title" \
+              --json title --jq '.[].title' | grep -Fxq "$title"; then
+            echo "existing issue: $title"
+            exit 0
+          fi
+          issue_body="${RUNNER_TEMP}/quarterly-dependency-review.md"
+          cat > "$issue_body" <<EOF
+          本季度依赖盘点已生成：${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+
+          处理约束：
+          - 只创建一张人工维护 PR，不接受机器人拆分 PR。
+          - 先处理可利用的安全修复，再处理 patch/minor；major 单独决策。
+          - Maven 变更必须同步 SBOM；Docker 镜像必须固定 tag + digest。
+          - 完成定向测试、PR Gate，并在合入后跟踪 Full Gate 和 Scorecard。
+          EOF
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" \
+            --body-file "$issue_body"

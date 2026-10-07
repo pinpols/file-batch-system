@@ -87,14 +87,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          version: '0.11.14'
           python-version: '3.12'
-      - name: Install jsonschema
-        run: python -m pip install --upgrade pip jsonschema
       - name: Validate every fixture
-        run: bash docs/api/sdk-contract-fixtures/validate.sh
+        run: uv run --project .github/ci-tools/python --frozen bash docs/api/sdk-contract-fixtures/validate.sh
 
   java-contract:
     name: java contract + shared-constants parity
@@ -226,8 +225,8 @@ jobs:
           trap 'cp /tmp/sdk-rust-Cargo.lock Cargo.lock' EXIT
           sed -i 's/^version = 4$/version = 3/' Cargo.lock
           cargo +1.75.0 test --locked
-      - name: Set up Rust (stable)
-        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+      - name: Set up Rust (locked baseline)
+        run: rustup show active-toolchain
       - name: Check Rust formatting
         working-directory: sdk/rust
         run: cargo fmt --all -- --check
@@ -337,7 +336,7 @@ jobs:
           go-version: '1.27.x'
 
       - name: Set up Rust
-        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+        run: rustup show active-toolchain
 
       - name: Check SDK configuration environment parity
         run: bash scripts/ci/run-gate.sh SDK_CONFIG_ENV_PARITY "SDK 配置环境一致性" -- python3 scripts/ci/check-sdk-config-env-parity.py

@@ -30,8 +30,9 @@ typescript_package = json.loads(read(ROOT / "sdk/typescript/package.json"))
 require(typescript_package.get("engines", {}).get("node") == "^22 || ^24", "TypeScript SDK engines.node must support Node 22 and 24 only")
 require((ROOT / "sdk/typescript/package-lock.json").is_file(), "TypeScript SDK development dependencies must be lockfile-backed")
 
-for version_file in (".node-version", ".nvmrc"):
-    require(read(ROOT / version_file).strip() == "24", f"repository {version_file} must select Node 24")
+node_baseline = read(ROOT / ".node-version").strip()
+require(bool(re.fullmatch(r"24\.\d+\.\d+", node_baseline)), "repository .node-version must pin an exact Node 24 release")
+require(read(ROOT / ".nvmrc").strip() == node_baseline, "repository .nvmrc must match .node-version exactly")
 
 # CI 中的前端仓库单独检出。仅在本地同时存在两个仓库时执行此处校验；
 # 前端自身 CI 仍是最终验证依据。
@@ -39,12 +40,27 @@ if FRONTEND.is_dir():
     frontend_package = json.loads(read(FRONTEND / "package.json"))
     require(frontend_package.get("engines", {}).get("node") == "^24", "frontend engines.node must require Node 24")
     require("engine-strict=true" in read(FRONTEND / ".npmrc"), "frontend npm must enforce the declared Node engine")
-    for version_file in (".node-version", ".nvmrc"):
-        require(read(FRONTEND / version_file).strip() == "24", f"frontend {version_file} must select Node 24")
+    frontend_node_baseline = read(FRONTEND / ".node-version").strip()
     require(
-        bool(re.search(r"^FROM node:24\.\d+\.\d+-alpine\d+\.\d+ AS build$", read(FRONTEND / "Dockerfile"), re.M)),
-        "frontend Docker build image must use a fully pinned Node 24 Alpine image",
+        bool(re.fullmatch(r"24\.\d+\.\d+", frontend_node_baseline)),
+        "frontend .node-version must pin an exact Node 24 release",
     )
+    require(
+        read(FRONTEND / ".nvmrc").strip() == frontend_node_baseline,
+        "frontend .nvmrc must match .node-version exactly",
+    )
+    require(frontend_node_baseline == node_baseline, "frontend and backend Node execution baselines must match")
+    frontend_docker_node = re.search(
+        r"^FROM node:(24\.\d+\.\d+)-alpine\d+\.\d+@sha256:[0-9a-f]{64} AS build$",
+        read(FRONTEND / "Dockerfile"),
+        re.M,
+    )
+    require(frontend_docker_node is not None, "frontend Docker build image must pin Node 24 tag and digest")
+    if frontend_docker_node is not None:
+        require(
+            frontend_docker_node.group(1) == frontend_node_baseline,
+            "frontend Docker Node release must match .node-version",
+        )
 
 go_files = (ROOT / "sdk/go/go.mod", ROOT / "sdk/go/kafka/go.mod")
 for path in go_files:
@@ -71,9 +87,11 @@ require("node-version: '24'" in e2e_workflow, "SDK orchestrator E2E must use cur
 rust_manifest = read(ROOT / "sdk/rust/Cargo.toml")
 rust_policy = read(ROOT / "docs/architecture/runtime-compatibility-contract-2026-09-01.md")
 rust_workflow = read(ROOT / ".github/workflows/sdk-contract-parity.yml")
+rust_toolchain = read(ROOT / "rust-toolchain.toml")
 require('rust-version = "1.75"' in rust_manifest, "Rust core MSRV must remain explicit in Cargo.toml")
 require("Rust 1.88+" in rust_policy, "Rust adapter toolchain floor must be documented from the locked dependency tree")
 require("cargo +1.75.0 test --locked" in rust_workflow, "Rust core MSRV must be exercised in SDK contract CI")
+require(bool(re.search(r'^channel = "\d+\.\d+\.\d+"$', rust_toolchain, re.M)), "repository Rust baseline must pin an exact release")
 
 if errors:
     for error in errors:

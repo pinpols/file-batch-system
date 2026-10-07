@@ -59,6 +59,11 @@
             <artifactId>web-push</artifactId>
             <version>5.1.2</version>
         </dependency>
+        <!-- ConsolePushSender 直接使用 Response 类型，不能依赖 web-push 的传递依赖范围。 -->
+        <dependency>
+            <groupId>org.asynchttpclient</groupId>
+            <artifactId>async-http-client</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.bitbucket.b_c</groupId>
             <artifactId>jose4j</artifactId>

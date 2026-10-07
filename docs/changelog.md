@@ -1,6 +1,7 @@
 # 变更记录（规范与架构权威条款变化）
 
 ### 2026-10-07
+- **依赖治理改为季度集中处理**：Dependabot 仅保留依赖解析配置并禁止自动版本 PR，仓库级安全自动修复 PR 同步关闭；新增季度多生态盘点、单 Issue/单人工 PR 流程和紧急漏洞例外。CI 工具改用 npm/uv 锁文件，镜像固定 tag + digest，供应链输入不再只靠可变版本号。
 - **开源工程与供应链治理基线**：新增私密漏洞报告、仓库保护、依赖更新、Action SHA 固定、Scorecard、轻量 BEP 和生产就绪评审的统一规范；稳定安全模型集中记录资产与信任边界，避免专项审计重复建立漂移模型。单维护者阶段保留 PR + required checks，不伪造双人审批；第二位维护者加入后再提升 Code Owner 审批。
 - **CI 门禁耗时治理**：PR 单元测试改为按模块边界保守路由，拆分 Worker/Console 长尾并以稳定 `unit-it-b2` 聚合 required context；PR CodeQL 使用 Java no-build、main/定时保持手工全量构建；Full/Staging E2E 根据最新 Surefire 实测从四片重排为六片，非测试 job 不再准备 Testcontainers 镜像缓存，并登记 P50/P90 验收和回退标准。
 - **CI 与测试质量治理**：外部 GitHub Actions 全量固定到提交 SHA；必需门禁取消全局失败重跑，flaky 测试改为带 Issue、责任人和到期日的独立隔离；软门禁增加统一登记和升级期限；PR/Full Gate 增加 80% 变更行覆盖率，定时 Full Gate 对两个核心状态机执行 PIT，并生成最近 30 次 Full Gate 与当前测试结果的质量趋势报告。
@@ -40,7 +41,7 @@
 ### 2026-10-01
 - **ADR-011 幂等边界补强**：Console 写请求幂等在 Redis 短暂不可用时增加数据库完成态兜底，ADR 同步明确 Redis 仍承担短期 in-flight 保护，数据库记录承担完成态 replay 与恢复边界。
 - **统一文档站发布过滤**：新增 `docs/.docsignore`，将技术试验、测试数据和规模统计保留在 Git 中但排除出发布站与搜索索引；现行架构、API、设计、测试、SDK、运维、合规、工程规范及其可追溯证据继续发布。
-- **当前待办与 CI 证据收口**：`todo-master` 对齐已落地的 AI 流式取消、前端会话恢复和降级联测，结构化来源引用继续保留为真实缺口；CI Action 专题同步 Hadolint 3.5.0、SBOM Action 0.24.2、Docker Bake v7 及已通过的 PR/Full Gate 证据，镜像 workflow 未实跑部分继续单列。
+- **当前待办与 CI 证据收口**：`todo-master` 对齐已落地的 AI 流式取消、前端会话恢复和降级联测，结构化来源引用继续保留为真实缺口；CI Action 专题同步 Hadolint 3.5.0、SBOM Action 0.24.3、Docker Bake v7 及已通过的 PR/Full Gate 证据，镜像 workflow 未实跑部分继续单列。
 - **Console AI 控制面入口更新**：ADR-045 的只读、非主链边界不变；对话入口统一为 SSE `/api/console/ai/chat/stream`，移除旧 JSON 入口引用。
 
 ### 2026-09-30

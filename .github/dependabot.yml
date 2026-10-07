@@ -1,56 +1,47 @@
 version: 2
+multi-ecosystem-groups:
+  quarterly-dependency-inventory:
+    schedule:
+      interval: "quarterly"
+      time: "03:00"
+      timezone: "Asia/Shanghai"
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+
 updates:
   # ==== Maven ====
   - package-ecosystem: "maven"
     directory: "/"
-    schedule:
-      interval: "monthly"
-      time: "03:00"
-      timezone: "Asia/Shanghai"
-    # 保留有限队列；patch 聚合，minor 单独评审，major 人工升级。
-    open-pull-requests-limit: 5
-    commit-message:
-      prefix: "chore(deps)"
-      prefix-development: "chore(deps-dev)"
-    labels:
-      - "dependencies"
-      - "auto-update"
+    patterns: ["*"]
+    multi-ecosystem-group: "quarterly-dependency-inventory"
+    # 仅保留 Dependabot 版本解析能力；升级由季度人工批次统一建一张 PR。
+    open-pull-requests-limit: 0
     # 忽略 major bump(major 升级牵涉 CVE 抑制等,需人工评审)
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
-    groups:
-      maven-patch:
-        patterns: ["*"]
-        update-types: ["patch"]
 
   # ==== GitHub Actions ====
   - package-ecosystem: "github-actions"
     directory: "/"
-    schedule:
-      interval: "monthly"
-      time: "03:00"
-      timezone: "Asia/Shanghai"
-    # 保留有限的版本更新队列；安全更新不受该上限影响。
-    open-pull-requests-limit: 5
-    commit-message:
-      prefix: "chore(ci)"
-    labels:
-      - "dependencies"
-      - "github-actions"
-    groups:
-      github-actions-patch:
-        patterns: ["*"]
-        update-types: ["patch"]
+    patterns: ["*"]
+    multi-ecosystem-group: "quarterly-dependency-inventory"
+    open-pull-requests-limit: 0
+    # Action major 版本可能改变权限、输入或 Node 运行时，继续人工升级。
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   # ==== Docker base image ====
   - package-ecosystem: "docker"
     directory: "/deploy/docker"
     schedule:
-      interval: "monthly"
+      interval: "quarterly"
       time: "03:00"
       timezone: "Asia/Shanghai"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 0
     commit-message:
       prefix: "chore(docker)"
     labels:
@@ -62,4 +53,4 @@ updates:
       - dependency-name: "maven"
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
-    # Docker tag/digest 不具有统一的 semver 语义，保留单项 PR 便于镜像回归和回滚。
+    # Docker tag/digest 不具有统一的 semver 语义，仅参与季度盘点并由人工集中处理。

@@ -1,0 +1,9 @@
+{
+  "name": "batch-platform-ci-tools",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Lock file for Node-based CI tools.",
+  "dependencies": {
+    "squawk-cli": "2.65.0"
+  }
+}

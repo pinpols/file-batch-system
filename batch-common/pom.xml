@@ -286,6 +286,13 @@
             <version>1.5.1</version>
             <scope>test</scope>
         </dependency>
+        <!-- 用户可控游标与日志字段的覆盖引导 fuzz；常规 test 只回放语料，周任务进入 fuzz 模式。 -->
+        <dependency>
+            <groupId>com.code-intelligence</groupId>
+            <artifactId>jazzer-junit</artifactId>
+            <version>${jazzer.version}</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

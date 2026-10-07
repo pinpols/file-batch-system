@@ -76,9 +76,9 @@
         <jose4j.version>0.9.7</jose4j.version>
         <shedlock.version>6.3.0</shedlock.version>
         <spring-retry.version>2.0.13</spring-retry.version>
-        <!-- OTel Logback appender 与 Spring Boot 4.1 的 OTel 1.62 API 兼容；
-             instrumentation 项目尚以 alpha 后缀发布该独立工件。 -->
-        <opentelemetry-instrumentation.version>2.32.0-alpha</opentelemetry-instrumentation.version>
+        <!-- OTel Logback appender 必须与 Spring Boot 4.1 管理的 OTel 1.62 API 对齐；
+             2.28.0-alpha 对应 API 1.62，后续版本会要求更高 API，不能单独滚动。 -->
+        <opentelemetry-instrumentation.version>2.28.0-alpha</opentelemetry-instrumentation.version>
         <!-- ArchUnit:守护 docs/agent-baseline.md 硬性架构与编码规约(ZoneId / Charset / 模块边界)。
              仅用于 test scope,不进运行时 jar。 -->
         <archunit.version>1.5.1</archunit.version>
@@ -110,9 +110,10 @@
         <resilience4j.version>2.4.0</resilience4j.version>
         <pitest.version>1.30.0</pitest.version>
         <pitest-junit5-plugin.version>1.2.3</pitest-junit5-plugin.version>
+        <jazzer.version>0.30.0</jazzer.version>
         <!-- 必需门禁默认不重跑失败测试；确认的 flaky 用例只在隔离 profile 中重跑。 -->
         <test.rerun-failing-count>0</test.rerun-failing-count>
-        <test.excluded-groups>flaky</test.excluded-groups>
+        <test.excluded-groups>flaky,fuzz</test.excluded-groups>
     </properties>
 
     <dependencyManagement>

@@ -17,7 +17,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 concurrency:
   group: docker-image-build-${{ github.ref }}
@@ -27,6 +26,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
     env:
       BUILD_REVISION: ${{ github.sha }}
       APP_IMAGE_TAG: sha-${{ github.sha }}
