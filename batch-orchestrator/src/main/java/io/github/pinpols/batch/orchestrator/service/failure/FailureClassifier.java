@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.service.failure;
 
 import io.github.pinpols.batch.common.enums.FailureClass;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.sql.SQLException;
 import java.sql.SQLTransientException;
@@ -52,7 +53,7 @@ public class FailureClassifier {
       }
       log.warn(
           "worker reported unknown failure_class '{}', falling back to classifier",
-          reportedClassCode);
+          LogSanitizer.value(reportedClassCode));
     }
     if (throwable == null) {
       return FailureClass.UNKNOWN;
