@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 版本对齐校验（CI 门禁）
-#   1. 应用版本关键落点对齐（pom / load-tests / helm / OpenAPI / SDK 文档 / CHANGELOG）
+#   1. 应用版本关键落点对齐（pom / load-tests parent / helm / OpenAPI / SDK 文档 / CHANGELOG）
 #   2. .env 文件里的每个 *_IMAGE_TAG 值一致               （基础服务版本跨环境不漂移）
 #   3. PostgreSQL/Kafka/MinIO/Valkey 的 Testcontainers 镜像与 .env.example 对齐
 set -euo pipefail
@@ -168,26 +168,25 @@ for pair in "orchestrator OpenAPI:${ORCH_OPENAPI_VER}" "SDK quickstart:${SDK_QUI
   fi
 done
 
-# load-tests 是独立 reactor（未纳入根 reactor），无法继承根 ${revision}，版本字面量手工同步。
-# docs/agent-baseline.md 点名为高危点 → 必须与根 <revision> 一致。
-# 取 <artifactId>batch-load-tests</artifactId> 紧随其后的 project <version>（非 dependency 里的）。
+# load-tests 保持独立 reactor，但必须继承根 POM，复用应用版本和安全依赖覆盖。
+# 这同时防止 Gatling 传递依赖与根工程的 Netty/Jackson/Logback 修复版本漂移。
 LOADTEST_VER="$("$PYTHON_BIN" -c "
 import re
 with open('$ROOT/load-tests/pom.xml') as f:
     txt = f.read()
-m = re.search(r'<artifactId>batch-load-tests</artifactId>.*?<version>([^<]+)</version>', txt, re.S)
+m = re.search(r'<parent>.*?<artifactId>batch-platform</artifactId>.*?<version>([^<]+)</version>.*?</parent>', txt, re.S)
 print(m.group(1).strip() if m else '')
 ")"
 
-echo "load-tests    <version>  = ${LOADTEST_VER}"
+echo "load-tests    parent.version = ${LOADTEST_VER}"
 if [[ -z "$LOADTEST_VER" ]]; then
-  echo "  ✗ 未能从 load-tests/pom.xml 解析到 batch-load-tests <version>" >&2
+  echo "  ✗ load-tests/pom.xml 未继承 batch-platform parent" >&2
   FAIL=1
-elif [[ "$LOADTEST_VER" != "$POM_REV" ]]; then
-  echo "  ✗ load-tests 版本与根 <revision> 不一致（${LOADTEST_VER} != ${POM_REV}）" >&2
+elif [[ "$LOADTEST_VER" != '${revision}' ]]; then
+  echo "  ✗ load-tests parent 必须使用 \${revision}，实际为 ${LOADTEST_VER}" >&2
   FAIL=1
 else
-  echo "  ✓ load-tests 与根版本对齐"
+  echo "  ✓ load-tests 继承根版本与依赖治理"
 fi
 
 # ─── 2. 基础服务镜像版本（4 个 .env 之间对齐）─────────────────────

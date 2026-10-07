@@ -8,13 +8,13 @@
 
 - `.github/dependabot.yml` 保留生态和忽略规则，但 `open-pull-requests-limit: 0`，不会创建版本更新 PR。
 - 仓库级 Dependabot security updates 关闭自动修复 PR；Dependabot alerts、Dependency Graph、CodeQL、Trivy 和 Scorecard 继续提供发现证据。
-- `quarterly-dependency-review.yml` 在每年 1、4、7、10 月首日生成 Maven、TypeScript、Python、Rust 和安全告警盘点，上传 90 天 artifact，并创建一个季度治理 Issue。
-- 工作流只读依赖和生成报告，不改分支、不提交代码、不创建 PR。
+- `quarterly-dependency-review.yml` 在每年 1、4、7、10 月首日生成 Maven、TypeScript、Python、Rust 和安全告警盘点，上传 90 天 artifact，并写入 Actions Summary。
+- 工作流只读依赖和生成报告，不改分支、不提交代码，也不创建 Issue/PR。维护者只在决定实施升级时建立一张人工 PR。
 
 ## 实施流程
 
 1. 从最新 `main` 建立一个 `chore/dependency-review-YYYY-qN` 分支。
-2. 阅读季度 Issue 和 artifact，按“可利用安全漏洞 → 运行时 patch → 构建/测试工具 patch → minor → major”排序。
+2. 阅读对应 workflow run 的 Actions Summary 和 artifact，按“可利用安全漏洞 → 运行时 patch → 构建/测试工具 patch → minor → major”排序。
 3. 一次只形成一张人工 PR。语义跨度过大的 major、JDK/Spring Boot 基线或数据库主版本升级另立决策，不强行捆绑。
 4. Maven、Actions、Python、Node、Rust 和 Docker 必须使用各自锁定机制；Docker 使用可读 tag 加不可变 digest，外部 Action 使用 40 位提交 SHA，Node 包由 `package-lock.json` 的 integrity 锁定，Python CI 工具由 `uv.lock` 的哈希锁定，Rust crate 由 `Cargo.lock` 和 crates.io checksum 锁定。
 5. Node/Rust 需区分兼容范围与执行基线：兼容矩阵继续覆盖 Node 22/24 和 Rust core MSRV 1.75，日常发布基线分别由 `.node-version`/`.nvmrc` 与 `rust-toolchain.toml` 固定到精确 patch，季度治理时统一提升。
@@ -28,7 +28,7 @@
 1. 立即建立单独安全修复 PR，不等待季度窗口；
 2. 核实受影响版本、调用可达性和部署暴露面，不仅依据 CVE 标题升级；
 3. 保留最小修复、定向回归、SBOM/许可证同步和回滚方案；
-4. 在季度 Issue 中登记已提前处理的依赖，避免重复升级。
+4. 在当季人工 PR 的说明中登记已提前处理的依赖，避免重复升级。
 
 ## 验收命令
 

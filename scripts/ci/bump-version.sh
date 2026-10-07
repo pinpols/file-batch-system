@@ -9,7 +9,6 @@
 #
 #   自动修改：
 #     - pom.xml   <revision>NEW_VERSION</revision>
-#     - load-tests/pom.xml   <version>NEW_VERSION</version>
 #     - docs/api/orchestrator-internal.openapi.yaml   info.version
 #     - docs/sdk/quickstart.md   Java SDK dependency version
 #     - GA 版本在 CHANGELOG.md 自动补正式版本小节（如已存在则不改）
@@ -57,13 +56,6 @@ def replace(path, pattern, repl, flags=0, label=None):
     print(f"  ✓ {label or path} → {new_version}")
 
 replace("pom.xml", r"<revision>[^<]+</revision>", f"<revision>{new_version}</revision>", label="pom.xml <revision>")
-replace(
-    "load-tests/pom.xml",
-    r"(<artifactId>batch-load-tests</artifactId>.*?<version>)[^<]+(</version>)",
-    rf"\g<1>{new_version}\g<2>",
-    flags=re.S,
-    label="load-tests <version>",
-)
 replace(
     "docs/api/orchestrator-internal.openapi.yaml",
     r"(^info:\s*\n(?:  .+\n)*?  version:\s*)\"?[^\s\"]+\"?",

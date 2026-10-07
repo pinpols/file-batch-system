@@ -99,38 +99,13 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-  issue:
-    name: open quarterly review issue
-    needs: inventory
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      issues: write
-    steps:
-      - name: Open one quarterly review issue
+      - name: Publish inventory summary
+        if: always()
         shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          month=$((10#$(date -u +%m)))
-          quarter=$((((month - 1) / 3) + 1))
-          title="依赖集中治理 $(date -u +%Y)-Q${quarter}"
-          if gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "$title in:title" \
-              --json title --jq '.[].title' | grep -Fxq "$title"; then
-            echo "existing issue: $title"
-            exit 0
+          if [[ -f target/dependency-review/report.md ]]; then
+            cat target/dependency-review/report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '季度依赖盘点未生成报告，请检查 inventory 步骤日志。' >> "$GITHUB_STEP_SUMMARY"
           fi
-          issue_body="${RUNNER_TEMP}/quarterly-dependency-review.md"
-          cat > "$issue_body" <<EOF
-          本季度依赖盘点已生成：${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
-
-          处理约束：
-          - 只创建一张人工维护 PR，不接受机器人拆分 PR。
-          - 先处理可利用的安全修复，再处理 patch/minor；major 单独决策。
-          - Maven 变更必须同步 SBOM；Docker 镜像必须固定 tag + digest。
-          - 完成定向测试、PR Gate，并在合入后跟踪 Full Gate 和 Scorecard。
-          EOF
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" \
-            --body-file "$issue_body"

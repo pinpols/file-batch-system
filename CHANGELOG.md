@@ -29,7 +29,8 @@
 
 ### Changed
 
-- 依赖治理改为持续告警、季度集中盘点和单个人工 PR：关闭 Dependabot 自动版本/安全修复 PR，新增季度多生态报告与治理 Issue；紧急可达漏洞仍走独立快速修复。同步升级本批依赖、固定 CI/镜像供应链输入并刷新 SBOM。
+- 依赖治理改为持续告警、季度集中盘点和单个人工 PR：关闭 Dependabot 自动版本/安全修复 PR，季度任务只生成多生态 artifact 与 Actions Summary，不再自动创建 Issue/PR；紧急可达漏洞仍走独立快速修复。同步升级本批依赖、固定 CI/镜像供应链输入并刷新 SBOM。
+- 修复独立 `load-tests` 未继承根依赖治理导致的安全版本漂移；压测模块继续保持独立 reactor，但统一复用根 POM 的 Netty、Jackson 与 Logback 修复版本。
 - PR 单元测试按模块边界选择分片并拆分 Worker/Console 长尾；静态门禁拆分 policy、供应链和 Java quality 三路并由稳定 context 聚合；PR CodeQL 使用 Java 无构建与默认高精度查询，main/定时保留手工全量构建和扩展查询；Full/Staging E2E 依据最新实测重排为六片，CI runbook 同步登记耗时基线与回退标准。
 - Console、Trigger 与 Import 通知的固定响应改用具名类型，Pipeline 列表不再在应用层传播原始 Map；Job trigger 保留普通实例号/dry-run 对象两种 wire 形态，OpenAPI 与配对前端类型同步。Lineage 热表/归档证据使用显式构造映射，文件 metadata 解析为 JSON 对象，不透传 JDBC 驱动封装。
 - 已有生命周期、Outbox、文件格式、分发策略和通知枚举统一复用稳定 code，保留各运维操作原有状态集合与配置 DSL。新增低误报 Java 契约守卫，按固定边界、确认的有限域和已有协议键复用阻断新增退化；动态契约按方法签名登记例外。
