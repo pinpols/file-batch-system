@@ -1,6 +1,6 @@
 # 固定契约、有限域与常量治理计划（2026-10-07）
 
-> 状态：LocalImplemented（本地实现与定向验收完成；已获前后端 PR 提交授权，CI 验收待完成）
+> 状态：LocalImplemented（本地实现与定向验收完成；后端 PR #1160、前端 PR #284 已提交，CI 验收待完成）
 >
 > 目标：治理固定结构使用 `Map` / `Object`、有限状态使用裸字符串、同一语义字面量重复散落三类问题，并建立低误报的增量门禁。
 >
@@ -223,7 +223,7 @@ MyBatis 状态集合不得为消除字面量而统一参数化。共享生命周
 | C：有限域 | 已完成 | 31 个确认类范围登记权威枚举；code 值、查询策略和 SQL 状态集合不变 |
 | D：高置信常量 | 已完成首批范围 | 已有同类 KEY/PARAM/MDC 值复用；另收敛 stepParams、timezone、message、requiredFileSet、downloadRequiresApproval、errorCode、workerId 等 8 个类内稳定协议键。固定路由常量复用；Sonar S1192 全量仍作为后续人工候选，不是全局阻断清单 |
 | E：精准守卫 | 已完成本地 | JCON-1/2/3；19 个正反例；PR/local 增量与 Full Gate 全量入口、规则变化路由、自测、总账和 runbook 已接入 |
-| CI / Full Gate / sim | 待 PR 验收 | 按主题提交前后端 PR；取得真实 CI 结果后更新，不据本地通过标记 Implemented |
+| CI / Full Gate / sim | 待 PR 验收 | [后端 #1160](https://github.com/pinpols/file-batch-system/pull/1160)、[前端 #284](https://github.com/pinpols/batch-console/pull/284) 已提交；取得真实 CI 结果后更新，不据本地通过标记 Implemented |
 
 ### 已确认保留项
 

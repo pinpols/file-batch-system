@@ -1,7 +1,7 @@
 # 固定契约与协议值治理本地验收记录
 
 > 日期：2026-10-07
-> 状态：本地实现与定向验证已完成，按主题提交并准备前后端 PR；CI / Full Gate / sim 尚无本轮结果。
+> 状态：本地实现与定向验证已完成；[后端 PR #1160](https://github.com/pinpols/file-batch-system/pull/1160) 与 [前端 PR #284](https://github.com/pinpols/batch-console/pull/284) 已提交，CI 进行中，未合并；Full Gate / sim 尚无本轮通过结论。
 > 计划：[固定契约、有限域与常量治理计划](../plans/typed-contract-enum-constant-governance-plan-2026-10-07.md)。
 
 ## 范围与基线
@@ -60,7 +60,7 @@ Sonar S1075 对固定 Trigger API 路由的误报只允许该代理文件一次 
 
 ## 未声称完成的验证
 
-- GitHub PR 检查、Full Gate、全量 Maven 测试、完整 sim、真实浏览器前后端操作和 staging 未运行。
+- GitHub PR 检查已触发，尚未获得全部通过结果；本轮没有完整 sim、全量 Maven 测试、真实浏览器前后端操作或 staging 证据，也不以进行中的检查声称 Full Gate 通过。
 - MockMvc/RestClient JSON 与 Testcontainers IT 是契约和投影证据，不等于真实长任务或生产高可用验收。
 - 首轮全量 Sonar 的 OPEN S1192 候选为 236 个，末轮为 228 个；其中含文案、样例、SQL 和正常标签重复，不等于同数量的确认缺陷，不在本轮作为强制清零指标。末轮全量报告仍有 1076 个 OPEN issue，本轮只报告变更行增量为零，不声称全仓 Sonar 清零。新增代码的高置信同类协议键回退由 JCON-3 阻断，其他候选按原计划逐处人工判定。
 - JCON 零候选仅指规则覆盖范围；它不证明所有嵌套 DTO、跨类常量或未登记有限域都不存在问题。
