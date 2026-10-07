@@ -51,6 +51,11 @@ def require_contains(label: str, text: str, needles: list[str], errors: list[str
         errors.append(f"{label} 缺少内容: {', '.join(missing)}")
 
 
+def require_matches(label: str, text: str, pattern: str, description: str, errors: list[str]) -> None:
+    if re.search(pattern, text, re.MULTILINE) is None:
+        errors.append(f"{label} 缺少内容: {description}")
+
+
 def main() -> int:
     errors: list[str] = []
 
@@ -168,7 +173,6 @@ def main() -> int:
         toolbox_dockerfile,
         [
             "postgresql-client-${POSTGRES_CLIENT_MAJOR}",
-            "FROM apache/kafka:${KAFKA_IMAGE_TAG} AS kafka-client",
             "COPY --from=kafka-client /opt/kafka/libs /opt/kafka-client/libs",
             "exec /opt/kafka-client/bin/%s",
             "kafka-topics.sh --version",
@@ -177,6 +181,13 @@ def main() -> int:
             "PATH=/opt/kafka-client/bin",
             "USER batch:batch",
         ],
+        errors,
+    )
+    require_matches(
+        rel(TOOLBOX_DOCKERFILE),
+        toolbox_dockerfile,
+        r"^FROM apache/kafka:\$\{KAFKA_IMAGE_TAG\}@sha256:[0-9a-f]{64} AS kafka-client$",
+        "Kafka 客户端基础镜像必须同时固定 tag 与 sha256 digest",
         errors,
     )
     require_contains(

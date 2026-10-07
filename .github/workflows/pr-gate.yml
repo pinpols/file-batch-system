@@ -148,6 +148,7 @@ jobs:
         shell: bash
         run: |
           npm ci --prefix .github/ci-tools --ignore-scripts --no-audit --no-fund
+          echo "$GITHUB_WORKSPACE/.github/ci-tools/node_modules/.bin" >> "$GITHUB_PATH"
           OASDIFF_VERSION=1.32.1
           curl -fsSL "https://github.com/oasdiff/oasdiff/releases/download/v${OASDIFF_VERSION}/oasdiff_${OASDIFF_VERSION}_linux_amd64.tar.gz" \
             | sudo tar -xz -C /usr/local/bin oasdiff
