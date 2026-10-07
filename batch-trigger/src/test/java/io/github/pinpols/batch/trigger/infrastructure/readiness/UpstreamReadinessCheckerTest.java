@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.trigger.application.UpstreamReadinessPort;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.function.Function;
@@ -50,7 +51,7 @@ class UpstreamReadinessCheckerTest {
   @DisplayName("上游 ready=true → 放行")
   void shouldAllow_whenUpstreamReady() {
     stubBody(new ReadinessResponse(true, null));
-    UpstreamReadinessChecker checker =
+    UpstreamReadinessPort checker =
         new UpstreamReadinessChecker(orchestratorRestClient, gate(true));
 
     assertThat(checker.isReady("t1", "UP_JOB", BIZ_DATE)).isTrue();

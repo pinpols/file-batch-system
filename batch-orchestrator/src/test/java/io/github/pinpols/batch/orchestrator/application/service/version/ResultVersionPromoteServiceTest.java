@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
+import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionService;
@@ -24,7 +25,6 @@ import java.time.Month;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.dao.OptimisticLockingFailureException;
 
 @DisplayName("结果版本生效服务: 生效,驳回,并发冲突与参数校验的处理口径")
 class ResultVersionPromoteServiceTest {
@@ -110,7 +110,9 @@ class ResultVersionPromoteServiceTest {
     when(mapper.promoteToEffective(eq("t1"), eq(3L), any())).thenReturn(0);
 
     assertThatThrownBy(() -> service.promote("t1", 3L))
-        .isInstanceOf(OptimisticLockingFailureException.class);
+        .isInstanceOf(BizException.class)
+        .extracting("code")
+        .isEqualTo(ResultCode.STATE_CONFLICT);
     verify(assetPartitionService, never()).materializeEffectiveJobPartition(any(), any());
   }
 
@@ -137,6 +139,24 @@ class ResultVersionPromoteServiceTest {
     assertThat(result.status()).isEqualTo("ARCHIVED");
     verify(mapper, never()).supersedePriorEffective(eq("t1"), eq("job:JOB:2026-05-04"), any());
     verify(assetPartitionService, never()).materializeEffectiveJobPartition(any(), any());
+  }
+
+  @Test
+  @DisplayName("并发导致驳回更新未命中任何行时返回状态冲突")
+  void shouldFailOnRejectRaceLoss_whenUpdateAffectsNoRow() {
+    ResultVersionEntity pending = ResultVersionEntity.builder()
+        .id(5L)
+        .tenantId("t1")
+        .businessKey("job:JOB:2026-05-04")
+        .status("PENDING")
+        .build();
+    when(mapper.selectById("t1", 5L)).thenReturn(pending);
+    when(mapper.rejectPending(eq("t1"), eq(5L), any())).thenReturn(0);
+
+    assertThatThrownBy(() -> service.rejectPending("t1", 5L))
+        .isInstanceOf(BizException.class)
+        .extracting("code")
+        .isEqualTo(ResultCode.STATE_CONFLICT);
   }
 
   @Test

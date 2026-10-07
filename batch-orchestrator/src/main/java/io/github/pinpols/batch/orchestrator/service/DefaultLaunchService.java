@@ -21,6 +21,7 @@ import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.application.service.failure.PersistenceConflictDetectionPort;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.application.service.task.PartitionDispatchService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
@@ -35,7 +36,6 @@ import io.github.pinpols.batch.orchestrator.observability.LaunchPhaseMetrics;
 import io.github.pinpols.batch.orchestrator.observability.LaunchPhaseMetrics.Phase;
 import io.github.pinpols.batch.orchestrator.service.LaunchValidationService.LaunchLoadResult;
 import io.micrometer.observation.annotation.Observed;
-import java.sql.SQLException;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -81,6 +81,7 @@ public class DefaultLaunchService implements LaunchService {
   private final JobExecutionLogMapper jobExecutionLogMapper;
   private final PlatformTransactionManager transactionManager;
   private final LaunchPhaseMetrics launchPhaseMetrics;
+  private final PersistenceConflictDetectionPort persistenceConflictDetection;
 
   @Override
   @Observed(name = "orch.launch", contextualName = "orch.launch")
@@ -117,7 +118,8 @@ public class DefaultLaunchService implements LaunchService {
     } catch (RuntimeException exception) {
       // PG 唯一约束等可能被包装为 TransactionSystemException / UncategorizedDataAccess 等，需沿 cause 识别
       // 23505
-      if (hasSqlStateInChain(exception, "23505")) {
+      if (persistenceConflictDetection.isUniqueConstraintViolation(
+          exception, "uk_job_instance_tenant_dedup")) {
         return resolveConcurrentDuplicate(request, loaded, exception);
       }
       throw exception;
@@ -591,21 +593,6 @@ public class DefaultLaunchService implements LaunchService {
       String m = t.getMessage();
       if (m != null && m.contains(needle)) {
         return true;
-      }
-    }
-    return false;
-  }
-
-  private static boolean hasSqlStateInChain(Throwable throwable, String sqlState) {
-    for (Throwable t = throwable; t != null; t = t.getCause()) {
-      if (t instanceof SQLException sql) {
-        if (sqlState.equals(sql.getSQLState())) {
-          return true;
-        }
-        String m = sql.getMessage();
-        if (m != null && m.contains("uk_job_instance_tenant_dedup")) {
-          return true;
-        }
       }
     }
     return false;

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.common.enums.FailureClass;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.orchestrator.infrastructure.failure.SpringTechnicalFailureClassificationAdapter;
 import java.sql.SQLException;
 import java.sql.SQLTimeoutException;
 import java.util.concurrent.TimeoutException;
@@ -18,7 +19,8 @@ import org.springframework.web.client.ResourceAccessException;
 @DisplayName("失败分类器: 依据上报类别, 业务异常与数据库状态信号判定失败归属")
 class FailureClassifierTest {
 
-  private final FailureClassifier classifier = new FailureClassifier();
+  private final FailureClassifier classifier =
+      new FailureClassifier(new SpringTechnicalFailureClassificationAdapter());
 
   @Test
   @DisplayName("恶意上报含换行时日志不分行,未知类别仍按异常回退分类")

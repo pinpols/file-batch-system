@@ -16,13 +16,13 @@ import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.trigger.application.UpstreamReadinessPort;
 import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
 import io.github.pinpols.batch.trigger.domain.TriggerLaunchStatus;
 import io.github.pinpols.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
 import io.github.pinpols.batch.trigger.event.TriggerOutboxDomainEventPublisher;
-import io.github.pinpols.batch.trigger.infrastructure.readiness.UpstreamReadinessChecker;
 import io.github.pinpols.batch.trigger.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.trigger.mapper.TenantStatusMapper;
 import io.github.pinpols.batch.trigger.mapper.TriggerMisfirePendingMapper;
@@ -77,7 +77,7 @@ public class DefaultTriggerService implements TriggerService {
   private final BusinessCalendarMapper businessCalendarMapper;
   private final TenantStatusMapper tenantStatusMapper;
   private final PlatformTransactionManager transactionManager;
-  private final UpstreamReadinessChecker upstreamReadinessChecker;
+  private final UpstreamReadinessPort upstreamReadiness;
   private final TriggerRuntimeProperties triggerRuntimeProperties;
 
   private record PendingApprovalTarget(
@@ -136,8 +136,7 @@ public class DefaultTriggerService implements TriggerService {
     if (!Texts.hasText(dependsOn)) {
       return true;
     }
-    return upstreamReadinessChecker.isReady(
-        launchRequest.tenantId(), dependsOn, launchRequest.bizDate());
+    return upstreamReadiness.isReady(launchRequest.tenantId(), dependsOn, launchRequest.bizDate());
   }
 
   @Override
