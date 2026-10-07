@@ -4,6 +4,13 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
+    <parent>
+        <groupId>io.github.pinpols.batch</groupId>
+        <artifactId>batch-platform</artifactId>
+        <version>${revision}</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
     <!--
       独立 Gatling 压测模块 — 未列入根 pom.xml 的 modules 列表。
       单独运行示例：
@@ -26,13 +33,9 @@
         -Dusers.peak=50
         -Dduration.seconds=180
     -->
-    <groupId>io.github.pinpols.batch</groupId>
-    <artifactId>batch-load-tests</artifactId>
-    <!-- 独立模块（未在根 reactor 中），无法继承根 pom 的 ${revision}；用字面量，与根版本手工保持同步。
-         release 时同步规则见 docs/runbook/releasing.md §release-bump-checklist。 -->
-    <version>1.0.0</version>
+    <artifactId>load-tests</artifactId>
     <packaging>jar</packaging>
-    <name>batch-load-tests</name>
+    <name>load-tests</name>
     <description>Gatling load tests and capacity baseline for batch-platform</description>
 
     <properties>

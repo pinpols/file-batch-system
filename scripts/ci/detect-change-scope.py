@@ -161,7 +161,7 @@ def classify_path(path: str) -> set[str]:
 def required_unit_shards(path: str) -> set[str]:
     """Return the conservative unit-test shards affected by one path."""
     normalized = path.removeprefix("./")
-    # E2E 源码由 static-checks 的全 reactor test-compile 保证可编译，并在 main / nightly
+    # E2E 源码由 static-java-quality 的全 reactor test-compile 保证可编译，并在 main / nightly
     # 的六片 E2E 中执行；PR 单元分片不重复启动。
     if under(normalized, "batch-e2e-tests/src"):
         return set()

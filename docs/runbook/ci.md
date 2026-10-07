@@ -19,7 +19,7 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 | `daily-sim-strict-validation` | 补充真实数据验证 | nightly(每天 13:31 UTC / 北京 21:31)+ workflow_dispatch | 定时触发按最近一次计划时间对应的北京时间日期检查代码/配置变更，延迟跨午夜仍归属原计划日；手动触发按当前北京时间日期。Markdown/RST、`LICENSE`、`NOTICE` 除外。需要验证时同环境先执行 `sim-harness all`，再执行 BE-ACC step 5(strict real-data verification)；strict step 使用 `always()` 采证，不因 sim 失败被短路 | 240 min |
 | `docker-image-build` | nightly / 可选发布镜像构建 | 由 `daily-sim-strict-validation` 在当天有代码/配置变更且 sim + strict 成功后调用；也支持手动和复用调用 | 默认只用 Docker Bake 构建全部应用镜像和运维工具箱镜像；显式 `publish=true` 时登录 GHCR、推送 SHA 镜像并上传含 immutable digest 的 backend image set。CI 使用 Maven Central 配置并带依赖下载重试 | 30 min |
 | `OpenSSF Scorecard` | 供应链治理报告 | push main、每周三、手动 | 生成 SARIF 并上传 Code Scanning；不按总分阻断 PR | 20 min |
-| `quarterly-dependency-review` | 依赖集中治理盘点 | 每季度首日、手动 | 生成多生态更新报告和单个治理 Issue；不改代码、不创建 PR | 25 min |
+| `quarterly-dependency-review` | 依赖集中治理盘点 | 每季度首日、手动 | 生成多生态 artifact 与 Actions Summary；不创建 Issue/PR | 25 min |
 | `main-failure-triage` | 失败处理自动化 | main 的 `full-ci-gate` 核心 job 失败 | 自动标记关联 PR 并评论处理要求；无关联 PR 时创建 issue | — |
 
 > **2026-05-23 删除 `capacity-gate` / `promote-staging`**:`capacity-gate` 目标是 `*.svc.cluster.local`(k8s 集群内 DNS),GitHub-hosted runner 永远连不上 → 100% Connection refused;`promote-staging` 要写 `pinpols/file-batch-system-ops` 但仓 / PAT 都没在用,等同 dead code。Checkov K8s manifest 静态扫已迁到 `full-ci-gate`。若未来要恢复真·生产环境验证 / 容量回归 / ops 仓同步,改用 self-hosted runner 部署到集群内,或 staging 暴露公网 ingress + 配 PAT。
@@ -48,7 +48,7 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 
 CI 版本基线与运行结果分开记录。每次核验 Full Gate、CodeQL 或镜像工作流时，按目标分支的实际 commit SHA 检查最新 run；`IN_PROGRESS`、`QUEUED`、`SKIPPED` 或其他 SHA 上的成功都不能作为当前提交通过证据。Docker Buildx/Bake、发布凭据、GHES 与 self-hosted runner 兼容性仍须按目标环境验证。后续每次升级按 [CI 外部 Actions 版本升级与验收记录](../backlog/ci-external-action-upgrade-backlog-2026-09-30.md) 运行对应回归。
 
-OpenSSF Scorecard 是 main/定时的供应链治理报告，不属于 PR required checks，也不以总分决定合并。其 workflow 失败表示扫描链路本身需要修复；SARIF 中的发现按 [`../standards/open-source-governance.md`](../standards/open-source-governance.md) 分级治理。外部 Action 必须固定 40 位 SHA；季度依赖盘点只创建 Issue 和 artifact，由维护者建立一张人工 PR 并核对 release、变更说明和所需权限。
+OpenSSF Scorecard 是 main/定时的供应链治理报告，不属于 PR required checks，也不以总分决定合并。其 workflow 失败表示扫描链路本身需要修复；SARIF 中的发现按 [`../standards/open-source-governance.md`](../standards/open-source-governance.md) 分级治理。外部 Action 必须固定 40 位 SHA；季度依赖盘点只生成 artifact 与 Actions Summary，由维护者需要时建立一张人工 PR 并核对 release、变更说明和所需权限。
 
 CodeQL 的 `Analyze (java)` 只有在 `codeql.yml` 已于 main 生效、并确认纯文档 PR 也会创建该检查后，才能加入 ruleset required checks。配置顺序必须是先合 workflow、用代码变更和纯文档 PR 各验证一次，再更新 ruleset；反向操作会使被 `paths-ignore` 跳过的 PR 永久等待。
 
@@ -58,7 +58,7 @@ CodeQL 的 `Analyze (java)` 只有在 `codeql.yml` 已于 main 生效、并确�
 - `actions/upload-artifact@v7` 使用当前 artifact 服务契约；迁移到 GHES 前必须确认 GHES 支持该 major，否则保持独立兼容版本或由平台团队提供替代上传方案。
 - Gitleaks `8.30.1` 本轮不盲目更换；已在 Docker `linux/amd64` 用同版 artifact 验证合成 `ghp_...` 正向退出 1、负向退出 0，并通过 PR/Full Gate 安全扫描；继续关注上游规则变化，该样例不代表所有密钥类型。
 - CodeQL、Trivy Action、Checkov、发布 Action 和 Sonar 仍按 G7 定期复核，不因本批版本升级自动视为完成。
-- `.github/dependabot.yml` 对 Maven、GitHub Actions 和 Docker 设置季度解析但将版本 PR 上限设为 0；仓库级 Dependabot security updates 关闭自动修复 PR，安全告警仍持续发现。`quarterly-dependency-review` 每季度只生成报告和一个 Issue，维护者按[季度依赖集中治理](./quarterly-dependency-governance.md)创建一张人工 PR。Maven 更新必须同步入库 SBOM；Docker 构建镜像的 JDK 主版本继续人工决策。
+- `.github/dependabot.yml` 对 Maven、GitHub Actions 和 Docker 设置季度解析但将版本 PR 上限设为 0；仓库级 Dependabot security updates 关闭自动修复 PR，安全告警仍持续发现。`quarterly-dependency-review` 每季度只生成 artifact 与 Actions Summary，维护者按[季度依赖集中治理](./quarterly-dependency-governance.md)在需要实施时创建一张人工 PR。Maven 更新必须同步入库 SBOM；Docker 构建镜像的 JDK 主版本继续人工决策。
 - 所有外部 Action 必须使用 40 位提交 SHA；尾部版本注释仅用于可读性。`check-github-action-pinning.py` 在本地、PR 和 Full Gate 阻止浮动 tag/branch 回流。
 
 ## 触发矩阵(开发者视角)
@@ -79,10 +79,10 @@ CodeQL 的 `Analyze (java)` 只有在 `codeql.yml` 已于 main 生效、并确�
 - **`concurrency.group + cancel-in-progress`** 全配 — 同分支并发 push / 同 PR 多次推时,旧 run 自动取消省 runner
 - **pr-gate 与 full-ci-gate 检查项不完全相同**:见下表(pr-gate 重快速反馈,full-ci-gate 重深度回归 + 安全扫描)
 - **main 红线独立于 PR 绿灯**:PR gate 通过只代表候选变更可合入；合入后的 main 只有最新 `full-ci-gate` 通过才可作为发布基线。
-- **CodeQL 分层执行**：PR 使用 Java `build-mode: none` 缩短 required check；main push、定时和手工运行保留手工全量编译，继续覆盖构建生成代码和精确依赖。仓库若引入 Kotlin，必须先恢复构建模式再合入。
+- **CodeQL 分层执行**：PR 使用 Java `build-mode: none` 和默认高精度查询缩短 required check；main push、定时和手工运行保留手工全量编译与 `security-extended`，继续覆盖构建生成代码、精确依赖和扩展热点。仓库若引入 Kotlin，必须先恢复构建模式再合入。
 - **非测试 job 不准备 Testcontainers**：静态检查、安全扫描和 CodeQL 通过 `cache-testcontainers: false` 跳过容器镜像恢复；单元/集成/E2E 仍保留镜像缓存。
 - **门禁结果行统一**:本地 hook 与 CI 统一输出 `状态 | code | gate | exit_code | action`；跳过时再输出 `reason`。单步中串行运行多个阻断检查时，每项都必须通过共享 `gate_run` 输出独立结果；具体诊断信息可保留各检查器原有内容。
-- **静态门禁失败统一汇总**：PR 与 Full Gate 的 `static-checks` 会继续执行所有相互独立的业务/规范检查，在 job 末尾一次性列出失败代码、名称和退出码后阻断；checkout、构建环境安装等缺失后无法继续的基础前置仍立即失败。本地 pre-commit/pre-push 保持首错即停。
+- **静态门禁失败统一汇总**：PR 将 policy、supply-chain、Java quality 三路并行执行，各路在末尾汇总自身失败，再由稳定的 `static-checks` required context 聚合；Full Gate 仍在单个 `static-checks` 中汇总。checkout、构建环境安装等缺失后无法继续的基础前置仍立即失败。本地 pre-commit/pre-push 保持首错即停。
 - **SBOM 快照必须同步**：POM 或 CI 门禁变更时，PR Gate 重生成 CycloneDX SBOM 并与 `docs/compliance/sbom.json` 比较；Full Gate 的许可证检查再次复核。动态 artifact 生成成功不等于入库快照已同步。
 - **核心术语枚举必须同步**：修改实例、工作流、节点、分片、步骤、任务状态，或调度类型、触发来源、节点类型、运行模式 enum 时，运行 `python3 scripts/ci/check-terminology-doc-sync.py --write`；PR / Full Gate 的只读检查会阻断旧值表。
 - **确定性派生产物由 hook 维护**：POM 已暂存且没有同文件未暂存改动时，pre-commit 自动重建并暂存 SBOM，同时执行许可证门禁；`@ConfigurationProperties` 增删时自动重建文档与运行时两份配置治理目录；代码量快照沿用 staged-tree 自动同步。CI 始终只读验证，不用机器人账号回写 PR。
@@ -200,8 +200,8 @@ SDK 五语言契约矩阵。
 > 由 PR / Full / Staging 的 `java-governance` job 独立执行，业务 unit/IT 显式排除这两类后缀。
 > `check-java-governance-test-coverage.py --verify-reports` 要求每个源码类都产生 Surefire XML，零用例或漏跑会阻断。
 > 这类测试型守卫的登记入口是 [约定约束与漂移防护总账](../audit/convention-drift-guard-index.md) 的守卫矩阵（`check-*` / `validate-*` 脚本另由 [scripts/ci/README.md](../../scripts/ci/README.md) 登记）。
-> Python / Shell / 配置/契约守卫在 `static-checks` 中独立命名执行，不混入 Maven unit/IT；
-> 为避免重复 checkout 和 JDK 初始化，它们暂不拆成额外 runner job。
+> Python / Shell / 配置/契约守卫在 PR 的 `static-policy`、Full/Staging 的 `static-checks` 中独立命名执行，不混入 Maven unit/IT；
+> PR 的 SBOM/Trivy 与 PMD/Spotless 分别由 `static-supply-chain`、`static-java-quality` 并发执行，稳定的 `static-checks` 只聚合结果。
 > 本地 pre-commit 只核对治理测试源码清单；pre-push 在 Java、POM 或相关 CI 路由变化时调用
 > `run-java-governance-tests.sh` 真实执行同一组测试，在线 workflow 也复用该入口。
 
@@ -480,7 +480,7 @@ bash scripts/ci/run-flaky-quarantine.sh
 | Workflow | 样本 | 优化前 P50 | 优化前 P90 | 优化后目标 |
 |---|---:|---:|---:|---:|
 | pr-gate | 20 | 8:10 | 8:58 | P50 3:30-5:00 |
-| PR CodeQL | 18 | 8:19 | 9:58 | P50 3:00-5:00 |
+| PR CodeQL | 18 | 8:19 | 9:58 | P50 2:30-4:30 |
 | full-ci-gate | 20 | 8:26 | 11:44 | P50 4:30-6:00 |
 | staging-gate | 未纳入本轮样本 | — | — | 六片全量 E2E 4:00-5:30；Java 治理组并发，不进入关键路径 |
 
@@ -490,6 +490,7 @@ bash scripts/ci/run-flaky-quarantine.sh
 
 - 最近一次首个 runner 等待 47 秒；`unit-it-b2` 482 秒，其中 Maven 测试 424 秒。
 - 优化后 B2 拆为 Worker / Console 并行，叶子模块只启动所属分片；required context 名仍为 `unit-it-b2`。
+- PR #1181 的单体 `static-checks` 约 5:41，重型供应链和 Java 静态质量步骤与 policy 串行；现已拆为三路叶子 job，并保留 `static-checks` 聚合名称。连续 10 次在线样本后再填写实际 P50/P90。
 
 **full-ci-gate（优化前）**
 
@@ -500,7 +501,7 @@ bash scripts/ci/run-flaky-quarantine.sh
 **CodeQL（优化前）**
 
 - 最近 PR 运行约 9:02：环境 44 秒、编译 289 秒、分析 136 秒、上传 7 秒。
-- PR 改为 Java no-build；main/定时/手工仍使用 manual build，在线连续 10 次运行后更新本节实测数据。
+- PR 改为 Java no-build + 默认高精度查询，且不再准备 Maven/JDK 构建环境；main/定时/手工仍使用 manual build + `security-extended`，在线连续 10 次运行后更新本节实测数据。
 
 完整样本、运行链接和回退标准见 [CI 门禁耗时分析与优化记录](../analysis/ci-gate-runtime-optimization-2026-10-07.md)。
 
@@ -537,8 +538,8 @@ pom.xml                      # 父 pom：JaCoCo agent、PMD、Spotless 插件配
 
 ### CodeQL 构建模式
 
-- PR：`build-mode: none`，仍运行 `security-extended` 查询并上传 SARIF，作为 required `Analyze (java)`。
-- main push、schedule、workflow_dispatch：`build-mode: manual`，执行跳过测试的全 reactor 编译后分析。
+- PR：`build-mode: none`，使用 CodeQL 默认高精度查询并上传 SARIF，作为 `Analyze (java)` 检查。
+- main push、schedule、workflow_dispatch：`build-mode: manual`，执行跳过测试的全 reactor 编译，并使用 `security-extended` 分析。
 - 无构建模式只适用于当前纯 Java 仓库；引入 Kotlin 或发现生成源码漏析时必须恢复 PR 手工构建。
 - PR 与 main 告警差异需要人工解释，不能仅因 PR 更快就认定覆盖等价。
 

@@ -6,10 +6,10 @@
 
 - PR Gate 从“任意 Maven 变更都跑全部单元分片”改为依赖边界保守路由。
 - 原 `unit-it-b2` 拆为 Worker 与 Console 两个并行执行分片，稳定的 `unit-it-b2` required context 由聚合 job 提供。
-- PR CodeQL 使用 Java `build-mode: none`；main push、定时和手工运行继续执行手工全量编译。
+- PR CodeQL 使用 Java `build-mode: none` 和默认高精度查询；main push、定时和手工运行继续执行手工全量编译与 `security-extended`。
 - Full/Staging E2E 使用最近一次成功运行的测试类耗时，从 4 片重排为 6 片。
 - PR / Full Gate 的 Java 分片均将依赖构建与测试执行分开，上游模块只编译安装，不在每个分片重复测试。
-- Python / Shell / 契约类守卫留在 `static-checks`，与 Maven unit/IT 隔离；同一 GitHub Actions SHA 守卫不再重复执行。
+- PR 静态门禁拆为 policy、supply-chain 和 Java quality 三路并行执行，再由稳定的 `static-checks` required context 聚合；同一 GitHub Actions SHA 守卫不再重复执行。
 - 27 个 `*ArchTest` / `*ConventionTest` 从业务 unit/IT 中排除，由 PR、Full、Staging 的独立 `java-governance` job 执行；源码清单与 Surefire 报告必须一一对应。
 - 不运行 Testcontainers 的静态、安全和 CodeQL job 不再恢复或拉取容器镜像缓存。
 
@@ -73,8 +73,13 @@ PR unit 分片还显式排除 `*IntegrationTest`。`-DskipITs` 只会跳过 Fail
 Full Gate 使用相同的依赖构建分离模型，但目标模块仍执行
 `verify -DskipITs=false`，因此 unit 和 Testcontainers IT 覆盖不减少。`batch-common` 和
 `batch-test-support` 在 `unit-it-b1` 中执行一次，不再因其他 shard 的 `-am` 被重复测试。
-静态守卫独立于 Maven unit/IT，但不拆成新 runner job：当前 `static-checks` 约 3 分 41 秒，
-不在 Full Gate 关键路径，额外 checkout/JDK 准备只会增加算力和排队。
+静态守卫独立于 Maven unit/IT。最初 3 分 41 秒的样本不足以证明拆分有收益，因此第一轮保持单 job；
+后续 PR #1181 的运行 `37629850236` 增长到约 5 分 41 秒，其中 Maven 缓存预热约 78 秒、SBOM 约 26 秒、
+Trivy 约 64 秒、PMD/Spotless 约 89 秒，均串在轻量 policy 守卫之后。PR Gate 因此改为
+`static-policy`、`static-supply-chain`、`static-java-quality` 三路并行，最后由原名 `static-checks`
+聚合结果，ruleset 不改名。普通 Java 业务变更若未触及 POM、镜像、Compose、Helm 或 Trivy 白名单，
+不再先安装整个 reactor 只为随后跳过 Trivy。该拆分会增加 checkout 和少量 runner 总分钟数，换取更短反馈墙钟；
+若连续 10 次在线样本显示排队抵消收益，则恢复单 job。
 
 Java 测试型治理守卫单独拆为 `java-governance` job，因为它们需要编译后类路径且失败责任与业务 unit/IT 不同。
 统一入口改为单 reactor 命令后，本地实测 27 个治理测试在 11 个归属模块中约 68 秒完成，
@@ -94,7 +99,7 @@ Staging Gate 采用相同路由：治理组与 6 个全量 E2E shard 并发，E2
 - PR Gate 与 PR CodeQL 分别统计 P50/P90，取消运行不进入样本。
 - Full Gate 必须保持单元、集成、E2E、安全扫描全部成功。
 - 六个 E2E shard 均必须产出声明数量的 Surefire suite。
-- PR `build-mode: none` 与 main 手工 CodeQL 的告警范围不得出现无法解释的持续差异。
+- PR 默认查询与 main `security-extended` 手工 CodeQL 的告警范围不得出现无法解释的持续差异。
 - 任一 workflow P90 连续三次超过目标上限 50%，按 `docs/runbook/ci.md` 排查 runner 排队、缓存命中和分片漂移。
 
-如 PR CodeQL 出现漏析证据，将 PR 恢复为 `manual`；如六片 E2E 的 P90 未改善或 runner 排队显著恶化，回退到四片并使用本记录中的类耗时重新平衡。required check 名称不因回退变化。
+如 PR CodeQL 出现漏析证据，将 PR 恢复为 `manual` 或扩展查询；如静态三路并行未缩短墙钟或显著增加排队，恢复单 job；如六片 E2E 的 P90 未改善或 runner 排队显著恶化，回退到四片并使用本记录中的类耗时重新平衡。required check 名称不因回退变化。

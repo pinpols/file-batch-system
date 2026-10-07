@@ -69,19 +69,26 @@ jobs:
           persist-credentials: false
 
       - name: Setup build environment
+        if: github.event_name != 'pull_request'
         uses: ./.github/actions/setup-build-env
         with:
           cache-testcontainers: 'false'
 
-      - name: Initialize CodeQL
+      - name: Initialize CodeQL (PR no-build)
+        if: github.event_name == 'pull_request'
         uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
         with:
           languages: java
-          # PR 使用 Java no-build 模式缩短 required check；main push / schedule 继续
-          # 手工全量编译，覆盖构建生成代码与精确依赖解析。
-          build-mode: ${{ github.event_name == 'pull_request' && 'none' || 'manual' }}
-          # security-extended 比 default 多 ~30 条规则(性能 / 安全热点),
-          # 跑时间增 ~3min 但对批处理 + JDBC 场景值。
+          # PR 使用默认高精度查询 + no-build，缩短反馈时间并减少低价值热点噪声。
+          build-mode: none
+
+      - name: Initialize CodeQL (full analysis)
+        if: github.event_name != 'pull_request'
+        uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
+        with:
+          languages: java
+          build-mode: manual
+          # main push / schedule 保留扩展规则和手工编译，覆盖生成代码与精确依赖。
           queries: security-extended
 
       - name: Build (skip tests)
