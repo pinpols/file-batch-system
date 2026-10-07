@@ -28,6 +28,7 @@
 
 ### Changed
 
+- Dependabot 普通更新改为按 Maven、GitHub Actions、Docker 生态分别聚合非 major 版本；JDK 耦合的 Maven 构建镜像退出自动升级，跨生态维护窗口由人工汇总 PR 承载，减少单依赖 PR 噪声并避免 Java 基线漂移。
 - PR 单元测试按模块边界选择分片并拆分 Worker/Console 长尾，PR CodeQL 使用 Java 无构建快速分析而 main/定时保留手工全量构建；Full/Staging E2E 依据最新实测重排为六片，CI runbook 同步登记耗时基线与回退标准。
 - Console、Trigger 与 Import 通知的固定响应改用具名类型，Pipeline 列表不再在应用层传播原始 Map；Job trigger 保留普通实例号/dry-run 对象两种 wire 形态，OpenAPI 与配对前端类型同步。Lineage 热表/归档证据使用显式构造映射，文件 metadata 解析为 JSON 对象，不透传 JDBC 驱动封装。
 - 已有生命周期、Outbox、文件格式、分发策略和通知枚举统一复用稳定 code，保留各运维操作原有状态集合与配置 DSL。新增低误报 Java 契约守卫，按固定边界、确认的有限域和已有协议键复用阻断新增退化；动态契约按方法签名登记例外。
