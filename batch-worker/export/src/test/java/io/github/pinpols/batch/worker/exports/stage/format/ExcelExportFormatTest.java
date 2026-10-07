@@ -253,7 +253,7 @@ class ExcelExportFormatTest {
           .anyMatch(path -> path.getFileName().toString().startsWith("poi-sxssf-template"));
       assertThat(intermediates).allMatch(path -> !Files.exists(path));
       Path restored = TempFile.createTempFile("restored", ".tmp").toPath();
-      assertThat(restored.getParent()).isEqualTo(tempDir);
+      assertThat(restored).hasParentRaw(tempDir);
       Files.delete(restored);
     } finally {
       TempFile.setThreadLocalTempFileCreationStrategy(null);
@@ -270,7 +270,7 @@ class ExcelExportFormatTest {
       assertThatThrownBy(() -> format.generate(ctx(directory, Map.of(), List.of(rowOf("id", "1")))))
           .isInstanceOf(IOException.class);
       Path restored = TempFile.createTempFile("restored", ".tmp").toPath();
-      assertThat(restored.getParent()).isEqualTo(tempDir);
+      assertThat(restored).hasParentRaw(tempDir);
       Files.delete(restored);
     } finally {
       TempFile.setThreadLocalTempFileCreationStrategy(null);
@@ -300,7 +300,7 @@ class ExcelExportFormatTest {
       assertThatThrownBy(() -> format.generate(context)).isSameAs(failure);
       assertThat(intermediates).isNotEmpty().allMatch(path -> !Files.exists(path));
       Path restored = TempFile.createTempFile("restored", ".tmp").toPath();
-      assertThat(restored.getParent()).isEqualTo(tempDir);
+      assertThat(restored).hasParentRaw(tempDir);
       Files.delete(restored);
     } finally {
       TempFile.setThreadLocalTempFileCreationStrategy(null);

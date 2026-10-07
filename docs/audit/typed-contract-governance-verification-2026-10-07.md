@@ -80,6 +80,8 @@ Trigger 代理的两条新增 Sonar S2259 属于分析器不能识别自定义�
 
 ## 未声称完成的验证
 
+本轮全 reactor Sonar 分析已完成，服务端 task `9dfce324-6de0-458a-a76a-99edecf646c1`，报告 `reports/sonar/2026-10-07_17-05-10/`。4 个 Java 变更文件中，生产代码无 OPEN issue，之前两条 S2259 已消失，待审 hotspot 为零；测试文件发现 3 条 MINOR S5838。随后将三处 Path 父级断言改为 `hasParentRaw`，Excel 的 11 个用例再次通过（`/tmp/bfs-codeql268-assertions.log`），没有重复计入上述 54 个用例。修正后未再执行第二次全 reactor Sonar，因此不把该报告描述为增量零告警；GitHub Sonar gate 默认跳过，也不视为通过证据。PMD、Spotless、完整提交预检及正常推送 hook 均已通过。
+
 - GitHub PR 检查已触发，尚未获得全部通过结果；本轮没有完整 sim、全量 Maven 测试、真实浏览器前后端操作或 staging 证据，也不以进行中的检查声称 Full Gate 通过。
 - MockMvc/RestClient JSON 与 Testcontainers IT 是契约和投影证据，不等于真实长任务或生产高可用验收。
 - 首轮全量 Sonar 的 OPEN S1192 候选为 236 个，末轮为 228 个；其中含文案、样例、SQL 和正常标签重复，不等于同数量的确认缺陷，不在本轮作为强制清零指标。末轮全量报告仍有 1076 个 OPEN issue，本轮只报告变更行增量为零，不声称全仓 Sonar 清零。新增代码的高置信同类协议键回退由 JCON-3 阻断，其他候选按原计划逐处人工判定。
