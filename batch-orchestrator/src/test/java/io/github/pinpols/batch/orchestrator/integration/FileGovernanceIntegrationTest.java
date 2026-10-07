@@ -320,7 +320,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
     var summaries =
         fileGovernanceRepository.selectArrivalGroupSummaries(TENANT_ID, groupCode, "TRIGGERED");
     assertThat(summaries).hasSize(1);
-    assertThat(((Number) summaries.get(0).get("triggered_count")).longValue()).isEqualTo(2L);
+    assertThat(summaries.get(0).triggeredCount()).isEqualTo(2L);
   }
 
   private Long insertFileRecord(FileRecordSpec spec) {
