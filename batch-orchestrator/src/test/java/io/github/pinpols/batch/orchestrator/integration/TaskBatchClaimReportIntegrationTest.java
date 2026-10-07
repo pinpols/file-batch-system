@@ -46,6 +46,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.TestConstructor;
 import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -66,6 +67,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 @DisplayName("批量认领与批量上报的真库集成验证:逐项结果独立返回,已被并发领走的任务跳过且不影响其余任务")
 class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
 
@@ -96,11 +98,16 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
   @Autowired
   private WorkerRegistryCache workerRegistryCache;
 
-  @Autowired
-  private PlatformTransactionManager transactionManager;
+  private final PlatformTransactionManager transactionManager;
 
-  @Autowired
-  private VerifierFailureOutboxService verifierFailureOutboxService;
+  private final VerifierFailureOutboxService verifierFailureOutboxService;
+
+  TaskBatchClaimReportIntegrationTest(
+      PlatformTransactionManager transactionManager,
+      VerifierFailureOutboxService verifierFailureOutboxService) {
+    this.transactionManager = transactionManager;
+    this.verifierFailureOutboxService = verifierFailureOutboxService;
+  }
 
   @BeforeEach
   void refreshWorkers() {

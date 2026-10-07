@@ -142,7 +142,7 @@ public class PlatformHttpClient {
       Duration timeoutOverride)
       throws IOException {
     String url = config.getBaseUrl() + path;
-    Object requestBody = body == null ? Map.of() : body;
+    Object requestBody = EmptyChecks.isNull(body) ? Map.of() : body;
     // 注册时间遵循 OpenAPI date-time 字符串格式，不依赖 ObjectMapper 的全局时间戳默认值。
     byte[] payload = body instanceof RegisterRequest
         ? objectMapper

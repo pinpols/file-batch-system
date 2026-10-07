@@ -96,21 +96,17 @@ class SdkWireContractTest {
         Map.of("batchSize", 1000),
         Map.of("type", "object", "required", List.of("sourcePath")),
         List.of("bizDate"));
-    RegisterRequest sdkSide = new RegisterRequest(
-        "tenant-acme",
-        "worker-1",
-        "sdk-self-hosted",
-        "RUNNING",
-        null,
-        null,
-        null,
-        null,
-        null,
-        Instant.parse("2026-05-31T10:00:00Z"),
-        List.of("tenant_acme_import"),
-        0,
-        List.of(descriptor),
-        "v1");
+    RegisterRequest sdkSide = RegisterRequest.builder()
+        .tenantId("tenant-acme")
+        .workerCode("worker-1")
+        .workerGroup("sdk-self-hosted")
+        .status("RUNNING")
+        .heartbeatAt(Instant.parse("2026-05-31T10:00:00Z"))
+        .capabilityTags(List.of("tenant_acme_import"))
+        .currentLoad(0)
+        .taskTypes(List.of(descriptor))
+        .protocolVersion("v1")
+        .build();
 
     WorkerHeartbeatDto platformSide =
         MAPPER.readValue(MAPPER.writeValueAsBytes(sdkSide), WorkerHeartbeatDto.class);

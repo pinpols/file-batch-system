@@ -118,7 +118,7 @@ public class BatchPlatformClient {
         .buildId(optionalFingerprint(config.getBuildId()))
         .sdkVersion(optionalFingerprint(WorkerFingerprint.sdkVersion()))
         .protocolVersion(RegisterRequest.CURRENT_PROTOCOL_VERSION)
-        .taskTypes(descriptors.isEmpty() ? null : descriptors)
+        .taskTypes(EmptyChecks.isEmpty(descriptors) ? null : descriptors)
         .build();
     try {
       PlatformHttpClient.WorkerRegistrationResponse resp = httpClient.register(request);
@@ -316,7 +316,7 @@ public class BatchPlatformClient {
   }
 
   private static String optionalFingerprint(String value) {
-    return value == null || value.isBlank() ? null : value;
+    return EmptyChecks.isBlank(value) ? null : value;
   }
 
   /** 给业务可见的工具方法 — 让自己生成 idempotency-key。 */
