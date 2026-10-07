@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """collect-flaky.py — 扫所有模块 surefire / failsafe XML,汇总 flaky 用例。
 
-背景:pom.xml 配 `rerunFailingTestsCount=2`,首次 fail 后再跑 2 次,
-任一过即标 flaky-but-pass(不染绿)。surefire 把这些用例记成
-`<flakyFailure>` / `<flakyError>` 子节点,但本仓此前没汇总 → 飘的用例
-没人盯,容易在主干上堆积。
+背景:必需门禁不重跑失败测试；只有带治理元数据的 `@FlakyTest` 会在
+`flaky-quarantine` profile 中最多重跑 2 次。Surefire 把隔离执行中的首次失败记成
+`<flakyFailure>` / `<flakyError>` 子节点，本脚本负责汇总这些证据。
 
 本脚本:
 - 扫 `**/target/surefire-reports/*.xml` 与 `**/target/failsafe-reports/*.xml`
@@ -13,9 +12,8 @@
   - stdout 人读 summary(模块 / 类#方法 / 重试次数 / 首条错误摘要)
   - 若 `GITHUB_STEP_SUMMARY` env 存在,追加 Markdown 表(给 GH Actions UI)
   - 若 `--json <path>` 指定,写机读 JSON(留给后续巡检 trend / 阈值告警)
-- 退出码恒为 0(flaky 本就允许 pass);可选 `--warn-threshold N` 在
-  count > N 时打 WARN(stderr),仍不阻断 build —— 阻断逻辑应放在治理 issue,
-  不放 CI gate(避免主干 red over noise)。
+- 退出码恒为 0；可选 `--warn-threshold N` 在 count > N 时打 WARN(stderr)。
+  隔离项的责任人、Issue 和到期日由独立静态门禁阻断。
 
 详细治理流程见 `docs/runbook/ci.md` 「flaky 治理」小节。
 """

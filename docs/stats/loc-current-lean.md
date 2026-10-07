@@ -1,21 +1,21 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `6ff58f0f9` + 当前工作区改动。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `8d60d853e`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,765 | 503,391 | 258,739 | 51.4% |
+| 4,776 | 504,179 | 259,271 | 51.4% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| prod | 2,756 | 251,503 | 115,128 | 45.8% |
-| test | 1,233 | 183,662 | 100,905 | 54.9% |
-| script | 630 | 52,444 | 32,751 | 62.4% |
-| config | 53 | 8,177 | 5,874 | 71.8% |
+| prod | 2,757 | 251,529 | 115,143 | 45.8% |
+| test | 1,237 | 183,857 | 101,037 | 55.0% |
+| script | 636 | 52,958 | 33,096 | 62.5% |
+| config | 53 | 8,230 | 5,914 | 71.9% |
 | infra-config | 32 | 5,344 | 3,912 | 73.2% |
 | sql | 61 | 2,261 | 169 | 7.5% |
 
@@ -23,11 +23,11 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,514 | 367,447 | 189,868 | 51.7% |
-| Shell | 199 | 30,312 | 23,657 | 78.0% |
-| Python | 240 | 34,610 | 17,775 | 51.4% |
+| Java | 3,515 | 367,473 | 189,883 | 51.7% |
+| Shell | 201 | 30,367 | 23,700 | 78.0% |
+| Python | 248 | 35,264 | 18,209 | 51.6% |
 | YAML | 95 | 12,461 | 9,439 | 75.7% |
-| XML | 178 | 21,515 | 6,718 | 31.2% |
+| XML | 178 | 21,568 | 6,758 | 31.3% |
 | TypeScript | 37 | 6,632 | 3,124 | 47.1% |
 | Rust | 23 | 8,423 | 2,835 | 33.7% |
 | Properties | 5 | 2,887 | 2,361 | 81.8% |
@@ -53,8 +53,8 @@
 | `scripts/ci/run-full-regression.sh` | script | Shell | 647 | 528 |
 | `scripts/local/start-all.sh` | script | Shell | 638 | 512 |
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationServiceTest.java` | test | Java | 814 | 503 |
+| `pom.xml` | config | XML | 822 | 499 |
 | `scripts/local/be-acceptance.sh` | script | Shell | 612 | 479 |
-| `pom.xml` | config | XML | 770 | 460 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | prod | Java | 1,028 | 451 |
 | `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultFileGovernanceServiceTest.java` | test | Java | 793 | 438 |
 | `batch-worker/core/src/test/java/io/github/pinpols/batch/worker/core/support/AbstractTaskConsumerTest.java` | test | Java | 698 | 433 |

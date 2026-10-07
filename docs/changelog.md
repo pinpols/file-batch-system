@@ -2,6 +2,8 @@
 
 ### 2026-10-07
 - **开源工程与供应链治理基线**：新增私密漏洞报告、仓库保护、依赖更新、Action SHA 固定、Scorecard、轻量 BEP 和生产就绪评审的统一规范；稳定安全模型集中记录资产与信任边界，避免专项审计重复建立漂移模型。单维护者阶段保留 PR + required checks，不伪造双人审批；第二位维护者加入后再提升 Code Owner 审批。
+- **CI 门禁耗时治理**：PR 单元测试改为按模块边界保守路由，拆分 Worker/Console 长尾并以稳定 `unit-it-b2` 聚合 required context；PR CodeQL 使用 Java no-build、main/定时保持手工全量构建；Full/Staging E2E 根据最新 Surefire 实测从四片重排为六片，非测试 job 不再准备 Testcontainers 镜像缓存，并登记 P50/P90 验收和回退标准。
+- **CI 与测试质量治理**：外部 GitHub Actions 全量固定到提交 SHA；必需门禁取消全局失败重跑，flaky 测试改为带 Issue、责任人和到期日的独立隔离；软门禁增加统一登记和升级期限；PR/Full Gate 增加 80% 变更行覆盖率，定时 Full Gate 对两个核心状态机执行 PIT，并生成最近 30 次 Full Gate 与当前测试结果的质量趋势报告。
 - **固定契约与协议值治理**：新增 JCON-1/2/3 守卫，分别保护 Controller/Application Service 返回类型、确认范围的 enum code 和同类协议键复用；动态 Map 以精确方法签名登记，存量违规基线为空，不以全局禁用字符串或消除全部 S1192 为目标。同步 PR/Full Gate/local 路径、脚本自测和治理计划。
 - **技术异常与就绪探测边界收口**：Orchestrator 应用层通过 `TechnicalFailureClassificationPort` 消费归一化失败类别，通过 `PersistenceConflictDetectionPort` 判断唯一约束冲突，JDBC / Spring DAO / HTTP 异常识别下沉到各自 infrastructure adapter；Trigger 通过 `UpstreamReadinessPort` 使用上游就绪查询，保持既有 HTTP fail-closed 语义而不直接依赖实现类。结果版本 CAS 冲突统一返回 `STATE_CONFLICT`，不再泄漏 Spring DAO 异常。
 - **测试约定统一（编码规约 §14.4 / §14.5 收紧）**：测试方法名只接受 `shouldXxx_whenYyy` 或 `方法名_条件_预期结果` 两种形状（禁 `testXxx` / `test1` / `test_xxx` / `xxx_test`）；每个含测试方法的类必须有**类级**、每个测试方法必须有**方法级中文** `@DisplayName`。新增 `scripts/ci/check-test-conventions.py`，接入 PR Gate / Full Gate / 本地 pre-commit，按 `docs/governance/test-conventions-baseline.txt` 只拦**新增**缺口；全仓存量按模块分批收敛完毕，基线清零。

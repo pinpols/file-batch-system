@@ -48,8 +48,8 @@ concurrency:
 jobs:
   # ===========================================================================
   # Job 0: pr-gate-scope — 统一范围探测器判定按需门禁
-  # 文档/示例-only PR 跳过 3 个 unit job(GitHub 把 skipped 算 SUCCESS,ruleset
-  # required check 不挂),只保留 static-checks + security-scan 回退。
+  # 四个 unit 执行分片按模块边界路由；无单元影响的变更跳过执行分片，并保留
+  # static-checks、security-scan 和稳定 required context。
   # ===========================================================================
   changes:
     name: pr-gate-scope
@@ -61,6 +61,10 @@ jobs:
     outputs:
       docs-only: ${{ steps.scope.outputs.docs-only }}
       unit-required: ${{ steps.scope.outputs.unit-required }}
+      unit-a-required: ${{ steps.scope.outputs.unit-a-required }}
+      unit-b1-required: ${{ steps.scope.outputs.unit-b1-required }}
+      unit-b2-workers-required: ${{ steps.scope.outputs.unit-b2-workers-required }}
+      unit-b2-console-required: ${{ steps.scope.outputs.unit-b2-console-required }}
       java: ${{ steps.scope.outputs.java }}
       sql: ${{ steps.scope.outputs.sql }}
       database: ${{ steps.scope.outputs.database }}
@@ -79,6 +83,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Detect changed scopes
@@ -134,6 +139,8 @@ jobs:
       - name: Setup build environment
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
         uses: ./.github/actions/setup-build-env
+        with:
+          cache-testcontainers: 'false'
 
       - name: Install squawk + oasdiff (迁移/契约守护工具)
         if: needs.changes.outputs.database == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true'
@@ -208,6 +215,15 @@ jobs:
         run: |
           source scripts/lib/gate-result.sh
           gate_run PR_SCRIPT_GOVERNANCE "脚本治理" python3 scripts/ci/check-script-governance.py
+          gate_run PR_ACTION_PINNING "GitHub Actions SHA 固定" python3 scripts/ci/check-github-action-pinning.py
+          gate_run PR_SOFT_GATES "软门禁治理" python3 scripts/ci/check-soft-gate-governance.py
+          gate_run PR_FLAKY_QUARANTINE "flaky 测试隔离治理" python3 scripts/ci/check-flaky-test-governance.py
+          gate_run PR_CI_QUALITY_GUARD_TESTS "CI 质量治理门禁测试" python3 -m unittest \
+            scripts/ci/tests/test_check_github_action_pinning.py \
+            scripts/ci/tests/test_check_flaky_test_governance.py \
+            scripts/ci/tests/test_check_soft_gate_governance.py \
+            scripts/ci/tests/test_check_diff_coverage.py \
+            scripts/ci/tests/test_report_ci_quality_trends.py
           gate_run PR_SHELL_SCRIPTS "Shell 语法与 ShellCheck" bash scripts/ci/check-shell-scripts.sh
           gate_run PR_SHELL_LINUX_PORTABILITY "Shell Linux 兼容性" python3 scripts/ci/check-shell-linux-portability.py
           gate_run PR_TESTCONTAINERS_REUSE_LABEL "Testcontainers 复用标签判定" python3 scripts/ci/check-testcontainers-reuse-label.py
@@ -605,18 +621,19 @@ jobs:
           gate_assert_collected
 
   # ===========================================================================
-  # 3 个 maven unit shard 按"压力均匀"分配,不按业务领域分。
+  # 4 个 Maven unit 执行分片按依赖边界路由；B2 Worker / Console 并行后由
+  # 稳定的 unit-it-b2 required context 聚合。
   # C 方案(2026-06-02):只跑 surefire unit(`mvn test -DskipITs`),IT 已搬到
   # full-ci-gate(main push 回退)+ staging-gate(nightly)。
-  # job 名 unit-it-a / unit-it-b1 / unit-it-b2 保留(ruleset required check 锁定)。
+  # required job 名 unit-it-a / unit-it-b1 / unit-it-b2 保留(ruleset context 锁定)。
   #
   # Job 2: unit-shard-1 — orchestrator + worker-core
   # ===========================================================================
   unit-it-a:
     needs: changes
-    # 非 Maven 变更(文档、脚本、SDK、CI)跳过 unit;workflow 仍保持 required job 状态上报。
+    # 无 A 分片影响的变更跳过；Java SDK 变更属于 A 分片。
     if: |
-      needs.changes.outputs.unit-required == 'true' &&
+      needs.changes.outputs.unit-a-required == 'true' &&
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -624,6 +641,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Setup build environment
@@ -637,6 +655,16 @@ jobs:
           ./mvnw test -pl batch-orchestrator,batch-worker/core,sdk/java/core,sdk/java/spring,sdk/java/testkit -am \
             -DskipITs=true -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
+
+      - name: Verify changed-line coverage
+        shell: bash
+        run: |
+          ./mvnw jacoco:report -pl batch-orchestrator,batch-worker/core,sdk/java/core,sdk/java/spring,sdk/java/testkit -B
+          BASE="${{ github.event.pull_request.base.sha }}"
+          [[ -n "$BASE" ]] || BASE="HEAD^"
+          python3 scripts/ci/check-diff-coverage.py --base "$BASE" \
+            --path batch-orchestrator --path batch-worker/core \
+            --path sdk/java/core --path sdk/java/spring --path sdk/java/testkit
 
       - name: Upload Surefire Reports
         if: always()
@@ -653,7 +681,7 @@ jobs:
   unit-it-b1:
     needs: changes
     if: |
-      needs.changes.outputs.unit-required == 'true' &&
+      needs.changes.outputs.unit-b1-required == 'true' &&
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -661,6 +689,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Setup build environment
@@ -673,6 +702,16 @@ jobs:
             -DskipITs=true -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
 
+      - name: Verify changed-line coverage
+        shell: bash
+        run: |
+          ./mvnw jacoco:report -pl batch-common,batch-trigger,batch-worker/process,batch-worker/dispatch -B
+          BASE="${{ github.event.pull_request.base.sha }}"
+          [[ -n "$BASE" ]] || BASE="HEAD^"
+          python3 scripts/ci/check-diff-coverage.py --base "$BASE" \
+            --path batch-common --path batch-trigger \
+            --path batch-worker/process --path batch-worker/dispatch
+
       - name: Upload Surefire Reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -683,12 +722,12 @@ jobs:
           retention-days: 14
 
   # ===========================================================================
-  # Job 4: unit-shard-3 — worker-import + worker-export + worker-atomic + console-api
+  # Job 4a: worker-import + worker-export + worker-atomic
   # ===========================================================================
-  unit-it-b2:
+  unit-it-b2-workers:
     needs: changes
     if: |
-      needs.changes.outputs.unit-required == 'true' &&
+      needs.changes.outputs.unit-b2-workers-required == 'true' &&
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -696,30 +735,108 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
 
-      - name: Run unit tests (worker-import + worker-export + worker-atomic + console-api)
+      - name: Run unit tests (worker-import + worker-export + worker-atomic)
         shell: bash
         run: |
-          ./mvnw test -pl batch-worker/import,batch-worker/export,batch-worker/atomic,batch-console-api -am \
+          ./mvnw test -pl batch-worker/import,batch-worker/export,batch-worker/atomic -am \
             -DskipITs=true -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
+
+      - name: Verify changed-line coverage
+        shell: bash
+        run: |
+          ./mvnw jacoco:report -pl batch-worker/import,batch-worker/export,batch-worker/atomic -B
+          BASE="${{ github.event.pull_request.base.sha }}"
+          [[ -n "$BASE" ]] || BASE="HEAD^"
+          python3 scripts/ci/check-diff-coverage.py --base "$BASE" \
+            --path batch-worker/import --path batch-worker/export \
+            --path batch-worker/atomic
 
       - name: Upload Surefire Reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: pr-gate-unit-it-b2-reports
+          name: pr-gate-unit-it-b2-workers-reports
           path: |
             **/target/surefire-reports/**
           retention-days: 14
 
   # ===========================================================================
+  # Job 4b: Console API 独立分片，避免与三个 Worker 串成 PR 长尾。
+  # ===========================================================================
+  unit-it-b2-console:
+    needs: changes
+    if: |
+      needs.changes.outputs.unit-b2-console-required == 'true' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+
+      - name: Run unit tests (console-api)
+        shell: bash
+        run: |
+          ./mvnw test -pl batch-console-api -am \
+            -DskipITs=true -Dspotless.check.skip=true -Dpmd.skip=true \
+            -fae -B
+
+      - name: Verify changed-line coverage
+        shell: bash
+        run: |
+          ./mvnw jacoco:report -pl batch-console-api -B
+          BASE="${{ github.event.pull_request.base.sha }}"
+          [[ -n "$BASE" ]] || BASE="HEAD^"
+          python3 scripts/ci/check-diff-coverage.py --base "$BASE" --path batch-console-api
+
+      - name: Upload Surefire Reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pr-gate-unit-it-b2-console-reports
+          path: |
+            **/target/surefire-reports/**
+          retention-days: 14
+
+  # ===========================================================================
+  # Required context 稳定聚合器：Ruleset 继续只依赖 unit-it-b2。
+  # ===========================================================================
+  unit-it-b2:
+    name: unit-it-b2
+    if: >-
+      always() &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    needs: [changes, unit-it-b2-workers, unit-it-b2-console]
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Verify split unit shard results
+        env:
+          SCOPE_RESULT: ${{ needs.changes.result }}
+          WORKERS_RESULT: ${{ needs.unit-it-b2-workers.result }}
+          CONSOLE_RESULT: ${{ needs.unit-it-b2-console.result }}
+        shell: bash
+        run: |
+          [[ "$SCOPE_RESULT" == "success" ]]
+          [[ "$WORKERS_RESULT" == "success" || "$WORKERS_RESULT" == "skipped" ]]
+          [[ "$CONSOLE_RESULT" == "success" || "$CONSOLE_RESULT" == "skipped" ]]
+
+  # ===========================================================================
   # NOTE: e2e-smoke 已从 pr-gate 移除(C 方案 #1)。
-  # E2E(smoke + regression)全部交给 staging-gate.yml(nightly,4 shard 并发)
+  # E2E(smoke + regression)全部交给 staging-gate.yml(nightly,6 shard 并发)
   # 和 full-ci-gate.yml(main push 后回退)。
   # 如需 PR 阶段重新引入 smoke,从 git history 恢复 e2e-smoke job。
   # ===========================================================================
@@ -739,6 +856,8 @@ jobs:
 
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
+        with:
+          cache-testcontainers: 'false'
 
       - name: Install gitleaks
         shell: bash

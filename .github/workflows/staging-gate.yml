@@ -8,9 +8,8 @@ name: staging-gate
 #   - workflow_dispatch: 手动 release 前过一遍。
 #
 # 与 pr-gate 关系:
-#   - pr-gate.yml `e2e-smoke` job 只跑 @Tag("smoke") + @Tag("critical")(12 个 E2eIT,
-#     ~15min wall-clock),反馈周期 Round-1 TOP-7 闭环目标。
-#   - 本 workflow 跑全量 28 个 E2eIT,4 shard 并发,~10min wall-clock,串行预算 ~2.5h。
+#   - pr-gate 只跑按模块路由的单元分片；E2E 由 main Full Gate 和本 nightly 回退。
+#   - 本 workflow 跑全量 28 个 E2eIT,6 shard 并发,目标 4-5min wall-clock。
 #
 # 与 full-ci-gate 关系:
 #   - full-ci-gate(main push)已并行跑全量 e2e-shard,本 workflow 是 staging branch
@@ -33,8 +32,8 @@ concurrency:
 
 jobs:
   # ===========================================================================
-  # e2e-shard:全量 E2E 4 shard 并发,无 tag 过滤(smoke + critical + regression
-  # 全跑)。分组沿用 full-ci-gate 的 LPT 均衡分配(docs/runbook/e2e-it-optimization-2026-05-22.md)。
+  # e2e-shard:全量 E2E 6 shard 并发,无 tag 过滤(smoke + critical + regression
+  # 全跑)。分组沿用 full-ci-gate 的 2026-10-07 实测 LPT 均衡结果。
   # ===========================================================================
   e2e-shard-full:
     runs-on: ubuntu-latest
@@ -46,45 +45,51 @@ jobs:
       matrix:
         shard:
           - id: 1
-            label: "338s ←最长 shard"
+            label: "158s baseline"
             tests: >-
               WorkerProcessRestartRecoveryE2eIT,
-              ExportFailurePipelineE2eIT,
-              WorkerDrainE2eIT,
-              ProcessPipelineE2eIT,
-              OutboxForwarderRetryE2eIT,
-              SdkAgainstStubOrchestratorE2eIT
-          - id: 2
-            label: "292s + trigger async"
-            tests: >-
               ImportFailureE2eIT,
-              FullChainTenantPropagationE2eIT,
-              ImportFailurePipelineE2eIT,
-              ExportPipelineE2eIT,
-              FilesystemBackendPipelineE2eIT,
-              TriggerAsyncLaunchFullChainE2eIT,
-              AtomicTaskPipelineE2eIT
-          - id: 3
-            label: "334s + atomic mixed"
+              FullChainTenantPropagationE2eIT
+          - id: 2
+            label: "179s baseline"
             tests: >-
               DeadLetterApprovalReplayE2eIT,
+              AtomicSeedStrictVerifyE2eIT,
+              AtomicTaskPipelineE2eIT,
+              ImportFailurePipelineE2eIT,
+              DedupJobLaunchE2eIT
+          - id: 3
+            label: "177s baseline"
+            tests: >-
+              ProcessPipelineE2eIT,
+              TriggerAsyncLaunchFullChainE2eIT,
               DispatchFailurePipelineE2eIT,
-              MultiTenantConcurrentE2eIT,
-              ProcessFailurePipelineE2eIT,
-              OutboxForwarderE2eIT,
-              SensorWaitFixtureE2eIT,
-              AtomicMixedScenarioE2eIT
+              OutboxForwarderRetryE2eIT,
+              SensorWaitFixtureE2eIT
           - id: 4
-            label: "334s + atomic seed/load"
+            label: "176s baseline"
+            tests: >-
+              AtomicMixedScenarioE2eIT,
+              ImportPipelineE2eIT,
+              WorkerDrainE2eIT,
+              ExportPipelineE2eIT,
+              OutboxPollMarginsYamlE2eIT
+          - id: 5
+            label: "159s baseline"
             tests: >-
               ExportStorageFailureE2eIT,
-              DispatchPipelineE2eIT,
+              ExportFailurePipelineE2eIT,
+              ProcessFailurePipelineE2eIT,
+              OutboxForwarderE2eIT,
+              SdkAgainstStubOrchestratorE2eIT
+          - id: 6
+            label: "148s baseline"
+            tests: >-
               ExportContentVerificationE2eIT,
-              ImportPipelineE2eIT,
-              DedupJobLaunchE2eIT,
-              OutboxPollMarginsYamlE2eIT,
-              AtomicSeedStrictVerifyE2eIT,
-              AtomicTaskLoadE2eIT
+              MultiTenantConcurrentE2eIT,
+              DispatchPipelineE2eIT,
+              AtomicTaskLoadE2eIT,
+              FilesystemBackendPipelineE2eIT
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

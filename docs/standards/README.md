@@ -7,5 +7,6 @@
 | [open-source-governance.md](./open-source-governance.md) | 漏洞响应、仓库保护、依赖/供应链和高风险变更治理 |
 | [bep-template.md](./bep-template.md) | 跨契约、状态机、安全和基础设施变更的轻量提案模板 |
 | [production-readiness-review-template.md](./production-readiness-review-template.md) | 跨组件高风险变更的生产就绪评审模板 |
+| [ci-test-quality-governance.md](./ci-test-quality-governance.md) | Action 固定、flaky 隔离、软门禁、覆盖率、PIT 与质量趋势 |
 
 编码规约仍以 [`../coding-conventions.md`](../coding-conventions.md) 和根目录 `docs/agent-baseline.md` 为准。

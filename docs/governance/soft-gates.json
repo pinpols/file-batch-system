@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "gates": [
+    {
+      "id": "ORCHESTRATOR_INTERNAL_OPENAPI_DRIFT",
+      "owner": "@pinpols",
+      "baseline": "控制器与 internal OpenAPI 路径差异仅记录，不阻断主线",
+      "promotionDeadline": "2026-12-15",
+      "target": "差异清零后移除 continue-on-error"
+    },
+    {
+      "id": "SDK_SUPPLY_CHAIN_REPORT",
+      "owner": "@pinpols",
+      "baseline": "SDK SBOM 与 changelog 生成失败不阻断发布验证",
+      "promotionDeadline": "2026-12-15",
+      "target": "生成链路稳定后改为阻断"
+    },
+    {
+      "id": "SPOTBUGS_NPE_REPORT",
+      "owner": "@pinpols",
+      "baseline": "SpotBugs NPE 规则只生成报告",
+      "promotionDeadline": "2026-12-31",
+      "target": "存量问题清零并将 failOnError 改为 true"
+    },
+    {
+      "id": "STRICT_VERIFY_LIVE",
+      "owner": "@pinpols",
+      "baseline": "在线 strict 验证返回报告，不影响工作流结论",
+      "promotionDeadline": "2026-12-31",
+      "target": "外部环境稳定后返回真实退出码"
+    }
+  ]
+}

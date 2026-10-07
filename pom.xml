@@ -108,6 +108,11 @@
 
         <!-- Resilience4j version validated against Spring Boot 4.1 and Java 21. -->
         <resilience4j.version>2.4.0</resilience4j.version>
+        <pitest.version>1.30.0</pitest.version>
+        <pitest-junit5-plugin.version>1.2.3</pitest-junit5-plugin.version>
+        <!-- 必需门禁默认不重跑失败测试；确认的 flaky 用例只在隔离 profile 中重跑。 -->
+        <test.rerun-failing-count>0</test.rerun-failing-count>
+        <test.excluded-groups>flaky</test.excluded-groups>
     </properties>
 
     <dependencyManagement>
@@ -398,13 +403,8 @@
                       无文档化依赖。统一到 surefire runOrder 一处, 消除歧义。
                     -->
                     <runOrder>alphabetical</runOrder>
-                    <!--
-                      flaky 自动重跑:首次 fail 后再跑 2 次,任意一次过即标 flaky-but-pass,
-                      不污染主分支绿。surefire 报告会显式标注 flaky,运维定期巡检 reports
-                      根因治理(见 docs/runbook/ci.md 「flaky 治理」 — 待补)。
-                      仅限单测 / IT;e2e module 在自己 pom 中可覆盖。
-                    -->
-                    <rerunFailingTestsCount>2</rerunFailingTestsCount>
+                    <rerunFailingTestsCount>${test.rerun-failing-count}</rerunFailingTestsCount>
+                    <excludedGroups>${test.excluded-groups}</excludedGroups>
                     <argLine>@{argLine} --enable-native-access=ALL-UNNAMED -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine>
                     <excludes>
                         <!-- Shared composed annotation, not an executable test class. -->
@@ -619,6 +619,57 @@ $1$2 $4 $5(</replacement>
     -->
     <profiles>
         <profile>
+            <id>flaky-quarantine</id>
+            <properties>
+                <test.rerun-failing-count>2</test.rerun-failing-count>
+                <test.excluded-groups></test.excluded-groups>
+            </properties>
+            <build>
+                <pluginManagement>
+                    <plugins>
+                        <plugin>
+                            <groupId>org.apache.maven.plugins</groupId>
+                            <artifactId>maven-surefire-plugin</artifactId>
+                            <configuration>
+                                <groups>flaky</groups>
+                            </configuration>
+                        </plugin>
+                    </plugins>
+                </pluginManagement>
+            </build>
+        </profile>
+
+        <profile>
+            <id>mutation-critical</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.pitest</groupId>
+                        <artifactId>pitest-maven</artifactId>
+                        <version>${pitest.version}</version>
+                        <dependencies>
+                            <dependency>
+                                <groupId>org.pitest</groupId>
+                                <artifactId>pitest-junit5-plugin</artifactId>
+                                <version>${pitest-junit5-plugin.version}</version>
+                            </dependency>
+                        </dependencies>
+                        <configuration>
+                            <threads>2</threads>
+                            <mutationThreshold>70</mutationThreshold>
+                            <coverageThreshold>80</coverageThreshold>
+                            <timestampedReports>false</timestampedReports>
+                            <outputFormats>
+                                <param>XML</param>
+                                <param>HTML</param>
+                            </outputFormats>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <profile>
             <id>compliance</id>
             <build>
                 <plugins>
@@ -708,6 +759,7 @@ $1$2 $4 $5(</replacement>
                             <configuration>
                                 <effort>Max</effort>
                                 <threshold>Medium</threshold>
+                                <!-- soft-gate-id: SPOTBUGS_NPE_REPORT -->
                                 <failOnError>false</failOnError>
                                 <xmlOutput>true</xmlOutput>
                                 <htmlOutput>true</htmlOutput>

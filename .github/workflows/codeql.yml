@@ -70,16 +70,22 @@ jobs:
 
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
+        with:
+          cache-testcontainers: 'false'
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
         with:
           languages: java
+          # PR 使用 Java no-build 模式缩短 required check；main push / schedule 继续
+          # 手工全量编译，覆盖构建生成代码与精确依赖解析。
+          build-mode: ${{ github.event_name == 'pull_request' && 'none' || 'manual' }}
           # security-extended 比 default 多 ~30 条规则(性能 / 安全热点),
           # 跑时间增 ~3min 但对批处理 + JDBC 场景值。
           queries: security-extended
 
       - name: Build (skip tests)
+        if: github.event_name != 'pull_request'
         # CodeQL 用编译产物分析字节码;测试不必跑,只要能 compile。
         # `-pl !batch-e2e-tests`:e2e module 不参与产物构建,加速。
         shell: bash
@@ -97,6 +103,7 @@ jobs:
 
       - name: Upload CodeQL results
         id: codeql-upload-primary
+        # non-gate-failure-policy: 首次上传失败后重试，最终上传仍会硬失败。
         continue-on-error: true
         uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
         with:
@@ -111,6 +118,7 @@ jobs:
       - name: Retry CodeQL results upload
         id: codeql-upload-retry
         if: steps.codeql-upload-primary.outcome == 'failure'
+        # non-gate-failure-policy: 第二次失败后由后续最终上传步骤硬失败。
         continue-on-error: true
         uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
         with:

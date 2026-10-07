@@ -28,6 +28,7 @@
 
 ### Changed
 
+- PR 单元测试按模块边界选择分片并拆分 Worker/Console 长尾，PR CodeQL 使用 Java 无构建快速分析而 main/定时保留手工全量构建；Full/Staging E2E 依据最新实测重排为六片，CI runbook 同步登记耗时基线与回退标准。
 - Console、Trigger 与 Import 通知的固定响应改用具名类型，Pipeline 列表不再在应用层传播原始 Map；Job trigger 保留普通实例号/dry-run 对象两种 wire 形态，OpenAPI 与配对前端类型同步。Lineage 热表/归档证据使用显式构造映射，文件 metadata 解析为 JSON 对象，不透传 JDBC 驱动封装。
 - 已有生命周期、Outbox、文件格式、分发策略和通知枚举统一复用稳定 code，保留各运维操作原有状态集合与配置 DSL。新增低误报 Java 契约守卫，按固定边界、确认的有限域和已有协议键复用阻断新增退化；动态契约按方法签名登记例外。
 - E2E 测试类将重复的 Spring Boot、profile 与标签声明收敛为可配置组合注解；各类独立应用上下文、属性、业务库 schema 和特殊上下文生命周期配置保持不变。
@@ -58,6 +59,7 @@
 
 ### Fixed
 
+- 升级独立 Java 租户 Worker 示例的 AssertJ 测试依赖至 3.27.7，修复恶意 XML 比较输入可触发的高危拒绝服务漏洞（CVE-2026-24400）；示例现有测试未使用受影响的 XML 比较 API。
 - Excel 导出将 POI 中间 XML 和模板 ZIP 纳入线程局部私有临时文件策略，成功和失败后恢复原策略；输出文件创建时限制为所有者权限，写入拒绝符号链接且不隐式重建文件，保持原输出路径和内容。
 - Trigger 运维代理显式归一化缺失响应信封，消除新增 Sonar 空值告警，同时保留已有信封的空 data 语义。
 - 修复 Console Trigger 类型化响应的跨域归属错误：Job Controller 与 Ops 代理共用的传输 DTO 移入顶层应用契约，恢复跨上下文直接依赖为零，JSON 字段与运维行为保持不变。

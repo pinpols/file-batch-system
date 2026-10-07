@@ -1,6 +1,6 @@
 # CI / Staging Gate
 
-更新时间：2026-03-27
+更新时间：2026-10-07
 
 ## 目标
 
@@ -38,11 +38,15 @@ GitHub Actions Workflow：
 
 - `.github/workflows/pr-gate.yml`
 
-建议命令：
+建议入口：
 
 ```bash
-bash scripts/ci/run-full-regression.sh --skip-it-suite -- --pl <changed-modules> -am -amd
+python3 scripts/ci/detect-change-scope.py --base origin/main --head HEAD --json
+bash scripts/ci/run-full-regression.sh --skip-it-suite -- --pl <affected-modules> -am
 ```
+
+`<affected-modules>` 应对齐 `pr-gate.yml` 的固定分片模块列表，不使用无边界的 `-amd` 扩散。
+需要完全复现线上路由时，以 `.github/actions/detect-change-scope` 的四个单元分片输出为准。
 
 要求：
 

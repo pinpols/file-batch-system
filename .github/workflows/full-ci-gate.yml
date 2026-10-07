@@ -57,6 +57,8 @@ jobs:
 
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
+        with:
+          cache-testcontainers: 'false'
 
       - name: Verify repository text encoding
         shell: bash
@@ -107,6 +109,15 @@ jobs:
         run: |
           source scripts/lib/gate-result.sh
           gate_run FULL_SCRIPT_GOVERNANCE "脚本治理" python3 scripts/ci/check-script-governance.py
+          gate_run FULL_ACTION_PINNING "GitHub Actions SHA 固定" python3 scripts/ci/check-github-action-pinning.py
+          gate_run FULL_SOFT_GATES "软门禁治理" python3 scripts/ci/check-soft-gate-governance.py
+          gate_run FULL_FLAKY_QUARANTINE "flaky 测试隔离治理" python3 scripts/ci/check-flaky-test-governance.py
+          gate_run FULL_CI_QUALITY_GUARD_TESTS "CI 质量治理门禁测试" python3 -m unittest \
+            scripts/ci/tests/test_check_github_action_pinning.py \
+            scripts/ci/tests/test_check_flaky_test_governance.py \
+            scripts/ci/tests/test_check_soft_gate_governance.py \
+            scripts/ci/tests/test_check_diff_coverage.py \
+            scripts/ci/tests/test_report_ci_quality_trends.py
           gate_run FULL_SHELL_SCRIPTS "Shell 语法与 ShellCheck" bash scripts/ci/check-shell-scripts.sh
           gate_run FULL_SHELL_LINUX_PORTABILITY "Shell Linux 兼容性" python3 scripts/ci/check-shell-linux-portability.py
           gate_run FULL_TESTCONTAINERS_REUSE_LABEL "Testcontainers 复用标签判定" python3 scripts/ci/check-testcontainers-reuse-label.py
@@ -340,11 +351,12 @@ jobs:
           gate_assert_collected
 
   # ===========================================================================
-  # 3 shard 按 IT 压力均化(2026-05-22 实测重排,对齐 pr-gate):
+  # 4 个 unit/IT 执行分片并发；原 b2 拆成 Worker 与 Console，避免串成长尾：
   #   a:  orchestrator + worker-core               (~3 min)
   #   b1: common + trigger + worker-process + worker-dispatch  (~3.5 min)
-  #   b2: worker-import + worker-export + console-api          (~4 min)
-  # wall-clock 由 b2 决定 ≤ 4 min(加 overhead ~5 min),目标 ≤ 6 min。
+  #   b2-workers: worker-import + worker-export + worker-atomic
+  #   b2: console-api（保留历史 job 名称）
+  # wall-clock 目标 4-5 min。
   # ===========================================================================
   unit-it-a:
     runs-on: ubuntu-latest
@@ -355,6 +367,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Setup build environment
@@ -379,6 +392,16 @@ jobs:
           # 现上 CI。只查本 shard 跑了测试的目标模块,不带 -am(否则上游模块 0% 覆盖误判失败)。
           ./mvnw jacoco:check@check -pl batch-orchestrator,batch-worker/core,sdk/java/core,sdk/java/spring,sdk/java/testkit -B
 
+      - name: Verify changed-line coverage
+        shell: bash
+        run: |
+          ./mvnw jacoco:report -pl batch-orchestrator,batch-worker/core,sdk/java/core,sdk/java/spring,sdk/java/testkit -B
+          BASE="${{ github.event.before }}"
+          [[ -n "$BASE" && ! "$BASE" =~ ^0+$ ]] || BASE="HEAD^"
+          python3 scripts/ci/check-diff-coverage.py --base "$BASE" \
+            --path batch-orchestrator --path batch-worker/core \
+            --path sdk/java/core --path sdk/java/spring --path sdk/java/testkit
+
       - name: Upload Surefire Reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -401,6 +424,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Setup build environment
@@ -424,6 +448,16 @@ jobs:
           # batch-test-support 是测试基础设施，执行自身测试但不纳入产品代码覆盖率。
           ./mvnw jacoco:check@check -pl batch-common,batch-trigger,batch-worker/process,batch-worker/dispatch -B
 
+      - name: Verify changed-line coverage
+        shell: bash
+        run: |
+          ./mvnw jacoco:report -pl batch-common,batch-trigger,batch-worker/process,batch-worker/dispatch -B
+          BASE="${{ github.event.before }}"
+          [[ -n "$BASE" && ! "$BASE" =~ ^0+$ ]] || BASE="HEAD^"
+          python3 scripts/ci/check-diff-coverage.py --base "$BASE" \
+            --path batch-common --path batch-trigger \
+            --path batch-worker/process --path batch-worker/dispatch
+
       - name: Upload Surefire Reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -435,9 +469,9 @@ jobs:
           retention-days: 14
 
   # ===========================================================================
-  # Job 4: unit-it-b2 — worker-import + worker-export + console-api
+  # Job 4a: unit-it-b2-workers — worker-import + worker-export + worker-atomic
   # ===========================================================================
-  unit-it-b2:
+  unit-it-b2-workers:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -446,6 +480,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Setup build environment
@@ -459,20 +494,81 @@ jobs:
             awk '$0 !~ /reuse-hash/ {print $1}' | \
             xargs -r docker rm -f >/dev/null 2>&1 || true
 
-      - name: Run unit + IT (worker-import + worker-export + console-api)
+      - name: Run unit + IT (worker-import + worker-export + worker-atomic)
         shell: bash
         run: |
-          ./mvnw verify -pl batch-worker/import,batch-worker/export,batch-worker/atomic,batch-console-api -am \
+          ./mvnw verify -pl batch-worker/import,batch-worker/export,batch-worker/atomic -am \
             -DskipITs=false -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
           # 覆盖率门禁(见 unit-it-a 注释);只查本 shard 目标模块。
-          ./mvnw jacoco:check@check -pl batch-worker/import,batch-worker/export,batch-worker/atomic,batch-console-api -B
+          ./mvnw jacoco:check@check -pl batch-worker/import,batch-worker/export,batch-worker/atomic -B
+
+      - name: Verify changed-line coverage
+        shell: bash
+        run: |
+          ./mvnw jacoco:report -pl batch-worker/import,batch-worker/export,batch-worker/atomic -B
+          BASE="${{ github.event.before }}"
+          [[ -n "$BASE" && ! "$BASE" =~ ^0+$ ]] || BASE="HEAD^"
+          python3 scripts/ci/check-diff-coverage.py --base "$BASE" \
+            --path batch-worker/import --path batch-worker/export \
+            --path batch-worker/atomic
 
       - name: Upload Surefire Reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: full-ci-unit-it-b2-reports
+          name: full-ci-unit-it-b2-workers-reports
+          path: |
+            **/target/surefire-reports/**
+            **/target/failsafe-reports/**
+          retention-days: 14
+
+  # ===========================================================================
+  # Job 4b: unit-it-b2 — Console API 独立分片，保留历史 job 名称用于趋势连续性。
+  # ===========================================================================
+  unit-it-b2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+
+      - name: Cleanup orphan testcontainers (pre-IT)
+        shell: bash
+        run: |
+          docker ps --filter "label=org.testcontainers=true" \
+            --format '{{.ID}} {{.Labels}}' | \
+            awk '$0 !~ /reuse-hash/ {print $1}' | \
+            xargs -r docker rm -f >/dev/null 2>&1 || true
+
+      - name: Run unit + IT (console-api)
+        shell: bash
+        run: |
+          ./mvnw verify -pl batch-console-api -am \
+            -DskipITs=false -Dspotless.check.skip=true -Dpmd.skip=true \
+            -fae -B
+          ./mvnw jacoco:check@check -pl batch-console-api -B
+
+      - name: Verify changed-line coverage
+        shell: bash
+        run: |
+          ./mvnw jacoco:report -pl batch-console-api -B
+          BASE="${{ github.event.before }}"
+          [[ -n "$BASE" && ! "$BASE" =~ ^0+$ ]] || BASE="HEAD^"
+          python3 scripts/ci/check-diff-coverage.py --base "$BASE" --path batch-console-api
+
+      - name: Upload Surefire Reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: full-ci-unit-it-b2-console-reports
           path: |
             **/target/surefire-reports/**
             **/target/failsafe-reports/**
@@ -497,6 +593,8 @@ jobs:
 
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
+        with:
+          cache-testcontainers: 'false'
 
       - name: Install gitleaks
         shell: bash
@@ -574,12 +672,10 @@ jobs:
           output_format: cli
 
   # ===========================================================================
-  # Job 3: e2e shard matrix。28 个 *E2eIT 按 LPT 均衡分成 4 组,并发跑。
-  # 单 shard 预期 ~6-8 min(含 setup + testcontainers 启动)。
-  # 4 shard 并发:总 wall-clock ~8-10 min,而非串行 25 min。
+  # Job 3: e2e shard matrix。28 个 *E2eIT 按 2026-10-07 实测 LPT 均衡分成 6 组。
+  # 单 shard 测试体约 148-179s；加依赖安装和 Testcontainers 后目标 wall-clock 4-5min。
   #
-  # 分组 baseline 数据来自 docs/runbook/e2e-it-optimization-2026-05-22.md:
-  #   shard1: 338s   shard2: 292s   shard3: 334s   shard4: 334s
+  # 分组证据见 docs/analysis/ci-gate-runtime-optimization-2026-10-07.md。
   # ===========================================================================
   e2e-shard:
     runs-on: ubuntu-latest
@@ -591,45 +687,51 @@ jobs:
       matrix:
         shard:
           - id: 1
-            label: "338s ←最长 shard"
+            label: "158s baseline"
             tests: >-
               WorkerProcessRestartRecoveryE2eIT,
-              ExportFailurePipelineE2eIT,
-              WorkerDrainE2eIT,
-              ProcessPipelineE2eIT,
-              OutboxForwarderRetryE2eIT,
-              SdkAgainstStubOrchestratorE2eIT
-          - id: 2
-            label: "292s + Atomic/TriggerAsync"
-            tests: >-
               ImportFailureE2eIT,
-              FullChainTenantPropagationE2eIT,
-              ImportFailurePipelineE2eIT,
-              ExportPipelineE2eIT,
-              FilesystemBackendPipelineE2eIT,
-              TriggerAsyncLaunchFullChainE2eIT,
-              AtomicTaskPipelineE2eIT
-          - id: 3
-            label: "334s + Atomic mixed"
+              FullChainTenantPropagationE2eIT
+          - id: 2
+            label: "179s baseline"
             tests: >-
               DeadLetterApprovalReplayE2eIT,
+              AtomicSeedStrictVerifyE2eIT,
+              AtomicTaskPipelineE2eIT,
+              ImportFailurePipelineE2eIT,
+              DedupJobLaunchE2eIT
+          - id: 3
+            label: "177s baseline"
+            tests: >-
+              ProcessPipelineE2eIT,
+              TriggerAsyncLaunchFullChainE2eIT,
               DispatchFailurePipelineE2eIT,
-              MultiTenantConcurrentE2eIT,
-              ProcessFailurePipelineE2eIT,
-              OutboxForwarderE2eIT,
-              SensorWaitFixtureE2eIT,
-              AtomicMixedScenarioE2eIT
+              OutboxForwarderRetryE2eIT,
+              SensorWaitFixtureE2eIT
           - id: 4
-            label: "334s + Atomic seed/load"
+            label: "176s baseline"
+            tests: >-
+              AtomicMixedScenarioE2eIT,
+              ImportPipelineE2eIT,
+              WorkerDrainE2eIT,
+              ExportPipelineE2eIT,
+              OutboxPollMarginsYamlE2eIT
+          - id: 5
+            label: "159s baseline"
             tests: >-
               ExportStorageFailureE2eIT,
-              DispatchPipelineE2eIT,
+              ExportFailurePipelineE2eIT,
+              ProcessFailurePipelineE2eIT,
+              OutboxForwarderE2eIT,
+              SdkAgainstStubOrchestratorE2eIT
+          - id: 6
+            label: "148s baseline"
+            tests: >-
               ExportContentVerificationE2eIT,
-              ImportPipelineE2eIT,
-              DedupJobLaunchE2eIT,
-              OutboxPollMarginsYamlE2eIT,
-              AtomicSeedStrictVerifyE2eIT,
-              AtomicTaskLoadE2eIT
+              MultiTenantConcurrentE2eIT,
+              DispatchPipelineE2eIT,
+              AtomicTaskLoadE2eIT,
+              FilesystemBackendPipelineE2eIT
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -674,6 +776,78 @@ jobs:
             batch-e2e-tests/target/surefire-reports/**
           retention-days: 14
 
+  scheduled-test-quality:
+    name: scheduled flaky quarantine and critical mutation
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+
+      - name: Run flaky quarantine
+        shell: bash
+        run: bash scripts/ci/run-flaky-quarantine.sh
+
+      - name: Run scoped critical mutation tests
+        shell: bash
+        run: bash scripts/ci/run-critical-mutation.sh
+
+      - name: Upload scheduled test quality evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: scheduled-test-quality-evidence
+          path: |
+            **/target/pit-reports/**
+            **/target/surefire-reports/**
+          retention-days: 30
+          if-no-files-found: warn
+
+  quality-trend:
+    name: CI and test quality trend
+    if: always()
+    needs: [unit-it-a, unit-it-b1, unit-it-b2-workers, unit-it-b2, e2e-shard]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Download test reports
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: full-ci-*-reports
+          path: build/ci-test-reports
+
+      - name: Generate CI quality trend
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          mkdir -p build/ci-quality
+          gh api "repos/${REPO}/actions/workflows/full-ci-gate.yml/runs?per_page=30" \
+            > build/ci-quality/workflow-runs.json
+          python3 scripts/ci/report-ci-quality-trends.py \
+            --reports-root build/ci-test-reports \
+            --workflow-runs-json build/ci-quality/workflow-runs.json \
+            --json build/ci-quality/metrics.json \
+            --markdown build/ci-quality/summary.md
+
+      - name: Upload CI quality trend
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: full-ci-quality-trend
+          path: build/ci-quality/**
+          retention-days: 90
+
   main-failure-triage:
     name: main full-gate failure triage
     if: >-
@@ -683,17 +857,23 @@ jobs:
         needs.static-checks.result == 'failure' ||
         needs.unit-it-a.result == 'failure' ||
         needs.unit-it-b1.result == 'failure' ||
+        needs.unit-it-b2-workers.result == 'failure' ||
         needs.unit-it-b2.result == 'failure' ||
         needs.security-scan.result == 'failure' ||
-        needs.e2e-shard.result == 'failure'
+        needs.e2e-shard.result == 'failure' ||
+        needs.scheduled-test-quality.result == 'failure' ||
+        needs.quality-trend.result == 'failure'
       )
     needs:
       - static-checks
       - unit-it-a
       - unit-it-b1
+      - unit-it-b2-workers
       - unit-it-b2
       - security-scan
       - e2e-shard
+      - scheduled-test-quality
+      - quality-trend
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

@@ -34,6 +34,13 @@ SCOPE_NAMES = (
     "maven",
     "unknown",
 )
+UNIT_SHARD_NAMES = (
+    "unit-a-required",
+    "unit-b1-required",
+    "unit-b2-workers-required",
+    "unit-b2-console-required",
+)
+ALL_UNIT_SHARDS = frozenset(UNIT_SHARD_NAMES)
 CODE_SCOPES = set(SCOPE_NAMES) - {"docs", "unknown"}
 ROOT_TOOL_CONFIG_FILES = {
     ".gitleaks.toml",
@@ -151,29 +158,74 @@ def classify_path(path: str) -> set[str]:
     return scopes
 
 
-def requires_unit(path: str) -> bool:
-    """Return whether the path can affect the Maven unit-test reactor."""
+def required_unit_shards(path: str) -> set[str]:
+    """Return the conservative unit-test shards affected by one path."""
     normalized = path.removeprefix("./")
-    return (
-        (normalized.startswith("batch-") and "/src/" in normalized)
-        or under(normalized, "db/migration")
+    # E2E 源码由 static-checks 的全 reactor test-compile 保证可编译，并在 main / nightly
+    # 的六片 E2E 中执行；PR 单元分片不重复启动。
+    if under(normalized, "batch-e2e-tests/src"):
+        return set()
+    if (
+        under(normalized, "db/migration")
         or normalized == "pom.xml"
         or normalized.endswith("/pom.xml")
         or under(normalized, ".mvn")
         or normalized.startswith("mvnw")
-    )
+        or under(normalized, "batch-common/src")
+        or under(normalized, "batch-test-support/src")
+    ):
+        return set(ALL_UNIT_SHARDS)
+
+    if under(normalized, "batch-orchestrator/src") or under(normalized, "sdk/java"):
+        return {"unit-a-required"}
+    if under(normalized, "batch-worker/core/src"):
+        return {
+            "unit-a-required",
+            "unit-b1-required",
+            "unit-b2-workers-required",
+        }
+    if any(
+        under(normalized, prefix)
+        for prefix in (
+            "batch-trigger/src",
+            "batch-worker/process/src",
+            "batch-worker/dispatch/src",
+        )
+    ):
+        return {"unit-b1-required"}
+    if any(
+        under(normalized, prefix)
+        for prefix in (
+            "batch-worker/import/src",
+            "batch-worker/export/src",
+            "batch-worker/atomic/src",
+        )
+    ):
+        return {"unit-b2-workers-required"}
+    if under(normalized, "batch-console-api/src"):
+        return {"unit-b2-console-required"}
+
+    # 新增 reactor 模块在显式登记前保守全跑，避免范围路由漏掉测试。
+    if normalized.startswith("batch-") and "/src/" in normalized:
+        return set(ALL_UNIT_SHARDS)
+    return set()
 
 
 def classify_paths(paths: list[str]) -> dict[str, object]:
     scopes: set[str] = set()
+    unit_shards: set[str] = set()
     for path in paths:
         scopes.update(classify_path(path))
+        unit_shards.update(required_unit_shards(path))
     code_changed = bool(scopes & CODE_SCOPES)
+    if "unknown" in scopes:
+        unit_shards.update(ALL_UNIT_SHARDS)
     return {
         "changed_files": len(paths),
         "scopes": sorted(scopes),
         "docs-only": bool(paths) and not code_changed and "unknown" not in scopes,
-        "unit-required": any(requires_unit(path) for path in paths) or "unknown" in scopes,
+        "unit-required": bool(unit_shards),
+        **{shard: shard in unit_shards for shard in UNIT_SHARD_NAMES},
         **{scope: scope in scopes for scope in SCOPE_NAMES},
     }
 
@@ -184,6 +236,7 @@ def full_result() -> dict[str, object]:
         "scopes": ["full"],
         "docs-only": False,
         "unit-required": True,
+        **{shard: True for shard in UNIT_SHARD_NAMES},
         **{scope: scope != "unknown" for scope in SCOPE_NAMES},
         "unknown": False,
     }

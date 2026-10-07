@@ -23,7 +23,11 @@
 | `docker` / `helm` | Dockerfile、镜像编排、Helm | 镜像、容器和生产 overlay 检查 |
 | `maven` | POM、`.mvn`、Maven wrapper | 依赖图、版本和构建路由 |
 | `unknown` | 未登记的文件类型或路径 | 按代码变更安全回退，并补分类规则 |
-| `unit-required` | Maven reactor 源码、迁移、测试和构建文件 | PR gate 的 Maven unit shard |
+| `unit-required` | 四个单元分片输出的兼容汇总 | 兼容旧消费者，不用于精确路由 |
+| `unit-a-required` | Orchestrator、Java SDK 及其共享依赖 | PR gate 的 A 分片 |
+| `unit-b1-required` | Trigger、Process、Dispatch 及其共享依赖 | PR gate 的 B1 分片 |
+| `unit-b2-workers-required` | Import、Export、Atomic 及其共享依赖 | PR gate 的 Worker B2 分片 |
+| `unit-b2-console-required` | Console API 及其共享依赖 | PR gate 的 Console B2 分片 |
 
 域可以重叠。`database` 是历史 workflow 的兼容输出，不要删除；新消费者优先使用
 更具体的 `sql`、`maven`、`helm` 等域。
@@ -34,8 +38,13 @@
 - `merge_group`、`push`、`schedule`、`workflow_dispatch`：没有可靠 PR diff，输出全域
   `true`，保证发布、合并队列和手工验证不会漏扫。
 - `unknown=true` 或非文档域命中：`docs-only=false`。
-- `unit-required=true` 或 `unknown=true`：PR gate 必须保留 Maven unit shard；CI、脚本、SDK
-  变更可以只走各自专项门禁。
+- 四个单元分片信号按模块边界保守路由；`unit-required=true` 表示至少一个分片必须执行。
+- 公共模块、测试支持、数据库迁移、任意 POM、Maven Wrapper、未登记的 `batch-*` 源码模块和
+  `unknown=true` 必须运行全部单元分片。CI、脚本、文档和部署配置可以只走对应专项门禁。
+- `batch-e2e-tests` 变更由静态 job 的全 reactor `test-compile` 保证编译，并由 main / nightly
+  六片 E2E 执行，不重复启动 PR 单元分片。
+- `unit-it-b2` 是 Ruleset 使用的稳定聚合 context；Worker B2 与 Console B2 任一执行失败时，
+  聚合 context 必须失败。不要把聚合 job 的成功误解为未执行子分片。
 - `docs-only=true` 只表示所有文件都是已识别的文档文件，不表示安全扫描可以跳过。
 
 ## 新增路径的流程

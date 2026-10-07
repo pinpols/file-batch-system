@@ -64,6 +64,50 @@ class DetectChangeScopeTest(unittest.TestCase):
 
         self.assertTrue(result["tests"])
         self.assertTrue(result["unit-required"])
+        self.assertTrue(result["unit-b1-required"])
+        self.assertFalse(result["unit-a-required"])
+        self.assertFalse(result["unit-b2-workers-required"])
+        self.assertFalse(result["unit-b2-console-required"])
+
+    def test_leaf_module_only_selects_its_unit_shard(self) -> None:
+        result = MODULE.classify_paths(
+            ["batch-console-api/src/main/java/example/ConsoleService.java"]
+        )
+
+        self.assertTrue(result["unit-required"])
+        self.assertTrue(result["unit-b2-console-required"])
+        self.assertFalse(result["unit-a-required"])
+        self.assertFalse(result["unit-b1-required"])
+        self.assertFalse(result["unit-b2-workers-required"])
+
+    def test_worker_core_selects_all_worker_shards(self) -> None:
+        result = MODULE.classify_paths(
+            ["batch-worker/core/src/main/java/example/WorkerRuntime.java"]
+        )
+
+        self.assertTrue(result["unit-a-required"])
+        self.assertTrue(result["unit-b1-required"])
+        self.assertTrue(result["unit-b2-workers-required"])
+        self.assertFalse(result["unit-b2-console-required"])
+
+    def test_shared_module_selects_every_unit_shard(self) -> None:
+        result = MODULE.classify_paths(
+            ["batch-common/src/main/java/example/SharedContract.java"]
+        )
+
+        for shard in MODULE.UNIT_SHARD_NAMES:
+            self.assertTrue(result[shard])
+
+    def test_e2e_source_relies_on_compile_and_post_merge_e2e(self) -> None:
+        result = MODULE.classify_paths(
+            ["batch-e2e-tests/src/test/java/example/FlowE2eIT.java"]
+        )
+
+        self.assertTrue(result["java"])
+        self.assertTrue(result["tests"])
+        self.assertFalse(result["unit-required"])
+        for shard in MODULE.UNIT_SHARD_NAMES:
+            self.assertFalse(result[shard])
 
     def test_openapi_is_api_and_not_docs_only(self) -> None:
         result = MODULE.classify_paths(["docs/api/console-api.openapi.yaml"])
@@ -79,6 +123,8 @@ class DetectChangeScopeTest(unittest.TestCase):
         self.assertFalse(result["docs-only"])
         self.assertTrue(result["unit-required"])
         self.assertTrue(result["unknown"])
+        for shard in MODULE.UNIT_SHARD_NAMES:
+            self.assertTrue(result[shard])
 
     def test_non_pull_request_falls_back_to_full_scope(self) -> None:
         result = MODULE.full_result()
@@ -88,6 +134,8 @@ class DetectChangeScopeTest(unittest.TestCase):
         self.assertTrue(result["sql"])
         self.assertTrue(result["sdk"])
         self.assertFalse(result["unknown"])
+        for shard in MODULE.UNIT_SHARD_NAMES:
+            self.assertTrue(result[shard])
 
     def test_workflow_change_is_ci_and_requires_static_checks(self) -> None:
         result = MODULE.classify_paths([".github/workflows/full-ci-gate.yml"])

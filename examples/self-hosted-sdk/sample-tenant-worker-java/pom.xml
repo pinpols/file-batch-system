@@ -28,6 +28,7 @@
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <jackson-2-bom.version>2.21.7</jackson-2-bom.version>
+    <assertj.version>3.27.7</assertj.version>
     <!-- 独立 reactor 无法继承根 POM，版本需与根 reactor <revision> 对齐。 -->
     <batch-sdk.version>1.0.0</batch-sdk.version>
   </properties>
@@ -73,7 +74,7 @@
     <dependency>
       <groupId>org.assertj</groupId>
       <artifactId>assertj-core</artifactId>
-      <version>3.27.7</version>
+      <version>${assertj.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
