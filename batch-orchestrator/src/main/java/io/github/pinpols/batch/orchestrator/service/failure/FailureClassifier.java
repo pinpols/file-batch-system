@@ -3,18 +3,10 @@ package io.github.pinpols.batch.orchestrator.service.failure;
 import io.github.pinpols.batch.common.enums.FailureClass;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.Texts;
-import java.sql.SQLException;
-import java.sql.SQLTransientException;
-import java.util.concurrent.TimeoutException;
+import io.github.pinpols.batch.orchestrator.application.service.failure.TechnicalFailureClassificationPort;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataAccessException;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.dao.NonTransientDataAccessException;
-import org.springframework.dao.OptimisticLockingFailureException;
-import org.springframework.dao.QueryTimeoutException;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.ResourceAccessException;
 
 /**
  * ADR-012 失败分类回退链。
@@ -26,7 +18,7 @@ import org.springframework.web.client.ResourceAccessException;
  *       io.github.pinpols.batch.orchestrator.controller.request.TaskExecutionReportDto#getFailureClass()}
  *       —— worker 业务侧最知根因；
  *   <li>{@link BizException#getFailureClass()} —— 业务方 throw 时显式声明；
- *   <li>本类的 exception/SQL state 回退分类器 —— 经验规则；
+ *   <li>技术失败分类端口的 exception/SQL state 回退分类器 —— 经验规则；
  *   <li>都不知道 → {@link FailureClass#UNKNOWN}（ops review 信号，不是 bug）。
  * </ol>
  *
@@ -34,7 +26,10 @@ import org.springframework.web.client.ResourceAccessException;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class FailureClassifier {
+
+  private final TechnicalFailureClassificationPort technicalFailureClassification;
 
   /**
    * 单一入口。
@@ -65,91 +60,12 @@ public class FailureClassifier {
       }
       cursor = cursor.getCause();
     }
-    // 3) 回退分类（按异常类型 / SQL state）
-    return classifyByThrowable(throwable);
+    // 3) 委托基础设施适配器按异常类型 / SQL state 回退分类。
+    return technicalFailureClassification.classify(throwable);
   }
 
   /** 单参数变体，仅看异常（典型 orchestrator 内部 catch 路径）。 */
   public FailureClass classify(Throwable throwable) {
     return classify(null, throwable);
-  }
-
-  private FailureClass classifyByThrowable(Throwable throwable) {
-    Throwable cursor = throwable;
-    while (cursor != null) {
-      // TIMEOUT 类（多见于 query timeout / Kafka send timeout / HTTP read timeout）
-      if (cursor instanceof TimeoutException
-          || cursor instanceof QueryTimeoutException
-          || isJavaSqlTimeout(cursor)) {
-        return FailureClass.TIMEOUT;
-      }
-      // INFRASTRUCTURE 类(瞬态可重试):先于下面的 DATA_QUALITY/catch-all 命中,
-      // 因为 OptimisticLockingFailureException 也是 NonTransientDataAccessException 子类,
-      // 但它属于 CAS 冲突,语义上可重试,必须前置不能被整合规则误判为异常数据。
-      if (cursor instanceof TransientDataAccessException
-          || cursor instanceof SQLTransientException
-          || cursor instanceof OptimisticLockingFailureException
-          || cursor instanceof ResourceAccessException) {
-        return FailureClass.INFRASTRUCTURE;
-      }
-      // DATA_QUALITY 类(不可重试异常数据):唯一键 / check / not-null / FK 违反等。
-      // 必须前置到泛 DataAccessException catch-all 之前,否则 DataIntegrityViolationException
-      // (NonTransientDataAccessException 子类)会被误判为 INFRASTRUCTURE → 异常数据无限重试。
-      if (cursor instanceof DataIntegrityViolationException) {
-        return FailureClass.DATA_QUALITY;
-      }
-      // 底层 SQLException 优先按 SQLState 精确分类(如 42xxx 语法 → CONFIG,23xxx 整合违反 →
-      // DATA_QUALITY),先于下面的 NonTransient/catch-all 粗分类。
-      if (cursor instanceof SQLException sql && Texts.hasText(sql.getSQLState())) {
-        return classifyBySqlState(sql.getSQLState());
-      }
-      // 其余不可恢复(NonTransient)数据访问异常:无瞬态特征也无 SQLState 信号,
-      // 归异常数据(不可重试),避免被 catch-all 当基础设施无限重试。
-      if (cursor instanceof NonTransientDataAccessException) {
-        return FailureClass.DATA_QUALITY;
-      }
-      // 泛 DataAccessException 回退:剩下的(瞬态语义弱但未显式标 Transient)归基础设施。
-      if (cursor instanceof DataAccessException) {
-        return FailureClass.INFRASTRUCTURE;
-      }
-      cursor = cursor.getCause();
-    }
-    return FailureClass.UNKNOWN;
-  }
-
-  private boolean isJavaSqlTimeout(Throwable t) {
-    return t instanceof java.sql.SQLTimeoutException;
-  }
-
-  /** 经典 PG SQLState 大分类。详见 https://www.postgresql.org/docs/current/errcodes-appendix.html */
-  private FailureClass classifyBySqlState(String sqlState) {
-    if (!Texts.hasText(sqlState)) {
-      return FailureClass.UNKNOWN;
-    }
-    // 08xxx connection exception / 53xxx insufficient resources / 57xxx operator intervention
-    // / 58xxx system error  → INFRASTRUCTURE
-    if (sqlState.startsWith("08")
-        || sqlState.startsWith("53")
-        || sqlState.startsWith("57")
-        || sqlState.startsWith("58")) {
-      return FailureClass.INFRASTRUCTURE;
-    }
-    // 23xxx integrity constraint violation → DATA_QUALITY
-    if (sqlState.startsWith("23")) {
-      return FailureClass.DATA_QUALITY;
-    }
-    // 40001 serialization_failure / 40P01 deadlock → INFRASTRUCTURE（瞬态可重试）
-    if (sqlState.startsWith("40")) {
-      return FailureClass.INFRASTRUCTURE;
-    }
-    // 22xxx data exception → DATA_QUALITY (转换失败 / 越界等)
-    if (sqlState.startsWith("22")) {
-      return FailureClass.DATA_QUALITY;
-    }
-    // 42xxx syntax error / access rule violation → CONFIG
-    if (sqlState.startsWith("42")) {
-      return FailureClass.CONFIG;
-    }
-    return FailureClass.UNKNOWN;
   }
 }

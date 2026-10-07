@@ -2,6 +2,7 @@ package io.github.pinpols.batch.trigger.infrastructure.readiness;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.trigger.application.UpstreamReadinessPort;
 import java.time.LocalDate;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -22,7 +23,7 @@ import org.springframework.web.client.RestClient;
 @Slf4j
 @Component
 @EnableConfigurationProperties(ReadinessGateProperties.class)
-public class UpstreamReadinessChecker {
+public class UpstreamReadinessChecker implements UpstreamReadinessPort {
 
   private final RestClient orchestratorRestClient;
   private final boolean enabled;
@@ -38,6 +39,7 @@ public class UpstreamReadinessChecker {
    *
    * @return true=就绪可 fire;false=未就绪 / 查询失败(fail-closed)
    */
+  @Override
   public boolean isReady(String tenantId, String upstreamJobCode, LocalDate bizDate) {
     if (!enabled) {
       return true;

@@ -15,10 +15,12 @@ Port / SPI / Adapter 模式。剩余治理不应一次性重写主链，而应�
 | Dispatch 渠道 | `DispatchChannelAdapter` | LOCAL / SFTP / HTTP / SMTP / NAS / OSS 等按 adapter 路由 |
 | Console 跨域 | `ConsoleOrchestratorPort`、`ConsoleOpsQueryPort`、`ConsoleRealtimeEventPort` 等 | 跨 context 调用已大量通过应用端口 |
 | SDK 幂等 | `SdkIdempotencyStore` | SDK 用户可替换存储实现 |
+| Orchestrator 技术失败分类 | `TechnicalFailureClassificationPort`、`PersistenceConflictDetectionPort` | 失败分类与唯一约束判断各用独立窄端口；JDBC、Spring DAO、HTTP 异常识别位于 infrastructure adapter |
+| Trigger 上游就绪查询 | `UpstreamReadinessPort` | 触发服务不再依赖 `RestClient` 实现类；HTTP fail-closed 行为仍由 readiness adapter 负责 |
 
 ## 本轮新增守护
 
-新增 `scripts/ci/check-infrastructure-abstraction-boundaries.py` 并接入 PR gate。它只检查 PR 新增/修改的
+`scripts/ci/check-infrastructure-abstraction-boundaries.py` 已接入 PR gate。它只检查 PR 新增/修改的
 主代码，防止 application、domain、service、web 层直接引用或 import 以下具体基础设施类型：
 
 - AWS SDK / S3 client
@@ -29,7 +31,8 @@ Port / SPI / Adapter 模式。剩余治理不应一次性重写主链，而应�
 - Spring `RestClient` / WebClient
 
 允许拥有具体实现的包：`config`、`infrastructure`、`mapper`、`mybatis`、`support`、`shared.client`、
-以及 `common` 的底层适配包。该守护是 ratchet，不清历史账，避免无关主链重构。
+以及 `common` 的底层适配包。该守护是 ratchet，避免无关主链重构；本轮触及的 launch、失败分类、结果版本
+推进与 trigger readiness 历史边界债务已通过窄端口收口，不增加例外或抑制。
 
 ## 后续分批治理
 

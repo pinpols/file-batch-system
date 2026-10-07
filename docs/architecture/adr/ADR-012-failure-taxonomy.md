@@ -69,7 +69,10 @@ public enum FailureClass implements DictEnum {
 
 1. **Worker 上报时显式标**：`TaskExecutionReportDto.failureClass`，worker 业务侧最知根因；
 2. **BizException 携带**：`BizException` 增加 `failureClass` 字段，`error.<scope>.<reason>` key 在 `messages.properties` 维护对应 class（例：`error.data.row_validation_failed=DATA_QUALITY`）；
-3. **Orchestrator 回退分类器**：`FailureClassifier`（chain）按异常类型 / SQL state / HTTP code / timeout 模式做 fallback；
+3. **Orchestrator 回退分类器**：`FailureClassifier` 负责 worker 上报值和业务异常的优先级，
+   `TechnicalFailureClassificationPort` 负责技术失败归一化；Launch 的唯一约束识别另由
+   `PersistenceConflictDetectionPort` 承担。JDBC / Spring DAO / HTTP 客户端异常类型只出现在 infrastructure
+   adapter，应用层不依赖具体基础设施 SDK；
 4. **不知道就 UNKNOWN**：永远不要为了显得"有分类"无依据猜测；UNKNOWN 触发 alert 让 ops 看一眼。
 
 ### 响应派发
@@ -118,7 +121,7 @@ NULL = 用 §响应派发 默认表。
 | Stage | 范围 | 状态 |
 |---|---|---|
 | 1 | schema + enum + 默认 NULL 不影响现有 | ✓ V111 + `FailureClass` enum |
-| 2 | `FailureClassifier` chain + 回退分类器（exception 类 / SQL state） | ✓ `service/failure/FailureClassifier` + `FailureClassifierTest` 7/7 |
+| 2 | `FailureClassifier` chain + 技术失败分类端口（exception 类 / SQL state） | ✓ `service/failure/FailureClassifier` + `infrastructure/failure/SpringTechnicalFailureClassificationAdapter` + 专项测试 |
 | 3 | Worker SDK 接 `TaskExecutionReportDto.failureClass`，BizException 携带 | ✓ `BizException.of(code, FailureClass, ...)` + Worker DTO + `TaskOutcomeCommand` 透传 + `finishTask` / `updateProgress` 写库 |
 | 4 | retry policy 按 class 派发；`retry_policy_by_class` JSONB 解析 | ☐ **deferred follow-up** —— Stage 1 已落 schema 列，应用层未接；触发条件：失败重试想按 class 微调时再做（默认全局 retry_policy 仍工作） |
 | 5 | metric / alert routing / Console 列展示 | ✓ `batch.job.failure{tenant,jobCode,class}` counter；`ConsoleMetaQueryService` 注册 `failureClass` + OpenAPI MetaEnums 同步 |
