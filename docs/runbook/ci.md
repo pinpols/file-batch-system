@@ -252,7 +252,7 @@ pr-gate 会根据 PR 变更文件范围决定 Maven 构建粒度：
 |---|---|
 | 禁推 `main` / 受保护分支 | 当前 push ref |
 | `check-empty-checks.py --base <base>` | 增量 |
-| `check-infrastructure-abstraction-boundaries.py --base <base>` | 增量 |
+| `check-infrastructure-abstraction-boundaries.py --base <base>` | 增量:与 PR merge-base 比较引用语句及出现次数,既有项不因纯日志修改而阻断 |
 | `check-readiness-doc-sync.py --base <base>` | 增量 |
 | Java 新增行编码反例（FQN、`@Autowired`、`@Transactional` 位置、`RuntimeException`、日志拼接、`ZoneId.systemDefault`、`Charset.forName`） | 增量：PR 新增有效代码行 |
 | `check-direct-client-boundaries.py` | 全量：业务层直连客户端是跨模块边界 |
