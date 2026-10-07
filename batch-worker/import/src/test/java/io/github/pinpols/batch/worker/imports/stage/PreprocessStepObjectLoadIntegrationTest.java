@@ -90,7 +90,7 @@ class PreprocessStepObjectLoadIntegrationTest {
         .thenReturn(Map.of("storage_path", registeredPath));
     S3StorageProperties props = new S3StorageProperties();
     props.setBucket(bucket);
-    return new PreprocessStep(
+    return PreprocessStepFixture.create(
         runtimeRepo,
         pipelineDefinitions,
         security,
