@@ -57,6 +57,7 @@ SCOPED_RULES = {
 }
 GATE_CODE = "JAVA_SUPPRESSION_REGISTRY"
 GATE_NAME = "Java SuppressWarnings 登记"
+BASELINE = ROOT / "scripts/ci/java-suppression-baseline.tsv"
 
 
 def production_sources(candidates: list[str] | None = None) -> list[Path]:
@@ -109,13 +110,69 @@ def unregistered(findings: list[tuple[str, int, str]]) -> list[tuple[str, int, s
     ]
 
 
+def suppression_counts(findings: list[tuple[str, int, str]]) -> Counter[tuple[str, str]]:
+    return Counter((path, rule) for path, _, rule in findings)
+
+
+def read_baseline() -> Counter[tuple[str, str]]:
+    counts: Counter[tuple[str, str]] = Counter()
+    if not BASELINE.is_file():
+        return counts
+    for line_number, line in enumerate(BASELINE.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split("\t")
+        if len(parts) != 3 or not parts[2].isdigit():
+            raise ValueError(f"{BASELINE}:{line_number}: expected path<TAB>rule<TAB>count")
+        key = (parts[0], parts[1])
+        if key in counts:
+            raise ValueError(f"{BASELINE}:{line_number}: duplicate entry {parts[0]} {parts[1]}")
+        counts[key] = int(parts[2])
+    return counts
+
+
+def write_baseline(findings: list[tuple[str, int, str]]) -> None:
+    lines = [
+        "# Reviewed production Java @SuppressWarnings inventory.",
+        "# Update only after reviewing the source change and documenting its reason.",
+        "# Format: repository-relative path<TAB>rule<TAB>approved occurrence count.",
+    ]
+    lines.extend(
+        f"{path}\t{rule}\t{count}"
+        for (path, rule), count in sorted(suppression_counts(findings).items())
+    )
+    BASELINE.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> int:
-    candidates = argv if argv else None
-    findings = scan(candidates)
+    args = list(argv or [])
+    if any(arg.startswith("-") for arg in args) and args != ["--write-baseline"]:
+        print(f"Unknown arguments: {' '.join(args)}", file=sys.stderr)
+        return 2
+    findings = scan(None if not args or args == ["--write-baseline"] else args)
+    if args == ["--write-baseline"]:
+        write_baseline(findings)
+        print(f"Wrote reviewed suppression baseline: {BASELINE} ({len(findings)} occurrences)")
+        return 0
     unknown = unregistered(findings)
     counts = Counter(rule for _, _, rule in findings)
     print(f"Java production suppressions: {len(findings)}")
     print("Reviewed rules: " + ", ".join(f"{rule}={counts[rule]}" for rule in sorted(counts)))
+    if not BASELINE.is_file():
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | baseline missing: {BASELINE}")
+        print("Run --write-baseline only after reviewing all current production suppressions.")
+        return 1
+    try:
+        baseline = read_baseline()
+    except ValueError as error:
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | {error}")
+        return 1
+    current_counts = suppression_counts(findings)
+    increased = [
+        (path, rule, count, baseline.get((path, rule), 0))
+        for (path, rule), count in sorted(current_counts.items())
+        if count > baseline.get((path, rule), 0)
+    ]
     if unknown:
         print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1")
         print("\nUnregistered production suppressions:")
@@ -124,6 +181,12 @@ def main(argv: list[str] | None = None) -> int:
         print(
             "\nAdd the rule to KNOWN_RULES and document its owner/reason before merging."
         )
+        return 1
+    if increased:
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | new suppression occurrences")
+        for path, rule, current, approved in increased:
+            print(f"  - {path}: {rule} current={current} approved={approved}")
+        print("Review the exception reason and update the baseline deliberately.")
         return 1
     print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME}")
     return 0

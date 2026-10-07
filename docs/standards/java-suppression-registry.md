@@ -5,7 +5,7 @@
 > `git add` 的新文件（`git ls-files --cached --others --exclude-standard`），因此本地在途新增的
 > suppression 在提交前就会被拦下，而不是等到提交后才暴露。
 
-这不是鼓励增加 suppression 的白名单。每个新增例外都必须先确认能否通过类型、结构或安全校验消除；确实不能消除时，才登记规则、模块归属、保留原因和后续移除条件。检查脚本使用精确规则表，未登记的规则会阻断 CI。
+这不是鼓励增加 suppression 的白名单。每个新增例外都必须先确认能否通过类型、结构或安全校验消除；确实不能消除时，才登记规则、模块归属、保留原因和后续移除条件。除规则登记外，CI 还按“源码路径 + 规则”核对存量计数；新增位置或增加数量会失败，不能仅凭规则已知自动放行。基线变更须在源码或评审中说明具体理由，并经人工审核后再更新。
 
 ## 当前规则归属
 
@@ -44,6 +44,7 @@
 ```bash
 bash scripts/python.sh scripts/ci/check-java-suppression-registry.py
 python3 -m unittest scripts/ci/tests/test_check_java_suppression_registry.py
+python3 scripts/ci/check-java-suppression-registry.py --write-baseline  # 仅在评审批准新增例外后更新
 bash scripts/python.sh scripts/ci/report-java-readability-inventory.py
 ./mvnw -DskipTests test-compile pmd:check spotless:check -fae -B
 ```

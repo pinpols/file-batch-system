@@ -22,13 +22,11 @@ import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 
 /**
  * 端到端测试：PROCESS 失败路径（VALIDATE 阶段用户校验规则不通过）。
@@ -36,13 +34,11 @@ import org.springframework.test.context.ActiveProfiles;
  * <p>测试意图：当 sqlTransformCompute 里配置的 validations 失败时，COMMIT 不执行，target 表保持空，staging 仍保留供
  * forensics；任务/实例终态为 FAILED。
  */
-@SpringBootTest(
+@E2eSpringBootTest(
     classes = E2eProcessApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = "batch.worker.process.worker-type=PROCESS")
-@ActiveProfiles({"test", "e2e"})
 @E2eBusinessSchema
-@Tag("e2e")
 @DisplayName("PROCESS 失败链路端到端:用户校验规则不通过时提交阶段中止,目标表零写入,暂存数据留档,任务与实例均为失败终态")
 class ProcessFailurePipelineE2eIT extends AbstractIntegrationTest {
 

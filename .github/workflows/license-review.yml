@@ -23,6 +23,8 @@ on:
       - 'pom.xml'
       - '**/pom.xml'
       - 'scripts/ci/check-dependency-licenses.sh'
+      - 'scripts/ci/license-allowlist.sh'
+      - 'scripts/ci/tests/test-dependency-license-allowlist.sh'
       - '.github/workflows/license-review.yml'
 
 permissions:

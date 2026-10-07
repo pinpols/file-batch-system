@@ -21,12 +21,10 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 
 /**
  * 真实数据严格验证(testcontainers 级):用 <b>生产形态</b> 的 SPI job 定义跑真链 —— 执行器协议(taskType + 参数) 放在 {@code
@@ -36,12 +34,10 @@ import org.springframework.test.context.ActiveProfiles;
  * <p>与 {@link AtomicTaskPipelineE2eIT}(参数走 LaunchRequest)互补:这里覆盖"管理员在 job 定义里配好协议、调度只给 jobCode"
  * 的真实使用方式,是严格(真实数据,非合成入参)验证。
  */
-@SpringBootTest(
+@E2eSpringBootTest(
     classes = E2eAtomicApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles({"test", "e2e"})
 @E2eBusinessSchema
-@Tag("e2e")
 @DisplayName("真实种子作业的原子任务端到端: 执行器协议预置在作业定义默认参数中, 空参触发后经参数合成, 事件投递与专属派发交由对应子执行器执行, 任务终态落库为成功")
 class AtomicSeedStrictVerifyE2eIT extends AbstractIntegrationTest {
 

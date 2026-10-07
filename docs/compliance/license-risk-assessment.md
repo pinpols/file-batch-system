@@ -30,9 +30,9 @@
 | **MIT** | Lombok / SLF4J / Mockito / 部分 transitive | 🟢 无 | 完全宽松 |
 | **BSD-2-Clause** | PostgreSQL JDBC | 🟢 无 | 仅需保留 copyright |
 | **ISC / BSD-3-Clause / EDL-1.0** | JSch (mwiede fork，pom 声明 ISC + Revised BSD) / ANTLR ST4 / Angus Activation Registries | 🟢 无（admin 缺口） | 严格要求保留许可证原文，详见 §3.3。EDL-1.0 = Eclipse Distribution License，与 BSD-3 等价 |
-| **EPL-2.0 + LGPL（双许可）** | Logback Classic / Core 1.5.34 | 🟢 无 | 双许可可选 EPL-2.0 路径；动态链接库使用无义务，详见 §2.1 |
+| **EPL-2.0 + LGPL（双许可）** | Logback Classic / Core 1.5.38 | 🟢 无 | 双许可可选 EPL-2.0 路径；动态链接库使用无义务，详见 §2.1 |
 | **EPL-2.0 + GPL-2 w/ Classpath Exception** | Angus Mail / Jakarta Annotations API / Jakarta Mail API | 🟢 无 | Classpath Exception **明确允许**链接到非 GPL 代码，无传染，详见 §2.2 |
-| **LGPL-2.1 OR Apache-2.0（双许可）** | JSqlParser 5.3 | 🟢 无 | 选 Apache-2.0 路径即可，无需走 LGPL，详见 §2.3 |
+| **LGPL-2.1 OR Apache-2.0（双许可）** | JSqlParser 5.4 | 🟢 无 | 选 Apache-2.0 路径即可，无需走 LGPL，详见 §2.3 |
 | **Apache-2.0 OR GPL-2.0（双许可）** | RocksDB JNI 10.1.3 | 🟢 无 | 选 Apache-2.0 路径即可，无需走 GPL，详见 §2.4 |
 | **CDDL / MPL / 纯 GPL（无 CPE）/ AGPL / CC-BY-NC** | — | — | **未发现**（grep 0 命中） |
 | **Unknown / undeclared** | — | — | **未发现**（generated 报告无 `unknown`） |
@@ -41,7 +41,7 @@
 
 ## 2. 主动管理项（看似有风险，实际 0 义务）
 
-### 2.1 Logback Classic / Core 1.5.34 — EPL-2.0 OR LGPL
+### 2.1 Logback Classic / Core 1.5.38 — EPL-2.0 OR LGPL
 
 **实际 license 文本**（来自 generated 报告）：  
 `(Eclipse Public License - v 2.0) (GNU Lesser General Public License) Logback Classic Module`
@@ -65,7 +65,7 @@
 
 **触发风险的姿势**：fork 这些库的源码并删除 CPE 声明再分发 → 不可能误操作。
 
-### 2.3 JSqlParser 5.3 — LGPL-2.1 OR Apache-2.0
+### 2.3 JSqlParser 5.4 — LGPL-2.1 OR Apache-2.0
 
 **实际 license 文本**：  
 `(GNU Library or Lesser General Public License (LGPL) V2.1) (The Apache Software License, Version 2.0) JSQLParser library`
@@ -82,7 +82,7 @@
 **风险评估**：
 - 双许可（OR），本项目选择 Apache-2.0 路径使用 RocksDB JNI → 不触发 GPL-2.0 义务
 - 当前仅作为未修改的第三方 jar 依赖使用，不 fork、不修改、不重新发布 RocksDB JNI 源码
-- CI 的 `check-dependency-licenses.sh` 只对白名单组件放过该双许可行，纯 GPL / AGPL 依赖仍会 fail
+- CI 的 `check-dependency-licenses.sh` 只对报告末尾精确匹配 `RocksDB JNI` 的行应用该选择；其他 GPL / AGPL 依赖仍会 fail
 
 **触发风险的姿势**：fork 或修改 RocksDB JNI 后按 GPL 路径分发，或引入仅 GPL 授权的 RocksDB 相关组件。**当前未发生。**
 
@@ -116,7 +116,7 @@
 
 ### 3.3 EPL-2.0 / LGPL secondary license 文本
 
-**涉及**：Logback Classic / Core 1.5.34
+**涉及**：Logback Classic / Core 1.5.38
 
 **EPL-2.0 §3.1 要求**：分发 EPL-licensed material 时必须把 EPL-2.0 全文随附。
 
@@ -195,7 +195,7 @@ jq -r '.components[] | "\(.licenses[0].license.id // .licenses[0].license.name /
 | 项目自身选 Apache-2.0 | 与 Spring 生态完全兼容；提供专利保护条款（比 MIT 强）；行业接受度最高 |
 | 不引入 AGPL 依赖 | 避免"网络服务必须开源"的传染 |
 | 不引入纯 GPL（无 CPE） | 避免静态链接传染；Java 生态主流库要么 Apache 要么有 CPE |
-| 双许可依赖（JSqlParser / Logback / RocksDB JNI）选宽松路径 | 在内部 license 记录里明确 declare "used under Apache-2.0 / EPL-2.0" |
+| 双许可依赖（JSqlParser / Logback / RocksDB JNI）选宽松路径 | 在内部 license 记录里明确 declare "used under Apache-2.0 / EPL-2.0"；CI 只对确实触发红线规则的 RocksDB JNI GPL 行做精确豁免 |
 | Logback **不 fork 修改** | 避免 EPL/LGPL 二选一的修改公开义务 |
 
 ---

@@ -9,6 +9,7 @@
 ## [Unreleased]
 
 - 收口后端待办：Console Telemetry 纳入用户限流并保留有界扩展类型兼容性，ShedLock provider 增加故障计数/健康指标和告警，并校正 SDK、租户 Worker、JVM/Helm 与 CD 文档中的陈旧待办状态。
+- 修复 Web Push 传递依赖 jose4j 0.7.0 的两个 HIGH CVE：统一管理并显式选择 0.9.6，删除已无当前漏洞命中的过期 Trivy CVE 忽略项。
 
 滚动合并中的变更入口；有发布影响的 PR 合入 `main` 时更新，冻结发版时整段下移到正式版本标题下。
 
@@ -28,7 +29,7 @@
 
 - Console、Trigger 与 Import 通知的固定响应改用具名类型，Pipeline 列表不再在应用层传播原始 Map；Job trigger 保留普通实例号/dry-run 对象两种 wire 形态，OpenAPI 与配对前端类型同步。Lineage 热表/归档证据使用显式构造映射，文件 metadata 解析为 JSON 对象，不透传 JDBC 驱动封装。
 - 已有生命周期、Outbox、文件格式、分发策略和通知枚举统一复用稳定 code，保留各运维操作原有状态集合与配置 DSL。新增低误报 Java 契约守卫，按固定边界、确认的有限域和已有协议键复用阻断新增退化；动态契约按方法签名登记例外。
-
+- E2E 测试类将重复的 Spring Boot、profile 与标签声明收敛为可配置组合注解；各类独立应用上下文、属性、业务库 schema 和特殊上下文生命周期配置保持不变。
 - 后端异常日志统一使用安全摘要或 SLF4J `Throwable` 堆栈：摘要会移除控制字符、遮蔽常见凭据并限制长度；PR、Full Gate 和本地提交门禁阻止生产日志重新直接打印异常 message。
 - 核心术语文档按 Java enum 和现行运行模型统一校准，并新增 PR / Full Gate 只读同步门禁，防止实例、工作流、节点、分片、步骤、任务等状态及调度类型再次与代码事实源漂移。
 - Docker 镜像构建 CI 纳入 `ops-toolbox` 运维工具箱镜像，实际构建校验 psql、Kafka CLI、MinIO mc、redis-cli 与非 root 运行时约束；该镜像仍不进入业务服务基础镜像。

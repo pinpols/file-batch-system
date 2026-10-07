@@ -6,11 +6,9 @@ import io.github.pinpols.batch.e2e.apps.E2eOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.config.OutboxProperties;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 
 /**
  * 守护 {@code batch-e2e-tests/src/test/resources/application-test.yml} 中的 Outbox 轮询边界。
@@ -20,11 +18,9 @@ import org.springframework.test.context.ActiveProfiles;
  * 下限自调度；库未就绪时会高频刷包含 {@code ERROR: relation "batch.outbox_event" does not exist} 的 WARN（PostgreSQL
  * 原文嵌在消息里）。
  */
-@SpringBootTest(
+@E2eSpringBootTest(
     classes = E2eOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@ActiveProfiles({"test", "e2e"})
-@Tag("e2e")
 @DisplayName("测试配置的 Outbox 轮询边界守护:轮询间隔与最小轮询间隔必须对齐,避免数据库未就绪时以默认下限高频自调度刷告警")
 class OutboxPollMarginsYamlE2eIT extends AbstractIntegrationTest {
 

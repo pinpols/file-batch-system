@@ -9,21 +9,17 @@ import io.github.pinpols.batch.orchestrator.application.service.workflow.Workflo
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 
 /** ADR-028 S5：ta/tb/tc 多租户 seed 至少覆盖一个 WAIT Sensor workflow。 */
-@SpringBootTest(
+@E2eSpringBootTest(
     classes = E2eOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@ActiveProfiles({"test", "e2e"})
 @Sql(scripts = {E2eTestSql.MULTI_TENANT_SEED})
-@Tag("e2e")
 @DisplayName("多租户种子夹具端到端:ta 租户的种子必须包含可用的等待文件到达工作流,并通过工作流图校验")
 class SensorWaitFixtureE2eIT extends AbstractIntegrationTest {
 

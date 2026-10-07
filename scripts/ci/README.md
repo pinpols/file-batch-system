@@ -30,7 +30,7 @@
 | API 与兼容 | `check-console-openapi-paths.py`、`check-openapi-breaking.sh` |
 | Java 质量 | `check-empty-checks.py`、`check-java-lombok-injection.py`、`check-java-logging-governance.py`、`check-java-readability.py`、`check-java-text-block-style.py`、`check-java-suppression-registry.py`、`check-mapof-null-values.py`、`check-pipeline-summary-keys.py`（stage 摘要键 / 续跑回灌键 / 前端计数键契约）、`check-required-java-docs.sh` |
 | 测试完整性 | `check-e2e-run-completeness.sh`、`check-e2e-shard-coverage.sh`、`check-integration-test-coverage.py`、`check-module-test-coverage.sh`、`check-no-silent-disabled-tests.sh`、`check-test-conventions.py`（中文 `@DisplayName` 类级/方法级 + 测试方法命名，增量拦截） |
-| 安全与许可 | `check-dependency-licenses.sh`、`check-license-compliance.sh`、`check-sbom-sync.sh`、`check-trivy-ignore-expiry.py` |
+| 安全与许可 | `check-dependency-licenses.sh`、`license-allowlist.sh`、`check-license-compliance.sh`、`check-sbom-sync.sh`、`check-trivy-ignore-expiry.py` |
 | 观测 | `check-helm-prometheusrule-sync.sh`、`check-log-lifecycle.sh`、`check-observability-contract.py` |
 
 ## `check-version-alignment.sh`
@@ -193,6 +193,7 @@ python3 scripts/ci/check-readiness-doc-sync.py --base origin/main
 
 校验 `.trivyignore` 中每组 CVE 白名单必须带 `owner`、`reason`、`expires: YYYY-MM-DD`，
 且 `expires` 未过期。安全漏洞豁免只允许作为有期限的临时措施，不能长期静默留在仓库。
+当前 `.trivyignore` 不再包含 CVE 豁免；扫描命中应优先升级依赖，只有经验证仍需临时接受的风险才可登记。
 配置误报使用 `.trivyignore.yaml` 按规则和文件路径精确豁免，并填写原因；
 Trivy 的漏洞扫描和配置扫描分别加载对应白名单，避免配置规则被全仓静默忽略。
 
@@ -202,6 +203,8 @@ python3 scripts/ci/check-trivy-ignore-expiry.py --today 2026-09-13
 ```
 
 已接入 `pr-gate.yml`、`full-ci-gate.yml` 和本地 `scripts/local/pre-push-sdk-checks.sh`。
+
+`check-dependency-licenses.sh` 会先运行 `tests/test-dependency-license-allowlist.sh`，验证双许可豁免仅匹配报告中精确的 `RocksDB JNI` 组件行。`license-review.yml` 的路径触发器同时覆盖检查脚本、匹配 helper 与该测试，避免只改豁免逻辑时跳过门禁。
 
 ## `run-full-regression.sh`
 

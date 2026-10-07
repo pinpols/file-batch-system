@@ -29,7 +29,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,10 +36,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.test.annotation.DirtiesContext;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 
-@SpringBootTest(
+@E2eSpringBootTest(
     classes = E2eImportApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
@@ -49,13 +47,11 @@ import org.springframework.test.context.jdbc.Sql;
       "batch.worker.drain.enabled=true",
       "batch.worker.drain.check-interval-millis=600000"
     })
-@ActiveProfiles({"test", "e2e"})
 @E2eBusinessSchema
 @Sql(
     scripts = {
       E2eTestSql.IMPORT_TEMPLATE_SEED,
     })
-@Tag("e2e")
 // CI 上字母序末位测试,前 22 个 E2E @SpringBootTest context cache 持续持有 Kafka consumer
 // 连接,叠加 RANDOM_PORT embedded server 启动到本测试时资源压力撞 GHA runner 上限。
 // 显式 AFTER_CLASS DirtiesContext 让 Spring 在本类结束时释放 context,缓解资源累积。

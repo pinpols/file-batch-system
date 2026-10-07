@@ -19,10 +19,7 @@
 #   - 任何 Commons-Clause / SSPL(Server-Side Public License)
 #   - Business Source License / Elastic License / CC-BY-NC 等商用限制许可
 #
-# 允许的双许可路径(grep 出现时不报警,因为我们已在 NOTICE / license-risk 中声明走 OR 的另一边):
-#   - JSqlParser: LGPL-2.1 OR Apache-2.0 → 走 Apache-2.0
-#   - Logback: EPL-2.0 OR LGPL-2.1 → 走 EPL-2.0(并保持库未修改)
-#   - RocksDB JNI: Apache-2.0 OR GPL-2.0 → 走 Apache-2.0(并保持库未修改)
+# 仅允许精确组件 RocksDB JNI 的 GPL-2.0 行；其 SBOM 同时声明 Apache-2.0，项目选择 Apache 路径。
 
 set -euo pipefail
 
@@ -33,6 +30,8 @@ fi
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
+source "${ROOT_DIR}/scripts/ci/license-allowlist.sh"
+bash "${ROOT_DIR}/scripts/ci/tests/test-dependency-license-allowlist.sh"
 
 REPORT_DIR="${ROOT_DIR}/target/license-aggregate-report"
 REPORT_FILE="${REPORT_DIR}/THIRD-PARTY.txt"
@@ -49,9 +48,6 @@ if [[ ! -f "$REPORT_FILE" ]]; then
   echo "[license-gate] FAIL: 未生成 $REPORT_FILE"
   exit 1
 fi
-
-# 已知双许可白名单 — 这些组件即使报告里出现 LGPL/EPL 关键字也不算红线(见脚本头部说明)
-ALLOW_DUAL_LICENSE='(JSQLParser|Logback Classic Module|Logback Core Module|RocksDB JNI|jakarta\.|Angus Mail|JUnit|Eclipse Public License - v 2\.0|EPL 2\.0)'
 
 # 红线 license 模式
 RED_LINE_PATTERNS=(
@@ -73,8 +69,8 @@ RED_LINE_PATTERNS=(
 VIOLATIONS=()
 for pat in "${RED_LINE_PATTERNS[@]}"; do
   while IFS= read -r line; do
-    # 跳过双许可白名单
-    if echo "$line" | grep -qE "$ALLOW_DUAL_LICENSE"; then
+    # 只豁免 SBOM 已确认的 RocksDB JNI 双许可行，避免包名子串扩大豁免范围。
+    if license_line_has_approved_alternative "$line"; then
       continue
     fi
     # 跳过 "with Classpath Exception" / "with CPE" 的 GPL(允许)
@@ -95,7 +91,7 @@ if [[ ${#VIOLATIONS[@]} -gt 0 ]]; then
   echo
   echo "[license-gate] 处理建议:"
   echo "  1. 找到引入此依赖的 pom 改换实现(优先走 Apache-2.0 / MIT / BSD 替代)"
-  echo "  2. 如果是双许可且选另一路径合规,在 docs/compliance/license-risk-assessment.md §2 添加判定记录,然后把组件名加到本脚本的 ALLOW_DUAL_LICENSE 白名单"
+  echo "  2. 如果是双许可且选另一路径合规,先在 docs/compliance/license-risk-assessment.md 记录组件与许可证证据，再按精确组件规则评审 allowlist"
   echo "  3. 详见 docs/compliance/license-risk-assessment.md §4 红线表"
   exit 1
 fi

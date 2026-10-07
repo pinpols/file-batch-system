@@ -20,13 +20,11 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
@@ -46,17 +44,15 @@ import org.springframework.test.context.jdbc.Sql;
  * AbstractIntegrationTest#s3Bucket()}。 若未来导出存储路径或桶策略变更，测试允许退化为“平台表记录了
  * storage_path”这一弱内容信号，避免把环境差异当成业务失败。
  */
-@SpringBootTest(
+@E2eSpringBootTest(
     classes = E2eExportApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = "batch.worker.export.worker-type=EXPORT")
-@ActiveProfiles({"test", "e2e"})
 @E2eBusinessSchema
 @Sql(
     scripts = {
       E2eTestSql.EXPORT_TEMPLATE_SEED,
     })
-@Tag("e2e")
 @DisplayName("导出成功链路内容级验收端到端:在任务终态成功之上校验导出产物非空且含关键业务字段,并确认结算批次主数据与汇总金额仍可查询")
 class ExportContentVerificationE2eIT extends AbstractIntegrationTest {
 

@@ -28,7 +28,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 
 /**
  * 端到端测试:专用原子任务 worker 四类原子任务主链路成功闭环(ADR-029)。
@@ -47,12 +46,10 @@ import org.springframework.test.context.ActiveProfiles;
  * <p>四个执行器(sql/shell/stored-proc/http)各跑一条真实全链,验证派发拓扑(原子任务专属 topic)+ 子执行器路由(payload.taskType)+ 参数透传
  * + 终态闭环。
  */
-@SpringBootTest(
+@E2eSpringBootTest(
     classes = E2eAtomicApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles({"test", "e2e"})
 @E2eBusinessSchema
-@Tag("e2e")
 @Tag("critical")
 @DisplayName("原子任务主链路端到端: 触发后建任务并写入事件, 经 Kafka 专属主题派发, 子执行器按任务协议路由执行并回执, 任务终态落库为成功")
 class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {

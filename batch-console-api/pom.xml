@@ -53,12 +53,15 @@
             <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
         <!-- 2026-05-16:Web Push 后端实装合并(原 batch-console/backend-patch/) -->
-        <!-- 锁 5.1.1:5.1.2 把 httpasyncclient / jose4j / bcprov 全降为 runtime scope,
-             ConsolePushSender 编译期用 HttpResponse + JoseException,升 patch 反而要补一堆显式依赖 -->
+        <!-- 锁定 web-push 5.1.1 以保持传递 API 的编译期可用；jose4j 由下方显式依赖升级到修复版。 -->
         <dependency>
             <groupId>nl.martijndwars</groupId>
             <artifactId>web-push</artifactId>
             <version>5.1.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.bitbucket.b_c</groupId>
+            <artifactId>jose4j</artifactId>
         </dependency>
         <!-- web-push 5.x 依赖 BouncyCastle 做 ECDH-P256 + ECIES 加密 -->
         <dependency>

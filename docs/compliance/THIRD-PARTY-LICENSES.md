@@ -73,7 +73,7 @@ These are the main runtime-facing third-party components currently used by the p
 | JSch (mwiede fork) | 0.2.26 | ISC / BSD-3-Clause | dispatch | SFTP support |
 | Angus Mail | managed by Spring Boot 4.1.1 | EPL-2.0 / GPL-2.0 with Classpath Exception | dispatch | SMTP 邮件分发 |
 | Jakarta EE APIs | managed by Spring Boot 4.1.1 | EPL-2.0 | all | API surface |
-| Logback Classic | 1.5.34 | EPL-2.0 + LGPL-2.1 | all (transitive) | Logging backend |
+| Logback Classic | 1.5.38 | EPL-2.0 + LGPL-2.1 | all (transitive) | Logging backend |
 | Netty DNS Resolver macOS | managed by Spring Boot 4.1.1 | Apache-2.0 | orchestrator, console-api | macOS profile 条件激活 |
 | Project Lombok | 1.18.48 | MIT | all (provided) | Annotation processor |
 | JSqlParser | 5.4 | Apache-2.0(LGPL-2.1 OR Apache-2.0,走 Apache) | export | SQL parsing / schema whitelist |

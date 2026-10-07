@@ -32,7 +32,6 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.test.context.ActiveProfiles;
 
 /**
  * ADR-010 Stage 5: trigger → outbox → Kafka → orchestrator → job_instance 全链路 E2E。
@@ -49,12 +48,10 @@ import org.springframework.test.context.ActiveProfiles;
  *
  * <p>重复消息用例仍直接投 Kafka，用来独立验证 orchestrator 的 at-least-once 消费幂等。
  */
-@SpringBootTest(
+@E2eSpringBootTest(
     classes = E2eOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE,
     properties = {"batch.outbox.poll-interval-millis=500"})
-@ActiveProfiles({"test", "e2e"})
-@Tag("e2e")
 @Tag("critical")
 // E2eOrchestratorApplication ComponentScan 不覆盖 io.github.pinpols.batch.common.i18n 包,
 // 显式 @Import BizMessageResolver 让 KafkaOutboxPublisher 等 i18n 依赖可以解出来

@@ -20,13 +20,11 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
@@ -50,17 +48,15 @@ import org.springframework.test.context.jdbc.Sql;
  *   <li>重试/死信的“最终裁决”在 orchestrator 侧完成：本用例通过 DB 断言验证其结果。
  * </ul>
  */
-@SpringBootTest(
+@E2eSpringBootTest(
     classes = E2eImportApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = "batch.worker.import.worker-type=IMPORT")
-@ActiveProfiles({"test", "e2e"})
 @E2eBusinessSchema
 @Sql(
     scripts = {
       E2eTestSql.IMPORT_TEMPLATE_SEED,
     })
-@Tag("e2e")
 // 修固 method 顺序:JUnit 5 默认 hash 顺序导致 scenarioC(3 min 重试风暴)先跑,
 // 长时间 churn 共享 worker 后 scenarioA/B 抢不到 Kafka 消息超时。alphabetical
 // 把 C 放到最后,A/B 在 clean worker state 下完成,C 自己跑完不影响他人。

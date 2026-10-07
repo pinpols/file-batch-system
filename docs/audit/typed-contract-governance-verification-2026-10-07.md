@@ -1,12 +1,12 @@
 # 固定契约与协议值治理本地验收记录
 
 > 日期：2026-10-07
-> 状态：本地实现与定向验证；未提交、未推送，CI / Full Gate / sim 未运行。
+> 状态：本地实现与定向验证已完成，按主题提交并准备前后端 PR；CI / Full Gate / sim 尚无本轮结果。
 > 计划：[固定契约、有限域与常量治理计划](../plans/typed-contract-enum-constant-governance-plan-2026-10-07.md)。
 
 ## 范围与基线
 
-后端、配对前端均在独立 `codex/typed-contract-governance` 工作树实现，未改动共享主检出目录中的既有内容。后端开发基线为 `88a96bd0a`，前端为 `bdeb7ee`；后续主线 `8cbdb811b` 的 Worker count 弃用 OpenAPI 注释已保留，避免重新生成类型时退回旧说明。
+后端、配对前端均在独立 `codex/typed-contract-governance` 工作树实现，未改动共享主检出目录中的既有内容。后端开发基线为 `88a96bd0a`，提交前已同步主线 `332956cb3`，前端为 `bdeb7ee`；Worker count 弃用 OpenAPI 注释及后端待办收口改动均保留。按“前后端所有内容提交 PR”的授权，本分支另外收录共享主检出目录的依赖安全、许可证与 E2E 注解治理增量，前端同时收录 CodeQL HTML 原型精确排除改动。
 
 本轮只治理确认清单及高置信回退，不改业务状态机、配额、事务、锁、重试、发布或租户权限。
 
@@ -52,6 +52,9 @@ Sonar S1075 对固定 Trigger API 路由的误报只允许该代理文件一次 
 | 生成快照 | 独立 index 的 Lean LOC 与 Java 可读性清单生成及一致性检查 | 两者通过；包含新文件，不遗漏未跟踪的 DTO 和测试 |
 | Sonar 首轮 | `reports/sonar/2026-10-07_14-52-03/` 增量报告 | 2 个 MINOR、0 hotspot；已修月份写法并按精确例外处理契约路由 |
 | Sonar 末轮 | 独立项目 `file-batch-system-contract-governance-20261007`，`reports/sonar/2026-10-07_15-21-00/`，服务端 task `37daa7f7-24dc-4c9d-8ffa-d53556a79155` 完成 | 74 个 Java 变更文件的新增/修改行：0 OPEN issue、0 待审 hotspot；静态模式未采集覆盖率 |
+| 交付合并复核 | 合并 suppression 精确例外与数量棘轮后，自测与全量扫描；许可证精确豁免测试；E2E shard 清单 | 7 个 suppression 自测通过，全量 243 条已登记；许可证测试通过，28 个 E2eIT 清单无漂移 |
+| 新 E2E 注解测试 | `./mvnw -pl batch-e2e-tests -am -Dtest=E2eTestAnnotationTest -Dsurefire.failIfNoSpecifiedTests=false test -B` | 最新主线与依赖升级后的 16 个 reactor 模块编译通过，1 个注解契约测试通过；不是 28 个真实 E2E 的执行证据 |
+| 前端提交预检复核 | `npm run preflight:changed`，显式检查本次全部变更路径 | 编码、注释、lint、类型、i18n、契约漂移、架构、维护性和 changelog 通过 |
 
 测试运行日志和 Sonar 原始 CSV 在本机临时目录/忽略的 reports 中，不将日志、凭据或构建产物入库。
 
@@ -66,4 +69,4 @@ Sonar S1075 对固定 Trigger API 路由的误报只允许该代理文件一次 
 
 重点风险是序列化和 MyBatis 投影而不是调度状态机，已增加真实 Jackson/PG 保护。metadata 的驱动封装修正单独登记为 wire 规范化，不掩称全量 wire 完全相同。普通触发字符串与 dry-run 对象都保留，breaking gate 只对既有端点的该历史分支做精确澄清，不全局禁用类型/union 检查。
 
-需要提交授权后按固定契约、enum/常量、守卫/文档分批提交；配对前端单独 PR。实际 CI 通过前不把计划标为 Implemented，不自动合并。
+按主题分批提交，后端集中一个 PR，配对前端单独 PR。两批 suppression 守卫合并时保留精确路径例外与存量数量棘轮，并增加增量文件参数的回归测试；新增 E2E 组合注解测试补齐中文 DisplayName 和方法命名。实际 CI 通过前不把计划标为 Implemented，不自动合并。

@@ -19,14 +19,12 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.jdbc.Sql;
@@ -47,17 +45,15 @@ import org.springframework.test.context.jdbc.Sql;
  *   <li>最终存在与该 job_instance 对应的 {@code batch.dead_letter_task}（source_type=JOB_PARTITION）。
  * </ul>
  */
-@SpringBootTest(
+@E2eSpringBootTest(
     classes = E2eExportApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = "batch.worker.export.worker-type=EXPORT")
-@ActiveProfiles({"test", "e2e"})
 @E2eBusinessSchema
 @Sql(
     scripts = {
       E2eTestSql.EXPORT_TEMPLATE_SEED,
     })
-@Tag("e2e")
 @EnabledIf("s3BackendActive")
 @DisplayName("导出链路对象存储故障端到端容错:对象存储不可达时按固定重试预算反复重排队,预算耗尽后分片进入死信终态")
 class ExportStorageFailureE2eIT extends AbstractIntegrationTest {

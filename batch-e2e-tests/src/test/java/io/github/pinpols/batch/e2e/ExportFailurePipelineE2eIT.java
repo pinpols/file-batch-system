@@ -17,12 +17,10 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 
 /**
  * 端到端测试：Export 模板不存在导致失败。
@@ -36,13 +34,11 @@ import org.springframework.test.context.ActiveProfiles;
  *   <li>job_instance.instance_status 最终为 FAILED 或 PARTIAL_FAILED（按分片汇总口径）
  * </ul>
  */
-@SpringBootTest(
+@E2eSpringBootTest(
     classes = E2eExportApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = "batch.worker.export.worker-type=EXPORT")
-@ActiveProfiles({"test", "e2e"})
 @E2eBusinessSchema
-@Tag("e2e")
 @DisplayName("导出失败链路端到端归因:导出模板引用不存在时快速失败并正确落库,验证任务终态为失败,作业实例按分片汇总口径收敛到失败态")
 class ExportFailurePipelineE2eIT extends AbstractIntegrationTest {
 
