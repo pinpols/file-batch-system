@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.console.domain.job.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleSchedulerCommandResponse;
 import io.github.pinpols.batch.console.application.ops.ConsoleTriggerProxyService;
-import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleSchedulerCommandResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;

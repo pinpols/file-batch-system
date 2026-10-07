@@ -58,6 +58,16 @@ Sonar S1075 对固定 Trigger API 路由的误报只允许该代理文件一次 
 
 测试运行日志和 Sonar 原始 CSV 在本机临时目录/忽略的 reports 中，不将日志、凭据或构建产物入库。
 
+## PR CI 发现的边界回归
+
+后端 PR #1160 的 `pr-gate` run `37592317281`、`unit-it-b2` job `112697081350` 在两个 Console 架构测试中失败：`BoundedContextDependencyArchTest` 与 `BoundedContextMigrationProgressTest` 均发现 23 条 `ops -> job` 直接依赖。此前 345 个定向用例未包含这两个全包架构扫描，不能作为跨域边界通过的证据。
+
+本地复现使用 `-pl batch-console-api -am` 和 `boundedContext.report` 导出逐类清单，确认全部违规来自 `DefaultConsoleTriggerProxyService` 及其三个响应类型引用。`ConsoleSchedulerCommandResponse`、`ConsoleTriggerActionResponse`、`ConsoleTriggerStatusResponse` 同时由 Job Controller 与 Ops 代理消费，应归属于既有顶层 `application.contract.response.ops`，而非 Job 域的内部契约。
+
+修复只迁移三个 DTO 及所有生产、测试引用，不新增旧包兼容别名，不调整架构测试、不增加豁免、不抬高基线；JSON 字段、时间类型、租户过滤、权限、读降级与写错误传播保持不变。
+
+修复复验：`./mvnw clean test -pl batch-console-api -am -DskipITs=true -DboundedContext.report=/tmp/bfs-pr1160-boundary-after.tsv -B` 已完成并返回 0，日志 `/tmp/bfs-pr1160-console-after.log`。Console 的 1543 个用例、上游模块的 1091 个用例均无 failure/error，合计 7 个既有条件跳过，不计为通过用例；两个原失败的架构测试均通过，逐类 TSV 无违规记录。clean 构建排除旧包残留 `.class`；该命令不是全量 IT / E2E 验收。退出阶段出现 Surefire 等待 30 秒后回收 fork 的日志，未将其作为应用正常关闭的证据。固定契约全量守卫、模块依赖与 400 条 OpenAPI 路由一致性检查同时通过；新提交的远端 CI 待验。
+
 ## 未声称完成的验证
 
 - GitHub PR 检查已触发，尚未获得全部通过结果；本轮没有完整 sim、全量 Maven 测试、真实浏览器前后端操作或 staging 证据，也不以进行中的检查声称 Full Gate 通过。

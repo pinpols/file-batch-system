@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.job.application.contract.response;
+package io.github.pinpols.batch.console.application.contract.response.ops;
 
 import java.time.Instant;
 

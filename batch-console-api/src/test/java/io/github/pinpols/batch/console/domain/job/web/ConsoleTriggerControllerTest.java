@@ -10,9 +10,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleTriggerActionResponse;
+import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleTriggerStatusResponse;
 import io.github.pinpols.batch.console.application.ops.ConsoleTriggerProxyService;
-import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleTriggerActionResponse;
-import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleTriggerStatusResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;

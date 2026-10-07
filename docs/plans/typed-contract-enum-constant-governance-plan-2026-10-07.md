@@ -65,6 +65,8 @@
 | `PipelineDefinitionService` | Application Service 返回 `PageResponse<Map<String, Object>>`，Controller 再转换 | Service 直接返回固定列表项 DTO，移除固定 Map 在应用层传播 |
 | Console Trigger proxy/list | `List<Object>` + `instanceof Map` 做租户过滤 | 定义 Console 内部传输 DTO，使用类型字段完成过滤和响应组装 |
 
+跨域共享 DTO 必须放入既有顶层 `application.contract`，不能因 Controller 位于 Job 域就让 Ops 代理直接依赖 Job 域内部响应。PR #1160 的 CI 已发现并本地复现此类 23 条越界依赖，修复将三个 Trigger 响应归入 `application.contract.response.ops`；验收增加 clean 构建下的两个 Bounded Context 守护，严格零依赖断言与基线均不变。
+
 公开契约必须保持路径、鉴权、业务含义和错误码不变。若 JSON wire 必须调整，必须作为显式契约变化记录，并在同一批完成配对前端适配。
 
 ### 3.2 P1：内部固定契约

@@ -1,9 +1,9 @@
 package io.github.pinpols.batch.console.domain.job.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleTriggerActionResponse;
+import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleTriggerStatusResponse;
 import io.github.pinpols.batch.console.application.ops.ConsoleTriggerProxyService;
-import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleTriggerActionResponse;
-import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleTriggerStatusResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;

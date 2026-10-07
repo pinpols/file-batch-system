@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.console.application.ops;
 
-import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleSchedulerCommandResponse;
-import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleTriggerActionResponse;
-import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleTriggerStatusResponse;
+import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleSchedulerCommandResponse;
+import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleTriggerActionResponse;
+import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleTriggerStatusResponse;
 import java.util.List;
 
 /** 触发器代理服务：转发控制台对调度器与触发器管理接口的操作。 */

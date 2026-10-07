@@ -8,7 +8,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.resilience.DownstreamFallback;
-import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleTriggerStatusResponse;
+import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleTriggerStatusResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.shared.client.TriggerInternalRestClient;
 import java.util.List;

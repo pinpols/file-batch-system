@@ -57,6 +57,7 @@
 
 ### Fixed
 
+- 修复 Console Trigger 类型化响应的跨域归属错误：Job Controller 与 Ops 代理共用的传输 DTO 移入顶层应用契约，恢复跨上下文直接依赖为零，JSON 字段与运维行为保持不变。
 - 修复内置 Worker 忽略心跳排空指令的问题：收到 `DRAINING` 后暂停单条与批量 Kafka listener，未 claim 消息回退重投；平台恢复 `NORMAL` 且本地有执行许可后再恢复消费。
 - 修复对象存储 raw backend 导致加密装饰 Bean 永远退避的问题；raw 实现改由内部持有者隔离，业务注入只暴露外层装饰器，并保留按类型提供完整 `BatchObjectStore` 的覆盖能力。修复 Console 真实认证主体被按整个对象字符串构造限流键、角色变化可绕开用户级限流的问题。
 - 取证 ZIP 与 Atomic shell 工作目录接入共享私有权限边界,不再依赖默认 umask;验证码日志覆盖 Unicode 换行并保留 null 归空语义,同步修正 CodeQL 净化模型与取证默认开关说明。
