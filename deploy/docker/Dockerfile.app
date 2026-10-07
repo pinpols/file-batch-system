@@ -17,7 +17,7 @@ ARG MAVEN_BUILD_FLAGS="-B -ntp -Dmaven.test.skip=true -DskipITs=true -Dspotless.
 
 # ───── Stage 1: Maven 依赖基层─────
 # Keep the tag for readability, pin the manifest digest for reproducible builds.
-FROM maven:3.9.16-eclipse-temurin-21@sha256:a972570be789ee5c9fa23446a8914ac7327560b5c022f662cfa9452aef829f18 AS maven-base
+FROM maven:3.9-eclipse-temurin-26@sha256:b2c1ad85954592f9928e84327c65201f308ad9b5d8ed7d5b823717c97bf23fbb AS maven-base
 
 WORKDIR /workspace
 
