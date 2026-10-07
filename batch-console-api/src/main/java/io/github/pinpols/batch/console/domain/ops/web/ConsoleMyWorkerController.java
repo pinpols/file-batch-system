@@ -39,7 +39,12 @@ public class ConsoleMyWorkerController {
         .toList());
   }
 
-  /** GET /api/console/my-workers/count?tenantId=xxx — 本租户自托管 worker 计数(仪表盘卡片用)。 */
+  /**
+   * GET /api/console/my-workers/count?tenantId=xxx — 保留给旧客户端的自托管 Worker 计数。
+   *
+   * @deprecated 前端已改用列表结果；待版本化弃用周期完成后移除。
+   */
+  @Deprecated(forRemoval = true)
   @GetMapping("/count")
   public CommonResponse<Long> count(
       @RequestParam(value = "tenantId", required = false) String tenantId) {
