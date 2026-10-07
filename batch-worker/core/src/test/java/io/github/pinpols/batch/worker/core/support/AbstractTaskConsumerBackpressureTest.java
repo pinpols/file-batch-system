@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.listener.MessageListenerContainer;
+import org.springframework.mock.env.MockEnvironment;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @DisplayName("任务消费者背压: 任务许可耗尽时的暂停与恢复")
@@ -84,22 +85,20 @@ class AbstractTaskConsumerBackpressureTest {
         new AbstractTaskConsumer(registry, meterRegistryProvider, concurrencyProperties(1)) {
           @Override
           protected AbstractWorkerLoop workerLoop() {
-            return new AbstractWorkerLoop(lifecycleManager, heartbeatService, dateTimeSupport, 1) {
-              @Override
-              protected WorkerConfiguration workerConfiguration() {
-                return AbstractTaskConsumerBackpressureTest.this.workerConfiguration();
-              }
+            AbstractWorkerLoop loop =
+                new AbstractWorkerLoop(lifecycleManager, heartbeatService, dateTimeSupport, 1) {
+                  @Override
+                  protected WorkerConfiguration workerConfiguration() {
+                    return AbstractTaskConsumerBackpressureTest.this.workerConfiguration();
+                  }
 
-              @Override
-              protected String workerGroup() {
-                return "test";
-              }
-
-              @Override
-              protected int workerPort() {
-                return 0;
-              }
-            };
+                  @Override
+                  protected String workerGroup() {
+                    return "test";
+                  }
+                };
+            loop.setEnvironment(new MockEnvironment().withProperty("local.server.port", "19083"));
+            return loop;
           }
 
           @Override
@@ -270,23 +269,21 @@ class AbstractTaskConsumerBackpressureTest {
         registry, meterRegistryProvider, concurrencyProperties(maxConcurrentTasks)) {
       @Override
       protected AbstractWorkerLoop workerLoop() {
-        return new AbstractWorkerLoop(
-            lifecycleManager, heartbeatService, dateTimeSupport, maxConcurrentTasks) {
-          @Override
-          protected WorkerConfiguration workerConfiguration() {
-            return AbstractTaskConsumerBackpressureTest.this.workerConfiguration();
-          }
+        AbstractWorkerLoop loop =
+            new AbstractWorkerLoop(
+                lifecycleManager, heartbeatService, dateTimeSupport, maxConcurrentTasks) {
+              @Override
+              protected WorkerConfiguration workerConfiguration() {
+                return AbstractTaskConsumerBackpressureTest.this.workerConfiguration();
+              }
 
-          @Override
-          protected String workerGroup() {
-            return "test";
-          }
-
-          @Override
-          protected int workerPort() {
-            return 0;
-          }
-        };
+              @Override
+              protected String workerGroup() {
+                return "test";
+              }
+            };
+        loop.setEnvironment(new MockEnvironment().withProperty("local.server.port", "19083"));
+        return loop;
       }
 
       @Override

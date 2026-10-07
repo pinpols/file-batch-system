@@ -46,11 +46,6 @@ public class ProcessWorkerLoop extends AbstractWorkerLoop {
     return "process";
   }
 
-  @Override
-  protected int workerPort() {
-    return 8086;
-  }
-
   @Scheduled(fixedDelayString = "${batch.worker.process.heartbeat-interval-millis:15000}")
   public void heartbeat() {
     doHeartbeat();

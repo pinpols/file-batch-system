@@ -17,6 +17,7 @@ import java.net.UnknownHostException;
 import java.nio.channels.ClosedChannelException;
 import java.time.OffsetDateTime;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -34,8 +35,7 @@ import org.springframework.core.env.Environment;
  * <p>使用方式：
  *
  * <ul>
- *   <li>子类只提供差异化配置：{@link #workerConfiguration()} / {@link #workerGroup()} / {@link #workerPort()}
- *       （其中 {@code workerPort()} 只作兜底，生产端口由运行时实际绑定值决定，见 {@link #resolveWorkerPort()}）
+ *   <li>子类只提供差异化配置：{@link #workerConfiguration()} / {@link #workerGroup()}
  *   <li>子类用一个很薄的 {@code @Scheduled} 方法定期调用 {@link #doHeartbeat()}（避免在抽象类里硬编码配置 key）
  * </ul>
  *
@@ -44,7 +44,7 @@ import org.springframework.core.env.Environment;
  * <ul>
  *   <li>应用启动后自动注册（{@link #onReady()}）
  *   <li>周期心跳（{@link #doHeartbeat()}）
- *   <li>优雅下线（{@link #onShutdown()}）
+ *   <li>优雅下线（{@link #shutdown()}）
  * </ul>
  */
 @Slf4j
@@ -61,11 +61,8 @@ public abstract class AbstractWorkerLoop implements EnvironmentAware {
   private final AtomicReference<WorkerRegistration> registration = new AtomicReference<>();
 
   /**
-   * Spring 运行时 Environment：经 {@link EnvironmentAware} 框架回调注入（非 {@code @Autowired} field、非构造器
-   * 参数），与 {@code BatchSecurityProperties} / {@code ConsoleSecurityProperties} / 同包的 {@code
-   * AbstractTaskConsumer}（{@code ApplicationContextAware}）同一先例。这样基类能读到 WebServer 实际绑定的端口，
-   * 而 5 个子类的构造器与既有单测都不必改；单元测试直接 {@code new} 时该字段为 null，自动回落到 {@link
-   * #workerPort()}。
+   * Spring 回调注入运行时环境。端口只采用主 WebServer 绑定后写入的 local.server.port，
+   * 不采用 server.port 配置值或独立 management 服务的 local.management.port。
    */
   private Environment environment;
 
@@ -119,46 +116,27 @@ public abstract class AbstractWorkerLoop implements EnvironmentAware {
   /** worker 逻辑分组，如 {@code import}/{@code export}/{@code dispatch}。 */
   protected abstract String workerGroup();
 
-  /**
-   * worker 端口**兜底值**：仅单元测试直接 {@code new}、或非 Web 上下文才会走到。
-   *
-   * <p>生产路径优先上报 Spring 实际绑定的端口（见 {@link #resolveWorkerPort()}）。保留本方法的代价是各子类仍留着
-   * 一份历史硬编码端口，那是「不破坏既有子类与测试」换来的——生产路径下不会被使用。
-   */
-  protected abstract int workerPort();
-
   @Override
   public void setEnvironment(Environment environment) {
     this.environment = environment;
   }
 
   /**
-   * 注册上报的 worker 端口：优先 Spring 运行时**实际绑定**的端口，其次配置值，最后才回落到 {@link #workerPort()}。
+   * 注册上报端口必须来自 Spring 主 WebServer 的实际绑定结果。
    *
    * <p>{@code local.server.port} 由 Spring Boot 在 WebServer 真正绑定后写入 Environment，因此 {@code
-   * server.port=0}（随机端口）也能拿到正确值；{@link #onReady()} 由 {@code ApplicationReadyEvent} 触发，此时该键
-   * 必定已可用。{@code server.port} 只作非 Web 上下文兜底。
-   *
-   * <p>不在子类里硬编码端口：端口的所有者是各 worker 的 {@code application.yml}
-   * （{@code ${BATCH_WORKER_*_PORT:1808x}}），Java 侧再抄一份就是第二份事实来源——历史遗留的 {@code 8083} 与真实
-   * {@code 18083} 不一致正是这么来的。
+   * server.port=0}（随机端口）也能上报正确结果。心跳或消费者提前触发注册时，若服务尚未绑定则拒绝注册，
+   * 后续沿既有重试路径再次尝试，避免把配置端口当作监听成功的证据。
    */
   private int resolveWorkerPort() {
-    Integer bound = positivePort("local.server.port");
-    if (EmptyChecks.isNotNull(bound)) {
-      return bound;
+    int port = EmptyChecks.isNull(environment)
+        ? -1
+        : Objects.requireNonNullElse(
+            environment.getProperty("local.server.port", Integer.class), -1);
+    if (port < 1 || port > 65535) {
+      throw new IllegalStateException("worker main HTTP server has no valid bound port");
     }
-    Integer configured = positivePort("server.port");
-    return EmptyChecks.isNotNull(configured) ? configured : workerPort();
-  }
-
-  /** 读取正整数端口；缺失 / 非正数（未绑定阶段会出现 {@code 0}）一律视为不可用。 */
-  private Integer positivePort(String key) {
-    if (EmptyChecks.isNull(environment)) {
-      return null;
-    }
-    Integer value = environment.getProperty(key, Integer.class);
-    return EmptyChecks.isNotNull(value) && value > 0 ? value : null;
+    return port;
   }
 
   @EventListener(ApplicationReadyEvent.class)

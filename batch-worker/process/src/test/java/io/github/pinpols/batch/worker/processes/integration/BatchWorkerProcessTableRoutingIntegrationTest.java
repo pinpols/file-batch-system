@@ -20,7 +20,7 @@ import org.springframework.test.context.DynamicPropertySource;
 
 @SpringBootTest(
     classes = BatchWorkerProcessApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("Process Worker 业务分片 TABLE 模式: 完整应用装配")
 class BatchWorkerProcessTableRoutingIntegrationTest extends AbstractIntegrationTest {
 

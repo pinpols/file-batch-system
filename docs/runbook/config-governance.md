@@ -12,9 +12,9 @@
 | 生效方式 | `IMMEDIATE_AFTER_CONFIRMATION` | 数据提交后仍须等待目标实例确认，不能把 `PUBLISHED` 当作已全量生效 |
 | 敏感级别 | `PUBLIC` / `SECRET` | 决定是否只能经 Secret/外部密钥系统注入，与是否重启无关 |
 
-机器登记源是 [config-governance-registry.yml](./config-governance-registry.yml)。当前源码真实存在
-`115` 个生产 `@ConfigurationProperties` 绑定点；历史扫描所称 `139` 个文件包含
-`@ConfigurationPropertiesScan`、测试启动类和注释命中，不作为验收数字。
+机器登记源是 [config-governance-registry.yml](./config-governance-registry.yml)。生产
+`@ConfigurationProperties` 绑定点以登记表与源码校验结果为准；包含
+`@ConfigurationPropertiesScan`、测试启动类或注释的文本命中数不作为验收数字。
 
 ## 2. 启动期配置
 
@@ -23,6 +23,45 @@
   渲染结果变化会改变 template hash，由 Kubernetes 自动滚动更新 Pod。
 - 不支持运行时重绑定。`@RefreshScope`、`ConfigurationPropertiesRebinder`、Spring Cloud Config、
   Nacos Config 和 Apollo 客户端由 CI 禁止，避免部分 Bean 刷新、连接池未重建和多实例漂移。
+- 配置的可执行边界用 `@Validated` 和字段约束在绑定期校验。副本采样周期、Worker 并发与续租
+  阈值必须为正数；首次采样延迟、Kafka 最小拉取字节数和等待时间允许零。已有跨字段背压检查
+  保留在容器工厂；批量领取大小的退化规则和已有零值禁用语义不因本次治理改变。
+- Worker Kafka consumer 使用 `WorkerKafkaProperties` 绑定原有 `spring.kafka` 配置键，保留
+  `max-poll-interval-ms`、`metadata-max-age-ms` 等现有键和毫秒单位；不新增 Spring Boot Kafka
+  自动配置依赖。producer 继续复用现有集中配置，手动 ACK、观测与批量背压行为保持不变。
+- Spring 管理的异步线程池由初始化回调创建底层线程池，Bean 工厂方法不再手动调用
+  `initialize()`；资源关闭仍交给 Spring 生命周期。
+
+### Worker 注册端口
+
+五类 Worker 仅使用主 WebServer 绑定后写入的 `local.server.port` 注册，不使用 `server.port`
+配置值或固定类型端口兜底。`server.port=0` 可以使用实际随机端口；独立 management 服务的
+`local.management.port` 不参与 Worker 注册。服务尚未绑定或运行时端口无效时拒绝注册，心跳沿既有
+重试路径等待绑定完成；配置端口不代表监听成功。修改 `server.port` 的部署覆盖入口保持不变。
+
+定向验证包括配置绑定成功/失败、Kafka 参数传递与跨字段容量限制、Spring 线程池初始化/销毁、
+未绑定时拒绝注册，以及主服务和管理服务均使用真实随机端口时的注册结果。加载完整 Worker 应用的
+集成测试使用 `RANDOM_PORT`，不能使用非 Web 上下文再依赖固定端口完成注册；不加载 Worker 注册循环的
+纯组件测试仍可使用非 Web 上下文。上述验证不替代整套 sim 或 staging 验证。
+
+### 本地验证记录（2026-10-08）
+
+| 层级 | 范围 | 结果 |
+|---|---|---|
+| 定向测试 | 配置真实绑定、线程池初始化/关闭、Kafka 参数与背压、注册/心跳/租约及主服务与管理服务随机端口 | 104 个用例通过，失败和跳过均为 0 |
+| Worker 集成测试 | 五类 Worker 的 21 个完整应用及相关集成测试类；包括业务库路由、导出分片、对象存储、SFTP/邮件、Atomic 执行器 | 70 个用例通过，失败和跳过均为 0 |
+| 端口复验 | 空值校验收敛后重新执行 `AbstractWorkerLoopTest` 与 `WorkerPortBindingTest` | 20 个用例通过，失败和跳过均为 0 |
+| Worker core 完整测试 | `./mvnw -ntp -pl batch-worker/core -am test` | core 235 个用例通过，失败和跳过均为 0 |
+| 静态治理 | 配置登记、默认值同步、环境变量、Helm/生产覆盖入口、模块依赖和空值判断规范 | 通过；配置绑定登记共 134 处 |
+| Sonar 本地增量报告 | 全仓分析后按 `origin/main` 至工作树的 Java 变更行过滤；报告目录 `reports/sonar/2026-10-08_00-31-04/` | 36 个包含新增行的 Java 文件，OPEN issue 0、待审安全热点 0 |
+
+集成测试复用仓库 Testcontainers 基础设施；Orchestrator 注册接口使用既有 WireMock 支撑，
+不代表真实控制面故障恢复或生产容量验收。未重启本地常驻应用，未执行整套 sim、Full Gate 或 staging 验收。
+完整 core 测试的上游模块也无失败；common 的 2 个外部分片用例与 test-support 的 3 个 S3 活体契约
+用例因未启用对应外部环境而跳过，不作为本轮通过证据。
+Sonar 本轮未采集覆盖率；增量无问题不等于全仓历史问题清零，也不替代线上 required checks。
+运行日志分别为 `/tmp/bfs-spring-config-tests.log`、`/tmp/bfs-spring-config-integration.log` 和
+`/tmp/bfs-spring-config-port-recheck.log`；这些临时文件仅作本轮本机取证，不是仓库测试入口。
 
 ## 3. 动态数据库配置
 

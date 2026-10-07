@@ -1,5 +1,9 @@
 # TODO Master · 当前待办唯一索引
 
+## Java 设计表达与可审查性（2026-10-08）
+
+当前为 Planned，尚未开始代码实施。按“基线 → 注释 → 测试装配 → 固定载荷 → 结果建模 → 内聚验收”推进；清单及状态统一见 [改进方案](../plans/java-design-expression-improvement-plan-2026-10-08.md)。不重新启动已完成的可读性阶段，不机械清除动态 Map，不以设计模式或代码行数作为目标；后续实施须保护常驻批量任务的数据与环境。
+
 ## 固定契约与协议值治理（2026-10-07）
 
 本地实现与定向验收已完成，当前仅待提交授权和实际 CI 验收；不能按“全仓 S1192 清零”扩展范围或将动态 Map、SQL 业务状态集合机械统一。权威范围与状态见 [治理计划](../plans/typed-contract-enum-constant-governance-plan-2026-10-07.md)，本地证据见 [验收记录](../audit/typed-contract-governance-verification-2026-10-07.md)。未经授权不提交、推送或合并。

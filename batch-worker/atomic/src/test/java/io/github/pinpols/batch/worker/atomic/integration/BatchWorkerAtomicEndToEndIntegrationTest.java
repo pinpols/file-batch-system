@@ -30,7 +30,7 @@ import org.springframework.test.context.DynamicPropertySource;
  */
 @SpringBootTest(
     classes = BatchWorkerAtomicApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE,
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
       "batch.worker.executors.shell.enabled=true",
       "batch.worker.executors.sql.enabled=true",

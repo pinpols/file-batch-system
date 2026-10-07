@@ -23,7 +23,7 @@ import org.springframework.test.context.DynamicPropertySource;
 /** SqlTaskExecutor 集成测试:打真实 testcontainers PG,跑真 JDBC SELECT(单测是 mock JDBC,本测验真连接 + 真结果集解析)。 */
 @SpringBootTest(
     classes = BatchWorkerAtomicApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("数据库执行器集成: 真实数据库连接下的查询与角色校验")
 class SqlTaskExecutorIntegrationTest extends AbstractIntegrationTest {
 

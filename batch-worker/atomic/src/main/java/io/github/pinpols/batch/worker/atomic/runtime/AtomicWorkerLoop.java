@@ -46,11 +46,6 @@ public class AtomicWorkerLoop extends AbstractWorkerLoop {
     return "atomic";
   }
 
-  @Override
-  protected int workerPort() {
-    return 8087;
-  }
-
   @Scheduled(fixedDelayString = "${batch.worker.atomic.heartbeat-interval-millis:15000}")
   public void heartbeat() {
     doHeartbeat();

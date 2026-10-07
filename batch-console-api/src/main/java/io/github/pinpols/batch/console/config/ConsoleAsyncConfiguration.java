@@ -37,7 +37,6 @@ public class ConsoleAsyncConfiguration {
     executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
     executor.setWaitForTasksToCompleteOnShutdown(true);
     executor.setAwaitTerminationSeconds(30);
-    executor.initialize();
     return executor;
   }
 

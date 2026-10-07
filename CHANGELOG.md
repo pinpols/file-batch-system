@@ -62,6 +62,7 @@
 
 ### Fixed
 
+- 修复 Console 异步线程池重复初始化，交由 Spring 初始化和销毁；副本采样、Worker 并发与续租配置增加绑定期校验。五类 Worker 删除固定端口兜底，仅注册主服务实际绑定端口；Kafka consumer 改为类型化绑定，保留原配置键、默认值、手动确认和批量背压校验。
 - 修复压测环境清理后 Kafka 仅重建首个 topic 的问题：清理脚本等待删除收敛后调用统一初始化入口并校验完整 topic 集；同时治理 shell `pipefail` 下 `head`、`grep -q` 和提前退出 AWK 造成的 SIGPIPE 误失败。修复每日 Sim 调用 reusable 镜像构建时缺少 `packages: write` 权限，以及 CodeQL 同一 category 重复上传 SARIF 导致的 CI 假失败。
 - 升级独立 Java 租户 Worker 示例的 AssertJ 测试依赖至 3.27.7，修复恶意 XML 比较输入可触发的高危拒绝服务漏洞（CVE-2026-24400）；示例现有测试未使用受影响的 XML 比较 API。
 - Excel 导出将 POI 中间 XML 和模板 ZIP 纳入线程局部私有临时文件策略，成功和失败后恢复原策略；输出文件创建时限制为所有者权限，写入拒绝符号链接且不隐式重建文件，保持原输出路径和内容。

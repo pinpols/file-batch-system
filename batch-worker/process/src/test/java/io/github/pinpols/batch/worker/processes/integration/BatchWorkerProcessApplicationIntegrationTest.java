@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
+import io.github.pinpols.batch.worker.core.support.AbstractWorkerLoop;
 import io.github.pinpols.batch.worker.processes.BatchWorkerProcessApplication;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.DisplayName;
@@ -18,7 +19,7 @@ import org.springframework.test.context.DynamicPropertySource;
 
 @SpringBootTest(
     classes = BatchWorkerProcessApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("处理 Worker 应用启动集成:上下文装配,以及平台库与业务库物理分离的部署约束")
 class BatchWorkerProcessApplicationIntegrationTest extends AbstractIntegrationTest {
 
@@ -39,6 +40,17 @@ class BatchWorkerProcessApplicationIntegrationTest extends AbstractIntegrationTe
     this.applicationContext = applicationContext;
     this.platformDataSource = platformDataSource;
     this.businessDataSource = businessDataSource;
+  }
+
+  @Test
+  @DisplayName("Worker 注册端口与主服务真实绑定端口一致")
+  void shouldRegisterActualBoundPort() {
+    Integer boundPort =
+        applicationContext.getEnvironment().getProperty("local.server.port", Integer.class);
+    assertThat(boundPort).isNotNull().isPositive();
+    assertThat(
+            applicationContext.getBean(AbstractWorkerLoop.class).ensureStarted().getPort())
+        .isEqualTo(boundPort);
   }
 
   @Test

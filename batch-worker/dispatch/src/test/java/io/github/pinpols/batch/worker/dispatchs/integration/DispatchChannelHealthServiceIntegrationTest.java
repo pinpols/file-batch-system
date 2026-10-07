@@ -26,7 +26,7 @@ import org.springframework.test.context.DynamicPropertySource;
  */
 @SpringBootTest(
     classes = BatchWorkerDispatchApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("渠道健康服务集成:真实业务库上的健康快照落库、失败退避累积与放行判定")
 class DispatchChannelHealthServiceIntegrationTest extends AbstractIntegrationTest {
 

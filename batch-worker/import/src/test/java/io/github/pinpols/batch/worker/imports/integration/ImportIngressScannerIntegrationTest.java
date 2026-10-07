@@ -34,7 +34,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
  */
 @SpringBootTest(
     classes = BatchWorkerImportApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @TestPropertySource(
     properties = {
       "batch.worker.import.tenant-id=t1",
