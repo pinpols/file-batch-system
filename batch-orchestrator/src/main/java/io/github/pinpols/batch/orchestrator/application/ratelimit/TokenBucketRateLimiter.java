@@ -6,6 +6,7 @@ import io.github.bucket4j.TimeoutException;
 import io.github.bucket4j.TokensInheritanceStrategy;
 import io.github.bucket4j.distributed.BucketProxy;
 import io.github.bucket4j.redis.lettuce.cas.LettuceBasedProxyManager;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -157,8 +158,8 @@ public class TokenBucketRateLimiter {
     log.warn(
         "Redis rate-limit unavailable; {}: tenantId={}, action={}, cause={}",
         failOpen ? "fail-open" : "fail-closed",
-        String.valueOf(tenantId).replaceAll("\\R", "_"),
-        String.valueOf(action).replaceAll("\\R", "_"),
+        LogSanitizer.value(tenantId),
+        LogSanitizer.value(action),
         SwallowedExceptionLogger.summary(ex));
     log.debug("Redis rate-limit backend failure", ex);
     return failOpen;

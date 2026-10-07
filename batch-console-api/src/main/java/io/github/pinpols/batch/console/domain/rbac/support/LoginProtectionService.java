@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.rbac.support;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.console.config.LoginProtectionProperties;
 import io.github.pinpols.batch.console.domain.rbac.support.captcha.CaptchaResult;
 import io.github.pinpols.batch.console.domain.rbac.support.captcha.CaptchaVerifier;
@@ -44,8 +45,8 @@ public class LoginProtectionService {
       boolean provided = captchaToken != null && !captchaToken.isBlank();
       log.warn(
           "login captcha required: user={} ip={} failures={} provider={} provided={} reason={}",
-          truncateForLog(String.valueOf(username).replaceAll("\\R", "_")),
-          truncateForLog(String.valueOf(clientIp).replaceAll("\\R", "_")),
+          truncateForLog(LogSanitizer.value(username)),
+          truncateForLog(LogSanitizer.value(clientIp)),
           failures,
           captchaVerifier.provider(),
           provided,
@@ -92,8 +93,9 @@ public class LoginProtectionService {
   /**
    * 截断日志字段,避免用户可控值撑爆日志行。
    *
-   * <p>CR/LF 防注入由调用点的内联 {@code replaceAll("\\R", "_")} 完成(CodeQL 只承认内联形态),
-   * 本方法只保留原先"超长截断"这一条语义,避免内联改写丢掉它。
+   * <p>CR/LF 防注入由调用点的 {@link
+   * io.github.pinpols.batch.common.logging.LogSanitizer#value(Object)} 完成;本方法只保留原先"超长截断"
+   * 这一条语义,避免改写时把它丢掉。
    */
   private static String truncateForLog(String cleaned) {
     return cleaned.length() > 200 ? cleaned.substring(0, 200) + "…" : cleaned;

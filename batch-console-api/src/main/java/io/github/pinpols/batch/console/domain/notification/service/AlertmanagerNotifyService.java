@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.config.AlertmanagerNotifyProperties;
@@ -64,8 +65,8 @@ public class AlertmanagerNotifyService {
       meterRegistry.counter(METRIC_SKIPPED, "receiver", receiver).increment();
       log.warn(
           "am_notify_skipped receiver={} tenantId={} reason=no_channel",
-          String.valueOf(receiver).replaceAll("\\R", "_"),
-          String.valueOf(tenantId).replaceAll("\\R", "_"));
+          LogSanitizer.value(receiver),
+          LogSanitizer.value(tenantId));
       return new AmNotifyOutcome(
           receiver, channelCode, false, "SKIPPED", "no channel configured for receiver");
     }
@@ -94,15 +95,15 @@ public class AlertmanagerNotifyService {
     if (result.success()) {
       log.info(
           "AM notify delivered: receiver={} channel={} alertCount={}",
-          String.valueOf(receiver).replaceAll("\\R", "_"),
-          String.valueOf(channelCode).replaceAll("\\R", "_"),
+          LogSanitizer.value(receiver),
+          LogSanitizer.value(channelCode),
           payload.safeAlerts().size());
       return new AmNotifyOutcome(receiver, channelCode, true, "SUCCESS", null);
     }
     log.warn(
         "AM notify delivery failed: receiver={} channel={} error={}",
-        String.valueOf(receiver).replaceAll("\\R", "_"),
-        String.valueOf(channelCode).replaceAll("\\R", "_"),
+        LogSanitizer.value(receiver),
+        LogSanitizer.value(channelCode),
         result.errorSummary());
     return new AmNotifyOutcome(receiver, channelCode, false, "FAILED", result.errorSummary());
   }
@@ -177,9 +178,7 @@ public class AlertmanagerNotifyService {
     } catch (RuntimeException ex) {
       // 日志写入是 off 关键路径的审计动作,失败只 warn,不影响回执 AM。
       log.warn(
-          "AM notify delivery log persist failed: channel={}",
-          String.valueOf(channelCode).replaceAll("\\R", "_"),
-          ex);
+          "AM notify delivery log persist failed: channel={}", LogSanitizer.value(channelCode), ex);
     }
   }
 }

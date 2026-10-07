@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
@@ -59,16 +60,16 @@ public class DefaultConsoleTenantConfigInitApplicationService
         // strict=true 且任一 spec failed → @Transactional 已回滚,组装 failed 结果让前端看到原因
         log.warn(
             "[TenantConfigBatchInit] strict bundle rolled back for tenant={} batchOp={}: {}",
-            String.valueOf(tenantId).replaceAll("\\R", "_"),
-            String.valueOf(batchOperationId).replaceAll("\\R", "_"),
+            LogSanitizer.value(tenantId),
+            LogSanitizer.value(batchOperationId),
             SwallowedExceptionLogger.summary(ex));
         results.add(TenantInitResult.failed(tenantId, ex.getMessage()));
         failureCount++;
       } catch (Exception ex) {
         log.error(
             "[TenantConfigBatchInit] unexpected error for tenant={} batchOp={}",
-            String.valueOf(tenantId).replaceAll("\\R", "_"),
-            String.valueOf(batchOperationId).replaceAll("\\R", "_"),
+            LogSanitizer.value(tenantId),
+            LogSanitizer.value(batchOperationId),
             ex);
         results.add(TenantInitResult.failed(tenantId, ex.getMessage()));
         failureCount++;

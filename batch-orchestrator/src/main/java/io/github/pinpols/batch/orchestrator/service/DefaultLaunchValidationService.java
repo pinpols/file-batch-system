@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
@@ -90,8 +91,8 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
     if (updatedRows == 0) {
       log.warn(
           "updateAcceptance(REJECTED) affected 0 rows; the row is already terminal: tenantId={} requestId={}",
-          String.valueOf(request.tenantId()).replaceAll("\\R", "_"),
-          String.valueOf(request.requestId()).replaceAll("\\R", "_"));
+          LogSanitizer.value(request.tenantId()),
+          LogSanitizer.value(request.requestId()));
     }
   }
 

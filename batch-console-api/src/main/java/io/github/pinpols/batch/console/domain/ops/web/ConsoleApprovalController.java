@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.ops.web;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleApprovalApplicationService;
 import io.github.pinpols.batch.console.domain.ops.application.contract.request.ApprovalActionRequest;
 import io.github.pinpols.batch.console.domain.ops.application.contract.request.BatchApprovalActionRequest;
@@ -130,9 +131,9 @@ public class ConsoleApprovalController {
         "action={} actor={} tenant={} target={} operatorId={} reasonLength={}",
         action,
         actor,
-        String.valueOf(tenantId).replaceAll("\\R", "_"),
-        String.valueOf(target).replaceAll("\\R", "_"),
-        String.valueOf(operatorId).replaceAll("\\R", "_"),
+        LogSanitizer.value(tenantId),
+        LogSanitizer.value(target),
+        LogSanitizer.value(operatorId),
         reasonLen);
   }
 }

@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.engine;
 
 import io.github.pinpols.batch.common.event.DomainEvent;
 import io.github.pinpols.batch.common.event.DomainEventPublisher;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -76,7 +77,7 @@ public class VerifierFailureOutboxService {
     if (log.isInfoEnabled()) {
       log.info(
           "ContentVerifier failures persisted as outbox events: tenantId={}, taskId={}, count={}",
-          String.valueOf(command.tenantId()).replaceAll("\\R", "_"),
+          LogSanitizer.value(command.tenantId()),
           command.taskId(),
           written);
     }

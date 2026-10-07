@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.application.config;
 
 import io.github.pinpols.batch.common.config.ConfigCacheInvalidationEvent;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -166,20 +167,18 @@ public class ConsoleConfigCacheInvalidationService {
       long deleted = invalidationStore.scanAndDelete(pattern, SCAN_BATCH_SIZE);
       if (deleted > 0) {
         log.debug(
-            "evicted {} redis keys matching pattern={}",
-            deleted,
-            String.valueOf(pattern).replaceAll("\\R", "_"));
+            "evicted {} redis keys matching pattern={}", deleted, LogSanitizer.value(pattern));
       }
       return true;
     } catch (RuntimeException exception) {
       increment(publishFailureCounter);
       log.warn(
           "config cache redis pattern delete failed: pattern={}, reason={}",
-          String.valueOf(pattern).replaceAll("\\R", "_"),
+          LogSanitizer.value(pattern),
           SwallowedExceptionLogger.summary(exception));
       log.debug(
           "config cache redis pattern delete failure: pattern={}",
-          String.valueOf(pattern).replaceAll("\\R", "_"),
+          LogSanitizer.value(pattern),
           exception);
       return false;
     }
@@ -209,12 +208,9 @@ public class ConsoleConfigCacheInvalidationService {
       increment(publishFailureCounter);
       log.warn(
           "config cache redis delete failed: key={}, reason={}",
-          String.valueOf(key).replaceAll("\\R", "_"),
+          LogSanitizer.value(key),
           SwallowedExceptionLogger.summary(exception));
-      log.debug(
-          "config cache redis delete failure: key={}",
-          String.valueOf(key).replaceAll("\\R", "_"),
-          exception);
+      log.debug("config cache redis delete failure: key={}", LogSanitizer.value(key), exception);
       return;
     }
     publishInvalidation(tenantId, type, code);
@@ -238,15 +234,15 @@ public class ConsoleConfigCacheInvalidationService {
       increment(publishFailureCounter);
       log.warn(
           "config cache invalidation publish failed: tenantId={}, type={}, code={}, reason={}",
-          String.valueOf(tenantId).replaceAll("\\R", "_"),
-          String.valueOf(type).replaceAll("\\R", "_"),
-          String.valueOf(code).replaceAll("\\R", "_"),
+          LogSanitizer.value(tenantId),
+          LogSanitizer.value(type),
+          LogSanitizer.value(code),
           SwallowedExceptionLogger.summary(exception));
       log.debug(
           "config cache invalidation publish failure: tenantId={}, type={}, code={}",
-          String.valueOf(tenantId).replaceAll("\\R", "_"),
-          String.valueOf(type).replaceAll("\\R", "_"),
-          String.valueOf(code).replaceAll("\\R", "_"),
+          LogSanitizer.value(tenantId),
+          LogSanitizer.value(type),
+          LogSanitizer.value(code),
           exception);
     }
   }

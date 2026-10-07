@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
@@ -55,7 +56,7 @@ class TenantConfigInitTenantExecutor {
     } catch (Exception ex) {
       log.warn(
           "[TenantConfigBatchInit] failed for tenant={}: {}",
-          String.valueOf(tenantId).replaceAll("\\R", "_"),
+          LogSanitizer.value(tenantId),
           SwallowedExceptionLogger.summary(ex));
       return TenantInitResult.failed(tenantId, ex.getMessage());
     }

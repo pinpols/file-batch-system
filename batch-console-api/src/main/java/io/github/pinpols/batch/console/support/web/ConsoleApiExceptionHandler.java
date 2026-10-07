@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.exception.SystemException;
 import io.github.pinpols.batch.common.i18n.BizMessageResolver;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -151,8 +152,8 @@ public class ConsoleApiExceptionHandler {
     // 不打 stack trace（避免 console.log 噪音 + 让运维一眼看出问题）。
     log.warn(
         "console method not supported: {} {} (supported: {})",
-        String.valueOf(request.getMethod()).replaceAll("\\R", "_"),
-        String.valueOf(request.getRequestURI()).replaceAll("\\R", "_"),
+        LogSanitizer.value(request.getMethod()),
+        LogSanitizer.value(request.getRequestURI()),
         exception.getSupportedHttpMethods());
     return ResponseEntity.status(405)
         .body(responseFactory.failure(ResultCode.INVALID_ARGUMENT, exception.getMessage()));
@@ -164,8 +165,8 @@ public class ConsoleApiExceptionHandler {
     // 403 同样是 client / config 问题非 server bug，打印请求行 + 异常 message。
     log.warn(
         "console access denied: {} {} - {}",
-        String.valueOf(request.getMethod()).replaceAll("\\R", "_"),
-        String.valueOf(request.getRequestURI()).replaceAll("\\R", "_"),
+        LogSanitizer.value(request.getMethod()),
+        LogSanitizer.value(request.getRequestURI()),
         SwallowedExceptionLogger.summary(exception));
     return ResponseEntity.status(ResultCode.FORBIDDEN.httpStatus())
         .body(responseFactory.failure(ResultCode.FORBIDDEN, CommonErrorMessages.ACCESS_DENIED));
@@ -239,8 +240,8 @@ public class ConsoleApiExceptionHandler {
     // 带上请求 URI + method 让排查能定位前端调用点(原日志只有 param name 排查不了)
     log.warn(
         "console missing request param: {} {} — {}",
-        String.valueOf(request.getMethod()).replaceAll("\\R", "_"),
-        String.valueOf(request.getRequestURI()).replaceAll("\\R", "_"),
+        LogSanitizer.value(request.getMethod()),
+        LogSanitizer.value(request.getRequestURI()),
         SwallowedExceptionLogger.summary(exception));
     return ResponseEntity.badRequest()
         .body(responseFactory.failure(ResultCode.INVALID_ARGUMENT, exception.getMessage()));
@@ -251,10 +252,10 @@ public class ConsoleApiExceptionHandler {
       MethodArgumentTypeMismatchException exception, HttpServletRequest request) {
     log.warn(
         "console request param type mismatch: {} {} param={} value={} requiredType={}",
-        String.valueOf(request.getMethod()).replaceAll("\\R", "_"),
-        String.valueOf(request.getRequestURI()).replaceAll("\\R", "_"),
-        String.valueOf(exception.getName()).replaceAll("\\R", "_"),
-        String.valueOf(exception.getValue()).replaceAll("\\R", "_"),
+        LogSanitizer.value(request.getMethod()),
+        LogSanitizer.value(request.getRequestURI()),
+        LogSanitizer.value(exception.getName()),
+        LogSanitizer.value(exception.getValue()),
         exception.getRequiredType() == null
             ? "<unknown>"
             : exception.getRequiredType().getSimpleName());

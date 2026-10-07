@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.security;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.common.web.BoundedRequestBodyReader;
 import io.github.pinpols.batch.common.web.BoundedRequestBodyReader.RequestBodyLimitExceededException;
@@ -75,9 +76,9 @@ public class RequestSignatureFilter extends OncePerRequestFilter {
       log.warn(
           "request signature rejected: result={} tenant={} method={} uri={}",
           result,
-          String.valueOf(tenantId).replaceAll("\\R", "_"),
-          String.valueOf(request.getMethod()).replaceAll("\\R", "_"),
-          String.valueOf(request.getRequestURI()).replaceAll("\\R", "_"));
+          LogSanitizer.value(tenantId),
+          LogSanitizer.value(request.getMethod()),
+          LogSanitizer.value(request.getRequestURI()));
       writeUnauthorized(response, result);
       return;
     }

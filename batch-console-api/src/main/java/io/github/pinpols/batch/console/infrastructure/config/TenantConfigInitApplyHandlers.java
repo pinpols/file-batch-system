@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.infrastructure.config;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
@@ -188,8 +189,8 @@ public class TenantConfigInitApplyHandlers {
         log.warn(
             "[TenantConfigBatchInit] {} code={} tenant={} failed: {}",
             handler.typeName(),
-            String.valueOf(code).replaceAll("\\R", "_"),
-            String.valueOf(ctx.tenantId()).replaceAll("\\R", "_"),
+            LogSanitizer.value(code),
+            LogSanitizer.value(ctx.tenantId()),
             SwallowedExceptionLogger.summary(ex));
         acc.recordFailed(code, ex.getMessage());
       }

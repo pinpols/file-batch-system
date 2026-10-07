@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.redis;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -47,11 +48,8 @@ public class OrchestratorRedisSupport {
     } catch (JsonProcessingException exception) {
       log.warn(
           "Redis cache JSON is corrupt; evicting and falling back to DB: key={}",
-          String.valueOf(key).replaceAll("\\R", "_"));
-      log.debug(
-          "Redis cache JSON deserialize failure: key={}",
-          String.valueOf(key).replaceAll("\\R", "_"),
-          exception);
+          LogSanitizer.value(key));
+      log.debug("Redis cache JSON deserialize failure: key={}", LogSanitizer.value(key), exception);
       evictCache(key);
       return null;
     }
@@ -92,9 +90,9 @@ public class OrchestratorRedisSupport {
     } catch (RedisConnectionFailureException | RedisSystemException ex) {
       log.warn(
           "Redis cache read unavailable; falling back to DB: key={}, cause={}",
-          String.valueOf(key).replaceAll("\\R", "_"),
+          LogSanitizer.value(key),
           SwallowedExceptionLogger.summary(ex));
-      log.debug("Redis cache read failure: key={}", String.valueOf(key).replaceAll("\\R", "_"), ex);
+      log.debug("Redis cache read failure: key={}", LogSanitizer.value(key), ex);
       return null;
     }
   }
@@ -105,7 +103,7 @@ public class OrchestratorRedisSupport {
     } catch (RedisConnectionFailureException | RedisSystemException ex) {
       log.debug(
           "Redis cache write/delete skipped: key={}, cause={}",
-          String.valueOf(key).replaceAll("\\R", "_"),
+          LogSanitizer.value(key),
           SwallowedExceptionLogger.summary(ex));
     }
   }

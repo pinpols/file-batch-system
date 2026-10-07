@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.notification.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.console.config.NotificationProperties;
 import java.util.Arrays;
 import java.util.List;
@@ -72,7 +73,7 @@ public class EmailNotificationSender implements NotificationSender {
     if (recipients.length == 0) {
       log.warn(
           "EMAIL all recipients blocked by domain allowlist; skipping: channelCode={}, declared={}",
-          String.valueOf(message.channelCode()).replaceAll("\\R", "_"),
+          LogSanitizer.value(message.channelCode()),
           declared.length);
       return WebhookDeliveryResult.failure(null, "no allowed email recipients");
     }
@@ -82,7 +83,7 @@ public class EmailNotificationSender implements NotificationSender {
       log.warn(
           "EMAIL channel selected but JavaMailSender not configured; skipping:"
               + " channelCode={}, recipients={}",
-          String.valueOf(message.channelCode()).replaceAll("\\R", "_"),
+          LogSanitizer.value(message.channelCode()),
           recipients.length);
       return WebhookDeliveryResult.failure(null, "mail not configured");
     }
@@ -102,7 +103,7 @@ public class EmailNotificationSender implements NotificationSender {
     } catch (MailException ex) {
       log.warn(
           "EMAIL delivery failed: channelCode={}, recipients={}, cause={}",
-          String.valueOf(message.channelCode()).replaceAll("\\R", "_"),
+          LogSanitizer.value(message.channelCode()),
           recipients.length,
           ex.getClass().getSimpleName());
       return WebhookDeliveryResult.failure(null, ex.getClass().getSimpleName());
