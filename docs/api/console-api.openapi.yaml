@@ -2780,8 +2780,10 @@ paths:
                 $ref: '#/components/schemas/CommonResponseMyWorkerList'
   /api/console/my-workers/count:
     get:
+      deprecated: true
       tags: [Workers]
-      summary: Count self-hosted workers for current tenant (dashboard)
+      summary: Count self-hosted workers for current tenant (deprecated)
+      description: Deprecated; clients should derive the count from GET /api/console/my-workers.
       operationId: countMyWorkers
       parameters:
         - name: tenantId

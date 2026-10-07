@@ -214,6 +214,7 @@
 
 ### Removed
 
+- 前端停用 `/api/console/my-workers/count` 计数链路；后端端点标记为 deprecated 并暂保留兼容，待后续版本化弃用周期完成后再移除。
 - 移除 Wheel scheduler 代码路径及双引擎切换逻辑，生产调度统一使用 Quartz；未来仅达到 ADR-033 阈值后重新评估成熟开源实现。
 
 ### Docs

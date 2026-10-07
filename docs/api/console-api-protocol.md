@@ -7,6 +7,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-10-07 | **弃用 `GET /api/console/my-workers/count`**：前端已停止调用，后端与 OpenAPI 暂保留兼容并标记 deprecated；`GET /api/console/my-workers` 列表端点、权限和租户隔离保持不变。 |
 | 2026-10-04 | **Pipeline 实时进度并发语义修复（公开契约不变）**：内置 Worker 心跳增加可选 `pipelineProgress[]`，按 task/pipeline/stage 隔离并发任务；orchestrator 新增内部 pipeline 聚合查询，Console 公开 `GET /api/console/queries/pipeline-progress?pipelineInstanceId=` 的路径与响应外形不变。移除旧 SDK 标量字段及 Console/internal 的 workerCode 查询入口；前端现有 pipelineInstanceId 查询不变。 |
 | 2026-10-03 | **账号批量开户**：新增模板、预检、逐行修正、原子提交和操作查询端点；提交响应的一次性初始密码不进入操作查询或预览存储。仅管理员和租户管理员可操作，按角色和租户范围校验；单账号和批量开户都要求租户角色绑定 ACTIVE 业务租户、平台角色绑定 `system`。批次操作查询支持可选 `targetTenantId` 过滤，`user.batchCreate` 审计以 `requestId` 作为 `user_batch_operation` 聚合键。 |
 | 2026-10-01 | **Console AI 图片输入**：新增图片能力查询、上传、状态查询、内容读取与草稿删除端点；`AiChatRequest` 增加 `clientTurnId` 和 `attachmentIds`，会话轮次响应增加附件元数据。图片仅在 AI、持久化及模型图片能力三重开关启用时可用，按租户和操作者隔离并受大小、数量、速率、配额与保留期限制。 |

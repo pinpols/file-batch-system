@@ -17,7 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("我的 Worker 接口:列表只查自托管 Worker, 计数透传查询结果")
+@DisplayName("我的 Worker 接口:列表只查自托管 Worker, 弃用计数端点保持兼容")
 class ConsoleMyWorkerControllerTest {
 
   @Mock
@@ -48,7 +48,8 @@ class ConsoleMyWorkerControllerTest {
   }
 
   @Test
-  @DisplayName("计数查询:返回查询服务的统计结果")
+  @DisplayName("兼容计数查询:返回查询服务的统计结果")
+  @SuppressWarnings("removal")
   void shouldReturnMapperCount_whenCountingSelfHostedWorkers() {
     when(queryService.countSelfHosted("tx")).thenReturn(7L);
     when(responseFactory.success(7L)).thenReturn(CommonResponse.success(7L));
