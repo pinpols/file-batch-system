@@ -29,7 +29,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
 import org.mybatis.spring.annotation.MapperScan;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
@@ -40,6 +39,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.test.context.TestConstructor;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -68,6 +68,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
     })
 @EnabledIf("s3BackendActive")
 @DisplayName("文件治理调度在延迟统计,归档清理,对象对账与到达组触发上的验收")
+@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
 
   private static final class FileRecordSpec {
@@ -148,20 +149,24 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT_ID = "t1";
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private final JdbcTemplate jdbcTemplate;
+  private final FileGovernanceScheduler fileGovernanceScheduler;
+  private final FileGovernanceRepository fileGovernanceRepository;
+  private final MeterRegistry meterRegistry;
+  private final FileGovernanceProperties fileGovernanceProperties;
 
-  @Autowired
-  private FileGovernanceScheduler fileGovernanceScheduler;
-
-  @Autowired
-  private FileGovernanceRepository fileGovernanceRepository;
-
-  @Autowired
-  private MeterRegistry meterRegistry;
-
-  @Autowired
-  private FileGovernanceProperties fileGovernanceProperties;
+  FileGovernanceIntegrationTest(
+      JdbcTemplate jdbcTemplate,
+      FileGovernanceScheduler fileGovernanceScheduler,
+      FileGovernanceRepository fileGovernanceRepository,
+      MeterRegistry meterRegistry,
+      FileGovernanceProperties fileGovernanceProperties) {
+    this.jdbcTemplate = jdbcTemplate;
+    this.fileGovernanceScheduler = fileGovernanceScheduler;
+    this.fileGovernanceRepository = fileGovernanceRepository;
+    this.meterRegistry = meterRegistry;
+    this.fileGovernanceProperties = fileGovernanceProperties;
+  }
 
   @Test
   @DisplayName("真实数据库查询保留成员校验类型,开启完整性要求后已校验文件能够触发")
