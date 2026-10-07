@@ -3,8 +3,8 @@ name: pr-gate
 # C 方案(2026-06-02):PR 只跑 unit + 文档全跳 + Merge Queue 入口。
 # 历史背景:Round-1 TOP-7 把 e2e 分级到 smoke(本 workflow)+ regression(staging-gate)。
 # C 方案进一步把 IT 也从 PR-gate 移除,IT/E2E 全部交给 full-ci-gate(main push 后回退)+
-# staging-gate(nightly)。PR-gate 保留 static-checks + unit + java-governance +
-# security-scan 四类快速反馈。
+# staging-gate(nightly)。PR-gate 保留 static-checks 聚合门禁 + unit +
+# java-governance + security-scan 四类快速反馈。
 # 风险:main 偶尔会被 full-ci-gate 拦,该 PR 作者负责立即 revert + 修复。
 # 详见 docs/runbook/ci-speedup-2026-06-02.md。
 #
@@ -13,8 +13,8 @@ name: pr-gate
 # `mvn test`(只跑 surefire unit)。
 #
 # affected 极小化：workflow 始终触发以回报 required check；`pr-gate-scope` job 按文件域路由，
-# Java 单测和 static-checks 内的专项步骤只在对应 java/database/scripts/docs/config/api/ci
-# 变更时执行。跨域 secret scan 保持全 PR 执行。
+# Java 单测和 static-policy/static-supply-chain/static-java-quality 内的专项步骤只在
+# 对应 java/database/scripts/docs/config/api/ci 变更时执行。跨域 secret scan 保持全 PR 执行。
 
 on:
   workflow_dispatch:
@@ -96,10 +96,10 @@ jobs:
           head-sha: ${{ github.sha }}
 
   # ===========================================================================
-  # Job 1: static-checks — yml/dict/openapi/PMD/Spotless 等静态校验
-  # 不依赖任何下游,与所有 maven job 并发起跑
+  # Job 1a: static-policy — Python/Shell/契约/配置等轻量守卫
+  # 与供应链和 Java 静态质量分路并发，末尾继续汇总本路所有独立失败。
   # ===========================================================================
-  static-checks:
+  static-policy:
     needs: changes
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
@@ -136,12 +136,6 @@ jobs:
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         run: bash scripts/ci/run-gate.sh PR_INFRASTRUCTURE_UTF8 "基础设施 UTF-8 配置" -- python3 scripts/ci/check-infrastructure-utf8.py
-
-      - name: Setup build environment
-        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
-        uses: ./.github/actions/setup-build-env
-        with:
-          cache-testcontainers: 'false'
 
       - name: Install squawk + oasdiff (迁移/契约守护工具)
         if: needs.changes.outputs.database == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true'
@@ -465,45 +459,6 @@ jobs:
       - name: Test readiness documentation sync guard
         run: python3 -m unittest scripts/ci/tests/test_check_readiness_doc_sync.py
 
-      - name: Verify Trivy ignore expiry metadata
-        if: needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
-        shell: bash
-        # .trivyignore 的每组 CVE 必须有 owner / reason / expires,过期豁免不得继续放行。
-        run: bash scripts/ci/run-gate.sh PR_TRIVY_IGNORE_EXPIRY "Trivy 忽略项有效期" -- python3 scripts/ci/check-trivy-ignore-expiry.py
-
-      - name: Warm Maven cache for Trivy dependency resolution
-        if: needs.changes.outputs.config == 'true' || needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
-        shell: bash
-        # Trivy 解析 Java 传递依赖时会访问 Maven Central；先缓存外部依赖并安装本地 reactor 产物，避免重复远端 POM 请求。
-        run: bash scripts/ci/run-gate.sh PR_TRIVY_MAVEN_CACHE "Trivy Maven 依赖缓存预热" -- ./mvnw -B -ntp -DskipTests -Dmaven.test.skip=true -pl '!batch-e2e-tests' install
-
-      - name: Verify tracked SBOM matches Maven dependencies
-        if: needs.changes.outputs.maven == 'true' || needs.changes.outputs.ci == 'true'
-        shell: bash
-        run: bash scripts/ci/run-gate.sh PR_SBOM_SYNC "SBOM 依赖快照同步" -- bash scripts/ci/check-sbom-sync.sh
-
-      - name: Trivy fs scan on supply-chain inputs
-        if: needs.changes.outputs.config == 'true' || needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
-        shell: bash
-        # 只在依赖、镜像、部署或安全白名单输入变更时跑,避免普通业务 PR 被漏洞库下载拖慢。
-        run: |
-          changed="$(git diff --name-only "$GUARD_BASE"...HEAD || true)"
-          if ! printf '%s\n' "$changed" | grep -Eq '(^pom\.xml$|/pom\.xml$|(^|/)Dockerfile[^/]*$|(^|/)docker-bake.*\.hcl$|(^|/)docker-compose.*\.ya?ml$|^deploy/docker/|^helm/|^\.trivyignore(\.yaml)?$)'; then
-            source scripts/lib/gate-result.sh
-            gate_skip PR_TRIVY_FS_SCAN "Trivy 供应链文件扫描" "本次未变更供应链输入"
-            exit 0
-          fi
-          source scripts/lib/gate-result.sh
-          run_trivy_fs_scan() {
-            local trivy_version=0.74.0
-            curl -fsSL -o /tmp/trivy.tar.gz "https://github.com/aquasecurity/trivy/releases/download/v${trivy_version}/trivy_${trivy_version}_Linux-64bit.tar.gz"
-            tar -xzf /tmp/trivy.tar.gz -C /tmp trivy
-            sudo mv /tmp/trivy /usr/local/bin/trivy
-            trivy fs --scanners vuln --ignorefile .trivyignore --severity CRITICAL,HIGH --exit-code 1 .
-            trivy fs --scanners misconfig --ignorefile .trivyignore.yaml --severity CRITICAL,HIGH --exit-code 1 .
-          }
-          gate_run PR_TRIVY_FS_SCAN "Trivy 供应链文件扫描" run_trivy_fs_scan
-
       - name: Verify e2e shard lists cover all *E2eIT
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
@@ -614,18 +569,160 @@ jobs:
           bash scripts/ci/run-gate.sh PR_JAVA_SUPPRESSION_REGISTRY "Java 抑制项注册表" -- python3 scripts/ci/check-java-suppression-registry.py
           bash scripts/ci/run-gate.sh PR_JAVA_SUPPRESSION_REGISTRY_TEST "Java 抑制项注册表门禁测试" -- python3 -m unittest scripts/ci/tests/test_check_java_suppression_registry.py
 
-      - name: PMD + Spotless + dependency boundary
-        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
-        shell: bash
-        # test-compile 必要(PMD 需要 class 文件分析),不跑 surefire
-        run: bash scripts/ci/run-gate.sh PR_JAVA_STATIC_ANALYSIS "PMD、Spotless 与编译检查" -- ./mvnw -DskipTests test-compile pmd:check spotless:check -fae -B
-
-      - name: Report all static check failures
+      - name: Report all policy check failures
         if: always()
         shell: bash
         run: |
           source scripts/lib/gate-result.sh
           gate_assert_collected
+
+  # ===========================================================================
+  # Job 1b: static-supply-chain — SBOM / Trivy 供应链校验
+  # 只在 Maven、镜像、Compose、Helm 或 Trivy 白名单输入变化时做重扫描。
+  # ===========================================================================
+  static-supply-chain:
+    needs: changes
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BATCH_GATE_COLLECT: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Resolve guard base ref
+        shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        run: |
+          BASE="${BASE_REF}"
+          git fetch --no-tags --depth=200 origin "$BASE" || git fetch --no-tags origin "$BASE"
+          echo "GUARD_BASE=origin/${BASE}" >> "$GITHUB_ENV"
+
+      - name: Detect supply-chain inputs
+        id: supply
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            echo "trivy-required=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff --name-only "$GUARD_BASE"...HEAD)"
+          if printf '%s\n' "$changed" | grep -Eq '(^pom\.xml$|/pom\.xml$|(^|/)Dockerfile[^/]*$|(^|/)docker-bake.*\.hcl$|(^|/)docker-compose.*\.ya?ml$|^deploy/docker/|^helm/|^\.trivyignore(\.yaml)?$)'; then
+            echo "trivy-required=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "trivy-required=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup build environment
+        if: needs.changes.outputs.maven == 'true' || needs.changes.outputs.ci == 'true' || steps.supply.outputs.trivy-required == 'true'
+        uses: ./.github/actions/setup-build-env
+        with:
+          cache-testcontainers: 'false'
+
+      - name: Verify Trivy ignore expiry metadata
+        if: needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        run: bash scripts/ci/run-gate.sh PR_TRIVY_IGNORE_EXPIRY "Trivy 忽略项有效期" -- python3 scripts/ci/check-trivy-ignore-expiry.py
+
+      - name: Warm Maven cache for Trivy dependency resolution
+        if: steps.supply.outputs.trivy-required == 'true'
+        shell: bash
+        run: bash scripts/ci/run-gate.sh PR_TRIVY_MAVEN_CACHE "Trivy Maven 依赖缓存预热" -- ./mvnw -B -ntp -DskipTests -Dmaven.test.skip=true -pl '!batch-e2e-tests' install
+
+      - name: Verify tracked SBOM matches Maven dependencies
+        if: needs.changes.outputs.maven == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        run: bash scripts/ci/run-gate.sh PR_SBOM_SYNC "SBOM 依赖快照同步" -- bash scripts/ci/check-sbom-sync.sh
+
+      - name: Trivy fs scan on supply-chain inputs
+        if: steps.supply.outputs.trivy-required == 'true'
+        shell: bash
+        run: |
+          source scripts/lib/gate-result.sh
+          run_trivy_fs_scan() {
+            local trivy_version=0.74.0
+            curl -fsSL -o /tmp/trivy.tar.gz "https://github.com/aquasecurity/trivy/releases/download/v${trivy_version}/trivy_${trivy_version}_Linux-64bit.tar.gz"
+            tar -xzf /tmp/trivy.tar.gz -C /tmp trivy
+            sudo mv /tmp/trivy /usr/local/bin/trivy
+            trivy fs --scanners vuln --ignorefile .trivyignore --severity CRITICAL,HIGH --exit-code 1 .
+            trivy fs --scanners misconfig --ignorefile .trivyignore.yaml --severity CRITICAL,HIGH --exit-code 1 .
+          }
+          gate_run PR_TRIVY_FS_SCAN "Trivy 供应链文件扫描" run_trivy_fs_scan
+
+      - name: Report all supply-chain check failures
+        if: always()
+        shell: bash
+        run: |
+          source scripts/lib/gate-result.sh
+          gate_assert_collected
+
+  # ===========================================================================
+  # Job 1c: static-java-quality — 编译、PMD 与 Spotless
+  # ===========================================================================
+  static-java-quality:
+    needs: changes
+    if: |
+      (needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true') &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BATCH_GATE_COLLECT: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+        with:
+          cache-testcontainers: 'false'
+
+      - name: PMD + Spotless + compile
+        shell: bash
+        # test-compile 必要(PMD 需要 class 文件分析),不跑 surefire。
+        run: bash scripts/ci/run-gate.sh PR_JAVA_STATIC_ANALYSIS "PMD、Spotless 与编译检查" -- ./mvnw -DskipTests test-compile pmd:check spotless:check -fae -B
+
+      - name: Report all Java quality check failures
+        if: always()
+        shell: bash
+        run: |
+          source scripts/lib/gate-result.sh
+          gate_assert_collected
+
+  # ===========================================================================
+  # Job 1d: static-checks — ruleset 绑定的稳定聚合 context
+  # ===========================================================================
+  static-checks:
+    name: static-checks
+    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    needs:
+      - changes
+      - static-policy
+      - static-supply-chain
+      - static-java-quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Verify static check lanes
+        shell: bash
+        env:
+          POLICY_RESULT: ${{ needs.static-policy.result }}
+          SUPPLY_CHAIN_RESULT: ${{ needs.static-supply-chain.result }}
+          JAVA_QUALITY_RESULT: ${{ needs.static-java-quality.result }}
+        run: |
+          [[ "$POLICY_RESULT" == "success" ]]
+          [[ "$SUPPLY_CHAIN_RESULT" == "success" ]]
+          [[ "$JAVA_QUALITY_RESULT" == "success" || "$JAVA_QUALITY_RESULT" == "skipped" ]]
 
   # ===========================================================================
   # 4 个 Maven unit 执行分片按依赖边界路由；B2 Worker / Console 并行后由

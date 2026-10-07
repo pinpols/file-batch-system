@@ -30,7 +30,7 @@
 ### Changed
 
 - 依赖治理改为持续告警、季度集中盘点和单个人工 PR：关闭 Dependabot 自动版本/安全修复 PR，新增季度多生态报告与治理 Issue；紧急可达漏洞仍走独立快速修复。同步升级本批依赖、固定 CI/镜像供应链输入并刷新 SBOM。
-- PR 单元测试按模块边界选择分片并拆分 Worker/Console 长尾，PR CodeQL 使用 Java 无构建快速分析而 main/定时保留手工全量构建；Full/Staging E2E 依据最新实测重排为六片，CI runbook 同步登记耗时基线与回退标准。
+- PR 单元测试按模块边界选择分片并拆分 Worker/Console 长尾；静态门禁拆分 policy、供应链和 Java quality 三路并由稳定 context 聚合；PR CodeQL 使用 Java 无构建与默认高精度查询，main/定时保留手工全量构建和扩展查询；Full/Staging E2E 依据最新实测重排为六片，CI runbook 同步登记耗时基线与回退标准。
 - Console、Trigger 与 Import 通知的固定响应改用具名类型，Pipeline 列表不再在应用层传播原始 Map；Job trigger 保留普通实例号/dry-run 对象两种 wire 形态，OpenAPI 与配对前端类型同步。Lineage 热表/归档证据使用显式构造映射，文件 metadata 解析为 JSON 对象，不透传 JDBC 驱动封装。
 - 已有生命周期、Outbox、文件格式、分发策略和通知枚举统一复用稳定 code，保留各运维操作原有状态集合与配置 DSL。新增低误报 Java 契约守卫，按固定边界、确认的有限域和已有协议键复用阻断新增退化；动态契约按方法签名登记例外。
 - E2E 测试类将重复的 Spring Boot、profile 与标签声明收敛为可配置组合注解；各类独立应用上下文、属性、业务库 schema 和特殊上下文生命周期配置保持不变。
