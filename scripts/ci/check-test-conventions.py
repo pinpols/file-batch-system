@@ -63,9 +63,9 @@ BANNED_METHOD_NAME = re.compile(r"^(?:test|test\d+|test_.+|test[A-Z].*|.+_test)$
 PREFERRED_SHOULD = re.compile(r"^should[A-Z]")
 
 KIND_LABEL = {
-    MISSING_CLASS: "类缺类级 @DisplayName",
-    MISSING_METHOD: "测试方法缺 @DisplayName",
-    NON_CHINESE: "@DisplayName 不含中文",
+    MISSING_CLASS: "测试类缺少类级中文场景名称",
+    MISSING_METHOD: "测试方法缺少中文场景名称",
+    NON_CHINESE: "测试场景名称不含中文",
     BANNED_NAME: "测试方法名是被禁形状",
     NON_PREFERRED_NAME: "测试方法名非首选形状(纯 camelCase)",
 }
@@ -424,7 +424,7 @@ def summarize(findings: list[Finding]) -> dict[str, int]:
 
 def report(findings: list[Finding], limit: int) -> None:
     summary = summarize(findings)
-    print("测试约定快照（@DisplayName 类级 + 方法级中文；方法命名两种形状）")
+    print("测试类规范快照（类级与方法级中文场景名称；方法命名两种形状）")
     print(f"  缺口合计: {len(findings)}")
     for kind in (MISSING_CLASS, MISSING_METHOD, NON_CHINESE, BANNED_NAME, NON_PREFERRED_NAME):
         print(f"    {KIND_LABEL[kind]}: {summary.get(kind, 0)}")
@@ -455,13 +455,14 @@ def check_baseline(path: Path, findings: list[Finding]) -> int:
     added = sorted(current - baseline)
     if not added:
         print(
-            f"✅ 通过 | code=TEST_CONVENTIONS | gate=测试 @DisplayName 约定 "
+            f"通过 | code=TEST_CONVENTIONS | gate=测试类规范检查 "
             f"（基线 {len(baseline)} 项，当前 {len(current)} 项，新增 0 项）"
         )
         return 0
 
     print(
-        f"❌ 新增 {len(added)} 处测试 @DisplayName 缺口（基线 {len(baseline)} 项，当前 {len(current)} 项）",
+        f"未通过 | code=TEST_CONVENTIONS | gate=测试类规范检查 | "
+        f"新增 {len(added)} 处缺口（基线 {len(baseline)} 项，当前 {len(current)} 项）",
         file=sys.stderr,
     )
     lookup = {finding.identity: finding for finding in findings}
@@ -485,7 +486,7 @@ def check_baseline(path: Path, findings: list[Finding]) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="测试 @DisplayName 约定守护")
+    parser = argparse.ArgumentParser(description="测试类中文场景名称与方法命名规范守护")
     parser.add_argument(
         "--report",
         action="store_true",
