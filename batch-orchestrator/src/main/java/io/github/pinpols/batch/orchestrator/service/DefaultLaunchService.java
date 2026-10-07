@@ -15,6 +15,7 @@ import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -154,8 +155,8 @@ public class DefaultLaunchService implements LaunchService {
     if (updated == 0) {
       log.warn(
           "updateAcceptance(DUPLICATE) affected 0 rows; the row is already terminal: tenantId={} requestId={}",
-          request.tenantId(),
-          request.requestId());
+          LogSanitizer.value(request.tenantId()),
+          LogSanitizer.value(request.requestId()));
     }
     return new LaunchResponse(
         loaded.existingInstance().getInstanceNo(), loaded.existingInstance().getTraceId());
@@ -199,8 +200,8 @@ public class DefaultLaunchService implements LaunchService {
     if (updated == 0) {
       log.warn(
           "updateAcceptance(LAUNCHED) affected 0 rows; the row is already terminal: tenantId={} requestId={}",
-          request.tenantId(),
-          request.requestId());
+          LogSanitizer.value(request.tenantId()),
+          LogSanitizer.value(request.requestId()));
     }
   }
 
@@ -256,8 +257,8 @@ public class DefaultLaunchService implements LaunchService {
       if (updated == 0) {
         log.warn(
             "updateAcceptance(REJECTED) affected 0 rows; the row is already terminal: tenantId={} requestId={}",
-            request.tenantId(),
-            request.requestId());
+            LogSanitizer.value(request.tenantId()),
+            LogSanitizer.value(request.requestId()));
       }
       appendDispatchRejectedAudit(jobInstance, dispatchFailure);
     }
@@ -628,8 +629,8 @@ public class DefaultLaunchService implements LaunchService {
     if (updated == 0) {
       log.warn(
           "updateAcceptance(DUPLICATE) affected 0 rows; the row is already terminal: tenantId={} requestId={}",
-          request.tenantId(),
-          request.requestId());
+          LogSanitizer.value(request.tenantId()),
+          LogSanitizer.value(request.requestId()));
     }
     return new LaunchResponse(existingInstance.getInstanceNo(), existingInstance.getTraceId());
   }

@@ -29,7 +29,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
 import org.mybatis.spring.annotation.MapperScan;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
@@ -40,6 +39,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.test.context.TestConstructor;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -68,6 +68,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
     })
 @EnabledIf("s3BackendActive")
 @DisplayName("文件治理调度在延迟统计,归档清理,对象对账与到达组触发上的验收")
+@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
 
   private static final class FileRecordSpec {
@@ -148,17 +149,59 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT_ID = "t1";
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private final JdbcTemplate jdbcTemplate;
+  private final FileGovernanceScheduler fileGovernanceScheduler;
+  private final FileGovernanceRepository fileGovernanceRepository;
+  private final MeterRegistry meterRegistry;
+  private final FileGovernanceProperties fileGovernanceProperties;
 
-  @Autowired
-  private FileGovernanceScheduler fileGovernanceScheduler;
+  FileGovernanceIntegrationTest(
+      JdbcTemplate jdbcTemplate,
+      FileGovernanceScheduler fileGovernanceScheduler,
+      FileGovernanceRepository fileGovernanceRepository,
+      MeterRegistry meterRegistry,
+      FileGovernanceProperties fileGovernanceProperties) {
+    this.jdbcTemplate = jdbcTemplate;
+    this.fileGovernanceScheduler = fileGovernanceScheduler;
+    this.fileGovernanceRepository = fileGovernanceRepository;
+    this.meterRegistry = meterRegistry;
+    this.fileGovernanceProperties = fileGovernanceProperties;
+  }
 
-  @Autowired
-  private FileGovernanceRepository fileGovernanceRepository;
-
-  @Autowired
-  private MeterRegistry meterRegistry;
+  @Test
+  @DisplayName("真实数据库查询保留成员校验类型,开启完整性要求后已校验文件能够触发")
+  void shouldTriggerVerifiedGroup_whenDatabaseReturnsChecksumType() {
+    String groupCode = "verified-group-" + suffix();
+    String metadata = """
+        {"fileGroupCode":"%s","requiredFileSet":"verified.csv","triggerOnComplete":true}
+        """.formatted(groupCode);
+    Long fileId = insertFileRecord(new FileRecordSpec(
+        TENANT_ID,
+        "verified.csv",
+        "INPUT",
+        FileStatus.RECEIVED.code(),
+        "LOCAL",
+        "incoming/" + groupCode + "/verified.csv",
+        metadata));
+    jdbcTemplate.update(
+        "update batch.file_record set checksum_type = 'SHA-256', checksum_value = ? where tenant_id = ? and id = ?",
+        "a".repeat(64),
+        TENANT_ID,
+        fileId);
+    boolean original = fileGovernanceProperties.getArrival().isRequireVerified();
+    try {
+      fileGovernanceProperties.getArrival().setRequireVerified(true);
+      fileGovernanceScheduler.manageFileArrivalGroups();
+      assertThat(jdbcTemplate.queryForObject(
+              "select metadata_json->>'arrivalState' from batch.file_record where tenant_id = ? and id = ?",
+              String.class,
+              TENANT_ID,
+              fileId))
+          .isEqualTo("TRIGGERED");
+    } finally {
+      fileGovernanceProperties.getArrival().setRequireVerified(original);
+    }
+  }
 
   @Test
   @DisplayName("延迟到达的文件计入送达延迟违规计数,最大延迟秒数不低于实际延迟")
@@ -233,10 +276,17 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("对象存储中的孤儿对象被登记为已接收文件记录,并写入对账审计")
   void shouldReconcileOrphanObjectIntoFileRecord() throws Exception {
-    String objectName = "incoming/" + suffix() + "-orphan.csv";
+    String reconcilePrefix = "incoming/reconcile-it-" + suffix() + "/";
+    String objectName = reconcilePrefix + "orphan.csv";
     putObject(objectName, "alpha,beta\n1,2\n");
 
-    fileGovernanceScheduler.reconcileObjectStorage();
+    String originalPrefix = fileGovernanceProperties.getReconcile().getPrefix();
+    try {
+      fileGovernanceProperties.getReconcile().setPrefix(reconcilePrefix);
+      fileGovernanceScheduler.reconcileObjectStorage();
+    } finally {
+      fileGovernanceProperties.getReconcile().setPrefix(originalPrefix);
+    }
 
     Map<String, Object> reconciled = jdbcTemplate.queryForMap("""
             select file_name,

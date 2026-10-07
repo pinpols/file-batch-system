@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -22,6 +23,12 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
@@ -30,11 +37,44 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 @DisplayName("浏览器推送接口: 公钥读取与订阅注册注销的透传")
 class ConsolePushControllerTest {
 
+  @Configuration(proxyBeanMethods = false)
+  @EnableMethodSecurity
+  static class MethodSecurityTestConfiguration {}
+
   private final ConsolePushSubscriptionService subscriptionService =
       mock(ConsolePushSubscriptionService.class);
   private final ConsoleRequestMetadataResolver requestMetadataResolver =
       mock(ConsoleRequestMetadataResolver.class);
   private MockMvc mockMvc;
+
+  @Test
+  @DisplayName("未认证订阅在方法安全边界拒绝,合法或非法载荷均不能进入服务")
+  void shouldRejectUnauthenticatedCalls_whenPayloadVaries() {
+    SecurityContextHolder.clearContext();
+    try (var context = new AnnotationConfigApplicationContext()) {
+      context.register(MethodSecurityTestConfiguration.class);
+      context.registerBean(
+          ConsolePushController.class,
+          () -> new ConsolePushController(
+              subscriptionService,
+              new ConsoleResponseFactory(requestMetadataResolver),
+              requestMetadataResolver));
+      context.refresh();
+      var controller = context.getBean(ConsolePushController.class);
+      var valid = new ConsolePushSubscribeRequest(
+          "https://push.invalid", null, new ConsolePushSubscribeRequest.Keys("p256", "auth"));
+      var request = new MockHttpServletRequest();
+      org.assertj.core.api.Assertions.assertThatThrownBy(
+              () -> controller.subscribe("ta", valid, request))
+          .isInstanceOf(AuthenticationCredentialsNotFoundException.class);
+      org.assertj.core.api.Assertions.assertThatThrownBy(
+              () -> controller.subscribe("ta", null, request))
+          .isInstanceOf(AuthenticationCredentialsNotFoundException.class);
+      verifyNoInteractions(subscriptionService);
+    } finally {
+      SecurityContextHolder.clearContext();
+    }
+  }
 
   @BeforeEach
   void setUp() {

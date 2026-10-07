@@ -108,6 +108,12 @@ class GenerateStepTest {
     assertThat(content).contains("name").contains("amount"); // header
     assertThat(content).contains("Alice").contains("100.00");
     assertThat(content).contains("Bob").contains("200.50");
+    Path generated = Path.of(
+        context.getAttributes().get(PipelineRuntimeKeys.GENERATED_FILE_PATH).toString());
+    assertThat(Files.getPosixFilePermissions(generated))
+        .isEqualTo(java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+    assertThat(Files.getPosixFilePermissions(generated.getParent()))
+        .isEqualTo(java.nio.file.attribute.PosixFilePermissions.fromString("rwx------"));
   }
 
   @Test

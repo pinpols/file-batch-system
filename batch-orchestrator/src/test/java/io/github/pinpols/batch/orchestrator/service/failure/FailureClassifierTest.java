@@ -23,6 +23,28 @@ class FailureClassifierTest {
       new FailureClassifier(new SpringTechnicalFailureClassificationAdapter());
 
   @Test
+  @DisplayName("恶意上报含换行时日志不分行,未知类别仍按异常回退分类")
+  void shouldSanitizeLog_whenReportedClassContainsLineBreaks() {
+    ch.qos.logback.classic.Logger logger =
+        (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(FailureClassifier.class);
+    var appender =
+        new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      assertThat(classifier.classify("bad\r\nFORGED\u2028record", new TimeoutException()))
+          .isEqualTo(FailureClass.TIMEOUT);
+      assertThat(appender.list).hasSize(1);
+      assertThat(appender.list.getFirst().getFormattedMessage())
+          .contains("bad_FORGED_record")
+          .doesNotContain("\r", "\n", "\u2028");
+    } finally {
+      logger.detachAppender(appender);
+      appender.stop();
+    }
+  }
+
+  @Test
   @DisplayName("上游已上报失败类别时直接采用,不再依据异常类型推断")
   void shouldUseWorkerReportedWhenPresent() {
     assertThat(classifier.classify("DATA_QUALITY", new RuntimeException()))

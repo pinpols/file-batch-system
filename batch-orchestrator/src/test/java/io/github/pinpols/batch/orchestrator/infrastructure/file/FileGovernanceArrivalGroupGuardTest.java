@@ -152,6 +152,52 @@ class FileGovernanceArrivalGroupGuardTest {
   }
 
   @Test
+  @DisplayName("束启动等待批次日时不误报触发,批次日恢复后即使到达期限已过仍归因真实结果")
+  void shouldTrackDurableWaiting_whenBundleLaunchIsDeferred() {
+    Map<String, Object> file =
+        baseFile(5501L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
+    file.put("required_file_set", "ready.csv");
+    when(repository.selectArrivalGovernanceCandidates(anyInt()))
+        .thenReturn(candidateViews(List.of(file)));
+    when(bundleArrivalLauncher.launchIfBundle(anyString(), anyString(), any()))
+        .thenReturn(
+            BundleArrivalLauncher.LaunchOutcome.WAITING,
+            BundleArrivalLauncher.LaunchOutcome.LAUNCHED);
+    scheduler.manageFileArrivalGroups();
+    ArgumentCaptor<Map<String, Object>> metadata = ArgumentCaptor.captor();
+    verify(repository).updateFileMetadata(eq("default-tenant"), eq(5501L), metadata.capture());
+    assertThat(metadata.getValue())
+        .containsEntry("arrivalState", "WAITING_ARRIVAL")
+        .containsEntry("arrivalReason", "BUNDLE_LAUNCH_WAITING");
+    file.put("arrival_reason", "BUNDLE_LAUNCH_WAITING");
+    file.put("latest_tolerable_time", "2020-01-01T00:00:00Z");
+    when(repository.selectArrivalGovernanceCandidates(anyInt()))
+        .thenReturn(candidateViews(List.of(file)));
+    scheduler.manageFileArrivalGroups();
+    verify(repository, times(2))
+        .updateFileMetadata(eq("default-tenant"), eq(5501L), metadata.capture());
+    assertThat(metadata.getValue()).containsEntry("arrivalState", "TRIGGERED");
+  }
+
+  @Test
+  @DisplayName("束启动被拒绝时进入人工处理状态,不计作已触发")
+  void shouldRequireManualConfirmation_whenBundleLaunchIsRejected() {
+    Map<String, Object> file =
+        baseFile(5502L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
+    file.put("required_file_set", "ready.csv");
+    when(repository.selectArrivalGovernanceCandidates(anyInt()))
+        .thenReturn(candidateViews(List.of(file)));
+    when(bundleArrivalLauncher.launchIfBundle(anyString(), anyString(), any()))
+        .thenReturn(BundleArrivalLauncher.LaunchOutcome.REJECTED);
+    scheduler.manageFileArrivalGroups();
+    ArgumentCaptor<Map<String, Object>> metadata = ArgumentCaptor.captor();
+    verify(repository).updateFileMetadata(eq("default-tenant"), eq(5502L), metadata.capture());
+    assertThat(metadata.getValue())
+        .containsEntry("arrivalState", "WAITING_MANUAL_CONFIRM")
+        .containsEntry("arrivalReason", "BUNDLE_LAUNCH_REJECTED");
+  }
+
+  @Test
   @DisplayName("同一到达组的触发过程抛出异常时不改写状态与审计,以便下一轮重试")
   void shouldKeepBundleGroupRetryableWhenLaunchFails() {
     Map<String, Object> file =

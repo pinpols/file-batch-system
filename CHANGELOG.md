@@ -49,6 +49,9 @@
 
 ### Fixed
 
+- 修复束文件到达组长编码请求号溢出、完整性查询遗漏校验类型及等待/拒绝误报触发。
+- 补齐 Trigger、启动服务、失败分类与结果版本操作的日志字段净化；私有临时目录、导出暂存、默认分发 Outbox 和本地对象存储统一在创建时设置私有权限，不支持 POSIX 的挂载点验证 owner-only ACL 后才允许写入。
+
 - 修复文件束到达组（ADR-046 `BUNDLE_IMPORT` / `BUNDLE_EXPORT` / `BUNDLE_DISPATCH`）到达后永不 launch 的两个缺陷：到达组文件元数据的 `metadata_json` 经 JDBC 返回 `PGobject` 时不再被当作空表（否则读不到 `bundleJobCode` 后静默跳过），并且 launch 前按同仓库其它内部 launcher 的既有模式先落 `trigger_request`（否则按 requestId 查不到行抛 `error.trigger.request_not_found`，到达组每轮 sweep 重试而束永不落地）。
 - 修复 Console 内部 RestClient 在 Spring 随机端口确定前提前解析 `${local.server.port}`、导致 E2E 应用上下文启动失败的问题；Orchestrator、Trigger 与可选 Atomic 状态客户端改为首次请求时构建并在组件生命周期内复用。
 - 修复 `ops-toolbox` Dockerfile 因未声明 Debian/PGDG 包版本策略触发 Hadolint DL3008、阻断 Full Gate 的问题；沿用应用镜像约定，显式记录从受控软件源获取最新安全补丁的窄范围例外。PR Gate 在 Dockerfile 等配置输入变化时同步初始化 JDK 21 构建环境，避免 Trivy 依赖预热误用 Runner 默认 JDK 17 后回源触发限流。

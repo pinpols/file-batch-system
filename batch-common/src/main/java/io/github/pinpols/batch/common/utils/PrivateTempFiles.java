@@ -5,17 +5,12 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.DirectoryStream;
-import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.nio.file.attribute.FileAttribute;
-import java.nio.file.attribute.PosixFilePermission;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Instant;
-import java.util.Set;
 
 /**
  * 临时目录策略的唯一入口：既为包含业务数据或凭据的中间文件提供进程级私有临时目录，也集中解析各模块本地路径
@@ -31,14 +26,6 @@ public final class PrivateTempFiles {
 
   private static final String ROOT_DIRECTORY = "file-batch-private";
   private static final String LOCK_SUFFIX = ".lock";
-  private static final FileAttribute<Set<PosixFilePermission>> OWNER_ONLY_DIRECTORY =
-      PosixFilePermissions.asFileAttribute(Set.of(
-          PosixFilePermission.OWNER_READ,
-          PosixFilePermission.OWNER_WRITE,
-          PosixFilePermission.OWNER_EXECUTE));
-  private static final FileAttribute<Set<PosixFilePermission>> OWNER_ONLY_FILE =
-      PosixFilePermissions.asFileAttribute(
-          Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
 
   private PrivateTempFiles() {}
 
@@ -154,74 +141,30 @@ public final class PrivateTempFiles {
   /** 在进程私有目录创建 owner-only 临时工作目录。 */
   public static Path createTempDirectory(String prefix) throws IOException {
     Path directory = privateDirectory();
-    if (supportsPosix(directory)) {
-      return Files.createTempDirectory(directory, prefix, OWNER_ONLY_DIRECTORY);
-    }
-    return Files.createTempDirectory(directory, prefix);
+    Path created =
+        Files.createTempDirectory(directory, prefix, OwnerOnlyFiles.attributes(directory, true));
+    OwnerOnlyFiles.protectExisting(created, true);
+    return created;
   }
 
   private static Path createTempFile(Path directory, String prefix, String suffix)
       throws IOException {
-    if (supportsPosix(directory)) {
-      return Files.createTempFile(directory, prefix, suffix, OWNER_ONLY_FILE);
-    }
-    return Files.createTempFile(directory, prefix, suffix);
+    Path created = Files.createTempFile(
+        directory, prefix, suffix, OwnerOnlyFiles.attributes(directory, false));
+    OwnerOnlyFiles.protectExisting(created, false);
+    return created;
   }
 
   private static void createOwnerOnlyFile(Path path) throws IOException {
-    if (supportsPosix(path)) {
-      Files.createFile(path, OWNER_ONLY_FILE);
-      return;
-    }
-    Files.createFile(path);
+    OwnerOnlyFiles.createFile(path);
   }
 
   private static Path privateDirectory() throws IOException {
     Path directory = resolveUnderTempRoot(ROOT_DIRECTORY);
-    boolean posix = supportsPosix(directory);
-    try {
-      if (posix) {
-        Files.createDirectory(directory, OWNER_ONLY_DIRECTORY);
-      } else {
-        Files.createDirectory(directory);
-      }
-    } catch (FileAlreadyExistsException alreadyExists) {
-      // 已存在的目录在下方统一校验类型;POSIX 下再收敛一次权限。
-    }
-    if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
+    if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)
+        && Files.exists(directory, LinkOption.NOFOLLOW_LINKS)) {
       throw new IOException("private temp path is not a directory: " + directory);
     }
-    if (posix) {
-      setOwnerOnlyPermissions(directory, true);
-    }
-    return directory;
-  }
-
-  /**
-   * 目标文件系统是否支持 POSIX 权限视图。
-   *
-   * <p>创建前先判定,而不是"先按默认权限建出来再 chmod":前者不会留下创建到收紧之间对本机其他用户可读的窗口
-   * (CodeQL java/local-temp-file-or-directory-information-disclosure 的推荐形态);非 POSIX(如 Windows)
-   * 的临时目录本身按用户隔离,无需显式权限。
-   */
-  private static boolean supportsPosix(Path path) {
-    return path.getFileSystem().supportedFileAttributeViews().contains("posix");
-  }
-
-  /**
-   * 收紧到 owner-only 权限。
-   *
-   * <p>只在 {@link #supportsPosix} 为真的路径上调用(创建时已带显式属性,这里用于既存目录的权限收敛),因此不再
-   * 吞 {@code UnsupportedOperationException}:文件系统自称支持 posix 却拒绝设置权限属异常情况,应显式暴露。
-   */
-  private static void setOwnerOnlyPermissions(Path path, boolean directory) throws IOException {
-    Files.setPosixFilePermissions(
-        path,
-        directory
-            ? Set.of(
-                PosixFilePermission.OWNER_READ,
-                PosixFilePermission.OWNER_WRITE,
-                PosixFilePermission.OWNER_EXECUTE)
-            : Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
+    return OwnerOnlyFiles.createDirectories(directory);
   }
 }

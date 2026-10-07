@@ -18,6 +18,7 @@
 | `java:S1181` | SDK Kafka consumer 边界防护；业务多片连接池构建失败时清理已创建资源并原样重抛 Error，不吞异常 | SDK、common | listener 具备等价错误边界；资源构建采用等价的失败自动回收机制 |
 | `java:S2093` | `PrivateTempFiles.createLockedTempFile` 将锁句柄所有权转移给返回的 `LockedTempFile`，调用方在上传结束后关闭，不能在工厂返回时关闭 | common | 分析器可识别跨方法的资源所有权转移 |
 | `java:S1313` | SSRF 防护内置的云元数据地址阻断规则 | worker atomic | 安全规则改由同等强度的集中策略提供 |
+| `java:S1452` | 仅 `OwnerOnlyFiles.attributes` 适配 JDK 创建 API 的异构 `FileAttribute<?>` 数组；保留实际文件系统权限校验，不用于领域返回类型 | common | JDK 提供无需通配符且支持异构属性的等价创建接口 |
 | `java:S2068` | 仅用于检测出厂默认密码常量的安全守卫 | console | 默认凭据改为首次 provision 随机生成且无兼容保留 |
 | `java:S2077` | 动态 SQL/存储过程名称仅在 allowlist、schema 和固定片段校验后执行 | orchestrator、worker | 全部调用改为参数化且不再需要动态标识符 |
 | `java:S2259`, `java:S2583`, `java:S2589` | Spring/Lombok/配置驱动的可达性或空值分析误报 | common、console、orchestrator、worker、trigger | 静态分析能识别实际控制流，或代码改为显式判定 |
