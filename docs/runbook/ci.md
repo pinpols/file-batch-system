@@ -6,6 +6,8 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 
 ## 概览
 
+长期治理原则见 [CI 与测试质量治理](../standards/ci-test-quality-governance.md)；本文只说明具体工作流与操作入口。
+
 项目有两条主要代码门禁流程（PR Gate、main Full CI Gate），另有补充验证与失败处理自动化。补充流程不替代代码合并门禁：
 
 | 工作流 | 分类 | 触发时机 | 目标 | 超时 |
@@ -13,7 +15,7 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 | `pr-gate` | PR 代码门禁 | PR → main(opened / synchronize / reopened / ready_for_review,非草稿) | 快速反馈，阻断不合格 PR | 45 min |
 | `sdk-contract-parity` | SDK 契约门禁 | PR、merge queue、每日 16:00 UTC、手动 | 五语言 fixture、共享常量和 conformance 契约 | — |
 | `full-ci-gate` | main 全量门禁 | push main、每周日 02:00 UTC、手动 | 主干质量基线 + 安全扫描(含 K8s manifest Checkov) | 75 min |
-| `staging-gate` | 补充 E2E 验证 | nightly(每天 18:00 UTC / 北京 02:00)+ workflow_dispatch | 全量 E2E(smoke + critical + regression 全跑,4 shard 并发)，不替代 `full-ci-gate` | — |
+| `staging-gate` | 补充 E2E 验证 | nightly(每天 18:00 UTC / 北京 02:00)+ workflow_dispatch | 全量 E2E(smoke + critical + regression 全跑,6 shard 并发)；Java 架构/约定守卫独立并发，不替代 `full-ci-gate` | — |
 | `daily-sim-strict-validation` | 补充真实数据验证 | nightly(每天 13:31 UTC / 北京 21:31)+ workflow_dispatch | 定时触发按最近一次计划时间对应的北京时间日期检查代码/配置变更，延迟跨午夜仍归属原计划日；手动触发按当前北京时间日期。Markdown/RST、`LICENSE`、`NOTICE` 除外。需要验证时同环境先执行 `sim-harness all`，再执行 BE-ACC step 5(strict real-data verification)；strict step 使用 `always()` 采证，不因 sim 失败被短路 | 240 min |
 | `docker-image-build` | nightly / 可选发布镜像构建 | 由 `daily-sim-strict-validation` 在当天有代码/配置变更且 sim + strict 成功后调用；也支持手动和复用调用 | 默认只用 Docker Bake 构建全部应用镜像和运维工具箱镜像；显式 `publish=true` 时登录 GHCR、推送 SHA 镜像并上传含 immutable digest 的 backend image set。CI 使用 Maven Central 配置并带依赖下载重试 | 30 min |
 | `OpenSSF Scorecard` | 供应链治理报告 | push main、每周三、手动 | 生成 SARIF 并上传 Code Scanning；不按总分阻断 PR | 20 min |
@@ -29,12 +31,13 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 
 | 类别 | 当前版本 | 说明 |
 |---|---|---|
-| `actions/checkout` | v7 | 所有 workflow/composite action 统一 |
+| `actions/checkout` | v7（固定提交 SHA） | 所有 workflow/composite action 统一 |
 | `actions/setup-python` | v7 | Python 3.x 版本由 workflow 输入决定 |
 | `actions/setup-java` | v6 | JDK/Maven cache 和发布凭据需按原输入验证 |
 | `actions/setup-node` | v7 | npm 发布 job 显式提供 `NODE_AUTH_TOKEN` |
 | `actions/setup-go` | v7 | 保留现有 `go-version` / `go-version-file` 输入 |
 | `actions/upload-artifact` | v7 | artifact 名称和下载配对保持不变 |
+| `actions/download-artifact` | v8 | Full Gate 质量趋势汇总测试报告 |
 | `docker/setup-buildx-action` | v4 | Buildx/Bake 构建需在 CI 回归 |
 | Hadolint Action | v3.5.0 | Dockerfile lint |
 | SBOM Action | v0.24.2 | 固定具体 release，不再使用浮动 `v0` |
@@ -54,7 +57,8 @@ CodeQL 的 `Analyze (java)` 只有在 `codeql.yml` 已于 main 生效、并确�
 - `actions/upload-artifact@v7` 使用当前 artifact 服务契约；迁移到 GHES 前必须确认 GHES 支持该 major，否则保持独立兼容版本或由平台团队提供替代上传方案。
 - Gitleaks `8.30.1` 本轮不盲目更换；已在 Docker `linux/amd64` 用同版 artifact 验证合成 `ghp_...` 正向退出 1、负向退出 0，并通过 PR/Full Gate 安全扫描；继续关注上游规则变化，该样例不代表所有密钥类型。
 - CodeQL、Trivy Action、Checkov、发布 Action 和 Sonar 仍按 G7 定期复核，不因本批版本升级自动视为完成。
-- `.github/dependabot.yml` 对 GitHub Actions、Maven 和 Docker 保留有限的每周更新队列；安全更新在 GitHub 平台启用。Docker 只扫描实际存放 Dockerfile 的 `deploy/docker`，major 升级继续人工评审。
+- `.github/dependabot.yml` 对普通版本按月检查，安全更新保持即时；仅对 Maven 和 GitHub Actions 的 patch 按生态分组，minor 保留单项 PR，Docker 不做宽泛分组，major 人工升级。Dependabot 不能跨 package ecosystem 生成一张 PR；跨生态汇总只适用于风险等级相当、验证边界相同的更新。Maven 更新还必须同步入库 SBOM；CI 保持只读校验，避免在高权限 workflow 中执行 PR 提供的 Maven 配置并回写分支。Docker 只扫描 `deploy/docker`；`maven` 构建镜像因 tag 携带 JDK 主版本而排除自动升级。
+- 所有外部 Action 必须使用 40 位提交 SHA；尾部版本注释仅用于可读性。`check-github-action-pinning.py` 在本地、PR 和 Full Gate 阻止浮动 tag/branch 回流。
 
 ## 触发矩阵(开发者视角)
 
@@ -74,6 +78,8 @@ CodeQL 的 `Analyze (java)` 只有在 `codeql.yml` 已于 main 生效、并确�
 - **`concurrency.group + cancel-in-progress`** 全配 — 同分支并发 push / 同 PR 多次推时,旧 run 自动取消省 runner
 - **pr-gate 与 full-ci-gate 检查项不完全相同**:见下表(pr-gate 重快速反馈,full-ci-gate 重深度回归 + 安全扫描)
 - **main 红线独立于 PR 绿灯**:PR gate 通过只代表候选变更可合入；合入后的 main 只有最新 `full-ci-gate` 通过才可作为发布基线。
+- **CodeQL 分层执行**：PR 使用 Java `build-mode: none` 缩短 required check；main push、定时和手工运行保留手工全量编译，继续覆盖构建生成代码和精确依赖。仓库若引入 Kotlin，必须先恢复构建模式再合入。
+- **非测试 job 不准备 Testcontainers**：静态检查、安全扫描和 CodeQL 通过 `cache-testcontainers: false` 跳过容器镜像恢复；单元/集成/E2E 仍保留镜像缓存。
 - **门禁结果行统一**:本地 hook 与 CI 统一输出 `状态 | code | gate | exit_code | action`；跳过时再输出 `reason`。单步中串行运行多个阻断检查时，每项都必须通过共享 `gate_run` 输出独立结果；具体诊断信息可保留各检查器原有内容。
 - **静态门禁失败统一汇总**：PR 与 Full Gate 的 `static-checks` 会继续执行所有相互独立的业务/规范检查，在 job 末尾一次性列出失败代码、名称和退出码后阻断；checkout、构建环境安装等缺失后无法继续的基础前置仍立即失败。本地 pre-commit/pre-push 保持首错即停。
 - **SBOM 快照必须同步**：POM 或 CI 门禁变更时，PR Gate 重生成 CycloneDX SBOM 并与 `docs/compliance/sbom.json` 比较；Full Gate 的许可证检查再次复核。动态 artifact 生成成功不等于入库快照已同步。
@@ -110,40 +116,39 @@ gh pr create --base main --head revert/main-broken-<short-sha> --title "revert: 
 | 维度 | pr-gate(增量) | full-ci-gate(全量) |
 |---|---|---|
 | **范围探测** | ✅ 有 — `scripts/ci/detect-change-scope.py` 按 changed files 决定 | ❌ 永远 full reactor |
-| **3 态决策** | `skip` / `partial` / `full` 三档 | 永远 `full` |
-| **Maven 范围** | partial 时 `-pl <module> -am -amd` 只跑受影响模块 | 全 10 模块跑 |
-| **E2E suite** | partial 时跳过 batch-e2e-tests | 拆 `e2e-shard` 独立 job 25 min 并发跑 |
+| **单元测试路由** | 四个保守分片信号；公共边界全跑，叶子模块只跑所属分片 | 永远全跑 |
+| **Maven 范围** | 每个被选分片先用 `install -DskipTests -am` 构建依赖，再只测试本分片模块；PR unit 分片排除 `*IntegrationTest` | 全部固定分片并发执行；依赖只构建一次/分片，目标模块执行完整 unit + IT |
+| **E2E suite** | 不运行，由合入后门禁回退 | 28 个测试按实测 LPT 拆为 6 个并发 shard |
 | **Hadolint / Trivy fs** | ❌ 不跑 | ✅ 跑 |
 | **文本 UTF-8 编码** | PR 相对目标分支扫描变更文本 | 全仓扫描 |
 | **测试约定（`@DisplayName` + 方法命名）** | 相对 `docs/governance/test-conventions-baseline.txt` 只拦**新增**缺口（中文 `@DisplayName` 类级/方法级；方法名只接受 `shouldXxx_whenYyy` / `方法名_条件_预期`，禁用形状直接失败） | 同一份基线全量复核 |
 | **运行时 UTF-8 配置** | Java / SDK / config / CI 变更时核对 Compose、Dockerfile、Helm、Testcontainers | 全量核对 |
 
-### pr-gate 自动 escalate 到 full 的"敏感路径"
+### PR 单元分片路由
 
-只要 changed files 命中以下任一,pr-gate 立即升级为 full reactor(不再 partial):
+范围探测输出 `unit-a-required`、`unit-b1-required`、`unit-b2-workers-required` 和
+`unit-b2-console-required`。规则如下：
 
-```
-pom.xml                    # 根 pom 变 → 全模块依赖可能变
-.mvn/*                     # Maven wrapper / 配置
-.github/workflows/*        # workflow 自身变
-scripts/ci/*               # CI 脚本变
-scripts/local/*            # 本地脚本影响 dev 环境一致性
-helm/*                     # 部署 chart
-docker-compose.yml         # 容器编排
-batch-common/*             # 跨模块基础库,改了全部模块都受影响
-```
+| 路径 | 执行分片 |
+|---|---|
+| Orchestrator、Java SDK | A |
+| Worker Core | A、B1、B2 Worker |
+| Trigger、Process、Dispatch | B1 |
+| Import、Export、Atomic | B2 Worker |
+| Console API | B2 Console |
+| Common、Test Support、数据库迁移、任意 POM、Maven Wrapper、未知路径或未登记 `batch-*` 模块 | 全部 |
 
-其余 `batch-<module>/*` 命中只升级到该模块 + -am -amd 上下游。
+`unit-it-b2` 是 Ruleset 使用的稳定聚合 context；内部 Worker/Console 子分片任一失败都会使聚合失败。
 
 ## 非代码提交触发吗?
 
 | 提交类型 | pr-gate | full-ci-gate |
 |---|---|---|
 | 纯 `docs/**.md` | ⚠️ workflow 触发但范围探测判 `docs-only`,Maven 不跑(几秒结束) | ⏭️ `paths-ignore` 不触发 |
-| 纯 `.github/workflows/*.yml` | ✅ workflow 触发 + 升级 full(workflow 自身改要全测) | ✅ 全跑 |
-| 纯 `helm/*` | ✅ workflow 触发 + 升级 full | ✅ 全跑 |
-| 纯 `scripts/local/*` | ✅ workflow 触发 + 升级 full | ✅ 全跑 |
-| 纯 `db/migration/*.sql` | ✅ database 静态检查运行（Flyway、migration safety、注释覆盖）；Maven scope 可跳过 | ✅ 全跑 |
+| 纯 `.github/workflows/*.yml` | ✅ CI 静态检查；Maven 单元跳过 | ✅ 全跑 |
+| 纯 `helm/*` | ✅ 配置/部署静态检查；Maven 单元跳过 | ✅ 全跑 |
+| 纯 `scripts/local/*` | ✅ 脚本静态检查；Maven 单元跳过 | ✅ 全跑 |
+| 纯 `db/migration/*.sql` | ✅ database 静态检查 + 全单元分片 | ✅ 全跑 |
 | 纯 `docs/api/console-api.openapi.yaml` | ✅ api 路由同步与 OpenAPI 破坏性变更检查运行；Maven scope 可跳过 | ✅ 全跑 |
 
 **结论**:`full-ci-gate` 对明确列入 `paths-ignore` 的纯文档/许可证/编辑器配置不触发；
@@ -156,7 +161,7 @@ SDK 纯变更由 SDK workflow 负责，`docs/api/**` 等契约路径不在忽略
 `.github/actions/detect-change-scope` 是 workflow 的统一入口，底层使用
 `scripts/ci/detect-change-scope.py`，是后端仓库 CI 的范围分类唯一实现。它输出
 `java`、`sql`、`database`、`scripts`、`docs`、`config`、`api`、`sdk`、`ci`、
-`tests`、`docker`、`helm`、`maven` 和 `unknown` 布尔字段，并在 GitHub Actions 中
+`tests`、`docker`、`helm`、`maven`、`unknown` 及四个单元分片布尔字段，并在 GitHub Actions 中
 同时写入 Job outputs 和 Step summary。一个文件可以命中多个域，例如 Flyway SQL
 同时命中 `sql` 与 `database`，SDK 共享常量同时命中 `sdk` 与 `docs`/`api`。
 已登记的根目录运行时和质量工具配置归入 `config`，不会单独触发 Maven unit；未登记的新路径
@@ -191,8 +196,13 @@ SDK 五语言契约矩阵。
 | E2E 套件 (`*E2eIT`) | Maven `test` `-pl batch-e2e-tests` | full-ci-gate |
 
 > 约定/架构守护（`*ArchTest`、`*ConventionTest`，如 `RepositoryMapReturnConventionTest`、`PositionalArgsConventionTest`）
-> 不单独接线 workflow：它们随上述「编译 + 单元测试」的 Maven `test` 全量执行并阻断，触发范围即该行的「全部」。
+> 由 PR / Full / Staging 的 `java-governance` job 独立执行，业务 unit/IT 显式排除这两类后缀。
+> `check-java-governance-test-coverage.py --verify-reports` 要求每个源码类都产生 Surefire XML，零用例或漏跑会阻断。
 > 这类测试型守卫的登记入口是 [约定约束与漂移防护总账](../audit/convention-drift-guard-index.md) 的守卫矩阵（`check-*` / `validate-*` 脚本另由 [scripts/ci/README.md](../../scripts/ci/README.md) 登记）。
+> Python / Shell / 配置/契约守卫在 `static-checks` 中独立命名执行，不混入 Maven unit/IT；
+> 为避免重复 checkout 和 JDK 初始化，它们暂不拆成额外 runner job。
+> 本地 pre-commit 只核对治理测试源码清单；pre-push 在 Java、POM 或相关 CI 路由变化时调用
+> `run-java-governance-tests.sh` 真实执行同一组测试，在线 workflow 也复用该入口。
 
 ### 提醒项（失败只通知，不阻断流水线）
 
@@ -218,12 +228,13 @@ pr-gate 会根据 PR 变更文件范围决定 Maven 构建粒度：
 
 | 变更范围 | Maven 行为 |
 |---|---|
-| 影响全局（`pom.xml`、`.github/`、`scripts/ci/`、`helm/`、`batch-common/` 等） | 全量 reactor |
-| 仅单个模块（如 `batch-console-api/`） | 仅构建受影响模块及其依赖（`-pl ... -am -amd`） |
-| 仅 `load-tests/` | 只编译 load-tests，跳过 reactor |
+| 公共代码、测试基础设施、数据库迁移、POM/Maven Wrapper、未知路径 | 四个单元分片全部执行 |
+| 仅单个叶子模块（如 `batch-console-api/`） | 仅执行所属分片；Maven 先构建依赖闭包，再只测试叶子模块 |
+| Worker Core | 执行 Core 自身和三组 Worker 分片，不启动 Console 分片 |
+| 仅 CI、脚本、部署配置或文档 | 跳过 Maven 单元测试，保留命中域的静态门禁 |
 | 无 Java 相关变更 | 跳过 Maven gate |
 
-所有路径下均跳过集成测试套件（`--skip-it-suite`），保证 PR 反馈在 45 分钟内完成。
+PR 所有单元分片均设置 `-DskipITs=true`；集成和 E2E 由 Full Gate 回退。详细证据与回退条件见 [CI 门禁耗时分析与优化记录](../analysis/ci-gate-runtime-optimization-2026-10-07.md)。
 
 ---
 
@@ -430,35 +441,26 @@ make ops-compensate     # 触发补偿
 
 ## flaky 治理
 
-surefire / failsafe 配置 `rerunFailingTestsCount=2`(pom.xml ~224 行):首次 fail 后再跑 2 次,任一过即标 **flaky-but-pass**,不污染主分支绿。问题是:这些飘的用例若没人盯,会在主干上越堆越多,直到某次同时失败 3 次彻底翻红。
-
-### 监控脚本
-
-`scripts/ci/collect-flaky.sh`(底层 `collect-flaky.py`,纯 Python 3 标准库,无外部依赖)。扫所有模块 `target/{surefire,failsafe}-reports/TEST-*.xml`,提 `<flakyFailure>` / `<flakyError>` 节点。
-
-- **接入位置**:`run-full-regression.sh` 末尾,跑完测试后自动调用 —— 因此 `pr-gate` / `full-ci-gate` / `make ci*` 全链路都会跑。脚本恒 `exit 0`,**永不阻断已绿 build**(flaky 本就允许 pass)。
-- **输出**:
-  - stdout:人读 summary(模块 / 类#方法 / 重试次数 / 首条错误摘要)
-  - GH Actions:自动写 `$GITHUB_STEP_SUMMARY` Markdown 表,直接在 run 页面看
-  - 可选 `--json <path>`:机读 JSON,留给后续趋势分析 / 告警
-  - 可选 `--warn-threshold N`(默认 5):超阈值在 stderr 打 WARN(仍不阻断)
+必需门禁的 `rerunFailingTestsCount` 固定为 `0`，首次失败就是失败，不允许用全局重跑掩盖回归。确认受外部时序影响且无法立即修复的测试，才可使用 `@FlakyTest(issue, owner, expiresOn)` 临时隔离；默认测试排除 `flaky` tag，每周或手动 Full Gate 通过 `run-flaky-quarantine.sh` 单独执行并最多重跑两次。
 
 ```bash
-# 本地手动跑(需先有 target/*-reports/)
-bash scripts/ci/collect-flaky.sh
-bash scripts/ci/collect-flaky.sh -- --json build/flaky.json --warn-threshold 3
+python3 scripts/ci/check-flaky-test-governance.py
+bash scripts/ci/run-flaky-quarantine.sh
 ```
 
-### 治理流程(运维定期巡检)
+隔离规则：
 
-1. **每周一巡**:翻最近一周 `full-ci-gate` 的 step summary(或下载 surefire-reports artifact 跑 `collect-flaky.sh`),记录 flaky 用例 Top N。
-2. **建治理 issue**:同一用例连续 ≥ 2 周出现 → 开 issue 派给原作者 / 模块 owner,标 `flaky-test` label。
-3. **修不动就隔离**:确认无法稳定的,改成 `@Disabled("flaky — see #<issue>")` 暂时下线,避免长期遮蔽真问题。**禁**直接删测试 —— 必须先有 issue 跟踪原因。
-4. **结构性原因**:flaky 集中在某模块(如 testcontainers Kafka / Redis 等待时序),走 `AbstractIntegrationTest` 调容器超时 / Awaitility 等待,而不是每个测试自己固定 sleep。
+1. 必须先建 Issue，写明可复现条件和修复计划。
+2. `owner` 使用 GitHub 账号或团队，`expiresOn` 使用绝对日期；到期未处理会阻断静态门禁。
+3. 禁止用 `@Disabled` 替代隔离，禁止在必需门禁命令行重新打开全局重跑。
+4. 根因修复后删除 `@FlakyTest`；`collect-flaky.sh` 仅汇总隔离执行产生的首次失败记录。
 
-### 为什么不阻断 build
+## 覆盖率、变异测试与趋势
 
-CI gate 阻断要满足「确定性 fail」前提;flaky 用例第一次 fail 是噪声,阻断就把噪声升级成主干 red,反而让开发者忽略后续真问题。阻断由人工治理 issue 回退,脚本只负责**让 flaky 可见**。
+- PR / Full Gate 的 Java shard 使用 `check-diff-coverage.py` 校验本次变更的可执行行覆盖率，最低 80%；存量 Bundle 25% 和核心类 80% 棘轮继续保留。
+- 每周及手动 Full Gate 使用 `run-critical-mutation.sh` 对 `FileStateMachine` 和 `DefaultLifecycleEventMapper` 运行 PIT，阈值为变异杀死率 70%、覆盖率 80%。范围保持小而稳定，不做全仓变异测试。
+- `quality-trend` job 汇总当前 Surefire/Failsafe XML，并读取最近 30 次 `full-ci-gate` 的成功率和耗时；JSON/Markdown 产物保留 90 天。报告包含测试总量、失败/跳过、首次失败重跑、E2E 成功、失败类型、禁用测试和软门禁数量。
+- 软门禁统一登记在 `docs/governance/soft-gates.json`；每项必须有 owner、当前基线、升级期限和目标。CodeQL 上传的有限重试属于传输容错，不计为软门禁。
 
 ---
 
@@ -470,29 +472,36 @@ CI gate 阻断要满足「确定性 fail」前提;flaky 用例第一次 fail 是
 
 ---
 
-## 耗时基线(2026-05-23 snapshot)
+## 耗时基线（2026-10-07）
 
-最近一次成功跑的总耗时与 job 分布。指标用于回归告警:任一 wf 超基线 +50% 需排查。
+优化前最近成功运行的基线。取消运行不进入样本；任一 workflow P90 连续三次超过目标上限 50% 需排查。
 
-| Workflow | 总耗时 | 触发 | 目标 | 状态 |
-|---|---|---|---|---|
-| pr-gate | 4:21 | PR / push | ≤6m | ✅ |
-| codeql | 4:21 | PR / push / 周 | ≤6m | ✅ |
-| workflow-lint | 0:18 | 改 `.github/workflows/**` | ≤1m | ✅ |
-| full-ci-gate | 6:19 | push main / nightly / 手动 | ≤10m | ✅(已贴目标) |
-| staging-gate | — | nightly schedule / 手动 | — | 全量 E2E 回退闸门 |
+| Workflow | 样本 | 优化前 P50 | 优化前 P90 | 优化后目标 |
+|---|---:|---:|---:|---:|
+| pr-gate | 20 | 8:10 | 8:58 | P50 3:30-5:00 |
+| PR CodeQL | 18 | 8:19 | 9:58 | P50 3:00-5:00 |
+| full-ci-gate | 20 | 8:26 | 11:44 | P50 4:30-6:00 |
+| staging-gate | 未纳入本轮样本 | — | — | 六片全量 E2E 4:00-5:30；Java 治理组并发，不进入关键路径 |
 
 ### Job 级分布
 
-**pr-gate(5 job 并行,瓶颈 unit-it-b2)**
-- static-checks 1:57 / security-scan 1:16 / unit-it-a 2:49 / unit-it-b1 3:02 / **unit-it-b2 4:14** ← critical path
+**pr-gate（优化前）**
 
-**full-ci-gate(9 job 并行,瓶颈 security-scan)**
-- static-checks 1:36 / unit-it-a 3:04 / unit-it-b1 3:13 / unit-it-b2 4:06 / e2e-shard 1-4 各 4:23-4:58 / security-scan 6:15（历史值，含 OWASP dependency-check NVD 下载）
+- 最近一次首个 runner 等待 47 秒；`unit-it-b2` 482 秒，其中 Maven 测试 424 秒。
+- 优化后 B2 拆为 Worker / Console 并行，叶子模块只启动所属分片；required context 名仍为 `unit-it-b2`。
 
-> 2026-08-09:security-scan job 移除 OWASP dependency-check 步骤（NVD 下载 5 分钟超时仍只下到 70k/352k，且该步骤 continue-on-error 不拦门禁；依赖漏洞已由同 job 的 Trivy fs 覆盖），job 预计从 6:15 降到 ~2:00，full-ci-gate 瓶颈随之变为 e2e-shard。
+**full-ci-gate（优化前）**
 
-> 2026-05-23:PR #27 合并后,本仓删除了 `capacity-gate` / `promote-staging`(dead code,见本文档开头说明);`staging-gate` 仍保留为 nightly 全量 E2E 回退闸门。
+- 最近一次最长 Unit / E2E job 分别为 475 / 477 秒。
+- 优化后 Unit B2 拆分，四个 Java shard 不再通过 `-am` 重复执行上游测试；E2E 从 4 片改为实测 LPT 六片，每片测试体基线 148-179 秒。
+- 静态守卫与 unit/IT 分离且去掉 action-pinning 重复执行；Java Arch/Convention 守卫单独并发执行，统一入口本地基线约 68 秒。
+
+**CodeQL（优化前）**
+
+- 最近 PR 运行约 9:02：环境 44 秒、编译 289 秒、分析 136 秒、上传 7 秒。
+- PR 改为 Java no-build；main/定时/手工仍使用 manual build，在线连续 10 次运行后更新本节实测数据。
+
+完整样本、运行链接和回退标准见 [CI 门禁耗时分析与优化记录](../analysis/ci-gate-runtime-optimization-2026-10-07.md)。
 
 ---
 
@@ -509,7 +518,7 @@ CI gate 阻断要满足「确定性 fail」前提;flaky 用例第一次 fail 是
     docker-image-build.yml   # 手动 / reusable 镜像构建
     label-automerge.yml      # automerge 标签自动归并
   actions/
-    setup-build-env/         # 共享 setup：JDK、Maven cache、OpenAPI 校验
+    setup-build-env/         # 共享 setup：JDK、Maven cache、OpenAPI 校验；Testcontainers 缓存可关闭
     detect-change-scope/     # 共享变更范围探测入口
   renovate.json              # 依赖自动更新配置
 
@@ -524,6 +533,14 @@ build/
 
 pom.xml                      # 父 pom：JaCoCo agent、PMD、Spotless 插件配置
 ```
+
+### CodeQL 构建模式
+
+- PR：`build-mode: none`，仍运行 `security-extended` 查询并上传 SARIF，作为 required `Analyze (java)`。
+- main push、schedule、workflow_dispatch：`build-mode: manual`，执行跳过测试的全 reactor 编译后分析。
+- 无构建模式只适用于当前纯 Java 仓库；引入 Kotlin 或发现生成源码漏析时必须恢复 PR 手工构建。
+- PR 与 main 告警差异需要人工解释，不能仅因 PR 更快就认定覆盖等价。
+
 ### Sonar 门禁（预留，默认关闭）
 
 仓库已预留 `.github/workflows/sonar-gate.yml`，但默认不执行，不纳入当前

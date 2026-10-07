@@ -36,7 +36,7 @@ flowchart LR
 | Runner 类别 | 标签 | 可执行内容 | 信任边界 |
 |---|---|---|---|
 | 校验 Runner | `linux-docker`, `unit`, `integration` | 单测、编译、静态检查、容器集成测试 | 不接触生产凭据 |
-| E2E Runner | `e2e` | 4 shard E2E、真实依赖容器、长回归 | 独立 Docker 主机和临时凭据 |
+| E2E Runner | `e2e` | 6 shard E2E、真实依赖容器、长回归 | 独立 Docker 主机和临时凭据 |
 | 受保护 Runner | `staging` | staging 联测、发布前验证 | 仅 protected branch/tag，禁止 fork 作业 |
 
 Runner 标签只是调度约束，不是权限边界；真正的权限仍由 protected branch、protected variables、网络 ACL 和独立主机保证。
@@ -45,7 +45,7 @@ Runner 标签只是调度约束，不是权限边界；真正的权限仍由 pro
 
 | 当前能力 | GitLab 对应物 | 迁移要求 |
 |---|---|---|
-| `pr-gate` | `merge_request_event` pipeline | 保留 changed-scope 探测、`-am -amd` 增量构建和 45 分钟目标 |
+| `pr-gate` | `merge_request_event` pipeline | 保留 changed-scope 四分片路由、固定模块列表与 3-5 分钟反馈目标 |
 | `full-ci-gate` | protected `main` 的 push pipeline | 保留全 reactor、依赖扫描、Hadolint、Trivy、Checkov 和 E2E shard |
 | `staging-gate` | schedule + manual pipeline | 只允许受保护 Runner 访问 staging；保留 smoke / critical / regression 分层 |
 | `sdk-contract-parity` | parallel matrix / child pipeline | 每种语言独立 job，结果和报告必须可下载 |
@@ -123,13 +123,14 @@ GitLab 服务端建议独立部署，不与 Runner 共用 Docker 主机。最低
 ### 阶段 2：PR 门禁等价迁移
 
 - 实现 `.gitlab-ci.yml` 和可复用 `.gitlab/ci/*.yml` 模板。
-- 迁移 `pr-gate` 的 scope 探测、Maven `-am -amd`、OpenAPI/依赖边界、secret scan 和报告上传。
+- 迁移 `pr-gate` 的 scope 探测、四个单元分片信号、固定 `-pl ... -am` 模块列表、
+  OpenAPI/依赖边界、secret scan 和报告上传。不要恢复无边界的 `-amd` 扩散。
 - 配置 MR 必需 pipeline、main protected branch、至少一名审核者和禁止直接推送。
 - 通过条件：连续 5 个真实 MR 无漏跑、误报、静默 skip 或 artifact 缺失。
 
 ### 阶段 3：全量门禁和 E2E
 
-- 迁移 `full-ci-gate` 全 reactor、安全扫描和 4 shard E2E。
+- 迁移 `full-ci-gate` 全 reactor、安全扫描和 6 shard E2E。
 - 使用 `needs` 和 parallel matrix 控制并发；用 `resource_group` 防止同一 staging 环境并发发布。
 - 对长任务设置 job timeout，但不以超时掩盖测试失败；所有 shard 必须汇总结果。
 - 通过条件：full gate 与当前基线结果一致，E2E 无未记录的 skip，测试报告和日志完整可取。

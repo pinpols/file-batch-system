@@ -194,9 +194,26 @@ if ((workflow_changed == 1)); then
   gate_run PRE_COMMIT_ACTIONLINT "GitHub Actions lint" check_workflows
 fi
 
+gate_run PRE_COMMIT_ACTION_PINNING "GitHub Actions SHA 固定" \
+  "$PYTHON_BIN" scripts/ci/check-github-action-pinning.py
+gate_run PRE_COMMIT_SOFT_GATES "软门禁治理" \
+  "$PYTHON_BIN" scripts/ci/check-soft-gate-governance.py
+gate_run PRE_COMMIT_FLAKY_QUARANTINE "flaky 测试隔离治理" \
+  "$PYTHON_BIN" scripts/ci/check-flaky-test-governance.py
+gate_run PRE_COMMIT_JAVA_GOVERNANCE_INVENTORY "Java 治理测试清单" \
+  "$PYTHON_BIN" scripts/ci/check-java-governance-test-coverage.py
+
 if ((scripts_changed == 1)); then
   gate_run PRE_COMMIT_SCRIPT_GOVERNANCE "脚本治理" \
     "$PYTHON_BIN" scripts/ci/check-script-governance.py
+  gate_run PRE_COMMIT_CI_QUALITY_GUARD_TESTS "CI 质量治理门禁测试" \
+    "$PYTHON_BIN" -m unittest \
+    scripts/ci/tests/test_check_github_action_pinning.py \
+    scripts/ci/tests/test_check_flaky_test_governance.py \
+    scripts/ci/tests/test_check_soft_gate_governance.py \
+    scripts/ci/tests/test_check_diff_coverage.py \
+    scripts/ci/tests/test_check_java_governance_test_coverage.py \
+    scripts/ci/tests/test_report_ci_quality_trends.py
   gate_run PRE_COMMIT_TESTCONTAINERS_REUSE_LABEL "Testcontainers 复用标签判定" \
     "$PYTHON_BIN" scripts/ci/check-testcontainers-reuse-label.py
   gate_run PRE_COMMIT_SCHEMA_GOVERNANCE_ASSETS "数据库结构治理资产" \

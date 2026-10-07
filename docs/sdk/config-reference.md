@@ -24,7 +24,7 @@
 | kafkaSaslMechanism | string | prod 必填 | null | `KAFKA_SASL_MECHANISM` | 如 `SCRAM-SHA-512` |
 | kafkaSasl 凭据 | string | prod 必填 | null | Java: `KAFKA_SASL_JAAS_CONFIG` · Python: `KAFKA_SASL_USERNAME` + `KAFKA_SASL_PASSWORD` | SASL 鉴权失败 → fast-fail 不重试 → K8s liveness 重启;**禁硬编码**(K8s Secret / env 注入) |
 | requestSigningEnabled | bool | 否 | false | `REQUEST_SIGNING_ENABLED`(`true/1/yes/on` 开) | 开启后写请求带 HMAC 签名;apiKey 空则即便开也不签 |
-| strictTimingValidation | bool | 否 | true | `STRICT_TIMING`(`false/0/no/off` 降级) | true=时序 4 规则违反即 fail-fast;false=WARN-only |
+| strictTimingValidation | bool | 否 | true | `STRICT_TIMING`(`false/0/no/off` 降级) | true=时序 4 规则违反即 fail-fast;false=WARN-only；Java 调度周期仍必须 > 0 |
 | claim/retry 退避 | int/时长 | 否 | 见下 | 见「语言差异」 | 5xx / 传输错误指数退避;连续 4xx(非鉴权非 409)达阈值 → fatal |
 
 ## 语言适配边界

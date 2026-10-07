@@ -33,7 +33,6 @@ class GitHubActionPinningTest(unittest.TestCase):
                 encoding="utf-8",
             )
             self.assertEqual([], MODULE.find_unpinned([path]))
-
     def test_rejects_mutable_version_reference(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "workflow.yml"
@@ -52,7 +51,6 @@ class GitHubActionPinningTest(unittest.TestCase):
             violations = MODULE.find_unpinned([path])
             self.assertEqual(1, len(violations))
             self.assertIn("缺少版本注释", violations[0])
-
 
 if __name__ == "__main__":
     unittest.main()

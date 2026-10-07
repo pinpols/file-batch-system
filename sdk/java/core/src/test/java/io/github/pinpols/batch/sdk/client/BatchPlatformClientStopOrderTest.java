@@ -109,4 +109,33 @@ class BatchPlatformClientStopOrderTest {
 
     Mockito.verifyNoInteractions(http);
   }
+
+  @Test
+  @DisplayName("启动中途失败时即使 started=false 也清理已分配的运行资源")
+  void shouldCleanPartialRuntimeResources_whenStartupFailsBeforeStartedFlag() throws Exception {
+    BatchPlatformClient client = BatchPlatformClient.builder(cfg()).build();
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    TaskDispatcher dispatcher = mock(TaskDispatcher.class);
+    KafkaTaskConsumer kafka = mock(KafkaTaskConsumer.class);
+    HeartbeatScheduler heartbeat = mock(HeartbeatScheduler.class);
+    LeaseRenewalScheduler lease = mock(LeaseRenewalScheduler.class);
+
+    inject(client, "httpClient", http);
+    inject(client, "started", false);
+    inject(client, "dispatcher", dispatcher);
+    inject(client, "kafkaConsumer", kafka);
+    inject(client, "heartbeatScheduler", heartbeat);
+    inject(client, "leaseRenewalScheduler", lease);
+
+    client.stop(Duration.ofMillis(500));
+
+    InOrder order = Mockito.inOrder(kafka, dispatcher, heartbeat, lease, http);
+    order.verify(kafka).close(any(Duration.class));
+    order.verify(dispatcher).stop(any(Duration.class));
+    order.verify(http).cancelInFlightCalls();
+    order.verify(heartbeat).close(any(Duration.class));
+    order.verify(lease).close(any(Duration.class));
+    order.verify(http).deactivate(anyString(), any(), any(Duration.class));
+    order.verify(http).evictIdleConnections();
+  }
 }

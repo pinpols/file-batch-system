@@ -271,7 +271,16 @@ public class BatchPlatformClientConfig {
       throw new IllegalArgumentException(
           "maxConcurrentTasks must be 1..64, got " + maxConcurrentTasks);
     }
+    requirePositiveSchedulerInterval("heartbeatInterval", heartbeatInterval);
+    requirePositiveSchedulerInterval("leaseRenewInterval", leaseRenewInterval);
     validateTimings();
+  }
+
+  /** 调度器不接受零或负周期；该结构约束不能被 WARN 降级，否则 client 会在后台线程启动后失败。 */
+  private static void requirePositiveSchedulerInterval(String name, Duration interval) {
+    if (EmptyChecks.isNull(interval) || interval.isZero() || interval.isNegative()) {
+      throw new IllegalArgumentException(name + " must be > 0, got " + interval);
+    }
   }
 
   /**

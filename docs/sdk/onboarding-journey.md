@@ -210,6 +210,8 @@ SDK 启动期对 4 条时序规则做 cross-field 校验,违反默认 `IllegalSt
 **降级开关**(Round-2 P0 #4):配置稍偏时,默认 fail-fast 会触发 K8s 重启循环对运维不友好。可通过
 `BATCH_SDK_STRICT_TIMING=false`(或 builder `.strictTimingValidation(false)`)把 4 规则违反从
 throw 降级为 `log.warn(...)`,client 仍可 build。**临时口子**,适用于运维降级窗口,不建议长期开启。
+Java SDK 的 `heartbeatInterval` 和 `leaseRenewInterval` 必须始终大于 0；这是调度器可运行的结构约束，
+不受该降级开关影响。
 
 ```bash
 # 紧急降级:接受配置偏差,WARN 不挂进程

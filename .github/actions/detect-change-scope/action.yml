@@ -21,6 +21,18 @@ outputs:
   unit-required:
     description: Whether the Maven unit reactor is required
     value: ${{ steps.scope.outputs.unit-required }}
+  unit-a-required:
+    description: Whether the orchestrator, worker-core and Java SDK shard is required
+    value: ${{ steps.scope.outputs.unit-a-required }}
+  unit-b1-required:
+    description: Whether the trigger, process and dispatch shard is required
+    value: ${{ steps.scope.outputs.unit-b1-required }}
+  unit-b2-workers-required:
+    description: Whether the import, export and atomic worker shard is required
+    value: ${{ steps.scope.outputs.unit-b2-workers-required }}
+  unit-b2-console-required:
+    description: Whether the Console API shard is required
+    value: ${{ steps.scope.outputs.unit-b2-console-required }}
   java:
     description: Java scope was changed
     value: ${{ steps.scope.outputs.java }}

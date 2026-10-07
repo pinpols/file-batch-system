@@ -76,7 +76,7 @@
 |---|---|---|
 | 本文统计仍是人工快照 | workflow、ADR 增删后可能忘记更新 | CI 守护脚本清单已由 `check-script-governance.py` 校验；workflow、ADR 数量后续可继续改为自动生成 |
 | ShellCheck warning | 已归零 | `check-shell-scripts.sh` 对全部版本化 Shell 脚本执行语法检查并禁止任何 warning |
-| 部分守卫散落在测试类中 | 审计时不容易一次性定位 | 为关键 ArchTest / IT 建立 `docs/testing/guard-tests-index.md`，当前先由模块测试与命名检索定位 |
+| Java 治理守卫执行路由 | 已收敛 | `*ArchTest` / `*ConventionTest` 由 PR、Full、Staging 的 `java-governance` 独立执行，并由 `check-java-governance-test-coverage.py` 核对源码与 Surefire 报告 |
 | 跨前后端漂移需要两个仓库共同验证 | 后端 CI 绿不代表前端页面可用 | Console API 变更默认要求前端 codegen check 和页面 smoke 证据 |
 | 运维恢复脚本和 Console 操作边界仍需持续对齐 | 可能出现“脚本能救、Console 不能救”或反向漂移 | 运维闭环能力变更时同步 runbook、Console 页面和脚本 |
 

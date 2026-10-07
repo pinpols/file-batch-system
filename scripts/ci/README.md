@@ -24,12 +24,12 @@
 | SDK 配置 | `check-sdk-config-env-parity.py`（Java/Python env 工厂和五语言 live transport 前缀）、`check-sdk-runtime-alignment.py`（仓库 Node 入口、SDK/前端声明与 CI 版本矩阵） |
 | SDK 双栈 | `run-sdk-happy-eyeballs-gate.sh`（五语言真实 loopback socket 单栈/双栈/黑洞矩阵） |
 | 文档与变更 | `check-docs-structure.py`、`check-doc-timestamp-policy.py`、`check-code-doc-references.py`、`check-terminology-doc-sync.py`、`check-changelog-sync.py`、`check-loc-snapshot.py`、`check-readiness-doc-sync.py`、`check-slo-sli-catalog.py`、`check-comment-language.py` |
-| 脚本与仓库 | `check-shell-scripts.sh`、`check-shell-linux-portability.py`、`check-script-governance.py`、`check-repository-hygiene.py`、`check-env-file-shell-safety.py`、`check-hardcoded-runtime-config.sh`、`check-utf8-encoding.py`（全仓 UTF-8 字节扫描）、`check-testcontainers-reuse-label.py`（Testcontainers 复用容器清理谓词）、`check-github-action-pinning.py`（外部 Action 固定 40 位 SHA） |
+| 脚本与仓库 | `check-shell-scripts.sh`、`check-shell-linux-portability.py`、`check-script-governance.py`、`check-repository-hygiene.py`、`check-env-file-shell-safety.py`、`check-hardcoded-runtime-config.sh`、`check-utf8-encoding.py`（全仓 UTF-8 字节扫描）、`check-testcontainers-reuse-label.py`（Testcontainers 复用容器清理谓词）、`check-github-action-pinning.py`（外部 Action 固定 40 位 SHA并保留版本注释）、`check-soft-gate-governance.py`（软门禁责任与期限） |
 | 配置与部署 | `check-config-defaults-sync.py`、`check-config-governance.py`、`check-direct-config-key-access.py`、`check-env-variable-governance.py`、`check-feature-switch-registry.py`、`check-five-worker-parity.py`、`check-keda-autoscaling.py`、`check-helm-env-sync.py`、`check-infrastructure-utf8.py`（Compose/Dockerfile/Helm/Testcontainers locale 与数据库编码）、`check-production-capacity-governance.py`、`check-production-overlay-safety.py`、`check-version-alignment.sh`、`validate-kafka-topics.sh`（全仓 topic 字面量 ↔ `BatchTopics.java`：env 模板 / `batch-defaults.yml` / helm / init 脚本 / load-tests） |
 | 数据库与 SQL | `check-biz-table-tenant-rls.py`、`check-db-comment-coverage.sh`、`check-db-scripts-safety.sh`、`check-migration-safety.sh`、`check-mybatis-generated-key-columns.py`、`check-no-positional-insert-select-star.py`、`check-postgres-client-fallback.sh`、`check-schema-governance-assets.py`、`check-sql-config-boundaries.py`、`check-sql-config-boundaries.sh`、`validate-flyway-schema.sh` |
 | API 与兼容 | `check-console-openapi-paths.py`、`check-openapi-breaking.sh` |
 | Java 质量 | `check-empty-checks.py`、`check-java-lombok-injection.py`、`check-java-logging-governance.py`、`check-java-readability.py`、`check-java-text-block-style.py`、`check-java-suppression-registry.py`、`check-mapof-null-values.py`、`check-pipeline-summary-keys.py`（stage 摘要键 / 续跑回灌键 / 前端计数键契约）、`check-required-java-docs.sh` |
-| 测试完整性 | `check-e2e-run-completeness.sh`、`check-e2e-shard-coverage.sh`、`check-integration-test-coverage.py`、`check-module-test-coverage.sh`、`check-no-silent-disabled-tests.sh`、`check-test-conventions.py`（中文 `@DisplayName` 类级/方法级 + 测试方法命名，增量拦截） |
+| 测试完整性 | `check-e2e-run-completeness.sh`、`check-e2e-shard-coverage.sh`、`check-integration-test-coverage.py`、`check-module-test-coverage.sh`、`check-no-silent-disabled-tests.sh`、`check-test-conventions.py`（中文 `@DisplayName` 类级/方法级 + 测试方法命名，增量拦截）、`check-flaky-test-governance.py`、`check-diff-coverage.py`、`run-critical-mutation.sh`、`report-ci-quality-trends.py` |
 | 安全与许可 | `check-dependency-licenses.sh`、`license-allowlist.sh`、`check-license-compliance.sh`、`check-sbom-sync.sh`、`check-trivy-ignore-expiry.py` |
 | 观测 | `check-helm-prometheusrule-sync.sh`、`check-log-lifecycle.sh`、`check-observability-contract.py` |
 
@@ -93,9 +93,13 @@ FORCE_VALIDATION=true python3 scripts/ci/daily-validation-change-gate.py
 `.github/actions/detect-change-scope` 统一调用 `scripts/ci/detect-change-scope.py`，
 `pr-gate-scope` 和 `sdk-contract-scope` 输出稳定的
 `java`、`sql`、`database`、`scripts`、`docs`、`config`、`api`、`sdk`、`ci`、
-`tests`、`docker`、`helm`、`maven`、`unknown` 和 `unit-required` 字段。后续 workflow 应消费这些
+`tests`、`docker`、`helm`、`maven`、`unknown`、`unit-required`，以及
+`unit-a-required`、`unit-b1-required`、`unit-b2-workers-required`、
+`unit-b2-console-required` 字段。后续 workflow 应消费这些
 输出，不要重新维护一套路径 glob。`database` 保留为旧门禁兼容别名；`unknown=true`
-时必须按代码变更处理。`unit-required` 只表示 Maven reactor 是否需要启动；CI、脚本、
+时必须按代码变更处理。`unit-required` 是四个单元分片输出的汇总兼容字段；PR workflow
+直接消费具体分片输出。Common、Test Support、数据库迁移、POM/Maven Wrapper、未知路径和
+未登记的 `batch-*` 源码模块均 fail-closed 为全分片。CI、脚本、
 SDK 变更仍应由各自专项 workflow/静态检查覆盖。已登记的根目录运行时与质量工具配置归入
 `config`，不因缺少 Java 影响而启动 Maven unit；未登记的新路径仍归入 `unknown` 并保守执行。
 SDK 契约 workflow 与 PR gate 共用同一探测器。
@@ -222,9 +226,13 @@ staging live rollout / rollback smoke 的薄封装：默认开启 live deploy sm
 bash scripts/ci/run-staging-live-smoke.sh
 ```
 
-## `collect-flaky.sh` / `collect-flaky.py`
+## 测试质量治理
 
-汇总 surefire / failsafe 报告里 `<flakyFailure>` / `<flakyError>`(`rerunFailingTestsCount=2` 自动重跑产生的 flaky-but-pass 用例),输出人读 summary 和(GH Actions 下)`$GITHUB_STEP_SUMMARY` Markdown 表。已在 `run-full-regression.sh` 末尾自动调用,**恒以 0 退出**,不阻断 CI。治理流程见 [`docs/runbook/ci.md`](../../docs/runbook/ci.md#flaky-治理)。
+必需门禁不再全局重跑失败测试。确认的 flaky 用例使用 `@FlakyTest` 填写 Issue、责任人和到期日，默认测试排除，定时任务通过 `run-flaky-quarantine.sh` 单独执行。`collect-flaky.sh` 仍用于识别隔离执行中的首次失败记录。
+
+PR / Full Gate 的各 Java shard 在现有测试后生成 JaCoCo XML，并由 `check-diff-coverage.py` 校验本 shard 变更可执行行覆盖率不低于 80%。每周或手动 Full Gate 通过 `run-critical-mutation.sh` 对文件状态机和生命周期映射器运行 PIT，不扩展到全仓。
+
+Full Gate 汇总 Surefire/Failsafe 报告与最近 30 次工作流运行，使用 `report-ci-quality-trends.py` 输出 JSON 和 Markdown，保存 90 天。
 
 ```bash
 bash scripts/ci/collect-flaky.sh
@@ -460,11 +468,26 @@ bash scripts/ci/check-version-alignment.sh
 
 ## `check-e2e-run-completeness.sh`
 
-e2e 运行侧闭环守护。`-Dsurefire.failIfNoSpecifiedTests=false` 会把「shard 清单列了某 `*E2eIT`、但因路径/改名没被选中」静默吞成绿色。本脚本在每个 e2e shard 跑完后比对:该 shard 实际产出的 surefire testsuite report 数 == 清单声明的类数,不等则 fail。与 `check-e2e-shard-coverage.sh`(静态:清单 ⊇ 仓库实际)互补。接入 `full-ci-gate.yml` / `staging-gate.yml` 的 `e2e-shard` job。
+e2e 运行侧闭环守护。`-Dsurefire.failIfNoSpecifiedTests=false` 会把「shard 清单列了某 `*E2eIT`、但因路径/改名没被选中」静默吞成绿色。本脚本在 Full/Staging 六片中的每个 e2e shard 跑完后比对：该 shard 实际产出的 surefire testsuite report 数必须等于清单声明的类数。与 `check-e2e-shard-coverage.sh`（静态双向集合校验）互补。
 
 ```bash
 bash scripts/ci/check-e2e-run-completeness.sh "<逗号分隔类名>" <surefire-reports-dir>
 ```
+
+### Java 治理测试完整性
+
+`check-java-governance-test-coverage.py` 统一发现 `*ArchTest` 和 `*ConventionTest`。PR、
+Full 和 Staging Gate 的 `java-governance` job 单独执行这些测试；业务 unit/IT 分片不再重复执行。
+
+```bash
+python3 scripts/ci/check-java-governance-test-coverage.py
+python3 scripts/ci/check-java-governance-test-coverage.py --verify-reports
+```
+
+第二条命令必须在 Maven 执行后运行，任一源码类没有对应 `TEST-<FQCN>.xml` 就失败。
+实际执行统一使用 `bash scripts/ci/run-java-governance-tests.sh`；该入口同时接入本地 pre-push，
+防止本地与三个在线 workflow 的模块清单和 Maven 参数漂移。pre-commit 只运行源码清单检查，
+避免每次提交承担 Maven 构建成本。
 
 ## `install-upstream-modules.sh`
 

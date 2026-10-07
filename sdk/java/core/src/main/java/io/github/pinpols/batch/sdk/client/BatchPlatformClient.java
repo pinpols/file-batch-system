@@ -53,6 +53,8 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class BatchPlatformClient {
 
+  private static final Duration STARTUP_ROLLBACK_TIMEOUT = Duration.ofSeconds(5);
+
   private final BatchPlatformClientConfig config;
   private final Map<String, SdkTaskHandler> handlers;
   private final PlatformHttpClient httpClient;
@@ -131,25 +133,37 @@ public class BatchPlatformClient {
       throw new BatchSdkClientException(
           BatchSdkClientException.Stage.REGISTER, "worker register failed", e);
     }
-    this.dispatcher = new TaskDispatcher(config, handlers, httpClient, idempotencyStore);
-    this.kafkaConsumer = new KafkaTaskConsumer(config, dispatcher);
-    this.kafkaConsumerThread = new Thread(kafkaConsumer, "batch-sdk-kafka-consumer");
-    this.kafkaConsumerThread.setDaemon(false);
-    this.kafkaConsumerThread.start();
-    // SDK-P5-3 + Python PR #320 对齐:把 register 时的 6 字段身份快照交给 heartbeat 每次带上,
-    // 防止 worker_registry 行被运维误删 / 平台冷启重建索引导致 heartbeat 回退降级 register 时丢字段。
-    WorkerIdentity identity = new WorkerIdentity(
-        "sdk-self-hosted",
-        WorkerFingerprint.hostName(),
-        WorkerFingerprint.hostIp(),
-        WorkerFingerprint.processId(),
-        capabilityTags,
-        config.getBuildId());
-    this.heartbeatScheduler = new HeartbeatScheduler(config, httpClient, dispatcher, identity);
-    this.heartbeatScheduler.start();
-    this.leaseRenewalScheduler = new LeaseRenewalScheduler(config, httpClient, dispatcher);
-    this.leaseRenewalScheduler.start();
-    started = true;
+    try {
+      this.dispatcher = new TaskDispatcher(config, handlers, httpClient, idempotencyStore);
+      this.kafkaConsumer = new KafkaTaskConsumer(config, dispatcher);
+      this.kafkaConsumerThread = new Thread(kafkaConsumer, "batch-sdk-kafka-consumer");
+      this.kafkaConsumerThread.setDaemon(false);
+      this.kafkaConsumerThread.start();
+      // SDK-P5-3 + Python PR #320 对齐:把 register 时的 6 字段身份快照交给 heartbeat 每次带上,
+      // 防止 worker_registry 行被运维误删 / 平台冷启重建索引导致 heartbeat 回退降级 register 时丢字段。
+      WorkerIdentity identity = new WorkerIdentity(
+          "sdk-self-hosted",
+          WorkerFingerprint.hostName(),
+          WorkerFingerprint.hostIp(),
+          WorkerFingerprint.processId(),
+          capabilityTags,
+          config.getBuildId());
+      this.heartbeatScheduler = new HeartbeatScheduler(config, httpClient, dispatcher, identity);
+      this.heartbeatScheduler.start();
+      this.leaseRenewalScheduler = new LeaseRenewalScheduler(config, httpClient, dispatcher);
+      this.leaseRenewalScheduler.start();
+      started = true;
+    } catch (RuntimeException | Error startupFailure) {
+      log.warn(
+          "BatchPlatformClient startup failed; rolling back partial runtime resources: {}",
+          ExceptionLogSummary.of(startupFailure));
+      try {
+        stop(STARTUP_ROLLBACK_TIMEOUT, true);
+      } catch (RuntimeException | Error rollbackFailure) {
+        startupFailure.addSuppressed(rollbackFailure);
+      }
+      throw startupFailure;
+    }
   }
 
   List<String> capabilityTags() {
@@ -209,7 +223,11 @@ public class BatchPlatformClient {
    * <p>Lane E #4-Java:若 Kafka 因 SASL 凭据错 fatal-failed,跳过 deactivate(凭据已坏,HTTP 也会 401)。
    */
   public synchronized void stop(Duration timeout) {
-    if (!started) {
+    stop(timeout, false);
+  }
+
+  private void stop(Duration timeout, boolean forceCleanup) {
+    if (!forceCleanup && !started && !hasRuntimeResources()) {
       return;
     }
     long totalMs = Math.max(0L, timeout == null ? 0L : timeout.toMillis());
@@ -267,6 +285,14 @@ public class BatchPlatformClient {
     }
     httpClient.evictIdleConnections();
     started = false;
+  }
+
+  private boolean hasRuntimeResources() {
+    return EmptyChecks.isNotNull(dispatcher)
+        || EmptyChecks.isNotNull(kafkaConsumer)
+        || EmptyChecks.isNotNull(kafkaConsumerThread)
+        || EmptyChecks.isNotNull(heartbeatScheduler)
+        || EmptyChecks.isNotNull(leaseRenewalScheduler);
   }
 
   private static long remainingMs(long startNanos, long totalMs) {

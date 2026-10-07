@@ -2,19 +2,30 @@ package io.github.pinpols.batch.sdk.client;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockConstruction;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.sdk.dispatcher.KafkaTaskConsumer;
+import io.github.pinpols.batch.sdk.dispatcher.TaskDispatcher;
+import io.github.pinpols.batch.sdk.idempotent.Idempotent;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
+import io.github.pinpols.batch.sdk.scheduler.HeartbeatScheduler;
+import io.github.pinpols.batch.sdk.scheduler.LeaseRenewalScheduler;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.time.Duration;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.MockedConstruction;
 
 /**
  * P7-3:验证 {@link BatchPlatformClient#start()} 的生命周期失败语义。
@@ -55,6 +66,20 @@ class BatchPlatformClientStartTest {
         return SdkTaskResult.ok();
       }
     };
+  }
+
+  @Idempotent(key = "startup:{taskInstanceId}")
+  private static final class IdempotentHandlerWithoutStore implements SdkTaskHandler {
+
+    @Override
+    public String taskType() {
+      return "idempotent-startup";
+    }
+
+    @Override
+    public SdkTaskResult execute(SdkTaskContext ctx) {
+      return SdkTaskResult.ok();
+    }
   }
 
   private static void inject(BatchPlatformClient target, String field, Object value)
@@ -101,6 +126,61 @@ class BatchPlatformClientStartTest {
     assertThat(m.healthy()).isFalse();
     assertThat(m.inFlightTaskCount()).isZero();
     assertThat(registerBody.getValue()).containsEntry("maxConcurrent", 4);
+  }
+
+  @Test
+  @DisplayName("注册成功后运行组件构造失败 -> 强制注销并保留原始异常")
+  void shouldDeactivateAndRethrow_whenRuntimeInitializationFailsAfterRegister() throws Exception {
+    BatchPlatformClient client = BatchPlatformClient.builder(cfg())
+        .register(new IdempotentHandlerWithoutStore())
+        .build();
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    when(http.register(any())).thenReturn(null);
+    inject(client, "httpClient", http);
+
+    assertThatThrownBy(client::start)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("no SdkIdempotencyStore");
+
+    verify(http).deactivate(anyString(), any(), any(Duration.class));
+    verify(http).evictIdleConnections();
+    assertThat(field(client, "started")).isEqualTo(false);
+    assertThat(field(client, "dispatcher")).isNull();
+    assertThat(client.isHealthy()).isFalse();
+  }
+
+  @Test
+  @DisplayName("注册成功后启动全部运行组件,停止时按生命周期回收")
+  void shouldStartAndStopAllRuntimeComponents_whenRegistrationSucceeds() throws Exception {
+    BatchPlatformClient client =
+        BatchPlatformClient.builder(cfg()).register(stub("type-a")).build();
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    when(http.register(any())).thenReturn(null);
+    inject(client, "httpClient", http);
+
+    try (MockedConstruction<TaskDispatcher> dispatchers = mockConstruction(TaskDispatcher.class);
+        MockedConstruction<KafkaTaskConsumer> consumers =
+            mockConstruction(KafkaTaskConsumer.class);
+        MockedConstruction<HeartbeatScheduler> heartbeats =
+            mockConstruction(HeartbeatScheduler.class);
+        MockedConstruction<LeaseRenewalScheduler> renewals =
+            mockConstruction(LeaseRenewalScheduler.class)) {
+      client.start();
+
+      assertThat(field(client, "started")).isEqualTo(true);
+      assertThat(dispatchers.constructed()).hasSize(1);
+      assertThat(consumers.constructed()).hasSize(1);
+      assertThat(heartbeats.constructed()).hasSize(1);
+      assertThat(renewals.constructed()).hasSize(1);
+      verify(heartbeats.constructed().getFirst()).start();
+      verify(renewals.constructed().getFirst()).start();
+
+      client.stop(Duration.ofSeconds(1));
+
+      assertThat(field(client, "started")).isEqualTo(false);
+      verify(http).deactivate(anyString(), any(), any(Duration.class));
+      verify(http).evictIdleConnections();
+    }
   }
 
   @Test

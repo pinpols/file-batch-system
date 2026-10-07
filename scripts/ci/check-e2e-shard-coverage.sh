@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 守护:e2e shard 清单漂移。
 #
-# 背景:full-ci-gate / staging-gate 的 e2e 用硬编码 `-Dtest=<逗号分隔类名>` 分 4 shard 跑,
+# 背景:full-ci-gate / staging-gate 的 e2e 用硬编码 `-Dtest=<逗号分隔类名>` 分 6 shard 跑,
 # 是 LPT 均衡的人工分片。风险:新增 / 重命名 *E2eIT 后忘记同步清单 → 该类被静默跳过,
 # CI 仍绿,造成「全量已跑」的假象(2026-06-14 实测 full-ci-gate 漏 5 个、staging-gate 漏 2 个)。
 #
