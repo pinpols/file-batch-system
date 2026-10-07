@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure;
 
 import io.github.pinpols.batch.common.enums.FileDispatchStatus;
 import io.github.pinpols.batch.common.enums.FileReceiptStatus;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.dispatchs.domain.PendingReceiptPollRow;
 import io.github.pinpols.batch.worker.dispatchs.mapper.FileDispatchMapper;
@@ -56,9 +57,8 @@ public class FileDispatchRepository {
     if (!Texts.hasText(tenantId) || fileId == null || !Texts.hasText(channelCode)) {
       return false;
     }
-    return fileDispatchMapper.selectLatestDispatchRecordId(
-            params(KEY_TENANT_ID, tenantId, KEY_FILE_ID, fileId, KEY_CHANNEL_CODE, channelCode))
-        != null;
+    return EmptyChecks.isNotNull(fileDispatchMapper.selectLatestDispatchRecordId(
+        params(KEY_TENANT_ID, tenantId, KEY_FILE_ID, fileId, KEY_CHANNEL_CODE, channelCode)));
   }
 
   public record InsertDispatchParam(
