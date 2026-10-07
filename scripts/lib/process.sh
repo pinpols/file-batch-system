@@ -24,9 +24,23 @@ process_listen_pids() {
   return 0
 }
 
+process_first_listen_pid() {
+  local port="${1:?port required}"
+  local first_pid="" pid
+  while IFS= read -r pid; do
+    if [[ -z "$first_pid" && "$pid" =~ ^[0-9]+$ ]]; then
+      first_pid="$pid"
+    fi
+  done < <(process_listen_pids "$port")
+  if [[ -n "$first_pid" ]]; then
+    printf '%s\n' "$first_pid"
+  fi
+  return 0
+}
+
 process_port_is_listening() {
   local port="${1:?port required}"
-  [[ -n "$(process_listen_pids "$port" | head -1)" ]]
+  [[ -n "$(process_first_listen_pid "$port")" ]]
 }
 
 process_kill_listeners() {

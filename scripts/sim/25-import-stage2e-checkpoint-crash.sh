@@ -226,7 +226,7 @@ def kill_worker_import():
         return
     out = sh([
         "bash", "-lc",
-        f"source scripts/lib/process.sh; process_listen_pids {WORKER_PORT} | head -1",
+        f"source scripts/lib/process.sh; process_first_listen_pid {WORKER_PORT}",
     ]).stdout.strip()
     if not out:
         raise RuntimeError("worker-import listener pid not found")

@@ -355,7 +355,7 @@ restart_import() {
       bash scripts/local/restart.sh worker-import >"$SIM_LOG_DIR/worker-import-${mode}.log" 2>&1
     for _ in $(seq 1 40); do
       curl -s -o /dev/null -w '%{http_code}' "http://localhost:${WORKER_IMPORT_PORT}/actuator/health" 2>/dev/null \
-        | grep -q 200 && { echo "  [worker-import:$mode ready]"; return 0; }
+        | grep -F 200 >/dev/null && { echo "  [worker-import:$mode ready]"; return 0; }
       sleep 3
     done
     echo "  [worker-import:$mode NOT ready] 见 $SIM_LOG_DIR/worker-import-${mode}.log" >&2
@@ -383,7 +383,7 @@ restart_import() {
       bash scripts/local/restart.sh worker-import
     return $?
   fi
-  local pid; pid="$(process_listen_pids "$WORKER_IMPORT_PORT" | head -1)"
+  local pid; pid="$(process_first_listen_pid "$WORKER_IMPORT_PORT")"
   if [ -n "$pid" ]; then
     kill "$pid" 2>/dev/null
     for _ in $(seq 1 15); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
@@ -395,7 +395,8 @@ restart_import() {
     -jar build/runtime-jars/worker-import.jar --spring.profiles.active=local >"$SIM_LOG_DIR/worker-import-${mode}.log" 2>&1 &
   disown
   for _ in $(seq 1 40); do
-    curl -s -o /dev/null -w '%{http_code}' "http://localhost:${WORKER_IMPORT_PORT}/actuator/health" 2>/dev/null | grep -q 200 && { echo "  [worker-import:$mode ready]"; return 0; }
+    curl -s -o /dev/null -w '%{http_code}' "http://localhost:${WORKER_IMPORT_PORT}/actuator/health" 2>/dev/null \
+      | grep -F 200 >/dev/null && { echo "  [worker-import:$mode ready]"; return 0; }
     sleep 3
   done
   echo "  [worker-import:$mode NOT ready] 见 $SIM_LOG_DIR/worker-import-${mode}.log" >&2; return 1
@@ -414,7 +415,7 @@ restart_process_batch_claim() {
     bash scripts/local/restart.sh worker-process >"$SIM_LOG_DIR/worker-process-batch-claim-${mode}.log" 2>&1
   for _ in $(seq 1 40); do
     curl -s -o /dev/null -w '%{http_code}' "http://localhost:${WORKER_PROCESS_PORT}/actuator/health" 2>/dev/null \
-      | grep -q 200 && { echo "  [worker-process:batch-claim-$mode ready]"; return 0; }
+      | grep -F 200 >/dev/null && { echo "  [worker-process:batch-claim-$mode ready]"; return 0; }
     sleep 3
   done
   echo "  [worker-process:batch-claim-$mode NOT ready] 见 $SIM_LOG_DIR/worker-process-batch-claim-${mode}.log" >&2
@@ -536,7 +537,7 @@ routing_overlay_clear() {
 # 不删就会残留到下一轮)。只在退出时调,run 中途用 routing_overlay_clear。
 routing_sim_teardown() {
   routing_overlay_clear
-  if docker ps -aq --filter "name=${BIZ_SHARD_1_CONTAINER}" 2>/dev/null | grep -q .; then
+  if docker ps -aq --filter "name=${BIZ_SHARD_1_CONTAINER}" 2>/dev/null | grep . >/dev/null; then
     docker rm -f "$BIZ_SHARD_1_CONTAINER" >/dev/null 2>&1 \
       && c_ylw "  biz-shard-1 容器已删(routing-sim 直起,退出即清)" || true
   fi
@@ -582,7 +583,11 @@ routing_sim() {
   } >> .env.local
   unset BATCH_ENV_LOADED BATCH_ENV_COMMON_ROOT
   bash scripts/local/restart.sh worker-import worker-export worker-process >"$SIM_LOG_DIR/rs-restart.log" 2>&1
-  for _ in $(seq 1 30); do curl -s -o /dev/null -w '%{http_code}' "http://localhost:${WORKER_IMPORT_PORT}/actuator/health" 2>/dev/null | grep -q 200 && break; sleep 3; done
+  for _ in $(seq 1 30); do
+    curl -s -o /dev/null -w '%{http_code}' "http://localhost:${WORKER_IMPORT_PORT}/actuator/health" 2>/dev/null \
+      | grep -F 200 >/dev/null && break
+    sleep 3
+  done
   ok "3 biz worker 已带 routing 重启"
 
   echo "-- 4) 跑导入(04-seed + 05-load)--"

@@ -103,9 +103,11 @@ else
   info "Scan mode: full"
 fi
 
-if docker ps --filter "name=${SONAR_CONTAINER}" --format '{{.Names}}' | grep -q "$SONAR_CONTAINER"; then
+if docker ps --filter "name=${SONAR_CONTAINER}" --format '{{.Names}}' \
+  | grep -F "$SONAR_CONTAINER" >/dev/null; then
   ok "Container already running, reusing."
-elif docker ps -a --filter "name=${SONAR_CONTAINER}" --format '{{.Names}}' | grep -q "$SONAR_CONTAINER"; then
+elif docker ps -a --filter "name=${SONAR_CONTAINER}" --format '{{.Names}}' \
+  | grep -F "$SONAR_CONTAINER" >/dev/null; then
   info "Starting existing container..."
   docker start "$SONAR_CONTAINER"
 else
@@ -124,7 +126,8 @@ fi
 # ── 2. 等待就绪 ───────────────────────────────────────────────────────────────
 info "Step 2/5 — Waiting for SonarQube to be ready..."
 WAIT=0
-until curl -sf "${SONAR_URL}/api/system/status" 2>/dev/null | grep -q '"status":"UP"'; do
+until curl -sf "${SONAR_URL}/api/system/status" 2>/dev/null \
+  | grep -F '"status":"UP"' >/dev/null; do
   sleep 5; WAIT=$((WAIT+5))
   if [ $WAIT -ge 180 ]; then
     error "SonarQube did not start within 3 minutes."

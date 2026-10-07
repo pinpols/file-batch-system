@@ -371,7 +371,7 @@ if [[ -n "$CHANGED_JAVA" ]] && [[ -n "$BASE_REF" ]]; then
     fi
     if [[ -n "$(printf '%s' "$autowired_bad" | tr -d '[:space:]')" ]]; then
       fail "规约 #3 违反 — @Autowired field/setter 注入(只允许构造器)"
-      printf '%s' "$autowired_bad" | sed '/^$/d;s/^/    /' | head -10
+      printf '%s' "$autowired_bad" | sed '/^$/d;s/^/    /' | awk 'NR <= 10 { print }'
       errors=$((errors+1))
     else
       ok "规约 #3 @Autowired 通过"
@@ -443,8 +443,9 @@ if [[ -n "$CHANGED_CTL" ]]; then
   while IFS= read -r ctl; do
     [[ -z "$ctl" ]] && continue
     if [[ -z "$BASE_REF" ]] \
-        || git diff -U0 "$BASE_REF...HEAD" -- "$ctl" | grep -qE \
-          '^[+-][^+-].*@(RequestMapping|GetMapping|PostMapping|PutMapping|PatchMapping|DeleteMapping|RequestBody|PathVariable|RequestParam|RequestHeader)|^[+-][^+-].*public[[:space:]]+(void|[A-Za-z_][A-Za-z0-9_]*(<[^(){};]*>)?(\[\])?)[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\('; then
+        || git diff -U0 "$BASE_REF...HEAD" -- "$ctl" | grep -E \
+          '^[+-][^+-].*@(RequestMapping|GetMapping|PostMapping|PutMapping|PatchMapping|DeleteMapping|RequestBody|PathVariable|RequestParam|RequestHeader)|^[+-][^+-].*public[[:space:]]+(void|[A-Za-z_][A-Za-z0-9_]*(<[^(){};]*>)?(\[\])?)[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(' \
+          >/dev/null; then
       API_CONTRACT_CTL+="$ctl"$'\n'
     else
       info "  跳过无 API 契约变化的 Controller 内部重构:$ctl"
@@ -498,7 +499,8 @@ if [[ -n "$CHANGED_FLYWAY" ]]; then
     info "  新 migration: $f (版本 $version)"
 
     # 找同版本号的其他 migration(本次 PR 没改但已存在)
-    dup=$(find . -path "*db/migration/${version}__*" -not -path "*/target/*" 2>/dev/null | grep -v "$f" | head -3)
+    dup=$(find . -path "*db/migration/${version}__*" -not -path "*/target/*" 2>/dev/null \
+      | grep -v "$f" | awk 'NR <= 3 { print }')
     if [[ -n "$dup" ]]; then
       fail "Flyway $version 已被占用:"
       echo "$dup" | sed 's/^/    /'
@@ -514,7 +516,8 @@ if [[ -n "$CHANGED_FLYWAY" ]]; then
     if grep -qiE "(CREATE|ALTER)[[:space:]]+TABLE[[:space:]]+batch\." "$f" 2>/dev/null; then
       version=$(basename "$f" | grep -oE "V[0-9]+" | head -1)
       # 找对应 archive migration
-      arch_mig=$(find . -path "*archive*migration*${version}__*" -not -path "*/target/*" 2>/dev/null | head -1)
+      arch_mig=$(find . -path "*archive*migration*${version}__*" -not -path "*/target/*" 2>/dev/null \
+        | awk 'NR == 1 { first = $0 } END { if (NR > 0) print first }')
       if ! grep -qiE "(CREATE|ALTER)[[:space:]]+TABLE[[:space:]]+archive\." "$f" 2>/dev/null \
           && [[ -z "$arch_mig" ]]; then
         warn "  $version 含批表 DDL,但未找到 archive 镜像 migration(docs/agent-baseline.md「archive 冷表对齐」红线)"
@@ -535,7 +538,8 @@ if [[ $errors -eq 0 ]] && [[ $SKIP_BUILD -eq 0 ]] && [[ -n "$CHANGED_JAVA" ]]; t
   info "──────────────────────────────────────"
 
   # 识别改动涉及的模块,只 build 这些(快)
-  MODULES=$(echo "$CHANGED_JAVA" | grep -oE "(batch-[a-z-]+|e2e-tests)" | sort -u | head -5)
+  MODULES=$(grep -oE "(batch-[a-z-]+|e2e-tests)" <<< "$CHANGED_JAVA" \
+    | sort -u | awk 'NR <= 5 { print }')
   if [[ -z "$MODULES" ]]; then
     MODULES="batch-orchestrator,batch-worker-sdk,batch-console-api"
   else

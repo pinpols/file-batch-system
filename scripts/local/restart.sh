@@ -335,7 +335,8 @@ start_module() {
     local container
     container="$(container_name_for "$name")"
     for _ in $(seq 1 90); do
-      if docker inspect -f '{{.State.Health.Status}}' "$container" 2>/dev/null | grep -q healthy; then
+      if docker inspect -f '{{.State.Health.Status}}' "$container" 2>/dev/null \
+        | grep -F healthy >/dev/null; then
         echo "  ${name} 容器已就绪"
         return 0
       fi
@@ -376,7 +377,7 @@ wait_orchestrator() {
   for _ in $(seq 1 60); do
     sleep 3
     if curl -sf --connect-timeout 2 --max-time 5 "$url" 2>/dev/null \
-        | grep -q '"status":"UP"'; then
+        | grep -F '"status":"UP"' >/dev/null; then
       echo "  orchestrator 已就绪"
       return 0
     fi

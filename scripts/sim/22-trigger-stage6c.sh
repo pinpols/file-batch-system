@@ -80,10 +80,12 @@ else
   fi
 fi
 for _ in $(seq 1 30); do
-  process_listen_pids "${BATCH_TRIGGER_PORT:-18081}" | grep -q . || break
+  if ! process_port_is_listening "${BATCH_TRIGGER_PORT:-18081}"; then
+    break
+  fi
   sleep 1
 done
-if process_listen_pids "${BATCH_TRIGGER_PORT:-18081}" | grep -q .; then
+if process_port_is_listening "${BATCH_TRIGGER_PORT:-18081}"; then
   echo "❌ trigger 停止失败，无法安全清理 Quartz fixture" >&2
   exit 1
 fi

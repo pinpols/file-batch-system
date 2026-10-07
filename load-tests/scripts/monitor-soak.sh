@@ -69,7 +69,8 @@ metric_value() {
   local name="$1" tag="${2:-}"
   local url="$CONSOLE_BASE_URL/actuator/metrics/$name"
   [[ -n "$tag" ]] && url="$url?tag=$tag"
-  curl -fsS -m 3 "$url" 2>/dev/null | sed -n 's/.*"VALUE","value":\([0-9.]*\).*/\1/p' | head -1
+  curl -fsS -m 3 "$url" 2>/dev/null \
+    | sed -n 's/.*"VALUE","value":\([0-9.]*\).*/\1/p'
 }
 
 # 1) 堆使用率 %

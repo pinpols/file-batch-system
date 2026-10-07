@@ -78,7 +78,7 @@ psql_q() {
 scrape() {
   local metric="$1"
   curl -sS --max-time 10 "http://localhost:${ORCH_PORT}/actuator/prometheus" 2>/dev/null \
-    | awk -v m="$metric" '$1==m {print $2; found=1} END{if(!found)print 0}' | head -1
+    | awk -v m="$metric" '!found && $1==m {value=$2; found=1} END{print found ? value : 0}'
 }
 
 # ---------- 0. 前置探活 ----------
@@ -92,7 +92,7 @@ docker exec -i "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -v ON_ERROR_STOP=1
 # claim-batch 指标存在性 = orchestrator 侧 batch 路径可观测(2.4)。
 if [[ "$(scrape batch_task_batch_claim_size_count)" == "0" ]] \
    && ! curl -sS --max-time 5 "http://localhost:${ORCH_PORT}/actuator/prometheus" 2>/dev/null \
-        | grep -q batch_task_batch_claim_size; then
+        | grep -F batch_task_batch_claim_size >/dev/null; then
   say "提示: 当前 batch_claim 指标为空 —— 若 worker 未以 flag 开启动,本次只会走单条路径"
 fi
 

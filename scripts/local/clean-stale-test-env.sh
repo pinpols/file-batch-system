@@ -51,7 +51,8 @@ command -v docker >/dev/null 2>&1 || {
 # 1) 孤儿 testcontainers(无 org.testcontainers.hash label;running + exited 都清)
 orphans=$(docker ps -aq --filter "label=org.testcontainers=true" 2>/dev/null | while read -r cid; do
   [ -n "$cid" ] || continue
-  if ! docker inspect "$cid" --format '{{json .Config.Labels}}' 2>/dev/null | grep -q "org.testcontainers.hash"; then
+  if ! docker inspect "$cid" --format '{{json .Config.Labels}}' 2>/dev/null \
+    | grep -F "org.testcontainers.hash" >/dev/null; then
     printf '%s\n' "$cid"
   fi
 done)

@@ -89,7 +89,8 @@ run_python() {
     printf '⚠ 有 %s 条被 skip(均在顶层 golden/contract/abstract 跨切面测试)。\n' "${skipped}"
     printf '   若 skip 原因是 "not yet merged" 但模块其实已在 main,说明 conftest 软门已 stale。\n'
     printf '   注:concrete handler(atomic/builtin/typed)由子目录测试覆盖,不在此列。详查:\n'
-    grep -aE 'SKIPPED' "${log}" | sed -E 's/.*conftest.py:[0-9]+: //; s/.*: //' | sort | uniq -c | sort -rn | head -12
+    grep -aE 'SKIPPED' "${log}" | sed -E 's/.*conftest.py:[0-9]+: //; s/.*: //' \
+      | sort | uniq -c | sort -rn | awk 'NR <= 12 { print }'
     [[ "${FAIL_ON_SKIP:-0}" == "1" ]] && { fail "FAIL_ON_SKIP=1:把 skip 当失败"; RC=1; }
   fi
 }

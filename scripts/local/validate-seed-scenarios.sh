@@ -105,7 +105,8 @@ psql_file() {
 
 psql_value() {
   local db="$1"; local file="$2"; shift 2
-  psql_file "$db" "$SQL_DIR/$file" -q -tA "$@" 2>/dev/null | head -1
+  psql_file "$db" "$SQL_DIR/$file" -q -tA "$@" 2>/dev/null \
+    | awk 'NR == 1 { first = $0 } END { if (NR > 0) print first }'
 }
 
 # do_cleanup [probe_pattern]
@@ -372,7 +373,7 @@ http_code=$(http_post "/api/triggers/launch" \
 if [[ "$http_code" == "400" ]]; then
   result pass "缺 jobCode → 400" "validation 拒绝"
 else
-  body=$(cat /tmp/resp.body | head -c 100)
+  body=$(head -c 100 /tmp/resp.body)
   result fail "缺 jobCode" "HTTP $http_code(期望 400) body=$body"
 fi
 
@@ -385,7 +386,7 @@ http_code=$(curl -sS --max-time 30 --connect-timeout 5 -o /tmp/resp.body -w "%{h
 if [[ "$http_code" == "400" ]]; then
   result pass "缺 Idempotency-Key → 400" "MISSING_IDEMPOTENCY_KEY"
 else
-  body=$(cat /tmp/resp.body | head -c 100)
+  body=$(head -c 100 /tmp/resp.body)
   result fail "缺 Idempotency-Key" "HTTP $http_code body=$body"
 fi
 
@@ -400,7 +401,7 @@ if [[ "$http_code" == "401" ]]; then
 elif [[ "$http_code" == "200" ]]; then
   result pass "缺 X-Internal-Secret → 200" "(bypass-mode=true,本地调试模式)"
 else
-  body=$(cat /tmp/resp.body | head -c 100)
+  body=$(head -c 100 /tmp/resp.body)
   result fail "缺 X-Internal-Secret" "HTTP $http_code body=$body(期望 401 或 bypass)"
 fi
 
@@ -443,7 +444,7 @@ if [[ "$http_code" == "200" ]]; then
 elif [[ "$http_code" == "404" || "$http_code" == "400" ]]; then
   result pass "跨租户 jobCode → 同步拒绝" "HTTP $http_code(trigger 端校验)"
 else
-  body=$(cat /tmp/resp.body | head -c 100)
+  body=$(head -c 100 /tmp/resp.body)
   result fail "跨租户 jobCode 行为" "HTTP $http_code body=$body"
 fi
 
@@ -647,7 +648,7 @@ if [[ "$ADVANCED" == "1" ]]; then
     body=$(cat /tmp/resp.body)
     result pass "Outbox cleanup API" "HTTP 200 $body"
   else
-    result fail "Outbox cleanup API" "HTTP $resp body=$(cat /tmp/resp.body | head -c 80)"
+    result fail "Outbox cleanup API" "HTTP $resp body=$(head -c 80 /tmp/resp.body)"
   fi
 
   # 9.2 Outbox republish smoke (空列表,验证接口可达 + 返回 reset=0)
@@ -664,7 +665,7 @@ if [[ "$ADVANCED" == "1" ]]; then
       result fail "Outbox republish API" "HTTP 200 但 body 异常: $body"
     fi
   else
-    result fail "Outbox republish API" "HTTP $resp body=$(cat /tmp/resp.body | head -c 80)"
+    result fail "Outbox republish API" "HTTP $resp body=$(head -c 80 /tmp/resp.body)"
   fi
 
   # 9.3 Compensate submit (使用合法 type=JOB + 不存在的 instance, 期望 4xx 业务错误而非 500)
@@ -675,7 +676,7 @@ if [[ "$ADVANCED" == "1" ]]; then
     -H "X-Internal-Secret: $INTERNAL_SECRET" \
     -H "Content-Type: application/json" \
     -d '{"tenantId":"ta","compensationType":"JOB","jobCode":"TA_IMPORT_CUSTOMER","bizDate":"2026-05-03","operatorId":"seedval","reason":"smoke probe","traceId":"'"${PROBE_TAG}"'-comp"}' 2>/dev/null)
-  body_short=$(cat /tmp/resp.body | head -c 120)
+  body_short=$(head -c 120 /tmp/resp.body)
   case "$resp" in
     200) result pass "Compensate submit API" "HTTP 200 — $body_short" ;;
     400|404|409) result pass "Compensate API (业务拒绝)" "HTTP $resp — $body_short" ;;
@@ -697,7 +698,7 @@ if [[ "$ADVANCED" == "1" ]]; then
   case "$resp" in
     401) result pass "Console-api 鉴权拦截" "HTTP 401(无认证 token,gate 工作)" ;;
     200) result pass "Console-api 可达" "HTTP 200(bypass-mode=true)" ;;
-    *) result fail "Console-api 可达性" "HTTP $resp body=$(cat /tmp/resp.body | head -c 60)" ;;
+    *) result fail "Console-api 可达性" "HTTP $resp body=$(head -c 60 /tmp/resp.body)" ;;
   esac
 
   # 9.5 Trigger 真触发 (CRON 每分钟)

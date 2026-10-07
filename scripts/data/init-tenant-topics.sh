@@ -71,7 +71,15 @@ topic_partitions() {
     --bootstrap-server "${bootstrap_server}" \
     --describe \
     --topic "${topic}" 2>/dev/null \
-    | awk -F'PartitionCount: ' 'NF > 1 { split($2, a, " "); print a[1]; exit }'
+    | awk -F'PartitionCount: ' '
+        !found && NF > 1 {
+          split($2, a, " ")
+          partitions = a[1]
+          found = 1
+        }
+        END {
+          if (found) print partitions
+        }'
 }
 
 ensure_topic() {

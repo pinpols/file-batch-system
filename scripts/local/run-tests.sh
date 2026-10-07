@@ -158,7 +158,8 @@ cleanup_orphan_testcontainers() {
   command -v docker >/dev/null 2>&1 || return 0
   local orphans
   orphans=$(docker ps -q --filter "label=org.testcontainers=true" 2>/dev/null | while read -r cid; do
-    if ! docker inspect "$cid" --format '{{json .Config.Labels}}' 2>/dev/null | grep -q "org.testcontainers.hash"; then
+    if ! docker inspect "$cid" --format '{{json .Config.Labels}}' 2>/dev/null \
+      | grep -F "org.testcontainers.hash" >/dev/null; then
       printf '%s\n' "$cid"
     fi
   done)
@@ -312,8 +313,10 @@ extract_test_results() {
     class_name=$(basename "$xml" .xml)
     class_name=${class_name#TEST-}
 
-    failures=$(grep -o 'failures="[0-9]*"' "$xml" | head -1 | sed 's/[^0-9]//g')
-    errors=$(grep -o 'errors="[0-9]*"' "$xml" | head -1 | sed 's/[^0-9]//g')
+    failures=$(grep -o 'failures="[0-9]*"' "$xml" \
+      | awk 'NR == 1 { first = $0 } END { if (NR > 0) print first }' | sed 's/[^0-9]//g')
+    errors=$(grep -o 'errors="[0-9]*"' "$xml" \
+      | awk 'NR == 1 { first = $0 } END { if (NR > 0) print first }' | sed 's/[^0-9]//g')
 
     failures=${failures:-0}
     errors=${errors:-0}

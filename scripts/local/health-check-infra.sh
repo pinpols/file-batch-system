@@ -68,7 +68,7 @@ for arg in "$@"; do
     --no-kafka) SKIP_KAFKA=1 ;;
     --no-minio) SKIP_MINIO=1 ;;
     --help|-h)
-      grep -E "^# " "$0" | head -25 | sed 's/^# //'
+      grep -E "^# " "$0" | awk 'NR <= 25 { print }' | sed 's/^# //'
       exit 0
       ;;
   esac
@@ -178,11 +178,12 @@ check_redis() {
   # 用 RESP 协议直发 PING(免装 redis-cli)
   local resp
   resp=$(printf 'PING\r\nQUIT\r\n' | timeout 3 bash -c "cat > /dev/tcp/$REDIS_HOST/$REDIS_PORT" 2>&1
-         printf 'PING\r\nQUIT\r\n' | timeout 3 bash -c "exec 3<>/dev/tcp/$REDIS_HOST/$REDIS_PORT; cat >&3; cat <&3" 2>/dev/null | head -1)
-  if echo "$resp" | grep -q "PONG"; then
+         printf 'PING\r\nQUIT\r\n' | timeout 3 bash -c "exec 3<>/dev/tcp/$REDIS_HOST/$REDIS_PORT; cat >&3; cat <&3" 2>/dev/null \
+           | awk 'NR == 1 { first = $0 } END { if (NR > 0) print first }')
+  if grep -F "PONG" <<< "$resp" >/dev/null; then
     ok "Redis" "$REDIS_HOST:$REDIS_PORT PONG"
   elif command -v redis-cli >/dev/null 2>&1; then
-    if redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" ping 2>/dev/null | grep -q PONG; then
+    if redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" ping 2>/dev/null | grep -F PONG >/dev/null; then
       ok "Redis" "$(batch_format_host_port "$REDIS_HOST" "$REDIS_PORT") PONG"
     else
       ng "Redis" "端口通但 PING 失败"

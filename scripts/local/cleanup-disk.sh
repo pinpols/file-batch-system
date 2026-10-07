@@ -160,13 +160,15 @@ prune_old_image_tags() {
     | awk -F '\t' '$1 != "<none>" && $2 != "<none>" {print}' \
     | while IFS=$'\t' read -r repo tag; do
         refs="$(docker image ls "$repo" --format '{{.Repository}}:{{.Tag}}' | grep -v ':<none>$')"
-        keep="$(printf '%s\n' "$refs" \
-          | awk -v repository="$repo" '$0 == repository ":latest" {print; found=1; exit} END {if (!found) exit 1}' \
-          || printf '%s\n' "$refs" | head -n 1)"
+        keep="$(awk -v repository="$repo" '
+          NR == 1 { first = $0 }
+          !found && $0 == repository ":latest" { preferred = $0; found = 1 }
+          END { print found ? preferred : first }
+        ' <<< "$refs")"
         ref="${repo}:${tag}"
         [ "$ref" = "$keep" ] && continue
         id="$(docker image inspect "$ref" --format '{{.Id}}' | sed 's/^sha256://')"
-        printf '%s\n' "$active_ids" | grep -qx "$id" && continue
+        grep -Fx "$id" <<< "$active_ids" >/dev/null && continue
         printf '%s\n' "$ref"
       done \
     | sort -u)"
@@ -253,7 +255,7 @@ PY
         printf '%s\n' "$candidates" | xargs docker volume rm >/dev/null
         echo "已删除 ${count} 个无引用 Docker 匿名卷"
       else
-        printf '%s\n' "$candidates" | head -n 20
+        awk 'NR <= 20 { print }' <<< "$candidates"
         if [ "$count" -gt 20 ]; then
           echo "... 其余 $((count - 20)) 个已省略"
         fi
@@ -279,7 +281,7 @@ if [ "$INCLUDE_RUN_LOGS" = true ]; then
       done
       echo "已删除 ${log_count} 个历史运行目录"
     elif [ -n "$log_candidates" ]; then
-      printf '%s\n' "$log_candidates" | head -n 20
+      awk 'NR <= 20 { print }' <<< "$log_candidates"
       if [ "$log_count" -gt 20 ]; then
         echo "... 其余 $((log_count - 20)) 个已省略"
       fi

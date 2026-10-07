@@ -67,7 +67,7 @@ status_or_fail() {
 
 docker_running() {
   command -v docker >/dev/null 2>&1 \
-    && docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null | grep -qx true
+    && docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null | grep -Fx true >/dev/null
 }
 
 psql_file() {
@@ -145,7 +145,8 @@ check_kafka_capacity() {
   for raw_topic in $KAFKA_TOPICS; do
     topic="$(printf '%s' "$raw_topic" | tr -d '[:space:]')"
     [[ -n "$topic" ]] || continue
-    describe="$(run_kafka_cli kafka-topics.sh --describe --topic "$topic" 2>/dev/null | head -n 1 || true)"
+    describe="$(run_kafka_cli kafka-topics.sh --describe --topic "$topic" 2>/dev/null \
+      | awk 'NR == 1 { first = $0 } END { if (NR > 0) print first }' || true)"
     if [[ -z "$describe" ]]; then
       optional_issue "$KAFKA_STRICT" "Kafka topic 不存在或无法读取：${topic}"
       continue
@@ -162,8 +163,8 @@ check_kafka_capacity() {
       "kafka.topic" "$status" "$topic" "rf=${rf:-?}" "rf>=${KAFKA_MIN_REPLICATION_FACTOR}" "$detail"
 
     configs="$(run_kafka_cli kafka-configs.sh --entity-type topics --entity-name "$topic" --describe 2>/dev/null || true)"
-    retention="$(grep -o 'retention.ms=[^, ]*' <<<"$configs" | head -n 1 | cut -d= -f2-)"
-    cleanup_policy="$(grep -o 'cleanup.policy=[^, ]*' <<<"$configs" | head -n 1 | cut -d= -f2-)"
+    retention="$(awk '!found && match($0, /retention.ms=[^, ]*/) {value=substr($0, RSTART + 13, RLENGTH - 13); found=1} END {if (found) print value}' <<<"$configs")"
+    cleanup_policy="$(awk '!found && match($0, /cleanup.policy=[^, ]*/) {value=substr($0, RSTART + 15, RLENGTH - 15); found=1} END {if (found) print value}' <<<"$configs")"
     if [[ "$KAFKA_REQUIRE_RETENTION" == "true" && ( -z "$retention" || "$retention" == "-1" ) ]]; then
       optional_issue "$KAFKA_STRICT" "Kafka topic ${topic}: 未设置有界 retention.ms"
     else

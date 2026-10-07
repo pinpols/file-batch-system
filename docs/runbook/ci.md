@@ -540,6 +540,7 @@ pom.xml                      # 父 pom：JaCoCo agent、PMD、Spotless 插件配
 
 - PR：`build-mode: none`，使用 CodeQL 默认高精度查询并上传 SARIF，作为 `Analyze (java)` 检查。
 - main push、schedule、workflow_dispatch：`build-mode: manual`，执行跳过测试的全 reactor 编译，并使用 `security-extended` 分析。
+- SARIF 由 `github/codeql-action/analyze` 原生上传。同一 job 内不得针对同一 tool/category 再调用 `upload-sarif` 重试；GitHub 会将后续调用判定为重复上传。上传故障通过重新运行 job 处理。
 - 无构建模式只适用于当前纯 Java 仓库；引入 Kotlin 或发现生成源码漏析时必须恢复 PR 手工构建。
 - PR 与 main 告警差异需要人工解释，不能仅因 PR 更快就认定覆盖等价。
 

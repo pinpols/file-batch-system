@@ -36,7 +36,8 @@ for p in "ta/outbound/report" "tb/outbound/statement" "tc/outbound/risk-alert"; 
   echo "init-$(date +%s)" | bash "$MINIO_MC_HELPER" \
     pipe "local/$MINIO_BUCKET/$p/.keep" >/dev/null
 done
-bash "$MINIO_MC_HELPER" ls --recursive "local/$MINIO_BUCKET" 2>&1 | grep "\.keep" | head -6
+bash "$MINIO_MC_HELPER" ls --recursive "local/$MINIO_BUCKET" 2>&1 \
+  | awk '/\.keep/ && shown < 6 { print; shown++ }'
 
 echo "==> ✅ 初始化完成"
 echo "    biz tables: $applied ($BUSINESS_DB)"

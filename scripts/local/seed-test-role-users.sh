@@ -60,7 +60,7 @@ login_resp=$(curl -sS -o /tmp/seed-login.json -w "%{http_code}" \
   -X POST "$CONSOLE_BASE_URL/api/console/auth/login" \
   --data-raw "$login_body" || echo "000")
 if [[ "$login_resp" != "200" ]]; then
-  ng "admin login HTTP=$login_resp (resp: $(cat /tmp/seed-login.json 2>/dev/null | head -c 400))"
+  ng "admin login HTTP=$login_resp (resp: $(head -c 400 /tmp/seed-login.json 2>/dev/null))"
   echo "  - 确认 console-api up: curl $CONSOLE_BASE_URL/actuator/health"
   echo "  - 若 admin/admin123 已被 reset,export ADMIN_PASSWORD=<新密码> 再跑"
   echo "  - 若 login-encryption required=true(prod-like),先关此开关或本脚本扩展支持加密路径"
@@ -88,7 +88,7 @@ create_tenant() {
     409)      ok "tenant $tid 已存在 -> skip" ;;
     400)
       local detail
-      detail=$(cat /tmp/seed-tenant.json 2>/dev/null | head -c 400)
+      detail=$(head -c 400 /tmp/seed-tenant.json 2>/dev/null)
       if echo "$detail" | grep -q "non_prod_require_test_prefix\|reserved_prefix\|reserved_id"; then
         ng "tenant $tid 拒绝(NON-PROD ReservedPrefixGuard)"
         echo "  $detail"
@@ -102,7 +102,7 @@ create_tenant() {
       exit 1
       ;;
     *)
-      ng "tenant $tid HTTP=$code: $(cat /tmp/seed-tenant.json 2>/dev/null | head -c 400)"
+      ng "tenant $tid HTTP=$code: $(head -c 400 /tmp/seed-tenant.json 2>/dev/null)"
       exit 1
       ;;
   esac
@@ -128,7 +128,7 @@ create_user() {
     200|201) ok "user $username 已创建" ;;
     409)     ok "user $username 已存在 -> skip" ;;
     *)
-      ng "user $username HTTP=$code: $(cat /tmp/seed-user.json 2>/dev/null | head -c 400)"
+      ng "user $username HTTP=$code: $(head -c 400 /tmp/seed-user.json 2>/dev/null)"
       exit 1
       ;;
   esac
@@ -149,7 +149,7 @@ verify_login() {
   if [[ "$code" == "200" ]]; then
     ok "login $username -> 200"
   else
-    ng "login $username -> $code: $(cat /tmp/seed-verify.json 2>/dev/null | head -c 200)"
+    ng "login $username -> $code: $(head -c 200 /tmp/seed-verify.json 2>/dev/null)"
     exit 1
   fi
 }
