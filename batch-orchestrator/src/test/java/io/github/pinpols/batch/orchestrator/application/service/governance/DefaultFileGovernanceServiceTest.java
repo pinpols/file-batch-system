@@ -27,6 +27,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.query.JobTaskQuery;
+import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceArrivalViews;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceRepository;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.S3GovernanceStorage;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
@@ -147,7 +148,7 @@ class DefaultFileGovernanceServiceTest {
             eq("t1"), eq(1L), eq(FileStatus.LOADED.code()), eq(FileStatus.ARCHIVED.code()), any()))
         .thenReturn(1);
     when(fileGovernanceRepository.operationDetail(anyString(), anyString(), any(), any()))
-        .thenReturn(Map.of());
+        .thenReturn(new FileGovernanceRepository.OperationDetailView(null, null, null, null));
 
     String result = service.archiveFile(cmd);
 
@@ -174,7 +175,7 @@ class DefaultFileGovernanceServiceTest {
             eq("t1"), eq(1L), eq(FileStatus.LOADED.code()), eq(FileStatus.ARCHIVED.code()), any()))
         .thenReturn(1);
     when(fileGovernanceRepository.operationDetail(anyString(), anyString(), any(), any()))
-        .thenReturn(Map.of());
+        .thenReturn(new FileGovernanceRepository.OperationDetailView(null, null, null, null));
 
     // arrange 完成,act + assert:不再抛 NPE,正常返回 ARCHIVED
     assertThat(service.archiveFile(cmd)).isEqualTo(FileStatus.ARCHIVED.code());
@@ -192,7 +193,7 @@ class DefaultFileGovernanceServiceTest {
             eq("t1"), eq(1L), eq(FileStatus.ARCHIVED.code()), eq(FileStatus.DELETED.code()), any()))
         .thenReturn(1);
     when(fileGovernanceRepository.operationDetail(anyString(), anyString(), any(), any()))
-        .thenReturn(Map.of());
+        .thenReturn(new FileGovernanceRepository.OperationDetailView(null, null, null, null));
 
     String result = service.deleteFile(cmd);
 
@@ -665,8 +666,9 @@ class DefaultFileGovernanceServiceTest {
   void shouldSkipFilesWithoutId_whenIteratingArrivalGroup() {
     // 验证 toLong(null) 时 continue 分支
     ArrivalGroupGovernanceCommand cmd = arrivalCmd("CONTINUE_WAITING");
-    Map<String, Object> noId = new LinkedHashMap<>();
-    Map<String, Object> withId = fileMap(99L, Map.of());
+    FileGovernanceArrivalViews.ArrivalGroupFileView noId =
+        FileGovernanceArrivalViews.arrivalGroupFile(new LinkedHashMap<>());
+    FileGovernanceArrivalViews.ArrivalGroupFileView withId = fileMap(99L, Map.of());
     when(fileGovernanceRepository.selectArrivalGroupFiles("t1", "grp"))
         .thenReturn(List.of(noId, withId));
 
@@ -781,10 +783,11 @@ class DefaultFileGovernanceServiceTest {
         .build();
   }
 
-  private Map<String, Object> fileMap(Long id, Map<String, Object> extra) {
+  private FileGovernanceArrivalViews.ArrivalGroupFileView fileMap(
+      Long id, Map<String, Object> extra) {
     Map<String, Object> map = new LinkedHashMap<>();
     map.put("id", id);
     map.putAll(extra);
-    return map;
+    return FileGovernanceArrivalViews.arrivalGroupFile(map);
   }
 }

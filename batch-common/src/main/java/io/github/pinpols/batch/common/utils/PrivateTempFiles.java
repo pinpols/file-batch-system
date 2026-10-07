@@ -161,10 +161,9 @@ public final class PrivateTempFiles {
 
   private static Path privateDirectory() throws IOException {
     Path directory = resolveUnderTempRoot(ROOT_DIRECTORY);
-    if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
-      if (Files.exists(directory, LinkOption.NOFOLLOW_LINKS)) {
-        throw new IOException("private temp path is not a directory: " + directory);
-      }
+    if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)
+        && Files.exists(directory, LinkOption.NOFOLLOW_LINKS)) {
+      throw new IOException("private temp path is not a directory: " + directory);
     }
     return OwnerOnlyFiles.createDirectories(directory);
   }

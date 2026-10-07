@@ -181,6 +181,10 @@ SDK 五语言契约矩阵。
 | 集成测试 (`*IntegrationTest` / 非 E2E `*IT`) | Maven `verify -DskipITs=false` | full-ci-gate；`check-integration-test-coverage.py` 守护含集成测试的主 reactor 模块必须进入 full-ci verify shard |
 | E2E 套件 (`*E2eIT`) | Maven `test` `-pl batch-e2e-tests` | full-ci-gate |
 
+> 约定/架构守护（`*ArchTest`、`*ConventionTest`，如 `RepositoryMapReturnConventionTest`、`PositionalArgsConventionTest`）
+> 不单独接线 workflow：它们随上述「编译 + 单元测试」的 Maven `test` 全量执行并阻断，触发范围即该行的「全部」。
+> 这类测试型守卫的登记入口是 [约定约束与漂移防护总账](../audit/convention-drift-guard-index.md) 的守卫矩阵（`check-*` / `validate-*` 脚本另由 [scripts/ci/README.md](../../scripts/ci/README.md) 登记）。
+
 ### 提醒项（失败只通知，不阻断流水线）
 
 | 检查项 | 工具 | 触发流水线 | 说明 |

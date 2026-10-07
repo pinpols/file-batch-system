@@ -44,6 +44,8 @@ public final class OwnerOnlyFiles {
     }
   }
 
+  // JDK 创建 API 接收异构 FileAttribute 数组,其值类型由具体文件系统属性决定。
+  @SuppressWarnings("java:S1452")
   public static FileAttribute<?>[] attributes(Path path, boolean directory) throws IOException {
     if (supportsPosix(path)) {
       return new FileAttribute<?>[] {

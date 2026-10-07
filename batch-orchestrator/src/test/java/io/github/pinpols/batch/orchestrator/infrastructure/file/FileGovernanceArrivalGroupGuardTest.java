@@ -68,7 +68,8 @@ class FileGovernanceArrivalGroupGuardTest {
     Map<String, Object> file =
         baseFile(5207L, "report.fw", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
     file.put("required_file_set", "");
-    when(repository.selectArrivalGovernanceCandidates(anyInt())).thenReturn(List.of(file));
+    when(repository.selectArrivalGovernanceCandidates(anyInt()))
+        .thenReturn(candidateViews(List.of(file)));
 
     scheduler.manageFileArrivalGroups();
 
@@ -84,7 +85,8 @@ class FileGovernanceArrivalGroupGuardTest {
     Map<String, Object> file =
         baseFile(5210L, "missing-trigger.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
     file.put("required_file_set", "missing-trigger.csv,companion.csv");
-    when(repository.selectArrivalGovernanceCandidates(anyInt())).thenReturn(List.of(file));
+    when(repository.selectArrivalGovernanceCandidates(anyInt()))
+        .thenReturn(candidateViews(List.of(file)));
 
     scheduler.manageFileArrivalGroups();
 
@@ -99,7 +101,8 @@ class FileGovernanceArrivalGroupGuardTest {
     Map<String, Object> file =
         baseFile(5300L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
     file.put("required_file_set", "ready.csv");
-    when(repository.selectArrivalGovernanceCandidates(anyInt())).thenReturn(List.of(file));
+    when(repository.selectArrivalGovernanceCandidates(anyInt()))
+        .thenReturn(candidateViews(List.of(file)));
 
     scheduler.manageFileArrivalGroups();
 
@@ -116,7 +119,8 @@ class FileGovernanceArrivalGroupGuardTest {
         baseFile(5400L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
     file.put("required_file_set", "ready.csv");
     file.put("checksum_type", "NONE");
-    when(repository.selectArrivalGovernanceCandidates(anyInt())).thenReturn(List.of(file));
+    when(repository.selectArrivalGovernanceCandidates(anyInt()))
+        .thenReturn(candidateViews(List.of(file)));
 
     scheduler.manageFileArrivalGroups();
 
@@ -136,7 +140,8 @@ class FileGovernanceArrivalGroupGuardTest {
         baseFile(5401L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
     file.put("required_file_set", "ready.csv");
     file.put("checksum_type", "SHA-256");
-    when(repository.selectArrivalGovernanceCandidates(anyInt())).thenReturn(List.of(file));
+    when(repository.selectArrivalGovernanceCandidates(anyInt()))
+        .thenReturn(candidateViews(List.of(file)));
 
     scheduler.manageFileArrivalGroups();
 
@@ -152,7 +157,8 @@ class FileGovernanceArrivalGroupGuardTest {
     Map<String, Object> file =
         baseFile(5500L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
     file.put("required_file_set", "ready.csv");
-    when(repository.selectArrivalGovernanceCandidates(anyInt())).thenReturn(List.of(file));
+    when(repository.selectArrivalGovernanceCandidates(anyInt()))
+        .thenReturn(candidateViews(List.of(file)));
     when(bundleArrivalLauncher.launchIfBundle(eq("default-tenant"), eq("test-group"), any()))
         .thenThrow(new IllegalStateException("launch failed"));
 
@@ -174,7 +180,7 @@ class FileGovernanceArrivalGroupGuardTest {
     yesterday.put("biz_date", "2026-06-20");
     yesterday.put("required_file_set", "ready.csv");
     when(repository.selectArrivalGovernanceCandidates(anyInt()))
-        .thenReturn(List.of(today, yesterday));
+        .thenReturn(candidateViews(List.of(today, yesterday)));
 
     scheduler.manageFileArrivalGroups();
 
@@ -189,7 +195,8 @@ class FileGovernanceArrivalGroupGuardTest {
         baseFile(5700L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
     file.remove("biz_date");
     file.put("required_file_set", "ready.csv");
-    when(repository.selectArrivalGovernanceCandidates(anyInt())).thenReturn(List.of(file));
+    when(repository.selectArrivalGovernanceCandidates(anyInt()))
+        .thenReturn(candidateViews(List.of(file)));
 
     scheduler.manageFileArrivalGroups();
 
@@ -197,6 +204,11 @@ class FileGovernanceArrivalGroupGuardTest {
   }
 
   // ── helpers ───────────────────────────────────────────────────────────────
+
+  private static List<FileGovernanceArrivalViews.ArrivalCandidateView> candidateViews(
+      List<Map<String, Object>> rows) {
+    return rows.stream().map(FileGovernanceArrivalViews::arrivalCandidate).toList();
+  }
 
   private static Map<String, Object> baseFile(
       long id, String fileName, String arrivalState, String arrivalReason) {

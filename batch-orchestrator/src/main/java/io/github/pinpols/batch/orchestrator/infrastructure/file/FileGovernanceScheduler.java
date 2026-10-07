@@ -35,7 +35,9 @@ public class FileGovernanceScheduler {
   private record ArrivalGroupUpdateState(String arrivalState, String reason, Instant now) {}
 
   private record ArrivalGroupUpdateFiles(
-      List<Map<String, Object>> groupFiles, Set<String> requiredFiles, Set<String> missingFiles) {}
+      List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles,
+      Set<String> requiredFiles,
+      Set<String> missingFiles) {}
 
   private record ArrivalGroupUpdateContext(
       ArrivalGroupKey key, ArrivalGroupUpdateState state, ArrivalGroupUpdateFiles files) {}
@@ -170,17 +172,18 @@ public class FileGovernanceScheduler {
     if (!properties.getArrival().isEnabled()) {
       return;
     }
-    List<Map<String, Object>> candidates =
+    List<FileGovernanceArrivalViews.ArrivalCandidateView> candidates =
         fileGovernanceRepository.selectArrivalGovernanceCandidates(
             properties.getArrival().getBatchSize());
-    Map<ArrivalGroupKey, List<Map<String, Object>>> grouped = new HashMap<>();
+    Map<ArrivalGroupKey, List<FileGovernanceArrivalViews.ArrivalCandidateView>> grouped =
+        new HashMap<>();
     if (EmptyChecks.isEmpty(candidates)) {
       arrivalGroupWaitingCount.set(0L);
       arrivalGroupTriggeredCount.set(0L);
       arrivalGroupTimeoutCount.set(0L);
       return;
     }
-    for (Map<String, Object> candidate : candidates) {
+    for (FileGovernanceArrivalViews.ArrivalCandidateView candidate : candidates) {
       ArrivalGroupKey key = ArrivalGroupKey.from(candidate);
       if (EmptyChecks.isNull(key)) {
         continue;
@@ -191,7 +194,8 @@ public class FileGovernanceScheduler {
     long triggeredGroups = 0L;
     long timeoutGroups = 0L;
     Instant now = BatchDateTimeSupport.utcNow();
-    for (Map.Entry<ArrivalGroupKey, List<Map<String, Object>>> entry : grouped.entrySet()) {
+    for (Map.Entry<ArrivalGroupKey, List<FileGovernanceArrivalViews.ArrivalCandidateView>> entry :
+        grouped.entrySet()) {
       ArrivalGroupDecision decision = evaluateArrivalGroup(entry.getKey(), entry.getValue(), now);
       if (EmptyChecks.isNull(decision) || EmptyChecks.isNull(decision.state())) {
         continue;
@@ -227,34 +231,28 @@ public class FileGovernanceScheduler {
   }
 
   private ArrivalGroupDecision evaluateArrivalGroup(
-      ArrivalGroupKey key, List<Map<String, Object>> groupFiles, Instant now) {
+      ArrivalGroupKey key,
+      List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles,
+      Instant now) {
     if (EmptyChecks.isEmpty(groupFiles)) {
       return new ArrivalGroupDecision(null);
     }
-    Map<String, Object> firstFile =
-        groupFiles.stream().filter(EmptyChecks::isNotNull).findFirst().orElse(null);
-    if (EmptyChecks.isNull(firstFile)) {
-      return new ArrivalGroupDecision(null);
-    }
-    Set<String> requiredFiles = parseRequiredFileSet(text(firstFile.get("required_file_set")));
+    FileGovernanceArrivalViews.ArrivalCandidateView firstFile = groupFiles.get(0);
+    Set<String> requiredFiles = parseRequiredFileSet(firstFile.requiredFileSet());
     Set<String> arrivedFiles = new HashSet<>();
-    for (Map<String, Object> file : groupFiles) {
-      if (EmptyChecks.isNull(file)) {
-        continue;
-      }
-      String fileName = text(file.get("file_name"));
+    for (FileGovernanceArrivalViews.ArrivalCandidateView file : groupFiles) {
+      String fileName = file.fileName();
       if (EmptyChecks.isNotNull(fileName)) {
         arrivedFiles.add(fileName);
       }
     }
     Set<String> missingFiles = new HashSet<>(requiredFiles);
     missingFiles.removeAll(arrivedFiles);
-    Instant latestTolerableTime = parseInstant(text(firstFile.get("latest_tolerable_time")));
-    boolean triggerOnComplete = parseBoolean(
-        text(firstFile.get("trigger_on_complete")), properties.getArrival().isTriggerOnComplete());
+    Instant latestTolerableTime = parseInstant(firstFile.latestTolerableTime());
+    boolean triggerOnComplete =
+        parseBoolean(firstFile.triggerOnComplete(), properties.getArrival().isTriggerOnComplete());
     String timeoutAction = defaultText(
-        text(firstFile.get("arrival_timeout_action")),
-        properties.getArrival().getDefaultTimeoutAction());
+        firstFile.arrivalTimeoutAction(), properties.getArrival().getDefaultTimeoutAction());
     boolean timedOut =
         EmptyChecks.isNotNull(latestTolerableTime) && now.isAfter(latestTolerableTime);
     if (timedOut) {
@@ -332,7 +330,7 @@ public class FileGovernanceScheduler {
 
   private ArrivalGroupDecision triggerArrivalGroup(
       ArrivalGroupKey key,
-      List<Map<String, Object>> groupFiles,
+      List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles,
       Set<String> requiredFiles,
       Set<String> missingFiles,
       String reason,
@@ -369,9 +367,9 @@ public class FileGovernanceScheduler {
     String targetState = context.state().arrivalState();
     String targetReason = context.state().reason();
     boolean allInSync = true;
-    for (Map<String, Object> file : context.files().groupFiles()) {
-      String currentState = text(file.get("arrival_state"));
-      String currentReason = text(file.get("arrival_reason"));
+    for (FileGovernanceArrivalViews.ArrivalCandidateView file : context.files().groupFiles()) {
+      String currentState = file.arrivalState();
+      String currentReason = file.arrivalReason();
       if (!targetState.equals(currentState) || !Objects.equals(targetReason, currentReason)) {
         allInSync = false;
         break;
@@ -397,9 +395,9 @@ public class FileGovernanceScheduler {
     if (STATUS_TIMEOUT.equals(targetState)) {
       metadata.put("arrivalTimedOutAt", context.state().now().toString());
     }
-    for (Map<String, Object> file : context.files().groupFiles()) {
-      Long fileId = toLong(file.get("id"));
-      String tenantId = text(file.get("tenant_id"));
+    for (FileGovernanceArrivalViews.ArrivalCandidateView file : context.files().groupFiles()) {
+      Long fileId = file.fileId();
+      String tenantId = file.tenantId();
       if (EmptyChecks.isNull(fileId) || EmptyChecks.isNull(tenantId)) {
         continue;
       }
@@ -428,21 +426,6 @@ public class FileGovernanceScheduler {
         context.files().missingFiles().size());
   }
 
-  private Long toLong(Object value) {
-    if (value instanceof Number number) {
-      return number.longValue();
-    }
-    if (EmptyChecks.isNull(value)) {
-      return null;
-    }
-    String text = String.valueOf(value);
-    return EmptyChecks.isBlank(text) ? null : Long.valueOf(text);
-  }
-
-  private String text(Object value) {
-    return EmptyChecks.isNull(value) ? null : String.valueOf(value);
-  }
-
   private Instant parseInstant(String value) {
     if (EmptyChecks.isBlank(value)) {
       return null;
@@ -457,9 +440,10 @@ public class FileGovernanceScheduler {
   }
 
   /** 组内每个成员都有完整性背书(checksum_type 非空且非 NONE,即入站 MANIFEST 注入了 checksum)。 */
-  private boolean allMembersVerified(List<Map<String, Object>> groupFiles) {
-    for (Map<String, Object> file : groupFiles) {
-      String checksumType = text(file.get("checksum_type"));
+  private boolean allMembersVerified(
+      List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles) {
+    for (FileGovernanceArrivalViews.ArrivalCandidateView file : groupFiles) {
+      String checksumType = file.checksumType();
       if (EmptyChecks.isBlank(checksumType) || "NONE".equalsIgnoreCase(checksumType)) {
         return false;
       }
@@ -502,26 +486,22 @@ public class FileGovernanceScheduler {
 
     private static final String MISSING_BIZ_DATE = "__MISSING_BIZ_DATE__";
 
-    static ArrivalGroupKey from(Map<String, Object> candidate) {
+    static ArrivalGroupKey from(FileGovernanceArrivalViews.ArrivalCandidateView candidate) {
       if (EmptyChecks.isNull(candidate)) {
         return null;
       }
-      String tenantId = textValue(candidate.get("tenant_id"));
-      String fileGroupCode = textValue(candidate.get("file_group_code"));
+      String tenantId = candidate.tenantId();
+      String fileGroupCode = candidate.fileGroupCode();
       if (EmptyChecks.isBlank(tenantId) || EmptyChecks.isBlank(fileGroupCode)) {
         return null;
       }
       return new ArrivalGroupKey(
           tenantId,
-          defaultString(textValue(candidate.get("biz_date")), MISSING_BIZ_DATE),
+          defaultString(candidate.bizDate(), MISSING_BIZ_DATE),
           fileGroupCode,
-          defaultString(textValue(candidate.get("wait_file_group_mode")), "ALL_OF"),
-          defaultString(textValue(candidate.get("required_file_set")), ""),
-          defaultString(textValue(candidate.get("arrival_timeout_action")), "MANUAL_CONFIRM"));
-    }
-
-    private static String textValue(Object value) {
-      return EmptyChecks.isNull(value) ? null : String.valueOf(value);
+          defaultString(candidate.waitFileGroupMode(), "ALL_OF"),
+          defaultString(candidate.requiredFileSet(), ""),
+          defaultString(candidate.arrivalTimeoutAction(), "MANUAL_CONFIRM"));
     }
 
     private static String defaultString(String value, String fallback) {

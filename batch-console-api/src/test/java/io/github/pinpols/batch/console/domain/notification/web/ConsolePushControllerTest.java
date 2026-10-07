@@ -63,11 +63,12 @@ class ConsolePushControllerTest {
       var controller = context.getBean(ConsolePushController.class);
       var valid = new ConsolePushSubscribeRequest(
           "https://push.invalid", null, new ConsolePushSubscribeRequest.Keys("p256", "auth"));
+      var request = new MockHttpServletRequest();
       org.assertj.core.api.Assertions.assertThatThrownBy(
-              () -> controller.subscribe("ta", valid, new MockHttpServletRequest()))
+              () -> controller.subscribe("ta", valid, request))
           .isInstanceOf(AuthenticationCredentialsNotFoundException.class);
       org.assertj.core.api.Assertions.assertThatThrownBy(
-              () -> controller.subscribe("ta", null, new MockHttpServletRequest()))
+              () -> controller.subscribe("ta", null, request))
           .isInstanceOf(AuthenticationCredentialsNotFoundException.class);
       verifyNoInteractions(subscriptionService);
     } finally {

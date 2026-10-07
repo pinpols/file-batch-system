@@ -24,6 +24,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.query.JobTaskQuery;
+import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceArrivalViews;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceRepository;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.S3GovernanceStorage;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
@@ -353,19 +354,16 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
   @Transactional
   public String operateArrivalGroup(ArrivalGroupGovernanceCommand command) {
     validateArrivalGroupCommand(command);
-    List<Map<String, Object>> groupFiles = Texts.hasText(command.bizDate())
-        ? fileGovernanceRepository.selectArrivalGroupFiles(
-            command.tenantId(), command.fileGroupCode(), command.bizDate())
-        : fileGovernanceRepository.selectArrivalGroupFiles(
-            command.tenantId(), command.fileGroupCode());
+    List<FileGovernanceArrivalViews.ArrivalGroupFileView> groupFiles =
+        Texts.hasText(command.bizDate())
+            ? fileGovernanceRepository.selectArrivalGroupFiles(
+                command.tenantId(), command.fileGroupCode(), command.bizDate())
+            : fileGovernanceRepository.selectArrivalGroupFiles(
+                command.tenantId(), command.fileGroupCode());
     if (EmptyChecks.isEmpty(groupFiles)) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.arrival_group.not_found");
     }
-    Map<String, Object> firstGroupFile =
-        groupFiles.stream().filter(EmptyChecks::isNotNull).findFirst().orElse(null);
-    if (EmptyChecks.isNull(firstGroupFile)) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.arrival_group.not_found");
-    }
+    FileGovernanceArrivalViews.ArrivalGroupFileView firstGroupFile = groupFiles.get(0);
     rejectAmbiguousArrivalGroupOperation(command, groupFiles);
     Instant now = BatchDateTimeSupport.utcNow();
     String action = command.action().trim().toUpperCase();
@@ -380,10 +378,10 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
                 ResultCode.INVALID_ARGUMENT.detailKey(),
                 "unsupported arrival action: " + command.action());
         };
-    if ("EMPTY_RUN".equals(action) && !toBoolean(firstGroupFile.get("allow_empty_run"))) {
+    if ("EMPTY_RUN".equals(action) && !firstGroupFile.allowEmptyRun()) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.arrival_group.empty_run_not_allowed");
     }
-    if ("SKIP_BATCH".equals(action) && !toBoolean(firstGroupFile.get("allow_skip_biz_date"))) {
+    if ("SKIP_BATCH".equals(action) && !firstGroupFile.allowSkipBizDate()) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT, "error.arrival_group.skip_batch_not_allowed");
     }
@@ -393,12 +391,9 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
             : command.extendWaitSeconds();
     String latestTolerableTime = "CONTINUE_WAITING".equals(action)
         ? now.plusSeconds(Math.max(1L, extensionSeconds)).toString()
-        : stringValue(firstGroupFile.get("latest_tolerable_time"));
-    for (Map<String, Object> groupFile : groupFiles) {
-      if (EmptyChecks.isNull(groupFile)) {
-        continue;
-      }
-      Long fileId = toLong(groupFile.get("id"));
+        : firstGroupFile.latestTolerableTime();
+    for (FileGovernanceArrivalViews.ArrivalGroupFileView groupFile : groupFiles) {
+      Long fileId = groupFile.fileId();
       if (EmptyChecks.isNull(fileId)) {
         continue;
       }
@@ -436,16 +431,14 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
   }
 
   private void rejectAmbiguousArrivalGroupOperation(
-      ArrivalGroupGovernanceCommand command, List<Map<String, Object>> groupFiles) {
+      ArrivalGroupGovernanceCommand command,
+      List<FileGovernanceArrivalViews.ArrivalGroupFileView> groupFiles) {
     if (Texts.hasText(command.bizDate())) {
       return;
     }
     LinkedHashSet<String> bizDates = new LinkedHashSet<>();
-    for (Map<String, Object> groupFile : groupFiles) {
-      if (EmptyChecks.isNull(groupFile)) {
-        continue;
-      }
-      String bizDate = stringValue(groupFile.get("biz_date"));
+    for (FileGovernanceArrivalViews.ArrivalGroupFileView groupFile : groupFiles) {
+      String bizDate = groupFile.bizDate();
       bizDates.add(Texts.hasText(bizDate) ? bizDate : "__MISSING_BIZ_DATE__");
       if (bizDates.size() > 1) {
         throw BizException.of(
@@ -454,10 +447,6 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
             "bizDate is required when arrival group spans multiple business dates");
       }
     }
-  }
-
-  private String stringValue(Object value) {
-    return EmptyChecks.isNull(value) ? null : String.valueOf(value);
   }
 
   private boolean requiresDownloadApproval(FileGovernanceViews.TemplateSecurityView security) {
@@ -610,24 +599,6 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
 
   private String resolveOperatorType(String operatorId) {
     return Texts.hasText(operatorId) ? "USER" : "API";
-  }
-
-  private Long toLong(Object value) {
-    if (EmptyChecks.isNull(value)) {
-      return null;
-    }
-    if (value instanceof Number number) {
-      return number.longValue();
-    }
-    String text = String.valueOf(value);
-    return EmptyChecks.isBlank(text) ? null : Long.valueOf(text);
-  }
-
-  private boolean toBoolean(Object value) {
-    if (value instanceof Boolean bool) {
-      return bool;
-    }
-    return EmptyChecks.isNotNull(value) && Boolean.parseBoolean(String.valueOf(value));
   }
 
   private String safeFileName(String fileName) {

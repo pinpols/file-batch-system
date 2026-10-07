@@ -69,6 +69,10 @@ public class FileGovernanceRepository {
       String traceId,
       Object detailSummary) {}
 
+  /** 审计明细固定列：状态跃迁 + 操作人 + 原因；FAILED 分支的 errorMessage 等动态证据仍以具名 Map 承载。 */
+  public record OperationDetailView(
+      String currentStatus, String nextStatus, String operatorId, String reason) {}
+
   private final FileGovernanceMapper fileGovernanceMapper;
 
   public Map<String, Object> loadFileRecord(String tenantId, Long fileId) {
@@ -194,30 +198,45 @@ public class FileGovernanceRepository {
         .toList();
   }
 
-  public List<Map<String, Object>> selectArrivalGovernanceCandidates(int limit) {
+  public List<FileGovernanceArrivalViews.ArrivalCandidateView> selectArrivalGovernanceCandidates(
+      int limit) {
     if (limit <= 0) {
       return List.of();
     }
-    return fileGovernanceMapper.selectArrivalGovernanceCandidates(params(KEY_LIMIT, limit));
+    return fileGovernanceMapper.selectArrivalGovernanceCandidates(params(KEY_LIMIT, limit)).stream()
+        .filter(row -> !EmptyChecks.isEmpty(row))
+        .map(FileGovernanceArrivalViews::arrivalCandidate)
+        .toList();
   }
 
-  public List<Map<String, Object>> selectArrivalGroupSummaries(
+  public List<FileGovernanceArrivalViews.ArrivalGroupSummaryView> selectArrivalGroupSummaries(
       String tenantId, String fileGroupCode, String arrivalState) {
-    return fileGovernanceMapper.selectArrivalGroupSummaries(params(
-        KEY_TENANT_ID, tenantId, "fileGroupCode", fileGroupCode, "arrivalState", arrivalState));
+    return fileGovernanceMapper
+        .selectArrivalGroupSummaries(params(
+            KEY_TENANT_ID, tenantId, "fileGroupCode", fileGroupCode, "arrivalState", arrivalState))
+        .stream()
+        .filter(row -> !EmptyChecks.isEmpty(row))
+        .map(FileGovernanceArrivalViews::arrivalGroupSummary)
+        .toList();
   }
 
-  public List<Map<String, Object>> selectArrivalGroupFiles(String tenantId, String fileGroupCode) {
+  public List<FileGovernanceArrivalViews.ArrivalGroupFileView> selectArrivalGroupFiles(
+      String tenantId, String fileGroupCode) {
     return selectArrivalGroupFiles(tenantId, fileGroupCode, null);
   }
 
-  public List<Map<String, Object>> selectArrivalGroupFiles(
+  public List<FileGovernanceArrivalViews.ArrivalGroupFileView> selectArrivalGroupFiles(
       String tenantId, String fileGroupCode, String bizDate) {
     if (!Texts.hasText(tenantId) || !Texts.hasText(fileGroupCode)) {
       return List.of();
     }
-    return fileGovernanceMapper.selectArrivalGroupFiles(
-        params(KEY_TENANT_ID, tenantId, "fileGroupCode", fileGroupCode, "bizDate", bizDate));
+    return fileGovernanceMapper
+        .selectArrivalGroupFiles(
+            params(KEY_TENANT_ID, tenantId, "fileGroupCode", fileGroupCode, "bizDate", bizDate))
+        .stream()
+        .filter(row -> !EmptyChecks.isEmpty(row))
+        .map(FileGovernanceArrivalViews::arrivalGroupFile)
+        .toList();
   }
 
   public long countArrivalDelayViolations(String tenantId, long thresholdSeconds) {
@@ -475,14 +494,9 @@ public class FileGovernanceRepository {
         toJson(command.detailSummary())));
   }
 
-  public Map<String, Object> operationDetail(
+  public OperationDetailView operationDetail(
       String currentStatus, String nextStatus, String operatorId, String reason) {
-    Map<String, Object> detail = new LinkedHashMap<>();
-    detail.put("currentStatus", currentStatus);
-    detail.put("nextStatus", nextStatus);
-    detail.put("operatorId", operatorId);
-    detail.put("reason", reason);
-    return detail;
+    return new OperationDetailView(currentStatus, nextStatus, operatorId, reason);
   }
 
   private String toJson(Object value) {
