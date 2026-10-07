@@ -30,10 +30,13 @@ class CaptchaCryptoTest {
   }
 
   @Test
-  @DisplayName("sanitizeForLog 去 CRLF、null 归空")
+  @DisplayName("共享日志净化覆盖换行及 Unicode 分隔符,验证码 null 语义保持为空")
   void sanitizeForLog_stripsCrlf() {
     assertThat(CaptchaCrypto.sanitizeForLog("1.2.3.4\nFAKE LOG")).isEqualTo("1.2.3.4_FAKE LOG");
-    assertThat(CaptchaCrypto.sanitizeForLog("a\r\nb")).isEqualTo("a__b");
+    for (String separator :
+        new String[] {"\r\n", "\n", "\r", "\u0085", "\u2028", "\u2029", "\u000b", "\f"}) {
+      assertThat(CaptchaCrypto.sanitizeForLog("a" + separator + "b")).isEqualTo("a_b");
+    }
     assertThat(CaptchaCrypto.sanitizeForLog(null)).isEmpty();
   }
 }

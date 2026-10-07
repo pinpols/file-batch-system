@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.forensic;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -22,7 +23,9 @@ import io.github.pinpols.batch.orchestrator.mapper.BatchDayOperationAuditMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ForensicExportLogMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.Month;
@@ -91,6 +94,12 @@ class ForensicExportServiceTest {
 
     Path zipPath = Path.of(response.storagePath());
     assertThat(zipPath).exists();
+    if (Files.getFileStore(zipPath).supportsFileAttributeView("posix")) {
+      assertThat(Files.getPosixFilePermissions(zipPath))
+          .isEqualTo(PosixFilePermissions.fromString("rw-------"));
+      assertThat(Files.getPosixFilePermissions(zipPath.getParent()))
+          .isEqualTo(PosixFilePermissions.fromString("rwx------"));
+    }
 
     try (ZipFile zip = new ZipFile(zipPath.toFile())) {
       assertThat(zip.getEntry("manifest.json")).isNotNull();
@@ -108,6 +117,25 @@ class ForensicExportServiceTest {
             eq(response.sha256()),
             anyString(),
             any());
+  }
+
+  @Test
+  @DisplayName("取证根为符号链接时拒绝写入并登记失败,不向链接目标泄露证据")
+  void shouldRejectSymlinkRoot_whenExportingPrivateEvidence() throws IOException {
+    assumeTrue(Files.getFileStore(tempDir).supportsFileAttributeView("posix"));
+    Path target = Files.createDirectory(tempDir.resolve("target"));
+    Path link = Files.createSymbolicLink(tempDir.resolve("link"), target);
+    properties.setStorageDir(link.toString());
+    assertThatThrownBy(() -> service.export(ForensicExportRequest.builder()
+            .tenantId("t1")
+            .bizDateFrom(LocalDate.of(2026, Month.MARCH, 15))
+            .bizDateTo(LocalDate.of(2026, Month.MARCH, 15))
+            .build()))
+        .isInstanceOf(BizException.class);
+    try (var files = Files.list(target)) {
+      assertThat(files).isEmpty();
+    }
+    verify(logMapper).markFailed(eq("t1"), anyString(), anyString(), any());
   }
 
   @Test

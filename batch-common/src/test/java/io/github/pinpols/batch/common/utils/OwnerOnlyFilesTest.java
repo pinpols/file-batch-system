@@ -21,6 +21,8 @@ class OwnerOnlyFilesTest {
   void shouldCreatePrivatePaths_whenUsingPosixFilesystem(@TempDir Path root) throws Exception {
     Path directory = OwnerOnlyFiles.createDirectories(root.resolve("nested/data"));
     Path file = OwnerOnlyFiles.createFile(directory.resolve("payload"));
+    assertThat(directory).isEqualTo(root.resolve("nested/data"));
+    assertThat(file).isEqualTo(directory.resolve("payload"));
     assertThat(Files.getPosixFilePermissions(directory))
         .isEqualTo(PosixFilePermissions.fromString("rwx------"));
     assertThat(Files.getPosixFilePermissions(directory.getParent()))

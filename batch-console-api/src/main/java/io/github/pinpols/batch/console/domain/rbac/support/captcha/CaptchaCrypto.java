@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.console.domain.rbac.support.captcha;
 
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import javax.crypto.Mac;
@@ -56,11 +58,8 @@ final class CaptchaCrypto {
     return hex(hmacSha256(key.getBytes(StandardCharsets.UTF_8), data));
   }
 
-  /** 用户可控值进日志前去除 CR/LF，防日志注入(伪造日志行)。null 归一为空串。 */
+  /** 委派共享换行净化规则;保留验证码日志既有的 null 归空串语义。 */
   static String sanitizeForLog(String value) {
-    if (value == null) {
-      return "";
-    }
-    return value.replaceAll("[\\r\\n]", "_");
+    return EmptyChecks.isNull(value) ? "" : LogSanitizer.value(value);
   }
 }
