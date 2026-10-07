@@ -3,11 +3,19 @@ package io.github.pinpols.batch.worker.exports.stage.format;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.OwnerOnlyFiles;
+import io.github.pinpols.batch.common.utils.PrivateTempFiles;
+import java.io.File;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.Map;
+import org.apache.poi.util.TempFile;
+import org.apache.poi.util.TempFileCreationStrategy;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.springframework.stereotype.Component;
 
@@ -31,6 +39,19 @@ import org.springframework.stereotype.Component;
 @Component
 public class ExcelExportFormat extends AbstractExportFormat {
 
+  private static final TempFileCreationStrategy PRIVATE_TEMP_FILES =
+      new TempFileCreationStrategy() {
+        @Override
+        public File createTempFile(String prefix, String suffix) throws IOException {
+          return PrivateTempFiles.createTempFile(prefix, suffix).toFile();
+        }
+
+        @Override
+        public File createTempDirectory(String prefix) throws IOException {
+          return PrivateTempFiles.createTempDirectory(prefix).toFile();
+        }
+      };
+
   public ExcelExportFormat(ObjectMapper objectMapper) {
     super(objectMapper);
   }
@@ -42,6 +63,24 @@ public class ExcelExportFormat extends AbstractExportFormat {
 
   @Override
   public long generate(ExportFormatContext ctx) throws Exception {
+    // POI 的 sheet XML 与模板 ZIP 同样包含业务数据；线程局部作用域覆盖生成和关闭，随后恢复原策略。
+    GenerationResult result = TempFile.withStrategy(PRIVATE_TEMP_FILES, () -> {
+      try {
+        return new GenerationResult(generateWorkbook(ctx), null);
+      } catch (Exception failure) {
+        return new GenerationResult(0, failure);
+      }
+    });
+    if (EmptyChecks.isNotNull(result.failure())) {
+      throw result.failure();
+    }
+    return result.recordCount();
+  }
+
+  // Supplier 不声明受检异常，通过结果传回原异常，避免改变上层失败分类。
+  private record GenerationResult(long recordCount, Exception failure) {}
+
+  private long generateWorkbook(ExportFormatContext ctx) throws Exception {
     Long batchIdLong = ctx.batchId() == null ? null : Long.valueOf(String.valueOf(ctx.batchId()));
     ExportDataPlugin.DetailPage firstPage =
         ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), null);
@@ -55,6 +94,13 @@ public class ExcelExportFormat extends AbstractExportFormat {
     String sheetName = resolveSheetName(templateConfig);
     int headerRows = Math.max(1, formatConfig.headerRows());
 
+    // 文件创建只经过私有权限边界；写流不得隐式新建文件或跟随符号链接。
+    if (Files.notExists(ctx.generatedFile(), LinkOption.NOFOLLOW_LINKS)) {
+      OwnerOnlyFiles.createFile(ctx.generatedFile());
+    } else {
+      OwnerOnlyFiles.protectExisting(ctx.generatedFile(), false);
+    }
+
     // workbook 必须纳入 try-with-resources:旧写法把 workbook 放外面 + finally close,
     // 若 Files.newOutputStream 抛异常(磁盘满 / 权限),控制流不进 try/finally → workbook
     // 已创建的 /tmp sheet-backing temp file 永不清理。Java 9+ try-with-resources 支持
@@ -62,9 +108,9 @@ public class ExcelExportFormat extends AbstractExportFormat {
     try (SXSSFWorkbook workbook = new SXSSFWorkbook(100);
         OutputStream outputStream = Files.newOutputStream(
             ctx.generatedFile(),
-            StandardOpenOption.CREATE,
             StandardOpenOption.TRUNCATE_EXISTING,
-            StandardOpenOption.WRITE)) {
+            StandardOpenOption.WRITE,
+            LinkOption.NOFOLLOW_LINKS)) {
       ExcelSheetWriter writer = new ExcelSheetWriter(
           workbook, columns, sheetName, headerRows, rowsPerSheet, styleOptions, this);
       long recordCount = ExportPageGenerationCoordinator.generatePaged(

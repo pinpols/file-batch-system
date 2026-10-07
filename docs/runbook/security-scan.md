@@ -49,6 +49,7 @@ java -jar security-scan/target/security-scan-1.0.0.jar --mode=all --root=. --tar
 - 用户可控日志字段复用 `LogSanitizer.value`,保留原字段与业务判断,覆盖 CR/LF 和 Unicode 换行。
 - CodeQL 的日志模型同时支持换行常量模式(如 `\\R`)和合规白名单,不能把其中一种描述为唯一有效形态。验证码日志保留 `null` 归空串语义,CRLF 按共享规则归为一个 `_`;Import 通知继续保留更严格的领域日志白名单,不把它当作对象 Key 的输入校验。
 - 私有落盘复用 `OwnerOnlyFiles`:按实际 `FileStore` 判断 POSIX 支持,创建时设文件 `0600` / 目录 `0700`;非 POSIX 必须验证 owner-only ACL,新建路径在写入内容前再次验证。不支持权限视图或权限设置失败时显式拒绝,不吞异常降级。
+- Excel 导出的最终输出与 POI 中间 XML/模板 ZIP 都属于私有业务数据。SXSSF 整个生成和关闭过程使用线程局部 `TempFile.withStrategy`，复用 `PrivateTempFiles`，完成或异常后恢复原策略；不使用全局 POI 策略覆盖。输出写流不得隐式 CREATE 或跟随符号链接。检查临时根目录的磁盘空间及文件系统权限能力；不支持私有权限时按失败关闭处理，不回退共享临时目录。
 - 私有临时文件、导出暂存与默认分发 Outbox 遵循上述约束。本地对象存储写入/复制的新文件也使用私有权限;显式配置的分发目标继续按目标存储协议与部署权限管理。
 - 取证 ZIP 与 Atomic shell 工作根/任务目录同样在写入前应用私有权限。确定性根目录继续用于恢复和清理,不为消除告警改成每进程随机根;取证 ZIP 排他创建,打开输出流时不跟随符号链接。`batch.forensic.enabled` 默认 `true`,关闭后返回 503,生产须显式设置持久私有存储目录。
 - `java/user-controlled-bypass` 若指向参数校验中的 `throw BizException.of(INVALID_ARGUMENT, ...)`,需追踪敏感调用实际语义。拒绝非法请求不是跳过鉴权;先验证 Controller 的 `@PreAuthorize`、认证过滤器、租户守卫和非法请求不落库,再以具体告警编号记录误报理由。不得删除校验来消除告警。

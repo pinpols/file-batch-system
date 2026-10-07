@@ -10,6 +10,7 @@ import io.github.pinpols.batch.console.application.ops.ConsoleTriggerProxyServic
 import io.github.pinpols.batch.console.shared.client.TriggerInternalRestClient;
 import io.github.pinpols.batch.console.shared.query.TenantScopeResolver;
 import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
@@ -141,9 +142,10 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
         .uri(ACTION_PATH, action)
         .retrieve()
         .body(SCHEDULER_RESPONSE);
-    return EmptyChecks.isNotNull(response)
-        ? response.data()
-        : new ConsoleSchedulerCommandResponse(null);
+    // 只归一化缺失的响应信封，已有信封中的 data=null 保持原样。
+    return Objects.requireNonNullElseGet(
+            response, () -> CommonResponse.success(new ConsoleSchedulerCommandResponse(null)))
+        .data();
   }
 
   private ConsoleTriggerActionResponse tenantCommand(String action, String tenantId) {
@@ -154,8 +156,9 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
             uriBuilder.path(ACTION_PATH).queryParam(TENANT_ID, tenantId).build(action))
         .retrieve()
         .body(ACTION_RESPONSE);
-    return EmptyChecks.isNotNull(response)
-        ? response.data()
-        : new ConsoleTriggerActionResponse(null, null, null);
+    return Objects.requireNonNullElseGet(
+            response,
+            () -> CommonResponse.success(new ConsoleTriggerActionResponse(null, null, null)))
+        .data();
   }
 }
