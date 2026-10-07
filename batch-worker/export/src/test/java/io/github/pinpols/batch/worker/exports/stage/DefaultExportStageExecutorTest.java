@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -42,6 +43,7 @@ import org.springframework.beans.factory.ObjectProvider;
 // 但 STEP_NOT_FOUND / PIPELINE_STEP_MISSING 等用例不会触发其中部分调用,严格模式会误报 UnnecessaryStubbing。
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
+@DisplayName("导出阶段执行器单测:成功,业务异常,基础设施异常与步骤缺失的结果归类")
 class DefaultExportStageExecutorTest {
 
   @Mock
@@ -82,6 +84,7 @@ class DefaultExportStageExecutorTest {
   }
 
   @Test
+  @DisplayName("步骤成功时返回成功结果,并把记录数计入指标且不附加租户标签")
   void execute_returnsSuccess_whenStepSucceeds() {
     when(prepareStep.execute(any())).thenReturn(ExportStageResult.success(ExportStage.PREPARE));
     ExportJobContext context = buildContext();
@@ -102,6 +105,7 @@ class DefaultExportStageExecutorTest {
   }
 
   @Test
+  @DisplayName("步骤抛业务异常时归类为业务错误,错误码与明细一并写入步骤运行记录")
   void execute_returnsBusinessError_whenStepThrowsBizException() {
     when(prepareStep.execute(any()))
         .thenThrow(BizException.of(
@@ -126,6 +130,7 @@ class DefaultExportStageExecutorTest {
   }
 
   @Test
+  @DisplayName("步骤抛运行时异常时归类为基础设施错误,并原样保留异常消息")
   void execute_returnsInfraError_whenStepThrowsRuntimeException() {
     when(prepareStep.execute(any())).thenThrow(new RuntimeException("connection timeout"));
     ExportJobContext context = buildContext();
@@ -140,6 +145,7 @@ class DefaultExportStageExecutorTest {
   }
 
   @Test
+  @DisplayName("实现编码未注册时返回步骤未找到结果,不执行任何阶段")
   void execute_returnsStepNotFound_whenImplCodeNotRegistered() {
     ExportJobContext context = buildContext("UNKNOWN_IMPL");
 
@@ -151,6 +157,7 @@ class DefaultExportStageExecutorTest {
   }
 
   @Test
+  @DisplayName("管道未配置任何步骤时返回步骤缺失结果")
   void execute_returnsPipelineStepMissing_whenNoStepsConfigured() {
     ExportJobContext context = new ExportJobContext();
     context.setTenantId("t1");

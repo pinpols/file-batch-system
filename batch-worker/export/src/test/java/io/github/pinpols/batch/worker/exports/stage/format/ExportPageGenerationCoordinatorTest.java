@@ -13,12 +13,15 @@ import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("导出分页生成协调器单测:跨页行号单调递增与首页预取复用语义")
 class ExportPageGenerationCoordinatorTest {
 
   @Test
-  void writesRowsAcrossPagesWithMonotonicRowIndexes() throws Exception {
+  @DisplayName("跨两页拉取时逐行回调,行号从零起严格单调递增")
+  void shouldWriteRowsAcrossPages_whenMultiplePagesReturned() throws Exception {
     ExportDataPlugin plugin = mock(ExportDataPlugin.class);
     ExportDataContext dataContext =
         new ExportDataContext("tenant-a", "job-a", "batch-a", "template-a", Map.of(), Map.of());
@@ -49,7 +52,8 @@ class ExportPageGenerationCoordinatorTest {
   }
 
   @Test
-  void usesPrefetchedPageAndDoesNotQueryItAgain() throws Exception {
+  @DisplayName("已预取首页时直接消费,不再重复查询数据源")
+  void shouldReusePrefetchedPage_whenFirstPageProvided() throws Exception {
     ExportDataPlugin plugin = mock(ExportDataPlugin.class);
     ExportDataContext dataContext =
         new ExportDataContext("tenant-a", "job-a", "batch-a", "template-a", Map.of(), Map.of());

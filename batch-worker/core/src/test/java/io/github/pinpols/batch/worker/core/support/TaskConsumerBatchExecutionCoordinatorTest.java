@@ -15,9 +15,11 @@ import io.github.pinpols.batch.worker.core.domain.WorkerExecutionResult;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.client.ResourceAccessException;
 
+@DisplayName("批量任务消费协调器: 租户分批, 死信转投与偏移量提交判定")
 class TaskConsumerBatchExecutionCoordinatorTest {
 
   private TaskDispatchExecutor executor;
@@ -34,7 +36,8 @@ class TaskConsumerBatchExecutionCoordinatorTest {
   }
 
   @Test
-  void groupsAcceptedMessagesByTenantBeforeBatchExecution() {
+  @DisplayName("同一批消息按租户分组分别执行, 全部成功时允许提交偏移量")
+  void shouldGroupAcceptedMessagesByTenant_whenExecutingBatch() {
     TaskDispatchMessage first = message(1L, "tenant-a");
     TaskDispatchMessage second = message(2L, "tenant-b");
     when(executor.executeBatchDetailed(any(), eq("worker-1"))).thenReturn(List.of());
@@ -46,7 +49,8 @@ class TaskConsumerBatchExecutionCoordinatorTest {
   }
 
   @Test
-  void sendsMalformedPayloadToDlqAndContinuesWithValidMessages() {
+  @DisplayName("载荷解析失败的消息转入死信, 合法消息继续执行并允许提交偏移量")
+  void shouldSendMalformedPayloadToDeadLetter_whenOtherMessagesAreValid() {
     when(executor.executeBatchDetailed(any(), eq("worker-1"))).thenReturn(List.of());
 
     boolean canCommit =
@@ -57,7 +61,8 @@ class TaskConsumerBatchExecutionCoordinatorTest {
   }
 
   @Test
-  void refusesOffsetCommitWhenBatchItemHasTransientFailure() {
+  @DisplayName("批量执行出现可重试失败时拒绝提交偏移量, 留待后续重试")
+  void shouldRefuseOffsetCommit_whenBatchItemHasTransientFailure() {
     TaskDispatchMessage message = message(1L, "tenant-a");
     when(executor.executeBatchDetailed(any(), eq("worker-1")))
         .thenReturn(List.of(BatchItemExecution.failed(
@@ -70,7 +75,8 @@ class TaskConsumerBatchExecutionCoordinatorTest {
   }
 
   @Test
-  void sendsOnlyFailedNonTransientItemToDlq() {
+  @DisplayName("批量结果中仅永久失败项转入死信, 成功项不转投且仍允许提交偏移量")
+  void shouldSendOnlyFailedNonTransientItemToDeadLetter() {
     TaskDispatchMessage first = message(1L, "tenant-a");
     TaskDispatchMessage second = message(2L, "tenant-a");
     when(executor.executeBatchDetailed(any(), eq("worker-1")))

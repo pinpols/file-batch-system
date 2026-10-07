@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
@@ -27,6 +28,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 @Testcontainers(disabledWithoutDocker = true)
+@DisplayName("JDBC 映射导入拷贝集成测试:分区替换,阶段交换,批量更新与行级安全语义")
 class JdbcMappedImportCopyIntegrationTest {
 
   @Container
@@ -134,7 +136,8 @@ class JdbcMappedImportCopyIntegrationTest {
   }
 
   @Test
-  void partitionReplaceCopyDeletesOnlyTargetPartitionThenCopiesRows() throws Exception {
+  @DisplayName("分区替换只清目标租户与目标日期分区,再拷入新行且保留其它分区")
+  void shouldReplaceOnlyTargetPartition_whenCopyingRows() throws Exception {
     ImportLoadContext context = new ImportLoadContext(
         "t1",
         "IMPORT_CUSTOMER",
@@ -187,7 +190,8 @@ class JdbcMappedImportCopyIntegrationTest {
   }
 
   @Test
-  void partitionStageSwapCopyLoadsStagingThenSwapsPhysicalPartition() throws Exception {
+  @DisplayName("阶段交换先写入中间分区,收尾时切换到按日期命名的物理分区")
+  void shouldSwapPhysicalPartition_whenStageSwapFinishes() throws Exception {
     ImportLoadContext context = new ImportLoadContext(
         "t1",
         "IMPORT_CUSTOMER",
@@ -229,7 +233,8 @@ class JdbcMappedImportCopyIntegrationTest {
   }
 
   @Test
-  void batchUpsertCoercesTemplateTypedNumericAndDateValues() throws Exception {
+  @DisplayName("批量更新按模板声明转换数值与日期类型,同主键二次写入转为更新")
+  void shouldCoerceTypedValues_whenBatchUpserting() throws Exception {
     ImportLoadContext context = new ImportLoadContext(
         "t1",
         "IMPORT_TRANSACTION",
@@ -271,7 +276,8 @@ class JdbcMappedImportCopyIntegrationTest {
   }
 
   @Test
-  void rlsProtectedCopyUsesRealTenantPolicyWithNonPrivilegedRole() throws Exception {
+  @DisplayName("非特权角色下行级安全生效:本租户可写,他租户写入被拒")
+  void shouldEnforceTenantPolicy_whenRoleIsNotPrivileged() throws Exception {
     String role = "copy_import_rls_" + UUID.randomUUID().toString().replace("-", "");
     jdbcTemplate.execute(
         "CREATE ROLE " + role + " LOGIN PASSWORD 'test-password'" + " NOSUPERUSER NOBYPASSRLS");

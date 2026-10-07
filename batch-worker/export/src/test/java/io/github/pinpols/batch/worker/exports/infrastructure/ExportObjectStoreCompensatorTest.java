@@ -38,7 +38,7 @@ class ExportObjectStoreCompensatorTest {
 
   @Test
   @DisplayName("删本 run file_record 的对象（attributes 已缓存 fileRecord）")
-  void deletesRunObjectFromCachedFileRecord() {
+  void shouldDeleteRunObject_whenFileRecordCached() {
     when(objectStoreProvider.getIfAvailable()).thenReturn(objectStore);
     Map<String, Object> fileRecord = new LinkedHashMap<>();
     fileRecord.put("storage_bucket", "export-bucket");
@@ -55,7 +55,7 @@ class ExportObjectStoreCompensatorTest {
 
   @Test
   @DisplayName("对象已不存在：幂等视为已反向（删 0）")
-  void idempotentWhenObjectAbsent() {
+  void shouldReverseIdempotently_whenObjectAbsent() {
     when(objectStoreProvider.getIfAvailable()).thenReturn(objectStore);
     Map<String, Object> fileRecord = new LinkedHashMap<>();
     fileRecord.put("storage_bucket", "b");
@@ -74,7 +74,7 @@ class ExportObjectStoreCompensatorTest {
 
   @Test
   @DisplayName("无 fileId：本 run 未产出对象，SKIP")
-  void skipsWhenNoFileId() {
+  void shouldSkip_whenFileIdMissing() {
     when(objectStoreProvider.getIfAvailable()).thenReturn(objectStore);
 
     CompensationResult result =
@@ -85,7 +85,7 @@ class ExportObjectStoreCompensatorTest {
 
   @Test
   @DisplayName("无对象存储 bean：SKIP，不误删")
-  void skipsWhenNoObjectStore() {
+  void shouldSkip_whenObjectStoreUnavailable() {
     when(objectStoreProvider.getIfAvailable()).thenReturn(null);
 
     CompensationResult result = compensator().compensate("tenant-a", 1L, 7L, new LinkedHashMap<>());
@@ -95,7 +95,7 @@ class ExportObjectStoreCompensatorTest {
 
   @Test
   @DisplayName("删除抛运行时异常：best-effort，转 FAILED，不上抛")
-  void failedWhenDeleteThrows() {
+  void shouldFail_whenDeleteThrows() {
     when(objectStoreProvider.getIfAvailable()).thenReturn(objectStore);
     Map<String, Object> fileRecord = new LinkedHashMap<>();
     fileRecord.put("storage_bucket", "b");

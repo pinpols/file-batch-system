@@ -9,12 +9,15 @@ import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperti
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("任务执行线程池: 池容量校验与队列满载时的提交拒绝")
 class TaskExecutionPoolConfigurationTest {
 
   @Test
-  void startFailsWhenPoolSizeIsSmallerThanMaxConcurrentTasks() {
+  @DisplayName("线程池容量小于任务并发上限时, 启动抛出状态异常并提示容量约束")
+  void shouldFailToStart_whenPoolSizeSmallerThanMaxConcurrentTasks() {
     WorkerExecutionTimeoutProperties properties = new WorkerExecutionTimeoutProperties();
     properties.setPoolSize(2);
     TaskExecutionPool pool = new TaskExecutionPool(properties, concurrencyProperties(4));
@@ -25,7 +28,8 @@ class TaskExecutionPoolConfigurationTest {
   }
 
   @Test
-  void startSucceedsWhenPoolSizeMatchesMaxConcurrentTasks() {
+  @DisplayName("线程池容量与任务并发上限相等时, 启动不抛异常")
+  void shouldStartSuccessfully_whenPoolSizeEqualsMaxConcurrentTasks() {
     WorkerExecutionTimeoutProperties properties = new WorkerExecutionTimeoutProperties();
     properties.setPoolSize(4);
     TaskExecutionPool pool = new TaskExecutionPool(properties, concurrencyProperties(4));
@@ -35,7 +39,8 @@ class TaskExecutionPoolConfigurationTest {
   }
 
   @Test
-  void submitRejectsWhenWorkerAndBoundedQueueAreBothOccupied() throws Exception {
+  @DisplayName("工作线程与有界队列均占满时, 再次提交被拒绝; 取消排队任务立即腾出队列位置")
+  void shouldRejectSubmission_whenWorkerAndQueueAreSaturated() throws Exception {
     WorkerExecutionTimeoutProperties properties = new WorkerExecutionTimeoutProperties();
     properties.setPoolSize(1);
     TaskExecutionPool pool = new TaskExecutionPool(properties, concurrencyProperties(1));

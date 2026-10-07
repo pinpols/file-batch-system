@@ -12,10 +12,12 @@ import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.BeanFactory;
 
 /** ADR-026 §dry-run 守护:dry-run 上下文下 StoredProc executor 必须不开 Callable,不接触 DB。 */
+@DisplayName("存储过程执行器 dry-run 短路: 不打开连接")
 class StoredProcTaskExecutorDryRunTest {
 
   private StoredProcExecutorProperties props;
@@ -35,6 +37,7 @@ class StoredProcTaskExecutorDryRunTest {
   }
 
   @Test
+  @DisplayName("dry-run 上下文下应返回过程调用计划, 敏感入参取值不外泄且不获取连接")
   void shouldShortCircuit_whenDryRun_andNotOpenConnection() throws Exception {
     // 准备
     TaskContext ctx = new TaskContext(

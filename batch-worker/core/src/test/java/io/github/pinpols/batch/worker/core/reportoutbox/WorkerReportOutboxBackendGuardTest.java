@@ -8,13 +8,16 @@ import io.github.pinpols.batch.common.config.RuntimeInfrastructureInspector;
 import io.github.pinpols.batch.common.stateful.StatefulBackendGuard;
 import java.nio.file.Path;
 import javax.sql.DataSource;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
 
+@DisplayName("上报发件箱后端守卫: 禁用态与启用态的后端身份解析")
 class WorkerReportOutboxBackendGuardTest {
 
   @Test
-  void modelsDisabledAsAnExplicitBackendState() {
+  @DisplayName("上报发件箱关闭时, 期望后端显式标记为禁用态并保留切换标识")
+  void shouldExposeDisabledState_whenOutboxDisabled() {
     WorkerReportOutboxProperties properties = new WorkerReportOutboxProperties();
     properties.setEnabled(false);
     properties.getBackendGuard().setCutoverId("disable-20260723-01");
@@ -27,7 +30,8 @@ class WorkerReportOutboxBackendGuardTest {
   }
 
   @Test
-  void identifiesEnabledPlatformPgState() {
+  @DisplayName("启用且使用平台库存储时, 期望后端标识为平台库并带上数据源地址")
+  void shouldReportPlatformDatabaseIdentity_whenUsingPlatformStorage() {
     WorkerReportOutboxProperties properties = new WorkerReportOutboxProperties();
     properties.setEnabled(true);
     properties.setStorage(WorkerReportOutboxStorage.PLATFORM_PG);
@@ -40,7 +44,8 @@ class WorkerReportOutboxBackendGuardTest {
   }
 
   @Test
-  void identifiesEnabledSqlitePath() {
+  @DisplayName("启用且使用本地库存储时, 期望后端标识为本地库并归一化为绝对路径")
+  void shouldReportLocalDatabaseIdentity_whenUsingLocalStorage() {
     WorkerReportOutboxProperties properties = new WorkerReportOutboxProperties();
     properties.setEnabled(true);
     properties.setStorage(WorkerReportOutboxStorage.SQLITE);

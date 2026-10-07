@@ -9,12 +9,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
  * {@link SparkSubmitTaskExecutor} 骨架单测:只验 parse / 校验 / dry-run(**不 fork 真进程**)。 真正提交 spark-submit
  * 的端到端验证需有 Spark 环境,留给集成/手测。
  */
+@DisplayName("外部计算提交执行器: 参数解析, 白名单校验与 dry-run 计划")
 class SparkSubmitTaskExecutorTest {
 
   private SparkSubmitTaskExecutor executor;
@@ -32,17 +34,20 @@ class SparkSubmitTaskExecutorTest {
   }
 
   @Test
+  @DisplayName("任务类型应标识为外部计算提交, 供注册表按能力路由")
   void taskType_isSparkSubmit() {
     assertThat(executor.taskType()).isEqualTo("spark_submit");
   }
 
   @Test
+  @DisplayName("能力声明应为非幂等且可取消, 避免重试引发重复提交")
   void capability_isNonIdempotentAndCancellable() {
     assertThat(executor.capability().idempotent()).isFalse();
     assertThat(executor.capability().cancellable()).isTrue();
   }
 
   @Test
+  @DisplayName("dry-run 下应给出完整启动参数计划, 包含运行模式, 主类, 配置与业务参数")
   void dryRun_buildsArgvWithoutForking() {
     TaskResult r = executor.execute(ctx(Map.of(
         "appResource",
@@ -68,6 +73,7 @@ class SparkSubmitTaskExecutorTest {
   }
 
   @Test
+  @DisplayName("缺少应用资源时应判失败, 并返回配置无效错误码")
   void missingAppResource_failsConfigInvalid() {
     TaskResult r = executor.execute(ctx(Map.of(PipelineRuntimeKeys.DRY_RUN, true)));
     assertThat(r.success()).isFalse();
@@ -75,6 +81,7 @@ class SparkSubmitTaskExecutorTest {
   }
 
   @Test
+  @DisplayName("指定输出路径时应注入配置项并在结果中回显输出地址")
   void outputPath_injectsConfAndReturnsOutputUri() {
     TaskResult r = executor.execute(ctx(Map.of(
         "appResource",
@@ -94,6 +101,7 @@ class SparkSubmitTaskExecutorTest {
   }
 
   @Test
+  @DisplayName("应用资源不在白名单内时应判失败, 并返回配置无效错误码")
   void appResourceNotInAllowlist_failsConfigInvalid() {
     SparkSubmitExecutorProperties props = new SparkSubmitExecutorProperties();
     props.setEnabled(true);
@@ -108,6 +116,7 @@ class SparkSubmitTaskExecutorTest {
   }
 
   @Test
+  @DisplayName("提交模式为集群模式时应判失败, 并在提示中说明受限模式")
   void clusterDeployMode_failsConfigInvalid() {
     TaskResult r = executor.execute(ctx(Map.of(
         "appResource",
@@ -122,6 +131,7 @@ class SparkSubmitTaskExecutorTest {
   }
 
   @Test
+  @DisplayName("集群地址不在允许前缀内时应判失败, 并返回配置无效错误码")
   void masterNotInAllowlist_failsConfigInvalid() {
     SparkSubmitExecutorProperties props = new SparkSubmitExecutorProperties();
     props.setEnabled(true);
@@ -140,6 +150,7 @@ class SparkSubmitTaskExecutorTest {
   }
 
   @Test
+  @DisplayName("业务参数不符合允许的正则形状时应判失败, 阻止注入类取值")
   void appArgNotMatchingRegexAllowlist_failsConfigInvalid() {
     SparkSubmitExecutorProperties props = new SparkSubmitExecutorProperties();
     props.setEnabled(true);
@@ -159,6 +170,7 @@ class SparkSubmitTaskExecutorTest {
   }
 
   @Test
+  @DisplayName("配置键不在允许前缀内时应判失败, 避免通过配置注入任意参数")
   void confKeyNotInAllowlist_failsConfigInvalid() {
     SparkSubmitExecutorProperties props = new SparkSubmitExecutorProperties();
     props.setEnabled(true);

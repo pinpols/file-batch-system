@@ -18,6 +18,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.postgresql.util.PGobject;
 
@@ -25,6 +26,7 @@ import org.postgresql.util.PGobject;
  * V5-P2-8 验证：ParseStep 在 FIXED_WIDTH / XML 两种文件格式上的解析正确性。 之前只覆盖 CSV / JSON，对应 parser 真实代码却存在
  * （FixedWidthFormatParser / XmlFormatParser），属验证缺口。
  */
+@DisplayName("导入解析阶段定长与 XML 格式单测:字段布局,首尾行跳过与安全拒绝语义")
 class ParseStepFixedWidthAndXmlTest {
 
   private ParseStep parseStep;
@@ -43,6 +45,7 @@ class ParseStepFixedWidthAndXmlTest {
 
   /** 3 字段定长格式: customerNo(6) + customerName(20) + status(8)，trim 后落盘。 */
   @Test
+  @DisplayName("定长格式按字段起始与长度切分,三条记录全部解析成明细")
   void shouldParseFixedWidth_threeFieldRecords() {
     String fixed =
         // 字段布局:customerNo | customerName | status
@@ -74,6 +77,7 @@ class ParseStepFixedWidthAndXmlTest {
 
   /** header_rows + footer_rows 用于跳过头尾。 */
   @Test
+  @DisplayName("定长格式跳过声明数量的表头与表尾行,只解析数据行")
   void shouldParseFixedWidth_skippingHeaderAndFooter() {
     String fixed = "HEADER LINE                       \n" // header_rows=1 跳
         + "C00001Alice               ACTIVE  \n"
@@ -106,6 +110,7 @@ class ParseStepFixedWidthAndXmlTest {
 
   /** PG jsonb 读取时 field_mappings 可能是 PGobject；运行时必须和 String/List 一样解析。 */
   @Test
+  @DisplayName("字段映射以数据库 jsonb 形态给出时,同样按布局解析")
   void shouldParseFixedWidth_whenFieldMappingsIsPgJsonbObject() throws Exception {
     String fixed = "C00004Dana                ACTIVE  \n";
     PGobject fieldMappings = new PGobject();
@@ -133,6 +138,7 @@ class ParseStepFixedWidthAndXmlTest {
 
   /** 标准 records 包裹结构: &lt;records&gt;&lt;record&gt;...&lt;/record&gt;...&lt;/records&gt; */
   @Test
+  @DisplayName("XML 格式按记录元素取子节点,两条记录字段完整")
   void shouldParseXml_recordElementChildren() {
     String xml = "<?xml version='1.0' encoding='UTF-8'?>"
         + "<records>"
@@ -164,6 +170,7 @@ class ParseStepFixedWidthAndXmlTest {
 
   /** XXE 防护：DOCTYPE / entity 被 XmlFormatParser 拒绝（disallow-doctype-decl=true）。 */
   @Test
+  @DisplayName("XML 含外部实体声明时拒绝解析,返回解析失败而非崩溃")
   void shouldRejectXml_withDoctype_xxeProtection() {
     String xmlWithDoctype = "<?xml version='1.0'?>"
         + "<!DOCTYPE foo SYSTEM '/etc/passwd'>"

@@ -22,6 +22,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 /** Import FEEDBACK 阶段单测：审计聚合 / dry-run 跳过 / null 上下文回退。 */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("导入反馈阶段单测:审计聚合,演练跳过与空上下文回退")
 class FeedbackStepTest {
 
   @Mock
@@ -31,6 +32,7 @@ class FeedbackStepTest {
   private FeedbackStep step;
 
   @Test
+  @DisplayName("访问阶段属性时返回反馈阶段标识")
   void shouldReturnStageFeedback_whenStageAccessed() {
     assertThat(step.stage()).isEqualTo(ImportStage.FEEDBACK);
   }

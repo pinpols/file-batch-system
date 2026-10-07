@@ -19,12 +19,14 @@ import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKe
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("分发确认阶段:缺载荷与落库失败时的分支路由,以及确认、回执待定与无回执三种结局")
 class AckDispatchStepTest {
 
   @Mock
@@ -41,11 +43,13 @@ class AckDispatchStepTest {
   }
 
   @Test
+  @DisplayName("阶段标识为分发确认阶段")
   void stage_returnsAck() {
     assertThat(step.stage()).isEqualTo(DispatchStage.ACK);
   }
 
   @Test
+  @DisplayName("上下文缺少分发载荷时判定失败,并给出缺载荷错误码")
   void execute_failsWhenNoPayloadInContext() {
     DispatchJobContext context = new DispatchJobContext();
     DispatchStageResult result = step.execute(context);
@@ -54,6 +58,7 @@ class AckDispatchStepTest {
   }
 
   @Test
+  @DisplayName("投递结果已确认时确认成功:回执状态置成功,并联动文件状态为已分发")
   void execute_succeedsAndMarksAckedWhenAcknowledgedByDispatchResult() {
     when(fileDispatchRepository.markAcked(any(), any(), any(), any())).thenReturn(1);
 
@@ -67,6 +72,7 @@ class AckDispatchStepTest {
   }
 
   @Test
+  @DisplayName("落库确认影响行数为零时判定失败,并把后续阶段路由到补偿")
   void execute_routesToCompensateWhenMarkAckedFails() {
     when(fileDispatchRepository.markAcked(any(), any(), any(), any())).thenReturn(0);
 
@@ -81,6 +87,7 @@ class AckDispatchStepTest {
   }
 
   @Test
+  @DisplayName("落库确认失败且载荷要求重试时,判定失败并把后续阶段路由到重试")
   void execute_routesToRetryWhenMarkAckedFailsAndRetryRequested() {
     when(fileDispatchRepository.markAcked(any(), any(), any(), any())).thenReturn(0);
 
@@ -94,6 +101,7 @@ class AckDispatchStepTest {
   }
 
   @Test
+  @DisplayName("投递结果回执待定时判定成功,回执状态置待定且不调用落库确认")
   void execute_setsPendingStatusWhenReceiptPending() {
 
     DispatchPayload payload =
@@ -116,6 +124,7 @@ class AckDispatchStepTest {
   }
 
   @Test
+  @DisplayName("载荷与投递结果都没有回执码时,回退用文件号拼出回执码完成确认")
   void execute_fallsBackToFileIdReceiptCodeWhenBothNull() {
     when(fileDispatchRepository.markAcked(any(), eq(10L), any(), eq("ACK-10"))).thenReturn(1);
 
@@ -138,6 +147,7 @@ class AckDispatchStepTest {
   }
 
   @Test
+  @DisplayName("既未确认也无待定回执时判定成功,不调用落库确认但仍联动文件状态为已分发")
   void execute_succeedsWithoutAckWhenNeitherAcknowledgedNorPending() {
 
     DispatchPayload payload =

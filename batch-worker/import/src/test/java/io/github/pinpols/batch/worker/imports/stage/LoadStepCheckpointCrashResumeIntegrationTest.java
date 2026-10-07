@@ -59,6 +59,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * DefaultProcessingPositionStoreTest} 覆盖)。用 in-memory 位点反而更贴近"跨库两套资源"的现实。
  */
 @Testcontainers(disabledWithoutDocker = true)
+@DisplayName("导入位点续跑崩溃重派集成测试:跨库位点下不双写与非幂等插件拒跑")
 class LoadStepCheckpointCrashResumeIntegrationTest {
 
   private static final String TENANT = "t1";

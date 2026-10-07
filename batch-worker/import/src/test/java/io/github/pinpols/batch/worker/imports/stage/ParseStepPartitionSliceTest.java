@@ -22,6 +22,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -38,6 +39,7 @@ import org.junit.jupiter.api.Test;
  *   <li>{@link #shouldKeepAllRowsWhenPartitionNoOutOfRange} — partitionNo > count 警告 + 直通
  * </ul>
  */
+@DisplayName("导入解析阶段分片切分单测:零重叠全覆盖与各类直通条件语义")
 class ParseStepPartitionSliceTest {
 
   private ParseStep parseStep;
@@ -55,6 +57,7 @@ class ParseStepPartitionSliceTest {
   // ── 直通场景 ──────────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("仅 1 个分片时全量直通,总数与明细行数一致")
   void shouldKeepAllRowsWhenPartitionCountIsOne() {
     String json = buildJsonArray(9);
     ImportJobContext context = buildContext(json, /*partitionNo*/ 1, /*partitionCount*/ 1, true);
@@ -70,6 +73,7 @@ class ParseStepPartitionSliceTest {
   }
 
   @Test
+  @DisplayName("关闭感知分片开关后不切分,总数与行数仍为全量")
   void shouldKeepAllRowsWhenPartitionAwareParseDisabled() {
     String json = buildJsonArray(9);
     ImportJobContext context = buildContext(json, 2, 3, /*partitionAware*/ false);
@@ -85,6 +89,7 @@ class ParseStepPartitionSliceTest {
   // ── 切分场景 ──────────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("3 个分片各取三分之一:两两不重叠且并集等于原始全集")
   void shouldSliceWithoutOverlapAcrossPartitions() {
     String json = buildJsonArray(9);
 
@@ -120,6 +125,7 @@ class ParseStepPartitionSliceTest {
   }
 
   @Test
+  @DisplayName("前序已按字节切片时不再按行取模,避免二次切分丢数据")
   void shouldKeepAllRowsWhenPreslicedByPreprocess() {
     // range-slice 优化:PREPROCESS 已只下本片字节并置 PARTITION_PRESLICED;
     // ParseStep 必须跳过 line-mod(否则二次切分丢数据),staging 全量即本片。
@@ -136,6 +142,7 @@ class ParseStepPartitionSliceTest {
   }
 
   @Test
+  @DisplayName("分片序号越界时告警并全量直通")
   void shouldKeepAllRowsWhenPartitionNoOutOfRange() {
     String json = buildJsonArray(5);
     // partitionNo=4 超过 count=3 → 警告 + 直通

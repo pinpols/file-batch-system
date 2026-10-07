@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
  *   <li>未注册格式 → require 抛 INVALID_ARGUMENT BizException
  * </ol>
  */
+@DisplayName("导出格式策略注册中心单测:大小写不敏感解析,缺省回退与未注册格式快速失败")
 class ExportFormatStrategyRegistryTest {
 
   private static ExportFormatStrategy stub(String formatType) {

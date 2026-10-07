@@ -7,6 +7,7 @@ import java.math.BigInteger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("校验取值强制转换单测:大数精度保持,空值与非数字输入的兜底处理")
 class ValidationCoercionsTest {
 
   @Test

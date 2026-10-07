@@ -14,6 +14,7 @@ import io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxReposi
 import io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxStats;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.ObjectProvider;
@@ -21,10 +22,12 @@ import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 
 @ExtendWith(OutputCaptureExtension.class)
+@DisplayName("Worker 启动运行时审计: 健康判定与启动日志内容边界")
 class WorkerStartupRuntimeAuditTest {
 
   @Test
-  void auditCoreReportsRegisteredWorkerAndOutboxStats() {
+  @DisplayName("核心审计汇总已注册 Worker 数量与发件箱待投递计数")
+  void shouldReportRegisteredWorkerAndOutboxStats_whenAuditingCore() {
     WorkerRuntimeState runtimeState = new WorkerRuntimeState();
     WorkerRegistration registration = new WorkerRegistration();
     registration.setWorkerId("worker-1");
@@ -56,7 +59,8 @@ class WorkerStartupRuntimeAuditTest {
   }
 
   @Test
-  void auditCoreWarnsWhenExecutionPoolIsSmallerThanConcurrency() {
+  @DisplayName("执行池容量小于任务并发上限时判定为不健康并给出问题项")
+  void shouldMarkUnhealthy_whenExecutionPoolSmallerThanConcurrency() {
     WorkerRuntimeState runtimeState = new WorkerRuntimeState();
     WorkerRegistration registration = new WorkerRegistration();
     registration.setWorkerId("worker-1");
@@ -81,7 +85,8 @@ class WorkerStartupRuntimeAuditTest {
   }
 
   @Test
-  void healthyStartupLogsSummaryWithoutContributorDetails(CapturedOutput output) {
+  @DisplayName("启动健康时只输出汇总与贡献者名称, 不展开配置明细")
+  void shouldLogSummaryWithoutContributorDetails_whenStartupHealthy(CapturedOutput output) {
     WorkerRuntimeState runtimeState = new WorkerRuntimeState();
     WorkerRegistration registration = new WorkerRegistration();
     registration.setWorkerId("worker-1");
@@ -112,7 +117,8 @@ class WorkerStartupRuntimeAuditTest {
   }
 
   @Test
-  void unhealthyStartupLogsIssuesWithoutFullCoreSnapshot(CapturedOutput output) {
+  @DisplayName("启动不健康时输出问题列表, 不打印完整核心快照")
+  void shouldLogIssuesWithoutFullCoreSnapshot_whenStartupUnhealthy(CapturedOutput output) {
     WorkerExecutionTimeoutProperties execution = new WorkerExecutionTimeoutProperties();
     execution.setPoolSize(4);
     WorkerStartupRuntimeAudit audit = new WorkerStartupRuntimeAudit(

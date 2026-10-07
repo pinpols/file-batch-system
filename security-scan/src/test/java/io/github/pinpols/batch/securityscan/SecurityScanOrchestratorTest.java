@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.securityscan;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
@@ -7,10 +8,12 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@DisplayName("安全扫描步骤命令构建:各步骤展示名与容器命令拼装,含 API 规格挂载路径")
 class SecurityScanOrchestratorTest {
 
     @Test
-    void buildSecretStepCommand() {
+    @DisplayName("密钥扫描步骤:展示名为 secret,首条命令为 gitleaks")
+    void shouldBuildGitleaksCommand_whenSecretStep() {
         SecurityScanOptions options = new SecurityScanOptions(
                 false,
                 ScanMode.SECRET,
@@ -40,7 +43,8 @@ class SecurityScanOrchestratorTest {
     }
 
     @Test
-    void buildDastApiScanCommandMountsOpenApiSpec() {
+    @DisplayName("DAST API 扫描步骤:命令含 api 扫描脚本与 openapi 格式,并把规格目录只读挂载进容器")
+    void shouldMountOpenApiSpec_whenDastApiScanStep() {
         Path root = Path.of(".").toAbsolutePath().normalize();
         SecurityScanOptions options = new SecurityScanOptions(
                 false,

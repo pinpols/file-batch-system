@@ -39,6 +39,7 @@ import org.springframework.test.context.DynamicPropertySource;
       "batch.worker.executors.shell.command-whitelist=/bin/echo",
       "batch.worker.executors.shell.workdir-base=${java.io.tmpdir}/batch-atomic-it"
     })
+@DisplayName("原子 Worker 端到端: 三类执行器真实执行链路")
 class BatchWorkerAtomicEndToEndIntegrationTest extends AbstractIntegrationTest {
 
   @DynamicPropertySource
@@ -51,7 +52,7 @@ class BatchWorkerAtomicEndToEndIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   @DisplayName("SPI registry 含 shell / sql / http 三类已开启的 executor")
-  void registryWiresEnabledExecutors() {
+  void shouldRegisterEnabledExecutors_whenRegistryDumped() {
     Map<String, String> dump = registry.dumpRegistry();
     assertThat(dump).containsKeys("shell", "sql", "http");
     assertThat(dump.get("shell")).contains("ShellTaskExecutor");

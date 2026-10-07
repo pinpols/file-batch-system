@@ -15,6 +15,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -23,6 +24,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("死信发布器: 消息封装, 错误截断与超时失败的可观测性")
 class DeadLetterPublisherTest {
 
   @Mock
@@ -41,6 +43,7 @@ class DeadLetterPublisherTest {
   }
 
   @Test
+  @DisplayName("发布死信时消息投递到死信主题, 载荷含原始消息与失败元信息, 成功计数加一")
   void publish_sendsToDeadLetterTopic() {
     when(mqMessagePublisher.publish(any(MqMessage.class)))
         .thenReturn(CompletableFuture.completedFuture(MqPublishResult.acknowledged()));
@@ -67,6 +70,7 @@ class DeadLetterPublisherTest {
   }
 
   @Test
+  @DisplayName("超长错误信息被截断, 最终载荷长度受限")
   void publish_longErrorMessage_truncatedTo2000chars() {
     when(mqMessagePublisher.publish(any(MqMessage.class)))
         .thenReturn(CompletableFuture.completedFuture(MqPublishResult.acknowledged()));
@@ -80,6 +84,7 @@ class DeadLetterPublisherTest {
   }
 
   @Test
+  @DisplayName("错误信息为空时不抛异常, 仍完成一次投递")
   void publish_nullErrorMessage_doesNotThrow() {
     when(mqMessagePublisher.publish(any(MqMessage.class)))
         .thenReturn(CompletableFuture.completedFuture(MqPublishResult.acknowledged()));
@@ -90,6 +95,7 @@ class DeadLetterPublisherTest {
 
   /** #4-3: DLQ 发送失败时应抛出异常，让调用方感知并决定是否提交偏移量. */
   @Test
+  @DisplayName("投递动作抛异常时向上传播, 交由调用方决定是否提交偏移量")
   void publish_messagePublisherThrows_propagatesException() {
     doThrow(new RuntimeException("kafka down"))
         .when(mqMessagePublisher)
@@ -104,6 +110,7 @@ class DeadLetterPublisherTest {
    * P0-3: future 一直不完成 → 5s 后超时抛 IllegalStateException + timeout counter +1; 不再无限阻塞 listener 线程.
    */
   @Test
+  @DisplayName("消息代理长时间无响应时按时超时失败, 并累加超时计数")
   void publish_brokerSlow_timesOutAndThrows() {
     // 永不完成的 future 模拟 broker 长期停滞
     CompletableFuture<MqPublishResult> stuck = new CompletableFuture<>();
@@ -125,6 +132,7 @@ class DeadLetterPublisherTest {
 
   /** P0-3: future 完成但 ack 异常 → 失败 counter +1, 抛 IllegalStateException 保留 cause. */
   @Test
+  @DisplayName("投递结果异常时抛出失败异常并累加失败计数")
   void publish_ackFails_throwsAndRecordsFailureMetric() {
     CompletableFuture<MqPublishResult> failed = new CompletableFuture<>();
     failed.completeExceptionally(new RuntimeException("broker rejected"));

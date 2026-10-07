@@ -14,6 +14,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** ADR-041 Phase1.2:控制金额对账(controlTotalCheck)。 */
+@DisplayName("控制金额对账单测:模板声明金额与 trailer 声明金额对累加值的一致性语义")
 class ControlTotalEvaluatorTest {
 
   private final ControlTotalEvaluator evaluator =
@@ -72,7 +73,7 @@ class ControlTotalEvaluatorTest {
 
   @Test
   @DisplayName("无 expected 时回落 trailer 声明的 declaredControlTotal")
-  void declaredFromTrailerAttr() {
+  void shouldUseDeclaredControlTotal_whenTrailerAttributePresent() {
     ValidationSession session =
         session(Map.of("controlTotalCheck", Map.of("amountField", "amount", "blocker", true)));
     session

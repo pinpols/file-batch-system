@@ -31,6 +31,7 @@ import org.springframework.beans.factory.ObjectProvider;
  * </ul>
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("心跳服务: 空标识与未知 Worker 的静默跳过, 负载采集与异常回退")
 class DefaultHeartbeatServiceTest {
 
   @Mock

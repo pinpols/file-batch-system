@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.io.TempDir;
  * ADR-026 §dry-run 守护:dry-run 上下文下 Shell executor 必须不 fork 进程、不建 workdir,直接回 success +
  * plannedAction。
  */
+@DisplayName("命令执行器 dry-run 短路: 不启动进程与工作目录")
 class ShellTaskExecutorDryRunTest {
 
   @TempDir
@@ -38,6 +40,7 @@ class ShellTaskExecutorDryRunTest {
   }
 
   @Test
+  @DisplayName("dry-run 上下文下应返回计划动作, 不启动进程, 不创建工作目录且环境变量取值不外泄")
   void shouldShortCircuit_whenDryRun_andNotForkProcessOrCreateWorkdir() {
     // 准备:用一个绝对不存在的命令,如果真 fork 一定 fail
     TaskContext ctx = new TaskContext(

@@ -17,6 +17,7 @@ import io.github.pinpols.batch.worker.core.config.WorkerIdentityProperties;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import java.time.Clock;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -35,6 +36,7 @@ import org.springframework.mock.env.MockEnvironment;
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
+@DisplayName("Worker 主循环基类: 注册幂等, 端口选择, 心跳与关闭委托")
 class AbstractWorkerLoopTest {
 
   @Mock
@@ -60,6 +62,7 @@ class AbstractWorkerLoopTest {
   }
 
   @Test
+  @DisplayName("首次调用即完成注册并返回注册信息, 注册入口只被调用一次")
   void ensureStarted_registersWorkerOnFirstCall() {
     WorkerRegistration result = loop.ensureStarted();
 
@@ -69,6 +72,7 @@ class AbstractWorkerLoopTest {
   }
 
   @Test
+  @DisplayName("重复调用注册方法保持幂等, 真正注册只发生一次")
   void ensureStarted_isIdempotent_registersOnlyOnce() {
     loop.ensureStarted();
     loop.ensureStarted();
@@ -78,6 +82,7 @@ class AbstractWorkerLoopTest {
   }
 
   @Test
+  @DisplayName("注册信息从配置填充: 租户, 类型与分组大写归一, 端口及并发上限")
   void ensureStarted_populatesRegistrationFromConfiguration() {
     loop.ensureStarted();
 
@@ -96,6 +101,7 @@ class AbstractWorkerLoopTest {
   }
 
   @Test
+  @DisplayName("运行时实际绑定端口优先于配置端口与子类兜底值")
   void ensureStarted_prefersRuntimeBoundPortOverConfiguredAndFallback() {
     // local.server.port 是 WebServer 真正绑定后写入的实际端口，必须优先于配置值与子类兜底值。
     loop.setEnvironment(environmentWith("local.server.port", "19099", "server.port", "18083"));
@@ -104,6 +110,7 @@ class AbstractWorkerLoopTest {
   }
 
   @Test
+  @DisplayName("缺少运行时绑定端口时回退使用配置的服务端口")
   void ensureStarted_fallsBackToConfiguredServerPort() {
     loop.setEnvironment(environmentWith("server.port", "18083"));
 
@@ -111,12 +118,14 @@ class AbstractWorkerLoopTest {
   }
 
   @Test
+  @DisplayName("没有环境信息时回退使用子类提供的端口")
   void ensureStarted_fallsBackToWorkerPortWithoutEnvironment() {
     // 单元测试直接 new（Spring 不回调 setEnvironment）→ 走子类兜底值，保证既有断言语义不变。
     assertThat(registered().getPort()).isEqualTo(9999);
   }
 
   @Test
+  @DisplayName("非正数端口视为无效, 继续回退到子类兜底值")
   void ensureStarted_ignoresNonPositivePorts() {
     // 未绑定阶段 server.port=0 表示随机端口，不能当成有效端口上报。
     loop.setEnvironment(environmentWith("local.server.port", "0", "server.port", "-1"));
@@ -142,6 +151,7 @@ class AbstractWorkerLoopTest {
   }
 
   @Test
+  @DisplayName("存在稳定 Worker 编码时以其作为 Worker 标识")
   void ensureStarted_buildWorkerIdFromWorkerCode_whenPresent() {
     loop.ensureStarted();
 
@@ -151,6 +161,7 @@ class AbstractWorkerLoopTest {
   }
 
   @Test
+  @DisplayName("稳定实例池编码与运行时实例标识分开, 标识追加规范化后的实例值")
   void ensureStarted_separatesStablePoolCodeFromRuntimeInstanceId() {
     WorkerIdentityProperties identity = new WorkerIdentityProperties();
     identity.setInstanceId("pod/uid:01");
@@ -166,6 +177,7 @@ class AbstractWorkerLoopTest {
   }
 
   @Test
+  @DisplayName("注册完成后心跳委托给心跳服务并携带 Worker 标识")
   void doHeartbeat_sendsHeartbeatAfterStart() {
     loop.ensureStarted();
     loop.doHeartbeat();
@@ -174,6 +186,7 @@ class AbstractWorkerLoopTest {
   }
 
   @Test
+  @DisplayName("尚未注册时心跳会先触发注册, 随后正常发送一次")
   void doHeartbeat_doesNotFailBeforeStart() {
     // 创建一个尚未调用 start() 的 loop
     TestWorkerLoop freshLoop =
@@ -187,6 +200,7 @@ class AbstractWorkerLoopTest {
   }
 
   @Test
+  @DisplayName("心跳服务抛异常时静默容忍, 不向调用方抛出")
   void doHeartbeat_continuesGracefullyWhenFacadeThrows() {
     loop.ensureStarted();
     doThrow(new RuntimeException("network error")).when(heartbeatService).beat(any());
@@ -195,6 +209,7 @@ class AbstractWorkerLoopTest {
   }
 
   @Test
+  @DisplayName("上下文关闭后心跳不再触发注册与发送")
   void doHeartbeat_skipsAfterContextClosed() {
     loop.onContextClosed(new ContextClosedEvent(new StaticApplicationContext()));
 
@@ -205,6 +220,7 @@ class AbstractWorkerLoopTest {
   }
 
   @Test
+  @DisplayName("已注册时关闭委托给生命周期管理器并携带 Worker 标识")
   void shutdown_delegatesToFacade_whenStarted() {
     loop.ensureStarted();
     loop.shutdown();
@@ -213,6 +229,7 @@ class AbstractWorkerLoopTest {
   }
 
   @Test
+  @DisplayName("从未注册时关闭为空操作, 不调用生命周期管理器")
   void shutdown_isNoOp_whenNeverStarted() {
     TestWorkerLoop freshLoop =
         new TestWorkerLoop(workerLifecycleManager, heartbeatService, dateTimeSupport);
@@ -222,6 +239,7 @@ class AbstractWorkerLoopTest {
   }
 
   @Test
+  @DisplayName("关闭过程抛异常时不向外传播, 委托调用仍已发生")
   void shutdown_doesNotPropagateFacadeFailure() {
     loop.ensureStarted();
     doThrow(new RuntimeException("shutdown failed"))

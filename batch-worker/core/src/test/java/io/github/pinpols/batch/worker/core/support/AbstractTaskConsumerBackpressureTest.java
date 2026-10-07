@@ -30,12 +30,14 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.test.util.ReflectionTestUtils;
 
+@DisplayName("任务消费者背压: 任务许可耗尽时的暂停与恢复")
 class AbstractTaskConsumerBackpressureTest {
 
   private ExecutorService pool;
@@ -54,6 +56,7 @@ class AbstractTaskConsumerBackpressureTest {
   }
 
   @Test
+  @DisplayName("任务许可耗尽时暂停监听容器, 任务完成释放许可后恢复消费并记录暂停与恢复指标")
   void shouldPauseWhenPermitsExhausted_thenResumeAfterRelease() throws Exception {
     KafkaListenerEndpointRegistry registry = mock(KafkaListenerEndpointRegistry.class);
     MessageListenerContainer container = mock(MessageListenerContainer.class);
@@ -152,7 +155,8 @@ class AbstractTaskConsumerBackpressureTest {
   }
 
   @Test
-  void batchBackpressurePausesBatchListenerContainer() {
+  @DisplayName("批量消费在许可耗尽时暂停批量监听容器, 且不执行批量任务")
+  void shouldPauseBatchListenerContainer_whenBackpressureExhausted() {
     KafkaListenerEndpointRegistry registry = mock(KafkaListenerEndpointRegistry.class);
     MessageListenerContainer baseContainer = mock(MessageListenerContainer.class);
     MessageListenerContainer batchContainer = mock(MessageListenerContainer.class);

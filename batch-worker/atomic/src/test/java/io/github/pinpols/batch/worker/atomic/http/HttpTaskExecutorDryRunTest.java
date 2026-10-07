@@ -13,9 +13,11 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** ADR-026 §dry-run 守护:dry-run 上下文下 HTTP executor 必须不发请求(用真 server 计请求数 = 0 验证)。 */
+@DisplayName("HTTP 任务执行器 dry-run 短路: 不发起真实请求")
 class HttpTaskExecutorDryRunTest {
 
   private HttpExecutorProperties props;
@@ -52,6 +54,7 @@ class HttpTaskExecutorDryRunTest {
   }
 
   @Test
+  @DisplayName("dry-run 上下文下应短路返回计划动作, 且本地服务零请求, 凭据与报文不落入输出")
   void shouldShortCircuit_whenDryRun_andNotSendHttpRequest() {
     // 准备
     String url = "http://127.0.0.1:" + serverPort + "/secret-endpoint";

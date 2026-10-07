@@ -28,6 +28,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 import java.util.regex.Pattern;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.slf4j.MDC;
@@ -43,9 +44,11 @@ import org.springframework.web.client.ResourceAccessException;
  * published, returns true (no requeue) - executor throws exception with no DLQ → still returns true
  * - MDC fields cleared after processing - topics() resolution logic
  */
+@DisplayName("任务消费者基类: 消息过滤, 批量消费与死信转投及订阅主题解析")
 class AbstractTaskConsumerTest {
 
   @Test
+  @DisplayName("任务标识缺失的消息被静默丢弃, 返回成功且不进入执行")
   void doConsume_dropsMessageWhenTaskIdMissing() {
     TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
     AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, null);
@@ -58,6 +61,7 @@ class AbstractTaskConsumerTest {
   }
 
   @Test
+  @DisplayName("同一租户的多条消息合并为一次批量执行, 整批成功即允许提交偏移量")
   void doConsumeBatch_groupsAcceptedMessagesByTenantAndExecutesBatch() {
     TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
     when(executor.executeBatchDetailed(any(), anyString())).thenReturn(List.of());
@@ -76,6 +80,7 @@ class AbstractTaskConsumerTest {
   }
 
   @Test
+  @DisplayName("批量消息为空时直接返回成功, 不触发批量执行")
   void doConsumeBatch_emptyOrNullReturnsTrueWithoutExecuting() {
     TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
     AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, null);
@@ -85,6 +90,7 @@ class AbstractTaskConsumerTest {
   }
 
   @Test
+  @DisplayName("批量中解析失败的消息只把该条转入死信, 合法消息继续执行")
   void doConsumeBatch_dlqsOnlyMalformedPayloadAndKeepsGoodPayloads() {
     TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
     when(executor.executeBatchDetailed(any(), anyString())).thenReturn(List.of());
@@ -105,6 +111,7 @@ class AbstractTaskConsumerTest {
   }
 
   @Test
+  @DisplayName("批量结果中仅永久失败的条目转入死信")
   void doConsumeBatch_dlqsOnlyFailedItemWhenBatchItemFailsNonTransient() {
     TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
     DeadLetterPublisher dlq = mock(DeadLetterPublisher.class);
@@ -125,6 +132,7 @@ class AbstractTaskConsumerTest {
   }
 
   @Test
+  @DisplayName("两条消息内容相等时按载荷位置定位失败项, 只转投对应位置的消息")
   void doConsumeBatch_keepsPayloadPositionWhenMessagesCompareEqual() {
     TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
     DeadLetterPublisher dlq = mock(DeadLetterPublisher.class);
@@ -147,6 +155,7 @@ class AbstractTaskConsumerTest {
   }
 
   @Test
+  @DisplayName("Worker 类型缺失的消息被丢弃, 不进入执行")
   void doConsume_dropsMessageWhenWorkerTypeMissing() {
     TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
     AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, null);
@@ -159,6 +168,7 @@ class AbstractTaskConsumerTest {
   }
 
   @Test
+  @DisplayName("Worker 类型与当前消费者不匹配时跳过该消息")
   void doConsume_skipsWhenWorkerTypeMismatch() {
     TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
     AbstractTaskConsumer consumer = buildConsumer("EXPORT", executor, null);
@@ -171,6 +181,7 @@ class AbstractTaskConsumerTest {
   }
 
   @Test
+  @DisplayName("消息指定的目标 Worker 与当前消费者不一致时跳过")
   void doConsume_skipsWhenSelectedWorkerIdDoesNotMatch() {
     TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
     AbstractTaskConsumer consumer = buildConsumer("IMPORT", executor, null, "worker-A");
@@ -185,6 +196,7 @@ class AbstractTaskConsumerTest {
   }
 
   @Test
+  @DisplayName("消息指定的目标 Worker 与当前消费者一致时执行该消息")
   void doConsume_executesWhenSelectedWorkerIdMatches() {
     TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
     when(executor.execute(any(), any())).thenReturn(new WorkerExecutionResult("1", true, "ok"));
@@ -198,6 +210,7 @@ class AbstractTaskConsumerTest {
   }
 
   @Test
+  @DisplayName("执行结果为空表示领取竞争失败, 按跳过处理并返回成功")
   void doConsume_treatsNullExecutorResultAsSkip() {
     TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
     when(executor.execute(any(), any())).thenReturn(null); // CLAIM race lost
@@ -209,6 +222,7 @@ class AbstractTaskConsumerTest {
   }
 
   @Test
+  @DisplayName("执行过程抛异常时把消息转入死信, 返回成功以避免重复投递")
   void doConsume_publishesToDlqOnException() {
     TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
     when(executor.execute(any(), any())).thenThrow(new RuntimeException("unexpected failure"));
@@ -222,6 +236,7 @@ class AbstractTaskConsumerTest {
   }
 
   @Test
+  @DisplayName("执行抛异常且没有死信通道时仍返回成功")
   void doConsume_returnsTrueEvenWhenExceptionAndNoDlq() {
     TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
     when(executor.execute(any(), any())).thenThrow(new RuntimeException("boom"));
@@ -233,6 +248,7 @@ class AbstractTaskConsumerTest {
   }
 
   @Test
+  @DisplayName("编排端暂时不可用时单条消费要求延迟重投, 不确认偏移量")
   void consume_nacksTransientOrchestratorFailureForRedelivery() {
     TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
     when(executor.execute(any(), any()))
@@ -247,6 +263,7 @@ class AbstractTaskConsumerTest {
   }
 
   @Test
+  @DisplayName("编排端暂时不可用时批量消费要求延迟重投, 不确认偏移量")
   void consumeBatch_nacksTransientOrchestratorFailureForRedelivery() {
     TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
     when(executor.executeBatchDetailed(any(), anyString()))
@@ -261,6 +278,7 @@ class AbstractTaskConsumerTest {
   }
 
   @Test
+  @DisplayName("执行成功后清理日志上下文中的租户, 追踪与任务字段")
   void doConsume_clearsMdcAfterSuccessfulExecution() {
     TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
     when(executor.execute(any(), any())).thenAnswer(inv -> {
@@ -277,6 +295,7 @@ class AbstractTaskConsumerTest {
   }
 
   @Test
+  @DisplayName("执行抛异常后同样清理日志上下文中的租户与追踪字段")
   void doConsume_clearsMdcAfterException() {
     TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
     when(executor.execute(any(), any())).thenThrow(new RuntimeException("fail"));
@@ -289,6 +308,7 @@ class AbstractTaskConsumerTest {
   }
 
   @Test
+  @DisplayName("没有 Worker 编码时只返回基础主题")
   void topics_returnsBaseTopicOnlyWhenNoWorkerCode() {
     AbstractTaskConsumer consumer = buildConsumer("IMPORT", mock(TaskDispatchExecutor.class), null);
     String[] topics = consumer.topics();
@@ -297,6 +317,7 @@ class AbstractTaskConsumerTest {
   }
 
   @Test
+  @DisplayName("处理类型解析为对应的派发主题")
   void topics_resolvesProcessWorkerTypeToProcessDispatchTopic() {
     AbstractTaskConsumer consumer =
         buildConsumer("PROCESS", mock(TaskDispatchExecutor.class), null);
@@ -305,12 +326,14 @@ class AbstractTaskConsumerTest {
   }
 
   @Test
+  @DisplayName("原子类型解析为对应的派发主题")
   void topics_resolvesAtomicWorkerTypeToAtomicDispatchTopic() {
     AbstractTaskConsumer consumer = buildConsumer("ATOMIC", mock(TaskDispatchExecutor.class), null);
     assertThat(consumer.topics()).containsExactly("batch.task.dispatch.atomic");
   }
 
   @Test
+  @DisplayName("存在 Worker 编码时同时返回基础主题与节点直投主题")
   void topics_returnsBothBaseAndDirectTopicWhenWorkerCodePresent() {
     AbstractTaskConsumer consumer =
         buildConsumer("IMPORT", mock(TaskDispatchExecutor.class), null, "w1");
@@ -321,6 +344,7 @@ class AbstractTaskConsumerTest {
   // ── P2-5 worker pattern: 匹配 SINGLE / TENANT / PRIORITY 三种 producer 输出 ───────────────
 
   @Test
+  @DisplayName("订阅主题匹配串同时命中基础主题, 自身节点直投与单段后缀, 不命中他人节点与其它类型")
   void topicPattern_matchesBaseAndNodeDirectAndSingleSegmentSuffix() {
     AbstractTaskConsumer consumer =
         buildConsumer("IMPORT", mock(TaskDispatchExecutor.class), null, "import-node-1");
@@ -346,6 +370,7 @@ class AbstractTaskConsumerTest {
   }
 
   @Test
+  @DisplayName("没有 Worker 编码时仍允许单段租户后缀, 但不允许节点直投后缀")
   void topicPattern_withoutWorkerCodeStillAllowsTenantSuffix() {
     AbstractTaskConsumer consumer = buildConsumer("IMPORT", mock(TaskDispatchExecutor.class), null);
     Pattern p = Pattern.compile(consumer.topicPattern());
@@ -359,6 +384,7 @@ class AbstractTaskConsumerTest {
   // ── 方案 A：FIXED 模式只匹配 base + node-direct ────────────────────────
 
   @Test
+  @DisplayName("固定订阅模式只匹配基础主题与自身节点直投, 不匹配任何租户或优先级后缀")
   void topicPattern_fixedModeOnlyMatchesBaseAndNodeDirect() throws Exception {
     AbstractTaskConsumer consumer =
         buildConsumer("IMPORT", mock(TaskDispatchExecutor.class), null, "import-node-1");
@@ -379,6 +405,7 @@ class AbstractTaskConsumerTest {
   // ── 方案 A：TENANT_SCOPED 仅匹配 allowlist 中的租户 ──────────────────
 
   @Test
+  @DisplayName("租户限定模式只匹配白名单中的租户后缀, 白名单外与优先级后缀均不匹配")
   void topicPattern_tenantScopedModeMatchesAllowlistOnly() throws Exception {
     AbstractTaskConsumer consumer =
         buildConsumer("IMPORT", mock(TaskDispatchExecutor.class), null, "import-node-1");
@@ -401,6 +428,7 @@ class AbstractTaskConsumerTest {
   }
 
   @Test
+  @DisplayName("租户限定模式在白名单为空时回退为固定模式, 不再匹配租户后缀")
   void topicPattern_tenantScopedWithEmptyAllowlistFallsBackToFixed() throws Exception {
     AbstractTaskConsumer consumer =
         buildConsumer("IMPORT", mock(TaskDispatchExecutor.class), null, "import-node-1");
@@ -418,6 +446,7 @@ class AbstractTaskConsumerTest {
   }
 
   @Test
+  @DisplayName("节点直投模式只匹配自身稳定实例池主题, 不匹配基础主题与其它实例池")
   void topicPattern_directOnlyMatchesOnlyItsStablePoolTopic() throws Exception {
     TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
     DeadLetterPublisher dlq = mock(DeadLetterPublisher.class);
@@ -436,6 +465,7 @@ class AbstractTaskConsumerTest {
   }
 
   @Test
+  @DisplayName("节点直投模式使用与生产端一致的规范化主题名, 原始带空格与斜杠的名称不匹配")
   void topicPattern_directOnlyUsesTheSameSanitizedTopicAsProducer() throws Exception {
     AbstractTaskConsumer consumer =
         buildConsumer("IMPORT", mock(TaskDispatchExecutor.class), null, "import/heavy pool");
@@ -454,6 +484,7 @@ class AbstractTaskConsumerTest {
   }
 
   @Test
+  @DisplayName("节点直投模式缺少稳定实例池编码时抛出状态异常并提示原因")
   void topicPattern_directOnlyRequiresStablePoolCode() throws Exception {
     AbstractTaskConsumer consumer =
         buildConsumer("IMPORT", mock(TaskDispatchExecutor.class), null, null);

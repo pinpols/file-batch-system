@@ -32,6 +32,7 @@ import org.junit.jupiter.api.TestInstance.Lifecycle;
  * <p>覆盖:Atomic / Import / Export / Process / Dispatch 5 类 ADR-036 业务模板 + 同名 echo / sleep 两个最小契约。
  */
 @TestInstance(Lifecycle.PER_CLASS)
+@DisplayName("自托管纯 Java worker 端到端集成:worker 启动注册,五类业务模板任务与最小契约任务的执行结果上报")
 class SampleTenantWorkerIT {
 
   private static final String TENANT = "tenant-a";
@@ -68,19 +69,19 @@ class SampleTenantWorkerIT {
 
   @Test
   @DisplayName("启动期向平台 register 一次,handler 列表完整")
-  void registersOnStart() {
+  void shouldRegisterHandlers_whenWorkerStarts() {
     assertThat(platform.registrations()).isNotEmpty();
   }
 
   @Test
   @DisplayName("echo: 最小 SdkTaskHandler 契约,parameters 原样回吐")
-  void echo() {
+  void shouldReturnEchoedMessage_whenEchoTaskDispatched() {
     dispatchAndAssertSuccess("echo", 501L, Map.of("k", "v"), "echoed");
   }
 
   @Test
   @DisplayName("sleep: 长任务样例,按 millis 阻塞并上报")
-  void sleep() {
+  void shouldReportSleptMillis_whenSleepTaskDispatched() {
     long id = 502L;
     platform.dispatch(
         TaskDispatchMessageBuilder.dispatch("sleep")
@@ -95,7 +96,7 @@ class SampleTenantWorkerIT {
 
   @Test
   @DisplayName("sample_atomic_echo: ADR-036 Atomic 模板")
-  void atomicEcho() {
+  void shouldSucceed_whenAtomicTemplateTaskDispatched() {
     long id = 503L;
     platform.dispatch(
         TaskDispatchMessageBuilder.dispatch("sample_atomic_echo")
@@ -109,7 +110,7 @@ class SampleTenantWorkerIT {
 
   @Test
   @DisplayName("sample_import_echo: ADR-036 Import 模板(3 行 batch=2)")
-  void importEcho() {
+  void shouldSucceed_whenImportTemplateTaskDispatched() {
     long id = 504L;
     platform.dispatch(
         TaskDispatchMessageBuilder.dispatch("sample_import_echo")
@@ -123,7 +124,7 @@ class SampleTenantWorkerIT {
 
   @Test
   @DisplayName("sample_export_echo: ADR-036 Export 模板")
-  void exportEcho() {
+  void shouldSucceed_whenExportTemplateTaskDispatched() {
     long id = 505L;
     platform.dispatch(
         TaskDispatchMessageBuilder.dispatch("sample_export_echo")
@@ -137,7 +138,7 @@ class SampleTenantWorkerIT {
 
   @Test
   @DisplayName("sample_process_echo: ADR-036 Process 模板")
-  void processEcho() {
+  void shouldSucceed_whenProcessTemplateTaskDispatched() {
     long id = 506L;
     platform.dispatch(
         TaskDispatchMessageBuilder.dispatch("sample_process_echo")
@@ -151,7 +152,7 @@ class SampleTenantWorkerIT {
 
   @Test
   @DisplayName("sample_dispatch_echo: ADR-036 Dispatch 模板")
-  void dispatchEcho() {
+  void shouldSucceed_whenDispatchTemplateTaskDispatched() {
     long id = 507L;
     platform.dispatch(
         TaskDispatchMessageBuilder.dispatch("sample_dispatch_echo")

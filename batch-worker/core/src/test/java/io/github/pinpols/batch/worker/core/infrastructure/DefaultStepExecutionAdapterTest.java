@@ -12,11 +12,14 @@ import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("步骤执行适配器: 执行器路由, 失败码映射与异常兜底")
 class DefaultStepExecutionAdapterTest {
 
   @Test
+  @DisplayName("命中已注册执行器时按任务类型路由, 上下文透传租户与作业身份并返回成功")
   void shouldRouteToRegisteredExecutor() {
     BatchTaskExecutor shell = stub("shell", ctx -> {
       assertThat(ctx.tenantId()).isEqualTo("t1");
@@ -36,6 +39,7 @@ class DefaultStepExecutionAdapterTest {
   }
 
   @Test
+  @DisplayName("任务类型未注册时返回无可用执行器的失败码并回显类型")
   void shouldReturnNoExecutorFailureForUnknownType() {
     DefaultStepExecutionAdapter adapter =
         new DefaultStepExecutionAdapter(new BatchTaskExecutorRegistry(List.of()));
@@ -49,6 +53,7 @@ class DefaultStepExecutionAdapterTest {
   }
 
   @Test
+  @DisplayName("执行器返回失败结果时映射为任务失败并保留原始错误信息")
   void shouldReturnTaskFailedWhenExecutorReturnsFailure() {
     BatchTaskExecutor failing = stub("sql", ctx -> TaskResult.fail("syntax error"));
     DefaultStepExecutionAdapter adapter =
@@ -63,6 +68,7 @@ class DefaultStepExecutionAdapterTest {
   }
 
   @Test
+  @DisplayName("执行器抛出未捕获异常时兜底为执行器故障并保留异常信息")
   void shouldCatchUncaughtExecutorException() {
     BatchTaskExecutor throwing = stub("http", ctx -> {
       throw new RuntimeException("network kaboom");
@@ -79,6 +85,7 @@ class DefaultStepExecutionAdapterTest {
   }
 
   @Test
+  @DisplayName("步骤编码为原子类型时按载荷中的子类型路由, 并向执行器透传参数")
   void shouldRouteByPayloadTaskTypeAndPassParams() {
     // job_type=ATOMIC ⇒ stepCode="ATOMIC";真正子类型 + 参数都在 payload 里。
     BatchTaskExecutor sql = stub("sql", ctx -> {
@@ -101,6 +108,7 @@ class DefaultStepExecutionAdapterTest {
   }
 
   @Test
+  @DisplayName("载荷缺少子类型时回退按步骤编码路由, 仍返回成功")
   void shouldFallBackToStepCodeWhenPayloadHasNoTaskType() {
     BatchTaskExecutor shell = stub("shell", ctx -> TaskResult.ok());
     DefaultStepExecutionAdapter adapter =

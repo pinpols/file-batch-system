@@ -21,12 +21,14 @@ import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchC
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("分发投递阶段:缺载荷与准备上下文缺失的错误码,记录新增或累加、失败路由重试、落库失败与试运行跳过")
 class DeliverDispatchStepTest {
 
   @Mock
@@ -46,11 +48,13 @@ class DeliverDispatchStepTest {
   }
 
   @Test
+  @DisplayName("阶段标识为分发投递阶段")
   void stage_returnsDispatch() {
     assertThat(step.stage()).isEqualTo(DispatchStage.DISPATCH);
   }
 
   @Test
+  @DisplayName("上下文缺少分发载荷时判定失败,并给出缺载荷错误码")
   void execute_failsWhenNoPayloadInContext() {
     DispatchJobContext context = new DispatchJobContext();
     context.setTenantId("t1");
@@ -60,6 +64,7 @@ class DeliverDispatchStepTest {
   }
 
   @Test
+  @DisplayName("上下文为空时判定失败,并给出缺载荷错误码")
   void execute_failsWhenContextIsNull() {
     DispatchStageResult result = step.execute(null);
     assertThat(result.success()).isFalse();
@@ -67,6 +72,7 @@ class DeliverDispatchStepTest {
   }
 
   @Test
+  @DisplayName("上下文缺少文件号时判定失败,并给出准备上下文缺失错误码")
   void execute_failsWhenFilePrepareContextMissing() {
     DispatchJobContext context = buildContext();
     context.getAttributes().remove(PipelineRuntimeKeys.FILE_ID);
@@ -77,6 +83,7 @@ class DeliverDispatchStepTest {
   }
 
   @Test
+  @DisplayName("没有历史派发记录时新增一条派发记录,投递成功后判定成功")
   void execute_insertsNewDispatchRecordWhenNoneExists() {
     setupMocksForNewRecord();
     when(dispatchChannelGateway.dispatch(any())).thenReturn(successResult());
@@ -91,6 +98,7 @@ class DeliverDispatchStepTest {
   }
 
   @Test
+  @DisplayName("已有派发记录时改为尝试次数加一,不再新增派发记录")
   void execute_incrementsAttemptWhenRecordAlreadyExists() {
     Map<String, Object> fileRecord = Map.of("id", 10L);
     Map<String, Object> channelConfig = Map.of("channel_type", "LOCAL");
@@ -109,6 +117,7 @@ class DeliverDispatchStepTest {
   }
 
   @Test
+  @DisplayName("投递失败时判定失败,置请求重试标记、把后续阶段路由到重试并记录失败")
   void execute_failsAndSetsRetryWhenDispatchFails() {
     setupMocksForNewRecord();
     DispatchResult failed =
@@ -128,6 +137,7 @@ class DeliverDispatchStepTest {
   }
 
   @Test
+  @DisplayName("投递成功但落库标记影响行数为零时判定失败")
   void execute_failsWhenMarkSentReturnsZero() {
     setupMocksForNewRecord();
     when(dispatchChannelGateway.dispatch(any())).thenReturn(successResult());
@@ -142,6 +152,7 @@ class DeliverDispatchStepTest {
   }
 
   @Test
+  @DisplayName("派发记录新增影响行数为零时判定失败,并给出记录写入失败错误码")
   void execute_failsWhenInsertReturnsZero() {
     Map<String, Object> fileRecord = Map.of("id", 10L);
     Map<String, Object> channelConfig = Map.of("channel_type", "LOCAL");
@@ -156,6 +167,7 @@ class DeliverDispatchStepTest {
   }
 
   @Test
+  @DisplayName("投递成功时把文件状态更新为分发中")
   void execute_updatesFileStatusToDispatching() {
     setupMocksForNewRecord();
     when(dispatchChannelGateway.dispatch(any())).thenReturn(successResult());
@@ -169,6 +181,7 @@ class DeliverDispatchStepTest {
   }
 
   @Test
+  @DisplayName("试运行模式下投递成功但跳过全部外部副作用:不碰派发仓库与网关,不更新文件状态,并写入试运行占位回执")
   void execute_dryRunSkipsAllDispatchSideEffects() {
     DispatchJobContext context = buildContext();
     context.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);

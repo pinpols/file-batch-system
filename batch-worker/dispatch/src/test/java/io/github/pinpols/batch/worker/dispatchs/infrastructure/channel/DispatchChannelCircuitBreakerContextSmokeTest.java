@@ -8,6 +8,7 @@ import io.github.resilience4j.springboot.circuitbreaker.autoconfigure.CircuitBre
 import io.github.resilience4j.springboot.circuitbreaker.autoconfigure.CircuitBreakerMetricsAutoConfiguration;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
@@ -32,6 +33,7 @@ import org.springframework.test.context.TestPropertySource;
 @SpringBootTest(classes = DispatchChannelCircuitBreakerContextSmokeTest.SmokeApp.class)
 @ActiveProfiles("test")
 @TestPropertySource(properties = "spring.main.web-application-type=none")
+@DisplayName("分发熔断上下文冒烟:熔断自动配置可无害装配,共享与自持注册表的状态指标都真实埋入")
 class DispatchChannelCircuitBreakerContextSmokeTest {
 
   @Autowired
@@ -44,7 +46,8 @@ class DispatchChannelCircuitBreakerContextSmokeTest {
   private MeterRegistry meterRegistry;
 
   @Test
-  void contextLoadsWithResilience4jAutoconfig() {
+  @DisplayName("上下文启动后熔断注册表与熔断器均已装配,首次请求放行且开路数为零")
+  void shouldWireCircuitBreakerBeans_whenContextStarts() {
     assertThat(circuitBreakerRegistry)
         .as("R4J autoconfig must provide CircuitBreakerRegistry")
         .isNotNull();
@@ -63,6 +66,7 @@ class DispatchChannelCircuitBreakerContextSmokeTest {
    * #circuitBreakerMetricsBindsStateMeter_selfHeldRegistry()}。
    */
   @Test
+  @DisplayName("共享注册表建出熔断器后,状态指标出现在注入的指标注册表里")
   void circuitBreakerMetricsAutoconfigBindsStateMeter_sharedRegistryOnly() {
     circuitBreakerRegistry.circuitBreaker("dispatch-smoke-probe");
 
@@ -78,6 +82,7 @@ class DispatchChannelCircuitBreakerContextSmokeTest {
    * meter(带 {@code name} tag 定位到具体 key),验证 {@code TaggedCircuitBreakerMetrics} 绑定链在 Spring 上下文里真活着。
    */
   @Test
+  @DisplayName("自持注册表的渠道熔断后,注入的指标注册表里出现该渠道自己的状态指标")
   void circuitBreakerMetricsBindsStateMeter_selfHeldRegistry() {
     String key = "t-smoke|API|ch-smoke";
     // 默认 failureThreshold=5(见 DispatchCircuitBreakerProperties 默认值)

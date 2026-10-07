@@ -11,12 +11,14 @@ import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.support.WorkerSelfRegistrationService;
 import java.time.Clock;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("Worker 生命周期管理器: 下线流程的本地清理与远端同步容错")
 class DefaultWorkerLifecycleManagerTest {
 
   @Mock
@@ -29,6 +31,7 @@ class DefaultWorkerLifecycleManagerTest {
   private ActiveTaskLeaseRegistry activeTaskLeaseRegistry;
 
   @Test
+  @DisplayName("下线时即使远端状态同步失败, 本地运行时注册信息也必须被移除")
   void shutdown_removesLocalStateEvenWhenRemoteStatusSyncFails() {
     WorkerRegistration registration = new WorkerRegistration();
     registration.setWorkerId("worker-1");

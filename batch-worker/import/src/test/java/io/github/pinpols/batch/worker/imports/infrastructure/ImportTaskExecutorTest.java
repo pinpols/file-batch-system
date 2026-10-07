@@ -14,6 +14,7 @@ import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -23,6 +24,7 @@ import org.mockito.ArgumentCaptor;
  * <p>不引 Spring context,直接构造 + mock delegate。Pipeline lifecycle 行为本身由
  * AbstractPipelineStepExecutionAdapterTest 覆盖,本测试只关心包装层翻译是否正确。
  */
+@DisplayName("导入任务执行器单测:任务类型,资源能力与请求翻译及失败消息回退语义")
 class ImportTaskExecutorTest {
 
   private ImportStepExecutionAdapter delegate;
@@ -35,12 +37,14 @@ class ImportTaskExecutorTest {
   }
 
   @Test
-  void taskTypeIsImport() {
+  @DisplayName("读取任务类型时返回导入类型")
+  void shouldReportImportTaskType_whenReadingTaskType() {
     assertThat(executor.taskType()).isEqualTo("IMPORT");
   }
 
   @Test
-  void capabilityDeclaresExpectedResources() {
+  @DisplayName("能力声明包含磁盘,数据库与网络资源,且可取消但非幂等")
+  void shouldDeclareResourcesAndCapabilities_whenReadingCapability() {
     assertThat(executor.capability().resourceKinds())
         .contains(ResourceKind.DISK, ResourceKind.DB, ResourceKind.NET);
     assertThat(executor.capability().idempotent()).isFalse();
@@ -48,7 +52,8 @@ class ImportTaskExecutorTest {
   }
 
   @Test
-  void executeTranslatesContextToStepRequestPreservingFields() {
+  @DisplayName("执行时翻译步骤请求,租户,作业,执行器与追踪字段全部保留")
+  void shouldTranslateContextPreservingFields_whenExecuting() {
     when(delegate.execute(any())).thenReturn(StepExecutionResponse.successResponse());
 
     TaskContext ctx = new TaskContext(
@@ -82,7 +87,8 @@ class ImportTaskExecutorTest {
   }
 
   @Test
-  void successResponseMapsToTaskResultOk() {
+  @DisplayName("委托返回成功时,任务结果标记成功并沿用其消息")
+  void shouldMapSuccessResponse_whenDelegateSucceeds() {
     when(delegate.execute(any())).thenReturn(StepExecutionResponse.successResponse());
 
     TaskResult r = executor.execute(simpleCtx());
@@ -93,7 +99,8 @@ class ImportTaskExecutorTest {
   }
 
   @Test
-  void failureResponsePropagatesMessage() {
+  @DisplayName("委托返回失败时,失败消息原样透传到任务结果")
+  void shouldPropagateMessage_whenDelegateFails() {
     when(delegate.execute(any()))
         .thenReturn(new StepExecutionResponse(false, "PIPELINE_FAILED", "stage RECEIVE failed"));
 
@@ -104,7 +111,8 @@ class ImportTaskExecutorTest {
   }
 
   @Test
-  void failureWithoutMessageFallsBackToCode() {
+  @DisplayName("失败但没有消息时,错误码作为任务结果消息")
+  void shouldFallBackToCode_whenFailureMessageMissing() {
     when(delegate.execute(any()))
         .thenReturn(new StepExecutionResponse(false, "PIPELINE_FAILED", null));
 

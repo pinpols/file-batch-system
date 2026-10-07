@@ -23,6 +23,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -36,6 +37,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * 阈值、ERROR_FILE / ERROR_TABLE sink、parse vs validate stage 分桶计数、bypassMode 关脱敏等。
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("导入坏记录治理服务单测:跳过策略,阈值判定,坏记录落库与错误汇总语义")
 class ImportRecordGovernanceServiceTest {
 
   @Mock
@@ -90,6 +92,7 @@ class ImportRecordGovernanceServiceTest {
   // ── isSkipEnabled / isSkippable / shouldFailOnSkip / shouldManualReview ──
 
   @Test
+  @DisplayName("跳过开关关闭时,任何错误码都不允许跳过")
   void shouldReturnFalse_whenSkipDisabled() {
     service = buildService(props(false, "ABSOLUTE", 5, 0.1, "E1", "CONTINUE", "BOTH"));
     assertThat(service.isSkipEnabled()).isFalse();
@@ -97,6 +100,7 @@ class ImportRecordGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("跳过开关开启且未限定错误码时全部可跳过,空值仍不可跳过")
   void shouldAllowAll_whenSkipEnabledAndCodesEmpty() {
     service = buildService(props(true, "ABSOLUTE", 5, 0.1, "", "CONTINUE", "BOTH"));
     assertThat(service.isSkipEnabled()).isTrue();
@@ -106,6 +110,7 @@ class ImportRecordGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("配置错误码清单后仅清单内可跳过,空白项被忽略")
   void shouldRestrictToConfiguredCodes_whenSkipCodesProvided() {
     service = buildService(props(true, "ABSOLUTE", 5, 0.1, "E1, E2 ,", "CONTINUE", "BOTH"));
     assertThat(service.isSkippable("E1")).isTrue();
@@ -114,6 +119,7 @@ class ImportRecordGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("仅当处置动作为失败批次且错误码可跳过时,才判定为需要失败")
   void shouldFailOnSkip_onlyWhenActionIsFailBatchAndCodeSkippable() {
     service = buildService(props(true, "ABSOLUTE", 5, 0.1, "E1", "FAIL_BATCH", "BOTH"));
     assertThat(service.shouldFailOnSkip("E1")).isTrue();
@@ -121,12 +127,14 @@ class ImportRecordGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("处置动作为继续时,可跳过的错误码不触发批次失败")
   void shouldNotFailOnSkip_whenActionIsContinue() {
     service = buildService(props(true, "ABSOLUTE", 5, 0.1, "E1", "CONTINUE", "BOTH"));
     assertThat(service.shouldFailOnSkip("E1")).isFalse();
   }
 
   @Test
+  @DisplayName("仅当处置动作为人工复核时,才要求人工复核")
   void shouldManualReview_onlyWhenActionIsManualReview() {
     service = buildService(props(true, "ABSOLUTE", 5, 0.1, "", "MANUAL_REVIEW", "BOTH"));
     assertThat(service.shouldManualReview()).isTrue();
@@ -138,6 +146,7 @@ class ImportRecordGovernanceServiceTest {
   // ── withinThreshold ──
 
   @Test
+  @DisplayName("跳过开关关闭时不看计数,阈值判定恒为通过")
   void shouldReturnTrue_whenSkipDisabled_regardlessOfCount() {
     service = buildService(props(false, "ABSOLUTE", 0, 0.0, "", "CONTINUE", "BOTH"));
     ImportJobContext ctx = context();
@@ -146,6 +155,7 @@ class ImportRecordGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("绝对阈值:跳过数等于阈值时通过,超过即不通过")
   void shouldEnforceAbsoluteThreshold() {
     service = buildService(props(true, "ABSOLUTE", 3, 0.5, "", "CONTINUE", "BOTH"));
     ImportJobContext ctx = context();
@@ -156,6 +166,7 @@ class ImportRecordGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("百分比阈值:占比等于上限时通过,超过即不通过")
   void shouldEnforcePercentageThreshold() {
     service = buildService(props(true, "PERCENTAGE", 0, 0.1, "", "CONTINUE", "BOTH"));
     ImportJobContext ctx = context();
@@ -167,6 +178,7 @@ class ImportRecordGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("总数为零时占比按零处理,阈值判定通过")
   void shouldTreatRateAsZero_whenTotalCountZero() {
     service = buildService(props(true, "PERCENTAGE", 0, 0.1, "", "CONTINUE", "BOTH"));
     ImportJobContext ctx = context();
@@ -178,6 +190,7 @@ class ImportRecordGovernanceServiceTest {
   // ── recordSkippedRecord / recordFailedRecord / stage scoped counters ──
 
   @Test
+  @DisplayName("登记跳过记录:累计跳过数与阶段计数递增,并写入错误明细")
   void shouldRecordSkippedRecord_incrementsSkippedAndStageScopedCounters() {
     service = buildService(props(true, "ABSOLUTE", 5, 0.0, "", "CONTINUE", "BOTH"));
 
@@ -210,6 +223,7 @@ class ImportRecordGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("登记失败记录:失败计数递增,并暂存最后一条坏记录")
   void shouldRecordFailedRecord_incrementsFailedAndStashesLastBadRecord() {
     service = buildService(props(true, "ABSOLUTE", 5, 0.0, "", "CONTINUE", "BOTH"));
 
@@ -223,6 +237,7 @@ class ImportRecordGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("人工复核动作下出现跳过记录时,标记需要人工复核")
   void shouldFlagManualReview_whenSkippedAndActionIsManualReview() {
     service = buildService(props(true, "ABSOLUTE", 5, 0.0, "", "MANUAL_REVIEW", "BOTH"));
 
@@ -232,6 +247,7 @@ class ImportRecordGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("模板配置开启脱敏时,落库的错误消息经过脱敏替换")
   void shouldMaskErrorPayload_whenTemplateConfigEnablesMasking() {
     service = buildService(props(true, "ABSOLUTE", 5, 0.0, "", "CONTINUE", "BOTH"));
 
@@ -251,6 +267,7 @@ class ImportRecordGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("旁路模式开启时不做脱敏,错误消息原样落库")
   void shouldDisableMasking_whenBypassModeOn() {
     batchSecurityProperties.setBypassMode(true);
     service = buildService(props(true, "ABSOLUTE", 5, 0.0, "", "CONTINUE", "BOTH"));
@@ -269,6 +286,7 @@ class ImportRecordGovernanceServiceTest {
   // ── recordThresholdViolation ──
 
   @Test
+  @DisplayName("阈值越界时登记违规记录,并置位跳过超限标记")
   void shouldRecordThresholdViolation_andSetSkipFlag() {
     service = buildService(props(true, "ABSOLUTE", 5, 0.0, "", "CONTINUE", "BOTH"));
 
@@ -282,6 +300,7 @@ class ImportRecordGovernanceServiceTest {
   // ── finalizeErrorOutput ──
 
   @Test
+  @DisplayName("没有坏记录时收尾直接返回,不写错误文件也不追加审计")
   void shouldSkipFinalize_whenNoBadRecords() {
     service = buildService(props(true, "ABSOLUTE", 5, 0.0, "", "CONTINUE", "BOTH"));
 
@@ -294,6 +313,7 @@ class ImportRecordGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("有坏记录时收尾写出错误文件,回填文件元数据并追加审计")
   void shouldFinalizeErrorOutput_writesFileMetadataAndAudit() {
     service = buildService(props(true, "ABSOLUTE", 5, 0.0, "", "CONTINUE", "BOTH"));
     when(errorOutputStorage.writeErrorOutput(eq("tenant-A"), eq("99"), any()))
@@ -327,6 +347,7 @@ class ImportRecordGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("错误出口仅为错误表时,不写错误文件但仍回填元数据")
   void shouldSkipErrorFileWrite_whenSinkIsErrorTableOnly() {
     service = buildService(props(true, "ABSOLUTE", 5, 0.0, "", "CONTINUE", "ERROR_TABLE"));
 
@@ -339,6 +360,7 @@ class ImportRecordGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("缺少文件标识时收尾不写任何错误产物")
   void shouldSkipFinalize_whenFileIdMissing() {
     service = buildService(props(true, "ABSOLUTE", 5, 0.0, "", "CONTINUE", "BOTH"));
 
@@ -360,6 +382,7 @@ class ImportRecordGovernanceServiceTest {
   // ── badRecords 列表治理 ──
 
   @Test
+  @DisplayName("坏记录列表混入异型对象时,整体替换为规范集合")
   void shouldReplaceBadRecordsList_whenContainsForeignType() {
     service = buildService(props(true, "ABSOLUTE", 5, 0.0, "", "CONTINUE", "BOTH"));
 

@@ -16,6 +16,7 @@ import java.util.Set;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +42,7 @@ import org.springframework.test.context.DynamicPropertySource;
 @SpringBootTest(
     classes = BatchWorkerAtomicApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("存储过程加固集成: 真实数据库下的调用路由与权限校验")
 class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
 
   @DynamicPropertySource
@@ -97,7 +99,8 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void realProcedureRunsViaNativeCall() {
+  @DisplayName("目标为过程时应走原生调用形式, 并真实写入数据")
+  void shouldInvokeNativeCall_whenTargetIsProcedure() {
     TaskResult r = executor(props()).execute(ctx(Map.of("procedureName", "spi_it.it_proc")));
     assertThat(r.success()).isTrue();
     assertThat(jdbc.queryForObject(
@@ -106,7 +109,8 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void realFunctionRunsViaCallEscape() {
+  @DisplayName("目标为函数时应走转义调用形式, 并真实写入数据")
+  void shouldInvokeCallEscape_whenTargetIsFunction() {
     TaskResult r = executor(props()).execute(ctx(Map.of("procedureName", "spi_it.it_fn_void")));
     assertThat(r.success()).isTrue();
     assertThat(jdbc.queryForObject(
@@ -115,7 +119,8 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void refCursorTruncatedAtCap() {
+  @DisplayName("游标结果超过上限时应标记截断")
+  void shouldTruncateRefCursor_whenRowsExceedCap() {
     StoredProcExecutorProperties p = props();
     p.setMaxRefCursorRows(5);
     TaskResult r = executor(p)
@@ -126,7 +131,8 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void searchPathPinResolvesUnqualifiedViaDefaultSchema() {
+  @DisplayName("固定检索路径后, 未限定模式的过程名应能解析并执行成功")
+  void shouldResolveUnqualifiedName_whenSearchPathPinned() {
     // 非 qualified 名不在默认 search_path 里;靠 pin(SET LOCAL search_path = pg_catalog, spi_it)才能解析。
     // 成功即证明 pin 把 spi_it 加进了 search_path(否则 it_proc 找不到会报错)。
     StoredProcExecutorProperties p = props();
@@ -137,7 +143,8 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void verifyExecutePrivilegeAllowsWhenCurrentUserHasExecute() {
+  @DisplayName("开启执行权限校验且当前用户具备权限时应放行")
+  void shouldAllow_whenCurrentUserHasExecutePrivilege() {
     StoredProcExecutorProperties p = props();
     p.setVerifyExecutePrivilege(true);
     TaskResult r = executor(p).execute(ctx(Map.of("procedureName", "spi_it.it_proc")));
@@ -145,7 +152,8 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void verifyExecutePrivilegeRejectsWhenCurrentUserLacksExecute() throws Exception {
+  @DisplayName("开启执行权限校验且当前用户无权限时应判失败, 并在消息中说明权限不足")
+  void shouldReject_whenCurrentUserLacksExecutePrivilege() throws Exception {
     // 构造低权限角色 + 一个 REVOKE 掉 PUBLIC EXECUTE 的过程,用该角色单独连接执行:
     // verifyExecutePrivilege=true 时 has_function_privilege 应判定无权 → fail,message 含权限字样。
     String role = "spi_lowpriv_" + Long.toHexString(System.nanoTime());
@@ -180,7 +188,8 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void forbidOsCapableRoleRejectsSuperuserConnection() {
+  @DisplayName("开启角色校验时, 具备系统能力的高权限连接应被拒绝执行")
+  void shouldReject_whenConnectionRoleHasOsCapability() {
     // testcontainers 连接是 superuser(OS 能力角色)→ forbidOsCapableRole=true 时代码层直接拒。
     StoredProcExecutorProperties p = props();
     p.setForbidOsCapableRole(true);
@@ -189,7 +198,8 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void securityDefinerProcedureRejectedByDefault() {
+  @DisplayName("默认不允许定义者权限过程, 应拒绝调用以防越权提权")
+  void shouldRejectSecurityDefiner_whenNotExplicitlyAllowed() {
     jdbc.execute(
         "CREATE PROCEDURE spi_it.it_proc_def() LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN END"
             + " $$");
@@ -199,7 +209,8 @@ class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  void securityDefinerAllowedWhenExplicitlyEnabled() {
+  @DisplayName("显式允许后, 定义者权限过程应可正常调用")
+  void shouldAllowSecurityDefiner_whenExplicitlyEnabled() {
     jdbc.execute(
         "CREATE PROCEDURE spi_it.it_proc_def2() LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN END"
             + " $$");

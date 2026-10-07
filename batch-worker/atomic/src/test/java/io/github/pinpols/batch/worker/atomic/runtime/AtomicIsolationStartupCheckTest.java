@@ -10,6 +10,7 @@ import io.github.pinpols.batch.worker.atomic.shell.ShellExecutorProperties;
 import io.github.pinpols.batch.worker.atomic.spark.SparkSubmitExecutorProperties;
 import io.github.pinpols.batch.worker.atomic.sql.SqlExecutorProperties;
 import io.github.pinpols.batch.worker.atomic.storedproc.StoredProcExecutorProperties;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -25,6 +26,7 @@ import org.springframework.core.env.Environment;
  * 不 throw。
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("原子隔离启动自检: 双用途执行器的隔离确认")
 class AtomicIsolationStartupCheckTest {
 
   @Mock
@@ -72,6 +74,7 @@ class AtomicIsolationStartupCheckTest {
   }
 
   @Test
+  @DisplayName("外部计算引擎提交执行器启用且要求隔离但未确认时, 启动自检应快速失败")
   void sparkEnabled_requireIsolation_notAcked_throws() {
     // S-2:spark-submit 是 dual-use RCE,启用 + require-isolation + 未 ack 必须 fail-fast。
     noOtherExecutors();
@@ -95,6 +98,7 @@ class AtomicIsolationStartupCheckTest {
   }
 
   @Test
+  @DisplayName("命令执行器启用且要求隔离但未确认时, 启动自检应抛出并指明执行器")
   void enabled_requireIsolation_notAcked_throws() {
     noOtherExecutors();
     enableShell();
@@ -107,6 +111,7 @@ class AtomicIsolationStartupCheckTest {
   }
 
   @Test
+  @DisplayName("启用执行器但未要求隔离时, 自检只告警不中断启动")
   void enabled_notRequired_onlyWarns_noThrow() {
     noOtherExecutors();
     enableShell();
@@ -116,6 +121,7 @@ class AtomicIsolationStartupCheckTest {
   }
 
   @Test
+  @DisplayName("要求隔离且已完成确认时, 启动自检应放行")
   void enabled_requireIsolation_acked_noThrow() {
     noOtherExecutors();
     enableShell();
@@ -125,6 +131,7 @@ class AtomicIsolationStartupCheckTest {
   }
 
   @Test
+  @DisplayName("没有启用任何双用途执行器时, 启动自检应直接放行")
   void noDualUseEnabled_noThrow() {
     noOtherExecutors();
 

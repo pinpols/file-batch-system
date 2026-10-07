@@ -24,12 +24,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
  * 基于 fixture 的 {@link ParseStep} 测试 — 验证导入管道必须处理的所有上游文件格式： CSV（逗号 / 竖线 /
  * 制表符）、XML、JSON（数组和信封）、FIXED_WIDTH、EXCEL 以及字符集变体（UTF-8 BOM）。
  */
+@DisplayName("导入解析阶段夹具回归单测:各类上游格式与字符集变体的解析计数语义")
 class ParseStepFixtureTest {
 
   private ParseStep parseStep;
@@ -48,6 +50,7 @@ class ParseStepFixtureTest {
   // ── CSV comma-delimited (with header, 10 data rows) ────────────────────────
 
   @Test
+  @DisplayName("逗号分隔夹具:跳过表头后解析出十条数据行")
   void shouldParseCsvFixture_tenDataRows() throws Exception {
     String content = loadFixture("fixtures/import-customers.csv");
     ImportJobContext ctx = buildContext(content, "DELIMITED", ",", 1, null);
@@ -61,6 +64,7 @@ class ParseStepFixtureTest {
   // ── Pipe-delimited (5 data rows) ───────────────────────────────────────────
 
   @Test
+  @DisplayName("竖线分隔夹具:五条数据行全部解析")
   void shouldParsePipeDelimitedFixture() throws Exception {
     String content = loadFixture("fixtures/import-customers-pipe.csv");
     ImportJobContext ctx = buildContext(content, "DELIMITED", "|", 1, null);
@@ -74,6 +78,7 @@ class ParseStepFixtureTest {
   // ── Tab-separated (5 data rows) ────────────────────────────────────────────
 
   @Test
+  @DisplayName("制表符分隔夹具:五条数据行全部解析")
   void shouldParseTabSeparatedFixture() throws Exception {
     String content = loadFixture("fixtures/import-customers-tab.tsv");
     ImportJobContext ctx = buildContext(content, "DELIMITED", "\t", 1, null);
@@ -87,6 +92,7 @@ class ParseStepFixtureTest {
   // ── JSON array fixture (5 records) ─────────────────────────────────────────
 
   @Test
+  @DisplayName("JSON 数组夹具:五条记录全部解析")
   void shouldParseJsonArrayFixture() throws Exception {
     String content = loadFixture("fixtures/import-customers-array.json");
     ImportJobContext ctx = buildContext(content, "JSON", null, 0, null);
@@ -100,6 +106,7 @@ class ParseStepFixtureTest {
   // ── JSON envelope fixture (5 records inside "records" key) ─────────────────
 
   @Test
+  @DisplayName("JSON 信封夹具:五条记录全部解析")
   void shouldParseJsonEnvelopeFixture() throws Exception {
     String content = loadFixture("fixtures/import-customers-envelope.json");
     ImportJobContext ctx = buildContext(content, "JSON", null, 0, null);
@@ -113,6 +120,7 @@ class ParseStepFixtureTest {
   // ── UTF-8 BOM CSV (header with BOM prefix stripped) ────────────────────────
 
   @Test
+  @DisplayName("带字节序标记的夹具:剥离标记后解析出三条数据行")
   void shouldParseCsvWithUtf8Bom() throws Exception {
     // 读取原始字节并验证 fixture 中包含 BOM
     byte[] raw = loadFixtureBytes("fixtures/import-customers-utf8bom.csv");
@@ -137,6 +145,7 @@ class ParseStepFixtureTest {
   // ── Excel fixture (programmatically built, 3 data rows) ───────────────────
 
   @Test
+  @DisplayName("表格夹具:程序化构造的工作簿解析出三条记录")
   void shouldParseExcelFixture_programmaticallyBuilt() {
     byte[] xlsx = TestExcelFileBuilder.customerImport(List.of(
         Map.of(
@@ -216,6 +225,7 @@ class ParseStepFixtureTest {
   // ── Bad-records CSV (2 valid rows: C001 and C010) ──────────────────────────
 
   @Test
+  @DisplayName("含坏记录的夹具:解析阶段照单计数,校验留给后续阶段")
   void shouldParseBadRecordsCsv_countAllRows() throws Exception {
     // ParseStep 统计所有已解析行数；校验推迟到 ValidateStep
     String content = loadFixture("fixtures/import-customers-bad-records.csv");
@@ -229,6 +239,7 @@ class ParseStepFixtureTest {
   }
 
   @Test
+  @DisplayName("合法的 trailer 控制记录被剥离,并回填声明笔数与控制总额")
   void shouldPeelValidTrailerControlRecord() {
     String content = "id,name,amount\n1,Alice,10.00\n2,Bob,20.00\nT,2,30.00\n";
     ImportJobContext ctx = buildContext(content, "DELIMITED", ",", 1, null);
@@ -243,6 +254,7 @@ class ParseStepFixtureTest {
   }
 
   @Test
+  @DisplayName("模板声明 trailer 但末行不是控制记录时,解析失败")
   void shouldFailWhenTrailerTemplatePresentButLastLineIsNotTrailer() {
     String content = "id,name,amount\n1,Alice,10.00\n2,Bob,20.00\n";
     ImportJobContext ctx = buildContext(content, "DELIMITED", ",", 1, null);
@@ -255,6 +267,7 @@ class ParseStepFixtureTest {
   }
 
   @Test
+  @DisplayName("二进制形态载荷不支持 trailer 控制记录,直接失败")
   void shouldFailWhenTrailerTemplatePresentForBinaryPayload() {
     String content = "id,name,amount\n1,Alice,10.00\nT,1,10.00\n";
     ImportJobContext ctx = buildContextBase64(
@@ -270,6 +283,7 @@ class ParseStepFixtureTest {
   }
 
   @Test
+  @DisplayName("中转文件形态载荷不支持 trailer 控制记录,直接失败")
   void shouldFailWhenTrailerTemplatePresentForSpoolPayload() throws Exception {
     Path spool = Files.createTempFile("parse-step-trailer-spool", ".csv");
     Files.writeString(spool, "id,name,amount\n1,Alice,10.00\nT,1,10.00\n", StandardCharsets.UTF_8);

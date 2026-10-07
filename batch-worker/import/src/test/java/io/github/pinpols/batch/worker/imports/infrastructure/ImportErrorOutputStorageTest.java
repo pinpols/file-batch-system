@@ -14,12 +14,15 @@ import java.io.InputStream;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("导入错误输出存储单测:坏记录先落本地中转文件再上传的语义")
 class ImportErrorOutputStorageTest {
 
   @Test
-  void writesBadRecordsToPrivateSpoolBeforeUploading() {
+  @DisplayName("写出坏记录时先落本地中转文件再上传,对象键含租户与文件标识")
+  void shouldWriteSpoolBeforeUpload_whenBadRecordsExist() {
     S3StorageProperties properties = new S3StorageProperties();
     properties.setBucket("bucket");
     BatchObjectStore objectStore = mock(BatchObjectStore.class);

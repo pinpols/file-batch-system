@@ -9,10 +9,12 @@ import io.github.pinpols.batch.testing.TestPostgresContainers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
+@DisplayName("真实 PostgreSQL 上的有状态后端身份守卫集成测试: 验证首次部署记录基线, 后端或位置变更需一次性切换凭证, 切换代次与切换历史持久化")
 class StatefulBackendGuardIntegrationTest {
 
   private static PostgreSQLContainer postgres;
@@ -83,7 +85,8 @@ class StatefulBackendGuardIntegrationTest {
   }
 
   @Test
-  void recordsBaselineThenVerifiesSameBackend() {
+  @DisplayName("首次校验记录后端身份基线, 同一后端再次校验返回已验证, 且切换历史仅落一条基线记录")
+  void recordsBaseline_thenVerifiesSameBackend() {
     StatefulBackendGuard.DesiredBackend redis =
         desired("redis", "host=valkey|port=6379|db=0", null);
 
@@ -96,7 +99,8 @@ class StatefulBackendGuardIntegrationTest {
   }
 
   @Test
-  void rejectsBackendChangeWithoutCutoverId() {
+  @DisplayName("已登记后端后未携带一次性切换凭证提交不同后端时被拒绝, 并提示需要新的切换凭证")
+  void rejectsBackendChange_withoutCutoverId() {
     guard.verify(desired("redis", "host=valkey|port=6379|db=0", null));
 
     assertThatThrownBy(
@@ -106,7 +110,8 @@ class StatefulBackendGuardIntegrationTest {
   }
 
   @Test
-  void recordsExplicitCutoverAndAllowsOtherNodesToVerifyIt() {
+  @DisplayName("携带尚未使用的一次性切换凭证时记录切换并令代次递增为 1, 其他节点随后以同一后端校验返回已验证")
+  void recordsExplicitCutover_thenOtherNodesVerify() {
     guard.verify(desired("redis", "host=valkey|port=6379|db=0", null));
     StatefulBackendGuard.DesiredBackend database =
         desired("database", "jdbc=jdbc:postgresql://db/batch", "quota-20260723-01");
@@ -120,7 +125,8 @@ class StatefulBackendGuardIntegrationTest {
   }
 
   @Test
-  void rejectsReusingTokenForRollback() {
+  @DisplayName("回滚到先前后端时复用已消耗的一次性切换凭证被拒绝, 并提示该凭证已被使用")
+  void rejectsReusedToken_forRollback() {
     guard.verify(desired("redis", "host=valkey|port=6379|db=0", null));
     guard.verify(
         desired("database", "jdbc=jdbc:postgresql://db/batch", "quota-20260723-rollback-test"));
@@ -132,7 +138,8 @@ class StatefulBackendGuardIntegrationTest {
   }
 
   @Test
-  void treatsLocationChangeAsStatefulCutover() {
+  @DisplayName("同一存储后端仅访问位置变化时同样判定为有状态切换, 未携带切换凭证的校验被拒绝")
+  void treatsLocationChange_asStatefulCutover() {
     guard.verify(desired("s3", "endpoint=minio-a|bucket=batch", null));
 
     assertThatThrownBy(() -> guard.verify(desired("s3", "endpoint=minio-b|bucket=batch", null)))
@@ -140,7 +147,8 @@ class StatefulBackendGuardIntegrationTest {
   }
 
   @Test
-  void requiresFreshTokensForEnableStorageChangeAndDisable() {
+  @DisplayName("从禁用态启用、更换存储后端以及再次禁用各自都需要新的一次性切换凭证, 仅携带新凭证时才记录切换")
+  void requiresFreshToken_forEachEnableStorageChangeAndDisable() {
     StatefulBackendGuard.DesiredBackend disabled = desired("disabled", "disabled", null);
     guard.verify(disabled);
 

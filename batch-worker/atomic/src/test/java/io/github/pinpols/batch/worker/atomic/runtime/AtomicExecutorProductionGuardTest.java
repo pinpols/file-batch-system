@@ -11,6 +11,7 @@ import io.github.pinpols.batch.worker.atomic.sql.SqlExecutorProperties;
 import io.github.pinpols.batch.worker.atomic.storedproc.StoredProcExecutorProperties;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -22,6 +23,7 @@ import org.springframework.mock.env.MockEnvironment;
 
 /** {@link AtomicExecutorProductionGuard} 单测:验证 prod profile fail-closed 行为 + dev/local 放行行为。 */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("原子执行器生产守卫: 生产档位下的默认拒绝校验")
 class AtomicExecutorProductionGuardTest {
 
   @Mock
@@ -68,6 +70,7 @@ class AtomicExecutorProductionGuardTest {
   }
 
   @Test
+  @DisplayName("生产档位下数据库执行器已开启但未配置允许的数据源时, 启动校验应快速失败")
   void shouldFailFast_whenProdProfileAndSqlAllowedDataSourceBeansEmpty() {
     env.setActiveProfiles("prod");
     SqlExecutorProperties sql = new SqlExecutorProperties();
@@ -87,6 +90,7 @@ class AtomicExecutorProductionGuardTest {
   }
 
   @Test
+  @DisplayName("生产档位下存储过程执行器已开启但未限定允许的库模式时, 启动校验应快速失败")
   void shouldFailFast_whenProdProfileAndStoredProcAllowedSchemasEmpty() {
     env.setActiveProfiles("prod");
     SqlExecutorProperties sql = new SqlExecutorProperties();
@@ -106,6 +110,7 @@ class AtomicExecutorProductionGuardTest {
   }
 
   @Test
+  @DisplayName("生产档位下接口执行器既无主机白名单也未开启强制模式时, 启动校验应快速失败")
   void shouldFailFast_whenProdProfileAndHttpAllowlistEmptyAndNotEnforced() {
     env.setActiveProfiles("prod");
     SqlExecutorProperties sql = new SqlExecutorProperties();
@@ -125,6 +130,7 @@ class AtomicExecutorProductionGuardTest {
   }
 
   @Test
+  @DisplayName("生产档位下接口执行器开启强制模式时, 即使白名单为空也应通过校验")
   void shouldPass_whenProdProfileAndHttpEnforceAllowlistTrue() {
     env.setActiveProfiles("prod");
     SqlExecutorProperties sql = new SqlExecutorProperties();
@@ -142,6 +148,7 @@ class AtomicExecutorProductionGuardTest {
   }
 
   @Test
+  @DisplayName("生产档位下命令执行器已开启但命令白名单为空时, 启动校验应快速失败")
   void shouldFailFast_whenProdProfileAndShellWhitelistEmpty() {
     env.setActiveProfiles("prod");
     SqlExecutorProperties sql = new SqlExecutorProperties();
@@ -161,6 +168,7 @@ class AtomicExecutorProductionGuardTest {
   }
 
   @Test
+  @DisplayName("生产档位下外部计算提交执行器已开启但应用资源白名单为空时, 启动校验应快速失败")
   void shouldFailFast_whenProdProfileAndSparkAppResourceAllowlistEmpty() {
     env.setActiveProfiles("prod");
     SqlExecutorProperties sql = new SqlExecutorProperties();
@@ -186,6 +194,7 @@ class AtomicExecutorProductionGuardTest {
   }
 
   @Test
+  @DisplayName("生产档位下各执行器都给出白名单与资源约束时, 启动校验应全部通过")
   void shouldPass_whenProdProfileAndAllExecutorsConfigured() {
     env.setActiveProfiles("prod");
     SqlExecutorProperties sql = new SqlExecutorProperties();
@@ -206,6 +215,7 @@ class AtomicExecutorProductionGuardTest {
   }
 
   @Test
+  @DisplayName("非生产档位下即使白名单全空也应放行, 保留开发友好语义")
   void shouldSkip_whenDevProfileEvenWithEmptyAllowlists() {
     // dev/local profile 即使全空也放行(保留开发友好语义)
     env.setActiveProfiles("dev");
@@ -214,12 +224,14 @@ class AtomicExecutorProductionGuardTest {
   }
 
   @Test
+  @DisplayName("未声明激活档位时应直接放行, 不进入生产校验分支")
   void shouldSkip_whenNoActiveProfile() {
     // 未声明 active profile 也放行
     newGuard().verifyProductionFailClosed(); // 不抛
   }
 
   @Test
+  @DisplayName("复合档位名以生产前缀开头时应按生产处理, 触发同样的校验")
   void shouldDetectProd_whenCompositeProfileLikeProdEu() {
     env.setActiveProfiles("prod-eu");
     SqlExecutorProperties sql = new SqlExecutorProperties();
@@ -238,6 +250,7 @@ class AtomicExecutorProductionGuardTest {
   }
 
   @Test
+  @DisplayName("生产档位下存在多处配置缺口时应一次性收集全部违规项, 便于一次修完")
   void shouldAggregateMultipleViolations_inProd() {
     env.setActiveProfiles("prod");
     SqlExecutorProperties sql = new SqlExecutorProperties();
@@ -255,6 +268,7 @@ class AtomicExecutorProductionGuardTest {
   }
 
   @Test
+  @DisplayName("档位被显式列入强制执行清单时, 即使名称不含生产前缀也必须校验")
   void shouldEnforce_whenProfileListedInEnforceProfiles() {
     // staging 不含 "prod",但被配置进 enforce-profiles → 同样 fail-closed
     env.setActiveProfiles("staging");
@@ -267,6 +281,7 @@ class AtomicExecutorProductionGuardTest {
   }
 
   @Test
+  @DisplayName("开关置为始终强制执行时, 开发档位同样要走生产校验")
   void shouldEnforce_whenAlwaysEnforceTrueEvenOnDev() {
     env.setActiveProfiles("dev");
     env.setProperty("batch.worker.executors.guard.always-enforce", "true");
@@ -278,6 +293,7 @@ class AtomicExecutorProductionGuardTest {
   }
 
   @Test
+  @DisplayName("预发档位存在配置缺口时应与生产一致地快速失败, 不依赖额外名单配置")
   void shouldFailFast_whenStagingProfileHasViolations() {
     // staging 与生产同样按 prod-like 处理，不能因漏配 enforce-profiles 而放行。
     env.setActiveProfiles("staging");

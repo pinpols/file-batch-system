@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -42,6 +43,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 /** 单测：ValidateStep —— 关键路径覆盖。 主链路 happy path / 行级错误处理 / 数据集级错误 / 阈值超限 / JSON 反序列化失败 等。 */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("导入校验阶段单测:流式校验落盘,可跳过判定与阈值越界的失败语义")
 class ValidateStepTest {
 
   @Mock
@@ -96,6 +98,7 @@ class ValidateStepTest {
   // ── stage() ──
 
   @Test
+  @DisplayName("访问阶段属性时返回校验阶段标识")
   void shouldReturnValidateStage() {
     assertThat(step.stage()).isEqualTo(ImportStage.VALIDATE);
   }
@@ -103,6 +106,7 @@ class ValidateStepTest {
   // ── input validation ──
 
   @Test
+  @DisplayName("缺少已解析记录路径时失败,返回无数据流错误码")
   void shouldFail_whenParsedRecordsPathMissing() {
     ImportJobContext ctx = baseContext();
 
@@ -113,6 +117,7 @@ class ValidateStepTest {
   }
 
   @Test
+  @DisplayName("路径已声明但文件不存在时,同样返回无数据流错误码")
   void shouldFail_whenParsedRecordsFileMissing() {
     ImportJobContext ctx = baseContext();
     ctx.getAttributes()
@@ -129,6 +134,7 @@ class ValidateStepTest {
   // ── happy path ──
 
   @Test
+  @DisplayName("全部行通过校验时写出校验后文件,计数与文件状态同步更新")
   void shouldStreamValidate_andWriteValidatedFile_whenAllRowsPass() throws Exception {
     Path parsed = writeNdjson(List.of(row("C1"), row("C2"), row("C3")));
     ImportJobContext ctx = baseContext();
@@ -159,6 +165,7 @@ class ValidateStepTest {
   // ── dataset-level issue ──
 
   @Test
+  @DisplayName("数据集级问题不可跳过时失败,并以该问题码作为错误码")
   void shouldFail_whenDatasetIssueNonSkippable() throws Exception {
     Path parsed = writeNdjson(List.of(row("C1")));
     ImportJobContext ctx = baseContext();
@@ -179,6 +186,7 @@ class ValidateStepTest {
   }
 
   @Test
+  @DisplayName("数据集级问题可跳过但超出阈值时,返回跳过超限失败")
   void shouldFail_whenDatasetIssueSkippableButThresholdExceeded() throws Exception {
     Path parsed = writeNdjson(List.of(row("C1")));
     ImportJobContext ctx = baseContext();
@@ -200,6 +208,7 @@ class ValidateStepTest {
   // ── row-level issue ──
 
   @Test
+  @DisplayName("行级问题可跳过时,该行被跳过而整体仍成功")
   void shouldSkipBadRow_andStillProduceSuccess_whenRowSkippable() throws Exception {
     Path parsed = writeNdjson(List.of(row("C1"), row("C2")));
     ImportJobContext ctx = baseContext();
@@ -225,6 +234,7 @@ class ValidateStepTest {
   }
 
   @Test
+  @DisplayName("行级问题不可跳过时失败,并登记失败记录")
   void shouldFail_whenRowErrorNonSkippable() throws Exception {
     Path parsed = writeNdjson(List.of(row("C1")));
     ImportJobContext ctx = baseContext();
@@ -248,6 +258,7 @@ class ValidateStepTest {
   // ── JSON parsing failure on a row ──
 
   @Test
+  @DisplayName("非法结构行按类型非法计入校验错误并失败")
   void shouldHandleMalformedLine_andCountAsValidationError() throws Exception {
     Path parsed = Files.createTempFile("parsed-", ".ndjson");
     tempPaths.add(parsed);
@@ -276,6 +287,7 @@ class ValidateStepTest {
   // ── post-loop threshold check ──
 
   @Test
+  @DisplayName("所有分块处理完后阈值越界,整体判定失败")
   void shouldFail_whenWithinThresholdReturnsFalseAfterAllChunks() throws Exception {
     Path parsed = writeNdjson(List.of(row("C1")));
     ImportJobContext ctx = baseContext();
@@ -297,6 +309,7 @@ class ValidateStepTest {
   // ── exception in dataQualityService bubbles to IMPORT_VALIDATE_FAILED ──
 
   @Test
+  @DisplayName("质量服务抛异常时返回通用失败结果")
   void shouldReturnGenericFailure_whenQualityServiceThrows() throws Exception {
     Path parsed = writeNdjson(List.of(row("C1")));
     ImportJobContext ctx = baseContext();

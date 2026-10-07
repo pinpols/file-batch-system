@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -40,6 +41,7 @@ import org.mockito.quality.Strictness;
 // 但 STEP_NOT_FOUND / PIPELINE_STEP_MISSING 等用例不会触发其中部分调用,严格模式会误报 UnnecessaryStubbing。
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
+@DisplayName("分发阶段执行器:成功、业务异常、基础设施异常与两类步骤缺失的出口路径及失败码映射")
 class DefaultDispatchStageExecutorTest {
 
   @Mock
@@ -77,6 +79,7 @@ class DefaultDispatchStageExecutorTest {
   }
 
   @Test
+  @DisplayName("步骤成功时执行成功:结果含准备阶段,回执指标不带租户标签,并标记步骤运行成功")
   void execute_returnsSuccess_whenStepSucceeds() {
     when(prepareStep.execute(any())).thenReturn(DispatchStageResult.success(DispatchStage.PREPARE));
     DispatchJobContext context = buildContext();
@@ -96,6 +99,7 @@ class DefaultDispatchStageExecutorTest {
   }
 
   @Test
+  @DisplayName("步骤抛业务异常时不向上传播,结果映射为业务错误码并回带错误键与参数摘要")
   void execute_returnsBusinessError_whenStepThrowsBizException() {
     when(prepareStep.execute(any()))
         .thenThrow(BizException.of(
@@ -122,6 +126,7 @@ class DefaultDispatchStageExecutorTest {
   }
 
   @Test
+  @DisplayName("步骤抛运行时异常时不向上传播,结果映射为基础设施错误码并回带异常信息")
   void execute_returnsInfraError_whenStepThrowsRuntimeException() {
     when(prepareStep.execute(any())).thenThrow(new RuntimeException("upstream connection refused"));
     DispatchJobContext context = buildContext();
@@ -136,6 +141,7 @@ class DefaultDispatchStageExecutorTest {
   }
 
   @Test
+  @DisplayName("流水线定义的实现码没有注册任何步骤时,结果映射为步骤未找到")
   void execute_returnsStepNotFound_whenImplCodeNotRegistered() {
     DispatchJobContext context = buildContext("UNKNOWN_IMPL");
 
@@ -147,6 +153,7 @@ class DefaultDispatchStageExecutorTest {
   }
 
   @Test
+  @DisplayName("上下文与库中都没有流水线步骤定义时,结果映射为流水线步骤缺失")
   void execute_returnsPipelineStepMissing_whenNoStepsConfigured() {
     DispatchJobContext context = new DispatchJobContext();
     context.setTenantId("t1");

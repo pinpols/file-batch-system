@@ -7,6 +7,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** buildPagedSql 的 keyset-range 重载：纯 SQL 字符串断言，不连库。 */
+@DisplayName("模板导出 keyset 区间分页语句生成单测:区间谓词边界,回退与游标谓词共存语义")
 class SqlTemplateExportKeysetRangeTest {
 
   private static final String BASE_SQL = "SELECT id FROM biz.t WHERE tenant_id = :tenantId";

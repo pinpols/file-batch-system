@@ -8,6 +8,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** ADR-041 Phase1.4:出站 trailer 控制记录构造(纯函数)。 */
+@DisplayName("出站 trailer 控制记录构造单测:启用开关,字段映射与列数推断")
 class OutboundTrailerRecordTest {
 
   @Test

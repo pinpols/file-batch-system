@@ -53,6 +53,7 @@ import org.springframework.test.context.DynamicPropertySource;
 @SpringBootTest(
     classes = BatchWorkerExportApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("导出 keyset 区间分片集成测试:真实库上验证分片无重叠,无遗漏以及未开启时的回退语义")
 class ExportKeysetRangeIT extends AbstractIntegrationTest {
 
   private static final int ROW_COUNT = 1000;

@@ -8,18 +8,21 @@ import java.time.Duration;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.core.SimpleLock;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+@DisplayName("ShedLock 锁提供者工厂:自动建表开关与 Redis 后端互斥语义验证")
 class ShedLockProviderFactoryTest extends AbstractIntegrationTest {
 
   private static final String DB_USERNAME = "batch_user";
   private static final String DB_PASSWORD = "batch_pass_123";
 
   @Test
+  @DisplayName("开启自动建表开关时锁表应被创建,且加锁与释放链路可用")
   void shouldAutoCreateShedLockTableWhenEnabled() {
     DriverManagerDataSource dataSource = new DriverManagerDataSource();
     dataSource.setDriverClassName("org.postgresql.Driver");
@@ -55,7 +58,8 @@ class ShedLockProviderFactoryTest extends AbstractIntegrationTest {
    * 后业务侧 @SchedulerLock 行为不变。
    */
   @Test
-  void redisLockProviderShouldEnforceMutualExclusion() {
+  @DisplayName("Redis 后端下同一把锁重复抢占应失败,释放后应可再次抢占")
+  void shouldEnforceMutualExclusion_whenRedisLockProvider() {
     LettuceConnectionFactory connectionFactory =
         new LettuceConnectionFactory(new RedisStandaloneConfiguration(redisHost(), redisPort()));
     connectionFactory.afterPropertiesSet();

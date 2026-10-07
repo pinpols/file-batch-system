@@ -22,11 +22,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.support.StaticApplicationContext;
 
 /** 单元测试：{@link DispatchReceiptPollScheduler#poll()} 的互斥与守卫行为。 */
+@DisplayName("回执轮询调度:开关与停机守卫、待轮询行缺失字段的跳过,以及瞬时连通性失败分类")
 class DispatchReceiptPollSchedulerTest {
 
   private DispatchReceiptPollProperties properties;
@@ -50,6 +52,7 @@ class DispatchReceiptPollSchedulerTest {
   }
 
   @Test
+  @DisplayName("轮询开关关闭时,不查询任何待轮询行")
   void shouldSkipPollingWhenDisabled() {
     properties.setEnabled(false);
 
@@ -59,6 +62,7 @@ class DispatchReceiptPollSchedulerTest {
   }
 
   @Test
+  @DisplayName("上下文关闭事件之后再触发轮询,不再查询任何待轮询行")
   void shouldSkipPollingAfterContextClosed() {
     properties.setEnabled(true);
 
@@ -69,6 +73,7 @@ class DispatchReceiptPollSchedulerTest {
   }
 
   @Test
+  @DisplayName("无待轮询行时只查询一次列表,不加载任何渠道配置")
   void shouldDoNothingWhenNoPendingRows() {
     properties.setEnabled(true);
     when(fileDispatchRepository.listPendingReceiptPolls(anyInt(), anyLong())).thenReturn(List.of());
@@ -80,6 +85,7 @@ class DispatchReceiptPollSchedulerTest {
   }
 
   @Test
+  @DisplayName("待轮询行缺文件号时跳过该行,不加载渠道配置")
   void shouldSkipRowWhenFileIdIsNull() {
     properties.setEnabled(true);
     Map<String, Object> row = Map.of(
@@ -97,6 +103,7 @@ class DispatchReceiptPollSchedulerTest {
   }
 
   @Test
+  @DisplayName("待轮询行渠道号为空时跳过该行,不加载渠道配置")
   void shouldSkipRowWhenChannelCodeIsBlank() {
     properties.setEnabled(true);
     Map<String, Object> row = new HashMap<>();
@@ -113,6 +120,7 @@ class DispatchReceiptPollSchedulerTest {
   }
 
   @Test
+  @DisplayName("待轮询行外部请求号为空时跳过该行,不加载渠道配置")
   void shouldSkipRowWhenExternalRequestIdIsNull() {
     properties.setEnabled(true);
     Map<String, Object> row = new HashMap<>();
@@ -129,6 +137,7 @@ class DispatchReceiptPollSchedulerTest {
   }
 
   @Test
+  @DisplayName("渠道查不到时只查询一次渠道,不把该行标记为已确认")
   void shouldSkipRowWhenChannelNotFound() {
     properties.setEnabled(true);
     Map<String, Object> row = Map.of(
@@ -148,6 +157,7 @@ class DispatchReceiptPollSchedulerTest {
   }
 
   @Test
+  @DisplayName("渠道未配置回执轮询地址时,不把该行标记为已确认")
   void shouldSkipRowWhenPollUrlNotConfigured() {
     properties.setEnabled(true);
     Map<String, Object> row = Map.of(
@@ -170,6 +180,7 @@ class DispatchReceiptPollSchedulerTest {
   }
 
   @Test
+  @DisplayName("连接拒绝、套接字超时、域名解析失败与包装异常判为瞬时连通性失败,业务异常与普通读写异常不判")
   void isTransientConnectivityFailure_classifiesNetExceptions() {
     // 直/嵌套 connect-refused / 超时 / DNS 都算瞬时连通性失败 (仅 message 日志, 不打 stack)。
     assertThat(DispatchReceiptPollScheduler.isTransientConnectivityFailure(new ConnectException()))

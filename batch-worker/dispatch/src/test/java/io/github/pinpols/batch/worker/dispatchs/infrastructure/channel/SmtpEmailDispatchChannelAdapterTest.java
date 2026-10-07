@@ -9,12 +9,15 @@ import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileConte
 import jakarta.mail.internet.MimeMessage;
 import java.lang.reflect.Method;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.env.Environment;
 
+@DisplayName("邮件分发适配器:连接、读取与写入三类超时属性按渠道配置显式落到邮件会话")
 class SmtpEmailDispatchChannelAdapterTest {
 
   @Test
+  @DisplayName("构建邮件消息时把连接、读取与写入超时毫秒数写入邮件会话属性")
   void shouldSetExplicitSmtpTimeoutProperties() throws Exception {
     Environment environment = mock(Environment.class);
     when(environment.getActiveProfiles()).thenReturn(new String[0]);

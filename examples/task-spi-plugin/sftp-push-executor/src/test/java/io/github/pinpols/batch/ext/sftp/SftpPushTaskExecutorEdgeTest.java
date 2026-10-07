@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
  * <p>聚焦:空字符串 / 缺失关键参数 / capability 详细字段 / output map 字段 / 非数字端口降级。 实际 SFTP 行为是 stub,不在此测;真做要替换
  * {@code doSftpPush}。
  */
+@DisplayName("SFTP 推送任务执行器边界行为:必填参数校验, 端口解析, 凭据并存, 能力声明与执行结果输出")
 class SftpPushTaskExecutorEdgeTest {
 
   private final SftpPushTaskExecutor executor = new SftpPushTaskExecutor();
@@ -40,7 +41,7 @@ class SftpPushTaskExecutorEdgeTest {
 
   @Test
   @DisplayName("空字符串 host 被拒(非空校验)")
-  void rejectsBlankHost() {
+  void shouldRejectBlankHost_whenHostIsWhitespace() {
     Map<String, Object> p = base();
     p.put("host", "   ");
     TaskResult r = executor.execute(ctx(p));
@@ -50,7 +51,7 @@ class SftpPushTaskExecutorEdgeTest {
 
   @Test
   @DisplayName("空字符串 username 被拒")
-  void rejectsBlankUsername() {
+  void shouldRejectBlankUsername_whenUsernameIsEmpty() {
     Map<String, Object> p = base();
     p.put("username", "");
     TaskResult r = executor.execute(ctx(p));
@@ -60,7 +61,7 @@ class SftpPushTaskExecutorEdgeTest {
 
   @Test
   @DisplayName("缺 localPath 被拒")
-  void rejectsMissingLocalPath() {
+  void shouldRejectExecution_whenLocalPathMissing() {
     Map<String, Object> p = base();
     p.remove("localPath");
     TaskResult r = executor.execute(ctx(p));
@@ -70,7 +71,7 @@ class SftpPushTaskExecutorEdgeTest {
 
   @Test
   @DisplayName("缺 remotePath 被拒")
-  void rejectsMissingRemotePath() {
+  void shouldRejectExecution_whenRemotePathMissing() {
     Map<String, Object> p = base();
     p.remove("remotePath");
     TaskResult r = executor.execute(ctx(p));
@@ -80,7 +81,7 @@ class SftpPushTaskExecutorEdgeTest {
 
   @Test
   @DisplayName("非字符串类型的 host 被拒(类型检查)")
-  void rejectsNonStringHost() {
+  void shouldRejectHost_whenHostIsNotString() {
     Map<String, Object> p = base();
     p.put("host", 123);
     TaskResult r = executor.execute(ctx(p));
@@ -92,7 +93,7 @@ class SftpPushTaskExecutorEdgeTest {
 
   @Test
   @DisplayName("非数字 port 静默降级 22(stub 当前契约)")
-  void nonNumericPortFallsBackTo22() {
+  void shouldFallBackToDefaultPort_whenPortIsNotNumeric() {
     Map<String, Object> p = base();
     p.put("port", "not-a-number");
     TaskResult r = executor.execute(ctx(p));
@@ -102,7 +103,7 @@ class SftpPushTaskExecutorEdgeTest {
 
   @Test
   @DisplayName("Long 类型 port 被接受(Number.intValue 通路)")
-  void longPortAccepted() {
+  void shouldAcceptPort_whenPortIsLongValue() {
     Map<String, Object> p = base();
     p.put("port", 2222L);
     TaskResult r = executor.execute(ctx(p));
@@ -114,7 +115,7 @@ class SftpPushTaskExecutorEdgeTest {
 
   @Test
   @DisplayName("password 与 privateKey 同时给:都接受(无互斥)")
-  void bothPasswordAndPrivateKeyAccepted() {
+  void shouldAcceptBothCredentials_whenPasswordAndPrivateKeyProvided() {
     Map<String, Object> p = base();
     p.put("privateKey", "-----BEGIN KEY-----");
     TaskResult r = executor.execute(ctx(p));
@@ -125,7 +126,7 @@ class SftpPushTaskExecutorEdgeTest {
 
   @Test
   @DisplayName("capability:timeout=10min,非幂等,不可取消,只声明 NET+DISK")
-  void capabilityDetailedFields() {
+  void shouldReportCapabilityFields_whenCapabilityQueried() {
     TaskCapability cap = executor.capability();
     assertThat(cap.recommendedTimeout()).isEqualTo(Duration.ofMinutes(10));
     assertThat(cap.idempotent()).isFalse();
@@ -138,7 +139,7 @@ class SftpPushTaskExecutorEdgeTest {
 
   @Test
   @DisplayName("成功 output 含 bytesTransferred / durationMillis / remotePath / mock=true")
-  void outputContainsAllStubFields() {
+  void shouldReturnStubOutputFields_whenPushSucceeds() {
     Map<String, Object> p = base();
     p.put("remotePath", "/upload/file.csv");
     TaskResult r = executor.execute(ctx(p));
@@ -155,7 +156,7 @@ class SftpPushTaskExecutorEdgeTest {
 
   @Test
   @DisplayName("空 parameters 直接进 execute:返回 fail 而非异常逸出")
-  void emptyParametersFailsGracefully() {
+  void shouldFailGracefully_whenParametersEmpty() {
     TaskResult r = executor.execute(ctx(Map.of()));
     assertThat(r.success()).isFalse();
     // 第一个缺失字段:host
@@ -164,7 +165,7 @@ class SftpPushTaskExecutorEdgeTest {
 
   @Test
   @DisplayName("null parameters map:NPE 被 catch 转 fail,而不是从 execute 逸出")
-  void nullParametersMapHandledGracefully() {
+  void shouldFailGracefully_whenParametersNull() {
     TaskResult r = executor.execute(ctx(null));
     assertThat(r.success()).isFalse();
     // catch (RuntimeException) 分支:fail(ex) 把异常类型/message 揉进 message

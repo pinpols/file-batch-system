@@ -182,7 +182,7 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
 
   @Test
   @DisplayName("(e) 按 pipeline_instance_id 隔离,不串其他实例")
-  void isolatedByPipelineInstanceId() {
+  void shouldIsolateByPipelineInstance_whenJudgingLatestStepStatus() {
     // arrange
     insertRun(500L, "COMPUTE", 1, "SUCCESS");
     insertRun(501L, "COMPUTE", 1, "FAILED");

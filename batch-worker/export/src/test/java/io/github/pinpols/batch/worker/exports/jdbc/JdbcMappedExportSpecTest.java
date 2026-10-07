@@ -6,13 +6,16 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("JDBC 映射导出规格解析单测:列缺省推断与显式配置优先级语义")
 class JdbcMappedExportSpecTest {
 
   private final ObjectMapper objectMapper = new ObjectMapper();
 
   @Test
+  @DisplayName("解析顶层配置:库名,批次表与两侧查询列都正确取出")
   void shouldParseTopLevelSpec() {
     Map<String, Object> template = Map.of(
         "jdbc_mapped_export",
@@ -34,6 +37,7 @@ class JdbcMappedExportSpecTest {
   }
 
   @Test
+  @DisplayName("缺少规格配置时抛参数非法,并提示规格缺失")
   void shouldRejectMissingSpec() {
     assertThatThrownBy(() -> JdbcMappedExportSpec.parse(Map.of(), objectMapper))
         .isInstanceOf(IllegalArgumentException.class)
@@ -41,6 +45,7 @@ class JdbcMappedExportSpecTest {
   }
 
   @Test
+  @DisplayName("未显式给出明细列时,从字段映射推断并按去重保序")
   void shouldInferDetailSelectColumnsFromFieldMappingsWhenOmitted() {
     Map<String, Object> template = Map.of(
         "field_mappings",
@@ -65,7 +70,8 @@ class JdbcMappedExportSpecTest {
   }
 
   @Test
-  void explicitDetailSelectColumnsTakePrecedenceOverFieldMappings() {
+  @DisplayName("字段映射与显式明细列同时存在时,显式配置优先")
+  void shouldPreferExplicitDetailColumns_whenFieldMappingsAlsoPresent() {
     Map<String, Object> template = Map.of(
         "field_mappings", List.of(Map.of("name", "x", "sourceColumn", "col_x")),
         "jdbc_mapped_export",

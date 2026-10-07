@@ -5,13 +5,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("渠道配置合并:白名单覆盖、字符串配置解析、历史别名归一化与策略列防护")
 class ChannelConfigMergeTest {
 
   private final ObjectMapper objectMapper = new ObjectMapper();
 
   @Test
+  @DisplayName("行记录为空或空映射时,合并结果为空,不做任何补键")
   void shouldReturnEmptyForNullOrEmptyRow() {
     assertThat(ChannelConfigMerge.merge(null, objectMapper)).isEmpty();
     assertThat(ChannelConfigMerge.merge(Map.of(), objectMapper)).isEmpty();
@@ -22,6 +25,7 @@ class ChannelConfigMergeTest {
    * "tenant_id" 这种策略列）一律被拒绝， 防止渠道配置通过 config_json 绕过管理员策略。
    */
   @Test
+  @DisplayName("配置映射仅白名单键可覆盖,策略列与未注册键一律忽略且不覆盖同名列")
   void shouldOnlyOverlayWhitelistedKeysFromConfigJsonMap() {
     Map<String, Object> row = new LinkedHashMap<>();
     row.put("tenant_id", "t1");
@@ -50,6 +54,7 @@ class ChannelConfigMergeTest {
   }
 
   @Test
+  @DisplayName("配置以 JSON 字符串给出时先解析,再按白名单保留命中键并丢弃策略列与未注册键")
   void shouldParseConfigJsonStringAndApplyWhitelist() {
     Map<String, Object> row = new LinkedHashMap<>();
     row.put(
@@ -62,6 +67,7 @@ class ChannelConfigMergeTest {
   }
 
   @Test
+  @DisplayName("对象存储历史别名键归一化为规范键,原别名不再出现在合并结果")
   void shouldNormalizeLegacyOssAliasesToCanonicalKeys() {
     Map<String, Object> row = new LinkedHashMap<>();
     row.put(
@@ -80,6 +86,7 @@ class ChannelConfigMergeTest {
   }
 
   @Test
+  @DisplayName("本地目录历史键归一化为目标路径键,本地文件名键被忽略")
   void shouldNormalizeLegacyLocalDirectoryAndIgnoreLocalFileName() {
     Map<String, Object> row = new LinkedHashMap<>();
     row.put(

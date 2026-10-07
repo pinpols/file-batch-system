@@ -22,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -29,6 +30,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("导出步骤执行适配器单测:上下文构建,阶段委派与成功响应元数据语义")
 class ExportStepExecutionAdapterTest {
 
   @Mock
@@ -58,13 +60,15 @@ class ExportStepExecutionAdapterTest {
   }
 
   @Test
-  void descriptorsMatchExportPipeline() {
+  @DisplayName("适配器的管道类型与起始阶段同导出流程保持一致")
+  void shouldMatchExportPipeline_whenDescribingAdapter() {
     assertThat(adapter.pipelineType()).isEqualTo(ExportWorkerType.EXPORT);
     assertThat(adapter.initialStage()).isEqualTo(ExportStage.PREPARE.name());
   }
 
   @Test
-  void buildContextParsesPayloadAndMapsExportFields() throws Exception {
+  @DisplayName("构建上下文时解析载荷,并回填业务日期与文件标识")
+  void shouldParsePayloadIntoContext_whenBuildingContext() throws Exception {
     Map<String, Object> attributes = new LinkedHashMap<>();
     attributes.put(PipelineRuntimeKeys.BIZ_DATE, "2026-09-11");
     attributes.put("payload", "{\"fileCode\":\"daily\",\"objectName\":\"daily.csv\"}");
@@ -81,7 +85,8 @@ class ExportStepExecutionAdapterTest {
   }
 
   @Test
-  void executeStagesDelegatesWithoutPipelineLockWhenInstanceIsMissing() {
+  @DisplayName("缺少管道实例时直接委派阶段执行,不额外加锁")
+  void shouldDelegateStages_whenPipelineInstanceMissing() {
     ExportJobContext context = new ExportJobContext();
     context.setAttributes(new LinkedHashMap<>());
     List<ExportStageResult> expected = List.of(ExportStageResult.success(ExportStage.PREPARE));
@@ -92,7 +97,8 @@ class ExportStepExecutionAdapterTest {
   }
 
   @Test
-  void resultAccessorsPreserveStageResultContract() {
+  @DisplayName("结果访问器如实反映阶段,错误码与消息,空结果判定为失败")
+  void shouldPreserveStageResultContract_whenReadingAccessors() {
     ExportStageResult result =
         ExportStageResult.failure(ExportStage.GENERATE, "WRITE_FAILED", "write failed");
 
@@ -104,8 +110,9 @@ class ExportStepExecutionAdapterTest {
   }
 
   @Test
+  @DisplayName("成功响应把文件标识,记录数与文件大小写入节点输出")
   @SuppressWarnings("unchecked")
-  void successResponsePublishesExportMetadataForWorkflow() {
+  void shouldPublishExportMetadata_whenBuildingSuccessResponse() {
     ExportJobContext context = new ExportJobContext();
     context.setBizDate("2026-09-11");
     Map<String, Object> attributes = new LinkedHashMap<>();

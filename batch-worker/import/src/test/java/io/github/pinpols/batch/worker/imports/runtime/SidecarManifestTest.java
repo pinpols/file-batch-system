@@ -6,13 +6,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("边车清单解析单测:字段完整解析与未知字段忽略语义")
 class SidecarManifestTest {
 
   private final ObjectMapper objectMapper = new ObjectMapper();
 
   @Test
   @DisplayName("解析 file-sidecar-manifest-v1:全字段映射正确")
-  void parsesFullManifest() throws Exception {
+  void shouldParseFullManifest_whenAllFieldsPresent() throws Exception {
     String json = """
         {
           "schemaVersion": "file-sidecar-manifest-v1",
@@ -34,7 +35,7 @@ class SidecarManifestTest {
 
   @Test
   @DisplayName("未知字段忽略(前向兼容),缺省字段为 null")
-  void ignoresUnknownAndAllowsMissing() throws Exception {
+  void shouldIgnoreUnknownFields_whenOptionalFieldsMissing() throws Exception {
     String json = "{\"fileName\":\"a.csv\",\"futureField\":\"x\"}";
     SidecarManifest m = objectMapper.readValue(json, SidecarManifest.class);
     assertThat(m.fileName()).isEqualTo("a.csv");

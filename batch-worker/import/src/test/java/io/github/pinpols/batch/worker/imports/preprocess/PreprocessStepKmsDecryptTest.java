@@ -20,12 +20,14 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
  * 单元测试：PreprocessStep 与 KMS 加解密闭环。 校验 BATCHENC 载荷（由 {@link BatchObjectCryptoService} 产生，例如
  * StoreStep）在 ImportPreprocessPipeline 运行前被正确解密，贯通导出加密与导入解密链路。
  */
+@DisplayName("导入预处理解密单测:加密载荷在管道运行前解密,明文载荷原样透传")
 class PreprocessStepKmsDecryptTest {
 
   private static final String KEY_REF = "TEST_KMS_2026";
@@ -64,6 +66,7 @@ class PreprocessStepKmsDecryptTest {
   }
 
   @Test
+  @DisplayName("加密载荷在预处理阶段被解密,规整后内容与原始明文一致")
   void shouldDecryptBatchEncPayload_beforePipelineRuns() {
     // 模拟 StoreStep 的行为：使用 BatchObjectCryptoService 加密明文
     byte[] encryptedBytes =
@@ -114,6 +117,7 @@ class PreprocessStepKmsDecryptTest {
   }
 
   @Test
+  @DisplayName("未加密载荷直接透传,规整后内容保持原样")
   void shouldPassThrough_nonEncryptedPayload() {
     String rawJson = "{\"records\":[]}";
     ImportPayload payload = new ImportPayload(

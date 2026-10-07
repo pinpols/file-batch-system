@@ -10,6 +10,7 @@ import io.github.pinpols.batch.worker.imports.BatchWorkerImportApplication;
 import io.github.pinpols.batch.worker.imports.infrastructure.ImportStepExecutionAdapter;
 import io.github.pinpols.batch.worker.imports.infrastructure.ImportTaskExecutor;
 import java.lang.reflect.Field;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -34,6 +35,7 @@ import org.springframework.test.context.DynamicPropertySource;
 @SpringBootTest(
     classes = BatchWorkerImportApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@DisplayName("导入 SPI 等价性集成测试:注册类型,执行器装配与委托实例同一性")
 class ImportSpiEquivalenceIT extends AbstractIntegrationTest {
 
   @DynamicPropertySource
@@ -48,18 +50,21 @@ class ImportSpiEquivalenceIT extends AbstractIntegrationTest {
   BatchTaskExecutorRegistry registry;
 
   @Test
-  void registryContainsImportTaskType() {
+  @DisplayName("上下文加载后,任务执行器注册表包含导入类型")
+  void shouldRegisterImportTaskType_whenContextLoads() {
     assertThat(registry.registeredTypes()).contains("IMPORT");
   }
 
   @Test
-  void registryFindReturnsImportTaskExecutor() {
+  @DisplayName("按导入类型查找时,返回导入任务执行器实例")
+  void shouldReturnImportTaskExecutor_whenLookingUpByType() {
     BatchTaskExecutor exec = registry.find("IMPORT");
     assertThat(exec).isNotNull().isInstanceOf(ImportTaskExecutor.class);
   }
 
   @Test
-  void wrapperDelegateIsSameAsPrimaryAdapter() throws Exception {
+  @DisplayName("包装执行器内部委托与主适配器为同一实例,证明两条路径共用实现")
+  void shouldShareDelegateWithPrimaryAdapter_whenSpiWrapperBuilt() throws Exception {
     ImportTaskExecutor exec = (ImportTaskExecutor) registry.find("IMPORT");
     Field f = ImportTaskExecutor.class.getDeclaredField("delegate");
     f.setAccessible(true);

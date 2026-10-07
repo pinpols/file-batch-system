@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /** ExcelExportFormat 类型化写入 / 多 sheet 拆分 / 表头样式 + 向后兼容验证。 */
+@DisplayName("表格导出格式单测:类型化写入,多工作表拆分与表头样式及向后兼容语义")
 class ExcelExportFormatTest {
 
   private final ExcelExportFormat format = new ExcelExportFormat(new ObjectMapper());
@@ -152,7 +153,7 @@ class ExcelExportFormatTest {
 
   @Test
   @DisplayName("公式注入值被前缀单引号转义")
-  void escapesFormulaInjection() throws Exception {
+  void shouldEscapeFormulaInjection_whenValueLooksLikeFormula() throws Exception {
     List<Map<String, Object>> rows = List.of(rowOf("v", "=SUM(A1:A2)"));
     Path file = tempDir.resolve("inject.xlsx");
 

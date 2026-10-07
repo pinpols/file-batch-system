@@ -14,10 +14,12 @@ import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 /** {@link ExportTaskExecutor} 单测 — 跟 {@code ImportTaskExecutorTest} 同 pattern。 */
+@DisplayName("导出任务执行器单测:任务类型,资源能力与请求翻译及失败消息回退语义")
 class ExportTaskExecutorTest {
 
   private ExportStepExecutionAdapter delegate;
@@ -30,12 +32,14 @@ class ExportTaskExecutorTest {
   }
 
   @Test
-  void taskTypeIsExport() {
+  @DisplayName("读取任务类型时返回导出类型")
+  void shouldReportExportTaskType_whenReadingTaskType() {
     assertThat(executor.taskType()).isEqualTo("EXPORT");
   }
 
   @Test
-  void capabilityDeclaresExpectedResources() {
+  @DisplayName("能力声明包含数据库,磁盘与网络资源,且可取消但非幂等")
+  void shouldDeclareResourcesAndCapabilities_whenReadingCapability() {
     assertThat(executor.capability().resourceKinds())
         .contains(ResourceKind.DB, ResourceKind.DISK, ResourceKind.NET);
     assertThat(executor.capability().idempotent()).isFalse();
@@ -43,7 +47,8 @@ class ExportTaskExecutorTest {
   }
 
   @Test
-  void executeTranslatesContextToStepRequest() {
+  @DisplayName("执行时把任务上下文翻译成步骤请求,作业与租户字段正确透传")
+  void shouldTranslateContextIntoStepRequest_whenExecuting() {
     when(delegate.execute(any())).thenReturn(StepExecutionResponse.successResponse());
 
     TaskContext ctx = new TaskContext(
@@ -67,7 +72,8 @@ class ExportTaskExecutorTest {
   }
 
   @Test
-  void failureResponsePropagatesMessage() {
+  @DisplayName("委托返回失败时,失败消息原样透传到任务结果")
+  void shouldPropagateMessage_whenDelegateFails() {
     when(delegate.execute(any()))
         .thenReturn(new StepExecutionResponse(false, "PIPELINE_FAILED", "stage QUERY failed"));
 
@@ -78,7 +84,8 @@ class ExportTaskExecutorTest {
   }
 
   @Test
-  void failureWithoutMessageFallsBackToCode() {
+  @DisplayName("失败但没有消息时,错误码作为任务结果消息")
+  void shouldFallBackToCode_whenFailureMessageMissing() {
     when(delegate.execute(any()))
         .thenReturn(new StepExecutionResponse(false, "EXPORT_FAILED", null));
     TaskResult r = executor.execute(simpleCtx());

@@ -18,11 +18,13 @@ import io.github.pinpols.batch.worker.dispatchs.config.DispatchCircuitBreakerPro
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.support.StaticApplicationContext;
 
+@DisplayName("渠道健康服务:上下文关闭后停止探测,以及失败退避直接采用落库返回的失败计数")
 class DispatchChannelHealthServiceTest {
 
   private DispatchChannelHealthRepository repository;
@@ -50,7 +52,8 @@ class DispatchChannelHealthServiceTest {
   }
 
   @Test
-  void probeConfiguredChannelsSkipsAfterContextClosed() {
+  @DisplayName("上下文关闭后再触发探测时,不再查询任何启用探测的渠道")
+  void shouldSkipProbeChannels_whenContextClosed() {
     service.stopOnContextClosed(new ContextClosedEvent(new StaticApplicationContext()));
 
     service.probeConfiguredChannels();
@@ -59,7 +62,8 @@ class DispatchChannelHealthServiceTest {
   }
 
   @Test
-  void failureBackoffUsesReturnedCounterWithoutReadBack() {
+  @DisplayName("记录投递失败时直接用落库返回的失败次数重算退避,不再回读健康快照")
+  void shouldUseReturnedFailureCount_whenRecordingDispatchFailure() {
     when(repository.upsertFailureAndBump(any())).thenReturn(4);
     Map<String, Object> channel =
         Map.of("tenant_id", "tenant-a", "channel_code", "channel-a", "channel_type", "API");

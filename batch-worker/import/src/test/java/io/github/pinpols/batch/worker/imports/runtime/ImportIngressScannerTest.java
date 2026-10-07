@@ -22,12 +22,14 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("导入入口扫描器单测:列举失败上抛,完成标记读取与兼容模式语义")
 class ImportIngressScannerTest {
 
   @Mock
@@ -78,6 +80,7 @@ class ImportIngressScannerTest {
   }
 
   @Test
+  @DisplayName("列举对象失败时向上抛出,且不触发任何登记写库")
   void scan_propagatesAndSkipsRegistration_whenListFails() {
     when(objectStore.list(any(), any(), any(), anyInt()))
         .thenThrow(new RuntimeException("storage unavailable"));
@@ -90,6 +93,7 @@ class ImportIngressScannerTest {
   }
 
   @Test
+  @DisplayName("完成标记为 JSON 形态时先读取校验其内容,再登记文件")
   void scan_readsAndValidatesSidecar_whenDoneFileFormatIsJsonAlias() {
     scannerProperties.setRequireDoneFile(true);
     scannerProperties.setDefaultBizDate("2026-07-23");
@@ -113,6 +117,7 @@ class ImportIngressScannerTest {
   }
 
   @Test
+  @DisplayName("标记模式保持向后兼容,不读取标记文件内容")
   void scan_keepsMarkerModeBackwardCompatible_withoutReadingSidecar() {
     scannerProperties.setRequireDoneFile(true);
     scannerProperties.setDefaultBizDate("2026-07-23");

@@ -15,6 +15,7 @@ import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
 import java.util.HashMap;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -23,6 +24,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("导入接收阶段载荷限制单测:体积上限,入参校验与存储路径唯一性语义")
 class ReceiveStepPayloadSizeLimitTest {
 
   @Mock
@@ -56,6 +58,7 @@ class ReceiveStepPayloadSizeLimitTest {
   }
 
   @Test
+  @DisplayName("载荷未超限时不会因体积被拒,错误码不是超限")
   void execute_payloadWithinLimit_doesNotFailOnSizeCheck() {
     String payload = "{\"templateCode\":\"T1\",\"content\":\"small\"}";
     ImportJobContext ctx = buildContext("t1", payload);
@@ -66,6 +69,7 @@ class ReceiveStepPayloadSizeLimitTest {
   }
 
   @Test
+  @DisplayName("载荷超过上限时失败,返回超限错误并说明原因")
   void execute_payloadExceedsLimit_returnsTooLargeFailure() {
     // 2 MB payload
     String payload = "x".repeat(2 * 1024 * 1024);
@@ -78,6 +82,7 @@ class ReceiveStepPayloadSizeLimitTest {
   }
 
   @Test
+  @DisplayName("上下文为空时失败,返回接收阶段非法")
   void execute_nullContext_returnsInvalidFailure() {
     ImportStageResult result = receiveStep.execute(null);
     assertThat(result.success()).isFalse();
@@ -85,6 +90,7 @@ class ReceiveStepPayloadSizeLimitTest {
   }
 
   @Test
+  @DisplayName("租户标识为空时失败,返回接收阶段非法")
   void execute_blankTenantId_returnsInvalidFailure() {
     ImportJobContext ctx = buildContext("", "{\"content\":\"x\"}");
     ImportStageResult result = receiveStep.execute(ctx);
@@ -93,6 +99,7 @@ class ReceiveStepPayloadSizeLimitTest {
   }
 
   @Test
+  @DisplayName("原始载荷为空时失败,返回接收阶段非法")
   void execute_blankPayload_returnsInvalidFailure() {
     ImportJobContext ctx = buildContext("t1", "");
     ImportStageResult result = receiveStep.execute(ctx);
@@ -101,6 +108,7 @@ class ReceiveStepPayloadSizeLimitTest {
   }
 
   @Test
+  @DisplayName("同一链路下不同任务生成各自存储路径,互不覆盖")
   void execute_sameTraceUsesTaskIdToKeepGeneratedStoragePathUnique() {
     when(runtimeRepository.createFileRecord(any())).thenReturn(101L, 102L);
     ImportJobContext first = buildContext("t1", "{\"templateCode\":\"T1\",\"content\":\"a\"}");

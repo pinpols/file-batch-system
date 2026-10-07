@@ -11,6 +11,7 @@ import io.github.pinpols.batch.worker.imports.runtime.ImportIngressScanner;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,6 +46,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
       "batch.worker.import.scanner.batch-manifest-enabled=true"
     })
 @EnabledIf("s3BackendActive")
+@DisplayName("导入入口扫描集成测试:对象存储文件发现,登记幂等与批次清单元数据回填")
 class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
 
   @DynamicPropertySource
@@ -59,6 +61,7 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
   private PlatformFileRecordRepository runtimeRepository;
 
   @Test
+  @DisplayName("扫描发现新文件后登记为平台文件记录,状态与字节数均正确")
   void shouldRegisterDiscoveredFileInPlatformDb() throws Exception {
     String objectName = "ingress/it-scan-test.csv";
     String bucket = s3Bucket();
@@ -93,6 +96,7 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("重复扫描同一文件不产生重复记录,记录标识保持不变")
   void shouldNotRegisterAlreadyKnownFile() throws Exception {
     String objectName = "ingress/it-scan-already-known.csv";
     String bucket = s3Bucket();
@@ -128,6 +132,7 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("新版批次清单里的按文件模板与作业标识写入文件记录元数据")
   void shouldPersistBundleTemplateCodeFromV2Manifest() throws Exception {
     String bucket = s3Bucket();
     String dataObject = "ingress/order-it.csv";
@@ -180,6 +185,7 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("数据先到,清单后到时补写批次元数据,含所需文件集与模板")
   void shouldBackfillBundleMetadataWhenDataArrivesBeforeManifest() throws Exception {
     String bucket = s3Bucket();
     String suffix = String.valueOf(System.nanoTime());

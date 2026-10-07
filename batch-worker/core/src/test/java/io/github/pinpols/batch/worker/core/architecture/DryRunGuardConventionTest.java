@@ -13,6 +13,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -40,6 +41,7 @@ import org.junit.jupiter.api.Test;
  * result_version DRY_RUN 状态串通。本测试是收尾守护，固化"哪些 step 必须 guard"的工程契约，避免后续新加 plugin 漏 guard 让 dry-run
  * 边界裂开。
  */
+@DisplayName("试运行守卫约定: 步骤插件的副作用分类与守卫接入守护")
 class DryRunGuardConventionTest {
 
   /** 副作用（写业务表 / 外部投递 / file_record 注册等）必须用 DryRunGuard 短路的 plugin。 */
@@ -118,7 +120,8 @@ class DryRunGuardConventionTest {
   private static final String SUSPICIOUS_ALLOW_MARKER = "dry-run-allow-internal";
 
   @Test
-  void everyStepPluginMustBeClassified() throws IOException {
+  @DisplayName("扫描各 Worker 模块的步骤插件, 每个都必须登记为有副作用或只读两类之一, 且守卫接入与登记一致")
+  void shouldClassifyEveryStepPlugin_whenScanningWorkerModules() throws IOException {
     Path repoRoot = locateRepositoryRoot();
     List<String> unclassified = new ArrayList<>();
     List<String> guardedButMissingImport = new ArrayList<>();

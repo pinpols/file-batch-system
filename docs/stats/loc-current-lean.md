@@ -1,19 +1,19 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `2eb5c86e9`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `d10313a91`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,718 | 493,473 | 250,680 | 50.8% |
+| 4,718 | 494,805 | 252,006 | 50.9% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
 | prod | 2,738 | 250,496 | 114,630 | 45.8% |
-| test | 1,209 | 175,845 | 94,208 | 53.6% |
+| test | 1,209 | 177,177 | 95,534 | 53.9% |
 | script | 625 | 51,383 | 31,917 | 62.1% |
 | config | 53 | 8,156 | 5,855 | 71.8% |
 | infra-config | 32 | 5,332 | 3,901 | 73.2% |
@@ -23,7 +23,7 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,477 | 359,088 | 183,018 | 51.0% |
+| Java | 3,477 | 360,420 | 184,344 | 51.1% |
 | Shell | 196 | 29,922 | 23,311 | 77.9% |
 | Python | 233 | 33,539 | 17,012 | 50.7% |
 | YAML | 95 | 12,437 | 9,417 | 75.7% |

@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
  *   <li>{@code batch.dispatch.circuits.open} gauge 反映 circuit breaker 实时开路数
  * </ul>
  */
+@DisplayName("Dispatch 投递指标采集:按渠道类型与投递结果分桶计数,并暴露熔断开路的实时数量")
 class DispatchDeliveryMetricsTest {
 
   private SimpleMeterRegistry registry;
@@ -35,7 +36,7 @@ class DispatchDeliveryMetricsTest {
   }
 
   @Test
-  @DisplayName("success → result=success counter +1")
+  @DisplayName("投递成功时,成功结果分桶的计数累加一")
   void shouldRecordSuccessCounter_whenSuccessTrue() {
     metrics.recordDelivery("SFTP", true, false);
 

@@ -8,10 +8,12 @@ import java.util.Map;
 import java.util.Set;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.BeanFactory;
 
 /** SPI 加固相关单测:DO 块分类 + dataSourceBean 白名单。无 docker / 无真实 BeanFactory。 */
+@DisplayName("数据库执行器加固: 语句类型识别与数据源白名单")
 class SqlTaskExecutorHardeningTest {
 
   private SqlExecutorProperties props;
@@ -29,12 +31,14 @@ class SqlTaskExecutorHardeningTest {
   // ─── (a) DO block → DDL ──────────────────────────────────────────────────────
 
   @Test
-  void doBlockIsClassifiedAsDdl() {
+  @DisplayName("匿名代码块语句应被识别为结构变更类型")
+  void shouldClassifyAsDdl_whenStatementIsDoBlock() {
     assertThat(SqlTaskExecutor.detectStatementType("DO $$ BEGIN END $$")).isEqualTo("DDL");
   }
 
   @Test
-  void doBlockLowercaseStillDdl() {
+  @DisplayName("匿名代码块使用小写关键字时仍应识别为结构变更类型")
+  void shouldClassifyAsDdl_whenDoBlockLowercase() {
     assertThat(SqlTaskExecutor.detectStatementType("do $$ begin perform 1; end $$"))
         .isEqualTo("DDL");
   }
@@ -42,7 +46,8 @@ class SqlTaskExecutorHardeningTest {
   // ─── (b) resolveDataSourceBeanName allowlist ─────────────────────────────────
 
   @Test
-  void rejectsDataSourceBeanNotInAllowlist() {
+  @DisplayName("指定的数据源不在白名单内时应拒绝执行并给出提示")
+  void shouldReject_whenDataSourceBeanNotAllowed() {
     props.setDataSourceBeanName("primaryDs");
     props.setAllowedDataSourceBeans(Set.of("reportingDs"));
 
@@ -54,7 +59,8 @@ class SqlTaskExecutorHardeningTest {
   }
 
   @Test
-  void acceptsConfiguredDefaultBeanEvenWhenAllowlistEmpty() {
+  @DisplayName("白名单为空时配置的默认数据源仍应可用, 保证默认路径不被误伤")
+  void shouldAcceptConfiguredDefault_whenAllowlistEmpty() {
     props.setDataSourceBeanName("primaryDs");
     props.setAllowedDataSourceBeans(Set.of());
 
@@ -65,7 +71,8 @@ class SqlTaskExecutorHardeningTest {
   }
 
   @Test
-  void acceptsBeanInAllowlist() {
+  @DisplayName("数据源在白名单内时应允许使用")
+  void shouldAccept_whenDataSourceBeanInAllowlist() {
     props.setDataSourceBeanName("primaryDs");
     props.setAllowedDataSourceBeans(Set.of("reportingDs"));
 
@@ -75,14 +82,16 @@ class SqlTaskExecutorHardeningTest {
   }
 
   @Test
-  void fallsBackToConfiguredWhenParamMissing() {
+  @DisplayName("未指定数据源参数时应回退到配置的默认数据源")
+  void shouldFallBackToConfigured_whenParamMissing() {
     props.setDataSourceBeanName("primaryDs");
 
     assertThat(executor.resolveDataSourceBeanName(Map.of())).isEqualTo("primaryDs");
   }
 
   @Test
-  void returnsNullWhenNoConfiguredAndNoParam() {
+  @DisplayName("既无配置也未传参数时应返回空, 由上层决定默认数据源")
+  void shouldReturnNull_whenNeitherConfiguredNorParam() {
     props.setDataSourceBeanName(null);
 
     assertThat(executor.resolveDataSourceBeanName(Map.of())).isNull();

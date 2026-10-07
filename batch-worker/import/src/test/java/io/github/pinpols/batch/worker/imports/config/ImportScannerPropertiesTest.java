@@ -11,6 +11,7 @@ import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
 
+@DisplayName("导入扫描器配置属性单测:完成标记,清单模式与后缀默认值的绑定语义")
 class ImportScannerPropertiesTest {
 
   @Test

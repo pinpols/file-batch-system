@@ -20,6 +20,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
@@ -28,6 +29,7 @@ import org.springframework.beans.factory.ObjectProvider;
  *
  * <p>覆盖：主续期路径、fast-retry 仅对失败 lease 触发、fast-retry 救回后 metric 计数、 stale 失败计数清理（lease 已下线但计数器残留）。
  */
+@DisplayName("任务租约续期器: 批量续期结果处理, 熔断打开与快速重试")
 class WorkerTaskLeaseRenewerTest {
 
   private ActiveTaskLeaseRegistry registry;
@@ -53,6 +55,7 @@ class WorkerTaskLeaseRenewerTest {
   }
 
   @Test
+  @DisplayName("成功续期活跃租约并清除失败计数")
   void shouldRenewActiveLeasesAndClearCountersOnSuccess() {
     ActiveTaskLeaseRegistry.ActiveTaskLease lease = lease("t1", "100", "w1");
     when(registry.snapshot()).thenReturn(List.of(lease));
@@ -65,6 +68,7 @@ class WorkerTaskLeaseRenewerTest {
   }
 
   @Test
+  @DisplayName("续期被拒绝时累计连续失败次数并逐次标记租约丢失")
   void shouldTrackConsecutiveFailureWhenRenewRejected() {
     ActiveTaskLeaseRegistry.ActiveTaskLease lease = lease("t1", "100", "w1");
     when(registry.snapshot()).thenReturn(List.of(lease));
@@ -83,6 +87,7 @@ class WorkerTaskLeaseRenewerTest {
   }
 
   @Test
+  @DisplayName("续期结果要求本地取消时只请求取消, 不标记租约丢失")
   void shouldRequestLocalCancellationWhenRenewReturnsCancelRequested() {
     ActiveTaskLeaseRegistry.ActiveTaskLease lease = lease("t1", "100", "w1");
     when(registry.snapshot()).thenReturn(List.of(lease));
@@ -96,6 +101,7 @@ class WorkerTaskLeaseRenewerTest {
   }
 
   @Test
+  @DisplayName("仅当批量续期抛出传输异常时才打开熔断并记录熔断指标")
   void shouldOpenCircuitOnlyWhenRenewBatchThrowsTransportFailure() {
     ActiveTaskLeaseRegistry.ActiveTaskLease lease = lease("t1", "100", "w1");
     when(registry.snapshot()).thenReturn(List.of(lease));
@@ -112,7 +118,8 @@ class WorkerTaskLeaseRenewerTest {
   }
 
   @Test
-  void fastRetryShouldNoOpWhenNoFailures() {
+  @DisplayName("没有失败租约时快速重试不发起任何客户端调用")
+  void shouldSkipFastRetry_whenNoFailures() {
     when(registry.snapshot()).thenReturn(List.of(lease("t1", "100", "w1")));
 
     renewer.fastRetryFailedLeases();
@@ -123,7 +130,8 @@ class WorkerTaskLeaseRenewerTest {
   }
 
   @Test
-  void fastRetryShouldOnlyTargetFailedLeases() {
+  @DisplayName("快速重试只针对上一轮失败的租约, 救回后累加救回计数")
+  void shouldRetryOnlyFailedLeases_whenFastRetryRuns() {
     ActiveTaskLeaseRegistry.ActiveTaskLease failed = lease("t1", "100", "w1");
     ActiveTaskLeaseRegistry.ActiveTaskLease healthy = lease("t1", "200", "w1");
     when(registry.snapshot()).thenReturn(List.of(failed, healthy));
@@ -152,6 +160,7 @@ class WorkerTaskLeaseRenewerTest {
   }
 
   @Test
+  @DisplayName("租约已从注册表移除时清理残留失败计数, 之后不再触发快速重试")
   void shouldClearStaleCountersWhenLeaseRemovedFromRegistry() {
     ActiveTaskLeaseRegistry.ActiveTaskLease lease = lease("t1", "100", "w1");
     when(registry.snapshot()).thenReturn(List.of(lease));

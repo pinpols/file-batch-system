@@ -36,6 +36,7 @@ import org.springframework.test.context.DynamicPropertySource;
       "batch.worker-sdk.kafka-poll-interval=100ms",
       "batch.worker-sdk.max-concurrent-tasks=2"
     })
+@DisplayName("自托管 Spring 样例 worker 集成测试:校验启动期自动装配与注册上报、内置处理器的自动登记与端到端派单执行,以及未注册任务类型不产生成功回执")
 class SampleSpringWorkerIT {
 
   // 静态生命周期:@DynamicPropertySource 在 Spring 容器启动前求值,需要这时 broker / stub 已就绪。

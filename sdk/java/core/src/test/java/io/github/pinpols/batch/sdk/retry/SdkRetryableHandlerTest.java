@@ -14,6 +14,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** A.4 声明式重试装饰器单测。delay 取 1ms 保持测试快。 */
+@DisplayName("SDK 声明式重试装饰器:按异常类型匹配重试,达上限后按退避策略退出并保留原始异常")
 class SdkRetryableHandlerTest {
 
   private static final SdkTaskContext CTX =

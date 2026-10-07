@@ -18,17 +18,21 @@ import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("导入预处理管道单测:压缩解包,加密解密,摘要校验与旁路模式语义")
 class ImportPreprocessPipelineTest {
 
   @Test
-  void bypassModeShouldSkipChecksumAndCrypto() {
+  @DisplayName("旁路模式开启时跳过摘要校验与加解密,空输入仍为空输出")
+  void shouldSkipChecksumAndCrypto_whenBypassModeEnabled() {
     byte[] out = ImportPreprocessPipeline.run(new byte[0], null, Map.of(), true);
     assertThat(out).isEmpty();
   }
 
   @Test
+  @DisplayName("压缩类型为 gzip 时先解压,输出等于原始内容")
   void shouldGunzipWhenCompressTypeGzip() throws Exception {
     byte[] raw = "hello".getBytes(StandardCharsets.UTF_8);
     ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -42,6 +46,7 @@ class ImportPreprocessPipelineTest {
   }
 
   @Test
+  @DisplayName("压缩类型为 tar 包时,解出首个文件条目")
   void shouldUntarFirstFileEntryWhenCompressTypeTar() throws Exception {
     byte[] raw = """
         id,name
@@ -54,6 +59,7 @@ class ImportPreprocessPipelineTest {
   }
 
   @Test
+  @DisplayName("压缩类型为 tar 加点 gzip 时,先解压再解包")
   void shouldUntarGzWhenCompressTypeTarGz() throws Exception {
     byte[] raw = """
         a,b
@@ -70,6 +76,7 @@ class ImportPreprocessPipelineTest {
   }
 
   @Test
+  @DisplayName("显式管道指定条目名时,解出对应文件内容")
   void shouldUntarSelectEntryByNameViaExplicitPipeline() throws Exception {
     // 多文件 tar:显式 entryName 选第二个,验证不是盲取首条
     LinkedHashMap<String, byte[]> entries = new LinkedHashMap<>();
@@ -84,6 +91,7 @@ class ImportPreprocessPipelineTest {
   }
 
   @Test
+  @DisplayName("包内没有文件条目时抛异常")
   void shouldThrowWhenTarHasNoFileEntry() throws Exception {
     byte[] emptyTar = buildTar(new LinkedHashMap<>());
     Map<String, Object> template = Map.of("compress_type", "TAR");
@@ -115,7 +123,8 @@ class ImportPreprocessPipelineTest {
   //   - 合法 key+iv 解密成功
 
   @Test
-  void aesGcmDecryptShouldBeSkippedInBypassMode() {
+  @DisplayName("旁路模式开启时不尝试解密,密文原样输出")
+  void shouldSkipDecryption_whenBypassModeEnabled() {
     // 编了一坨非法密文,bypass=true 下应直接放过,不会被强制解密失败
     byte[] garbage = "not-real-aes-cipher".getBytes(StandardCharsets.UTF_8);
     Map<String, Object> template = Map.of("encrypt_type", "AES");
@@ -124,7 +133,8 @@ class ImportPreprocessPipelineTest {
   }
 
   @Test
-  void aesGcmDecryptShouldFailFastWhenKeyMissingInProdMode() {
+  @DisplayName("生产模式下缺少解密密钥时立即失败")
+  void shouldFailFast_whenDecryptionKeyMissingInProdMode() {
     // 异常数据事故的精确回归:bypass=false + AES 但未提供 key/iv → 必抛
     byte[] anyBytes = "anything".getBytes(StandardCharsets.UTF_8);
     Map<String, Object> template = Map.of("encrypt_type", "AES");
@@ -134,7 +144,8 @@ class ImportPreprocessPipelineTest {
   }
 
   @Test
-  void aesGcmDecryptShouldSucceedWithKeyAndIvInMetadata() throws Exception {
+  @DisplayName("载荷元数据提供密钥与初始向量时解密成功,还原明文")
+  void shouldDecrypt_whenKeyAndIvProvidedInMetadata() throws Exception {
     // 全链路真实路径:走 metadata.decryptAesKeyBase64 / decryptAesIvBase64
     byte[] plain = "hello world".getBytes(StandardCharsets.UTF_8);
     byte[] key = new byte[16];
@@ -179,7 +190,8 @@ class ImportPreprocessPipelineTest {
   }
 
   @Test
-  void unsupportedEncryptTypeShouldThrowInProdMode() {
+  @DisplayName("生产模式下加密类型不受支持时直接抛异常")
+  void shouldThrow_whenEncryptTypeUnsupportedInProdMode() {
     // 防御未来 encrypt_type 扩展时 worker 静默吃掉
     byte[] anyBytes = "x".getBytes(StandardCharsets.UTF_8);
     Map<String, Object> template = Map.of("encrypt_type", "FUTURE_ALGO");
@@ -188,7 +200,8 @@ class ImportPreprocessPipelineTest {
   }
 
   @Test
-  void encryptTypeNoneShouldPassThroughUnchanged() {
+  @DisplayName("加密类型为不加密时,内容原样通过")
+  void shouldPassThrough_whenEncryptTypeIsNone() {
     byte[] raw = "plain".getBytes(StandardCharsets.UTF_8);
     Map<String, Object> template = Map.of("encrypt_type", "NONE");
     // bypass=true 跳过 implicit checksum 校验,直接验证 NONE 不被当成解密算法
@@ -197,7 +210,8 @@ class ImportPreprocessPipelineTest {
   }
 
   @Test
-  void verifyDigestShouldPassWhenChecksumMatches() throws Exception {
+  @DisplayName("摘要与声明校验和一致时校验通过,内容原样输出")
+  void shouldPassDigestVerification_whenChecksumMatches() throws Exception {
     byte[] raw = "abc".getBytes(StandardCharsets.UTF_8);
     MessageDigest md = MessageDigest.getInstance("SHA-256");
     String expectedHex = HexFormat.of().formatHex(md.digest(raw));
@@ -215,7 +229,8 @@ class ImportPreprocessPipelineTest {
   }
 
   @Test
-  void verifyDigestShouldThrowWhenChecksumMismatches() {
+  @DisplayName("摘要与声明校验和不一致时抛异常")
+  void shouldThrow_whenChecksumMismatches() {
     byte[] raw = "abc".getBytes(StandardCharsets.UTF_8);
     Map<String, Object> step = Map.of(
         "type",
@@ -230,7 +245,8 @@ class ImportPreprocessPipelineTest {
   }
 
   @Test
-  void implicitChecksumShouldVerifyRawBytesBeforeImplicitTransform() throws Exception {
+  @DisplayName("隐式校验和针对变换前的原始字节校验,再执行后续变换")
+  void shouldVerifyRawBytes_whenImplicitChecksumConfigured() throws Exception {
     byte[] plain = "hello".getBytes(StandardCharsets.UTF_8);
     byte[] gz = gzip(plain);
     String rawChecksum =
@@ -267,6 +283,7 @@ class ImportPreprocessPipelineTest {
   }
 
   @Test
+  @DisplayName("管道以 JSON 描述时正常解析,并跳过未写类型的步骤")
   void shouldParseJsonPipelineAndSkipBlankStepType() {
     byte[] raw = "hello".getBytes(StandardCharsets.UTF_8);
     String pipeline = """
@@ -283,6 +300,7 @@ class ImportPreprocessPipelineTest {
   }
 
   @Test
+  @DisplayName("转码前剥离字节序标记,再按目标编码转码")
   void charsetTranscode_shouldStripUtf8BomBeforeTranscoding() {
     // UTF-8 BOM + 内容，转码到 UTF-16BE 后 BOM 不应出现在业务内容里
     byte[] bom = new byte[] {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};

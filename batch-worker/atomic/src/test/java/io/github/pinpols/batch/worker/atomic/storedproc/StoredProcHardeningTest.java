@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.Set;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.BeanFactory;
 
@@ -29,6 +30,7 @@ import org.springframework.beans.factory.BeanFactory;
  * 相关位(search_path / has_function_privilege / prokind)只能在 testcontainers IT 真测,见 {@code
  * StoredProcHardeningIntegrationTest}(本仓库不在此运行)。
  */
+@DisplayName("存储过程加固: 数据源白名单与游标结果截断")
 class StoredProcHardeningTest {
 
   private StoredProcExecutorProperties props;
@@ -66,7 +68,8 @@ class StoredProcHardeningTest {
   // ─── (b) dataSourceBean 不在白名单 → 拒绝 ──────────────────────────────────────
 
   @Test
-  void rejectsDataSourceBeanNotInAllowlist() {
+  @DisplayName("指定未授权数据源时应判失败, 并提示数据源不被允许")
+  void shouldReject_whenDataSourceBeanNotAllowed() {
     // allowedDataSourceBeans 默认空 + 配置默认为 null → 任意覆盖都拒
     TaskResult r =
         executor.execute(ctx(Map.of("procedureName", "batch.p", "dataSourceBean", "rogueDs")));
@@ -76,7 +79,8 @@ class StoredProcHardeningTest {
   }
 
   @Test
-  void resolveDataSourceBeanHelperContract() {
+  @DisplayName("解析数据源时应支持缺省回退与白名单放行, 越权请求直接抛出")
+  void shouldResolveDataSourceBean_whenRequestedAbsentOrAllowed() {
     // null requested → 返回 configured
     assertThat(StoredProcTaskExecutor.resolveDataSourceBean(null, "mainDs", Set.of()))
         .isEqualTo("mainDs");
@@ -95,7 +99,8 @@ class StoredProcHardeningTest {
   }
 
   @Test
-  void allowsDataSourceBeanWhenInAllowlist() throws Exception {
+  @DisplayName("白名单内的数据源应可用于执行并成功返回")
+  void shouldAllowDataSourceBean_whenInAllowlist() throws Exception {
     props.setDataSourceBeanName("mainDs");
     props.setAllowedDataSourceBeans(Set.of("reportingDs"));
     Connection conn = mock(Connection.class);
@@ -117,7 +122,8 @@ class StoredProcHardeningTest {
   // ─── (c) maxRefCursorRows 截断 ────────────────────────────────────────────────
 
   @Test
-  void refCursorTruncatesBeyondCap() throws Exception {
+  @DisplayName("游标结果超过行数上限时应截断到上限, 并标记已截断")
+  void shouldTruncateRefCursor_whenRowsExceedCap() throws Exception {
     props.setMaxRefCursorRows(3);
     CallableStatement cs = wireConnection();
 
@@ -148,7 +154,8 @@ class StoredProcHardeningTest {
   }
 
   @Test
-  void refCursorNotTruncatedWhenUnderCap() throws Exception {
+  @DisplayName("游标结果未超过上限时应完整返回, 且不标记截断")
+  void shouldKeepRefCursor_whenRowsUnderCap() throws Exception {
     props.setMaxRefCursorRows(10);
     CallableStatement cs = wireConnection();
 

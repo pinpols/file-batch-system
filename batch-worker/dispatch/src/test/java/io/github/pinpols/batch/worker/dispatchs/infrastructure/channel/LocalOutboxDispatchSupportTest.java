@@ -8,12 +8,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+@DisplayName("本地出箱分发:沙箱内写出信封与旁挂清单,以及目标目录越出沙箱根时的拒绝")
 class LocalOutboxDispatchSupportTest {
 
   @Test
+  @DisplayName("在沙箱内写出信封与旁挂校验文件,清单引用带校验和并落在目标目录")
   void shouldWriteEnvelopeAndSidecarManifestInsideSandbox(@TempDir Path tempDir) throws Exception {
     Path sandbox = tempDir.resolve("sandbox");
     Path target = sandbox.resolve("outbox");
@@ -37,6 +40,7 @@ class LocalOutboxDispatchSupportTest {
   }
 
   @Test
+  @DisplayName("目标目录越出沙箱根时拒绝写入,并说明路径逃逸沙箱根")
   void shouldRejectTargetEndpointEscapingSandbox(@TempDir Path tempDir) throws Exception {
     Path sandbox = tempDir.resolve("sandbox");
     Path outside = tempDir.resolve("outside");

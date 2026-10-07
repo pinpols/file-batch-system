@@ -21,16 +21,20 @@ import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 
+@DisplayName("导出存储阶段单测:校验和确认,加密上传,失败清理与演练语义")
 class StoreStepTest {
 
   @ParameterizedTest
+  @DisplayName("加密或上传失败时删除加密副本,保留原始生成文件")
   @ValueSource(booleans = {true, false})
-  void encryptedCopyIsDeletedOnEncryptionOrUploadFailure(boolean failEncryption) throws Exception {
+  void shouldDeleteEncryptedCopy_whenEncryptionOrUploadFails(boolean failEncryption)
+      throws Exception {
     S3ExportStorage storage = mock(S3ExportStorage.class);
     BatchObjectCryptoService crypto = mock(BatchObjectCryptoService.class);
     when(crypto.shouldEncrypt(any())).thenReturn(true);
@@ -62,6 +66,7 @@ class StoreStepTest {
   }
 
   @Test
+  @DisplayName("演练模式只计算校验和,不上传不加密也不触碰存储")
   void execute_dryRunComputesChecksumWithoutUploadingOrEncrypting() throws Exception {
     S3ExportStorage storage = mock(S3ExportStorage.class);
     BatchObjectCryptoService crypto = mock(BatchObjectCryptoService.class);
@@ -83,6 +88,7 @@ class StoreStepTest {
   }
 
   @Test
+  @DisplayName("缺少生成文件路径时返回存储阶段非法,不发起上传")
   void execute_returnsInvalid_whenGeneratedFilePathMissing() {
     S3ExportStorage storage = mock(S3ExportStorage.class);
     BatchObjectCryptoService crypto = mock(BatchObjectCryptoService.class);
@@ -99,6 +105,7 @@ class StoreStepTest {
   }
 
   @Test
+  @DisplayName("生成文件在磁盘上不存在时返回存储阶段非法")
   void execute_returnsInvalid_whenGeneratedFileMissingOnDisk() {
     S3ExportStorage storage = mock(S3ExportStorage.class);
     BatchObjectCryptoService crypto = mock(BatchObjectCryptoService.class);
@@ -119,6 +126,7 @@ class StoreStepTest {
   }
 
   @Test
+  @DisplayName("校验和一致时上传并转正对象,随后删除本地生成文件")
   void execute_uploadsAndPromotes_whenDigestMatches_andDeletesLocalFile() throws Exception {
     S3ExportStorage storage = mock(S3ExportStorage.class);
     BatchObjectCryptoService crypto = mock(BatchObjectCryptoService.class);
@@ -154,6 +162,7 @@ class StoreStepTest {
   }
 
   @Test
+  @DisplayName("模板要求加密时先生成密文再上传,上传后清理密文副本")
   void execute_encryptsBeforeUpload_whenTemplateRequiresEncryption() throws Exception {
     S3ExportStorage storage = mock(S3ExportStorage.class);
     BatchObjectCryptoService crypto = mock(BatchObjectCryptoService.class);

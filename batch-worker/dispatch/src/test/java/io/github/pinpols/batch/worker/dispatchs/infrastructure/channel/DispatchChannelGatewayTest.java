@@ -17,8 +17,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("渠道分发网关:适配器解析与投递记账、健康与熔断拦截、许可释放与回读守卫")
 class DispatchChannelGatewayTest {
 
   private DispatchChannelAdapter httpAdapter;
@@ -50,6 +52,7 @@ class DispatchChannelGatewayTest {
   }
 
   @Test
+  @DisplayName("有适配器支持该渠道类型时投递成功,并按正常结果记录投递指标")
   void shouldDispatchSuccessfullyViaMatchingAdapter() {
     DispatchResult success = new DispatchResult(true, "req-1", null, true, false, "ok", null);
     when(httpAdapter.dispatch(any())).thenReturn(success);
@@ -61,6 +64,7 @@ class DispatchChannelGatewayTest {
   }
 
   @Test
+  @DisplayName("适配器投递失败时结果判失败,并按失败结果记录投递指标")
   void shouldRecordCircuitBreakerFailureOnAdapterFailure() {
     DispatchResult failure = new DispatchResult(false, null, null, false, false, "timeout", null);
     when(httpAdapter.dispatch(any())).thenReturn(failure);
@@ -72,6 +76,7 @@ class DispatchChannelGatewayTest {
   }
 
   @Test
+  @DisplayName("健康检查拒绝投递时直接失败并给出退避原因,不调用适配器且按熔断拒绝计数")
   void shouldBlockWhenHealthServiceRejectsDispatch() {
     when(healthService.allowDispatch(any())).thenReturn(false);
 
@@ -84,6 +89,7 @@ class DispatchChannelGatewayTest {
   }
 
   @Test
+  @DisplayName("渠道已熔断开路时直接失败并给出开路原因,不调用适配器且按熔断拒绝计数")
   void shouldBlockWhenCircuitIsOpen() {
     // trigger the circuit open via real circuit breaker
     DispatchCircuitBreakerProperties cbProps = new DispatchCircuitBreakerProperties();
@@ -107,6 +113,7 @@ class DispatchChannelGatewayTest {
   }
 
   @Test
+  @DisplayName("没有任何适配器支持该渠道类型时抛出非法状态,并说明不支持的渠道类型")
   void shouldThrowWhenNoAdapterSupportsChannelType() {
     assertThatThrownBy(() -> gateway.dispatch(command("t1", "SFTP", "ch-1")))
         .isInstanceOf(IllegalStateException.class)
@@ -114,6 +121,7 @@ class DispatchChannelGatewayTest {
   }
 
   @Test
+  @DisplayName("多个适配器同时支持同一渠道类型时快速失败,构造网关即报重复适配器")
   void shouldFailFastWhenMultipleAdaptersSupportSameChannelType() {
     DispatchChannelAdapter first = mock(DispatchChannelAdapter.class);
     DispatchChannelAdapter second = mock(DispatchChannelAdapter.class);
@@ -129,6 +137,7 @@ class DispatchChannelGatewayTest {
   // --- I-1 许可泄漏兜底:allow() 后逃逸异常必须配对释放熔断许可,否则 HALF_OPEN 永久 brick ---
 
   @Test
+  @DisplayName("适配器投递抛异常时熔断许可被释放,异常继续向上抛出")
   void shouldReleasePermitWhenAdapterDispatchThrows() {
     DispatchChannelCircuitBreaker cb = mock(DispatchChannelCircuitBreaker.class);
     when(cb.allow(anyString())).thenReturn(true);
@@ -144,6 +153,7 @@ class DispatchChannelGatewayTest {
   }
 
   @Test
+  @DisplayName("解析适配器阶段抛异常时熔断许可同样被释放,异常继续向上抛出")
   void shouldReleasePermitWhenAdapterResolutionThrows() {
     DispatchChannelCircuitBreaker cb = mock(DispatchChannelCircuitBreaker.class);
     when(cb.allow(anyString())).thenReturn(true);
@@ -158,6 +168,7 @@ class DispatchChannelGatewayTest {
   }
 
   @Test
+  @DisplayName("半开探测抛异常耗尽试探预算后,冷却结束仍可再探测,渠道不会被永久卡死")
   void shouldNotPermanentlyBrickKeyWhenHalfOpenProbeThrows() throws InterruptedException {
     // 真实 breaker 端到端:HALF_OPEN 探测抛异常若不释放许可,该 key 会永久卡半开;验证释放后可恢复。
     DispatchCircuitBreakerProperties cbProps = new DispatchCircuitBreakerProperties();
@@ -188,6 +199,7 @@ class DispatchChannelGatewayTest {
   }
 
   @Test
+  @DisplayName("非官方渠道类型在查适配器之前就被拒绝,并计入失败投递指标")
   void shouldRejectNonOfficialChannelTypeBeforeAdapterLookup() {
     DispatchResult result = gateway.dispatch(command("t1", "WEBHOOK_RAW", "ch-1"));
 
@@ -199,6 +211,7 @@ class DispatchChannelGatewayTest {
   }
 
   @Test
+  @DisplayName("回读大小遇到未知渠道类型时在查适配器之前返回空,完全不触碰适配器")
   void readbackSize_rejectsUnknownChannelType_beforeAdapterLookup() {
     OptionalLong result = gateway.readbackSize(command("t1", "WEBHOOK_RAW", "ch-1"));
 
@@ -208,6 +221,7 @@ class DispatchChannelGatewayTest {
   }
 
   @Test
+  @DisplayName("回读大小遇到空白渠道类型时返回空,完全不触碰适配器")
   void readbackSize_rejectsBlankChannelType() {
     OptionalLong result = gateway.readbackSize(command("t1", "   ", "ch-1"));
 
@@ -217,6 +231,7 @@ class DispatchChannelGatewayTest {
   }
 
   @Test
+  @DisplayName("官方渠道类型大小写不一先归一化再查适配器,投递成功并按规范类型记账")
   void shouldNormalizeOfficialChannelTypeBeforeAdapterLookup() {
     DispatchResult success = new DispatchResult(true, "req-1", null, true, false, "ok", null);
     when(httpAdapter.dispatch(any())).thenReturn(success);
@@ -228,6 +243,7 @@ class DispatchChannelGatewayTest {
   }
 
   @Test
+  @DisplayName("投递结束后把本次结果回报给渠道健康服务")
   void shouldRecordHealthOutcomeAfterDispatch() {
     DispatchResult success = new DispatchResult(true, "req-1", null, true, false, "ok", null);
     when(httpAdapter.dispatch(any())).thenReturn(success);

@@ -15,6 +15,7 @@ import java.time.Duration;
 import java.util.List;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.DockerClientFactory;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -28,6 +29,8 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
  * {@link S3ObjectStore} 契约测试：用 Testcontainers MinIO 跑 put/get/getFrom/statSize/exists/list/delete
  * round-trip。Docker 不可用时整体跳过（不致编译/构建失败）。异常映射的纯单元覆盖见 {@link S3ObjectStoreExceptionMappingTest}。
  */
+@DisplayName(
+    "对象存储 S3 适配层契约(容器化 MinIO 真实端点):上传后存在性与大小可查,整对象与偏移读取内容一致,删除后键不存在,批量删除与空入参处理,预签名上传与下载链接,列举分页游标推进,声明长度不符被拒,缺失对象异常映射")
 class S3ObjectStoreTest {
 
   private static MinioObjectStoreContainer objectStore;
@@ -75,6 +78,7 @@ class S3ObjectStoreTest {
   }
 
   @Test
+  @DisplayName("单对象往返:上传后存在且大小一致,下载内容与原文相同,删除后键不再存在")
   void shouldRoundTripPutGetStatExistsDelete() throws Exception {
     // 准备
     String key = "store/roundtrip.txt";
@@ -95,6 +99,7 @@ class S3ObjectStoreTest {
   }
 
   @Test
+  @DisplayName("批量删除:5 个键一次删除后全部不存在;空列表与空引用入参为无操作且不抛异常")
   void shouldBatchDeleteMany() {
     String prefix = "store/batchdelete/";
     for (int i = 0; i < 5; i++) {
@@ -116,6 +121,7 @@ class S3ObjectStoreTest {
   }
 
   @Test
+  @DisplayName("预签名链接生成:声明支持预签名上传,下载与上传链接均为带桶名的 HTTP 地址且两者不同")
   void shouldGenerateGetAndPutPresignUrls() {
     String key = "store/presign.txt";
     assertThat(store.supportsPresignPut()).isTrue();
@@ -127,6 +133,7 @@ class S3ObjectStoreTest {
   }
 
   @Test
+  @DisplayName("声明长度小于实际内容:上传被拒绝并提示长度不匹配")
   void shouldRejectExtraBytesBeyondDeclaredSize() {
     String key = "store/under-reported.txt";
     byte[] content = "payload-with-extra-bytes".getBytes(StandardCharsets.UTF_8);
@@ -138,6 +145,7 @@ class S3ObjectStoreTest {
   }
 
   @Test
+  @DisplayName("偏移读取:从指定偏移读取对象,返回偏移之后的剩余内容")
   void shouldReadFromOffset() throws Exception {
     String key = "store/offset.txt";
     byte[] content = "0123456789".getBytes(StandardCharsets.UTF_8);
@@ -149,6 +157,7 @@ class S3ObjectStoreTest {
   }
 
   @Test
+  @DisplayName("列举分页:首页按上限返回且游标指向第 2 个键,次页从该键之后续读,末页返回剩余项且游标为空")
   void shouldListWithPaginationMarker() {
     String prefix = "store/list/";
     for (int i = 0; i < 5; i++) {
@@ -171,12 +180,14 @@ class S3ObjectStoreTest {
   }
 
   @Test
+  @DisplayName("查询不存在对象的大小:抛对象未找到异常")
   void shouldThrowObjectNotFoundForMissingStat() {
     assertThatThrownBy(() -> store.statSize(bucket, "store/no-such-key.txt"))
         .isInstanceOf(ObjectNotFoundException.class);
   }
 
   @Test
+  @DisplayName("预签名下载链接:包含对象键与签名参数,可直接用于下载")
   void shouldPresignDownloadUrl() {
     String key = "store/presign.txt";
     byte[] body = "presigned".getBytes(StandardCharsets.UTF_8);

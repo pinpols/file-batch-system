@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Set;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -27,6 +28,7 @@ import org.springframework.mock.env.MockEnvironment;
  * (explicit / prod-default / dev-default)+ SQL dialect 容错。
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("原子运行时状态服务: 执行器快照与生效来源分类")
 class AtomicRuntimeStatusServiceTest {
 
   @Mock
@@ -66,6 +68,7 @@ class AtomicRuntimeStatusServiceTest {
   }
 
   @Test
+  @DisplayName("生产档位常规配置下应采集四类执行器的启用状态, 白名单规模与数据库方言")
   void shouldCaptureAllFourExecutorStatuses_underNormalProdConfiguration() throws Exception {
     // 准备:prod profile,http 未显式配置 → enforceAllowlistSource = prod-default
     env.setActiveProfiles("prod");
@@ -116,6 +119,7 @@ class AtomicRuntimeStatusServiceTest {
   }
 
   @Test
+  @DisplayName("环境变量显式配置过接口强制开关时, 来源应标记为显式配置")
   void shouldReportExplicitSource_whenHttpEnforceAllowlistConfiguredInEnvironment() {
     env.setActiveProfiles("prod");
     env.setProperty(HttpExecutorProdDefaults.PROP_ENFORCE_ALLOWLIST, "false");
@@ -127,6 +131,7 @@ class AtomicRuntimeStatusServiceTest {
   }
 
   @Test
+  @DisplayName("非生产档位下接口强制开关的来源应标记为开发默认值")
   void shouldReportDevDefaultSource_whenNotProdProfile() {
     env.setActiveProfiles("dev");
     HttpExecutorProperties http = new HttpExecutorProperties();
@@ -136,6 +141,7 @@ class AtomicRuntimeStatusServiceTest {
   }
 
   @Test
+  @DisplayName("数据源连接失败时数据库方言应回退为未知, 不影响其余状态采集")
   void shouldFallbackUnknownDialect_whenDataSourceConnectionFails() throws Exception {
     SqlExecutorProperties sql = new SqlExecutorProperties();
     sql.setEnabled(true);
@@ -148,6 +154,7 @@ class AtomicRuntimeStatusServiceTest {
   }
 
   @Test
+  @DisplayName("执行器配置 bean 缺失时应返回全部禁用状态, 方言与来源给出占位值")
   void shouldReturnDisabledStatus_whenPropertiesBeansAbsent() {
     when(shellProvider.getIfAvailable()).thenReturn(null);
     when(sqlProvider.getIfAvailable()).thenReturn(null);
