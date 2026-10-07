@@ -147,9 +147,9 @@ kubectl scale deploy/batch-platform-worker-import-bigcorp -n batch --replicas=3
 ## 5. 出口检查表
 
 - [ ] 1 个示范大租户独立 worker pool 跑通（§3）
-- [ ] Helm 模板 `templates/worker-tenant.yaml`（覆盖 import 等全类型）
-- [ ] Kafka topic 自动创建脚本 `scripts/data/init-tenant-topics.sh` + 命名规约（§1）
-- [ ] 本手册 `docs/runbook/per-tenant-worker-onboarding.md`
+- [x] Helm 模板 `templates/worker-tenant.yaml`（覆盖 import 等全类型）
+- [x] Kafka topic 自动创建脚本 `scripts/data/init-tenant-topics.sh` + 命名规约（§1）
+- [x] 本手册 `docs/runbook/per-tenant-worker-onboarding.md`
 - [ ] 故障演练：示范租户 worker 挂 → 其它租户无感（§4）
 - [ ] 自托管租户 Kafka SASL/SCRAM ACL 已 apply,且跨租户 topic 访问被拒(§5.1)
 

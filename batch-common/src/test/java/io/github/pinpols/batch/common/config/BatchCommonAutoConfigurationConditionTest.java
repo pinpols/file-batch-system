@@ -8,6 +8,8 @@ import io.github.pinpols.batch.common.health.BatchStartupSelfCheck;
 import io.github.pinpols.batch.common.health.HikariSaturationHealthIndicator;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
+import io.github.pinpols.batch.common.storage.BatchObjectStore;
+import io.github.pinpols.batch.common.storage.EncryptingObjectStore;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import javax.sql.DataSource;
@@ -67,6 +69,54 @@ class BatchCommonAutoConfigurationConditionTest {
           assertThat(context).hasSingleBean(BatchObjectCryptoService.class);
           assertThat(context).hasSingleBean(SecretPayloadProtector.class);
           assertThat(context).hasNotFailed();
+        });
+  }
+
+  @Test
+  @DisplayName("非旁路环境开启对象加密装饰后,业务注入的是加密对象存储而不是原始后端")
+  void shouldDecorateObjectStore_whenEncryptionDecoratorEnabled() {
+    contextRunner
+        .withConfiguration(AutoConfigurations.of(
+            BatchObjectCryptoAutoConfiguration.class, BatchObjectStoreAutoConfiguration.class))
+        .withPropertyValues(
+            "spring.profiles.active=test",
+            "batch.storage.backend=filesystem",
+            "batch.storage.filesystem.root=${java.io.tmpdir}/batch-object-store-config-test",
+            "batch.storage.s3.endpoint=http://127.0.0.1:9000",
+            "batch.storage.s3.bucket=batch-test",
+            "batch.storage.startup-check.enabled=false",
+            "batch.security.bypass-mode=false",
+            "batch.storage.encryption.decorator-enabled=true",
+            KMS_TEST_KEY)
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          assertThat(context).hasBean("rawObjectStore").hasBean("objectStore");
+          assertThat(context).hasSingleBean(BatchObjectStore.class);
+          assertThat(context.getBean(BatchObjectStore.class))
+              .isInstanceOf(EncryptingObjectStore.class);
+        });
+  }
+
+  @Test
+  @DisplayName("租户提供完整对象存储实现时自动配置退避且不会暴露原始后端为业务候选")
+  void shouldBackOffOuterObjectStore_whenCustomStoreProvided() {
+    contextRunner
+        .withUserConfiguration(CustomObjectStoreConfiguration.class)
+        .withConfiguration(AutoConfigurations.of(BatchObjectStoreAutoConfiguration.class))
+        .withPropertyValues(
+            "spring.profiles.active=test",
+            "batch.security.bypass-mode=true",
+            "batch.storage.backend=filesystem",
+            "batch.storage.filesystem.root=${java.io.tmpdir}/batch-object-store-custom-test",
+            "batch.storage.s3.endpoint=http://127.0.0.1:9000",
+            "batch.storage.s3.bucket=batch-test",
+            "batch.storage.startup-check.enabled=false")
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          assertThat(context).hasBean("rawObjectStore");
+          assertThat(context).hasSingleBean(BatchObjectStore.class);
+          assertThat(context.getBean(BatchObjectStore.class))
+              .isSameAs(context.getBean("customObjectStore"));
         });
   }
 
@@ -168,6 +218,15 @@ class BatchCommonAutoConfigurationConditionTest {
     @Bean
     DataSource secondaryDataSource() {
       return mock(DataSource.class);
+    }
+  }
+
+  @Configuration(proxyBeanMethods = false)
+  static class CustomObjectStoreConfiguration {
+
+    @Bean
+    BatchObjectStore customObjectStore() {
+      return mock(BatchObjectStore.class);
     }
   }
 }

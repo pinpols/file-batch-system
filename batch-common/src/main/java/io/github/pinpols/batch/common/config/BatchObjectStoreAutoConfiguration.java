@@ -38,8 +38,8 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
  * batch.security.bypass-mode=false} 时，最外层 {@link BatchObjectStore} bean 是 {@link
  * EncryptingObjectStore} 包裹的 raw store；否则直接暴露 raw store。
  *
- * <p>raw store bean 命名 {@code rawObjectStore}（用 {@link Qualifier} 区分），业务代码注入的 {@link
- * BatchObjectStore} 始终是最外层 bean。
+ * <p>raw store bean 命名 {@code rawObjectStore}，并由内部持有者隔离类型；业务代码注入的 {@link BatchObjectStore}
+ * 始终是最外层 bean。这样既不会让 raw backend 触发外层的 missing-bean 条件，也保留租户按类型提供完整实现的覆盖能力。
  */
 @AutoConfiguration(after = {S3AutoConfiguration.class, BatchObjectCryptoAutoConfiguration.class})
 @ConditionalOnClass(S3Client.class)
@@ -48,6 +48,7 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
   FilesystemStorageProperties.class,
   StorageBackendGuardProperties.class,
   StorageBackendProperties.class,
+  BatchSecurityProperties.class,
   ObjectStoreEncryptionProperties.class
 })
 @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
@@ -75,26 +76,26 @@ public class BatchObjectStoreAutoConfiguration {
   @Bean(name = "rawObjectStore")
   @ConditionalOnMissingBean(name = "rawObjectStore")
   @ConditionalOnProperty(name = "batch.storage.backend", havingValue = "s3", matchIfMissing = true)
-  public BatchObjectStore s3RawObjectStore(
+  public RawObjectStoreBackend s3RawObjectStore(
       S3Client s3Client, S3Presigner presigner, S3StorageProperties properties) {
-    return new S3ObjectStore(s3Client, presigner, properties);
+    return new RawObjectStoreBackend(new S3ObjectStore(s3Client, presigner, properties));
   }
 
   /** FS 后端 raw 实现。 */
   @Bean(name = "rawObjectStore")
   @ConditionalOnMissingBean(name = "rawObjectStore")
   @ConditionalOnProperty(name = "batch.storage.backend", havingValue = "filesystem")
-  public BatchObjectStore filesystemRawObjectStore(
+  public RawObjectStoreBackend filesystemRawObjectStore(
       FilesystemStorageProperties properties, BatchSecurityProperties securityProperties) {
     String secret = Texts.hasText(properties.getPresignSecret())
         ? properties.getPresignSecret()
         : securityProperties.getInternalSecret();
-    return new FilesystemObjectStore(
+    return new RawObjectStoreBackend(new FilesystemObjectStore(
         properties.getRoot(),
         properties.getDownloadBaseUrl(),
         secret,
         properties.getDefaultPresignTtl(),
-        properties.getMaxListScanEntries());
+        properties.getMaxListScanEntries()));
   }
 
   /**
@@ -105,12 +106,13 @@ public class BatchObjectStoreAutoConfiguration {
   @Bean
   @ConditionalOnMissingBean(BatchObjectStore.class)
   public BatchObjectStore objectStore(
-      @Qualifier("rawObjectStore") BatchObjectStore raw,
+      @Qualifier("rawObjectStore") RawObjectStoreBackend rawBackend,
       BatchSecurityProperties securityProperties,
       ObjectStoreEncryptionProperties encryptionProperties,
       ObjectProvider<BatchObjectCryptoService> cryptoProvider,
       ObjectProvider<BatchKmsProperties> kmsPropertiesProvider,
       ObjectProvider<MeterRegistry> meterRegistryProvider) {
+    BatchObjectStore raw = rawBackend.delegate();
     BatchObjectCryptoService crypto = cryptoProvider.getIfAvailable();
     BatchKmsProperties kmsProperties = kmsPropertiesProvider.getIfAvailable();
     BatchObjectStore store;
@@ -131,6 +133,9 @@ public class BatchObjectStoreAutoConfiguration {
     MeterRegistry registry = meterRegistryProvider.getIfAvailable();
     return registry == null ? store : new MeteredObjectStore(store, registry);
   }
+
+  /** 隔离 raw backend 的容器类型，避免它被业务注入或触发最外层 Bean 的退避条件。 */
+  record RawObjectStoreBackend(BatchObjectStore delegate) {}
 
   /**
    * 对象存储启动冒烟自检（{@code batch.storage.startup-check.enabled=true}，默认开）。

@@ -134,13 +134,13 @@ fixture/mock。
 
 **异构 runner 适配**:TS/Go/Rust 决策核新增 `classifyHeartbeatRenewError`(§C 豁免)+ `decidePausedTaskType`(paused drop),`applyHeartbeatDirective` 补 `DEGRADED` 分支与 `effectiveMaxConcurrent`,`classifyHttp` 已带累计 4xx 阈值(23)。Java `JsonFixtureContractTest` 静态校验全部 30 条(verb + OpenAPI path);请求侧 body 红线仍只覆盖带 `requestBody*` 的 fixture。Python 见下表。
 
-**Python 后续清单(增量 2/3)**:
+**Python 收口清单(增量 2/3)**:
 
 - [x] 23/24/26/27/29 + 21/22:转硬,真实 `PlatformHttpClient` / 分类断言全部通过。
-- [ ] **25-heartbeat-503-no-backoff**:Python `heartbeat` 复用通用 `with_retry`,对所有 5xx 做指数退避,缺 §C 单次豁免分支。补 per-端点 no-backoff 是独立 production retry 行为变更,超出本增量范围 → 暂 `xfail(strict)`,标后续。
-- [ ] **28-kafka-paused-task-type-drop**:Python `dispatcher.apply_platform_directive` 当前只落 `runtimeState`,未在 `on_message` 按 `pausedTaskTypes` 做 per-message drop(directive 已能解析 paused 集合,但不据此丢消息)→ 暂 `xfail(strict)`,补 drop 后驱动 `on_message` 断言不 claim 即转硬。
+- [x] **25-heartbeat-503-no-backoff**:`PlatformHttpClient.heartbeat` 与 `renew` 均显式使用 `max_attempts=1`,单次失败交给下一调度 tick；fixture 已转硬。
+- [x] **28-kafka-paused-task-type-drop**:`TaskDispatcher.on_message` 在 claim 前检查 `pausedTaskTypes`,命中时返回 `WITHHOLD` 且不提交 offset；真实 dispatcher 契约断言已转硬。
 
-> 这两条 Python 后续项均为 strict `xfail`(真实违约才 xfail,实现后会 XPASS 报警提醒转硬),不是静默 skip;TS/Go/Rust/Java 对这两条均已硬断言,parity 不红。
+> 五语言对 25/28 均已有硬断言；后续不得重新改回 `xfail` 或用 fixture-only 结果代替真实 HTTP/dispatcher 行为。
 
 ## 3. 错误码 / 退避 / schemaVersion 的等价规则
 

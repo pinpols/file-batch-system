@@ -2,6 +2,10 @@ variable "APP_IMAGE_TAG" {
   default = "local"
 }
 
+variable "APP_IMAGE_PREFIX" {
+  default = "batch-"
+}
+
 variable "BUILD_REVISION" {
   default = "unknown"
 }
@@ -48,7 +52,7 @@ target "console-api" {
   args = {
     MODULE = "batch-console-api"
   }
-  tags = ["batch-console-api:${APP_IMAGE_TAG}"]
+  tags = ["${APP_IMAGE_PREFIX}console-api:${APP_IMAGE_TAG}"]
 }
 
 target "trigger" {
@@ -56,7 +60,7 @@ target "trigger" {
   args = {
     MODULE = "batch-trigger"
   }
-  tags = ["batch-trigger:${APP_IMAGE_TAG}"]
+  tags = ["${APP_IMAGE_PREFIX}trigger:${APP_IMAGE_TAG}"]
 }
 
 target "orchestrator" {
@@ -64,7 +68,7 @@ target "orchestrator" {
   args = {
     MODULE = "batch-orchestrator"
   }
-  tags = ["batch-orchestrator:${APP_IMAGE_TAG}"]
+  tags = ["${APP_IMAGE_PREFIX}orchestrator:${APP_IMAGE_TAG}"]
 }
 
 target "worker-import" {
@@ -72,7 +76,7 @@ target "worker-import" {
   args = {
     MODULE = "batch-worker-import"
   }
-  tags = ["batch-worker-import:${APP_IMAGE_TAG}"]
+  tags = ["${APP_IMAGE_PREFIX}worker-import:${APP_IMAGE_TAG}"]
 }
 
 target "worker-export" {
@@ -80,7 +84,7 @@ target "worker-export" {
   args = {
     MODULE = "batch-worker-export"
   }
-  tags = ["batch-worker-export:${APP_IMAGE_TAG}"]
+  tags = ["${APP_IMAGE_PREFIX}worker-export:${APP_IMAGE_TAG}"]
 }
 
 target "worker-process" {
@@ -88,7 +92,7 @@ target "worker-process" {
   args = {
     MODULE = "batch-worker-process"
   }
-  tags = ["batch-worker-process:${APP_IMAGE_TAG}"]
+  tags = ["${APP_IMAGE_PREFIX}worker-process:${APP_IMAGE_TAG}"]
 }
 
 target "worker-dispatch" {
@@ -96,7 +100,7 @@ target "worker-dispatch" {
   args = {
     MODULE = "batch-worker-dispatch"
   }
-  tags = ["batch-worker-dispatch:${APP_IMAGE_TAG}"]
+  tags = ["${APP_IMAGE_PREFIX}worker-dispatch:${APP_IMAGE_TAG}"]
 }
 
 target "worker-atomic" {
@@ -104,7 +108,7 @@ target "worker-atomic" {
   args = {
     MODULE = "batch-worker-atomic"
   }
-  tags = ["batch-worker-atomic:${APP_IMAGE_TAG}"]
+  tags = ["${APP_IMAGE_PREFIX}worker-atomic:${APP_IMAGE_TAG}"]
 }
 
 target "ops-toolbox" {
@@ -117,7 +121,7 @@ target "ops-toolbox" {
     MINIO_MC_IMAGE_REPOSITORY = MINIO_MC_IMAGE_REPOSITORY
     MINIO_MC_IMAGE_TAG        = MINIO_MC_IMAGE_TAG
   }
-  tags = ["batch-ops-toolbox:${OPS_TOOLBOX_IMAGE_TAG}"]
+  tags = ["${APP_IMAGE_PREFIX}ops-toolbox:${OPS_TOOLBOX_IMAGE_TAG}"]
 }
 
 group "default" {

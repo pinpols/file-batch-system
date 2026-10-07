@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.core.infrastructure;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.config.OrchestratorClientProperties;
 import io.github.pinpols.batch.common.dto.WorkerHeartbeatDto;
+import io.github.pinpols.batch.common.dto.WorkerHeartbeatResponse;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -44,7 +45,14 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
 
   @Override
   public WorkerRegistration heartbeat(WorkerRegistration registration) {
-    post("/internal/workers/" + registration.getWorkerId() + "/heartbeat", registration);
+    WorkerHeartbeatResponse response = client()
+        .post()
+        .uri("/internal/workers/{workerId}/heartbeat", registration.getWorkerId())
+        .contentType(MediaType.APPLICATION_JSON)
+        .body(toHeartbeatDto(registration))
+        .retrieve()
+        .body(WorkerHeartbeatResponse.class);
+    applyHeartbeatResponse(registration, response);
     return registration;
   }
 
@@ -138,5 +146,18 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
         // file-pipeline worker 非 BYO 自托管 SDK，不上报运行指纹、自定义 taskType 与 wire 协议版本
         // （协议门禁只针对外部 SDK worker 上报的 protocolVersion）。
         .build();
+  }
+
+  void applyHeartbeatResponse(WorkerRegistration registration, WorkerHeartbeatResponse response) {
+    if (EmptyChecks.isNull(registration) || EmptyChecks.isNull(response)) {
+      return;
+    }
+    boolean shouldDrain = response.shouldDrain()
+        || WorkerHeartbeatResponse.STATUS_DRAINING.equals(response.platformStatus());
+    if (shouldDrain) {
+      registration.setStatus(WorkerRegistryStatus.DRAINING.code());
+    } else if (WorkerHeartbeatResponse.STATUS_NORMAL.equals(response.platformStatus())) {
+      registration.setStatus(WorkerRegistryStatus.ONLINE.code());
+    }
   }
 }

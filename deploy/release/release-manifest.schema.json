@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pinpols/file-batch-system/deploy/release/release-manifest.schema.json",
+  "title": "Batch Platform Release Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "releaseId", "createdAt", "commits", "images"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "releaseId": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,128}$"},
+    "createdAt": {"type": "string", "format": "date-time"},
+    "previousStableReleaseId": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Za-z0-9._-]{1,128}$"
+    },
+    "commits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["backend", "frontend"],
+      "properties": {
+        "backend": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "frontend": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+      }
+    },
+    "images": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frontend", "console-api", "trigger", "orchestrator", "worker-import", "worker-export", "worker-process", "worker-dispatch", "worker-atomic"],
+      "properties": {
+        "frontend": {"$ref": "#/$defs/image"},
+        "console-api": {"$ref": "#/$defs/image"},
+        "trigger": {"$ref": "#/$defs/image"},
+        "orchestrator": {"$ref": "#/$defs/image"},
+        "worker-import": {"$ref": "#/$defs/image"},
+        "worker-export": {"$ref": "#/$defs/image"},
+        "worker-process": {"$ref": "#/$defs/image"},
+        "worker-dispatch": {"$ref": "#/$defs/image"},
+        "worker-atomic": {"$ref": "#/$defs/image"}
+      }
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "staging": {"$ref": "#/$defs/verification"},
+        "production": {"$ref": "#/$defs/verification"}
+      }
+    }
+  },
+  "$defs": {
+    "image": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._/-]*@sha256:[0-9a-f]{64}$"},
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {"enum": ["PENDING", "PASSED", "FAILED"]},
+        "verifiedAt": {"type": ["string", "null"], "format": "date-time"},
+        "workflowRunUrl": {
+          "type": ["string", "null"],
+          "format": "uri",
+          "pattern": "^https?://"
+        }
+      }
+    }
+  }
+}

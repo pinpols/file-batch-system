@@ -182,6 +182,40 @@ class AbstractTaskConsumerBackpressureTest {
     verify(executor, never()).executeBatchDetailed(any(), anyString());
   }
 
+  @Test
+  @DisplayName("平台排空时暂停单条和批量监听器, 拒绝新任务并在恢复后重新拉取")
+  void shouldPauseBothListenersAndWithholdTasks_whenPlatformDrains() {
+    KafkaListenerEndpointRegistry registry = mock(KafkaListenerEndpointRegistry.class);
+    MessageListenerContainer singleContainer = mock(MessageListenerContainer.class);
+    MessageListenerContainer batchContainer = mock(MessageListenerContainer.class);
+    when(registry.getListenerContainer("test-listener")).thenReturn(singleContainer);
+    when(registry.getListenerContainer("test-listener-batch")).thenReturn(batchContainer);
+    when(singleContainer.isPauseRequested()).thenReturn(false, true);
+    when(batchContainer.isPauseRequested()).thenReturn(false, true);
+    TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
+    AbstractTaskConsumer consumer = buildConsumer(registry, executor, 1);
+    consumer.initSemaphore();
+
+    consumer.setPlatformDraining(true);
+    String payload = JsonUtils.toJson(new TaskDispatchMessage(
+        "v2", "t1", 1L, null, 1L, null, null, "IMPORT", null, null, "tr", "k", null, null));
+
+    assertThat((boolean) ReflectionTestUtils.invokeMethod(consumer, "doConsume", payload))
+        .isFalse();
+    assertThat((boolean)
+            ReflectionTestUtils.invokeMethod(consumer, "doConsumeBatch", List.of(payload)))
+        .isFalse();
+    verify(executor, never()).execute(any(), anyString());
+    verify(executor, never()).executeBatchDetailed(any(), anyString());
+    verify(singleContainer).pause();
+    verify(batchContainer).pause();
+
+    consumer.setPlatformDraining(false);
+
+    verify(singleContainer).resume();
+    verify(batchContainer).resume();
+  }
+
   // P1-2.2:删除原 shouldExposeRunModeInMdcDuringConsumption 测试。
   // 原测试断言 message.payload 解析后把 run_mode 注入 MDC,P1-2.2 起 message v2 已无 payload,
   // run_mode 改由 worker CLAIM 后通过 EffectiveTaskConfig.payload → ExecutionContext.attributes

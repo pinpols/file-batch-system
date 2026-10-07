@@ -51,9 +51,20 @@ class ConsoleTelemetryControllerTest {
             post("/api/console/telemetry/events")
                 .contentType(APPLICATION_JSON)
                 .content(
-                    "{\"app\":\"console\",\"events\":[{\"type\":\"info\",\"name\":\"page_view\",\"page\":\"/home\"}]}"))
+                    "{\"app\":\"console\",\"events\":[{\"type\":\"route\",\"name\":\"page_view\",\"page\":\"/home\"}]}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
+  }
+
+  @Test
+  @DisplayName("遥测上报:兼容有界的扩展事件类型")
+  void shouldAccept_whenEventTypeIsBoundedExtension() throws Exception {
+    mockMvc
+        .perform(post("/api/console/telemetry/events")
+            .contentType(APPLICATION_JSON)
+            .content(
+                "{\"app\":\"console\",\"events\":[{\"type\":\"custom\",\"name\":\"page_view\"}]}"))
+        .andExpect(status().isOk());
   }
 
   @Test

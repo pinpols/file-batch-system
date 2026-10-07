@@ -1,6 +1,6 @@
 # 前后端持续部署路线：Compose CD → Kubernetes GitOps
 
-> 状态：规划 / 待实施
+> 状态：Phase 1 本地制品与部署脚本已落地；前端制品、GitHub Environments 和 staging/production 接入待外部实施
 > 适用仓库：file-batch-system + batch-console
 > 决策：当前优先 Docker Compose CD；Helm / Kubernetes / Argo CD 保留为后续高可用路线。
 
@@ -104,15 +104,15 @@ Phase 2 继续复用 Phase 1 的 build-once、digest 晋级、release set、stag
 
 ### P0：Compose CD 最小闭环
 
-- [ ] 后端 build-image 输出每个模块 immutable digest。
+- [x] 后端 `docker-image-build` 在 `publish=true` 时推送 SHA 镜像，并输出每个模块 immutable digest 的 backend image set。
 - [ ] 前端 build-image 输出 frontend immutable digest。
-- [ ] 定义统一 release manifest schema、存储和审计方式。
+- [x] 定义统一 release manifest schema、示例、校验器，以及部署机 manifest retention / JSONL 审计方式。
 - [ ] 建立 staging / production GitHub Environments；production 开人工审批。
 - [ ] 配置 staging/prod SSH host、user、key、known_hosts，禁止关闭 host key 校验。
-- [ ] Linux deploy 脚本：precheck → pull → up → health → version/digest verify。
+- [x] Linux deploy 脚本：precheck → pull → up → health → image digest verify。
 - [ ] staging 在制品完成后自动部署。
 - [ ] staging 串联后端 smoke 与前端真实 E2E/Lighthouse。
-- [ ] 保存上一 stable manifest，实现失败自动回滚。
+- [x] 保存上一 stable manifest，实现失败自动回滚。
 - [ ] production 只允许晋级 staging 已通过的同一 release set。
 - [ ] production 发布后再次 health/version/digest verify。
 - [ ] Actions summary 记录目标/上一 digest、环境和结果。
@@ -121,16 +121,16 @@ Phase 2 继续复用 Phase 1 的 build-once、digest 晋级、release set、stag
 
 - [ ] SSH 最小权限部署用户。
 - [ ] GHCR 生产凭据只需 pull。
-- [ ] 同一环境 deployment concurrency lock。
-- [ ] 部署超时、失败日志与容器状态快照。
+- [x] 部署机同一环境进程锁；GitHub Environment concurrency 仍随自动部署工作流补齐。
+- [x] 部署超时、失败日志与容器状态快照。
 - [ ] Flyway 向前兼容/不可逆迁移回滚规则。
-- [ ] 最近 N 个已验证 release set retention。
+- [x] 最近 N 个已验证 release set retention。
 - [ ] 演练前端失败、单后端模块失败、健康失败、SSH 中断、pull 失败。
 - [ ] break-glass 手工发布/回滚 runbook。
 
 ### P2：GitOps / HA
 
-- [ ] 保持 Helm lint、生产 values、安全和配置漂移门禁。
+- [x] Helm lint、生产 values、安全和配置漂移门禁已由 `run-full-regression.sh`、PR Gate 和 Full Gate 持续守护。
 - [ ] 完成 deploy/ha 对应 PG/Kafka/Redis/MinIO 的真实故障演练。
 - [ ] 明确 K8s 节点、故障域、StorageClass、Ingress、Secret 管理。
 - [ ] 建立独立 deployment/ops repo 后再引入 Argo CD。

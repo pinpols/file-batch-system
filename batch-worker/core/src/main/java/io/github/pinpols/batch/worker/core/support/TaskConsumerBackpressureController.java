@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.worker.core.support;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +28,7 @@ final class TaskConsumerBackpressureController {
   private final int maxConcurrentTasks;
   private final Supplier<String> workerTypeSupplier;
   private final AtomicReference<Semaphore> semaphore = new AtomicReference<>();
+  private final AtomicBoolean platformDraining = new AtomicBoolean();
   private final AtomicReference<Counter> pauseCounter = new AtomicReference<>();
   private final AtomicReference<Counter> resumeCounter = new AtomicReference<>();
 
@@ -57,6 +60,21 @@ final class TaskConsumerBackpressureController {
     return Math.max(0, inFlight);
   }
 
+  boolean isPlatformDraining() {
+    return platformDraining.get();
+  }
+
+  void setPlatformDraining(boolean draining, String... containerIds) {
+    platformDraining.set(draining);
+    for (String containerId : containerIds) {
+      if (draining) {
+        pause(containerId);
+      } else {
+        resumeIfPaused(containerId);
+      }
+    }
+  }
+
   void pause(String containerId) {
     MessageListenerContainer container = listenerRegistry.getListenerContainer(containerId);
     if (container == null) {
@@ -80,8 +98,13 @@ final class TaskConsumerBackpressureController {
   }
 
   void resumeIfPaused(String containerId) {
+    Semaphore current = semaphore.get();
+    if (platformDraining.get()
+        || (EmptyChecks.isNotNull(current) && current.availablePermits() <= 0)) {
+      return;
+    }
     MessageListenerContainer container = listenerRegistry.getListenerContainer(containerId);
-    if (container == null) {
+    if (EmptyChecks.isNull(container)) {
       return;
     }
     try {

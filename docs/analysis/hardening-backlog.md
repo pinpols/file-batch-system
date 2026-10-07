@@ -1,6 +1,6 @@
 # 硬化与遗留问题 Backlog
 
-> 滚动版本：**v7**（2026-06-15 校准）。v6 及更早完整清账见归档快照
+> 滚动版本：**v7**（2026-10-07 校准）。v6 及更早完整清账见归档快照
 > [`docs/archive/analysis/hardening-backlog-v6.md`](../archive/analysis/hardening-backlog-v6.md)（v3/v4 同目录）。
 > 维护规则：见底部。
 
@@ -27,11 +27,11 @@ v6 周期（57 项硬化条目）**已实质收敛**。2026-06-15 重新核实�
 |---|---|---|---|
 | **V6-DBA-P1-1/P1-2** | `job_instance` / `workflow_run` 冗余索引 DROP | 🟡 加新已完成，DROP 待取证 | 需生产 `pg_stat_user_indexes.idx_scan` 数据证明旧索引零命中后，发 V14x `DROP INDEX`。流程见 [`runbook/archive/index-consolidation-2026-05.md`](../runbook/archive/index-consolidation-2026-05.md)（V142/V143 已加新索引 + 回退 UNIQUE，无功能缺口，纯瘦身）|
 | **V6-DBA-P1-4** | `ArchiveSchemaDriftCheck` 列**类型/nullability**比对 | ✅ 完成 | `ArchiveSchemaDriftCheck.checkColumnTypesOnStartup()` 已比对 `data_type`、字符长度、数值精度/scale 和限制性 `is_nullable`；`ArchiveSchemaDriftCheckIntegrationTest` 覆盖类型漂移。|
-| **V6-D-5** | Worker 4 模块单测密度补齐 | 待办（低优先）| 各 `Default*StageExecutor` + `*StepExecutionAdapter` 加 5-10 单测；非 blocker，趁改这些类时顺带补 |
-| **V7-TEST-1** | `batch.datasource.business.routing.*` boot 级集成测试 | 待办（低优先）| 组件/RLS IT（`BusinessMultiShardRouting*` / `RlsTenantIsolation*`）已有；补 Testcontainers 起完整 worker 的 enabled=true/false + placement-source=CONFIG/TABLE 开关 IT |
-| **V7-TEST-2** | console security rate-limit 真实 HTTP 限流 IT | 待办（低优先）| `ConsoleRateLimitFilterTest` 已有行为覆盖；补真实 HTTP 请求验证 429（expensive-op / file-op 各一条）|
-| **V7-TEST-3** | `batch.shedlock.provider` jdbc 切换集成测试 | 待办（低优先）| Redis 故障路径已有 `RedisDownToxicIT`；补 jdbc provider 装配/切换 IT（全停→切→全起，验证无重复触发）|
-| **V7-TEST-4** | 其余 P1 开关 IT：`ai.enabled` 开启路径（stub LLM）、`worker.atomic.enabled-task-types` 白名单装配、`storage.encryption.decorator-enabled` 落盘加密、`storage.s3.auto-create-bucket` 建桶行为、`resource-scheduler.default-exceeded-strategy` 超限策略、`file-governance.arrival.require-verified` 到达组拦截 | 待办（低优先）| 目前仅单测或组件级覆盖；按上表逐项补真实链路 IT |
+| **V6-D-5** | Worker 4 模块单测密度补齐 | ✅ 完成 | 4 个 `Default*StageExecutor` 与 Import / Export / Process / Dispatch 的 `*StepExecutionAdapterTest` 已覆盖核心契约；与 `todo-master.md` 状态对齐。|
+| **V7-TEST-1** | `batch.datasource.business.routing.*` boot 级集成测试 | ✅ 本地完成 | `BatchWorkerProcessConfigRoutingIntegrationTest`、`BatchWorkerProcessTableRoutingIntegrationTest` 和既有默认关闭场景以真实 PostgreSQL 启动完整 Process Worker，覆盖 CONFIG / TABLE / disabled。|
+| **V7-TEST-2** | console security rate-limit 真实 HTTP 限流 IT | ✅ 本地完成 | `ConsoleRateLimitHttpIntegrationTest` 通过真实 HTTP Filter 链和 Valkey 验证 expensive-op / file-op 429，并发现及修复 `ConsolePrincipal` 限流键错误。|
+| **V7-TEST-3** | `batch.shedlock.provider=jdbc` 装配与互斥 | 🟡 本地完成，切换演练待 staging | `ShedLockJdbcConfigurationIntegrationTest` 以真实 PostgreSQL 验证 JDBC provider、同名锁互斥和释放后重获；全停→切换→全起且无重复触发仍是 staging 运维演练。|
+| **V7-TEST-4** | 其余 P1 开关验证 | ✅ 本地代码项完成 | AI provider/client 与业务服务、Atomic 白名单、资源超限策略、文件到达校验已有专项测试；对象加密增加自动配置装配测试并修复装饰器被 raw bean 误退避；S3 自动建桶覆盖关闭探测与通用 404 创建。真实 AI provider 仍按受控外部验证，不纳入无密钥 CI。|
 
 ### ❌ 不做（已论证，仅存档）
 

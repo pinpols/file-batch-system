@@ -48,7 +48,6 @@
 
 **Legend**:
 - ✅ 已用 `DownstreamFallback` 接入
-- ⏳ TODO 待迁(目前可能直接调用或散写 try/catch)
 - 🚫 不接入(走业务自己的特殊语义)
 
 ## 原则
@@ -84,15 +83,16 @@ downstream.call.total{service=<svc>, op=<op>, outcome=success|fallback|failure}
 downstream.call.total{service=<svc>, op=<op>, outcome=fallback|failure, exception=<class>}
 ```
 
-Grafana 大盘和告警仍待接入现有观测栈:
+现有观测栈已经接入下游调用计数、fallback 比例和容量/背压告警。生产阈值仍应根据
+staging 流量校准，不能把本地默认值直接当作生产容量结论。重点观察:
 
 - 每个 `service` 的 fallback rate
 - 每个 `service` 的 P99 latency(需另加 Timer)
-- Alertmanager 规则:`fallback rate ≥ 50% for 5m` → page
+- Alertmanager 中的 fallback rate 持续超阈值告警
 
-## 守护(待加)
+## 检查要点
 
-ArchUnit 规则(后续 PR):
+新增或修改 Proxy 时，代码审查应持续检查:
 - 所有 `*ProxyService` 的 public 方法体内不允许直接 `try { ... } catch (RestClientException ...)`,必须走 `DownstreamFallback`
 - 所有 `*ProxyService` 必须构造器注入 `DownstreamFallback`
 
@@ -100,7 +100,7 @@ ArchUnit 规则(后续 PR):
 
 - CircuitBreaker 已接入，配置和调用入口统一在 `DownstreamFallback`。
 - TimeLimiter、Bulkhead 和 RateLimiter 不在当前 Console 降级方案中默认新增；只有出现可复现的线程占用或流量隔离问题时，再按独立变更评估。
-- 当前主要缺口是统一输出 `X-Degraded-Source`、补现有观测指标/告警和增加双实例/真实前端联测，详见完善方案。
+- `X-Degraded-Source`、维护与 fallback 指标/告警已落地；当前剩余边界是双实例和真实前端/staging 联测，详见完善方案。
 
 ## 迁移指南
 
@@ -126,4 +126,4 @@ public List<Foo> listFoos() {
 }
 ```
 
-迁完一个写一个,在本文档的策略表把 ⏳ TODO 改 ✅ + 备注 commit 号。
+新增同步下游调用时，应先在策略表登记读降级或写 fail-fast 语义，再沿用统一入口和测试口径。

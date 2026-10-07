@@ -67,15 +67,16 @@
 - **新 orchestrator + 旧 worker**:✅ 安全。worker 不上报 outputs/errorKey,orchestrator 写入数据库 NULL,DSL 引用按 null fallback。
 - **旧 orchestrator + 新 worker**:⚠️ worker 上报的 outputs/errorKey 字段被 orchestrator 忽略(`@JsonIgnoreProperties(ignoreUnknown = true)` 保护),但 V72/V77/V78/V79 列若未 apply 则 worker → orchestrator 上报后 mapper 写库会失败。**所以 V72/V77/V78/V79 必须先于 worker 升级**。
 
-## Worker 进程侧（建议）
+## Worker 进程侧
 
-本仓库在 Orchestrator/Console 侧提供了排空状态与 API；Worker 进程若需在 `DRAINING` 时 **停止拉取新任务**，应在心跳或配置拉取结果中识别 `DRAINING` 并停止 claim（若尚未实现，请在发布说明中注明当前行为）。
+内置 Worker 会消费心跳响应中的平台指令。收到 `DRAINING` / `shouldDrain=true` 后，单条和批量 Kafka listener 都会暂停；已经进入执行池的任务继续收尾，poll 缓冲中尚未 claim 的消息返回 Kafka 重投。平台恢复 `NORMAL` 且本地仍有执行许可时，listener 才恢复拉取。外部 SDK Worker 仍须按各语言 SDK 的心跳指令契约实现同样语义。
 
 ## 验收核对
 
-- [ ] 能对指定 `workerCode` 发起 drain 并查到 `claimed-tasks`。
-- [ ] 超时后 Orchestrator 能完成接管并将 Worker 标为下线（查 `worker_registry` 或控制台）。
-- [ ] `force-offline` 能在紧急情况下立即移交任务并下线。
+- [x] 本地 E2E：能对指定 `workerCode` 发起 drain 并查到 `claimed-tasks`。
+- [x] 本地 E2E：超时后 Orchestrator 能完成接管并将 Worker 标为下线。
+- [x] 本地 E2E：`force-offline` 能立即移交任务并下线。
+- [ ] staging：验证真实 Pod 排空、监听器暂停、负载均衡、Kafka lag 收敛与操作留痕。
 
 ## 后端本地验收
 

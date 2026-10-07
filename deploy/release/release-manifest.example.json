@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "2026.10.07-example",
+  "createdAt": "2026-10-07T00:00:00Z",
+  "previousStableReleaseId": null,
+  "commits": {
+    "backend": "0000000000000000000000000000000000000000",
+    "frontend": "0000000000000000000000000000000000000000"
+  },
+  "images": {
+    "frontend": "ghcr.io/pinpols/batch-console@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "console-api": "ghcr.io/pinpols/console-api@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "trigger": "ghcr.io/pinpols/trigger@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "orchestrator": "ghcr.io/pinpols/orchestrator@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "worker-import": "ghcr.io/pinpols/worker-import@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "worker-export": "ghcr.io/pinpols/worker-export@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "worker-process": "ghcr.io/pinpols/worker-process@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "worker-dispatch": "ghcr.io/pinpols/worker-dispatch@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "worker-atomic": "ghcr.io/pinpols/worker-atomic@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "verification": {
+    "staging": {"status": "PENDING", "verifiedAt": null, "workflowRunUrl": null},
+    "production": {"status": "PENDING", "verifiedAt": null, "workflowRunUrl": null}
+  }
+}

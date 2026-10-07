@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.domain.PulledTask;
 import io.github.pinpols.batch.worker.core.domain.WorkerExecutionResult;
 import io.github.pinpols.batch.worker.core.support.TaskClaimItem;
@@ -116,6 +117,10 @@ public class TaskDispatchExecutor {
             StructuredLogField.TRACE_ID,
             StructuredLogField.TASK_ID,
             StructuredLogField.JOB_INSTANCE_ID,
+            StructuredLogField.WORKFLOW_RUN_ID,
+            StructuredLogField.PARTITION_ID,
+            StructuredLogField.BATCH_DAY,
+            StructuredLogField.ATTEMPT,
             StructuredLogField.WORKER_TYPE,
             StructuredLogField.WORKER_ID,
             StructuredLogField.RUN_MODE);
@@ -164,10 +169,34 @@ public class TaskDispatchExecutor {
     BatchMdc.put(StructuredLogField.TRACE_ID, message.traceId());
     BatchMdc.put(
         StructuredLogField.TASK_ID,
-        message.taskId() == null ? null : String.valueOf(message.taskId()));
+        EmptyChecks.isNull(message.taskId()) ? null : String.valueOf(message.taskId()));
     BatchMdc.put(
         StructuredLogField.JOB_INSTANCE_ID,
-        message.jobInstanceId() == null ? null : String.valueOf(message.jobInstanceId()));
+        EmptyChecks.isNull(message.jobInstanceId())
+            ? null
+            : String.valueOf(message.jobInstanceId()));
+    BatchMdc.put(
+        StructuredLogField.PARTITION_ID,
+        EmptyChecks.isNull(message.jobPartitionId())
+            ? null
+            : String.valueOf(message.jobPartitionId()));
+    if (EmptyChecks.isNotNull(message.schedulingContext())) {
+      BatchMdc.put(
+          StructuredLogField.WORKFLOW_RUN_ID,
+          EmptyChecks.isNull(message.schedulingContext().workflowRunId())
+              ? null
+              : String.valueOf(message.schedulingContext().workflowRunId()));
+      BatchMdc.put(
+          StructuredLogField.BATCH_DAY,
+          EmptyChecks.isNull(message.schedulingContext().bizDate())
+              ? null
+              : message.schedulingContext().bizDate().toString());
+      BatchMdc.put(
+          StructuredLogField.ATTEMPT,
+          EmptyChecks.isNull(message.schedulingContext().attemptNo())
+              ? null
+              : String.valueOf(message.schedulingContext().attemptNo()));
+    }
     BatchMdc.put(StructuredLogField.WORKER_TYPE, message.workerType());
     BatchMdc.put(StructuredLogField.WORKER_ID, workerId);
   }

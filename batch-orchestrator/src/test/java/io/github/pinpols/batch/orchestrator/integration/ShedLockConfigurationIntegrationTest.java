@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.pinpols.batch.common.config.MeteredLockProvider;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
@@ -16,7 +17,6 @@ import javax.sql.DataSource;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.core.SimpleLock;
-import net.javacrumbs.shedlock.provider.redis.spring.RedisLockProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,7 +55,10 @@ class ShedLockConfigurationIntegrationTest extends AbstractIntegrationTest {
             """, Integer.class);
 
     assertThat(tableCount).isEqualTo(1);
-    assertThat(lockProvider).isInstanceOf(RedisLockProvider.class);
+    assertThat(lockProvider)
+        .isInstanceOfSatisfying(
+            MeteredLockProvider.class,
+            provider -> assertThat(provider.providerType()).isEqualTo("redis"));
     assertThat(dataSource).isNotNull();
   }
 

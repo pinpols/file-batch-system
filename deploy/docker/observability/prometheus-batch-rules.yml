@@ -315,6 +315,18 @@ groups:
           summary: "Redis connected clients are high"
           description: "Redis connected clients stayed above 200 for 10 minutes. Check SSE fanout load, exporter connections, and leaked clients."
 
+      - alert: BatchShedLockProviderFailure
+        expr: sum by (application, provider) (increase(batch_shedlock_acquire_failed_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: scheduler
+        annotations:
+          summary: "ShedLock {{ $labels.provider }} provider is failing"
+          description: "{{ $labels.application }} observed ShedLock provider exceptions for five minutes. Normal lock contention is excluded; inspect Valkey/PostgreSQL connectivity before scheduled work begins to skip repeatedly."
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/distributed-locking-checklist.md"
+
       - alert: BatchConsoleRealtimeReplayCursorMissGrowing
         expr: sum by (stream) (increase(batch_console_realtime_replay_cursor_miss_total[10m])) > 5
         for: 10m

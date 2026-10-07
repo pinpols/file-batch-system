@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
+import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.support.HeartbeatService;
+import io.github.pinpols.batch.worker.core.support.WorkerConsumptionControl;
 import io.github.pinpols.batch.worker.core.support.WorkerLoadProvider;
 import io.github.pinpols.batch.worker.core.support.WorkerSelfRegistrationService;
 import lombok.extern.slf4j.Slf4j;
@@ -26,14 +28,17 @@ public class DefaultHeartbeatService implements HeartbeatService {
   private final WorkerSelfRegistrationService workerRegistryService;
   private final WorkerRuntimeState workerRuntimeState;
   private final ObjectProvider<WorkerLoadProvider> loadProviders;
+  private final ObjectProvider<WorkerConsumptionControl> consumptionControls;
 
   public DefaultHeartbeatService(
       WorkerSelfRegistrationService workerRegistryService,
       WorkerRuntimeState workerRuntimeState,
-      ObjectProvider<WorkerLoadProvider> loadProviders) {
+      ObjectProvider<WorkerLoadProvider> loadProviders,
+      ObjectProvider<WorkerConsumptionControl> consumptionControls) {
     this.workerRegistryService = workerRegistryService;
     this.workerRuntimeState = workerRuntimeState;
     this.loadProviders = loadProviders;
+    this.consumptionControls = consumptionControls;
   }
 
   @Override
@@ -49,10 +54,27 @@ public class DefaultHeartbeatService implements HeartbeatService {
     activeRegistration.setCurrentLoad(collectCurrentLoad());
     activeRegistration = workerRegistryService.renew(activeRegistration);
     workerRuntimeState.put(activeRegistration);
+    applyPlatformDirective(activeRegistration);
     log.debug(
         "worker heartbeat: workerId={} currentLoad={}",
         workerId,
         activeRegistration.getCurrentLoad());
+  }
+
+  private void applyPlatformDirective(WorkerRegistration registration) {
+    boolean draining = WorkerRegistryStatus.DRAINING.code().equals(registration.getStatus())
+        || WorkerRegistryStatus.DECOMMISSIONED.code().equals(registration.getStatus());
+    consumptionControls.orderedStream().forEach(control -> {
+      try {
+        control.setPlatformDraining(draining);
+      } catch (RuntimeException ex) {
+        log.warn(
+            "failed to apply worker platform directive: workerId={}, draining={}, error={}",
+            registration.getWorkerId(),
+            draining,
+            SwallowedExceptionLogger.summary(ex));
+      }
+    });
   }
 
   /** 求和所有 WorkerLoadProvider 实现 (通常是 1 个 AbstractTaskConsumer 子类), 异常静默回退为 0. */

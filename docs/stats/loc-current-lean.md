@@ -1,32 +1,32 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `26a139028`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `0606625af`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,734 | 499,807 | 256,459 | 51.3% |
+| 4,746 | 501,786 | 257,687 | 51.4% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| prod | 2,747 | 250,767 | 114,732 | 45.8% |
-| test | 1,216 | 181,877 | 99,864 | 54.9% |
-| script | 625 | 51,414 | 31,938 | 62.1% |
-| config | 53 | 8,156 | 5,855 | 71.8% |
-| infra-config | 32 | 5,332 | 3,901 | 73.2% |
+| prod | 2,749 | 251,034 | 114,849 | 45.8% |
+| test | 1,224 | 182,972 | 100,487 | 54.9% |
+| script | 627 | 52,007 | 32,404 | 62.3% |
+| config | 53 | 8,168 | 5,866 | 71.8% |
+| infra-config | 32 | 5,344 | 3,912 | 73.2% |
 | sql | 61 | 2,261 | 169 | 7.5% |
 
 ## 按语言
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,492 | 365,373 | 188,753 | 51.7% |
-| Shell | 196 | 29,922 | 23,311 | 77.9% |
-| Python | 234 | 33,608 | 17,059 | 50.8% |
-| YAML | 95 | 12,437 | 9,417 | 75.7% |
+| Java | 3,501 | 366,630 | 189,434 | 51.7% |
+| Shell | 197 | 30,258 | 23,608 | 78.0% |
+| Python | 236 | 33,970 | 17,287 | 50.9% |
+| YAML | 95 | 12,461 | 9,439 | 75.7% |
 | XML | 178 | 21,421 | 6,637 | 31.0% |
 | TypeScript | 37 | 6,632 | 3,124 | 47.1% |
 | Rust | 23 | 8,423 | 2,835 | 33.7% |
@@ -42,8 +42,8 @@
 | `load-tests/scripts/run-p2-capacity-profile.sh` | script | Shell | 1,383 | 1,269 |
 | `batch-common/src/main/resources/messages.properties` | prod | Properties | 1,433 | 1,180 |
 | `batch-common/src/main/resources/messages_zh_CN.properties` | prod | Properties | 1,431 | 1,180 |
-| `deploy/docker/observability/prometheus-batch-rules.yml` | config | YAML | 1,216 | 1,016 |
-| `helm/batch-platform/files/prometheus-batch-rules.yml` | infra-config | YAML | 1,216 | 1,016 |
+| `deploy/docker/observability/prometheus-batch-rules.yml` | config | YAML | 1,228 | 1,027 |
+| `helm/batch-platform/files/prometheus-batch-rules.yml` | infra-config | YAML | 1,228 | 1,027 |
 | `load-tests/scripts/run-control-plane-worker-benchmark.sh` | script | Shell | 879 | 796 |
 | `helm/batch-platform/values.yaml` | infra-config | YAML | 991 | 712 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java` | prod | Java | 1,146 | 645 |
@@ -57,8 +57,8 @@
 | `pom.xml` | config | XML | 764 | 455 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | prod | Java | 1,028 | 451 |
 | `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultFileGovernanceServiceTest.java` | test | Java | 793 | 438 |
+| `batch-worker/core/src/test/java/io/github/pinpols/batch/worker/core/support/AbstractTaskConsumerTest.java` | test | Java | 698 | 433 |
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleConfigApplicationServiceTest.java` | test | Java | 610 | 428 |
-| `scripts/local/pre-push-sdk-checks.sh` | script | Shell | 558 | 424 |
 
 ## 复跑
 
