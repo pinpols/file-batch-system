@@ -278,7 +278,7 @@ public class BatchPlatformClientConfig {
 
   /** 调度器不接受零或负周期；该结构约束不能被 WARN 降级，否则 client 会在后台线程启动后失败。 */
   private static void requirePositiveSchedulerInterval(String name, Duration interval) {
-    if (interval == null || interval.isZero() || interval.isNegative()) {
+    if (EmptyChecks.isNull(interval) || interval.isZero() || interval.isNegative()) {
       throw new IllegalArgumentException(name + " must be > 0, got " + interval);
     }
   }

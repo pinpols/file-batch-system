@@ -288,11 +288,11 @@ public class BatchPlatformClient {
   }
 
   private boolean hasRuntimeResources() {
-    return dispatcher != null
-        || kafkaConsumer != null
-        || kafkaConsumerThread != null
-        || heartbeatScheduler != null
-        || leaseRenewalScheduler != null;
+    return EmptyChecks.isNotNull(dispatcher)
+        || EmptyChecks.isNotNull(kafkaConsumer)
+        || EmptyChecks.isNotNull(kafkaConsumerThread)
+        || EmptyChecks.isNotNull(heartbeatScheduler)
+        || EmptyChecks.isNotNull(leaseRenewalScheduler);
   }
 
   private static long remainingMs(long startNanos, long totalMs) {
