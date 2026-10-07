@@ -1,19 +1,19 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `4c41291c3`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `4262c6b75`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,720 | 498,750 | 255,906 | 51.3% |
+| 4,721 | 498,863 | 255,890 | 51.3% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| prod | 2,739 | 250,446 | 114,617 | 45.8% |
-| test | 1,210 | 181,172 | 99,447 | 54.9% |
+| prod | 2,740 | 250,547 | 114,598 | 45.7% |
+| test | 1,210 | 181,184 | 99,450 | 54.9% |
 | script | 625 | 51,383 | 31,917 | 62.1% |
 | config | 53 | 8,156 | 5,855 | 71.8% |
 | infra-config | 32 | 5,332 | 3,901 | 73.2% |
@@ -23,7 +23,7 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,479 | 364,381 | 188,245 | 51.7% |
+| Java | 3,480 | 364,494 | 188,229 | 51.6% |
 | Shell | 196 | 29,922 | 23,311 | 77.9% |
 | Python | 233 | 33,544 | 17,014 | 50.7% |
 | YAML | 95 | 12,437 | 9,417 | 75.7% |
@@ -56,7 +56,7 @@
 | `scripts/local/be-acceptance.sh` | script | Shell | 612 | 479 |
 | `pom.xml` | config | XML | 764 | 455 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | prod | Java | 1,028 | 451 |
-| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultFileGovernanceServiceTest.java` | test | Java | 790 | 437 |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultFileGovernanceServiceTest.java` | test | Java | 793 | 438 |
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleConfigApplicationServiceTest.java` | test | Java | 610 | 428 |
 | `scripts/local/pre-push-sdk-checks.sh` | script | Shell | 558 | 424 |
 

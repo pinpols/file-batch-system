@@ -70,7 +70,9 @@ public class BundleArrivalLauncher {
 
   /** 到达组满足条件时调用;非束组(无 bundleJobCode)直接返回,不发 launch。 */
   public LaunchOutcome launchIfBundle(
-      String tenantId, String fileGroupCode, List<Map<String, Object>> groupFiles) {
+      String tenantId,
+      String fileGroupCode,
+      List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles) {
     if (groupFiles == null || groupFiles.isEmpty() || !Texts.hasText(tenantId)) {
       return LaunchOutcome.NOT_BUNDLE;
     }
@@ -84,26 +86,28 @@ public class BundleArrivalLauncher {
   }
 
   private BundleLaunchCandidate collectCandidate(
-      String tenantId, String fileGroupCode, List<Map<String, Object>> groupFiles) {
+      String tenantId,
+      String fileGroupCode,
+      List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles) {
     String bundleJobCode = null;
     LocalDate bizDate = null;
     List<Map<String, Object>> bundleFiles = new ArrayList<>();
     boolean bindingWithoutJobCode = false;
     boolean jobCodedMemberWithoutBinding = false;
-    for (Map<String, Object> file : groupFiles) {
-      Map<String, Object> meta = parseMetadata(file.get("metadata_json"));
+    for (FileGovernanceArrivalViews.ArrivalCandidateView file : groupFiles) {
+      Map<String, Object> meta = parseMetadata(file.metadataJson());
       String jobCode = text(meta.get(META_BUNDLE_JOB_CODE));
       String templateCode = text(meta.get(META_BUNDLE_TEMPLATE_CODE));
       String targetRef = text(meta.get(META_BUNDLE_TARGET_REF));
       List<String> exportTemplates = textList(meta.get(META_BUNDLE_EXPORT_TEMPLATES));
       bundleJobCode = mergeJobCode(tenantId, fileGroupCode, bundleJobCode, jobCode);
-      bizDate = mergeBizDate(tenantId, fileGroupCode, bizDate, toLocalDate(file.get("biz_date")));
+      bizDate = mergeBizDate(tenantId, fileGroupCode, bizDate, toLocalDate(file.bizDate()));
       if (jobCode == null
           && (!exportTemplates.isEmpty() || templateCode != null || targetRef != null)) {
         bindingWithoutJobCode = true;
       }
       boolean emittedBinding = appendBundleBindings(
-          bundleFiles, toLong(file.get("id")), templateCode, targetRef, exportTemplates);
+          bundleFiles, file.fileId(), templateCode, targetRef, exportTemplates);
       if (jobCode != null && !emittedBinding) {
         jobCodedMemberWithoutBinding = true;
       }
@@ -298,20 +302,6 @@ public class BundleArrivalLauncher {
       }
     }
     return result;
-  }
-
-  private static Long toLong(Object value) {
-    if (value instanceof Number n) {
-      return n.longValue();
-    }
-    if (value == null) {
-      return null;
-    }
-    try {
-      return Long.parseLong(String.valueOf(value).trim());
-    } catch (NumberFormatException ignored) {
-      return null;
-    }
   }
 
   private static LocalDate toLocalDate(Object value) {

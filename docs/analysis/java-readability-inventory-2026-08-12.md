@@ -7,11 +7,11 @@
 
 | 指标 | 数量 |
 |---|---:|
-| 生产 Java 源文件 | 2389 |
+| 生产 Java 源文件 | 2390 |
 | CGLIB 自注入类 | 0 |
-| `Map<String, Object>` 出现次数 | 2077 |
-| 含 Map 的源文件 | 448 |
-| public Map 契约候选 | 61 |
+| `Map<String, Object>` 出现次数 | 2055 |
+| 含 Map 的源文件 | 449 |
+| public Map 契约候选 | 56 |
 | public Map 契约候选文件 | 36 |
 | `@SuppressWarnings` | 237 |
 | 含 suppression 的源文件 | 178 |
@@ -25,7 +25,7 @@
 |---|---:|
 | `batch-common` | 329 |
 | `batch-console-api` | 962 |
-| `batch-orchestrator` | 544 |
+| `batch-orchestrator` | 545 |
 | `batch-trigger` | 73 |
 | `batch-worker` | 380 |
 | `sdk` | 92 |
@@ -73,7 +73,7 @@
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/lineage/LineageEvidenceService.java` | `L31: public Map<String, Object> evidenceForResultVersion`<br>`L44: public Map<String, Object> evidenceForEffective` |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/task/PartitionDispatchService.java` | `L51: public Map<String, Object> effectiveParams` |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowNodePayloadBuilder.java` | `L269: public Map<String, Object> nodeOutput`<br>`L274: public Map<String, Object> workflowRunFields`<br>`L303: public Map<String, Object> nodeOutput`<br>`L308: public Map<String, Object> workflowRunFields`<br>`L331: public static Map<String, Object> parsePayloadMap` |
-| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/file/FileGovernanceRepository.java` | `L74: public Map<String, Object> loadFileRecord`<br>`L83: public Map<String, Object> loadTemplateSecurityForFile`<br>`L128: public Map<String, Object> loadLatestDispatchRecord`<br>`L197: public List<Map<String, Object>> selectArrivalGovernanceCandidates`<br>`L204: public List<Map<String, Object>> selectArrivalGroupSummaries`<br>`L210: public List<Map<String, Object>> selectArrivalGroupFiles`<br>`L214: public List<Map<String, Object>> selectArrivalGroupFiles`<br>`L242: public List<Map<String, Object>> selectArrivalDelaySamples`<br>`L277: public List<Map<String, Object>> selectProcessingDelaySamples`<br>`L478: public Map<String, Object> operationDetail` |
+| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/file/FileGovernanceRepository.java` | `L78: public Map<String, Object> loadFileRecord`<br>`L87: public Map<String, Object> loadTemplateSecurityForFile`<br>`L132: public Map<String, Object> loadLatestDispatchRecord`<br>`L261: public List<Map<String, Object>> selectArrivalDelaySamples`<br>`L296: public List<Map<String, Object>> selectProcessingDelaySamples` |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/mybatis/MapJsonbTypeHandler.java` | `L36: public Map<String, Object> getNullableResult`<br>`L42: public Map<String, Object> getNullableResult`<br>`L47: public Map<String, Object> getNullableResult` |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/redis/FileGovernanceMetricsCacheService.java` | `L33: public Map<String, Object> load`<br>`L57: public Map<String, Object> compute` |
 | `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/PlatformFileRecordRepository.java` | `L34: public Map<String, Object> loadFileRecord`<br>`L52: public Map<String, Object> loadFileRecordByStoragePath` |
