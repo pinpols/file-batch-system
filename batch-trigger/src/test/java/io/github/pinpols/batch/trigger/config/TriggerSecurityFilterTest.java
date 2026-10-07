@@ -57,7 +57,7 @@ class TriggerSecurityFilterTest {
 
   @Test
   @DisplayName("缺少内部密钥请求头时返回 401 UNAUTHORIZED,且不继续执行过滤器链")
-  void rejects401WhenHeaderMissing() throws Exception {
+  void headerMissing_returns401() throws Exception {
     MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/triggers/launch");
     MockHttpServletResponse response = new MockHttpServletResponse();
     FilterChain chain = mock(FilterChain.class);
@@ -71,7 +71,7 @@ class TriggerSecurityFilterTest {
 
   @Test
   @DisplayName("请求头密钥与配置值不一致时返回 401,且不放行到后续过滤器链")
-  void rejects401WhenHeaderMismatched() throws Exception {
+  void headerMismatched_returns401() throws Exception {
     MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/triggers/launch");
     request.addHeader(HEADER, "wrong-secret");
     MockHttpServletResponse response = new MockHttpServletResponse();
@@ -85,7 +85,7 @@ class TriggerSecurityFilterTest {
 
   @Test
   @DisplayName("密钥匹配时放行请求,并在 SecurityContext 写入已认证的 internal 身份")
-  void passesAndSetsAuthenticatedWhenHeaderMatches() throws Exception {
+  void headerMatches_passesAndSetsAuthenticated() throws Exception {
     MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/triggers/launch");
     request.addHeader(HEADER, SECRET);
     MockHttpServletResponse response = new MockHttpServletResponse();
@@ -105,7 +105,7 @@ class TriggerSecurityFilterTest {
 
   @Test
   @DisplayName("/actuator 健康探针路径直接放行,不校验密钥也不向 SecurityContext 写认证")
-  void skipsFilterForActuatorEndpoints() throws Exception {
+  void actuatorEndpoints_skipFilter() throws Exception {
     MockHttpServletRequest request = new MockHttpServletRequest("GET", "/actuator/health");
     MockHttpServletResponse response = new MockHttpServletResponse();
     FilterChain chain = mock(FilterChain.class);
@@ -121,7 +121,7 @@ class TriggerSecurityFilterTest {
 
   @Test
   @DisplayName("bypass-mode 打开时无密钥请求也放行,并写入 internal 身份供本地联调")
-  void allowsAnyRequestInBypassMode() throws Exception {
+  void bypassMode_allowsAnyRequest() throws Exception {
     securityProperties.setBypassMode(true);
     MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/triggers/launch");
     // 不带 header

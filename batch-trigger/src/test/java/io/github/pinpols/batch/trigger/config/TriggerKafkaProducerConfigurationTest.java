@@ -21,7 +21,7 @@ class TriggerKafkaProducerConfigurationTest {
 
   @Test
   @DisplayName("只提供 bootstrap-servers 时,容器唯一装配 ProducerFactory、KafkaTemplate 与沿用该地址的 KafkaAdmin")
-  void createsProducerAndAdminInfrastructureWithoutKafkaAutoConfiguration() {
+  void producerAndAdmin_areCreatedWithoutKafkaAutoConfiguration() {
     contextRunner.run(context -> {
       assertThat(context).hasSingleBean(ProducerFactory.class);
       assertThat(context).hasSingleBean(KafkaTemplate.class);

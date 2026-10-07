@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
-"""测试约定守护：类级/方法级中文 ``@DisplayName`` 的存量报告与增量拦截。
+"""测试约定守护：``@DisplayName`` 与方法命名的存量报告与增量拦截。
 
-口径见 ``docs/coding-conventions.md`` §14.5 —— 全项目统一中文 ``@DisplayName``，类级与方法级都要。
-覆盖 ``src/test/java`` 下的 Java 测试源码，检查三类缺口：
+口径见 ``docs/coding-conventions.md`` §14.4 / §14.5 —— 全项目统一：类级与方法级都要中文
+``@DisplayName``；测试方法名只接受 ``shouldXxx_whenYyy`` 或 ``方法名_条件_预期结果`` 两种形状。
+覆盖 ``src/test/java`` 下的 Java 测试源码，检查五类缺口：
 
-* ``missing-class-display``  —— 含测试方法的类没有类级 ``@DisplayName``；
-* ``missing-method-display`` —— ``@Test`` / ``@ParameterizedTest`` / ``@RepeatedTest`` /
+* ``missing-class-display``     —— 含测试方法的类没有类级 ``@DisplayName``；
+* ``missing-method-display``    —— ``@Test`` / ``@ParameterizedTest`` / ``@RepeatedTest`` /
   ``@TestFactory`` 方法没有 ``@DisplayName``；
-* ``non-chinese-display``    —— ``@DisplayName`` 文本不含中文。
+* ``non-chinese-display``       —— ``@DisplayName`` 文本不含中文；
+* ``banned-method-name``        —— 方法名是被禁形状（``testXxx`` / ``test1`` / ``xxx_test``）；
+* ``non-preferred-method-name`` —— 方法名既不是 ``shouldXxx...`` 也不含下划线（纯 camelCase）。
 
-存量按 ``docs/governance/test-conventions-baseline.txt`` 渐进收敛（标识忽略行号漂移）：
+两类缺口都要求**最终全部补齐**（终态基线为空）；``docs/governance/test-conventions-baseline.txt``
+只是分批实施的顺序装置，避免历史存量阻断无关 PR（标识忽略行号漂移）。
 
 * ``--report``（默认行为）输出人读快照，恒以 0 退出，不阻断历史存量；
 * ``--write-baseline`` 按当前缺口重建基线，收敛一项即从基线消失；
@@ -50,11 +54,20 @@ MODIFIER = re.compile(
 MISSING_CLASS = "missing-class-display"
 MISSING_METHOD = "missing-method-display"
 NON_CHINESE = "non-chinese-display"
+BANNED_NAME = "banned-method-name"
+NON_PREFERRED_NAME = "non-preferred-method-name"
+
+# 禁用形状：test / test1 / testXxx / test_xxx / xxx_test（docs/coding-conventions.md §14.4）。
+BANNED_METHOD_NAME = re.compile(r"^(?:test|test\d+|test_.+|test[A-Z].*|.+_test)$")
+# 首选形状之一：shouldXxx_whenYyy；另一种是含下划线的「方法名_条件_预期结果」。
+PREFERRED_SHOULD = re.compile(r"^should[A-Z]")
 
 KIND_LABEL = {
     MISSING_CLASS: "类缺类级 @DisplayName",
     MISSING_METHOD: "测试方法缺 @DisplayName",
     NON_CHINESE: "@DisplayName 不含中文",
+    BANNED_NAME: "测试方法名是被禁形状",
+    NON_PREFERRED_NAME: "测试方法名非首选形状(纯 camelCase)",
 }
 
 
@@ -329,6 +342,13 @@ def scan_file(path: Path, rel: str) -> list[Finding]:
         elif not CJK.search(text[span[0] : span[1] + 1]):
             findings.append(Finding(NON_CHINESE, rel, qualified, line_of(text, m.start())))
 
+        if BANNED_METHOD_NAME.match(method_name):
+            findings.append(Finding(BANNED_NAME, rel, qualified, line_of(text, m.start())))
+        elif not (PREFERRED_SHOULD.match(method_name) or "_" in method_name):
+            findings.append(
+                Finding(NON_PREFERRED_NAME, rel, qualified, line_of(text, m.start()))
+            )
+
     for index, node in enumerate(nodes):
         if index not in tests_by_class:
             continue
@@ -404,9 +424,9 @@ def summarize(findings: list[Finding]) -> dict[str, int]:
 
 def report(findings: list[Finding], limit: int) -> None:
     summary = summarize(findings)
-    print("测试约定快照（@DisplayName 类级 + 方法级中文）")
+    print("测试约定快照（@DisplayName 类级 + 方法级中文；方法命名两种形状）")
     print(f"  缺口合计: {len(findings)}")
-    for kind in (MISSING_CLASS, MISSING_METHOD, NON_CHINESE):
+    for kind in (MISSING_CLASS, MISSING_METHOD, NON_CHINESE, BANNED_NAME, NON_PREFERRED_NAME):
         print(f"    {KIND_LABEL[kind]}: {summary.get(kind, 0)}")
 
     by_module: dict[str, int] = {}

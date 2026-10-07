@@ -34,14 +34,14 @@ class BatchTriggerApplicationIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   @DisplayName("应用上下文加载后 Quartz 调度器与密钥 Flyway 回调均完成装配,不能为空")
-  void contextLoads() {
+  void contextLoads_succeeds() {
     assertThat(scheduler).isNotNull();
     assertThat(secretPayloadFlywayCallback).isNotNull();
   }
 
   @Test
   @DisplayName("启动完成后 Quartz 调度器处于 started 状态,可以接受触发注册与调度")
-  void quartzSchedulerStarted() throws Exception {
+  void quartzScheduler_isStarted() throws Exception {
     assertThat(scheduler.isStarted()).isTrue();
   }
 }

@@ -40,7 +40,7 @@ class TriggerOutboxDomainEventPublisherTest {
 
   @Test
   @DisplayName("DomainEvent 字段适配落 trigger_outbox_event 行 — 全字段对齐")
-  void mapsDomainEventToEntity() {
+  void domainEvent_mapsToEntity() {
     when(triggerOutboxEventMapper.insert(any())).thenAnswer(inv -> {
       ((TriggerOutboxEventEntity) inv.getArgument(0)).setId(42L);
       return 1;

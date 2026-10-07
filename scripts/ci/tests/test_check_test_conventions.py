@@ -34,8 +34,18 @@ def write(tmp: Path, name: str, body: str) -> Path:
     return path
 
 
-def kinds(findings) -> list[str]:
-    return sorted(finding.kind for finding in findings)
+DISPLAY_KINDS = (MODULE.MISSING_CLASS, MODULE.MISSING_METHOD, MODULE.NON_CHINESE)
+NAMING_KINDS = (MODULE.BANNED_NAME, MODULE.NON_PREFERRED_NAME)
+
+
+def kinds(findings, pool=DISPLAY_KINDS) -> list[str]:
+    """按规则族过滤缺口：夹具里的短方法名（m/series）不该干扰 @DisplayName 断言。"""
+    return sorted(finding.kind for finding in findings if finding.kind in pool)
+
+
+def display_findings(findings):
+    """只取 @DisplayName 族缺口，避免方法命名缺口影响 [0] 取值断言。"""
+    return [finding for finding in findings if finding.kind in DISPLAY_KINDS]
 
 
 class MaskJavaTest(unittest.TestCase):
@@ -122,7 +132,7 @@ class ValueSourceTest {
 }
 ''',
             )
-            self.assertEqual(MODULE.scan_file(path, "demo/ValueSourceTest.java"), [])
+            self.assertEqual(kinds(MODULE.scan_file(path, "demo/ValueSourceTest.java")), [])
 
     def test_display_name_before_csv_source_is_accepted(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -143,7 +153,7 @@ class CsvTest {
 }
 ''',
             )
-            self.assertEqual(MODULE.scan_file(path, "demo/CsvTest.java"), [])
+            self.assertEqual(kinds(MODULE.scan_file(path, "demo/CsvTest.java")), [])
 
     def test_missing_display_after_value_source_is_still_reported(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -162,7 +172,7 @@ class StillMissingTest {
             )
             findings = MODULE.scan_file(path, "demo/StillMissingTest.java")
             self.assertEqual(kinds(findings), [MODULE.MISSING_METHOD])
-            self.assertEqual(findings[0].qualified, "StillMissingTest.series")
+            self.assertEqual(display_findings(findings)[0].qualified, "StillMissingTest.series")
 
     def test_missing_class_display_is_reported(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -180,7 +190,7 @@ class NoClassDisplayTest {
             )
             findings = MODULE.scan_file(path, "demo/NoClassDisplayTest.java")
             self.assertEqual(kinds(findings), [MODULE.MISSING_CLASS])
-            self.assertEqual(findings[0].qualified, "NoClassDisplayTest")
+            self.assertEqual(display_findings(findings)[0].qualified, "NoClassDisplayTest")
 
     def test_missing_method_display_is_reported(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -198,7 +208,7 @@ class NoMethodDisplayTest {
             )
             findings = MODULE.scan_file(path, "demo/NoMethodDisplayTest.java")
             self.assertEqual(kinds(findings), [MODULE.MISSING_METHOD])
-            self.assertEqual(findings[0].qualified, "NoMethodDisplayTest.m")
+            self.assertEqual(display_findings(findings)[0].qualified, "NoMethodDisplayTest.m")
 
     def test_multiple_test_annotations_count_once(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -217,7 +227,7 @@ class ParamTest {
             )
             findings = MODULE.scan_file(path, "demo/ParamTest.java")
             self.assertEqual(kinds(findings), [MODULE.MISSING_METHOD])
-            self.assertEqual(len(findings), 1)
+            self.assertEqual(len([f for f in findings if f.kind in DISPLAY_KINDS]), 1)
 
     def test_commented_out_test_is_ignored(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -237,7 +247,7 @@ class CommentedTest {
 }
 """,
             )
-            self.assertEqual(MODULE.scan_file(path, "demo/CommentedTest.java"), [])
+            self.assertEqual(kinds(MODULE.scan_file(path, "demo/CommentedTest.java")), [])
 
     def test_text_block_does_not_shift_class_tree(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -259,7 +269,7 @@ class SqlTest {
 }
 ''',
             )
-            self.assertEqual(MODULE.scan_file(path, "demo/SqlTest.java"), [])
+            self.assertEqual(kinds(MODULE.scan_file(path, "demo/SqlTest.java")), [])
 
     def test_nested_class_is_checked_separately(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -285,7 +295,7 @@ class OuterTest {
             )
             findings = MODULE.scan_file(path, "demo/OuterTest.java")
             self.assertEqual(kinds(findings), [MODULE.MISSING_CLASS])
-            self.assertEqual(findings[0].qualified, "InnerTest")
+            self.assertEqual(display_findings(findings)[0].qualified, "InnerTest")
 
     def test_english_display_name_is_reported(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -323,6 +333,45 @@ class Helper {
 """,
             )
             self.assertEqual(MODULE.scan_file(path, "demo/Helper.java"), [])
+
+
+    def test_method_naming_rules(self) -> None:
+        """§14.4：禁 testXxx/test1/test_xxx/xxx_test；只接受 shouldXxx... 或含下划线的形状。"""
+        cases = {
+            "testFoo": MODULE.BANNED_NAME,
+            "test1": MODULE.BANNED_NAME,
+            "test_something": MODULE.BANNED_NAME,
+            "something_test": MODULE.BANNED_NAME,
+            "contextLoads": MODULE.NON_PREFERRED_NAME,
+            "stoppedMonitorDoesNotSampleLag": MODULE.NON_PREFERRED_NAME,
+            "shouldPauseWhenPermitsExhausted": None,
+            "shouldPauseWhenPermitsExhausted_thenResume": None,
+            "resumeAfterRelease_whenPermitsExhausted": None,
+            "testing": MODULE.NON_PREFERRED_NAME,
+        }
+        for name, expected in cases.items():
+            with self.subTest(name=name):
+                with tempfile.TemporaryDirectory() as raw:
+                    path = write(
+                        Path(raw),
+                        "NamingTest.java",
+                        f'''
+@DisplayName("命名规则")
+class NamingTest {{
+
+  @Test
+  @DisplayName("用例")
+  void {name}() {{}}
+}}
+''',
+                    )
+                    findings = MODULE.scan_file(path, "demo/NamingTest.java")
+                    naming = [
+                        finding.kind
+                        for finding in findings
+                        if finding.kind in (MODULE.BANNED_NAME, MODULE.NON_PREFERRED_NAME)
+                    ]
+                    self.assertEqual(naming, [] if expected is None else [expected])
 
 
 class BaselineTest(unittest.TestCase):

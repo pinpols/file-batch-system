@@ -16,7 +16,7 @@ class QuartzTriggerConfigurationTest {
 
   @Test
   @DisplayName("relay 调度器取托管调度阶段且关闭不等待任务完成,确保先于 Redis 停机")
-  void triggerOutboxRelaySchedulerStopsBeforeRedisWithoutDrainingPolls() {
+  void relayScheduler_stopsBeforeRedisWithoutDrainingPolls() {
     TriggerOutboxRelayProperties properties = new TriggerOutboxRelayProperties();
 
     ThreadPoolTaskScheduler scheduler =
@@ -29,7 +29,7 @@ class QuartzTriggerConfigurationTest {
 
   @Test
   @DisplayName("poll 间隔、批大小、发布超时、最大重试与关停等待取 0 或负数时逐项校验拒绝")
-  void rejectsInvalidRelayBoundsBeforeScheduling() {
+  void invalidRelayBounds_areRejectedBeforeScheduling() {
     TriggerOutboxRelayProperties properties = new TriggerOutboxRelayProperties();
     properties.setPollIntervalMillis(0);
     properties.setBatchSize(0);
@@ -48,7 +48,7 @@ class QuartzTriggerConfigurationTest {
 
   @Test
   @DisplayName("开启自适应释放后最小速率高于最大速率且 lag 软硬阈值相等时判定配置不一致")
-  void rejectsInconsistentAdaptiveReleaseConfiguration() {
+  void inconsistentAdaptiveRelease_isRejected() {
     TriggerOutboxRelayProperties properties = new TriggerOutboxRelayProperties();
     properties.setAdaptiveReleaseEnabled(true);
     properties.setMaxPublishEventsPerSecond(10);

@@ -17,7 +17,7 @@
 | 数据库与 SQL | `check-biz-table-tenant-rls.py`、`check-db-comment-coverage.sh`、`check-db-scripts-safety.sh`、`check-migration-safety.sh`、`check-mybatis-generated-key-columns.py`、`check-no-positional-insert-select-star.py`、`check-postgres-client-fallback.sh`、`check-schema-governance-assets.py`、`check-sql-config-boundaries.py`、`check-sql-config-boundaries.sh`、`validate-flyway-schema.sh` |
 | API 与兼容 | `check-console-openapi-paths.py`、`check-openapi-breaking.sh` |
 | Java 质量 | `check-empty-checks.py`、`check-java-lombok-injection.py`、`check-java-logging-governance.py`、`check-java-readability.py`、`check-java-text-block-style.py`、`check-java-suppression-registry.py`、`check-mapof-null-values.py`、`check-pipeline-summary-keys.py`（stage 摘要键 / 续跑回灌键 / 前端计数键契约）、`check-required-java-docs.sh` |
-| 测试完整性 | `check-e2e-run-completeness.sh`、`check-e2e-shard-coverage.sh`、`check-integration-test-coverage.py`、`check-module-test-coverage.sh`、`check-no-silent-disabled-tests.sh`、`check-test-conventions.py`（类级/方法级中文 `@DisplayName` 增量拦截） |
+| 测试完整性 | `check-e2e-run-completeness.sh`、`check-e2e-shard-coverage.sh`、`check-integration-test-coverage.py`、`check-module-test-coverage.sh`、`check-no-silent-disabled-tests.sh`、`check-test-conventions.py`（中文 `@DisplayName` 类级/方法级 + 测试方法命名，增量拦截） |
 | 安全与许可 | `check-dependency-licenses.sh`、`check-license-compliance.sh`、`check-sbom-sync.sh`、`check-trivy-ignore-expiry.py` |
 | 观测 | `check-helm-prometheusrule-sync.sh`、`check-log-lifecycle.sh`、`check-observability-contract.py` |
 
@@ -373,17 +373,20 @@ python3 scripts/ci/check-direct-config-key-access.py --check-baseline \
 
 ## `check-test-conventions.py`
 
-按 `docs/coding-conventions.md` §14.5 检查 `src/test/java` 下 Java 测试的 `@DisplayName`：
+按 `docs/coding-conventions.md` §14.4 / §14.5 检查 `src/test/java` 下 Java 测试的两族约定：
 
 | 缺口类型 | 判定 |
 |---|---|
 | `missing-class-display` | 含测试方法的类（含 `@Nested` 内部类）没有**类级** `@DisplayName` |
 | `missing-method-display` | `@Test` / `@ParameterizedTest` / `@RepeatedTest` / `@TestFactory` 方法没有 `@DisplayName` |
 | `non-chinese-display` | `@DisplayName` 文本不含中文 |
+| `banned-method-name` | 方法名被禁形状：`test` / `test1` / `testXxx` / `test_xxx` / `xxx_test`（**硬失败，存量 0**） |
+| `non-preferred-method-name` | 方法名既不是 `shouldXxx...` 也不含下划线（纯 camelCase，走基线） |
 
 实现要点：先把注释、字符串、字符与文本块掩码成等长空白（保留换行），再做括号配对与方法归属，
-因此 SQL 文本块里的 `{` / `}`、注释掉的 `@Test` 都不会干扰判定；注解块以 `}` / `;` / `{` 为下界，
-避免把**外层类**的 `@DisplayName` 误当成成员的注解。只判注解是否存在与是否含中文，不评判措辞质量。
+因此 SQL 文本块里的 `{` / `}`、注释掉的 `@Test` 都不会干扰判定；注解块边界只认**括号深度为 0** 的
+`}` / `;` / `{`，否则 `@ValueSource(strings = {...})` 这类注解参数里的数组大括号会让已标注的方法
+被误报为缺失。只判形状与是否存在，不评判措辞质量。
 
 ```bash
 python3 scripts/ci/check-test-conventions.py --report
@@ -393,9 +396,10 @@ python3 scripts/ci/check-test-conventions.py --check-baseline \
   docs/governance/test-conventions-baseline.txt
 ```
 
-存量按 `docs/governance/test-conventions-baseline.txt` 渐进收敛（标识忽略行号漂移，收敛一项即从基线消失）：
+终态是**全部补齐**（基线归零）；基线只是分批实施的顺序装置（标识忽略行号漂移，收敛一项即从基线消失）。
 **PR Gate `PR_TEST_CONVENTIONS` 与 Full Gate `FULL_TEST_CONVENTIONS` 只拦新增缺口**，不阻断历史存量。
-基线生成时为 5,623 项（类级 986 / 方法级 4,632 / 非中文 5），随分批收敛递减。
+基线生成时为 7,694 项：`@DisplayName` 5,432（类级 954 / 方法级 4,473 / 非中文 5）+ 方法命名 2,262；
+禁用形状 0 项，`batch-trigger` 已整模块收敛（0 项）。
 
 ## `check-db-scripts-safety.sh`
 

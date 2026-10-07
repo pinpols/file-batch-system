@@ -15,7 +15,7 @@ class TriggerApiAdmissionConfigurationGuardTest {
 
   @Test
   @DisplayName("最大并发 8 加后台预留 2 落在连接池 10 内时,启动校验放行不抛异常")
-  void acceptsConcurrencyWithinPoolBudget() {
+  void concurrencyWithinPoolBudget_isAccepted() {
     TriggerRuntimeProperties properties = properties(8, 2, 2);
 
     assertThatCode(() -> guard(properties, 10).afterSingletonsInstantiated())
@@ -24,7 +24,7 @@ class TriggerApiAdmissionConfigurationGuardTest {
 
   @Test
   @DisplayName("最大并发超过连接池扣除后台预留后的预算时,启动校验报超出平台库预算")
-  void rejectsConcurrencyAbovePoolBudget() {
+  void concurrencyAbovePoolBudget_isRejected() {
     TriggerRuntimeProperties properties = properties(9, 2, 2);
 
     assertThatIllegalStateException()
@@ -34,7 +34,7 @@ class TriggerApiAdmissionConfigurationGuardTest {
 
   @Test
   @DisplayName("最小并发大于最大并发时,启动校验报最小并发不得大于最大并发并阻止启动")
-  void rejectsMinConcurrencyAboveMaxConcurrency() {
+  void minConcurrencyAboveMax_isRejected() {
     TriggerRuntimeProperties properties = properties(4, 5, 2);
 
     assertThatIllegalStateException()

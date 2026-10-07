@@ -51,7 +51,7 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
 
   @Test
   @DisplayName("新增待审批记录写入 1 行并回填主键,回查状态为 PENDING 且过期时间落在 7 天后")
-  void insertPendingThenSelectStatus() {
+  void insertPending_thenSelectStatus() {
     Instant scheduled = BatchDateTimeSupport.utcNow().minusSeconds(120);
     TriggerMisfirePendingEntity e = newPending(scheduled);
     int rows = mapper.insertPending(e);
@@ -67,7 +67,7 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
 
   @Test
   @DisplayName("同租户同作业同计划触发时刻重复落库时,唯一约束抛 DuplicateKeyException 防重复待审批")
-  void insertPendingDuplicateThrowsOnUniqueConstraint() {
+  void insertPendingDuplicate_throwsOnUniqueConstraint() {
     Instant scheduled = BatchDateTimeSupport.utcNow().minusSeconds(120);
     mapper.insertPending(newPending(scheduled));
 
@@ -77,7 +77,7 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
 
   @Test
   @DisplayName("按租户查询待审批只返回 PENDING,已审批记录从运营待办列表中消失")
-  void selectPendingByTenantOnlyReturnsPending() {
+  void selectPendingByTenant_onlyReturnsPending() {
     Instant fireA = BatchDateTimeSupport.utcNow().minusSeconds(180);
     Instant fireB = BatchDateTimeSupport.utcNow().minusSeconds(120);
     Instant fireC = BatchDateTimeSupport.utcNow().minusSeconds(60);
@@ -98,7 +98,7 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
 
   @Test
   @DisplayName("审批只对 PENDING 行生效并落库审批人与时间,重复审批因状态已变更返回 0 行")
-  void approveOnlyAffectsPendingRows() {
+  void approve_onlyAffectsPendingRows() {
     TriggerMisfirePendingEntity e = newPending(BatchDateTimeSupport.utcNow().minusSeconds(60));
     mapper.insertPending(e);
 
@@ -117,7 +117,7 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
 
   @Test
   @DisplayName("驳回只对 PENDING 行生效,写入 REJECTED 状态与驳回原因供运营追溯")
-  void rejectOnlyAffectsPendingRows() {
+  void reject_onlyAffectsPendingRows() {
     TriggerMisfirePendingEntity e = newPending(BatchDateTimeSupport.utcNow().minusSeconds(60));
     mapper.insertPending(e);
 
@@ -130,7 +130,7 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
 
   @Test
   @DisplayName("补跑请求落库后回填请求 ID,使待审批记录与真正执行的补跑实例建立关联")
-  void linkCatchUpRequestSetsRequestId() {
+  void linkCatchUpRequest_setsRequestId() {
     TriggerMisfirePendingEntity e = newPending(BatchDateTimeSupport.utcNow().minusSeconds(60));
     mapper.insertPending(e);
     mapper.approve(e.getId(), "ops-user");
@@ -142,7 +142,7 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
 
   @Test
   @DisplayName("过期扫描把 expires_at 已超期的 PENDING 记录批量置为 EXPIRED,避免待办长期堆积")
-  void markExpiredFlipsOverduePendingRows() {
+  void markExpired_flipsOverduePendingRows() {
     TriggerMisfirePendingEntity e = newPending(BatchDateTimeSupport.utcNow().minusSeconds(60));
     mapper.insertPending(e);
 
@@ -159,7 +159,7 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
 
   @Test
   @DisplayName("过期扫描只处理 PENDING,已审批记录即使超期也保持 APPROVED 不被误改")
-  void markExpiredDoesNotTouchAlreadyApproved() {
+  void markExpired_doesNotTouchAlreadyApproved() {
     TriggerMisfirePendingEntity e = newPending(BatchDateTimeSupport.utcNow().minusSeconds(60));
     mapper.insertPending(e);
     mapper.approve(e.getId(), "ops-user");

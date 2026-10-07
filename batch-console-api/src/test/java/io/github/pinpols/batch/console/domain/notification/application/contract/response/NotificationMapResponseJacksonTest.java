@@ -124,7 +124,7 @@ class NotificationMapResponseJacksonTest {
   }
 
   @Test
-  void testResultPreservesExplicitNullKeys() throws Exception {
+  void result_preservesExplicitNullKeys() throws Exception {
     // service 用 LinkedHashMap 显式 put httpStatus/errorSummary（可为 null）→ 键必须保留（无 NON_NULL）。
     Map<String, Object> row = new LinkedHashMap<>();
     row.put("channelCode", "WH1");

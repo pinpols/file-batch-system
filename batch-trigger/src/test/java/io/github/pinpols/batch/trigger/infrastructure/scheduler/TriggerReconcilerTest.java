@@ -151,7 +151,7 @@ class TriggerReconcilerTest {
 
   @Test
   @DisplayName("作业挂有 misfire 恢复辅助触发器时,不得拿它比对主调度而误判漂移")
-  void auxiliaryRecoveryTriggerDoesNotCauseScheduleDrift() throws Exception {
+  void auxiliaryRecoveryTrigger_doesNotCauseScheduleDrift() throws Exception {
     TriggerDescriptor descriptor = enabledDescriptor("t1", "JOB_A");
     descriptor.setScheduleType("CRON");
     descriptor.setScheduleExpression("0 0 2 * * ?");

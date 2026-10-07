@@ -343,7 +343,7 @@ class DefaultTriggerServiceTest {
 
   @Test
   @DisplayName("人工补跑登记生成待审批记录,并把 misfire 待办关联到该补跑请求")
-  void createPendingCatchUpShouldLinkMisfirePendingToCatchUpRequest() {
+  void createPendingCatchUp_linksMisfirePendingToCatchUpRequest() {
     ScheduledTriggerCommand command = new ScheduledTriggerCommand(
         scheduledDescriptor(),
         Instant.parse("2026-03-28T18:00:00Z"),

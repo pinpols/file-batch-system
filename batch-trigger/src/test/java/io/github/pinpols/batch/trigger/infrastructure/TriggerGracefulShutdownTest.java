@@ -81,14 +81,14 @@ class TriggerGracefulShutdownTest {
 
   @Test
   @DisplayName("Quartz 声明为生命周期最早停止且自动启动,确保先于数据源连接池关闭")
-  void quartzStopsAtTheEarliestLifecyclePhase() {
+  void quartz_stopsAtEarliestLifecyclePhase() {
     assertThat(shutdown.getPhase()).isEqualTo(BatchLifecyclePhases.FIRST_TO_STOP_RELAY);
     assertThat(shutdown.isAutoStartup()).isTrue();
   }
 
   @Test
   @DisplayName("重复调用 stop 只执行一次 standby,停机流程幂等不重复操作调度器")
-  void lifecycleStopIsIdempotent() throws SchedulerException {
+  void lifecycleStop_isIdempotent() throws SchedulerException {
     when(scheduler.isShutdown()).thenReturn(false);
 
     shutdown.stop();

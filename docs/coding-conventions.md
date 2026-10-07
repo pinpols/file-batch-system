@@ -1012,7 +1012,12 @@ class ConsoleQueryControllerTest {
 }
 ```
 
-格式：`shouldXxx_whenYyy`（首选）或 `方法名_条件_预期结果`（省略 `should` 也可，老代码 ~48% 是此风格）。**禁** `testXxx` / `test1` / `xxx_test` / 全 snake_case 无语义结构。
+**只接受两种形状**：`shouldXxx_whenYyy`（首选）或 `方法名_条件_预期结果`（下划线结构，省略 `should` 也可）。
+**禁** `testXxx` / `test1` / `test_xxx` / `xxx_test` / 全 snake_case 无语义结构。
+
+守护：`scripts/ci/check-test-conventions.py`（PR Gate `PR_TEST_CONVENTIONS`）—— 禁用形状**直接失败**
+（存量 0 处）；非首选形状（纯 camelCase，存量 2,308 处）按
+`docs/governance/test-conventions-baseline.txt` 增量拦截：改动存量测试类时，**新加/改名的方法必须是两种形状之一**。
 
 ### 14.5 `@DisplayName`
 
@@ -1027,11 +1032,11 @@ class ConsoleQueryControllerTest {
 写法：类级写明**被测对象 + 验证范围**，方法级写明**该用例的验收点**；一条用例覆盖多个断言点时用
 `;` / `+` 串起；标点沿用半角 `,` `:`，与仓库存量多数写法一致。
 
-**存量与增量**：2026-10-07 起口径由「复杂用例才推荐」收紧为「全量必填」。存量测试类按
-`docs/governance/test-conventions-baseline.txt` 渐进收敛，守护脚本
-`scripts/ci/check-test-conventions.py` 只拦截**相对基线新增**的缺口——因此改动一个存量测试类时，
-新加的方法必须带 `@DisplayName`，但不必一次性补齐该文件的历史缺口（补齐后需重跑
-`--write-baseline` 收敛基线）。覆盖范围：`src/test/java` 下的 Java 测试；配对前端仓库另有其约定。
+**存量与增量**：2026-10-07 起口径由「复杂用例才推荐」收紧为「**全量必填**」——终态是每个测试类都有
+类级、每个测试方法都有方法级中文 `@DisplayName`，基线文件归零。`docs/governance/test-conventions-baseline.txt`
+只是分批实施的顺序装置：守护只拦截**相对基线新增**的缺口（改动存量测试类时新加的方法必须带
+`@DisplayName`），历史缺口按模块分批补齐，补齐后重跑 `--write-baseline` 收敛基线。
+覆盖范围：`src/test/java` 下的 Java 测试；配对前端仓库另有其约定。
 
 ### 14.6 断言风格
 

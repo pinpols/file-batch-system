@@ -60,7 +60,7 @@ class TriggerDedupRequiresNewIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   @DisplayName("异步路径下 trigger_request 落 ACCEPTED 状态,outbox 事件在同一 REQUIRES_NEW 事务内原子写入")
-  void asyncLaunchWritesBothRequestAndOutboxInSameTransaction() {
+  void asyncLaunch_writesBothRequestAndOutboxInSameTransaction() {
     TriggerLaunchCommand command = buildCommand("ASYNC_WRITE", "idem-async", "req-async");
 
     var response = triggerService.launch(command);
@@ -96,7 +96,7 @@ class TriggerDedupRequiresNewIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   @DisplayName("同一 dedupKey 连续发起两次触发,去重检查保证 trigger_request 只保留一条记录")
-  void dedupCheckPreventsSecondInsertInNewTransaction() {
+  void dedupCheck_preventsSecondInsert() {
     TriggerLaunchCommand first = buildCommand("DEDUP_TWICE", "idem-twice", "req-first");
     TriggerLaunchCommand second = buildCommand("DEDUP_TWICE", "idem-twice", "req-second");
 

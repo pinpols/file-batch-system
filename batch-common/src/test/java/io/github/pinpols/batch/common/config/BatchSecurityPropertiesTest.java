@@ -164,7 +164,7 @@ class BatchSecurityPropertiesTest {
   }
 
   @Test
-  void testProfile_completelyRelaxed() {
+  void nonProdTestProfile_completelyRelaxed_isAccepted() {
     BatchSecurityProperties props = newProps("test", true);
     // test profile 不在 prod-like 名单，bypass + 默认密钥都不报错
     props.validateSecuritySettings();

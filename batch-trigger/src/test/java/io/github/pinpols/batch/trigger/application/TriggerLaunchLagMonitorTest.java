@@ -14,7 +14,7 @@ class TriggerLaunchLagMonitorTest {
 
   @Test
   @DisplayName("监控 stop() 后 sampleSafely() 不得触碰 lag 查询端口,避免停机后仍打库")
-  void stoppedMonitorDoesNotSampleLag() {
+  void stoppedMonitor_doesNotSampleLag() {
     TriggerLaunchLagQueryPort lagQuery = mock(TriggerLaunchLagQueryPort.class);
     TriggerLaunchLagMonitor monitor = new TriggerLaunchLagMonitor(
         lagQuery,
