@@ -382,6 +382,7 @@ DB (job_task: READY)
 | [NOTICE](NOTICE) | 第三方声明和合规入口 |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | 贡献和提交约定 |
 | [SECURITY.md](SECURITY.md) | 安全漏洞报告入口 |
+| [开源工程治理规范](docs/standards/open-source-governance.md) | 仓库保护、依赖/供应链、安全响应和高风险变更流程 |
 | [CHANGELOG.md](CHANGELOG.md) | 版本变更记录 |
 | [测试文档索引](docs/testing/README.md) | 测试计划、覆盖矩阵、门禁规则和测试报告总入口 |
 | [API 文档索引](docs/api/README.md) | 控制台接口协议、OpenAPI 和对接说明 |

@@ -34,6 +34,7 @@
 | 24 | [maturity-assessment.md](./maturity-assessment.md) | 成熟度评估快照 | 能力对标时，结论需结合最新验证 |
 | 25 | [deficiencies-2026-05-30.md](./deficiencies-2026-05-30.md) / [p0-p1-p2-roadmap.md](./p0-p1-p2-roadmap.md) | 历史差距与治理路线证据 | 审计历史，不作为当前待办 |
 | 26 | [heavy-workload-guarantees.md](./heavy-workload-guarantees.md) | 重任务容量、资源池、长任务、下游健康和窗口吞吐五项保障 | 重任务上线 / 定容 / 资源隔离前 |
+| 27 | [security-model.md](./security-model.md) | 资产、信任边界、攻击者假设和安全验证入口 | 新增外部入口、执行能力或安全控制前 |
 
 ## 角色路径
 

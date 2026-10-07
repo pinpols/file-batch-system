@@ -59,13 +59,13 @@ jobs:
           - lang: go
           - lang: rust
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
       - name: Set up JDK 21
         if: matrix.lang == 'java'
-        uses: actions/setup-java@v6
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
         with:
           distribution: temurin
           java-version: '21'
@@ -80,7 +80,7 @@ jobs:
 
       - name: Set up Python
         if: matrix.lang == 'python'
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: '3.12'
       - name: Python contract + parity
@@ -94,7 +94,7 @@ jobs:
 
       - name: Set up Node
         if: matrix.lang == 'typescript'
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: '22'
           package-manager-cache: false
@@ -104,7 +104,7 @@ jobs:
 
       - name: Set up Go
         if: matrix.lang == 'go'
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: '1.26.x'
           cache: false
@@ -130,7 +130,7 @@ jobs:
     name: breaking-change gate (orchestrator-internal spec vs prev release)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -202,10 +202,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: [conformance-gate, breaking-change-gate]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: '22'
           package-manager-cache: false
@@ -239,10 +239,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: [conformance-gate, breaking-change-gate]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: '3.12'
       - name: Build sdist + wheel
@@ -274,10 +274,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: [conformance-gate, breaking-change-gate]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
         with:
           distribution: temurin
           java-version: '21'
@@ -339,10 +339,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: [conformance-gate, breaking-change-gate]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: '1.26.x'
           cache: false
@@ -359,7 +359,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [conformance-gate, breaking-change-gate]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
       - name: Set up Rust (stable)
@@ -383,18 +383,18 @@ jobs:
     needs: [package-smoke-typescript, package-smoke-python, package-smoke-java, package-go, package-rust]
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
           persist-credentials: false
       - name: Generate SBOM (syft, 全 sdk/ 目录)
-        uses: anchore/sbom-action@v0.24.2
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         with:
           path: sdk/
           format: spdx-json
           output-file: sdk-sbom.spdx.json
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: sdk-sbom
           path: sdk-sbom.spdx.json
@@ -420,7 +420,7 @@ jobs:
             echo "无上个 release tag 或 base spec 不存在,跳过 changelog 生成" | tee sdk-protocol-changelog.txt
           fi
       - name: Upload changelog artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: sdk-protocol-changelog
           path: sdk-protocol-changelog.txt
@@ -449,10 +449,10 @@ jobs:
       contents: read
       id-token: write   # npm provenance(sigstore OIDC),无需 token 也能签
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: '22'
           package-manager-cache: false
@@ -476,10 +476,10 @@ jobs:
       contents: read
       id-token: write   # PyPI Trusted Publishing(OIDC),无需明文 token
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: '3.12'
       - name: Build sdist + wheel
@@ -488,7 +488,7 @@ jobs:
           python -m pip install --upgrade pip build
           python -m build
       - name: Publish to PyPI(Trusted Publishing / OIDC)
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
         with:
           packages-dir: sdk/python/dist/
           skip-existing: true
@@ -500,7 +500,7 @@ jobs:
     if: github.event_name == 'release' && !(github.event_name == 'workflow_dispatch' && inputs.dry-run)
     environment: release-publish
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
       - name: Set up Rust (stable)
@@ -518,10 +518,10 @@ jobs:
     if: github.event_name == 'release' && !(github.event_name == 'workflow_dispatch' && inputs.dry-run)
     environment: release-publish
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
         with:
           distribution: temurin
           java-version: '21'

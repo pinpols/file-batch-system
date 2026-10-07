@@ -1,12 +1,12 @@
-# CODEOWNERS — main 分支保护配套
-# 匹配路径的 PR 必须 listed owner approve 才能 merge(branch protection
-# require_code_owner_reviews=true)。admin(enforce_admins=false)可绕过,
-# 其他 contributor 必走 review。
+# CODEOWNERS — 代码所有权和高风险路径评审路由。
+# 当前仓库只有一个维护者，ruleset 暂不要求独立 Code Owner 审批，避免制造
+# 无法满足的伪双人流程。新增第二位维护者后，应把 main ruleset 提升为至少
+# 1 个独立审批 + Code Owner 审批 + 最后推送者之外审批。
 #
 # 文档:https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-security/customizing-your-repository/about-code-owners
 #
 # 2026-05-23:owner 从 @idengzhao(旧)改 @pinpols(当前账号);
-# 加 workflow / pom / test / migration 等高风险路径强制审。
+# 加 workflow / pom / test / migration 等高风险路径所有权标识。
 
 # 默认 — 任何文件改动都要 @pinpols
 *                                       @pinpols

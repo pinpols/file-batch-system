@@ -49,10 +49,11 @@ jobs:
       BATCH_GATE_COLLECT: '1'
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           # EmptyChecks guard 按 push event.before 做 diff；静态 job 需要可访问完整基线。
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
@@ -110,6 +111,13 @@ jobs:
           gate_run FULL_SHELL_LINUX_PORTABILITY "Shell Linux 兼容性" python3 scripts/ci/check-shell-linux-portability.py
           gate_run FULL_TESTCONTAINERS_REUSE_LABEL "Testcontainers 复用标签判定" python3 scripts/ci/check-testcontainers-reuse-label.py
           gate_run FULL_POSTGRES_CLIENT_FALLBACK "PostgreSQL 客户端 fallback" bash scripts/ci/check-postgres-client-fallback.sh
+
+      - name: Verify GitHub Actions SHA pinning
+        shell: bash
+        run: |
+          source scripts/lib/gate-result.sh
+          gate_run FULL_ACTION_PINNING "GitHub Actions SHA 固定" python3 scripts/ci/check-github-action-pinning.py
+          gate_run FULL_ACTION_PINNING_TEST "GitHub Actions SHA 固定门禁测试" python3 -m unittest scripts/ci/tests/test_check_github_action_pinning.py
 
       - name: Verify module dependency boundaries
         shell: bash
@@ -174,7 +182,7 @@ jobs:
 
       - name: Upload direct config key access inventory
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: direct-config-key-access
           path: build/config-key-access.json
@@ -345,7 +353,9 @@ jobs:
       TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
@@ -371,7 +381,7 @@ jobs:
 
       - name: Upload Surefire Reports
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: full-ci-unit-it-a-reports
           path: |
@@ -389,7 +399,9 @@ jobs:
       TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
@@ -414,7 +426,7 @@ jobs:
 
       - name: Upload Surefire Reports
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: full-ci-unit-it-b1-reports
           path: |
@@ -432,7 +444,9 @@ jobs:
       TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
@@ -456,7 +470,7 @@ jobs:
 
       - name: Upload Surefire Reports
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: full-ci-unit-it-b2-reports
           path: |
@@ -477,7 +491,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
@@ -513,7 +529,7 @@ jobs:
 
       - name: Upload SBOM
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: sbom-cyclonedx
           path: target/bom.json
@@ -521,13 +537,13 @@ jobs:
           if-no-files-found: warn
 
       - name: Lint Dockerfile
-        uses: hadolint/hadolint-action@v3.5.0
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
         with:
           dockerfile: deploy/docker/Dockerfile.app
           failure-threshold: warning
 
       - name: Lint operations toolbox Dockerfile
-        uses: hadolint/hadolint-action@v3.5.0
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
         with:
           dockerfile: deploy/docker/Dockerfile.ops-toolbox
           failure-threshold: warning
@@ -544,7 +560,7 @@ jobs:
           trivy fs --scanners misconfig --ignorefile .trivyignore.yaml --severity CRITICAL,HIGH --exit-code 1 .
 
       - name: K8s manifest security — Checkov
-        uses: bridgecrewio/checkov-action@v12
+        uses: bridgecrewio/checkov-action@a76233b2c1d4a820a9dc68be350c473a4a9dceec # v12
         with:
           directory: helm/batch-platform
           framework: helm
@@ -616,7 +632,9 @@ jobs:
               AtomicTaskLoadE2eIT
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
@@ -649,7 +667,7 @@ jobs:
 
       - name: Upload E2E shard ${{ matrix.shard.id }} reports
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: full-ci-e2e-shard-${{ matrix.shard.id }}-reports
           path: |

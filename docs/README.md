@@ -34,7 +34,7 @@
 | 14 | [stats/](./stats/README.md) | 规模统计 | LoC / 文档体量统计 |
 | 15 | [test-data/](./test-data/test-full-coverage-import-suite/README.md) | 测试数据（Excel 配置包）| E2E 准备 |
 | 16 | [verifications/](./verifications/README.md) | 验证记录 | 实测 / drill / go-live evidence |
-| 17 | [standards/](./standards/README.md) | 文档状态、待办和归档治理 | 文档复扫与状态校准 |
+| 17 | [standards/](./standards/README.md) | 文档、CI 质量和开源工程治理 | 文档复扫 / Action 固定 / 安全响应与供应链治理 |
 | 18 | [governance/](./governance/README.md) | 机器可读治理契约 | CI 规则输入 |
 | — | [archive/](./archive/README.md) | 历史快照（**不再维护**） | 仅审计参考 |
 | — | [spike/](./spike/README.md) | Spike 实验记录 | 临时技术验证 |
@@ -51,6 +51,7 @@
 | 上线评审 | 05 testing (`release-gate.md`) → 04 runbook (`docker-deployment.md` 或 `feature-switches.md`)|
 | 架构改动 | 01 architecture (`project-structure.md` / adr) → 顶层 03 changelog 追规范 |
 | 规范复扫 / PR 审核 | 09 audit (`convention-drift-guard-index.md`) → `agent-baseline.md` → 顶层 02 coding-conventions → `scripts/ci/README.md` |
+| 开源治理 / 安全响应 | 17 standards (`open-source-governance.md`) → 根 `SECURITY.md` → 04 runbook (`security-scan.md`) |
 | 文档维护 / 目录调整 | 17 standards (`document-governance.md`) → 本 README → 受影响子目录 README → `scripts/ci/check-docs-structure.py` |
 | AI 协作 | 顶层 01 agent-baseline → 02 coding-conventions |
 

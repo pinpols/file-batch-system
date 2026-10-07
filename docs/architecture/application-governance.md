@@ -10,7 +10,7 @@
 | 运行时兼容 | Java/Python/Go/TS/Rust、Docker/非 Docker、IPv4/IPv6、`psql` fallback 已有矩阵和脚本门禁 | 外部服务双栈、宿主机工具版本仍需部署环境复验 |
 | 故障注入 | Kafka Outbox、PG/Redis/ShedLock、Worker lease、下游超时已有 IT、sim 和演练入口 | 真正的 PG failover、Kafka broker 故障和整组 Worker 演练必须在 staging 执行 |
 | 告警与 Runbook | Prometheus 规则、Trace/MDC 字段、[`SLO / SLI 目录`](../runbook/slo-sli-catalog.md)、故障剧本和恢复动作集中索引 | 告警接收端、静默/升级策略需由目标监控环境确认 |
-| 供应链 | CodeQL、Trivy、license review、SDK SBOM/provenance 入口已纳入发布流程 | 生产镜像签名、SLSA attestation 和制品仓库策略依赖发布环境，不在开发机伪造 |
+| 供应链 | CodeQL、Trivy、license review、Action SHA 固定、OpenSSF Scorecard 报告和 SDK SBOM/provenance 入口已纳入流程 | 生产镜像签名、SLSA attestation 和部署端验证依赖发布环境，不在开发机伪造 |
 
 ## 统一约束
 
@@ -18,6 +18,7 @@
 2. 代码防线、CI 门禁、容器配置、真实环境演练分别记证据；任一项缺失都不能标记为完整上线证据。
 3. 所有新治理项必须加入权威 YAML 清单并提供至少一个仓库内证据路径，否则 CI 失败。
 4. 开发默认配置可以保持单机友好；生产安全值只能在 `helm/values-prod.yaml` 和外部 Secret 中声明。
+5. 开源仓库安全响应、ruleset、依赖更新和高风险提案要求以 [`../standards/open-source-governance.md`](../standards/open-source-governance.md) 为准。
 
 ## 复扫命令
 

@@ -67,6 +67,14 @@ gh api 'repos/pinpols/file-batch-system/code-scanning/alerts?state=open&ref=refs
 
 每次记录告警编号、规则、修复提交、PR、定向验证、扫描提交、关闭状态与残余风险。配对前端遵循对应 `docs/runbook/security-alert-governance.md`,不复制后端权限和存储治理实现。
 
+## GitHub 平台安全能力
+
+仓库内扫描脚本之外，公共仓库应同时启用 GitHub Secret Scanning、Push Protection、Dependabot security updates 和 Private Vulnerability Reporting。non-provider patterns 与 validity checks 仅在当前 GitHub 计划和仓库能力支持时启用；不可用时由现有 Gitleaks/CodeQL 和人工响应补位。平台设置是运行事实，不能只凭文档、workflow 或 `dependabot.yml` 推断已开启。
+
+OpenSSF Scorecard 由 `.github/workflows/scorecard.yml` 在 main 推送、每周计划和手动触发时运行，SARIF 上传到 Code Scanning。它只用于发现分支保护、Action 固定、依赖更新和安全响应等治理漂移：低分或单项发现不会直接阻断 PR，扫描执行失败仍应修复，具体风险仍按可利用性和项目边界人工复核。
+
+私密漏洞报告入口和披露边界以根 [`SECURITY.md`](../../SECURITY.md) 为准。发现真实密钥时先撤销/轮换，再清理历史和修复注入路径。
+
 ## 报告位置
 
 默认所有报告都统一写到仓库根目录下的 `target/security-scan-report/`：

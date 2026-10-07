@@ -77,7 +77,7 @@ jobs:
       unknown: ${{ steps.scope.outputs.unknown }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
@@ -102,7 +102,7 @@ jobs:
       BATCH_GATE_COLLECT: '1'
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
           # 0 = 全历史:migration-safety / openapi-breaking 守护要相对 base 做 diff。
@@ -193,7 +193,7 @@ jobs:
 
       - name: Set up Python for LOC snapshot
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.database == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version-file: .python-version
 
@@ -212,6 +212,14 @@ jobs:
           gate_run PR_SHELL_LINUX_PORTABILITY "Shell Linux 兼容性" python3 scripts/ci/check-shell-linux-portability.py
           gate_run PR_TESTCONTAINERS_REUSE_LABEL "Testcontainers 复用标签判定" python3 scripts/ci/check-testcontainers-reuse-label.py
           gate_run PR_POSTGRES_CLIENT_FALLBACK "PostgreSQL 客户端 fallback" bash scripts/ci/check-postgres-client-fallback.sh
+
+      - name: Verify GitHub Actions SHA pinning
+        if: needs.changes.outputs.scripts == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        run: |
+          source scripts/lib/gate-result.sh
+          gate_run PR_ACTION_PINNING "GitHub Actions SHA 固定" python3 scripts/ci/check-github-action-pinning.py
+          gate_run PR_ACTION_PINNING_TEST "GitHub Actions SHA 固定门禁测试" python3 -m unittest scripts/ci/tests/test_check_github_action_pinning.py
 
       - name: Verify module dependency boundaries
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
@@ -614,7 +622,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
@@ -632,7 +640,7 @@ jobs:
 
       - name: Upload Surefire Reports
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pr-gate-unit-it-a-reports
           path: |
@@ -651,7 +659,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
@@ -667,7 +675,7 @@ jobs:
 
       - name: Upload Surefire Reports
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pr-gate-unit-it-b1-reports
           path: |
@@ -686,7 +694,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
@@ -702,7 +710,7 @@ jobs:
 
       - name: Upload Surefire Reports
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pr-gate-unit-it-b2-reports
           path: |
@@ -725,7 +733,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
