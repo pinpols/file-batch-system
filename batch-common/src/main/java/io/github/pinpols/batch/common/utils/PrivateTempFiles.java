@@ -201,11 +201,21 @@ public final class PrivateTempFiles {
    * 目标文件系统是否支持 POSIX 权限视图。
    *
    * <p>创建前先判定,而不是"先按默认权限建出来再 chmod":前者不会留下创建到收紧之间对本机其他用户可读的窗口
-   * (CodeQL java/local-temp-file-or-directory-information-disclosure 的推荐形态);非 POSIX(如 Windows)
-   * 的临时目录本身按用户隔离,无需显式权限。
+   * (CodeQL java/local-temp-file-or-directory-information-disclosure 的推荐形态)。
+   * 必须查询目标挂载点的 FileStore,不能用 provider 声明代替实际存储能力。非 POSIX 挂载点由部署方
+   * 保证临时根的 ACL 仅允许运行账户访问,尤其不能把 Windows 自定义临时根视为天然私有。
    */
-  private static boolean supportsPosix(Path path) {
-    return path.getFileSystem().supportedFileAttributeViews().contains("posix");
+  static boolean supportsPosix(Path path) throws IOException {
+    Path existing = path.toAbsolutePath();
+    while (EmptyChecks.isNotNull(existing)) {
+      try {
+        return Files.getFileStore(existing).supportsFileAttributeView("posix");
+      } catch (NoSuchFileException missing) {
+        // 文件尚未创建时沿父目录找到实际挂载点;权限或存储故障不能当成不支持而降级。
+        existing = existing.getParent();
+      }
+    }
+    throw new IOException("cannot resolve temp file store: " + path);
   }
 
   /**
