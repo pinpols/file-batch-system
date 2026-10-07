@@ -7,14 +7,14 @@
 
 | 指标 | 数量 |
 |---|---:|
-| 生产 Java 源文件 | 2391 |
+| 生产 Java 源文件 | 2392 |
 | CGLIB 自注入类 | 0 |
 | `Map<String, Object>` 出现次数 | 2055 |
 | 含 Map 的源文件 | 449 |
 | public Map 契约候选 | 56 |
 | public Map 契约候选文件 | 36 |
-| `@SuppressWarnings` | 237 |
-| 含 suppression 的源文件 | 178 |
+| `@SuppressWarnings` | 238 |
+| 含 suppression 的源文件 | 179 |
 | `@Configuration` 类 | 48 |
 | 大于等于 700 行的源文件 | 11 |
 | `PMD.ExcessiveParameterList` 显式例外 | 33 |
