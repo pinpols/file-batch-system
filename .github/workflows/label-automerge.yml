@@ -22,8 +22,7 @@ on:
     types: [labeled, synchronize, reopened, ready_for_review]
 
 permissions:
-  pull-requests: write
-  contents: write
+  contents: read
 
 # 同 PR 多事件并发触发,只保留最后一次
 concurrency:
@@ -38,6 +37,9 @@ jobs:
       contains(github.event.pull_request.labels.*.name, 'automerge')
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - name: Enable squash auto-merge
         env:

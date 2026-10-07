@@ -17,7 +17,7 @@
         <dependency>
             <groupId>org.jspecify</groupId>
             <artifactId>jspecify</artifactId>
-            <version>1.0.0</version>
+            <version>1.0.1</version>
         </dependency>
         <!--
           JSR-305 @javax.annotation.Nullable：全仓统一的可空标注,兼容 SonarJava S4449
@@ -283,7 +283,14 @@
                  所有 transitive deps (shedlock / OTEL / Jackson jsr310) 在 trigger / worker
                  测试 classpath 上全部失踪，造成大批假阴失败。
                  与根 pom <archunit.version> 手工保持同步。 -->
-            <version>1.5.0</version>
+            <version>1.5.1</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- 用户可控游标与日志字段的覆盖引导 fuzz；常规 test 只回放语料，周任务进入 fuzz 模式。 -->
+        <dependency>
+            <groupId>com.code-intelligence</groupId>
+            <artifactId>jazzer-junit</artifactId>
+            <version>${jazzer.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

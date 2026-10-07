@@ -8,6 +8,7 @@
 
 ## [Unreleased]
 
+- 供应链与安全治理改为持续发现、季度集中升级：依赖机器人不再自动创建 PR，新增只读季度盘点、不可变工具链锁定和用户输入边界 Jazzer fuzzing。
 - 收口后端待办：Console Telemetry 纳入用户限流并保留有界扩展类型兼容性，ShedLock provider 增加故障计数/健康指标和告警，并校正 SDK、租户 Worker、JVM/Helm 与 CD 文档中的陈旧待办状态。
 - 修复 Web Push 传递依赖 jose4j 0.7.0 的两个 HIGH CVE：统一管理并显式选择 0.9.6，删除已无当前漏洞命中的过期 Trivy CVE 忽略项。
 
@@ -28,7 +29,7 @@
 
 ### Changed
 
-- Dependabot 将普通版本检查降为每月，安全更新保持即时；仅按 Maven 和 GitHub Actions 生态聚合 patch，minor 与 Docker 更新保留单项评审，major/JDK 基线人工升级；Maven 变更必须在同一 PR 提交受控 SBOM。
+- 依赖治理改为持续告警、季度集中盘点和单个人工 PR：关闭 Dependabot 自动版本/安全修复 PR，新增季度多生态报告与治理 Issue；紧急可达漏洞仍走独立快速修复。同步升级本批依赖、固定 CI/镜像供应链输入并刷新 SBOM。
 - PR 单元测试按模块边界选择分片并拆分 Worker/Console 长尾，PR CodeQL 使用 Java 无构建快速分析而 main/定时保留手工全量构建；Full/Staging E2E 依据最新实测重排为六片，CI runbook 同步登记耗时基线与回退标准。
 - Console、Trigger 与 Import 通知的固定响应改用具名类型，Pipeline 列表不再在应用层传播原始 Map；Job trigger 保留普通实例号/dry-run 对象两种 wire 形态，OpenAPI 与配对前端类型同步。Lineage 热表/归档证据使用显式构造映射，文件 metadata 解析为 JSON 对象，不透传 JDBC 驱动封装。
 - 已有生命周期、Outbox、文件格式、分发策略和通知枚举统一复用稳定 code，保留各运维操作原有状态集合与配置 DSL。新增低误报 Java 契约守卫，按固定边界、确认的有限域和已有协议键复用阻断新增退化；动态契约按方法签名登记例外。

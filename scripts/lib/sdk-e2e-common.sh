@@ -210,8 +210,8 @@ sdk_e2e_start_worker() {
       # SDK 的 kafka adapter(sdk/typescript/kafka)import 'kafkajs',它从 SDK 自身的
       # node_modules 解析(样例经相对路径引 SDK,样例的 node_modules 不在 SDK 解析树上),
       # 故须先在 sdk/typescript 装 devDeps(含 kafkajs)。
-      npm --prefix "$root/sdk/typescript" install --silent >/dev/null 2>&1
-      ( cd "$root/examples/self-hosted-sdk/sample-tenant-worker-typescript" && npm install --silent >/dev/null 2>&1 \
+      npm --prefix "$root/sdk/typescript" ci --ignore-scripts --silent >/dev/null 2>&1
+      ( cd "$root/examples/self-hosted-sdk/sample-tenant-worker-typescript" && npm ci --ignore-scripts --silent >/dev/null 2>&1 \
         && BATCH_BASE_URL="$ORCH_URL" BATCH_API_KEY="$raw" BATCH_TENANT_ID="$TENANT" \
            BATCH_WORKER_CODE="$wc" KAFKA_BOOTSTRAP="$KAFKA_BOOTSTRAP" \
            node --experimental-strip-types src/main.ts ) >"$logf" 2>&1 & echo $! ;;

@@ -87,7 +87,7 @@ echo "[sdk-live] Python live Kafka + HTTP fake"
 echo "[sdk-live] TypeScript live Kafka adapter"
 (
   cd "$ROOT/sdk/typescript"
-  npm install --include=optional --package-lock=false --no-audit --no-fund
+  npm ci --include=optional --ignore-scripts --no-audit --no-fund
   node --test --test-concurrency=1 --test-timeout=30000 --experimental-strip-types \
     'tests/lifecycle.test.ts' 'tests/transport.test.ts'
   BATCH_SDK_KAFKA_BOOTSTRAP="$SDK_KAFKA_BOOTSTRAP" \

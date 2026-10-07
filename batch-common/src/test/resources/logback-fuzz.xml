@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- Fuzz 输入会高频触发预期解析失败，只保留真正的测试框架错误。 -->
+    <root level="WARN"/>
+</configuration>

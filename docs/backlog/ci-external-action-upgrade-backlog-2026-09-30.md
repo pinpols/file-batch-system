@@ -30,7 +30,7 @@
 | Checkov Action | `bridgecrewio/checkov-action@v12` | 上游当前文档仍使用 v12；引用的是可变 major tag，工具实际版本随 Action 维护节奏更新 | 不因版本数字看似旧就盲升；复核 tag、底层 Checkov 版本和 `CKV_K8S_*` 结果后再变更 |
 | Hadolint Action | `hadolint/hadolint-action@v3.5.0` | 已升级到当前引用 | ✅ 静态门禁和主干 Full Gate 已通过 |
 | GitHub CodeQL Action | `github/codeql-action/*@v4` | 当前主版本；保留 | 关注 GitHub 弃用公告和 runner 兼容要求 |
-| SBOM Action | `anchore/sbom-action@v0.24.2` | 已从浮动 major tag改为具体 release tag 并继续补丁升级 | ✅ SDK release validation 静态门禁通过；真实发布 artifact 仍在发布任务验证 |
+| SBOM Action | `anchore/sbom-action@v0.24.3` | 已从浮动 major tag改为具体 release tag 并继续补丁升级 | ✅ SDK release validation 静态门禁通过；真实发布 artifact 仍在发布任务验证 |
 | Sonar Scanner | 可选 `sonar-gate` 使用 Maven Scanner `5.7.0.6970`；本地脚本同版本默认值 | Sonar 门禁默认关闭，不属于当前必需 PR/Full Gate；不作为当前阻断性安全扫描 | 启用 Sonar Gate 或变更 Sonar 服务时，复核插件与服务器兼容矩阵并执行全量/增量扫描 |
 
 ## 迁移与 API 契约守护工具
@@ -58,7 +58,7 @@
 
 1. ✅ 已完成第一批 `checkout`、`setup-python/java/node/go` 和 artifact Actions 升级。
 2. ✅ 已完成 Hadolint、SBOM Action 和 Squawk/oasdiff 版本更新及适用门禁验证；Buildx/Bake 待下一次真实镜像 workflow 补运行证据。
-3. GitHub Actions Dependabot 已开启每周版本更新队列，上限 5；再处理浮动 tag、未明确 pin 到 release 的第三方 Action 时，同步考虑 Dependabot 更新和人工审查负担。
+3. GitHub Actions 与其他生态的自动更新 PR 已关闭；每季度由 `quarterly-dependency-review` 生成集中盘点，维护者只建立一张人工 PR。紧急安全修复不等待季度窗口。
 4. 每批升级都运行 `actionlint`、对应 workflow、PR Gate；影响主构建/安全流程时再运行 Full Gate。CI 未实际运行的结果不得标记为通过。
 
 ## 上游参考

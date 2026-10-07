@@ -78,25 +78,25 @@ jobs:
             -Dtest='JsonFixtureContractTest,JsonFixtureRequestSideContractTest,SharedConstantsParityTest' \
             test
 
-      - name: Set up Python
+      - name: Set up uv
         if: matrix.lang == 'python'
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          version: '0.11.14'
           python-version: '3.12'
       - name: Python contract + parity
         if: matrix.lang == 'python'
         working-directory: sdk/python
         run: |
-          python -m pip install --upgrade pip
-          pip install -e .[dev]
-          pytest tests/contract -v
-          pytest tests/test_shared_constants_parity.py -v
+          uv sync --frozen --extra dev
+          uv run --frozen --extra dev pytest tests/contract -v
+          uv run --frozen --extra dev pytest tests/test_shared_constants_parity.py -v
 
       - name: Set up Node
         if: matrix.lang == 'typescript'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: '22'
+          node-version-file: '.node-version'
           package-manager-cache: false
       - name: TypeScript conformance + parity
         if: matrix.lang == 'typescript'
@@ -113,9 +113,9 @@ jobs:
         working-directory: sdk/go
         run: go vet ./... && go test ./...
 
-      - name: Set up Rust (stable)
+      - name: Set up Rust (locked baseline)
         if: matrix.lang == 'rust'
-        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+        run: rustup show active-toolchain
       - name: Rust conformance + parity + unit
         if: matrix.lang == 'rust'
         working-directory: sdk/rust
@@ -212,7 +212,7 @@ jobs:
       - name: Build + npm pack(产出可发布 tarball)
         working-directory: sdk/typescript
         run: |
-          npm install
+          npm ci --ignore-scripts --no-audit --no-fund
           npm run build
           mkdir -p /tmp/pkg
           npm pack --pack-destination /tmp/pkg
@@ -223,10 +223,9 @@ jobs:
           TARBALL="$(ls /tmp/pkg/*.tgz)"
           SMOKE="$(mktemp -d)"
           cd "$SMOKE"
-          npm init -y >/dev/null
-          npm install "$TARBALL"
+          tar -xzf "$TARBALL"
           cat > smoke.mjs <<'EOF'
-          import { classifyHttp, exponentialBackoff } from "@batch/worker-sdk";
+          import { classifyHttp, exponentialBackoff } from "./package/dist/index.js";
           if (typeof classifyHttp !== "function") throw new Error("classifyHttp not exported from packed SDK");
           const decision = classifyHttp(500, 1);
           const backoff = exponentialBackoff(1);
@@ -242,14 +241,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          version: '0.11.14'
           python-version: '3.12'
       - name: Build sdist + wheel
         working-directory: sdk/python
         run: |
-          python -m pip install --upgrade pip build
-          python -m build
+          uv build
           ls -la dist/
           test -n "$(ls dist/*.whl 2>/dev/null)" || { echo "missing wheel"; exit 1; }
           test -n "$(ls dist/*.tar.gz 2>/dev/null)" || { echo "missing sdist"; exit 1; }
@@ -257,9 +256,8 @@ jobs:
         shell: bash
         run: |
           WHEEL="$(ls sdk/python/dist/*.whl)"
-          python -m venv /tmp/smoke-venv
-          /tmp/smoke-venv/bin/pip install --upgrade pip
-          /tmp/smoke-venv/bin/pip install "$WHEEL"
+          uv venv --python 3.12 /tmp/smoke-venv
+          uv pip install --python /tmp/smoke-venv/bin/python "$WHEEL"
           cat > /tmp/py_smoke.py <<'EOF'
           import batch_worker_sdk as sdk
           from batch_worker_sdk import __version__, SdkAbstractTaskHandler, SdkTaskResult
@@ -362,8 +360,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - name: Set up Rust (stable)
-        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+      - name: Set up Rust (locked baseline)
+        run: rustup show active-toolchain
       - name: cargo package(产出 .crate + 校验可打包发布)
         working-directory: sdk/rust
         # --no-verify 跳过重新编译(默认特性 zero-dep,已在 conformance-gate 编过);
@@ -389,7 +387,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Generate SBOM (syft, 全 sdk/ 目录)
-        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
           path: sdk/
           format: spdx-json
@@ -463,7 +461,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          npm install
+          npm ci --ignore-scripts --no-audit --no-fund
           npm run build
           npm publish --provenance --access restricted
 
@@ -480,14 +478,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          version: '0.11.14'
           python-version: '3.12'
       - name: Build sdist + wheel
         working-directory: sdk/python
-        run: |
-          python -m pip install --upgrade pip build
-          python -m build
+        run: uv build
       - name: Publish to PyPI(Trusted Publishing / OIDC)
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
         with:
@@ -504,8 +501,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - name: Set up Rust (stable)
-        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+      - name: Set up Rust (locked baseline)
+        run: rustup show active-toolchain
       - name: cargo publish
         working-directory: sdk/rust
         env:

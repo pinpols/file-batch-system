@@ -57,7 +57,12 @@
         <dependency>
             <groupId>nl.martijndwars</groupId>
             <artifactId>web-push</artifactId>
-            <version>5.1.1</version>
+            <version>5.1.2</version>
+        </dependency>
+        <!-- ConsolePushSender 直接使用 Response 类型，不能依赖 web-push 的传递依赖范围。 -->
+        <dependency>
+            <groupId>org.asynchttpclient</groupId>
+            <artifactId>async-http-client</artifactId>
         </dependency>
         <dependency>
             <groupId>org.bitbucket.b_c</groupId>
@@ -146,7 +151,7 @@
         <dependency>
             <groupId>com.twelvemonkeys.imageio</groupId>
             <artifactId>imageio-webp</artifactId>
-            <version>3.15.0</version>
+            <version>3.15.2</version>
         </dependency>
         <!-- okhttp:webhook 出站投递用自定义 Dns 做 per-request SSRF pin(连的就是 guard 校验过的那个 IP),
              与 worker-dispatch 同款;版本由 root dependencyManagement 统管(okhttp-jvm 才是 JVM 类来源)。 -->

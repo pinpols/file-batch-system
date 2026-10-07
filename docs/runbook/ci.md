@@ -19,6 +19,7 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 | `daily-sim-strict-validation` | 补充真实数据验证 | nightly(每天 13:31 UTC / 北京 21:31)+ workflow_dispatch | 定时触发按最近一次计划时间对应的北京时间日期检查代码/配置变更，延迟跨午夜仍归属原计划日；手动触发按当前北京时间日期。Markdown/RST、`LICENSE`、`NOTICE` 除外。需要验证时同环境先执行 `sim-harness all`，再执行 BE-ACC step 5(strict real-data verification)；strict step 使用 `always()` 采证，不因 sim 失败被短路 | 240 min |
 | `docker-image-build` | nightly / 可选发布镜像构建 | 由 `daily-sim-strict-validation` 在当天有代码/配置变更且 sim + strict 成功后调用；也支持手动和复用调用 | 默认只用 Docker Bake 构建全部应用镜像和运维工具箱镜像；显式 `publish=true` 时登录 GHCR、推送 SHA 镜像并上传含 immutable digest 的 backend image set。CI 使用 Maven Central 配置并带依赖下载重试 | 30 min |
 | `OpenSSF Scorecard` | 供应链治理报告 | push main、每周三、手动 | 生成 SARIF 并上传 Code Scanning；不按总分阻断 PR | 20 min |
+| `quarterly-dependency-review` | 依赖集中治理盘点 | 每季度首日、手动 | 生成多生态更新报告和单个治理 Issue；不改代码、不创建 PR | 25 min |
 | `main-failure-triage` | 失败处理自动化 | main 的 `full-ci-gate` 核心 job 失败 | 自动标记关联 PR 并评论处理要求；无关联 PR 时创建 issue | — |
 
 > **2026-05-23 删除 `capacity-gate` / `promote-staging`**:`capacity-gate` 目标是 `*.svc.cluster.local`(k8s 集群内 DNS),GitHub-hosted runner 永远连不上 → 100% Connection refused;`promote-staging` 要写 `pinpols/file-batch-system-ops` 但仓 / PAT 都没在用,等同 dead code。Checkov K8s manifest 静态扫已迁到 `full-ci-gate`。若未来要恢复真·生产环境验证 / 容量回归 / ops 仓同步,改用 self-hosted runner 部署到集群内,或 staging 暴露公网 ingress + 配 PAT。
@@ -40,14 +41,14 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 | `actions/download-artifact` | v8 | Full Gate 质量趋势汇总测试报告 |
 | `docker/setup-buildx-action` | v4 | Buildx/Bake 构建需在 CI 回归 |
 | Hadolint Action | v3.5.0 | Dockerfile lint |
-| SBOM Action | v0.24.2 | 固定具体 release，不再使用浮动 `v0` |
+| SBOM Action | v0.24.3 | 固定具体 release，不再使用浮动 `v0` |
 | Docker Bake Action | v7 | 与 Buildx v4 配套；真实镜像 workflow 仍需升级后运行证据 |
 | Squawk / oasdiff | 2.65.0 / 1.32.1 | 迁移安全和 OpenAPI 破坏性变更守护 |
 | Trivy CLI | 0.74.0 | `vuln,misconfig` 扫描参数统一 |
 
 CI 版本基线与运行结果分开记录。每次核验 Full Gate、CodeQL 或镜像工作流时，按目标分支的实际 commit SHA 检查最新 run；`IN_PROGRESS`、`QUEUED`、`SKIPPED` 或其他 SHA 上的成功都不能作为当前提交通过证据。Docker Buildx/Bake、发布凭据、GHES 与 self-hosted runner 兼容性仍须按目标环境验证。后续每次升级按 [CI 外部 Actions 版本升级与验收记录](../backlog/ci-external-action-upgrade-backlog-2026-09-30.md) 运行对应回归。
 
-OpenSSF Scorecard 是 main/定时的供应链治理报告，不属于 PR required checks，也不以总分决定合并。其 workflow 失败表示扫描链路本身需要修复；SARIF 中的发现按 [`../standards/open-source-governance.md`](../standards/open-source-governance.md) 分级治理。外部 Action 必须固定 40 位 SHA，Dependabot 负责提出升级 PR，人工仍需核对 release、变更说明和所需权限。
+OpenSSF Scorecard 是 main/定时的供应链治理报告，不属于 PR required checks，也不以总分决定合并。其 workflow 失败表示扫描链路本身需要修复；SARIF 中的发现按 [`../standards/open-source-governance.md`](../standards/open-source-governance.md) 分级治理。外部 Action 必须固定 40 位 SHA；季度依赖盘点只创建 Issue 和 artifact，由维护者建立一张人工 PR 并核对 release、变更说明和所需权限。
 
 CodeQL 的 `Analyze (java)` 只有在 `codeql.yml` 已于 main 生效、并确认纯文档 PR 也会创建该检查后，才能加入 ruleset required checks。配置顺序必须是先合 workflow、用代码变更和纯文档 PR 各验证一次，再更新 ruleset；反向操作会使被 `paths-ignore` 跳过的 PR 永久等待。
 
@@ -57,7 +58,7 @@ CodeQL 的 `Analyze (java)` 只有在 `codeql.yml` 已于 main 生效、并确�
 - `actions/upload-artifact@v7` 使用当前 artifact 服务契约；迁移到 GHES 前必须确认 GHES 支持该 major，否则保持独立兼容版本或由平台团队提供替代上传方案。
 - Gitleaks `8.30.1` 本轮不盲目更换；已在 Docker `linux/amd64` 用同版 artifact 验证合成 `ghp_...` 正向退出 1、负向退出 0，并通过 PR/Full Gate 安全扫描；继续关注上游规则变化，该样例不代表所有密钥类型。
 - CodeQL、Trivy Action、Checkov、发布 Action 和 Sonar 仍按 G7 定期复核，不因本批版本升级自动视为完成。
-- `.github/dependabot.yml` 对普通版本按月检查，安全更新保持即时；仅对 Maven 和 GitHub Actions 的 patch 按生态分组，minor 保留单项 PR，Docker 不做宽泛分组，major 人工升级。Dependabot 不能跨 package ecosystem 生成一张 PR；跨生态汇总只适用于风险等级相当、验证边界相同的更新。Maven 更新还必须同步入库 SBOM；CI 保持只读校验，避免在高权限 workflow 中执行 PR 提供的 Maven 配置并回写分支。Docker 只扫描 `deploy/docker`；`maven` 构建镜像因 tag 携带 JDK 主版本而排除自动升级。
+- `.github/dependabot.yml` 对 Maven、GitHub Actions 和 Docker 设置季度解析但将版本 PR 上限设为 0；仓库级 Dependabot security updates 关闭自动修复 PR，安全告警仍持续发现。`quarterly-dependency-review` 每季度只生成报告和一个 Issue，维护者按[季度依赖集中治理](./quarterly-dependency-governance.md)创建一张人工 PR。Maven 更新必须同步入库 SBOM；Docker 构建镜像的 JDK 主版本继续人工决策。
 - 所有外部 Action 必须使用 40 位提交 SHA；尾部版本注释仅用于可读性。`check-github-action-pinning.py` 在本地、PR 和 Full Gate 阻止浮动 tag/branch 回流。
 
 ## 触发矩阵(开发者视角)
@@ -418,7 +419,7 @@ make ops-compensate     # 触发补偿
 |---|---|---|---|
 | `label-automerge.yml` | 任意人开 PR + 打 `automerge` 标签 | ❌ | ✅ |
 
-> Dependabot PR(`.github/dependabot.yml` 配置的 Maven 等生态)不走独立 auto-merge workflow,需人工或经 `automerge` 标签走 `label-automerge.yml` 路径。
+> Dependabot 自动版本和安全修复 PR 已关闭。季度治理 PR 由维护者创建，不走独立 auto-merge workflow；如需自动等待门禁，只能由人工添加 `automerge` 标签走 `label-automerge.yml`。
 
 **用法（label 路径）**：
 1. 开 PR

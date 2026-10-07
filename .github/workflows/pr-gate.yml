@@ -147,11 +147,12 @@ jobs:
         if: needs.changes.outputs.database == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         run: |
-          npm install -g squawk-cli@2.65.0
+          npm ci --prefix .github/ci-tools --ignore-scripts --no-audit --no-fund
+          echo "$GITHUB_WORKSPACE/.github/ci-tools/node_modules/.bin" >> "$GITHUB_PATH"
           OASDIFF_VERSION=1.32.1
           curl -fsSL "https://github.com/oasdiff/oasdiff/releases/download/v${OASDIFF_VERSION}/oasdiff_${OASDIFF_VERSION}_linux_amd64.tar.gz" \
             | sudo tar -xz -C /usr/local/bin oasdiff
-          squawk --version && oasdiff --version
+          .github/ci-tools/node_modules/.bin/squawk --version && oasdiff --version
 
       - name: Resolve guard base ref
         shell: bash

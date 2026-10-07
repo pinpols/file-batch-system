@@ -51,7 +51,7 @@
              embedded servlet container on the first patched 11.x release. -->
         <tomcat.version>11.0.25</tomcat.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <awssdk.version>2.55.5</awssdk.version>
+        <awssdk.version>2.55.11</awssdk.version>
         <testcontainers.version>2.0.5</testcontainers.version>
         <!-- testcontainers-redis 不在 testcontainers-bom 里，单独管理；子模块去版本号。 -->
         <testcontainers-redis.version>2.2.4</testcontainers-redis.version>
@@ -73,15 +73,15 @@
         <mybatis-spring-boot.version>4.1.0</mybatis-spring-boot.version>
         <spring-ai.version>2.0.1</spring-ai.version>
         <jsqlparser.version>5.4</jsqlparser.version>
-        <jose4j.version>0.9.6</jose4j.version>
+        <jose4j.version>0.9.7</jose4j.version>
         <shedlock.version>6.3.0</shedlock.version>
         <spring-retry.version>2.0.13</spring-retry.version>
-        <!-- OTel Logback appender 与 Spring Boot 4.1 的 OTel 1.62 API 兼容；
-             instrumentation 项目尚以 alpha 后缀发布该独立工件。 -->
-        <opentelemetry-instrumentation.version>2.25.0-alpha</opentelemetry-instrumentation.version>
+        <!-- OTel Logback appender 必须与 Spring Boot 4.1 管理的 OTel 1.62 API 对齐；
+             2.28.0-alpha 对应 API 1.62，后续版本会要求更高 API，不能单独滚动。 -->
+        <opentelemetry-instrumentation.version>2.28.0-alpha</opentelemetry-instrumentation.version>
         <!-- ArchUnit:守护 docs/agent-baseline.md 硬性架构与编码规约(ZoneId / Charset / 模块边界)。
              仅用于 test scope,不进运行时 jar。 -->
-        <archunit.version>1.5.0</archunit.version>
+        <archunit.version>1.5.1</archunit.version>
         <poi.version>5.5.1</poi.version>
         <!-- commons-compress:import 预处理 UNTAR / UNTAR_GZ 用(tar 容器解包);JDK 自带 GZIP/ZIP,
              tar 无标准库支持。版本对齐 POI 5.5.1 传递的 commons-compress,避免双版本漂移。 -->
@@ -104,15 +104,16 @@
         <!-- CVE-2026-54399 / CVE-2026-54428: Anthropic client 2.16.1 经 Spring AI BOM
              传入 httpcore5 5.4.2；5.4.3 起包含修复。统一覆盖 core 与 HTTP/2 变体，避免
              仅覆盖一个工件后依赖树再次漂移。 -->
-        <httpcomponents-core5.version>5.4.3</httpcomponents-core5.version>
+        <httpcomponents-core5.version>5.4.4</httpcomponents-core5.version>
 
         <!-- Resilience4j version validated against Spring Boot 4.1 and Java 21. -->
         <resilience4j.version>2.4.0</resilience4j.version>
         <pitest.version>1.30.0</pitest.version>
         <pitest-junit5-plugin.version>1.2.3</pitest-junit5-plugin.version>
+        <jazzer.version>0.30.0</jazzer.version>
         <!-- 必需门禁默认不重跑失败测试；确认的 flaky 用例只在隔离 profile 中重跑。 -->
         <test.rerun-failing-count>0</test.rerun-failing-count>
-        <test.excluded-groups>flaky</test.excluded-groups>
+        <test.excluded-groups>flaky,fuzz</test.excluded-groups>
     </properties>
 
     <dependencyManagement>
@@ -804,7 +805,7 @@ $1$2 $4 $5(</replacement>
                                     <path>
                                         <groupId>com.google.errorprone</groupId>
                                         <artifactId>error_prone_core</artifactId>
-                                        <version>2.36.0</version>
+                                        <version>2.50.0</version>
                                     </path>
                                     <path>
                                         <groupId>com.uber.nullaway</groupId>
