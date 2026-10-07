@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.support.web;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -161,7 +162,8 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
           && (hm.getMethodAnnotation(Idempotent.class) != null
               || hm.getBeanType().isAnnotationPresent(Idempotent.class))) {
         log.warn(
-            "missing Idempotency-Key on @Idempotent endpoint: uri={}", request.getRequestURI());
+            "missing Idempotency-Key on @Idempotent endpoint: uri={}",
+            LogSanitizer.value(request.getRequestURI()));
         writeJson(response, HttpStatus.BAD_REQUEST, MISSING_KEY_BODY);
         return false;
       }
@@ -187,9 +189,9 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
     if (DONE.equals(existing)) {
       log.warn(
           "duplicate idempotency key rejected (already done): key={}, uri={}, tenant={}",
-          idempotencyKey,
-          request.getRequestURI(),
-          tenantId);
+          LogSanitizer.value(idempotencyKey),
+          LogSanitizer.value(request.getRequestURI()),
+          LogSanitizer.value(tenantId));
       writeJson(response, HttpStatus.CONFLICT, CONFLICT_DONE_BODY);
       return false;
     }
@@ -226,7 +228,7 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
       // R-4.1 fail-closed：幂等拦截器拿不到 Redis 直接 503
       log.warn(
           "idempotency Redis GET unavailable — fail-closed: key={}, cause={}",
-          idempotencyKey,
+          LogSanitizer.value(idempotencyKey),
           SwallowedExceptionLogger.summary(ex));
       writeJson(response, HttpStatus.SERVICE_UNAVAILABLE, REDIS_UNAVAILABLE_BODY);
       return null;
@@ -246,15 +248,15 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
       }
       log.warn(
           "duplicate idempotency key rejected by durable completion record: key={}, uri={}, tenant={}",
-          idempotencyKey,
-          requestUri,
-          tenantId);
+          LogSanitizer.value(idempotencyKey),
+          LogSanitizer.value(requestUri),
+          LogSanitizer.value(tenantId));
       writeJson(response, HttpStatus.CONFLICT, CONFLICT_DONE_BODY);
       return true;
     } catch (DataAccessException ex) {
       log.warn(
           "durable idempotency lookup unavailable — fail-closed: key={}, cause={}",
-          idempotencyKey,
+          LogSanitizer.value(idempotencyKey),
           SwallowedExceptionLogger.summary(ex));
       writeJson(response, HttpStatus.SERVICE_UNAVAILABLE, REDIS_UNAVAILABLE_BODY);
       return true;
@@ -290,7 +292,7 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
       log.warn(
           "idempotency Redis follow-up GET unavailable — fail-closed (treat as pending):"
               + " key={}, cause={}",
-          idempotencyKey,
+          LogSanitizer.value(idempotencyKey),
           SwallowedExceptionLogger.summary(ex));
       response.setHeader("Retry-After", streamRequest ? "600" : "30");
       writeJson(
@@ -302,15 +304,15 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
     if (DONE.equals(current)) {
       log.warn(
           "duplicate idempotency key rejected (raced to DONE): key={}, uri={}",
-          idempotencyKey,
-          request.getRequestURI());
+          LogSanitizer.value(idempotencyKey),
+          LogSanitizer.value(request.getRequestURI()));
       writeJson(response, HttpStatus.CONFLICT, CONFLICT_DONE_BODY);
       return;
     }
     log.warn(
         "concurrent idempotency key rejected (pending): key={}, uri={}",
-        idempotencyKey,
-        request.getRequestURI());
+        LogSanitizer.value(idempotencyKey),
+        LogSanitizer.value(request.getRequestURI()));
     response.setHeader("Retry-After", streamRequest ? "600" : "30");
     writeJson(
         response,

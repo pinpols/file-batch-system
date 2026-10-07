@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.TaskStatus;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
@@ -36,9 +37,9 @@ public class JobInstanceTerminalChildStateReconciler {
       log.info(
           "job_instance terminal child-state reconcile: tenantId={} jobInstanceId={}"
               + " instanceStatus={} partitionsClosed={} tasksClosed={}",
-          tenantId,
+          LogSanitizer.value(tenantId),
           jobInstanceId,
-          terminalInstanceStatus,
+          LogSanitizer.value(terminalInstanceStatus),
           partitions,
           tasks);
     }

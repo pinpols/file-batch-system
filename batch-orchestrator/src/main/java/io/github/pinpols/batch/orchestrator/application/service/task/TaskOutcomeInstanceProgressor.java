@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.WorkflowNodeCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
@@ -160,9 +161,9 @@ public final class TaskOutcomeInstanceProgressor {
       log.info(
           "promoting stale failed job instance to success after all partitions completed:"
               + " tenantId={} jobInstanceId={} previousStatus={} successPartitions={}",
-          command.tenantId(),
+          LogSanitizer.value(command.tenantId()),
           jobInstance.getId(),
-          jobInstance.getInstanceStatus(),
+          LogSanitizer.value(jobInstance.getInstanceStatus()),
           successCount);
     }
     String instanceFailureClass = TaskOutcomeStatePolicy.isTerminalJobInstanceStatus(instanceStatus)

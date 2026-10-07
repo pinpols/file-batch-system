@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.SmsProperties;
 import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
@@ -108,8 +109,8 @@ public class TwilioSmsProvider implements SmsProvider {
         if (status / 100 != 2) {
           log.warn(
               "[twilio] delivery rejected tenant={} channel={} recipients={} status={}",
-              message.tenantId(),
-              message.channelCode(),
+              LogSanitizer.value(message.tenantId()),
+              LogSanitizer.value(message.channelCode()),
               phoneNumbers.size(),
               status);
           return WebhookDeliveryResult.failure(status, "twilio http status=" + status);
@@ -118,15 +119,15 @@ public class TwilioSmsProvider implements SmsProvider {
         Thread.currentThread().interrupt();
         log.warn(
             "[twilio] delivery interrupted tenant={} channel={} recipients={}",
-            message.tenantId(),
-            message.channelCode(),
+            LogSanitizer.value(message.tenantId()),
+            LogSanitizer.value(message.channelCode()),
             phoneNumbers.size());
         return WebhookDeliveryResult.failure(null, ie.getClass().getSimpleName());
       } catch (Exception e) {
         log.warn(
             "[twilio] delivery failed tenant={} channel={} recipients={} ex={}",
-            message.tenantId(),
-            message.channelCode(),
+            LogSanitizer.value(message.tenantId()),
+            LogSanitizer.value(message.channelCode()),
             phoneNumbers.size(),
             e.getClass().getSimpleName());
         return WebhookDeliveryResult.failure(null, e.getClass().getSimpleName());

@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -343,7 +344,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
               "high_water_mark_out CAS no-op for jobInstance {}: incoming={} (regression or"
                   + " malformed)",
               task.getJobInstanceId(),
-              command.highWaterMarkOut());
+              LogSanitizer.value(command.highWaterMarkOut()));
         }
       }
     } else {

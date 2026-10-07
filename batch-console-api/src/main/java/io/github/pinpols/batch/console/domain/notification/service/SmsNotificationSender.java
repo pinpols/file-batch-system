@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.notification.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.SmsProperties;
 import java.util.ArrayList;
@@ -54,7 +55,7 @@ public class SmsNotificationSender implements NotificationSender {
       log.warn(
           "SMS channel selected but no provider impl for '{}'; skipping: channelCode={}",
           providerName,
-          message.channelCode());
+          LogSanitizer.value(message.channelCode()));
       return WebhookDeliveryResult.failure(null, "sms provider not available: " + providerName);
     }
     return provider.send(phoneNumbers, message);

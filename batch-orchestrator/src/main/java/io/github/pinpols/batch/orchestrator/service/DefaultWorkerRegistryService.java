@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.dto.WorkerTaskTypeDescriptorDto;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.security.SensitiveDataValidator;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -216,8 +217,8 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     if (reportedMajor == null) {
       log.warn(
           "Could not parse the major version from worker {} sdkVersion=\"{}\"; skipping the minimum SDK version gate",
-          request.workerCode(),
-          reportedSdkVersion);
+          LogSanitizer.value(request.workerCode()),
+          LogSanitizer.value(reportedSdkVersion));
       return;
     }
     if (reportedMajor < requiredMajor) {

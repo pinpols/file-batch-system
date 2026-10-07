@@ -1,19 +1,19 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `4262c6b75`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `2fc83ef0c`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,721 | 498,863 | 255,890 | 51.3% |
+| 4,723 | 498,994 | 255,940 | 51.3% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| prod | 2,740 | 250,547 | 114,598 | 45.7% |
-| test | 1,210 | 181,184 | 99,450 | 54.9% |
+| prod | 2,741 | 250,654 | 114,632 | 45.7% |
+| test | 1,211 | 181,208 | 99,466 | 54.9% |
 | script | 625 | 51,383 | 31,917 | 62.1% |
 | config | 53 | 8,156 | 5,855 | 71.8% |
 | infra-config | 32 | 5,332 | 3,901 | 73.2% |
@@ -23,7 +23,7 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,480 | 364,494 | 188,229 | 51.6% |
+| Java | 3,482 | 364,625 | 188,279 | 51.6% |
 | Shell | 196 | 29,922 | 23,311 | 77.9% |
 | Python | 233 | 33,544 | 17,014 | 50.7% |
 | YAML | 95 | 12,437 | 9,417 | 75.7% |
@@ -46,7 +46,7 @@
 | `helm/batch-platform/files/prometheus-batch-rules.yml` | infra-config | YAML | 1,216 | 1,016 |
 | `load-tests/scripts/run-control-plane-worker-benchmark.sh` | script | Shell | 879 | 796 |
 | `helm/batch-platform/values.yaml` | infra-config | YAML | 991 | 712 |
-| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java` | prod | Java | 1,145 | 644 |
+| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java` | prod | Java | 1,146 | 645 |
 | `deploy/docker/compose/app.yml` | config | YAML | 724 | 643 |
 | `scripts/local/validate-seed-scenarios.sh` | script | Shell | 768 | 560 |
 | `scripts/fix-fixture-xlsx.py` | script | Python | 979 | 559 |
