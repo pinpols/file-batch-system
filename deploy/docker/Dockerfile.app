@@ -118,7 +118,7 @@ RUN set -eux; \
 
 # ───── Stage 5: per-image runtime─────
 # Keep the tag for readability, pin the manifest digest for reproducible builds.
-FROM eclipse-temurin:21-jre-jammy@sha256:f04fb34e053148344e83317976114ec3f37e4b830ec8bdab5a2fe3cecd7d010b
+FROM eclipse-temurin:21-jre-jammy@sha256:bce52ea7da1f72e6bf5bec505e63b6eb55ba79ad1226903579f77eab1a80139a
 
 ARG MODULE
 ARG BUILD_REVISION=unknown
