@@ -33,6 +33,7 @@ shell_files=()
 mapper_xml_files=()
 docs_changed=0
 scripts_changed=0
+contract_governance_changed=0
 workflow_changed=0
 loc_affecting_changed=0
 env_file_changed=0
@@ -44,6 +45,11 @@ maven_descriptor_changed=0
 helm_changed=0
 config_registry_changed=0
 for file in "${staged_files[@]}"; do
+  case "$file" in
+    docs/governance/java-contract-governance*.json|scripts/ci/check-java-contract-governance.py|scripts/ci/tests/test_check_java_contract_governance.py)
+      contract_governance_changed=1
+      ;;
+  esac
   [[ "$file" == *.java ]] && java_files+=("$file")
   [[ "$file" == *.sh ]] && shell_files+=("$file")
   [[ "$file" == *Mapper.xml ]] && mapper_xml_files+=("$file")
@@ -83,6 +89,10 @@ if ((${#java_files[@]} > 0)); then
     ./mvnw -q spotless:apply
   gate_run PRE_COMMIT_JAVA_LOGGING "Java 日志与异常输出治理" \
     "$PYTHON_BIN" scripts/ci/check-java-logging-governance.py "${java_files[@]}"
+  gate_run PRE_COMMIT_JAVA_CONTRACT "Java 固定契约与协议值治理" \
+    "$PYTHON_BIN" scripts/ci/check-java-contract-governance.py "${java_files[@]}"
+  gate_run PRE_COMMIT_JAVA_CONTRACT_TEST "Java 契约治理门禁测试" \
+    "$PYTHON_BIN" -m unittest scripts/ci/tests/test_check_java_contract_governance.py
   gate_run PRE_COMMIT_JAVA_LOGGING_TEST "Java 日志治理门禁测试" \
     "$PYTHON_BIN" -m unittest scripts/ci/tests/test_check_java_logging_governance.py
   gate_run PRE_COMMIT_JAVA_READABILITY "Java 可读性约定" \
@@ -113,6 +123,13 @@ if ((${#java_files[@]} > 0)); then
   for file in "${java_files[@]}"; do
     [[ -f "$file" ]] && git add -- "$file"
   done
+fi
+
+if ((contract_governance_changed == 1)); then
+  gate_run PRE_COMMIT_JAVA_CONTRACT_RESCAN "Java 契约治理规则全量复扫" \
+    "$PYTHON_BIN" scripts/ci/check-java-contract-governance.py
+  gate_run PRE_COMMIT_JAVA_CONTRACT_RESCAN_TEST "Java 契约治理门禁测试" \
+    "$PYTHON_BIN" -m unittest scripts/ci/tests/test_check_java_contract_governance.py
 fi
 
 if ((config_registry_changed == 1)); then

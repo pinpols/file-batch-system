@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.constants.BatchFileConstants;
 import io.github.pinpols.batch.common.enums.FileStatus;
+import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
@@ -67,7 +68,6 @@ public class ParseStep implements ImportStageStep {
   private static final String ERROR_CODE_PARSE_FAILED = "IMPORT_PARSE_FAILED";
 
   private static final String KEY_PARSED_COUNT = PipelineRuntimeKeys.IMPORT_PARSED_COUNT;
-  private static final String FORMAT_EXCEL = "EXCEL";
 
   private static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
@@ -97,15 +97,15 @@ public class ParseStep implements ImportStageStep {
     FixedWidthFormatParser fixedWidthParser = new FixedWidthFormatParser(support);
     DelimitedFormatParser delimitedParser = new DelimitedFormatParser(support);
     this.parsers = Map.of(
-        FORMAT_EXCEL,
+        FileTemplateFormat.EXCEL.code(),
         excelParser,
-        "JSON",
+        FileTemplateFormat.JSON.code(),
         jsonParser,
-        "XML",
+        FileTemplateFormat.XML.code(),
         xmlParser,
-        "FIXED_WIDTH",
+        FileTemplateFormat.FIXED_WIDTH.code(),
         fixedWidthParser,
-        "DELIMITED",
+        FileTemplateFormat.DELIMITED.code(),
         delimitedParser);
     this.defaultParser = delimitedParser;
   }
@@ -400,10 +400,10 @@ public class ParseStep implements ImportStageStep {
         StandardOpenOption.WRITE)) {
       if (binary instanceof byte[] binaryBytes && binaryBytes.length > 0) {
         String format = resolveFormat(importPayload, templateConfig, "");
-        if (FORMAT_EXCEL.equalsIgnoreCase(format)) {
+        if (FileTemplateFormat.EXCEL.code().equalsIgnoreCase(format)) {
           FormatParseRequest request = new FormatParseRequest(
               null, binaryBytes, importPayload, templateConfig, preserveLogicalRow);
-          return parsers.get(FORMAT_EXCEL).parse(context, request, writer);
+          return parsers.get(FileTemplateFormat.EXCEL.code()).parse(context, request, writer);
         }
         Charset cs = resolvePayloadTextCharset(importPayload, templateConfig);
         String asText = new String(binaryBytes, cs);
@@ -436,7 +436,7 @@ public class ParseStep implements ImportStageStep {
         preserveLogicalRow,
         spoolPath,
         spoolCharset);
-    if (FORMAT_EXCEL.equalsIgnoreCase(format)) {
+    if (FileTemplateFormat.EXCEL.code().equalsIgnoreCase(format)) {
       byte[] bytes =
           payloadText == null ? new byte[0] : payloadText.getBytes(StandardCharsets.UTF_8);
       request = new FormatParseRequest(
@@ -488,10 +488,10 @@ public class ParseStep implements ImportStageStep {
     if (Texts.hasText(payloadText)) {
       String trim = payloadText.trim();
       if (trim.startsWith("{") || trim.startsWith("[")) {
-        return "JSON";
+        return FileTemplateFormat.JSON.code();
       }
     }
-    return "DELIMITED";
+    return FileTemplateFormat.DELIMITED.code();
   }
 
   private Charset resolvePayloadTextCharset(

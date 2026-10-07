@@ -25,12 +25,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 
 /**
  * 仿真(testcontainers 级):一轮跑 4 类执行器混合 + 多轮重复(soak/variety),模拟真实多样负载下 原子任务 worker 的稳定性 —— 同一 worker
@@ -38,12 +36,10 @@ import org.springframework.test.context.ActiveProfiles;
  *
  * <p>与负载测试({@link AtomicTaskLoadE2eIT},单一类型高并发)互补:这里强调"类型多样 + 重复", 验证执行器注册表路由在混合流量下不串、不丢。
  */
-@SpringBootTest(
+@E2eSpringBootTest(
     classes = E2eAtomicApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles({"test", "e2e"})
 @E2eBusinessSchema
-@Tag("e2e")
 @DisplayName(
     "原子任务混合执行器端到端:同一 worker 进程交错处理数据库查询,命令行脚本,存储过程与 HTTP 调用四类任务,连续三轮投放,验证混合流量下派发与执行链路全部收敛到终态成功")
 class AtomicMixedScenarioE2eIT extends AbstractIntegrationTest {

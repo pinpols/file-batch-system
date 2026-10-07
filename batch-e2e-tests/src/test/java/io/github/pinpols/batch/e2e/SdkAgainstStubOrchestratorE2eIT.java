@@ -66,7 +66,7 @@ import org.testcontainers.kafka.KafkaContainer;
  * JDBC」同理。
  */
 @Tag("smoke")
-@Tag("e2e")
+@E2eTest
 @Testcontainers
 @DisplayName("SDK↔stub orchestrator 真 Kafka 端到端 POC")
 class SdkAgainstStubOrchestratorE2eIT {

@@ -2,149 +2,160 @@ package io.github.pinpols.batch.console.domain.ops.infrastructure;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.resilience.DownstreamFallback;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleSchedulerCommandResponse;
+import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleTriggerActionResponse;
+import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleTriggerStatusResponse;
 import io.github.pinpols.batch.console.application.ops.ConsoleTriggerProxyService;
 import io.github.pinpols.batch.console.shared.client.TriggerInternalRestClient;
 import io.github.pinpols.batch.console.shared.query.TenantScopeResolver;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
 
-/**
- * {@link ConsoleTriggerProxyService} 的默认实现:通过 RestClient 转发请求到触发器管理接口。
- *
- * <p>P2-1(2026-05-16):trigger client 构造下沉到 {@link TriggerInternalRestClient}, 该类用 ObjectProvider
- * 拿独立 builder + 加 5s/30s 超时 + 注入 secret。本类专注路由 + tenant guard。
- *
- * <p>P1-B(2026-05-30):全部调用走 {@link DownstreamFallback} 统一打 metrics。读路径 {@code list} / {@code
- * schedulerStatus} 用 {@code callOrFallback} 降级,其余写路径用 {@code callOrThrow} fail-fast。
- */
-@Slf4j
+/** Trigger 内部接口代理：读路径统一降级，写路径失败传播，并按当前租户收敛列表。 */
 @Service
 @RequiredArgsConstructor
 public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxyService {
 
   private static final String SVC = "trigger";
+  private static final String TENANT_ID = "tenantId";
+  // 固定内部路由属于 API 契约，部署地址由 TriggerInternalRestClient 的配置提供。
+  @SuppressWarnings("java:S1075")
+  private static final String ACTION_PATH = "/api/triggers/management/{action}";
+
+  private static final ParameterizedTypeReference<CommonResponse<ConsoleSchedulerCommandResponse>>
+      SCHEDULER_RESPONSE = new ParameterizedTypeReference<>() {};
+  private static final ParameterizedTypeReference<CommonResponse<ConsoleTriggerActionResponse>>
+      ACTION_RESPONSE = new ParameterizedTypeReference<>() {};
+  private static final ParameterizedTypeReference<
+          CommonResponse<List<ConsoleTriggerStatusResponse>>>
+      LIST_RESPONSE = new ParameterizedTypeReference<>() {};
 
   private final TriggerInternalRestClient triggerInternalRestClient;
   private final TenantScopeResolver tenantGuard;
   private final DownstreamFallback downstreamFallback;
 
-  private RestClient newClient() {
-    return triggerInternalRestClient.client();
-  }
-
   @Override
-  public Map<String, String> schedulerStatus() {
+  public ConsoleSchedulerCommandResponse schedulerStatus() {
     return downstreamFallback.callOrFallback(
         SVC,
         "scheduler-status",
-        () -> proxyGet("/api/triggers/management/scheduler-status"),
-        ex -> Map.of("status", "UNKNOWN"));
+        () -> {
+          CommonResponse<ConsoleSchedulerCommandResponse> response = triggerInternalRestClient
+              .client()
+              .get()
+              .uri("/api/triggers/management/scheduler-status")
+              .retrieve()
+              .body(SCHEDULER_RESPONSE);
+          return EmptyChecks.isNotNull(response)
+              ? response.data()
+              : new ConsoleSchedulerCommandResponse(null);
+        },
+        ex -> new ConsoleSchedulerCommandResponse("UNKNOWN"));
   }
 
   @Override
-  public Map<String, String> schedulerPauseAll() {
+  public ConsoleSchedulerCommandResponse schedulerPauseAll() {
     return downstreamFallback.callOrThrow(
-        SVC, "scheduler-pause-all", () -> proxyPost("/api/triggers/management/pause-all"));
+        SVC, "scheduler-pause-all", () -> schedulerCommand("pause-all"));
   }
 
   @Override
-  public Map<String, String> schedulerResumeAll() {
+  public ConsoleSchedulerCommandResponse schedulerResumeAll() {
     return downstreamFallback.callOrThrow(
-        SVC, "scheduler-resume-all", () -> proxyPost("/api/triggers/management/resume-all"));
+        SVC, "scheduler-resume-all", () -> schedulerCommand("resume-all"));
   }
 
   @Override
-  public List<Object> triggerList() {
-    // SEC(跨租户越权修复):下游 /api/triggers/management/list 无 tenant 过滤能力(返回全租户
-    // TriggerStatusInfo),故在 console 侧按调用方租户收敛:
-    //   - 全局角色(ADMIN / AUDITOR)→ scope 为 null,返回全部;
-    //   - 租户角色(TENANT_ADMIN / TENANT_USER)→ 仅返回 tenantId 命中自身租户的条目。
-    // 只读查询,trigger 不可达 → DownstreamFallback 降级为空 list + metrics(详见
-    // docs/runbook/downstream-degradation.md "trigger:list" 条目)。
-    // 状态变更(register / pause / resume / triggerAction)仍 fail-fast,见各方法的 callOrThrow。
+  public List<ConsoleTriggerStatusResponse> triggerList() {
     String tenantScope = tenantGuard.currentTenantScopeOrNull();
     return downstreamFallback.callOrFallback(
         SVC,
         "list",
         () -> {
-          CommonResponse<List<Object>> resp = newClient()
+          CommonResponse<List<ConsoleTriggerStatusResponse>> response = triggerInternalRestClient
+              .client()
               .get()
               .uri("/api/triggers/management/list")
               .retrieve()
-              .body(new ParameterizedTypeReference<CommonResponse<List<Object>>>() {});
-          List<Object> data = resp != null ? resp.data() : List.<Object>of();
-          return filterByTenant(data, tenantScope);
+              .body(LIST_RESPONSE);
+          return filterByTenant(
+              EmptyChecks.isNotNull(response) ? response.data() : List.of(), tenantScope);
         },
-        ex -> List.<Object>of());
+        ex -> List.of());
   }
 
-  /**
-   * 按租户作用域过滤下游触发器列表。scope 为 null(全局角色)时原样返回; 否则仅保留 {@code tenantId} 命中 scope 的条目(下游条目反序列化为 {@code
-   * Map},取其 {@code tenantId} 键)。无法识别 tenantId 的条目按「不属于本租户」丢弃,fail-closed。
-   */
-  static List<Object> filterByTenant(List<Object> data, String tenantScope) {
-    if (tenantScope == null || data == null) {
-      return data != null ? data : List.<Object>of();
+  /** 下游不提供租户筛选；缺失租户标识的条目在租户作用域内按失败关闭处理。 */
+  static List<ConsoleTriggerStatusResponse> filterByTenant(
+      List<ConsoleTriggerStatusResponse> data, String tenantScope) {
+    if (EmptyChecks.isNull(data)) {
+      return List.of();
+    }
+    if (EmptyChecks.isNull(tenantScope)) {
+      return data;
     }
     return data.stream()
-        .filter(item -> item instanceof Map<?, ?> row
-            && tenantScope.equals(String.valueOf(row.get("tenantId"))))
+        .filter(item -> EmptyChecks.isNotNull(item) && tenantScope.equals(item.tenantId()))
         .toList();
   }
 
   @Override
-  public Map<String, String> triggerAction(String tenantId, String jobCode, String action) {
+  public ConsoleTriggerActionResponse triggerAction(
+      String tenantId, String jobCode, String action) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return downstreamFallback.callOrThrow(SVC, "action", () -> {
-      CommonResponse<Map<String, String>> resp = newClient()
+      CommonResponse<ConsoleTriggerActionResponse> response = triggerInternalRestClient
+          .client()
           .post()
           .uri(uriBuilder -> uriBuilder
-              .path("/api/triggers/management/{action}")
-              .queryParam("tenantId", resolved)
+              .path(ACTION_PATH)
+              .queryParam(TENANT_ID, resolved)
               .queryParam("jobCode", jobCode)
               .build(action))
           .retrieve()
-          .body(new ParameterizedTypeReference<CommonResponse<Map<String, String>>>() {});
-      return resp != null ? resp.data() : Map.of();
+          .body(ACTION_RESPONSE);
+      return EmptyChecks.isNotNull(response)
+          ? response.data()
+          : new ConsoleTriggerActionResponse(null, null, null);
     });
   }
 
   @Override
-  public Map<String, String> pauseByTenant(String tenantId) {
+  public ConsoleTriggerActionResponse pauseByTenant(String tenantId) {
     return downstreamFallback.callOrThrow(
-        SVC,
-        "pause-tenant",
-        () -> proxyPost("/api/triggers/management/pause-tenant?tenantId=" + tenantId));
+        SVC, "pause-tenant", () -> tenantCommand("pause-tenant", tenantId));
   }
 
   @Override
-  public Map<String, String> resumeByTenant(String tenantId) {
+  public ConsoleTriggerActionResponse resumeByTenant(String tenantId) {
     return downstreamFallback.callOrThrow(
-        SVC,
-        "resume-tenant",
-        () -> proxyPost("/api/triggers/management/resume-tenant?tenantId=" + tenantId));
+        SVC, "resume-tenant", () -> tenantCommand("resume-tenant", tenantId));
   }
 
-  private Map<String, String> proxyGet(String path) {
-    CommonResponse<Map<String, String>> resp = newClient()
-        .get()
-        .uri(path)
-        .retrieve()
-        .body(new ParameterizedTypeReference<CommonResponse<Map<String, String>>>() {});
-    return resp != null ? resp.data() : Map.of();
-  }
-
-  private Map<String, String> proxyPost(String path) {
-    CommonResponse<Map<String, String>> resp = newClient()
+  private ConsoleSchedulerCommandResponse schedulerCommand(String action) {
+    CommonResponse<ConsoleSchedulerCommandResponse> response = triggerInternalRestClient
+        .client()
         .post()
-        .uri(path)
+        .uri(ACTION_PATH, action)
         .retrieve()
-        .body(new ParameterizedTypeReference<CommonResponse<Map<String, String>>>() {});
-    return resp != null ? resp.data() : Map.of();
+        .body(SCHEDULER_RESPONSE);
+    return EmptyChecks.isNotNull(response)
+        ? response.data()
+        : new ConsoleSchedulerCommandResponse(null);
+  }
+
+  private ConsoleTriggerActionResponse tenantCommand(String action, String tenantId) {
+    CommonResponse<ConsoleTriggerActionResponse> response = triggerInternalRestClient
+        .client()
+        .post()
+        .uri(uriBuilder ->
+            uriBuilder.path(ACTION_PATH).queryParam(TENANT_ID, tenantId).build(action))
+        .retrieve()
+        .body(ACTION_RESPONSE);
+    return EmptyChecks.isNotNull(response)
+        ? response.data()
+        : new ConsoleTriggerActionResponse(null, null, null);
   }
 }

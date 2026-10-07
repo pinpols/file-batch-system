@@ -1,39 +1,42 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
+import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse.DispatchRecord;
+import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse.FileRecord;
+import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse.JobInstance;
+import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse.PipelineInstance;
 import java.util.List;
-import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 
 public interface LineageEvidenceMapper {
 
-  Map<String, Object> selectJobInstance(
+  JobInstance selectJobInstance(
       @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
-  Map<String, Object> selectArchivedJobInstance(
+  JobInstance selectArchivedJobInstance(
       @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
-  List<Map<String, Object>> selectPipelineInstances(
+  List<PipelineInstance> selectPipelineInstances(
       @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
-  List<Map<String, Object>> selectArchivedPipelineInstances(
+  List<PipelineInstance> selectArchivedPipelineInstances(
       @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
-  List<Map<String, Object>> selectFileRecords(
+  List<FileRecord> selectFileRecords(
       @Param("tenantId") String tenantId,
       @Param("jobInstanceId") Long jobInstanceId,
       @Param("payloadFileId") Long payloadFileId);
 
-  List<Map<String, Object>> selectArchivedFileRecords(
+  List<FileRecord> selectArchivedFileRecords(
       @Param("tenantId") String tenantId,
       @Param("jobInstanceId") Long jobInstanceId,
       @Param("payloadFileId") Long payloadFileId);
 
-  List<Map<String, Object>> selectDispatchRecords(
+  List<DispatchRecord> selectDispatchRecords(
       @Param("tenantId") String tenantId,
       @Param("jobInstanceId") Long jobInstanceId,
       @Param("fileIds") List<Long> fileIds);
 
-  List<Map<String, Object>> selectArchivedDispatchRecords(
+  List<DispatchRecord> selectArchivedDispatchRecords(
       @Param("tenantId") String tenantId,
       @Param("jobInstanceId") Long jobInstanceId,
       @Param("fileIds") List<Long> fileIds);

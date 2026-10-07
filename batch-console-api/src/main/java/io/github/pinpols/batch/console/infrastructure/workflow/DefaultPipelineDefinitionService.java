@@ -4,12 +4,14 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.application.rbac.ConsoleMetaQueryService;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.application.PipelineDefinitionService;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.PipelineDefinitionSaveRequest;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsolePipelineDefinitionListItemResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.PipelineDefinitionDetailResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.PipelineDefinitionDetailResponse.StepResponse;
 import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
@@ -43,6 +45,7 @@ public class DefaultPipelineDefinitionService implements PipelineDefinitionServi
   private static final String KEY_WORKER_GROUP = "worker_group";
   private static final String KEY_DESCRIPTION = "description";
   private static final String KEY_ID = "id";
+  private static final String KEY_STEP_PARAMS = "step_params";
   private static final String KEY_ENABLED = "enabled";
 
   private final PipelineDefinitionMapper pipelineDefinitionMapper;
@@ -76,7 +79,7 @@ public class DefaultPipelineDefinitionService implements PipelineDefinitionServi
   }
 
   @Override
-  public PageResponse<Map<String, Object>> list(
+  public PageResponse<ConsolePipelineDefinitionListItemResponse> list(
       String tenantId,
       String jobCode,
       String pipelineType,
@@ -88,7 +91,11 @@ public class DefaultPipelineDefinitionService implements PipelineDefinitionServi
     long total = pipelineDefinitionMapper.countByQuery(resolved, jobCode, pipelineType, enabled);
     List<Map<String, Object>> items = pipelineDefinitionMapper.selectByQuery(
         resolved, jobCode, pipelineType, enabled, pageRequest);
-    return new PageResponse<>(total, pageRequest.pageNo(), pageRequest.pageSize(), items);
+    return new PageResponse<>(
+        total,
+        pageRequest.pageNo(),
+        pageRequest.pageSize(),
+        items.stream().map(ConsolePipelineDefinitionListItemResponse::from).toList());
   }
 
   @Override
@@ -196,7 +203,7 @@ public class DefaultPipelineDefinitionService implements PipelineDefinitionServi
       stepParams.put("stage_code", step.getStageCode());
       stepParams.put("step_order", step.getStepOrder() != null ? step.getStepOrder() : 0);
       stepParams.put("impl_code", step.getImplCode());
-      stepParams.put("step_params", step.getStepParams());
+      stepParams.put(KEY_STEP_PARAMS, step.getStepParams());
       stepParams.put(
           "timeout_seconds", step.getTimeoutSeconds() != null ? step.getTimeoutSeconds() : 0);
       stepParams.put(
@@ -235,7 +242,9 @@ public class DefaultPipelineDefinitionService implements PipelineDefinitionServi
         (String) row.get("stage_code"),
         toInt(row.get("step_order")),
         (String) row.get("impl_code"),
-        row.get("step_params") != null ? row.get("step_params").toString() : null,
+        EmptyChecks.isNotNull(row.get(KEY_STEP_PARAMS))
+            ? row.get(KEY_STEP_PARAMS).toString()
+            : null,
         toInt(row.get("timeout_seconds")),
         (String) row.get("retry_policy"),
         toInt(row.get("retry_max_count")),

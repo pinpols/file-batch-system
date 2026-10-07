@@ -41,7 +41,6 @@ import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -49,7 +48,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
-import org.springframework.test.context.ActiveProfiles;
 
 /**
  * Worker 进程重启恢复 E2E 测试：验证 Dispatch Worker 进程重启后， 重新注册并恢复消费 Kafka 派发消息，完成文件分发任务。
@@ -57,7 +55,7 @@ import org.springframework.test.context.ActiveProfiles;
  * <p>测试流程：启动 worker1 → 杀掉 worker1 → 启动 worker2（同 consumer group）→ 等待 Kafka rebalance 完成 → 触发 job →
  * 等待任务成功。
  */
-@SpringBootTest(
+@E2eSpringBootTest(
     classes = io.github.pinpols.batch.e2e.apps.E2eOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
@@ -77,8 +75,6 @@ import org.springframework.test.context.ActiveProfiles;
       "batch.resource-scheduler.quota-reset-scan-interval-millis=600000",
       "batch.scheduler.snapshot-persist-enabled=false"
     })
-@ActiveProfiles({"test", "e2e"})
-@Tag("e2e")
 // 杀真 subprocess Worker 后 Spring context 里 Lettuce/RedisTemplate 会进入 STOPPED 状态，污染
 // 后续 IT class 共用的同一个 ApplicationContext。AFTER_CLASS 强制 Spring 在本 IT 跑完后销毁
 // 上下文，下个 IT 重建一份干净的，避免 ImportFailurePipeline / ExportPipeline / ExportContent /

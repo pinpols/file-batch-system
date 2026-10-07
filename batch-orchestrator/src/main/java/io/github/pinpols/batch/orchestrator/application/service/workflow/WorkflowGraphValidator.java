@@ -2,6 +2,10 @@ package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.constants.NodeOutputKeys;
+import io.github.pinpols.batch.common.enums.DictEnum;
+import io.github.pinpols.batch.common.enums.SensorTimeoutAction;
+import io.github.pinpols.batch.common.enums.SensorType;
+import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -153,8 +157,10 @@ public class WorkflowGraphValidator {
     Set<String> startCodes = new HashSet<>();
     Set<String> endCodes = new HashSet<>();
     for (WorkflowNodeEntity n : byCode.values()) {
-      if ("START".equalsIgnoreCase(n.getNodeType())) startCodes.add(n.getNodeCode());
-      else if ("END".equalsIgnoreCase(n.getNodeType())) endCodes.add(n.getNodeCode());
+      if (WorkflowNodeType.START.code().equalsIgnoreCase(n.getNodeType()))
+        startCodes.add(n.getNodeCode());
+      else if (WorkflowNodeType.END.code().equalsIgnoreCase(n.getNodeType()))
+        endCodes.add(n.getNodeCode());
     }
 
     validateStartEndEdges(startCodes, endCodes, incoming, outgoing, errors);
@@ -279,7 +285,7 @@ public class WorkflowGraphValidator {
       Map<String, List<String>> incoming,
       List<ValidationIssue> errors) {
     for (WorkflowNodeEntity n : nodes) {
-      if (!"GATEWAY".equalsIgnoreCase(n.getNodeType())) continue;
+      if (!WorkflowNodeType.GATEWAY.code().equalsIgnoreCase(n.getNodeType())) continue;
       int incomingCount = incoming.getOrDefault(n.getNodeCode(), List.of()).size();
       JoinMode joinMode = parseJoinMode(n.getNodeParams());
       if (joinMode == null) continue;
@@ -525,10 +531,10 @@ public class WorkflowGraphValidator {
   private static final TypeReference<Map<String, Object>> SENSOR_MAP_TYPE =
       new TypeReference<>() {};
 
-  private static final Set<String> SENSOR_TYPES =
-      Set.of("FILE_ARRIVAL", "HTTP_POLL", "KAFKA_OFFSET", "DB_ROW_EXISTS");
+  private static final Set<String> SENSOR_TYPES = DictEnum.codes(SensorType.class);
 
-  private static final Set<String> SENSOR_TIMEOUT_ACTIONS = Set.of("FAIL", "SKIP_DOWNSTREAM");
+  private static final Set<String> SENSOR_TIMEOUT_ACTIONS =
+      DictEnum.codes(SensorTimeoutAction.class);
 
   /**
    * ADR-028 V16：WAIT 节点的 sensor_spec / sensor_type / 超时配置静态校验。非 WAIT 节点直接返回。
@@ -543,7 +549,7 @@ public class WorkflowGraphValidator {
    */
   @SuppressWarnings("unchecked")
   private void validateSensorSpec(WorkflowNodeEntity node, List<ValidationIssue> errors) {
-    if (!"WAIT".equalsIgnoreCase(node.getNodeType())) {
+    if (!WorkflowNodeType.WAIT.code().equalsIgnoreCase(node.getNodeType())) {
       return;
     }
     Map<String, Object> params;
@@ -614,13 +620,13 @@ public class WorkflowGraphValidator {
 
   private Map<String, SensorSpecValidator> sensorSpecValidators() {
     return Map.of(
-        "FILE_ARRIVAL",
+        SensorType.FILE_ARRIVAL.code(),
         this::validateFileArrivalSensorSpec,
-        "HTTP_POLL",
+        SensorType.HTTP_POLL.code(),
         this::validateHttpPollSensorSpec,
-        "KAFKA_OFFSET",
+        SensorType.KAFKA_OFFSET.code(),
         this::validateKafkaOffsetSensorSpec,
-        "DB_ROW_EXISTS",
+        SensorType.DB_ROW_EXISTS.code(),
         this::validateDbRowExistsSensorSpec);
   }
 

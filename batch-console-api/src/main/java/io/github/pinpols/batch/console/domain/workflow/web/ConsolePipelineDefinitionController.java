@@ -12,7 +12,6 @@ import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.shared.command.EnabledPatchRequest;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -47,17 +46,8 @@ public class ConsolePipelineDefinitionController {
       @RequestParam(value = "enabled", required = false) Boolean enabled,
       @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
       @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
-    PageResponse<Map<String, Object>> page =
-        pipelineDefinitionService.list(tenantId, jobCode, pipelineType, enabled, pageNo, pageSize);
-    return responseFactory.success(new PageResponse<>(
-        page.total(),
-        page.pageNo(),
-        page.pageSize(),
-        page.items().stream()
-            .map(ConsolePipelineDefinitionListItemResponse::from)
-            .toList(),
-        page.nextCursor(),
-        page.hasMore()));
+    return responseFactory.success(
+        pipelineDefinitionService.list(tenantId, jobCode, pipelineType, enabled, pageNo, pageSize));
   }
 
   @GetMapping("/{id}")

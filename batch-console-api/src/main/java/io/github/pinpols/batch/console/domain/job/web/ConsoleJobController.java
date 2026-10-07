@@ -12,6 +12,8 @@ import io.github.pinpols.batch.console.domain.job.application.contract.request.B
 import io.github.pinpols.batch.console.domain.job.application.contract.request.CompensateRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayCatchUpResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchTriggerEntryResponse;
+import io.github.pinpols.batch.console.domain.job.view.JobTriggerResult;
+import io.github.pinpols.batch.console.domain.job.view.TriggeredJobResult;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.command.CompensationCommandRequest;
@@ -57,7 +59,7 @@ public class ConsoleJobController {
   /** 手工触发作业运行（所有已认证用户均可触发）。dryRun=true 时仅校验不执行。 */
   @PostMapping("/trigger")
   @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_USER)
-  public CommonResponse<Object> trigger(
+  public CommonResponse<JobTriggerResult> trigger(
       @RequestHeader(value = CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, required = false)
           String idempotencyKey,
       @Valid @RequestBody TriggerRequest request) {
@@ -65,7 +67,8 @@ public class ConsoleJobController {
       return responseFactory.success(triggerService.dryRunTrigger(request));
     }
     requireIdempotencyKey(idempotencyKey);
-    return responseFactory.success(triggerService.trigger(request, idempotencyKey));
+    return responseFactory.success(
+        new TriggeredJobResult(triggerService.trigger(request, idempotencyKey)));
   }
 
   /** 批量触发多个作业。 */

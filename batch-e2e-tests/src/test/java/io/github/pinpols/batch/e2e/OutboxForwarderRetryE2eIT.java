@@ -22,12 +22,10 @@ import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -48,7 +46,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
  *       {@code FAILED} 记录作为失败轨迹。
  * </ul>
  */
-@SpringBootTest(
+@E2eSpringBootTest(
     classes = E2eImportApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE,
     properties = {
@@ -58,8 +56,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
       "batch.outbox.max-retry-attempts=2",
       "batch.outbox.circuit-breaker-enabled=false"
     })
-@ActiveProfiles({"test", "e2e"})
-@Tag("e2e")
 @DisplayName("待发事件投递状态机与重试审计:以替身投递器精确控制成功与失败序列,验证重试耗尽与短暂失败恢复两种语义")
 class OutboxForwarderRetryE2eIT extends AbstractIntegrationTest {
 

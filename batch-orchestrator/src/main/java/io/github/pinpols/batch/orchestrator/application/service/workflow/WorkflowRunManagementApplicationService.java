@@ -1,7 +1,10 @@
 package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
+import io.github.pinpols.batch.common.enums.AlertSeverity;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.WorkflowNodeCode;
+import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
+import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
@@ -50,16 +53,12 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class WorkflowRunManagementApplicationService {
 
-  // ── duplicate literal constants ─────────────────────────────────────────
-  private static final String STATUS_TERMINATED = "TERMINATED";
-  private static final String STATUS_PAUSED = "PAUSED";
-  private static final String STATUS_RUNNING = "RUNNING";
-
-  private static final Set<String> CANCELLABLE = Set.of("CREATED", STATUS_RUNNING);
-  private static final Set<String> TERMINABLE = Set.of("RUNNING");
+  private static final Set<String> CANCELLABLE =
+      Set.of(WorkflowRunStatus.CREATED.code(), WorkflowRunStatus.RUNNING.code());
+  private static final Set<String> TERMINABLE = Set.of(WorkflowRunStatus.RUNNING.code());
   // ADR-044:仅 RUNNING 可暂停 DAG 推进;PAUSED 可恢复回 RUNNING。
-  private static final Set<String> PAUSABLE = Set.of("RUNNING");
-  private static final Set<String> RESUMABLE = Set.of(STATUS_PAUSED);
+  private static final Set<String> PAUSABLE = Set.of(WorkflowRunStatus.RUNNING.code());
+  private static final Set<String> RESUMABLE = Set.of(WorkflowRunStatus.PAUSED.code());
 
   private final WorkflowRunMapper workflowRunMapper;
   private final WorkflowNodeRunMapper workflowNodeRunMapper;
@@ -96,13 +95,13 @@ public class WorkflowRunManagementApplicationService {
   /** ADR-044 暂停 RUNNING → PAUSED:停止推进下游 DAG 节点,在途节点自然终结。 */
   @Transactional
   public RunAction pause(String tenantId, Long id) {
-    return lifecycleFlip(tenantId, id, PAUSABLE, STATUS_PAUSED);
+    return lifecycleFlip(tenantId, id, PAUSABLE, WorkflowRunStatus.PAUSED.code());
   }
 
   /** ADR-044 恢复 PAUSED → RUNNING:重新推进 DAG。 */
   @Transactional
   public RunAction resume(String tenantId, Long id) {
-    return lifecycleFlip(tenantId, id, RESUMABLE, STATUS_RUNNING);
+    return lifecycleFlip(tenantId, id, RESUMABLE, WorkflowRunStatus.RUNNING.code());
   }
 
   /**
@@ -147,13 +146,14 @@ public class WorkflowRunManagementApplicationService {
   private NodeAction skipNodeInternal(
       String tenantId, Long id, String nodeCode, String operatorId, String reason) {
     WorkflowRunEntity run = findRun(tenantId, id);
-    if (!"RUNNING".equals(run.getRunStatus()) && !"FAILED".equals(run.getRunStatus())) {
+    if (!WorkflowRunStatus.RUNNING.code().equals(run.getRunStatus())
+        && !WorkflowRunStatus.FAILED.code().equals(run.getRunStatus())) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.skip_node_state_invalid");
     }
     WorkflowNodeRunEntity nodeRun = Guard.requireFound(
         workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(id, nodeCode),
         "node run not found: " + nodeCode);
-    if (!"FAILED".equals(nodeRun.getNodeStatus())) {
+    if (!WorkflowNodeRunStatus.FAILED.code().equals(nodeRun.getNodeStatus())) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT,
           ResultCode.STATE_CONFLICT.detailKey(),
@@ -161,7 +161,7 @@ public class WorkflowRunManagementApplicationService {
     }
     workflowNodeRunMapper.updateStatus(UpdateNodeRunStatusParam.builder()
         .id(nodeRun.getId())
-        .nodeStatus("SKIPPED")
+        .nodeStatus(WorkflowNodeRunStatus.SKIPPED.code())
         .errorCode(null)
         .errorMessage(null)
         .durationMs(nodeRun.getDurationMs())
@@ -171,7 +171,7 @@ public class WorkflowRunManagementApplicationService {
     // P1-2: 写 audit 行 + 发 WARN alert,补齐"运维介入"事后追溯。
     appendSkipNodeAudit(run, nodeCode, nodeRun.getId(), operatorId, reason);
     emitSkipNodeAlert(run, nodeCode, operatorId);
-    return new NodeAction(id, nodeCode, "SKIPPED");
+    return new NodeAction(id, nodeCode, WorkflowNodeRunStatus.SKIPPED.code());
   }
 
   private void appendSkipNodeAudit(
@@ -221,7 +221,7 @@ public class WorkflowRunManagementApplicationService {
         .tenantId(run.getTenantId())
         .serviceName("batch-orchestrator")
         .alertType("WORKFLOW_NODE_MANUAL_SKIP")
-        .severity("WARN")
+        .severity(AlertSeverity.WARN.code())
         .title("Workflow node manually skipped")
         .resourceKey(resourceKey)
         .detailJson(JsonUtils.toJson(detail))
@@ -236,7 +236,7 @@ public class WorkflowRunManagementApplicationService {
     int updated = workflowRunMapper.updateStatus(UpdateWorkflowRunStatusParam.builder()
         .tenantId(run.getTenantId())
         .id(run.getId())
-        .runStatus(STATUS_TERMINATED)
+        .runStatus(WorkflowRunStatus.TERMINATED.code())
         .currentNodeCode(run.getCurrentNodeCode())
         .finishedAt(finishedAt)
         .expectedStatuses(expectedFrom)
@@ -248,8 +248,9 @@ public class WorkflowRunManagementApplicationService {
           "error.workflow.cancel_invalid_state",
           "<concurrent transition>");
     }
-    workflowTerminalOutboxService.writeTerminalEvent(run, STATUS_TERMINATED, finishedAt);
-    return new RunAction(run.getId(), STATUS_TERMINATED);
+    workflowTerminalOutboxService.writeTerminalEvent(
+        run, WorkflowRunStatus.TERMINATED.code(), finishedAt);
+    return new RunAction(run.getId(), WorkflowRunStatus.TERMINATED.code());
   }
 
   /**

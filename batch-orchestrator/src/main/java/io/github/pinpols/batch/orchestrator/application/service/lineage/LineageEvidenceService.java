@@ -2,20 +2,27 @@ package io.github.pinpols.batch.orchestrator.application.service.lineage;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse;
+import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse.DispatchRecord;
+import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse.FileRecord;
+import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse.JobInstance;
+import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse.LineageCoverage;
+import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse.LineageSources;
+import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse.PipelineInstance;
+import io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse.ResultVersion;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionQueryService;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import io.github.pinpols.batch.orchestrator.mapper.LineageEvidenceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-/** BFS 管辖范围内的最小 lineage 证据链查询,不承担外部数据目录职责。 */
+/** BFS 管辖范围内的最小 lineage 证据链查询，不承担外部数据目录职责。 */
 @Service
 @RequiredArgsConstructor
 public class LineageEvidenceService {
@@ -23,171 +30,151 @@ public class LineageEvidenceService {
   private static final String FILE_RECORD_REF_PREFIX = "file_record:";
   private static final String HOT = "HOT";
   private static final String ARCHIVE = "ARCHIVE";
+  private static final String NONE = "NONE";
 
   private final ResultVersionMapper resultVersionMapper;
   private final ResultVersionQueryService resultVersionQueryService;
   private final LineageEvidenceMapper lineageEvidenceMapper;
 
-  public Map<String, Object> evidenceForResultVersion(String tenantId, Long resultVersionId) {
+  public LineageEvidenceResponse evidenceForResultVersion(String tenantId, Long resultVersionId) {
     ResultVersionEntity version = resultVersionMapper.selectById(tenantId, resultVersionId);
     String resultVersionSource = HOT;
-    if (version == null) {
+    if (EmptyChecks.isNull(version)) {
       version = resultVersionMapper.selectArchivedById(tenantId, resultVersionId);
       resultVersionSource = ARCHIVE;
     }
-    if (version == null) {
+    if (EmptyChecks.isNull(version)) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.result_version.not_found");
     }
     return buildEvidence(version, resultVersionSource);
   }
 
-  public Map<String, Object> evidenceForEffective(String tenantId, String businessKey) {
+  public LineageEvidenceResponse evidenceForEffective(String tenantId, String businessKey) {
     ResultVersionEntity version = resultVersionQueryService
         .findEffective(tenantId, businessKey)
         .orElseThrow(() -> BizException.of(ResultCode.NOT_FOUND, "error.result_version.not_found"));
     return buildEvidence(version, HOT);
   }
 
-  private Map<String, Object> buildEvidence(
+  private LineageEvidenceResponse buildEvidence(
       ResultVersionEntity version, String resultVersionSource) {
     Long payloadFileId = payloadFileId(version);
-    Map<String, Object> jobInstance =
+    JobInstance jobInstance =
         lineageEvidenceMapper.selectJobInstance(version.tenantId(), version.jobInstanceId());
     String jobInstanceSource = HOT;
-    if (jobInstance == null || jobInstance.isEmpty()) {
+    if (EmptyChecks.isNull(jobInstance)) {
       jobInstance = lineageEvidenceMapper.selectArchivedJobInstance(
           version.tenantId(), version.jobInstanceId());
       jobInstanceSource = ARCHIVE;
     }
-    List<Map<String, Object>> pipelineInstances =
+    List<PipelineInstance> pipelines =
         lineageEvidenceMapper.selectPipelineInstances(version.tenantId(), version.jobInstanceId());
     String pipelineSource = HOT;
-    if (pipelineInstances == null || pipelineInstances.isEmpty()) {
-      pipelineInstances = lineageEvidenceMapper.selectArchivedPipelineInstances(
+    if (EmptyChecks.isEmpty(pipelines)) {
+      pipelines = lineageEvidenceMapper.selectArchivedPipelineInstances(
           version.tenantId(), version.jobInstanceId());
       pipelineSource = ARCHIVE;
     }
-    List<Map<String, Object>> fileRecords = lineageEvidenceMapper.selectFileRecords(
+    List<FileRecord> files = lineageEvidenceMapper.selectFileRecords(
         version.tenantId(), version.jobInstanceId(), payloadFileId);
     String fileSource = HOT;
-    if (fileRecords == null || fileRecords.isEmpty()) {
-      fileRecords = lineageEvidenceMapper.selectArchivedFileRecords(
+    if (EmptyChecks.isEmpty(files)) {
+      files = lineageEvidenceMapper.selectArchivedFileRecords(
           version.tenantId(), version.jobInstanceId(), payloadFileId);
       fileSource = ARCHIVE;
     }
-    List<Map<String, Object>> files = nullToEmpty(fileRecords);
-    List<Long> fileIds = files.stream()
-        .map(row -> longValue(row.get("id")))
-        .filter(Objects::nonNull)
-        .toList();
-    List<Map<String, Object>> dispatchRecords = lineageEvidenceMapper.selectDispatchRecords(
+    files = nullToEmpty(files);
+    List<Long> fileIds =
+        files.stream().map(FileRecord::id).filter(Objects::nonNull).toList();
+    List<DispatchRecord> dispatches = lineageEvidenceMapper.selectDispatchRecords(
         version.tenantId(), version.jobInstanceId(), fileIds);
     String dispatchSource = HOT;
-    if (dispatchRecords == null || dispatchRecords.isEmpty()) {
-      dispatchRecords = lineageEvidenceMapper.selectArchivedDispatchRecords(
+    if (EmptyChecks.isEmpty(dispatches)) {
+      dispatches = lineageEvidenceMapper.selectArchivedDispatchRecords(
           version.tenantId(), version.jobInstanceId(), fileIds);
       dispatchSource = ARCHIVE;
     }
-
-    Map<String, Object> evidence = new LinkedHashMap<>();
-    evidence.put("resultVersion", resultVersion(version));
-    evidence.put("jobInstance", emptyToNull(jobInstance));
-    evidence.put("pipelineInstances", nullToEmpty(pipelineInstances));
-    evidence.put("fileRecords", nullToEmpty(fileRecords));
-    evidence.put("dispatchRecords", nullToEmpty(dispatchRecords));
+    pipelines = nullToEmpty(pipelines);
+    dispatches = nullToEmpty(dispatches);
     EvidenceCoverageInput coverageInput = new EvidenceCoverageInput(
         version,
         resultVersionSource,
         payloadFileId,
         jobInstance,
         jobInstanceSource,
-        pipelineInstances,
+        pipelines,
         pipelineSource,
-        fileRecords,
+        files,
         fileSource,
-        dispatchRecords,
+        dispatches,
         dispatchSource);
-    evidence.put("coverage", coverage(coverageInput));
-    return evidence;
+    return new LineageEvidenceResponse(
+        resultVersion(version), jobInstance, pipelines, files, dispatches, coverage(coverageInput));
   }
 
-  private static Map<String, Object> resultVersion(ResultVersionEntity v) {
-    Map<String, Object> row = new LinkedHashMap<>();
-    row.put("id", v.id());
-    row.put("tenantId", v.tenantId());
-    row.put("businessKey", v.businessKey());
-    row.put("versionNo", v.versionNo());
-    row.put("jobInstanceId", v.jobInstanceId());
-    row.put("status", v.status());
-    row.put("effectiveAt", v.effectiveAt());
-    row.put("deactivatedAt", v.deactivatedAt());
-    row.put("payloadStorage", v.payloadStorage());
-    row.put("payloadRef", v.payloadRef());
-    row.put("generatedAt", v.generatedAt());
-    row.put("generatedBy", v.generatedBy());
-    row.put("promotionPolicy", v.promotionPolicy());
-    row.put("dqGateStatus", v.dqGateStatus());
-    return row;
+  private static ResultVersion resultVersion(ResultVersionEntity v) {
+    return new ResultVersion(
+        v.id(),
+        v.tenantId(),
+        v.businessKey(),
+        v.versionNo(),
+        v.jobInstanceId(),
+        v.status(),
+        v.effectiveAt(),
+        v.deactivatedAt(),
+        v.payloadStorage(),
+        v.payloadRef(),
+        v.generatedAt(),
+        v.generatedBy(),
+        v.promotionPolicy(),
+        v.dqGateStatus());
   }
 
-  private static Map<String, Object> coverage(EvidenceCoverageInput input) {
-    List<Map<String, Object>> pipelines = nullToEmpty(input.pipelineInstances());
-    List<Map<String, Object>> files = nullToEmpty(input.fileRecords());
-    List<Map<String, Object>> dispatches = nullToEmpty(input.dispatchRecords());
+  private static LineageCoverage coverage(EvidenceCoverageInput input) {
     List<String> knownGaps = new ArrayList<>();
-    if (input.jobInstance() == null || input.jobInstance().isEmpty()) {
+    boolean jobFound = EmptyChecks.isNotNull(input.jobInstance());
+    boolean payloadResolved = EmptyChecks.isNull(input.payloadFileId())
+        || input.fileRecords().stream().anyMatch(row -> input.payloadFileId().equals(row.id()));
+    if (!jobFound) {
       knownGaps.add("job_instance not found in hot or archive tables");
     }
-    if (input.payloadFileId() != null
-        && files.stream()
-            .noneMatch(row -> input.payloadFileId().equals(longValue(row.get("id"))))) {
+    if (!payloadResolved) {
       knownGaps.add("payload_ref file_record not found in hot or archive tables");
     }
-    if (files.isEmpty()) {
+    if (EmptyChecks.isEmpty(input.fileRecords())) {
       knownGaps.add("no related file_record found in hot or archive tables");
     }
-    if (dispatches.isEmpty()) {
+    if (EmptyChecks.isEmpty(input.dispatchRecords())) {
       knownGaps.add("no dispatch receipt found in hot or archive tables");
     }
-
-    Map<String, Object> coverage = new LinkedHashMap<>();
-    boolean jobFound = input.jobInstance() != null && !input.jobInstance().isEmpty();
     boolean archiveUsed = ARCHIVE.equals(input.resultVersionSource())
         || (jobFound && ARCHIVE.equals(input.jobInstanceSource()))
-        || (!pipelines.isEmpty() && ARCHIVE.equals(input.pipelineSource()))
-        || (!files.isEmpty() && ARCHIVE.equals(input.fileSource()))
-        || (!dispatches.isEmpty() && ARCHIVE.equals(input.dispatchSource()));
-    coverage.put("scope", archiveUsed ? "BFS_HOT_AND_ARCHIVE" : "BFS_HOT_TABLES");
-    coverage.put("resultVersionId", input.version().id());
-    coverage.put(
-        "sources",
-        Map.of(
-            "resultVersion",
-            input.resultVersionSource(),
-            "jobInstance",
-            jobFound ? input.jobInstanceSource() : "NONE",
-            "pipelineInstances",
-            pipelines.isEmpty() ? "NONE" : input.pipelineSource(),
-            "fileRecords",
-            files.isEmpty() ? "NONE" : input.fileSource(),
-            "dispatchRecords",
-            dispatches.isEmpty() ? "NONE" : input.dispatchSource()));
-    coverage.put("jobInstanceFound", jobFound);
-    coverage.put("payloadFileId", input.payloadFileId());
-    coverage.put(
-        "payloadFileResolved",
-        input.payloadFileId() == null
-            || files.stream()
-                .anyMatch(row -> input.payloadFileId().equals(longValue(row.get("id")))));
-    coverage.put("pipelineInstanceCount", pipelines.size());
-    coverage.put("fileRecordCount", files.size());
-    coverage.put("dispatchRecordCount", dispatches.size());
-    coverage.put("knownGaps", knownGaps);
-    return coverage;
+        || (!EmptyChecks.isEmpty(input.pipelineInstances())
+            && ARCHIVE.equals(input.pipelineSource()))
+        || (!EmptyChecks.isEmpty(input.fileRecords()) && ARCHIVE.equals(input.fileSource()))
+        || (!EmptyChecks.isEmpty(input.dispatchRecords())
+            && ARCHIVE.equals(input.dispatchSource()));
+    LineageSources sources = new LineageSources(
+        input.resultVersionSource(),
+        jobFound ? input.jobInstanceSource() : NONE,
+        EmptyChecks.isEmpty(input.pipelineInstances()) ? NONE : input.pipelineSource(),
+        EmptyChecks.isEmpty(input.fileRecords()) ? NONE : input.fileSource(),
+        EmptyChecks.isEmpty(input.dispatchRecords()) ? NONE : input.dispatchSource());
+    return new LineageCoverage(
+        archiveUsed ? "BFS_HOT_AND_ARCHIVE" : "BFS_HOT_TABLES",
+        input.version().id(),
+        sources,
+        jobFound,
+        input.payloadFileId(),
+        payloadResolved,
+        input.pipelineInstances().size(),
+        input.fileRecords().size(),
+        input.dispatchRecords().size(),
+        knownGaps);
   }
 
   private static Long payloadFileId(ResultVersionEntity version) {
-    if (version == null
+    if (EmptyChecks.isNull(version)
         || !"FILE_RECORD".equals(version.payloadStorage())
         || !Texts.hasText(version.payloadRef())
         || !version.payloadRef().startsWith(FILE_RECORD_REF_PREFIX)) {
@@ -201,38 +188,20 @@ public class LineageEvidenceService {
     }
   }
 
-  private static Long longValue(Object value) {
-    if (value instanceof Number number) {
-      return number.longValue();
-    }
-    if (value == null) {
-      return null;
-    }
-    try {
-      return Long.valueOf(String.valueOf(value));
-    } catch (NumberFormatException ignored) {
-      return null;
-    }
-  }
-
-  private static Map<String, Object> emptyToNull(Map<String, Object> row) {
-    return row == null || row.isEmpty() ? null : row;
-  }
-
-  private static List<Map<String, Object>> nullToEmpty(List<Map<String, Object>> rows) {
-    return rows == null ? List.of() : rows;
+  private static <T> List<T> nullToEmpty(List<T> rows) {
+    return EmptyChecks.isNull(rows) ? List.of() : rows;
   }
 
   private record EvidenceCoverageInput(
       ResultVersionEntity version,
       String resultVersionSource,
       Long payloadFileId,
-      Map<String, Object> jobInstance,
+      JobInstance jobInstance,
       String jobInstanceSource,
-      List<Map<String, Object>> pipelineInstances,
+      List<PipelineInstance> pipelineInstances,
       String pipelineSource,
-      List<Map<String, Object>> fileRecords,
+      List<FileRecord> fileRecords,
       String fileSource,
-      List<Map<String, Object>> dispatchRecords,
+      List<DispatchRecord> dispatchRecords,
       String dispatchSource) {}
 }

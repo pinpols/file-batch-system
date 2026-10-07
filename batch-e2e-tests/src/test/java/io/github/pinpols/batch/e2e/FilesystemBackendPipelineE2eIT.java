@@ -28,13 +28,11 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestConstructor;
 import org.springframework.test.context.jdbc.Sql;
 
@@ -48,17 +46,15 @@ import org.springframework.test.context.jdbc.Sql;
  * 基类属性注册会按该系统属性登记 {@code batch.storage.filesystem.*}。e2e 模块每个 IT 类独立
  * JVM/数据库，后端守卫（Stateful Backend Guard）首启记录 filesystem baseline，无需外部 cutover。
  */
-@SpringBootTest(
+@E2eSpringBootTest(
     classes = E2eExportApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = "batch.worker.export.worker-type=EXPORT")
-@ActiveProfiles({"test", "e2e"})
 @E2eBusinessSchema
 @Sql(
     scripts = {
       E2eTestSql.EXPORT_TEMPLATE_SEED,
     })
-@Tag("e2e")
 @EnabledIfSystemProperty(named = "batch.test.storage.backend", matches = "filesystem")
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 @DisplayName("本地文件后端的导出主链路:任务成功终态后产物落盘位置、磁盘直读、抽象接口读取与预签名令牌三路结果一致")

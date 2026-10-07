@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.console.service;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.enums.AlertSeverity;
+import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -23,11 +25,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class ConsoleAssetFreshnessPolicyService {
 
   private static final String ASSET_TYPE_JOB = "JOB";
-  private static final String DEFAULT_SEVERITY = "WARN";
+  private static final String DEFAULT_SEVERITY = AlertSeverity.WARN.code();
   private static final int DEFAULT_STALE_AFTER_SECONDS = 0;
   private static final int DEFAULT_LOOKBACK_DAYS = 1;
   private static final int MAX_LIMIT = 500;
-  private static final Set<String> VALID_SEVERITIES = Set.of("INFO", "WARN", "ERROR", "CRITICAL");
+  private static final Set<String> VALID_SEVERITIES = DictEnum.codes(AlertSeverity.class);
 
   private final ConsoleAssetFreshnessPolicyMapper mapper;
   private final ConsoleTenantGuard tenantGuard;

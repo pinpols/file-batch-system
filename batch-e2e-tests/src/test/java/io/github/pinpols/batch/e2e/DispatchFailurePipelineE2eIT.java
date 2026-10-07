@@ -18,12 +18,10 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 
 /**
  * 端到端测试：Dispatch 渠道配置缺失导致失败。
@@ -37,13 +35,11 @@ import org.springframework.test.context.ActiveProfiles;
  *   <li>file_record.file_status 不能是 DISPATCHED
  * </ul>
  */
-@SpringBootTest(
+@E2eSpringBootTest(
     classes = E2eDispatchApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = "batch.worker.dispatch.worker-type=DISPATCH")
-@ActiveProfiles({"test", "e2e"})
 @E2eBusinessSchema
-@Tag("e2e")
 @DisplayName("派发失败链路端到端归因:渠道配置缺失时派发任务收敛失败,验证任务终态为失败,且文件记录不会被错误标记为已派发")
 class DispatchFailurePipelineE2eIT extends AbstractIntegrationTest {
 

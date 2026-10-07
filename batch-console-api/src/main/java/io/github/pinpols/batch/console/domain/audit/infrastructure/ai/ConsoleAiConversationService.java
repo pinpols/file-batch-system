@@ -133,7 +133,7 @@ public class ConsoleAiConversationService {
     mapper.setTenantContext(completion.tenantId());
     String status =
         switch (EmptyChecks.isNull(completion.decision()) ? "" : completion.decision()) {
-          case "FAILED" -> FAILED;
+          case FAILED -> FAILED;
           case "REJECTED_SCOPE", "REJECTED_SAFETY", "REJECTED_DISABLED", "REJECTED_BUDGET" ->
             REJECTED;
           default -> COMPLETE;

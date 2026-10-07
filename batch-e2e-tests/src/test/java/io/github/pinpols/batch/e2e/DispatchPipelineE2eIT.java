@@ -25,7 +25,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 
 /**
  * 端到端测试：Dispatch 主链路成功闭环。
@@ -45,13 +44,11 @@ import org.springframework.test.context.ActiveProfiles;
  *   <li>{@code file_audit_log} 至少有一条审计记录（便于审计/排障）
  * </ul>
  */
-@SpringBootTest(
+@E2eSpringBootTest(
     classes = E2eDispatchApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = "batch.worker.dispatch.worker-type=DISPATCH")
-@ActiveProfiles({"test", "e2e"})
 @E2eBusinessSchema
-@Tag("e2e")
 @Tag("smoke")
 @DisplayName("端到端测试: 派发主链路从触发受理, 事件派发, 任务领取到渠道投递的成功闭环, 验证任务成功终态, 平台表文件状态, 投递回执与审计记录四处一致")
 class DispatchPipelineE2eIT extends AbstractIntegrationTest {

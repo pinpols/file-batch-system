@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.enums.FileAuditOperationType;
 import io.github.pinpols.batch.common.enums.FileChecksumType;
 import io.github.pinpols.batch.common.enums.FileStatus;
+import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.enums.OperationResult;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
@@ -108,8 +109,8 @@ public class RegisterStep implements ExportStageStep {
     }
     String objectName = String.valueOf(attrs.get(KEY_OBJECT_NAME));
     String fileName = String.valueOf(attrs.get(PipelineRuntimeKeys.FILE_NAME));
-    String fileFormatType =
-        String.valueOf(attrs.getOrDefault(PipelineRuntimeKeys.EXPORT_FILE_FORMAT_TYPE, "JSON"));
+    String fileFormatType = String.valueOf(attrs.getOrDefault(
+        PipelineRuntimeKeys.EXPORT_FILE_FORMAT_TYPE, FileTemplateFormat.JSON.code()));
     String bucket = s3StorageProperties.getBucket();
     String expectedChecksum = nullableText(attrs.get(PipelineRuntimeKeys.CHECKSUM_VALUE));
     // 相同路径的 file_record 已存在时进行幂等复用（STORE → REGISTER 重试场景）

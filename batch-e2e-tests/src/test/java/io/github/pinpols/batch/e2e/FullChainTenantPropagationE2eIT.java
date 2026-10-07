@@ -24,7 +24,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
@@ -49,14 +48,12 @@ import org.springframework.test.context.jdbc.Sql;
  *   <li>{@code batch.file_record} — import 写出的文件登记
  * </ul>
  */
-@SpringBootTest(
+@E2eSpringBootTest(
     classes = E2eImportApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = "batch.worker.import.worker-type=IMPORT")
-@ActiveProfiles({"test", "e2e"})
 @E2eBusinessSchema
 @Sql(scripts = {E2eTestSql.IMPORT_TEMPLATE_SEED})
-@Tag("e2e")
 @Tag("critical")
 @DisplayName("导入全链路租户传播守护:从触发请求、派发事件到执行回报与终态写入,全部落库行的租户标识不得漂移")
 class FullChainTenantPropagationE2eIT extends AbstractIntegrationTest {

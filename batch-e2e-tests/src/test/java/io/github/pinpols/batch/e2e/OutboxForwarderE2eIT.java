@@ -23,7 +23,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
@@ -39,7 +38,7 @@ import org.springframework.test.context.jdbc.Sql;
  * <p>实现方式：把 {@code batch.outbox.poll-interval-millis} 调小到 500ms，并且<strong>刻意不调用</strong> {@code
  * E2eOutboxPublishSupport.publishAllPending()}，仅等待最终任务成功。
  */
-@SpringBootTest(
+@E2eSpringBootTest(
     classes = E2eImportApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
@@ -47,13 +46,11 @@ import org.springframework.test.context.jdbc.Sql;
       "batch.outbox.poll-interval-millis=500",
       "batch.outbox.min-poll-interval-millis=500"
     })
-@ActiveProfiles({"test", "e2e"})
 @E2eBusinessSchema
 @Sql(
     scripts = {
       E2eTestSql.IMPORT_TEMPLATE_SEED,
     })
-@Tag("e2e")
 @Tag("critical")
 @DisplayName("待发事件轮询投递链路:常驻轮询器自动扫描并投递,导入任务无需任何人工投递即达成功终态")
 class OutboxForwarderE2eIT extends AbstractIntegrationTest {

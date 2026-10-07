@@ -5,6 +5,8 @@ import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.Session;
 import com.jcraft.jsch.SftpException;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.enums.FileChannelType;
+import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -94,7 +96,7 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
 
   @Override
   public boolean supports(String channelType) {
-    return channelType != null && "SFTP".equalsIgnoreCase(channelType);
+    return FileChannelType.SFTP.code().equalsIgnoreCase(channelType);
   }
 
   private record ConnectionConfig(String host, int port, String user, String password) {}
@@ -160,7 +162,7 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
     RemoteTarget remoteTarget = resolveRemoteTarget(channelConfig, command.fileRecord());
 
     DispatchReceiptSupport.Receipt receipt =
-        DispatchReceiptSupport.resolve(command, channelConfig, "SYNC");
+        DispatchReceiptSupport.resolve(command, channelConfig, FileReceiptPolicy.SYNC.code());
 
     SftpUploadContext uploadCtx = SftpUploadContext.builder()
         .command(command)

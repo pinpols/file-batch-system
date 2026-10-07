@@ -31,7 +31,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
@@ -45,7 +44,7 @@ import org.springframework.test.context.jdbc.Sql;
  *   → replay 重新入队 → dead letter 状态更新为 SUCCESS
  * </pre>
  */
-@SpringBootTest(
+@E2eSpringBootTest(
     classes = E2eConsoleImportApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
@@ -56,13 +55,11 @@ import org.springframework.test.context.jdbc.Sql;
       "batch.console.orchestrator.base-url=http://127.0.0.1:${local.server.port}",
       "batch.console.trigger.base-url=http://127.0.0.1:${local.server.port}"
     })
-@ActiveProfiles({"test", "e2e"})
 @E2eBusinessSchema
 @Sql(
     scripts = {
       E2eTestSql.IMPORT_TEMPLATE_SEED,
     })
-@Tag("e2e")
 @Tag("critical")
 @DisplayName("死信人工闭环端到端:任务进入死信后由控制台发起重放审批并审批通过,验证重放重新入队生效,死信状态与重放次数更新,审批单流转到已执行")
 class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {

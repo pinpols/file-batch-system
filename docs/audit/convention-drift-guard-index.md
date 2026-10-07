@@ -1,6 +1,6 @@
 # 约定约束与漂移防护总账
 
-> 维护日期: 2026-10-05
+> 维护日期: 2026-10-07
 > 定位: 统一记录项目约定、约束、审计、审核、复扫与 CI 守卫入口,用于后续扫描时防止规范漂移。
 
 本文不是新的规范来源,也不替代 `docs/agent-baseline.md`、编码规约、ADR 或 runbook。它只做一件事:把分散在代码、文档、脚本、CI、审计报告里的约束集中成一张可复扫的总账。
@@ -23,7 +23,7 @@
 |---|---:|---|---|
 | ADR | 47 个 ADR 文件 | [docs/architecture/adr/](../architecture/adr/) | 包含架构边界、SDK、checkpoint、capacity、依赖调度等决策 |
 | 专项审计报告 | 13 个文件 | [docs/audit/](./) | 包含全仓架构审计、治理总账和后续后端深扫 |
-| CI 守卫脚本 | 72 个 `check-*` / `validate-*` 文件 | [scripts/ci/README.md](../../scripts/ci/README.md) | 覆盖文档、脚本、仓库卫生、租户隔离、迁移、OpenAPI、配置、版本、许可、测试完整性、测试 `@DisplayName` 约定和 Java suppression/快照防漂移等 |
+| CI 守卫脚本 | 73 个 `check-*` / `validate-*` 文件 | [scripts/ci/README.md](../../scripts/ci/README.md) | 覆盖文档、脚本、仓库卫生、租户隔离、迁移、OpenAPI、配置、版本、许可、测试完整性、测试 `@DisplayName` 约定、Java 固定契约/协议值及 suppression/快照防漂移等 |
 | GitHub Actions | 17 个 workflow | `.github/workflows/` | PR gate、full CI、staging、SDK parity、CodeQL、workflow lint |
 | SDK 契约 fixture | 31 个 case | [docs/api/sdk-contract-fixtures/](../api/sdk-contract-fixtures/) | 覆盖注册、心跳、claim、renew、report、Kafka schema 兼容等 |
 | 顶层规范文档 | 3 个核心入口 | [docs/README.md](../README.md) | `agent-baseline`、`coding-conventions`、`changelog` |
@@ -34,6 +34,7 @@
 |---|---|---|---|
 | 多租户与数据库 | `docs/agent-baseline.md`; [bounded-context-rules.md](../architecture/bounded-context-rules.md); ADR-017/020/024 | `check-biz-table-tenant-rls.py`; `check-migration-safety.sh`; `validate-flyway-schema.sh`; `check-no-positional-insert-select-star.py`; 相关租户/归档 ArchTest | 漏 `tenant_id`; `ON CONFLICT` 幂等守卫退化; archive schema 和热表漂移; 位置列插入导致错列 |
 | API 契约 | [console-api-protocol.md](../api/console-api-protocol.md); [console-api.openapi.yaml](../api/console-api.openapi.yaml); [orchestrator-internal.openapi.yaml](../api/orchestrator-internal.openapi.yaml) | `check-console-openapi-paths.py`; `check-openapi-breaking.sh`; 前端 `gen:api:check` | Controller 改了但 OpenAPI/前端类型没同步; 返回体字段和页面假设不一致 |
+| 固定契约与协议值 | [治理计划](../plans/typed-contract-enum-constant-governance-plan-2026-10-07.md); [精确例外](../governance/java-contract-governance.json); [零债务基线](../governance/java-contract-governance-baseline.json) | `check-java-contract-governance.py` 及 19 个正反例自测；PR/local 增量、规则变更与 Full Gate 全量；枚举改动扩展复扫登记消费者 | 固定 DTO 退回 Map/Object；已确认同域的 enum code 重新散落；已有协议键常量未复用；动态 Map 宽泛豁免 |
 | Worker / SDK | ADR-035/036/037/038; [sdk-contract-fixtures](../api/sdk-contract-fixtures/) | `run-sdk-live-transport-gate.sh`; `run-sdk-orchestrator-e2e.sh`; workflow `sdk-contract-parity.yml`; `sdk-orchestrator-e2e.yml`; `sdk-release-validation.yml` | conformance 绿但生产 transport 不通; 五语言 SDK 行为不一致 |
 | 编码与架构 | [coding-conventions.md](../coding-conventions.md); `docs/agent-baseline.md`; [project-structure.md](../architecture/project-structure.md) | PMD; Spotless; `check-dependency-boundaries.py`; `check-java-logging-governance.py` 及扫描器自测; `check-no-enable-preview.sh`; `RepositoryMapReturnConventionTest`（Repository 出参不得新增 `Map<String, Object>`，见 §1.2 与 [分类总账](../analysis/java-readability-phase-0-classification-2026-08-12.md) §4.2） | 构造注入退回字段注入; 事务放错层; 原始异常 message 注入日志或泄漏凭据; common 引入重依赖; 预览特性混入主线; 仓库出参回退为 `Map<String, Object>` 把字段错误推迟到运行期 |
 | 配置与环境 | [runbook/](../runbook/); [dict/config-keys.md](../dict/config-keys.md); ADR-039 | `check-config-defaults-sync.py`; `check-feature-switch-registry.py`; `check-helm-env-sync.py`; `check-production-overlay-safety.py`; `check-version-alignment.sh`（应用、基础服务与 MinIO CLI 镜像版本及运行入口）；`check-helm-prometheusrule-sync.sh`; `validate-kafka-topics.sh`; `check-sql-config-boundaries.sh` | yml、docker、helm、env、topic、PrometheusRule 不一致; SQL 和配置混在 shell |
@@ -83,6 +84,7 @@
 
 | 计划 | 范围 | 防漂移要求 |
 |---|---|---|
+| [固定契约、有限域与常量治理计划](../plans/typed-contract-enum-constant-governance-plan-2026-10-07.md) | Controller/Application Service 固定 DTO、既有枚举复用、稳定协议键和增量门禁 | 动态 Map 使用精确例外；公开契约同步 OpenAPI 与配对前端；门禁先增量后全量，不把 Sonar `S1192` 机械设为阻断 |
 | [Java 可读性与结构一致性治理路线图](../plans/java-readability-refactoring-roadmap-2026-08-12.md) | CGLIB 自注入、固定 Map 契约、复杂类、测试风格、suppression 与配置类表达 | 结构重构与行为变更分离；动态 Map 和声明式规格保留明确例外；核心事务/状态链路必须通过 IT、E2E 或 sim |
 
 ## 维护规则

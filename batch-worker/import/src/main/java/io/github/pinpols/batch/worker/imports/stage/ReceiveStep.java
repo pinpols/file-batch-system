@@ -376,12 +376,12 @@ public class ReceiveStep implements ImportStageStep {
       return fileFormatType.toUpperCase();
     }
     if (rawPayload != null && rawPayload.trim().startsWith("{")) {
-      return "JSON";
+      return FileTemplateFormat.JSON.code();
     }
     if (rawPayload != null && rawPayload.contains(",")) {
-      return "DELIMITED";
+      return FileTemplateFormat.DELIMITED.code();
     }
-    return "JSON";
+    return FileTemplateFormat.JSON.code();
   }
 
   private LocalDate parseBizDate(String bizDate) {

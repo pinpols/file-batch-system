@@ -23,7 +23,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
@@ -38,17 +37,15 @@ import org.springframework.test.context.jdbc.Sql;
  *   <li>此用例不启用重试（retry_policy=NONE），目的是验证“失败直接收敛为终态”的最短路径。
  * </ul>
  */
-@SpringBootTest(
+@E2eSpringBootTest(
     classes = E2eImportApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = "batch.worker.import.worker-type=IMPORT")
-@ActiveProfiles({"test", "e2e"})
 @E2eBusinessSchema
 @Sql(
     scripts = {
       E2eTestSql.IMPORT_TEMPLATE_SEED,
     })
-@Tag("e2e")
 @Tag("critical")
 @DisplayName("端到端测试: 导入失败链路从触发受理, 事件派发, 任务领取到失败回报的闭环, 验证解析异常与尾行控制合计不一致两类失败均收敛为失败终态并给出归因")
 class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {

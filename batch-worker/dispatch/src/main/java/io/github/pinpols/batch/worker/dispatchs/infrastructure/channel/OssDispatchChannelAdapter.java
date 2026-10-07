@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
 import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.common.enums.FileChannelType;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
@@ -40,7 +41,7 @@ public class OssDispatchChannelAdapter implements DispatchChannelAdapter {
 
   @Override
   public boolean supports(String channelType) {
-    return channelType != null && "OSS".equalsIgnoreCase(channelType);
+    return FileChannelType.OSS.code().equalsIgnoreCase(channelType);
   }
 
   @Override

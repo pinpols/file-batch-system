@@ -22137,71 +22137,6 @@
     },
     {
       "type" : "library",
-      "bom-ref" : "pkg:maven/org.bitbucket.b_c/jose4j@0.7.0?type=jar",
-      "group" : "org.bitbucket.b_c",
-      "name" : "jose4j",
-      "version" : "0.7.0",
-      "description" : "The jose.4.j library is a robust and easy to use open source implementation of JSON Web Token (JWT) and the JOSE specification suite (JWS, JWE, and JWK). It is written in Java and relies solely on the JCA APIs for cryptography. Please see https://bitbucket.org/b_c/jose4j/wiki/Home for more info, examples, etc..",
-      "scope" : "required",
-      "hashes" : [
-        {
-          "alg" : "MD5",
-          "content" : "971137516efac9201bce7b7a949efd3d"
-        },
-        {
-          "alg" : "SHA-1",
-          "content" : "478ee8518687f9b01f20912fc7edd9d7b46d06da"
-        },
-        {
-          "alg" : "SHA-256",
-          "content" : "eb14f69c0395d4a106c6c46fe6dff080c4608ccabc99b1f03933d374383d9bbe"
-        },
-        {
-          "alg" : "SHA-512",
-          "content" : "48a2bd51d06e4220cfdee3d31ddfbef07d8184ca2b712bff40884cc8f3fa3248a6ecbcfc8a6bf1ee2b02c85290766fea250508d32d85113393c6b66fb803ca45"
-        },
-        {
-          "alg" : "SHA-384",
-          "content" : "002475cd5442555c36f6c6799aae2723f97ef82ebc1a810bac18fad5e804fab8e3a702c6f840218ab5f6000ed9808a06"
-        },
-        {
-          "alg" : "SHA3-384",
-          "content" : "7397f578e5aeafef46fbf3562ffc691e1a19b9342b1cff00a4b1c2c9b324a01e75127288da13895fc2d2263ac1011875"
-        },
-        {
-          "alg" : "SHA3-256",
-          "content" : "c8059ca2bb7c1c1a3fce8937a292526fecdecc4957cb68553845954853b62b0a"
-        },
-        {
-          "alg" : "SHA3-512",
-          "content" : "c1d9cbe18e8c07f59864d67ca909160e33640c5688342912c775eaf6f4a1ffafbbf2e84c745167a745070d4c300fa4c2f0bbd3878e7db6b10db44c1bcfd1e1c7"
-        }
-      ],
-      "licenses" : [
-        {
-          "license" : {
-            "id" : "Apache-2.0"
-          }
-        }
-      ],
-      "purl" : "pkg:maven/org.bitbucket.b_c/jose4j@0.7.0?type=jar",
-      "externalReferences" : [
-        {
-          "type" : "website",
-          "url" : "https://bitbucket.org/b_c/jose4j/"
-        },
-        {
-          "type" : "distribution-intake",
-          "url" : "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
-        },
-        {
-          "type" : "vcs",
-          "url" : "https://bitbucket.org/b_c/jose4j"
-        }
-      ]
-    },
-    {
-      "type" : "library",
       "bom-ref" : "pkg:maven/org.bouncycastle/bcprov-jdk18on@1.86?type=jar",
       "group" : "org.bouncycastle",
       "name" : "bcprov-jdk18on",
@@ -28757,6 +28692,7 @@
         "pkg:maven/org.springframework.boot/spring-boot-starter-validation@4.1.1?type=jar",
         "pkg:maven/org.springframework.boot/spring-boot-starter-mail@4.1.1?type=jar",
         "pkg:maven/nl.martijndwars/web-push@5.1.1?type=jar",
+        "pkg:maven/org.bitbucket.b_c/jose4j@0.9.6?type=jar",
         "pkg:maven/org.bouncycastle/bcprov-jdk18on@1.86?type=jar",
         "pkg:maven/org.springframework.boot/spring-boot-starter-actuator@4.1.1?type=jar",
         "pkg:maven/io.micrometer/micrometer-registry-prometheus@1.17.1?type=jar",
@@ -28824,7 +28760,7 @@
         "pkg:maven/com.beust/jcommander@1.78?type=jar",
         "pkg:maven/org.apache.httpcomponents/httpasyncclient@4.1.5?type=jar",
         "pkg:maven/org.asynchttpclient/async-http-client@2.16.1?type=jar",
-        "pkg:maven/org.bitbucket.b_c/jose4j@0.7.0?type=jar"
+        "pkg:maven/org.bitbucket.b_c/jose4j@0.9.6?type=jar"
       ]
     },
     {
@@ -28929,12 +28865,6 @@
       "dependsOn" : [
         "pkg:maven/io.netty/netty-handler@4.2.17.Final?type=jar",
         "pkg:maven/org.reactivestreams/reactive-streams@1.0.4?type=jar"
-      ]
-    },
-    {
-      "ref" : "pkg:maven/org.bitbucket.b_c/jose4j@0.7.0?type=jar",
-      "dependsOn" : [
-        "pkg:maven/org.slf4j/slf4j-api@2.0.18?type=jar"
       ]
     },
     {

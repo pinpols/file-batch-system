@@ -19,14 +19,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 
 /**
  * 负载/压力测试(testcontainers 级):并发往 原子任务专属 topic 灌 N 个原子任务,验证 原子任务 worker 在并发下 全部跑到终态 SUCCESS,无丢任务 /
@@ -39,12 +37,10 @@ import org.springframework.test.context.ActiveProfiles;
  * claim/report HTTP 往返,有效吞吐很低(~1 task/10s 级),与生产无关。 生产吞吐/SLO 基准用 load-tests 的 {@code
  * SpiTaskDispatchSimulation}(Gatling,打真实部署)。
  */
-@SpringBootTest(
+@E2eSpringBootTest(
     classes = E2eAtomicApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles({"test", "e2e"})
 @E2eBusinessSchema
-@Tag("e2e")
 @DisplayName("原子任务负载端到端:单类型原子任务高并发突发投放,压真实派发与执行链路,验证并发下不丢任务,全部收敛到终态成功并记录吞吐")
 class AtomicTaskLoadE2eIT extends AbstractIntegrationTest {
 

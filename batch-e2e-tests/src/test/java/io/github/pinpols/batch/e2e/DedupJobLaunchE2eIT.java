@@ -25,7 +25,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
@@ -41,17 +40,15 @@ import org.springframework.test.context.jdbc.Sql;
  *   <li><b>并发重复</b>：两个线程在 {@link CountDownLatch} 栅栏后同时 launch，相同 dedup_key 下最终只落一条 instance。
  * </ol>
  */
-@SpringBootTest(
+@E2eSpringBootTest(
     classes = E2eImportApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = "batch.worker.import.worker-type=IMPORT")
-@ActiveProfiles({"test", "e2e"})
 @E2eBusinessSchema
 @Sql(
     scripts = {
       E2eTestSql.IMPORT_TEMPLATE_SEED,
     })
-@Tag("e2e")
 @Tag("critical")
 @DisplayName("端到端测试: 同一去重键在串行重放与并发抢占两种情形下的触发受理链路, 验证应用层去重判定与数据库唯一约束共同保证只落一条作业实例")
 class DedupJobLaunchE2eIT extends AbstractIntegrationTest {

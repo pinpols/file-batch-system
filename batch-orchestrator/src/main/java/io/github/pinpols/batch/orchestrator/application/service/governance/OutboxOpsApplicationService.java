@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service.governance;
 
+import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -31,7 +32,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class OutboxOpsApplicationService {
 
-  private static final List<String> REPUBLISHABLE_FROM_STATUSES = List.of("FAILED", "GIVE_UP");
+  private static final List<String> REPUBLISHABLE_FROM_STATUSES =
+      List.of(OutboxPublishStatus.FAILED.code(), OutboxPublishStatus.GIVE_UP.code());
 
   private final OutboxEventMapper outboxEventMapper;
   private final JobExecutionLogMapper jobExecutionLogMapper;

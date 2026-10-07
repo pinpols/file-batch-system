@@ -6,6 +6,7 @@
 | 文档 | 范围 |
 |---|---|
 | [convention-drift-guard-index.md](./convention-drift-guard-index.md) | 代码规约与 CI 漂移守卫总账 |
+| [typed-contract-governance-verification-2026-10-07.md](./typed-contract-governance-verification-2026-10-07.md) | 固定契约、既有枚举与精准门禁的本地实施验收、保留项和未执行边界 |
 | [backend-adversarial-audit-2026-07-27.md](./backend-adversarial-audit-2026-07-27.md) | 后端安全、一致性和故障恢复对抗审计 |
 | [backend-six-round-adversarial-audit-2026-07-27.md](./backend-six-round-adversarial-audit-2026-07-27.md) | 六轮对抗审计汇总 |
 | [backend-deep-scan-2026-06-19.md](./backend-deep-scan-2026-06-19.md) | 后端深度扫描快照 |

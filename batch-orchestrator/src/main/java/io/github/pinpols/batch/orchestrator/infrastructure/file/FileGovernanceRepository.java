@@ -408,7 +408,7 @@ public class FileGovernanceRepository {
         PIPELINE_STATUS_FAILED,
         "pendingStatus",
         "PENDING",
-        "runningStatus",
+        KEY_RUNNING_STATUS,
         PIPELINE_STATUS_RUNNING,
         "retryingStatus",
         "RETRYING",

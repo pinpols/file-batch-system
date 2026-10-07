@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.exports.stage;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.constants.BatchFileConstants;
+import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.file.ExportFileNameResolver;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -87,7 +88,8 @@ public class PrepareStep implements ExportStageStep {
             "bizDate is required from orchestrator context or export payload",
             objectMapper);
       }
-      String fileFormatType = resolveText(templateConfig.get("file_format_type"), "JSON");
+      String fileFormatType =
+          resolveText(templateConfig.get("file_format_type"), FileTemplateFormat.JSON.code());
       // 地区(per-run):metadata.region 优先 → 模板 defaultRegion 回退 → allowedRegions 字典校验。
       // 在此统一解析:既喂文件名 ${region} 占位,也经 exportSnapshot 透传给 GENERATE 查询插件绑定 :region。
       String region = ExportRegionResolver.resolve(templateConfig, payload.metadata());

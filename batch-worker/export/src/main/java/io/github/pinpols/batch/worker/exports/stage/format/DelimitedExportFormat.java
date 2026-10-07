@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.exports.stage.format;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -23,7 +24,7 @@ public class DelimitedExportFormat extends AbstractExportFormat {
 
   @Override
   public String formatType() {
-    return "DELIMITED";
+    return FileTemplateFormat.DELIMITED.code();
   }
 
   @Override

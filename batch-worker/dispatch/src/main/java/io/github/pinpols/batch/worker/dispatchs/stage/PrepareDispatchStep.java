@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.dispatchs.stage;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -103,7 +104,8 @@ public class PrepareDispatchStep implements DispatchStageStep {
       attrs.put(PipelineRuntimeKeys.CHANNEL_CONFIG, channelConfig);
       attrs.put(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.TRUE.equals(payload.forceRetry()));
       attrs.put(
-          DispatchRuntimeKeys.RECEIPT_STATUS, channelConfig.getOrDefault("receipt_policy", "NONE"));
+          DispatchRuntimeKeys.RECEIPT_STATUS,
+          channelConfig.getOrDefault("receipt_policy", FileReceiptPolicy.NONE.code()));
       pipelineRuns.bindFileToPipelineInstance(
           PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)),
           fileId);

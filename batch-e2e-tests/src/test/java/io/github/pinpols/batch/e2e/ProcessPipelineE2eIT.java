@@ -36,7 +36,6 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 
 /**
  * 端到端测试：PROCESS 主链路成功闭环（WAP+bookends 完整 5 stage）。
@@ -52,14 +51,12 @@ import org.springframework.test.context.ActiveProfiles;
  * <p>本类只覆盖成功路径（sqlTransformCompute 与自定义 plugin）；失败路径（validation 失败）见 {@link
  * ProcessFailurePipelineE2eIT}。
  */
-@SpringBootTest(
+@E2eSpringBootTest(
     classes = E2eProcessApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = "batch.worker.process.worker-type=PROCESS")
-@ActiveProfiles({"test", "e2e"})
 @E2eBusinessSchema
 @Import(ProcessPipelineE2eIT.ProcessE2eTestConfiguration.class)
-@Tag("e2e")
 @Tag("smoke")
 @DisplayName("PROCESS 主链路成功闭环端到端:发起经派发与认领进入五阶段流水线,目标表写入正确且暂存清空,实例与任务成功收敛")
 class ProcessPipelineE2eIT extends AbstractIntegrationTest {

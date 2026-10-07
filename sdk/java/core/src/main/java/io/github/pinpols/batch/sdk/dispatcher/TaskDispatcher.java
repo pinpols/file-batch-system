@@ -61,6 +61,9 @@ public class TaskDispatcher {
   private final Map<String, SdkTaskHandler> handlers;
   private final ExecutorService executor;
 
+  private static final String KEY_ERROR_CODE = "errorCode";
+  private static final String KEY_WORKER_ID = "workerId";
+  private static final String KEY_MESSAGE = "message";
   private static final ObjectMapper RESULT_SUMMARY_MAPPER = SdkJsonMapperFactory.create();
 
   /**
@@ -338,7 +341,7 @@ public class TaskDispatcher {
     Map<String, Object> claimBody = new HashMap<>();
     claimBody.put(MDC_TENANT_ID, msg.tenantId());
     claimBody.put(
-        "workerId", config.getWorkerCode()); // ADR-035 §9:workerId==workerCode(P4 后 server 分配)
+        KEY_WORKER_ID, config.getWorkerCode()); // ADR-035 §9:workerId==workerCode(P4 后 server 分配)
     String partitionInvocationId = extractPartitionInvocation(msg);
     if (partitionInvocationId != null) {
       claimBody.put("partitionInvocationId", partitionInvocationId);
@@ -486,15 +489,15 @@ public class TaskDispatcher {
     try {
       Map<String, Object> body = new HashMap<>();
       body.put(MDC_TASK_ID, msg.taskId());
-      body.put("tenantId", msg.tenantId());
-      body.put("workerId", config.getWorkerCode());
+      body.put(MDC_TENANT_ID, msg.tenantId());
+      body.put(KEY_WORKER_ID, config.getWorkerCode());
       putPartitionInvocation(body, msg);
       body.put("success", false);
-      body.put("message", message);
+      body.put(KEY_MESSAGE, message);
       // errorCode 统一收敛到 protocol 常量 EXECUTION_FAILED(no-handler / dispatcher 级失败的默认分类),
       // 不再用异常类 SimpleName —— 否则平台按 errorCode 聚合告警时跨语言 SDK 碎片化(#P2 errorCode 词表统一)。
       String code = SdkErrorCode.EXECUTION_FAILED;
-      body.put("errorCode", code);
+      body.put(KEY_ERROR_CODE, code);
       // result_summary 是 JSONB:发 {code,message} 对象(普通文本 → invalid input syntax for type json →
       // 500)。
       // 原异常类名保留在 resultSummary.message 里维持可诊断性(平台读 resultSummary;errorMessage 字段是红线,禁发)。
@@ -511,17 +514,17 @@ public class TaskDispatcher {
    */
   private Map<String, Object> successReportBody(TaskDispatchMessage msg, SdkTaskResult result) {
     Map<String, Object> body = new HashMap<>();
-    body.put("taskId", msg.taskId());
-    body.put("tenantId", msg.tenantId());
-    body.put("workerId", config.getWorkerCode());
+    body.put(MDC_TASK_ID, msg.taskId());
+    body.put(MDC_TENANT_ID, msg.tenantId());
+    body.put(KEY_WORKER_ID, config.getWorkerCode());
     putPartitionInvocation(body, msg); // 平台 R3-P0-5 late-report CAS 防覆盖守卫依赖该字段
     body.put("success", result.success());
-    body.put("message", result.message());
+    body.put(KEY_MESSAGE, result.message());
     body.put("outputs", result.output()); // 对齐 TaskExecutionReportDto.outputs
     String code = resolveErrorCode(result);
     // 失败时一律带 errorCode(protocol 常量或 handler 显式业务码);成功不下发(平台读 success=true)。
     if (!result.success()) {
-      body.put("errorCode", code);
+      body.put(KEY_ERROR_CODE, code);
     }
     // 原异常类名保留在 resultSummary.message(平台读 resultSummary,不是 errorMessage —— 后者是红线字段禁发)。
     body.put(
@@ -543,7 +546,9 @@ public class TaskDispatcher {
    */
   private static String resolveErrorCode(SdkTaskResult result) {
     Map<String, Object> output = result.output();
-    if (output != null && output.get("errorCode") instanceof String s && !s.isBlank()) {
+    if (EmptyChecks.isNotNull(output)
+        && output.get(KEY_ERROR_CODE) instanceof String s
+        && !EmptyChecks.isBlank(s)) {
       return s;
     }
     if (result.success()) {
@@ -573,7 +578,7 @@ public class TaskDispatcher {
     try {
       Map<String, Object> summary = new HashMap<>();
       summary.put("code", code == null ? "UNKNOWN" : code);
-      summary.put("message", message == null ? "" : message);
+      summary.put(KEY_MESSAGE, EmptyChecks.isNull(message) ? "" : message);
       return RESULT_SUMMARY_MAPPER.writeValueAsString(summary);
     } catch (Exception e) {
       return "{\"code\":\"UNKNOWN\",\"message\":\"\"}";

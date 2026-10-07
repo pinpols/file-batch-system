@@ -27,7 +27,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
@@ -42,17 +41,15 @@ import org.springframework.test.context.jdbc.Sql;
  *
  * <p>说明：该用例偏“状态级成功”断言；更严格的产物内容断言见 {@link ExportContentVerificationE2eIT}。
  */
-@SpringBootTest(
+@E2eSpringBootTest(
     classes = E2eExportApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = "batch.worker.export.worker-type=EXPORT")
-@ActiveProfiles({"test", "e2e"})
 @E2eBusinessSchema
 @Sql(
     scripts = {
       E2eTestSql.EXPORT_TEMPLATE_SEED,
     })
-@Tag("e2e")
 @Tag("smoke")
 @DisplayName("端到端测试: 导出主链路从触发受理, 事件派发, 任务领取到业务明细读取与导出产物落库的成功闭环, 验证任务成功终态, 业务汇总可读与导出文件记录一致")
 class ExportPipelineE2eIT extends AbstractIntegrationTest {

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
+import io.github.pinpols.batch.common.enums.FileChannelType;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
 import org.springframework.stereotype.Component;
 
@@ -15,7 +16,7 @@ public class LocalDispatchChannelAdapter implements DispatchChannelAdapter {
 
   @Override
   public boolean supports(String channelType) {
-    return channelType != null && "LOCAL".equalsIgnoreCase(channelType);
+    return FileChannelType.LOCAL.code().equalsIgnoreCase(channelType);
   }
 
   @Override

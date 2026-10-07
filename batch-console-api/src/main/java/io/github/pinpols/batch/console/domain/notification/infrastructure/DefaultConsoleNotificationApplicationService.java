@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.notification.infrastructure;
 
+import io.github.pinpols.batch.common.enums.NotificationChannelType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -59,6 +60,7 @@ public class DefaultConsoleNotificationApplicationService
 
   // ── duplicate literal constants ─────────────────────────────────────────
   private static final String ERR_CHANNEL_NOT_FOUND = "notification channel not found: ";
+  private static final String KEY_MESSAGE = "message";
   private static final String KEY_CONFIG_JSON = "configJson";
   private static final String KEY_UPDATED_BY = "updatedBy";
   private static final String KEY_RULE_NAME = "ruleName";
@@ -70,10 +72,13 @@ public class DefaultConsoleNotificationApplicationService
   private static final String KEY_CHANNEL_NAME = "channelName";
   private static final String KEY_CHANNEL_TYPE = "channelType";
   private static final String KEY_TENANT_ID = "tenantId";
-  private static final String CHANNEL_TYPE_WEBHOOK = "WEBHOOK";
 
-  private static final Set<String> CHANNEL_TYPES =
-      Set.of("EMAIL", "DINGTALK", "WECOM", CHANNEL_TYPE_WEBHOOK, "SMS");
+  private static final Set<String> CHANNEL_TYPES = Set.of(
+      NotificationChannelType.EMAIL.code(),
+      NotificationChannelType.DINGTALK.code(),
+      NotificationChannelType.WECOM.code(),
+      NotificationChannelType.WEBHOOK.code(),
+      NotificationChannelType.SMS.code());
 
   private static final String COL_CHANNEL_TYPE = "channel_type";
   private static final String COL_CONFIG_JSON = "config_json";
@@ -176,7 +181,7 @@ public class DefaultConsoleNotificationApplicationService
    * url"处理)。
    */
   private void validateWebhookChannelUrl(String channelType, String configJson) {
-    if (!CHANNEL_TYPE_WEBHOOK.equalsIgnoreCase(channelType)) {
+    if (!NotificationChannelType.WEBHOOK.code().equalsIgnoreCase(channelType)) {
       return;
     }
     String url = WebhookDeliverySupport.configText(
@@ -326,14 +331,14 @@ public class DefaultConsoleNotificationApplicationService
     String configJson = str(channel, COL_CONFIG_JSON);
 
     String testMessage = "[BATCH] 测试通知 " + BatchDateTimeSupport.utcNow();
-    String payloadJson = JsonUtils.toJson(Map.of("message", testMessage, "test", Boolean.TRUE));
+    String payloadJson = JsonUtils.toJson(Map.of(KEY_MESSAGE, testMessage, "test", Boolean.TRUE));
     WebhookEventPayload payload = new WebhookEventPayload(
         resolved,
         TEST_EVENT_TYPE,
         "notification-test",
         null,
         BatchDateTimeSupport.utcNow(),
-        Map.of("message", testMessage));
+        Map.of(KEY_MESSAGE, testMessage));
 
     WebhookDeliveryResult result =
         deliverTest(resolved, channelCode, channelType, configJson, payload, payloadJson);
@@ -365,7 +370,7 @@ public class DefaultConsoleNotificationApplicationService
     response.put("success", result.success());
     response.put("status", result.success() ? "OK" : "FAILED");
     response.put(
-        "message",
+        KEY_MESSAGE,
         result.success()
             ? "test notification delivered"
             : "test notification failed: " + result.errorSummary());

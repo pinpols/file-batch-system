@@ -145,7 +145,7 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
         planned.put(PipelineRuntimeKeys.DRY_RUN, true);
         planned.put("plannedAction", "shell");
         planned.put(PARAM_COMMAND, inv.command);
-        planned.put("args", inv.args);
+        planned.put(PARAM_ARGS, inv.args);
         planned.put(PARAM_TIMEOUT_SECONDS, inv.timeout.toSeconds());
         // env 只暴露 key(白名单过滤过),value 不出库以防泄密
         planned.put("envKeys", List.copyOf(inv.env.keySet()));
@@ -206,8 +206,8 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
       throw new ShellValidationException(
           "command not in whitelist: " + command + ", allowed=" + props.getCommandWhitelist());
     }
-    validateAgainstRegex(command, "command");
-    validateNoParentDirRef(command, "command");
+    validateAgainstRegex(command, PARAM_COMMAND);
+    validateNoParentDirRef(command, PARAM_COMMAND);
 
     // args
     List<String> args = parseArgs(params.get(PARAM_ARGS));

@@ -3,7 +3,92 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.orchestrator.mapper.LineageEvidenceMapper">
 
-    <select id="selectJobInstance" resultType="map">
+    <resultMap id="JobInstanceResultMap" type="io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse$JobInstance">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="job_code" javaType="java.lang.String"/>
+            <arg column="biz_date" javaType="java.time.LocalDate"/>
+            <arg column="instance_status" javaType="java.lang.String"/>
+            <arg column="run_attempt" javaType="java.lang.Integer"/>
+            <arg column="trace_id" javaType="java.lang.String"/>
+            <arg column="related_file_id" javaType="java.lang.Long"/>
+            <arg column="parent_instance_id" javaType="java.lang.Long"/>
+            <arg column="replay_session_id" javaType="java.lang.Long"/>
+            <arg column="started_at" javaType="java.time.Instant"/>
+            <arg column="finished_at" javaType="java.time.Instant"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="PipelineInstanceResultMap" type="io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse$PipelineInstance">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="pipeline_definition_id" javaType="java.lang.Long"/>
+            <arg column="job_code" javaType="java.lang.String"/>
+            <arg column="pipeline_type" javaType="java.lang.String"/>
+            <arg column="file_id" javaType="java.lang.Long"/>
+            <arg column="related_job_instance_id" javaType="java.lang.Long"/>
+            <arg column="current_stage" javaType="java.lang.String"/>
+            <arg column="last_success_stage" javaType="java.lang.String"/>
+            <arg column="run_status" javaType="java.lang.String"/>
+            <arg column="trace_id" javaType="java.lang.String"/>
+            <arg column="started_at" javaType="java.time.Instant"/>
+            <arg column="finished_at" javaType="java.time.Instant"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="FileRecordResultMap" type="io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse$FileRecord">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="file_code" javaType="java.lang.String"/>
+            <arg column="biz_type" javaType="java.lang.String"/>
+            <arg column="file_category" javaType="java.lang.String"/>
+            <arg column="file_name" javaType="java.lang.String"/>
+            <arg column="file_format_type" javaType="java.lang.String"/>
+            <arg column="file_size_bytes" javaType="java.lang.Long"/>
+            <arg column="checksum_type" javaType="java.lang.String"/>
+            <arg column="checksum_value" javaType="java.lang.String"/>
+            <arg column="storage_type" javaType="java.lang.String"/>
+            <arg column="storage_bucket" javaType="java.lang.String"/>
+            <arg column="storage_path" javaType="java.lang.String"/>
+            <arg column="file_status" javaType="java.lang.String"/>
+            <arg column="biz_date" javaType="java.time.LocalDate"/>
+            <arg column="trace_id" javaType="java.lang.String"/>
+            <arg column="metadata_json" javaType="java.util.Map" typeHandler="io.github.pinpols.batch.orchestrator.infrastructure.mybatis.MapJsonbTypeHandler"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="DispatchRecordResultMap" type="io.github.pinpols.batch.orchestrator.application.contract.response.LineageEvidenceResponse$DispatchRecord">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="file_id" javaType="java.lang.Long"/>
+            <arg column="pipeline_instance_id" javaType="java.lang.Long"/>
+            <arg column="channel_code" javaType="java.lang.String"/>
+            <arg column="dispatch_target" javaType="java.lang.String"/>
+            <arg column="dispatch_status" javaType="java.lang.String"/>
+            <arg column="dispatch_attempt" javaType="java.lang.Integer"/>
+            <arg column="receipt_code" javaType="java.lang.String"/>
+            <arg column="receipt_status" javaType="java.lang.String"/>
+            <arg column="external_request_id" javaType="java.lang.String"/>
+            <arg column="error_code" javaType="java.lang.String"/>
+            <arg column="error_message" javaType="java.lang.String"/>
+            <arg column="dispatched_at" javaType="java.time.Instant"/>
+            <arg column="ack_at" javaType="java.time.Instant"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectJobInstance" resultMap="JobInstanceResultMap">
         select id,
                tenant_id,
                job_code,
@@ -23,7 +108,7 @@
           and id = #{jobInstanceId}
     </select>
 
-    <select id="selectArchivedJobInstance" resultType="map">
+    <select id="selectArchivedJobInstance" resultMap="JobInstanceResultMap">
         select id,
                tenant_id,
                job_code,
@@ -43,7 +128,7 @@
           and id = #{jobInstanceId}
     </select>
 
-    <select id="selectPipelineInstances" resultType="map">
+    <select id="selectPipelineInstances" resultMap="PipelineInstanceResultMap">
         select id,
                tenant_id,
                pipeline_definition_id,
@@ -65,7 +150,7 @@
         order by id asc
     </select>
 
-    <select id="selectArchivedPipelineInstances" resultType="map">
+    <select id="selectArchivedPipelineInstances" resultMap="PipelineInstanceResultMap">
         select id,
                tenant_id,
                pipeline_definition_id,
@@ -87,7 +172,7 @@
         order by id asc
     </select>
 
-    <select id="selectFileRecords" resultType="map">
+    <select id="selectFileRecords" resultMap="FileRecordResultMap">
         select distinct fr.id,
                fr.tenant_id,
                fr.file_code,
@@ -104,7 +189,7 @@
                fr.file_status,
                fr.biz_date,
                fr.trace_id,
-               fr.metadata_json,
+               fr.metadata_json::text as metadata_json,
                fr.created_at,
                fr.updated_at
         from batch.file_record fr
@@ -131,7 +216,7 @@
         order by fr.id asc
     </select>
 
-    <select id="selectArchivedFileRecords" resultType="map">
+    <select id="selectArchivedFileRecords" resultMap="FileRecordResultMap">
         select distinct fr.id,
                fr.tenant_id,
                fr.file_code,
@@ -148,7 +233,7 @@
                fr.file_status,
                fr.biz_date,
                fr.trace_id,
-               fr.metadata_json,
+               fr.metadata_json::text as metadata_json,
                fr.created_at,
                fr.updated_at
         from archive.file_record_archive fr
@@ -175,7 +260,7 @@
         order by fr.id asc
     </select>
 
-    <select id="selectDispatchRecords" resultType="map">
+    <select id="selectDispatchRecords" resultMap="DispatchRecordResultMap">
         select distinct fdr.id,
                fdr.tenant_id,
                fdr.file_id,
@@ -211,7 +296,7 @@
         limit 100
     </select>
 
-    <select id="selectArchivedDispatchRecords" resultType="map">
+    <select id="selectArchivedDispatchRecords" resultMap="DispatchRecordResultMap">
         select distinct fdr.id,
                fdr.tenant_id,
                fdr.file_id,

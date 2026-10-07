@@ -1,22 +1,24 @@
 package io.github.pinpols.batch.console.application.ops;
 
+import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleSchedulerCommandResponse;
+import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleTriggerActionResponse;
+import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleTriggerStatusResponse;
 import java.util.List;
-import java.util.Map;
 
 /** 触发器代理服务：转发控制台对调度器与触发器管理接口的操作。 */
 public interface ConsoleTriggerProxyService {
 
-  Map<String, String> schedulerStatus();
+  ConsoleSchedulerCommandResponse schedulerStatus();
 
-  Map<String, String> schedulerPauseAll();
+  ConsoleSchedulerCommandResponse schedulerPauseAll();
 
-  Map<String, String> schedulerResumeAll();
+  ConsoleSchedulerCommandResponse schedulerResumeAll();
 
-  List<Object> triggerList();
+  List<ConsoleTriggerStatusResponse> triggerList();
 
-  Map<String, String> triggerAction(String tenantId, String jobCode, String action);
+  ConsoleTriggerActionResponse triggerAction(String tenantId, String jobCode, String action);
 
-  Map<String, String> pauseByTenant(String tenantId);
+  ConsoleTriggerActionResponse pauseByTenant(String tenantId);
 
-  Map<String, String> resumeByTenant(String tenantId);
+  ConsoleTriggerActionResponse resumeByTenant(String tenantId);
 }

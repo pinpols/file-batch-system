@@ -10,6 +10,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 SCRIPT = Path(__file__).parents[1] / "check-java-suppression-registry.py"
@@ -20,6 +21,27 @@ SPEC.loader.exec_module(MODULE)
 
 
 class JavaSuppressionRegistryTest(unittest.TestCase):
+
+    def test_main_accepts_incremental_source_paths(self) -> None:
+        """pre-commit 的增量文件参数不能被误判为未知选项。"""
+        candidates = ["batch-common/src/main/java/Example.java"]
+        with patch.object(MODULE, "scan", return_value=[]) as scan:
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(MODULE.main(candidates), 0)
+            scan.assert_called_once_with(candidates)
+
+    def test_main_rejects_unknown_options_before_scanning(self) -> None:
+        with patch.object(MODULE, "scan") as scan:
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(MODULE.main(["--unknown"]), 2)
+            scan.assert_not_called()
+
+    def test_contract_path_exception_is_exact_and_cannot_grow(self) -> None:
+        path = next(iter(MODULE.SCOPED_RULES["java:S1075"]))
+        allowed = (path, 23, "java:S1075")
+        self.assertEqual(MODULE.unregistered([allowed]), [])
+        self.assertEqual(len(MODULE.unregistered([allowed, allowed])), 2)
+        self.assertEqual(len(MODULE.unregistered([("Other.java", 23, "java:S1075")])), 1)
 
     def test_default_enumeration_includes_untracked_files(self) -> None:
         """默认扫描必须覆盖尚未 git add 的新文件。
@@ -58,12 +80,14 @@ class JavaSuppressionRegistryTest(unittest.TestCase):
             [path.relative_to(MODULE.ROOT).as_posix() for path in kept], [production_rel])
 
     def test_main_flags_unregistered_rule(self) -> None:
-        """未登记的规则必须让门禁失败，已登记的规则必须通过。"""
+        """未知规则失败；既有明确登记的 suppression 可通过。"""
         original = MODULE.production_sources
+        original_baseline = MODULE.BASELINE
         # 临时目录建在仓库内，scan() 才能算出相对路径。
         with tempfile.TemporaryDirectory(dir=MODULE.ROOT) as tmp:
             probe = Path(tmp) / "ZzSuppressionProbe.java"
             MODULE.production_sources = lambda _candidates=None: [probe]
+            MODULE.BASELINE = Path(tmp) / "baseline.tsv"
             try:
                 probe.write_text(
                     "package probe;\n\n"
@@ -71,6 +95,7 @@ class JavaSuppressionRegistryTest(unittest.TestCase):
                     "public class ZzSuppressionProbe {}\n",
                     encoding="utf-8",
                 )
+                MODULE.BASELINE.write_text("", encoding="utf-8")
                 with contextlib.redirect_stdout(io.StringIO()):
                     self.assertEqual(MODULE.main([]), 1)
 
@@ -80,10 +105,33 @@ class JavaSuppressionRegistryTest(unittest.TestCase):
                     "public class ZzSuppressionProbe {}\n",
                     encoding="utf-8",
                 )
+                relative = probe.relative_to(MODULE.ROOT).as_posix()
+                MODULE.BASELINE.write_text(f"{relative}\tunchecked\t1\n", encoding="utf-8")
                 with contextlib.redirect_stdout(io.StringIO()):
                     self.assertEqual(MODULE.main([]), 0)
             finally:
                 MODULE.production_sources = original
+                MODULE.BASELINE = original_baseline
+
+    def test_known_rule_addition_requires_baseline_update(self) -> None:
+        """全局已知规则不能让新文件中的 suppression 自动豁免。"""
+        original = MODULE.production_sources
+        original_baseline = MODULE.BASELINE
+        with tempfile.TemporaryDirectory(dir=MODULE.ROOT) as tmp:
+            probe = Path(tmp) / "ZzNewSuppression.java"
+            probe.write_text(
+                '@SuppressWarnings("unchecked")\npublic class ZzNewSuppression {}\n',
+                encoding="utf-8",
+            )
+            MODULE.production_sources = lambda _candidates=None: [probe]
+            MODULE.BASELINE = Path(tmp) / "baseline.tsv"
+            MODULE.BASELINE.write_text("", encoding="utf-8")
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(MODULE.main([]), 1)
+            finally:
+                MODULE.production_sources = original
+                MODULE.BASELINE = original_baseline
 
 
 if __name__ == "__main__":

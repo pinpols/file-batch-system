@@ -1,21 +1,21 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `fa3633c37`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `666f070ba`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,746 | 501,796 | 257,697 | 51.4% |
+| 4,763 | 503,012 | 258,499 | 51.4% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| prod | 2,749 | 251,034 | 114,849 | 45.8% |
-| test | 1,224 | 182,982 | 100,497 | 54.9% |
-| script | 627 | 52,007 | 32,404 | 62.3% |
-| config | 53 | 8,168 | 5,866 | 71.8% |
+| prod | 2,756 | 251,454 | 115,098 | 45.8% |
+| test | 1,232 | 183,390 | 100,740 | 54.9% |
+| script | 629 | 52,386 | 32,706 | 62.4% |
+| config | 53 | 8,177 | 5,874 | 71.8% |
 | infra-config | 32 | 5,344 | 3,912 | 73.2% |
 | sql | 61 | 2,261 | 169 | 7.5% |
 
@@ -23,11 +23,11 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,501 | 366,630 | 189,434 | 51.7% |
-| Shell | 197 | 30,258 | 23,608 | 78.0% |
-| Python | 236 | 33,980 | 17,297 | 50.9% |
+| Java | 3,514 | 367,184 | 189,709 | 51.7% |
+| Shell | 199 | 30,305 | 23,651 | 78.0% |
+| Python | 238 | 34,501 | 17,700 | 51.3% |
 | YAML | 95 | 12,461 | 9,439 | 75.7% |
-| XML | 178 | 21,421 | 6,637 | 31.0% |
+| XML | 178 | 21,515 | 6,718 | 31.2% |
 | TypeScript | 37 | 6,632 | 3,124 | 47.1% |
 | Rust | 23 | 8,423 | 2,835 | 33.7% |
 | Properties | 5 | 2,887 | 2,361 | 81.8% |
@@ -46,7 +46,7 @@
 | `helm/batch-platform/files/prometheus-batch-rules.yml` | infra-config | YAML | 1,228 | 1,027 |
 | `load-tests/scripts/run-control-plane-worker-benchmark.sh` | script | Shell | 879 | 796 |
 | `helm/batch-platform/values.yaml` | infra-config | YAML | 991 | 712 |
-| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java` | prod | Java | 1,146 | 645 |
+| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java` | prod | Java | 1,147 | 646 |
 | `deploy/docker/compose/app.yml` | config | YAML | 724 | 643 |
 | `scripts/local/validate-seed-scenarios.sh` | script | Shell | 768 | 560 |
 | `scripts/fix-fixture-xlsx.py` | script | Python | 979 | 559 |
@@ -54,7 +54,7 @@
 | `scripts/local/start-all.sh` | script | Shell | 638 | 512 |
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationServiceTest.java` | test | Java | 814 | 503 |
 | `scripts/local/be-acceptance.sh` | script | Shell | 612 | 479 |
-| `pom.xml` | config | XML | 764 | 455 |
+| `pom.xml` | config | XML | 770 | 460 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | prod | Java | 1,028 | 451 |
 | `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultFileGovernanceServiceTest.java` | test | Java | 793 | 438 |
 | `batch-worker/core/src/test/java/io/github/pinpols/batch/worker/core/support/AbstractTaskConsumerTest.java` | test | Java | 698 | 433 |

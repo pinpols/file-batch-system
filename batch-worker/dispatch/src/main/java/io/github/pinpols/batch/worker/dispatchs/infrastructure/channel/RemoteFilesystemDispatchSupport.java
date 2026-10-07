@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.constants.BatchFileConstants;
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.FileChannelType;
+import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
@@ -500,11 +501,12 @@ final class RemoteFilesystemDispatchSupport {
       String evidence,
       DispatchManifestSupport.ManifestPayload manifest) {
     Map<String, Object> channelConfig = command.channelConfig();
-    String receiptPolicy = String.valueOf(channelConfig.getOrDefault("receipt_policy", "SYNC"));
-    boolean acknowledged =
-        "NONE".equalsIgnoreCase(receiptPolicy) || "SYNC".equalsIgnoreCase(receiptPolicy);
-    boolean pending =
-        "ASYNC".equalsIgnoreCase(receiptPolicy) || "POLLING".equalsIgnoreCase(receiptPolicy);
+    String receiptPolicy =
+        String.valueOf(channelConfig.getOrDefault("receipt_policy", FileReceiptPolicy.SYNC.code()));
+    boolean acknowledged = FileReceiptPolicy.NONE.code().equalsIgnoreCase(receiptPolicy)
+        || FileReceiptPolicy.SYNC.code().equalsIgnoreCase(receiptPolicy);
+    boolean pending = FileReceiptPolicy.ASYNC.code().equalsIgnoreCase(receiptPolicy)
+        || FileReceiptPolicy.POLLING.code().equalsIgnoreCase(receiptPolicy);
     if (manifest == null) {
       return new DispatchResult(
           true, externalRequestId, receiptCode, acknowledged, pending, message, evidence);

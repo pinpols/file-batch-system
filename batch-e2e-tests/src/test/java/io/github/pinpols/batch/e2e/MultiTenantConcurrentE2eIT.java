@@ -35,7 +35,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
@@ -55,20 +54,18 @@ import org.springframework.test.context.jdbc.Sql;
  *
  * <p>并发驱动方式：两个线程在 {@link CountDownLatch} 栅栏处对齐后同时 launch，随后等待两个任务完成再做隔离断言。
  */
-@SpringBootTest(
+@E2eSpringBootTest(
     classes = E2eImportApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
       "batch.worker.import.worker-type=IMPORT",
       "batch.worker.import.accept-cross-tenant-dispatch=true"
     })
-@ActiveProfiles({"test", "e2e"})
 @E2eBusinessSchema
 @Sql(
     scripts = {
       E2eTestSql.IMPORT_TEMPLATE_SEED,
     })
-@Tag("e2e")
 @Tag("critical")
 @DisplayName("多租户并发端到端: 两租户栅栏对齐后同时触发导入任务, 校验实例, 任务, 事件, 错误明细与配额峰值均按租户隔离, 且双方任务终态均为成功")
 class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
