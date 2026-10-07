@@ -16,6 +16,7 @@ import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 
@@ -80,8 +81,14 @@ class DispatchChannelCircuitBreakerContextSmokeTest {
    * registry,之前只有 {@code batch.dispatch.circuits.open} 聚合 gauge、没有 R4J 明细指标覆盖。这里让某个 key 熔断
    * OPEN,断言注入的 {@link MeterRegistry} 里真出现该 breaker 的 {@code resilience4j.circuitbreaker.state}
    * meter(带 {@code name} tag 定位到具体 key),验证 {@code TaggedCircuitBreakerMetrics} 绑定链在 Spring 上下文里真活着。
+   *
+   * <p><b>为何要在本用例之后 dirty 上下文</b>:它会把自己持有的 registry 里某个 key 打成 OPEN 且<b>不复位</b>,而
+   * {@link #shouldWireCircuitBreakerBeans_whenContextStarts()} 断言的是同一 registry 的全局
+   * {@code currentOpenCircuits()} 为 0。JUnit 5 默认方法执行顺序由方法名派生,重命名会改变顺序——不做隔离时
+   * "开局无开路"的断言就会随执行顺序时红时绿。{@code AFTER_METHOD} 保证本用例之后各用例拿到干净上下文,与顺序无关。
    */
   @Test
+  @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
   @DisplayName("自持注册表的渠道熔断后,注入的指标注册表里出现该渠道自己的状态指标")
   void circuitBreakerMetricsBindsStateMeter_selfHeldRegistry() {
     String key = "t-smoke|API|ch-smoke";
