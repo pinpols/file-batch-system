@@ -827,6 +827,14 @@
       "sensitivity": "PUBLIC"
     },
     {
+      "id": "batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/config/WorkerKafkaProperties.java#WorkerKafkaProperties",
+      "className": "WorkerKafkaProperties",
+      "prefix": "spring.kafka",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
       "id": "batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/config/WorkerKafkaSubscribeProperties.java#WorkerKafkaSubscribeProperties",
       "className": "WorkerKafkaSubscribeProperties",
       "prefix": "batch.worker.kafka",

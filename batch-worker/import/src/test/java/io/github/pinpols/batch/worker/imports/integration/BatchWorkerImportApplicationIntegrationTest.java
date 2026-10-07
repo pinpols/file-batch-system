@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
+import io.github.pinpols.batch.worker.core.support.AbstractWorkerLoop;
 import io.github.pinpols.batch.worker.imports.BatchWorkerImportApplication;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,7 +17,7 @@ import org.springframework.test.context.DynamicPropertySource;
 /** 使用 Testcontainers Postgres（platform + biz）、Kafka、对象存储和模拟的 orchestrator HTTP 端点加载导入 Worker。 */
 @SpringBootTest(
     classes = BatchWorkerImportApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("导入工作器应用集成测试:容器化依赖下应用上下文可正常启动装配")
 class BatchWorkerImportApplicationIntegrationTest extends AbstractIntegrationTest {
 
@@ -27,6 +28,17 @@ class BatchWorkerImportApplicationIntegrationTest extends AbstractIntegrationTes
 
   @Autowired
   ApplicationContext applicationContext;
+
+  @Test
+  @DisplayName("Worker 注册端口与主服务真实绑定端口一致")
+  void shouldRegisterActualBoundPort() {
+    Integer boundPort =
+        applicationContext.getEnvironment().getProperty("local.server.port", Integer.class);
+    assertThat(boundPort).isNotNull().isPositive();
+    assertThat(
+            applicationContext.getBean(AbstractWorkerLoop.class).ensureStarted().getPort())
+        .isEqualTo(boundPort);
+  }
 
   @Test
   @DisplayName("应用启动后上下文装配完成,不为空")

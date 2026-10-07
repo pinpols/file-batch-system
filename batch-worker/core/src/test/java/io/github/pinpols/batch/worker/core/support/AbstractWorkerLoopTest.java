@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.core.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -20,6 +21,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -101,36 +104,52 @@ class AbstractWorkerLoopTest {
   }
 
   @Test
-  @DisplayName("运行时实际绑定端口优先于配置端口与子类兜底值")
-  void ensureStarted_prefersRuntimeBoundPortOverConfiguredAndFallback() {
-    // local.server.port 是 WebServer 真正绑定后写入的实际端口，必须优先于配置值与子类兜底值。
+  @DisplayName("实际主服务端口优先于配置端口, 不受独立管理服务端口影响")
+  void ensureStarted_usesRuntimeBoundMainPort() {
     loop.setEnvironment(environmentWith("local.server.port", "19099", "server.port", "18083"));
 
     assertThat(registered().getPort()).isEqualTo(19099);
   }
 
   @Test
-  @DisplayName("缺少运行时绑定端口时回退使用配置的服务端口")
-  void ensureStarted_fallsBackToConfiguredServerPort() {
-    loop.setEnvironment(environmentWith("server.port", "18083"));
-
-    assertThat(registered().getPort()).isEqualTo(18083);
+  @DisplayName("仅配置端口或管理端口而主服务未绑定时拒绝注册")
+  void ensureStarted_rejectsConfiguredOrManagementPortBeforeBinding() {
+    loop.setEnvironment(environmentWith("server.port", "18083", "local.management.port", "19090"));
+    assertThatThrownBy(loop::ensureStarted)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("main HTTP server");
+    verify(workerLifecycleManager, never()).start(any());
   }
 
   @Test
-  @DisplayName("没有环境信息时回退使用子类提供的端口")
-  void ensureStarted_fallsBackToWorkerPortWithoutEnvironment() {
-    // 单元测试直接 new（Spring 不回调 setEnvironment）→ 走子类兜底值，保证既有断言语义不变。
-    assertThat(registered().getPort()).isEqualTo(9999);
+  @DisplayName("没有 Spring 环境信息时拒绝注册, 不存在子类端口兜底")
+  void ensureStarted_rejectsMissingEnvironment() {
+    loop.setEnvironment(null);
+    assertThatThrownBy(loop::ensureStarted).isInstanceOf(IllegalStateException.class);
+    verify(workerLifecycleManager, never()).start(any());
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {-1, 0, 65536})
+  @DisplayName("实际端口不在 TCP 端口范围内时拒绝注册")
+  void ensureStarted_rejectsInvalidBoundPort(int port) {
+    loop.setEnvironment(environmentWith("local.server.port", Integer.toString(port)));
+    assertThatThrownBy(loop::ensureStarted).isInstanceOf(IllegalStateException.class);
+    verify(workerLifecycleManager, never()).start(any());
   }
 
   @Test
-  @DisplayName("非正数端口视为无效, 继续回退到子类兜底值")
-  void ensureStarted_ignoresNonPositivePorts() {
-    // 未绑定阶段 server.port=0 表示随机端口，不能当成有效端口上报。
-    loop.setEnvironment(environmentWith("local.server.port", "0", "server.port", "-1"));
+  @DisplayName("随机端口配置只在实际绑定后注册, 管理端口不能覆盖主服务端口")
+  void ensureStarted_canRetryAfterMainServerBinds() {
+    MockEnvironment environment =
+        environmentWith("server.port", "0", "local.management.port", "19090");
+    loop.setEnvironment(environment);
+    loop.doHeartbeat();
+    verify(workerLifecycleManager, never()).start(any());
+    verify(heartbeatService, never()).beat(any());
 
-    assertThat(registered().getPort()).isEqualTo(9999);
+    environment.setProperty("local.server.port", "19099");
+    assertThat(registered().getPort()).isEqualTo(19099);
   }
 
   /** 构造带属性的 MockEnvironment；参数按 key/value 成对传入。 */
@@ -260,6 +279,7 @@ class AbstractWorkerLoopTest {
         HeartbeatService heartbeatService,
         BatchDateTimeSupport dateTimeSupport) {
       super(lifecycleManager, heartbeatService, dateTimeSupport, 8);
+      setEnvironment(new MockEnvironment().withProperty("local.server.port", "9999"));
     }
 
     TestWorkerLoop(
@@ -268,6 +288,7 @@ class AbstractWorkerLoopTest {
         BatchDateTimeSupport dateTimeSupport,
         WorkerIdentityProperties identityProperties) {
       super(lifecycleManager, heartbeatService, dateTimeSupport, 8, identityProperties);
+      setEnvironment(new MockEnvironment().withProperty("local.server.port", "9999"));
     }
 
     @Override
@@ -302,11 +323,6 @@ class AbstractWorkerLoopTest {
     @Override
     protected String workerGroup() {
       return "test";
-    }
-
-    @Override
-    protected int workerPort() {
-      return 9999;
     }
   }
 }

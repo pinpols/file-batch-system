@@ -379,6 +379,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     Object bundleSourceFileId = resolveBundleSourceFileId(payload);
     if (bundleSourceFileId != null) {
       executionContext.put(PipelineRuntimeKeys.FILE_ID, bundleSourceFileId);
+      executionContext.put(PipelineRuntimeKeys.BUNDLE_SOURCE_FILE_ID, bundleSourceFileId);
     }
     if (task.getHighWaterMarkIn() != null) {
       // INCREMENTAL pipeline 业务读 attributes 拼 SQL 水位条件;FULL/CDC/历史首跑为 null。
@@ -513,7 +514,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     try {
       Object payloadObject = JsonUtils.fromJson(payload, Object.class);
       if (payloadObject instanceof Map<?, ?> payloadMap) {
-        return ((Map<String, Object>) payloadMap).get("bundleSourceFileId");
+        return ((Map<String, Object>) payloadMap).get(PipelineRuntimeKeys.BUNDLE_SOURCE_FILE_ID);
       }
     } catch (RuntimeException ignored) {
       SwallowedExceptionLogger.warn(

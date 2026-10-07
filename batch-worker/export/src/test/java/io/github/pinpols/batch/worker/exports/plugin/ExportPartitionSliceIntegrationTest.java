@@ -44,7 +44,7 @@ import org.springframework.test.context.DynamicPropertySource;
  */
 @SpringBootTest(
     classes = BatchWorkerExportApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("导出分片完整性集成测试:两种导出插件在真实库上都满足 4 片无重叠且全集覆盖")
 class ExportPartitionSliceIT extends AbstractIntegrationTest {
 

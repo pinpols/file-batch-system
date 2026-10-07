@@ -92,6 +92,8 @@ jobs:
 
       - name: Run full simulation harness
         id: sim_harness
+        # 为后续 strict 和诊断保留时间；SIM 失败或步骤超时不能短路 strict。
+        timeout-minutes: 180
         shell: bash
         run: |
           set -o pipefail
@@ -99,14 +101,30 @@ jobs:
 
       - name: Quiesce simulated schedules
         if: ${{ always() && steps.start_apps.outcome == 'success' }}
+        timeout-minutes: 5
         run: bash scripts/sim/98-quiesce-schedules.sh
 
       - name: Run BE acceptance strict step
+        id: strict_verify
         if: ${{ always() && steps.start_apps.outcome == 'success' }}
+        timeout-minutes: 20
         shell: bash
         run: |
           set -o pipefail
           CI=1 bash scripts/local/be-acceptance.sh --steps=5 2>&1 | tee /tmp/be-acceptance-strict.log
+
+      - name: Summarize simulation and strict outcomes
+        if: always()
+        env:
+          START_OUTCOME: ${{ steps.start_apps.outcome }}
+          SIM_OUTCOME: ${{ steps.sim_harness.outcome }}
+          STRICT_OUTCOME: ${{ steps.strict_verify.outcome }}
+        run: |
+          {
+            printf '### Runtime validation\n\n'
+            printf '| Environment | SIM | Strict |\n|---|---|---|\n'
+            printf '| %s | %s | %s |\n' "$START_OUTCOME" "$SIM_OUTCOME" "$STRICT_OUTCOME"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Capture diagnostics on failure
         if: failure()

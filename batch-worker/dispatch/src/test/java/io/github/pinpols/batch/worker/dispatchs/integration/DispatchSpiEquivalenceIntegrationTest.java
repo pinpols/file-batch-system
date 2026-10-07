@@ -20,7 +20,7 @@ import org.springframework.test.context.DynamicPropertySource;
 /** P0 Phase 3 等价性 IT — SPI 路径 ≡ @Primary 路径(dispatch)。详见 {@code ImportSpiEquivalenceIT} 同名 doc。 */
 @SpringBootTest(
     classes = BatchWorkerDispatchApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("分发 SPI 等价性:注册表暴露分发任务类型,查得的执行器与主适配器共用同一实现")
 class DispatchSpiEquivalenceIT extends AbstractIntegrationTest {
 

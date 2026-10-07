@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
 import io.github.pinpols.batch.worker.atomic.BatchWorkerAtomicApplication;
+import io.github.pinpols.batch.worker.core.support.AbstractWorkerLoop;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,7 +20,7 @@ import org.springframework.test.context.DynamicPropertySource;
  */
 @SpringBootTest(
     classes = BatchWorkerAtomicApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("原子 Worker 应用上下文: 真实中间件下的启动装配冒烟")
 class BatchWorkerAtomicApplicationIntegrationTest extends AbstractIntegrationTest {
 
@@ -30,6 +31,17 @@ class BatchWorkerAtomicApplicationIntegrationTest extends AbstractIntegrationTes
 
   @Autowired
   ApplicationContext applicationContext;
+
+  @Test
+  @DisplayName("Worker 注册端口与主服务真实绑定端口一致")
+  void shouldRegisterActualBoundPort() {
+    Integer boundPort =
+        applicationContext.getEnvironment().getProperty("local.server.port", Integer.class);
+    assertThat(boundPort).isNotNull().isPositive();
+    assertThat(
+            applicationContext.getBean(AbstractWorkerLoop.class).ensureStarted().getPort())
+        .isEqualTo(boundPort);
+  }
 
   @Test
   @DisplayName("应用启动后上下文应完成装配并可注入, 不因缺少中间件而中断")

@@ -34,7 +34,7 @@ import org.springframework.test.context.DynamicPropertySource;
  */
 @SpringBootTest(
     classes = BatchWorkerImportApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("导入 SPI 等价性集成测试:注册类型,执行器装配与委托实例同一性")
 class ImportSpiEquivalenceIT extends AbstractIntegrationTest {
 

@@ -1,20 +1,20 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `42288fe28`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `40e9852b3`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,782 | 504,808 | 259,749 | 51.5% |
+| 4,789 | 505,588 | 260,231 | 51.5% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| prod | 2,757 | 251,564 | 115,160 | 45.8% |
-| test | 1,240 | 184,066 | 101,170 | 55.0% |
-| script | 638 | 53,323 | 33,408 | 62.7% |
+| prod | 2,758 | 251,578 | 115,183 | 45.8% |
+| test | 1,246 | 184,817 | 101,620 | 55.0% |
+| script | 638 | 53,338 | 33,417 | 62.7% |
 | config | 54 | 8,250 | 5,930 | 71.9% |
 | infra-config | 32 | 5,344 | 3,912 | 73.2% |
 | sql | 61 | 2,261 | 169 | 7.5% |
@@ -23,15 +23,15 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,516 | 367,662 | 190,002 | 51.7% |
-| Shell | 202 | 30,599 | 23,930 | 78.2% |
-| Python | 250 | 35,447 | 18,320 | 51.7% |
+| Java | 3,521 | 368,324 | 190,419 | 51.7% |
+| Shell | 202 | 30,609 | 23,939 | 78.2% |
+| Python | 252 | 35,550 | 18,376 | 51.7% |
 | YAML | 95 | 12,461 | 9,439 | 75.7% |
 | XML | 179 | 21,589 | 6,772 | 31.4% |
 | TypeScript | 37 | 6,632 | 3,124 | 47.1% |
 | Rust | 23 | 8,423 | 2,835 | 33.7% |
 | Properties | 5 | 2,887 | 2,361 | 81.8% |
-| SQL | 433 | 11,791 | 1,458 | 12.4% |
+| SQL | 433 | 11,796 | 1,458 | 12.4% |
 | Go | 34 | 6,983 | 1,288 | 18.4% |
 | TOML | 8 | 334 | 220 | 65.9% |
 
@@ -58,7 +58,7 @@
 | `scripts/local/be-acceptance.sh` | script | Shell | 614 | 481 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | prod | Java | 1,028 | 451 |
 | `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultFileGovernanceServiceTest.java` | test | Java | 793 | 438 |
-| `scripts/local/pre-push-sdk-checks.sh` | script | Shell | 573 | 437 |
+| `scripts/local/pre-push-sdk-checks.sh` | script | Shell | 574 | 437 |
 
 ## 复跑
 

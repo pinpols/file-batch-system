@@ -46,11 +46,6 @@ public class ExportWorkerLoop extends AbstractWorkerLoop {
     return "export";
   }
 
-  @Override
-  protected int workerPort() {
-    return 8084;
-  }
-
   /** 定时心跳方法，按配置间隔向平台上报 Worker 存活。 */
   @Scheduled(fixedDelayString = "${batch.worker.export.heartbeat-interval-millis:15000}")
   public void heartbeat() {

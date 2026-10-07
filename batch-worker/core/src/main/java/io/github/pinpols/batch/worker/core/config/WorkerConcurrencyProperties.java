@@ -1,7 +1,9 @@
 package io.github.pinpols.batch.worker.core.config;
 
+import jakarta.validation.constraints.Min;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
 
 /**
  * Worker 并发上限配置（{@code batch.worker} 前缀）。
@@ -17,10 +19,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * 共用前缀但字段互不重叠，属既有的扁平 key 约定。
  */
 @Data
+@Validated
 @ConfigurationProperties(prefix = "batch.worker")
 @SuppressWarnings("ConfigurationProperties") // 与 WorkerTempFileProperties 共享前缀，子键互不重叠。
 public class WorkerConcurrencyProperties {
 
   /** 单个 worker 实例允许并发执行的最大任务数。 */
+  @Min(value = 1, message = "worker max concurrent tasks must be positive")
   private int maxConcurrentTasks = WorkerRuntimeConfiguration.DEFAULT_MAX_CONCURRENT_TASKS;
 }

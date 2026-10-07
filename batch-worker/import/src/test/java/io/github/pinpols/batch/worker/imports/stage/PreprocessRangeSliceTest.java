@@ -1,15 +1,34 @@
 package io.github.pinpols.batch.worker.imports.stage;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
+import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
+import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
+import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
+import io.github.pinpols.batch.worker.imports.domain.ImportStage;
+import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * range-slice 核心算法 {@link ImportPreprocessObjectSource#copyPartitionRange} + 资格判定 {@link
@@ -19,6 +38,51 @@ import org.junit.jupiter.api.Test;
  */
 @DisplayName("导入预处理范围切片单测:分片无损拼接不变式与切片资格判定语义")
 class PreprocessRangeSliceTest {
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  @DisplayName("普通大文件分片使用范围下载,文件束绑定独立文件时必须完整下载")
+  void shouldRangeSliceOnlySharedSourceFiles(boolean bundle) {
+    ImportPreprocessObjectSource source = mock(ImportPreprocessObjectSource.class);
+    WorkerImportPayloadProperties properties = new WorkerImportPayloadProperties();
+    properties.setPreprocessSpoolBytes(1);
+    ImportPayload payload = JsonUtils.fromJson(
+        "{\"fileFormatType\":\"FIXED_WIDTH\",\"storagePath\":\"ingress/ta/file.dat\"}",
+        ImportPayload.class);
+    ImportJobContext context = new ImportJobContext();
+    context.setRawPayload("");
+    Map<String, Object> attributes = new HashMap<>();
+    attributes.put(PipelineRuntimeKeys.IMPORT_PAYLOAD, payload);
+    attributes.put(PipelineRuntimeKeys.PARTITION_NO, 2);
+    attributes.put(PipelineRuntimeKeys.PARTITION_COUNT, 2);
+    if (bundle) {
+      attributes.put(PipelineRuntimeKeys.BUNDLE_SOURCE_FILE_ID, 81L);
+    }
+    context.setAttributes(attributes);
+    when(source.objectSizeBytes(payload)).thenReturn(100L);
+    when(source.supportsRangeRead()).thenReturn(true);
+    ImportStageResult success = ImportStageResult.success(ImportStage.PREPROCESS);
+    when(source.streamObjectToSpoolAndReturn(any(), any(), any(), any())).thenReturn(success);
+    when(source.streamObjectRangeToSpool(any(), any(), any(), any(), any())).thenReturn(success);
+    PreprocessStep step = new PreprocessStep(
+        mock(PlatformFileRecordRepository.class),
+        mock(PlatformPipelineDefinitionRepository.class),
+        new BatchSecurityProperties(),
+        mock(BatchObjectCryptoService.class),
+        properties,
+        JsonUtils.newDefaultMapper(),
+        source);
+
+    assertThat(step.execute(context).success()).isTrue();
+
+    if (bundle) {
+      verify(source).streamObjectToSpoolAndReturn(any(), any(), any(), any());
+      verify(source, never()).streamObjectRangeToSpool(any(), any(), any(), any(), any());
+    } else {
+      verify(source).streamObjectRangeToSpool(any(), any(), any(), any(), any());
+      verify(source, never()).streamObjectToSpoolAndReturn(any(), any(), any(), any());
+    }
+  }
 
   /** 用与 streamObjectRangeToSpool 相同的边界数学,把 data 切 N 片跑 copyPartitionRange,返回各片输出按序拼接。 */
   private static byte[] sliceAllAndConcat(byte[] data, int n) throws IOException {

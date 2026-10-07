@@ -538,8 +538,9 @@ if [[ $errors -eq 0 ]] && [[ $SKIP_BUILD -eq 0 ]] && [[ -n "$CHANGED_JAVA" ]]; t
   info "──────────────────────────────────────"
 
   # 识别改动涉及的模块,只 build 这些(快)
-  MODULES=$(grep -oE "(batch-[a-z-]+|e2e-tests)" <<< "$CHANGED_JAVA" \
-    | sort -u | awk 'NR <= 5 { print }')
+  # 模块名可能带数字（如 batch-e2e-tests）；不能截断名称或静默丢掉第五个之后的模块。
+  MODULES=$(grep -oE "(batch-[a-z0-9-]+|e2e-tests)" <<< "$CHANGED_JAVA" \
+    | sort -u)
   if [[ -z "$MODULES" ]]; then
     MODULES="batch-orchestrator,batch-worker-sdk,batch-console-api"
   else

@@ -111,11 +111,12 @@ def launch(job_code, params):
     return request_id
 
 
-def wait_instance(job_code, after_id=0, timeout=180):
+def wait_instance(job_code, request_id, after_id=0, timeout=180):
     deadline = time.time() + timeout
     while time.time() < deadline:
         r = psql_file(os.environ["PG_PLATFORM_DB"], "select-bundle-instance-after.sql",
-                      {"tenant_id": "ta", "job_code": job_code, "after_id": after_id})
+                      {"tenant_id": "ta", "job_code": job_code, "request_id": request_id,
+                       "after_id": after_id})
         val = r.stdout.strip()
         if val:
             return int(val)
@@ -178,8 +179,9 @@ def upload(object_name, data):
 # 1) 生成 2 个数据文件 + v2 清单(声明本束 → TA_BUNDLE_IMPORT,逐文件用 ta_import_customer_tpl 模板)
 f1 = f"bundle-a-{BIZ_COMPACT}-{RUN}.csv"
 f2 = f"bundle-b-{BIZ_COMPACT}-{RUN}.csv"
-data1 = csv_rows("BNDLA", 10)
-data2 = csv_rows("BNDLB", 15)
+customer_prefixes = [f"BNDLA{RUN}-", f"BNDLB{RUN}-"]
+data1 = csv_rows(customer_prefixes[0], 10)
+data2 = csv_rows(customer_prefixes[1], 15)
 manifest = {
     "schemaVersion": "batch-manifest-v2",
     "fileGroupCode": GROUP,
@@ -203,7 +205,7 @@ upload(f"{prefix}/{GROUP}.batch.json", json.dumps(manifest, ensure_ascii=False))
 
 # 2) 轮询:扫描器登记 → 到达组满足完整性条件 → BUNDLE_IMPORT launch → 分区展开
 print(f"==> 等待 scanner→到达组→BUNDLE_IMPORT launch(group={GROUP})")
-instance_id = wait_instance(JOB_CODE, before_import)
+instance_id = wait_instance(JOB_CODE, f"bundle-arrival-ta-{GROUP}-{BIZ}", before_import)
 
 if instance_id is None:
     print("❌ FAIL:超时未见 TA_BUNDLE_IMPORT job_instance(检查 scanner batch-manifest/arrival 配置是否开启)")
@@ -217,6 +219,8 @@ assert len(parts) == 2, f"期望 2 个 partition,实得 {len(parts)}"
 for cols in parts:
     assert cols[1], f"partition 缺 source_file_id: {cols}"
     assert cols[2] == TEMPLATE, f"partition template_code 不符: {cols}"
+assert {cols[4] for cols in parts} == {f"{prefix}/{f1}", f"{prefix}/{f2}"}, \
+    f"partition 来源文件与本轮上传不一致: {parts}"
 print("  ✓ 2 个绑定异构 partition(各带 source_file_id + template_code)")
 
 # 4) 终态 + 业务行(worker 真跑时)
@@ -228,13 +232,16 @@ if final is None:
     sys.exit(1)
 ok, failed, total = final
 print(f"  partition 终态:SUCCESS={ok} FAILED={failed} TOTAL={total}")
-rows = int(psql_file(os.environ["PG_BUSINESS_DB"], "count-bundle-import-customers.sql",
-                     {"tenant_id": "ta"}).stdout.strip())
-print(f"  biz.customer_account BNDL* 行数:{rows}")
+file_rows = [int(psql_file(os.environ["PG_BUSINESS_DB"], "count-bundle-import-customers.sql",
+                          {"tenant_id": "ta", "customer_prefix": customer_prefix}).stdout.strip())
+             for customer_prefix in customer_prefixes]
+rows = sum(file_rows)
+print(f"  biz.customer_account 本轮文件行数:{file_rows}, 总数:{rows}")
 assert total == 2, f"导入束 partition 总数异常:{total}"
 assert failed == 0, f"有 {failed} 个导入分区失败"
 assert ok == total, "导入束并非全部分区成功"
 assert rows == 25, f"导入束业务行数异常:expected=25 actual={rows}"
+assert file_rows == [10, 15], f"导入束逐文件行数异常:expected=[10,15] actual={file_rows}"
 print("✅ PASS:文件束导入全链(scanner→到达组→launch→展2分区→worker导入)通过")
 
 # 5) BUNDLE_EXPORT:通过 trigger API 直接发束 launch,验证真实 launch 展开 export 绑定。
@@ -242,7 +249,7 @@ print("==> 验证 BUNDLE_EXPORT launch→partition 绑定")
 seed_export_rows()
 before = int(psql_file(os.environ["PG_PLATFORM_DB"], "select-bundle-max-instance-id.sql",
                        {"tenant_id": "ta"}).stdout.strip())
-launch("TA_BUNDLE_EXPORT", {
+export_request = launch("TA_BUNDLE_EXPORT", {
     "batchNo": BATCH or RUN,
     "bizDate": BIZ,
     "bizType": "TA_EXPORT_REPORT",
@@ -251,7 +258,7 @@ launch("TA_BUNDLE_EXPORT", {
         {"templateCode": "TA_EXPORT_REPORT_JSON_TPL"},
     ],
 })
-export_instance = wait_instance("TA_BUNDLE_EXPORT", before)
+export_instance = wait_instance("TA_BUNDLE_EXPORT", export_request, before)
 if export_instance is None:
     print("❌ FAIL:超时未见 TA_BUNDLE_EXPORT job_instance")
     sys.exit(1)
@@ -275,7 +282,7 @@ file1 = insert_generated_file(f"bundle-dispatch-a-{RUN}")
 file2 = insert_generated_file(f"bundle-dispatch-b-{RUN}")
 before = int(psql_file(os.environ["PG_PLATFORM_DB"], "select-bundle-max-instance-id.sql",
                        {"tenant_id": "ta"}).stdout.strip())
-launch("TA_BUNDLE_DISPATCH", {
+dispatch_request = launch("TA_BUNDLE_DISPATCH", {
     "receiptCode": f"R-BUNDLE-{RUN}",
     "ackRequired": False,
     "forceRetry": False,
@@ -284,7 +291,7 @@ launch("TA_BUNDLE_DISPATCH", {
         {"sourceFileId": file2, "targetRef": "ta_bundle_local"},
     ],
 })
-dispatch_instance = wait_instance("TA_BUNDLE_DISPATCH", before)
+dispatch_instance = wait_instance("TA_BUNDLE_DISPATCH", dispatch_request, before)
 if dispatch_instance is None:
     print("❌ FAIL:超时未见 TA_BUNDLE_DISPATCH job_instance")
     sys.exit(1)

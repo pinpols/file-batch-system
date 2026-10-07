@@ -33,7 +33,7 @@ System.getProperty("batch.xxx")
 
 - `src/test`、`batch-test-support`、`batch-e2e-tests`、`load-tests` 中用于测试或压测的 `-Dxxx` 参数；
 - `java.io.tmpdir`、`user.home` 等 JVM 系统属性；
-- `local.server.port` 这类 Spring Boot 测试运行期属性；
+- `local.server.port` 这类 Spring Boot 运行期绑定结果（Worker 注册也使用该属性，不仅用于测试）；
 - 框架桥接场景，例如仅用于诊断标签、连接池名或 actor 名的 `spring.application.name`；
 - 需要读取 Spring 基础设施实际生效值的启动守护，例如 `spring.datasource.url`、`spring.data.redis.*`。这类可以后续封装 runtime inspector，但不作为第一批阻断项。
 
@@ -60,7 +60,7 @@ System.getProperty("batch.xxx")
 | 多字段同前缀 `@Value` | `batch.console.pipeline-progress-dirty.*` | 提取成独立 properties 类，避免默认值散落 |
 | 单字段低风险 `@Value` | 单个内部实现开关或历史桥接字段 | 可以暂缓；新增时优先 properties |
 | Spring 基础设施配置 | `spring.datasource.url`、`spring.data.redis.host` | 允许保留；如多处重复再封装只读 inspector |
-| 运行期测试端口 | `local.server.port` | 允许保留，仅用于测试或懒解析客户端 |
+| 运行期绑定端口 | `local.server.port` | 允许保留，用于实际端口注册、测试或懒解析客户端；不得用配置端口替代绑定结果 |
 | JVM 系统路径 | `java.io.tmpdir`、`user.home` | 允许保留，不强行 Spring 化 |
 | 测试/压测参数 | `batch.test.*`、`users.peak` | 允许保留在测试和压测模块 |
 | 构建 / 测试工具属性 | `maven.multiModuleProjectDirectory`、`boundedContext.report` | 允许保留，归 `TEST_ONLY`（由 Maven 或测试自身注入，无应用侧归属类） |
@@ -97,6 +97,11 @@ System.getProperty("batch.xxx")
 | worker 本地路径默认值是否需要集中成临时目录策略组件 | 复用既有临时目录工具 | ✅ `PrivateTempFiles.tempRoot()` / `resolveUnderTempRoot()`（batch-common） |
 
 第二批与第一批的取舍一致：只做**去重与集中**，不新增业务配置语义，也不迁移 key。
+
+Spring 生命周期收口：Worker consumer 的多个 `spring.kafka.*` 注入已集中为
+`WorkerKafkaProperties`，保留现有配置键、默认值、毫秒单位和背压校验，不引入 Kafka 自动配置模块。
+副本采样、Worker 并发与续租参数在绑定期校验；五类 Worker 删除固定端口兜底，只读主服务
+`local.server.port`。具体零值语义、初始化责任与验证边界见 [启动期配置](./config-governance.md#2-启动期配置)。
 
 第三批：测试源码字面量收敛（2026-10-06，只动测试与归属类常量，不改任何 key）：
 

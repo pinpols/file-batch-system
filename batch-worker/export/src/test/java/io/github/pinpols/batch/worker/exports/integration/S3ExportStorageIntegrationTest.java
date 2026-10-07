@@ -23,7 +23,7 @@ import org.springframework.test.context.DynamicPropertySource;
  */
 @SpringBootTest(
     classes = BatchWorkerExportApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("导出对象存储集成测试:写入,存在性判断,校验和,复制与删除在当前后端上的行为")
 class S3ExportStorageIntegrationTest extends AbstractIntegrationTest {
 

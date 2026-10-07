@@ -48,7 +48,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 @SpringBootTest(
     classes = BatchWorkerDispatchApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @EnabledIf("s3BackendActive")
 @DisplayName("外部渠道真实投递集成:对象存储、SFTP 与邮件三条链路端到端送达并回读校验")
 class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {

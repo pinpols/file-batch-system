@@ -40,6 +40,7 @@ import org.slf4j.MDC;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.support.Acknowledgment;
+import org.springframework.mock.env.MockEnvironment;
 import org.springframework.web.client.ResourceAccessException;
 
 /**
@@ -585,22 +586,20 @@ class AbstractTaskConsumerTest {
     return new AbstractTaskConsumer(registry, meterRegistryProvider, concurrencyProperties(8)) {
       @Override
       protected AbstractWorkerLoop workerLoop() {
-        return new AbstractWorkerLoop(lifecycleManager, heartbeatService, dateTimeSupport(), 8) {
-          @Override
-          protected WorkerConfiguration workerConfiguration() {
-            return cfg;
-          }
+        AbstractWorkerLoop loop =
+            new AbstractWorkerLoop(lifecycleManager, heartbeatService, dateTimeSupport(), 8) {
+              @Override
+              protected WorkerConfiguration workerConfiguration() {
+                return cfg;
+              }
 
-          @Override
-          protected String workerGroup() {
-            return "test";
-          }
-
-          @Override
-          protected int workerPort() {
-            return 0;
-          }
-        };
+              @Override
+              protected String workerGroup() {
+                return "test";
+              }
+            };
+        loop.setEnvironment(new MockEnvironment().withProperty("local.server.port", "19083"));
+        return loop;
       }
 
       @Override

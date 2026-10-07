@@ -41,7 +41,7 @@ import org.springframework.test.context.DynamicPropertySource;
  */
 @SpringBootTest(
     classes = BatchWorkerAtomicApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("存储过程加固集成: 真实数据库下的调用路由与权限校验")
 class StoredProcHardeningIntegrationTest extends AbstractIntegrationTest {
 

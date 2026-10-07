@@ -20,7 +20,7 @@ import org.springframework.test.context.DynamicPropertySource;
 /** P0 Phase 3 等价性 IT — SPI 路径 ≡ @Primary 路径(export)。详见 {@code ImportSpiEquivalenceIT} 同名 doc。 */
 @SpringBootTest(
     classes = BatchWorkerExportApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("导出 SPI 等价性集成测试:注册类型,执行器装配与委托实例同一性")
 class ExportSpiEquivalenceIT extends AbstractIntegrationTest {
 

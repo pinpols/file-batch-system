@@ -26,6 +26,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -118,6 +120,10 @@ class PreprocessStepObjectLoadIntegrationTest {
   }
 
   private ImportPayload objectPayload(String storagePath) {
+    return objectPayload(storagePath, "JSON");
+  }
+
+  private ImportPayload objectPayload(String storagePath, String format) {
     // 字段序见 ImportPayload:...,12 storageType,13 storagePath,14 storageBucket,15 templateCode,
     //   16 batchNo,17 content,18 contentBase64,...,23 metadata。content/contentBase64 留空 = 走对象。
     return new ImportPayload(
@@ -125,7 +131,7 @@ class PreprocessStepObjectLoadIntegrationTest {
         null,
         null,
         null,
-        "JSON",
+        format,
         null,
         null,
         null,
@@ -192,9 +198,10 @@ class PreprocessStepObjectLoadIntegrationTest {
         .isNull();
   }
 
-  @Test
-  @DisplayName("超大对象走流式直载:落盘中转文件,不整体驻留内存")
-  void largeObject_streamsToSpoolWithoutHeapBuffering() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  @DisplayName("超大对象走完整流式直载:文件束即使开启范围切片也不截掉独立文件内容")
+  void largeObject_streamsToSpoolWithoutHeapBuffering(boolean bundle) throws Exception {
     // ≥16MB(spool 阈值)的对象走流式直载:落 spool 文件 + 设 IMPORT_LARGE_TEXT_PATH 交 PARSE 流式消费,
     // 不读进堆(normalizedPayload 不在 PREPROCESS 设置)。生成 ~17MB CSV 验证。
     String key = "ingress/objload-it/big.csv";
@@ -206,7 +213,15 @@ class PreprocessStepObjectLoadIntegrationTest {
     }
     putObject(key, sb.toString());
 
-    ImportJobContext context = contextWithBlankRawPayload(objectPayload(key));
+    ImportJobContext context = contextWithBlankRawPayload(objectPayload(key, "DELIMITED"));
+    if (bundle) {
+      context.getAttributes().put(PipelineRuntimeKeys.BUNDLE_SOURCE_FILE_ID, 1L);
+      context.getAttributes().put(PipelineRuntimeKeys.PARTITION_NO, 2);
+      context.getAttributes().put(PipelineRuntimeKeys.PARTITION_COUNT, 2);
+      context
+          .getAttributes()
+          .put(PipelineRuntimeKeys.TEMPLATE_CONFIG, Map.of("partition_range_slice", true));
+    }
     ImportStageResult result = newStep(key).execute(context);
 
     assertThat(result.success()).as("large object stream-direct should succeed").isTrue();
@@ -219,7 +234,8 @@ class PreprocessStepObjectLoadIntegrationTest {
     java.nio.file.Path spool = java.nio.file.Path.of(spoolPath.toString());
     assertThat(java.nio.file.Files.size(spool))
         .as("spool file should hold the streamed object bytes")
-        .isGreaterThan(16L * 1024 * 1024);
+        .isEqualTo(sb.toString().getBytes(StandardCharsets.UTF_8).length);
+    assertThat(context.getAttributes()).doesNotContainKey(PipelineRuntimeKeys.PARTITION_PRESLICED);
     java.nio.file.Files.deleteIfExists(spool);
   }
 }
