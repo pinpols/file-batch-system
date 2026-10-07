@@ -13,10 +13,12 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /** {@link FilesystemObjectStore} 单测：覆盖 §4 三大难点 + traversal + 异常映射 + presign sign/verify。 */
+@DisplayName("文件系统对象存储:验证读写往返、切片范围读取无损、列举分页与扫描上限、临时与隐藏文件过滤、长度校验、路径穿越拒绝、异常映射与预签名签验")
 class FilesystemObjectStoreTest {
 
   private static final String BUCKET = "test-bucket";
@@ -29,6 +31,7 @@ class FilesystemObjectStoreTest {
   }
 
   @Test
+  @DisplayName("写入后可读回完全一致的字节,存在性与大小统计与写入内容一致")
   void shouldRoundTripPutAndGet(@TempDir Path root) throws Exception {
     FilesystemObjectStore store = newStore(root);
     byte[] payload = "hello-fs-world".getBytes(StandardCharsets.UTF_8);
@@ -43,7 +46,8 @@ class FilesystemObjectStoreTest {
   }
 
   @Test
-  void deleteManyShouldRemoveAllViaDefaultLoop(@TempDir Path root) {
+  @DisplayName("批量删除移除全部已存在对象,缺失的键不导致失败")
+  void shouldRemoveAllKeys_whenBatchDeleteIncludesMissingKey(@TempDir Path root) {
     FilesystemObjectStore store = newStore(root);
     byte[] p = "x".getBytes(StandardCharsets.UTF_8);
     for (String k : new String[] {"d/a.txt", "d/b.txt", "d/c.txt"}) {
@@ -60,7 +64,8 @@ class FilesystemObjectStoreTest {
   }
 
   @Test
-  void putShouldNotCloseCallerOwnedInputStream(@TempDir Path root) {
+  @DisplayName("写入完成后不关闭调用方传入的输入流")
+  void shouldLeaveCallerStreamOpen_whenPutCompletes(@TempDir Path root) {
     FilesystemObjectStore store = newStore(root);
     byte[] payload = "caller-owned".getBytes(StandardCharsets.UTF_8);
     CloseTrackingInputStream inputStream = new CloseTrackingInputStream(payload);
@@ -71,7 +76,8 @@ class FilesystemObjectStoreTest {
   }
 
   @Test
-  void putShouldRejectLengthMismatch(@TempDir Path root) {
+  @DisplayName("声明长度大于实际字节数时拒绝写入,底层不落文件")
+  void shouldRejectWrite_whenDeclaredLengthExceedsActualBytes(@TempDir Path root) {
     FilesystemObjectStore store = newStore(root);
     byte[] payload = "short".getBytes(StandardCharsets.UTF_8);
 
@@ -83,7 +89,8 @@ class FilesystemObjectStoreTest {
   }
 
   @Test
-  void putShouldRejectExtraBytesBeyondDeclaredSize(@TempDir Path root) {
+  @DisplayName("实际字节数多于声明长度时拒绝写入,底层不落文件")
+  void shouldRejectWrite_whenActualBytesExceedDeclaredLength(@TempDir Path root) {
     FilesystemObjectStore store = newStore(root);
     byte[] payload = "longer-than-declared".getBytes(StandardCharsets.UTF_8);
 
@@ -95,6 +102,7 @@ class FilesystemObjectStoreTest {
   }
 
   @Test
+  @DisplayName("从任意偏移读取返回剩余内容,偏移等于总长度时读到流末尾")
   void shouldReadFromArbitraryOffset(@TempDir Path root) throws Exception {
     FilesystemObjectStore store = newStore(root);
     byte[] payload = "0123456789ABCDEF".getBytes(StandardCharsets.UTF_8);
@@ -110,7 +118,8 @@ class FilesystemObjectStoreTest {
 
   /** §4② 关键：N 个 offset 切片按序拼接 == 原文，等价于无重叠 + 无遗漏 + 不劈位。 */
   @Test
-  void getFromShouldBeLosslessAcrossLineBoundaries(@TempDir Path root) throws Exception {
+  @DisplayName("按多组切片偏移依次读取并拼接,结果与原文完全一致且不重不漏")
+  void shouldConcatenateSlicesLosslessly_whenReadingByOffsets(@TempDir Path root) throws Exception {
     FilesystemObjectStore store = newStore(root);
     StringBuilder sb = new StringBuilder();
     for (int i = 0; i < 50; i++) {
@@ -147,7 +156,8 @@ class FilesystemObjectStoreTest {
 
   /** §4③ 关键：put 原子性 → list 不读到正在写的 .tmp.xxx 文件，对外只见完整对象。 */
   @Test
-  void listShouldSkipTempAndHiddenFiles(@TempDir Path root) throws Exception {
+  @DisplayName("列举只返回完整对象,未完成的临时文件与隐藏文件不可见")
+  void shouldHideTempAndHiddenEntries_whenListing(@TempDir Path root) throws Exception {
     FilesystemObjectStore store = newStore(root);
     // 准备一个正式对象
     store.put(BUCKET, "ok.txt", new ByteArrayInputStream(new byte[] {1, 2, 3}), 3, "x");
@@ -163,7 +173,8 @@ class FilesystemObjectStoreTest {
   }
 
   @Test
-  void listShouldPaginateByMaxKeysWithMarker(@TempDir Path root) {
+  @DisplayName("按单页上限分页返回,游标指向末条键,最后一页游标为空")
+  void shouldPaginateByMaxKeys_whenListingMoreThanOnePage(@TempDir Path root) {
     FilesystemObjectStore store = newStore(root);
     for (int i = 0; i < 5; i++) {
       byte[] b = new byte[] {(byte) i};
@@ -184,7 +195,8 @@ class FilesystemObjectStoreTest {
   }
 
   @Test
-  void listShouldRejectWhenScanEntriesExceedLimit(@TempDir Path root) {
+  @DisplayName("目录扫描条目数超过上限时拒绝列举并给出超限提示")
+  void shouldRejectListing_whenScannedEntriesExceedLimit(@TempDir Path root) {
     FilesystemObjectStore store =
         new FilesystemObjectStore(root.toString(), DOWNLOAD_BASE_URL, SECRET, 2);
     for (int i = 0; i < 3; i++) {
@@ -198,7 +210,9 @@ class FilesystemObjectStoreTest {
   }
 
   @Test
-  void listScanLimitShouldCountHiddenAndTempEntries(@TempDir Path root) throws Exception {
+  @DisplayName("扫描上限统计包含隐藏文件与临时文件,超限即拒绝列举")
+  void shouldCountHiddenAndTempEntriesTowardScanLimit_whenListing(@TempDir Path root)
+      throws Exception {
     FilesystemObjectStore store =
         new FilesystemObjectStore(root.toString(), DOWNLOAD_BASE_URL, SECRET, 2);
     Path bucketDir = root.resolve(BUCKET).resolve("wide");
@@ -215,7 +229,8 @@ class FilesystemObjectStoreTest {
   }
 
   @Test
-  void etagShouldReflectSizeAndMtime(@TempDir Path root) throws Exception {
+  @DisplayName("对象内容与修改时间变化后,其标识随之变化")
+  void shouldChangeEtag_whenObjectRewritten(@TempDir Path root) throws Exception {
     FilesystemObjectStore store = newStore(root);
     byte[] before = "abc".getBytes(StandardCharsets.UTF_8);
     store.put(BUCKET, "et.txt", new ByteArrayInputStream(before), before.length, "x");
@@ -231,6 +246,7 @@ class FilesystemObjectStoreTest {
   }
 
   @Test
+  @DisplayName("含上级目录跳转或绝对路径的键被拒绝,写入与读取均抛异常")
   void shouldRejectTraversalKeys(@TempDir Path root) {
     FilesystemObjectStore store = newStore(root);
     assertThatThrownBy(() ->
@@ -241,7 +257,8 @@ class FilesystemObjectStoreTest {
   }
 
   @Test
-  void getNonExistentKeyShouldThrowNotFound(@TempDir Path root) {
+  @DisplayName("键不存在时读取与大小统计抛出未找到异常,存在性判断返回不存在")
+  void shouldSignalNotFound_whenKeyMissing(@TempDir Path root) {
     FilesystemObjectStore store = newStore(root);
     assertThatThrownBy(() -> store.get(BUCKET, "missing"))
         .isInstanceOf(ObjectNotFoundException.class);
@@ -251,7 +268,8 @@ class FilesystemObjectStoreTest {
   }
 
   @Test
-  void copyShouldDuplicateObject(@TempDir Path root) throws IOException {
+  @DisplayName("复制后目标键的内容与源对象完全一致")
+  void shouldCopyContent_whenTargetKeyProvided(@TempDir Path root) throws IOException {
     FilesystemObjectStore store = newStore(root);
     byte[] payload = "copy-me".getBytes(StandardCharsets.UTF_8);
     store.put(BUCKET, "src", new ByteArrayInputStream(payload), payload.length, "x");
@@ -262,7 +280,8 @@ class FilesystemObjectStoreTest {
   }
 
   @Test
-  void deleteShouldRemoveObject(@TempDir Path root) {
+  @DisplayName("删除后对象不可见,重复删除保持幂等不报错")
+  void shouldRemoveObjectOnce_whenDeleteCalled(@TempDir Path root) {
     FilesystemObjectStore store = newStore(root);
     store.put(BUCKET, "x", new ByteArrayInputStream(new byte[] {1}), 1, "x");
     store.delete(BUCKET, "x");
@@ -272,7 +291,8 @@ class FilesystemObjectStoreTest {
   }
 
   @Test
-  void presignShouldRoundTripSignAndVerify(@TempDir Path root) throws Exception {
+  @DisplayName("未过期的原始签名校验通过,篡改签名、篡改桶名或已过期均校验失败")
+  void shouldVerifySignature_whenTokenUntamperedAndUnexpired(@TempDir Path root) throws Exception {
     FilesystemObjectStore store = newStore(root);
     store.put(BUCKET, "f.txt", new ByteArrayInputStream(new byte[] {1}), 1, "x");
 
@@ -300,7 +320,8 @@ class FilesystemObjectStoreTest {
   }
 
   @Test
-  void presignShouldUseConfiguredDefaultWhenTtlIsNull(@TempDir Path root) {
+  @DisplayName("未指定有效期时采用配置的默认值,剩余有效时间落在预期区间")
+  void shouldUseConfiguredDefaultTtl_whenTtlMissing(@TempDir Path root) {
     FilesystemObjectStore store = new FilesystemObjectStore(
         root.toString(), DOWNLOAD_BASE_URL, SECRET, Duration.ofMinutes(2), 200_000);
 

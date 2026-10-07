@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("表驱动分片解析:命中覆盖哈希,未登记、空租户与空映射回退,缓存有效期,重载失败保留旧值与构造校验")
 class DbTablePlacementResolverTest {
 
   /** 可控映射 + 加载计数的假 repository。 */
@@ -39,7 +40,7 @@ class DbTablePlacementResolverTest {
 
   @Test
   @DisplayName("重载失败保留 stale 缓存(silo 不被 hash 误路由)")
-  void reloadFailureKeepsStaleMapping() {
+  void shouldKeepStaleMapping_whenReloadFails() {
     FakeRepository repo = new FakeRepository();
     repo.mapping.put("big-corp", "silo-big");
     DbTablePlacementResolver r = resolver(repo, 5000L);
@@ -54,7 +55,7 @@ class DbTablePlacementResolverTest {
 
   @Test
   @DisplayName("冷启动读失败:退 hash(无缓存可保)")
-  void coldLoadFailureFallsBackToHash() {
+  void shouldFallBackToHash_whenColdLoadFails() {
     FakeRepository repo = new FakeRepository();
     repo.fail = true;
     DbTablePlacementResolver r = resolver(repo, 5000L);
@@ -64,7 +65,7 @@ class DbTablePlacementResolverTest {
 
   @Test
   @DisplayName("表命中:返回表里的 placement key(覆盖 hash)")
-  void tableHitWins() {
+  void shouldPreferTableEntry_whenTenantRegistered() {
     FakeRepository repo = new FakeRepository();
     repo.mapping.put("t-1", "silo-big");
     DbTablePlacementResolver r = resolver(repo, 5000L);
@@ -74,7 +75,7 @@ class DbTablePlacementResolverTest {
 
   @Test
   @DisplayName("未登记租户:退回 hash 回退")
-  void missFallsBackToHash() {
+  void shouldFallBackToHash_whenTenantUnlisted() {
     FakeRepository repo = new FakeRepository();
     DbTablePlacementResolver r = resolver(repo, 5000L);
 
@@ -85,7 +86,7 @@ class DbTablePlacementResolverTest {
 
   @Test
   @DisplayName("空租户:退回回退(default key)")
-  void blankTenantFallsBack() {
+  void shouldFallBackToDefault_whenTenantBlank() {
     FakeRepository repo = new FakeRepository();
     DbTablePlacementResolver r = resolver(repo, 5000L);
 
@@ -95,7 +96,7 @@ class DbTablePlacementResolverTest {
 
   @Test
   @DisplayName("TTL 内复用缓存不重载;过期后重载拾取新映射")
-  void cacheRespectsTtl() {
+  void shouldReuseCacheWithinTtl_thenReloadAfterExpiry() {
     FakeRepository repo = new FakeRepository();
     repo.mapping.put("t-1", "shard-0");
     DbTablePlacementResolver r = resolver(repo, 5000L);
@@ -115,7 +116,7 @@ class DbTablePlacementResolverTest {
 
   @Test
   @DisplayName("repository 返回空(表缺失 fail-open):全部退回 hash")
-  void emptyMappingFallsBack() {
+  void shouldFallBackToHash_whenMappingEmpty() {
     FakeRepository repo = new FakeRepository(); // 空映射
     DbTablePlacementResolver r = resolver(repo, 5000L);
 
@@ -124,7 +125,7 @@ class DbTablePlacementResolverTest {
 
   @Test
   @DisplayName("构造参数校验:repository / fallback 不能为空")
-  void rejectsNullDeps() {
+  void shouldRejectNullDependencies_whenConstructing() {
     HashAndSiloPlacementResolver fallback = new HashAndSiloPlacementResolver(1, Map.of());
     assertThatThrownBy(() -> new DbTablePlacementResolver(null, fallback, 1000L, clock::get))
         .isInstanceOf(IllegalArgumentException.class);

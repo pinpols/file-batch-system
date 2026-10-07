@@ -16,9 +16,11 @@ import io.github.pinpols.batch.sdk.internal.ThrottledLogger;
 import java.time.Duration;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 
+@DisplayName("TaskDispatcher 认领重试协调 — 鉴权失败判致命,冲突视为同伴持有")
 class TaskDispatcherRetryCoordinatorTest {
 
   private PlatformHttpClient httpClient;
@@ -36,7 +38,8 @@ class TaskDispatcherRetryCoordinatorTest {
   }
 
   @Test
-  void marksFatalAndStopsClaimOnAuthenticationFailure() throws Exception {
+  @DisplayName("认领遇到鉴权失败时标记致命并停止后续认领")
+  void shouldMarkFatal_whenClaimAuthenticationFails() throws Exception {
     when(httpClient.claim(anyLong(), anyString(), any()))
         .thenThrow(new PlatformHttpException(401, "unauthorized"));
 
@@ -49,7 +52,8 @@ class TaskDispatcherRetryCoordinatorTest {
   }
 
   @Test
-  void treatsClaimConflictAsPeerOwnershipWithoutMarkingFatal() throws Exception {
+  @DisplayName("认领冲突视为同伴已持有任务,不标记致命且只尝试一次")
+  void shouldTreatAsPeerOwnership_whenClaimConflict() throws Exception {
     when(httpClient.claim(anyLong(), anyString(), any()))
         .thenThrow(new PlatformHttpException(409, "already claimed"));
 

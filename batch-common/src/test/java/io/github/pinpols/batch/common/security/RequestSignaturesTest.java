@@ -7,20 +7,21 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** 请求签名契约：canonical 串 + HMAC-SHA256，跨 5 语言 SDK 与服务端验签的唯一权威源。 */
+@DisplayName("RequestSignatures: 请求签名 canonical 串与 HMAC-SHA256 摘要契约")
 class RequestSignaturesTest {
 
   private static final byte[] EMPTY = new byte[0];
 
   @Test
   @DisplayName("空 body 的 sha256 hex 等于公认常量")
-  void emptyBodyHashIsKnownConstant() {
+  void shouldProduceKnownBodyHash_whenBodyEmpty() {
     assertThat(RequestSignatures.bodySha256Hex(EMPTY))
         .isEqualTo("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
   }
 
   @Test
   @DisplayName("canonical 串按 method/path/ts/nonce/bodyHash 用 \\n 连接")
-  void canonicalStringJoinsFieldsWithNewline() {
+  void shouldJoinFieldsWithNewline_whenBuildingCanonical() {
     String c = RequestSignatures.canonicalString(
         "post", "/internal/tasks/10/claim", "1700000000000", "abc123", EMPTY);
     assertThat(c)
@@ -30,7 +31,7 @@ class RequestSignaturesTest {
 
   @Test
   @DisplayName("sign 产出 64 位小写 hex，且确定性")
-  void signIsLowercaseHexAndDeterministic() {
+  void shouldReturnLowercaseHexAndDeterministic_whenSigning() {
     String s1 = RequestSignatures.sign(
         "key-1", "POST", "/p", "1", "n", "{}".getBytes(StandardCharsets.UTF_8));
     String s2 = RequestSignatures.sign(
@@ -40,7 +41,7 @@ class RequestSignaturesTest {
 
   @Test
   @DisplayName("任一字段变化签名即变（nonce/key/body）")
-  void anyFieldChangeAltersSignature() {
+  void shouldAlterSignature_whenAnyFieldChanges() {
     byte[] body = "{}".getBytes(StandardCharsets.UTF_8);
     String base = RequestSignatures.sign("k", "POST", "/p", "1", "n", body);
     assertThat(RequestSignatures.sign("k", "POST", "/p", "1", "n2", body)).isNotEqualTo(base);

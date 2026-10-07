@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.yaml.snakeyaml.Yaml;
 
@@ -31,6 +32,7 @@ import org.yaml.snakeyaml.Yaml;
  * <p>豁免:当模块 overlay 是为了走 module-specific env var(如各 worker 的 hikari pool size)时, 对应 key 不进
  * OWNED_KEYS。每加一个白名单需在 ADR-029 留 PR 痕迹。
  */
+@DisplayName("共享配置基线守护:基线文件的位置与类路径可达性、唯一来源键取值,以及各服务模块的配置漂移检查")
 class ConfigDriftGuardTest {
 
   /** 基线"唯一来源"的键集合：这些键如果在模块 application.yml 里重新出现就算 drift。 */
@@ -102,7 +104,8 @@ class ConfigDriftGuardTest {
   }
 
   @Test
-  void baselineYamlExistsAtCanonicalLocation() {
+  @DisplayName("共享基线配置文件必须存在于公共模块的资源目录下且为常规文件")
+  void shouldKeepBaselineConfigAtCanonicalLocation() {
     assertThat(baselineYml())
         .as("batch-defaults.yml 必须位于 batch-common/src/main/resources/(ADR-029 修订版)")
         .exists()
@@ -110,7 +113,8 @@ class ConfigDriftGuardTest {
   }
 
   @Test
-  void baselineYamlIsReachableFromClasspath() {
+  @DisplayName("共享基线配置文件在测试类路径上可被解析,否则配置导入会在启动时失败")
+  void shouldExposeBaselineConfigOnClasspath() {
     // 任何继承了 batch-common 的模块在测试 classpath 上都应能 resolve 到这个 resource。
     // 这是 spring.config.import: "classpath:batch-defaults.yml" 启动时的最终判据。
     assertThat(getClass().getClassLoader().getResource("batch-defaults.yml"))
@@ -119,7 +123,8 @@ class ConfigDriftGuardTest {
   }
 
   @Test
-  void shedLockRedisNamespaceDefaultsToApplicationName() throws IOException {
+  @DisplayName("分布式锁的缓存键前缀默认取自应用名,避免多个服务共用缓存时互相干扰")
+  void shouldDefaultDistributedLockNamespaceToApplicationName() throws IOException {
     Map<String, Object> flat = flatten(loadYaml(baselineYml()));
 
     assertThat(flat.get("batch.shedlock.redis.key-prefix-env"))
@@ -129,7 +134,8 @@ class ConfigDriftGuardTest {
   }
 
   @Test
-  void openTelemetryMasterSwitchControlsTraceAndLogExporters() throws IOException {
+  @DisplayName("可观测总开关统管调用链与日志导出,指标导出保持关闭由抓取方式采集")
+  void shouldLetMasterSwitchControlTraceAndLogExporters() throws IOException {
     Map<String, Object> flat = flatten(loadYaml(baselineYml()));
     String masterSwitch = "${MANAGEMENT_OPENTELEMETRY_ENABLED:false}";
 
@@ -142,7 +148,8 @@ class ConfigDriftGuardTest {
   }
 
   @Test
-  void kafkaConfigurationDumpIsNotLoggedAtInfo() throws IOException {
+  @DisplayName("消息客户端与其配置类的日志级别均提升到告警,避免启动时刷出完整配置")
+  void shouldSuppressMessagingConfigurationDumpAtInfoLevel() throws IOException {
     Map<String, Object> flat = flatten(loadYaml(baselineYml()));
 
     assertThat(flat)
@@ -151,7 +158,8 @@ class ConfigDriftGuardTest {
   }
 
   @Test
-  void serviceModulesDoNotRedefineBaselineOwnedKeys() throws IOException {
+  @DisplayName("服务模块的常规与分环境配置文件都不得复刻基线负责的唯一来源键")
+  void shouldRejectServiceModulesRedefiningBaselineOwnedKeys() throws IOException {
     Path root = repoRoot();
     Map<String, String> drift = new LinkedHashMap<>();
     for (String module : List.of(
@@ -186,7 +194,8 @@ class ConfigDriftGuardTest {
   }
 
   @Test
-  void localProfileDoesNotReintroduceConsolidatedKeys() throws IOException {
+  @DisplayName("各模块本地环境配置不得重新声明已收敛到单点的消息地址与对象存储凭据键")
+  void shouldRejectLocalProfileReintroducingConsolidatedKeys() throws IOException {
     Path root = repoRoot();
     Map<String, String> scatter = new LinkedHashMap<>();
     for (String module : List.of(

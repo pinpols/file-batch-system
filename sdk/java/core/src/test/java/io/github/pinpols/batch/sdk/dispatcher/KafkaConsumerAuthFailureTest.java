@@ -18,12 +18,14 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
  * Lane E #4-Java:Kafka SASL 凭据错 → poll loop 必须 fail-fast,置 {@code fatalAuthFailure=true} + {@code
  * running=false} + 抛 RuntimeException,让 Pod 重启;不重试。
  */
+@DisplayName("KafkaTaskConsumer 认证失败 — 消费循环快速失败并上报致命认证状态")
 class KafkaConsumerAuthFailureTest {
 
   private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
@@ -49,7 +51,8 @@ class KafkaConsumerAuthFailureTest {
   }
 
   @Test
-  void authenticationExceptionTriggersFailFast() {
+  @DisplayName("认证异常时消费循环立即失败退出,标记致命认证失败且不计入崩溃")
+  void shouldFailFast_whenAuthenticationException() {
     dispatcher = new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
     Consumer<String, byte[]> consumer = mockConsumer();
     doNothing().when(consumer).subscribe(any(Pattern.class), any(ConsumerRebalanceListener.class));

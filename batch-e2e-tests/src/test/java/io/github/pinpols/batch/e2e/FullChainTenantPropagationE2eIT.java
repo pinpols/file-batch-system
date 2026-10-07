@@ -18,6 +18,7 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,6 +58,7 @@ import org.springframework.test.context.jdbc.Sql;
 @Sql(scripts = {E2eTestSql.IMPORT_TEMPLATE_SEED})
 @Tag("e2e")
 @Tag("critical")
+@DisplayName("导入全链路租户传播守护:从触发请求、派发事件到执行回报与终态写入,全部落库行的租户标识不得漂移")
 class FullChainTenantPropagationE2eIT extends AbstractIntegrationTest {
 
   // 与 ImportPipelineE2eIT 等已通过的 IT 对齐;E2E 的 worker/seed 体系默认覆盖此租户
@@ -72,7 +74,8 @@ class FullChainTenantPropagationE2eIT extends AbstractIntegrationTest {
   private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
   @Test
-  void tenantIdMustNotDriftAcrossEveryWritePathOfFullChain() {
+  @DisplayName("导入全链路到达任务成功终态后,逐表核对每一行租户标识严格一致;链路未写入的表跳过核对")
+  void shouldNotDriftTenantId_whenFullChainImportWritesEveryPath() {
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
 

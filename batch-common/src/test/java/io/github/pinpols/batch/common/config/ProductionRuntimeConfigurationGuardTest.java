@@ -3,14 +3,17 @@ package io.github.pinpols.batch.common.config;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.mock.env.MockEnvironment;
 
+@DisplayName("生产运行期配置守卫:开发环境放行、必需地址缺失与回环地址拒绝,以及远端地址的通过场景")
 class ProductionRuntimeConfigurationGuardTest {
 
   @Test
+  @DisplayName("本地环境跳过生产校验,初始化完成后不抛任何异常")
   void shouldIgnoreDevelopmentProfile() {
     MockEnvironment environment = new MockEnvironment();
     environment.setActiveProfiles("local");
@@ -20,6 +23,7 @@ class ProductionRuntimeConfigurationGuardTest {
   }
 
   @Test
+  @DisplayName("未配置激活环境时按生产处理,缺少平台数据源地址即失败以保证失败安全")
   void shouldFailClosedWhenProfileIsMissing() {
     MockEnvironment environment = new MockEnvironment();
 
@@ -27,6 +31,7 @@ class ProductionRuntimeConfigurationGuardTest {
   }
 
   @Test
+  @DisplayName("生产环境调度端地址指向本机回环地址时启动校验失败并指出该配置项")
   void shouldRejectLoopbackEndpointInProduction() {
     MockEnvironment environment = validProductionEnvironment();
     environment.setProperty("batch.orchestrator.base-url", "http://localhost:18082");
@@ -35,6 +40,7 @@ class ProductionRuntimeConfigurationGuardTest {
   }
 
   @Test
+  @DisplayName("生产环境管理端口设为随机端口时启动校验失败并指出该配置项")
   void shouldRejectRandomManagementPortInProduction() {
     MockEnvironment environment = validProductionEnvironment();
     environment.setProperty("management.server.port", "0");
@@ -43,6 +49,7 @@ class ProductionRuntimeConfigurationGuardTest {
   }
 
   @Test
+  @DisplayName("生产数据处理进程的业务库地址指向回环地址时启动校验失败并指出该配置项")
   void shouldRejectLoopbackBusinessDatabaseForProductionWorker() {
     MockEnvironment environment = validProductionEnvironment();
     environment.setProperty("spring.application.name", "batch-worker-process");
@@ -53,6 +60,7 @@ class ProductionRuntimeConfigurationGuardTest {
   }
 
   @Test
+  @DisplayName("生产环境选择对象存储且服务端点指向回环地址时启动校验失败并指出该配置项")
   void shouldRejectLoopbackS3ForProduction() {
     MockEnvironment environment = validProductionEnvironment();
     environment.setProperty("batch.storage.backend", "s3");
@@ -62,6 +70,7 @@ class ProductionRuntimeConfigurationGuardTest {
   }
 
   @Test
+  @DisplayName("生产环境各端点均配置为显式远端地址时启动校验通过")
   void shouldAcceptExplicitRemoteProductionEndpoints() {
     MockEnvironment environment = validProductionEnvironment();
 

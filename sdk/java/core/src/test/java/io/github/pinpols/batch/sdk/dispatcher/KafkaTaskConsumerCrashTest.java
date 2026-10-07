@@ -19,12 +19,14 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.common.errors.WakeupException;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
  * Phase 1 §3.1 #1.7:Kafka poll loop 若因非预期 Throwable 退出,必须置 {@code crashed=true},不能静默死。 这样 {@link
  * io.github.pinpols.batch.sdk.client.BatchPlatformClient#isHealthy()} 才能正确返回 false 让运维介入。
  */
+@DisplayName("Kafka 消费线程崩溃 — 非预期异常置崩溃标记并向上抛出")
 class KafkaTaskConsumerCrashTest {
 
   private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
@@ -55,7 +57,8 @@ class KafkaTaskConsumerCrashTest {
   }
 
   @Test
-  void crashedFlagSetWhenPollLoopThrowsUnexpected() throws Exception {
+  @DisplayName("消费循环遇到非预期异常时置崩溃标记并停止运行")
+  void shouldMarkCrashed_whenPollLoopThrowsUnexpected() throws Exception {
     dispatcher = new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
     Consumer<String, byte[]> consumer = mockConsumer();
     doNothing().when(consumer).subscribe(any(Pattern.class), any(ConsumerRebalanceListener.class));
@@ -75,7 +78,8 @@ class KafkaTaskConsumerCrashTest {
   }
 
   @Test
-  void fatalErrorIsRethrownAfterCrashStateIsRecorded() throws Exception {
+  @DisplayName("严重错误先记录崩溃状态再原样抛出,交由线程终止处理")
+  void shouldRethrowFatalError_afterCrashStateRecorded() throws Exception {
     dispatcher = new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
     Consumer<String, byte[]> consumer = mockConsumer();
     doNothing().when(consumer).subscribe(any(Pattern.class), any(ConsumerRebalanceListener.class));
@@ -97,7 +101,8 @@ class KafkaTaskConsumerCrashTest {
   }
 
   @Test
-  void wakeupExceptionFromCloseIsNotCrash() throws Exception {
+  @DisplayName("关闭触发的唤醒异常按正常结束处理,不判为崩溃")
+  void shouldNotMarkCrashed_whenCloseTriggersWakeup() throws Exception {
     dispatcher = new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
     Consumer<String, byte[]> consumer = mockConsumer();
     doNothing().when(consumer).subscribe(any(Pattern.class), any(ConsumerRebalanceListener.class));
@@ -116,7 +121,8 @@ class KafkaTaskConsumerCrashTest {
   }
 
   @Test
-  void normalCloseDoesNotCrash() throws Exception {
+  @DisplayName("正常关闭后运行标记为假且不产生崩溃标记")
+  void shouldNotMarkCrashed_whenClosedNormally() throws Exception {
     dispatcher = new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
     Consumer<String, byte[]> consumer = mockConsumer();
     doNothing().when(consumer).subscribe(any(Pattern.class), any(ConsumerRebalanceListener.class));

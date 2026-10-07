@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -44,6 +45,7 @@ import org.springframework.test.context.ActiveProfiles;
 @ActiveProfiles({"test", "e2e"})
 @E2eBusinessSchema
 @Tag("e2e")
+@DisplayName("原子任务负载端到端:单类型原子任务高并发突发投放,压真实派发与执行链路,验证并发下不丢任务,全部收敛到终态成功并记录吞吐")
 class AtomicTaskLoadE2eIT extends AbstractIntegrationTest {
 
   private static final Logger log = LoggerFactory.getLogger(AtomicTaskLoadE2eIT.class);
@@ -60,7 +62,8 @@ class AtomicTaskLoadE2eIT extends AbstractIntegrationTest {
   private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
   @Test
-  void spiWorkerProcessesConcurrentTaskBurstWithoutLoss() {
+  @DisplayName("并发突发投放 15 个原子任务:验证全部走到终态成功,成功数恰好等于投放数,无丢任务与长期停滞")
+  void shouldProcessEveryTaskToSuccess_whenConcurrentBurstDispatched() {
     List<String> dedupKeys = new ArrayList<>(TASK_COUNT);
 
     long launchStart = System.nanoTime();

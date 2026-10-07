@@ -10,6 +10,7 @@ import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.lang.reflect.Field;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.Test;
  *
  * <p>因 BatchPlatformClient 内部字段在 start() 才被赋值,这里用反射注入 mock 避免真的拉 Kafka / orchestrator。
  */
+@DisplayName("BatchPlatformClient 运行指标与健康判定 — 未启动、致命、崩溃与排空状态")
 class BatchPlatformClientMetricsTest {
 
   private static BatchPlatformClientConfig cfg() {
@@ -54,7 +56,8 @@ class BatchPlatformClientMetricsTest {
   }
 
   @Test
-  void notStartedClientIsUnhealthyAndMetricsReflectIt() {
+  @DisplayName("未启动时健康为假,并发上限与已注册 handler 数等指标照实反映")
+  void shouldReportUnhealthyAndUnknownLag_whenNotStarted() {
     BatchPlatformClient client = BatchPlatformClient.builder(cfg())
         .register(stub("type-a"))
         .register(stub("type-b"))
@@ -76,7 +79,8 @@ class BatchPlatformClientMetricsTest {
   }
 
   @Test
-  void startedClientWithoutFatalOrCrashIsHealthy() throws Exception {
+  @DisplayName("已启动且无致命故障与崩溃时健康为真,在飞任务数与消费积压取自运行态")
+  void shouldReportHealthy_whenStartedWithoutFatalOrCrash() throws Exception {
     BatchPlatformClient client =
         BatchPlatformClient.builder(cfg()).register(stub("type-a")).build();
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
@@ -100,7 +104,8 @@ class BatchPlatformClientMetricsTest {
   }
 
   @Test
-  void dispatcherFatalMakesClientUnhealthy() throws Exception {
+  @DisplayName("派发器进入致命状态时客户端健康为假")
+  void shouldReportUnhealthy_whenDispatcherFatal() throws Exception {
     BatchPlatformClient client =
         BatchPlatformClient.builder(cfg()).register(stub("type-a")).build();
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
@@ -116,7 +121,8 @@ class BatchPlatformClientMetricsTest {
   }
 
   @Test
-  void consumerCrashedMakesClientUnhealthy() throws Exception {
+  @DisplayName("消费线程崩溃时客户端健康为假")
+  void shouldReportUnhealthy_whenConsumerCrashed() throws Exception {
     BatchPlatformClient client =
         BatchPlatformClient.builder(cfg()).register(stub("type-a")).build();
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
@@ -134,7 +140,8 @@ class BatchPlatformClientMetricsTest {
   }
 
   @Test
-  void kafkaAuthFailureMakesClientUnhealthyAndMetricsReflectIt() throws Exception {
+  @DisplayName("认证失败导致消费停止时并入崩溃维度,健康为假以避免存活误报")
+  void shouldReportUnhealthyAndCrashed_whenKafkaAuthFails() throws Exception {
     // Kafka SASL 认证失败:poll 线程 fail-fast 退出(非 crashed 路径),但消费已停。
     // 必须并入 isHealthy/metrics,否则 actuator/liveness 误报 UP。
     BatchPlatformClient client =
@@ -156,7 +163,8 @@ class BatchPlatformClientMetricsTest {
   }
 
   @Test
-  void drainingClientStillHealthy() throws Exception {
+  @DisplayName("排空阶段停止消费但租约与心跳继续,健康仍为真")
+  void shouldStayHealthy_whenDispatcherDraining() throws Exception {
     // drain 是 graceful 状态:Kafka 不再消费但 lease / heartbeat 仍续约,平台不应误判
     BatchPlatformClient client =
         BatchPlatformClient.builder(cfg()).register(stub("type-a")).build();

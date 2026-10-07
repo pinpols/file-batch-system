@@ -9,6 +9,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** A.3 幂等键解析单测。 */
+@DisplayName("IdempotencyKeyResolver — 幂等键占位符解析、字面量透传与异常语义")
 class IdempotencyKeyResolverTest {
 
   private static SdkTaskContext ctx(Map<String, Object> params) {

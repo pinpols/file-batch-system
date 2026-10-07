@@ -18,6 +18,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.verification.VerificationMode;
 import org.slf4j.MDC;
@@ -25,6 +26,7 @@ import org.slf4j.MDC;
 /**
  * ADR-035 §SDK 增强 P0 三件测试 — draining flag + MDC 透传(capacity-aware pause 在 KafkaTaskConsumerTest)。
  */
+@DisplayName("TaskDispatcher 加固 — 排空标记、诊断上下文透传与容量许可背压")
 class TaskDispatcherP0HardeningTest {
 
   private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
@@ -48,7 +50,8 @@ class TaskDispatcherP0HardeningTest {
   // ─── P0-2: Draining flag ────────────────────────────────────────────────────
 
   @Test
-  void stopMarksDrainingTrue() {
+  @DisplayName("停止后置排空标记,用于区分正常停机与异常退出")
+  void shouldMarkDraining_whenStopped() {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     dispatcher = new TaskDispatcher(config, Map.of("tt", noopHandler()), http);
     assertThat(dispatcher.isDraining()).isFalse();
@@ -60,7 +63,8 @@ class TaskDispatcherP0HardeningTest {
   }
 
   @Test
-  void onMessageAfterStopIsSkipped() throws Exception {
+  @DisplayName("停机后到达的消息不认领也不进入处理器")
+  void shouldSkipMessage_whenDispatcherStopped() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     AtomicReference<SdkTaskContext> seenCtx = new AtomicReference<>();
     dispatcher = new TaskDispatcher(
@@ -91,7 +95,8 @@ class TaskDispatcherP0HardeningTest {
   // ─── P0-3: MDC 透传 ──────────────────────────────────────────────────────────
 
   @Test
-  void handlerExecutionPopulatesMdcTraceTenantTask() throws Exception {
+  @DisplayName("处理器执行时注入链路、租户与任务标识,便于日志串联")
+  void shouldPopulateDiagnosticContext_whenHandlerRuns() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     AtomicReference<Map<String, String>> seenMdc = new AtomicReference<>();
     CountDownLatch executed = new CountDownLatch(1);
@@ -132,7 +137,8 @@ class TaskDispatcherP0HardeningTest {
   }
 
   @Test
-  void mdcClearedAfterExecution() throws Exception {
+  @DisplayName("执行结束后诊断上下文被清理,不残留到后续任务")
+  void shouldClearDiagnosticContext_afterExecution() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     CountDownLatch executed = new CountDownLatch(1);
     dispatcher = new TaskDispatcher(config, Map.of("tt", new CountDownHandler(executed)), http);
@@ -149,7 +155,8 @@ class TaskDispatcherP0HardeningTest {
   }
 
   @Test
-  void workerExecutionRestoresCallerMdc() {
+  @DisplayName("工作线程执行完毕后恢复调用方原有上下文,不丢失外层字段")
+  void shouldRestoreCallerContext_afterWorkerExecution() {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     dispatcher = new TaskDispatcher(config, Map.of("tt", noopHandler()), http);
     MDC.put("traceId", "outer-trace");
@@ -167,7 +174,8 @@ class TaskDispatcherP0HardeningTest {
   }
 
   @Test
-  void missingTraceIdSkipsMdcKey() throws Exception {
+  @DisplayName("缺少链路标识时不注入该字段,其它上下文照常写入")
+  void shouldSkipTraceKey_whenTraceIdMissing() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     AtomicReference<Map<String, String>> seenMdc = new AtomicReference<>();
     CountDownLatch executed = new CountDownLatch(1);
@@ -200,7 +208,8 @@ class TaskDispatcherP0HardeningTest {
   // ─── P0: 容量 permit backpressure(提交前占容量,满则 RETRY_LATER 不提交 offset)──────────
 
   @Test
-  void onMessageReturnsRetryLaterWhenCapacityFullThenAcceptsAfterDrain() throws Exception {
+  @DisplayName("并发许可用尽时拒收并延后处理,许可释放后容量归零")
+  void shouldReturnRetryLater_whenCapacityFull() throws Exception {
     BatchPlatformClientConfig cap1 = BatchPlatformClientConfig.builder()
         .baseUrl("http://localhost:0")
         .tenantId("tx")

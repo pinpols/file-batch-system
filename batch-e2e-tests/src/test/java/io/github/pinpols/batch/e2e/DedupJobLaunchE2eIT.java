@@ -19,6 +19,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,6 +53,7 @@ import org.springframework.test.context.jdbc.Sql;
     })
 @Tag("e2e")
 @Tag("critical")
+@DisplayName("端到端测试: 同一去重键在串行重放与并发抢占两种情形下的触发受理链路, 验证应用层去重判定与数据库唯一约束共同保证只落一条作业实例")
 class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -67,7 +69,8 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
    * dedup_key. The second call must be treated as a duplicate — no second job_instance created.
    */
   @Test
-  void sequentialDuplicateLaunchIsIdempotent() {
+  @DisplayName("同一去重键用不同请求标识串行重复发起触发请求时, 第二次不再新增作业实例, 落库仅保留一条作业实例")
+  void shouldKeepSingleInstance_whenSameDedupKeyLaunchedTwice() {
     // Seed: job_definition + workflow_definition + first trigger_request
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
@@ -117,7 +120,8 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
    * job_instance} row must exist.
    */
   @Test
-  void concurrentDuplicateLaunchProducesExactlyOneInstance() throws Exception {
+  @DisplayName("两个线程在栅栏后并发发起同一去重键的触发请求时, 两次调用均有结果且落库仅一条作业实例, 两条触发请求分别收敛为已发起与重复两种终态")
+  void shouldReturnSingleWinner_whenSameDedupKeyLaunchedConcurrently() throws Exception {
     // Seed: job_definition + workflow_definition + two trigger_requests sharing the same dedup_key
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);

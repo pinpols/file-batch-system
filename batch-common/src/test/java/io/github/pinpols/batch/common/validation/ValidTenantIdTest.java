@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -21,6 +22,7 @@ import org.junit.jupiter.params.provider.ValueSource;
  *
  * <p>tenant id 比 resource code 严格 —— 允许 `.` 但首字符要求是字母或数字（不允许 `_` / `-` 开头）。
  */
+@DisplayName("ValidTenantId: 租户标识组合注解的必填、长度与字符集三层约束")
 class ValidTenantIdTest {
 
   private static ValidatorFactory factory;
@@ -50,6 +52,7 @@ class ValidTenantIdTest {
   }
 
   @ParameterizedTest
+  @DisplayName("合法租户标识全部通过校验,含点号、下划线与数字开头")
   @ValueSource(
       strings = {
         "ta",
@@ -65,6 +68,7 @@ class ValidTenantIdTest {
   }
 
   @ParameterizedTest
+  @DisplayName("非法租户标识被拒绝,含下划线、连字符与点号开头及中文")
   @ValueSource(
       strings = {
         "_abc", // 下划线开头
@@ -80,24 +84,28 @@ class ValidTenantIdTest {
   }
 
   @Test
-  void rejectsNull() {
+  @DisplayName("租户标识为空时校验失败")
+  void shouldReject_whenTenantIdNull() {
     assertThat(violations(null)).isNotEmpty();
   }
 
   @Test
-  void rejectsBlank() {
+  @DisplayName("租户标识只有空白字符时校验失败")
+  void shouldReject_whenTenantIdBlank() {
     assertThat(violations("   ")).isNotEmpty();
   }
 
   @Test
-  void acceptsMax64() {
+  @DisplayName("长度达到上限 64 个字符时通过校验")
+  void shouldAccept_whenTenantIdAtMaxLength() {
     String s = "a" + "0".repeat(63);
     assertThat(s).hasSize(64);
     assertThat(violations(s)).isEmpty();
   }
 
   @Test
-  void rejectsOver64() {
+  @DisplayName("长度超过上限 65 个字符时校验失败")
+  void shouldReject_whenTenantIdExceedsMaxLength() {
     String s = "a" + "0".repeat(64); // 65
     assertThat(violations(s)).isNotEmpty();
   }

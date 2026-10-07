@@ -28,6 +28,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 
@@ -35,6 +36,7 @@ import org.slf4j.LoggerFactory;
  * Lane E #5:{@link KafkaTaskConsumer#close(Duration)} 必须 wakeup + join poll 线程, 超时不阻塞返回,且超时打 WARN
  * 提示 offset 可能未提交。
  */
+@DisplayName("KafkaTaskConsumer 关闭 — 唤醒并收拢消费线程,超时告警且重复关闭幂等")
 class KafkaConsumerCloseJoinTest {
 
   private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
@@ -83,7 +85,8 @@ class KafkaConsumerCloseJoinTest {
 
   /** close(Duration) 在 join 超时时返回 + 打 WARN,且仍触发 wakeup;poll 线程未及时退出场景。 */
   @Test
-  void closeReturnsWithinTimeoutAndWarnsWhenPollLoopStuck() throws Exception {
+  @DisplayName("消费线程卡住时关闭在超时预算内返回,唤醒消费端并告警提示位移可能未提交")
+  void shouldReturnWithinTimeoutAndWarn_whenPollLoopStuck() throws Exception {
     attachCapture();
     dispatcher = new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
     Consumer<String, byte[]> consumer = mockConsumer();
@@ -121,7 +124,8 @@ class KafkaConsumerCloseJoinTest {
   }
 
   @Test
-  void zeroBudgetWakesConsumerWithoutWaitingForPollThread() throws Exception {
+  @DisplayName("关闭预算为零时只唤醒消费端,不等待消费线程退出")
+  void shouldWakeConsumerWithoutWaiting_whenCloseBudgetZero() throws Exception {
     dispatcher = new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
     Consumer<String, byte[]> consumer = mockConsumer();
     doNothing().when(consumer).subscribe(any(Pattern.class), any(ConsumerRebalanceListener.class));
@@ -155,7 +159,8 @@ class KafkaConsumerCloseJoinTest {
 
   /** close(Duration) 在 poll 线程已退出时立刻返回,不打 WARN。 */
   @Test
-  void closeReturnsImmediatelyWhenPollLoopExits() throws Exception {
+  @DisplayName("消费线程已正常退出时关闭迅速返回且不产生告警")
+  void shouldReturnImmediately_whenPollLoopExited() throws Exception {
     attachCapture();
     dispatcher = new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
     Consumer<String, byte[]> consumer = mockConsumer();
@@ -198,7 +203,8 @@ class KafkaConsumerCloseJoinTest {
 
   /** 二次调用 close() 幂等,不重复 wakeup / 不阻塞。 */
   @Test
-  void closeIsIdempotent() {
+  @DisplayName("重复关闭不重复唤醒也不阻塞,运行标记为假")
+  void shouldBeIdempotent_whenCloseCalledTwice() {
     dispatcher = new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
     Consumer<String, byte[]> consumer = mockConsumer();
     doNothing().when(consumer).subscribe(any(Pattern.class), any(ConsumerRebalanceListener.class));

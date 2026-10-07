@@ -34,9 +34,11 @@ import okhttp3.OkHttpClient;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** {@link PlatformHttpClient} 真 HTTP 测试使用 JDK {@link HttpServer} 或 MockWebServer 启动 stub。 */
+@DisplayName("PlatformHttpClient — 真实 HTTP 请求、传输策略与取消行为")
 class PlatformHttpClientTest {
 
   private HttpServer server;
@@ -72,7 +74,8 @@ class PlatformHttpClientTest {
   }
 
   @Test
-  void registerReturnsResponse() throws IOException {
+  @DisplayName("注册成功后返回平台下发的 worker 标识与编码,并带上鉴权与租户请求头")
+  void shouldReturnWorkerRegistration_whenRegisterSucceeds() throws IOException {
     AtomicReference<String> seenAuth = new AtomicReference<>();
     AtomicReference<String> seenTenant = new AtomicReference<>();
     server.createContext("/internal/workers/register", ex -> {
@@ -97,7 +100,8 @@ class PlatformHttpClientTest {
   }
 
   @Test
-  void claimIncludesIdempotencyKey() throws IOException {
+  @DisplayName("认领任务时请求携带幂等键")
+  void shouldSendIdempotencyKey_whenClaiming() throws IOException {
     AtomicReference<String> seenIdem = new AtomicReference<>();
     server.createContext("/internal/tasks/42/claim", ex -> {
       seenIdem.set(ex.getRequestHeaders().getFirst("Idempotency-Key"));
@@ -111,7 +115,8 @@ class PlatformHttpClientTest {
   }
 
   @Test
-  void non2xxThrowsWithoutErrBodyLeak() {
+  @DisplayName("非成功响应抛错且不回显错误响应体,避免泄漏敏感字段")
+  void shouldThrowWithoutLeakingBody_whenStatusNotSuccessful() {
     server.createContext("/internal/workers/w-1/heartbeat", ex -> {
       // errBody 含潜在敏感字段(token / 内部错误码),不应出现在 exception message
       byte[] body = "{\"code\":\"FORBIDDEN\",\"detail\":\"token=secret-abc\"}"
@@ -131,7 +136,8 @@ class PlatformHttpClientTest {
   }
 
   @Test
-  void deactivateCallsWorkerPath() throws IOException {
+  @DisplayName("注销请求命中指定 worker 的注销路径")
+  void shouldCallDeactivatePath_whenDeactivating() throws IOException {
     AtomicReference<String> seenPath = new AtomicReference<>();
     server.createContext("/internal/workers/w-1/deactivate", ex -> {
       seenPath.set(ex.getRequestURI().getPath());
@@ -143,7 +149,8 @@ class PlatformHttpClientTest {
   }
 
   @Test
-  void reportEmptyResponseOk() throws IOException {
+  @DisplayName("任务回报无响应体也视为成功")
+  void shouldAcceptEmptyBody_whenReporting() throws IOException {
     AtomicReference<String> seenPath = new AtomicReference<>();
     server.createContext("/internal/tasks/99/report", ex -> {
       seenPath.set(ex.getRequestURI().getPath());
@@ -156,7 +163,8 @@ class PlatformHttpClientTest {
   }
 
   @Test
-  void transportPolicyEnablesHappyEyeballsWithoutImplicitPostRetry() {
+  @DisplayName("传输客户端开启多地址竞速回退,同时关闭连接重试与重定向跟随")
+  void shouldEnableFastFallbackAndDisableRetries_whenBuildingClient() {
     OkHttpClient client = PlatformHttpClient.createHttpClient(Duration.ofSeconds(2));
 
     assertThat(client.fastFallback()).isTrue();
@@ -166,7 +174,8 @@ class PlatformHttpClientTest {
   }
 
   @Test
-  void fallsBackFromIpv6BlackholeToIpv4WithoutDuplicatePost() throws Exception {
+  @DisplayName("首选地址黑洞时回退到可达地址,且请求只发送一次不重复提交")
+  void shouldFallBackToReachableAddress_whenFirstAddressBlackholed() throws Exception {
     InetAddress unreachableIpv6 = InetAddress.getByName("2001:db8::1");
     InetAddress reachableIpv4 = InetAddress.getByName("127.0.0.1");
     FaultInjectingSocketFactory socketFactory = new FaultInjectingSocketFactory(unreachableIpv6);
@@ -197,7 +206,8 @@ class PlatformHttpClientTest {
   }
 
   @Test
-  void cancelInFlightCallsUnblocksHangingSynchronousRequest() throws Exception {
+  @DisplayName("取消在飞请求后挂起的同步调用立即中止并抛连接异常")
+  void shouldUnblockHangingRequest_whenCancellingInFlightCalls() throws Exception {
     try (MockWebServer hangingServer = new MockWebServer()) {
       hangingServer.enqueue(new MockResponse.Builder()
           .onResponseStart(SocketEffect.Stall.INSTANCE)
@@ -227,7 +237,8 @@ class PlatformHttpClientTest {
   }
 
   @Test
-  void deactivateHonorsRemainingShutdownBudget() throws Exception {
+  @DisplayName("注销请求遵守剩余关停预算,超时即中止")
+  void shouldRespectShutdownBudget_whenDeactivating() throws Exception {
     try (MockWebServer hangingServer = new MockWebServer()) {
       hangingServer.enqueue(new MockResponse.Builder()
           .onResponseStart(SocketEffect.Stall.INSTANCE)
@@ -247,7 +258,8 @@ class PlatformHttpClientTest {
   }
 
   @Test
-  void realSocketHappyEyeballsMatrix() throws Exception {
+  @DisplayName("提供场景矩阵文件时逐条验证地址竞速结果与耗时上限")
+  void shouldValidateScenarioMatrix_whenMatrixFileProvided() throws Exception {
     String matrixFile = System.getenv("BATCH_SDK_HE_MATRIX_FILE");
     Assumptions.assumeTrue(matrixFile != null && !matrixFile.isBlank());
     JsonNode scenarios = SdkJsonMapperFactory.create()

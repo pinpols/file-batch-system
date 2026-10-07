@@ -6,10 +6,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import java.util.Locale;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.support.ResourceBundleMessageSource;
 
 /** {@link LocalizedErrorRenderer} 读路径 + {@link BizExceptionUtils} 写路径互转测试。 */
+@DisplayName("本地化错误渲染与异常转换:渲染, 兜底, 截断与读写往返")
 class LocalizedErrorRendererTest {
 
   private final ObjectMapper objectMapper = new ObjectMapper();
@@ -19,7 +21,8 @@ class LocalizedErrorRendererTest {
       new LocalizedErrorRenderer(messageSource, objectMapper);
 
   @Test
-  void renderWithKeyAndArgsResolvesPerLocale() {
+  @DisplayName("带消息键与参数的渲染:按语言取译文并填充占位符")
+  void shouldResolvePerLocale_whenKeyAndArgsPresent() {
     String rendered = renderer.render(
         "error.tenant.already_exists",
         "[\"acme\"]",
@@ -30,7 +33,8 @@ class LocalizedErrorRendererTest {
   }
 
   @Test
-  void renderWithKeyResolvesEnglish() {
+  @DisplayName("带消息键的渲染:英文语言环境下返回英文译文")
+  void shouldResolveEnglish_whenKeyPresent() {
     String rendered =
         renderer.render("error.tenant.already_exists", "[\"acme\"]", "fallback", Locale.ENGLISH);
 
@@ -38,14 +42,16 @@ class LocalizedErrorRendererTest {
   }
 
   @Test
-  void renderWithoutKeyReturnsFallback() {
+  @DisplayName("消息键缺失:直接返回存储的兜底文案")
+  void shouldReturnFallback_whenKeyAbsent() {
     String rendered = renderer.render(null, null, "literal message", Locale.ENGLISH);
 
     assertThat(rendered).isEqualTo("literal message");
   }
 
   @Test
-  void renderWithUnknownKeyFallsBackToMessage() {
+  @DisplayName("消息键在资源中不存在:回退到存储的兜底文案")
+  void shouldFallBackToStoredMessage_whenKeyUnknown() {
     String rendered =
         renderer.render("error.does.not.exist", "[\"x\"]", "fallback message", Locale.ENGLISH);
 
@@ -53,7 +59,8 @@ class LocalizedErrorRendererTest {
   }
 
   @Test
-  void bizExceptionUtilsExtractsKeyAndArgs() {
+  @DisplayName("业务异常转换:保留消息键与参数串, 并渲染出可读文案")
+  void shouldExtractKeyAndArgs_whenBusinessExceptionGiven() {
     BizException ex = BizException.of(ResultCode.NOT_FOUND, "error.tenant.already_exists", "acme");
 
     LocalizedError error = BizExceptionUtils.toLocalizedError(ex, resolver, objectMapper);
@@ -64,7 +71,8 @@ class LocalizedErrorRendererTest {
   }
 
   @Test
-  void bizExceptionUtilsHandlesLegacyLiteral() {
+  @DisplayName("旧式业务异常:无消息键与参数, 可读文案即原始信息")
+  void shouldKeepLiteralMessage_whenLegacyBusinessException() {
     BizException ex = new BizException(ResultCode.SYSTEM_ERROR, "db connection refused");
 
     LocalizedError error = BizExceptionUtils.toLocalizedError(ex, resolver, objectMapper);
@@ -75,7 +83,8 @@ class LocalizedErrorRendererTest {
   }
 
   @Test
-  void bizExceptionUtilsHandlesThirdPartyThrowable() {
+  @DisplayName("第三方异常:无消息键与参数, 可读文案取异常描述")
+  void shouldKeepMessage_whenThirdPartyThrowable() {
     RuntimeException ex = new RuntimeException("kafka producer failed");
 
     LocalizedError error = BizExceptionUtils.toLocalizedError(ex, resolver, objectMapper);
@@ -86,7 +95,8 @@ class LocalizedErrorRendererTest {
   }
 
   @Test
-  void bizExceptionUtilsRoundTrip() {
+  @DisplayName("转换后再次渲染:与首次渲染结果一致, 构成读写往返")
+  void shouldRoundTripThroughStorage_whenBusinessException() {
     BizException ex = BizException.of(ResultCode.NOT_FOUND, "error.workflow.not_found", "wf-42");
     LocalizedError stored = BizExceptionUtils.toLocalizedError(ex, resolver, objectMapper);
 
@@ -99,7 +109,8 @@ class LocalizedErrorRendererTest {
 
   /** P1-1：render 不应在 args 与占位符不匹配时把 IllegalArgumentException 透传到上层。 */
   @Test
-  void renderWithCorruptArgsFallsBackInsteadOfThrowing() {
+  @DisplayName("参数串损坏:渲染不抛异常, 至少返回非空文案")
+  void shouldNotThrow_whenArgsJsonCorrupt() {
     // error.tenant.already_exists 模板含 {0}，但 errorArgsJson 损坏 → parseArgs 返回空数组 →
     // MessageFormat 尝试替换 {0} 时抛 IllegalArgumentException；renderer 应 fallback
     String rendered = renderer.render(
@@ -114,7 +125,8 @@ class LocalizedErrorRendererTest {
   }
 
   @Test
-  void renderSwallowsRuntimeExceptionAndFallsBack() {
+  @DisplayName("渲染过程抛出运行时异常:吞掉异常并返回兜底文案")
+  void shouldFallBack_whenMessageSourceThrows() {
     // 守护"render 任何 RuntimeException 都 fallback"的契约：注入一个永远抛 IAE 的 messageSource，
     // 模拟 args 与占位符不匹配 / args 类型异常等渲染失败场景
     org.springframework.context.MessageSource faulty =
@@ -134,7 +146,8 @@ class LocalizedErrorRendererTest {
 
   /** P1-2：写入路径 truncate error_message 防 VARCHAR(1024) 超长。 */
   @Test
-  void bizExceptionUtilsTruncatesLongRenderedMessage() {
+  @DisplayName("超长可读文案:按存储长度上限截断并追加截断标记")
+  void shouldTruncate_whenRenderedMessageExceedsLimit() {
     String longText = "x".repeat(2000);
     BizException ex = new BizException(ResultCode.SYSTEM_ERROR, longText);
 
@@ -145,7 +158,8 @@ class LocalizedErrorRendererTest {
   }
 
   @Test
-  void bizExceptionUtilsShortMessageIsUnchanged() {
+  @DisplayName("短文案:不触发截断, 原样保留")
+  void shouldKeepShortMessageUnchanged() {
     BizException ex = new BizException(ResultCode.SYSTEM_ERROR, "short message");
 
     LocalizedError error = BizExceptionUtils.toLocalizedError(ex, resolver, objectMapper);
@@ -154,7 +168,8 @@ class LocalizedErrorRendererTest {
   }
 
   @Test
-  void bizExceptionUtilsTruncatesThirdPartyThrowableMessage() {
+  @DisplayName("第三方异常超长描述:同样按存储长度上限截断")
+  void shouldTruncate_whenThirdPartyMessageExceedsLimit() {
     RuntimeException ex = new RuntimeException("y".repeat(3000));
 
     LocalizedError error = BizExceptionUtils.toLocalizedError(ex, resolver, objectMapper);
@@ -164,7 +179,8 @@ class LocalizedErrorRendererTest {
 
   /** P3：args 含复杂对象不阻塞写入数据库（仅 log.warn）；JSON 序列化仍能完成。 */
   @Test
-  void bizExceptionUtilsAcceptsComplexArgsWithoutThrowing() {
+  @DisplayName("参数为复杂对象:仍能完成转换与序列化, 不抛异常")
+  void shouldSerializeComplexArgsWithoutThrowing() {
     BizException ex = BizException.of(
         ResultCode.NOT_FOUND, "error.tenant.already_exists", java.util.Map.of("nested", "value"));
 

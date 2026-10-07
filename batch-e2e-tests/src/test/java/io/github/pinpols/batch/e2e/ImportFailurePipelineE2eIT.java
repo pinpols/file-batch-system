@@ -17,6 +17,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,6 +50,7 @@ import org.springframework.test.context.jdbc.Sql;
     })
 @Tag("e2e")
 @Tag("critical")
+@DisplayName("端到端测试: 导入失败链路从触发受理, 事件派发, 任务领取到失败回报的闭环, 验证解析异常与尾行控制合计不一致两类失败均收敛为失败终态并给出归因")
 class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -63,7 +65,8 @@ class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
   private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
   @Test
-  void importJobReportsFailedWhenContentIsUnparseable() {
+  @DisplayName("输入内容不是可解析的 JSON 时解析环节失败, 任务收敛为失败终态, 作业实例终态为失败或部分失败")
+  void shouldReportFailed_whenImportContentIsUnparseable() {
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
 
@@ -107,7 +110,8 @@ class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
   }
 
   @Test
-  void importJobReportsFailedWhenTrailerControlTotalsMismatch() {
+  @DisplayName("定界文件尾行声明的记录数与合计金额同明细不一致时校验环节阻断, 任务收敛为失败终态, 作业实例终态为失败或部分失败, 错误归因到控制记录或控制合计校验")
+  void shouldReportFailed_whenTrailerControlTotalsMismatch() {
     String templateCode = "IMP-CONTROL-TOTAL-E2E-" + System.nanoTime();
     insertControlTotalTemplate(templateCode);
 

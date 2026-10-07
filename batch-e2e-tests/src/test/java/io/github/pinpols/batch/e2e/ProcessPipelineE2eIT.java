@@ -26,6 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,6 +61,7 @@ import org.springframework.test.context.ActiveProfiles;
 @Import(ProcessPipelineE2eIT.ProcessE2eTestConfiguration.class)
 @Tag("e2e")
 @Tag("smoke")
+@DisplayName("PROCESS 主链路成功闭环端到端:发起经派发与认领进入五阶段流水线,目标表写入正确且暂存清空,实例与任务成功收敛")
 class ProcessPipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -89,6 +91,7 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("内置转换主链路成功:五个阶段全部成功,目标表行数与金额正确,暂存区清空,水位推进到预期值")
   void wap_sqlTransform_publishesTargetAndCleansStaging() throws Exception {
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
@@ -162,6 +165,7 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("自定义计算插件链路成功:仅计算阶段产出计数,其余阶段空跑不报错,暂存区仍被清空")
   void wap_customPlugin_simpleComputeOnly_runsAll5StagesAsNoOpForOthers() {
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(

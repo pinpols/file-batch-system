@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -21,6 +22,7 @@ import org.junit.jupiter.params.provider.ValueSource;
  *
  * <p>注解组合是 Bean Validation 元注解机制 + Lombok/Hibernate Validator 实现，单测覆盖典型异常数据 + 边界长度。
  */
+@DisplayName("ValidResourceCode: 资源编码组合注解的必填、长度与字符集三层约束")
 class ValidResourceCodeTest {
 
   private static ValidatorFactory factory;
@@ -50,6 +52,7 @@ class ValidResourceCodeTest {
   }
 
   @ParameterizedTest
+  @DisplayName("合法资源编码全部通过校验,含大小写、下划线与连字符")
   @ValueSource(
       strings = {
         "abc",
@@ -65,6 +68,7 @@ class ValidResourceCodeTest {
   }
 
   @ParameterizedTest
+  @DisplayName("非法字符集全部被拒绝,含空格、中文、特殊符号与首字符越界")
   @ValueSource(
       strings = {
         "q q q", // 含空格(就是历史异常数据案例)
@@ -89,29 +93,34 @@ class ValidResourceCodeTest {
   }
 
   @Test
-  void rejectsNull() {
+  @DisplayName("资源编码为空时校验失败")
+  void shouldReject_whenCodeNull() {
     assertThat(violations(null)).isNotEmpty();
   }
 
   @Test
-  void rejectsEmpty() {
+  @DisplayName("资源编码为空串时校验失败")
+  void shouldReject_whenCodeEmpty() {
     assertThat(violations("")).isNotEmpty();
   }
 
   @Test
-  void rejectsBlank() {
+  @DisplayName("资源编码只有空白字符时校验失败")
+  void shouldReject_whenCodeBlank() {
     assertThat(violations("   ")).isNotEmpty();
   }
 
   @Test
-  void acceptsMax128() {
+  @DisplayName("长度达到上限 128 个字符时通过校验")
+  void shouldAccept_whenCodeAtMaxLength() {
     String s = "a" + "0".repeat(127); // 128 字符
     assertThat(s).hasSize(128);
     assertThat(violations(s)).isEmpty();
   }
 
   @Test
-  void rejectsOver128() {
+  @DisplayName("长度超过上限 129 个字符时校验失败")
+  void shouldReject_whenCodeExceedsMaxLength() {
     String s = "a" + "0".repeat(128); // 129 字符
     assertThat(s).hasSize(129);
     assertThat(violations(s)).isNotEmpty();

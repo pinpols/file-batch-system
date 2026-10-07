@@ -17,6 +17,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -54,6 +55,7 @@ import org.springframework.test.context.jdbc.Sql;
     })
 @Tag("e2e")
 @Tag("critical")
+@DisplayName("待发事件轮询投递链路:常驻轮询器自动扫描并投递,导入任务无需任何人工投递即达成功终态")
 class OutboxForwarderE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -65,7 +67,8 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
   private JdbcTemplate jdbcTemplate;
 
   @Test
-  void outboxSchedulerAutomaticallyPublishesAndWorkerReportsSuccess() {
+  @DisplayName("不手工投递待发事件,仅由常驻轮询器自动投递,导入任务最终收敛到成功终态")
+  void shouldAutoPublishAndReachSuccess_whenOutboxPollerRunsWithoutManualPublish() {
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
 

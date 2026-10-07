@@ -11,6 +11,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** Lane I:启动期 cross-field 时序校验测试 —— 覆盖 heartbeat / lease / httpTimeout 4 条规则正反 case。 */
+@DisplayName("BatchPlatformClientConfig 时序校验 — 心跳、租约与超时四组规则的正反用例")
 class BatchPlatformClientConfigValidationTest {
 
   private static BatchPlatformClientConfig.BatchPlatformClientConfigBuilder valid() {
@@ -49,7 +50,7 @@ class BatchPlatformClientConfigValidationTest {
 
   // ─── leaseRenewInterval >= 5s ──────────────────────────────────────────────
   @Test
-  @DisplayName("leaseRenewInterval < 5s → IllegalStateException")
+  @DisplayName("租约续约间隔低于 5 秒下限时直接拒绝启动")
   void shouldRejectLeaseTooSmall() {
     BatchPlatformClientConfig c =
         valid().leaseRenewInterval(Duration.ofSeconds(3)).build();

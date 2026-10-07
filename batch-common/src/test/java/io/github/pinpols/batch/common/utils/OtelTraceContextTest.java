@@ -8,6 +8,7 @@ import io.opentelemetry.api.trace.TraceFlags;
 import io.opentelemetry.api.trace.TraceState;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -16,24 +17,28 @@ import org.junit.jupiter.api.Test;
  *
  * <p>用 {@link Span#wrap(SpanContext)} 直接构造 SpanContext，避免依赖 opentelemetry-sdk-testing。
  */
+@DisplayName("链路上下文桥接: 上游追踪标识的读取与无上下文时的追踪号回退")
 class OtelTraceContextTest {
 
   private static final String VALID_TRACE_ID = "0123456789abcdef0123456789abcdef";
   private static final String VALID_SPAN_ID = "0123456789abcdef";
 
   @Test
-  void noActiveSpanReturnsNull() {
+  @DisplayName("无活动链路上下文: 当前追踪标识返回空")
+  void shouldReturnNull_whenNoActiveSpan() {
     assertThat(OtelTraceContext.currentTraceIdOrNull()).isNull();
   }
 
   @Test
-  void newTraceIdFallsBackToUuidWhenNoActiveSpan() {
+  @DisplayName("无活动链路上下文: 业务追踪号回退为随机生成值")
+  void shouldFallBackToGeneratedId_whenNoActiveSpan() {
     String traceId = IdGenerator.newTraceId();
     assertThat(traceId).hasSize(32).matches("[0-9a-f]+");
   }
 
   @Test
-  void validSpanContextExposesTraceId() {
+  @DisplayName("有效链路上下文: 当前追踪标识与上游一致, 业务追踪号同步桥接")
+  void shouldExposeUpstreamTraceId_whenSpanContextIsValid() {
     SpanContext valid = SpanContext.create(
         VALID_TRACE_ID, VALID_SPAN_ID, TraceFlags.getSampled(), TraceState.getDefault());
     Span span = Span.wrap(valid);
@@ -45,7 +50,8 @@ class OtelTraceContextTest {
   }
 
   @Test
-  void invalidSpanContextReturnsNull() {
+  @DisplayName("无效链路上下文: 当前追踪标识返回空, 业务追踪号回退为随机值")
+  void shouldReturnNullAndFallBack_whenSpanContextIsInvalid() {
     SpanContext invalid = SpanContext.create(
         "00000000000000000000000000000000",
         "0000000000000000",

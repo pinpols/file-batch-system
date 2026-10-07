@@ -3,12 +3,15 @@ package io.github.pinpols.batch.common.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("试运行守卫:直通与全跳过两种模式下副作用执行与返回值语义")
 class DryRunGuardTest {
 
   @Test
-  void passThroughExecutesEveryAction() {
+  @DisplayName("直通模式:副作用照常执行,取回真实调用结果且不标记试运行")
+  void shouldExecuteActions_whenPassThroughMode() {
     DryRunGuard guard = DryRunGuard.passThrough();
     AtomicInteger counter = new AtomicInteger();
 
@@ -21,7 +24,8 @@ class DryRunGuardTest {
   }
 
   @Test
-  void skipAllShortCircuitsSideEffectAndReturnsFallback() {
+  @DisplayName("全跳过模式:副作用不执行,直接返回回退值并标记试运行")
+  void shouldSkipSideEffectAndReturnFallback_whenDryRunMode() {
     DryRunGuard guard = DryRunGuard.skipAll();
     AtomicInteger counter = new AtomicInteger();
 
@@ -34,7 +38,8 @@ class DryRunGuardTest {
   }
 
   @Test
-  void skipAllNeverInvokesSupplierEvenIfSupplierThrows() {
+  @DisplayName("全跳过模式:即使提供方会抛异常也不被调用,直接返回回退值")
+  void shouldNotInvokeSupplier_whenDryRunMode() {
     DryRunGuard guard = DryRunGuard.skipAll();
 
     String value = guard.callOrSkip(

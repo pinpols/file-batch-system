@@ -23,13 +23,15 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
  * Phase 1 #SDK-P1-2 — CLAIM 401/403 fail-fast + 5xx 指数退避 + 409 peer / 其它 4xx give up。
  *
- * <p>测试 base delay 设小到 1ms,跑得快;exponential 行为见 {@link #claim503RetriesUpToConfiguredCount}。
+ * <p>测试 base delay 设小到 1ms,跑得快;exponential 行为见 {@link #shouldRetryUpToConfiguredCount_whenClaimUnavailable}。
  */
+@DisplayName("TaskDispatcher 认领重试 — 鉴权快速失败、冲突让位与 5xx 退避重试")
 class TaskDispatcherClaimRetryTest {
 
   private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
@@ -59,7 +61,8 @@ class TaskDispatcherClaimRetryTest {
   // ─── 401 / 403 → fail-fast,标记 fatal,不重试,不 report ─────────────────────────
 
   @Test
-  void claim401MarksDispatcherFatalAndSkipsRetry() throws Exception {
+  @DisplayName("认领返回未授权时标记致命且严格不重试,也不回报任务状态")
+  void shouldMarkFatalWithoutRetry_whenClaimUnauthorized() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     when(http.claim(anyLong(), anyString(), any()))
         .thenThrow(new PlatformHttpException(401, "Unauthorized"));
@@ -74,7 +77,8 @@ class TaskDispatcherClaimRetryTest {
   }
 
   @Test
-  void claim403MarksDispatcherFatalAndSkipsRetry() throws Exception {
+  @DisplayName("认领返回禁止访问时标记致命并放弃本次派发")
+  void shouldMarkFatalWithoutRetry_whenClaimForbidden() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     when(http.claim(anyLong(), anyString(), any()))
         .thenThrow(new PlatformHttpException(403, "Forbidden"));
@@ -88,7 +92,8 @@ class TaskDispatcherClaimRetryTest {
   }
 
   @Test
-  void fatalDispatcherDropsNewMessages() throws Exception {
+  @DisplayName("进入致命状态后新消息不再派发,也不产生额外认领调用")
+  void shouldDropNewMessages_whenDispatcherFatal() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     when(http.claim(anyLong(), anyString(), any()))
         .thenThrow(new PlatformHttpException(401, "Unauthorized"));
@@ -112,7 +117,8 @@ class TaskDispatcherClaimRetryTest {
   // ─── 409 → peer 已 claim,放弃,不 report,不重试 ─────────────────────────────────
 
   @Test
-  void claim409SilentlySkipsWithoutReportOrRetry() throws Exception {
+  @DisplayName("认领冲突视为同伴已持有,静默放弃且不回报不重试")
+  void shouldSkipSilently_whenClaimConflict() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     when(http.claim(anyLong(), anyString(), any()))
         .thenThrow(new PlatformHttpException(409, "already claimed by peer"));
@@ -130,7 +136,8 @@ class TaskDispatcherClaimRetryTest {
   // ─── 其它 4xx(400 / 404 / 422)→ 客户端构造错误,放弃,不重试 ───────────────────────
 
   @Test
-  void claim404SkipsWithoutRetry() throws Exception {
+  @DisplayName("认领目标不存在时不重试也不回报,且不标记致命")
+  void shouldSkipWithoutRetry_whenClaimNotFound() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     when(http.claim(anyLong(), anyString(), any()))
         .thenThrow(new PlatformHttpException(404, "task gone"));
@@ -146,7 +153,8 @@ class TaskDispatcherClaimRetryTest {
   // ─── 5xx → 指数退避重试,直到耗尽或成功 ─────────────────────────────────────────
 
   @Test
-  void claim503RetriesUpToConfiguredCount() throws Exception {
+  @DisplayName("服务不可用时按配置次数重试,耗尽后放弃且不回报")
+  void shouldRetryUpToConfiguredCount_whenClaimUnavailable() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     when(http.claim(anyLong(), anyString(), any()))
         .thenThrow(new PlatformHttpException(503, "Service Unavailable"));
@@ -161,7 +169,8 @@ class TaskDispatcherClaimRetryTest {
   }
 
   @Test
-  void claim5xxThenSuccessRunsHandlerAndReports() throws Exception {
+  @DisplayName("重试后认领成功则继续执行处理器并回报结果")
+  void shouldRunHandlerAndReport_whenClaimSucceedsAfterRetry() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     AtomicInteger calls = new AtomicInteger();
     when(http.claim(anyLong(), anyString(), any())).thenAnswer(inv -> {
@@ -181,7 +190,8 @@ class TaskDispatcherClaimRetryTest {
   }
 
   @Test
-  void claim5xxWithZeroRetriesGivesUpImmediately() throws Exception {
+  @DisplayName("重试次数配置为零时只尝试一次,失败即放弃")
+  void shouldGiveUpImmediately_whenRetryDisabled() throws Exception {
     BatchPlatformClientConfig zeroRetry =
         config.toBuilder().claimMax5xxRetries(0).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
@@ -198,7 +208,8 @@ class TaskDispatcherClaimRetryTest {
   // ─── P7-2:CLAIM/REPORT 连续 4xx 达阈值 → fail-fast ──────────────────────────────
 
   @Test
-  void consecutiveClientErrorsTripFatalAtThreshold() throws Exception {
+  @DisplayName("连续客户端错误达到阈值时进入致命状态并累计错误计数")
+  void shouldTripFatal_whenClientErrorsReachThreshold() throws Exception {
     BatchPlatformClientConfig threshold3 =
         config.toBuilder().clientErrorFailFastThreshold(3).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
@@ -216,7 +227,8 @@ class TaskDispatcherClaimRetryTest {
   }
 
   @Test
-  void successfulClaimResetsClientErrorStreak() throws Exception {
+  @DisplayName("认领成功后连续错误计数归零,不触发致命状态")
+  void shouldResetErrorStreak_whenClaimSucceeds() throws Exception {
     BatchPlatformClientConfig threshold3 =
         config.toBuilder().clientErrorFailFastThreshold(3).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
@@ -239,7 +251,8 @@ class TaskDispatcherClaimRetryTest {
   }
 
   @Test
-  void clientErrorFailFastDisabledWhenThresholdZero() throws Exception {
+  @DisplayName("阈值为零表示关闭快速失败,多次客户端错误也不进入致命状态")
+  void shouldNeverTripFatal_whenThresholdDisabled() throws Exception {
     BatchPlatformClientConfig disabled =
         config.toBuilder().clientErrorFailFastThreshold(0).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
@@ -256,7 +269,8 @@ class TaskDispatcherClaimRetryTest {
   // ─── P7-2:REPORT 路径的非鉴权、非 409 4xx 也计入 consecutiveClientErrors ──────────
 
   @Test
-  void reportNonAuthNon409ClientErrorCountsTowardStreak() throws Exception {
+  @DisplayName("回报阶段的非鉴权非冲突客户端错误计入连续错误计数")
+  void shouldCountTowardStreak_whenReportReturnsClientError() throws Exception {
     BatchPlatformClientConfig threshold3 =
         config.toBuilder().clientErrorFailFastThreshold(3).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
@@ -274,7 +288,8 @@ class TaskDispatcherClaimRetryTest {
   }
 
   @Test
-  void reportAuthErrorDoesNotCountTowardStreak() throws Exception {
+  @DisplayName("回报鉴权失败不计入连续错误计数,但同样标记致命")
+  void shouldMarkFatalWithoutCounting_whenReportUnauthorized() throws Exception {
     BatchPlatformClientConfig threshold3 =
         config.toBuilder().clientErrorFailFastThreshold(3).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
@@ -294,7 +309,8 @@ class TaskDispatcherClaimRetryTest {
   }
 
   @Test
-  void reportConflictDoesNotCountTowardStreak() throws Exception {
+  @DisplayName("回报冲突不计入连续错误计数,也不标记致命")
+  void shouldNotCountTowardStreak_whenReportConflict() throws Exception {
     BatchPlatformClientConfig threshold3 =
         config.toBuilder().clientErrorFailFastThreshold(3).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
@@ -312,8 +328,8 @@ class TaskDispatcherClaimRetryTest {
   }
 
   @Test
-  void interveningClaimSuccessResetsReportErrorStreakSoReportOnly4xxNeverTripsFatal()
-      throws Exception {
+  @DisplayName("每轮认领成功都会归零,仅回报反复失败的客户端错误不会累积触发致命")
+  void shouldNotAccumulate_whenOnlyReportKeepsFailing() throws Exception {
     BatchPlatformClientConfig threshold3 =
         config.toBuilder().clientErrorFailFastThreshold(3).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
@@ -335,7 +351,8 @@ class TaskDispatcherClaimRetryTest {
   // ─── 传输错误(generic IOException)→ 当 5xx 退避重试 ────────────────────────────
 
   @Test
-  void claimTransportErrorRetries() throws Exception {
+  @DisplayName("认领传输异常按服务不可用处理并退避重试")
+  void shouldRetry_whenClaimTransportError() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     when(http.claim(anyLong(), anyString(), any())).thenThrow(new IOException("connection reset"));
     dispatcher = new TaskDispatcher(config, Map.of("tt", noopHandler()), http);
@@ -347,7 +364,8 @@ class TaskDispatcherClaimRetryTest {
   }
 
   @Test
-  void claimTransportErrorThenSuccessRecovers() throws Exception {
+  @DisplayName("传输异常后重试成功即恢复执行,不进入致命状态")
+  void shouldRecover_whenTransportErrorThenSuccess() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     AtomicInteger calls = new AtomicInteger();
     when(http.claim(anyLong(), anyString(), any())).thenAnswer(inv -> {

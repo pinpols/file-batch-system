@@ -20,6 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -53,6 +54,7 @@ import org.springframework.test.context.jdbc.Sql;
     })
 @Tag("e2e")
 @Tag("smoke")
+@DisplayName("端到端测试: 导出主链路从触发受理, 事件派发, 任务领取到业务明细读取与导出产物落库的成功闭环, 验证任务成功终态, 业务汇总可读与导出文件记录一致")
 class ExportPipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -72,7 +74,8 @@ class ExportPipelineE2eIT extends AbstractIntegrationTest {
   private DataSource businessDataSource;
 
   @Test
-  void exportJobRunsThroughKafkaClaimAndReportsSuccess() {
+  @DisplayName("单个导出任务经事件派发与任务领取后收敛为成功终态, 业务侧结算批次的汇总金额可读且非空")
+  void shouldReportSuccess_whenExportTaskClaimedAndArtifactGenerated() {
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
     seedSettlementData(businessJdbc, BATCH_NO, "E2E-SET-001", "C-E2E-1");
 
@@ -118,7 +121,8 @@ class ExportPipelineE2eIT extends AbstractIntegrationTest {
   }
 
   @Test
-  void bundleExportExpandsAndEachPartitionRunsThroughWorker() {
+  @DisplayName("含两个导出模板的批量导出任务展开为两个子任务并全部成功, 落库两条来源一致的已生成文件记录且分别对应两个模板")
+  void shouldGenerateAllTemplates_whenBundleExportTaskExpandsIntoSubtasks() {
     String batchNo = "E2E-BUNDLE-EXPORT-" + System.nanoTime();
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
     seedSettlementData(businessJdbc, batchNo, "E2E-BND-SET-001", "C-E2E-BND-1");

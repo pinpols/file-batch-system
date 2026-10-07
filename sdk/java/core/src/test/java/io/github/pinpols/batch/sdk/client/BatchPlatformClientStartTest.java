@@ -29,6 +29,7 @@ import org.mockito.ArgumentCaptor;
  * <p>因 {@code httpClient} 字段在构造期 new 出且无注入入口,这里复用本测试包既有的反射注入 mock 套路(见 {@code
  * BatchPlatformClientStopOrderTest} / {@code BatchPlatformClientMetricsTest}),避免真拉 orchestrator。
  */
+@DisplayName("BatchPlatformClient 启动生命周期 — 注册失败时回滚与重复启动防护")
 class BatchPlatformClientStartTest {
 
   private static BatchPlatformClientConfig cfg() {
@@ -117,7 +118,8 @@ class BatchPlatformClientStartTest {
   }
 
   @Test
-  void dryRunCapabilityRequiresExplicitOptIn() {
+  @DisplayName("仅在显式开启时能力标签才追加 dry-run 安全标记")
+  void shouldAddDryRunTag_whenExplicitlyOptedIn() {
     BatchPlatformClient defaultClient =
         BatchPlatformClient.builder(cfg()).register(stub("type-a")).build();
     BatchPlatformClient safeClient = BatchPlatformClient.builder(

@@ -11,6 +11,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** ADR-037 决策二 + 决策三 — 三合一 commit 原子性 / 限流上报 / 取消安全点单测。 */
+@DisplayName("SdkCommitCoordinator — 断点提交原子性、上报限流与取消安全点")
 class SdkCommitCoordinatorTest {
 
   private SdkCommitCoordinator coordinator(

@@ -6,8 +6,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("BatchPlatformClientConfig 环境变量装载 — 必填项汇总与可选覆盖项解析")
 class BatchPlatformClientConfigEnvTest {
 
   private Map<String, String> minimalEnv() {
@@ -22,6 +24,7 @@ class BatchPlatformClientConfigEnvTest {
   }
 
   @Test
+  @DisplayName("仅提供必填环境变量时套用并发数与心跳间隔等默认值")
   void shouldBuildFromRequiredEnvWithDefaults() {
     BatchPlatformClientConfig config =
         BatchPlatformClientConfig.fromEnv("BATCH_SDK_", minimalEnv()::get);
@@ -34,6 +37,7 @@ class BatchPlatformClientConfigEnvTest {
   }
 
   @Test
+  @DisplayName("可选环境变量覆盖并发、心跳、租约与重试相关默认值")
   void shouldApplyOptionalOverrides() {
     Map<String, String> env = minimalEnv();
     env.put("BATCH_SDK_MAX_CONCURRENT_TASKS", "8");
@@ -60,6 +64,7 @@ class BatchPlatformClientConfigEnvTest {
   }
 
   @Test
+  @DisplayName("缺失多个必填项时一次性汇总报出全部键名")
   void shouldReportAllMissingRequiredKeysAtOnce() {
     Map<String, String> env = new HashMap<>();
     env.put("BATCH_SDK_BASE_URL", "http://platform:8080");
@@ -71,6 +76,7 @@ class BatchPlatformClientConfigEnvTest {
   }
 
   @Test
+  @DisplayName("基址以斜杠结尾时拒绝装载配置")
   void shouldRejectBaseUrlWithTrailingSlash() {
     Map<String, String> env = minimalEnv();
     env.put("BATCH_SDK_BASE_URL", "http://platform:8080/");

@@ -17,9 +17,11 @@ import org.apache.ibatis.mapping.SqlCommandType;
 import org.apache.ibatis.plugin.Invocation;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
 
+@DisplayName("审计字段拦截器:验证新增补全、更新强制刷新、已有值保留、参数多种形态遍历与查询语句跳过")
 class AuditFieldsInterceptorTest {
 
   private static final Instant FIXED_NOW = Instant.parse("2026-05-20T10:00:00Z");
@@ -38,7 +40,8 @@ class AuditFieldsInterceptorTest {
   }
 
   @Test
-  void insertFillsAllAuditFieldsWhenNull() throws Throwable {
+  @DisplayName("新增且审计字段为空时,创建时间、更新时间、创建人、更新人与租户均被补全")
+  void shouldFillAllAuditFields_whenInsertAndFieldsNull() throws Throwable {
     SampleEntity entity = new SampleEntity();
     runIntercept(entity, SqlCommandType.INSERT);
     assertThat(entity.getCreatedAt()).isEqualTo(FIXED_NOW);
@@ -49,7 +52,8 @@ class AuditFieldsInterceptorTest {
   }
 
   @Test
-  void insertRespectsExistingValues() throws Throwable {
+  @DisplayName("新增时已有创建时间、创建人与租户保持不变,仅更新相关字段被补全")
+  void shouldKeepExistingValues_whenInsertWithPresetFields() throws Throwable {
     SampleEntity entity = new SampleEntity();
     Instant earlier = Instant.parse("2020-01-01T00:00:00Z");
     entity.setCreatedAt(earlier);
@@ -64,7 +68,8 @@ class AuditFieldsInterceptorTest {
   }
 
   @Test
-  void updateForceRefreshesUpdatedFields() throws Throwable {
+  @DisplayName("更新时强制刷新更新时间与更新人,创建时间与创建人保持原值")
+  void shouldRefreshUpdatedFields_whenUpdate() throws Throwable {
     SampleEntity entity = new SampleEntity();
     entity.setUpdatedAt(Instant.parse("2020-01-01T00:00:00Z"));
     entity.setUpdatedBy("stale");
@@ -79,7 +84,8 @@ class AuditFieldsInterceptorTest {
   }
 
   @Test
-  void mdcMissingLeavesFieldsAsNull() throws Throwable {
+  @DisplayName("缺少调用方身份上下文时时间仍补全,人员与租户字段保持为空")
+  void shouldLeaveOperatorFieldsNull_whenOperatorMissing() throws Throwable {
     MDC.clear();
     SampleEntity entity = new SampleEntity();
     runIntercept(entity, SqlCommandType.INSERT);
@@ -89,7 +95,8 @@ class AuditFieldsInterceptorTest {
   }
 
   @Test
-  void batchInsertList() throws Throwable {
+  @DisplayName("参数为集合时,集合中每个实体都被补全审计信息")
+  void shouldFillEveryEntity_whenParameterIsList() throws Throwable {
     SampleEntity e1 = new SampleEntity();
     SampleEntity e2 = new SampleEntity();
     runIntercept(List.of(e1, e2), SqlCommandType.INSERT);
@@ -98,7 +105,8 @@ class AuditFieldsInterceptorTest {
   }
 
   @Test
-  void paramMapEachValueProcessed() throws Throwable {
+  @DisplayName("参数为映射时,映射中的实体同样被补全,非实体取值被跳过")
+  void shouldFillEntityInsideMap_whenParameterIsMap() throws Throwable {
     SampleEntity entity = new SampleEntity();
     Map<String, Object> param = Map.of("entity", entity, "extraKey", "noise");
     runIntercept(param, SqlCommandType.INSERT);
@@ -106,14 +114,16 @@ class AuditFieldsInterceptorTest {
   }
 
   @Test
-  void selectIsIgnored() throws Throwable {
+  @DisplayName("查询语句不触发拦截,实体审计字段保持为空")
+  void shouldSkipInterception_whenStatementIsQuery() throws Throwable {
     SampleEntity entity = new SampleEntity();
     runIntercept(entity, SqlCommandType.SELECT);
     assertThat(entity.getCreatedAt()).isNull();
   }
 
   @Test
-  void entityWithoutAuditFieldsNoOp() throws Throwable {
+  @DisplayName("实体不含审计字段时原样放行,业务字段不受影响")
+  void shouldKeepEntityUntouched_whenEntityHasNoAuditFields() throws Throwable {
     NoAuditFields entity = new NoAuditFields();
     entity.setId(1L);
     runIntercept(entity, SqlCommandType.INSERT);

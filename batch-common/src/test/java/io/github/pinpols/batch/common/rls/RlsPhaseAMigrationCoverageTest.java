@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
  * Phase A 守护：三份 RLS 运维脚本必须按真实 schema 动态发现租户表，不能退回固定表清单。 新增 biz 表只要带
  * tenant_id，就会被安装脚本覆盖；非分区子表由父表继承策略。
  */
+@DisplayName("行级安全迁移脚本:安装、严格与回滚三份脚本都按真实模式动态发现租户表")
 class RlsPhaseAMigrationCoverageTest {
 
   private static final List<String> MIGRATION_SCRIPTS = List.of(
@@ -20,7 +21,7 @@ class RlsPhaseAMigrationCoverageTest {
 
   @Test
   @DisplayName("RLS 安装、strict、回滚脚本都动态发现 biz 租户表")
-  void migrationScriptsUseDynamicTenantTableDiscovery() throws IOException {
+  void shouldDiscoverTenantTablesDynamically_whenInspectingMigrationScripts() throws IOException {
     for (String filename : MIGRATION_SCRIPTS) {
       Path script = Path.of(System.getProperty("user.dir"))
           .getParent()

@@ -22,6 +22,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Map;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,6 +59,7 @@ import org.springframework.test.context.ActiveProfiles;
 // E2eOrchestratorApplication ComponentScan 不覆盖 io.github.pinpols.batch.common.i18n 包,
 // 显式 @Import BizMessageResolver 让 KafkaOutboxPublisher 等 i18n 依赖可以解出来
 @Import(BizMessageResolver.class)
+@DisplayName("触发到实例创建的异步全链路端到端:触发发起经中继投递消息,编排端真实消费后落库,重复投递仍只产生一条实例")
 class TriggerAsyncLaunchFullChainE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -97,6 +99,7 @@ class TriggerAsyncLaunchFullChainE2eIT extends AbstractIntegrationTest {
   private KafkaTemplate<String, String> kafkaTemplate;
 
   @Test
+  @DisplayName("触发发起后事件真正发布并被消费:作业实例有且仅有一条,发送记录状态推进为已发布")
   void triggerLaunch_publishesAndCreatesJobInstance() {
     // 1) 准备 job_definition；fixture 预置的 trigger_request 先删掉，让真实 trigger service 创建。
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
@@ -138,6 +141,7 @@ class TriggerAsyncLaunchFullChainE2eIT extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("同一消息重复投递三次:去重键兜底拦截,作业实例数量最终仍为一,消费幂等成立")
   void duplicateKafkaMessage_dedupKeyEnsuresOnlyOneJobInstance() throws Exception {
     // 验证 ADR-010 §不变量:同 requestId 多次消费 → uk_job_instance_tenant_dedup 回退,只产生 1 个 job_instance
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(

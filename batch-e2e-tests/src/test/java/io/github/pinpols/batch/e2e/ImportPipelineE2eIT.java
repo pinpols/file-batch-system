@@ -19,6 +19,7 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import javax.sql.DataSource;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,6 +58,7 @@ import org.springframework.test.context.jdbc.Sql;
     })
 @Tag("e2e")
 @Tag("smoke")
+@DisplayName("导入任务主链路成功闭环:调度派发、执行进程认领执行、回报汇聚到任务成功终态,并核对业务结果落库")
 class ImportPipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -75,7 +77,8 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
   private DataSource businessDataSource;
 
   @Test
-  void importJobRunsThroughKafkaClaimAndReportsSuccess() {
+  @DisplayName("导入任务经派发与认领执行后回报成功,任务终态为成功,且业务表中存在对应客户记录")
+  void shouldImportAndPersistBusinessRecords_whenJobDispatchedAndClaimed() {
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
 

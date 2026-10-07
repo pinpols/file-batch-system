@@ -24,6 +24,7 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -54,6 +55,7 @@ import org.springframework.test.context.jdbc.Sql;
 // 连接,叠加 RANDOM_PORT embedded server 启动到本测试时资源压力撞 GHA runner 上限。
 // 显式 AFTER_CLASS DirtiesContext 让 Spring 在本类结束时释放 context,缓解资源累积。
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+@DisplayName("Worker 排空回收端到端:排空请求受理后进入排空态,超时接管把运行中任务退回就绪并让 worker 下线")
 class WorkerDrainE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -81,7 +83,8 @@ class WorkerDrainE2eIT extends AbstractIntegrationTest {
   }
 
   @Test
-  void drainTimeoutReclaimsRunningTaskAndDecommissionsWorker() throws Exception {
+  @DisplayName("排空超时后接管:worker 在排空态后转为已下线并清空排空时间戳,运行中任务退回就绪且解除占用")
+  void shouldReclaimRunningTaskAndDecommissionWorker_whenDrainTimeoutExpires() throws Exception {
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
 

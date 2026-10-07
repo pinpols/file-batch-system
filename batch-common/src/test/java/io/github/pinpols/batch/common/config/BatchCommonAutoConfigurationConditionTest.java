@@ -11,6 +11,7 @@ import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import javax.sql.DataSource;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -19,6 +20,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import software.amazon.awssdk.services.s3.S3Client;
 
+@DisplayName("公共自动配置装配条件:存储后端互斥、启动自检开关、对象加密密钥校验与健康指示器数据源选择")
 class BatchCommonAutoConfigurationConditionTest {
 
   private final ApplicationContextRunner contextRunner = new ApplicationContextRunner();
@@ -31,7 +33,8 @@ class BatchCommonAutoConfigurationConditionTest {
       String.join("-", "prod", "database", "test", "value");
 
   @Test
-  void s3AutoConfigurationBacksOffWhenFilesystemBackendIsSelected() {
+  @DisplayName("选择文件系统存储后端时不创建对象存储客户端,且上下文正常启动")
+  void shouldBackOffObjectStorageAutoConfiguration_whenFilesystemBackendSelected() {
     contextRunner
         .withConfiguration(AutoConfigurations.of(S3AutoConfiguration.class))
         .withPropertyValues("batch.storage.backend=filesystem")
@@ -42,7 +45,8 @@ class BatchCommonAutoConfigurationConditionTest {
   }
 
   @Test
-  void startupSelfCheckCanBeDisabledWithoutDatabaseMapper() {
+  @DisplayName("显式关闭启动自检后不注册自检组件,且缺少数据库映射器也不会导致上下文失败")
+  void shouldDisableStartupSelfCheck_whenExplicitlyTurnedOff() {
     contextRunner
         .withConfiguration(AutoConfigurations.of(BatchStartupSelfCheckAutoConfiguration.class))
         .withPropertyValues("batch.startup-self-check.enabled=false")
@@ -53,7 +57,8 @@ class BatchCommonAutoConfigurationConditionTest {
   }
 
   @Test
-  void objectCryptoAutoConfigurationProvidesSecretPayloadProtector() {
+  @DisplayName("测试环境开启对象加密后同时注册加解密服务与密文载荷保护器")
+  void shouldProvideSecretPayloadProtector_whenCryptoEnabledInTestProfile() {
     contextRunner
         .withConfiguration(AutoConfigurations.of(BatchObjectCryptoAutoConfiguration.class))
         .withPropertyValues(
@@ -66,7 +71,8 @@ class BatchCommonAutoConfigurationConditionTest {
   }
 
   @Test
-  void objectCryptoAutoConfigurationRejectsMissingDefaultKeyRef() {
+  @DisplayName("默认密钥引用指向不存在的条目时上下文启动失败,并提示必须引用已存在的密钥")
+  void shouldFailContext_whenDefaultKeyRefMissing() {
     contextRunner
         .withConfiguration(AutoConfigurations.of(BatchObjectCryptoAutoConfiguration.class))
         .withPropertyValues(
@@ -81,7 +87,8 @@ class BatchCommonAutoConfigurationConditionTest {
   }
 
   @Test
-  void objectCryptoAutoConfigurationRejectsInvalidAesKeyLength() {
+  @DisplayName("密钥解码后长度不是十六、二十四或三十二字节时上下文启动失败")
+  void shouldFailContext_whenAesKeyLengthInvalid() {
     contextRunner
         .withConfiguration(AutoConfigurations.of(BatchObjectCryptoAutoConfiguration.class))
         .withPropertyValues(
@@ -95,7 +102,8 @@ class BatchCommonAutoConfigurationConditionTest {
   }
 
   @Test
-  void objectCryptoAutoConfigurationRejectsWeakProdKey() {
+  @DisplayName("生产环境使用强度不足的密钥时上下文启动失败,并指出该密钥强度偏弱")
+  void shouldFailContext_whenProductionKeyWeak() {
     contextRunner
         .withConfiguration(AutoConfigurations.of(BatchObjectCryptoAutoConfiguration.class))
         .withPropertyValues(
@@ -111,7 +119,8 @@ class BatchCommonAutoConfigurationConditionTest {
   }
 
   @Test
-  void hikariSaturationHealthIndicatorBacksOffForAmbiguousDataSources() {
+  @DisplayName("存在多个数据源且未指定首选时退避不注册饱和健康指示器")
+  void shouldBackOffHealthIndicator_whenMultipleDataSourcesWithoutPrimary() {
     contextRunner
         .withUserConfiguration(AmbiguousDataSourcesConfiguration.class)
         .withConfiguration(AutoConfigurations.of(BatchHealthAutoConfiguration.class))
@@ -122,7 +131,8 @@ class BatchCommonAutoConfigurationConditionTest {
   }
 
   @Test
-  void hikariSaturationHealthIndicatorUsesPrimaryDataSourceWhenMultipleExist() {
+  @DisplayName("多数据源中指定首个为首选时正常注册饱和健康指示器")
+  void shouldRegisterHealthIndicator_whenPrimaryDataSourcePresent() {
     contextRunner
         .withUserConfiguration(PrimaryDataSourceConfiguration.class)
         .withConfiguration(AutoConfigurations.of(BatchHealthAutoConfiguration.class))

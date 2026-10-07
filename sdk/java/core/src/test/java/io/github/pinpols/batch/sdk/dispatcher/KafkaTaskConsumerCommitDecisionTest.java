@@ -19,9 +19,11 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** SDK Kafka offset 契约:只有已接收/终态坏消息提交 offset,可恢复拒收不提交。 */
+@DisplayName("Kafka 消费位移决策 — 仅接收成功或终态坏消息提交位移,可恢复拒收不提交")
 class KafkaTaskConsumerCommitDecisionTest {
 
   private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
@@ -35,7 +37,8 @@ class KafkaTaskConsumerCommitDecisionTest {
       .build();
 
   @Test
-  void commitsOffsetAfterDispatcherSubmitted() throws Exception {
+  @DisplayName("派发接收成功后提交该条消息的位移")
+  void shouldCommitOffset_whenDispatcherSubmitted() throws Exception {
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     when(dispatcher.onMessage(any())).thenReturn(TaskDispatcher.DispatchDecision.SUBMITTED);
     @SuppressWarnings("unchecked")
@@ -51,7 +54,8 @@ class KafkaTaskConsumerCommitDecisionTest {
   }
 
   @Test
-  void retryLaterDoesNotCommitOffsetAndSeeksBack() throws Exception {
+  @DisplayName("瞬时背压拒收时不提交位移,回退到本条并暂停该分区")
+  void shouldNotCommitAndSeekBack_whenRetryLater() throws Exception {
     // RETRY_LATER = 瞬时背压(容量满 / 平台 PAUSED / draining):seek 回本条 + pause 分区(可恢复,由
     // applyBackpressure 在恢复后 resume)。这不是 withhold —— withhold 不 seek 不 pause(见下方 schema 测)。
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
@@ -73,7 +77,8 @@ class KafkaTaskConsumerCommitDecisionTest {
   }
 
   @Test
-  void retryLaterSkipsOnlyCurrentPartitionAndProcessesOtherPartitions() throws Exception {
+  @DisplayName("拒收只影响当前分区,同一批次其它分区仍正常处理并提交")
+  void shouldSkipOnlyCurrentPartition_whenRetryLater() throws Exception {
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     when(dispatcher.onMessage(any()))
         .thenReturn(
@@ -99,7 +104,8 @@ class KafkaTaskConsumerCommitDecisionTest {
   }
 
   @Test
-  void commitFailureSeeksBackAndDoesNotBlockOtherPartitions() throws Exception {
+  @DisplayName("提交位移失败时回退当前分区,不阻塞其它分区提交")
+  void shouldSeekBackWithoutBlockingOtherPartitions_whenCommitFails() throws Exception {
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     when(dispatcher.onMessage(any())).thenReturn(TaskDispatcher.DispatchDecision.SUBMITTED);
     @SuppressWarnings("unchecked")
@@ -126,7 +132,8 @@ class KafkaTaskConsumerCommitDecisionTest {
   }
 
   @Test
-  void terminalBadMessageCommitsOffset() {
+  @DisplayName("报文无法解析等终态坏消息直接提交位移,避免重复消费")
+  void shouldCommitOffset_whenMessageTerminallyInvalid() {
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     @SuppressWarnings("unchecked")
     Consumer<String, byte[]> consumer = mock(Consumer.class);
@@ -143,7 +150,8 @@ class KafkaTaskConsumerCommitDecisionTest {
   }
 
   @Test
-  void unsupportedSchemaSetsCeilingAndDoesNotBlockLaterRecord() throws Exception {
+  @DisplayName("协议主版本不受支持时抬高提交位点上限但不冻结分区,后续消息继续送达")
+  void shouldNotBlockLaterRecord_whenSchemaUnsupported() throws Exception {
     // wire-protocol §A:未知大版本(v3)**不提交** offset,但也不 seek/pause 冻结分区。
     // 后续正常记录继续送达 dispatcher,只是其 commit 被最低 withheld ceiling 拦住。
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);

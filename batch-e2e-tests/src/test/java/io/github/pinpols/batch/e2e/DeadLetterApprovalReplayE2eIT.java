@@ -23,6 +23,7 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -63,6 +64,7 @@ import org.springframework.test.context.jdbc.Sql;
     })
 @Tag("e2e")
 @Tag("critical")
+@DisplayName("死信人工闭环端到端:任务进入死信后由控制台发起重放审批并审批通过,验证重放重新入队生效,死信状态与重放次数更新,审批单流转到已执行")
 class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -85,7 +87,8 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
   private int localServerPort;
 
   @Test
-  void deadLetterCanBeApprovedAndReplayedThroughConsoleHttp() throws Exception {
+  @DisplayName("死信初始为待重放且来源为作业分片,控制台发起重放并审批通过后:验证原记录重放状态转为成功,重放次数为 1,审批单状态转为已执行")
+  void shouldMarkDeadLetterReplaySuccess_whenConsoleApprovalExecuted() throws Exception {
     String initialTraceId = traceId("dlq");
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate,

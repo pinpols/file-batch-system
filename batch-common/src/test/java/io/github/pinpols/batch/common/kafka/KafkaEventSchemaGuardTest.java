@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.Test;
  *   <li>删 / 改名 / 改类型(破坏)→ 必须改走版本化 topic(如 .v2)+ 双写迁移,禁直接改。
  * </ul>
  */
+@DisplayName("跨服务事件结构守护:线上契约字段签名与金标准快照比对")
 class KafkaEventSchemaGuardTest {
 
   /** 受守护的跨服务 wire 契约类(新增 Kafka payload 类型时在此登记)。 */
@@ -40,7 +42,8 @@ class KafkaEventSchemaGuardTest {
   private static final String GOLDEN = "/kafka-event-schema.golden";
 
   @Test
-  void wireSchemaMatchesGolden() {
+  @DisplayName("登记的全部线上契约类型字段签名与金标准快照一致")
+  void shouldMatchGolden_whenInspectingWireSchema() {
     String actual = WIRE_CONTRACTS.stream()
             .map(KafkaEventSchemaGuardTest::signature)
             .collect(Collectors.joining("\n"))

@@ -7,6 +7,7 @@ import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("哈希与独占分片解析:单分片,空租户回退,独占优先,确定性与参数校验")
 class HashAndSiloPlacementResolverTest {
 
   @Test

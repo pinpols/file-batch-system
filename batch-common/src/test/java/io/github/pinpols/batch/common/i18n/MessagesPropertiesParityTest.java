@@ -11,6 +11,7 @@ import java.util.LinkedHashSet;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -21,13 +22,15 @@ import org.junit.jupiter.api.Test;
  *
  * <p>同时校验:① 无重复 key(Properties 会静默后者覆盖前者);② value 非空(空翻译等于没翻译)。
  */
+@DisplayName("多语言资源文件一致性:中英文键集合对齐, 无重复键且取值非空")
 class MessagesPropertiesParityTest {
 
   private static final String EN = "/messages.properties";
   private static final String ZH = "/messages_zh_CN.properties";
 
   @Test
-  void enAndZhKeysAreOneToOne() throws IOException {
+  @DisplayName("中英文资源键集合:两侧一一对应, 不存在单边缺失")
+  void shouldKeepEnAndZhKeysAligned() throws IOException {
     Set<String> enKeys = loadKeys(EN);
     Set<String> zhKeys = loadKeys(ZH);
 
@@ -45,7 +48,8 @@ class MessagesPropertiesParityTest {
   }
 
   @Test
-  void noDuplicateKeysAndNoBlankValues() throws IOException {
+  @DisplayName("资源文件内容:无重复键, 且除模板空行外无空取值")
+  void shouldRejectDuplicateKeysAndBlankValues() throws IOException {
     assertNoDuplicateKeysAndNoBlankValues(EN);
     assertNoDuplicateKeysAndNoBlankValues(ZH);
   }

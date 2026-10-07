@@ -17,9 +17,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** SDK Phase 2 §2.4:心跳指令驱动 4 态状态机 + onMessage 门控。 */
+@DisplayName("TaskDispatcher 平台状态机 — 心跳指令驱动的四态切换与消息门控")
 class TaskDispatcherPlatformStateTest {
 
   private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
@@ -40,14 +42,16 @@ class TaskDispatcherPlatformStateTest {
   }
 
   @Test
-  void defaultStateIsNormalAndAcceptsTasks() {
+  @DisplayName("启动默认处于正常态并接收新任务")
+  void shouldStartInNormalState_acceptingTasks() {
     dispatcher = new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
     assertThat(dispatcher.platformState()).isEqualTo(WorkerRuntimeState.NORMAL);
     assertThat(dispatcher.platformAcceptsNewTasks()).isTrue();
   }
 
   @Test
-  void directiveTransitionsState() {
+  @DisplayName("依次应用暂停、排空与恢复指令时状态与接收能力同步切换")
+  void shouldTransitionState_whenDirectiveApplied() {
     dispatcher = new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
 
     dispatcher.applyPlatformDirective(
@@ -66,14 +70,16 @@ class TaskDispatcherPlatformStateTest {
   }
 
   @Test
-  void nullDirectiveIsNoop() {
+  @DisplayName("心跳指令缺失时保持正常态,不误改运行状态")
+  void shouldRemainNormal_whenDirectiveMissing() {
     dispatcher = new TaskDispatcher(config, Map.of(), mock(PlatformHttpClient.class));
     dispatcher.applyPlatformDirective(null);
     assertThat(dispatcher.platformState()).isEqualTo(WorkerRuntimeState.NORMAL);
   }
 
   @Test
-  void onMessageSkippedWhenPaused() throws Exception {
+  @DisplayName("平台暂停期间消息被延后处理,不认领也不进入处理器")
+  void shouldSkipMessage_whenPlatformPaused() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     AtomicReference<SdkTaskContext> seen = new AtomicReference<>();
     dispatcher = new TaskDispatcher(

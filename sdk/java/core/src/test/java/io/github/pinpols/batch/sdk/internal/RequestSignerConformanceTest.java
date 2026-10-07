@@ -11,11 +11,12 @@ import org.junit.jupiter.api.Test;
  *
  * <p>SDK core 不依赖 batch-common；这里用固定测试向量固化 canonical 串、body hash 和 HMAC 输出。
  */
+@DisplayName("RequestSigner — 与服务端签名规范的逐字节一致性")
 class RequestSignerConformanceTest {
 
   @Test
   @DisplayName("canonical 串与服务端一致")
-  void canonicalMatchesServer() {
+  void shouldMatchServer_whenBuildingCanonicalString() {
     byte[] body = "{\"tenantId\":\"t1\",\"success\":true}".getBytes(StandardCharsets.UTF_8);
     assertThat(RequestSigner.canonicalString(
             "POST", "/internal/tasks/10/report", "1700000000000", "n-1", body))
@@ -28,7 +29,7 @@ class RequestSignerConformanceTest {
 
   @Test
   @DisplayName("签名与服务端一致(多组输入)")
-  void signatureMatchesServer() {
+  void shouldMatchServer_whenSigningMultipleInputs() {
     String[][] cases = {
       {
         "key-1",
@@ -69,7 +70,7 @@ class RequestSignerConformanceTest {
 
   @Test
   @DisplayName("空 body 摘要与服务端一致")
-  void emptyBodyHashMatches() {
+  void shouldMatchServer_whenHashingEmptyBody() {
     assertThat(RequestSigner.bodySha256Hex(new byte[0]))
         .isEqualTo("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
   }

@@ -9,16 +9,19 @@ import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.config.StorageBackendProperties;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.mock.env.MockEnvironment;
 
+@DisplayName("运行期状态端点:有效配置聚合与敏感值脱敏")
 class BatchRuntimeStatusEndpointTest {
 
   @Test
-  void returnsOnlyRedactedEffectiveRuntimeStatus() {
+  @DisplayName("返回有效运行期状态时,内部密钥与对象存储密钥均不得出现在结果中")
+  void shouldRedactSensitiveValues_whenReportingEffectiveRuntimeStatus() {
     MockEnvironment environment = new MockEnvironment()
         .withProperty(ApplicationNameProvider.APPLICATION_NAME_KEY, "batch-test")
         .withProperty(StorageBackendProperties.BACKEND_KEY, "s3");

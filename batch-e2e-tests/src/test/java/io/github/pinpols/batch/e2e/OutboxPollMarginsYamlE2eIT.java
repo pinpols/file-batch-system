@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.e2e.apps.E2eOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.config.OutboxProperties;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,13 +25,15 @@ import org.springframework.test.context.ActiveProfiles;
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles({"test", "e2e"})
 @Tag("e2e")
+@DisplayName("测试配置的 Outbox 轮询边界守护:轮询间隔与最小轮询间隔必须对齐,避免数据库未就绪时以默认下限高频自调度刷告警")
 class OutboxPollMarginsYamlE2eIT extends AbstractIntegrationTest {
 
   @Autowired
   private OutboxProperties outboxProperties;
 
   @Test
-  void applicationTestYamlAlignsOutboxMinAndMaxPollInterval() {
+  @DisplayName("测试配置加载后轮询间隔与最小轮询间隔一致:两者同为十分钟级,不再落入默认高频下限")
+  void shouldAlignOutboxPollIntervalBounds_whenApplicationTestYamlLoaded() {
     assertThat(outboxProperties.getPollIntervalMillis()).isEqualTo(600_000L);
     assertThat(outboxProperties.getMinPollIntervalMillis()).isEqualTo(600_000L);
   }

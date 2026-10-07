@@ -2,15 +2,18 @@ package io.github.pinpols.batch.common.validation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+@DisplayName("ValidBizDateValidator: 业务日期格式校验,含闰年、年月边界与空白处理")
 class ValidBizDateValidatorTest {
 
   private final ValidBizDateValidator v = new ValidBizDateValidator();
 
   @ParameterizedTest
+  @DisplayName("合法日期格式全部通过校验,含闰年与年月边界")
   @ValueSource(
       strings = {
         "2026-01-01",
@@ -25,6 +28,7 @@ class ValidBizDateValidatorTest {
   }
 
   @ParameterizedTest
+  @DisplayName("非法日期格式全部被拒绝,含不存在的日期、错分隔符与缺零填充")
   @ValueSource(
       strings = {
         "2026-02-30", // 不存在的日期
@@ -44,7 +48,8 @@ class ValidBizDateValidatorTest {
   }
 
   @Test
-  void allowsNullBlankByDesign() {
+  @DisplayName("空值与空白按设计放行,必填约束交由上层注解")
+  void shouldAllowNullAndBlankByDesign_whenValidating() {
     // 设计:校验只关心格式,是否必填交给 @NotBlank
     assertThat(v.isValid(null, null)).isTrue();
     assertThat(v.isValid("", null)).isTrue();
@@ -52,7 +57,8 @@ class ValidBizDateValidatorTest {
   }
 
   @Test
-  void trimsWhitespace() {
+  @DisplayName("首尾空白被去除后仍判定为合法日期")
+  void shouldTrimWhitespace_whenValidating() {
     assertThat(v.isValid("  2026-05-20  ", null)).isTrue();
   }
 }

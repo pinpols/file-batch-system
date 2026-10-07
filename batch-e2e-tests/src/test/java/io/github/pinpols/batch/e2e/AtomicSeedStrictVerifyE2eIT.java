@@ -20,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +42,7 @@ import org.springframework.test.context.ActiveProfiles;
 @ActiveProfiles({"test", "e2e"})
 @E2eBusinessSchema
 @Tag("e2e")
+@DisplayName("真实种子作业的原子任务端到端: 执行器协议预置在作业定义默认参数中, 空参触发后经参数合成, 事件投递与专属派发交由对应子执行器执行, 任务终态落库为成功")
 class AtomicSeedStrictVerifyE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -55,24 +57,28 @@ class AtomicSeedStrictVerifyE2eIT extends AbstractIntegrationTest {
   private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
   @Test
-  void sqlSeedJobRunsFromDefaultParams() {
+  @DisplayName("sql 类型种子作业: 定义内预置查询协议, 空参触发后经事件投递与专属派发执行, 任务终态落库为成功")
+  void shouldRunSqlSeedTask_whenLaunchCarriesNoParams() {
     runSeedJob("{\"taskType\":\"sql\",\"sql\":\"SELECT 1\"}");
   }
 
   @Test
-  void shellSeedJobRunsFromDefaultParams() {
+  @DisplayName("shell 类型种子作业: 定义内预置命令与入参, 空参触发后经专属派发执行, 任务终态落库为成功")
+  void shouldRunShellSeedTask_whenLaunchCarriesNoParams() {
     runSeedJob("{\"taskType\":\"shell\",\"command\":\"/bin/echo\",\"args\":[\"hello-from-spi\"]}");
   }
 
   @Test
-  void storedProcSeedJobRunsFromDefaultParams() {
+  @DisplayName("存储过程类型种子作业: 先建真实过程再以定义内协议空参触发, 经专属派发调用后任务终态落库为成功")
+  void shouldRunStoredProcSeedTask_whenLaunchCarriesNoParams() {
     jdbcTemplate.execute(
         "CREATE OR REPLACE PROCEDURE batch.e2e_seed_proc() LANGUAGE plpgsql AS $$ BEGIN END; $$");
     runSeedJob("{\"taskType\":\"stored_proc\",\"procedureName\":\"batch.e2e_seed_proc\"}");
   }
 
   @Test
-  void httpSeedJobRunsFromDefaultParams() throws IOException {
+  @DisplayName("http 类型种子作业: 定义内预置请求地址与方法, 空参触发后经专属派发请求本地服务, 任务终态落库为成功")
+  void shouldRunHttpSeedTask_whenLaunchCarriesNoParams() throws IOException {
     HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     server.createContext("/ok", exchange -> {
       byte[] body = "ok".getBytes(StandardCharsets.UTF_8);

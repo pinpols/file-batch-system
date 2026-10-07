@@ -19,6 +19,7 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,6 +53,7 @@ import org.springframework.test.context.ActiveProfiles;
 @E2eBusinessSchema
 @Tag("e2e")
 @Tag("smoke")
+@DisplayName("端到端测试: 派发主链路从触发受理, 事件派发, 任务领取到渠道投递的成功闭环, 验证任务成功终态, 平台表文件状态, 投递回执与审计记录四处一致")
 class DispatchPipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -66,7 +68,8 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
   private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
   @Test
-  void dispatchJobRunsThroughKafkaClaimAndReportsSuccess() {
+  @DisplayName("单个文件派发任务经事件派发与任务领取后完成本地渠道投递, 任务收敛为成功终态, 文件状态为已派发, 回执落库且至少一条审计记录")
+  void shouldReportSuccess_whenSingleFileDispatchTaskClaimedAndDelivered() {
     upsertLocalChannel("e2e_local_dispatch");
     String path = "/tmp/e2e-dispatch-" + System.nanoTime() + ".json";
     Long fileId = insertGeneratedFile("e2e-dis", "e2e.json", path, "e2e-dis-trace");
@@ -120,7 +123,8 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
   }
 
   @Test
-  void bundleDispatchExpandsAndEachPartitionRunsThroughWorker() {
+  @DisplayName("两个文件组成的批量派发任务展开为两个子任务并各自完成渠道投递, 两个任务均为成功终态, 两个文件状态为已派发且各写入一条投递回执")
+  void shouldDeliverEveryFile_whenBundleDispatchTaskExpandsIntoSubtasks() {
     upsertLocalChannel("e2e_local_dispatch");
     Long fileOne = insertGeneratedFile(
         "e2e-bundle-dis-1",

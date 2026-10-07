@@ -23,9 +23,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+@DisplayName("TaskDispatcher 主链路 — 认领执行回报、异常回退与异步派发")
 class TaskDispatcherTest {
 
   private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
@@ -63,7 +65,8 @@ class TaskDispatcherTest {
   // ─── 正常路径 ────────────────────────────────────────────────────────────────
 
   @Test
-  void claimSuccessRunsHandlerAndReports() throws Exception {
+  @DisplayName("认领成功后执行处理器并回报成功结果,上下文与回报字段完整")
+  void shouldRunHandlerAndReport_whenClaimSucceeds() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     AtomicReference<SdkTaskContext> seenCtx = new AtomicReference<>();
     SdkTaskHandler handler = new SdkTaskHandler() {
@@ -101,7 +104,8 @@ class TaskDispatcherTest {
   }
 
   @Test
-  void partitionInvocationThreadedToClaimAndReport() throws Exception {
+  @DisplayName("分区调用标识透传到认领与回报报文,任务结束后映射被清理")
+  void shouldThreadPartitionInvocation_toClaimAndReport() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     SdkTaskHandler handler = new SdkTaskHandler() {
       @Override
@@ -140,7 +144,8 @@ class TaskDispatcherTest {
   }
 
   @Test
-  void partitionInvocationFromClaimResponseIsThreadedToReport() throws Exception {
+  @DisplayName("认领响应返回的分区调用标识透传到回报,任务结束后不残留")
+  void shouldThreadClaimResponseInvocation_toReport() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     when(http.claim(eq(42L), anyString(), any()))
         .thenReturn(new PlatformHttpClient.TaskClaimResponse("inv-from-claim"));
@@ -169,7 +174,8 @@ class TaskDispatcherTest {
   // ─── handler 异常回退 ────────────────────────────────────────────────────────
 
   @Test
-  void handlerExceptionStillReportsFailure() throws Exception {
+  @DisplayName("处理器抛出异常时仍回报失败,统一错误码且摘要保留异常细节")
+  void shouldReportFailure_whenHandlerThrows() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     SdkTaskHandler handler = new SdkTaskHandler() {
       @Override
@@ -202,7 +208,8 @@ class TaskDispatcherTest {
   }
 
   @Test
-  void handlerReturnsNullTreatedAsFailure() throws Exception {
+  @DisplayName("处理器返回空结果按失败回报,并给出明确原因")
+  void shouldTreatAsFailure_whenHandlerReturnsNull() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     SdkTaskHandler handler = new SdkTaskHandler() {
       @Override
@@ -229,7 +236,8 @@ class TaskDispatcherTest {
   // ─── 未注册 taskType ────────────────────────────────────────────────────────
 
   @Test
-  void unknownTaskTypeReportsFailureWithoutClaim() throws Exception {
+  @DisplayName("任务类型未注册时不认领,直接回报失败并说明原因")
+  void shouldReportFailureWithoutClaim_whenTaskTypeUnregistered() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     dispatcher = new TaskDispatcher(config, Map.of("tt", noopHandler()), http);
 
@@ -245,7 +253,8 @@ class TaskDispatcherTest {
   // ─── CLAIM 失败 ─────────────────────────────────────────────────────────────
 
   @Test
-  void claimFailureDoesNotExecuteOrReport() throws Exception {
+  @DisplayName("认领失败时不执行处理器也不回报,避免污染任务状态")
+  void shouldNotExecuteOrReport_whenClaimFails() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     when(http.claim(anyLong(), anyString(), any()))
         .thenThrow(new PlatformHttpException(409, "409 already claimed"));
@@ -273,7 +282,8 @@ class TaskDispatcherTest {
   // ─── REPORT 传输失败:5xx/IO 退避重试,耗尽后捕获并抑制,等 orchestrator lease 超时 ──────────
 
   @Test
-  void reportFailureSwallowed() throws Exception {
+  @DisplayName("回报传输失败时抑制异常不外抛,仅尝试一次等待租约超时兜底")
+  void shouldSwallowReportFailure_andReportOnce() throws Exception {
     // 关掉 report 重试(0 次)让本用例只验"吞异常不外抛 + 调一次"语义,避免退避 sleep 拖慢测试。
     BatchPlatformClientConfig noRetryConfig =
         config.toBuilder().claimMax5xxRetries(0).build();
@@ -290,7 +300,8 @@ class TaskDispatcherTest {
   // ─── 异步路径 onMessage 集成测试 ───────────────────────────────────────────────
 
   @Test
-  void onMessageRunsAsyncOnExecutor() throws Exception {
+  @DisplayName("消息派发在线程池异步执行,处理器被真正调用")
+  void shouldRunAsync_whenMessageDispatched() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     CountDownLatch executed = new CountDownLatch(1);
     SdkTaskHandler handler = new SdkTaskHandler() {
@@ -315,7 +326,8 @@ class TaskDispatcherTest {
   // ─── invalid message 跳过 ────────────────────────────────────────────────────
 
   @Test
-  void invalidMessageSkippedWithoutSubmit() throws Exception {
+  @DisplayName("非法消息直接终态丢弃,不占用并发许可也不认领")
+  void shouldDropTerminally_whenMessageInvalid() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
     dispatcher = new TaskDispatcher(config, Map.of(), http);
 

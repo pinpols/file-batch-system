@@ -8,6 +8,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("路由数据源查找键:按当前租户解析分片,无租户与独占租户的回退和映射")
 class BusinessRoutingDataSourceTest {
 
   /** 暴露 protected determineCurrentLookupKey 供断言。 */

@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.invocation.InvocationOnMock;
 
@@ -40,6 +41,7 @@ import org.mockito.invocation.InvocationOnMock;
  *
  * <p>批 BE DTO 字段被改时,本测试应失败 — fail-fast 守门。
  */
+@DisplayName("SDK 与平台协议契约 — 派单载荷、注册心跳、执行回报与认领请求字段对账")
 class SdkPlatformContractTest {
 
   private static final ObjectMapper M = new ObjectMapper();
@@ -57,7 +59,8 @@ class SdkPlatformContractTest {
   // ─── Kafka 派单 payload 契约 ────────────────────────────────────────────────
 
   @Test
-  void platformKafkaPayloadSdkCanDeserialize() throws Exception {
+  @DisplayName("平台派单载荷可被 SDK 反序列化,关键字段对齐且多余新字段被忽略")
+  void shouldDeserializePayload_whenKafkaDispatchReceived() throws Exception {
     // 模拟平台 producer 写的 JSON(对照 orchestrator BatchTopicResolver + 上游 producer
     // 写入的 TaskDispatchMessage —— 字段集是协议契约,平台改要同步改 SDK)
     String wirePayload = "{"
@@ -87,7 +90,8 @@ class SdkPlatformContractTest {
   // ─── register body 契约 → WorkerHeartbeatDto 字段集 ──────────────────────────
 
   @Test
-  void registerBodyMatchesWorkerHeartbeatDtoSchema() {
+  @DisplayName("注册心跳报文体覆盖必填字段,并发与容量字段类型符合平台约定")
+  void shouldMatchHeartbeatSchema_whenBuildingRegisterBody() {
     // 直接 build register body 字段集校验 — start() 全链路要 mock 太多,改 schema test
     Map<String, Object> simulated = new HashMap<>();
     simulated.put("tenantId", "tx");
@@ -118,7 +122,8 @@ class SdkPlatformContractTest {
   // ─── report body 契约 → TaskExecutionReportDto 字段集 ───────────────────────
 
   @Test
-  void reportBodyMatchesTaskExecutionReportDtoSchema() throws IOException {
+  @DisplayName("执行回报字段集完整,输出字段用复数名且不含已废弃的错误字段")
+  void shouldMatchReportSchema_whenBuildingExecutionReport() throws IOException {
     List<Map<String, Object>> reports = captureReports(SdkTaskResult.ok("done", Map.of("rows", 5)));
 
     assertThat(reports).hasSize(1);
@@ -136,7 +141,8 @@ class SdkPlatformContractTest {
   }
 
   @Test
-  void reportFailureBodyHasErrorCodeAndResultSummary() throws IOException {
+  @DisplayName("执行异常时回报统一错误码,并把异常细节保留在结果摘要中")
+  void shouldReportErrorCodeAndSummary_whenExecutionFails() throws IOException {
     List<Map<String, Object>> reports =
         captureReports(SdkTaskResult.fail(new IllegalStateException("boom")));
     Map<String, Object> body = reports.get(0);
@@ -154,7 +160,8 @@ class SdkPlatformContractTest {
   }
 
   @Test
-  void reportBusinessFailWithoutCodeDefaultsToExecutionFailed() throws IOException {
+  @DisplayName("业务失败未显式给出错误码时回退为统一执行失败码")
+  void shouldDefaultToExecutionFailed_whenBusinessFailWithoutCode() throws IOException {
     // 业务 fail(message) 无显式码、无异常 → 规范回退 EXECUTION_FAILED(不再是旧的 "FAILED" 非协议值)。
     Map<String, Object> body =
         captureReports(SdkTaskResult.fail("business rule violated")).get(0);
@@ -163,7 +170,8 @@ class SdkPlatformContractTest {
   }
 
   @Test
-  void reportPreservesExplicitBusinessErrorCodeFromOutput() throws IOException {
+  @DisplayName("处理器显式给出的业务错误码原样透传,不被默认码覆盖")
+  void shouldPreserveExplicitErrorCode_whenHandlerProvidesIt() throws IOException {
     // handler 经 output['errorCode'] 显式给的协议/业务码(如 CANCELLED)必须原样透传,不被 EXECUTION_FAILED 覆盖。
     Map<String, Object> body =
         captureReports(SdkTaskResult.cancelled(Map.of("offset", 42))).get(0);

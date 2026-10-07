@@ -24,6 +24,7 @@ import org.mockito.ArgumentCaptor;
  * <p>fixed-rate 在 tick 卡顿(HTTP 5xx 重试 ~3s)后会立刻追发下一轮,内存耗尽 / orchestrator 雪崩。 见
  * docs/archive/analysis/2026-06-02-sdk-code-deep-review.md §3。
  */
+@DisplayName("LeaseRenewalScheduler — 启动调度采用固定延迟而非固定频率")
 class LeaseRenewalSchedulerFixedDelayTest {
 
   private static BatchPlatformClientConfig cfg() {

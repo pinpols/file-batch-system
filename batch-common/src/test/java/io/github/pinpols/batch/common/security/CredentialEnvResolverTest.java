@@ -7,23 +7,27 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import java.util.Map;
 import java.util.function.UnaryOperator;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /** ADR-039 P1 envRef 解析 + fail-fast + 明文兼容期放行。 */
+@DisplayName("CredentialEnvResolver: 环境变量引用解析、缺失快速失败与明文兼容放行")
 class CredentialEnvResolverTest {
 
   private static final UnaryOperator<String> ENV =
       Map.of("DB_PASSWORD", "s3cr3t", "API_TOKEN", "tok-123")::get;
 
   @Test
+  @DisplayName("引用已定义的变量时返回真实值")
   void resolvesEnvRef_whenDefined() {
     assertThat(CredentialEnvResolver.resolve("${DB_PASSWORD}", ENV)).isEqualTo("s3cr3t");
     assertThat(CredentialEnvResolver.resolve("${API_TOKEN}", ENV)).isEqualTo("tok-123");
   }
 
   @Test
+  @DisplayName("引用未定义变量时按未解析凭据错误码快速失败")
   void failsFast_whenEnvRefUndefined() {
     assertThatThrownBy(() -> CredentialEnvResolver.resolve("${MISSING_SECRET}", ENV))
         .isInstanceOf(BizException.class)
@@ -32,6 +36,7 @@ class CredentialEnvResolverTest {
   }
 
   @Test
+  @DisplayName("变量已定义但取值为空时同样快速失败")
   void failsFast_whenEnvRefDefinedButEmpty() {
     UnaryOperator<String> blank = name -> "";
     assertThatThrownBy(() -> CredentialEnvResolver.resolve("${DB_PASSWORD}", blank))
@@ -39,6 +44,7 @@ class CredentialEnvResolverTest {
   }
 
   @ParameterizedTest
+  @DisplayName("非严格整串引用形态原样放行,不误抛异常")
   @ValueSource(
       strings = {
         "hunter2", // 明文
@@ -55,6 +61,7 @@ class CredentialEnvResolverTest {
   }
 
   @Test
+  @DisplayName("入参为空时直接返回空值")
   void returnsNull_whenNull() {
     assertThat(CredentialEnvResolver.resolve(null, ENV)).isNull();
   }

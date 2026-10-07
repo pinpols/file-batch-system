@@ -8,6 +8,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** ADR-037 决策一 — 断点存储 load/save 协议单测。 */
+@DisplayName("InMemorySdkCheckpoint — 内存断点存储的读写协议、任务隔离与防御性拷贝")
 class InMemorySdkCheckpointTest {
 
   @Test

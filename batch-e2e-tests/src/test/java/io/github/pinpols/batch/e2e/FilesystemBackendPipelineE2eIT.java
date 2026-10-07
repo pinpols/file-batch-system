@@ -27,6 +27,7 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import javax.sql.DataSource;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
@@ -60,6 +61,7 @@ import org.springframework.test.context.jdbc.Sql;
 @Tag("e2e")
 @EnabledIfSystemProperty(named = "batch.test.storage.backend", matches = "filesystem")
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
+@DisplayName("本地文件后端的导出主链路:任务成功终态后产物落盘位置、磁盘直读、抽象接口读取与预签名令牌三路结果一致")
 class FilesystemBackendPipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -92,7 +94,8 @@ class FilesystemBackendPipelineE2eIT extends AbstractIntegrationTest {
   }
 
   @Test
-  void exportJobRunsOnFilesystemBackendAndArtifactIsReadableFromDiskStoreAndPresign()
+  @DisplayName("本地文件后端导出任务到达成功终态,产物落在根目录对应桶与键下,磁盘直读、抽象接口读取与预签名令牌校验结果一致")
+  void shouldReadExportedArtifactViaDiskStoreAndPresignToken_whenFilesystemBackendSelected()
       throws Exception {
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
     seedSettlementData(businessJdbc);

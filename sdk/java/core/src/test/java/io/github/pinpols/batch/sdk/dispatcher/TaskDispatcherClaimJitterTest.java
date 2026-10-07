@@ -14,6 +14,7 @@ import org.junit.jupiter.params.provider.CsvSource;
  *
  * <p>见 wire-protocol §C。
  */
+@DisplayName("TaskDispatcher 认领退避抖动 — 抖动区间、随机性与极端入参收敛")
 class TaskDispatcherClaimJitterTest {
 
   @ParameterizedTest(name = "base={0}ms attempt={1} → delay ∈ [exp, exp*1.1)")

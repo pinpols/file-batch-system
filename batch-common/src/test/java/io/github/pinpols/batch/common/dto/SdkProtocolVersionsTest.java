@@ -6,11 +6,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** {@link SdkProtocolVersions} 解析 + 支持判定单元测试。 */
+@DisplayName("SDK 协议版本: 主版本号归一化与受支持范围判定")
 class SdkProtocolVersionsTest {
 
   @Test
   @DisplayName("normalizeMajor: 容忍 v 前缀 / 小数尾 / rc 后缀,归一为 v<major>")
-  void normalizeMajorTolerant() {
+  void shouldNormalizeToCanonicalMajor_whenVersionTextHasNoise() {
     assertThat(SdkProtocolVersions.normalizeMajor("v1")).isEqualTo("v1");
     assertThat(SdkProtocolVersions.normalizeMajor("V2")).isEqualTo("v2");
     assertThat(SdkProtocolVersions.normalizeMajor("v2-rc")).isEqualTo("v2");
@@ -20,7 +21,7 @@ class SdkProtocolVersionsTest {
 
   @Test
   @DisplayName("normalizeMajor: 空 / 无前导数字 → null")
-  void normalizeMajorUnparseable() {
+  void shouldReturnNull_whenMajorCannotBeParsed() {
     assertThat(SdkProtocolVersions.normalizeMajor(null)).isNull();
     assertThat(SdkProtocolVersions.normalizeMajor("")).isNull();
     assertThat(SdkProtocolVersions.normalizeMajor("  ")).isNull();
@@ -30,7 +31,7 @@ class SdkProtocolVersionsTest {
 
   @Test
   @DisplayName("isSupportedMajor: v1/v2 支持;v3 / 无法解析 / null 不支持")
-  void isSupportedMajor() {
+  void shouldJudgeSupport_whenMajorIsOneTwoOrUnknown() {
     assertThat(SdkProtocolVersions.isSupportedMajor("v1")).isTrue();
     assertThat(SdkProtocolVersions.isSupportedMajor("v2")).isTrue();
     assertThat(SdkProtocolVersions.isSupportedMajor("1.0.0")).isTrue();

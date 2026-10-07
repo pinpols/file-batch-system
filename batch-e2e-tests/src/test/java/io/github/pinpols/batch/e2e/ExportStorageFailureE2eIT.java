@@ -18,6 +18,7 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import javax.sql.DataSource;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
@@ -58,6 +59,7 @@ import org.springframework.test.context.jdbc.Sql;
     })
 @Tag("e2e")
 @EnabledIf("s3BackendActive")
+@DisplayName("导出链路对象存储故障端到端容错:对象存储不可达时按固定重试预算反复重排队,预算耗尽后分片进入死信终态")
 class ExportStorageFailureE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -83,7 +85,8 @@ class ExportStorageFailureE2eIT extends AbstractIntegrationTest {
   private DataSource businessDataSource;
 
   @Test
-  void exportToUnreachableStorageExhaustsRetriesAndDeadLetters() {
+  @DisplayName("对象存储不可达时导出任务反复重排队,重试预算耗尽后该分片写入死信记录,链路以死信终态收敛")
+  void shouldDeadLetterPartition_whenStorageUnreachableAndRetryBudgetExhausted() {
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
     Long batchId = businessJdbc.queryForObject("""
             insert into biz.settlement_batch (
