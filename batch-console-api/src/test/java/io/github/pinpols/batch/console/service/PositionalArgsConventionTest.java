@@ -93,11 +93,11 @@ class PositionalArgsConventionTest {
       "batch-common",
       "batch-trigger",
       "batch-orchestrator",
-      "batch-worker-core",
-      "batch-worker-import",
-      "batch-worker-export",
-      "batch-worker-process",
-      "batch-worker-dispatch",
+      "batch-worker/core",
+      "batch-worker/import",
+      "batch-worker/export",
+      "batch-worker/process",
+      "batch-worker/dispatch",
       "batch-console-api");
 
   /**
@@ -122,9 +122,12 @@ class PositionalArgsConventionTest {
     for (String module : SCAN_MODULES) {
       for (String scope : SCAN_SCOPES) {
         Path root = REPO_ROOT.resolve(module).resolve("src").resolve(scope).resolve("java");
-        if (!Files.isDirectory(root)) {
-          continue;
-        }
+        assertThat(root)
+            .as(
+                "扫描目录必须存在：%s（worker 的目录是 batch-worker/<name>，不是 artifactId"
+                    + " batch-worker-<name>；路径写错会静默漏扫整段模块）",
+                root)
+            .isDirectory();
         try (Stream<Path> stream = Files.walk(root)) {
           stream
               .filter(p -> p.toString().endsWith(".java"))
@@ -145,9 +148,12 @@ class PositionalArgsConventionTest {
     for (String module : SCAN_MODULES) {
       for (String scope : SCAN_SCOPES) {
         Path root = REPO_ROOT.resolve(module).resolve("src").resolve(scope).resolve("java");
-        if (!Files.isDirectory(root)) {
-          continue;
-        }
+        assertThat(root)
+            .as(
+                "扫描目录必须存在：%s（worker 的目录是 batch-worker/<name>，不是 artifactId"
+                    + " batch-worker-<name>；路径写错会静默漏扫整段模块）",
+                root)
+            .isDirectory();
         try (Stream<Path> stream = Files.walk(root)) {
           stream
               .filter(p -> p.toString().endsWith(".java"))

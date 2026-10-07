@@ -262,7 +262,7 @@ class ProcessStageSkipCrashResumeIntegrationTest {
           stage == ProcessStage.COMPUTE ? SqlTransformComputePlugin.PLUGIN_ID : "PROCESS_" + stage;
       Map<String, Object> stepParams =
           stage == ProcessStage.COMPUTE ? computeStepParams() : Map.of();
-      steps.add(PipelineStepDefinition.builder()
+      PipelineStepDefinition definition = PipelineStepDefinition.builder()
           .id((long) order)
           .pipelineDefinitionId(1L)
           .stepCode("PROCESS_" + stage.name())
@@ -275,7 +275,8 @@ class ProcessStageSkipCrashResumeIntegrationTest {
           .retryPolicy("NONE")
           .retryMaxCount(0)
           .enabled(true)
-          .build());
+          .build();
+      steps.add(definition);
       if (stage == lastStage) {
         break;
       }

@@ -102,8 +102,7 @@ class DeliverDispatchStepTest {
   void execute_incrementsAttemptWhenRecordAlreadyExists() {
     Map<String, Object> fileRecord = Map.of("id", 10L);
     Map<String, Object> channelConfig = Map.of("channel_type", "LOCAL");
-    when(fileDispatchRepository.loadLatestDispatchRecord("t1", 10L, "CH1"))
-        .thenReturn(Map.of("id", 5L));
+    when(fileDispatchRepository.existsLatestDispatchRecord("t1", 10L, "CH1")).thenReturn(true);
     when(dispatchChannelGateway.dispatch(any())).thenReturn(successResult());
     when(fileDispatchRepository.markSent(any(), any(), any(), any(), any(), any()))
         .thenReturn(1);
@@ -156,7 +155,7 @@ class DeliverDispatchStepTest {
   void execute_failsWhenInsertReturnsZero() {
     Map<String, Object> fileRecord = Map.of("id", 10L);
     Map<String, Object> channelConfig = Map.of("channel_type", "LOCAL");
-    when(fileDispatchRepository.loadLatestDispatchRecord(any(), any(), any())).thenReturn(Map.of());
+    when(fileDispatchRepository.existsLatestDispatchRecord(any(), any(), any())).thenReturn(false);
     when(fileDispatchRepository.insertDispatchRecord(any())).thenReturn(0);
 
     DispatchJobContext context = buildContext(fileRecord, channelConfig);
@@ -198,7 +197,7 @@ class DeliverDispatchStepTest {
   }
 
   private void setupMocksForNewRecord() {
-    when(fileDispatchRepository.loadLatestDispatchRecord(any(), any(), any())).thenReturn(Map.of());
+    when(fileDispatchRepository.existsLatestDispatchRecord(any(), any(), any())).thenReturn(false);
     when(fileDispatchRepository.insertDispatchRecord(any())).thenReturn(1);
   }
 

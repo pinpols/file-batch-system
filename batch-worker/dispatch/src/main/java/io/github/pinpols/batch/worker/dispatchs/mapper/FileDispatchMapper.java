@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.dispatchs.mapper;
 
+import io.github.pinpols.batch.worker.dispatchs.domain.PendingReceiptPollRow;
 import java.util.List;
 import java.util.Map;
 
@@ -10,7 +11,7 @@ public interface FileDispatchMapper {
 
   Map<String, Object> selectChannelConfig(Map<String, Object> params);
 
-  Map<String, Object> selectLatestDispatchRecord(Map<String, Object> params);
+  Long selectLatestDispatchRecordId(Map<String, Object> params);
 
   int insertDispatchRecord(Map<String, Object> params);
 
@@ -24,5 +25,5 @@ public interface FileDispatchMapper {
 
   int markCompensated(Map<String, Object> params);
 
-  List<Map<String, Object>> listPendingReceiptPolls(Map<String, Object> params);
+  List<PendingReceiptPollRow> listPendingReceiptPolls(Map<String, Object> params);
 }

@@ -149,6 +149,7 @@ return 位置因每个项目语义不同(短工厂方法合理 inline),不全局
 - Controller、Application Service 的固定请求/响应字段必须使用独立 `record` / DTO；新增字段应先修改 DTO，再同步 OpenAPI 和前端类型。
 - `Map<String, Object>` 只允许出现在确实动态的边界：插件参数、用户自定义 metadata、状态名作为 key 的聚合维度、透传的外部扩展字段。
 - MyBatis 临时行映射可以阶段性使用 Map，但不得直接作为 Console 固定响应或核心服务契约；迁移时在 mapper 与 DTO 之间增加 typed view。
+- 行映射迁移为不可变 `record` 时，用显式 `<resultMap>` + `<constructor>`（`<idArg>` / `<arg column=... javaType=...>`）声明构造器参数，不依赖列序或参数名自动映射；`resultType="map"` 只保留在尚未迁移的查询上。
 - 兼容历史 wire 的 `from(Map)` 转换器可以保留，但生产调用链应优先使用 typed view，兼容入口只由旧数据/旧测试使用。
 
 ### 1.3 长方法与参数密度

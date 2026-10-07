@@ -36,15 +36,6 @@ public class PlatformPipelineDefinitionRepository {
     return config == null ? Map.of() : config;
   }
 
-  public Map<String, Object> loadChannelConfig(String tenantId, String channelCode) {
-    if (!Texts.hasText(tenantId) || !Texts.hasText(channelCode)) {
-      return Map.of();
-    }
-    Map<String, Object> config =
-        mapper.selectChannelConfig(params(TENANT_ID, tenantId, "channelCode", channelCode));
-    return config == null ? Map.of() : config;
-  }
-
   public Long findPipelineDefinition(String tenantId, String jobCode) {
     if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode)) {
       return null;
@@ -66,7 +57,7 @@ public class PlatformPipelineDefinitionRepository {
     }
     List<PipelineStepDefinition> definitions = new ArrayList<>(rows.size());
     for (Map<String, Object> row : rows) {
-      definitions.add(PipelineStepDefinition.builder()
+      PipelineStepDefinition definition = PipelineStepDefinition.builder()
           .id(toLong(row.get(ID)))
           .pipelineDefinitionId(toLong(row.get("pipeline_definition_id")))
           .stepCode(stringValue(row.get("step_code")))
@@ -79,7 +70,8 @@ public class PlatformPipelineDefinitionRepository {
           .retryPolicy(stringValue(row.get("retry_policy")))
           .retryMaxCount(toInteger(row.get("retry_max_count")))
           .enabled(Boolean.TRUE.equals(row.get("enabled")))
-          .build());
+          .build();
+      definitions.add(definition);
     }
     return Collections.unmodifiableList(definitions);
   }
