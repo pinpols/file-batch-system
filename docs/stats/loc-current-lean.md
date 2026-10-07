@@ -1,19 +1,19 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `4b9b33d70`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `2fc83ef0c`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,722 | 499,204 | 256,151 | 51.3% |
+| 4,723 | 498,994 | 255,940 | 51.3% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| prod | 2,740 | 250,639 | 114,702 | 45.8% |
-| test | 1,211 | 181,433 | 99,607 | 54.9% |
+| prod | 2,741 | 250,654 | 114,632 | 45.7% |
+| test | 1,211 | 181,208 | 99,466 | 54.9% |
 | script | 625 | 51,383 | 31,917 | 62.1% |
 | config | 53 | 8,156 | 5,855 | 71.8% |
 | infra-config | 32 | 5,332 | 3,901 | 73.2% |
@@ -23,11 +23,11 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,481 | 364,834 | 188,490 | 51.7% |
+| Java | 3,482 | 364,625 | 188,279 | 51.6% |
 | Shell | 196 | 29,922 | 23,311 | 77.9% |
 | Python | 233 | 33,544 | 17,014 | 50.7% |
 | YAML | 95 | 12,437 | 9,417 | 75.7% |
-| XML | 178 | 21,421 | 6,637 | 31.0% |
+| XML | 178 | 21,420 | 6,637 | 31.0% |
 | TypeScript | 37 | 6,632 | 3,124 | 47.1% |
 | Rust | 23 | 8,423 | 2,835 | 33.7% |
 | Properties | 5 | 2,887 | 2,361 | 81.8% |
@@ -56,7 +56,7 @@
 | `scripts/local/be-acceptance.sh` | script | Shell | 612 | 479 |
 | `pom.xml` | config | XML | 764 | 455 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | prod | Java | 1,028 | 451 |
-| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultFileGovernanceServiceTest.java` | test | Java | 790 | 437 |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultFileGovernanceServiceTest.java` | test | Java | 793 | 438 |
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleConfigApplicationServiceTest.java` | test | Java | 610 | 428 |
 | `scripts/local/pre-push-sdk-checks.sh` | script | Shell | 558 | 424 |
 
