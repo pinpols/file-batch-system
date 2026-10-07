@@ -33,9 +33,9 @@
         -Dusers.peak=50
         -Dduration.seconds=180
     -->
-    <artifactId>batch-load-tests</artifactId>
+    <artifactId>load-tests</artifactId>
     <packaging>jar</packaging>
-    <name>batch-load-tests</name>
+    <name>load-tests</name>
     <description>Gatling load tests and capacity baseline for batch-platform</description>
 
     <properties>
