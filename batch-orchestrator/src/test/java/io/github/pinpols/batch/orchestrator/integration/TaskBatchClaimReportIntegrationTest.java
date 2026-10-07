@@ -1,11 +1,14 @@
 package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
+import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.application.engine.VerifierFailureOutboxService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimBatchCommand;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimBatchResult;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimItemCommand;
@@ -16,6 +19,7 @@ import io.github.pinpols.batch.orchestrator.application.service.task.TaskControl
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskReportItemResult;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControllerApplicationService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -33,6 +37,7 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,6 +46,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.IllegalTransactionStateException;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * ADR-046 Phase 2 端点级集成测试(真 PG):{@code claim-batch}(2.1)+ {@code report-batch}(2.2)。
@@ -87,6 +95,12 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
   private WorkerRegistryCache workerRegistryCache;
+
+  @Autowired
+  private PlatformTransactionManager transactionManager;
+
+  @Autowired
+  private VerifierFailureOutboxService verifierFailureOutboxService;
 
   @BeforeEach
   void refreshWorkers() {
@@ -253,4 +267,87 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
   }
 
   private record LaunchedTask(LaunchSeed seed, Long instanceId, Long taskId, Long partitionId) {}
+
+  @Test
+  @DisplayName("成功回报中的校验失败只写软告警，空元素不改变事件序号且重复回报不重复写入")
+  void shouldPersistSoftFailuresOnce_whenSuccessfulReportIsRepeated() {
+    LaunchedTask launched = launchOne(8);
+    TaskOutcomeCommand report = claimedReport(launched);
+
+    taskExecutionService.applyTaskOutcome(report);
+    taskExecutionService.applyTaskOutcome(report);
+
+    assertThat(jobTaskMapper.selectById(TENANT, launched.taskId()).getTaskStatus())
+        .isEqualTo(TaskStatus.SUCCESS.code());
+    assertThat(verifierEventCount(launched)).isEqualTo(2L);
+    List<String> keys = jdbcTemplate.queryForList(
+        "SELECT event_key FROM batch.outbox_event WHERE tenant_id = ? AND aggregate_id = ? "
+            + "AND event_type = 'verifier.failure.v1' ORDER BY event_key",
+        String.class,
+        TENANT,
+        launched.instanceId());
+    assertThat(keys)
+        .containsExactly(
+            TENANT + ":verifier:" + launched.taskId() + ":COUNT:1",
+            TENANT + ":verifier:" + launched.taskId() + ":COUNT:2");
+  }
+
+  @Test
+  @DisplayName("回报事务后续失败时真实数据库同时回滚任务终态、分区状态和校验告警")
+  void shouldRollbackTaskAndSoftFailuresTogether_whenReportTransactionFails() {
+    LaunchedTask launched = launchOne(9);
+    TaskOutcomeCommand report = claimedReport(launched);
+    TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+
+    assertThatThrownBy(() -> transaction.executeWithoutResult(status -> {
+          taskExecutionService.applyTaskOutcome(report);
+          assertThat(verifierEventCount(launched)).isEqualTo(2L);
+          throw new IllegalStateException("failure after outcome writes");
+        }))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("failure after outcome writes");
+
+    assertThat(jobTaskMapper.selectById(TENANT, launched.taskId()).getTaskStatus())
+        .isEqualTo(TaskStatus.RUNNING.code());
+    assertThat(jobPartitionMapper.selectById(TENANT, launched.partitionId()).getPartitionStatus())
+        .isEqualTo(PartitionStatus.RUNNING.code());
+    assertThat(verifierEventCount(launched)).isZero();
+  }
+
+  @Test
+  @DisplayName("旧入口与 typed 入口都必须持有事务，不能因共用私有发布逻辑绕过守护")
+  void shouldRejectBothVerifierEntryPoints_whenTransactionIsAbsent() {
+    assertThatThrownBy(() -> verifierFailureOutboxService.writeVerifierFailures(null, null))
+        .isInstanceOf(IllegalTransactionStateException.class);
+    assertThatThrownBy(
+            () -> verifierFailureOutboxService.writeVerifierFailures(null, null, List.of()))
+        .isInstanceOf(IllegalTransactionStateException.class);
+  }
+
+  private TaskOutcomeCommand claimedReport(LaunchedTask launched) {
+    assertThat(taskExecutionService.assignWorker(
+            TENANT, launched.taskId(), launched.seed().workerCode()))
+        .isNotNull();
+    JobPartitionEntity partition = jobPartitionMapper.selectById(TENANT, launched.partitionId());
+    return TaskOutcomeCommand.builder()
+        .tenantId(TENANT)
+        .taskId(launched.taskId())
+        .workerId(launched.seed().workerCode())
+        .success(true)
+        .partitionInvocationId(partition.getCurrentInvocationId())
+        .verifierFailures(Arrays.asList(
+            null,
+            Map.of("code", "COUNT", "evidence", Map.of("actual", 1)),
+            Map.of("code", "COUNT", "message", "second verifier")))
+        .build();
+  }
+
+  private long verifierEventCount(LaunchedTask launched) {
+    return jdbcTemplate.queryForObject(
+        "SELECT count(*) FROM batch.outbox_event WHERE tenant_id = ? AND aggregate_id = ? "
+            + "AND event_type = 'verifier.failure.v1'",
+        Long.class,
+        TENANT,
+        launched.instanceId());
+  }
 }

@@ -1,6 +1,6 @@
 # Java 设计表达与可审查性改进方案（2026-10-08）
 
-> 状态：Planned。方案已登记，代码实施尚未开始；本次仅做抽样静态核查，不代表全工程审计或运行验收完成。
+> 状态：LocalImplemented。阶段 0–5 的代码和定向本地验证已实施；CI Full Gate、隔离 sim 与性能复测尚未执行，因此不标记为端到端验收完成。
 >
 > 目标：让维护者更容易读懂业务约束、依赖关系和正确性依据，而不是增加设计模式、减少行数或模仿某个开源项目的排版。
 >
@@ -42,14 +42,14 @@
 - 租户校验、RLS、鉴权、幂等键、CAS、advisory lock 和终态语义。
 - `@Transactional` 入口、传播级别、回滚规则、Outbox 顺序和 after-commit 行为。
 - Worker claim/report、Kafka offset、lease、取消、checkpoint 和资源关闭顺序。
-- 公开 Java 签名、HTTP JSON 字段、缺省/空值行为、错误码和动态 workflow 输出。
+- 当前平台与 SDK 的 wire 字段、缺省语义、错误码和动态 workflow 输出。SDK 尚未上线，注册入口与 DTO 构造 API 可按新契约收敛；不承诺兼容本次发布前的 SDK 调用方。应用内部、非发布 SPI 的测试装配构造器也按阶段 2 核对后迁出。
 - 默认配置、数据库结构、依赖版本、格式化风格和模块依赖方向。
 
 若其中任何一项确实需要变化，停止按纯重构推进，拆成独立行为或兼容性变更并补充设计及测试。
 
 ## 3. 首批核查清单
 
-以下是当前工作区源码抽样事实，不是已发现的运行故障。代码可能被并行任务修改，实施前须重新确认。
+以下是方案建立时的源码事实，不是已发现的运行故障。实施后的结果见 §8、§10；后续扫描不应把本表当作未修复清单。
 
 | 编号 | 位置 | 核查事实 | 裁定 |
 |---|---|---|---|
@@ -91,10 +91,10 @@
 
 拆成两个独立批次：
 
-1. Java SDK 注册载荷：优先复用现有请求类型；若字段不匹配，在 SDK 所属传输边界定义类型。保留指纹字段缺失、`taskTypes` 空列表省略、时间字符串、能力标签和协议版本语义。
+1. Java SDK 注册载荷：优先复用现有请求类型；若字段不匹配，在 SDK 所属传输边界定义类型。注册 API 尚未发布，可删除过渡 Map/构造入口；仍须满足当前服务端 wire 字段，保留指纹字段缺失、`taskTypes` 空列表省略、ISO date-time、能力标签和协议版本语义。
 2. verifier failure 元素：固定 code/message/evidence 结构，明确 evidence 中仍允许动态数据；保留原列表顺序、null/empty 和每项 Outbox 事件语义。
 
-**完成条件**：使用实际 HTTP 客户端的序列化配置比较前后 JSON，而不是仅比较 `new ObjectMapper()`；核对请求/响应两端和持久化事件。若涉及 OpenAPI 或共享 wire，同步契约与所有受影响语言消费者，不能只完成 Java 编译。
+**完成条件**：使用实际 HTTP 客户端检查序列化后的字段类型和值是否符合当前 OpenAPI，而不是只比较 DTO 属性或 `new ObjectMapper()` 的结果；无需保持旧 Map JSON 的字节级兼容。核对请求/响应两端和持久化事件。若涉及 OpenAPI 或共享 wire，同步契约与所有受影响语言消费者，不能只完成 Java 编译。
 
 ### 阶段 4：任务结果不变量建模（JD-5）
 
@@ -163,14 +163,21 @@
 
 | 阶段 | 当前状态 | 完成证据 |
 |---|---|---|
-| 0 调用图与行为基线 | 待实施；已完成首批源码抽样 | 完整调用图与基线测试尚未建立 |
-| 1 注释表达 | 待实施 | — |
-| 2 测试装配 | 待实施 | — |
-| 3 固定载荷 | 待实施 | — |
-| 4 结果建模 | 待实施 | — |
-| 5 内聚与验收 | 待实施 | — |
+| 0 调用图与行为基线 | 已完成 | §10.1 调用与契约范围；实际 HTTP 字段测试、旧字段组合测试 |
+| 1 注释表达 | 已完成 | `PreprocessStep` 配置、对象读取、错误序列化注释重新归属 |
+| 2 测试装配 | 已完成 | 两个 test fixture；真实 Spring 协作者装配、唯一构造器、指标初始化与启动失败测试 |
+| 3 固定载荷 | 已完成 | SDK 使用已有 `RegisterRequest`；verifier 固定元素在内部转换，开放 evidence 与原摘要保留 |
+| 4 结果建模 | 已完成 | 内部 `TaskExecutionResult.Success/Failure`；旧 record/Builder/JSON 保留；真 PG 回滚、重复报告与并发 IT |
+| 5 内聚与验收 | 代码与本地定向验证完成；发布验收待执行 | 删除两层生产依赖容器；进度协作者直接注入实际所需依赖；静态/PMD/架构检查。CI、sim、性能证据不冒充已通过 |
 
 完成必须满足：候选有实现或明确保留理由；外部契约与关键顺序不变；对应测试与实际 CI 通过；高风险路径具备真实环境验证记录。只写了方案、编译成功或静态扫描无候选均不算代码治理完成。
+
+### 8.1 尚未完成的发布验收
+
+- 本地三个职责提交已建立，尚未推送；因此还没有本次 revision 的 PR checks / main Full Gate 结果。
+- 未运行 `sim-harness all`。该入口会初始化租户数据、切换 Worker 配置和重启服务，不能直接作用于当前常驻批量任务环境。后续使用隔离验证栈，在部署本次构建后验证 Import、report、重投与失败推进；IT 不替代 sim。
+- 内部结果转换增加了小对象分配，未测线上吞吐或 10w 性能，不能声称性能提升或无回退。发布前按既有可比负载口径复测，不更换验收指标。
+- Sonar 扫描和本地静态结果不等于 CI 通过；扫描结果与执行记录见 §10.3–10.4。最后一次扫描按用户要求停止，不具备最终版本改动行问题清零的扫描证据。
 
 ## 9. 学习参考
 
@@ -204,3 +211,78 @@
 - [JUnit 用户指南](https://junit.org/junit5/docs/current/user-guide/)：参考测试组织与扩展点，沿用仓库中文 `@DisplayName` 和已有 fixture 规则。
 
 这些是学习入口，不是依赖升级或照搬设计模式的实施要求。
+
+## 10. 实施记录（2026-10-08）
+
+### 10.1 调用、类型与兼容边界
+
+| 候选 | 生产与测试消费关系 | 实施 / 保留裁定 |
+|---|---|---|
+| `PreprocessStep` | 生产由 Spring 注入；三个测试调用便利构造器，一个范围切片测试原本就显式注入对象源 | 便利装配迁入 `PreprocessStepFixture`；生产只保留容器装配。流程、spool/range、租户归属和解码逻辑不移动 |
+| Task Outcome 装配 | 生产由 Spring 注入现有窄协作者；两个测试类消费原三参数测试构造器 | `TaskOutcomeServiceFixture` 接管测试装配。生产删除 `DefaultTaskOutcomeCollaborators` / `TaskOutcomeAuxiliaryCollaborators`；不是把十四个依赖换成另一个生产容器 |
+| instance progressor | 原依赖容器实际只提供 lifecycle mapper 与 failure classifier | 直接注入这两个依赖及已有终态、DAG、父任务和 workflow 协作者；不新增转发壳或接口 |
+| SDK register | `BatchPlatformClient` → `PlatformHttpClient` → `/internal/workers/register` → 平台 DTO | 复用 SDK 自有 `RegisterRequest` 并增加 Builder；删除未发布的 Map 注册入口与过渡构造器，使用单一 typed 方法；SDK 不依赖平台/Spring |
+| verifier | Worker/内部请求 → 原 `TaskOutcomeCommand` → 任务摘要、成功回报 Outbox | wire 仍是原列表，内部转 `VerifierFailure`；保留列表 null 元素的位置和事件 key 序号，数值 code/message 按原规则转字符串；evidence、outputs 和摘要扩展字段仍开放 |
+| 结果分支 | 原 command 兼容旧输入，入口转换后选择成功或失败内部类型 | 不增加请求拒绝规则；成功仍允许软校验失败，旧无关字段仍保留在 command 与原持久化位置；新 accessor 不进入 JSON |
+| 公共构造器 | 两个应用模块不是 SDK 的 Central 发布范围，已移出的便利入口不是声明的插件 SPI；SDK 注册入口也尚未发布 | 仓库内调用已迁移；应用与未发布注册 DTO 的旧构造/API 形态不作为兼容约束。对外仍遵守当前服务端协议 |
+| 正向样例 | `FairShareGroupAdmissionGuard`、现有 finalizer / DAG / 节点记录协作者 | 保留已有职责与方法；不因形状或行数重复重构 |
+
+事务入口、传播级别、tenant/invocation 校验、instance advisory lock、task/partition CAS、重试治理、Outbox 和 after-commit 顺序保持原位。没有数据库、默认配置、依赖版本或 OpenAPI 变更，配对前端不需要重新生成类型。
+
+### 10.2 资源所有权
+
+| 资源 | 创建者 | 使用者 | 关闭者 | 部分启动 / 清理失败 |
+|---|---|---|---|---|
+| ObjectStore、平台仓储、业务 ObjectMapper | Spring 配置 | `PreprocessStep` / object source | 原容器生命周期 | 测试 fixture 借用传入资源，不重复创建或关闭共享 store |
+| 下载流、spool 文件 | 原 object source / preprocess 路径 | preprocess / parse | 原 try-with-resources、pipeline 清理路径 | 沿用原异常与清理逻辑；本次未改流关闭、失败删除或范围回退 |
+| Counter、Timer | 服务 `@PostConstruct` 注册到注入 registry | Task Outcome | registry 所属容器 | 未解析的派发依赖仍启动失败；测试 fixture 显式调用同一初始化方法，不另建 registry |
+| SDK HTTP/Kafka/调度资源 | 原 client 配置与启动路径 | `BatchPlatformClient` | 原 stop / 启动失败回滚 | 本次只换注册载荷组装；生命周期不改，以原启动/回滚测试验证 |
+| typed 结果、verifier 列表 | command 边界转换 | Outcome / Outbox | JVM 回收 | 无线程、连接或文件生命周期；不更改传入 Map 的字段或关闭任何借用资源 |
+
+### 10.3 本地执行证据
+
+基线：`origin/main` `0096a6876c046052257afd548cad99fd282bb0db`。本地职责提交为 `c12b62873`（Import）、`78b02eb57`（SDK）、`8ed62eb37`（Orchestrator）。测试使用 Maven Wrapper 与 `-am`，不重启常驻应用。以下数量来自实际执行输出，不累加同一测试的重跑次数。
+
+| 范围 | 执行内容 | 结果 |
+|---|---|---|
+| Import | wiring、encoding、object load、KMS decrypt、range slice 五类定向测试 | 29 个通过，0 失败、0 跳过；对象加载使用真实测试存储 |
+| Orchestrator | Outcome、verifier、summary、state policy、结果建模、Controller、wiring、四类架构守护、SDK wire 映射 | 71 个通过，0 失败、0 跳过 |
+| 真 PG IT | invocation fence、batch claim/report、outcome/reclaim deadlock、job node dispatch | 事务入口收口后 11 个通过，0 失败、0 跳过；新增 verifier 重复报告幂等、同事务回滚及新旧入口无事务拒绝三条验证；内部空集合归一化后的定向复验另列下方 |
+| 补偿路径 | 失败恢复真 PG IT、补偿服务与过期命令对账器 | 17 个通过，0 失败、0 跳过；中途失败后再次提交恢复成功 |
+| SDK core 全量（旧注册入口收敛前） | startup、HTTP、共享 fixture、请求契约及全部 core 测试 | 467 个执行，453 个通过、14 个跳过；13 个 fixture 非适用项与 1 个外部 HE matrix opt-in，不计为通过 |
+| SDK 最终定向复验 | 移除未发布注册 Map/构造入口后，startup、实际 HTTP 注册及请求契约测试 | 20 个执行，19 个通过、1 个外部 HE matrix opt-in 跳过；没有在此变更后重跑 core 全量 |
+| SDK 关联模块 | spring starter 与 testkit 全量测试（注册入口收敛前） | starter 7 个、testkit 2 个通过；不计为最终 SDK 全量复验 |
+| PMD | import、orchestrator、SDK core 及 `-am` 依赖闭包 | 通过；没有新增 suppression 或放宽规则 |
+| Spotless | 仅本轮修改和新增 Java 文件 | 通过；没有全工程格式化 |
+| 静态治理 | 依赖/直连边界、Java 契约、构造注入、可读性、日志、注释和 suppression 登记 | 通过；全工程可读性清单刷新；不将只比较已提交 diff 的检查当作工作区覆盖 |
+
+定向测试日志为 `/tmp/bfs-java-design-import.log`、`/tmp/bfs-java-design-import-wiring.log`、`/tmp/bfs-java-design-orchestrator.log`、`/tmp/bfs-java-design-pg-final.log`、`/tmp/bfs-java-design-compensation.log`、`/tmp/bfs-java-design-sdk-reactor.log`；测试的 Testcontainers 使用独立依赖，不重置长期运行的本地租户库。
+
+### 10.4 Sonar 收口
+
+过程扫描 `reports/sonar/2026-10-08_06-54-52/` 识别 3 个改动行问题（S6809 一项、S3358 两项），热点为 0。未将这轮结果算作通过；处理如下：
+
+- 新旧 verifier 公开入口各自保留 `MANDATORY`，共同调用无事务注解的私有发布方法，不再通过同类调用事务方法；新增真实 Spring/PG 上下文测试证明两个入口无事务都拒绝。
+- verifier 转换先处理 null 列表，再转换单项；HTTP 客户端先归一化请求体，再选择序列化策略。消除嵌套三元，不改变空值、时间和事件语义。
+- 修复后的定向测试、SDK 全量及真 PG IT 已通过。没有修改扫描规则或增加 suppression 来隐藏问题；扫描与测试分别记录，不互相替代。
+- 第二轮 `reports/sonar/2026-10-08_07-14-05/` 确认上述三项消失，但新增 S1168 一项。处理为仅将内部 `VerifierFailure.fromWire(null)` 归一化到空集合；原 command、HTTP JSON 和持久化摘要仍保留 null/empty 区别，列表中的 null 元素位置仍保留。该内部方法随本轮新建，不是 SDK 公开兼容入口。
+- 该归一化后复跑结果转换、verifier 单测及 batch claim/report 真 PG IT：14 个通过（9 个单测、5 个 IT），0 失败、0 跳过；日志 `/tmp/bfs-java-design-null-list-final.log`。最终 Spotless/PMD 通过，保持无新增 suppression。
+- 第三次扫描已启动，但按用户“不要复扫”的要求停止，进程退出码为 143，日志 `/tmp/bfs-java-design-sonar-final.log`。S1168 修复已有代码和定向测试证据，但没有修复后的最终 Sonar 结果；不得表述为“Sonar 全部通过”或“最终问题数为 0”。
+
+### 10.5 最终差异复核与交付准备
+
+复核基于 §10.3 的提交版本；Import 与 Orchestrator 生产代码指纹和对应测试一致，SDK 注册入口移除后另外运行最终定向测试。此后没有继续修改 Java 文件。审查范围包含新增测试和 fixture，不只检查已跟踪文件的 diff。
+
+| 清单 | 复核结论 | 验证与限制 |
+|---|---|---|
+| JD-1 注释归属 | 已完成 | 配置与对象源注释对齐；保留专用错误序列化器，不改变运行参数 |
+| JD-2 测试装配 | 已完成 | 测试调用迁入 fixture；生产唯一构造器使用容器协作者；应用内部构造签名改变，不承诺未知外部嵌入代码 ABI |
+| JD-3 SDK 注册 | 已完成 | 未发布的 Map 注册入口与过渡构造器已移除；实际 HTTP 字段、可选字段省略与 ISO 时间格式按当前平台 wire 契约验证 |
+| JD-4 verifier | 已完成 | 类型化只在内部；原 wire/摘要保留 null、空集合与扩展字段；null 元素仍保留事件序号；内部缺失列表归一化为空集合 |
+| JD-5 结果建模 | 已完成 | 成功、失败专属字段分离；原 command 保留兼容字段，不收紧输入；成功校验失败仍为软告警 |
+| JD-6 协作者内聚 | 代码与定向本地验证完成 | 删除生产依赖容器，复用原窄协作者；事务入口、实例锁、CAS、重试、Outbox 和 after-commit 顺序未改；整体验收尚未完成 |
+| JD-7 正向样例 | 按计划保留 | 不调整已具备业务谓词与职责边界的实现 |
+
+本次差异复核未发现新的阻塞缺陷，不等于保证所有环境无回归。已知残余风险为：内部构造入口兼容范围、结果转换的额外小对象分配，以及尚未执行的 CI、隔离 sim 与性能验收。
+
+按 §7 准备三批交付：Import 注释与测试装配、SDK 注册类型化、Task Outcome 结果与协作者内聚。SDK 与 verifier 不混成同一契约批次。交付时逐批更新 changelog 和暂存树 LOC 快照、核对生成清单及提交门禁；这些交付动作当前尚未执行。准备说明不等于已提交、推送或创建 PR，不授权自动合并。

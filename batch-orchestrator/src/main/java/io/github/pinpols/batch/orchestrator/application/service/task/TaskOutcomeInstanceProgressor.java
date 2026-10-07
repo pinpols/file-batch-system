@@ -18,12 +18,15 @@ import io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusRef;
 import io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusSummary;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateInstanceProgressParam;
 import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionQuery;
+import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleEventMapper;
+import io.github.pinpols.batch.orchestrator.service.failure.FailureClassifier;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -36,33 +39,18 @@ import org.springframework.stereotype.Component;
  * instance advisory lock 后加载并传入权威实例快照，本类不再重复读取同一实例。
  */
 @Component
+@RequiredArgsConstructor
 @Slf4j
 public final class TaskOutcomeInstanceProgressor {
 
   private final OrchestratorJobMappers jobMappers;
   private final OrchestratorWorkflowMappers workflowMappers;
-  private final DefaultTaskOutcomeService.DefaultTaskOutcomeCollaborators collaborators;
+  private final LifecycleEventMapper<Object> lifecycleEventMapper;
+  private final FailureClassifier failureClassifier;
   private final TaskOutcomeTerminalFinalizer terminalFinalizer;
   private final TaskOutcomeDagProgressor dagProgressor;
   private final TaskOutcomeParentTaskSignaler parentTaskSignaler;
   private final TaskOutcomeWorkflowFinalizer workflowFinalizer;
-
-  public TaskOutcomeInstanceProgressor(
-      OrchestratorJobMappers jobMappers,
-      OrchestratorWorkflowMappers workflowMappers,
-      DefaultTaskOutcomeService.DefaultTaskOutcomeCollaborators collaborators,
-      TaskOutcomeTerminalFinalizer terminalFinalizer,
-      TaskOutcomeDagProgressor dagProgressor,
-      TaskOutcomeParentTaskSignaler parentTaskSignaler,
-      TaskOutcomeWorkflowFinalizer workflowFinalizer) {
-    this.jobMappers = jobMappers;
-    this.workflowMappers = workflowMappers;
-    this.collaborators = collaborators;
-    this.terminalFinalizer = terminalFinalizer;
-    this.dagProgressor = dagProgressor;
-    this.parentTaskSignaler = parentTaskSignaler;
-    this.workflowFinalizer = workflowFinalizer;
-  }
 
   void advance(
       TaskOutcomeCommand command,
@@ -147,8 +135,7 @@ public final class TaskOutcomeInstanceProgressor {
         allPartitionsFinished,
         dagContinues,
         TaskOutcomeStatePolicy.isDryRun(jobInstance));
-    String instanceStatus =
-        collaborators.lifecycleEventMapper().map(jobInstance, instanceEvent).toState();
+    String instanceStatus = lifecycleEventMapper.map(jobInstance, instanceEvent).toState();
     if (TaskOutcomeStatePolicy.shouldPromoteTerminalFailure(
         jobInstance.getInstanceStatus(),
         instanceEvent,
@@ -169,10 +156,7 @@ public final class TaskOutcomeInstanceProgressor {
     String instanceFailureClass = TaskOutcomeStatePolicy.isTerminalJobInstanceStatus(instanceStatus)
             && (JobInstanceStatus.FAILED.code().equals(instanceStatus)
                 || JobInstanceStatus.PARTIAL_FAILED.code().equals(instanceStatus))
-        ? collaborators
-            .failureClassifier()
-            .classify(command.failureClass(), null)
-            .code()
+        ? failureClassifier.classify(command.failureClass(), null).code()
         : null;
     int progressUpdated =
         jobMappers.jobInstanceMapper.updateProgress(UpdateInstanceProgressParam.builder()

@@ -142,8 +142,8 @@ class DefaultTaskOutcomeServiceTest {
         triggerRequestMapper);
     OrchestratorWorkflowMappers workflowMappers = new OrchestratorWorkflowMappers(
         workflowNodeMapper, workflowRunMapper, workflowNodeRunMapper);
-    DefaultTaskOutcomeService.DefaultTaskOutcomeCollaborators collaborators =
-        new DefaultTaskOutcomeService.DefaultTaskOutcomeCollaborators(
+    TaskOutcomeServiceFixture.Dependencies collaborators =
+        new TaskOutcomeServiceFixture.Dependencies(
             retryGovernanceService,
             lifecycleEventMapper,
             workflowDagService,
@@ -158,7 +158,7 @@ class DefaultTaskOutcomeServiceTest {
             jobLifecycleMetricsRecorder,
             mock(CountContinuityOutboxService.class),
             mock(org.springframework.context.ApplicationEventPublisher.class));
-    service = new DefaultTaskOutcomeService(jobMappers, workflowMappers, collaborators);
+    service = TaskOutcomeServiceFixture.create(jobMappers, workflowMappers, collaborators);
   }
 
   // ===== recordNodeRunReady =====

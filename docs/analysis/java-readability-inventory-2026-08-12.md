@@ -7,17 +7,17 @@
 
 | 指标 | 数量 |
 |---|---:|
-| 生产 Java 源文件 | 2407 |
+| 生产 Java 源文件 | 2409 |
 | CGLIB 自注入类 | 0 |
-| `Map<String, Object>` 出现次数 | 2014 |
-| 含 Map 的源文件 | 444 |
+| `Map<String, Object>` 出现次数 | 2008 |
+| 含 Map 的源文件 | 446 |
 | public Map 契约候选 | 54 |
 | public Map 契约候选文件 | 35 |
-| `@SuppressWarnings` | 239 |
-| 含 suppression 的源文件 | 180 |
+| `@SuppressWarnings` | 238 |
+| 含 suppression 的源文件 | 179 |
 | `@Configuration` 类 | 48 |
 | 大于等于 700 行的源文件 | 11 |
-| `PMD.ExcessiveParameterList` 显式例外 | 33 |
+| `PMD.ExcessiveParameterList` 显式例外 | 32 |
 
 ## 模块源文件
 
@@ -25,7 +25,7 @@
 |---|---:|
 | `batch-common` | 332 |
 | `batch-console-api` | 965 |
-| `batch-orchestrator` | 550 |
+| `batch-orchestrator` | 552 |
 | `batch-trigger` | 76 |
 | `batch-worker` | 383 |
 | `sdk` | 92 |
@@ -121,4 +121,3 @@
 | `batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchChannelHealthService.java` | 2 |
 | `sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/dispatcher/TaskDispatchMessage.java` | 1 |
 | `sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/task/SdkTaskContext.java` | 4 |
-| `sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/wire/RegisterRequest.java` | 1 |

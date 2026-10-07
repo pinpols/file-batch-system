@@ -29,6 +29,7 @@
 
 ### Changed
 
+- Java 设计表达收口：Import 与 Task Outcome 的纯测试装配迁入 test fixture，生产直接注入已有窄协作者；未发布的 SDK 注册 Map/构造入口收敛为 typed 请求，按当前平台 wire 协议发送。内部区分执行成功/失败与 verifier 软告警，保留动态输出及事务/锁/Outbox 顺序，补齐真实装配、序列化和 PG 回滚/幂等验证。
 - 依赖治理改为持续告警、季度集中盘点和单个人工 PR：关闭 Dependabot 自动版本/安全修复 PR，季度任务只生成多生态 artifact 与 Actions Summary，不再自动创建 Issue/PR；紧急可达漏洞仍走独立快速修复。同步升级本批依赖、固定 CI/镜像供应链输入并刷新 SBOM。
 - 修复独立 `load-tests` 未继承根依赖治理导致的安全版本漂移；压测模块继续保持独立 reactor，但统一复用根 POM 的 Netty、Jackson 与 Logback 修复版本。
 - PR 单元测试按模块边界选择分片并拆分 Worker/Console 长尾；静态门禁拆分 policy、供应链和 Java quality 三路并由稳定 context 聚合；PR CodeQL 使用 Java 无构建与默认高精度查询，main/定时保留手工全量构建和扩展查询；Full/Staging E2E 依据最新实测重排为六片，CI runbook 同步登记耗时基线与回退标准。

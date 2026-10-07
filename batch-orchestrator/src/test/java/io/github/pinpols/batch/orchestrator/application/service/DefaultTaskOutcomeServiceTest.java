@@ -20,9 +20,10 @@ import io.github.pinpols.batch.orchestrator.application.engine.WorkflowTerminalO
 import io.github.pinpols.batch.orchestrator.application.service.governance.RetryGovernanceService;
 import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayTerminalReconciler;
 import io.github.pinpols.batch.orchestrator.application.service.task.DefaultTaskOutcomeService;
-import io.github.pinpols.batch.orchestrator.application.service.task.DefaultTaskOutcomeService.DefaultTaskOutcomeCollaborators;
 import io.github.pinpols.batch.orchestrator.application.service.task.JobInstanceTerminalChildStateReconciler;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeServiceFixture;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeServiceFixture.Dependencies;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionWriter;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
@@ -118,7 +119,7 @@ class DefaultTaskOutcomeServiceTest {
         triggerRequestMapper);
     OrchestratorWorkflowMappers workflowMappers = new OrchestratorWorkflowMappers(
         workflowNodeMapper, workflowRunMapper, workflowNodeRunMapper);
-    DefaultTaskOutcomeCollaborators collaborators = new DefaultTaskOutcomeCollaborators(
+    Dependencies collaborators = new Dependencies(
         retryGovernanceService,
         lifecycleEventMapper,
         workflowDagService,
@@ -137,7 +138,7 @@ class DefaultTaskOutcomeServiceTest {
             io.github.pinpols.batch.orchestrator.application.engine.CountContinuityOutboxService
                 .class),
         mock(org.springframework.context.ApplicationEventPublisher.class));
-    service = new DefaultTaskOutcomeService(jobMappers, workflowMappers, collaborators);
+    service = TaskOutcomeServiceFixture.create(jobMappers, workflowMappers, collaborators);
   }
 
   @Test
