@@ -275,10 +275,17 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("对象存储中的孤儿对象被登记为已接收文件记录,并写入对账审计")
   void shouldReconcileOrphanObjectIntoFileRecord() throws Exception {
-    String objectName = "incoming/" + suffix() + "-orphan.csv";
+    String reconcilePrefix = "incoming/reconcile-it-" + suffix() + "/";
+    String objectName = reconcilePrefix + "orphan.csv";
     putObject(objectName, "alpha,beta\n1,2\n");
 
-    fileGovernanceScheduler.reconcileObjectStorage();
+    String originalPrefix = fileGovernanceProperties.getReconcile().getPrefix();
+    try {
+      fileGovernanceProperties.getReconcile().setPrefix(reconcilePrefix);
+      fileGovernanceScheduler.reconcileObjectStorage();
+    } finally {
+      fileGovernanceProperties.getReconcile().setPrefix(originalPrefix);
+    }
 
     Map<String, Object> reconciled = jdbcTemplate.queryForMap("""
             select file_name,
