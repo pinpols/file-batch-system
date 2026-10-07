@@ -2,15 +2,20 @@ package io.github.pinpols.batch.sdk.client;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.sdk.idempotent.Idempotent;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.time.Duration;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -57,6 +62,20 @@ class BatchPlatformClientStartTest {
     };
   }
 
+  @Idempotent(key = "startup:{taskInstanceId}")
+  private static final class IdempotentHandlerWithoutStore implements SdkTaskHandler {
+
+    @Override
+    public String taskType() {
+      return "idempotent-startup";
+    }
+
+    @Override
+    public SdkTaskResult execute(SdkTaskContext ctx) {
+      return SdkTaskResult.ok();
+    }
+  }
+
   private static void inject(BatchPlatformClient target, String field, Object value)
       throws Exception {
     Field f = BatchPlatformClient.class.getDeclaredField(field);
@@ -101,6 +120,27 @@ class BatchPlatformClientStartTest {
     assertThat(m.healthy()).isFalse();
     assertThat(m.inFlightTaskCount()).isZero();
     assertThat(registerBody.getValue()).containsEntry("maxConcurrent", 4);
+  }
+
+  @Test
+  @DisplayName("注册成功后运行组件构造失败 -> 强制注销并保留原始异常")
+  void shouldDeactivateAndRethrow_whenRuntimeInitializationFailsAfterRegister() throws Exception {
+    BatchPlatformClient client = BatchPlatformClient.builder(cfg())
+        .register(new IdempotentHandlerWithoutStore())
+        .build();
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    when(http.register(any())).thenReturn(null);
+    inject(client, "httpClient", http);
+
+    assertThatThrownBy(client::start)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("no SdkIdempotencyStore");
+
+    verify(http).deactivate(anyString(), any(), any(Duration.class));
+    verify(http).evictIdleConnections();
+    assertThat(field(client, "started")).isEqualTo(false);
+    assertThat(field(client, "dispatcher")).isNull();
+    assertThat(client.isHealthy()).isFalse();
   }
 
   @Test

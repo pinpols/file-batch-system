@@ -60,6 +60,24 @@ class BatchPlatformClientConfigWarnModeTest {
   }
 
   @Test
+  @DisplayName("strict=false 仍拒绝零或负调度周期,避免调度器启动后失败")
+  void shouldRejectNonPositiveSchedulerIntervals_evenWhenStrictFalse() {
+    BatchPlatformClientConfig zeroHeartbeat =
+        valid().strictTimingValidation(false).heartbeatInterval(Duration.ZERO).build();
+    BatchPlatformClientConfig negativeLease = valid()
+        .strictTimingValidation(false)
+        .leaseRenewInterval(Duration.ofMillis(-1))
+        .build();
+
+    assertThatThrownBy(zeroHeartbeat::validate)
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("heartbeatInterval must be > 0");
+    assertThatThrownBy(negativeLease::validate)
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("leaseRenewInterval must be > 0");
+  }
+
+  @Test
   @DisplayName("strict=false 违反 lease > hb×3 → 不抛")
   void shouldWarnWhenStrictFalse_leaseUpperBound() {
     BatchPlatformClientConfig c = valid()
@@ -139,12 +157,11 @@ class BatchPlatformClientConfigWarnModeTest {
   void shouldDowngradeWhenEnvFalse() {
     Map<String, String> env = minimalEnv();
     env.put("BATCH_SDK_STRICT_TIMING", "false");
-    // 配置 hb=500ms 违反规则 → strict=true 时 fromEnv 会抛;strict=false 应当只 WARN
-    env.put("BATCH_SDK_HEARTBEAT_INTERVAL_SECONDS", "0"); // 0s 也违反 hb >= 1s
-    // 注:HEARTBEAT_INTERVAL_SECONDS 只接受秒级 long,这里用 0s 模拟违反
+    // 1s 是调度器可执行的正周期，但违反 lease >= 5s 的运维阈值；WARN 模式仍可降级。
+    env.put("BATCH_SDK_LEASE_RENEW_INTERVAL_SECONDS", "1");
     BatchPlatformClientConfig c = BatchPlatformClientConfig.fromEnv("BATCH_SDK_", env::get);
     assertThat(c.isStrictTimingValidation()).isFalse();
-    assertThat(c.getHeartbeatInterval()).isEqualTo(Duration.ZERO);
+    assertThat(c.getLeaseRenewInterval()).isEqualTo(Duration.ofSeconds(1));
   }
 
   @Test
@@ -152,10 +169,10 @@ class BatchPlatformClientConfigWarnModeTest {
   void shouldStayStrictWhenEnvTrue() {
     Map<String, String> env = minimalEnv();
     env.put("BATCH_SDK_STRICT_TIMING", "true");
-    env.put("BATCH_SDK_HEARTBEAT_INTERVAL_SECONDS", "0");
+    env.put("BATCH_SDK_LEASE_RENEW_INTERVAL_SECONDS", "1");
     assertThatThrownBy(() -> BatchPlatformClientConfig.fromEnv("BATCH_SDK_", env::get))
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("heartbeatInterval");
+        .hasMessageContaining("leaseRenewInterval");
   }
 
   @Test

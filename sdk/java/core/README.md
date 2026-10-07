@@ -144,7 +144,7 @@ Runtime.getRuntime().addShutdownHook(new Thread(() -> client.stop(Duration.ofSec
 | `claimRetryBaseDelay` | Duration | 200ms | CLAIM 5xx 重试基准退避(`base × 2^attempt`) |
 | `clientErrorFailFastThreshold` | int | 5 | CLAIM/REPORT 连续(非鉴权非 409)4xx 达阈值 → dispatcher FATAL |
 | `kafkaSecurityProtocol` / `kafkaSaslMechanism` / `kafkaSaslJaasConfig` | String | null | Kafka SASL/SCRAM(prod 必填;从 K8s Secret / env 注入,**禁硬编码**) |
-| `strictTimingValidation` | boolean | true | 启动期时序 4 规则违反即 fail-fast;env `BATCH_SDK_STRICT_TIMING=false` 降级 WARN |
+| `strictTimingValidation` | boolean | true | 启动期时序 4 规则违反即 fail-fast;env `BATCH_SDK_STRICT_TIMING=false` 降级 WARN；心跳与续租周期仍必须 > 0 |
 | `requestSigningEnabled` | boolean | false | 写请求 HMAC 签名(`X-Batch-Timestamp/Nonce/Signature`);env `BATCH_SDK_REQUEST_SIGNING_ENABLED=true` |
 
 > 无 `*Ms` 后缀字段、无 `httpConnectTimeoutMs` / `httpReadTimeoutMs` / `gracefulShutdownTimeoutMs` —— 超时统一走 `Duration` 类型。`stop(Duration)` 的优雅停超时是 `stop()` 方法参数(默认 30s),不是 config 字段。完整 env 前缀 / 五语言配置总表见 [`docs/sdk/config-reference.md`](../../../docs/sdk/config-reference.md)。
