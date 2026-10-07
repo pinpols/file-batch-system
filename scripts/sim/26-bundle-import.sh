@@ -11,10 +11,9 @@
 # 断言:① TA_BUNDLE_IMPORT 的 job_instance 出现并达终态;② 恰好 2 个 partition,各带
 #   source_file_id + template_code 绑定;③(worker 真跑时)biz.customer_account 收到两文件的行。
 #
-# ⚠️ CI/手动专用,不在 CI 自动跑:需全栈 up(PG/MinIO/Kafka)+ worker-import 开启
-#    batch-manifest 扫描 + arrival 到达组 + 非 JDK25 的可执行 worker。本机 sim worker
-#    fat-jar 在 JDK25 嵌套 jar loader 卡死(见 docs backlog),故本阶段只能在能跑 sim 的
-#    环境验证;脚本静态(SQL fixture 加载 / bash 语法)已验。
+# 由 sim-harness 在本阶段前临时开启 batch-manifest 扫描与 arrival 到达组，结束后恢复
+# worker-import 默认配置。直接运行本脚本时调用方必须提供相同运行配置；前置不足即失败，
+# 不允许把未执行或只完成编排降级记为通过。
 # =========================================================
 set -euo pipefail
 
@@ -26,14 +25,6 @@ export SIM_SQL_DIR
 export SIM_STAGE_NAME="bundle-import"
 # shellcheck source=env-common.sh
 source "$ROOT/scripts/sim/env-common.sh"
-
-# 默认 opt-in:本阶段需 worker-import 开启 batch-manifest 扫描 + arrival 到达组(非默认 sim 配置),
-# 且需能执行的 worker(本机 JDK25 worker hang 跑不了)。未显式 RUN_BUNDLE_SIM=1 时跳过,
-# 避免破坏标准 sim 一条龙(harness 自动遍历 [0-2][0-9] 阶段)。显式跑:RUN_BUNDLE_SIM=1 bash scripts/sim/26-bundle-import.sh
-if [[ "${RUN_BUNDLE_SIM:-0}" != "1" ]]; then
-  echo "==> 26-bundle-import 跳过(opt-in:设 RUN_BUNDLE_SIM=1 且 worker-import 开 batch-manifest+arrival 才跑)"
-  exit 0
-fi
 
 batch_require_python
 
@@ -233,17 +224,18 @@ print("==> 等待 partition 达终态")
 final = wait_partitions_terminal(instance_id)
 
 if final is None:
-    print("⚠️ partition 未在限时内达终态(worker 可能未执行——本机 JDK25 worker hang 即此现象)。"
-          "编排侧(launch+分区展开+绑定)已验证通过。")
-else:
-    ok, failed, total = final
-    print(f"  partition 终态:SUCCESS={ok} FAILED={failed} TOTAL={total}")
-    rows = psql_file(os.environ["PG_BUSINESS_DB"], "count-bundle-import-customers.sql",
-                     {"tenant_id": "ta"}).stdout.strip()
-    print(f"  biz.customer_account BNDL* 行数:{rows}")
-    assert failed == 0, f"有 {failed} 个分区失败"
-    assert ok == total, "并非全部分区成功"
-    print("✅ PASS:文件束导入全链(scanner→到达组→launch→展2分区→worker导入)通过")
+    print("❌ FAIL:文件束导入 partition 未在限时内达终态")
+    sys.exit(1)
+ok, failed, total = final
+print(f"  partition 终态:SUCCESS={ok} FAILED={failed} TOTAL={total}")
+rows = int(psql_file(os.environ["PG_BUSINESS_DB"], "count-bundle-import-customers.sql",
+                     {"tenant_id": "ta"}).stdout.strip())
+print(f"  biz.customer_account BNDL* 行数:{rows}")
+assert total == 2, f"导入束 partition 总数异常:{total}"
+assert failed == 0, f"有 {failed} 个导入分区失败"
+assert ok == total, "导入束并非全部分区成功"
+assert rows == 25, f"导入束业务行数异常:expected=25 actual={rows}"
+print("✅ PASS:文件束导入全链(scanner→到达组→launch→展2分区→worker导入)通过")
 
 # 5) BUNDLE_EXPORT:通过 trigger API 直接发束 launch,验证真实 launch 展开 export 绑定。
 print("==> 验证 BUNDLE_EXPORT launch→partition 绑定")
@@ -269,9 +261,13 @@ assert len(export_parts) == 2, f"BUNDLE_EXPORT 期望 2 个 partition,实得 {le
 assert [p[2] for p in export_parts] == ["ta_export_report_tpl", "TA_EXPORT_REPORT_JSON_TPL"]
 print("  ✓ BUNDLE_EXPORT 展开 2 个 template 绑定 partition")
 export_final = wait_partitions_terminal(export_instance, timeout=120)
-if export_final is not None:
-    ok, failed, total = export_final
-    print(f"  export partition 终态:SUCCESS={ok} FAILED={failed} TOTAL={total}")
+if export_final is None:
+    print("❌ FAIL:文件束导出 partition 未在限时内达终态")
+    sys.exit(1)
+ok, failed, total = export_final
+print(f"  export partition 终态:SUCCESS={ok} FAILED={failed} TOTAL={total}")
+assert total == 2, f"导出束 partition 总数异常:{total}"
+assert failed == 0 and ok == total, "导出束并非全部分区成功"
 
 # 6) BUNDLE_DISPATCH:预置两个输出 file_record,通过束 targetRef 路由到本地渠道。
 print("==> 验证 BUNDLE_DISPATCH launch→partition 绑定")
@@ -299,8 +295,12 @@ assert [int(p[1]) for p in dispatch_parts] == [file1, file2]
 assert [p[3] for p in dispatch_parts] == ["ta_bundle_local", "ta_bundle_local"]
 print("  ✓ BUNDLE_DISPATCH 展开 2 个 source_file_id + target_ref 绑定 partition")
 dispatch_final = wait_partitions_terminal(dispatch_instance, timeout=120)
-if dispatch_final is not None:
-    ok, failed, total = dispatch_final
-    print(f"  dispatch partition 终态:SUCCESS={ok} FAILED={failed} TOTAL={total}")
-print("✅ PASS:文件束导入/导出/分发 sim 编排覆盖通过")
+if dispatch_final is None:
+    print("❌ FAIL:文件束分发 partition 未在限时内达终态")
+    sys.exit(1)
+ok, failed, total = dispatch_final
+print(f"  dispatch partition 终态:SUCCESS={ok} FAILED={failed} TOTAL={total}")
+assert total == 2, f"分发束 partition 总数异常:{total}"
+assert failed == 0 and ok == total, "分发束并非全部分区成功"
+print("✅ PASS:文件束导入/导出/分发全链执行与终态覆盖通过")
 PY

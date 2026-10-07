@@ -5,18 +5,14 @@
 # 命题:flag batch.worker.batch-claim.enabled=true 时,worker 走「攒 K 条 → 一次
 #   claim-batch → 逐 partition 执行」路径,控制面 CLAIM 往返 O(N)→⌈N/K⌉。
 #
-# 设计(适配 sim 套件 flag 默认关):
+# 设计:
+#   - sim-harness 在本阶段前临时开启 process worker 批量 listener，并把 poll/batch/并发
+#     规整为可观测到 K>1 的独占验证配置，结束后恢复默认配置；
 #   - 触发已 seed 的分片 process 作业，等 SUCCESS；默认使用 TA_PROCESS_STAGE4_SHARDED；
-#   - 比对 orchestrator batch_task_batch_claim_size 指标增量:
-#       · 增量>0 → 攒批路径被实际命中 + 作业 SUCCESS → PASS(回归绿)。
-#       · 增量=0 → workers 跑单条路径(flag 关,sim 默认)→ SKIP(不破默认套件)。
-#   - 即:本 stage 在 flag 开时是端到端攒批回归,flag 关时自动 SKIP。
+#   - 比对 orchestrator batch_task_batch_claim_size 指标增量，要求真实命中批量路径且
+#     claim 调用数小于认领 partition 数。前置未开启、退化 K=1 或未达终态均为失败。
 #
-# 退出码:0 = PASS 或 SKIP;非 0 = 攒批路径命中但作业未达 SUCCESS(真回归)。
-#
-# 可通过 JOB_CODE、PARTITION_COUNT 覆盖作业和分片数（2-256，默认 4）；用于在不改生产配置的前提下复验
-# 高 fan-out 的 claim/report 与实例聚合路径。REQUIRE_BATCH_CLAIM=false 时只验证分片终态与实例聚合，
-# 不把 Kafka poll 恰好只取到一条消息误判为控制面失败。
+# 可通过 JOB_CODE、PARTITION_COUNT 覆盖作业和分片数（2-256，默认 4）。
 # =========================================================
 set -euo pipefail
 
@@ -39,7 +35,6 @@ BIZ = os.environ["BIZ_DATE"]
 BATCH = os.environ["BATCH_NO"]
 JOB_CODE = os.environ.get("JOB_CODE", "TA_PROCESS_STAGE4_SHARDED")
 PARTITION_COUNT = int(os.environ.get("PARTITION_COUNT", "4"))
-REQUIRE_BATCH_CLAIM = os.environ.get("REQUIRE_BATCH_CLAIM", "true").lower() == "true"
 PG = os.environ["PG_CONTAINER"]
 PGU = os.environ["POSTGRES_USER"]
 PLAT = os.environ["PLATFORM_DB"]
@@ -143,17 +138,15 @@ d_calls = after_calls - before_calls
 d_parts = after_parts - before_parts
 print(f"==> delta: claim-batch calls={d_calls:.0f} partitions={d_parts:.0f}", flush=True)
 
-if not REQUIRE_BATCH_CLAIM:
-    print("✅ PASS: 高 fan-out 分区与实例聚合全 SUCCESS；本次未要求命中 batch-claim。", flush=True)
-    sys.exit(0)
-
 if d_calls <= 0:
-    # flag 关(sim 默认):workers 走单条路径,batch listener 未启动 → SKIP,不破默认套件
-    print("🟡 SKIP: batch-claim flag 未开(单条路径),攒批 listener 未命中。", flush=True)
-    print("        要跑攒批回归:workers 以 BATCH_WORKER_BATCH_CLAIM_ENABLED=true 启动后重跑本 stage。", flush=True)
-    sys.exit(0)
+    raise RuntimeError("batch-claim path was not observed; worker profile was not enabled")
+if d_parts < PARTITION_COUNT:
+    raise RuntimeError(
+        f"batch-claim metric missed partitions: expected>={PARTITION_COUNT}, actual={d_parts:.0f}")
+if d_calls >= d_parts:
+    raise RuntimeError(
+        f"batch-claim degraded to K<=1: calls={d_calls:.0f}, partitions={d_parts:.0f}")
 
-# flag 开:既要作业 SUCCESS,又要攒批路径确被命中
 eff_k = (d_parts / d_calls) if d_calls else 0
 print(f"✅ PASS: 攒批路径命中 + 作业 SUCCESS;有效 K(parts/call)={eff_k:.1f},往返 {d_parts:.0f}→{d_calls:.0f}", flush=True)
 PY

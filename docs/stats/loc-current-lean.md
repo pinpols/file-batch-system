@@ -1,12 +1,12 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `7a32fc734`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `e1c2ad9bc`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,782 | 504,596 | 259,534 | 51.4% |
+| 4,782 | 504,651 | 259,598 | 51.4% |
 
 ## 按用途
 
@@ -14,7 +14,7 @@
 |---|---:|---:|---:|---:|
 | prod | 2,757 | 251,564 | 115,160 | 45.8% |
 | test | 1,240 | 184,066 | 101,170 | 55.0% |
-| script | 638 | 53,111 | 33,193 | 62.5% |
+| script | 638 | 53,166 | 33,257 | 62.6% |
 | config | 54 | 8,250 | 5,930 | 71.9% |
 | infra-config | 32 | 5,344 | 3,912 | 73.2% |
 | sql | 61 | 2,261 | 169 | 7.5% |
@@ -24,7 +24,7 @@
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
 | Java | 3,516 | 367,662 | 190,002 | 51.7% |
-| Shell | 202 | 30,387 | 23,715 | 78.0% |
+| Shell | 202 | 30,442 | 23,779 | 78.1% |
 | Python | 250 | 35,447 | 18,320 | 51.7% |
 | YAML | 95 | 12,461 | 9,439 | 75.7% |
 | XML | 179 | 21,589 | 6,772 | 31.4% |
@@ -55,10 +55,10 @@
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationServiceTest.java` | test | Java | 814 | 503 |
 | `pom.xml` | config | XML | 823 | 500 |
 | `scripts/local/be-acceptance.sh` | script | Shell | 612 | 479 |
+| `scripts/local/sim-harness.sh` | script | Shell | 619 | 477 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | prod | Java | 1,028 | 451 |
 | `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultFileGovernanceServiceTest.java` | test | Java | 793 | 438 |
 | `batch-worker/core/src/test/java/io/github/pinpols/batch/worker/core/support/AbstractTaskConsumerTest.java` | test | Java | 698 | 433 |
-| `scripts/local/pre-push-sdk-checks.sh` | script | Shell | 569 | 433 |
 
 ## 复跑
 
