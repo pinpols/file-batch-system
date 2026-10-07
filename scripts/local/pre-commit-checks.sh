@@ -213,6 +213,8 @@ if ((scripts_changed == 1)); then
     scripts/ci/tests/test_check_soft_gate_governance.py \
     scripts/ci/tests/test_check_diff_coverage.py \
     scripts/ci/tests/test_check_java_governance_test_coverage.py \
+    scripts/ci/tests/test_daily_validation_workflow.py \
+    scripts/ci/tests/test_pre_push_module_selection.py \
     scripts/ci/tests/test_report_ci_quality_trends.py
   gate_run PRE_COMMIT_TESTCONTAINERS_REUSE_LABEL "Testcontainers 复用标签判定" \
     "$PYTHON_BIN" scripts/ci/check-testcontainers-reuse-label.py

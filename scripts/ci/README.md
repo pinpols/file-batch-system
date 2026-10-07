@@ -90,6 +90,10 @@ strict 只以环境成功启动为前置，不要求 SIM 成功；SIM 失败或�
 任一验证失败都阻断后续镜像构建。SIM 限时 180 分钟、静默调度限时 5 分钟、strict 限时 20 分钟，
 工作流总限时 240 分钟；主动取消、Runner 丢失或环境启动失败无法保证继续验证，
 这些情况必须按未执行报告，不能记为通过。步骤摘要分别展示环境、SIM、strict 的结果。
+
+预推送模块选择由 `tests/test_pre_push_module_selection.py` 守护：保留 `batch-e2e-tests`
+等带数字的完整模块名、同一 Worker 聚合模块去重，不再静默截断超过五个的改动模块。
+此测试接入本地 pre-commit 和 PR / Full 的 CI 质量守护组。
 `test_daily_validation_workflow.py` 在 PR / Full 的 CI 质量守护组执行，
 防止 strict 改回隐式成功依赖或吞掉失败退出码。
 

@@ -49,6 +49,9 @@ Nightly 验证顺序由 `scripts/ci/tests/test_daily_validation_workflow.py` 守
 接入 PR / Full 的 CI 质量守护组：SIM 失败或步骤超时后仍运行 strict（环境启动成功时），
 保留两项独立结果，任一失败阻断镜像构建；不把取消或环境不可用记为通过。
 
+预推送编译模块选择由 `scripts/ci/tests/test_pre_push_module_selection.py` 守护，
+保护数字模块名、聚合模块去重和完整改动集合，接入本地 pre-commit 及 PR / Full 同一守护组。
+
 基础设施抽象边界守护 `check-infrastructure-abstraction-boundaries.py` 以 PR merge-base 的引用语句与出现次数作为比较基线,只阻断新增引用;历史引用的日志安全修复不触发整文件清债。专项回归覆盖新增导入、重复引用增加及空白排版。完整历史收敛仍由治理计划和全量直连客户端守护承担。
 
 | 场景 | 建议复扫动作 | 通过标准 |
