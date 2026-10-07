@@ -388,6 +388,18 @@ jobs:
         shell: bash
         run: bash scripts/ci/run-gate.sh PR_PIPELINE_SUMMARY_KEYS_TEST "Pipeline 摘要键契约门禁测试" -- python3 -m unittest scripts/ci/tests/test_check_pipeline_summary_keys.py
 
+      - name: Verify test @DisplayName conventions
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        # 口径见 docs/coding-conventions.md §14.5：类级 + 方法级都要中文 @DisplayName。
+        # 历史存量走 docs/governance/test-conventions-baseline.txt，只拦新增缺口，不阻断无关 PR。
+        run: bash scripts/ci/run-gate.sh PR_TEST_CONVENTIONS "测试 @DisplayName 约定" -- python3 scripts/ci/check-test-conventions.py --check-baseline docs/governance/test-conventions-baseline.txt
+
+      - name: Test test-convention checker
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        run: bash scripts/ci/run-gate.sh PR_TEST_CONVENTIONS_TEST "测试 @DisplayName 约定门禁测试" -- python3 -m unittest scripts/ci/tests/test_check_test_conventions.py
+
       - name: Enforce centralized empty checks
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash

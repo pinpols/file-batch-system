@@ -1016,7 +1016,21 @@ class ConsoleQueryControllerTest {
 
 ### 14.5 `@DisplayName`
 
-业务复杂或方法名表达不清时**强烈推荐**中文 `@DisplayName`（参考 `SoftDeleteRecoveryIntegrationTest`）；简单字段校验可省。**不要**只在少数模块用，整模块统一风格。
+**全项目统一为中文 `@DisplayName`，类级与方法级都要。**
+
+| 层级 | 要求 |
+|---|---|
+| 测试类 | 每个含测试方法的类**必须**有类级 `@DisplayName`，写明被测对象与验证范围 |
+| 测试方法 | 每个 `@Test` / `@ParameterizedTest` / `@RepeatedTest` / `@TestFactory` 方法**必须**有方法级 `@DisplayName` |
+| 文本内容 | **必须含中文**；描述**业务意图或验收点**，不是方法名直译（反例：`@DisplayName("shouldPauseWhenPermitsExhausted")`、`@DisplayName("XxxController")`） |
+
+参考 `SoftDeleteRecoveryIntegrationTest`（类级 + 方法级成对使用）。
+
+**存量与增量**：2026-10-07 起口径由「复杂用例才推荐」收紧为「全量必填」。存量测试类按
+`docs/governance/test-conventions-baseline.txt` 渐进收敛，守护脚本
+`scripts/ci/check-test-conventions.py` 只拦截**相对基线新增**的缺口——因此改动一个存量测试类时，
+新加的方法必须带 `@DisplayName`，但不必一次性补齐该文件的历史缺口（补齐后需重跑
+`--write-baseline` 收敛基线）。覆盖范围：`src/test/java` 下的 Java 测试；配对前端仓库另有其约定。
 
 ### 14.6 断言风格
 
