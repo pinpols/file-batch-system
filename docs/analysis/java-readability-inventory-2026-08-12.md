@@ -7,11 +7,11 @@
 
 | 指标 | 数量 |
 |---|---:|
-| 生产 Java 源文件 | 2388 |
+| 生产 Java 源文件 | 2389 |
 | CGLIB 自注入类 | 0 |
-| `Map<String, Object>` 出现次数 | 2086 |
+| `Map<String, Object>` 出现次数 | 2077 |
 | 含 Map 的源文件 | 448 |
-| public Map 契约候选 | 63 |
+| public Map 契约候选 | 61 |
 | public Map 契约候选文件 | 36 |
 | `@SuppressWarnings` | 237 |
 | 含 suppression 的源文件 | 178 |
@@ -27,7 +27,7 @@
 | `batch-console-api` | 962 |
 | `batch-orchestrator` | 544 |
 | `batch-trigger` | 73 |
-| `batch-worker` | 379 |
+| `batch-worker` | 380 |
 | `sdk` | 92 |
 | `security-scan` | 9 |
 
@@ -80,7 +80,7 @@
 | `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/PlatformPipelineDefinitionRepository.java` | `L29: public Map<String, Object> loadLatestTemplateConfig` |
 | `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/PlatformPipelineRunRepository.java` | `L136: public Map<String, Object> loadLatestSucceededStepOutputSummary` |
 | `batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/ChannelConfigMerge.java` | `L103: public static Map<String, Object> merge` |
-| `batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/FileDispatchRepository.java` | `L29: public Map<String, Object> loadFile`<br>`L36: public Map<String, Object> loadFile`<br>`L45: public Map<String, Object> loadChannel`<br>`L54: public Map<String, Object> loadLatestDispatchRecord`<br>`L185: public List<Map<String, Object>> listPendingReceiptPolls` |
+| `batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/FileDispatchRepository.java` | `L31: public Map<String, Object> loadFile`<br>`L38: public Map<String, Object> loadFile`<br>`L47: public Map<String, Object> loadChannel` |
 | `batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchChannelHealthRepository.java` | `L30: public List<Map<String, Object>> findEnabledProbeChannels` |
 | `batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/config/ExportConfigValueSupport.java` | `L18: public static Map<String, Object> toMap` |
 | `batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/GenericJdbcMappedExportDataPlugin.java` | `L57: public Map<String, Object> loadBatch` |
