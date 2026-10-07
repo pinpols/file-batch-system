@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.WorkflowNodeCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.Guard;
@@ -286,7 +287,7 @@ public class WorkflowRunManagementApplicationService {
         log.warn(
             "manual skipNode {} routed to END on workflow_run {}; workflow_run terminal will be"
                 + " driven by next outcome",
-            nodeCode,
+            LogSanitizer.value(nodeCode),
             run.getId());
         continue;
       }

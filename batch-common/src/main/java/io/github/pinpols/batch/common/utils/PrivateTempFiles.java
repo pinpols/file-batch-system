@@ -154,67 +154,74 @@ public final class PrivateTempFiles {
   /** 在进程私有目录创建 owner-only 临时工作目录。 */
   public static Path createTempDirectory(String prefix) throws IOException {
     Path directory = privateDirectory();
-    try {
+    if (supportsPosix(directory)) {
       return Files.createTempDirectory(directory, prefix, OWNER_ONLY_DIRECTORY);
-    } catch (UnsupportedOperationException ignored) {
-      Path path = Files.createTempDirectory(directory, prefix);
-      setOwnerOnlyPermissions(path, true);
-      return path;
     }
+    return Files.createTempDirectory(directory, prefix);
   }
 
   private static Path createTempFile(Path directory, String prefix, String suffix)
       throws IOException {
-    try {
+    if (supportsPosix(directory)) {
       return Files.createTempFile(directory, prefix, suffix, OWNER_ONLY_FILE);
-    } catch (UnsupportedOperationException ignored) {
-      Path path = Files.createTempFile(directory, prefix, suffix);
-      setOwnerOnlyPermissions(path, false);
-      return path;
     }
+    return Files.createTempFile(directory, prefix, suffix);
   }
 
   private static void createOwnerOnlyFile(Path path) throws IOException {
-    try {
+    if (supportsPosix(path)) {
       Files.createFile(path, OWNER_ONLY_FILE);
-    } catch (UnsupportedOperationException ignored) {
-      Files.createFile(path);
-      setOwnerOnlyPermissions(path, false);
+      return;
     }
+    Files.createFile(path);
   }
 
   private static Path privateDirectory() throws IOException {
     Path directory = resolveUnderTempRoot(ROOT_DIRECTORY);
+    boolean posix = supportsPosix(directory);
     try {
-      Files.createDirectory(directory, OWNER_ONLY_DIRECTORY);
-    } catch (UnsupportedOperationException ignored) {
-      try {
+      if (posix) {
+        Files.createDirectory(directory, OWNER_ONLY_DIRECTORY);
+      } else {
         Files.createDirectory(directory);
-      } catch (FileAlreadyExistsException alreadyExists) {
-        // Existing directory is validated below.
       }
     } catch (FileAlreadyExistsException alreadyExists) {
-      // Existing directory is validated below.
+      // 已存在的目录在下方统一校验类型;POSIX 下再收敛一次权限。
     }
     if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
       throw new IOException("private temp path is not a directory: " + directory);
     }
-    setOwnerOnlyPermissions(directory, true);
+    if (posix) {
+      setOwnerOnlyPermissions(directory, true);
+    }
     return directory;
   }
 
+  /**
+   * 目标文件系统是否支持 POSIX 权限视图。
+   *
+   * <p>创建前先判定,而不是"先按默认权限建出来再 chmod":前者不会留下创建到收紧之间对本机其他用户可读的窗口
+   * (CodeQL java/local-temp-file-or-directory-information-disclosure 的推荐形态);非 POSIX(如 Windows)
+   * 的临时目录本身按用户隔离,无需显式权限。
+   */
+  private static boolean supportsPosix(Path path) {
+    return path.getFileSystem().supportedFileAttributeViews().contains("posix");
+  }
+
+  /**
+   * 收紧到 owner-only 权限。
+   *
+   * <p>只在 {@link #supportsPosix} 为真的路径上调用(创建时已带显式属性,这里用于既存目录的权限收敛),因此不再
+   * 吞 {@code UnsupportedOperationException}:文件系统自称支持 posix 却拒绝设置权限属异常情况,应显式暴露。
+   */
   private static void setOwnerOnlyPermissions(Path path, boolean directory) throws IOException {
-    try {
-      Files.setPosixFilePermissions(
-          path,
-          directory
-              ? Set.of(
-                  PosixFilePermission.OWNER_READ,
-                  PosixFilePermission.OWNER_WRITE,
-                  PosixFilePermission.OWNER_EXECUTE)
-              : Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
-    } catch (UnsupportedOperationException ignored) {
-      // Windows ACLs and non-POSIX filesystems enforce permissions outside this API.
-    }
+    Files.setPosixFilePermissions(
+        path,
+        directory
+            ? Set.of(
+                PosixFilePermission.OWNER_READ,
+                PosixFilePermission.OWNER_WRITE,
+                PosixFilePermission.OWNER_EXECUTE)
+            : Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
   }
 }

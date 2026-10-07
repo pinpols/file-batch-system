@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -134,12 +135,12 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
 
     log.info(
         "[TenantConfigCopy] source={} targets={} types={} jobCodes={} dryRun={} batchOp={}",
-        request.getSourceTenantId(),
-        request.getTargetTenantIds(),
-        request.getConfigTypes(),
-        request.getJobCodes(),
+        LogSanitizer.value(request.getSourceTenantId()),
+        LogSanitizer.value(request.getTargetTenantIds()),
+        LogSanitizer.value(request.getConfigTypes()),
+        LogSanitizer.value(request.getJobCodes()),
         request.isDryRun(),
-        batchOperationId);
+        LogSanitizer.value(batchOperationId));
 
     return initService.batchInit(initRequest, operator, batchOperationId);
   }

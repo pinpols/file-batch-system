@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.application.config;
 
 import io.github.pinpols.batch.common.config.ConfigCacheInvalidationEvent;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -165,16 +166,20 @@ public class ConsoleConfigCacheInvalidationService {
     try {
       long deleted = invalidationStore.scanAndDelete(pattern, SCAN_BATCH_SIZE);
       if (deleted > 0) {
-        log.debug("evicted {} redis keys matching pattern={}", deleted, pattern);
+        log.debug(
+            "evicted {} redis keys matching pattern={}", deleted, LogSanitizer.value(pattern));
       }
       return true;
     } catch (RuntimeException exception) {
       increment(publishFailureCounter);
       log.warn(
           "config cache redis pattern delete failed: pattern={}, reason={}",
-          pattern,
+          LogSanitizer.value(pattern),
           SwallowedExceptionLogger.summary(exception));
-      log.debug("config cache redis pattern delete failure: pattern={}", pattern, exception);
+      log.debug(
+          "config cache redis pattern delete failure: pattern={}",
+          LogSanitizer.value(pattern),
+          exception);
       return false;
     }
   }
@@ -203,9 +208,9 @@ public class ConsoleConfigCacheInvalidationService {
       increment(publishFailureCounter);
       log.warn(
           "config cache redis delete failed: key={}, reason={}",
-          key,
+          LogSanitizer.value(key),
           SwallowedExceptionLogger.summary(exception));
-      log.debug("config cache redis delete failure: key={}", key, exception);
+      log.debug("config cache redis delete failure: key={}", LogSanitizer.value(key), exception);
       return;
     }
     publishInvalidation(tenantId, type, code);
@@ -229,15 +234,15 @@ public class ConsoleConfigCacheInvalidationService {
       increment(publishFailureCounter);
       log.warn(
           "config cache invalidation publish failed: tenantId={}, type={}, code={}, reason={}",
-          tenantId,
-          type,
-          code,
+          LogSanitizer.value(tenantId),
+          LogSanitizer.value(type),
+          LogSanitizer.value(code),
           SwallowedExceptionLogger.summary(exception));
       log.debug(
           "config cache invalidation publish failure: tenantId={}, type={}, code={}",
-          tenantId,
-          type,
-          code,
+          LogSanitizer.value(tenantId),
+          LogSanitizer.value(type),
+          LogSanitizer.value(code),
           exception);
     }
   }

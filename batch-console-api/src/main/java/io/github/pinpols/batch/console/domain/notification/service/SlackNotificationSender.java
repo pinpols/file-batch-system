@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
 import java.io.IOException;
 import java.time.Duration;
@@ -64,8 +65,8 @@ public class SlackNotificationSender implements NotificationSender {
     } catch (RuntimeException | IOException e) {
       log.warn(
           "[slack] payload serialize failed tenant={} channel={} ex={}",
-          message.tenantId(),
-          message.channelCode(),
+          LogSanitizer.value(message.tenantId()),
+          LogSanitizer.value(message.channelCode()),
           e.getClass().getSimpleName());
       return WebhookDeliveryResult.failure(null, e.getClass().getSimpleName());
     }
@@ -86,15 +87,15 @@ public class SlackNotificationSender implements NotificationSender {
       }
       log.warn(
           "[slack] delivery rejected tenant={} channel={} status={}",
-          message.tenantId(),
-          message.channelCode(),
+          LogSanitizer.value(message.tenantId()),
+          LogSanitizer.value(message.channelCode()),
           status);
       return WebhookDeliveryResult.failure(status, truncate(responseBody, ERROR_SUMMARY_MAX_CHARS));
     } catch (RuntimeException | IOException e) {
       log.warn(
           "[slack] delivery failed tenant={} channel={} ex={}",
-          message.tenantId(),
-          message.channelCode(),
+          LogSanitizer.value(message.tenantId()),
+          LogSanitizer.value(message.channelCode()),
           e.getClass().getSimpleName());
       return WebhookDeliveryResult.failure(null, e.getClass().getSimpleName());
     }

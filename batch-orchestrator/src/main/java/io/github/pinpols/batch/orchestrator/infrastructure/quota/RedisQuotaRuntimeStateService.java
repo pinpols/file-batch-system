@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.quota;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -266,9 +267,9 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
       log.warn(
           "redis quota describe failed; returning empty snapshot: tenant={}, scope={}, owner={},"
               + " cause={}",
-          tenantId,
-          quotaScope,
-          ownerCode,
+          LogSanitizer.value(tenantId),
+          LogSanitizer.value(quotaScope),
+          LogSanitizer.value(ownerCode),
           SwallowedExceptionLogger.summary(ex));
       return new QuotaRuntimeSnapshot(policy.name(), burstLimit, 0, burstLimit, null, null, null);
     }

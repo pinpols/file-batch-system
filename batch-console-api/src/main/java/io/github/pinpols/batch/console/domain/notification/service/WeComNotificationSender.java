@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
 import java.time.Duration;
@@ -74,8 +75,8 @@ public class WeComNotificationSender implements NotificationSender {
       // 净化:不打 url，只记异常类型，避免泄露群机器人密钥
       log.warn(
           "WeCom notification delivery failed: tenantId={} channelCode={} cause={}",
-          message.tenantId(),
-          message.channelCode(),
+          LogSanitizer.value(message.tenantId()),
+          LogSanitizer.value(message.channelCode()),
           e.getClass().getSimpleName());
       return WebhookDeliveryResult.failure(null, e.getClass().getSimpleName());
     }

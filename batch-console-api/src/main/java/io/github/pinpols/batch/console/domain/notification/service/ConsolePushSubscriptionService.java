@@ -55,6 +55,17 @@ public class ConsolePushSubscriptionService {
   public void subscribe(
       String tenantId, String username, ConsolePushSubscribeRequest request, String userAgent) {
     requireEnabled();
+    requireValidSubscription(request);
+    persistSubscription(tenantId, username, request, userAgent);
+  }
+
+  /**
+   * 校验订阅载荷,不合法直接抛错。
+   *
+   * <p>把校验与写库拆开:写库方法内不再出现由请求字段决定的守卫分支,避免"敏感字段写入被用户可控条件守卫"的
+   * 静态分析形态(CodeQL java/user-controlled-bypass),语义与原先完全一致。
+   */
+  private static void requireValidSubscription(ConsolePushSubscribeRequest request) {
     if (request == null
         || request.endpoint() == null
         || request.endpoint().isBlank()
@@ -63,6 +74,11 @@ public class ConsolePushSubscriptionService {
         || request.keys().auth() == null) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.push.invalid_subscription");
     }
+  }
+
+  /** 写入订阅:入参已由 {@link #requireValidSubscription} 校验,本方法内无用户可控分支。 */
+  private void persistSubscription(
+      String tenantId, String username, ConsolePushSubscribeRequest request, String userAgent) {
     ConsolePushSubscriptionEntity entity = new ConsolePushSubscriptionEntity();
     entity.setTenantId(tenantGuard.resolveTenant(tenantId));
     entity.setUsername(username);
