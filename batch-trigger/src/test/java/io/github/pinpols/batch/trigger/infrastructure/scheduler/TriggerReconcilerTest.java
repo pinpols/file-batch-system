@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.TimeZone;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentMatchers;
@@ -30,6 +31,7 @@ import org.quartz.TriggerKey;
 import org.quartz.impl.matchers.GroupMatcher;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("Trigger 对账器:DB 与 Quartz 的注册、清理与表达式漂移处理,及排空期与脏 JobKey 容错")
 class TriggerReconcilerTest {
 
   @Mock
@@ -53,6 +55,7 @@ class TriggerReconcilerTest {
   }
 
   @Test
+  @DisplayName("DB 有启用描述而 Quartz 无对应作业时补注册,且不误清理")
   void dbOnly_registersMissingQuartzJob() throws Exception {
     TriggerDescriptor enabled = enabledDescriptor("t1", "JOB_A");
     when(loader.loadAll()).thenReturn(List.of(enabled));
@@ -65,6 +68,7 @@ class TriggerReconcilerTest {
   }
 
   @Test
+  @DisplayName("Quartz 存在 DB 已无的孤儿作业时按 tenant:jobCode 拆解清理")
   void quartzOnly_unregistersOrphanedJob() throws Exception {
     when(loader.loadAll()).thenReturn(List.of());
     JobKey orphan = JobKey.jobKey("t1:STALE_JOB", TriggerSchedulerFacade.JOB_GROUP);
@@ -78,6 +82,7 @@ class TriggerReconcilerTest {
   }
 
   @Test
+  @DisplayName("DB 与 Quartz 完全一致时不产生任何注册或清理动作")
   void dbAndQuartzAligned_noChanges() throws Exception {
     TriggerDescriptor enabled = enabledDescriptor("t1", "JOB_A");
     JobKey existing = JobKey.jobKey("t1:JOB_A", TriggerSchedulerFacade.JOB_GROUP);
@@ -92,6 +97,7 @@ class TriggerReconcilerTest {
   }
 
   @Test
+  @DisplayName("DB 已停用的作业若仍留在 Quartz 中,对账应将其清理")
   void disabledDescriptor_unregistersExistingQuartzJob() throws Exception {
     TriggerDescriptor disabled = disabledDescriptor("t1", "JOB_A");
     JobKey existing = JobKey.jobKey("t1:JOB_A", TriggerSchedulerFacade.JOB_GROUP);
@@ -106,6 +112,7 @@ class TriggerReconcilerTest {
   }
 
   @Test
+  @DisplayName("优雅排空期间整轮对账直接跳过,不读 DB 也不碰调度器")
   void drainingState_skipsReconcile() {
     when(gracefulShutdown.isDraining()).thenReturn(true);
 
@@ -117,6 +124,7 @@ class TriggerReconcilerTest {
   }
 
   @Test
+  @DisplayName("DB 与 Quartz 的 cron 表达式不一致时触发重新注册,以 DB 为准")
   void scheduleDrift_triggersReRegister() throws Exception {
     TriggerDescriptor descriptor = enabledDescriptor("t1", "JOB_A");
     descriptor.setScheduleType("CRON");
@@ -142,7 +150,8 @@ class TriggerReconcilerTest {
   }
 
   @Test
-  void auxiliaryRecoveryTriggerDoesNotCauseScheduleDrift() throws Exception {
+  @DisplayName("作业挂有 misfire 恢复辅助触发器时,不得拿它比对主调度而误判漂移")
+  void auxiliaryRecoveryTrigger_doesNotCauseScheduleDrift() throws Exception {
     TriggerDescriptor descriptor = enabledDescriptor("t1", "JOB_A");
     descriptor.setScheduleType("CRON");
     descriptor.setScheduleExpression("0 0 2 * * ?");
@@ -170,6 +179,7 @@ class TriggerReconcilerTest {
   }
 
   @Test
+  @DisplayName("JobKey 缺少租户分隔符时记录告警并跳过,不按错误租户清理")
   void malformedJobKey_logsAndSkips() throws Exception {
     when(loader.loadAll()).thenReturn(List.of());
     JobKey malformed = JobKey.jobKey("nocolon", TriggerSchedulerFacade.JOB_GROUP);

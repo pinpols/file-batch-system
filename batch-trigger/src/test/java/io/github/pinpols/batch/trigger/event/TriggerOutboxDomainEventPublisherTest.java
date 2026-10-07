@@ -24,6 +24,7 @@ import org.mockito.MockitoAnnotations;
  * <p>Propagation.MANDATORY 守护(无事务时抛 IllegalTransactionStateException)由 Spring 容器在 集成测中验证 — 单测直接调
  * publisher 不走 AOP,断言意义不大,放 IT 层覆盖。
  */
+@DisplayName("TriggerOutboxDomainEventPublisher:DomainEvent 到 trigger_outbox_event 行的字段投影与落库适配语义")
 class TriggerOutboxDomainEventPublisherTest {
 
   @Mock
@@ -39,7 +40,7 @@ class TriggerOutboxDomainEventPublisherTest {
 
   @Test
   @DisplayName("DomainEvent 字段适配落 trigger_outbox_event 行 — 全字段对齐")
-  void mapsDomainEventToEntity() {
+  void domainEvent_mapsToEntity() {
     when(triggerOutboxEventMapper.insert(any())).thenAnswer(inv -> {
       ((TriggerOutboxEventEntity) inv.getArgument(0)).setId(42L);
       return 1;

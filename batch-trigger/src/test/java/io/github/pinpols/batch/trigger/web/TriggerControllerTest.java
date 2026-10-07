@@ -22,6 +22,7 @@ import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
 import io.github.pinpols.batch.trigger.service.TriggerService;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -32,6 +33,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("Trigger REST 入口:启动/启动状态查询/补跑审批的入参校验与请求标识生成")
 class TriggerControllerTest {
 
   @Mock
@@ -54,6 +56,7 @@ class TriggerControllerTest {
   }
 
   @Test
+  @DisplayName("启动请求未带 requestId/traceId 时,服务端按幂等键生成 req- 前缀请求号与 32 位 traceId")
   void shouldGenerateRequestAndTraceIdsWhenHeadersAreMissing() throws Exception {
     when(triggerService.launch(any())).thenReturn(new LaunchResponse("inst-001", "trace-response"));
 
@@ -83,6 +86,7 @@ class TriggerControllerTest {
   }
 
   @Test
+  @DisplayName("按租户与幂等键查询启动状态,返回请求号/请求状态/关联作业实例号与实例状态")
   void shouldReturnLaunchStatusByTenantAndIdempotencyKey() throws Exception {
     when(triggerService.findLaunchStatus("t1", "idem-status"))
         .thenReturn(
@@ -101,6 +105,7 @@ class TriggerControllerTest {
   }
 
   @Test
+  @DisplayName("启动入参缺少 jobCode 或 tenantId 为空时返回 400 校验错误,且不调用 TriggerService")
   void shouldReturnValidationErrorWhenRequiredFieldsAreMissing() throws Exception {
     mockMvc
         .perform(post("/api/triggers/launch")
@@ -120,6 +125,7 @@ class TriggerControllerTest {
   }
 
   @Test
+  @DisplayName("缺少幂等键请求头时以 400 MISSING_IDEMPOTENCY_KEY 拒绝,不进入 TriggerService")
   void shouldReturnMissingIdempotencyKeyWhenHeaderIsAbsent() throws Exception {
     mockMvc
         .perform(post("/api/triggers/launch").contentType(APPLICATION_JSON).content("""
@@ -137,6 +143,7 @@ class TriggerControllerTest {
   }
 
   @Test
+  @DisplayName("补跑审批入参合法时放行,返回审批生成的实例编号并调用 TriggerService")
   void shouldApproveCatchUpWhenPayloadIsValid() throws Exception {
     when(triggerService.approvePendingCatchUp(any()))
         .thenReturn(new LaunchResponse("inst-cu", "trace-cu"));
@@ -160,6 +167,7 @@ class TriggerControllerTest {
   }
 
   @Test
+  @DisplayName("补跑审批租户名为空时返回 400 校验错误(must not be blank),且不调用 TriggerService")
   void shouldReturnValidationErrorWhenCatchUpApprovalTenantIsMissing() throws Exception {
     mockMvc
         .perform(post("/api/triggers/catch-up/approve")

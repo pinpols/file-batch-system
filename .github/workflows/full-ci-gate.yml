@@ -237,6 +237,14 @@ jobs:
         shell: bash
         run: bash scripts/ci/run-gate.sh FULL_PIPELINE_SUMMARY_KEYS_TEST "Pipeline 摘要键契约门禁测试" -- python3 -m unittest scripts/ci/tests/test_check_pipeline_summary_keys.py
 
+      - name: Verify test @DisplayName conventions
+        shell: bash
+        run: bash scripts/ci/run-gate.sh FULL_TEST_CONVENTIONS "测试 @DisplayName 约定" -- python3 scripts/ci/check-test-conventions.py --check-baseline docs/governance/test-conventions-baseline.txt
+
+      - name: Test test-convention checker
+        shell: bash
+        run: bash scripts/ci/run-gate.sh FULL_TEST_CONVENTIONS_TEST "测试 @DisplayName 约定门禁测试" -- python3 -m unittest scripts/ci/tests/test_check_test_conventions.py
+
       - name: Verify Java text block style
         shell: bash
         run: bash scripts/ci/run-gate.sh FULL_JAVA_TEXT_BLOCK_STYLE "Java 文本块格式" -- python3 scripts/ci/check-java-text-block-style.py

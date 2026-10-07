@@ -10,6 +10,7 @@ import io.github.pinpols.batch.trigger.infrastructure.QuartzLaunchJob;
 import java.time.Instant;
 import java.util.Date;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.quartz.JobDataMap;
 import org.quartz.JobExecutionContext;
@@ -33,6 +34,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
       // ADR-010: 默认 true，走异步路径写 trigger_outbox_event，不调 OrchestratorAdapter HTTP
     })
 @Import(QuartzLaunchJobIntegrationTest.TestConfig.class)
+@DisplayName("QuartzLaunchJob 集成:Quartz 触发携带的作业参数走异步路径写出箱事件,不直连编排服务发起 HTTP 调用")
 class QuartzLaunchJobIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
@@ -48,6 +50,7 @@ class QuartzLaunchJobIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("Quartz 按 jobDataMap 触发一次调度,应恰好落库一条 trigger_outbox_event 启动事件")
   void shouldWriteOutboxEventWhenQuartzFires() throws Exception {
     JobExecutionContext context = mock(JobExecutionContext.class);
     JobDataMap jobDataMap = new JobDataMap();

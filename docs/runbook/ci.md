@@ -106,6 +106,7 @@ gh pr create --base main --head revert/main-broken-<short-sha> --title "revert: 
 | **E2E suite** | partial 时跳过 batch-e2e-tests | 拆 `e2e-shard` 独立 job 25 min 并发跑 |
 | **Hadolint / Trivy fs** | ❌ 不跑 | ✅ 跑 |
 | **文本 UTF-8 编码** | PR 相对目标分支扫描变更文本 | 全仓扫描 |
+| **测试约定（`@DisplayName` + 方法命名）** | 相对 `docs/governance/test-conventions-baseline.txt` 只拦**新增**缺口（中文 `@DisplayName` 类级/方法级；方法名只接受 `shouldXxx_whenYyy` / `方法名_条件_预期`，禁用形状直接失败） | 同一份基线全量复核 |
 | **运行时 UTF-8 配置** | Java / SDK / config / CI 变更时核对 Compose、Dockerfile、Helm、Testcontainers | 全量核对 |
 
 ### pr-gate 自动 escalate 到 full 的"敏感路径"

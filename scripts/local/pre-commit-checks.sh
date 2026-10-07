@@ -104,6 +104,12 @@ if ((${#java_files[@]} > 0)); then
     "$PYTHON_BIN" scripts/ci/check-pipeline-summary-keys.py
   gate_run PRE_COMMIT_PIPELINE_SUMMARY_KEYS_TEST "Pipeline 摘要键契约门禁测试" \
     "$PYTHON_BIN" -m unittest scripts/ci/tests/test_check_pipeline_summary_keys.py
+  # 测试 @DisplayName 约定是跨文件的（类树 + 注解归属），不做单文件裁剪，直接全仓扫描；
+  # 只对相对基线新增的缺口失败，口径见 docs/coding-conventions.md §14.5。
+  gate_run PRE_COMMIT_TEST_CONVENTIONS "测试 @DisplayName 约定" \
+    "$PYTHON_BIN" scripts/ci/check-test-conventions.py --check-baseline docs/governance/test-conventions-baseline.txt
+  gate_run PRE_COMMIT_TEST_CONVENTIONS_TEST "测试 @DisplayName 约定门禁测试" \
+    "$PYTHON_BIN" -m unittest scripts/ci/tests/test_check_test_conventions.py
   for file in "${java_files[@]}"; do
     [[ -f "$file" ]] && git add -- "$file"
   done

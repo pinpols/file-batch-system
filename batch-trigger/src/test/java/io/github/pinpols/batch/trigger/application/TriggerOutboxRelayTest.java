@@ -35,6 +35,7 @@ import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -52,6 +53,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 // 严格模式会误报 UnnecessaryStubbing。
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
+@DisplayName("Trigger outbox 中继轮询:批领取预算、投递成败回写、停机跳过与退避重试语义")
 class TriggerOutboxRelayTest {
 
   @Mock
@@ -114,6 +116,7 @@ class TriggerOutboxRelayTest {
   }
 
   @Test
+  @DisplayName("本轮无待发事件时只重置超时 PUBLISHING,不发起投递或抢占")
   void poll_emptyBatch_doesNothing() throws Throwable {
     when(mapper.selectPending(any(), anyInt(), anyString(), anyString())).thenReturn(List.of());
 
@@ -125,6 +128,7 @@ class TriggerOutboxRelayTest {
   }
 
   @Test
+  @DisplayName("每秒发布上限按轮询间隔折算为单轮批量:40 条/秒配 200ms 应只领取 8 条")
   void poll_spreadsPerSecondReleaseBudgetAcrossPollingIntervals() {
     relayProperties.setMaxPublishEventsPerSecond(40);
     relayProperties.setPollIntervalMillis(200);
@@ -136,6 +140,7 @@ class TriggerOutboxRelayTest {
   }
 
   @Test
+  @DisplayName("分布式锁持有时长须覆盖发布超时并留 10 秒缓冲:120 秒超时对应 130 秒")
   void poll_lockAtMostCoversPublishingTimeoutPlusBuffer() throws Throwable {
     relayProperties.setPublishingTimeoutSeconds(120);
     when(mapper.selectPending(any(), anyInt(), anyString(), anyString())).thenReturn(List.of());
@@ -148,6 +153,7 @@ class TriggerOutboxRelayTest {
   }
 
   @Test
+  @DisplayName("轮询间隔超过锁上限时,锁最短持有时间收敛到锁上限,避免相邻两轮互斥")
   void poll_lockAtLeastIsClampedWhenPollIntervalExceedsLockAtMost() throws Throwable {
     relayProperties.setPublishingTimeoutSeconds(1);
     relayProperties.setPollIntervalMillis(30_000);
@@ -162,6 +168,7 @@ class TriggerOutboxRelayTest {
   }
 
   @Test
+  @DisplayName("收到容器关闭事件后不再取锁与访问 mapper,避免停机中继续打库")
   void poll_afterContextClosed_skipsLockAndMapper() throws Throwable {
     relay.stopOnContextClosed(new ContextClosedEvent(new StaticApplicationContext()));
 
@@ -172,6 +179,7 @@ class TriggerOutboxRelayTest {
   }
 
   @Test
+  @DisplayName("停机期间 Redis 连接工厂 STOPPING 的异常按跳过处理,不重试也不触碰 mapper")
   void poll_redisStoppingDuringShutdown_isNotBusinessError() throws Throwable {
     doAnswer(inv -> {
           relay.stopOnContextClosed(new ContextClosedEvent(new StaticApplicationContext()));
@@ -186,6 +194,7 @@ class TriggerOutboxRelayTest {
   }
 
   @Test
+  @DisplayName("取待发事件前先把超时未确认的 PUBLISHING 行重置为 FAILED 并写入原因")
   void poll_resetsStalePublishingBeforeSelectingPending() {
     when(mapper.resetStalePublishing(anyString(), anyString(), anyString(), anyLong()))
         .thenReturn(2);
@@ -202,6 +211,7 @@ class TriggerOutboxRelayTest {
   }
 
   @Test
+  @DisplayName("投递成功的事件按主题与幂等键发出,并批量从 PUBLISHING 置为 PUBLISHED")
   void poll_successPath_marksPublished() {
     TriggerOutboxEventEntity event = buildPendingEvent(101L, validEnvelopePayload());
     when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
@@ -226,6 +236,7 @@ class TriggerOutboxRelayTest {
   }
 
   @Test
+  @DisplayName("broker 明确返回失败时按退避时间写入 FAILED,且不得误标为已发布")
   void poll_publisherFailure_marksFailedWithBackoff() {
     TriggerOutboxEventEntity event = buildPendingEvent(102L, validEnvelopePayload());
     event.setPublishAttempt(2);
@@ -248,6 +259,7 @@ class TriggerOutboxRelayTest {
   }
 
   @Test
+  @DisplayName("投递 future 异常完成时同样回写 FAILED,不让事件滞留在 PUBLISHING")
   void poll_exceptionalPublishFuture_marksFailedWithoutLeavingBatchPublishing() {
     TriggerOutboxEventEntity event = buildPendingEvent(108L, validEnvelopePayload());
     CompletableFuture<TriggerEventPublisher.PublishResult> failed = new CompletableFuture<>();
@@ -269,6 +281,7 @@ class TriggerOutboxRelayTest {
   }
 
   @Test
+  @DisplayName("投递 future 长期无响应时按发布超时兜底回写 FAILED,避免批次被永久占用")
   void poll_hungPublishFuture_isBoundedByPublishingTimeout() {
     relayProperties.setPublishingTimeoutSeconds(1);
     TriggerOutboxEventEntity event = buildPendingEvent(109L, validEnvelopePayload());
@@ -289,6 +302,7 @@ class TriggerOutboxRelayTest {
   }
 
   @Test
+  @DisplayName("重试次数达到上限后失败事件置为 GIVE_UP,不再无限重投")
   void poll_publisherFailureAtMaxAttempts_marksGiveUp() {
     relayProperties.setMaxPublishAttempts(3);
     TriggerOutboxEventEntity event = buildPendingEvent(107L, validEnvelopePayload());
@@ -312,6 +326,7 @@ class TriggerOutboxRelayTest {
   }
 
   @Test
+  @DisplayName("payload 反序列化失败属不可重试错误,直接置 GIVE_UP 且不发起投递")
   void poll_payloadDeserializeError_marksGiveUp() {
     TriggerOutboxEventEntity event = buildPendingEvent(103L, "{not-json}");
     when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
@@ -330,6 +345,7 @@ class TriggerOutboxRelayTest {
   }
 
   @Test
+  @DisplayName("事件已被其它实例抢占时本轮静默跳过,不重复投递也不回写状态")
   void poll_alreadyClaimedByOtherInstance_skipsSilently() {
     TriggerOutboxEventEntity event = buildPendingEvent(104L, validEnvelopePayload());
     when(mapper.selectPending(any(), anyInt(), anyString(), anyString()))
@@ -345,6 +361,7 @@ class TriggerOutboxRelayTest {
   }
 
   @Test
+  @DisplayName("单条事件发起投递即抛异常时,同批其它事件仍应正常发布")
   void poll_singleItemException_doesNotBlockRestOfBatch() {
     TriggerOutboxEventEntity bad = buildPendingEvent(105L, validEnvelopePayload());
     TriggerOutboxEventEntity good = buildPendingEvent(106L, validEnvelopePayload());
@@ -370,6 +387,7 @@ class TriggerOutboxRelayTest {
   }
 
   @Test
+  @DisplayName("失败退避按 2 的幂递增并以 60 秒封顶,避免重试风暴")
   void backoffSeconds_followsExponentialWithCap() {
     assertThat(TriggerOutboxRelay.backoffSeconds(0)).isEqualTo(1);
     assertThat(TriggerOutboxRelay.backoffSeconds(1)).isEqualTo(2);

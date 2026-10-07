@@ -1012,11 +1012,33 @@ class ConsoleQueryControllerTest {
 }
 ```
 
-格式：`shouldXxx_whenYyy`（首选）或 `方法名_条件_预期结果`（省略 `should` 也可，老代码 ~48% 是此风格）。**禁** `testXxx` / `test1` / `xxx_test` / 全 snake_case 无语义结构。
+**只接受两种形状**：`shouldXxx_whenYyy`（首选）或 `方法名_条件_预期结果`（下划线结构，省略 `should` 也可）。
+**禁** `testXxx` / `test1` / `test_xxx` / `xxx_test` / 全 snake_case 无语义结构。
+
+守护：`scripts/ci/check-test-conventions.py`（PR Gate `PR_TEST_CONVENTIONS`）—— 禁用形状**直接失败**
+（存量 0 处）；非首选形状（纯 camelCase，存量 2,308 处）按
+`docs/governance/test-conventions-baseline.txt` 增量拦截：改动存量测试类时，**新加/改名的方法必须是两种形状之一**。
 
 ### 14.5 `@DisplayName`
 
-业务复杂或方法名表达不清时**强烈推荐**中文 `@DisplayName`（参考 `SoftDeleteRecoveryIntegrationTest`）；简单字段校验可省。**不要**只在少数模块用，整模块统一风格。
+**全项目统一为中文 `@DisplayName`，类级与方法级都要。**
+
+| 层级 | 要求 |
+|---|---|
+| 测试类 | 每个含测试方法的类**必须**有类级 `@DisplayName`，写明被测对象与验证范围 |
+| 测试方法 | 每个 `@Test` / `@ParameterizedTest` / `@RepeatedTest` / `@TestFactory` 方法**必须**有方法级 `@DisplayName` |
+| 文本内容 | **必须含中文**；描述**业务意图或验收点**，不是方法名直译（反例：`@DisplayName("shouldPauseWhenPermitsExhausted")`、`@DisplayName("XxxController")`） |
+
+写法：类级写明**被测对象 + 验证范围**，方法级写明**该用例的验收点**；一条用例覆盖多个断言点时用
+`;` / `+` 串起；标点沿用半角 `,` `:`，与仓库存量多数写法一致。描述里**不要内嵌代码片段或 API 调用名**
+（例如不要写 `ZoneId.systemDefault()`）——既更好读，也避免触发按新增行扫描的红线条与契约关键词守护
+（`pre-push` 的 `ZoneId`/`Charset` 红线、`check-readiness-doc-sync.py` 的触点匹配）。
+
+**存量与增量**：2026-10-07 起口径由「复杂用例才推荐」收紧为「**全量必填**」——终态是每个测试类都有
+类级、每个测试方法都有方法级中文 `@DisplayName`，基线文件归零。`docs/governance/test-conventions-baseline.txt`
+只是分批实施的顺序装置：守护只拦截**相对基线新增**的缺口（改动存量测试类时新加的方法必须带
+`@DisplayName`），历史缺口按模块分批补齐，补齐后重跑 `--write-baseline` 收敛基线。
+覆盖范围：`src/test/java` 下的 Java 测试；配对前端仓库另有其约定。
 
 ### 14.6 断言风格
 

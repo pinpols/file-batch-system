@@ -127,7 +127,12 @@ def is_readiness_touchpoint(path: str, base: str | None) -> bool:
         return False
     if is_logging_only_change(path, base):
         return False
-    if any(pattern.search(path) for pattern in READINESS_TOUCHPOINTS):
+    # 测试源码不作为**路径**触点：测试文件路径常与生产类同名（如 DefaultTriggerServiceTest 命中
+    # DefaultTriggerService），但契约漂移来自生产/契约文件；测试在 EVIDENCE_PATHS 里是「同步证据」
+    # 而非触发器。测试侧真实的 readiness 改动仍由下面的 CONTENT_TOUCHPOINTS 内容判定捕获。
+    if "/src/test/" not in path and any(
+        pattern.search(path) for pattern in READINESS_TOUCHPOINTS
+    ):
         return True
     if diff_contains_touchpoint(path, base):
         return True

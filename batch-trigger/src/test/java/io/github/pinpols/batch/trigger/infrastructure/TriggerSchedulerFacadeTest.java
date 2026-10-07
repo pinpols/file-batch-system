@@ -21,6 +21,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -34,6 +35,7 @@ import org.quartz.SimpleTrigger;
 import org.quartz.Trigger;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("Quartz 调度门面:CRON/FIXED_RATE 注册替换、启停暂停顺序与并发管理保护")
 class TriggerSchedulerFacadeTest {
 
   @Mock
@@ -52,6 +54,7 @@ class TriggerSchedulerFacadeTest {
   // ─── CRON ────────────────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("启用的 CRON 作业按 DB 描述注册,并携带日历、依赖、补跑策略与 misfire 指令")
   void shouldScheduleEnabledCronDefinitionsWithCatchUpMetadata() throws Exception {
     TriggerDescriptor dependentCron = cronDescriptor("t1", "JOB_CRON", true);
     dependentCron.setDependsOnJobCode("UPSTREAM_JOB");
@@ -78,6 +81,7 @@ class TriggerSchedulerFacadeTest {
   }
 
   @Test
+  @DisplayName("重新注册 CRON 前先删除已存在的 Quartz 作业,保证以 DB 表达式覆盖")
   void shouldDeleteExistingQuartzJobBeforeReschedulingCron() throws Exception {
     when(triggerDefinitionLoader.loadByJobCode("t1", "JOB_REPLACE"))
         .thenReturn(cronDescriptor("t1", "JOB_REPLACE", true));
@@ -92,6 +96,7 @@ class TriggerSchedulerFacadeTest {
   }
 
   @Test
+  @DisplayName("单作业注册先把 enabled 落库再加载描述下发,避免调度成功但库里仍停用")
   void shouldPersistEnabledBeforeRegisteringSingleJob() throws Exception {
     when(triggerDefinitionLoader.loadByJobCode("t1", "JOB_REENABLE"))
         .thenReturn(cronDescriptor("t1", "JOB_REENABLE", true));
@@ -105,6 +110,7 @@ class TriggerSchedulerFacadeTest {
   }
 
   @Test
+  @DisplayName("单作业注销先删 Quartz 再落库置停用,避免留下无法解释的残留调度")
   void shouldPersistDisabledAfterUnregisteringSingleJob() throws Exception {
     when(scheduler.checkExists(JobKey.jobKey("t1:JOB_STOP", TriggerSchedulerFacade.JOB_GROUP)))
         .thenReturn(true);
@@ -122,6 +128,7 @@ class TriggerSchedulerFacadeTest {
   }
 
   @Test
+  @DisplayName("暂停单作业与注销同语义:删除 Quartz 作业后落库置停用")
   void shouldDeleteQuartzJobAndPersistDisabledWhenPausingSingleJob() throws Exception {
     when(scheduler.checkExists(JobKey.jobKey("t1:JOB_PAUSE", TriggerSchedulerFacade.JOB_GROUP)))
         .thenReturn(true);
@@ -139,6 +146,7 @@ class TriggerSchedulerFacadeTest {
   }
 
   @Test
+  @DisplayName("恢复单作业先落库置启用,再按最新描述重新下发调度")
   void shouldPersistEnabledAndScheduleWhenResumingSingleJob() throws Exception {
     when(triggerDefinitionLoader.loadByJobCode("t1", "JOB_RESUME"))
         .thenReturn(cronDescriptor("t1", "JOB_RESUME", true));
@@ -152,6 +160,7 @@ class TriggerSchedulerFacadeTest {
   }
 
   @Test
+  @DisplayName("cron 表达式非法时跳过该作业,不向 Quartz 注册半成品触发器")
   void shouldSkipInvalidCronExpression() throws Exception {
     TriggerDescriptor descriptor = cronDescriptor("t1", "BAD_CRON", true);
     descriptor.setScheduleExpression("not-a-cron");
@@ -165,6 +174,7 @@ class TriggerSchedulerFacadeTest {
   // ─── FIXED_RATE ───────────────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("FIXED_RATE 按秒换算成毫秒周期注册为永久重复触发器,并采用保留计数的 misfire 策略")
   void shouldScheduleFixedRateDefinitionWithSimpleTrigger() throws Exception {
     when(triggerDefinitionLoader.loadAll())
         .thenReturn(List.of(fixedRateDescriptor("t1", "JOB_FIXED", "300", true)));
@@ -191,6 +201,7 @@ class TriggerSchedulerFacadeTest {
   }
 
   @Test
+  @DisplayName("重新注册 FIXED_RATE 前同样先删旧作业,避免周期任务双份执行")
   void shouldDeleteExistingQuartzJobBeforeReschedulingFixedRate() throws Exception {
     when(triggerDefinitionLoader.loadByJobCode("t1", "JOB_FR"))
         .thenReturn(fixedRateDescriptor("t1", "JOB_FR", "60", true));
@@ -205,6 +216,7 @@ class TriggerSchedulerFacadeTest {
   }
 
   @Test
+  @DisplayName("FIXED_RATE 间隔非数字时跳过注册,不让解析异常破坏整批调度")
   void shouldSkipNonNumericFixedRateExpression() throws Exception {
     TriggerDescriptor descriptor = fixedRateDescriptor("t1", "BAD_FR", "not-a-number", true);
     when(triggerDefinitionLoader.loadByJobCode("t1", "BAD_FR")).thenReturn(descriptor);
@@ -215,6 +227,7 @@ class TriggerSchedulerFacadeTest {
   }
 
   @Test
+  @DisplayName("FIXED_RATE 间隔为 0 属非法配置,跳过注册以免形成空转触发器")
   void shouldSkipZeroFixedRateInterval() throws Exception {
     TriggerDescriptor descriptor = fixedRateDescriptor("t1", "ZERO_FR", "0", true);
     when(triggerDefinitionLoader.loadByJobCode("t1", "ZERO_FR")).thenReturn(descriptor);
@@ -225,6 +238,7 @@ class TriggerSchedulerFacadeTest {
   }
 
   @Test
+  @DisplayName("FIXED_RATE 间隔为负数属非法配置,跳过注册而非写入调度器")
   void shouldSkipNegativeFixedRateInterval() throws Exception {
     TriggerDescriptor descriptor = fixedRateDescriptor("t1", "NEG_FR", "-10", true);
     when(triggerDefinitionLoader.loadByJobCode("t1", "NEG_FR")).thenReturn(descriptor);
@@ -235,6 +249,7 @@ class TriggerSchedulerFacadeTest {
   }
 
   @Test
+  @DisplayName("FIXED_RATE 间隔为空白字符串时同样跳过注册,不写入调度器")
   void shouldSkipBlankFixedRateExpression() throws Exception {
     TriggerDescriptor descriptor = fixedRateDescriptor("t1", "BLANK_FR", "  ", true);
     when(triggerDefinitionLoader.loadByJobCode("t1", "BLANK_FR")).thenReturn(descriptor);
@@ -247,6 +262,7 @@ class TriggerSchedulerFacadeTest {
   // ─── 跳过非 scheduled 类型 ─────────────────────────────────────────────────────
 
   @Test
+  @DisplayName("MANUAL 与 EVENT 描述不参与 Quartz 调度,注册时不得与调度器交互")
   void shouldSilentlySkipManualAndEventScheduleTypes() {
     when(triggerDefinitionLoader.loadAll())
         .thenReturn(
@@ -258,6 +274,7 @@ class TriggerSchedulerFacadeTest {
   }
 
   @Test
+  @DisplayName("管理操作串行化:锁被占用时并发调用立即抛 TriggerSchedulerBusyException 并带操作名")
   void shouldFailFastWhenConcurrentManagementOperationIsAlreadyRunning() throws Exception {
     facade = new TriggerSchedulerFacade(triggerDefinitionLoader, scheduler, Duration.ofMillis(50));
     CountDownLatch enteredQuartzCall = new CountDownLatch(1);
