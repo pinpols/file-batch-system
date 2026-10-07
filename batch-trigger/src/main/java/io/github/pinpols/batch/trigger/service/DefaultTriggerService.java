@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.persistence.entity.TriggerMisfirePendingEntity;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -241,8 +242,8 @@ public class DefaultTriggerService implements TriggerService {
         log.warn(
             "updateRequestStatusConditional(LAUNCHED) affected 0 rows; the row is no longer PROCESSING:"
                 + " tenantId={} requestId={}",
-            command.getTenantId(),
-            command.getRequestId());
+            LogSanitizer.value(command.getTenantId()),
+            LogSanitizer.value(command.getRequestId()));
       }
       return new LaunchResponse(pendingRequest.getRequestId(), pendingRequest.getTraceId());
     });
@@ -385,9 +386,9 @@ public class DefaultTriggerService implements TriggerService {
     log.info(
         "scheduled trigger skipped by business calendar: tenantId={}, jobCode={},"
             + " calendarCode={}, fireTime={}",
-        command.descriptor().getTenantId(),
-        command.descriptor().getJobCode(),
-        command.descriptor().getCalendarCode(),
+        LogSanitizer.value(command.descriptor().getTenantId()),
+        LogSanitizer.value(command.descriptor().getJobCode()),
+        LogSanitizer.value(command.descriptor().getCalendarCode()),
         command.fireTime());
     return LaunchResponse.skipped(command.traceId());
   }
@@ -409,8 +410,8 @@ public class DefaultTriggerService implements TriggerService {
       log.warn(
           "calendar definition not found: tenantId={}, calendarCode={} — scheduled"
               + " trigger will proceed without calendar filtering",
-          command.descriptor().getTenantId(),
-          calendarCode);
+          LogSanitizer.value(command.descriptor().getTenantId()),
+          LogSanitizer.value(calendarCode));
       return null;
     }
     List<CalendarHolidayRule> rules =

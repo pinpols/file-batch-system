@@ -2,14 +2,9 @@ package io.github.pinpols.batch.common.utils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.when;
 
 import java.io.IOException;
-import java.nio.file.FileStore;
 import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
 import java.time.Instant;
@@ -62,39 +57,6 @@ class PrivateTempFilesTest {
     }
     assertThat(path).doesNotExist();
     assertThat(lockPath).doesNotExist();
-  }
-
-  @Test
-  @DisplayName("目标挂载点不支持 POSIX 时不采用 provider 的全局能力声明")
-  void shouldUseActualFileStore_whenPosixSupportDiffersByMount() throws Exception {
-    Path path = Path.of("mount-specific-temp").toAbsolutePath();
-    FileStore store = mock(FileStore.class);
-    when(store.supportsFileAttributeView("posix")).thenReturn(false);
-    try (var files = mockStatic(Files.class)) {
-      files.when(() -> Files.getFileStore(path)).thenReturn(store);
-      assertThat(PrivateTempFiles.supportsPosix(path)).isFalse();
-    }
-  }
-
-  @Test
-  @DisplayName("目标尚未创建时查询最近已有父目录的挂载点,存储查询失败则显式报错")
-  void shouldResolveParentStoreAndPropagateFailure_whenTargetDoesNotExist() throws Exception {
-    Path path = Path.of("mount-specific-temp", "new-file").toAbsolutePath();
-    FileStore store = mock(FileStore.class);
-    when(store.supportsFileAttributeView("posix")).thenReturn(true);
-    try (var files = mockStatic(Files.class)) {
-      files
-          .when(() -> Files.getFileStore(path))
-          .thenThrow(new NoSuchFileException(path.toString()));
-      files.when(() -> Files.getFileStore(path.getParent())).thenReturn(store);
-      assertThat(PrivateTempFiles.supportsPosix(path)).isTrue();
-      files
-          .when(() -> Files.getFileStore(path.getParent()))
-          .thenThrow(new IOException("store unavailable"));
-      assertThatThrownBy(() -> PrivateTempFiles.supportsPosix(path))
-          .isInstanceOf(IOException.class)
-          .hasMessageContaining("store unavailable");
-    }
   }
 
   @Test

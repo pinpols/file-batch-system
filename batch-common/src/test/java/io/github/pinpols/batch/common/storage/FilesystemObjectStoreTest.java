@@ -31,6 +31,27 @@ class FilesystemObjectStoreTest {
   }
 
   @Test
+  @DisplayName("私有本地对象写入与复制后仅属主可访问,复制仍保留内容和修改时间")
+  void shouldKeepObjectsPrivate_whenPuttingAndCopying(@TempDir Path root) throws Exception {
+    FilesystemObjectStore store = newStore(root);
+    byte[] payload = "private-data".getBytes(StandardCharsets.UTF_8);
+    store.put(
+        BUCKET, "source/a.txt", new ByteArrayInputStream(payload), payload.length, "text/plain");
+    Path source = root.resolve(BUCKET).resolve("source/a.txt");
+    // 模拟历史宽松文件,复制不得继承公开权限。
+    Files.setPosixFilePermissions(
+        source, java.nio.file.attribute.PosixFilePermissions.fromString("rw-r--r--"));
+    store.copy(BUCKET, "source/a.txt", "target/b.txt");
+    Path copied = root.resolve(BUCKET).resolve("target/b.txt");
+    assertThat(Files.readAllBytes(copied)).isEqualTo(payload);
+    assertThat(Files.getLastModifiedTime(copied)).isEqualTo(Files.getLastModifiedTime(source));
+    assertThat(Files.getPosixFilePermissions(copied))
+        .isEqualTo(java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+    assertThat(Files.getPosixFilePermissions(copied.getParent()))
+        .isEqualTo(java.nio.file.attribute.PosixFilePermissions.fromString("rwx------"));
+  }
+
+  @Test
   @DisplayName("写入后可读回完全一致的字节,存在性与大小统计与写入内容一致")
   void shouldRoundTripPutAndGet(@TempDir Path root) throws Exception {
     FilesystemObjectStore store = newStore(root);

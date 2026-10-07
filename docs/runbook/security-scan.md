@@ -31,6 +31,39 @@ mvn -f security-scan/pom.xml package
 java -jar security-scan/target/security-scan-1.0.0.jar --mode=all --root=. --target-url=http://localhost:18080
 ```
 
+## GitHub 安全告警治理
+
+面向开发、代码审查、运维和发布负责人。Code scanning、Dependabot 与 Secret scanning 分开判读;本节用于后续增量治理。
+
+### 处理与交付顺序
+
+1. 核对仓库、默认分支、扫描提交和告警编号,记录规则、来源与危险调用;追踪调用方、数据表示、异常路径和已有防护。
+2. 判定真实缺陷、已有防护的误报或证据不足。先跑恶意输入与正常对照,再在共享边界做最小完整修复。
+3. 同步回归测试、配置/运行文档和变更日志。涉及 Console API、角色或租户契约时同步配对前端。
+4. 定向测试、本地提交检查与适用 Sonar 检查完成后创建 PR,核验 PR CodeQL 的具体实例。
+5. 用户合并后确认 main 扫描提交包含修复,查询 main 开放告警;合并与告警关闭均有证据后才写“收尾完成”。跳过、运行中或未运行须单独说明。
+
+### 修复边界
+
+- Workflow 执行成功只代表分析完成;必须查询对应提交与分支的开放告警,才能判断修复闭环。PR 扫描与 `main` 扫描分别核验。
+- 用户可控日志字段复用 `LogSanitizer.value`,保留原字段与业务判断,覆盖 CR/LF 和 Unicode 换行。
+- 私有落盘复用 `OwnerOnlyFiles`:按实际 `FileStore` 判断 POSIX 支持,创建时设文件 `0600` / 目录 `0700`;非 POSIX 必须验证 owner-only ACL,新建路径在写入内容前再次验证。不支持权限视图或权限设置失败时显式拒绝,不吞异常降级。
+- 私有临时文件、导出暂存与默认分发 Outbox 遵循上述约束。本地对象存储写入/复制的新文件也使用私有权限;显式配置的分发目标继续按目标存储协议与部署权限管理。
+- `java/user-controlled-bypass` 若指向参数校验中的 `throw BizException.of(INVALID_ARGUMENT, ...)`,需追踪敏感调用实际语义。拒绝非法请求不是跳过鉴权;先验证 Controller 的 `@PreAuthorize`、认证过滤器、租户守卫和非法请求不落库,再以具体告警编号记录误报理由。不得删除校验来消除告警。
+
+### 误报与后续守护
+
+误报只按具体编号关闭并记录实际路径、防护和验证依据;接受风险使用不同状态并说明负责人、影响与后续处理。不得批量 dismiss,不得排除手写业务代码、降低规则或删除校验来清零。相关防护、依赖、调用链或规则变化后重新核查既有判断。
+
+PR 与 main 维持现有 CodeQL 检查,新增/重开告警优先处理。新增自动守护先报告,再基线增量阻断;历史项按计划消化,不未经验证强制全仓失败。Secret scanning 涉及真实凭据时须撤销与轮换;删字符串不构成修复。Dependabot 核对可达性、锁定版本及 SBOM/许可门禁,不与 CodeQL 清零混称。
+
+```bash
+gh run list --repo pinpols/file-batch-system --workflow codeql --branch main --limit 3
+gh api 'repos/pinpols/file-batch-system/code-scanning/alerts?state=open&ref=refs/heads/main&per_page=100' --paginate
+```
+
+每次记录告警编号、规则、修复提交、PR、定向验证、扫描提交、关闭状态与残余风险。配对前端遵循对应 `docs/runbook/security-alert-governance.md`,不复制后端权限和存储治理实现。
+
 ## 报告位置
 
 默认所有报告都统一写到仓库根目录下的 `target/security-scan-report/`：

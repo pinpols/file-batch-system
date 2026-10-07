@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.storage;
 
+import io.github.pinpols.batch.common.utils.OwnerOnlyFiles;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -92,10 +93,13 @@ public class FilesystemObjectStore implements BatchObjectStore {
     Path target = resolveKey(bucket, key);
     Path temp = null;
     try {
-      Files.createDirectories(target.getParent());
+      OwnerOnlyFiles.createDirectories(target.getParent());
       temp = target.resolveSibling(target.getFileName() + TEMP_SUFFIX_MARKER + UUID.randomUUID());
-      try (FileChannel ch =
-          FileChannel.open(temp, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+      try (FileChannel ch = FileChannel.open(
+          temp,
+          java.util.Set.of(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE),
+          OwnerOnlyFiles.attributes(temp, false))) {
+        OwnerOnlyFiles.protectExisting(temp, false);
         ExactSizeInputStream exact =
             ExactSizeInputStream.exact(in, "filesystem", bucket, key, size);
         exact.transferTo(Channels.newOutputStream(ch));
@@ -135,13 +139,19 @@ public class FilesystemObjectStore implements BatchObjectStore {
       if (!Files.exists(src)) {
         throw new NoSuchFileException(src.toString());
       }
-      Files.createDirectories(dst.getParent());
+      OwnerOnlyFiles.createDirectories(dst.getParent());
       temp = dst.resolveSibling(dst.getFileName() + TEMP_SUFFIX_MARKER + UUID.randomUUID());
-      Files.copy(src, temp, StandardCopyOption.COPY_ATTRIBUTES);
-      try (FileChannel ch = FileChannel.open(temp, StandardOpenOption.WRITE)) {
+      try (InputStream in = Files.newInputStream(src);
+          FileChannel ch = FileChannel.open(
+              temp,
+              java.util.Set.of(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE),
+              OwnerOnlyFiles.attributes(temp, false))) {
+        OwnerOnlyFiles.protectExisting(temp, false);
+        in.transferTo(Channels.newOutputStream(ch));
         // 与 put 路径保持同一持久性语义：发布前先把临时文件内容刷盘。
         ch.force(true);
       }
+      Files.setLastModifiedTime(temp, Files.getLastModifiedTime(src));
       try {
         Files.move(temp, dst, StandardCopyOption.ATOMIC_MOVE);
       } catch (AtomicMoveNotSupportedException atomicEx) {

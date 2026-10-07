@@ -68,6 +68,8 @@ BFS 的下游 readiness 不能只看 `job_instance` 最新 attempt 是否成功�
 
 ## 边界
 
+Trigger 日历与结果版本操作的日志字段经 `LogSanitizer.value` 输出,防止用户可控换行伪造运维记录。日志净化不修改原租户、业务键、状态或 readiness 判断输入;EFFECTIVE 物化与调度 defer 规则保持一致。
+
 - 不做企业数据目录、字段级血缘、记录级血缘。
 - 不判断业务金额/笔数是否正确；这仍由 DQ gate、对账规则和业务 worker 负责。
 - 不缓存 asset partition。后续如果读取 QPS 确认需要,再按明确失效策略加缓存。

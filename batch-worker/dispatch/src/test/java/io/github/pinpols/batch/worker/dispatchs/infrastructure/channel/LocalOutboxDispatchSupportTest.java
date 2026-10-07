@@ -16,6 +16,45 @@ import org.junit.jupiter.api.io.TempDir;
 class LocalOutboxDispatchSupportTest {
 
   @Test
+  @DisplayName("默认临时出箱目录及信封文件均私有,正常分发仍返回成功")
+  void shouldCreatePrivateOutbox_whenEndpointIsMissing(@TempDir Path tempDir) throws Exception {
+    String previous = System.getProperty(
+        io.github.pinpols.batch.common.utils.PrivateTempFiles.TEMP_ROOT_PROPERTY);
+    System.setProperty(
+        io.github.pinpols.batch.common.utils.PrivateTempFiles.TEMP_ROOT_PROPERTY,
+        tempDir.toString());
+    try {
+      var base = command(tempDir);
+      var command = new DispatchCommand(
+          base.tenantId(),
+          base.traceId(),
+          base.fileRecord(),
+          Map.of("channel_type", "LOCAL", "channel_code", "default"),
+          base.payload());
+      DispatchResult result =
+          LocalOutboxDispatchSupport.writeFilesystemEnvelope(command, false, null);
+      assertThat(result.success()).isTrue();
+      Path directory = tempDir.resolve("batch-dispatch-outbox");
+      assertThat(Files.getPosixFilePermissions(directory))
+          .isEqualTo(java.nio.file.attribute.PosixFilePermissions.fromString("rwx------"));
+      try (Stream<Path> files = Files.list(directory)) {
+        for (Path file : files.toList()) {
+          assertThat(Files.getPosixFilePermissions(file))
+              .isEqualTo(java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+        }
+      }
+    } finally {
+      if (previous == null) {
+        System.clearProperty(
+            io.github.pinpols.batch.common.utils.PrivateTempFiles.TEMP_ROOT_PROPERTY);
+      } else {
+        System.setProperty(
+            io.github.pinpols.batch.common.utils.PrivateTempFiles.TEMP_ROOT_PROPERTY, previous);
+      }
+    }
+  }
+
+  @Test
   @DisplayName("在沙箱内写出信封与旁挂校验文件,清单引用带校验和并落在目标目录")
   void shouldWriteEnvelopeAndSidecarManifestInsideSandbox(@TempDir Path tempDir) throws Exception {
     Path sandbox = tempDir.resolve("sandbox");

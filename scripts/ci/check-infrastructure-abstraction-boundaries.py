@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from pathlib import Path
 import re
 import subprocess
@@ -69,21 +70,50 @@ def is_application_boundary(path: Path) -> bool:
     return not any(owner in relative for owner in INFRASTRUCTURE_OWNERS)
 
 
+def infrastructure_references(content: str) -> list[tuple[int, str]]:
+    references = []
+    for line_number, line in enumerate(content.splitlines(), start=1):
+        stripped = line.strip()
+        if stripped.startswith(("*", "//")):
+            continue
+        if BANNED_INFRASTRUCTURE_REFERENCE.search(stripped):
+            references.append((line_number, stripped))
+    return references
+
+
+def new_references(before: str, after: str) -> list[tuple[int, str]]:
+    # 以基线引用及出现次数抵扣既有项,日志修复不能变成整文件历史债务阻断。
+    baseline = Counter(re.sub(r"\s+", "", line) for _, line in infrastructure_references(before))
+    added = []
+    for line_number, line in infrastructure_references(after):
+        key = re.sub(r"\s+", "", line)
+        if baseline[key]:
+            baseline[key] -= 1
+        else:
+            added.append((line_number, line))
+    return added
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base", required=True, help="base ref for diff-only PR guard")
     args = parser.parse_args()
+    merge_base = run_git(["merge-base", args.base, "HEAD"]).strip()
 
     errors: list[str] = []
     for path in changed_java_files(args.base):
         if not is_application_boundary(path):
             continue
-        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-            stripped = line.strip()
-            if stripped.startswith("*") or stripped.startswith("//"):
-                continue
-            if BANNED_IMPORT.search(stripped) or BANNED_INFRASTRUCTURE_REFERENCE.search(stripped):
-                errors.append(f"{path.relative_to(ROOT)}:{line_number}: {line.strip()}")
+        relative = path.relative_to(ROOT).as_posix()
+        baseline = subprocess.run(
+            ["git", "show", f"{merge_base}:{relative}"], cwd=ROOT, capture_output=True, text=True
+        )
+        # 新增文件没有基线;其他读取错误必须失败,不能静默丢失比较依据。
+        before = baseline.stdout
+        if baseline.returncode and run_git(["ls-tree", "--name-only", merge_base, "--", relative]).strip():
+            raise RuntimeError(f"cannot read infrastructure boundary baseline: {relative}")
+        for line_number, line in new_references(before, path.read_text(encoding="utf-8")):
+            errors.append(f"{relative}:{line_number}: {line}")
 
     if errors:
         print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1")
