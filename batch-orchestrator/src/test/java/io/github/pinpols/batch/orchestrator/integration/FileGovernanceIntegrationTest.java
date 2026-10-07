@@ -160,6 +160,48 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
   @Autowired
   private MeterRegistry meterRegistry;
 
+  @Autowired
+  private FileGovernanceProperties fileGovernanceProperties;
+
+  @Test
+  @DisplayName("真实数据库查询保留成员校验类型,开启完整性要求后已校验文件能够触发")
+  void shouldTriggerVerifiedGroup_whenDatabaseReturnsChecksumType() {
+    String groupCode = "verified-group-" + suffix();
+    String metadata = """
+        {"fileGroupCode":"%s","requiredFileSet":"verified.csv","triggerOnComplete":true}
+        """.formatted(groupCode);
+    Long fileId = insertFileRecord(new FileRecordSpec(
+        TENANT_ID,
+        "verified.csv",
+        "INPUT",
+        FileStatus.RECEIVED.code(),
+        "LOCAL",
+        "incoming/" + groupCode + "/verified.csv",
+        metadata));
+    jdbcTemplate.update(
+        "update batch.file_record set checksum_type = 'SHA-256', checksum_value = ? where tenant_id = ? and id = ?",
+        "a".repeat(64),
+        TENANT_ID,
+        fileId);
+    assertThat(fileGovernanceRepository.selectArrivalGovernanceCandidates(1000))
+        .filteredOn(row -> fileId.equals(((Number) row.get("id")).longValue()))
+        .singleElement()
+        .satisfies(row -> assertThat(row).containsEntry("checksum_type", "SHA-256"));
+    boolean original = fileGovernanceProperties.getArrival().isRequireVerified();
+    try {
+      fileGovernanceProperties.getArrival().setRequireVerified(true);
+      fileGovernanceScheduler.manageFileArrivalGroups();
+      assertThat(jdbcTemplate.queryForObject(
+              "select metadata_json->>'arrivalState' from batch.file_record where tenant_id = ? and id = ?",
+              String.class,
+              TENANT_ID,
+              fileId))
+          .isEqualTo("TRIGGERED");
+    } finally {
+      fileGovernanceProperties.getArrival().setRequireVerified(original);
+    }
+  }
+
   @Test
   @DisplayName("延迟到达的文件计入送达延迟违规计数,最大延迟秒数不低于实际延迟")
   void shouldCollectLatencyMetricsForDelayedArrivalFiles() {

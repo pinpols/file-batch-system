@@ -1,9 +1,12 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.file;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -256,6 +259,92 @@ class BundleArrivalLauncherTest {
     assertThatThrownBy(() -> launcher.launchIfBundle("t1", "g", groupFiles))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("binding without bundleJobCode");
+    verify(launchService, never()).launch(org.mockito.ArgumentMatchers.any());
+  }
+
+  @Test
+  @DisplayName("长租户和到达组编码生成有界稳定请求号,不同组不共用幂等键")
+  void shouldBoundRequestId_whenTenantAndGroupCodesAreLong() {
+    when(launchService.launch(org.mockito.ArgumentMatchers.any()))
+        .thenReturn(new LaunchResponse("INST-1", "trace-1"));
+    List<Map<String, Object>> files = List.of(file(
+        101, "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_ORDER\"}"));
+    String tenant = "t".repeat(64);
+    String group = "g".repeat(64);
+    launcher.launchIfBundle(tenant, group, files);
+    launcher.launchIfBundle(tenant, group, files);
+    launcher.launchIfBundle(tenant, "h".repeat(64), files);
+    ArgumentCaptor<LaunchRequest> requests = ArgumentCaptor.forClass(LaunchRequest.class);
+    verify(launchService, times(3)).launch(requests.capture());
+    List<String> ids =
+        requests.getAllValues().stream().map(LaunchRequest::requestId).toList();
+    Assertions.assertThat(ids.get(0)).hasSizeLessThanOrEqualTo(128).isEqualTo(ids.get(1));
+    Assertions.assertThat(ids.get(2)).isNotEqualTo(ids.get(0));
+  }
+
+  @Test
+  @DisplayName("批次日门禁返回无实例时按持久化等待结果返回,下一轮不重复启动")
+  void shouldReturnWaitingWithoutRelaunch_whenBatchDayGateDefers() {
+    TriggerRequestEntity waiting = new TriggerRequestEntity();
+    waiting.setRequestStatus(TriggerRequestStatus.WAITING.code());
+    when(triggerRequestMapper.selectByTenantAndRequestId(anyString(), anyString()))
+        .thenReturn(null, null, waiting, waiting);
+    when(launchService.launch(org.mockito.ArgumentMatchers.any()))
+        .thenReturn(LaunchResponse.skipped("trace-1"));
+    List<Map<String, Object>> files = List.of(file(
+        101, "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_ORDER\"}"));
+    Assertions.assertThat(launcher.launchIfBundle("t1", "g", files))
+        .isEqualTo(BundleArrivalLauncher.LaunchOutcome.WAITING);
+    Assertions.assertThat(launcher.launchIfBundle("t1", "g", files))
+        .isEqualTo(BundleArrivalLauncher.LaunchOutcome.WAITING);
+    verify(launchService).launch(org.mockito.ArgumentMatchers.any());
+    verify(triggerRequestMapper).insertIfAbsent(any());
+  }
+
+  @Test
+  @DisplayName("门禁拒绝返回空实例时读取持久化拒绝状态,结果无法确认时不误报启动成功")
+  void shouldResolveSkippedResponseOrFail_whenGateReturnsNoInstance() {
+    TriggerRequestEntity rejected = new TriggerRequestEntity();
+    rejected.setRequestStatus(TriggerRequestStatus.REJECTED.code());
+    when(triggerRequestMapper.selectByTenantAndRequestId(anyString(), anyString()))
+        .thenReturn(null, null, rejected);
+    when(launchService.launch(any())).thenReturn(LaunchResponse.skipped("trace-1"));
+    List<Map<String, Object>> files = List.of(file(
+        101, "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_ORDER\"}"));
+    Assertions.assertThat(launcher.launchIfBundle("t1", "g", files))
+        .isEqualTo(BundleArrivalLauncher.LaunchOutcome.REJECTED);
+    when(triggerRequestMapper.selectByTenantAndRequestId(anyString(), anyString()))
+        .thenReturn(null);
+    assertThatThrownBy(() -> launcher.launchIfBundle("t1", "g2", files))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("no instance or durable outcome");
+  }
+
+  @Test
+  @DisplayName("请求登记期间另一调用已派发时直接采用持久化结果,不重复调用启动服务")
+  void shouldObserveConcurrentLaunch_whenRequestAlreadyAdvanced() {
+    TriggerRequestEntity launched = new TriggerRequestEntity();
+    launched.setRequestStatus(TriggerRequestStatus.LAUNCHED.code());
+    when(triggerRequestMapper.selectByTenantAndRequestId(anyString(), anyString()))
+        .thenReturn(null, launched);
+    List<Map<String, Object>> files = List.of(file(
+        101, "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_ORDER\"}"));
+    Assertions.assertThat(launcher.launchIfBundle("t1", "g", files))
+        .isEqualTo(BundleArrivalLauncher.LaunchOutcome.LAUNCHED);
+    verify(launchService, never()).launch(any());
+  }
+
+  @Test
+  @DisplayName("已拒绝的持久化请求不重新启动,也不报告已派发")
+  void shouldReturnRejected_whenRequestWasRejected() {
+    TriggerRequestEntity rejected = new TriggerRequestEntity();
+    rejected.setRequestStatus(TriggerRequestStatus.REJECTED.code());
+    when(triggerRequestMapper.selectByTenantAndRequestId(anyString(), anyString()))
+        .thenReturn(rejected);
+    List<Map<String, Object>> files = List.of(file(
+        101, "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_ORDER\"}"));
+    Assertions.assertThat(launcher.launchIfBundle("t1", "g", files))
+        .isEqualTo(BundleArrivalLauncher.LaunchOutcome.REJECTED);
     verify(launchService, never()).launch(org.mockito.ArgumentMatchers.any());
   }
 

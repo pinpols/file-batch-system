@@ -249,6 +249,11 @@ public class FileGovernanceScheduler {
     }
     Set<String> missingFiles = new HashSet<>(requiredFiles);
     missingFiles.removeAll(arrivedFiles);
+    // 文件已齐且请求已交给批次日等待队列后,到达超时不再覆盖该请求的真实恢复结果。
+    if ("BUNDLE_LAUNCH_WAITING".equals(text(firstFile.get("arrival_reason")))) {
+      return triggerArrivalGroup(
+          key, groupFiles, requiredFiles, missingFiles, "ALL_FILES_ARRIVED", now);
+    }
     Instant latestTolerableTime = parseInstant(text(firstFile.get("latest_tolerable_time")));
     boolean triggerOnComplete = parseBoolean(
         text(firstFile.get("trigger_on_complete")), properties.getArrival().isTriggerOnComplete());
@@ -337,8 +342,10 @@ public class FileGovernanceScheduler {
       Set<String> missingFiles,
       String reason,
       Instant now) {
+    BundleArrivalLauncher.LaunchOutcome outcome;
     try {
-      bundleArrivalLauncher.launchIfBundle(key.tenantId(), key.fileGroupCode(), groupFiles);
+      outcome =
+          bundleArrivalLauncher.launchIfBundle(key.tenantId(), key.fileGroupCode(), groupFiles);
     } catch (RuntimeException exception) {
       // P1-2:束 launch 失败 → 保持组 retryable(不丢触发)。但永久畸形组(混 jobCode/bizDate)会每轮
       // sweep 重试,只 ERROR 日志运维不可见 → 加 counter 供告警(瞬时故障可恢复,永久故障靠该 metric
@@ -353,14 +360,21 @@ public class FileGovernanceScheduler {
           exception);
       return new ArrivalGroupDecision("WAITING_ARRIVAL");
     }
-    ArrivalGroupUpdateState updateState =
-        new ArrivalGroupUpdateState(STATUS_TRIGGERED, reason, now);
+    String state = STATUS_TRIGGERED;
+    if (outcome == BundleArrivalLauncher.LaunchOutcome.WAITING) {
+      state = "WAITING_ARRIVAL";
+      reason = "BUNDLE_LAUNCH_WAITING";
+    } else if (outcome == BundleArrivalLauncher.LaunchOutcome.REJECTED) {
+      state = STATUS_WAITING_MANUAL_CONFIRM;
+      reason = "BUNDLE_LAUNCH_REJECTED";
+    }
+    ArrivalGroupUpdateState updateState = new ArrivalGroupUpdateState(state, reason, now);
     ArrivalGroupUpdateFiles updateFiles =
         new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles);
     ArrivalGroupUpdateContext updateContext =
         new ArrivalGroupUpdateContext(key, updateState, updateFiles);
     updateGroupState(updateContext);
-    return new ArrivalGroupDecision(STATUS_TRIGGERED);
+    return new ArrivalGroupDecision(state);
   }
 
   private void updateGroupState(ArrivalGroupUpdateContext context) {
