@@ -31,6 +31,29 @@ echo "select text shown to an operator"
 
         self.assertEqual([1, 2, 3, 4], [line_number for line_number, _ in matches])
 
+    def test_detects_wrapped_psql_c_commands_and_eosql_heredocs(self) -> None:
+        content = '''\
+run_or_preview psql_platform -c "VACUUM (ANALYZE) ${table};"
+psql -v ON_ERROR_STOP=1 <<-EOSQL
+  DO $$ BEGIN SELECT 1; END $$;
+EOSQL
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "probe.sh"
+            path.write_text(content, encoding="utf-8")
+            matches = SQL_BOUNDARY.matched_lines(path)
+
+        self.assertEqual([1, 2, 3], [line_number for line_number, _ in matches])
+
+    def test_does_not_treat_downstream_grep_count_as_psql_c_option(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "probe.sh"
+            path.write_text(
+                'updated="$(psql_file -f reset.sql | grep -c "^[0-9]")"\n',
+                encoding="utf-8",
+            )
+            self.assertEqual([], SQL_BOUNDARY.matched_lines(path))
+
     def test_ignore_marker_is_explicit(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "probe.sh"

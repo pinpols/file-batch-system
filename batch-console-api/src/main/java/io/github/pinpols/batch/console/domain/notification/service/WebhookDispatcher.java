@@ -273,9 +273,7 @@ public class WebhookDispatcher {
   private void deliver(
       WebhookSubscriptionEntity subscription, WebhookEventPayload payload, String payloadJson)
       throws IOException {
-    // 主机名 rebinding:由 httpClient 内置 SsrfGuardedDns 在建连回调层解析 + 校验 + pin(连的就是校验的那个 IP)。
-    // 字面量 IP 兜底:OkHttp 对字面量 IP 短路不走 Dns,故这里补一次 guard 拦住 metadata/内网字面量 IP;
-    // 对主机名这次是冗余预检(实连 IP 仍由 SsrfGuardedDns 决定,不重开 rebinding 窗口)。
+    // SSRF 防护：主机名由 OkHttp DNS guard 校验并固定连接 IP；此处额外校验字面量 IP，避免绕过 DNS 回调。
     String host = URI.create(subscription.getCallbackUrl()).getHost();
     if (host != null) {
       DnsResolveGuard.resolveAndValidate(host);

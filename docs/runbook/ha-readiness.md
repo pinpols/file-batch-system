@@ -63,6 +63,15 @@
 - **② 应用侧**:✅ cache fail-open(Redis 挂→直通 DB,`worker-cache.enabled` fail-open);⚠️ ShedLock 依赖 Redis,Redis 全挂期间调度互斥退化——可配 ShedLock 走 PG 回退(`docs/runbook/redis-shedlock-down.md`)。
 - **验证**:Sentinel 主从切换,缓存/选主短暂抖动后恢复,业务不崩。
 
+### 本地 Compose 故障切换演练
+
+本地演练用于验证协议、复制与恢复步骤，不代表跨节点/跨可用区 HA，也不替代生产 Kubernetes Operator 演练。脚本使用唯一 Compose project 和独立具名卷；无论成功或失败，退出时只清理该 project。
+
+- **Valkey Sentinel**：`bash scripts/local/redis-sentinel-ha-drill.sh`。默认读取 `.env.local`，可用 `COMPOSE_ENV_FILE` 指定环境文件。叠加 `docker-compose.redis-sentinel-ha.yml` 后启动 1 主、2 从、3 Sentinel；确认 `WAIT 2`、停止主节点、验证自动切换前数据可读和切换后可写，再重启旧主并确认其作为副本追平。应用服务默认仍使用单点配置；需要联调应用 Sentinel 客户端时，另叠加 `deploy/docker/compose/app-redis-sentinel.yml`。
+- **PostgreSQL streaming replica**：`bash scripts/local/pg-replica-failover-drill.sh`。复用现有 `replica` profile，隔离启动主从；验证复制标记、提升 standby、晋升后写入，再用空卷将旧主从新主重新克隆为 standby。它验证手动故障切换流程，不声称现有本地 Compose 有自动 leader endpoint 或 Patroni 自动切换。
+- **MinIO distributed erasure coding**：`bash scripts/local/minio-distributed-ha-drill.sh`。使用 `docker-compose.minio-ha.yml` 启动 4 节点、每节点 1 个独立数据卷的 EC:2 集群；停止一个节点后从存活节点验证已有对象可读、新对象可写，再恢复节点并复验。客户端在故障时显式切到存活节点，因此此项验证对象集群 quorum 与恢复，不验证负载均衡器或应用 SDK 的 endpoint 故障转移。演练复用本地 `MINIO_IMAGE_*` / `MINIO_MC_IMAGE_*` 镜像；`deploy/ha/40-minio-tenant.yaml` 仍是需先完成镜像授权/维护审查的 Kubernetes 设计示例。
+- **边界**：三项演练都需要本机 Docker 资源；PG 演练是临时数据库，MinIO 演练是临时对象集群，退出后删除隔离卷。不要把脚本指向共享或生产 Docker project；生产 HA 仍按本 Runbook 的 Operator/托管服务流程演练。
+
 ### P1-2 连接池 / 扇出治理(上 Citus 重点;单机可选)
 - **现状**:无 PgBouncer。Citus 下 app 池 × 分片数放大已撞 "too many clients"(W8)。
 - **① 运维件**:PgBouncer(transaction mode)前置;Citus 调 `citus.max_shared_pool_size`(三元组:worker max_connections ≥ max_shared_pool_size ≥ app 池峰值和)。

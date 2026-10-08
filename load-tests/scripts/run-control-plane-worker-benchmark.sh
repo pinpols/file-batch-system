@@ -778,7 +778,7 @@ if [[ "$RESET_PG_STATEMENTS_BEFORE_MEASURE" != "0" && "$RESET_PG_STATEMENTS_BEFO
 fi
 if [[ "$PRE_MEASURE_CHECKPOINT_ENABLED" == "1" ]]; then
   echo "==> forcing PostgreSQL checkpoint before measured traffic"
-  psql_platform -c 'CHECKPOINT' >/dev/null
+  psql_platform -f "$LOAD_DIR/sql/checkpoint.sql" >/dev/null
 fi
 if [[ "$POST_PREPARE_SETTLE_SECONDS" -gt 0 ]]; then
   echo "==> settling ${POST_PREPARE_SETTLE_SECONDS}s after fixture preparation before measured traffic"

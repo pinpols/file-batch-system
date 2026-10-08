@@ -88,6 +88,9 @@ def main() -> int:
     test_compose_path = ROOT / "deploy/docker/compose/test.yml"
     check_service_env(errors, load_yaml(test_compose_path), TEST_SERVICES, test_compose_path.name)
 
+    sim_compose_path = ROOT / "scripts/sim/compose.yml"
+    check_service_env(errors, load_yaml(sim_compose_path), TEST_SERVICES, sim_compose_path.name)
+
     helm_values = load_yaml(ROOT / "helm/batch-platform/values.yaml")
     if helm_values.get("batchLocale") != "C.UTF-8":
         errors.append("Helm batchLocale default must be C.UTF-8")
@@ -127,7 +130,7 @@ def main() -> int:
 
     print(
         f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME} "
-        f"| service_configs={len(COMPOSE_SERVICES) + len(KAFKA_HA_SERVICES) + len(APP_SERVICES) + len(TEST_SERVICES)} "
+        f"| service_configs={len(COMPOSE_SERVICES) + len(KAFKA_HA_SERVICES) + len(APP_SERVICES) + 2 * len(TEST_SERVICES)} "
         f"testcontainers={len(TEST_CONTAINER_FACTORIES)}"
     )
     return 0

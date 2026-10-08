@@ -349,13 +349,19 @@ postgres_maintenance() {
     batch.result_version
   )
   for table in "${tables[@]}"; do
-    run_or_preview psql_platform -c "VACUUM (ANALYZE) ${table};"
+    local table_schema="${table%%.*}"
+    local table_name="${table#*.}"
+    run_or_preview psql_platform -v table_schema="$table_schema" -v table_name="$table_name" \
+      -f "$LOAD_DIR/sql/vacuum-analyze-table.sql"
   done
-  run_or_preview psql_platform -c "CHECKPOINT;"
+  run_or_preview psql_platform -f "$LOAD_DIR/sql/checkpoint.sql"
   if [[ "$POSTGRES_RECLAIM" == "true" ]]; then
     echo "VACUUM FULL 会锁表，仅限本地停写窗口。"
     for table in "${tables[@]}"; do
-      run_or_preview psql_platform -c "VACUUM (FULL, ANALYZE) ${table};"
+      local table_schema="${table%%.*}"
+      local table_name="${table#*.}"
+      run_or_preview psql_platform -v table_schema="$table_schema" -v table_name="$table_name" \
+        -f "$LOAD_DIR/sql/vacuum-full-analyze-table.sql"
     done
   fi
 }

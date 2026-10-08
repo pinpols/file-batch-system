@@ -6,11 +6,18 @@ x-common-runtime-env: &common-runtime-env
   BATCH_TIMEZONE_DEFAULT_ZONE: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
   TZ: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
 
+x-postgres-replication-env: &postgres-replication-env
+  POSTGRES_REPLICATION_USER: ${POSTGRES_REPLICATION_USER:-replicator}
+  POSTGRES_REPLICATION_PASSWORD: ${POSTGRES_REPLICATION_PASSWORD:-repl_pass_dev_only}
+
 x-container-logging: &container-logging
   driver: local
   options:
     max-size: ${BATCH_DOCKER_LOG_MAX_SIZE:-50m}
     max-file: ${BATCH_DOCKER_LOG_MAX_FILES:-3}
+
+# MinIO 镜像身份与 minio-data 卷属主绑定；固定契约，不提供运行时覆盖变量。
+x-minio-runtime-user: &minio-runtime-user "1001:1001"
 
 services:
   postgres-primary:
@@ -80,13 +87,10 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      # P2-4: 透传给 003-create-replication-user.sh 创建流复制用户
-      POSTGRES_REPLICATION_USER: ${POSTGRES_REPLICATION_USER:-replicator}
-      POSTGRES_REPLICATION_PASSWORD: ${POSTGRES_REPLICATION_PASSWORD:-repl_pass_dev_only}
       # 全栈 UTF-8（见 docs/agent-baseline.md §字符编码）：数据库 initdb 强制 UTF8 编码，
       # 容器 locale 锁 C.UTF-8 防止 psql/日志输出乱码。
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --auth-host=scram-sha-256"
-      <<: *common-runtime-env
+      <<: [*common-runtime-env, *postgres-replication-env]
       PGTZ: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
     ports:
       - "${POSTGRES_PORT}:5432"
@@ -139,13 +143,11 @@ services:
     environment:
       POSTGRES_PRIMARY_HOST: postgres-primary
       POSTGRES_PRIMARY_PORT: 5432
-      POSTGRES_REPLICATION_USER: ${POSTGRES_REPLICATION_USER:-replicator}
-      POSTGRES_REPLICATION_PASSWORD: ${POSTGRES_REPLICATION_PASSWORD:-repl_pass_dev_only}
       # healthcheck 用的本地连接信息（同主库一致；replica 镜像主库账号体系）
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_DB: ${POSTGRES_DB}
       PGDATA: /var/lib/postgresql/data/pgdata
-      <<: *common-runtime-env
+      <<: [*common-runtime-env, *postgres-replication-env]
       PGTZ: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
     ports:
       - "${POSTGRES_REPLICA_PORT:-15433}:5432"
@@ -311,7 +313,7 @@ services:
     build:
       context: .
       dockerfile: deploy/docker/Dockerfile.volume-init
-    user: "1001:1001"
+    user: *minio-runtime-user
     restart: "no"
     network_mode: none
     read_only: true
@@ -324,7 +326,7 @@ services:
   minio:
     logging: *container-logging
     image: ${MINIO_IMAGE_REPOSITORY:-bitnamilegacy/minio}:${MINIO_IMAGE_TAG:-2025.7.23-debian-12-r1}
-    user: "1001:1001"
+    user: *minio-runtime-user
     container_name: batch-minio
     restart: unless-stopped
     # 本地依赖也必须有 cgroup 边界，避免异常 multipart/扫描占满宿主机内存。
@@ -361,7 +363,7 @@ services:
     logging: *container-logging
     # 独立 CLI 容器使用已验证内置 mc 的固定镜像，避免失效的 minio/mc 仓库。
     image: ${MINIO_MC_IMAGE_REPOSITORY:-bitnamilegacy/minio}:${MINIO_MC_IMAGE_TAG:-2025.7.23-debian-12-r1}
-    user: "1001:1001"
+    user: *minio-runtime-user
     container_name: batch-minio-init
     depends_on:
       minio:

@@ -266,7 +266,7 @@ PR 所有单元分片均设置 `-DskipITs=true`；集成和 E2E 由 Full Gate �
 | 文档变更 | 文档结构、文档日期策略、代码与文档路径引用、核心术语枚举同步 | 全局文档关系检查 |
 | `.env*` 变更 | 环境文件 Shell 安全 | 全局 env 文件检查 |
 | YAML / Compose / env 默认值变更 | 配置默认值同步、功能开关注册表 | 按域触发的全量一致性检查 |
-| 配置 / Java / SDK 变更 | `check-infrastructure-utf8.py` | **全量矩阵**：核对 8 个应用服务、基础服务、Kafka HA、测试服务、Helm、Dockerfile、Testcontainers 和新建 PostgreSQL 编码参数 |
+| 配置 / Java / SDK 变更 | `check-infrastructure-utf8.py` | **全量矩阵**：核对 8 个应用服务、基础服务、Kafka HA、测试服务及 Sim SFTP/MockServer、Helm、Dockerfile、Testcontainers 和新建 PostgreSQL 编码参数 |
 | `pom.xml` / `*/pom.xml` 变更 | Maven 模块依赖边界 | 全局依赖图检查 |
 | `helm/*` 变更 | Helm 环境变量同步、Helm 生产 overlay 安全 | 全局 Helm / 配置一致性检查 |
 | 数据库 / 脚本 / 文档 / 配置 / CI 变更 | 生产容量治理自动化 | 校验生产容量巡检脚本、只读 SQL、runbook、索引和 workflow 入口同步 |

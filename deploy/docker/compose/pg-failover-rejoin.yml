@@ -1,0 +1,14 @@
+# PG failover drill 的收尾覆盖：把旧 primary 的隔离卷重新从 promoted replica 克隆为 standby。
+services:
+  postgres-primary:
+    entrypoint: ["/usr/local/bin/replica-entrypoint.sh"]
+    environment:
+      POSTGRES_PRIMARY_HOST: postgres-replica
+      POSTGRES_PRIMARY_PORT: "5432"
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - pg-failover-rejoin-data:/var/lib/postgresql/data
+      - ./deploy/docker/postgres-replica/entrypoint.sh:/usr/local/bin/replica-entrypoint.sh:ro
+
+volumes:
+  pg-failover-rejoin-data:

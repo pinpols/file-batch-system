@@ -13,13 +13,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 BASELINE_FILE = ROOT / "scripts/ci/sql-inline-baseline.tsv"
-SCAN_ROOTS = (ROOT / "scripts", ROOT / "load-tests")
+SCAN_ROOTS = (ROOT / "scripts", ROOT / "load-tests", ROOT / "deploy")
 EXCLUDED_FILES = {Path("scripts/ci/check-sql-config-boundaries.sh")}
 GATE_CODE = "SQL_CONFIG_BOUNDARIES"
 GATE_NAME = "SQL/配置边界"
 
-PSQL_COMMAND = re.compile(r"\bpsql\b[^#\n]*(?:^|\s)-[A-Za-z]*c(?:\s|$)", re.IGNORECASE)
-SQL_HEREDOC = re.compile(r"<<\s*['\"]?SQL['\"]?\s*$", re.IGNORECASE)
+PSQL_COMMAND = re.compile(
+    r"\bpsql(?:_[A-Za-z0-9_]+)?\b(?:(?![|;&<>]).)*?(?:^|\s)-[A-Za-z]*c(?:\s|$)",
+    re.IGNORECASE,
+)
+SQL_HEREDOC = re.compile(r"<<-?\s*['\"]?(?:SQL|EOSQL)['\"]?\s*$", re.IGNORECASE)
 SQL_STATEMENT = re.compile(
     r"(?:^|[\"'`])\s*(?:"
     r"select(?:\s+|$)|insert\s+into\s+|update\s+[A-Za-z_$\"'{]|delete\s+from\s+|"

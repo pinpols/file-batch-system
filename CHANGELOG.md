@@ -63,6 +63,7 @@
 
 ### Fixed
 
+- 补齐本地容器生命周期并发保护及 PG/Valkey Sentinel/MinIO HA 隔离演练；维护 SQL 从 shell 内联迁至独立文件并扩展边界守护，避免演练误触现有数据卷或共享环境；Sim SFTP/MockServer 也统一 UTF-8 locale 并纳入守护。
 - 修复 Worker 实际绑定端口校验收紧后两个 E2E 的运行形态漂移：Outbox 重试测试和 Worker 进程重启测试改用随机真实 HTTP 端口，不再以无 Web Server 的上下文触发 Worker 自注册。
 - 修复文件束导入把独立文件再次当作单文件分片进行行取模和范围下载、导致分区成功但业务漏数的问题；补齐真实对象存储与端到端逐文件对账，SIM 26 按本轮请求、来源文件和业务键隔离验证。Nightly 保留 SIM 后执行 strict 的顺序，明确 SIM 失败仍采集 strict 结果，并限制 SIM 步骤超时以保留后续验证时间。
 - 修复预推送编译把 `batch-e2e-tests` 截成不存在的 `batch-e`、以及改动模块超过五个时静默漏编译的问题；补充模块选择回归守护。

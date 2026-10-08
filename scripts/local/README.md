@@ -9,16 +9,25 @@
   - 裸 JVM 自动使用宿主机 PostgreSQL / replica / Redis 地址，并映射 `.env.local` 的数据库凭据
   - 任一应用未通过最终健康检查时返回非零退出码
 - `stop-all.sh`：分阶段停止本地 Java 进程
+- `start-all.sh`、`restart.sh`、`stop-all.sh` 和 `build-apps.sh` 共用仓库级本地生命周期锁；
+  并发调用会串行等待，进程异常退出后可回收失效锁。默认等待上限 600 秒，可用
+  `BATCH_LOCAL_LOCK_TIMEOUT_SECONDS` 调整；设为 `0` 表示无限等待。
 - `health-check-infra.sh`：基建健康检查(PG primary/replica / Kafka / Redis / MinIO)。
   协议层探测 + env-var 驱动,**任何环境可用**(本机走 `.env` 默认,staging/CI 覆盖
   `PG_PRIMARY_HOST` / `KAFKA_BOOTSTRAP` / `MINIO_URL` 等)。
   - `--quiet`:只 exit code(供 start-all.sh fail-fast 调用)
   - `--no-replica` / `--no-kafka` / `--no-minio`:跳过某项(staging 无 replica 时)
   - `make dev-health` 是它的别名
+- `redis-sentinel-ha-drill.sh`：用隔离 Compose project 验证 Valkey Sentinel 自动切主、切换前复制数据、切换后写入及旧 master 重新加入；退出时清理该 project 的临时卷。
+- `pg-replica-failover-drill.sh`：复用 `replica` profile，在隔离 project 验证 standby 晋升、晋升后写入及旧 primary 从新主重新克隆为 standby；不会触碰默认本地 PG 容器或卷。
+- `minio-distributed-ha-drill.sh`：启动隔离的 4 节点 MinIO EC:2 集群，验证单节点停止期间对象读写和节点恢复后的数据可用；退出时清理专属卷。
 - `watchdog.sh`：长时间联调时挂在另一 tab 自动拉起被系统回收的 worker 进程
 （macOS 闲置数小时会回收 JVM；docker-compose 模式不需要本脚本，靠 docker
 自带 `restart: unless-stopped` 回退）
 - `build-apps.sh`：Maven 打包 8 个应用模块（`-Dmaven.test.skip=true`，不编译测试源码）
+- `pg-replica-failover-drill.sh`、`redis-sentinel-ha-drill.sh`、`minio-distributed-ha-drill.sh`：使用唯一 Compose project
+  和独立卷执行本地 PG 主备切换/重新加入、Valkey Sentinel 自动切主/旧主重新加入、MinIO 分布式纠删码单节点故障演练；要求本机 Docker context，
+  退出时会删除演练 project 和专用卷，失败时先输出容器日志。
 - `import-copy-worth-benchmark.sh`：IMPORT LOAD 写入微基准,对比当前 JDBC batch UPSERT 与
   `COPY -> temp table -> merge` 路径,用于判断是否值得实现 COPY。
 - `run-tests.sh`：**本地一键测试入口**（推荐）

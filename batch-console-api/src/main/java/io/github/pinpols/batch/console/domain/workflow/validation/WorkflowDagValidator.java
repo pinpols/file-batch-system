@@ -88,14 +88,12 @@ public class WorkflowDagValidator {
     Set<String> nodeCodes = new HashSet<>();
     List<String> startNodes = new ArrayList<>();
     List<String> endNodes = new ArrayList<>();
-    Map<String, NodeItem> byCode = new HashMap<>();
     for (NodeItem n : nodes) {
       String code = n.getNodeCode();
       if (!nodeCodes.add(code)) {
         throw BizException.of(
             ResultCode.VALIDATION_ERROR, "error.workflow.dag.duplicate_node_code", code);
       }
-      byCode.put(code, n);
       String type = n.getNodeType();
       if ("APPROVAL".equalsIgnoreCase(type)) {
         throw BizException.of(

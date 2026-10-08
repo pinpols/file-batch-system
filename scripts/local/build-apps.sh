@@ -13,6 +13,15 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
+# shellcheck source=../lib/local-lifecycle-lock.sh
+source "$ROOT/scripts/lib/local-lifecycle-lock.sh"
+batch_local_lifecycle_lock_acquire "$ROOT"
+staged_jar=""
+_cleanup_build_apps() {
+  [[ -z "$staged_jar" ]] || rm -f "$staged_jar"
+  batch_local_lifecycle_lock_release
+}
+trap _cleanup_build_apps EXIT
 
 RUNTIME_JAR_DIR="$ROOT/build/runtime-jars"
 mkdir -p "$RUNTIME_JAR_DIR"
@@ -70,7 +79,17 @@ for i in "${!MODULES[@]}"; do
     echo "ERROR: $jar 仅 ${_bytes} 字节，疑似损坏（正常 exec jar 至少数 MB）。请执行: CLEAN=1 bash scripts/local/build-apps.sh" >&2
     exit 1
   fi
-  cp -f "$jar" "$RUNTIME_JAR_DIR/${name}.jar"
+  # 先在目标目录同一文件系统写完并校验，再用 rename 原子替换。
+  # 运行中的 JVM 可能仍按需读取 fat JAR 内的嵌套依赖，不能原位截断已打开的文件。
+  staged_jar="$(mktemp "$RUNTIME_JAR_DIR/.${name}.jar.XXXXXX")"
+  cp "$jar" "$staged_jar"
+  if ! jar tf "$staged_jar" >/dev/null; then
+    echo "ERROR: staged jar 校验失败: $staged_jar" >&2
+    exit 1
+  fi
+  chmod 0644 "$staged_jar"
+  mv -f "$staged_jar" "$RUNTIME_JAR_DIR/${name}.jar"
+  staged_jar=""
   echo "  ${name}.jar <- $(basename "$jar")"
 done
 
