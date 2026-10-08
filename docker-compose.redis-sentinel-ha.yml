@@ -1,0 +1,117 @@
+# 可选本地 Redis/Valkey Sentinel 演练覆盖层。默认单节点栈不受影响。
+# 与 docker-compose.yml 及 deploy/docker/compose/app.yml 一起使用。
+
+x-valkey-ha-runtime-env: &valkey-ha-runtime-env
+  LANG: ${BATCH_LOCALE:-C.UTF-8}
+  LC_ALL: ${BATCH_LOCALE:-C.UTF-8}
+  BATCH_TIMEZONE_DEFAULT_ZONE: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
+  TZ: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
+
+services:
+  # 覆盖基础栈的单 Valkey 服务；独立 drill project 会使用独立数据卷和网络。
+  valkey:
+    container_name: ${COMPOSE_PROJECT_NAME:-batch-platform}-valkey
+    ports: !reset []
+    mem_limit: 256m
+    command:
+      - valkey-server
+      - --maxmemory
+      - 128mb
+      - --maxmemory-policy
+      - noeviction
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+
+  valkey-replica-1:
+    image: valkey/valkey:${VALKEY_IMAGE_TAG:-8.1.10}
+    user: valkey
+    restart: unless-stopped
+    mem_limit: 256m
+    command:
+      - valkey-server
+      - --replicaof
+      - valkey
+      - "6379"
+      - --maxmemory
+      - 128mb
+      - --maxmemory-policy
+      - noeviction
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+    environment: *valkey-ha-runtime-env
+    volumes:
+      - valkey-ha-replica-1-data:/data
+    networks: [batch-network]
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli ping | grep -qx PONG"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+
+  valkey-replica-2:
+    image: valkey/valkey:${VALKEY_IMAGE_TAG:-8.1.10}
+    user: valkey
+    restart: unless-stopped
+    mem_limit: 256m
+    command:
+      - valkey-server
+      - --replicaof
+      - valkey
+      - "6379"
+      - --maxmemory
+      - 128mb
+      - --maxmemory-policy
+      - noeviction
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+    environment: *valkey-ha-runtime-env
+    volumes:
+      - valkey-ha-replica-2-data:/data
+    networks: [batch-network]
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli ping | grep -qx PONG"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+
+  valkey-sentinel-1: &valkey-sentinel
+    image: valkey/valkey:${VALKEY_IMAGE_TAG:-8.1.10}
+    user: valkey
+    restart: unless-stopped
+    mem_limit: 128m
+    entrypoint: ["/usr/local/bin/valkey-sentinel-entrypoint.sh"]
+    environment:
+      <<: *valkey-ha-runtime-env
+      SENTINEL_MASTER_NAME: batch-valkey
+      SENTINEL_MASTER_HOST: valkey
+      SENTINEL_MASTER_PORT: "6379"
+      SENTINEL_QUORUM: "2"
+    volumes:
+      - ./scripts/docker/valkey-sentinel-entrypoint.sh:/usr/local/bin/valkey-sentinel-entrypoint.sh:ro
+    networks: [batch-network]
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli -p 26379 ping | grep -qx PONG"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+
+  valkey-sentinel-2:
+    <<: *valkey-sentinel
+
+  valkey-sentinel-3:
+    <<: *valkey-sentinel
+
+volumes:
+  valkey-ha-replica-1-data:
+  valkey-ha-replica-2-data:
+
+networks:
+  batch-network:
+    external: false
+    name: null

@@ -1,0 +1,22 @@
+# 本地 Sentinel 演练时叠加到 app.yml；默认应用配置仍使用单节点 valkey。
+x-redis-sentinel-client: &redis-sentinel-client
+  SPRING_DATA_REDIS_SENTINEL_MASTER: batch-valkey
+  SPRING_DATA_REDIS_SENTINEL_NODES: valkey-sentinel-1:26379,valkey-sentinel-2:26379,valkey-sentinel-3:26379
+
+services:
+  console-api:
+    environment: *redis-sentinel-client
+  trigger:
+    environment: *redis-sentinel-client
+  orchestrator:
+    environment: *redis-sentinel-client
+  worker-import:
+    environment: *redis-sentinel-client
+  worker-export:
+    environment: *redis-sentinel-client
+  worker-process:
+    environment: *redis-sentinel-client
+  worker-dispatch:
+    environment: *redis-sentinel-client
+  worker-atomic:
+    environment: *redis-sentinel-client

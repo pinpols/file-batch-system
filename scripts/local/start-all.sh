@@ -16,6 +16,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
+# shellcheck source=../lib/local-lifecycle-lock.sh
+source "$ROOT/scripts/lib/local-lifecycle-lock.sh"
+batch_local_lifecycle_lock_acquire "$ROOT"
 
 _LOCAL_SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=docker-path.sh
@@ -71,7 +74,11 @@ CDS_DIR="$ROOT/build/cds"
 mkdir -p "$RUNTIME_JAR_DIR" "$CDS_DIR"
 PID_FILE="$(log_pid_file "$ROOT" start-all.pids)"
 PID_FILE_NEW="$(mktemp "$PID_FILE.XXXXXX")"
-trap 'rm -f "$PID_FILE_NEW"' EXIT
+_cleanup_start_all() {
+  rm -f "$PID_FILE_NEW"
+  batch_local_lifecycle_lock_release
+}
+trap _cleanup_start_all EXIT
 
 existing_pid_for() {
   local name="$1"
@@ -510,7 +517,6 @@ if [[ -f "$PID_FILE" ]]; then
   done < "$PID_FILE"
 fi
 mv "$PID_FILE_NEW" "$PID_FILE"
-trap - EXIT
 
 echo ""
 echo "全部进程已在后台运行。端口（默认）："

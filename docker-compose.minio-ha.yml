@@ -1,0 +1,116 @@
+# 可选的本地 MinIO 分布式纠删码演练栈。独立 project/卷，不覆盖默认单节点 MinIO。
+
+x-minio-ha-runtime: &minio-ha-runtime
+  image: ${MINIO_IMAGE_REPOSITORY:-bitnamilegacy/minio}:${MINIO_IMAGE_TAG:-2025.7.23-debian-12-r1}
+  user: "1001:1001"
+  restart: unless-stopped
+  mem_limit: 512m
+  environment: &minio-ha-env
+    MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+    MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    MINIO_STORAGE_CLASS_STANDARD: EC:2
+    LANG: ${BATCH_LOCALE:-C.UTF-8}
+    LC_ALL: ${BATCH_LOCALE:-C.UTF-8}
+    BATCH_TIMEZONE_DEFAULT_ZONE: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
+    TZ: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
+  command: &minio-ha-command
+    - server
+    - http://minio-ha-1/bitnami/minio/data
+    - http://minio-ha-2/bitnami/minio/data
+    - http://minio-ha-3/bitnami/minio/data
+    - http://minio-ha-4/bitnami/minio/data
+    - --console-address
+    - ":9001"
+  networks: [minio-ha]
+  healthcheck:
+    test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/ready >/dev/null"]
+    interval: 5s
+    timeout: 3s
+    retries: 30
+
+x-minio-ha-volume-init: &minio-ha-volume-init
+  image: alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+  user: "0:0"
+  restart: "no"
+  network_mode: none
+  read_only: true
+  cap_drop: [ALL]
+  cap_add: [CHOWN]
+  security_opt: ["no-new-privileges:true"]
+  command: ["sh", "-ec", "chown 1001:1001 /volume/minio"]
+
+services:
+  minio-ha-volume-init-1:
+    <<: *minio-ha-volume-init
+    volumes: [minio-ha-1-data:/volume/minio]
+  minio-ha-volume-init-2:
+    <<: *minio-ha-volume-init
+    volumes: [minio-ha-2-data:/volume/minio]
+  minio-ha-volume-init-3:
+    <<: *minio-ha-volume-init
+    volumes: [minio-ha-3-data:/volume/minio]
+  minio-ha-volume-init-4:
+    <<: *minio-ha-volume-init
+    volumes: [minio-ha-4-data:/volume/minio]
+
+  minio-ha-1:
+    <<: *minio-ha-runtime
+    depends_on:
+      minio-ha-volume-init-1:
+        condition: service_completed_successfully
+    volumes:
+      - type: volume
+        source: minio-ha-1-data
+        target: /bitnami/minio/data
+        volume: {nocopy: true}
+  minio-ha-2:
+    <<: *minio-ha-runtime
+    depends_on:
+      minio-ha-volume-init-2:
+        condition: service_completed_successfully
+    volumes:
+      - type: volume
+        source: minio-ha-2-data
+        target: /bitnami/minio/data
+        volume: {nocopy: true}
+  minio-ha-3:
+    <<: *minio-ha-runtime
+    depends_on:
+      minio-ha-volume-init-3:
+        condition: service_completed_successfully
+    volumes:
+      - type: volume
+        source: minio-ha-3-data
+        target: /bitnami/minio/data
+        volume: {nocopy: true}
+  minio-ha-4:
+    <<: *minio-ha-runtime
+    depends_on:
+      minio-ha-volume-init-4:
+        condition: service_completed_successfully
+    volumes:
+      - type: volume
+        source: minio-ha-4-data
+        target: /bitnami/minio/data
+        volume: {nocopy: true}
+
+  minio-ha-client:
+    image: ${MINIO_MC_IMAGE_REPOSITORY:-bitnamilegacy/minio}:${MINIO_MC_IMAGE_TAG:-2025.7.23-debian-12-r1}
+    user: "1001:1001"
+    entrypoint: ["/bin/sh", "-ec"]
+    command: ["sleep infinity"]
+    environment:
+      <<: *minio-ha-env
+      HOME: /tmp
+      MC_CONFIG_DIR: /tmp/mc
+    networks: [minio-ha]
+
+volumes:
+  minio-ha-1-data:
+  minio-ha-2-data:
+  minio-ha-3-data:
+  minio-ha-4-data:
+
+networks:
+  minio-ha:
+    name: ${COMPOSE_PROJECT_NAME:-minio-ha-drill}-network

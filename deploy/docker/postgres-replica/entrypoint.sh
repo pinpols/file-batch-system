@@ -16,8 +16,10 @@ set -euo pipefail
 
 PRIMARY_HOST="${POSTGRES_PRIMARY_HOST:-postgres-primary}"
 PRIMARY_PORT="${POSTGRES_PRIMARY_PORT:-5432}"
-REPL_USER="${POSTGRES_REPLICATION_USER:-replicator}"
-REPL_PASS="${POSTGRES_REPLICATION_PASSWORD:-repl_pass_dev_only}"
+: "${POSTGRES_REPLICATION_USER:?POSTGRES_REPLICATION_USER is required}"
+: "${POSTGRES_REPLICATION_PASSWORD:?POSTGRES_REPLICATION_PASSWORD is required}"
+REPL_USER="$POSTGRES_REPLICATION_USER"
+REPL_PASS="$POSTGRES_REPLICATION_PASSWORD"
 
 # PGDATA 取值优先环境变量；未设时用官方镜像默认 /var/lib/postgresql/data
 : "${PGDATA:=/var/lib/postgresql/data/pgdata}"
@@ -54,6 +56,10 @@ if [ -z "$(ls -A "$PGDATA" 2>/dev/null)" ]; then
   echo "[postgres-replica] pg_basebackup 完成；进入 standby 模式"
 else
   echo "[postgres-replica] PGDATA 已存在，跳过引导，直接启动"
+fi
+
+if [[ "${1:-}" == "postgres" ]]; then
+  shift
 fi
 
 exec postgres "$@"

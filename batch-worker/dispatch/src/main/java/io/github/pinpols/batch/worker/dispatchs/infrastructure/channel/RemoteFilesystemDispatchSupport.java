@@ -51,6 +51,11 @@ final class RemoteFilesystemDispatchSupport {
   private static final String PATH_SEP = "/";
   private static final String NAS_SANDBOX_PROPERTY_KEY =
       "batch.worker.dispatch.runtime.nas-sandbox-root";
+  private static final String NAS_SYMLINK_WARNING_FORMAT = """
+          NAS directory contains symlink(s): configured={}, real={} — using real path; set \
+          {}=<abs-path> to enforce sandbox \
+          root and reject symlink escape (this warning is emitted only once per configured path)\
+          """;
   // R-4.2: NAS 沙箱根目录（可选）。若 batch.worker.dispatch.runtime.nas-sandbox-root 设置，
   // 则所有 NAS dispatch 的 realPath 必须落在该根内，否则拒绝；未设置则仅 WARN 不阻断（兼容模式）。
   // 生产强烈建议设置此属性以彻底关闭 symlink 逃逸攻击面。
@@ -168,14 +173,7 @@ final class RemoteFilesystemDispatchSupport {
             directory,
             realDirectory);
       } else {
-        log.warn(
-            "NAS directory contains symlink(s): configured={}, real={} — using real path; set"
-                + " batch.worker.dispatch.runtime.nas-sandbox-root=<abs-path> to enforce sandbox"
-                + " root and reject symlink escape (this warning is emitted only once per"
-                + " configured path)",
-            directory,
-            realDirectory,
-            NAS_SANDBOX_PROPERTY_KEY);
+        log.warn(NAS_SYMLINK_WARNING_FORMAT, directory, realDirectory, NAS_SANDBOX_PROPERTY_KEY);
       }
     }
     String sandboxRootRaw = properties.getNasSandboxRoot();

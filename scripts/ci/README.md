@@ -102,6 +102,8 @@ python3 -m unittest scripts/ci/tests/test_daily_validation_workflow.py
 ```
 
 `check-sql-config-boundaries.py` 是同名 `.sh` 稳定入口的实现，两者都登记，避免包装层与实现层单独漂移。
+扫描覆盖 `scripts/`、`load-tests/` 和 `deploy/`，识别 `psql`/`psql_* -c`、SQL heredoc 与直接 SQL 语句；
+数据库维护命令也应使用独立 `.sql` 文件和 psql 变量传值。
 
 ## PR 按需路由
 

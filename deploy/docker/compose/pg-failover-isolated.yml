@@ -1,0 +1,14 @@
+# 仅供本地 PG failover drill：复用根 Compose 的 postgres-primary 和 replica profile，
+# 但去掉固定容器名/宿主机端口，并创建项目专属网络与具名卷，避免碰现有开发栈。
+services:
+  postgres-primary:
+    container_name: ${COMPOSE_PROJECT_NAME:-batch-platform}-pg-primary
+    ports: !reset []
+  postgres-replica:
+    container_name: ${COMPOSE_PROJECT_NAME:-batch-platform}-pg-replica
+    ports: !reset []
+
+networks:
+  batch-network:
+    external: false
+    name: null

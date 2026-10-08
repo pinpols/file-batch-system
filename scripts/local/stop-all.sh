@@ -11,6 +11,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=../lib/local-lifecycle-lock.sh
+source "$ROOT/scripts/lib/local-lifecycle-lock.sh"
+batch_local_lifecycle_lock_acquire "$ROOT"
+trap batch_local_lifecycle_lock_release EXIT
 # shellcheck source=../lib/logging.sh
 source "$ROOT/scripts/lib/logging.sh"
 # shellcheck source=../lib/process.sh

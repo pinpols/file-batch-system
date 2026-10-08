@@ -1,0 +1,1 @@
+SELECT NOT pg_is_in_recovery();

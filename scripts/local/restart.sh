@@ -23,6 +23,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=../lib/local-lifecycle-lock.sh
+source "$ROOT/scripts/lib/local-lifecycle-lock.sh"
+batch_local_lifecycle_lock_acquire "$ROOT"
+trap batch_local_lifecycle_lock_release EXIT
 # 记录调用方是否显式指定了容器内 S3 endpoint。env-common 为裸 JVM
 # 自动补出的 localhost:19000 不能直接传进 Compose 网络。
 _BATCH_S3_ENDPOINT_EXPLICIT=0

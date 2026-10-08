@@ -35,6 +35,8 @@ file-batch-system/
 ├── helm/batch-platform/                    Helm Chart(prod 部署)
 ├── docker-compose.yml                      本地基础依赖 Compose 入口
 ├── docker-compose.kafka-ha.yml             本地 Kafka HA 可选叠加层
+├── docker-compose.redis-sentinel-ha.yml     本地 Valkey Sentinel 可选演练叠加层
+├── docker-compose.minio-ha.yml              本地 MinIO 分布式纠删码隔离演练栈
 ├── deploy/docker/                          Dockerfile + 应用 / 测试 / 观测 Compose
 ├── .agents/skills/                         本仓专用 Codex 工程技能(只登记 SKILL.md)
 ├── .github/workflows/                      CI(pr-gate / strict-verify / sdk-publish 等)
