@@ -162,7 +162,7 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
 
   @Override
   public String submitApproval(ApprovalSubmitContext ctx) {
-    return approvalClient.submitApproval(ApprovalSubmitCommand.builder()
+    ApprovalSubmitCommand command = ApprovalSubmitCommand.builder()
         .tenantId(resolveTenant(extractTenantId(ctx.payload())))
         .approvalType(ctx.approvalType())
         .actionType(ctx.actionType())
@@ -171,7 +171,8 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
         .payloadJson(JsonUtils.toJson(ctx.payload()))
         .approvalReason(ctx.approvalReason())
         .idempotencyKey(ctx.idempotencyKey())
-        .build());
+        .build();
+    return approvalClient.submitApproval(command);
   }
 
   /**

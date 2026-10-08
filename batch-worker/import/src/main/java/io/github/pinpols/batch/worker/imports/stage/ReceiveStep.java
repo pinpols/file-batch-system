@@ -157,7 +157,7 @@ public class ReceiveStep implements ImportStageStep {
       mergeSecurityMetadata(
           metadata, resolveTemplateSecurity(context.getTenantId(), importPayload.templateCode()));
       mergeUserMetadata(metadata, importPayload.metadata());
-      Long fileId = fileRecords.createFileRecord(FileRecordParam.builder()
+      FileRecordParam fileRecord = FileRecordParam.builder()
           .tenantId(context.getTenantId())
           .fileCode(importPayload.fileCode())
           .bizType(defaultText(importPayload.bizType(), context.getJobCode()))
@@ -181,7 +181,8 @@ public class ReceiveStep implements ImportStageStep {
           .fileStatus(FileStatus.RECEIVED.code())
           .traceId(traceId)
           .metadata(metadata)
-          .build());
+          .build();
+      Long fileId = fileRecords.createFileRecord(fileRecord);
       attrs.put(PipelineRuntimeKeys.FILE_ID, fileId);
       attrs.put(
           PipelineRuntimeKeys.FILE_RECORD,

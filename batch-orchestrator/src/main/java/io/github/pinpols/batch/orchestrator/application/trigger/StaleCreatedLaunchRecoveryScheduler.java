@@ -124,11 +124,15 @@ public class StaleCreatedLaunchRecoveryScheduler {
         .dryRun(Boolean.TRUE.equals(jobInstance.getDryRun()))
         .build();
 
-    partitionDispatchService.dispatch(PartitionDispatchService.DispatchContext.of(
+    PartitionDispatchService.DispatchRequest dispatchRequest =
         new PartitionDispatchService.DispatchRequest(
-            request, effectiveParams, jobInstance.getTraceId()),
+            request, effectiveParams, jobInstance.getTraceId());
+    PartitionDispatchService.DispatchRuntime dispatchRuntime =
         new PartitionDispatchService.DispatchRuntime(
-            jobInstance, null, List.of(), BatchDateTimeSupport.utcNow())));
+            jobInstance, null, List.of(), BatchDateTimeSupport.utcNow());
+    PartitionDispatchService.DispatchContext dispatchContext =
+        PartitionDispatchService.DispatchContext.of(dispatchRequest, dispatchRuntime);
+    partitionDispatchService.dispatch(dispatchContext);
     // dispatch(自带事务)提交后任务已实际恢复;reconcileLaunched 在其事务外,失败不能把本次
     // 恢复记成 failed(误导监控)——trigger_request 滞留 ACCEPTED 会由 TriggerRequestLaunchReconciler
     // (ADR-010,扫"ACCEPTED 且已有 job_instance")下一轮自愈,此处降级为 WARN。

@@ -155,7 +155,7 @@ public class RegisterStep implements ExportStageStep {
     mergeUserMetadata(metadata, exportPayload.metadata());
     Long fileSizeBytes =
         PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_SIZE_BYTES));
-    Long fileId = fileRecords.createFileRecord(FileRecordParam.builder()
+    FileRecordParam fileRecordParam = FileRecordParam.builder()
         .tenantId(context.getTenantId())
         .fileCode(exportPayload.fileCode())
         .bizType(
@@ -179,7 +179,8 @@ public class RegisterStep implements ExportStageStep {
         .fileStatus(FileStatus.GENERATED.code())
         .traceId(String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
         .metadata(metadata)
-        .build());
+        .build();
+    Long fileId = fileRecords.createFileRecord(fileRecordParam);
     Map<String, Object> fileRecord = fileRecords.loadFileRecord(context.getTenantId(), fileId);
     attrs.put(PipelineRuntimeKeys.FILE_ID, fileId);
     attrs.put(PipelineRuntimeKeys.FILE_RECORD, fileRecord);
