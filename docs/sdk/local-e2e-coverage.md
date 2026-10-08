@@ -42,6 +42,26 @@ KEEP=1 bash scripts/local/sdk-e2e-local.sh go   # 不清理探针(调试)
 CI 入口 `scripts/ci/run-sdk-orchestrator-e2e.sh` 可复用同一套(自己 boot 栈后调相同断言函数)。
 加一门语言只在 `sdk_e2e_start_worker` 里加一个 case,本地 + CI 同时生效。
 
+## 控制指令真实栈验证
+
+使用 `bash scripts/local/sdk-control-e2e.sh all` 验证五种 BYO SDK 对 heartbeat pause/resume、运行中取消、
+以及 worker drain 的响应。前置条件与 `sdk-e2e-local.sh` 相同；脚本为每种语言建立独立 worker/job，使用真实
+Orchestrator、Trigger、PostgreSQL、Kafka，结束后清理探针数据。也可传单个语言名缩小范围。
+
+| 控制行为 | 注入方式 | 验收 |
+|---|---|---|
+| PAUSED → NORMAL | 本机 loopback fault proxy 只改目标 worker 的 heartbeat 响应；其余 HTTP 请求转发真实 Orchestrator | PAUSED 期间 task 不进入 RUNNING、handler 不执行；NORMAL 后消费恢复 |
+| cancel | 真实 `POST /internal/tasks/{taskId}/cancel` | worker renew 收到 `cancelRequested`，handler 观察取消信号并报告 CANCELLED |
+| drain | 真实 `POST /internal/workers/{workerCode}/drain` | SDK 进入 DRAINING 并停止接单，in-flight task 正常成功；随后测试发送部署层 SIGTERM，验证进程退出且注册状态不再 ONLINE |
+
+**重要边界**：当前 Orchestrator 的 worker registry 只有 ONLINE/OFFLINE/DRAINING/DECOMMISSIONED，心跳响应文档也将
+`PAUSED` 标为预留。因此 PAUSED 由本地代理注入，用于验证真实 SDK HTTP/Kafka 生命周期；它不是后端已实现的
+worker pause 管理功能。要验证真实平台主动下发 PAUSED，需先实现服务端状态/控制 API，再移除此代理注入。样例里的
+`BATCH_SDK_CONTROL_E2E*` 只对本地测试生效，未设置时维持原始 handler 和 SDK 时序。
+Drain 和进程退出也是两段控制：平台 drain 负责停止接单并等待在飞任务收敛；测试随后发送 SIGTERM 并验证进程退出、注册状态不再 ONLINE。该断言不把各 SDK 是否自行退出当成统一契约。
+
+**最近一次控制指令实测（2026-10-08）**：Java、Go、Python、TypeScript、Rust 五种样例均通过 PAUSED 阻止 claim、NORMAL 恢复消费、真实 cancel 返回 CANCELLED、drain 期间在飞任务成功。测试发现并修复了 Go 心跳只更新 FSM 而没有唤醒 consumer、TypeScript 忽略 NORMAL/DEGRADED 的 `Kafka=none`，以及 Rust 样例没有将心跳状态接入 Kafka poll gate 三处问题。Rust 新增 `KafkaTaskConsumer::run_controlled`，现有 `run` API 保持兼容。PAUSED 仍是代理注入，不代表后端已提供原生 pause 管理功能。
+
 ## 当前状态(per language / per stage)
 
 > 用本地真 orchestrator 实测(非 fixture)。五语言样例 worker **全跑到 terminal SUCCESS**。

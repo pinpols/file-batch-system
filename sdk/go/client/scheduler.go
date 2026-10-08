@@ -33,6 +33,8 @@ type HeartbeatScheduler struct {
 	inFlight func() int
 	// onDrain is invoked once when the platform signals DRAINING (drainThenDeactivate).
 	onDrain func()
+	// onKafkaDirective 将心跳中的暂停和恢复指令应用到实际 consumer，而不只更新内存状态机。
+	onKafkaDirective func(string)
 	// onFatal is invoked once when heartbeat hits a FATAL (401/403 auth) error.
 	// The worker MUST stop consuming: a dead heartbeat means the platform will
 	// declare this worker dead after its liveness window (~120s) and redispatch
@@ -61,6 +63,12 @@ func WithHeartbeatInFlight(f func() int) HeartbeatOption {
 // WithOnDrain registers the DRAINING callback (lifecycle wires it to Stop).
 func WithOnDrain(f func()) HeartbeatOption {
 	return func(s *HeartbeatScheduler) { s.onDrain = f }
+}
+
+// WithOnKafkaDirective 将平台心跳指令连接到 broker consumer。
+// 仅更新状态机无法唤醒阻塞在 Poll() 中的 consumer。
+func WithOnKafkaDirective(f func(string)) HeartbeatOption {
+	return func(s *HeartbeatScheduler) { s.onKafkaDirective = f }
 }
 
 // WithOnFatal registers the fatal-heartbeat callback (lifecycle wires it to a
@@ -128,6 +136,9 @@ func (s *HeartbeatScheduler) Beat(ctx context.Context) (protocol.Decision, error
 	}
 	// Kafka pause/resume.
 	s.fsm.ApplyKafkaDirective(d.Kafka)
+	if d.Kafka != nil && s.onKafkaDirective != nil {
+		s.onKafkaDirective(*d.Kafka)
+	}
 
 	// Dynamic re-pacing from nextHeartbeatHint (§1.3, the closed Java gap).
 	s.mu.Lock()

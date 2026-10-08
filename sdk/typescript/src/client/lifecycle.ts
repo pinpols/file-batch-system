@@ -234,11 +234,11 @@ export class WorkerLifecycle {
         this.#consumer.pause();
         break;
       case "resume":
+      case "none":
         this.#consumer.resume();
         break;
       case "subscribe":
       case "wakeup":
-      case "none":
       case "drop-message":
         break;
     }

@@ -20,9 +20,11 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/pinpols/file-batch-system/sdk/go/client"
 	"github.com/pinpols/file-batch-system/sdk/go/kafka"
+	"github.com/pinpols/file-batch-system/sdk/go/protocol"
 )
 
 func main() {
@@ -61,11 +63,13 @@ func main() {
 	// sensitive-data validator (§1.8) + logger.
 	worker := client.NewWorker(
 		client.Config{
-			WorkerCode:     cfg.WorkerCode,
-			TenantID:       cfg.TenantID,
-			BuildID:        "sample-tenant-worker-go@dev",
-			SDKVersion:     "go-byo-sdk",
-			CapabilityTags: []string{"echo"},
+			WorkerCode:         cfg.WorkerCode,
+			TenantID:           cfg.TenantID,
+			BuildID:            "sample-tenant-worker-go@dev",
+			SDKVersion:         "go-byo-sdk",
+			CapabilityTags:     []string{"echo"},
+			HeartbeatInterval:  controlE2EInterval(),
+			LeaseRenewInterval: controlE2EInterval(),
 		},
 		transport,
 		consumer,
@@ -91,6 +95,17 @@ type echoHandler struct{ logger *log.Logger }
 func (h *echoHandler) Execute(tc *client.TaskContext) client.TaskResult {
 	h.logger.Printf("INFO echo handler taskId=%s traceId=%s params=%v",
 		tc.TaskID, tc.TraceID, tc.EffectiveConfig)
+	if delay := controlE2EDelay(); delay > 0 {
+		h.logger.Printf("INFO control-e2e handler started taskId=%s delayMs=%d", tc.TaskID, delay.Milliseconds())
+		timer := time.NewTimer(delay)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-tc.Cancellation.Context().Done():
+			h.logger.Printf("INFO control-e2e cancellation observed taskId=%s", tc.TaskID)
+			return client.Fail(protocol.ErrorCodeCancelled, "cancelled by platform")
+		}
+	}
 
 	// Cooperative cancellation: bail early if the lease was cancelled.
 	if tc.Cancellation.IsCancellationRequested() {
@@ -102,6 +117,24 @@ func (h *echoHandler) Execute(tc *client.TaskContext) client.TaskResult {
 		"handledBy":    "sample-tenant-worker-go",
 	}
 	return client.Success(outputs, fmt.Sprintf("echoed %d param(s)", len(tc.EffectiveConfig)))
+}
+
+func controlE2EInterval() time.Duration {
+	if os.Getenv("BATCH_SDK_CONTROL_E2E") == "true" {
+		return 5 * time.Second
+	}
+	return 0
+}
+
+func controlE2EDelay() time.Duration {
+	if os.Getenv("BATCH_SDK_CONTROL_E2E") != "true" {
+		return 0
+	}
+	ms, err := time.ParseDuration(os.Getenv("BATCH_SDK_CONTROL_E2E_DELAY"))
+	if err != nil || ms <= 0 {
+		return 15 * time.Second
+	}
+	return ms
 }
 
 // ---------------------------------------------------------------------------

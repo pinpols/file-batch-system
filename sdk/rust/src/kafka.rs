@@ -455,7 +455,27 @@ impl<H: MessageHandler> KafkaTaskConsumer<H> {
         F: Fn() -> i64,
         G: Fn() -> bool,
     {
+        self.run_controlled(in_flight, || false, keep_running)
+    }
+
+    /// 带平台暂停状态门控的阻塞轮询循环。
+    /// 心跳可暂停任务领取而不取消订阅；恢复后从同一消费组位置继续轮询。
+    pub fn run_controlled<F, P, G>(
+        &mut self,
+        in_flight: F,
+        platform_paused: P,
+        keep_running: G,
+    ) -> Result<(), KafkaError>
+    where
+        F: Fn() -> i64,
+        P: Fn() -> bool,
+        G: Fn() -> bool,
+    {
         while keep_running() {
+            if platform_paused() {
+                std::thread::sleep(Duration::from_millis(50));
+                continue;
+            }
             self.poll_once(&in_flight)?;
         }
         // Best-effort: commit nothing extra here; offsets are committed inline on

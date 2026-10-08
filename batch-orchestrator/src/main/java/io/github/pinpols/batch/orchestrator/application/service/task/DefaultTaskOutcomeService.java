@@ -46,7 +46,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 回报执行结果；orchestrator 在这里统一完成：
  *
  * <ul>
- *   <li>写入 task 的终态（SUCCESS/FAILED）
+ *   <li>写入 task 的终态（SUCCESS/FAILED/CANCELLED）
  *   <li>根据失败决定是否进入重试（写 retry_schedule，并把 partition/task/step 标记为 RETRYING）
  *   <li>委托协作者推进 partition/job_instance/workflow_run 的状态机（含 DAG 节点切换与下一节点派发）
  *   <li>更新 step 镜像 {@code job_step_instance}（用于审计/可视化口径一致）
@@ -67,6 +67,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Slf4j
 public class DefaultTaskOutcomeService implements TaskOutcomeService {
+
+  private static final String CANCELLED_ERROR_CODE = "CANCELLED";
 
   private final OrchestratorJobMappers jobMappers;
   private final RetryGovernanceService retryGovernanceService;
@@ -189,23 +191,25 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     TaskExecutionResult result = command.executionResult();
     TaskExecutionResult.Failure failure =
         result instanceof TaskExecutionResult.Failure failed ? failed : null;
+    boolean cancellationOutcome = isCancellationOutcome(task, command, failure);
     JobInstanceEntity retryContextInstance =
-        EmptyChecks.isNotNull(failure) && EmptyChecks.isNotNull(partition)
+        !cancellationOutcome && EmptyChecks.isNotNull(failure) && EmptyChecks.isNotNull(partition)
             ? jobMappers.jobInstanceMapper.selectById(command.tenantId(), task.getJobInstanceId())
             : null;
     // 失败时是否进入重试：由治理层统一决策（NONE/预算耗尽 → dead-letter；否则写 retry_schedule）。
-    boolean retryScheduled = EmptyChecks.isNotNull(failure)
+    boolean retryScheduled = !cancellationOutcome
+        && EmptyChecks.isNotNull(failure)
         && EmptyChecks.isNotNull(partition)
         && EmptyChecks.isNotNull(retryContextInstance)
         && retryGovernanceService.scheduleRetryIfNecessary(
             task, partition, retryContextInstance, failure.errorCode(), failure.errorMessage());
-    String resolvedFailureClass = EmptyChecks.isNull(failure)
+    String resolvedFailureClass = EmptyChecks.isNull(failure) || cancellationOutcome
         ? null
         : failureClassifier.classify(failure.failureClass(), null).code();
     JobTaskEntity finishedTask = jobMappers.jobTaskMapper.finishTask(FinishTaskParam.builder()
         .tenantId(command.tenantId())
         .id(command.taskId())
-        .taskStatus(command.success() ? TaskStatus.SUCCESS.code() : TaskStatus.FAILED.code())
+        .taskStatus(resolveTaskStatus(command, cancellationOutcome))
         .expectedStatus(TaskStatus.RUNNING.code())
         .resultSummary(command.resultSummary())
         .errorCode(command.errorCode())
@@ -253,7 +257,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
           command.tenantId(), partition.getId(), outputSummary, command.partitionInvocationId());
     }
     // step 镜像用于"按 step 维度"看执行状态/重试次数，与 task/partition 状态保持一致口径。
-    updateStepInstanceProgress(command, task, retryScheduled, finishedAt, outputSummary);
+    updateStepInstanceProgress(
+        command, task, retryScheduled, cancellationOutcome, finishedAt, outputSummary);
     // 终态 CTE 会同步递增 job_instance 的分区计数和 version，并直接返回权威快照；虚拟任务、重试路径
     // 或 CAS 未命中时才回读。两条路径都位于 instance advisory lock 保护范围内。
     JobInstanceEntity jobInstance = EmptyChecks.isNotNull(transitionedInstance)
@@ -267,6 +272,20 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       applicationEventPublisher.publishEvent(new WaitingCapacityReleasedEvent(command.tenantId()));
     }
     return finishedTask;
+  }
+
+  private static boolean isCancellationOutcome(
+      JobTaskEntity task, TaskOutcomeCommand command, TaskExecutionResult.Failure failure) {
+    return EmptyChecks.isNotNull(failure)
+        && Boolean.TRUE.equals(task.getCancelRequested())
+        && CANCELLED_ERROR_CODE.equals(command.errorCode());
+  }
+
+  private static String resolveTaskStatus(TaskOutcomeCommand command, boolean cancellationOutcome) {
+    if (command.success()) {
+      return TaskStatus.SUCCESS.code();
+    }
+    return cancellationOutcome ? TaskStatus.CANCELLED.code() : TaskStatus.FAILED.code();
   }
 
   private void warnIfCasMiss(int updated, String context, long partitionId) {
@@ -354,6 +373,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       TaskOutcomeCommand command,
       JobTaskEntity task,
       boolean retryScheduled,
+      boolean cancellationOutcome,
       Instant finishedAt,
       String outputSummary) {
     if (EmptyChecks.isNull(command) || EmptyChecks.isNull(task)) {
@@ -364,9 +384,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     if (EmptyChecks.isNull(stepInstance)) {
       return;
     }
-    String nextStatus = retryScheduled
-        ? "RETRYING"
-        : command.success() ? TaskStatus.SUCCESS.code() : TaskStatus.FAILED.code();
+    String nextStatus =
+        retryScheduled ? "RETRYING" : resolveTaskStatus(command, cancellationOutcome);
     int currentRetryCount = Optional.ofNullable(stepInstance.getRetryCount()).orElse(0);
     int nextRetryCount = retryScheduled ? currentRetryCount + 1 : currentRetryCount;
     int updated = jobMappers.jobStepInstanceMapper.updateProgress(UpdateStepProgressParam.builder()

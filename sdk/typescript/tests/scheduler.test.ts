@@ -48,6 +48,27 @@ test("heartbeat: DRAINING directive → FSM DRAINING + consumer paused + onDrain
   assert.equal(drained, true);
 });
 
+test("heartbeat: NORMAL directive forwards kafka none so a paused consumer resumes", async () => {
+  const transport = new FakeTransport({ heartbeat: { platformStatus: "NORMAL" } });
+  const kafka: KafkaAction[] = [];
+  const hb = new HeartbeatScheduler(
+    transport,
+    {
+      workerCode: "w1",
+      buildBody: () => ({}),
+      setFsm: () => {},
+      applyKafka: (action) => kafka.push(action),
+      onDrain: () => {},
+      logger: silentLogger,
+    },
+    30_000,
+  );
+
+  await hb.tick();
+
+  assert.deepEqual(kafka, ["none"]);
+});
+
 test("heartbeat: nextHeartbeatHint PT15S → next interval = 15000", async () => {
   const transport = new FakeTransport({
     heartbeat: { platformStatus: "NORMAL", nextHeartbeatHint: "PT15S" },
