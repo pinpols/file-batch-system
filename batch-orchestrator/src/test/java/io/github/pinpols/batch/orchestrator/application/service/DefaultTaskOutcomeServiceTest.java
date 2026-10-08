@@ -20,9 +20,10 @@ import io.github.pinpols.batch.orchestrator.application.engine.WorkflowTerminalO
 import io.github.pinpols.batch.orchestrator.application.service.governance.RetryGovernanceService;
 import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayTerminalReconciler;
 import io.github.pinpols.batch.orchestrator.application.service.task.DefaultTaskOutcomeService;
-import io.github.pinpols.batch.orchestrator.application.service.task.DefaultTaskOutcomeService.DefaultTaskOutcomeCollaborators;
 import io.github.pinpols.batch.orchestrator.application.service.task.JobInstanceTerminalChildStateReconciler;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeServiceFixture;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeServiceFixture.Dependencies;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionWriter;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
@@ -73,6 +74,9 @@ class DefaultTaskOutcomeServiceTest {
   JobStepInstanceMapper jobStepInstanceMapper;
 
   @Mock
+  FailureClassifier failureClassifier;
+
+  @Mock
   TriggerRequestMapper triggerRequestMapper;
 
   @Mock
@@ -118,7 +122,7 @@ class DefaultTaskOutcomeServiceTest {
         triggerRequestMapper);
     OrchestratorWorkflowMappers workflowMappers = new OrchestratorWorkflowMappers(
         workflowNodeMapper, workflowRunMapper, workflowNodeRunMapper);
-    DefaultTaskOutcomeCollaborators collaborators = new DefaultTaskOutcomeCollaborators(
+    Dependencies collaborators = new Dependencies(
         retryGovernanceService,
         lifecycleEventMapper,
         workflowDagService,
@@ -131,13 +135,13 @@ class DefaultTaskOutcomeServiceTest {
         jobInstanceTerminalChildStateReconciler,
         mock(ResultVersionWriter.class),
         mock(BatchDayReplayTerminalReconciler.class),
-        mock(FailureClassifier.class),
+        failureClassifier,
         mock(JobLifecycleMetricsRecorder.class),
         mock(
             io.github.pinpols.batch.orchestrator.application.engine.CountContinuityOutboxService
                 .class),
         mock(org.springframework.context.ApplicationEventPublisher.class));
-    service = new DefaultTaskOutcomeService(jobMappers, workflowMappers, collaborators);
+    service = TaskOutcomeServiceFixture.create(jobMappers, workflowMappers, collaborators);
   }
 
   @Test
@@ -340,6 +344,56 @@ class DefaultTaskOutcomeServiceTest {
     verify(jobInstanceMapper).updateProgress(captor.capture());
     verify(jobInstanceMapper, never()).selectById("t1", 10L);
     assertThat(captor.getValue().getInstanceStatus()).isEqualTo(JobInstanceStatus.SUCCESS.code());
+  }
+
+  @Test
+  @DisplayName("平台取消的任务回报 CANCELLED 时落取消终态且不安排重试")
+  void applyTaskOutcome_platformCancellation_isCancelledWithoutRetry() {
+    JobTaskEntity task = new JobTaskEntity();
+    task.setId(1L);
+    task.setTenantId("t1");
+    task.setJobInstanceId(10L);
+    task.setJobPartitionId(99L);
+    task.setTaskStatus(TaskStatus.RUNNING.code());
+    task.setCancelRequested(true);
+    task.setAssignedWorkerCode("w1");
+    task.setVersion(1L);
+
+    JobPartitionEntity partition = new JobPartitionEntity();
+    partition.setId(99L);
+    partition.setTenantId("t1");
+    partition.setJobInstanceId(10L);
+    partition.setPartitionStatus(PartitionStatus.RUNNING.code());
+    partition.setVersion(1L);
+
+    when(jobTaskMapper.selectOutcomePersistenceContext("t1", 1L))
+        .thenReturn(persistenceContext(task, partition));
+    when(jobTaskMapper.finishTask(any())).thenReturn(task);
+
+    TaskOutcomeCommand command = TaskOutcomeCommand.builder()
+        .tenantId("t1")
+        .taskId(1L)
+        .workerId("w1")
+        .success(false)
+        .errorCode("CANCELLED")
+        .failureClass("UNKNOWN")
+        .build();
+
+    service.applyTaskOutcome(command);
+
+    ArgumentCaptor<io.github.pinpols.batch.orchestrator.domain.param.FinishTaskParam> taskCaptor =
+        ArgumentCaptor.forClass(
+            io.github.pinpols.batch.orchestrator.domain.param.FinishTaskParam.class);
+    verify(jobTaskMapper).finishTask(taskCaptor.capture());
+    assertThat(taskCaptor.getValue().getTaskStatus()).isEqualTo(TaskStatus.CANCELLED.code());
+    assertThat(taskCaptor.getValue().getFailureClass()).isNull();
+    verify(retryGovernanceService, never())
+        .scheduleRetryIfNecessary(any(), any(), any(), any(), any());
+    ArgumentCaptor<MarkPartitionStatusParam> partitionCaptor =
+        ArgumentCaptor.forClass(MarkPartitionStatusParam.class);
+    verify(jobPartitionMapper).markTerminalStatusAndLoadInstance(partitionCaptor.capture());
+    assertThat(partitionCaptor.getValue().getPartitionStatus())
+        .isEqualTo(PartitionStatus.FAILED.code());
   }
 
   private static TaskOutcomePersistenceContext persistenceContext(

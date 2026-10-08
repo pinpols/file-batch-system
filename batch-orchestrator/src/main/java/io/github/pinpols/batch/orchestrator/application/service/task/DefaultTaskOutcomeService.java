@@ -10,14 +10,10 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.engine.CountContinuityOutboxService;
 import io.github.pinpols.batch.orchestrator.application.engine.VerifierFailureOutboxService;
-import io.github.pinpols.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
 import io.github.pinpols.batch.orchestrator.application.scheduler.WaitingCapacityReleasedEvent;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RetryGovernanceService;
-import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayTerminalReconciler;
-import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionWriter;
-import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
-import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeDispatchService;
+import io.github.pinpols.batch.orchestrator.domain.command.TaskExecutionResult;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
@@ -28,8 +24,6 @@ import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.FinishTaskParam;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkPartitionStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateStepProgressParam;
-import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleEventMapper;
-import io.github.pinpols.batch.orchestrator.observability.JobLifecycleMetricsRecorder;
 import io.github.pinpols.batch.orchestrator.service.failure.FailureClassifier;
 import io.micrometer.core.annotation.Timed;
 import io.micrometer.core.instrument.Counter;
@@ -38,11 +32,10 @@ import io.micrometer.core.instrument.Timer;
 import jakarta.annotation.PostConstruct;
 import java.time.Instant;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,7 +46,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 回报执行结果；orchestrator 在这里统一完成：
  *
  * <ul>
- *   <li>写入 task 的终态（SUCCESS/FAILED）
+ *   <li>写入 task 的终态（SUCCESS/FAILED/CANCELLED）
  *   <li>根据失败决定是否进入重试（写 retry_schedule，并把 partition/task/step 标记为 RETRYING）
  *   <li>委托协作者推进 partition/job_instance/workflow_run 的状态机（含 DAG 节点切换与下一节点派发）
  *   <li>更新 step 镜像 {@code job_step_instance}（用于审计/可视化口径一致）
@@ -71,133 +64,40 @@ import org.springframework.transaction.annotation.Transactional;
  * 用租户条件、状态 CAS 和 instance 级 advisory lock 把 at-least-once 回报收敛为一次有效状态转移。
  */
 @Service
+@RequiredArgsConstructor
 @Slf4j
 public class DefaultTaskOutcomeService implements TaskOutcomeService {
 
+  private static final String CANCELLED_ERROR_CODE = "CANCELLED";
+
   private final OrchestratorJobMappers jobMappers;
-  private final DefaultTaskOutcomeCollaborators collaborators;
+  private final RetryGovernanceService retryGovernanceService;
+  private final VerifierFailureOutboxService verifierFailureOutboxService;
+  private final FailureClassifier failureClassifier;
+  private final CountContinuityOutboxService countContinuityOutboxService;
+  private final ApplicationEventPublisher applicationEventPublisher;
+  private final ObjectProvider<WorkflowNodeDispatchService> workflowNodeDispatchServiceProvider;
+  private final MeterRegistry meterRegistry;
   private final TaskOutcomeNodeRunRecorder nodeRunRecorder;
   private final TaskOutcomeInstanceProgressor instanceProgressor;
-  // #1-2: CAS 冲突计数器，用于监控并发更新频率
-  private final Counter casMissCounter;
+  private Counter casMissCounter;
+  /** 同实例 report 的锁等待独立计量，避免把数据库竞争误判为 Worker 执行慢。 */
+  private Timer advisoryLockWaitTimer;
 
-  /**
-   * A6:同 instance report 串行化的 advisory lock 阻塞获取耗时。争用此前只体现为端到端 report 延时,无法归因是 锁等待还是 DB 慢;这个 Timer
-   * 把锁等待单独切出来(P95 上升=同 instance 高并发 report 排队)。
-   */
-  private final Timer advisoryLockWaitTimer;
-
-  @Component
-  public record DefaultTaskOutcomeCollaborators(
-      RetryGovernanceService retryGovernanceService,
-      LifecycleEventMapper<Object> lifecycleEventMapper,
-      WorkflowDagService workflowDagService,
-      ObjectProvider<WorkflowNodeDispatchService> workflowNodeDispatchServiceProvider,
-      WorkflowTerminalOutboxService workflowTerminalOutboxService,
-      VerifierFailureOutboxService verifierFailureOutboxService,
-      MeterRegistry meterRegistry,
-      JobInstanceTerminalChildStateReconciler jobInstanceTerminalChildStateReconciler,
-      ResultVersionWriter resultVersionWriter,
-      BatchDayReplayTerminalReconciler batchDayReplayTerminalReconciler,
-      FailureClassifier failureClassifier,
-      // worker REPORT 终态写路径与 JobInstanceTerminalStatusApplicationService 复用同一
-      // JobLifecycleMetrics helper，统一使用 afterCommit 调度。
-      JobLifecycleMetricsRecorder jobLifecycleMetricsRecorder,
-      // ADR-041 Phase1.3b:节点产出写入数据库后跨阶段 count 连续性核对(仅告警)。
-      CountContinuityOutboxService countContinuityOutboxService,
-      ApplicationEventPublisher applicationEventPublisher) {}
-
-  @Component
-  public record TaskOutcomeAuxiliaryCollaborators(
-      TaskOutcomeNodeRunRecorder nodeRunRecorder,
-      TaskOutcomeTerminalFinalizer terminalFinalizer,
-      TaskOutcomeDagProgressor dagProgressor,
-      TaskOutcomeParentTaskSignaler parentTaskSignaler,
-      TaskOutcomeWorkflowFinalizer workflowFinalizer) {}
-
-  @Autowired
-  public DefaultTaskOutcomeService(
-      OrchestratorJobMappers jobMappers,
-      OrchestratorWorkflowMappers workflowMappers,
-      DefaultTaskOutcomeCollaborators collaborators,
-      TaskOutcomeAuxiliaryCollaborators auxiliaryCollaborators,
-      TaskOutcomeInstanceProgressor instanceProgressor) {
-    this.jobMappers = jobMappers;
-    this.collaborators = collaborators;
-    this.nodeRunRecorder = auxiliaryCollaborators.nodeRunRecorder();
-    this.instanceProgressor = instanceProgressor;
-    this.casMissCounter = Counter.builder("batch.orchestrator.cas.miss")
+  // 在容器完成注入后注册指标并校验惰性依赖，测试 fixture 显式调用同一初始化入口。
+  @PostConstruct
+  void initialize() {
+    casMissCounter = Counter.builder("batch.orchestrator.cas.miss")
         .description("CAS miss count during optimistic locking updates")
-        .register(collaborators.meterRegistry());
-    this.advisoryLockWaitTimer = Timer.builder("batch.report.advisory_lock.wait")
+        .register(meterRegistry);
+    advisoryLockWaitTimer = Timer.builder("batch.report.advisory_lock.wait")
         .description(
             "Blocking wait to acquire the per-instance pg_advisory_xact_lock that serializes"
                 + " concurrent reports for the same job_instance.")
         .publishPercentileHistogram()
-        .register(collaborators.meterRegistry());
-  }
-
-  /** 纯单元测试的便捷构造器；Spring 生产装配始终使用上面的完整构造器注入协作者。 */
-  public DefaultTaskOutcomeService(
-      OrchestratorJobMappers jobMappers,
-      OrchestratorWorkflowMappers workflowMappers,
-      DefaultTaskOutcomeCollaborators collaborators) {
-    this(
-        jobMappers,
-        workflowMappers,
-        collaborators,
-        compatibilityAuxiliaryCollaborators(workflowMappers, collaborators));
-  }
-
-  private DefaultTaskOutcomeService(
-      OrchestratorJobMappers jobMappers,
-      OrchestratorWorkflowMappers workflowMappers,
-      DefaultTaskOutcomeCollaborators collaborators,
-      TaskOutcomeAuxiliaryCollaborators auxiliaryCollaborators) {
-    this(
-        jobMappers,
-        workflowMappers,
-        collaborators,
-        auxiliaryCollaborators,
-        new TaskOutcomeInstanceProgressor(
-            jobMappers,
-            workflowMappers,
-            collaborators,
-            auxiliaryCollaborators.terminalFinalizer(),
-            auxiliaryCollaborators.dagProgressor(),
-            auxiliaryCollaborators.parentTaskSignaler(),
-            auxiliaryCollaborators.workflowFinalizer()));
-  }
-
-  private static TaskOutcomeAuxiliaryCollaborators compatibilityAuxiliaryCollaborators(
-      OrchestratorWorkflowMappers workflowMappers, DefaultTaskOutcomeCollaborators collaborators) {
-    TaskOutcomeNodeRunRecorder nodeRunRecorder = new TaskOutcomeNodeRunRecorder(workflowMappers);
-    return new TaskOutcomeAuxiliaryCollaborators(
-        nodeRunRecorder,
-        new TaskOutcomeTerminalFinalizer(
-            collaborators.jobLifecycleMetricsRecorder(),
-            collaborators.meterRegistry(),
-            collaborators.jobInstanceTerminalChildStateReconciler(),
-            collaborators.resultVersionWriter(),
-            collaborators.batchDayReplayTerminalReconciler()),
-        new TaskOutcomeDagProgressor(
-            workflowMappers,
-            collaborators.workflowDagService(),
-            collaborators.workflowNodeDispatchServiceProvider(),
-            nodeRunRecorder,
-            collaborators.countContinuityOutboxService()),
-        new TaskOutcomeParentTaskSignaler(),
-        new TaskOutcomeWorkflowFinalizer(
-            workflowMappers,
-            collaborators.lifecycleEventMapper(),
-            collaborators.workflowTerminalOutboxService()));
-  }
-
-  // #8-3: 启动时验证 ObjectProvider 可正常解析，将循环依赖暴露在启动阶段而非运行时
-  @PostConstruct
-  void verifyLazyDependencies() {
+        .register(meterRegistry);
     try {
-      collaborators.workflowNodeDispatchServiceProvider().getIfAvailable();
+      workflowNodeDispatchServiceProvider.getIfAvailable();
     } catch (Exception ex) {
       log.error(
           "Failed to resolve lazy WorkflowNodeDispatchService injection; a circular dependency may exist: {}",
@@ -228,9 +128,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     WorkflowNodeRunEntity finished = nodeRunRecorder.recordFinish(command);
     // ADR-041 Phase1.3b:本节点产出已写入数据库,同事务核跨阶段 count 连续性(仅告警,不翻转状态)。
     if (command.success()) {
-      collaborators
-          .countContinuityOutboxService()
-          .checkContinuity(command.workflowRunId(), command.nodeCode(), command.outputJson());
+      countContinuityOutboxService.checkContinuity(
+          command.workflowRunId(), command.nodeCode(), command.outputJson());
     }
     return finished;
   }
@@ -289,27 +188,28 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     }
     // 成功回报无需额外读取 job_instance；失败路径在实例锁后读取当前快照计算重试治理决策。
     // 实例推进也在锁内读取权威状态，避免成功路径重复点查同一热表行。
-    JobInstanceEntity retryContextInstance = !command.success() && EmptyChecks.isNotNull(partition)
-        ? jobMappers.jobInstanceMapper.selectById(command.tenantId(), task.getJobInstanceId())
-        : null;
+    TaskExecutionResult result = command.executionResult();
+    TaskExecutionResult.Failure failure =
+        result instanceof TaskExecutionResult.Failure failed ? failed : null;
+    boolean cancellationOutcome = isCancellationOutcome(task, command, failure);
+    JobInstanceEntity retryContextInstance =
+        !cancellationOutcome && EmptyChecks.isNotNull(failure) && EmptyChecks.isNotNull(partition)
+            ? jobMappers.jobInstanceMapper.selectById(command.tenantId(), task.getJobInstanceId())
+            : null;
     // 失败时是否进入重试：由治理层统一决策（NONE/预算耗尽 → dead-letter；否则写 retry_schedule）。
-    boolean retryScheduled = !command.success()
+    boolean retryScheduled = !cancellationOutcome
+        && EmptyChecks.isNotNull(failure)
         && EmptyChecks.isNotNull(partition)
         && EmptyChecks.isNotNull(retryContextInstance)
-        && collaborators
-            .retryGovernanceService()
-            .scheduleRetryIfNecessary(
-                task, partition, retryContextInstance, command.errorCode(), command.errorMessage());
-    String resolvedFailureClass = command.success()
+        && retryGovernanceService.scheduleRetryIfNecessary(
+            task, partition, retryContextInstance, failure.errorCode(), failure.errorMessage());
+    String resolvedFailureClass = EmptyChecks.isNull(failure) || cancellationOutcome
         ? null
-        : collaborators
-            .failureClassifier()
-            .classify(command.failureClass(), null)
-            .code();
+        : failureClassifier.classify(failure.failureClass(), null).code();
     JobTaskEntity finishedTask = jobMappers.jobTaskMapper.finishTask(FinishTaskParam.builder()
         .tenantId(command.tenantId())
         .id(command.taskId())
-        .taskStatus(command.success() ? TaskStatus.SUCCESS.code() : TaskStatus.FAILED.code())
+        .taskStatus(resolveTaskStatus(command, cancellationOutcome))
         .expectedStatus(TaskStatus.RUNNING.code())
         .resultSummary(command.resultSummary())
         .errorCode(command.errorCode())
@@ -328,23 +228,23 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
 
     String outputSummary = TaskOutcomeSummaryBuilder.buildOutputSummary(command, task);
     JobInstanceEntity transitionedInstance;
-    if (command.success()) {
+    if (result instanceof TaskExecutionResult.Success success) {
       transitionedInstance = applySuccessOutcome(command, partition, outputSummary);
       // ADR-030 §F：worker 上报的 ContentVerifier 失败 → 同事务写 outbox_event(verifier.failure.v1)。
       // 软告警语义：不翻转 task SUCCESS，仅产出可订阅的事件供告警面板消费。
-      collaborators.verifierFailureOutboxService().writeVerifierFailures(command, task);
+      verifierFailureOutboxService.writeVerifierFailures(command, task, success.verifierFailures());
       // ExecutionMode.INCREMENTAL:把 worker 上报的新水位回写到 job_instance。null/空跳过
       // (保留旧值,下次启动时同 IN 不变);仅成功路径推水位,失败/重试不应推进。
-      if (EmptyChecks.isNotBlank(command.highWaterMarkOut())) {
+      if (EmptyChecks.isNotBlank(success.highWaterMarkOut())) {
         int wmUpdated = jobMappers.jobInstanceMapper.updateHighWaterMarkOut(
-            command.tenantId(), task.getJobInstanceId(), command.highWaterMarkOut());
+            command.tenantId(), task.getJobInstanceId(), success.highWaterMarkOut());
         if (wmUpdated <= 0) {
           // CAS 守护拦下:更高水位已就绪 (并发 partition 回报乱序) 或新值格式非法,debug 即可。
           log.debug(
               "high_water_mark_out CAS no-op for jobInstance {}: incoming={} (regression or"
                   + " malformed)",
               task.getJobInstanceId(),
-              LogSanitizer.value(command.highWaterMarkOut()));
+              LogSanitizer.value(success.highWaterMarkOut()));
         }
       }
     } else {
@@ -357,7 +257,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
           command.tenantId(), partition.getId(), outputSummary, command.partitionInvocationId());
     }
     // step 镜像用于"按 step 维度"看执行状态/重试次数，与 task/partition 状态保持一致口径。
-    updateStepInstanceProgress(command, task, retryScheduled, finishedAt, outputSummary);
+    updateStepInstanceProgress(
+        command, task, retryScheduled, cancellationOutcome, finishedAt, outputSummary);
     // 终态 CTE 会同步递增 job_instance 的分区计数和 version，并直接返回权威快照；虚拟任务、重试路径
     // 或 CAS 未命中时才回读。两条路径都位于 instance advisory lock 保护范围内。
     JobInstanceEntity jobInstance = EmptyChecks.isNotNull(transitionedInstance)
@@ -368,11 +269,23 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     }
     if (!retryScheduled) {
       // AFTER_COMMIT 监听器会合并同一波 report，不能在事务内直接扫描，否则可能读到未提交状态。
-      collaborators
-          .applicationEventPublisher()
-          .publishEvent(new WaitingCapacityReleasedEvent(command.tenantId()));
+      applicationEventPublisher.publishEvent(new WaitingCapacityReleasedEvent(command.tenantId()));
     }
     return finishedTask;
+  }
+
+  private static boolean isCancellationOutcome(
+      JobTaskEntity task, TaskOutcomeCommand command, TaskExecutionResult.Failure failure) {
+    return EmptyChecks.isNotNull(failure)
+        && Boolean.TRUE.equals(task.getCancelRequested())
+        && CANCELLED_ERROR_CODE.equals(command.errorCode());
+  }
+
+  private static String resolveTaskStatus(TaskOutcomeCommand command, boolean cancellationOutcome) {
+    if (command.success()) {
+      return TaskStatus.SUCCESS.code();
+    }
+    return cancellationOutcome ? TaskStatus.CANCELLED.code() : TaskStatus.FAILED.code();
   }
 
   private void warnIfCasMiss(int updated, String context, long partitionId) {
@@ -460,6 +373,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       TaskOutcomeCommand command,
       JobTaskEntity task,
       boolean retryScheduled,
+      boolean cancellationOutcome,
       Instant finishedAt,
       String outputSummary) {
     if (EmptyChecks.isNull(command) || EmptyChecks.isNull(task)) {
@@ -470,9 +384,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     if (EmptyChecks.isNull(stepInstance)) {
       return;
     }
-    String nextStatus = retryScheduled
-        ? "RETRYING"
-        : command.success() ? TaskStatus.SUCCESS.code() : TaskStatus.FAILED.code();
+    String nextStatus =
+        retryScheduled ? "RETRYING" : resolveTaskStatus(command, cancellationOutcome);
     int currentRetryCount = Optional.ofNullable(stepInstance.getRetryCount()).orElse(0);
     int nextRetryCount = retryScheduled ? currentRetryCount + 1 : currentRetryCount;
     int updated = jobMappers.jobStepInstanceMapper.updateProgress(UpdateStepProgressParam.builder()

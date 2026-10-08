@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 
 from batch_worker_sdk import (
     BatchPlatformClientConfig,
@@ -50,6 +51,16 @@ async def atomic_base_echo(ctx: SdkTaskContext) -> SdkTaskResult:
 
     ``sample-echo`` / ``sample-sleep`` 是自定义 taskType,仅 catalog / FakeBatchPlatform
     演示用;平台真实 dispatch 不会以它们为 workerType。"""
+    delay_ms = int(os.environ.get("BATCH_SDK_CONTROL_E2E_DELAY_MS", "0"))
+    if delay_ms > 0 and ctx.cancel_signal is not None:
+        logger.info("control-e2e handler started taskId=%s delayMs=%d", ctx.task_id, delay_ms)
+        try:
+            await asyncio.wait_for(ctx.cancel_signal.wait_cancelled(), timeout=delay_ms / 1000)
+        except TimeoutError:
+            pass
+        else:
+            logger.info("control-e2e cancellation observed taskId=%s", ctx.task_id)
+            return SdkTaskResult.cancelled()
     return SdkTaskResult.success_with(
         {"echo": dict(ctx.parameters)},
         f"atomic-base echoed taskId={ctx.task_id}",

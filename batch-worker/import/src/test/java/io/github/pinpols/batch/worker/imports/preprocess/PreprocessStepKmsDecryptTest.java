@@ -15,6 +15,7 @@ import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
 import io.github.pinpols.batch.worker.imports.stage.PreprocessStep;
+import io.github.pinpols.batch.worker.imports.stage.PreprocessStepFixture;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HashMap;
@@ -56,7 +57,7 @@ class PreprocessStepKmsDecryptTest {
     when(pipelineDefinitions.loadLatestTemplateConfig(any(), any(), any())).thenReturn(Map.of());
     // updateFileStatus 返回 void — Mockito mock 默认不做任何操作
 
-    preprocessStep = new PreprocessStep(
+    preprocessStep = PreprocessStepFixture.create(
         runtimeRepo,
         pipelineDefinitions,
         security,

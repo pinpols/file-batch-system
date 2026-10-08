@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.sdk.internal;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.dispatcher.HeartbeatDirective;
+import io.github.pinpols.batch.sdk.wire.RegisterRequest;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -64,8 +66,8 @@ public class PlatformHttpClient {
         .build();
   }
 
-  /** POST /internal/workers/register — body schema = WorkerHeartbeatDto。 */
-  public WorkerRegistrationResponse register(Map<String, Object> body) throws IOException {
+  /** POST /internal/workers/register — 固定注册协议由 wire DTO 表达。 */
+  public WorkerRegistrationResponse register(RegisterRequest body) throws IOException {
     return postJson("/internal/workers/register", body, null, WorkerRegistrationResponse.class);
   }
 
@@ -127,21 +129,27 @@ public class PlatformHttpClient {
     return postJson("/internal/tasks/" + taskId + "/renew", body, null, TaskRenewResponse.class);
   }
 
-  private <T> T postJson(
-      String path, Map<String, Object> body, String idempotencyKey, Class<T> responseType)
+  private <T> T postJson(String path, Object body, String idempotencyKey, Class<T> responseType)
       throws IOException {
     return postJson(path, body, idempotencyKey, responseType, null);
   }
 
   private <T> T postJson(
       String path,
-      Map<String, Object> body,
+      Object body,
       String idempotencyKey,
       Class<T> responseType,
       Duration timeoutOverride)
       throws IOException {
     String url = config.getBaseUrl() + path;
-    byte[] payload = objectMapper.writeValueAsBytes(body == null ? Map.of() : body);
+    Object requestBody = EmptyChecks.isNull(body) ? Map.of() : body;
+    // 注册时间遵循 OpenAPI date-time 字符串格式，不依赖 ObjectMapper 的全局时间戳默认值。
+    byte[] payload = body instanceof RegisterRequest
+        ? objectMapper
+            .writer()
+            .without(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+            .writeValueAsBytes(requestBody)
+        : objectMapper.writeValueAsBytes(requestBody);
 
     Request.Builder req = new Request.Builder()
         .url(url)

@@ -190,8 +190,10 @@ sdk_e2e_start_worker() {
     go)
       ( cd "$root/examples/self-hosted-sdk/sample-tenant-worker-go" \
         && GOROOT="$GOROOT_HINT" PATH="$GOROOT_HINT/bin:$PATH" \
-           BATCH_BASE_URL="$ORCH_URL" BATCH_API_KEY="$raw" BATCH_TENANT_ID="$TENANT" \
+           BATCH_BASE_URL="${SDK_E2E_WORKER_BASE_URL:-$ORCH_URL}" BATCH_API_KEY="$raw" BATCH_TENANT_ID="$TENANT" \
            BATCH_WORKER_CODE="$wc" KAFKA_BOOTSTRAP="$KAFKA_BOOTSTRAP" \
+           BATCH_SDK_CONTROL_E2E="${SDK_CONTROL_E2E:-false}" \
+           BATCH_SDK_CONTROL_E2E_DELAY="${SDK_CONTROL_E2E_DELAY:-15s}" \
            go run . ) >"$logf" 2>&1 & echo $! ;;
     python)
       local python_bin="${SDK_E2E_PYTHON_BIN:-}"
@@ -207,8 +209,13 @@ sdk_e2e_start_worker() {
       fi
       ( cd "$root/examples/self-hosted-sdk/sample-tenant-worker-python" \
         && PYTHONPATH="$root/sdk/python/src:$root/examples/self-hosted-sdk/sample-tenant-worker-python/src${PYTHONPATH:+:$PYTHONPATH}" \
-           BATCH_SDK_BASE_URL="$ORCH_URL" BATCH_SDK_API_KEY="$raw" BATCH_SDK_TENANT_ID="$TENANT" \
+           BATCH_SDK_BASE_URL="${SDK_E2E_WORKER_BASE_URL:-$ORCH_URL}" BATCH_SDK_API_KEY="$raw" BATCH_SDK_TENANT_ID="$TENANT" \
            BATCH_SDK_WORKER_CODE="$wc" BATCH_SDK_KAFKA_BOOTSTRAP="$KAFKA_BOOTSTRAP" \
+           BATCH_SDK_CONTROL_E2E="${SDK_CONTROL_E2E:-false}" \
+           BATCH_SDK_CONTROL_E2E_DELAY_MS="${SDK_CONTROL_E2E_DELAY_MS:-0}" \
+           BATCH_SDK_HEARTBEAT_INTERVAL_SECONDS="${SDK_CONTROL_E2E:+5}" \
+           BATCH_SDK_LEASE_RENEW_INTERVAL_SECONDS="${SDK_CONTROL_E2E:+5}" \
+           BATCH_SDK_HTTP_TIMEOUT_SECONDS="${SDK_CONTROL_E2E:+2}" \
            "$python_bin" -m sample_tenant_worker ) >>"$logf" 2>&1 & echo $! ;;
     typescript)
       # SDK 的 kafka adapter(sdk/typescript/kafka)import 'kafkajs',它从 SDK 自身的
@@ -216,8 +223,10 @@ sdk_e2e_start_worker() {
       # 故须先在 sdk/typescript 装 devDeps(含 kafkajs)。
       npm --prefix "$root/sdk/typescript" ci --ignore-scripts --silent >/dev/null 2>&1
       ( cd "$root/examples/self-hosted-sdk/sample-tenant-worker-typescript" && npm ci --ignore-scripts --silent >/dev/null 2>&1 \
-        && BATCH_BASE_URL="$ORCH_URL" BATCH_API_KEY="$raw" BATCH_TENANT_ID="$TENANT" \
+        && BATCH_BASE_URL="${SDK_E2E_WORKER_BASE_URL:-$ORCH_URL}" BATCH_API_KEY="$raw" BATCH_TENANT_ID="$TENANT" \
            BATCH_WORKER_CODE="$wc" KAFKA_BOOTSTRAP="$KAFKA_BOOTSTRAP" \
+           BATCH_SDK_CONTROL_E2E="${SDK_CONTROL_E2E:-false}" \
+           BATCH_SDK_CONTROL_E2E_DELAY_MS="${SDK_CONTROL_E2E_DELAY_MS:-0}" \
            node --experimental-strip-types src/main.ts ) >"$logf" 2>&1 & echo $! ;;
     java)
       # 先 install SDK 到本地 m2(样例硬依赖 batch-worker-sdk + testkit),再 package 样例。
@@ -228,8 +237,10 @@ sdk_e2e_start_worker() {
       local jdir="$root/examples/self-hosted-sdk/sample-tenant-worker-java"
       mvn -q -U -f "$jdir/pom.xml" package -DskipTests -Dspotless.check.skip=true >>"$logf" 2>&1
       ( cd "$jdir" \
-        && BATCH_BASE_URL="$ORCH_URL" BATCH_API_KEY="$raw" BATCH_TENANT_ID="$TENANT" \
+        && BATCH_BASE_URL="${SDK_E2E_WORKER_BASE_URL:-$ORCH_URL}" BATCH_API_KEY="$raw" BATCH_TENANT_ID="$TENANT" \
            BATCH_WORKER_CODE="$wc" BATCH_KAFKA="$KAFKA_BOOTSTRAP" \
+           BATCH_SDK_CONTROL_E2E="${SDK_CONTROL_E2E:-false}" \
+           BATCH_SDK_CONTROL_E2E_DELAY_MS="${SDK_CONTROL_E2E_DELAY_MS:-0}" \
            java -jar target/sample-tenant-worker-1.0.0-SNAPSHOT.jar ) >>"$logf" 2>&1 & echo $! ;;
     rust)
       # cargo 通常位于 ~/.cargo/bin（未必已加入 PATH）；构建 rdkafka 还需要 PATH 中有 cmake。
@@ -240,8 +251,10 @@ sdk_e2e_start_worker() {
       PATH="$cargo_path:/usr/local/bin:$PATH" cargo build --manifest-path "$rdir/Cargo.toml" >>"$logf" 2>&1
       ( cd "$rdir" \
         && PATH="$cargo_path:/usr/local/bin:$PATH" \
-           BATCH_BASE_URL="$ORCH_URL" BATCH_API_KEY="$raw" BATCH_TENANT_ID="$TENANT" \
+           BATCH_BASE_URL="${SDK_E2E_WORKER_BASE_URL:-$ORCH_URL}" BATCH_API_KEY="$raw" BATCH_TENANT_ID="$TENANT" \
            BATCH_WORKER_CODE="$wc" KAFKA_BOOTSTRAP="$KAFKA_BOOTSTRAP" \
+           BATCH_SDK_CONTROL_E2E="${SDK_CONTROL_E2E:-false}" \
+           BATCH_SDK_CONTROL_E2E_DELAY_MS="${SDK_CONTROL_E2E_DELAY_MS:-0}" \
            ./target/debug/sample-tenant-worker-rust ) >>"$logf" 2>&1 & echo $! ;;
     *) sdk_e2e_fail "unsupported lang '$lang'"; return 2 ;;
   esac

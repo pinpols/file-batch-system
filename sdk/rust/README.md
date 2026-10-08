@@ -45,6 +45,12 @@ The `kafka` feature pulls `rdkafka` (real SASL/SCRAM consumer); it is optional s
 core stays dependency-free. The end-to-end Kafka integration test is env-gated
 (`BATCH_SDK_KAFKA_BOOTSTRAP`) and runs only against a live broker / in CI.
 
+When wiring heartbeat control into a custom poll loop, use
+`KafkaTaskConsumer::run_controlled(in_flight, platform_paused, keep_running)` so a
+PAUSED worker stops claiming without leaving its consumer group; clearing the
+pause gate resumes polling. `run(in_flight, keep_running)` remains available for
+workers that do not need an external platform-pause gate.
+
 ## P1 retry / idempotency
 
 The runtime stays thin: retry and idempotency are explicit handler wrappers, not

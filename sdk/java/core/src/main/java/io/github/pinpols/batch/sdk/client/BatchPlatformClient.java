@@ -100,34 +100,28 @@ public class BatchPlatformClient {
         config.getTenantId(),
         config.getWorkerCode(),
         handlers.keySet());
-    // body 对齐 WorkerHeartbeatDto(tenantId/workerCode/workerGroup/status/heartbeatAt/
-    // currentLoad/capabilityTags),taskTypes 走 capabilityTags(平台从此推断 worker 能跑哪些 type)
-    Map<String, Object> body = new HashMap<>();
-    body.put("tenantId", config.getTenantId());
-    body.put("workerCode", config.getWorkerCode());
-    body.put("workerGroup", "sdk-self-hosted");
-    body.put("status", "RUNNING");
-    body.put("heartbeatAt", Instant.now().toString());
-    body.put("currentLoad", 0);
-    body.put("maxConcurrent", config.getMaxConcurrentTasks());
-    List<String> capabilityTags = capabilityTags();
-    body.put("capabilityTags", capabilityTags);
-    // SDK-P5-3 运行指纹:host/pid 尽力采集,buildId 由租户 config 注入,sdkVersion 读 jar manifest;
-    // 全部尽力而为(null 字段由 NON_NULL 序列化策略略过,平台列可空)。
-    putIfPresent(body, "hostName", WorkerFingerprint.hostName());
-    putIfPresent(body, "hostIp", WorkerFingerprint.hostIp());
-    putIfPresent(body, "processId", WorkerFingerprint.processId());
-    putIfPresent(body, "buildId", config.getBuildId());
-    putIfPresent(body, "sdkVersion", WorkerFingerprint.sdkVersion());
-    // 协议门禁:声明本 SDK 实现的 wire 协议主版本;平台不支持则 register 被拒(400)。
-    body.put("protocolVersion", RegisterRequest.CURRENT_PROTOCOL_VERSION);
-    // Phase 3 M3.1:声明了 descriptor 的 handler 随 register 上报 taskTypes[](平台 upsert 到 registry)。
     List<SdkTaskTypeDescriptor> descriptors = collectDescriptors();
-    if (!descriptors.isEmpty()) {
-      body.put("taskTypes", descriptors);
-    }
+    List<String> capabilityTags = capabilityTags();
+    // 与旧载荷保持同一可选字段策略：空指纹和空 taskTypes 不上报，避免覆盖平台注册信息。
+    RegisterRequest request = RegisterRequest.builder()
+        .tenantId(config.getTenantId())
+        .workerCode(config.getWorkerCode())
+        .workerGroup("sdk-self-hosted")
+        .status("RUNNING")
+        .heartbeatAt(Instant.now())
+        .currentLoad(0)
+        .maxConcurrent(config.getMaxConcurrentTasks())
+        .capabilityTags(capabilityTags)
+        .hostName(optionalFingerprint(WorkerFingerprint.hostName()))
+        .hostIp(optionalFingerprint(WorkerFingerprint.hostIp()))
+        .processId(optionalFingerprint(WorkerFingerprint.processId()))
+        .buildId(optionalFingerprint(config.getBuildId()))
+        .sdkVersion(optionalFingerprint(WorkerFingerprint.sdkVersion()))
+        .protocolVersion(RegisterRequest.CURRENT_PROTOCOL_VERSION)
+        .taskTypes(EmptyChecks.isEmpty(descriptors) ? null : descriptors)
+        .build();
     try {
-      PlatformHttpClient.WorkerRegistrationResponse resp = httpClient.register(body);
+      PlatformHttpClient.WorkerRegistrationResponse resp = httpClient.register(request);
       log.info("BatchPlatformClient registered: response={}", resp);
     } catch (IOException e) {
       throw new BatchSdkClientException(
@@ -321,10 +315,8 @@ public class BatchPlatformClient {
     }
   }
 
-  private static void putIfPresent(Map<String, Object> body, String key, String value) {
-    if (value != null && !value.isBlank()) {
-      body.put(key, value);
-    }
+  private static String optionalFingerprint(String value) {
+    return EmptyChecks.isBlank(value) ? null : value;
   }
 
   /** 给业务可见的工具方法 — 让自己生成 idempotency-key。 */

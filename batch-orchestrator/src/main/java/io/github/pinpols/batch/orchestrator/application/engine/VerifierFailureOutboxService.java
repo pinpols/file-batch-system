@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.event.DomainEventPublisher;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
+import io.github.pinpols.batch.orchestrator.domain.command.VerifierFailure;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -59,13 +60,28 @@ public class VerifierFailureOutboxService {
     if (EmptyChecks.isNull(command) || EmptyChecks.isNull(task)) {
       return 0;
     }
-    List<Map<String, Object>> failures = command.verifierFailures();
+    return publishFailures(command, task, VerifierFailure.fromWire(command.verifierFailures()));
+  }
+
+  /** typed 结果与旧调用共享同一事务、事件顺序和幂等键，避免主链重复解析固定 Map。 */
+  @Transactional(propagation = Propagation.MANDATORY)
+  public int writeVerifierFailures(
+      TaskOutcomeCommand command, JobTaskEntity task, List<VerifierFailure> failures) {
+    return publishFailures(command, task, failures);
+  }
+
+  // 两个公开入口各自经过事务代理；内部只共享发布逻辑，不依赖同类调用重新触发事务拦截。
+  private int publishFailures(
+      TaskOutcomeCommand command, JobTaskEntity task, List<VerifierFailure> failures) {
+    if (EmptyChecks.isNull(command) || EmptyChecks.isNull(task)) {
+      return 0;
+    }
     if (EmptyChecks.isEmpty(failures)) {
       return 0;
     }
     int written = 0;
     int index = 0;
-    for (Map<String, Object> failure : failures) {
+    for (VerifierFailure failure : failures) {
       if (EmptyChecks.isNull(failure)) {
         index++;
         continue;
@@ -85,10 +101,10 @@ public class VerifierFailureOutboxService {
   }
 
   private DomainEvent buildEvent(
-      TaskOutcomeCommand command, JobTaskEntity task, Map<String, Object> failure, int index) {
-    String reason = stringValue(failure.get("code"));
-    String message = stringValue(failure.get("message"));
-    Object evidence = failure.get("evidence");
+      TaskOutcomeCommand command, JobTaskEntity task, VerifierFailure failure, int index) {
+    String reason = failure.code();
+    String message = failure.message();
+    Object evidence = failure.evidence();
 
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("schemaVersion", "v1");
@@ -118,9 +134,5 @@ public class VerifierFailureOutboxService {
         .key(eventKey)
         .payload(payload)
         .build();
-  }
-
-  private static String stringValue(Object value) {
-    return EmptyChecks.isNull(value) ? null : value.toString();
   }
 }

@@ -104,6 +104,18 @@ class EchoHandler implements TaskHandler {
     if (ctx.cancellation.isCancellationRequested) {
       return { success: false, errorCode: ErrorCode.CANCELLED, resultSummary: "cancelled before run" };
     }
+    const delayMs = Number(process.env.BATCH_SDK_CONTROL_E2E_DELAY_MS ?? "0");
+    if (Number.isFinite(delayMs) && delayMs > 0) {
+      logger.info("control-e2e handler started", { taskId: ctx.taskId, delayMs });
+      const deadline = Date.now() + delayMs;
+      while (Date.now() < deadline) {
+        if (ctx.cancellation.isCancellationRequested) {
+          logger.info("control-e2e cancellation observed", { taskId: ctx.taskId });
+          return { success: false, errorCode: ErrorCode.CANCELLED, resultSummary: "cancelled by platform" };
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+    }
     return taskSuccess(
       { echo: ctx.effectiveConfig },
       `echoed taskId=${ctx.taskId}`,
@@ -148,6 +160,8 @@ async function main(): Promise<void> {
     transport,
     consumer,
     handler: new EchoHandler(),
+    heartbeatIntervalMs: process.env.BATCH_SDK_CONTROL_E2E === "true" ? 5_000 : undefined,
+    leaseRenewIntervalMs: process.env.BATCH_SDK_CONTROL_E2E === "true" ? 5_000 : undefined,
     validator: new SensitiveDataValidator(),
     logger,
   });

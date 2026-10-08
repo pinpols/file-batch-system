@@ -74,7 +74,7 @@ export class HeartbeatScheduler {
       if (decision.fsmTransition) {
         this.#hooks.setFsm(decision.fsmTransition);
       }
-      if (decision.kafka && decision.kafka !== "none") {
+      if (decision.kafka) {
         this.#hooks.applyKafka(decision.kafka);
       }
       if (decision.drainThenDeactivate) {

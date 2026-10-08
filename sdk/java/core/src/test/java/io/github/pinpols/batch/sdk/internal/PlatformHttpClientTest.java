@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.sun.net.httpserver.HttpServer;
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
+import io.github.pinpols.batch.sdk.wire.RegisterRequest;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -18,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -29,6 +31,7 @@ import java.util.concurrent.locks.LockSupport;
 import javax.net.SocketFactory;
 import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
+import mockwebserver3.RecordedRequest;
 import mockwebserver3.SocketEffect;
 import okhttp3.OkHttpClient;
 import org.junit.jupiter.api.AfterEach;
@@ -40,6 +43,49 @@ import org.junit.jupiter.api.Test;
 /** {@link PlatformHttpClient} 真 HTTP 测试使用 JDK {@link HttpServer} 或 MockWebServer 启动 stub。 */
 @DisplayName("PlatformHttpClient — 真实 HTTP 请求、传输策略与取消行为")
 class PlatformHttpClientTest {
+
+  @Test
+  @DisplayName("类型化注册使用真实传输序列化，时间字符串与旧 Map 一致且可选字段省略")
+  void shouldPreserveLegacyRegistrationJson_whenUsingTypedRequest() throws Exception {
+    try (MockWebServer registrationServer = new MockWebServer()) {
+      registrationServer.enqueue(new MockResponse.Builder().body("{\"id\":123}").build());
+      registrationServer.start(InetAddress.getByName("127.0.0.1"), 0);
+      PlatformHttpClient client =
+          new PlatformHttpClient(config("http://127.0.0.1:" + registrationServer.getPort()));
+      Instant heartbeat = Instant.parse("2026-10-08T01:02:03.123456789Z");
+      RegisterRequest request = RegisterRequest.builder()
+          .tenantId("tx")
+          .workerCode("w-1")
+          .workerGroup("sdk-self-hosted")
+          .status("RUNNING")
+          .heartbeatAt(heartbeat)
+          .capabilityTags(List.of("IMPORT"))
+          .currentLoad(0)
+          .maxConcurrent(4)
+          .protocolVersion(RegisterRequest.CURRENT_PROTOCOL_VERSION)
+          .build();
+
+      assertThat(client.register(request).id()).isEqualTo(123L);
+      RecordedRequest captured = registrationServer.takeRequest(1, TimeUnit.SECONDS);
+      assertThat(captured).isNotNull();
+      JsonNode actual =
+          SdkJsonMapperFactory.create().readTree(captured.getBody().utf8());
+      assertThat(actual.path("tenantId").asText()).isEqualTo("tx");
+      assertThat(actual.path("workerCode").asText()).isEqualTo("w-1");
+      assertThat(actual.path("workerGroup").asText()).isEqualTo("sdk-self-hosted");
+      assertThat(actual.path("status").asText()).isEqualTo("RUNNING");
+      assertThat(actual.path("heartbeatAt").asText()).isEqualTo(heartbeat.toString());
+      assertThat(actual.path("capabilityTags").get(0).asText()).isEqualTo("IMPORT");
+      assertThat(actual.path("currentLoad").asInt()).isZero();
+      assertThat(actual.path("maxConcurrent").asInt()).isEqualTo(4);
+      assertThat(actual.path("protocolVersion").asText())
+          .isEqualTo(RegisterRequest.CURRENT_PROTOCOL_VERSION);
+      assertThat(actual.has("hostName")).isFalse();
+      assertThat(actual.has("taskTypes")).isFalse();
+      assertThat(captured.getHeaders().get("X-Batch-Tenant-Id")).isEqualTo("tx");
+      client.evictIdleConnections();
+    }
+  }
 
   private HttpServer server;
   private int port;
@@ -58,6 +104,15 @@ class PlatformHttpClientTest {
 
   private PlatformHttpClient newClient() {
     return new PlatformHttpClient(config("http://127.0.0.1:" + port));
+  }
+
+  private static RegisterRequest registrationRequest() {
+    return RegisterRequest.builder()
+        .tenantId("tx")
+        .workerCode("w-1")
+        .workerGroup("sdk-self-hosted")
+        .status("RUNNING")
+        .build();
   }
 
   private static BatchPlatformClientConfig config(String baseUrl) {
@@ -91,7 +146,7 @@ class PlatformHttpClientTest {
     });
 
     PlatformHttpClient.WorkerRegistrationResponse resp =
-        newClient().register(Map.of("workerCode", "w-1"));
+        newClient().register(registrationRequest());
 
     assertThat(resp.id()).isEqualTo(123L);
     assertThat(resp.workerCode()).isEqualTo("w-1");
@@ -194,7 +249,7 @@ class PlatformHttpClientTest {
 
       long startedAt = System.nanoTime();
       PlatformHttpClient.WorkerRegistrationResponse response =
-          platformClient.register(Map.of("workerCode", "w-1"));
+          platformClient.register(registrationRequest());
       long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
 
       assertThat(response.id()).isEqualTo(123L);
@@ -218,7 +273,7 @@ class PlatformHttpClientTest {
       AtomicReference<Throwable> failure = new AtomicReference<>();
       Thread requestThread = new Thread(() -> {
         try {
-          client.register(Map.of("workerCode", "w-1"));
+          client.register(registrationRequest());
         } catch (Throwable throwable) {
           failure.set(throwable);
         }

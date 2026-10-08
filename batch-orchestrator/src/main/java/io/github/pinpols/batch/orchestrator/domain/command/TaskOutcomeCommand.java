@@ -48,6 +48,15 @@ public record TaskOutcomeCommand(
     List<Map<String, Object>> verifierFailures)
     implements LocalizedErrorCarrier {
 
+  /** 边界转换仅选择执行分支，不更改原字段或摘要持久化形态，也不新增请求校验。 */
+  public TaskExecutionResult executionResult() {
+    return success
+        ? new TaskExecutionResult.Success(
+            highWaterMarkOut, outputs, VerifierFailure.fromWire(verifierFailures))
+        : new TaskExecutionResult.Failure(
+            errorCode, errorMessage, errorKey, errorArgs, failureClass);
+  }
+
   // record 默认 accessor 是 errorMessage() 无 get 前缀;桥接 carrier 契约的 getErrorXxx() bean 命名。
   @Override
   public String getErrorMessage() {

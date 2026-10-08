@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import io.github.pinpols.batch.sdk.task.SdkTaskTypeDescriptor;
 import java.time.Instant;
 import java.util.List;
+import lombok.Builder;
 
 /**
  * SDK wire DTO — {@code POST /internal/workers/register} 请求体。
@@ -25,6 +26,7 @@ import java.util.List;
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
+@Builder
 public record RegisterRequest(
     String tenantId,
     String workerCode,
@@ -47,41 +49,6 @@ public record RegisterRequest(
     // 值见 {@link #CURRENT_PROTOCOL_VERSION};与平台 sdk-shared-constants.yaml schema_versions_supported
     // 对齐。
     String protocolVersion) {
-
-  /** 保留旧构造签名,避免升级 SDK 后让租户已有的协议测试或适配代码无法编译。 */
-  @SuppressWarnings("PMD.ExcessiveParameterList")
-  public RegisterRequest(
-      String tenantId,
-      String workerCode,
-      String workerGroup,
-      String status,
-      String hostName,
-      String hostIp,
-      String processId,
-      String buildId,
-      String sdkVersion,
-      Instant heartbeatAt,
-      List<String> capabilityTags,
-      Integer currentLoad,
-      List<SdkTaskTypeDescriptor> taskTypes,
-      String protocolVersion) {
-    this(
-        tenantId,
-        workerCode,
-        workerGroup,
-        status,
-        hostName,
-        hostIp,
-        processId,
-        buildId,
-        sdkVersion,
-        heartbeatAt,
-        capabilityTags,
-        currentLoad,
-        null,
-        taskTypes,
-        protocolVersion);
-  }
 
   /**
    * 本 SDK 当前声明的 wire 协议 schema 主版本(register 上报)。取平台支持集合 {@code {v1, v2}} 的最高版本 —— SDK 同时兼容 v1/v2

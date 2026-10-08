@@ -121,6 +121,14 @@ func NewWorker(cfg Config, transport Transport, consumer Consumer, handler TaskH
 		WithHeartbeatInterval(cfg.HeartbeatInterval),
 		WithHeartbeatInFlight(registry.Count),
 		WithHeartbeatLogger(logger),
+		WithOnKafkaDirective(func(directive string) {
+			switch directive {
+			case "pause":
+				consumer.Pause()
+			case "resume", "none":
+				consumer.Resume()
+			}
+		}),
 		WithOnDrain(w.beginDrain),
 		WithOnFatal(w.onHeartbeatFatal),
 	)

@@ -49,8 +49,11 @@ public final class SampleTenantWorker {
                 System.getenv().getOrDefault(
                     "BATCH_KAFKA_GROUP", requireEnv("BATCH_TENANT_ID") + "-sample-workers"))
             .maxConcurrentTasks(4)
-            .heartbeatInterval(Duration.ofSeconds(30))
-            .leaseRenewInterval(Duration.ofSeconds(60))
+            .heartbeatInterval(
+                controlE2eEnabled() ? Duration.ofSeconds(5) : Duration.ofSeconds(30))
+            .leaseRenewInterval(
+                controlE2eEnabled() ? Duration.ofSeconds(5) : Duration.ofSeconds(60))
+            .httpTimeout(controlE2eEnabled() ? Duration.ofSeconds(2) : Duration.ofSeconds(10))
             // P3 Kafka SASL/SCRAM(prod 必填,本地联调不设走 PLAINTEXT)
             .kafkaSecurityProtocol(System.getenv("BATCH_KAFKA_PROTOCOL"))
             .kafkaSaslMechanism(System.getenv("BATCH_KAFKA_SASL_MECHANISM"))
@@ -99,6 +102,23 @@ public final class SampleTenantWorker {
     return v;
   }
 
+  private static boolean controlE2eEnabled() {
+    return "true".equalsIgnoreCase(System.getenv("BATCH_SDK_CONTROL_E2E"));
+  }
+
+  private static long controlE2eDelayMillis() {
+    if (!controlE2eEnabled()) {
+      return 0;
+    }
+    try {
+      long delay = Long.parseLong(
+          System.getenv().getOrDefault("BATCH_SDK_CONTROL_E2E_DELAY_MS", "15000"));
+      return Math.max(0, delay);
+    } catch (NumberFormatException ignored) {
+      return 15_000;
+    }
+  }
+
   // ─── 示范 handler ────────────────────────────────────────────────────────────
 
   static final class EchoHandler implements SdkTaskHandler {
@@ -129,6 +149,23 @@ public final class SampleTenantWorker {
     @Override
     public SdkTaskResult execute(SdkTaskContext ctx) {
       log.info("ATOMIC base handler taskId={} params={}", ctx.taskId(), ctx.parameters());
+      long delayMillis = controlE2eDelayMillis();
+      if (delayMillis > 0) {
+        log.info("control-e2e handler started taskId={} delayMs={}", ctx.taskId(), delayMillis);
+        long deadline = System.nanoTime() + Duration.ofMillis(delayMillis).toNanos();
+        while (System.nanoTime() < deadline) {
+          if (ctx.isCancelled()) {
+            log.info("control-e2e cancellation observed taskId={}", ctx.taskId());
+            return SdkTaskResult.cancelled(Map.of());
+          }
+          try {
+            Thread.sleep(50);
+          } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return SdkTaskResult.cancelled(Map.of());
+          }
+        }
+      }
       return SdkTaskResult.ok("atomic-echoed", Map.copyOf(ctx.parameters()));
     }
   }

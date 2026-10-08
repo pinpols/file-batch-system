@@ -2,11 +2,9 @@ package io.github.pinpols.batch.worker.imports.stage;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
-import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
-import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -39,8 +37,8 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -54,118 +52,26 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 @SuppressWarnings("java:S2259")
 public class PreprocessStep implements ImportStageStep {
 
   private static final String ERROR_CODE_PREPROCESS_INVALID = "IMPORT_PREPROCESS_INVALID";
 
-  /**
-   * 解码后内存放大阈值：超过该字节数直接 spool 原始字节到临时文件，避免生成整块 UTF-16 String。默认 16 MiB， 通过 {@code
-   * batch.worker.import.preprocess-spool-bytes} 调整（设 0 关闭 spool）。
-   */
+  /** 错误参数使用稳定的默认序列化策略，不受业务载荷 mapper 定制影响。 */
   private static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
-  /** 对象存储拉取的单文件字节上限(防 OOM)。默认 512 MiB,由 {@code batch.worker.import.max-object-bytes} 调整。 */
   private final PlatformFileRecordRepository fileRecords;
 
   private final PlatformPipelineDefinitionRepository pipelineDefinitions;
 
   private final BatchSecurityProperties batchSecurityProperties;
   private final BatchObjectCryptoService cryptoService;
+  /** 解码内存阈值与单文件上限由绑定配置提供；对象读取协作者统一落实大小和临时文件边界。 */
   private final WorkerImportPayloadProperties payloadProperties;
-  private final ImportPreprocessObjectSource objectSource;
+
   private final ObjectMapper objectMapper;
-
-  public PreprocessStep(
-      PlatformFileRecordRepository fileRecords,
-      PlatformPipelineDefinitionRepository pipelineDefinitions,
-      BatchSecurityProperties batchSecurityProperties,
-      BatchObjectCryptoService cryptoService,
-      S3StorageProperties s3StorageProperties,
-      BatchObjectStore objectStore) {
-    this(
-        fileRecords,
-        pipelineDefinitions,
-        batchSecurityProperties,
-        cryptoService,
-        defaultRuntime(fileRecords, s3StorageProperties, objectStore));
-  }
-
-  public PreprocessStep(
-      PlatformFileRecordRepository fileRecords,
-      PlatformPipelineDefinitionRepository pipelineDefinitions,
-      BatchSecurityProperties batchSecurityProperties,
-      BatchObjectCryptoService cryptoService,
-      S3StorageProperties s3StorageProperties,
-      BatchObjectStore objectStore,
-      WorkerImportPayloadProperties payloadProperties) {
-    this(
-        fileRecords,
-        pipelineDefinitions,
-        batchSecurityProperties,
-        cryptoService,
-        runtime(
-            fileRecords, s3StorageProperties, objectStore, payloadProperties, ERROR_OBJECT_MAPPER));
-  }
-
-  @Autowired
-  public PreprocessStep(
-      PlatformFileRecordRepository fileRecords,
-      PlatformPipelineDefinitionRepository pipelineDefinitions,
-      BatchSecurityProperties batchSecurityProperties,
-      BatchObjectCryptoService cryptoService,
-      WorkerImportPayloadProperties payloadProperties,
-      ObjectMapper objectMapper,
-      ImportPreprocessObjectSource objectSource) {
-    this(
-        fileRecords,
-        pipelineDefinitions,
-        batchSecurityProperties,
-        cryptoService,
-        new PreprocessRuntime(payloadProperties, objectMapper, objectSource));
-  }
-
-  private PreprocessStep(
-      PlatformFileRecordRepository fileRecords,
-      PlatformPipelineDefinitionRepository pipelineDefinitions,
-      BatchSecurityProperties batchSecurityProperties,
-      BatchObjectCryptoService cryptoService,
-      PreprocessRuntime runtime) {
-    this.fileRecords = fileRecords;
-    this.pipelineDefinitions = pipelineDefinitions;
-    this.batchSecurityProperties = batchSecurityProperties;
-    this.cryptoService = cryptoService;
-    this.payloadProperties = runtime.payloadProperties();
-    this.objectMapper = runtime.objectMapper();
-    this.objectSource = runtime.objectSource();
-  }
-
-  private static PreprocessRuntime defaultRuntime(
-      PlatformFileRecordRepository fileRecords,
-      S3StorageProperties s3StorageProperties,
-      BatchObjectStore objectStore) {
-    WorkerImportPayloadProperties payloadProperties = new WorkerImportPayloadProperties();
-    return runtime(
-        fileRecords, s3StorageProperties, objectStore, payloadProperties, ERROR_OBJECT_MAPPER);
-  }
-
-  private static PreprocessRuntime runtime(
-      PlatformFileRecordRepository fileRecords,
-      S3StorageProperties s3StorageProperties,
-      BatchObjectStore objectStore,
-      WorkerImportPayloadProperties payloadProperties,
-      ObjectMapper objectMapper) {
-    return new PreprocessRuntime(
-        payloadProperties,
-        objectMapper,
-        new ImportPreprocessObjectSource(
-            fileRecords, s3StorageProperties, objectStore, payloadProperties));
-  }
-
-  private record PreprocessRuntime(
-      WorkerImportPayloadProperties payloadProperties,
-      ObjectMapper objectMapper,
-      ImportPreprocessObjectSource objectSource) {}
+  private final ImportPreprocessObjectSource objectSource;
 
   @Override
   public ImportStage stage() {

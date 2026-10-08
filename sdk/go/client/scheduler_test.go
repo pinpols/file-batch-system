@@ -44,7 +44,11 @@ func TestHeartbeat_PausedDirective(t *testing.T) {
 	fp := NewFakePlatform()
 	fp.ScriptHeartbeat(protocol.HeartbeatResponse{PlatformStatus: strp("PAUSED")}, nil)
 	fsm := NewFSM()
-	hb := NewHeartbeatScheduler(fp, fsm, "w1", "t1", WithHeartbeatInterval(time.Millisecond))
+	var directive string
+	hb := NewHeartbeatScheduler(fp, fsm, "w1", "t1",
+		WithHeartbeatInterval(time.Millisecond),
+		WithOnKafkaDirective(func(value string) { directive = value }),
+	)
 	if _, err := hb.Beat(context.Background()); err != nil {
 		t.Fatalf("beat: %v", err)
 	}
@@ -53,6 +57,9 @@ func TestHeartbeat_PausedDirective(t *testing.T) {
 	}
 	if !fsm.Paused() {
 		t.Fatalf("expected consumer paused")
+	}
+	if directive != "pause" {
+		t.Fatalf("expected pause directive to reach consumer, got %q", directive)
 	}
 }
 
@@ -83,12 +90,19 @@ func TestHeartbeat_NormalResumes(t *testing.T) {
 	fp.ScriptHeartbeat(protocol.HeartbeatResponse{PlatformStatus: strp("NORMAL")}, nil)
 	fsm := NewFSM()
 	fsm.SetPaused(true)
-	hb := NewHeartbeatScheduler(fp, fsm, "w1", "t1", WithHeartbeatInterval(time.Millisecond))
+	var directive string
+	hb := NewHeartbeatScheduler(fp, fsm, "w1", "t1",
+		WithHeartbeatInterval(time.Millisecond),
+		WithOnKafkaDirective(func(value string) { directive = value }),
+	)
 	if _, err := hb.Beat(context.Background()); err != nil {
 		t.Fatalf("beat: %v", err)
 	}
 	if fsm.Paused() {
 		t.Fatalf("expected NORMAL to resume (unpause) the consumer")
+	}
+	if directive != "none" {
+		t.Fatalf("expected resume directive to reach consumer, got %q", directive)
 	}
 }
 

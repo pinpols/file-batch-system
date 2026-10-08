@@ -29,7 +29,7 @@ ADR-035 租户自托管 Worker SDK 的文档集。代码总入口见 [`sdk/READM
 
 | 文档 | 说明 |
 |---|---|
-| [local-e2e-coverage.md](local-e2e-coverage.md) | 本地全链路覆盖策略 + per-language/per-stage 现状(真 orchestrator 实测) |
+| [local-e2e-coverage.md](local-e2e-coverage.md) | 本地全链路覆盖和五语言 pause/resume、cancel、drain 控制指令真实栈验证 |
 | [conformance-gap-analysis-2026-06-16.md](conformance-gap-analysis-2026-06-16.md) | conformance 缺口分析(历史快照) |
 
 ## 发布

@@ -44,7 +44,7 @@ class PreprocessStepEncodingTest {
         .thenAnswer(invocation -> templateConfig == null ? Map.of() : templateConfig);
     S3StorageProperties props = new S3StorageProperties();
     props.setBucket("bucket-1");
-    step = new PreprocessStep(
+    step = PreprocessStepFixture.create(
         runtimeRepository,
         pipelineDefinitions,
         security,

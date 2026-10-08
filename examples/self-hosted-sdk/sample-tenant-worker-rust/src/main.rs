@@ -145,6 +145,7 @@ fn main() {
     // owns register/deactivate; the heartbeat + lease-renewal schedulers (below)
     // get their own clones (reqwest's client is internally Arc'd → cheap). ──────
     let mut worker = Worker::new(&cfg.worker_code, transport.clone());
+    let platform_paused = Arc::new(AtomicBool::new(false));
 
     // (4a) SIGTERM hook. std has no portable async-signal-safe handler, so the
     // documented integration point is `Worker::request_stop()` / `stop_flag()`:
@@ -188,6 +189,8 @@ fn main() {
         transport.clone(),
         Arc::clone(&in_flight_tasks),
         Arc::clone(&stop_flag),
+        Arc::clone(&platform_paused),
+        control_e2e_enabled(),
     );
     let lease_thread = spawn_lease_renewal(
         transport.clone(),
@@ -195,6 +198,7 @@ fn main() {
         cfg.tenant_id.clone(),
         cfg.worker_code.clone(),
         Arc::clone(&stop_flag),
+        control_e2e_enabled(),
     );
 
     // ── (6) Run loop: poll Kafka until the stop flag flips. ────────────────
@@ -209,7 +213,12 @@ fn main() {
     };
 
     log("entering Kafka poll loop (Ctrl-C / SIGTERM to drain)");
-    if let Err(e) = consumer.run(if_read, keep_running) {
+    let pause_state = Arc::clone(&platform_paused);
+    if let Err(e) = consumer.run_controlled(
+        if_read,
+        move || pause_state.load(Ordering::SeqCst),
+        keep_running,
+    ) {
         eprintln!("[sample-worker] FATAL kafka run loop: {e}");
         stop_flag.store(true, Ordering::SeqCst);
     }
@@ -238,9 +247,15 @@ fn spawn_heartbeat(
     transport: ReqwestTransport,
     in_flight: InFlight,
     stop_flag: Arc<AtomicBool>,
+    platform_paused: Arc<AtomicBool>,
+    control_e2e: bool,
 ) -> thread::JoinHandle<()> {
     thread::spawn(move || {
-        let mut sched = HeartbeatScheduler::new(&worker_code, transport);
+        let mut sched = if control_e2e {
+            HeartbeatScheduler::with_interval(&worker_code, transport, 5_000)
+        } else {
+            HeartbeatScheduler::new(&worker_code, transport)
+        };
         while !stop_flag.load(Ordering::SeqCst) {
             // 心跳必须携带租户和 worker 身份。平台会校验 API-Key 绑定的租户，
             // 不能只发送状态字段。
@@ -262,6 +277,11 @@ fn spawn_heartbeat(
             let parsed = parse_heartbeat(&raw.body);
             let tick = sched.apply(raw.status, &parsed);
             if let Some(decision) = &tick.decision {
+                match decision.kafka.as_deref() {
+                    Some("pause") => platform_paused.store(true, Ordering::SeqCst),
+                    Some("none") | Some("resume") => platform_paused.store(false, Ordering::SeqCst),
+                    _ => {}
+                }
                 if decision.drain_then_deactivate == Some(true) {
                     log("heartbeat: platform requested DRAIN → stopping worker");
                     stop_flag.store(true, Ordering::SeqCst);
@@ -291,9 +311,14 @@ fn spawn_lease_renewal(
     tenant_id: String,
     worker_code: String,
     stop_flag: Arc<AtomicBool>,
+    control_e2e: bool,
 ) -> thread::JoinHandle<()> {
     thread::spawn(move || {
-        let sched = LeaseRenewalScheduler::new(transport);
+        let sched = if control_e2e {
+            LeaseRenewalScheduler::with_interval(transport, 5_000)
+        } else {
+            LeaseRenewalScheduler::new(transport)
+        };
         while !stop_flag.load(Ordering::SeqCst) {
             // Snapshot so the renew IO does not hold the registry lock.
             let tasks: Vec<(String, InFlightTask)> = match in_flight.lock() {
@@ -418,6 +443,24 @@ impl TaskHandler for EchoHandler {
             return TaskResult::cancelled("task cancelled before echo");
         }
 
+        if let Some(delay_ms) = control_e2e_delay_ms() {
+            log(&format!(
+                "control-e2e handler started taskId={} delayMs={delay_ms}",
+                ctx.task_id
+            ));
+            let deadline = std::time::Instant::now() + Duration::from_millis(delay_ms);
+            while std::time::Instant::now() < deadline {
+                if ctx.is_cancelled() {
+                    log(&format!(
+                        "control-e2e cancellation observed taskId={}",
+                        ctx.task_id
+                    ));
+                    return TaskResult::cancelled("cancelled by platform");
+                }
+                thread::sleep(Duration::from_millis(50));
+            }
+        }
+
         // Echo each effective parameter back as an output artifact.
         let mut result = TaskResult::success(&format!("echoed {} param(s)", ctx.parameters.len()))
             .with_output("handledBy", "sample-tenant-worker-rust");
@@ -426,6 +469,19 @@ impl TaskHandler for EchoHandler {
         }
         result
     }
+}
+
+fn control_e2e_enabled() -> bool {
+    env::var("BATCH_SDK_CONTROL_E2E").is_ok_and(|value| value.eq_ignore_ascii_case("true"))
+}
+
+fn control_e2e_delay_ms() -> Option<u64> {
+    control_e2e_enabled()
+        .then(|| env::var("BATCH_SDK_CONTROL_E2E_DELAY_MS").ok())
+        .flatten()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .or_else(|| control_e2e_enabled().then_some(15_000))
 }
 
 // ───────────────────────────────────────────────────────────────────────────

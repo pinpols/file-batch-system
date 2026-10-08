@@ -29,6 +29,7 @@
 
 ### Changed
 
+- Java 设计表达收口：Import 与 Task Outcome 的纯测试装配迁入 test fixture，生产直接注入已有窄协作者；未发布的 SDK 注册 Map/构造入口收敛为 typed 请求，按当前平台 wire 协议发送。内部区分执行成功/失败与 verifier 软告警，保留动态输出及事务/锁/Outbox 顺序，补齐真实装配、序列化和 PG 回滚/幂等验证。
 - 依赖治理改为持续告警、季度集中盘点和单个人工 PR：关闭 Dependabot 自动版本/安全修复 PR，季度任务只生成多生态 artifact 与 Actions Summary，不再自动创建 Issue/PR；紧急可达漏洞仍走独立快速修复。同步升级本批依赖、固定 CI/镜像供应链输入并刷新 SBOM。
 - 修复独立 `load-tests` 未继承根依赖治理导致的安全版本漂移；压测模块继续保持独立 reactor，但统一复用根 POM 的 Netty、Jackson 与 Logback 修复版本。
 - PR 单元测试按模块边界选择分片并拆分 Worker/Console 长尾；静态门禁拆分 policy、供应链和 Java quality 三路并由稳定 context 聚合；PR CodeQL 使用 Java 无构建与默认高精度查询，main/定时保留手工全量构建和扩展查询；Full/Staging E2E 依据最新实测重排为六片，CI runbook 同步登记耗时基线与回退标准。
@@ -72,6 +73,7 @@
 - Excel 导出将 POI 中间 XML 和模板 ZIP 纳入线程局部私有临时文件策略，成功和失败后恢复原策略；输出文件创建时限制为所有者权限，写入拒绝符号链接且不隐式重建文件，保持原输出路径和内容。
 - Trigger 运维代理显式归一化缺失响应信封，消除新增 Sonar 空值告警，同时保留已有信封的空 data 语义。
 - 修复 Java SDK 在 WARN 时序模式下接受零或负调度周期、注册成功后启动失败时可能遗留后台资源和 Worker 注册的问题；不可执行周期始终拒绝，启动中途失败统一执行有界回滚。
+- 为 Java、Go、Python、TypeScript、Rust 自托管 Worker 补齐真实服务控制故障注入验证：检查 pause/resume、取消、drain 与进程退出期间的任务领取和终态；修复 Go 心跳未控制 Kafka consumer、TypeScript 丢弃 `none` 恢复指令及 Rust 示例未将心跳状态接入消费循环的问题。暂停状态由本地代理注入，不代表平台提供原生 pause 管理 API。
 - 修复 Console Trigger 类型化响应的跨域归属错误：Job Controller 与 Ops 代理共用的传输 DTO 移入顶层应用契约，恢复跨上下文直接依赖为零，JSON 字段与运维行为保持不变。
 - 修复内置 Worker 忽略心跳排空指令的问题：收到 `DRAINING` 后暂停单条与批量 Kafka listener，未 claim 消息回退重投；平台恢复 `NORMAL` 且本地有执行许可后再恢复消费。
 - 修复对象存储 raw backend 导致加密装饰 Bean 永远退避的问题；raw 实现改由内部持有者隔离，业务注入只暴露外层装饰器，并保留按类型提供完整 `BatchObjectStore` 的覆盖能力。修复 Console 真实认证主体被按整个对象字符串构造限流键、角色变化可绕开用户级限流的问题。
