@@ -286,3 +286,18 @@
 本次差异复核未发现新的阻塞缺陷，不等于保证所有环境无回归。已知残余风险为：内部构造入口兼容范围、结果转换的额外小对象分配，以及尚未执行的 CI、隔离 sim 与性能验收。
 
 按 §7 准备三批交付：Import 注释与测试装配、SDK 注册类型化、Task Outcome 结果与协作者内聚。SDK 与 verifier 不混成同一契约批次。交付时逐批更新 changelog 和暂存树 LOC 快照、核对生成清单及提交门禁；这些交付动作当前尚未执行。准备说明不等于已提交、推送或创建 PR，不授权自动合并。
+
+### 11. 方法委托收敛（2026-10-08）
+
+本节记录在上述方案之后追加的一组窄范围维护性改动，生产行为按既有业务契约保持不变：
+
+| 调整 | 当前结构 | 语义边界 |
+|---|---|---|
+| Task 创建调用 | Workflow、子作业、分区派发及报告重试分别依赖 `TaskCreationService` / `TaskOutcomeService`；保留 `TaskExecutionService` 作为 Controller 与既有主链入口 | 仅收窄内部依赖，任务创建、报告状态机和事务不变 |
+| 补偿任务日志 | `DefaultCompensationService` 依赖 `TaskAssignmentService` 写入分配日志 | 事务执行器及补偿顺序不变 |
+| Console Job facade | 删除只转发调用的 `ConsoleJobApplicationService` 及默认实现；审批服务直接依赖恢复和审批协作者 | 保留业务校验、授权与审批流程 |
+| Workflow NodeRun API | 从 Task Execution/Outcome 公共服务移除 READY/START 转发方法；由 workflow 内部 recorder 承担节点记录 | FINISH 的既有服务入口及节点状态、并发幂等行为不变 |
+| Verifier outbox | 删除旧的二参数 wire 转换重载，只保留 `VerifierFailure` 类型化入口，并要求调用方事务已存在 | `MANDATORY`、事件顺序、幂等键与事务回滚边界不变 |
+| 薄包装方法 | Cookie token 解析、报表快照读取、文件响应映射和配额策略读取改为直接调用既有实现 | 不改变输入、输出、异常或配置语义 |
+
+验收结果：Orchestrator 定向单测 107 项通过（0 失败、0 跳过）；Console 相关单测 21 项通过（0 失败、0 跳过）；`TaskBatchClaimReportIntegrationTest` 使用 Testcontainers PostgreSQL 17.11、Kafka 4.1.2、MinIO 和 Valkey 执行 5 项通过（0 失败、0 跳过），其中包含无事务时 `MANDATORY` 拒绝验证；Orchestrator 与 Console 的 `spotless:check` 及 `git diff --check` 通过。首次测试执行发现并修正窄接口测试桩遗漏和 Spotless 格式问题，以上结果来自修正后的重跑。未执行 PMD、Sonar、Full Gate、sim 或生产环境验证；本节不声明 PR/CI 或生产验收完成。

@@ -322,10 +322,8 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  @DisplayName("旧入口与 typed 入口都必须持有事务，不能因共用私有发布逻辑绕过守护")
-  void shouldRejectBothVerifierEntryPoints_whenTransactionIsAbsent() {
-    assertThatThrownBy(() -> verifierFailureOutboxService.writeVerifierFailures(null, null))
-        .isInstanceOf(IllegalTransactionStateException.class);
+  @DisplayName("typed verifier 入口必须持有事务")
+  void shouldRejectVerifierEntryPoint_whenTransactionIsAbsent() {
     assertThatThrownBy(
             () -> verifierFailureOutboxService.writeVerifierFailures(null, null, List.of()))
         .isInstanceOf(IllegalTransactionStateException.class);

@@ -17,7 +17,7 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService;
 import io.github.pinpols.batch.orchestrator.domain.command.CompensationSubmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.command.FileGovernanceCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.CompensationCommandEntity;
@@ -67,7 +67,7 @@ public class DefaultCompensationService implements CompensationService {
   private final RetryGovernanceService retryGovernanceService;
   private final FileGovernanceService fileGovernanceService;
   private final ObjectProvider<LaunchService> launchServiceProvider;
-  private final TaskExecutionService taskExecutionService;
+  private final TaskAssignmentService taskAssignmentService;
   private final CompensationTransactionExecutor transactionExecutor;
 
   /** 本类内部的路由函数，不对外伪装成可插拔 SPI；类型新增仍由统一事务入口维护。 */
@@ -582,7 +582,7 @@ public class DefaultCompensationService implements CompensationService {
       detail.put("error", ctx.exception().getMessage());
     }
     log.setExtraJson(JsonUtils.toJson(detail));
-    taskExecutionService.appendLog(log);
+    taskAssignmentService.appendLog(log);
   }
 
   /**
@@ -622,7 +622,7 @@ public class DefaultCompensationService implements CompensationService {
       detail.put("error", exception == null ? null : exception.getMessage());
       detail.put("errorCode", exception == null ? null : resolveErrorCode(exception));
       entry.setExtraJson(JsonUtils.toJson(detail));
-      taskExecutionService.appendLog(entry);
+      taskAssignmentService.appendLog(entry);
     } catch (RuntimeException loggingEx) {
       // 落 trail 是 best-effort,不能让审计失败掩盖原始业务异常
       log.warn(

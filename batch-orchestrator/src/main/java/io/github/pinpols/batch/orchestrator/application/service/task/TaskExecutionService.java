@@ -73,11 +73,6 @@ public interface TaskExecutionService {
 
   JobTaskEntity markRunning(String tenantId, Long taskId, Instant startedAt);
 
-  WorkflowNodeRunEntity recordNodeRunReady(Long workflowRunId, String nodeCode, String nodeType);
-
-  WorkflowNodeRunEntity recordNodeRunStart(
-      Long workflowRunId, String nodeCode, String nodeType, Instant startedAt);
-
   WorkflowNodeRunEntity recordNodeRunFinish(TaskOutcomeService.NodeRunFinishCommand command);
 
   JobTaskEntity applyTaskOutcome(TaskOutcomeCommand command);

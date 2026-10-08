@@ -22,6 +22,7 @@ import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRa
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService.TaskHeartbeatResult;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControllerApplicationService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskReportRetryExecutor;
 import io.github.pinpols.batch.orchestrator.config.BundleBatchClaimProperties;
 import io.github.pinpols.batch.orchestrator.config.InternalAuthFilter;
@@ -48,6 +49,9 @@ class TaskControllerTest {
   private TaskExecutionService taskExecutionService;
 
   @Mock
+  private TaskOutcomeService taskOutcomeService;
+
+  @Mock
   private TenantActionRateLimiter tenantActionRateLimiter;
 
   private MockMvc mockMvc;
@@ -62,7 +66,7 @@ class TaskControllerTest {
             new ObjectMapper(),
             new BundleBatchClaimProperties(),
             new SimpleMeterRegistry(),
-            new TaskReportRetryExecutor(taskExecutionService));
+            new TaskReportRetryExecutor(taskOutcomeService));
     mockMvc = MockMvcBuilders.standaloneSetup(
             new TaskController(taskControllerApplicationService, tenantActionRateLimiter))
         .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
@@ -94,7 +98,7 @@ class TaskControllerTest {
             .content("{\"tenantId\":\"t1\",\"success\":true,\"resultSummary\":\"ok\"}"))
         .andExpect(status().isTooManyRequests());
 
-    verify(taskExecutionService, never()).applyTaskOutcome(any());
+    verify(taskOutcomeService, never()).applyTaskOutcome(any());
   }
 
   @Test
@@ -259,7 +263,7 @@ class TaskControllerTest {
         .andExpect(status().isOk());
 
     ArgumentCaptor<TaskOutcomeCommand> captor = ArgumentCaptor.forClass(TaskOutcomeCommand.class);
-    verify(taskExecutionService).applyTaskOutcome(captor.capture());
+    verify(taskOutcomeService).applyTaskOutcome(captor.capture());
     assertThat(captor.getValue().errorCode()).isEqualTo("ERR_PARSE");
     assertThat(captor.getValue().errorMessage()).isEqualTo("parse failed");
   }

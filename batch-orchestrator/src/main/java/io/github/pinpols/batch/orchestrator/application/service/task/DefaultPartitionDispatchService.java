@@ -64,7 +64,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
   private final SchedulePlanBuilder schedulePlanBuilder;
   private final ResourceScheduler resourceScheduler;
   private final PartitionLifecycleService partitionLifecycleService;
-  private final TaskExecutionService taskExecutionService;
+  private final TaskCreationService taskCreationService;
   private final TaskDispatchOutboxService taskDispatchOutboxService;
   private final LifecycleEventMapper<Object> lifecycleEventMapper;
   private final GlobalJobAdmission globalJobAdmission;
@@ -277,7 +277,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     for (JobPartitionEntity partition : partitions) {
       tasks.add(buildTask(context.buildContext(partition)));
     }
-    taskExecutionService.createTasks(tasks);
+    taskCreationService.createTasks(tasks);
     if (!context.scheduling().decision().isDispatchable()) {
       return;
     }

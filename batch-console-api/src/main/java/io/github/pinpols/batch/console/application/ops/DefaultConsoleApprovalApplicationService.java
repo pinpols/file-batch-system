@@ -10,7 +10,8 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.contract.response.file.ConsolePresignDownloadResponse;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileApplicationService;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.PresignDownloadFileRequest;
-import io.github.pinpols.batch.console.domain.job.application.ConsoleJobApplicationService;
+import io.github.pinpols.batch.console.domain.job.application.ConsoleJobApprovalService;
+import io.github.pinpols.batch.console.domain.job.application.ConsoleJobRecoveryService;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleApprovalApplicationService;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleBatchApprovalResultResponse;
 import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
@@ -38,11 +39,11 @@ import org.springframework.stereotype.Service;
  *   <li>远程调 {@code /internal/approvals/{no}/approve} 把状态推进为 APPROVED。
  *   <li>按 {@code actionType} 分派到对应 application service 执行真实业务：
  *       <ul>
- *         <li>{@code COMPENSATION} → {@link ConsoleJobApplicationService#compensation}
- *         <li>{@code RERUN} → {@link ConsoleJobApplicationService#rerun}（SELF_SERVICE 自助重跑）
- *         <li>{@code DLQ_REPLAY} → {@link ConsoleJobApplicationService#replayDeadLetter}
+ *         <li>{@code COMPENSATION} → {@link ConsoleJobRecoveryService#compensation}
+ *         <li>{@code RERUN} → {@link ConsoleJobRecoveryService#rerun}（SELF_SERVICE 自助重跑）
+ *         <li>{@code DLQ_REPLAY} → {@link ConsoleJobRecoveryService#replayDeadLetter}
  *         <li>{@code DOWNLOAD} → {@link ConsoleFileApplicationService#presignDownload}
- *         <li>{@code CATCH_UP} → {@link ConsoleJobApplicationService#approveCatchUp}
+ *         <li>{@code CATCH_UP} → {@link ConsoleJobApprovalService#approveCatchUp}
  *         <li>{@code BATCH_DAY_REPLAY} → orchestrator {@code
  *             /internal/orchestrator/batch-day-replay/sessions/{id}/approve}（ADR-020 Stage 3
  *             审批接入；payload 含 sessionId / tenantId）
@@ -60,7 +61,8 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
   // P2-1(2026-05-16):删除未实际使用的 RestClient.Builder 字段(原本就是空注入,死代码)。
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
-  private final ConsoleJobApplicationService consoleJobApplicationService;
+  private final ConsoleJobRecoveryService consoleJobRecoveryService;
+  private final ConsoleJobApprovalService consoleJobApprovalService;
   private final ConsoleFileApplicationService consoleFileApplicationService;
 
   @Override
@@ -95,7 +97,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
                 || request.getCompensationType().isBlank()) {
               request.setCompensationType(deriveCompensationType(approvalRecord.getTargetType()));
             }
-            yield consoleJobApplicationService.compensation(request, approvalNo);
+            yield consoleJobRecoveryService.compensation(request, approvalNo);
           }
           case "RERUN" -> {
             // SELF_SERVICE 自助重跑(ConsoleSelfServiceJobService.requestRerun 提交):payload =
@@ -104,13 +106,13 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
             RerunRequest request =
                 JsonUtils.fromJson(approvalRecord.getPayloadJson(), RerunRequest.class);
             request.setApprovalId(approvalNo);
-            yield consoleJobApplicationService.rerun(request, approvalNo);
+            yield consoleJobRecoveryService.rerun(request, approvalNo);
           }
           case "DLQ_REPLAY" -> {
             DeadLetterReplayRequest request =
                 JsonUtils.fromJson(approvalRecord.getPayloadJson(), DeadLetterReplayRequest.class);
             request.setApprovalId(approvalNo);
-            yield consoleJobApplicationService.replayDeadLetter(request, approvalNo);
+            yield consoleJobRecoveryService.replayDeadLetter(request, approvalNo);
           }
           case "DOWNLOAD" -> {
             PresignDownloadFileRequest request = JsonUtils.fromJson(
@@ -124,7 +126,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
             ConsoleCatchUpApprovalRequest request = JsonUtils.fromJson(
                 approvalRecord.getPayloadJson(), ConsoleCatchUpApprovalRequest.class);
             request.setApprovalId(approvalNo);
-            yield consoleJobApplicationService.approveCatchUp(request, approvalNo);
+            yield consoleJobApprovalService.approveCatchUp(request, approvalNo);
           }
           case "BATCH_DAY_REPLAY" -> {
             // ADR-020 Stage 3 审批接入：payload = {"sessionId":<long>, "tenantId":<str>}。

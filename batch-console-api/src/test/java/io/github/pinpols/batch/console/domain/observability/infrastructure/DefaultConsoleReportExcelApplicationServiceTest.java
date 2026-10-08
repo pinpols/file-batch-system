@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.observability.infrastructure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
@@ -69,6 +70,31 @@ class DefaultConsoleReportExcelApplicationServiceTest {
       Row header = workbook.getSheetAt(0).getRow(0);
       assertThat(header.getCell(1).getStringCellValue()).isEqualTo("tenantId");
     }
+  }
+
+  @Test
+  @DisplayName("导出调度快照和历史时委派到编排端口")
+  void shouldDelegateSchedulerSnapshotExports() {
+    ConsoleOrchestratorPort orchestratorPort = mock(ConsoleOrchestratorPort.class);
+    DefaultConsoleReportExcelApplicationService service =
+        new DefaultConsoleReportExcelApplicationService(
+            mock(ConsoleConfigApplicationService.class),
+            mock(ConsoleQueryApplicationService.class),
+            orchestratorPort,
+            dateTimeSupport());
+    when(orchestratorPort.schedulerSnapshot("tenant-a")).thenReturn(null);
+    when(orchestratorPort.schedulerSnapshotHistory("tenant-a", 10)).thenReturn(List.of());
+
+    assertThat(service.exportSchedulerSnapshot("tenant-a").getStatusCode().is2xxSuccessful())
+        .isTrue();
+    assertThat(service
+            .exportSchedulerSnapshotHistory("tenant-a", 10)
+            .getStatusCode()
+            .is2xxSuccessful())
+        .isTrue();
+
+    verify(orchestratorPort).schedulerSnapshot("tenant-a");
+    verify(orchestratorPort).schedulerSnapshotHistory("tenant-a", 10);
   }
 
   private static BatchDateTimeSupport dateTimeSupport() {

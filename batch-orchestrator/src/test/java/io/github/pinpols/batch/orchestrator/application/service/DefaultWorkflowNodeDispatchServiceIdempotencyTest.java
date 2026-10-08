@@ -14,7 +14,7 @@ import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceSchedu
 import io.github.pinpols.batch.orchestrator.application.service.task.ChildJobLaunchSupport;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.application.service.task.PartitionLifecycleService;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskCreationService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.CrossDayDependencyResolver;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.DefaultWorkflowNodeDispatchService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
@@ -36,7 +36,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.beans.factory.ObjectProvider;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("流程节点派发幂等: 行锁防重与短路返回口径")
@@ -82,7 +81,7 @@ class DefaultWorkflowNodeDispatchServiceIdempotencyTest {
   ResourceScheduler resourceScheduler;
 
   @Mock
-  ObjectProvider<TaskExecutionService> taskExecutionServiceProvider;
+  TaskCreationService taskCreationService;
 
   @Mock
   WorkflowNodePayloadBuilder payloadBuilder;
@@ -110,7 +109,7 @@ class DefaultWorkflowNodeDispatchServiceIdempotencyTest {
         taskDispatchOutboxService,
         workflowDagService,
         resourceScheduler,
-        taskExecutionServiceProvider,
+        taskCreationService,
         payloadBuilder,
         childJobLaunchSupport,
         mock(CrossDayDependencyResolver.class));

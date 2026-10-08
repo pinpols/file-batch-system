@@ -79,7 +79,7 @@ public class ChildJobLaunchSupport {
 
   private final OrchestratorJobMappers jobMappers;
   private final OrchestratorWorkflowMappers workflowMappers;
-  private final ObjectProvider<TaskExecutionService> taskExecutionServiceProvider;
+  private final TaskCreationService taskCreationService;
   private final ObjectProvider<LaunchService> launchServiceProvider;
   private final WorkflowNodePayloadBuilder payloadBuilder;
 
@@ -240,7 +240,7 @@ public class ChildJobLaunchSupport {
     virtualTaskTemplate.setVersion(0L);
     virtualTaskTemplate.setTaskPayload(taskPayload);
     virtualTaskTemplate.setDryRun(Boolean.TRUE.equals(jobInstance.getDryRun()));
-    return taskExecutionServiceProvider.getObject().createTask(virtualTaskTemplate);
+    return taskCreationService.createTask(virtualTaskTemplate);
   }
 
   private void incrementExpectedPartitionCount(JobInstanceEntity jobInstance, String nodeCode) {

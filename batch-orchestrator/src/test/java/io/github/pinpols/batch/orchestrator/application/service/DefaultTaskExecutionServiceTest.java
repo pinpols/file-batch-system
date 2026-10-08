@@ -12,7 +12,6 @@ import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcome
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -167,17 +166,5 @@ class DefaultTaskExecutionServiceTest {
 
     assertThat(result).isSameAs(task);
     verify(taskOutcomeService).applyTaskOutcome(command);
-  }
-
-  @Test
-  @DisplayName("登记节点运行就绪委托给结果服务并原样返回记录")
-  void recordNodeRunReady_delegatesToOutcomeService() {
-    WorkflowNodeRunEntity nodeRun = new WorkflowNodeRunEntity();
-    when(taskOutcomeService.recordNodeRunReady(1L, "N1", "EXPORT")).thenReturn(nodeRun);
-
-    WorkflowNodeRunEntity result = service.recordNodeRunReady(1L, "N1", "EXPORT");
-
-    assertThat(result).isSameAs(nodeRun);
-    verify(taskOutcomeService).recordNodeRunReady(1L, "N1", "EXPORT");
   }
 }

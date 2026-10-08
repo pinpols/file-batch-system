@@ -21,7 +21,7 @@ import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceSchedu
 import io.github.pinpols.batch.orchestrator.application.service.task.ChildJobLaunchSupport;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.application.service.task.PartitionLifecycleService;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskCreationService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService.DagNodeResolution;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
@@ -46,7 +46,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.beans.factory.ObjectProvider;
 
 /**
  * 守护 DAG 节点派发的早退分支(避免重复激活):
@@ -104,7 +103,7 @@ class DefaultWorkflowNodeDispatchServiceTest {
   private ResourceScheduler resourceScheduler;
 
   @Mock
-  private ObjectProvider<TaskExecutionService> taskExecutionServiceProvider;
+  private TaskCreationService taskCreationService;
 
   @Mock
   private WorkflowNodePayloadBuilder payloadBuilder;
@@ -135,7 +134,7 @@ class DefaultWorkflowNodeDispatchServiceTest {
         taskDispatchOutboxService,
         workflowDagService,
         resourceScheduler,
-        taskExecutionServiceProvider,
+        taskCreationService,
         payloadBuilder,
         childJobLaunchSupport,
         crossDayDependencyResolver);

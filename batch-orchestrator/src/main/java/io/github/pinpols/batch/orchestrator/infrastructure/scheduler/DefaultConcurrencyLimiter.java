@@ -52,7 +52,8 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
       return globalCheck;
     }
 
-    TenantQuotaPolicyEntity quotaPolicy = resolveQuotaPolicy(request.getTenantId());
+    TenantQuotaPolicyEntity quotaPolicy =
+        configCacheService.findEnabledQuotaPolicy(request.getTenantId());
     ResourceCheck tenantCheck = checkTenantLimit(request, quotaPolicy);
     if (!tenantCheck.allowed()) {
       return tenantCheck;
@@ -189,9 +190,5 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
       return burstCheck;
     }
     return ResourceCheck.allow();
-  }
-
-  private TenantQuotaPolicyEntity resolveQuotaPolicy(String tenantId) {
-    return configCacheService.findEnabledQuotaPolicy(tenantId);
   }
 }

@@ -124,7 +124,7 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
         }
       }
 
-      String bearerToken = resolveBearerToken(request);
+      String bearerToken = resolveCookieToken(request);
       if (Texts.hasText(bearerToken)) {
         try {
           ConsolePrincipal principal = jwtService.authenticate(bearerToken);
@@ -212,26 +212,6 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
 
   private boolean isPublicAuthPath(HttpServletRequest request) {
     return PUBLIC_AUTH_PATHS.contains(request.getRequestURI());
-  }
-
-  /**
-   * ADR-030 §D7 Stage B 收尾（2026-05-15）：HttpOnly cookie 是 console 端唯一 JWT 入口。
-   *
-   * <p>Authorization Bearer header fallback 已删除，所有客户端统一走 cookie：
-   *
-   * <ul>
-   *   <li>前端：axios {@code withCredentials=true}，浏览器自动带 cookie
-   *   <li>运维脚本：curl {@code --cookie "batch_console_token=${BATCH_CONSOLE_TOKEN}"}
-   *       （heal-drain-timeout.sh / trigger-compensation.sh 同步迁移）
-   * </ul>
-   *
-   * <p>orchestrator {@code /internal/**} 走另一个 {@code X-Internal-Secret} 通道， 不在本 filter 范围内，5 个
-   * heal-* 脚本不受影响。
-   *
-   * <p>Header 入站不再被识别为 token：保留 method 签名是为了上游 SSE-ticket 路径 fallthrough 调用方便。
-   */
-  private String resolveBearerToken(HttpServletRequest request) {
-    return resolveCookieToken(request);
   }
 
   private String resolveCookieToken(HttpServletRequest request) {

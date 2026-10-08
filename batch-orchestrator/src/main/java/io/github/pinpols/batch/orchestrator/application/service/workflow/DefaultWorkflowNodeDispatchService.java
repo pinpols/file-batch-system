@@ -24,7 +24,7 @@ import io.github.pinpols.batch.orchestrator.application.service.WorkflowNodeRunS
 import io.github.pinpols.batch.orchestrator.application.service.task.ChildJobLaunchSupport;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.application.service.task.PartitionLifecycleService;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskCreationService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.CrossDayDependencyResolver.ResolutionResult;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
@@ -43,7 +43,6 @@ import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -75,7 +74,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
   private final TaskDispatchOutboxService taskDispatchOutboxService;
   private final WorkflowDagService workflowDagService;
   private final ResourceScheduler resourceScheduler;
-  private final ObjectProvider<TaskExecutionService> taskExecutionServiceProvider;
+  private final TaskCreationService taskCreationService;
   // P2-4 god-class-decomposition: payload 拼装 + 上游产物合并 + ADR-009 DSL 解析全套抽到 collaborator
   private final WorkflowNodePayloadBuilder payloadBuilder;
   // P2-4 god-class-decomposition: JOB 节点子作业拉起全套(virtual partition/task + 写 trigger_request +
@@ -367,7 +366,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
       task.setDryRun(plan.isDryRun());
       // ORCH-P4-2：派单期把节点 startToClose timeout 拷到 task，让 TaskTimeoutEnforcer 自洽扫 job_task。
       task.setTaskTimeoutSeconds(workflowNode.getTaskTimeoutSeconds());
-      taskExecutionServiceProvider.getObject().createTask(task);
+      taskCreationService.createTask(task);
       if (decision.isDispatchable()
           && partitionLifecycleService.releaseForDispatch(
               partition, task, PartitionStatus.CREATED.code(), TaskStatus.CREATED.code())) {

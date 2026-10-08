@@ -46,7 +46,8 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
       return ResourceCheck.allow();
     }
     int requestedPartitions = Math.max(request.getRequestedPartitionCount(), 1);
-    TenantQuotaPolicyEntity quotaPolicy = resolveQuotaPolicy(request.getTenantId());
+    TenantQuotaPolicyEntity quotaPolicy =
+        configCacheService.findEnabledQuotaPolicy(request.getTenantId());
     boolean tenantPartitionQuotaEnabled = quotaPolicy != null
         && quotaPolicy.maxPartitionsPerTenant() != null
         && quotaPolicy.maxPartitionsPerTenant() > 0;
@@ -139,9 +140,5 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
         .runningStatus(PartitionStatus.RUNNING.code())
         .retryingStatus(PartitionStatus.RETRYING.code())
         .build());
-  }
-
-  private TenantQuotaPolicyEntity resolveQuotaPolicy(String tenantId) {
-    return configCacheService.findEnabledQuotaPolicy(tenantId);
   }
 }

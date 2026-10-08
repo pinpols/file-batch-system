@@ -256,7 +256,7 @@ public class ConsoleFileQueryService {
         request.getChannelCode(),
         request.getChannelType(),
         request.getEnabled());
-    return page(pageRequest, total, rows, this::toFileChannelResponse);
+    return page(pageRequest, total, rows, ConsoleFileProjectionMapper::channel);
   }
 
   public PageResponse<ConsoleFileTemplateResponse> fileTemplates(FileTemplateQueryRequest request) {
@@ -274,7 +274,7 @@ public class ConsoleFileQueryService {
         .build();
     List<Map<String, Object>> rows = fileMappers.fileTemplateConfigMapper.selectByQuery(q);
     long total = fileMappers.fileTemplateConfigMapper.countByQuery(q);
-    return page(pageRequest, total, rows, this::toFileTemplateResponse);
+    return page(pageRequest, total, rows, ConsoleFileProjectionMapper::template);
   }
 
   public PageResponse<ConsoleFileArrivalGroupResponse> fileArrivalGroups(
@@ -501,14 +501,6 @@ public class ConsoleFileQueryService {
         stringValue(row, "error_key"),
         stringValue(row, "error_args"),
         stringValue(row, "error_message"));
-  }
-
-  private ConsoleFileChannelResponse toFileChannelResponse(Map<String, Object> row) {
-    return ConsoleFileProjectionMapper.channel(row);
-  }
-
-  private ConsoleFileTemplateResponse toFileTemplateResponse(Map<String, Object> row) {
-    return ConsoleFileProjectionMapper.template(row);
   }
 
   private ConsoleFileArrivalGroupResponse toFileArrivalGroupResponse(
