@@ -65,7 +65,7 @@ public class LoadStep implements ImportStageStep {
   private final PlatformFileRecordRepository fileRecords;
   private final ImportWorkerConfiguration workerConfiguration;
   private final ObjectMapper objectMapper;
-  // ADR-038 P2:续跑位点(默认禁用,开关 batch.worker.checkpoint.enabled=true 才生效)
+  // ADR-038 P2:续跑位点(默认启用,开关 batch.worker.checkpoint.enabled=false 可关闭)
   private final WorkerCheckpointProperties checkpointProperties;
   private final ProcessingPositionStore positionStore;
   private final PipelineStageProgressRegistry progressRegistry;

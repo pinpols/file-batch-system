@@ -1,17 +1,17 @@
 # Redis 全断,ShedLock 切 jdbc fallback
 
-> 优先级 P0 · 最后核对版本:2026-05 · 配套 chaos IT:仓内有 fallback 路径测试，真实 Redis 全断仍需 staging 演练
+> 优先级 P0 · 最后复核：2026-10-08（代码/配置核对；真实 Redis 全断仍需 staging 演练）
 
 ## TL;DR
 
 **症状**:所有 `@SchedulerLock` 任务报 Redis 连不上,`OutboxPollScheduler` / `BatchDaySettleScheduler` 等全部空转;调度停顿。
-**一行修复**:把 `batch.shedlock.provider` 从 `redis`(默认)切 `jdbc`,滚动重启 orchestrator/trigger/worker/console-api,10 分钟内恢复。
+**处置摘要**:若确认 Redis 故障无法快速恢复，按变更流程停止所有使用 ShedLock 的实例，统一切到 `jdbc` 后再启动。预计中断时长取决于业务排空和部署方式，不承诺固定恢复时间。
 
 ---
 
 ## 怎么发现
 
-- **Prometheus alert**:`BatchOutboxCircuitBreakerFailOpen` 表示 outbox 熔断器因 Redis 不可达而回落到本地缓存态；`BatchRedisMemoryUsageHigh` / `BatchRedisConnectedClientsHigh` 用于容量侧信号。ShedLock 本身没有可靠的统一 acquire-failure 指标，不能把日志关键字冒充 Prometheus 告警，仍需按下方 Redis 探活与锁表检查定位。
+- **Prometheus**:`batch_shedlock_acquire_failed_total{provider="redis"}` 记录 provider 调用异常，`batch_shedlock_provider_healthy{provider="redis"}` 表示最近一次 provider 调用状态；`BatchOutboxCircuitBreakerFailOpen` 与 Redis 内存/连接数告警是相关但不同的信号。锁竞争返回空不计为故障。
 - **Grafana**:当前使用下列 Prometheus/日志查询；专用面板由目标监控环境落地:
   - `lettuce_command_completion_seconds_count{command="SET"}` 不再增长
   - orchestrator 日志中 `RedisConnectionFailureException` 出现频率
@@ -19,10 +19,10 @@
   - `org.springframework.data.redis.RedisConnectionFailureException`
   - `io.lettuce.core.RedisCommandTimeoutException`
   - `Unable to acquire JedisConnection` / `Connection refused`
-  - `Outbox 投递熔断已打开` 后续轮持续打印(因为 advance 拿不到锁)
+  - Outbox 调度持续异常时，同时核对 ShedLock 指标和 Redis 连接日志；熔断日志本身不能证明锁获取失败
 - **用户反馈**:
   - "Job 准时窗口过了还没起" — `BatchDaySettleScheduler` / `TriggerLaunchScheduler` 都靠 ShedLock 抢锁
-  - console-api 的 quota 检查异常 — `RedisQuotaRuntimeStateService` 也用 Redis
+  - console-api quota 检查异常属于另一条 Redis 依赖链，不代表 ShedLock 获取失败；按 quota 告警单独排查
 
 ---
 
@@ -69,11 +69,11 @@
 
 ## 怎么恢复
 
-### 方案 A:切 ShedLock 到 jdbc(2-5 min,推荐)
+### 方案 A:统一切换 ShedLock 到 jdbc
 
 ShedLock 抽象了 provider,业务代码无需改动 — 见 `BatchShedLockAutoConfiguration` 注释。
 
-1. **改配置**(每个服务都要,共 6 个:orchestrator / trigger / 4 个 worker / console-api 任选有 `@SchedulerLock` 的)
+1. **准备配置**：当前代码中使用 `@SchedulerLock` 的运行服务为 orchestrator、trigger、worker-import、worker-process、worker-dispatch。部署前应重新核对该清单；同一组调度任务的 provider 必须保持一致。
    ```yaml
    # application.yml 或环境变量覆盖
    batch:
@@ -83,50 +83,36 @@ ShedLock 抽象了 provider,业务代码无需改动 — 见 `BatchShedLockAutoC
    ```
    或环境变量:`BATCH_SHEDLOCK_PROVIDER=jdbc`
 
-2. **确认 `batch.shedlock` 表存在**(正常情况下早就由 Flyway 建好)
+2. **确认 `batch.shedlock` 表存在**(生产环境由 Flyway 管理)
    ```sql
    \d batch.shedlock
    -- 期望:name PK / lock_until / locked_at / locked_by
    ```
-   不存在 → 临时打开 `batch.shedlock.auto-create=true` 让启动期 `ShedLockProviderFactory#ensureShedLockTable` 建表。
+   不存在 → 不要在生产临时启用自动建表；按数据库迁移流程核实 Flyway 状态并补齐迁移。
 
-3. **滚动重启**
-   ```bash
-   docker compose restart batch-orchestrator
-   sleep 30 && curl -sSf http://localhost:18082/actuator/health | jq .status
-   docker compose restart batch-trigger
-   docker compose restart batch-worker-import batch-worker-export \
-     batch-worker-process batch-worker-dispatch
-   docker compose restart batch-console-api
-   ```
+3. **全停、统一切换、再全起**：按当前部署编排停止所有执行这些 ShedLock 任务的实例，确认旧实例均已停止后统一设置 `BATCH_SHEDLOCK_PROVIDER=jdbc`，再启动全部实例。禁止逐个滚动切换；两种 provider 的锁互不知情，可能造成重复调度。
 
 4. **验证锁正常工作**
    - 看启动日志,期望:`ShedLock LockProvider auto-configured: type=JDBC (JdbcTemplateLockProvider), autoCreate=false`
    - 等一个调度周期(`OutboxPollScheduler` 默认几百 ms,`BatchDaySettleScheduler` 60s),`select * from batch.shedlock` 应有新行写入
 
-5. **Redis 修好后切回**:把 `provider` 改回 `redis`(或删除该配置项,默认就是 redis)+ 再滚动重启。**切回前必须确认 Redis 健康**,否则又掉进同一个问题。
+5. **Redis 修复后切回**：确认 Redis 健康后，仍按“全停、统一切换、再全起”切回 `redis`；不可滚动切换，也不要手工删除 Redis key。
 
-### 方案 B:短时挂起,等 Redis 自愈(5-10 min)
+### 方案 B:短时等待 Redis 恢复
 
-适用:已确认 Redis 故障可在 5 min 内恢复(例:OOM 重启)。
+适用:已确认 Redis 故障可快速恢复，且业务可接受调度短暂停顿。
 
-1. 不改配置,但让上层 chaos 影响最小化:
-   - 把熔断器阈值临时调激进,让 `OutboxPublishCircuitBreaker` 早早 open,减少日志噪音(见 `OutboxPublishCircuitBreaker` 的 `failure-threshold` / `cooldown-seconds`)
-2. 等 Redis 拉起后:
+1. 不要为降低日志量临时修改熔断阈值；记录故障时间、受影响服务和相关指标。
+2. Redis 恢复后:
    ```bash
    docker compose restart redis
    docker compose exec redis redis-cli ping  # PONG
    ```
 3. `OutboxPollScheduler` / `BatchDaySettleScheduler` 会自动恢复(下一个 tick 抢锁成功)。
 
-### 方案 C:最后手段(破坏性操作)— 回滚到上一版(15+ min)
+### 方案 C:Redis 与 PostgreSQL 同时不可用
 
-仅当方案 A 失败(jdbc fallback 也起不来,例如 `batch.shedlock` schema drift)。
-
-1. 停所有业务:`docker compose stop batch-orchestrator batch-trigger batch-worker-* batch-console-api`
-2. 回滚镜像 tag 到上个已知版本:`git checkout <last-known-good-tag>`,重新 build / pull
-3. `docker compose up -d`,逐个服务验证 `actuator/health`
-4. Redis / PG 都没救 → 升级到全平台不可用应急流程(超出本剧本)
+JDBC provider 依赖 PostgreSQL；双故障时不要尝试切换 provider 或回滚应用代码。停止会产生调度副作用的服务，按 PostgreSQL 与 Redis 各自的灾备/恢复流程处理；依赖恢复后统一核对锁后端配置，再恢复业务服务。
 
 ---
 
@@ -134,11 +120,11 @@ ShedLock 抽象了 provider,业务代码无需改动 — 见 `BatchShedLockAutoC
 
 - **写 incident-response 关联本剧本**:在 `docs/runbook/incident-response.md` 表里追加 P1 行。
 - **思考默认 provider 选择**:本仓 2026-05-28 默认切 `redis`(批注见 `BatchShedLockAutoConfiguration`),如果半年内 Redis 已 down 过 2 次 → 考虑默认回 `jdbc`,把 redis 当性能优化的可选项。
-- **观测边界**:`BatchOutboxCircuitBreakerFailOpen` 已覆盖 Redis 降级可见性；ShedLock acquire 失败仍以 Redis 探活、锁状态查询和日志为准，后续只有在能稳定产生低基数失败事件时才新增独立告警。
-- **剧本走不通**:Redis 又活了但锁没释放(`job-lock:shedlock:<env>:<lockName>` key 有残留 TTL),手动 `DEL` 该 key,补一篇 `redis-shedlock-stuck-lock.md`。
+- **观测边界**:`batch_shedlock_acquire_failed_total` / `batch_shedlock_provider_healthy` 观测 provider 调用异常和最近状态；锁竞争不计失败。
+- **锁状态异常**：不要手工 `DEL` 锁 key。保留 key 名、TTL、provider 指标、实例状态和任务日志，交由维护者按 ShedLock 租约语义分析。
 
 ## 关联
 
 - 代码:`batch-common/.../config/BatchShedLockAutoConfiguration.java`(provider 切换),`ShedLockProviderFactory.java`(jdbc / redis 实现)
-- 业务调度:`OutboxPollScheduler`,`BatchDaySettleScheduler`,`TriggerLaunchScheduler`,`WebhookDeliveryRelay` 等共 48 处 `@SchedulerLock`
+- 当前涉及的主要运行服务：orchestrator、trigger、worker-import、worker-process、worker-dispatch；具体调度点以各模块中的 `@SchedulerLock` 为准
 - 上一级:[`docs/runbook/incident-response.md`](../incident-response.md)

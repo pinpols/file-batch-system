@@ -2,9 +2,11 @@
 
 日期：2026-06-09
 
+> **历史扫描快照**：本文的 JDK 版本和特性使用判断只适用于扫描时点。当前工程运行时以根 `pom.xml`、[`runtime compatibility contract`](../architecture/runtime-compatibility-contract-2026-09-01.md) 和运行时对齐门禁为准。
+
 ## 结论
 
-当前项目主工程以 **JDK 25** 编译运行，但源码层面主要使用的是 **JDK 8 → 21** 的稳定语言/API 特性；尚未显式使用 JDK 22/23/24/25 的核心新增编程模型。
+截至 2026-06-09，扫描记录中的主工程使用 JDK 25；源码层面主要使用 JDK 8 → 21 的稳定语言/API 特性。此为历史环境观察，不是当前 JDK 基线声明。
 
 - 主工程：`pom.xml` 配置 `java.version=25`、`maven.compiler.release=25`。
 - 压测模块：`load-tests/pom.xml` 单独配置 `maven.compiler.release=21`。

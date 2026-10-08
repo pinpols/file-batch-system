@@ -1,7 +1,7 @@
 # 系统职责范围分析 — 批量调度系统的边界守护
 
 **文档状态**：架构基准  
-**最后更新**：2026-05-06  
+**最后更新**：2026-10-08
 **审核周期**：每季度 / 有 PR 涉及新模块时重审
 
 ---
@@ -137,33 +137,11 @@ POST /api/console/ai/chat/stream
 }
 ```
 
-**现状评估**：
-- ✓ System prompt 约束：只回答批量调度问题
-- ✓ 多层防护：authz gate + prompt guard + 审计（SHA-256 哈希，不落明文）
-- ✓ 不直接代执行：只给建议，不调写接口
-- ✓ 拒绝路径完整：敏感问题明确拒绝
+**当前边界**：ADR-045 已明确 AI 是控制面只读运维助手，工具沿用调用者 RBAC，不执行 launch/cancel/retry 等写操作；知识范围、默认开关及外部模型配置也由该 ADR 约束。统一 chat 路径本身不是越界证据。
 
-**风险**：
-- ❌ 路径太泛：`/chat` 通用化，容易加"帮我写 SQL""帮我分析这个文件"溜出 scope
-- ❌ 没有与 forensic / approval 对接：AI 回答被用户照着做，没有更深 trace 关联
+**持续治理**：维持只读工具白名单、租户绑定、拒答测试和敏感内容处理；新增写操作或扩大为通用业务问答前，必须先修订 ADR 并完成安全/产品评审。AI 建议是否进入审批/取证链路属于独立产品决策，不作为既定缺口。
 
-**风险等级**：🟡 中（目前守得住，但有扩张通道）
-
-**建议方案**：
-1. **路径收敛**：把 `/api/console/ai/chat` 改成具体能力
-   ```
-   POST /api/console/ai/explain-failure/{instanceId}
-   POST /api/console/ai/recommend-cron/{jobCode}
-   POST /api/console/ai/diagnose-dag/{workflowId}
-   ```
-   不留通用 `/chat` 入口
-
-2. **在相关 ADR 加显式声明**：
-   > AI 是辅助分析工具，永远不直接调任何写接口（launch / cancel / retry）。每个 AI 建议都在 audit_log 里标 `suggestion_from_ai=true`，可追溯。
-
-3. **与 approval + forensic 对接**：
-   - AI 建议 + 用户确认 → 生成 approval_request
-   - Forensic 包导出时一并抓出"这个决策是否参考了 AI 建议"
+**风险等级**：🟡 持续治理（按 ADR-045 和当前 AI 治理计划复核；不是当前已确认漏洞）。
 
 ---
 
@@ -353,6 +331,6 @@ GET /api/console/topics
 
 ## 结语
 
-**总体结论**：系统当前 **没有大幅越界**，大部分模块职责清晰。但有 4-5 处中小越界/模糊点需要在短期（本月内）加强护栏，防止通过 PR 小步扩张而最终越界。
+**总体结论（2026-10-08）**：本清单中的 telemetry、AI 只读边界、SQL Transform、Resource Tag 和 Event Catalog 护栏均已有明确实现或 ADR 约束，§6 所列行动已完成。当前没有证据支持“仍有 4-5 处需本月收敛”的旧结论。后续按季度及新能力 PR 复核；AI 按 ADR-045 持续控制范围。
 
 **核心原则**：当有新功能诉求时，先问：**这是批量调度系统应该自己做，还是应该对接专门系统（数据治理 / RUM / 审计 / 编排）？**

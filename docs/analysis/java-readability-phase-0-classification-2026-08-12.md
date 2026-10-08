@@ -59,7 +59,7 @@
 | Orchestrator 操作接口 | `InstanceManagementApplicationService`、`WorkflowRunManagementApplicationService` 及对应 Controller | Controller/应用服务测试、内部 OpenAPI、worker/console 调用方 |
 | Orchestrator 状态接口 | `OrchestratorDrainController`、`OrchestratorGracefulShutdown`、`TriggerGracefulShutdown`、`AtomicRuntimeStatus` | Actuator/Controller 测试、容器健康检查 |
 | 文件治理与 lineage | `DefaultFileGovernanceService`、`LineageEvidenceService`、`FileGovernanceController`、`FileGovernanceScheduler`、`FileGovernanceMetricsCacheService` | 文件治理 IT、对象存储 sim、内部 OpenAPI；延迟指标已由 `FileGovernanceLatencyMetrics` 固定输出 |
-| 固定数据库投影 | `FileGovernanceRepository`（待做）；`PlatformFileRuntimeRepository`、`FileDispatchRepository`、`DispatchChannelHealthRepository` 已逐条复核——固定行类型化，对外透传/动态合并入参按 §4.2 保留 Map | mapper/真 PG IT、import/export/dispatch E2E |
+| 固定数据库投影 | `FileGovernanceRepository` 已于 2026-10-07 完成剩余固定投影审查与类型化；`PlatformFileRuntimeRepository`、`FileDispatchRepository`、`DispatchChannelHealthRepository` 已逐条复核——固定行类型化，对外透传/动态合并入参按 §4.2 保留 Map | mapper/真 PG IT、import/export/dispatch E2E |
 | Java SDK 固定 transport | `PlatformHttpClient` 的 register/heartbeat/deactivate/claim/report/renew 响应 | SDK contract、live transport、Java testkit |
 
 ### 4.2 合理保留 Map

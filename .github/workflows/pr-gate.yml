@@ -1,12 +1,7 @@
 name: pr-gate
 
-# C 方案(2026-06-02):PR 只跑 unit + 文档全跳 + Merge Queue 入口。
-# 历史背景:Round-1 TOP-7 把 e2e 分级到 smoke(本 workflow)+ regression(staging-gate)。
-# C 方案进一步把 IT 也从 PR-gate 移除,IT/E2E 全部交给 full-ci-gate(main push 后回退)+
-# staging-gate(nightly)。PR-gate 保留 static-checks 聚合门禁 + unit +
-# java-governance + security-scan 四类快速反馈。
-# 风险:main 偶尔会被 full-ci-gate 拦,该 PR 作者负责立即 revert + 修复。
-# 详见 docs/runbook/ci-speedup-2026-06-02.md。
+# PR 合入门禁：按变更范围运行静态检查、测试分片和安全扫描；E2E 在 Full CI
+# 与独立 nightly E2E workflow 执行。具体路由以本 workflow 和 docs/runbook/ci.md 为准。
 #
 # Job 名(unit-it-a / unit-it-b1 / unit-it-b2)不动,因为 ruleset required check 配置在
 # 这 3 个名字上;改名会导致 ruleset 失配。命令从 `mvn verify`(failsafe IT)改成
@@ -31,10 +26,8 @@ on:
       - synchronize
       - reopened
       - ready_for_review
-  # GitHub Merge Queue 入口(C 方案 #4):必须 list 在这里,merge queue 才会调用
-  # pr-gate 作为 required check;ruleset required check 同时支持 PR 和 merge_group。
-  # 启用 Merge Queue 后,合并通过 queue 串行化,可消除 main 被 broken 风险。
-  # 启用指引见 docs/runbook/ci-speedup-2026-06-02.md。
+  # 为未来 merge queue 保留 merge_group 支持；当前 main Ruleset 未启用 merge queue。
+  # 启用前应验证 required contexts 在 PR 与 merge_group 两种事件下均完整上报。
   merge_group:
     types:
       - checks_requested
@@ -739,8 +732,8 @@ jobs:
   # ===========================================================================
   # 4 个 Maven unit 执行分片按依赖边界路由；B2 Worker / Console 并行后由
   # 稳定的 unit-it-b2 required context 聚合。
-  # C 方案(2026-06-02):只跑 surefire unit(`mvn test -DskipITs`),IT 已搬到
-  # full-ci-gate(main push 回退)+ staging-gate(nightly)。
+  # 当前分片只执行范围路由后的 Maven 测试，不执行 E2E；完整 E2E 由 Full CI
+  # 与独立 nightly E2E workflow 执行。
   # required job 名 unit-it-a / unit-it-b1 / unit-it-b2 保留(ruleset context 锁定)。
   #
   # Job 2: unit-shard-1 — orchestrator + worker-core
@@ -1008,8 +1001,7 @@ jobs:
 
   # ===========================================================================
   # NOTE: e2e-smoke 已从 pr-gate 移除(C 方案 #1)。
-  # E2E(smoke + regression)全部交给 staging-gate.yml(nightly,6 shard 并发)
-  # 和 full-ci-gate.yml(main push 后回退)。
+  # PR 不运行 E2E；Full CI Gate 和 staging-gate.yml 分别在 main push、nightly/手动执行。
   # 如需 PR 阶段重新引入 smoke,从 git history 恢复 e2e-smoke job。
   # ===========================================================================
 

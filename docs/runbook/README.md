@@ -15,7 +15,7 @@
 | 01 | [daily-inspection.md](./daily-inspection.md) | 日常巡检 SOP（每日 / 每周 / 每月 check） |
 | 02 | [incident-response.md](./incident-response.md) | 故障响应 runbook（P0/P1 标准动作） |
 | 03 | [troubleshooting-decision-tree.md](./troubleshooting-decision-tree.md) | 故障决策树（按症状分支定位） |
-| 04 | [compensation-cleanup.md](./compensation-cleanup.md) | Compensation 失败清理（长期停滞补偿任务的处理流程） |
+| 04 | [compensation-cleanup.md](./compensation-cleanup.md) | 补偿失败的只读诊断、恢复边界与升级流程 |
 
 ### 二、部署 / 上线（首次部署或上量）
 

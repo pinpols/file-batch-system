@@ -23,7 +23,7 @@
 | 03 | [api/](./api/README.md) | 前后端契约 | `console-api-protocol.md` + OpenAPI |
 | 04 | [runbook/](./runbook/README.md) | 运维 SOP（应急 / 部署 / 容量 / 灰度 / 观测）| `incident-response.md` + `feature-switches.md` |
 | 05 | [testing/](./testing/README.md) | 测试计划 / 覆盖矩阵 / release-gate | `full-project-test-plan.md` |
-| 06 | [analysis/](./analysis/README.md) | 演进向：问题 / 修复 / 加固三件套 + 长期治理方案 + 项目评估 | `deep-issue-analysis.md` |
+| 06 | [analysis/](./analysis/README.md) | 当前待办、硬化事项、长期方案与历史分析快照 | `todo-master.md` |
 | 07 | [dict/](./dict/README.md) | **Reference dict**（错误码 / 配置键，自动生成）| `error-codes.md` + `config-keys.md` |
 | 08 | [compliance/](./compliance/README.md) | 第三方依赖许可 + SBOM | `THIRD-PARTY-LICENSES.md` |
 | 09 | [audit/](./audit/README.md) | 专项审计报告 + 漂移防护总账 | [convention-drift-guard-index.md](./audit/convention-drift-guard-index.md) |
@@ -53,7 +53,7 @@
 | 规范复扫 / PR 审核 | 09 audit (`convention-drift-guard-index.md`) → `agent-baseline.md` → 顶层 02 coding-conventions → `scripts/ci/README.md` |
 | 开源治理 / 安全响应 | 17 standards (`open-source-governance.md`) → 根 `SECURITY.md` → 04 runbook (`security-scan.md`) |
 | 文档维护 / 目录调整 | 17 standards (`document-governance.md`) → 本 README → 受影响子目录 README → `scripts/ci/check-docs-structure.py` |
-| AI 协作 | 顶层 01 agent-baseline → 02 coding-conventions |
+| AI 协作 | 顶层 01 agent-baseline → 02 coding-conventions；项目级审查使用 [project-engineering-review](../.agents/skills/project-engineering-review/SKILL.md)，批量调度领域开发与评估使用 [batch-scheduling-engineering](../.agents/skills/batch-scheduling-engineering/SKILL.md)，再按技能路由进入专项流程 |
 
 ## 维护约束（来自 agent-baseline.md）
 

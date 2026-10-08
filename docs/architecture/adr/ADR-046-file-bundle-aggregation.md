@@ -1,8 +1,8 @@
 # ADR-046 · 文件束聚合 —— 在单文件单元之上加一层批量编排(File Bundle Aggregation)
 
-- **Status**: Proposed(**方向已定 2026-06-21**:见 §已决;4 个开放问题已拍板,待实施分阶段逐 PR)
+- **Status**: Accepted；bundle 基础迁移（V183/V184）、编排入口及集成测试已存在。方案中最初的分阶段计划是历史记录；各 profile 的完整能力与生产性能结论仍须分别以测试/压测证据确认（复核：2026-10-08）
 - **Related**: ADR-040(清单驱动到达组,**分组种子之一**)、ADR-002(transactional outbox)、ADR-027(资源亲和范围红线,**边界对照**)、配置批量导入(`/config/tenant-package` Excel 配置包,**配置模型复用**)、`docs/analysis`(吞吐瓶颈实测:瓶颈在控制面消费 + claim/report 争用,非 PG)、PR #465(launch 消费并发 +50%)
-- **Plan**: 本 PR 仅设计文档。**架构级**——引入新的编排聚合单元 + 动 orchestrator 的 claim/report 粒度(orchestrator 是唯一状态主机)。§已决 已拍板 4 个方向问题 + 配置模型,后续分阶段逐 PR 落地,**先定语义再写码**。
+- **Plan**: 本文的原始分阶段方案保留为设计历史。当前实现入口包括 `BundlePlanParams`、`BundleArrivalLauncher`、V183/V184 及 bundle 集成测试；批量 CLAIM/REPORT、各 Worker profile 和性能收益应以各自当前实现与专项验证为准，不从设计目标推定全部达成。
 
 ## 范围边界(实施 PR 必答)
 

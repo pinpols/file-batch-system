@@ -1,12 +1,12 @@
 # E2E 分级策略(smoke / critical / regression)
 
-> R3-2 最初把 smoke/critical 放入 PR；当前策略已将 PR 收敛为单元快速反馈，全部 E2E 由 Full/Staging 六片并发执行。
+> 当前策略：PR 不运行 E2E；Full CI 在 main push 后执行全量 E2E，`staging-gate` 每日定时或手动执行全量 E2E。两者都在 GitHub-hosted runner 上运行，不代表部署到 staging 集群。
 >
 > 落地 PR:`feature/r3-2-e2e-tier-smoke-pr-gate`(2026-06-02)
 
 ## 背景
 
-`batch-e2e-tests` 共 28 个 `*E2eIT`。2026-10-07 按最近 Full Gate 的 Surefire 实测耗时重新执行 LPT，6 shard 的测试体基线为 148-179 秒，含依赖安装和 Testcontainers 的目标 wall-clock 为 4-5 分钟。PR 不运行 E2E，由合入后的 Full Gate 和 nightly staging 回退。
+`batch-e2e-tests` 的用例清单由 `scripts/ci/check-e2e-shard-coverage.sh` 与各 workflow shard 定义共同校验。2026-10-07 的历史 Surefire 样本记录六片测试体耗时为 148-179 秒；这不是每次运行的 SLA。PR 不运行 E2E，Full CI 在 main push 后运行，nightly/手动 `staging-gate` 提供额外回归。
 
 ## 三级标签
 
@@ -81,13 +81,12 @@ profile `e2e-smoke` 用 JUnit5 tag 表达式 `smoke | critical` 过滤。
 | `full-ci-gate.yml` job `e2e-shard` | push 到 main | **全量** 6 shard 并发 |
 | `staging-gate.yml` job `e2e-shard-full` | 每天 02:00 北京时间 + workflow_dispatch | **全量** 6 shard 并发 |
 
-> full-ci-gate 仍跑全量,作为 main push 的最终守护。staging-gate 是 nightly + 手动
-> 回退,主要价值是「下班期间在 staging branch 上对 release candidate 全跑」。
+> Full CI 在 main push 后运行全量 E2E；`staging-gate` 是 nightly + 手动的额外回归，运行于 GitHub-hosted runner，不使用 staging branch，也不部署 release candidate。
 
 ## 命令速记
 
 ```bash
-# 本地只跑 smoke + critical(等价 pr-gate)
+# 本地按 smoke + critical 标签筛选 E2E；不等同于 PR Gate 的完整检查集
 mvn -pl batch-e2e-tests test -Pe2e-smoke
 
 # 本地只跑 smoke
@@ -96,7 +95,7 @@ mvn -pl batch-e2e-tests test -Dgroups=smoke
 # 本地只跑 critical
 mvn -pl batch-e2e-tests test -Dgroups=critical
 
-# 本地全跑(等价 staging-gate)
+# 本地运行 E2E 全量测试；不包含 staging-gate 中独立的 Java 治理 job
 mvn -pl batch-e2e-tests test
 
 # 本地只跑 regression(排除 smoke/critical)

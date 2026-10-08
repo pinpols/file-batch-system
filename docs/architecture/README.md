@@ -15,7 +15,7 @@
 | 05 | [kafka-topic-plan.md](./kafka-topic-plan.md) | Kafka Topic 命名 / 分区 / PATTERN 订阅规范 | 加新 topic 前 |
 | 06 | [worker-plugins.md](./worker-plugins.md) | Worker 平台框架 + IMPORT / EXPORT / DISPATCH 插件扩展机制 | 写新 Worker 类型前 |
 | 07 | [workflow-dependency-guide.md](./workflow-dependency-guide.md) | 租户 Workflow 完整运行流程图、运行态对象、DAG / GATEWAY / joinMode / CONDITION 编排指南 | 配 Workflow 或排查节点推进前 |
-| 08 | [scalability-assessment.md](./scalability-assessment.md) | 千万级承载力评估（绿/黄/红 + 改造路线图，2026-04-25） | 容量规划 / 上量评估 |
+| 08 | [scalability-assessment.md](./scalability-assessment.md) | 容量方向评估历史快照（2026-07-28）；不是当前容量认证 | 追溯容量判断；当前评估需结合最新压测与待办 |
 | 09 | [rework-classification.md](./rework-classification.md) | scalability 评估的"改什么"分类（代码 / 配置 / 数据 / 运维 / SQL / 部署 / 文档） | 决定哪些项目立项、哪些当下办 |
 | 10 | [quartz-replacement-design.md](./quartz-replacement-design.md) | 已撤销的 Quartz → Wheel 实施设计 | 历史决策 |
 | 11 | [quartz-replacement-evaluation.md](./quartz-replacement-evaluation.md) | Quartz 替换可行性评估 + 落地路径 | 同上，看决策上下文 |
@@ -24,8 +24,8 @@
 | 14 | [notification-and-audit-boundary.md](./notification-and-audit-boundary.md) | 通知、技术告警、运行日志、业务审计的统一职责与复用边界 | 判断告警/通知/审计归属时 |
 | 15 | [outbox-architecture.md](./outbox-architecture.md) | Outbox 主表 + 副表（retry / delivery_log）+ 兄弟表（trigger_outbox_event）总览 | 排障 / 改 outbox 子系统前 |
 | 16 | [architecture-truth.md](./architecture-truth.md) | 当前架构事实的稳定入口与权威源清单 | 核对版本、模块、端口或迁移事实 |
-| 17 | [adr/](./adr/) | 架构决策记录（不可变） | 想知道"为什么这么做" |
-| 18 | [../analysis/p0-p1-governance-status-2026-09-02.md](../analysis/p0-p1-governance-status-2026-09-02.md) | P0/P1 治理状态、证据边界与复扫入口 | 上线前复核治理是否漂移 |
+| 17 | [adr/](./adr/) | 架构决策记录（决策结论只追加；实现状态可按证据更新） | 想知道"为什么这么做" |
+| 18 | [../analysis/p0-p1-governance-status-2026-09-02.md](../analysis/p0-p1-governance-status-2026-09-02.md) | 2026-09-02 P0/P1 治理状态历史快照 | 追溯当时的证据边界；当前事项看 todo-master |
 | 19 | [application-governance.md](./application-governance.md) | 超时、运行时兼容、故障注入、告警、供应链五项应用治理入口 | 复核横切治理是否有代码和证据 |
 | 20 | [bounded-context-rules.md](./bounded-context-rules.md) | bounded context 依赖方向和例外规则 | 调整跨域依赖前 |
 | 21 | [event-routing-policy.md](./event-routing-policy.md) | 事件路由与 topic 选择规则 | 新增或迁移事件前 |
@@ -33,7 +33,7 @@
 | 23 | [engineering-maturity-roadmap.md](./engineering-maturity-roadmap.md) | 当前工程成熟度路线图,串联 Java、DB、运维、CI 和前端协作治理 | 规划下一批治理 / 上线准入复核 |
 | 24 | [maturity-assessment.md](./maturity-assessment.md) | 成熟度评估快照 | 能力对标时，结论需结合最新验证 |
 | 25 | [deficiencies-2026-05-30.md](./deficiencies-2026-05-30.md) / [p0-p1-p2-roadmap.md](./p0-p1-p2-roadmap.md) | 历史差距与治理路线证据 | 审计历史，不作为当前待办 |
-| 26 | [heavy-workload-guarantees.md](./heavy-workload-guarantees.md) | 重任务容量、资源池、长任务、下游健康和窗口吞吐五项保障 | 重任务上线 / 定容 / 资源隔离前 |
+| 26 | [heavy-workload-guarantees.md](./heavy-workload-guarantees.md) | 重任务容量保障设计与已验证边界；目标环境容量仍需实测 | 重任务上线 / 定容 / 资源隔离前 |
 | 27 | [security-model.md](./security-model.md) | 资产、信任边界、攻击者假设和安全验证入口 | 新增外部入口、执行能力或安全控制前 |
 
 ## 角色路径
@@ -53,6 +53,6 @@
 | [`../design/`](../design/README.md) | 业务向 / 静态：数据模型 DDL、能力评估、链路设计 |
 | [`../runbook/`](../runbook/README.md) | 运维向：部署、监控、灰度、应急、巡检 |
 | [`../testing/`](../testing/README.md) | 质量向：测试计划、覆盖矩阵、release-gate |
-| [`../analysis/`](../analysis/README.md) | 演进向：深度问题分析 + 修复报告 + 硬化 backlog |
+| [`../analysis/`](../analysis/README.md) | 当前事项索引、硬化 backlog 与历史分析快照 |
 | [`../api/`](../api/README.md) | 前后端契约：Console API 协议 + OpenAPI |
 | [`../archive/`](../archive/README.md) | 历史快照：不再维护 |

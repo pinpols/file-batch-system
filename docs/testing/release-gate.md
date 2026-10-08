@@ -1,10 +1,10 @@
-# CI / Staging Gate
+# CI 门禁与发布验收
 
-更新时间：2026-10-07
+更新时间：2026-10-08
 
 ## 目标
 
-本文件定义当前仓库的统一回归入口、推荐门禁层级和 staging 前的最低放行标准。
+本文件区分实际 GitHub Actions workflow、统一本地回归脚本和发布前人工验收。三者执行范围不同，不能将脚本支持的可选能力视为 CI 已执行的验证。
 
 统一脚本入口：
 
@@ -18,8 +18,9 @@
 2. reactor 显式 `*IT` 套件：补齐需要单独触发的集成测试和 E2E
 3. workflow 级 `load-tests/` 额外 `test-compile`
 4. 可选 load smoke：`JobLaunchSimulation`
-5. 可选 deploy smoke：Helm `lint + template`
-6. 可选巡检：`scripts/ops/inspect-all.sh`
+5. 可选容量测试：`CapacityBaselineSimulation`
+6. 可选部署验证：live rollout/readiness/rollback（需显式配置目标集群）
+7. 可选巡检：`scripts/ops/inspect-all.sh`
 
 GitHub Actions Workflow：
 
@@ -56,7 +57,7 @@ bash scripts/ci/run-full-regression.sh --skip-it-suite -- --pl <affected-modules
 
 ### Full CI Gate
 
-目标：在合并前完成仓库级测试门禁。
+目标：合并到 main 后执行主干全量回归；它不是 PR 合并前的 required check。
 
 真实 workflow：
 
@@ -74,15 +75,15 @@ bash scripts/ci/run-full-regression.sh
 - `*IT` 套件通过
 - `load-tests/` 至少完成一次 `test-compile`
 
-### Staging Gate
+### Nightly E2E Gate
 
-目标：在进入 staging 或发布前完成完整门禁。
+目标：在 GitHub-hosted runner 上定时或手动运行六片全量 E2E 和 Java 治理检查。当前 workflow 不部署到 staging 集群，也不执行 live rollout、负载测试或巡检。
 
 真实 workflow：
 
 - `.github/workflows/staging-gate.yml`
 
-建议命令：
+需要在本地或已配置的受控环境执行发布前扩展验证时，可运行：
 
 ```bash
 bash scripts/ci/run-full-regression.sh \
@@ -92,13 +93,17 @@ bash scripts/ci/run-full-regression.sh \
   --with-inspection
 ```
 
-要求：
+以上命令只是脚本可选能力，不代表 nightly E2E workflow 会执行这些步骤。实际发布前应根据变更风险明确运行并留存对应证据：
 
 - Full CI Gate 全部通过
 - Helm deploy smoke 通过
 - 部署升级 / 回滚验证通过
 - load smoke 通过
 - 巡检脚本无 FAIL
+
+### Daily SIM / strict validation
+
+`.github/workflows/daily-sim-strict-validation.yml` 是独立的定时真实数据验证，不属于 `staging-gate`。它按计划日期是否有代码/配置变更决定是否运行；手动触发使用当前北京时间日期。SIM 与 strict 分别记录结果，只有两者成功才会进入 nightly 镜像构建。workflow 被跳过、取消、runner 丢失或环境未成功启动均不能算验证通过。
 
 ## Deploy Smoke 说明
 
@@ -184,15 +189,16 @@ deploy smoke 现在分两层：
 
 当前部署升级 / 回滚验证已经补齐了普通 rollback 路径，以上边界应继续作为下一轮加强项，重点放在 `--atomic` 失败观测和业务验收留档。
 
-## Gate 收敛状态
+## 当前 workflow 边界
 
-当前 `pr-gate.yml`、`full-ci-gate.yml` 与 `scripts/ci/run-full-regression.sh` 已形成闭环：
+当前 GitHub Actions 的实际职责：
 
-- PR Gate 负责受影响范围的快速回归
-- Full CI Gate 负责仓库级默认测试与 IT / E2E + 安全扫(secret/deps/hadolint/trivy/Checkov)
-- ~~Staging Gate 负责 deploy smoke、部署升级 / 回滚验证、load smoke 和巡检~~ **(2026-05-23 删除:hosted runner 连不上 `*.svc.cluster.local`,这部分目前没有自动化回退;deploy smoke / load smoke / 巡检 走人工 SOP 或未来 self-hosted runner)**
+- PR Gate 负责合入前、按变更范围路由的检查和测试。
+- Full CI Gate 在 main push 后运行全量回归，并按周或手动执行质量分析。
+- `staging-gate` 每日定时或手动执行全量 E2E 和 Java 治理，不连接 staging 集群。
+- Daily SIM/strict workflow 独立运行真实数据验证；是否执行取决于计划日期的代码/配置变更检测或手动触发。
 
-剩余的不是 gate 结构，而是 staging 留档和 `--atomic` 失败观测的补齐。
+本地脚本的 deploy smoke、live deployment verification、load smoke/capacity 和 inspection 是可选能力。它们只有在命令实际执行并保存结果后，才能作为对应环境的验证证据；不能由 nightly E2E 的成功状态推导出来。
 
 ---
 

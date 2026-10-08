@@ -70,7 +70,7 @@ public class GenerateStep implements ExportStageStep {
   private final ExportFormatStrategyRegistry formatStrategyRegistry;
   private final ExportWorkerConfiguration workerConfiguration;
   private final ObjectMapper objectMapper;
-  // ADR-038 P3:GENERATE 续跑(默认禁用,开关 batch.worker.checkpoint.enabled=true 才生效)。
+  // ADR-038 P3:GENERATE 续跑(默认启用,开关 batch.worker.checkpoint.enabled=false 可关闭)。
   private final WorkerCheckpointProperties checkpointProperties;
   private final ProcessingPositionStore positionStore;
   private final GenerateCursorCodec cursorCodec;

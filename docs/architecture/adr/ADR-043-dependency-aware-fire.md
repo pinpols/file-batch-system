@@ -1,9 +1,9 @@
 # ADR-043 · 依赖感知 fire —— 触发前上游就绪闸
 
-- **Status**: Proposed
+- **Status**: Accepted；Trigger 上游 readiness 检查、defer/retry 及超时指标已在代码中实现。Staging/真实 wheel 并发链路验收仍应单独记录（复核：2026-10-08）
 - **Date**: 2026-06-20
 - **Related**: `docs/analysis/system-wide-capability-gap-analysis-2026-06-20.md`(全系统缺口分析,本 ADR 的源,缺口 #13/#15)、`docs/plans/settlement-gap-remediation-roadmap-2026-06-20.md`(Phase 4.2)、ADR-010(trigger 异步解耦)、ADR-018(跨日依赖,**边界对照**)、ADR-023(日历依赖,**边界对照**)、ADR-027(范围红线)
-- **Plan**: 本 PR 仅设计文档,评审定方向后再逐 PR 落地。架构级:改触发侧 fire 时序、引入 trigger→orchestrator 只读就绪查询,**先拍板边界**。
+- **Plan**: 本文的原始计划段保留决策背景；实现入口包括 `QuartzLaunchJob`、`UpstreamReadinessChecker` 和 orchestrator readiness API。静态代码与单测不等同于真实部署链路验收。
 
 ## 范围边界(实施 PR 必答)
 

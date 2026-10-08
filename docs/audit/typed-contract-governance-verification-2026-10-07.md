@@ -1,7 +1,7 @@
 # 固定契约与协议值治理本地验收记录
 
 > 日期：2026-10-07
-> 状态：本地实现与定向验证已完成；[后端 PR #1160](https://github.com/pinpols/file-batch-system/pull/1160) 与 [前端 PR #284](https://github.com/pinpols/batch-console/pull/284) 已提交，CI 进行中，未合并；Full Gate / sim 尚无本轮通过结论。
+> 状态核查（2026-10-08）：[后端 PR #1160](https://github.com/pinpols/file-batch-system/pull/1160) 与 [前端 PR #284](https://github.com/pinpols/batch-console/pull/284) 已于 2026-10-07 合并。PR 检查均已完成；Full CI Gate [run 37736284461](https://github.com/pinpols/file-batch-system/actions/runs/37736284461) 与 SIM/strict [run 37752043644](https://github.com/pinpols/file-batch-system/actions/runs/37752043644) 在 main SHA `b5e5cbdf3e4700b87a5af35f73b5e683e569501f` 均成功。后者包含 nightly image build。该证据不代表生产环境验收或容量/灾备验证完成。
 > 计划：[固定契约、有限域与常量治理计划](../plans/typed-contract-enum-constant-governance-plan-2026-10-07.md)。
 
 ## 范围与基线
@@ -66,7 +66,7 @@ Sonar S1075 对固定 Trigger API 路由的误报只允许该代理文件一次 
 
 修复只迁移三个 DTO 及所有生产、测试引用，不新增旧包兼容别名，不调整架构测试、不增加豁免、不抬高基线；JSON 字段、时间类型、租户过滤、权限、读降级与写错误传播保持不变。
 
-修复复验：`./mvnw clean test -pl batch-console-api -am -DskipITs=true -DboundedContext.report=/tmp/bfs-pr1160-boundary-after.tsv -B` 已完成并返回 0，日志 `/tmp/bfs-pr1160-console-after.log`。Console 的 1543 个用例、上游模块的 1091 个用例均无 failure/error，合计 7 个既有条件跳过，不计为通过用例；两个原失败的架构测试均通过，逐类 TSV 无违规记录。clean 构建排除旧包残留 `.class`；该命令不是全量 IT / E2E 验收。退出阶段出现 Surefire 等待 30 秒后回收 fork 的日志，未将其作为应用正常关闭的证据。固定契约全量守卫、模块依赖与 400 条 OpenAPI 路由一致性检查同时通过；新提交的远端 CI 待验。
+修复复验：`./mvnw clean test -pl batch-console-api -am -DskipITs=true -DboundedContext.report=/tmp/bfs-pr1160-boundary-after.tsv -B` 已完成并返回 0，日志 `/tmp/bfs-pr1160-console-after.log`。Console 的 1543 个用例、上游模块的 1091 个用例均无 failure/error，合计 7 个既有条件跳过，不计为通过用例；两个原失败的架构测试均通过，逐类 TSV 无违规记录。clean 构建排除旧包残留 `.class`；该命令不是全量 IT / E2E 验收。退出阶段出现 Surefire 等待 30 秒后回收 fork 的日志，未将其作为应用正常关闭的证据。固定契约全量守卫、模块依赖与 400 条 OpenAPI 路由一致性检查同时通过；当时新提交的远端 CI 尚待运行，后续合并及主线验证状态见本文状态核查。
 
 ## 合入后的安全与空值分析收尾
 
@@ -82,7 +82,7 @@ Trigger 代理的两条新增 Sonar S2259 属于分析器不能识别自定义�
 
 本轮全 reactor Sonar 分析已完成，服务端 task `9dfce324-6de0-458a-a76a-99edecf646c1`，报告 `reports/sonar/2026-10-07_17-05-10/`。4 个 Java 变更文件中，生产代码无 OPEN issue，之前两条 S2259 已消失，待审 hotspot 为零；测试文件发现 3 条 MINOR S5838。随后将三处 Path 父级断言改为 `hasParentRaw`，Excel 的 11 个用例再次通过（`/tmp/bfs-codeql268-assertions.log`），没有重复计入上述 54 个用例。修正后未再执行第二次全 reactor Sonar，因此不把该报告描述为增量零告警；GitHub Sonar gate 默认跳过，也不视为通过证据。PMD、Spotless、完整提交预检及正常推送 hook 均已通过。
 
-- GitHub PR 检查已触发，尚未获得全部通过结果；本轮没有完整 sim、全量 Maven 测试、真实浏览器前后端操作或 staging 证据，也不以进行中的检查声称 Full Gate 通过。
+- 当时撰写本节时，GitHub PR 检查尚未全部完成；截至 2026-10-08，PR 检查及本文顶部记录的 main Full CI、SIM/strict 已成功。仍未由这些记录证明生产环境验收、真实浏览器全流程或 staging 集群部署/故障演练。
 - MockMvc/RestClient JSON 与 Testcontainers IT 是契约和投影证据，不等于真实长任务或生产高可用验收。
 - 首轮全量 Sonar 的 OPEN S1192 候选为 236 个，末轮为 228 个；其中含文案、样例、SQL 和正常标签重复，不等于同数量的确认缺陷，不在本轮作为强制清零指标。末轮全量报告仍有 1076 个 OPEN issue，本轮只报告变更行增量为零，不声称全仓 Sonar 清零。新增代码的高置信同类协议键回退由 JCON-3 阻断，其他候选按原计划逐处人工判定。
 - JCON 零候选仅指规则覆盖范围；它不证明所有嵌套 DTO、跨类常量或未登记有限域都不存在问题。

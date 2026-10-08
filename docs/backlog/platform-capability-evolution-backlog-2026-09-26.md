@@ -47,7 +47,7 @@
 | 事项 | 原因 |
 |---|---|
 | Service Mesh | 当前主要瓶颈不是服务间流量治理，而是批量状态、背压、观测和容量验收 |
-| 更换 MQ | Kafka 是当前主链承重墙；抽象可以保留，但近期不以换 MQ 为目标 |
+| 更换 MQ | Kafka 是当前主链的核心依赖；可保留抽象边界，但近期不以替换 MQ 为目标 |
 | 分布式数据库 / Citus | PostgreSQL 仍是合理核心；先做索引、分区、归档、连接池和容量验收 |
 | Nacos / Apollo / Spring Cloud Config | 现有配置治理明确禁止预埋热刷新；达到多 region、频繁无重启变更、合规回滚或服务数量翻倍后再评估 |
 | 主链 AI 自执行 | AI 不接 orchestrator / worker / trigger 主链，不直接改任务状态 |

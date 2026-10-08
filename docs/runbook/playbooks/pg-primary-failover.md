@@ -1,11 +1,12 @@
 # PG 主库故障切主(postgres-primary → postgres-replica)
 
-> 优先级 P0 · 最后核对版本:2026-05 · 配套 chaos IT:仓内有故障路径说明，真实主备切换仍需 staging 演练
+> **适用范围：**仓库提供的 Docker Compose 主从演练拓扑，不是生产切主授权或生产操作 SOP。生产切换必须先按目标 HA 产品的受支持流程隔离旧主并由 DBA/值班负责人确认，参见 [`HA readiness`](../ha-readiness.md)。
+> 最后复核：2026-10-08（代码/文档核对；未执行真实切主）。生产主备切换仍需 staging 演练。
 
 ## TL;DR
 
 **症状**:orchestrator/trigger/worker 大量 `DataAccessException` + `pg_isready` 不通,业务停顿。
-**一行修复**:在 replica 上 `select pg_promote();` 把从库切主,改 `.env.local` 的 `POSTGRES_PORT` 指向新主,重启 orchestrator/trigger/worker。
+**本地演练摘要**:仅在隔离的 Compose 演练环境中，确认并隔离旧主后，再按演练步骤 promote replica。生产环境不得直接照抄以下 Docker 命令或仅凭连接失败执行 promote。
 
 ---
 
@@ -58,8 +59,8 @@
    - `NEW` 多 → 切主后 `OutboxPollScheduler` 自然续上,不用管
 
 4. **关键决策点**:
-   - replica lag < 1s 且业务可容忍丢 < 1s 数据 → **方案 A**
-   - replica lag 高或不确定 → **方案 B**(只读降级,等主库回来)
+   - 已确认旧主被隔离、复制状态与可接受 RPO 经 DBA/值班负责人确认 → **方案 A**（仅 Compose 演练）
+   - 主库归属、复制状态或可接受 RPO 不确定 → **方案 B**(只读降级,等待确认)
    - 主库数据卷损坏 / replica 也挂 → **方案 C**(回滚版本 + 重建)
 
 ---
@@ -68,7 +69,7 @@
 
 ### 方案 A:promote replica 切主(2-5 min,最常用)
 
-1. **冻结写入**:把 orchestrator/trigger/worker 停掉,避免 split-brain(主库一会儿可能回来)
+1. **隔离旧主并冻结写入**:确认旧主已从写流量和网络中隔离，阻止其恢复后继续接受写入；仅停止应用容器不足以防止 split-brain。若无法确认隔离，停止切主并升级 DBA/值班负责人。
    ```bash
    docker compose stop batch-orchestrator batch-trigger \
      batch-worker-import batch-worker-export batch-worker-process batch-worker-dispatch \
@@ -103,18 +104,7 @@
    curl -sSf http://localhost:18082/actuator/health | jq .status   # 期望 UP
    ```
 
-5. **事后清理 stale PUBLISHING**
-   - 调度自动调 `OutboxEventMapper.resetStalePublishing` 重置(默认 `batch.outbox.publishing-timeout-seconds`,见 `OutboxProperties`),正常 1-2 轮后回 `FAILED` 重投。
-   - 若想立即清:
-     ```sql
-     update batch.outbox_event
-        set publish_status='FAILED',
-            next_publish_at=current_timestamp,
-            updated_at=current_timestamp
-      where publish_status='PUBLISHING'
-        and updated_at < current_timestamp - interval '60 seconds';
-     ```
-     **必须**走 orchestrator 的 `/internal/outbox/*` 治理接口(docs/agent-baseline.md 红线:console-api 禁直接 UPDATE/DELETE `outbox_event`)。
+5. **核对 Outbox 恢复**：让 `OutboxPollScheduler` 按配置回收超时的 `PUBLISHING` 记录，并核实事件重投与下游幂等结果。不要直接 UPDATE `batch.outbox_event`；stale 回收没有人工 reset 接口时，保留证据并走 incident/开发支持流程。
 
 ### 方案 B:有损降级 — 只读模式撑过去(10 min)
 

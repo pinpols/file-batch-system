@@ -1,185 +1,68 @@
-# PG 表分区运维手册
+# PostgreSQL 分区表运维
 
-针对千万级以上数据量场景：把 `outbox_event`（按 `created_at` 月分区）和 `job_instance`
-（按 `biz_date` 月分区）改造为 PG 原生 PARTITION BY RANGE 表。
+> 本手册按 2026-10-08 仓库状态复核。`outbox_event` 和 `job_instance` 已由 Flyway V172/V173 建立月分区；本文不是分区迁移或数据修复操作手册。生产变更必须通过正式 Flyway 和数据库变更流程执行。
 
-## 何时做这件事
+## 事实源与边界
 
-**不要预先做**。这条改造**风险较高且不可逆**（PK 改了、FK 全部去掉），只有真撞瓶颈才动：
+- `db/migration/V172__outbox_event_monthly_partition.sql`：`batch.outbox_event` 按 `created_at` 月分区。
+- `db/migration/V173__job_instance_monthly_partition.sql`：`batch.job_instance` 按 `biz_date` 月分区。
+- `scripts/db/partition-migration/` 下的 SQL 是迁移演练脚本，见该目录 README；不得把 `01`、`02` 或 `03` 脚本直接用于生产迁移或定时维护。
+- 当前仓库未发现负责生产未来分区自动创建的应用调度器或部署 cron。部署团队必须明确分区维护责任、告警和经过审核的执行流程；不得假定分区会自动创建。
+- 分区裁剪、分区主键/唯一约束和外键边界会影响查询与幂等语义。不要手工删除约束、旧表或分区，也不要安装 `pg_partman` 等额外扩展来绕过项目迁移流程。
 
-- 单表行数 > 5000 万
-- DELETE 老数据要几小时
-- VACUUM 跟不上 dead tuple
-- 索引大小 > 内存能放下的程度
+## 只读检查
 
-如果只是"防患于未然"，先用 `archive` 调度器（已交付：commit `18577c0c`）控制表大小。
-分区表的最大收益是 **DROP 老分区毫秒级** vs **DELETE 老数据慢 + 锁表**，archive 调度器能把数据控制在合理范围下时分区不是必需。
-
-## 核心权衡（决策点）
-
-| 项 | 不分区 | 分区 |
-|---|---|---|
-| PK | 单列 `id` | 复合 `(id, created_at)` 或 `(id, biz_date)` |
-| FK 约束 | DB 强制（FK 一致性） | **必须去掉** PG 不支持跨分区 FK；改应用层守护 |
-| 老数据清理 | DELETE（慢、锁、产生 dead tuple） | DROP PARTITION（毫秒、无 dead tuple） |
-| 跨期间查询 | 全表扫 | 自动分区裁剪（命中相关分区） |
-| 单分区维护 | 不可单独 VACUUM | 单独 VACUUM/REINDEX |
-| 查询计划复杂度 | 简单 | partition pruning 失败时全分区扫，慢 |
-
-## 操作流程
-
-### 一、前置准备
-
-1. **数据备份**：
-   ```bash
-   pg_dump -U batch_user -d batch_platform -t 'batch.outbox_event' \
-     -t 'batch.job_instance' -t 'batch.event_delivery_log' \
-     -F custom -f /tmp/pre-partition-backup.dump
-   ```
-
-2. **业务停机或只读**（必需）：
-   - 修改业务网关：trigger / orchestrator / console-api 进入维护模式
-   - 等所有 in-flight 任务收尾（ShedLock 释放、worker 心跳归零）
-   - 或 `BATCH_SECURITY_BYPASS_MODE=true` + 业务侧停止 launch
-
-3. **staging 完整跑一遍**：用同样的脚本在 staging 预演，包括所有 e2e 测试。
-
-### 二、执行迁移
-
-```bash
-# 1) outbox_event 改造
-PGPASSWORD=... psql -h <prod-host> -U batch_user -d batch_platform \
-  -v ON_ERROR_STOP=1 \
-  -f scripts/db/partition-migration/01-outbox-event-partitioned.sql
-
-# 2) job_instance 改造（更复杂，FK 多，先确认 outbox 改造完无异常再做）
-PGPASSWORD=... psql -h <prod-host> -U batch_user -d batch_platform \
-  -v ON_ERROR_STOP=1 \
-  -f scripts/db/partition-migration/02-job-instance-partitioned.sql
-```
-
-每个脚本包含：
-1. 建分区父表（PK 含分区键）
-2. 建近 24 月 + 后 12 月 + DEFAULT 分区
-3. 复制数据 `INSERT INTO ... SELECT`
-4. 解 FK / 改名 / 切换
-
-执行完应该看到：
-```
-=== 总行数 vs legacy 行数（应一致） ===
- new_count | legacy_count
------------+--------------
-   12345678|     12345678
-```
-
-### 三、验证
-
-```bash
-# 业务侧端到端：launch 一个测试任务，看 outbox 和 job_instance 落对分区
-docker exec batch-postgres psql -U batch_user -d batch_platform -c "
-SELECT inhrelid::regclass AS partition, pg_size_pretty(pg_relation_size(inhrelid)) AS size
-FROM pg_inherits WHERE inhparent='batch.outbox_event'::regclass
-ORDER BY partition LIMIT 5;
-"
-
-# 检查 archive 调度器还能正常跑（PG cron 等）
-docker exec batch-postgres psql -U batch_user -d batch_platform -c "
-SELECT count(*) FROM batch.outbox_event WHERE publish_status='PUBLISHED';
-"
-```
-
-主链路 e2e 通过后：
+### 列出分区和边界
 
 ```sql
--- 删 legacy 表（释放磁盘）
-DROP TABLE batch.outbox_event_legacy CASCADE;
-DROP TABLE batch.job_instance_legacy CASCADE;
+SELECT parent.relname AS parent_table,
+       child.relname AS partition_table,
+       pg_get_expr(child.relpartbound, child.oid) AS partition_bound
+  FROM pg_inherits inheritance
+  JOIN pg_class parent ON parent.oid = inheritance.inhparent
+  JOIN pg_class child ON child.oid = inheritance.inhrelid
+  JOIN pg_namespace ns ON ns.oid = parent.relnamespace
+ WHERE ns.nspname = 'batch'
+   AND parent.relname IN ('outbox_event', 'job_instance')
+ ORDER BY parent.relname, child.relname;
 ```
 
-### 四、长期维护
+### 检查 DEFAULT 分区中的记录
 
-每月 1 号 02:00 自动建未来分区（防 DEFAULT 分区接到数据后无法回退）：
-
-```bash
-# crontab
-0 2 1 * *  PGPASSWORD=$PGPW psql -U batch_user -d batch_platform \
-             -v ON_ERROR_STOP=1 -v months_ahead=6 \
-             -f /opt/batch/scripts/db/partition-migration/03-add-future-partitions.sql
-```
-
-或用 `pg_partman` 扩展自动化（推荐，避免手工 cron）。
-
-### 五、与 archive 调度器配合
-
-分区改造后，`OutboxArchiveScheduler` / `SuccessInstanceArchiveScheduler` 仍然工作（DELETE 还能跑）。但**额外可以做**：
+DEFAULT 分区出现记录本身不一定是故障。先确认目标分区是否已创建、记录的业务日期/时间范围及写入来源；以下查询只读：
 
 ```sql
--- 直接 DROP 老分区（比 DELETE 快几个数量级）
-ALTER TABLE batch.outbox_event DETACH PARTITION batch.outbox_event_p_2025_01;
-DROP TABLE batch.outbox_event_p_2025_01;
+SELECT count(*) AS default_outbox_rows
+  FROM batch.outbox_event_p_default;
+
+SELECT count(*) AS default_job_instance_rows
+  FROM batch.job_instance_p_default;
 ```
 
-这部分自动化未实现，本期改造仅交付分区结构 + 手工运维脚本。如需 detach 调度器：
+记录数量异常增长、目标分区缺失或 Flyway 迁移状态异常时，保存查询结果、数据库版本、分区边界和相关迁移日志，提交 DBA/值班负责人评估。不要直接 DETACH DEFAULT、复制/删除行或 ATTACH 分区；这些操作可能阻断写入、触发约束扫描、遗漏并发写入，或破坏幂等键和引用关系。
 
-```java
-// 后续可加 PartitionDropScheduler，月初跑一次：
-//   1. 找出 created_at < cutoff 的所有分区名
-//   2. ALTER TABLE ... DETACH PARTITION
-//   3. DROP TABLE
-// 同 P3-3 archive 调度器模式
-```
+## 新环境与生产变更
 
-## 故障处置：DEFAULT 分区已捕获目标月数据
+1. 新环境只运行仓库 Flyway 迁移，并核对 `flyway_schema_history` 中 V172/V173 成功记录。
+2. 已有生产环境的分区结构调整、补历史分区或整理 DEFAULT 分区数据，先按数据库变更流程准备备份、锁/耗时评估、并发写入方案、数据核对和恢复计划。
+3. 生产 DDL/DML 变更需由 DBA 审核；不得以本地 rehearsal SQL、手工 `DROP ... CASCADE`、临时关闭安全检查或直接改运行态数据替代正式迁移。
+4. 变更后验证分区边界、行数/数据指纹、关键唯一约束与索引、外键/引用完整性、关键 Mapper 查询计划、写入路由及 archive 保留策略，并记录真实环境和执行结果。
 
-`03-add-future-partitions.sql` 每个 (表, 月) 独立成块并捕获异常：单月失败不再级联中止其余
-月份与另一张表，且失败会 `RAISE WARNING` + 末尾汇总 `RAISE EXCEPTION` 让脚本非零退出（cron/
-告警可感知）。**但脚本不会自动修复**下面这种最常见失败——需人工介入。
+## 分区维护责任
 
-**症状**：脚本报 `partition create failed ... default partition would be violated by some row`。
-**根因**：某月的常规分区还没建，而 DEFAULT 分区已经收了属于该月的行（漏跑一次 cron，或
-`biz_date` 被 backfill / 前置到未来窗口之外）。此时 `CREATE ... PARTITION OF` 需扫 DEFAULT，
-发现有行落在新分区区间内即报错。
+V172/V173 建立的初始分区窗口并不证明未来分区会自动创建。当前仓库没有可确认的生产维护调度入口，因此上线配置需显式登记：
 
-**手工修复（维护窗口内，注意并发写）**，以 `job_instance` 的 `2026_09` 月为例：
+- 维护负责人及变更审批人；
+- 提前创建分区的周期和时间窗口；
+- 分区缺失/DEFAULT 分区增长的告警和处置升级路径；
+- 与业务日历、补数范围、保留/归档策略相容的分区窗口。
 
-```sql
-BEGIN;
--- 1. 摘掉 DEFAULT（此后落该区间的新写入会直接失败,故务必在维护窗口/低峰做,时间尽量短）
-ALTER TABLE batch.job_instance DETACH PARTITION batch.job_instance_p_default;
--- 2. 建目标月常规分区（DEFAULT 已摘,不再触发校验）
-CREATE TABLE IF NOT EXISTS batch.job_instance_p_2026_09
-    PARTITION OF batch.job_instance FOR VALUES FROM ('2026-09-01') TO ('2026-10-01');
--- 3. 把错落在旧 DEFAULT 里的该月行迁回主表（自动路由进新分区）
-INSERT INTO batch.job_instance
-    SELECT * FROM batch.job_instance_p_default
-    WHERE biz_date >= '2026-09-01' AND biz_date < '2026-10-01';
-DELETE FROM batch.job_instance_p_default
-    WHERE biz_date >= '2026-09-01' AND biz_date < '2026-10-01';
--- 4. 重新挂回 DEFAULT
-ALTER TABLE batch.job_instance ATTACH PARTITION batch.job_instance_p_default DEFAULT;
-COMMIT;
-```
-
-`outbox_event` 同理，分区键换成 `created_at`。修完重跑 `03-add-future-partitions.sql` 确认全绿。
-**预防**：保证 cron 按时跑（每月 1 号）；任何把 `biz_date` 前置到 `months_ahead` 窗口之外的
-backfill / catch-up，须先手工建好目标月分区再写入。
-
-## 回滚
-
-**步骤二完成后基本不可逆**——只能从 legacy 表手工重建：
-
-```sql
-ALTER TABLE batch.outbox_event RENAME TO outbox_event_partitioned_failed;
-ALTER TABLE batch.outbox_event_legacy RENAME TO outbox_event;
-```
-
-但 outbox_event_partitioned_failed 期间产生的新数据会丢（除非手工 INSERT 回去）。
-**强烈建议**步骤二在维护窗口完成 + 跑完全套 e2e 后再删 legacy 表，留几天观察期。
+具体生产自动化方案应作为独立变更评估，优先复用 Flyway/受控 DBA 变更机制，并补充权限最小化、幂等执行、审计、告警和故障恢复测试。本手册不提供未经验证的定时 SQL。
 
 ## 相关文件
 
-- `scripts/db/partition-migration/01-outbox-event-partitioned.sql` — outbox 迁移
-- `scripts/db/partition-migration/02-job-instance-partitioned.sql` — job_instance 迁移
-- `scripts/db/partition-migration/03-add-future-partitions.sql` — 月度维护
-- `OutboxArchiveScheduler` / `SuccessInstanceArchiveScheduler` — archive 自动化（commit `18577c0c`）
-- `cleanup-outbox-events.sql` / `cleanup-success-instances.sql` — 手工回退
+- [数据库迁移安全技能](../../.agents/skills/database-migration-safety/SKILL.md)
+- [分区迁移演练脚本说明](../../scripts/db/partition-migration/README.md)
+- [`V172` outbox 分区迁移](../../db/migration/V172__outbox_event_monthly_partition.sql)
+- [`V173` job instance 分区迁移](../../db/migration/V173__job_instance_monthly_partition.sql)
+- [数据库备份与恢复手册](./backup-and-pitr.md)

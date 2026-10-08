@@ -1,12 +1,14 @@
 # 扩容现状盘点 + biz 数据层路径决策(2026-06-14)
 
+> **历史决策快照（2026-06-14）**：本文保留当时对 Citus、分区和租户路由的评估。PR #470/#479 已合并并引入 platform 表分区；表格中“待合”等状态只表示记录时点。当前扩容事实和事项请复核 [`scalability-assessment.md`](../architecture/scalability-assessment.md)、相关 ADR 与 [`todo-master.md`](./todo-master.md)。
+
 > 状态:决策已定。与 `docs/agent-baseline.md`「citus 冻结」一致,本文是其判据的合并记录。
 > 关联:tag `citus-poc-2026-06-14`(冻结快照)、PR #470(分区抽 main)、
 > `docs/design/partition-idempotency-decision.md`。
 
 ## 0. TL;DR
 
-- **控制面(platform `batch.*`)扩容/裁冷:已做好、够用**(读副本、归档、即将合入的 outbox/job_instance 月分区)。
+- **控制面(platform `batch.*`)扩容/裁冷:已有读副本、归档与 outbox/job_instance 月分区能力**；容量是否足够须按当前部署负载评估。
 - **biz 业务数据层:仍是 greenfield**——三条扩容手段没一条真正落到它头上。
 - **Citus 当前不解决真实问题**:压在了不需要的控制面,真会涨的 biz 层它又因 RLS 上不了(PoC 实测证伪)。已冻结为只读参考。
 - **biz 真要扩,走分区 + 应用层租户路由**(都保 RLS、贴合多租 OLTP),需求驱动,不上 Citus。
@@ -15,7 +17,7 @@
 
 | 方案 | 解决 | RLS | 现状 |
 |---|---|---|---|
-| 声明式分区 | 单表太大 | ✅ 单机分区 RLS 正常 | **部分**:`process_staging` ✅;outbox/job_instance 月分区在 PR #470(platform,待合);**biz 业务表(customer_account/transaction/settlement/risk_*)全没分区** |
+| 声明式分区 | 单表太大 | ✅ 单机分区 RLS 正常 | **platform 已覆盖**:`process_staging`、`outbox_event`、`job_instance`；biz 业务表是否分区需按当前业务 schema 与迁移复核，本文不作为现状清单 |
 | 应用层租户路由(tenant→PG 实例) | 跨实例水平扩 | ✅ 每实例普通 PG,RLS 完整 | **没做**:`ActiveTenantRegistry` 只做租户上下文(RLS GUC);唯一 `AbstractRoutingDataSource` 是 console-api 主从路由;biz 单数据源,无实例分片 |
 | 垂直扩 + 读副本 + archive 裁冷 | 先撑住 | ✅ | **做了但不覆盖 biz**:读副本仅 console-api(worker/orchestrator 禁用);归档仅 platform 运行态(job_instance/workflow_run),非 biz 数据;垂直扩=换机器 |
 
@@ -28,7 +30,7 @@
 3. **真会受益的 biz 上不了**:biz 租户隔离 100% 靠 RLS;PoC(多节点 coord+worker)实测 **RLS 在 Citus 分布表上坏掉**(返 0 行/写报错,GUC 跨节点未正确传播)。详见 [[project_biz_citus_rls_poc_broken]] 记录。
 4. **从未进生产**:citus 永不合 main。
 
-**捞回的价值**(非解决问题):① outbox/job_instance **分区**(通用,解真实表增长/retention)→ PR #470 抽到 main;② "新多租大表复合 PK"前瞻规约(不依赖 Citus 也成立);③ 一次「现在不该上 + biz 此路不通」的实证。
+**历史结论**(非当前状态账):① outbox/job_instance **分区**由 PR #470/#479 纳入 main;② "新多租大表复合 PK"前瞻规约(不依赖 Citus 也成立);③ 一次「当时不该上 + biz 此路不通」的实证。
 
 ## 3. biz 数据层推荐路径(弃 Citus)
 

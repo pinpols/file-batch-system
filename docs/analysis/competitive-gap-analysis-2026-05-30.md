@@ -1,5 +1,7 @@
 # 对标业界开源批量调度的能力差距分析
 
+> **历史差距快照（2026-05-30，复核至 2026-06-29）**：文中的“仍缺”只反映该时点的对标结果，不代表当前能力或待办。当前事项以 [`todo-master.md`](./todo-master.md)、对应 ADR 和当前代码为准。
+
 > 日期:2026-05-30(2026-06-29 复核更新)。对标对象:Apache DolphinScheduler / Apache Airflow / XXL-Job / Temporal / Argo Workflows / Kestra。
 > 方法:实际 grep + 读代码核实,非凭印象。每条给证据文件。
 > 后续实施边界与验证计划见 [roadmap](../plans/bfs-open-source-scheduler-boundary-roadmap-2026-06-29.md)。

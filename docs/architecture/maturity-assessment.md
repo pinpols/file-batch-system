@@ -1,4 +1,4 @@
-> 注：本文为 2026-04-26 时点历史快照。Wheel 方案后来已撤销，当前调度器统一为 Quartz；本文涉及 Wheel 的评估和行动项不再有效。
+> 文档性质：2026-04-26 成熟度评估历史快照。本文的成熟度等级、指标、优势和缺口均是当时判断，不代表当前能力或生产就绪结论。Wheel 方案后来已撤销，当前调度器统一为 Quartz；本文涉及 Wheel 的评估和行动项不再有效。当前待办见 [`../analysis/todo-master.md`](../analysis/todo-master.md)，运行能力以代码、现行 ADR 和最新验证证据为准。
 
 # 项目工程成熟度评估
 
@@ -126,7 +126,7 @@
 ### 3.7 持续交付 / CI — **L4**
 
 **强项**：
-- 4 个 GitHub Actions workflow 分层（pr-gate / full-ci-gate / staging-gate / capacity-gate）
+- GitHub Actions 已分设 PR 合入门禁、main 全量回归、定时/手动 E2E、真实数据验证等 workflow；`capacity-gate` 已删除，不属于当前门禁。具体职责以 [`../runbook/ci.md`](../runbook/ci.md) 和 workflow 配置为准。
 - `feature-switches.md` 持续维护跨模块开关索引、风险等级和回滚指引
 - 关键变更有专属 runbook：`mq-topic-routing-rollout.md` / `stateful-backend-cutover.md` / `read-replica.md`
 
