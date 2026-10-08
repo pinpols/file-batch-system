@@ -58,8 +58,8 @@ for f in "${files[@]}"; do
 
   # ② 关键约束级危险 DDL → 要求头部有禁令标记,否则 FAIL。
   if grep -qiE "$DANGEROUS_DDL_RE" "$f"; then
-    danger_line="$(awk '{ sub(/--.*/, ""); print }' "$f" | grep -inE "$DANGEROUS_DDL_RE" | head -n 1 | cut -d: -f1)"
-    marker_line="$(grep -inE "$DANGER_MARKER_RE" "$f" | head -n 1 | cut -d: -f1 || true)"
+    danger_line="$(awk -v pattern="$DANGEROUS_DDL_RE" '{ sub(/--.*/, ""); if (tolower($0) ~ tolower(pattern)) { print NR; exit } }' "$f")"
+    marker_line="$(awk -v pattern="$DANGER_MARKER_RE" -v limit="$HEADER_LINES" 'NR <= limit && tolower($0) ~ tolower(pattern) { print NR; exit }' "$f")"
     if [[ -n "$marker_line" && "$marker_line" -le "$HEADER_LINES" && "$marker_line" -lt "$danger_line" ]]; then
       echo "✅ [OK]   $f 含破坏性 SQL,头部已有风险标记。"
     else
