@@ -63,16 +63,18 @@ class SdkPlatformContractTest {
   void shouldDeserializePayload_whenKafkaDispatchReceived() throws Exception {
     // 模拟平台 producer 写的 JSON(对照 orchestrator BatchTopicResolver + 上游 producer
     // 写入的 TaskDispatchMessage —— 字段集是协议契约,平台改要同步改 SDK)
-    String wirePayload = "{"
-        + "\"taskId\":12345,"
-        + "\"tenantId\":\"acme\","
-        + "\"jobCode\":\"daily-report\","
-        + "\"taskType\":\"echo\","
-        + "\"taskInstanceId\":\"ti-789\","
-        + "\"parameters\":{\"bizDate\":\"2026-05-31\"},"
-        + "\"runtimeAttributes\":{\"traceId\":\"abc\",\"partitionInvocationId\":\"inv-1\"},"
-        + "\"futureFieldFromPlatform\":\"ignored\""
-        + "}";
+    String wirePayload = """
+        {
+          "taskId": 12345,
+          "tenantId": "acme",
+          "jobCode": "daily-report",
+          "taskType": "echo",
+          "taskInstanceId": "ti-789",
+          "parameters": {"bizDate": "2026-05-31"},
+          "runtimeAttributes": {"traceId": "abc", "partitionInvocationId": "inv-1"},
+          "futureFieldFromPlatform": "ignored"
+        }
+        """.stripTrailing();
 
     TaskDispatchMessage msg = M.readValue(wirePayload, TaskDispatchMessage.class);
     assertThat(msg.taskId()).isEqualTo(12345L);

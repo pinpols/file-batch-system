@@ -22,19 +22,17 @@ import org.springframework.http.MediaType;
 class ConsoleQuotaPolicyMutationIntegrationTest extends AbstractMutationIntegrationTest {
 
   private String body(String code, int maxJobs) {
-    return "{"
-        + "\"tenantId\":\"int-qp-ta\","
-        + "\"policyCode\":\""
-        + code
-        + "\","
-        + "\"maxRunningJobsPerTenant\":"
-        + maxJobs
-        + ","
-        + "\"maxPartitionsPerTenant\":100,"
-        + "\"maxQpsPerTenant\":10,"
-        + "\"fairShareWeight\":1,"
-        + "\"enabled\":false"
-        + "}";
+    return """
+        {
+          "tenantId": "int-qp-ta",
+          "policyCode": "%s",
+          "maxRunningJobsPerTenant": %d,
+          "maxPartitionsPerTenant": 100,
+          "maxQpsPerTenant": 10,
+          "fairShareWeight": 1,
+          "enabled": false
+        }
+        """.formatted(code, maxJobs).stripTrailing();
   }
 
   @Test

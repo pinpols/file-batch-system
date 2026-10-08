@@ -67,17 +67,15 @@ class ConsoleJobDefinitionControllerValidationTest {
   }
 
   private String createBody(String jobCode, String jobType) {
-    return "{"
-        + "\"tenantId\":\"ta\","
-        + "\"jobCode\":\""
-        + jobCode
-        + "\","
-        + "\"jobName\":\"test\","
-        + "\"jobType\":\""
-        + jobType
-        + "\","
-        + "\"scheduleType\":\"MANUAL\""
-        + "}";
+    return """
+        {
+          "tenantId": "ta",
+          "jobCode": "%s",
+          "jobName": "test",
+          "jobType": "%s",
+          "scheduleType": "MANUAL"
+        }
+        """.formatted(jobCode, jobType).stripTrailing();
   }
 
   @Test

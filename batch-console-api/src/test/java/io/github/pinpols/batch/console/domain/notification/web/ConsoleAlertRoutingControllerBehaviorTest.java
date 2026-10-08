@@ -59,16 +59,16 @@ class ConsoleAlertRoutingControllerBehaviorTest {
   }
 
   private String saveBody(String routeCode) {
-    return "{"
-        + "\"tenantId\":\"ta\","
-        + "\"routeCode\":\""
-        + routeCode
-        + "\","
-        + "\"team\":\"ops\","
-        + "\"alertGroup\":\"default\","
-        + "\"severity\":\"WARN\","
-        + "\"receiver\":\"ops@example.com\""
-        + "}";
+    return """
+        {
+          "tenantId": "ta",
+          "routeCode": "%s",
+          "team": "ops",
+          "alertGroup": "default",
+          "severity": "WARN",
+          "receiver": "ops@example.com"
+        }
+        """.formatted(routeCode).stripTrailing();
   }
 
   @Test

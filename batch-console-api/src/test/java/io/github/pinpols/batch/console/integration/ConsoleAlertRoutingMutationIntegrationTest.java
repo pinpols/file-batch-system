@@ -22,22 +22,22 @@ import org.springframework.http.MediaType;
 class ConsoleAlertRoutingMutationIntegrationTest extends AbstractMutationIntegrationTest {
 
   private String body(String code) {
-    return "{"
-        + "\"tenantId\":\"int-ar-ta\","
-        + "\"routeCode\":\""
-        + code
-        + "\","
-        + "\"routeName\":\"int test route\","
-        + "\"team\":\"team-a\","
-        + "\"alertGroup\":\"group-a\","
-        + "\"severity\":\"WARN\","
-        + "\"receiver\":\"oncall@example.com\","
-        + "\"groupBy\":\"alertname\","
-        + "\"groupWaitSeconds\":30,"
-        + "\"groupIntervalSeconds\":300,"
-        + "\"repeatIntervalSeconds\":3600,"
-        + "\"enabled\":false"
-        + "}";
+    return """
+        {
+          "tenantId": "int-ar-ta",
+          "routeCode": "%s",
+          "routeName": "int test route",
+          "team": "team-a",
+          "alertGroup": "group-a",
+          "severity": "WARN",
+          "receiver": "oncall@example.com",
+          "groupBy": "alertname",
+          "groupWaitSeconds": 30,
+          "groupIntervalSeconds": 300,
+          "repeatIntervalSeconds": 3600,
+          "enabled": false
+        }
+        """.formatted(code).stripTrailing();
   }
 
   @Test

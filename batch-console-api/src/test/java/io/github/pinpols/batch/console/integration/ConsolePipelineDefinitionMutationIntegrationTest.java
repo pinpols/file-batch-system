@@ -29,20 +29,18 @@ import org.springframework.http.MediaType;
 class ConsolePipelineDefinitionMutationIntegrationTest extends AbstractMutationIntegrationTest {
 
   private String body(String jobCode, String pipelineType) {
-    return "{"
-        + "\"tenantId\":\"int-pd-ta\","
-        + "\"jobCode\":\""
-        + jobCode
-        + "\","
-        + "\"pipelineName\":\"integration test pipeline\","
-        + "\"pipelineType\":\""
-        + pipelineType
-        + "\","
-        + "\"bizType\":\"settlement\","
-        + "\"workerGroup\":\"default\","
-        + "\"enabled\":false,"
-        + "\"steps\":[]"
-        + "}";
+    return """
+        {
+          "tenantId": "int-pd-ta",
+          "jobCode": "%s",
+          "pipelineName": "integration test pipeline",
+          "pipelineType": "%s",
+          "bizType": "settlement",
+          "workerGroup": "default",
+          "enabled": false,
+          "steps": []
+        }
+        """.formatted(jobCode, pipelineType).stripTrailing();
   }
 
   @Test

@@ -159,11 +159,19 @@ class ConsoleWorkflowFullUpdateControllerTest {
   @Test
   @DisplayName("嵌套 @Valid 失败:nodeCode 含空格 → 400 VALIDATION_ERROR,不调 service")
   void shouldRejectValidation_whenNestedNodeCodeInvalid() throws Exception {
-    String body = "{\"definition\":{"
-        + "\"tenantId\":\"ta\",\"workflowCode\":\"wf_ok\",\"workflowName\":\"wf\","
-        + "\"workflowType\":\"DAG\","
-        + "\"nodes\":[{\"nodeCode\":\"bad code\",\"nodeType\":\"TASK\"}],\"edges\":[]"
-        + "},\"expectedVersion\":1}";
+    String body = """
+        {
+          "definition": {
+            "tenantId": "ta",
+            "workflowCode": "wf_ok",
+            "workflowName": "wf",
+            "workflowType": "DAG",
+            "nodes": [{"nodeCode": "bad code", "nodeType": "TASK"}],
+            "edges": []
+          },
+          "expectedVersion": 1
+        }
+        """.stripTrailing();
     mockMvc
         .perform(put("/api/console/workflow-definitions/42/full")
             .contentType(APPLICATION_JSON)
@@ -174,12 +182,21 @@ class ConsoleWorkflowFullUpdateControllerTest {
   }
 
   private static String validBody() {
-    return "{\"definition\":{"
-        + "\"tenantId\":\"ta\",\"workflowCode\":\"wf_ok\",\"workflowName\":\"wf\","
-        + "\"workflowType\":\"DAG\","
-        + "\"nodes\":[{\"nodeCode\":\"start\",\"nodeType\":\"START\"},"
-        + "{\"nodeCode\":\"end\",\"nodeType\":\"END\"}],"
-        + "\"edges\":[{\"fromNodeCode\":\"start\",\"toNodeCode\":\"end\"}]"
-        + "},\"expectedVersion\":1}";
+    return """
+        {
+          "definition": {
+            "tenantId": "ta",
+            "workflowCode": "wf_ok",
+            "workflowName": "wf",
+            "workflowType": "DAG",
+            "nodes": [
+              {"nodeCode": "start", "nodeType": "START"},
+              {"nodeCode": "end", "nodeType": "END"}
+            ],
+            "edges": [{"fromNodeCode": "start", "toNodeCode": "end"}]
+          },
+          "expectedVersion": 1
+        }
+        """.stripTrailing();
   }
 }

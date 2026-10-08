@@ -374,6 +374,16 @@ jobs:
         shell: bash
         run: bash scripts/ci/run-gate.sh PR_JAVA_TEXT_BLOCK_STYLE "Java 文本块格式" -- python3 scripts/ci/check-java-text-block-style.py
 
+      - name: Verify structured Java multiline strings
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        run: bash scripts/ci/run-gate.sh PR_JAVA_STRUCTURED_STRING_CONCAT "Java 结构化多行字符串" -- python3 scripts/ci/check-java-structured-string-concat.py --base-ref "$GUARD_BASE"
+
+      - name: Test structured Java multiline string checker
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        run: bash scripts/ci/run-gate.sh PR_JAVA_STRUCTURED_STRING_CONCAT_TEST "Java 结构化多行字符串门禁测试" -- python3 -m unittest scripts/ci/tests/test_check_java_structured_string_concat.py
+
       - name: Verify Java readability inventory
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.docs == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash

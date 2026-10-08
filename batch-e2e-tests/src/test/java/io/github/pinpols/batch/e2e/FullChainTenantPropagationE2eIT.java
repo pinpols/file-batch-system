@@ -80,12 +80,17 @@ class FullChainTenantPropagationE2eIT extends AbstractIntegrationTest {
     params.put("fileFormatType", "JSON");
     params.put("templateCode", "IMP-CUSTOMER-JSON-ARRAY");
     params.put("bizType", "CUSTOMER");
-    params.put(
-        "content",
-        "[{\"customerNo\":\"TENANT_GUARD_001\",\"customerName\":\"Tenant"
-            + " Guard\",\"customerType\":\"PERSONAL\","
-            + "\"certificateNo\":\"ID-PROPAGATION-001\",\"mobileNo\":\"13800000099\","
-            + "\"email\":\"guard@example.com\",\"status\":\"ACTIVE\"}]");
+    params.put("content", """
+            [{
+              "customerNo": "TENANT_GUARD_001",
+              "customerName": "Tenant Guard",
+              "customerType": "PERSONAL",
+              "certificateNo": "ID-PROPAGATION-001",
+              "mobileNo": "13800000099",
+              "email": "guard@example.com",
+              "status": "ACTIVE"
+            }]
+            """.stripTrailing());
 
     launchService.launch(new LaunchRequest(
         TENANT,

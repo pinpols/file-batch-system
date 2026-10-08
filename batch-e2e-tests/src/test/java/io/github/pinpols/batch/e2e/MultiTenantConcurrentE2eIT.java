@@ -116,12 +116,17 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
         params.put("fileFormatType", "JSON");
         params.put("templateCode", "IMP-CUSTOMER-JSON-ARRAY");
         params.put("bizType", "CUSTOMER");
-        params.put(
-            "content",
-            "[{\"customerNo\":\"MT-T1-001\",\"customerName\":\"Tenant1"
-                + " User\",\"customerType\":\"PERSONAL\","
-                + "\"certificateNo\":\"ID-MT-T1-001\",\"mobileNo\":\"13800001001\","
-                + "\"email\":\"t1@example.com\",\"status\":\"ACTIVE\"}]");
+        params.put("content", """
+                [{
+                  "customerNo": "MT-T1-001",
+                  "customerName": "Tenant1 User",
+                  "customerType": "PERSONAL",
+                  "certificateNo": "ID-MT-T1-001",
+                  "mobileNo": "13800001001",
+                  "email": "t1@example.com",
+                  "status": "ACTIVE"
+                }]
+                """.stripTrailing());
         launchService.launch(new LaunchRequest(
             T1,
             t1Seed.jobCode(),
@@ -143,12 +148,17 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
         params.put("fileFormatType", "JSON");
         params.put("templateCode", "IMP-CUSTOMER-JSON-ARRAY");
         params.put("bizType", "CUSTOMER");
-        params.put(
-            "content",
-            "[{\"customerNo\":\"MT-T2-001\",\"customerName\":\"Tenant2"
-                + " User\",\"customerType\":\"PERSONAL\","
-                + "\"certificateNo\":\"ID-MT-T2-001\",\"mobileNo\":\"13800002001\","
-                + "\"email\":\"t2@example.com\",\"status\":\"ACTIVE\"}]");
+        params.put("content", """
+                [{
+                  "customerNo": "MT-T2-001",
+                  "customerName": "Tenant2 User",
+                  "customerType": "PERSONAL",
+                  "certificateNo": "ID-MT-T2-001",
+                  "mobileNo": "13800002001",
+                  "email": "t2@example.com",
+                  "status": "ACTIVE"
+                }]
+                """.stripTrailing());
         launchService.launch(new LaunchRequest(
             T2,
             t2Seed.jobCode(),

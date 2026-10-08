@@ -57,7 +57,12 @@ class ConsoleQuotaPolicyControllerValidationTest {
   }
 
   private String body(String policyCode) {
-    return "{" + "\"tenantId\":\"ta\"," + "\"policyCode\":\"" + policyCode + "\"" + "}";
+    return """
+        {
+          "tenantId": "ta",
+          "policyCode": "%s"
+        }
+        """.formatted(policyCode).stripTrailing();
   }
 
   @Test

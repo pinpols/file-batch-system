@@ -134,19 +134,18 @@ class AssetPartitionReadinessMapperIntegrationTest extends AbstractIntegrationTe
 
   private long insertResultVersion(String businessKey, int versionNo, String status) {
     Long id = jdbcTemplate.queryForObject(
-        "insert into batch.result_version (tenant_id, business_key, version_no,"
-            + " job_instance_id, status, effective_at, payload_storage, payload_json,"
-            + " generated_at, generated_by, promotion_policy) values (?, ?, ?, ?, ?,"
-            + " case when ? = 'EFFECTIVE' then current_timestamp else null end,"
-            + " 'INLINE_JSON', '{\"recordCount\":100}'::jsonb, current_timestamp, 'it',"
-            + " 'AUTO_LATEST') returning id",
-        Long.class,
-        TENANT,
-        businessKey,
-        versionNo,
-        STUB_JOB_INSTANCE_ID,
-        status,
-        status);
+        """
+        insert into batch.result_version (
+          tenant_id, business_key, version_no, job_instance_id, status, effective_at,
+          payload_storage, payload_json, generated_at, generated_by, promotion_policy
+        )
+        values (
+          ?, ?, ?, ?, ?,
+          case when ? = 'EFFECTIVE' then current_timestamp else null end,
+          'INLINE_JSON', '{"recordCount":100}'::jsonb, current_timestamp, 'it', 'AUTO_LATEST'
+        )
+        returning id
+        """, Long.class, TENANT, businessKey, versionNo, STUB_JOB_INSTANCE_ID, status, status);
     assertThat(id).isNotNull();
     return id;
   }

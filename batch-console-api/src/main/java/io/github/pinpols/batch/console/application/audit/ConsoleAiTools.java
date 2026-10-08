@@ -244,30 +244,32 @@ public class ConsoleAiTools {
   }
 
   private String renderInstance(ConsoleJobInstanceResponse instance) {
-    return "id="
-        + instance.id()
-        + "\njobCode="
-        + instance.jobCode()
-        + "\ninstanceNo="
-        + instance.instanceNo()
-        + "\nstatus="
-        + instance.instanceStatus()
-        + "\nfailureClass="
-        + nullToDash(instance.failureClass())
-        + "\nbizDate="
-        + instance.bizDate()
-        + "\nstartedAt="
-        + instance.startedAt()
-        + "\nfinishedAt="
-        + instance.finishedAt()
-        + "\nretryFlag="
-        + instance.retryFlag()
-        + "\nrerunFlag="
-        + instance.rerunFlag()
-        + "\ntraceId="
-        + nullToDash(instance.traceId())
-        + "\nresultSummary="
-        + truncate(instance.resultSummary(), 500);
+    return """
+        id=%s
+        jobCode=%s
+        instanceNo=%s
+        status=%s
+        failureClass=%s
+        bizDate=%s
+        startedAt=%s
+        finishedAt=%s
+        retryFlag=%s
+        rerunFlag=%s
+        traceId=%s
+        resultSummary=%s
+        """.formatted(
+        instance.id(),
+        instance.jobCode(),
+        instance.instanceNo(),
+        instance.instanceStatus(),
+        nullToDash(instance.failureClass()),
+        instance.bizDate(),
+        instance.startedAt(),
+        instance.finishedAt(),
+        instance.retryFlag(),
+        instance.rerunFlag(),
+        nullToDash(instance.traceId()),
+        truncate(instance.resultSummary(), 500)).stripTrailing();
   }
 
   private String renderLog(ConsoleJobExecutionLogResponse log) {

@@ -30,16 +30,14 @@ class ConsoleAtomicTaskConfigMutationIntegrationTest extends AbstractMutationInt
   private static final String TENANT = "int-atc-ta";
 
   private String body(String taskType, String name, String parametersJson) {
-    return "{"
-        + "\"tenantId\":\""
-        + TENANT
-        + "\",\"taskType\":\""
-        + taskType
-        + "\",\"name\":\""
-        + name
-        + "\",\"parameters\":"
-        + parametersJson
-        + "}";
+    return """
+        {
+          "tenantId": "%s",
+          "taskType": "%s",
+          "name": "%s",
+          "parameters": %s
+        }
+        """.formatted(TENANT, taskType, name, parametersJson).stripTrailing();
   }
 
   @Test

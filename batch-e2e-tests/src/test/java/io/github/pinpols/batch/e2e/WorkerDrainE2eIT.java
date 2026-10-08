@@ -210,12 +210,17 @@ class WorkerDrainE2eIT extends AbstractIntegrationTest {
     params.put("fileFormatType", "JSON");
     params.put("templateCode", "IMP-CUSTOMER-JSON-ARRAY");
     params.put("bizType", "CUSTOMER");
-    params.put(
-        "content",
-        "[{\"customerNo\":\"DRAIN-E2E-" + scenario + "\",\"customerName\":\"Drain"
-            + " User\",\"customerType\":\"PERSONAL\","
-            + "\"certificateNo\":\"ID-20260115-DRN1\",\"mobileNo\":\"13800009999\","
-            + "\"email\":\"drain@example.com\",\"status\":\"ACTIVE\"}]");
+    params.put("content", """
+            [{
+              "customerNo": "DRAIN-E2E-%s",
+              "customerName": "Drain User",
+              "customerType": "PERSONAL",
+              "certificateNo": "ID-20260115-DRN1",
+              "mobileNo": "13800009999",
+              "email": "drain@example.com",
+              "status": "ACTIVE"
+            }]
+            """.formatted(scenario).stripTrailing());
 
     launchService.launch(new LaunchRequest(
         TENANT,

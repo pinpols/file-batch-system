@@ -42,7 +42,7 @@ cargo fmt --manifest-path sdk/rust/Cargo.toml --all
 
 ### 0.2 多行字符串与文本块
 
-多行 SQL、JSON、XML、Lua、Markdown fixture 优先使用 Java text block：
+具有固定结构或特殊排版的多行内容优先使用 Java text block，包括 SQL、JSON、XML、YAML、Lua、Shell、Markdown、提示词和测试 fixture：
 
 ```java
 String payload = """
@@ -54,11 +54,17 @@ String payload = """
 ```
 
 不要为了使用新语法而机械替换签名串、canonical request、协议拼接、Redis key、metric name、
-header、错误码、短日志模板、循环生成的 CSV/Mermaid/PEM，或已经由 `String.join("\n", ...)`
-清晰表达的聚合。
+header、错误码、短日志模板、循环生成的 CSV/Mermaid/PEM、含有意义行尾空格或字节布局的定长文件 fixture，
+或已经由 `String.join("\n", ...)`
+清晰表达的聚合。动态值优先用 `.formatted()`；需要正确转义或构造复杂对象时使用 JSON/YAML 序列化器，
+不要手工拼接字段。纯文本动态消息不属于固定排版模板，可保留字符串拼接。
 
 文本块的结束 `"""` 必须独立占一行；如果需要保持旧字符串“没有末尾换行”的语义，可以使用
 `.stripTrailing()`。文本块仍交给 Spotless / palantir-java-format 排版，不和 formatter 对抗。
+
+`check-java-structured-string-concat.py` 对新增 Java 代码执行增量检查：识别跨多行拼接且具有 JSON、
+XML、YAML、SQL、Markdown、CSV、PEM、INI、properties、Lua 或 Shell 脚本结构特征的字符串模板。存量表达式以目标分支为基线，不要求一次性改写；
+签名/协议字符串、普通动态消息和生成式内容不在强制范围内。门禁是有针对性的静态检测，不能替代代码审查。
 
 ---
 

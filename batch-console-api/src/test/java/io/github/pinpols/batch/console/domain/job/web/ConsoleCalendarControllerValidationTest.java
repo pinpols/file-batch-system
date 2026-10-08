@@ -57,14 +57,14 @@ class ConsoleCalendarControllerValidationTest {
   }
 
   private String body(String calendarCode) {
-    return "{"
-        + "\"tenantId\":\"ta\","
-        + "\"calendarCode\":\""
-        + calendarCode
-        + "\","
-        + "\"calendarName\":\"cal\","
-        + "\"timezone\":\"Asia/Shanghai\""
-        + "}";
+    return """
+        {
+          "tenantId": "ta",
+          "calendarCode": "%s",
+          "calendarName": "cal",
+          "timezone": "Asia/Shanghai"
+        }
+        """.formatted(calendarCode).stripTrailing();
   }
 
   @Test

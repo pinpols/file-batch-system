@@ -119,12 +119,12 @@ class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
     params.put("fileFormatType", "DELIMITED");
     params.put("templateCode", templateCode);
     params.put("bizType", "CUSTOMER");
-    params.put(
-        "content",
-        "customerNo,customerName,customerType,creditLimit,currencyCode,email,phone,status,openDate,remark\n"
-            + "CTL-1,A,PERSONAL,100.00,CNY,a@example.test,1381,ACTIVE,2026-01-15,ok\n"
-            + "CTL-2,B,PERSONAL,200.00,CNY,b@example.test,1382,ACTIVE,2026-01-15,ok\n"
-            + "T,3,999.00\n");
+    params.put("content", """
+            customerNo,customerName,customerType,creditLimit,currencyCode,email,phone,status,openDate,remark
+            CTL-1,A,PERSONAL,100.00,CNY,a@example.test,1381,ACTIVE,2026-01-15,ok
+            CTL-2,B,PERSONAL,200.00,CNY,b@example.test,1382,ACTIVE,2026-01-15,ok
+            T,3,999.00
+            """);
 
     launchService.launch(new LaunchRequest(
         TENANT,

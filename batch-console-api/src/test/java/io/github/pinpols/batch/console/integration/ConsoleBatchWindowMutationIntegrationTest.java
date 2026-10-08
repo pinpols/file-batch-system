@@ -28,20 +28,20 @@ import org.springframework.http.MediaType;
 class ConsoleBatchWindowMutationIntegrationTest extends AbstractMutationIntegrationTest {
 
   private String body(String code) {
-    return "{"
-        + "\"tenantId\":\"int-win-ta\","
-        + "\"windowCode\":\""
-        + code
-        + "\","
-        + "\"windowName\":\"integration test window\","
-        + "\"timezone\":\"Asia/Shanghai\","
-        + "\"startTime\":\"02:00:00\","
-        + "\"endTime\":\"04:00:00\","
-        + "\"endStrategy\":\"FINISH_RUNNING\","
-        + "\"outOfWindowAction\":\"WAIT\","
-        + "\"allowCrossDay\":false,"
-        + "\"enabled\":false"
-        + "}";
+    return """
+        {
+          "tenantId": "int-win-ta",
+          "windowCode": "%s",
+          "windowName": "integration test window",
+          "timezone": "Asia/Shanghai",
+          "startTime": "02:00:00",
+          "endTime": "04:00:00",
+          "endStrategy": "FINISH_RUNNING",
+          "outOfWindowAction": "WAIT",
+          "allowCrossDay": false,
+          "enabled": false
+        }
+        """.formatted(code).stripTrailing();
   }
 
   @Test

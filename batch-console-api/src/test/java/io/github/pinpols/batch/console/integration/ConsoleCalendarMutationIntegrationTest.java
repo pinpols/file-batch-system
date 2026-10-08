@@ -28,17 +28,17 @@ import org.springframework.http.MediaType;
 class ConsoleCalendarMutationIntegrationTest extends AbstractMutationIntegrationTest {
 
   private String body(String code) {
-    return "{"
-        + "\"tenantId\":\"int-cal-ta\","
-        + "\"calendarCode\":\""
-        + code
-        + "\","
-        + "\"calendarName\":\"integration test calendar\","
-        + "\"timezone\":\"Asia/Shanghai\","
-        + "\"holidayRollRule\":\"NEXT_WORKDAY\","
-        + "\"catchUpPolicy\":\"NONE\","
-        + "\"enabled\":false"
-        + "}";
+    return """
+        {
+          "tenantId": "int-cal-ta",
+          "calendarCode": "%s",
+          "calendarName": "integration test calendar",
+          "timezone": "Asia/Shanghai",
+          "holidayRollRule": "NEXT_WORKDAY",
+          "catchUpPolicy": "NONE",
+          "enabled": false
+        }
+        """.formatted(code).stripTrailing();
   }
 
   @Test

@@ -28,24 +28,24 @@ import org.springframework.http.MediaType;
 class ConsoleFileTemplateMutationIntegrationTest extends AbstractMutationIntegrationTest {
 
   private String body(String code) {
-    return "{"
-        + "\"tenantId\":\"int-ft-ta\","
-        + "\"templateCode\":\""
-        + code
-        + "\","
-        + "\"templateName\":\"integration test template\","
-        + "\"templateType\":\"IMPORT\","
-        + "\"bizType\":\"settlement\","
-        + "\"fileFormatType\":\"DELIMITED\","
-        + "\"charset\":\"UTF-8\","
-        + "\"delimiter\":\",\","
-        + "\"encryptType\":\"NONE\","
-        + "\"checksumType\":\"NONE\","
-        + "\"compressType\":\"NONE\","
-        + "\"streamingEnabled\":false,"
-        + "\"enabled\":false,"
-        + "\"version\":1"
-        + "}";
+    return """
+        {
+          "tenantId": "int-ft-ta",
+          "templateCode": "%s",
+          "templateName": "integration test template",
+          "templateType": "IMPORT",
+          "bizType": "settlement",
+          "fileFormatType": "DELIMITED",
+          "charset": "UTF-8",
+          "delimiter": ",",
+          "encryptType": "NONE",
+          "checksumType": "NONE",
+          "compressType": "NONE",
+          "streamingEnabled": false,
+          "enabled": false,
+          "version": 1
+        }
+        """.formatted(code).stripTrailing();
   }
 
   @Test

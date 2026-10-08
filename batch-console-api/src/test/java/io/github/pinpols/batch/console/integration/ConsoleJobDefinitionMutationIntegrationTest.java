@@ -35,16 +35,18 @@ class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegr
   }
 
   private String createBody(String jobCode, String dependsOnJobCode) {
-    return "{"
-        + "\"tenantId\":\"int-ta\","
-        + "\"jobCode\":\""
-        + jobCode
-        + "\","
-        + "\"jobName\":\"integration test\","
-        + "\"jobType\":\"GENERAL\","
-        + "\"scheduleType\":\"MANUAL\""
-        + (dependsOnJobCode == null ? "" : ",\"dependsOnJobCode\":\"" + dependsOnJobCode + "\"")
-        + "}";
+    String dependency = dependsOnJobCode == null
+        ? ""
+        : ",\n  \"dependsOnJobCode\": \"%s\"".formatted(dependsOnJobCode);
+    return """
+        {
+          "tenantId": "int-ta",
+          "jobCode": "%s",
+          "jobName": "integration test",
+          "jobType": "GENERAL",
+          "scheduleType": "MANUAL"%s
+        }
+        """.formatted(jobCode, dependency).stripTrailing();
   }
 
   @Test

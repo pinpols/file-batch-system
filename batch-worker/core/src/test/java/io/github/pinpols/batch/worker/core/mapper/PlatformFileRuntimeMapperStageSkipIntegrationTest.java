@@ -274,13 +274,18 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
   @Test
   @DisplayName("LOADED 成功回写清理旧失败元数据但保留本次统计")
   void loadedStatus_clearsStaleFailureMetadata() {
-    jdbcTemplate.update(
-        "insert into batch.file_record (id, file_status, metadata_json, updated_at) "
-            + "values (700, 'FAILED', ?::jsonb, current_timestamp)",
-        "{\"errorCode\":\"IMPORT_PARSE_FAILED\","
-            + "\"errorMessage\":\"ClosedChannelException\","
-            + "\"errorKey\":\"error.import.parse.failed\","
-            + "\"errorArgs\":\"[]\",\"sourceBytes\":74177868}");
+    jdbcTemplate.update("""
+        insert into batch.file_record (id, file_status, metadata_json, updated_at)
+        values (700, 'FAILED', ?::jsonb, current_timestamp)
+        """, """
+        {
+          "errorCode": "IMPORT_PARSE_FAILED",
+          "errorMessage": "ClosedChannelException",
+          "errorKey": "error.import.parse.failed",
+          "errorArgs": "[]",
+          "sourceBytes": 74177868
+        }
+        """.stripTrailing());
 
     Map<String, Object> params = new HashMap<>();
     params.put(PipelineRuntimeKeys.FILE_ID, 700L);

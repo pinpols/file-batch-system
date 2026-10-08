@@ -68,8 +68,11 @@ public class AtomicExecutorProductionGuard {
     // 让运维即便没开强制也能看到 dual-use 执行器是大开的。要拦截:把本 profile 加进
     // batch.worker.executors.guard.enforce-profiles,或置 always-enforce=true。
     log.warn(
-        "Atomic dual-use executor in profile ({}) detected 'empty allowlist = allow all' without enforcement"
-            + " (accepted only in dev). For staging/uat/production-like environments, harden it:\n - {}",
+        """
+        Atomic dual-use executor in profile ({}) detected 'empty allowlist = allow all' without enforcement
+        (accepted only in dev). For staging/uat/production-like environments, harden it:
+         - {}
+        """.stripTrailing(),
         Arrays.toString(environment.getActiveProfiles()),
         String.join("\n - ", violations));
   }

@@ -79,10 +79,11 @@ class ParseStepFixedWidthAndXmlTest {
   @Test
   @DisplayName("定长格式跳过声明数量的表头与表尾行,只解析数据行")
   void shouldParseFixedWidth_skippingHeaderAndFooter() {
-    String fixed = "HEADER LINE                       \n" // header_rows=1 跳
+    // 定长空格属于输入字节，保留逐行字符串，避免文本块处理尾随空白改变字段位置。
+    String fixed = "HEADER LINE                       \n"
         + "C00001Alice               ACTIVE  \n"
         + "C00002Bob                 INACTIVE\n"
-        + "FOOTER:total=2                    \n"; // footer_rows=1 跳
+        + "FOOTER:total=2                    \n";
 
     Map<String, Object> templateConfig = Map.of(
         "field_mappings",
@@ -115,11 +116,13 @@ class ParseStepFixedWidthAndXmlTest {
     String fixed = "C00004Dana                ACTIVE  \n";
     PGobject fieldMappings = new PGobject();
     fieldMappings.setType("jsonb");
-    fieldMappings.setValue("["
-        + "{\"target\":\"customerNo\",\"start\":0,\"length\":6},"
-        + "{\"target\":\"customerName\",\"start\":6,\"length\":20},"
-        + "{\"target\":\"status\",\"start\":26,\"length\":8}"
-        + "]");
+    fieldMappings.setValue("""
+        [
+          {"target": "customerNo", "start": 0, "length": 6},
+          {"target": "customerName", "start": 6, "length": 20},
+          {"target": "status", "start": 26, "length": 8}
+        ]
+        """.stripTrailing());
 
     Map<String, Object> templateConfig = Map.of(
         "field_mappings", fieldMappings, "record_length", 34, "jdbc_mapped_import", Map.of());
@@ -140,19 +143,21 @@ class ParseStepFixedWidthAndXmlTest {
   @Test
   @DisplayName("XML 格式按记录元素取子节点,两条记录字段完整")
   void shouldParseXml_recordElementChildren() {
-    String xml = "<?xml version='1.0' encoding='UTF-8'?>"
-        + "<records>"
-        + "  <record>"
-        + "    <customerNo>C001</customerNo>"
-        + "    <customerName>Alice</customerName>"
-        + "    <status>ACTIVE</status>"
-        + "  </record>"
-        + "  <record>"
-        + "    <customerNo>C002</customerNo>"
-        + "    <customerName>Bob</customerName>"
-        + "    <status>INACTIVE</status>"
-        + "  </record>"
-        + "</records>";
+    String xml = """
+        <?xml version='1.0' encoding='UTF-8'?>
+        <records>
+          <record>
+            <customerNo>C001</customerNo>
+            <customerName>Alice</customerName>
+            <status>ACTIVE</status>
+          </record>
+          <record>
+            <customerNo>C002</customerNo>
+            <customerName>Bob</customerName>
+            <status>INACTIVE</status>
+          </record>
+        </records>
+        """.stripTrailing();
 
     Map<String, Object> templateConfig =
         Map.of("xmlRecordElement", "record", "jdbc_mapped_import", Map.of());

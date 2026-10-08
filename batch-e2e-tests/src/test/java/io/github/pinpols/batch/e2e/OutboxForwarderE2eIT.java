@@ -73,12 +73,17 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
     params.put("fileFormatType", "JSON");
     params.put("templateCode", "IMP-CUSTOMER-JSON-ARRAY");
     params.put("bizType", "CUSTOMER");
-    params.put(
-        "content",
-        "[{\"customerNo\":\"E2E-FWD-001\",\"customerName\":\"Forwarder"
-            + " User\",\"customerType\":\"PERSONAL\","
-            + "\"certificateNo\":\"ID-20260115-9001\",\"mobileNo\":\"13800009001\","
-            + "\"email\":\"fwd@example.com\",\"status\":\"ACTIVE\"}]");
+    params.put("content", """
+            [{
+              "customerNo": "E2E-FWD-001",
+              "customerName": "Forwarder User",
+              "customerType": "PERSONAL",
+              "certificateNo": "ID-20260115-9001",
+              "mobileNo": "13800009001",
+              "email": "fwd@example.com",
+              "status": "ACTIVE"
+            }]
+            """.stripTrailing());
 
     launchService.launch(new LaunchRequest(
         TENANT,

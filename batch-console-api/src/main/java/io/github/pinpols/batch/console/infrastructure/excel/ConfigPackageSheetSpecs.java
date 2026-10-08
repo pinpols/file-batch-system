@@ -244,30 +244,27 @@ public final class ConfigPackageSheetSpecs {
       Map.entry(
           FILE_TEMPLATE_SHEET,
           Map.ofEntries(
-              Map.entry(
-                  "field_mappings",
-                  "IMPORT: "
-                      + EXAMPLE_IMPORT_FIELD_MAPPINGS
-                      + "\nEXPORT: "
-                      + EXAMPLE_EXPORT_FIELD_MAPPINGS),
+              Map.entry("field_mappings", """
+                  IMPORT: %s
+                  EXPORT: %s
+                  """.formatted(
+                  EXAMPLE_IMPORT_FIELD_MAPPINGS, EXAMPLE_EXPORT_FIELD_MAPPINGS).stripTrailing()),
               Map.entry(
                   "query_param_schema",
-                  "IMPORT: "
-                      + EXAMPLE_IMPORT_QUERY_PARAM_SCHEMA
-                      + "\nEXPORT: "
-                      + EXAMPLE_EXPORT_QUERY_PARAM_SCHEMA),
+                  """
+                  IMPORT: %s
+                  EXPORT: %s
+                  """.formatted(
+                      EXAMPLE_IMPORT_QUERY_PARAM_SCHEMA, EXAMPLE_EXPORT_QUERY_PARAM_SCHEMA).stripTrailing()),
               Map.entry("validation_rule_set", EXAMPLE_IMPORT_VALIDATION_RULE_SET),
               Map.entry("default_query_sql", EXAMPLE_EXPORT_QUERY_SQL))),
       Map.entry(CHANNEL_SHEET, Map.of(COL_CONFIG_JSON, EXAMPLE_CHANNEL_CONFIG_JSON)),
       Map.entry(JOB_SHEET, Map.of(COL_DEFAULT_PARAMS, EXAMPLE_JOB_DEFAULT_PARAMS)),
-      Map.entry(
-          STEP_SHEET,
-          Map.of(
-              "step_params",
-              "PROCESS: "
-                  + EXAMPLE_PROCESS_STEP_PARAMS
-                  + "\nDISPATCH: "
-                  + EXAMPLE_DISPATCH_STEP_PARAMS)));
+      Map.entry(STEP_SHEET, Map.of("step_params", """
+              PROCESS: %s
+              DISPATCH: %s
+              """.formatted(
+          EXAMPLE_PROCESS_STEP_PARAMS, EXAMPLE_DISPATCH_STEP_PARAMS).stripTrailing())));
 
   private static final Set<String> FILE_TEMPLATE_TYPES = DictEnum.codes(FileTemplateType.class);
   private static final Set<String> FILE_FORMAT_TYPES = DictEnum.codes(FileTemplateFormat.class);

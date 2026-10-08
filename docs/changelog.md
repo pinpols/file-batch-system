@@ -1,6 +1,7 @@
 # 变更记录（规范与架构权威条款变化）
 
 ### 2026-10-08
+- **Java 多行结构化字符串约定与增量门禁**：SQL、JSON、XML、YAML、CSV、PEM、INI、properties、Lua、Shell 和 Markdown 等固定模板优先使用 text block；新增门禁只拦相对基线新增的结构化拼接，保留协议签名、动态文本和生成式内容例外。
 - **Java 设计表达改进方案**：阶段 0–5 完成生产/测试装配分离、SDK 与 verifier 内部类型化、任务结果分支及依赖内聚；同步调用关系、资源所有权、本地定向验证与兼容裁定。状态为 LocalImplemented，CI Full Gate、隔离 sim 与性能证据仍单独待验收，不影响常驻运行环境。
 
 ### 2026-10-07
