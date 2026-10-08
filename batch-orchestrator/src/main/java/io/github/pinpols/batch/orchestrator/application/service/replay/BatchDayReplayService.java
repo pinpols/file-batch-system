@@ -827,21 +827,6 @@ public class BatchDayReplayService {
     return value == null ? null : String.valueOf(value);
   }
 
-  private static Long longValue(Object value) {
-    if (value == null) {
-      return null;
-    }
-    if (value instanceof Number number) {
-      return number.longValue();
-    }
-    return Long.parseLong(String.valueOf(value));
-  }
-
-  private static long longValueOrZero(Object value) {
-    Long parsed = longValue(value);
-    return parsed == null ? 0L : parsed;
-  }
-
   private boolean isCancellable(String status) {
     return STATUS_PENDING_APPROVAL.equals(status) || STATUS_RUNNING.equals(status);
   }

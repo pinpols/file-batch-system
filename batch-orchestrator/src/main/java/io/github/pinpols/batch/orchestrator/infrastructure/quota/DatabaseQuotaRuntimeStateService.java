@@ -123,28 +123,20 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
     int burstLimit = request.burstLimit();
     int slidingWindowHours = request.slidingWindowHours();
     if (!Texts.hasText(tenantId) || !Texts.hasText(quotaScope) || !Texts.hasText(ownerCode)) {
-      return new QuotaRuntimeSnapshot(
-          normalizePolicy(quotaResetPolicy),
-          Math.max(0, burstLimit),
-          0,
-          Math.max(0, burstLimit),
-          null,
-          null,
-          null);
+      return QuotaRuntimeSnapshot.withoutWindow(normalizePolicy(quotaResetPolicy), burstLimit);
     }
     QuotaResetPolicy policy = QuotaResetPolicy.from(quotaResetPolicy);
     if (!policy.isRuntimeManaged() || burstLimit <= 0) {
-      return new QuotaRuntimeSnapshot(
-          policy.name(), Math.max(0, burstLimit), 0, Math.max(0, burstLimit), null, null, null);
+      return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
     }
     QuotaRuntimeStateEntity state =
         quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner(tenantId, quotaScope, ownerCode);
     if (state == null) {
-      return new QuotaRuntimeSnapshot(policy.name(), burstLimit, 0, burstLimit, null, null, null);
+      return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
     }
     state = refreshState(state, policy, BatchDateTimeSupport.utcNow(), slidingWindowHours, false);
     if (state == null) {
-      return new QuotaRuntimeSnapshot(policy.name(), burstLimit, 0, burstLimit, null, null, null);
+      return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
     }
     int peakBorrowed =
         state.peakBorrowedCount() == null ? 0 : Math.max(0, state.peakBorrowedCount());

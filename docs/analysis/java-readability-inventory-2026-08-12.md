@@ -7,16 +7,16 @@
 
 | 指标 | 数量 |
 |---|---:|
-| 生产 Java 源文件 | 2407 |
+| 生产 Java 源文件 | 2410 |
 | CGLIB 自注入类 | 0 |
-| `Map<String, Object>` 出现次数 | 2006 |
+| `Map<String, Object>` 出现次数 | 2008 |
 | 含 Map 的源文件 | 446 |
 | public Map 契约候选 | 54 |
 | public Map 契约候选文件 | 35 |
-| `@SuppressWarnings` | 238 |
+| `@SuppressWarnings` | 237 |
 | 含 suppression 的源文件 | 179 |
 | `@Configuration` 类 | 48 |
-| 大于等于 700 行的源文件 | 11 |
+| 大于等于 700 行的源文件 | 9 |
 | `PMD.ExcessiveParameterList` 显式例外 | 32 |
 
 ## 模块源文件
@@ -24,10 +24,10 @@
 | 模块 | 生产 Java 文件 |
 |---|---:|
 | `batch-common` | 332 |
-| `batch-console-api` | 963 |
-| `batch-orchestrator` | 552 |
+| `batch-console-api` | 964 |
+| `batch-orchestrator` | 553 |
 | `batch-trigger` | 76 |
-| `batch-worker` | 383 |
+| `batch-worker` | 384 |
 | `sdk` | 92 |
 | `security-scan` | 9 |
 
@@ -40,12 +40,10 @@
 
 | 文件 | 行数 |
 |---|---:|
-| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java` | 1147 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageSheetSpecs.java` | 1070 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | 1028 |
-| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java` | 870 |
-| `batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/sql/SqlTransformComputePlugin.java` | 829 |
-| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowGraphValidator.java` | 789 |
+| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java` | 996 |
+| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java` | 855 |
 | `batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanner.java` | 780 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/application/ops/infrastructure/DefaultConsoleOrchestratorProxyService.java` | 755 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java` | 740 |

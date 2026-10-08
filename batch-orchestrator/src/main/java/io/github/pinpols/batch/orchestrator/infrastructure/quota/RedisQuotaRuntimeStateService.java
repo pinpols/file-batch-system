@@ -253,10 +253,10 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
     QuotaResetPolicy policy = QuotaResetPolicy.from(request.quotaResetPolicy());
 
     if (!Texts.hasText(tenantId) || !Texts.hasText(quotaScope) || !Texts.hasText(ownerCode)) {
-      return new QuotaRuntimeSnapshot(policy.name(), burstLimit, 0, burstLimit, null, null, null);
+      return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
     }
     if (!policy.isRuntimeManaged() || burstLimit <= 0) {
-      return new QuotaRuntimeSnapshot(policy.name(), burstLimit, 0, burstLimit, null, null, null);
+      return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
     }
 
     String key = BatchRedisKeys.quotaState(tenantId, quotaScope, ownerCode);
@@ -271,10 +271,10 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
           LogSanitizer.value(quotaScope),
           LogSanitizer.value(ownerCode),
           SwallowedExceptionLogger.summary(ex));
-      return new QuotaRuntimeSnapshot(policy.name(), burstLimit, 0, burstLimit, null, null, null);
+      return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
     }
     if (entries == null || entries.isEmpty()) {
-      return new QuotaRuntimeSnapshot(policy.name(), burstLimit, 0, burstLimit, null, null, null);
+      return QuotaRuntimeSnapshot.withoutWindow(policy.name(), burstLimit);
     }
 
     long nowMillis = BatchDateTimeSupport.utcNow().toEpochMilli();

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.application.contract.response.config;
 
 import java.util.List;
+import lombok.Builder;
 
 /** Same-job comparison matrix across tenants. */
 public record TenantConfigMatrixResponse(
@@ -9,6 +10,7 @@ public record TenantConfigMatrixResponse(
     List<String> jobCodes,
     List<JobMatrixRow> rows) {
 
+  @Builder
   public record JobMatrixRow(
       String tenantId,
       String jobCode,

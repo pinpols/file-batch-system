@@ -132,6 +132,6 @@ class DelimitedFormatParserTest {
 
   private FormatParseRequest request(String csv, Object templateConfig) {
     // importPayload=null → withHeader 取 headerRows(0) → 走无表头位置绑定路径
-    return new FormatParseRequest(csv, null, null, templateConfig, true);
+    return FormatParseRequest.fromText(csv, null, templateConfig, true);
   }
 }

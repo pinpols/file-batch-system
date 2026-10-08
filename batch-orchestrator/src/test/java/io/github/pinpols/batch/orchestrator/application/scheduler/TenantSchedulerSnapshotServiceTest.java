@@ -120,8 +120,7 @@ class TenantSchedulerSnapshotServiceTest {
             argThat(p -> p.tenantId().equals("ta") && p.queueCodes().contains("import_queue"))))
         .thenReturn(List.of(new QueuePartitionBacklogStats("import_queue", 1, 3, 2, 1, 0, 120)));
     when(quotaRuntimeStateService.describe(org.mockito.ArgumentMatchers.any()))
-        .thenReturn(
-            new QuotaRuntimeStateService.QuotaRuntimeSnapshot(null, 0, 0, 0, null, null, null));
+        .thenReturn(QuotaRuntimeStateService.QuotaRuntimeSnapshot.withoutWindow(null, 0));
 
     SchedulerSnapshotResponse resp = service.buildLive("ta");
 
@@ -159,8 +158,7 @@ class TenantSchedulerSnapshotServiceTest {
             argThat(p -> p.tenantId().equals("ta") && p.queueCodes().contains("dispatch_queue"))))
         .thenReturn(List.of(new QueuePartitionBacklogStats("dispatch_queue", 0, 1, 0, 0, 0, 30)));
     when(quotaRuntimeStateService.describe(org.mockito.ArgumentMatchers.any()))
-        .thenReturn(
-            new QuotaRuntimeStateService.QuotaRuntimeSnapshot(null, 0, 0, 0, null, null, null));
+        .thenReturn(QuotaRuntimeStateService.QuotaRuntimeSnapshot.withoutWindow(null, 0));
 
     SchedulerSnapshotResponse resp = service.buildLive("ta");
 

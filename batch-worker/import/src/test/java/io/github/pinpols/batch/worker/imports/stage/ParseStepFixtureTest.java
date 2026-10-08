@@ -222,6 +222,17 @@ class ParseStepFixtureTest {
     assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 3L);
   }
 
+  @Test
+  @DisplayName("Excel 文本回退输入经二进制请求路由,无效工作簿返回解析失败")
+  void shouldRouteExcelTextFallbackAsBinaryAndRejectInvalidWorkbook() {
+    ImportJobContext context = buildContext("not-an-xlsx-workbook", "EXCEL", null, 0, null);
+
+    ImportStageResult result = parseStep.execute(context);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("IMPORT_PARSE_FAILED");
+  }
+
   // ── Bad-records CSV (2 valid rows: C001 and C010) ──────────────────────────
 
   @Test
