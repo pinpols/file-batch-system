@@ -234,7 +234,7 @@ public class ImportRecordGovernanceService {
       metadata.put("errorOutputPath", errorOutputPath);
     }
     fileRecords.updateFileMetadata(fileId, metadata);
-    fileAudits.appendAudit(FileAuditParam.builder()
+    FileAuditParam audit = FileAuditParam.builder()
         .fileId(fileId)
         .tenantId(context.getTenantId())
         .operationType(FileAuditOperationType.BAD_RECORD_GOVERNANCE.code())
@@ -244,7 +244,8 @@ public class ImportRecordGovernanceService {
         .traceId(stringValue(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
         .evidenceRef("import-error-output")
         .detailSummary(metadata)
-        .build());
+        .build();
+    fileAudits.appendAudit(audit);
   }
 
   /**
@@ -338,7 +339,7 @@ public class ImportRecordGovernanceService {
     Object payloadForStore = rawRecord == null ? JsonUtils.toJson(badRecord) : rawRecord;
     Object safePayload =
         errorLineMask ? maskErrorPayload(payloadForStore, maskingRuleSet) : payloadForStore;
-    fileAudits.insertFileErrorRecord(FileErrorRecordParam.builder()
+    FileErrorRecordParam errorRecord = FileErrorRecordParam.builder()
         .tenantId(context.getTenantId())
         .fileId(fileId)
         .pipelineInstanceId(pipelineInstanceId)
@@ -352,7 +353,8 @@ public class ImportRecordGovernanceService {
         .rawRecord(safePayload)
         .sourceRowNum(sourceRowNum)
         .sourceColumn(sourceColumn)
-        .build());
+        .build();
+    fileAudits.insertFileErrorRecord(errorRecord);
 
     if (skipped && resolveSkipAction() == SkipAction.MANUAL_REVIEW) {
       attrs.put(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED, true);

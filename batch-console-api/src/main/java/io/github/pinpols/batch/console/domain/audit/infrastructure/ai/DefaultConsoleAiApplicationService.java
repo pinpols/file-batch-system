@@ -296,7 +296,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       return degraded;
     }
 
-    return completeApprovedChat(ApprovedChatExecution.builder()
+    ApprovedChatExecution execution = ApprovedChatExecution.builder()
         .tenantId(tenantId)
         .requestId(requestId)
         .traceId(traceId)
@@ -310,7 +310,8 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         .reservation(reservation)
         .snippets(snippets)
         .persistedTurn(persistedTurn)
-        .build());
+        .build();
+    return completeApprovedChat(execution);
   }
 
   @Override
@@ -459,26 +460,27 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
           .build());
     }
 
-    auditService.record(buildAuditCommand(AuditContext.builder()
-        .request(AuditRequest.builder()
-            .tenantId(execution.tenantId())
-            .requestId(execution.requestId())
-            .traceId(execution.traceId())
-            .sessionId(execution.sessionId())
-            .operatorId(execution.operatorId())
-            .build())
-        .result(AuditResult.builder()
-            .promptCategory(execution.gateResult().category())
-            .decision(AiPromptDecision.APPROVED)
-            .modelName(execution.modelName())
-            .prompt(execution.prompt())
-            .response(ConsoleTextSanitizer.safeInput(answer, aiProperties.getMaxResponseLength()))
-            .promptTokens(promptTokens)
-            .completionTokens(completionTokens)
-            .estimatedCostUsd(cost.amount())
-            .costStatus(cost.status())
-            .build())
-        .build()));
+    AuditRequest request = AuditRequest.builder()
+        .tenantId(execution.tenantId())
+        .requestId(execution.requestId())
+        .traceId(execution.traceId())
+        .sessionId(execution.sessionId())
+        .operatorId(execution.operatorId())
+        .build();
+    AuditResult result = AuditResult.builder()
+        .promptCategory(execution.gateResult().category())
+        .decision(AiPromptDecision.APPROVED)
+        .modelName(execution.modelName())
+        .prompt(execution.prompt())
+        .response(ConsoleTextSanitizer.safeInput(answer, aiProperties.getMaxResponseLength()))
+        .promptTokens(promptTokens)
+        .completionTokens(completionTokens)
+        .estimatedCostUsd(cost.amount())
+        .costStatus(cost.status())
+        .build();
+    AuditContext context =
+        AuditContext.builder().request(request).result(result).build();
+    auditService.record(buildAuditCommand(context));
     return response;
   }
 
@@ -706,19 +708,19 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     response.setAnswer(ConsoleTextSanitizer.safeDisplay(degraded, degraded.length()));
     response.setRefusalReason(null);
 
-    auditService.record(buildAuditCommand(AuditContext.builder()
-        .request(request)
-        .result(AuditResult.builder()
-            .promptCategory(gateResult.category())
-            .decision(AiPromptDecision.FAILED)
-            .modelName(null)
-            .prompt(prompt)
-            .response(degraded)
-            .refusalReason(reason)
-            .estimatedCostUsd(cost.amount())
-            .costStatus(cost.status())
-            .build())
-        .build()));
+    AuditResult auditResult = AuditResult.builder()
+        .promptCategory(gateResult.category())
+        .decision(AiPromptDecision.FAILED)
+        .modelName(null)
+        .prompt(prompt)
+        .response(degraded)
+        .refusalReason(reason)
+        .estimatedCostUsd(cost.amount())
+        .costStatus(cost.status())
+        .build();
+    AuditContext auditContext =
+        AuditContext.builder().request(request).result(auditResult).build();
+    auditService.record(buildAuditCommand(auditContext));
     return response;
   }
 
@@ -796,23 +798,24 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       AiPromptGateResult gateResult) {
     aiMetrics.recordDecision(ConsoleAiMetrics.DECISION_REJECTED);
     AiChatResponse response = buildRejectedResponse(requestId, traceId, sessionId, gateResult);
-    auditService.record(buildAuditCommand(AuditContext.builder()
-        .request(AuditRequest.builder()
-            .tenantId(tenantId)
-            .requestId(requestId)
-            .traceId(traceId)
-            .sessionId(sessionId)
-            .operatorId(metadata.operatorId())
-            .build())
-        .result(AuditResult.builder()
-            .promptCategory(gateResult.category())
-            .decision(gateResult.decision())
-            .prompt(prompt)
-            .response(ConsoleTextSanitizer.safeInput(
-                response.getAnswer(), aiProperties.getMaxResponseLength()))
-            .refusalReason(ConsoleTextSanitizer.safeInput(gateResult.reason(), 512))
-            .build())
-        .build()));
+    AuditRequest auditRequest = AuditRequest.builder()
+        .tenantId(tenantId)
+        .requestId(requestId)
+        .traceId(traceId)
+        .sessionId(sessionId)
+        .operatorId(metadata.operatorId())
+        .build();
+    AuditResult auditResult = AuditResult.builder()
+        .promptCategory(gateResult.category())
+        .decision(gateResult.decision())
+        .prompt(prompt)
+        .response(ConsoleTextSanitizer.safeInput(
+            response.getAnswer(), aiProperties.getMaxResponseLength()))
+        .refusalReason(ConsoleTextSanitizer.safeInput(gateResult.reason(), 512))
+        .build();
+    AuditContext auditContext =
+        AuditContext.builder().request(auditRequest).result(auditResult).build();
+    auditService.record(buildAuditCommand(auditContext));
     return response;
   }
 

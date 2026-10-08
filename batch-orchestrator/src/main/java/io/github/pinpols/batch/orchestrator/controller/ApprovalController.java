@@ -24,20 +24,22 @@ public class ApprovalController {
 
   @PostMapping
   public ApprovalResponse submit(@RequestBody ApprovalRequest request) {
-    return new ApprovalResponse(
-        approvalWorkflowService.submit(ApprovalWorkflowService.ApprovalSubmitCommand.of(
-            request.tenantId(),
-            new ApprovalWorkflowService.ApprovalTarget(
-                request.approvalType(),
-                request.actionType(),
-                request.targetType(),
-                request.targetId(),
-                request.payloadJson()),
-            new ApprovalWorkflowService.ApprovalSource(
-                request.requesterId(),
-                request.sourceTraceId(),
-                request.sourceIdempotencyKey(),
-                request.approvalReason()))));
+    String tenantId = request.tenantId();
+    ApprovalWorkflowService.ApprovalTarget target = new ApprovalWorkflowService.ApprovalTarget(
+        request.approvalType(),
+        request.actionType(),
+        request.targetType(),
+        request.targetId(),
+        request.payloadJson());
+    ApprovalWorkflowService.ApprovalSource source = new ApprovalWorkflowService.ApprovalSource(
+        request.requesterId(),
+        request.sourceTraceId(),
+        request.sourceIdempotencyKey(),
+        request.approvalReason());
+    ApprovalWorkflowService.ApprovalSubmitCommand command =
+        ApprovalWorkflowService.ApprovalSubmitCommand.of(tenantId, target, source);
+    String approvalNo = approvalWorkflowService.submit(command);
+    return new ApprovalResponse(approvalNo);
   }
 
   @GetMapping("/{approvalNo}")

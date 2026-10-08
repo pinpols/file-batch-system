@@ -320,18 +320,20 @@ public class DefaultCompensationService implements CompensationService {
     params.put("retryFlag", false);
     params.put("reason", command.reason());
     applyRerunPolicyParams(params, command);
-    LaunchResponse response = launchCompensation(CompensationLaunchRequest.of(
-        new CompensationLaunchTarget(
-            command.tenantId(),
-            sourceInstance.getJobCode(),
-            sourceInstance.getBizDate(),
-            TriggerType.CATCH_UP),
+    CompensationLaunchTarget target = new CompensationLaunchTarget(
+        command.tenantId(),
+        sourceInstance.getJobCode(),
+        sourceInstance.getBizDate(),
+        TriggerType.CATCH_UP);
+    CompensationLaunchRequest request = CompensationLaunchRequest.of(
+        target,
         params,
         traceId,
         commandNo,
         command.replaySessionId(),
         command.replayEntryId(),
-        command.dryRun()));
+        command.dryRun());
+    LaunchResponse response = launchCompensation(request);
     JobInstanceEntity launched =
         jobMappers.jobInstanceMapper.selectByInstanceNo(command.tenantId(), response.instanceNo());
     entity.setRelatedJobInstanceId(launched == null ? sourceInstance.getId() : launched.getId());
@@ -437,15 +439,17 @@ public class DefaultCompensationService implements CompensationService {
     params.put("retryFlag", false);
     params.put("reason", command.reason());
     applyRerunPolicyParams(params, command);
-    LaunchResponse response = launchCompensation(CompensationLaunchRequest.of(
-        new CompensationLaunchTarget(
-            command.tenantId(), command.jobCode(), command.bizDate(), TriggerType.CATCH_UP),
+    CompensationLaunchTarget target = new CompensationLaunchTarget(
+        command.tenantId(), command.jobCode(), command.bizDate(), TriggerType.CATCH_UP);
+    CompensationLaunchRequest request = CompensationLaunchRequest.of(
+        target,
         params,
         traceId,
         commandNo,
         command.replaySessionId(),
         command.replayEntryId(),
-        command.dryRun()));
+        command.dryRun());
+    LaunchResponse response = launchCompensation(request);
     JobInstanceEntity launched =
         jobMappers.jobInstanceMapper.selectByInstanceNo(command.tenantId(), response.instanceNo());
     entity.setRelatedJobInstanceId(launched == null ? null : launched.getId());

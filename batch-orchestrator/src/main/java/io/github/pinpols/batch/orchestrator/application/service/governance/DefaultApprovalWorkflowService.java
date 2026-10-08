@@ -136,23 +136,24 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
   }
 
   private ApprovalRecord toRecord(ApprovalCommandEntity entity) {
-    return ApprovalRecord.of(
-        new ApprovalIdentity(new ApprovalContext(entity.getTenantId()), entity.getApprovalNo()),
-        new ApprovalTarget(
-            entity.getApprovalType(),
-            entity.getActionType(),
-            entity.getTargetType(),
-            entity.getTargetId(),
-            entity.getPayloadJson()),
-        new ApprovalOutcome(
-            entity.getApprovalStatus(),
-            entity.getApproverId(),
-            entity.getRejectionReason(),
-            entity.getApprovalReason()),
-        new ApprovalSource(
-            entity.getRequesterId(),
-            entity.getSourceTraceId(),
-            entity.getSourceIdempotencyKey(),
-            entity.getApprovalReason()));
+    ApprovalIdentity identity =
+        new ApprovalIdentity(new ApprovalContext(entity.getTenantId()), entity.getApprovalNo());
+    ApprovalTarget target = new ApprovalTarget(
+        entity.getApprovalType(),
+        entity.getActionType(),
+        entity.getTargetType(),
+        entity.getTargetId(),
+        entity.getPayloadJson());
+    ApprovalOutcome outcome = new ApprovalOutcome(
+        entity.getApprovalStatus(),
+        entity.getApproverId(),
+        entity.getRejectionReason(),
+        entity.getApprovalReason());
+    ApprovalSource source = new ApprovalSource(
+        entity.getRequesterId(),
+        entity.getSourceTraceId(),
+        entity.getSourceIdempotencyKey(),
+        entity.getApprovalReason());
+    return ApprovalRecord.of(identity, target, outcome, source);
   }
 }
