@@ -12,6 +12,7 @@ import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
+import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -114,7 +115,7 @@ class TaskOutcomeNodeRunRecorderTest {
     when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "n1"))
         .thenReturn(null);
 
-    java.time.Instant t = java.time.Instant.parse("2026-05-20T10:00:00Z");
+    Instant t = Instant.parse("2026-05-20T10:00:00Z");
     WorkflowNodeRunEntity result = recorder.recordStart(10L, "n1", "TASK", t);
 
     assertThat(result.getRunSeq()).isEqualTo(1);
@@ -132,7 +133,7 @@ class TaskOutcomeNodeRunRecorderTest {
         .when(workflowNodeRunMapper)
         .insert(any());
 
-    WorkflowNodeRunEntity result = recorder.recordStart(10L, "n1", "TASK", java.time.Instant.now());
+    WorkflowNodeRunEntity result = recorder.recordStart(10L, "n1", "TASK", Instant.now());
 
     assertThat(result.getRunSeq()).isEqualTo(2);
   }
@@ -143,7 +144,7 @@ class TaskOutcomeNodeRunRecorderTest {
     when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(anyLong(), any()))
         .thenReturn(null);
 
-    recorder.recordStart(10L, "n1", "GATEWAY", java.time.Instant.now());
+    recorder.recordStart(10L, "n1", "GATEWAY", Instant.now());
 
     ArgumentCaptor<WorkflowNodeRunEntity> cap =
         ArgumentCaptor.forClass(WorkflowNodeRunEntity.class);
