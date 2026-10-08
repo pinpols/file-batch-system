@@ -29,7 +29,6 @@ import io.github.pinpols.batch.console.application.contract.response.config.Tena
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigDiffPreviewResponse.Summary;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigDiffPreviewResponse.TenantDiffResult;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigMatrixResponse;
-import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigMatrixResponse.JobMatrixRow;
 import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.query.FileTemplateConfigQuery;
@@ -221,38 +220,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
 
   @Override
   public TenantConfigMatrixResponse matrix(TenantConfigMatrixRequest request) {
-    String baselineTenantId = resolveBaselineTenantId(request);
-    Map<String, Map<String, JobMatrixRow>> rowsByTenantAndJob = new LinkedHashMap<>();
-    List<JobMatrixRow> rows = new ArrayList<>();
-    for (String tenantId : request.getTenantIds()) {
-      ConfigSyncBundlePayload bundle = buildBundle(
-          tenantId,
-          Set.of(
-              ConfigType.JOB_DEFINITION,
-              ConfigType.WORKFLOW_DEFINITION,
-              ConfigType.PIPELINE_DEFINITION,
-              ConfigType.FILE_CHANNEL,
-              ConfigType.FILE_TEMPLATE,
-              ConfigType.RESOURCE_QUEUE,
-              ConfigType.BATCH_WINDOW,
-              ConfigType.BUSINESS_CALENDAR));
-      Map<String, JobMatrixRow> tenantRows = new LinkedHashMap<>();
-      for (String jobCode : request.getJobCodes()) {
-        JobMatrixRow row = matrixRow(tenantId, jobCode, bundle);
-        tenantRows.put(jobCode, row);
-        rows.add(row);
-      }
-      rowsByTenantAndJob.put(tenantId, tenantRows);
-    }
-    rows = rows.stream()
-        .map(row -> withDrift(
-            row, rowsByTenantAndJob.getOrDefault(baselineTenantId, Map.of()).get(row.jobCode())))
-        .toList();
-    return new TenantConfigMatrixResponse(
-        baselineTenantId,
-        List.copyOf(request.getTenantIds()),
-        List.copyOf(request.getJobCodes()),
-        rows);
+    return TenantConfigMatrixBuilder.build(request, this::buildBundle, referenceResolver);
   }
 
   private ConfigSyncBundlePayload requestedBundle(TenantConfigPreviewRequest request) {
@@ -421,112 +389,6 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
       }
     }
     return impacts;
-  }
-
-  private JobMatrixRow matrixRow(String tenantId, String jobCode, ConfigSyncBundlePayload bundle) {
-    JobDefinitionSpec job =
-        first(filter(bundle.getJobDefinitions(), j -> jobCode.equals(j.getJobCode())));
-    if (job == null) {
-      return new JobMatrixRow(
-          tenantId,
-          jobCode,
-          false,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          List.of(),
-          List.of(),
-          List.of(),
-          List.of(),
-          List.of("missing"));
-    }
-    List<PipelineDefinitionSpec> relatedPipelines =
-        filter(bundle.getPipelineDefinitions(), p -> jobCode.equals(p.getJobCode()));
-    List<WorkflowDefinitionSpec> relatedWorkflows = filter(
-        bundle.getWorkflowDefinitions(),
-        w -> w.getNodes() != null
-            && w.getNodes().stream()
-                .anyMatch(n -> jobCode.equals(n.getRelatedJobCode())
-                    || jobCode.equals(n.getRelatedPipelineCode())));
-    TenantConfigReferenceResolver.References refs =
-        referenceResolver.resolve(job, relatedPipelines, relatedWorkflows);
-    List<String> templateCodes = EmptyChecks.isEmpty(refs.templateCodes())
-        ? filter(bundle.getFileTemplates(), t -> equalsNullable(job.getBizType(), t.getBizType()))
-            .stream()
-            .map(FileTemplateSpec::getTemplateCode)
-            .toList()
-        : refs.templateCodes();
-    return new JobMatrixRow(
-        tenantId,
-        jobCode,
-        true,
-        job.getEnabled(),
-        job.getScheduleType(),
-        job.getScheduleExpr(),
-        job.getTimezone(),
-        job.getQueueCode(),
-        job.getCalendarCode(),
-        job.getWindowCode(),
-        job.getWorkerGroup(),
-        refs.pipelineJobCodes(),
-        refs.workflowCodes(),
-        templateCodes,
-        channelCodes(job, bundle, refs),
-        List.of());
-  }
-
-  private JobMatrixRow withDrift(JobMatrixRow row, JobMatrixRow baseline) {
-    if (baseline == null || Objects.equals(row.tenantId(), baseline.tenantId())) {
-      return row;
-    }
-    List<String> fields = new ArrayList<>();
-    addDrift(fields, "exists", row.exists(), baseline.exists());
-    addDrift(fields, KEY_ENABLED, row.enabled(), baseline.enabled());
-    addDrift(fields, "scheduleType", row.scheduleType(), baseline.scheduleType());
-    addDrift(fields, "scheduleExpr", row.scheduleExpr(), baseline.scheduleExpr());
-    addDrift(fields, KEY_TIMEZONE, row.timezone(), baseline.timezone());
-    addDrift(fields, "queueCode", row.queueCode(), baseline.queueCode());
-    addDrift(fields, "calendarCode", row.calendarCode(), baseline.calendarCode());
-    addDrift(fields, "windowCode", row.windowCode(), baseline.windowCode());
-    addDrift(fields, "workerGroup", row.workerGroup(), baseline.workerGroup());
-    addDrift(fields, "templateCodes", row.templateCodes(), baseline.templateCodes());
-    addDrift(fields, "channelCodes", row.channelCodes(), baseline.channelCodes());
-    return new JobMatrixRow(
-        row.tenantId(),
-        row.jobCode(),
-        row.exists(),
-        row.enabled(),
-        row.scheduleType(),
-        row.scheduleExpr(),
-        row.timezone(),
-        row.queueCode(),
-        row.calendarCode(),
-        row.windowCode(),
-        row.workerGroup(),
-        row.pipelineJobCodes(),
-        row.workflowCodes(),
-        row.templateCodes(),
-        row.channelCodes(),
-        List.copyOf(fields));
-  }
-
-  private List<String> channelCodes(
-      JobDefinitionSpec job,
-      ConfigSyncBundlePayload bundle,
-      TenantConfigReferenceResolver.References refs) {
-    if (EmptyChecks.isNotEmpty(refs.channelCodes())) {
-      return refs.channelCodes();
-    }
-    return filter(
-            bundle.getFileChannels(), c -> equalsNullable(job.getBizType(), c.getChannelCode()))
-        .stream()
-        .map(FileChannelSpec::getChannelCode)
-        .toList();
   }
 
   /** 构建 10 条传输描述符。每次按需创建；方法引用是懒求值，不会在此处调用 mapper。 */
@@ -1093,21 +955,8 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     return (int) items.stream().filter(item -> action.equals(item.action())).count();
   }
 
-  private static String resolveBaselineTenantId(TenantConfigMatrixRequest request) {
-    if (StringUtils.hasText(request.getBaselineTenantId())) {
-      return request.getBaselineTenantId();
-    }
-    return request.getTenantIds().get(0);
-  }
-
   private static <T> T first(List<T> values) {
     return EmptyChecks.isEmpty(values) ? null : values.get(0);
-  }
-
-  private static void addDrift(List<String> fields, String field, Object current, Object baseline) {
-    if (!Objects.equals(current, baseline)) {
-      fields.add(field);
-    }
   }
 
   private static Boolean bool(Map<String, Object> map, String key) {

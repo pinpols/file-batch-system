@@ -364,7 +364,7 @@ class SqlTransformComputePluginIntegrationTest {
     SqlTransformComputeSpec spec =
         SqlTransformComputeSpec.parse(currentStepParams(context), new ObjectMapper());
 
-    String sql = SqlTransformComputePlugin.buildPublishSql(spec);
+    String sql = SqlTransformComputeSqlBuilder.buildPublishSql(spec);
 
     assertThat(sql)
         .contains("ORDER BY (rec).\"tenant_id\", (rec).\"account_id\"")
@@ -380,7 +380,7 @@ class SqlTransformComputePluginIntegrationTest {
     SqlTransformComputeSpec spec =
         SqlTransformComputeSpec.parse(currentStepParams(context), new ObjectMapper());
 
-    String sql = SqlTransformComputePlugin.buildDirectPublishSql(spec);
+    String sql = SqlTransformComputeSqlBuilder.buildDirectPublishSql(spec);
 
     assertThat(sql)
         .contains("ORDER BY base.\"tenant_id\", base.\"account_id\"")
