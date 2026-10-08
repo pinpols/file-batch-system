@@ -247,7 +247,7 @@ class ExcelFormatParserTest {
   }
 
   private FormatParseRequest request(byte[] bytes, Object templateConfig) {
-    return new FormatParseRequest(null, bytes, null, templateConfig, true);
+    return FormatParseRequest.fromBinary(bytes, null, templateConfig, true);
   }
 
   private BufferedWriter writer(Writer w) {

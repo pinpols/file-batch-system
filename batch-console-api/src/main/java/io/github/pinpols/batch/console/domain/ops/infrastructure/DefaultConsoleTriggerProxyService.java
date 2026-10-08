@@ -119,7 +119,7 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
           .body(ACTION_RESPONSE);
       return EmptyChecks.isNotNull(response)
           ? response.data()
-          : new ConsoleTriggerActionResponse(null, null, null);
+          : ConsoleTriggerActionResponse.empty();
     });
   }
 
@@ -157,8 +157,7 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
         .retrieve()
         .body(ACTION_RESPONSE);
     return Objects.requireNonNullElseGet(
-            response,
-            () -> CommonResponse.success(new ConsoleTriggerActionResponse(null, null, null)))
+            response, () -> CommonResponse.success(ConsoleTriggerActionResponse.empty()))
         .data();
   }
 }

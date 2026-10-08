@@ -402,8 +402,8 @@ public class ParseStep implements ImportStageStep {
       if (binary instanceof byte[] binaryBytes && binaryBytes.length > 0) {
         String format = resolveFormat(importPayload, templateConfig, "");
         if (FileTemplateFormat.EXCEL.code().equalsIgnoreCase(format)) {
-          FormatParseRequest request = new FormatParseRequest(
-              null, binaryBytes, importPayload, templateConfig, preserveLogicalRow);
+          FormatParseRequest request = FormatParseRequest.fromBinary(
+              binaryBytes, importPayload, templateConfig, preserveLogicalRow);
           return parsers.get(FileTemplateFormat.EXCEL.code()).parse(context, request, writer);
         }
         Charset cs = resolvePayloadTextCharset(importPayload, templateConfig);
@@ -426,29 +426,22 @@ public class ParseStep implements ImportStageStep {
       throws Exception {
     Path spoolPath = resolveSpoolPath(context);
     Charset spoolCharset = resolveSpoolCharset(context);
-    String format = spoolPath != null
+    String format = !EmptyChecks.isNull(spoolPath)
         ? resolveFormat(importPayload, templateConfig, "")
         : resolveFormat(importPayload, templateConfig, payloadText);
-    FormatParseRequest request = new FormatParseRequest(
-        payloadText,
-        null,
-        importPayload,
-        templateConfig,
-        preserveLogicalRow,
-        spoolPath,
-        spoolCharset);
     if (FileTemplateFormat.EXCEL.code().equalsIgnoreCase(format)) {
       byte[] bytes =
           payloadText == null ? new byte[0] : payloadText.getBytes(StandardCharsets.UTF_8);
-      request = new FormatParseRequest(
-          payloadText,
-          bytes,
-          importPayload,
-          templateConfig,
-          preserveLogicalRow,
-          spoolPath,
-          spoolCharset);
+      FormatParseRequest request =
+          FormatParseRequest.fromBinary(bytes, importPayload, templateConfig, preserveLogicalRow);
+      FormatParser parser = parsers.getOrDefault(format.toUpperCase(), defaultParser);
+      return parser.parse(context, request, writer);
     }
+    FormatParseRequest request = EmptyChecks.isNull(spoolPath)
+        ? FormatParseRequest.fromText(
+            payloadText, importPayload, templateConfig, preserveLogicalRow)
+        : FormatParseRequest.fromSpool(
+            importPayload, templateConfig, preserveLogicalRow, spoolPath, spoolCharset);
     FormatParser parser = parsers.getOrDefault(format.toUpperCase(), defaultParser);
     return parser.parse(context, request, writer);
   }

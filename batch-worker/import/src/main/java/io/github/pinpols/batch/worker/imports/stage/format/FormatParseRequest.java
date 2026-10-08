@@ -12,6 +12,7 @@ import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Objects;
 
 /**
  * Immutable parameter object passed to each {@link FormatParser}.
@@ -39,6 +40,43 @@ public record FormatParseRequest(
       Object templateConfig,
       boolean preserveLogicalRow) {
     this(payloadText, binaryPayload, importPayload, templateConfig, preserveLogicalRow, null, null);
+  }
+
+  /** 创建普通文本输入请求。 */
+  public static FormatParseRequest fromText(
+      String payloadText,
+      ImportPayload importPayload,
+      Object templateConfig,
+      boolean preserveLogicalRow) {
+    return new FormatParseRequest(
+        payloadText, null, importPayload, templateConfig, preserveLogicalRow, null, null);
+  }
+
+  /** 创建二进制文件输入请求，例如 Excel。 */
+  public static FormatParseRequest fromBinary(
+      byte[] binaryPayload,
+      ImportPayload importPayload,
+      Object templateConfig,
+      boolean preserveLogicalRow) {
+    return new FormatParseRequest(
+        null, binaryPayload, importPayload, templateConfig, preserveLogicalRow, null, null);
+  }
+
+  /** 创建从 spool 文件流式读取的文本请求。 */
+  public static FormatParseRequest fromSpool(
+      ImportPayload importPayload,
+      Object templateConfig,
+      boolean preserveLogicalRow,
+      Path spoolPath,
+      Charset spoolCharset) {
+    return new FormatParseRequest(
+        null,
+        null,
+        importPayload,
+        templateConfig,
+        preserveLogicalRow,
+        Objects.requireNonNull(spoolPath, "spoolPath"),
+        spoolCharset);
   }
 
   /**

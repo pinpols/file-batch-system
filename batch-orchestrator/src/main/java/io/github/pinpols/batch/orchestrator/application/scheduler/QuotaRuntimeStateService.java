@@ -34,7 +34,15 @@ public interface QuotaRuntimeStateService {
       Integer remainingBurst,
       Instant windowStartedAt,
       Instant windowExpiresAt,
-      Instant lastResetAt) {}
+      Instant lastResetAt) {
+
+    /** 配额不使用运行时窗口或当前没有有效窗口时，返回完整可用的突发额度快照。 */
+    public static QuotaRuntimeSnapshot withoutWindow(String quotaResetPolicy, int burstLimit) {
+      int availableBurst = Math.max(0, burstLimit);
+      return new QuotaRuntimeSnapshot(
+          quotaResetPolicy, availableBurst, 0, availableBurst, null, null, null);
+    }
+  }
 
   record QuotaReservationOwner(String tenantId, String quotaScope, String ownerCode) {}
 

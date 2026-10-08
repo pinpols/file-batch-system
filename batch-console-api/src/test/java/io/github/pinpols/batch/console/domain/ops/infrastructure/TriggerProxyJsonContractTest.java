@@ -106,7 +106,7 @@ class TriggerProxyJsonContractTest {
 
   private static Stream<Arguments> tenantCommandCases() {
     return Stream.of(
-        Arguments.of("", new ConsoleTriggerActionResponse(null, null, null)),
+        Arguments.of("", ConsoleTriggerActionResponse.empty()),
         Arguments.of("{\"code\":\"SUCCESS\",\"data\":null}", null),
         Arguments.of(
             "{\"code\":\"SUCCESS\",\"data\":{\"tenantId\":\"ta\",\"status\":\"PAUSED\"}}",
