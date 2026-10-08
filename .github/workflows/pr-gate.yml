@@ -206,11 +206,12 @@ jobs:
         run: bash scripts/ci/run-gate.sh PR_LOC_SNAPSHOT "代码量快照同步" -- python3 scripts/ci/check-loc-snapshot.py
 
       - name: Verify script governance and zero ShellCheck warnings
-        if: needs.changes.outputs.scripts == 'true' || needs.changes.outputs.ci == 'true'
+        if: needs.changes.outputs.scripts == 'true' || needs.changes.outputs.database == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         run: |
           source scripts/lib/gate-result.sh
           gate_run PR_SCRIPT_GOVERNANCE "脚本治理" python3 scripts/ci/check-script-governance.py
+          gate_run PR_DESTRUCTIVE_OPS_GOVERNANCE "高风险操作清单" python3 scripts/ci/check-destructive-ops-governance.py
           gate_run PR_SHELL_SCRIPTS "Shell 语法与 ShellCheck" bash scripts/ci/check-shell-scripts.sh
           gate_run PR_SHELL_LINUX_PORTABILITY "Shell Linux 兼容性" python3 scripts/ci/check-shell-linux-portability.py
           gate_run PR_TESTCONTAINERS_REUSE_LABEL "Testcontainers 复用标签判定" python3 scripts/ci/check-testcontainers-reuse-label.py
@@ -509,12 +510,10 @@ jobs:
         shell: bash
         run: bash scripts/ci/run-gate.sh PR_REQUIRED_JAVA_DOCS "Java 架构文档完整性" -- bash scripts/ci/check-required-java-docs.sh
 
-      - name: DB scripts safety lint (scripts/db/** 手工 DDL)
+      - name: Database destructive SQL safety
         if: needs.changes.outputs.database == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
-        # 补 squawk 盲区:batch_business 不走 Flyway,partition-migration / business 下的手工
-        # DDL 脚本(改 UNIQUE/PK 列集 / DROP TABLE)不在迁移守护内。本步要求这类危险脚本头部
-        # 必带禁令标记,并对 ON CONFLICT 提示核对幂等契约(docs/agent-baseline.md 红线)。
+        # 检查 db / sim / local / load-tests SQL 的 DROP、TRUNCATE、DELETE 和约束变更风险声明。
         run: bash scripts/ci/run-gate.sh PR_DB_SCRIPTS_SAFETY "数据库脚本安全" -- bash scripts/ci/check-db-scripts-safety.sh
 
       - name: Version and infrastructure image alignment

@@ -1,3 +1,4 @@
+-- DANGER: 删除/停用 sim 调度夹具。仅限本地 sim 平台库，执行前确认 schedule 范围。
 \echo '-- 1/2 CRON/FIXED_RATE → MANUAL(保留 expr / enabled;stage6c 等自我重置不受影响)'
 WITH q AS (
   UPDATE batch.job_definition
@@ -15,3 +16,4 @@ SELECT 'still_auto_fire' AS check, count(*) AS n
   FROM batch.job_definition WHERE schedule_type IN ('CRON', 'FIXED_RATE')
 UNION ALL
 SELECT 'remaining_dead_letters', count(*) FROM batch.dead_letter_task;
+-- DANGER: 删除/停用 sim 调度夹具。仅限本地 sim 平台库，执行前确认 schedule 范围。

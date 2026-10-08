@@ -2,9 +2,42 @@
 # ④ HA 故障演练(混沌):逐组件 kill leader / 滚动重启,断言自动恢复。
 # 这是"HA 真的成立"的证据——把 deploy/ha/README.md 的验证表变成可重复跑的脚本。
 # ⚠️ 会真删 pod,**只在非生产/演练集群跑**(prod 演练需变更窗口 + 知会)。
-# 用法:bash scripts/ha/failover-drill.sh [pg|kafka|redis|minio|all]
+# 用法:bash scripts/ha/failover-drill.sh [pg|kafka|redis|minio|all] \\
+#   --confirm-context <kubectl-context> --confirm-namespaces batch-data,kafka,redis,minio
 set -euo pipefail
-TARGET=${1:-all}
+TARGET=all
+CONFIRM_CONTEXT=""
+CONFIRM_NAMESPACES=""
+if [[ "$#" -gt 0 && "$1" != -* ]]; then TARGET="$1"; shift; fi
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --confirm-context)
+      [[ -n "${2:-}" ]] || { echo "--confirm-context 缺少值" >&2; exit 2; }
+      CONFIRM_CONTEXT="$2"; shift ;;
+    --confirm-namespaces)
+      [[ -n "${2:-}" ]] || { echo "--confirm-namespaces 缺少值" >&2; exit 2; }
+      CONFIRM_NAMESPACES="$2"; shift ;;
+    -h|--help)
+      sed -n '1,10p' "$0"; exit 0 ;;
+    *) echo "未知参数: $1" >&2; exit 2 ;;
+  esac
+  shift
+done
+expected_namespaces="batch-data,kafka,redis,minio"
+if [[ "$CONFIRM_CONTEXT" == "" || "$CONFIRM_NAMESPACES" != "$expected_namespaces" ]]; then
+  echo "拒绝执行故障注入:需传 --confirm-context <当前 context> --confirm-namespaces '$expected_namespaces'。" >&2
+  exit 2
+fi
+context="$(kubectl config current-context)"
+if [[ "$context" != "$CONFIRM_CONTEXT" ]]; then
+  echo "拒绝执行故障注入:当前 context=$context，与确认值不一致。" >&2
+  exit 2
+fi
+case "$context" in
+  *prod*|*uat*)
+    echo "拒绝在生产/预发布 Kubernetes context 执行故障注入: $context" >&2
+    exit 2 ;;
+esac
 PASS=(); FAIL=()
 log() { echo "[drill] $*"; }
 ok()  { PASS+=("$1"); echo "  ✅ $1"; }

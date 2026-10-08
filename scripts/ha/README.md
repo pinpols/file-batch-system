@@ -5,6 +5,12 @@
 - `bootstrap-secrets.sh`：初始化演练所需 secret。
 - `install-operators.sh`：安装 HA 相关 operator。
 - `apply-stage123.sh`：顺序应用 HA 演练前三阶段资源。
-- `failover-drill.sh`：执行故障切换演练。
+- `failover-drill.sh`：执行故障切换演练，会删除 PG/Kafka/Redis/MinIO Pod。必须显式确认当前 kube context 与固定 namespace 清单；拒绝生产/预发布 context。
+
+```bash
+bash scripts/ha/failover-drill.sh all \
+  --confirm-context "$(kubectl config current-context)" \
+  --confirm-namespaces batch-data,kafka,redis,minio
+```
 
 执行前先确认目标 kube context、namespace 和凭据，避免误操作生产环境。

@@ -1,3 +1,4 @@
+-- DANGER: 删除 validate-seed 平台夹具数据。仅限隔离本地测试库，并按 fixture pattern 精确筛选。
 BEGIN;
 
 CREATE TEMP TABLE seed_cleanup_job_instance_ids(id BIGINT PRIMARY KEY) ON COMMIT DROP;
@@ -174,3 +175,4 @@ DELETE FROM batch.job_definition
 WHERE id IN (SELECT id FROM seed_cleanup_job_definition_ids);
 
 COMMIT;
+-- DANGER: 删除 validate-seed 平台夹具数据。仅限隔离本地测试库，并按 fixture pattern 精确筛选。

@@ -1,3 +1,4 @@
+-- DANGER: 批量删除所有非系统租户及关联数据。执行前必须核对数据库、备份和保留租户名单。
 -- =====================================================================
 -- wipe-non-system-tenants.sql
 -- 清空"白名单外"所有租户的全部数据,用于日常清理 e2e / 手测残留。
@@ -144,3 +145,4 @@ UNION ALL SELECT 'workflow_def',     count(*) FROM batch.workflow_definition WHE
 UNION ALL SELECT 'file_template',    count(*) FROM batch.file_template_config WHERE tenant_id NOT IN :keep
 UNION ALL SELECT 'file_channel',     count(*) FROM batch.file_channel_config  WHERE tenant_id NOT IN :keep
 UNION ALL SELECT 'console_user',     count(*) FROM batch.console_user_account WHERE tenant_id NOT IN :keep;
+-- DANGER: 批量删除所有非系统租户及关联数据。执行前必须核对数据库、备份和保留租户名单。

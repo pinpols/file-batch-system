@@ -42,6 +42,7 @@
 | 15b | [production-capacity-governance.md](./production-capacity-governance.md) | 生产容量与存储增长治理（PG 热表 / Kafka retention / 对象存储 lifecycle / 文件通道 / 状态后端 / Quartz / 观测 / 压测边界） |
 | 16 | [ha-readiness.md](./ha-readiness.md) | **生产 HA 就绪 Checklist（P0/P1）**——基础件 HA(Kafka/PG Patroni/备份/Redis Sentinel/PgBouncer)逐项 + 应用侧已做对照 |
 | 16a | [heavy-workload-operations.md](./heavy-workload-operations.md) | 重任务定容、专用资源池、灰度、排障与回滚 |
+| 16b | [high-risk-operations.md](./high-risk-operations.md) | 文件、数据库、Kafka、对象存储、Redis/Valkey 与 Docker 的删除/重置命令边界 |
 
 ### 四、灰度 / 切换（特性开关）
 

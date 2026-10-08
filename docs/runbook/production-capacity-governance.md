@@ -280,7 +280,7 @@ Kafka 增长主要由 topic retention、segment、消费 lag 和副本因子决�
 - lag 持续增长时，先查 worker 饱和度、PostgreSQL 写入和 direct topic 热点，再扩容或限流。
 - 不在生产直接删除 topic、重置 group offset 或缩短 retention 到分钟级清盘；这些都会改变重放语义。
 
-本地压测需要快速回收 Kafka 空间时，使用 `load-tests/scripts/cleanup-load-test-environment.sh --apply --kafka-reset-topics`，该命令只用于本地压测环境。
+本地压测需要快速回收 Kafka 空间时，使用 `load-tests/scripts/cleanup-load-test-environment.sh --apply --confirm-project batch-platform --kafka-reset-topics`，该命令只用于本机 Compose 压测环境。
 
 ## 10. 对象存储治理口径
 

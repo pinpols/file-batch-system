@@ -57,22 +57,22 @@
 bash scripts/local/cleanup-disk.sh
 
 # 清理超过 7 天的可再生 Docker 缓存
-bash scripts/local/cleanup-disk.sh --apply
+bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system
 
 # 磁盘紧张时清理全部未使用的 BuildKit 缓存
-bash scripts/local/cleanup-disk.sh --apply --all-build-cache
+bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system --all-build-cache
 
 # 每个镜像仓库只保留 latest（无 latest 时保留最新版本）和容器引用版本
-bash scripts/local/cleanup-disk.sh --apply --prune-old-image-tags
+bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system --prune-old-image-tags
 
 # 明确确认后，再清理超过 14 天且无引用的 Docker 匿名卷
-bash scripts/local/cleanup-disk.sh --apply --retention-days 14 --include-anonymous-volumes
+bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system --retention-days 14 --include-anonymous-volumes
 
 # 压测后清理观测栈命名卷（会清空 Prometheus/Loki/Tempo/Grafana 历史）：
-bash scripts/local/cleanup-disk.sh --apply --include-observability-volumes
+bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system --include-observability-volumes
 
 # 清理应用归档日志（只处理 `logs/archive/app`，默认保留最近 7 天）：
-bash scripts/local/cleanup-disk.sh --apply --include-app-logs
+bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system --include-app-logs
 ```
 
 历史运行日志和 Maven `target` 目录也必须通过独立参数显式启用。不要使用 `docker system prune --volumes`，它无法区分可丢弃测试卷和需要保留的数据卷。

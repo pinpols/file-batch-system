@@ -1,3 +1,4 @@
+-- DANGER: 删除 P2 多租户公平性压测策略夹具。仅限专用本地压测库；不得连接生产或共享验收库。
 -- P2 压测档案独占这些隔离租户和配置记录。
 -- 清理条件采用精确匹配，不得影响租户自行维护的定义。
 DELETE FROM batch.tenant_quota_policy
@@ -14,3 +15,4 @@ WHERE tenant_id IN ('p2fa', 'p2fb', 'p2fc')
 DELETE FROM batch.tenant
 WHERE tenant_id IN ('p2fa', 'p2fb', 'p2fc')
   AND description = 'Ephemeral P2 fairness load-test tenant';
+-- DANGER: 删除 P2 多租户公平性压测策略夹具。仅限专用本地压测库；不得连接生产或共享验收库。

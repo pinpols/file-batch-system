@@ -138,7 +138,7 @@ bash load-tests/scripts/cleanup-load-test-environment.sh --diagnose
 确认是可重建的本地开发环境后，再执行推荐清理：
 
 ```bash
-bash load-tests/scripts/cleanup-load-test-environment.sh --apply --all
+bash load-tests/scripts/cleanup-load-test-environment.sh --apply --confirm-project batch-platform --all
 ```
 
 `--all` 会把压测 topic 调整为安全保留（默认 6 小时）、清理本地 MinIO 压测前缀，并对高频
@@ -147,13 +147,13 @@ PostgreSQL 表执行 `VACUUM ANALYZE`；本地 MinIO 删除回收站也会一并
 broker 回收。若只想单独清理 MinIO 回收站，可执行：
 
 ```bash
-bash load-tests/scripts/cleanup-load-test-environment.sh --apply --minio-trash
+bash load-tests/scripts/cleanup-load-test-environment.sh --apply --confirm-project batch-platform --minio-trash
 ```
 
 如果需要立刻释放 Kafka topic 日志空间，可在停写的本地环境显式执行：
 
 ```bash
-bash load-tests/scripts/cleanup-load-test-environment.sh --apply --kafka-reset-topics
+bash load-tests/scripts/cleanup-load-test-environment.sh --apply --confirm-project batch-platform --kafka-reset-topics
 ```
 
 该命令会等待目标 topic 删除完成，再通过 Compose `kafka-init` 统一入口恢复全部平台 topic，

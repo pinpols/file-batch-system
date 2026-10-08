@@ -412,7 +412,20 @@ deployment_verification() {
     values_args=(-f "$values_file")
   fi
 
-  run_kubectl config current-context >/dev/null
+  local context target_confirmation
+  context="$(run_kubectl config current-context)"
+  target_confirmation="${context}/${namespace}/${release_name}"
+  case "$context,$namespace" in
+    *prod*)
+      printf '拒绝在生产 Kubernetes 目标执行部署验证清理: %s/%s\n' "$context" "$namespace" >&2
+      return 2
+      ;;
+  esac
+  if [[ "${BATCH_DEPLOY_VERIFICATION_CONFIRM_TARGET:-}" != "$target_confirmation" ]]; then
+    printf '部署验证会卸载并重建 Helm release。再次确认目标：BATCH_DEPLOY_VERIFICATION_CONFIRM_TARGET=%s\n' \
+      "$target_confirmation" >&2
+    return 2
+  fi
   run_helm uninstall "$release_name" --namespace "$namespace" >/dev/null 2>&1 || true
 
   run_helm upgrade --install "$release_name" "$chart_dir" \

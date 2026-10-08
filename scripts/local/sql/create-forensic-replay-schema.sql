@@ -1,3 +1,4 @@
+-- DANGER: 删除并重建取证回放 schema。仅限本地取证回放库，确认 schema 名称和数据备份。
 DROP SCHEMA IF EXISTS :"replay_schema" CASCADE;
 CREATE SCHEMA :"replay_schema";
 
@@ -16,3 +17,4 @@ CREATE TABLE :"replay_schema".forensic_day_audits (
   tenant_id TEXT,
   snapshot  JSONB NOT NULL
 );
+-- DANGER: 删除并重建取证回放 schema。仅限本地取证回放库，执行前确认 schema 名称和数据已备份。

@@ -16,6 +16,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../local/docker-path.sh
 source "$ROOT/scripts/local/docker-path.sh"
 ensure_docker_on_path
+# shellcheck source=../lib/destructive-ops.sh
+source "$ROOT/scripts/lib/destructive-ops.sh"
 
 PROJECT_NAME="${COMPOSE_PROJECT_NAME:-batch-platform}"
 APPLY=false
@@ -120,6 +122,7 @@ docker info >/dev/null 2>&1 || {
   echo "ERROR: Docker daemon 不可用，请先启动 Docker Desktop 或 Docker Engine。" >&2
   exit 1
 }
+batch_require_local_docker_context || exit $?
 
 project_filter="label=com.docker.compose.project=${PROJECT_NAME}"
 containers="$(docker ps -aq --filter "$project_filter")"
