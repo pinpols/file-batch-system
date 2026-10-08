@@ -54,23 +54,14 @@ public class VerifierFailureOutboxService {
 
   private final DomainEventPublisher domainEventPublisher;
 
-  /** 调用方持有当前事务；本方法 MANDATORY，无事务直接抛。 */
-  @Transactional(propagation = Propagation.MANDATORY)
-  public int writeVerifierFailures(TaskOutcomeCommand command, JobTaskEntity task) {
-    if (EmptyChecks.isNull(command) || EmptyChecks.isNull(task)) {
-      return 0;
-    }
-    return publishFailures(command, task, VerifierFailure.fromWire(command.verifierFailures()));
-  }
-
-  /** typed 结果与旧调用共享同一事务、事件顺序和幂等键，避免主链重复解析固定 Map。 */
+  /** typed 结果在同一事务内发布，保留原有事件顺序和幂等键。 */
   @Transactional(propagation = Propagation.MANDATORY)
   public int writeVerifierFailures(
       TaskOutcomeCommand command, JobTaskEntity task, List<VerifierFailure> failures) {
     return publishFailures(command, task, failures);
   }
 
-  // 两个公开入口各自经过事务代理；内部只共享发布逻辑，不依赖同类调用重新触发事务拦截。
+  // 事务由唯一的公开入口通过代理强制要求；这里仅承载事件发布逻辑。
   private int publishFailures(
       TaskOutcomeCommand command, JobTaskEntity task, List<VerifierFailure> failures) {
     if (EmptyChecks.isNull(command) || EmptyChecks.isNull(task)) {

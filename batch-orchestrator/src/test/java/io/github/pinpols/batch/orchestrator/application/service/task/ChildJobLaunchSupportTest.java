@@ -56,7 +56,7 @@ class ChildJobLaunchSupportTest {
   private OrchestratorWorkflowMappers workflowMappers;
 
   @Mock
-  private ObjectProvider<TaskExecutionService> taskExecutionServiceProvider;
+  private TaskCreationService taskCreationService;
 
   @Mock
   private ObjectProvider<LaunchService> launchServiceProvider;
@@ -72,11 +72,7 @@ class ChildJobLaunchSupportTest {
         jobStepInstanceMapper,
         triggerRequestMapper);
     return new ChildJobLaunchSupport(
-        jobMappers,
-        workflowMappers,
-        taskExecutionServiceProvider,
-        launchServiceProvider,
-        payloadBuilder);
+        jobMappers, workflowMappers, taskCreationService, launchServiceProvider, payloadBuilder);
   }
 
   private JobInstanceEntity instance(Long id, String jobCode, Long parentInstanceId) {
@@ -125,7 +121,7 @@ class ChildJobLaunchSupportTest {
         });
 
     // 环在任何副作用之前被拦：不写虚拟分区、不发起子作业 launch
-    verifyNoInteractions(jobPartitionMapper, launchServiceProvider, taskExecutionServiceProvider);
+    verifyNoInteractions(jobPartitionMapper, launchServiceProvider, taskCreationService);
     // 顶层父无 parent_instance_id，无需上溯 DB
     verify(jobInstanceMapper, never()).selectById(anyString(), anyLong());
   }
@@ -148,7 +144,7 @@ class ChildJobLaunchSupportTest {
           assertThat(biz.getMessageArgs()).contains("WF_A");
         });
 
-    verifyNoInteractions(jobPartitionMapper, launchServiceProvider, taskExecutionServiceProvider);
+    verifyNoInteractions(jobPartitionMapper, launchServiceProvider, taskCreationService);
   }
 
   @Test

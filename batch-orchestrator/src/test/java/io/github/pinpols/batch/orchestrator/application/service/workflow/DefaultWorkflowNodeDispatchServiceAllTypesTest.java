@@ -17,7 +17,7 @@ import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceSchedu
 import io.github.pinpols.batch.orchestrator.application.service.task.ChildJobLaunchSupport;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.application.service.task.PartitionLifecycleService;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskCreationService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService.DagNodeResolution;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
@@ -37,7 +37,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.springframework.beans.factory.ObjectProvider;
 
 /**
  * P2: DefaultWorkflowNodeDispatchService 跨 NodeType 分派路由守护。
@@ -91,7 +90,7 @@ class DefaultWorkflowNodeDispatchServiceAllTypesTest {
   private ResourceScheduler resourceScheduler;
 
   @Mock
-  private ObjectProvider<TaskExecutionService> taskExecutionServiceProvider;
+  private TaskCreationService taskCreationService;
 
   @Mock
   private WorkflowNodePayloadBuilder payloadBuilder;
@@ -122,7 +121,7 @@ class DefaultWorkflowNodeDispatchServiceAllTypesTest {
         taskDispatchOutboxService,
         workflowDagService,
         resourceScheduler,
-        taskExecutionServiceProvider,
+        taskCreationService,
         payloadBuilder,
         childJobLaunchSupport,
         crossDayDependencyResolver);

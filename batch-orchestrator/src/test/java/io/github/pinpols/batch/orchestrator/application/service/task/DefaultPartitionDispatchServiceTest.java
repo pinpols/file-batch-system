@@ -47,7 +47,7 @@ class DefaultPartitionDispatchServiceTest {
   private SchedulePlanBuilder schedulePlanBuilder;
   private ResourceScheduler resourceScheduler;
   private PartitionLifecycleService partitionLifecycleService;
-  private TaskExecutionService taskExecutionService;
+  private TaskCreationService taskCreationService;
   private TaskDispatchOutboxService taskDispatchOutboxService;
   private GlobalJobAdmission globalJobAdmission;
   private WorkflowNodeDispatchService workflowNodeDispatchService;
@@ -60,7 +60,7 @@ class DefaultPartitionDispatchServiceTest {
     schedulePlanBuilder = mock(SchedulePlanBuilder.class);
     resourceScheduler = mock(ResourceScheduler.class);
     partitionLifecycleService = mock(PartitionLifecycleService.class);
-    taskExecutionService = mock(TaskExecutionService.class);
+    taskCreationService = mock(TaskCreationService.class);
     taskDispatchOutboxService = mock(TaskDispatchOutboxService.class);
     globalJobAdmission = mock(GlobalJobAdmission.class);
     when(globalJobAdmission.hasCapacity()).thenReturn(true);
@@ -74,7 +74,7 @@ class DefaultPartitionDispatchServiceTest {
         schedulePlanBuilder,
         resourceScheduler,
         partitionLifecycleService,
-        taskExecutionService,
+        taskCreationService,
         taskDispatchOutboxService,
         lifecycleEventMapper,
         globalJobAdmission,
@@ -152,7 +152,7 @@ class DefaultPartitionDispatchServiceTest {
     @SuppressWarnings("unchecked")
     ArgumentCaptor<List<io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity>> tasks =
         ArgumentCaptor.forClass(List.class);
-    verify(taskExecutionService).createTasks(tasks.capture());
+    verify(taskCreationService).createTasks(tasks.capture());
     assertThat(tasks.getValue())
         .singleElement()
         .satisfies(task -> assertThat(task.getTaskStatus())

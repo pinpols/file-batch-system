@@ -114,7 +114,7 @@ public class DefaultConsoleReportExcelApplicationService
 
   @Override
   public ResponseEntity<StreamingResponseBody> exportSchedulerSnapshot(String tenantId) {
-    ConsoleSchedulerSnapshotResponse snapshot = fetchSnapshot(tenantId);
+    ConsoleSchedulerSnapshotResponse snapshot = orchestratorPort.schedulerSnapshot(tenantId);
     List<ConsoleSchedulerSnapshotResponse.PolicySnapshot> rows =
         EmptyChecks.isNull(snapshot) ? List.of() : snapshot.policies();
     return exportRows(
@@ -128,7 +128,8 @@ public class DefaultConsoleReportExcelApplicationService
   @Override
   public ResponseEntity<StreamingResponseBody> exportSchedulerSnapshotHistory(
       String tenantId, int limit) {
-    List<ConsoleSchedulerSnapshotHistoryResponse> rows = fetchSnapshotHistory(tenantId, limit);
+    List<ConsoleSchedulerSnapshotHistoryResponse> rows =
+        orchestratorPort.schedulerSnapshotHistory(tenantId, limit);
     return exportRows(
         "scheduler_snapshot_history",
         "scheduler-snapshot-history",
@@ -167,15 +168,6 @@ public class DefaultConsoleReportExcelApplicationService
         "outbox deliveries",
         queryApplicationService.outboxDeliveries(request).items(),
         ConsoleOutboxDeliveryLogResponse.class);
-  }
-
-  private ConsoleSchedulerSnapshotResponse fetchSnapshot(String tenantId) {
-    return orchestratorPort.schedulerSnapshot(tenantId);
-  }
-
-  private List<ConsoleSchedulerSnapshotHistoryResponse> fetchSnapshotHistory(
-      String tenantId, int limit) {
-    return orchestratorPort.schedulerSnapshotHistory(tenantId, limit);
   }
 
   private <T> ResponseEntity<StreamingResponseBody> exportRows(

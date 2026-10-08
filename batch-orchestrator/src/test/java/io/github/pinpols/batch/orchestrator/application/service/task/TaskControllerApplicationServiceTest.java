@@ -61,6 +61,9 @@ class TaskControllerApplicationServiceTest {
   @Mock
   private TaskExecutionService taskExecutionService;
 
+  @Mock
+  private TaskOutcomeService taskOutcomeService;
+
   private TaskControllerApplicationService service;
 
   private final BundleBatchClaimProperties batchClaimProperties = new BundleBatchClaimProperties();
@@ -73,7 +76,7 @@ class TaskControllerApplicationServiceTest {
         new ObjectMapper(),
         batchClaimProperties,
         meterRegistry,
-        new TaskReportRetryExecutor(taskExecutionService));
+        new TaskReportRetryExecutor(taskOutcomeService));
   }
 
   // ===== claim =====
@@ -197,7 +200,7 @@ class TaskControllerApplicationServiceTest {
   @DisplayName("reportBatch: 批内某项失败只标记该项,其余照常推进(逐项独立)")
   void shouldIsolateFailure_whenReportingBatchPartially() {
     // taskId=2 的 applyTaskOutcome 抛(模拟版本 CAS 冲突);1/3 正常
-    when(taskExecutionService.applyTaskOutcome(any())).thenAnswer(inv -> {
+    when(taskOutcomeService.applyTaskOutcome(any())).thenAnswer(inv -> {
       TaskOutcomeCommand c = inv.getArgument(0);
       if (c.taskId() == 2L) {
         throw new RuntimeException("version CAS conflict");
@@ -214,7 +217,7 @@ class TaskControllerApplicationServiceTest {
     assertThat(resp.results().get(1).error()).contains("CAS");
     assertThat(resp.results().get(2).ok()).isTrue();
     // 三项都被尝试推进(失败项不阻断后续)
-    verify(taskExecutionService, times(3)).applyTaskOutcome(any());
+    verify(taskOutcomeService, times(3)).applyTaskOutcome(any());
   }
 
   @Test
@@ -225,7 +228,7 @@ class TaskControllerApplicationServiceTest {
     assertThatThrownBy(() -> service.reportBatch(
             new TaskReportBatchCommand(List.of(reportDto(1L), reportDto(2L), reportDto(3L)))))
         .isInstanceOf(BizException.class);
-    verify(taskExecutionService, never()).applyTaskOutcome(any());
+    verify(taskOutcomeService, never()).applyTaskOutcome(any());
   }
 
   @Test
@@ -248,7 +251,7 @@ class TaskControllerApplicationServiceTest {
     assertThat(result.results().get(0).ok()).isFalse();
     assertThat(result.results().get(0).error()).isEqualTo("batch item is null");
     assertThat(result.results().get(1).ok()).isTrue();
-    verify(taskExecutionService).applyTaskOutcome(any());
+    verify(taskOutcomeService).applyTaskOutcome(any());
   }
 
   // ===== 2.4 观测指标 =====
@@ -278,7 +281,7 @@ class TaskControllerApplicationServiceTest {
         .isEqualTo(1.0);
 
     // report:taskId=2 抛 → 1 ok + 1 failed
-    when(taskExecutionService.applyTaskOutcome(any())).thenAnswer(inv -> {
+    when(taskOutcomeService.applyTaskOutcome(any())).thenAnswer(inv -> {
       TaskOutcomeCommand c = inv.getArgument(0);
       if (c.taskId() == 2L) {
         throw new RuntimeException("boom");
@@ -313,7 +316,7 @@ class TaskControllerApplicationServiceTest {
     service.report(100L, dto);
 
     ArgumentCaptor<TaskOutcomeCommand> cap = ArgumentCaptor.forClass(TaskOutcomeCommand.class);
-    verify(taskExecutionService).applyTaskOutcome(cap.capture());
+    verify(taskOutcomeService).applyTaskOutcome(cap.capture());
     assertThat(cap.getValue().errorCode()).isNull();
     assertThat(cap.getValue().errorMessage()).isNull();
   }
@@ -327,7 +330,7 @@ class TaskControllerApplicationServiceTest {
     service.report(100L, dto);
 
     ArgumentCaptor<TaskOutcomeCommand> cap = ArgumentCaptor.forClass(TaskOutcomeCommand.class);
-    verify(taskExecutionService).applyTaskOutcome(cap.capture());
+    verify(taskOutcomeService).applyTaskOutcome(cap.capture());
     assertThat(cap.getValue().errorCode()).isEqualTo("NEW_ERR");
     assertThat(cap.getValue().errorMessage()).isEqualTo("new msg");
   }
@@ -341,7 +344,7 @@ class TaskControllerApplicationServiceTest {
     service.report(100L, dto);
 
     ArgumentCaptor<TaskOutcomeCommand> cap = ArgumentCaptor.forClass(TaskOutcomeCommand.class);
-    verify(taskExecutionService).applyTaskOutcome(cap.capture());
+    verify(taskOutcomeService).applyTaskOutcome(cap.capture());
     assertThat(cap.getValue().errorCode()).isEqualTo("OLD_ERR");
     assertThat(cap.getValue().errorMessage()).isEqualTo("old msg");
   }
@@ -354,7 +357,7 @@ class TaskControllerApplicationServiceTest {
     service.report(100L, dto);
 
     ArgumentCaptor<TaskOutcomeCommand> cap = ArgumentCaptor.forClass(TaskOutcomeCommand.class);
-    verify(taskExecutionService).applyTaskOutcome(cap.capture());
+    verify(taskOutcomeService).applyTaskOutcome(cap.capture());
     assertThat(cap.getValue().errorCode()).isEqualTo("UNKNOWN");
     assertThat(cap.getValue().errorMessage()).isEqualTo("UNKNOWN");
   }
@@ -367,7 +370,7 @@ class TaskControllerApplicationServiceTest {
     service.report(100L, dto);
 
     ArgumentCaptor<TaskOutcomeCommand> cap = ArgumentCaptor.forClass(TaskOutcomeCommand.class);
-    verify(taskExecutionService).applyTaskOutcome(cap.capture());
+    verify(taskOutcomeService).applyTaskOutcome(cap.capture());
     assertThat(cap.getValue().verifierFailures()).isNull();
   }
 

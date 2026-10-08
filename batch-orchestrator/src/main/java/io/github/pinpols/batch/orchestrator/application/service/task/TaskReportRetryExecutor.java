@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class TaskReportRetryExecutor {
 
-  private final TaskExecutionService taskExecutionService;
+  private final TaskOutcomeService taskOutcomeService;
 
   @Retryable(
       retryFor = {CannotAcquireLockException.class, TransientDataAccessException.class},
@@ -41,7 +41,7 @@ public class TaskReportRetryExecutor {
         .failureClass(request.success() ? null : request.failureClass())
         .verifierFailures(request.success() ? request.verifierFailures() : null)
         .build();
-    taskExecutionService.applyTaskOutcome(command);
+    taskOutcomeService.applyTaskOutcome(command);
   }
 
   private static String resolveFailureField(String modern, String legacy, boolean success) {

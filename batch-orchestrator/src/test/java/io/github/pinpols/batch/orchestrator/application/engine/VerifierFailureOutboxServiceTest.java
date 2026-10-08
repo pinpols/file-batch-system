@@ -10,10 +10,9 @@ import static org.mockito.Mockito.verify;
 import io.github.pinpols.batch.common.event.DomainEvent;
 import io.github.pinpols.batch.common.event.DomainEventPublisher;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
+import io.github.pinpols.batch.orchestrator.domain.command.VerifierFailure;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -26,25 +25,20 @@ class VerifierFailureOutboxServiceTest {
   void shouldWriteOneEventPerFailure_whenVerificationFails() {
     DomainEventPublisher publisher = mock(DomainEventPublisher.class);
     VerifierFailureOutboxService service = new VerifierFailureOutboxService(publisher);
-    Map<String, Object> failureA = new LinkedHashMap<>();
-    failureA.put("code", "EXPORT_FILE_EMPTY");
-    failureA.put("message", "no rows");
-    failureA.put("evidence", Map.of("recordCount", 0));
-    Map<String, Object> failureB = new LinkedHashMap<>();
-    failureB.put("code", "EXPORT_HEADER_INVALID");
-    failureB.put("message", "missing header");
-    failureB.put("evidence", Map.of());
+    VerifierFailure failureA =
+        new VerifierFailure("EXPORT_FILE_EMPTY", "no rows", java.util.Map.of("recordCount", 0));
+    VerifierFailure failureB =
+        new VerifierFailure("EXPORT_HEADER_INVALID", "missing header", java.util.Map.of());
     TaskOutcomeCommand command = TaskOutcomeCommand.builder()
         .tenantId("t1")
         .taskId(42L)
         .workerId("worker-A")
         .success(true)
-        .verifierFailures(List.of(failureA, failureB))
         .build();
     JobTaskEntity task = new JobTaskEntity();
     task.setJobInstanceId(7L);
 
-    int written = service.writeVerifierFailures(command, task);
+    int written = service.writeVerifierFailures(command, task, List.of(failureA, failureB));
 
     assertThat(written).isEqualTo(2);
     ArgumentCaptor<DomainEvent> captor = ArgumentCaptor.forClass(DomainEvent.class);
@@ -64,18 +58,14 @@ class VerifierFailureOutboxServiceTest {
   void shouldIncludeIndexInEventKey_whenReasonsRepeat() {
     DomainEventPublisher publisher = mock(DomainEventPublisher.class);
     VerifierFailureOutboxService service = new VerifierFailureOutboxService(publisher);
-    Map<String, Object> a = Map.of("code", "DUP_CODE", "message", "first", "evidence", Map.of());
-    Map<String, Object> b = Map.of("code", "DUP_CODE", "message", "second", "evidence", Map.of());
-    TaskOutcomeCommand command = TaskOutcomeCommand.builder()
-        .tenantId("t1")
-        .taskId(7L)
-        .success(true)
-        .verifierFailures(List.of(a, b))
-        .build();
+    VerifierFailure a = new VerifierFailure("DUP_CODE", "first", java.util.Map.of());
+    VerifierFailure b = new VerifierFailure("DUP_CODE", "second", java.util.Map.of());
+    TaskOutcomeCommand command =
+        TaskOutcomeCommand.builder().tenantId("t1").taskId(7L).success(true).build();
     JobTaskEntity task = new JobTaskEntity();
     task.setJobInstanceId(1L);
 
-    service.writeVerifierFailures(command, task);
+    service.writeVerifierFailures(command, task, List.of(a, b));
 
     ArgumentCaptor<DomainEvent> captor = ArgumentCaptor.forClass(DomainEvent.class);
     verify(publisher, times(2)).publish(captor.capture());
@@ -92,7 +82,7 @@ class VerifierFailureOutboxServiceTest {
     TaskOutcomeCommand command =
         TaskOutcomeCommand.builder().tenantId("t1").taskId(1L).success(true).build();
 
-    int written = service.writeVerifierFailures(command, new JobTaskEntity());
+    int written = service.writeVerifierFailures(command, new JobTaskEntity(), List.of());
 
     assertThat(written).isZero();
     verify(publisher, never()).publish(any());
@@ -110,7 +100,7 @@ class VerifierFailureOutboxServiceTest {
         .verifierFailures(List.of())
         .build();
 
-    int written = service.writeVerifierFailures(command, new JobTaskEntity());
+    int written = service.writeVerifierFailures(command, new JobTaskEntity(), List.of());
 
     assertThat(written).isZero();
     verify(publisher, never()).publish(any());
@@ -121,17 +111,14 @@ class VerifierFailureOutboxServiceTest {
   void shouldSkipNullEntries_whenWritingFailures() {
     DomainEventPublisher publisher = mock(DomainEventPublisher.class);
     VerifierFailureOutboxService service = new VerifierFailureOutboxService(publisher);
-    Map<String, Object> good = Map.of("code", "X", "message", "y", "evidence", Map.of());
-    TaskOutcomeCommand command = TaskOutcomeCommand.builder()
-        .tenantId("t1")
-        .taskId(1L)
-        .success(true)
-        .verifierFailures(java.util.Arrays.asList(null, good, null))
-        .build();
+    VerifierFailure good = new VerifierFailure("X", "y", java.util.Map.of());
+    TaskOutcomeCommand command =
+        TaskOutcomeCommand.builder().tenantId("t1").taskId(1L).success(true).build();
     JobTaskEntity task = new JobTaskEntity();
     task.setJobInstanceId(99L);
 
-    int written = service.writeVerifierFailures(command, task);
+    int written =
+        service.writeVerifierFailures(command, task, java.util.Arrays.asList(null, good, null));
 
     assertThat(written).isEqualTo(1);
     verify(publisher, times(1)).publish(any());

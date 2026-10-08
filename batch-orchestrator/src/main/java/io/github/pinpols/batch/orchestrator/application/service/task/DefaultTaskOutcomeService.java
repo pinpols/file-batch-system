@@ -110,20 +110,6 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
 
   @Override
   @Transactional
-  public WorkflowNodeRunEntity recordNodeRunReady(
-      Long workflowRunId, String nodeCode, String nodeType) {
-    return nodeRunRecorder.recordReady(workflowRunId, nodeCode, nodeType);
-  }
-
-  @Override
-  @Transactional
-  public WorkflowNodeRunEntity recordNodeRunStart(
-      Long workflowRunId, String nodeCode, String nodeType, Instant startedAt) {
-    return nodeRunRecorder.recordStart(workflowRunId, nodeCode, nodeType, startedAt);
-  }
-
-  @Override
-  @Transactional
   public WorkflowNodeRunEntity recordNodeRunFinish(NodeRunFinishCommand command) {
     WorkflowNodeRunEntity finished = nodeRunRecorder.recordFinish(command);
     // ADR-041 Phase1.3b:本节点产出已写入数据库,同事务核跨阶段 count 连续性(仅告警,不翻转状态)。

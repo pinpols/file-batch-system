@@ -17,7 +17,7 @@ import io.github.pinpols.batch.orchestrator.application.service.governance.Defau
 import io.github.pinpols.batch.orchestrator.application.service.governance.FileGovernanceService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RetryGovernanceService;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService;
 import io.github.pinpols.batch.orchestrator.domain.command.CompensationSubmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.mapper.CompensationCommandMapper;
@@ -49,7 +49,7 @@ class DefaultCompensationServiceTest {
   private FileGovernanceService fileGovernanceService;
   private LaunchService launchService;
   private ObjectProvider<LaunchService> launchServiceProvider;
-  private TaskExecutionService taskExecutionService;
+  private TaskAssignmentService taskAssignmentService;
   private DefaultCompensationService service;
 
   @BeforeEach
@@ -65,7 +65,7 @@ class DefaultCompensationServiceTest {
     fileGovernanceService = mock(FileGovernanceService.class);
     launchService = mock(LaunchService.class);
     launchServiceProvider = mock(ObjectProvider.class);
-    taskExecutionService = mock(TaskExecutionService.class);
+    taskAssignmentService = mock(TaskAssignmentService.class);
 
     service = new DefaultCompensationService(
         compensationCommandMapper,
@@ -73,7 +73,7 @@ class DefaultCompensationServiceTest {
         retryGovernanceService,
         fileGovernanceService,
         launchServiceProvider,
-        taskExecutionService,
+        taskAssignmentService,
         new CompensationTransactionExecutor(new PlatformTransactionManager() {
           @Override
           public TransactionStatus getTransaction(TransactionDefinition definition) {

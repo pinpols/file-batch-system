@@ -135,11 +135,6 @@ public interface TaskOutcomeService {
     }
   }
 
-  WorkflowNodeRunEntity recordNodeRunReady(Long workflowRunId, String nodeCode, String nodeType);
-
-  WorkflowNodeRunEntity recordNodeRunStart(
-      Long workflowRunId, String nodeCode, String nodeType, Instant startedAt);
-
   WorkflowNodeRunEntity recordNodeRunFinish(NodeRunFinishCommand command);
 
   JobTaskEntity applyTaskOutcome(TaskOutcomeCommand command);

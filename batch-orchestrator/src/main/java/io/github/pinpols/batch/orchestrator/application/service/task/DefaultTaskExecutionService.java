@@ -118,18 +118,6 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
   }
 
   @Override
-  public WorkflowNodeRunEntity recordNodeRunReady(
-      Long workflowRunId, String nodeCode, String nodeType) {
-    return taskOutcomeService.recordNodeRunReady(workflowRunId, nodeCode, nodeType);
-  }
-
-  @Override
-  public WorkflowNodeRunEntity recordNodeRunStart(
-      Long workflowRunId, String nodeCode, String nodeType, Instant startedAt) {
-    return taskOutcomeService.recordNodeRunStart(workflowRunId, nodeCode, nodeType, startedAt);
-  }
-
-  @Override
   public WorkflowNodeRunEntity recordNodeRunFinish(
       TaskOutcomeService.NodeRunFinishCommand command) {
     return taskOutcomeService.recordNodeRunFinish(command);
