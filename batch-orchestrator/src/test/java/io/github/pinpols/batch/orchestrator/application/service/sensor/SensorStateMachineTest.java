@@ -219,8 +219,15 @@ class SensorStateMachineTest {
     when(workflowRunMapper.selectByIdAnyTenant(1L)).thenReturn(wfRun);
     WorkflowNodeEntity wfNode = new WorkflowNodeEntity();
     wfNode.setNodeType("WAIT");
-    wfNode.setNodeParams("{\"sensor_type\":\"BOGUS\",\"sensor_spec\":{},\"timeout_seconds\":120,"
-        + "\"poll_interval_seconds\":30,\"on_timeout\":\"FAIL\"}");
+    wfNode.setNodeParams("""
+        {
+          "sensor_type": "BOGUS",
+          "sensor_spec": {},
+          "timeout_seconds": 120,
+          "poll_interval_seconds": 30,
+          "on_timeout": "FAIL"
+        }
+        """.stripTrailing());
     when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(7L, "wait-1")).thenReturn(wfNode);
 
     sm.probeAndAdvance(nodeRun(0, 0), NOW);
@@ -323,11 +330,15 @@ class SensorStateMachineTest {
     when(workflowRunMapper.selectByIdAnyTenant(1L)).thenReturn(wfRun);
     WorkflowNodeEntity wfNode = new WorkflowNodeEntity();
     wfNode.setNodeType("WAIT");
-    wfNode.setNodeParams("{\"sensor_type\":\"FILE_ARRIVAL\","
-        + "\"sensor_spec\":{\"pattern\":\"x-*\",\"maxAgeSeconds\":3600},"
-        + "\"timeout_seconds\":120,"
-        + "\"poll_interval_seconds\":30,"
-        + "\"on_timeout\":\"FAIL\"}");
+    wfNode.setNodeParams("""
+        {
+          "sensor_type": "FILE_ARRIVAL",
+          "sensor_spec": {"pattern": "x-*", "maxAgeSeconds": 3600},
+          "timeout_seconds": 120,
+          "poll_interval_seconds": 30,
+          "on_timeout": "FAIL"
+        }
+        """.stripTrailing());
     when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(7L, "wait-1")).thenReturn(wfNode);
   }
 

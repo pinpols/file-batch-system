@@ -79,19 +79,16 @@ class PipelineWorkerAtomicIsolationOptInArchTest {
     Map<String, Object> root = loadYaml(yml);
     Object actual = walk(root, EXPECTED_KEY_PATH);
 
-    assertThat(actual)
-        .as(
-            "[ADR-029] %s 必须在 %s 显式声明 batch.worker.atomic.isolation-check.enabled=true,"
-                + "否则 PipelineWorkerAtomicClasspathCheck(默认 opt-in)失效,"
-                + "pipeline worker 误引 batch-worker-atomic 依赖时不会 fail-fast。"
-                + "请在 application.yml 加:\n"
-                + "  batch:\n"
-                + "    worker:\n"
-                + "      atomic:\n"
-                + "        isolation-check:\n"
-                + "          enabled: true\n",
-            module, yml)
-        .isEqualTo(Boolean.TRUE);
+    assertThat(actual).as("""
+            [ADR-029] %s 必须在 %s 显式声明 batch.worker.atomic.isolation-check.enabled=true,
+            否则 PipelineWorkerAtomicClasspathCheck(默认 opt-in)失效，pipeline worker 误引
+            batch-worker-atomic 依赖时不会 fail-fast。请在 application.yml 加:
+              batch:
+                worker:
+                  atomic:
+                    isolation-check:
+                      enabled: true
+            """, module, yml).isEqualTo(Boolean.TRUE);
   }
 
   /** 按 key 路径深度优先取值;任一层不存在或非 Map 即返回 {@code null}。 */

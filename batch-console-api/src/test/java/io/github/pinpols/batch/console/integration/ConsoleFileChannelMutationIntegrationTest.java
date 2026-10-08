@@ -32,21 +32,19 @@ class ConsoleFileChannelMutationIntegrationTest extends AbstractMutationIntegrat
   }
 
   private String body(String code, String channelType) {
-    return "{"
-        + "\"tenantId\":\"int-fc-ta\","
-        + "\"channelCode\":\""
-        + code
-        + "\","
-        + "\"channelName\":\"integration test channel\","
-        + "\"channelType\":\""
-        + channelType
-        + "\","
-        + "\"targetEndpoint\":\"sftp://example.com:22/inbox\","
-        + "\"authType\":\"PASSWORD\","
-        + "\"receiptPolicy\":\"NONE\","
-        + "\"timeoutSeconds\":60,"
-        + "\"enabled\":false"
-        + "}";
+    return """
+        {
+          "tenantId": "int-fc-ta",
+          "channelCode": "%s",
+          "channelName": "integration test channel",
+          "channelType": "%s",
+          "targetEndpoint": "sftp://example.com:22/inbox",
+          "authType": "PASSWORD",
+          "receiptPolicy": "NONE",
+          "timeoutSeconds": 60,
+          "enabled": false
+        }
+        """.formatted(code, channelType).stripTrailing();
   }
 
   @Test

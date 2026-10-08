@@ -59,14 +59,14 @@ class ConsolePipelineDefinitionControllerValidationTest {
   }
 
   private String body(String jobCode) {
-    return "{"
-        + "\"tenantId\":\"ta\","
-        + "\"jobCode\":\""
-        + jobCode
-        + "\","
-        + "\"pipelineName\":\"pl\","
-        + "\"pipelineType\":\"IMPORT\""
-        + "}";
+    return """
+        {
+          "tenantId": "ta",
+          "jobCode": "%s",
+          "pipelineName": "pl",
+          "pipelineType": "IMPORT"
+        }
+        """.formatted(jobCode).stripTrailing();
   }
 
   @Test
@@ -118,10 +118,17 @@ class ConsolePipelineDefinitionControllerValidationTest {
   @DisplayName("顶层作业编码合法但嵌套步骤编码为空时, 校验下钻并拒绝请求, 不落库")
   void rejects_nested_step_with_blank_stepCode() throws Exception {
     // 顶层 jobCode 合法,但 steps[0].stepCode 为空 → @Valid 应下钻 → 400
-    String body = "{\"tenantId\":\"ta\",\"jobCode\":\"pl_ok\",\"pipelineName\":\"pl\","
-        + "\"pipelineType\":\"IMPORT\","
-        + "\"steps\":[{\"stepCode\":\"\",\"stepName\":\"s\",\"stageCode\":\"st\","
-        + "\"implCode\":\"impl\"}]}";
+    String body = """
+        {
+          "tenantId": "ta",
+          "jobCode": "pl_ok",
+          "pipelineName": "pl",
+          "pipelineType": "IMPORT",
+          "steps": [
+            {"stepCode": "", "stepName": "s", "stageCode": "st", "implCode": "impl"}
+          ]
+        }
+        """.stripTrailing();
     mockMvc
         .perform(post("/api/console/pipeline-definitions")
             .contentType(APPLICATION_JSON)
@@ -134,8 +141,14 @@ class ConsolePipelineDefinitionControllerValidationTest {
   @Test
   @DisplayName("流水线类型不在允许取值内时, 请求被校验拦截并返回参数错误")
   void rejects_invalid_pipelineType() throws Exception {
-    String body = "{\"tenantId\":\"ta\",\"jobCode\":\"pl_ok\",\"pipelineName\":\"pl\","
-        + "\"pipelineType\":\"UNKNOWN\"}";
+    String body = """
+        {
+          "tenantId": "ta",
+          "jobCode": "pl_ok",
+          "pipelineName": "pl",
+          "pipelineType": "UNKNOWN"
+        }
+        """.stripTrailing();
     mockMvc
         .perform(post("/api/console/pipeline-definitions")
             .contentType(APPLICATION_JSON)
@@ -148,10 +161,17 @@ class ConsolePipelineDefinitionControllerValidationTest {
   @DisplayName("作业编码与嵌套步骤均合法时, 请求通过校验并创建成功")
   void shouldAcceptValidRequest_whenNestedStepsProvided() throws Exception {
     when(service.create(ArgumentMatchers.any())).thenReturn(null);
-    String body = "{\"tenantId\":\"ta\",\"jobCode\":\"pl_ok\",\"pipelineName\":\"pl\","
-        + "\"pipelineType\":\"IMPORT\","
-        + "\"steps\":[{\"stepCode\":\"s1\",\"stepName\":\"step1\",\"stageCode\":\"stage1\","
-        + "\"implCode\":\"impl1\"}]}";
+    String body = """
+        {
+          "tenantId": "ta",
+          "jobCode": "pl_ok",
+          "pipelineName": "pl",
+          "pipelineType": "IMPORT",
+          "steps": [
+            {"stepCode": "s1", "stepName": "step1", "stageCode": "stage1", "implCode": "impl1"}
+          ]
+        }
+        """.stripTrailing();
     mockMvc
         .perform(post("/api/console/pipeline-definitions")
             .contentType(APPLICATION_JSON)

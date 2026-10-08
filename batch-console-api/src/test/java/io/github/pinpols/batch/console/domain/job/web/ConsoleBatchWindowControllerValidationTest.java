@@ -59,16 +59,16 @@ class ConsoleBatchWindowControllerValidationTest {
   }
 
   private String body(String windowCode) {
-    return "{"
-        + "\"tenantId\":\"ta\","
-        + "\"windowCode\":\""
-        + windowCode
-        + "\","
-        + "\"windowName\":\"win\","
-        + "\"timezone\":\"Asia/Shanghai\","
-        + "\"startTime\":\"00:00\","
-        + "\"endTime\":\"23:59\""
-        + "}";
+    return """
+        {
+          "tenantId": "ta",
+          "windowCode": "%s",
+          "windowName": "win",
+          "timezone": "Asia/Shanghai",
+          "startTime": "00:00",
+          "endTime": "23:59"
+        }
+        """.formatted(windowCode).stripTrailing();
   }
 
   @Test

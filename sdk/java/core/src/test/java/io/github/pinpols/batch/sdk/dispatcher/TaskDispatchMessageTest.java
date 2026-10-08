@@ -47,10 +47,24 @@ class TaskDispatchMessageTest {
   @DisplayName("调度上下文按契约解析出业务日期、触发类型与尝试次数")
   void shouldDeserializeSchedulingContext_whenPresent() throws Exception {
     // 平台以 int-array 下发 LocalDate(WRITE_DATES_AS_TIMESTAMPS 默认开);triggerCode/workflowRunId 平台置 null
-    String json = "{\"taskId\":42,\"tenantId\":\"tx\",\"jobCode\":\"job-1\",\"taskType\":\"tt\","
-        + "\"schedulingContext\":{\"bizDate\":[2026,6,1],\"prevBizDate\":[2026,5,29],"
-        + "\"nextBizDate\":[2026,6,2],\"isHoliday\":false,\"attemptNo\":2,"
-        + "\"triggerType\":\"SCHEDULED\",\"triggerCode\":null,\"workflowRunId\":null}}";
+    String json = """
+        {
+          "taskId": 42,
+          "tenantId": "tx",
+          "jobCode": "job-1",
+          "taskType": "tt",
+          "schedulingContext": {
+            "bizDate": [2026, 6, 1],
+            "prevBizDate": [2026, 5, 29],
+            "nextBizDate": [2026, 6, 2],
+            "isHoliday": false,
+            "attemptNo": 2,
+            "triggerType": "SCHEDULED",
+            "triggerCode": null,
+            "workflowRunId": null
+          }
+        }
+        """.stripTrailing();
     TaskDispatchMessage msg = timeAwareMapper.readValue(json, TaskDispatchMessage.class);
 
     assertThat(msg.schedulingContext()).isNotNull();

@@ -64,9 +64,16 @@ class ConsoleBatchDayControllerTest {
     mockMvc
         .perform(post("/api/console/batch-days/operate")
             .contentType(APPLICATION_JSON)
-            .content("{\"tenantId\":\"ta\",\"calendarCode\":\"default-calendar\","
-                + "\"bizDate\":\"2026-05-20\",\"action\":\"FREEZE\","
-                + "\"operatorId\":\"admin\",\"reason\":\"safety\"}"))
+            .content("""
+                {
+                  "tenantId": "ta",
+                  "calendarCode": "default-calendar",
+                  "bizDate": "2026-05-20",
+                  "action": "FREEZE",
+                  "operatorId": "admin",
+                  "reason": "safety"
+                }
+                """))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.batchDayId").value(1))
         .andExpect(jsonPath("$.data.dayStatus").value("FROZEN"));
@@ -106,10 +113,14 @@ class ConsoleBatchDayControllerTest {
       mockMvc
           .perform(post("/api/console/batch-days/operate")
               .contentType(APPLICATION_JSON)
-              .content("{\"tenantId\":\"ta\",\"calendarCode\":\"c1\","
-                  + "\"bizDate\":\"2026-05-20\",\"action\":\""
-                  + act
-                  + "\"}"))
+              .content("""
+                {
+                  "tenantId": "ta",
+                  "calendarCode": "c1",
+                  "bizDate": "2026-05-20",
+                  "action": "%s"
+                }
+                """.formatted(act)))
           .andExpect(status().isOk());
     }
   }

@@ -107,8 +107,16 @@ class ConsoleConfigSyncControllerTest {
         .perform(post("/api/console/config/sync/import")
             .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
             .contentType(APPLICATION_JSON)
-            .content("{\"tenantId\":\"ta\",\"sourceEnv\":\"dev\",\"targetEnv\":\"prod\","
-                + "\"targetTenantIds\":[\"tb\"],\"dryRun\":true,\"bundle\":{}}"))
+            .content("""
+                {
+                  "tenantId": "ta",
+                  "sourceEnv": "dev",
+                  "targetEnv": "prod",
+                  "targetTenantIds": ["tb"],
+                  "dryRun": true,
+                  "bundle": {}
+                }
+                """))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.syncLogId").value(7));
     verify(service).importBundle(any(ConfigSyncImportRequest.class));

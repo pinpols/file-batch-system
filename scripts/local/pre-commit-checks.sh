@@ -103,6 +103,10 @@ if ((${#java_files[@]} > 0)); then
     "$PYTHON_BIN" -m unittest scripts/ci/tests/test_check_java_lombok_injection.py
   gate_run PRE_COMMIT_JAVA_TEXT_BLOCK_STYLE "Java 文本块格式" \
     "$PYTHON_BIN" scripts/ci/check-java-text-block-style.py "${java_files[@]}"
+  gate_run PRE_COMMIT_JAVA_STRUCTURED_STRING_CONCAT "Java 结构化多行字符串" \
+    "$PYTHON_BIN" scripts/ci/check-java-structured-string-concat.py "${java_files[@]}"
+  gate_run PRE_COMMIT_JAVA_STRUCTURED_STRING_CONCAT_TEST "Java 结构化多行字符串门禁测试" \
+    "$PYTHON_BIN" -m unittest scripts/ci/tests/test_check_java_structured_string_concat.py
   gate_run PRE_COMMIT_JAVA_SUPPRESSION_REGISTRY "Java 抑制项注册表" \
     "$PYTHON_BIN" scripts/ci/check-java-suppression-registry.py "${java_files[@]}"
   gate_run PRE_COMMIT_JAVA_SUPPRESSION_REGISTRY_TEST "Java 抑制项注册表门禁测试" \

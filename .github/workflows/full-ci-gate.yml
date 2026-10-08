@@ -282,6 +282,14 @@ jobs:
         shell: bash
         run: bash scripts/ci/run-gate.sh FULL_JAVA_TEXT_BLOCK_STYLE "Java 文本块格式" -- python3 scripts/ci/check-java-text-block-style.py
 
+      - name: Verify structured Java multiline strings
+        shell: bash
+        run: bash scripts/ci/run-gate.sh FULL_JAVA_STRUCTURED_STRING_CONCAT "Java 结构化多行字符串" -- python3 scripts/ci/check-java-structured-string-concat.py --base-ref origin/main
+
+      - name: Test structured Java multiline string checker
+        shell: bash
+        run: bash scripts/ci/run-gate.sh FULL_JAVA_STRUCTURED_STRING_CONCAT_TEST "Java 结构化多行字符串门禁测试" -- python3 -m unittest scripts/ci/tests/test_check_java_structured_string_concat.py
+
       - name: Verify Java readability inventory
         shell: bash
         run: bash scripts/ci/run-gate.sh FULL_JAVA_READABILITY_INVENTORY "Java 可读性快照" -- python3 scripts/ci/report-java-readability-inventory.py --check docs/analysis/java-readability-inventory-2026-08-12.md

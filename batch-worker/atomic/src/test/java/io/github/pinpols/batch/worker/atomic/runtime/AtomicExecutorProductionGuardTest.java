@@ -224,6 +224,15 @@ class AtomicExecutorProductionGuardTest {
   }
 
   @Test
+  @DisplayName("开发档位存在空白名单时应记录告警并继续启动")
+  void shouldWarnAndContinue_whenDevProfileHasEmptyAllowlist() {
+    env.setActiveProfiles("dev");
+    stubAllWith(enabledSqlEmptyAllowlist(), disabledSp(), disabledHttp(), disabledShell());
+
+    newGuard().verifyProductionFailClosed();
+  }
+
+  @Test
   @DisplayName("未声明激活档位时应直接放行, 不进入生产校验分支")
   void shouldSkip_whenNoActiveProfile() {
     // 未声明 active profile 也放行

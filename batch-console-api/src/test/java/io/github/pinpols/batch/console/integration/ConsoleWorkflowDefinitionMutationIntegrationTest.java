@@ -30,30 +30,25 @@ import org.springframework.http.MediaType;
 class ConsoleWorkflowDefinitionMutationIntegrationTest extends AbstractMutationIntegrationTest {
 
   private String body(String workflowCode, String node1Code, String fromCode) {
-    return "{"
-        + "\"tenantId\":\"int-wf-ta\","
-        + "\"workflowCode\":\""
-        + workflowCode
-        + "\","
-        + "\"workflowName\":\"wf-it\","
-        + "\"workflowType\":\"DAG\","
-        + "\"enabled\":false,"
-        + "\"nodes\":["
-        + "{\"nodeCode\":\"start\",\"nodeName\":\"start\",\"nodeType\":\"START\"},"
-        + "{\"nodeCode\":\""
-        + node1Code
-        + "\",\"nodeName\":\"t1\",\"nodeType\":\"TASK\"},"
-        + "{\"nodeCode\":\"end\",\"nodeName\":\"end\",\"nodeType\":\"END\"}"
-        + "],\"edges\":["
-        + "{\"fromNodeCode\":\""
-        + fromCode
-        + "\",\"toNodeCode\":\""
-        + node1Code
-        + "\"},"
-        + "{\"fromNodeCode\":\""
-        + node1Code
-        + "\",\"toNodeCode\":\"end\"}"
-        + "]}";
+    return """
+        {
+          "tenantId": "int-wf-ta",
+          "workflowCode": "%s",
+          "workflowName": "wf-it",
+          "workflowType": "DAG",
+          "enabled": false,
+          "nodes": [
+            {"nodeCode": "start", "nodeName": "start", "nodeType": "START"},
+            {"nodeCode": "%s", "nodeName": "t1", "nodeType": "TASK"},
+            {"nodeCode": "end", "nodeName": "end", "nodeType": "END"}
+          ],
+          "edges": [
+            {"fromNodeCode": "%s", "toNodeCode": "%s"},
+            {"fromNodeCode": "%s", "toNodeCode": "end"}
+          ]
+        }
+        """.formatted(workflowCode, node1Code, fromCode, node1Code, node1Code)
+        .stripTrailing();
   }
 
   @Test

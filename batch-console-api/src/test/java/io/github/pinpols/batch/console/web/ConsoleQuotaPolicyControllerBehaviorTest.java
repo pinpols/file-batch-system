@@ -58,14 +58,14 @@ class ConsoleQuotaPolicyControllerBehaviorTest {
   }
 
   private String saveBody(String policyCode) {
-    return "{"
-        + "\"tenantId\":\"ta\","
-        + "\"policyCode\":\""
-        + policyCode
-        + "\","
-        + "\"maxRunningJobsPerTenant\":10,"
-        + "\"maxQpsPerTenant\":100"
-        + "}";
+    return """
+        {
+          "tenantId": "ta",
+          "policyCode": "%s",
+          "maxRunningJobsPerTenant": 10,
+          "maxQpsPerTenant": 100
+        }
+        """.formatted(policyCode).stripTrailing();
   }
 
   @Test

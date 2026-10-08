@@ -95,9 +95,16 @@ class ConsoleWorkflowDefinitionControllerValidationTest {
   @Test
   @DisplayName("连线起点编码含中文时, 校验下钻到连线元素并拒绝请求")
   void rejects_nested_invalid_edge_fromNodeCode() throws Exception {
-    String body = "{\"tenantId\":\"ta\",\"workflowCode\":\"wf_ok\",\"workflowName\":\"wf\","
-        + "\"workflowType\":\"DAG\",\"nodes\":[],"
-        + "\"edges\":[{\"fromNodeCode\":\"中文\",\"toNodeCode\":\"end\"}]}";
+    String body = """
+        {
+          "tenantId": "ta",
+          "workflowCode": "wf_ok",
+          "workflowName": "wf",
+          "workflowType": "DAG",
+          "nodes": [],
+          "edges": [{"fromNodeCode": "中文", "toNodeCode": "end"}]
+        }
+        """.stripTrailing();
     mockMvc
         .perform(post("/api/console/workflow-definitions")
             .contentType(APPLICATION_JSON)
@@ -110,11 +117,19 @@ class ConsoleWorkflowDefinitionControllerValidationTest {
   @DisplayName("编码与嵌套节点、连线全部合法时, 请求通过校验并创建成功")
   void shouldAcceptAllCodes_whenWorkflowFullyValid() throws Exception {
     when(service.create(ArgumentMatchers.any())).thenReturn(null);
-    String body = "{\"tenantId\":\"ta\",\"workflowCode\":\"wf_ok\",\"workflowName\":\"wf\","
-        + "\"workflowType\":\"DAG\","
-        + "\"nodes\":[{\"nodeCode\":\"start\",\"nodeType\":\"START\"},"
-        + "{\"nodeCode\":\"end\",\"nodeType\":\"END\"}],"
-        + "\"edges\":[{\"fromNodeCode\":\"start\",\"toNodeCode\":\"end\"}]}";
+    String body = """
+        {
+          "tenantId": "ta",
+          "workflowCode": "wf_ok",
+          "workflowName": "wf",
+          "workflowType": "DAG",
+          "nodes": [
+            {"nodeCode": "start", "nodeType": "START"},
+            {"nodeCode": "end", "nodeType": "END"}
+          ],
+          "edges": [{"fromNodeCode": "start", "toNodeCode": "end"}]
+        }
+        """.stripTrailing();
     mockMvc
         .perform(post("/api/console/workflow-definitions")
             .contentType(APPLICATION_JSON)
