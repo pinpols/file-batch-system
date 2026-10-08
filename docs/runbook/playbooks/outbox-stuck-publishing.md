@@ -99,7 +99,10 @@
    # republish 将指定 tenant 下 FAILED/GIVE_UP 重置为 NEW，由 OutboxForwarder 重发。
    ```
 
-2. 不要手工删除 JDBC ShedLock 行或 Redis key。锁应在租约到期后自然回收；强删可能造成仍运行的实例与另一实例并发执行。Redis 故障按 [`redis-shedlock-down.md`](redis-shedlock-down.md) 处理。
+2. 不要手工删除 JDBC ShedLock 行或 Redis key。锁应在租约到期后自然回收；强删可能造成仍运行的实例与另一实例并发执行。Redis 故障按 [`redis-shedlock-down.md`](redis-shedlock-down.md) 处理。需要核对 Redis key 时，仅执行只读扫描：
+   ```bash
+   redis-cli -h localhost -p ${REDIS_PORT:-16379} --scan --pattern '*shedlock:*:outbox_poll*'
+   ```
 
 3. 仅在确认调度进程异常且通过变更审批后，才受控重启 orchestrator；之后核对 provider 健康指标、调度周期与 outbox 状态变化。
 

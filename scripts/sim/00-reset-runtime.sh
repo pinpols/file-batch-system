@@ -22,6 +22,8 @@ SIM_STAGE_NAME="reset-runtime"
 # shellcheck source=env-common.sh
 # shellcheck disable=SC1091 # 运行时从仓库绝对路径加载。
 source "$ROOT/scripts/sim/env-common.sh"
+# shellcheck source=../lib/destructive-ops.sh
+source "$ROOT/scripts/lib/destructive-ops.sh"
 SQL_DIR="$ROOT/scripts/sim/sql"
 
 PG_PLAT_C="${PG_PLATFORM_CONTAINER:-$PG_CONTAINER}"
@@ -45,13 +47,18 @@ BIZ_TABLES="biz.customer_account, biz.transaction, biz.risk_score, biz.risk_aler
   biz.settlement_batch, biz.settlement_detail, biz.process_account_summary, biz.process_event_copy,
   biz.process_order_event, biz.process_stage4_source, biz.process_stage4_target, biz.import_stage2c_customer"
 
+batch_require_compose_container "$PG_PLAT_C" || exit $?
+if [[ "$PG_BIZ_C" != "$PG_PLAT_C" ]]; then
+  batch_require_compose_container "$PG_BIZ_C" || exit $?
+fi
+
 echo "==> reset 平台运行态(${PG_PLAT_C}/${PG_PLAT_D})"
-docker exec -i "$PG_PLAT_C" psql -U "$PG_PLAT_U" -d "$PG_PLAT_D" -v ON_ERROR_STOP=1 \
+docker exec -e PGOPTIONS='-c batch.destructive_ops=sim-reset' -i "$PG_PLAT_C" psql -U "$PG_PLAT_U" -d "$PG_PLAT_D" -v ON_ERROR_STOP=1 \
   -v reset_tables="$PLAT_TABLES" -f /dev/stdin < "$SQL_DIR/reset-platform-runtime.sql"
 plat_rc=$?
 
 echo "==> reset biz 业务数据(${PG_BIZ_C}/${PG_BIZ_D})"
-docker exec -i "$PG_BIZ_C" psql -U "$PG_BIZ_U" -d "$PG_BIZ_D" -v ON_ERROR_STOP=1 \
+docker exec -e PGOPTIONS='-c batch.destructive_ops=sim-reset' -i "$PG_BIZ_C" psql -U "$PG_BIZ_U" -d "$PG_BIZ_D" -v ON_ERROR_STOP=1 \
   -v reset_tables="$BIZ_TABLES" -f /dev/stdin < "$SQL_DIR/reset-business-runtime.sql"
 biz_rc=$?
 

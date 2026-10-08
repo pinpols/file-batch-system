@@ -1,3 +1,4 @@
+-- DANGER: 删除压测平台运行数据。仅限专用本地压测库；先核对平台库连接和 RUN_ID 筛选条件。
 BEGIN;
 
 -- 每个压测档案独立生成 run_id，并以此限定清理范围；公平性场景使用 ta/tb/tc，不能限定为默认租户。
@@ -319,3 +320,4 @@ DELETE FROM batch.file_record
 WHERE (file_code LIKE :'run_id' || '%' OR metadata_json ->> 'runId' = :'run_id');
 
 COMMIT;
+-- DANGER: 删除压测平台运行数据。仅限专用本地压测库；先核对平台库连接和 RUN_ID 筛选条件。

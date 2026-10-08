@@ -1,3 +1,4 @@
+-- DANGER: 清空平台库 Flyway 历史记录会破坏迁移状态。执行前备份库并确认只有一个应用执行 migration。
 -- 清空平台库 Flyway 历史表，便于在「库中对象已存在但 history 丢失/错乱」时由应用重新 migrate 写入正确记录。
 -- 迁移脚本大量使用 CREATE IF NOT EXISTS / 可重复 DDL，一般可与已有表共存。
 --
@@ -20,3 +21,4 @@ END;
 $$;
 
 COMMIT;
+-- DANGER: 清空 Flyway 历史版本记录会破坏迁移状态。仅限明确批准的本地恢复场景，执行前备份数据库。

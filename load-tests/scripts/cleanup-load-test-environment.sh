@@ -5,6 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LOAD_DIR="$ROOT_DIR/load-tests"
 # shellcheck source=env.sh
 source "$LOAD_DIR/scripts/env.sh"
+# shellcheck source=../../scripts/lib/destructive-ops.sh
+source "$ROOT_DIR/scripts/lib/destructive-ops.sh"
 
 APPLY=false
 DIAGNOSE=false
@@ -15,6 +17,7 @@ CLEAN_MINIO_TRASH=false
 POSTGRES_MAINTENANCE=false
 POSTGRES_RECLAIM=false
 RUN_ID_FILTER="${RUN_ID:-}"
+CONFIRM_PROJECT=""
 LOAD_BIZ_DATE="${BIZ_DATE:-2026-05-05}"
 KAFKA_CONTAINER_NAME="${KAFKA_CONTAINER_NAME:-$BATCH_DEFAULT_KAFKA_CONTAINER}"
 POSTGRES_CONTAINER_NAME="${POSTGRES_CONTAINER_NAME:-$BATCH_DEFAULT_POSTGRES_CONTAINER}"
@@ -33,6 +36,7 @@ usage() {
 选项:
   --diagnose                 输出 Docker / Kafka / MinIO / PostgreSQL 占用
   --apply                    执行已选择的清理动作
+  --confirm-project <名称>   与 --apply 一起使用，必须输入当前 Compose project 名
   --all                      执行推荐的本地压测后清理：Kafka 安全保留、MinIO 压测前缀、PostgreSQL VACUUM
   --run-id <RUN_ID>          仅用于提示和已知对象名匹配，业务表清理仍请用 cleanup-worker-load-data.sh
   --biz-date <YYYY-MM-DD>    MinIO 导出压测前缀日期，默认 2026-05-05
@@ -47,8 +51,9 @@ usage() {
 示例:
   bash load-tests/scripts/cleanup-load-test-environment.sh --diagnose
   bash load-tests/scripts/cleanup-load-test-environment.sh --apply --all
+  bash load-tests/scripts/cleanup-load-test-environment.sh --apply --confirm-project batch-platform --all
   RUN_ID=ltw-20261004094022 bash load-tests/scripts/cleanup-worker-load-data.sh
-  bash load-tests/scripts/cleanup-load-test-environment.sh --apply --kafka-reset-topics
+  bash load-tests/scripts/cleanup-load-test-environment.sh --apply --confirm-project batch-platform --kafka-reset-topics
 EOF
 }
 
@@ -66,6 +71,11 @@ while [[ "$#" -gt 0 ]]; do
       ;;
     --apply)
       APPLY=true
+      ;;
+    --confirm-project)
+      require_value "$@"
+      CONFIRM_PROJECT="$2"
+      shift
       ;;
     --all)
       CLEAN_KAFKA=true
@@ -350,9 +360,38 @@ postgres_maintenance() {
   fi
 }
 
+if [[ "$APPLY" == "true" ]]; then
+  expected_project="${COMPOSE_PROJECT_NAME:-batch-platform}"
+  if [[ "$CONFIRM_PROJECT" != "$expected_project" ]]; then
+    echo "拒绝清理:必须同时传 --confirm-project '$expected_project'。" >&2
+    exit 2
+  fi
+fi
+
 require_docker
 echo "模式: $([[ "$APPLY" == "true" ]] && echo 执行 || echo 预览)"
 echo "RUN_ID_FILTER=${RUN_ID_FILTER:-<none>} BIZ_DATE=${LOAD_BIZ_DATE}"
+
+if [[ "$APPLY" == "true" ]]; then
+  expected_project="${COMPOSE_PROJECT_NAME:-batch-platform}"
+  batch_require_local_docker_context || exit $?
+  if [[ "$CLEAN_KAFKA" == "true" ]]; then
+    batch_require_compose_container "$KAFKA_CONTAINER_NAME" "$expected_project" || exit $?
+  fi
+  if [[ "$CLEAN_MINIO" == "true" || "$CLEAN_MINIO_TRASH" == "true" ]]; then
+    batch_require_compose_container "${MINIO_CONTAINER:-$BATCH_DEFAULT_MINIO_CONTAINER}" "$expected_project" || exit $?
+    batch_require_local_host "$(python3 - "${MINIO_MC_ENDPOINT:-$BATCH_DEFAULT_MINIO_CONTAINER_ENDPOINT}" <<'PY'
+from urllib.parse import urlparse
+import sys
+print(urlparse(sys.argv[1]).hostname or "")
+PY
+)" || exit $?
+  fi
+  if [[ "$POSTGRES_MAINTENANCE" == "true" ]]; then
+    batch_require_compose_container "$POSTGRES_CONTAINER_NAME" "$expected_project" || exit $?
+    batch_require_local_host "$PGHOST" || exit $?
+  fi
+fi
 
 if [[ "$DIAGNOSE" == "true" ]]; then
   diagnose

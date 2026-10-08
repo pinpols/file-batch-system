@@ -109,6 +109,7 @@ jobs:
         run: |
           source scripts/lib/gate-result.sh
           gate_run FULL_SCRIPT_GOVERNANCE "脚本治理" python3 scripts/ci/check-script-governance.py
+          gate_run FULL_DESTRUCTIVE_OPS_GOVERNANCE "高风险操作清单" python3 scripts/ci/check-destructive-ops-governance.py
           gate_run FULL_SHELL_SCRIPTS "Shell 语法与 ShellCheck" bash scripts/ci/check-shell-scripts.sh
           gate_run FULL_SHELL_LINUX_PORTABILITY "Shell Linux 兼容性" python3 scripts/ci/check-shell-linux-portability.py
           gate_run FULL_TESTCONTAINERS_REUSE_LABEL "Testcontainers 复用标签判定" python3 scripts/ci/check-testcontainers-reuse-label.py

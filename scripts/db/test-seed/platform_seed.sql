@@ -1,3 +1,4 @@
+-- DANGER: TRUNCATE 测试种子数据涉及的表。仅限隔离测试数据库，禁止连接共享或生产环境。
 BEGIN;
 
 TRUNCATE TABLE
@@ -565,3 +566,4 @@ UPDATE batch.job_partition SET worker_group = upper(worker_group) WHERE worker_g
 UPDATE batch.pipeline_definition SET worker_group = upper(worker_group) WHERE worker_group IS NOT NULL AND worker_group <> upper(worker_group);
 
 COMMIT;
+-- DANGER: TRUNCATE 测试种子数据涉及的表。仅限隔离的测试数据库，禁止连接共享或生产环境。

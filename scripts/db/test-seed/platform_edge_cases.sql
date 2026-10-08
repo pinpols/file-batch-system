@@ -1,3 +1,4 @@
+-- DANGER: TRUNCATE 测试租户和平台夹具表。仅限隔离测试数据库，禁止连接共享或生产环境。
 BEGIN;
 
 TRUNCATE TABLE
@@ -299,3 +300,4 @@ INSERT INTO batch.alert_event (
 ON CONFLICT DO NOTHING;
 
 COMMIT;
+-- DANGER: TRUNCATE 测试租户和平台夹具表。仅限隔离的测试数据库，禁止连接共享或生产环境。

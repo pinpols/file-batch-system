@@ -1,3 +1,4 @@
+-- DANGER: 删除指定 sim 批次生成的文件记录。仅限本地 sim 库，必须提供租户、作业和 batchNo 条件。
 WITH target_files AS (
     SELECT id, tenant_id
     FROM batch.file_record
@@ -17,3 +18,4 @@ DELETE FROM batch.file_record file
 USING target_files target
 WHERE file.tenant_id = target.tenant_id
   AND file.id = target.id;
+-- DANGER: 删除指定 sim 批次生成的文件记录。仅限本地 sim 库，必须提供租户、作业和 batchNo 条件。

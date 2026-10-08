@@ -13,7 +13,8 @@
 # 用法:
 #   bash scripts/db/backup/dr-drill.sh                # 安全模式:恢复到 *_dr 旁路库,验完清掉,不动现有数据
 #   bash scripts/db/backup/dr-drill.sh --keep         # 安全模式,但保留 *_dr 库供人工查
-#   bash scripts/db/backup/dr-drill.sh --in-place --yes  # 真实演练:DROP 现有库 + 恢复(破坏性!量真 RTO)
+#   bash scripts/db/backup/dr-drill.sh --in-place --yes --confirm-databases batch_platform,batch_business
+#                                                            # 本机 Compose 库原地恢复，危险且不可逆
 #   bash scripts/db/backup/dr-drill.sh --backup-dir /mnt/bk   # 顺带把 dump 落到宿主目录留存
 #   bash scripts/db/backup/dr-drill.sh --strict-rto          # RTO 超 SLO 阈值(默认 1800s)即 fail
 #                                                            #   阈值可经 RTO_SLO_SECONDS env 覆盖
@@ -25,6 +26,8 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_DIR/../../.." && pwd)
 # shellcheck source=../../lib/env-common.sh
 source "$REPO_ROOT/scripts/lib/env-common.sh"
+# shellcheck source=../../lib/destructive-ops.sh
+source "$REPO_ROOT/scripts/lib/destructive-ops.sh"
 
 PG_CONTAINER=${PG_CONTAINER:-$BATCH_DEFAULT_POSTGRES_CONTAINER}
 PG_USER=${POSTGRES_USER:-$BATCH_DEFAULT_POSTGRES_USERNAME}
@@ -37,22 +40,31 @@ DR_SQL_DIR="$REPO_ROOT/scripts/db/backup/sql"
 MODE=safe          # safe | in-place
 KEEP=0
 CONFIRM=0
+CONFIRM_DATABASES=""
 BACKUP_DIR=""
 STRICT_RTO=0
 # RTO SLO 阈值(秒)。默认 1800 = 30min,对齐 backup-and-pitr.md §SLO 的生产 RTO≤30min 目标。
 # 本地逻辑恢复通常远快于生产真实 RTO,故默认仅 WARN;--strict-rto 时超阈值直接 fail
 # (用于 CI / staging 上对"恢复链路退化"做硬断言)。
 RTO_SLO_SECONDS=${RTO_SLO_SECONDS:-1800}
-for arg in "$@"; do
-  case "$arg" in
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
     --in-place) MODE=in-place ;;
     --keep) KEEP=1 ;;
     --yes) CONFIRM=1 ;;
     --strict-rto) STRICT_RTO=1 ;;
-    --backup-dir) shift; BACKUP_DIR="${1:-}" ;;
-    --backup-dir=*) BACKUP_DIR="${arg#*=}" ;;
-    -h|--help) sed -n '2,23p' "$0"; exit 0 ;;
+    --confirm-databases)
+      [[ -n "${2:-}" ]] || { echo "--confirm-databases 缺少值" >&2; exit 2; }
+      CONFIRM_DATABASES="$2"; shift ;;
+    --confirm-databases=*) CONFIRM_DATABASES="${1#*=}" ;;
+    --backup-dir)
+      [[ -n "${2:-}" ]] || { echo "--backup-dir 缺少值" >&2; exit 2; }
+      BACKUP_DIR="$2"; shift ;;
+    --backup-dir=*) BACKUP_DIR="${1#*=}" ;;
+    -h|--help) sed -n '2,26p' "$0"; exit 0 ;;
+    *) echo "未知参数: $1" >&2; exit 2 ;;
   esac
+  shift
 done
 
 RED=$'\e[31m'; GREEN=$'\e[32m'; YELLOW=$'\e[33m'; BLUE=$'\e[34m'; BOLD=$'\e[1m'; RESET=$'\e[0m'
@@ -74,7 +86,7 @@ q_file() {
 adm_file() {
   local sql_file="$1"
   shift
-  docker exec -e PGPASSWORD="$PG_PASSWORD" -i "$PG_CONTAINER" \
+  docker exec -e PGPASSWORD="$PG_PASSWORD" -e PGOPTIONS='-c batch.destructive_ops=dr-drill' -i "$PG_CONTAINER" \
     psql -U "$PG_USER" -d postgres -v ON_ERROR_STOP=1 -tA "$@" -f /dev/stdin \
     < "$DR_SQL_DIR/$sql_file"
 }
@@ -88,6 +100,8 @@ check() { # $1=名称 $2=期望 $3=实际
 }
 
 echo "${BOLD}== 本地灾备演练 ($MODE 模式) ==${RESET}"
+
+batch_require_compose_container "$PG_CONTAINER" || exit $?
 
 # ---- 0. 前置 ----
 if ! docker exec "$PG_CONTAINER" pg_isready -U "$PG_USER" >/dev/null 2>&1; then
@@ -130,6 +144,14 @@ if [[ "$MODE" == "in-place" ]]; then
   if [[ "$CONFIRM" != "1" ]]; then
     echo "${RED}--in-place 是破坏性操作(DROP $PLATFORM_DB/$BUSINESS_DB 后恢复)。加 --yes 确认。${RESET}"; exit 1
   fi
+  expected_databases="$PLATFORM_DB,$BUSINESS_DB"
+  if [[ "$CONFIRM_DATABASES" != "$expected_databases" ]]; then
+    echo "${RED}拒绝原地恢复:必须显式确认目标库，传 --confirm-databases '$expected_databases'。${RESET}"; exit 1
+  fi
+  case "$PLATFORM_DB,$BUSINESS_DB" in
+    *prod*|*staging*|*uat*)
+      echo "${RED}拒绝对生产/预发布命名数据库执行原地恢复。${RESET}"; exit 1 ;;
+  esac
   echo "${YELLOW}[3/5] 模拟灾难:DROP + 重建现有库(真实 RTO 演练)...${RESET}"
   TGT_PLATFORM="$PLATFORM_DB"; TGT_BUSINESS="$BUSINESS_DB"
   adm_file terminate-database-connections.sql \

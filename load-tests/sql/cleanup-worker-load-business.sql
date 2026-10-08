@@ -1,3 +1,4 @@
+-- DANGER: 删除压测业务数据。仅限专用本地压测库；先核对业务库连接和 RUN_ID/业务日期筛选条件。
 BEGIN;
 
 DELETE FROM biz.customer_account
@@ -25,3 +26,4 @@ WHERE tenant_id = 'default-tenant'
   );
 
 COMMIT;
+-- DANGER: 删除压测业务数据。仅限专用本地压测库；先核对业务库连接和 RUN_ID/业务日期筛选条件。

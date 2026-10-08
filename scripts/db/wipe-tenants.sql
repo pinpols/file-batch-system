@@ -1,3 +1,4 @@
+-- DANGER: 批量删除租户及关联数据。执行前必须核对数据库、备份和目标租户清单。
 -- =====================================================================
 -- wipe-tenants.sql
 -- 清空指定租户在 batch schema 下的全部运行态 + 配置态数据，用于前端跑一轮
@@ -134,3 +135,4 @@ UNION ALL SELECT 'outbox_event',   count(*) FROM batch.outbox_event        WHERE
 UNION ALL SELECT 'file_record',    count(*) FROM batch.file_record         WHERE tenant_id IN ('ta','tb','tc')
 UNION ALL SELECT 'worker_registry',count(*) FROM batch.worker_registry    WHERE tenant_id IN ('ta','tb','tc')
 UNION ALL SELECT 'tenant',         count(*) FROM batch.tenant              WHERE tenant_id IN ('ta','tb','tc');
+-- DANGER: 批量删除租户及关联数据。执行前必须核对数据库、备份和目标租户清单。

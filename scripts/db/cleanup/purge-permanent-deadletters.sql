@@ -1,3 +1,4 @@
+-- DANGER: 永久删除筛选命中的 DLQ 记录且不可恢复。执行前完成备份并复核租户和时间范围。
 -- 清理"永久失败"残留死信(畸形输入/坏 SQL/缺表),配合 DefaultRetryGovernanceService 把
 -- IMPORT_PARSE_FAILED / IMPORT_PARSE_EMPTY / IMPORT_LOAD_FAILED 归类为 BUSINESS(不再自动重试)。
 -- 背景:这些码原漏出 NON_RETRYABLE_ERROR_CODES → 被判 SYSTEM → 永久失败任务在 dead_letter 无限循环
@@ -8,3 +9,4 @@ DELETE FROM batch.dead_letter_task
 WHERE dead_letter_reason LIKE '%IMPORT_PARSE_FAILED%'
    OR dead_letter_reason LIKE '%IMPORT_LOAD_FAILED%'
    OR dead_letter_reason LIKE '%IMPORT_PARSE_EMPTY%';
+-- DANGER: 永久删除满足筛选条件的 DLQ 记录且不可恢复。执行前必须完成备份并复核租户/时间范围。

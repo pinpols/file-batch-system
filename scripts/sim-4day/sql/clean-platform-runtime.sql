@@ -1,3 +1,10 @@
+DO $$
+BEGIN
+  IF current_setting('batch.destructive_ops', true) IS DISTINCT FROM 'sim-4day-clean' THEN
+    RAISE EXCEPTION '拒绝清理平台运行态:需通过本地 sim-4day clean 入口显式授权';
+  END IF;
+END $$;
+
 TRUNCATE TABLE
   batch.file_record, batch.file_audit_log, batch.file_error_record,
   batch.file_dispatch_record, batch.file_channel_health,
