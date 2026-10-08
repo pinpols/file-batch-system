@@ -1,3 +1,11 @@
+DO $$
+BEGIN
+    IF current_setting('batch.destructive_ops', true) IS DISTINCT FROM 'sim-reset' THEN
+        RAISE EXCEPTION '拒绝重置平台运行态:需通过本地 sim reset 入口显式授权';
+    END IF;
+END
+$$;
+
 SET citus.multi_shard_modify_mode TO 'sequential';
 
 SELECT format('TRUNCATE TABLE %s CASCADE', to_regclass(btrim(table_name)))

@@ -5,7 +5,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/logging.sh
 source "$ROOT/scripts/lib/logging.sh"
+# shellcheck source=../lib/destructive-ops.sh
+source "$ROOT/scripts/lib/destructive-ops.sh"
 APPLY=false
+CONFIRM_ROOT=""
 RETENTION_DAYS=7
 INCLUDE_ANONYMOUS_VOLUMES=false
 INCLUDE_RUN_LOGS=false
@@ -23,6 +26,7 @@ usage() {
 
 选项:
   --apply                       执行清理
+  --confirm-root <目录名>       与 --apply 一起使用，必须输入仓库根目录名
   --retention-days <天数>       仅处理早于该天数的资源，默认 7
   --include-anonymous-volumes   同时处理无引用的 Docker 匿名卷
   --include-run-logs            同时处理 logs/runs 下的历史运行目录
@@ -35,10 +39,10 @@ usage() {
 
 示例:
   bash scripts/local/cleanup-disk.sh
-  bash scripts/local/cleanup-disk.sh --apply
-  bash scripts/local/cleanup-disk.sh --apply --all-build-cache
-  bash scripts/local/cleanup-disk.sh --apply --prune-old-image-tags
-  bash scripts/local/cleanup-disk.sh --apply --retention-days 14 --include-anonymous-volumes
+  bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system
+  bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system --all-build-cache
+  bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system --prune-old-image-tags
+  bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system --retention-days 14 --include-anonymous-volumes
 EOF
 }
 
@@ -53,6 +57,11 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --apply)
       APPLY=true
+      ;;
+    --confirm-root)
+      require_value "$@"
+      CONFIRM_ROOT="$2"
+      shift
       ;;
     --retention-days)
       require_value "$@"
@@ -101,6 +110,17 @@ case "$RETENTION_DAYS" in
 esac
 
 hours=$((RETENTION_DAYS * 24))
+
+if [ "$APPLY" = true ]; then
+  expected_root="$(basename "$ROOT")"
+  if [ "$CONFIRM_ROOT" != "$expected_root" ]; then
+    echo "拒绝删除:必须同时传 --confirm-root '$expected_root'。" >&2
+    exit 2
+  fi
+  if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+    batch_require_local_docker_context || exit $?
+  fi
+fi
 
 run_or_preview() {
   if [ "$APPLY" = true ]; then

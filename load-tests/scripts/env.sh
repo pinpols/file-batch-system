@@ -54,7 +54,7 @@ require_load_test_disk_headroom() {
   if [[ -z "$available_kib" || "$available_kib" -lt "$required_kib" ]]; then
     echo "${label} requires at least ${min_free_gib}GiB free disk; available=$((available_kib / 1024 / 1024))GiB at ${ROOT_DIR}" >&2
     echo "Run: bash load-tests/scripts/cleanup-load-test-environment.sh --diagnose" >&2
-    echo "For local-only cleanup after review: bash load-tests/scripts/cleanup-load-test-environment.sh --apply --all" >&2
+    echo "For local-only cleanup after review: bash load-tests/scripts/cleanup-load-test-environment.sh --apply --confirm-project <compose-project> --all" >&2
     return 2
   fi
 }

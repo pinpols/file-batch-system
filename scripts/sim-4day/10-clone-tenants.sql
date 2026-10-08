@@ -1,3 +1,4 @@
+-- DANGER: 替换 4-day sim 克隆租户配置数据。仅限本地 sim 平台库，执行前确认租户范围。
 -- ADR-sim 4day · P1 把 ta/tb/tc 的「活配置」克隆到 t04..t10,凑 10 租户。
 -- 仅换 tenant_id(job/template/channel/workflow code 保持不变,多租隔离天然成立),
 -- 子表 FK 走自然 code 键重映射(workflow_edge 用 node code,不需 node id 重映射)。
@@ -137,3 +138,4 @@ SELECT tenant_id,
        (SELECT count(*) FROM batch.workflow_definition w WHERE w.tenant_id=t.tenant_id) wfs
 FROM (SELECT unnest(ARRAY['ta','tb','tc','t04','t05','t06','t07','t08','t09','t10']) tenant_id) t
 ORDER BY tenant_id;
+-- DANGER: 替换 4-day sim 克隆租户配置数据。仅限本地 sim 平台库，执行前确认租户范围。

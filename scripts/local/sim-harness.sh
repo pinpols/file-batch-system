@@ -53,6 +53,8 @@ FIXTURE_DIR="${FIXTURE_DIR:-docs/test-data/test-full-coverage-import-suite}"
 SIM_LOG_DIR="$(log_run_dir "$ROOT" sim-harness sim-harness)"
 HARNESS_TMP_DIR="${HARNESS_TMP_DIR:-$SIM_LOG_DIR/tmp}"
 SIM_SQL_DIR="$ROOT/scripts/local/sql"
+# shellcheck source=../lib/destructive-ops.sh
+source "$ROOT/scripts/lib/destructive-ops.sh"
 mkdir -p "$HARNESS_TMP_DIR"
 log_link_dir "$ROOT" sim-harness "$SIM_LOG_DIR"
 
@@ -66,14 +68,22 @@ warn()   { c_ylw "  ! $*"; }
 sim_platform_sql() {
   local sql_file="$1"
   shift
-  docker exec -i "$PG" psql -X -v ON_ERROR_STOP=1 -U "$PGU" -d "$PLAT_DB" \
+  local -a docker_env_args=()
+  if [[ "$sql_file" == "reset-platform-runtime.sql" ]]; then
+    docker_env_args=(-e 'PGOPTIONS=-c batch.destructive_ops=sim-reset')
+  fi
+  docker exec "${docker_env_args[@]}" -i "$PG" psql -X -v ON_ERROR_STOP=1 -U "$PGU" -d "$PLAT_DB" \
     "$@" -f /dev/stdin < "$SIM_SQL_DIR/$sql_file"
 }
 
 sim_business_sql() {
   local sql_file="$1"
   shift
-  docker exec -i "$PG" psql -X -v ON_ERROR_STOP=1 -U "$PGU" -d "$BIZ_DB" \
+  local -a docker_env_args=()
+  if [[ "$sql_file" == "reset-business-runtime.sql" ]]; then
+    docker_env_args=(-e 'PGOPTIONS=-c batch.destructive_ops=sim-reset')
+  fi
+  docker exec "${docker_env_args[@]}" -i "$PG" psql -X -v ON_ERROR_STOP=1 -U "$PGU" -d "$BIZ_DB" \
     "$@" -f /dev/stdin < "$SIM_SQL_DIR/$sql_file"
 }
 
@@ -185,6 +195,7 @@ fixture_compat_check() {
 # ---------------------------------------------------------
 reset() {
   echo "== reset:运行态 + biz 数据回基线(保留 definition/config/tenant/user)=="
+  batch_require_compose_container "$PG" || return $?
   # 平台运行态:沿用 00-reset 的平台段(它平台段是好的;失败的是 biz 段的硬编码列表)
   set -a; . ./.env.local; set +a
   # biz 数据:动态枚举 biz 现有基表(非分区子表)TRUNCATE CASCADE,避免硬编码撞缺表

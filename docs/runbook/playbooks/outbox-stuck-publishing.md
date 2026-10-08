@@ -101,9 +101,9 @@
 2. **释放残留 ShedLock 锁**(只在确认 scheduler 不跑时):
    - Redis provider:
      ```bash
-     redis-cli -h localhost -p ${REDIS_PORT:-16379} \
-       --scan --pattern '*shedlock:*:outbox_poll*' | xargs -r redis-cli del
+     redis-cli -h localhost -p ${REDIS_PORT:-16379} --scan --pattern '*shedlock:*:outbox_poll*'
      ```
+     先人工核对 Redis endpoint、DB index、完整 key、TTL 与 owner；确认 scheduler 已停止且锁已过期后，仅对列出的精确 key 执行 `redis-cli DEL '<exact-key>'`，不要把 `SCAN` 输出直接 pipe 给 `DEL`。
    - jdbc provider:
      ```sql
      delete from batch.shedlock where name like 'outbox_poll%' and lock_until < current_timestamp;

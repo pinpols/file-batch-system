@@ -31,14 +31,20 @@ TARGET_ALIAS="poctgt${RUN_ID}"
 SOURCE_BUCKET="s3-poc-src-${RUN_ID}"
 TARGET_BUCKET="s3-poc-dst-${RUN_ID}"
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/s3-migration-poc.XXXXXX")"
+SOURCE_BUCKET_CREATED=false
+TARGET_BUCKET_CREATED=false
 
 cleanup() {
   local status=$?
   trap - EXIT
-  mc rm --recursive --force "${SOURCE_ALIAS}/${SOURCE_BUCKET}" >/dev/null 2>&1 || true
-  mc rb "${SOURCE_ALIAS}/${SOURCE_BUCKET}" >/dev/null 2>&1 || true
-  mc rm --recursive --force "${TARGET_ALIAS}/${TARGET_BUCKET}" >/dev/null 2>&1 || true
-  mc rb "${TARGET_ALIAS}/${TARGET_BUCKET}" >/dev/null 2>&1 || true
+  if [[ "$SOURCE_BUCKET_CREATED" == true ]]; then
+    mc rm --recursive --force "${SOURCE_ALIAS}/${SOURCE_BUCKET}" >/dev/null 2>&1 || true
+    mc rb "${SOURCE_ALIAS}/${SOURCE_BUCKET}" >/dev/null 2>&1 || true
+  fi
+  if [[ "$TARGET_BUCKET_CREATED" == true ]]; then
+    mc rm --recursive --force "${TARGET_ALIAS}/${TARGET_BUCKET}" >/dev/null 2>&1 || true
+    mc rb "${TARGET_ALIAS}/${TARGET_BUCKET}" >/dev/null 2>&1 || true
+  fi
   mc alias rm "$SOURCE_ALIAS" >/dev/null 2>&1 || true
   mc alias rm "$TARGET_ALIAS" >/dev/null 2>&1 || true
   rm -rf "$WORK_DIR"
@@ -49,7 +55,9 @@ trap cleanup EXIT
 mc alias set "$SOURCE_ALIAS" "$SOURCE_ENDPOINT" "$SOURCE_ACCESS_KEY" "$SOURCE_SECRET_KEY" >/dev/null
 mc alias set "$TARGET_ALIAS" "$TARGET_ENDPOINT" "$TARGET_ACCESS_KEY" "$TARGET_SECRET_KEY" >/dev/null
 mc mb "${SOURCE_ALIAS}/${SOURCE_BUCKET}" >/dev/null
+SOURCE_BUCKET_CREATED=true
 mc mb "${TARGET_ALIAS}/${TARGET_BUCKET}" >/dev/null
+TARGET_BUCKET_CREATED=true
 
 mkdir -p "$WORK_DIR/source" "$WORK_DIR/source-download" "$WORK_DIR/target-download"
 for size_kib in {1..32}; do

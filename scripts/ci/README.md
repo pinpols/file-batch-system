@@ -24,7 +24,7 @@
 | SDK 配置 | `check-sdk-config-env-parity.py`（Java/Python env 工厂和五语言 live transport 前缀）、`check-sdk-runtime-alignment.py`（仓库 Node 入口、SDK/前端声明与 CI 版本矩阵） |
 | SDK 双栈 | `run-sdk-happy-eyeballs-gate.sh`（五语言真实 loopback socket 单栈/双栈/黑洞矩阵） |
 | 文档与变更 | `check-docs-structure.py`、`check-doc-timestamp-policy.py`、`check-code-doc-references.py`、`check-terminology-doc-sync.py`、`check-changelog-sync.py`、`check-loc-snapshot.py`、`check-readiness-doc-sync.py`、`check-slo-sli-catalog.py`、`check-comment-language.py` |
-| 脚本与仓库 | `check-shell-scripts.sh`、`check-shell-linux-portability.py`、`check-script-governance.py`、`check-repository-hygiene.py`、`check-env-file-shell-safety.py`、`check-hardcoded-runtime-config.sh`、`check-utf8-encoding.py`（全仓 UTF-8 字节扫描）、`check-testcontainers-reuse-label.py`（Testcontainers 复用容器清理谓词）、`check-github-action-pinning.py`（外部 Action 固定 40 位 SHA并保留版本注释）、`check-soft-gate-governance.py`（软门禁责任与期限） |
+| 脚本与仓库 | `check-shell-scripts.sh`、`check-shell-linux-portability.py`、`check-script-governance.py`、`check-destructive-ops-governance.py`（删除类命令增量基线）、`check-repository-hygiene.py`、`check-env-file-shell-safety.py`、`check-hardcoded-runtime-config.sh`、`check-utf8-encoding.py`（全仓 UTF-8 字节扫描）、`check-testcontainers-reuse-label.py`（Testcontainers 复用容器清理谓词）、`check-github-action-pinning.py`（外部 Action 固定 40 位 SHA并保留版本注释）、`check-soft-gate-governance.py`（软门禁责任与期限） |
 | 配置与部署 | `check-config-defaults-sync.py`、`check-config-governance.py`、`check-direct-config-key-access.py`、`check-env-variable-governance.py`、`check-feature-switch-registry.py`、`check-five-worker-parity.py`、`check-keda-autoscaling.py`、`check-helm-env-sync.py`、`check-infrastructure-utf8.py`（Compose/Dockerfile/Helm/Testcontainers locale 与数据库编码）、`check-production-capacity-governance.py`、`check-production-overlay-safety.py`、`check-version-alignment.sh`、`validate-kafka-topics.sh`（全仓 topic 字面量 ↔ `BatchTopics.java`：env 模板 / `batch-defaults.yml` / helm / init 脚本 / load-tests） |
 | 数据库与 SQL | `check-biz-table-tenant-rls.py`、`check-db-comment-coverage.sh`、`check-db-scripts-safety.sh`、`check-migration-safety.sh`、`check-mybatis-generated-key-columns.py`、`check-no-positional-insert-select-star.py`、`check-postgres-client-fallback.sh`、`check-schema-governance-assets.py`、`check-sql-config-boundaries.py`、`check-sql-config-boundaries.sh`、`validate-flyway-schema.sh` |
 | API 与兼容 | `check-console-openapi-paths.py`、`check-openapi-breaking.sh` |
@@ -442,15 +442,17 @@ python3 scripts/ci/check-test-conventions.py --check-baseline \
 
 ## `check-db-scripts-safety.sh`
 
-补 `check-migration-safety.sh`(squawk 只扫 `db/migration`)的盲区:`scripts/db/**`(尤其 `business/` 不走 Flyway、`partition-migration/`)下的手工 DDL 脚本同样能跑危险变更。
+盘点维护/仿真/压测 SQL 与运行脚本中的数据库、文件、S3、Kafka、Redis/Valkey、Docker 和 Kubernetes 删除操作；命令数量新增或扩大必须先审查再更新基线。危险 SQL 还必须有头部风险声明。`ON CONFLICT` 仍提示核对幂等契约。
 
 - **WARN**(不阻断):脚本含 `ON CONFLICT` → 提示核对幂等契约是否受约束变更影响。
-- **FAIL**:脚本含关键约束级危险 DDL(改 UNIQUE/PK 列集 / `DROP TABLE` / `DROP CONSTRAINT`)**且**文件头部无禁令标记(🔴/⚠/DANGER/禁止执行/破坏性…)→ 强制要求头注释显式声明风险与前置条件。
+- **FAIL**: SQL 含 `DROP` / `TRUNCATE` / `DELETE FROM` 或关键约束变更，且头部没有风险标记(🔴/⚠/DANGER/禁止执行/破坏性…)。
 
-接入 `pr-gate.yml` 的 `static-checks` job。排除 `*-seed`。
+接入 PR Gate 的 SQL safety job；测试 seed 也纳入扫描，因为误连到错误数据库时同样会造成数据损失。
 
 ```bash
 bash scripts/ci/check-db-scripts-safety.sh
+python3 scripts/ci/check-destructive-ops-governance.py
+python3 -m unittest scripts/ci/tests/test_check_destructive_ops_governance.py
 ```
 
 ## `check-db-comment-coverage.sh`

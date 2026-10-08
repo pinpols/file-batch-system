@@ -11,6 +11,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 # shellcheck source=scripts/lib/env-common.sh
 source "$ROOT/scripts/lib/env-common.sh"
+# shellcheck source=../lib/destructive-ops.sh
+source "$ROOT/scripts/lib/destructive-ops.sh"
 MINIO_MC_HELPER="$ROOT/scripts/lib/minio-mc.sh"
 PG="$PG_CONTAINER"
 PGU="$POSTGRES_USER"
@@ -21,8 +23,22 @@ SQL_DIR="$HERE/sql"
 KAFKA="${KAFKA_CONTAINER:-$BATCH_DEFAULT_KAFKA_CONTAINER}"
 KAFKA_BOOTSTRAP="$KAFKA_CONTAINER_BOOTSTRAP"
 
-psql_plat() { docker exec -i "$PG" psql -U "$PGU" -d "$PLATFORM_DB" -v ON_ERROR_STOP=1 "$@"; }
-psql_biz()  { docker exec -i "$PG" psql -U "$PGU" -d "$BUSINESS_DB" -v ON_ERROR_STOP=1 "$@"; }
+# 本脚本会清空两个数据库的运行数据、Kafka batch.* 历史消息和整个 MinIO bucket。
+# 它只允许操作当前本机 Compose 项目管理的服务容器。
+batch_require_compose_container "$PG" || exit $?
+batch_require_compose_container "$KAFKA" || exit $?
+batch_require_compose_container "$MINIO" || exit $?
+if [[ "$KAFKA_BOOTSTRAP" != "$BATCH_DEFAULT_KAFKA_CONTAINER_BOOTSTRAP" ]]; then
+  echo "拒绝清理:Kafka bootstrap 不是本地 Compose 地址: $KAFKA_BOOTSTRAP" >&2
+  exit 2
+fi
+if [[ "${MINIO_MC_ENDPOINT:-$BATCH_DEFAULT_MINIO_CONTAINER_ENDPOINT}" != "$BATCH_DEFAULT_MINIO_CONTAINER_ENDPOINT" ]]; then
+  echo "拒绝清理:MinIO endpoint 不是本地 Compose 服务: ${MINIO_MC_ENDPOINT}" >&2
+  exit 2
+fi
+
+psql_plat() { docker exec -e PGOPTIONS='-c batch.destructive_ops=sim-4day-clean' -i "$PG" psql -U "$PGU" -d "$PLATFORM_DB" -v ON_ERROR_STOP=1 "$@"; }
+psql_biz()  { docker exec -e PGOPTIONS='-c batch.destructive_ops=sim-4day-clean' -i "$PG" psql -U "$PGU" -d "$BUSINESS_DB" -v ON_ERROR_STOP=1 "$@"; }
 
 clean_kafka_runtime() {
   echo "==> 清理 Kafka runtime topic 历史消息"

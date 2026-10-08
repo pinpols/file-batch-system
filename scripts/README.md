@@ -13,6 +13,7 @@
 - `scripts/minio/`：MinIO / S3 兼容对象存储 lifecycle 策略与下发脚本；生产 apply 必须使用专用账号和显式确认。
 - `scripts/lib/minio-mc.sh`：通过独立运行的固定版本 CLI 容器访问 MinIO；默认镜像 `bitnamilegacy/minio:2025.7.23-debian-12-r1` 已验证内置 `mc`，更换镜像时需重新确认。
 - `scripts/ci/`：CI / staging 统一回归入口和门禁脚本（说明见 [scripts/ci/README.md](ci/README.md)）
+- 高风险操作（`rm`、数据库 DROP/TRUNCATE/DELETE、Kafka topic 删除、S3 清理、Redis 键删除、Docker 资源删除）由 [高风险操作治理](../docs/runbook/high-risk-operations.md) 统一盘点；破坏性命令必须有目标确认或本地服务边界。
 - `scripts/db/`：数据库维护、种子数据、备份恢复和分区迁移演练
 - `scripts/codegen/`：OpenAPI、错误码字典和契约 fixture 等可复现代码生成
 - `scripts/dev/`：开发期诊断、演示和本机工具，不作为生产运维入口

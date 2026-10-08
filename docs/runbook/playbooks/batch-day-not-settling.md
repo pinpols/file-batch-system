@@ -123,9 +123,9 @@
      ```
    - Redis provider:
      ```bash
-     redis-cli -h localhost -p ${REDIS_PORT:-16379} \
-       --scan --pattern '*shedlock:*:batch_day_settle' | xargs -r redis-cli del
+     redis-cli -h localhost -p ${REDIS_PORT:-16379} --scan --pattern '*shedlock:*:batch_day_settle'
      ```
+     先人工核对 Redis endpoint、DB index、完整 key、TTL 与 owner；确认锁已过期后，仅对列出的精确 key 执行 `redis-cli DEL '<exact-key>'`，不要把 `SCAN` 输出直接 pipe 给 `DEL`。
 2. 重启 orchestrator:`docker compose restart batch-orchestrator`
 3. 等 60s,看 audit log 有没有新的 `BATCH_DAY_SETTLED` / `BATCH_DAY_FAILED`。
 

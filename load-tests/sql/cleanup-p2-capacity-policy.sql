@@ -1,3 +1,4 @@
+-- DANGER: 删除 P2 capacity 压测策略夹具。仅限专用本地压测库；不得连接生产或共享验收库。
 -- p2capacity 是容量画像专用的短生命周期租户。只有确认没有实例和 Trigger 请求后，
 -- 才允许回收异常中断或旧版清理顺序留下的无主运行记录。
 DELETE FROM batch.event_outbox_retry retry
@@ -69,3 +70,4 @@ WHERE tenant_id = :'capacity_tenant_id'
       FROM batch.job_instance ji
       WHERE ji.tenant_id = batch.tenant.tenant_id
   );
+-- DANGER: 删除 P2 capacity 压测策略夹具。仅限专用本地压测库；不得连接生产或共享验收库。
