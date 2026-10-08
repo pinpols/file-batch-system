@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -11,6 +12,7 @@ import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -60,6 +62,24 @@ class RemoteFilesystemNasPathTest {
     Path newDir = tempDir.resolve("newsubdir");
     Map<String, Object> config = Map.of("nas_remote_directory", newDir.toString());
     DispatchChannelProbeResult result = RemoteFilesystemDispatchSupport.probeNas(config);
+    assertThat(result.success()).isTrue();
+  }
+
+  @Test
+  @DisplayName("NAS 目录经符号链接解析时探测仍成功并经过告警分支")
+  void probeNas_symlinkDirectory_logsWarningAndSucceeds() throws Exception {
+    Path realDirectory = Files.createDirectory(tempDir.resolve("nas-real"));
+    Path symlinkDirectory = tempDir.resolve("nas-link");
+    try {
+      Files.createSymbolicLink(symlinkDirectory, realDirectory);
+    } catch (IOException | UnsupportedOperationException | SecurityException ex) {
+      assumeTrue(false, "当前文件系统不支持创建符号链接: " + ex.getClass().getSimpleName());
+      return;
+    }
+
+    Map<String, Object> config = Map.of("nas_remote_directory", symlinkDirectory.toString());
+    DispatchChannelProbeResult result = RemoteFilesystemDispatchSupport.probeNas(config);
+
     assertThat(result.success()).isTrue();
   }
 
