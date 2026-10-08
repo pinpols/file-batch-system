@@ -129,11 +129,11 @@ OutboxPollScheduler 没有在跑，`resetStalePublishing` 永远不清 0。
 # 1. 看 OutboxPoll 启动日志（应有 "OutboxPollScheduler 已启动（自适应模式）"）
 kubectl logs batch-orchestrator-0 | grep -i 'OutboxPoll'
 
-# 2. 看 ShedLock 是否被某个 Pod 永久持有
+# 2. JDBC provider 下只读查看 ShedLock 状态
 kubectl exec -it batch-postgres-0 -- psql -U batch_user -d batch_platform -c \
-  "SELECT name, lock_until, locked_at, locked_by FROM shedlock \
+  "SELECT name, lock_until, locked_at, locked_by FROM batch.shedlock \
    WHERE name LIKE 'outbox_poll%' ORDER BY lock_until DESC"
-# lock_until 远超当前时间 + lockAtMostFor=1min → 锁被 crash 的 pod 留下
+# 已过期的 lock_until 可由下一次 acquire 接管；这不证明有残留锁。
 
 # 3. 如果 lazy-init 相关（罕见）→ 看 spring.main.lazy-initialization
 kubectl exec batch-orchestrator-0 -- printenv | grep -i lazy
@@ -141,14 +141,7 @@ kubectl exec batch-orchestrator-0 -- printenv | grep -i lazy
 
 ### 动作
 
-```bash
-# 锁残留 → 手动清：
-psql ... -c "DELETE FROM shedlock WHERE name = 'outbox_poll_shard_0' \
-             AND lock_until < NOW()"
-
-# 重启 orchestrator：
-kubectl -n batch-prod rollout restart statefulset/batch-orchestrator
-```
+不要手工删除 ShedLock 锁记录或 Redis key；过期租约由 provider 回收，强删可能导致重复调度。只有核实进程故障、确认目标集群上下文并经过变更审批后，才受控重启 orchestrator。
 
 ---
 
@@ -257,21 +250,18 @@ kubectl exec batch-orchestrator-0 -- printenv | grep SHARDING
 -- 活跃锁清单
 SELECT name, lock_until, locked_at, locked_by,
        EXTRACT(EPOCH FROM (lock_until - locked_at)) AS hold_seconds
-  FROM shedlock
+  FROM batch.shedlock
  WHERE lock_until > NOW()
  ORDER BY lock_until - locked_at DESC
  LIMIT 20;
 
--- 如果 hold_seconds 显著大于该 lock 对应 @SchedulerLock(lockAtMostFor=...) 参数
--- → 说明 crashed pod 留下的残骸
+-- 对照 lockAtMostFor 与时钟状态；本查询只能用于观察 JDBC provider，不足以证明持锁进程已失效。
+-- Redis provider 下 batch.shedlock 表不代表 Redis 锁状态。
 ```
 
 ### 动作
 
-```sql
--- 确认 pod 不存在后手动清
-DELETE FROM shedlock WHERE name = '<lock_name>' AND locked_by LIKE '<dead_pod_host>%';
-```
+不要手工删除锁行或 Redis 锁 key。租约到期后由 ShedLock 自然回收；先核实 provider 和持锁实例。
 
 ---
 

@@ -6,18 +6,18 @@
 
 ## 固定契约与协议值治理（2026-10-07）
 
-本地实现与定向验收已完成，当前仅待提交授权和实际 CI 验收；不能按“全仓 S1192 清零”扩展范围或将动态 Map、SQL 业务状态集合机械统一。权威范围与状态见 [治理计划](../plans/typed-contract-enum-constant-governance-plan-2026-10-07.md)，本地证据见 [验收记录](../audit/typed-contract-governance-verification-2026-10-07.md)。未经授权不提交、推送或合并。
+本地实现与定向验收已完成；后端 PR #1160、前端 PR #284 均于 2026-10-07 合并（PR 元数据确认）。合并不单独证明 Full Gate、sim 或生产验收完成；这些验证状态以各自运行记录为准。不能按“全仓 S1192 清零”扩展范围或将动态 Map、SQL 业务状态集合机械统一。范围见 [治理计划](../plans/typed-contract-enum-constant-governance-plan-2026-10-07.md)，本地证据见 [验收记录](../audit/typed-contract-governance-verification-2026-10-07.md)。
 
 ## 部署与持续交付
 
 Compose CD、生产拓扑、硬件起步规格和 Kubernetes/GitOps 最终目标的权威待办统一维护在 [Compose CD → Kubernetes GitOps 路线](../runbook/compose-cd-roadmap.md#8-待办)。本总表只保留领域入口，避免复制 P0/P1/P2 checkbox 后产生状态漂移。
 
-> 核查日期：2026-10-07。本文只登记当前仍有效的事项；`docs/archive/` 的历史待办不计入本表。
+> 核查日期：2026-10-08。本文只登记当前仍有效的事项；历史分析和计划中的旧待办不计入本表。
 > 状态分类、证据要求和归档规则见 [`../standards/document-governance.md`](../standards/document-governance.md)。
 
 > 本文早期的统计数字和日期快照可能已过期；后续以事项表、证据路径和最后核查日期为准，不以历史总数为准。
 
-> 本轮复核结论：AI、使用率统计、维护/降级三项均已有部分基础能力，不能再按“从零未实现”处理；剩余项已在各表中拆成明确缺口。五类 Worker 的核心 Runtime/SPI 和本地 Sim 已完成，仍需区分本地证据与 staging/生产证据。最近一次本地 Sim 证据：`logs/runs/sim-harness/sim-harness-20260930-095359-e6f7b3887/sim-summary.txt`，脚本 04–28 全部通过。
+> 本轮复核结论：AI、使用率统计、维护/降级三项均已有部分基础能力，不能再按“从零未实现”处理；剩余项已在各表中拆成明确缺口。五类 Worker 的核心 Runtime/SPI 和本地 Sim 已完成，仍需区分本地证据与 staging/生产证据。最新可确认完整的本地 Sim 记录为 `logs/runs/sim-harness/sim-harness-20261007-010101-71200bccf/sim-summary.txt`，其中 04–28 阶段均通过；该记录对应历史代码基线，不代表当前代码已重跑。同日更晚的 `sim-harness-20261007-225906-490c413f1` 目录没有摘要，不能作为通过证据。
 
 ---
 
@@ -33,7 +33,7 @@ Compose CD、生产拓扑、硬件起步规格和 Kubernetes/GitOps 最终目标
 | 🟡 **暂缓** | 已明确不立即实施，并记录触发条件和复审周期 |
 | ❌ **不做** | 明确超出系统边界或收益不足，仅保留决策理由 |
 
-### 当前核查边界（2026-10-07）
+### 当前核查边界（2026-10-08）
 
 以下事项仍可从现行文档确认存在，但不能仅凭历史计划宣称“代码未完成”：
 
@@ -137,13 +137,13 @@ Compose CD、生产拓扑、硬件起步规格和 Kubernetes/GitOps 最终目标
 
 | ID | 主题 | 状态 | 验收证据 |
 |---|---|---|---|
-| **CFGKEY-1** | P1 存量收敛：`batch.*` 直接读取与高风险 / 多字段同前缀 `@Value` 提取到 `@ConfigurationProperties` | ✅ 已闭环 | §4 清单 P1 7 条 + P2 3 条全部收敛；新增 `AtomicExecutorGuardProperties`、`ConsoleInstanceIdProperties`、`ConsolePipelineProgressDirtyProperties`、`ReplicaLagMonitorProperties`、`StorageBackendProperties`、`ConsoleReadReplicaProperties`、`ReadReplicaCredentialGuard`、`StaleCompensationReconcilerProperties`、`StaleCreatedLaunchRecoveryProperties`，均已进入 config governance registry（HEAD 116 项 → 当前 133 项，以 `scripts/ci/check-config-governance.py` 输出为准）；直接 key 扫描生产命中 84 → 21（`--check-baseline` 口径：新增高风险 0 项、白名单 1 项） |
+| **CFGKEY-1** | P1 存量收敛：`batch.*` 直接读取与高风险 / 多字段同前缀 `@Value` 提取到 `@ConfigurationProperties` | ✅ 已闭环 | §4 清单 P1 7 条 + P2 3 条全部收敛；登记项及扫描数量会随代码变化，不在此复制易过期计数；以 `scripts/ci/check-config-governance.py` 和 `scripts/ci/check-direct-config-key-access.py --report` 的当前输出为准。|
 | **CFGKEY-2** | CI 报告模式：生成直接 key / `@Value` inventory，区分 `PROJECT_CONFIG`、`SECRET_CONFIG`、`SPRING_INFRA`、`JVM_SYSTEM`、`TEST_ONLY` | ✅ 已闭环 | `scripts/ci/check-direct-config-key-access.py`（`--report`/`--json`/`--write-baseline`/`--check-baseline`）已登记 `scripts/ci/README.md`，接入 Full Gate `static-checks` 报告模式并上传 `build/config-key-access.json` 产物（30 天），不阻断历史存量 |
-| **CFGKEY-3** | CI 增量拦截：只阻断新增高风险 `batch.*` 直接读取和敏感 `@Value`，历史存量走 baseline | ✅ 已闭环 | `docs/governance/direct-config-key-access-baseline.txt` 已生成；`--check-baseline` 接入 PR Gate `PR_DIRECT_CONFIG_KEY_BASELINE`（java/ci 触发）和 Full Gate `FULL_DIRECT_CONFIG_KEY_BASELINE`（main push 回退），只对相对基线新增的高风险命中失败。基线规模：存量清零 **0 项**（`docs/governance/direct-config-key-access-baseline.txt` 随本批在工作区新增、尚未提交，历史中间态无法从 git 复现；当前仅剩注释头，可直接核对） |
+| **CFGKEY-3** | CI 增量拦截：只阻断新增高风险 `batch.*` 直接读取和敏感 `@Value`，历史存量走 baseline | ✅ 已闭环 | `--check-baseline` 接入 PR Gate `PR_DIRECT_CONFIG_KEY_BASELINE`（java/ci 触发）和 Full Gate `FULL_DIRECT_CONFIG_KEY_BASELINE`（main push 回退），只对相对基线新增的高风险命中失败。当前基线文件仅含生成说明注释、没有存量条目；该文件已在 Git 跟踪，基线格式见 `docs/governance/direct-config-key-access-baseline.txt`。|
 
 本项不要求把 `local.server.port`、`java.io.tmpdir`、`user.home`、`spring.application.name` 等合理例外强行改造；否则会制造噪声和第二事实来源。
 
-存量清零：第一批收敛后基线仍剩 11 条 `batch.*` 高风险读取，已按明确授权全部提取为 `@ConfigurationProperties`，基线归零（清单见 [治理文档 §4.1](../runbook/config-key-access-governance.md)）；配置治理登记表当前 133 项（HEAD 116 项，以 `scripts/ci/check-config-governance.py` 输出为准）。基线为空意味着此后任何新增高风险 `batch.*` 读取都会被 PR Gate 直接拦下。同时脚本补上“注释不是代码”的口径（`strip_comments`），避免迁移说明里的 `@Value("${...}")` 字面量被当成命中。
+存量清零：第一批收敛后基线仍剩 11 条 `batch.*` 高风险读取，后续已提取为 `@ConfigurationProperties`，基线归零（过程见[治理文档 §4.1](../runbook/config-key-access-governance.md)）。当前门禁对相对基线新增的高风险读取执行阻断；登记数量以检查脚本输出为准，不在此维护易过期的静态计数。脚本会忽略注释，避免迁移说明中的 `@Value` 示例被误报。
 
 第二批再评估（2026-10-06 收敛）：治理文档 §4 明确保留的 4 项已全部完成，均为**去重与集中**、不新增业务配置语义、不迁移 key。
 

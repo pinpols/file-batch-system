@@ -7,7 +7,7 @@
 
 # 全项目测试覆盖矩阵（Phase 1）
 
-更新时间：2026-04-08（历史基线）；当前状态核查：2026-09-11
+更新时间：2026-04-08（历史基线）；最近一次状态核查记录：2026-09-11（非当前状态）。当前事项与验证结果以 [`../analysis/todo-master.md`](../analysis/todo-master.md) 和最新验证记录为准。
 
 ## 目标
 
@@ -35,19 +35,19 @@
 
 `batch-trigger` 现有 14 个测试文件，已覆盖请求校验、dedup 写入数据库、Quartz misfire/catch-up、调度元数据透传、启动加载和基础 DB 协作。剩余缺口主要是 trigger 专属 E2E 与多实例 Quartz 集群行为验证。
 
-### 结论 3：项目已有统一回归入口，并已落地三层 GitHub Actions workflow
+### 结论 3：项目已有统一本地回归入口；当前 GitHub Actions 分工以现行 workflow 为准
 
-仓库里现已具备 `scripts/ci/run-full-regression.sh`、`docs/testing/release-gate.md`、`.github/workflows/pr-gate.yml`、`.github/workflows/full-ci-gate.yml` 和 `.github/workflows/staging-gate.yml`。三层门禁已经成型并完成接入：PR Gate 跑受影响模块默认测试，Full CI Gate 跑仓库级默认测试 + `*IT`，Staging Gate 跑 deploy smoke + deployment verification + load smoke + 巡检。当前未完成项转为：真实 staging 集群实跑留档和 `helm upgrade --install --atomic` 失败观测。
+本历史盘点提及的 workflow 名称仍存在，但不能据此推断其职责。经 2026-10-08 对照 workflow 配置：PR Gate 是合入前门禁；Full CI Gate 在 main push、每周定时或手动触发；`staging-gate` 仅执行 GitHub-hosted 六片全量 E2E 与 Java 治理，不部署 staging、不执行负载测试或巡检。实际触发与范围见[CI 体系说明](../runbook/ci.md)。
 
-### 结论 4：压测和部署验证资产已形成最小自动化，但 staging 实跑证据仍缺
+### 结论 4：仓库包含本地可选的压测与部署验证能力；本快照不代表当前 CI 已运行这些步骤
 
-`load-tests/` 已有 3 个 Gatling Simulation，但不在根 reactor 中，容量基线表也仍是待填写状态。部署侧已落地 Helm `lint + template` 静态 smoke，以及可选 live rollout / readiness / rollback 逻辑；当前已完成门禁入口，未完成项是真实 staging 集群实跑留档和 atomic 失败观测。
+以下属于本历史盘点结果：当时记录 `load-tests/` 有 3 个 Gatling Simulation，且不在根 reactor；脚本含 Helm 静态检查和显式启用的 live rollout/readiness/rollback 路径。这些能力是否在当前环境运行以及结果如何，须分别核查脚本配置和最新验证记录；`staging-gate` 不提供这些验证。
 
 ### 结论 5：测试口径已统一到当前仓库基线
 
 本快照的历史统计口径为：**247 个测试相关文件**（146 单元 + 59 集成 + 30 E2E + 支撑类）。该数字不作为当前数量基线；当前验证结果应引用最新 `docs/verifications/` 记录和门禁产物。
 
-## 测试资产总览（历史盘点快照）
+## 测试资产总览（历史盘点快照；非当前数量）
 
 | 模块 | 真实测试资产 | 当前判断 |
 |---|---:|---|
@@ -62,7 +62,7 @@
 | `batch-e2e-tests` | 32 个测试相关文件 | 端到端骨架已成型，DeadLetterApprovalReplay E2E 已补齐 |
 | `load-tests` | 5 个文件（3 个 Gatling Simulation + 2 个支撑/配置文件） | smoke 与 CI 编译门禁已接入 |
 
-## 模块覆盖矩阵（按本快照）
+## 模块覆盖矩阵（按本快照；缺口不代表当前待办）
 
 说明：
 
@@ -82,7 +82,7 @@
 | `batch-console-api` | 查询、审批、AI 审计、DLQ、retry schedule、告警、Excel 维护、报表导出 | 有 | 有 | 部分 | 无 | 查询面覆盖不错，HTTP smoke + 权限/租户负向 + Excel 维护与报表导出已补齐 | 仍可继续补少量查询负向与异常边界 | P1 |
 | `batch-e2e-tests` | Import/Export/Dispatch 主链路、失败分支、Outbox、dedup、多租户 | 不适用 | 不适用 | 有 | 无 | 可以承担核心回归 | 仍缺部署后 smoke 场景 | P1 |
 | `load-tests` | trigger 写入、console 查询、混合基线压测 | 不适用 | 不适用 | 不适用 | 有 | smoke 与 CI 编译门禁已接入 | 仍不在 root reactor；容量基线表未填写 | P1 |
-| 部署与发布门禁 | Helm、启动脚本、巡检、自愈、升级、回滚 | 无 | 无 | 无 | 有 | 三层 workflow 已形成，部署验证已接入 | 已完成门禁接入；未完成真实 staging 实跑留档和 `--atomic` 失败观测 | P0 |
+| 部署与发布验证 | Helm、启动脚本、巡检、自愈、升级、回滚 | 无 | 无 | 无 | 有 | 历史盘点记录存在本地脚本能力 | 该表不说明当前 GitHub workflow 覆盖或 staging 执行状态 | 历史 |
 
 ## 跨模块门禁盘点（按本快照）
 
@@ -94,7 +94,7 @@
 | 部署产物 | `helm/batch-platform/`、`helm/values-prod.yaml`、`scripts/ci/run-full-regression.sh --with-deploy-smoke` | 静态 deploy smoke 已自动化，live rollout/readiness 逻辑已具备 | 仍缺真实 staging 实跑与回滚验证 |
 | 部署验证 | `scripts/ci/run-full-regression.sh --with-deployment-verification` | 升级 / 回滚执行入口已接入；本快照未附真实 staging 报告 | 真实 staging 留档和 `--atomic` 失败观测需查当前验证记录 |
 | 压测资产 | `JobLaunchSimulation`、`ConsoleQuerySimulation`、`CapacityBaselineSimulation` | 仅有脚本和空白基线表 | 仍缺实测数据和流水线接入 |
-| CI 工作流 | `.github/workflows/pr-gate.yml`、`.github/workflows/full-ci-gate.yml`、`.github/workflows/staging-gate.yml` 已存在；未发现 `.gitlab-ci.yml`、`Jenkinsfile` | 三层门禁已落地 | 下一步重点转为真实 staging 执行与回滚验证 |
+| CI 工作流 | 当时列出的 GitHub workflow 文件 | 仅保留文件存在与当时观察 | 现行触发、required 状态和职责以 `../runbook/ci.md` 及仓库 Ruleset 为准 |
 | 文档一致性 | 历史核查时统一到 156 / 76 / 27 / 42 口径 | 以本历史矩阵、`full-project-test-plan.md`、`release-gate.md` 为参考 | 该数量口径不代表当前测试资产 |
 
 ## 说明

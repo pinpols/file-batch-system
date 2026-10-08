@@ -21,7 +21,7 @@
 | 04 | [redis-usage-design.md](./redis-usage-design.md) | Redis 使用清单（quota / rate-limit / cache / pub-sub / SSE replay）| 改任何 Redis 相关代码 |
 | 05 | [logging-architecture.md](./logging-architecture.md) | 日志架构（MDC / 结构化 / Loki 分发） | 加日志埋点前 |
 | 06 | [delete-strategy.md](./delete-strategy.md) | 删除策略（job_instance / file_record / outbox archive 等）| 删数据前 |
-| 07 | [capability-assessment.md](./capability-assessment.md) | 系统能力矩阵评估 | PD 问"我们能做 X 吗" |
+| 07 | [capability-assessment.md](./capability-assessment.md) | 设计方案覆盖度评估；不代表当前实现或生产能力 | 评估方案范围；核实现状请查 todo-master、代码和验证记录 |
 | 08 | [project-structure-pom.md](./project-structure-pom.md) | 早期模块结构 / POM 设计稿（当前事实以 architecture/project-structure 为准） | 查历史设计背景 |
 | 09 | [runtime-default-parameters.md](./runtime-default-parameters.md) | 运行时默认参数基线（pool / timeout / batch size 等）| 调参前看默认值 |
 | 10 | [console-sidebar-menu-tree.md](./console-sidebar-menu-tree.md) | 控制台侧边栏菜单树 + 角色可见性 | 加 console 页面 |

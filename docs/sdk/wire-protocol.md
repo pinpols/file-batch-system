@@ -74,7 +74,7 @@ Orch 不主动 push 任何指令。所有"平台→worker"信号搭便车在两�
   "shouldDrain": true,                     // 平台要求 worker 进 DRAINING
   "desiredMaxConcurrent": 4,               // 平台动态压并发(可比 SDK 配的小)
   "pausedTaskTypes": ["http", "shell"],    // 临时屏蔽某些 type
-  "nextHeartbeatHint": "PT15S"             // 平台请求改心跳频率(SDK 暂未消费,见 §6)
+  "nextHeartbeatHint": "PT15S"             // 平台建议的心跳间隔;Java SDK 会重排下一次心跳
 }
 ```
 
@@ -106,9 +106,9 @@ SDK 收到后 `TaskDispatcher.applyPlatformDirective()`:
 | **持续 4xx 活锁** | SDK | `clientErrorFailFastThreshold` 次后 | 累计 5 次(默认)4xx 后 fail-fast |
 | **worker 心跳停更**(JVM 卡 / 网络隔离 / 容器迁移) | orch | `timeoutSeconds(90) + graceSeconds(30) = 120s` | `WorkerHeartbeatTimeoutScheduler` 每 30s 扫,`ONLINE → OFFLINE`,`DefaultWorkerSelector` 不再选中 |
 | **僵尸 worker 抓任务**(被选中后 OFFLINE) | orch | partition rebalance 触发 | partition 自动释放 → 其他 ONLINE worker 接 |
-| **单 task lease 失效**(orch 已回收) | SDK | `leaseRenewInterval`(60s) | `renew` 收 404 → log warn,handler 继续跑(报告时被 orch 拒) — 浪费算力,见 §6 短板 |
+| **单 task lease 失效**(orch 已回收) | SDK | `leaseRenewInterval`(60s) | `renew` 收 404 / 410 → 翻转本地取消信号，要求 handler 停止以避免旧租约继续执行 |
 | **Kafka in-flight 满**(SDK 处理跟不上) | SDK | 下一次 poll | `KafkaTaskConsumer.applyBackpressure()` pause assignment,Kafka 不再投,直到 in-flight 降回 |
-| **Kafka SASL 凭据错** | SDK | 第一次 poll | 当前无 fail-fast,会 retry — 见 §6 待补 |
+| **Kafka SASL 凭据错** | SDK | 第一次 poll | Java SDK 将认证异常转为 fatal 并以非零退出；其他 SDK 按各自客户端的认证异常策略实现 fail-fast |
 | **平台主动取消任务** | SDK | `leaseRenewInterval`(60s) | `cancelRequested` 经 renew 响应回来,handler 通过 `CancellationSignal` 检测 |
 | **SDK 优雅停止** | orch | `deactivate` 调用立刻 + 心跳停更回退 | DB `status → DRAINING → OFFLINE` |
 | **SDK 进程崩(SIGKILL)** | orch | 心跳停更 120s | `OFFLINE` + Kafka partition rebalance |
@@ -159,19 +159,19 @@ SDK 收到后 `TaskDispatcher.applyPlatformDirective()`:
 | orch `timeoutSeconds` | 90s | — |
 | orch `graceSeconds` | 30s | + `timeoutSeconds` 留 5-12 次漏跳容忍 |
 
-**最常见配错**:`leaseRenewInterval >= orch lease ttl`,导致任务被无故回收,handler 跑完报告却被拒。SDK 当前**无 cross-field 校验**,见 §6。
+**最常见配错**:`leaseRenewInterval >= orch lease ttl`,可能导致任务被回收。Java SDK 启动时会校验 heartbeat、lease renew 和 HTTP timeout 之间的时序关系，但 SDK 不知道服务端实际 lease TTL，无法跨服务校验该值；部署时仍须按服务端 TTL 配置并复核。运维排查见 [`troubleshooting.md`](troubleshooting.md)。
 
-## 6. 当前最大短板(对应历史深度审查 [`docs/archive/analysis/2026-06-02-sdk-atomic-fe-deep-review.md`](../archive/analysis/2026-06-02-sdk-atomic-fe-deep-review.md))
+## 6. 已知限制与持续治理项(初始清单来自历史深度审查 [`docs/archive/analysis/2026-06-02-sdk-atomic-fe-deep-review.md`](../archive/analysis/2026-06-02-sdk-atomic-fe-deep-review.md))
 
 | 短板 | 现状 | 改进进度 |
 |---|---|---|
-| Kafka SASL 凭据错时无 fail-fast,会 retry 风暴 | 待补 | TOP #1 部分(Lane A 完成 stop 超时,Kafka pause 已有,SASL fail-fast 仍缺) |
+| Kafka SASL 凭据错时 fail-fast | Java SDK 已实现 | `KafkaTaskConsumer` 捕获 Kafka `AuthenticationException` 后进入 fatal 状态并退出；以 SDK 测试和当前实现为准 |
 | cancel 信号无主动 push,延迟 60s | 设计权衡(避免反向 channel)| 不动 |
-| `nextHeartbeatHint` orch 下发但 SDK 未消费 | 待补 — SDK 接到但调度器不动态调速 | follow-up |
-| heartbeat / lease 超时阈值无 cross-field 校验 | 运维配错只能事后排查 | `troubleshooting.md` 写了排查路径,代码层无校验 |
+| `nextHeartbeatHint` 动态调节心跳 | Java SDK 已实现 | `HeartbeatScheduler` 消费 hint 并重排下一次心跳；其他 SDK 以各语言实现和 conformance 结果为准 |
+| 客户端周期与服务端 lease TTL 无法交叉校验 | 服务端 TTL 不在 SDK 配置中，无法由客户端启动校验 | SDK 会校验本地 heartbeat / lease renew / HTTP timeout 的时序关系；服务端 TTL 仍需按部署配置核对，排查见 `troubleshooting.md` |
 | worker fingerprint console 看板 | BE 端点(PR #240 Lane D)+ **FE 看板已做**(`WorkerFingerprintBoard.vue`,`/ops/worker-fingerprints`) | ✅ 完成 |
 | 租户自助「我的 Worker」页(ADR-035 P4) | BE `ConsoleMyWorkerController`(`/api/console/my-workers`)+ **FE 自助页已做**(`MyWorkers.vue`,`/workers/my-workers`) | ✅ 完成 |
-| 凭据走 parameters / descriptor 泄露 | `SensitiveDataValidator`(PR #242 Lane C)拦截 register 路径 | atomic executor 入口注入待 Lane C/B PR 合后回头补 |
+| 凭据走 parameters / descriptor 泄露 | 已有入口校验 | Orchestrator 注册 descriptor/defaults 与 Atomic shell/sql/stored-proc/http/spark 执行入口使用 `SensitiveDataValidator`；随新增执行器和敏感键规则复核覆盖范围 |
 
 ## A. 协议版本与 schemaVersion(BYO SDK 兼容矩阵)
 
@@ -260,7 +260,7 @@ on http-call(endpoint, body):
 **心跳 / lease renew 特殊豁免**:这俩是周期性 tick,单次失败可以等下一 tick 自然重试,**不必内部指数退避**(防 tick 之间累积阻塞)。
 但 **register / claim / report** 是单次性、丢了就丢任务的关键调用,**必须**走完整 retryMaxAttempts。
 
-**Kafka SASL/SCRAM 凭据错**:当前 Java SDK 仍 retry 风暴(见 §6 短板),Lane A 待补 fail-fast;**BYO SDK 推荐直接 fail-fast**(认证失败不可能靠重试恢复)。
+**Kafka SASL/SCRAM 凭据错**:Java SDK 会对 Kafka `AuthenticationException` fail-fast；其它 BYO SDK 需按所用 Kafka 客户端的错误类型实现等价处理，不能对认证失败无限重试。
 
 ## 7. 引用
 

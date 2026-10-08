@@ -20,7 +20,7 @@
   - P1-5:export 真实云 S3/OSS 专项(multipart abort/retry、checksum、真 endpoint)。
   - P1-6:dispatch/atomic 真实外部依赖故障注入(真 SFTP/NAS/OSS/HTTP 超时/断连/权限失败 + 重试/DLQ)。
   - P1-7:process 故障画像(DIRECT copy 中途 kill worker / PG 临时断开 / 恢复后 staging 核对)——本地 fault profile 已完成；真实生产拓扑仍需 staging 复验。
-  - P2-8:10 万 task 洪峰容量(当前本地不达标,需调 trigger/orchestrator 消费并发 + 接入层 backpressure 后重跑)。
+  - P2-8:10 万 task 峰值负载容量（当时本地测试未达标，计划调整 trigger/orchestrator 消费并发与接入层 backpressure 后复测）。
   - P2-9:多租户公平性(需 tenant-aware outbox 选择 / launch 消费分区并发 / quota fair-share)。
 - **验证基础设施 r3 系列**(来源:`plans/r3-1`…`r3-4`)
   - r3-1:Chaos/Toxiproxy 集成测试框架已落地，覆盖 Kafka 延迟、Redis down、PG 连接重置。

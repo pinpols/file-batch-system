@@ -1,6 +1,6 @@
 # outbox_event 卡 PUBLISHING 不进 PUBLISHED
 
-> 优先级 P1 · 最后核对版本:2026-05 · 配套 chaos IT:仓内有 stale 回收和 Kafka 故障路径测试，真实长时间故障仍需 staging 演练
+> 优先级 P1 · 最后复核：2026-10-08（代码/文档核对；未执行生产故障演练）· 配套 chaos IT:仓内有 stale 回收和 Kafka 故障路径测试，真实长时间故障仍需 staging 演练
 
 ## TL;DR
 
@@ -87,53 +87,28 @@
 
 ### 方案 B:手动触发 reset(5 min)
 
-适用:scheduler 没在跑(ShedLock 锁残留)或 stale 阈值过大。
+适用:stale 回收持续未运行或阈值经配置核查确实过大；仅凭无日志不能认定是 ShedLock 锁残留。
 
-1. **stale 行(卡 PUBLISHING)无独立手动接口**:回收只由调度自动调 `OutboxEventMapper.resetStalePublishing` 完成。若怀疑 scheduler 没在跑(ShedLock 锁残留),走第 2、3 步释放锁 / 重启即可恢复自动回收。**对已转 `FAILED`/`GIVE_UP` 的行**,走 orchestrator 治理接口重投(docs/agent-baseline.md 红线:console-api / 运维**不能**直接 `UPDATE batch.outbox_event`):
+1. **stale 行(卡 PUBLISHING)无独立手动接口**:回收只由调度自动调 `OutboxEventMapper.resetStalePublishing` 完成。先核实调度、provider 和实例健康，不要手工删除 ShedLock。**对已转 `FAILED`/`GIVE_UP` 的行**,走 orchestrator 治理接口重投(docs/agent-baseline.md 红线:console-api / 运维**不能**直接 `UPDATE batch.outbox_event`):
    ```bash
-   curl -X POST http://localhost:18082/internal/outbox/republish \
+   curl -X POST "http://localhost:18082/internal/outbox/republish?tenantId=${TENANT_ID}&dryRun=true" \
      -H "X-Internal-Secret: ${INTERNAL_SECRET}" \
      -H "Content-Type: application/json" \
-     -d '{"tenantId": "<tenant>", "dryRun": false}'
-   # OutboxOpsController 仅暴露 /cleanup 与 /republish 两个接口;republish 把 FAILED/GIVE_UP reset 为 NEW 由 OutboxForwarder 重发
+     -d '{"ids": [12345], "operatorId": "<operator>", "reason": "<incident-or-ticket>"}'
+   # dryRun=true 只返回符合条件的候选数，不改变状态。确认 tenant、event IDs 和审批后，再将 dryRun 改为 false 执行。
+   # republish 将指定 tenant 下 FAILED/GIVE_UP 重置为 NEW，由 OutboxForwarder 重发。
    ```
 
-2. **释放残留 ShedLock 锁**(只在确认 scheduler 不跑时):
-   - Redis provider:
-     ```bash
-     redis-cli -h localhost -p ${REDIS_PORT:-16379} --scan --pattern '*shedlock:*:outbox_poll*'
-     ```
-     先人工核对 Redis endpoint、DB index、完整 key、TTL 与 owner；确认 scheduler 已停止且锁已过期后，仅对列出的精确 key 执行 `redis-cli DEL '<exact-key>'`，不要把 `SCAN` 输出直接 pipe 给 `DEL`。
-   - jdbc provider:
-     ```sql
-     delete from batch.shedlock where name like 'outbox_poll%' and lock_until < current_timestamp;
-     ```
-   - **不要**删未过期的锁(可能有 instance 正在持有)。
-
-3. **重启 orchestrator** 让 scheduler 重新调度(若上一步仍不见 `Outbox 轮询` 日志):
+2. 不要手工删除 JDBC ShedLock 行或 Redis key。锁应在租约到期后自然回收；强删可能造成仍运行的实例与另一实例并发执行。Redis 故障按 [`redis-shedlock-down.md`](redis-shedlock-down.md) 处理。需要核对 Redis key 时，仅执行只读扫描：
    ```bash
-   docker compose restart batch-orchestrator
+   redis-cli -h localhost -p ${REDIS_PORT:-16379} --scan --pattern '*shedlock:*:outbox_poll*'
    ```
 
-### 方案 C:最后手段(破坏性操作)— 直接改 DB(只在生产严重事故 + 上述均失败)
+3. 仅在确认调度进程异常且通过变更审批后，才受控重启 orchestrator；之后核对 provider 健康指标、调度周期与 outbox 状态变化。
 
-**违反 docs/agent-baseline.md 红线**,只在 P0 事故 + 走过 incident commander approval 时使用。事后必须补 post-mortem 说明为什么治理接口不行。
+### 方案 C:自动回收仍不收敛
 
-```sql
-begin;
-update batch.outbox_event
-   set publish_status = 'FAILED',
-       next_publish_at = current_timestamp,
-       updated_at = current_timestamp
- where publish_status = 'PUBLISHING'
-   and updated_at < current_timestamp - interval '60 seconds';
--- 检查影响行数,合理才 commit
-commit;
-```
-
-事后必须:
-- 在 `outbox_event` 上手动写一行 audit 记录到 `job_execution_log`(`log_type='AUDIT'`)
-- post-mortem 标注 "绕过治理接口" + 跟 ADR-021 责任划分对齐
+不要直接修改 `batch.outbox_event` 或手工伪造审计记录。保留 `tenant_id`、event key、状态时间线、scheduler 日志与 Kafka 结果，升级到 incident commander 和后端维护者；先确认锁、租约与事务是否仍被活实例持有，再决定是否开发经审计的治理接口或修复路径。生产数据修复须单独审批、备份并记录可回滚方案。
 
 ---
 

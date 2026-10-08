@@ -10,21 +10,23 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 
 项目有两条主要代码门禁流程（PR Gate、main Full CI Gate），另有补充验证与失败处理自动化。补充流程不替代代码合并门禁：
 
-| 工作流 | 分类 | 触发时机 | 目标 | 超时 |
+| 工作流 / job | 分类 | 触发时机 | 实际职责 | 超时 |
 |---|---|---|---|---|
-| `pr-gate` | PR 代码门禁 | PR → main(opened / synchronize / reopened / ready_for_review,非草稿) | 快速反馈，阻断不合格 PR | 45 min |
-| `sdk-contract-parity` | SDK 契约门禁 | PR、merge queue、每日 16:00 UTC、手动 | 五语言 fixture、共享常量和 conformance 契约 | — |
-| `full-ci-gate` | main 全量门禁 | push main、每周日 02:00 UTC、手动 | 主干质量基线 + 安全扫描(含 K8s manifest Checkov) | 75 min |
-| `staging-gate` | 补充 E2E 验证 | nightly(每天 18:00 UTC / 北京 02:00)+ workflow_dispatch | 全量 E2E(smoke + critical + regression 全跑,6 shard 并发)；Java 架构/约定守卫独立并发，不替代 `full-ci-gate` | — |
-| `daily-sim-strict-validation` | 补充真实数据验证 | nightly(每天 13:31 UTC / 北京 21:31)+ workflow_dispatch | 定时触发按最近一次计划时间对应的北京时间日期检查代码/配置变更，延迟跨午夜仍归属原计划日；手动触发按当前北京时间日期。Markdown/RST、`LICENSE`、`NOTICE` 除外。需要验证时同环境执行 `sim-harness all` 的 04-28 全阶段且不允许 SKIP；harness 为文件束与 batch-claim 临时切换 Worker 配置并负责恢复。SIM 限时 180 min，随后静默调度（限时 5 min）并执行 BE-ACC step 5(strict real-data verification，限时 20 min)；strict 使用 `always()`，仅要求环境启动成功，不因 SIM 失败或步骤超时短路。摘要分别记录两项结果；主动取消、Runner 丢失或环境启动失败按未执行处理，不算通过。任一验证失败都阻断镜像构建；PR / Full 自测保护这一顺序与失败传播契约 | 240 min |
+| `pr-gate` | PR 合入门禁 | PR → main（opened / synchronize / reopened / ready_for_review，非草稿）、`merge_group`、手动 | 按变更范围执行静态检查和测试分片 | 各 job 单独设置，不设统一 workflow 超时 |
+| `sdk-contract-parity` | SDK 契约门禁 | PR、`merge_group`、每日 16:00 UTC、手动 | 五语言共享契约验证；`sdk-contract-required` 聚合结果是稳定门禁，真实 Orchestrator 传输验证不属于该 required 聚合 | 各 job 单独设置 |
+| `full-ci-gate` | main 全量回归 | main push、每周日 02:00 UTC、手动 | 主干静态检查、单元/集成测试、E2E 和安全检查；定时/手动还运行测试质量分析 | 各 job 单独设置，不设统一 workflow 超时 |
+| `staging-gate` | 定时/手动 E2E 回归 | 每天 18:00 UTC（北京次日 02:00）、手动 | GitHub-hosted runner 上的六片全量 E2E 与 Java 治理检查；不部署到 staging 集群，也不运行部署验证、负载测试或巡检 | 各 job 单独设置 |
+| `daily-sim-strict-validation` | 定时真实数据验证 | 每天 13:31 UTC（北京 21:31）、手动（`force=true` 可强制执行） | 检测当日代码/配置变化后运行 `sim-harness all` 和 BE-ACC strict；纯 Markdown/RST、`LICENSE`、`NOTICE` 不触发当天验证。手动运行按当前北京时间日期判断；定时运行使用计划触发时间所属日期。SIM 失败不跳过 strict，但启动失败/取消/runner 丢失不算通过。只有两项成功才构建 nightly 镜像 | 验证 job 240 min；内部步骤分别设限 |
 | `docker-image-build` | nightly / 可选发布镜像构建 | 由 `daily-sim-strict-validation` 在当天有代码/配置变更且 sim + strict 成功后调用；也支持手动和复用调用 | 默认只用 Docker Bake 构建全部应用镜像和运维工具箱镜像；显式 `publish=true` 时登录 GHCR、推送 SHA 镜像并上传含 immutable digest 的 backend image set。CI 使用 Maven Central 配置并带依赖下载重试 | 30 min |
 | `OpenSSF Scorecard` | 供应链治理报告 | push main、每周三、手动 | 生成 SARIF 并上传 Code Scanning；不按总分阻断 PR | 20 min |
 | `quarterly-dependency-review` | 依赖集中治理盘点 | 每季度首日、手动 | 生成多生态 artifact 与 Actions Summary；不创建 Issue/PR | 25 min |
-| `main-failure-triage` | 失败处理自动化 | main 的 `full-ci-gate` 核心 job 失败 | 自动标记关联 PR 并评论处理要求；无关联 PR 时创建 issue | — |
+| `main-failure-triage`（job） | 失败处理自动化 | `full-ci-gate` 核心 job 失败 | 自动标记关联 PR 并评论处理要求；无关联 PR 时创建 issue | job 级 |
 
 > **2026-05-23 删除 `capacity-gate` / `promote-staging`**:`capacity-gate` 目标是 `*.svc.cluster.local`(k8s 集群内 DNS),GitHub-hosted runner 永远连不上 → 100% Connection refused;`promote-staging` 要写 `pinpols/file-batch-system-ops` 但仓 / PAT 都没在用,等同 dead code。Checkov K8s manifest 静态扫已迁到 `full-ci-gate`。若未来要恢复真·生产环境验证 / 容量回归 / ops 仓同步,改用 self-hosted runner 部署到集群内,或 staging 暴露公网 ingress + 配 PAT。
 >
-> `staging-gate` **仍存在**:作为 nightly schedule / staging 分支的全量 E2E 回退闸门(见上表与 `e2e-tier-strategy.md`)。
+> `staging-gate` 仍存在，但当前仅由定时和手动事件触发；名称不代表它会部署到 staging 集群。其职责是 GitHub-hosted runner 上的全量 E2E 与 Java 治理检查。
+
+其他独立工作流：`codeql.yml` 在 PR、main push 和每周定时运行（当前未配置手动触发）；`sdk-orchestrator-e2e.yml` 每日定时/手动执行五语言真实 Orchestrator E2E（非 required）；`workflow-lint.yml` 检查 workflow/action 文件变更；`license-review.yml` 检查依赖许可变更；`strict-verify.yml` 提供手动严格校验及 PR dry-run；`sonar-gate.yml` 默认关闭，只有仓库变量 `SONAR_GATE_ENABLED=true` 时执行；`fuzzing.yml` 按其 workflow 配置单独运行。以上工作流是否 required 以仓库 Ruleset 当前配置为准，不由 workflow 文件名推断。
 
 ## CI 依赖与安全扫描版本基线
 
@@ -396,18 +398,17 @@ make ops-compensate     # 触发补偿
 
 ---
 
-## 依赖自动更新（Renovate）
+## 依赖更新配置
 
-配置文件：`.github/renovate.json`
+仓库同时保留 `.github/renovate.json` 与 `.github/dependabot.yml` 配置。配置文件存在不等于对应 GitHub App 已启用；实际 PR 行为还取决于组织/仓库安装状态。
 
-| 类型 | 策略 |
+| 配置 | 声明的行为 |
 |---|---|
-| Maven patch 版本 | 自动合并 |
-| Maven minor / major 版本 | 开 PR，人工审核 |
-| GitHub Actions | 自动合并 |
-| Spring Boot 父 pom | 单独 PR，指派 `idengzhao` 审核 |
+| Renovate (`.github/renovate.json`) | Maven patch 与 GitHub Actions 规则声明 automerge；Maven minor/major 不自动合并；Spring Boot 父 POM 不自动合并并配置 reviewer |
+| Dependabot (`.github/dependabot.yml`) | Maven、GitHub Actions、Docker 更新周期为季度，版本 PR 数上限为 0；安全更新由仓库级设置控制 |
+| `quarterly-dependency-review` | 生成依赖盘点 artifact 与 Actions Summary，不自动创建 PR |
 
-更新窗口：每周一 09:00 前。
+不得仅凭配置推断 Renovate App 正在运行或 PR 会自动合并；执行状态应通过最近一次 bot PR/run 和仓库 App 设置确认。季度依赖盘点的操作步骤见[季度依赖集中治理](./quarterly-dependency-governance.md)。
 
 ---
 
@@ -435,8 +436,7 @@ make ops-compensate     # 触发补偿
   `static-checks`、`unit-it-a`、`unit-it-b1`、`unit-it-b2`、`security-scan`、
   `sdk-contract-required`。后者聚合 `validate fixtures` 和五语言契约矩阵，避免矩阵
   版本名漂移导致 Ruleset required context 失效。否则 `--auto` 可能在部分契约检查完成前合并。
-- `strict_required_status_checks_policy=true`，并启用 main 的 merge queue，避免多个 PR
-  分别通过后合并结果失真。
+- required contexts 必须与当前 Ruleset 完全一致；merge queue 目前是可选协作策略，只有 Ruleset 实际启用后，才要求相关 workflow 的 `merge_group` 触发覆盖完整。
 
 ---
 

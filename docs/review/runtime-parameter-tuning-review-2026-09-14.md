@@ -151,7 +151,7 @@ RF=3 和故障条件下比较后再改。
 | Kafka | 最终 lag=0，零重启 |
 | 清理 | run-scoped 关键表无残留 |
 
-该结果证明可接收 200 requests/s 洪峰并以约 152 tasks/s 排空，不代表能持续完成 200 tasks/s。
+该结果证明本次测试可接收 200 requests/s 的突发负载并以约 152 tasks/s 排空，不代表能持续完成 200 tasks/s。
 主要约束是 Orchestrator 控制面事务与 PostgreSQL WAL/提交；Kafka、Atomic 执行和 HTTP Service 入口
 不是该轮主瓶颈。双 Orchestrator task-control 直连曾降至 96.494/s，说明增加写入入口可能放大共享
 PG 竞争，不能把多实例数量直接换算为吞吐。

@@ -1,5 +1,7 @@
 # SDK Roadmap H2-2026 — 进度记录
 
+> **历史进度日志**：以下日期条目记录发生时的进展，包含当时尚未 push/merge 的状态；这些状态不是当前交付状态。当前 SDK 契约、发布与剩余工作分别以 [`docs/sdk/README.md`](../sdk/README.md)、[`docs/runbook/sdk-release.md`](../runbook/sdk-release.md) 和 [`todo-master.md`](../analysis/todo-master.md) 为准。
+
 > 日期倒序。每个 phase 收官后追加 5 行 retro:实际 vs plan diff + 经验。
 > 维护规则参见主 plan §1 决策 #隐-1。
 

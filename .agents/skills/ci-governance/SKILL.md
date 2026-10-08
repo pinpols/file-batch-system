@@ -26,6 +26,13 @@ description: 审查或修改 GitHub Actions、PR gate、full-ci-gate、merge que
 - PR 描述或收尾报告中分别列出本地预检、PR required checks、full gate、sim/staging 的状态。
 - 新增或更名门禁时同步 `docs/runbook/ci.md`、本地钩子说明和 required checks 文档。
 
+## 失败诊断与门禁演进
+
+- 门禁失败时先保留失败命令、首个有效错误和 revision，判断是产品代码/测试缺陷、环境或依赖故障、门禁本身误报；不能用重复运行或清理失败记录代替诊断。
+- 代码或测试缺陷应修复根因；修后先重跑失败门禁，再跑受影响的完整验证域。环境故障说明影响并恢复环境后重测，不能标为代码通过。
+- 只有最小复现证明误报、错误范围或过期契约时才改门禁。新增/修改规则应验证正例与反例、增量与全量路径及相关 workflow；对增量规则确认未变更违规不会误报、变更新增违规会被拦截。
+- 不以扩大豁免、全局 suppress、降低 required 状态或弱化断言来消除红灯。确需例外时限定文件/规则/期限与理由，并遵循项目登记流程。
+
 ## 常见收口
 
 - Dependabot 或 bot PR 策略变化要同时检查 `.github/dependabot.yml`、自动合并 workflow、ruleset 与安全扫描门禁。

@@ -1,6 +1,6 @@
 # PostgreSQL 备份 / PITR / 容量护栏 Runbook
 
-> 2026-06-10 审计 P1-7 补。补上 `playbooks/pg-primary-failover.md` 第 §方案C 留的 TODO(「本仓未集成 PITR — TODO ops 团队补」)。
+> 本文包含备份/PITR 设计目标与仓库脚本入口，不证明生产备份拓扑已经部署或通过演练。2026-10-08 复核：仓库提供 `pg-backup.sh` 和逻辑恢复演练 `dr-drill.sh`；Compose 默认关闭 WAL 归档，`dr-drill.sh` 不验证 PITR。生产状态必须由目标环境配置及真实恢复报告证明。
 >
 > **核心区分:复制 ≠ 备份。** 流复制 standby(`docker compose --profile replica`)是**高可用**——主库异常退出切从库;但**误删 / 坏 migration / 逻辑损坏会同步到从库**,无法回到任意时间点。本 runbook 解决的是后者:可恢复到事故前任意时刻。
 
@@ -24,9 +24,9 @@
 
 | 层 | 工具 | 频率 | 作用 | RPO |
 |---|---|---|---|---|
-| **A. 物理基准备份** | `pg_basebackup` | 每日 | PITR 的起点(base + 之后的 WAL = 任意时间点) | — |
-| **B. WAL 连续归档** | `archive_command` → 对象存储/NFS | 实时(WAL 写满即归档) | base 之后的增量,支撑 PITR | ≤ 1 个 WAL 段(默认 16MB)/ `archive_timeout` |
-| **C. 逻辑导出** | `pg_dump -Fc`(两库各一份) | 每日 | 跨大版本恢复 / 单表恢复 / 离线归档 | 24h |
+| **A. 物理基准备份** | `pg_basebackup` | 建议每日，频率由恢复策略确定 | PITR 起点；需与同一时间线的 WAL 配套 | 未部署/演练前不作承诺 |
+| **B. WAL 连续归档** | `archive_command` → 独立故障域 | 持续 | base 之后的 WAL，用于 PITR | 由实际归档延迟和缺口决定；`archive_timeout` 不是 RPO 保证 |
+| **C. 逻辑导出** | `pg_dump -Fc`(两库各一份) | 建议每日，频率由恢复策略确定 | 跨大版本恢复 / 单表恢复 / 离线归档 | 取决于最近一次成功且可恢复的备份 |
 
 **为什么三层都要**:物理备份(A+B)恢复快、支持 PITR,但绑定 PG 大版本、不能只恢一张表;逻辑备份(C)慢但跨版本、可单表/单库粒度恢复、可校验。生产事故里两种都会用到。
 
@@ -94,14 +94,14 @@ WAL 归档是 `archive_command` 实时触发的,不进 cron。
 
 容灾不是"有备份"就行,得有**可度量的恢复目标**,否则无法判断备份策略是否达标、演练是否退化。
 
-| 指标 | 定义 | **SLO 目标** | 依据 / 由什么保证 |
+| 指标 | 定义 | **候选目标** | 依据 / 当前证据 |
 |---|---|---|---|
-| **RPO**(可容忍数据丢失) | 灾难时点 → 最近可恢复点 的时间差 | **≤ 5 min** | WAL 连续归档 `archive_timeout=300`(§1.1)封顶:低峰也每 5min 切一个 WAL 段归档,故最坏丢 5min。逻辑 dump(C 层)RPO=24h,仅作跨版本/单表回退,不是主 RPO。 |
-| **RTO**(恢复耗时) | 开始恢复 → 应用可服务 的耗时 | **≤ 30 min** | 单实例两库:base 解包 + WAL replay 到目标点 + 应用拉起健康。`pg_restore -j4` 并行 + base streamed(`-Xs`)。`dr-drill.sh` 实测本地逻辑恢复远小于此(秒级),生产真实 RTO 受 dump 体积/网络/盘速影响,30min 是含人工介入的保守上限。 |
+| **RPO**(可容忍数据丢失) | 灾难时点 → 最近可恢复点的时间差 | **≤ 5 min（待目标环境验证）** | 仅当生产已持续归档 WAL、归档目标独立且可读、监控无缺口，并完成指定时间点恢复演练后才能确认。`archive_timeout=300` 只控制 WAL 切换，不保证归档成功或 RPO。 |
+| **RTO**(恢复耗时) | 开始恢复 → 应用可服务的耗时 | **≤ 30 min（待目标环境验证）** | 本地 `dr-drill.sh` 是逻辑备份旁路库恢复，不含生产数据量、WAL replay、网络/存储和服务恢复，不能作为生产 RTO 实测。 |
 
-**SLO 选值依据**:本系统是批量控制面,非 7×24 在线交易;主链 `DB→Outbox→Kafka→CLAIM→EXECUTE→REPORT` 在恢复后靠 lease 超时重派 + outbox republish **自愈收敛**(见 `ha-readiness.md` P0-5),允许分钟级恢复窗口,无需亚分钟 RTO/RPO(那需要同步多副本 + 自动 failover,成本与收益不匹配)。若未来 SLA 收紧:RPO 靠缩短 `archive_timeout` + 流复制 standby 同步提交;RTO 靠 Patroni 自动 failover(P0-2)+ 预热待命实例。
+**目标选择不等于 SLO 承诺**：批量控制面可由业务方确定分钟级恢复目标，但恢复后 outbox/lease 的收敛不能替代数据库备份，也不能证明目标可达。缩短 `archive_timeout` 本身不会保证 RPO；需要独立故障域 WAL 归档、失败告警、可用 base backup 和时间点恢复演练。自动 failover 解决可用性，不替代 PITR。
 
-**达标守护**:`dr-drill.sh` 演练对实测 RTO 做阈值断言(默认 `RTO_SLO_SECONDS=1800`=30min;`--strict-rto` 时超阈值直接 fail,否则 WARN)。把 SLO 从"文档数字"变成"演练里会红的断言",防恢复链路悄悄退化(dump 膨胀、并行度丢失)。
+**本地演练守护**:`dr-drill.sh` 可对逻辑恢复耗时做阈值断言(默认 `RTO_SLO_SECONDS=1800`;`--strict-rto` 时超阈值失败)。这只保护该脚本所覆盖的本地逻辑恢复路径，不等价于生产 RTO，也不验证 PITR/WAL 连续性。真实目标达标需由生产同构 staging 演练单独证明。
 
 ---
 

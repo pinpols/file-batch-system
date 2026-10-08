@@ -1,5 +1,7 @@
 # 批量日、时区与冬夏令时优化设计
 
+> 本文包含 2026-05 的实施状态与验收快照，以及后续补充的设计说明。第 4、4.1、13、14.3 节的状态只代表各自标注的历史核查时点，不是当前能力矩阵或待办；当前后端实现以对应 ADR/源码为准，当前事项以 [`../analysis/todo-master.md`](../analysis/todo-master.md) 为准。后续更新状态时必须标注核查日期与证据层级。
+
 ## 1. 设计定位
 
 本文基于以下三份设计材料和当前系统实现做收敛：
@@ -129,9 +131,9 @@ timezone_snapshot
 
 `cutoff_at` 和 `sla_deadline_at` 应在创建时按 `timezone_snapshot` 计算并写入数据库，避免后续日历配置变化导致历史解释漂移。
 
-## 4. 当前能力缺口复核
+## 4. 能力缺口历史快照（2026-05-06）
 
-本节按 [`batch-day-capability-design.md`](./batch-day-capability-design.md) 的能力项，对照当前 DDL / 代码后重新标注（已合并 2026-05-05 落地）。状态含义：
+本节按 [`batch-day-capability-design.md`](./batch-day-capability-design.md) 的能力项，对照 2026-05-06 当时的 DDL / 代码重新标注。表中的“当前”“主要缺口”均指该核查时点；后续代码和决策已改变部分结论，不能作为今天的能力清单。状态含义：
 
 ```text
 已具备：当前主链路已有表、服务、API 或调度器支撑；
@@ -139,7 +141,7 @@ timezone_snapshot
 未具备：目前主要停留在设计态，未形成可用运行能力。
 ```
 
-「主要缺口」列已对齐当前后端实现：
+当时的「主要缺口」列按当时后端实现标注：
 - 后端尾巴显式标注，关联到 §14.3 优先级；
 - 非后端（Console 视图 / REST API / 审批 UI）显式标 "(非后端)"，跟踪入口在 §4.1 / §14.3。
 
@@ -173,7 +175,7 @@ timezone_snapshot
 | 观测与审计 | 已具备 | 批量日查询、窗口查询、audit log；V105 `batch_day_operation_audit` 独立表沉淀治理动作；alert event 流覆盖 gate / late-arrival 决策 | Console 操作历史 UI 接入（非后端） |
 | 权限与审批 | 部分具备 | console 鉴权、审批命令基础 | `batch_day.skip / freeze / release / reopen / close` 权限点和审批流（API + 后端校验） |
 
-结论（2026-05-06 更新）：
+历史结论（2026-05-06）：
 
 ```text
 "批量日驱动"主链后端能力已全闭合：主动打开、前日门闩(含 FROZEN→REJECT、SAME_JOB / SAME_JOB_GROUP 真正区分)、
@@ -187,7 +189,9 @@ trigger 本地计划审计、SLA escalation + alert event 流、import scanner b
 - Console 治理 REST API + 权限点 + 审批 UI + 操作历史视图(非后端)
 ```
 
-### 4.1 2026-05-05 实施回填
+### 4.1 实施回填快照（2026-05-05）
+
+> 下表保留当时的实施状态。后续已发生多轮实现与修正，请勿将表中“仍待补齐”直接登记为当前待办。
 
 本轮 7 步已落到分支 `codex/batch-day-lifecycle-closure`，并按阶段提交。当前状态从“设计缺口”更新为：
 
@@ -980,7 +984,9 @@ misfireCount
 4. 核心账务类补跑默认需要人工确认生效版本。
 ```
 
-## 13. 验收矩阵
+## 13. 验收矩阵（历史快照）
+
+> 以下用例与结果记录 2026-05 的代码和测试基线，不是当前分支的最新测试结果。当前真实链路验收必须引用带代码基线和运行结果的近期验证报告。
 
 本轮按代码和针对性测试做验收，状态含义：
 
@@ -1091,7 +1097,9 @@ SLA escalation + gate/late-arrival alert event   a98ba722
 trigger 本地计划审计 / 独立审计表 / SAME_JOB_GROUP / rerun policy 显式入参 / RUN_TWICE warn   d9f2ac7b
 ```
 
-### 14.3 残留缺口与下一步
+### 14.3 残留缺口与下一步（2026-05-06 历史快照）
+
+> 本节优先级、缺口与估算均属于 2026-05-06 记录；已被后续 ADR、实现及当前待办取代，不作为现行路线图。
 
 2026-05-06 完成扫尾后, 状态分两类:
 

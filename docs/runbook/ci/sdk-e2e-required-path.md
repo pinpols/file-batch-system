@@ -1,43 +1,30 @@
-# SDK e2e / live-transport — 非阻塞 → 必需(required)收口路径
+# SDK E2E 与 live-transport 门禁边界
 
-本页记录两条 SDK CI 信号从「非阻塞、易 flake」演进到「分支保护 required check」的判定标准与操作步骤。改动 `.github/workflows/sdk-orchestrator-e2e.yml` 与 `.github/workflows/sdk-contract-parity.yml` 的 gating 时对照本页。
+本页说明平台 SDK 契约门禁、真实 Orchestrator E2E 和 live-transport 的当前触发与阻断边界。工作流变更后应同步核对本页与相关 workflow。
 
 ## 1. `sdk-orchestrator-e2e`(样例 worker × 真 orchestrator)
 
-真实依赖栈往返(register / claim / report / 心跳 directive),`nightly cron + workflow_dispatch` 触发,**始终不进分支保护 required checks**(全栈启动数分钟 + 偶发 flaky,不适合每-PR 硬门禁)。矩阵内每条腿的 `continue-on-error` 是「这条腿本身是否让整个 workflow run 判失败」的开关。
+该工作流通过 nightly cron 和 `workflow_dispatch` 启动真实基础设施与 Orchestrator/Trigger，执行五语言样例 worker 的 register、launch、dispatch、claim、execute、report 和终态断言。它**不是 PR required check**；但单次 workflow run 中任一语言失败都会使该 run 失败。
 
 | lang | 当前状态 | 说明 |
 |---|---|---|
-| go | 阻塞(`continue-on-error=false`) | 已校准的真往返信号 |
-| python | 阻塞 | 同上 |
-| java | 非阻塞(`continue-on-error`) | #649 GA 接入,runner 已支持真往返;绿稳一轮后转阻塞 |
-| typescript | 非阻塞 · **scaffold** | 矩阵已登记,但 `scripts/ci/run-sdk-orchestrator-e2e.sh` 尚无 ts case;workflow 里先占位打 `PENDING` |
-| rust | 非阻塞 · **scaffold** | 同 typescript |
+| go | 执行 | `scripts/ci/run-sdk-orchestrator-e2e.sh go` |
+| python | 执行 | 同一真实 Orchestrator E2E fixture |
+| java | 执行 | 同一真实 Orchestrator E2E fixture |
+| typescript | 执行 | 同一真实 Orchestrator E2E fixture |
+| rust | 执行 | 同一真实 Orchestrator E2E fixture |
 
-### typescript / rust 收口步骤
-
-1. 由各自语言 agent 给 `scripts/ci/run-sdk-orchestrator-e2e.sh` 补 `typescript)` / `rust)` 的 build + start case(消费 `examples/self-hosted-sdk/sample-tenant-worker-{typescript,rust}`),对齐 go/python/java case 的 worker_code / API-key seed / topic 预建约定。
-2. 删除 `sdk-orchestrator-e2e.yml` 里 Run 步骤对 `typescript|rust` 的 `PENDING` 占位分支,改为直接 `bash scripts/ci/run-sdk-orchestrator-e2e.sh "${{ matrix.lang }}"`。
-3. 首次 `workflow_dispatch` 跑通阶段 A(注册 + 心跳落 `worker_registry`),校准阶段 B 派单路由。
-4. 一条腿连续 N 次 nightly 绿(建议 N≥5)后,从 `continue-on-error` 表达式里去掉该 lang,转阻塞。
-
-> 注:该 workflow 整体不进 required checks;去 `continue-on-error` 只是让 nightly run 在该腿红时整体判红(告警更硬),不是 PR 门禁。
+语言矩阵及硬断言由 [workflow](../../../.github/workflows/sdk-orchestrator-e2e.yml) 和共享 runner 决定；该 workflow 不配置逐语言 `continue-on-error`。
 
 ## 2. `sdk-live-transport`(真 Kafka broker + HTTP fake)
 
-`sdk-contract-parity.yml` 内的独立 job,起真 Redpanda broker 打五语言 SDK 的 transport/lifecycle,是 fake-only contract 之外唯一覆盖真 offset-commit / rebalance 的信号。当前 **非 required**(真 Kafka 偶发 flake:broker 启动竞态、offset 提交时序)。`parity-report` 只 log-only 汇总,不 gate。
+`sdk-contract-parity.yml` 内的独立 job，使用真实 Redpanda broker 验证五语言 SDK transport/lifecycle。该 job 当前是 **非 required 信号**；契约 fixture 及五语言 parity 则由 `sdk-contract-required` 聚合门禁阻断合并。`parity-report` 汇总结果，不替代 required contract checks。
 
-### 转 required 的前置(flake 治理)
+### 若未来评估将 live-transport 转为 required
 
-1. **broker 就绪探针**:`Start Redpanda` 后加显式 `rpk cluster health` / `nc -z` 轮询直到 broker 可用,替代裸 `sleep`(消除启动竞态)。
-2. **job 级重试隔离**:对 live-transport step 加一次自动重试(如 `nick-fields/retry` 或脚本内 `for attempt in 1 2`),把「首跑偶发」与「真回归」区分开;重试仍红才判失败。
-3. **topic / group 隔离**:每次 run 用带 `${{ github.run_id }}` 后缀的 topic / consumer-group,避免并发 run 之间 offset 串扰(参考 sim harness 的 batchNo 隔离教训)。
-4. **判定标准**:连续 20 个 run(PR + nightly 混合)零非回归性红后,把 `sdk-live-transport` 加入分支保护 required checks,并把 `parity-report` 对它的依赖从 log-only 提升为硬 gate(或单独设 required)。
+需要先评估 broker 稳定性、隔离策略、有效运行样本和分支保护 required context，再单独决策。本节是未来评估条件，不表示当前已有切换计划或已满足条件。
 
-### 操作(满足前置后)
-
-- 分支保护(仓库 settings / ruleset)required status checks 勾选 `sdk live transport (Kafka + HTTP fake)`。
-- 本页表格状态更新为 required,并在 `docs/changelog.md` 记一笔。
+当前 required 状态以 workflow 的 `sdk-contract-required` job 及仓库 ruleset 为准；不得仅凭 nightly 成功或 `parity-report` 绿灯推断 live-transport 已成为 required check。
 
 ## 关联
 

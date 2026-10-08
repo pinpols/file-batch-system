@@ -1,5 +1,7 @@
 # 行业对标改进计划
 
+> **历史基线与方案（2026-05-13）**：本文的“已知短板”、对标表和实施建议基于当时的代码及文档，不是当前能力矩阵或待办。后续已新增 Sensor、路由和相关治理能力；逐项当前状态请查 [`todo-master.md`](./todo-master.md)、对应 ADR 和当前实现。保留本计划用于回溯当时的决策背景。
+
 > 状态：可执行计划 v1（2026-05-13）。
 >
 > 基线：本仓库当前 `main` HEAD（27 个 ADR + maturity-assessment L4 + scalability-assessment 中等量级 production-ready）。

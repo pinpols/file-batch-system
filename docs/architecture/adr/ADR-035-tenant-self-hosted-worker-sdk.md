@@ -1,6 +1,6 @@
 # ADR-035 · 平台定位:纯调度面 + 租户自托管 Worker SDK
 
-- **Status**: Proposed(2026-05-31)
+- **Status**: Accepted；核心 SDK 已在 `sdk/` 实现。历史阶段表为 2026-05-31 快照，不能作为当前开发状态或生产验收证据（复核：2026-10-08）
 - **Date**: 2026-05-31
 - **Related**: ADR-029 dedicated SPI worker / `docs/design/task-spi-design.md` / ADR-034 CAP 定位
 - **Supersedes**: 部分修订 task-spi-design.md §Phase 4「示范第三方扩展」的"jar 入 classpath"形态
@@ -228,7 +228,7 @@
 
 ## 实施分阶段
 
-| Phase | 内容 | 状态(2026-05-31) | PR |
+| Phase | 内容 | 状态(2026-05-31 历史快照) | PR |
 |---|---|---|---|
 | **P1.1: SDK 起步** | `batch-worker-sdk` 子模块 + HTTP client + DTO + Builder | ✅ Merged | #164 |
 | **P1.2: Kafka consumer + dispatcher** | Kafka topic Pattern subscribe + TaskDispatcher 线程池 + claim→exec→report | ✅ 待 merge | #165 |
@@ -244,7 +244,7 @@
 | **P7(可选)** | Python SDK | 视需求 | ❌ |
 | **P8(可选)** | per-tenant 计量 / billing | P2 评估 | ❌ |
 
-**总量 ≈ 8-10 周**(P1-P6 必做)。当前进度 ≈ P1-P3 代码完成、P4 进行中。
+> 本表记录提案期拆分和当时 PR 状态，不是现行路线图。SDK 多语言代码、Java Spring starter、接入文档及 sample 均已在仓库中；当前能力范围看 `sdk/`、`docs/sdk/` 和 CI conformance。真实部署、各语言生产 transport/lifecycle 行为及发布凭据仍需对应环境证据，不能由源码存在推定完成。
 
 ## 兼容性 / 风险
 

@@ -8,7 +8,7 @@ on:
   push:
     branches:
       - main
-    # 纯文档 / 许可证 / 编辑器配置 改动不触发 full reactor(75min)。
+    # 纯文档 / 许可证 / 编辑器配置改动不触发全量 reactor；各 job 独立设置超时。
     # 注意:docs/api/** 是契约文档(OpenAPI + protocol),不在 ignore 列表 — schema 漂移仍要 CI 回退。
     # 注意:db/migration/** / helm/** / scripts/** / pom.xml / .github/workflows/** 都不 ignore。
     paths-ignore:
@@ -26,7 +26,7 @@ on:
       - '.editorconfig'
       - '.agents/**'
       # BYO 多语言 SDK(sdk/{python,go,rust,typescript})不进 Java reactor,由
-      # sdk-contract-parity.yml + sdk-python.yml 自验;纯 sdk 改动不触发 75min 全量 + e2e。
+      # sdk-contract-parity.yml + sdk-python.yml 自验；纯 SDK 改动不触发 Java reactor + E2E。
       # 注意:Java SDK 模块 batch-worker-sdk* 是 reactor 模块,不在此列(照常跑)。
       - 'sdk/**'
 

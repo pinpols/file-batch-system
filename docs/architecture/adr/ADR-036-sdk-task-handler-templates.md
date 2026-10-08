@@ -1,6 +1,6 @@
 # ADR-036 · batch-worker-sdk 五大业务模板抽象类(Atomic / Import / Export / Process / Dispatch)
 
-- **Status**: Proposed(2026-05-31)
+- **Status**: Accepted；Java SDK 中五类业务模板及类型化模板均已有实现和测试。提案期分阶段表仅作历史记录（复核：2026-10-08）
 - **Date**: 2026-05-31
 - **Related**: ADR-035 租户自托管 Worker SDK(本 ADR 是 §SDK API 表面的细化)/ ADR-029 dedicated atomic worker / `docs/design/task-spi-design.md`
 - **Refines**: ADR-035 §6(SDK 黑盒边界)+ §决策(SDK 是 Java 友好封装)

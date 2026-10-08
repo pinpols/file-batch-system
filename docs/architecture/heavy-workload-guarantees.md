@@ -5,7 +5,7 @@
 - **适用范围**：Import、Export、Process、Dispatch、Atomic 以及 DAG 中的同类任务
 - **关联决策**：ADR-016、ADR-027、ADR-038、ADR-042、ADR-046
 
-本文是重任务场景的权威设计入口。它回答的是“控制面如何避免重任务洪峰拖垮平台、任务如何落到合适的
+本文是重任务场景的权威设计入口。它回答的是“控制面如何避免突发重任务负载影响平台稳定性、任务如何分配到合适的
 Worker、长任务如何安全执行、下游故障如何阻断放量、容量承诺如何计算”，不替代各 Worker 的业务场景
 文档和压测报告。
 
@@ -149,7 +149,7 @@ CPU/IO、Kafka lag 和 Worker 饱和度。`tasks/s` 只适用于同一任务重�
 2. **任务派发 Kafka 显式 lag gate**：Trigger relay 已有可选的 lag 自适应释放；任务派发侧当前依靠全局活跃
    上限、Worker 负载、QPS、Outbox 重试和 Kafka/KEDA 告警形成反馈，没有直接按 consumer lag 拒绝准入。
 
-这两个增强继续以 ADR-042 和调度边界路线图为准。未完成前不得宣称“任意请求洪峰下 backlog 永不增长”。
+这两个增强继续以 ADR-042 和调度边界路线图为准。未完成前不得宣称“任意峰值请求负载下 backlog 均可保持有界”。
 同时明确不做本地队列替代 Kafka、不自研 Kubernetes Scheduler、不把容量画像扩成 FinOps 平台。
 
 ## 8. 代码与证据入口

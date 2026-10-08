@@ -64,7 +64,7 @@ loop:
   if resp.pausedTaskTypes: pause those types in Kafka
 ```
 
-> Java SDK 目前 **接** `nextHeartbeatHint` 但 **没动态调速**(见 wire-protocol §6 短板);BYO SDK 推荐一次性把动态调速做出来。
+> Java SDK 已消费 `nextHeartbeatHint` 并重排下次心跳；BYO SDK 应按自身调度器实现同等行为，并通过对应 conformance 用例验证。
 
 ### 1.4 lease 续约调度(默认 60s,遍历 in-flight)
 
@@ -75,8 +75,8 @@ loop:
     resp = POST /internal/tasks/{taskId}/renew with TaskHeartbeatRequest
     if resp.cancelRequested:
       signal_cancellation(task)   # 见 §1.6 FSM 与 cancel
-    if status == 404 / 409:
-      drop task locally           # lease 已被回收,handler 跑完也报不了
+    if status == 404 / 410:
+      signal_cancellation(task)   # lease 已回收,停止本地副本以避免双跑
 ```
 
 **关键约束**:`leaseRenewInterval < orch lease ttl / 2`(防 lease 提前回收;详 wire-protocol §5)。
@@ -116,7 +116,7 @@ stop(timeout):
 - `409` → 当幂等成功
 - 其他 4xx → 累计 5 次 fail-fast
 - `5xx` / 传输错 → 指数退避(200ms 基,2^n,默认 3 次)
-- Kafka SASL 凭据错 → 推荐直接 fail-fast(Java SDK 还没做,BYO 起点就做更简化处理)
+- Kafka SASL 凭据错 → fail-fast(Java SDK 已实现；BYO SDK 应按自身 Kafka 客户端识别认证异常)
 
 ### 1.8 凭据走 env,严禁入 payload
 
@@ -140,7 +140,7 @@ BYO SDK **必须**实现等价校验,代码层留 hook 供租户扩 deny-list。
 | **graceful drain on SIGTERM** | K8s rolling deploy 0 task 丢失 | §1.6 |
 | **buildId / sdkVersion 上报** | 平台 fingerprint 看板(`/ops/worker-fingerprints`)能反查租户 SDK 版本分布 | `WorkerHeartbeatDto.buildId / sdkVersion`(register 期上报一次) |
 | **dispatch 消息 hash 去重** | 平台保证 at-least-once,但同一 idempotencyKey 可能投多次;SDK 内部 LRU 去重省 claim 调用 | Java SDK 暂无,可加分项 |
-| **nextHeartbeatHint 动态调速** | 平台负载高时全局降频,负载低时升频 | Java SDK 未实现(短板 #3) |
+| **nextHeartbeatHint 动态调速** | 平台负载高时可建议调整心跳周期 | Java SDK 已支持动态重排，其他语言 SDK 的实现状态以其 conformance 与运行时测试为准 |
 
 ---
 
@@ -148,7 +148,7 @@ BYO SDK **必须**实现等价校验,代码层留 hook 供租户扩 deny-list。
 
 [`docs/api/sdk-contract-fixtures/`](../api/sdk-contract-fixtures/) 提供 language-agnostic JSON 契约用例。
 
-**用法**:写一个 contract runner(任意语言),按 fixture JSON 的 `given` 起 SDK、`when` 触发 HTTP / Kafka 调用、断言 `then.sdkExpectedAction`。10+ 用例覆盖:
+**用法**:SDK conformance runner 按 fixture JSON 的 `given` 构造输入、`when` 执行决策或模拟 transport，再断言 `then`。当前 fixtures 的 schema 校验和五语言 conformance 已由 `sdk-contract-parity.yml` 执行；它不替代真实 Kafka broker、真实平台 API 或发布包安装验证。用例清单见 [`fixture README`](../api/sdk-contract-fixtures/README.md)。
 
 - register 成功 / 同 workerCode 重复(平台 idempotent)
 - heartbeat 各 directive(NORMAL / DRAINING / PAUSED / desiredMaxConcurrent / nextHeartbeatHint)
@@ -159,7 +159,7 @@ BYO SDK **必须**实现等价校验,代码层留 hook 供租户扩 deny-list。
 - Kafka partition pause / resume
 - stop with timeout
 
-任何 BYO SDK PR 必须先把这 10+ fixtures 跑绿(本 lane 不强制 CI,但租户上线评审用)。
+平台内 SDK 变更由上述 CI 工作流按变更范围执行 conformance；外部 BYO SDK 团队应在自有 CI 运行相同 fixtures，并在租户上线评审中提交结果。
 
 ---
 
@@ -215,7 +215,7 @@ BYO SDK **必须**实现等价校验,代码层留 hook 供租户扩 deny-list。
 
 - **平台改 wire schema 必须先双写**(走 [`docs/runbook/sdk-dual-rollout.md`](../runbook/sdk-dual-rollout.md)):新增字段必为 nullable optional;改名 / 删除走两阶段(N 发布兼容老名,N+1 删老名)。
 - **BYO SDK 团队订阅**:平台改 schema 时 PR 标签 `sdk-wire-protocol`,BYO SDK 维护者 review;若 schema 升 major(`v3`),所有 BYO SDK 需在窗口期内升级,否则未知 major 会被自家 SDK reject。
-- **协议契约 PR-gate**:平台端 `WorkerController` / `TaskController` 改字段 → 必须同 PR 改 `orchestrator-internal.openapi.yaml` + `wire-protocol.md` Changelog + `sdk-contract-fixtures/` 对应用例。CI 拦截漂移(待补脚本)。
+- **协议契约 PR-gate**:平台端 `WorkerController` / `TaskController` 改字段 → 必须同步 `orchestrator-internal.openapi.yaml`、`wire-protocol.md` Changelog 和 `sdk-contract-fixtures/`；`sdk-contract-parity.yml` 执行 fixture schema 与 SDK conformance。该 workflow 不等于所有文档语义都能自动证明，协议变更仍须人工核对三者一致。
 
 ---
 

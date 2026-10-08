@@ -3,6 +3,8 @@
 > 文档性质：测试计划与历史基线，不是当前缺陷清单。阶段性“未完成 / 未覆盖”只表示当时的验证范围；当前有效事项以
 > [`../analysis/todo-master.md`](../analysis/todo-master.md) 为准。真实 staging、生产 HA 和灾备证据仍须以最新验证记录为准。
 
+> 当前 CI 职责核查（2026-10-08）：本文后续阶段计划与“staging gate 已接入部署/负载验证”等历史描述不是当前 workflow 状态。当前 PR、main、nightly E2E、SIM/strict 的触发和职责以 [`../runbook/ci.md`](../runbook/ci.md) 为准；`staging-gate.yml` 不执行 staging 部署、负载测试或巡检。
+
 > 包含原 full-project-full-project-test-plan.md 的测试分层建议（2026-04-26 合并）
 
 ## 0. 测试分层建议（来自旧 full-project-full-project-test-plan.md）

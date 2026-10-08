@@ -1,6 +1,6 @@
 # Kafka consumer group lag 飙高 / rebalance 长期停滞
 
-> 优先级 P1 · 最后核对版本:2026-05 · 配套 chaos IT:仓内有 consumer/lease 恢复路径，真实 broker rebalance 仍需 staging 演练
+> 优先级 P1 · 最后复核：2026-10-08（代码/文档核对；真实 broker rebalance 仍需 staging 演练）
 
 ## TL;DR
 
@@ -92,16 +92,7 @@
            max.poll.interval.ms: 600000    # 默认 5 min,调到 10 min 容忍长消息
            max.poll.records: 10            # 默认 500,减小批量
    ```
-2. **跳过毒消息**(如果某个 offset 反复处理失败拖住整个 partition):
-   ```bash
-   # 危险操作:跳过当前 offset 一条(只在确认无业务影响时用)
-   docker compose exec kafka "${KAFKA_CONTAINER_BIN_DIR:-/opt/kafka/bin}/kafka-consumer-groups.sh" \
-     --bootstrap-server kafka:29092 --group batch-worker-import \
-     --topic batch.task.dispatch.import --reset-offsets --shift-by 1 --execute
-   ```
-   - **必须先停 worker**:`docker compose stop batch-worker-import`
-   - reset 完再 `up -d`
-   - 跳过的消息走 dead-letter topic(`batch.task.dead-letter`),后续走 forensic replay 流程(`docs/architecture/forensic-replay.md`,TODO 待 Plan #4)
+2. **不要通过 offset reset 处理毒消息**：`--reset-offsets --shift-by 1` 只会跳过 Kafka 记录，不会把该记录发布到 dead-letter topic，也不会自动完成业务补偿。暂停操作并保留 topic、partition、offset、taskId 和日志证据；按平台 DLQ/人工审批与重放流程处理。不得在生产环境直接推进 consumer offset。
 3. **看 `batch.task.dead-letter` 是不是堆积**:
    ```bash
    docker compose exec kafka "${KAFKA_CONTAINER_BIN_DIR:-/opt/kafka/bin}/kafka-console-consumer.sh" \

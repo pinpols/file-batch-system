@@ -126,7 +126,7 @@ Pod kill、取消和 checkpoint 演练。
 ## 5. 未覆盖与结论边界
 
 本轮没有新增 WAITING 全局数量上限/统一 TTL，也没有在任务派发链直接读取 Kafka consumer lag。现有全局
-活跃作业上限、租户/队列配额、Worker 负载、派发 QPS 与 Outbox 可以保护执行面，但不能证明任意洪峰下
+活跃作业上限、租户/队列配额、Worker 负载、派发 QPS 与 Outbox 可以保护执行面，但不能证明任意峰值负载下
 PG backlog 永不增长。
 
 因此当前结论是：**五项重任务执行保障已落地，代码级主链闭环；pending 存储硬边界和显式 Kafka lag gate

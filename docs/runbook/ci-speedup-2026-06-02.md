@@ -5,6 +5,7 @@
 > [CI 门禁耗时分析与优化记录](../analysis/ci-gate-runtime-optimization-2026-10-07.md)及
 > [CI Runbook](ci.md)为准；当前 Full/Staging E2E 为六片，PR 使用四个单元分片信号，
 > 不再采用本文早期的单一 docs-only 路由描述。
+> Merge queue 当前未在 main Ruleset 启用；本文中的启用步骤仅为条件性操作说明，不代表现行配置。
 > 背景:PR-gate wall-clock 由最慢的 IT shard 决定(~15 min),日常 6+ 个 PR 排队反馈
 > 慢。C 方案把 IT/E2E 全部从 PR-gate 拆走,PR 阶段只做"5 min 内的快速反馈",IT 由
 > main push 的 full-ci-gate(post-merge)+ nightly staging-gate 回退。

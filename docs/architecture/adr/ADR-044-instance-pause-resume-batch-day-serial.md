@@ -1,9 +1,9 @@
 # ADR-044 · 实例 pause/resume + 批次日严格串行
 
-- **Status**: Proposed
+- **Status**: Accepted；`PAUSED` 生命周期状态、实例暂停/恢复服务和调度侧相关约束已落入代码。批次日串行完整场景仍以专项集成/仿真证据为准（复核：2026-10-08）
 - **Date**: 2026-06-20
 - **Related**: `docs/analysis/system-wide-capability-gap-analysis-2026-06-20.md`(全系统缺口分析,本 ADR 的源,缺口 #15)、`docs/plans/settlement-gap-remediation-roadmap-2026-06-20.md`(Phase 4.3)、ADR-018(跨日依赖,**边界对照**)、ADR-042(WAITING/有界队列,**状态复用对照**)、ADR-027(范围红线)
-- **Plan**: 本 PR 仅设计文档,评审定方向后再逐 PR 落地。架构级:动 `job_instance` / `workflow_run` 状态机(orchestrator 唯一状态主机),**先拍板状态迁移再写码**。
+- **Plan**: 本文的原始计划段保留决策背景；状态迁移实现入口见 `InstanceManagementApplicationService` 及对应 mapper/controller。不能仅凭状态枚举存在推断所有 pause/resume 业务场景均已验收。
 
 ## 范围边界(实施 PR 必答)
 

@@ -126,7 +126,7 @@
 2. 在 outbox release / partition dispatch 前做轻量 gate：
    - broker 不可用或快照过期:停止继续释放新任务，已有 outbox 继续由 durable retry 处理。
    - lag 超阈值:进入 DEFER，受 P0-A pending cap 约束。
-   - lag 恢复并连续稳定:按小批量恢复，避免恢复洪峰。
+   - lag 恢复并连续稳定:按小批量恢复，避免恢复时形成瞬时流量峰值。
 3. Redis 只作为多实例快照协调或缓存，不承载唯一业务状态；PG outbox 仍是恢复真相。
 4. Prometheus/KEDA 继续负责观测和扩缩容，不把 KEDA 当作业务准入实现。
 
@@ -576,7 +576,7 @@ trigger
 
 风险:
 
-- Kafka 短故障时 outbox 堆积,恢复后可能形成洪峰。
+- Kafka 短故障时 outbox 堆积，恢复后可能形成瞬时发布负载峰值。
 - outbox GIVE_UP 如果只靠人工查表,运维响应慢。
 
 影响:

@@ -1,5 +1,7 @@
 # Plan — batch-worker-sdk 2026 H2 演进路线图
 
+> **初始规划快照**：本文按 2026 H2 的初始范围拆分工作阶段；其中决策和任务状态不自动代表当前进度。已完成/未完成项应以 [`todo-master.md`](../analysis/todo-master.md)、[`sdk-roadmap-2026-h2-progress.md`](./sdk-roadmap-2026-h2-progress.md)、SDK 发布 runbook 与当前代码复核，不按本文旧 PR 顺序继续执行。
+
 > 优先级:Phase 0/1/2/3 必做 · Phase 4 看真实需求 · Phase 5/6 按需启动
 > 估时:单人 ~10 周 / 双人并行 ~6 周(不含 Phase 6)
 >

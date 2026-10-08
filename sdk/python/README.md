@@ -1,6 +1,6 @@
 # batch-worker-sdk (Python)
 
-**file-batch-system** worker 协议的 Python SDK —— Java 版
+**file-batch-system** worker 协议的 Python SDK，与 Java SDK 对等
 [`batch-worker-sdk/`](../java/core/) 的 async-only 对等实现。
 
 > **状态(2026-06-03)**: Phase 0-5 全部交付,版本 `0.5.0a0`(**Pre-Alpha,API 尚未冻结,1.0 前可能有破坏性调整**)。核心入口(`BatchPlatformClient` / `@batch_task` / `FakeBatchPlatform`)已成形,12 个跨 SDK 契约 fixture 全过(Lane P drift guard);PyPI 待 1.0 发布。可用于内测与 staging 跑通,生产使用前请确认契约 fixture 对自家场景已覆盖。
@@ -26,8 +26,7 @@
   没有同步 wrapper。需要同步请在 `asyncio.run` 内运行。
 - **PyPI 名 `batch-worker-sdk`,import 名 `batch_worker_sdk`** ——
   与 Java 模块名对齐,按 PEP 8 把 `-` 换成 `_`。
-- **版本 `0.0.1a0`** —— PEP 440 对 "0.0.1-alpha" 的规范化形式,
-  hatchling 拒绝带连字符的写法。
+- **当前版本 `0.5.0a0`** —— 版本权威值见 `src/batch_worker_sdk/_version.py`；PyPI 发布状态见发布 runbook。不要在此复制独立的版本常量。
 - **同一个 monorepo** —— 与 Java SDK 并列在 `sdk/python/` 下,
   独立工具链;**不**纳入 Maven reactor。
 
