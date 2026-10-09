@@ -1,6 +1,7 @@
 -- OIDC 身份只与预先存在的本地账号绑定；平台权限继续以 console_user_account 为准。
 -- batch schema 属平台控制面数据，不属于 biz schema 的租户 RLS 闭世界检查范围；
 -- 通过复合外键保证映射租户与本地账号租户一致，并由 Console 管理 API 做角色授权。
+-- 此表保存当前账号映射配置，不属于需要保留历史快照的运行事实表，因此不建立 archive 镜像。
 CREATE UNIQUE INDEX IF NOT EXISTS uk_console_user_account_tenant_id_id
     ON batch.console_user_account (tenant_id, id);
 
