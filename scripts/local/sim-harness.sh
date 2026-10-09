@@ -548,9 +548,13 @@ routing_overlay_clear() {
 # 不删就会残留到下一轮)。只在退出时调,run 中途用 routing_overlay_clear。
 routing_sim_teardown() {
   routing_overlay_clear
-  if docker ps -aq --filter "name=${BIZ_SHARD_1_CONTAINER}" 2>/dev/null | grep . >/dev/null; then
-    docker rm -f "$BIZ_SHARD_1_CONTAINER" >/dev/null 2>&1 \
-      && c_ylw "  biz-shard-1 容器已删(routing-sim 直起,退出即清)" || true
+  local sim_shard_id
+  sim_shard_id="$(docker ps -aq \
+    --filter "name=^/${BIZ_SHARD_1_CONTAINER}$" \
+    --filter 'label=io.github.pinpols.batch.testcontainers.owner=file-batch-system' 2>/dev/null)"
+  if [ -n "$sim_shard_id" ]; then
+    docker rm -f "$sim_shard_id" >/dev/null 2>&1 \
+      && c_ylw "  routing-sim 所有的 biz-shard 容器已清理" || true
   fi
 }
 
@@ -561,7 +565,9 @@ routing_sim() {
   set -a; . ./.env.local; set +a
 
   echo "-- 1) shard-1 + secrets --"
-  bash scripts/local/provision-biz-shard.sh shard-1 "${BIZ_SHARD_1_PORT:-15442}" >"$SIM_LOG_DIR/rs-shard1.log" 2>&1 && ok "shard-1" || { fail "shard-1"; return 1; }
+  BATCH_SIM_RESIDUE_CONTAINER=true \
+    bash scripts/local/provision-biz-shard.sh shard-1 "${BIZ_SHARD_1_PORT:-15442}" \
+      >"$SIM_LOG_DIR/rs-shard1.log" 2>&1 && ok "shard-1" || { fail "shard-1"; return 1; }
   local s0u s0n s0p s1u s1n s1p
   s0u=$(grep BIZ_SHARD_URL secrets/biz-shards/shard-0.env|cut -d= -f2-|tr -d '"'); s0n=$(grep BIZ_SHARD_USERNAME secrets/biz-shards/shard-0.env|cut -d= -f2-); s0p=$(grep BIZ_SHARD_PASSWORD secrets/biz-shards/shard-0.env|cut -d= -f2-)
   s1u=$(grep BIZ_SHARD_URL secrets/biz-shards/shard-1.env|cut -d= -f2-|tr -d '"'); s1n=$(grep BIZ_SHARD_USERNAME secrets/biz-shards/shard-1.env|cut -d= -f2-); s1p=$(grep BIZ_SHARD_PASSWORD secrets/biz-shards/shard-1.env|cut -d= -f2-)

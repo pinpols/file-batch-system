@@ -122,10 +122,12 @@ E2E 22 个完整明细(降序):
 
 ## 环境前提 / 约束
 
+> **当前策略（2026-10-09）**：下方复用设置属于本报告形成时的历史性能基线，不再是默认要求。普通 Maven 测试默认不跨运行复用容器，由 Ryuk 在测试 JVM 退出后清理；仅在本地显式使用 `-Plocal-testcontainers-reuse` 才复用 Valkey/MinIO，并带 `io.github.pinpols.batch.testcontainers.reuse=local-opt-in` Docker 标签。PG 与 Kafka 始终不跨运行复用。
+
 ### 本地(macOS)
 - **JVM**:Java 21（跟根 pom `<java.version>` 对齐）
 - **Docker Desktop 内存**:7.75 GB
-- **必须**:`~/.testcontainers.properties` 含 `testcontainers.reuse.enable=true`(MinIO/Redis reuse 才生效)
+- **历史基线**:`~/.testcontainers.properties` 曾要求设置 `testcontainers.reuse.enable=true`；当前只在本地显式启用 `-Plocal-testcontainers-reuse` 时需要复用能力
 - **本地不推荐 forkCount>1**:7.75GB 内存 + docker-compose dev 服务(若开)= 约 4-6GB 可用,跑 2 fork 必 OOM
 
 ### CI(GitHub Actions ubuntu-latest)

@@ -9,6 +9,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Lazy;
 
 /**
  * 提供 {@code @Observed} 注解的 AOP 拦截支持，把业务方法包成 Micrometer Observation。Observation 自动桥接到 {@code
@@ -36,6 +37,7 @@ public class BatchObservabilityAutoConfiguration {
   }
 
   @Bean
+  @Lazy(false)
   @ConditionalOnBean(OpenTelemetry.class)
   @ConditionalOnMissingBean
   public OpenTelemetryLogbackBridge openTelemetryLogbackBridge(OpenTelemetry openTelemetry) {

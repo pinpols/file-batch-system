@@ -68,6 +68,29 @@ def main() -> int:
     base_compose = load_yaml(ROOT / "docker-compose.yml")
     obs_compose = load_yaml(ROOT / "deploy/docker/compose/observability.yml")
 
+    runtime_env = app_compose.get("x-app-runtime-env") or {}
+    if runtime_env.get("MANAGEMENT_LOGGING_EXPORT_OTLP_ENABLED") != (
+        "${MANAGEMENT_OPENTELEMETRY_ENABLED:-false}"
+    ):
+        errors.append("Compose must bind Spring Boot OTLP logging to the OpenTelemetry switch")
+    console_env = nested(app_compose, "services", "console-api", "environment") or {}
+    if console_env.get("BATCH_CONSOLE_ALERTMANAGER_BEARER_TOKEN") != (
+        "${BATCH_CONSOLE_ALERTMANAGER_BEARER_TOKEN:-}"
+    ):
+        errors.append("Console API must receive the Alertmanager webhook bearer token")
+    alertmanager = nested(obs_compose, "services", "alertmanager") or {}
+    if alertmanager.get("entrypoint") != [
+        "/bin/sh",
+        "/usr/local/bin/render-alertmanager-config.sh",
+    ]:
+        errors.append("Alertmanager must render and validate its shared bearer token at startup")
+    if (alertmanager.get("environment") or {}).get(
+        "BATCH_CONSOLE_ALERTMANAGER_BEARER_TOKEN"
+    ) != "${BATCH_CONSOLE_ALERTMANAGER_BEARER_TOKEN:-}":
+        errors.append("Alertmanager must receive the same webhook bearer token as Console API")
+    if not (ROOT / "scripts/ops/render-alertmanager-config.sh").is_file():
+        errors.append("Alertmanager token renderer is missing")
+
     for document, services in (
         (app_compose, APP_SERVICES),
         (base_compose, tuple((base_compose.get("services") or {}).keys())),

@@ -8,22 +8,29 @@
 
 ### 1.1 设计边界
 
-- SLA 可按**任务实例 / 流程节点 / 分片粒度**统计，**以任务实例为主要口径**
-- SLA 超时**默认触发告警**，不直接终止运行中的任务
-- 父子节点 SLA 可分别配置，不强制自动继承
+- 作业监控以**作业实例**为主要业务口径；Worker task timeout 是执行安全边界，不能替代作业 SLA。
+- 作业硬超时、运行耗时预警、到期未启动、结束晚是四种不同事件，必须有独立配置来源和验收口径。
+- 软 SLA 违约只告警/升级，不直接终止运行；硬 timeout 才按超时策略收敛任务或实例。
+- 父子作业、Workflow 节点和分区的 SLA 继承不是当前已交付能力；没有显式配置时不得假定自动继承。
 
 ### 1.2 SLA 字段
 
-| 字段 | 说明 |
-|---|---|
-| `deadline` | 最晚完成时间（绝对时刻） |
-| `expected_duration` | 预计执行时长（相对值，毫秒） |
+| 配置/快照 | 语义 | 当前来源与边界 |
+|---|---|---|
+| `job_definition.timeout_seconds` | 作业硬超时；worker 已开始执行后，超过该时长可终止实例 | Console 作业配置；`0` 表示不启用硬超时。不能因为实例处于 RUNNING 派发态就从队列等待开始强杀 |
+| `expectedDurationSeconds` / `expected_duration_seconds` | 软 SLA 预计运行时长 | 当前可由 launch params 指定；缺省回退 `job_definition.timeout_seconds`。扫描器对 WAITING/READY/RUNNING 的超限实例告警；当前和硬 timeout 使用同一字段作默认值，语义尚未完全解耦 |
+| `deadlineAt` / `deadline` / `slaDeadlineAt` | 最晚完成时刻 | 当前可由 launch params 指定，并与 job timeout 推导值、批量日 SLA deadline 取最早值；最终快照到 `job_instance.deadline_at` |
+| 结束时刻 `finished_at` 与 `deadline_at` | 结束是否晚于业务 deadline | Console 有完成时限统计；当前没有确认到终态晚完成后的专门告警事件 |
 
 ### 1.3 当前实现
 
-- ✅ `JobSlaScheduler`（`batch-orchestrator/.../infrastructure/sla/JobSlaScheduler.java`）周期扫描运行中实例，超时打告警
-- ✅ 字段挂在 `job_definition` + `job_instance` 上
-- `JobInstanceStatus` 的完整值表以 [核心模型](../architecture/core-model.md#42-当前统一状态口径) 为准；其中**没有专门的 SLA_TIMEOUT 状态**，超时仅做告警，不改变状态机
+- ✅ `JobInstanceTimeoutEnforcer` 根据作业 `timeout_seconds` 执行硬超时；仅在至少一个 worker task 已 RUNNING 后计时，避免把派发排队时间当执行耗时。
+- ✅ `JobSlaScheduler` 周期扫描 WAITING/READY/RUNNING 实例；`deadline_at` 已过或 `expected_duration_seconds` 已超限时写告警事件，并以 `sla_alerted_at` 防重复。
+- ✅ 首次 SLA 告警后支持一个可配置延迟的升级级别；当前不是按 50%/100%/deadline 多级策略矩阵。
+- ⚠️ “到期未执行”当前只覆盖进入 WAITING/READY/RUNNING 且 deadline 过期的实例；仍停留在 CREATED 的实例由 launch 恢复链路处理，不属于 `JobSlaScheduler` 扫描范围，恢复失败还需独立告警。
+- ⚠️ “执行结束晚”当前可由 `finished_at > deadline_at` 做看板统计，但未确认有终态发生时的独立通知/告警。
+- ⚠️ 软 `expectedDurationSeconds` 尚未作为独立的作业定义字段与硬 `timeoutSeconds` 完全解耦；当前缺省复用硬超时值。作业监控产品化前应提供独立软 SLA 默认值和是否告警策略，并保留每次实例快照。
+- `JobInstanceStatus` 的完整值表以 [核心模型](../architecture/core-model.md#42-当前统一状态口径) 为准；没有专门的 `SLA_TIMEOUT` 状态。软 SLA 只告警，不改变状态机；硬 timeout 按独立超时策略收敛。
 
 ## 2. 文件到达 SLA 与等待策略
 
@@ -110,7 +117,7 @@ phone REGEX ^1[3-9]\d{9}$
 - L2 告警：超 `expected_duration` 100% → 通知 owner + on-call
 - L3 告警：超 `deadline` → 通知 owner + on-call + 业务方 + 触发自动降级
 
-实际：仅 `JobSlaScheduler` 扫超时 + 告警通道（webhook / email / dingtalk）齐全；分级矩阵 / 自动降级未落。
+实际：已具备首次 SLA 事件和单次延迟升级配置；50% / 100% / deadline 分级矩阵、作业 owner/on-call 责任路由和自动降级未落。作业定义字段、告警事件、Prometheus 规则与 Console 统计应保持同一 SLA 语义，不得各自推导不同阈值。
 
 ## 相关文档
 

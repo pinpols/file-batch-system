@@ -16,10 +16,13 @@ public final class TestValkeyContainers {
   private TestValkeyContainers() {}
 
   public static GenericContainer<?> create() {
-    return new GenericContainer<>(DockerImageName.parse(TestContainerImages.VALKEY))
+    GenericContainer<?> container = new GenericContainer<>(
+            DockerImageName.parse(TestContainerImages.VALKEY))
         .withEnv("LANG", TestContainerImages.UTF8_LOCALE)
         .withEnv("LC_ALL", TestContainerImages.UTF8_LOCALE)
         .withExposedPorts(REDIS_PORT);
+    TestContainerLabels.markOwned(container);
+    return container;
   }
 
   public static GenericContainer<?> createPersistent() {

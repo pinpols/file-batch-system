@@ -48,7 +48,11 @@ if docker ps -a --format '{{.Names}}' | grep -Fx "$CONTAINER" >/dev/null; then
   echo "    复用已存在容器"
   docker start "$CONTAINER" >/dev/null
 else
-  docker run -d --name "$CONTAINER" --network "$NETWORK" \
+  ownership_label_args=()
+  if [ "${BATCH_SIM_RESIDUE_CONTAINER:-false}" = true ]; then
+    ownership_label_args=(--label io.github.pinpols.batch.testcontainers.owner=file-batch-system)
+  fi
+  docker run -d --name "$CONTAINER" "${ownership_label_args[@]}" --network "$NETWORK" \
     -p "$PORT:5432" \
     -e POSTGRES_DB="$PLATFORM_DB" \
     -e POSTGRES_USER="$POSTGRES_USER" \

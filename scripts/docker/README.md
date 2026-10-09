@@ -49,23 +49,30 @@
 
 ## 磁盘清理
 
-本地磁盘清理由 `scripts/local/cleanup-disk.sh` 统一处理。脚本默认只预览；执行模式默认清理超过保留期的 Docker 构建缓存和悬空镜像。
-观测栈命名卷、历史运行日志、Maven `target`、数据库文件和当前日志默认不清理，需显式参数开启。
+本地磁盘与测试残留清理由 `scripts/local/cleanup-disk.sh` 按批次处理。脚本默认只预览；执行必须同时传入 `--apply` 和精确仓库名。脚本**永不删除 Docker 镜像**，也不删除应用/基础环境容器、命名卷或数据库数据；routing-sim 分片只有显式带 BFS 所有权标签的新建测试容器才可清理。同名 Compose/持久分片容器不会被选中。BuildKit 缓存是 Docker 全局缓存，会影响其他仓库的后续构建。
 
 ```bash
-# 预览
+# 预览可清理项和 Docker 占用
 bash scripts/local/cleanup-disk.sh
 
-# 清理超过 7 天的可再生 Docker 缓存
-bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system
+# 第一批：清理已退出的 BFS 测试容器、已退出的本项目初始化容器和业务分片残留
+bash scripts/local/cleanup-disk.sh --batch test-residue
+bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system --batch test-residue
 
-# 磁盘紧张时清理全部未使用的 BuildKit 缓存
+# 第二批：预览/清理超过 7 天的 BuildKit 缓存，不影响镜像
+bash scripts/local/cleanup-disk.sh --batch build-cache
+bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system --batch build-cache
+
+# 合并执行上述两批；保留所有镜像和数据卷
+bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system --batch safe
+
+# 可选：清理本地显式复用的 Valkey/MinIO 测试容器。只在测试已停止后使用
+bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system --include-local-reuse-containers
+
+# 磁盘紧张时，额外清理全部未使用的 BuildKit 缓存（仍不删除镜像）
 bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system --all-build-cache
 
-# 每个镜像仓库只保留 latest（无 latest 时保留最新版本）和容器引用版本
-bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system --prune-old-image-tags
-
-# 明确确认后，再清理超过 14 天且无引用的 Docker 匿名卷
+# 匿名卷可能包含已移除测试容器的数据，必须单独检查预览后再选择启用
 bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system --retention-days 14 --include-anonymous-volumes
 
 # 压测后清理观测栈命名卷（会清空 Prometheus/Loki/Tempo/Grafana 历史）：
@@ -75,4 +82,4 @@ bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system --in
 bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system --include-app-logs
 ```
 
-历史运行日志和 Maven `target` 目录也必须通过独立参数显式启用。不要使用 `docker system prune --volumes`，它无法区分可丢弃测试卷和需要保留的数据卷。
+观测卷、历史日志和 Maven `target` 目录也必须通过独立参数显式启用。不要使用全局镜像清理或带卷的系统级清理命令；它们无法可靠区分应用/基础环境镜像与可丢弃资源，也无法区分测试卷和业务数据卷。

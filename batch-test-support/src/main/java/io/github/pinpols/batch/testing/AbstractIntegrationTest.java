@@ -26,10 +26,11 @@ import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 @BatchIntegrationTest
 public abstract class AbstractIntegrationTest {
 
-  // 2026-05 IT 提速:对象存储 + Redis 加 .withReuse(true) 跨 JVM 复用。
-  // **PG 不加 reuse**:reuse 会让 outbox_event 等表跨 run 残留,
-  // 破坏 MultiTenantConcurrent / OutboxForwarderRetry / ImportFailure 等依赖 outbox 状态的 IT。
-  // PG 单次启动 ~3-5s,影响有限,稳妥优先。
+  // 默认不跨测试运行复用，避免测试数据残留；本地性能调试可显式启用 Maven profile。
+  private static final boolean REUSE_TESTCONTAINERS =
+      Boolean.getBoolean("batch.testcontainers.reuse");
+
+  // PG 不复用：outbox_event 等表的跨运行残留会破坏依赖其状态的集成测试。
   @SuppressWarnings("resource")
   private static final PostgreSQLContainer PLATFORM_POSTGRES = TestPostgresContainers.platform()
       .withInitScript("db/platform-init.sql")
@@ -40,16 +41,14 @@ public abstract class AbstractIntegrationTest {
       .withInitScript("db/create_biz_tables.sql")
       .withCommand("postgres", "-c", "max_connections=500");
 
-  // Kafka 不加 withReuse:OutboxPublishCircuitBreakerKafkaFailureIT 等用 stopKafka/startKafka 做
-  // fault injection,reuse 容器禁止 stop。Kafka 单次启动 ~5s,影响有限。
+  // Kafka 不复用：故障注入用例需要 stop/start，且每次测试运行应从干净 broker 状态开始。
   private static final KafkaContainer KAFKA = TestKafkaContainers.create();
 
   @SuppressWarnings("resource")
   private static final TestObjectStoreEndpoint OBJECT_STORE = createObjectStoreEndpoint();
 
   @SuppressWarnings("resource")
-  private static final GenericContainer<?> REDIS =
-      TestValkeyContainers.createPersistent().withReuse(true);
+  private static final GenericContainer<?> REDIS = createRedisContainer();
 
   static {
     // 在同一 JVM 中所有集成测试类之间保持测试基础设施端口稳定。
@@ -244,9 +243,16 @@ public abstract class AbstractIntegrationTest {
     }
     TestObjectStoreEndpoint endpoint = TestObjectStoreContainers.createEndpoint();
     if (endpoint instanceof MinioObjectStoreContainer container) {
-      return container.withReuse(true);
+      TestContainerLabels.configureLocalReuse(container, REUSE_TESTCONTAINERS);
+      return container;
     }
     return endpoint;
+  }
+
+  private static GenericContainer<?> createRedisContainer() {
+    GenericContainer<?> container = TestValkeyContainers.createPersistent();
+    TestContainerLabels.configureLocalReuse(container, REUSE_TESTCONTAINERS);
+    return container;
   }
 
   private static void startObjectStoreIfNeeded() {

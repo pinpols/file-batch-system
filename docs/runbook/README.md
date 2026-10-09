@@ -61,7 +61,7 @@
 | # | 文件 | 作用 |
 |---|---|---|
 | 18 | [observability-stack.md](./observability-stack.md) | 一站式观测部署 + 排障 SOP（Prometheus / Loki / Tempo / OTel）|
-| 18a | [slo-sli-catalog.md](./slo-sli-catalog.md) | 批量调度 SLO / SLI 目录：调度、批次日、Outbox、Kafka、文件到达、重试和 Worker 心跳 |
+| 18a | [slo-sli-catalog.md](./slo-sli-catalog.md) | 批量调度 SLO / SLI 与可用性、事件、批量作业三类告警覆盖矩阵 |
 | 19 | [quartz-capacity-baseline.md](./quartz-capacity-baseline.md) | Quartz 容量基线压测（识别容量拐点）|
 | 20 | [worker-stage-coverage.md](./worker-stage-coverage.md) | 三类 Worker 全 Stage 真实覆盖端到端验证 |
 | 21 | [security-scan.md](./security-scan.md) | 本地扫描与 GitHub 告警分类、修复、误报和合并后收尾 |

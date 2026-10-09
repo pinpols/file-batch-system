@@ -25,7 +25,8 @@ public final class TestPostgresContainers {
   }
 
   public static PostgreSQLContainer create(String databaseName) {
-    return new PostgreSQLContainer(DockerImageName.parse(TestContainerImages.POSTGRES))
+    PostgreSQLContainer container = new PostgreSQLContainer(
+            DockerImageName.parse(TestContainerImages.POSTGRES))
         .withEnv("LANG", TestContainerImages.UTF8_LOCALE)
         .withEnv("LC_ALL", TestContainerImages.UTF8_LOCALE)
         .withEnv("POSTGRES_INITDB_ARGS", "--encoding=UTF8")
@@ -33,6 +34,8 @@ public final class TestPostgresContainers {
         .withUsername(DEFAULT_USERNAME)
         .withPassword(DEFAULT_TEST_SECRET)
         .withUrlParam("sslmode", "disable");
+    TestContainerLabels.markOwned(container);
+    return container;
   }
 
   public static PostgreSQLContainer platform() {

@@ -5,6 +5,7 @@ import eu.rekawek.toxiproxy.ToxiproxyClient;
 import eu.rekawek.toxiproxy.model.Toxic;
 import eu.rekawek.toxiproxy.model.ToxicDirection;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.testing.TestContainerLabels;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -53,6 +54,7 @@ public abstract class AbstractChaosIntegrationTest extends AbstractIntegrationTe
   private static final GenericContainer<?> TOXIPROXY = new GenericContainer<>(
           DockerImageName.parse(TOXIPROXY_IMAGE))
       .withExposedPorts(TOXIPROXY_CONTROL_PORT, PG_PROXY_PORT, KAFKA_PROXY_PORT, REDIS_PROXY_PORT)
+      .withLabel(TestContainerLabels.OWNER, TestContainerLabels.OWNER_VALUE)
       .waitingFor(Wait.forHttp("/version").forPort(TOXIPROXY_CONTROL_PORT));
 
   private static ToxiproxyClient client;

@@ -30,6 +30,8 @@
 
 ### Changed
 
+- Testcontainers 跨 Maven 运行复用改为本地显式 opt-in：默认清理 PG、Kafka、Valkey 和 MinIO 测试容器；`local-testcontainers-reuse` profile 仅复用带专属 Docker label 的 Valkey/MinIO，避免 CI 或个人全局配置造成测试数据残留。
+- 本地 Docker 清理改为按测试残留、BuildKit 缓存分批预览/执行；测试容器增加仓库归属标签，业务分片仅按显式测试所有权标签识别，磁盘清理脚本不删除应用或基础环境镜像，也不执行全局 system prune。
 - Java 设计表达收口：Import 与 Task Outcome 的纯测试装配迁入 test fixture，生产直接注入已有窄协作者；未发布的 SDK 注册 Map/构造入口收敛为 typed 请求，按当前平台 wire 协议发送。内部区分执行成功/失败与 verifier 软告警，保留动态输出及事务/锁/Outbox 顺序，补齐真实装配、序列化和 PG 回滚/幂等验证。
 - 依赖治理改为持续告警、季度集中盘点和单个人工 PR：关闭 Dependabot 自动版本/安全修复 PR，季度任务只生成多生态 artifact 与 Actions Summary，不再自动创建 Issue/PR；紧急可达漏洞仍走独立快速修复。同步升级本批依赖、固定 CI/镜像供应链输入并刷新 SBOM。
 - 修复独立 `load-tests` 未继承根依赖治理导致的安全版本漂移；压测模块继续保持独立 reactor，但统一复用根 POM 的 Netty、Jackson 与 Logback 修复版本。

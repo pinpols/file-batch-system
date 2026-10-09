@@ -105,6 +105,22 @@ class DefaultExportStageExecutorTest {
   }
 
   @Test
+  @DisplayName("步骤成功但缺少记录数时单独记录诊断指标,不伪造导出行数")
+  void execute_recordsMissingCountMetric_whenStepSucceedsWithoutRecordCount() {
+    when(prepareStep.execute(any())).thenReturn(ExportStageResult.success(ExportStage.PREPARE));
+
+    List<ExportStageResult> results = executor.execute(buildContext());
+
+    assertThat(results).hasSize(1);
+    assertThat(results.get(0).success()).isTrue();
+    assertThat(meterRegistry
+            .counter("export.file.rows.count_missing", "workerType", "EXPORT")
+            .count())
+        .isEqualTo(1.0);
+    assertThat(meterRegistry.find("export.file.rows.total").counter()).isNull();
+  }
+
+  @Test
   @DisplayName("步骤抛业务异常时归类为业务错误,错误码与明细一并写入步骤运行记录")
   void execute_returnsBusinessError_whenStepThrowsBizException() {
     when(prepareStep.execute(any()))

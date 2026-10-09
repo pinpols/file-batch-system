@@ -9,6 +9,7 @@
 - `prometheus.yml`：Prometheus 抓取配置
 - `prometheus-batch-rules.yml`：Prometheus 告警规则
 - `alertmanager-batch-template.yml`：Alertmanager 路由和接收器模板
+- `../../../scripts/ops/render-alertmanager-config.sh`：启动时校验共享 Bearer Token 并渲染 Alertmanager 配置
 - `grafana-dashboard-batch.json`：Grafana 仪表盘模板
 - `grafana-provisioning/`：Grafana 数据源自动注入配置
 - [../../docs/runbook/observability-stack.md](../../../docs/runbook/observability-stack.md)：本地观测栈启动、端口和排障说明
@@ -27,3 +28,8 @@
 - [helm/batch-platform/README.md](../../../helm/batch-platform/README.md)
 
 本目录的 `prometheus-batch-rules.yml` / `alertmanager-batch-template.yml` 是本地观测栈模板;`../../helm/batch-platform/files/prometheus-batch-rules.yml` 是 Helm 发布侧同步规则模板。
+
+启用观测栈前，必须在 `.env.local` 设置 `BATCH_CONSOLE_ALERTMANAGER_BEARER_TOKEN`，至少 32 位，
+仅使用字母、数字、`_` 或 `-`。同一变量会注入 Console API 和 Alertmanager；Alertmanager 启动时
+将其渲染进临时配置文件，缺失、格式错误或仍为模板占位符时拒绝启动。生产环境应通过 Secret 管理，
+不要复制本地开发令牌。

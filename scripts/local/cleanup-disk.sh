@@ -16,7 +16,11 @@ INCLUDE_BUILD_ARTIFACTS=false
 INCLUDE_APP_LOGS=false
 INCLUDE_OBSERVABILITY_VOLUMES=false
 ALL_BUILD_CACHE=false
-PRUNE_OLD_IMAGE_TAGS=false
+INCLUDE_BUILD_CACHE=false
+INCLUDE_TEST_CONTAINERS=false
+INCLUDE_LOCAL_REUSE_CONTAINERS=false
+INCLUDE_COMPOSE_INIT_CONTAINERS=false
+INCLUDE_BIZ_SHARDS=false
 
 usage() {
   cat <<'EOF'
@@ -33,15 +37,21 @@ usage() {
   --include-build-artifacts     同时处理仓库内 Maven target 目录
   --include-app-logs            同时清理 logs/archive/app 下的历史应用归档日志
   --include-observability-volumes 同时清理本地观测栈命名卷
+  --include-build-cache         清理超过保留期的 BuildKit 缓存
   --all-build-cache             清理全部未使用的 BuildKit 缓存，忽略保留周期
-  --prune-old-image-tags        每个镜像仓库只保留最新版本和容器引用版本
+  --include-test-containers     清理已退出且带 BFS 所有权标签的测试容器
+  --include-local-reuse-containers 清理带 BFS 本地复用标签的测试容器（可包含运行中容器）
+  --include-compose-init-containers 清理本项目已退出的 Kafka/MinIO 初始化容器
+  --include-biz-shards          清理带 BFS 所有权标签的 routing-sim 分片容器
+  --batch <name>                选择批次：test-residue、build-cache、safe
   -h, --help                    显示帮助
 
 示例:
   bash scripts/local/cleanup-disk.sh
   bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system
+  bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system --batch test-residue
+  bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system --batch build-cache
   bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system --all-build-cache
-  bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system --prune-old-image-tags
   bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system --retention-days 14 --include-anonymous-volumes
 EOF
 }
@@ -74,7 +84,7 @@ while [ "$#" -gt 0 ]; do
     --include-run-logs)
       INCLUDE_RUN_LOGS=true
       ;;
-  --include-build-artifacts)
+    --include-build-artifacts)
       INCLUDE_BUILD_ARTIFACTS=true
       ;;
     --include-app-logs)
@@ -85,9 +95,46 @@ while [ "$#" -gt 0 ]; do
       ;;
     --all-build-cache)
       ALL_BUILD_CACHE=true
+      INCLUDE_BUILD_CACHE=true
       ;;
-    --prune-old-image-tags)
-      PRUNE_OLD_IMAGE_TAGS=true
+    --include-build-cache)
+      INCLUDE_BUILD_CACHE=true
+      ;;
+    --include-test-containers)
+      INCLUDE_TEST_CONTAINERS=true
+      ;;
+    --include-local-reuse-containers)
+      INCLUDE_LOCAL_REUSE_CONTAINERS=true
+      ;;
+    --include-compose-init-containers)
+      INCLUDE_COMPOSE_INIT_CONTAINERS=true
+      ;;
+    --include-biz-shards)
+      INCLUDE_BIZ_SHARDS=true
+      ;;
+    --batch)
+      require_value "$@"
+      case "$2" in
+        test-residue)
+          INCLUDE_TEST_CONTAINERS=true
+          INCLUDE_COMPOSE_INIT_CONTAINERS=true
+          INCLUDE_BIZ_SHARDS=true
+          ;;
+        build-cache)
+          INCLUDE_BUILD_CACHE=true
+          ;;
+        safe)
+          INCLUDE_TEST_CONTAINERS=true
+          INCLUDE_COMPOSE_INIT_CONTAINERS=true
+          INCLUDE_BIZ_SHARDS=true
+          INCLUDE_BUILD_CACHE=true
+          ;;
+        *)
+          echo "不支持的清理批次: $2" >&2
+          exit 2
+          ;;
+      esac
+      shift
       ;;
     -h|--help)
       usage
@@ -169,41 +216,65 @@ cleanup_observability_volumes() {
   fi
 }
 
-prune_old_image_tags() {
-  local active_ids candidates count refs keep ref id repo tag
-  active_ids="$(docker ps --all --quiet \
-    | xargs -r docker inspect --format '{{.Image}}' \
-    | sed 's/^sha256://' \
-    | sort -u)"
-
-  candidates="$(docker image ls --format '{{.Repository}}\t{{.Tag}}' \
-    | awk -F '\t' '$1 != "<none>" && $2 != "<none>" {print}' \
-    | while IFS=$'\t' read -r repo tag; do
-        refs="$(docker image ls "$repo" --format '{{.Repository}}:{{.Tag}}' | grep -v ':<none>$')"
-        keep="$(awk -v repository="$repo" '
-          NR == 1 { first = $0 }
-          !found && $0 == repository ":latest" { preferred = $0; found = 1 }
-          END { print found ? preferred : first }
-        ' <<< "$refs")"
-        ref="${repo}:${tag}"
-        [ "$ref" = "$keep" ] && continue
-        id="$(docker image inspect "$ref" --format '{{.Id}}' | sed 's/^sha256://')"
-        grep -Fx "$id" <<< "$active_ids" >/dev/null && continue
-        printf '%s\n' "$ref"
-      done \
-    | sort -u)"
-
-  count="$(printf '%s\n' "$candidates" | grep -c . || true)"
-  echo "符合条件的历史镜像标签: ${count}"
-  [ -n "$candidates" ] || return 0
+show_and_remove_containers() {
+  local title="$1" container_ids="$2" count cid
+  count="$(printf '%s\n' "$container_ids" | grep -c . || true)"
+  echo "${title}: ${count}"
+  [ -n "$container_ids" ] || return 0
   if [ "$APPLY" = true ]; then
-    while IFS= read -r ref; do
-      docker image rm "$ref" >/dev/null
-    done <<< "$candidates"
-    echo "已删除 ${count} 个历史镜像标签"
+    while IFS= read -r cid; do
+      [ -n "$cid" ] || continue
+      docker rm -f "$cid" >/dev/null
+    done <<< "$container_ids"
+    echo "已清理 ${count} 个容器（不删除镜像或卷）"
   else
-    printf '%s\n' "$candidates"
+    printf '%s\n' "$container_ids"
   fi
+}
+
+cleanup_test_containers() {
+  local owner_label="io.github.pinpols.batch.testcontainers.owner=file-batch-system"
+  local reuse_label="io.github.pinpols.batch.testcontainers.reuse=local-opt-in"
+  local test_container_ids="" reuse_container_ids="" cid running
+
+  if [ "$INCLUDE_TEST_CONTAINERS" = true ]; then
+    while IFS= read -r cid; do
+      [ -n "$cid" ] || continue
+      running="$(docker inspect --format '{{.State.Running}}' "$cid" 2>/dev/null || echo false)"
+      [ "$running" = false ] && test_container_ids+="${cid}"$'\n'
+    done < <(docker ps -aq --filter "label=${owner_label}")
+    show_and_remove_containers '符合条件的已退出 BFS Testcontainers' "${test_container_ids%$'\n'}"
+  fi
+
+  if [ "$INCLUDE_LOCAL_REUSE_CONTAINERS" = true ]; then
+    reuse_container_ids="$(docker ps -aq --filter "label=${reuse_label}")"
+    show_and_remove_containers '符合条件的 BFS 本地复用容器' "$reuse_container_ids"
+  fi
+}
+
+cleanup_compose_init_containers() {
+  local init_container_ids="" cid service project
+  while IFS= read -r cid; do
+    [ -n "$cid" ] || continue
+    project="$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}' "$cid" 2>/dev/null || true)"
+    service="$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.service" }}' "$cid" 2>/dev/null || true)"
+    [ "$project" = "${COMPOSE_PROJECT_NAME:-batch-platform}" ] || continue
+    case "$service" in
+      kafka-init|minio-init|minio-volume-init)
+        init_container_ids+="${cid}"$'\n'
+        ;;
+    esac
+  done < <(docker ps -aq --filter "label=com.docker.compose.project=${COMPOSE_PROJECT_NAME:-batch-platform}" --filter status=exited)
+  show_and_remove_containers '符合条件的已退出 Compose 初始化容器' "${init_container_ids%$'\n'}"
+}
+
+cleanup_biz_shards() {
+  local owner_label="io.github.pinpols.batch.testcontainers.owner=file-batch-system"
+  local shard_container_ids
+  shard_container_ids="$(docker ps -aq \
+    --filter 'name=^batch-postgres-biz-shard-' \
+    --filter "label=${owner_label}")"
+  show_and_remove_containers '符合条件的本地业务分片容器' "$shard_container_ids"
 }
 
 echo "清理模式: $([ "$APPLY" = true ] && echo 执行 || echo 预览)"
@@ -215,23 +286,35 @@ if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   echo 'Docker 清理前占用:'
   docker system df
 
-  # BuildKit 缓存和 dangling 镜像均可重新生成，但保留最近构建以免影响开发效率。
-  if [ "$ALL_BUILD_CACHE" = true ]; then
-    run_or_preview docker builder prune --all --force
+  if [ "$INCLUDE_BUILD_CACHE" = true ]; then
+    if [ "$ALL_BUILD_CACHE" = true ]; then
+      run_or_preview docker builder prune --all --force
+    else
+      run_or_preview docker builder prune --force --filter "until=${hours}h"
+    fi
   else
-    run_or_preview docker builder prune --force --filter "until=${hours}h"
+    echo 'BuildKit 缓存: 未启用清理（使用 --include-build-cache 或 --batch build-cache）'
   fi
-  run_or_preview docker image prune --force --filter "until=${hours}h"
 
-  if [ "$PRUNE_OLD_IMAGE_TAGS" = true ]; then
-    prune_old_image_tags
+  if [ "$INCLUDE_TEST_CONTAINERS" = true ] || [ "$INCLUDE_LOCAL_REUSE_CONTAINERS" = true ]; then
+    cleanup_test_containers
   else
-    echo '历史镜像标签: 未启用清理（使用 --prune-old-image-tags 显式启用）'
+    echo 'BFS Testcontainers: 未启用清理（使用 --include-test-containers 或 --include-local-reuse-containers）'
+  fi
+  if [ "$INCLUDE_COMPOSE_INIT_CONTAINERS" = true ]; then
+    cleanup_compose_init_containers
+  else
+    echo '已退出 Compose 初始化容器: 未启用清理（使用 --include-compose-init-containers）'
+  fi
+  if [ "$INCLUDE_BIZ_SHARDS" = true ]; then
+    cleanup_biz_shards
+  else
+    echo '业务分片测试容器: 未启用清理（使用 --include-biz-shards）'
   fi
 
   if [ "$INCLUDE_ANONYMOUS_VOLUMES" = true ]; then
     cutoff_epoch="$(($(date +%s) - RETENTION_DAYS * 86400))"
-    candidates="$({
+    anon_volume_candidates="$({
       docker volume ls --quiet --filter dangling=true \
         | grep -E '^[0-9a-f]{64}$' || true
     } | while IFS= read -r volume; do
@@ -268,14 +351,14 @@ PY
       fi
     done)"
 
-    count="$(printf '%s\n' "$candidates" | grep -c . || true)"
+    count="$(printf '%s\n' "$anon_volume_candidates" | grep -c . || true)"
     echo "符合条件的无引用 Docker 匿名卷: ${count}"
-    if [ -n "$candidates" ]; then
+    if [ -n "$anon_volume_candidates" ]; then
       if [ "$APPLY" = true ]; then
-        printf '%s\n' "$candidates" | xargs docker volume rm >/dev/null
+        printf '%s\n' "$anon_volume_candidates" | xargs docker volume rm >/dev/null
         echo "已删除 ${count} 个无引用 Docker 匿名卷"
       else
-        awk 'NR <= 20 { print }' <<< "$candidates"
+        awk 'NR <= 20 { print }' <<< "$anon_volume_candidates"
         if [ "$count" -gt 20 ]; then
           echo "... 其余 $((count - 20)) 个已省略"
         fi
@@ -366,4 +449,4 @@ if [ "$APPLY" = true ] && command -v docker >/dev/null 2>&1 && docker info >/dev
 fi
 
 echo
-echo '受保护项: 运行中/已停止容器、数据库文件与 Maven 仓库。若未启用对应参数，Docker 卷/日志/历史运行目录不清理。'
+echo '受保护项: 所有 Docker 镜像、Compose 应用/基础环境容器、命名卷、数据库文件与 Maven 仓库；本脚本不执行 image prune/rmi、volume prune 或 system prune。'

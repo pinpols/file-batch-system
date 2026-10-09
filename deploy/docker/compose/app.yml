@@ -13,6 +13,8 @@ x-app-runtime-env: &app-runtime-env
   LC_ALL: ${BATCH_LOCALE:-C.UTF-8}
   # 默认不连 Collector；启动 observability overlay 时显式开启。
   MANAGEMENT_OPENTELEMETRY_ENABLED: ${MANAGEMENT_OPENTELEMETRY_ENABLED:-false}
+  # Spring Boot 4 的 OTLP log exporter 单独读取该键；显式绑定避免只启用 traces 而漏掉应用日志。
+  MANAGEMENT_LOGGING_EXPORT_OTLP_ENABLED: ${MANAGEMENT_OPENTELEMETRY_ENABLED:-false}
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
   OTEL_SAMPLING_PROBABILITY: ${OTEL_SAMPLING_PROBABILITY:-1.0}
   BATCH_LOG_FORMAT: ${BATCH_LOG_FORMAT:-}
@@ -238,6 +240,7 @@ services:
       JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0 -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError -XX:MaxMetaspaceSize=192m}
       SPRING_FLYWAY_ENABLED: "false"
       BATCH_CONSOLE_INSTANCE_ID: ${BATCH_CONSOLE_INSTANCE_ID:-batch-console-api-local}
+      BATCH_CONSOLE_ALERTMANAGER_BEARER_TOKEN: ${BATCH_CONSOLE_ALERTMANAGER_BEARER_TOKEN:-}
       # OIDC pilot 配置仅注入 Console API；client secret 不放入共享 runtime anchor。
       BATCH_CONSOLE_SSO_OIDC_ENABLED: ${BATCH_CONSOLE_SSO_OIDC_ENABLED:-false}
       BATCH_CONSOLE_SSO_OIDC_REGISTRATION_ID: ${BATCH_CONSOLE_SSO_OIDC_REGISTRATION_ID:-}
