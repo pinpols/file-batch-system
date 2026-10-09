@@ -96,10 +96,13 @@
              - bcprov-jdk18on 1.81 → 1.86: security fixes and current compatible release
              - postgresql 42.7.10 → 42.7.11: CVE-2026-42198
              - postgresql 42.7.11 → 42.7.12: CVE-2026-54291
-             - postgresql 42.7.13: SCRAM channel-binding downgrade fix and protocol improvements。 -->
+             - postgresql 42.7.13: SCRAM channel-binding downgrade fix and protocol improvements
+             - async-http-client 2.16.1 → 3.0.14: CVE-2026-107227 / CVE-2026-107230
+             - lz4-java 1.10.1 → 1.11.4: CVE-2026-106451。 -->
         <netty.version>4.2.17.Final</netty.version>
         <bouncycastle.version>1.86</bouncycastle.version>
-        <async-http-client.version>2.16.1</async-http-client.version>
+        <async-http-client.version>3.0.14</async-http-client.version>
+        <lz4-java.version>1.11.4</lz4-java.version>
         <postgresql.version>42.7.13</postgresql.version>
         <!-- CVE-2026-54399 / CVE-2026-54428: Anthropic client 2.16.1 经 Spring AI BOM
              传入 httpcore5 5.4.2；5.4.3 起包含修复。统一覆盖 core 与 HTTP/2 变体，避免
@@ -244,6 +247,11 @@
                 <groupId>org.asynchttpclient</groupId>
                 <artifactId>async-http-client</artifactId>
                 <version>${async-http-client.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>at.yawk.lz4</groupId>
+                <artifactId>lz4-java</artifactId>
+                <version>${lz4-java.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.httpcomponents.core5</groupId>
