@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.imports.stage;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -93,7 +94,7 @@ public class DefaultImportStageExecutor
 
   private void recordImportRowsMetrics(ImportJobContext context) {
     MeterRegistry registry = meterRegistryProvider.getIfAvailable();
-    if (registry == null) {
+    if (EmptyChecks.isNull(registry)) {
       return;
     }
     recordRows(registry, "parsed", context, PipelineRuntimeKeys.IMPORT_PARSED_COUNT);
