@@ -9,7 +9,7 @@
 # 只清"残留",不碰 batch-local 受管 dev 栈(batch-postgres-primary/valkey/minio/kafka):
 #   - 孤儿 testcontainers:label org.testcontainers=true 且无 org.testcontainers.hash
 #     (反复 kill-9 / Ryuk 没机会清的;保留显式 withReuse 容器,它们带该 hash label)。
-#   - biz-shard:名字 batch-postgres-biz-shard-*(sim routing 用 docker run 直起,不归 compose)。
+#   - biz-shard:仅清理显式带本仓库所有权标签的 routing-sim 容器；同名 Compose/持久分片保留。
 #   - SDK E2E 本机样例 worker:go run/java/python/rust/ts 等后台进程若父脚本被 kill,
 #     EXIT trap 来不及执行,会继续消费 Kafka 并干扰后续 sim。
 set -uo pipefail
@@ -63,8 +63,10 @@ if [ -n "$orphans" ]; then
   removed=$((removed + n))
 fi
 
-# 2) biz-shard 残留(sim routing 直起的 docker run 容器,不归 compose 管)
-shards=$(docker ps -aq --filter "name=batch-postgres-biz-shard-" 2>/dev/null)
+# 2) routing-sim 创建的 biz-shard 残留。标签是所有权证据，不能仅凭容器名删除持久环境。
+shards=$(docker ps -aq \
+  --filter 'name=^/batch-postgres-biz-shard-' \
+  --filter 'label=io.github.pinpols.batch.testcontainers.owner=file-batch-system' 2>/dev/null)
 if [ -n "$shards" ]; then
   n=$(printf '%s\n' "$shards" | grep -c .)
   printf '  清理 %d 个 biz-shard 残留容器\n' "$n"

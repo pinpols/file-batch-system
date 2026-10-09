@@ -11,8 +11,10 @@ public final class TestKafkaContainers {
   // 资源生命周期由调用方管理：容器分别由 Testcontainers 扩展或共享集成测试基类关闭。
   @SuppressWarnings("resource")
   public static KafkaContainer create() {
-    return new KafkaContainer(DockerImageName.parse(TestContainerImages.KAFKA))
+    KafkaContainer container = new KafkaContainer(DockerImageName.parse(TestContainerImages.KAFKA))
         .withEnv("LANG", TestContainerImages.UTF8_LOCALE)
         .withEnv("LC_ALL", TestContainerImages.UTF8_LOCALE);
+    TestContainerLabels.markOwned(container);
+    return container;
   }
 }

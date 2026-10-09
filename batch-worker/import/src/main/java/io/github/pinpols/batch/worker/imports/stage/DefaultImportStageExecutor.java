@@ -13,12 +13,16 @@ import io.github.pinpols.batch.worker.core.support.StageFailureCode;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportStage;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
+import io.github.pinpols.batch.worker.imports.domain.ImportWorkerType;
 import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 /**
@@ -46,17 +50,20 @@ public class DefaultImportStageExecutor
   private final Map<ImportStage, ImportStageStep> stepsByStage;
   private final List<PipelineStepTemplate> defaultStepDefinitions;
   private final ImportRecordGovernanceService recordGovernanceService;
+  private final ObjectProvider<MeterRegistry> meterRegistryProvider;
 
   public DefaultImportStageExecutor(
       List<ImportStageStep> steps,
       PlatformPipelineDefinitionRepository pipelineDefinitions,
       PlatformPipelineRunRepository pipelineRuns,
-      ImportRecordGovernanceService recordGovernanceService) {
+      ImportRecordGovernanceService recordGovernanceService,
+      ObjectProvider<MeterRegistry> meterRegistryProvider) {
     super(pipelineDefinitions, pipelineRuns);
     this.stepsByImplCode = indexByImplCode(steps);
     this.stepsByStage = indexByStage(steps);
     this.defaultStepDefinitions = buildDefaultStepDefinitions();
     this.recordGovernanceService = recordGovernanceService;
+    this.meterRegistryProvider = meterRegistryProvider;
   }
 
   @Override
@@ -66,6 +73,14 @@ public class DefaultImportStageExecutor
       return runStageLoop(context);
     } finally {
       try {
+        recordImportRowsMetrics(context);
+      } catch (Exception exception) {
+        log.warn(
+            "failed to record import row metrics: {}",
+            SwallowedExceptionLogger.summary(exception),
+            exception);
+      }
+      try {
         recordGovernanceService.finalizeErrorOutput(context);
       } catch (Exception exception) {
         log.warn(
@@ -74,6 +89,31 @@ public class DefaultImportStageExecutor
             exception);
       }
     }
+  }
+
+  private void recordImportRowsMetrics(ImportJobContext context) {
+    MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+    if (registry == null) {
+      return;
+    }
+    recordRows(registry, "parsed", context, PipelineRuntimeKeys.IMPORT_PARSED_COUNT);
+    recordRows(registry, "validated", context, PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT);
+    recordRows(registry, "loaded", context, PipelineRuntimeKeys.IMPORT_LOADED_COUNT);
+    recordRows(registry, "skipped", context, PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT);
+  }
+
+  private void recordRows(
+      MeterRegistry registry, String phase, ImportJobContext context, String attribute) {
+    Object value = context.getAttributes().get(attribute);
+    if (!(value instanceof Number count) || count.doubleValue() <= 0) {
+      return;
+    }
+    Counter.builder("import.file.rows.total")
+        .description("导入文件各处理阶段的记录数")
+        .tag("workerType", ImportWorkerType.IMPORT)
+        .tag("phase", phase)
+        .register(registry)
+        .increment(count.doubleValue());
   }
 
   @Override

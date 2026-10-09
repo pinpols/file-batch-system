@@ -48,6 +48,10 @@ structured metadata，不建立索引标签。
 
 - Prometheus 拉取应用 Actuator、Collector、Loki、Tempo、Kafka、PostgreSQL、Valkey、节点和容器指标。
 - 指标标签只允许稳定低基数字段；租户、实例号、任务号不得作为 Prometheus label。
+- Import 通过 `import.file.rows.total{phase=parsed|validated|loaded|skipped}` 记录各阶段行数；Export 通过
+  `export.file.rows.total` 记录成功导出行数，`export.file.rows.count_missing` 统计成功但缺少行数上下文的次数。
+- Atomic 的任务时延与结果复用 Worker Core 的 `worker.task.execution.duration`，按 `workerType` 和 `outcome` 区分；
+  Process、Dispatch、Trigger 继续使用各自领域指标，不重复建设通用执行指标。
 - Collector/Loki/Tempo 自身的拒收、队列、发送失败和存活状态必须纳入告警。
 
 ### 2.4 JVM 诊断
@@ -74,6 +78,11 @@ docker compose -f docker-compose.yml -f deploy/docker/compose/app.yml \
   -f deploy/docker/compose/observability.yml --env-file .env.local \
   --profile apps --profile replica up -d
 ```
+
+要启用 Alertmanager 到 Console 的告警投递，还必须在 `.env.local` 设置同一个
+`BATCH_CONSOLE_ALERTMANAGER_BEARER_TOKEN`（至少 32 位，只含字母、数字、`_`、`-`）。该值由 Compose
+同时注入 Console API 和 Alertmanager；Alertmanager 启动入口会校验并渲染模板。没有令牌时，告警服务
+会拒绝启动而不是持续向 Console 发送未授权请求。生产环境必须从 Secret 管理系统提供该值。
 
 入口：Grafana `http://localhost:13000`、Prometheus `http://localhost:19090`、Jaeger
 `http://localhost:16686`、Tempo API `http://localhost:13200`、Loki API
@@ -135,7 +144,9 @@ Collector 配置应使用对应版本官方镜像执行 `validate`；Prometheus 
 
 ### 应用有 stdout、Loki 无日志
 
-1. 确认 `MANAGEMENT_OPENTELEMETRY_ENABLED=true`。该总开关控制 OTLP traces 和 logs；metrics 固定由
+1. 确认 `MANAGEMENT_OPENTELEMETRY_ENABLED=true`，Compose 会同步设置 Spring Boot 4 的
+   `MANAGEMENT_LOGGING_EXPORT_OTLP_ENABLED=true`。前者启用 OpenTelemetry SDK/traces，后者明确开启 OTLP
+   log exporter；metrics 固定由
    Prometheus 拉取 `/actuator/prometheus`，应用不创建 OTLP `OtlpMeterRegistry`。
 2. 确认依赖中同时存在 Starter 和 OTel Logback appender。
 3. 检查 Collector `otelcol_exporter_send_failed_log_records`、队列容量和 Loki 拒收指标。

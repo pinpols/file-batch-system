@@ -77,11 +77,16 @@ public class DefaultExportStageExecutor
 
   private void recordExportRowsMetric(ExportJobContext context) {
     Object recordCountAttr = context.getAttributes().get(PipelineRuntimeKeys.RECORD_COUNT);
-    if (!(recordCountAttr instanceof Number recordCount)) {
-      return;
-    }
     MeterRegistry registry = meterRegistryProvider.getIfAvailable();
     if (registry == null) {
+      return;
+    }
+    if (!(recordCountAttr instanceof Number recordCount)) {
+      Counter.builder("export.file.rows.count_missing")
+          .description("成功导出但缺少记录数的次数")
+          .tag("workerType", ExportWorkerType.EXPORT)
+          .register(registry)
+          .increment();
       return;
     }
     Counter.builder("export.file.rows.total")

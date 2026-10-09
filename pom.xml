@@ -44,6 +44,8 @@
         <revision>1.0.0</revision>
         <java.version>21</java.version>
         <maven.compiler.release>21</maven.compiler.release>
+        <!-- Testcontainers 默认由 Ryuk 在测试 JVM 退出后清理；仅本地 profile 显式开启跨运行复用。 -->
+        <testcontainers.reuse.enable>false</testcontainers.reuse.enable>
         <!-- 覆盖 Spring Boot 4.1 管理版本，修复 Jackson 反序列化相关高危漏洞。 -->
         <jackson-2-bom.version>2.21.7</jackson-2-bom.version>
         <jackson-bom.version>3.1.7</jackson-bom.version>
@@ -390,7 +392,8 @@
                   - forkCount=1 + reuseForks=true: 同 module 内单 JVM 复用,降低 testcontainer 启停开销
                   - forkedProcessTimeoutInSeconds=1800: 单 fork 超时 30min,覆盖 GitHub Actions
                     冷启动拉镜像 + Testcontainers Spring 上下文启动的最差情况
-                  - testcontainers.reuse.enable=true: 命中 ~/.testcontainers.properties 时自动复用容器
+                  - Testcontainers reuse 默认关闭，测试 fork 退出后由 Ryuk 清理容器；本地仅通过
+                    `-Plocal-testcontainers-reuse` 显式开启 Valkey/MinIO 跨 Maven 运行复用
                 跨 module 并行(`mvn -T`)无法在 surefire 层控制,见 docs/coding-conventions.md
                 §测试运行 部分:全 reactor 测试请用 `mvn test`(不带 -T)。
             -->
@@ -427,8 +430,12 @@
                              Keep this at the root so all module-level Testcontainers IT share the same probe behavior,
                              not only batch-e2e-tests. -->
                         <api.version>1.44</api.version>
-                        <testcontainers.reuse.enable>true</testcontainers.reuse.enable>
+                        <batch.testcontainers.reuse>${testcontainers.reuse.enable}</batch.testcontainers.reuse>
                     </systemPropertyVariables>
+                    <environmentVariables>
+                        <!-- 明确覆盖 ~/.testcontainers.properties，确保默认测试不会继承个人机器的复用设置。 -->
+                        <TESTCONTAINERS_REUSE_ENABLE>${testcontainers.reuse.enable}</TESTCONTAINERS_REUSE_ENABLE>
+                    </environmentVariables>
                 </configuration>
             </plugin>
             <!-- 把 `${revision}` 占位符在 install/deploy 前展开为实际版本号，避免下游依赖拿到未解析的 pom。 -->
@@ -627,6 +634,13 @@ $1$2 $4 $5(</replacement>
                            聚合时在 target/site/licenses.html 汇总
     -->
     <profiles>
+        <profile>
+            <id>local-testcontainers-reuse</id>
+            <properties>
+                <testcontainers.reuse.enable>true</testcontainers.reuse.enable>
+            </properties>
+        </profile>
+
         <profile>
             <id>flaky-quarantine</id>
             <properties>

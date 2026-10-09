@@ -14,7 +14,7 @@
 
 | 资源 | 当前破坏性入口 | 防护与使用边界 |
 |---|---|---|
-| 文件 / Docker | `scripts/local/cleanup-disk.sh` | 默认预览；执行需 `--apply --confirm-root <仓库目录名>`。Docker 资源清理拒绝远程 context。匿名卷、观测卷、构建缓存需额外显式选项。 |
+| 文件 / Docker | `scripts/local/cleanup-disk.sh` | 默认预览；执行需 `--apply --confirm-root <仓库目录名>`。Docker 资源清理拒绝远程 context。按 `test-residue` / `build-cache` / `safe` 分批；匿名卷、观测卷、复用测试容器需额外显式选项。业务分片仅按测试所有权标签清理；脚本不执行镜像删除，保护应用及基础环境镜像。 |
 | 本地生命周期锁 | `scripts/lib/local-lifecycle-lock.sh` | 仅在 `${TMPDIR}` 下操作由当前仓库路径哈希和当前 UID 派生的锁目录；失效锁需确认 owner PID 已退出后才回收，回收过程有独立恢复目录串行化，不触碰仓库业务数据。 |
 | 本地 HA 故障演练 | `scripts/local/pg-replica-failover-drill.sh`、`scripts/local/redis-sentinel-ha-drill.sh` | 仅接受本机 Docker context；每次生成唯一隔离 Compose project，失败先打印日志，退出清理仅作用于该 project 的容器、网络和专用卷。不得用生产/共享 Docker context 执行。 |
 | Docker Compose 栈 | `scripts/docker/reset-dev.sh` | 默认预览；执行需 `--apply` 和输入 project 名或 `--yes`；拒绝生产类 project 名和远程 Docker context，只按 Compose 标签清理。 |

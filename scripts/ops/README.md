@@ -9,6 +9,7 @@
 - `inspect-db.sh`：数据库健康、积压和 Flyway 状态巡检。
 - `inspect-workers.sh`：worker 心跳、排空和任务占用巡检。
 - `inspect-observability.sh`：观测栈连通性巡检。
+- `render-alertmanager-config.sh`：Alertmanager 容器启动时校验共享 Bearer Token 并渲染本地配置。
 - `inspect-dependencies.sh`：PostgreSQL / Kafka / Valkey / MinIO 基础依赖只读巡检，支持宿主机 CLI 和 Docker fallback。
 - `inspect-production-capacity.sh`：生产容量治理只读巡检，覆盖 PostgreSQL 热表/保留、Kafka topic retention 和对象存储 bucket/lifecycle。
 - `plan-production-retention.sh`：生产保留治理只读计划，输出 PostgreSQL 归档策略缺口、Kafka topic 保留策略、对象存储 lifecycle 和 Redis TTL 候选项；不执行清理。

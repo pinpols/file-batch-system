@@ -979,7 +979,7 @@ public record ConsoleProperties(
 
 - JUnit 5 + Mockito + AssertJ
 - Spring Boot Test（集成测试）
-- 集成测试统一继承 `AbstractIntegrationTest`（`batch-common/src/test/.../testing/`），复用 Testcontainers PG / Kafka / Redis / MinIO；**禁** 各自 `@Testcontainers @SpringBootTest`
+- 集成测试统一继承 `AbstractIntegrationTest`（`batch-test-support/src/main/.../testing/`），在同一测试 JVM 内共享 Testcontainers PG / Kafka / Valkey / MinIO；**禁** 各自 `@Testcontainers @SpringBootTest`。默认不跨测试运行复用，测试 fork 退出后由 Ryuk 清理；本地性能调试可显式使用 `./mvnw -Plocal-testcontainers-reuse ...`，仅 Valkey/MinIO 会跨运行复用且带 `io.github.pinpols.batch.testcontainers.reuse=local-opt-in` 标签。启用后可能保留数据；CI 不得激活该 profile。
 
 ### 14.2 Mock 初始化（强约束）
 

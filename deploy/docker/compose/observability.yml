@@ -38,10 +38,12 @@ services:
     image: prom/alertmanager:${ALERTMANAGER_IMAGE_TAG:-v0.28.1}
     container_name: batch-alertmanager
     restart: unless-stopped
-    command:
-      - --config.file=/etc/alertmanager/alertmanager.yml
+    entrypoint: ["/bin/sh", "/usr/local/bin/render-alertmanager-config.sh"]
+    environment:
+      BATCH_CONSOLE_ALERTMANAGER_BEARER_TOKEN: ${BATCH_CONSOLE_ALERTMANAGER_BEARER_TOKEN:-}
     volumes:
-      - ./deploy/docker/observability/alertmanager-batch-template.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./deploy/docker/observability/alertmanager-batch-template.yml:/etc/alertmanager/alertmanager-template.yml:ro
+      - ./scripts/ops/render-alertmanager-config.sh:/usr/local/bin/render-alertmanager-config.sh:ro
     ports:
       - "${ALERTMANAGER_PORT:-19093}:9093"
     networks:

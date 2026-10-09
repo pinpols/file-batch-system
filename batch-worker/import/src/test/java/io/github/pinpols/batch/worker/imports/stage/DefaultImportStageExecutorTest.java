@@ -18,6 +18,8 @@ import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportStage;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
 import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +31,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.beans.factory.ObjectProvider;
 
 /**
  * V6-D-5: DefaultImportStageExecutor 5 路径单测 — success / business-error / infra-error /
@@ -53,6 +56,7 @@ class DefaultImportStageExecutorTest {
 
   private ImportStageStep receiveStep;
   private DefaultImportStageExecutor executor;
+  private SimpleMeterRegistry meterRegistry;
 
   private static final Long PIPELINE_INSTANCE_ID = 100L;
   private static final Long STEP_RUN_ID = 200L;
@@ -60,6 +64,7 @@ class DefaultImportStageExecutorTest {
   @BeforeEach
   void setUp() {
     receiveStep = stubStep(ImportStage.RECEIVE);
+    meterRegistry = new SimpleMeterRegistry();
 
     when(pipelineRuns.startStepRun(any(), any(), any(), any())).thenReturn(STEP_RUN_ID);
 
@@ -70,8 +75,15 @@ class DefaultImportStageExecutorTest {
         allSteps.add(stubStep(stage));
       }
     }
+    @SuppressWarnings("unchecked")
+    ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
+    when(meterRegistryProvider.getIfAvailable()).thenReturn(meterRegistry);
     executor = new DefaultImportStageExecutor(
-        allSteps, pipelineDefinitions, pipelineRuns, recordGovernanceService);
+        allSteps,
+        pipelineDefinitions,
+        pipelineRuns,
+        recordGovernanceService,
+        meterRegistryProvider);
   }
 
   @Test
@@ -79,6 +91,10 @@ class DefaultImportStageExecutorTest {
   void execute_returnsSuccess_whenStepSucceeds() {
     when(receiveStep.execute(any())).thenReturn(ImportStageResult.success(ImportStage.RECEIVE));
     ImportJobContext context = buildContext();
+    context.getAttributes().put(PipelineRuntimeKeys.IMPORT_PARSED_COUNT, 10L);
+    context.getAttributes().put(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT, 9L);
+    context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LOADED_COUNT, 8L);
+    context.getAttributes().put(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT, 1L);
 
     List<ImportStageResult> results = executor.execute(context);
 
@@ -87,6 +103,14 @@ class DefaultImportStageExecutorTest {
     assertThat(results.get(0).stage()).isEqualTo(ImportStage.RECEIVE);
     verify(pipelineRuns).finishStepRunSuccess(eq(STEP_RUN_ID), any());
     verify(recordGovernanceService).finalizeErrorOutput(context);
+    assertThat(meterRegistry
+            .counter("import.file.rows.total", "workerType", "IMPORT", "phase", "parsed")
+            .count())
+        .isEqualTo(10.0);
+    assertThat(meterRegistry
+            .counter("import.file.rows.total", "workerType", "IMPORT", "phase", "loaded")
+            .count())
+        .isEqualTo(8.0);
   }
 
   @Test

@@ -7,6 +7,7 @@ import com.icegreen.greenmail.util.ServerSetupTest;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
+import io.github.pinpols.batch.testing.TestContainerLabels;
 import io.github.pinpols.batch.worker.dispatchs.BatchWorkerDispatchApplication;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
@@ -64,6 +65,7 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
   @Container
   @SuppressWarnings("resource")
   private static final GenericContainer<?> SFTP_SERVER = new GenericContainer<>(SFTP_IMAGE)
+      .withLabel(TestContainerLabels.OWNER, TestContainerLabels.OWNER_VALUE)
       .withExposedPorts(22)
       .withCommand(SFTP_USER + ":" + SFTP_PASSWORD + ":::upload")
       .waitingFor(Wait.forListeningPort().withStartupTimeout(Duration.ofMinutes(2)));
