@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionService;
 import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionSnapshot;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.Optional;
@@ -44,6 +45,7 @@ class ReadinessServiceTest {
         "EFFECTIVE",
         3,
         900L,
+        Instant.parse("2026-06-20T04:15:00Z"),
         "INLINE_JSON",
         "{\"rows\":10}",
         "s3://bucket/key");
@@ -63,6 +65,7 @@ class ReadinessServiceTest {
     assertThat(result.freshnessStatus()).isEqualTo("EFFECTIVE");
     assertThat(result.versionNo()).isEqualTo(3);
     assertThat(result.jobInstanceId()).isEqualTo(900L);
+    assertThat(result.readyAt()).isEqualTo(Instant.parse("2026-06-20T04:15:00Z"));
     assertThat(result.payloadStorage()).isEqualTo("INLINE_JSON");
     assertThat(result.payloadRef()).isEqualTo("s3://bucket/key");
   }

@@ -22,6 +22,7 @@ import io.github.pinpols.batch.console.application.contract.response.config.Tena
 import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.query.FileTemplateConfigQuery;
+import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.CalendarHolidayMapper;
@@ -79,7 +80,7 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
  * <p><b>3 阶段导入流程</b>：
  *
  * <ol>
- *   <li>{@link #upload} — 解析 Excel 字节流（11 sheet），构建 {@code PackageExcelSession} 存入 {@link
+ *   <li>{@link #upload} — 解析 Excel 字节流（12 sheet），构建 {@code PackageExcelSession} 存入 {@link
  *       TenantConfigPackageExcelImportStore}，返回短期 token（内存 TTL）。
  *   <li>{@link #preview} — 用 token 取回 session，调 {@link ConfigPackageExcelValidator} 做 跨 sheet
  *       依赖校验（如 pipelineStep 引用的 jobCode 必须存在），返回每 sheet 的 valid/invalid 统计和逐行错误列表，不写库。
@@ -88,9 +89,8 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
  *       workflow+node+edge 顺序写库， 完成后 {@code importStore.remove(token)}。
  * </ol>
  *
- * <p><b>11 sheets</b>（顺序即写库顺序）：resource_queue、business_calendar、batch_window、job、
- * file_channel、file_template、pipeline_definition、pipeline_step、workflow_definition、workflow_node、
- * workflow_edge。
+ * <p><b>12 sheets</b>：作业告警策略单独放在 {@code job_monitoring_policy}，与 {@code job_definition} 分开维护。
+ * 该 sheet 是当前配置包格式的必需组成部分；导入旧版或不完整工作簿时明确拒绝，避免配置包往返时静默遗漏策略。
  *
  * <p><b>多级结构写法</b>：
  *
@@ -153,8 +153,11 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
     List<Map<String, Object>> businessCalendars =
         withCalendarHolidayValues(businessCalendarMapper.selectByQuery(tid, null, null, null));
     List<Map<String, Object>> batchWindows = batchWindowMapper.selectByQuery(tid, null, null, null);
-    List<Map<String, Object>> jobs = rowProjections.toJobRows(
-        jobDefinitionMapper.selectByQuery(JobDefinitionQuery.ofTenant(tid, null)));
+    List<JobDefinitionEntity> jobDefinitions =
+        jobDefinitionMapper.selectByQuery(JobDefinitionQuery.ofTenant(tid, null));
+    List<Map<String, Object>> jobs = rowProjections.toJobRows(jobDefinitions);
+    List<Map<String, Object>> jobMonitoringPolicies =
+        rowProjections.toJobMonitoringPolicyRows(jobDefinitions);
     List<Map<String, Object>> channels =
         fileChannelConfigMapper.selectByQuery(tid, null, null, null, null);
     List<Map<String, Object>> fileTemplates =
@@ -172,6 +175,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
         businessCalendars,
         batchWindows,
         jobs,
+        jobMonitoringPolicies,
         channels,
         fileTemplates,
         pipelines,
@@ -405,6 +409,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
           parseOptionalSheet(wb, BUSINESS_CALENDAR_SHEET, BUSINESS_CALENDAR_COLUMNS, tenantId),
           parseOptionalSheet(wb, BATCH_WINDOW_SHEET, BATCH_WINDOW_COLUMNS, tenantId),
           parseSheet(wb, JOB_SHEET, JOB_COLUMNS, tenantId),
+          parseSheet(wb, JOB_MONITORING_POLICY_SHEET, JOB_MONITORING_POLICY_COLUMNS, tenantId),
           parseSheet(wb, CHANNEL_SHEET, CHANNEL_COLUMNS, tenantId),
           parseSheet(wb, FILE_TEMPLATE_SHEET, FILE_TEMPLATE_COLUMNS, tenantId),
           parseSheet(wb, PIPELINE_SHEET, PIPELINE_COLUMNS, tenantId),
@@ -454,6 +459,9 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
   }
 
   private static Set<String> requiredHeaders(String sheetName, List<String> columns) {
+    if (JOB_MONITORING_POLICY_SHEET.equals(sheetName)) {
+      return Set.of(COL_JOB_CODE);
+    }
     if (!JOB_SHEET.equals(sheetName)) {
       return Set.copyOf(columns);
     }
@@ -476,6 +484,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
         toSheetStats(result.businessCalendars()),
         toSheetStats(result.batchWindows()),
         toSheetStats(result.jobs()),
+        toSheetStats(result.jobMonitoringPolicies()),
         toSheetStats(result.channels()),
         toSheetStats(result.fileTemplates()),
         toSheetStats(result.pipelines()),
@@ -535,6 +544,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
     m.put(BUSINESS_CALENDAR_SHEET, session.businessCalendarRows());
     m.put(BATCH_WINDOW_SHEET, session.batchWindowRows());
     m.put(JOB_SHEET, session.jobRows());
+    m.put(JOB_MONITORING_POLICY_SHEET, session.jobMonitoringPolicyRows());
     m.put(CHANNEL_SHEET, session.fileChannelRows());
     m.put(FILE_TEMPLATE_SHEET, session.fileTemplateRows());
     m.put(PIPELINE_SHEET, session.pipelineRows());

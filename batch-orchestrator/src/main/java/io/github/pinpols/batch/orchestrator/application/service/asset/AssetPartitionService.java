@@ -136,6 +136,7 @@ public class AssetPartitionService {
         FRESHNESS_EFFECTIVE,
         row.versionNo(),
         row.jobInstanceId(),
+        row.effectiveAt(),
         row.payloadStorage(),
         row.payloadJson(),
         row.payloadRef());

@@ -16,6 +16,7 @@ import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
+import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
@@ -35,6 +36,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -58,6 +60,22 @@ public class ConfigPackageExcelValidator {
   public static final String COL_RETRY_POLICY = ConfigPackageExcelSchema.COL_RETRY_POLICY;
   public static final String COL_RETRY_MAX_COUNT = ConfigPackageExcelSchema.COL_RETRY_MAX_COUNT;
   public static final String COL_TIMEOUT_SECONDS = ConfigPackageExcelSchema.COL_TIMEOUT_SECONDS;
+  public static final String COL_SOFT_RUNTIME_SECONDS =
+      ConfigPackageExcelSchema.COL_SOFT_RUNTIME_SECONDS;
+  public static final String COL_SOFT_RUNTIME_SEVERITY =
+      ConfigPackageExcelSchema.COL_SOFT_RUNTIME_SEVERITY;
+  public static final String COL_START_GRACE_SECONDS =
+      ConfigPackageExcelSchema.COL_START_GRACE_SECONDS;
+  public static final String COL_START_GRACE_SEVERITY =
+      ConfigPackageExcelSchema.COL_START_GRACE_SEVERITY;
+  public static final String COL_COMPLETION_DEADLINE_LOCAL_TIME =
+      ConfigPackageExcelSchema.COL_COMPLETION_DEADLINE_LOCAL_TIME;
+  public static final String COL_COMPLETION_DEADLINE_DAY_OFFSET =
+      ConfigPackageExcelSchema.COL_COMPLETION_DEADLINE_DAY_OFFSET;
+  public static final String COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS =
+      ConfigPackageExcelSchema.COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS;
+  public static final String COL_COMPLETION_DEADLINE_SEVERITY =
+      ConfigPackageExcelSchema.COL_COMPLETION_DEADLINE_SEVERITY;
   public static final String COL_SHARD_STRATEGY = ConfigPackageExcelSchema.COL_SHARD_STRATEGY;
   public static final String COL_EXECUTION_MODE = ConfigPackageExcelSchema.COL_EXECUTION_MODE;
   public static final String COL_WATERMARK_FIELD = ConfigPackageExcelSchema.COL_WATERMARK_FIELD;
@@ -108,6 +126,8 @@ public class ConfigPackageExcelValidator {
   private static final String INTERNAL_ROW_NO = "__excel_row_no";
 
   public static final String JOB_SHEET = "job_definition";
+  public static final String JOB_MONITORING_POLICY_SHEET =
+      ConfigPackageExcelSchema.JobMonitoringPolicy.SHEET_NAME;
   public static final String RESOURCE_QUEUE_SHEET = ResourceQueueExcelRowParser.SHEET_NAME;
   public static final String BUSINESS_CALENDAR_SHEET = BusinessCalendarExcelRowParser.SHEET_NAME;
   public static final String BATCH_WINDOW_SHEET = BatchWindowExcelRowParser.SHEET_NAME;
@@ -205,6 +225,7 @@ public class ConfigPackageExcelValidator {
       SheetResult businessCalendars,
       SheetResult batchWindows,
       SheetResult jobs,
+      SheetResult jobMonitoringPolicies,
       SheetResult channels,
       SheetResult fileTemplates,
       SheetResult pipelines,
@@ -214,11 +235,45 @@ public class ConfigPackageExcelValidator {
       SheetResult wfEdges,
       List<WorkbookIssue> crossRefIssues) {
 
+    public PackageValidationResult(
+        SheetResult resourceQueues,
+        SheetResult businessCalendars,
+        SheetResult batchWindows,
+        SheetResult jobs,
+        SheetResult channels,
+        SheetResult fileTemplates,
+        SheetResult pipelines,
+        SheetResult steps,
+        SheetResult wfDefs,
+        SheetResult wfNodes,
+        SheetResult wfEdges,
+        List<WorkbookIssue> crossRefIssues) {
+      this(
+          resourceQueues,
+          businessCalendars,
+          batchWindows,
+          jobs,
+          emptySheet(JOB_MONITORING_POLICY_SHEET),
+          channels,
+          fileTemplates,
+          pipelines,
+          steps,
+          wfDefs,
+          wfNodes,
+          wfEdges,
+          crossRefIssues);
+    }
+
+    private static SheetResult emptySheet(String name) {
+      return new SheetResult(name, 0, List.of(), List.of());
+    }
+
     public int totalInvalid() {
       return resourceQueues.invalid()
           + businessCalendars.invalid()
           + batchWindows.invalid()
           + jobs.invalid()
+          + jobMonitoringPolicies.invalid()
           + channels.invalid()
           + fileTemplates.invalid()
           + pipelines.invalid()
@@ -231,6 +286,10 @@ public class ConfigPackageExcelValidator {
 
     public List<Map<String, String>> validJobs() {
       return jobs.validRows();
+    }
+
+    public List<Map<String, String>> validJobMonitoringPolicies() {
+      return jobMonitoringPolicies.validRows();
     }
 
     public List<Map<String, String>> validResourceQueues() {
@@ -279,6 +338,7 @@ public class ConfigPackageExcelValidator {
       all.addAll(businessCalendars.issues());
       all.addAll(batchWindows.issues());
       all.addAll(jobs.issues());
+      all.addAll(jobMonitoringPolicies.issues());
       all.addAll(channels.issues());
       all.addAll(fileTemplates.issues());
       all.addAll(pipelines.issues());
@@ -320,6 +380,8 @@ public class ConfigPackageExcelValidator {
         validateBusinessCalendarRows(tid, session.businessCalendarRows());
     SheetResult batchWindows = validateBatchWindowRows(tid, session.batchWindowRows());
     SheetResult jobs = validateJobRows(tid, session.jobRows());
+    SheetResult jobMonitoringPolicies =
+        validateJobMonitoringPolicyRows(tid, session.jobMonitoringPolicyRows(), jobs.validRows());
     SheetResult channels = validateChannelRows(tid, session.fileChannelRows());
     SheetResult fileTemplates = validateFileTemplateRows(tid, session.fileTemplateRows());
     SheetResult pipelines = validatePipelineRows(tid, session.pipelineRows());
@@ -349,6 +411,7 @@ public class ConfigPackageExcelValidator {
         businessCalendars,
         batchWindows,
         jobs,
+        jobMonitoringPolicies,
         channels,
         fileTemplates,
         pipelines,
@@ -397,6 +460,176 @@ public class ConfigPackageExcelValidator {
         rows,
         (row, rowNo, ri) ->
             ConfigPackageExcelRowValidators.validateJobRow(tenantId, row, seen, ri));
+  }
+
+  private SheetResult validateJobMonitoringPolicyRows(
+      String tenantId, List<Map<String, String>> rows, List<Map<String, String>> packageJobRows) {
+    Map<String, PolicyJobContext> packageJobs = packageJobRows.stream()
+        .filter(row -> hasText(normalize(row.get(COL_JOB_CODE))))
+        .collect(Collectors.toMap(
+            row -> normalize(row.get(COL_JOB_CODE)).toUpperCase(Locale.ROOT),
+            row -> new PolicyJobContext(
+                Objects.toString(normalizeEnum(row.get(COL_SCHEDULE_TYPE)), ""),
+                Objects.toString(normalize(row.get(COL_DEPENDS_ON_JOB_CODE)), "")),
+            (first, ignored) -> first));
+    Set<String> seen = new LinkedHashSet<>();
+    return validateRows(
+        JOB_MONITORING_POLICY_SHEET,
+        rows,
+        (row, rowNo, rowIssues) ->
+            validateJobMonitoringPolicyRow(tenantId, packageJobs, seen, row, rowIssues));
+  }
+
+  private void validateJobMonitoringPolicyRow(
+      String tenantId,
+      Map<String, PolicyJobContext> packageJobs,
+      Set<String> seen,
+      Map<String, String> row,
+      List<String> issues) {
+    validatePolicyTenant(tenantId, row, issues);
+    PolicyJobContext jobContext = resolvePolicyJob(tenantId, packageJobs, seen, row, issues);
+    if (jobContext != null) {
+      validateMonitoringPolicyApplicability(row, jobContext, issues);
+    }
+    validateMonitoringPolicyValues(row, issues);
+  }
+
+  private static void validatePolicyTenant(
+      String tenantId, Map<String, String> row, List<String> issues) {
+    String rowTenantId = normalize(row.get(COL_TENANT_ID));
+    if (hasText(rowTenantId) && !tenantId.equals(rowTenantId)) {
+      issues.add(COL_TENANT_ID + " must match the uploaded tenant");
+    }
+  }
+
+  private PolicyJobContext resolvePolicyJob(
+      String tenantId,
+      Map<String, PolicyJobContext> packageJobs,
+      Set<String> seen,
+      Map<String, String> row,
+      List<String> issues) {
+    String jobCode = normalize(row.get(COL_JOB_CODE));
+    if (!hasText(jobCode)) {
+      issues.add(COL_JOB_CODE + " is required");
+      return null;
+    }
+    String key = jobCode.toUpperCase(Locale.ROOT);
+    if (!seen.add(key)) {
+      issues.add("duplicate job_code in excel: " + jobCode);
+    }
+    PolicyJobContext packageJob = packageJobs.get(key);
+    if (packageJob != null) {
+      return packageJob;
+    }
+    JobDefinitionEntity existingJob = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
+    if (existingJob == null) {
+      issues.add("job_code does not exist for tenant: " + jobCode);
+      return null;
+    }
+    return new PolicyJobContext(existingJob.getScheduleType(), existingJob.getDependsOnJobCode());
+  }
+
+  private static void validateMonitoringPolicyApplicability(
+      Map<String, String> row, PolicyJobContext job, List<String> issues) {
+    boolean cron = "CRON".equals(job.scheduleType());
+    boolean dependent = hasText(job.dependsOnJobCode());
+    Integer startGrace = parseIntegerWithoutIssue(row.get(COL_START_GRACE_SECONDS));
+    Integer dependencyWindow =
+        parseIntegerWithoutIssue(row.get(COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS));
+    String deadlineTime = normalize(row.get(COL_COMPLETION_DEADLINE_LOCAL_TIME));
+    String dayOffset = normalize(row.get(COL_COMPLETION_DEADLINE_DAY_OFFSET));
+
+    if (!cron && !dependent && startGrace != null && startGrace > 0) {
+      issues.add(COL_START_GRACE_SECONDS + " is only supported for CRON or dependent jobs");
+    }
+    if (hasText(deadlineTime) && (!cron || dependent)) {
+      issues.add(COL_COMPLETION_DEADLINE_LOCAL_TIME
+          + " is only supported for CRON jobs without an upstream dependency");
+    }
+    if (dependencyWindow != null && dependencyWindow > 0 && !dependent) {
+      issues.add(
+          COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS + " is only supported for dependent jobs");
+    }
+    if (!cron && hasText(dayOffset) && !"0".equals(dayOffset)) {
+      issues.add(COL_COMPLETION_DEADLINE_DAY_OFFSET + " is only supported for CRON jobs");
+    }
+    if (hasText(deadlineTime) && dependencyWindow != null && dependencyWindow > 0) {
+      issues.add(COL_COMPLETION_DEADLINE_LOCAL_TIME + " and "
+          + COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS + " cannot both be configured");
+    }
+  }
+
+  private static void validateMonitoringPolicyValues(Map<String, String> row, List<String> issues) {
+    validateNonNegativeIntegerFields(row, issues);
+    validateDeadlineTime(row, issues);
+    validateDeadlineDayOffset(row, issues);
+    validateSeverityFields(row, issues);
+  }
+
+  private static void validateNonNegativeIntegerFields(
+      Map<String, String> row, List<String> issues) {
+    for (String field : List.of(
+        COL_SOFT_RUNTIME_SECONDS,
+        COL_START_GRACE_SECONDS,
+        COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS)) {
+      String value = normalize(row.get(field));
+      if (hasText(value)) {
+        parseOptionalNonNegativeInteger(value, field, issues);
+      }
+    }
+  }
+
+  private static void validateDeadlineTime(Map<String, String> row, List<String> issues) {
+    String deadlineTime = normalize(row.get(COL_COMPLETION_DEADLINE_LOCAL_TIME));
+    if (hasText(deadlineTime) && !deadlineTime.matches("^(?:[01]\\d|2[0-3]):[0-5]\\d$")) {
+      issues.add(COL_COMPLETION_DEADLINE_LOCAL_TIME + " must use HH:mm (00:00-23:59)");
+    }
+  }
+
+  private static void validateDeadlineDayOffset(Map<String, String> row, List<String> issues) {
+    String dayOffset = normalize(row.get(COL_COMPLETION_DEADLINE_DAY_OFFSET));
+    if (hasText(dayOffset) && !Set.of("0", "1").contains(dayOffset)) {
+      issues.add(COL_COMPLETION_DEADLINE_DAY_OFFSET + " must be 0 (same day) or 1 (next day)");
+    }
+  }
+
+  private static void validateSeverityFields(Map<String, String> row, List<String> issues) {
+    for (String field : List.of(
+        COL_SOFT_RUNTIME_SEVERITY, COL_START_GRACE_SEVERITY, COL_COMPLETION_DEADLINE_SEVERITY)) {
+      String severity = normalizeEnum(row.get(field));
+      if (hasText(severity) && !Set.of("WARN", "ERROR", "CRITICAL").contains(severity)) {
+        issues.add(field + " must be WARN, ERROR or CRITICAL");
+      }
+    }
+  }
+
+  private record PolicyJobContext(String scheduleType, String dependsOnJobCode) {}
+
+  private static Integer parseOptionalNonNegativeInteger(
+      String value, String field, List<String> issues) {
+    String normalized = normalize(value);
+    if (!hasText(normalized)) {
+      return null;
+    }
+    try {
+      int parsed = Integer.parseInt(normalized);
+      if (parsed < 0) {
+        issues.add(field + " must be >= 0");
+        return null;
+      }
+      return parsed;
+    } catch (NumberFormatException exception) {
+      issues.add(field + " must be an integer");
+      return null;
+    }
+  }
+
+  private static Integer parseIntegerWithoutIssue(String value) {
+    try {
+      return hasText(normalize(value)) ? Integer.valueOf(normalize(value)) : null;
+    } catch (NumberFormatException exception) {
+      return null;
+    }
   }
 
   private SheetResult validateChannelRows(String tenantId, List<Map<String, String>> rows) {

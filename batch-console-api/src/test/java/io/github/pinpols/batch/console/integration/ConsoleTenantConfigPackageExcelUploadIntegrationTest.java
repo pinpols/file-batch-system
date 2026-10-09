@@ -42,7 +42,7 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
   @Test
   @DisplayName("上传租户配置包: 返回成功,并回显文件通道与文件模板各命中一行")
   void shouldUploadMultipartTenantPackageWorkbookIncludingFileSheets() throws Exception {
-    byte[] workbook = tenantPackageWorkbook();
+    byte[] workbook = tenantPackageWorkbook(true);
     String boundary = "excel-upload-it-boundary";
     HttpRequest request = HttpRequest.newBuilder(URI.create(
             "http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
@@ -62,6 +62,27 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
     assertThat(response.body()).contains("\"fileTemplateRows\":1");
     assertThat(response.body()).contains("\"jobRows\":0");
     assertThat(response.body()).contains("\"workflowEdgeRows\":0");
+  }
+
+  @Test
+  @DisplayName("上传缺少作业监控策略 sheet 的配置包: 明确拒绝旧格式")
+  void shouldRejectWorkbookMissingJobMonitoringPolicySheet() throws Exception {
+    byte[] workbook = tenantPackageWorkbook(false);
+    String boundary = "excel-upload-missing-monitoring-boundary";
+    HttpRequest request = HttpRequest.newBuilder(URI.create(
+            "http://localhost:" + port + "/api/console/config/tenant-package/excel/upload"))
+        .timeout(Duration.ofSeconds(60))
+        .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+        .header(
+            CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-excel-upload-missing-monitoring")
+        .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(boundary, workbook)))
+        .build();
+
+    HttpResponse<String> response =
+        HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+
+    assertThat(response.body()).contains("job_monitoring_policy");
+    assertThat(response.body()).doesNotContain("\"code\":\"SUCCESS\"");
   }
 
   private static byte[] multipartBody(String boundary, byte[] workbook) throws Exception {
@@ -96,7 +117,7 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
     out.write("\r\n".getBytes(StandardCharsets.UTF_8));
   }
 
-  private static byte[] tenantPackageWorkbook() {
+  private static byte[] tenantPackageWorkbook(boolean includeMonitoringPolicySheet) {
     try (XSSFWorkbook workbook = new XSSFWorkbook()) {
       sheet(
           workbook,
@@ -118,6 +139,13 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
           ConfigPackageExcelValidator.JOB_SHEET,
           ConfigPackageExcelSchema.JobDefinition.COLUMNS,
           List.of());
+      if (includeMonitoringPolicySheet) {
+        sheet(
+            workbook,
+            ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET,
+            ConfigPackageExcelSchema.JobMonitoringPolicy.COLUMNS,
+            List.of());
+      }
       sheet(
           workbook,
           ConfigPackageExcelValidator.CHANNEL_SHEET,

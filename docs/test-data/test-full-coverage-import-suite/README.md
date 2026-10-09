@@ -2,12 +2,14 @@
 
 租户：`ta` / `tb` / `tc`、`default-tenant`
 
-本目录下的 `*-tenant-config-package-test.xlsx` 是系统当前主用的整合式配置包（11 sheet：resource_queue / business_calendar / batch_window / job_definition / file_channel_config / file_template_config / pipeline_definition / pipeline_step_definition / workflow_definition / workflow_node / workflow_edge），通过 `POST /api/console/config/tenant-package/excel/{upload,preview,apply}` 导入。
+本目录下的 `*-tenant-config-package-test.xlsx` 是系统当前主用的整合式配置包（12 sheet：resource_queue / business_calendar / batch_window / job_definition / job_monitoring_policy / file_channel_config / file_template_config / pipeline_definition / pipeline_step_definition / workflow_definition / workflow_node / workflow_edge），通过 `POST /api/console/config/tenant-package/excel/{upload,preview,apply}` 导入。作业监控阈值和告警级别只在 `job_monitoring_policy` 维护，不与作业定义重复。
+
+`job_monitoring_policy` 中无依赖 Cron 使用 `completion_deadline_local_time` / `completion_deadline_day_offset`；依赖作业使用 `dependency_completion_window_seconds`，从满足执行资格时刻起算。固定频率独立作业仅适用运行耗时监控；运行耗时阈值不统一默认开启。
 
 - `ta/tb/tc-tenant-config-package-test.xlsx`：三大业务租户样本。按租户分工覆盖枚举长尾——ta 补 IMPORT FEEDBACK 全链 / EXPORT 全链 / LOCAL channel；tb 补 DISPATCH 全链 / API channel；tc 补 GATEWAY ALL 与 N_OF join + FAILURE / CONDITION 边。幂等追加脚本 `scripts/local/append-tenant-coverage.py`。
 - `default-tenant-config-package-test.xlsx`：与 `batch-test-support/src/main/resources/db/testdata/multi-tenant-seed.sql` 中 v4 硬化批次新增的 `default-tenant` 项对齐（4 条本地化 channel_config + `wf_probe_pipeline` / `wf_probe_gateway` / `wf_probe_mixed` 3 条探针 workflow + 对应 job_definition）。生成脚本 `scripts/local/gen-default-tenant-excel.py`。
 
-> **关于基础依赖**：当前样本已切到 v3 11-sheet 格式，配置包内直接携带 `resource_queue`、`business_calendar`、`batch_window`、`file_template_config`；Import 目标表、字段映射和 Export SQL 后续应继续收敛到 `file_template_config`。完整 9+2 扩展见 [9+2 优化设计](../../design/tenant-config-package-excel-9plus2-design.md)。
+> **关于基础依赖**：当前样本采用 v4 12-sheet 格式，配置包内直接携带 `resource_queue`、`business_calendar`、`batch_window`、`file_template_config` 和独立的 `job_monitoring_policy`；Import 目标表、字段映射和 Export SQL 后续应继续收敛到 `file_template_config`。完整 9+2 扩展见 [9+2 优化设计](../../design/tenant-config-package-excel-9plus2-design.md)。旧 11-sheet 工作簿仍可导入，但不会修改已有作业监控策略。
 
 ## E2E 渠道基础设施（ta/tb/tc）
 

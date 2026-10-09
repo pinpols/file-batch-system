@@ -3,7 +3,9 @@ package io.github.pinpols.batch.trigger.infrastructure.readiness;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.trigger.application.UpstreamReadinessPort;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Component;
@@ -40,9 +42,9 @@ public class UpstreamReadinessChecker implements UpstreamReadinessPort {
    * @return true=就绪可 fire;false=未就绪 / 查询失败(fail-closed)
    */
   @Override
-  public boolean isReady(String tenantId, String upstreamJobCode, LocalDate bizDate) {
+  public Optional<Instant> readyAt(String tenantId, String upstreamJobCode, LocalDate bizDate) {
     if (!enabled) {
-      return true;
+      return Optional.of(Instant.now());
     }
     try {
       ReadinessResponse response = orchestratorRestClient
@@ -55,7 +57,11 @@ public class UpstreamReadinessChecker implements UpstreamReadinessPort {
               .build())
           .retrieve()
           .body(ReadinessResponse.class);
-      return EmptyChecks.isNotNull(response) && response.ready();
+      if (EmptyChecks.isNull(response) || !response.ready()) {
+        return Optional.empty();
+      }
+      // 与旧 Orchestrator 混合部署时响应可能没有 readyAt；以本次通过门禁的时刻作为兼容基准。
+      return Optional.ofNullable(response.readyAt()).or(() -> Optional.of(Instant.now()));
     } catch (RuntimeException e) {
       log.error(
           "upstream readiness check failed, fail-closed (skip fire): tenantId={} upstream={} "
@@ -64,7 +70,7 @@ public class UpstreamReadinessChecker implements UpstreamReadinessPort {
           upstreamJobCode,
           bizDate,
           SwallowedExceptionLogger.summary(e));
-      return false;
+      return Optional.empty();
     }
   }
 }

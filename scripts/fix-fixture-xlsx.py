@@ -54,6 +54,12 @@ CANONICAL_COLUMNS: dict[str, list[str]] = {
         "timeout_seconds", "shard_strategy", "execution_mode", "watermark_field",
         "execution_handler", "param_schema", "default_params", "enabled", "description",
     ],
+    "job_monitoring_policy": [
+        "tenant_id", "job_code", "soft_runtime_seconds", "soft_runtime_severity",
+        "start_grace_seconds", "start_grace_severity", "completion_deadline_local_time",
+        "completion_deadline_day_offset", "dependency_completion_window_seconds",
+        "completion_deadline_severity",
+    ],
     "file_channel_config": [
         "tenant_id", "channel_code", "channel_name", "channel_type", "target_endpoint",
         "auth_type", "config_json", "receipt_policy", "timeout_seconds", "enabled",

@@ -6,7 +6,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * 防漂移单测：锁定配置包 11 个 sheet 与共享 schema 的列定义。
+ * 防漂移单测：锁定配置包各 sheet 与共享 schema 的列定义。
  *
  * <p>新增字段时应优先改 {@link ConfigPackageExcelSchema}，配置包导入导出与模板下载统一从这里派生，避免多处维护字符串列表。
  */
@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 class ConfigPackageExcelSchemaConsistencyTest {
 
   @Test
-  @DisplayName("配置包写出列:11 个 sheet 全部取自共享 schema 定义")
+  @DisplayName("配置包写出列:所有 sheet 全部取自共享 schema 定义")
   void shouldUseSharedSchemaColumns_whenWritingWorkbook() {
     assertThat(ConfigPackageExcelWorkbookWriter.RESOURCE_QUEUE_COLUMNS)
         .isEqualTo(ConfigPackageExcelSchema.ResourceQueue.COLUMNS);
@@ -24,6 +24,8 @@ class ConfigPackageExcelSchemaConsistencyTest {
         .isEqualTo(ConfigPackageExcelSchema.BatchWindow.COLUMNS);
     assertThat(ConfigPackageExcelWorkbookWriter.JOB_COLUMNS)
         .isEqualTo(ConfigPackageExcelSchema.JobDefinition.COLUMNS);
+    assertThat(ConfigPackageExcelWorkbookWriter.JOB_MONITORING_POLICY_COLUMNS)
+        .isEqualTo(ConfigPackageExcelSchema.JobMonitoringPolicy.COLUMNS);
     assertThat(ConfigPackageExcelWorkbookWriter.CHANNEL_COLUMNS)
         .isEqualTo(ConfigPackageExcelSchema.FileChannel.COLUMNS);
     assertThat(ConfigPackageExcelWorkbookWriter.FILE_TEMPLATE_COLUMNS)
@@ -45,5 +47,23 @@ class ConfigPackageExcelSchemaConsistencyTest {
   void shouldKeepDependsOnColumnNearSchedule_whenSchemaChanges() {
     assertThat(ConfigPackageExcelSchema.JobDefinition.COLUMNS)
         .containsSubsequence("schedule_expr", "depends_on_job_code", "calendar_code");
+  }
+
+  @Test
+  @DisplayName("作业监控策略列独立于作业定义 sheet")
+  void shouldKeepMonitoringPolicyInDedicatedSheet() {
+    assertThat(ConfigPackageExcelSchema.JobDefinition.COLUMNS)
+        .doesNotContain(
+            ConfigPackageExcelSchema.COL_SOFT_RUNTIME_SECONDS,
+            ConfigPackageExcelSchema.COL_START_GRACE_SECONDS,
+            ConfigPackageExcelSchema.COL_COMPLETION_DEADLINE_LOCAL_TIME);
+    assertThat(ConfigPackageExcelSchema.JobMonitoringPolicy.COLUMNS)
+        .contains(
+            ConfigPackageExcelSchema.COL_JOB_CODE,
+            ConfigPackageExcelSchema.COL_SOFT_RUNTIME_SECONDS,
+            ConfigPackageExcelSchema.COL_START_GRACE_SECONDS,
+            ConfigPackageExcelSchema.COL_COMPLETION_DEADLINE_LOCAL_TIME,
+            ConfigPackageExcelSchema.COL_COMPLETION_DEADLINE_DAY_OFFSET,
+            ConfigPackageExcelSchema.COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS);
   }
 }

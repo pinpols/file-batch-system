@@ -31,7 +31,8 @@
 | 14 | [multi-tenant-and-security.md](./multi-tenant-and-security.md) | 多租户隔离边界 / 角色权限 / 密钥轮换 / 配置发布治理 / AI 输入边界 | 安全评审 / 加敏感字段 |
 | 15 | [batch-classification-and-gaps.md](./batch-classification-and-gaps.md) | 批量类型 3 维分类法（BatchType / ExecutionMode / TriggerType） + 系统缺口与 P0 落地草案 | 加新业务类型 / 评估增量执行 / 抽公共状态机 |
 | 16 | [process-worker-known-issues.md](./process-worker-known-issues.md) | 2026-04-28 PROCESS Worker 问题与修复快照 | 历史审计；当前待办以 todo-master 为准 |
-| 17 | [tenant-config-package-excel-9plus2-design.md](./tenant-config-package-excel-9plus2-design.md) | 租户配置包 Excel 9+2 优化设计：默认 9 sheet + 可选 calendar/window、依赖说明 sheet、字段说明合并单元格与关联关系列 | 改 tenant-package Excel / 补 Import 表名与 Export SQL 配置包迁移 |
+| 17 | [tenant-config-package-excel-9plus2-design.md](./tenant-config-package-excel-9plus2-design.md) | 当前已实现的租户配置包设计基线：9 个业务 sheet + 可选依赖、字段说明与跨 sheet 校验 | 核对现行配置包实现 |
+| 17a | [租户作业配置与资源边界收敛计划](../plans/tenant-job-configuration-simplification-plan-2026-10-09.md) | 待实施方案：降低租户填写量、场景化模板、平台托管资源配置及旧包迁移 | 规划配置包与租户资源权限改造 |
 | 18 | [pipeline-stage-progress-display.md](./pipeline-stage-progress-display.md) | Pipeline step 进度展示与 SSE 刷新设计：低频 dirty event、轮询快照、Worker 支持矩阵、降级策略 | 改 Pipeline Observability / SSE / Worker progress 前 |
 
 ## 专题设计

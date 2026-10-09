@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.request;
 
 import io.github.pinpols.batch.common.validation.ValidTenantId;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import java.time.LocalTime;
 import lombok.Data;
 
 @Data
@@ -43,6 +45,32 @@ public class JobDefinitionUpdateRequest {
   private String retryPolicy;
   private Integer retryMaxCount;
   private Integer timeoutSeconds;
+
+  @Min(0)
+  private Integer softRuntimeSeconds;
+
+  @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
+  private String softRuntimeSeverity;
+
+  @Min(0)
+  private Integer startGraceSeconds;
+
+  @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
+  private String startGraceSeverity;
+
+  private Boolean completionDeadlineEnabled;
+  private LocalTime completionDeadlineLocalTime;
+
+  @Min(0)
+  @jakarta.validation.constraints.Max(1)
+  private Integer completionDeadlineDayOffset;
+
+  @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
+  private String completionDeadlineSeverity;
+
+  @Min(0)
+  private Integer dependencyCompletionWindowSeconds;
+
   private String executionHandler;
   private String paramSchema;
   private String defaultParams;

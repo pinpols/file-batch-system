@@ -14,6 +14,7 @@
             <arg column="freshness_status" javaType="java.lang.String"/>
             <arg column="version_no"       javaType="java.lang.Integer"/>
             <arg column="job_instance_id"  javaType="java.lang.Long"/>
+            <arg column="effective_at"     javaType="java.time.Instant"/>
             <arg column="payload_storage"  javaType="java.lang.String"/>
             <arg column="payload_json"     javaType="java.lang.String"/>
             <arg column="payload_ref"      javaType="java.lang.String"/>
@@ -118,6 +119,7 @@
             ap.freshness_status,
             rv.version_no,
             ap.job_instance_id,
+            ap.effective_at,
             ap.payload_storage,
             rv.payload_json::text as payload_json,
             ap.payload_ref

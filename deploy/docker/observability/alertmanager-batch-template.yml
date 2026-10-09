@@ -3,7 +3,7 @@ global:
 
 route:
   receiver: batch-default
-  group_by: [alertname, team, alert_group, severity]
+  group_by: [alertname, tenant, team, alert_group, severity]
   group_wait: 30s
   group_interval: 5m
   repeat_interval: 2h
@@ -70,4 +70,4 @@ inhibit_rules:
       - severity="critical"
     target_matchers:
       - severity="warning"
-    equal: [alertname, team, alert_group]
+    equal: [alertname, tenant, team, alert_group]

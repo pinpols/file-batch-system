@@ -52,7 +52,8 @@ public class SuccessInstanceArchiveService {
     long archivedExecutionLogs = archiveMapper.archiveJobExecutionLogsByInstanceIds(ids);
     long archivedCompensations = archiveMapper.archiveCompensationCommandsByInstanceIds(ids);
 
-    // 12 步级联删（顺序遵守 cleanup-success-instances.sql）
+    // 归档后清除热表运行树及其告警幂等 claim，避免 claim 脱离源实例长期增长。
+    // 级联清理顺序遵守 cleanup-success-instances.sql。
     // FK 依赖：job_execution_log.job_partition_id 在 V119 之前没有 ON DELETE CASCADE，必须在
     // deleteJobPartitionsByInstanceIds 之前删完执行日志，否则 partition 删除会被 FK 阻塞。
     long stepInstances = archiveMapper.deleteJobStepInstancesByInstanceIds(ids);
@@ -66,6 +67,7 @@ public class SuccessInstanceArchiveService {
     long workflowNodeRuns = archiveMapper.deleteWorkflowNodeRunsByInstanceIds(ids);
     long workflowRuns = archiveMapper.deleteWorkflowRunsByInstanceIds(ids);
     long compensations = archiveMapper.deleteCompensationCommandsByInstanceIds(ids);
+    long monitoringClaims = archiveMapper.deleteJobMonitoringAlertClaimsByInstanceIds(ids);
     archiveMapper.nullifyParentInstanceIdByParentIds(ids);
     long instances = archiveMapper.deleteJobInstancesByIds(ids);
 
@@ -77,7 +79,7 @@ public class SuccessInstanceArchiveService {
             + " archivedExecutionLogs={}, archivedCompensations={}, instances={}, partitions={},"
             + " stepInstances={}, jobTasks={}, pipelineInstances={}, pipelineStepRuns={},"
             + " fileDispatch={}, workflowRuns={}, workflowNodeRuns={}, executionLogs={},"
-            + " compensations={}",
+            + " compensations={}, monitoringClaims={}",
         cutoff,
         retention,
         archivedInstances,
@@ -102,7 +104,8 @@ public class SuccessInstanceArchiveService {
         workflowRuns,
         workflowNodeRuns,
         executionLogs,
-        compensations);
+        compensations,
+        monitoringClaims);
     return new ArchiveBatchResult(true, cutoff, ids.size(), (int) instances);
   }
 

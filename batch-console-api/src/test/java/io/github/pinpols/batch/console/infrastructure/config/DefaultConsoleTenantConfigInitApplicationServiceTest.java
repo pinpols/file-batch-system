@@ -17,6 +17,7 @@ import io.github.pinpols.batch.console.application.contract.request.config.Tenan
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.JobDefinitionSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.WorkflowDefinitionSpec;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse;
+import io.github.pinpols.batch.console.config.JobMonitoringDefaultsProperties;
 import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
@@ -144,7 +145,8 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
             businessCalendarMapper,
             calendarHolidayMapper,
             tenantQuotaPolicyMapper,
-            alertRoutingConfigMapper));
+            alertRoutingConfigMapper),
+        new JobMonitoringDefaultsProperties());
     service = new DefaultConsoleTenantConfigInitApplicationService(
         new TenantConfigInitTenantExecutor(handlers));
   }
@@ -165,7 +167,9 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     assertThat(response.results().get(0).jobDefinitions().skipped()).isZero();
     verify(jobDefinitionMapper)
         .insert(argThat(entity -> "upstream-job".equals(entity.getDependsOnJobCode())
-            && "t1".equals(entity.getTenantId())));
+            && "t1".equals(entity.getTenantId())
+            && entity.getSoftRuntimeSeconds() == 0
+            && entity.getStartGraceSeconds() == 300));
   }
 
   @Test

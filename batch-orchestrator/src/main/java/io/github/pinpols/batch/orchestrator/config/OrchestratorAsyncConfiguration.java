@@ -22,6 +22,7 @@ public class OrchestratorAsyncConfiguration {
   // 避免与 OutboxPollScheduler @Component bean(默认 bean 名 outboxPollScheduler)
   // 同名冲突(Spring Boot 4 默认不允许 override → BeanDefinitionOverrideException)。
   public static final String OUTBOX_POLL_SCHEDULER = "outboxPollTaskScheduler";
+  public static final String JOB_MONITORING_SCHEDULER = "jobMonitoringTaskScheduler";
 
   /**
    * {@code defaultCandidate = false}:Spring Boot {@code TaskExecutionAutoConfiguration} 的
@@ -42,6 +43,20 @@ public class OrchestratorAsyncConfiguration {
     scheduler.setWaitForTasksToCompleteOnShutdown(true);
     scheduler.setAwaitTerminationSeconds(30);
     scheduler.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+    return scheduler;
+  }
+
+  /** 作业监控独占调度线程，监控阻塞或过载时不挤占 Outbox 和共享定时任务。 */
+  @Bean(name = JOB_MONITORING_SCHEDULER, destroyMethod = "shutdown", defaultCandidate = false)
+  public ThreadPoolTaskScheduler jobMonitoringTaskScheduler() {
+    ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+    scheduler.setPoolSize(1);
+    scheduler.setThreadNamePrefix("job-monitoring-scheduler-");
+    scheduler.setDaemon(false);
+    scheduler.setRemoveOnCancelPolicy(true);
+    scheduler.setWaitForTasksToCompleteOnShutdown(true);
+    scheduler.setAwaitTerminationSeconds(15);
+    scheduler.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
     return scheduler;
   }
 

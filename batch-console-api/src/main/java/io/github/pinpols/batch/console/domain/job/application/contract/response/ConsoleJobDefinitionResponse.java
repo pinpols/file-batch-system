@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import java.time.Instant;
+import java.time.LocalTime;
 
 public record ConsoleJobDefinitionResponse(
     Long id,
@@ -22,6 +24,15 @@ public record ConsoleJobDefinitionResponse(
     String retryPolicy,
     Integer retryMaxCount,
     Integer timeoutSeconds,
+    Integer softRuntimeSeconds,
+    String softRuntimeSeverity,
+    Integer startGraceSeconds,
+    String startGraceSeverity,
+    Boolean completionDeadlineEnabled,
+    @JsonFormat(pattern = "HH:mm") LocalTime completionDeadlineLocalTime,
+    Integer completionDeadlineDayOffset,
+    String completionDeadlineSeverity,
+    Integer dependencyCompletionWindowSeconds,
     String shardStrategy,
     String executionMode,
     String watermarkField,

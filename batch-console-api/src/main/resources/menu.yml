@@ -51,6 +51,7 @@ batch:
           minRole: VIEWER
           children:
             - { title: 告警, path: /observability/alerts, icon: WarningFilled, minRole: VIEWER }
+            - { title: 作业监控策略, path: /observability/job-monitoring-policies, icon: Timer, minRole: TENANT_ADMIN }
             - { title: 告警路由, path: /observability/alert-routings, icon: Promotion, minRole: TENANT_ADMIN }
             - { title: 通知与投递, path: /system/notifications, icon: Bell, minRole: TENANT_ADMIN }
             - { title: Outbox, path: /observability/outbox, icon: Box, minRole: TENANT_ADMIN }

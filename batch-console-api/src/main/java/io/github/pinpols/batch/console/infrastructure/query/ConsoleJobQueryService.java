@@ -251,6 +251,17 @@ public class ConsoleJobQueryService {
         display(entity.getRetryPolicy()),
         entity.getRetryMaxCount(),
         entity.getTimeoutSeconds(),
+        entity.getSoftRuntimeSeconds() == null ? 0 : entity.getSoftRuntimeSeconds(),
+        display(entity.getSoftRuntimeSeverity()),
+        entity.getStartGraceSeconds() == null ? 0 : entity.getStartGraceSeconds(),
+        display(entity.getStartGraceSeverity()),
+        entity.getCompletionDeadlineEnabled(),
+        entity.getCompletionDeadlineLocalTime(),
+        entity.getCompletionDeadlineDayOffset(),
+        display(entity.getCompletionDeadlineSeverity()),
+        entity.getDependencyCompletionWindowSeconds() == null
+            ? 0
+            : entity.getDependencyCompletionWindowSeconds(),
         display(entity.getShardStrategy()),
         display(entity.getExecutionMode()),
         display(entity.getWatermarkField()),

@@ -67,7 +67,7 @@ public final class AlertLabels {
     if (lower.contains(GROUP_DISPATCH)) {
       return GROUP_DISPATCH;
     }
-    if (lower.contains("sla")) {
+    if (lower.contains("sla") || isJobMonitoringAlert(lower)) {
       return GROUP_SLA;
     }
     if (lower.contains(GROUP_FRESHNESS) || lower.contains("asset") || lower.contains("stale")) {
@@ -79,6 +79,14 @@ public final class AlertLabels {
       return GROUP_CAPACITY;
     }
     return GROUP_DEFAULT;
+  }
+
+  private static boolean isJobMonitoringAlert(String normalizedAlertType) {
+    return normalizedAlertType.equals("job_running_too_long")
+        || normalizedAlertType.equals("job_not_started_by_deadline")
+        || normalizedAlertType.equals("job_completed_late")
+        || normalizedAlertType.equals("job_not_completed_by_deadline")
+        || normalizedAlertType.equals("job_final_partition_failure");
   }
 
   /**

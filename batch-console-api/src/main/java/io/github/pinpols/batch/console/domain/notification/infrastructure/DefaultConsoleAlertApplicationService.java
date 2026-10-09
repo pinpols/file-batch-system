@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.notification.infrastructure;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -98,7 +99,25 @@ public class DefaultConsoleAlertApplicationService implements ConsoleAlertApplic
       // 时长走桥接默认(AlertActionRequest 无时长维度);后续如需可扩展请求字段。
       alertmanagerSilenceBridge.silence(entity, null);
     } else if (STATUS_CLOSED.equals(nextStatus)) {
-      alertmanagerSilenceBridge.resolve(entity);
+      resolveAmGroupIfInactive(entity);
+    }
+  }
+
+  private void resolveAmGroupIfInactive(AlertEventEntity entity) {
+    try {
+      long activePeers = alertEventMapper.countActiveAlertsInAmGroup(
+          entity.getTenantId(),
+          entity.getServiceName(),
+          entity.getAlertType(),
+          entity.getSeverity(),
+          entity.getId());
+      if (activePeers == 0) {
+        alertmanagerSilenceBridge.resolve(entity);
+      }
+    } catch (RuntimeException exception) {
+      // 关闭已在事务中提交；解除通知查询失败不得把已成功的运维操作伪装成失败。
+      SwallowedExceptionLogger.warn(
+          DefaultConsoleAlertApplicationService.class, "catch:resolveAlertGroup", exception);
     }
   }
 

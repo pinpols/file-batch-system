@@ -61,6 +61,10 @@
                 update batch.job_instance set parent_instance_id = null
                  where parent_instance_id in (<include refid="JobInstancesByPrefix"/>)
             </when>
+            <when test="target == 'JOB_MONITORING_ALERT_CLAIM'">
+                delete from batch.job_monitoring_alert_claim
+                 where job_instance_id in (<include refid="JobInstancesByPrefix"/>)
+            </when>
             <when test="target == 'JOB_INSTANCE'">
                 delete from batch.job_instance
                  where job_code like #{prefixLike} escape '\'
@@ -166,6 +170,10 @@
                     select id from batch.job_instance where tenant_id in
                     <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
                  )
+            </when>
+            <when test="target == 'JOB_MONITORING_ALERT_CLAIM'">
+                delete from batch.job_monitoring_alert_claim where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
             </when>
             <when test="target == 'JOB_INSTANCE'">
                 delete from batch.job_instance where tenant_id in

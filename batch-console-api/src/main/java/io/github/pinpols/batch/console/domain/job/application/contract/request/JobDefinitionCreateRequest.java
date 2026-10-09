@@ -11,6 +11,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import java.time.LocalTime;
 import java.util.Set;
 import lombok.Data;
 import org.springframework.scheduling.support.CronExpression;
@@ -78,6 +79,39 @@ public class JobDefinitionCreateRequest {
   @Min(value = 0, message = "timeoutSeconds must be >= 0")
   private Integer timeoutSeconds;
 
+  /** 软运行时告警阈值；0 表示关闭，不影响硬超时。 */
+  @Min(value = 0, message = "softRuntimeSeconds must be >= 0")
+  private Integer softRuntimeSeconds;
+
+  @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
+  private String softRuntimeSeverity;
+
+  /** 计划触发后允许的启动延迟秒数；0 表示关闭。 */
+  @Min(value = 0, message = "startGraceSeconds must be >= 0")
+  private Integer startGraceSeconds;
+
+  @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
+  private String startGraceSeverity;
+
+  private Boolean completionDeadlineEnabled;
+
+  /** 定时作业最晚完成的本地时间；时区沿用作业定义，留空表示关闭。 */
+  private LocalTime completionDeadlineLocalTime;
+
+  /** 最晚完成日期相对计划触发日的偏移：0 当日，1 次日。 */
+  @Min(value = 0, message = "completionDeadlineDayOffset must be 0 or 1")
+  @jakarta.validation.constraints.Max(
+      value = 1,
+      message = "completionDeadlineDayOffset must be 0 or 1")
+  private Integer completionDeadlineDayOffset;
+
+  @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
+  private String completionDeadlineSeverity;
+
+  /** 依赖满足后允许下游完成的时长；0 表示关闭。 */
+  @Min(value = 0, message = "dependencyCompletionWindowSeconds must be >= 0")
+  private Integer dependencyCompletionWindowSeconds;
+
   private String executionHandler;
   private String paramSchema;
   private String defaultParams;
@@ -115,5 +149,26 @@ public class JobDefinitionCreateRequest {
   @AssertTrue(message = "jobType must be a supported JobType")
   public boolean isJobTypeSupported() {
     return EmptyChecks.isBlank(jobType) || SUPPORTED_JOB_TYPES.contains(jobType);
+  }
+
+  @AssertTrue(message = "monitoring thresholds must match the job schedule type and dependency")
+  public boolean isScheduledMonitoringConfiguredCorrectly() {
+    boolean cron = "CRON".equals(scheduleType);
+    boolean dependency = EmptyChecks.isNotBlank(dependsOnJobCode);
+    boolean startGraceEnabled = startGraceSeconds != null && startGraceSeconds > 0;
+    boolean localDeadlineEnabled =
+        Boolean.TRUE.equals(completionDeadlineEnabled) || completionDeadlineLocalTime != null;
+    boolean dependencyWindowEnabled =
+        dependencyCompletionWindowSeconds != null && dependencyCompletionWindowSeconds > 0;
+    return (cron || dependency || !startGraceEnabled)
+        && (!localDeadlineEnabled || cron && !dependency)
+        && (!dependencyWindowEnabled || dependency)
+        && !(localDeadlineEnabled && dependencyWindowEnabled);
+  }
+
+  @AssertTrue(
+      message = "completionDeadlineLocalTime is required when completionDeadlineEnabled=true")
+  public boolean isCompletionDeadlineTimePresentWhenEnabled() {
+    return !Boolean.TRUE.equals(completionDeadlineEnabled) || completionDeadlineLocalTime != null;
   }
 }

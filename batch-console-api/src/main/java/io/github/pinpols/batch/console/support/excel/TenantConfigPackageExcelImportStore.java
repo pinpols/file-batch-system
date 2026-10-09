@@ -21,11 +21,46 @@ public interface TenantConfigPackageExcelImportStore {
       List<Map<String, String>> businessCalendarRows,
       List<Map<String, String>> batchWindowRows,
       List<Map<String, String>> jobRows,
+      List<Map<String, String>> jobMonitoringPolicyRows,
       List<Map<String, String>> fileChannelRows,
       List<Map<String, String>> fileTemplateRows,
       List<Map<String, String>> pipelineRows,
       List<Map<String, String>> pipelineStepRows,
       List<Map<String, String>> workflowDefinitionRows,
       List<Map<String, String>> workflowNodeRows,
-      List<Map<String, String>> workflowEdgeRows) {}
+      List<Map<String, String>> workflowEdgeRows) {
+
+    public PackageExcelSession(
+        String fileName,
+        String tenantId,
+        Instant uploadedAt,
+        List<Map<String, String>> resourceQueueRows,
+        List<Map<String, String>> businessCalendarRows,
+        List<Map<String, String>> batchWindowRows,
+        List<Map<String, String>> jobRows,
+        List<Map<String, String>> fileChannelRows,
+        List<Map<String, String>> fileTemplateRows,
+        List<Map<String, String>> pipelineRows,
+        List<Map<String, String>> pipelineStepRows,
+        List<Map<String, String>> workflowDefinitionRows,
+        List<Map<String, String>> workflowNodeRows,
+        List<Map<String, String>> workflowEdgeRows) {
+      this(
+          fileName,
+          tenantId,
+          uploadedAt,
+          resourceQueueRows,
+          businessCalendarRows,
+          batchWindowRows,
+          jobRows,
+          List.of(),
+          fileChannelRows,
+          fileTemplateRows,
+          pipelineRows,
+          pipelineStepRows,
+          workflowDefinitionRows,
+          workflowNodeRows,
+          workflowEdgeRows);
+    }
+  }
 }

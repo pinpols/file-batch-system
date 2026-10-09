@@ -20,6 +20,13 @@ public interface AlertEventMapper {
       @Param("severity") String severity,
       @Param("status") String status);
 
+  long countActiveAlertsInAmGroup(
+      @Param("tenantId") String tenantId,
+      @Param("serviceName") String serviceName,
+      @Param("alertType") String alertType,
+      @Param("severity") String severity,
+      @Param("excludingId") Long excludingId);
+
   int updateStatus(
       @Param("tenantId") String tenantId, @Param("id") Long id, @Param("status") String status);
 

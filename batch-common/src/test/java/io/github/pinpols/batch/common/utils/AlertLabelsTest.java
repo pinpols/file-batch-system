@@ -40,6 +40,16 @@ class AlertLabelsTest {
   }
 
   @Test
+  @DisplayName("作业时限告警统一归入 SLA 通知组")
+  void alertGroup_groupsJobMonitoringAlertsAsSla() {
+    assertThat(AlertLabels.alertGroup("JOB_RUNNING_TOO_LONG")).isEqualTo("sla");
+    assertThat(AlertLabels.alertGroup("JOB_NOT_STARTED_BY_DEADLINE")).isEqualTo("sla");
+    assertThat(AlertLabels.alertGroup("JOB_COMPLETED_LATE")).isEqualTo("sla");
+    assertThat(AlertLabels.alertGroup("JOB_NOT_COMPLETED_BY_DEADLINE")).isEqualTo("sla");
+    assertThat(AlertLabels.alertGroup("JOB_FINAL_PARTITION_FAILURE")).isEqualTo("sla");
+  }
+
+  @Test
   @DisplayName("team 由 alert_group 一一派生")
   void team_derivesFromGroup() {
     assertThat(AlertLabels.team("DISPATCH_X")).isEqualTo("batch-dispatch");

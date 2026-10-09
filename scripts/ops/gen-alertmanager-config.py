@@ -15,7 +15,7 @@ Alertmanager route semantics")。本生成器把该表渲染成 alertmanager.yml
   # 渲染后跑 amtool 校验:
   gen-alertmanager-config.py --input rows.json --amtool
 
-行字段(对齐 V43):route_code, team, alert_group, severity, receiver,
+行字段(对齐 V43):tenant_id, route_code, team, alert_group, severity, receiver,
 group_by(逗号分隔或留空), group_wait_seconds, group_interval_seconds,
 repeat_interval_seconds, enabled。
 """
@@ -29,7 +29,7 @@ import tempfile
 AM_NOTIFY_BASE = "http://batch-console-api:18080/internal/am-notify"
 BEARER_PLACEHOLDER = "REPLACE_WITH_AM_NOTIFY_BEARER_TOKEN"
 DEFAULT_RECEIVER = "batch-default"
-DEFAULT_GROUP_BY = ["alertname", "team", "alert_group", "severity"]
+DEFAULT_GROUP_BY = ["alertname", "tenant", "team", "alert_group", "severity"]
 
 # fbs severity(大写) → AM severity(小写词形),与 AlertLabels.amSeverity 一致。
 SEVERITY_WORD = {
@@ -59,7 +59,7 @@ def load_rows(args):
         try:
             cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             cur.execute(
-                "select route_code, team, alert_group, severity, receiver, group_by, "
+                "select tenant_id, route_code, team, alert_group, severity, receiver, group_by, "
                 "group_wait_seconds, group_interval_seconds, repeat_interval_seconds, enabled "
                 "from batch.alert_routing_config where enabled = true "
                 "order by tenant_id, route_code"
@@ -78,7 +78,7 @@ def secs(row, key, default):
 def render(rows):
     # 稳定排序:route 树输出确定,便于 snapshot 契约测试。
     enabled = [r for r in rows if r.get("enabled", True)]
-    enabled.sort(key=lambda r: str(r.get("route_code", "")))
+    enabled.sort(key=lambda r: (str(r.get("tenant_id", "")), str(r.get("route_code", ""))))
 
     lines = []
     lines.append("global:")
@@ -93,7 +93,11 @@ def render(rows):
     if enabled:
         lines.append("  routes:")
         for r in enabled:
+            tenant_id = r.get("tenant_id")
+            if tenant_id is None or not str(tenant_id).strip():
+                raise ValueError("enabled alert routing row is missing tenant_id")
             matchers = []
+            matchers.append('tenant=%s' % json.dumps(str(tenant_id), ensure_ascii=False))
             if r.get("alert_group"):
                 matchers.append('alert_group="%s"' % r["alert_group"])
             if r.get("team"):
@@ -109,6 +113,8 @@ def render(rows):
             if gb:
                 cols = [c.strip() for c in str(gb).split(",") if c.strip()]
                 if cols:
+                    if "tenant" not in cols:
+                        cols.insert(1 if cols[0] == "alertname" else 0, "tenant")
                     lines.append("      group_by: [%s]" % ", ".join(cols))
             lines.append("      group_wait: %ds" % secs(r, "group_wait_seconds", 30))
             lines.append("      group_interval: %ds" % secs(r, "group_interval_seconds", 300))
@@ -133,13 +139,13 @@ def render(rows):
         lines.append("            credentials: %s" % BEARER_PLACEHOLDER)
     lines.append("")
 
-    # inhibit:critical 压 warning(同 alertname/team/alert_group)。
+    # 抑制关系必须限制在同一租户,避免一个租户的 critical 告警压制另一租户的 warning。
     lines.append("inhibit_rules:")
     lines.append("  - source_matchers:")
     lines.append('      - severity="critical"')
     lines.append("    target_matchers:")
     lines.append('      - severity="warning"')
-    lines.append("    equal: [alertname, team, alert_group]")
+    lines.append("    equal: [alertname, tenant, team, alert_group]")
     lines.append("")
     return "\n".join(lines)
 

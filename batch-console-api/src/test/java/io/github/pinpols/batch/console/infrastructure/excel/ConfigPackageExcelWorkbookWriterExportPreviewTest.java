@@ -14,6 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.poi.ss.usermodel.Comment;
+import org.apache.poi.ss.usermodel.DataValidation;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.DisplayName;
@@ -32,6 +33,7 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
       ConfigPackageExcelValidator.BUSINESS_CALENDAR_SHEET,
       ConfigPackageExcelValidator.BATCH_WINDOW_SHEET,
       ConfigPackageExcelValidator.JOB_SHEET,
+      ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET,
       ConfigPackageExcelValidator.CHANNEL_SHEET,
       ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET,
       ConfigPackageExcelValidator.PIPELINE_SHEET,
@@ -86,11 +88,50 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
   }
 
   @Test
+  @DisplayName("导出工作簿:监控阈值仅出现在独立策略 sheet")
+  void shouldWriteMonitoringPolicyToDedicatedSheet() throws Exception {
+    List<List<Map<String, Object>>> sheetData = emptyExportData();
+    sheetData.set(
+        4,
+        List.of(row(
+            "job_code", "JOB_IMPORT_CUSTOMER",
+            "soft_runtime_seconds", 900,
+            "soft_runtime_severity", "ERROR")));
+
+    try (XSSFWorkbook wb = read(workbookWriter().buildExportWorkbook(sheetData, Map.of()))) {
+      Sheet policySheet = wb.getSheet(ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET);
+      assertThat(policySheet.getRow(0).getCell(2).getStringCellValue())
+          .isEqualTo("soft_runtime_seconds");
+      assertThat(policySheet.getRow(1).getCell(1).getStringCellValue())
+          .isEqualTo("JOB_IMPORT_CUSTOMER");
+      assertThat(policySheet.getRow(1).getCell(3).getStringCellValue()).isEqualTo("ERROR");
+    }
+  }
+
+  @Test
+  @DisplayName("监控策略模板:严重级别下拉只应用到三个级别列")
+  void shouldApplySeverityDropdownsToSeverityColumns() throws Exception {
+    try (XSSFWorkbook wb =
+        read(workbookWriter().buildExportWorkbook(emptyExportData(), Map.of()))) {
+      Sheet policySheet = wb.getSheet(ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET);
+      List<Integer> validatedColumns = new ArrayList<>();
+      for (DataValidation validation : policySheet.getDataValidations()) {
+        if (!validation.getValidationConstraint().getFormula1().contains("CRITICAL")) {
+          continue;
+        }
+        validatedColumns.add(validation.getRegions().getCellRangeAddress(0).getFirstColumn());
+      }
+
+      assertThat(validatedColumns).containsExactly(3, 5, 9);
+    }
+  }
+
+  @Test
   @DisplayName("导出工作簿:步骤实现编码列按注册表生成动态下拉")
   void shouldApplyStepImplDropdown_whenRegistryProvidesImplCodes() throws Exception {
     List<List<Map<String, Object>>> sheetData = emptyExportData();
     sheetData.set(
-        7, List.of(row("job_code", "JOB_PROCESS", "version", "1", "impl_code", "sqlCompute")));
+        8, List.of(row("job_code", "JOB_PROCESS", "version", "1", "impl_code", "sqlCompute")));
 
     try (XSSFWorkbook wb = read(workbookWriter()
         .buildExportWorkbook(sheetData, Map.of("PROCESS", List.of("sqlCompute"))))) {

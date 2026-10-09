@@ -274,7 +274,7 @@ Prometheus metrics 那 76 条规则同样汇入中间的 AM 框(§1.4),复用同
 
 ### 7.1 本地 docker AM 全链 smoke(observability overlay,AM v0.28.1,`deploy/docker/compose/observability.yml:27`)
 
-一条端到端断言链(建议做成脚本,风格对齐 `sim-harness.sh` 系列):
+完整验收必须覆盖一条端到端断言链(脚本未实现的步骤不能标记为已通过):
 1. 起全栈 + observability overlay;route 由生成器从 `alert_routing_config` 种子数据渲染,`amtool check-config` 绿;
 2. 触发一条业务告警(打 `POST /internal/alerts`,`AlertInternalController.java:25`,带 tenant/alert_type/severity);
 3. 断言 `alert_event` 落库(UPSERT 去重);
@@ -287,6 +287,8 @@ Prometheus metrics 那 76 条规则同样汇入中间的 AM 框(§1.4),复用同
    console close → 断言 AM 侧 resolved;
 9. **inhibit**:同 alert_group 注入 critical + warning,断言 warning 被压;
 10. **回滚开关**:`am-emit.enabled=false` 后 emit 只落库不打 AM(断言 AM 无新 alert)。
+
+**当前交付状态**：`scripts/ops/am-migration-smoke.sh` 的默认模式只执行 AM API 契约；`--full` 目前仍输出手动步骤，不是自动全链测试。部署接收渠道也未配置时，Console 会返回 `SKIPPED/no_channel`，这只能证明回调到达，不能证明最终通知送达。CI/本地测试应使用隔离的测试 sender 验证 SUCCESS + delivery log；真实收件端交付仍属于目标环境验收，必须有获准的测试渠道。
 
 ### 7.2 单测 / IT / sim-e2e 断言
 

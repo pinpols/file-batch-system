@@ -307,6 +307,14 @@
       "sensitivity": "PUBLIC"
     },
     {
+      "id": "batch-console-api/src/main/java/io/github/pinpols/batch/console/config/JobMonitoringDefaultsProperties.java#JobMonitoringDefaultsProperties",
+      "className": "JobMonitoringDefaultsProperties",
+      "prefix": "batch.job-monitoring.defaults",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
       "id": "batch-console-api/src/main/java/io/github/pinpols/batch/console/config/LoginProtectionProperties.java#LoginProtectionProperties",
       "className": "LoginProtectionProperties",
       "prefix": "batch.console.login-protection",

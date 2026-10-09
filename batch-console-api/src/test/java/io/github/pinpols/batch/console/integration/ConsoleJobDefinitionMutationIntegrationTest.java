@@ -76,6 +76,14 @@ class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegr
     assertThat(rows).hasSize(1);
     assertThat(rows.get(0)).containsEntry("tenant_id", "int-ta");
     assertThat(rows.get(0)).containsEntry("job_code", jobCode);
+    Map<String, Object> monitoringPolicy = jdbcTemplate.queryForMap(
+        "SELECT soft_runtime_seconds, start_grace_seconds FROM batch.job_monitoring_policy mp "
+            + "JOIN batch.job_definition jd ON jd.id = mp.job_definition_id "
+            + "WHERE jd.job_code = ?",
+        jobCode);
+    assertThat(monitoringPolicy)
+        .containsEntry("soft_runtime_seconds", 0)
+        .containsEntry("start_grace_seconds", 0);
 
     // 清理
     jdbcTemplate.update("DELETE FROM batch.job_definition WHERE job_code = ?", jobCode);

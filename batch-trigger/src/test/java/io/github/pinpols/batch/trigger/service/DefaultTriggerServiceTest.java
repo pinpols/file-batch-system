@@ -296,8 +296,8 @@ class DefaultTriggerServiceTest {
         Map.of("calendarCode", "BIZ_CAL"));
 
     when(launchAdapterService.fromScheduledTrigger(eq(command), any())).thenReturn(launchRequest);
-    when(upstreamReadiness.isReady("t1", "UPSTREAM_SETTLE", LocalDate.of(2026, Month.MARCH, 28)))
-        .thenReturn(false);
+    when(upstreamReadiness.readyAt("t1", "UPSTREAM_SETTLE", LocalDate.of(2026, Month.MARCH, 28)))
+        .thenReturn(java.util.Optional.empty());
 
     assertThatThrownBy(() -> service.launchScheduled(command))
         .isInstanceOf(UpstreamNotReadyException.class);
@@ -329,14 +329,20 @@ class DefaultTriggerServiceTest {
         Map.of("calendarCode", "BIZ_CAL"));
 
     when(launchAdapterService.fromScheduledTrigger(eq(command), any())).thenReturn(launchRequest);
-    when(upstreamReadiness.isReady("t1", "UPSTREAM_SETTLE", LocalDate.of(2026, Month.MARCH, 28)))
-        .thenReturn(true);
+    when(upstreamReadiness.readyAt("t1", "UPSTREAM_SETTLE", LocalDate.of(2026, Month.MARCH, 28)))
+        .thenReturn(java.util.Optional.of(Instant.parse("2026-03-28T20:00:00Z")));
 
     LaunchResponse response = service.launchScheduled(command);
 
     // 就绪 → 正常 persistAndForward(落 trigger_request)
     assertThat(response).isNotNull();
     verify(triggerRequestMapper).insert(any());
+    org.mockito.ArgumentCaptor<LaunchEnvelope> envelope =
+        org.mockito.ArgumentCaptor.forClass(LaunchEnvelope.class);
+    verify(triggerOutboxPublisher)
+        .publishLaunch(anyString(), anyString(), anyString(), envelope.capture());
+    assertThat(envelope.getValue().launchRequest().params())
+        .containsEntry("dependencyReadyAt", "2026-03-28T20:00:00Z");
   }
 
   @Test

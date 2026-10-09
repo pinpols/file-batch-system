@@ -21,6 +21,7 @@ import org.apache.ibatis.annotations.Param;
  *   <li>workflow_run → job_instance
  *   <li>job_execution_log → job_instance
  *   <li>compensation_command → job_instance
+ *   <li>job_monitoring_alert_claim（清理实例级告警幂等记录）
  *   <li>job_instance.parent_instance_id NULL（解自引用 FK）
  *   <li>job_instance（根删）
  * </ol>
@@ -80,6 +81,8 @@ public interface SuccessInstanceArchiveMapper {
   int deleteJobExecutionLogsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
 
   int deleteCompensationCommandsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+
+  int deleteJobMonitoringAlertClaimsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
 
   int nullifyParentInstanceIdByParentIds(@Param("parentIds") List<Long> parentIds);
 

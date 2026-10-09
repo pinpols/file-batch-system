@@ -46,6 +46,7 @@ class AssetPartitionServiceTest {
         "EFFECTIVE",
         4,
         101L,
+        Instant.parse("2026-06-30T02:00:00Z"),
         "INLINE_JSON",
         "{\"rows\":20}",
         null);
@@ -80,6 +81,7 @@ class AssetPartitionServiceTest {
         "EFFECTIVE",
         4,
         101L,
+        Instant.parse("2026-06-30T02:00:00Z"),
         "INLINE_JSON",
         "{\"rows\":20}",
         null);

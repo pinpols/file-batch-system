@@ -3,20 +3,13 @@ global:
 
 route:
   receiver: batch-default
-  group_by: [alertname, team, alert_group, severity]
+  group_by: [alertname, tenant, team, alert_group, severity]
   group_wait: 30s
   group_interval: 5m
   repeat_interval: 2h
   routes:
     - matchers:
-        - alert_group="dispatch"
-        - team="batch-dispatch"
-        - severity="warning"
-      receiver: batch-dispatch
-      group_wait: 30s
-      group_interval: 300s
-      repeat_interval: 3600s
-    - matchers:
+        - tenant="tenant-a"
         - alert_group="sla"
         - team="batch-sla"
         - severity="critical"
@@ -25,19 +18,20 @@ route:
       group_wait: 10s
       group_interval: 120s
       repeat_interval: 1800s
+    - matchers:
+        - tenant="tenant-b"
+        - alert_group="dispatch"
+        - team="batch-dispatch"
+        - severity="warning"
+      receiver: batch-dispatch
+      group_wait: 30s
+      group_interval: 300s
+      repeat_interval: 3600s
 
 receivers:
   - name: batch-default
     webhook_configs:
       - url: http://batch-console-api:18080/internal/am-notify/batch-default
-        send_resolved: true
-        http_config:
-          authorization:
-            type: Bearer
-            credentials: REPLACE_WITH_AM_NOTIFY_BEARER_TOKEN
-  - name: batch-dispatch
-    webhook_configs:
-      - url: http://batch-console-api:18080/internal/am-notify/batch-dispatch
         send_resolved: true
         http_config:
           authorization:
@@ -51,10 +45,18 @@ receivers:
           authorization:
             type: Bearer
             credentials: REPLACE_WITH_AM_NOTIFY_BEARER_TOKEN
+  - name: batch-dispatch
+    webhook_configs:
+      - url: http://batch-console-api:18080/internal/am-notify/batch-dispatch
+        send_resolved: true
+        http_config:
+          authorization:
+            type: Bearer
+            credentials: REPLACE_WITH_AM_NOTIFY_BEARER_TOKEN
 
 inhibit_rules:
   - source_matchers:
       - severity="critical"
     target_matchers:
       - severity="warning"
-    equal: [alertname, team, alert_group]
+    equal: [alertname, tenant, team, alert_group]

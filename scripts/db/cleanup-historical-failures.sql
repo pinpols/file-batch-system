@@ -121,6 +121,15 @@ WITH old_instances AS (
 DELETE FROM batch.workflow_run
  WHERE related_job_instance_id IN (SELECT id FROM old_instances);
 
+-- 作业监控 claim 不设 job_instance 外键（源表按业务日分区）；删除实例前显式清理。
+WITH old_instances AS (
+  SELECT id FROM batch.job_instance
+   WHERE instance_status IN ('FAILED','CANCELLED','TERMINATED')
+     AND created_at < now() - interval :'retention_interval'
+)
+DELETE FROM batch.job_monitoring_alert_claim
+ WHERE job_instance_id IN (SELECT id FROM old_instances);
+
 -- 最后根：job_instance
 DELETE FROM batch.job_instance
  WHERE instance_status IN ('FAILED','CANCELLED','TERMINATED')

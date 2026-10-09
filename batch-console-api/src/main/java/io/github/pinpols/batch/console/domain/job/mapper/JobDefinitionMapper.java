@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.job.mapper;
 
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.param.JobDefinitionMaintenanceUpdateParam;
+import io.github.pinpols.batch.console.domain.job.param.JobMonitoringPolicyUpsertParam;
 import io.github.pinpols.batch.console.domain.job.query.JobDefinitionQuery;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +19,14 @@ public interface JobDefinitionMapper {
   JobDefinitionEntity selectById(String tenantId, Long id);
 
   int insert(JobDefinitionEntity entity);
+
+  int upsertJobMonitoringPolicy(JobMonitoringPolicyUpsertParam param);
+
+  int copyJobMonitoringPolicy(
+      @Param("tenantId") String tenantId,
+      @Param("sourceJobDefinitionId") Long sourceJobDefinitionId,
+      @Param("targetJobDefinitionId") Long targetJobDefinitionId,
+      @Param("updatedBy") String updatedBy);
 
   int updateJobDefinitionMaintenance(JobDefinitionMaintenanceUpdateParam param);
 

@@ -31,6 +31,9 @@ spec:
       path: {{ $.Values.serviceMonitor.path | default "/actuator/prometheus" }}
       interval: {{ $.Values.serviceMonitor.interval | default "30s" }}
       scrapeTimeout: {{ $.Values.serviceMonitor.scrapeTimeout | default "10s" }}
+      relabelings:
+        - targetLabel: job
+          replacement: batch-{{ $component }}
       honorLabels: true
 {{- end }}
 {{- if $.Values.otelCollector.enabled }}

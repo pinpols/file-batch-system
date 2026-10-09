@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.Nullables;
+import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.AlertRoutingSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.BatchWindowSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.BusinessCalendarSpec;
@@ -21,12 +22,15 @@ import io.github.pinpols.batch.console.application.contract.request.config.Tenan
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.WorkflowDefinitionSpec;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.ItemStats;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.ItemStatsAccumulator;
+import io.github.pinpols.batch.console.config.JobMonitoringDefaultsProperties;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.param.JobDefinitionMaintenanceUpdateParam;
+import io.github.pinpols.batch.console.domain.job.param.JobMonitoringPolicyUpsertParam;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionUpsertParam;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowEdgeUpsertParam;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowNodeUpsertParam;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -59,16 +63,19 @@ public class TenantConfigInitApplyHandlers {
   private final PlatformTransactionManager transactionManager;
   private final TenantFileConfigApplySupport fileConfigSupport;
   private final TenantOperationalConfigApplySupport operationalConfigSupport;
+  private final JobMonitoringDefaultsProperties monitoringDefaults;
 
   public TenantConfigInitApplyHandlers(
       TenantDefinitionConfigMappers definitionMappers,
       PlatformTransactionManager transactionManager,
       TenantFileConfigApplySupport fileConfigSupport,
-      TenantOperationalConfigApplySupport operationalConfigSupport) {
+      TenantOperationalConfigApplySupport operationalConfigSupport,
+      JobMonitoringDefaultsProperties monitoringDefaults) {
     this.definitionMappers = definitionMappers;
     this.transactionManager = transactionManager;
     this.fileConfigSupport = fileConfigSupport;
     this.operationalConfigSupport = operationalConfigSupport;
+    this.monitoringDefaults = monitoringDefaults;
   }
 
   /** 上下文：一次 apply 调用所需的四个不变量，避免在 10 个 apply* 方法中重复传参。 */
@@ -234,6 +241,19 @@ public class TenantConfigInitApplyHandlers {
     entity.setRetryPolicy(Nullables.coalesce(spec.getRetryPolicy(), "NONE"));
     entity.setRetryMaxCount(spec.getRetryMaxCount());
     entity.setTimeoutSeconds(spec.getTimeoutSeconds());
+    entity.setSoftRuntimeSeconds(resolveSoftRuntime(spec.getSoftRuntimeSeconds()));
+    entity.setSoftRuntimeSeverity(severityOrWarn(spec.getSoftRuntimeSeverity()));
+    entity.setStartGraceSeconds(resolveStartGrace(
+        spec.getScheduleType(), spec.getDependsOnJobCode(), spec.getStartGraceSeconds()));
+    entity.setStartGraceSeverity(severityOrWarn(spec.getStartGraceSeverity()));
+    entity.setCompletionDeadlineLocalTime(spec.getCompletionDeadlineLocalTime());
+    entity.setDependencyCompletionWindowSeconds(
+        valueOrZero(spec.getDependencyCompletionWindowSeconds()));
+    entity.setCompletionDeadlineDayOffset(
+        spec.getCompletionDeadlineLocalTime() == null
+            ? 0
+            : valueOrZero(spec.getCompletionDeadlineDayOffset()));
+    entity.setCompletionDeadlineSeverity(severityOrWarn(spec.getCompletionDeadlineSeverity()));
     entity.setExecutionHandler(spec.getExecutionHandler());
     entity.setParamSchema(spec.getParamSchema());
     entity.setDefaultParams(spec.getDefaultParams());
@@ -253,15 +273,31 @@ public class TenantConfigInitApplyHandlers {
     entity.setCreatedBy(operator);
     entity.setUpdatedBy(operator);
     definitionMappers.jobDefinition.insert(entity);
+    saveMonitoringPolicy(tenantId, entity, operator);
   }
 
   private void updateJobDefinition(
       JobDefinitionEntity existing, JobDefinitionSpec spec, String operator) {
+    String dependsOnJobCode = Nullables.coalesce(
+        CodeNormalizer.trimToNull(spec.getDependsOnJobCode()), existing.getDependsOnJobCode());
+    LocalTime completionDeadlineLocalTime = spec.getCompletionDeadlineLocalTime() == null
+        ? existing.getCompletionDeadlineLocalTime()
+        : spec.getCompletionDeadlineLocalTime();
+    Integer dependencyCompletionWindowSeconds = resolveMonitoringValue(
+        spec.getDependencyCompletionWindowSeconds(),
+        existing.getDependencyCompletionWindowSeconds());
+    validateScheduledMonitoring(
+        existing.getScheduleType(),
+        dependsOnJobCode,
+        spec.getStartGraceSeconds(),
+        completionDeadlineLocalTime,
+        dependencyCompletionWindowSeconds);
     JobDefinitionMaintenanceUpdateParam param = new JobDefinitionMaintenanceUpdateParam();
     param.setTenantId(existing.getTenantId());
     param.setJobCode(existing.getJobCode());
-    param.setDependsOnJobCode(Nullables.coalesce(
-        CodeNormalizer.trimToNull(spec.getDependsOnJobCode()), existing.getDependsOnJobCode()));
+    param.setDependsOnJobCode(dependsOnJobCode);
+    param.setDependencyCompletionWindowSeconds(
+        Texts.hasText(dependsOnJobCode) ? dependencyCompletionWindowSeconds : 0);
     param.setJobName(Nullables.coalesce(spec.getJobName(), existing.getJobName()));
     param.setQueueCode(Nullables.coalesce(
         CodeNormalizer.toConfigFormOrNull(spec.getQueueCode()), existing.getQueueCode()));
@@ -287,6 +323,107 @@ public class TenantConfigInitApplyHandlers {
         Nullables.coalesce(spec.getWatermarkField(), existing.getWatermarkField()));
     param.setUpdatedBy(operator);
     definitionMappers.jobDefinition.updateJobDefinitionMaintenance(param);
+    definitionMappers.jobDefinition.upsertJobMonitoringPolicy(
+        JobMonitoringPolicyUpsertParam.builder()
+            .tenantId(existing.getTenantId())
+            .jobDefinitionId(existing.getId())
+            .softRuntimeSeconds(resolveMonitoringValue(
+                spec.getSoftRuntimeSeconds(), existing.getSoftRuntimeSeconds()))
+            .softRuntimeSeverity(resolveMonitoringSeverity(
+                spec.getSoftRuntimeSeverity(), existing.getSoftRuntimeSeverity()))
+            .startGraceSeconds(resolveMonitoringValue(
+                spec.getStartGraceSeconds(), existing.getStartGraceSeconds()))
+            .startGraceSeverity(resolveMonitoringSeverity(
+                spec.getStartGraceSeverity(), existing.getStartGraceSeverity()))
+            .completionDeadlineLocalTime(completionDeadlineLocalTime)
+            .completionDeadlineDayOffset(resolveCompletionDeadlineDayOffset(
+                completionDeadlineLocalTime,
+                spec.getCompletionDeadlineDayOffset(),
+                existing.getCompletionDeadlineDayOffset()))
+            .dependencyCompletionWindowSeconds(param.getDependencyCompletionWindowSeconds())
+            .completionDeadlineSeverity(resolveMonitoringSeverity(
+                spec.getCompletionDeadlineSeverity(), existing.getCompletionDeadlineSeverity()))
+            .updatedBy(operator)
+            .build());
+  }
+
+  private void saveMonitoringPolicy(String tenantId, JobDefinitionEntity entity, String operator) {
+    validateScheduledMonitoring(
+        entity.getScheduleType(),
+        entity.getDependsOnJobCode(),
+        entity.getStartGraceSeconds(),
+        entity.getCompletionDeadlineLocalTime(),
+        entity.getDependencyCompletionWindowSeconds());
+    definitionMappers.jobDefinition.upsertJobMonitoringPolicy(
+        JobMonitoringPolicyUpsertParam.builder()
+            .tenantId(tenantId)
+            .jobDefinitionId(entity.getId())
+            .softRuntimeSeconds(valueOrZero(entity.getSoftRuntimeSeconds()))
+            .softRuntimeSeverity(severityOrWarn(entity.getSoftRuntimeSeverity()))
+            .startGraceSeconds(valueOrZero(entity.getStartGraceSeconds()))
+            .startGraceSeverity(severityOrWarn(entity.getStartGraceSeverity()))
+            .completionDeadlineLocalTime(entity.getCompletionDeadlineLocalTime())
+            .completionDeadlineDayOffset(valueOrZero(entity.getCompletionDeadlineDayOffset()))
+            .dependencyCompletionWindowSeconds(
+                valueOrZero(entity.getDependencyCompletionWindowSeconds()))
+            .completionDeadlineSeverity(severityOrWarn(entity.getCompletionDeadlineSeverity()))
+            .updatedBy(operator)
+            .build());
+  }
+
+  private int resolveStartGrace(String scheduleType, String dependsOnJobCode, Integer requested) {
+    if (requested != null) {
+      return requested;
+    }
+    return "CRON".equals(scheduleType) || Texts.hasText(dependsOnJobCode)
+        ? monitoringDefaults.getStartGraceSeconds()
+        : 0;
+  }
+
+  private static Integer resolveCompletionDeadlineDayOffset(
+      LocalTime deadlineTime, Integer requestedOffset, Integer existingOffset) {
+    if (deadlineTime == null) {
+      return 0;
+    }
+    return requestedOffset == null ? valueOrZero(existingOffset) : requestedOffset;
+  }
+
+  private int resolveSoftRuntime(Integer requested) {
+    return requested == null ? monitoringDefaults.getSoftRuntimeSeconds() : requested;
+  }
+
+  private static void validateScheduledMonitoring(
+      String scheduleType,
+      String dependsOnJobCode,
+      Integer startGraceSeconds,
+      LocalTime completionDeadlineLocalTime,
+      Integer dependencyCompletionWindowSeconds) {
+    boolean cron = "CRON".equals(scheduleType);
+    boolean dependency = Texts.hasText(dependsOnJobCode);
+    boolean startGraceSupported = cron || dependency;
+    boolean invalidCompletionDeadline = completionDeadlineLocalTime != null && (!cron || dependency)
+        || valueOrZero(dependencyCompletionWindowSeconds) > 0 && !dependency
+        || completionDeadlineLocalTime != null
+            && valueOrZero(dependencyCompletionWindowSeconds) > 0;
+    if ((!startGraceSupported && valueOrZero(startGraceSeconds) > 0) || invalidCompletionDeadline) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
+    }
+  }
+
+  private static Integer resolveMonitoringValue(Integer requested, Integer existing) {
+    return valueOrZero(requested == null ? existing : requested);
+  }
+
+  private static Integer valueOrZero(Integer value) {
+    return value == null ? 0 : value;
+  }
+
+  private static String resolveMonitoringSeverity(String requested, String existing) {
+    return severityOrWarn(requested == null ? existing : requested);
+  }
+
+  private static String severityOrWarn(String severity) {
+    return severity == null || severity.isBlank() ? "WARN" : severity;
   }
 
   ItemStats applyWorkflowDefinitions(List<WorkflowDefinitionSpec> specs, ApplyContext ctx) {

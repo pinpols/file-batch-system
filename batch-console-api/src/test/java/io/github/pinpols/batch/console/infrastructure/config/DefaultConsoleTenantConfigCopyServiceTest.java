@@ -106,6 +106,10 @@ class DefaultConsoleTenantConfigCopyServiceTest {
         .extracting("templateCode")
         .containsExactly("tpl-from-job", "tpl-from-step");
     assertThat(bundle.getFileChannels()).extracting("channelCode").containsExactly("chan-explicit");
+    assertThat(bundle.getJobDefinitions())
+        .singleElement()
+        .extracting("dependencyCompletionWindowSeconds")
+        .isEqualTo(900);
   }
 
   @Test
@@ -142,6 +146,7 @@ class DefaultConsoleTenantConfigCopyServiceTest {
     job.setQueueCode("q1");
     job.setWindowCode("nightly");
     job.setCalendarCode("cn");
+    job.setDependencyCompletionWindowSeconds(900);
     job.setDefaultParams("{\"fileTemplateCode\":\"tpl-from-job\"}");
     when(jobDefinitionMapper.selectByQuery(any(JobDefinitionQuery.class))).thenReturn(List.of(job));
     when(pipelineDefinitionMapper.selectByQuery(
