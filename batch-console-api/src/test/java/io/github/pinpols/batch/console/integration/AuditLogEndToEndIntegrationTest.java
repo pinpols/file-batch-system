@@ -39,8 +39,7 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  */
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("审计切面端到端: 真实 HTTP 写操作后审计行落库,动作与聚合标识与声明一致")
 class AuditLogEndToEndIntegrationTest extends AbstractIntegrationTest {
 

@@ -22,8 +22,7 @@ import org.springframework.http.MediaType;
  */
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("原子任务配置写路径: 参数文档落库,按类型列表查询与参数安全校验")
 class ConsoleAtomicTaskConfigMutationIntegrationTest extends AbstractMutationIntegrationTest {
 

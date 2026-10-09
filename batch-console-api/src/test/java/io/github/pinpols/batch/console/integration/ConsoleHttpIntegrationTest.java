@@ -44,8 +44,7 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("控制台 HTTP 写端点: 触发,导出,排水,审批,文件与密钥等链路的响应与入参校验")
 class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
 

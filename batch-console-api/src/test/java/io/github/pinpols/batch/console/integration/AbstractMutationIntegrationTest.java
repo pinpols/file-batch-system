@@ -19,17 +19,17 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  * <pre>{@code
  * @SpringBootTest(
  *     classes = BatchConsoleApiApplication.class,
- *     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
- *     properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+ *     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
  * class ConsoleXxxMutationIntegrationTest extends AbstractMutationIntegrationTest {
  *   @Test
  *   void shouldCreate() { client.post().uri("/api/console/xxx")... }
  * }
  * }</pre>
  *
- * <p>注:本基类**不**强加 {@code @SpringBootTest} —— 子类各自声明启用 properties / classes,避免 Spring context
- * 缓存粒度漂移。WebTestClient response timeout 默认 60s,满足 Mutation IT 包含 Flyway / Kafka topic create 等
- * 启动等待场景。
+ * <p>注:本基类**不**强加 {@code @SpringBootTest} —— 子类各自声明应用类与 Web 环境；公共测试属性由
+ * {@link AbstractIntegrationTest} 和模块 {@code application-test.yml} 提供，避免在子类重复声明。这样可以保持
+ * Spring context 配置一致，并避免同一基础值在多个测试类间漂移。WebTestClient response timeout 默认 60s，满足
+ * Mutation IT 包含 Flyway / Kafka topic create 等启动等待场景。
  */
 public abstract class AbstractMutationIntegrationTest extends AbstractIntegrationTest {
 

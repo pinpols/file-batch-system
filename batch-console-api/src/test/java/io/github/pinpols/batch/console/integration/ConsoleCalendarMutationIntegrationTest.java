@@ -22,8 +22,7 @@ import org.springframework.http.MediaType;
  */
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("业务日历写路径: 编码格式校验,落库字段透传与唯一约束")
 class ConsoleCalendarMutationIntegrationTest extends AbstractMutationIntegrationTest {
 

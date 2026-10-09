@@ -16,8 +16,7 @@ import org.springframework.http.MediaType;
  */
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("配额策略写路径: 编码格式与数值边界校验,落库与唯一约束")
 class ConsoleQuotaPolicyMutationIntegrationTest extends AbstractMutationIntegrationTest {
 

@@ -25,8 +25,7 @@ import org.springframework.http.MediaType;
  */
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("作业定义写路径: 编码校验,落库租户强一致,更新与依赖作业字段")
 class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegrationTest {
 

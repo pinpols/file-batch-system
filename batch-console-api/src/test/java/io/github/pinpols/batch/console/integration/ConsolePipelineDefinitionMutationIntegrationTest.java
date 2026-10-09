@@ -23,8 +23,7 @@ import org.springframework.http.MediaType;
  */
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("流水线定义写路径: 作业编码与流水线类型校验,落库字段透传与唯一约束")
 class ConsolePipelineDefinitionMutationIntegrationTest extends AbstractMutationIntegrationTest {
 

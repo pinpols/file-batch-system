@@ -28,8 +28,7 @@ import org.springframework.http.HttpStatus;
 
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("租户配置包 Excel 上传: 解析成功并回显各工作表命中行数")
 class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractIntegrationTest {
 
