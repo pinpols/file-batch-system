@@ -59,10 +59,17 @@ Image reference helper.  Usage: include "batch-platform.image" (dict "root" . "n
   Chart.AppVersion 必须与 pom.xml <revision> 保持一致（两处同步改）。
 */}}
 {{- define "batch-platform.image" -}}
+{{- $references := .root.Values.image.references | default dict -}}
+{{- $reference := index $references .name | default "" -}}
 {{- $reg := .root.Values.image.registry -}}
 {{- $tag := default .root.Chart.AppVersion .root.Values.image.tag -}}
 {{- $digest := default "" .root.Values.image.digest -}}
-{{- if $digest -}}
+{{- if $reference -}}
+{{- if not (regexMatch "^([a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]+)?/)?[a-z0-9][a-z0-9._/-]*@sha256:[0-9a-f]{64}$" $reference) -}}
+{{- fail (printf "image.references.%s must be an immutable sha256 image reference" .name) -}}
+{{- end -}}
+{{- $reference -}}
+{{- else if $digest -}}
 {{- if $reg -}}
 {{- printf "%s/%s@%s" $reg .name $digest -}}
 {{- else -}}
@@ -96,7 +103,14 @@ Name of the shared ConfigMap.
 Name of the shared Secret.
 */}}
 {{- define "batch-platform.secretName" -}}
+{{- if .Values.security.existingSecretName -}}
+{{- if not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" .Values.security.existingSecretName) -}}
+{{- fail "security.existingSecretName must be a valid Kubernetes Secret name" -}}
+{{- end -}}
+{{ .Values.security.existingSecretName }}
+{{- else -}}
 {{ include "batch-platform.fullname" . }}-secret
+{{- end -}}
 {{- end }}
 
 {{/*
@@ -117,6 +131,9 @@ Deployment/StatefulSet 因此自动执行滚动更新。摘要不暴露 Secret �
 {{- define "batch-platform.configChecksumAnnotations" -}}
 checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
 checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+{{- if .Values.security.existingSecretRevision }}
+checksum/external-secret: {{ .Values.security.existingSecretRevision | sha256sum }}
+{{- end }}
 {{- end }}
 
 {{/*

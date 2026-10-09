@@ -30,9 +30,9 @@
 |---|---|---|---|
 | **PLAT-KEDA-1** | KEDA staging 验证 | `batch.outbox.sharding-mode=dynamic` 下启用 Orchestrator backlog KEDA；扩缩容期间无重复 outbox 分片、无残留 `RUNNING` | static sharding 禁止直接 autoscale |
 | **PLAT-KEDA-2** | 五类 Worker Kafka lag KEDA 验证 | Import / Export / Process / Dispatch / Atomic 分别按 lag 扩缩；缩容时 drain 正常，Kafka lag 能回落 | 需要真实 K8s + KEDA operator |
-| **PLAT-GITOPS-1** | GitOps staging 接入 | 镜像构建、ops repo promotion PR、Argo CD sync、Helm values、staging smoke 全链路跑通 | 当前只有骨架，不能宣称已具备生产 GitOps |
-| **PLAT-SECRET-1** | 生产 Secret 后端选型与接入 | DB / Kafka / Redis / 对象存储 / Console JWT / internal secret 均由 K8s Secret 或 Vault 类后端注入；普通 DB 动态配置不混入 Secret | 不引入普通配置中心替代现有配置治理 |
-| **PLAT-WR-2** | Worker 第三方插件示例与 capability 展示 | 提供一个不依赖 `batch-worker-core` 的外部 `BatchTaskExecutor` 示例；Console 能展示已注册 taskType / capability | 先示例和治理，不急着无限扩内置 task type |
+| **PLAT-GITOPS-1** | GitOps staging 接入 | 镜像构建、ops repo promotion PR、Argo CD sync、Helm values、staging smoke 全链路跑通 | 已补 ops 仓模板、逐镜像 digest values 生成和 chart 引用支持；仍需实际 ops repo、promotion PR、Argo CD 与 staging smoke |
+| **PLAT-SECRET-1** | 生产 Secret 后端选型与接入 | DB / Kafka / Redis / 对象存储 / Console JWT / internal secret 均由 K8s Secret 或 Vault 类后端注入；普通 DB 动态配置不混入 Secret | Helm 已支持引用预建共享 Kubernetes Secret 和轮换触发滚动；仍需选定/部署外部密钥控制器并验证全部键，未引入 Vault SDK |
+| **PLAT-WR-2** | Worker 第三方插件示例与 capability 展示 | 提供一个不依赖 `batch-worker-core` 的外部 `BatchTaskExecutor` 示例；Console 能展示已注册 taskType / capability | 已补只读 SHA-256 插件、注册能力持久化/API 和 Console 卡片展示；需完成本地编译/测试与示例 Worker 集成验收 |
 
 ## 4. P2：业务触发后再推进
 

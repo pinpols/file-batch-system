@@ -1,33 +1,33 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `fd03fe9b5`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `6df5e3908`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,867 | 512,447 | 264,552 | 51.6% |
+| 4,875 | 513,162 | 264,920 | 51.6% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| prod | 2,783 | 252,890 | 115,949 | 45.8% |
-| test | 1,270 | 188,069 | 103,396 | 55.0% |
-| script | 659 | 55,239 | 34,873 | 63.1% |
-| config | 59 | 8,598 | 6,228 | 72.4% |
-| infra-config | 32 | 5,373 | 3,934 | 73.2% |
+| prod | 2,785 | 253,184 | 116,056 | 45.8% |
+| test | 1,272 | 188,364 | 103,571 | 55.0% |
+| script | 659 | 55,281 | 34,886 | 63.1% |
+| config | 63 | 8,678 | 6,296 | 72.6% |
+| infra-config | 32 | 5,377 | 3,939 | 73.3% |
 | sql | 64 | 2,278 | 172 | 7.6% |
 
 ## 按语言
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,566 | 372,239 | 192,694 | 51.8% |
+| Java | 3,570 | 372,791 | 192,960 | 51.8% |
 | Shell | 210 | 31,836 | 25,029 | 78.6% |
-| Python | 257 | 36,443 | 18,866 | 51.8% |
-| YAML | 100 | 12,812 | 9,750 | 76.1% |
-| XML | 180 | 21,713 | 6,827 | 31.4% |
+| Python | 257 | 36,505 | 18,891 | 51.7% |
+| YAML | 103 | 12,852 | 9,789 | 76.2% |
+| XML | 181 | 21,774 | 6,865 | 31.5% |
 | TypeScript | 37 | 6,667 | 3,141 | 47.1% |
 | Rust | 23 | 8,499 | 2,856 | 33.6% |
 | Properties | 5 | 2,897 | 2,371 | 81.8% |
@@ -45,7 +45,7 @@
 | `deploy/docker/observability/prometheus-batch-rules.yml` | config | YAML | 1,228 | 1,027 |
 | `helm/batch-platform/files/prometheus-batch-rules.yml` | infra-config | YAML | 1,228 | 1,027 |
 | `load-tests/scripts/run-control-plane-worker-benchmark.sh` | script | Shell | 879 | 796 |
-| `helm/batch-platform/values.yaml` | infra-config | YAML | 1,002 | 722 |
+| `helm/batch-platform/values.yaml` | infra-config | YAML | 1,008 | 725 |
 | `deploy/docker/compose/app.yml` | config | YAML | 735 | 652 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java` | prod | Java | 996 | 597 |
 | `scripts/local/validate-seed-scenarios.sh` | script | Shell | 769 | 561 |

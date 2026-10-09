@@ -7,6 +7,9 @@
         <result column="worker_code" property="workerCode"/>
         <result column="worker_group" property="workerGroup"/>
         <result column="port" property="port"/>
+        <result column="capability_tags_json" property="capabilityTagsJson"/>
+        <result column="resource_tag" property="resourceTag"/>
+        <result column="task_capabilities_json" property="taskCapabilitiesJson"/>
         <result column="status" property="status"/>
         <result column="heartbeat_at" property="heartbeatAt"/>
         <result column="drain_started_at" property="drainStartedAt"/>
@@ -14,7 +17,11 @@
     </resultMap>
 
     <select id="selectByQuery" resultMap="WorkerRegistryResultMap">
-        select *
+        select id, tenant_id, worker_code, worker_group, port,
+               capability_tags::text as capability_tags_json, resource_tag,
+               task_capabilities::text as task_capabilities_json,
+               status, heartbeat_at, current_load, max_concurrent,
+               drain_started_at, drain_deadline_at
         from batch.worker_registry
         where tenant_id = #{tenantId}
         <if test="workerGroup != null and workerGroup != ''">
@@ -48,7 +55,11 @@
 
     <!-- ADR-035 P4 "我的 Worker":SDK 自托管 worker 按租户列出,heartbeat 倒序。 -->
     <select id="selectSelfHostedByTenant" resultMap="WorkerRegistryResultMap">
-        select *
+        select id, tenant_id, worker_code, worker_group, port,
+               capability_tags::text as capability_tags_json, resource_tag,
+               task_capabilities::text as task_capabilities_json,
+               status, heartbeat_at, current_load, max_concurrent,
+               drain_started_at, drain_deadline_at
         from batch.worker_registry
         where tenant_id = #{tenantId}
           and is_self_hosted = true

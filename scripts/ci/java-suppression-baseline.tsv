@@ -95,7 +95,7 @@ batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/ent
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/BusinessCalendarEntity.java	PMD.ExcessiveParameterList	1
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/JobDefinitionEntity.java	PMD.ExcessiveParameterList	1
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/ResultVersionEntity.java	PMD.ExcessiveParameterList	1
-batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/WorkerRegistryEntity.java	PMD.ExcessiveParameterList	2
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/WorkerRegistryEntity.java	PMD.ExcessiveParameterList	3
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/dataquality/JdbcDataQualitySqlRuleProbe.java	java:S2259	1
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/dryrun/JdbcDryRunSqlProbe.java	java:S2077	1
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/dryrun/JdbcDryRunSqlProbe.java	java:S2259	1

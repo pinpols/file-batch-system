@@ -209,6 +209,9 @@ CREATE INDEX IF NOT EXISTS idx_worker_registry_group_status
 CREATE INDEX IF NOT EXISTS idx_worker_registry_heartbeat_at
     ON batch.worker_registry (heartbeat_at);
 
+-- 当前迁移 V223 另增 task_capabilities JSONB，保存注册时上报的执行器能力摘要。
+-- 该字段供 Console 运维展示，不参与调度；真实列定义以 db/migration/V223 为准。
+
 -- =========================================================
 -- 2. 任务定义与流程定义表
 -- =========================================================

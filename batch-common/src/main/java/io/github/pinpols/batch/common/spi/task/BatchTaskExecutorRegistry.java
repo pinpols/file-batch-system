@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.common.spi.task;
 
+import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -146,6 +148,22 @@ public class BatchTaskExecutorRegistry {
   /** 当前所有已注册的 taskType(给 console-api 拉下拉框用)。 */
   public Set<String> registeredTypes() {
     return byType.keySet();
+  }
+
+  /** 返回稳定排序的能力快照，用于注册展示，不作为调度路由数据。 */
+  public List<WorkerTaskCapabilityDto> capabilitySnapshot() {
+    return byType.values().stream()
+        .map(executor -> {
+          TaskCapability capability = executor.capability();
+          return new WorkerTaskCapabilityDto(
+              executor.taskType(),
+              capability.resourceKinds().stream().map(Enum::name).sorted().toList(),
+              capability.idempotent(),
+              capability.cancellable(),
+              capability.recommendedTimeout().toMillis());
+        })
+        .sorted(Comparator.comparing(WorkerTaskCapabilityDto::taskType))
+        .toList();
   }
 
   /** 用于诊断:列所有注册项(taskType → 实现类全名)。 */

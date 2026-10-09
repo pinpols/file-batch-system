@@ -1,6 +1,7 @@
 # 运维 Runbook 索引
 
-- [Compose CD → Kubernetes GitOps 路线](./compose-cd-roadmap.md)：前后端统一 release set、immutable digest、staging 自动部署、production 审批、失败回滚与后续 GitOps 实施待办。
+- [Compose CD → Kubernetes GitOps 路线](./compose-cd-roadmap.md)：前后端统一 release set、immutable digest、staging 自动部署、production 审批、失败回滚与 GitOps 验收边界。
+- [GitOps ops 仓模板](../../deploy/gitops/ops-repo-template/README.md)：外部 ops 仓结构、Argo CD staging Application 与 digest values promotion。
 
 部署、监控、灰度、应急、巡检五类 SOP。每份都按线上事件可直接执行的标准维护。
 

@@ -1,3 +1,6 @@
+{{- if and .Values.security.enforceStrongSecrets (empty .Values.objectStorage.endpoint) }}
+{{- fail "objectStorage.endpoint 必须提供 (生产环境通过 Helm values 注入非敏感端点)" }}
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

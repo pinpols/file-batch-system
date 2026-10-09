@@ -37,10 +37,56 @@ public record WorkerRegistryEntity(
     Integer port,
     String buildId,
     String sdkVersion,
-    String workerPoolCode) {
+    String workerPoolCode,
+    JsonbString taskCapabilities) {
 
   /** Worker 未声明容量时的平台默认并发；DDL 的同值 DEFAULT 仅作为数据库最后防线。 */
   public static final int DEFAULT_MAX_CONCURRENT = 10;
+
+  /** 兼容未携带运行时任务能力的注册快照。 */
+  @SuppressWarnings("PMD.ExcessiveParameterList")
+  public WorkerRegistryEntity(
+      Long id,
+      String tenantId,
+      String workerCode,
+      String workerGroup,
+      JsonbString capabilityTags,
+      String resourceTag,
+      String status,
+      Instant heartbeatAt,
+      Integer currentLoad,
+      Integer maxConcurrent,
+      Instant drainStartedAt,
+      Instant drainDeadlineAt,
+      String hostName,
+      String hostIp,
+      String processId,
+      Integer port,
+      String buildId,
+      String sdkVersion,
+      String workerPoolCode) {
+    this(
+        id,
+        tenantId,
+        workerCode,
+        workerGroup,
+        capabilityTags,
+        resourceTag,
+        status,
+        heartbeatAt,
+        currentLoad,
+        maxConcurrent,
+        drainStartedAt,
+        drainDeadlineAt,
+        hostName,
+        hostIp,
+        processId,
+        port,
+        buildId,
+        sdkVersion,
+        workerPoolCode,
+        null);
+  }
 
   /**
    * 兼容构造器：不带运行指纹（hostName/hostIp/processId/buildId/sdkVersion），全置 null。 缓存重建 / 选择器 /
@@ -79,7 +125,8 @@ public record WorkerRegistryEntity(
         null,
         null,
         null,
-        workerCode);
+        workerCode,
+        null);
   }
 
   /** 兼容 workerPoolCode 引入前的完整构造调用。 */
@@ -121,7 +168,8 @@ public record WorkerRegistryEntity(
         null,
         buildId,
         sdkVersion,
-        workerCode);
+        workerCode,
+        null);
   }
 
   /** 任务路由使用稳定池代码；历史行没有该列时回退实例 workerCode。 */
@@ -150,7 +198,8 @@ public record WorkerRegistryEntity(
         port,
         buildId,
         sdkVersion,
-        newWorkerPoolCode);
+        newWorkerPoolCode,
+        taskCapabilities);
   }
 
   /** 注册/重注册更新：状态、心跳时间、负载、能力标签和 worker 自报并发上限。 */
@@ -179,7 +228,8 @@ public record WorkerRegistryEntity(
         port,
         buildId,
         sdkVersion,
-        workerPoolCode);
+        workerPoolCode,
+        taskCapabilities);
   }
 
   /** 仅更新状态（如 OFFLINE）。 */
@@ -203,7 +253,8 @@ public record WorkerRegistryEntity(
         port,
         buildId,
         sdkVersion,
-        workerPoolCode);
+        workerPoolCode,
+        taskCapabilities);
   }
 
   /** 开始排空：设置 DRAINING 状态和排空窗口。 */
@@ -228,7 +279,8 @@ public record WorkerRegistryEntity(
         port,
         buildId,
         sdkVersion,
-        workerPoolCode);
+        workerPoolCode,
+        taskCapabilities);
   }
 
   /** 标记已下线：清除排空时间戳。 */
@@ -252,7 +304,8 @@ public record WorkerRegistryEntity(
         port,
         buildId,
         sdkVersion,
-        workerPoolCode);
+        workerPoolCode,
+        taskCapabilities);
   }
 
   /** SDK-P5-3：刷新运行指纹（register 路径，worker 重启可能换 host / 换监听端口 / 升 SDK 版本）。 */
@@ -282,6 +335,31 @@ public record WorkerRegistryEntity(
         port,
         buildId,
         sdkVersion,
-        workerPoolCode);
+        workerPoolCode,
+        taskCapabilities);
+  }
+
+  public WorkerRegistryEntity withTaskCapabilities(JsonbString newTaskCapabilities) {
+    return new WorkerRegistryEntity(
+        id,
+        tenantId,
+        workerCode,
+        workerGroup,
+        capabilityTags,
+        resourceTag,
+        status,
+        heartbeatAt,
+        currentLoad,
+        maxConcurrent,
+        drainStartedAt,
+        drainDeadlineAt,
+        hostName,
+        hostIp,
+        processId,
+        port,
+        buildId,
+        sdkVersion,
+        workerPoolCode,
+        newTaskCapabilities);
   }
 }

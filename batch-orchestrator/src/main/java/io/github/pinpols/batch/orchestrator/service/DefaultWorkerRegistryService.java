@@ -80,6 +80,9 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     JsonbString newTags = request.capabilityTags() != null
         ? JsonbString.of(JsonUtils.toJson(request.capabilityTags()))
         : (registry == null ? null : registry.capabilityTags());
+    JsonbString newTaskCapabilities = EmptyChecks.isNotNull(request.taskCapabilities())
+        ? JsonbString.of(JsonUtils.toJson(request.taskCapabilities()))
+        : (EmptyChecks.isNull(registry) ? null : registry.taskCapabilities());
 
     if (registry == null) {
       // 缺口②:仅对新 worker_code 做 per-tenant 数量配额校验(opt-in,默认 max<=0 不限);
@@ -104,7 +107,8 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
           request.port(),
           request.buildId(),
           request.sdkVersion(),
-          resolveWorkerPoolCode(request));
+          resolveWorkerPoolCode(request),
+          newTaskCapabilities);
     } else {
       // SDK-P5-3:register 刷新运行指纹(worker 重启可能换 host / 升 SDK 版本);request 未带的字段 mapper 端 coalesce
       // 保留旧值。
@@ -117,7 +121,8 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
               request.port(),
               request.buildId(),
               request.sdkVersion())
-          .withWorkerPoolCode(resolveWorkerPoolCode(request));
+          .withWorkerPoolCode(resolveWorkerPoolCode(request))
+          .withTaskCapabilities(newTaskCapabilities);
     }
     WorkerRegistryEntity saved = persistRegistration(registry, expectedStatus);
     // ADR-035 §2:SDK 自托管 worker 通过 workerGroup="sdk-self-hosted" 识别,标到列上让

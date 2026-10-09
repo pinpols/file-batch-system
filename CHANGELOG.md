@@ -8,6 +8,7 @@
 
 ## [Unreleased]
 
+- 补齐平台能力的代码基础：独立 SHA-256 `BatchTaskExecutor` 插件样例、Worker 注册 capability 持久化与 Console 展示；Helm 支持外部共享 Secret 引用和轮换触发滚动；GitOps 增加 ops 仓模板及从 release manifest 生成逐镜像 digest values。真实 ops 仓、密钥控制器和 Kubernetes staging 验收仍待外部接入。
 - 供应链与安全治理改为持续发现、季度集中升级：依赖机器人不再自动创建 PR，新增只读季度盘点、不可变工具链锁定和用户输入边界 Jazzer fuzzing。
 - 收口后端待办：Console Telemetry 纳入用户限流并保留有界扩展类型兼容性，ShedLock provider 增加故障计数/健康指标和告警，并校正 SDK、租户 Worker、JVM/Helm 与 CD 文档中的陈旧待办状态。
 - 修复 Web Push 传递依赖 jose4j 0.7.0 的两个 HIGH CVE：统一管理并显式选择 0.9.6，删除已无当前漏洞命中的过期 Trivy CVE 忽略项。

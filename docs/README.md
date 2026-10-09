@@ -1,6 +1,7 @@
 # docs/ 文档总入口
 
-- [Compose CD → Kubernetes GitOps 路线](runbook/compose-cd-roadmap.md)：前后端统一 digest、staging 自动部署、production 审批、回滚与后续 GitOps 待办。
+- [Compose CD → Kubernetes GitOps 路线](runbook/compose-cd-roadmap.md)：前后端统一 digest、staging 自动部署、production 审批、回滚与 GitOps 验收边界。
+- [GitOps ops 仓模板](../deploy/gitops/ops-repo-template/README.md)：Argo CD staging Application、Helm 环境 values 和 release manifest digest promotion 工具。
 
 整个 `docs/` 目录的导航。**新人从这里开始**。
 

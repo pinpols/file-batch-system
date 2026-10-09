@@ -39,6 +39,26 @@ class ReleaseManifestTest(unittest.TestCase):
         with self.assertRaisesRegex(release_manifest.ManifestError, "images.console-api"):
             release_manifest.validate_manifest(self.manifest)
 
+    def test_helm_values_include_each_backend_digest(self) -> None:
+        values = release_manifest.render_helm_values(self.manifest)
+        references = values["image"]["references"]
+
+        self.assertEqual(self.manifest["releaseId"], values["release"]["id"])
+        self.assertEqual(
+            self.manifest["commits"]["backend"], values["release"]["backendCommit"]
+        )
+        self.assertEqual(len(release_manifest.BACKEND_SERVICES), len(references))
+        for service, helm_name in release_manifest.HELM_IMAGE_NAMES.items():
+            self.assertEqual(self.manifest["images"][service], references[helm_name])
+            self.assertIn("@sha256:", references[helm_name])
+
+    def test_private_registry_port_is_accepted(self) -> None:
+        self.manifest["images"]["worker-atomic"] = (
+            "registry.example.com:5000/batch/worker-atomic@sha256:" + "a" * 64
+        )
+
+        release_manifest.validate_manifest(self.manifest)
+
     def test_missing_service_is_rejected(self) -> None:
         del self.manifest["images"]["worker-atomic"]
 

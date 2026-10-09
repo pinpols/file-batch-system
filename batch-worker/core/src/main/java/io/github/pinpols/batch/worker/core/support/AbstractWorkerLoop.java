@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.core.support;
 
 import io.github.pinpols.batch.common.constants.WorkerCapabilities;
+import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
@@ -16,6 +17,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.channels.ClosedChannelException;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
@@ -116,6 +118,11 @@ public abstract class AbstractWorkerLoop implements EnvironmentAware {
   /** worker 逻辑分组，如 {@code import}/{@code export}/{@code dispatch}。 */
   protected abstract String workerGroup();
 
+  /** Worker 进程可选上报的执行器能力；默认不声明。 */
+  protected List<WorkerTaskCapabilityDto> taskCapabilities() {
+    return List.of();
+  }
+
   @Override
   public void setEnvironment(Environment environment) {
     this.environment = environment;
@@ -215,6 +222,7 @@ public abstract class AbstractWorkerLoop implements EnvironmentAware {
           Stream.concat(cfg.capabilityTags().stream(), Stream.of(WorkerCapabilities.DRY_RUN_SAFE))
               .distinct()
               .toList());
+      workerRegistration.setTaskCapabilities(taskCapabilities());
       WorkerRegistration startedRegistration = workerLifecycleManager.start(workerRegistration);
       registration.set(startedRegistration);
       started.set(true);

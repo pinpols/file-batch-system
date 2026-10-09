@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.dto.WorkerHeartbeatDto;
+import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
 import io.github.pinpols.batch.common.dto.WorkerTaskTypeDescriptorDto;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.exception.BizException;
@@ -216,6 +217,26 @@ class DefaultWorkerRegistryServiceTest {
     assertThat(captor.getValue().maxConcurrent())
         .isEqualTo(WorkerRegistryEntity.DEFAULT_MAX_CONCURRENT);
     assertThat(result).isNotNull();
+  }
+
+  @Test
+  @DisplayName("注册 Worker 时持久化执行器能力供运维展示")
+  void shouldPersistTaskCapabilities_whenRegisteringWorker() {
+    WorkerRegistryEntity saved = entityWithStatus(WorkerRegistryStatus.ONLINE.code());
+    when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(null, saved);
+    WorkerTaskCapabilityDto capability =
+        new WorkerTaskCapabilityDto("file_sha256", List.of("DISK"), true, false, 300_000L);
+    WorkerHeartbeatDto request =
+        dto(null).toBuilder().taskCapabilities(List.of(capability)).build();
+
+    service.register(request);
+
+    ArgumentCaptor<WorkerRegistryEntity> captor =
+        ArgumentCaptor.forClass(WorkerRegistryEntity.class);
+    verify(mapper).insert(captor.capture());
+    assertThat(captor.getValue().taskCapabilities().getValue())
+        .contains("file_sha256")
+        .contains("300000");
   }
 
   @Test

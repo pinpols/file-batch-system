@@ -9,6 +9,7 @@ image:
   registry: ""          # 例如 registry.example.com/batch-platform
   tag: ""               # 为空则用 Chart.appVersion
   digest: ""            # 非空时使用 registry/image@sha256:...，优先于 tag
+  references: {}         # 可选：按镜像名配置完整不可变引用，供 GitOps release manifest promotion 使用
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -94,6 +95,11 @@ workerAtomicBaseUrl: "http://batch-worker-atomic:18087"
 
 security:
   bypassMode: "false"
+  # 预先由 External Secrets Operator、Vault、Sealed Secrets 等创建的共享运行时 Secret。
+  # 非空时 Helm 不渲染自有 Secret；外部 Secret 必须包含 secret.yaml 中声明的全部 BATCH_* 键。
+  existingSecretName: ""
+  # 外部 Secret 轮换时更新此非敏感版本标识，触发 Pod 滚动更新。
+  existingSecretRevision: ""
   # /internal/** API 的服务间内部密钥。
   # 默认 chart values 留空,让非生产环境仍走应用默认值。
   # 生产必须通过 --set、values overlay 或外部密钥管理设置。

@@ -7,23 +7,23 @@
 
 | 指标 | 数量 |
 |---|---:|
-| 生产 Java 源文件 | 2429 |
+| 生产 Java 源文件 | 2430 |
 | CGLIB 自注入类 | 0 |
 | `Map<String, Object>` 出现次数 | 2010 |
 | 含 Map 的源文件 | 447 |
 | public Map 契约候选 | 54 |
 | public Map 契约候选文件 | 35 |
-| `@SuppressWarnings` | 237 |
+| `@SuppressWarnings` | 238 |
 | 含 suppression 的源文件 | 179 |
 | `@Configuration` 类 | 49 |
 | 大于等于 700 行的源文件 | 9 |
-| `PMD.ExcessiveParameterList` 显式例外 | 32 |
+| `PMD.ExcessiveParameterList` 显式例外 | 33 |
 
 ## 模块源文件
 
 | 模块 | 生产 Java 文件 |
 |---|---:|
-| `batch-common` | 332 |
+| `batch-common` | 333 |
 | `batch-console-api` | 983 |
 | `batch-orchestrator` | 553 |
 | `batch-trigger` | 76 |
@@ -111,7 +111,7 @@
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/BusinessCalendarEntity.java` | 1 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/JobDefinitionEntity.java` | 1 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/ResultVersionEntity.java` | 1 |
-| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/WorkerRegistryEntity.java` | 2 |
+| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/WorkerRegistryEntity.java` | 3 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/mq/OutboxPollScheduler.java` | 1 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/mapper/BatchDayReplayEntryMapper.java` | 1 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/mapper/BatchDayReplaySessionMapper.java` | 1 |

@@ -42,7 +42,9 @@ public record WorkerHeartbeatDto(
     // 稳定路由池代码；workerCode 继续表示唯一运行实例。旧 SDK 不带时由平台回退为 workerCode。
     String workerPoolCode,
     // 并发任务阶段进度；缺省或空列表表示本轮没有活跃阶段。
-    List<WorkerPipelineProgressDto> pipelineProgress) {
+    List<WorkerPipelineProgressDto> pipelineProgress,
+    // 注册时上报执行器能力；调度仍以 worker capabilityTags/resourceTag 为准。
+    List<WorkerTaskCapabilityDto> taskCapabilities) {
 
   public WorkerHeartbeatDto {
     Integer normalizedCurrentLoad = currentLoad;
@@ -56,6 +58,12 @@ public record WorkerHeartbeatDto(
     // 端口只接受有效监听端口；0（随机端口未绑定）与负值一律 normalize 为 null，不落库。
     if (EmptyChecks.isNotNull(port) && port <= 0) {
       port = null;
+    }
+    if (EmptyChecks.isNotNull(taskCapabilities)) {
+      if (taskCapabilities.size() > 128) {
+        throw new IllegalArgumentException("taskCapabilities must contain at most 128 entries");
+      }
+      taskCapabilities = List.copyOf(taskCapabilities);
     }
   }
 }

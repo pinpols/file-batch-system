@@ -21,7 +21,7 @@ mvn install -f examples/task-spi-plugin/sftp-push-executor/pom.xml
 
 ## 部署 / 启用
 
-1. 把 jar 放进任一 worker(import/export/process/dispatch/core)的 `lib/` 或 classpath
+1. 把 jar 放进 `worker-atomic` 的 `lib/` 或 classpath
 2. worker 启动时 `BatchTaskExecutorRegistry` 通过 ServiceLoader 自动注册 `sftp_push` taskType
 3. 在 console 新建 job 时 `taskType="sftp_push"` 即可派发到该 worker
 

@@ -13,6 +13,10 @@ public class WorkerRegistryEntity {
   /** Worker 实际监听 HTTP 端口（V221）；NULL=未上报（老 worker / 老 SDK / 非 web 上下文）。 */
   private Integer port;
 
+  private String capabilityTagsJson;
+  private String resourceTag;
+  private String taskCapabilitiesJson;
+
   private String status;
   private Instant heartbeatAt;
   private Integer currentLoad;

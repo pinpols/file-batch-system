@@ -39,7 +39,7 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
 
   @Override
   public WorkerRegistration register(WorkerRegistration registration) {
-    post("/internal/workers/register", registration);
+    post("/internal/workers/register", registration, true);
     return registration;
   }
 
@@ -49,7 +49,7 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
         .post()
         .uri("/internal/workers/{workerId}/heartbeat", registration.getWorkerId())
         .contentType(MediaType.APPLICATION_JSON)
-        .body(toHeartbeatDto(registration))
+        .body(toHeartbeatDto(registration, false))
         .retrieve()
         .body(WorkerHeartbeatResponse.class);
     applyHeartbeatResponse(registration, response);
@@ -67,18 +67,18 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
     client()
         .post()
         .uri("/internal/workers/{workerId}/status", registration.getWorkerId())
-        .body(toHeartbeatDto(registration))
+        .body(toHeartbeatDto(registration, false))
         .retrieve()
         .toBodilessEntity();
     return registration;
   }
 
-  private void post(String path, WorkerRegistration registration) {
+  private void post(String path, WorkerRegistration registration, boolean includeCapabilities) {
     client()
         .post()
         .uri(path)
         .contentType(MediaType.APPLICATION_JSON)
-        .body(toHeartbeatDto(registration))
+        .body(toHeartbeatDto(registration, includeCapabilities))
         .retrieve()
         .toBodilessEntity();
   }
@@ -124,6 +124,11 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
 
   // package-private 暴露给同包测试覆盖(LoadStep/GenerateStep 接入测试也用同一签名)
   WorkerHeartbeatDto toHeartbeatDto(WorkerRegistration registration) {
+    return toHeartbeatDto(registration, false);
+  }
+
+  private WorkerHeartbeatDto toHeartbeatDto(
+      WorkerRegistration registration, boolean includeCapabilities) {
     OffsetDateTime lastHeartbeatAt = registration.getLastHeartbeatAt();
     return WorkerHeartbeatDto.builder()
         .tenantId(registration.getTenantId())
@@ -142,6 +147,7 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
         .maxConcurrent(registration.getMaxConcurrent())
         .workerPoolCode(registration.getWorkerCode())
         .pipelineProgress(pipelineStageProgressRegistry.snapshots())
+        .taskCapabilities(includeCapabilities ? registration.getTaskCapabilities() : null)
         // hostIp / processId / buildId / sdkVersion / taskTypes / protocolVersion 保持缺省 null：
         // file-pipeline worker 非 BYO 自托管 SDK，不上报运行指纹、自定义 taskType 与 wire 协议版本
         // （协议门禁只针对外部 SDK worker 上报的 protocolVersion）。
