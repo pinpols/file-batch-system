@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.infrastructure.rbac;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
@@ -50,6 +51,9 @@ class RedisOidcAuthorizationRequestRepositoryTest {
       }
       return null;
     });
+    when(values.get(anyString()))
+        .thenAnswer(invocation ->
+            invocation.getArgument(0).equals(savedKey.get()) ? savedValue.get() : null);
     RedisOidcAuthorizationRequestRepository repository =
         new RedisOidcAuthorizationRequestRepository(
             redis, new ObjectMapper(), new ConsoleSecurityProperties());
@@ -81,6 +85,13 @@ class RedisOidcAuthorizationRequestRepositoryTest {
         .contains("SameSite=Lax")
         .contains("Path=/");
     verify(values).set(savedKey.get(), savedValue.get(), Duration.ofMinutes(5));
+
+    MockHttpServletRequest loadRequest = new MockHttpServletRequest();
+    loadRequest.setParameter("state", original.getState());
+    loadRequest.setCookies(savedCookie.get());
+    OAuth2AuthorizationRequest loaded = repository.loadAuthorizationRequest(loadRequest);
+    assertThat(loaded.getState()).isEqualTo(original.getState());
+    assertThat(loaded.getAttributes()).containsEntry("code_verifier", "pkce-verifier");
 
     MockHttpServletRequest callback = new MockHttpServletRequest();
     callback.setParameter("state", original.getState());
@@ -124,6 +135,39 @@ class RedisOidcAuthorizationRequestRepositoryTest {
             new MockHttpServletRequest(), new MockHttpServletResponse()))
         .isNull();
     org.mockito.Mockito.verifyNoInteractions(redis);
+  }
+
+  @Test
+  @DisplayName("保存请求拒绝无效 state，损坏的 Redis 数据按未命中处理")
+  @SuppressWarnings("unchecked")
+  void shouldRejectInvalidStateAndIgnoreCorruptedPayload() {
+    StringRedisTemplate redis = mock(StringRedisTemplate.class);
+    ValueOperations<String, String> values = mock(ValueOperations.class);
+    org.mockito.Mockito.when(redis.opsForValue()).thenReturn(values);
+    RedisOidcAuthorizationRequestRepository repository =
+        new RedisOidcAuthorizationRequestRepository(
+            redis, new ObjectMapper(), new ConsoleSecurityProperties());
+    OAuth2AuthorizationRequest request = OAuth2AuthorizationRequest.authorizationCode()
+        .authorizationUri("https://idp.example.com/authorize")
+        .clientId("console-client")
+        .redirectUri("https://console.example.com/callback")
+        .scopes(Set.of("openid"))
+        .build();
+
+    assertThatThrownBy(() -> repository.saveAuthorizationRequest(
+            request, new MockHttpServletRequest(), new MockHttpServletResponse()))
+        .isInstanceOf(IllegalArgumentException.class);
+
+    OAuth2AuthorizationRequest validRequest =
+        OAuth2AuthorizationRequest.from(request).state("valid-state").build();
+    MockHttpServletResponse authorizationResponse = new MockHttpServletResponse();
+    repository.saveAuthorizationRequest(
+        validRequest, new MockHttpServletRequest(), authorizationResponse);
+    when(values.get(anyString())).thenReturn("not-json");
+    MockHttpServletRequest callback = new MockHttpServletRequest();
+    callback.setParameter("state", "valid-state");
+    callback.setCookies(cookieFrom(authorizationResponse.getHeader("Set-Cookie")));
+    assertThat(repository.loadAuthorizationRequest(callback)).isNull();
   }
 
   private static Cookie cookieFrom(String setCookieHeader) {

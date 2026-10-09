@@ -108,6 +108,45 @@ class ConsoleAuthApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("OIDC 签发重新读取启用账号的租户、角色和改密状态")
+  void issueTokenForOidc_usesCurrentLocalAccountState() {
+    ConsolePrincipal principal = new ConsolePrincipal("alice", "t1", Set.of("ROLE_TENANT_USER"));
+    ConsoleAuthTokenResponse issued = stubTokenResponse();
+    when(userAccountService.findByUsername("alice"))
+        .thenReturn(Optional.of(new ConsoleUserAccount(
+            "t1", "alice", "Alice", "hash", Set.of("ROLE_TENANT_USER"), true, true)));
+    when(sessionRegistry.nextSessionVersion("alice", "t1")).thenReturn(9L);
+    when(jwtService.issueToken("alice", "t1", Set.of("ROLE_TENANT_USER"), 9L)).thenReturn(issued);
+
+    ConsoleAuthTokenResponse response = service.issueToken(principal);
+
+    assertThat(response.accessToken()).isEqualTo(issued.accessToken());
+    assertThat(response.mustChangePassword()).isTrue();
+  }
+
+  @Test
+  @DisplayName("OIDC 不接受非正式角色、账号停用或账号租户变化")
+  void issueTokenForOidc_rejectsInvalidPrincipalOrChangedAccount() {
+    assertThatThrownBy(
+            () -> service.issueToken(new ConsolePrincipal("alice", "t1", Set.of("ROLE_USER"))))
+        .isInstanceOf(BizException.class);
+
+    when(userAccountService.findByUsername("alice"))
+        .thenReturn(Optional.of(new ConsoleUserAccount(
+            "t1", "alice", "Alice", "hash", Set.of("ROLE_TENANT_USER"), false, false)));
+    assertThatThrownBy(() ->
+            service.issueToken(new ConsolePrincipal("alice", "t1", Set.of("ROLE_TENANT_USER"))))
+        .isInstanceOf(BizException.class);
+
+    when(userAccountService.findByUsername("bob"))
+        .thenReturn(Optional.of(new ConsoleUserAccount(
+            "tenant-b", "bob", "Bob", "hash", Set.of("ROLE_TENANT_USER"), true, false)));
+    assertThatThrownBy(() ->
+            service.issueToken(new ConsolePrincipal("bob", "tenant-a", Set.of("ROLE_TENANT_USER"))))
+        .isInstanceOf(BizException.class);
+  }
+
+  @Test
   @DisplayName("存在已认证主体时资料回包用户名、租户、权限与能力集")
   void profile_returnsConsolePrincipalFieldsWhenPresent() {
     ConsolePrincipal principal = new ConsolePrincipal("alice", "t1", Set.of("ROLE_ADMIN"));

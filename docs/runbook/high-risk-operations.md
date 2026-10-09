@@ -7,7 +7,7 @@
 1. 删除命令必须有明确目标范围；不能用生产凭据、远程 Docker context 或未确认的默认连接执行本地清理。
 2. 破坏性入口默认预览或拒绝执行。确认需要同时指出目标，而不是只传通用 `--force` / `--yes`。
 3. 生产操作由生产变更审批、备份和最小权限控制；本地脚本中的保护不替代 DB 权限、IAM、Kafka ACL、Redis ACL 或部署平台审批。
-4. 临时文件清理只允许删除由当前脚本创建的私有临时目录；不得把用户输入、仓库根目录或任意环境变量直接拼入 `rm -rf`。
+4. 临时产物清理只允许删除由当前脚本通过 `mktemp` 创建并记录的文件，或当前脚本创建的私有临时目录；不得把用户输入、仓库根目录或任意环境变量直接拼入 `rm -rf`。
 5. 新增或扩大删除操作（包括 `rm`、`find -delete`、`mkfs`/块设备命令、服务端删除和 Kubernetes 删除），必须审查目标、确认方式、幂等性、影响范围和恢复方式，并更新 `scripts/ci/destructive-ops-baseline.json`。
 
 ## 仓库内入口与防护
@@ -29,6 +29,7 @@
 ## SQL 和 CI
 
 - `scripts/ci/check-db-scripts-safety.sh` 扫描维护、sim、local、load-test SQL。`DROP`、`TRUNCATE`、`DELETE FROM` 和约束变更必须在文件头部标明风险及目标环境；seed SQL 也不豁免。
+- `scripts/local/pre-commit-checks.sh` 将本次门禁错误汇总写入由 `mktemp` 创建的独立临时文件，并仅在退出时删除该文件；路径由脚本创建，不接受调用方覆盖，清理不触碰仓库或服务数据。
 - `scripts/ci/check-destructive-ops-governance.py` 盘点普通及强制 `rm`、PG `DROP`/`TRUNCATE`/`DELETE`/`dropdb`/`pg_restore --clean`、S3 删除/同步删除、Kafka topic/group/record 删除、Redis/Valkey `DEL`/`UNLINK`/`FLUSH*`，以及 Docker/Kubernetes 清理操作；支持识别反斜杠续行和 `minio_mc` 包装器。扫描范围包含 `scripts/`、`load-tests/scripts/`、`db/`、`deploy/`、`.github/workflows/` 和 `docs/runbook/`。相对 `scripts/ci/destructive-ops-baseline.json` 新增或扩大时 PR/Full Gate 失败，审查后才更新基线。
 - 该基线是增量治理，不是命令沙箱：无法约束开发者在仓库外执行命令，也无法阻止有 DB 超级用户/云管理员权限的人绕过脚本。生产必须使用独立账号、最小权限和变更审批。
 
