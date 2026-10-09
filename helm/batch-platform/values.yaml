@@ -131,6 +131,17 @@ batchLocale: "C.UTF-8"
 # ── console-api ────────────────────────────────────────────────────────────────
 
 consoleApi:
+  sso:
+    oidc:
+      enabled: false
+      registrationId: ""
+      tenantId: ""
+      issuerUri: ""
+      clientId: ""
+      redirectUri: ""
+      # 仅引用预先创建的 Console 专属 Secret，不把 secret 值放入 Helm values/release state。
+      clientSecretSecretName: ""
+      clientSecretSecretKey: "client-secret"
   # per-service JVM override(追加到全局 javaOpts 后),完整参数说明见
   # docs/runbook/jvm-tuning-and-profiling.md §1.2。容器资源较小时 JVM 可能自动选择
   # Serial GC，因此普通服务也显式固定 G1，避免资源 limits 改动造成 GC 漂移。

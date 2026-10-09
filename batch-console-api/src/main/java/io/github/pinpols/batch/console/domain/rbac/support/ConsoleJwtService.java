@@ -56,7 +56,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
  *   <li><b>启动期强校验</b>（{@link #validateSecuritySecrets}）：prod profile 下拒绝启动如果 {@code jwt-secret} 仍含
  *       "change-me" 占位或 {@code shared-secret} 仍为默认值 {@code console-secret} （见 {@code
  *       5.3}）——防止占位符被带上生产。
- *   <li><b>单点登录</b>（可选，{@code singleSessionEnabled}）：token 里写入 {@code session_version}， 登录时 {@link
+ *   <li><b>单账号单会话</b>（可选，{@code singleSessionEnabled}）：token 里写入 {@code session_version}， 登录时 {@link
  *       ConsoleSessionRegistry} 递增该用户的 session 版本；旧 token 的 {@code session_version} 失效后 {@code
  *       authenticate} 拒绝，实现"新登录踢旧会话"。
  *   <li><b>token 类型门</b>：{@code token_type="console_access"} 声明，仅接受该类型——防止其他 JWT 服务签发的

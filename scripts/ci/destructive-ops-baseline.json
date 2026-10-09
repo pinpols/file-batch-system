@@ -178,7 +178,7 @@
   "scripts/local/cleanup-disk.sh|docker-delete": 6,
   "scripts/local/cleanup-disk.sh|filesystem-remove": 6,
   "scripts/local/import-copy-worth-benchmark.sh|filesystem-remove": 1,
-  "scripts/local/pre-commit-checks.sh|filesystem-remove": 1,
+  "scripts/local/pre-commit-checks.sh|filesystem-remove": 2,
   "scripts/local/pre-push-sdk-checks.sh|filesystem-remove": 1,
   "scripts/local/repair-local-flyway-history.sh|filesystem-remove": 1,
   "scripts/local/restart.sh|filesystem-permanent-delete": 1,

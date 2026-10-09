@@ -46,18 +46,24 @@ class ConsoleRateLimitFilterTest {
   private ConsoleSecurityResponseWriter responseWriter;
 
   private ConsoleRateLimitFilter filter;
+  private ConsoleLoginIpRateLimiter loginIpRateLimiter;
 
   @BeforeEach
   void setUp() {
     ConsoleRateLimitProperties props = new ConsoleRateLimitProperties();
     props.setLoginIpLimitPerMinute(3);
     props.setSensitiveOpUserLimitPerMinute(5);
+    loginIpRateLimiter = new ConsoleLoginIpRateLimiter(
+        rateLimiter,
+        props,
+        new ConsoleSecurityProperties(),
+        RedisRateLimitCircuitBreaker.forTesting(props));
     filter = new ConsoleRateLimitFilter(
         rateLimiter,
         props,
         responseWriter,
-        new ConsoleSecurityProperties(),
-        RedisRateLimitCircuitBreaker.forTesting(props));
+        RedisRateLimitCircuitBreaker.forTesting(props),
+        loginIpRateLimiter);
   }
 
   // ── disabled ──────────────────────────────────────────────────────────────
@@ -67,12 +73,17 @@ class ConsoleRateLimitFilterTest {
   void shouldPassThroughWhenDisabled() throws Exception {
     ConsoleRateLimitProperties disabledProps = new ConsoleRateLimitProperties();
     disabledProps.setEnabled(false);
+    ConsoleLoginIpRateLimiter disabledLoginLimiter = new ConsoleLoginIpRateLimiter(
+        rateLimiter,
+        disabledProps,
+        new ConsoleSecurityProperties(),
+        RedisRateLimitCircuitBreaker.forTesting(disabledProps));
     ConsoleRateLimitFilter disabledFilter = new ConsoleRateLimitFilter(
         rateLimiter,
         disabledProps,
         responseWriter,
-        new ConsoleSecurityProperties(),
-        RedisRateLimitCircuitBreaker.forTesting(disabledProps));
+        RedisRateLimitCircuitBreaker.forTesting(disabledProps),
+        disabledLoginLimiter);
 
     MockHttpServletRequest request = loginRequest("1.2.3.4");
     MockHttpServletResponse response = new MockHttpServletResponse();
@@ -130,12 +141,14 @@ class ConsoleRateLimitFilterTest {
     trustProps.setTrustForwardedHeaders(true);
     ConsoleRateLimitProperties limitProps = new ConsoleRateLimitProperties();
     limitProps.setLoginIpLimitPerMinute(3);
+    ConsoleLoginIpRateLimiter trustingLoginLimiter = new ConsoleLoginIpRateLimiter(
+        rateLimiter, limitProps, trustProps, RedisRateLimitCircuitBreaker.forTesting(limitProps));
     ConsoleRateLimitFilter trustingFilter = new ConsoleRateLimitFilter(
         rateLimiter,
         limitProps,
         responseWriter,
-        trustProps,
-        RedisRateLimitCircuitBreaker.forTesting(limitProps));
+        RedisRateLimitCircuitBreaker.forTesting(limitProps),
+        trustingLoginLimiter);
 
     when(rateLimiter.tryAcquire(contains("203.0.113.5"), anyInt())).thenReturn(true);
 

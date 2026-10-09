@@ -13,7 +13,7 @@ Sonar 增量复扫已清零：`reports/sonar/2026-09-25_10-08-44/sonar-increment
 - Console Redis 能力已改为端口 + infrastructure 实现：
   - 配置缓存失效
   - 实时事件发布 / replay
-  - 会话与单点登录版本
+  - 会话与单账号单会话版本
   - 登录失败滑动窗口
   - token revocation
   - idempotency

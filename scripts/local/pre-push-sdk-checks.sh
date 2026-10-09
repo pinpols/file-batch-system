@@ -10,7 +10,8 @@
 # 设计原则:
 #   - 静态项只检查本 PR 改过的文件；Java 相关变更额外运行全量架构/约定守卫
 #   - 无 Java 变更通常 < 30s；Java 治理测试本地基线约 1-2min
-#   - fast-fail:第一类 fail 立刻退出,不跑后面的
+#   - 独立静态检查或治理失败后仍继续其余检查与 clean compile,最后汇总失败项
+#   - 所有独立门禁尽量执行完,最后一次性汇总失败项
 #   - 可通过 SKIP_SDK_CHECKS=1 跳过(应急用,正常 PR 必跑)
 #   - CI=1 时关闭颜色 + 简化输出
 #
@@ -77,7 +78,12 @@ else
   RED='\033[0;31m'; YELLOW='\033[0;33m'; GREEN='\033[0;32m'; BLUE='\033[0;34m'; RESET='\033[0m'
 fi
 
-fail()  { printf "${RED}❌ %s${RESET}\n" "$*" >&2; }
+failures=()
+fail()  {
+  printf "${RED}❌ %s${RESET}\n" "$*" >&2
+  errors=$((errors + 1))
+  failures+=("$*")
+}
 warn()  { printf "${YELLOW}⚠️  %s${RESET}\n" "$*"; }
 ok()    { printf "${GREEN}✅ %s${RESET}\n" "$*"; }
 info()  { printf "${BLUE}→  %s${RESET}\n" "$*"; }
@@ -145,71 +151,71 @@ info "────────────────────────�
 
 if [[ -n "$BASE_REF" ]]; then
   if ! "$PYTHON_BIN" scripts/ci/check-empty-checks.py --base "$BASE_REF"; then
-    errors=$((errors+1))
+    fail "EmptyChecks diff 门禁失败"
   fi
   if ! "$PYTHON_BIN" scripts/ci/check-infrastructure-abstraction-boundaries.py --base "$BASE_REF"; then
-    errors=$((errors+1))
+    fail "Infrastructure abstraction boundary 门禁失败"
   fi
   if ! "$PYTHON_BIN" scripts/ci/check-readiness-doc-sync.py --base "$BASE_REF"; then
-    errors=$((errors+1))
+    fail "Readiness 文档同步门禁失败"
   fi
 else
   warn "无可用 base,跳过 diff 类 Python 门禁"
 fi
 
 if ! "$PYTHON_BIN" scripts/ci/check-direct-client-boundaries.py; then
-  errors=$((errors+1))
+  fail "Direct client boundary 门禁失败"
 fi
 
 if [[ -f ".trivyignore" ]]; then
   if ! "$PYTHON_BIN" scripts/ci/check-trivy-ignore-expiry.py; then
-    errors=$((errors+1))
+    fail "Trivy ignore 到期检查失败"
   fi
 fi
 
 if ! "$PYTHON_BIN" scripts/ci/check-env-file-shell-safety.py; then
-  errors=$((errors+1))
+  fail "环境文件 shell 安全检查失败"
 fi
 if ! "$PYTHON_BIN" scripts/ci/check-sdk-config-env-parity.py; then
-  errors=$((errors+1))
+  fail "SDK 配置环境变量一致性检查失败"
 fi
 
 if [[ -n "$CHANGED_CONFIG_DEFAULTS" ]]; then
   if ! "$PYTHON_BIN" scripts/ci/check-config-defaults-sync.py --check; then
-    errors=$((errors+1))
+    fail "配置默认值同步检查失败"
   fi
   if ! "$PYTHON_BIN" scripts/ci/check-helm-env-sync.py; then
-    errors=$((errors+1))
+    fail "Helm 环境变量同步检查失败"
   fi
 fi
 
 if [[ -n "$CHANGED_FEATURE_SWITCH" ]]; then
   if ! "$PYTHON_BIN" scripts/ci/check-feature-switch-registry.py; then
-    errors=$((errors+1))
+    fail "Feature switch 注册表检查失败"
   fi
 fi
 
 if [[ -n "$CHANGED_CONFIG_GOVERNANCE" ]]; then
   if ! "$PYTHON_BIN" scripts/ci/check-config-governance.py; then
-    errors=$((errors+1))
+    fail "配置治理检查失败"
   fi
 fi
 
 if [[ -n "$CHANGED_ENV_GOVERNANCE" ]]; then
   if ! "$PYTHON_BIN" scripts/ci/check-env-variable-governance.py; then
-    errors=$((errors+1))
+    fail "环境变量治理检查失败"
   fi
 fi
 
 if [[ -n "$CHANGED_RUNTIME_CONFIG" ]]; then
   if ! bash scripts/ci/check-hardcoded-runtime-config.sh; then
-    errors=$((errors+1))
+    fail "硬编码运行时配置检查失败"
   fi
 fi
 
 if [[ -n "$CHANGED_RELEASE_SENSITIVE" && -n "$BASE_REF" ]]; then
   if ! "$PYTHON_BIN" scripts/ci/check-changelog-sync.py --base "$BASE_REF"; then
-    errors=$((errors+1))
+    fail "Changelog 同步检查失败"
   fi
 fi
 
@@ -221,11 +227,9 @@ if [[ -n "$CHANGED_JAVA" || "$CHANGED_FILES" == *"$READABILITY_INVENTORY"* ]]; t
         ok "Java readability inventory 已同步"
       else
         fail "Java readability inventory 已自动刷新,请 git add/commit 后再 push:$READABILITY_INVENTORY"
-        errors=$((errors+1))
       fi
     else
       fail "Java readability inventory 生成失败"
-      errors=$((errors+1))
     fi
   fi
 fi
@@ -233,14 +237,13 @@ fi
 if [[ -n "$CHANGED_SHELL" ]]; then
   if [[ -x "scripts/ci/check-shell-scripts.sh" ]]; then
     if ! bash scripts/ci/check-shell-scripts.sh; then
-      errors=$((errors+1))
+      fail "完整 Shell 脚本检查失败"
     fi
   fi
   while IFS= read -r script; do
     [[ -z "$script" || ! -f "$script" ]] && continue
     if ! bash -n "$script"; then
       fail "Shell 语法检查失败:$script"
-      errors=$((errors+1))
     fi
   done <<< "$CHANGED_SHELL"
 fi
@@ -250,7 +253,6 @@ if [[ -n "$CHANGED_DOCKER_BUILD" ]]; then
     if ! docker buildx bake -f docker-bake.hcl -f docker-bake.ci.hcl --print >/tmp/pre-push-docker-bake.json 2>/tmp/pre-push-docker-bake.log; then
       fail "Docker bake 配置解析失败:"
       sed 's/^/    /' /tmp/pre-push-docker-bake.log
-      errors=$((errors+1))
     else
       ok "Docker bake 配置解析通过"
     fi
@@ -264,7 +266,7 @@ if [[ -n "$CHANGED_JAVA_GOVERNANCE" && $SKIP_BUILD -eq 0 ]]; then
   info "Java 架构/约定守卫"
   info "──────────────────────────────────────"
   if ! bash scripts/ci/run-java-governance-tests.sh; then
-    errors=$((errors+1))
+    fail "Java 架构/约定守卫失败"
   fi
 fi
 
@@ -330,7 +332,6 @@ if [[ -n "$CHANGED_JAVA" ]] && [[ -n "$BASE_REF" ]]; then
       if [[ -n "$hits" ]]; then
         fail "$desc"
         echo "$hits" | sed 's/^/    /'
-        errors=$((errors+1))
         return 1
       fi
       return 0
@@ -343,7 +344,6 @@ if [[ -n "$CHANGED_JAVA" ]] && [[ -n "$BASE_REF" ]]; then
     if [[ -n "$fqn_hits" ]]; then
       fail "规约 #1 违反 — FQN(必走 import)"
       echo "$fqn_hits" | sed 's/^/    /'
-      errors=$((errors+1))
     else
       ok "规约 #1 FQN 通过"
     fi
@@ -372,7 +372,6 @@ if [[ -n "$CHANGED_JAVA" ]] && [[ -n "$BASE_REF" ]]; then
     if [[ -n "$(printf '%s' "$autowired_bad" | tr -d '[:space:]')" ]]; then
       fail "规约 #3 违反 — @Autowired field/setter 注入(只允许构造器)"
       printf '%s' "$autowired_bad" | sed '/^$/d;s/^/    /' | awk 'NR <= 10 { print }'
-      errors=$((errors+1))
     else
       ok "规约 #3 @Autowired 通过"
     fi
@@ -382,7 +381,6 @@ if [[ -n "$CHANGED_JAVA" ]] && [[ -n "$BASE_REF" ]]; then
     if [[ -n "$trans_hits" ]]; then
       fail "规约 #4 违反 — @Transactional 出现在 Controller / Mapper:"
       echo "$trans_hits" | sed 's/^/    /'
-      errors=$((errors+1))
     else
       ok "规约 #4 @Transactional 位置通过"
     fi
@@ -460,7 +458,6 @@ if [[ -n "$CHANGED_CTL" ]]; then
     if [[ -z "$CHANGED_YAML" ]] || ! echo "$CHANGED_YAML" | grep -q "console-api.openapi.yaml"; then
       fail "controller 改了但 docs/api/console-api.openapi.yaml 没改 — CI pr-gate 会拦"
       info "  修复:同步更新 docs/api/console-api.openapi.yaml(补 path + schema)"
-      errors=$((errors+1))
     else
       ok "OpenAPI yaml 同步更新了"
     fi
@@ -468,7 +465,6 @@ if [[ -n "$CHANGED_CTL" ]]; then
     if [[ -z "$CHANGED_PROTOCOL" ]]; then
       fail "controller 改了但 docs/api/console-api-protocol.md Changelog 没追加"
       info "  修复:在 protocol.md 的 Changelog 表追加 日期 + 摘要(日期倒序)"
-      errors=$((errors+1))
     else
       ok "protocol.md Changelog 同步更新了"
     fi
@@ -505,7 +501,6 @@ if [[ -n "$CHANGED_FLYWAY" ]]; then
       fail "Flyway $version 已被占用:"
       echo "$dup" | sed 's/^/    /'
       info "  修复:本 PR 改用下一个版本号(V$(echo "$version" | tr -d V | awk '{print $1+1}'))"
-      errors=$((errors+1))
     fi
   done
 
@@ -532,7 +527,7 @@ fi
 # ═════════════════════════════════════════════════════════
 # 检查 4:clean compile(避免 stale cache 漏报真错)
 # ═════════════════════════════════════════════════════════
-if [[ $errors -eq 0 ]] && [[ $SKIP_BUILD -eq 0 ]] && [[ -n "$CHANGED_JAVA" ]]; then
+if [[ $SKIP_BUILD -eq 0 ]] && [[ -n "$CHANGED_JAVA" ]]; then
   info "──────────────────────────────────────"
   info "检查 4:clean compile(memory: feedback_clean_before_push)"
   info "──────────────────────────────────────"
@@ -552,7 +547,6 @@ if [[ $errors -eq 0 ]] && [[ $SKIP_BUILD -eq 0 ]] && [[ -n "$CHANGED_JAVA" ]]; t
     fail "clean compile 失败:"
     tail -30 /tmp/sdk-precheck-build.log | sed 's/^/    /'
     info "  完整日志: /tmp/sdk-precheck-build.log"
-    errors=$((errors+1))
   else
     ok "clean compile 通过"
   fi
@@ -568,7 +562,11 @@ if [[ $errors -eq 0 ]]; then
   exit 0
 else
   echo ""
-  fail "自查发现 $errors 个问题,请修复后再 push"
+  printf '%b❌ 自查发现 %d 个问题,请修复后再 push%b\n' "$RED" "$errors" "$RESET" >&2
+  info "失败项汇总:"
+  for failure in "${failures[@]}"; do
+    printf '  - %s\n' "$failure" >&2
+  done
   warn "应急绕过:SKIP_SDK_CHECKS=1 git push(仅限明确知道问题但需要紧急 push 时)"
   exit 1
 fi

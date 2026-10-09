@@ -54,7 +54,7 @@ public class ConsoleSecurityProperties implements EnvironmentAware {
    */
   private List<String> defaultAuthorities = new ArrayList<>(List.of(ConsoleRoles.AUDITOR));
 
-  /** 单点登录（同一用户后登录踢前一个 session）。 */
+  /** 单账号单会话（同一用户后登录会使前一个会话失效）。 */
   private boolean singleSessionEnabled = true;
 
   /** JWT iss claim 值。 */
@@ -69,7 +69,7 @@ public class ConsoleSecurityProperties implements EnvironmentAware {
   /** JWT 时钟偏差容忍。多机时钟不齐时调大（NTP 同步好的话 1 分钟够）。 */
   private Duration jwtClockSkew = Duration.ofMinutes(1);
 
-  /** Redis 中 session state（单点登录、踢人）TTL。 */
+  /** Redis 中会话状态（单账号单会话、管理员踢人）的 TTL。 */
   private Duration sessionStateTtl = Duration.ofDays(30);
 
   /**

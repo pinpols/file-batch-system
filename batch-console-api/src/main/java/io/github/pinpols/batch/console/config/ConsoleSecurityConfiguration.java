@@ -7,16 +7,24 @@ import io.github.pinpols.batch.console.domain.rbac.support.ConsoleAuthentication
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityHeadersWriter;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityResponseWriter;
+import io.github.pinpols.batch.console.infrastructure.rbac.ConsoleOidcAuthenticationFailureHandler;
+import io.github.pinpols.batch.console.infrastructure.rbac.ConsoleOidcAuthenticationSuccessHandler;
+import io.github.pinpols.batch.console.infrastructure.rbac.DiscardingOidcAuthorizedClientRepository;
+import io.github.pinpols.batch.console.infrastructure.rbac.RedisOidcAuthorizationRequestRepository;
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceModeFilter;
+import io.github.pinpols.batch.console.support.ratelimit.ConsoleLoginIpRateLimiter;
+import io.github.pinpols.batch.console.support.ratelimit.ConsoleOidcAuthorizationRateLimitFilter;
 import io.github.pinpols.batch.console.support.ratelimit.ConsoleRateLimitFilter;
 import io.github.pinpols.batch.console.support.ratelimit.RedisRateLimitCircuitBreaker;
 import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
+import jakarta.servlet.Filter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
@@ -24,6 +32,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestRedirectFilter;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
@@ -61,13 +70,67 @@ public class ConsoleSecurityConfiguration {
   private static final String[] BYPASS_MODE_CSRF_IGNORED_MATCHERS = {"/**"};
 
   @Bean
+  public ConsoleLoginIpRateLimiter consoleLoginIpRateLimiter(
+      SlidingWindowRateLimiter rateLimiter,
+      ConsoleRateLimitProperties rateLimitProperties,
+      RedisRateLimitCircuitBreaker redisRateLimitCircuitBreaker) {
+    return new ConsoleLoginIpRateLimiter(
+        rateLimiter, rateLimitProperties, properties, redisRateLimitCircuitBreaker);
+  }
+
+  @Bean
+  public ConsoleOidcAuthorizationRateLimitFilter consoleOidcAuthorizationRateLimitFilter(
+      ConsoleRateLimitProperties rateLimitProperties,
+      ConsoleLoginIpRateLimiter loginIpRateLimiter,
+      ConsoleSecurityResponseWriter responseWriter) {
+    return new ConsoleOidcAuthorizationRateLimitFilter(
+        rateLimitProperties, loginIpRateLimiter, responseWriter);
+  }
+
+  @Bean
+  public FilterRegistrationBean<ConsoleOidcAuthorizationRateLimitFilter>
+      consoleOidcAuthorizationRateLimitFilterRegistration(
+          ConsoleOidcAuthorizationRateLimitFilter filter) {
+    return securityChainOnly(filter);
+  }
+
+  @Bean
   public ConsoleRateLimitFilter consoleRateLimitFilter(
       SlidingWindowRateLimiter rateLimiter,
       ConsoleRateLimitProperties rateLimitProperties,
       ConsoleSecurityResponseWriter responseWriter,
-      RedisRateLimitCircuitBreaker redisRateLimitCircuitBreaker) {
+      RedisRateLimitCircuitBreaker redisRateLimitCircuitBreaker,
+      ConsoleLoginIpRateLimiter loginIpRateLimiter) {
     return new ConsoleRateLimitFilter(
-        rateLimiter, rateLimitProperties, responseWriter, properties, redisRateLimitCircuitBreaker);
+        rateLimiter,
+        rateLimitProperties,
+        responseWriter,
+        redisRateLimitCircuitBreaker,
+        loginIpRateLimiter);
+  }
+
+  @Bean
+  public FilterRegistrationBean<ConsoleRateLimitFilter> consoleRateLimitFilterRegistration(
+      ConsoleRateLimitFilter filter) {
+    return securityChainOnly(filter);
+  }
+
+  @Bean
+  public FilterRegistrationBean<ConsoleAuthenticationFilter>
+      consoleAuthenticationFilterRegistration(ConsoleAuthenticationFilter filter) {
+    return securityChainOnly(filter);
+  }
+
+  @Bean
+  public FilterRegistrationBean<MaintenanceModeFilter> maintenanceModeFilterRegistration(
+      MaintenanceModeFilter filter) {
+    return securityChainOnly(filter);
+  }
+
+  private static <T extends Filter> FilterRegistrationBean<T> securityChainOnly(T filter) {
+    FilterRegistrationBean<T> registration = new FilterRegistrationBean<>(filter);
+    registration.setEnabled(false);
+    return registration;
   }
 
   /**
@@ -92,9 +155,26 @@ public class ConsoleSecurityConfiguration {
   }
 
   @Bean
+  public ConsoleOidcSecurityComponents consoleOidcSecurityComponents(
+      RedisOidcAuthorizationRequestRepository repository,
+      ConsoleOidcAuthenticationSuccessHandler successHandler,
+      ConsoleOidcAuthenticationFailureHandler failureHandler,
+      DiscardingOidcAuthorizedClientRepository authorizedClientRepository,
+      ConsoleOidcAuthorizationRateLimitFilter oidcAuthorizationRateLimitFilter) {
+    return new ConsoleOidcSecurityComponents(
+        repository,
+        successHandler,
+        failureHandler,
+        authorizedClientRepository,
+        oidcAuthorizationRateLimitFilter);
+  }
+
+  @Bean
   @SuppressWarnings({"java:S4502", "java:S3330"})
   public SecurityFilterChain consoleSecurityFilterChain(
-      HttpSecurity http, ConsoleSecurityFilterChainComponents components) {
+      HttpSecurity http,
+      ConsoleSecurityFilterChainComponents components,
+      ConsoleOidcSecurityComponents oidcComponents) {
     ConsoleAuthenticationFilter consoleAuthenticationFilter = components.authenticationFilter();
     ConsoleRateLimitFilter consoleRateLimitFilter = components.rateLimitFilter();
     MaintenanceModeFilter maintenanceModeFilter = components.maintenanceModeFilter();
@@ -135,9 +215,12 @@ public class ConsoleSecurityConfiguration {
             .requestMatchers("/internal/am-notify/**")
             .permitAll()
             .requestMatchers(
+                "/oauth2/authorization/**",
+                "/login/oauth2/code/**",
                 "/api/console/auth/login",
                 "/api/console/auth/logout",
                 "/api/console/auth/public-key",
+                "/api/console/auth/oidc/provider",
                 // 验证码配置登录前即需访问(无认证态),仅下发公开 provider/siteKey。
                 "/api/console/captcha/config",
                 "/api/console/push/vapid-public-key",
@@ -163,12 +246,21 @@ public class ConsoleSecurityConfiguration {
                 ConsoleRoles.TENANT_USER)
             .anyRequest()
             .authenticated())
+        .oauth2Login(oauth2 -> oauth2
+            .authorizationEndpoint(endpoint -> endpoint.authorizationRequestRepository(
+                oidcComponents.authorizationRequestRepository()))
+            .successHandler(oidcComponents.successHandler())
+            .failureHandler(oidcComponents.failureHandler())
+            .authorizedClientRepository(oidcComponents.authorizedClientRepository()))
         // Auth 先建立 SecurityContext，MaintenanceModeFilter 才能识别 ROLE_ADMIN 旁路；
         // rate limit 仍放在维护拦截之后，维护期被挡请求不消耗限流窗口。
         .addFilterAfter(new CsrfCookieMaterializeFilter(), CsrfFilter.class)
         .addFilterBefore(consoleAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
         .addFilterAfter(maintenanceModeFilter, ConsoleAuthenticationFilter.class)
         .addFilterAfter(consoleRateLimitFilter, MaintenanceModeFilter.class)
+        .addFilterBefore(
+            oidcComponents.authorizationRateLimitFilter(),
+            OAuth2AuthorizationRequestRedirectFilter.class)
         .build();
   }
 

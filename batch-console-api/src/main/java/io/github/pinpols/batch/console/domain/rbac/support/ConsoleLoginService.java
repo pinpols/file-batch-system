@@ -21,7 +21,7 @@ import org.springframework.stereotype.Service;
  *       任意租户猜测越权。
  *   <li><b>统一错误消息</b>：账号不存在 / 账号禁用 / 密码错误都抛同一个 {@code invalidCredentials} （{@code UNAUTHORIZED} +
  *       "invalid username or password"），不向客户端泄露"用户是否存在"—— 防用户枚举攻击。
- *   <li><b>会话版本递增</b>：登录成功立即 {@code nextSessionVersion}——单点登录开启时自动踢旧会话 （见 {@link
+ *   <li><b>会话版本递增</b>：登录成功立即 {@code nextSessionVersion}——单账号单会话开启时自动踢旧会话 （见 {@link
  *       ConsoleSessionRegistry}）。
  * </ul>
  */

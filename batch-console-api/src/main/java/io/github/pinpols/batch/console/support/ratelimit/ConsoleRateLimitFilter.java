@@ -7,7 +7,6 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.common.web.ServletRequestPaths;
 import io.github.pinpols.batch.console.config.ConsoleRateLimitProperties;
-import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityResponseWriter;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import jakarta.servlet.FilterChain;
@@ -46,20 +45,20 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
   private final SlidingWindowRateLimiter rateLimiter;
   private final ConsoleRateLimitProperties properties;
   private final ConsoleSecurityResponseWriter responseWriter;
-  private final ConsoleSecurityProperties securityProperties;
   private final RedisRateLimitCircuitBreaker redisCircuitBreaker;
+  private final ConsoleLoginIpRateLimiter loginIpRateLimiter;
 
   public ConsoleRateLimitFilter(
       SlidingWindowRateLimiter rateLimiter,
       ConsoleRateLimitProperties properties,
       ConsoleSecurityResponseWriter responseWriter,
-      ConsoleSecurityProperties securityProperties,
-      RedisRateLimitCircuitBreaker redisCircuitBreaker) {
+      RedisRateLimitCircuitBreaker redisCircuitBreaker,
+      ConsoleLoginIpRateLimiter loginIpRateLimiter) {
     this.rateLimiter = rateLimiter;
     this.properties = properties;
     this.responseWriter = responseWriter;
-    this.securityProperties = securityProperties;
     this.redisCircuitBreaker = redisCircuitBreaker;
+    this.loginIpRateLimiter = loginIpRateLimiter;
   }
 
   @Override
@@ -75,12 +74,12 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
     String method = request.getMethod();
 
     // ── 1. 登录接口：IP 限流 ───────────────────────────────────────────────
-    if (HttpMethod.POST.matches(method) && LOGIN_PATH.equals(path)) {
-      String ip = resolveClientIp(request);
-      String key = "login:ip:" + ip;
-      if (!tryAcquireFailOpen(key, properties.getLoginIpLimitPerMinute(), "login", ip)) {
+    boolean passwordLogin = HttpMethod.POST.matches(method) && LOGIN_PATH.equals(path);
+    if (passwordLogin) {
+      if (!loginIpRateLimiter.tryAcquire(request)) {
+        String ip = request.getRemoteAddr();
         log.warn(
-            "Login rate limit triggered: ip={} path={}",
+            "Console login rate limit triggered: ip={} path={}",
             LogSanitizer.value(ip),
             LogSanitizer.value(path));
         responseWriter.write(
@@ -183,26 +182,6 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
           SwallowedExceptionLogger.summary(ex));
       return true;
     }
-  }
-
-  /**
-   * 解析客户端真实 IP。仅当 {@code batch.console.security.trust-forwarded-headers=true} 时才信任反代下发的 {@code
-   * X-Forwarded-For} / {@code X-Real-IP}（应用挂在受信反代/Ingress 之后才该开），否则直接走 {@code RemoteAddr},防 {@code
-   * curl -H 'X-Forwarded-For: 1.2.3.4'} 伪造源 IP 绕过限流。
-   */
-  private String resolveClientIp(HttpServletRequest request) {
-    if (securityProperties.isTrustForwardedHeaders()) {
-      String xff = request.getHeader("X-Forwarded-For");
-      if (Texts.hasText(xff)) {
-        int comma = xff.indexOf(',');
-        return (comma > 0 ? xff.substring(0, comma) : xff).trim();
-      }
-      String realIp = request.getHeader("X-Real-IP");
-      if (Texts.hasText(realIp)) {
-        return realIp.trim();
-      }
-    }
-    return request.getRemoteAddr();
   }
 
   private String resolveUsername() {

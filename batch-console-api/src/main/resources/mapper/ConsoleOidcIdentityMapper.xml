@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleOidcIdentityMapper">
+
+    <resultMap id="consoleUserAccountEntityMap"
+               type="io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity">
+        <id column="account_id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="username" property="username"/>
+        <result column="display_name" property="displayName"/>
+        <result column="password_hash" property="passwordHash"/>
+        <result column="authorities_csv" property="authoritiesCsv"/>
+        <result column="enabled" property="enabled"/>
+        <result column="must_change_password" property="mustChangePassword"/>
+    </resultMap>
+
+    <resultMap id="consoleOidcIdentityEntityMap"
+               type="io.github.pinpols.batch.console.domain.rbac.entity.ConsoleOidcIdentityEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="account_id" property="accountId"/>
+        <result column="username" property="username"/>
+        <result column="issuer" property="issuer"/>
+        <result column="subject" property="subject"/>
+        <result column="linked_by" property="linkedBy"/>
+        <result column="linked_at" property="linkedAt"/>
+    </resultMap>
+
+    <select id="findEnabledAccount" resultMap="consoleUserAccountEntityMap">
+        select a.id as account_id, a.tenant_id, a.username, a.display_name, a.password_hash,
+               a.authorities_csv, a.enabled, a.must_change_password
+          from batch.console_external_identity i
+          join batch.console_user_account a
+            on a.tenant_id = i.tenant_id and a.id = i.account_id
+         where i.tenant_id = #{tenantId}
+           and i.issuer = #{issuer}
+           and i.subject = #{subject}
+           and a.enabled = true
+         limit 1
+    </select>
+
+    <select id="findByTenant" resultMap="consoleOidcIdentityEntityMap">
+        select i.id, i.tenant_id, i.account_id, a.username, i.issuer, i.subject,
+               i.linked_by, i.linked_at
+          from batch.console_external_identity i
+          join batch.console_user_account a
+            on a.tenant_id = i.tenant_id and a.id = i.account_id
+         where i.tenant_id = #{tenantId}
+         order by i.linked_at desc, i.id desc
+    </select>
+
+    <select id="findByAccountAndTenant" resultMap="consoleOidcIdentityEntityMap">
+        select i.id, i.tenant_id, i.account_id, a.username, i.issuer, i.subject,
+               i.linked_by, i.linked_at
+          from batch.console_external_identity i
+          join batch.console_user_account a
+            on a.tenant_id = i.tenant_id and a.id = i.account_id
+         where i.account_id = #{accountId}
+           and i.tenant_id = #{tenantId}
+         limit 1
+    </select>
+
+    <insert id="insert">
+        insert into batch.console_external_identity
+            (tenant_id, account_id, issuer, subject, linked_by)
+        values
+            (#{tenantId}, #{accountId}, #{issuer}, #{subject}, #{linkedBy})
+    </insert>
+
+    <delete id="deleteByIdAndTenant">
+        delete from batch.console_external_identity
+         where id = #{id} and tenant_id = #{tenantId}
+    </delete>
+</mapper>
