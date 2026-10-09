@@ -14,6 +14,7 @@ import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.enums.WorkflowType;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
@@ -488,7 +489,7 @@ public class ConfigPackageExcelValidator {
       List<String> issues) {
     validatePolicyTenant(tenantId, row, issues);
     PolicyJobContext jobContext = resolvePolicyJob(tenantId, packageJobs, seen, row, issues);
-    if (jobContext != null) {
+    if (EmptyChecks.isNotNull(jobContext)) {
       validateMonitoringPolicyApplicability(row, jobContext, issues);
     }
     validateMonitoringPolicyValues(row, issues);
@@ -518,11 +519,11 @@ public class ConfigPackageExcelValidator {
       issues.add("duplicate job_code in excel: " + jobCode);
     }
     PolicyJobContext packageJob = packageJobs.get(key);
-    if (packageJob != null) {
+    if (EmptyChecks.isNotNull(packageJob)) {
       return packageJob;
     }
     JobDefinitionEntity existingJob = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
-    if (existingJob == null) {
+    if (EmptyChecks.isNull(existingJob)) {
       issues.add("job_code does not exist for tenant: " + jobCode);
       return null;
     }
@@ -539,21 +540,21 @@ public class ConfigPackageExcelValidator {
     String deadlineTime = normalize(row.get(COL_COMPLETION_DEADLINE_LOCAL_TIME));
     String dayOffset = normalize(row.get(COL_COMPLETION_DEADLINE_DAY_OFFSET));
 
-    if (!cron && !dependent && startGrace != null && startGrace > 0) {
+    if (!cron && !dependent && EmptyChecks.isNotNull(startGrace) && startGrace > 0) {
       issues.add(COL_START_GRACE_SECONDS + " is only supported for CRON or dependent jobs");
     }
     if (hasText(deadlineTime) && (!cron || dependent)) {
       issues.add(COL_COMPLETION_DEADLINE_LOCAL_TIME
           + " is only supported for CRON jobs without an upstream dependency");
     }
-    if (dependencyWindow != null && dependencyWindow > 0 && !dependent) {
+    if (EmptyChecks.isNotNull(dependencyWindow) && dependencyWindow > 0 && !dependent) {
       issues.add(
           COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS + " is only supported for dependent jobs");
     }
     if (!cron && hasText(dayOffset) && !"0".equals(dayOffset)) {
       issues.add(COL_COMPLETION_DEADLINE_DAY_OFFSET + " is only supported for CRON jobs");
     }
-    if (hasText(deadlineTime) && dependencyWindow != null && dependencyWindow > 0) {
+    if (hasText(deadlineTime) && EmptyChecks.isNotNull(dependencyWindow) && dependencyWindow > 0) {
       issues.add(COL_COMPLETION_DEADLINE_LOCAL_TIME + " and "
           + COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS + " cannot both be configured");
     }

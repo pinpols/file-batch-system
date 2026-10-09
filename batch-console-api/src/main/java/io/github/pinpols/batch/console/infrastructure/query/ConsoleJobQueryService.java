@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.i18n.LocalizedErrorRenderer;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.console.domain.job.application.contract.query.JobDefinitionQueryRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.query.JobExecutionLogQueryRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.query.JobInstanceQueryRequest;
@@ -251,17 +252,15 @@ public class ConsoleJobQueryService {
         display(entity.getRetryPolicy()),
         entity.getRetryMaxCount(),
         entity.getTimeoutSeconds(),
-        entity.getSoftRuntimeSeconds() == null ? 0 : entity.getSoftRuntimeSeconds(),
+        Nullables.coalesce(entity.getSoftRuntimeSeconds(), 0),
         display(entity.getSoftRuntimeSeverity()),
-        entity.getStartGraceSeconds() == null ? 0 : entity.getStartGraceSeconds(),
+        Nullables.coalesce(entity.getStartGraceSeconds(), 0),
         display(entity.getStartGraceSeverity()),
         entity.getCompletionDeadlineEnabled(),
         entity.getCompletionDeadlineLocalTime(),
         entity.getCompletionDeadlineDayOffset(),
         display(entity.getCompletionDeadlineSeverity()),
-        entity.getDependencyCompletionWindowSeconds() == null
-            ? 0
-            : entity.getDependencyCompletionWindowSeconds(),
+        Nullables.coalesce(entity.getDependencyCompletionWindowSeconds(), 0),
         display(entity.getShardStrategy()),
         display(entity.getExecutionMode()),
         display(entity.getWatermarkField()),

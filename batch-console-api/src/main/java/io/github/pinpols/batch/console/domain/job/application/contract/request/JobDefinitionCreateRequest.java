@@ -155,11 +155,11 @@ public class JobDefinitionCreateRequest {
   public boolean isScheduledMonitoringConfiguredCorrectly() {
     boolean cron = "CRON".equals(scheduleType);
     boolean dependency = EmptyChecks.isNotBlank(dependsOnJobCode);
-    boolean startGraceEnabled = startGraceSeconds != null && startGraceSeconds > 0;
-    boolean localDeadlineEnabled =
-        Boolean.TRUE.equals(completionDeadlineEnabled) || completionDeadlineLocalTime != null;
-    boolean dependencyWindowEnabled =
-        dependencyCompletionWindowSeconds != null && dependencyCompletionWindowSeconds > 0;
+    boolean startGraceEnabled = EmptyChecks.isNotNull(startGraceSeconds) && startGraceSeconds > 0;
+    boolean localDeadlineEnabled = Boolean.TRUE.equals(completionDeadlineEnabled)
+        || EmptyChecks.isNotNull(completionDeadlineLocalTime);
+    boolean dependencyWindowEnabled = EmptyChecks.isNotNull(dependencyCompletionWindowSeconds)
+        && dependencyCompletionWindowSeconds > 0;
     return (cron || dependency || !startGraceEnabled)
         && (!localDeadlineEnabled || cron && !dependency)
         && (!dependencyWindowEnabled || dependency)
@@ -169,6 +169,7 @@ public class JobDefinitionCreateRequest {
   @AssertTrue(
       message = "completionDeadlineLocalTime is required when completionDeadlineEnabled=true")
   public boolean isCompletionDeadlineTimePresentWhenEnabled() {
-    return !Boolean.TRUE.equals(completionDeadlineEnabled) || completionDeadlineLocalTime != null;
+    return !Boolean.TRUE.equals(completionDeadlineEnabled)
+        || EmptyChecks.isNotNull(completionDeadlineLocalTime);
   }
 }

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.console.domain.job.param.JobMonitoringPolicyUpsertParam;
 import io.github.pinpols.batch.testing.TestPostgresContainers;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
@@ -85,7 +86,7 @@ class JobMonitoringPolicyMapperIntegrationTest {
           .softRuntimeSeverity("WARN")
           .startGraceSeconds(60)
           .startGraceSeverity("WARN")
-          .completionDeadlineLocalTime(java.time.LocalTime.of(4, 0))
+          .completionDeadlineLocalTime(LocalTime.of(4, 0))
           .completionDeadlineDayOffset(1)
           .dependencyCompletionWindowSeconds(0)
           .completionDeadlineSeverity("WARN")
@@ -102,7 +103,7 @@ class JobMonitoringPolicyMapperIntegrationTest {
           .softRuntimeSeverity("ERROR")
           .startGraceSeconds(90)
           .startGraceSeverity("WARN")
-          .completionDeadlineLocalTime(java.time.LocalTime.of(4, 0))
+          .completionDeadlineLocalTime(LocalTime.of(4, 0))
           .completionDeadlineDayOffset(1)
           .dependencyCompletionWindowSeconds(0)
           .completionDeadlineSeverity("WARN")
@@ -117,7 +118,7 @@ class JobMonitoringPolicyMapperIntegrationTest {
           .softRuntimeSeverity("ERROR")
           .startGraceSeconds(90)
           .startGraceSeverity("WARN")
-          .completionDeadlineLocalTime(java.time.LocalTime.of(4, 1))
+          .completionDeadlineLocalTime(LocalTime.of(4, 1))
           .completionDeadlineDayOffset(1)
           .dependencyCompletionWindowSeconds(0)
           .completionDeadlineSeverity("CRITICAL")

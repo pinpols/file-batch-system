@@ -37,6 +37,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -297,7 +298,7 @@ class DefaultTriggerServiceTest {
 
     when(launchAdapterService.fromScheduledTrigger(eq(command), any())).thenReturn(launchRequest);
     when(upstreamReadiness.readyAt("t1", "UPSTREAM_SETTLE", LocalDate.of(2026, Month.MARCH, 28)))
-        .thenReturn(java.util.Optional.empty());
+        .thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.launchScheduled(command))
         .isInstanceOf(UpstreamNotReadyException.class);
@@ -330,7 +331,7 @@ class DefaultTriggerServiceTest {
 
     when(launchAdapterService.fromScheduledTrigger(eq(command), any())).thenReturn(launchRequest);
     when(upstreamReadiness.readyAt("t1", "UPSTREAM_SETTLE", LocalDate.of(2026, Month.MARCH, 28)))
-        .thenReturn(java.util.Optional.of(Instant.parse("2026-03-28T20:00:00Z")));
+        .thenReturn(Optional.of(Instant.parse("2026-03-28T20:00:00Z")));
 
     LaunchResponse response = service.launchScheduled(command);
 

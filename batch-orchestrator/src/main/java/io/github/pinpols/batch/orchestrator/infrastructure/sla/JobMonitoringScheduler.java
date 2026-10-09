@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.sla;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.service.governance.JobMonitoringAlertEmissionService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.JobMonitoringAlertEmissionService.Violation;
 import io.github.pinpols.batch.orchestrator.config.SlaGovernanceProperties;
@@ -82,7 +83,7 @@ public class JobMonitoringScheduler {
       if (querySucceeded) {
         meterRegistry
             .summary("batch.job.monitoring.scan.candidates", VIOLATION_TYPE_TAG, violation.name())
-            .record(candidates == null ? 0 : candidates.size());
+            .record(EmptyChecks.isNull(candidates) ? 0 : candidates.size());
         scanCandidates(candidates, violation);
       }
     } finally {
@@ -95,11 +96,13 @@ public class JobMonitoringScheduler {
   }
 
   private void scanCandidates(List<JobMonitoringAlertCandidate> candidates, Violation violation) {
-    if (candidates == null || candidates.isEmpty()) {
+    if (EmptyChecks.isEmpty(candidates)) {
       return;
     }
     for (JobMonitoringAlertCandidate candidate : candidates) {
-      if (candidate == null || candidate.tenantId() == null || candidate.jobInstanceId() == null) {
+      if (EmptyChecks.isNull(candidate)
+          || EmptyChecks.isNull(candidate.tenantId())
+          || EmptyChecks.isNull(candidate.jobInstanceId())) {
         continue;
       }
       try {

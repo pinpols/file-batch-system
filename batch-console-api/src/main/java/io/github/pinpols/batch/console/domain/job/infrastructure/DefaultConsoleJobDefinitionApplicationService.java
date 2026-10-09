@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
@@ -128,7 +129,7 @@ public class DefaultConsoleJobDefinitionApplicationService
             ? null
             : request.getCompletionDeadlineLocalTime());
     entity.setCompletionDeadlineDayOffset(
-        entity.getCompletionDeadlineLocalTime() == null
+        EmptyChecks.isNull(entity.getCompletionDeadlineLocalTime())
             ? 0
             : valueOrZero(request.getCompletionDeadlineDayOffset()));
     entity.setCompletionDeadlineSeverity(severityOrWarn(request.getCompletionDeadlineSeverity()));
@@ -168,22 +169,22 @@ public class DefaultConsoleJobDefinitionApplicationService
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     JobDefinitionEntity existing = Guard.requireFound(
         jobDefinitionMapper.selectById(tenantId, id), "job definition not found");
-    String dependsOnJobCode = request.getDependsOnJobCode() == null
+    String dependsOnJobCode = EmptyChecks.isNull(request.getDependsOnJobCode())
         ? existing.getDependsOnJobCode()
         : CodeNormalizer.trimToNull(request.getDependsOnJobCode());
     LocalTime completionDeadlineLocalTime = resolveCompletionDeadlineLocalTime(request, existing);
     if (Boolean.TRUE.equals(request.getCompletionDeadlineEnabled())
-        && completionDeadlineLocalTime == null) {
+        && EmptyChecks.isNull(completionDeadlineLocalTime)) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
     }
     validateScheduledMonitoring(
         existing.getScheduleType(),
         dependsOnJobCode,
-        request.getStartGraceSeconds() == null
+        EmptyChecks.isNull(request.getStartGraceSeconds())
             ? existing.getStartGraceSeconds()
             : request.getStartGraceSeconds(),
         completionDeadlineLocalTime,
-        request.getDependencyCompletionWindowSeconds() == null
+        EmptyChecks.isNull(request.getDependencyCompletionWindowSeconds())
             ? existing.getDependencyCompletionWindowSeconds()
             : request.getDependencyCompletionWindowSeconds());
     String operator = requestMetadataResolver.current().operatorId();
@@ -415,7 +416,7 @@ public class DefaultConsoleJobDefinitionApplicationService
         severityOrWarn(e.getStartGraceSeverity()),
         ("CRON".equals(e.getScheduleType())
                 && !Texts.hasText(e.getDependsOnJobCode())
-                && e.getCompletionDeadlineLocalTime() != null)
+                && EmptyChecks.isNotNull(e.getCompletionDeadlineLocalTime()))
             || (Texts.hasText(e.getDependsOnJobCode())
                 && valueOrZero(e.getDependencyCompletionWindowSeconds()) > 0),
         e.getCompletionDeadlineLocalTime(),
@@ -459,14 +460,14 @@ public class DefaultConsoleJobDefinitionApplicationService
 
   private static Integer resolveCompletionDeadlineDayOffset(
       LocalTime deadlineTime, Integer requestedOffset, Integer existingOffset) {
-    if (deadlineTime == null) {
+    if (EmptyChecks.isNull(deadlineTime)) {
       return 0;
     }
-    return requestedOffset == null ? valueOrZero(existingOffset) : requestedOffset;
+    return EmptyChecks.isNull(requestedOffset) ? valueOrZero(existingOffset) : requestedOffset;
   }
 
   private static Integer resolveMonitoringValue(Integer requested, Integer existing) {
-    return valueOrZero(requested == null ? existing : requested);
+    return valueOrZero(EmptyChecks.isNull(requested) ? existing : requested);
   }
 
   private static LocalTime resolveCompletionDeadlineLocalTime(
@@ -474,13 +475,13 @@ public class DefaultConsoleJobDefinitionApplicationService
     if (Boolean.FALSE.equals(request.getCompletionDeadlineEnabled())) {
       return null;
     }
-    return request.getCompletionDeadlineLocalTime() == null
+    return EmptyChecks.isNull(request.getCompletionDeadlineLocalTime())
         ? existing.getCompletionDeadlineLocalTime()
         : request.getCompletionDeadlineLocalTime();
   }
 
   private static Integer valueOrZero(Integer value) {
-    return value == null ? 0 : value;
+    return EmptyChecks.isNull(value) ? 0 : value;
   }
 
   private static int resolveStartGraceSeconds(
@@ -488,7 +489,7 @@ public class DefaultConsoleJobDefinitionApplicationService
       String dependsOnJobCode,
       Integer requested,
       JobMonitoringDefaultsProperties defaults) {
-    if (requested != null) {
+    if (EmptyChecks.isNotNull(requested)) {
       return requested;
     }
     return "CRON".equals(scheduleType) || Texts.hasText(dependsOnJobCode)
@@ -498,7 +499,7 @@ public class DefaultConsoleJobDefinitionApplicationService
 
   private static int resolveSoftRuntimeSeconds(
       Integer requested, JobMonitoringDefaultsProperties defaults) {
-    return requested == null ? defaults.getSoftRuntimeSeconds() : requested;
+    return EmptyChecks.isNull(requested) ? defaults.getSoftRuntimeSeconds() : requested;
   }
 
   private static void validateScheduledMonitoring(
@@ -510,7 +511,7 @@ public class DefaultConsoleJobDefinitionApplicationService
     boolean cron = "CRON".equals(scheduleType);
     boolean dependency = Texts.hasText(dependsOnJobCode);
     boolean startGraceConfigured = valueOrZero(startGraceSeconds) > 0;
-    boolean completionDeadlineConfigured = completionDeadlineLocalTime != null;
+    boolean completionDeadlineConfigured = EmptyChecks.isNotNull(completionDeadlineLocalTime);
     boolean dependencyWindowConfigured = valueOrZero(dependencyCompletionWindowSeconds) > 0;
     boolean startGraceSupported = cron || dependency;
     boolean invalidDeadlineCombination = completionDeadlineConfigured && (!cron || dependency)
@@ -522,10 +523,10 @@ public class DefaultConsoleJobDefinitionApplicationService
   }
 
   private static String resolveMonitoringSeverity(String requested, String existing) {
-    return severityOrWarn(requested == null ? existing : requested);
+    return severityOrWarn(EmptyChecks.isNull(requested) ? existing : requested);
   }
 
   private static String severityOrWarn(String severity) {
-    return severity == null || severity.isBlank() ? "WARN" : severity;
+    return EmptyChecks.isBlank(severity) ? "WARN" : severity;
   }
 }

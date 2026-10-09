@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service.governance;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobMonitoringAlertCandidate;
@@ -41,19 +42,17 @@ public class JobMonitoringAlertEmissionService {
       detail.put("failedPartitionCount", candidate.failedPartitionCount());
     }
 
-    alertEventService.emit(AlertEmitRequest.builder()
+    AlertEmitRequest request = AlertEmitRequest.builder()
         .tenantId(candidate.tenantId())
         .serviceName("batch-orchestrator")
         .alertType(violation.alertType())
-        .severity(
-            candidate.severity() == null || candidate.severity().isBlank()
-                ? "WARN"
-                : candidate.severity())
+        .severity(EmptyChecks.isBlank(candidate.severity()) ? "WARN" : candidate.severity())
         .title(violation.title(candidate.jobCode()))
         .detailJson(JsonUtils.toJson(detail))
         .resourceKey(String.valueOf(candidate.jobInstanceId()))
         .traceId(candidate.traceId())
-        .build());
+        .build();
+    alertEventService.emit(request);
     return true;
   }
 

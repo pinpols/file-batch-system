@@ -118,7 +118,8 @@ public class DefaultTriggerService implements TriggerService {
       return skipScheduled(command);
     }
     Optional<Instant> dependencyReadyAt = upstreamReadyAt(command, launchRequest);
-    if (dependencyReadyAt.isEmpty() && Texts.hasText(command.descriptor().getDependsOnJobCode())) {
+    if (dependencyReadyAt.isEmpty() // empty-check: allow - Optional 通过其专属 API 表达无值。
+        && Texts.hasText(command.descriptor().getDependsOnJobCode())) {
       // ADR-043:依赖未就绪不返回 skipped，QuartzLaunchJob 会用 one-shot trigger 延迟重检。
       throw new UpstreamNotReadyException(
           launchRequest.tenantId(),

@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.AlertRoutingSpec;
@@ -250,7 +251,7 @@ public class TenantConfigInitApplyHandlers {
     entity.setDependencyCompletionWindowSeconds(
         valueOrZero(spec.getDependencyCompletionWindowSeconds()));
     entity.setCompletionDeadlineDayOffset(
-        spec.getCompletionDeadlineLocalTime() == null
+        EmptyChecks.isNull(spec.getCompletionDeadlineLocalTime())
             ? 0
             : valueOrZero(spec.getCompletionDeadlineDayOffset()));
     entity.setCompletionDeadlineSeverity(severityOrWarn(spec.getCompletionDeadlineSeverity()));
@@ -280,9 +281,10 @@ public class TenantConfigInitApplyHandlers {
       JobDefinitionEntity existing, JobDefinitionSpec spec, String operator) {
     String dependsOnJobCode = Nullables.coalesce(
         CodeNormalizer.trimToNull(spec.getDependsOnJobCode()), existing.getDependsOnJobCode());
-    LocalTime completionDeadlineLocalTime = spec.getCompletionDeadlineLocalTime() == null
-        ? existing.getCompletionDeadlineLocalTime()
-        : spec.getCompletionDeadlineLocalTime();
+    LocalTime completionDeadlineLocalTime =
+        EmptyChecks.isNull(spec.getCompletionDeadlineLocalTime())
+            ? existing.getCompletionDeadlineLocalTime()
+            : spec.getCompletionDeadlineLocalTime();
     Integer dependencyCompletionWindowSeconds = resolveMonitoringValue(
         spec.getDependencyCompletionWindowSeconds(),
         existing.getDependencyCompletionWindowSeconds());
@@ -372,7 +374,7 @@ public class TenantConfigInitApplyHandlers {
   }
 
   private int resolveStartGrace(String scheduleType, String dependsOnJobCode, Integer requested) {
-    if (requested != null) {
+    if (EmptyChecks.isNotNull(requested)) {
       return requested;
     }
     return "CRON".equals(scheduleType) || Texts.hasText(dependsOnJobCode)
@@ -382,14 +384,14 @@ public class TenantConfigInitApplyHandlers {
 
   private static Integer resolveCompletionDeadlineDayOffset(
       LocalTime deadlineTime, Integer requestedOffset, Integer existingOffset) {
-    if (deadlineTime == null) {
+    if (EmptyChecks.isNull(deadlineTime)) {
       return 0;
     }
-    return requestedOffset == null ? valueOrZero(existingOffset) : requestedOffset;
+    return EmptyChecks.isNull(requestedOffset) ? valueOrZero(existingOffset) : requestedOffset;
   }
 
   private int resolveSoftRuntime(Integer requested) {
-    return requested == null ? monitoringDefaults.getSoftRuntimeSeconds() : requested;
+    return EmptyChecks.isNull(requested) ? monitoringDefaults.getSoftRuntimeSeconds() : requested;
   }
 
   private static void validateScheduledMonitoring(
@@ -401,29 +403,30 @@ public class TenantConfigInitApplyHandlers {
     boolean cron = "CRON".equals(scheduleType);
     boolean dependency = Texts.hasText(dependsOnJobCode);
     boolean startGraceSupported = cron || dependency;
-    boolean invalidCompletionDeadline = completionDeadlineLocalTime != null && (!cron || dependency)
-        || valueOrZero(dependencyCompletionWindowSeconds) > 0 && !dependency
-        || completionDeadlineLocalTime != null
-            && valueOrZero(dependencyCompletionWindowSeconds) > 0;
+    boolean invalidCompletionDeadline =
+        EmptyChecks.isNotNull(completionDeadlineLocalTime) && (!cron || dependency)
+            || valueOrZero(dependencyCompletionWindowSeconds) > 0 && !dependency
+            || EmptyChecks.isNotNull(completionDeadlineLocalTime)
+                && valueOrZero(dependencyCompletionWindowSeconds) > 0;
     if ((!startGraceSupported && valueOrZero(startGraceSeconds) > 0) || invalidCompletionDeadline) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
     }
   }
 
   private static Integer resolveMonitoringValue(Integer requested, Integer existing) {
-    return valueOrZero(requested == null ? existing : requested);
+    return valueOrZero(EmptyChecks.isNull(requested) ? existing : requested);
   }
 
   private static Integer valueOrZero(Integer value) {
-    return value == null ? 0 : value;
+    return EmptyChecks.isNull(value) ? 0 : value;
   }
 
   private static String resolveMonitoringSeverity(String requested, String existing) {
-    return severityOrWarn(requested == null ? existing : requested);
+    return severityOrWarn(EmptyChecks.isNull(requested) ? existing : requested);
   }
 
   private static String severityOrWarn(String severity) {
-    return severity == null || severity.isBlank() ? "WARN" : severity;
+    return EmptyChecks.isBlank(severity) ? "WARN" : severity;
   }
 
   ItemStats applyWorkflowDefinitions(List<WorkflowDefinitionSpec> specs, ApplyContext ctx) {

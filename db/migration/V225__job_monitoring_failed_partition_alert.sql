@@ -1,4 +1,4 @@
--- 扩展异步作业监控告警的 claim 类型，不修改已应用的 V223。
+-- 扩展异步作业监控告警的 claim 类型，不修改已应用的 V224。
 ALTER TABLE batch.job_monitoring_alert_claim
     ADD CONSTRAINT ck_job_monitoring_alert_claim_type_expanded
     CHECK (violation_type IN (

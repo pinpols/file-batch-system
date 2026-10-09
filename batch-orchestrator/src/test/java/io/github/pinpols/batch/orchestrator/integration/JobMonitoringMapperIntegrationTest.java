@@ -8,6 +8,7 @@ import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -92,19 +93,19 @@ class JobMonitoringMapperIntegrationTest {
         )
         """);
     new ResourceDatabasePopulator(
-            new ClassPathResource("db/migration/V223__job_monitoring_policy_and_alert_claim.sql"))
+            new ClassPathResource("db/migration/V224__job_monitoring_policy_and_alert_claim.sql"))
         .execute(dataSource);
     new ResourceDatabasePopulator(
-            new ClassPathResource("db/migration/V224__job_monitoring_failed_partition_alert.sql"))
+            new ClassPathResource("db/migration/V225__job_monitoring_failed_partition_alert.sql"))
         .execute(dataSource);
     new ResourceDatabasePopulator(
-            new ClassPathResource("db/migration/V225__job_monitoring_policy_severity.sql"))
+            new ClassPathResource("db/migration/V226__job_monitoring_policy_severity.sql"))
         .execute(dataSource);
     new ResourceDatabasePopulator(
-            new ClassPathResource("db/migration/V226__scheduled_job_completion_deadline_time.sql"))
+            new ClassPathResource("db/migration/V227__scheduled_job_completion_deadline_time.sql"))
         .execute(dataSource);
     new ResourceDatabasePopulator(
-            new ClassPathResource("db/migration/V227__job_not_completed_deadline_alert.sql"))
+            new ClassPathResource("db/migration/V228__job_not_completed_deadline_alert.sql"))
         .execute(dataSource);
     Long legacyDefinitionId =
         jdbcTemplate.queryForObject("""
@@ -123,7 +124,7 @@ class JobMonitoringMapperIntegrationTest {
         ) values (?, ?, 0, 0, 0, time '04:00', 1)
         """, LEGACY_FIXED_RATE_TENANT, legacyDefinitionId);
     new ResourceDatabasePopulator(
-            new ClassPathResource("db/migration/V228__fixed_rate_completion_grace.sql"))
+            new ClassPathResource("db/migration/V229__fixed_rate_completion_grace.sql"))
         .execute(dataSource);
 
     org.apache.ibatis.session.Configuration configuration =
@@ -173,8 +174,8 @@ class JobMonitoringMapperIntegrationTest {
 
     savePolicy(tenant, runningDefinitionId, 30, 0, null, 0, 0);
     savePolicy(tenant, notStartedDefinitionId, 0, 60, null, 0, 0);
-    savePolicy(tenant, deadlineDefinitionId, 0, 0, java.time.LocalTime.MIDNIGHT, 0, 0);
-    savePolicy(tenant, manualDeadlineDefinitionId, 0, 0, java.time.LocalTime.MIDNIGHT, 0, 0);
+    savePolicy(tenant, deadlineDefinitionId, 0, 0, LocalTime.MIDNIGHT, 0, 0);
+    savePolicy(tenant, manualDeadlineDefinitionId, 0, 0, LocalTime.MIDNIGHT, 0, 0);
     jdbcTemplate.update(
         "update batch.job_monitoring_policy set completion_deadline_updated_at = current_timestamp - interval '1 hour' "
             + "where tenant_id = ? and job_definition_id = ?",
@@ -474,7 +475,7 @@ class JobMonitoringMapperIntegrationTest {
       long definitionId,
       int runtimeSeconds,
       int startGraceSeconds,
-      java.time.LocalTime completionTime,
+      LocalTime completionTime,
       int completionDayOffset,
       int dependencyCompletionWindowSeconds) {
     jdbcTemplate.update(

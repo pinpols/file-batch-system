@@ -311,7 +311,7 @@ public class TenantConfigPackageExcelApplyService {
     for (Map<String, String> row : rows) {
       String jobCode = normalize(row.get(COL_JOB_CODE));
       JobDefinitionEntity job = jobDefinitionMapper.selectByUniqueKey(ctx.tenantId(), jobCode);
-      if (job == null) {
+      if (EmptyChecks.isNull(job)) {
         throw invalidParsedRow(
             JOB_MONITORING_POLICY_SHEET, List.of("job_code does not exist for tenant: " + jobCode));
       }
@@ -337,12 +337,12 @@ public class TenantConfigPackageExcelApplyService {
 
   private static Integer parseNonNegativeMonitoringValue(String value) {
     Integer parsed = parseInteger(value);
-    return parsed == null ? 0 : parsed;
+    return EmptyChecks.isNull(parsed) ? 0 : parsed;
   }
 
   private int parseStartGraceSeconds(String value, JobDefinitionEntity job) {
     Integer configured = parseInteger(value);
-    if (configured != null) {
+    if (EmptyChecks.isNotNull(configured)) {
       return configured;
     }
     return isStartGraceMonitored(job) ? monitoringDefaults.getStartGraceSeconds() : 0;
