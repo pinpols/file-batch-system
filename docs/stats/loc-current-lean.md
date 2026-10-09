@@ -1,12 +1,12 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `29dc65387`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `2cb5059e2`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,864 | 512,053 | 264,276 | 51.6% |
+| 4,864 | 512,080 | 264,293 | 51.6% |
 
 ## 按用途
 
@@ -15,7 +15,7 @@
 | prod | 2,782 | 252,799 | 115,896 | 45.8% |
 | test | 1,269 | 187,962 | 103,332 | 55.0% |
 | script | 658 | 55,089 | 34,742 | 63.1% |
-| config | 59 | 8,552 | 6,200 | 72.5% |
+| config | 59 | 8,579 | 6,217 | 72.5% |
 | infra-config | 32 | 5,373 | 3,934 | 73.2% |
 | sql | 64 | 2,278 | 172 | 7.6% |
 
@@ -27,7 +27,7 @@
 | Shell | 209 | 31,709 | 24,911 | 78.6% |
 | Python | 257 | 36,420 | 18,853 | 51.8% |
 | YAML | 100 | 12,807 | 9,746 | 76.1% |
-| XML | 180 | 21,672 | 6,803 | 31.4% |
+| XML | 180 | 21,699 | 6,820 | 31.4% |
 | TypeScript | 37 | 6,667 | 3,141 | 47.1% |
 | Rust | 23 | 8,499 | 2,856 | 33.6% |
 | Properties | 5 | 2,897 | 2,371 | 81.8% |
@@ -52,8 +52,8 @@
 | `scripts/fix-fixture-xlsx.py` | script | Python | 979 | 559 |
 | `scripts/ci/run-full-regression.sh` | script | Shell | 661 | 542 |
 | `scripts/local/start-all.sh` | script | Shell | 645 | 518 |
+| `pom.xml` | config | XML | 831 | 505 |
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationServiceTest.java` | test | Java | 814 | 503 |
-| `pom.xml` | config | XML | 823 | 500 |
 | `scripts/local/sim-harness.sh` | script | Shell | 635 | 492 |
 | `scripts/local/be-acceptance.sh` | script | Shell | 614 | 481 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | prod | Java | 1,031 | 460 |

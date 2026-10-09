@@ -14028,44 +14028,44 @@
     },
     {
       "type" : "library",
-      "bom-ref" : "pkg:maven/at.yawk.lz4/lz4-java@1.10.1?type=jar",
+      "bom-ref" : "pkg:maven/at.yawk.lz4/lz4-java@1.11.4?type=jar",
       "group" : "at.yawk.lz4",
       "name" : "lz4-java",
-      "version" : "1.10.1",
+      "version" : "1.11.4",
       "description" : "Java bindings and pure Java implementations of LZ4 and XXHash",
       "scope" : "required",
       "hashes" : [
         {
           "alg" : "MD5",
-          "content" : "8ea4d77e6a652da0162a69b6aea6e4a9"
+          "content" : "bf4431da97b91459fba1ad55e42bcd78"
         },
         {
           "alg" : "SHA-1",
-          "content" : "f541d7f910fe3d76f38f799c507c48cc81b12ecb"
+          "content" : "a27ccbac6c886771d3db36f91b144950bdb5082a"
         },
         {
           "alg" : "SHA-256",
-          "content" : "a58a84c4271e50df4c96ed916ccb7e48a869f8ed9cdcda1ad5d3d4c33b0214a3"
+          "content" : "58c8e0b813960d2a248e050c353baea73139b48a2ffc55382d42c69707e17325"
         },
         {
           "alg" : "SHA-512",
-          "content" : "6930598c1c27a247de88a0db74aa14e90d7837832b61042edde7f954f55c8382b505aa35a21d3e69a3dc333b013866a98a7c3570c34aeea3ab1c1ef1c05d0048"
+          "content" : "0db8664f43cc4e0f5af07d7adbac7ba5a1137e8cf15379fa749c3b5a483b2f639d609b6e4acecfb6caeac5a5e11bc4a909ef4dae54e82915f3954e74d6d0b62e"
         },
         {
           "alg" : "SHA-384",
-          "content" : "f266dbead14988f5b05d11628bb55b5266c6e1d10578356f9a25967310c301d20fab78d46d6dfe8a31b641c2844ba2f9"
+          "content" : "2ea8b956ee33b0753e644e64f6eb19060ec2e969152e0bff0351b520a9e7d7865109d5ac49077c63f5be200cc1046e93"
         },
         {
           "alg" : "SHA3-384",
-          "content" : "a35fd2201de77821293560ca5dcbbc4f831ee0a1ae056b0511847370091402c1433fd7e0ff18d4fc26f217b613d6f0e9"
+          "content" : "895c23271ae2740a26593008a736cab33546895b3ade1d26bddd70961fd8ca1beeac8319e3fd5e1418d81fc0a377e048"
         },
         {
           "alg" : "SHA3-256",
-          "content" : "cd5bc0d64595fc34b50d830be6d61a5e537389368a9c50136d76100ff17c9727"
+          "content" : "3e62e56ac56625e89aa7cc69dce9e1a25a8b01da09ddd2de8d9c7e9022b9bcdc"
         },
         {
           "alg" : "SHA3-512",
-          "content" : "d3da038eca828202ecccc8ccb0ba3355839723369ebf9e42ab0ed9d564671bad25b3559decf20673381a30c43da7b70af0a440d155021932cd6b1dc39bb43da5"
+          "content" : "dac9c7ccd77a70586608db9e4bc09624ee08ab6aa86bb7d11d482b02b8a56f39d2159ad6230a9e7ac292828a50fae4afedbebd6f41b63aaddb7a98d8f309b601"
         }
       ],
       "licenses" : [
@@ -14075,7 +14075,7 @@
           }
         }
       ],
-      "purl" : "pkg:maven/at.yawk.lz4/lz4-java@1.10.1?type=jar",
+      "purl" : "pkg:maven/at.yawk.lz4/lz4-java@1.11.4?type=jar",
       "externalReferences" : [
         {
           "type" : "website",
@@ -21988,44 +21988,44 @@
     },
     {
       "type" : "library",
-      "bom-ref" : "pkg:maven/org.asynchttpclient/async-http-client@2.16.1?type=jar",
+      "bom-ref" : "pkg:maven/org.asynchttpclient/async-http-client@3.0.14?type=jar",
       "group" : "org.asynchttpclient",
       "name" : "async-http-client",
-      "version" : "2.16.1",
+      "version" : "3.0.14",
       "description" : "The Async Http Client (AHC) classes.",
       "scope" : "required",
       "hashes" : [
         {
           "alg" : "MD5",
-          "content" : "d60f24d9bc2502cab163b331914d7477"
+          "content" : "032ad8fea6cdda715760a553d9be60e7"
         },
         {
           "alg" : "SHA-1",
-          "content" : "4f8ff7761b6951b59754d9eb53a5af483b7ef309"
+          "content" : "eacc1a0545c088e79a64a8714ec6a98b9111f908"
         },
         {
           "alg" : "SHA-256",
-          "content" : "9e76dd36d4ef6e13e81e2478f4e18723cabda0fe2e3b7ad6a4f41990969a7c90"
+          "content" : "06db1cd41e22d9c98e9eba046335533a6ac93f8e2b255f456a297cb7589b80ec"
         },
         {
           "alg" : "SHA-512",
-          "content" : "80d017b3f6b71a515adf2c1c4017a84567fe4d7f7c575211e550e6dc6fc213a1fff4eb475f47523f23adcb4ef577efd0a31b0de91002b41eb8e49b7a35b8d918"
+          "content" : "8e10d726c4433823235e0b2fce7a3ee17a02717cdb36893878b3a42a1aaacdeaed02cc31682a4e2027b1ad5cb0a4690966fb99580d97fa7a21c49f04ae604d48"
         },
         {
           "alg" : "SHA-384",
-          "content" : "2d0c1248fec75c783e32fc94b28c4f58af903d421a042663d2ca9a325667a64406f04ffecac81daae6da6ce2e5d6af45"
+          "content" : "cc26f225480642ad48a17e9f8b701e0b3cbbfaa29d9b9a88831c75aab251e6b3f18bc5c7ffe8d534cc976ed9cf581fbb"
         },
         {
           "alg" : "SHA3-384",
-          "content" : "70ccf0511fa6ba98b50bbde9371798800333da7075964b56648811b942ebf8394c2f7294b5ece68d07e4d21994aa8f55"
+          "content" : "833a0f157a1b5201fbb4fcb8b812be86650759291c267a2b7bef7a33d3bc4371f8b586334ddaf96efdc4ee5f9b7e67a9"
         },
         {
           "alg" : "SHA3-256",
-          "content" : "7254b0ad04b5ff58007792e9e60e8ff38151e290eea8cc0d0f88596affaae0f3"
+          "content" : "9762fe543e2fe52feb4b594f6f3d5b58de3ccffa26ba09215bdffffe72f62012"
         },
         {
           "alg" : "SHA3-512",
-          "content" : "64db51ddbc5fef41cc740f32582b414f9fd470b46ab39d20a43e179048e514ff1c8c56e36a3dcaf3957ccfe0aad00d764aa6612736da6c8bb0b85eeac4b29ef1"
+          "content" : "3efd5142846f87a5269a9f5d95f8d27c9a9800c0ecf9f0a07751f43daca87680598c0d156c19467acf8ae6033343e362e255402c389c0b0797d2e3316b2f7420"
         }
       ],
       "licenses" : [
@@ -22035,11 +22035,11 @@
           }
         }
       ],
-      "purl" : "pkg:maven/org.asynchttpclient/async-http-client@2.16.1?type=jar",
+      "purl" : "pkg:maven/org.asynchttpclient/async-http-client@3.0.14?type=jar",
       "externalReferences" : [
         {
           "type" : "website",
-          "url" : "http://github.com/AsyncHttpClient/async-http-client/async-http-client"
+          "url" : "https://github.com/AsyncHttpClient/async-http-client/async-http-client"
         },
         {
           "type" : "distribution-intake",
@@ -22051,84 +22051,11 @@
         },
         {
           "type" : "mailing-list",
-          "url" : "http://groups.google.com/group/asynchttpclient/topics"
+          "url" : "https://github.com/AsyncHttpClient/async-http-client/discussions"
         },
         {
           "type" : "vcs",
-          "url" : "https://github.com/AsyncHttpClient/async-http-client/tree/master/async-http-client"
-        }
-      ]
-    },
-    {
-      "type" : "library",
-      "bom-ref" : "pkg:maven/org.asynchttpclient/async-http-client-netty-utils@2.16.1?type=jar",
-      "group" : "org.asynchttpclient",
-      "name" : "async-http-client-netty-utils",
-      "version" : "2.16.1",
-      "description" : "The Async Http Client (AHC) library's purpose is to allow Java applications to easily execute HTTP requests and asynchronously process the response.",
-      "scope" : "required",
-      "hashes" : [
-        {
-          "alg" : "MD5",
-          "content" : "691de8020b22936de6b84a0d67d6e93a"
-        },
-        {
-          "alg" : "SHA-1",
-          "content" : "cf48c1339da13bb70f3cbb3ff50971c214ab3ccc"
-        },
-        {
-          "alg" : "SHA-256",
-          "content" : "5dc30eb034ec1daea2578e3ecf861ee3212f8693170f7da53cc3503a9ff44971"
-        },
-        {
-          "alg" : "SHA-512",
-          "content" : "511decf72ae008630ac7bca7bb32179d28b301f19122486658f8e3ac31c3db2c5845cedabdf65df71798adef931b15eeb8e5a78c04493ab393bdab80cfba8353"
-        },
-        {
-          "alg" : "SHA-384",
-          "content" : "02b430f0fbe4f477db7da22e079931b0c0e24a0a82f3ca57cc45d9745c50019a10b7d92c4f85aa1cafb0c95db08f513b"
-        },
-        {
-          "alg" : "SHA3-384",
-          "content" : "e535105c827b630deafdde9d83ba32ab7a7c0d1a8d1da5880e4dbe027f8373d171b912ea7b2ee39817eb1475a74cd99f"
-        },
-        {
-          "alg" : "SHA3-256",
-          "content" : "dfcca8df26ccd2a41eeb4ef1777c420f9668a19c4650c1353866bc46c1d6c05b"
-        },
-        {
-          "alg" : "SHA3-512",
-          "content" : "48ee7ab96c69471b36ba367f5f01d2df19966455713290a78f660359ddfa5d2a87b9ceb8266538f1d9cb370f877c3b4ff787bc6c1729f47eed64055bb708bc99"
-        }
-      ],
-      "licenses" : [
-        {
-          "license" : {
-            "id" : "Apache-2.0"
-          }
-        }
-      ],
-      "purl" : "pkg:maven/org.asynchttpclient/async-http-client-netty-utils@2.16.1?type=jar",
-      "externalReferences" : [
-        {
-          "type" : "website",
-          "url" : "http://github.com/AsyncHttpClient/async-http-client/async-http-client-netty-utils"
-        },
-        {
-          "type" : "distribution-intake",
-          "url" : "https://central.sonatype.com"
-        },
-        {
-          "type" : "issue-tracker",
-          "url" : "https://github.com/AsyncHttpClient/async-http-client/issues"
-        },
-        {
-          "type" : "mailing-list",
-          "url" : "http://groups.google.com/group/asynchttpclient/topics"
-        },
-        {
-          "type" : "vcs",
-          "url" : "https://github.com/AsyncHttpClient/async-http-client/tree/master/async-http-client-netty-utils"
+          "url" : "https://github.com/AsyncHttpClient/async-http-client/tree/main/async-http-client"
         }
       ]
     },
@@ -22261,344 +22188,6 @@
         {
           "type" : "vcs",
           "url" : "https://github.com/netty/netty/netty-handler-proxy"
-        }
-      ]
-    },
-    {
-      "type" : "library",
-      "bom-ref" : "pkg:maven/io.netty/netty-transport-native-epoll@4.2.17.Final?classifier=linux-x86_64&type=jar",
-      "publisher" : "The Netty Project",
-      "group" : "io.netty",
-      "name" : "netty-transport-native-epoll",
-      "version" : "4.2.17.Final",
-      "description" : "Netty is an asynchronous event-driven network application framework for rapid development of maintainable high performance protocol servers and clients.",
-      "scope" : "required",
-      "hashes" : [
-        {
-          "alg" : "MD5",
-          "content" : "68c4275951d498839e5bcf94207457e4"
-        },
-        {
-          "alg" : "SHA-1",
-          "content" : "f7283f9f4bc6ceb16568aaf0a8038d5eaf284d3f"
-        },
-        {
-          "alg" : "SHA-256",
-          "content" : "c295b1d7f46e3c7375c93fa4c8abcc3944398c5e4eb53e31587cbbf0bf559d4f"
-        },
-        {
-          "alg" : "SHA-512",
-          "content" : "174dcb36ab1f3e4018ab9d0ef9dc0e8cf10b4e7261b41d110e2330a53e0c6c02dcf2142341778fb67bc1b459272bfdeb18b46b9e7c0c885bd305876cb613e56b"
-        },
-        {
-          "alg" : "SHA-384",
-          "content" : "37ddf1b1f7845cdd2757beb678fe0ff7caa4308f09769de0492196fe5660ab22c0dad71cf436ca3d6ab4598983bf19f5"
-        },
-        {
-          "alg" : "SHA3-384",
-          "content" : "e047e085832bc748668c16cba5f4f0973a9a709b7bbfed827ee36b1b70b2370a6d7479e29ce366cb01332a119ae26ec7"
-        },
-        {
-          "alg" : "SHA3-256",
-          "content" : "3dcc5eaf4c26c0d0b0ed80db821d7ab702950baf5136a4dc7090db9ad07bdfe9"
-        },
-        {
-          "alg" : "SHA3-512",
-          "content" : "51f58c2280f4d610843be40db32cc9debabc9f6186f92bb386b91f334206cce4753908789ecb810e692af9af96cac2a810cb8f05455126aa0dd9d95b9521238c"
-        }
-      ],
-      "licenses" : [
-        {
-          "license" : {
-            "id" : "Apache-2.0"
-          }
-        }
-      ],
-      "purl" : "pkg:maven/io.netty/netty-transport-native-epoll@4.2.17.Final?classifier=linux-x86_64&type=jar",
-      "externalReferences" : [
-        {
-          "type" : "website",
-          "url" : "https://netty.io/netty-transport-native-epoll/"
-        },
-        {
-          "type" : "distribution-intake",
-          "url" : "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
-        },
-        {
-          "type" : "vcs",
-          "url" : "https://github.com/netty/netty/netty-transport-native-epoll"
-        }
-      ]
-    },
-    {
-      "type" : "library",
-      "bom-ref" : "pkg:maven/io.netty/netty-transport-native-kqueue@4.2.17.Final?classifier=osx-x86_64&type=jar",
-      "publisher" : "The Netty Project",
-      "group" : "io.netty",
-      "name" : "netty-transport-native-kqueue",
-      "version" : "4.2.17.Final",
-      "description" : "Netty is an asynchronous event-driven network application framework for rapid development of maintainable high performance protocol servers and clients.",
-      "scope" : "required",
-      "hashes" : [
-        {
-          "alg" : "MD5",
-          "content" : "63fa0478784e6a6f19531fc7aa258665"
-        },
-        {
-          "alg" : "SHA-1",
-          "content" : "d6a91d5f0b69aa16f032bb6d3c697fab9351cbf9"
-        },
-        {
-          "alg" : "SHA-256",
-          "content" : "de98c8c8aecb90160921abc52ee64acaac64947e359daa7121b895fc3d3b15ab"
-        },
-        {
-          "alg" : "SHA-512",
-          "content" : "f0d5b28419ed0969ead0a112a2e1e6cb9a56bbf93f8397cfe0c0195f7c8a1dcc26a4165cd15be6953d42c40c211b9137171cc74fe6fc7ae37b1ee64dcc2191f9"
-        },
-        {
-          "alg" : "SHA-384",
-          "content" : "fe1c62191d3028178b6ba0929ab5661b0187be7b93f0dcdc69242fba0f810dfc25a59823bc4446287bfba2dac323bbb0"
-        },
-        {
-          "alg" : "SHA3-384",
-          "content" : "946cb03046d85e8a4d387d8cbc4fb97a8619b96ccbc64a2dd5ff9d932c9937c4405ba1330309d8ee94ce0303fcbfff93"
-        },
-        {
-          "alg" : "SHA3-256",
-          "content" : "c4cb3ab971b399823c4e1df3f1163c9dd71cdcd6a1d311d24ff7c714fbee0a27"
-        },
-        {
-          "alg" : "SHA3-512",
-          "content" : "41c6c59e031623863eb771bc5479c7df05d6799642f9a90f9101127420a15c2f0eb5870fec843e9c8d05f703136c7510da76f77e4028b00a2188a1f59535bd6f"
-        }
-      ],
-      "licenses" : [
-        {
-          "license" : {
-            "id" : "Apache-2.0"
-          }
-        }
-      ],
-      "purl" : "pkg:maven/io.netty/netty-transport-native-kqueue@4.2.17.Final?classifier=osx-x86_64&type=jar",
-      "externalReferences" : [
-        {
-          "type" : "website",
-          "url" : "https://netty.io/netty-transport-native-kqueue/"
-        },
-        {
-          "type" : "distribution-intake",
-          "url" : "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
-        },
-        {
-          "type" : "vcs",
-          "url" : "https://github.com/netty/netty/netty-transport-native-kqueue"
-        }
-      ]
-    },
-    {
-      "type" : "library",
-      "bom-ref" : "pkg:maven/io.netty/netty-transport-classes-kqueue@4.2.17.Final?type=jar",
-      "publisher" : "The Netty Project",
-      "group" : "io.netty",
-      "name" : "netty-transport-classes-kqueue",
-      "version" : "4.2.17.Final",
-      "description" : "Netty is an asynchronous event-driven network application framework for rapid development of maintainable high performance protocol servers and clients.",
-      "scope" : "required",
-      "hashes" : [
-        {
-          "alg" : "MD5",
-          "content" : "f4a472d569eb52bb6a5586c3c3f2e5e9"
-        },
-        {
-          "alg" : "SHA-1",
-          "content" : "e846f5e2b9d479059091e41fe133a2db8288a8f3"
-        },
-        {
-          "alg" : "SHA-256",
-          "content" : "f0b2dd4757a22345b0b28e2856dc7ee44e5dea256cc520ddc27e4dce4ea9efb3"
-        },
-        {
-          "alg" : "SHA-512",
-          "content" : "9eb36d4e1d51d1e2bd6a2fc74634cfcd71ac07fcc4e2ac84cdb05716ac694d1581df4823384f843ff3addaf47deb27373f56a3123a7760da3776d915a5979105"
-        },
-        {
-          "alg" : "SHA-384",
-          "content" : "8b6c882a8c828759afa55b00232881ca0a00e7bc048bce8803b63dae2c58519d4bf4d48f58396b2783b697d005936241"
-        },
-        {
-          "alg" : "SHA3-384",
-          "content" : "93e8251085dc103af2bc2e942e0d6813a5d7d36af977a49259495a49b5bc73919f1e43b4824c0ff1808018aab1ec20da"
-        },
-        {
-          "alg" : "SHA3-256",
-          "content" : "5553a9225c0411c2744ad754b7ecb4d1dcddc37d12286c564a544f4923236917"
-        },
-        {
-          "alg" : "SHA3-512",
-          "content" : "e16a584619974af37ded13b01f40793a2341061ea50fb6565314d6de84eec8651d1ac13436c160056137fcd2024febb559ab12ece3469df2a75eb3c22108a0e5"
-        }
-      ],
-      "licenses" : [
-        {
-          "license" : {
-            "id" : "Apache-2.0"
-          }
-        }
-      ],
-      "purl" : "pkg:maven/io.netty/netty-transport-classes-kqueue@4.2.17.Final?type=jar",
-      "externalReferences" : [
-        {
-          "type" : "website",
-          "url" : "https://netty.io/netty-transport-classes-kqueue/"
-        },
-        {
-          "type" : "distribution-intake",
-          "url" : "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
-        },
-        {
-          "type" : "vcs",
-          "url" : "https://github.com/netty/netty/netty-transport-classes-kqueue"
-        }
-      ]
-    },
-    {
-      "type" : "library",
-      "bom-ref" : "pkg:maven/com.typesafe.netty/netty-reactive-streams@2.0.17?type=jar",
-      "publisher" : "Typesafe",
-      "group" : "com.typesafe.netty",
-      "name" : "netty-reactive-streams",
-      "version" : "2.0.17",
-      "description" : "Reactive streams implementation for Netty.",
-      "scope" : "required",
-      "hashes" : [
-        {
-          "alg" : "MD5",
-          "content" : "3f08dacb32a9a0fab4c47ba812cd2e3d"
-        },
-        {
-          "alg" : "SHA-1",
-          "content" : "76a9ec6b868ee09f06d5caf36a1246c1ee5415ab"
-        },
-        {
-          "alg" : "SHA-256",
-          "content" : "ab71dc80a6b605c65636aa1cf0963aeaf433e903e6e9c2cdb49a6b43b382980e"
-        },
-        {
-          "alg" : "SHA-512",
-          "content" : "d4a7d1797063d486ed8c88cd9a61746a3006c0422047c4654962c6b99bac9e1317b4696d71b07d63f49fc242cc1f45f87723fa167bfe24da0ae2d9940948d8f0"
-        },
-        {
-          "alg" : "SHA-384",
-          "content" : "1043c62fd3633867be2a94bce18384a450dcfc0e53f43d56203643e99dc4c6c738e38ed7ebdfad3492ff0f22e030f014"
-        },
-        {
-          "alg" : "SHA3-384",
-          "content" : "93770db3d71adbfd3cf7d5710143de9e27558d731b3f76cb0f9c78b5eb87e1f58b0bcf9b68357cf536c73bbd67fd14f3"
-        },
-        {
-          "alg" : "SHA3-256",
-          "content" : "db4de472d9a66c29e2a2a072f590867a448954a00722e01448a100ad6654a15d"
-        },
-        {
-          "alg" : "SHA3-512",
-          "content" : "41f991a39eb5f82753f0b335ad54f08f43c1e4b28f0b0c1f6780933bb1180b25dd99032f549190d06b2c37b90f16d1ed9f5c9cdd5974a876ecd88aea83d49763"
-        }
-      ],
-      "licenses" : [
-        {
-          "license" : {
-            "id" : "Apache-2.0"
-          }
-        }
-      ],
-      "purl" : "pkg:maven/com.typesafe.netty/netty-reactive-streams@2.0.17?type=jar",
-      "externalReferences" : [
-        {
-          "type" : "website",
-          "url" : "https://github.com/playframework/netty-reactive-streams/netty-reactive-streams"
-        },
-        {
-          "type" : "issue-tracker",
-          "url" : "https://github.com/playframework/netty-reactive-streams/issues"
-        },
-        {
-          "type" : "vcs",
-          "url" : "https://github.com/playframework/netty-reactive-streams/netty-reactive-streams"
-        }
-      ]
-    },
-    {
-      "type" : "library",
-      "bom-ref" : "pkg:maven/com.sun.activation/jakarta.activation@1.2.2?type=jar",
-      "publisher" : "Eclipse Foundation",
-      "group" : "com.sun.activation",
-      "name" : "jakarta.activation",
-      "version" : "1.2.2",
-      "description" : "Jakarta Activation",
-      "scope" : "required",
-      "hashes" : [
-        {
-          "alg" : "MD5",
-          "content" : "0b8bee3bf29b9a015f8b992035581a7c"
-        },
-        {
-          "alg" : "SHA-1",
-          "content" : "74548703f9851017ce2f556066659438019e7eb5"
-        },
-        {
-          "alg" : "SHA-256",
-          "content" : "02156773e4ae9d048d14a56ad35d644bee9f1052a791d072df3ded3c656e6e1a"
-        },
-        {
-          "alg" : "SHA-512",
-          "content" : "8bd94a4370b827e3904f31253b022e5c1851896d3b616ca7daebfef259238cedc56d4ced32c74f24a13c3e2295b0ea012af5d04656b7f713cc53a2f18d5e2cf7"
-        },
-        {
-          "alg" : "SHA-384",
-          "content" : "1cb0aff8b73ba52a9931b2cf13c75a1ce6665fb826bf97ede66db75c532136aa189fb53a1925e62b6eef572309ef3b9a"
-        },
-        {
-          "alg" : "SHA3-384",
-          "content" : "83801332576d931f4091ba65ea240d49c23e3b93dae939ce2eed63de943f80f251a4347638b99900de5b831796b12590"
-        },
-        {
-          "alg" : "SHA3-256",
-          "content" : "5363211b59dfaff6e1973e93548e5e4062189c6d0f43d7802627ebeb7b7ff37d"
-        },
-        {
-          "alg" : "SHA3-512",
-          "content" : "0c7b62a3432b19ffad02eafffc7e598391cd32b1313d075f94cda09913402770b4ba2314716625571f266431067229c93cec36e17c3ea598623542988634ca0a"
-        }
-      ],
-      "licenses" : [
-        {
-          "license" : {
-            "id" : "BSD-3-Clause"
-          }
-        }
-      ],
-      "purl" : "pkg:maven/com.sun.activation/jakarta.activation@1.2.2?type=jar",
-      "externalReferences" : [
-        {
-          "type" : "website",
-          "url" : "https://github.com/eclipse-ee4j/jaf/jakarta.activation"
-        },
-        {
-          "type" : "distribution-intake",
-          "url" : "https://jakarta.oss.sonatype.org/service/local/staging/deploy/maven2/"
-        },
-        {
-          "type" : "issue-tracker",
-          "url" : "https://github.com/eclipse-ee4j/jaf/issues/"
-        },
-        {
-          "type" : "mailing-list",
-          "url" : "https://dev.eclipse.org/mhonarc/lists/jakarta.ee-community/"
-        },
-        {
-          "type" : "vcs",
-          "url" : "https://github.com/eclipse-ee4j/jaf/jakarta.activation"
         }
       ]
     },
@@ -23646,6 +23235,72 @@
         {
           "type" : "vcs",
           "url" : "https://github.com/netty/netty/netty-resolver-dns-native-macos"
+        }
+      ]
+    },
+    {
+      "type" : "library",
+      "bom-ref" : "pkg:maven/io.netty/netty-transport-native-epoll@4.2.17.Final?classifier=linux-x86_64&type=jar",
+      "publisher" : "The Netty Project",
+      "group" : "io.netty",
+      "name" : "netty-transport-native-epoll",
+      "version" : "4.2.17.Final",
+      "description" : "Netty is an asynchronous event-driven network application framework for rapid development of maintainable high performance protocol servers and clients.",
+      "scope" : "required",
+      "hashes" : [
+        {
+          "alg" : "MD5",
+          "content" : "68c4275951d498839e5bcf94207457e4"
+        },
+        {
+          "alg" : "SHA-1",
+          "content" : "f7283f9f4bc6ceb16568aaf0a8038d5eaf284d3f"
+        },
+        {
+          "alg" : "SHA-256",
+          "content" : "c295b1d7f46e3c7375c93fa4c8abcc3944398c5e4eb53e31587cbbf0bf559d4f"
+        },
+        {
+          "alg" : "SHA-512",
+          "content" : "174dcb36ab1f3e4018ab9d0ef9dc0e8cf10b4e7261b41d110e2330a53e0c6c02dcf2142341778fb67bc1b459272bfdeb18b46b9e7c0c885bd305876cb613e56b"
+        },
+        {
+          "alg" : "SHA-384",
+          "content" : "37ddf1b1f7845cdd2757beb678fe0ff7caa4308f09769de0492196fe5660ab22c0dad71cf436ca3d6ab4598983bf19f5"
+        },
+        {
+          "alg" : "SHA3-384",
+          "content" : "e047e085832bc748668c16cba5f4f0973a9a709b7bbfed827ee36b1b70b2370a6d7479e29ce366cb01332a119ae26ec7"
+        },
+        {
+          "alg" : "SHA3-256",
+          "content" : "3dcc5eaf4c26c0d0b0ed80db821d7ab702950baf5136a4dc7090db9ad07bdfe9"
+        },
+        {
+          "alg" : "SHA3-512",
+          "content" : "51f58c2280f4d610843be40db32cc9debabc9f6186f92bb386b91f334206cce4753908789ecb810e692af9af96cac2a810cb8f05455126aa0dd9d95b9521238c"
+        }
+      ],
+      "licenses" : [
+        {
+          "license" : {
+            "id" : "Apache-2.0"
+          }
+        }
+      ],
+      "purl" : "pkg:maven/io.netty/netty-transport-native-epoll@4.2.17.Final?classifier=linux-x86_64&type=jar",
+      "externalReferences" : [
+        {
+          "type" : "website",
+          "url" : "https://netty.io/netty-transport-native-epoll/"
+        },
+        {
+          "type" : "distribution-intake",
+          "url" : "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
+        },
+        {
+          "type" : "vcs",
+          "url" : "https://github.com/netty/netty/netty-transport-native-epoll"
         }
       ]
     },
@@ -28413,7 +28068,7 @@
       "ref" : "pkg:maven/org.apache.kafka/kafka-clients@4.2.1?type=jar",
       "dependsOn" : [
         "pkg:maven/com.github.luben/zstd-jni@1.5.6-10?type=jar",
-        "pkg:maven/at.yawk.lz4/lz4-java@1.10.1?type=jar",
+        "pkg:maven/at.yawk.lz4/lz4-java@1.11.4?type=jar",
         "pkg:maven/org.xerial.snappy/snappy-java@1.1.10.7?type=jar",
         "pkg:maven/org.slf4j/slf4j-api@2.0.18?type=jar"
       ]
@@ -28423,7 +28078,7 @@
       "dependsOn" : [ ]
     },
     {
-      "ref" : "pkg:maven/at.yawk.lz4/lz4-java@1.10.1?type=jar",
+      "ref" : "pkg:maven/at.yawk.lz4/lz4-java@1.11.4?type=jar",
       "dependsOn" : [ ]
     },
     {
@@ -28768,7 +28423,7 @@
       "ref" : "pkg:maven/org.apache.kafka/kafka-clients@4.2.1?classifier=test&type=jar",
       "dependsOn" : [
         "pkg:maven/com.github.luben/zstd-jni@1.5.6-10?type=jar",
-        "pkg:maven/at.yawk.lz4/lz4-java@1.10.1?type=jar",
+        "pkg:maven/at.yawk.lz4/lz4-java@1.11.4?type=jar",
         "pkg:maven/org.xerial.snappy/snappy-java@1.1.10.7?type=jar",
         "pkg:maven/org.slf4j/slf4j-api@2.0.18?type=jar"
       ]
@@ -29156,7 +28811,7 @@
         "pkg:maven/org.springframework.boot/spring-boot-starter-validation@4.1.1?type=jar",
         "pkg:maven/org.springframework.boot/spring-boot-starter-mail@4.1.1?type=jar",
         "pkg:maven/nl.martijndwars/web-push@5.1.2?type=jar",
-        "pkg:maven/org.asynchttpclient/async-http-client@2.16.1?type=jar",
+        "pkg:maven/org.asynchttpclient/async-http-client@3.0.14?type=jar",
         "pkg:maven/org.bitbucket.b_c/jose4j@0.9.7?type=jar",
         "pkg:maven/org.bouncycastle/bcprov-jdk18on@1.86?type=jar",
         "pkg:maven/org.springframework.boot/spring-boot-starter-actuator@4.1.1?type=jar",
@@ -29272,7 +28927,7 @@
       "dependsOn" : [
         "pkg:maven/com.beust/jcommander@1.81?type=jar",
         "pkg:maven/org.apache.httpcomponents/httpasyncclient@4.1.5?type=jar",
-        "pkg:maven/org.asynchttpclient/async-http-client@2.16.1?type=jar",
+        "pkg:maven/org.asynchttpclient/async-http-client@3.0.14?type=jar",
         "pkg:maven/org.bitbucket.b_c/jose4j@0.9.7?type=jar"
       ]
     },
@@ -29296,32 +28951,22 @@
       ]
     },
     {
-      "ref" : "pkg:maven/org.asynchttpclient/async-http-client@2.16.1?type=jar",
-      "dependsOn" : [
-        "pkg:maven/org.asynchttpclient/async-http-client-netty-utils@2.16.1?type=jar",
-        "pkg:maven/io.netty/netty-codec-http@4.2.17.Final?type=jar",
-        "pkg:maven/io.netty/netty-handler@4.2.17.Final?type=jar",
-        "pkg:maven/io.netty/netty-codec-socks@4.2.17.Final?type=jar",
-        "pkg:maven/io.netty/netty-handler-proxy@4.2.17.Final?type=jar",
-        "pkg:maven/io.netty/netty-transport-native-epoll@4.2.17.Final?classifier=linux-x86_64&type=jar",
-        "pkg:maven/io.netty/netty-transport-native-kqueue@4.2.17.Final?classifier=osx-x86_64&type=jar",
-        "pkg:maven/org.reactivestreams/reactive-streams@1.0.4?type=jar",
-        "pkg:maven/com.typesafe.netty/netty-reactive-streams@2.0.17?type=jar",
-        "pkg:maven/org.slf4j/slf4j-api@2.0.18?type=jar",
-        "pkg:maven/com.sun.activation/jakarta.activation@1.2.2?type=jar"
-      ]
-    },
-    {
-      "ref" : "pkg:maven/org.asynchttpclient/async-http-client-netty-utils@2.16.1?type=jar",
+      "ref" : "pkg:maven/org.asynchttpclient/async-http-client@3.0.14?type=jar",
       "dependsOn" : [
         "pkg:maven/io.netty/netty-buffer@4.2.17.Final?type=jar",
+        "pkg:maven/io.netty/netty-codec-http@4.2.17.Final?type=jar",
+        "pkg:maven/io.netty/netty-codec-http2@4.2.17.Final?type=jar",
+        "pkg:maven/io.netty/netty-codec-base@4.2.17.Final?type=jar",
+        "pkg:maven/io.netty/netty-codec-compression@4.2.17.Final?type=jar",
+        "pkg:maven/io.netty/netty-codec-socks@4.2.17.Final?type=jar",
+        "pkg:maven/io.netty/netty-handler-proxy@4.2.17.Final?type=jar",
+        "pkg:maven/io.netty/netty-common@4.2.17.Final?type=jar",
+        "pkg:maven/io.netty/netty-transport@4.2.17.Final?type=jar",
+        "pkg:maven/io.netty/netty-handler@4.2.17.Final?type=jar",
+        "pkg:maven/io.netty/netty-resolver-dns@4.2.17.Final?type=jar",
         "pkg:maven/org.slf4j/slf4j-api@2.0.18?type=jar",
-        "pkg:maven/com.sun.activation/jakarta.activation@1.2.2?type=jar"
+        "pkg:maven/org.jetbrains/annotations@26.1.0?type=jar"
       ]
-    },
-    {
-      "ref" : "pkg:maven/com.sun.activation/jakarta.activation@1.2.2?type=jar",
-      "dependsOn" : [ ]
     },
     {
       "ref" : "pkg:maven/io.netty/netty-codec-socks@4.2.17.Final?type=jar",
@@ -29342,42 +28987,6 @@
         "pkg:maven/io.netty/netty-codec-socks@4.2.17.Final?type=jar",
         "pkg:maven/io.netty/netty-codec-http@4.2.17.Final?type=jar",
         "pkg:maven/io.netty/netty-handler@4.2.17.Final?type=jar"
-      ]
-    },
-    {
-      "ref" : "pkg:maven/io.netty/netty-transport-native-epoll@4.2.17.Final?classifier=linux-x86_64&type=jar",
-      "dependsOn" : [
-        "pkg:maven/io.netty/netty-common@4.2.17.Final?type=jar",
-        "pkg:maven/io.netty/netty-buffer@4.2.17.Final?type=jar",
-        "pkg:maven/io.netty/netty-transport@4.2.17.Final?type=jar",
-        "pkg:maven/io.netty/netty-transport-native-unix-common@4.2.17.Final?type=jar",
-        "pkg:maven/io.netty/netty-transport-classes-epoll@4.2.17.Final?type=jar"
-      ]
-    },
-    {
-      "ref" : "pkg:maven/io.netty/netty-transport-native-kqueue@4.2.17.Final?classifier=osx-x86_64&type=jar",
-      "dependsOn" : [
-        "pkg:maven/io.netty/netty-common@4.2.17.Final?type=jar",
-        "pkg:maven/io.netty/netty-buffer@4.2.17.Final?type=jar",
-        "pkg:maven/io.netty/netty-transport@4.2.17.Final?type=jar",
-        "pkg:maven/io.netty/netty-transport-native-unix-common@4.2.17.Final?type=jar",
-        "pkg:maven/io.netty/netty-transport-classes-kqueue@4.2.17.Final?type=jar"
-      ]
-    },
-    {
-      "ref" : "pkg:maven/io.netty/netty-transport-classes-kqueue@4.2.17.Final?type=jar",
-      "dependsOn" : [
-        "pkg:maven/io.netty/netty-common@4.2.17.Final?type=jar",
-        "pkg:maven/io.netty/netty-buffer@4.2.17.Final?type=jar",
-        "pkg:maven/io.netty/netty-transport@4.2.17.Final?type=jar",
-        "pkg:maven/io.netty/netty-transport-native-unix-common@4.2.17.Final?type=jar"
-      ]
-    },
-    {
-      "ref" : "pkg:maven/com.typesafe.netty/netty-reactive-streams@2.0.17?type=jar",
-      "dependsOn" : [
-        "pkg:maven/io.netty/netty-handler@4.2.17.Final?type=jar",
-        "pkg:maven/org.reactivestreams/reactive-streams@1.0.4?type=jar"
       ]
     },
     {
@@ -29511,6 +29120,16 @@
       "ref" : "pkg:maven/io.netty/netty-resolver-dns-native-macos@4.2.17.Final?classifier=osx-x86_64&type=jar",
       "dependsOn" : [
         "pkg:maven/io.netty/netty-resolver-dns-classes-macos@4.2.17.Final?type=jar"
+      ]
+    },
+    {
+      "ref" : "pkg:maven/io.netty/netty-transport-native-epoll@4.2.17.Final?classifier=linux-x86_64&type=jar",
+      "dependsOn" : [
+        "pkg:maven/io.netty/netty-common@4.2.17.Final?type=jar",
+        "pkg:maven/io.netty/netty-buffer@4.2.17.Final?type=jar",
+        "pkg:maven/io.netty/netty-transport@4.2.17.Final?type=jar",
+        "pkg:maven/io.netty/netty-transport-native-unix-common@4.2.17.Final?type=jar",
+        "pkg:maven/io.netty/netty-transport-classes-epoll@4.2.17.Final?type=jar"
       ]
     },
     {
