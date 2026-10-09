@@ -70,7 +70,7 @@ public class ConsoleAuthApplicationService {
 
   /** OIDC 只负责证明外部身份；签发平台会话时仍重新读取本地账号状态和角色。 */
   public ConsoleAuthTokenResponse issueToken(ConsolePrincipal principal) {
-    if (principal == null || !ConsoleRoles.isFormalRoleSet(principal.authorities())) {
+    if (EmptyChecks.isNull(principal) || !ConsoleRoles.isFormalRoleSet(principal.authorities())) {
       throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.invalid_credentials");
     }
     ConsoleUserAccount account = userAccountService

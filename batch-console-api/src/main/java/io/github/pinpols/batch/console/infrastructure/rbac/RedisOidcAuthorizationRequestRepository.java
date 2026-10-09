@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.infrastructure.rbac;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -54,7 +55,7 @@ public class RedisOidcAuthorizationRequestRepository
       return null;
     }
     String browserBinding = browserBinding(request, state);
-    if (browserBinding == null) {
+    if (EmptyChecks.isNull(browserBinding)) {
       return null;
     }
     return read(redis.opsForValue().get(key(state, browserBinding)));
@@ -65,7 +66,7 @@ public class RedisOidcAuthorizationRequestRepository
       OAuth2AuthorizationRequest authorizationRequest,
       HttpServletRequest request,
       HttpServletResponse response) {
-    if (authorizationRequest == null) {
+    if (EmptyChecks.isNull(authorizationRequest)) {
       removeByState(request, response, request.getParameter("state"));
       return;
     }
@@ -89,7 +90,7 @@ public class RedisOidcAuthorizationRequestRepository
       return null;
     }
     String browserBinding = browserBinding(request, state);
-    if (browserBinding == null) {
+    if (EmptyChecks.isNull(browserBinding)) {
       return null;
     }
     OAuth2AuthorizationRequest authorizationRequest =
@@ -105,7 +106,7 @@ public class RedisOidcAuthorizationRequestRepository
       return;
     }
     String browserBinding = browserBinding(request, state);
-    if (browserBinding == null) {
+    if (EmptyChecks.isNull(browserBinding)) {
       return;
     }
     redis.delete(key(state, browserBinding));
@@ -121,7 +122,7 @@ public class RedisOidcAuthorizationRequestRepository
 
   private String browserBinding(HttpServletRequest request, String state) {
     String cookieName = cookieName(state);
-    if (request.getCookies() == null) {
+    if (EmptyChecks.isNull(request.getCookies())) {
       return null;
     }
     for (jakarta.servlet.http.Cookie cookie : request.getCookies()) {
@@ -147,7 +148,7 @@ public class RedisOidcAuthorizationRequestRepository
   }
 
   private OAuth2AuthorizationRequest read(String json) {
-    if (json == null) {
+    if (EmptyChecks.isNull(json)) {
       return null;
     }
     try {
@@ -168,11 +169,11 @@ public class RedisOidcAuthorizationRequestRepository
   }
 
   private static boolean validState(String state) {
-    return state != null && !state.isBlank() && state.length() <= MAX_STATE_LENGTH;
+    return EmptyChecks.isNotBlank(state) && state.length() <= MAX_STATE_LENGTH;
   }
 
   private static boolean validBrowserBinding(String value) {
-    return value != null && value.matches("[A-Za-z0-9_-]{43}");
+    return EmptyChecks.isNotNull(value) && value.matches("[A-Za-z0-9_-]{43}");
   }
 
   private static String key(String state, String browserBinding) {

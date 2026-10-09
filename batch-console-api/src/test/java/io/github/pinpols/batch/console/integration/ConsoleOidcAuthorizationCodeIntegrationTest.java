@@ -20,6 +20,7 @@ import io.github.pinpols.batch.console.support.ratelimit.ConsoleOidcAuthorizatio
 import io.github.pinpols.batch.console.support.ratelimit.ConsoleRateLimitFilter;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import jakarta.servlet.http.Cookie;
+import java.net.InetAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
@@ -399,7 +400,7 @@ class ConsoleOidcAuthorizationCodeIntegrationTest extends AbstractIntegrationTes
       }
     });
     try {
-      server.start(java.net.InetAddress.getByName("127.0.0.1"), 0);
+      server.start(InetAddress.getByName("127.0.0.1"), 0);
       return server;
     } catch (Exception exception) {
       throw new ExceptionInInitializerError(exception);

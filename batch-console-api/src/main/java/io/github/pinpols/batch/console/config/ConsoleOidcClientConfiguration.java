@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.config;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
@@ -36,11 +37,11 @@ public class ConsoleOidcClientConfiguration {
         return null;
       }
       ClientRegistration cachedRegistration = registration;
-      if (cachedRegistration != null) {
+      if (EmptyChecks.isNotNull(cachedRegistration)) {
         return cachedRegistration;
       }
       synchronized (this) {
-        if (registration == null) {
+        if (EmptyChecks.isNull(registration)) {
           registration = discoverRegistration();
         }
         return registration;

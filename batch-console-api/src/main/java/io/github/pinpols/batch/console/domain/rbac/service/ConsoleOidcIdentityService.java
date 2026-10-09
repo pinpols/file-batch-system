@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.rbac.service;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsoleOidcProperties;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.request.ConsoleOidcIdentityRequest;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleOidcIdentityResponse;
@@ -33,11 +34,11 @@ public class ConsoleOidcIdentityService {
   public ConsoleOidcIdentityResponse bind(
       String tenantId, ConsoleOidcIdentityRequest request, String linkedBy) {
     requireConfiguredTenant(tenantId);
-    if (request == null || linkedBy == null || linkedBy.isBlank()) {
+    if (EmptyChecks.isNull(request) || EmptyChecks.isBlank(linkedBy)) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.console.oidc.identity_invalid");
     }
     String subject = request.subject();
-    if (subject == null || subject.isBlank() || subject.length() > 255 || !isAscii(subject)) {
+    if (EmptyChecks.isBlank(subject) || subject.length() > 255 || !isAscii(subject)) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.console.oidc.identity_invalid");
     }
     ConsoleUserAccountEntity account = userAccountMapper
@@ -67,7 +68,9 @@ public class ConsoleOidcIdentityService {
   }
 
   private void requireConfiguredTenant(String tenantId) {
-    if (!properties.isEnabled() || tenantId == null || !tenantId.equals(properties.getTenantId())) {
+    if (!properties.isEnabled()
+        || EmptyChecks.isNull(tenantId)
+        || !tenantId.equals(properties.getTenantId())) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.console.oidc.provider_unavailable");
     }
   }

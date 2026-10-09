@@ -7,6 +7,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-10-09 | **Console OIDC 单点登录与身份绑定**：新增 provider 能力查询和管理员维护 OIDC subject 到本地账号的绑定端点；登录采用授权码 + PKCE，身份映射后仍按本地账号状态、租户和角色签发平台 JWT Cookie，不直接信任 IdP 角色。OIDC 按部署配置启用，既有本地登录路径保持不变。 |
 | 2026-10-07 | **固定契约与有限域治理**：普通 `POST /api/console/jobs/trigger` 继续返回实例号字符串，`dryRun=true` 继续返回校验对象；OpenAPI 补录这两个既有分支，Java 使用封闭类型而不是 `Object`。Trigger 列表与操作改为固定 DTO，列表租户范围由登录权限决定，移除 spec 中实现不接收的必填查询参数。Pipeline 列表字段与 Lineage 的 snake_case 证据行、camelCase 结果版本和空值规则保持不变；文件 `metadata_json` 规范为动态 JSON 对象，不再暴露 JDBC 驱动封装。路径、权限、状态机和错误码不变。 |
 | 2026-10-07 | **弃用 `GET /api/console/my-workers/count`**：前端已停止调用，后端与 OpenAPI 暂保留兼容并标记 deprecated；`GET /api/console/my-workers` 列表端点、权限和租户隔离保持不变。 |
 | 2026-10-04 | **Pipeline 实时进度并发语义修复（公开契约不变）**：内置 Worker 心跳增加可选 `pipelineProgress[]`，按 task/pipeline/stage 隔离并发任务；orchestrator 新增内部 pipeline 聚合查询，Console 公开 `GET /api/console/queries/pipeline-progress?pipelineInstanceId=` 的路径与响应外形不变。移除旧 SDK 标量字段及 Console/internal 的 workerCode 查询入口；前端现有 pipelineInstanceId 查询不变。 |

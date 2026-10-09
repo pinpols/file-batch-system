@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.audit.support;
 
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
@@ -38,7 +39,7 @@ public class ConsoleOidcLoginAudit {
         "OIDC",
         result,
         errorCode,
-        errorCode == null ? null : "OIDC authentication failed",
+        EmptyChecks.isNull(errorCode) ? null : "OIDC authentication failed",
         null,
         metadata.traceId(),
         metadata.requestId(),

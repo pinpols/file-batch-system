@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.infrastructure.rbac;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsoleOidcProperties;
 import io.github.pinpols.batch.console.domain.audit.support.ConsoleOidcLoginAudit;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleOidcIdentityMapper;
@@ -42,10 +43,9 @@ public class ConsoleOidcAuthenticationSuccessHandler implements AuthenticationSu
         || !properties
             .getRegistrationId()
             .equals(oauthAuthentication.getAuthorizedClientRegistrationId())
-        || oidcUser.getIssuer() == null
+        || EmptyChecks.isNull(oidcUser.getIssuer())
         || !properties.getIssuerUri().equals(oidcUser.getIssuer().toString())
-        || oidcUser.getSubject() == null
-        || oidcUser.getSubject().isBlank()
+        || EmptyChecks.isBlank(oidcUser.getSubject())
         || oidcUser.getSubject().length() > 255
         || !isAscii(oidcUser.getSubject())) {
       loginAudit.failed(properties.getTenantId(), "OIDC_IDENTITY_INVALID");
@@ -60,7 +60,7 @@ public class ConsoleOidcAuthenticationSuccessHandler implements AuthenticationSu
         .map(account -> localPrincipal(
             account.getUsername(), account.getTenantId(), account.getAuthoritiesCsv()))
         .orElse(null);
-    if (principal == null) {
+    if (EmptyChecks.isNull(principal)) {
       loginAudit.failed(properties.getTenantId(), "OIDC_IDENTITY_UNBOUND");
       redirectFailure(response);
       return;
@@ -69,12 +69,14 @@ public class ConsoleOidcAuthenticationSuccessHandler implements AuthenticationSu
   }
 
   private ConsolePrincipal localPrincipal(String username, String tenantId, String authoritiesCsv) {
-    if (username == null || tenantId == null || authoritiesCsv == null) {
+    if (EmptyChecks.isNull(username)
+        || EmptyChecks.isNull(tenantId)
+        || EmptyChecks.isNull(authoritiesCsv)) {
       return null;
     }
     LinkedHashSet<String> authorities = Arrays.stream(authoritiesCsv.split(","))
         .map(String::trim)
-        .filter(value -> !value.isEmpty())
+        .filter(EmptyChecks::isNotEmpty)
         .map(value -> value.toUpperCase(Locale.ROOT))
         .collect(Collectors.toCollection(LinkedHashSet::new));
     return new ConsolePrincipal(username, tenantId, authorities);

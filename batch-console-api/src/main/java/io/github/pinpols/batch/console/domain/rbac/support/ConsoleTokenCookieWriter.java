@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.rbac.support;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthTokenResponse;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +24,7 @@ public class ConsoleTokenCookieWriter {
 
   private String build(ConsoleAuthTokenResponse body) {
     long maxAge = DEFAULT_MAX_AGE_SECONDS;
-    if (body.expiresAt() != null && body.issuedAt() != null) {
+    if (EmptyChecks.isNotNull(body.expiresAt()) && EmptyChecks.isNotNull(body.issuedAt())) {
       long remainingSeconds =
           body.expiresAt().getEpochSecond() - body.issuedAt().getEpochSecond();
       if (remainingSeconds > 0) {

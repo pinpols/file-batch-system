@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.config;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import jakarta.annotation.PostConstruct;
 import java.net.URI;
 import java.util.Locale;
@@ -45,14 +46,15 @@ public class ConsoleOidcProperties {
     URI redirect = parseAbsoluteUri(redirectUri, "redirect-uri");
     requireTrustedScheme(issuer, "issuer-uri");
     requireTrustedScheme(redirect, "redirect-uri");
-    if (redirect.getPath() == null
-        || !redirect.getPath().endsWith("/login/oauth2/code/" + registrationId)) {
+    String redirectPath = redirect.getPath();
+    if (EmptyChecks.isBlank(redirectPath)
+        || !redirectPath.endsWith("/login/oauth2/code/" + registrationId)) {
       throw invalid("redirect-uri must end with /login/oauth2/code/{registration-id}");
     }
   }
 
   private static void requireText(String value, String name) {
-    if (value == null || value.isBlank()) {
+    if (EmptyChecks.isBlank(value)) {
       throw invalid(name + " is required when OIDC is enabled");
     }
   }
@@ -68,7 +70,7 @@ public class ConsoleOidcProperties {
       URI uri = URI.create(value);
       if (!uri.isAbsolute()
           || uri.getHost() == null
-          || uri.getUserInfo() != null
+          || EmptyChecks.isNotNull(uri.getUserInfo())
           || uri.getQuery() != null
           || uri.getFragment() != null) {
         throw invalid(name + " must be an absolute URI without user-info, query, or fragment");
