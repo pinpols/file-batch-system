@@ -22,6 +22,7 @@ public class AtomicWorkerLoop extends AbstractWorkerLoop {
   private final AtomicWorkerConfiguration configuration;
   private final BatchTaskExecutorRegistry taskExecutorRegistry;
 
+  @SuppressWarnings("PMD.ExcessiveParameterList") // Spring 构造器注入保持依赖显式，不引入聚合依赖容器。
   public AtomicWorkerLoop(
       WorkerLifecycleManager workerLifecycleManager,
       HeartbeatService heartbeatService,

@@ -125,6 +125,7 @@ batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/config/A
 batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/http/HttpExecutorProperties.java	java:S1313	1
 batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/http/HttpTaskExecutor.java	unchecked	1
 batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/runtime/AtomicTaskConsumer.java	SpringJavaInjectionPointsAutowiringInspection	1
+batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/runtime/AtomicWorkerLoop.java	PMD.ExcessiveParameterList	1
 batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/sql/SqlTaskExecutor.java	java:S2077	1
 batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/storedproc/StoredProcTaskExecutor.java	java:S2077	1
 batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/config/WorkerConcurrencyProperties.java	ConfigurationProperties	1
