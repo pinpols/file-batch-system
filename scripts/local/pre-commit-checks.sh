@@ -19,6 +19,12 @@ if ((${#staged_files[@]} == 0)); then
   exit 0
 fi
 
+BATCH_GATE_COLLECT=1
+BATCH_GATE_FAILURE_FILE="$(mktemp "${TMPDIR:-/tmp}/pre-commit-gates.XXXXXX")"
+export BATCH_GATE_COLLECT BATCH_GATE_FAILURE_FILE
+trap 'rm -f "$BATCH_GATE_FAILURE_FILE"' EXIT
+gate_reset_collected
+
 gate_run PRE_COMMIT_COMMENT_LANGUAGE "注释语言增量预检" \
   "$PYTHON_BIN" scripts/ci/check-comment-language.py --staged
 
@@ -146,9 +152,13 @@ if ((config_registry_changed == 1)); then
       echo "存在未暂存的新生产 Java 文件，拒绝自动生成配置治理登记表" >&2
       return 1
     fi
-    "$PYTHON_BIN" scripts/ci/check-config-governance.py --write
-    git add -- docs/runbook/config-governance-registry.yml \
-      batch-console-api/src/main/resources/config-governance-registry.json
+    if ! "$PYTHON_BIN" scripts/ci/check-config-governance.py --write; then
+      return 1
+    fi
+    if ! git add -- docs/runbook/config-governance-registry.yml \
+      batch-console-api/src/main/resources/config-governance-registry.json; then
+      return 1
+    fi
     "$PYTHON_BIN" scripts/ci/check-config-governance.py
   }
   gate_run PRE_COMMIT_CONFIG_GOVERNANCE_SYNC "配置治理登记表自动同步" \
@@ -164,15 +174,21 @@ fi
 
 if ((${#shell_files[@]} > 0)); then
   check_shell_files() {
+    local failures=0
     command -v shellcheck >/dev/null 2>&1 || {
       echo "缺少 shellcheck，无法校验 Shell 变更" >&2
       return 1
     }
     for file in "${shell_files[@]}"; do
       [[ -f "$file" ]] || continue
-      bash -n "$file"
-      shellcheck -S warning "$file"
+      if ! bash -n "$file"; then
+        failures=1
+      fi
+      if ! shellcheck -S warning "$file"; then
+        failures=1
+      fi
     done
+    return "$failures"
   }
   gate_run PRE_COMMIT_SHELLCHECK "Shell 语法与 ShellCheck（${#shell_files[@]} 个文件）" \
     check_shell_files
@@ -267,10 +283,16 @@ if ((maven_descriptor_changed == 1)); then
       echo "存在未暂存的新 POM，拒绝自动生成 SBOM" >&2
       return 1
     fi
-    ./mvnw -q -P compliance license:aggregate-add-third-party \
-      cyclonedx:makeAggregateBom -DskipTests
-    cp target/bom.json docs/compliance/sbom.json
-    git add -- docs/compliance/sbom.json
+    if ! ./mvnw -q -P compliance license:aggregate-add-third-party \
+      cyclonedx:makeAggregateBom -DskipTests; then
+      return 1
+    fi
+    if ! cp target/bom.json docs/compliance/sbom.json; then
+      return 1
+    fi
+    if ! git add -- docs/compliance/sbom.json; then
+      return 1
+    fi
     bash scripts/ci/check-license-compliance.sh --reuse-generated
   }
   gate_run PRE_COMMIT_SBOM_SYNC "SBOM 与许可证自动同步" sync_maven_compliance_snapshot
@@ -300,9 +322,15 @@ if ((loc_affecting_changed == 1)); then
       fi
     fi
 
-    staged_tree="$(git write-tree)"
-    snapshot_commit="$(git commit-tree "$staged_tree" -p HEAD -m pre-commit-loc-snapshot)"
-    tmp_dir="$(mktemp -d)"
+    if ! staged_tree="$(git write-tree)"; then
+      return 1
+    fi
+    if ! snapshot_commit="$(git commit-tree "$staged_tree" -p HEAD -m pre-commit-loc-snapshot)"; then
+      return 1
+    fi
+    if ! tmp_dir="$(mktemp -d)"; then
+      return 1
+    fi
     tmp_worktree="$tmp_dir/worktree"
     cleanup_loc_worktree() {
       env -u GIT_INDEX_FILE -u GIT_DIR -u GIT_WORK_TREE \
@@ -316,14 +344,17 @@ if ((loc_affecting_changed == 1)); then
     fi
     if ! (
       unset GIT_INDEX_FILE GIT_DIR GIT_WORK_TREE
-      cd "$tmp_worktree"
-      "$loc_python_bin" scripts/dev/lean-loc-report.py --write docs/stats/loc-current-lean.md >/dev/null
-      "$loc_python_bin" scripts/ci/check-loc-snapshot.py
+      cd "$tmp_worktree" &&
+        "$loc_python_bin" scripts/dev/lean-loc-report.py --write docs/stats/loc-current-lean.md >/dev/null &&
+        "$loc_python_bin" scripts/ci/check-loc-snapshot.py
     ); then
       cleanup_loc_worktree
       return 1
     fi
-    cp "$tmp_worktree/docs/stats/loc-current-lean.md" docs/stats/loc-current-lean.md
+    if ! cp "$tmp_worktree/docs/stats/loc-current-lean.md" docs/stats/loc-current-lean.md; then
+      cleanup_loc_worktree
+      return 1
+    fi
     cleanup_loc_worktree
     git add docs/stats/loc-current-lean.md
   }
@@ -332,4 +363,7 @@ fi
 gate_run PRE_COMMIT_REPOSITORY_HYGIENE "仓库卫生" \
   "$PYTHON_BIN" scripts/ci/check-repository-hygiene.py
 
+if ! gate_assert_collected; then
+  exit 1
+fi
 gate_result PASS PRE_COMMIT_ALL "所有适用的 pre-commit 门禁"

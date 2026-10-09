@@ -15,6 +15,7 @@ import io.github.pinpols.batch.console.domain.rbac.application.contract.response
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleAuthApplicationService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleJwtService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleLoginKeyPairService;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTokenCookieWriter;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -52,7 +53,8 @@ class ConsoleAuthControllerTest {
             mock(ConsoleLoginKeyPairService.class),
             mock(
                 io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserAccountService
-                    .class)))
+                    .class),
+            new ConsoleTokenCookieWriter(securityProperties)))
         .build();
   }
 

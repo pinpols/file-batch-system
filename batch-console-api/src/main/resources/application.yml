@@ -133,6 +133,15 @@ batch:
         # Redis 限流连续失败后本进程短路，保持 fail-open 但避免重复等待慢 Redis
         redis-failure-threshold: ${BATCH_CONSOLE_SECURITY_RATE_LIMIT_REDIS_FAILURE_THRESHOLD:3}
         redis-circuit-open-seconds: ${BATCH_CONSOLE_SECURITY_RATE_LIMIT_REDIS_CIRCUIT_OPEN_SECONDS:15}
+    sso:
+      oidc:
+        enabled: ${BATCH_CONSOLE_SSO_OIDC_ENABLED:false}
+        registration-id: ${BATCH_CONSOLE_SSO_OIDC_REGISTRATION_ID:}
+        tenant-id: ${BATCH_CONSOLE_SSO_OIDC_TENANT_ID:}
+        issuer-uri: ${BATCH_CONSOLE_SSO_OIDC_ISSUER_URI:}
+        client-id: ${BATCH_CONSOLE_SSO_OIDC_CLIENT_ID:}
+        client-secret: ${BATCH_CONSOLE_SSO_OIDC_CLIENT_SECRET:}
+        redirect-uri: ${BATCH_CONSOLE_SSO_OIDC_REDIRECT_URI:}
     # PWA Web Push (VAPID) — 移动端告警/审批推送。VAPID 公私钥需先 generate 再注入。
     push:
       enabled: ${BATCH_CONSOLE_PUSH_ENABLED:false}

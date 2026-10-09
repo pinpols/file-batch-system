@@ -272,7 +272,7 @@ console-api 仅放 `health/info/prometheus` 3 个具体路径,trigger 这边 `**
 
 ### 认证 — 多层防御
 
-- console JWT HS256 + SHA-256 派生 key + jti revocation(Redis blacklist) + session_version(单点登录) + token_type 守护
+- console JWT HS256 + SHA-256 派生 key + jti revocation(Redis blacklist) + session_version(单账号单会话) + token_type 守护
 - 内部 `/internal/**` `X-Internal-Secret`(`MessageDigest.isEqual` 常量时间)+ `X-Batch-Api-Key` 双通道,API key 通道强制写回 resolved tenantId 防租户冒充
 - `@PreAuthorize` 154 处覆盖 74 controller(均覆 ≥ 2 处);`/api/console/**` 回退要求至少一角色防漏 annotation
 - SecurityContextHolder.clearContext() 回退放 finally,防容器线程池复用污染

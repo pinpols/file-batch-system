@@ -16,6 +16,7 @@ import io.github.pinpols.batch.console.domain.rbac.service.ConsoleAuthApplicatio
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserAccountService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleJwtService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleLoginKeyPairService;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTokenCookieWriter;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
@@ -50,8 +51,9 @@ public class ConsoleAuthController {
   private final ConsoleJwtService jwtService;
   private final ConsoleLoginKeyPairService loginKeyPairService;
   private final ConsoleUserAccountService userAccountService;
+  private final ConsoleTokenCookieWriter tokenCookieWriter;
 
-  private static final String CONSOLE_TOKEN_COOKIE = "batch_console_token";
+  private static final String CONSOLE_TOKEN_COOKIE = ConsoleTokenCookieWriter.COOKIE_NAME;
 
   /**
    * 使用平台库中的控制台账号进行登录并签发 JWT。
@@ -73,7 +75,7 @@ public class ConsoleAuthController {
       @RequestBody ConsoleLoginRequest request, HttpServletResponse response) {
     ConsoleLoginRequest resolved = resolveLoginRequest(request);
     ConsoleAuthTokenResponse body = authApplicationService.login(resolved);
-    response.addHeader(HttpHeaders.SET_COOKIE, buildTokenCookie(body));
+    tokenCookieWriter.write(body, response);
     return responseFactory.success(body.withoutToken());
   }
 
@@ -120,7 +122,7 @@ public class ConsoleAuthController {
   public CommonResponse<ConsoleAuthTokenResponse> token(
       Authentication authentication, HttpServletResponse response) {
     ConsoleAuthTokenResponse body = authApplicationService.issueToken(authentication);
-    response.addHeader(HttpHeaders.SET_COOKIE, buildTokenCookie(body));
+    tokenCookieWriter.write(body, response);
     return responseFactory.success(body.withoutToken());
   }
 
@@ -163,36 +165,6 @@ public class ConsoleAuthController {
       }
     }
     return null;
-  }
-
-  /**
-   * 构造 HttpOnly token cookie。
-   *
-   * <ul>
-   *   <li>HttpOnly：JS 不可读 → XSS 也无法外泄
-   *   <li>SameSite=Lax：跨站 POST/iframe 不带 cookie；同站 GET / 普通跳转保留
-   *   <li>Secure：默认 true（生产 HTTPS 强制），由 {@code batch.console.security.cookie-secure} 开关，本地 /
-   *       docker-compose 调试可在 application-local.yml 覆盖为 false。R7-A1-P2 改造前 硬编码 false 完全依赖反代改写，反代
-   *       misconfig 即明文传输 token。
-   *   <li>Path=/：所有 console API 命中
-   * </ul>
-   */
-  private String buildTokenCookie(ConsoleAuthTokenResponse body) {
-    long maxAge = 8 * 3600L; // 默认 8h；与 JWT TTL 同步由签发服务控制
-    if (body.expiresAt() != null && body.issuedAt() != null) {
-      long delta = body.expiresAt().getEpochSecond() - body.issuedAt().getEpochSecond();
-      if (delta > 0) {
-        maxAge = delta;
-      }
-    }
-    return ResponseCookie.from(CONSOLE_TOKEN_COOKIE, body.accessToken())
-        .httpOnly(true)
-        .secure(securityProperties.isCookieSecure())
-        .sameSite("Lax")
-        .path("/")
-        .maxAge(maxAge)
-        .build()
-        .toString();
   }
 
   /**

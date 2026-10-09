@@ -34,6 +34,19 @@ switches:
     composeRequired: true
     helmRequired: true
 
+  - key: batch.console.sso.oidc.enabled
+    module: console-api
+    env:
+      - BATCH_CONSOLE_SSO_OIDC_ENABLED
+      - BATCH_CONSOLE_SSO_OIDC_REGISTRATION_ID
+      - BATCH_CONSOLE_SSO_OIDC_TENANT_ID
+      - BATCH_CONSOLE_SSO_OIDC_ISSUER_URI
+      - BATCH_CONSOLE_SSO_OIDC_CLIENT_ID
+      - BATCH_CONSOLE_SSO_OIDC_REDIRECT_URI
+      - BATCH_CONSOLE_SSO_OIDC_CLIENT_SECRET
+    composeRequired: true
+    helmRequired: true
+
   - key: batch.scheduler.worker-cache.enabled
     module: orchestrator
     env:

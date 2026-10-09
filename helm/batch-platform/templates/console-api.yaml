@@ -1,5 +1,9 @@
 {{- $component := "console-api" }}
 {{- $svc := .Values.consoleApi }}
+{{- $oidc := (((.Values.consoleApi).sso).oidc) | default dict }}
+{{- if and $oidc.enabled (empty $oidc.clientSecretSecretName) }}
+{{- fail "consoleApi.sso.oidc.clientSecretSecretName 必须指向预先创建的 Console 专属 Secret" }}
+{{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -56,6 +60,14 @@ spec:
             # 会让 livenessProbe / Prometheus scrape 找不到管理 endpoint。
             - name: BATCH_MANAGEMENT_PORT
               value: {{ $svc.port | quote }}
+            {{- if and $oidc.enabled $oidc.clientSecretSecretName }}
+            # client secret 使用 Console 专属 Secret 引用；Secret 更新后需滚动重启 Console API。
+            - name: BATCH_CONSOLE_SSO_OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $oidc.clientSecretSecretName | quote }}
+                  key: {{ $oidc.clientSecretSecretKey | default "client-secret" | quote }}
+            {{- end }}
           {{- with $svc.startupProbe }}
           startupProbe:
             {{- toYaml . | nindent 12 }}

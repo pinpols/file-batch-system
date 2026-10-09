@@ -92,6 +92,7 @@ AI 附件上线条件（当前仅允许图片）：`batch-ai-attachments` 专用
 |---|---|---|---|---|---|---|
 | `batch.quota.redis.failure-mode` | `FAIL_CLOSED` / `FAIL_OPEN` | **FAIL_CLOSED** | Redis 故障时配额行为；FAIL_OPEN 等同关闭限流，**生产禁止** | **P0** | `BATCH_QUOTA_REDIS_FAILURE_MODE` | ✅ |
 | `batch.console.read-replica.enabled` | `true` / `false` | **true** | 读副本路由；无从库部署建议显式 false 避免反复探测 | P1 | `BATCH_CONSOLE_READ_REPLICA_ENABLED` | ✅ |
+| `batch.console.sso.oidc.enabled` | `true` / `false` | **false** | OIDC 企业登录试点总开关；单 tenant / 单 registration，显式绑定已有本地账号；部署配置变更需重启 Console API。client secret 仅允许由 Console 专属 Secret 注入，不得进入共享 Secret、ConfigMap、数据库或 API | P1 | `BATCH_CONSOLE_SSO_OIDC_ENABLED`、`BATCH_CONSOLE_SSO_OIDC_*` | ✅（本地协议 Testcontainers IT；真实 IdP 联测待试点配置） |
 | `batch.storage.startup-check.enabled` | `true` / `false` | **true** | 启动冒烟自检（put/exists/statSize/get/list/delete），失败 fail-fast | P1 | `BATCH_STORAGE_STARTUP_CHECK_ENABLED` | ✅（每个挂存储的应用 IT 启动都跑探针） |
 | `batch.storage.encryption.decorator-enabled` | `true` / `false` | **false** | BATCHENC 整对象加密装饰层；开启后 presign 直传禁用、range 读退化 | P1 | `BATCH_STORAGE_ENCRYPTION_DECORATOR_ENABLED` | ❌ |
 | `batch.storage.s3.auto-create-bucket` | `true` / `false` | **true** | 启动自动建桶；AWS/OSS/COS 等托管云**必须 false** | P1 | `BATCH_S3_AUTO_CREATE_BUCKET` | ❌ |

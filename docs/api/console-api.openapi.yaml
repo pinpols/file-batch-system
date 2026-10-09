@@ -172,6 +172,80 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleAuthTokenResponse'
+  /api/console/auth/oidc/provider:
+    get:
+      tags: [Auth]
+      summary: Read public OIDC login availability
+      operationId: getConsoleOidcProvider
+      security: []
+      description: Returns only whether the configured pilot login is enabled and its public registration id; never returns issuer credentials or tokens.
+      responses:
+        '200':
+          description: OIDC login availability
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleOidcProvider'
+  /api/console/auth/oidc/identities:
+    get:
+      tags: [Auth]
+      summary: List explicit OIDC identity bindings for the configured tenant
+      operationId: listConsoleOidcIdentities
+      parameters:
+        - in: query
+          name: tenantId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Identity bindings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleOidcIdentityList'
+    post:
+      tags: [Auth]
+      summary: Bind an OIDC subject to an existing local account
+      operationId: bindConsoleOidcIdentity
+      parameters:
+        - in: query
+          name: tenantId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsoleOidcIdentityRequest'
+      responses:
+        '200':
+          description: Identity binding created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleOidcIdentity'
+  /api/console/auth/oidc/identities/{id}:
+    delete:
+      tags: [Auth]
+      summary: Remove an OIDC identity binding
+      operationId: unbindConsoleOidcIdentity
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, format: int64 }
+        - in: query
+          name: tenantId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Identity binding removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
   /api/console/auth/public-key:
     get:
       tags: [Auth]
@@ -18957,6 +19031,51 @@ components:
         algorithm: { type: string }
         publicKey: { type: string }
         fingerprint: { type: string }
+    ConsoleOidcProviderResponse:
+      type: object
+      description: 登录页可见的 OIDC 开关状态；不暴露 IdP 地址或客户端凭据。
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+        registrationId: { type: string, nullable: true }
+    ConsoleOidcIdentityRequest:
+      type: object
+      required: [username, subject]
+      properties:
+        username: { type: string, minLength: 1, maxLength: 128 }
+        subject: { type: string, minLength: 1, maxLength: 255, description: IdP 提供的精确、区分大小写的 OIDC sub 值；按 OIDC Core 限制为 ASCII。 }
+    ConsoleOidcIdentityResponse:
+      type: object
+      required: [id, tenantId, accountId, username, issuer, subject, linkedBy, linkedAt]
+      properties:
+        id: { type: integer, format: int64 }
+        tenantId: { type: string }
+        accountId: { type: integer, format: int64 }
+        username: { type: string }
+        issuer: { type: string }
+        subject: { type: string }
+        linkedBy: { type: string }
+        linkedAt: { type: string, format: date-time }
+    CommonResponseConsoleOidcProvider:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ConsoleOidcProviderResponse' }
+    CommonResponseConsoleOidcIdentity:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ConsoleOidcIdentityResponse' }
+    CommonResponseConsoleOidcIdentityList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/ConsoleOidcIdentityResponse' }
     CommonResponseConsoleLoginPublicKey:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'

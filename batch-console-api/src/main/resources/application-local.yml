@@ -40,6 +40,10 @@ batch:
   security:
     bypass-mode: true
   console:
+    sso:
+      oidc:
+        # 仅本地 mock IdP 可使用 loopback HTTP；生产 profile 不得启用此例外。
+        allow-loopback-http: true
     instance-id: ${BATCH_CONSOLE_INSTANCE_ID:batch-console-api-local}
     security:
       enabled: true
@@ -50,7 +54,7 @@ batch:
       allowed-tenants: []
       default-authorities:
       - ROLE_ADMIN
-      # 本地/测试环境关掉单点登录,允许 e2e harness 共享 storageState (BE-ISSUE-3)。
+      # 本地/测试环境关闭单账号单会话,允许 E2E harness 共享 storageState (BE-ISSUE-3)。
       # 生产由 application.yml 的环境变量 BATCH_CONSOLE_SINGLE_SESSION_ENABLED 控制,默认仍 true。
       single-session-enabled: false
       jwt-issuer: batch-console-api

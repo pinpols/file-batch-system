@@ -4,6 +4,7 @@
 
 | 文档 | 用途 |
 |---|---|
+| [Console OIDC SSO 接入方案](./console-oidc-sso-integration-plan-2026-10-09.md) | 企业身份提供方 OIDC 登录边界、账号映射与验收；后端最小闭环及前端 pilot 入口已实现，真实 IdP 试点联测和生产启用仍待完成 |
 | [java-design-expression-improvement-plan-2026-10-08.md](./java-design-expression-improvement-plan-2026-10-08.md) | 注释归属、测试装配、固定载荷、任务结果不变量与协作者内聚的后续改进方案；不重复已有可读性/契约治理 |
 | [typed-contract-enum-constant-governance-plan-2026-10-07.md](./typed-contract-enum-constant-governance-plan-2026-10-07.md) | 固定 Map/Object 契约、有限域裸字符串、重复常量与精准增量门禁的分批治理计划 |
 | [java-readability-refactoring-roadmap-2026-08-12.md](./java-readability-refactoring-roadmap-2026-08-12.md) | Java 可读性、事务自注入、固定 Map 契约和复杂类的分阶段治理路线 |

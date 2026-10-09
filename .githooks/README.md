@@ -10,7 +10,7 @@ git config core.hooksPath .githooks
 
 ### `pre-commit` — 暂存区按需轻量门禁
 
-每次 `git commit` 前：
+每次 `git commit` 前，按暂存文件范围运行所有适用检查；一个检查失败不会阻止其他独立检查继续，最后集中列出失败门禁：
 1. 始终检查暂存区空白错误和冲突标记
 2. Java 变更执行 Spotless 并重新暂存原 Java 文件
 3. Shell 变更执行 `bash -n` 和 ShellCheck warning 零容忍
@@ -22,7 +22,7 @@ Maven 单测、Helm、Zizmor、镜像和依赖扫描保留在 pre-push / CI，�
 ### `pre-push` — PR 静态门禁预检
 
 每次 `git push` 前执行 `scripts/local/pre-push-sdk-checks.sh`，按当前分支相对
-`origin/main` 的改动预检高频 CI 失败项：
+`origin/main` 的改动预检高频 CI 失败项。独立检查尽量完整执行，包含 clean compile，末尾汇总所有失败；环境缺失或参数错误等无法继续的前置问题会直接终止：
 
 1. 拒绝直接推送 `main` / `master`
 2. 新增生产 Java 代码必须使用 `EmptyChecks`

@@ -16,6 +16,7 @@
 
 ### Added
 
+- Console 增加默认关闭的单试点 OIDC 企业登录：使用 Authorization Code + PKCE、Redis 一次性 state、显式外部身份绑定和本地 RBAC；登录成功复用平台 HttpOnly Cookie。IdP discovery 延迟到首次 OIDC 请求，服务启动与密码登录不依赖 IdP 可用性；Security 链过滤器不再被 Servlet 容器重复注册。同步提供条件展示的 Console 登录入口、配置/Secret 注入、迁移及隔离 IdP 协议集成测试；真实 IdP 联测仍待试点配置。
 - 新增开源工程治理规范、轻量 BEP 与生产就绪评审模板、稳定安全模型和 OpenSSF Scorecard 周期报告；GitHub 启用私密漏洞报告、Secret Scanning/Push Protection 与 Dependabot 安全更新，main ruleset 强制讨论解决并移除永久 bypass；CodeQL 补齐纯文档 PR 的稳定检查后再纳入 required checks。
 - 新增后端不可变镜像发布输出、统一 release manifest schema / 校验器，以及 Compose 按 digest 部署、健康校验、失败快照、稳定版本回滚和留存审计脚本；生产自动部署、审批和 SSH 凭据仍由后续环境接入完成。
 - 补齐 Process Worker 业务库路由、Console 真实 HTTP 限流、批量开户真实 PG/Valkey 事务、JDBC ShedLock、Worker drain、对象存储加密装配和 S3 自动建桶的集成或专项验证。

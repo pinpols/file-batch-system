@@ -77,6 +77,14 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
     return false;
   }
 
+  /** 授权发起与 IdP callback 必须交给 Spring OAuth 过滤器，避免旧 JWT cookie 抢先拦截/清除认证上下文。 */
+  @Override
+  protected boolean shouldNotFilter(HttpServletRequest request) {
+    String path = request.getRequestURI();
+    return path.startsWith(request.getContextPath() + "/oauth2/authorization/")
+        || path.startsWith(request.getContextPath() + "/login/oauth2/code/");
+  }
+
   private final ConsoleSecurityProperties properties;
   private final BatchSecurityProperties batchSecurityProperties;
   private final ConsoleJwtService jwtService;
@@ -207,8 +215,11 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
    * 与 {@code ConsoleSecurityConfiguration} permitAll 列表对齐的公开认证端点。 失效 cookie 命中这些路径时不应 401,放行给
    * controller 处理凭证校验和换发新 cookie。
    */
-  private static final Set<String> PUBLIC_AUTH_PATHS =
-      Set.of("/api/console/auth/login", "/api/console/auth/logout", "/api/console/auth/public-key");
+  private static final Set<String> PUBLIC_AUTH_PATHS = Set.of(
+      "/api/console/auth/login",
+      "/api/console/auth/logout",
+      "/api/console/auth/public-key",
+      "/api/console/auth/oidc/provider");
 
   private boolean isPublicAuthPath(HttpServletRequest request) {
     return PUBLIC_AUTH_PATHS.contains(request.getRequestURI());

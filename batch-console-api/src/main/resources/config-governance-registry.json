@@ -243,6 +243,14 @@
       "sensitivity": "PUBLIC"
     },
     {
+      "id": "batch-console-api/src/main/java/io/github/pinpols/batch/console/config/ConsoleOidcProperties.java#ConsoleOidcProperties",
+      "className": "ConsoleOidcProperties",
+      "prefix": "batch.console.sso.oidc",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "SECRET"
+    },
+    {
       "id": "batch-console-api/src/main/java/io/github/pinpols/batch/console/config/ConsoleOrchestratorClientProperties.java#ConsoleOrchestratorClientProperties",
       "className": "ConsoleOrchestratorClientProperties",
       "prefix": "batch.console.orchestrator",

@@ -68,6 +68,24 @@ public class ConsoleAuthApplicationService {
     return jwtService.issueToken(username, tenantId, authorities(authentication), sessionVersion);
   }
 
+  /** OIDC 只负责证明外部身份；签发平台会话时仍重新读取本地账号状态和角色。 */
+  public ConsoleAuthTokenResponse issueToken(ConsolePrincipal principal) {
+    if (principal == null || !ConsoleRoles.isFormalRoleSet(principal.authorities())) {
+      throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.invalid_credentials");
+    }
+    ConsoleUserAccount account = userAccountService
+        .findByUsername(principal.username())
+        .filter(ConsoleUserAccount::enabled)
+        .filter(user -> principal.tenantId().equals(user.tenantId()))
+        .orElseThrow(
+            () -> BizException.of(ResultCode.UNAUTHORIZED, "error.auth.invalid_credentials"));
+    long sessionVersion =
+        sessionRegistry.nextSessionVersion(account.username(), account.tenantId());
+    return jwtService
+        .issueToken(account.username(), account.tenantId(), account.authorities(), sessionVersion)
+        .withMustChangePassword(account.mustChangePassword());
+  }
+
   public ConsoleAuthProfileResponse profile(Authentication authentication) {
     Set<String> auths = authorities(authentication);
     String username = username(authentication);
