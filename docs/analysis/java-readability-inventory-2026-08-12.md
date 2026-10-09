@@ -13,11 +13,11 @@
 | 含 Map 的源文件 | 447 |
 | public Map 契约候选 | 54 |
 | public Map 契约候选文件 | 35 |
-| `@SuppressWarnings` | 239 |
-| 含 suppression 的源文件 | 180 |
+| `@SuppressWarnings` | 240 |
+| 含 suppression 的源文件 | 181 |
 | `@Configuration` 类 | 49 |
 | 大于等于 700 行的源文件 | 9 |
-| `PMD.ExcessiveParameterList` 显式例外 | 34 |
+| `PMD.ExcessiveParameterList` 显式例外 | 35 |
 
 ## 模块源文件
 
@@ -102,6 +102,7 @@
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/observability/view/dashboard/ExecutionProgressView.java` | 1 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/mapper/ConsoleApiKeyMapper.java` | 1 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java` | 1 |
+| `batch-console-api/src/main/java/io/github/pinpols/batch/console/shared/view/ConsoleWorkerRegistryResponse.java` | 1 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/dryrun/DefaultDryRunPlanService.java` | 1 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplaySubmitCommand.java` | 1 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/command/CompensationSubmitCommand.java` | 2 |

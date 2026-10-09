@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
 import java.time.Instant;
 import java.util.List;
 
+@SuppressWarnings("PMD.ExcessiveParameterList") // 保持 Console JSON 扁平字段，避免改变既有 API 契约。
 public record ConsoleWorkerRegistryResponse(
     Long id,
     String tenantId,

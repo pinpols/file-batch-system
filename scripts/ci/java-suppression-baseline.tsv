@@ -44,6 +44,7 @@ batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notificat
 batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/service/WebhookDeliverySupport.java	java:S2583	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/service/WebhookDispatcher.java	java:S2583	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/observability/view/dashboard/ExecutionProgressView.java	PMD.ExcessiveParameterList	1
+batch-console-api/src/main/java/io/github/pinpols/batch/console/shared/view/ConsoleWorkerRegistryResponse.java	PMD.ExcessiveParameterList	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/ops/application/contract/response/ConsoleInstanceDiagnosisResponse.java	unchecked	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/ops/infrastructure/ConsoleJobOpsSupport.java	unchecked	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/ops/infrastructure/DefaultConsoleTriggerProxyService.java	java:S1075	1
