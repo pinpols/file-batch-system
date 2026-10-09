@@ -259,7 +259,20 @@ public class DefaultConsoleJobDefinitionApplicationService
         request.getDescription() != null ? request.getDescription() : existing.getDescription());
     param.setUpdatedBy(operator);
     jobDefinitionMapper.updateJobDefinitionMaintenance(param);
-    saveMonitoringPolicy(tenantId, id, param, operator);
+    jobDefinitionMapper.upsertJobMonitoringPolicy(JobMonitoringPolicyUpsertParam.builder()
+        .tenantId(tenantId)
+        .jobDefinitionId(id)
+        .softRuntimeSeconds(valueOrZero(param.getSoftRuntimeSeconds()))
+        .softRuntimeSeverity(severityOrWarn(param.getSoftRuntimeSeverity()))
+        .startGraceSeconds(valueOrZero(param.getStartGraceSeconds()))
+        .startGraceSeverity(severityOrWarn(param.getStartGraceSeverity()))
+        .completionDeadlineLocalTime(param.getCompletionDeadlineLocalTime())
+        .completionDeadlineDayOffset(valueOrZero(param.getCompletionDeadlineDayOffset()))
+        .dependencyCompletionWindowSeconds(
+            valueOrZero(param.getDependencyCompletionWindowSeconds()))
+        .completionDeadlineSeverity(severityOrWarn(param.getCompletionDeadlineSeverity()))
+        .updatedBy(operator)
+        .build());
     cacheInvalidationService.evictJobDefinition(tenantId, existing.getJobCode());
     return toResponse(jobDefinitionMapper.selectById(tenantId, id));
   }
@@ -435,27 +448,6 @@ public class DefaultConsoleJobDefinitionApplicationService
         e.getDescription(),
         e.getCreatedAt(),
         e.getUpdatedAt());
-  }
-
-  private void saveMonitoringPolicy(
-      String tenantId,
-      Long jobDefinitionId,
-      JobDefinitionMaintenanceUpdateParam policy,
-      String operator) {
-    jobDefinitionMapper.upsertJobMonitoringPolicy(JobMonitoringPolicyUpsertParam.builder()
-        .tenantId(tenantId)
-        .jobDefinitionId(jobDefinitionId)
-        .softRuntimeSeconds(valueOrZero(policy.getSoftRuntimeSeconds()))
-        .softRuntimeSeverity(severityOrWarn(policy.getSoftRuntimeSeverity()))
-        .startGraceSeconds(valueOrZero(policy.getStartGraceSeconds()))
-        .startGraceSeverity(severityOrWarn(policy.getStartGraceSeverity()))
-        .completionDeadlineLocalTime(policy.getCompletionDeadlineLocalTime())
-        .completionDeadlineDayOffset(valueOrZero(policy.getCompletionDeadlineDayOffset()))
-        .dependencyCompletionWindowSeconds(
-            valueOrZero(policy.getDependencyCompletionWindowSeconds()))
-        .completionDeadlineSeverity(severityOrWarn(policy.getCompletionDeadlineSeverity()))
-        .updatedBy(operator)
-        .build());
   }
 
   private static Integer resolveCompletionDeadlineDayOffset(
