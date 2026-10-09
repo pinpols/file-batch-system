@@ -1,13 +1,8 @@
 # Production overlay — apply on top of values.yaml:
 #   helm upgrade --install batch-platform ./helm/batch-platform \
 #     -f helm/values-prod.yaml \
-#     --set postgresql.platform.password=$DB_PASS \
-#     --set postgresql.business.password=$DB_PASS \
-#     --set objectStorage.endpoint=$BATCH_S3_ENDPOINT \
-#     --set objectStorage.accessKey=$BATCH_S3_ACCESS_KEY \
-#     --set objectStorage.secretKey=$BATCH_S3_SECRET_KEY \
-#     --set security.internalSecret=$BATCH_INTERNAL_SECRET \
-#     --set security.consoleJwtSecret=$BATCH_CONSOLE_JWT_SECRET
+#     --set objectStorage.endpoint=$BATCH_S3_ENDPOINT
+# 运行时凭据由外部 Secret 控制器写入下方 Secret。
 
 image:
   registry: "registry.example.com/batch-platform"
@@ -64,13 +59,14 @@ alertmanager:
 security:
   bypassMode: "false"
   enforceStrongSecrets: true
+  existingSecretName: "batch-platform-runtime"
+  existingSecretRevision: ""
   internalSecret: ""
   consoleJwtSecret: ""
   # 2026-05-18 console 登录请求体 RSA+AES 混合加密(BE ConsoleLoginKeyPairService)。
   # prod 强制 required=true(BE @PostConstruct 守护);multi-replica 必须显式注入
   # keypair —— 单副本启动期生成在多副本会导致 FE 公钥不匹配解密私钥。
-  # 推荐外部密钥管理(Vault / KMS / sealed-secrets)注入,本文件留空,deploy 时
-  # --set security.loginEncryption.privateKeyPem=$(cat priv.pem) 或 values overlay。
+  # 由 batch-platform-runtime 外部 Secret 提供，不写入 values 或 Helm release state。
   loginEncryption:
     enabled: "true"
     required: "true"

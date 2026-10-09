@@ -1,10 +1,10 @@
 # GitOps Onboarding(Argo CD + flagger)— 2026-05-22
 
-> **⚠️ 2026-05-23 状态更新**:`promote-staging.yml` 已删除(从未接通,见 [ci.md](./ci.md) 顶部说明)。本文档描述的是**未来若要恢复 ops 仓自动同步**的完整链路;当前 main commit → ops 仓同步走人工 SOP。
+> **2026-10-09 状态**：GitOps 尚未连接真实 ops 仓和集群。仓库已提供 [ops 仓模板](../../deploy/gitops/ops-repo-template/README.md)、按 release manifest 生成逐镜像 digest values 的脚本，以及 Helm 外部 Secret 引用；promotion PR、Argo CD sync 和 staging smoke 仍需外部接入验收。
 >
 > 给 ops 团队的入门 runbook。**不假设读者懂 Argo CD / flagger**,从 0 装到能跑。
-> 本仓库已经写好 `build-image.yml` / `helm/` 骨架,**但都没接集群**。
-> 这份文档是把"接集群"那部分变成 checklist。
+> 本仓库提供 `build-image.yml`、Helm Chart、ops 仓模板和 digest values 生成工具，**但尚未连接集群**。
+> 这份文档说明外部接入步骤和未完成的验收边界。
 
 ---
 
@@ -20,7 +20,7 @@
 | Prometheus + ServiceMonitor CRD | flagger 拉 metric 用 | TODO 安装 |
 | Service mesh / Ingress(nginx/istio 二选一) | flagger 切流量用 | TODO 选型 |
 | ghcr.io PAT(`GHCR_TOKEN`) | 集群拉镜像 + CI 推镜像 | TODO 在 GitHub Settings → Secrets 配 |
-| ops repo PAT(`OPS_REPO_TOKEN`) | promote-staging.yml 提 PR 到 ops repo | TODO 在 GitHub Settings → Secrets 配 |
+| ops repo 写权限 | promotion 自动化向 ops repo 提 PR | 当前使用人工审查/提交；接入 CI 自动提 PR 时再配置 GitHub App 或短期凭据 |
 | Slack webhook(可选) | 发布通知 / canary 失败告警 | TODO |
 
 ---
@@ -32,20 +32,22 @@
 - 应用代码:**本仓库** `pinpols/file-batch-system`(Java + Helm chart)
 - 部署声明:**新建** `pinpols/file-batch-system-ops`(values + Argo Application)
 
-ops repo 目录示例(**本仓库不创建,留给 ops 团队 init**):
+ops repo 目录示例（可从 `deploy/gitops/ops-repo-template` 初始化）：
 
 ```
 file-batch-system-ops/
 ├── README.md
 ├── argo/
-│   ├── staging-application.yaml      # Argo Application 指 staging
-│   └── prod-application.yaml         # Argo Application 指 prod
-└── helm/
-    ├── values-staging.yaml           # 7 个模块的 image.tag(promote-staging.yml 自动更新)
-    └── values-prod.yaml              # prod values(手动 promote)
+│   └── application-staging.yaml      # Argo Application 指 staging
+└── environments/
+    └── staging/
+        ├── values.yaml               # 环境配置，不含凭据
+        └── release-images.yaml        # release manifest 生成的逐镜像 digest
 ```
 
-### 2.1 `argo/staging-application.yaml` 模板
+### 2.1 `argo/application-staging.yaml` 模板
+
+完整模板位于 [`deploy/gitops/ops-repo-template/argo/application-staging.yaml`](../../deploy/gitops/ops-repo-template/argo/application-staging.yaml)。其关键配置如下：
 
 ```yaml
 apiVersion: argoproj.io/v1alpha1
@@ -62,8 +64,8 @@ spec:
       path: helm/batch-platform
       helm:
         valueFiles:
-          - values.yaml
-          - $values/helm/values-staging.yaml
+          - $values/environments/staging/values.yaml
+          - $values/environments/staging/release-images.yaml
     - repoURL: https://github.com/pinpols/file-batch-system-ops.git
       targetRevision: main
       ref: values
@@ -78,7 +80,7 @@ spec:
       - CreateNamespace=true
 ```
 
-### 2.2 `argo/prod-application.yaml` 模板
+### 2.2 Production Application
 
 与 staging 几乎一致,差异:
 
@@ -89,6 +91,12 @@ spec:
 ---
 
 ## 3. Secret 管理
+
+Helm 可通过 `security.existingSecretName` 引用由外部密钥控制器预先创建在目标 namespace 中的共享 Secret，此时 Chart 不渲染自己的 Secret，也不会把运行时凭据写进 Helm values/release state。生产 overlay 默认引用 `batch-platform-runtime`。Secret 至少应包含以下键（依启用功能提供可选键）：
+
+`BATCH_PLATFORM_DB_PASSWORD`、`BATCH_BUSINESS_DB_PASSWORD`、`BATCH_CONSOLE_PRIMARY_PASSWORD`、`BATCH_CONSOLE_REPLICA_PASSWORD`、`BATCH_S3_ACCESS_KEY`、`BATCH_S3_SECRET_KEY`、`BATCH_STORAGE_FILESYSTEM_PRESIGN_SECRET`、`BATCH_INTERNAL_SECRET`、`BATCH_CONSOLE_JWT_SECRET`、`BATCH_CONSOLE_AI_OPENAI_COMPATIBLE_API_KEY`、`BATCH_SECURITY_BYPASS_MODE`、`BATCH_CONSOLE_SECURITY_LOGIN_ENCRYPTION_PRIVATE_KEY_PEM`、`BATCH_CONSOLE_SECURITY_LOGIN_ENCRYPTION_PUBLIC_KEY_PEM`。
+
+外部 Secret 更新不会被 Helm 读取明文，也不会自动触发 Pod 重启。Secret 控制器需提供 rollout reloader，或在 ops values 更新非敏感的 `security.existingSecretRevision` 以触发 Deployment 滚动。Chart 渲染阶段无法读取外部 Secret 内容；生产 profile 的应用启动校验仍负责拒绝缺失或强度不足的关键密钥。OIDC Client Secret 仍使用 `consoleApi.sso.oidc.clientSecretSecretName` 单独引用。
 
 | Secret | 配置位置 | 内容 |
 |---|---|---|

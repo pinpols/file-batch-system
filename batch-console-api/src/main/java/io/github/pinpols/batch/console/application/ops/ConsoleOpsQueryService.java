@@ -2,7 +2,9 @@ package io.github.pinpols.batch.console.application.ops;
 
 import static io.github.pinpols.batch.console.shared.query.ConsoleQuerySupport.*;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
+import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
 import io.github.pinpols.batch.common.i18n.LocalizedErrorRenderer;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
@@ -10,6 +12,7 @@ import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.contract.query.ApprovalCommandQueryRequest;
 import io.github.pinpols.batch.console.application.contract.query.AuditLogQueryRequest;
 import io.github.pinpols.batch.console.application.contract.query.OutboxDeliveryLogQueryRequest;
@@ -609,13 +612,18 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
         display(entity.getTenantId()),
         display(entity.getWorkerCode()),
         display(entity.getWorkerGroup()),
-        null,
-        null,
+        entity.getCapabilityTagsJson(),
+        entity.getResourceTag(),
         display(entity.getStatus()),
         entity.getHeartbeatAt(),
         null,
         entity.getDrainStartedAt(),
         entity.getDrainDeadlineAt(),
-        entity.getPort());
+        entity.getPort(),
+        EmptyChecks.isNull(entity.getTaskCapabilitiesJson())
+            ? List.of()
+            : JsonUtils.fromJson(
+                entity.getTaskCapabilitiesJson(),
+                new TypeReference<List<WorkerTaskCapabilityDto>>() {}));
   }
 }

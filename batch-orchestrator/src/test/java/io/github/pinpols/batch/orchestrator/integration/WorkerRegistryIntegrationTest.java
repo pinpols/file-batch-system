@@ -183,6 +183,42 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
         .isEqualTo(18083);
   }
 
+  @Test
+  @DisplayName("注册能力摘要写入 JSONB 后可从注册表读回")
+  void shouldPersistTaskCapabilitiesAndReadThemBack() {
+    String workerCode = "worker-it-capabilities-" + BatchDateTimeSupport.utcEpochMillis();
+    String capabilities = "[{\"taskType\":\"file_sha256\",\"resourceKinds\":[\"DISK\"],"
+        + "\"idempotent\":true,\"cancellable\":false,\"recommendedTimeoutMillis\":300000}]";
+    WorkerRegistryEntity worker = new WorkerRegistryEntity(
+        null,
+        "t1",
+        workerCode,
+        "DEFAULT",
+        new JsonbString("{}"),
+        null,
+        WorkerRegistryStatus.ONLINE.code(),
+        BatchDateTimeSupport.utcNow(),
+        0,
+        10,
+        null,
+        null,
+        "host-it",
+        "1.2.3.4",
+        "pid-it",
+        18083,
+        "build-it",
+        "sdk-it",
+        workerCode,
+        new JsonbString(capabilities));
+
+    workerRegistryMapper.saveLikeSdj(worker);
+
+    WorkerRegistryEntity found = workerRegistryMapper.selectByTenantAndWorkerCode("t1", workerCode);
+    assertThat(found).isNotNull();
+    assertThat(found.taskCapabilities()).isNotNull();
+    assertThat(found.taskCapabilities().getValue()).contains("file_sha256").contains("300000");
+  }
+
   // ── helpers ───────────────────────────────────────────────────────────────
 
   private static WorkerRegistryEntity workerWithPort(String tenantId, String workerCode, int port) {

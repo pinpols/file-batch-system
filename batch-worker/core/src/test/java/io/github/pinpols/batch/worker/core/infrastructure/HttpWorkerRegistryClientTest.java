@@ -7,12 +7,20 @@ import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.config.OrchestratorClientProperties;
 import io.github.pinpols.batch.common.dto.WorkerHeartbeatDto;
 import io.github.pinpols.batch.common.dto.WorkerHeartbeatResponse;
+import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+import mockwebserver3.MockResponse;
+import mockwebserver3.MockWebServer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
+import org.springframework.mock.env.MockEnvironment;
+import org.springframework.web.client.RestClient;
 
 /**
  * register / heartbeat 请求体映射：worker 侧把运行身份与真实监听端口装进 {@link WorkerHeartbeatDto}。
@@ -78,6 +86,50 @@ class HttpWorkerRegistryClientTest {
   }
 
   @Test
+  @DisplayName("注册请求发送执行器能力清单，而后续心跳不重复发送")
+  void shouldSendCapabilitiesOnRegistrationOnly() throws Exception {
+    try (MockWebServer server = new MockWebServer()) {
+      server.enqueue(new MockResponse.Builder().code(200).build());
+      server.enqueue(new MockResponse.Builder()
+          .code(200)
+          .addHeader("Content-Type", "application/json")
+          .body("{\"platformStatus\":\"NORMAL\",\"shouldDrain\":false,\"pausedTaskTypes\":[]}")
+          .build());
+      server.start();
+
+      // 使用实际临时端口，避免访问默认的 orchestrator base URL。
+      OrchestratorClientProperties properties = new OrchestratorClientProperties();
+      properties.setBaseUrl("http://127.0.0.1:" + server.getPort());
+      HttpWorkerRegistryClient httpClient = new HttpWorkerRegistryClient(
+          properties,
+          new BatchSecurityProperties(),
+          restClientBuilderProvider(),
+          new MockEnvironment(),
+          new PipelineStageProgressRegistry());
+
+      WorkerRegistration registration = registration();
+      registration.setWorkerId("worker-1");
+      registration.setTaskCapabilities(List.of(
+          new WorkerTaskCapabilityDto("FILE_CHECKSUM", List.of("FILE"), true, true, 30_000)));
+
+      httpClient.register(registration);
+      httpClient.heartbeat(registration);
+
+      var registerRequest = server.takeRequest(1, TimeUnit.SECONDS);
+      var heartbeatRequest = server.takeRequest(1, TimeUnit.SECONDS);
+      assertThat(registerRequest).isNotNull();
+      assertThat(registerRequest.getUrl().encodedPath()).isEqualTo("/internal/workers/register");
+      assertThat(registerRequest.getBody().utf8())
+          .contains("\"taskCapabilities\"")
+          .contains("\"taskType\":\"FILE_CHECKSUM\"");
+      assertThat(heartbeatRequest).isNotNull();
+      assertThat(heartbeatRequest.getUrl().encodedPath())
+          .isEqualTo("/internal/workers/worker-1/heartbeat");
+      assertThat(heartbeatRequest.getBody().utf8()).contains("\"taskCapabilities\":null");
+    }
+  }
+
+  @Test
   @DisplayName("心跳响应要求排空时把本地注册状态切换为 DRAINING")
   void shouldApplyDrainingStatus_whenHeartbeatRequestsDrain() {
     WorkerRegistration registration = registration();
@@ -106,5 +158,35 @@ class HttpWorkerRegistryClientTest {
     registration.setStatus(WorkerRegistryStatus.ONLINE.code());
     // lastHeartbeatAt 故意留 null：覆盖 toHeartbeatDto 的 utcNow() 兜底分支。
     return registration;
+  }
+
+  private static ObjectProvider<RestClient.Builder> restClientBuilderProvider() {
+    return new org.springframework.beans.factory.ObjectProvider<>() {
+      @Override
+      public RestClient.Builder getObject(Object... args) {
+        return jsonRestClientBuilder();
+      }
+
+      @Override
+      public RestClient.Builder getObject() {
+        return jsonRestClientBuilder();
+      }
+
+      @Override
+      public RestClient.Builder getIfAvailable() {
+        return jsonRestClientBuilder();
+      }
+
+      @Override
+      public RestClient.Builder getIfUnique() {
+        return jsonRestClientBuilder();
+      }
+    };
+  }
+
+  private static RestClient.Builder jsonRestClientBuilder() {
+    return RestClient.builder()
+        .configureMessageConverters(b -> b.configureMessageConvertersList(
+            converters -> converters.addFirst(new JacksonJsonHttpMessageConverter())));
   }
 }

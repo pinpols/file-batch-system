@@ -1,0 +1,6 @@
+security:
+  existingSecretName: batch-platform-runtime
+  existingSecretRevision: ""
+
+image:
+  pullPolicy: IfNotPresent

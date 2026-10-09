@@ -3,6 +3,7 @@ package io.github.pinpols.batch.common.spi.task;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -80,6 +81,18 @@ class BatchTaskExecutorRegistryTest {
     assertThat(registry.dumpRegistry())
         .hasSize(1)
         .containsEntry("shell", StubExecutor.class.getName());
+  }
+
+  @Test
+  @DisplayName("能力快照按任务类型排序并转换为展示 DTO")
+  void shouldExposeStableCapabilitySnapshot() {
+    BatchTaskExecutorRegistry registry = new BatchTaskExecutorRegistry(
+        List.of(new StubExecutor("z_task"), new StubExecutor("a_task")));
+
+    assertThat(registry.capabilitySnapshot())
+        .extracting(WorkerTaskCapabilityDto::taskType)
+        .containsExactly("a_task", "z_task");
+    assertThat(registry.capabilitySnapshot().getFirst().resourceKinds()).containsExactly("CPU");
   }
 
   // ─── helpers ─────────────────────────────────────────────────────────────────

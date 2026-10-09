@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: batch-platform-staging
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://github.com/pinpols/file-batch-system.git
+      # 仅用于首次引导；每次晋级都必须固定到 release.backendCommit。
+      targetRevision: main
+      path: helm/batch-platform
+      helm:
+        valueFiles:
+          - $values/environments/staging/values.yaml
+          - $values/environments/staging/release-images.yaml
+    - repoURL: https://github.com/pinpols/file-batch-system-ops.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: batch-staging
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

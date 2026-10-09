@@ -44,6 +44,7 @@ batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notificat
 batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/service/WebhookDeliverySupport.java	java:S2583	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/service/WebhookDispatcher.java	java:S2583	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/observability/view/dashboard/ExecutionProgressView.java	PMD.ExcessiveParameterList	1
+batch-console-api/src/main/java/io/github/pinpols/batch/console/shared/view/ConsoleWorkerRegistryResponse.java	PMD.ExcessiveParameterList	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/ops/application/contract/response/ConsoleInstanceDiagnosisResponse.java	unchecked	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/ops/infrastructure/ConsoleJobOpsSupport.java	unchecked	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/ops/infrastructure/DefaultConsoleTriggerProxyService.java	java:S1075	1
@@ -95,7 +96,7 @@ batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/ent
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/BusinessCalendarEntity.java	PMD.ExcessiveParameterList	1
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/JobDefinitionEntity.java	PMD.ExcessiveParameterList	1
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/ResultVersionEntity.java	PMD.ExcessiveParameterList	1
-batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/WorkerRegistryEntity.java	PMD.ExcessiveParameterList	2
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/WorkerRegistryEntity.java	PMD.ExcessiveParameterList	3
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/dataquality/JdbcDataQualitySqlRuleProbe.java	java:S2259	1
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/dryrun/JdbcDryRunSqlProbe.java	java:S2077	1
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/dryrun/JdbcDryRunSqlProbe.java	java:S2259	1
@@ -125,6 +126,7 @@ batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/config/A
 batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/http/HttpExecutorProperties.java	java:S1313	1
 batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/http/HttpTaskExecutor.java	unchecked	1
 batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/runtime/AtomicTaskConsumer.java	SpringJavaInjectionPointsAutowiringInspection	1
+batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/runtime/AtomicWorkerLoop.java	PMD.ExcessiveParameterList	1
 batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/sql/SqlTaskExecutor.java	java:S2077	1
 batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/storedproc/StoredProcTaskExecutor.java	java:S2077	1
 batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/config/WorkerConcurrencyProperties.java	ConfigurationProperties	1

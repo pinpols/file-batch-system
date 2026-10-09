@@ -24,8 +24,21 @@ BACKEND_SERVICES = (
     "worker-atomic",
 )
 ALL_SERVICES = ("frontend", *BACKEND_SERVICES)
+HELM_IMAGE_NAMES = {
+    "console-api": "batch-console-api",
+    "trigger": "batch-trigger",
+    "orchestrator": "batch-orchestrator",
+    "worker-import": "batch-worker-import",
+    "worker-export": "batch-worker-export",
+    "worker-process": "batch-worker-process",
+    "worker-dispatch": "batch-worker-dispatch",
+    "worker-atomic": "batch-worker-atomic",
+}
 SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
-IMAGE_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._/-]*@sha256:[0-9a-f]{64}$")
+IMAGE_PATTERN = re.compile(
+    r"^([a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]+)?/)?"
+    r"[a-z0-9][a-z0-9._/-]*@sha256:[0-9a-f]{64}$"
+)
 RELEASE_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 ROOT_FIELDS = {
     "schemaVersion",
@@ -164,6 +177,23 @@ def render_compose(manifest: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def render_helm_values(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Render immutable backend image references accepted by the Helm chart."""
+    validate_manifest(manifest)
+    return {
+        "release": {
+            "id": manifest["releaseId"],
+            "backendCommit": manifest["commits"]["backend"],
+        },
+        "image": {
+            "references": {
+                HELM_IMAGE_NAMES[service]: manifest["images"][service]
+                for service in BACKEND_SERVICES
+            }
+        },
+    }
+
+
 def backend_fragment(
     metadata: dict[str, Any], bake_plan: dict[str, Any], git_sha: str
 ) -> dict[str, Any]:
@@ -219,6 +249,12 @@ def parse_args() -> argparse.Namespace:
     render.add_argument("manifest", type=Path)
     render.add_argument("--output", type=Path)
 
+    helm_values = subparsers.add_parser(
+        "render-helm-values", help="生成 Helm GitOps values 中的不可变后端镜像引用"
+    )
+    helm_values.add_argument("manifest", type=Path)
+    helm_values.add_argument("--output", type=Path)
+
     fragment = subparsers.add_parser("backend-fragment", help="从 Bake metadata 提取后端 digest")
     fragment.add_argument("--metadata", required=True, type=Path)
     fragment.add_argument("--plan", required=True, type=Path)
@@ -240,6 +276,12 @@ def main() -> int:
                 args.output.write_text(rendered, encoding="utf-8")
             else:
                 sys.stdout.write(rendered)
+        elif args.command == "render-helm-values":
+            rendered = render_helm_values(read_json(args.manifest))
+            if args.output:
+                write_json(args.output, rendered)
+            else:
+                sys.stdout.write(json.dumps(rendered, ensure_ascii=False, indent=2) + "\n")
         elif args.command == "backend-fragment":
             write_json(
                 args.output,

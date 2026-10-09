@@ -845,7 +845,28 @@ components:
               rowsProcessed: {type: integer, format: int64}
               totalRowsHint: {type: integer, format: int64, nullable: true}
             required: [taskId, pipelineInstanceId, stageCode, rowsProcessed]
+        taskCapabilities:
+          type: array
+          nullable: true
+          description: Atomic Worker 注册时上报的执行器能力摘要；仅供 Console 运维展示，不参与调度路由；心跳不带。
+          maxItems: 128
+          items:
+            $ref: '#/components/schemas/WorkerTaskCapabilityDto'
       required: [tenantId, workerCode, status, heartbeatAt]
+
+    WorkerTaskCapabilityDto:
+      type: object
+      required: [taskType, resourceKinds, idempotent, cancellable, recommendedTimeoutMillis]
+      properties:
+        taskType: {type: string, minLength: 1, maxLength: 128}
+        resourceKinds:
+          type: array
+          minItems: 1
+          maxItems: 16
+          items: {type: string, minLength: 1}
+        idempotent: {type: boolean}
+        cancellable: {type: boolean}
+        recommendedTimeoutMillis: {type: integer, format: int64, minimum: 1}
 
     WorkerTaskTypeDescriptorDto:
       type: object

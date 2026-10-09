@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.core.domain;
 
+import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
 import java.time.OffsetDateTime;
 import java.util.List;
 import lombok.Data;
@@ -37,4 +38,7 @@ public class WorkerRegistration {
 
   /** 能力标签；心跳上报后写入 {@code worker_registry.capability_tags} JSONB，参与 selector 路由匹配。 */
   private List<String> capabilityTags;
+
+  /** 执行器能力摘要，仅用于运维查询展示。 */
+  private List<WorkerTaskCapabilityDto> taskCapabilities;
 }

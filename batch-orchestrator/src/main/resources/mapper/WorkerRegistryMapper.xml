@@ -77,6 +77,9 @@
             <arg column="build_id" javaType="java.lang.String"/>
             <arg column="sdk_version" javaType="java.lang.String"/>
             <arg column="worker_pool_code" javaType="java.lang.String"/>
+            <arg column="task_capabilities_text"
+                 javaType="io.github.pinpols.batch.orchestrator.domain.value.JsonbString"
+                 typeHandler="io.github.pinpols.batch.orchestrator.infrastructure.mybatis.JsonbStringTypeHandler"/>
         </constructor>
     </resultMap>
 
@@ -86,7 +89,8 @@
         resource_tag, status, heartbeat_at, current_load, max_concurrent,
         drain_started_at, drain_deadline_at,
         host_name, host_ip, process_id, port, build_id, sdk_version,
-        coalesce(worker_pool_code, worker_code) as worker_pool_code
+        coalesce(worker_pool_code, worker_code) as worker_pool_code,
+        task_capabilities::text as task_capabilities_text
     </sql>
 
     <select id="selectByTenantAndWorkerCode" resultMap="workerRegistryMap">
@@ -203,7 +207,7 @@
         insert into batch.worker_registry (
             tenant_id, worker_code, worker_group, capability_tags, resource_tag,
             status, heartbeat_at, current_load, max_concurrent, drain_started_at, drain_deadline_at,
-            host_name, host_ip, process_id, port, build_id, sdk_version, worker_pool_code,
+            host_name, host_ip, process_id, port, build_id, sdk_version, worker_pool_code, task_capabilities,
             created_at, updated_at
         ) values (
             #{tenantId}, #{workerCode}, #{workerGroup},
@@ -212,6 +216,7 @@
             #{status}, #{heartbeatAt}, #{currentLoad}, #{maxConcurrent},
             #{drainStartedAt}, #{drainDeadlineAt},
             #{hostName}, #{hostIp}, #{processId}, #{port}, #{buildId}, #{sdkVersion}, #{workerPoolCode},
+            cast(#{taskCapabilities.value} as jsonb),
             current_timestamp, current_timestamp
         )
         on conflict (tenant_id, worker_code) do nothing
@@ -247,6 +252,7 @@
                build_id           = coalesce(#{worker.buildId}, build_id),
                sdk_version        = coalesce(#{worker.sdkVersion}, sdk_version),
                worker_pool_code   = coalesce(#{worker.workerPoolCode}, worker_pool_code, worker_code),
+               task_capabilities = coalesce(cast(#{worker.taskCapabilities.value} as jsonb), task_capabilities),
                updated_at         = current_timestamp
          where tenant_id = #{worker.tenantId}
            and worker_code = #{worker.workerCode}
