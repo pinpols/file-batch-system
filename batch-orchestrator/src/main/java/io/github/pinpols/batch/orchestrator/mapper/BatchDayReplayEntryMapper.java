@@ -19,6 +19,7 @@ public interface BatchDayReplayEntryMapper {
 
   List<BatchDayReplayEntryEntity> selectBySessionId(@Param("sessionId") Long sessionId);
 
+  /** 按租户和会话查询 entry；status 为空时返回全部状态。 */
   List<BatchDayReplayEntryEntity> selectBySessionAndStatus(
       @Param("sessionId") Long sessionId,
       @Param("tenantId") String tenantId,

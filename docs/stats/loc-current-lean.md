@@ -1,19 +1,19 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `a315b8c9e`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `dcc6ecb4c`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,899 | 518,242 | 267,519 | 51.6% |
+| 4,899 | 518,259 | 267,528 | 51.6% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| prod | 2,796 | 255,356 | 116,931 | 45.8% |
-| test | 1,283 | 190,469 | 104,622 | 54.9% |
+| prod | 2,796 | 255,360 | 116,932 | 45.8% |
+| test | 1,283 | 190,482 | 104,630 | 54.9% |
 | script | 660 | 55,480 | 34,995 | 63.1% |
 | config | 64 | 9,111 | 6,704 | 73.6% |
 | infra-config | 32 | 5,548 | 4,095 | 73.8% |
@@ -23,11 +23,11 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,589 | 376,711 | 194,845 | 51.7% |
+| Java | 3,589 | 376,726 | 194,853 | 51.7% |
 | Shell | 210 | 31,858 | 25,048 | 78.6% |
 | Python | 258 | 36,662 | 18,977 | 51.8% |
 | YAML | 105 | 13,402 | 10,327 | 77.1% |
-| XML | 183 | 22,185 | 6,932 | 31.2% |
+| XML | 183 | 22,187 | 6,933 | 31.2% |
 | TypeScript | 37 | 6,667 | 3,141 | 47.1% |
 | Rust | 23 | 8,499 | 2,856 | 33.6% |
 | Properties | 5 | 2,899 | 2,373 | 81.9% |
@@ -58,7 +58,7 @@
 | `scripts/local/be-acceptance.sh` | script | Shell | 615 | 482 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java` | prod | Java | 975 | 469 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | prod | Java | 1,031 | 460 |
-| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java` | prod | Java | 1,042 | 458 |
+| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java` | prod | Java | 1,043 | 458 |
 
 ## 复跑
 
