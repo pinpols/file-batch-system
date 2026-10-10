@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
@@ -148,6 +149,35 @@ class OrchestratorConfigCacheServiceTest {
   }
 
   @Test
+  @DisplayName("读取工作流定义时使用一致的缓存类型键")
+  void shouldUseWorkflowDefinitionCacheType_whenReading() {
+    WorkflowDefinitionEntity cached = workflowDefinitionRecord("t1", "WF1");
+    when(redis.getJson("config:t1:workflow-definition:WF1", WorkflowDefinitionEntity.class))
+        .thenReturn(cached);
+
+    assertThat(service.findEnabledWorkflowDefinition("t1", "WF1")).isSameAs(cached);
+
+    verify(workflowDefinitionMapper, never())
+        .selectFirstByTenantAndCodeAndEnabled(any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("按工作流定义类型清除本地缓存后重新读取")
+  void shouldReloadWorkflowDefinition_whenTypeCacheEvicted() {
+    WorkflowDefinitionEntity fromDb = workflowDefinitionRecord("t1", "WF1");
+    when(redis.getJson(anyString(), eq(WorkflowDefinitionEntity.class))).thenReturn(null);
+    when(workflowDefinitionMapper.selectFirstByTenantAndCodeAndEnabled("t1", "WF1", true))
+        .thenReturn(fromDb);
+
+    assertThat(service.findEnabledWorkflowDefinition("t1", "WF1")).isSameAs(fromDb);
+    service.evictLocal("t1", "workflow-definition", "*");
+    assertThat(service.findEnabledWorkflowDefinition("t1", "WF1")).isSameAs(fromDb);
+
+    verify(workflowDefinitionMapper, times(2))
+        .selectFirstByTenantAndCodeAndEnabled("t1", "WF1", true);
+  }
+
+  @Test
   @DisplayName("同一租户配额策略连续读取两次时只有第一次访问远端缓存")
   void shouldHitRemoteCacheOnce_whenSameQuotaPolicyReadTwice() {
     TenantQuotaPolicyEntity cached = quotaPolicyRecord("t1");
@@ -185,5 +215,11 @@ class OrchestratorConfigCacheServiceTest {
   private static TenantQuotaPolicyEntity quotaPolicyRecord(String tenantId) {
     return new TenantQuotaPolicyEntity(
         1L, tenantId, "default", 10, 20, 100, 1, null, 0, 0, "NONE", 0, true, null);
+  }
+
+  private static WorkflowDefinitionEntity workflowDefinitionRecord(
+      String tenantId, String workflowCode) {
+    return new WorkflowDefinitionEntity(
+        1L, tenantId, workflowCode, "Workflow", "STANDARD", 1, true);
   }
 }
