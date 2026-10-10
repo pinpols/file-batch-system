@@ -9,6 +9,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -294,7 +295,7 @@ class JobMonitoringMapperIntegrationTest {
     long definitionId = createJobDefinition(tenant, "DEPENDENT", "MANUAL", "UPSTREAM");
     savePolicy(tenant, definitionId, 0, 60, null, 0, 120);
 
-    Instant readyAt = Instant.now().minusSeconds(300);
+    Instant readyAt = Instant.now().truncatedTo(ChronoUnit.MICROS).minusSeconds(300);
     long eligibleButNotStarted =
         insertInstance(tenant, definitionId, "READY", null, null, null, readyAt, false);
     long eligibleAndStillRunning = insertInstance(
@@ -329,7 +330,7 @@ class JobMonitoringMapperIntegrationTest {
     long definitionId = createJobDefinition(tenant, "DEPENDENT_CRON", "CRON", "UPSTREAM");
     savePolicy(tenant, definitionId, 0, 60, null, 0, 120);
 
-    Instant upstreamReadyAt = Instant.now().minusSeconds(600);
+    Instant upstreamReadyAt = Instant.now().truncatedTo(ChronoUnit.MICROS).minusSeconds(600);
     Instant plannedAfterReadyAt = upstreamReadyAt.plusSeconds(200);
     Instant readyAfterPlannedAt = upstreamReadyAt.plusSeconds(400);
     long plannedWinsId = insertInstance(
