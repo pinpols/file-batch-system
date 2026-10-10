@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.domain.entity;
 import java.time.Instant;
 
 /** 后台监控扫描命中的作业实例，不进入作业执行状态机。 */
+@SuppressWarnings("PMD.ExcessiveParameterList") // 固定 SQL 投影 DTO；字段必须与告警扫描查询一一对应。
 public record JobMonitoringAlertCandidate(
     String tenantId,
     Long jobInstanceId,

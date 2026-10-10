@@ -1,7 +1,10 @@
 ALTER TABLE batch.job_monitoring_policy
     ADD COLUMN dependency_completion_window_seconds INTEGER NOT NULL DEFAULT 0,
     ADD CONSTRAINT ck_job_monitoring_policy_dependency_completion_window
-        CHECK (dependency_completion_window_seconds >= 0);
+        CHECK (dependency_completion_window_seconds >= 0) NOT VALID;
+
+ALTER TABLE batch.job_monitoring_policy
+    VALIDATE CONSTRAINT ck_job_monitoring_policy_dependency_completion_window;
 
 COMMENT ON COLUMN batch.job_monitoring_policy.dependency_completion_window_seconds IS
     '依赖作业从上游 EFFECTIVE 就绪时刻起允许的最长完成秒数；零表示关闭此规则。';

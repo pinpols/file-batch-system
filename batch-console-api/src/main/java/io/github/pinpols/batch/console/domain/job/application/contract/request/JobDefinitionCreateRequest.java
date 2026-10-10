@@ -100,9 +100,7 @@ public class JobDefinitionCreateRequest {
 
   /** 最晚完成日期相对计划触发日的偏移：0 当日，1 次日。 */
   @Min(value = 0, message = "completionDeadlineDayOffset must be 0 or 1")
-  @jakarta.validation.constraints.Max(
-      value = 1,
-      message = "completionDeadlineDayOffset must be 0 or 1")
+  @Max(value = 1, message = "completionDeadlineDayOffset must be 0 or 1")
   private Integer completionDeadlineDayOffset;
 
   @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")

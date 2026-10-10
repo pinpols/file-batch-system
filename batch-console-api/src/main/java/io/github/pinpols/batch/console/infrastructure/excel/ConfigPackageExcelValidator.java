@@ -221,6 +221,7 @@ public class ConfigPackageExcelValidator {
     }
   }
 
+  @SuppressWarnings("PMD.ExcessiveParameterList") // 每个组件对应配置包固定 sheet，保持逐表校验结果的类型安全。
   public record PackageValidationResult(
       SheetResult resourceQueues,
       SheetResult businessCalendars,

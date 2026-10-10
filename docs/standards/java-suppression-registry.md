@@ -12,7 +12,7 @@
 | 规则 | 当前用途 | 主要归属 | 移除条件 |
 |---|---|---|---|
 | `unchecked`, `rawtypes` | Jackson/JSONB/Redis/动态 JSONB payload 的边界强转 | common、orchestrator、worker、SDK | 改为 typed DTO/`TypeReference`，且不改变动态扩展字段契约 |
-| `PMD.ExcessiveParameterList` | record、MyBatis 投影、Spring 构造注入和稳定 SPI 参数顺序 | common、console、orchestrator、SDK | 引入上下文对象后仍能保持语义清晰，并补齐构造/契约测试 |
+| `PMD.ExcessiveParameterList` | record、MyBatis 投影、Spring 构造注入、稳定 SPI 参数顺序，以及与固定 Excel sheet 一一对应的类型安全结果/上传快照 | common、console、orchestrator、SDK | 引入上下文对象后仍能保持语义清晰，并补齐构造/契约测试；固定 schema 投影需证明聚合不会削弱逐 sheet 类型安全 |
 | `PMD.NcssCount` | Excel 工作流拓扑校验的一次性图算法 | console | 拆分后仍能保持同一校验事务和中间状态可见性 |
 | `java:S112` | import/export/process/dispatch/atomic 插件 SPI 对外暴露的通用异常契约 | common、SDK、worker import | SPI 改为稳定的领域异常契约并完成五语言 SDK 兼容验证 |
 | `java:S1075` | 仅 `DefaultConsoleTriggerProxyService.ACTION_PATH` 的固定 API 路由，不是部署地址；实际 host/port 由内部客户端配置提供，守卫限制该文件最多一次 | console | 分析器能区分契约路由和环境 URL，或复用正式路由常量 |

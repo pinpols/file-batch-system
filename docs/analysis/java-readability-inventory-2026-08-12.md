@@ -13,11 +13,11 @@
 | 含 Map 的源文件 | 449 |
 | public Map 契约候选 | 54 |
 | public Map 契约候选文件 | 35 |
-| `@SuppressWarnings` | 240 |
-| 含 suppression 的源文件 | 181 |
+| `@SuppressWarnings` | 243 |
+| 含 suppression 的源文件 | 183 |
 | `@Configuration` 类 | 49 |
 | 大于等于 700 行的源文件 | 9 |
-| `PMD.ExcessiveParameterList` 显式例外 | 35 |
+| `PMD.ExcessiveParameterList` 显式例外 | 38 |
 
 ## 模块源文件
 
@@ -43,7 +43,7 @@
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageSheetSpecs.java` | 1135 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | 1031 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java` | 1004 |
-| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java` | 974 |
+| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java` | 975 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java` | 855 |
 | `batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanner.java` | 780 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/application/ops/infrastructure/DefaultConsoleOrchestratorProxyService.java` | 755 |
@@ -101,8 +101,9 @@
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/mapper/OperationAuditMapper.java` | 2 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/observability/view/dashboard/ExecutionProgressView.java` | 1 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/mapper/ConsoleApiKeyMapper.java` | 1 |
-| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java` | 1 |
+| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java` | 2 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/shared/view/ConsoleWorkerRegistryResponse.java` | 1 |
+| `batch-console-api/src/main/java/io/github/pinpols/batch/console/support/excel/TenantConfigPackageExcelImportStore.java` | 1 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/dryrun/DefaultDryRunPlanService.java` | 1 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplaySubmitCommand.java` | 1 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/command/CompensationSubmitCommand.java` | 2 |
@@ -111,6 +112,7 @@
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/BatchDayReplaySessionEntity.java` | 1 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/BusinessCalendarEntity.java` | 1 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/JobDefinitionEntity.java` | 1 |
+| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/JobMonitoringAlertCandidate.java` | 1 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/ResultVersionEntity.java` | 1 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/WorkerRegistryEntity.java` | 3 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/mq/OutboxPollScheduler.java` | 1 |

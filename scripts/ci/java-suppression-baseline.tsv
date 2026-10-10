@@ -44,7 +44,6 @@ batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notificat
 batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/service/WebhookDeliverySupport.java	java:S2583	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/service/WebhookDispatcher.java	java:S2583	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/observability/view/dashboard/ExecutionProgressView.java	PMD.ExcessiveParameterList	1
-batch-console-api/src/main/java/io/github/pinpols/batch/console/shared/view/ConsoleWorkerRegistryResponse.java	PMD.ExcessiveParameterList	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/ops/application/contract/response/ConsoleInstanceDiagnosisResponse.java	unchecked	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/ops/infrastructure/ConsoleJobOpsSupport.java	unchecked	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/ops/infrastructure/DefaultConsoleTriggerProxyService.java	java:S1075	1
@@ -59,13 +58,15 @@ batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/c
 batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultTenantConfigPackageExcelService.java	java:S2583	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigPackageExcelValueSupport.java	java:S2583	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigReferenceResolver.java	unchecked	1
-batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java	PMD.ExcessiveParameterList	1
+batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java	PMD.ExcessiveParameterList	2
 batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java	java:S2583	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/WorkflowGraphTopologyValidator.java	PMD.NcssCount	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/service/ConsoleResponseFactory.java	unchecked	1
+batch-console-api/src/main/java/io/github/pinpols/batch/console/shared/view/ConsoleWorkerRegistryResponse.java	PMD.ExcessiveParameterList	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/support/cache/ConsoleQueryCacheService.java	java:S2583	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/support/excel/ConsoleSingleSheetExcelImportSupport.java	java:S2259	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/support/excel/DropdownValidationSpec.java	java:S6218	1
+batch-console-api/src/main/java/io/github/pinpols/batch/console/support/excel/TenantConfigPackageExcelImportStore.java	PMD.ExcessiveParameterList	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/support/web/ConsoleResponseFieldReader.java	unchecked	5
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/engine/TaskDispatchOutboxService.java	unchecked	2
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/plan/BundlePlanParams.java	unchecked	1
@@ -85,7 +86,6 @@ batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/applicatio
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowFanOutSupport.java	unchecked	1
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowGraphValidator.java	java:S2583	1
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowGraphValidator.java	java:S6218	1
-batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowGraphValidator.java	unchecked	1
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowNodePayloadBuilder.java	unchecked	5
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/trigger/StaleCreatedLaunchRecoveryScheduler.java	unchecked	1
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/WorkerRegistryProperties.java	ConfigurationProperties	1
@@ -95,6 +95,7 @@ batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/ent
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/BatchDayReplaySessionEntity.java	PMD.ExcessiveParameterList	1
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/BusinessCalendarEntity.java	PMD.ExcessiveParameterList	1
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/JobDefinitionEntity.java	PMD.ExcessiveParameterList	1
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/JobMonitoringAlertCandidate.java	PMD.ExcessiveParameterList	1
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/ResultVersionEntity.java	PMD.ExcessiveParameterList	1
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/WorkerRegistryEntity.java	PMD.ExcessiveParameterList	3
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/dataquality/JdbcDataQualitySqlRuleProbe.java	java:S2259	1
@@ -199,5 +200,4 @@ sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/handler/typed/SdkAbstrac
 sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/handler/typed/SdkAbstractTypedImportHandler.java	java:S112	1
 sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/handler/typed/SdkAbstractTypedProcessHandler.java	java:S112	1
 sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/task/SdkTaskContext.java	PMD.ExcessiveParameterList	4
-sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/wire/RegisterRequest.java	PMD.ExcessiveParameterList	1
 sdk/java/testkit/src/main/java/io/github/pinpols/batch/sdk/testkit/FakeBatchPlatform.java	unchecked	2

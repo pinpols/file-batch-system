@@ -44,3 +44,5 @@ CREATE TABLE batch.job_monitoring_alert_claim (
 
 COMMENT ON TABLE batch.job_monitoring_alert_claim IS
     '异步作业监控告警的幂等 claim；与 job_instance 生命周期写入隔离。';
+COMMENT ON COLUMN batch.job_monitoring_alert_claim.violation_type IS
+    '告警违规类型；与租户和作业实例共同构成幂等 claim 主键。';
