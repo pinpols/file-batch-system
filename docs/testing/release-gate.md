@@ -75,9 +75,9 @@ bash scripts/ci/run-full-regression.sh
 - `*IT` 套件通过
 - `load-tests/` 至少完成一次 `test-compile`
 
-### Nightly E2E Gate
+### 手动全量 E2E 复验
 
-目标：在 GitHub-hosted runner 上定时或手动运行六片全量 E2E 和 Java 治理检查。当前 workflow 不部署到 staging 集群，也不执行 live rollout、负载测试或巡检。
+目标：按需在 GitHub-hosted runner 上运行六片全量 E2E 和 Java 治理检查。当前 workflow 仅手动触发，不部署到 staging 集群，也不执行 live rollout、负载测试或巡检。
 
 真实 workflow：
 
@@ -93,7 +93,7 @@ bash scripts/ci/run-full-regression.sh \
   --with-inspection
 ```
 
-以上命令只是脚本可选能力，不代表 nightly E2E workflow 会执行这些步骤。实际发布前应根据变更风险明确运行并留存对应证据：
+以上命令只是脚本可选能力，不代表手动 E2E workflow 会执行这些步骤。实际发布前应根据变更风险明确运行并留存对应证据：
 
 - Full CI Gate 全部通过
 - Helm deploy smoke 通过
@@ -195,10 +195,10 @@ deploy smoke 现在分两层：
 
 - PR Gate 负责合入前、按变更范围路由的检查和测试。
 - Full CI Gate 在 main push 后运行全量回归，并按周或手动执行质量分析。
-- `staging-gate` 每日定时或手动执行全量 E2E 和 Java 治理，不连接 staging 集群。
+- `staging-gate` 手动执行全量 E2E 和 Java 治理，不连接 staging 集群；主干代码变更由 `full-ci-gate` 验证。
 - Daily SIM/strict workflow 独立运行真实数据验证；是否执行取决于计划日期的代码/配置变更检测或手动触发。
 
-本地脚本的 deploy smoke、live deployment verification、load smoke/capacity 和 inspection 是可选能力。它们只有在命令实际执行并保存结果后，才能作为对应环境的验证证据；不能由 nightly E2E 的成功状态推导出来。
+本地脚本的 deploy smoke、live deployment verification、load smoke/capacity 和 inspection 是可选能力。它们只有在命令实际执行并保存结果后，才能作为对应环境的验证证据；不能由 Full CI 或手动 E2E 的成功状态推导出来。
 
 ---
 

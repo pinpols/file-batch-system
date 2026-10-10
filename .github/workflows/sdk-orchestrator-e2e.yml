@@ -1,7 +1,7 @@
 name: sdk-orchestrator-e2e
 
 # =============================================================================
-# BYO SDK 样例 worker × 真 orchestrator 端到端(nightly / 非 required check)
+# BYO SDK 样例 worker × 真 orchestrator 端到端(相关 main 变更 / 手动，非 required check)
 #
 # 补 SDK 测试最大缺口:per-PR 的 sdk-contract-parity / live-transport 只打 fake HTTP
 # stub + 真 Kafka;真实 orchestrator 的鉴权 / worker 注册 / 心跳 directive 往返从未
@@ -12,19 +12,42 @@ name: sdk-orchestrator-e2e
 # report + terminal。fixture 自包含,不依赖 system-test seed。
 #
 # **非 required check**:本 wf 不进分支保护。单次运行内五种语言均为硬门禁，
-# 任一语言未到 terminal SUCCESS 都会使工作流失败。触发方式 = nightly cron + 手动
-# (workflow_dispatch)。e2e 真栈不适合当每-PR
-# 硬门禁(~数分钟启动 + 偶发 flaky)。
+# 任一语言未到 terminal SUCCESS 都会使工作流失败。PR 使用分层的 SDK 快速门禁；
+# main 上相关代码变更后运行真栈 E2E，另保留手动入口，不在无变更时重复构建整套环境。
 #
 # 本 wf 使用自包含的 queue/job fixture，不依赖 system-test seed，也不与内建 worker
 # 竞争 claim。诊断(容器日志 / DB 行 / worker 日志)失败时全量打印。
 # =============================================================================
 
 on:
-  schedule:
-    - cron: '0 18 * * *'   # 每日 02:00 Asia/Shanghai(UTC 18:00)
+  push:
+    branches: [main]
+    paths:
+      - 'sdk/**'
+      - '!sdk/**/*.md'
+      - 'examples/self-hosted-sdk/**'
+      - '!examples/self-hosted-sdk/**/*.md'
+      - 'batch-common/**'
+      - 'batch-orchestrator/**'
+      - 'batch-trigger/**'
+      - '.env.example'
+      - 'db/migration/**'
+      - 'docs/api/orchestrator-internal.openapi.yaml'
+      - 'docs/api/sdk-shared-constants.yaml'
+      - 'docs/api/sdk-contract-fixtures/**'
+      - 'deploy/docker/**'
+      - 'docker-compose.yml'
+      - 'pom.xml'
+      - '**/pom.xml'
+      - 'scripts/docker/**'
+      - 'scripts/ci/run-sdk-orchestrator-e2e.sh'
+      - 'scripts/lib/env-common.sh'
+      - 'scripts/lib/runtime-defaults.sh'
+      - 'scripts/lib/sdk-e2e-common.sh'
+      - 'scripts/lib/sql/**'
+      - '.github/workflows/sdk-orchestrator-e2e.yml'
   workflow_dispatch:
-  # 真栈启动成本较高，因此只做 schedule + 手动；PR 使用分层的 SDK 快速门禁。
+  # 真栈成本较高，不作为每个 PR 的必需门禁；相关 main 变更后自动验证。
 
 permissions:
   contents: read

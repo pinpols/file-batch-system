@@ -1,7 +1,7 @@
 name: pr-gate
 
 # PR 合入门禁：按变更范围运行静态检查、测试分片和安全扫描；E2E 在 Full CI
-# 与独立 nightly E2E workflow 执行。具体路由以本 workflow 和 docs/runbook/ci.md 为准。
+# 的 main/每周回归中执行，另可通过 staging-gate 手动复验。路由以本 workflow 和 runbook 为准。
 #
 # Job 名(unit-it-a / unit-it-b1 / unit-it-b2)不动,因为 ruleset required check 配置在
 # 这 3 个名字上;改名会导致 ruleset 失配。命令从 `mvn verify`(failsafe IT)改成
@@ -736,8 +736,8 @@ jobs:
   # ===========================================================================
   # 4 个 Maven unit 执行分片按依赖边界路由；B2 Worker / Console 并行后由
   # 稳定的 unit-it-b2 required context 聚合。
-  # 当前分片只执行范围路由后的 Maven 测试，不执行 E2E；完整 E2E 由 Full CI
-  # 与独立 nightly E2E workflow 执行。
+  # 当前分片只执行范围路由后的 Maven 测试，不执行 E2E；完整 E2E 由 main/每周 Full CI
+  # 执行，也可通过 staging-gate 手动复验。
   # required job 名 unit-it-a / unit-it-b1 / unit-it-b2 保留(ruleset context 锁定)。
   #
   # Job 2: unit-shard-1 — orchestrator + worker-core
@@ -1005,7 +1005,7 @@ jobs:
 
   # ===========================================================================
   # NOTE: e2e-smoke 已从 pr-gate 移除(C 方案 #1)。
-  # PR 不运行 E2E；Full CI Gate 和 staging-gate.yml 分别在 main push、nightly/手动执行。
+  # PR 不运行 E2E；Full CI Gate 在 main push/每周回归运行，staging-gate.yml 用于手动复验。
   # 如需 PR 阶段重新引入 smoke,从 git history 恢复 e2e-smoke job。
   # ===========================================================================
 
