@@ -1085,13 +1085,14 @@ assertThatThrownBy(() -> service.doSth()).isInstanceOf(BizException.class);
 
 ### 14.8 测试数据与配置事实来源
 
-- 测试输入依赖平台已有定义时，优先复用生产 DTO、枚举、配置属性、公共 fixture 或 `batch-test-support`，避免重复维护平台已经提供的值。跨模块共享的测试默认配置放在测试支持模块；模块专属配置留在对应模块的 `src/test/resources/application-test.yml`。
+- 测试输入依赖平台已有定义时，优先复用生产 DTO、枚举、配置属性、公共 fixture 或 `batch-test-support`，避免重复维护平台已经提供的值。跨模块共享的测试 profile 默认配置统一放在 `batch-test-support/src/main/resources/batch-test-defaults.yml`；模块专属配置和场景覆盖留在对应模块的 `src/test/resources/application-test.yml` 或测试类。
 - 多个集成测试共享的 Spring 属性应优先由 `AbstractIntegrationTest`、测试 profile 配置或共享测试资源提供；不要在每个 `@SpringBootTest(properties = ...)` 重复声明相同默认值。单个测试确需覆盖属性时保留本地声明，并说明被验证的配置差异。
 - 测试与验收脚本访问平台服务时，应加载 `scripts/lib/env-common.sh` 并使用其中的环境变量；不得在脚本内重复定义平台端口、容器或基础设施默认值。脚本专属的场景参数可保留为可覆盖变量；真实服务端口、凭据等不得与平台配置事实源分叉。门禁只检查已知共享配置边界，不禁止业务样例、独立契约预期或场景专属参数字面量。
 - 共享测试资源只能通过 test scope 使用，不得让测试默认值进入应用运行时配置或生产依赖。新增共享 fixture 时核对模块依赖方向和打包范围。
 - 契约回归测试应保留独立预期值：例如对外 API/序列化字段、公开配置默认值、权限边界，以及 MyBatis XML 状态分类与领域状态集合的对照。不要让被测实现和预期断言引用同一常量，否则常量变化会同时改写两边而漏掉漂移。
 - 不把所有状态、角色、租户标识、JSON 字段或测试参数机械集中到全局常量类。只抽取语义稳定、确有多处复用且所有权明确的值；业务策略不同的值保持局部表达，并用专项测试说明口径。
 - fixture/mock 只能证明其模拟边界内的行为。事务、SQL、并发和租户隔离按风险使用真实数据库集成测试；消息传输、调度和浏览器链路按风险选择集成或端到端验证，并区分 mock、容器与真实环境证据。
+- `scripts/ci/check-test-config-sources.py` 校验各模块的 `application-test.yml` 已导入共享配置，且未重复声明共享配置项；它不禁止 Java 测试为验证行为而显式覆盖配置。修改共享测试配置、模块测试 profile 或该门禁时，应运行其自测和全量扫描。
 
 ---
 

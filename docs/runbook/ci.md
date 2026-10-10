@@ -293,6 +293,7 @@ PR 所有单元分片均设置 `-DskipITs=true`；集成和 E2E 由 Full Gate �
 | `check-config-governance.py`、`check-env-variable-governance.py` | 按域触发的全量：配置绑定、环境变量治理入口变更时运行 |
 | `check-production-capacity-governance.py` | 按域触发的全量：生产容量巡检脚本、只读 SQL、runbook 和 workflow 入口变更时运行 |
 | `check-hardcoded-runtime-config.sh` | 按域触发的全量：运行配置、脚本、容器、测试基础设施变更时运行；检查 BE 验收脚本的平台服务端口必须来自公共环境配置 |
+| `check-test-config-sources.py` | PR、Full Gate 与本地 pre-push；确保各模块导入共享测试配置且不在 `application-test.yml` 重复定义共享项；不拦截 Java 测试的场景覆盖值 |
 | `check-changelog-sync.py --base <base>` | 按域触发的增量：发布敏感配置、契约、迁移或架构规范变更时运行 |
 | Java readability inventory 自动刷新 | Java 变更时刷新全局清单 |
 | Shell 脚本检查 / Docker bake 配置解析 | 仅变更命中的文件或配置 |

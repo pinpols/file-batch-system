@@ -1,5 +1,42 @@
-# 集成测试不覆盖 Spring 调度线程池的优雅收尾，关闭等待以缩短测试进程退出时间。
+# 集成测试共享配置：固定迁移位置，并降低后台调度对测试时序的干扰。
+spring:
+  flyway:
+    locations: classpath:db/migration
+
 batch:
+  rls:
+    startup-fail-fast: false
+  sla:
+    enabled: false
+  file-governance:
+    latency:
+      enabled: false
+    archive:
+      enabled: false
+    reconcile:
+      enabled: false
+    arrival:
+      enabled: false
+    access:
+      enabled: false
+  outbox:
+    poll-interval-millis: 600000
+    min-poll-interval-millis: 600000
+  retry:
+    poll-interval-millis: 600000
+  partition-lease:
+    reclaim-interval-millis: 600000
+  resource-scheduler:
+    waiting-dispatch-interval-millis: 600000
+    quota-reset-scan-interval-millis: 600000
+    quota-reset-enabled: false
+  scheduler:
+    snapshot-persist-enabled: false
+    snapshot-persist-ms: 600000
+  worker:
+    drain:
+      enabled: false
   scheduling:
+    # 测试不覆盖优雅收尾，关闭等待以缩短测试进程退出时间。
     wait-for-tasks-to-complete-on-shutdown: false
     await-termination-seconds: 1

@@ -2,13 +2,10 @@ spring:
   config:
     import: classpath:batch-test-defaults.yml
   flyway:
-    locations: classpath:db/migration
     baseline-on-migrate: true
 
 # 集成测常用 platform PG：未必迁出 batch.process_staging；禁用孤儿清理调度避免调度线程刷 ERROR。
 batch:
-  rls:
-    startup-fail-fast: false
   worker:
     registry:
       # 该配置测试只验证 YAML 绑定，不依赖真实 orchestrator；避免 ApplicationReady 时连本地 18082 注册。

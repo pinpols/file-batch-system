@@ -96,6 +96,10 @@ jobs:
         shell: bash
         run: bash scripts/ci/run-gate.sh FULL_RUNTIME_CONFIG_BOUNDARIES "运行时配置集中管理" -- bash scripts/ci/check-hardcoded-runtime-config.sh
 
+      - name: Verify test configuration sources
+        shell: bash
+        run: bash scripts/ci/run-gate.sh FULL_TEST_CONFIG_SOURCES "测试配置事实来源" -- python3 scripts/ci/check-test-config-sources.py
+
       - name: Verify repository hygiene
         shell: bash
         run: bash scripts/ci/run-gate.sh FULL_REPOSITORY_HYGIENE "仓库卫生" -- python3 scripts/ci/check-repository-hygiene.py

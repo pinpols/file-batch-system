@@ -128,6 +128,7 @@ while IFS= read -r java_file; do
 done <<< "$CHANGED_JAVA"
 CHANGED_ENV_GOVERNANCE=$(echo "$CHANGED_FILES" | grep -E "^(\.env\.example|docs/runbook/(environment-variable-governance|feature-switch|config-ops-tiering)|scripts/ci/check-(feature-switch-registry|config-defaults-sync|helm-env-sync|config-governance)\.py|deploy/docker/compose/|helm/)" || true)
 CHANGED_RUNTIME_CONFIG=$(echo "$CHANGED_FILES" | grep -E "^((scripts|load-tests/scripts)/.*\.sh|deploy/docker/|helm/|docker-compose.*\.ya?ml|Makefile|batch-.*/src/(main|test)/.*\.(java|ya?ml)|\.env[^/]*)$" || true)
+CHANGED_TEST_CONFIG_SOURCE=$(echo "$CHANGED_FILES" | grep -E "^(batch-.*/src/test/.*\.(java|ya?ml)|batch-test-support/src/main/resources/batch-test-defaults\.yml|scripts/ci/check-test-config-sources\.py)$" || true)
 CHANGED_RELEASE_SENSITIVE=$(echo "$CHANGED_FILES" | grep -E "^(db/migration/|deploy/docker/|deploy/ha/|helm/batch-platform/(templates|files)/|docs/api/sdk-contract-fixtures/|pom\.xml|\.env\.example|docker-compose(\.kafka-ha)?\.yml|helm/batch-platform/(Chart|values|values-canary)\.yaml|helm/values-prod\.yaml|docs/api/(console-api\.openapi|orchestrator-internal\.openapi|sdk-shared-constants)\.yaml|docs/agent-baseline\.md|docs/architecture/adr/)" || true)
 CHANGED_JAVA_GOVERNANCE=$(echo "$CHANGED_FILES" | grep -E "(^|/)(pom\.xml|.*\.java)$|^scripts/ci/(check-java-governance-test-coverage\.py|run-java-governance-tests\.sh)$|^\.github/workflows/(pr-gate|full-ci-gate|staging-gate)\.yml$" || true)
 
@@ -210,6 +211,12 @@ fi
 if [[ -n "$CHANGED_RUNTIME_CONFIG" ]]; then
   if ! bash scripts/ci/check-hardcoded-runtime-config.sh; then
     fail "硬编码运行时配置检查失败"
+  fi
+fi
+
+if [[ -n "$CHANGED_TEST_CONFIG_SOURCE" ]]; then
+  if ! "$PYTHON_BIN" scripts/ci/check-test-config-sources.py; then
+    fail "测试配置事实来源检查失败"
   fi
 fi
 
