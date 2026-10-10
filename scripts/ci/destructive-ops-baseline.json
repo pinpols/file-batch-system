@@ -1,6 +1,8 @@
 {
   ".github/workflows/daily-sim-strict-validation.yml|docker-delete": 1,
   ".github/workflows/daily-sim-strict-validation.yml|filesystem-remove": 1,
+  ".github/workflows/sonar-gate.yml|docker-delete": 1,
+  ".github/workflows/sonar-gate.yml|filesystem-remove": 1,
   ".github/workflows/full-ci-gate.yml|docker-delete": 4,
   ".github/workflows/full-ci-gate.yml|filesystem-remove": 4,
   ".github/workflows/staging-gate.yml|docker-delete": 1,
