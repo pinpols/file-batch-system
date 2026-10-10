@@ -108,7 +108,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Python guard environment
-        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.ci == 'true'
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.tests == 'true' || needs.changes.outputs.ci == 'true'
         uses: ./.github/actions/setup-python-guard-env
 
       - name: Verify repository text encoding
@@ -187,6 +187,14 @@ jobs:
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.tests == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         run: bash scripts/ci/run-gate.sh PR_TEST_CONFIG_SOURCES "测试配置事实来源" -- python3 scripts/ci/check-test-config-sources.py
+
+      - name: Verify simulation Excel fixtures
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.tests == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        run: |
+          source scripts/lib/gate-result.sh
+          gate_run PR_SIM_XLSX_FIXTURES "Sim 配置包 Excel schema" python3 scripts/fix-fixture-xlsx.py --check
+          gate_run PR_SIM_XLSX_FIXTURE_TEST "Sim 配置包 Excel schema 门禁测试" python3 -m unittest scripts/ci/tests/test_fix_fixture_xlsx.py
 
       - name: Verify repository hygiene
         shell: bash

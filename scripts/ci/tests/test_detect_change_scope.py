@@ -117,6 +117,16 @@ class DetectChangeScopeTest(unittest.TestCase):
         self.assertTrue(result["docs"])
         self.assertTrue(result["api"])
 
+    def test_excel_test_fixture_is_documentation_and_test_scope(self) -> None:
+        result = MODULE.classify_paths(
+            ["docs/test-data/test-full-coverage-import-suite/ta-tenant-config-package-test.xlsx"]
+        )
+
+        self.assertTrue(result["docs"])
+        self.assertTrue(result["tests"])
+        self.assertFalse(result["docs-only"])
+        self.assertFalse(result["unit-required"])
+
     def test_unknown_files_fail_closed(self) -> None:
         result = MODULE.classify_paths(["some-new-root-format.bin"])
 

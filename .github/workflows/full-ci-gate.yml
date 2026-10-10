@@ -100,6 +100,13 @@ jobs:
         shell: bash
         run: bash scripts/ci/run-gate.sh FULL_TEST_CONFIG_SOURCES "测试配置事实来源" -- python3 scripts/ci/check-test-config-sources.py
 
+      - name: Verify simulation Excel fixtures
+        shell: bash
+        run: |
+          source scripts/lib/gate-result.sh
+          gate_run FULL_SIM_XLSX_FIXTURES "Sim 配置包 Excel schema" python3 scripts/fix-fixture-xlsx.py --check
+          gate_run FULL_SIM_XLSX_FIXTURE_TEST "Sim 配置包 Excel schema 门禁测试" python3 -m unittest scripts/ci/tests/test_fix_fixture_xlsx.py
+
       - name: Verify repository hygiene
         shell: bash
         run: bash scripts/ci/run-gate.sh FULL_REPOSITORY_HYGIENE "仓库卫生" -- python3 scripts/ci/check-repository-hygiene.py

@@ -6,6 +6,8 @@
 
 `job_monitoring_policy` 中无依赖 Cron 使用 `completion_deadline_local_time` / `completion_deadline_day_offset`；依赖作业使用 `dependency_completion_window_seconds`，从满足执行资格时刻起算。固定频率独立作业仅适用运行耗时监控；运行耗时阈值不统一默认开启。
 
+修改工作簿、生成脚本或配置包导入 schema 后，必须执行 `python3 scripts/fix-fixture-xlsx.py --check`。需要按当前 schema 重排并修复存量工作簿时，先运行不带 `--check` 的命令并审查二进制差异，再执行检查模式确认四份 fixture 全部通过。
+
 - `ta/tb/tc-tenant-config-package-test.xlsx`：三大业务租户样本。按租户分工覆盖枚举长尾——ta 补 IMPORT FEEDBACK 全链 / EXPORT 全链 / LOCAL channel；tb 补 DISPATCH 全链 / API channel；tc 补 GATEWAY ALL 与 N_OF join + FAILURE / CONDITION 边。幂等追加脚本 `scripts/local/append-tenant-coverage.py`。
 - `default-tenant-config-package-test.xlsx`：与 `batch-test-support/src/main/resources/db/testdata/multi-tenant-seed.sql` 中 v4 硬化批次新增的 `default-tenant` 项对齐（4 条本地化 channel_config + `wf_probe_pipeline` / `wf_probe_gateway` / `wf_probe_mixed` 3 条探针 workflow + 对应 job_definition）。生成脚本 `scripts/local/gen-default-tenant-excel.py`。
 
