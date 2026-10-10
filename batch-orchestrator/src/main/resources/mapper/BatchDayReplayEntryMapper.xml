@@ -65,7 +65,9 @@
         select * from batch.batch_day_replay_entry
         where session_id = #{sessionId}
           and tenant_id = #{tenantId}
+        <if test="status != null">
           and status = #{status}
+        </if>
         order by id asc
         limit #{limit}
     </select>

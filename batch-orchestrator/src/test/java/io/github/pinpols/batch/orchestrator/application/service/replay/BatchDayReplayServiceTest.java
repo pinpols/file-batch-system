@@ -681,6 +681,22 @@ class BatchDayReplayServiceTest {
   }
 
   @Test
+  @DisplayName("查询重放条目时空白状态表示全部,显式状态仍传给 mapper")
+  void shouldNormalizeBlankEntryStatus_whenListingEntries() {
+    when(sessionMapper.selectById("t1", 5L))
+        .thenReturn(sessionAt("t1", 5L, "RUNNING", "ALL_FAILED"));
+    when(entryMapper.selectBySessionAndStatus(5L, "t1", null, 20)).thenReturn(List.of());
+    when(entryMapper.selectBySessionAndStatus(5L, "t1", "PENDING", 20)).thenReturn(List.of());
+
+    assertThat(service.listEntries("t1", 5L, null, 20)).isEmpty();
+    assertThat(service.listEntries("t1", 5L, " ", 20)).isEmpty();
+    assertThat(service.listEntries("t1", 5L, "PENDING", 20)).isEmpty();
+
+    verify(entryMapper, times(2)).selectBySessionAndStatus(5L, "t1", null, 20);
+    verify(entryMapper).selectBySessionAndStatus(5L, "t1", "PENDING", 20);
+  }
+
+  @Test
   @DisplayName("执行仅产出会话时逐条提升结果版本, 完成后会话置为成功")
   void shouldPromoteEachEntryAndComplete_whenExecutingOutputsOnly() {
     when(sessionMapper.selectById("t1", 5L))

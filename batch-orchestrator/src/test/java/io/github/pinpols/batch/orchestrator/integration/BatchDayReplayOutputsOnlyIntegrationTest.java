@@ -164,9 +164,22 @@ class BatchDayReplayOutputsOnlyIntegrationTest extends AbstractIntegrationTest {
         .isEqualTo(2);
     assertThat(session.status()).isEqualTo("RUNNING");
     assertThat(session.totalCount()).isEqualTo(2);
-    assertThat(entryMapper.selectBySessionId(session.id()))
-        .extracting("resultVersionId")
-        .containsExactly(v2Id, v3Id);
+    var initialEntries = entryMapper.selectBySessionId(session.id());
+    assertThat(initialEntries).extracting("resultVersionId").containsExactly(v2Id, v3Id);
+
+    // 默认列表包含所有状态；显式状态过滤和租户隔离仍然生效。
+    jdbcTemplate.update(
+        "update batch.batch_day_replay_entry set status='FAILED' where id=?",
+        initialEntries.get(0).id());
+    assertThat(replayService.listEntries(TENANT, session.id(), null, 20)).hasSize(2);
+    assertThat(replayService.listEntries(TENANT, session.id(), " ", 20)).hasSize(2);
+    assertThat(replayService.listEntries(TENANT, session.id(), "PENDING", 20)).hasSize(1);
+    assertThat(replayService.listEntries(TENANT, session.id(), "FAILED", 20)).hasSize(1);
+    assertThat(entryMapper.selectBySessionAndStatus(session.id(), "other-tenant", null, 20))
+        .isEmpty();
+    jdbcTemplate.update(
+        "update batch.batch_day_replay_entry set status='PENDING' where id=?",
+        initialEntries.get(0).id());
 
     // Step 3: 同步执行 OUTPUTS_ONLY → 同 source_instance_id 的 v2/v3 都不能被唯一键吞掉，最终 v3 生效
     BatchDayReplaySessionEntity completed = replayService.executeOutputsOnly(TENANT, session.id());

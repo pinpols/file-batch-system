@@ -434,7 +434,8 @@ public class BatchDayReplayService {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.invalid_argument");
     }
     loadOrThrow(tenantId, sessionId);
-    return entryMapper.selectBySessionAndStatus(sessionId, tenantId, status, limit);
+    return entryMapper.selectBySessionAndStatus(
+        sessionId, tenantId, defaultIfBlank(status, null), limit);
   }
 
   /** PENDING_APPROVAL → RUNNING；记录 approver。 */
