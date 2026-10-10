@@ -124,7 +124,7 @@ class BatchDayReplayOutputsOnlyIntegrationTest extends AbstractIntegrationTest {
     assertThat(v3Id).isNotNull();
 
     // Step 2: 提交 OUTPUTS_ONLY session，autoApprove 直接 RUNNING
-    BatchDayReplaySessionEntity session = replayService.submit(BatchDayReplaySubmitCommand.builder()
+    BatchDayReplaySubmitCommand command = BatchDayReplaySubmitCommand.builder()
         .tenantId(TENANT)
         .calendarCode(CALENDAR)
         .bizDate(BIZ_DATE)
@@ -135,7 +135,33 @@ class BatchDayReplayOutputsOnlyIntegrationTest extends AbstractIntegrationTest {
         .reason("regulatory restate IT")
         .requestedBy("ops")
         .autoApprove(true)
-        .build());
+        .build();
+    String previewToken = replayService.preview(command).previewToken();
+    BatchDayReplaySubmitCommand submitCommand = new BatchDayReplaySubmitCommand(
+        command.tenantId(),
+        command.calendarCode(),
+        command.bizDate(),
+        command.scope(),
+        command.jobCodes(),
+        command.versionIds(),
+        command.resultPolicy(),
+        command.configVersionPolicy(),
+        command.configVersion(),
+        command.reason(),
+        command.requestedBy(),
+        command.autoApprove(),
+        command.traceId(),
+        command.executionMode(),
+        command.candidateSource(),
+        previewToken);
+    BatchDayReplaySessionEntity session = replayService.submit(submitCommand);
+    BatchDayReplaySessionEntity retry = replayService.submit(submitCommand);
+    assertThat(retry.id()).isEqualTo(session.id());
+    assertThat(jdbcTemplate.queryForObject(
+            "select count(*) from batch.batch_day_replay_entry where session_id=?",
+            Integer.class,
+            session.id()))
+        .isEqualTo(2);
     assertThat(session.status()).isEqualTo("RUNNING");
     assertThat(session.totalCount()).isEqualTo(2);
     assertThat(entryMapper.selectBySessionId(session.id()))

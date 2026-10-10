@@ -7,7 +7,7 @@
 
 | 指标 | 数量 |
 |---|---:|
-| 生产 Java 源文件 | 2436 |
+| 生产 Java 源文件 | 2438 |
 | CGLIB 自注入类 | 0 |
 | `Map<String, Object>` 出现次数 | 2015 |
 | 含 Map 的源文件 | 449 |
@@ -25,7 +25,7 @@
 |---|---:|
 | `batch-common` | 333 |
 | `batch-console-api` | 985 |
-| `batch-orchestrator` | 557 |
+| `batch-orchestrator` | 559 |
 | `batch-trigger` | 76 |
 | `batch-worker` | 384 |
 | `sdk` | 92 |
@@ -41,10 +41,10 @@
 | 文件 | 行数 |
 |---|---:|
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageSheetSpecs.java` | 1135 |
+| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java` | 1042 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | 1031 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java` | 1004 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java` | 975 |
-| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java` | 855 |
 | `batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanner.java` | 780 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/application/ops/infrastructure/DefaultConsoleOrchestratorProxyService.java` | 755 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultCompensationService.java` | 724 |

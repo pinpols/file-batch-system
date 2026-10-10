@@ -23,12 +23,14 @@ import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanCommand
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionPromoteService;
 import io.github.pinpols.batch.orchestrator.config.BatchDayDryRunProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayPreviewTokenEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayPlanCalendarMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayEntryMapper;
+import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayPreviewTokenMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplaySessionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.DisasterDayOverrideMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
@@ -36,19 +38,25 @@ import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.view.BatchDayReplayAssetPartitionImpactView;
 import io.github.pinpols.batch.orchestrator.mapper.view.BatchDayReplayDispatchImpactView;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,7 +67,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>覆盖能力：
  *
  * <ul>
- *   <li>{@link #submit(BatchDayReplaySubmitCommand)} —— 创建 session + 物化 entries（按 scope 解析候选）；
+ *   <li>{@link #submit(BatchDayReplaySubmitCommand)} —— 校验一次性预览凭证，创建 session + 物化 entries；
  *       autoApprove=true 直接 RUNNING，否则 PENDING_APPROVAL；
  *   <li>{@link #approve} / {@link #cancel} —— 状态机推进；
  *   <li>{@link #executeOutputsOnly} —— OUTPUTS_ONLY scope 的同步路径，直接调用 {@link
@@ -82,9 +90,13 @@ public class BatchDayReplayService {
   static final String ENTRY_PENDING = "PENDING";
   static final String ENTRY_SUCCEEDED = "SUCCEEDED";
   static final String ENTRY_FAILED = "FAILED";
+  private static final Duration PREVIEW_TOKEN_TTL = Duration.ofMinutes(5);
+  private static final Duration CONSUMED_PREVIEW_RETENTION = Duration.ofHours(24);
+  private static final int EXPIRED_PREVIEW_CLEANUP_LIMIT = 500;
 
   private final BatchDayReplaySessionMapper sessionMapper;
   private final BatchDayReplayEntryMapper entryMapper;
+  private final BatchDayReplayPreviewTokenMapper previewTokenMapper;
   private final JobInstanceMapper jobInstanceMapper;
   private final ResultVersionMapper resultVersionMapper;
   private final ResultVersionPromoteService promoteService;
@@ -97,27 +109,39 @@ public class BatchDayReplayService {
   private final BatchTimezoneProvider timezoneProvider;
 
   /**
-   * 提交 replay session：写聚合 + 物化 entries。同 (tenant, calendarCode, bizDate) 已存在 active session 则拒绝。
+   * 提交 replay session：校验并消费预览凭证，再写聚合与预览时确认的 entries。
    */
   @Transactional
   public BatchDayReplaySessionEntity submit(BatchDayReplaySubmitCommand command) {
     validateCommand(command);
     Instant now = dateTimeSupport.nowInstant();
-
-    String scope = normalizeScope(command.scope());
-    String executionMode = normalizeExecutionMode(command.executionMode());
-    String candidateSource = normalizeCandidateSource(command.candidateSource());
-    String configVersionPolicy =
-        normalizeConfigVersionPolicy(command.configVersionPolicy(), command.configVersion());
-    validateModeContract(scope, executionMode, candidateSource, true);
-    String initialStatus = command.autoApprove() ? STATUS_RUNNING : STATUS_PENDING_APPROVAL;
-
-    // 物化 entries
-    List<BatchDayReplayEntryEntity> entries = materializeEntries(command, scope, now);
+    PreparedReplay prepared = prepareReplay(command, now, true);
+    List<BatchDayReplayEntryEntity> entries = prepared.entries();
+    Instant tokenValidationTime = dateTimeSupport.nowInstant();
+    BatchDayReplayPreviewTokenEntity token =
+        lockValidPreviewToken(command, prepared, tokenValidationTime);
+    if (EmptyChecks.isNotNull(token.consumedAt())) {
+      if (EmptyChecks.isNull(token.sessionId())) {
+        throw invalidPreviewToken();
+      }
+      BatchDayReplaySessionEntity existing =
+          sessionMapper.selectById(command.tenantId(), token.sessionId());
+      if (EmptyChecks.isNull(existing)) {
+        throw invalidPreviewToken();
+      }
+      return existing;
+    }
     if (entries.isEmpty()) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.batch_day_replay.no_candidates");
     }
-    enforceDryRunCapacity(executionMode, entries.size());
+    String scope = prepared.scope();
+    String executionMode = prepared.executionMode();
+    String candidateSource = prepared.candidateSource();
+    String configVersionPolicy = prepared.configVersionPolicy();
+    String initialStatus = command.autoApprove() ? STATUS_RUNNING : STATUS_PENDING_APPROVAL;
+    if (previewTokenMapper.consume(command.tenantId(), token.tokenHash()) != 1) {
+      throw invalidPreviewToken();
+    }
 
     BatchDayReplaySessionEntity session = BatchDayReplaySessionEntity.builder()
         .tenantId(command.tenantId())
@@ -164,6 +188,10 @@ public class BatchDayReplayService {
       linkedEntries.add(e.toBuilder().sessionId(sessionId).build());
     }
     entryMapper.insertBatch(linkedEntries);
+    if (previewTokenMapper.linkSession(command.tenantId(), token.tokenHash(), sessionId) != 1) {
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT, "error.batch_day_replay.active_session_lost");
+    }
 
     log.info(
         "batch_day_replay submitted: tenantId={}, calendarCode={}, bizDate={}, scope={},"
@@ -180,18 +208,55 @@ public class BatchDayReplayService {
     return persisted;
   }
 
-  /** 只读预览 replay 影响范围：复用 submit 的候选解析,但不写 session/entry、不触发审批。 */
-  @Transactional(readOnly = true)
+  /** 生成有时效的一次性预览凭证；不创建 session/entry，也不触发审批。 */
+  @Transactional
   public BatchDayReplayPreviewResponse preview(BatchDayReplaySubmitCommand command) {
     validateCommand(command);
     Instant now = dateTimeSupport.nowInstant();
+    PreparedReplay prepared = prepareReplay(command, now, false);
+    String rawToken = UUID.randomUUID().toString();
+    Instant expiresAt = now.plus(PREVIEW_TOKEN_TTL);
+    previewTokenMapper.deleteExpired(
+        now, now.minus(CONSUMED_PREVIEW_RETENTION), EXPIRED_PREVIEW_CLEANUP_LIMIT);
+    previewTokenMapper.insert(new BatchDayReplayPreviewTokenEntity(
+        command.tenantId(),
+        sha256(rawToken),
+        requestHash(command, prepared),
+        snapshotHash(prepared.response()),
+        expiresAt,
+        null,
+        null));
+    BatchDayReplayPreviewResponse response = prepared.response();
+    return new BatchDayReplayPreviewResponse(
+        response.tenantId(),
+        response.calendarCode(),
+        response.bizDate(),
+        response.scope(),
+        response.executionMode(),
+        response.candidateSource(),
+        response.resultPolicy(),
+        response.configVersionPolicy(),
+        response.configVersion(),
+        rawToken,
+        expiresAt,
+        response.totalCount(),
+        response.entries(),
+        response.resultVersionImpacts(),
+        response.assetPartitionImpacts(),
+        response.dispatchImpacts(),
+        response.warnings());
+  }
+
+  private PreparedReplay prepareReplay(
+      BatchDayReplaySubmitCommand command, Instant now, boolean requireEnabled) {
     String scope = normalizeScope(command.scope());
     String executionMode = normalizeExecutionMode(command.executionMode());
     String candidateSource = normalizeCandidateSource(command.candidateSource());
     String configVersionPolicy =
         normalizeConfigVersionPolicy(command.configVersionPolicy(), command.configVersion());
-    validateModeContract(scope, executionMode, candidateSource, false);
+    validateModeContract(scope, executionMode, candidateSource, requireEnabled);
     List<BatchDayReplayEntryEntity> entries = materializeEntries(command, scope, now);
+    enforceDryRunCapacity(executionMode, entries.size());
     String resultPolicy = resolveResultPolicy(command, executionMode);
     Map<Long, String> versionBusinessKeys = loadVersionBusinessKeys(command, scope);
     List<BatchDayReplayPreviewResponse.PreviewEntry> previewEntries = entries.stream()
@@ -205,7 +270,7 @@ public class BatchDayReplayService {
     List<BatchDayReplayPreviewResponse.DispatchImpact> dispatchImpacts =
         loadDispatchImpacts(command.tenantId(), previewEntries);
     List<String> warnings = entries.isEmpty() ? List.of("NO_CANDIDATES") : List.of();
-    return new BatchDayReplayPreviewResponse(
+    BatchDayReplayPreviewResponse response = new BatchDayReplayPreviewResponse(
         command.tenantId(),
         command.calendarCode(),
         command.bizDate(),
@@ -215,13 +280,135 @@ public class BatchDayReplayService {
         resultPolicy,
         configVersionPolicy,
         command.configVersion(),
+        null,
+        null,
         entries.size(),
         previewEntries,
         impacts,
         assetPartitionImpacts,
         dispatchImpacts,
         warnings);
+    return new PreparedReplay(
+        scope, executionMode, candidateSource, configVersionPolicy, entries, response);
   }
+
+  private BatchDayReplayPreviewTokenEntity lockValidPreviewToken(
+      BatchDayReplaySubmitCommand command, PreparedReplay prepared, Instant now) {
+    if (!Texts.hasText(command.previewToken())) {
+      throw invalidPreviewToken();
+    }
+    String tokenHash = sha256(command.previewToken());
+    BatchDayReplayPreviewTokenEntity token;
+    try {
+      token = previewTokenMapper.selectForUpdate(command.tenantId(), tokenHash);
+    } catch (PessimisticLockingFailureException concurrentConsumption) {
+      throw invalidPreviewToken();
+    }
+    if (EmptyChecks.isNull(token) || !token.requestHash().equals(requestHash(command, prepared))) {
+      throw invalidPreviewToken();
+    }
+    if (EmptyChecks.isNull(token.consumedAt())
+        && (!token.expiresAt().isAfter(now)
+            || !token.snapshotHash().equals(snapshotHash(prepared.response())))) {
+      throw invalidPreviewToken();
+    }
+    return token;
+  }
+
+  private static BizException invalidPreviewToken() {
+    return BizException.of(ResultCode.STATE_CONFLICT, "error.batch_day_replay.preview_stale");
+  }
+
+  private String requestHash(BatchDayReplaySubmitCommand command, PreparedReplay prepared) {
+    ReplayRequestFingerprint fingerprint = new ReplayRequestFingerprint(
+        command.tenantId(),
+        command.calendarCode(),
+        command.bizDate(),
+        prepared.scope(),
+        command.jobCodes(),
+        command.versionIds(),
+        prepared.response().resultPolicy(),
+        prepared.configVersionPolicy(),
+        command.configVersion(),
+        command.reason(),
+        command.requestedBy(),
+        command.autoApprove(),
+        command.traceId(),
+        prepared.executionMode(),
+        prepared.candidateSource());
+    return sha256(JsonUtils.toJson(fingerprint));
+  }
+
+  private String snapshotHash(BatchDayReplayPreviewResponse response) {
+    return sha256(JsonUtils.toJson(new ReplaySnapshotFingerprint(
+        response.tenantId(),
+        response.calendarCode(),
+        response.bizDate(),
+        response.scope(),
+        response.executionMode(),
+        response.candidateSource(),
+        response.resultPolicy(),
+        response.configVersionPolicy(),
+        response.configVersion(),
+        response.totalCount(),
+        response.entries(),
+        response.resultVersionImpacts(),
+        response.assetPartitionImpacts(),
+        response.dispatchImpacts(),
+        response.warnings())));
+  }
+
+  private static String sha256(String value) {
+    try {
+      return HexFormat.of()
+          .formatHex(MessageDigest.getInstance("SHA-256")
+              .digest(value.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    } catch (NoSuchAlgorithmException impossible) {
+      throw new IllegalStateException("SHA-256 is unavailable", impossible);
+    }
+  }
+
+  private record PreparedReplay(
+      String scope,
+      String executionMode,
+      String candidateSource,
+      String configVersionPolicy,
+      List<BatchDayReplayEntryEntity> entries,
+      BatchDayReplayPreviewResponse response) {}
+
+  private record ReplayRequestFingerprint(
+      String tenantId,
+      String calendarCode,
+      LocalDate bizDate,
+      String scope,
+      List<String> jobCodes,
+      List<Long> versionIds,
+      String resultPolicy,
+      String configVersionPolicy,
+      Integer configVersion,
+      String reason,
+      String requestedBy,
+      boolean autoApprove,
+      String traceId,
+      String executionMode,
+      String candidateSource) {}
+
+  private record ReplaySnapshotFingerprint(
+      String tenantId,
+      String calendarCode,
+      LocalDate bizDate,
+      String scope,
+      String executionMode,
+      String candidateSource,
+      String resultPolicy,
+      String configVersionPolicy,
+      Integer configVersion,
+      int totalCount,
+      List<BatchDayReplayPreviewResponse.PreviewEntry> entries,
+      List<BatchDayReplayPreviewResponse.ResultVersionImpact> resultVersionImpacts,
+      List<BatchDayReplayPreviewResponse.AssetPartitionImpact> assetPartitionImpacts,
+      List<BatchDayReplayPreviewResponse.DispatchImpact> dispatchImpacts,
+      List<String> warnings) {}
 
   /** 查询 replay session 详情，统一复用应用层租户和存在性校验。 */
   @Transactional(readOnly = true)

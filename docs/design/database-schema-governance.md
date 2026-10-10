@@ -20,6 +20,7 @@
 | 定义配置 | `job_definition`、`workflow_definition`、`pipeline_definition`、`file_template_config`、`resource_queue` | 软删除唯一性、配置发布审计、租户隔离 |
 | 运行态 | `job_instance`、`job_task`、`job_partition`、`workflow_run`、`pipeline_instance`、`pipeline_step_run` | 分区、终态一致性、热查询索引、归档 |
 | 调度与触发 | `trigger_request`、`trigger_runtime_state`、`trigger_outbox_event`、Quartz 表 | 幂等、misfire、重试、调度窗口 |
+| 运维控制 | `batch_day_replay_session`、`batch_day_replay_entry`、`batch_day_replay_preview_token` | 租户约束、一次性预览消费/提交结果恢复、短期过期清理与状态一致性 |
 | 文件与对象 | `file_record`、`file_dispatch_record`、`file_error_record`、`file_audit_log` | 对象存储引用、校验和、来源定位、保留策略 |
 | 观测与审计 | `console_operation_audit`、`alert_event`、`event_delivery_log`、`dead_letter_task` | TraceId 检索、告警闭环、冷热分层 |
 | 控制台与权限 | `console_user_account`、`tenant`、`api_key`、`console_push_subscription` | 密码/密钥生命周期、四角色边界、审计 |

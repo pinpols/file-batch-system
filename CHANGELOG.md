@@ -8,6 +8,7 @@
 
 ## [Unreleased]
 
+- 批量日回放改为“先预览、再确认提交”：预览生成短时一次性凭证，提交时重新核对候选快照并原子消费，防止候选变化或重复提交造成预览与执行不一致；补充回放预览令牌迁移及并发/过期测试。
 - 集中多个后端集成测试重复的测试 profile 默认配置，并增加 CI/pre-push 守卫，避免模块测试 YAML 重新复制共享配置；场景专属属性覆盖保持不变。
 
 - 补齐平台能力的代码基础：独立 SHA-256 `BatchTaskExecutor` 插件样例、Worker 注册 capability 持久化与 Console 展示；Helm 支持外部共享 Secret 引用和轮换触发滚动；GitOps 增加 ops 仓模板及从 release manifest 生成逐镜像 digest values。真实 ops 仓、密钥控制器和 Kubernetes staging 验收仍待外部接入。
