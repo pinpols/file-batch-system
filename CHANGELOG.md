@@ -77,6 +77,7 @@
 
 ### Fixed
 
+- 修复四份 Sim 租户配置包 Excel 的作业监控策略表头仍使用旧字段、导致线上 `daily-sim-strict-validation` 在场景执行前失败的问题；PR、Full Gate 与本地提交预检新增配置包 schema 防漂移检查。
 - Prevent cross-tenant Alertmanager grouping/inhibition and closing one event from resolving a group that still has active peers; document alert hold, deduplication, repeat-notification, and recovery semantics.
 - 修复 Trivy 报告的 AsyncHttpClient WebSocket 解压 DoS/连接上下文复用及 Kafka LZ4 临时文件代码执行高危依赖；统一升级到修复版本并刷新入库 SBOM。
 - 补齐本地容器生命周期并发保护及 PG/Valkey Sentinel/MinIO HA 隔离演练；维护 SQL 从 shell 内联迁至独立文件并扩展边界守护，避免演练误触现有数据卷或共享环境；Sim SFTP/MockServer 也统一 UTF-8 locale 并纳入守护。

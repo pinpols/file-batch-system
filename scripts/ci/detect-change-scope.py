@@ -133,6 +133,8 @@ def classify_path(path: str) -> set[str]:
         normalized, "batch-e2e-tests"
     ):
         scopes.add("tests")
+    if under(normalized, "docs/test-data") and normalized.endswith(".xlsx"):
+        scopes.add("tests")
 
     if normalized.startswith(("Dockerfile", "docker/")) or name.startswith(
         ("Dockerfile", "docker-compose", "docker-bake")

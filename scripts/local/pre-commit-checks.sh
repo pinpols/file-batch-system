@@ -50,6 +50,7 @@ env_governance_changed=0
 maven_descriptor_changed=0
 helm_changed=0
 config_registry_changed=0
+sim_xlsx_fixture_changed=0
 for file in "${staged_files[@]}"; do
   case "$file" in
     docs/governance/java-contract-governance*.json|scripts/ci/check-java-contract-governance.py|scripts/ci/tests/test_check_java_contract_governance.py)
@@ -73,6 +74,12 @@ for file in "${staged_files[@]}"; do
     && env_governance_changed=1
   [[ "$file" == pom.xml || "$file" == */pom.xml ]] && maven_descriptor_changed=1
   [[ "$file" == helm/* ]] && helm_changed=1
+  [[ "$file" == docs/test-data/test-full-coverage-import-suite/*.xlsx \
+    || "$file" == batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelSchema.java \
+    || "$file" == scripts/fix-fixture-xlsx.py \
+    || "$file" == scripts/local/append-tenant-coverage.py \
+    || "$file" == scripts/local/gen-default-tenant-excel.py ]] \
+    && sim_xlsx_fixture_changed=1
   if [[ "$file" == */src/main/java/*.java ]] \
     && grep -Fq "${file}#" docs/runbook/config-governance-registry.yml; then
     config_registry_changed=1
@@ -240,6 +247,12 @@ if ((scripts_changed == 1)); then
     "$PYTHON_BIN" scripts/ci/check-testcontainers-reuse-label.py
   gate_run PRE_COMMIT_SCHEMA_GOVERNANCE_ASSETS "数据库结构治理资产" \
     "$PYTHON_BIN" scripts/ci/check-schema-governance-assets.py
+fi
+if ((sim_xlsx_fixture_changed == 1)); then
+  gate_run PRE_COMMIT_SIM_XLSX_FIXTURES "Sim 配置包 Excel schema" \
+    "$PYTHON_BIN" scripts/fix-fixture-xlsx.py --check
+  gate_run PRE_COMMIT_SIM_XLSX_FIXTURE_TEST "Sim 配置包 Excel schema 门禁测试" \
+    "$PYTHON_BIN" -m unittest scripts/ci/tests/test_fix_fixture_xlsx.py
 fi
 if ((docs_changed == 1)); then
   gate_run PRE_COMMIT_DOCS_STRUCTURE "文档结构" \

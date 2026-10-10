@@ -199,6 +199,7 @@ SDK 五语言契约矩阵。
 | 编译 + 单元测试 | Maven `test` | 全部 |
 | 集成测试 (`*IntegrationTest` / 非 E2E `*IT`) | Maven `verify -DskipITs=false` | full-ci-gate；`check-integration-test-coverage.py` 守护含集成测试的主 reactor 模块必须进入 full-ci verify shard |
 | E2E 套件 (`*E2eIT`) | Maven `test` `-pl batch-e2e-tests` | full-ci-gate |
+| Sim 配置包 Excel schema | `python3 scripts/fix-fixture-xlsx.py --check` | 本地：权威 Java schema、四份工作簿或生成/修复脚本变更；PR：Java/test/script/CI 域；Full Gate：全量 |
 
 > 约定/架构守护（`*ArchTest`、`*ConventionTest`，如 `RepositoryMapReturnConventionTest`、`PositionalArgsConventionTest`）
 > 由 PR / Full / Staging 的 `java-governance` job 独立执行，业务 unit/IT 显式排除这两类后缀。
@@ -206,6 +207,7 @@ SDK 五语言契约矩阵。
 > 这类测试型守卫的登记入口是 [约定约束与漂移防护总账](../audit/convention-drift-guard-index.md) 的守卫矩阵（`check-*` / `validate-*` 脚本另由 [scripts/ci/README.md](../../scripts/ci/README.md) 登记）。
 > Python / Shell / 配置/契约守卫在 PR 的 `static-policy`、Full/Staging 的 `static-checks` 中独立命名执行，不混入 Maven unit/IT；
 > PR 的 SBOM/Trivy 与 PMD/Spotless 分别由 `static-supply-chain`、`static-java-quality` 并发执行，稳定的 `static-checks` 只聚合结果。
+> `docs/test-data/**/*.xlsx` 按 test 域路由；权威 Java schema 变更也会执行配置包校验，schema 漂移会在 PR 阶段阻断，不再等 nightly Sim 才暴露。
 > 本地 pre-commit 只核对治理测试源码清单；pre-push 在 Java、POM 或相关 CI 路由变化时调用
 > `run-java-governance-tests.sh` 真实执行同一组测试，在线 workflow 也复用该入口。
 
