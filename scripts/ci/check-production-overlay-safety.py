@@ -104,6 +104,36 @@ def main() -> int:
     values = merge_values(chart_values, prod_values)
     errors: list[str] = []
 
+    compose_app = (ROOT / "deploy/docker/compose/app.yml").read_text(encoding="utf-8")
+    if "SPRING_DATA_REDIS_HOST: ${COMPOSE_REDIS_HOST:-valkey}" not in compose_app:
+        errors.append("Compose Spring Redis host must use COMPOSE_REDIS_HOST with a local default")
+    if "BATCH_REDIS_HOST: ${COMPOSE_REDIS_HOST:-valkey}" not in compose_app:
+        errors.append("Compose business Redis host must use the same COMPOSE_REDIS_HOST")
+    if "SPRING_DATA_REDIS_PORT: ${COMPOSE_REDIS_PORT:-6379}" not in compose_app:
+        errors.append("Compose Spring Redis port must use the container-network port default")
+    if "BATCH_REDIS_PORT: ${COMPOSE_REDIS_PORT:-6379}" not in compose_app:
+        errors.append("Compose business Redis port must use the same COMPOSE_REDIS_PORT")
+
+    external_compose = (ROOT / "deploy/docker/compose/app.external.deploy.yml").read_text(encoding="utf-8")
+    for endpoint in (
+        "BATCH_PLATFORM_DB_URL",
+        "COMPOSE_REDIS_HOST",
+        "COMPOSE_REDIS_PORT",
+        "BATCH_KAFKA_BOOTSTRAP_SERVERS",
+        "BATCH_DATASOURCE_BUSINESS_URL",
+        "BATCH_S3_ENDPOINT",
+    ):
+        if f"${{{endpoint}:?" not in external_compose:
+            errors.append(f"External Compose deployment must require {endpoint}")
+    if "SPRING_DATASOURCE_URL: ${BATCH_PLATFORM_DB_URL:?" not in external_compose:
+        errors.append("External Compose must derive Spring's platform database URL from the canonical platform URL")
+    if "SPRING_KAFKA_BOOTSTRAP_SERVERS: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:?" not in external_compose:
+        errors.append("External Compose must derive Spring's Kafka bootstrap servers from the canonical Kafka URL")
+    if "external: true" not in external_compose or "${APP_EXTERNAL_NETWORK:?" not in external_compose:
+        errors.append("External Compose deployment must require a pre-created site network")
+    if external_compose.count("depends_on: !reset []") != 8:
+        errors.append("External Compose deployment must remove local infrastructure dependencies from all 8 apps")
+
     validate_gc_configuration("chart defaults", chart_values, errors)
     validate_gc_configuration("production overlay", values, errors)
     validate_gc_configuration(
@@ -114,6 +144,7 @@ def main() -> int:
     )
 
     required_true = (
+        ("production.requireExplicitTopology", ("production", "requireExplicitTopology")),
         ("security.enforceStrongSecrets", ("security", "enforceStrongSecrets")),
         ("networkPolicy.enabled", ("networkPolicy", "enabled")),
         ("security.loginEncryption.required", ("security", "loginEncryption", "required")),
@@ -132,11 +163,39 @@ def main() -> int:
     if get(values, "orchestrator", "quota", "redisFailureMode") != "FAIL_CLOSED":
         errors.append("orchestrator.quota.redisFailureMode must be FAIL_CLOSED in production")
 
-    otel_endpoint = get(values, "otel", "endpoint")
-    if not isinstance(otel_endpoint, str) or not otel_endpoint.strip():
-        errors.append("otel.endpoint must name the production OpenTelemetry Collector")
-    elif not is_true(get(values, "otelCollector", "enabled")) and "batch-platform-otel-collector" in otel_endpoint:
-        errors.append("otel.endpoint must not target the disabled in-chart Collector")
+    topology_inputs = (
+        ("image.registry", ("image", "registry")),
+        ("clusterDomain", ("clusterDomain",)),
+        ("postgresql.platform.url", ("postgresql", "platform", "url")),
+        ("postgresql.business.url", ("postgresql", "business", "url")),
+        ("kafka.bootstrapServers", ("kafka", "bootstrapServers")),
+        ("redis.host", ("redis", "host")),
+        ("redis.port", ("redis", "port")),
+        ("objectStorage.endpoint", ("objectStorage", "endpoint")),
+        ("objectStorage.bucket", ("objectStorage", "bucket")),
+        ("otel.endpoint", ("otel", "endpoint")),
+        ("consoleApi.ai.attachment.storageBucket", ("consoleApi", "ai", "attachment", "storageBucket")),
+        ("workerAtomic.serviceAccountName", ("workerAtomic", "serviceAccountName")),
+        ("workerAtomic.envFromSecretName", ("workerAtomic", "envFromSecretName")),
+        ("workerAtomic.networkPolicy.egress.postgresql.port", ("workerAtomic", "networkPolicy", "egress", "postgresql", "port")),
+        ("workerAtomic.networkPolicy.egress.kafka.port", ("workerAtomic", "networkPolicy", "egress", "kafka", "port")),
+        ("consoleApi.readReplica.primaryUrl", ("consoleApi", "readReplica", "primaryUrl")),
+        ("consoleApi.readReplica.replicaUrl", ("consoleApi", "readReplica", "replicaUrl")),
+    )
+    for label, path in topology_inputs:
+        if get(prod_values, *path) not in ("", None):
+            errors.append(f"{label} must be supplied by the site values overlay, not helm/values-prod.yaml")
+
+    if get(prod_values, "consoleApi", "ingress", "hosts") != []:
+        errors.append("consoleApi.ingress.hosts must be empty in helm/values-prod.yaml")
+    if get(prod_values, "networkPolicy", "ingress", "from") != []:
+        errors.append("networkPolicy.ingress.from must be supplied by the site values overlay")
+    for label, path in (
+        ("workerAtomic.networkPolicy.egress.postgresql.to", ("workerAtomic", "networkPolicy", "egress", "postgresql", "to")),
+        ("workerAtomic.networkPolicy.egress.kafka.to", ("workerAtomic", "networkPolicy", "egress", "kafka", "to")),
+    ):
+        if get(prod_values, *path) != []:
+            errors.append(f"{label} must be supplied by the site values overlay")
 
     try:
         sampling_probability = float(get(values, "otel", "samplingProbability"))
@@ -144,19 +203,6 @@ def main() -> int:
             errors.append("otel.samplingProbability must be 1.0 so Collector tail sampling can retain errors")
     except (TypeError, ValueError):
         errors.append("otel.samplingProbability must be a numeric string")
-
-    for label, path in (
-        ("workerAtomic.serviceAccountName", ("workerAtomic", "serviceAccountName")),
-        ("workerAtomic.envFromSecretName", ("workerAtomic", "envFromSecretName")),
-        ("orchestratorBaseUrl", ("orchestratorBaseUrl",)),
-        ("triggerBaseUrl", ("triggerBaseUrl",)),
-        ("workerAtomicBaseUrl", ("workerAtomicBaseUrl",)),
-    ):
-        value = get(values, *path)
-        if not isinstance(value, str) or not value.strip():
-            errors.append(f"{label} must name an externally managed production resource")
-        elif "localhost" in value.lower() or "127.0.0.1" in value:
-            errors.append(f"{label} must not use a loopback development address")
 
     atomic_network = get(values, "workerAtomic", "networkPolicy", "egress") or {}
     for kind in ("postgresql", "kafka"):

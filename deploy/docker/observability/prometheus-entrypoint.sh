@@ -1,41 +1,87 @@
 #!/bin/sh
-# 根据 BATCH_DEPLOY_MODE 生成 Java 应用的 Prometheus targets 文件，然后启动 Prometheus。
-# container 模式：使用容器名 + 容器端口（Docker 网络内直连）
-# local 模式：使用 host.docker.internal + 宿主机映射端口
-set -e
+# Generate local file discovery targets, then start Prometheus.
+set -eu
 
-MODE="${BATCH_DEPLOY_MODE:-container}"
-TARGET_DIR="/prometheus/targets"
-mkdir -p "$TARGET_DIR"
+generate_targets() {
+mode=${BATCH_DEPLOY_MODE:-container}
+target_dir=/prometheus/targets
+mkdir -p "$target_dir"
 
-if [ "$MODE" = "local" ]; then
-  cat > "$TARGET_DIR/app-targets.json" <<'EOF'
-[
-  {"targets": ["host.docker.internal:18080"], "labels": {"job": "batch-console-api", "__metrics_path__": "/actuator/prometheus"}},
-  {"targets": ["host.docker.internal:18081"], "labels": {"job": "batch-trigger", "__metrics_path__": "/actuator/prometheus"}},
-  {"targets": ["host.docker.internal:18082"], "labels": {"job": "batch-orchestrator", "__metrics_path__": "/actuator/prometheus"}},
-  {"targets": ["host.docker.internal:18083"], "labels": {"job": "batch-worker-import", "__metrics_path__": "/actuator/prometheus"}},
-  {"targets": ["host.docker.internal:18084"], "labels": {"job": "batch-worker-export", "__metrics_path__": "/actuator/prometheus"}},
-  {"targets": ["host.docker.internal:18085"], "labels": {"job": "batch-worker-dispatch", "__metrics_path__": "/actuator/prometheus"}},
-  {"targets": ["host.docker.internal:18086"], "labels": {"job": "batch-worker-process", "__metrics_path__": "/actuator/prometheus"}},
-  {"targets": ["host.docker.internal:18087"], "labels": {"job": "batch-worker-atomic", "__metrics_path__": "/actuator/prometheus"}}
-]
-EOF
-else
-  cat > "$TARGET_DIR/app-targets.json" <<'EOF'
-[
-  {"targets": ["console-api:8080"], "labels": {"job": "batch-console-api", "__metrics_path__": "/actuator/prometheus"}},
-  {"targets": ["trigger:8081"], "labels": {"job": "batch-trigger", "__metrics_path__": "/actuator/prometheus"}},
-  {"targets": ["orchestrator:8082"], "labels": {"job": "batch-orchestrator", "__metrics_path__": "/actuator/prometheus"}},
-  {"targets": ["worker-import:8083"], "labels": {"job": "batch-worker-import", "__metrics_path__": "/actuator/prometheus"}},
-  {"targets": ["worker-export:8084"], "labels": {"job": "batch-worker-export", "__metrics_path__": "/actuator/prometheus"}},
-  {"targets": ["worker-dispatch:8085"], "labels": {"job": "batch-worker-dispatch", "__metrics_path__": "/actuator/prometheus"}},
-  {"targets": ["worker-process:8086"], "labels": {"job": "batch-worker-process", "__metrics_path__": "/actuator/prometheus"}},
-  {"targets": ["worker-atomic:8087"], "labels": {"job": "batch-worker-atomic", "__metrics_path__": "/actuator/prometheus"}}
-]
-EOF
-fi
+case "$mode" in
+  container)
+    set -- \
+      console-api 18080 batch-console-api \
+      trigger 18081 batch-trigger \
+      orchestrator 18082 batch-orchestrator \
+      worker-import 18083 batch-worker-import \
+      worker-export 18084 batch-worker-export \
+      worker-dispatch 18085 batch-worker-dispatch \
+      worker-process 18086 batch-worker-process \
+      worker-atomic 18087 batch-worker-atomic
+    ;;
+  local)
+    host=${PROMETHEUS_HOST_TARGET:-host.docker.internal}
+    case "$host" in
+      ""|*[!A-Za-z0-9.-]*)
+        echo "Invalid PROMETHEUS_HOST_TARGET: expected a hostname or IPv4 address" >&2
+        exit 2
+        ;;
+    esac
+    set -- \
+      "$host" "${CONSOLE_API_PORT:-18080}" batch-console-api \
+      "$host" "${TRIGGER_PORT:-18081}" batch-trigger \
+      "$host" "${ORCHESTRATOR_PORT:-18082}" batch-orchestrator \
+      "$host" "${WORKER_IMPORT_PORT:-18083}" batch-worker-import \
+      "$host" "${WORKER_EXPORT_PORT:-18084}" batch-worker-export \
+      "$host" "${WORKER_DISPATCH_PORT:-18085}" batch-worker-dispatch \
+      "$host" "${WORKER_PROCESS_PORT:-18086}" batch-worker-process \
+      "$host" "${WORKER_ATOMIC_PORT:-18087}" batch-worker-atomic
+    ;;
+  *)
+    echo "Unsupported BATCH_DEPLOY_MODE '$mode'; expected container or local" >&2
+    exit 2
+    ;;
+esac
 
-echo "[prometheus-entrypoint] BATCH_DEPLOY_MODE=$MODE — generated app-targets.json"
+tmp_file="$target_dir/app-targets.json.tmp"
+printf '[\n' > "$tmp_file"
+first=true
+while [ "$#" -gt 0 ]; do
+  host=$1
+  port=$2
+  job=$3
+  shift 3
+  case "$port" in
+    ""|*[!0-9]*)
+      echo "Invalid scrape port for $job: $port" >&2
+      rm -f "$tmp_file"
+      exit 2
+      ;;
+  esac
+  if [ "$first" = true ]; then
+    first=false
+  else
+    printf ',\n' >> "$tmp_file"
+  fi
+  printf '  {"targets":["%s:%s"],"labels":{"job":"%s","__metrics_path__":"/actuator/prometheus"}}' \
+    "$host" "$port" "$job" >> "$tmp_file"
+done
+printf '\n]\n' >> "$tmp_file"
+mv "$tmp_file" "$target_dir/app-targets.json"
 
+case "${PROMETHEUS_ENABLE_HOST_METRICS:-false}" in
+  true) printf '[{"targets":["node-exporter:9100"]}]\n' > "$target_dir/node-exporter-targets.json" ;;
+  false) printf '[]\n' > "$target_dir/node-exporter-targets.json" ;;
+  *) echo "PROMETHEUS_ENABLE_HOST_METRICS must be true or false" >&2; exit 2 ;;
+esac
+
+case "${PROMETHEUS_ENABLE_CONTAINER_METRICS:-false}" in
+  true) printf '[{"targets":["cadvisor:8080"]}]\n' > "$target_dir/cadvisor-targets.json" ;;
+  false) printf '[]\n' > "$target_dir/cadvisor-targets.json" ;;
+  *) echo "PROMETHEUS_ENABLE_CONTAINER_METRICS must be true or false" >&2; exit 2 ;;
+esac
+}
+
+generate_targets
+echo "[prometheus-entrypoint] BATCH_DEPLOY_MODE=$mode — generated app-targets.json"
 exec /bin/prometheus "$@"

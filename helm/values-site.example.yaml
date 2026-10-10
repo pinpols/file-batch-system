@@ -1,0 +1,64 @@
+# 请复制到私有配置仓库，并按目标环境填写配置。
+# 此模板尚未填写完整，禁止直接部署；必填项为空时生产 Chart 渲染会失败。
+image:
+  registry: ""
+imagePullSecrets: []
+
+clusterDomain: ""
+
+postgresql:
+  platform:
+    url: ""
+  business:
+    url: ""
+
+kafka:
+  bootstrapServers: ""
+
+redis:
+  host: ""
+  port: ""
+
+objectStorage:
+  endpoint: ""
+  bucket: ""
+
+networkPolicy:
+  ingress:
+    from: []
+
+consoleApi:
+  ai:
+    attachment:
+      storageBucket: ""
+  readReplica:
+    primaryUrl: ""
+    replicaUrl: ""
+  ingress:
+    className: ""
+    annotations: {}
+    hosts: []
+    tls: []
+
+workerAtomic:
+  serviceAccountName: ""
+  envFromSecretName: ""
+  networkPolicy:
+    egress:
+      postgresql:
+        port: ""
+        to: []
+      kafka:
+        port: ""
+        to: []
+
+otel:
+  endpoint: ""
+
+serviceMonitor:
+  labels: {}
+
+prometheusRule:
+  labels: {}
+
+# 密码、令牌和私钥应由密钥管理系统或部署流水线注入，禁止将密钥值写入此文件。

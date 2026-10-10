@@ -189,7 +189,8 @@ Pod 启动时向中央协调者（etcd / Redis）注册：「我活着，分配�
 
 ```bash
 helm upgrade batch helm/batch-platform/ -n batch-prod \
-  --values values-prod.yaml \
+  --values helm/values-prod.yaml \
+  --values /secure/path/site-values.yaml \
   --values helm/batch-platform/examples/values-autoscale.yaml
 ```
 

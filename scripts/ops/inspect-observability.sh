@@ -23,10 +23,22 @@ KAFKA_BOOTSTRAP_SERVERS="${BATCH_OBSERVABILITY_KAFKA_BOOTSTRAP_SERVERS:-${BATCH_
 KAFKA_GROUPS="${BATCH_OBSERVABILITY_KAFKA_GROUPS:-batch-worker-import,batch-worker-export,batch-worker-process,batch-worker-dispatch,batch-worker-atomic}"
 KAFKA_BIN_DIR="${BATCH_OBSERVABILITY_KAFKA_BIN_DIR:-}"
 KAFKA_LAG_THRESHOLD="${BATCH_OBSERVABILITY_KAFKA_LAG_THRESHOLD:-1000}"
-DEFAULT_EXTRA_ENDPOINTS="http://localhost:${REDIS_EXPORTER_PORT:-19121}/metrics|redis_connected_clients,redis_memory_used_bytes;http://localhost:${POSTGRES_EXPORTER_PORT:-19187}/metrics|pg_up,pg_stat_database_numbackends;http://localhost:${KAFKA_EXPORTER_PORT:-19308}/metrics|kafka_brokers;http://localhost:${NODE_EXPORTER_PORT:-19100}/metrics|node_load1,node_memory_MemAvailable_bytes,node_filesystem_size_bytes,node_network_receive_bytes_total;http://localhost:${CADVISOR_PORT:-19101}/metrics|container_cpu_usage_seconds_total,container_memory_working_set_bytes;http://localhost:${MINIO_API_PORT}/minio/v2/metrics/cluster|minio_cluster_nodes_offline_total"
+DEFAULT_EXTRA_ENDPOINTS="http://localhost:${REDIS_EXPORTER_PORT:-19121}/metrics|redis_connected_clients,redis_memory_used_bytes;http://localhost:${POSTGRES_EXPORTER_PORT:-19187}/metrics|pg_up,pg_stat_database_numbackends;http://localhost:${KAFKA_EXPORTER_PORT:-19308}/metrics|kafka_brokers;http://localhost:${MINIO_API_PORT}/minio/v2/metrics/cluster|minio_cluster_nodes_offline_total"
+if [[ "${PROMETHEUS_ENABLE_HOST_METRICS:-false}" == "true" ]]; then
+  DEFAULT_EXTRA_ENDPOINTS+=";http://localhost:${NODE_EXPORTER_PORT:-19100}/metrics|node_load1,node_memory_MemAvailable_bytes,node_filesystem_size_bytes,node_network_receive_bytes_total"
+fi
+if [[ "${PROMETHEUS_ENABLE_CONTAINER_METRICS:-false}" == "true" ]]; then
+  DEFAULT_EXTRA_ENDPOINTS+=";http://localhost:${CADVISOR_PORT:-19101}/metrics|container_cpu_usage_seconds_total,container_memory_working_set_bytes"
+fi
 EXTRA_ENDPOINTS="${BATCH_OBSERVABILITY_EXTRA_ENDPOINTS:-$DEFAULT_EXTRA_ENDPOINTS}"
 PROMETHEUS_BASE_URL="${BATCH_OBSERVABILITY_PROMETHEUS_BASE_URL:-http://localhost:${PROMETHEUS_PORT:-19090}}"
-PROMETHEUS_TARGET_JOBS="${BATCH_OBSERVABILITY_PROMETHEUS_TARGET_JOBS:-batch-console-api,batch-trigger,batch-orchestrator,batch-worker-import,batch-worker-export,batch-worker-process,batch-worker-dispatch,batch-worker-atomic,redis-exporter,postgres-exporter,kafka-exporter,minio,node-exporter,cadvisor,otel-collector}"
+PROMETHEUS_TARGET_JOBS="${BATCH_OBSERVABILITY_PROMETHEUS_TARGET_JOBS:-batch-console-api,batch-trigger,batch-orchestrator,batch-worker-import,batch-worker-export,batch-worker-process,batch-worker-dispatch,batch-worker-atomic,redis-exporter,postgres-exporter,kafka-exporter,minio,otel-collector}"
+if [[ "${PROMETHEUS_ENABLE_HOST_METRICS:-false}" == "true" ]]; then
+  PROMETHEUS_TARGET_JOBS+=",node-exporter"
+fi
+if [[ "${PROMETHEUS_ENABLE_CONTAINER_METRICS:-false}" == "true" ]]; then
+  PROMETHEUS_TARGET_JOBS+=",cadvisor"
+fi
 
 failures=0
 

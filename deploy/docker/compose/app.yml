@@ -25,8 +25,8 @@ x-app-runtime-env: &app-runtime-env
   SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-batch_user}
   SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-${BATCH_PLATFORM_DB_PASSWORD}}
   # 容器内使用 Compose 网络服务名；.env.local 中的宿主机 redis:16379 仅供裸 JVM 使用。
-  SPRING_DATA_REDIS_HOST: valkey
-  SPRING_DATA_REDIS_PORT: 6379
+  SPRING_DATA_REDIS_HOST: ${COMPOSE_REDIS_HOST:-valkey}
+  SPRING_DATA_REDIS_PORT: ${COMPOSE_REDIS_PORT:-6379}
   SPRING_KAFKA_BOOTSTRAP_SERVERS: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
   BATCH_DATASOURCE_BUSINESS_URL: ${BATCH_DATASOURCE_BUSINESS_URL:-jdbc:postgresql://postgres-primary:5432/batch_business?stringtype=unspecified&reWriteBatchedInserts=true}
   BATCH_DATASOURCE_BUSINESS_USERNAME: ${BATCH_DATASOURCE_BUSINESS_USERNAME:-${BATCH_BUSINESS_DB_USERNAME:-batch_business_writer}}
@@ -37,8 +37,8 @@ x-app-runtime-env: &app-runtime-env
   BATCH_CONSOLE_ORCHESTRATOR_BASE_URL: ${BATCH_CONSOLE_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
   # /internal/** 服务间共享密钥;强制要求 .env.local 显式设置,防止落回默认 internal-secret(15 字符弱密钥)。
   BATCH_INTERNAL_SECRET: ${BATCH_INTERNAL_SECRET:?BATCH_INTERNAL_SECRET is required}
-  BATCH_REDIS_HOST: valkey
-  BATCH_REDIS_PORT: 6379
+  BATCH_REDIS_HOST: ${COMPOSE_REDIS_HOST:-valkey}
+  BATCH_REDIS_PORT: ${COMPOSE_REDIS_PORT:-6379}
   BATCH_SHEDLOCK_PROVIDER: ${BATCH_SHEDLOCK_PROVIDER:-redis}
   # Documented runtime feature switches must be forwarded explicitly. Keeping
   # them in the shared anchor makes `.env.local` behave the same for bare JVM
@@ -265,8 +265,8 @@ services:
       BATCH_CONSOLE_REPLICA_URL: ${BATCH_CONSOLE_REPLICA_URL:-jdbc:postgresql://postgres-replica:5432/batch_platform?reWriteBatchedInserts=true}
       BATCH_CONSOLE_REPLICA_USER: ${BATCH_CONSOLE_REPLICA_USER:-batch_user}
       BATCH_CONSOLE_REPLICA_PASSWORD: ${BATCH_CONSOLE_REPLICA_PASSWORD:-${BATCH_PLATFORM_DB_PASSWORD}}
-      BATCH_REDIS_HOST: valkey
-      BATCH_REDIS_PORT: 6379
+      BATCH_REDIS_HOST: ${COMPOSE_REDIS_HOST:-valkey}
+      BATCH_REDIS_PORT: ${COMPOSE_REDIS_PORT:-6379}
       BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
       BATCH_S3_ENDPOINT: ${BATCH_S3_ENDPOINT:-http://minio:9000}
       BATCH_S3_ACCESS_KEY: ${BATCH_S3_ACCESS_KEY:?BATCH_S3_ACCESS_KEY is required}
@@ -400,8 +400,8 @@ services:
       # 必须显式声明非生产 profile:BatchProfileSupport.isProductionProfile 已改 fail-secure,
       # 空/未知 profile 一律当生产 → 拒 bypass-mode 启动期抛错。local 在非生产白名单内。
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
-      BATCH_REDIS_HOST: valkey
-      BATCH_REDIS_PORT: 6379
+      BATCH_REDIS_HOST: ${COMPOSE_REDIS_HOST:-valkey}
+      BATCH_REDIS_PORT: ${COMPOSE_REDIS_PORT:-6379}
       # 观测 overlay 未启动时不直连 AM；启用后必须使用 Compose DNS，不能用容器内 localhost。
       BATCH_ALERT_AM_EMIT_ENABLED: ${BATCH_ALERT_AM_EMIT_ENABLED:-false}
       BATCH_ALERT_AM_EMIT_ENDPOINT: ${BATCH_ALERT_AM_EMIT_ENDPOINT:-http://alertmanager:9093}

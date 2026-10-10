@@ -13,6 +13,7 @@
 #     batch-console-api → ghcr.io/pinpols/console-api,以此类推。
 #
 # IMAGE_TAG 必须显式指定已验证的 sha-<full> 或正式版本标签。
+# 外部托管基础设施请改用 app.external.deploy.yml，且不要叠加根 docker-compose.yml。
 
 services:
   console-api:

@@ -1,0 +1,82 @@
+# 仅供拓扑测试使用，禁止用于真实环境部署。
+image:
+  registry: registry.example.invalid/batch-platform
+
+clusterDomain: cluster.test
+
+postgresql:
+  platform:
+    url: jdbc:postgresql://pg-platform.db-test.svc.cluster.test:5432/batch_platform
+  business:
+    url: jdbc:postgresql://pg-business.db-test.svc.cluster.test:5432/batch_business
+
+kafka:
+  bootstrapServers: kafka-test.messaging-test.svc.cluster.test:9092
+
+redis:
+  host: redis-test.cache-test.svc.cluster.test
+  port: 6380
+
+objectStorage:
+  endpoint: https://objects-test.storage-test.example.invalid
+  bucket: batch-files-test
+
+networkPolicy:
+  ingress:
+    from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: apps-test
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: ingress-test
+
+consoleApi:
+  ai:
+    attachment:
+      storageBucket: batch-ai-attachments-test
+  readReplica:
+    primaryUrl: jdbc:postgresql://pg-platform.db-test.svc.cluster.test:5432/batch_platform
+    replicaUrl: jdbc:postgresql://pg-read.db-test.svc.cluster.test:5432/batch_platform
+  ingress:
+    className: test-ingress
+    annotations:
+      cert-manager.io/cluster-issuer: test-issuer
+    hosts:
+      - host: console-test.example.invalid
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: console-test-tls
+        hosts:
+          - console-test.example.invalid
+
+workerAtomic:
+  serviceAccountName: platform-worker-atomic-test
+  envFromSecretName: platform-worker-atomic-secret-test
+  networkPolicy:
+    egress:
+      postgresql:
+        port: 55432
+        to:
+          - namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: db-test
+      kafka:
+        port: 19092
+        to:
+          - namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: messaging-test
+
+otel:
+  endpoint: https://otel-test.observability-test.example.invalid/v1/traces
+
+serviceMonitor:
+  labels:
+    release: monitoring-test
+
+prometheusRule:
+  labels:
+    release: monitoring-test

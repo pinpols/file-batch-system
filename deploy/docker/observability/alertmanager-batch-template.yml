@@ -29,7 +29,7 @@ route:
 # NotificationSenderRegistry 投递到真实渠道并落 notification_delivery_log。
 # 鉴权:AM 独立进程够不到 console cookie/JWT,统一带共享密钥 bearer token;
 # 该 token 必须与 console-api 的 batch.console.alertmanager.bearer-token 一致。
-# 占位符 REPLACE_WITH_AM_NOTIFY_BEARER_TOKEN 部署时替换(AM 不做 env 变量替换,须渲染真实值)。
+# Compose 将同一个 bearer-token secret 文件挂载给 Alertmanager 和 Console API。
 receivers:
   - name: batch-default
     webhook_configs:
@@ -38,7 +38,7 @@ receivers:
         http_config: &am_notify_http
           authorization:
             type: Bearer
-            credentials: REPLACE_WITH_AM_NOTIFY_BEARER_TOKEN
+            credentials_file: /run/secrets/alertmanager-bearer-token
   - name: batch-pager
     webhook_configs:
       - url: http://batch-console-api:18080/internal/am-notify/batch-pager

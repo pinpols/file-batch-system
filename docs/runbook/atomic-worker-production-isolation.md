@@ -4,7 +4,7 @@
 
 ## Helm 生产门禁
 
-`helm/values-prod.yaml` 已开启 `workerAtomic.productionIsolationRequired`，模板会拒绝以下配置：
+`helm/values-prod.yaml` 已开启 `workerAtomic.productionIsolationRequired` 与显式拓扑门禁，部署还必须叠加站点私有 values（字段模板见 `helm/values-site.example.yaml`）。模板会拒绝以下配置：
 
 - 没有独立的 `ServiceAccount`
 - 没有独立的受限 Secret
@@ -30,7 +30,7 @@ NetworkPolicy 仅放行 DNS、平台 PostgreSQL、Kafka 和 values 中显式列�
 ## 验证
 
 ```bash
-helm lint helm/batch-platform -f helm/values-prod.yaml \
+helm lint helm/batch-platform -f helm/values-prod.yaml -f /secure/path/site-values.yaml \
   --set-string postgresql.platform.password="${SMOKE_PLATFORM_PASSWORD:?set SMOKE_PLATFORM_PASSWORD}" \
   --set-string postgresql.business.password="${SMOKE_BUSINESS_PASSWORD:?set SMOKE_BUSINESS_PASSWORD}" \
   --set-string objectStorage.accessKey="${SMOKE_OBJECT_STORAGE_ACCESS_KEY:?set SMOKE_OBJECT_STORAGE_ACCESS_KEY}" \
@@ -38,7 +38,7 @@ helm lint helm/batch-platform -f helm/values-prod.yaml \
   --set-string security.internalSecret="${SMOKE_INTERNAL_SECRET:?set SMOKE_INTERNAL_SECRET}" \
   --set-string security.consoleJwtSecret="${SMOKE_CONSOLE_JWT_SECRET:?set SMOKE_CONSOLE_JWT_SECRET}"
 
-helm template batch-platform helm/batch-platform -f helm/values-prod.yaml \
+helm template batch-platform helm/batch-platform -f helm/values-prod.yaml -f /secure/path/site-values.yaml \
   --set-string postgresql.platform.password="${SMOKE_PLATFORM_PASSWORD:?set SMOKE_PLATFORM_PASSWORD}" \
   --set-string postgresql.business.password="${SMOKE_BUSINESS_PASSWORD:?set SMOKE_BUSINESS_PASSWORD}" \
   --set-string objectStorage.accessKey="${SMOKE_OBJECT_STORAGE_ACCESS_KEY:?set SMOKE_OBJECT_STORAGE_ACCESS_KEY}" \

@@ -28,7 +28,7 @@
 | 压测 | `.env.local` + `application-benchmark.yml` + benchmark compose overlay | `local,benchmark` | `load-tests/scripts/run-control-plane-worker-benchmark.sh`、`load-tests/scripts/run-process-worker-benchmark.sh` | 必须隔离容量画像，不能把压测参数写回 local/prod 默认值 |
 | CI | GitHub Actions 注入 | `test` / workflow 指定 | `scripts/ci/run-full-regression.sh` | CI 不复用本机 `.env.local`，依赖 workflow secrets 和临时服务 |
 | Staging | Helm values + staging overlay | `prod` 或 prod-like | `helm lint`；集群部署验证通过显式配置的 live rollout 流程执行 | 用生产安全策略和较小容量验证发布链路。当前 `.github/workflows/staging-gate.yml` 只运行 GitHub-hosted E2E，不部署到 staging 集群 |
-| 生产 | `helm/batch-platform/values.yaml` + `helm/values-prod.yaml` + Secret/ExternalSecret | `prod` | `helm upgrade --install ... -f helm/values-prod.yaml` | 禁止 bypass、必须强密钥、变更走灰度和回滚 SOP |
+| 生产 | `helm/batch-platform/values.yaml` + `helm/values-prod.yaml` + 站点私有 values + Secret/ExternalSecret | `prod` | `helm upgrade --install ... -f helm/values-prod.yaml -f <site-values>` | 禁止 bypass、必须强密钥与显式拓扑、变更走灰度和回滚 SOP |
 
 ## 3. 变量分组速查
 

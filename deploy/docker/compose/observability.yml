@@ -1,5 +1,6 @@
 # 观测栈：Prometheus / Grafana / Loki / Jaeger / OTel Collector / Alertmanager / Exporters
-# 叠加到 docker-compose.yml 使用：docker compose -f docker-compose.yml -f deploy/docker/compose/observability.yml up -d
+# 本地开发栈；依赖根 docker-compose.yml 的服务名和 batch-network，不是生产部署 overlay。
+# Web/OTLP 宿主机端口默认只绑定回环地址；远程访问应通过受控反向代理显式配置。
 x-observability-logging: &observability-logging
   driver: local
   options:
@@ -7,6 +8,13 @@ x-observability-logging: &observability-logging
     max-file: ${BATCH_DOCKER_LOG_MAX_FILES:-3}
 
 services:
+  console-api:
+    logging: *observability-logging
+    environment:
+      SPRING_CONFIG_IMPORT: optional:configtree:/run/secrets/
+    secrets:
+      - source: alertmanager-bearer-token
+        target: batch.console.alertmanager.bearer-token
 
   # ── 指标 ──────────────────────────────────────────────────────────
   prometheus:
@@ -23,13 +31,24 @@ services:
       - --web.enable-lifecycle
     environment:
       BATCH_DEPLOY_MODE: ${BATCH_DEPLOY_MODE:-container}
+      PROMETHEUS_HOST_TARGET: ${PROMETHEUS_HOST_TARGET:-host.docker.internal}
+      CONSOLE_API_PORT: ${CONSOLE_API_PORT:-18080}
+      TRIGGER_PORT: ${TRIGGER_PORT:-18081}
+      ORCHESTRATOR_PORT: ${ORCHESTRATOR_PORT:-18082}
+      WORKER_IMPORT_PORT: ${WORKER_IMPORT_PORT:-18083}
+      WORKER_EXPORT_PORT: ${WORKER_EXPORT_PORT:-18084}
+      WORKER_DISPATCH_PORT: ${WORKER_DISPATCH_PORT:-18085}
+      WORKER_PROCESS_PORT: ${WORKER_PROCESS_PORT:-18086}
+      WORKER_ATOMIC_PORT: ${WORKER_ATOMIC_PORT:-18087}
+      PROMETHEUS_ENABLE_HOST_METRICS: ${PROMETHEUS_ENABLE_HOST_METRICS:-false}
+      PROMETHEUS_ENABLE_CONTAINER_METRICS: ${PROMETHEUS_ENABLE_CONTAINER_METRICS:-false}
     volumes:
       - ./deploy/docker/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./deploy/docker/observability/prometheus-batch-rules.yml:/etc/prometheus/rules/batch.yml:ro
       - ./deploy/docker/observability/prometheus-entrypoint.sh:/etc/prometheus/entrypoint.sh:ro
       - prometheus-data:/prometheus
     ports:
-      - "${PROMETHEUS_PORT:-19090}:9090"
+      - "${OBSERVABILITY_BIND_IP:-127.0.0.1}:${PROMETHEUS_PORT:-19090}:9090"
     networks:
       - batch-network
 
@@ -44,8 +63,11 @@ services:
     volumes:
       - ./deploy/docker/observability/alertmanager-batch-template.yml:/etc/alertmanager/alertmanager-template.yml:ro
       - ./scripts/ops/render-alertmanager-config.sh:/usr/local/bin/render-alertmanager-config.sh:ro
+    secrets:
+      - source: alertmanager-bearer-token
+        target: alertmanager-bearer-token
     ports:
-      - "${ALERTMANAGER_PORT:-19093}:9093"
+      - "${OBSERVABILITY_BIND_IP:-127.0.0.1}:${ALERTMANAGER_PORT:-19093}:9093"
     networks:
       - batch-network
 
@@ -58,8 +80,9 @@ services:
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
     ports:
-      - "${JAEGER_UI_PORT:-16686}:16686"   # UI
-      - "4317"                              # OTLP gRPC（仅容器间）
+      - "${OBSERVABILITY_BIND_IP:-127.0.0.1}:${JAEGER_UI_PORT:-16686}:16686" # UI
+    expose:
+      - "4317"
     networks:
       - batch-network
 
@@ -94,8 +117,9 @@ services:
         volume:
           nocopy: true
     ports:
-      - "${TEMPO_HTTP_PORT:-13200}:3200"   # 查询 API（Grafana datasource 走容器内 tempo:3200）
-      - "4317"                              # OTLP gRPC（仅容器间，被 otel-collector 用）
+      - "${OBSERVABILITY_BIND_IP:-127.0.0.1}:${TEMPO_HTTP_PORT:-13200}:3200" # 查询 API
+    expose:
+      - "4317"
     networks:
       - batch-network
     depends_on:
@@ -113,7 +137,7 @@ services:
       - ./deploy/docker/observability/loki-config.yml:/etc/loki/loki-config.yml:ro
       - loki-data:/loki
     ports:
-      - "${LOKI_PORT:-13100}:3100"
+      - "${OBSERVABILITY_BIND_IP:-127.0.0.1}:${LOKI_PORT:-13100}:3100"
     networks:
       - batch-network
 
@@ -151,8 +175,8 @@ services:
         volume:
           nocopy: true
     ports:
-      - "${OTEL_GRPC_PORT:-4317}:4317"
-      - "${OTEL_HTTP_PORT:-4318}:4318"
+      - "${OBSERVABILITY_BIND_IP:-127.0.0.1}:${OTEL_GRPC_PORT:-4317}:4317"
+      - "${OBSERVABILITY_BIND_IP:-127.0.0.1}:${OTEL_HTTP_PORT:-4318}:4318"
     networks:
       - batch-network
     depends_on:
@@ -174,8 +198,8 @@ services:
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       # 本地默认复用已显式提供的数据库密码；部署环境应单独设置 GRAFANA_ADMIN_PASSWORD。
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-${BATCH_PLATFORM_DB_PASSWORD:?BATCH_PLATFORM_DB_PASSWORD is required}}
-      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
     volumes:
       - ./deploy/docker/observability/grafana-provisioning:/etc/grafana/provisioning:ro
@@ -186,7 +210,7 @@ services:
       - ./deploy/docker/observability/grafana-dashboard-batch-capacity.json:/var/lib/grafana/dashboards/batch-capacity.json:ro
       - grafana-data:/var/lib/grafana
     ports:
-      - "${GRAFANA_PORT:-13000}:3000"
+      - "${OBSERVABILITY_BIND_IP:-127.0.0.1}:${GRAFANA_PORT:-13000}:3000"
     networks:
       - batch-network
     depends_on:
@@ -204,6 +228,8 @@ services:
       REDIS_ADDR: valkey:6379
     networks:
       - batch-network
+    ports:
+      - "${OBSERVABILITY_BIND_IP:-127.0.0.1}:${REDIS_EXPORTER_PORT:-19121}:9121"
     depends_on:
       valkey:
         condition: service_healthy
@@ -221,6 +247,8 @@ services:
       - ./deploy/docker/observability/postgres-exporter-queries.yaml:/etc/postgres_exporter/queries.yaml:ro
     networks:
       - batch-network
+    ports:
+      - "${OBSERVABILITY_BIND_IP:-127.0.0.1}:${POSTGRES_EXPORTER_PORT:-19187}:9187"
     depends_on:
       postgres-primary:
         condition: service_healthy
@@ -233,6 +261,8 @@ services:
     command: ["--kafka.server=kafka:29092"]
     networks:
       - batch-network
+    ports:
+      - "${OBSERVABILITY_BIND_IP:-127.0.0.1}:${KAFKA_EXPORTER_PORT:-19308}:9308"
     depends_on:
       kafka:
         condition: service_healthy
@@ -242,6 +272,18 @@ services:
     image: prom/node-exporter:${NODE_EXPORTER_IMAGE_TAG:-v1.11.1}
     container_name: batch-node-exporter
     restart: unless-stopped
+    profiles: [host-metrics]
+    pid: host
+    command:
+      - --path.rootfs=/host
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+    volumes:
+      - /:/host:ro,rslave
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+    ports:
+      - "${OBSERVABILITY_BIND_IP:-127.0.0.1}:${NODE_EXPORTER_PORT:-19100}:9100"
     networks:
       - batch-network
 
@@ -250,11 +292,14 @@ services:
     image: gcr.io/cadvisor/cadvisor:${CADVISOR_IMAGE_TAG:-v0.52.1}
     container_name: batch-cadvisor
     restart: unless-stopped
+    profiles: [container-metrics]
     privileged: true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
+    ports:
+      - "${OBSERVABILITY_BIND_IP:-127.0.0.1}:${CADVISOR_PORT:-19101}:8080"
     networks:
       - batch-network
 
@@ -264,6 +309,10 @@ volumes:
   tempo-data:
   otel-collector-data:
   grafana-data:
+
+secrets:
+  alertmanager-bearer-token:
+    file: ${BATCH_CONSOLE_ALERTMANAGER_BEARER_TOKEN_FILE:?Set BATCH_CONSOLE_ALERTMANAGER_BEARER_TOKEN_FILE to the shared bearer-token file}
 
 networks:
   batch-network:

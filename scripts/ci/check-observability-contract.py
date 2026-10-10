@@ -159,6 +159,97 @@ def main() -> int:
         if not dashboard_data.get("uid"):
             errors.append(f"Grafana dashboard must define a stable uid: {dashboard}")
 
+    if nested(obs_compose, "services", "grafana", "environment", "GF_AUTH_ANONYMOUS_ENABLED") != "false":
+        errors.append("Compose Grafana anonymous access must stay disabled")
+    if nested(obs_compose, "services", "grafana", "environment", "GF_SECURITY_ADMIN_PASSWORD") != "${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}":
+        errors.append("Compose Grafana must require a dedicated admin password")
+    published_services = (
+        "prometheus",
+        "alertmanager",
+        "jaeger",
+        "tempo",
+        "loki",
+        "otel-collector",
+        "grafana",
+        "redis-exporter",
+        "postgres-exporter",
+        "kafka-exporter",
+        "node-exporter",
+        "cadvisor",
+    )
+    for service_name in published_services:
+        ports = nested(obs_compose, "services", service_name, "ports") or []
+        for port in ports:
+            rendered = str(port.get("published", "")) if isinstance(port, dict) else str(port)
+            if "OBSERVABILITY_BIND_IP" not in rendered:
+                errors.append(f"{service_name}: published ports must use OBSERVABILITY_BIND_IP")
+    for service_name in ("jaeger", "tempo"):
+        ports = nested(obs_compose, "services", service_name, "ports") or []
+        if any(str(port) == "4317" for port in ports):
+            errors.append(f"{service_name}: OTLP gRPC must not be randomly published to the host")
+    secret_file = nested(obs_compose, "secrets", "alertmanager-bearer-token", "file")
+    if secret_file != "${BATCH_CONSOLE_ALERTMANAGER_BEARER_TOKEN_FILE:?Set BATCH_CONSOLE_ALERTMANAGER_BEARER_TOKEN_FILE to the shared bearer-token file}":
+        errors.append("Compose Alertmanager bearer token must come from a required secret file")
+    observability_runbook = (
+        ROOT / "docs/runbook/observability-stack.md"
+    ).read_text(encoding="utf-8")
+    for permission_step in (
+        "umask 077",
+        "chmod 0700 secrets/observability",
+        "chmod 0444 secrets/observability/console-bearer-token",
+    ):
+        if permission_step not in observability_runbook:
+            errors.append(
+                f"Observability runbook must protect and expose the shared secret safely: {permission_step}"
+            )
+    for service_name, target in (
+        ("alertmanager", "alertmanager-bearer-token"),
+        ("console-api", "batch.console.alertmanager.bearer-token"),
+    ):
+        service_secrets = nested(obs_compose, "services", service_name, "secrets") or []
+        if not any(
+            isinstance(secret, dict)
+            and secret.get("source") == "alertmanager-bearer-token"
+            and secret.get("target") == target
+            for secret in service_secrets
+        ):
+            errors.append(f"{service_name}: shared Alertmanager token secret is not mounted")
+    alertmanager_config = load_yaml(
+        ROOT / "deploy/docker/observability/alertmanager-batch-template.yml"
+    )
+    alertmanager_receivers = alertmanager_config.get("receivers") or []
+    first_webhook = (
+        (alertmanager_receivers[0].get("webhook_configs") or [{}])[0]
+        if alertmanager_receivers
+        else {}
+    )
+    if nested(
+        first_webhook, "http_config", "authorization", "credentials_file"
+    ) != "/run/secrets/alertmanager-bearer-token":
+        errors.append("Alertmanager webhook must read its bearer token from the mounted secret")
+    for service_name, expected_profile in (
+        ("node-exporter", "host-metrics"),
+        ("cadvisor", "container-metrics"),
+    ):
+        profiles = nested(obs_compose, "services", service_name, "profiles") or []
+        if expected_profile not in profiles:
+            errors.append(f"{service_name}: high-scope metrics collection must be opt-in")
+    prometheus_entrypoint = (
+        ROOT / "deploy/docker/observability/prometheus-entrypoint.sh"
+    ).read_text(encoding="utf-8")
+    for target in (
+        "console-api 18080 batch-console-api",
+        "trigger 18081 batch-trigger",
+        "orchestrator 18082 batch-orchestrator",
+        "worker-import 18083 batch-worker-import",
+        "worker-export 18084 batch-worker-export",
+        "worker-dispatch 18085 batch-worker-dispatch",
+        "worker-process 18086 batch-worker-process",
+        "worker-atomic 18087 batch-worker-atomic",
+    ):
+        if target not in prometheus_entrypoint:
+            errors.append(f"Prometheus container target is missing or has a wrong port: {target}")
+
     collector = load_yaml(ROOT / "deploy/docker/observability/otel-collector.yml")
     extensions = collector.get("extensions") or {}
     processors = collector.get("processors") or {}
@@ -188,8 +279,14 @@ def main() -> int:
     if nested(prod, "otel", "enabled") is not True:
         errors.append("production Helm overlay must enable OpenTelemetry")
     endpoint = str(nested(prod, "otel", "endpoint") or "")
-    if not endpoint or "batch-platform-otel-collector" in endpoint:
-        errors.append("production OTLP endpoint must target the external Collector")
+    site_fixture = load_yaml(
+        ROOT / "helm/batch-platform/examples/values-production-topology-test.yaml"
+    )
+    site_endpoint = str(nested(site_fixture, "otel", "endpoint") or "")
+    if endpoint and "batch-platform-otel-collector" in endpoint:
+        errors.append("production OTLP endpoint must not target the chart's disabled Collector")
+    if not endpoint and (not site_endpoint or "batch-platform-otel-collector" in site_endpoint):
+        errors.append("site topology fixture must provide a reachable external Collector endpoint")
     if str(nested(prod, "otel", "samplingProbability")) != "1.0":
         errors.append("production head sampling must be 1.0 when tail sampling is authoritative")
     prod_profile = load_yaml(

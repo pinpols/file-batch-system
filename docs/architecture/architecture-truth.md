@@ -11,7 +11,7 @@
 | 模块间通信 | [runtime-module-communication.md](./runtime-module-communication.md) |
 | 依赖和 Java 基线 | [`pom.xml`](../../pom.xml) |
 | 环境变量与本地默认值 | [`.env.example`](../../.env.example) |
-| 生产部署参数 | [`helm/values-prod.yaml`](../../helm/values-prod.yaml) |
+| 生产安全与运行参数 | [`helm/values-prod.yaml`](../../helm/values-prod.yaml)；网络拓扑由部署环境私有 values 注入，字段模板见 [`helm/values-site.example.yaml`](../../helm/values-site.example.yaml) |
 | 数据库迁移版本 | [`db/migration/`](../../db/migration/) |
 | 当前待办 | [`analysis/todo-master.md`](../analysis/todo-master.md) |
 

@@ -63,11 +63,20 @@ heap dump。它不是集中日志通道；Pod 重建后允许丢失，生产需�
 
 ```bash
 cp .env.example .env.local
-# 按 .env.example 设置必填数据库密码和内部密钥
+# 设置独立的 Grafana 密码、数据库密码、内部密钥和对象存储凭据。
+# Alertmanager 与 Console API 使用不同容器 UID；Compose 文件型 secret 挂载保留宿主文件权限。
+# 用仅当前宿主用户可访问的目录保护宿主文件，再允许挂载容器进程读取文件。
+umask 077
+mkdir -p secrets/observability
+chmod 0700 secrets/observability
+openssl rand -hex 32 | tr -d '\n' > secrets/observability/console-bearer-token
+chmod 0444 secrets/observability/console-bearer-token
 docker compose -f docker-compose.yml -f deploy/docker/compose/app.yml \
   -f deploy/docker/compose/observability.yml --env-file .env.local \
   --profile apps --profile replica up -d
 ```
+
+观测 UI/API 和 Collector 的宿主机端口默认只绑定 `127.0.0.1`，Grafana 匿名访问关闭，登录密码必须独立于数据库密码。不要将 `OBSERVABILITY_BIND_IP` 改为 `0.0.0.0`，除非前置了认证代理和网络 ACL。Jaeger、Tempo 的 OTLP gRPC 仅在 Compose 网络内部开放，不发布宿主机随机端口。
 
 要让应用上报到 Collector：
 
@@ -83,6 +92,9 @@ docker compose -f docker-compose.yml -f deploy/docker/compose/app.yml \
 `BATCH_CONSOLE_ALERTMANAGER_BEARER_TOKEN`（至少 32 位，只含字母、数字、`_`、`-`）。该值由 Compose
 同时注入 Console API 和 Alertmanager；Alertmanager 启动入口会校验并渲染模板。没有令牌时，告警服务
 会拒绝启动而不是持续向 Console 发送未授权请求。生产环境必须从 Secret 管理系统提供该值。
+裸 JVM 模式设 `BATCH_DEPLOY_MODE=local`。Prometheus 通过 `PROMETHEUS_HOST_TARGET` 和应用宿主机端口抓取；Linux Docker Engine 通常需将其设置为宿主机在 Docker bridge 上可达的地址，并确保应用监听该地址。Docker Desktop 可使用 `host.docker.internal`。Compose 容器模式使用应用服务 DNS 和内部 `18080–18087` 端口。
+
+主机资源指标和容器指标默认不启动。Linux 主机按需分别设置 `PROMETHEUS_ENABLE_HOST_METRICS=true`、`PROMETHEUS_ENABLE_CONTAINER_METRICS=true`，并使用 `--profile host-metrics`、`--profile container-metrics` 启动对应 exporter。node-exporter 读取宿主机根目录；cAdvisor 需要 Docker socket 和特权模式，属于高权限本地诊断组件，不应在不信任的共享主机上启用。Docker Desktop 上的主机指标代表其 Linux VM，不代表 macOS 主机本身。
 
 入口：Grafana `http://localhost:13000`、Prometheus `http://localhost:19090`、Jaeger
 `http://localhost:16686`、Tempo API `http://localhost:13200`、Loki API
@@ -90,12 +102,12 @@ docker compose -f docker-compose.yml -f deploy/docker/compose/app.yml \
 
 ## 4. 生产配置
 
-`helm/values-prod.yaml` 已强制：
+生产 values 必须启用以下观测能力；采集地址由站点私有 values 提供：
 
 ```yaml
 otel:
   enabled: true
-  endpoint: http://otel-collector.monitoring.svc.cluster.local:4318
+  endpoint: <site-owned-collector-endpoint>
   samplingProbability: "1.0"
   logFormat: ecs
 serviceMonitor:
@@ -104,7 +116,7 @@ prometheusRule:
   enabled: true
 ```
 
-外部 Collector 地址必须替换为目标集群真实 Service。生产不得把 `otelCollector.enabled`
+`<site-owned-collector-endpoint>` 是说明性占位符，必须由站点私有 values 替换为目标环境可达的 Collector endpoint。仓库不指定固定 namespace、cluster domain 或 Service 名。`deploy/docker/compose/observability.yml` 依赖本地根 Compose 的基础设施服务名与网络，仅用于开发/验收，不与外部依赖 Compose overlay 叠加作为生产观测栈。生产不得把 `otelCollector.enabled`
 与外部 Collector 同时作为两套独立采集主链路；迁移期需要双写时应明确容量、去重和回退窗口。
 
 ## 5. 验收
@@ -117,7 +129,7 @@ Docker Prometheus 会抓取同网络内 `alertmanager:9093`，按 `job=alertmana
 python3 scripts/ci/check-observability-contract.py
 bash scripts/python.sh scripts/ci/check-production-overlay-safety.py
 bash scripts/ci/check-helm-prometheusrule-sync.sh
-helm lint helm/batch-platform -f helm/values-prod.yaml
+helm lint helm/batch-platform -f helm/values-prod.yaml -f /secure/path/site-values.yaml
 ```
 
 Collector 配置应使用对应版本官方镜像执行 `validate`；Prometheus 规则应使用
