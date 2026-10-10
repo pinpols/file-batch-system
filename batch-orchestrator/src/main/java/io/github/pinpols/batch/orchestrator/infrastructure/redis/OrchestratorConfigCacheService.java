@@ -32,6 +32,7 @@ import org.springframework.stereotype.Service;
 public class OrchestratorConfigCacheService {
 
   private static final Duration CONFIG_CACHE_TTL = Duration.ofMinutes(5);
+  private static final String WORKFLOW_DEFINITION_CACHE_TYPE = "workflow-definition";
   // R3-P2-9 / S1-3：DB 也返回 null 时（配置被 disabled / 不存在）记录"已知缺失"标记，
   // 在 NEGATIVE_TTL 内直接返回 null，不再 hit DB。scheduler 每秒 tick 配置 disabled 不再
   // 把 DB 打满。本地 cache 即可（每个 orchestrator 实例独立，命中率自然降低也是可接受降级）。
@@ -144,7 +145,7 @@ public class OrchestratorConfigCacheService {
     if (!Texts.hasText(tenantId) || !Texts.hasText(workflowCode)) {
       return null;
     }
-    String key = BatchRedisKeys.config(tenantId, "workflow-definition", workflowCode);
+    String key = BatchRedisKeys.config(tenantId, WORKFLOW_DEFINITION_CACHE_TYPE, workflowCode);
     WorkflowDefinitionEntity local = workflowDefinitionLocalCache.getIfPresent(key);
     if (local != null) {
       return local;
@@ -248,7 +249,7 @@ public class OrchestratorConfigCacheService {
   }
 
   public void evictWorkflowDefinition(String tenantId, String workflowCode) {
-    evictConfig(tenantId, "workflow-definition", workflowCode);
+    evictConfig(tenantId, WORKFLOW_DEFINITION_CACHE_TYPE, workflowCode);
   }
 
   public void evictBusinessCalendar(String tenantId, String calendarCode) {
@@ -298,7 +299,7 @@ public class OrchestratorConfigCacheService {
   private void evictLocalByType(String type) {
     if ("job-definition".equals(type)) {
       jobDefinitionLocalCache.invalidateAll();
-    } else if ("workflow-definition".equals(type)) {
+    } else if (WORKFLOW_DEFINITION_CACHE_TYPE.equals(type)) {
       workflowDefinitionLocalCache.invalidateAll();
     } else if ("tenant-quota-policy".equals(type)) {
       quotaPolicyLocalCache.invalidateAll();
@@ -309,7 +310,7 @@ public class OrchestratorConfigCacheService {
   private void evictLocalByKey(String type, String key) {
     if ("job-definition".equals(type)) {
       jobDefinitionLocalCache.invalidate(key);
-    } else if ("workflow-definition".equals(type)) {
+    } else if (WORKFLOW_DEFINITION_CACHE_TYPE.equals(type)) {
       workflowDefinitionLocalCache.invalidate(key);
     } else if ("tenant-quota-policy".equals(type)) {
       quotaPolicyLocalCache.invalidate(key);

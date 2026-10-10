@@ -1,7 +1,7 @@
 # SonarQube 扫描与门禁（SOP）
 
 > 用 SonarQube 建立静态质量基线：Bug / Vulnerability / Code Smell / 覆盖率 / 重复率。
-> 本地一键扫描出报告，CI 侧预留质量门禁（默认关闭）。
+> 本地一键扫描出报告；CI 在 GitHub runner 上使用临时 SonarQube 容器扫描。
 
 ## 1. 覆盖范围
 
@@ -32,7 +32,7 @@
 
 `--incremental` 不会裁剪 Sonar 的静态分析上下文：它只执行全 reactor 的 `test-compile`，不运行测试，然后以 Git merge-base 到当前工作树的新增/修改 Java 行过滤报告。增量模式使用独立项目键 `<projectKey>-incremental`，且不采集覆盖率，避免污染全量项目的 JaCoCo 基线。需要同时验证覆盖率时显式增加 `--with-tests`。
 
-Java PR 的本地审阅按需运行增量模式，并检查变更行 issues 与待审 Security Hotspots。它仍会分析完整 Maven reactor，再按 Git 变更行生成增量报告，不是只分析改动文件。当前 Sonar CI 工作流默认关闭且不是 required check；只有工作流实际执行并成功完成 Quality Gate 才能报告 CI Sonar 通过，`SKIPPED`、未配置或本地未运行均不是通过证据。
+Java PR 的本地审阅按需运行增量模式，并检查变更行 issues 与待审 Security Hotspots。它仍会分析完整 Maven reactor，再按 Git 变更行生成增量报告，不是只分析改动文件。CI 工作流在 PR、`main` push 和有相关变更的夜间执行；是否属于 required check 以仓库 Ruleset 为准。未触发的夜间 job 不算扫描通过。
 
 增量文件集同时覆盖分支提交、暂存/未暂存修改和未跟踪 Java 文件。基线默认是 `origin/main`，也可用 `SONAR_BASE_REF` 或 `--base-ref` 覆盖。
 
@@ -58,19 +58,19 @@ Java PR 的本地审阅按需运行增量模式，并检查变更行 issues 与�
 
 读取 `reports/sonar/latest/sonar-report.csv`，为每条 issue 增加 `action`（`FIXED` / `ANNOTATION` / `DEFERRED` / `SKIP_FP` / `SKIP_SPI` / `SKIP_DOMAIN` / `SKIP_THRESHOLD` / `SKIP_BULK` / `KEEP`）和 `note` 两列，输出 `sonar-report-annotated.csv`，便于逐条决策“修 / 延期 / 豁免”。
 
-## 3. CI 门禁（预留，默认关闭）
+## 3. CI 扫描
 
 工作流：[`.github/workflows/sonar-gate.yml`](../../.github/workflows/sonar-gate.yml)
 
-- 触发：PR → `main`、push `main`、`workflow_dispatch`；超时 30 分钟。
-- **默认关闭**：只有仓库变量 `SONAR_GATE_ENABLED=true` 才执行，未配置 SonarCloud/SonarQube 凭据时不影响现有 CI 与合并门禁。
-- 启用前配置：
-  - Secret：`SONAR_TOKEN`
-  - Variable：`SONAR_HOST_URL`（可选，默认 `https://sonarcloud.io`）
-  - Variable：`SONAR_PROJECT_KEY`（可选，默认 `file-batch-system`）
-  - Variable：`SONAR_ORGANIZATION`（SonarCloud 必填；自建 SonarQube 可不填）
-- 执行内容：`./mvnw -B clean test org.jacoco:jacoco-maven-plugin:0.8.15:report --projects '!batch-e2e-tests' org.sonarsource.scanner.maven:sonar-maven-plugin:5.7.0.6970:sonar -Dsonar.qualitygate.wait=true`。
-- 结果以 Sonar 侧 Quality Gate 为准（`-Dsonar.qualitygate.wait=true`）。
+- 触发：push `main`、每日夜间、`workflow_dispatch`；手动运行仅允许选择 `main`。Community Build 不支持多分支/PR 分析，因此不配置 `pull_request` 触发；Java PR 仍可运行本地增量扫描。
+- 夜间仅在最近 24 小时有 Java、Maven、Sonar 扫描脚本/辅助脚本或该 workflow 改动时执行。
+- Maven 测试和 JaCoCo 先运行；随后在 GitHub-hosted runner 本机启动固定 digest 的 SonarQube Community Build 容器（6 GiB、3 CPU），扫描后检查该分析对应的 Sonar Way Quality Gate。
+- 每次扫描将新代码定义设为滚动 30 天，并在分析前回读验证；`fetch-depth: 0` 提供 SCM 历史。门禁还会确认项目绑定了至少一条 Quality Gate 条件，在扫描后确认分析任务完成、Quality Gate 状态为 `OK` 且返回了所有配置条件；空门禁或未完整评估均失败。
+- 容器只绑定 runner 的 loopback 地址，并在成功、失败或取消后由 workflow cleanup 删除；数据库无持久卷，不保留 issue 状态、分析历史或项目配置。
+- 无需 Sonar token/管理员 secret。Sonar 结果报告作为 workflow artifact 保留 7 天。
+- 每次运行都是 main 当前代码快照；滚动 30 天的变更判定依靠 Git SCM 历史，不依靠 Sonar 分析历史。系统不能提供跨提交的 issue 生命周期/趋势，也不执行 PR 分支分析。
+- Quality Gate 成功只表示该次分析使用的临时项目门禁通过；是否属于 required check 以仓库 Ruleset 为准。
+- 源码中已审核的 `@SuppressWarnings("java:S...")` 按 [Java suppression 标准](../standards/java-suppression-registry.md)维护；临时 Sonar 服务不做 issue 状态同步。
 - Sonar **不替代**现有 PMD / Spotless / SpotBugs / 依赖扫描 / 测试门禁。
 
 ## 4. 质量基线参考
@@ -93,5 +93,5 @@ Java PR 的本地审阅按需运行增量模式，并检查变更行 issues 与�
 ## 6. 维护注意
 
 - S3776 阈值与 profile 绑定逻辑在 `sonar-scan.sh` Step 3.5，改动约定时同步更新脚本注释。
-- CI 门禁参数集中在 `sonar-gate.yml` 顶部的 `env` 与 `vars` 引用。
+- CI 镜像 digest 与启动、清理方式集中在 `sonar-gate.yml`；本地扫描参数集中在 `sonar-scan.sh`。
 - 报告格式变更会同时影响 `sonar-scan.sh` Step 5 的内嵌 Python 导出块和 `annotate-sonar-report.py`。
