@@ -35,7 +35,7 @@ description: 用户要求在特性分支交付代码、执行提交检查、创�
 4. **Lean LOC 快照**：tracked 源码变化由 pre-commit 使用暂存树重生成 `docs/stats/loc-current-lean.md` 并自动暂存。生成器要求 Python 3.12+；手工复核可运行 `python3.12 scripts/ci/check-loc-snapshot.py`。不要用旧快照覆盖当前结果。
 5. **Java 可读性清单**：pre-push 可能自动刷新 `docs/analysis/java-readability-inventory-2026-08-12.md` 并拒绝本次 push。若仅清单排序/行数按生成逻辑变化，审查后单独暂存并提交该生成物，再重试 push；不要用 `SKIP_SDK_CHECKS=1` 绕过。
 6. **Changelog**：有用户可见功能、重要缺陷/安全修复、生产配置、部署、迁移或外部契约影响时，按根 `CHANGELOG.md` 的 `[Unreleased]` 分类追加条目。只有 `docs/agent-baseline.md` 或 ADR/架构权威约束变化才更新 `docs/changelog.md`。提交后运行 `python3 scripts/ci/check-changelog-sync.py --base origin/main`。
-7. **Sonar**：Java 生产代码有改动时，PR 前应在 Docker、Java 21 和 Sonar 服务可用的本地环境运行 `bash scripts/dev/sonar-scan.sh --incremental --base-ref origin/main`，检查 issues、changed-lines 与 hotspots，并治理本次新增项；扫描未能运行时记录阻塞原因和未执行状态。需刷新覆盖率时添加 `--with-tests`。报告位于 `reports/sonar/<timestamp>/`，通常是本地产物，不要随意纳入 PR。该扫描分析完整 Maven reactor 并额外导出 Git 变更行报告，不等于只扫描改动文件。仓库 `.github/workflows/sonar-gate.yml` 当前默认关闭且不属于 required checks；若结果为 `SKIPPED`、未配置或未运行，不得描述为 Sonar 通过。
+7. **Sonar**：Java 生产代码有改动时，PR 前应在 Docker、Java 21 和 Sonar 服务可用的本地环境运行 `bash scripts/dev/sonar-scan.sh --incremental --base-ref origin/main`，检查 issues、changed-lines 与 hotspots，并治理本次新增项；扫描未能运行时记录阻塞原因和未执行状态。需刷新覆盖率时添加 `--with-tests`。报告位于 `reports/sonar/<timestamp>/`，通常是本地产物，不要随意纳入 PR。该扫描分析完整 Maven reactor 并额外导出 Git 变更行报告，不等于只扫描改动文件。CI workflow 在 main push 及相关代码变更夜间扫描；SonarQube Community Build 不执行 PR 分析。是否属于 required check 以仓库 Ruleset 为准；若结果为 `SKIPPED`、未配置或未运行，不得描述为 Sonar 通过。
 8. 根据变更域运行 Shell/文档/配置/依赖/安全/API 等守护。全量 Full Gate、sim、BE-ACC 和 Sonar 是不同验证层级，不要互相替代；未运行则在 PR 中写明。
 9. **实现与文档同步**：所有有语义影响的变更都要检查对应文档、示例、索引和生成物是否需要更新，包括功能与 API 契约、配置/环境变量、数据库结构与表说明、部署和运行方式、脚本运维、测试验收及故障处理。按权威文档归属更新，不复制出相互矛盾的第二事实来源；同步生成类型、清单或快照时要运行对应校验。纯内部重构若不改变用户行为、操作方式或架构约束，可以不改文档，但在 PR 说明中简述判断依据。只完成代码、不核对适用文档，不算交付完成。
 10. **门禁与文档同步**：新增或扩展门禁时，确认脚本已登记在 `scripts/ci/README.md`，并按影响更新 `docs/runbook/ci.md` 的触发/阻断矩阵、`docs/audit/convention-drift-guard-index.md` 的守卫矩阵，以及对应专项 runbook。文档应说明检查范围、触发条件、执行命令和不覆盖的验证；修改 workflow 时还要核对 required check 名称与实际 job 一致。只改门禁实现但不更新适用说明，不算交付完成。
@@ -58,6 +58,6 @@ description: 用户要求在特性分支交付代码、执行提交检查、创�
 ## Sonar 与快照参考
 
 - 本地 Sonar 命令说明：`scripts/dev/sonar-scan.sh`、`scripts/dev/README.md`。
-- CI 增量/全量门禁边界及 Sonar 默认状态：`docs/runbook/ci.md`。
+- 临时 Sonar CI 触发范围、限制及 Quality Gate：`docs/runbook/ci.md`、`docs/runbook/sonar.md`。
 - LOC 口径与归档：`docs/stats/README.md`、`docs/stats/archive/README.md`。
 - 代码量自动刷新：`scripts/local/pre-commit-checks.sh`；可读性清单生成：`scripts/ci/report-java-readability-inventory.py`。

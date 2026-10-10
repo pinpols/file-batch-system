@@ -1,15 +1,13 @@
-name: sonar-gate
+name: SonarQube CI
 
-# Sonar 门禁预留配置。
-# 默认关闭：只有仓库变量 SONAR_GATE_ENABLED=true 时才执行。
-# 这样未配置 SonarCloud/SonarQube 凭据时不会影响现有 CI 和合并门禁。
+# Community Build 仅分析 main；完整 Git 历史用于 30 天新代码基线。
+# 夜间只在最近 24 小时有相关代码/构建变更时扫描。
 on:
-  pull_request:
-    branches:
-      - main
   push:
     branches:
       - main
+  schedule:
+    - cron: '23 18 * * *'
   workflow_dispatch:
 
 permissions:
@@ -21,11 +19,19 @@ concurrency:
 
 jobs:
   sonar:
-    name: Sonar quality gate
-    if: vars.SONAR_GATE_ENABLED == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    name: Sonar analysis and quality gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
+      - name: Require main branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" != 'refs/heads/main' ]]; then
+            echo '❌ 不通过 | code=SONAR_MAIN_BRANCH_ONLY | gate=Sonar Community Build 仅支持 main 分支分析' >&2
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -39,29 +45,66 @@ jobs:
           java-version: '21'
           cache: maven
 
-      - name: Run Sonar analysis and quality gate
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL || 'https://sonarcloud.io' }}
-          SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY || 'file-batch-system' }}
-          SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION }}
+      - name: Check for recent code changes
+        id: nightly
+        if: github.event_name == 'schedule'
         shell: bash
         run: |
           set -euo pipefail
-          [[ -n "${SONAR_TOKEN}" ]] || { echo 'SONAR_TOKEN is required when SONAR_GATE_ENABLED=true' >&2; exit 1; }
-
-          sonar_args=(
-            "-Dsonar.host.url=${SONAR_HOST_URL}"
-            "-Dsonar.token=${SONAR_TOKEN}"
-            "-Dsonar.projectKey=${SONAR_PROJECT_KEY}"
-            '-Dsonar.qualitygate.wait=true'
-          )
-          if [[ -n "${SONAR_ORGANIZATION}" ]]; then
-            sonar_args+=("-Dsonar.organization=${SONAR_ORGANIZATION}")
+          changed_files="$(git log --since='24 hours ago' --name-only --format= HEAD | sort -u)"
+          if printf '%s\n' "$changed_files" | grep -Eq '(^|/)([^/]+\.java|pom\.xml)$|^\.mvn/|^mvnw$|^scripts/dev/sonar-.*|^scripts/dev/sql/sonar-.*|^scripts/lib/(process|python-runtime)\.sh$|^\.github/workflows/sonar-gate\.yml$'; then
+            echo '最近 24 小时存在 Java、构建或 Sonar CI 变更，将执行夜间扫描。'
+          else
+            echo '最近 24 小时没有 Java、构建或 Sonar CI 变更，跳过夜间扫描。'
+            echo 'skip=true' >> "$GITHUB_OUTPUT"
           fi
 
-          ./mvnw -B clean test \
-            org.jacoco:jacoco-maven-plugin:0.8.15:report \
-            --projects '!batch-e2e-tests' \
-            org.sonarsource.scanner.maven:sonar-maven-plugin:5.7.0.6970:sonar \
-            "${sonar_args[@]}"
+      - name: Run Maven tests and generate JaCoCo reports
+        if: steps.nightly.outputs.skip != 'true'
+        run: ./mvnw -B clean test org.jacoco:jacoco-maven-plugin:0.8.15:report --projects '!batch-e2e-tests'
+
+      - name: Start ephemeral SonarQube container
+        if: steps.nightly.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo sysctl -w vm.max_map_count=524288
+          docker run -d --rm --name sonarqube-batch \
+            --memory=6g --cpus=3 \
+            --ulimit nofile=131072:131072 --ulimit nproc=8192:8192 \
+            -p 127.0.0.1:9001:9000 \
+            sonarqube@sha256:d4899d380ad9d7b63ebaa751e047f5a4f064f8902cdf7c1a3c3c96f7d71600ed
+          attempt=0
+          while (( attempt < 120 )); do
+            if curl -fsS http://127.0.0.1:9001/api/system/status | grep -q '"status":"UP"'; then
+              echo '✅ 通过 | code=SONAR_CONTAINER_READY | gate=临时SonarQube服务'
+              exit 0
+            fi
+            attempt=$((attempt + 1))
+            sleep 5
+          done
+          docker logs sonarqube-batch --tail 80
+          echo '❌ 不通过 | code=SONAR_CONTAINER_STARTUP | gate=临时SonarQube服务 | timeout=600s' >&2
+          exit 1
+
+      - name: Analyze and enforce Sonar Quality Gate
+        if: steps.nightly.outputs.skip != 'true'
+        env:
+          SONAR_PORT: '9001'
+          SONAR_ANONYMOUS_ACCESS: 'false'
+          SONAR_PUBLIC_PROJECT: 'false'
+        run: bash scripts/dev/sonar-scan.sh --full --skip-build --quality-gate
+
+      - name: Upload Sonar report
+        if: always() && steps.nightly.outputs.skip != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sonar-report-${{ github.run_id }}
+          path: reports/sonar/*/sonar-report.*
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Remove ephemeral SonarQube container
+        if: always()
+        shell: bash
+        run: docker rm -f sonarqube-batch >/dev/null 2>&1 || true

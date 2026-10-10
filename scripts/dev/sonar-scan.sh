@@ -8,6 +8,7 @@
 #   ./scripts/dev/sonar-scan.sh --incremental --with-tests # 增量扫描并刷新覆盖率
 #   ./scripts/dev/sonar-scan.sh --incremental --base-ref origin/main
 #   ./scripts/dev/sonar-scan.sh --skip-build  # 跳过 Maven Wrapper 构建（已构建时）
+#   ./scripts/dev/sonar-scan.sh --quality-gate # 扫描后检查 Sonar Quality Gate
 #   ./scripts/dev/sonar-scan.sh --stop        # 停止并删除 SonarQube 容器
 #
 # 输出（reports/sonar/<timestamp>/）：
@@ -23,6 +24,7 @@ set -euo pipefail
 SKIP_BUILD=false
 STOP_ONLY=false
 WITH_TESTS=false
+QUALITY_GATE=false
 SCAN_MODE="full"
 FULL_REQUESTED=false
 INCREMENTAL_REQUESTED=false
@@ -38,6 +40,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --skip-build)  SKIP_BUILD=true ;;
     --with-tests)  WITH_TESTS=true ;;
+    --quality-gate) QUALITY_GATE=true ;;
     --stop)        STOP_ONLY=true  ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -156,10 +159,12 @@ else
   warn "SonarQube H2 client jar not found; skipping password-change flag reset"
 fi
 
-# 关闭强制登录，Dashboard 可匿名访问
-curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" -X POST \
-  "${SONAR_URL}/api/settings/set" \
-  -d "key=sonar.forceAuthentication&value=false" &>/dev/null || true
+# 本地扫描默认允许匿名查看 Dashboard；CI 容器保持认证开启。
+if [[ "${SONAR_ANONYMOUS_ACCESS:-true}" == "true" ]]; then
+  curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" -X POST \
+    "${SONAR_URL}/api/settings/set" \
+    -d "key=sonar.forceAuthentication&value=false" &>/dev/null || true
+fi
 
 # ── 3. 生成分析 token ─────────────────────────────────────────────────────────
 info "Step 3/5 — Generating analysis token..."
@@ -185,6 +190,41 @@ curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" -X POST \
   "${SONAR_URL}/api/projects/create" \
   --data-urlencode "name=${PROJECT_NAME}" \
   --data-urlencode "project=${PROJECT_KEY}" &>/dev/null || true
+if $QUALITY_GATE; then
+  curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" -X POST \
+    "${SONAR_URL}/api/new_code_periods/set" \
+    --data-urlencode "project=${PROJECT_KEY}" \
+    --data-urlencode "type=NUMBER_OF_DAYS" \
+    --data-urlencode "value=30" >/dev/null
+  NEW_CODE_PERIOD_JSON="$(curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" \
+    --get --data-urlencode "project=${PROJECT_KEY}" \
+    "${SONAR_URL}/api/new_code_periods/show")"
+  if ! printf '%s' "$NEW_CODE_PERIOD_JSON" | "$PYTHON_BIN" -c '
+import json,sys
+period=json.load(sys.stdin)
+if period.get("type") != "NUMBER_OF_DAYS" or str(period.get("value")) != "30":
+    raise SystemExit(1)
+'; then
+    printf '❌ 不通过 | code=SONAR_NEW_CODE_PERIOD | gate=Sonar新代码基线 | expected=30d\n' >&2
+    exit 1
+  fi
+  GATE_NAME="$(curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" \
+    --get --data-urlencode "project=${PROJECT_KEY}" \
+    "${SONAR_URL}/api/qualitygates/get_by_project" \
+    | "$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin).get('qualityGate',{}).get('name',''))")"
+  if [[ -z "$GATE_NAME" ]]; then
+    printf '❌ 不通过 | code=SONAR_QUALITY_GATE_UNCONFIGURED | gate=Sonar质量门禁 | project=%s\n' "$PROJECT_KEY" >&2
+    exit 1
+  fi
+  GATE_CONFIG_CONDITION_COUNT="$(curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" \
+    --get --data-urlencode "name=${GATE_NAME}" \
+    "${SONAR_URL}/api/qualitygates/show" \
+    | "$PYTHON_BIN" -c "import json,sys; print(len(json.load(sys.stdin).get('conditions',[])))")"
+  if [[ "$GATE_CONFIG_CONDITION_COUNT" -eq 0 ]]; then
+    printf '❌ 不通过 | code=SONAR_QUALITY_GATE_UNCONFIGURED | gate=Sonar质量门禁 | project=%s\n' "$PROJECT_KEY" >&2
+    exit 1
+  fi
+fi
 CUSTOM_PROFILE_KEY=$(curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" \
   "${SONAR_URL}/api/qualityprofiles/search?language=java" \
   | "$PYTHON_BIN" -c "
@@ -314,6 +354,9 @@ if [ -n "$TASK_URL" ]; then
       | "$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['task']['status'])" 2>/dev/null || true)"
     case "$TASK_STATUS" in
       SUCCESS)
+        ANALYSIS_ID="$(curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" \
+          "${SONAR_URL}/api/ce/task?id=${TASK_ID}" \
+          | "$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['task'].get('analysisId',''))")"
         break
         ;;
       FAILED|CANCELED)
@@ -328,12 +371,22 @@ if [ -n "$TASK_URL" ]; then
     fi
   done
 fi
+if $QUALITY_GATE && [[ -z "${TASK_ID:-}" ]]; then
+  error "Sonar analysis task id not found; cannot verify Quality Gate."
+  exit 1
+fi
+if $QUALITY_GATE && [[ -z "${ANALYSIS_ID:-}" ]]; then
+  error "Sonar analysis completed without an analysis id; cannot verify Quality Gate."
+  exit 1
+fi
 ok "Analysis complete."
 
-# 项目设为 Public，匿名可直接打开 Dashboard
-curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" -X POST \
-  "${SONAR_URL}/api/projects/update_visibility" \
-  -d "project=${PROJECT_KEY}&visibility=public" &>/dev/null || true
+# 本地扫描默认公开 Dashboard；CI 临时项目保持私有。
+if [[ "${SONAR_PUBLIC_PROJECT:-true}" == "true" ]]; then
+  curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" -X POST \
+    "${SONAR_URL}/api/projects/update_visibility" \
+    -d "project=${PROJECT_KEY}&visibility=public" &>/dev/null || true
+fi
 
 # ── 5. 导出报告 ───────────────────────────────────────────────────────────────
 info "Step 5/5 — Exporting reports to reports/sonar/${SCAN_TS}/..."
@@ -490,4 +543,29 @@ fi
 echo "   reports/sonar/latest  ->  ${SCAN_TS}  (symlink)"
 echo ""
 echo -e "${GREEN}Dashboard:${NC} ${SONAR_URL}/dashboard?id=${PROJECT_KEY}"
+
+if $QUALITY_GATE; then
+  GATE_JSON="$(curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" \
+    --get --data-urlencode "analysisId=${ANALYSIS_ID}" \
+    "${SONAR_URL}/api/qualitygates/project_status")"
+  GATE_SUMMARY="$(printf '%s' "$GATE_JSON" | "$PYTHON_BIN" -c '
+import json,sys
+status=json.load(sys.stdin)["projectStatus"]
+conditions=status.get("conditions", [])
+failed=[str(c.get("metricKey"))+"="+str(c.get("actualValue")) for c in conditions if c.get("status")=="ERROR"]
+print("\\t".join([status.get("status", "UNKNOWN"), str(len(conditions)), ",".join(failed)]))')"
+  IFS=$'\t' read -r GATE_STATUS GATE_RESULT_CONDITION_COUNT GATE_FAILURES <<< "$GATE_SUMMARY"
+  if [[ "$GATE_RESULT_CONDITION_COUNT" -ne "$GATE_CONFIG_CONDITION_COUNT" ]]; then
+    printf '❌ 不通过 | code=SONAR_QUALITY_GATE_INCOMPLETE | gate=Sonar质量门禁 | expected=%s | evaluated=%s\n' \
+      "$GATE_CONFIG_CONDITION_COUNT" "$GATE_RESULT_CONDITION_COUNT" >&2
+    exit 1
+  fi
+  if [[ "$GATE_STATUS" != "OK" ]]; then
+    printf '❌ 不通过 | code=SONAR_QUALITY_GATE | gate=Sonar质量门禁 | status=%s | failed=%s\n' \
+      "$GATE_STATUS" "${GATE_FAILURES:-none}" >&2
+    exit 1
+  fi
+  printf '✅ 通过 | code=SONAR_QUALITY_GATE | gate=Sonar质量门禁 | quality_gate=%s | configured_conditions=%s | new_code_period=30d\n' \
+    "$GATE_NAME" "$GATE_CONFIG_CONDITION_COUNT"
+fi
 echo -e "${YELLOW}Tip:${NC} Run with --stop to shut down the SonarQube container when done."

@@ -1,20 +1,20 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `ae4f93aee`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `2e4b528dd` + 当前工作区改动。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,903 | 518,966 | 267,988 | 51.6% |
+| 4,903 | 519,053 | 268,070 | 51.6% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| prod | 2,796 | 255,416 | 116,987 | 45.8% |
-| test | 1,284 | 190,558 | 104,685 | 54.9% |
-| script | 660 | 55,689 | 35,124 | 63.1% |
+| prod | 2,796 | 255,417 | 116,988 | 45.8% |
+| test | 1,284 | 190,566 | 104,690 | 54.9% |
+| script | 660 | 55,767 | 35,200 | 63.1% |
 | config | 65 | 9,209 | 6,793 | 73.8% |
 | infra-config | 34 | 5,816 | 4,227 | 72.7% |
 | sql | 64 | 2,278 | 172 | 7.6% |
@@ -23,8 +23,8 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,589 | 376,742 | 194,864 | 51.7% |
-| Shell | 210 | 31,978 | 25,166 | 78.7% |
+| Java | 3,589 | 376,751 | 194,870 | 51.7% |
+| Shell | 210 | 32,056 | 25,242 | 78.7% |
 | Python | 259 | 36,867 | 19,087 | 51.8% |
 | YAML | 108 | 13,768 | 10,548 | 76.6% |
 | XML | 183 | 22,187 | 6,933 | 31.2% |
@@ -56,9 +56,9 @@
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationServiceTest.java` | test | Java | 814 | 503 |
 | `scripts/local/sim-harness.sh` | script | Shell | 641 | 498 |
 | `scripts/local/be-acceptance.sh` | script | Shell | 615 | 482 |
+| `scripts/dev/sonar-scan.sh` | script | Shell | 571 | 478 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java` | prod | Java | 975 | 469 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | prod | Java | 1,031 | 460 |
-| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java` | prod | Java | 1,043 | 458 |
 
 ## 复跑
 

@@ -28,7 +28,7 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 >
 > `staging-gate` 仍存在，但当前仅由手动事件触发；名称不代表它会部署到 staging 集群。其职责是 GitHub-hosted runner 上的独立全量 E2E 与 Java 治理复验。
 
-其他独立工作流：`codeql.yml` 在 PR、main push 和每周定时运行（当前未配置手动触发）；`sdk-orchestrator-e2e.yml` 在 SDK/Orchestrator 相关 main 文件变更后运行五语言真实 Orchestrator E2E，也支持手动（非 required）；`workflow-lint.yml` 检查 workflow/action 文件变更；`license-review.yml` 检查依赖许可变更；`strict-verify.yml` 提供手动严格校验及 PR dry-run；`sonar-gate.yml` 默认关闭，只有仓库变量 `SONAR_GATE_ENABLED=true` 时执行；`fuzzing.yml` 按其 workflow 配置单独运行。以上工作流是否 required 以仓库 Ruleset 当前配置为准，不由 workflow 文件名推断。
+其他独立工作流：`codeql.yml` 在 PR、main push 和每周定时运行（当前未配置手动触发）；`sdk-orchestrator-e2e.yml` 每日定时/手动执行五语言真实 Orchestrator E2E（非 required）；`workflow-lint.yml` 检查 workflow/action 文件变更；`license-review.yml` 检查依赖许可变更；`strict-verify.yml` 提供手动严格校验及 PR dry-run；`sonar-gate.yml` 在 main push 和夜间有相关代码变更时使用临时 SonarQube 容器运行（Community Build 仅分析 main）；`fuzzing.yml` 按其 workflow 配置单独运行。以上工作流是否 required 以仓库 Ruleset 当前配置为准，不由 workflow 文件名推断。
 
 ## CI 依赖与安全扫描版本基线
 
@@ -550,18 +550,8 @@ pom.xml                      # 父 pom：JaCoCo agent、PMD、Spotless 插件配
 - 无构建模式只适用于当前纯 Java 仓库；引入 Kotlin 或发现生成源码漏析时必须恢复 PR 手工构建。
 - PR 与 main 告警差异需要人工解释，不能仅因 PR 更快就认定覆盖等价。
 
-### Sonar 门禁（预留，默认关闭）
+### SonarQube CI
 
-仓库已预留 `.github/workflows/sonar-gate.yml`，但默认不执行，不纳入当前
-required checks。只有配置仓库变量 `SONAR_GATE_ENABLED=true` 后才会运行。
-Java 生产代码变更应按 [Sonar Runbook](sonar.md) 在本地运行增量审阅；本地执行情况与 CI 门禁状态分开报告。当前工作流关闭或显示 `SKIPPED` 时，不得视为 Sonar 通过。
+`.github/workflows/sonar-gate.yml` 在 `main` push、每日 18:23 UTC（北京时间次日 02:23）和手动触发时运行；Community Build 仅支持 main 分析，非 main 手动运行会明确失败。夜间运行仅在最近 24 小时有 Java、Maven、Sonar 扫描脚本/辅助脚本或该 workflow 改动时继续。无需外部 Sonar 主机、GitHub Sonar secret 或管理员 token：工作流在 runner 上启动固定 digest 的 SonarQube Community Build 容器（6 GiB、3 CPU），执行 Sonar Way Quality Gate，并将新代码基线设为滚动 30 天；最后删除容器。扫描报告作为短期 workflow artifact 保留 7 天。
 
-启用前配置：
-
-- Secret：`SONAR_TOKEN`
-- Variable：`SONAR_HOST_URL`（可选，默认 `https://sonarcloud.io`）
-- Variable：`SONAR_PROJECT_KEY`（可选，默认 `file-batch-system`）
-- Variable：`SONAR_ORGANIZATION`（SonarCloud 必填；自建 SonarQube 可不填）
-
-启用后工作流会等待 Sonar Quality Gate 结果。现有 PMD、Spotless、SpotBugs、
-依赖扫描和测试门禁保持不变，Sonar 不替代这些检查。
+容器和数据库不跨任务持久化，因此 issue 状态、分析历史和项目配置不会保留；质量门禁每次按完整 Git 历史计算最近 30 天新代码，不依赖 Sonar 历史。该方案不对 PR 执行 Sonar 分支分析，也不提供跨提交的 issue 状态同步或长期趋势。Java PR 的 Sonar 变更行审阅仍使用本地增量扫描。不得将临时扫描结果描述成持久 Sonar 项目状态。Sonar 不替代现有 PMD、Spotless、SpotBugs、依赖扫描和测试门禁；是否作为 required check 仍以仓库 Ruleset 为准。

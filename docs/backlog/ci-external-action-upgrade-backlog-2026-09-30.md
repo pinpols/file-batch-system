@@ -31,7 +31,7 @@
 | Hadolint Action | `hadolint/hadolint-action@v3.5.0` | 已升级到当前引用 | ✅ 静态门禁和主干 Full Gate 已通过 |
 | GitHub CodeQL Action | `github/codeql-action/*@v4` | 当前主版本；保留 | 关注 GitHub 弃用公告和 runner 兼容要求 |
 | SBOM Action | `anchore/sbom-action@v0.24.3` | 已从浮动 major tag改为具体 release tag 并继续补丁升级 | ✅ SDK release validation 静态门禁通过；真实发布 artifact 仍在发布任务验证 |
-| Sonar Scanner | 可选 `sonar-gate` 使用 Maven Scanner `5.7.0.6970`；本地脚本同版本默认值 | Sonar 门禁默认关闭，不属于当前必需 PR/Full Gate；不作为当前阻断性安全扫描 | 启用 Sonar Gate 或变更 Sonar 服务时，复核插件与服务器兼容矩阵并执行全量/增量扫描 |
+| Sonar Scanner | `sonar-gate` 在 main push 和有相关代码变更的夜间运行临时 SonarQube；Community Build 仅支持 main 分析；新代码基线为滚动 30 天；Maven Scanner `5.7.0.6970` 与本地脚本一致 | 不依赖外部 Sonar 服务或 secret，不保留 issue 状态；是否属于 required check 以仓库 Ruleset 为准 | 升级插件或镜像时复核兼容矩阵，并验证全量扫描、Quality Gate 条件评估和容器资源预算 |
 
 ## 迁移与 API 契约守护工具
 

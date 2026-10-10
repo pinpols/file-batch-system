@@ -140,6 +140,14 @@ class OrchestratorConfigCacheServiceTest {
   }
 
   @Test
+  @DisplayName("清除工作流定义缓存时保持工作流缓存类型键一致")
+  void shouldDeleteRemoteKey_whenWorkflowDefinitionEvicted() {
+    service.evictWorkflowDefinition("t1", "WF1");
+
+    verify(redis).delete("config:t1:workflow-definition:WF1");
+  }
+
+  @Test
   @DisplayName("同一租户配额策略连续读取两次时只有第一次访问远端缓存")
   void shouldHitRemoteCacheOnce_whenSameQuotaPolicyReadTwice() {
     TenantQuotaPolicyEntity cached = quotaPolicyRecord("t1");
