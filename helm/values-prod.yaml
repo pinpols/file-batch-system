@@ -5,26 +5,29 @@
 # 运行时凭据由外部 Secret 控制器写入下方 Secret。
 
 image:
-  registry: "registry.example.com/batch-platform"
+  registry: ""
   tag: "1.0.0"
   # 发布系统可将这里覆盖为镜像 digest；留空时使用固定版本 tag。
   digest: ""
   pullPolicy: Always
 
-imagePullSecrets:
-  - name: registry-credentials
+imagePullSecrets: []
+
+clusterDomain: ""
+production:
+  requireExplicitTopology: true
 
 postgresql:
   platform:
-    url: "jdbc:postgresql://pg-primary.db.svc.cluster.local:5432/batch_platform"
+    url: ""
     username: "batch_user"
   business:
-    url: "jdbc:postgresql://pg-primary.db.svc.cluster.local:5432/batch_business"
+    url: ""
     username: "batch_business_writer"
     schema: "biz"
 
 kafka:
-  bootstrapServers: "kafka-0.kafka-headless.kafka.svc.cluster.local:9092,kafka-1.kafka-headless.kafka.svc.cluster.local:9092,kafka-2.kafka-headless.kafka.svc.cluster.local:9092"
+  bootstrapServers: ""
   # broker HA 拓扑由 Strimzi operator 落地（deploy/ha/20-kafka-strimzi.yaml），chart 不自建 broker。
   # 这里的 broker.* 是“期望值”声明，必须与 Strimzi Kafka CR 一致；改这里不会改集群，需同步改 CR。
   #   - replicas=3：KafkaNodePool.spec.replicas=3，散在不同 node（podAntiAffinity）。
@@ -41,9 +44,13 @@ kafka:
 objectStorage:
   # 生产必须由发布 overlay 或外部 Secret/ConfigMap 显式注入真实 S3 兼容对象存储端点。
   endpoint: ""
-  bucket: "batch-prod"
+  bucket: ""
   autoCreateBucket: false
   pathStyleEnabled: true
+
+redis:
+  host: ""
+  port: ""
 
 # Alertmanager 由集群外部提供时，在发布 overlay 中显式设置 endpoint 和 enabled。
 # 未配置时保持关闭，不允许回落到容器内 localhost。
@@ -73,38 +80,28 @@ security:
     privateKeyPem: ""   # 必填 (helm/Secret fail-fast 守卫)
     publicKeyPem: ""    # 必填 (helm/Secret fail-fast 守卫)
 
-# 标准应用 Pod 只接受平台命名空间内部、Ingress Controller 和监控抓取流量。
-# 若集群使用不同命名空间标签，部署前同步修改这些 namespaceSelector。
+# 标准应用 Pod 的来源必须由站点 overlay 按实际集群配置。
 networkPolicy:
   enabled: true
   ingress:
-    from:
-      - namespaceSelector:
-          matchLabels:
-            kubernetes.io/metadata.name: batch
-      - namespaceSelector:
-          matchLabels:
-            kubernetes.io/metadata.name: ingress-nginx
-      - namespaceSelector:
-          matchLabels:
-            kubernetes.io/metadata.name: monitoring
+    from: []
 
 # R4-P0-4：K8s Service 实际端口 18082（见 chart values orchestrator.port），之前误用 docker-compose 内部端口 8082。
 # 修复后 worker / console-api 才能正确连到 orchestrator。
-orchestratorBaseUrl: "http://batch-platform-orchestrator.batch.svc.cluster.local:18082"
-triggerBaseUrl: "http://batch-platform-trigger.batch.svc.cluster.local:18081"
-workerAtomicBaseUrl: "http://batch-platform-worker-atomic.batch.svc.cluster.local:18087"
+orchestratorBaseUrl: ""
+triggerBaseUrl: ""
+workerAtomicBaseUrl: ""
 
 consoleApi:
   replicaCount: 2
   ai:
     attachment:
       # 生产需预建私有桶，并与 objectStorage.bucket 保持物理隔离。
-      storageBucket: "batch-ai-attachments"
+      storageBucket: ""
   readReplica:
     enabled: true
-    primaryUrl: "jdbc:postgresql://pg-primary.db.svc.cluster.local:5432/batch_platform"
-    replicaUrl: "jdbc:postgresql://pg-replica.db.svc.cluster.local:5432/batch_platform"
+    primaryUrl: ""
+    replicaUrl: ""
   # R4-P2-5：与 .env.prod 一致的 SSE 重放容量（默认 chart 是 dev 量 20000/24h）
   realtime:
     replayMaxEntries: 50000
@@ -118,19 +115,11 @@ consoleApi:
     failureThreshold: 18
   ingress:
     enabled: true
-    className: "nginx"
+    className: ""
     annotations:
-      cert-manager.io/cluster-issuer: "letsencrypt-prod"
       nginx.ingress.kubernetes.io/proxy-body-size: "200m"
-    hosts:
-      - host: batch-console.example.com
-        paths:
-          - path: /
-            pathType: Prefix
-    tls:
-      - secretName: batch-console-tls
-        hosts:
-          - batch-console.example.com
+    hosts: []
+    tls: []
 
 # P0-5: trigger 在 base values 有 livenessProbe 但缺 startupProbe,prod 补齐
 trigger:
@@ -214,8 +203,8 @@ workerDispatch:
 workerAtomic:
   replicaCount: 1
   productionIsolationRequired: true
-  serviceAccountName: "batch-worker-atomic"
-  envFromSecretName: "batch-worker-atomic-secret"
+  serviceAccountName: ""
+  envFromSecretName: ""
   requireIsolation: true
   isolationAcknowledged: true
   executors:
@@ -228,18 +217,12 @@ workerAtomic:
     egress:
       postgresql:
         enabled: true
-        port: 5432
-        to:
-          - namespaceSelector:
-              matchLabels:
-                kubernetes.io/metadata.name: db
+        port: ""
+        to: []
       kafka:
         enabled: true
-        port: 9092
-        to:
-          - namespaceSelector:
-              matchLabels:
-                kubernetes.io/metadata.name: kafka
+        port: ""
+        to: []
       extra: []
   hpa:
     enabled: true
@@ -289,7 +272,7 @@ otelCollector:
 # 发布 overlay 必须覆盖 endpoint；CI 会拒绝回落到被关闭的 chart 内地址。
 otel:
   enabled: true
-  endpoint: "http://otel-collector.monitoring.svc.cluster.local:4318"
+  endpoint: ""
   # 应用端全量上报，由 Collector tail sampling 保留所有错误/慢链路，
   # 并对普通成功链路按比例采样。
   samplingProbability: "1.0"
@@ -298,10 +281,8 @@ otel:
 # 生产必须让 Prometheus Operator 发现应用指标并加载告警规则。
 serviceMonitor:
   enabled: true
-  labels:
-    release: prometheus
+  labels: {}
 
 prometheusRule:
   enabled: true
-  labels:
-    release: prometheus
+  labels: {}

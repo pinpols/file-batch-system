@@ -17,7 +17,7 @@
 1. 应用治理优先复用现有 Spring、Kafka、PG、Helm、Prometheus 和 CI 能力，不新增配置中心、网关或调度组件。
 2. 代码防线、CI 门禁、容器配置、真实环境演练分别记证据；任一项缺失都不能标记为完整上线证据。
 3. 所有新治理项必须加入权威 YAML 清单并提供至少一个仓库内证据路径，否则 CI 失败。
-4. 开发默认配置可以保持单机友好；生产安全值只能在 `helm/values-prod.yaml` 和外部 Secret 中声明。
+4. 开发默认配置可以保持单机友好；生产安全基线由 `helm/values-prod.yaml` 声明，站点网络/基础设施拓扑由私有 values 提供，凭据通过 Secret/ExternalSecret 注入。
 5. 开源仓库安全响应、ruleset、依赖更新和高风险提案要求以 [`../standards/open-source-governance.md`](../standards/open-source-governance.md) 为准。
 
 ## 复扫命令

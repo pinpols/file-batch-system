@@ -1,4 +1,4 @@
-# Docker 部署基线
+# Docker Compose 部署基线
 
 仓库现在提供两种 Docker 使用方式：
 
@@ -6,11 +6,13 @@
 - `deploy/docker/compose/app.yml`：应用容器部署
 - `deploy/docker/compose/observability.yml`：可选观测栈叠加层
 
+该 Compose 全栈定义面向本地开发和隔离测试，不是生产拓扑模板。需要部署到非本机 Docker 网络时，必须显式覆盖外部数据库、Kafka、Valkey、对象存储和服务间地址；生产 Kubernetes 部署使用 Helm 基础 chart、`helm/values-prod.yaml` 安全策略和站点私有 values，不要把仓库中的本地服务名当作生产地址。
+
 建议按环境选择对应的 env 文件：
 
 - `.env.local`：本地开发
 - `.env.test`：测试环境
-- `.env.prod`：生产环境模板
+- 生产环境：由发布/密钥系统维护的站点专属 env 文件，不提交真实域名、账号或拓扑到仓库
 
 ## 环境标识与 Compose 项目名
 
@@ -18,7 +20,7 @@
   `batch-platform_batch-network`。
 - `be-acceptance` 是验收脚本和日志的运行标识，不是普通本地 Docker 栈的项目名。
 - Docker 观测标签由 `DEPLOYMENT_ENVIRONMENT` 注入，本地默认值为 `local`；生产 Helm
-  部署必须使用 `helm/values-prod.yaml` 的 `production` 覆盖值。
+  部署必须叠加 `helm/values-prod.yaml` 与站点私有 values，并显式设置生产环境标识。
 - `COMPOSE_PROJECT_NAME` 仍可由压测或隔离环境显式覆盖，但不同工作树不能共用固定的
   `batch-*` 容器名；切换工作树前应先停止上一套栈。
 
@@ -29,7 +31,7 @@
 ```
 
 默认会启用 `DOCKER_BUILDKIT=1` 和 `COMPOSE_DOCKER_CLI_BUILD=1`。
-如需切换环境，可在执行前指定 `COMPOSE_ENV_FILE=.env.test` 或 `COMPOSE_ENV_FILE=.env.prod`。
+如需切换本地/测试输入，可在执行前指定 `COMPOSE_ENV_FILE=.env.test`。不要将本地全栈 Compose 当作生产部署入口；仓库不提供可直接用于生产的 `.env.prod`。
 
 ## 启动完整容器栈
 
@@ -124,3 +126,31 @@ MinIO 主进程及 `minio-init` 应为 1001:1001，Valkey 的 PID 1 与服务进
 - 只有 `console-api`、`trigger`、`orchestrator` 暴露 HTTP 健康检查；三个 worker 是非 Web 进程，靠容器重启策略和启动顺序保障
 - `console-api` 的普通 REST 接口可以直接做负载均衡；SSE 实时接口通过 Redis Pub/Sub 广播并结合 replay buffer 回放，允许多实例部署
 - `console-api` realtime 层会消费 Redis Pub/Sub 并转发到本机 SSE 连接，不再依赖 sticky session
+
+## 非本机 Docker 网络
+
+`deploy/docker/compose/app.yml` 保留 `valkey:6379` 等本地 Compose 服务名作为开发默认值。外部 Compose 网络使用 `COMPOSE_REDIS_HOST` / `COMPOSE_REDIS_PORT`，并同时供 Spring Data Redis 与业务 Redis 配置使用。宿主机裸 JVM 继续使用 `BATCH_REDIS_HOST` / `BATCH_REDIS_PORT`（本地映射端口可能是 `16379`），两者是不同网络视角，不能交叉复用。其他依赖分别使用对应的 `SPRING_DATASOURCE_URL`、`BATCH_DATASOURCE_BUSINESS_URL`、`SPRING_KAFKA_BOOTSTRAP_SERVERS`、`BATCH_S3_ENDPOINT` 等变量。
+
+接入托管数据库、Kafka、Valkey 或对象存储时，不要叠加根 `docker-compose.yml`，否则本地基础设施和 `depends_on` 仍会参与启动。使用 `app.yml`、`app.deploy.yml` 与 `app.external.deploy.yml`，先创建容器网络并确认外部依赖可从该网络访问，再从密钥系统加载私有 env 文件：
+
+```bash
+docker network create batch-production
+docker compose \
+  --env-file /secure/path/batch-compose.env \
+  -f deploy/docker/compose/app.yml \
+  -f deploy/docker/compose/app.deploy.yml \
+  -f deploy/docker/compose/app.external.deploy.yml \
+  --profile apps pull
+docker compose \
+  --env-file /secure/path/batch-compose.env \
+  -f deploy/docker/compose/app.yml \
+  -f deploy/docker/compose/app.deploy.yml \
+  -f deploy/docker/compose/app.external.deploy.yml \
+  --profile apps up -d --no-build
+```
+
+私有 env 文件设置 `APP_EXTERNAL_NETWORK=batch-production`、`IMAGE_TAG`、`BATCH_PLATFORM_DB_URL`、`BATCH_DATASOURCE_BUSINESS_URL`、`BATCH_KAFKA_BOOTSTRAP_SERVERS`、`COMPOSE_REDIS_HOST/PORT`、`BATCH_S3_ENDPOINT` 及各依赖凭据、服务间密钥和应用端口即可。Overlay 将平台 DB 和 Kafka 的 canonical endpoint 映射到 Spring 与 worker 两类配置键，避免维护两份同义地址。关键 endpoint 使用 Compose 必填插值，遗漏配置会在启动前失败。此模式只负责接入外部依赖，不提供跨主机调度、自动故障转移或 HA；生产多副本和网络策略优先使用 Kubernetes/Helm。
+
+生产 Kubernetes 使用 `helm/values-prod.yaml` 时必须叠加站点私有 values。该文件只声明生产安全策略和运行参数，不含镜像仓库、集群 DNS、Ingress 域名、namespace selector、监控标签、数据库/Kafka/Redis/对象存储地址。字段模板见 [`helm/values-site.example.yaml`](../../helm/values-site.example.yaml)，复制到私有配置仓库后填写。Helm 会在 `production.requireExplicitTopology=true` 时拒绝缺少关键拓扑；内部服务地址从 release 名、namespace、`clusterDomain` 和服务端口推导。模板验证使用 `helm/batch-platform/examples/values-production-topology-test.yaml`，它是虚构 fixture，不可部署到真实环境。
+
+实时部署/回滚验证必须提供 `BATCH_DEPLOY_SMOKE_VALUES_FILE` 或 `BATCH_DEPLOY_VERIFICATION_VALUES_FILE`，指向站点拥有的 values overlay；静态门禁使用测试 fixture，不会连接或修改集群。

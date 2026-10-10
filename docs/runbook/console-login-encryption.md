@@ -51,6 +51,7 @@ echo "ping" | openssl pkeyutl -encrypt -pubin -inkey console-login.pub.pem \
 # 3. helm deploy（推荐走 Vault / sealed-secrets / KMS,不要 commit 进 git）
 helm upgrade batch-platform helm/batch-platform \
   -f helm/values-prod.yaml \
+  -f /secure/path/site-values.yaml \
   --set security.internalSecret="${INTERNAL_SECRET}" \
   --set security.consoleJwtSecret="${CONSOLE_JWT_SECRET}" \
   --set-file security.loginEncryption.privateKeyPem=console-login.priv.pem \

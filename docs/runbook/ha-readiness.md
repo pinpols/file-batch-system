@@ -8,8 +8,8 @@
 
 ## 0. 部署模型(先明确)
 
-- **应用 8 服务**:K8s 容器多副本(Helm `helm/batch-platform`,values-prod / values-canary)。✅ 就绪。
-- **基础件**:应用只连地址(`values-prod` 里 `*.svc.cluster.local`),**chart 不自建**。两条路可混用:
+- **应用 8 服务**:K8s 容器多副本(Helm `helm/batch-platform`,叠加生产策略和站点私有 values)。部署材料已具备；目标集群验收见下文。
+- **基础件**:应用只连服务地址，具体 endpoint 由站点私有 values 提供，**chart 不自建**。两条路可混用:
   - **K8s operator 自托管容器**:PG=CloudNativePG/Patroni、Kafka=Strimzi、Redis=redis-operator/Sentinel、MinIO=MinIO-Operator。
   - **云托管(非容器)**:Aurora/RDS、MSK、ElastiCache、S3——改 url/bootstrap 即可,应用零改动。**团队小优先托管,省 P0 一大半运维。**
 
@@ -31,7 +31,7 @@
 
 ### P0-2 PG / Citus coordinator 自动 failover
 - **现状**:流复制 standby 在(primary/replica),但 **failover 是手动 promote**(`playbooks/pg-primary-failover.md`),无 Patroni/etcd。
-- **① 运维件**:Patroni + etcd(或 CloudNativePG);VIP/Service 名(`pg-primary.db.svc`)指向当前 leader,**app 连 VIP 不连 IP**(values-prod 已是 svc 名 ✅)。上 Citus 时 coordinator 同样要 HA(Citus 13 支持 coordinator 主备),worker 各自也要副本。
+- **① 运维件**:Patroni + etcd(或 CloudNativePG);VIP/Service 名指向当前 leader,**app 连 VIP/Service/DNS endpoint，不连固定 IP**。具体地址放在站点私有 values；仓库 `values-prod.yaml` 不再假定数据库 Service 名。上 Citus 时 coordinator 同样要 HA(Citus 13 支持 coordinator 主备),worker 各自也要副本。
 - **② 应用侧**:✅ **已做**——url 走 svc 名非硬编码 IP;Hikari **keepalive=30s**(本次补:`HikariPgSessionSupport`,failover 后主动探活剔除指向旧主的死连接)+ `connection-timeout=5s`;状态机强一致(读写分离仅 console-api)。
 - **验证**:Patroni 触发 switchover,观察应用日志——切换窗口内允许少量重试 WARN,**不应** Connection reset 雪崩;keepalive 探活在 ~30s 内剔除旧连接。
 - **回滚**:Patroni `failover`/`switchover` 切回;app 无需动(连 VIP)。
@@ -107,5 +107,5 @@
 
 ## 关联
 - `playbooks/pg-primary-failover.md` / `backup-and-pitr.md` / `redis-shedlock-down.md`
-- `helm/values-prod.yaml`(基础件连接地址 + Kafka broker 期望拓扑)、`deploy/docker/observability/prometheus-batch-rules.yml`(HA 告警)
+- `helm/values-prod.yaml`(生产安全策略与 Kafka broker 期望拓扑；基础件 endpoint 由站点私有 values 注入)、`deploy/docker/observability/prometheus-batch-rules.yml`(HA 告警)
 - **Kafka broker HA**:`deploy/ha/20-kafka-strimzi.yaml`(prod CR) + `deploy/ha/README.md`(apply/验证) + `docker-compose.kafka-ha.yml`(本地 3 broker 演练 override) + `scripts/data/init-kafka-topics.sh`(RF / min.insync 可配)

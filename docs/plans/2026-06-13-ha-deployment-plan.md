@@ -81,7 +81,7 @@ PG 层的真相:
 ## 3. 网络 / 连接(避免硬编码 IP)
 
 - 应用 → **PgBouncer Service** → Patroni `<cluster>-leader` Service(只指当前 leader);failover 时 app/PgBouncer 不动,endpoint 自动切。
-- `helm/values-prod.yaml`:`postgresql.url` 指 PgBouncer svc、Kafka 指 Strimzi bootstrap svc、Redis 指 Sentinel svc —— **全 svc 名零 IP**(本仓已是此形态)。
+- `helm/values-prod.yaml`只保留生产安全策略与运行参数；PgBouncer、Kafka bootstrap、Redis Sentinel 等地址由站点私有 values 注入。应用连接应使用稳定的 Service/DNS endpoint，避免固定 IP；具体名称取决于目标集群拓扑。
 
 ---
 
@@ -116,7 +116,7 @@ PG 层的真相:
 ## 5. 交付物
 
 operator 清单/CR/values 属部署产物,随 `main` 的部署目录与 runbook 维护。需产出:
-- **通用 HA(阶段1-3)**:etcd StatefulSet + **普通 Patroni** StatefulSet + leader Service + Strimzi `Kafka` CR + Redis Sentinel + MinIO `Tenant` CR + PgBouncer + pgBackRest 配置/CronJob/演练脚本 + `values-prod` svc 地址对齐。
+- **通用 HA(阶段1-3)**:etcd StatefulSet + **普通 Patroni** StatefulSet + leader Service + Strimzi `Kafka` CR + Redis Sentinel + MinIO `Tenant` CR + PgBouncer + pgBackRest 配置/CronJob/演练脚本 + 站点 values 中的 Service/DNS endpoint 对齐。
 - **Citus 增量(阶段4)**:Patroni Citus 模式 ConfigMap + worker group StatefulSet + 迁移 runbook(单 PG → Citus)——**单独交付,前置 feature 合 main**。
 - 每件配 §4 failover 验证脚本(kill leader / 断网 / 滚动重启)。
 
@@ -135,4 +135,4 @@ operator 清单/CR/values 属部署产物,随 `main` 的部署目录与 runbook 
 - `ha-readiness.md`(P0/P1 checklist + 应用侧已做对照)
 - `backup-and-pitr.md`(备份/PITR/演练)· `citus-deployment.md`(Citus GUC/distribute/开关)
 - `playbooks/pg-primary-failover.md`(Patroni 后由 patronictl 替代手动 promote)
-- `helm/values-prod.yaml`(基础件连接地址)
+- `helm/values-prod.yaml`(生产策略)与站点私有 values(基础件连接地址)

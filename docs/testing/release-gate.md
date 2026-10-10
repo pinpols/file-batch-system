@@ -240,7 +240,7 @@ deploy smoke 现在分两层：
 export BATCH_DEPLOY_SMOKE_ENABLE_LIVE=true
 export BATCH_DEPLOY_SMOKE_RELEASE=batch-platform-staging-smoke
 export BATCH_DEPLOY_SMOKE_NAMESPACE=batch-staging-smoke
-export BATCH_DEPLOY_SMOKE_VALUES_FILE=helm/values-prod.yaml
+export BATCH_DEPLOY_SMOKE_VALUES_FILE=/secure/path/site-values.yaml
 export BATCH_DEPLOY_SMOKE_TIMEOUT=10m
 export BATCH_DEPLOY_SMOKE_READINESS_TIMEOUT_SECONDS=180
 
@@ -253,7 +253,7 @@ export BATCH_DEPLOY_SMOKE_MINIO_SECRET_KEY='***'
 如果后续新增 `helm/values-staging.yaml`，优先改成：
 
 ```bash
-export BATCH_DEPLOY_SMOKE_VALUES_FILE=helm/values-staging.yaml
+export BATCH_DEPLOY_SMOKE_VALUES_FILE=/secure/path/staging-site-values.yaml
 ```
 
 ## 执行顺序

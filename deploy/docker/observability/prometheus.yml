@@ -44,12 +44,14 @@ scrape_configs:
       - targets: ['minio:9000']
 
   - job_name: node-exporter
-    static_configs:
-      - targets: ['node-exporter:9100']
+    file_sd_configs:
+      - files: ['/prometheus/targets/node-exporter-targets.json']
+        refresh_interval: 30s
 
   - job_name: cadvisor
-    static_configs:
-      - targets: ['cadvisor:8080']
+    file_sd_configs:
+      - files: ['/prometheus/targets/cadvisor-targets.json']
+        refresh_interval: 30s
 
   - job_name: otel-collector
     metrics_path: /metrics

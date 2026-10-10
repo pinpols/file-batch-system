@@ -1,0 +1,46 @@
+# 外部依赖 Compose 部署覆盖文件。
+# 与 app.yml 和 app.deploy.yml 配合使用，不与根目录 docker-compose.yml 同时使用。
+# 运维人员负责创建或连接网络，并通过私有环境文件提供外部服务地址。
+# 此方式仍是单机 Compose 部署，不具备高可用能力。
+x-external-dependency-env: &external-dependency-env
+  SPRING_DATASOURCE_URL: ${BATCH_PLATFORM_DB_URL:?Set the platform PostgreSQL JDBC URL}
+  SPRING_DATA_REDIS_HOST: ${COMPOSE_REDIS_HOST:?Set the container-network Redis host}
+  SPRING_DATA_REDIS_PORT: ${COMPOSE_REDIS_PORT:?Set the container-network Redis port}
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:?Set Kafka bootstrap servers}
+  BATCH_DATASOURCE_BUSINESS_URL: ${BATCH_DATASOURCE_BUSINESS_URL:?Set the business PostgreSQL JDBC URL}
+  BATCH_REDIS_HOST: ${COMPOSE_REDIS_HOST:?Set the container-network Redis host}
+  BATCH_REDIS_PORT: ${COMPOSE_REDIS_PORT:?Set the container-network Redis port}
+  BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:?Set the platform PostgreSQL JDBC URL}
+  BATCH_KAFKA_BOOTSTRAP_SERVERS: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:?Set Kafka bootstrap servers}
+  BATCH_S3_ENDPOINT: ${BATCH_S3_ENDPOINT:?Set the reachable S3-compatible endpoint}
+
+services:
+  console-api:
+    depends_on: !reset []
+    environment: *external-dependency-env
+  trigger:
+    depends_on: !reset []
+    environment: *external-dependency-env
+  orchestrator:
+    depends_on: !reset []
+    environment: *external-dependency-env
+  worker-import:
+    depends_on: !reset []
+    environment: *external-dependency-env
+  worker-export:
+    depends_on: !reset []
+    environment: *external-dependency-env
+  worker-process:
+    depends_on: !reset []
+    environment: *external-dependency-env
+  worker-dispatch:
+    depends_on: !reset []
+    environment: *external-dependency-env
+  worker-atomic:
+    depends_on: !reset []
+    environment: *external-dependency-env
+
+networks:
+  batch-network:
+    external: true
+    name: ${APP_EXTERNAL_NETWORK:?Set APP_EXTERNAL_NETWORK to the pre-created network}

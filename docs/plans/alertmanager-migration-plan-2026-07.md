@@ -303,7 +303,7 @@ Prometheus metrics 那 76 条规则同样汇入中间的 AM 框(§1.4),复用同
 - 真实下游送达(真钉钉/企微/短信 provider、真 webhook 端点)实测一轮;
 - AM HA(≥2 副本 gossip cluster,`--cluster.peer`)或明确接受单实例 SPOF(与本仓「单实例试生产接受」惯例一致);
 - 告警风暴演练(批量注入,验 AM 分组/抑制不漏 CRITICAL、`am-notify` 端点限流);
-- bearer token(`alertmanager-batch-template.yml:41` 占位符)纳入密钥管理与轮换;
+- bearer token 轮换仍需上线前验证；本地 Compose 已改为从受保护的文件型 secret 同时注入 Alertmanager 和 Console API，生产密钥由站点 Secret 管理方案提供;
 - `am.notify.skipped` / `batch.alert.am_emit.failed` 元告警接到值班渠道。
 
 ### 附录:代码侧最小改动清单(供 PR-1,本任务不实现)
@@ -362,8 +362,7 @@ Prometheus metrics 那 76 条规则同样汇入中间的 AM 框(§1.4),复用同
 - **现状**:单实例 `prom/alertmanager:v0.28.1`(`deploy/docker/compose/observability.yml:27`),配置文件挂载
   `alertmanager-batch-template.yml`,宿主端口 `19093→9093`。Prometheus 已指向 `alertmanager:9093`(`prometheus.yml:13`)。
 - **配置管理**:文件驱动 + `amtool check-config` 校验 + `POST /-/reload` 热加载;route 由 §6.4 生成器产出。
-  模板里 `REPLACE_WITH_AM_NOTIFY_BEARER_TOKEN`(`alertmanager-batch-template.yml:41`)部署时渲染真实 token
-  (AM 不做 env 替换)。
+  本地 Compose 将同一文件型 secret 挂载到 Alertmanager 与 Console API，避免把 bearer token 写进配置模板；生产环境需由站点 Secret 管理方案注入，轮换后按部署平台要求重启/重载相关服务。
 - **HA(生产,上线时决策)**:AM 官方 gossip cluster(≥2 副本,`--cluster.peer`),去重与 silence 跨副本一致;
   k8s 生产可走 kube-prometheus-stack 的 Alertmanager CRD(影响生成器输出形态:yml vs `AlertmanagerConfig` CRD,列入待核实)。
   **本迁移 v1 单实例。**

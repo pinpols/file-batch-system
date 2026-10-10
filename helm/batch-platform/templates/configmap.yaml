@@ -1,6 +1,148 @@
 {{- if and .Values.security.enforceStrongSecrets (empty .Values.objectStorage.endpoint) }}
 {{- fail "objectStorage.endpoint 必须提供 (生产环境通过 Helm values 注入非敏感端点)" }}
 {{- end }}
+{{- $fullname := include "batch-platform.fullname" . -}}
+{{- $namespace := .Release.Namespace -}}
+{{- $clusterDomain := .Values.clusterDomain | default "cluster.local" -}}
+{{- $orchestratorUrl := .Values.orchestratorBaseUrl | default (printf "http://%s-orchestrator.%s.svc.%s:%v" $fullname $namespace $clusterDomain .Values.orchestrator.port) -}}
+{{- $triggerUrl := .Values.triggerBaseUrl | default (printf "http://%s-trigger.%s.svc.%s:%v" $fullname $namespace $clusterDomain .Values.trigger.port) -}}
+{{- $workerAtomicUrl := .Values.workerAtomicBaseUrl | default (printf "http://%s-worker-atomic.%s.svc.%s:%v" $fullname $namespace $clusterDomain .Values.workerAtomic.port) -}}
+{{- if .Values.production.requireExplicitTopology -}}
+  {{- $_ := required "production overlay must set image.registry" .Values.image.registry -}}
+  {{- $_ := required "production overlay must set postgresql.platform.url" .Values.postgresql.platform.url -}}
+  {{- $_ := required "production overlay must set postgresql.business.url" .Values.postgresql.business.url -}}
+  {{- $_ := required "production overlay must set kafka.bootstrapServers" .Values.kafka.bootstrapServers -}}
+  {{- $_ := required "production overlay must set redis.host" .Values.redis.host -}}
+  {{- $_ := required "production overlay must set redis.port" .Values.redis.port -}}
+  {{- $_ := required "production overlay must set objectStorage.endpoint" .Values.objectStorage.endpoint -}}
+  {{- $_ := required "production overlay must set objectStorage.bucket" .Values.objectStorage.bucket -}}
+  {{- $_ := required "production overlay must set consoleApi.ai.attachment.storageBucket" .Values.consoleApi.ai.attachment.storageBucket -}}
+  {{- $_ := required "production overlay must set clusterDomain" .Values.clusterDomain -}}
+  {{- $_ := required "production overlay must set workerAtomic PostgreSQL egress port" .Values.workerAtomic.networkPolicy.egress.postgresql.port -}}
+  {{- $_ := required "production overlay must set workerAtomic Kafka egress port" .Values.workerAtomic.networkPolicy.egress.kafka.port -}}
+  {{- if eq .Values.objectStorage.bucket .Values.consoleApi.ai.attachment.storageBucket -}}
+    {{- fail "production objectStorage.bucket and AI attachment bucket must be distinct" -}}
+  {{- end -}}
+  {{- $endpointValues := list .Values.postgresql.platform.url .Values.postgresql.business.url .Values.kafka.bootstrapServers .Values.redis.host .Values.objectStorage.endpoint .Values.otel.endpoint .Values.orchestratorBaseUrl .Values.triggerBaseUrl .Values.workerAtomicBaseUrl .Values.clusterDomain -}}
+  {{- range $endpoint := $endpointValues -}}
+    {{- $normalizedEndpoint := lower (toString $endpoint) -}}
+    {{- range $localAddress := list "localhost" "127.0.0.1" "0.0.0.0" "::1" "host.docker.internal" -}}
+      {{- if contains $localAddress $normalizedEndpoint -}}
+        {{- fail (printf "production endpoint must not use local-only address %s" $localAddress) -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if not .Values.security.enforceStrongSecrets -}}
+    {{- fail "production security.enforceStrongSecrets must remain enabled" -}}
+  {{- end -}}
+  {{- if not .Values.security.loginEncryption.required -}}
+    {{- fail "production security.loginEncryption.required must remain enabled" -}}
+  {{- end -}}
+  {{- if not .Values.networkPolicy.enabled -}}
+    {{- fail "production networkPolicy.enabled must remain enabled" -}}
+  {{- end -}}
+  {{- if not .Values.workerAtomic.productionIsolationRequired -}}
+    {{- fail "production workerAtomic.productionIsolationRequired must remain enabled" -}}
+  {{- end -}}
+  {{- if not .Values.workerAtomic.requireIsolation -}}
+    {{- fail "production workerAtomic.requireIsolation must remain enabled" -}}
+  {{- end -}}
+  {{- if not .Values.workerAtomic.isolationAcknowledged -}}
+    {{- fail "production workerAtomic.isolationAcknowledged must remain enabled" -}}
+  {{- end -}}
+  {{- if not .Values.workerAtomic.networkPolicy.enabled -}}
+    {{- fail "production workerAtomic.networkPolicy.enabled must remain enabled" -}}
+  {{- end -}}
+  {{- if or (not .Values.workerAtomic.networkPolicy.egress.postgresql.enabled) (not .Values.workerAtomic.networkPolicy.egress.kafka.enabled) -}}
+    {{- fail "production workerAtomic PostgreSQL and Kafka egress rules must remain enabled" -}}
+  {{- end -}}
+  {{- if not .Values.otel.enabled -}}
+    {{- fail "production otel.enabled must remain enabled" -}}
+  {{- end -}}
+  {{- if not .Values.serviceMonitor.enabled -}}
+    {{- fail "production serviceMonitor.enabled must remain enabled" -}}
+  {{- end -}}
+  {{- if not .Values.prometheusRule.enabled -}}
+    {{- fail "production prometheusRule.enabled must remain enabled" -}}
+  {{- end -}}
+  {{- if ne .Values.orchestrator.quota.redisFailureMode "FAIL_CLOSED" -}}
+    {{- fail "production Redis quota failure mode must remain FAIL_CLOSED" -}}
+  {{- end -}}
+  {{- if not .Values.networkPolicy.ingress.from -}}
+    {{- fail "production networkPolicy.ingress.from must list the authorized ingress namespaces/selectors" -}}
+  {{- end -}}
+  {{- range $peer := .Values.networkPolicy.ingress.from -}}
+    {{- if not (or (hasKey $peer "ipBlock") (hasKey $peer "namespaceSelector") (hasKey $peer "podSelector")) -}}
+      {{- fail "production networkPolicy.ingress.from contains an empty or unsupported peer" -}}
+    {{- end -}}
+    {{- if hasKey $peer "ipBlock" -}}
+      {{- $cidr := get (get $peer "ipBlock") "cidr" -}}
+      {{- if or (empty $cidr) (eq $cidr "0.0.0.0/0") (eq $cidr "::/0") -}}
+        {{- fail "production networkPolicy ingress ipBlock must use a bounded CIDR" -}}
+      {{- end -}}
+    {{- end -}}
+    {{- if and (hasKey $peer "namespaceSelector") (empty (get $peer "namespaceSelector")) (or (not (hasKey $peer "podSelector")) (empty (get $peer "podSelector"))) -}}
+      {{- fail "production networkPolicy ingress must not select every namespace and pod" -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if and .Values.consoleApi.ingress.enabled (not .Values.consoleApi.ingress.hosts) -}}
+    {{- fail "production consoleApi.ingress.hosts must list the public hostnames" -}}
+  {{- end -}}
+  {{- if and .Values.consoleApi.ingress.enabled (not .Values.consoleApi.ingress.tls) -}}
+    {{- fail "production ingress must reference TLS secrets" -}}
+  {{- end -}}
+  {{- if and .Values.consoleApi.readReplica.enabled (or (not .Values.consoleApi.readReplica.primaryUrl) (not .Values.consoleApi.readReplica.replicaUrl)) -}}
+    {{- fail "production read replica requires explicit primaryUrl and replicaUrl" -}}
+  {{- end -}}
+  {{- if and .Values.otel.enabled (not .Values.otel.endpoint) -}}
+    {{- fail "production otel.endpoint must identify the reachable collector" -}}
+  {{- end -}}
+  {{- if or (not .Values.workerAtomic.networkPolicy.egress.postgresql.to) (not .Values.workerAtomic.networkPolicy.egress.kafka.to) -}}
+    {{- fail "production workerAtomic egress rules must identify the PostgreSQL and Kafka network peers" -}}
+  {{- end -}}
+  {{- range $kind := list "postgresql" "kafka" -}}
+    {{- $peers := (index $.Values.workerAtomic.networkPolicy.egress $kind).to -}}
+    {{- range $peer := $peers -}}
+      {{- if not (or (hasKey $peer "ipBlock") (hasKey $peer "namespaceSelector") (hasKey $peer "podSelector")) -}}
+        {{- fail (printf "production workerAtomic %s egress contains an empty or unsupported peer" $kind) -}}
+      {{- end -}}
+      {{- if hasKey $peer "ipBlock" -}}
+        {{- $cidr := get (get $peer "ipBlock") "cidr" -}}
+        {{- if or (empty $cidr) (eq $cidr "0.0.0.0/0") (eq $cidr "::/0") -}}
+          {{- fail (printf "production workerAtomic %s egress ipBlock must use a bounded CIDR" $kind) -}}
+        {{- end -}}
+      {{- end -}}
+      {{- if and (hasKey $peer "namespaceSelector") (empty (get $peer "namespaceSelector")) (or (not (hasKey $peer "podSelector")) (empty (get $peer "podSelector"))) -}}
+        {{- fail (printf "production workerAtomic %s egress must not select every namespace and pod" $kind) -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- range $rule := .Values.workerAtomic.networkPolicy.egress.extra -}}
+    {{- if not $rule.to -}}
+      {{- fail "production workerAtomic extra egress rule must include explicit destination peers" -}}
+    {{- end -}}
+    {{- range $peer := $rule.to -}}
+      {{- if not (or (hasKey $peer "ipBlock") (hasKey $peer "namespaceSelector") (hasKey $peer "podSelector")) -}}
+        {{- fail "production workerAtomic extra egress contains an empty or unsupported peer" -}}
+      {{- end -}}
+      {{- if hasKey $peer "ipBlock" -}}
+        {{- $cidr := get (get $peer "ipBlock") "cidr" -}}
+        {{- if or (empty $cidr) (eq $cidr "0.0.0.0/0") (eq $cidr "::/0") -}}
+          {{- fail "production workerAtomic extra egress ipBlock must use a bounded CIDR" -}}
+        {{- end -}}
+      {{- end -}}
+      {{- if and (hasKey $peer "namespaceSelector") (empty (get $peer "namespaceSelector")) (or (not (hasKey $peer "podSelector")) (empty (get $peer "podSelector"))) -}}
+        {{- fail "production workerAtomic extra egress must not select every namespace and pod" -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if and .Values.serviceMonitor.enabled (not .Values.serviceMonitor.labels) -}}
+    {{- fail "production serviceMonitor.labels must match the Prometheus installation" -}}
+  {{- end -}}
+  {{- if and .Values.prometheusRule.enabled (not .Values.prometheusRule.labels) -}}
+    {{- fail "production prometheusRule.labels must match the Prometheus installation" -}}
+  {{- end -}}
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -69,9 +211,9 @@ data:
   BATCH_STORAGE_FILESYSTEM_MAX_LIST_SCAN_ENTRIES: {{ (.Values.storage).filesystemMaxListScanEntries | default 200000 | quote }}
 
   # ── 跨服务 ──────────────────────────────────────────────────────────
-  BATCH_ORCHESTRATOR_BASE_URL: {{ .Values.orchestratorBaseUrl | quote }}
-  BATCH_TRIGGER_BASE_URL: {{ .Values.triggerBaseUrl | quote }}
-  BATCH_WORKER_ATOMIC_BASE_URL: {{ .Values.workerAtomicBaseUrl | quote }}
+  BATCH_ORCHESTRATOR_BASE_URL: {{ $orchestratorUrl | quote }}
+  BATCH_TRIGGER_BASE_URL: {{ $triggerUrl | quote }}
+  BATCH_WORKER_ATOMIC_BASE_URL: {{ $workerAtomicUrl | quote }}
 
   # R7-A4-P0: orchestrator 限流 + DB 池规模（之前 .env.prod 写了但 Helm 漂移）。
   BATCH_ORCHESTRATOR_PLATFORM_DB_MAX_POOL_SIZE: {{ .Values.orchestrator.platformDb.maxPoolSize | default 30 | quote }}
@@ -213,10 +355,6 @@ data:
   BATCH_RATE_LIMIT_MAX_RELEASE_REQUESTS_PER_TENANT_PER_MINUTE: {{ .Values.orchestrator.rateLimit.maxReleasePerTenantPerMinute | default 3000 | quote }}
   BATCH_RATE_LIMIT_MAX_CLAIM_REQUESTS_PER_TENANT_PER_MINUTE: {{ .Values.orchestrator.rateLimit.maxClaimPerTenantPerMinute | default 12000 | quote }}
   BATCH_RATE_LIMIT_MAX_REPORT_REQUESTS_PER_TENANT_PER_MINUTE: {{ .Values.orchestrator.rateLimit.maxReportPerTenantPerMinute | default 30000 | quote }}
-  BATCH_SLA_JOB_MONITORING_ENABLED: {{ .Values.orchestrator.sla.jobMonitoring.enabled | quote }}
-  BATCH_SLA_JOB_MONITORING_POLL_INTERVAL_MILLIS: {{ .Values.orchestrator.sla.jobMonitoring.pollIntervalMillis | default 30000 | quote }}
-  BATCH_SLA_JOB_MONITORING_BATCH_SIZE: {{ .Values.orchestrator.sla.jobMonitoring.batchSize | default 50 | quote }}
-  BATCH_SLA_JOB_MONITORING_FAILED_PARTITION_LOOKBACK_SECONDS: {{ .Values.orchestrator.sla.jobMonitoring.failedPartitionLookbackSeconds | default 3600 | quote }}
   BATCH_REQUEST_SIGNING_ENABLED: {{ (.Values.orchestrator.requestSigning).enabled | default false | quote }}
   BATCH_CONSOLE_REALTIME_REPLAY_MAX_ENTRIES: {{ .Values.consoleApi.realtime.replayMaxEntries | quote }}
   BATCH_CONSOLE_REALTIME_REPLAY_TTL: {{ .Values.consoleApi.realtime.replayTtl | quote }}

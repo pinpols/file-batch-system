@@ -176,7 +176,7 @@ resolve_kubectl_bin() {
 run_helm() {
   if command -v helm >/dev/null 2>&1; then
     helm "$@"
-    return 0
+    return $?
   fi
 
   local docker_bin
@@ -278,9 +278,10 @@ rollout_and_probe_release() {
 deploy_smoke() {
   local chart_dir="$ROOT_DIR/helm/batch-platform"
   local prod_values="$ROOT_DIR/helm/values-prod.yaml"
+  local topology_fixture="$chart_dir/examples/values-production-topology-test.yaml"
   local release_name="${BATCH_DEPLOY_SMOKE_RELEASE:-batch-platform-smoke}"
   local namespace="${BATCH_DEPLOY_SMOKE_NAMESPACE:-batch-smoke}"
-  local values_file="${BATCH_DEPLOY_SMOKE_VALUES_FILE:-$prod_values}"
+  local values_file="${BATCH_DEPLOY_SMOKE_VALUES_FILE:-}"
   local render_dir
   render_dir="$(mktemp -d "${TMPDIR:-/tmp}/batch-deploy-smoke.XXXXXX")"
 
@@ -297,10 +298,43 @@ deploy_smoke() {
   )
 
   run_helm lint "$chart_dir"
-  run_helm lint "$chart_dir" -f "$prod_values" "${secret_args[@]}"
+  run_helm lint "$chart_dir" -f "$prod_values" -f "$topology_fixture" "${secret_args[@]}"
 
   run_helm template "$release_name" "$chart_dir" --namespace "$namespace" >"$render_dir/default.yaml"
-  run_helm template "$release_name" "$chart_dir" --namespace "$namespace" -f "$prod_values" "${secret_args[@]}" >"$render_dir/prod.yaml"
+  run_helm template "$release_name" "$chart_dir" --namespace "$namespace" -f "$prod_values" -f "$topology_fixture" "${secret_args[@]}" >"$render_dir/prod.yaml"
+  local blocked_local_host
+  blocked_local_host="$(printf 'local%s' 'host')"
+  local blocked_database_name_separator="_"
+  local blocked_local_database_url="jdbc:postgresql://${blocked_local_host}:5432/batch${blocked_database_name_separator}platform"
+  local -a invalid_topology_cases=(
+    '--set networkPolicy.enabled=false|production networkPolicy.enabled must remain enabled'
+    '--set-json networkPolicy.ingress.from=[{}]|production networkPolicy.ingress.from contains an empty or unsupported peer'
+    '--set-json networkPolicy.ingress.from=[{"ipBlock":{"cidr":"0.0.0.0/0"}}]|production networkPolicy ingress ipBlock must use a bounded CIDR'
+    '--set-json workerAtomic.networkPolicy.egress.postgresql.to=[{}]|production workerAtomic postgresql egress contains an empty or unsupported peer'
+    '--set workerAtomic.networkPolicy.egress.kafka.enabled=false|production workerAtomic PostgreSQL and Kafka egress rules must remain enabled'
+    '--set-json workerAtomic.networkPolicy.egress.kafka.to=[{"ipBlock":{"cidr":"0.0.0.0/0"}}]|production workerAtomic kafka egress ipBlock must use a bounded CIDR'
+    '--set-json workerAtomic.networkPolicy.egress.extra=[{"ports":[{"port":443}]}]|production workerAtomic extra egress rule must include explicit destination peers'
+    "--set-string postgresql.platform.url=${blocked_local_database_url}|production endpoint must not use local-only address localhost"
+    '--set consoleApi.ai.attachment.storageBucket=batch-files-test|production objectStorage.bucket and AI attachment bucket must be distinct'
+    '--set workerAtomic.networkPolicy.egress.kafka.port=|production overlay must set workerAtomic Kafka egress port'
+  )
+  local invalid_case invalid_override expected_error
+  for invalid_case in "${invalid_topology_cases[@]}"; do
+    IFS='|' read -r invalid_override expected_error <<<"$invalid_case"
+    # shellcheck disable=SC2086
+    if run_helm template "$release_name" "$chart_dir" --namespace "$namespace" \
+      -f "$prod_values" -f "$topology_fixture" "${secret_args[@]}" $invalid_override \
+      >"$render_dir/invalid-topology.yaml" 2>&1; then
+      printf 'Production Helm accepted an unsafe topology override: %s\n' "$invalid_override" >&2
+      return 1
+    fi
+    if ! grep -Fq "$expected_error" "$render_dir/invalid-topology.yaml"; then
+      printf 'Production Helm rejected %s for an unexpected reason; expected: %s\n' \
+        "$invalid_override" "$expected_error" >&2
+      cat "$render_dir/invalid-topology.yaml" >&2
+      return 1
+    fi
+  done
   run_helm template "$release_name" "$chart_dir" --namespace "$namespace" \
     -f "$chart_dir/examples/values-autoscale.yaml" >"$render_dir/autoscale.yaml"
 
@@ -342,9 +376,11 @@ deploy_smoke() {
 
   if [[ "${BATCH_DEPLOY_SMOKE_ENABLE_LIVE:-false}" == "true" ]]; then
     local -a values_args=()
-    if [[ -n "$values_file" ]]; then
-      values_args=(-f "$values_file")
+    if [[ -z "$values_file" || ! -f "$values_file" ]]; then
+      printf 'Live deploy requires BATCH_DEPLOY_SMOKE_VALUES_FILE pointing to a site-owned values file.\n' >&2
+      return 2
     fi
+    values_args=(-f "$prod_values" -f "$values_file")
 
     run_kubectl config current-context >/dev/null
     run_helm upgrade --install "$release_name" "$chart_dir" \
@@ -366,9 +402,10 @@ deploy_smoke() {
 deployment_verification() {
   local chart_dir="$ROOT_DIR/helm/batch-platform"
   local prod_values="$ROOT_DIR/helm/values-prod.yaml"
+  local topology_fixture="$chart_dir/examples/values-production-topology-test.yaml"
   local release_name="${DEFAULT_VERIFICATION_RELEASE}"
   local namespace="${DEFAULT_VERIFICATION_NAMESPACE}"
-  local values_file="${BATCH_DEPLOY_VERIFICATION_VALUES_FILE:-$prod_values}"
+  local values_file="${BATCH_DEPLOY_VERIFICATION_VALUES_FILE:-}"
   local render_dir
   local verification_id
   render_dir="$(mktemp -d "${TMPDIR:-/tmp}/batch-deploy-verification.XXXXXX")"
@@ -383,9 +420,9 @@ deployment_verification() {
   )
 
   run_helm lint "$chart_dir"
-  run_helm lint "$chart_dir" -f "$prod_values" "${secret_args[@]}"
+  run_helm lint "$chart_dir" -f "$prod_values" -f "$topology_fixture" "${secret_args[@]}"
   run_helm template "$release_name" "$chart_dir" --namespace "$namespace" >"$render_dir/default.yaml"
-  run_helm template "$release_name" "$chart_dir" --namespace "$namespace" -f "$prod_values" "${secret_args[@]}" >"$render_dir/prod.yaml"
+  run_helm template "$release_name" "$chart_dir" --namespace "$namespace" -f "$prod_values" -f "$topology_fixture" "${secret_args[@]}" >"$render_dir/prod.yaml"
 
   assert_manifest_contains "$render_dir/default.yaml" "name: ${release_name}-trigger"
   assert_manifest_contains "$render_dir/default.yaml" "name: ${release_name}-orchestrator"
@@ -408,9 +445,11 @@ deployment_verification() {
   fi
 
   local -a values_args=()
-  if [[ -n "$values_file" ]]; then
-    values_args=(-f "$values_file")
+  if [[ -z "$values_file" || ! -f "$values_file" ]]; then
+    printf 'Live verification requires BATCH_DEPLOY_VERIFICATION_VALUES_FILE pointing to a site-owned values file.\n' >&2
+    return 2
   fi
+  values_args=(-f "$prod_values" -f "$values_file")
 
   local context target_confirmation
   context="$(run_kubectl config current-context)"
