@@ -55,6 +55,9 @@ class ConfigPackageWorkbookGuidanceTest {
   @DisplayName("示例模板:各场景数据行完整,且队列类型取值保持合法")
   void shouldContainScenarioRows_whenBuildingSampleTemplate() throws Exception {
     try (XSSFWorkbook importWb = buildSampleTemplate("IMPORT")) {
+      assertThat(importWb.getSheet(ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET))
+          .as("场景示例导出必须包含作业监控策略 sheet")
+          .isNotNull();
       assertThat(importWb
               .getSheet(ConfigPackageExcelValidator.JOB_SHEET)
               .getRow(1)
@@ -83,6 +86,39 @@ class ConfigPackageWorkbookGuidanceTest {
       assertThat(jobSheet.getRow(1).getCell(3).getStringCellValue()).isEqualTo("ATOMIC");
       assertThat(atomicWb.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET).getLastRowNum())
           .isZero();
+    }
+  }
+
+  @Test
+  @DisplayName("导出、派发和工作流示例仍按 12 个数据 sheet 正确定位")
+  void shouldKeepSheetIndexes_whenBuildingExportDispatchAndWorkflowSamples() throws Exception {
+    try (XSSFWorkbook exportWb = buildSampleTemplate("EXPORT")) {
+      assertThat(exportWb
+              .getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET)
+              .getRow(1)
+              .getCell(1)
+              .getStringCellValue())
+          .isEqualTo("TPL_EXPORT_CUSTOMER");
+      assertThat(exportWb.getSheet(ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET))
+          .isNotNull();
+    }
+    try (XSSFWorkbook dispatchWb = buildSampleTemplate("DISPATCH")) {
+      assertThat(dispatchWb
+              .getSheet(ConfigPackageExcelValidator.CHANNEL_SHEET)
+              .getRow(1)
+              .getCell(1)
+              .getStringCellValue())
+          .isEqualTo("demo-sftp");
+    }
+    try (XSSFWorkbook workflowWb = buildSampleTemplate("WORKFLOW")) {
+      assertThat(workflowWb
+              .getSheet(ConfigPackageExcelValidator.WF_DEF_SHEET)
+              .getRow(1)
+              .getCell(1)
+              .getStringCellValue())
+          .isEqualTo("WF_CUSTOMER_EOD");
+      assertThat(workflowWb.getSheet(ConfigPackageExcelValidator.WF_EDGE_SHEET).getLastRowNum())
+          .isEqualTo(3);
     }
   }
 

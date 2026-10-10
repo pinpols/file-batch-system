@@ -56,11 +56,11 @@ Prometheus 规则入口：
 
 | 对象 | 当前规则 / 信号 | 覆盖结论 | 故障定位 |
 |---|---|---|---|
-| Console、Trigger、Orchestrator、五类 Worker | `BatchServiceDown` / Prometheus `up` | 覆盖已发现 target 的 scrape 失败；target 从服务发现中消失时未必产生 `up=0` | 查进程、探针、网络和 Prometheus target 列表 |
+| Console、Trigger、Orchestrator、五类 Worker | `BatchServiceDown`、`BatchCoreServiceTargetMissing` / Prometheus `up` | 已发现 target 抓取失败会告警；核心控制面 target 完全消失也会告警。Worker 缩容到零不按 target 缺失告警，依赖 worker registry 的在线/租约信号 | 查进程、探针、服务发现、ServiceMonitor 选择器和 worker registry |
 | Worker 在线状态、drain 和 lease | `BatchWorkerStaleOnlinePresent`、`BatchWorkerDrainOverduePresent`、`BatchDecommissionedWorkerActiveClaims`、`WorkerLeaseCircuitOpen`、`WorkerLeaseCircuitCurrentlyOpen` | 已覆盖心跳陈旧、drain 超期、下线仍持有任务和租约熔断 | 查 worker registry、心跳/续租、任务回收和滚动发布 |
 | PostgreSQL / 连接池 | `PostgresReplicationStopped`、`PostgresReplicationLagHigh/Critical`、`HikariCpConnectionExhausted`、`HikariCpAcquireTimeout`、锁等待/长事务规则 | 覆盖主从保护、连接池耗尽和关键锁等待；需区分单库部署与启用副本的环境 | 查主库、复制状态、慢 SQL、连接池和长事务 |
-| Kafka、Valkey/Redis、对象存储 | `BatchKafkaConsumerLagHigh`、Redis 容量/连接数规则、Dispatch channel probe | 覆盖消费滞后、部分 Redis 容量和派发通道探测；Kafka/exporter、Redis exporter、MinIO 的 target/服务不可达告警仍需核验 | 联查依赖探针、Exporter `up`、客户端错误率和队列积压 |
-| 告警和遥测基础设施 | Collector、Loki、Tempo 存活/丢弃/拒收规则；Alertmanager → Console webhook 配置 | 规则与配置入口存在；目标环境的 token、路由、接收器和最终通知送达需实测 | 按 `observability-stack.md` 做 firing 到最终通知的端到端演练 |
+| Kafka、Valkey/Redis、对象存储 | `BatchKafkaConsumerLagHigh`、Redis 容量/连接数规则、`BatchDependencyExporterDown`、Dispatch channel probe | Docker 已配置的 Kafka/Redis/PG/MinIO scrape target 不可达会告警；Kubernetes 仅对实际发现的 target 生效，缺失 target 由部署监控核验 | 联查依赖探针、Exporter `up`、客户端错误率和队列积压 |
+| 告警和遥测基础设施 | Collector、Loki、Tempo 存活/丢弃/拒收规则；Alertmanager scrape、通知失败/配置重载；`BatchAlertmanagerNotifySkipped`、`BatchAlertmanagerDeliveryFailed` | 无渠道、Console 发送器失败、Alertmanager 下线/通知失败/配置重载失败均有检测规则；Prometheus/Alertmanager 自身停止无法由同一套告警链路可靠自报，须由集群/外部监控监测。目标环境 token、路由、真实接收渠道及最终送达仍需实测 | 按 `observability-stack.md` 做 firing 到最终通知的端到端演练，并用独立通道监控 Prometheus/Alertmanager |
 
 ### 2. 事件监控
 
@@ -68,9 +68,10 @@ Prometheus 规则入口：
 
 | 事件 | 当前规则 / 指标 | 覆盖结论 | 说明 |
 |---|---|---|---|
-| HTTP Controller/API 异常 | `HttpServerErrorRateHigh` / `http_server_requests_seconds_count` | 部分覆盖：当前按所有服务汇总 5xx 比例，服务间流量可能互相稀释；低流量单次故障不一定触发 | 应基于 target 的稳定 `job` 标签按应用计算，避免用 URI 等高基数标签分组告警 |
-| Trigger launch 失败 | `TriggerLaunchFailureSpike` / `batch_trigger_launch_failed_total` | 部分覆盖：仅非限流失败持续超过 1 次/秒才触发；低频技术失败需有单独规则 | launch 消息解析、HTTP/runtime、业务拒绝要按可操作性区分，不应混为同一严重级别 |
-| 陈旧 CREATED 实例恢复失败 | `batch.trigger.launch.created_recovery_failed.total` | 有生产指标、未发现对应 Prometheus 告警规则 | 恢复失败会阻碍实例自愈，应对任意持续/重复失败告警 |
+| HTTP Controller/API 异常 | `HttpServerErrorRateHigh` / `http_server_requests_seconds_count` | 已覆盖：按稳定 target `job` 分服务计算 5xx 比率，并设请求数下限；避免服务间流量稀释 | 低于请求数下限的单次错误由日志/追踪定位，不按 URI 等高基数标签分组告警 |
+| Trigger launch 技术失败 | `TriggerLaunchFailureDetected`、`TriggerLaunchFailureSpike` / `batch_trigger_launch_failed_total` | 已覆盖：低频技术失败告警 + 持续高频严重告警；排除预期限流和业务拒绝 | 消息解析、HTTP 和 runtime 失败触发；业务拒绝保留为业务结果，不升级成平台故障告警 |
+| 陈旧 CREATED 实例恢复失败 | `StaleCreatedLaunchRecoveryFailed` / `batch_trigger_launch_created_recovery_failed_total` | 已覆盖：窗口内任一恢复失败即告警 | 恢复失败会阻碍实例自愈；按告警描述检查 DB、trigger_request 和恢复调度器 |
+| 告警渠道实际投递失败 | `BatchAlertmanagerDeliveryFailed` / `am_notify_failed_total` | 已覆盖：匹配到渠道但发送器返回失败时按 receiver 计数；与无渠道跳过分开处理 | 检查 `notification_delivery_log`、渠道状态和独立升级渠道；不能只看 Alertmanager 已把 webhook 发到 Console |
 | Outbox、REPORT、DLQ、重试及通知投递 | Outbox backlog/GIVE_UP/circuit、Worker report dropped/GIVE_UP、DLQ、Webhook delivery 规则 | 已有多条事件告警 | 按 Runbook 先恢复投递，再处理重放；不能用清理积压替代根因修复 |
 | ShedLock、CAS、超时执行器、工作流收尾 | `BatchShedLockProviderFailure`、`OrchestratorCasMiss`、`TimeoutEnforcerFailed`、`WorkflowStuckFinalized` | 已覆盖关键调度器和状态推进异常 | 关联实例/trace 日志排障；Prometheus 标签不得直接加入实例 ID |
 
@@ -81,29 +82,39 @@ Prometheus 规则入口：
 | 对象 | 当前规则 / 指标 | 覆盖结论 | 说明 |
 |---|---|---|---|
 | 作业终态失败和错误分类 | `JobFailureRateHigh`、`JobErrorCodeRateHigh`、`BatchJobDefinitionFailingRepeatedly` | 已覆盖作业级失败率、错误码和重复失败；仅在作业进入相应终态后体现 | 这是作业聚合信号，不代表每个分片失败都能即时发现 |
-| 分片/分区失败 | 当前只有作业终态失败聚合；队列指标不包含 FAILED 数 | **缺独立分区失败信号及告警** | 需补充低基数、无高频全表扫描的最终失败计数；定义重试中、最终失败、取消和 dry-run 的口径 |
+| 分片/分区失败 | `JOB_FINAL_PARTITION_FAILURE` / `BatchFinalPartitionFailures` | 已覆盖近期非 dry-run `FAILED`/`PARTIAL_FAILED` 且最终失败分区数大于零的实例；有界查询、幂等 claim、Prometheus 告警；不把 RETRYING、取消或 dry-run 当成最终分区失败 | 查看实例与失败分区详情；扫描回看窗口默认 1 小时，批大小默认 50，可通过 orchestrator 配置调整 |
 | 任务超时、长尾和 Pipeline 阶段耗时 | `WorkerTaskTimeoutHigh`、`BatchPipelineStepExecutionLatencyHigh` / 执行时延指标 | 已覆盖任务超时率和阶段 P95 长尾 | 按 worker 类型和阶段定位容量/慢步骤，不把长尾直接等同作业 SLA 违约 |
-| 作业运行超时、耗时过长、到期未启动、结束晚 | `JobSlaScheduler`、`JobInstanceTimeoutEnforcer`、SLA 违约 gauge、Console 完成时限统计 | **部分覆盖，必须按四种语义配置和验收**：硬超时与运行中软 SLA 已有实现；WAITING/READY 逾期由 SLA 扫描覆盖，CREATED 卡住由恢复链路覆盖但恢复失败告警缺失；结束晚只有统计口径，未发现终态后的专门告警 | 见 [`sla-and-quality.md`](../design/sla-and-quality.md)：硬超时不能代替预期耗时，未启动逾期不能代替执行中耗时，完成时间超过 deadline 需单独统计/告警 |
+| 作业耗时过久、启动过晚、完成过晚 | `JobMonitoringScheduler`、`JobInstanceTimeoutEnforcer`、`BatchJobRunningTooLong`、`BatchJobNotStartedByDeadline`、`BatchJobNotCompletedByDeadline` | 三类软时限 + 近期最终失败分区告警共四类均写入 `alert_event`，有独立 Prometheus 告警；耗时阈值适用于所有已启动作业；启动/完成时限适用于无依赖 Cron 和声明上游依赖的作业；真实 PostgreSQL mapper IT 验证候选边界，旁路有独立线程、批量上限和失败隔离。硬超时仍由执行器负责，不改写实例状态 | 共享 PG 仍有 CPU/IO 竞争；应在 Docker/Helm 环境测查询计划和最终通知送达 |
 | Pipeline 处理 SLA / 文件到达 | `PipelineProcessingSlaViolation`、`FileArrivalSlaViolation` | 已覆盖已配置并启用的 SLA | 核查处理窗口、上游到达组和 SLA 配置 |
 | 调度等待、Worker 选择、容量和反压 | `BatchSchedulerQueueOldestWaitHigh`、`WorkerSelectionNoMatch`、Worker capacity/backpressure、Kafka lag | 已覆盖运行积压与派发能力不足 | 这是“无法及时启动/消费”的信号，不替代分区结果失败 |
 | Readiness、批次日与资产新鲜度 | readiness timeout/defer、asset freshness、批次日门禁相关规则 | 覆盖依赖等待、窗口超时及资产新鲜度事件；批次日最终完成率仍需结合业务日视图验收 | 对账实例清单、补跑/审批记录和最终终态 |
 
-### 必须闭环的缺口
+### 实施状态与环境验收
 
-仓库目前不能标记为“必要告警全部完成”。实施顺序：
+代码、配置、规则和本地自动化验证已闭环；由于没有获准的真实收件渠道，不能把目标环境端到端送达标记为完成。前四项为已落地能力，最后一项仍是部署环境验收：
 
-1. 为最终失败分区增加低成本、可解释的指标和规则；覆盖正常 REPORT、重试耗尽、部分失败及 dry-run 边界。
-2. 为低频 Trigger launch 技术失败和陈旧 `CREATED` 实例恢复失败补独立告警，不以高阈值 failure-spike 替代。
-3. 将 HTTP 5xx 比率按 Prometheus target 的稳定应用标签计算；并补关键基础依赖/Exporter 不可达信号，覆盖 Kafka、Valkey/Redis、MinIO 和指标采集目标。
-4. 将作业监控按作业配置拆分为硬执行超时、执行中预计耗时超限、deadline 到期未启动、终态晚完成；软 SLA 配置不得与硬 timeout 混用，并为晚完成补终态事件/告警。
-5. 在 Docker 与 Helm 目标环境分别做可控 firing 和端到端送达演练，验证 Prometheus、Alertmanager、Console 鉴权、通知渠道及 delivery log。规则 YAML、CI 静态检查或 Alertmanager 页面可访问都不等于送达验收。
+1. ✅ 最终分区失败使用 job_instance 的终态失败计数，通过 1 小时回看、每轮限批、部分索引和独立幂等 claim 发告警；IT 覆盖部分失败、零失败数、历史行和 dry-run。
+2. ✅ 已为低频 Trigger launch 技术失败和陈旧 `CREATED` 实例恢复失败补独立告警，并将高频 failure-spike 限定为技术失败。
+3. ✅ HTTP 5xx 比率按稳定 `job` 标签计算并设最低请求数；Docker 配置的依赖 Exporter 不可达规则已补。Kubernetes 动态 target 缺失仍由平台部署监控确认，不能用空 `up` 序列推断服务健康。
+4. ✅ 已将作业监控按作业配置拆为硬执行超时与三种软时限告警，并增加近期终态失败分区告警；四类告警事件写入现有 `alert_event`，各有独立 Prometheus 告警，扫描/事件持久化故障另行监控。软 SLA 不改变执行状态。实现和配置语义见 [`sla-and-quality.md`](../design/sla-and-quality.md)。
+5. 在 Docker 与 Helm 目标环境分别做可控 firing 和端到端送达演练，验证 Prometheus、Alertmanager、Console 鉴权、通知渠道及 delivery log。规则 YAML、CI 静态检查或 Alertmanager 页面可访问都不等于送达验收；当前本地无获准的真实收件端，禁止将其记为已送达。
 
-以上三类监控必须分别验收：可用性故障注入、事件规则触发/恢复、代表性批次从创建到分区终态及 SLA 违约的业务链路。不得用其中一类的绿灯替代另外两类。
+以上三类监控必须分别验收：可用性故障注入、事件规则触发/恢复、代表性批次从创建到分区终态及 SLA 违约的业务链路。四类作业监控已完成代码、配置链路和真实 PostgreSQL 候选查询验证；promtool fixture 覆盖四类作业告警、服务 down/核心 target 缺失、Trigger 技术失败与陈旧 CREATED 恢复失败、Alertmanager 通知失败/配置错误，并验证预期限流/业务拒绝不误告警。本轮未穷举所有既有规则，也不替代 Docker/Helm 的 Alertmanager 最终送达演练。不得用其中一类的绿灯替代另外两类。
 
 ### 规则变更验收
 
+### 告警持续、防风暴与解除语义
+
+- **Prometheus 条件告警**：规则的 `for` 表示条件必须连续成立多久才进入 firing；条件恢复为 false 后进入 resolved。通知端的 `group_wait=30s`、`group_interval=5m`、`repeat_interval=2h` 分别控制首次分组等待、同组更新和持续告警的重复通知，不延迟数据库事件状态变化。所有 webhook receiver 开启 `send_resolved`。
+- **计数器窗口告警**：`increase(counter[窗口]) > 0` 表示窗口内发生过事件，不等同于根因仍未恢复。无新事件后，告警会在窗口样本退出后解除；样本窗口加 scrape/evaluation 间隔构成解除延迟。不要把这类 resolved 当作某个具体作业/分区已修复。
+- **`alert_event` 业务事件**：相同 tenant/fingerprint 的重复事件合并到一行并累计 `occurrence_count`；OPEN 事件每 60 秒重新发布给 Alertmanager，以维持 firing。事件查询、去重和解除候选均带 tenant；直发 AM 的事件标签也带 tenant。Console 的关闭动作发 `endsAt=now`；同一 tenant、service、类型、级别的 AM label 组仍有其他 OPEN 事件时，不得解除整组告警。确认/静默/关闭是不同操作，历史事件是否自动关闭必须由事件来源给出明确恢复条件，不能由通用计数器窗口推断。
+- **平台级指标告警**：不带 tenant 标签，按平台整体汇总并发送到平台通知渠道；它们用于服务、依赖、投递和聚合失败率监控，不提供租户级归属。若要增加租户级业务告警，必须先评估标签基数、租户授权和通知路由，不能直接把 tenant/job/instance 全量加入时序标签。
+- **通知防风暴与租户边界**：Alertmanager 按 `alertname/tenant/team/alert_group/severity` 聚合，critical 仅抑制同租户同组 warning，持续 firing 最快每 2 小时重复通知；数据库 fingerprint 去重限制同一业务故障的事件行增长。自定义子路由也必须保留 `tenant` 分组。上述机制不会丢弃高基数业务明细，明细保留在 `alert_event`，不得把 instance/task/resource id 加入 Prometheus labels 规避分组。
+- **恢复验收**：每类状态型告警至少验证“触发后持续 firing、恢复后发 resolved、同组仍有另一活动事件时不发 resolved、最后一个活动事件关闭后发 resolved”；计数器窗口告警另验窗口自然过期。通知渠道实际收到 firing/resolved 仍须在目标环境演练，规则单测不证明端到端送达。
+
 - 指标名必须能追溯到生产代码的 meter 注册点；新增 gauge/counter 时验证状态语义、重试/终态口径、dry-run 过滤和租户标签基数。
 - 规则必须同时落在 Docker canonical 文件与 Helm 副本，并运行 `bash scripts/ci/check-helm-prometheusrule-sync.sh`。
+- 核心服务 target 缺失告警依赖稳定 `job=batch-<component>` 标签；Docker file-SD 与 Helm ServiceMonitor 必须使用同一命名。可弹性缩至零的 Worker 不使用静态 target 缺失告警，应由 Worker registry/容量策略提供业务可用性信号。
 - 有 `promtool` 时运行 `promtool check rules deploy/docker/observability/prometheus-batch-rules.yml`；无工具时不能报告规则语法已验证。
 - 至少构造一个触发样例和一个不触发样例；重要告警另需在目标环境验证从 Prometheus 到最终接收端的完整链路。
 - 每个告警应给出 severity、稳定的 alert group、可定位的摘要/描述和 Runbook；不要在标签中放 instanceId、taskId 等高基数字段。

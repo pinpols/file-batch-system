@@ -87,6 +87,7 @@
 | 运维管理 | Worker 排空 / 下线 / 接管 | `ROLE_ADMIN` / `ROLE_TENANT_ADMIN` | 强操作页面 |
 | 运维管理 | 运行中的 Worker 任务 | `ROLE_ADMIN` / `ROLE_TENANT_ADMIN` | 对应 `/api/console/workers/{workerCode}/claimed-tasks` |
 | 运维管理 | 告警治理 | `ROLE_ADMIN` / `ROLE_TENANT_ADMIN` | 确认、静默、关闭告警 |
+| 告警与投递 | 作业监控策略 | `ROLE_ADMIN` / `ROLE_TENANT_ADMIN` | 前端路由和菜单仅向这两类角色展示；策略由作业定义 API 写入，后端创建/更新接口同样限制为这两类角色。作业详情 GET 可由任意 Console 角色读取，不代表有策略写权限 |
 | 运维管理 | 配置发布单 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_TENANT_ADMIN` | 查询可见；创建 / 发布 / 灰度 / 回滚建议仅 `ROLE_ADMIN` |
 | 运维管理 | 配置审批 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_TENANT_ADMIN` | 查看审批详情可见三类角色；提交审批 / 批准 / 拒绝仅 `ROLE_ADMIN`。对应 `/api/console/config/releases/{releaseId}/submit-approval`、`/approval`、`/approvals/{approvalId}/approve`、`/reject` |
 | 运维管理 | 配置同步 | `ROLE_ADMIN` | 跨环境配置导出 / 预览 / 导入 + 同步日志。对应 `/api/console/config/sync/*` |

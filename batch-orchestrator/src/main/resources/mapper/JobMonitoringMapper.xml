@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.JobMonitoringMapper">
+    <resultMap id="candidateMap" type="io.github.pinpols.batch.orchestrator.domain.entity.JobMonitoringAlertCandidate">
+        <constructor>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="job_instance_id" javaType="java.lang.Long"/>
+            <arg column="job_code" javaType="java.lang.String"/>
+            <arg column="instance_no" javaType="java.lang.String"/>
+            <arg column="instance_status" javaType="java.lang.String"/>
+            <arg column="trigger_type" javaType="java.lang.String"/>
+            <arg column="trace_id" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="started_at" javaType="java.time.Instant"/>
+            <arg column="finished_at" javaType="java.time.Instant"/>
+            <arg column="monitoring_deadline_at" javaType="java.time.Instant"/>
+            <arg column="threshold_seconds" javaType="java.lang.Integer"/>
+            <arg column="failed_partition_count" javaType="java.lang.Integer"/>
+            <arg column="severity" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="scheduledAtExpression">
+        CASE
+            WHEN ji.params_snapshot #>> '{effectiveParams,scheduledAt}' ~
+                 '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$'
+            THEN (ji.params_snapshot #>> '{effectiveParams,scheduledAt}')::timestamptz
+            ELSE NULL
+        END
+    </sql>
+
+    <sql id="dependencyReadyAtExpression">
+        CASE
+            WHEN ji.params_snapshot #&gt;&gt; '{effectiveParams,dependencyReadyAt}' ~
+                 '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$'
+            THEN (ji.params_snapshot #&gt;&gt; '{effectiveParams,dependencyReadyAt}')::timestamptz
+            ELSE NULL
+        END
+    </sql>
+
+    <sql id="candidateColumns">
+        ji.tenant_id,
+        ji.id AS job_instance_id,
+        ji.job_code,
+        ji.instance_no,
+        ji.instance_status,
+        ji.trigger_type,
+        ji.trace_id,
+        ji.created_at,
+        ji.started_at,
+        ji.finished_at,
+        ji.failed_partition_count
+    </sql>
+
+    <select id="selectRunningTooLong" resultMap="candidateMap" timeout="5">
+        SELECT <include refid="candidateColumns"/>,
+               ji.started_at + (mp.soft_runtime_seconds * interval '1 second') AS monitoring_deadline_at,
+               mp.soft_runtime_seconds AS threshold_seconds,
+               mp.soft_runtime_severity AS severity
+        FROM batch.job_instance ji
+        JOIN batch.job_monitoring_policy mp
+          ON mp.tenant_id = ji.tenant_id AND mp.job_definition_id = ji.job_definition_id
+        WHERE ji.instance_status = 'RUNNING'
+          AND ji.started_at IS NOT NULL
+          AND ji.dry_run = false
+          AND mp.soft_runtime_seconds &gt; 0
+          AND ji.started_at + (mp.soft_runtime_seconds * interval '1 second') &lt; current_timestamp
+          AND NOT EXISTS (
+              SELECT 1 FROM batch.job_monitoring_alert_claim c
+              WHERE c.tenant_id = ji.tenant_id
+                AND c.job_instance_id = ji.id
+                AND c.violation_type = 'RUNNING_TOO_LONG'
+          )
+        ORDER BY ji.tenant_id, ji.started_at, ji.id
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectNotStarted" resultMap="candidateMap" timeout="5">
+        SELECT <include refid="candidateColumns"/>,
+               eligibility.eligible_at + (mp.start_grace_seconds * interval '1 second') AS monitoring_deadline_at,
+               mp.start_grace_seconds AS threshold_seconds,
+               mp.start_grace_severity AS severity
+        FROM batch.job_instance ji
+        JOIN batch.job_monitoring_policy mp
+          ON mp.tenant_id = ji.tenant_id AND mp.job_definition_id = ji.job_definition_id
+        JOIN batch.job_definition jd
+          ON jd.tenant_id = ji.tenant_id AND jd.id = ji.job_definition_id
+        CROSS JOIN LATERAL (SELECT <include refid="scheduledAtExpression"/> AS planned_at) scheduled_at
+        CROSS JOIN LATERAL (SELECT <include refid="dependencyReadyAtExpression"/> AS ready_at) dependency_ready
+        CROSS JOIN LATERAL (
+            SELECT CASE
+                WHEN jd.depends_on_job_code IS NOT NULL AND dependency_ready.ready_at IS NOT NULL
+                    THEN GREATEST(COALESCE(scheduled_at.planned_at, dependency_ready.ready_at), dependency_ready.ready_at)
+                WHEN jd.depends_on_job_code IS NULL AND jd.schedule_type = 'CRON'
+                    THEN scheduled_at.planned_at
+                ELSE NULL
+            END AS eligible_at
+        ) eligibility
+        WHERE ji.instance_status IN ('CREATED', 'WAITING', 'READY', 'RUNNING')
+          AND ji.started_at IS NULL
+          AND ji.dry_run = false
+          AND mp.start_grace_seconds &gt; 0
+          AND eligibility.eligible_at IS NOT NULL
+          AND eligibility.eligible_at + (mp.start_grace_seconds * interval '1 second') &lt; current_timestamp
+          AND NOT EXISTS (
+              SELECT 1 FROM batch.job_monitoring_alert_claim c
+              WHERE c.tenant_id = ji.tenant_id
+                AND c.job_instance_id = ji.id
+                AND c.violation_type = 'NOT_STARTED'
+          )
+        ORDER BY ji.tenant_id, eligibility.eligible_at, ji.id
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectNotCompletedByDeadline" resultMap="candidateMap" timeout="5">
+        SELECT <include refid="candidateColumns"/>,
+               due.deadline_at AS monitoring_deadline_at,
+               CASE WHEN jd.depends_on_job_code IS NOT NULL
+                    THEN mp.dependency_completion_window_seconds
+                    ELSE NULL::integer
+               END AS threshold_seconds,
+               mp.completion_deadline_severity AS severity
+        FROM batch.job_instance ji
+        JOIN batch.job_monitoring_policy mp
+          ON mp.tenant_id = ji.tenant_id AND mp.job_definition_id = ji.job_definition_id
+        JOIN batch.job_definition jd
+          ON jd.tenant_id = ji.tenant_id AND jd.id = ji.job_definition_id
+        CROSS JOIN LATERAL (SELECT <include refid="scheduledAtExpression"/> AS planned_at) scheduled_at
+        CROSS JOIN LATERAL (SELECT <include refid="dependencyReadyAtExpression"/> AS ready_at) dependency_ready
+        CROSS JOIN LATERAL (
+            SELECT CASE
+                WHEN jd.depends_on_job_code IS NOT NULL AND dependency_ready.ready_at IS NOT NULL
+                    THEN GREATEST(COALESCE(scheduled_at.planned_at, dependency_ready.ready_at), dependency_ready.ready_at)
+                WHEN jd.depends_on_job_code IS NULL AND jd.schedule_type = 'CRON'
+                    THEN scheduled_at.planned_at
+                ELSE NULL
+            END AS eligible_at
+        ) eligibility
+        CROSS JOIN LATERAL (
+            SELECT CASE
+                WHEN jd.depends_on_job_code IS NOT NULL
+                     AND mp.dependency_completion_window_seconds &gt; 0 THEN
+                    eligibility.eligible_at
+                    + (mp.dependency_completion_window_seconds * interval '1 second')
+                WHEN jd.schedule_type = 'CRON' THEN
+                    ((scheduled_at.planned_at AT TIME ZONE jd.timezone)::date
+                     + mp.completion_deadline_day_offset
+                     + mp.completion_deadline_local_time) AT TIME ZONE jd.timezone
+                ELSE NULL
+            END AS deadline_at
+        ) due
+        WHERE (ji.finished_at IS NULL OR ji.finished_at &gt; due.deadline_at)
+          AND COALESCE(ji.finished_at, current_timestamp) >= mp.completion_deadline_updated_at
+          AND ji.dry_run = false
+          AND eligibility.eligible_at IS NOT NULL
+          AND ((jd.depends_on_job_code IS NOT NULL
+                AND (mp.dependency_completion_window_seconds &gt; 0
+                     OR (jd.schedule_type = 'CRON' AND mp.completion_deadline_local_time IS NOT NULL)))
+               OR (jd.depends_on_job_code IS NULL
+                   AND jd.schedule_type = 'CRON'
+                   AND mp.completion_deadline_local_time IS NOT NULL))
+          AND due.deadline_at &lt; current_timestamp
+          AND NOT EXISTS (
+              SELECT 1 FROM batch.job_monitoring_alert_claim c
+              WHERE c.tenant_id = ji.tenant_id
+                AND c.job_instance_id = ji.id
+                AND c.violation_type = 'NOT_COMPLETED_BY_DEADLINE'
+          )
+        ORDER BY ji.tenant_id, due.deadline_at, ji.id
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectFinalPartitionFailures" resultMap="candidateMap" timeout="5">
+        SELECT <include refid="candidateColumns"/>,
+               ji.finished_at AS monitoring_deadline_at,
+               0::integer AS threshold_seconds,
+               'WARN'::varchar AS severity
+        FROM batch.job_instance ji
+        WHERE ji.instance_status IN ('FAILED', 'PARTIAL_FAILED')
+          AND ji.failed_partition_count &gt; 0
+          AND ji.finished_at &gt;= current_timestamp - (#{lookbackSeconds} * interval '1 second')
+          AND ji.dry_run = false
+          AND NOT EXISTS (
+              SELECT 1 FROM batch.job_monitoring_alert_claim c
+              WHERE c.tenant_id = ji.tenant_id
+                AND c.job_instance_id = ji.id
+                AND c.violation_type = 'FAILED_PARTITION'
+          )
+        ORDER BY ji.finished_at, ji.tenant_id, ji.id
+        LIMIT #{limit}
+    </select>
+
+    <insert id="claimAlert">
+        INSERT INTO batch.job_monitoring_alert_claim (tenant_id, job_instance_id, violation_type)
+        VALUES (#{tenantId}, #{jobInstanceId}, #{violationType})
+        ON CONFLICT (tenant_id, job_instance_id, violation_type) DO NOTHING
+    </insert>
+</mapper>

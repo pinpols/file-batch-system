@@ -31,10 +31,13 @@ import io.github.pinpols.batch.trigger.support.CalendarBizDateDefinition;
 import io.github.pinpols.batch.trigger.support.CalendarHolidayRule;
 import io.github.pinpols.batch.trigger.support.TriggerCalendarConfig;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -114,13 +117,20 @@ public class DefaultTriggerService implements TriggerService {
     if (EmptyChecks.isNull(launchRequest.bizDate())) {
       return skipScheduled(command);
     }
-    if (!upstreamReady(command, launchRequest)) {
+    Optional<Instant> dependencyReadyAt = upstreamReadyAt(command, launchRequest);
+    if (dependencyReadyAt.isEmpty() // empty-check: allow - Optional 通过其专属 API 表达无值。
+        && Texts.hasText(command.descriptor().getDependsOnJobCode())) {
       // ADR-043:依赖未就绪不返回 skipped，QuartzLaunchJob 会用 one-shot trigger 延迟重检。
       throw new UpstreamNotReadyException(
           launchRequest.tenantId(),
           command.descriptor().getJobCode(),
           command.descriptor().getDependsOnJobCode(),
           launchRequest.bizDate());
+    }
+    if (dependencyReadyAt.isPresent()) {
+      Map<String, Object> params = new LinkedHashMap<>(launchRequest.params());
+      params.put("dependencyReadyAt", dependencyReadyAt.get().toString());
+      launchRequest = launchRequest.toBuilder().params(params).build();
     }
     String dedupKey = buildScheduledDedupKey(command);
     return persistAndForward(launchRequest, dedupKey);
@@ -131,12 +141,13 @@ public class DefaultTriggerService implements TriggerService {
    *
    * <p>无声明(绝大多数存量触发器)→ 直接放行,行为不变。
    */
-  private boolean upstreamReady(ScheduledTriggerCommand command, LaunchRequest launchRequest) {
+  private Optional<Instant> upstreamReadyAt(
+      ScheduledTriggerCommand command, LaunchRequest launchRequest) {
     String dependsOn = command.descriptor().getDependsOnJobCode();
     if (!Texts.hasText(dependsOn)) {
-      return true;
+      return Optional.empty();
     }
-    return upstreamReadiness.isReady(launchRequest.tenantId(), dependsOn, launchRequest.bizDate());
+    return upstreamReadiness.readyAt(launchRequest.tenantId(), dependsOn, launchRequest.bizDate());
   }
 
   @Override

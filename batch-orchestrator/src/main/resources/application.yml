@@ -284,6 +284,12 @@ batch:
     poll-interval-millis: ${BATCH_SLA_POLL_INTERVAL_MILLIS:30000}
     # SLA 单次处理批大小
     batch-size: ${BATCH_SLA_BATCH_SIZE:200}
+    # 每作业监控旁路扫描：独立线程；默认每 30 秒、每类最多 50 条，避免扩散到主调度池。
+    job-monitoring:
+      enabled: ${BATCH_SLA_JOB_MONITORING_ENABLED:true}
+      poll-interval-millis: ${BATCH_SLA_JOB_MONITORING_POLL_INTERVAL_MILLIS:30000}
+      batch-size: ${BATCH_SLA_JOB_MONITORING_BATCH_SIZE:50}
+      failed-partition-lookback-seconds: ${BATCH_SLA_JOB_MONITORING_FAILED_PARTITION_LOOKBACK_SECONDS:3600}
   file-governance:
     latency:
       # 文件治理 - 延迟监控：到达/处理延迟阈值检测

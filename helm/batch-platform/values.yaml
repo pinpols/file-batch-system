@@ -507,6 +507,12 @@ orchestrator:
     maxReleasePerTenantPerMinute: 3000
     maxClaimPerTenantPerMinute: 12000
     maxReportPerTenantPerMinute: 30000
+  sla:
+    jobMonitoring:
+      enabled: true
+      pollIntervalMillis: 30000
+      batchSize: 50
+      failedPartitionLookbackSeconds: 3600
   requestSigning:
     enabled: false
 

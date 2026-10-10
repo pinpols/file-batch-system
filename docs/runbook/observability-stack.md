@@ -109,6 +109,8 @@ prometheusRule:
 
 ## 5. 验收
 
+Docker Prometheus 会抓取同网络内 `alertmanager:9093`，按 `job=alertmanager` 产生可用性与通知失败信号。Helm 部署使用集群外 Prometheus/Alertmanager 时，需要由集群监控配置把 Alertmanager metrics target 规范为同一 `job` 标签；不能仅凭本 chart 中存在 PrometheusRule 就认为 Alertmanager 已纳入监控。Prometheus 或 Alertmanager 整体不可用时，必须由集群外的独立监控通道告警。
+
 ### 5.1 静态与配置验证
 
 ```bash

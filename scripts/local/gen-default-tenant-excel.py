@@ -3,7 +3,7 @@
 # gen-default-tenant-excel.py
 # 依据 multi-tenant-seed.sql 里 default-tenant 的 "v4 硬化批次" 新增项
 # 生成与 ta/tb/tc-tenant-config-package-test.xlsx 同结构的配置包 Excel，
-# 9+2 v3 结构（11 sheet）：8 业务核心 + 3 可选基础依赖。
+# v4 结构（12 sheet）：8 业务核心（含独立作业监控策略）+ 3 可选基础依赖。
 #
 # 历史变化：alert_routing_config 已剔除（走 /config/excel?domain=alert-routings
 # 独立入口）；file_template_config 进核心（含 Import 目标表 / Export SQL）；
@@ -20,6 +20,12 @@ JOB_COLS = [
     "schedule_type","schedule_expr","depends_on_job_code","calendar_code","window_code",
     "retry_policy","retry_max_count","timeout_seconds","shard_strategy","execution_mode",
     "watermark_field","execution_handler","param_schema","default_params","enabled","description",
+]
+JOB_MONITORING_POLICY_COLS = [
+    "tenant_id", "job_code", "soft_runtime_seconds", "soft_runtime_severity",
+    "start_grace_seconds", "start_grace_severity", "completion_deadline_local_time",
+    "completion_deadline_day_offset", "dependency_completion_window_seconds",
+    "completion_deadline_severity",
 ]
 CHANNEL_COLS = [
     "tenant_id","channel_code","channel_name","channel_type","target_endpoint",
@@ -174,7 +180,7 @@ def write_sheet(wb, name, columns, rows):
 def main():
     wb = Workbook()
     wb.remove(wb.active)
-    # 9+2 v3 顺序：8 业务核心（job 在前 → file_template → channel → pipeline → workflow）
+    # v4 顺序：作业监控策略紧随作业定义，便于一起导入但保持职责独立。
     # + 3 可选基础依赖（resource_queue / business_calendar / batch_window）。
     # 输出顺序与 backend ConfigPackageExcelWorkbookWriter.sheetDefs 完全一致，
     # 方便 diff 与可视化对齐。
@@ -182,6 +188,7 @@ def main():
     write_sheet(wb, "business_calendar",        BUSINESS_CALENDAR_COLS, [])
     write_sheet(wb, "batch_window",             BATCH_WINDOW_COLS,      [])
     write_sheet(wb, "job_definition",           JOB_COLS,               JOB_ROWS)
+    write_sheet(wb, "job_monitoring_policy",     JOB_MONITORING_POLICY_COLS, [])
     write_sheet(wb, "file_channel_config",      CHANNEL_COLS,           CHANNEL_ROWS)
     write_sheet(wb, "file_template_config",     FILE_TEMPLATE_COLS,     [])
     write_sheet(wb, "pipeline_definition",      PIPELINE_COLS,          [])

@@ -88,6 +88,11 @@ batch:
     enabled: true
     poll-interval-millis: 30000
     batch-size: 200
+    job-monitoring:
+      enabled: ${BATCH_SLA_JOB_MONITORING_ENABLED:true}
+      poll-interval-millis: ${BATCH_SLA_JOB_MONITORING_POLL_INTERVAL_MILLIS:30000}
+      batch-size: ${BATCH_SLA_JOB_MONITORING_BATCH_SIZE:50}
+      failed-partition-lookback-seconds: ${BATCH_SLA_JOB_MONITORING_FAILED_PARTITION_LOOKBACK_SECONDS:3600}
   file-governance:
     latency:
       enabled: true

@@ -121,6 +121,9 @@ class AlertmanagerNotifyServiceTest {
     verify(deliveryLogMapper).insert(log.capture());
     assertThat(log.getValue()).containsEntry("deliveryStatus", "FAILED");
     assertThat(log.getValue()).containsEntry("errorMessage", "boom");
+    assertThat(
+            meterRegistry.counter("am.notify.failed", "receiver", "batch-sla").count())
+        .isEqualTo(1.0);
   }
 
   @Test

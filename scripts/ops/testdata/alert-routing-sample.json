@@ -1,17 +1,19 @@
 [
   {
+    "tenant_id": "tenant-a",
     "route_code": "sla-critical",
     "team": "batch-sla",
     "alert_group": "sla",
     "severity": "CRITICAL",
     "receiver": "batch-pager",
-    "group_by": "alertname, tenant, severity",
+    "group_by": "alertname, severity",
     "group_wait_seconds": 10,
     "group_interval_seconds": 120,
     "repeat_interval_seconds": 1800,
     "enabled": true
   },
   {
+    "tenant_id": "tenant-b",
     "route_code": "dispatch-warn",
     "team": "batch-dispatch",
     "alert_group": "dispatch",
@@ -24,6 +26,7 @@
     "enabled": true
   },
   {
+    "tenant_id": "tenant-c",
     "route_code": "freshness-disabled",
     "team": "batch-data",
     "alert_group": "freshness",

@@ -4,6 +4,7 @@
 
 | 文档 | 用途 |
 |---|---|
+| [租户作业配置与资源边界收敛计划](./tenant-job-configuration-simplification-plan-2026-10-09.md) | 精简 41 列文件模板和作业配置入口；将队列容量、配额与 Worker 路由收归平台，定义默认值、兼容迁移及验收门槛 |
 | [Console OIDC SSO 接入方案](./console-oidc-sso-integration-plan-2026-10-09.md) | 企业身份提供方 OIDC 登录边界、账号映射与验收；后端最小闭环及前端 pilot 入口已实现，真实 IdP 试点联测和生产启用仍待完成 |
 | [java-design-expression-improvement-plan-2026-10-08.md](./java-design-expression-improvement-plan-2026-10-08.md) | 注释归属、测试装配、固定载荷、任务结果不变量与协作者内聚的后续改进方案；不重复已有可读性/契约治理 |
 | [typed-contract-enum-constant-governance-plan-2026-10-07.md](./typed-contract-enum-constant-governance-plan-2026-10-07.md) | 固定 Map/Object 契约、有限域裸字符串、重复常量与精准增量门禁的分批治理计划 |

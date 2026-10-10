@@ -4,8 +4,11 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
+import io.github.pinpols.batch.console.config.JobMonitoringDefaultsProperties;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobDefinitionApplicationService;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDefinitionCopyRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDefinitionCreateRequest;
@@ -14,12 +17,15 @@ import io.github.pinpols.batch.console.domain.job.application.contract.response.
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.param.JobDefinitionMaintenanceUpdateParam;
+import io.github.pinpols.batch.console.domain.job.param.JobMonitoringPolicyUpsertParam;
 import io.github.pinpols.batch.console.domain.job.support.BuiltinTaskTypeGuard;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import java.time.LocalTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Job 定义的 CRUD + 批量启停 + 克隆入口。
@@ -49,6 +55,7 @@ public class DefaultConsoleJobDefinitionApplicationService
   private final TenantIdResolver tenantGuard;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   private final ConsoleConfigCacheInvalidationService cacheInvalidationService;
+  private final JobMonitoringDefaultsProperties monitoringDefaults;
   private final BuiltinTaskTypeGuard builtinTaskTypeGuard;
 
   @Override
@@ -60,10 +67,17 @@ public class DefaultConsoleJobDefinitionApplicationService
   }
 
   @Override
+  @Transactional
   public ConsoleJobDefinitionResponse create(JobDefinitionCreateRequest request) {
     // ADR-035 §使用边界:builtin SPI 4 件套(shell/sql/stored_proc/http)只许平台 ADMIN 引用,
     // 租户走 SDK 自托管。controller 类级 @PreAuthorize ROLE_ADMIN 已是第一道,本守门 defense in depth。
     builtinTaskTypeGuard.assertAllowed(request.getJobType());
+    validateScheduledMonitoring(
+        request.getScheduleType(),
+        request.getDependsOnJobCode(),
+        request.getStartGraceSeconds(),
+        request.getCompletionDeadlineLocalTime(),
+        request.getDependencyCompletionWindowSeconds());
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     JobDefinitionEntity existing =
         jobDefinitionMapper.selectByUniqueKey(tenantId, request.getJobCode());
@@ -101,6 +115,26 @@ public class DefaultConsoleJobDefinitionApplicationService
     entity.setRetryPolicy(request.getRetryPolicy() == null ? "NONE" : request.getRetryPolicy());
     entity.setRetryMaxCount(request.getRetryMaxCount());
     entity.setTimeoutSeconds(request.getTimeoutSeconds());
+    entity.setSoftRuntimeSeconds(
+        resolveSoftRuntimeSeconds(request.getSoftRuntimeSeconds(), monitoringDefaults));
+    entity.setSoftRuntimeSeverity(severityOrWarn(request.getSoftRuntimeSeverity()));
+    entity.setStartGraceSeconds(resolveStartGraceSeconds(
+        request.getScheduleType(),
+        request.getDependsOnJobCode(),
+        request.getStartGraceSeconds(),
+        monitoringDefaults));
+    entity.setStartGraceSeverity(severityOrWarn(request.getStartGraceSeverity()));
+    entity.setCompletionDeadlineLocalTime(
+        Boolean.FALSE.equals(request.getCompletionDeadlineEnabled())
+            ? null
+            : request.getCompletionDeadlineLocalTime());
+    entity.setCompletionDeadlineDayOffset(
+        EmptyChecks.isNull(entity.getCompletionDeadlineLocalTime())
+            ? 0
+            : valueOrZero(request.getCompletionDeadlineDayOffset()));
+    entity.setCompletionDeadlineSeverity(severityOrWarn(request.getCompletionDeadlineSeverity()));
+    entity.setDependencyCompletionWindowSeconds(
+        valueOrZero(request.getDependencyCompletionWindowSeconds()));
     entity.setExecutionHandler(request.getExecutionHandler());
     entity.setParamSchema(request.getParamSchema());
     entity.setDefaultParams(request.getDefaultParams());
@@ -111,23 +145,53 @@ public class DefaultConsoleJobDefinitionApplicationService
     entity.setCreatedBy(operator);
     entity.setUpdatedBy(operator);
     jobDefinitionMapper.insert(entity);
+    jobDefinitionMapper.upsertJobMonitoringPolicy(JobMonitoringPolicyUpsertParam.builder()
+        .tenantId(tenantId)
+        .jobDefinitionId(entity.getId())
+        .softRuntimeSeconds(valueOrZero(entity.getSoftRuntimeSeconds()))
+        .softRuntimeSeverity(severityOrWarn(entity.getSoftRuntimeSeverity()))
+        .startGraceSeconds(valueOrZero(entity.getStartGraceSeconds()))
+        .startGraceSeverity(severityOrWarn(entity.getStartGraceSeverity()))
+        .completionDeadlineLocalTime(entity.getCompletionDeadlineLocalTime())
+        .completionDeadlineDayOffset(valueOrZero(entity.getCompletionDeadlineDayOffset()))
+        .dependencyCompletionWindowSeconds(
+            valueOrZero(entity.getDependencyCompletionWindowSeconds()))
+        .completionDeadlineSeverity(severityOrWarn(entity.getCompletionDeadlineSeverity()))
+        .updatedBy(operator)
+        .build());
     cacheInvalidationService.evictJobDefinition(tenantId, entity.getJobCode());
     return toResponse(jobDefinitionMapper.selectById(tenantId, entity.getId()));
   }
 
   @Override
+  @Transactional
   public ConsoleJobDefinitionResponse update(Long id, JobDefinitionUpdateRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     JobDefinitionEntity existing = Guard.requireFound(
         jobDefinitionMapper.selectById(tenantId, id), "job definition not found");
+    String dependsOnJobCode = EmptyChecks.isNull(request.getDependsOnJobCode())
+        ? existing.getDependsOnJobCode()
+        : CodeNormalizer.trimToNull(request.getDependsOnJobCode());
+    LocalTime completionDeadlineLocalTime = resolveCompletionDeadlineLocalTime(request, existing);
+    if (Boolean.TRUE.equals(request.getCompletionDeadlineEnabled())
+        && EmptyChecks.isNull(completionDeadlineLocalTime)) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
+    }
+    validateScheduledMonitoring(
+        existing.getScheduleType(),
+        dependsOnJobCode,
+        EmptyChecks.isNull(request.getStartGraceSeconds())
+            ? existing.getStartGraceSeconds()
+            : request.getStartGraceSeconds(),
+        completionDeadlineLocalTime,
+        EmptyChecks.isNull(request.getDependencyCompletionWindowSeconds())
+            ? existing.getDependencyCompletionWindowSeconds()
+            : request.getDependencyCompletionWindowSeconds());
     String operator = requestMetadataResolver.current().operatorId();
     JobDefinitionMaintenanceUpdateParam param = new JobDefinitionMaintenanceUpdateParam();
     param.setTenantId(tenantId);
     param.setJobCode(existing.getJobCode());
-    param.setDependsOnJobCode(
-        request.getDependsOnJobCode() != null
-            ? CodeNormalizer.trimToNull(request.getDependsOnJobCode())
-            : existing.getDependsOnJobCode());
+    param.setDependsOnJobCode(dependsOnJobCode);
     param.setJobName(request.getJobName() != null ? request.getJobName() : existing.getJobName());
     param.setQueueCode(
         request.getQueueCode() != null
@@ -157,6 +221,27 @@ public class DefaultConsoleJobDefinitionApplicationService
         request.getTimeoutSeconds() != null
             ? request.getTimeoutSeconds()
             : existing.getTimeoutSeconds());
+    param.setSoftRuntimeSeconds(
+        resolveMonitoringValue(request.getSoftRuntimeSeconds(), existing.getSoftRuntimeSeconds()));
+    param.setSoftRuntimeSeverity(resolveMonitoringSeverity(
+        request.getSoftRuntimeSeverity(), existing.getSoftRuntimeSeverity()));
+    param.setStartGraceSeconds(
+        resolveMonitoringValue(request.getStartGraceSeconds(), existing.getStartGraceSeconds()));
+    param.setStartGraceSeverity(resolveMonitoringSeverity(
+        request.getStartGraceSeverity(), existing.getStartGraceSeverity()));
+    param.setCompletionDeadlineLocalTime(completionDeadlineLocalTime);
+    param.setCompletionDeadlineDayOffset(resolveCompletionDeadlineDayOffset(
+        completionDeadlineLocalTime,
+        request.getCompletionDeadlineDayOffset(),
+        existing.getCompletionDeadlineDayOffset()));
+    param.setCompletionDeadlineSeverity(resolveMonitoringSeverity(
+        request.getCompletionDeadlineSeverity(), existing.getCompletionDeadlineSeverity()));
+    param.setDependencyCompletionWindowSeconds(
+        Texts.hasText(dependsOnJobCode)
+            ? resolveMonitoringValue(
+                request.getDependencyCompletionWindowSeconds(),
+                existing.getDependencyCompletionWindowSeconds())
+            : 0);
     param.setShardStrategy(
         request.getShardStrategy() != null
             ? request.getShardStrategy()
@@ -174,6 +259,20 @@ public class DefaultConsoleJobDefinitionApplicationService
         request.getDescription() != null ? request.getDescription() : existing.getDescription());
     param.setUpdatedBy(operator);
     jobDefinitionMapper.updateJobDefinitionMaintenance(param);
+    jobDefinitionMapper.upsertJobMonitoringPolicy(JobMonitoringPolicyUpsertParam.builder()
+        .tenantId(tenantId)
+        .jobDefinitionId(id)
+        .softRuntimeSeconds(valueOrZero(param.getSoftRuntimeSeconds()))
+        .softRuntimeSeverity(severityOrWarn(param.getSoftRuntimeSeverity()))
+        .startGraceSeconds(valueOrZero(param.getStartGraceSeconds()))
+        .startGraceSeverity(severityOrWarn(param.getStartGraceSeverity()))
+        .completionDeadlineLocalTime(param.getCompletionDeadlineLocalTime())
+        .completionDeadlineDayOffset(valueOrZero(param.getCompletionDeadlineDayOffset()))
+        .dependencyCompletionWindowSeconds(
+            valueOrZero(param.getDependencyCompletionWindowSeconds()))
+        .completionDeadlineSeverity(severityOrWarn(param.getCompletionDeadlineSeverity()))
+        .updatedBy(operator)
+        .build());
     cacheInvalidationService.evictJobDefinition(tenantId, existing.getJobCode());
     return toResponse(jobDefinitionMapper.selectById(tenantId, id));
   }
@@ -202,6 +301,7 @@ public class DefaultConsoleJobDefinitionApplicationService
   }
 
   @Override
+  @Transactional
   public ConsoleJobDefinitionResponse copy(Long id, String tenantId, String newJobCode) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     JobDefinitionEntity existing = jobDefinitionMapper.selectByUniqueKey(resolved, newJobCode);
@@ -213,11 +313,16 @@ public class DefaultConsoleJobDefinitionApplicationService
     JobDefinitionEntity copied = Guard.requireFound(
         jobDefinitionMapper.selectByUniqueKey(resolved, newJobCode),
         "source job definition not found");
+    jobDefinitionMapper.copyJobMonitoringPolicy(resolved, id, copied.getId(), operator);
+    copied = Guard.requireFound(
+        jobDefinitionMapper.selectById(resolved, copied.getId()),
+        "copied job definition not found");
     cacheInvalidationService.evictJobDefinition(resolved, newJobCode);
     return toResponse(copied);
   }
 
   @Override
+  @Transactional
   public ConsoleJobDefinitionResponse copyWithOverrides(Long id, JobDefinitionCopyRequest request) {
     String resolved = tenantGuard.resolveTenant(request.getTenantId());
     JobDefinitionEntity existing =
@@ -233,6 +338,10 @@ public class DefaultConsoleJobDefinitionApplicationService
     JobDefinitionEntity copied = Guard.requireFound(
         jobDefinitionMapper.selectByUniqueKey(resolved, request.getNewJobCode()),
         "source job definition not found");
+    jobDefinitionMapper.copyJobMonitoringPolicy(resolved, id, copied.getId(), operator);
+    copied = Guard.requireFound(
+        jobDefinitionMapper.selectById(resolved, copied.getId()),
+        "copied job definition not found");
     // Apply overrides
     JobDefinitionMaintenanceUpdateParam param = new JobDefinitionMaintenanceUpdateParam();
     param.setTenantId(resolved);
@@ -275,6 +384,20 @@ public class DefaultConsoleJobDefinitionApplicationService
         request.getDescription() != null ? request.getDescription() : copied.getDescription());
     param.setUpdatedBy(operator);
     jobDefinitionMapper.updateJobDefinitionMaintenance(param);
+    jobDefinitionMapper.upsertJobMonitoringPolicy(JobMonitoringPolicyUpsertParam.builder()
+        .tenantId(resolved)
+        .jobDefinitionId(copied.getId())
+        .softRuntimeSeconds(valueOrZero(copied.getSoftRuntimeSeconds()))
+        .softRuntimeSeverity(severityOrWarn(copied.getSoftRuntimeSeverity()))
+        .startGraceSeconds(valueOrZero(copied.getStartGraceSeconds()))
+        .startGraceSeverity(severityOrWarn(copied.getStartGraceSeverity()))
+        .completionDeadlineLocalTime(copied.getCompletionDeadlineLocalTime())
+        .completionDeadlineDayOffset(valueOrZero(copied.getCompletionDeadlineDayOffset()))
+        .dependencyCompletionWindowSeconds(
+            valueOrZero(copied.getDependencyCompletionWindowSeconds()))
+        .completionDeadlineSeverity(severityOrWarn(copied.getCompletionDeadlineSeverity()))
+        .updatedBy(operator)
+        .build());
     cacheInvalidationService.evictJobDefinition(resolved, request.getNewJobCode());
     return toResponse(jobDefinitionMapper.selectByUniqueKey(resolved, request.getNewJobCode()));
   }
@@ -300,6 +423,19 @@ public class DefaultConsoleJobDefinitionApplicationService
         e.getRetryPolicy(),
         e.getRetryMaxCount(),
         e.getTimeoutSeconds(),
+        valueOrZero(e.getSoftRuntimeSeconds()),
+        severityOrWarn(e.getSoftRuntimeSeverity()),
+        valueOrZero(e.getStartGraceSeconds()),
+        severityOrWarn(e.getStartGraceSeverity()),
+        ("CRON".equals(e.getScheduleType())
+                && !Texts.hasText(e.getDependsOnJobCode())
+                && EmptyChecks.isNotNull(e.getCompletionDeadlineLocalTime()))
+            || (Texts.hasText(e.getDependsOnJobCode())
+                && valueOrZero(e.getDependencyCompletionWindowSeconds()) > 0),
+        e.getCompletionDeadlineLocalTime(),
+        valueOrZero(e.getCompletionDeadlineDayOffset()),
+        severityOrWarn(e.getCompletionDeadlineSeverity()),
+        valueOrZero(e.getDependencyCompletionWindowSeconds()),
         e.getShardStrategy(),
         e.getExecutionMode(),
         e.getWatermarkField(),
@@ -312,5 +448,77 @@ public class DefaultConsoleJobDefinitionApplicationService
         e.getDescription(),
         e.getCreatedAt(),
         e.getUpdatedAt());
+  }
+
+  private static Integer resolveCompletionDeadlineDayOffset(
+      LocalTime deadlineTime, Integer requestedOffset, Integer existingOffset) {
+    if (EmptyChecks.isNull(deadlineTime)) {
+      return 0;
+    }
+    return EmptyChecks.isNull(requestedOffset) ? valueOrZero(existingOffset) : requestedOffset;
+  }
+
+  private static Integer resolveMonitoringValue(Integer requested, Integer existing) {
+    return valueOrZero(EmptyChecks.isNull(requested) ? existing : requested);
+  }
+
+  private static LocalTime resolveCompletionDeadlineLocalTime(
+      JobDefinitionUpdateRequest request, JobDefinitionEntity existing) {
+    if (Boolean.FALSE.equals(request.getCompletionDeadlineEnabled())) {
+      return null;
+    }
+    return EmptyChecks.isNull(request.getCompletionDeadlineLocalTime())
+        ? existing.getCompletionDeadlineLocalTime()
+        : request.getCompletionDeadlineLocalTime();
+  }
+
+  private static Integer valueOrZero(Integer value) {
+    return EmptyChecks.isNull(value) ? 0 : value;
+  }
+
+  private static int resolveStartGraceSeconds(
+      String scheduleType,
+      String dependsOnJobCode,
+      Integer requested,
+      JobMonitoringDefaultsProperties defaults) {
+    if (EmptyChecks.isNotNull(requested)) {
+      return requested;
+    }
+    return "CRON".equals(scheduleType) || Texts.hasText(dependsOnJobCode)
+        ? defaults.getStartGraceSeconds()
+        : 0;
+  }
+
+  private static int resolveSoftRuntimeSeconds(
+      Integer requested, JobMonitoringDefaultsProperties defaults) {
+    return EmptyChecks.isNull(requested) ? defaults.getSoftRuntimeSeconds() : requested;
+  }
+
+  private static void validateScheduledMonitoring(
+      String scheduleType,
+      String dependsOnJobCode,
+      Integer startGraceSeconds,
+      LocalTime completionDeadlineLocalTime,
+      Integer dependencyCompletionWindowSeconds) {
+    boolean cron = "CRON".equals(scheduleType);
+    boolean dependency = Texts.hasText(dependsOnJobCode);
+    boolean startGraceConfigured = valueOrZero(startGraceSeconds) > 0;
+    boolean completionDeadlineConfigured = EmptyChecks.isNotNull(completionDeadlineLocalTime);
+    boolean dependencyWindowConfigured = valueOrZero(dependencyCompletionWindowSeconds) > 0;
+    boolean startGraceSupported = cron || dependency;
+    boolean invalidDeadlineCombination = completionDeadlineConfigured && (!cron || dependency)
+        || dependencyWindowConfigured && !dependency
+        || completionDeadlineConfigured && dependencyWindowConfigured;
+    if ((!startGraceSupported && startGraceConfigured) || invalidDeadlineCombination) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
+    }
+  }
+
+  private static String resolveMonitoringSeverity(String requested, String existing) {
+    return severityOrWarn(EmptyChecks.isNull(requested) ? existing : requested);
+  }
+
+  private static String severityOrWarn(String severity) {
+    return EmptyChecks.isBlank(severity) ? "WARN" : severity;
   }
 }

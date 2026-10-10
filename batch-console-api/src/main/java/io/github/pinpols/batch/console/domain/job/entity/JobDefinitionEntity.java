@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.job.entity;
 
 import java.time.Instant;
+import java.time.LocalTime;
 import lombok.Data;
 
 @Data
@@ -25,6 +26,15 @@ public class JobDefinitionEntity {
   private String retryPolicy;
   private Integer retryMaxCount;
   private Integer timeoutSeconds;
+  private Integer softRuntimeSeconds;
+  private String softRuntimeSeverity;
+  private Integer startGraceSeconds;
+  private String startGraceSeverity;
+  private Boolean completionDeadlineEnabled;
+  private LocalTime completionDeadlineLocalTime;
+  private Integer completionDeadlineDayOffset;
+  private String completionDeadlineSeverity;
+  private Integer dependencyCompletionWindowSeconds;
   private String shardStrategy;
 
   /** ExecutionMode 枚举 code:FULL / INCREMENTAL / CDC,默认 FULL,见 V73 migration。 */

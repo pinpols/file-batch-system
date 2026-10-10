@@ -1,0 +1,10 @@
+[
+  {
+    "route_code": "missing-tenant",
+    "team": "batch-sla",
+    "alert_group": "sla",
+    "severity": "CRITICAL",
+    "receiver": "batch-pager",
+    "enabled": true
+  }
+]

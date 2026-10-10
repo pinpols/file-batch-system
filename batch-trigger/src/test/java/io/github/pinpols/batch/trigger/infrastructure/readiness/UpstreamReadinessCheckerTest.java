@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.trigger.application.UpstreamReadinessPort;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.function.Function;
@@ -50,11 +51,12 @@ class UpstreamReadinessCheckerTest {
   @Test
   @DisplayName("上游 ready=true → 放行")
   void shouldAllow_whenUpstreamReady() {
-    stubBody(new ReadinessResponse(true, null));
+    stubBody(new ReadinessResponse(true, null, Instant.parse("2026-06-20T04:15:00Z")));
     UpstreamReadinessPort checker =
         new UpstreamReadinessChecker(orchestratorRestClient, gate(true));
 
-    assertThat(checker.isReady("t1", "UP_JOB", BIZ_DATE)).isTrue();
+    assertThat(checker.readyAt("t1", "UP_JOB", BIZ_DATE))
+        .contains(Instant.parse("2026-06-20T04:15:00Z"));
   }
 
   @Test
@@ -64,7 +66,7 @@ class UpstreamReadinessCheckerTest {
     UpstreamReadinessChecker checker =
         new UpstreamReadinessChecker(orchestratorRestClient, gate(true));
 
-    assertThat(checker.isReady("t1", "UP_JOB", BIZ_DATE)).isFalse();
+    assertThat(checker.readyAt("t1", "UP_JOB", BIZ_DATE)).isEmpty();
   }
 
   @Test
@@ -74,7 +76,7 @@ class UpstreamReadinessCheckerTest {
     UpstreamReadinessChecker checker =
         new UpstreamReadinessChecker(orchestratorRestClient, gate(true));
 
-    assertThat(checker.isReady("t1", "UP_JOB", BIZ_DATE)).isFalse();
+    assertThat(checker.readyAt("t1", "UP_JOB", BIZ_DATE)).isEmpty();
   }
 
   @Test
@@ -83,7 +85,7 @@ class UpstreamReadinessCheckerTest {
     RestClient unused = mock(RestClient.class);
     UpstreamReadinessChecker checker = new UpstreamReadinessChecker(unused, gate(false));
 
-    assertThat(checker.isReady("t1", "UP_JOB", BIZ_DATE)).isTrue();
+    assertThat(checker.readyAt("t1", "UP_JOB", BIZ_DATE)).isPresent();
     verifyNoInteractions(unused);
   }
 }

@@ -429,6 +429,12 @@
         <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
     </delete>
 
+    <delete id="deleteJobMonitoringAlertClaimsByInstanceIds">
+        delete from batch.job_monitoring_alert_claim
+        where job_instance_id in
+        <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
     <update id="nullifyParentInstanceIdByParentIds">
         update batch.job_instance set parent_instance_id = null
         where parent_instance_id in

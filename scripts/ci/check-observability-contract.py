@@ -256,6 +256,46 @@ def main() -> int:
             "console-api must use Boot LoggingSystem; custom logback overrides structured output"
         )
 
+    alert_rules = load_yaml(
+        ROOT / "deploy/docker/observability/prometheus-batch-rules.yml"
+    )
+    alert_names = {
+        rule.get("alert")
+        for group in alert_rules.get("groups") or []
+        for rule in group.get("rules") or []
+    }
+    for required_alert in (
+        "BatchCoreServiceTargetMissing",
+        "BatchAlertmanagerDown",
+        "BatchAlertmanagerNotificationFailures",
+        "BatchAlertmanagerConfigReloadFailed",
+        "BatchAlertmanagerNotifySkipped",
+        "BatchAlertmanagerDeliveryFailed",
+    ):
+        if required_alert not in alert_names:
+            errors.append(f"platform alert rule missing: {required_alert}")
+    prometheus = load_yaml(ROOT / "deploy/docker/observability/prometheus.yml")
+    alertmanager_scraped = any(
+        scrape.get("job_name") == "alertmanager"
+        and any(
+            "alertmanager:9093" in (target_group.get("targets") or [])
+            for target_group in scrape.get("static_configs") or []
+        )
+        for scrape in prometheus.get("scrape_configs") or []
+    )
+    if not alertmanager_scraped:
+        errors.append("Docker Prometheus must scrape Alertmanager's metrics endpoint")
+    service_monitor = (
+        ROOT / "helm/batch-platform/templates/servicemonitor.yaml"
+    ).read_text(encoding="utf-8")
+    if (
+        "targetLabel: job" not in service_monitor
+        or "replacement: batch-{{ $component }}" not in service_monitor
+    ):
+        errors.append(
+            "Helm app targets must use the same stable batch-<component> job labels as Docker"
+        )
+
     if errors:
         print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1")
         for error in errors:

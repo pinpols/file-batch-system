@@ -97,6 +97,9 @@ public class ConfigPackageExcelWorkbookWriter {
 
   public static final List<String> JOB_COLUMNS = ConfigPackageExcelSchema.JobDefinition.COLUMNS;
 
+  public static final List<String> JOB_MONITORING_POLICY_COLUMNS =
+      List.copyOf(ConfigPackageExcelSchema.JobMonitoringPolicy.COLUMNS);
+
   public static final List<String> CHANNEL_COLUMNS = ConfigPackageExcelSchema.FileChannel.COLUMNS;
 
   public static final List<String> FILE_TEMPLATE_COLUMNS =
@@ -240,6 +243,7 @@ public class ConfigPackageExcelWorkbookWriter {
         session.businessCalendarRows(),
         session.batchWindowRows(),
         session.jobRows(),
+        session.jobMonitoringPolicyRows(),
         session.fileChannelRows(),
         session.fileTemplateRows(),
         session.pipelineRows(),
@@ -252,6 +256,7 @@ public class ConfigPackageExcelWorkbookWriter {
         result.businessCalendars(),
         result.batchWindows(),
         result.jobs(),
+        result.jobMonitoringPolicies(),
         result.channels(),
         result.fileTemplates(),
         result.pipelines(),

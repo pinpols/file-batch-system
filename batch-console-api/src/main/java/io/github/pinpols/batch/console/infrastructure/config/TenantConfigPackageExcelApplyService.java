@@ -12,6 +12,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.console.config.JobMonitoringDefaultsProperties;
 import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.param.FileChannelConfigUpsertParam;
@@ -21,6 +22,7 @@ import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.CalendarHolidayMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.param.JobDefinitionMaintenanceUpdateParam;
+import io.github.pinpols.batch.console.domain.job.param.JobMonitoringPolicyUpsertParam;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
@@ -41,6 +43,9 @@ import io.github.pinpols.batch.console.infrastructure.excel.FileTemplateExcelRow
 import io.github.pinpols.batch.console.infrastructure.excel.ResourceQueueExcelRowParser;
 import io.github.pinpols.batch.console.infrastructure.excel.ResourceQueueExcelRowParser.QueueRow;
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -67,6 +72,7 @@ public class TenantConfigPackageExcelApplyService {
   private final FileChannelConfigMapper fileChannelConfigMapper;
   private final FileTemplateConfigMapper fileTemplateConfigMapper;
   private final JobDefinitionMapper jobDefinitionMapper;
+  private final JobMonitoringDefaultsProperties monitoringDefaults;
   private final PipelineDefinitionMapper pipelineDefinitionMapper;
   private final PipelineStepDefinitionMapper pipelineStepDefinitionMapper;
   private final WorkflowDefinitionMapper workflowDefinitionMapper;
@@ -100,6 +106,7 @@ public class TenantConfigPackageExcelApplyService {
     ApplyStats fileTemplateStats = applyFileTemplates(result.validFileTemplates(), ctx);
     ApplyStats channelStats = applyChannels(result.validChannels(), ctx);
     ApplyStats jobStats = applyJobs(result.validJobs(), ctx);
+    applyJobMonitoringPolicies(result.validJobMonitoringPolicies(), ctx);
     ApplyStats pipelineStats = applyPipelines(result.validPipelines(), result.validSteps(), ctx);
     ApplyStats wfStats =
         applyWorkflows(result.validWfDefs(), result.validWfNodes(), result.validWfEdges(), ctx);
@@ -255,6 +262,20 @@ public class TenantConfigPackageExcelApplyService {
         entity.setCreatedBy(safeOp(ctx.operatorId()));
         entity.setUpdatedBy(safeOp(ctx.operatorId()));
         jobDefinitionMapper.insert(entity);
+        jobDefinitionMapper.upsertJobMonitoringPolicy(JobMonitoringPolicyUpsertParam.builder()
+            .tenantId(ctx.tenantId())
+            .jobDefinitionId(entity.getId())
+            .softRuntimeSeconds(monitoringDefaults.getSoftRuntimeSeconds())
+            .softRuntimeSeverity("WARN")
+            .startGraceSeconds(
+                isStartGraceMonitored(entity) ? monitoringDefaults.getStartGraceSeconds() : 0)
+            .startGraceSeverity("WARN")
+            .completionDeadlineLocalTime(null)
+            .completionDeadlineDayOffset(0)
+            .dependencyCompletionWindowSeconds(0)
+            .completionDeadlineSeverity("WARN")
+            .updatedBy(safeOp(ctx.operatorId()))
+            .build());
         inserted++;
       } else {
         JobDefinitionMaintenanceUpdateParam param = new JobDefinitionMaintenanceUpdateParam();
@@ -284,6 +305,70 @@ public class TenantConfigPackageExcelApplyService {
       }
     }
     return new ApplyStats(inserted, updated);
+  }
+
+  private void applyJobMonitoringPolicies(List<Map<String, String>> rows, ApplyContext ctx) {
+    for (Map<String, String> row : rows) {
+      String jobCode = normalize(row.get(COL_JOB_CODE));
+      JobDefinitionEntity job = jobDefinitionMapper.selectByUniqueKey(ctx.tenantId(), jobCode);
+      if (EmptyChecks.isNull(job)) {
+        throw invalidParsedRow(
+            JOB_MONITORING_POLICY_SHEET, List.of("job_code does not exist for tenant: " + jobCode));
+      }
+      jobDefinitionMapper.upsertJobMonitoringPolicy(JobMonitoringPolicyUpsertParam.builder()
+          .tenantId(ctx.tenantId())
+          .jobDefinitionId(job.getId())
+          .softRuntimeSeconds(parseNonNegativeMonitoringValue(row.get(COL_SOFT_RUNTIME_SECONDS)))
+          .softRuntimeSeverity(resolveMonitoringSeverity(row.get(COL_SOFT_RUNTIME_SEVERITY)))
+          .startGraceSeconds(parseStartGraceSeconds(row.get(COL_START_GRACE_SECONDS), job))
+          .startGraceSeverity(resolveMonitoringSeverity(row.get(COL_START_GRACE_SEVERITY)))
+          .completionDeadlineLocalTime(
+              parseMonitoringTime(row.get(COL_COMPLETION_DEADLINE_LOCAL_TIME)))
+          .completionDeadlineDayOffset(
+              parseNonNegativeMonitoringValue(row.get(COL_COMPLETION_DEADLINE_DAY_OFFSET)))
+          .dependencyCompletionWindowSeconds(
+              parseNonNegativeMonitoringValue(row.get(COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS)))
+          .completionDeadlineSeverity(
+              resolveMonitoringSeverity(row.get(COL_COMPLETION_DEADLINE_SEVERITY)))
+          .updatedBy(safeOp(ctx.operatorId()))
+          .build());
+    }
+  }
+
+  private static Integer parseNonNegativeMonitoringValue(String value) {
+    Integer parsed = parseInteger(value);
+    return EmptyChecks.isNull(parsed) ? 0 : parsed;
+  }
+
+  private int parseStartGraceSeconds(String value, JobDefinitionEntity job) {
+    Integer configured = parseInteger(value);
+    if (EmptyChecks.isNotNull(configured)) {
+      return configured;
+    }
+    return isStartGraceMonitored(job) ? monitoringDefaults.getStartGraceSeconds() : 0;
+  }
+
+  private boolean isStartGraceMonitored(JobDefinitionEntity entity) {
+    return "CRON".equals(entity.getScheduleType()) || Texts.hasText(entity.getDependsOnJobCode());
+  }
+
+  private static LocalTime parseMonitoringTime(String value) {
+    String normalized = normalize(value);
+    if (!Texts.hasText(normalized)) {
+      return null;
+    }
+    try {
+      return LocalTime.parse(normalized, DateTimeFormatter.ofPattern("HH:mm"));
+    } catch (DateTimeParseException exception) {
+      throw invalidParsedRow(
+          JOB_MONITORING_POLICY_SHEET,
+          List.of(COL_COMPLETION_DEADLINE_LOCAL_TIME + " must use HH:mm (00:00-23:59)"));
+    }
+  }
+
+  private static String resolveMonitoringSeverity(String severity) {
+    String normalized = normalizeEnum(severity);
+    return Texts.hasText(normalized) ? normalized : "WARN";
   }
 
   private static String resolveExecutionMode(Map<String, String> row) {

@@ -11,7 +11,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-/** 生成 11-Sheet 配置包的场景化示例数据。示例值只用于模板引导，不代表生产默认配置。 */
+/** 生成 12-Sheet 配置包的场景化示例数据。示例值只用于模板引导，不代表生产默认配置。 */
 public final class ConfigPackageSampleDataFactory {
 
   private static final String TENANT = "demo-tenant";
@@ -27,7 +27,7 @@ public final class ConfigPackageSampleDataFactory {
   private static final String SCENARIO_DISPATCH = "DISPATCH";
   private static final String SCENARIO_ATOMIC = "ATOMIC";
   private static final String SCENARIO_WORKFLOW = "WORKFLOW";
-  private static final int SHEET_COUNT = 11;
+  private static final int SHEET_COUNT = 12;
 
   private ConfigPackageSampleDataFactory() {}
 
@@ -185,13 +185,13 @@ public final class ConfigPackageSampleDataFactory {
   private static void putImport(List<List<Map<String, Object>>> sheets) {
     String job = "JOB_IMPORT_CUSTOMER";
     String tpl = "TPL_IMPORT_CUSTOMER";
-    sheets.get(5).add(fileTemplate(tpl, "客户导入模板", SCENARIO_IMPORT, null));
+    sheets.get(6).add(fileTemplate(tpl, "客户导入模板", SCENARIO_IMPORT, null));
     sheets.get(3).add(job(job, "客户导入", SCENARIO_IMPORT, "{\"templateCode\":\"" + tpl + "\"}"));
-    sheets.get(6).add(pipeline(job, "客户导入流水线", SCENARIO_IMPORT));
-    sheets.get(7).add(step(job, "RECEIVE", "接收文件", "RECEIVE", 1, "fileReceive", "{}"));
-    sheets.get(7).add(step(job, "PARSE", "解析文件", "PARSE", 2, "csvParser", "{}"));
+    sheets.get(7).add(pipeline(job, "客户导入流水线", SCENARIO_IMPORT));
+    sheets.get(8).add(step(job, "RECEIVE", "接收文件", "RECEIVE", 1, "fileReceive", "{}"));
+    sheets.get(8).add(step(job, "PARSE", "解析文件", "PARSE", 2, "csvParser", "{}"));
     sheets
-        .get(7)
+        .get(8)
         .add(
             step(job, "LOAD", "加载入库", "LOAD", 3, "jdbcLoad", "{\"templateCode\":\"" + tpl + "\"}"));
   }
@@ -199,12 +199,12 @@ public final class ConfigPackageSampleDataFactory {
   private static void putExport(List<List<Map<String, Object>>> sheets) {
     String job = "JOB_EXPORT_CUSTOMER";
     String tpl = "TPL_EXPORT_CUSTOMER";
-    sheets.get(5).add(fileTemplate(tpl, "客户导出模板", SCENARIO_EXPORT, "customer_${batchDate}.csv"));
+    sheets.get(6).add(fileTemplate(tpl, "客户导出模板", SCENARIO_EXPORT, "customer_${batchDate}.csv"));
     sheets.get(3).add(job(job, "客户导出", SCENARIO_EXPORT, "{\"templateCode\":\"" + tpl + "\"}"));
-    sheets.get(6).add(pipeline(job, "客户导出流水线", SCENARIO_EXPORT));
-    sheets.get(7).add(step(job, "PREPARE", "准备导出", "PREPARE", 1, "exportPrepare", "{}"));
+    sheets.get(7).add(pipeline(job, "客户导出流水线", SCENARIO_EXPORT));
+    sheets.get(8).add(step(job, "PREPARE", "准备导出", "PREPARE", 1, "exportPrepare", "{}"));
     sheets
-        .get(7)
+        .get(8)
         .add(step(
             job,
             "GENERATE",
@@ -213,15 +213,15 @@ public final class ConfigPackageSampleDataFactory {
             2,
             "csvExport",
             "{\"templateCode\":\"" + tpl + "\"}"));
-    sheets.get(7).add(step(job, "STORE", "保存文件", "STORE", 3, "objectStore", "{}"));
+    sheets.get(8).add(step(job, "STORE", "保存文件", "STORE", 3, "objectStore", "{}"));
   }
 
   private static void putProcess(List<List<Map<String, Object>>> sheets) {
     String job = "JOB_PROCESS_CUSTOMER";
     sheets.get(3).add(job(job, "客户汇总加工", SCENARIO_PROCESS, "{}"));
-    sheets.get(6).add(pipeline(job, "客户汇总加工流水线", SCENARIO_PROCESS));
+    sheets.get(7).add(pipeline(job, "客户汇总加工流水线", SCENARIO_PROCESS));
     sheets
-        .get(7)
+        .get(8)
         .add(
             step(
                 job,
@@ -231,13 +231,13 @@ public final class ConfigPackageSampleDataFactory {
                 1,
                 "sqlCompute",
                 "{\"targetSchema\":\"biz\",\"targetTable\":\"customer_summary\",\"sql\":\"SELECT customer_no, count(*) AS cnt FROM biz.customer_account WHERE tenant_id = :tenantId GROUP BY customer_no\"}"));
-    sheets.get(7).add(step(job, "COMMIT", "提交结果", "COMMIT", 2, "jdbcCommit", "{}"));
+    sheets.get(8).add(step(job, "COMMIT", "提交结果", "COMMIT", 2, "jdbcCommit", "{}"));
   }
 
   private static void putDispatch(List<List<Map<String, Object>>> sheets) {
     String job = "JOB_DISPATCH_CUSTOMER";
     sheets
-        .get(4)
+        .get(5)
         .add(row(
             COL_TENANT_ID,
             TENANT,
@@ -260,9 +260,9 @@ public final class ConfigPackageSampleDataFactory {
             COL_ENABLED,
             true));
     sheets.get(3).add(job(job, "客户文件派发", SCENARIO_DISPATCH, "{}"));
-    sheets.get(6).add(pipeline(job, "客户文件派发流水线", SCENARIO_DISPATCH));
+    sheets.get(7).add(pipeline(job, "客户文件派发流水线", SCENARIO_DISPATCH));
     sheets
-        .get(7)
+        .get(8)
         .add(step(
             job,
             SCENARIO_DISPATCH,
@@ -271,7 +271,7 @@ public final class ConfigPackageSampleDataFactory {
             1,
             "sftpDispatch",
             "{\"channelCode\":\"" + CHANNEL + "\"}"));
-    sheets.get(7).add(step(job, "ACK", "等待回执", "ACK", 2, "dispatchAck", "{}"));
+    sheets.get(8).add(step(job, "ACK", "等待回执", "ACK", 2, "dispatchAck", "{}"));
   }
 
   /** Atomic 是单任务执行器，不创建 pipeline_definition / pipeline_step_definition。 */
@@ -289,7 +289,7 @@ public final class ConfigPackageSampleDataFactory {
     putImport(sheets);
     putExport(sheets);
     sheets
-        .get(8)
+        .get(9)
         .add(row(
             COL_TENANT_ID, TENANT,
             COL_WORKFLOW_CODE, "WF_CUSTOMER_EOD",
@@ -298,13 +298,13 @@ public final class ConfigPackageSampleDataFactory {
             COL_VERSION, VERSION,
             COL_ENABLED, true,
             COL_DESCRIPTION, "先导入后导出的示例 DAG"));
-    sheets.get(9).add(workflowNode("START", "开始", "START", null, null, 1));
-    sheets.get(9).add(workflowNode("NODE_IMPORT", "客户导入", "JOB", "JOB_IMPORT_CUSTOMER", null, 2));
-    sheets.get(9).add(workflowNode("NODE_EXPORT", "客户导出", "JOB", "JOB_EXPORT_CUSTOMER", null, 3));
-    sheets.get(9).add(workflowNode("END", "结束", "END", null, null, 4));
-    sheets.get(10).add(workflowEdge("START", "NODE_IMPORT"));
-    sheets.get(10).add(workflowEdge("NODE_IMPORT", "NODE_EXPORT"));
-    sheets.get(10).add(workflowEdge("NODE_EXPORT", "END"));
+    sheets.get(10).add(workflowNode("START", "开始", "START", null, null, 1));
+    sheets.get(10).add(workflowNode("NODE_IMPORT", "客户导入", "JOB", "JOB_IMPORT_CUSTOMER", null, 2));
+    sheets.get(10).add(workflowNode("NODE_EXPORT", "客户导出", "JOB", "JOB_EXPORT_CUSTOMER", null, 3));
+    sheets.get(10).add(workflowNode("END", "结束", "END", null, null, 4));
+    sheets.get(11).add(workflowEdge("START", "NODE_IMPORT"));
+    sheets.get(11).add(workflowEdge("NODE_IMPORT", "NODE_EXPORT"));
+    sheets.get(11).add(workflowEdge("NODE_EXPORT", "END"));
   }
 
   private static Map<String, Object> job(

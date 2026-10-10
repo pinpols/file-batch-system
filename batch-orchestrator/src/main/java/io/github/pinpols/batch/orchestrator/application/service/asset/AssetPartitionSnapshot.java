@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service.asset;
 
+import java.time.Instant;
 import java.time.LocalDate;
 
 /**
@@ -17,6 +18,7 @@ public record AssetPartitionSnapshot(
     String freshnessStatus,
     Integer versionNo,
     Long jobInstanceId,
+    Instant effectiveAt,
     String payloadStorage,
     String payloadJson,
     String payloadRef) {}

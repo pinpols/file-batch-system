@@ -64,6 +64,12 @@ mybatis:
   type-handlers-package: io.github.pinpols.batch.console.config
 
 batch:
+  job-monitoring:
+    defaults:
+      # 不统一推断运行时长阈值；未配置时关闭，由作业显式设置。
+      soft-runtime-seconds: ${BATCH_JOB_MONITORING_DEFAULT_SOFT_RUNTIME_SECONDS:0}
+      # Cron 和依赖作业未单独设置启动宽限期时采用 5 分钟；0 可关闭平台默认。
+      start-grace-seconds: ${BATCH_JOB_MONITORING_DEFAULT_START_GRACE_SECONDS:300}
   console:
     alertmanager:
       enabled: ${BATCH_CONSOLE_ALERTMANAGER_ENABLED:true}

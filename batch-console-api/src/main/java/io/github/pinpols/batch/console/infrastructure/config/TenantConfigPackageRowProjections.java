@@ -2,8 +2,12 @@ package io.github.pinpols.batch.console.infrastructure.config;
 
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_BIZ_TYPE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_CALENDAR_CODE;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_COMPLETION_DEADLINE_DAY_OFFSET;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_COMPLETION_DEADLINE_LOCAL_TIME;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_COMPLETION_DEADLINE_SEVERITY;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_CONDITION_EXPR;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_DEFAULT_PARAMS;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_DEPENDS_ON_JOB_CODE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_DESCRIPTION;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_EDGE_TYPE;
@@ -28,6 +32,10 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SCHEDULE_EXPR;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SCHEDULE_TYPE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SHARD_STRATEGY;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SOFT_RUNTIME_SECONDS;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SOFT_RUNTIME_SEVERITY;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_START_GRACE_SECONDS;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_START_GRACE_SEVERITY;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_TENANT_ID;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_TIMEOUT_SECONDS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_TO_NODE_CODE;
@@ -101,6 +109,27 @@ public class TenantConfigPackageRowProjections {
           return m;
         })
         .collect(Collectors.toList());
+  }
+
+  List<Map<String, Object>> toJobMonitoringPolicyRows(List<JobDefinitionEntity> entities) {
+    return entities.stream()
+        .map(entity -> {
+          Map<String, Object> row = new LinkedHashMap<>();
+          row.put(COL_TENANT_ID, entity.getTenantId());
+          row.put(COL_JOB_CODE, entity.getJobCode());
+          row.put(COL_SOFT_RUNTIME_SECONDS, entity.getSoftRuntimeSeconds());
+          row.put(COL_SOFT_RUNTIME_SEVERITY, entity.getSoftRuntimeSeverity());
+          row.put(COL_START_GRACE_SECONDS, entity.getStartGraceSeconds());
+          row.put(COL_START_GRACE_SEVERITY, entity.getStartGraceSeverity());
+          row.put(COL_COMPLETION_DEADLINE_LOCAL_TIME, entity.getCompletionDeadlineLocalTime());
+          row.put(COL_COMPLETION_DEADLINE_DAY_OFFSET, entity.getCompletionDeadlineDayOffset());
+          row.put(
+              COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS,
+              entity.getDependencyCompletionWindowSeconds());
+          row.put(COL_COMPLETION_DEADLINE_SEVERITY, entity.getCompletionDeadlineSeverity());
+          return row;
+        })
+        .toList();
   }
 
   List<Map<String, Object>> collectPipelineSteps(List<Map<String, Object>> pipelines) {

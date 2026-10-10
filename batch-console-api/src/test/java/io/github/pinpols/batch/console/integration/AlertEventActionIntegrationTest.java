@@ -82,6 +82,34 @@ class AlertEventActionIntegrationTest extends AbstractIntegrationTest {
     assertThat(entity.getStatus()).isEqualTo("CLOSED");
   }
 
+  @Test
+  @DisplayName("同一 Alertmanager 告警组仅在最后一条未关闭事件结束后才可解除")
+  void shouldCountActivePeersInSameAlertmanagerGroup() {
+    String tenantId = "t-alert-group-" + BatchDateTimeSupport.utcEpochMillis();
+    long firstId = insertAlertEvent(tenantId, "JOB_RUNNING_TOO_LONG", "WARN", "OPEN", "first");
+    long ackedId = insertAlertEvent(tenantId, "JOB_RUNNING_TOO_LONG", "WARN", "ACKED", "acked");
+    long suppressedId =
+        insertAlertEvent(tenantId, "JOB_RUNNING_TOO_LONG", "WARN", "SUPPRESSED", "suppressed");
+
+    alertApplicationService.close(firstId, alertRequest(tenantId), "idem-group-1");
+
+    assertThat(alertEventMapper.countActiveAlertsInAmGroup(
+            tenantId, "batch-orchestrator", "JOB_RUNNING_TOO_LONG", "WARN", firstId))
+        .isEqualTo(2);
+
+    alertApplicationService.close(ackedId, alertRequest(tenantId), "idem-group-2");
+
+    assertThat(alertEventMapper.countActiveAlertsInAmGroup(
+            tenantId, "batch-orchestrator", "JOB_RUNNING_TOO_LONG", "WARN", ackedId))
+        .isEqualTo(1);
+
+    alertApplicationService.close(suppressedId, alertRequest(tenantId), "idem-group-3");
+
+    assertThat(alertEventMapper.countActiveAlertsInAmGroup(
+            tenantId, "batch-orchestrator", "JOB_RUNNING_TOO_LONG", "WARN", suppressedId))
+        .isZero();
+  }
+
   private AlertActionRequest alertRequest(String tenantId) {
     AlertActionRequest request = new AlertActionRequest();
     request.setTenantId(tenantId);

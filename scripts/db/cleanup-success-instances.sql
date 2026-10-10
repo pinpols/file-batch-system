@@ -149,7 +149,16 @@ WITH old_instances AS (
 DELETE FROM batch.compensation_command
  WHERE related_job_instance_id IN (SELECT id FROM old_instances);
 
--- 7.6) 解开 job_instance 自引用 FK：子实例的 parent_instance_id 指向即将被删的父
+-- 7.6) 清理作业监控告警幂等 claim；归档后不再扫描热表实例，claim 无需继续保留。
+WITH old_instances AS (
+  SELECT id FROM batch.job_instance
+   WHERE instance_status IN ('SUCCESS','PARTIAL_FAILED')
+     AND finished_at < now() - (:success_retention_days || ' days')::interval
+)
+DELETE FROM batch.job_monitoring_alert_claim
+ WHERE job_instance_id IN (SELECT id FROM old_instances);
+
+-- 7.7) 解开 job_instance 自引用 FK：子实例的 parent_instance_id 指向即将被删的父
 UPDATE batch.job_instance SET parent_instance_id = NULL
  WHERE parent_instance_id IN (
    SELECT id FROM batch.job_instance

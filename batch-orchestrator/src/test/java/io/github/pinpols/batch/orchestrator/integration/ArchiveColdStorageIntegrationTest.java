@@ -78,6 +78,11 @@ class ArchiveColdStorageIntegrationTest extends AbstractIntegrationTest {
     Long partitionId = insertJobPartition(tenantId, instanceId);
     Long taskId = insertJobTask(tenantId, instanceId, partitionId);
     Long stepId = insertJobStepInstance(tenantId, instanceId, partitionId, taskId);
+    jdbcTemplate.update(
+        "insert into batch.job_monitoring_alert_claim (tenant_id, job_instance_id, violation_type) "
+            + "values (?, ?, 'COMPLETED_LATE')",
+        tenantId,
+        instanceId);
 
     SuccessInstanceArchiveService.ArchiveBatchResult result =
         successInstanceArchiveService.archiveOnce();
@@ -89,6 +94,11 @@ class ArchiveColdStorageIntegrationTest extends AbstractIntegrationTest {
     assertThat(count("batch.job_partition", partitionId)).isZero();
     assertThat(count("batch.job_task", taskId)).isZero();
     assertThat(count("batch.job_step_instance", stepId)).isZero();
+    assertThat(jdbcTemplate.queryForObject(
+            "select count(*) from batch.job_monitoring_alert_claim where job_instance_id = ?",
+            Integer.class,
+            instanceId))
+        .isZero();
     assertThat(count("archive.job_instance_archive", instanceId)).isEqualTo(1);
     assertThat(count("archive.job_partition_archive", partitionId)).isEqualTo(1);
     assertThat(count("archive.job_task_archive", taskId)).isEqualTo(1);

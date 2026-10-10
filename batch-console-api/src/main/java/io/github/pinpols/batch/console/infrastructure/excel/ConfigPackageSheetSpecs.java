@@ -11,9 +11,13 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_CHANNEL_CODE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_CHANNEL_NAME;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_CHANNEL_TYPE;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_COMPLETION_DEADLINE_DAY_OFFSET;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_COMPLETION_DEADLINE_LOCAL_TIME;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_COMPLETION_DEADLINE_SEVERITY;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_CONDITION_EXPR;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_CONFIG_JSON;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_DEFAULT_PARAMS;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_DEPENDS_ON_JOB_CODE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_DESCRIPTION;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_EDGE_TYPE;
@@ -41,7 +45,11 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SCHEDULE_EXPR;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SCHEDULE_TYPE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SHARD_STRATEGY;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SOFT_RUNTIME_SECONDS;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SOFT_RUNTIME_SEVERITY;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_STAGE_CODE;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_START_GRACE_SECONDS;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_START_GRACE_SEVERITY;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_STEP_CODE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_STEP_NAME;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_TENANT_ID;
@@ -58,6 +66,7 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.EDGE_TYPES;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.EXECUTION_MODES;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.JOB_SHEET;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.JOB_TYPES;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.NODE_TYPES;
@@ -79,6 +88,7 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.CHANNEL_COLUMNS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.FILE_TEMPLATE_COLUMNS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.JOB_COLUMNS;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.JOB_MONITORING_POLICY_COLUMNS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.PIPELINE_COLUMNS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.RESOURCE_QUEUE_COLUMNS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.STEP_COLUMNS;
@@ -116,7 +126,7 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.springframework.context.MessageSource;
 
 /**
- * 11 个配置包 sheet 的字段、顺序和业务约束的集中声明。
+ * 配置包各 sheet 的字段、顺序和业务约束的集中声明。
  *
  * <p>该类看起来行数较多是刻意的：它是配置包协议的“单一事实源”，不是把多个业务流程塞进一个服务。导入校验、模板生成和错误定位都从这里读取规则，
  * 集中维护可以避免同一个 sheet 在不同链路出现列顺序或必填语义漂移；新增 sheet 应优先新增规格，而不是在各个校验器里复制条件。
@@ -124,6 +134,7 @@ import org.springframework.context.MessageSource;
 public final class ConfigPackageSheetSpecs {
 
   private static final String EMPTY = "";
+  private static final String[] JOB_MONITORING_SEVERITY_CHOICES = {"WARN", "ERROR", "CRITICAL"};
 
   /**
    * 枚举下拉数组 — 单一权威源，全部从 enum 声明顺序 + ConfigPackageExcelValidator 集合派生。
@@ -310,6 +321,11 @@ public final class ConfigPackageSheetSpecs {
             this::applyBatchWindowValidations),
         new SheetDef(JOB_SHEET, JOB_COLUMNS, buildJobGuides(), this::applyJobValidations),
         new SheetDef(
+            JOB_MONITORING_POLICY_SHEET,
+            JOB_MONITORING_POLICY_COLUMNS,
+            buildJobMonitoringPolicyGuides(),
+            this::applyJobMonitoringPolicyValidations),
+        new SheetDef(
             CHANNEL_SHEET, CHANNEL_COLUMNS, buildChannelGuides(), this::applyChannelValidations),
         new SheetDef(
             FILE_TEMPLATE_SHEET,
@@ -451,6 +467,19 @@ public final class ConfigPackageSheetSpecs {
         messageSource,
         locale);
     boolDropdown(sheet, 20, locale);
+  }
+
+  private void applyJobMonitoringPolicyValidations(Sheet sheet, Locale locale) {
+    for (int columnIndex : List.of(3, 5, 9)) {
+      addDropdownValidation(
+          sheet,
+          columnIndex,
+          JOB_MONITORING_SEVERITY_CHOICES,
+          "excel.common.severity.prompt_title",
+          "excel.common.severity.prompt_box",
+          messageSource,
+          locale);
+    }
   }
 
   private void applyChannelValidations(Sheet sheet, Locale locale) {
@@ -770,6 +799,45 @@ public final class ConfigPackageSheetSpecs {
             COL_ENABLED,
             optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
         Map.entry(COL_DESCRIPTION, optionalColumn(GUIDE_DESC_DESC, GUIDE_STR, "客户文件导入作业")));
+  }
+
+  private Map<String, ColumnGuide> buildJobMonitoringPolicyGuides() {
+    return Map.ofEntries(
+        Map.entry(COL_TENANT_ID, optionalColumn("所属租户，留空使用当前租户。", GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
+        Map.entry(
+            COL_JOB_CODE, requiredColumn("策略对应的作业编码，需在本包或当前租户中存在。", GUIDE_STR, GUIDE_JOB_EXAMPLE)),
+        Map.entry(
+            COL_SOFT_RUNTIME_SECONDS,
+            optionalColumn(
+                "作业开始执行后运行超过此秒数时告警；所有调度类型均适用。新建作业不统一启用默认值；配置包中 0 或留空表示关闭。", GUIDE_INT, "")),
+        Map.entry(
+            COL_SOFT_RUNTIME_SEVERITY,
+            optionalColumn("运行超时告警级别。", GUIDE_ENUM, "WARN", JOB_MONITORING_SEVERITY_CHOICES)),
+        Map.entry(
+            COL_START_GRACE_SECONDS,
+            optionalColumn(
+                "Cron 或依赖作业进入执行资格后允许延迟启动的时长（秒）；超过后仍未启动则告警。新建作业默认 300 秒；配置包中 0 或留空表示关闭。",
+                GUIDE_INT,
+                "300")),
+        Map.entry(
+            COL_START_GRACE_SEVERITY,
+            optionalColumn("启动过晚告警级别。", GUIDE_ENUM, "WARN", JOB_MONITORING_SEVERITY_CHOICES)),
+        Map.entry(
+            COL_COMPLETION_DEADLINE_LOCAL_TIME,
+            optionalColumn(
+                "仅无依赖的 CRON 作业使用：完成截止钟点（HH:mm），按作业时区和计划触发日解释；到期仍未结束时告警，留空关闭。", GUIDE_STR, "04:00")),
+        Map.entry(
+            COL_COMPLETION_DEADLINE_DAY_OFFSET,
+            optionalColumn("仅无依赖的 CRON 作业使用：截止日期相对计划触发日的偏移，0 当日，1 次日。", GUIDE_ENUM, "0", "0", "1")),
+        Map.entry(
+            COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS,
+            optionalColumn(
+                "仅依赖作业使用：从下游满足执行资格时起算的最晚完成时长（秒）；0 或留空关闭。若同时为 CRON，以计划触发时刻和上游 EFFECTIVE 时刻较晚者作为起算点。",
+                GUIDE_INT,
+                "")),
+        Map.entry(
+            COL_COMPLETION_DEADLINE_SEVERITY,
+            optionalColumn("完成过晚告警级别。", GUIDE_ENUM, "WARN", JOB_MONITORING_SEVERITY_CHOICES)));
   }
 
   private Map<String, ColumnGuide> buildChannelGuides() {

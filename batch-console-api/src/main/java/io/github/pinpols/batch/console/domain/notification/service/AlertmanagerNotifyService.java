@@ -38,6 +38,8 @@ public class AlertmanagerNotifyService {
 
   /** 缺渠道丢弃告警的计数器名(供 Prometheus 对"关于告警的告警"再告警)。 */
   private static final String METRIC_SKIPPED = "am.notify.skipped";
+  /** 已匹配渠道但最终投递失败的计数器名。 */
+  private static final String METRIC_FAILED = "am.notify.failed";
 
   private final AlertmanagerNotifyProperties properties;
   private final NotificationChannelMapper channelMapper;
@@ -100,6 +102,7 @@ public class AlertmanagerNotifyService {
           payload.safeAlerts().size());
       return new AmNotifyOutcome(receiver, channelCode, true, "SUCCESS", null);
     }
+    meterRegistry.counter(METRIC_FAILED, "receiver", receiver).increment();
     log.warn(
         "AM notify delivery failed: receiver={} channel={} error={}",
         LogSanitizer.value(receiver),

@@ -12,6 +12,7 @@ import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
 import io.github.pinpols.batch.console.support.excel.TenantConfigPackageExcelImportStore.PackageExcelSession;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,6 +47,96 @@ class ConfigPackageExcelValidatorTest {
     assertThat(result.allIssues())
         .anySatisfy(issue ->
             assertThat(issue.message()).contains("duplicate template_code + version in excel"));
+  }
+
+  @Test
+  @DisplayName("作业监控策略独立 sheet:识别作业并校验阈值和告警级别")
+  void shouldValidateDedicatedJobMonitoringPolicySheet() {
+    Map<String, String> policy = new LinkedHashMap<>();
+    policy.put("tenant_id", "t1");
+    policy.put("job_code", "JOB_IMPORT_CUSTOMER");
+    policy.put("soft_runtime_seconds", "900");
+    policy.put("soft_runtime_severity", "ERROR");
+    policy.put("start_grace_seconds", "60");
+    policy.put("start_grace_severity", "WARN");
+    policy.put("completion_deadline_local_time", "04:00");
+    policy.put("completion_deadline_day_offset", "1");
+    policy.put("completion_deadline_severity", "CRITICAL");
+    Map<String, String> job = new LinkedHashMap<>(jobRow("", "", ""));
+    job.put("job_code", "JOB_IMPORT_CUSTOMER");
+    job.put("job_name", "客户导入");
+    job.put("schedule_type", "CRON");
+    job.put("schedule_expr", "0 0 2 * * ?");
+    PackageExcelSession session = new PackageExcelSession(
+        "config.xlsx",
+        "t1",
+        Instant.parse("2026-10-09T00:00:00Z"),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(job),
+        List.of(policy),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of());
+
+    ConfigPackageExcelValidator.PackageValidationResult result = validator().validate(session);
+
+    assertThat(result.jobMonitoringPolicies().sheetName())
+        .isEqualTo(ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET);
+    assertThat(result.validJobMonitoringPolicies()).hasSize(1);
+    assertThat(result.allIssues()).isEmpty();
+  }
+
+  @Test
+  @DisplayName("固定频率独立作业仅支持运行耗时告警")
+  void shouldRejectCompletionDeadlineForStandaloneFixedRateJob() {
+    Map<String, String> policy = new LinkedHashMap<>();
+    policy.put("tenant_id", "t1");
+    policy.put("job_code", "JOB_FIXED_RATE");
+    policy.put("dependency_completion_window_seconds", "1200");
+    policy.put("completion_deadline_severity", "ERROR");
+    Map<String, String> job = new LinkedHashMap<>(jobRow("", "", ""));
+    job.put("job_code", "JOB_FIXED_RATE");
+    job.put("job_name", "固定频率作业");
+    job.put("schedule_type", "FIXED_RATE");
+    job.put("schedule_expr", "PT1M");
+    List<Map<String, String>> jobs = new ArrayList<>(List.of(job));
+    PackageExcelSession session = new PackageExcelSession(
+        "config.xlsx",
+        "t1",
+        Instant.parse("2026-10-09T00:00:00Z"),
+        List.of(),
+        List.of(),
+        List.of(),
+        jobs,
+        List.of(policy),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of());
+
+    ConfigPackageExcelValidator.PackageValidationResult result = validator().validate(session);
+
+    assertThat(result.validJobMonitoringPolicies()).isEmpty();
+    assertThat(result.allIssues())
+        .anySatisfy(
+            issue -> assertThat(issue.message()).contains("only supported for dependent jobs"));
+
+    job.put("depends_on_job_code", "UPSTREAM_JOB");
+    Map<String, String> upstreamJob = new LinkedHashMap<>(jobRow("", "", ""));
+    upstreamJob.put("job_code", "UPSTREAM_JOB");
+    jobs.add(upstreamJob);
+    ConfigPackageExcelValidator.PackageValidationResult dependent = validator().validate(session);
+    assertThat(dependent.validJobMonitoringPolicies()).hasSize(1);
+    assertThat(dependent.allIssues()).isEmpty();
   }
 
   @Test

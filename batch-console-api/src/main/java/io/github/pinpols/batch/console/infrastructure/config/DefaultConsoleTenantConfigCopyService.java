@@ -480,6 +480,14 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
       s.setRetryPolicy(e.getRetryPolicy());
       s.setRetryMaxCount(e.getRetryMaxCount());
       s.setTimeoutSeconds(e.getTimeoutSeconds());
+      s.setSoftRuntimeSeconds(e.getSoftRuntimeSeconds());
+      s.setSoftRuntimeSeverity(e.getSoftRuntimeSeverity());
+      s.setStartGraceSeconds(e.getStartGraceSeconds());
+      s.setStartGraceSeverity(e.getStartGraceSeverity());
+      s.setCompletionDeadlineLocalTime(e.getCompletionDeadlineLocalTime());
+      s.setCompletionDeadlineDayOffset(e.getCompletionDeadlineDayOffset());
+      s.setCompletionDeadlineSeverity(e.getCompletionDeadlineSeverity());
+      s.setDependencyCompletionWindowSeconds(e.getDependencyCompletionWindowSeconds());
       s.setExecutionHandler(e.getExecutionHandler());
       s.setParamSchema(e.getParamSchema());
       s.setDefaultParams(e.getDefaultParams());

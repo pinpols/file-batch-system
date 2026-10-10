@@ -4200,6 +4200,13 @@ paths:
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
         - $ref: '#/components/parameters/JobCodeFilter'
+        - name: scheduleType
+          in: query
+          required: false
+          description: 'Filter by schedule type: CRON, FIXED_RATE, or MANUAL.'
+          schema:
+            type: string
+            enum: [CRON, FIXED_RATE, MANUAL]
         - name: enabled
           in: query
           required: false
@@ -10071,7 +10078,7 @@ paths:
   /api/console/config/tenant-package/excel/export:
     get:
       tags: [Config]
-      summary: Export current tenant config package as 11-sheet Excel (importable)
+      summary: Export current tenant config package as 12-sheet Excel (importable)
       operationId: exportTenantConfigPackageExcel
       parameters:
         - name: tenantId
@@ -10081,7 +10088,7 @@ paths:
             type: string
       responses:
         '200':
-          description: 11-sheet Excel workbook containing all config data for the tenant
+          description: 12-sheet Excel workbook containing all config data for the tenant; job monitoring settings are isolated in job_monitoring_policy
           content:
             application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
               schema:
@@ -10090,11 +10097,11 @@ paths:
   /api/console/config/tenant-package/excel/template:
     get:
       tags: [Config]
-      summary: Download blank tenant config package Excel template (11 sheets)
+      summary: Download blank tenant config package Excel template (12 sheets)
       operationId: downloadTenantConfigPackageExcelTemplate
       responses:
         '200':
-          description: Empty Excel template with 11 data sheets
+          description: Empty Excel template with 12 data sheets
           content:
             application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
               schema:
@@ -10125,7 +10132,7 @@ paths:
               enum: [ALL, IMPORT, EXPORT, PROCESS, DISPATCH, ATOMIC, WORKFLOW]
       responses:
         '200':
-          description: Scenario sample Excel template with 11 data sheets
+          description: Scenario sample Excel template with 12 data sheets
           content:
             application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
               schema:
@@ -10134,7 +10141,7 @@ paths:
   /api/console/config/tenant-package/excel/guide:
     get:
       tags: [Config]
-      summary: Return 11-sheet tenant config package field guide
+      summary: Return 12-sheet tenant config package field guide
       operationId: getTenantConfigPackageExcelGuide
       responses:
         '200':
@@ -10146,7 +10153,7 @@ paths:
   /api/console/config/tenant-package/excel/upload:
     post:
       tags: [Config]
-      summary: Upload tenant config package Excel (11 sheets)
+      summary: Upload tenant config package Excel (12 sheets)
       operationId: uploadTenantConfigPackageExcel
       parameters:
         - name: tenantId
@@ -14467,6 +14474,46 @@ components:
         timeoutSeconds:
           type: integer
           format: int32
+        softRuntimeSeconds:
+          type: integer
+          format: int32
+          minimum: 0
+          description: 作业实际开始执行后超过该时长告警；适用于定时和非定时作业，0 表示关闭
+        softRuntimeSeverity:
+          type: string
+          enum: [WARN, ERROR, CRITICAL]
+          description: 运行时长告警级别；缺省 WARN
+        startGraceSeconds:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Cron 独立作业从计划触发时刻、依赖作业从计划触发与上游就绪时刻中的较晚者起算启动宽限秒数；超过宽限期仍未启动时告警，创建时未指定采用平台默认，0 表示关闭
+        startGraceSeverity:
+          type: string
+          enum: [WARN, ERROR, CRITICAL]
+          description: 启动过晚告警级别；缺省 WARN
+        completionDeadlineEnabled:
+          type: boolean
+          description: 完成过晚监控是否启用；无依赖 Cron 以 completionDeadlineLocalTime 启用，依赖作业以 dependencyCompletionWindowSeconds 启用
+        completionDeadlineLocalTime:
+          type: string
+          format: time
+          description: 仅无依赖 CRON：完成截止钟点（HH:mm），按作业时区解释；到期仍未结束则告警，留空关闭
+        completionDeadlineDayOffset:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 1
+          description: 仅无依赖 CRON：截止日期相对计划触发日的偏移；0 当日，1 次日
+        dependencyCompletionWindowSeconds:
+          type: integer
+          format: int32
+          minimum: 0
+          description: 仅依赖作业：从下游满足执行资格时起算的完成窗口秒数；到期仍未结束则告警，0 关闭
+        completionDeadlineSeverity:
+          type: string
+          enum: [WARN, ERROR, CRITICAL]
+          description: 完成过晚告警级别；Cron 独立作业或声明上游依赖的作业适用，缺省 WARN
         executionHandler:
           type: string
         paramSchema:
@@ -14533,6 +14580,46 @@ components:
         timeoutSeconds:
           type: integer
           format: int32
+        softRuntimeSeconds:
+          type: integer
+          format: int32
+          minimum: 0
+          description: 作业实际开始执行后超过该时长告警；适用于定时和非定时作业，0 表示关闭
+        softRuntimeSeverity:
+          type: string
+          enum: [WARN, ERROR, CRITICAL]
+          description: 运行时长告警级别；缺省 WARN
+        startGraceSeconds:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Cron 独立作业从计划触发时刻、依赖作业从计划触发与上游就绪时刻中的较晚者起算启动宽限秒数；超过宽限期仍未启动时告警，0 表示关闭
+        startGraceSeverity:
+          type: string
+          enum: [WARN, ERROR, CRITICAL]
+          description: 启动过晚告警级别；缺省 WARN
+        completionDeadlineEnabled:
+          type: boolean
+          description: 完成过晚监控是否启用；无依赖 Cron 以 completionDeadlineLocalTime 启用，依赖作业以 dependencyCompletionWindowSeconds 启用
+        completionDeadlineLocalTime:
+          type: string
+          format: time
+          description: 仅无依赖 CRON：完成截止钟点（HH:mm），按作业时区解释；到期仍未结束则告警，留空关闭
+        completionDeadlineDayOffset:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 1
+          description: 仅无依赖 CRON：截止日期相对计划触发日的偏移；0 当日，1 次日
+        dependencyCompletionWindowSeconds:
+          type: integer
+          format: int32
+          minimum: 0
+          description: 仅依赖作业：从下游满足执行资格时起算的完成窗口秒数；到期仍未结束则告警，0 关闭
+        completionDeadlineSeverity:
+          type: string
+          enum: [WARN, ERROR, CRITICAL]
+          description: 完成过晚告警级别；Cron 独立作业或声明上游依赖的作业适用，缺省 WARN
         executionHandler:
           type: string
         paramSchema:
@@ -14570,6 +14657,9 @@ components:
           type: string
         scheduleExpr:
           type: string
+        timezone:
+          type: string
+          description: 作业调度时区；完成截止钟点也使用此时区
         calendarCode:
           type: string
         windowCode:
@@ -14582,6 +14672,42 @@ components:
         timeoutSeconds:
           type: integer
           format: int32
+        softRuntimeSeconds:
+          type: integer
+          format: int32
+          description: 作业实际开始执行后超过该时长告警；适用于定时和非定时作业，0 表示关闭
+        softRuntimeSeverity:
+          type: string
+          enum: [WARN, ERROR, CRITICAL]
+          description: 运行时长告警级别；缺省 WARN
+        startGraceSeconds:
+          type: integer
+          format: int32
+          description: Cron 独立作业按计划触发时刻、依赖作业按计划触发与上游就绪时刻中的较晚者起算允许的启动延迟时长（秒）；超过宽限期仍未启动时告警，0 表示关闭
+        startGraceSeverity:
+          type: string
+          enum: [WARN, ERROR, CRITICAL]
+          description: 启动过晚告警级别；缺省 WARN
+        completionDeadlineEnabled:
+          type: boolean
+          description: 完成过晚监控是否启用；无依赖 Cron 使用钟点规则，依赖作业使用相对完成窗口
+        completionDeadlineLocalTime:
+          type: string
+          format: time
+          description: 仅无依赖 CRON：完成截止钟点（HH:mm），按作业时区解释；到期仍未结束则告警，留空关闭
+        completionDeadlineDayOffset:
+          type: integer
+          format: int32
+          description: 仅无依赖 CRON：截止日期相对计划触发日的偏移；0 当日，1 次日
+        dependencyCompletionWindowSeconds:
+          type: integer
+          format: int32
+          minimum: 0
+          description: 仅依赖作业：从下游满足执行资格时起算的完成窗口秒数；到期仍未结束则告警，0 关闭
+        completionDeadlineSeverity:
+          type: string
+          enum: [WARN, ERROR, CRITICAL]
+          description: 完成过晚告警级别；Cron 独立作业或声明上游依赖的作业适用，缺省 WARN
         shardStrategy:
           type: string
         executionMode:

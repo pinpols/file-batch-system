@@ -107,6 +107,17 @@
           and status = #{status}
     </select>
 
+    <select id="countActiveAlertsInAmGroup" resultType="long">
+        select count(1)
+        from batch.alert_event
+        where tenant_id = #{tenantId}
+          and service_name = #{serviceName}
+          and alert_type = #{alertType}
+          and severity = #{severity}
+          and status &lt;&gt; 'CLOSED'
+          and id &lt;&gt; #{excludingId}
+    </select>
+
     <update id="updateStatus">
         update batch.alert_event
         set status = #{status},

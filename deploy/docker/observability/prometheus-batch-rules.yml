@@ -12,6 +12,82 @@ groups:
           summary: "{{ $labels.job }} is down"
           description: "Prometheus target {{ $labels.instance }} for {{ $labels.job }} is not scraping successfully."
 
+      - alert: BatchCoreServiceTargetMissing
+        expr: absent(up{job="batch-console-api"}) or absent(up{job="batch-trigger"}) or absent(up{job="batch-orchestrator"})
+        for: 2m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: platform
+        annotations:
+          summary: "Core service target {{ $labels.job }} is missing from Prometheus"
+          description: "No scrape target is discovered for a required control-plane service. Check Prometheus service discovery, ServiceMonitor selection, and deployment labels."
+
+      - alert: BatchAlertmanagerDown
+        expr: up{job="alertmanager"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: alerting
+        annotations:
+          summary: "Alertmanager scrape target is unavailable"
+          description: "Prometheus cannot scrape Alertmanager. This rule cannot deliver while Alertmanager is down; an independent monitor must page on the Prometheus alert state."
+
+      - alert: BatchAlertmanagerNotificationFailures
+        expr: sum by (integration, reason) (increase(alertmanager_notifications_failed_total[5m])) > 0
+        for: 1m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: alerting
+        annotations:
+          summary: "Alertmanager notification failed via {{ $labels.integration }}"
+          description: "Alertmanager recorded a notification failure ({{ $labels.reason }}). Check its receiver configuration, network and downstream channel."
+
+      - alert: BatchAlertmanagerConfigReloadFailed
+        expr: alertmanager_config_last_reload_successful == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: alerting
+        annotations:
+          summary: "Alertmanager rejected its latest configuration"
+          description: "Alertmanager is still running with the previous configuration. Validate the rendered config and correct the rejected change."
+
+      - alert: BatchDependencyExporterDown
+        expr: up{job=~"redis-exporter|postgres-exporter|kafka-exporter|minio"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: dependency
+        annotations:
+          summary: "Dependency metrics target {{ $labels.job }} is unavailable"
+          description: "The configured scrape target {{ $labels.instance }} is not reachable. Verify the dependency service, exporter and monitoring network."
+
+      - alert: BatchAlertmanagerNotifySkipped
+        expr: increase(am_notify_skipped_total[5m]) > 0
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: alerting
+        annotations:
+          summary: "Alertmanager notification was skipped for {{ $labels.receiver }}"
+          description: "Console received an Alertmanager callback but found no enabled notification channel. Provision the receiver channel and verify delivery logs."
+
+      - alert: BatchAlertmanagerDeliveryFailed
+        expr: sum by (receiver) (increase(am_notify_failed_total[5m])) > 0
+        for: 1m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: alerting
+        annotations:
+          summary: "Alert notification delivery failed for {{ $labels.receiver }}"
+          description: "Console matched a notification channel but its sender reported delivery failure. Inspect notification_delivery_log and verify an independent escalation channel."
+
       - alert: BatchConsoleMaintenanceStateUnavailable
         expr: batch_console_maintenance_shared_state_available == 0
         for: 2m
@@ -132,6 +208,66 @@ groups:
         annotations:
           summary: "SLA violations detected"
           description: "At least one SLA violation is still outstanding."
+
+      - alert: BatchJobMonitoringScanFailures
+        expr: sum by (violation_type) (increase(batch_job_monitoring_scan_failures_total[5m])) > 0
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: job-monitoring
+        annotations:
+          summary: "Job monitoring scan failed for {{ $labels.violation_type }}"
+          description: "The out-of-band job deadline monitor could not query candidates in the last five minutes. Check orchestrator database connectivity and JobMonitoringScheduler logs."
+
+      - alert: BatchJobMonitoringEventFailures
+        expr: sum by (violation_type) (increase(batch_job_monitoring_alert_failures_total[5m])) > 0
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: job-monitoring
+        annotations:
+          summary: "Job monitoring alert persistence failed for {{ $labels.violation_type }}"
+          description: "The monitor found a violation but could not persist its alert event in the last five minutes. Check orchestrator logs and alert event database health."
+
+      - alert: BatchFinalPartitionFailures
+        expr: increase(batch_job_monitoring_violation_total{violation_type="FAILED_PARTITION"}[10m]) > 0
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: job-monitoring
+        annotations:
+          summary: "A job instance finished with failed partitions"
+          description: "A non-dry-run FAILED or PARTIAL_FAILED job instance has a positive final failed-partition count. Inspect the job instance and partition-level failure details."
+
+      - alert: BatchJobRunningTooLong
+        expr: increase(batch_job_monitoring_violation_total{violation_type="RUNNING_TOO_LONG"}[10m]) > 0
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: job-monitoring
+        annotations:
+          summary: "A job instance exceeded its runtime threshold"
+          description: "A job instance exceeded its configured soft runtime threshold. Inspect the instance timeline, worker capacity and partition progress."
+
+      - alert: BatchJobNotStartedByDeadline
+        expr: increase(batch_job_monitoring_violation_total{violation_type="NOT_STARTED"}[10m]) > 0
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: job-monitoring
+        annotations:
+          summary: "A scheduled job did not start within its grace period"
+          description: "A scheduled job instance did not enter execution before its configured start grace deadline. Check trigger delivery, admission capacity and instance state."
+
+      - alert: BatchJobNotCompletedByDeadline
+        expr: increase(batch_job_monitoring_violation_total{violation_type="NOT_COMPLETED_BY_DEADLINE"}[10m]) > 0
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: job-monitoring
+        annotations:
+          summary: "A scheduled job was not finished by its deadline"
+          description: "A scheduled job instance was still unfinished at its configured local deadline, or completed after that deadline before the scan observed it. Inspect its execution timeline and downstream batch window."
 
       - alert: BatchAlertEventsGrowing
         expr: increase(batch_alert_events_total[10m]) > 0
@@ -592,10 +728,10 @@ groups:
           summary: "Trigger outbox rows stuck in PUBLISHING"
           description: "{{ $value }} trigger_outbox_event rows stayed PUBLISHING past timeout. TriggerOutboxRelay stale reset is not clearing them."
 
-      # consumer 端 launch 失败(非 rate_limited)率超过 1/s 持续 5min — 可能是
-      # LaunchApplicationService 内部异常 / DB 连接池耗尽 / orchestrator 崩溃风暴.
+      # consumer 端技术性 launch 失败率超过 1/s 持续 5min；排除预期限流和业务拒绝。
+      # 常见原因包括 LaunchApplicationService 异常、DB 连接池耗尽或 Orchestrator 故障风暴。
       - alert: TriggerLaunchFailureSpike
-        expr: rate(batch_trigger_launch_failed_total{reason!="rate_limited"}[5m]) > 1
+        expr: rate(batch_trigger_launch_failed_total{reason!="rate_limited",reason!="business"}[5m]) > 1
         for: 5m
         labels:
           severity: critical
@@ -603,7 +739,29 @@ groups:
           alert_group: trigger-async
         annotations:
           summary: "Trigger launch failure rate is high"
-          description: "trigger launch 失败率 {{ $value | humanize }}/s (非限流原因) 持续 5min. 检查 orchestrator 日志 + DB / Kafka 健康. 失败的 envelope 会留在 Kafka topic 不丢, 但 trigger_request 状态可能错乱."
+          description: "trigger launch 技术失败率 {{ $value | humanize }}/s 持续 5min. 限流和预期业务拒绝不计入。检查 orchestrator 日志、DB/Kafka 健康及 trigger_request 状态。"
+
+      - alert: TriggerLaunchFailureDetected
+        expr: sum by (reason) (increase(batch_trigger_launch_failed_total{reason!="rate_limited",reason!="business"}[5m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: trigger-async
+        annotations:
+          summary: "Trigger launch technical failure detected: {{ $labels.reason }}"
+          description: "A non-rate-limit, non-business trigger launch failure occurred in the last five minutes. Check the Orchestrator logs and trigger_request recovery state."
+
+      - alert: StaleCreatedLaunchRecoveryFailed
+        expr: sum(increase(batch_trigger_launch_created_recovery_failed_total[5m])) > 0
+        for: 1m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: trigger-async
+        annotations:
+          summary: "Stale CREATED launch recovery failed"
+          description: "The Orchestrator failed to recover at least one stale CREATED job instance in the last five minutes. Check database connectivity, trigger_request state, and recovery scheduler logs."
 
       # Kafka 已经投递、但 consumer 尚未处理的停留时间。该指标以 Kafka record timestamp 为起点，
       # 与 relay 的 outbox publish latency 合起来覆盖 trigger 异步链路的两段排队时间。
@@ -730,16 +888,16 @@ groups:
           description: "线程在 connectionTimeout 内拿不到连接,请求会直接 fail。立刻排查池容量 / 数据库可用性 / 是否有泄漏的连接未归还。"
 
       - alert: HttpServerErrorRateHigh
-        # 全局 5xx 占比 > 5% → 服务整体异常,需立即介入
-        expr: sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m])) / sum(rate(http_server_requests_seconds_count[5m])) > 0.05
+        # 按稳定的 Prometheus target job 隔离服务错误率，避免高流量服务稀释单个服务故障。
+        expr: (sum by (job) (rate(http_server_requests_seconds_count{status=~"5.."}[5m])) / sum by (job) (rate(http_server_requests_seconds_count[5m])) > 0.05) and on (job) (sum by (job) (increase(http_server_requests_seconds_count[5m])) >= 20)
         for: 5m
         labels:
           severity: warning
           team: batch-platform
           alert_group: http
         annotations:
-          summary: "HTTP 5xx ratio {{ $value | humanizePercentage }} > 5%"
-          description: "近 5min HTTP 5xx 占比超过 5%。结合 grafana-dashboard-batch-sre 中按 uri 分组的 P99 / 5xx 占比定位异常端点。"
+          summary: "HTTP 5xx ratio on {{ $labels.job }} is {{ $value | humanizePercentage }}"
+          description: "服务 {{ $labels.job }} 近 5min HTTP 5xx 占比超过 5%，且请求数达到告警下限。结合 Grafana 的 URI 维度面板定位异常端点；不要将高基数 URI 加入告警标签。"
 
   - name: batch.mainline
     rules:

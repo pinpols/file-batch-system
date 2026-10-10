@@ -24,6 +24,9 @@ batch:
   sla:
     # 测试关闭 SLA 扫描，避免后台线程影响测试稳定性
     enabled: false
+    job-monitoring:
+      enabled: false
+      failed-partition-lookback-seconds: 3600
   worker:
     drain:
       # 测试关闭 drain，减少状态机/轮询干扰

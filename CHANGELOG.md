@@ -17,6 +17,8 @@
 
 ### Added
 
+- 补齐平台告警闭环：新增核心控制面 target 消失检测、Alertmanager 停机/通知失败/配置重载失败告警，以及 Console 实际渠道投递失败计数；Docker 与 Helm 统一服务 `job` 标签并增加规则正反例验证。Prometheus / Alertmanager 自身故障仍需集群外独立监控，真实通知渠道送达需按目标环境验收。
+- 新增作业级耗时过久、启动过晚和完成过晚三类旁路告警；完整配置包导入与导出统一包含必需的 `job_monitoring_policy` sheet，每个作业一行集中维护阈值和告警等级；不兼容缺少该 sheet 的旧工作簿，并提供 Console 独立维护页。
 - Console 增加默认关闭的单试点 OIDC 企业登录：使用 Authorization Code + PKCE、Redis 一次性 state、显式外部身份绑定和本地 RBAC；登录成功复用平台 HttpOnly Cookie。IdP discovery 延迟到首次 OIDC 请求，服务启动与密码登录不依赖 IdP 可用性；Security 链过滤器不再被 Servlet 容器重复注册。同步提供条件展示的 Console 登录入口、配置/Secret 注入、迁移及隔离 IdP 协议集成测试；真实 IdP 联测仍待试点配置。
 - 新增开源工程治理规范、轻量 BEP 与生产就绪评审模板、稳定安全模型和 OpenSSF Scorecard 周期报告；GitHub 启用私密漏洞报告、Secret Scanning/Push Protection 与 Dependabot 安全更新，main ruleset 强制讨论解决并移除永久 bypass；CodeQL 补齐纯文档 PR 的稳定检查后再纳入 required checks。
 - 新增后端不可变镜像发布输出、统一 release manifest schema / 校验器，以及 Compose 按 digest 部署、健康校验、失败快照、稳定版本回滚和留存审计脚本；生产自动部署、审批和 SSH 凭据仍由后续环境接入完成。
@@ -30,6 +32,8 @@
 - SDK 跨语言共享常量新增 `report_error_codes`（report body `errorCode`，权威源 Java `SdkErrorCode` → `docs/api/sdk-shared-constants.yaml`）；Java / Python / Go / TypeScript / Rust 五门语言的 parity 测试均覆盖该列表，各语言常量从单一来源派生（Go / Rust / TS 不再复制字面量，Python `dispatcher.DEFAULT_ERROR_CODE` 改引 `constants.ERROR_CODE_EXECUTION_FAILED`）；BYO 契约同步登记尚未纳管的 wire 字段名与 `BATCH_SDK_*` 配置 key 缺口。
 
 ### Changed
+
+- 作业监控矩阵收敛为：Cron 与依赖作业支持开始过晚、完成过晚、运行耗时；独立固定频率及手动/API/外部触发仅支持运行耗时。依赖完成窗口以 EFFECTIVE 就绪时刻计算，运行耗时不统一启用默认值。
 
 - Testcontainers 跨 Maven 运行复用改为本地显式 opt-in：默认清理 PG、Kafka、Valkey 和 MinIO 测试容器；`local-testcontainers-reuse` profile 仅复用带专属 Docker label 的 Valkey/MinIO，避免 CI 或个人全局配置造成测试数据残留。
 - 本地 Docker 清理改为按测试残留、BuildKit 缓存分批预览/执行；测试容器增加仓库归属标签，业务分片仅按显式测试所有权标签识别，磁盘清理脚本不删除应用或基础环境镜像，也不执行全局 system prune。
@@ -67,6 +71,7 @@
 
 ### Fixed
 
+- Prevent cross-tenant Alertmanager grouping/inhibition and closing one event from resolving a group that still has active peers; document alert hold, deduplication, repeat-notification, and recovery semantics.
 - 修复 Trivy 报告的 AsyncHttpClient WebSocket 解压 DoS/连接上下文复用及 Kafka LZ4 临时文件代码执行高危依赖；统一升级到修复版本并刷新入库 SBOM。
 - 补齐本地容器生命周期并发保护及 PG/Valkey Sentinel/MinIO HA 隔离演练；维护 SQL 从 shell 内联迁至独立文件并扩展边界守护，避免演练误触现有数据卷或共享环境；Sim SFTP/MockServer 也统一 UTF-8 locale 并纳入守护。
 - 修复 Worker 实际绑定端口校验收紧后两个 E2E 的运行形态漂移：Outbox 重试测试和 Worker 进程重启测试改用随机真实 HTTP 端口，不再以无 Web Server 的上下文触发 Worker 自注册。

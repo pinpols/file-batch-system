@@ -20,6 +20,15 @@ public final class ConfigPackageExcelSchema {
   public static final String COL_RETRY_POLICY = "retry_policy";
   public static final String COL_RETRY_MAX_COUNT = "retry_max_count";
   public static final String COL_TIMEOUT_SECONDS = "timeout_seconds";
+  public static final String COL_SOFT_RUNTIME_SECONDS = "soft_runtime_seconds";
+  public static final String COL_SOFT_RUNTIME_SEVERITY = "soft_runtime_severity";
+  public static final String COL_START_GRACE_SECONDS = "start_grace_seconds";
+  public static final String COL_START_GRACE_SEVERITY = "start_grace_severity";
+  public static final String COL_COMPLETION_DEADLINE_LOCAL_TIME = "completion_deadline_local_time";
+  public static final String COL_COMPLETION_DEADLINE_DAY_OFFSET = "completion_deadline_day_offset";
+  public static final String COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS =
+      "dependency_completion_window_seconds";
+  public static final String COL_COMPLETION_DEADLINE_SEVERITY = "completion_deadline_severity";
   public static final String COL_SHARD_STRATEGY = "shard_strategy";
   public static final String COL_EXECUTION_MODE = "execution_mode";
   public static final String COL_WATERMARK_FIELD = "watermark_field";
@@ -191,6 +200,23 @@ public final class ConfigPackageExcelSchema {
         COL_DESCRIPTION);
 
     private JobDefinition() {}
+  }
+
+  public static final class JobMonitoringPolicy {
+    public static final String SHEET_NAME = "job_monitoring_policy";
+    public static final List<String> COLUMNS = List.of(
+        COL_TENANT_ID,
+        COL_JOB_CODE,
+        COL_SOFT_RUNTIME_SECONDS,
+        COL_SOFT_RUNTIME_SEVERITY,
+        COL_START_GRACE_SECONDS,
+        COL_START_GRACE_SEVERITY,
+        COL_COMPLETION_DEADLINE_LOCAL_TIME,
+        COL_COMPLETION_DEADLINE_DAY_OFFSET,
+        COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS,
+        COL_COMPLETION_DEADLINE_SEVERITY);
+
+    private JobMonitoringPolicy() {}
   }
 
   public static final class FileChannel {

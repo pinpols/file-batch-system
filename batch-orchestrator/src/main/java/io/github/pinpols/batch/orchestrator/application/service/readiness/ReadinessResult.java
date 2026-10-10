@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.readiness;
 
 import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionSnapshot;
+import java.time.Instant;
 import java.time.LocalDate;
 
 /**
@@ -15,6 +16,7 @@ import java.time.LocalDate;
  * @param freshnessStatus 当前新鲜度状态
  * @param versionNo 当前 EFFECTIVE result_version.version_no
  * @param jobInstanceId 产出该 EFFECTIVE 版本的 job_instance_id
+ * @param readyAt 上游结果进入 EFFECTIVE、允许下游消费的时刻
  * @param payloadStorage 结果载荷存储类型
  * @param payloadRef 外部载荷引用
  */
@@ -28,11 +30,13 @@ public record ReadinessResult(
     String freshnessStatus,
     Integer versionNo,
     Long jobInstanceId,
+    Instant readyAt,
     String payloadStorage,
     String payloadRef) {
 
   public static ReadinessResult ofReady() {
-    return new ReadinessResult(true, null, null, null, null, null, null, null, null, null, null);
+    return new ReadinessResult(
+        true, null, null, null, null, null, null, null, null, null, null, null);
   }
 
   public static ReadinessResult ofReady(AssetPartitionSnapshot partition) {
@@ -49,12 +53,14 @@ public record ReadinessResult(
         partition.freshnessStatus(),
         partition.versionNo(),
         partition.jobInstanceId(),
+        partition.effectiveAt(),
         partition.payloadStorage(),
         partition.payloadRef());
   }
 
   public static ReadinessResult ofNotReady(String reason) {
-    return new ReadinessResult(false, reason, null, null, null, null, null, null, null, null, null);
+    return new ReadinessResult(
+        false, reason, null, null, null, null, null, null, null, null, null, null);
   }
 
   public static ReadinessResult ofNotReady(String reason, String assetCode, LocalDate bizDate) {
@@ -64,6 +70,7 @@ public record ReadinessResult(
         assetCode,
         bizDate,
         bizDate == null ? null : bizDate.toString(),
+        null,
         null,
         null,
         null,

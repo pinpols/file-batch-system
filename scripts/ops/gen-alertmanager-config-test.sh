@@ -9,9 +9,11 @@ source "$REPO/scripts/lib/python-runtime.sh"
 batch_require_python
 INPUT="$HERE/testdata/alert-routing-sample.json"
 EXPECTED="$HERE/testdata/alert-routing-sample.expected.yml"
+INVALID_INPUT="$HERE/testdata/alert-routing-missing-tenant.json"
 
 ACTUAL="$(mktemp)"
-trap 'rm -f "$ACTUAL"' EXIT
+INVALID_OUTPUT="$(mktemp)"
+trap 'rm -f "$ACTUAL" "$INVALID_OUTPUT"' EXIT
 
 "$PYTHON_BIN" "$HERE/gen-alertmanager-config.py" --input "$INPUT" --output "$ACTUAL"
 
@@ -22,6 +24,13 @@ else
   echo "  若为有意变更,更新 $EXPECTED" >&2
   exit 1
 fi
+
+if "$PYTHON_BIN" "$HERE/gen-alertmanager-config.py" \
+  --input "$INVALID_INPUT" --output "$INVALID_OUTPUT" >/dev/null 2>&1; then
+  echo "FAIL: enabled alert route without tenant_id was accepted" >&2
+  exit 1
+fi
+echo "OK: enabled alert route without tenant_id is rejected"
 
 # 若本机有 amtool,顺带校验渲染结果语法(可选,缺则跳过)。
 if command -v amtool >/dev/null 2>&1; then

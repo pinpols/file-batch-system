@@ -1,0 +1,271 @@
+rule_files:
+  - prometheus-batch-rules.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: service availability alert fires after sustained scrape failure
+    interval: 1m
+    input_series:
+      - series: 'up{job="batch-orchestrator", instance="orchestrator:18081"}'
+        values: '1 0+0x3'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: BatchServiceDown
+        exp_alerts:
+          - exp_labels:
+              job: batch-orchestrator
+              instance: orchestrator:18081
+              severity: critical
+              team: batch-platform
+              alert_group: platform
+            exp_annotations:
+              summary: batch-orchestrator is down
+              description: Prometheus target orchestrator:18081 for batch-orchestrator is not scraping successfully.
+
+  - name: missing core service target is detected while other services remain scrapeable
+    interval: 1m
+    input_series:
+      - series: 'up{job="batch-trigger", instance="trigger:18081"}'
+        values: '1+0x4'
+      - series: 'up{job="batch-orchestrator", instance="orchestrator:18082"}'
+        values: '1+0x4'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: BatchCoreServiceTargetMissing
+        exp_alerts:
+          - exp_labels:
+              job: batch-console-api
+              severity: critical
+              team: batch-platform
+              alert_group: platform
+            exp_annotations:
+              summary: Core service target batch-console-api is missing from Prometheus
+              description: No scrape target is discovered for a required control-plane service. Check Prometheus service discovery, ServiceMonitor selection, and deployment labels.
+
+  - name: core service target missing stays clear when all required targets exist
+    interval: 1m
+    input_series:
+      - series: 'up{job="batch-console-api", instance="console-api:18080"}'
+        values: '1+0x4'
+      - series: 'up{job="batch-trigger", instance="trigger:18081"}'
+        values: '1+0x4'
+      - series: 'up{job="batch-orchestrator", instance="orchestrator:18082"}'
+        values: '1+0x4'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: BatchCoreServiceTargetMissing
+        exp_alerts: []
+
+  - name: Alertmanager failure, rejected config and unavailability are detected
+    interval: 1m
+    input_series:
+      - series: 'up{job="alertmanager", instance="alertmanager:9093"}'
+        values: '1 0 0 0'
+      - series: 'alertmanager_notifications_failed_total{integration="webhook", reason="serverError"}'
+        values: '0 0 1 1'
+      - series: 'alertmanager_config_last_reload_successful'
+        values: '1 0 0 0'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: BatchAlertmanagerDown
+        exp_alerts:
+          - exp_labels:
+              job: alertmanager
+              instance: alertmanager:9093
+              severity: critical
+              team: batch-platform
+              alert_group: alerting
+            exp_annotations:
+              summary: Alertmanager scrape target is unavailable
+              description: Prometheus cannot scrape Alertmanager. This rule cannot deliver while Alertmanager is down; an independent monitor must page on the Prometheus alert state.
+      - eval_time: 3m
+        alertname: BatchAlertmanagerNotificationFailures
+        exp_alerts:
+          - exp_labels:
+              integration: webhook
+              reason: serverError
+              severity: critical
+              team: batch-platform
+              alert_group: alerting
+            exp_annotations:
+              summary: Alertmanager notification failed via webhook
+              description: Alertmanager recorded a notification failure (serverError). Check its receiver configuration, network and downstream channel.
+      - eval_time: 3m
+        alertname: BatchAlertmanagerConfigReloadFailed
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              team: batch-platform
+              alert_group: alerting
+            exp_annotations:
+              summary: Alertmanager rejected its latest configuration
+              description: Alertmanager is still running with the previous configuration. Validate the rendered config and correct the rejected change.
+
+  - name: trigger event alerts exclude expected business and rate-limit outcomes
+    interval: 1m
+    input_series:
+      - series: 'batch_trigger_launch_failed_total{reason="internal"}'
+        values: '0 0 1 1 1'
+      - series: 'batch_trigger_launch_failed_total{reason="business"}'
+        values: '0 0 5 5 5'
+      - series: 'batch_trigger_launch_failed_total{reason="rate_limited"}'
+        values: '0 0 5 5 5'
+      - series: 'batch_trigger_launch_created_recovery_failed_total'
+        values: '0 0 1 1 1'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: TriggerLaunchFailureDetected
+        exp_alerts:
+          - exp_labels:
+              reason: internal
+              severity: warning
+              team: batch-platform
+              alert_group: trigger-async
+            exp_annotations:
+              summary: 'Trigger launch technical failure detected: internal'
+              description: A non-rate-limit, non-business trigger launch failure occurred in the last five minutes. Check the Orchestrator logs and trigger_request recovery state.
+      - eval_time: 4m
+        alertname: StaleCreatedLaunchRecoveryFailed
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              team: batch-platform
+              alert_group: trigger-async
+            exp_annotations:
+              summary: Stale CREATED launch recovery failed
+              description: The Orchestrator failed to recover at least one stale CREATED job instance in the last five minutes. Check database connectivity, trigger_request state, and recovery scheduler logs.
+      - eval_time: 10m
+        alertname: TriggerLaunchFailureDetected
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: StaleCreatedLaunchRecoveryFailed
+        exp_alerts: []
+
+  - name: HTTP 5xx is isolated per service and suppressed below the request floor
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="batch-console-api", status="500"}'
+        values: '0 2 4 6 8 10 12 14 16 18 20'
+      - series: 'http_server_requests_seconds_count{job="batch-console-api", status="200"}'
+        values: '0 8 16 24 32 40 48 56 64 72 80'
+      - series: 'http_server_requests_seconds_count{job="batch-trigger", status="500"}'
+        values: '0 1 2 3 4 5 6 7 8 9 10'
+      - series: 'http_server_requests_seconds_count{job="batch-trigger", status="200"}'
+        values: '0 2 4 6 8 10 12 14 16 18 20'
+      - series: 'http_server_requests_seconds_count{job="batch-orchestrator", status="200"}'
+        values: '0 100 200 300 400 500 600 700 800 900 1000'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HttpServerErrorRateHigh
+        exp_alerts:
+          - exp_labels:
+              job: batch-console-api
+              severity: warning
+              team: batch-platform
+              alert_group: http
+            exp_annotations:
+              summary: HTTP 5xx ratio on batch-console-api is 20%
+              description: 服务 batch-console-api 近 5min HTTP 5xx 占比超过 5%，且请求数达到告警下限。结合 Grafana 的 URI 维度面板定位异常端点；不要将高基数 URI 加入告警标签。
+
+  - name: dependency exporter outage and skipped alert delivery fire
+    interval: 1m
+    input_series:
+      - series: 'up{job="redis-exporter", instance="redis-exporter:9121"}'
+        values: '0+0x3'
+      - series: 'am_notify_skipped_total{receiver="batch-sla"}'
+        values: '0 1 1 1'
+      - series: 'am_notify_failed_total{receiver="batch-sla"}'
+        values: '0 0 1 1'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: BatchDependencyExporterDown
+        exp_alerts:
+          - exp_labels:
+              job: redis-exporter
+              instance: redis-exporter:9121
+              severity: critical
+              team: batch-platform
+              alert_group: dependency
+            exp_annotations:
+              summary: Dependency metrics target redis-exporter is unavailable
+              description: The configured scrape target redis-exporter:9121 is not reachable. Verify the dependency service, exporter and monitoring network.
+      - eval_time: 2m
+        alertname: BatchAlertmanagerNotifySkipped
+        exp_alerts:
+          - exp_labels:
+              receiver: batch-sla
+              severity: critical
+              team: batch-platform
+              alert_group: alerting
+            exp_annotations:
+              summary: Alertmanager notification was skipped for batch-sla
+              description: Console received an Alertmanager callback but found no enabled notification channel. Provision the receiver channel and verify delivery logs.
+      - eval_time: 3m
+        alertname: BatchAlertmanagerDeliveryFailed
+        exp_alerts:
+          - exp_labels:
+              receiver: batch-sla
+              severity: critical
+              team: batch-platform
+              alert_group: alerting
+            exp_annotations:
+              summary: Alert notification delivery failed for batch-sla
+              description: Console matched a notification channel but its sender reported delivery failure. Inspect notification_delivery_log and verify an independent escalation channel.
+
+  - name: all four job monitoring violation types have dedicated alerts
+    interval: 1m
+    input_series:
+      - series: 'batch_job_monitoring_violation_total{violation_type="FAILED_PARTITION"}'
+        values: '0 0 1 1 1 1 1 1 1 1 1'
+      - series: 'batch_job_monitoring_violation_total{violation_type="RUNNING_TOO_LONG"}'
+        values: '0 0 1 1 1 1 1 1 1 1 1'
+      - series: 'batch_job_monitoring_violation_total{violation_type="NOT_STARTED"}'
+        values: '0 0 1 1 1 1 1 1 1 1 1'
+      - series: 'batch_job_monitoring_violation_total{violation_type="NOT_COMPLETED_BY_DEADLINE"}'
+        values: '0 0 1 1 1 1 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: BatchFinalPartitionFailures
+        exp_alerts:
+          - exp_labels:
+              violation_type: FAILED_PARTITION
+              severity: warning
+              team: batch-platform
+              alert_group: job-monitoring
+            exp_annotations:
+              summary: A job instance finished with failed partitions
+              description: A non-dry-run FAILED or PARTIAL_FAILED job instance has a positive final failed-partition count. Inspect the job instance and partition-level failure details.
+      - eval_time: 10m
+        alertname: BatchJobRunningTooLong
+        exp_alerts:
+          - exp_labels:
+              violation_type: RUNNING_TOO_LONG
+              severity: warning
+              team: batch-platform
+              alert_group: job-monitoring
+            exp_annotations:
+              summary: A job instance exceeded its runtime threshold
+              description: A job instance exceeded its configured soft runtime threshold. Inspect the instance timeline, worker capacity and partition progress.
+      - eval_time: 10m
+        alertname: BatchJobNotStartedByDeadline
+        exp_alerts:
+          - exp_labels:
+              violation_type: NOT_STARTED
+              severity: warning
+              team: batch-platform
+              alert_group: job-monitoring
+            exp_annotations:
+              summary: A scheduled job did not start within its grace period
+              description: A scheduled job instance did not enter execution before its configured start grace deadline. Check trigger delivery, admission capacity and instance state.
+      - eval_time: 10m
+        alertname: BatchJobNotCompletedByDeadline
+        exp_alerts:
+          - exp_labels:
+              violation_type: NOT_COMPLETED_BY_DEADLINE
+              severity: warning
+              team: batch-platform
+              alert_group: job-monitoring
+            exp_annotations:
+              summary: A scheduled job was not finished by its deadline
+              description: A scheduled job instance was still unfinished at its configured local deadline, or completed after that deadline before the scan observed it. Inspect its execution timeline and downstream batch window.

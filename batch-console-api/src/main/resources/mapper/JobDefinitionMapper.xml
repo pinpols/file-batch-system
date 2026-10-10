@@ -21,6 +21,15 @@
         <result column="retry_policy" property="retryPolicy"/>
         <result column="retry_max_count" property="retryMaxCount"/>
         <result column="timeout_seconds" property="timeoutSeconds"/>
+        <result column="soft_runtime_seconds" property="softRuntimeSeconds"/>
+        <result column="soft_runtime_severity" property="softRuntimeSeverity"/>
+        <result column="start_grace_seconds" property="startGraceSeconds"/>
+        <result column="start_grace_severity" property="startGraceSeverity"/>
+        <result column="completion_deadline_enabled" property="completionDeadlineEnabled"/>
+        <result column="completion_deadline_local_time" property="completionDeadlineLocalTime"/>
+        <result column="dependency_completion_window_seconds" property="dependencyCompletionWindowSeconds"/>
+        <result column="completion_deadline_day_offset" property="completionDeadlineDayOffset"/>
+        <result column="completion_deadline_severity" property="completionDeadlineSeverity"/>
         <result column="shard_strategy" property="shardStrategy"/>
         <result column="execution_mode" property="executionMode"/>
         <result column="watermark_field" property="watermarkField"/>
@@ -38,31 +47,45 @@
     </resultMap>
 
     <select id="selectByQuery" resultMap="JobDefinitionResultMap">
-        select *
-        from batch.job_definition
-        where tenant_id = #{tenantId}
+        select jd.*,
+               coalesce(mp.soft_runtime_seconds, 0) as soft_runtime_seconds,
+               coalesce(mp.soft_runtime_severity, 'WARN') as soft_runtime_severity,
+               coalesce(mp.start_grace_seconds, 0) as start_grace_seconds,
+               coalesce(mp.start_grace_severity, 'WARN') as start_grace_severity,
+               (jd.schedule_type = 'CRON' and jd.depends_on_job_code is null
+                    and mp.completion_deadline_local_time is not null
+                 or jd.depends_on_job_code is not null
+                    and coalesce(mp.dependency_completion_window_seconds, 0) &gt; 0) as completion_deadline_enabled,
+               mp.completion_deadline_local_time,
+               coalesce(mp.dependency_completion_window_seconds, 0) as dependency_completion_window_seconds,
+               coalesce(mp.completion_deadline_day_offset, 0) as completion_deadline_day_offset,
+               coalesce(mp.completion_deadline_severity, 'WARN') as completion_deadline_severity
+        from batch.job_definition jd
+        left join batch.job_monitoring_policy mp
+          on mp.tenant_id = jd.tenant_id and mp.job_definition_id = jd.id
+        where jd.tenant_id = #{tenantId}
         <if test="jobCode != null and jobCode != ''">
-            and job_code like concat('%', #{jobCode}, '%')
+            and jd.job_code like concat('%', #{jobCode}, '%')
         </if>
         <if test="jobName != null and jobName != ''">
-            and job_name like concat('%', #{jobName}, '%')
+            and jd.job_name like concat('%', #{jobName}, '%')
         </if>
         <if test="jobType != null and jobType != ''">
-            and job_type = #{jobType}
+            and jd.job_type = #{jobType}
         </if>
         <if test="workerGroup != null and workerGroup != ''">
-            and worker_group like concat('%', #{workerGroup}, '%')
+            and jd.worker_group like concat('%', #{workerGroup}, '%')
         </if>
         <if test="queueCode != null and queueCode != ''">
-            and queue_code like concat('%', #{queueCode}, '%')
+            and jd.queue_code like concat('%', #{queueCode}, '%')
         </if>
         <if test="scheduleType != null and scheduleType != ''">
-            and schedule_type = #{scheduleType}
+            and jd.schedule_type = #{scheduleType}
         </if>
         <if test="enabled != null">
-            and enabled = #{enabled}
+            and jd.enabled = #{enabled}
         </if>
-        order by id desc
+        order by jd.id desc
         <include refid="io.github.pinpols.batch.common.mapper.CommonFragments.offsetPageClause"/>
     </select>
 
@@ -94,14 +117,44 @@
     </select>
 
     <select id="selectByUniqueKey" resultMap="JobDefinitionResultMap">
-        select *
-        from batch.job_definition
-        where tenant_id = #{tenantId}
-          and job_code = #{jobCode}
+        select jd.*,
+               coalesce(mp.soft_runtime_seconds, 0) as soft_runtime_seconds,
+               coalesce(mp.soft_runtime_severity, 'WARN') as soft_runtime_severity,
+               coalesce(mp.start_grace_seconds, 0) as start_grace_seconds,
+               coalesce(mp.start_grace_severity, 'WARN') as start_grace_severity,
+               (jd.schedule_type = 'CRON' and jd.depends_on_job_code is null
+                    and mp.completion_deadline_local_time is not null
+                 or jd.depends_on_job_code is not null
+                    and coalesce(mp.dependency_completion_window_seconds, 0) &gt; 0) as completion_deadline_enabled,
+               mp.completion_deadline_local_time,
+               coalesce(mp.dependency_completion_window_seconds, 0) as dependency_completion_window_seconds,
+               coalesce(mp.completion_deadline_day_offset, 0) as completion_deadline_day_offset,
+               coalesce(mp.completion_deadline_severity, 'WARN') as completion_deadline_severity
+        from batch.job_definition jd
+        left join batch.job_monitoring_policy mp
+          on mp.tenant_id = jd.tenant_id and mp.job_definition_id = jd.id
+        where jd.tenant_id = #{tenantId}
+          and jd.job_code = #{jobCode}
     </select>
 
     <select id="selectById" resultMap="JobDefinitionResultMap">
-        select * from batch.job_definition where tenant_id = #{tenantId} and id = #{id}
+        select jd.*,
+               coalesce(mp.soft_runtime_seconds, 0) as soft_runtime_seconds,
+               coalesce(mp.soft_runtime_severity, 'WARN') as soft_runtime_severity,
+               coalesce(mp.start_grace_seconds, 0) as start_grace_seconds,
+               coalesce(mp.start_grace_severity, 'WARN') as start_grace_severity,
+               (jd.schedule_type = 'CRON' and jd.depends_on_job_code is null
+                    and mp.completion_deadline_local_time is not null
+                 or jd.depends_on_job_code is not null
+                    and coalesce(mp.dependency_completion_window_seconds, 0) &gt; 0) as completion_deadline_enabled,
+               mp.completion_deadline_local_time,
+               coalesce(mp.dependency_completion_window_seconds, 0) as dependency_completion_window_seconds,
+               coalesce(mp.completion_deadline_day_offset, 0) as completion_deadline_day_offset,
+               coalesce(mp.completion_deadline_severity, 'WARN') as completion_deadline_severity
+        from batch.job_definition jd
+        left join batch.job_monitoring_policy mp
+          on mp.tenant_id = jd.tenant_id and mp.job_definition_id = jd.id
+        where jd.tenant_id = #{tenantId} and jd.id = #{id}
     </select>
 
     <!--
@@ -136,6 +189,60 @@
             <choose><when test="enabled != null">#{enabled}</when><otherwise>true</otherwise></choose>,
             #{description}, #{createdBy}, #{updatedBy}
         )
+    </insert>
+
+    <insert id="upsertJobMonitoringPolicy">
+        insert into batch.job_monitoring_policy (
+            tenant_id, job_definition_id, soft_runtime_seconds, start_grace_seconds,
+            completion_deadline_seconds, completion_deadline_local_time, completion_deadline_day_offset,
+            dependency_completion_window_seconds,
+            soft_runtime_severity, start_grace_severity,
+            completion_deadline_severity, updated_by
+        ) values (
+            #{tenantId}, #{jobDefinitionId}, #{softRuntimeSeconds}, #{startGraceSeconds},
+            0, #{completionDeadlineLocalTime}, #{completionDeadlineDayOffset}, #{dependencyCompletionWindowSeconds},
+            #{softRuntimeSeverity}, #{startGraceSeverity},
+            #{completionDeadlineSeverity}, #{updatedBy}
+        )
+        on conflict (tenant_id, job_definition_id) do update
+        set soft_runtime_seconds = excluded.soft_runtime_seconds,
+            start_grace_seconds = excluded.start_grace_seconds,
+            completion_deadline_seconds = 0,
+            completion_deadline_local_time = excluded.completion_deadline_local_time,
+            completion_deadline_day_offset = excluded.completion_deadline_day_offset,
+            dependency_completion_window_seconds = excluded.dependency_completion_window_seconds,
+            soft_runtime_severity = excluded.soft_runtime_severity,
+            start_grace_severity = excluded.start_grace_severity,
+            completion_deadline_severity = excluded.completion_deadline_severity,
+            updated_by = excluded.updated_by,
+            updated_at = current_timestamp,
+            completion_deadline_updated_at = CASE
+                WHEN batch.job_monitoring_policy.completion_deadline_local_time
+                     IS DISTINCT FROM excluded.completion_deadline_local_time
+                  OR batch.job_monitoring_policy.completion_deadline_day_offset
+                     IS DISTINCT FROM excluded.completion_deadline_day_offset
+                  OR batch.job_monitoring_policy.dependency_completion_window_seconds
+                     IS DISTINCT FROM excluded.dependency_completion_window_seconds
+                THEN current_timestamp
+                ELSE batch.job_monitoring_policy.completion_deadline_updated_at
+            END
+    </insert>
+
+    <insert id="copyJobMonitoringPolicy">
+        insert into batch.job_monitoring_policy (
+            tenant_id, job_definition_id, soft_runtime_seconds, start_grace_seconds,
+            completion_deadline_seconds, completion_deadline_local_time, completion_deadline_day_offset,
+            dependency_completion_window_seconds,
+            soft_runtime_severity, start_grace_severity,
+            completion_deadline_severity, updated_by
+        )
+        select tenant_id, #{targetJobDefinitionId}, soft_runtime_seconds, start_grace_seconds,
+               0, completion_deadline_local_time, completion_deadline_day_offset, dependency_completion_window_seconds,
+               soft_runtime_severity, start_grace_severity,
+               completion_deadline_severity, #{updatedBy}
+        from batch.job_monitoring_policy
+        where tenant_id = #{tenantId} and job_definition_id = #{sourceJobDefinitionId}
+        on conflict (tenant_id, job_definition_id) do nothing
     </insert>
 
     <update id="updateJobDefinitionMaintenance">
