@@ -1370,7 +1370,7 @@ paths:
       tags: [Ops]
       summary: ADR-020 提交批次日重放 session
       description: |-
-        转发到 orchestrator `POST /internal/orchestrator/batch-day-replay/sessions`。
+        转发到 orchestrator `POST /internal/orchestrator/batch-day-replay/sessions`。previewToken 必须来自当前请求参数对应且未过期的预览；提交成功后不可再次执行，但相同请求在 24 小时内重试会返回已创建的 session。
         scope ∈ {ALL, ALL_FAILED, SUBSET_JOB_CODES, OUTPUTS_ONLY}；ALL/ALL_FAILED 物化所有候选 instance，
         SUBSET 需 jobCodes，OUTPUTS_ONLY 需 versionIds。autoApprove=true 直接 RUNNING；否则 PENDING_APPROVAL。
         同 (tenant, calendarCode, bizDate) 已存在 active session → STATE_CONFLICT。
@@ -1391,10 +1391,10 @@ paths:
   /api/console/ops/batch-day-replay/sessions/preview:
     post:
       tags: [Ops]
-      summary: ADR-020 批次日重放影响预览（只读）
+      summary: ADR-020 批次日重放影响预览并签发提交凭证
       description: |-
         转发到 orchestrator `POST /internal/orchestrator/batch-day-replay/sessions/preview`。
-        复用 submit 的候选解析和 scope 校验，但不创建 session / entry，不触发审批；用于提交前确认会重跑哪些 job、影响哪些 result_version。
+        复用 submit 的候选解析和 scope 校验，不创建 session / entry，也不触发审批；返回 5 分钟有效的一次性 previewToken。提交必须携带该 token，参数或候选/影响快照变化时需要重新预览。
       operationId: previewBatchDayReplayImpact
       requestBody:
         required: true
@@ -12776,6 +12776,9 @@ components:
           type: string
           enum: [EXISTING_INSTANCES, SCHEDULE_PLAN]
           default: EXISTING_INSTANCES
+        previewToken:
+          type: string
+          description: 预览接口签发的一次性凭证；提交时必填，不能复用或跨租户使用。
         jobCodes:
           type: array
           items: { type: string }
@@ -12800,7 +12803,7 @@ components:
       required: [calendarCode, bizDate, scope, reason, requestedBy]
     BatchDayReplayPreview:
       type: object
-      description: ADR-020 批次日重放影响预览；只读解析候选，不创建 session。
+      description: ADR-020 批次日重放影响预览；解析候选并签发短时一次性凭证，不创建 session。
       properties:
         tenantId: { type: string }
         calendarCode: { type: string }
@@ -12821,6 +12824,12 @@ components:
           type: string
           enum: [USE_ORIGINAL_CONFIG, USE_LATEST_CONFIG, USE_SPECIFIED_VERSION]
         configVersion: { type: integer, format: int32, nullable: true }
+        previewToken:
+          type: string
+          description: 提交本次预览时使用的一次性凭证，有效期 5 分钟。
+        expiresAt:
+          type: string
+          format: date-time
         totalCount: { type: integer, format: int32 }
         entries:
           type: array
@@ -12841,7 +12850,7 @@ components:
         warnings:
           type: array
           items: { type: string }
-      required: [tenantId, calendarCode, bizDate, scope, executionMode, candidateSource, resultPolicy, configVersionPolicy, totalCount, entries, resultVersionImpacts, assetPartitionImpacts, dispatchImpacts, warnings]
+      required: [tenantId, calendarCode, bizDate, scope, executionMode, candidateSource, resultPolicy, configVersionPolicy, previewToken, expiresAt, totalCount, entries, resultVersionImpacts, assetPartitionImpacts, dispatchImpacts, warnings]
     BatchDayReplayPreviewEntry:
       type: object
       properties:

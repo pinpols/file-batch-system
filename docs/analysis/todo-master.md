@@ -1,5 +1,9 @@
 # TODO Master · 当前待办唯一索引
 
+## 产品用户旅程对抗审计（2026-10-10）
+
+⏳ **进行中**：按 `ADMIN`、`AUDITOR`、`TENANT_ADMIN`、`TENANT_USER` 四类现有 RBAC 角色建立产品工作画像后，已确认配置包权限终点、租户资源暴露、固定作业向导、多入口选择、重放预览和实例取消/终止反馈等问题。按[产品用户旅程改造方案](../plans/console-product-journey-improvement-plan-2026-10-10.md)分阶段推进，仍需完成运行、异常恢复、文件交付、账号生命周期、移动端与可访问性对抗验证。逐项证据见[审计报告](../audit/product-journey-adversarial-audit-2026-10-10.md)。系统应代办可推断的选择、说明默认依据并保留专家覆盖能力；不得为降低表面复杂度压缩业务场景。本事项完成前，不得以视觉优化或 API/E2E 点击成功宣称产品链路已验收。
+
 ## Java 设计表达与可审查性（2026-10-08）
 
 阶段 0–5 已完成代码实施与本地定向验证（LocalImplemented），CI Full Gate、隔离 sim 和性能复测仍待发布验收，不能标为全量闭环。调用关系、兼容裁定、资源所有权及证据统一见 [改进方案](../plans/java-design-expression-improvement-plan-2026-10-08.md)。动态 Map、事务/锁/Outbox 顺序与 SDK 旧入口保留；常驻批量任务环境未重置或重启。

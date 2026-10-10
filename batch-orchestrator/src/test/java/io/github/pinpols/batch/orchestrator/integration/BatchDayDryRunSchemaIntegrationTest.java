@@ -43,6 +43,15 @@ class BatchDayDryRunSchemaIntegrationTest extends AbstractIntegrationTest {
         .contains("execution_mode", "candidate_source");
     assertThat(columnsOf("batch", "batch_day_replay_entry")).contains("plan_snapshot");
     assertThat(columnsOf("archive", "batch_day_replay_entry_archive")).contains("plan_snapshot");
+    assertThat(columnsOf("batch", "batch_day_replay_preview_token"))
+        .contains(
+            "tenant_id",
+            "token_hash",
+            "request_hash",
+            "snapshot_hash",
+            "expires_at",
+            "consumed_at",
+            "session_id");
   }
 
   @Test

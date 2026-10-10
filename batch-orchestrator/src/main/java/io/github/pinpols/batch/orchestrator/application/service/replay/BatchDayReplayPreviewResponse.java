@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.orchestrator.application.service.replay;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 
-/** 批次日重放影响预览：只读解析候选 entry,不创建 session,不触发审批。 */
+/** 批次日重放影响预览：解析候选并签发短时凭证，不创建 session 或触发审批。 */
 public record BatchDayReplayPreviewResponse(
     String tenantId,
     String calendarCode,
@@ -14,6 +15,8 @@ public record BatchDayReplayPreviewResponse(
     String resultPolicy,
     String configVersionPolicy,
     Integer configVersion,
+    String previewToken,
+    Instant expiresAt,
     int totalCount,
     List<PreviewEntry> entries,
     List<ResultVersionImpact> resultVersionImpacts,

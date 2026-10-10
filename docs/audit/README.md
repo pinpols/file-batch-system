@@ -5,6 +5,7 @@
 
 | 文档 | 范围 |
 |---|---|
+| [product-journey-adversarial-audit-2026-10-10.md](./product-journey-adversarial-audit-2026-10-10.md) | 配置、作业创建与入口的用户旅程对抗审计（进行中；含后续覆盖矩阵） |
 | [convention-drift-guard-index.md](./convention-drift-guard-index.md) | 代码规约与 CI 漂移守卫总账 |
 | [typed-contract-governance-verification-2026-10-07.md](./typed-contract-governance-verification-2026-10-07.md) | 固定契约、既有枚举与精准门禁的本地实施验收、保留项和未执行边界 |
 | [backend-adversarial-audit-2026-07-27.md](./backend-adversarial-audit-2026-07-27.md) | 后端安全、一致性和故障恢复对抗审计 |

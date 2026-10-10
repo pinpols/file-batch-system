@@ -26,7 +26,9 @@ public record BatchDayReplaySubmitCommand(
     /** REPLAY（默认）或 DRY_RUN。 */
     String executionMode,
     /** EXISTING_INSTANCES（默认）或 SCHEDULE_PLAN。 */
-    String candidateSource) {
+    String candidateSource,
+    /** 由预览生成的一次性凭证；仅提交时必填。 */
+    String previewToken) {
 
   /** V202 前的兼容构造器。 */
   @SuppressWarnings("PMD.ExcessiveParameterList")
@@ -59,6 +61,7 @@ public record BatchDayReplaySubmitCommand(
         autoApprove,
         traceId,
         "REPLAY",
-        "EXISTING_INSTANCES");
+        "EXISTING_INSTANCES",
+        null);
   }
 }

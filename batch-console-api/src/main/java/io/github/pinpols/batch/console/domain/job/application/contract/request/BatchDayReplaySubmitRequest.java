@@ -61,4 +61,7 @@ public class BatchDayReplaySubmitRequest {
 
   /** EXISTING_INSTANCES（默认）或 SCHEDULE_PLAN。 */
   private String candidateSource = "EXISTING_INSTANCES";
+
+  /** 预览接口签发的一次性凭证；提交时必填。 */
+  private String previewToken;
 }

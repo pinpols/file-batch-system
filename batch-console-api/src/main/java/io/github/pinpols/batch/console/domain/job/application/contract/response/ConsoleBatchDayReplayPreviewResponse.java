@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.response;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -14,6 +15,8 @@ public record ConsoleBatchDayReplayPreviewResponse(
     String resultPolicy,
     String configVersionPolicy,
     Integer configVersion,
+    String previewToken,
+    Instant expiresAt,
     Integer totalCount,
     List<PreviewEntry> entries,
     List<ResultVersionImpact> resultVersionImpacts,
