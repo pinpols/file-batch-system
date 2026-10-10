@@ -1,12 +1,7 @@
 spring:
   config:
     import: classpath:batch-test-defaults.yml
-  flyway:
-    locations: classpath:db/migration
-
 batch:
-  rls:
-    startup-fail-fast: false
   worker:
     graceful-shutdown:
       timeout-seconds: 1

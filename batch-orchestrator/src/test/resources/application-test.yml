@@ -4,10 +4,6 @@ spring:
     # 在 CI / 本地开发中，测试可能只构建当前模块。
     # 如果共享默认配置（依赖产物）过期或缺失，这里用 optional import 避免测试直接失败。
     import: "optional:classpath:batch-defaults.yml,classpath:batch-test-defaults.yml"
-  flyway:
-    # 集成测试使用独立的迁移脚本目录，避免与正式环境迁移互相影响
-    locations: classpath:db/migration
-    # platform-init.sql 仅建 batch/quartz schema；表结构一律由本目录迁移从头应用，无需 baseline。
 
 mybatis:
   # 即使 batch-defaults.yml 不在 classpath，也要保证测试可自包含运行
@@ -18,39 +14,14 @@ mybatis:
 
 batch:
   sla:
-    # 测试关闭 SLA 扫描，避免后台线程影响测试稳定性
-    enabled: false
     job-monitoring:
       enabled: false
       failed-partition-lookback-seconds: 3600
   worker:
     drain:
-      # 测试关闭 drain，减少状态机/轮询干扰
-      enabled: false
       # 关闭 WorkerHeartbeatTimeoutScheduler：seed worker 不会在 IT 中续心跳，长 JVM 易被误降级 OFFLINE（assignWorker 短路 READY）
       heartbeat-timeout-scheduler-enabled: false
-  file-governance:
-    latency:
-      # 测试关闭文件治理（延迟）
-      enabled: false
-    archive:
-      # 测试关闭文件治理（归档清理）
-      enabled: false
-    reconcile:
-      # 测试关闭文件治理（对账）
-      enabled: false
-    arrival:
-      # 测试关闭文件治理（到达检测）
-      enabled: false
-    access:
-      # 测试关闭文件治理（访问控制/预签名）
-      enabled: false
   outbox:
-    # 拉长轮询周期，避免测试时频繁跑后台任务
-    poll-interval-millis: 600000
-    # OutboxPollScheduler 自适应间隔的下限：默认 200ms 会让测试期手动 publish 后被 scheduler 二次 publish
-    # 产生重复 event_delivery_log 行；测试拉到 10 分钟同时锁住上下限。
-    min-poll-interval-millis: 600000
     # P3-3 archive: 测试禁用，避免后台 cron 干扰主测时序
     archive:
       enabled: false
@@ -63,26 +34,10 @@ batch:
   # P2-5 收敛 (2026-04-26 maturity-assessment §6 #1): mq.routing.mode 不再覆盖默认 TENANT。
   # 配套：OutboxPublishIntegrationTest / OutboxEventToKafkaDispatchIntegrationTest 已改 subscribe + assert
   # 期望 base + ".t1" 后缀 topic（producer 走 BatchTopicResolver TENANT 模式）。
-  retry:
-    # 拉长轮询周期，避免测试时频繁跑后台任务
-    poll-interval-millis: 600000
   partition-lease:
-    # 拉长回收扫描周期，降低并发时序干扰
-    reclaim-interval-millis: 600000
     # 关闭租约回收/孤儿扫描定时器：首轮 @Scheduled 仍会在 JVM 启动后很快执行，与 claim 集成测试并发竞态
     reclaim-scheduler-enabled: false
-  resource-scheduler:
-    # 拉长扫描周期，避免测试时频繁跑后台任务
-    waiting-dispatch-interval-millis: 600000
-    # 拉长扫描周期，避免测试时频繁跑后台任务
-    quota-reset-scan-interval-millis: 600000
-    # 测试关闭配额重置逻辑
-    quota-reset-enabled: false
   scheduler:
-    # 测试关闭快照持久化，避免写库与时序影响
-    snapshot-persist-enabled: false
-    # 拉长周期（理论上不应触发），回退避免误触发
-    snapshot-persist-ms: 600000
     # P2-3 收敛 (2026-04-26 maturity-assessment §6 #1): worker-cache 改为开启 + ttl 极短 (100ms)。
     # 之前全局 enabled=false 导致 prod 主路径 (Redis 缓存 + JSON 序列化 + fail-open) 在 IT 层不被
     # 真实覆盖。改为 enabled=true 让 wiring + 序列化 + Redis 通讯路径都跑过 IT，但 ttl=100ms 让

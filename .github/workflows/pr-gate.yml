@@ -183,6 +183,11 @@ jobs:
         shell: bash
         run: bash scripts/ci/run-gate.sh PR_RUNTIME_CONFIG_BOUNDARIES "运行时配置集中管理" -- bash scripts/ci/check-hardcoded-runtime-config.sh
 
+      - name: Verify test configuration sources
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.tests == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        run: bash scripts/ci/run-gate.sh PR_TEST_CONFIG_SOURCES "测试配置事实来源" -- python3 scripts/ci/check-test-config-sources.py
+
       - name: Verify repository hygiene
         shell: bash
         run: bash scripts/ci/run-gate.sh PR_REPOSITORY_HYGIENE "仓库卫生" -- python3 scripts/ci/check-repository-hygiene.py

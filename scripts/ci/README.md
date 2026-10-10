@@ -45,7 +45,7 @@
 | 数据库 / SQL | 业务表缺租户隔离、迁移有破坏风险、位置式 `INSERT ... SELECT *`、SQL 绕过独立文件与变量传值 | 由权威状态/配置来源驱动的 SQL；经过登记并有专项测试的精确例外 | `check-biz-table-tenant-rls.py`、`check-migration-safety.sh`、`check-no-positional-insert-select-star.py`、`check-sql-config-boundaries.sh` |
 | API 与 SDK | OpenAPI 出现破坏性变更未同步、五语言共享契约不一致、运行时版本超出声明范围 | 只改变实现且不改变公开契约的内部重构；允许的兼容新增字段 | `check-openapi-breaking.sh`、`check-console-openapi-paths.py`、SDK parity workflow |
 | Java 规约与架构 | 新增空检查、字段注入/日志违规、固定协议值漂移、结构化多行字符串退化、依赖越界 | 不在规则覆盖范围内的测试 fixture/说明文本；已精确登记且有理由的例外 | `check-empty-checks.py`、`check-java-contract-governance.py`、`check-java-lombok-injection.py`、`check-dependency-boundaries.py` |
-| 测试完整性 | 测试被静默禁用、E2E 分片漏场景、差异覆盖率不足、测试展示名称不符合约定 | 按契约定义的负向用例、明确标记且登记的 flaky 隔离项 | `check-no-silent-disabled-tests.sh`、`check-e2e-run-completeness.sh`、`check-e2e-shard-coverage.sh`、`check-diff-coverage.py` |
+| 测试完整性 | 测试被静默禁用、E2E 分片漏场景、差异覆盖率不足、测试展示名称不符合约定；模块测试 profile 重复维护共享默认项 | 按契约定义的负向用例、明确标记且登记的 flaky 隔离项、Java 测试为特定场景显式覆盖配置 | `check-no-silent-disabled-tests.sh`、`check-e2e-run-completeness.sh`、`check-e2e-shard-coverage.sh`、`check-diff-coverage.py`、`check-test-config-sources.py` |
 | 安全 / 供应链 / 许可 | 未登记的高危漏洞豁免、例外到期、禁止许可证、SBOM 与 POM 不一致、Action 使用可变引用 | 扫描器确认的误报可按规则与路径精确登记；许可结论明确且符合项目策略的依赖 | `check-trivy-ignore-expiry.py`、`check-license-compliance.sh`、`check-sbom-sync.sh`、`check-github-action-pinning.py` |
 | 可观测性 | 告警定义与服务指标契约漂移、日志生命周期破坏敏感信息保护要求 | 业务日志内容变化但不改变受守护字段、生命周期或敏感信息规则 | `check-observability-contract.py`、`check-helm-prometheusrule-sync.sh`、`check-log-lifecycle.sh` |
 
@@ -84,7 +84,14 @@ bash scripts/ci/check-version-alignment.sh
 
 ## 门禁结果格式
 
-Git hook 与 GitHub workflow 的门禁入口统一输出 `状态 | code | gate | exit_code | action`；跳过结果在固定字段后追加 `reason`。具体诊断仍由检查脚本输出，最终状态行由 `scripts/lib/gate-result.sh` / `scripts/ci/run-gate.sh` 生成。workflow 中不要直接调用门禁脚本；多项检查要逐项调用 `gate_run`，避免一项失败掩盖同一步其余门禁的独立状态。扫描器报告、测试清单和运行进度不是门禁状态行，不强行改成该格式。
+Git hook、GitHub workflow 和独立事实来源检查统一输出最终状态行：
+
+```text
+✅ 通过 | code=TEST_CONFIG_SOURCES | gate=测试配置事实来源 | exit_code=0 | action=none
+❌ 不通过 | code=TEST_CONFIG_SOURCES | gate=测试配置事实来源 | exit_code=1 | action=fix_and_retry
+```
+
+字段顺序固定为状态、`code`、`gate`、`exit_code`、`action`；跳过结果仅在固定字段后追加 `reason`。共享 shell 门禁由 `scripts/lib/gate-result.sh` / `scripts/ci/run-gate.sh` 生成，Python/Node 独立检查器也必须遵循同一格式。具体诊断仍由检查脚本输出。workflow 中不要直接调用门禁脚本；多项检查要逐项调用 `gate_run`，避免一项失败掩盖同一步其余门禁的独立状态。扫描器报告、测试清单和运行进度不是门禁状态行，不强行改成该格式。
 
 PR 与 Full Gate 的静态检查 job 设置 `BATCH_GATE_COLLECT=1`。业务门禁失败时
 `gate_run` 会记录错误并继续执行后续检查，末尾由 `gate_assert_collected` 汇总全部失败后

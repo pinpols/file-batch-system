@@ -1,9 +1,6 @@
 spring:
   config:
     import: classpath:batch-test-defaults.yml
-  flyway:
-    locations: classpath:db/migration
-
 batch:
   worker:
     atomic:
