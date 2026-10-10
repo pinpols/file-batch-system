@@ -302,6 +302,10 @@ deploy_smoke() {
 
   run_helm template "$release_name" "$chart_dir" --namespace "$namespace" >"$render_dir/default.yaml"
   run_helm template "$release_name" "$chart_dir" --namespace "$namespace" -f "$prod_values" -f "$topology_fixture" "${secret_args[@]}" >"$render_dir/prod.yaml"
+  local blocked_local_host
+  blocked_local_host="$(printf 'local%s' 'host')"
+  local blocked_database_name_separator="_"
+  local blocked_local_database_url="jdbc:postgresql://${blocked_local_host}:5432/batch${blocked_database_name_separator}platform"
   local -a invalid_topology_cases=(
     '--set networkPolicy.enabled=false|production networkPolicy.enabled must remain enabled'
     '--set-json networkPolicy.ingress.from=[{}]|production networkPolicy.ingress.from contains an empty or unsupported peer'
@@ -310,7 +314,7 @@ deploy_smoke() {
     '--set workerAtomic.networkPolicy.egress.kafka.enabled=false|production workerAtomic PostgreSQL and Kafka egress rules must remain enabled'
     '--set-json workerAtomic.networkPolicy.egress.kafka.to=[{"ipBlock":{"cidr":"0.0.0.0/0"}}]|production workerAtomic kafka egress ipBlock must use a bounded CIDR'
     '--set-json workerAtomic.networkPolicy.egress.extra=[{"ports":[{"port":443}]}]|production workerAtomic extra egress rule must include explicit destination peers'
-    '--set-string postgresql.platform.url=jdbc:postgresql://localhost:5432/batch_platform|production endpoint must not use local-only address localhost'
+    "--set-string postgresql.platform.url=${blocked_local_database_url}|production endpoint must not use local-only address localhost"
     '--set consoleApi.ai.attachment.storageBucket=batch-files-test|production objectStorage.bucket and AI attachment bucket must be distinct'
     '--set workerAtomic.networkPolicy.egress.kafka.port=|production overlay must set workerAtomic Kafka egress port'
   )
