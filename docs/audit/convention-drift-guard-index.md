@@ -1,6 +1,6 @@
 # 约定约束与漂移防护总账
 
-> 维护日期: 2026-10-08
+> 维护日期: 2026-10-10
 > 定位: 统一记录项目约定、约束、审计、审核、复扫与 CI 守卫入口,用于后续扫描时防止规范漂移。
 
 本文不是新的规范来源,也不替代 `docs/agent-baseline.md`、编码规约、ADR 或 runbook。它只做一件事:把分散在代码、文档、脚本、CI、审计报告里的约束集中成一张可复扫的总账。
@@ -23,7 +23,7 @@
 |---|---:|---|---|
 | ADR | 47 个 ADR 文件 | [docs/architecture/adr/](../architecture/adr/) | 包含架构边界、SDK、checkpoint、capacity、依赖调度等决策 |
 | 专项审计报告 | 13 个文件 | [docs/audit/](./) | 包含全仓架构审计、治理总账和后续后端深扫 |
-| CI 守卫脚本 | 74 个 `check-*` / `validate-*` 文件 | [scripts/ci/README.md](../../scripts/ci/README.md) | 覆盖文档、脚本、仓库卫生、租户隔离、迁移、OpenAPI、配置、版本、许可、测试完整性、测试 `@DisplayName` 约定、Java 固定契约/协议值、Action SHA 及 suppression/快照防漂移等 |
+| CI 守卫脚本 | 80 个已登记的 `check-*` / `validate-*` 守卫 | [scripts/ci/README.md](../../scripts/ci/README.md) | 覆盖文档、脚本、仓库卫生、租户隔离、迁移、OpenAPI、配置、版本、许可、测试完整性、Java 规约、安全与可观测；分类正反例和失败汇总边界见守卫目录 |
 | GitHub Actions | 18 个 workflow | `.github/workflows/` | PR gate、full CI、staging、SDK parity、CodeQL、workflow lint、OpenSSF Scorecard |
 | SDK 契约 fixture | 31 个 case | [docs/api/sdk-contract-fixtures/](../api/sdk-contract-fixtures/) | 覆盖注册、心跳、claim、renew、report、Kafka schema 兼容等 |
 | 顶层规范文档 | 3 个核心入口 | [docs/README.md](../README.md) | `agent-baseline`、`coding-conventions`、`changelog` |

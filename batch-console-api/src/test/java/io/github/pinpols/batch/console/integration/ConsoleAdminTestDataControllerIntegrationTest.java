@@ -23,8 +23,7 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  */
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("内部测试数据清理接口: 转发编排器并包装响应,前缀参数校验")
 class ConsoleAdminTestDataControllerIntegrationTest extends AbstractIntegrationTest {
 

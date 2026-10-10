@@ -24,7 +24,7 @@
 | SDK 配置 | `check-sdk-config-env-parity.py`（Java/Python env 工厂和五语言 live transport 前缀）、`check-sdk-runtime-alignment.py`（仓库 Node 入口、SDK/前端声明与 CI 版本矩阵） |
 | SDK 双栈 | `run-sdk-happy-eyeballs-gate.sh`（五语言真实 loopback socket 单栈/双栈/黑洞矩阵） |
 | 文档与变更 | `check-docs-structure.py`、`check-doc-timestamp-policy.py`、`check-code-doc-references.py`、`check-terminology-doc-sync.py`、`check-changelog-sync.py`、`check-loc-snapshot.py`、`check-readiness-doc-sync.py`、`check-slo-sli-catalog.py`、`check-comment-language.py` |
-| 脚本与仓库 | `check-shell-scripts.sh`、`check-shell-linux-portability.py`、`check-script-governance.py`、`check-destructive-ops-governance.py`（删除类命令增量基线）、`check-repository-hygiene.py`、`check-env-file-shell-safety.py`、`check-hardcoded-runtime-config.sh`、`check-utf8-encoding.py`（全仓 UTF-8 字节扫描）、`check-testcontainers-reuse-label.py`（Testcontainers 复用容器清理谓词）、`check-github-action-pinning.py`（外部 Action 固定 40 位 SHA并保留版本注释）、`check-soft-gate-governance.py`（软门禁责任与期限） |
+| 脚本与仓库 | `check-shell-scripts.sh`、`check-shell-linux-portability.py`、`check-script-governance.py`、`check-destructive-ops-governance.py`（删除类命令增量基线）、`check-repository-hygiene.py`、`check-env-file-shell-safety.py`、`check-hardcoded-runtime-config.sh`（含 BE 验收脚本的平台服务端口来源）、`check-utf8-encoding.py`（全仓 UTF-8 字节扫描）、`check-testcontainers-reuse-label.py`（Testcontainers 复用容器清理谓词）、`check-github-action-pinning.py`（外部 Action 固定 40 位 SHA并保留版本注释）、`check-soft-gate-governance.py`（软门禁责任与期限） |
 | 配置与部署 | `check-config-defaults-sync.py`、`check-config-governance.py`、`check-direct-config-key-access.py`、`check-env-variable-governance.py`、`check-feature-switch-registry.py`、`check-five-worker-parity.py`、`check-keda-autoscaling.py`、`check-helm-env-sync.py`、`check-infrastructure-utf8.py`（Compose/Sim/Dockerfile/Helm/Testcontainers locale 与数据库编码）、`check-production-capacity-governance.py`、`check-production-overlay-safety.py`、`check-version-alignment.sh`、`validate-kafka-topics.sh`（全仓 topic 字面量 ↔ `BatchTopics.java`：env 模板 / `batch-defaults.yml` / helm / init 脚本 / load-tests） |
 | 数据库与 SQL | `check-biz-table-tenant-rls.py`、`check-db-comment-coverage.sh`、`check-db-scripts-safety.sh`、`check-migration-safety.sh`、`check-mybatis-generated-key-columns.py`、`check-no-positional-insert-select-star.py`、`check-postgres-client-fallback.sh`、`check-schema-governance-assets.py`、`check-sql-config-boundaries.py`、`check-sql-config-boundaries.sh`、`validate-flyway-schema.sh` |
 | API 与兼容 | `check-console-openapi-paths.py`、`check-openapi-breaking.sh` |
@@ -32,6 +32,40 @@
 | 测试完整性 | `check-e2e-run-completeness.sh`、`check-e2e-shard-coverage.sh`、`check-integration-test-coverage.py`、`check-module-test-coverage.sh`、`check-no-silent-disabled-tests.sh`、`check-test-conventions.py`（中文 `@DisplayName` 类级/方法级 + 测试方法命名，增量拦截）、`check-flaky-test-governance.py`、`check-diff-coverage.py`、`run-critical-mutation.sh`、`report-ci-quality-trends.py` |
 | 安全与许可 | `check-dependency-licenses.sh`、`license-allowlist.sh`、`check-license-compliance.sh`、`check-sbom-sync.sh`、`check-trivy-ignore-expiry.py` |
 | 观测 | `check-helm-prometheusrule-sync.sh`、`check-log-lifecycle.sh`、`check-observability-contract.py` |
+
+## 门禁判定与正反例
+
+本节解释门禁类别的判定边界。表中“拦截”是应失败的变更，“放行”是看起来相似但属于合法场景的变更；它们是判定示例，不替代脚本本身的精确规则。具体脚本、触发范围和本地命令以本页清单、`docs/runbook/ci.md` 及对应脚本帮助为准。
+
+| 类别 | 主要拦截情形 | 应放行情形 | 代表性守卫 |
+|---|---|---|---|
+| 文档与变更记录 | 破坏文档结构/链接、核心状态字典未同步、版本变更缺少 Changelog | 不影响发布行为的普通文字修订；允许按日期策略存放的归档文档 | `check-docs-structure.py`、`check-terminology-doc-sync.py`、`check-changelog-sync.py` |
+| Shell / Python / 仓库卫生 | Shell 语法或 ShellCheck 告警、Linux 不兼容语法、脚本未登记、提交本机产物 | 通过公共配置读取平台服务端口；脚本自有的临时端口和显式可覆盖的场景参数 | `check-shell-scripts.sh`、`check-shell-linux-portability.py`、`check-script-governance.py`、`check-repository-hygiene.py`、`check-hardcoded-runtime-config.sh` |
+| 配置与部署 | 环境默认值、Helm、Compose、功能开关或生产覆盖彼此漂移；生产配置启用不安全值 | 只在一个场景使用且有明确 owner 的测试参数；不属于平台配置源的临时客户端端口 | `check-config-defaults-sync.py`、`check-env-variable-governance.py`、`check-helm-env-sync.py`、`check-production-overlay-safety.py` |
+| 数据库 / SQL | 业务表缺租户隔离、迁移有破坏风险、位置式 `INSERT ... SELECT *`、SQL 绕过独立文件与变量传值 | 由权威状态/配置来源驱动的 SQL；经过登记并有专项测试的精确例外 | `check-biz-table-tenant-rls.py`、`check-migration-safety.sh`、`check-no-positional-insert-select-star.py`、`check-sql-config-boundaries.sh` |
+| API 与 SDK | OpenAPI 出现破坏性变更未同步、五语言共享契约不一致、运行时版本超出声明范围 | 只改变实现且不改变公开契约的内部重构；允许的兼容新增字段 | `check-openapi-breaking.sh`、`check-console-openapi-paths.py`、SDK parity workflow |
+| Java 规约与架构 | 新增空检查、字段注入/日志违规、固定协议值漂移、结构化多行字符串退化、依赖越界 | 不在规则覆盖范围内的测试 fixture/说明文本；已精确登记且有理由的例外 | `check-empty-checks.py`、`check-java-contract-governance.py`、`check-java-lombok-injection.py`、`check-dependency-boundaries.py` |
+| 测试完整性 | 测试被静默禁用、E2E 分片漏场景、差异覆盖率不足、测试展示名称不符合约定 | 按契约定义的负向用例、明确标记且登记的 flaky 隔离项 | `check-no-silent-disabled-tests.sh`、`check-e2e-run-completeness.sh`、`check-e2e-shard-coverage.sh`、`check-diff-coverage.py` |
+| 安全 / 供应链 / 许可 | 未登记的高危漏洞豁免、例外到期、禁止许可证、SBOM 与 POM 不一致、Action 使用可变引用 | 扫描器确认的误报可按规则与路径精确登记；许可结论明确且符合项目策略的依赖 | `check-trivy-ignore-expiry.py`、`check-license-compliance.sh`、`check-sbom-sync.sh`、`check-github-action-pinning.py` |
+| 可观测性 | 告警定义与服务指标契约漂移、日志生命周期破坏敏感信息保护要求 | 业务日志内容变化但不改变受守护字段、生命周期或敏感信息规则 | `check-observability-contract.py`、`check-helm-prometheusrule-sync.sh`、`check-log-lifecycle.sh` |
+
+例子如何读：`scripts/local/be-acceptance.sh` 若重新声明 `CONSOLE_PORT` 的平台默认值，属于配置重复，应被 `check-hardcoded-runtime-config.sh` 拦截；若某测试脚本定义自己的 `PREVIEW_PORT`，该值仅控制测试进程监听端口且可由环境变量覆盖，则不应因“出现数字端口”被误拦。测试中的状态值若是要验证的公开协议 fixture，应与生产权威枚举保持对照，而不是简单禁止字面量。
+
+本页的拦截/放行例子是面向人的说明文字，不是可执行配置或门禁 fixture；不粘贴违规片段，不把说明文档纳入代码规则的误报豁免。若未来确需在文档中展示精确违规源码，应使用明确的非执行标记，并为对应扫描器添加窄范围文档样例测试，证明样例不会触发门禁且真实源码仍会被拦截。
+
+## 快速失败与失败汇总
+
+汇总失败是为了减少“修一个、重跑一次”的往返，不代表允许后续步骤忽略失败。当前路由如下：
+
+| 执行范围 | 当前策略 | 可以继续的条件 | 必须立即停止的情形 |
+|---|---|---|---|
+| 本地 pre-commit | `BATCH_GATE_COLLECT=1`；适用的独立检查逐项输出，末尾 `gate_assert_collected` 汇总并返回非零 | 多个 lint、文档、配置、静态契约检查互不依赖 | 扫描器所需解释器/依赖不可用、Git 暂存区信息无法取得等脚本级前置错误；单项内部有生成产物依赖时，该子流程在产物生成失败处停止 |
+| 本地 pre-push | 独立静态门禁失败后继续其他适用检查，并在末尾汇总；符合条件时仍执行 clean compile | 不依赖失败项输出的其他静态检查 | base/工作区不可判定等无法可靠计算增量范围的前置错误；编译失败后不应继续依赖编译产物的检查 |
+| PR 静态门禁 | policy、supply-chain、Java quality 分路执行；各组 `gate_run` 收集失败，required `static-checks` 汇总 | 同一静态组中的独立脚本可继续 | checkout、运行时/工具安装、权限或必需输入准备失败；扫描器无法启动时不能报告扫描通过 |
+| Full Gate 静态门禁 | 在一个静态 job 内收集独立门禁结果，最后统一失败 | 互不依赖的策略与静态扫描 | 环境安装、依赖下载等阻断后续全部检查的前置失败 |
+| 编译、单元/集成/E2E、真实链路 | 按 job/步骤依赖关系执行；矩阵可设 `fail-fast: false` 以收齐其他 shard 结果，但整体仍失败 | 其他独立 shard 可并行完成结果采集 | 服务启动、数据库迁移、测试所需构建产物失败时，不运行依赖它们的阶段；超时/取消/环境失败不算通过 |
+
+汇总策略的验证标准：同时制造两项互不依赖的失败，应看到两项诊断且最终退出码非零；制造基础前置失败，应看到后续依赖步骤未执行且 job 失败；所有项通过才输出整体通过。不得通过 `continue-on-error`、忽略退出码或只检查最后一项实现“汇总”。
 
 ## `check-version-alignment.sh`
 

@@ -23,8 +23,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 /** 预览出错行内联编辑:preview 返回 errorRows + patchRow 改单元格后重校验。 */
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.MOCK,
-    properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+    webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @DisplayName("租户配置包 Excel 预览与行内修正: 出错行透出,单元格修订后重校验通过")
 class ConsoleTenantConfigPackageExcelPatchIntegrationTest extends AbstractIntegrationTest {
 

@@ -37,8 +37,9 @@ cd "$ROOT_DIR" || exit 1
 source "$ROOT_DIR/scripts/lib/logging.sh"
 # shellcheck source=../lib/process.sh
 source "$ROOT_DIR/scripts/lib/process.sh"
-# shellcheck source=../lib/python-runtime.sh
-source "$ROOT_DIR/scripts/lib/python-runtime.sh"
+# shellcheck source=../lib/env-common.sh
+export BATCH_ENV_COMMON_ROOT="$ROOT_DIR"
+source "$ROOT_DIR/scripts/lib/env-common.sh"
 
 # 完整本地验收使用宿主 JVM。历史 Compose 应用容器即使处于 stopped 状态仍保留
 # compose.service 标签；若使用 auto，restart.sh 会把这些旧容器误判为当前运行模式。
@@ -48,7 +49,7 @@ export BATCH_SCRIPT_RUNTIME="${BATCH_SCRIPT_RUNTIME:-host}"
 # 别人 clone 仓库到不同位置 / Linux 上跑,环境变量 export FE_DIR=/path 覆盖。
 FE_DIR="${FE_DIR:-$ROOT_DIR/../batch-console}"
 AGENT_TASK_OUTPUT_ROOT="${AGENT_TASK_OUTPUT_ROOT:-}"
-CONSOLE_PORT="${CONSOLE_PORT:-18080}"
+CONSOLE_PORT="${CONSOLE_PORT:-$CONSOLE_API_PORT}"
 FE_PORT="${FE_PORT:-5173}"
 DOCKER_CONTAINER_NAME_PATTERN="${DOCKER_CONTAINER_NAME_PATTERN:-batch-(postgres|kafka|valkey|minio)}"
 BE_MODULES=(orchestrator trigger console worker-import worker-export worker-process worker-dispatch worker-atomic)
@@ -201,14 +202,14 @@ should_run() {
 wait_for_backend_health() {
   local name port deadline
   local endpoints=(
-    "orchestrator:${BATCH_ORCHESTRATOR_PORT:-18082}"
-    "trigger:${BATCH_TRIGGER_PORT:-18081}"
-    "console:${BATCH_CONSOLE_PORT:-18080}"
-    "worker-import:${BATCH_WORKER_IMPORT_PORT:-18083}"
-    "worker-export:${BATCH_WORKER_EXPORT_PORT:-18084}"
-    "worker-process:${BATCH_WORKER_PROCESS_PORT:-18086}"
-    "worker-dispatch:${BATCH_WORKER_DISPATCH_PORT:-18085}"
-    "worker-atomic:${BATCH_WORKER_ATOMIC_PORT:-18087}"
+    "orchestrator:${ORCHESTRATOR_PORT}"
+    "trigger:${TRIGGER_PORT}"
+    "console:${CONSOLE_API_PORT}"
+    "worker-import:${WORKER_IMPORT_PORT}"
+    "worker-export:${WORKER_EXPORT_PORT}"
+    "worker-process:${WORKER_PROCESS_PORT}"
+    "worker-dispatch:${WORKER_DISPATCH_PORT}"
+    "worker-atomic:${WORKER_ATOMIC_PORT}"
   )
   deadline=$(( $(date +%s) + 180 ))
   for endpoint in "${endpoints[@]}"; do

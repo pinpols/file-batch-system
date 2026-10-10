@@ -28,8 +28,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  */
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("配置表软删除复活语义: 软删后不可见,同编码重建走 upsert 复活且保留原主键")
 class SoftDeleteRecoveryIntegrationTest extends AbstractIntegrationTest {
 

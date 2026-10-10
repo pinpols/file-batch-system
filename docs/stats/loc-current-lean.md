@@ -1,20 +1,20 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `f05731958`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `f2506b601`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,894 | 517,651 | 267,286 | 51.6% |
+| 4,895 | 517,628 | 267,286 | 51.6% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| prod | 2,792 | 255,008 | 116,795 | 45.8% |
-| test | 1,283 | 190,337 | 104,602 | 55.0% |
-| script | 659 | 55,369 | 34,918 | 63.1% |
+| prod | 2,793 | 255,013 | 116,799 | 45.8% |
+| test | 1,283 | 190,303 | 104,593 | 55.0% |
+| script | 659 | 55,375 | 34,923 | 63.1% |
 | config | 64 | 9,111 | 6,704 | 73.6% |
 | infra-config | 32 | 5,548 | 4,095 | 73.8% |
 | sql | 64 | 2,278 | 172 | 7.6% |
@@ -23,10 +23,10 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,587 | 376,221 | 194,660 | 51.7% |
-| Shell | 210 | 31,845 | 25,037 | 78.6% |
+| Java | 3,587 | 376,205 | 194,661 | 51.7% |
+| Shell | 210 | 31,851 | 25,042 | 78.6% |
 | Python | 257 | 36,564 | 18,911 | 51.7% |
-| YAML | 104 | 13,479 | 10,373 | 77.0% |
+| YAML | 105 | 13,466 | 10,367 | 77.0% |
 | XML | 182 | 22,120 | 6,917 | 31.3% |
 | TypeScript | 37 | 6,667 | 3,141 | 47.1% |
 | Rust | 23 | 8,499 | 2,856 | 33.6% |
@@ -55,7 +55,7 @@
 | `pom.xml` | config | XML | 845 | 512 |
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationServiceTest.java` | test | Java | 814 | 503 |
 | `scripts/local/sim-harness.sh` | script | Shell | 641 | 498 |
-| `scripts/local/be-acceptance.sh` | script | Shell | 614 | 481 |
+| `scripts/local/be-acceptance.sh` | script | Shell | 615 | 482 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java` | prod | Java | 975 | 469 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | prod | Java | 1,031 | 460 |
 | `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultFileGovernanceServiceTest.java` | test | Java | 793 | 438 |

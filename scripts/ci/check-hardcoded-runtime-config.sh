@@ -107,6 +107,11 @@ assert_no_matches \
   ':!scripts/ci/check-hardcoded-runtime-config.sh' \
   ':!scripts/ci/check-postgres-client-fallback.sh'
 
+assert_no_matches \
+  'BE 验收脚本必须从公共环境配置读取平台服务端口' \
+  '\$\{(CONSOLE_PORT|BATCH_(ORCHESTRATOR|TRIGGER|CONSOLE|WORKER_(IMPORT|EXPORT|PROCESS|DISPATCH|ATOMIC))_PORT):-[0-9]+\}' \
+  'scripts/local/be-acceptance.sh'
+
 while IFS= read -r test_file; do
   if grep -q '@SpringBootTest' "$test_file" && ! grep -q 'extends AbstractIntegrationTest' "$test_file"; then
     echo "FAIL: Spring Boot 集成测试使用统一基础设施时必须继承 AbstractIntegrationTest" >&2

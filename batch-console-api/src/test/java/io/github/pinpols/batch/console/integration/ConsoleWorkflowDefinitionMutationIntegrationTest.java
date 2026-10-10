@@ -24,8 +24,7 @@ import org.springframework.http.MediaType;
  */
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("工作流定义写路径: DAG 三表落库,嵌套节点与边编码校验及唯一约束")
 class ConsoleWorkflowDefinitionMutationIntegrationTest extends AbstractMutationIntegrationTest {
 

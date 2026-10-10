@@ -16,8 +16,7 @@ import org.springframework.http.MediaType;
  */
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("告警路由配置写路径: 编码校验,落库字段与唯一约束")
 class ConsoleAlertRoutingMutationIntegrationTest extends AbstractMutationIntegrationTest {
 

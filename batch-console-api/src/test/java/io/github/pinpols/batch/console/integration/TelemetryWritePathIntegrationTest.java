@@ -31,8 +31,7 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  */
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("控制台遥测写路径: 入参校验口径与成功受理响应")
 class TelemetryWritePathIntegrationTest extends AbstractIntegrationTest {
 

@@ -1,0 +1,5 @@
+# 集成测试不覆盖 Spring 调度线程池的优雅收尾，关闭等待以缩短测试进程退出时间。
+batch:
+  scheduling:
+    wait-for-tasks-to-complete-on-shutdown: false
+    await-termination-seconds: 1
