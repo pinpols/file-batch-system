@@ -7,6 +7,15 @@ mode=${BATCH_DEPLOY_MODE:-container}
 target_dir=/prometheus/targets
 mkdir -p "$target_dir"
 
+validate_port() {
+  case "$2" in
+    ""|*[!0-9]*)
+      echo "Invalid scrape port for $1: $2" >&2
+      exit 2
+      ;;
+  esac
+}
+
 case "$mode" in
   container)
     set -- \
@@ -27,6 +36,14 @@ case "$mode" in
         exit 2
         ;;
     esac
+    validate_port batch-console-api "${CONSOLE_API_PORT:-18080}"
+    validate_port batch-trigger "${TRIGGER_PORT:-18081}"
+    validate_port batch-orchestrator "${ORCHESTRATOR_PORT:-18082}"
+    validate_port batch-worker-import "${WORKER_IMPORT_PORT:-18083}"
+    validate_port batch-worker-export "${WORKER_EXPORT_PORT:-18084}"
+    validate_port batch-worker-dispatch "${WORKER_DISPATCH_PORT:-18085}"
+    validate_port batch-worker-process "${WORKER_PROCESS_PORT:-18086}"
+    validate_port batch-worker-atomic "${WORKER_ATOMIC_PORT:-18087}"
     set -- \
       "$host" "${CONSOLE_API_PORT:-18080}" batch-console-api \
       "$host" "${TRIGGER_PORT:-18081}" batch-trigger \
@@ -51,13 +68,6 @@ while [ "$#" -gt 0 ]; do
   port=$2
   job=$3
   shift 3
-  case "$port" in
-    ""|*[!0-9]*)
-      echo "Invalid scrape port for $job: $port" >&2
-      rm -f "$tmp_file"
-      exit 2
-      ;;
-  esac
   if [ "$first" = true ]; then
     first=false
   else
