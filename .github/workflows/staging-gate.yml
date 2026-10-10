@@ -1,11 +1,8 @@
 name: staging-gate
 
-# 全量 E2E（含 regression）的定时/手动回归 workflow；不执行 staging 集群部署。
-#
-# 触发:
-#   - schedule: 每天 18:00 UTC(北京 02:00)nightly 跑全量(含 smoke/critical/regression
-#     无 tag 过滤)。
-#   - workflow_dispatch: 手动运行全量 E2E 回归。
+# 全量 E2E（含 regression）的手动回归 workflow；不执行 staging 集群部署。
+# main 代码变更由 full-ci-gate 执行同一 E2E 清单；无变更时不额外每日重复跑。
+# workflow_dispatch 用于排障后的复验或维护者主动要求的全量回归。
 #
 # 与 pr-gate 关系:
 #   - PR Gate 按变更范围执行静态检查和测试分片；Full CI Gate 在 main push 后也运行 E2E。
@@ -13,16 +10,13 @@ name: staging-gate
 #   - Java 架构/约定守卫独立并发执行,不计入 E2E shard 的业务验收结果与耗时。
 #
 # 与 full-ci-gate 关系:
-#   - full-ci-gate(main push)已并行跑全量 e2e-shard；本 workflow 仅由每日 schedule
-#     或手动触发，作为额外回归，**不替代** full-ci-gate，也不执行 staging rollout。
+#   - full-ci-gate(main push/每周回归)已并行跑全量 e2e-shard；本 workflow 仅手动触发，
+#     用于独立复验，**不替代** full-ci-gate，也不执行 staging rollout。
 #
 # 标签策略详见 docs/runbook/e2e-tier-strategy.md。
 
 on:
   workflow_dispatch:
-  schedule:
-    # 每天 18:00 UTC(北京 02:00),低峰时段跑全量。
-    - cron: '0 18 * * *'
 
 permissions:
   contents: read
@@ -32,7 +26,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Java 架构/约定守卫与 E2E 并发，防止 nightly 只跑业务 E2E 而漏掉治理测试。
+  # Java 架构/约定守卫与 E2E 并发，保证手动全量回归也覆盖治理测试。
   java-governance:
     runs-on: ubuntu-latest
     timeout-minutes: 15

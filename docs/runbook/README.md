@@ -91,7 +91,7 @@
 | 测试与 CI | [BE 验收](./be-acceptance.md)、[E2E 分层](./e2e-tier-strategy.md)、[种子校验](./seed-validation.md)、[CI 加速](./ci-speedup-2026-06-02.md)、[取证回放](./forensic-replay-howto.md) |
 | SDK 发布 | [双轨灰度](./sdk-dual-rollout.md)、[SDK 发布](./sdk-release.md)、[Python 发布](./sdk-python-release.md) |
 | 故障剧本 | [Playbooks 索引](./playbooks/README.md) |
-| CI 专项 | [CI Runbook 索引](./ci/README.md) |
+| CI 专项 | [CI Runbook 索引](./ci/README.md)；[前后端 CI 定时治理](./ci-schedule-governance.md) |
 
 ## 补充与历史专题
 

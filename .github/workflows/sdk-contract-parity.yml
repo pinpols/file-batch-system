@@ -19,11 +19,8 @@ name: sdk-contract-parity
 # contract 结果由稳定的 `sdk-contract-required` 聚合门禁阻塞合并。sdk-live-transport
 # (真 kafka,偶发 flake)与 parity-report 保持非必需信号(PR 上非阻塞)。
 #
-# nightly 常态化(2026-07-15):sdk-live-transport 这条五语言 live-Kafka 一致性 gate
-# 原先只在碰 sdk 路径的 PR 上跑 → 数周无 sdk PR 时长期 dormant,withhold/HOL 这类
-# 五语言集体回归会潜伏到某个偶然 PR 才暴露。故加 schedule cron:每天在 main 全跑一次
-# (含 live-transport),把潜伏回归压到 24h 内暴露。schedule 无 base diff → 走与
-# merge_group/workflow_dispatch 相同的「非 PR 事件回退全跑」路径(见 `sdk-contract-scope` job)。
+# SDK 变更在 PR/merge queue 上运行五语言契约和 live-transport；无 SDK 变更时不做
+# 定时空跑。真实 Orchestrator 全链路由 sdk-orchestrator-e2e 在相关 main 变更后验证。
 
 on:
   # 2026-06-22:契约检查升为 ruleset required(阻塞合并)。required check 必须在
@@ -38,11 +35,6 @@ on:
     types:
       - checks_requested
   workflow_dispatch:
-  schedule:
-    # 每天 16:00 UTC(北京 00:00)在 main 全跑一次,专治 live-transport 长期 dormant。
-    # 低峰、每日一次(非每小时);与 sdk-orchestrator-e2e / staging-gate 的 18:00 错峰,
-    # 避免同时段抢 runner。schedule 事件默认在默认分支(main)上运行。
-    - cron: '0 16 * * *'
 
 permissions:
   contents: read
@@ -53,9 +45,9 @@ concurrency:
 
 jobs:
   # Job 0:探测 sdk 相关变更。PR 事件按 base diff 判定;非 PR 事件(merge_group /
-  # workflow_dispatch / schedule)无 base diff,探测器对非 PR 事件回退全跑 → 各下游
+  # workflow_dispatch)无 base diff,探测器对非 PR 事件回退全跑 → 各下游
   # job 的 `if: ... || github.event_name != 'pull_request'` 再兜一层 →
-  # 回退全跑(安全)。schedule(nightly)即走此路径:全语言 contract + live-transport 都真跑。
+  # 回退全跑(安全)。手动运行即走此路径:全语言 contract + live-transport 都真跑。
   changes:
     name: sdk-contract-scope
     runs-on: ubuntu-latest

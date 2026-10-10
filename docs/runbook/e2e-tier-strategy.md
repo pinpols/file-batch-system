@@ -1,12 +1,12 @@
 # E2E 分级策略(smoke / critical / regression)
 
-> 当前策略：PR 不运行 E2E；Full CI 在 main push 后执行全量 E2E，`staging-gate` 每日定时或手动执行全量 E2E。两者都在 GitHub-hosted runner 上运行，不代表部署到 staging 集群。
+> 当前策略：PR 不运行 E2E；Full CI 在 main push 和每周回归中执行全量 E2E，`staging-gate` 仅用于手动全量复验。两者都在 GitHub-hosted runner 上运行，不代表部署到 staging 集群。
 >
 > 落地 PR:`feature/r3-2-e2e-tier-smoke-pr-gate`(2026-06-02)
 
 ## 背景
 
-`batch-e2e-tests` 的用例清单由 `scripts/ci/check-e2e-shard-coverage.sh` 与各 workflow shard 定义共同校验。2026-10-07 的历史 Surefire 样本记录六片测试体耗时为 148-179 秒；这不是每次运行的 SLA。PR 不运行 E2E，Full CI 在 main push 后运行，nightly/手动 `staging-gate` 提供额外回归。
+`batch-e2e-tests` 的用例清单由 `scripts/ci/check-e2e-shard-coverage.sh` 与各 workflow shard 定义共同校验。2026-10-07 的历史 Surefire 样本记录六片测试体耗时为 148-179 秒；这不是每次运行的 SLA。PR 不运行 E2E；Full CI 在 main push 和每周回归中运行，`staging-gate` 仅保留手动复验入口。
 
 ## 三级标签
 
@@ -47,7 +47,7 @@ profile `e2e-smoke` 用 JUnit5 tag 表达式 `smoke | critical` 过滤。
 
 ### regression(14,默认)
 
-剩余无 smoke/critical 标记的 `*E2eIT`,nightly 全量跑。代表:`OutboxPollMarginsYamlE2eIT`、
+剩余无 smoke/critical 标记的 `*E2eIT` 纳入 Full CI 全量回归。代表:`OutboxPollMarginsYamlE2eIT`、
 `AtomicTaskLoadE2eIT`、`SensorWaitFixtureE2eIT`、`WorkerProcessRestartRecoveryE2eIT` 等。
 
 ## 归类规则(新加 / 改 e2e 时按此判断)
@@ -78,10 +78,10 @@ profile `e2e-smoke` 用 JUnit5 tag 表达式 `smoke | critical` 过滤。
 | Workflow | 何时跑 | 包含 |
 |---|---|---|
 | `pr-gate.yml` | PR open / synchronize | 不运行 E2E；单元分片快速反馈 |
-| `full-ci-gate.yml` job `e2e-shard` | push 到 main | **全量** 6 shard 并发 |
-| `staging-gate.yml` job `e2e-shard-full` | 每天 02:00 北京时间 + workflow_dispatch | **全量** 6 shard 并发 |
+| `full-ci-gate.yml` job `e2e-shard` | push 到 main、每周定时、workflow_dispatch | **全量** 6 shard 并发 |
+| `staging-gate.yml` job `e2e-shard-full` | workflow_dispatch | **全量** 6 shard 并发 |
 
-> Full CI 在 main push 后运行全量 E2E；`staging-gate` 是 nightly + 手动的额外回归，运行于 GitHub-hosted runner，不使用 staging branch，也不部署 release candidate。
+> Full CI 在 main push 和每周回归中运行全量 E2E；`staging-gate` 是手动的额外复验，运行于 GitHub-hosted runner，不使用 staging branch，也不部署 release candidate。
 
 ## 命令速记
 
@@ -112,7 +112,7 @@ mvn -pl batch-e2e-tests test -DexcludedGroups='smoke,critical'
 
 ## 反预期场景
 
-- pr-gate 漏掉 E2E bug：PR 门禁有意不运行 E2E，由 main Full Gate 和 nightly staging 回退；fail
+- pr-gate 漏掉 E2E bug：PR 门禁有意不运行 E2E，由 main Full Gate、每周回归和手动 staging-gate 复验补充；fail
   时回滚 staging branch / hotfix。如果同类 bug 反复在 regression 上失败,考虑升级该
   case 到 critical。
 - smoke 跑得不稳:**严重** — smoke 是反馈周期的根基,flaky 必须当 P0 修。

@@ -4,7 +4,7 @@
 
 ## 1. `sdk-orchestrator-e2e`(样例 worker × 真 orchestrator)
 
-该工作流通过 nightly cron 和 `workflow_dispatch` 启动真实基础设施与 Orchestrator/Trigger，执行五语言样例 worker 的 register、launch、dispatch、claim、execute、report 和终态断言。它**不是 PR required check**；但单次 workflow run 中任一语言失败都会使该 run 失败。
+该工作流在 SDK、样例、Orchestrator、Trigger、迁移、协议和运行脚本相关 main 变更后，以及 `workflow_dispatch` 时启动真实基础设施与 Orchestrator/Trigger，执行五语言样例 worker 的 register、launch、dispatch、claim、execute、report 和终态断言。它**不是 PR required check**；但单次 workflow run 中任一语言失败都会使该 run 失败。
 
 | lang | 当前状态 | 说明 |
 |---|---|---|
@@ -24,7 +24,7 @@
 
 需要先评估 broker 稳定性、隔离策略、有效运行样本和分支保护 required context，再单独决策。本节是未来评估条件，不表示当前已有切换计划或已满足条件。
 
-当前 required 状态以 workflow 的 `sdk-contract-required` job 及仓库 ruleset 为准；不得仅凭 nightly 成功或 `parity-report` 绿灯推断 live-transport 已成为 required check。
+当前 required 状态以 workflow 的 `sdk-contract-required` job 及仓库 ruleset 为准；不得仅凭 Full CI、手动真栈 E2E 或 `parity-report` 绿灯推断 live-transport 已成为 required check。
 
 ## 关联
 
