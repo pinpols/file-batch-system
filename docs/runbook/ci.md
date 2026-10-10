@@ -7,6 +7,7 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 ## 概览
 
 长期治理原则见 [CI 与测试质量治理](../standards/ci-test-quality-governance.md)；本文只说明具体工作流与操作入口。
+全部 CI 守卫的分类目录、判定正反例以及快速失败/失败汇总边界见[CI 脚本说明](../../scripts/ci/README.md#完整守护清单)。该目录的 80 个可执行守卫由脚本治理检查登记；新增或调整门禁时须同步更新守卫清单、对应工作流路由和本 runbook。
 
 项目有两条主要代码门禁流程（PR Gate、main Full CI Gate），另有补充验证与失败处理自动化。补充流程不替代代码合并门禁：
 
@@ -291,7 +292,7 @@ PR 所有单元分片均设置 `-DskipITs=true`；集成和 E2E 由 Full Gate �
 | `check-feature-switch-registry.py` | 按域触发的全量：功能开关、YAML、Helm 变更时运行 |
 | `check-config-governance.py`、`check-env-variable-governance.py` | 按域触发的全量：配置绑定、环境变量治理入口变更时运行 |
 | `check-production-capacity-governance.py` | 按域触发的全量：生产容量巡检脚本、只读 SQL、runbook 和 workflow 入口变更时运行 |
-| `check-hardcoded-runtime-config.sh` | 按域触发的全量：运行配置、脚本、容器、测试基础设施变更时运行 |
+| `check-hardcoded-runtime-config.sh` | 按域触发的全量：运行配置、脚本、容器、测试基础设施变更时运行；检查 BE 验收脚本的平台服务端口必须来自公共环境配置 |
 | `check-changelog-sync.py --base <base>` | 按域触发的增量：发布敏感配置、契约、迁移或架构规范变更时运行 |
 | Java readability inventory 自动刷新 | Java 变更时刷新全局清单 |
 | Shell 脚本检查 / Docker bake 配置解析 | 仅变更命中的文件或配置 |
