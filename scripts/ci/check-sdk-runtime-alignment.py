@@ -29,6 +29,13 @@ def read(path: Path) -> str:
 typescript_package = json.loads(read(ROOT / "sdk/typescript/package.json"))
 require(typescript_package.get("engines", {}).get("node") == "^22 || ^24", "TypeScript SDK engines.node must support Node 22 and 24 only")
 require((ROOT / "sdk/typescript/package-lock.json").is_file(), "TypeScript SDK development dependencies must be lockfile-backed")
+typescript_sample_package = json.loads(
+    read(ROOT / "examples/self-hosted-sdk/sample-tenant-worker-typescript/package.json")
+)
+require(
+    typescript_sample_package.get("engines", {}).get("node") == "^22 || ^24",
+    "TypeScript self-hosted sample engines.node must match the SDK Node 22/24 support matrix",
+)
 
 node_baseline = read(ROOT / ".node-version").strip()
 require(bool(re.fullmatch(r"24\.\d+\.\d+", node_baseline)), "repository .node-version must pin an exact Node 24 release")

@@ -8,7 +8,7 @@
 | [`sample-tenant-worker-java-spring/`](sample-tenant-worker-java-spring/) | `sdk/java/spring` | Spring Boot starter 自动装配 |
 | [`sample-tenant-worker-python/`](sample-tenant-worker-python/) | `sdk/python` | async,3.12+,依赖 `batch-worker-sdk` |
 | [`sample-tenant-worker-go/`](sample-tenant-worker-go/) | `sdk/go` | kafka adapter;参照实现 |
-| [`sample-tenant-worker-typescript/`](sample-tenant-worker-typescript/) | `sdk/typescript` | kafkajs adapter,Node ≥ 25 |
+| [`sample-tenant-worker-typescript/`](sample-tenant-worker-typescript/) | `sdk/typescript` | kafkajs adapter，Node 22 / 24 |
 | [`sample-tenant-worker-rust/`](sample-tenant-worker-rust/) | `sdk/rust` | `reqwest` transport + `rdkafka`(`http` + `kafka` feature) |
 
 ## 怎么跑

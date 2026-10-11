@@ -55,7 +55,11 @@ sdk_e2e_ensure_echo_job
 sdk_e2e_precreate_topic "$WORKER_CODE"
 
 sdk_e2e_say "2. start ${LANG_ID} sample worker"
-WORKER_PID="$(sdk_e2e_start_worker "$LANG_ID" "$WORKER_CODE" "$RAW_KEY" "$WORKER_LOG")"
+if ! WORKER_PID="$(sdk_e2e_start_worker "$LANG_ID" "$WORKER_CODE" "$RAW_KEY" "$WORKER_LOG")"; then
+  sdk_e2e_fail "${LANG_ID} sample worker preparation failed"
+  dump_diagnostics
+  exit 1
+fi
 
 sdk_e2e_say "3. register"
 sdk_e2e_assert_register "$WORKER_CODE" "$WORKER_PID" "$WORKER_LOG" \
