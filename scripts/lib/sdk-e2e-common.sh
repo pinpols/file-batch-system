@@ -222,9 +222,9 @@ sdk_e2e_start_worker() {
       # node_modules 解析(样例经相对路径引 SDK,样例的 node_modules 不在 SDK 解析树上),
       # 故须先在 sdk/typescript 和样例目录安装锁定依赖。安装必须在返回 worker PID 前
       # 同步完成并保留日志，否则 npm 失败会伪装成“worker 提前退出”且没有根因输出。
-      npm --prefix "$root/sdk/typescript" ci --ignore-scripts --silent >>"$logf" 2>&1 || return 1
+      npm --prefix "$root/sdk/typescript" ci --ignore-scripts >>"$logf" 2>&1 || return 1
       npm --prefix "$root/examples/self-hosted-sdk/sample-tenant-worker-typescript" \
-        ci --ignore-scripts --silent >>"$logf" 2>&1 || return 1
+        ci --ignore-scripts >>"$logf" 2>&1 || return 1
       ( cd "$root/examples/self-hosted-sdk/sample-tenant-worker-typescript" \
         && BATCH_BASE_URL="${SDK_E2E_WORKER_BASE_URL:-$ORCH_URL}" BATCH_API_KEY="$raw" BATCH_TENANT_ID="$TENANT" \
            BATCH_WORKER_CODE="$wc" KAFKA_BOOTSTRAP="$KAFKA_BOOTSTRAP" \
