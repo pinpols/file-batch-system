@@ -3,8 +3,10 @@ package io.github.pinpols.batch.console.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleJwtService;
+import io.github.pinpols.batch.console.support.web.ConsoleIdempotencyStore;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.util.Set;
@@ -56,13 +58,18 @@ class ConsoleCsrfCookieIntegrationTest extends AbstractIntegrationTest {
 
   private final BatchSecurityProperties securityProperties;
 
+  private final ConsoleIdempotencyStore idempotencyStore;
+
   private WebTestClient client;
 
   @Autowired
   ConsoleCsrfCookieIntegrationTest(
-      ConsoleJwtService jwtService, BatchSecurityProperties securityProperties) {
+      ConsoleJwtService jwtService,
+      BatchSecurityProperties securityProperties,
+      ConsoleIdempotencyStore idempotencyStore) {
     this.jwtService = jwtService;
     this.securityProperties = securityProperties;
+    this.idempotencyStore = idempotencyStore;
   }
 
   @BeforeEach
@@ -126,5 +133,47 @@ class ConsoleCsrfCookieIntegrationTest extends AbstractIntegrationTest {
         .exchange()
         .expectStatus()
         .isEqualTo(405);
+  }
+
+  @Test
+  @DisplayName("真实认证请求重复提交配置包上传时由类级幂等声明返回 409")
+  void shouldRejectCompletedIdempotencyKeyOnTenantPackageUpload_whenAuthenticated() {
+    String tenantId = "idempotency-http-tenant";
+    String uri = "/api/console/config/tenant-package/excel/apply/upload-123";
+    String idempotencyKey = "completed-upload-key";
+    String redisKey = "console:idempotency:" + tenantId + ":POST:" + uri + ":" + idempotencyKey;
+    String jwt = jwtService
+        .issueToken("config-idempotency-admin", tenantId, Set.of("ROLE_TENANT_ADMIN"))
+        .accessToken();
+    ResponseCookie csrfCookie = client
+        .get()
+        .uri("/api/console/auth/check")
+        .cookie("batch_console_token", jwt)
+        .exchange()
+        .expectStatus()
+        .isNoContent()
+        .returnResult(Void.class)
+        .getResponseCookies()
+        .getFirst("XSRF-TOKEN");
+    assertThat(csrfCookie).isNotNull();
+    assertThat(idempotencyStore.setIfAbsent(redisKey, "DONE", Duration.ofMinutes(1)))
+        .isTrue();
+
+    client
+        .post()
+        .uri(uri)
+        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+        .cookie("batch_console_token", jwt)
+        .cookie("XSRF-TOKEN", csrfCookie.getValue())
+        .header("X-XSRF-TOKEN", csrfCookie.getValue())
+        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+        .bodyValue("{}")
+        .exchange()
+        .expectStatus()
+        .isEqualTo(409)
+        .expectBody()
+        .jsonPath("$.message")
+        .value(message -> assertThat(message.toString()).contains("duplicate request"));
   }
 }

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.application.contract.request.config;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
@@ -223,11 +224,13 @@ public class TenantConfigBatchInitRequest {
     private String channelType;
 
     @Size(max = 512)
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String targetEndpoint;
 
     @Size(max = 32)
     private String authType;
 
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String configJson;
 
     @Size(max = 32)

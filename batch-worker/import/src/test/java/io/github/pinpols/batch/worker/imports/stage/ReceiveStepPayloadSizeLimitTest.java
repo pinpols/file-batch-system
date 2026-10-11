@@ -14,6 +14,7 @@ import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRep
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
 import java.util.HashMap;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -129,6 +130,26 @@ class ReceiveStepPayloadSizeLimitTest {
         .containsExactly(
             "ingress/t1/shared-trace-11/import-shared-trace.json",
             "ingress/t1/shared-trace-12/import-shared-trace.json");
+  }
+
+  @Test
+  @DisplayName("接收阶段读取并绑定模板配置供本次流水线后续阶段复用")
+  void execute_bindsTemplateConfigToPipelineContext() {
+    Map<String, Object> template = Map.of(
+        "template_code", "T1",
+        "file_format_type", "DELIMITED",
+        "charset", "GBK");
+    when(pipelineDefinitions.loadLatestTemplateConfig("t1", "T1", "IMPORT")).thenReturn(template);
+    when(runtimeRepository.createFileRecord(any())).thenReturn(101L);
+    when(runtimeRepository.loadFileRecord("t1", 101L)).thenReturn(Map.of());
+    ImportJobContext context =
+        buildContext("t1", "{\"templateCode\":\"T1\",\"content\":\"name\\nAlice\"}");
+
+    ImportStageResult result = receiveStep.execute(context);
+
+    assertThat(result.success()).isTrue();
+    assertThat(context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG))
+        .isEqualTo(template);
   }
 
   private ImportJobContext buildContext(String tenantId, String payload) {

@@ -7,8 +7,8 @@ import java.time.Instant;
  * Kafka task 派发消息。
  *
  * <p>schema v2(P1-2.2 起):瘦身只保留 task key + 路由元数据,业务字段(payload/businessKey/taskSeq/highWaterMarkIn
- * 等)统一走 worker CLAIM 时返回的 {@link io.github.pinpols.batch.common.dto.EffectiveTaskConfig} 实时读
- * DB,确保管理员改 retry/timeout/payload 等配置后立即生效,不再受队列里旧消息延迟。
+ * 等)统一走 worker CLAIM 时返回的 {@link io.github.pinpols.batch.common.dto.EffectiveTaskConfig}。业务 payload
+ * 在 CLAIM 时从 task 读取；新实例的执行/重试策略读取创建时快照，历史实例兼容读取作业定义。
  *
  * <p>设计依据:{@code docs/design/batch-classification-and-gaps.md} §3.4 / §4 P1-2 / §4.4。
  *

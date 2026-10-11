@@ -1,13 +1,17 @@
 package io.github.pinpols.batch.console.infrastructure.excel;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.enums.PipelineType;
+import io.github.pinpols.batch.common.exception.BizException;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.apache.poi.ss.usermodel.DataValidation;
 import org.apache.poi.ss.usermodel.Row;
@@ -36,7 +40,8 @@ class ConfigPackageWorkbookGuidanceTest {
   private XSSFWorkbook buildSampleTemplate(String scenario) throws Exception {
     StaticMessageSource ms = new StaticMessageSource();
     ms.setUseCodeAsDefaultMessage(true);
-    ConfigPackageExcelWorkbookWriter writer = new ConfigPackageExcelWorkbookWriter(ms);
+    ConfigPackageExcelWorkbookWriter writer =
+        new ConfigPackageExcelWorkbookWriter(ms, List.of(scenario));
     byte[] bytes =
         writer.buildExportWorkbook(ConfigPackageSampleDataFactory.sampleSheets(scenario));
     return new XSSFWorkbook(new ByteArrayInputStream(bytes));
@@ -45,99 +50,436 @@ class ConfigPackageWorkbookGuidanceTest {
   private XSSFWorkbook buildSampleTemplate(List<String> scenarios) throws Exception {
     StaticMessageSource ms = new StaticMessageSource();
     ms.setUseCodeAsDefaultMessage(true);
-    ConfigPackageExcelWorkbookWriter writer = new ConfigPackageExcelWorkbookWriter(ms);
+    ConfigPackageExcelWorkbookWriter writer = new ConfigPackageExcelWorkbookWriter(ms, scenarios);
     byte[] bytes =
         writer.buildExportWorkbook(ConfigPackageSampleDataFactory.sampleSheets(scenarios));
     return new XSSFWorkbook(new ByteArrayInputStream(bytes));
   }
 
+  private XSSFWorkbook buildFocusedTemplate(List<String> scenarios) throws Exception {
+    StaticMessageSource ms = new StaticMessageSource();
+    ms.setUseCodeAsDefaultMessage(true);
+    ConfigPackageExcelWorkbookWriter writer = new ConfigPackageExcelWorkbookWriter(ms, scenarios);
+    return new XSSFWorkbook(new ByteArrayInputStream(writer.buildTemplateWorkbook()));
+  }
+
   @Test
-  @DisplayName("示例模板:各场景数据行完整,且队列类型取值保持合法")
+  @DisplayName("场景模板只包含相关业务 Sheet 和精简列，不暴露平台队列配置")
   void shouldContainScenarioRows_whenBuildingSampleTemplate() throws Exception {
     try (XSSFWorkbook importWb = buildSampleTemplate("IMPORT")) {
       assertThat(importWb.getSheet(ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET))
-          .as("场景示例导出必须包含作业监控策略 sheet")
-          .isNotNull();
-      assertThat(importWb
-              .getSheet(ConfigPackageExcelValidator.JOB_SHEET)
-              .getRow(1)
-              .getCell(1)
-              .getStringCellValue())
+          .as("平台运行监控阈值不进入租户场景模板")
+          .isNull();
+      assertThat(importWb.getSheet(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET))
+          .isNull();
+      assertThat(
+              cellByHeader(importWb.getSheet(ConfigPackageExcelValidator.JOB_SHEET), "job_code", 1))
           .isEqualTo("JOB_IMPORT_CUSTOMER");
+      assertThat(cellByHeader(
+              importWb.getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET),
+              "template_code",
+              1))
+          .isEqualTo("TPL_IMPORT_CUSTOMER");
       assertThat(importWb
               .getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET)
-              .getRow(1)
-              .getCell(1)
-              .getStringCellValue())
-          .isEqualTo("TPL_IMPORT_CUSTOMER");
+              .getRow(0)
+              .getLastCellNum())
+          .isLessThan((short) 41);
     }
     try (XSSFWorkbook processWb = buildSampleTemplate("PROCESS")) {
-      assertThat(processWb
-              .getSheet(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET)
-              .getRow(1)
-              .getCell(3)
-              .getStringCellValue())
-          .isEqualTo("MIXED");
+      assertThat(processWb.getSheet(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET))
+          .isNull();
+      assertThat(processWb.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET)).isNotNull();
+      assertThat(processWb.getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET))
+          .isNull();
     }
     try (XSSFWorkbook atomicWb = buildSampleTemplate("ATOMIC")) {
       Sheet jobSheet = atomicWb.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
-      assertThat(jobSheet.getRow(1).getCell(1).getStringCellValue())
-          .isEqualTo("JOB_ATOMIC_SQL_CHECK");
-      assertThat(jobSheet.getRow(1).getCell(3).getStringCellValue()).isEqualTo("ATOMIC");
-      assertThat(atomicWb.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET).getLastRowNum())
-          .isZero();
+      assertThat(cellByHeader(jobSheet, "job_code", 1)).isEqualTo("JOB_ATOMIC_SQL_CHECK");
+      assertThat(cellByHeader(jobSheet, "job_type", 1)).isEqualTo("ATOMIC");
+      assertThat(atomicWb.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET)).isNull();
+      assertThat(atomicWb.getSheet(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET))
+          .isNull();
     }
   }
 
   @Test
-  @DisplayName("导出、派发和工作流示例仍按 12 个数据 sheet 正确定位")
+  @DisplayName("完整模板路径保持原有工作簿结构和完整字段")
+  void shouldPreserveLegacyFullWorkbook_whenBuildingTemplate() throws Exception {
+    try (XSSFWorkbook wb = buildTemplate()) {
+      assertThat(wb.getNumberOfSheets()).isEqualTo(19);
+      assertThat(wb.getSheet(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET)).isNotNull();
+      assertThat(wb.getSheet(ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET))
+          .isNotNull();
+      assertThat(wb.getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET)
+              .getRow(0)
+              .getLastCellNum())
+          .isEqualTo((short) 41);
+    }
+  }
+
+  @Test
+  @DisplayName("空白场景模板仅保留所选业务 Sheet，ALL 不包含平台资源表")
+  void shouldWriteFocusedBlankTemplateWithoutPlatformResourceSheets() throws Exception {
+    StaticMessageSource ms = messageSource();
+    ConfigPackageExcelWorkbookWriter writer =
+        new ConfigPackageExcelWorkbookWriter(ms, List.of("IMPORT"));
+    byte[] bytes;
+    try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+      writer.writeFocusedTemplateWorkbook(out, Map.of());
+      bytes = out.toByteArray();
+    }
+    try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
+      assertThat(workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET)).isNotNull();
+      assertThat(workbook.getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET))
+          .isNotNull();
+      assertThat(workbook.getSheet(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET))
+          .isNull();
+      assertThat(workbook.getSheet(ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET))
+          .isNull();
+      assertThat(workbook.getSheet(ConfigPackageWorkbookSupplementWriter.SHEET_NAME_FIVE_WORKER))
+          .isNull();
+      assertThat(workbook.getSheet(ConfigPackageWorkbookSupplementWriter.SHEET_NAME_BUNDLE))
+          .isNull();
+    }
+  }
+
+  @Test
+  @DisplayName("调度场景提供业务日历、时间窗口和业务 SLA，但不暴露平台运行阈值")
+  void shouldProjectBusinessSchedulingFieldsWithoutPlatformThresholds() {
+    List<ConfigPackageSheetSpecs.SheetDef> sheets =
+        new ConfigPackageSheetSpecs(messageSource()).project(List.of("SCHEDULE"));
+    assertThat(sheets)
+        .extracting(ConfigPackageSheetSpecs.SheetDef::name)
+        .containsExactlyInAnyOrder(
+            ConfigPackageExcelValidator.JOB_SHEET,
+            ConfigPackageExcelValidator.BUSINESS_CALENDAR_SHEET,
+            ConfigPackageExcelValidator.BATCH_WINDOW_SHEET,
+            ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET);
+    ConfigPackageSheetSpecs.SheetDef policy = sheets.stream()
+        .filter(
+            sheet -> ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET.equals(sheet.name()))
+        .findFirst()
+        .orElseThrow();
+    assertThat(policy.columns())
+        .contains("completion_deadline_local_time", "completion_deadline_day_offset")
+        .doesNotContain("soft_runtime_seconds", "start_grace_seconds");
+  }
+
+  @Test
+  @DisplayName("IMPORT 与 EXPORT 模板仅展示场景字段和必要配置列")
+  void shouldExposeOnlyScenarioFieldsInImportAndExportTemplates() {
+    ConfigPackageSheetSpecs specs = new ConfigPackageSheetSpecs(messageSource());
+
+    ConfigPackageSheetSpecs.SheetDef importJob =
+        sheet(specs, "IMPORT", ConfigPackageExcelValidator.JOB_SHEET);
+    assertThat(importJob.columns())
+        .containsExactly(
+            "job_code",
+            "job_name",
+            "job_type",
+            "biz_type",
+            "schedule_type",
+            "schedule_expr",
+            "depends_on_job_code",
+            "calendar_code",
+            "window_code",
+            "default_params",
+            "enabled",
+            "description");
+    assertThat(importJob.columns())
+        .doesNotContain(
+            "queue_code",
+            "worker_group",
+            "retry_policy",
+            "retry_max_count",
+            "timeout_seconds",
+            "shard_strategy",
+            "execution_mode",
+            "watermark_field",
+            "execution_handler",
+            "param_schema");
+
+    assertThat(sheet(specs, "IMPORT", ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET)
+            .columns())
+        .containsExactly(
+            "template_code",
+            "template_name",
+            "template_type",
+            "biz_type",
+            "file_format_type",
+            "charset",
+            "with_bom",
+            "line_separator",
+            "delimiter",
+            "quote_char",
+            "escape_char",
+            "record_length",
+            "header_rows",
+            "footer_rows",
+            "field_mappings",
+            "validation_rule_set",
+            "enabled",
+            "version",
+            "description");
+
+    assertThat(sheet(specs, "EXPORT", ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET)
+            .columns())
+        .containsExactly(
+            "template_code",
+            "template_name",
+            "template_type",
+            "biz_type",
+            "file_format_type",
+            "charset",
+            "with_bom",
+            "line_separator",
+            "delimiter",
+            "quote_char",
+            "escape_char",
+            "record_length",
+            "header_rows",
+            "footer_rows",
+            "naming_rule",
+            "field_mappings",
+            "default_query_code",
+            "default_query_sql",
+            "query_param_schema",
+            "enabled",
+            "version",
+            "description");
+  }
+
+  private static ConfigPackageSheetSpecs.SheetDef sheet(
+      ConfigPackageSheetSpecs specs, String scenario, String sheetName) {
+    return specs.project(List.of(scenario)).stream()
+        .filter(def -> sheetName.equals(def.name()))
+        .findFirst()
+        .orElseThrow();
+  }
+
+  @Test
+  @DisplayName("ALL 场景展开为租户业务能力，不包含平台资源分配")
+  void shouldExpandAllIntoTenantBusinessScenarios() {
+    List<String> scenarios = ConfigPackageSampleDataFactory.tenantTemplateScenarios(List.of("ALL"));
+    assertThat(scenarios).contains("SCHEDULE", "IMPORT", "EXPORT", "ATOMIC");
+    assertThat(new ConfigPackageSheetSpecs(messageSource()).project(scenarios))
+        .extracting(ConfigPackageSheetSpecs.SheetDef::name)
+        .doesNotContain(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET);
+    ConfigPackageSheetSpecs.SheetDef jobs = new ConfigPackageSheetSpecs(messageSource())
+        .project(scenarios).stream()
+            .filter(sheet -> ConfigPackageExcelValidator.JOB_SHEET.equals(sheet.name()))
+            .findFirst()
+            .orElseThrow();
+    assertThat(jobs.columns()).doesNotContain("queue_code", "worker_group");
+  }
+
+  @Test
+  @DisplayName("导出、派发和工作流模板仅包含场景所需 sheet")
   void shouldKeepSheetIndexes_whenBuildingExportDispatchAndWorkflowSamples() throws Exception {
     try (XSSFWorkbook exportWb = buildSampleTemplate("EXPORT")) {
-      assertThat(exportWb
-              .getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET)
-              .getRow(1)
-              .getCell(1)
-              .getStringCellValue())
+      assertThat(cellByHeader(
+              exportWb.getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET),
+              "template_code",
+              1))
           .isEqualTo("TPL_EXPORT_CUSTOMER");
       assertThat(exportWb.getSheet(ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET))
-          .isNotNull();
+          .isNull();
     }
     try (XSSFWorkbook dispatchWb = buildSampleTemplate("DISPATCH")) {
-      assertThat(dispatchWb
-              .getSheet(ConfigPackageExcelValidator.CHANNEL_SHEET)
-              .getRow(1)
-              .getCell(1)
-              .getStringCellValue())
+      assertThat(cellByHeader(
+              dispatchWb.getSheet(ConfigPackageExcelValidator.CHANNEL_SHEET), "channel_code", 1))
           .isEqualTo("demo-sftp");
+      assertThat(dispatchWb.getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET))
+          .isNull();
     }
     try (XSSFWorkbook workflowWb = buildSampleTemplate("WORKFLOW")) {
-      assertThat(workflowWb
-              .getSheet(ConfigPackageExcelValidator.WF_DEF_SHEET)
-              .getRow(1)
-              .getCell(1)
-              .getStringCellValue())
+      assertThat(cellByHeader(
+              workflowWb.getSheet(ConfigPackageExcelValidator.WF_DEF_SHEET), "workflow_code", 1))
           .isEqualTo("WF_CUSTOMER_EOD");
       assertThat(workflowWb.getSheet(ConfigPackageExcelValidator.WF_EDGE_SHEET).getLastRowNum())
           .isEqualTo(3);
+      assertThat(workflowWb.getSheet(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET))
+          .isNull();
     }
   }
 
   @Test
-  @DisplayName("示例模板:多场景组合时作业行合并且队列类型合法")
+  @DisplayName("多场景组合模板合并业务行且不生成资源分配 Sheet")
   void shouldCombineScenarios_whenMultipleSelected() throws Exception {
     try (XSSFWorkbook wb = buildSampleTemplate(List.of("IMPORT", "PROCESS"))) {
       Sheet jobSheet = wb.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
       List<String> jobCodes = new ArrayList<>();
       for (int i = 1; i <= jobSheet.getLastRowNum(); i++) {
-        jobCodes.add(jobSheet.getRow(i).getCell(1).getStringCellValue());
+        jobCodes.add(cellByHeader(jobSheet, "job_code", i));
       }
       assertThat(jobCodes).contains("JOB_IMPORT_CUSTOMER", "JOB_PROCESS_CUSTOMER");
-      assertThat(wb.getSheet(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET)
-              .getRow(1)
-              .getCell(3)
-              .getStringCellValue())
-          .isEqualTo("MIXED");
+      assertThat(wb.getSheet(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET)).isNull();
     }
+  }
+
+  @Test
+  @DisplayName("所有场景模板的精简表头均满足上传解析器的结构要求")
+  void shouldIncludeRequiredHeadersInProjectedScenarioSheets() {
+    ConfigPackageSheetSpecs specs = new ConfigPackageSheetSpecs(messageSource());
+    for (String scenario : List.of(
+        "IMPORT",
+        "EXPORT",
+        "IMPORT_DELIMITED",
+        "IMPORT_FIXED_WIDTH",
+        "IMPORT_EXCEL",
+        "IMPORT_XML",
+        "IMPORT_JSON",
+        "EXPORT_DELIMITED",
+        "EXPORT_FIXED_WIDTH",
+        "EXPORT_EXCEL",
+        "EXPORT_JSON",
+        "PROCESS",
+        "DISPATCH",
+        "ATOMIC",
+        "WORKFLOW",
+        "SCHEDULE")) {
+      for (ConfigPackageSheetSpecs.SheetDef sheet : specs.project(List.of(scenario))) {
+        assertThat(sheet.columns())
+            .as("%s 场景的 %s 表头", scenario, sheet.name())
+            .containsAll(
+                ConfigPackageSheetSpecs.requiredImportHeaders(sheet.name(), sheet.columns()));
+      }
+    }
+    List<String> importColumns = specs.project(List.of("IMPORT")).stream()
+        .filter(sheet -> ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET.equals(sheet.name()))
+        .findFirst()
+        .orElseThrow()
+        .columns();
+    List<String> exportColumns = specs.project(List.of("EXPORT")).stream()
+        .filter(sheet -> ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET.equals(sheet.name()))
+        .findFirst()
+        .orElseThrow()
+        .columns();
+    assertThat(importColumns).contains("validation_rule_set").doesNotContain("default_query_sql");
+    assertThat(exportColumns)
+        .contains("default_query_sql", "query_param_schema")
+        .doesNotContain("validation_rule_set");
+  }
+
+  @Test
+  @DisplayName("文件模板按方向和格式隐藏无关列并固定所选格式")
+  void shouldProjectFileTemplateColumnsByDirectionAndFormat() {
+    ConfigPackageSheetSpecs specs = new ConfigPackageSheetSpecs(messageSource());
+    List<String> delimitedImport = fileTemplateColumns(specs, "IMPORT_DELIMITED");
+    List<String> fixedWidthImport = fileTemplateColumns(specs, "IMPORT_FIXED_WIDTH");
+    List<String> excelImport = fileTemplateColumns(specs, "IMPORT_EXCEL");
+    List<String> xmlImport = fileTemplateColumns(specs, "IMPORT_XML");
+    List<String> excelExport = fileTemplateColumns(specs, "EXPORT_EXCEL");
+
+    assertThat(delimitedImport)
+        .contains("delimiter", "quote_char", "validation_rule_set")
+        .doesNotContain("record_length", "default_query_sql");
+    assertThat(fixedWidthImport)
+        .contains("record_length", "validation_rule_set")
+        .doesNotContain("delimiter", "quote_char", "default_query_sql");
+    assertThat(excelImport)
+        .contains("header_rows", "validation_rule_set")
+        .doesNotContain("charset", "delimiter", "record_length");
+    assertThat(xmlImport)
+        .contains("charset", "validation_rule_set")
+        .doesNotContain("delimiter", "record_length", "header_rows");
+    assertThat(excelExport)
+        .contains("default_query_sql", "query_param_schema", "header_rows")
+        .doesNotContain("validation_rule_set", "charset", "delimiter", "record_length");
+    assertThat(specs.project(List.of("IMPORT_EXCEL")).stream()
+            .filter(sheet -> ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET.equals(sheet.name()))
+            .findFirst()
+            .orElseThrow()
+            .guides()
+            .get("file_format_type")
+            .allowedValues())
+        .containsExactly("EXCEL");
+    assertThat(specs.project(List.of("IMPORT_EXCEL")).stream()
+            .filter(sheet -> ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET.equals(sheet.name()))
+            .findFirst()
+            .orElseThrow()
+            .guides()
+            .get("template_type")
+            .allowedValues())
+        .containsExactly("IMPORT");
+    assertThat(ConfigPackageSampleDataFactory.normalizeScenario("IMPORT_EXCEL"))
+        .isEqualTo("IMPORT_EXCEL");
+  }
+
+  @Test
+  @DisplayName("格式场景空白模板限制格式下拉且示例值与场景一致")
+  void shouldConstrainFormatDropdownAndAlignSampleFormat() throws Exception {
+    try (XSSFWorkbook blankTemplate = buildFocusedTemplate(List.of("IMPORT_EXCEL"))) {
+      Sheet sheet = blankTemplate.getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET);
+      int formatColumn = headerIndex(sheet, "file_format_type");
+      DataValidation formatValidation = sheet.getDataValidations().stream()
+          .filter(validation ->
+              validation.getRegions().getCellRangeAddress(0).getFirstColumn() == formatColumn)
+          .findFirst()
+          .orElseThrow();
+      assertThat(formatValidation.getValidationConstraint().getExplicitListValues())
+          .containsExactly("EXCEL");
+      int templateTypeColumn = headerIndex(sheet, "template_type");
+      DataValidation typeValidation = sheet.getDataValidations().stream()
+          .filter(validation ->
+              validation.getRegions().getCellRangeAddress(0).getFirstColumn() == templateTypeColumn)
+          .findFirst()
+          .orElseThrow();
+      assertThat(typeValidation.getValidationConstraint().getExplicitListValues())
+          .containsExactly("IMPORT");
+    }
+    try (XSSFWorkbook sampleTemplate = buildSampleTemplate("IMPORT_EXCEL")) {
+      assertThat(cellByHeader(
+              sampleTemplate.getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET),
+              "file_format_type",
+              1))
+          .isEqualTo("EXCEL");
+    }
+  }
+
+  private static List<String> fileTemplateColumns(ConfigPackageSheetSpecs specs, String scenario) {
+    return specs.project(List.of(scenario)).stream()
+        .filter(sheet -> ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET.equals(sheet.name()))
+        .findFirst()
+        .orElseThrow()
+        .columns();
+  }
+
+  private static int headerIndex(Sheet sheet, String name) {
+    Row header = sheet.getRow(0);
+    for (int column = 0; column < header.getLastCellNum(); column++) {
+      if (name.equals(header.getCell(column).getStringCellValue())) {
+        return column;
+      }
+    }
+    throw new AssertionError("missing header: " + name);
+  }
+
+  @Test
+  @DisplayName("未知场景被明确拒绝，不回退为完整配置包")
+  void shouldRejectUnknownScenario() {
+    assertThatThrownBy(() -> ConfigPackageSampleDataFactory.normalizeScenario("IMPRT"))
+        .isInstanceOf(BizException.class);
+    assertThatThrownBy(() -> ConfigPackageSampleDataFactory.tenantTemplateScenarios(List.of()))
+        .isInstanceOf(BizException.class);
+  }
+
+  private static StaticMessageSource messageSource() {
+    StaticMessageSource ms = new StaticMessageSource();
+    ms.setUseCodeAsDefaultMessage(true);
+    return ms;
+  }
+
+  private static String cellByHeader(Sheet sheet, String headerName, int rowIndex) {
+    Row header = sheet.getRow(0);
+    Row row = sheet.getRow(rowIndex);
+    for (int column = 0; column < header.getLastCellNum(); column++) {
+      if (headerName.equals(header.getCell(column).getStringCellValue())) {
+        return row.getCell(column).getStringCellValue();
+      }
+    }
+    throw new AssertionError("missing header: " + headerName);
   }
 
   @Test
@@ -302,9 +644,12 @@ class ConfigPackageWorkbookGuidanceTest {
           .contains("conflictColumns")
           .isNotEqualTo("{}");
 
-      // channel config_json 填写示例必须含 endpoint + credentials(真实结构),非空 {}。
+      // 示例只展示渠道参数结构；导出的租户配置包不得包含渠道凭据。
       String configJsonFill = fillExampleOf(sheet, "config_json");
-      assertThat(configJsonFill).contains("endpoint").contains("credentials").isNotEqualTo("{}");
+      assertThat(configJsonFill)
+          .contains("sftp_host", "sftp_port", "sftp_user")
+          .doesNotContain("passwordRef", "sftp_password");
+      assertThat(rowOf(sheet, "config_json").getCell(3).getStringCellValue()).isEqualTo("可选");
     }
   }
 

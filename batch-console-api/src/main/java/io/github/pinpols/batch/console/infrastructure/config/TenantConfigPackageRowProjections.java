@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelSchema.COL_CONFIG_JSON;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelSchema.FileChannel.COL_TARGET_ENDPOINT;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_BIZ_TYPE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_CALENDAR_CODE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_COMPLETION_DEADLINE_DAY_OFFSET;
@@ -46,6 +48,9 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WORKFLOW_CODE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WORKFLOW_VERSION;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
@@ -79,7 +84,8 @@ public class TenantConfigPackageRowProjections {
   private final WorkflowNodeMapper workflowNodeMapper;
   private final WorkflowEdgeMapper workflowEdgeMapper;
 
-  List<Map<String, Object>> toJobRows(List<JobDefinitionEntity> entities) {
+  List<Map<String, Object>> toJobRows(
+      List<JobDefinitionEntity> entities, boolean includePlatformFields) {
     return entities.stream()
         .map(e -> {
           Map<String, Object> m = new LinkedHashMap<>();
@@ -88,8 +94,8 @@ public class TenantConfigPackageRowProjections {
           m.put(COL_JOB_NAME, e.getJobName());
           m.put(COL_JOB_TYPE, e.getJobType());
           m.put(COL_BIZ_TYPE, e.getBizType());
-          m.put(COL_QUEUE_CODE, e.getQueueCode());
-          m.put(COL_WORKER_GROUP, e.getWorkerGroup());
+          m.put(COL_QUEUE_CODE, includePlatformFields ? e.getQueueCode() : null);
+          m.put(COL_WORKER_GROUP, includePlatformFields ? e.getWorkerGroup() : null);
           m.put(COL_SCHEDULE_TYPE, e.getScheduleType());
           m.put(COL_SCHEDULE_EXPR, e.getScheduleExpr());
           m.put(COL_DEPENDS_ON_JOB_CODE, e.getDependsOnJobCode());
@@ -103,7 +109,7 @@ public class TenantConfigPackageRowProjections {
           m.put(COL_WATERMARK_FIELD, e.getWatermarkField());
           m.put(COL_EXECUTION_HANDLER, e.getExecutionHandler());
           m.put(COL_PARAM_SCHEMA, e.getParamSchema());
-          m.put(COL_DEFAULT_PARAMS, e.getDefaultParams());
+          m.put(COL_DEFAULT_PARAMS, SecretMasking.maskSensitiveJson(e.getDefaultParams()));
           m.put(COL_ENABLED, e.getEnabled());
           m.put(COL_DESCRIPTION, e.getDescription());
           return m;
@@ -111,22 +117,52 @@ public class TenantConfigPackageRowProjections {
         .collect(Collectors.toList());
   }
 
-  List<Map<String, Object>> toJobMonitoringPolicyRows(List<JobDefinitionEntity> entities) {
+  List<Map<String, Object>> toJobMonitoringPolicyRows(
+      List<JobDefinitionEntity> entities, boolean includePlatformFields) {
     return entities.stream()
         .map(entity -> {
           Map<String, Object> row = new LinkedHashMap<>();
           row.put(COL_TENANT_ID, entity.getTenantId());
           row.put(COL_JOB_CODE, entity.getJobCode());
-          row.put(COL_SOFT_RUNTIME_SECONDS, entity.getSoftRuntimeSeconds());
-          row.put(COL_SOFT_RUNTIME_SEVERITY, entity.getSoftRuntimeSeverity());
-          row.put(COL_START_GRACE_SECONDS, entity.getStartGraceSeconds());
-          row.put(COL_START_GRACE_SEVERITY, entity.getStartGraceSeverity());
+          row.put(
+              COL_SOFT_RUNTIME_SECONDS,
+              includePlatformFields ? entity.getSoftRuntimeSeconds() : null);
+          row.put(
+              COL_SOFT_RUNTIME_SEVERITY,
+              includePlatformFields ? entity.getSoftRuntimeSeverity() : null);
+          row.put(
+              COL_START_GRACE_SECONDS,
+              includePlatformFields ? entity.getStartGraceSeconds() : null);
+          row.put(
+              COL_START_GRACE_SEVERITY,
+              includePlatformFields ? entity.getStartGraceSeverity() : null);
           row.put(COL_COMPLETION_DEADLINE_LOCAL_TIME, entity.getCompletionDeadlineLocalTime());
           row.put(COL_COMPLETION_DEADLINE_DAY_OFFSET, entity.getCompletionDeadlineDayOffset());
           row.put(
               COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS,
               entity.getDependencyCompletionWindowSeconds());
           row.put(COL_COMPLETION_DEADLINE_SEVERITY, entity.getCompletionDeadlineSeverity());
+          return row;
+        })
+        .toList();
+  }
+
+  List<Map<String, Object>> withoutPlatformWorkerGroups(List<Map<String, Object>> rows) {
+    return rows.stream()
+        .map(row -> {
+          Map<String, Object> projected = new LinkedHashMap<>(row);
+          projected.put(COL_WORKER_GROUP, null);
+          return projected;
+        })
+        .toList();
+  }
+
+  List<Map<String, Object>> toExportableChannelRows(List<Map<String, Object>> channels) {
+    return channels.stream()
+        .map(channel -> {
+          Map<String, Object> row = new LinkedHashMap<>(channel);
+          row.put(COL_TARGET_ENDPOINT, "");
+          row.put(COL_CONFIG_JSON, "");
           return row;
         })
         .toList();
@@ -141,6 +177,13 @@ public class TenantConfigPackageRowProjections {
       for (Map<String, Object> step :
           pipelineStepDefinitionMapper.selectByPipelineDefinitionId(pipelineId)) {
         Map<String, Object> enriched = new LinkedHashMap<>(step);
+        Object stepParams = step.get("step_params");
+        if (EmptyChecks.isNotNull(stepParams)) {
+          String json = stepParams instanceof Map<?, ?> || stepParams instanceof List<?>
+              ? JsonUtils.toJson(stepParams)
+              : stepParams.toString();
+          enriched.put("step_params", SecretMasking.maskSensitiveJson(json));
+        }
         enriched.put(COL_JOB_CODE, jobCode);
         enriched.put(COL_VERSION, version);
         allSteps.add(enriched);
@@ -191,7 +234,7 @@ public class TenantConfigPackageRowProjections {
         m.put(COL_RETRY_POLICY, node.getRetryPolicy());
         m.put(COL_RETRY_MAX_COUNT, node.getRetryMaxCount());
         m.put(COL_TIMEOUT_SECONDS, node.getTimeoutSeconds());
-        m.put(COL_NODE_PARAMS, node.getNodeParams());
+        m.put(COL_NODE_PARAMS, SecretMasking.maskSensitiveJson(node.getNodeParams()));
         m.put(COL_ENABLED, node.getEnabled());
         result.add(m);
       }

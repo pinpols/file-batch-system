@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigCopyService;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
@@ -132,6 +133,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
 
     ConfigSyncBundlePayload bundle = requestedCopyBundle(request);
     typeTransfers().forEach(t -> t.transferToRequest(bundle, initRequest));
+    initRequest.setFileChannels(channelsWithoutEnvironmentCredentials(bundle.getFileChannels()));
 
     log.info(
         "[TenantConfigCopy] source={} targets={} types={} jobCodes={} dryRun={} batchOp={}",
@@ -143,6 +145,26 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
         LogSanitizer.value(batchOperationId));
 
     return initService.batchInit(initRequest, operator, batchOperationId);
+  }
+
+  private List<FileChannelSpec> channelsWithoutEnvironmentCredentials(
+      List<FileChannelSpec> source) {
+    if (EmptyChecks.isEmpty(source)) {
+      return source;
+    }
+    return source.stream()
+        .map(channel -> {
+          FileChannelSpec target = new FileChannelSpec();
+          target.setChannelCode(channel.getChannelCode());
+          target.setChannelName(channel.getChannelName());
+          target.setChannelType(channel.getChannelType());
+          target.setAuthType(channel.getAuthType());
+          target.setReceiptPolicy(channel.getReceiptPolicy());
+          target.setTimeoutSeconds(channel.getTimeoutSeconds());
+          target.setEnabled(channel.getEnabled());
+          return target;
+        })
+        .toList();
   }
 
   @Override
@@ -490,7 +512,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
       s.setDependencyCompletionWindowSeconds(e.getDependencyCompletionWindowSeconds());
       s.setExecutionHandler(e.getExecutionHandler());
       s.setParamSchema(e.getParamSchema());
-      s.setDefaultParams(e.getDefaultParams());
+      s.setDefaultParams(SecretMasking.removeSensitiveJsonFields(e.getDefaultParams()));
       s.setPriority(e.getPriority());
       s.setEnabled(e.getEnabled());
       s.setDescription(e.getDescription());
@@ -530,7 +552,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
         ns.setRetryPolicy(n.getRetryPolicy());
         ns.setRetryMaxCount(n.getRetryMaxCount());
         ns.setTimeoutSeconds(n.getTimeoutSeconds());
-        ns.setNodeParams(n.getNodeParams());
+        ns.setNodeParams(SecretMasking.removeSensitiveJsonFields(n.getNodeParams()));
         ns.setEnabled(n.getEnabled());
         nodeSpecs.add(ns);
       }
@@ -584,7 +606,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
             ss.setStageCode(str(step, "stage_code"));
             ss.setStepOrder(intVal(step, "step_order"));
             ss.setImplCode(str(step, "impl_code"));
-            ss.setStepParams(str(step, "step_params"));
+            ss.setStepParams(SecretMasking.removeSensitiveJsonFields(str(step, "step_params")));
             ss.setTimeoutSeconds(intVal(step, "timeout_seconds"));
             ss.setRetryPolicy(str(step, "retry_policy"));
             ss.setRetryMaxCount(intVal(step, "retry_max_count"));

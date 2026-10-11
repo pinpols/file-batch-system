@@ -6,7 +6,7 @@
     "exportQueryParamSchema": "{\"type\":\"object\",\"properties\":{\"tenantId\":{\"type\":\"string\",\"required\":true},\"status\":{\"type\":\"string\",\"required\":false}}} // 游标分页用 {\"sqlTemplateExport\":{\"cursorColumn\":\"id\"}}",
     "exportQuerySql": "SELECT customer_no, customer_name, status FROM biz.customer_account WHERE tenant_id = :tenantId AND (:status IS NULL OR status = :status)\n怎么填: 单条 SELECT(禁 UPDATE/DELETE/SELECT *); 命名参数用 :tenantId/:status(运行时绑定,别写 ? 占位符); 必须按 tenant_id = :tenantId 过滤本租户; SELECT 列名需与 field_mappings.sourceColumn 对齐。",
     "importValidationRuleSet": "{\"maxErrorRate\":0.05,\"stopOnFirstError\":false,\"duplicateKeyCheck\":{\"enabled\":true,\"keys\":[\"customerNo\"]}}\n怎么填: maxErrorRate=坏行率阈值(0.05=5%,超过则整批失败); stopOnFirstError=遇首个坏行即停;duplicateKeyCheck.keys 取 field_mappings.name(批内重复键检测)。",
-    "channelConfigJson": "{\"endpoint\":\"sftp://sftp.example.com:22/inbound\",\"auth\":{\"type\":\"PASSWORD\",\"username\":\"batch_user\"},\"credentials\":{\"passwordRef\":\"kms://channel/sftp_inbound\"}}",
+    "channelConfigJson": "{\"sftp_host\":\"sftp.example.com\",\"sftp_port\":22,\"sftp_user\":\"batch_user\"}",
     "jobDefaultParams": "{\"templateCode\":\"TPL_IMPORT_CUSTOMER\",\"bizDate\":\"${bizDate}\"}",
     "processStepParams": "{\"targetSchema\":\"biz\",\"targetTable\":\"customer_summary\",\"sql\":\"SELECT customer_no, count(*) AS cnt FROM biz.customer_account WHERE tenant_id = :tenantId GROUP BY customer_no\",\"columnMappings\":[{\"from\":\"customer_no\",\"to\":\"customer_no\"}]}",
     "dispatchStepParams": "{\"channelCode\":\"sftp_inbound\",\"fileChannelCode\":\"sftp_inbound\"}"

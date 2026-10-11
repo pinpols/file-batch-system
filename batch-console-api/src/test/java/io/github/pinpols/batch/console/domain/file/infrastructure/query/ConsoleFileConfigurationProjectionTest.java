@@ -10,8 +10,10 @@ import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.i18n.LocalizedErrorRenderer;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.domain.file.application.contract.query.FileChannelQueryRequest;
+import io.github.pinpols.batch.console.domain.file.application.contract.query.FilePipelineStepQueryRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.query.FileTemplateQueryRequest;
 import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;
+import io.github.pinpols.batch.console.domain.file.mapper.FilePipelineStepRunMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.support.ConsoleFileQueryMappers;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
@@ -26,14 +28,16 @@ class ConsoleFileConfigurationProjectionTest {
 
   private FileChannelConfigMapper channelMapper;
   private FileTemplateConfigMapper templateMapper;
+  private FilePipelineStepRunMapper stepRunMapper;
   private ConsoleFileQueryService service;
 
   @BeforeEach
   void setUp() {
     channelMapper = mock(FileChannelConfigMapper.class);
     templateMapper = mock(FileTemplateConfigMapper.class);
+    stepRunMapper = mock(FilePipelineStepRunMapper.class);
     ConsoleFileQueryMappers mappers = new ConsoleFileQueryMappers(
-        null, null, null, null, null, null, channelMapper, templateMapper);
+        null, null, null, null, stepRunMapper, null, channelMapper, templateMapper);
     TenantIdResolver tenantResolver = ignored -> "tenant-a";
     service = new ConsoleFileQueryService(
         tenantResolver,
@@ -62,5 +66,33 @@ class ConsoleFileConfigurationProjectionTest {
         .singleElement()
         .extracting("templateCode")
         .isEqualTo("IMPORT_CSV");
+  }
+
+  @Test
+  @DisplayName("文件流水线步骤摘要在响应中递归遮罩凭据字段")
+  void shouldMaskCredentialsInPipelineStepSummaries() {
+    when(stepRunMapper.selectByQuery(anyString(), any(), any(), any(), any(), any(), any()))
+        .thenReturn(List.of(Map.of(
+            "id", 1L,
+            "pipeline_instance_id", 12L,
+            "step_code", "LOAD",
+            "stage_code", "LOAD",
+            "input_summary", "{\"source\":\"upload.csv\",\"auth\":{\"clientSecret\":\"raw\"}}",
+            "output_summary", "{\"rows\":5,\"auth\":{\"password\":\"raw\"}}")));
+    when(stepRunMapper.countByQuery(anyString(), any(), any(), any(), any(), any()))
+        .thenReturn(1L);
+
+    FilePipelineStepQueryRequest request = new FilePipelineStepQueryRequest();
+    request.setTenantId("tenant-a");
+    var response = service.filePipelineSteps(request).items().getFirst();
+
+    assertThat(response.inputSummary())
+        .contains("&quot;source&quot;:&quot;upload.csv&quot;")
+        .contains("&quot;clientSecret&quot;:&quot;****&quot;")
+        .doesNotContain("raw");
+    assertThat(response.outputSummary())
+        .contains("&quot;rows&quot;:5")
+        .contains("&quot;password&quot;:&quot;****&quot;")
+        .doesNotContain("raw");
   }
 }

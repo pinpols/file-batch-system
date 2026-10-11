@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobMonitoringAlertCandidate;
 import io.github.pinpols.batch.orchestrator.mapper.JobMonitoringMapper;
 import io.github.pinpols.batch.testing.TestPostgresContainers;
@@ -88,7 +89,10 @@ class JobMonitoringMapperIntegrationTest {
           created_at timestamptz not null default current_timestamp,
           started_at timestamptz,
           finished_at timestamptz,
+          deadline_at timestamptz,
+          sla_alerted_at timestamptz,
           params_snapshot jsonb,
+          expected_duration_seconds integer not null default 0,
           failed_partition_count integer not null default 0,
           dry_run boolean not null default false
         )
@@ -131,6 +135,12 @@ class JobMonitoringMapperIntegrationTest {
     org.apache.ibatis.session.Configuration configuration =
         new org.apache.ibatis.session.Configuration(
             new Environment("job-monitoring-it", new JdbcTransactionFactory(), dataSource));
+    String jobInstanceMapperPath = "mapper/JobInstanceMapper.xml";
+    try (var mapperXml = Resources.getResourceAsStream(jobInstanceMapperPath)) {
+      new XMLMapperBuilder(
+              mapperXml, configuration, jobInstanceMapperPath, configuration.getSqlFragments())
+          .parse();
+    }
     String mapperPath = "mapper/JobMonitoringMapper.xml";
     try (var mapperXml = Resources.getResourceAsStream(mapperPath)) {
       new XMLMapperBuilder(mapperXml, configuration, mapperPath, configuration.getSqlFragments())
@@ -249,6 +259,34 @@ class JobMonitoringMapperIntegrationTest {
             runningId))
         .containsEntry("instance_status", "RUNNING")
         .containsEntry("finished_at", null);
+  }
+
+  @DisplayName("监控策略修改即时影响已运行实例")
+  @Test
+  void shouldApplyUpdatedSoftRuntimePolicyToExistingInstances() {
+    String tenant = "monitor-live-policy-" + UUID.randomUUID();
+    long definitionId = createJobDefinition(tenant, "LIVE_POLICY", "MANUAL");
+    savePolicy(tenant, definitionId, 300, 0, null, 0, 0);
+    long instanceId = insertSlaCandidate(tenant, definitionId);
+
+    try (SqlSession session = sqlSessionFactory.openSession(true)) {
+      assertThat(session.getMapper(JobMonitoringMapper.class).selectSlaViolationCandidates(100))
+          .extracting(JobInstanceEntity::getId)
+          .doesNotContain(instanceId);
+    }
+    jdbcTemplate.update(
+        "update batch.job_monitoring_policy set soft_runtime_seconds = 0, "
+            + "completion_deadline_updated_at = current_timestamp "
+            + "where tenant_id = ? and job_definition_id = ?",
+        tenant,
+        definitionId);
+
+    try (SqlSession session = sqlSessionFactory.openSession(true)) {
+      var mapper = session.getMapper(JobMonitoringMapper.class);
+      assertThat(mapper.selectSlaViolationCandidates(100))
+          .extracting(JobInstanceEntity::getId)
+          .contains(instanceId);
+    }
   }
 
   @DisplayName("固定频率独立作业不适用启动和完成过晚告警")
@@ -506,6 +544,31 @@ class JobMonitoringMapperIntegrationTest {
       boolean dryRun) {
     return insertInstance(
         tenant, definitionId, status, startedAt, finishedAt, scheduledAt, null, dryRun);
+  }
+
+  private long insertSlaCandidate(String tenant, long definitionId) {
+    String jobCode = jdbcTemplate.queryForObject(
+        "select job_code from batch.job_definition where id = ?", String.class, definitionId);
+    Long id = jdbcTemplate.queryForObject(
+        """
+        insert into batch.job_instance (
+          tenant_id, job_definition_id, job_code, instance_no, biz_date, trigger_type,
+          instance_status, dedup_key, params_snapshot, started_at,
+          expected_duration_seconds, failed_partition_count, dry_run
+        ) values (?, ?, ?, ?, ?, 'MANUAL', 'RUNNING', ?, ?::jsonb, ?, 60, 0, false)
+        returning id
+        """,
+        Long.class,
+        tenant,
+        definitionId,
+        jobCode,
+        "instance-" + UUID.randomUUID(),
+        LocalDate.now(),
+        "dedup-" + UUID.randomUUID(),
+        "{}",
+        Timestamp.from(Instant.now().minusSeconds(120)));
+    assertThat(id).isNotNull();
+    return id;
   }
 
   private long insertInstance(

@@ -6,6 +6,7 @@ import java.util.Map;
 /** 租户配置包 Excel 预览响应：各 sheet 统计 + 汇总问题列表 + 出错行明细(供前端内联编辑)。 */
 public record TenantConfigPackageExcelPreviewResponse(
     String uploadToken,
+    String previewToken,
     String fileName,
     int totalRows,
     int validRows,

@@ -2,7 +2,9 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import java.util.List;
 import java.util.Map;
@@ -48,6 +50,36 @@ class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegr
         """.formatted(jobCode, dependency).stripTrailing();
   }
 
+  private String createBodyWithQueue(String jobCode, String queueCode) {
+    return """
+        {
+          "tenantId": "int-ta",
+          "jobCode": "%s",
+          "jobName": "integration test",
+          "jobType": "GENERAL",
+          "scheduleType": "MANUAL",
+          "queueCode": "%s"
+        }
+        """.formatted(jobCode, queueCode).stripTrailing();
+  }
+
+  private Long createPlatformRoutedJob(String jobCode, String queueCode) {
+    client
+        .post()
+        .uri("/api/console/job-definitions")
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-routed-" + jobCode)
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue(createBodyWithQueue(jobCode, queueCode))
+        .exchange()
+        .expectStatus()
+        .isOk();
+    return jdbcTemplate.queryForObject(
+        "SELECT id FROM batch.job_definition WHERE tenant_id = ? AND job_code = ?",
+        Long.class,
+        "int-ta",
+        jobCode);
+  }
+
   @Test
   @DisplayName("创建作业定义: 返回成功,落库行的租户与编码与请求一致")
   void shouldCreateJobDefinitionWithValidCode() {
@@ -86,6 +118,256 @@ class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegr
 
     // 清理
     jdbcTemplate.update("DELETE FROM batch.job_definition WHERE job_code = ?", jobCode);
+  }
+
+  @Test
+  @DisplayName("作业实例详情递归脱敏执行参数快照中的凭据")
+  void shouldMaskSensitiveValuesInJobInstanceParameterSnapshot() throws Exception {
+    String jobCode = "int_test_snapshot_mask_" + System.currentTimeMillis();
+    client
+        .post()
+        .uri("/api/console/job-definitions")
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-create-" + jobCode)
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue(createBody(jobCode))
+        .exchange()
+        .expectStatus()
+        .isOk();
+    Long jobDefinitionId = jdbcTemplate.queryForObject(
+        "select id from batch.job_definition where tenant_id = ? and job_code = ?",
+        Long.class,
+        "int-ta",
+        jobCode);
+    String instanceNo = "inst_snapshot_mask_" + System.currentTimeMillis();
+    String dedupKey = "dedup_snapshot_mask_" + System.currentTimeMillis();
+    Long instanceId = jdbcTemplate.queryForObject(
+        "insert into batch.job_instance (tenant_id, job_definition_id, job_code, instance_no, "
+            + "biz_date, trigger_type, instance_status, dedup_key, params_snapshot, result_summary) "
+            + "values (?, ?, ?, ?, date '2026-10-11', 'MANUAL', 'CREATED', ?, ?::jsonb, ?::jsonb) returning id",
+        Long.class,
+        "int-ta",
+        jobDefinitionId,
+        jobCode,
+        instanceNo,
+        dedupKey,
+        "{\"effectiveParams\":{\"apiToken\":\"snapshot-secret\","
+            + "\"nested\":[{\"password\":\"nested-secret\"}]},"
+            + "\"executionPolicy\":{\"retryMaxCount\":2}}",
+        "{\"credential\":\"summary-secret\",\"rowsProcessed\":12}");
+
+    try {
+      String responseBody = client
+          .get()
+          .uri("/api/console/queries/instances/{id}?tenantId=int-ta", instanceId)
+          .exchange()
+          .expectStatus()
+          .isOk()
+          .expectBody(String.class)
+          .returnResult()
+          .getResponseBody();
+      JsonNode response = JsonUtils.newDefaultMapper().readTree(responseBody);
+      JsonNode snapshot = JsonUtils.newDefaultMapper()
+          .readTree(response.path("data").path("paramsSnapshot").asText());
+      assertThat(snapshot.path("effectiveParams").path("apiToken").asText()).isEqualTo("****");
+      assertThat(snapshot
+              .path("effectiveParams")
+              .path("nested")
+              .get(0)
+              .path("password")
+              .asText())
+          .isEqualTo("****");
+      assertThat(snapshot.path("executionPolicy").path("retryMaxCount").asInt()).isEqualTo(2);
+      JsonNode resultSummary = JsonUtils.newDefaultMapper()
+          .readTree(response.path("data").path("resultSummary").asText());
+      assertThat(resultSummary.path("credential").asText()).isEqualTo("****");
+      assertThat(resultSummary.path("rowsProcessed").asInt()).isEqualTo(12);
+    } finally {
+      jdbcTemplate.update(
+          "delete from batch.job_instance where id = ? and tenant_id = ?", instanceId, "int-ta");
+      jdbcTemplate.update(
+          "delete from batch.job_definition where id = ? and tenant_id = ?",
+          jobDefinitionId,
+          "int-ta");
+    }
+  }
+
+  @Test
+  @DisplayName("作业默认参数更新会落库，回显凭据脱敏且回传掩码不覆盖存量值")
+  void shouldUpdateDefaultParamsAndPreserveMaskedCredentials() {
+    String jobCode = "int_test_default_params_" + System.currentTimeMillis();
+    String initial = "{\"password\":\"stored-secret\",\"region\":\"west\"}";
+    String created = client
+        .post()
+        .uri("/api/console/job-definitions")
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-default-params-" + jobCode)
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue(Map.of(
+            "tenantId", "int-ta",
+            "jobCode", jobCode,
+            "jobName", "default params test",
+            "jobType", "GENERAL",
+            "scheduleType", "MANUAL",
+            "defaultParams", initial))
+        .exchange()
+        .expectStatus()
+        .isOk()
+        .expectBody(String.class)
+        .returnResult()
+        .getResponseBody();
+    assertThat(created).contains("****").doesNotContain("stored-secret");
+
+    Long id = jdbcTemplate.queryForObject(
+        "SELECT id FROM batch.job_definition WHERE tenant_id = ? AND job_code = ?",
+        Long.class,
+        "int-ta",
+        jobCode);
+    try {
+      client
+          .put()
+          .uri("/api/console/job-definitions/" + id)
+          .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-update-default-" + jobCode)
+          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, "int-ta")
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue(Map.of(
+              "tenantId",
+              "int-ta",
+              "defaultParams",
+              JsonUtils.toJson(Map.of("password", "****", "region", "east"))))
+          .exchange()
+          .expectStatus()
+          .isOk()
+          .expectBody(String.class)
+          .value(body -> assertThat(body).contains("****").doesNotContain("stored-secret"));
+
+      Map<String, Object> stored = jdbcTemplate.queryForMap(
+          "SELECT default_params ->> 'password' AS password, "
+              + "default_params ->> 'region' AS region "
+              + "FROM batch.job_definition WHERE id = ?",
+          id);
+      assertThat(stored).containsEntry("password", "stored-secret").containsEntry("region", "east");
+    } finally {
+      jdbcTemplate.update("DELETE FROM batch.job_definition WHERE id = ?", id);
+    }
+  }
+
+  @Test
+  @DisplayName("租户管理员不能通过作业定义 API 指定物理资源队列")
+  void shouldRejectTenantAdminAssigningPhysicalQueue() {
+    String jobCode = "int_test_tenant_route_" + System.currentTimeMillis();
+
+    client
+        .post()
+        .uri("/api/console/job-definitions")
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-tenant-route-" + jobCode)
+        .header("X-Console-Roles", "ROLE_TENANT_ADMIN")
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue(createBodyWithQueue(jobCode, "platform_only_queue"))
+        .exchange()
+        .expectStatus()
+        .isForbidden();
+
+    Long count = jdbcTemplate.queryForObject(
+        "SELECT COUNT(*) FROM batch.job_definition WHERE tenant_id = ? AND job_code = ?",
+        Long.class,
+        "int-ta",
+        jobCode);
+    assertThat(count).isZero();
+  }
+
+  @Test
+  @DisplayName("租户管理员不能更改现有作业的物理资源路由")
+  void shouldRejectTenantAdminChangingPhysicalQueue() {
+    String jobCode = "int_test_route_update_" + System.currentTimeMillis();
+    Long id = createPlatformRoutedJob(jobCode, "platform_queue_a");
+    try {
+      client
+          .put()
+          .uri("/api/console/job-definitions/" + id)
+          .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-route-update-" + jobCode)
+          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, "int-ta")
+          .header("X-Console-Roles", "ROLE_TENANT_ADMIN")
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue("""
+              {"tenantId":"int-ta","queueCode":"platform_queue_b"}
+              """)
+          .exchange()
+          .expectStatus()
+          .isForbidden();
+
+      String queueCode = jdbcTemplate.queryForObject(
+          "SELECT queue_code FROM batch.job_definition WHERE id = ?", String.class, id);
+      assertThat(queueCode).isEqualTo("platform_queue_a");
+    } finally {
+      jdbcTemplate.update("DELETE FROM batch.job_definition WHERE id = ?", id);
+    }
+  }
+
+  @Test
+  @DisplayName("租户管理员复制作业时不继承物理路由")
+  void shouldClearPhysicalQueueWhenTenantAdminCopiesJob() {
+    String sourceJobCode = "int_test_route_source_" + System.currentTimeMillis();
+    String copiedJobCode = sourceJobCode + "_copy";
+    Long sourceId = createPlatformRoutedJob(sourceJobCode, "platform_queue_copy");
+    try {
+      client
+          .post()
+          .uri(uriBuilder -> uriBuilder
+              .path("/api/console/job-definitions/{id}/copy")
+              .queryParam("tenantId", "int-ta")
+              .queryParam("newJobCode", copiedJobCode)
+              .build(sourceId))
+          .header(
+              CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-copy-route-" + sourceJobCode)
+          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, "int-ta")
+          .header("X-Console-Roles", "ROLE_TENANT_ADMIN")
+          .exchange()
+          .expectStatus()
+          .isOk();
+
+      Map<String, Object> copied = jdbcTemplate.queryForMap(
+          "SELECT queue_code, worker_group FROM batch.job_definition WHERE tenant_id = ? AND job_code = ?",
+          "int-ta",
+          copiedJobCode);
+      assertThat(copied).containsEntry("queue_code", null).containsEntry("worker_group", null);
+    } finally {
+      jdbcTemplate.update(
+          "DELETE FROM batch.job_definition WHERE tenant_id = ? AND job_code IN (?, ?)",
+          "int-ta",
+          sourceJobCode,
+          copiedJobCode);
+    }
+  }
+
+  @Test
+  @DisplayName("租户管理员不能通过克隆覆盖字段指定物理资源队列")
+  void shouldRejectTenantAdminOverridingPhysicalQueueWhenCloning() {
+    String sourceJobCode = "int_test_route_clone_" + System.currentTimeMillis();
+    Long sourceId = createPlatformRoutedJob(sourceJobCode, "platform_queue_clone");
+    try {
+      client
+          .post()
+          .uri("/api/console/job-definitions/" + sourceId + "/clone")
+          .header(
+              CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-clone-route-" + sourceJobCode)
+          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, "int-ta")
+          .header("X-Console-Roles", "ROLE_TENANT_ADMIN")
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue("""
+              {"tenantId":"int-ta","newJobCode":"tenant_route_clone","queueCode":"platform_queue_b"}
+              """)
+          .exchange()
+          .expectStatus()
+          .isForbidden();
+
+      Long cloneCount = jdbcTemplate.queryForObject(
+          "SELECT COUNT(*) FROM batch.job_definition WHERE tenant_id = ? AND job_code = ?",
+          Long.class,
+          "int-ta",
+          "tenant_route_clone");
+      assertThat(cloneCount).isZero();
+    } finally {
+      jdbcTemplate.update("DELETE FROM batch.job_definition WHERE id = ?", sourceId);
+    }
   }
 
   @Test
@@ -169,6 +451,10 @@ class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegr
     Long id = jdbcTemplate.queryForObject(
         "SELECT id FROM batch.job_definition WHERE job_code = ?", Long.class, jobCode);
     assertThat(id).isNotNull();
+    Map<String, Object> initial = jdbcTemplate.queryForMap(
+        "SELECT version, enabled FROM batch.job_definition WHERE id = ?", id);
+    Integer initialVersion = (Integer) initial.get("version");
+    Boolean initialEnabled = (Boolean) initial.get("enabled");
 
     // PUT 更新 jobName
     String updateBody =
@@ -184,9 +470,28 @@ class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegr
         .expectStatus()
         .isOk();
 
-    String name = jdbcTemplate.queryForObject(
-        "SELECT job_name FROM batch.job_definition WHERE id = ?", String.class, id);
-    assertThat(name).isEqualTo("updated name");
+    Map<String, Object> updated = jdbcTemplate.queryForMap(
+        "SELECT job_name, version, enabled FROM batch.job_definition WHERE id = ?", id);
+    assertThat(updated)
+        .containsEntry("job_name", "updated name")
+        .containsEntry("version", initialVersion + 1)
+        .containsEntry("enabled", initialEnabled);
+
+    client
+        .patch()
+        .uri("/api/console/job-definitions/" + id)
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-toggle-" + jobCode)
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue(Map.of("tenantId", "int-ta", "enabled", false))
+        .exchange()
+        .expectStatus()
+        .isOk();
+
+    Map<String, Object> toggled = jdbcTemplate.queryForMap(
+        "SELECT version, enabled FROM batch.job_definition WHERE id = ?", id);
+    assertThat(toggled)
+        .containsEntry("version", initialVersion + 2)
+        .containsEntry("enabled", false);
 
     // 清理
     jdbcTemplate.update("DELETE FROM batch.job_definition WHERE job_code = ?", jobCode);

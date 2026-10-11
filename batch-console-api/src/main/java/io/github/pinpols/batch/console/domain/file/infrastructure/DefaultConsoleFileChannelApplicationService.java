@@ -6,7 +6,10 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileChannelApplicationService;
 import io.github.pinpols.batch.console.domain.file.application.contract.query.FileChannelQueryRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.FileChannelCreateRequest;
@@ -78,7 +81,7 @@ public class DefaultConsoleFileChannelApplicationService
     param.setTargetEndpoint(request.getTargetEndpoint());
     param.setAuthType(request.getAuthType());
     // DB 这两列 NOT NULL,FE 不传时给安全默认
-    param.setConfigJson(request.getConfigJson() != null ? request.getConfigJson() : "{}");
+    param.setConfigJson(normalizeConfigJson(request.getConfigJson()));
     param.setReceiptPolicy(
         request.getReceiptPolicy() != null ? request.getReceiptPolicy() : "NONE");
     param.setTimeoutSeconds(request.getTimeoutSeconds() != null ? request.getTimeoutSeconds() : 30);
@@ -112,13 +115,14 @@ public class DefaultConsoleFileChannelApplicationService
             : (String) existing.get("channel_type"));
     param.setTargetEndpoint(
         request.getTargetEndpoint() != null
-            ? request.getTargetEndpoint()
+            ? SecretMasking.preserveMaskedEndpoint(
+                request.getTargetEndpoint(), (String) existing.get("target_endpoint"))
             : (String) existing.get("target_endpoint"));
     param.setAuthType(
         request.getAuthType() != null ? request.getAuthType() : (String) existing.get("auth_type"));
     param.setConfigJson(
         request.getConfigJson() != null
-            ? request.getConfigJson()
+            ? preserveMaskedConfig(request.getConfigJson(), existing.get("config_json"))
             : existing.get("config_json") != null ? existing.get("config_json").toString() : null);
     param.setReceiptPolicy(
         request.getReceiptPolicy() != null
@@ -145,6 +149,27 @@ public class DefaultConsoleFileChannelApplicationService
           DictEnum.codeList(FileChannelType.class));
     }
     return matched.code();
+  }
+
+  private static String preserveMaskedConfig(String submitted, Object storedValue) {
+    String normalized = normalizeConfigJson(submitted);
+    String stored = EmptyChecks.isNull(storedValue) ? null : storedValue.toString();
+    return SecretMasking.preserveMaskedJson(normalized, stored);
+  }
+
+  private static String normalizeConfigJson(String configJson) {
+    if (EmptyChecks.isNull(configJson) || EmptyChecks.isBlank(configJson)) {
+      return "{}";
+    }
+    try {
+      Object parsed = JsonUtils.fromJson(configJson, Object.class);
+      if (parsed instanceof Map<?, ?>) {
+        return configJson;
+      }
+    } catch (IllegalArgumentException ignored) {
+      // 避免在接口错误中暴露提交的 JSON 解析细节。
+    }
+    throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.file_channel.invalid_config_json");
   }
 
   @Override

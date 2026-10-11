@@ -18,6 +18,12 @@ public final class ConsoleSecurityExpressions {
       + AUTHORITY_SEPARATOR
       + ConsoleRoles.TENANT_ADMIN
       + EXPRESSION_SUFFIX;
+  public static final String ADMIN_OR_TENANT_ADMIN_WITH_PREVIEW_TOKEN = "hasAuthority('"
+      + ConsoleRoles.ADMIN
+      + "') or (hasAuthority('"
+      + ConsoleRoles.TENANT_ADMIN
+      + "') and #request.previewToken != null)"; // empty-check: allow - SpEL role guard requires
+  // this null comparison.
   public static final String ADMIN_OR_TENANT_USER = HAS_ANY_AUTHORITY
       + ConsoleRoles.ADMIN
       + AUTHORITY_SEPARATOR

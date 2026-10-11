@@ -5,6 +5,7 @@
 
 | 文档 | 范围 |
 |---|---|
+| [tenant-job-configuration-phase0-baseline-2026-10-10.md](./tenant-job-configuration-phase0-baseline-2026-10-10.md) | 租户作业配置改造阶段 0 的前后端基线、配置包/权限事实和未决决策 |
 | [product-journey-adversarial-audit-2026-10-10.md](./product-journey-adversarial-audit-2026-10-10.md) | 配置、作业创建与入口的用户旅程对抗审计（进行中；含后续覆盖矩阵） |
 | [convention-drift-guard-index.md](./convention-drift-guard-index.md) | 代码规约与 CI 漂移守卫总账 |
 | [typed-contract-governance-verification-2026-10-07.md](./typed-contract-governance-verification-2026-10-07.md) | 固定契约、既有枚举与精准门禁的本地实施验收、保留项和未执行边界 |

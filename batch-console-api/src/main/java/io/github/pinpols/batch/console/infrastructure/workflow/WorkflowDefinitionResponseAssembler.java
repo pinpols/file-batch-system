@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.infrastructure.workflow;
 
+import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowEdgeResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowNodeResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowDefinitionDetailResponse;
@@ -72,7 +73,7 @@ public final class WorkflowDefinitionResponseAssembler {
         node.getRetryPolicy(),
         node.getRetryMaxCount(),
         node.getTimeoutSeconds(),
-        node.getNodeParams(),
+        SecretMasking.maskSensitiveJson(node.getNodeParams()),
         node.getEnabled(),
         node.getCreatedAt(),
         node.getUpdatedAt(),

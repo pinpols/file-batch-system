@@ -69,6 +69,109 @@ class ConsolePipelineDefinitionMutationIntegrationTest extends AbstractMutationI
   }
 
   @Test
+  @DisplayName("流水线敏感步骤参数读取脱敏且掩码更新保留原凭据")
+  void shouldMaskAndPreserveSensitiveStepParams() {
+    String code = "int_pd_secret_" + System.currentTimeMillis();
+    String implCode = "it-secret-step-" + System.currentTimeMillis();
+    jdbcTemplate.update(
+        "INSERT INTO batch.step_registry(module, impl_code, impl_class) VALUES ('IMPORT', ?, ?)",
+        implCode,
+        getClass().getName());
+    Long definitionId = null;
+    try {
+      String createBody = body(code, "IMPORT").replace("\"steps\": []", """
+              "steps": [{"stepCode":"load","stepName":"Load","stageCode":"LOAD","stepOrder":0,"implCode":"%s","stepParams":"{\\"apiKey\\":\\"pipeline-secret\\",\\"label\\":\\"old\\"}"}]
+              """.formatted(implCode));
+      String created = client
+          .post()
+          .uri("/api/console/pipeline-definitions")
+          .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-pd-secret-" + code)
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue(createBody)
+          .exchange()
+          .expectStatus()
+          .isOk()
+          .expectBody(String.class)
+          .returnResult()
+          .getResponseBody();
+
+      definitionId = jdbcTemplate.queryForObject(
+          "SELECT id FROM batch.pipeline_definition WHERE tenant_id = ? AND job_code = ?",
+          Long.class,
+          "int-pd-ta",
+          code);
+      assertThat(created).contains("****").doesNotContain("pipeline-secret");
+      String detail = client
+          .get()
+          .uri(
+              "/api/console/pipeline-definitions/{id}?tenantId={tenantId}",
+              definitionId,
+              "int-pd-ta")
+          .exchange()
+          .expectStatus()
+          .isOk()
+          .expectBody(String.class)
+          .returnResult()
+          .getResponseBody();
+      assertThat(detail).contains("****").doesNotContain("pipeline-secret");
+
+      String updateBody = createBody.replace("pipeline-secret", "****").replace("old", "new");
+      String updated = client
+          .put()
+          .uri("/api/console/pipeline-definitions/{id}", definitionId)
+          .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-pd-secret-update-" + code)
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue(updateBody)
+          .exchange()
+          .expectStatus()
+          .isOk()
+          .expectBody(String.class)
+          .returnResult()
+          .getResponseBody();
+
+      assertThat(updated).contains("****").doesNotContain("pipeline-secret");
+      var storedParams = jdbcTemplate.queryForMap(
+          "SELECT step_params->>'apiKey' AS api_key, step_params->>'label' AS label "
+              + "FROM batch.pipeline_step_definition WHERE pipeline_definition_id = ?",
+          definitionId);
+      assertThat(storedParams).containsEntry("api_key", "pipeline-secret");
+      assertThat(storedParams).containsEntry("label", "new");
+    } finally {
+      if (definitionId != null) {
+        jdbcTemplate.update(
+            "DELETE FROM batch.pipeline_step_definition WHERE pipeline_definition_id = ?",
+            definitionId);
+        jdbcTemplate.update("DELETE FROM batch.pipeline_definition WHERE id = ?", definitionId);
+      }
+      jdbcTemplate.update("DELETE FROM batch.step_registry WHERE impl_code = ?", implCode);
+    }
+  }
+
+  @Test
+  @DisplayName("租户管理员不能通过流水线定义 API 指定物理 Worker 分组")
+  void shouldRejectTenantAdminAssigningWorkerGroup() {
+    String code = "int_pd_tenant_route_" + System.currentTimeMillis();
+
+    client
+        .post()
+        .uri("/api/console/pipeline-definitions")
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-pd-route-" + code)
+        .header("X-Console-Roles", "ROLE_TENANT_ADMIN")
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue(body(code, "IMPORT"))
+        .exchange()
+        .expectStatus()
+        .isForbidden();
+
+    Long count = jdbcTemplate.queryForObject(
+        "SELECT COUNT(*) FROM batch.pipeline_definition WHERE tenant_id = ? AND job_code = ?",
+        Long.class,
+        "int-pd-ta",
+        code);
+    assertThat(count).isZero();
+  }
+
+  @Test
   @DisplayName("作业编码含空格: 返回校验错误且不落库")
   void shouldRejectInvalidJobCodeWithSpaces() {
     client

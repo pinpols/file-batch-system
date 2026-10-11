@@ -62,6 +62,7 @@ import static io.github.pinpols.batch.console.support.excel.SheetValidationHelpe
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
@@ -145,7 +146,7 @@ final class ConfigPackageExcelRowValidators {
     requiredEnum(normalizeEnum(row.get(COL_AUTH_TYPE)), COL_AUTH_TYPE, AUTH_TYPES, ri);
     requiredEnum(
         normalizeEnum(row.get(COL_RECEIPT_POLICY)), COL_RECEIPT_POLICY, RECEIPT_POLICIES, ri);
-    validateJsonField(row.get(COL_CONFIG_JSON), COL_CONFIG_JSON, true, ri);
+    validateJsonField(row.get(COL_CONFIG_JSON), COL_CONFIG_JSON, false, ri);
     if (hasText(code) && !seen.add(tenantId + KEY_SEP_HASH + code)) {
       ri.add("duplicate channel_code in excel: " + code);
     }
@@ -184,19 +185,18 @@ final class ConfigPackageExcelRowValidators {
   }
 
   /**
-   * #1 JSON 字段深层结构校验(语法已由 parser 校验):field_mappings 每项须有非空 name; query_param_schema 的
+   * #1 JSON 字段深层结构校验(语法已由 parser 校验):字段映射按文件格式校验; query_param_schema 的
    * jdbcMappedImport 须有 table/tenantColumn、jdbcMappedExport 须有 batchTable/detailTable。 不强制
    * columnMappings(可从 field_mappings 推断)。
    */
   void validateTemplateJsonStructure(Map<String, String> row, List<String> ri) {
     JsonNode fieldMappings = tryReadJson(normalize(row.get("field_mappings")));
-    if (fieldMappings != null && fieldMappings.isArray()) {
-      for (JsonNode entry : fieldMappings) {
-        if (!hasText(firstText(entry, "name"))) {
-          ri.add("field_mappings entries must each have a non-blank 'name'");
-          break;
-        }
-      }
+    boolean fixedWidthImport = "IMPORT".equals(normalizeEnum(row.get("template_type")))
+        && "FIXED_WIDTH".equals(normalizeEnum(row.get("file_format_type")));
+    if (fixedWidthImport) {
+      validateFixedWidthMappings(fieldMappings, ri);
+    } else if (EmptyChecks.isNotNull(fieldMappings) && fieldMappings.isArray()) {
+      validateNamedMappings(fieldMappings, ri);
     }
     JsonNode qps = tryReadJson(normalize(row.get("query_param_schema")));
     if (qps == null) {
@@ -211,6 +211,39 @@ final class ConfigPackageExcelRowValidators {
     if (exp != null && exp.isObject()) {
       requireJsonText(exp, "query_param_schema.jdbcMappedExport.batchTable", ri, "batchTable");
       requireJsonText(exp, "query_param_schema.jdbcMappedExport.detailTable", ri, "detailTable");
+    }
+  }
+
+  private static void validateFixedWidthMappings(JsonNode mappings, List<String> ri) {
+    if (EmptyChecks.isNull(mappings)
+        || !mappings.isArray()
+        || mappings.isEmpty()) { // empty-check: allow - JsonNode container semantics
+      ri.add("FIXED_WIDTH imports require at least one field mapping");
+      return;
+    }
+    for (JsonNode entry : mappings) {
+      JsonNode start = entry.path("start");
+      JsonNode length = entry.path("length");
+      if (!hasText(firstText(entry, "target"))
+          || !start.isIntegralNumber()
+          || !start.canConvertToInt()
+          || start.intValue() < 0
+          || !length.isIntegralNumber()
+          || !length.canConvertToInt()
+          || length.intValue() <= 0) {
+        ri.add(
+            "FIXED_WIDTH field mappings require non-blank target, non-negative start and positive length");
+        return;
+      }
+    }
+  }
+
+  private static void validateNamedMappings(JsonNode mappings, List<String> ri) {
+    for (JsonNode entry : mappings) {
+      if (!hasText(firstText(entry, "name"))) {
+        ri.add("field_mappings entries must each have a non-blank 'name'");
+        return;
+      }
     }
   }
 
@@ -458,7 +491,7 @@ final class ConfigPackageExcelRowValidators {
   static Set<String> buildFileTemplateKeys(List<Map<String, String>> rows) {
     Set<String> keys = new HashSet<>();
     for (Map<String, String> row : rows) {
-      String templateCode = normalize(row.get("template_code"));
+      String templateCode = CodeNormalizer.toConfigFormOrNull(row.get("template_code"));
       Integer version = parseVersion(row.get(COL_VERSION));
       if (hasText(templateCode)) {
         keys.add(templateCode);
@@ -475,7 +508,8 @@ final class ConfigPackageExcelRowValidators {
     }
     try {
       JsonNode root = objectMapper.readTree(n);
-      String templateCode = firstText(root, "templateCode", "template_code");
+      String templateCode =
+          CodeNormalizer.toConfigFormOrNull(firstText(root, "templateCode", "template_code"));
       Integer version = firstInt(root, "templateVersion", "template_version", "version");
       return new TemplateRef(templateCode, version);
     } catch (JsonProcessingException e) {

@@ -1,10 +1,13 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
+import io.github.pinpols.batch.common.utils.CodeNormalizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.JobDefinitionSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.PipelineDefinitionSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.WorkflowDefinitionSpec;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +44,47 @@ public class TenantConfigReferenceResolver {
       "target_channel_code",
       "dispatchChannelCode",
       "dispatch_channel_code");
+
+  /** 仅规范化不透明 JSON 中已识别的配置引用。 */
+  public static String normalizeConfigReferences(String raw) {
+    if (EmptyChecks.isBlank(raw)) {
+      return raw;
+    }
+    try {
+      Object parsed = JsonUtils.fromJson(raw, Object.class);
+      boolean[] changed = {false};
+      Object normalized = normalizeReferenceValues(parsed, changed);
+      return changed[0] ? JsonUtils.toJson(normalized) : raw;
+    } catch (IllegalArgumentException ignored) {
+      return raw;
+    }
+  }
+
+  private static Object normalizeReferenceValues(Object value, boolean[] changed) {
+    if (value instanceof Map<?, ?> map) {
+      Map<String, Object> normalized = new LinkedHashMap<>();
+      map.forEach((key, entryValue) -> {
+        String name = EmptyChecks.isNull(key) ? "" : key.toString();
+        if (entryValue instanceof String reference
+            && (TEMPLATE_KEYS.contains(name) || CHANNEL_KEYS.contains(name))) {
+          String canonical = CodeNormalizer.toConfigFormOrNull(reference);
+          normalized.put(name, canonical);
+          changed[0] |= !reference.equals(canonical);
+        } else {
+          normalized.put(name, normalizeReferenceValues(entryValue, changed));
+        }
+      });
+      return normalized;
+    }
+    if (value instanceof List<?> list) {
+      List<Object> normalized = new ArrayList<>(list.size());
+      for (Object item : list) {
+        normalized.add(normalizeReferenceValues(item, changed));
+      }
+      return normalized;
+    }
+    return value;
+  }
 
   public References resolve(
       JobDefinitionSpec job,

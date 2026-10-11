@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.enums.RunMode;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.entity.CustomTaskTypeRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
@@ -262,6 +263,7 @@ public class LaunchParamResolver {
     Map<String, Object> snapshot = new LinkedHashMap<>();
     snapshot.put("jobDefinitionId", jobDefinition == null ? null : jobDefinition.id());
     snapshot.put("jobDefinitionVersion", jobDefinition == null ? null : jobDefinition.version());
+    snapshot.put("executionPolicy", executionPolicySnapshot(jobDefinition));
     snapshot.put("jobCode", request.jobCode());
     snapshot.put(
         "triggerType",
@@ -281,6 +283,19 @@ public class LaunchParamResolver {
     snapshot.put("requestParams", request.params() == null ? Map.of() : request.params());
     snapshot.put("effectiveParams", effectiveParams == null ? Map.of() : effectiveParams);
     return JsonUtils.toJson(snapshot);
+  }
+
+  private Map<String, Object> executionPolicySnapshot(JobDefinitionEntity jobDefinition) {
+    if (EmptyChecks.isNull(jobDefinition)) {
+      return Map.of();
+    }
+    Map<String, Object> snapshot = new LinkedHashMap<>();
+    snapshot.put("executionMode", jobDefinition.executionMode());
+    snapshot.put("watermarkField", jobDefinition.watermarkField());
+    snapshot.put("retryPolicy", jobDefinition.retryPolicy());
+    snapshot.put("retryMaxCount", jobDefinition.retryMaxCount());
+    snapshot.put("timeoutSeconds", jobDefinition.timeoutSeconds());
+    return snapshot;
   }
 
   String buildPayloadJson(Map<String, Object> params) {

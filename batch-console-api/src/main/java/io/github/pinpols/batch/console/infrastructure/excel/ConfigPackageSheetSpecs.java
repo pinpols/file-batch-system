@@ -117,11 +117,16 @@ import io.github.pinpols.batch.common.enums.ScheduleType;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.ColumnGuide;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
+import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.springframework.context.MessageSource;
 
@@ -134,6 +139,8 @@ import org.springframework.context.MessageSource;
 public final class ConfigPackageSheetSpecs {
 
   private static final String EMPTY = "";
+  private static final String SCENARIO_IMPORT = "IMPORT";
+  private static final String SCENARIO_EXPORT = "EXPORT";
   private static final String[] JOB_MONITORING_SEVERITY_CHOICES = {"WARN", "ERROR", "CRITICAL"};
 
   /**
@@ -234,7 +241,7 @@ public final class ConfigPackageSheetSpecs {
   private static final String EXAMPLE_IMPORT_VALIDATION_RULE_SET =
       GUIDANCE.fragment("importValidationRuleSet");
 
-  /** 渠道 config_json：endpoint + auth + credentials（DISPATCH 用）。 */
+  /** 渠道示例配置；真实凭据不得写入或从配置包导出。 */
   private static final String EXAMPLE_CHANNEL_CONFIG_JSON = GUIDANCE.fragment("channelConfigJson");
 
   /** job default_params：IMPORT/EXPORT 用 templateCode 引用 file_template_config。 */
@@ -288,7 +295,16 @@ public final class ConfigPackageSheetSpecs {
   private static final Set<String> CATCH_UP_POLICIES = DictEnum.codes(CatchUpPolicyType.class);
   private static final Set<String> END_STRATEGIES = DictEnum.codes(BatchWindowEndStrategy.class);
   private static final Set<String> OUT_OF_WINDOW_ACTIONS = DictEnum.codes(OutOfWindowAction.class);
-  private static final int[] FILE_TEMPLATE_BOOLEAN_COLUMNS = {8, 27, 31, 32, 33, 34, 36, 38};
+  private static final String[] FILE_TEMPLATE_BOOLEAN_COLUMNS = {
+    ConfigPackageExcelSchema.FileTemplate.COL_WITH_BOM,
+    ConfigPackageExcelSchema.FileTemplate.COL_STREAMING_ENABLED,
+    ConfigPackageExcelSchema.FileTemplate.COL_PREVIEW_MASKING_ENABLED,
+    ConfigPackageExcelSchema.FileTemplate.COL_ERROR_LINE_MASKING_ENABLED,
+    ConfigPackageExcelSchema.FileTemplate.COL_LOG_MASKING_ENABLED,
+    ConfigPackageExcelSchema.FileTemplate.COL_CONTENT_ENCRYPTION_ENABLED,
+    ConfigPackageExcelSchema.FileTemplate.COL_DOWNLOAD_REQUIRES_APPROVAL,
+    COL_ENABLED
+  };
 
   private final MessageSource messageSource;
 
@@ -345,6 +361,370 @@ public final class ConfigPackageSheetSpecs {
             WF_EDGE_SHEET, WF_EDGE_COLUMNS, buildWfEdgeGuides(), this::applyWfEdgeValidations));
   }
 
+  /**
+   * 将完整业务结构投影为场景化工作簿。租户模板不包含平台管理的资源分配和运行监控阈值。
+   */
+  public List<SheetDef> project(List<String> rawScenarios) {
+    Set<String> scenarios = ConfigPackageSampleDataFactory.normalizeScenarios(rawScenarios);
+    if (scenarios.contains("ALL")) {
+      return build();
+    }
+
+    Set<String> includedSheets = new LinkedHashSet<>();
+    includedSheets.add(JOB_SHEET);
+    for (String scenario : scenarios) {
+      switch (scenario) {
+        case SCENARIO_IMPORT, SCENARIO_EXPORT -> {
+          includedSheets.add(FILE_TEMPLATE_SHEET);
+          includePipelineSheets(includedSheets);
+        }
+        case "IMPORT_DELIMITED",
+            "IMPORT_FIXED_WIDTH",
+            "IMPORT_EXCEL",
+            "IMPORT_XML",
+            "IMPORT_JSON",
+            "EXPORT_DELIMITED",
+            "EXPORT_FIXED_WIDTH",
+            "EXPORT_EXCEL",
+            "EXPORT_JSON" -> {
+          includedSheets.add(FILE_TEMPLATE_SHEET);
+          includePipelineSheets(includedSheets);
+        }
+        case "PROCESS" -> includePipelineSheets(includedSheets);
+        case "DISPATCH" -> {
+          includedSheets.add(CHANNEL_SHEET);
+          includePipelineSheets(includedSheets);
+        }
+        case "WORKFLOW" -> {
+          includedSheets.add(FILE_TEMPLATE_SHEET);
+          includedSheets.add(CHANNEL_SHEET);
+          includePipelineSheets(includedSheets);
+          includedSheets.add(WF_DEF_SHEET);
+          includedSheets.add(WF_NODE_SHEET);
+          includedSheets.add(WF_EDGE_SHEET);
+        }
+        case "SCHEDULE" -> {
+          includedSheets.add(BUSINESS_CALENDAR_SHEET);
+          includedSheets.add(BATCH_WINDOW_SHEET);
+          includedSheets.add(JOB_MONITORING_POLICY_SHEET);
+        }
+        case "ATOMIC" -> {}
+        default -> throw new IllegalArgumentException("unsupported package scenario: " + scenario);
+      }
+    }
+
+    List<SheetDef> projected = new ArrayList<>();
+    for (SheetDef def : build()) {
+      if (!includedSheets.contains(def.name())) {
+        continue;
+      }
+      List<String> columns = projectedColumns(def.name(), def.columns(), scenarios);
+      Map<String, ColumnGuide> guides = new LinkedHashMap<>();
+      for (String column : columns) {
+        ColumnGuide guide = def.guides().get(column);
+        if (EmptyChecks.isNotNull(guide)) {
+          guides.put(column, guide);
+        }
+      }
+      Set<String> focusedFormats = focusedFileFormats(scenarios);
+      String focusedDirection = focusedFileDirection(scenarios);
+      BiConsumer<Sheet, Locale> validationApplier = def.validationApplier();
+      if (FILE_TEMPLATE_SHEET.equals(def.name()) && EmptyChecks.isNotNull(focusedFormats)) {
+        Set<String> focusedTypes =
+            EmptyChecks.isNull(focusedDirection) ? FILE_TEMPLATE_TYPES : Set.of(focusedDirection);
+        validationApplier = (sheet, locale) ->
+            applyFileTemplateValidations(sheet, locale, focusedFormats, focusedTypes);
+        replaceGuideChoices(
+            guides, ConfigPackageExcelSchema.FileTemplate.COL_FILE_FORMAT_TYPE, focusedFormats);
+        if (EmptyChecks.isNotNull(focusedDirection)) {
+          replaceGuideChoices(
+              guides, ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_TYPE, focusedTypes);
+        }
+      }
+      projected.add(new SheetDef(def.name(), columns, Map.copyOf(guides), validationApplier));
+    }
+    return List.copyOf(projected);
+  }
+
+  /** 模板投影与工作簿解析共用的必需结构列。 */
+  public static Set<String> requiredImportHeaders(String sheetName, List<String> columns) {
+    Set<String> required =
+        switch (sheetName) {
+          case JOB_SHEET ->
+            Set.of(
+                COL_JOB_CODE,
+                COL_JOB_NAME,
+                COL_JOB_TYPE,
+                ConfigPackageExcelSchema.COL_SCHEDULE_TYPE);
+          case JOB_MONITORING_POLICY_SHEET -> Set.of(COL_JOB_CODE);
+          case CHANNEL_SHEET ->
+            Set.of(
+                COL_CHANNEL_CODE,
+                COL_CHANNEL_NAME,
+                ConfigPackageExcelSchema.COL_CHANNEL_TYPE,
+                ConfigPackageExcelSchema.COL_AUTH_TYPE,
+                COL_RECEIPT_POLICY);
+          case FILE_TEMPLATE_SHEET ->
+            Set.of(
+                ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_CODE,
+                ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_NAME,
+                ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_TYPE,
+                ConfigPackageExcelSchema.FileTemplate.COL_FILE_FORMAT_TYPE);
+          case PIPELINE_SHEET ->
+            Set.of(COL_JOB_CODE, COL_PIPELINE_NAME, COL_PIPELINE_TYPE, COL_VERSION);
+          case STEP_SHEET ->
+            Set.of(
+                COL_JOB_CODE,
+                COL_VERSION,
+                COL_STEP_CODE,
+                COL_STEP_NAME,
+                COL_STAGE_CODE,
+                ConfigPackageExcelSchema.PipelineStep.COL_STEP_ORDER,
+                ConfigPackageExcelSchema.PipelineStep.COL_IMPL_CODE);
+          case WF_DEF_SHEET ->
+            Set.of(COL_WORKFLOW_CODE, COL_WORKFLOW_NAME, COL_WORKFLOW_TYPE, COL_VERSION);
+          case WF_NODE_SHEET ->
+            Set.of(COL_WORKFLOW_CODE, COL_WORKFLOW_VERSION, COL_NODE_CODE, COL_NODE_TYPE);
+          case WF_EDGE_SHEET ->
+            Set.of(
+                COL_WORKFLOW_CODE,
+                COL_WORKFLOW_VERSION,
+                COL_FROM_NODE_CODE,
+                COL_TO_NODE_CODE,
+                COL_EDGE_TYPE);
+          default -> {
+            Set<String> all = new LinkedHashSet<>(columns);
+            all.remove(COL_TENANT_ID);
+            yield Set.copyOf(all);
+          }
+        };
+    return required;
+  }
+
+  private static void includePipelineSheets(Set<String> includedSheets) {
+    includedSheets.add(PIPELINE_SHEET);
+    includedSheets.add(STEP_SHEET);
+  }
+
+  private static List<String> projectedColumns(
+      String sheetName, List<String> allColumns, Set<String> scenarios) {
+    Set<String> selected =
+        switch (sheetName) {
+          case JOB_SHEET ->
+            Set.of(
+                COL_JOB_CODE,
+                COL_JOB_NAME,
+                COL_JOB_TYPE,
+                COL_BIZ_TYPE,
+                COL_SCHEDULE_TYPE,
+                COL_SCHEDULE_EXPR,
+                COL_DEPENDS_ON_JOB_CODE,
+                COL_CALENDAR_CODE,
+                COL_WINDOW_CODE,
+                COL_DEFAULT_PARAMS,
+                COL_ENABLED,
+                COL_DESCRIPTION);
+          case FILE_TEMPLATE_SHEET -> fileTemplateColumns(scenarios);
+          case CHANNEL_SHEET ->
+            Set.of(
+                COL_CHANNEL_CODE,
+                COL_CHANNEL_NAME,
+                COL_CHANNEL_TYPE,
+                ConfigPackageExcelSchema.FileChannel.COL_TARGET_ENDPOINT,
+                COL_AUTH_TYPE,
+                COL_CONFIG_JSON,
+                COL_RECEIPT_POLICY,
+                COL_TIMEOUT_SECONDS,
+                COL_ENABLED);
+          case JOB_MONITORING_POLICY_SHEET ->
+            Set.of(
+                COL_JOB_CODE,
+                COL_COMPLETION_DEADLINE_LOCAL_TIME,
+                COL_COMPLETION_DEADLINE_DAY_OFFSET,
+                COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS,
+                COL_COMPLETION_DEADLINE_SEVERITY);
+          case PIPELINE_SHEET ->
+            Set.of(
+                COL_JOB_CODE,
+                COL_PIPELINE_NAME,
+                COL_PIPELINE_TYPE,
+                COL_BIZ_TYPE,
+                COL_VERSION,
+                COL_ENABLED,
+                COL_DESCRIPTION);
+          case STEP_SHEET ->
+            Set.of(
+                COL_JOB_CODE,
+                COL_VERSION,
+                COL_STEP_CODE,
+                COL_STEP_NAME,
+                COL_STAGE_CODE,
+                ConfigPackageExcelSchema.PipelineStep.COL_STEP_ORDER,
+                ConfigPackageExcelSchema.PipelineStep.COL_IMPL_CODE,
+                ConfigPackageExcelSchema.PipelineStep.COL_STEP_PARAMS,
+                COL_ENABLED);
+          case WF_NODE_SHEET ->
+            Set.of(
+                COL_WORKFLOW_CODE,
+                COL_WORKFLOW_VERSION,
+                COL_NODE_CODE,
+                COL_NODE_NAME,
+                COL_NODE_TYPE,
+                COL_RELATED_JOB_CODE,
+                COL_RELATED_PIPELINE_CODE,
+                COL_WINDOW_CODE,
+                COL_NODE_ORDER,
+                COL_NODE_PARAMS,
+                COL_ENABLED);
+          default -> Set.copyOf(allColumns);
+        };
+    return allColumns.stream()
+        .filter(column -> selected.contains(column) && !COL_TENANT_ID.equals(column))
+        .toList();
+  }
+
+  private static Set<String> fileTemplateColumns(Set<String> scenarios) {
+    List<ConfigPackageFileScenario> profiles = fileProfiles(scenarios);
+    if (EmptyChecks.isNotEmpty(profiles)
+        && !scenarios.contains(SCENARIO_IMPORT)
+        && !scenarios.contains(SCENARIO_EXPORT)
+        && !scenarios.contains("WORKFLOW")) {
+      return focusedFileTemplateColumns(profiles);
+    }
+    Set<String> selected = new LinkedHashSet<>(Set.of(
+        ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_CODE,
+        ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_NAME,
+        ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_TYPE,
+        COL_BIZ_TYPE,
+        ConfigPackageExcelSchema.FileTemplate.COL_FILE_FORMAT_TYPE,
+        ConfigPackageExcelSchema.FileTemplate.COL_CHARSET,
+        ConfigPackageExcelSchema.FileTemplate.COL_WITH_BOM,
+        ConfigPackageExcelSchema.FileTemplate.COL_LINE_SEPARATOR,
+        ConfigPackageExcelSchema.FileTemplate.COL_DELIMITER,
+        ConfigPackageExcelSchema.FileTemplate.COL_QUOTE_CHAR,
+        ConfigPackageExcelSchema.FileTemplate.COL_ESCAPE_CHAR,
+        ConfigPackageExcelSchema.FileTemplate.COL_RECORD_LENGTH,
+        ConfigPackageExcelSchema.FileTemplate.COL_HEADER_ROWS,
+        ConfigPackageExcelSchema.FileTemplate.COL_FOOTER_ROWS,
+        ConfigPackageExcelSchema.FileTemplate.COL_FIELD_MAPPINGS,
+        COL_VERSION,
+        COL_ENABLED,
+        COL_DESCRIPTION));
+    if (scenarios.contains(SCENARIO_IMPORT) || scenarios.contains("WORKFLOW")) {
+      selected.add(ConfigPackageExcelSchema.FileTemplate.COL_VALIDATION_RULE_SET);
+    }
+    if (scenarios.contains(SCENARIO_EXPORT) || scenarios.contains("WORKFLOW")) {
+      selected.add(ConfigPackageExcelSchema.FileTemplate.COL_NAMING_RULE);
+      selected.add(ConfigPackageExcelSchema.FileTemplate.COL_DEFAULT_QUERY_CODE);
+      selected.add(ConfigPackageExcelSchema.FileTemplate.COL_DEFAULT_QUERY_SQL);
+      selected.add(ConfigPackageExcelSchema.FileTemplate.COL_QUERY_PARAM_SCHEMA);
+    }
+    return Set.copyOf(selected);
+  }
+
+  private static List<ConfigPackageFileScenario> fileProfiles(Set<String> scenarios) {
+    return scenarios.stream()
+        .map(ConfigPackageFileScenario::fromCode)
+        .flatMap(Optional::stream)
+        .toList();
+  }
+
+  private static Set<String> focusedFileFormats(Set<String> scenarios) {
+    if (scenarios.contains(SCENARIO_IMPORT)
+        || scenarios.contains(SCENARIO_EXPORT)
+        || scenarios.contains("WORKFLOW")) {
+      return null;
+    }
+    Set<String> formats = new LinkedHashSet<>();
+    for (ConfigPackageFileScenario profile : ConfigPackageFileScenario.values()) {
+      if (scenarios.contains(profile.code())) {
+        formats.add(profile.format().code());
+      }
+    }
+    return EmptyChecks.isEmpty(formats) ? null : formats;
+  }
+
+  private static String focusedFileDirection(Set<String> scenarios) {
+    if (scenarios.contains(SCENARIO_IMPORT)
+        || scenarios.contains(SCENARIO_EXPORT)
+        || scenarios.contains("WORKFLOW")) {
+      return null;
+    }
+    Set<String> directions = fileProfiles(scenarios).stream()
+        .map(ConfigPackageFileScenario::direction)
+        .collect(Collectors.toSet());
+    return directions.size() == 1 ? directions.iterator().next() : null;
+  }
+
+  private static void replaceGuideChoices(
+      Map<String, ColumnGuide> guides, String columnName, Set<String> choices) {
+    ColumnGuide guide = guides.get(columnName);
+    if (EmptyChecks.isNotNull(guide)) {
+      guides.put(
+          columnName,
+          new ColumnGuide(
+              guide.required(),
+              guide.readOnly(),
+              guide.description(),
+              guide.formatHint(),
+              String.join(", ", choices),
+              List.copyOf(choices)));
+    }
+  }
+
+  private static Set<String> focusedFileTemplateColumns(List<ConfigPackageFileScenario> profiles) {
+    Set<String> selected = new LinkedHashSet<>(Set.of(
+        ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_CODE,
+        ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_NAME,
+        ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_TYPE,
+        COL_BIZ_TYPE,
+        ConfigPackageExcelSchema.FileTemplate.COL_FILE_FORMAT_TYPE,
+        ConfigPackageExcelSchema.FileTemplate.COL_FIELD_MAPPINGS,
+        COL_VERSION,
+        COL_ENABLED,
+        COL_DESCRIPTION));
+    for (ConfigPackageFileScenario profile : profiles) {
+      if (SCENARIO_IMPORT.equals(profile.direction())) {
+        selected.add(ConfigPackageExcelSchema.FileTemplate.COL_VALIDATION_RULE_SET);
+      } else {
+        selected.add(ConfigPackageExcelSchema.FileTemplate.COL_NAMING_RULE);
+        selected.add(ConfigPackageExcelSchema.FileTemplate.COL_DEFAULT_QUERY_CODE);
+        selected.add(ConfigPackageExcelSchema.FileTemplate.COL_DEFAULT_QUERY_SQL);
+        selected.add(ConfigPackageExcelSchema.FileTemplate.COL_QUERY_PARAM_SCHEMA);
+      }
+      switch (profile.format()) {
+        case DELIMITED ->
+          selected.addAll(Set.of(
+              ConfigPackageExcelSchema.FileTemplate.COL_CHARSET,
+              ConfigPackageExcelSchema.FileTemplate.COL_TARGET_CHARSET,
+              ConfigPackageExcelSchema.FileTemplate.COL_WITH_BOM,
+              ConfigPackageExcelSchema.FileTemplate.COL_LINE_SEPARATOR,
+              ConfigPackageExcelSchema.FileTemplate.COL_DELIMITER,
+              ConfigPackageExcelSchema.FileTemplate.COL_QUOTE_CHAR,
+              ConfigPackageExcelSchema.FileTemplate.COL_ESCAPE_CHAR,
+              ConfigPackageExcelSchema.FileTemplate.COL_HEADER_ROWS,
+              ConfigPackageExcelSchema.FileTemplate.COL_FOOTER_ROWS,
+              ConfigPackageExcelSchema.FileTemplate.COL_TRAILER_TEMPLATE));
+        case FIXED_WIDTH ->
+          selected.addAll(Set.of(
+              ConfigPackageExcelSchema.FileTemplate.COL_CHARSET,
+              ConfigPackageExcelSchema.FileTemplate.COL_TARGET_CHARSET,
+              ConfigPackageExcelSchema.FileTemplate.COL_WITH_BOM,
+              ConfigPackageExcelSchema.FileTemplate.COL_LINE_SEPARATOR,
+              ConfigPackageExcelSchema.FileTemplate.COL_RECORD_LENGTH,
+              ConfigPackageExcelSchema.FileTemplate.COL_HEADER_ROWS,
+              ConfigPackageExcelSchema.FileTemplate.COL_FOOTER_ROWS));
+        case EXCEL -> selected.add(ConfigPackageExcelSchema.FileTemplate.COL_HEADER_ROWS);
+        case XML, JSON ->
+          selected.addAll(Set.of(
+              ConfigPackageExcelSchema.FileTemplate.COL_CHARSET,
+              ConfigPackageExcelSchema.FileTemplate.COL_TARGET_CHARSET));
+        case BINARY -> throw new IllegalArgumentException("BINARY is not a tenant template format");
+      }
+    }
+    return Set.copyOf(selected);
+  }
+
   private Map<String, ColumnGuide> buildResourceQueueGuides() {
     return Map.ofEntries(
         Map.entry(
@@ -354,7 +734,13 @@ public final class ConfigPackageSheetSpecs {
         Map.entry(
             "queue_type",
             requiredColumn(
-                "队列类型。", GUIDE_ENUM, GUIDE_IMPORT, GUIDE_IMPORT, "EXPORT", "DISPATCH", "MIXED")),
+                "队列类型。",
+                GUIDE_ENUM,
+                GUIDE_IMPORT,
+                GUIDE_IMPORT,
+                SCENARIO_EXPORT,
+                "DISPATCH",
+                "MIXED")),
         Map.entry("max_running_jobs", requiredColumn("最大并发作业数。", GUIDE_INT, "10")),
         Map.entry("max_running_partitions", requiredColumn("最大并发分区数。", GUIDE_INT, "20")),
         Map.entry("max_qps", requiredColumn("最大派发 QPS。", GUIDE_INT, "100")),
@@ -572,49 +958,82 @@ public final class ConfigPackageSheetSpecs {
   }
 
   private void applyFileTemplateValidations(Sheet sheet, Locale locale) {
-    addDropdownValidation(
+    applyFileTemplateValidations(sheet, locale, FILE_FORMAT_TYPES, FILE_TEMPLATE_TYPES);
+  }
+
+  private void applyFileTemplateValidations(
+      Sheet sheet,
+      Locale locale,
+      Set<String> allowedFileFormats,
+      Set<String> allowedTemplateTypes) {
+    addColumnDropdownValidation(
         sheet,
-        3,
-        FILE_TEMPLATE_TYPES.toArray(String[]::new),
+        ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_TYPE,
+        allowedTemplateTypes.toArray(String[]::new),
         "excel.template.template_type.prompt_title",
         "excel.template.template_type.prompt_box",
-        messageSource,
         locale);
-    addDropdownValidation(
+    addColumnDropdownValidation(
         sheet,
-        5,
-        FILE_FORMAT_TYPES.toArray(String[]::new),
+        ConfigPackageExcelSchema.FileTemplate.COL_FILE_FORMAT_TYPE,
+        allowedFileFormats.toArray(String[]::new),
         "excel.template.file_format_type.prompt_title",
         "excel.template.file_format_type.prompt_box",
-        messageSource,
         locale);
-    addDropdownValidation(
+    addColumnDropdownValidation(
         sheet,
-        18,
+        ConfigPackageExcelSchema.FileTemplate.COL_CHECKSUM_TYPE,
         CHECKSUM_TYPES.toArray(String[]::new),
         "excel.template.checksum_type.prompt_title",
         "excel.template.checksum_type.prompt_box",
-        messageSource,
         locale);
-    addDropdownValidation(
+    addColumnDropdownValidation(
         sheet,
-        19,
+        ConfigPackageExcelSchema.FileTemplate.COL_COMPRESS_TYPE,
         COMPRESS_TYPES.toArray(String[]::new),
         "excel.template.compress_type.prompt_title",
         "excel.template.compress_type.prompt_box",
-        messageSource,
         locale);
-    addDropdownValidation(
+    addColumnDropdownValidation(
         sheet,
-        20,
+        ConfigPackageExcelSchema.FileTemplate.COL_ENCRYPT_TYPE,
         ENCRYPT_TYPES.toArray(String[]::new),
         "excel.template.encrypt_type.prompt_title",
         "excel.template.encrypt_type.prompt_box",
-        messageSource,
         locale);
-    for (int col : FILE_TEMPLATE_BOOLEAN_COLUMNS) {
-      boolDropdown(sheet, col, locale);
+    for (String column : FILE_TEMPLATE_BOOLEAN_COLUMNS) {
+      int columnIndex = columnIndex(sheet, column);
+      if (columnIndex >= 0) {
+        boolDropdown(sheet, columnIndex, locale);
+      }
     }
+  }
+
+  private void addColumnDropdownValidation(
+      Sheet sheet,
+      String column,
+      String[] choices,
+      String titleKey,
+      String promptKey,
+      Locale locale) {
+    int columnIndex = columnIndex(sheet, column);
+    if (columnIndex >= 0) {
+      addDropdownValidation(
+          sheet, columnIndex, choices, titleKey, promptKey, messageSource, locale);
+    }
+  }
+
+  private static int columnIndex(Sheet sheet, String columnName) {
+    Row header = sheet.getRow(0);
+    if (EmptyChecks.isNull(header)) {
+      return -1;
+    }
+    for (int index = 0; index < header.getLastCellNum(); index++) {
+      if (columnName.equals(header.getCell(index).getStringCellValue())) {
+        return index;
+      }
+    }
+    return -1;
   }
 
   private void applyPipelineValidations(Sheet sheet, Locale locale) {
@@ -740,7 +1159,7 @@ public final class ConfigPackageSheetSpecs {
                 "作业类型。",
                 GUIDE_ENUM,
                 GUIDE_IMPORT,
-                // 与 JobType enum / ConfigPackageExcelValidator.JOB_TYPES 对齐：
+                // 与 JobType enum / JOB_TYPES 对齐：
                 // 直接从 JobType 生成，包含五类 Worker、GENERAL/WORKFLOW 与文件束类型。
                 JOB_TYPE_DROPDOWN)),
         Map.entry(COL_BIZ_TYPE, optionalColumn("业务类型标识。", GUIDE_STR, "CUSTOMER")),
@@ -752,7 +1171,7 @@ public final class ConfigPackageSheetSpecs {
                 "调度类型。",
                 GUIDE_ENUM,
                 "MANUAL",
-                // 与 ScheduleType enum / ConfigPackageExcelValidator.SCHEDULE_TYPES 对齐：
+                // 与 ScheduleType enum / SCHEDULE_TYPES 对齐：
                 // CRON / FIXED_RATE / MANUAL（不再包含历史值 EVENT / ONE_TIME，validator 已拒收）
                 SCHEDULE_TYPE_DROPDOWN)),
         Map.entry(COL_SCHEDULE_EXPR, optionalColumn("调度表达式，CRON 时填写。", GUIDE_STR, "0 2 * * *")),
@@ -874,9 +1293,8 @@ public final class ConfigPackageSheetSpecs {
                 "CUSTOM")),
         Map.entry(
             COL_CONFIG_JSON,
-            requiredColumn(
-                "通道配置 JSON：endpoint + auth + credentials（DISPATCH 用；endpoint 为 env-specific，跨环境迁移需"
-                    + " review）。",
+            optionalColumn(
+                "可选的通道运行参数 JSON；导出配置包会留空以保护凭据，同租户 MERGE 留空时保留现有配置。新通道默认为 {}，请在通道管理中完成连接参数与凭据配置。",
                 GUIDE_JSON,
                 EXAMPLE_CHANNEL_CONFIG_JSON)),
         Map.entry(
@@ -897,7 +1315,8 @@ public final class ConfigPackageSheetSpecs {
         Map.entry("template_name", requiredColumn("文件模板名称。", GUIDE_STR, "客户导入模板")),
         Map.entry(
             "template_type",
-            requiredColumn("模板类型。", GUIDE_ENUM, GUIDE_IMPORT, GUIDE_IMPORT, "EXPORT", "SHARED")),
+            requiredColumn(
+                "模板类型。", GUIDE_ENUM, GUIDE_IMPORT, GUIDE_IMPORT, SCENARIO_EXPORT, "SHARED")),
         Map.entry(COL_BIZ_TYPE, optionalColumn("业务类型。", GUIDE_STR, "CUSTOMER")),
         Map.entry(
             "file_format_type",
@@ -1009,7 +1428,7 @@ public final class ConfigPackageSheetSpecs {
                 "流水线类型。",
                 GUIDE_ENUM,
                 GUIDE_IMPORT,
-                // 与 PipelineType enum / ConfigPackageExcelValidator.PIPELINE_TYPES 对齐：
+                // 与 PipelineType enum / PIPELINE_TYPES 对齐：
                 // IMPORT / EXPORT / PROCESS / DISPATCH
                 PIPELINE_TYPE_DROPDOWN)),
         Map.entry(COL_BIZ_TYPE, optionalColumn("业务类型。", GUIDE_STR, "CUSTOMER")),

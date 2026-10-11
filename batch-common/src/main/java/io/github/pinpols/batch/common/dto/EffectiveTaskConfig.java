@@ -15,8 +15,9 @@ import java.time.Instant;
  * <ul>
  *   <li>identity / payload 字段(jobCode / taskType / payload / businessKey 等)与消息内容等价, 但来自
  *       orchestrator 实时读 DB,不会受队列里旧消息影响。
- *   <li>execution / retry 字段(executionMode / retryPolicy / retryMaxCount / timeoutSeconds) 从 {@code
- *       job_definition} 实时读,管理员改完立即生效。
+ *   <li>execution / retry 字段(executionMode / retryPolicy / retryMaxCount / timeoutSeconds) 对新实例从
+ *       {@code job_instance.params_snapshot.executionPolicy} 读取，固定实例创建时语义；没有该快照段的历史实例才回退到
+ *       {@code job_definition}。
  *   <li>highWaterMarkIn 从 {@code job_instance} 实时读,与 ExecutionMode.INCREMENTAL 配合。
  * </ul>
  *
@@ -47,11 +48,11 @@ public record EffectiveTaskConfig(
     String watermarkField,
     /** 增量水位起点(从 job_instance.high_water_mark_in 实时读)。 */
     String highWaterMarkIn,
-    /** 重试策略 code(NONE/FIXED/EXPONENTIAL),实时反映管理员最新配置。 */
+    /** 重试策略 code(NONE/FIXED/EXPONENTIAL)，优先读取实例创建时快照。 */
     String retryPolicy,
-    /** 最大重试次数,实时反映管理员最新配置。 */
+    /** 最大重试次数，优先读取实例创建时快照。 */
     Integer retryMaxCount,
-    /** 超时秒数,实时反映管理员最新配置。 */
+    /** 超时秒数，优先读取实例创建时快照。 */
     Integer timeoutSeconds,
     /**
      * 当前 task 所属 partition 的 1-based 序号(读自 {@code job_partition.partition_no})。Worker step / plugin

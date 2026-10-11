@@ -3,7 +3,9 @@ package io.github.pinpols.batch.console.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -70,6 +72,30 @@ class ConsoleFileChannelMutationIntegrationTest extends AbstractMutationIntegrat
     assertThat(row).containsEntry("channel_type", "SFTP");
 
     jdbcTemplate.update("DELETE FROM batch.file_channel_config WHERE channel_code = ?", code);
+  }
+
+  @Test
+  @DisplayName("非法通道 JSON: 返回请求错误且不落库")
+  void shouldRejectInvalidChannelConfigJson() {
+    String code = "int_fc_invalid_json_" + System.currentTimeMillis();
+    String requestBody = body(code)
+        .replace(
+            "\"enabled\": false",
+            "\"enabled\": false, \"configJson\": " + JsonUtils.toJson("{invalid"));
+
+    client
+        .post()
+        .uri("/api/console/file-channels")
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-fc-invalid-json-" + code)
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue(requestBody)
+        .exchange()
+        .expectStatus()
+        .isBadRequest();
+
+    Long count = jdbcTemplate.queryForObject(
+        "SELECT COUNT(*) FROM batch.file_channel_config WHERE channel_code = ?", Long.class, code);
+    assertThat(count).isZero();
   }
 
   @Test
@@ -196,5 +222,75 @@ class ConsoleFileChannelMutationIntegrationTest extends AbstractMutationIntegrat
         .value(s -> assertThat(s).isIn(400, 409, 500));
 
     jdbcTemplate.update("DELETE FROM batch.file_channel_config WHERE channel_code = ?", code);
+  }
+
+  @Test
+  @DisplayName("查询响应递归脱敏通道凭据且更新回传掩码不会覆盖存量凭据")
+  void shouldRedactChannelSecretsAndPreserveMaskedValuesOnUpdate() {
+    String code = "int_fc_secret_" + System.currentTimeMillis();
+    String configJson = "{\"endpoint\":\"sftp.example\",\"auth\":{"
+        + "\"password\":\"secret-pass\",\"apiKey\":\"secret-key\"}}";
+    String createBody = body(code)
+        .replace(
+            "sftp://example.com:22/inbox",
+            "sftp://user:pass@sftp.example:22/inbox?token=endpoint-token")
+        .replace(
+            "\"enabled\": false",
+            "\"enabled\": false, \"configJson\": " + JsonUtils.toJson(configJson));
+    String createResponse = client
+        .post()
+        .uri("/api/console/file-channels")
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-fc-secret-" + code)
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue(createBody)
+        .exchange()
+        .expectStatus()
+        .isOk()
+        .expectBody(String.class)
+        .returnResult()
+        .getResponseBody();
+
+    assertThat(createResponse)
+        .contains("****")
+        .doesNotContain("secret-pass", "secret-key", "user:pass", "endpoint-token");
+
+    Long id = jdbcTemplate.queryForObject(
+        "SELECT id FROM batch.file_channel_config WHERE channel_code = ?", Long.class, code);
+    String maskedConfig =
+        "{\"endpoint\":\"new.example\",\"auth\":{" + "\"password\":\"****\",\"apiKey\":\"****\"}}";
+    String updateBody = JsonUtils.toJson(Map.of(
+        "tenantId",
+        "int-fc-ta",
+        "channelName",
+        "updated channel",
+        "targetEndpoint",
+        "sftp://****@sftp.example:22/inbox?token=****",
+        "configJson",
+        maskedConfig));
+
+    client
+        .put()
+        .uri("/api/console/file-channels/" + id)
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue(updateBody)
+        .exchange()
+        .expectStatus()
+        .isOk()
+        .expectBody(String.class)
+        .value(response -> assertThat(response)
+            .contains("new.example", "****")
+            .doesNotContain("secret-pass", "secret-key"));
+
+    String storedConfig = jdbcTemplate.queryForObject(
+        "SELECT config_json::text FROM batch.file_channel_config WHERE id = ?", String.class, id);
+    assertThat(storedConfig)
+        .contains("secret-pass", "secret-key", "new.example")
+        .doesNotContain("****");
+    String storedEndpoint = jdbcTemplate.queryForObject(
+        "SELECT target_endpoint FROM batch.file_channel_config WHERE id = ?", String.class, id);
+    assertThat(storedEndpoint)
+        .isEqualTo("sftp://user:pass@sftp.example:22/inbox?token=endpoint-token");
+
+    jdbcTemplate.update("DELETE FROM batch.file_channel_config WHERE id = ?", id);
   }
 }

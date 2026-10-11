@@ -11,8 +11,12 @@ import io.github.pinpols.batch.common.i18n.LocalizedErrorRenderer;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.page.CursorCodec;
 import io.github.pinpols.batch.console.domain.job.application.contract.query.JobExecutionLogQueryRequest;
+import io.github.pinpols.batch.console.domain.job.application.contract.query.JobStepInstanceQueryRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleJobExecutionLogResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleJobInstanceResponse;
 import io.github.pinpols.batch.console.domain.job.entity.JobExecutionLogEntity;
+import io.github.pinpols.batch.console.domain.job.entity.JobInstanceEntity;
+import io.github.pinpols.batch.console.domain.job.entity.JobStepInstanceEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobExecutionLogMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobInstanceMapper;
@@ -82,6 +86,7 @@ class ConsoleJobExecutionLogQueryTest {
     e.setLogLevel("INFO");
     e.setLogType("BUSINESS");
     e.setMessage("step " + id + " done");
+    e.setExtraJson("{\"apiToken\":\"log-secret\",\"attempt\":1}");
     e.setCreatedAt(Instant.parse("2026-05-30T00:00:00Z"));
     return e;
   }
@@ -103,6 +108,10 @@ class ConsoleJobExecutionLogQueryTest {
     assertThat(resp.total()).isEqualTo(2);
     assertThat(resp.items()).hasSize(2);
     assertThat(resp.items().get(0).message()).isEqualTo("step 2 done");
+    assertThat(resp.items().get(0).extraJson())
+        .contains("\"apiToken\":\"****\"")
+        .contains("\"attempt\":1")
+        .doesNotContain("log-secret");
 
     ArgumentCaptor<JobExecutionLogQuery> captor =
         ArgumentCaptor.forClass(JobExecutionLogQuery.class);
@@ -156,5 +165,53 @@ class ConsoleJobExecutionLogQueryTest {
     verify(jobExecutionLogMapper).selectByQuery(captor.capture());
     assertThat(captor.getValue().jobInstanceId()).isNull();
     assertThat(captor.getValue().traceId()).isEqualTo("trace-1");
+  }
+
+  @Test
+  @DisplayName("作业实例参数快照返回前递归脱敏敏感字段")
+  void jobInstance_masksSensitiveValuesInParameterSnapshot() {
+    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+    JobInstanceEntity instance = new JobInstanceEntity();
+    instance.setId(1001L);
+    instance.setTenantId("t1");
+    instance.setParamsSnapshot(
+        "{\"effectiveParams\":{\"apiToken\":\"secret-value\",\"nested\":[{\"password\":\"pw\"}]},"
+            + "\"executionPolicy\":{\"retryMaxCount\":2}}");
+    instance.setResultSummary("{\"accessToken\":\"result-secret\",\"rowsProcessed\":42}");
+    when(jobInstanceMapper.selectById("t1", 1001L)).thenReturn(instance);
+
+    ConsoleJobInstanceResponse response = service.jobInstance("t1", 1001L);
+
+    assertThat(response.paramsSnapshot())
+        .contains("\"apiToken\":\"****\"")
+        .contains("\"password\":\"****\"")
+        .contains("\"retryMaxCount\":2")
+        .doesNotContain("secret-value", "pw");
+    assertThat(response.resultSummary())
+        .contains("\"accessToken\":\"****\"")
+        .contains("\"rowsProcessed\":42")
+        .doesNotContain("result-secret");
+  }
+
+  @Test
+  @DisplayName("步骤结果摘要返回前递归脱敏敏感字段")
+  void jobStepInstance_masksSensitiveValuesInResultSummary() {
+    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+    JobStepInstanceEntity step = new JobStepInstanceEntity();
+    step.setId(10L);
+    step.setTenantId("t1");
+    step.setResultSummary("{\"credential\":\"step-secret\",\"rowsProcessed\":5}");
+    when(jobStepInstanceMapper.selectByQuery(any())).thenReturn(List.of(step));
+    when(jobStepInstanceMapper.countByQuery(any())).thenReturn(1L);
+
+    JobStepInstanceQueryRequest request = new JobStepInstanceQueryRequest();
+    request.setTenantId("t1");
+    var response = service.jobStepInstances(request);
+
+    assertThat(response.items()).hasSize(1);
+    assertThat(response.items().getFirst().resultSummary())
+        .contains("\"credential\":\"****\"")
+        .contains("\"rowsProcessed\":5")
+        .doesNotContain("step-secret");
   }
 }

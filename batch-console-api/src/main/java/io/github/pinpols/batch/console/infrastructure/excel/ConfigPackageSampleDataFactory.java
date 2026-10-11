@@ -2,6 +2,8 @@ package io.github.pinpols.batch.console.infrastructure.excel;
 
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelSchema.*;
 
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -9,12 +11,13 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /** 生成 12-Sheet 配置包的场景化示例数据。示例值只用于模板引导，不代表生产默认配置。 */
 public final class ConfigPackageSampleDataFactory {
 
-  private static final String TENANT = "demo-tenant";
+  private static final String TENANT = "";
   private static final String CALENDAR = "default-calendar";
   private static final String WINDOW = "always-open";
   private static final String QUEUE = "demo-queue";
@@ -27,6 +30,7 @@ public final class ConfigPackageSampleDataFactory {
   private static final String SCENARIO_DISPATCH = "DISPATCH";
   private static final String SCENARIO_ATOMIC = "ATOMIC";
   private static final String SCENARIO_WORKFLOW = "WORKFLOW";
+  private static final String SCENARIO_SCHEDULE = "SCHEDULE";
   private static final int SHEET_COUNT = 12;
 
   private ConfigPackageSampleDataFactory() {}
@@ -40,23 +44,38 @@ public final class ConfigPackageSampleDataFactory {
     Set<String> scenarios = normalizeScenarios(rawScenarios);
     List<List<Map<String, Object>>> sheets = emptySheets();
     putCommonFoundation(sheets, scenarios.size() == 1 ? scenarios.iterator().next() : SCENARIO_ALL);
-    for (String scenario : scenarios) {
-      switch (scenario) {
-        case SCENARIO_IMPORT -> putImport(sheets);
-        case SCENARIO_EXPORT -> putExport(sheets);
-        case SCENARIO_PROCESS -> putProcess(sheets);
-        case SCENARIO_DISPATCH -> putDispatch(sheets);
-        case SCENARIO_ATOMIC -> putAtomic(sheets);
-        case SCENARIO_WORKFLOW -> putWorkflow(sheets);
-        default -> {
-          putImport(sheets);
-          putExport(sheets);
-          putProcess(sheets);
-          putDispatch(sheets);
-          putAtomic(sheets);
-          putWorkflow(sheets);
-        }
-      }
+    boolean all = scenarios.contains(SCENARIO_ALL);
+    boolean genericImport =
+        all || scenarios.contains(SCENARIO_IMPORT) || scenarios.contains(SCENARIO_WORKFLOW);
+    boolean genericExport =
+        all || scenarios.contains(SCENARIO_EXPORT) || scenarios.contains(SCENARIO_WORKFLOW);
+    if (genericImport) {
+      putImport(sheets);
+    }
+    if (genericExport) {
+      putExport(sheets);
+    }
+    scenarios.stream()
+        .map(ConfigPackageFileScenario::fromCode)
+        .flatMap(Optional::stream)
+        .forEach(profile -> {
+          if (SCENARIO_IMPORT.equals(profile.direction())) {
+            putImport(sheets, profile.format().code());
+          } else {
+            putExport(sheets, profile.format().code());
+          }
+        });
+    if (all || scenarios.contains(SCENARIO_PROCESS)) {
+      putProcess(sheets);
+    }
+    if (all || scenarios.contains(SCENARIO_DISPATCH)) {
+      putDispatch(sheets);
+    }
+    if (all || scenarios.contains(SCENARIO_ATOMIC)) {
+      putAtomic(sheets);
+    }
+    if (all || scenarios.contains(SCENARIO_WORKFLOW)) {
+      putWorkflow(sheets);
     }
     return sheets;
   }
@@ -76,19 +95,50 @@ public final class ConfigPackageSampleDataFactory {
     return EmptyChecks.isEmpty(normalized) ? Set.of(SCENARIO_ALL) : normalized;
   }
 
+  public static List<String> tenantTemplateScenarios(List<String> rawScenarios) {
+    if (EmptyChecks.isEmpty(rawScenarios) || rawScenarios.stream().anyMatch(EmptyChecks::isBlank)) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.config_package.scenario_required");
+    }
+    Set<String> normalized = normalizeScenarios(rawScenarios);
+    if (normalized.contains(SCENARIO_ALL)) {
+      return List.of(
+          SCENARIO_IMPORT,
+          SCENARIO_EXPORT,
+          SCENARIO_PROCESS,
+          SCENARIO_DISPATCH,
+          SCENARIO_ATOMIC,
+          SCENARIO_WORKFLOW,
+          SCENARIO_SCHEDULE);
+    }
+    return List.copyOf(normalized);
+  }
+
   public static String normalizeScenario(String rawScenario) {
     if (EmptyChecks.isBlank(rawScenario)) {
       return SCENARIO_ALL;
     }
     return switch (rawScenario.trim().toUpperCase(Locale.ROOT)) {
+      case SCENARIO_ALL -> SCENARIO_ALL;
       case SCENARIO_IMPORT,
           SCENARIO_EXPORT,
           SCENARIO_PROCESS,
           SCENARIO_DISPATCH,
           SCENARIO_ATOMIC,
-          SCENARIO_WORKFLOW -> rawScenario.trim().toUpperCase(Locale.ROOT);
-      default -> SCENARIO_ALL;
+          SCENARIO_WORKFLOW,
+          SCENARIO_SCHEDULE -> rawScenario.trim().toUpperCase(Locale.ROOT);
+      default -> normalizeFileScenario(rawScenario);
     };
+  }
+
+  private static String normalizeFileScenario(String rawScenario) {
+    String normalized = rawScenario.trim().toUpperCase(Locale.ROOT);
+    if (ConfigPackageFileScenario.fromCode(normalized).isPresent()) {
+      return normalized;
+    }
+    throw BizException.of(
+        ResultCode.INVALID_ARGUMENT,
+        ResultCode.INVALID_ARGUMENT.detailKey(),
+        "unsupported package scenario: " + rawScenario);
   }
 
   private static List<List<Map<String, Object>>> emptySheets() {
@@ -183,9 +233,15 @@ public final class ConfigPackageSampleDataFactory {
   }
 
   private static void putImport(List<List<Map<String, Object>>> sheets) {
+    putImport(sheets, "DELIMITED");
+  }
+
+  private static void putImport(List<List<Map<String, Object>>> sheets, String fileFormat) {
     String job = "JOB_IMPORT_CUSTOMER";
-    String tpl = "TPL_IMPORT_CUSTOMER";
-    sheets.get(6).add(fileTemplate(tpl, "客户导入模板", SCENARIO_IMPORT, null));
+    String suffix = "DELIMITED".equals(fileFormat) ? "" : "_" + fileFormat;
+    job += suffix;
+    String tpl = "TPL_IMPORT_CUSTOMER" + suffix;
+    sheets.get(6).add(fileTemplate(tpl, "客户导入模板", SCENARIO_IMPORT, null, fileFormat));
     sheets.get(3).add(job(job, "客户导入", SCENARIO_IMPORT, "{\"templateCode\":\"" + tpl + "\"}"));
     sheets.get(7).add(pipeline(job, "客户导入流水线", SCENARIO_IMPORT));
     sheets.get(8).add(step(job, "RECEIVE", "接收文件", "RECEIVE", 1, "fileReceive", "{}"));
@@ -197,9 +253,17 @@ public final class ConfigPackageSampleDataFactory {
   }
 
   private static void putExport(List<List<Map<String, Object>>> sheets) {
+    putExport(sheets, "DELIMITED");
+  }
+
+  private static void putExport(List<List<Map<String, Object>>> sheets, String fileFormat) {
     String job = "JOB_EXPORT_CUSTOMER";
-    String tpl = "TPL_EXPORT_CUSTOMER";
-    sheets.get(6).add(fileTemplate(tpl, "客户导出模板", SCENARIO_EXPORT, "customer_${batchDate}.csv"));
+    String suffix = "DELIMITED".equals(fileFormat) ? "" : "_" + fileFormat;
+    job += suffix;
+    String tpl = "TPL_EXPORT_CUSTOMER" + suffix;
+    sheets
+        .get(6)
+        .add(fileTemplate(tpl, "客户导出模板", SCENARIO_EXPORT, "customer_${batchDate}", fileFormat));
     sheets.get(3).add(job(job, "客户导出", SCENARIO_EXPORT, "{\"templateCode\":\"" + tpl + "\"}"));
     sheets.get(7).add(pipeline(job, "客户导出流水线", SCENARIO_EXPORT));
     sheets.get(8).add(step(job, "PREPARE", "准备导出", "PREPARE", 1, "exportPrepare", "{}"));
@@ -252,7 +316,7 @@ public final class ConfigPackageSampleDataFactory {
             COL_AUTH_TYPE,
             "PASSWORD",
             COL_CONFIG_JSON,
-            "{\"endpoint\":\"sftp://sftp.example.com:22/outbound\",\"auth\":{\"type\":\"PASSWORD\",\"username\":\"batch_user\"},\"credentials\":{\"passwordRef\":\"kms://channel/demo-sftp\"}}",
+            "{\"sftp_host\":\"sftp.example.com\",\"sftp_port\":22,\"sftp_user\":\"batch_user\"}",
             COL_RECEIPT_POLICY,
             "NONE",
             COL_TIMEOUT_SECONDS,
@@ -286,8 +350,6 @@ public final class ConfigPackageSampleDataFactory {
   }
 
   private static void putWorkflow(List<List<Map<String, Object>>> sheets) {
-    putImport(sheets);
-    putExport(sheets);
     sheets
         .get(9)
         .add(row(
@@ -327,9 +389,9 @@ public final class ConfigPackageSampleDataFactory {
         COL_SCHEDULE_TYPE,
         "MANUAL",
         COL_CALENDAR_CODE,
-        CALENDAR,
+        "",
         COL_WINDOW_CODE,
-        WINDOW,
+        "",
         COL_RETRY_POLICY,
         "NONE",
         COL_RETRY_MAX_COUNT,
@@ -339,7 +401,7 @@ public final class ConfigPackageSampleDataFactory {
         COL_SHARD_STRATEGY,
         "NONE",
         COL_EXECUTION_MODE,
-        "STANDARD",
+        "FULL",
         COL_PARAM_SCHEMA,
         "{}",
         COL_DEFAULT_PARAMS,
@@ -352,6 +414,11 @@ public final class ConfigPackageSampleDataFactory {
 
   private static Map<String, Object> fileTemplate(
       String code, String name, String type, String namingRule) {
+    return fileTemplate(code, name, type, namingRule, "DELIMITED");
+  }
+
+  private static Map<String, Object> fileTemplate(
+      String code, String name, String type, String namingRule, String fileFormat) {
     return row(
         COL_TENANT_ID,
         TENANT,
@@ -364,7 +431,7 @@ public final class ConfigPackageSampleDataFactory {
         COL_BIZ_TYPE,
         "CUSTOMER",
         ConfigPackageExcelSchema.FileTemplate.COL_FILE_FORMAT_TYPE,
-        "CSV",
+        fileFormat,
         ConfigPackageExcelSchema.FileTemplate.COL_CHARSET,
         "UTF-8",
         ConfigPackageExcelSchema.FileTemplate.COL_LINE_SEPARATOR,
@@ -478,7 +545,7 @@ public final class ConfigPackageSampleDataFactory {
         COL_WORKER_GROUP,
         "workflow",
         COL_WINDOW_CODE,
-        WINDOW,
+        "",
         COL_NODE_ORDER,
         order,
         COL_RETRY_POLICY,

@@ -2,9 +2,11 @@ package io.github.pinpols.batch.console.domain.notification.application.contract
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;
 import java.time.Instant;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 通知投递日志行响应（{@code NotificationDeliveryLogMapper.selectByTenant} 投影）。
@@ -43,11 +45,13 @@ public record ConsoleNotificationDeliveryLogResponse(
         ConsoleResponseFieldReader.stringValue(row, "channel_code"),
         ConsoleResponseFieldReader.stringValue(row, "event_type"),
         ConsoleResponseFieldReader.longValue(row, "alert_event_id"),
-        ConsoleResponseFieldReader.value(row, "payload_json"),
+        SecretMasking.maskSensitiveValue(
+            ConsoleResponseFieldReader.value(row, "payload_json"), Set.of()),
         ConsoleResponseFieldReader.stringValue(row, "delivery_status"),
         ConsoleResponseFieldReader.stringValue(row, "error_message"),
         ConsoleResponseFieldReader.stringValue(row, "error_key"),
-        ConsoleResponseFieldReader.value(row, "error_args"),
+        SecretMasking.maskSensitiveValue(
+            ConsoleResponseFieldReader.value(row, "error_args"), Set.of()),
         ConsoleResponseFieldReader.integerValue(row, "attempt"),
         ConsoleResponseFieldReader.instantValue(row, "created_at"));
   }

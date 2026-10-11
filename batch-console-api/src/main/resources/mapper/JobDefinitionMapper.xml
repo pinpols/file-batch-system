@@ -82,6 +82,17 @@
         <if test="scheduleType != null and scheduleType != ''">
             and jd.schedule_type = #{scheduleType}
         </if>
+        <if test="monitoringCategory == 'DEPENDENCY'">
+            and nullif(btrim(jd.depends_on_job_code), '') is not null
+        </if>
+        <if test="monitoringCategory == 'SCHEDULED'">
+            and jd.schedule_type = 'CRON'
+            and nullif(btrim(jd.depends_on_job_code), '') is null
+        </if>
+        <if test="monitoringCategory == 'RUNTIME_ONLY'">
+            and jd.schedule_type != 'CRON'
+            and nullif(btrim(jd.depends_on_job_code), '') is null
+        </if>
         <if test="enabled != null">
             and jd.enabled = #{enabled}
         </if>
@@ -110,6 +121,17 @@
         </if>
         <if test="scheduleType != null and scheduleType != ''">
             and schedule_type = #{scheduleType}
+        </if>
+        <if test="monitoringCategory == 'DEPENDENCY'">
+            and nullif(btrim(depends_on_job_code), '') is not null
+        </if>
+        <if test="monitoringCategory == 'SCHEDULED'">
+            and schedule_type = 'CRON'
+            and nullif(btrim(depends_on_job_code), '') is null
+        </if>
+        <if test="monitoringCategory == 'RUNTIME_ONLY'">
+            and schedule_type != 'CRON'
+            and nullif(btrim(depends_on_job_code), '') is null
         </if>
         <if test="enabled != null">
             and enabled = #{enabled}
@@ -260,8 +282,12 @@
             shard_strategy = #{shardStrategy},
             execution_mode = #{executionMode},
             watermark_field = #{watermarkField},
+            <if test="defaultParamsSpecified">
+                default_params = #{defaultParams}::jsonb,
+            </if>
             enabled = #{enabled},
             description = #{description},
+            version = version + 1,
             updated_by = #{updatedBy},
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
@@ -274,13 +300,15 @@
 
     <update id="toggleEnabled">
         update batch.job_definition
-        set enabled = #{enabled}, updated_by = #{updatedBy}, updated_at = current_timestamp
+        set enabled = #{enabled}, version = version + 1,
+            updated_by = #{updatedBy}, updated_at = current_timestamp
         where tenant_id = #{tenantId} and id = #{id}
     </update>
 
     <update id="batchToggleEnabled">
         update batch.job_definition
-        set enabled = #{enabled}, updated_by = #{updatedBy}, updated_at = current_timestamp
+        set enabled = #{enabled}, version = version + 1,
+            updated_by = #{updatedBy}, updated_at = current_timestamp
         where tenant_id = #{tenantId} and id in
         <foreach collection="ids" item="id" open="(" close=")" separator=",">
             #{id}
@@ -305,6 +333,17 @@
         from batch.job_definition
         where tenant_id = #{tenantId} and id = #{sourceId}
     </insert>
+
+    <update id="clearPhysicalResourceAssignment">
+        update batch.job_definition
+        set queue_code = null,
+            worker_group = null,
+            version = version + 1,
+            updated_by = #{updatedBy},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and job_code = #{jobCode}
+    </update>
 
     <!-- BE Spike (workflow-dag-designer): 下拉数据源,仅 enabled=true,按 jobCode 升序。 -->
     <select id="selectActiveCodeNames" resultType="map">

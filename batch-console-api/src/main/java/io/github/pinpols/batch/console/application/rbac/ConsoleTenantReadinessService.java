@@ -82,13 +82,13 @@ public class ConsoleTenantReadinessService {
             + (missingQuery ? "default_query_sql " : "")
             + (missingMappings ? "field_mappings" : "");
         if (enabled) {
-          String hint = "在配置模板 file_template_config sheet 为模板 '"
+          String hint = "在对应场景配置包的文件模板 Sheet 为模板 '"
               + code
               + "' 填写 "
               + (missingQuery ? "default_query_sql(EXPORT 导出 SQL)" : "")
               + (missingQuery && missingMappings ? " 和 " : "")
               + (missingMappings ? "field_mappings(字段映射)" : "")
-              + "；结构参考『五类Worker示例』sheet 与『字段说明』的填写示例列。";
+              + "；使用对应场景模板中的字段说明核对格式和适用条件。";
           blocking.add(new ReadinessItem("template", reason.trim(), code, hint, DOC_FIELD_GUIDE));
         } else {
           warnings.add(new ReadinessItem(
@@ -129,11 +129,10 @@ public class ConsoleTenantReadinessService {
       String queueCode = str(row, "queue_code");
       String jobCode = str(row, "job_code");
       if (!isBlank(queueCode) && !existing.contains(queueCode)) {
-        String hint = "在配置模板 resource_queue sheet 新增 queue_code='"
-            + queueCode
-            + "'(作业 '"
+        String hint = "作业 '"
             + jobCode
-            + "' 引用)，或把作业 queue_code 改为已存在的队列；resource_queue 是可选 sheet，引用时必填。";
+            + "' 引用的物理队列不可用；请由平台运维核对该租户的队列配置和作业路由后处理。"
+            + "租户配置包不能创建队列，也不能调整物理队列引用。";
         blocking.add(new ReadinessItem(
             "queue",
             "job references missing queue_code '" + queueCode + "'",

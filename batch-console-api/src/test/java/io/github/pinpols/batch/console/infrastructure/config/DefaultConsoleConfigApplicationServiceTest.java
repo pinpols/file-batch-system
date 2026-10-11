@@ -370,7 +370,7 @@ class DefaultConsoleConfigApplicationServiceTest {
     entity.setOperatorType("API");
     entity.setOperatorId("op");
     entity.setTraceId("tr");
-    entity.setChangeSummary("{}");
+    entity.setChangeSummary("{\"reason\":\"updated\",\"auth\":{\"clientSecret\":\"raw\"}}");
     entity.setCreatedAt(Instant.now());
     when(configChangeLogMapper.selectByQuery(any())).thenReturn(List.of(entity));
 
@@ -382,6 +382,10 @@ class DefaultConsoleConfigApplicationServiceTest {
 
     List<ConsoleConfigChangeLogResponse> list = service.configChangeLogs(req);
     assertThat(list).hasSize(1);
+    assertThat(list.getFirst().changeSummaryJson())
+        .contains("&quot;reason&quot;:&quot;updated&quot;")
+        .contains("&quot;clientSecret&quot;:&quot;****&quot;")
+        .doesNotContain("raw");
   }
 
   // ── 详情、依赖关系与差异 ───────────────────────────────────────────────

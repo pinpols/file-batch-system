@@ -932,6 +932,16 @@ jobs:
             -DskipITs=true -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
 
+      - name: Run config and definition integration tests for coverage
+        shell: bash
+        # Console API 的高风险配置写入路径由真实 PostgreSQL/Testcontainers 集成测试覆盖；
+        # 将其 JaCoCo 数据追加到单测结果，保持变更行 80% 门槛而不把整个慢速 IT 套件塞进 PR。
+        run: |
+          ./mvnw test -pl batch-console-api \
+            -Dtest=ConsoleTenantConfigPackageExcelUploadIntegrationTest,ConsoleTenantConfigPackageExcelPatchIntegrationTest,ConsoleTenantConfigPackageAuthenticatedIdempotencyIntegrationTest,ConsoleFileChannelMutationIntegrationTest,ConsoleJobDefinitionMutationIntegrationTest,ConsolePipelineDefinitionMutationIntegrationTest,ConsoleWorkflowDefinitionMutationIntegrationTest,ConsoleFileTemplateMutationIntegrationTest,ConsoleCalendarMutationIntegrationTest,ConsoleBatchWindowMutationIntegrationTest \
+            -DskipITs=true -Djacoco.append=true \
+            -Dspotless.check.skip=true -Dpmd.skip=true -fae -B
+
       - name: Verify changed-line coverage
         shell: bash
         run: |

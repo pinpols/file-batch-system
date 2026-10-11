@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.console.application.rbac.ConsoleMetaQueryService;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
+import io.github.pinpols.batch.console.domain.job.support.JobResourceAssignmentGuard;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineStepDefinitionMapper;
@@ -33,7 +34,8 @@ class PipelineDefinitionListContractTest {
         mock(PipelineStepDefinitionMapper.class),
         guard,
         mock(ConsoleRealtimeEventPort.class),
-        mock(ConsoleMetaQueryService.class));
+        mock(ConsoleMetaQueryService.class),
+        mock(JobResourceAssignmentGuard.class));
     Instant createdAt = Instant.parse("2026-10-07T00:00:00Z");
     when(guard.resolveTenant("ta")).thenReturn("ta");
     when(mapper.countByQuery("ta", "IMPORT_A", "IMPORT", true)).thenReturn(1L);

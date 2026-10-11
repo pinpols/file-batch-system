@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.trigger.BatchTriggerApplication;
+import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
 import io.github.pinpols.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
 import io.github.pinpols.batch.trigger.service.TriggerService;
@@ -16,16 +17,17 @@ import io.github.pinpols.batch.trigger.web.request.TriggerLaunchRequest;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.quartz.Scheduler;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.TestConstructor;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.web.client.RestClient;
 
@@ -43,13 +45,23 @@ import org.springframework.web.client.RestClient;
     })
 @Import(TriggerServiceIntegrationTest.TestConfig.class)
 @DisplayName("Trigger 启动链路集成:同一幂等键重复提交只落一条 ACCEPTED 请求,审批补跑同事务写出箱事件而非直连编排服务")
+@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private TriggerService triggerService;
+  private final TriggerService triggerService;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private final JdbcTemplate jdbcTemplate;
+
+  private final TriggerDefinitionLoader triggerDefinitionLoader;
+
+  TriggerServiceIntegrationTest(
+      TriggerService triggerService,
+      JdbcTemplate jdbcTemplate,
+      TriggerDefinitionLoader triggerDefinitionLoader) {
+    this.triggerService = triggerService;
+    this.jdbcTemplate = jdbcTemplate;
+    this.triggerDefinitionLoader = triggerDefinitionLoader;
+  }
 
   @MockitoBean
   private RestClient orchestratorRestClient;
@@ -106,6 +118,39 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
     assertThat(launchStatus.relatedJobInstanceId()).isNull();
     assertThat(launchStatus.instanceStatus()).isNull();
     assertThat(launchStatus.updatedAt()).isNotNull();
+  }
+
+  @Test
+  @DisplayName("Trigger 启停更新作业定义版本，供实例快照识别配置变更")
+  void shouldIncrementJobDefinitionVersionWhenTriggerChangesEnabledState() {
+    String jobCode = "version-" + UUID.randomUUID().toString().replace("-", "");
+    jdbcTemplate.update(
+        "insert into batch.job_definition "
+            + "(tenant_id, job_code, job_name, job_type, schedule_type, timezone, enabled) "
+            + "values (?, ?, ?, 'GENERAL', 'MANUAL', 'UTC', true)",
+        "t1",
+        jobCode,
+        jobCode);
+    try {
+      Integer initialVersion = jdbcTemplate.queryForObject(
+          "select version from batch.job_definition where tenant_id = ? and job_code = ?",
+          Integer.class,
+          "t1",
+          jobCode);
+
+      int updated = triggerDefinitionLoader.setEnabled("t1", jobCode, false);
+
+      Integer updatedVersion = jdbcTemplate.queryForObject(
+          "select version from batch.job_definition where tenant_id = ? and job_code = ?",
+          Integer.class,
+          "t1",
+          jobCode);
+      assertThat(updated).isEqualTo(1);
+      assertThat(updatedVersion).isEqualTo(initialVersion + 1);
+    } finally {
+      jdbcTemplate.update(
+          "delete from batch.job_definition where tenant_id = ? and job_code = ?", "t1", jobCode);
+    }
   }
 
   @Test

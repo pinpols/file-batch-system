@@ -17,7 +17,11 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.console.application.config.TenantConfigPackageExcelService;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigPackageExcelApplyRequest;
 import io.github.pinpols.batch.console.application.idempotency.ConsoleDurableIdempotencyStore;
+import io.github.pinpols.batch.console.domain.rbac.web.ConsoleTenantConfigPackageExcelController;
+import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.ScheduledFuture;
@@ -148,6 +152,36 @@ class ConsoleIdempotencyInterceptorTest {
 
     assertThat(allowed).isFalse();
     assertThat(response.getStatus()).isEqualTo(409);
+    verify(store, never()).setIfAbsent(anyString(), anyString(), any(Duration.class));
+  }
+
+  @Test
+  @DisplayName("配置包 Apply 的类级幂等声明拦截已完成的重复请求")
+  void shouldRejectRepeatedApply_whenControllerUsesClassLevelIdempotent() throws Exception {
+    String tenantId = "tenant-config";
+    String uploadToken = "upload-123";
+    String idempotencyKey = "apply-key";
+    String uri = "/api/console/config/tenant-package/excel/apply/" + uploadToken;
+    String redisKey = "console:idempotency:" + tenantId + ":POST:" + uri + ":" + idempotencyKey;
+    ConsoleTenantConfigPackageExcelController controller =
+        new ConsoleTenantConfigPackageExcelController(
+            mock(TenantConfigPackageExcelService.class), mock(ConsoleResponseFactory.class));
+    HandlerMethod applyHandler = new HandlerMethod(
+        controller,
+        ConsoleTenantConfigPackageExcelController.class.getMethod(
+            "apply", String.class, String.class, TenantConfigPackageExcelApplyRequest.class));
+    MockHttpServletRequest request = new MockHttpServletRequest("POST", uri);
+    request.addHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId);
+    request.addHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey);
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    when(store.get(redisKey)).thenReturn("DONE");
+
+    boolean allowed = interceptor.preHandle(request, response, applyHandler);
+
+    assertThat(allowed).isFalse();
+    assertThat(response.getStatus()).isEqualTo(409);
+    assertThat(response.getContentAsString()).contains("duplicate request");
+    verify(store).get(redisKey);
     verify(store, never()).setIfAbsent(anyString(), anyString(), any(Duration.class));
   }
 

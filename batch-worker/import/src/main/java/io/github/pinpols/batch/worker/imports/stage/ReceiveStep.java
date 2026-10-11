@@ -139,6 +139,8 @@ public class ReceiveStep implements ImportStageStep {
     }
     ImportPayload importPayload = resolvePayload(context);
     Map<String, Object> attrs = context.getAttributes();
+    Map<String, Object> templateConfig =
+        resolveTemplateConfig(attrs, context.getTenantId(), importPayload.templateCode());
     Long existingFileId = PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
     if (existingFileId == null) {
       String traceId =
@@ -154,8 +156,7 @@ public class ReceiveStep implements ImportStageStep {
       metadata.put("footerRows", importPayload.footerRows());
       metadata.put(PipelineRuntimeKeys.TASK_ID, attrs.get(PipelineRuntimeKeys.TASK_ID));
       metadata.put("withHeader", importPayload.withHeader());
-      mergeSecurityMetadata(
-          metadata, resolveTemplateSecurity(context.getTenantId(), importPayload.templateCode()));
+      mergeSecurityMetadata(metadata, resolveTemplateSecurity(templateConfig));
       mergeUserMetadata(metadata, importPayload.metadata());
       FileRecordParam fileRecord = FileRecordParam.builder()
           .tenantId(context.getTenantId())
@@ -200,6 +201,9 @@ public class ReceiveStep implements ImportStageStep {
       importPayload =
           enrichFromFileRecord(importPayload, attrs.get(PipelineRuntimeKeys.FILE_RECORD));
     }
+    if (EmptyChecks.isNotEmpty(templateConfig)) {
+      attrs.put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);
+    }
     attrs.put(PipelineRuntimeKeys.IMPORT_PAYLOAD, importPayload);
     return ImportStageResult.success(stage());
   }
@@ -239,13 +243,26 @@ public class ReceiveStep implements ImportStageStep {
     }
   }
 
-  private Map<String, Object> resolveTemplateSecurity(String tenantId, String templateCode) {
+  private Map<String, Object> resolveTemplateConfig(
+      Map<String, Object> attributes, String tenantId, String templateCode) {
+    Object existing = attributes.get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
+    if (existing instanceof Map<?, ?> snapshot && EmptyChecks.isNotEmpty(snapshot)) {
+      return objectMapper.convertValue(
+          existing,
+          objectMapper
+              .getTypeFactory()
+              .constructMapType(LinkedHashMap.class, String.class, Object.class));
+    }
     if (!Texts.hasText(tenantId) || !Texts.hasText(templateCode)) {
       return Map.of();
     }
     Map<String, Object> template = pipelineDefinitions.loadLatestTemplateConfig(
         tenantId, templateCode, ImportWorkerType.IMPORT);
-    if (template == null || template.isEmpty()) {
+    return EmptyChecks.isNull(template) ? Map.of() : template;
+  }
+
+  private Map<String, Object> resolveTemplateSecurity(Map<String, Object> template) {
+    if (EmptyChecks.isEmpty(template)) {
       return Map.of();
     }
     Map<String, Object> security = new LinkedHashMap<>();

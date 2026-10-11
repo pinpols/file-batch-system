@@ -11,6 +11,9 @@ public interface BusinessCalendarMapper {
   Map<String, Object> selectActiveByTenantAndCalendarCode(
       @Param("tenantId") String tenantId, @Param("calendarCode") String calendarCode);
 
+  Map<String, Object> selectByTenantAndCalendarCode(
+      @Param("tenantId") String tenantId, @Param("calendarCode") String calendarCode);
+
   List<Map<String, Object>> selectByQuery(
       @Param("tenantId") String tenantId,
       @Param("calendarCode") String calendarCode,

@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.infrastructure.excel;
 import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.normalize;
 import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.optionalBoolean;
 import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.optionalEnum;
-import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.requireInteger;
+import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.optionalInteger;
 import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.requireText;
 import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.resolveTenantField;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelSchema.BusinessCalendar.COL_CALENDAR_NAME;
@@ -54,7 +54,7 @@ public final class BusinessCalendarExcelRowParser {
             optionalEnum(values, COL_HOLIDAY_ROLL_RULE, HOLIDAY_ROLL_RULES, 32, "SKIP", issues))
         .catchUpPolicy(
             optionalEnum(values, COL_CATCH_UP_POLICY, CATCH_UP_POLICIES, 32, "NONE", issues))
-        .catchUpMaxDays(requireInteger(values, COL_CATCH_UP_MAX_DAYS, 0, issues))
+        .catchUpMaxDays(optionalInteger(values, COL_CATCH_UP_MAX_DAYS, 0, 0, issues))
         .holidays(parseHolidays(values.get(COL_HOLIDAYS), issues))
         .enabled(optionalBoolean(values, COL_ENABLED, true, issues))
         .description(normalize(values.get(COL_DESCRIPTION)))
