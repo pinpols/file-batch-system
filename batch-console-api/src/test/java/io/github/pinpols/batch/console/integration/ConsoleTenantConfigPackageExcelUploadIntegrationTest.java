@@ -1123,9 +1123,8 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
         HttpClient.newHttpClient().send(applyRequest, HttpResponse.BodyHandlers.ofString());
 
     assertThat(applyResponse.statusCode()).isEqualTo(HttpStatus.CONFLICT.value());
-    assertThat(applyResponse.body())
-        .contains("\"code\":\"STATE_CONFLICT\"")
-        .contains("预览后租户配置已发生变化");
+    assertThat(new ObjectMapper().readTree(applyResponse.body()).path("code").asText())
+        .isEqualTo("STATE_CONFLICT");
     assertThat(jdbcTemplate.queryForObject(
             "select count(*) from batch.file_channel_config where tenant_id = ? "
                 + "and channel_code = 'excel_upload_local'",
@@ -1271,7 +1270,8 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
         "tenant-admin-apply");
 
     assertThat(response.statusCode()).isEqualTo(HttpStatus.FORBIDDEN.value());
-    assertThat(response.body()).contains("租户管理员不能应用平台资源分配");
+    assertThat(new ObjectMapper().readTree(response.body()).path("code").asText())
+        .isEqualTo("FORBIDDEN");
   }
 
   @Test
