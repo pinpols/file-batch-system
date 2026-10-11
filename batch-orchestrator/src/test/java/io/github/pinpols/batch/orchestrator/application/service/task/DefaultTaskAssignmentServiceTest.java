@@ -425,6 +425,45 @@ class DefaultTaskAssignmentServiceTest {
     assertThat(config.partitionInvocationId()).isEqualTo("inv-1");
   }
 
+  @Test
+  @DisplayName("loadEffectiveConfig: 新实例使用创建时冻结的执行策略而非当前作业定义")
+  void shouldPreferInstanceExecutionPolicySnapshot_whenLoadingEffectiveConfig() {
+    JobTaskEntity task = task(101L, 1L, TaskStatus.RUNNING.code());
+    task.setJobInstanceId(11L);
+    task.setTaskType("IMPORT");
+    task.setTaskPayload("{}");
+    when(jobTaskMapper.selectById("ta", 101L)).thenReturn(task);
+
+    JobInstanceEntity instance = new JobInstanceEntity();
+    instance.setId(11L);
+    instance.setTenantId("ta");
+    instance.setJobDefinitionId(20L);
+    instance.setInstanceNo("INST-2");
+    instance.setJobCode("JOB_A");
+    instance.setParamsSnapshot("""
+        {"executionPolicy":{"executionMode":"INCREMENTAL","watermarkField":"updated_at",
+         "retryPolicy":"FIXED","retryMaxCount":2,"timeoutSeconds":900}}
+        """);
+    when(jobInstanceMapper.selectById("ta", 11L)).thenReturn(instance);
+    when(jobDefinitionMapper.selectById(20L))
+        .thenReturn(JobDefinitionEntity.builder()
+            .id(20L)
+            .executionMode("FULL")
+            .watermarkField("live_field")
+            .retryPolicy("EXPONENTIAL")
+            .retryMaxCount(5)
+            .timeoutSeconds(60)
+            .build());
+
+    EffectiveTaskConfig config = service.loadEffectiveConfig("ta", 101L);
+
+    assertThat(config.executionMode()).isEqualTo("INCREMENTAL");
+    assertThat(config.watermarkField()).isEqualTo("updated_at");
+    assertThat(config.retryPolicy()).isEqualTo("FIXED");
+    assertThat(config.retryMaxCount()).isEqualTo(2);
+    assertThat(config.timeoutSeconds()).isEqualTo(900);
+  }
+
   // ===== renewLeaseBatch (PERF 5.3) =====
 
   @Test

@@ -118,15 +118,21 @@ public class ConfigPackageExcelWorkbookWriter {
   public static final List<String> WF_EDGE_COLUMNS = ConfigPackageExcelSchema.WorkflowEdge.COLUMNS;
 
   private final List<ConfigPackageSheetSpecs.SheetDef> sheetDefs;
+  private final List<ConfigPackageSheetSpecs.SheetDef> allSheetDefs;
   private final MessageSource messageSource;
   private final ConfigPackageWorkbookSupplementWriter supplementWriter;
   private final ConfigPackageSheetSpecs sheetSpecs;
 
   public ConfigPackageExcelWorkbookWriter(MessageSource messageSource) {
+    this(messageSource, List.of("ALL"));
+  }
+
+  public ConfigPackageExcelWorkbookWriter(MessageSource messageSource, List<String> scenarios) {
     this.messageSource = messageSource;
     this.supplementWriter = new ConfigPackageWorkbookSupplementWriter(messageSource);
     this.sheetSpecs = new ConfigPackageSheetSpecs(messageSource);
-    this.sheetDefs = sheetSpecs.build();
+    this.allSheetDefs = sheetSpecs.build();
+    this.sheetDefs = sheetSpecs.project(scenarios);
   }
 
   public byte[] buildExportWorkbook(List<List<Map<String, Object>>> sheetDataList) {
@@ -160,9 +166,9 @@ public class ConfigPackageExcelWorkbookWriter {
     Locale locale = LocaleContextHolder.getLocale();
     Map<String, List<String>> implRegistry = copyImplRegistry(registeredImplCodesByModule);
     try (SXSSFWorkbook wb = new SXSSFWorkbook(50)) {
-      for (int i = 0; i < sheetDefs.size(); i++) {
-        ConfigPackageSheetSpecs.SheetDef def = sheetDefs.get(i);
-        writeDataSheet(wb, def, sheetDataList.get(i), locale, implRegistry);
+      for (ConfigPackageSheetSpecs.SheetDef def : sheetDefs) {
+        int sourceIndex = sheetIndex(def.name());
+        writeDataSheet(wb, def, sheetDataList.get(sourceIndex), locale, implRegistry);
       }
       supplementWriter.createReadmeSheet(wb, locale);
       supplementWriter.createFillOrderSheet(wb, sheetDefs);
@@ -173,6 +179,15 @@ public class ConfigPackageExcelWorkbookWriter {
       ConsoleExcelStyles.createValidationSheet(wb);
       wb.write(out);
     }
+  }
+
+  private int sheetIndex(String sheetName) {
+    for (int i = 0; i < allSheetDefs.size(); i++) {
+      if (allSheetDefs.get(i).name().equals(sheetName)) {
+        return i;
+      }
+    }
+    throw new IllegalArgumentException("unknown configuration sheet: " + sheetName);
   }
 
   public byte[] buildTemplateWorkbook() {
@@ -203,6 +218,23 @@ public class ConfigPackageExcelWorkbookWriter {
       supplementWriter.createDependencyGuideSheet(wb);
       supplementWriter.createFiveWorkerExampleSheet(wb);
       supplementWriter.createBundleExampleSheet(wb);
+      createFieldGuideSheet(wb);
+      ConsoleExcelStyles.createValidationSheet(wb);
+      wb.write(out);
+    }
+  }
+
+  /** 生成仅包含当前场景工作表的模板。 */
+  public void writeFocusedTemplateWorkbook(
+      OutputStream out, Map<String, List<String>> registeredImplCodesByModule) throws IOException {
+    Locale locale = LocaleContextHolder.getLocale();
+    Map<String, List<String>> implRegistry = copyImplRegistry(registeredImplCodesByModule);
+    try (SXSSFWorkbook wb = new SXSSFWorkbook(50)) {
+      for (ConfigPackageSheetSpecs.SheetDef def : sheetDefs) {
+        writeDataSheet(wb, def, List.of(), locale, implRegistry);
+      }
+      supplementWriter.createFocusedReadmeSheet(wb, locale, sheetDefs);
+      supplementWriter.createFillOrderSheet(wb, sheetDefs);
       createFieldGuideSheet(wb);
       ConsoleExcelStyles.createValidationSheet(wb);
       wb.write(out);

@@ -3,6 +3,8 @@ package io.github.pinpols.batch.worker.imports.stage;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
@@ -109,6 +111,26 @@ class PreprocessStepEncodingTest {
     assertThat(result.success()).isTrue();
     assertThat(context.getAttributes()).doesNotContainKey("detectedCharset");
     assertThat(context.getRawPayload()).contains("张三");
+  }
+
+  @Test
+  @DisplayName("已有实例模板快照时不再读取最新模板")
+  void shouldPreferTemplateSnapshotAlreadyBoundToExecution() {
+    Map<String, Object> pinnedConfig = Map.of(
+        "file_format_type", "DELIMITED",
+        "charset", "GBK");
+    templateConfig = Map.of("file_format_type", "DELIMITED", "charset", "UTF-8");
+    ImportJobContext context =
+        contextWithBase64Payload(gbk("客户,金额\n张三,100"), "DELIMITED", "TPL_GBK");
+    context.getAttributes().put(PipelineRuntimeKeys.TEMPLATE_CONFIG, pinnedConfig);
+
+    ImportStageResult result = step.execute(context);
+
+    assertThat(result.success()).isTrue();
+    assertThat(context.getRawPayload()).contains("张三");
+    assertThat(context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG))
+        .isSameAs(pinnedConfig);
+    verify(pipelineDefinitions, never()).loadLatestTemplateConfig(any(), any(), any());
   }
 
   @Test

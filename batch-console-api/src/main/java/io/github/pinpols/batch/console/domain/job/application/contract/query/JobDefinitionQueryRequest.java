@@ -31,5 +31,10 @@ public class JobDefinitionQueryRequest extends PageQueryRequest {
   @Size(max = 64, message = "scheduleType too long (max 64)")
   private String scheduleType;
 
+  @jakarta.validation.constraints.Pattern(
+      regexp = "^(SCHEDULED|DEPENDENCY|RUNTIME_ONLY)?$",
+      message = "monitoringCategory must be SCHEDULED, DEPENDENCY, or RUNTIME_ONLY")
+  private String monitoringCategory;
+
   private Boolean enabled = true;
 }

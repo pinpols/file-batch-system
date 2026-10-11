@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.trigger.BatchTriggerApplication;
+import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
 import io.github.pinpols.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
 import io.github.pinpols.batch.trigger.service.TriggerService;
@@ -50,6 +51,9 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
   private JdbcTemplate jdbcTemplate;
+
+  @Autowired
+  private TriggerDefinitionLoader triggerDefinitionLoader;
 
   @MockitoBean
   private RestClient orchestratorRestClient;
@@ -106,6 +110,39 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
     assertThat(launchStatus.relatedJobInstanceId()).isNull();
     assertThat(launchStatus.instanceStatus()).isNull();
     assertThat(launchStatus.updatedAt()).isNotNull();
+  }
+
+  @Test
+  @DisplayName("Trigger 启停更新作业定义版本，供实例快照识别配置变更")
+  void shouldIncrementJobDefinitionVersionWhenTriggerChangesEnabledState() {
+    String jobCode = "version-" + java.util.UUID.randomUUID().toString().replace("-", "");
+    jdbcTemplate.update(
+        "insert into batch.job_definition "
+            + "(tenant_id, job_code, job_name, job_type, schedule_type, timezone, enabled) "
+            + "values (?, ?, ?, 'GENERAL', 'MANUAL', 'UTC', true)",
+        "t1",
+        jobCode,
+        jobCode);
+    try {
+      Integer initialVersion = jdbcTemplate.queryForObject(
+          "select version from batch.job_definition where tenant_id = ? and job_code = ?",
+          Integer.class,
+          "t1",
+          jobCode);
+
+      int updated = triggerDefinitionLoader.setEnabled("t1", jobCode, false);
+
+      Integer updatedVersion = jdbcTemplate.queryForObject(
+          "select version from batch.job_definition where tenant_id = ? and job_code = ?",
+          Integer.class,
+          "t1",
+          jobCode);
+      assertThat(updated).isEqualTo(1);
+      assertThat(updatedVersion).isEqualTo(initialVersion + 1);
+    } finally {
+      jdbcTemplate.update(
+          "delete from batch.job_definition where tenant_id = ? and job_code = ?", "t1", jobCode);
+    }
   }
 
   @Test

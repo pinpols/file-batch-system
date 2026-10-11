@@ -8,8 +8,10 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.i18n.LocalizedErrorRenderer;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
+import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.ContentMaskingUtils;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.contract.query.FileChainQueryRequest;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
@@ -427,14 +429,23 @@ public class ConsoleFileQueryService {
         stringValue(row, "stage_code"),
         intValue(row, "run_seq"),
         stringValue(row, "step_status"),
-        stringValue(row, "input_summary"),
-        stringValue(row, "output_summary"),
+        maskedJsonValue(row, "input_summary"),
+        maskedJsonValue(row, "output_summary"),
         stringValue(row, "error_code"),
         renderLocalizedError(row),
         intValue(row, "retry_count"),
         longValue(row, "duration_ms"),
         instantValue(row, "started_at"),
         instantValue(row, "finished_at"));
+  }
+
+  private String maskedJsonValue(Map<String, Object> row, String key) {
+    Object rawValue = row == null ? null : row.get(key);
+    if (rawValue == null) {
+      return null;
+    }
+    String masked = SecretMasking.maskSensitiveJson(String.valueOf(rawValue));
+    return ConsoleTextSanitizer.safeDisplay(masked);
   }
 
   private ConsoleFilePipelineStepProgressResponse toFilePipelineStepProgressResponse(
@@ -499,8 +510,13 @@ public class ConsoleFileQueryService {
   private String renderLocalizedError(Map<String, Object> row) {
     return localizedErrorRenderer.render(
         stringValue(row, "error_key"),
-        stringValue(row, "error_args"),
+        SecretMasking.maskSensitiveJson(rawValue(row, "error_args")),
         stringValue(row, "error_message"));
+  }
+
+  private String rawValue(Map<String, Object> row, String key) {
+    Object value = row == null ? null : row.get(key);
+    return value == null ? null : String.valueOf(value);
   }
 
   private ConsoleFileArrivalGroupResponse toFileArrivalGroupResponse(

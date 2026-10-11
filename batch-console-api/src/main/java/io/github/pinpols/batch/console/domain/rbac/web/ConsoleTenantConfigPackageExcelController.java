@@ -34,11 +34,9 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 /**
  * 租户配置包（tenant-config-package）多 Sheet Excel 批量导入接口。
  *
- * <p>11 个数据 Sheet 合并为单文件导入：resource_queue / business_calendar / batch_window / job_definition /
- * file_channel_config / file_template_config / pipeline_definition / pipeline_step_definition /
- * workflow_definition / workflow_node / workflow_edge。
+ * <p>完整配置包包含 12 个数据 Sheet；场景化模板只输出所选业务 Sheet 和列。
  *
- * <p>典型流程：{@code GET /template} 下载模板 → {@code POST /upload} 上传得 {@code uploadToken} → {@code GET
+ * <p>典型流程：{@code GET /scenario-template} 下载所选场景模板 → {@code POST /upload} 上传得 {@code uploadToken} → {@code GET
  * /preview/{uploadToken}} 预览校验 → {@code GET /preview/{uploadToken}/workbook} 下载带批注 workbook（可选）→
  * {@code POST /apply/{uploadToken}} 全量事务写库。
  */
@@ -53,7 +51,7 @@ public class ConsoleTenantConfigPackageExcelController {
   private final ConsoleResponseFactory responseFactory;
 
   /**
-   * 导出当前租户全量配置包（11 Sheet），可直接回灌至 {@code /upload → /apply} 流程。
+   * 导出当前租户完整配置包，可直接回灌至 {@code /upload → /apply} 流程。
    *
    * <p>R2-P1-9：返回 {@link StreamingResponseBody} 让 workbook 直接写到响应流，不再缓 byte[]。
    */
@@ -65,7 +63,7 @@ public class ConsoleTenantConfigPackageExcelController {
   }
 
   /**
-   * 下载包含全部 11 个数据 Sheet 及填写说明的空白导入模板 {@code .xlsx}。
+   * 下载包含全部配置 Sheet 及填写说明的兼容型空白导入模板 {@code .xlsx}。
    *
    * <p>R2-P1-9：streaming 返回避免 byte[] 双拷贝。
    */
@@ -75,7 +73,15 @@ public class ConsoleTenantConfigPackageExcelController {
     return tenantConfigExcelService.downloadTemplate();
   }
 
-  /** 下载带示例数据的场景化配置包模板，完整 11-Sheet 结构不变。 */
+  /** 下载按场景投影的空白模板；ALL 表示全部租户业务场景，不包含平台资源配置。 */
+  @GetMapping("/scenario-template")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)
+  public ResponseEntity<StreamingResponseBody> scenarioTemplate(
+      @RequestParam("scenarios") List<String> scenarios) {
+    return tenantConfigExcelService.downloadScenarioTemplate(scenarios);
+  }
+
+  /** 下载带示例数据的场景化配置包模板。 */
   @GetMapping("/sample-template")
   @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)
   public ResponseEntity<StreamingResponseBody> sampleTemplate(
@@ -84,7 +90,7 @@ public class ConsoleTenantConfigPackageExcelController {
     return tenantConfigExcelService.downloadSampleTemplate(scenario, scenarios);
   }
 
-  /** 返回 11 个 Sheet 的必填、类型、枚举、默认留空行为和填写示例，供 Console 页面直接展示。 */
+  /** 返回配置 Sheet 的必填、类型、枚举、默认留空行为和填写示例，供 Console 页面直接展示。 */
   @GetMapping("/guide")
   @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)
   public CommonResponse<TenantConfigPackageExcelGuideResponse> guide() {
@@ -92,7 +98,7 @@ public class ConsoleTenantConfigPackageExcelController {
   }
 
   /**
-   * 上传租户配置包 Excel，解析 11 个 Sheet 后写入服务端临时会话，返回 {@code uploadToken}。
+   * 上传租户配置包 Excel，解析已识别的 Sheet 后写入服务端临时会话，返回 {@code uploadToken}。
    *
    * @param file 表单字段名 {@code file}，内容为 xlsx
    * @param tenantId 目标租户 id。ROLE_ADMIN / ROLE_TENANT_ADMIN 是全局角色，必须显式指定； 租户级账号可不传（自动沿用 JWT 内
@@ -131,7 +137,11 @@ public class ConsoleTenantConfigPackageExcelController {
       @PathVariable String uploadToken,
       @Valid @RequestBody TenantConfigPackageExcelPatchRequest request) {
     return responseFactory.success(tenantConfigExcelService.patchRow(
-        uploadToken, request.getSheetName(), request.getRowNo(), request.getValues()));
+        uploadToken,
+        request.getPreviewToken(),
+        request.getSheetName(),
+        request.getRowNo(),
+        request.getValues()));
   }
 
   /**
@@ -153,7 +163,7 @@ public class ConsoleTenantConfigPackageExcelController {
    * @param request 可选变更说明（见 {@link TenantConfigPackageExcelApplyRequest}）
    */
   @PostMapping("/apply/{uploadToken}")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<TenantConfigPackageExcelApplyResponse> apply(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable String uploadToken,

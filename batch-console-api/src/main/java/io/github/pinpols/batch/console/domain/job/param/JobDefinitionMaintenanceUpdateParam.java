@@ -29,6 +29,8 @@ public class JobDefinitionMaintenanceUpdateParam {
   private String shardStrategy;
   private String executionMode;
   private String watermarkField;
+  private String defaultParams;
+  private boolean defaultParamsSpecified;
   private Boolean enabled;
   private String description;
   private String updatedBy;

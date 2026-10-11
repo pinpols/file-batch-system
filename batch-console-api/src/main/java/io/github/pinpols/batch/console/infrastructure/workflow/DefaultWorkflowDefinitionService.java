@@ -3,8 +3,10 @@ package io.github.pinpols.batch.console.infrastructure.workflow;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
+import io.github.pinpols.batch.console.domain.job.support.JobResourceAssignmentGuard;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
@@ -24,7 +26,9 @@ import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowEdgeQuery;
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowNodeQuery;
 import io.github.pinpols.batch.console.domain.workflow.validation.WorkflowDagValidator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -71,6 +75,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
   private final WorkflowDefinitionResponseAssembler responseAssembler;
   private final WorkflowDefinitionWriteSupport writeSupport;
   private final WorkflowDefinitionDagInspector dagInspector;
+  private final JobResourceAssignmentGuard resourceAssignmentGuard;
 
   @Override
   public WorkflowDefinitionDetailResponse getById(Long id, String tenantId) {
@@ -88,6 +93,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
   @Transactional
   public WorkflowDefinitionDetailResponse create(WorkflowDefinitionSaveRequest request) {
     String resolvedTenant = tenantGuard.resolveTenant(request.getTenantId());
+    assertNodeRoutingOnCreate(request.getNodes());
 
     WorkflowDefinitionEntity existing =
         definitionMapper.selectByUniqueKey(resolvedTenant, request.getWorkflowCode(), 1);
@@ -126,6 +132,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
 
     WorkflowDefinitionEntity def = Guard.requireFound(
         definitionMapper.selectById(resolvedTenant, id), ERR_WORKFLOW_NOT_FOUND + id);
+    assertAndPreserveNodeRouting(resolvedTenant, id, request.getNodes());
 
     // BE 回退:与 fullUpdate 同源校验。update 不改 workflowCode,用持久化 def 的 code 作环检测 root。
     dagValidator.validate(resolvedTenant, request);
@@ -138,9 +145,10 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
         request.getWorkflowType(),
         request.getEnabled());
 
+    Map<String, String> existingNodeParams = writeSupport.readNodeParams(resolvedTenant, id);
     nodeMapper.deleteByWorkflowDefinitionId(id);
     edgeMapper.deleteByWorkflowDefinitionId(id);
-    writeSupport.upsertNodesAndEdges(resolvedTenant, id, request);
+    writeSupport.upsertNodesAndEdges(resolvedTenant, id, request, existingNodeParams);
     cacheInvalidationService.evictWorkflowDefinition(resolvedTenant, def.getWorkflowCode());
     publishRefresh(resolvedTenant, "workflow-definition-updated");
 
@@ -175,6 +183,8 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
           ResultCode.CONFLICT, "error.workflow_design_lock.held_by_other", holder.lockedBy());
     }
 
+    assertAndPreserveNodeRouting(resolvedTenant, id, body.getNodes());
+
     // BE 回退:DAG 拓扑 + 引用完整性校验(范围 = 拓扑;业务对错见 ADR-021,不在此处)
     dagValidator.validate(resolvedTenant, body);
     // 跨 workflow 嵌套环检测:JOB 节点指向 WORKFLOW 类型 job 时,配置期就拦住 A→B→A / 自引用
@@ -196,9 +206,10 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
           def.getVersion());
     }
 
+    Map<String, String> existingNodeParams = writeSupport.readNodeParams(resolvedTenant, id);
     nodeMapper.deleteByWorkflowDefinitionId(id);
     edgeMapper.deleteByWorkflowDefinitionId(id);
-    writeSupport.upsertNodesAndEdges(resolvedTenant, id, body);
+    writeSupport.upsertNodesAndEdges(resolvedTenant, id, body, existingNodeParams);
 
     // 同事务追加版本快照(workflow-dag-designer Polish):新 version = 旧 version + 1。
     // 版本协作者序列化当前持久化后的 entity list — 与 detail 读路径一致，
@@ -258,6 +269,41 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
     List<WorkflowEdgeEntity> edges =
         edgeMapper.selectByQuery(WorkflowEdgeQuery.ofDefinition(tenantId, id, null));
     return responseAssembler.toDetailResponse(def, nodes, edges);
+  }
+
+  private void assertNodeRoutingOnCreate(List<WorkflowDefinitionSaveRequest.NodeItem> nodes) {
+    if (nodes == null) {
+      return;
+    }
+    for (WorkflowDefinitionSaveRequest.NodeItem node : nodes) {
+      if (Texts.hasText(node.getWorkerGroup())) {
+        resourceAssignmentGuard.assertCreateAllowed(null, node.getWorkerGroup());
+      }
+    }
+  }
+
+  private void assertAndPreserveNodeRouting(
+      String tenantId, Long definitionId, List<WorkflowDefinitionSaveRequest.NodeItem> nodes) {
+    if (nodes == null) {
+      return;
+    }
+    Map<String, String> existingGroups = new HashMap<>();
+    for (WorkflowNodeEntity node :
+        nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, definitionId, null))) {
+      existingGroups.put(node.getNodeCode(), node.getWorkerGroup());
+    }
+    boolean hasRouting = existingGroups.values().stream().anyMatch(Texts::hasText)
+        || nodes.stream().anyMatch(node -> Texts.hasText(node.getWorkerGroup()));
+    if (!hasRouting || !resourceAssignmentGuard.shouldPreserveExistingRouting()) {
+      return;
+    }
+    for (WorkflowDefinitionSaveRequest.NodeItem node : nodes) {
+      String existingGroup = existingGroups.get(node.getNodeCode());
+      resourceAssignmentGuard.assertUpdateAllowed(null, node.getWorkerGroup(), null, existingGroup);
+      if (node.getWorkerGroup() == null && existingGroup != null) {
+        node.setWorkerGroup(existingGroup);
+      }
+    }
   }
 
   private void publishRefresh(String tenantId, String eventType) {

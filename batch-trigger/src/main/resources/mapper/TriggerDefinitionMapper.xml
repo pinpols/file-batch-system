@@ -63,6 +63,7 @@
     <update id="updateEnabled">
         update batch.job_definition
         set enabled = #{enabled},
+            version = version + 1,
             updated_at = CURRENT_TIMESTAMP
         where tenant_id = #{tenantId}
           and job_code = #{jobCode}

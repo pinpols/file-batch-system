@@ -9,6 +9,10 @@ import lombok.Data;
 @Data
 public class TenantConfigPackageExcelPatchRequest {
 
+  /** 当前预览返回的一次性确认版本；并发预览或修正后旧版本不能覆盖新会话。 */
+  @NotBlank
+  private String previewToken;
+
   /** sheet 名(后端 validator SHEET 常量,如 job_definition / file_channel_config)。 */
   @NotBlank
   private String sheetName;

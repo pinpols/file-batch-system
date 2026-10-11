@@ -134,7 +134,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         createDeadLetter(task, partition, jobInstance, errorCode, errorMessage);
         return false;
       }
-      RetryPolicyPlan retryPolicyPlan = resolveRetryPolicy(jobInstance.getJobDefinitionId());
+      RetryPolicyPlan retryPolicyPlan = resolveRetryPolicy(jobInstance);
       if (RetryPolicyType.NONE.code().equals(retryPolicyPlan.retryPolicy())
           || retryPolicyPlan.maxRetryCount() <= 0) {
         // 无重试预算：直接进入死信，交由人工/审批/补偿处理。
@@ -497,6 +497,59 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
     return new RetryPolicyPlan(
         retryPolicy,
         retryMaxCount == null ? governance.retry().getDefaultMaxRetryCount() : retryMaxCount);
+  }
+
+  private RetryPolicyPlan resolveRetryPolicy(JobInstanceEntity jobInstance) {
+    Map<String, Object> snapshot = executionPolicySnapshot(jobInstance);
+    if (snapshot != null) {
+      String retryPolicy = stringValue(snapshot.get("retryPolicy"));
+      Integer retryMaxCount = integerValue(snapshot.get("retryMaxCount"));
+      return new RetryPolicyPlan(
+          Texts.hasText(retryPolicy) ? retryPolicy : RetryPolicyType.FIXED.code(),
+          retryMaxCount == null ? governance.retry().getDefaultMaxRetryCount() : retryMaxCount);
+    }
+    return resolveRetryPolicy(jobInstance.getJobDefinitionId());
+  }
+
+  @SuppressWarnings("unchecked")
+  private Map<String, Object> executionPolicySnapshot(JobInstanceEntity jobInstance) {
+    if (jobInstance == null || !Texts.hasText(jobInstance.getParamsSnapshot())) {
+      return null;
+    }
+    try {
+      Object parsed = JsonUtils.fromJson(jobInstance.getParamsSnapshot(), Object.class);
+      if (!(parsed instanceof Map<?, ?> instanceSnapshot)) {
+        return null;
+      }
+      Object policy = instanceSnapshot.get("executionPolicy");
+      return policy instanceof Map<?, ?> policyMap ? (Map<String, Object>) policyMap : null;
+    } catch (IllegalArgumentException malformedSnapshot) {
+      log.warn(
+          "job instance execution policy snapshot parse failed, using legacy definition:"
+              + " tenantId={} instanceId={}",
+          jobInstance.getTenantId(),
+          jobInstance.getId(),
+          malformedSnapshot);
+      return null;
+    }
+  }
+
+  private String stringValue(Object value) {
+    return value == null ? null : String.valueOf(value);
+  }
+
+  private Integer integerValue(Object value) {
+    if (value instanceof Number number) {
+      return number.intValue();
+    }
+    if (value instanceof String text && !text.isBlank()) {
+      try {
+        return Integer.valueOf(text);
+      } catch (NumberFormatException ignored) {
+        return null;
+      }
+    }
+    return null;
   }
 
   /** 重试时间由治理层统一计算，避免调度器和业务处理各自散落一套 backoff 规则。 */

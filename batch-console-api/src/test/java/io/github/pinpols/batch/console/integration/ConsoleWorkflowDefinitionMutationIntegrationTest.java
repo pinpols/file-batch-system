@@ -90,6 +90,164 @@ class ConsoleWorkflowDefinitionMutationIntegrationTest extends AbstractMutationI
   }
 
   @Test
+  @DisplayName("工作流敏感节点参数读取脱敏且掩码更新保留原凭据")
+  void shouldMaskAndPreserveSensitiveNodeParams() {
+    String workflowCode = "int_wf_secret_" + System.currentTimeMillis();
+    Long definitionId = null;
+    try {
+      String createBody = body(workflowCode, "task1", "start")
+          .replace(
+              "\"nodeType\": \"TASK\"",
+              "\"nodeType\": \"TASK\", \"nodeParams\": "
+                  + "\"{\\\"apiKey\\\":\\\"workflow-secret\\\","
+                  + "\\\"label\\\":\\\"old\\\"}\"");
+      String created = client
+          .post()
+          .uri("/api/console/workflow-definitions")
+          .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-wf-secret-" + workflowCode)
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue(createBody)
+          .exchange()
+          .expectStatus()
+          .isOk()
+          .expectBody(String.class)
+          .returnResult()
+          .getResponseBody();
+
+      definitionId = jdbcTemplate.queryForObject(
+          "SELECT id FROM batch.workflow_definition WHERE tenant_id = ? AND workflow_code = ?",
+          Long.class,
+          "int-wf-ta",
+          workflowCode);
+      assertThat(created).contains("****").doesNotContain("workflow-secret");
+      String detail = client
+          .get()
+          .uri(
+              "/api/console/workflow-definitions/{id}?tenantId={tenantId}",
+              definitionId,
+              "int-wf-ta")
+          .exchange()
+          .expectStatus()
+          .isOk()
+          .expectBody(String.class)
+          .returnResult()
+          .getResponseBody();
+      assertThat(detail).contains("****").doesNotContain("workflow-secret");
+
+      String updateBody = createBody.replace("workflow-secret", "****").replace("old", "new");
+      String updated = client
+          .put()
+          .uri("/api/console/workflow-definitions/{id}", definitionId)
+          .header(
+              CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER,
+              "idem-wf-secret-update-" + workflowCode)
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue(updateBody)
+          .exchange()
+          .expectStatus()
+          .isOk()
+          .expectBody(String.class)
+          .returnResult()
+          .getResponseBody();
+
+      assertThat(updated).contains("****").doesNotContain("workflow-secret");
+      var storedParams = jdbcTemplate.queryForMap(
+          "SELECT node_params->>'apiKey' AS api_key, node_params->>'label' AS label "
+              + "FROM batch.workflow_node WHERE workflow_definition_id = ? AND node_code = ?",
+          definitionId,
+          "task1");
+      assertThat(storedParams).containsEntry("api_key", "workflow-secret");
+      assertThat(storedParams).containsEntry("label", "new");
+    } finally {
+      if (definitionId != null) {
+        jdbcTemplate.update(
+            "DELETE FROM batch.workflow_edge WHERE workflow_definition_id = ?", definitionId);
+        jdbcTemplate.update(
+            "DELETE FROM batch.workflow_node WHERE workflow_definition_id = ?", definitionId);
+        jdbcTemplate.update("DELETE FROM batch.workflow_definition WHERE id = ?", definitionId);
+      }
+    }
+  }
+
+  @Test
+  @DisplayName("租户管理员不能在工作流节点上指定物理 Worker 分组")
+  void shouldRejectTenantAdminAssigningNodeWorkerGroup() {
+    String workflowCode = "int_wf_tenant_route_" + System.currentTimeMillis();
+    String routedBody = body(workflowCode, "task1", "start")
+        .replace("\"nodeType\": \"TASK\"", "\"nodeType\": \"TASK\", \"workerGroup\": \"IMPORT\"");
+
+    client
+        .post()
+        .uri("/api/console/workflow-definitions")
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-wf-route-" + workflowCode)
+        .header("X-Console-Roles", "ROLE_TENANT_ADMIN")
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue(routedBody)
+        .exchange()
+        .expectStatus()
+        .isForbidden();
+
+    Long count = jdbcTemplate.queryForObject(
+        "SELECT COUNT(*) FROM batch.workflow_definition WHERE tenant_id = ? AND workflow_code = ?",
+        Long.class,
+        "int-wf-ta",
+        workflowCode);
+    assertThat(count).isZero();
+  }
+
+  @Test
+  @DisplayName("租户管理员更新工作流时省略物理路由字段不清除平台分配")
+  void shouldPreserveNodeWorkerGroup_whenTenantAdminUpdatesWorkflow() {
+    String workflowCode = "int_wf_route_preserve_" + System.currentTimeMillis();
+    String routedBody = body(workflowCode, "task1", "start")
+        .replace("\"nodeType\": \"TASK\"", "\"nodeType\": \"TASK\", \"workerGroup\": \"IMPORT\"");
+    client
+        .post()
+        .uri("/api/console/workflow-definitions")
+        .header(
+            CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-wf-route-seed-" + workflowCode)
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue(routedBody)
+        .exchange()
+        .expectStatus()
+        .isOk();
+
+    Long definitionId = jdbcTemplate.queryForObject(
+        "SELECT id FROM batch.workflow_definition WHERE tenant_id = ? AND workflow_code = ?",
+        Long.class,
+        "int-wf-ta",
+        workflowCode);
+    try {
+      client
+          .put()
+          .uri("/api/console/workflow-definitions/{id}", definitionId)
+          .header(
+              CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER,
+              "idem-wf-route-update-" + workflowCode)
+          .header("X-Console-Roles", "ROLE_TENANT_ADMIN")
+          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, "int-wf-ta")
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue(body(workflowCode, "task1", "start"))
+          .exchange()
+          .expectStatus()
+          .isOk();
+
+      String workerGroup = jdbcTemplate.queryForObject(
+          "SELECT worker_group FROM batch.workflow_node WHERE workflow_definition_id = ? AND node_code = ?",
+          String.class,
+          definitionId,
+          "task1");
+      assertThat(workerGroup).isEqualTo("IMPORT");
+    } finally {
+      jdbcTemplate.update(
+          "DELETE FROM batch.workflow_edge WHERE workflow_definition_id = ?", definitionId);
+      jdbcTemplate.update(
+          "DELETE FROM batch.workflow_node WHERE workflow_definition_id = ?", definitionId);
+      jdbcTemplate.update("DELETE FROM batch.workflow_definition WHERE id = ?", definitionId);
+    }
+  }
+
+  @Test
   @DisplayName("嵌套节点编码含空格: 返回校验错误且不落库")
   void shouldRejectNestedInvalidNodeCode() {
     // 嵌套 nodes[].nodeCode 含空格 → @Valid 下钻 → 400

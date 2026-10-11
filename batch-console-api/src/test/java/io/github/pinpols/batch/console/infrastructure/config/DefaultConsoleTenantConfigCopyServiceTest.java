@@ -137,6 +137,10 @@ class DefaultConsoleTenantConfigCopyServiceTest {
     assertThat(delegated.getFileChannels())
         .extracting("channelCode")
         .containsExactly("chan-explicit");
+    assertThat(delegated.getFileChannels()).singleElement().satisfies(channel -> {
+      assertThat(channel.getTargetEndpoint()).isNull();
+      assertThat(channel.getConfigJson()).isNull();
+    });
   }
 
   private void stubExplicitReferenceBundle() {
@@ -184,7 +188,11 @@ class DefaultConsoleTenantConfigCopyServiceTest {
     when(fileChannelConfigMapper.selectByQuery(
             anyString(), isNull(), isNull(), isNull(), any(PageRequest.class)))
         .thenReturn(List.of(
-            Map.of("channel_code", "chan-explicit", "enabled", true),
+            Map.of(
+                "channel_code", "chan-explicit",
+                "target_endpoint", "sftp://source-user:source-password@example.com/inbox",
+                "config_json", "{\"password\":\"source-password\"}",
+                "enabled", true),
             Map.of("channel_code", "PAYROLL", "enabled", true)));
     when(tenantQuotaPolicyMapper.selectByQuery(
             anyString(), isNull(), isNull(), any(PageRequest.class)))

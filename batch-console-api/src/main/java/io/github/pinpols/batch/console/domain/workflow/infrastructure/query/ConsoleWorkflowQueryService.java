@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.query.WorkflowDefinitionQueryRequest;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.query.WorkflowEdgeQueryRequest;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.query.WorkflowNodeQueryRequest;
@@ -253,7 +254,7 @@ public class ConsoleWorkflowQueryService {
         display(entity.getRetryPolicy()),
         entity.getRetryMaxCount(),
         entity.getTimeoutSeconds(),
-        display(entity.getNodeParams()),
+        SecretMasking.maskSensitiveJson(entity.getNodeParams()),
         entity.getEnabled(),
         entity.getCreatedAt(),
         entity.getUpdatedAt(),

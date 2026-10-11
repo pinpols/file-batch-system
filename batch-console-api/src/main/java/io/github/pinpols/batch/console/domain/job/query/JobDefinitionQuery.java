@@ -12,6 +12,7 @@ public record JobDefinitionQuery(
     String workerGroup,
     String queueCode,
     String scheduleType,
+    String monitoringCategory,
     Boolean enabled,
     PageRequest pageRequest) {
 

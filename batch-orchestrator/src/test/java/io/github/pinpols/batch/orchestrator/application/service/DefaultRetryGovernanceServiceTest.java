@@ -138,6 +138,23 @@ class DefaultRetryGovernanceServiceTest {
   }
 
   @Test
+  @DisplayName("重试使用实例创建时的策略快照,不受后续作业定义修改影响")
+  void shouldUseInstanceRetryPolicySnapshotAfterJobDefinitionChanges() {
+    when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 3));
+    JobInstanceEntity instance = jobInstance(1L);
+    instance.setParamsSnapshot(
+        "{\"executionPolicy\":{\"retryPolicy\":\"NONE\",\"retryMaxCount\":0}}");
+
+    boolean result = service.scheduleRetryIfNecessary(
+        task("t1", 1L, 1L), partition(1L, 0), instance, "ERR", "snapshot policy");
+
+    assertThat(result).isFalse();
+    verify(deadLetterTaskMapper).insert(any());
+    verify(retryScheduleMapper, never()).insert(any());
+    verify(jobDefinitionMapper, never()).selectById(1L);
+  }
+
+  @Test
   @DisplayName("最大重试次数为零时生成死信, 不写重试计划")
   void shouldCreateDeadLetterWhenMaxRetryCountZero() {
     when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 0));

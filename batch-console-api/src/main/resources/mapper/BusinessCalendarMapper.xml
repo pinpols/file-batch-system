@@ -20,6 +20,24 @@
         limit 1
     </select>
 
+    <select id="selectByTenantAndCalendarCode" resultType="map">
+        select
+            id,
+            tenant_id as "tenantId",
+            calendar_code as "calendarCode",
+            calendar_name as "calendarName",
+            timezone,
+            holiday_roll_rule as "holidayRollRule",
+            catch_up_policy as "catchUpPolicy",
+            catch_up_max_days as "catchUpMaxDays",
+            enabled,
+            description
+        from batch.business_calendar
+        where tenant_id = #{tenantId}
+          and calendar_code = #{calendarCode}
+        limit 1
+    </select>
+
     <select id="selectByQuery" resultType="map">
         select
             id, tenant_id as "tenantId", calendar_code as "calendarCode",

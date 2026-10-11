@@ -17,6 +17,8 @@ public interface CalendarHolidayMapper {
 
   int batchInsert(@Param("list") List<Map<String, Object>> list);
 
+  int upsertBatch(@Param("list") List<Map<String, Object>> list);
+
   int update(Map<String, Object> params);
 
   int deleteByCalendarId(@Param("calendarId") Long calendarId);

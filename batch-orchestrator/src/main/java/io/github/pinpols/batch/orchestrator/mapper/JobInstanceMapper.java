@@ -64,20 +64,6 @@ public interface JobInstanceMapper {
       @Param("expectedPartitionCount") Integer expectedPartitionCount,
       @Param("expectedVersion") Long expectedVersion);
 
-  List<JobInstanceEntity> selectSlaViolationCandidates(@Param("limit") int limit);
-
-  long countSlaViolationCandidates();
-
-  /**
-   * 选 sla_alerted_at 早于 {@code escalationBefore} 且 instance_status 仍非终态（WAITING/READY/RUNNING）的实例。
-   * 用于升级再触发：首次告警后跑了一段时间还没结束就转为 ERROR 级再发一次。
-   */
-  List<JobInstanceEntity> selectSlaEscalationCandidates(
-      @Param("escalationBefore") Instant escalationBefore, @Param("limit") int limit);
-
-  /** 升级候选总数（gauge 用）。 */
-  long countSlaEscalationCandidates(@Param("escalationBefore") Instant escalationBefore);
-
   /**
    * 选至少一个子任务已进入 RUNNING，且超过 {@code job_definition.timeout_seconds} 的实例（业务级 timeout 回退）。
    *
@@ -86,8 +72,8 @@ public interface JobInstanceMapper {
    * <p>实例进入 RUNNING 只表示已完成派发，并不代表 worker 已开始执行。排队等待由背压和 SLA 观察，不能消耗执行
    * timeout；否则高峰队列会把尚未 claim 的任务错误终止。
    *
-   * <p>与 {@code selectSlaViolationCandidates} 区别：SLA 看 {@code deadline_at /
-   * expected_duration_seconds}（业务 SLA 软告警，不变更状态）；timeout 看 {@code job_definition.timeout_seconds}（硬
+   * <p>SLA 看 {@code deadline_at / expected_duration_seconds}（业务 SLA 软告警，不变更状态）；timeout 看
+   * {@code job_definition.timeout_seconds}（硬
    * fail 终态）。
    */
   List<JobInstanceEntity> selectTimedOutCandidates(@Param("limit") int limit);
@@ -99,11 +85,6 @@ public interface JobInstanceMapper {
    */
   List<JobInstanceEntity> selectStaleCreatedLaunchCandidates(
       @Param("olderThan") Instant olderThan, @Param("limit") int limit);
-
-  int markSlaAlerted(
-      @Param("tenantId") String tenantId,
-      @Param("id") Long id,
-      @Param("slaAlertedAt") Instant slaAlertedAt);
 
   long countActiveByTenant(@Param("tenantId") String tenantId);
 

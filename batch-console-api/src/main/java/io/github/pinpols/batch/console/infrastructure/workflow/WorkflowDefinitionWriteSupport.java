@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.SecretMasking;
+import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
@@ -18,6 +20,8 @@ import io.github.pinpols.batch.console.domain.workflow.param.WorkflowNodeUpsertP
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowEdgeQuery;
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowNodeQuery;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -44,6 +48,25 @@ public final class WorkflowDefinitionWriteSupport {
 
   public void upsertNodesAndEdges(
       String tenantId, Long definitionId, WorkflowDefinitionSaveRequest request) {
+    upsertNodesAndEdges(tenantId, definitionId, request, Map.of());
+  }
+
+  public Map<String, String> readNodeParams(String tenantId, Long definitionId) {
+    return nodeMapper
+        .selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, definitionId, null))
+        .stream()
+        .filter(node -> node.getNodeParams() != null)
+        .collect(Collectors.toMap(
+            WorkflowNodeEntity::getNodeCode,
+            WorkflowNodeEntity::getNodeParams,
+            (first, ignored) -> first));
+  }
+
+  public void upsertNodesAndEdges(
+      String tenantId,
+      Long definitionId,
+      WorkflowDefinitionSaveRequest request,
+      Map<String, String> existingNodeParams) {
     if (request.getNodes() != null) {
       for (WorkflowDefinitionSaveRequest.NodeItem node : request.getNodes()) {
         WorkflowNodeUpsertParam param = new WorkflowNodeUpsertParam();
@@ -60,7 +83,8 @@ public final class WorkflowDefinitionWriteSupport {
         param.setRetryPolicy(node.getRetryPolicy());
         param.setRetryMaxCount(node.getRetryMaxCount());
         param.setTimeoutSeconds(node.getTimeoutSeconds());
-        param.setNodeParams(node.getNodeParams());
+        param.setNodeParams(
+            resolveNodeParams(node.getNodeParams(), existingNodeParams.get(node.getNodeCode())));
         param.setCrossDayDependencies(node.getCrossDayDependencies());
         param.setCrossDayDependencyTimeoutSeconds(node.getCrossDayDependencyTimeoutSeconds());
         param.setEnabled(node.getEnabled());
@@ -80,6 +104,19 @@ public final class WorkflowDefinitionWriteSupport {
         edgeMapper.upsertWorkflowEdge(param);
       }
     }
+  }
+
+  private static String resolveNodeParams(String submitted, String stored) {
+    if (!Texts.hasText(submitted)) {
+      return submitted;
+    }
+    String resolved =
+        stored == null ? submitted : SecretMasking.preserveMaskedJson(submitted, stored);
+    if (SecretMasking.containsMaskedSensitiveValue(resolved)) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.config.masked_secret_requires_value");
+    }
+    return resolved;
   }
 
   public void appendVersionSnapshot(

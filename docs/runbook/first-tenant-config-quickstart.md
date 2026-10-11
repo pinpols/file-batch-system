@@ -1,24 +1,23 @@
-# 第一个租户配置 · 手把手 quickstart
+# 首个租户作业配置与运行自检
 
-> 给**配置维护者 / 新人**:从零把一个租户的「CSV 导入」和「导出」跑起来。全程**可抄**,不用先读完设计文档。
-> 配套:不想手写 JSON?用 Excel 配置模板(本文 §4)。填错了怎么办?看 §6。
+> 面向熟悉批量作业和运维流程的配置维护人员。本文聚焦首次配置、配置包校验和就绪问题定位；字段规则以 Console 当前生成的场景模板和预览结果为准。
 
 ---
 
 ## 0. 心智模型(先记这张图)
 
 ```
-租户(tenant) ──持有──► 模板(file_template_config) ──引用──► 渠道(channel) / 队列(queue)
+租户(tenant) ──维护──► 作业 / 文件模板 / 日历 / 窗口 ──引用──► 渠道(channel)
      │                        │
      │                        └─ template_type = IMPORT / EXPORT / PROCESS / DISPATCH
-     └─ 一键建租户时可从 default 租户复制一套模板骨架(再填实)
+     └─ 作业创建后由平台资源策略解析物理队列和 Worker 路由
 ```
 
-- **租户**:隔离单元。建好后默认拿到一套**空骨架模板**(字段映射是空的,要你填)。
-- **模板**:一个导入/导出任务"长什么样"——文件格式、字段怎么映射、落哪张表 / 用哪条 SQL。**90% 的配置工作在这。**
-- **渠道 / 队列**:导出投递目标(SFTP/API)、调度队列。最简单的"导入入库 + 导出落文件"用不到渠道。
+- **业务配置**:作业、文件模板、Pipeline/Workflow、日历和窗口按实际场景维护；按需生成单场景或组合配置包，不要求每个作业都维护无关 Sheet。
+- **平台资源**:物理队列、容量、配额、Worker 分组和运行阈值由平台运维管理；租户配置包不能创建队列或指定物理路由。
+- **渠道**:用于外部文件交付。业务配置只引用获准渠道；凭据和环境专属 endpoint 不应通过导出/跨租户复制传播。
 
-**跑通一个导入只需要填好一个 IMPORT 模板;跑通一个导出只需要填好一个 EXPORT 模板。** 先把这两件事做完。
+租户负责描述业务意图和数据规则；平台负责资源供给与物理路由。就绪自检发现路由问题时，应由平台运维处理，而不是让租户绕过配置边界。
 
 ---
 
@@ -154,15 +153,23 @@ WHERE tenant_id = :tenantId AND (:status IS NULL OR status = :status)
 
 ---
 
-## 4. 不想手写 JSON?用 Excel 配置模板
+## 4. 按场景维护配置包
 
-`GET /api/console/config/tenant-package/excel/template` 下载一个**带引导的空白工作簿**:
+在 Console 配置包向导选择需要维护的场景，然后下载场景化空白模板。也可调用：
 
-- 「**字段说明**」sheet:每个字段的 必填★ / 类型 / 可选值枚举 / 说明 / 示例 / **填写示例**(完整可抄片段)/ 适用 Worker;枚举列是**下拉**。
-- 「**五类Worker示例**」sheet:IMPORT/EXPORT/PROCESS/DISPATCH/ATOMIC 各一份**填好的整行范例**；ATOMIC 行明确只填 `job_definition`，不创建 Pipeline。
-- 「**依赖说明**」sheet:job→template/channel/queue 引用关系 + DB fallback 规则。
+```text
+GET /api/console/config/tenant-package/excel/scenario-template?scenarios=IMPORT&scenarios=EXPORT
+```
 
-填完上传:`POST .../tenant-package/excel`(upload)→ `.../preview/{token}`(**预览,一次性列出字段错/SQL 错/跨 sheet 引用错**)→ `.../apply`(确认写入)。
+场景模板只包含所选场景需要的 Sheet/列和填写指引，不包含平台资源分配字段。文件场景可进一步选择方向与格式；高级字段仍可按场景提供，不因模板精简而删除底层能力。完整导出是权限投影后的全量维护包，不等于快速模板，也不能用作不经预览的覆盖恢复。
+
+导入流程为：
+
+1. `POST /api/console/config/tenant-package/excel/upload`，以 multipart 字段 `file` 上传工作簿；需要代租户操作的全局角色应传 `tenantId`。
+2. `GET /api/console/config/tenant-package/excel/preview/{uploadToken}` 检查字段、跨 Sheet 引用、权限和变更统计；错误行可通过 `POST .../preview/{uploadToken}/patch` 修正后重新预览，也可下载带批注工作簿。
+3. 确认预览和影响范围后，带幂等键调用 `POST /api/console/config/tenant-package/excel/apply/{uploadToken}`。Apply 是单事务 MERGE；包中缺少的行/Sheet 不表示删除。若预览后配置已变化，服务端返回冲突，必须刷新预览并重新确认。
+
+租户管理员提交的配置包若包含资源队列、物理 `queue_code` / `worker_group` 或平台运行阈值，会被整包拒绝；不要通过编辑 Excel 绕过限制。队列或路由异常请在就绪自检中复制作业编码和提示，交由平台运维核对。
 
 ---
 
@@ -182,7 +189,7 @@ WHERE tenant_id = :tenantId AND (:status IS NULL OR status = :status)
 | Excel 配置包填错 | upload→`preview` 一次性列出所有字段/SQL/引用错 | §4 |
 | 导入有坏行 | `file_error_record` 写入数据库**带 Excel 物理行号 + 出错列**,能回原表定位 | 坏行治理 |
 | 导入整列变 null | 多半是**表头名拼错**——现在 LOAD 前会校验表头存在性,fail-fast 报缺哪列 | §3a |
-| 不确定某字段含义/格式 | Excel 字段说明 sheet(§4)是字段字典的**单一权威源** | §4 |
+| 不确定某字段含义/格式 | 场景模板的字段说明、下拉选项和预览错误是当前契约；平台字段以权限提示为准 | §4 |
 
 ---
 

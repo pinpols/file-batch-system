@@ -92,7 +92,6 @@ public class DefaultLaunchService implements LaunchService {
     if (duplicateShortCircuit != null) {
       return duplicateShortCircuit;
     }
-
     String traceId = resolveTraceId(request);
     LaunchRequest routedRequest = launchBatchDayService.routeLateArrivalIfNeeded(request, loaded);
     Map<String, Object> effectiveParams =

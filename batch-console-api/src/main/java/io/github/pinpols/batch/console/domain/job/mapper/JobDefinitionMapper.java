@@ -42,6 +42,8 @@ public interface JobDefinitionMapper {
 
   int copyJobDefinition(String tenantId, Long sourceId, String newJobCode, String createdBy);
 
+  int clearPhysicalResourceAssignment(String tenantId, String jobCode, String updatedBy);
+
   /** BE Spike(workflow-dag-designer): 下拉数据源,仅 enabled=true,按 jobCode 升序返回 (jobCode, jobName)。 */
   List<Map<String, Object>> selectActiveCodeNames(@Param("tenantId") String tenantId);
 

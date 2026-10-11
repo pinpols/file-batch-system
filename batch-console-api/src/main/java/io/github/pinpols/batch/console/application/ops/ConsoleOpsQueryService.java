@@ -13,6 +13,7 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.console.application.contract.query.ApprovalCommandQueryRequest;
 import io.github.pinpols.batch.console.application.contract.query.AuditLogQueryRequest;
 import io.github.pinpols.batch.console.application.contract.query.OutboxDeliveryLogQueryRequest;
@@ -373,7 +374,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
   private ConsoleOutboxDeliveryLogResponse toOutboxDeliveryResponse(Map<String, Object> row) {
     String errorMessage = localizedErrorRenderer.render(
         stringValue(row, "error_key"),
-        stringValue(row, "error_args"),
+        SecretMasking.maskSensitiveJson(rawStringValue(row, "error_args")),
         stringValue(row, "error_message"));
     return new ConsoleOutboxDeliveryLogResponse(
         longValue(row, "id"),
@@ -420,7 +421,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
         display(entity.getActionType()),
         display(entity.getTargetType()),
         display(entity.getTargetId()),
-        entity.getPayloadJson(),
+        SecretMasking.maskSensitiveJson(entity.getPayloadJson()),
         display(entity.getApprovalStatus()),
         display(entity.getRequesterId()),
         display(entity.getApproverId()),
@@ -535,6 +536,11 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
     return now.isAfter(slaDeadlineAt) ? "SLA_TIMEOUT" : "ON_TIME";
   }
 
+  private String rawStringValue(Map<String, Object> row, String key) {
+    Object value = row == null ? null : row.get(key);
+    return value == null ? null : String.valueOf(value);
+  }
+
   private ConsoleAlertEventResponse toAlertEventResponse(AlertEventEntity entity) {
     return new ConsoleAlertEventResponse(
         entity.getId(),
@@ -543,7 +549,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
         display(entity.getAlertType()),
         display(entity.getSeverity()),
         display(entity.getTitle()),
-        display(entity.getDetailJson()),
+        ConsoleTextSanitizer.safeDisplay(SecretMasking.maskSensitiveJson(entity.getDetailJson())),
         display(entity.getDedupFingerprint()),
         entity.getOccurrenceCount(),
         entity.getFirstSeenAt(),

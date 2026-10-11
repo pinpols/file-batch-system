@@ -19,6 +19,8 @@ public interface TenantConfigPackageExcelService {
 
   ResponseEntity<StreamingResponseBody> downloadTemplate();
 
+  ResponseEntity<StreamingResponseBody> downloadScenarioTemplate(List<String> scenarios);
+
   ResponseEntity<StreamingResponseBody> downloadSampleTemplate(
       String scenario, List<String> scenarios);
 
@@ -31,7 +33,11 @@ public interface TenantConfigPackageExcelService {
 
   /** 内联编辑回写:把出错行被改的单元格合并进上传会话,重校验后返回新预览(不落库)。 */
   TenantConfigPackageExcelPreviewResponse patchRow(
-      String uploadToken, String sheetName, int rowNo, Map<String, String> values);
+      String uploadToken,
+      String previewToken,
+      String sheetName,
+      int rowNo,
+      Map<String, String> values);
 
   ResponseEntity<StreamingResponseBody> downloadPreviewWorkbook(String uploadToken);
 

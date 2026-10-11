@@ -1,6 +1,86 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.orchestrator.mapper.JobMonitoringMapper">
+    <select id="selectSlaViolationCandidates"
+            resultMap="io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper.JobInstanceResultMap">
+        <!-- 按租户轮转排序，避免一个租户占满批次后让其他租户的 SLA 告警长期饥饿。 -->
+        SELECT *
+        FROM batch.job_instance
+        WHERE instance_status IN ('WAITING', 'READY', 'RUNNING')
+          AND sla_alerted_at IS NULL
+          AND (
+                (deadline_at IS NOT NULL AND deadline_at &lt; current_timestamp)
+                OR (
+                    expected_duration_seconds &gt; 0
+                    AND started_at IS NOT NULL
+                    AND started_at &lt; current_timestamp - (expected_duration_seconds * interval '1 second')
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM batch.job_monitoring_policy mp
+                        WHERE mp.tenant_id = job_instance.tenant_id
+                          AND mp.job_definition_id = job_instance.job_definition_id
+                          AND mp.soft_runtime_seconds &gt; 0
+                    )
+                )
+              )
+        ORDER BY tenant_id ASC,
+                 coalesce(
+                    deadline_at,
+                    started_at + (expected_duration_seconds * interval '1 second'),
+                    created_at
+                 ) ASC,
+                 id ASC
+        LIMIT #{limit}
+    </select>
+
+    <select id="countSlaViolationCandidates" resultType="long">
+        SELECT count(1)
+        FROM batch.job_instance
+        WHERE instance_status IN ('WAITING', 'READY', 'RUNNING')
+          AND sla_alerted_at IS NULL
+          AND (
+                (deadline_at IS NOT NULL AND deadline_at &lt; current_timestamp)
+                OR (
+                    expected_duration_seconds &gt; 0
+                    AND started_at IS NOT NULL
+                    AND started_at &lt; current_timestamp - (expected_duration_seconds * interval '1 second')
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM batch.job_monitoring_policy mp
+                        WHERE mp.tenant_id = job_instance.tenant_id
+                          AND mp.job_definition_id = job_instance.job_definition_id
+                          AND mp.soft_runtime_seconds &gt; 0
+                    )
+                )
+              )
+    </select>
+
+    <update id="markSlaAlerted">
+        UPDATE batch.job_instance
+        SET sla_alerted_at = #{slaAlertedAt}, updated_at = current_timestamp
+        WHERE tenant_id = #{tenantId}
+          AND id = #{id}
+          AND sla_alerted_at IS NULL
+    </update>
+
+    <select id="selectSlaEscalationCandidates"
+            resultMap="io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper.JobInstanceResultMap">
+        SELECT *
+        FROM batch.job_instance
+        WHERE instance_status IN ('WAITING', 'READY', 'RUNNING')
+          AND sla_alerted_at IS NOT NULL
+          AND sla_alerted_at &lt; #{escalationBefore}
+        ORDER BY tenant_id ASC, sla_alerted_at ASC, id ASC
+        LIMIT #{limit}
+    </select>
+
+    <select id="countSlaEscalationCandidates" resultType="long">
+        SELECT count(1)
+        FROM batch.job_instance
+        WHERE instance_status IN ('WAITING', 'READY', 'RUNNING')
+          AND sla_alerted_at IS NOT NULL
+          AND sla_alerted_at &lt; #{escalationBefore}
+    </select>
     <resultMap id="candidateMap" type="io.github.pinpols.batch.orchestrator.domain.entity.JobMonitoringAlertCandidate">
         <constructor>
             <arg column="tenant_id" javaType="java.lang.String"/>

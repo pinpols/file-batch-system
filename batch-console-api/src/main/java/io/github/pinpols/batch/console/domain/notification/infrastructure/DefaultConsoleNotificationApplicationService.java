@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.console.domain.notification.application.ConsoleNotificationApplicationService;
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.NotificationChannelUpdateRequest;
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.NotificationChannelUpsertRequest;
@@ -160,19 +161,30 @@ public class DefaultConsoleNotificationApplicationService
   public void updateChannel(
       String tenantId, String channelCode, NotificationChannelUpdateRequest request) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    Guard.requireFound(
+    Map<String, Object> existing = Guard.requireFound(
         channelMapper.selectByCode(resolved, channelCode), ERR_CHANNEL_NOT_FOUND + channelCode);
     requireKnownChannelType(request.getChannelType());
-    validateWebhookChannelUrl(request.getChannelType(), request.getConfigJson());
+    String configJson = request.getConfigJson() != null
+        ? preserveMaskedChannelConfig(request.getConfigJson(), existing.get(COL_CONFIG_JSON))
+        : null;
+    validateWebhookChannelUrl(request.getChannelType(), configJson);
     String operator = metadataResolver.current().operatorId();
     channelMapper.update(mapOf(
         KEY_TENANT_ID, resolved,
         KEY_CHANNEL_CODE, channelCode,
         KEY_CHANNEL_NAME, ConsoleTextSanitizer.safeInput(request.getChannelName(), 128),
         KEY_CHANNEL_TYPE, request.getChannelType(),
-        KEY_CONFIG_JSON, request.getConfigJson(),
+        KEY_CONFIG_JSON, configJson,
         KEY_ENABLED, enabledOrDefault(request.getEnabled()),
         KEY_UPDATED_BY, operator));
+  }
+
+  private static String preserveMaskedChannelConfig(String submittedJson, Object storedValue) {
+    if (storedValue == null || !submittedJson.contains(SecretMasking.MASKED_VALUE)) {
+      return submittedJson;
+    }
+    return SecretMasking.preserveMaskedJson(
+        submittedJson, JsonUtils.toJson(storedValue), Set.of("url"));
   }
 
   /**

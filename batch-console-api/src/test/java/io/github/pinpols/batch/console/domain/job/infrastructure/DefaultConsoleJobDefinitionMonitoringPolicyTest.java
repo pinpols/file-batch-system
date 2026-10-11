@@ -18,6 +18,7 @@ import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.param.JobDefinitionMaintenanceUpdateParam;
 import io.github.pinpols.batch.console.domain.job.param.JobMonitoringPolicyUpsertParam;
 import io.github.pinpols.batch.console.domain.job.support.BuiltinTaskTypeGuard;
+import io.github.pinpols.batch.console.domain.job.support.JobResourceAssignmentGuard;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -51,6 +52,9 @@ class DefaultConsoleJobDefinitionMonitoringPolicyTest {
   @Mock
   private BuiltinTaskTypeGuard builtinTaskTypeGuard;
 
+  @Mock
+  private JobResourceAssignmentGuard resourceAssignmentGuard;
+
   @InjectMocks
   private DefaultConsoleJobDefinitionApplicationService service;
 
@@ -64,7 +68,8 @@ class DefaultConsoleJobDefinitionMonitoringPolicyTest {
         requestMetadataResolver,
         cacheInvalidationService,
         defaults,
-        builtinTaskTypeGuard);
+        builtinTaskTypeGuard,
+        resourceAssignmentGuard);
   }
 
   private void stubTenantAndOperator() {
@@ -191,6 +196,33 @@ class DefaultConsoleJobDefinitionMonitoringPolicyTest {
     assertThat(response.jobCode()).isEqualTo("JOB_COPY");
     verify(jobDefinitionMapper).copyJobMonitoringPolicy("tenant-a", 60L, 61L, "tester");
     verify(cacheInvalidationService).evictJobDefinition("tenant-a", "JOB_COPY");
+  }
+
+  @Test
+  @DisplayName("租户复制作业时清除继承的物理路由,交由平台重新解析")
+  void shouldResolveRoutingForTenantCopy() {
+    stubTenantAndOperator();
+    when(resourceAssignmentGuard.shouldResolveRoutingForCopy()).thenReturn(true);
+    JobDefinitionEntity copied = copyEntity("JOB_COPY_ROUTE");
+    copied.setQueueCode("queue_a");
+    copied.setWorkerGroup("IMPORT");
+    when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_COPY_ROUTE"))
+        .thenReturn(null, copied);
+    when(jobDefinitionMapper.selectById("tenant-a", 61L)).thenAnswer(invocation -> copied);
+    doAnswer(invocation -> {
+          copied.setQueueCode(null);
+          copied.setWorkerGroup(null);
+          return 1;
+        })
+        .when(jobDefinitionMapper)
+        .clearPhysicalResourceAssignment("tenant-a", "JOB_COPY_ROUTE", "tester");
+
+    var response = service.copy(60L, "tenant-a", "JOB_COPY_ROUTE");
+
+    assertThat(response.queueCode()).isNull();
+    assertThat(response.workerGroup()).isNull();
+    verify(jobDefinitionMapper)
+        .clearPhysicalResourceAssignment("tenant-a", "JOB_COPY_ROUTE", "tester");
   }
 
   @Test

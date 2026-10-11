@@ -117,7 +117,7 @@ class ConsoleTenantReadinessServiceTest {
     assertThat(r.blocking().get(0).ref()).isEqualTo("exp1");
     // hint / docRef 是「报怎么补」引导:blocking 项必须给出可操作提示 + 文档引用。
     assertThat(r.blocking().get(0).hint())
-        .contains("file_template_config")
+        .contains("对应场景配置包的文件模板 Sheet")
         .contains("default_query_sql");
     assertThat(r.blocking().get(0).docRef()).contains("first-tenant-config-quickstart.md");
   }
@@ -184,7 +184,7 @@ class ConsoleTenantReadinessServiceTest {
   }
 
   @Test
-  @DisplayName("作业引用了不存在的队列时判定阻断, 并给出可操作提示与文档引用")
+  @DisplayName("作业引用了不存在的物理队列时判定阻断并指向平台运维")
   void shouldBlock_whenJobReferencesMissingQueue() {
     when(resourceQueueMapper.selectQueueCodes("t1")).thenReturn(List.of("q-existing"));
     when(jobDefinitionMapper.selectEnabledJobQueueRefs("t1"))
@@ -196,7 +196,11 @@ class ConsoleTenantReadinessServiceTest {
     assertThat(r.blocking()).hasSize(1);
     assertThat(r.blocking().get(0).item()).isEqualTo("queue");
     assertThat(r.blocking().get(0).ref()).isEqualTo("job1");
-    assertThat(r.blocking().get(0).hint()).contains("resource_queue").contains("q-missing");
+    assertThat(r.blocking().get(0).hint())
+        .contains("平台运维")
+        .contains("租户配置包不能创建队列")
+        .doesNotContain("resource_queue sheet", "把作业 queue_code 改为")
+        .contains("不能调整物理队列引用");
     assertThat(r.blocking().get(0).docRef()).contains("first-tenant-config-quickstart.md");
   }
 

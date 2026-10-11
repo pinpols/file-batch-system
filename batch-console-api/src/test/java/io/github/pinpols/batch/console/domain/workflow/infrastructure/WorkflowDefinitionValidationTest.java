@@ -10,6 +10,7 @@ import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInva
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
+import io.github.pinpols.batch.console.domain.job.support.JobResourceAssignmentGuard;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService.DagValidationResult;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
@@ -72,7 +73,8 @@ class WorkflowDefinitionValidationTest {
         new WorkflowDefinitionResponseAssembler(),
         new WorkflowDefinitionWriteSupport(
             nodeMapper, edgeMapper, versionMapper, new ObjectMapper()),
-        new WorkflowDefinitionDagInspector(jobDefinitionMapper));
+        new WorkflowDefinitionDagInspector(jobDefinitionMapper),
+        mock(JobResourceAssignmentGuard.class));
   }
 
   @Test

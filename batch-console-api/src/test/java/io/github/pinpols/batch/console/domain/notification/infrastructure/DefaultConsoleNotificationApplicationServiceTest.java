@@ -203,12 +203,16 @@ class DefaultConsoleNotificationApplicationServiceTest {
   @DisplayName("更新渠道时按最新字段与当前操作人写库")
   void shouldUpdateChannel() {
     when(channelMapper.selectByCode("tenant-a", "email-1"))
-        .thenReturn(Map.of("channelCode", "email-1"));
+        .thenReturn(Map.of(
+            "channelCode",
+            "email-1",
+            "config_json",
+            Map.of("url", "https://example.com/old", "token", "stored-token")));
 
     NotificationChannelUpdateRequest update = new NotificationChannelUpdateRequest();
     update.setChannelName("Email Updated");
     update.setChannelType("EMAIL");
-    update.setConfigJson("{\"url\":\"https://example.com/new\"}");
+    update.setConfigJson("{\"url\":\"****\",\"token\":\"****\"}");
     update.setEnabled(false);
     service.updateChannel("tenant-a", "email-1", update);
 
@@ -219,7 +223,8 @@ class DefaultConsoleNotificationApplicationServiceTest {
         .containsEntry("channelCode", "email-1")
         .containsEntry("channelName", "Email Updated")
         .containsEntry("channelType", "EMAIL")
-        .containsEntry("configJson", "{\"url\":\"https://example.com/new\"}")
+        .containsEntry(
+            "configJson", "{\"url\":\"https://example.com/old\",\"token\":\"stored-token\"}")
         .containsEntry("enabled", false)
         .containsEntry("updatedBy", "operator-1");
   }

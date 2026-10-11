@@ -1,6 +1,11 @@
 package io.github.pinpols.batch.common.utils;
 
+import java.net.URI;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -20,7 +25,7 @@ import java.util.Set;
  *
  * <p>命中 → 值替换为 {@code ****}（无论长度）；调用方负责在日志 / 审计 payload 组装前走这里。
  *
- * <p>该工具不做深递归，默认只处理 map 顶层。嵌套 Map 的敏感字段需调用方递归（避免意外展开 不该展开的数据结构）。
+ * <p>Map 和集合中的敏感字段会递归脱敏；非 Map/集合值保持原样。
  */
 @SuppressWarnings("java:S2583")
 public final class SecretMasking {
@@ -35,7 +40,7 @@ public final class SecretMasking {
       "private_key",
       "credential");
 
-  private static final String MASK = "****";
+  public static final String MASKED_VALUE = "****";
 
   private SecretMasking() {}
 
@@ -53,8 +58,14 @@ public final class SecretMasking {
     return false;
   }
 
-  /** 返回原 map 的拷贝，敏感字段值替换为 {@link #MASK}。null-in → null-out。 */
+  /** 返回原 map 的拷贝，敏感字段值替换为 {@link #MASKED_VALUE}。null-in → null-out。 */
   public static Map<String, Object> maskSensitiveKeys(Map<String, Object> source) {
+    return maskSensitiveKeys(source, Set.of());
+  }
+
+  /** 返回原 map 的拷贝，并将额外指定的字段按敏感值处理。 */
+  public static Map<String, Object> maskSensitiveKeys(
+      Map<String, Object> source, Set<String> additionalSensitiveKeys) {
     if (source == null) {
       return null;
     }
@@ -62,12 +73,267 @@ public final class SecretMasking {
     for (Map.Entry<String, Object> entry : source.entrySet()) {
       String key = entry.getKey();
       Object value = entry.getValue();
-      if (isSensitive(key) && value != null) {
-        masked.put(key, MASK);
+      if (isSensitive(key, additionalSensitiveKeys) && value != null) {
+        masked.put(key, MASKED_VALUE);
       } else {
-        masked.put(key, value);
+        masked.put(key, maskNestedValue(value, additionalSensitiveKeys));
       }
     }
     return masked;
+  }
+
+  /** 对动态 JSON 做递归凭据脱敏；无效 JSON 由调用方决定如何降级处理。 */
+  public static String maskSensitiveJson(String json) {
+    return maskSensitiveJson(json, Set.of());
+  }
+
+  /** 对动态 JSON 做递归凭据脱敏，并将额外指定的字段按敏感值处理。 */
+  public static String maskSensitiveJson(String json, Set<String> additionalSensitiveKeys) {
+    if (!Texts.hasText(json)) {
+      return json;
+    }
+    return JsonUtils.toJson(
+        maskNestedValue(JsonUtils.fromJson(json, Object.class), additionalSensitiveKeys));
+  }
+
+  /** 判断动态 JSON 是否仍含有未恢复的敏感字段掩码。 */
+  public static boolean containsMaskedSensitiveValue(String json) {
+    if (!Texts.hasText(json)) {
+      return false;
+    }
+    return containsMaskedSensitiveValue(JsonUtils.fromJson(json, Object.class));
+  }
+
+  /** 从跨租户配置副本中递归移除敏感字段，避免复制源环境凭据或租户级密钥引用。 */
+  public static String removeSensitiveJsonFields(String json) {
+    if (!Texts.hasText(json)) {
+      return json;
+    }
+    return JsonUtils.toJson(removeSensitiveFields(JsonUtils.fromJson(json, Object.class)));
+  }
+
+  /** 更新请求回传脱敏 JSON 时，从当前数据库值恢复相同位置的掩码凭据。 */
+  public static String preserveMaskedJson(String submittedJson, String storedJson) {
+    return preserveMaskedJson(submittedJson, storedJson, Set.of());
+  }
+
+  /** 更新回传脱敏 JSON 时，从当前数据库值恢复敏感键和额外指定字段的掩码值。 */
+  public static String preserveMaskedJson(
+      String submittedJson, String storedJson, Set<String> additionalSensitiveKeys) {
+    if (!Texts.hasText(submittedJson) || !Texts.hasText(storedJson)) {
+      return submittedJson;
+    }
+    Object submitted = JsonUtils.fromJson(submittedJson, Object.class);
+    Object stored = JsonUtils.fromJson(storedJson, Object.class);
+    return JsonUtils.toJson(restoreMaskedValue(submitted, stored, additionalSensitiveKeys));
+  }
+
+  /** 脱敏 URI 中的 userinfo 和敏感 query 参数；普通文件路径及非敏感 URI 保持不变。 */
+  public static String maskEndpoint(String endpoint) {
+    return transformEndpoint(endpoint, null, false);
+  }
+
+  /** 更新回传已脱敏端点时，从存量端点恢复 userinfo 和对应 query 凭据。 */
+  public static String preserveMaskedEndpoint(String submitted, String stored) {
+    return transformEndpoint(submitted, stored, true);
+  }
+
+  private static String transformEndpoint(String endpoint, String storedEndpoint, boolean restore) {
+    if (!Texts.hasText(endpoint)) {
+      return endpoint;
+    }
+    try {
+      URI uri = URI.create(endpoint);
+      if (uri.getScheme() == null || uri.isOpaque()) {
+        return endpoint;
+      }
+      URI storedUri = restore && Texts.hasText(storedEndpoint) ? URI.create(storedEndpoint) : null;
+      String authority = uri.getRawAuthority();
+      if (uri.getRawUserInfo() != null) {
+        String userInfo = uri.getRawUserInfo();
+        if (restore && MASKED_VALUE.equals(userInfo) && storedUri != null) {
+          userInfo = storedUri.getRawUserInfo();
+        } else if (!restore) {
+          userInfo = MASKED_VALUE;
+        }
+        int at = authority.lastIndexOf('@');
+        authority = (userInfo == null ? "" : userInfo) + authority.substring(at);
+      }
+      String query = transformQuery(
+          uri.getRawQuery(), storedUri == null ? null : storedUri.getRawQuery(), restore);
+      return renderUri(uri, authority, query);
+    } catch (IllegalArgumentException ignored) {
+      return endpoint.matches("(?i)^[a-z][a-z0-9+.-]*://.*") ? MASKED_VALUE : endpoint;
+    }
+  }
+
+  private static String transformQuery(String query, String storedQuery, boolean restore) {
+    if (query == null) {
+      return null;
+    }
+    String[] parameters = query.split("&", -1);
+    String[] storedParameters = storedQuery == null ? new String[0] : storedQuery.split("&", -1);
+    for (int index = 0; index < parameters.length; index++) {
+      int equals = parameters[index].indexOf('=');
+      String rawName = equals < 0 ? parameters[index] : parameters[index].substring(0, equals);
+      String name = URLDecoder.decode(rawName, StandardCharsets.UTF_8);
+      if (!isSensitive(name) && !"key".equalsIgnoreCase(name)) {
+        continue;
+      }
+      if (equals < 0) {
+        parameters[index] = rawName + "=" + MASKED_VALUE;
+      } else {
+        String value = parameters[index].substring(equals + 1);
+        if (restore && MASKED_VALUE.equals(value)) {
+          String storedValue = queryValue(storedParameters, name);
+          if (storedValue != null) {
+            value = storedValue;
+          }
+        } else if (!restore) {
+          value = MASKED_VALUE;
+        }
+        parameters[index] = rawName + "=" + value;
+      }
+    }
+    return String.join("&", parameters);
+  }
+
+  private static String queryValue(String[] parameters, String expectedName) {
+    for (String parameter : parameters) {
+      int equals = parameter.indexOf('=');
+      if (equals < 0) {
+        continue;
+      }
+      String name = URLDecoder.decode(parameter.substring(0, equals), StandardCharsets.UTF_8);
+      if (name.equalsIgnoreCase(expectedName)) {
+        return parameter.substring(equals + 1);
+      }
+    }
+    return null;
+  }
+
+  private static String renderUri(URI uri, String authority, String query) {
+    StringBuilder rendered = new StringBuilder(uri.getScheme()).append(':');
+    if (authority != null) {
+      rendered.append("//").append(authority);
+    }
+    if (uri.getRawPath() != null) {
+      rendered.append(uri.getRawPath());
+    }
+    if (query != null) {
+      rendered.append('?').append(query);
+    }
+    if (uri.getRawFragment() != null) {
+      rendered.append('#').append(uri.getRawFragment());
+    }
+    return rendered.toString();
+  }
+
+  /** 对动态 JSON 值递归脱敏；保留 Map/List 类型供既有响应契约使用。 */
+  public static Object maskSensitiveValue(Object value, Set<String> additionalSensitiveKeys) {
+    return maskNestedValue(value, additionalSensitiveKeys);
+  }
+
+  private static boolean isSensitive(String key, Set<String> additionalSensitiveKeys) {
+    return isSensitive(key)
+        || additionalSensitiveKeys.stream().anyMatch(candidate -> candidate.equalsIgnoreCase(key));
+  }
+
+  private static Object maskNestedValue(Object value, Set<String> additionalSensitiveKeys) {
+    if (value instanceof Map<?, ?> source) {
+      Map<String, Object> masked = new LinkedHashMap<>(source.size());
+      for (Map.Entry<?, ?> entry : source.entrySet()) {
+        String key = String.valueOf(entry.getKey());
+        Object nested = entry.getValue();
+        masked.put(
+            key,
+            isSensitive(key, additionalSensitiveKeys) && nested != null
+                ? MASKED_VALUE
+                : maskNestedValue(nested, additionalSensitiveKeys));
+      }
+      return masked;
+    }
+    if (value instanceof Iterable<?> source) {
+      List<Object> masked = new ArrayList<>();
+      for (Object nested : source) {
+        masked.add(maskNestedValue(nested, additionalSensitiveKeys));
+      }
+      return masked;
+    }
+    return value;
+  }
+
+  private static Object restoreMaskedValue(
+      Object submitted, Object stored, Set<String> additionalSensitiveKeys) {
+    if (submitted instanceof Map<?, ?> submittedMap) {
+      Map<?, ?> storedMap = stored instanceof Map<?, ?> map ? map : Map.of();
+      Map<String, Object> restored = new LinkedHashMap<>(submittedMap.size());
+      for (Map.Entry<?, ?> entry : submittedMap.entrySet()) {
+        String key = String.valueOf(entry.getKey());
+        Object value = entry.getValue();
+        if (isSensitive(key, additionalSensitiveKeys)
+            && MASKED_VALUE.equals(value)
+            && storedMap.containsKey(key)) {
+          restored.put(key, storedMap.get(key));
+        } else {
+          restored.put(key, restoreMaskedValue(value, storedMap.get(key), additionalSensitiveKeys));
+        }
+      }
+      return restored;
+    }
+    if (submitted instanceof List<?> submittedList) {
+      List<?> storedList = stored instanceof List<?> list ? list : List.of();
+      List<Object> restored = new ArrayList<>(submittedList.size());
+      for (int index = 0; index < submittedList.size(); index++) {
+        Object storedValue = index < storedList.size() ? storedList.get(index) : null;
+        restored.add(
+            restoreMaskedValue(submittedList.get(index), storedValue, additionalSensitiveKeys));
+      }
+      return restored;
+    }
+    return submitted;
+  }
+
+  private static boolean containsMaskedSensitiveValue(Object value) {
+    if (value instanceof Map<?, ?> map) {
+      for (Map.Entry<?, ?> entry : map.entrySet()) {
+        String key = String.valueOf(entry.getKey());
+        Object nested = entry.getValue();
+        if (isSensitive(key) && MASKED_VALUE.equals(nested)) {
+          return true;
+        }
+        if (containsMaskedSensitiveValue(nested)) {
+          return true;
+        }
+      }
+    } else if (value instanceof Iterable<?> values) {
+      for (Object nested : values) {
+        if (containsMaskedSensitiveValue(nested)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  private static Object removeSensitiveFields(Object value) {
+    if (value instanceof Map<?, ?> map) {
+      Map<String, Object> sanitized = new LinkedHashMap<>(map.size());
+      for (Map.Entry<?, ?> entry : map.entrySet()) {
+        String key = String.valueOf(entry.getKey());
+        if (!isSensitive(key)) {
+          sanitized.put(key, removeSensitiveFields(entry.getValue()));
+        }
+      }
+      return sanitized;
+    }
+    if (value instanceof Iterable<?> values) {
+      List<Object> sanitized = new ArrayList<>();
+      for (Object nested : values) {
+        sanitized.add(removeSensitiveFields(nested));
+      }
+      return sanitized;
+    }
+    return value;
   }
 }

@@ -6,8 +6,14 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.i18n.LocalizedErrorRenderer;
+import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
+import io.github.pinpols.batch.console.application.contract.query.ApprovalCommandQueryRequest;
 import io.github.pinpols.batch.console.application.contract.query.WorkerRegistryQueryRequest;
+import io.github.pinpols.batch.console.domain.notification.application.contract.query.AlertEventQueryRequest;
+import io.github.pinpols.batch.console.domain.notification.mapper.AlertEventMapper;
+import io.github.pinpols.batch.console.domain.ops.entity.ApprovalCommandEntity;
 import io.github.pinpols.batch.console.domain.ops.entity.WorkerRegistryEntity;
+import io.github.pinpols.batch.console.domain.ops.mapper.ApprovalCommandMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.WorkerRegistryMapper;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import java.util.List;
@@ -23,6 +29,12 @@ class ConsoleOpsQueryServiceTest {
 
   @Mock
   private WorkerRegistryMapper workerRegistryMapper;
+
+  @Mock
+  private AlertEventMapper alertEventMapper;
+
+  @Mock
+  private ApprovalCommandMapper approvalCommandMapper;
 
   @Mock
   private LocalizedErrorRenderer localizedErrorRenderer;
@@ -63,5 +75,53 @@ class ConsoleOpsQueryServiceTest {
       assertThat(capability.resourceKinds()).containsExactly("DISK");
       assertThat(capability.recommendedTimeoutMillis()).isEqualTo(300_000L);
     });
+  }
+
+  @Test
+  @DisplayName("告警详情和审批载荷只在查询响应中递归脱敏")
+  void shouldMaskDynamicJsonInReadResponses() {
+    AlertEventEntity alert = new AlertEventEntity();
+    alert.setId(2L);
+    alert.setTenantId("tenant-a");
+    alert.setDetailJson("{\"reason\":\"failed\",\"auth\":{\"clientSecret\":\"raw\"}}");
+    ApprovalCommandEntity approval = new ApprovalCommandEntity();
+    approval.setId(3L);
+    approval.setTenantId("tenant-a");
+    approval.setPayloadJson("{\"action\":\"retry\",\"apiToken\":\"raw\"}");
+    when(alertEventMapper.selectByQuery(any())).thenReturn(List.of(alert));
+    when(alertEventMapper.countByQuery(any())).thenReturn(1L);
+    when(approvalCommandMapper.selectByQuery(any())).thenReturn(List.of(approval));
+    when(approvalCommandMapper.countByQuery(any())).thenReturn(1L);
+    ConsoleOpsQueryMappers mappers = new ConsoleOpsQueryMappers(
+        null,
+        alertEventMapper,
+        approvalCommandMapper,
+        null,
+        null,
+        null,
+        workerRegistryMapper,
+        null,
+        null,
+        null,
+        null,
+        null);
+    ConsoleOpsQueryService service = new ConsoleOpsQueryService(
+        requestTenantId -> requestTenantId, mappers, localizedErrorRenderer, timezoneProvider);
+    AlertEventQueryRequest alertRequest = new AlertEventQueryRequest();
+    alertRequest.setTenantId("tenant-a");
+    ApprovalCommandQueryRequest approvalRequest = new ApprovalCommandQueryRequest();
+    approvalRequest.setTenantId("tenant-a");
+
+    var alertResponse = service.alertEvents(alertRequest).items().getFirst();
+    var approvalResponse = service.approvals(approvalRequest).items().getFirst();
+
+    assertThat(alertResponse.detailJson())
+        .contains("&quot;reason&quot;:&quot;failed&quot;")
+        .contains("&quot;clientSecret&quot;:&quot;****&quot;")
+        .doesNotContain("raw");
+    assertThat(approvalResponse.payloadJson())
+        .contains("\"action\":\"retry\"")
+        .contains("\"apiToken\":\"****\"")
+        .doesNotContain("raw");
   }
 }

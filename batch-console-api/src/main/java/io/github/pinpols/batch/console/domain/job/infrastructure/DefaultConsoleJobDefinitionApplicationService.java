@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.config.JobMonitoringDefaultsProperties;
@@ -19,6 +20,7 @@ import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.param.JobDefinitionMaintenanceUpdateParam;
 import io.github.pinpols.batch.console.domain.job.param.JobMonitoringPolicyUpsertParam;
 import io.github.pinpols.batch.console.domain.job.support.BuiltinTaskTypeGuard;
+import io.github.pinpols.batch.console.domain.job.support.JobResourceAssignmentGuard;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.time.LocalTime;
@@ -57,6 +59,7 @@ public class DefaultConsoleJobDefinitionApplicationService
   private final ConsoleConfigCacheInvalidationService cacheInvalidationService;
   private final JobMonitoringDefaultsProperties monitoringDefaults;
   private final BuiltinTaskTypeGuard builtinTaskTypeGuard;
+  private final JobResourceAssignmentGuard resourceAssignmentGuard;
 
   @Override
   public ConsoleJobDefinitionResponse detail(Long id, String tenantId) {
@@ -69,6 +72,7 @@ public class DefaultConsoleJobDefinitionApplicationService
   @Override
   @Transactional
   public ConsoleJobDefinitionResponse create(JobDefinitionCreateRequest request) {
+    resourceAssignmentGuard.assertCreateAllowed(request.getQueueCode(), request.getWorkerGroup());
     // ADR-035 §使用边界:builtin SPI 4 件套(shell/sql/stored_proc/http)只许平台 ADMIN 引用,
     // 租户走 SDK 自托管。controller 类级 @PreAuthorize ROLE_ADMIN 已是第一道,本守门 defense in depth。
     builtinTaskTypeGuard.assertAllowed(request.getJobType());
@@ -137,7 +141,7 @@ public class DefaultConsoleJobDefinitionApplicationService
         valueOrZero(request.getDependencyCompletionWindowSeconds()));
     entity.setExecutionHandler(request.getExecutionHandler());
     entity.setParamSchema(request.getParamSchema());
-    entity.setDefaultParams(request.getDefaultParams());
+    entity.setDefaultParams(resolveDefaultParams(request.getDefaultParams(), null));
     entity.setPriority(request.getPriority() == null ? 5 : request.getPriority());
     entity.setEnabled(request.getEnabled() != null && request.getEnabled());
     entity.setDescription(request.getDescription());
@@ -169,6 +173,11 @@ public class DefaultConsoleJobDefinitionApplicationService
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     JobDefinitionEntity existing = Guard.requireFound(
         jobDefinitionMapper.selectById(tenantId, id), "job definition not found");
+    resourceAssignmentGuard.assertUpdateAllowed(
+        request.getQueueCode(),
+        request.getWorkerGroup(),
+        existing.getQueueCode(),
+        existing.getWorkerGroup());
     String dependsOnJobCode = EmptyChecks.isNull(request.getDependsOnJobCode())
         ? existing.getDependsOnJobCode()
         : CodeNormalizer.trimToNull(request.getDependsOnJobCode());
@@ -254,6 +263,11 @@ public class DefaultConsoleJobDefinitionApplicationService
         request.getWatermarkField() != null
             ? request.getWatermarkField()
             : existing.getWatermarkField());
+    if (request.getDefaultParams() != null) {
+      param.setDefaultParams(
+          resolveDefaultParams(request.getDefaultParams(), existing.getDefaultParams()));
+      param.setDefaultParamsSpecified(true);
+    }
     param.setEnabled(request.getEnabled() != null ? request.getEnabled() : existing.getEnabled());
     param.setDescription(
         request.getDescription() != null ? request.getDescription() : existing.getDescription());
@@ -304,12 +318,16 @@ public class DefaultConsoleJobDefinitionApplicationService
   @Transactional
   public ConsoleJobDefinitionResponse copy(Long id, String tenantId, String newJobCode) {
     String resolved = tenantGuard.resolveTenant(tenantId);
+    boolean resolveRouting = resourceAssignmentGuard.shouldResolveRoutingForCopy();
     JobDefinitionEntity existing = jobDefinitionMapper.selectByUniqueKey(resolved, newJobCode);
     if (existing != null) {
       throw BizException.of(ResultCode.CONFLICT, "error.job.code_already_exists", newJobCode);
     }
     String operator = requestMetadataResolver.current().operatorId();
     jobDefinitionMapper.copyJobDefinition(resolved, id, newJobCode, operator);
+    if (resolveRouting) {
+      jobDefinitionMapper.clearPhysicalResourceAssignment(resolved, newJobCode, operator);
+    }
     JobDefinitionEntity copied = Guard.requireFound(
         jobDefinitionMapper.selectByUniqueKey(resolved, newJobCode),
         "source job definition not found");
@@ -324,7 +342,10 @@ public class DefaultConsoleJobDefinitionApplicationService
   @Override
   @Transactional
   public ConsoleJobDefinitionResponse copyWithOverrides(Long id, JobDefinitionCopyRequest request) {
+    resourceAssignmentGuard.assertCopyOverridesAllowed(
+        request.getQueueCode(), request.getWorkerGroup());
     String resolved = tenantGuard.resolveTenant(request.getTenantId());
+    boolean resolveRouting = resourceAssignmentGuard.shouldResolveRoutingForCopy();
     JobDefinitionEntity existing =
         jobDefinitionMapper.selectByUniqueKey(resolved, request.getNewJobCode());
     if (existing != null) {
@@ -335,6 +356,10 @@ public class DefaultConsoleJobDefinitionApplicationService
     }
     String operator = requestMetadataResolver.current().operatorId();
     jobDefinitionMapper.copyJobDefinition(resolved, id, request.getNewJobCode(), operator);
+    if (resolveRouting) {
+      jobDefinitionMapper.clearPhysicalResourceAssignment(
+          resolved, request.getNewJobCode(), operator);
+    }
     JobDefinitionEntity copied = Guard.requireFound(
         jobDefinitionMapper.selectByUniqueKey(resolved, request.getNewJobCode()),
         "source job definition not found");
@@ -379,6 +404,7 @@ public class DefaultConsoleJobDefinitionApplicationService
     param.setShardStrategy(copied.getShardStrategy());
     param.setExecutionMode(copied.getExecutionMode());
     param.setWatermarkField(copied.getWatermarkField());
+    param.setDefaultParams(copied.getDefaultParams());
     param.setEnabled(request.getEnabled() != null ? request.getEnabled() : copied.getEnabled());
     param.setDescription(
         request.getDescription() != null ? request.getDescription() : copied.getDescription());
@@ -441,13 +467,26 @@ public class DefaultConsoleJobDefinitionApplicationService
         e.getWatermarkField(),
         e.getExecutionHandler(),
         e.getParamSchema(),
-        e.getDefaultParams(),
+        SecretMasking.maskSensitiveJson(e.getDefaultParams()),
         e.getPriority(),
         e.getVersion(),
         e.getEnabled(),
         e.getDescription(),
         e.getCreatedAt(),
         e.getUpdatedAt());
+  }
+
+  private static String resolveDefaultParams(String submitted, String stored) {
+    if (!Texts.hasText(submitted)) {
+      return null;
+    }
+    String resolved =
+        stored == null ? submitted : SecretMasking.preserveMaskedJson(submitted, stored);
+    if (SecretMasking.containsMaskedSensitiveValue(resolved)) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.config.masked_secret_requires_value");
+    }
+    return resolved;
   }
 
   private static Integer resolveCompletionDeadlineDayOffset(

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.notification.application.contract.response;
 
+import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookDeliveryLogEntity;
 import java.time.Instant;
 
@@ -23,7 +24,7 @@ public record WebhookDeliveryLogResponse(
         entity.getTenantId(),
         entity.getSubscriptionId(),
         entity.getEventType(),
-        entity.getPayloadJson(),
+        SecretMasking.maskSensitiveJson(entity.getPayloadJson()),
         entity.getHttpStatus(),
         entity.getResponseBody(),
         entity.getDeliveryStatus(),

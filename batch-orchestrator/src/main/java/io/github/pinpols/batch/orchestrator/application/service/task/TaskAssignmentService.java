@@ -89,7 +89,7 @@ public interface TaskAssignmentService {
       String tenantId, Long taskId, String workerCode, String partitionInvocationId) {}
 
   /**
-   * 加载任务的 effective config 快照(实时读 job_task / job_instance / job_partition / job_definition)。
+   * 加载任务的 effective config 快照；执行策略优先读实例快照，历史实例兼容读取作业定义。
    *
    * <p>由 {@code POST /internal/tasks/{taskId}/claim} 在 worker 认领成功后调用,把结果作为 HTTP response body 返回给
    * worker。Worker 优先用本对象的字段,缺字段时 fallback 到 {@code TaskDispatchMessage} 旧字段。

@@ -38,6 +38,7 @@
 4. 修改现有 suppression 时，必须重新跑 PMD、Spotless、受影响模块测试和本检查脚本。
 5. 删除代码时同步删除对应 suppression；本阶段已移除 `DistributedLockAspect` 中无运行时用途的 `SimpleLock` 编译守卫。
 6. `ConfigurationProperties` 必须标在**所有**共享该前缀的类型上（含跨模块的另一侧），并在行尾注释里点名共享方，便于一眼看出该前缀有多个绑定方。子键**重叠**的共享不适用本条：应改为合并绑定，或保留重复绑定但补一致性测试（当前唯一例外见 `ConsoleReadReplicaProperties`）。
+7. `unchecked` 仅可用于解析 JSON 动态对象后的边界转换；必须确认数据由 JSON 解析器构造，并在消费处完成字段类型校验。实例与分区快照当前保留 Map 结构以兼容存量参数，重试策略和派发快照只读取其已知字段。
 
 ## 复查命令
 

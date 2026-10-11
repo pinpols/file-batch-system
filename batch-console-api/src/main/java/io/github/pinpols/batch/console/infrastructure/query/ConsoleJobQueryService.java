@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Nullables;
+import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.console.domain.job.application.contract.query.JobDefinitionQueryRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.query.JobExecutionLogQueryRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.query.JobInstanceQueryRequest;
@@ -60,6 +61,7 @@ public class ConsoleJobQueryService {
         request.getWorkerGroup(),
         request.getQueueCode(),
         request.getScheduleType(),
+        request.getMonitoringCategory(),
         request.getEnabled(),
         pageRequest);
     List<JobDefinitionEntity> rows = jobMappers.jobDefinitionMapper.selectByQuery(query);
@@ -107,7 +109,7 @@ public class ConsoleJobQueryService {
         display(entity.getTraceId()),
         display(entity.getMessage()),
         display(entity.getDetailRef()),
-        entity.getExtraJson(),
+        SecretMasking.maskSensitiveJson(entity.getExtraJson()),
         entity.getCreatedAt());
   }
 
@@ -266,7 +268,7 @@ public class ConsoleJobQueryService {
         display(entity.getWatermarkField()),
         display(entity.getExecutionHandler()),
         display(entity.getParamSchema()),
-        display(entity.getDefaultParams()),
+        SecretMasking.maskSensitiveJson(entity.getDefaultParams()),
         entity.getPriority(),
         entity.getVersion(),
         entity.getEnabled(),
@@ -295,8 +297,8 @@ public class ConsoleJobQueryService {
         display(entity.getWorkerGroup()),
         entity.getPriority(),
         display(entity.getTraceId()),
-        entity.getParamsSnapshot(),
-        entity.getResultSummary(),
+        SecretMasking.maskSensitiveJson(entity.getParamsSnapshot()),
+        SecretMasking.maskSensitiveJson(entity.getResultSummary()),
         entity.getDeadlineAt(),
         entity.getExpectedDurationSeconds(),
         entity.getSlaAlertedAt(),
@@ -319,7 +321,7 @@ public class ConsoleJobQueryService {
         display(entity.getStepStatus()),
         entity.getRetryCount(),
         entity.getRelatedFileId(),
-        entity.getResultSummary(),
+        SecretMasking.maskSensitiveJson(entity.getResultSummary()),
         display(entity.getErrorCode()),
         display(errorMessage),
         entity.getRelatedPipelineInstanceId(),

@@ -218,6 +218,12 @@ class DefaultLaunchServiceTest {
     Map<String, Object> paramsSnapshot =
         JsonUtils.fromJson(jobCaptor.getValue().getParamsSnapshot(), new TypeReference<>() {});
     assertThat(paramsSnapshot).containsEntry("jobDefinitionVersion", jobDefinition.version());
+    Object executionPolicyValue = paramsSnapshot.get("executionPolicy");
+    assertThat(executionPolicyValue).isInstanceOf(Map.class);
+    Map<?, ?> executionPolicy = (Map<?, ?>) executionPolicyValue;
+    assertThat(executionPolicy.get("retryPolicy")).isEqualTo(jobDefinition.retryPolicy());
+    assertThat(executionPolicy.get("retryMaxCount")).isEqualTo(jobDefinition.retryMaxCount());
+    assertThat(executionPolicy.get("timeoutSeconds")).isEqualTo(jobDefinition.timeoutSeconds());
     ArgumentCaptor<BatchDayInstanceEntity> captor =
         ArgumentCaptor.forClass(BatchDayInstanceEntity.class);
     verify(batchDayInstanceMapper).insert(captor.capture());

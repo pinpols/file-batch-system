@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.console.domain.notification.entity.WebhookDeliveryLogEntity;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -12,10 +13,10 @@ import org.junit.jupiter.api.Test;
 
 /**
  * wire 红线守护：批次4 notification 域类型化 response record 的 JSON key 必须与历史 Map 响应逐字一致。 覆盖 snake_case
- * 键保留、jsonb 字段原样透传、NON_NULL 省略、test 结果显式 null 键保留、alert-routing 单 record 同服务 list(列子集)与
+ * 键保留、jsonb 结构与敏感值脱敏、NON_NULL 省略、test 结果显式 null 键保留、alert-routing 单 record 同服务 list(列子集)与
  * create(select * 全列)两种键集。
  */
-@DisplayName("通知域响应记录序列化契约: 蛇形键保留, 配置内容透传与空列省略")
+@DisplayName("通知域响应记录序列化契约: 蛇形键保留, 凭据脱敏与空列省略")
 class NotificationMapResponseJacksonTest {
 
   private final ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
@@ -25,11 +26,12 @@ class NotificationMapResponseJacksonTest {
   }
 
   @Test
-  @DisplayName("渠道行序列化后保留蛇形键, 配置内容原样透传且未提供的列被省略")
-  void shouldKeepSnakeCaseKeysAndPassthroughConfig_whenChannelRowMapped() throws Exception {
+  @DisplayName("渠道行保留蛇形键和配置结构, 凭据及 Webhook 地址脱敏")
+  void shouldKeepSnakeCaseKeysAndRedactConfig_whenChannelRowMapped() throws Exception {
     // MyBatis resultType=map 省略 null 列：不放入 updated_by / config_json。
     Map<String, Object> config = new LinkedHashMap<>();
-    config.put("url", "https://hooks.example/x");
+    config.put("url", "https://hooks.example/x?key=secret-key");
+    config.put("auth", Map.of("apiToken", "secret-token"));
     Map<String, Object> row = new LinkedHashMap<>();
     row.put("id", 5L);
     row.put("tenant_id", "acme");
@@ -58,9 +60,12 @@ class NotificationMapResponseJacksonTest {
             "updated_at");
     assertThat(back).containsEntry("channel_code", "WH1").containsEntry("enabled", true);
     assertThat(back).doesNotContainKey("updated_by");
+    Map<String, Object> maskedConfig =
+        mapper.convertValue(back.get("config_json"), new TypeReference<>() {});
+    assertThat(maskedConfig).containsEntry("url", "****");
     assertThat(mapper.convertValue(
-            back.get("config_json"), new TypeReference<Map<String, Object>>() {}))
-        .containsEntry("url", "https://hooks.example/x");
+            maskedConfig.get("auth"), new TypeReference<Map<String, Object>>() {}))
+        .containsEntry("apiToken", "****");
   }
 
   @Test
@@ -102,7 +107,8 @@ class NotificationMapResponseJacksonTest {
     row.put("rule_id", 0L);
     row.put("channel_code", "WH1");
     row.put("event_type", "TEST");
-    row.put("payload_json", Map.of("message", "hi"));
+    row.put("payload_json", Map.of("message", "hi", "accessToken", "secret-token"));
+    row.put("error_args", Map.of("connection", Map.of("password", "secret-password")));
     row.put("delivery_status", "SUCCESS");
     row.put("attempt", 1);
     row.put("created_at", Instant.parse("2026-07-11T00:00:00Z"));
@@ -117,15 +123,35 @@ class NotificationMapResponseJacksonTest {
             "channel_code",
             "event_type",
             "payload_json",
+            "error_args",
             "delivery_status",
             "attempt",
             "created_at");
-    // alert_event_id / error_message / error_key / error_args 未 put → NON_NULL 省略。
-    assertThat(back)
-        .doesNotContainKeys("alert_event_id", "error_message", "error_key", "error_args");
+    // alert_event_id / error_message / error_key 未 put → NON_NULL 省略。
+    assertThat(back).doesNotContainKeys("alert_event_id", "error_message", "error_key");
     assertThat(mapper.convertValue(
             back.get("payload_json"), new TypeReference<Map<String, Object>>() {}))
-        .containsEntry("message", "hi");
+        .containsEntry("message", "hi")
+        .containsEntry("accessToken", "****");
+    Map<String, Object> maskedArgs =
+        mapper.convertValue(back.get("error_args"), new TypeReference<>() {});
+    assertThat(mapper.convertValue(
+            maskedArgs.get("connection"), new TypeReference<Map<String, Object>>() {}))
+        .containsEntry("password", "****");
+  }
+
+  @Test
+  @DisplayName("Webhook 投递日志查询响应遮罩载荷凭据但保留业务字段")
+  void shouldMaskWebhookDeliveryPayloadCredentials() throws Exception {
+    WebhookDeliveryLogEntity entity = new WebhookDeliveryLogEntity();
+    entity.setPayloadJson("{\"event\":\"JOB_FAILED\",\"metadata\":{\"apiKey\":\"raw\"}}");
+
+    Map<String, Object> response = roundTrip(WebhookDeliveryLogResponse.from(entity));
+
+    assertThat(response.get("payloadJson").toString())
+        .contains("\"event\":\"JOB_FAILED\"")
+        .contains("\"apiKey\":\"****\"")
+        .doesNotContain("raw");
   }
 
   @Test

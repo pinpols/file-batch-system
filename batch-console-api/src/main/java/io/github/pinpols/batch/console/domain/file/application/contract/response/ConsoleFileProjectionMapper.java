@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.file.application.contract.response;
 
+import io.github.pinpols.batch.common.utils.SecretMasking;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -21,14 +22,22 @@ public final class ConsoleFileProjectionMapper {
             stringValue(row, "channel_code"),
             stringValue(row, "channel_name"),
             stringValue(row, "channel_type"),
-            stringValue(row, "target_endpoint"),
+            SecretMasking.maskEndpoint(stringValue(row, "target_endpoint")),
             stringValue(row, "auth_type"),
-            stringValue(row, "config_json"),
+            safeMaskedConfigJson(row),
             stringValue(row, "receipt_policy"),
             intValue(row, "timeout_seconds"),
             booleanValue(row, "enabled"),
             instantValue(row, "created_at"),
             instantValue(row, "updated_at"));
+  }
+
+  private static String safeMaskedConfigJson(Map<String, Object> row) {
+    try {
+      return SecretMasking.maskSensitiveJson(stringValue(row, "config_json"));
+    } catch (IllegalArgumentException ignored) {
+      return null;
+    }
   }
 
   public static ConsoleFileTemplateResponse template(Map<String, Object> row) {

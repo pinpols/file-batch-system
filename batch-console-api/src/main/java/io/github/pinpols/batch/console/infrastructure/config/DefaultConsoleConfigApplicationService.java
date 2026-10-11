@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.config.ConfigReleaseApplyService;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigApplicationService;
@@ -669,7 +670,8 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
         ConsoleTextSanitizer.safeDisplay(entity.getOperatorType()),
         ConsoleTextSanitizer.safeDisplay(entity.getOperatorId()),
         ConsoleTextSanitizer.safeDisplay(entity.getTraceId()),
-        ConsoleTextSanitizer.safeDisplay(entity.getChangeSummary()),
+        ConsoleTextSanitizer.safeDisplay(
+            SecretMasking.maskSensitiveJson(entity.getChangeSummary())),
         entity.getCreatedAt());
   }
 }

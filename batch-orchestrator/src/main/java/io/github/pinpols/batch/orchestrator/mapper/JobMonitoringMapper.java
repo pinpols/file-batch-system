@@ -1,11 +1,27 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
+import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobMonitoringAlertCandidate;
+import java.time.Instant;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
-/** 作业监控旁路查询与告警幂等声明；不更新 job_instance 生命周期字段。 */
+/** 作业监控查询与告警标记；不推进 job_instance 生命周期状态。 */
 public interface JobMonitoringMapper {
+
+  List<JobInstanceEntity> selectSlaViolationCandidates(@Param("limit") int limit);
+
+  long countSlaViolationCandidates();
+
+  List<JobInstanceEntity> selectSlaEscalationCandidates(
+      @Param("escalationBefore") Instant escalationBefore, @Param("limit") int limit);
+
+  long countSlaEscalationCandidates(@Param("escalationBefore") Instant escalationBefore);
+
+  int markSlaAlerted(
+      @Param("tenantId") String tenantId,
+      @Param("id") Long id,
+      @Param("slaAlertedAt") Instant slaAlertedAt);
 
   List<JobMonitoringAlertCandidate> selectRunningTooLong(@Param("limit") int limit);
 

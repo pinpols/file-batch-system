@@ -25,7 +25,7 @@ import org.springframework.stereotype.Service;
  * <p>保证 Orchestrator 是唯一状态主机：Kafka 仅负责任务路由，Worker 不能绕过 CLAIM 直接执行。
  *
  * <p>P1-2.2 起 message v2 已瘦身,业务字段(payload/businessKey/taskSeq/highWaterMarkIn 等) 全部从 CLAIM 返回的
- * {@link EffectiveTaskConfig} 实时读,本类不再 fallback 到 message。task key +
+ * {@link EffectiveTaskConfig} 读取,本类不再 fallback 到 message。task key +
  * 路由元数据(tenantId/taskId/instanceId 等)继续从 message 读。
  */
 @Service
@@ -217,7 +217,7 @@ public class TaskDispatchExecutor {
     if (message.schedulingContext() != null) {
       task.setBizDate(message.schedulingContext().bizDate());
     }
-    // 业务字段:从 CLAIM 返回的 effective config 读(确保管理员改完 retry/payload 立即生效)
+    // 业务字段:从 CLAIM 返回的 effective config 读取；payload 在 claim 时读取，执行策略优先使用实例快照。
     task.setTaskType(effective.taskType());
     task.setBusinessKey(effective.businessKey());
     task.setTaskSeq(effective.taskSeq());

@@ -262,6 +262,7 @@ public class LaunchParamResolver {
     Map<String, Object> snapshot = new LinkedHashMap<>();
     snapshot.put("jobDefinitionId", jobDefinition == null ? null : jobDefinition.id());
     snapshot.put("jobDefinitionVersion", jobDefinition == null ? null : jobDefinition.version());
+    snapshot.put("executionPolicy", executionPolicySnapshot(jobDefinition));
     snapshot.put("jobCode", request.jobCode());
     snapshot.put(
         "triggerType",
@@ -281,6 +282,19 @@ public class LaunchParamResolver {
     snapshot.put("requestParams", request.params() == null ? Map.of() : request.params());
     snapshot.put("effectiveParams", effectiveParams == null ? Map.of() : effectiveParams);
     return JsonUtils.toJson(snapshot);
+  }
+
+  private Map<String, Object> executionPolicySnapshot(JobDefinitionEntity jobDefinition) {
+    if (jobDefinition == null) {
+      return Map.of();
+    }
+    Map<String, Object> snapshot = new LinkedHashMap<>();
+    snapshot.put("executionMode", jobDefinition.executionMode());
+    snapshot.put("watermarkField", jobDefinition.watermarkField());
+    snapshot.put("retryPolicy", jobDefinition.retryPolicy());
+    snapshot.put("retryMaxCount", jobDefinition.retryMaxCount());
+    snapshot.put("timeoutSeconds", jobDefinition.timeoutSeconds());
+    return snapshot;
   }
 
   String buildPayloadJson(Map<String, Object> params) {

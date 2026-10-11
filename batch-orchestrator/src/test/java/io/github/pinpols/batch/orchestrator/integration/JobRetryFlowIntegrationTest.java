@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.RetryScheduleStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RetryGovernanceService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
@@ -82,7 +83,7 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
   private JdbcTemplate jdbcTemplate;
 
   @Test
-  @DisplayName("任务执行失败后创建等待中的重试计划,到期重投递时新增发送事件使分区重新入队")
+  @DisplayName("作业策略更新后任务仍按实例快照重试,到期重投递使分区重新入队")
   void taskFailure_withRetryPolicy_schedulesRetryAndDispatchDueRetries_requeuesPartition() {
     String suffix = Long.toUnsignedString(System.nanoTime());
     String jobCode = "IT_RETRY_" + suffix;
@@ -134,6 +135,17 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
 
     JobInstanceEntity jobInstance = jobInstanceMapper.selectByTenantAndDedupKey(TENANT, dedupKey);
     assertThat(jobInstance).isNotNull();
+    Map<?, ?> snapshot = JsonUtils.fromJson(jobInstance.getParamsSnapshot(), Map.class);
+    Map<?, ?> executionPolicy = (Map<?, ?>) snapshot.get("executionPolicy");
+    assertThat(executionPolicy.get("retryPolicy")).isEqualTo("FIXED");
+    assertThat(executionPolicy.get("retryMaxCount")).isEqualTo(1);
+
+    // 实例创建后管理员调整策略；已有实例仍须按创建时快照执行重试策略。
+    jdbcTemplate.update(
+        "update batch.job_definition set retry_policy = 'NONE', retry_max_count = 0"
+            + " where tenant_id = ? and job_code = ?",
+        TENANT,
+        jobCode);
 
     List<JobTaskEntity> tasks = jobTaskMapper.selectByQuery(
         new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null));

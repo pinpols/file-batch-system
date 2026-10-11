@@ -6,8 +6,12 @@ import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.SecretMasking;
+import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.rbac.ConsoleMetaQueryService;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
+import io.github.pinpols.batch.console.domain.job.support.JobResourceAssignmentGuard;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.application.PipelineDefinitionService;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.PipelineDefinitionSaveRequest;
@@ -29,6 +33,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,6 +58,7 @@ public class DefaultPipelineDefinitionService implements PipelineDefinitionServi
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRealtimeEventPort realtimeEventPublisher;
   private final ConsoleMetaQueryService metaQueryService;
+  private final JobResourceAssignmentGuard resourceAssignmentGuard;
 
   /** 校验每个 step 的 stageCode 属于该 pipelineType 允许集、implCode 已在 step 注册表登记(FE 下拉之外的越界拦截)。 */
   private void validateSteps(
@@ -107,6 +113,9 @@ public class DefaultPipelineDefinitionService implements PipelineDefinitionServi
   @Override
   @Transactional
   public PipelineDefinitionDetailResponse create(PipelineDefinitionSaveRequest request) {
+    if (Texts.hasText(request.getWorkerGroup())) {
+      resourceAssignmentGuard.assertCreateAllowed(null, request.getWorkerGroup());
+    }
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> params = new HashMap<>();
     params.put("tenant_id", tenantId);
@@ -122,7 +131,7 @@ public class DefaultPipelineDefinitionService implements PipelineDefinitionServi
     pipelineDefinitionMapper.insert(params);
     Long defId = ((Number) params.get(KEY_ID)).longValue();
 
-    insertSteps(defId, request.getSteps());
+    insertSteps(defId, request.getSteps(), Map.of());
 
     PipelineDefinitionDetailResponse response = loadDetailResponse(tenantId, defId);
     publishRealtimeEvent(tenantId, "pipeline-definition-created", response);
@@ -135,6 +144,11 @@ public class DefaultPipelineDefinitionService implements PipelineDefinitionServi
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> existing = Guard.requireFound(
         pipelineDefinitionMapper.selectById(tenantId, id), "pipeline definition not found");
+    String existingWorkerGroup = (String) existing.get(KEY_WORKER_GROUP);
+    if (Texts.hasText(request.getWorkerGroup()) || Texts.hasText(existingWorkerGroup)) {
+      resourceAssignmentGuard.assertUpdateAllowed(
+          null, request.getWorkerGroup(), null, existingWorkerGroup);
+    }
     Map<String, Object> params = new HashMap<>();
     params.put("tenant_id", tenantId);
     params.put(KEY_ID, id);
@@ -170,8 +184,14 @@ public class DefaultPipelineDefinitionService implements PipelineDefinitionServi
     validateSteps(effectiveType, request.getSteps());
     pipelineDefinitionMapper.update(params);
 
+    Map<String, Map<String, Object>> existingSteps =
+        pipelineStepDefinitionMapper.selectByPipelineDefinitionId(id).stream()
+            .collect(Collectors.toMap(
+                step -> String.valueOf(step.get("step_code")),
+                step -> step,
+                (first, ignored) -> first));
     pipelineStepDefinitionMapper.deleteByPipelineDefinitionId(id);
-    insertSteps(id, request.getSteps());
+    insertSteps(id, request.getSteps(), existingSteps);
 
     PipelineDefinitionDetailResponse response = loadDetailResponse(tenantId, id);
     publishRealtimeEvent(tenantId, "pipeline-definition-updated", response);
@@ -191,7 +211,9 @@ public class DefaultPipelineDefinitionService implements PipelineDefinitionServi
   }
 
   private void insertSteps(
-      Long pipelineDefinitionId, List<PipelineDefinitionSaveRequest.StepItem> steps) {
+      Long pipelineDefinitionId,
+      List<PipelineDefinitionSaveRequest.StepItem> steps,
+      Map<String, Map<String, Object>> existingSteps) {
     if (steps == null) {
       return;
     }
@@ -203,7 +225,9 @@ public class DefaultPipelineDefinitionService implements PipelineDefinitionServi
       stepParams.put("stage_code", step.getStageCode());
       stepParams.put("step_order", step.getStepOrder() != null ? step.getStepOrder() : 0);
       stepParams.put("impl_code", step.getImplCode());
-      stepParams.put(KEY_STEP_PARAMS, step.getStepParams());
+      Map<String, Object> existing = existingSteps.get(step.getStepCode());
+      String stored = existing == null ? null : jsonValue(existing.get(KEY_STEP_PARAMS));
+      stepParams.put(KEY_STEP_PARAMS, resolveStepParams(step.getStepParams(), stored));
       stepParams.put(
           "timeout_seconds", step.getTimeoutSeconds() != null ? step.getTimeoutSeconds() : 0);
       stepParams.put(
@@ -243,7 +267,7 @@ public class DefaultPipelineDefinitionService implements PipelineDefinitionServi
         toInt(row.get("step_order")),
         (String) row.get("impl_code"),
         EmptyChecks.isNotNull(row.get(KEY_STEP_PARAMS))
-            ? row.get(KEY_STEP_PARAMS).toString()
+            ? SecretMasking.maskSensitiveJson(row.get(KEY_STEP_PARAMS).toString())
             : null,
         toInt(row.get("timeout_seconds")),
         (String) row.get("retry_policy"),
@@ -251,6 +275,28 @@ public class DefaultPipelineDefinitionService implements PipelineDefinitionServi
         (Boolean) row.get(KEY_ENABLED),
         toInstant(row.get("created_at")),
         toInstant(row.get("updated_at")));
+  }
+
+  private static String resolveStepParams(String submitted, String stored) {
+    if (!Texts.hasText(submitted)) {
+      return submitted;
+    }
+    String resolved =
+        stored == null ? submitted : SecretMasking.preserveMaskedJson(submitted, stored);
+    if (SecretMasking.containsMaskedSensitiveValue(resolved)) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.config.masked_secret_requires_value");
+    }
+    return resolved;
+  }
+
+  private static String jsonValue(Object value) {
+    if (value == null) {
+      return null;
+    }
+    return value instanceof Map<?, ?> || value instanceof List<?>
+        ? JsonUtils.toJson(value)
+        : value.toString();
   }
 
   private PipelineDefinitionDetailResponse loadDetailResponse(String tenantId, Long id) {

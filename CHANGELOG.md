@@ -12,6 +12,18 @@
 - 新增受控的前后端 Compose CD：同一 release manifest 固定两仓 commit 与全部镜像 digest；可手动部署 staging 并执行 health/version、Playwright、视觉/跨浏览器 smoke 与 Lighthouse 验收，失败时恢复上一稳定 release。真实主机配置和 production 晋级仍待外部接入。
 - 修复临时 Sonar 首次扫描无法设置 30 天新代码基线的问题：为扫描管理账号补齐项目级管理权限，并按项目实际主分支回读验证，避免 Sonar API 空响应掩盖配置未生效。
 - 修复批次日回放详情默认“全部”筛选因空状态被 SQL 等值过滤而显示空列表的问题；保留指定状态筛选及租户隔离。
+### Security
+- 配置包 Excel 解析失败时不再将 POI 原始异常文本回显给调用方；服务端保留经过清理的诊断摘要。
+- 作业/步骤结果、实例快照及执行日志扩展字段的查询响应递归掩码凭据类 JSON 键；告警、审批、文件流水线、配置审计、通知投递和结构化错误载荷在响应投影/渲染时同样掩码，不改持久化值或 Worker/投递输入。自由文本中的任意凭据不在本次覆盖范围内。
+- 文件通道、通知渠道响应递归掩码动态 JSON 敏感字段；文件 endpoint 同时遮盖 URI 凭据。更新请求回传掩码值时保留数据库原值，显式删除仍可清除。
+- JSON Config Sync、Job Bundle 和 Excel 配置包导出不再回传渠道凭据及环境专属 endpoint；跨租户复制保留渠道业务定义但不复制来源环境连接信息。
+- Excel 配置包上传会话绑定操作者和权限集合；跨账号或权限变化后拒绝复用。预览、行内修正与 Apply 使用随机确认令牌、跨副本 CAS 和原子占用，避免旧预览覆盖、重复 Apply 或未经确认写入。
+
+### Changed
+- 配置包按作业场景和文件方向/格式生成精简模板；旧模板与旧包解析保持兼容，未选择场景时不再回退到全量模板。
+- 作业、Pipeline、Workflow REST 与配置包 Apply 的租户写入口拒绝修改物理队列、Worker 分组和平台运行阈值；租户角色导出隐藏平台资源字段，平台角色保留完整维护视图。
+- 配置包 MERGE 对未提供的可选值保留现值；省略 Pipeline steps / 日历 holidays 不再隐式删除已有项。Apply 前用租户配置修订栅栏拒绝预览后的并发变更。
+- 租户配置向导要求先选择场景，Apply 按角色显示；作业配置表单不向租户管理员展示或发送物理队列和 Worker 分组字段。
 - 批量日回放改为“先预览、再确认提交”：预览生成短时一次性凭证，提交时重新核对候选快照并原子消费，防止候选变化或重复提交造成预览与执行不一致；补充回放预览令牌迁移及并发/过期测试。
 - 集中多个后端集成测试重复的测试 profile 默认配置，并增加 CI/pre-push 守卫，避免模块测试 YAML 重新复制共享配置；场景专属属性覆盖保持不变。
 
@@ -80,8 +92,10 @@
 
 ### Fixed
 
+- 修复作业实例创建后重试策略被作业定义变更覆盖的问题；重试排程优先使用实例执行参数快照，历史实例缺少快照时保留原定义回退行为。
 - 修复 SDK 真 Orchestrator E2E 冷启动时把 PostgreSQL initdb 临时 Unix socket 误判为数据库初始化完成，以及 Java、Python、TypeScript、Rust 样例准备失败被后台 PID 掩盖、诊断日志缺失的问题。
 - 修复四份 Sim 租户配置包 Excel 的作业监控策略表头仍使用旧字段、导致线上 `daily-sim-strict-validation` 在场景执行前失败的问题；PR、Full Gate 与本地提交预检新增配置包 schema 防漂移检查。
+- 修复 SLA 告警标记与审计/执行日志、告警事件分步提交导致的静默漏报；改为每个候选独立事务，单个持久化失败回滚该候选并允许后续扫描重试，不阻塞同批其他候选。
 - Prevent cross-tenant Alertmanager grouping/inhibition and closing one event from resolving a group that still has active peers; document alert hold, deduplication, repeat-notification, and recovery semantics.
 - 修复 Trivy 报告的 AsyncHttpClient WebSocket 解压 DoS/连接上下文复用及 Kafka LZ4 临时文件代码执行高危依赖；统一升级到修复版本并刷新入库 SBOM。
 - 补齐本地容器生命周期并发保护及 PG/Valkey Sentinel/MinIO HA 隔离演练；维护 SQL 从 shell 内联迁至独立文件并扩展边界守护，避免演练误触现有数据卷或共享环境；Sim SFTP/MockServer 也统一 UTF-8 locale 并纳入守护。

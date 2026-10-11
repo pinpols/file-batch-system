@@ -49,6 +49,20 @@
         </foreach>
     </insert>
 
+    <insert id="upsertBatch">
+        insert into batch.calendar_holiday (
+            tenant_id, calendar_id, biz_date, day_type, holiday_name, description
+        ) values
+        <foreach collection="list" item="item" separator=",">
+            (#{item.tenantId}, #{item.calendarId}, #{item.bizDate}::date, #{item.dayType}, #{item.holidayName}, #{item.description})
+        </foreach>
+        on conflict (tenant_id, calendar_id, biz_date) do update
+        set day_type = excluded.day_type,
+            holiday_name = excluded.holiday_name,
+            description = excluded.description,
+            updated_at = current_timestamp
+    </insert>
+
     <update id="update" parameterType="map">
         update batch.calendar_holiday
         set biz_date = #{bizDate}::date,

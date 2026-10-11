@@ -94,7 +94,7 @@ public class TaskDispatchOutboxService {
         ? partition.getIdempotencyKey()
         : resolveIdempotencyKeyWithoutPartition(task, eventKey);
     // P1-2.2:v2 消息瘦身,业务字段(payload/businessKey/taskSeq/highWaterMarkIn)走 worker CLAIM
-    // 时 EffectiveTaskConfig 实时读 DB;此处只保留 task key + 路由元数据。
+    // 时由 EffectiveTaskConfig 返回;此处只保留 task key + 路由元数据。
     // runModeOverride 在 v1 时通过 payload 注入,v2 后改由 worker CLAIM 读 job_task.task_payload —
     // retry/reclaim 路径需要把 run_mode 持久化到 task_payload 而非写入 message 临时透传。
     persistRunModeOverride(task, runModeOverride);
@@ -235,8 +235,8 @@ public class TaskDispatchOutboxService {
   }
 
   /**
-   * P1-2.2:把 RunMode 持久化到 job_task.task_payload。worker CLAIM 时 EffectiveTaskConfig 实时读
-   * task_payload, 看到 run_mode 即可区分"首次执行"与"补偿/重放"。仅 retry/reclaim 等再派发场景调用(runModeOverride 非 null)。
+   * P1-2.2:把 RunMode 持久化到 job_task.task_payload。worker CLAIM 时 EffectiveTaskConfig 从
+   * task_payload 读取 run_mode,看到该值即可区分"首次执行"与"补偿/重放"。仅 retry/reclaim 等再派发场景调用(runModeOverride 非 null)。
    */
   private void persistRunModeOverride(JobTaskEntity task, RunMode runModeOverride) {
     if (EmptyChecks.isNull(runModeOverride)

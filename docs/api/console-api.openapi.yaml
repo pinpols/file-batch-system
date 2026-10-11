@@ -4207,6 +4207,15 @@ paths:
           schema:
             type: string
             enum: [CRON, FIXED_RATE, MANUAL]
+        - name: monitoringCategory
+          in: query
+          required: false
+          description: >-
+            Filter by monitoring matrix category. DEPENDENCY selects jobs with an upstream dependency;
+            SCHEDULED selects standalone CRON jobs; RUNTIME_ONLY selects standalone non-CRON jobs.
+          schema:
+            type: string
+            enum: [SCHEDULED, DEPENDENCY, RUNTIME_ONLY]
         - name: enabled
           in: query
           required: false
@@ -5090,6 +5099,9 @@ paths:
     post:
       tags: [JobDefinitions]
       summary: Create job definition
+      description: >-
+        物理队列和 Worker 分组由平台运维分配。租户管理员创建作业时不得提交 queueCode 或 workerGroup；
+        作业运行路由由平台根据已批准的策略解析。
       operationId: createJobDefinition
       security:
         - bearerAuth: []
@@ -5137,6 +5149,9 @@ paths:
     put:
       tags: [JobDefinitions]
       summary: Update job definition
+      description: >-
+        物理队列和 Worker 分组由平台运维管理。租户管理员更新时应省略 queueCode 和 workerGroup；
+        若提交且改变现有路由，服务端将拒绝请求。
       operationId: updateJobDefinition
       security:
         - bearerAuth: []
@@ -5191,6 +5206,9 @@ paths:
     post:
       tags: [JobDefinitions]
       summary: Clone job definition
+      description: >-
+        租户管理员复制作业时，服务端会清除复制源的物理队列和 Worker 分组；运行调度时按现有租户启用队列和作业类型匹配路由。
+        物理资源定义由平台运维管理。
       operationId: copyJobDefinition
       security:
         - bearerAuth: []
@@ -5243,6 +5261,9 @@ paths:
     post:
       tags: [JobDefinitions]
       summary: Clone job definition with field overrides
+      description: >-
+        租户管理员不得通过覆盖字段指定 queueCode 或 workerGroup。服务端清除复制源路由，运行调度时按现有租户启用队列和作业类型匹配；
+        平台管理员可在授权范围内管理物理资源分配。
       operationId: cloneJobDefinition
       security:
         - bearerAuth: []
@@ -5355,6 +5376,7 @@ paths:
     post:
       tags: [WorkflowDefinitions]
       summary: Create workflow definition (with nodes and edges)
+      description: 租户管理员不能为工作流节点指定物理 Worker 分组；平台管理员负责路由分配。
       operationId: createWorkflowDefinition
       security:
         - bearerAuth: []
@@ -5402,6 +5424,7 @@ paths:
     put:
       tags: [WorkflowDefinitions]
       summary: Update workflow definition
+      description: 租户管理员不能更改工作流节点的物理 Worker 分组；省略该字段时保留现有平台分配。
       operationId: updateWorkflowDefinition
       security:
         - bearerAuth: []
@@ -7333,6 +7356,7 @@ paths:
     post:
       tags: [PipelineDefinitions]
       summary: Create pipeline definition
+      description: 租户管理员不能设置物理 Worker 分组；该路由由平台运维管理。
       operationId: createPipelineDefinition
       security:
         - bearerAuth: []
@@ -7380,6 +7404,7 @@ paths:
     put:
       tags: [PipelineDefinitions]
       summary: Update pipeline definition
+      description: 租户管理员不能修改平台管理的物理 Worker 分组。
       operationId: updatePipelineDefinition
       security:
         - bearerAuth: []
@@ -8298,7 +8323,9 @@ paths:
       summary: Cross-tenant configuration copy
       description: >
         Reads configuration from a source tenant and pushes it to one or more target tenants.
-        Supports selective config types and dry-run mode. Response format is identical to tenant-init.
+        Supports selective config types and dry-run mode. File channel endpoint and credential JSON
+        are not copied; configure environment-specific values for each target tenant. Response format
+        is identical to tenant-init.
       operationId: copyTenantConfig
       security:
         - bearerAuth: []
@@ -10107,6 +10134,29 @@ paths:
               schema:
                 type: string
                 format: binary
+  /api/console/config/tenant-package/excel/scenario-template:
+    get:
+      tags: [Config]
+      summary: Download a focused blank tenant configuration template
+      operationId: downloadTenantConfigPackageExcelScenarioTemplate
+      parameters:
+        - name: scenarios
+          in: query
+          required: true
+          description: Repeat for each selected scenario. ALL means all tenant business scenarios and excludes platform resource allocation.
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [ALL, IMPORT, EXPORT, PROCESS, DISPATCH, ATOMIC, WORKFLOW, SCHEDULE]
+      responses:
+        '200':
+          description: Focused workbook containing only the selected business sheets and fields.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
   /api/console/config/tenant-package/excel/sample-template:
     get:
       tags: [Config]
@@ -10119,7 +10169,7 @@ paths:
           description: Legacy single scenario filter. ALL keeps all sample scenarios.
           schema:
             type: string
-            enum: [ALL, IMPORT, EXPORT, PROCESS, DISPATCH, ATOMIC, WORKFLOW]
+            enum: [ALL, IMPORT, EXPORT, PROCESS, DISPATCH, ATOMIC, WORKFLOW, SCHEDULE]
             default: ALL
         - name: scenarios
           in: query
@@ -10129,7 +10179,7 @@ paths:
             type: array
             items:
               type: string
-              enum: [ALL, IMPORT, EXPORT, PROCESS, DISPATCH, ATOMIC, WORKFLOW]
+              enum: [ALL, IMPORT, EXPORT, PROCESS, DISPATCH, ATOMIC, WORKFLOW, SCHEDULE]
       responses:
         '200':
           description: Scenario sample Excel template with 12 data sheets
@@ -10248,7 +10298,8 @@ paths:
   /api/console/config/tenant-package/excel/apply/{uploadToken}:
     post:
       tags: [Config]
-      summary: Apply tenant config package Excel in a single transaction
+      summary: Apply tenant-owned configuration package Excel in a single transaction
+      description: ROLE_ADMIN may apply legacy full packages. ROLE_TENANT_ADMIN may apply only tenant business configuration; packages containing platform resource allocation or runtime monitoring fields are rejected.
       operationId: applyTenantConfigPackageExcel
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
@@ -10270,6 +10321,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseTenantConfigPackageExcelApply'
+        '403':
+          description: Caller role is not allowed to apply the package, or a tenant administrator package contains platform-owned fields
+        '409':
+          description: Preview token is stale, already consumed, or another apply is in progress
 
   # 2026-05-16 Web Push 后端实装合并(原 batch-console/backend-patch/),3 端点恢复声明。
   /api/console/push/vapid-public-key:
@@ -12204,6 +12259,7 @@ components:
           type: string
         workerGroup:
           type: string
+          description: Platform-owned physical worker group. Tenant administrators cannot assign or change it.
         windowCode:
           type: string
         nodeOrder:
@@ -14381,6 +14437,8 @@ components:
         targetEndpoint:
           type: string
           maxLength: 512
+          writeOnly: true
+          description: 仅用于受控导入；配置导出不回传环境专属 endpoint。
         authType:
           type: string
           maxLength: 32
@@ -14456,8 +14514,10 @@ components:
           type: string
         workerGroup:
           type: string
+          description: 平台管理的物理 Worker 分组；租户管理员创建时须省略。
         queueCode:
           type: string
+          description: 平台管理的物理队列；租户管理员创建时须省略。
         calendarCode:
           type: string
         windowCode:
@@ -14564,8 +14624,10 @@ components:
           type: string
         workerGroup:
           type: string
+          description: 平台管理的物理 Worker 分组；租户管理员不可更改现有值。
         queueCode:
           type: string
+          description: 平台管理的物理队列；租户管理员不可更改现有值。
         calendarCode:
           type: string
         windowCode:
@@ -16713,9 +16775,11 @@ components:
         channelCode: { type: string }
         channelName: { type: string }
         channelType: { type: string }
-        targetEndpoint: { type: string }
+        targetEndpoint: { type: string, description: URI 中的 userinfo 和敏感 query 参数会显示为 ****；更新时回传掩码可保留原凭据 }
         authType: { type: string }
-        configJson: { type: string }
+        configJson:
+          type: string
+          description: 通道配置 JSON；响应中的敏感键值递归显示为 ****。更新时回传 **** 可保留对应原值，删除键可清除该凭据。
         receiptPolicy: { type: string }
         timeoutSeconds: { type: integer, format: int32 }
         enabled: { type: boolean }
@@ -17846,9 +17910,13 @@ components:
     TenantConfigPackageExcelApplyRequest:
       type: object
       properties:
+        previewToken:
+          type: string
+          description: One-time token returned by the latest successful preview; invalidated by a subsequent preview or row patch.
         reason:
           type: string
           maxLength: 512
+      required: [previewToken]
     TenantConfigPackageExcelUploadResponse:
       type: object
       properties:
@@ -17943,6 +18011,9 @@ components:
       properties:
         uploadToken:
           type: string
+        previewToken:
+          type: string
+          description: One-time confirmation token for this preview result.
         fileName:
           type: string
         totalRows:
@@ -17967,7 +18038,7 @@ components:
           description: 按 (sheet, rowNo) 聚合的出错行明细(整行单元格值 + 该行所有问题),供前端内联编辑。
           items:
             $ref: '#/components/schemas/TenantConfigPackageErrorRowDto'
-      required: [uploadToken, fileName, totalRows, validRows, invalidRows, sheets, issues]
+      required: [uploadToken, previewToken, fileName, totalRows, validRows, invalidRows, sheets, issues]
     TenantConfigPackageErrorRowDto:
       type: object
       properties:
@@ -19285,7 +19356,7 @@ components:
     # notification channels / rules / delivery logs / test / alert routing / event catalog
     ConsoleNotificationChannelResponse:
       type: object
-      description: 通知渠道行（mapper 显式列，snake_case 键；config_json 为 jsonb 原样透传）。
+      description: 通知渠道行（mapper 显式列，snake_case 键；config_json 保留 JSON 对象结构，常规凭据键及 webhook URL 在响应中显示为 ****）。更新时回传掩码可保留原值，删除字段可清除配置。
       required: [id]
       properties:
         id: { type: integer, format: int64 }
@@ -19293,7 +19364,7 @@ components:
         channel_code: { type: string, nullable: true }
         channel_name: { type: string, nullable: true }
         channel_type: { type: string, nullable: true }
-        config_json: { nullable: true, description: jsonb 渠道配置原样透传 }
+        config_json: { nullable: true, description: jsonb 渠道配置；敏感键与 URL 脱敏，更新回传 **** 保留现值，删除字段可清除 }
         enabled: { type: boolean, nullable: true }
         created_by: { type: string, nullable: true }
         updated_by: { type: string, nullable: true }

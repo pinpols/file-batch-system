@@ -61,6 +61,36 @@ class ConfigPackageWorkbookSupplementWriter {
     }
   }
 
+  void createFocusedReadmeSheet(
+      Workbook wb, Locale locale, List<ConfigPackageSheetSpecs.SheetDef> sheetDefs) {
+    Sheet sheet = wb.createSheet(ConsoleExcelStyles.SHEET_NAME_README);
+    sheet.setColumnWidth(0, 28000);
+    CellStyle title = createReadmeTitleStyle(wb);
+    String[] keys = {
+      "excel.package.focused.title",
+      "excel.package.focused.scope",
+      "excel.package.focused.resources",
+      "excel.package.focused.apply"
+    };
+    Object[][] arguments = {
+      {},
+      {
+        String.join(
+            ", ", sheetDefs.stream().map(ConfigPackageSheetSpecs.SheetDef::name).toList())
+      },
+      {},
+      {}
+    };
+    for (int i = 0; i < keys.length; i++) {
+      Row row = sheet.createRow(i);
+      Cell cell = row.createCell(0);
+      cell.setCellValue(messageSource.getMessage(keys[i], arguments[i], keys[i], locale));
+      if (i == 0) {
+        cell.setCellStyle(title);
+      }
+    }
+  }
+
   void createFillOrderSheet(Workbook wb, List<ConfigPackageSheetSpecs.SheetDef> sheetDefs) {
     Sheet sheet = wb.createSheet(SHEET_NAME_FILL_ORDER);
     CreationHelper creationHelper = wb.getCreationHelper();

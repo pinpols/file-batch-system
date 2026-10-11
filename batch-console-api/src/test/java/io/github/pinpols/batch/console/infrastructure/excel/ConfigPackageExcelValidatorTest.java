@@ -164,7 +164,7 @@ class ConfigPackageExcelValidatorTest {
     assertThat(result.allIssues()).anySatisfy(issue -> {
       assertThat(issue.sheetName()).isEqualTo(ConfigPackageExcelValidator.JOB_SHEET);
       assertThat(issue.columnName()).isEqualTo(ConfigPackageExcelValidator.COL_DEFAULT_PARAMS);
-      assertThat(issue.message()).contains("TPL_MISSING");
+      assertThat(issue.message()).contains("tpl_missing");
     });
   }
 
@@ -283,6 +283,53 @@ class ConfigPackageExcelValidatorTest {
     assertThat(result.allIssues())
         .anySatisfy(issue -> assertThat(issue.message())
             .contains("field_mappings entries must each have a non-blank 'name'"));
+  }
+
+  @Test
+  @DisplayName("固定宽度导入映射:使用 start/length/target 契约并接受合法字段")
+  void shouldAcceptFixedWidthMappings_whenWorkerContractIsSatisfied() {
+    Map<String, String> row = new LinkedHashMap<>(fileTemplateRow("TPL", "1"));
+    row.put("file_format_type", "FIXED_WIDTH");
+    row.put("field_mappings", "[{\"start\":0,\"length\":12,\"target\":\"customer_no\"}]");
+
+    ConfigPackageExcelValidator.PackageValidationResult result =
+        validator().validate(session(List.of(row), List.of()));
+
+    assertThat(result.fileTemplates().invalid()).isZero();
+    assertThat(result.allIssues()).isEmpty();
+  }
+
+  @Test
+  @DisplayName("固定宽度导入映射:缺少 Worker 必需字段时被标记为问题")
+  void shouldFlagInvalidFixedWidthMapping_whenTargetOrBoundsAreMissing() {
+    Map<String, String> row = new LinkedHashMap<>(fileTemplateRow("TPL", "1"));
+    row.put("file_format_type", "FIXED_WIDTH");
+    row.put("field_mappings", "[{\"start\":0,\"length\":12,\"target\":\" \"}]");
+
+    ConfigPackageExcelValidator.PackageValidationResult result =
+        validator().validate(session(List.of(row), List.of()));
+
+    assertThat(result.fileTemplates().invalid()).isEqualTo(1);
+    assertThat(result.allIssues())
+        .anySatisfy(
+            issue -> assertThat(issue.message())
+                .contains(
+                    "FIXED_WIDTH field mappings require non-blank target, non-negative start and positive length"));
+  }
+
+  @Test
+  @DisplayName("固定宽度导入映射:未提供映射时在预览阶段被拒绝")
+  void shouldRejectFixedWidthTemplate_whenFieldMappingsAreMissing() {
+    Map<String, String> row = new LinkedHashMap<>(fileTemplateRow("TPL", "1"));
+    row.put("file_format_type", "FIXED_WIDTH");
+
+    ConfigPackageExcelValidator.PackageValidationResult result =
+        validator().validate(session(List.of(row), List.of()));
+
+    assertThat(result.fileTemplates().invalid()).isEqualTo(1);
+    assertThat(result.allIssues())
+        .anySatisfy(issue -> assertThat(issue.message())
+            .contains("FIXED_WIDTH imports require at least one field mapping"));
   }
 
   @Test

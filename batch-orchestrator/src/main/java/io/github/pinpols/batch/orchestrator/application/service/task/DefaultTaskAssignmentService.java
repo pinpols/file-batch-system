@@ -404,6 +404,9 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         ? null
         : jobPartitionMapper.selectById(tenantId, task.getJobPartitionId());
     JobDefinitionEntity definition = jobDefinitionMapper.selectById(instance.getJobDefinitionId());
+    Map<String, Object> instanceSnapshot = parseInstanceSnapshot(instance);
+    Map<String, Object> executionPolicy = executionPolicySnapshot(instanceSnapshot);
+    boolean hasExecutionPolicySnapshot = instanceSnapshot.containsKey("executionPolicy");
     String businessKey = partition == null // empty-check: allow - Sonar S2259
         ? null
         : partition.getBusinessKey();
@@ -426,12 +429,22 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         idempotencyKey,
         task.getTaskPayload(),
         instance.getTraceId(),
-        EmptyChecks.isNull(definition) ? null : definition.executionMode(),
-        EmptyChecks.isNull(definition) ? null : definition.watermarkField(),
+        hasExecutionPolicySnapshot
+            ? textValue(executionPolicy.get("executionMode"))
+            : EmptyChecks.isNull(definition) ? null : definition.executionMode(),
+        hasExecutionPolicySnapshot
+            ? textValue(executionPolicy.get("watermarkField"))
+            : EmptyChecks.isNull(definition) ? null : definition.watermarkField(),
         instance.getHighWaterMarkIn(),
-        EmptyChecks.isNull(definition) ? null : definition.retryPolicy(),
-        EmptyChecks.isNull(definition) ? null : definition.retryMaxCount(),
-        EmptyChecks.isNull(definition) ? null : definition.timeoutSeconds(),
+        hasExecutionPolicySnapshot
+            ? textValue(executionPolicy.get("retryPolicy"))
+            : EmptyChecks.isNull(definition) ? null : definition.retryPolicy(),
+        hasExecutionPolicySnapshot
+            ? intValue(executionPolicy.get("retryMaxCount"))
+            : EmptyChecks.isNull(definition) ? null : definition.retryMaxCount(),
+        hasExecutionPolicySnapshot
+            ? intValue(executionPolicy.get("timeoutSeconds"))
+            : EmptyChecks.isNull(definition) ? null : definition.timeoutSeconds(),
         partition == null // empty-check: allow - Sonar S2259
             ? null
             : partition.getPartitionNo(),
@@ -451,6 +464,40 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         partition == null // empty-check: allow - Sonar S2259
             ? null
             : partition.getCurrentInvocationId());
+  }
+
+  @SuppressWarnings("unchecked")
+  private Map<String, Object> parseInstanceSnapshot(JobInstanceEntity instance) {
+    if (EmptyChecks.isNull(instance) || EmptyChecks.isBlank(instance.getParamsSnapshot())) {
+      return Map.of();
+    }
+    try {
+      Object parsed = JsonUtils.fromJson(instance.getParamsSnapshot(), Object.class);
+      if (parsed instanceof Map<?, ?> snapshot) {
+        return (Map<String, Object>) snapshot;
+      }
+    } catch (IllegalArgumentException badSnapshot) {
+      log.warn(
+          "job instance params_snapshot parse failed, using legacy live execution policy:"
+              + " tenantId={} instanceId={}",
+          instance.getTenantId(),
+          instance.getId(),
+          badSnapshot);
+    }
+    return Map.of();
+  }
+
+  @SuppressWarnings("unchecked")
+  private Map<String, Object> executionPolicySnapshot(Map<String, Object> instanceSnapshot) {
+    Object policy = instanceSnapshot.get("executionPolicy");
+    if (policy instanceof Map<?, ?> values) {
+      return (Map<String, Object>) values;
+    }
+    return Map.of();
+  }
+
+  private String textValue(Object value) {
+    return value == null ? null : String.valueOf(value);
   }
 
   @SuppressWarnings("unchecked")
