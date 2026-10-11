@@ -779,7 +779,7 @@ jobs:
         shell: bash
         run: |
           trivy sbom --ignorefile .trivyignore --severity CRITICAL,HIGH --exit-code 1 target/bom.json
-          trivy fs --scanners misconfig --ignorefile .trivyignore.yaml --severity CRITICAL,HIGH --exit-code 1 .
+          trivy config --ignorefile .trivyignore.yaml --severity CRITICAL,HIGH --exit-code 1 .
 
       - name: K8s manifest security — Checkov
         uses: bridgecrewio/checkov-action@a76233b2c1d4a820a9dc68be350c473a4a9dceec # v12
