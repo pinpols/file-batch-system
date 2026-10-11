@@ -9,6 +9,7 @@ public interface ConsoleAlertRoutingApplicationService {
 
   PageResponse<ConsoleAlertRoutingResponse> list(
       String tenantId,
+      String keyword,
       String routeCode,
       String team,
       String severity,

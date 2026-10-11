@@ -5,6 +5,8 @@ import io.github.pinpols.batch.common.enums.AlertSeverity;
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.model.PageRequest;
+import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.entity.AssetFreshnessPolicyEntity;
 import io.github.pinpols.batch.console.domain.param.AssetFreshnessPolicyUpsertParam;
@@ -28,19 +30,21 @@ public class ConsoleAssetFreshnessPolicyService {
   private static final String DEFAULT_SEVERITY = AlertSeverity.WARN.code();
   private static final int DEFAULT_STALE_AFTER_SECONDS = 0;
   private static final int DEFAULT_LOOKBACK_DAYS = 1;
-  private static final int MAX_LIMIT = 500;
   private static final Set<String> VALID_SEVERITIES = DictEnum.codes(AlertSeverity.class);
 
   private final ConsoleAssetFreshnessPolicyMapper mapper;
   private final ConsoleTenantGuard tenantGuard;
 
   @Transactional(readOnly = true)
-  public List<AssetFreshnessPolicyEntity> list(
-      String tenantId, String assetCode, Boolean enabled, Integer limit) {
+  public PageResponse<AssetFreshnessPolicyEntity> list(
+      String tenantId, String assetCode, Boolean enabled, int pageNo, int pageSize) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    int normalizedLimit = Math.min(MAX_LIMIT, Math.max(1, limit == null ? 100 : limit));
+    PageRequest page = new PageRequest(pageNo, pageSize);
     String normalizedAssetCode = Texts.hasText(assetCode) ? assetCode.trim() : null;
-    return mapper.findByTenant(resolved, normalizedAssetCode, enabled, normalizedLimit);
+    long total = mapper.countByTenant(resolved, normalizedAssetCode, enabled);
+    List<AssetFreshnessPolicyEntity> items =
+        mapper.findByTenant(resolved, normalizedAssetCode, enabled, page);
+    return new PageResponse<>(total, page.pageNo(), page.pageSize(), items);
   }
 
   @Transactional(readOnly = true)

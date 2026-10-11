@@ -74,7 +74,7 @@ class ConsoleAlertRoutingControllerBehaviorTest {
   @Test
   @DisplayName("清单查询把租户, 路由编码, 团队, 级别与启用状态全部透传给服务")
   void shouldPassAllFilters_whenListingRoutings() throws Exception {
-    when(service.list("ta", "RT_A", "ops", "WARN", true, 1, 20))
+    when(service.list("ta", null, "RT_A", "ops", "WARN", true, 1, 20))
         .thenReturn(new PageResponse<>(0L, 1, 20, List.of()));
     mockMvc
         .perform(get("/api/console/alert-routings")
@@ -84,7 +84,7 @@ class ConsoleAlertRoutingControllerBehaviorTest {
             .param("severity", "WARN")
             .param("enabled", "true"))
         .andExpect(status().isOk());
-    verify(service).list("ta", "RT_A", "ops", "WARN", true, 1, 20);
+    verify(service).list("ta", null, "RT_A", "ops", "WARN", true, 1, 20);
   }
 
   @Test

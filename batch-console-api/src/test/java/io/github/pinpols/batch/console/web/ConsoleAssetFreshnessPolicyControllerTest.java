@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.github.pinpols.batch.common.dto.ResponseMeta;
+import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.domain.entity.AssetFreshnessPolicyEntity;
 import io.github.pinpols.batch.console.domain.param.AssetFreshnessPolicyUpsertParam;
@@ -75,7 +76,8 @@ class ConsoleAssetFreshnessPolicyControllerTest {
         true,
         null,
         null);
-    when(policyService.list("t1", "JOB_A", true, 100)).thenReturn(List.of(entity));
+    when(policyService.list("t1", "JOB_A", true, 1, 15))
+        .thenReturn(new PageResponse<>(1L, 1, 15, List.of(entity)));
 
     mockMvc
         .perform(get("/api/console/asset-freshness-policies")
@@ -84,8 +86,9 @@ class ConsoleAssetFreshnessPolicyControllerTest {
             .param("enabled", "true"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"))
-        .andExpect(jsonPath("$.data[0].assetCode").value("JOB_A"))
-        .andExpect(jsonPath("$.data[0].severity").value("WARN"));
+        .andExpect(jsonPath("$.data.items[0].assetCode").value("JOB_A"))
+        .andExpect(jsonPath("$.data.items[0].severity").value("WARN"))
+        .andExpect(jsonPath("$.data.total").value(1));
   }
 
   @Test

@@ -30,6 +30,7 @@ public class DefaultConsoleAlertRoutingApplicationService
   @Override
   public PageResponse<ConsoleAlertRoutingResponse> list(
       String tenantId,
+      String keyword,
       String routeCode,
       String team,
       String severity,
@@ -38,10 +39,10 @@ public class DefaultConsoleAlertRoutingApplicationService
       int pageSize) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     PageRequest pageRequest = new PageRequest(pageNo, pageSize);
-    long total =
-        alertRoutingConfigMapper.countByQuery(resolved, routeCode, team, severity, enabled);
+    long total = alertRoutingConfigMapper.countByQuery(
+        resolved, keyword, routeCode, team, severity, enabled);
     List<Map<String, Object>> items = alertRoutingConfigMapper.selectByQuery(
-        resolved, routeCode, team, severity, enabled, pageRequest);
+        resolved, keyword, routeCode, team, severity, enabled, pageRequest);
     return new PageResponse<>(
         total,
         pageRequest.pageNo(),

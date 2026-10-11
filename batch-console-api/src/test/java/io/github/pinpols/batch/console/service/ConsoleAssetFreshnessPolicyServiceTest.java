@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.console.domain.entity.AssetFreshnessPolicyEntity;
 import io.github.pinpols.batch.console.domain.param.AssetFreshnessPolicyUpsertParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
@@ -20,7 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-@DisplayName("资产新鲜度策略服务: 列表上限、默认值补全、更新归一化与参数校验")
+@DisplayName("资产新鲜度策略服务: 分页查询、默认值补全、更新归一化与参数校验")
 class ConsoleAssetFreshnessPolicyServiceTest {
 
   private ConsoleAssetFreshnessPolicyMapper mapper;
@@ -36,18 +37,23 @@ class ConsoleAssetFreshnessPolicyServiceTest {
   }
 
   @Test
-  @DisplayName("查询策略时, 资产编码去除首尾空格且返回条数上限压到允许最大值")
-  void shouldListPoliciesWithLimitCap() {
+  @DisplayName("查询策略时, 资产编码去除首尾空格并返回分页元数据")
+  void shouldListPoliciesWithPagination() {
     AssetFreshnessPolicyEntity entity = new AssetFreshnessPolicyEntity(
         1L, "t1", "JOB_A", "JOB", LocalTime.NOON, "Asia/Shanghai", 60, 1, "WARN", true, null, null);
-    when(mapper.findByTenant("t1", "JOB_A", true, 500)).thenReturn(List.of(entity));
+    when(mapper.countByTenant("t1", "JOB_A", true)).thenReturn(21L);
+    when(mapper.findByTenant("t1", "JOB_A", true, new PageRequest(2, 15)))
+        .thenReturn(List.of(entity));
 
-    List<AssetFreshnessPolicyEntity> result = service.list("t1", " JOB_A ", true, 999);
+    var result = service.list("t1", " JOB_A ", true, 2, 15);
 
-    assertThat(result)
+    assertThat(result.items())
         .singleElement()
         .extracting(AssetFreshnessPolicyEntity::assetCode)
         .isEqualTo("JOB_A");
+    assertThat(result.total()).isEqualTo(21L);
+    assertThat(result.pageNo()).isEqualTo(2);
+    assertThat(result.pageSize()).isEqualTo(15);
   }
 
   @Test

@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.web;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigSyncApplicationService;
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncExportRequest;
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncImportRequest;
@@ -14,7 +15,6 @@ import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpres
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -59,9 +59,10 @@ public class ConsoleConfigSyncController {
   }
 
   @GetMapping("/logs")
-  public CommonResponse<List<ConfigSyncLogResponse>> logs(
+  public CommonResponse<PageResponse<ConfigSyncLogResponse>> logs(
       @RequestParam("tenantId") String tenantId,
-      @RequestParam(value = "limit", defaultValue = "50") int limit) {
-    return responseFactory.success(applicationService.logs(tenantId, limit));
+      @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
+      @RequestParam(value = "pageSize", defaultValue = "15") int pageSize) {
+    return responseFactory.success(applicationService.logs(tenantId, pageNo, pageSize));
   }
 }

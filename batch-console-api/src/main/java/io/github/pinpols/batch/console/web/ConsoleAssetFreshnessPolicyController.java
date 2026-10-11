@@ -1,7 +1,9 @@
 package io.github.pinpols.batch.console.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.console.application.contract.response.AssetFreshnessPolicyResponse;
+import io.github.pinpols.batch.console.domain.entity.AssetFreshnessPolicyEntity;
 import io.github.pinpols.batch.console.domain.param.AssetFreshnessPolicyUpsertParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleAssetFreshnessPolicyService;
@@ -13,7 +15,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalTime;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -40,15 +41,19 @@ public class ConsoleAssetFreshnessPolicyController {
   private final ConsoleResponseFactory responseFactory;
 
   @GetMapping
-  public CommonResponse<List<AssetFreshnessPolicyResponse>> list(
+  public CommonResponse<PageResponse<AssetFreshnessPolicyResponse>> list(
       @RequestParam(value = "tenantId", required = false) String tenantId,
       @RequestParam(value = "assetCode", required = false) String assetCode,
       @RequestParam(value = "enabled", required = false) Boolean enabled,
-      @RequestParam(value = "limit", required = false, defaultValue = "100") @Min(1) @Max(500)
-          Integer limit) {
-    return responseFactory.success(policyService.list(tenantId, assetCode, enabled, limit).stream()
-        .map(AssetFreshnessPolicyResponse::from)
-        .toList());
+      @RequestParam(value = "pageNo", defaultValue = "1") @Min(1) Integer pageNo,
+      @RequestParam(value = "pageSize", defaultValue = "15") @Min(1) @Max(200) Integer pageSize) {
+    PageResponse<AssetFreshnessPolicyEntity> page =
+        policyService.list(tenantId, assetCode, enabled, pageNo, pageSize);
+    return responseFactory.success(new PageResponse<>(
+        page.total(),
+        page.pageNo(),
+        page.pageSize(),
+        page.items().stream().map(AssetFreshnessPolicyResponse::from).toList()));
   }
 
   @GetMapping("/{id}")

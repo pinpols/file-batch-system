@@ -788,7 +788,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
 
   private List<AlertRoutingSpec> readAlertRoutings(String tenantId) {
     List<Map<String, Object>> rows = alertRoutingConfigMapper.selectByQuery(
-        tenantId, null, null, null, null, new PageRequest(1, MAX_PAGE_SIZE));
+        tenantId, null, null, null, null, null, new PageRequest(1, MAX_PAGE_SIZE));
     List<AlertRoutingSpec> specs = new ArrayList<>(rows.size());
     for (Map<String, Object> r : rows) {
       AlertRoutingSpec s = new AlertRoutingSpec();

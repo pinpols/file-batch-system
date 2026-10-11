@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.ResponseMeta;
+import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigSyncApplicationService;
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncExportRequest;
@@ -123,28 +124,34 @@ class ConsoleConfigSyncControllerTest {
   }
 
   @Test
-  @DisplayName("查询同步日志时, 租户与条数上限传给服务, 未指定上限时取缺省值")
-  void shouldPassTenantAndLimit_whenQueryingLogs() throws Exception {
-    when(service.logs("ta", 50))
-        .thenReturn(List.of(new ConfigSyncLogResponse(
+  @DisplayName("查询同步日志时, 租户与分页参数传给服务, 未指定时取缺省值")
+  void shouldPassTenantAndPagination_whenQueryingLogs() throws Exception {
+    when(service.logs("ta", 1, 15))
+        .thenReturn(new PageResponse<>(
             1L,
-            "ta",
-            "IMPORT",
-            "dev",
-            "prod",
-            "jobDefinitions",
             1,
-            1,
-            0,
-            0,
-            "SUCCESS",
-            null,
-            "admin",
-            Instant.parse("2026-05-20T10:00:00Z"))));
+            15,
+            List.of(new ConfigSyncLogResponse(
+                1L,
+                "ta",
+                "IMPORT",
+                "dev",
+                "prod",
+                "jobDefinitions",
+                1,
+                1,
+                0,
+                0,
+                "SUCCESS",
+                null,
+                "admin",
+                Instant.parse("2026-05-20T10:00:00Z")))));
     mockMvc
         .perform(get("/api/console/config/sync/logs").param("tenantId", "ta"))
-        .andExpect(status().isOk());
-    verify(service).logs("ta", 50);
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.items[0].id").value(1))
+        .andExpect(jsonPath("$.data.total").value(1));
+    verify(service).logs("ta", 1, 15);
   }
 
   private static ConfigSyncSummaryResponse summary() {

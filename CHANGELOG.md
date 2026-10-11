@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+- 告警路由查询支持关键词服务端筛选；资产新鲜度策略和配置同步日志改为返回带总数的分页响应，避免列表只取固定数量或无分页加载。
+- 新增幂等 Worker 能力列补偿迁移，修复历史版本号漂移导致 `worker_registry.task_capabilities` 缺失、Console Worker 查询返回 HTTP 500 的问题。
 - 修复 Compose CD 调用前端 reusable build workflow 时引用错误提交的问题，并将 Sentry DSN secret 与前端 `workflow_call` 契约对齐。
 - 新增受控的前后端 Compose CD：同一 release manifest 固定两仓 commit 与全部镜像 digest；可手动部署 staging 并执行 health/version、Playwright、视觉/跨浏览器 smoke 与 Lighthouse 验收，失败时恢复上一稳定 release。真实主机配置和 production 晋级仍待外部接入。
 - 修复临时 Sonar 首次扫描无法设置 30 天新代码基线的问题：为扫描管理账号补齐项目级管理权限，并按项目实际主分支回读验证，避免 Sonar API 空响应掩盖配置未生效。

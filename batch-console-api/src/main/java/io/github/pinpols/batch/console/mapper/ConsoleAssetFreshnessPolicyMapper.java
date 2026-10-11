@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.mapper;
 
+import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.console.domain.entity.AssetFreshnessPolicyEntity;
 import io.github.pinpols.batch.console.domain.param.AssetFreshnessPolicyUpsertParam;
 import java.util.List;
@@ -13,7 +14,12 @@ public interface ConsoleAssetFreshnessPolicyMapper {
       @Param("tenantId") String tenantId,
       @Param("assetCode") String assetCode,
       @Param("enabled") Boolean enabled,
-      @Param("limit") int limit);
+      @Param("page") PageRequest page);
+
+  long countByTenant(
+      @Param("tenantId") String tenantId,
+      @Param("assetCode") String assetCode,
+      @Param("enabled") Boolean enabled);
 
   Optional<AssetFreshnessPolicyEntity> findById(
       @Param("tenantId") String tenantId, @Param("id") Long id);

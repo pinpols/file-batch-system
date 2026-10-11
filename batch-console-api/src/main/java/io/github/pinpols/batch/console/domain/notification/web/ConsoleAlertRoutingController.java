@@ -30,6 +30,7 @@ public class ConsoleAlertRoutingController {
   @GetMapping
   public CommonResponse<PageResponse<ConsoleAlertRoutingResponse>> list(
       @RequestParam("tenantId") String tenantId,
+      @RequestParam(value = "keyword", required = false) String keyword,
       @RequestParam(value = "routeCode", required = false) String routeCode,
       @RequestParam(value = "team", required = false) String team,
       @RequestParam(value = "severity", required = false) String severity,
@@ -37,7 +38,7 @@ public class ConsoleAlertRoutingController {
       @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
       @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
     PageResponse<ConsoleAlertRoutingResponse> page = alertRoutingApplicationService.list(
-        tenantId, routeCode, team, severity, enabled, pageNo, pageSize);
+        tenantId, keyword, routeCode, team, severity, enabled, pageNo, pageSize);
     return responseFactory.success(page);
   }
 
