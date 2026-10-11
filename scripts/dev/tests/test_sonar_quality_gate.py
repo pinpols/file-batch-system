@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 from scripts.dev.sonar_quality_gate import evaluate_quality_gate
+from scripts.dev.sonar_quality_gate import parse_measures
 
 
 HOTSPOT_METRIC = "new_security_hotspots_reviewed"
@@ -36,7 +37,7 @@ class SonarQualityGateTest(unittest.TestCase):
         }
 
     def test_accepts_all_configured_conditions_when_quality_gate_is_ok(self) -> None:
-        passed, _ = evaluate_quality_gate(self.config, self.result)
+        passed, _ = evaluate_quality_gate(self.config, self.result, {})
 
         self.assertTrue(passed)
 
@@ -45,10 +46,64 @@ class SonarQualityGateTest(unittest.TestCase):
         status["conditions"] = status["conditions"][:-1]
         status["ignoredConditions"] = True
 
-        passed, detail = evaluate_quality_gate(self.config, self.result)
+        passed, detail = evaluate_quality_gate(
+            self.config, self.result, {"new_security_hotspots": 0}
+        )
 
         self.assertTrue(passed)
         self.assertIn(HOTSPOT_METRIC, detail)
+
+    def test_accepts_coverage_and_duplication_ignored_below_twenty_new_lines(self) -> None:
+        status = self.result["projectStatus"]
+        status["conditions"] = [condition("new_violations")]
+        status["ignoredConditions"] = True
+
+        passed, detail = evaluate_quality_gate(
+            self.config,
+            self.result,
+            {"new_lines": 12, "new_security_hotspots": 0},
+        )
+
+        self.assertTrue(passed)
+        self.assertIn("new_coverage", detail)
+        self.assertIn("new_duplicated_lines_density", detail)
+
+    def test_rejects_coverage_and_duplication_missing_at_twenty_or_more_lines(self) -> None:
+        status = self.result["projectStatus"]
+        status["conditions"] = [condition("new_violations"), condition(HOTSPOT_METRIC)]
+        status["ignoredConditions"] = True
+
+        passed, detail = evaluate_quality_gate(
+            self.config,
+            self.result,
+            {"new_lines": 20, "new_security_hotspots": 0},
+        )
+
+        self.assertFalse(passed)
+        self.assertIn("new_coverage", detail)
+
+    def test_rejects_missing_hotspot_condition_without_zero_hotspot_evidence(self) -> None:
+        status = self.result["projectStatus"]
+        status["conditions"] = status["conditions"][:-1]
+
+        passed, _ = evaluate_quality_gate(self.config, self.result, {})
+
+        self.assertFalse(passed)
+
+    def test_parses_period_measures_and_ignores_invalid_values(self) -> None:
+        measures = parse_measures(
+            {
+                "component": {
+                    "measures": [
+                        {"metric": "new_lines", "periods": [{"value": "12"}]},
+                        {"metric": "new_security_hotspots", "value": "0"},
+                        {"metric": "new_coverage", "value": "NaN"},
+                    ]
+                }
+            }
+        )
+
+        self.assertEqual(measures, {"new_lines": 12, "new_security_hotspots": 0})
 
     def test_rejects_other_missing_condition_even_when_sonar_ignored_conditions(self) -> None:
         status = self.result["projectStatus"]
@@ -59,7 +114,7 @@ class SonarQualityGateTest(unittest.TestCase):
         ]
         status["ignoredConditions"] = True
 
-        passed, detail = evaluate_quality_gate(self.config, self.result)
+        passed, detail = evaluate_quality_gate(self.config, self.result, {})
 
         self.assertFalse(passed)
         self.assertIn("new_coverage", detail)
@@ -68,24 +123,26 @@ class SonarQualityGateTest(unittest.TestCase):
         status = self.result["projectStatus"]
         status["conditions"] = status["conditions"][:-1]
 
-        passed, _ = evaluate_quality_gate(self.config, self.result)
+        passed, _ = evaluate_quality_gate(
+            self.config, self.result, {"new_security_hotspots": 0}
+        )
 
         self.assertFalse(passed)
 
     def test_rejects_empty_and_unconfigured_results(self) -> None:
         status = self.result["projectStatus"]
         status["conditions"] = []
-        self.assertFalse(evaluate_quality_gate(self.config, self.result)[0])
+        self.assertFalse(evaluate_quality_gate(self.config, self.result, {})[0])
 
         status["conditions"] = [condition("unexpected_metric")]
-        self.assertFalse(evaluate_quality_gate(self.config, self.result)[0])
+        self.assertFalse(evaluate_quality_gate(self.config, self.result, {})[0])
 
     def test_rejects_failed_condition_and_non_ok_gate(self) -> None:
         status = self.result["projectStatus"]
         status["status"] = "ERROR"
         status["conditions"][0] = condition("new_violations", "ERROR")
 
-        passed, detail = evaluate_quality_gate(self.config, self.result)
+        passed, detail = evaluate_quality_gate(self.config, self.result, {})
 
         self.assertFalse(passed)
         self.assertIn("status=ERROR", detail)
