@@ -556,8 +556,8 @@ python3 scripts/ci/check-java-governance-test-coverage.py --verify-reports
 
 ## `install-upstream-modules.sh`
 
-将 E2E / staging / Trivy 扫描所需的上游 Maven 模块安装到 `~/.m2`。Full Gate 和 PR 的 Trivy 文件系统扫描会先运行本脚本，缓存依赖元数据并安装本地 reactor 产物，避免扫描器重复向 Maven Central 请求内部模块 POM。它保持 `batch-e2e-tests`
-排除和 `-DskipTests` 约束不变，并对 Maven Central 的临时 5xx / 传输失败使用 Maven
+将 E2E / staging 所需的上游 Maven 模块安装到 `~/.m2`，避免测试模块重复向 Maven Central 请求内部模块 POM。它保持 `batch-e2e-tests`
+排除和 `-DskipTests` 约束不变，并跳过上游应用的 Spring Boot executable jar repackage：E2E 使用模块普通 jar；需要 `-exec.jar` 的重启恢复场景会在测试自己的子构建中生成，不依赖上游预构建产物。对 Maven Central 的临时 5xx / 传输失败使用 Maven
 强制更新、传输层重试和最多三轮退避重试，避免依赖下载瞬时失败被误报为 E2E 业务失败。
 
 ```bash

@@ -115,4 +115,10 @@ Staging Gate 采用相同路由：治理组与 6 个全量 E2E shard 并发，E2
 
 本地 action/workflow 静态检查只能证明定义、路径和权限符合约束，不能证明 GitHub hosted runner 命中 BuildKit 缓存、同 run artifact 实际下载成功或墙钟时间下降。在线 PR/Full Gate/Sonar/E2E 结果及连续运行耗时需在本分支 PR 后复核；至少积累 10 次可比运行后再判断是否达到耗时目标。
 
+### E2E 上游安装避免生成 executable jar
+
+2026-10-11 的 Full Gate `38102247567` 中，六个 E2E shard 都先独立安装上游 reactor；例如 shard 2 的安装步骤 104 秒，shard 6 为 50 秒。该 install 阶段会触发 Spring Boot `repackage`，为多个应用重复生成体积约 99-126 MiB 的 `-exec.jar`。E2E 通过普通 reactor jar 引用这些模块，只有 `WorkerProcessRestartRecoveryE2eIT` 需要可执行 jar，且它会在测试自己的子构建中单独打包 Worker。
+
+因此 `scripts/ci/install-upstream-modules.sh` 增加 `-Dspring-boot.repackage.skip=true`，只在预安装阶段跳过无用的可执行 jar；普通 jar、编译、依赖安装和 E2E 测试均保留。Full/Staging 在线验证需确认重启恢复场景仍成功，并比较上游安装步骤耗时；这一变化预期减少重复打包 CPU/磁盘工作，不代表六个 shard 的 Maven 编译已合并或跨 PR/Full 共享。
+
 同日 main Sonar run `38102247541` 另暴露既有门禁解析缺陷：分析任务完成且报告导出成功，但 `SONAR_QUALITY_GATE_INCOMPLETE` 输出 `expected=4 | evaluated=`。脚本以 Python 字面 `\\t` 连接字段、再由 Bash 按真实 Tab 拆分，导致状态和条件数量没有正确解析。修复为输出实际 Tab；本地验证解析逻辑后仍需观察线上 Sonar run，确认真实 Quality Gate 条件结果，不预先宣称通过。
