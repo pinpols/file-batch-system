@@ -8,7 +8,9 @@
 
 ## [Unreleased]
 
+- 统一 Sim 两个初始化入口的平台运行态清理，补齐触发请求、任务和审计记录；运行中配置编辑场景在终止信号下也尝试恢复原配置，上传预览会话仍按短期 TTL 回收。
 - 修复 TypeScript 自托管 Worker E2E 因样例缺少锁文件导致 `npm ci` 必然失败的问题，并保留依赖安装错误日志。
+- 修复临时 SonarQube 仅执行一次分析导致 Quality Gate 未计算、Sonar CI 恒失败的问题；先建立分析基线，再严格校验第二次分析结果。
 - 告警路由查询支持关键词服务端筛选；资产新鲜度策略和配置同步日志改为返回带总数的分页响应，避免列表只取固定数量或无分页加载。
 - 新增幂等 Worker 能力列补偿迁移，修复历史版本号漂移导致 `worker_registry.task_capabilities` 缺失、Console Worker 查询返回 HTTP 500 的问题。
 - 修复 Compose CD 调用前端 reusable build workflow 时引用错误提交的问题，并将 Sentry DSN secret 与前端 `workflow_call` 契约对齐。

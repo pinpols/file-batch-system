@@ -35,6 +35,7 @@ gate_run PRE_COMMIT_UTF8_ENCODING_TEST "UTF-8 编码门禁测试" \
   "$PYTHON_BIN" -m unittest scripts/ci/tests/test_check_utf8_encoding.py
 
 java_files=()
+suppression_files=()
 shell_files=()
 mapper_xml_files=()
 docs_changed=0
@@ -58,6 +59,9 @@ for file in "${staged_files[@]}"; do
       ;;
   esac
   [[ "$file" == *.java ]] && java_files+=("$file")
+  if [[ "$file" == */src/main/resources/application*.yml || "$file" == */src/main/resources/application*.yaml ]]; then
+    suppression_files+=("$file")
+  fi
   [[ "$file" == *.sh ]] && shell_files+=("$file")
   [[ "$file" == *Mapper.xml ]] && mapper_xml_files+=("$file")
   [[ "$file" == *.md || "$file" == docs/* ]] && docs_changed=1
@@ -98,6 +102,7 @@ if git diff --cached -G'@ConfigurationProperties' --name-only -- '*.java' | grep
 fi
 
 if ((${#java_files[@]} > 0)); then
+  suppression_files+=("${java_files[@]}")
   gate_run PRE_COMMIT_SPOTLESS "Java Spotless 格式化（${#java_files[@]} 个文件）" \
     ./mvnw -q spotless:apply
   gate_run PRE_COMMIT_JAVA_LOGGING "Java 日志与异常输出治理" \
@@ -121,7 +126,7 @@ if ((${#java_files[@]} > 0)); then
   gate_run PRE_COMMIT_JAVA_STRUCTURED_STRING_CONCAT_TEST "Java 结构化多行字符串门禁测试" \
     "$PYTHON_BIN" -m unittest scripts/ci/tests/test_check_java_structured_string_concat.py
   gate_run PRE_COMMIT_JAVA_SUPPRESSION_REGISTRY "Java 抑制项注册表" \
-    "$PYTHON_BIN" scripts/ci/check-java-suppression-registry.py "${java_files[@]}"
+    "$PYTHON_BIN" scripts/ci/check-java-suppression-registry.py "${suppression_files[@]}"
   gate_run PRE_COMMIT_JAVA_SUPPRESSION_REGISTRY_TEST "Java 抑制项注册表门禁测试" \
     "$PYTHON_BIN" -m unittest scripts/ci/tests/test_check_java_suppression_registry.py
   gate_run PRE_COMMIT_MAPOF_NULL_VALUES "Map/List/Set.of 空值风险" \
@@ -140,6 +145,13 @@ if ((${#java_files[@]} > 0)); then
   for file in "${java_files[@]}"; do
     [[ -f "$file" ]] && git add -- "$file"
   done
+fi
+
+if ((${#suppression_files[@]} > 0 && ${#java_files[@]} == 0)); then
+  gate_run PRE_COMMIT_JAVA_SUPPRESSION_REGISTRY "静态检查抑制项注册表" \
+    "$PYTHON_BIN" scripts/ci/check-java-suppression-registry.py "${suppression_files[@]}"
+  gate_run PRE_COMMIT_JAVA_SUPPRESSION_REGISTRY_TEST "静态检查抑制项注册表门禁测试" \
+    "$PYTHON_BIN" -m unittest scripts/ci/tests/test_check_java_suppression_registry.py
 fi
 
 if ((contract_governance_changed == 1)); then

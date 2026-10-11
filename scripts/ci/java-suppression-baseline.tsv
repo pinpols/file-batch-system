@@ -1,4 +1,4 @@
-# Reviewed production Java @SuppressWarnings inventory.
+# Reviewed production Java @SuppressWarnings and YAML IDE inspection inventory.
 # Update only after reviewing the source change and documenting its reason.
 # Format: repository-relative path<TAB>rule<TAB>approved occurrence count.
 batch-common/src/main/java/io/github/pinpols/batch/common/config/BatchObjectStoreAutoConfiguration.java	SpringJavaInjectionPointsAutowiringInspection	1
@@ -68,6 +68,7 @@ batch-console-api/src/main/java/io/github/pinpols/batch/console/support/excel/Co
 batch-console-api/src/main/java/io/github/pinpols/batch/console/support/excel/DropdownValidationSpec.java	java:S6218	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/support/excel/TenantConfigPackageExcelImportStore.java	PMD.ExcessiveParameterList	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/support/web/ConsoleResponseFieldReader.java	unchecked	5
+batch-console-api/src/main/resources/application.yml	SpringBootApplicationYaml	1
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/engine/TaskDispatchOutboxService.java	unchecked	2
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/plan/BundlePlanParams.java	unchecked	1
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/dataquality/DataQualityCheckExecutor.java	unchecked	1
@@ -123,7 +124,9 @@ batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/Ba
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/BatchDayTimePolicyResolver.java	java:S2259	2
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/LaunchBatchDayService.java	java:S2259	1
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/LaunchParamResolver.java	java:S2583	1
+batch-orchestrator/src/main/resources/application.yml	SpringBootApplicationYaml	1
 batch-trigger/src/main/java/io/github/pinpols/batch/trigger/config/TriggerSecurityConfiguration.java	java:S4502	1
+batch-trigger/src/main/resources/application.yml	SpringBootApplicationYaml	1
 batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/config/AtomicWorkerConfiguration.java	ConfigurationProperties	1
 batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/http/HttpExecutorProperties.java	java:S1313	1
 batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/http/HttpTaskExecutor.java	unchecked	1
@@ -131,6 +134,7 @@ batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/runtime/
 batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/runtime/AtomicWorkerLoop.java	PMD.ExcessiveParameterList	1
 batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/sql/SqlTaskExecutor.java	java:S2077	1
 batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/storedproc/StoredProcTaskExecutor.java	java:S2077	1
+batch-worker/atomic/src/main/resources/application.yml	SpringBootApplicationYaml	1
 batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/config/WorkerConcurrencyProperties.java	ConfigurationProperties	1
 batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/config/WorkerRegistryStartupProperties.java	ConfigurationProperties	1
 batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/config/WorkerTempFileProperties.java	ConfigurationProperties	1
@@ -151,6 +155,7 @@ batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/inf
 batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/runtime/DispatchTaskConsumer.java	SpringJavaInjectionPointsAutowiringInspection	1
 batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/stage/DeliverDispatchStep.java	unchecked	2
 batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/stage/RetryDispatchStep.java	unchecked	2
+batch-worker/dispatch/src/main/resources/application.yml	SpringBootApplicationYaml	1
 batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/config/ExportConfigValueSupport.java	unchecked	1
 batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/jdbc/JdbcMappedExportSpec.java	unchecked	1
 batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/ExportKeysetRangePlanner.java	unchecked	1
@@ -165,6 +170,7 @@ batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/f
 batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/format/AbstractExportFormat.java	java:S5164	1
 batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/format/ExcelStyleOptions.java	java:S6218	1
 batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/format/ExportFormatStrategy.java	java:S112	2
+batch-worker/export/src/main/resources/application.yml	SpringBootApplicationYaml	1
 batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/config/ImportWorkerConfiguration.java	ConfigurationProperties	1
 batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/config/WorkerImportPayloadProperties.java	ConfigurationProperties	1
 batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/infrastructure/ImportRecordGovernanceService.java	unchecked	1
@@ -180,12 +186,14 @@ batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/R
 batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/format/ExcelFormatParser.java	java:S2259	1
 batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/format/FormatParseRequest.java	java:S6218	1
 batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/format/FormatParser.java	java:S112	1
+batch-worker/import/src/main/resources/application.yml	SpringBootApplicationYaml	1
 batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/cleanup/ProcessStagingOrphanCleaner.java	SpringJavaInjectionPointsAutowiringInspection	1
 batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/cleanup/ProcessStagingStartupAuditContributor.java	SpringJavaInjectionPointsAutowiringInspection	1
 batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/infrastructure/ProcessStepExecutionAdapter.java	unchecked	1
 batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/runtime/ProcessTaskConsumer.java	SpringJavaInjectionPointsAutowiringInspection	1
 batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/sql/SqlTransformComputePlugin.java	unchecked	1
 batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/sql/SqlTransformComputeSpec.java	unchecked	1
+batch-worker/process/src/main/resources/application.yml	SpringBootApplicationYaml	1
 sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/checkpoint/JdbcSdkCheckpoint.java	unchecked	1
 sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/dispatcher/KafkaTaskConsumer.java	java:S1181	1
 sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/dispatcher/TaskDispatchMessage.java	PMD.ExcessiveParameterList	1

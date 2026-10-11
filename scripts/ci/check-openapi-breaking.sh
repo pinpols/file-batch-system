@@ -88,6 +88,11 @@ for spec in "${SPECS[@]}"; do
   oasdiff breaking "$base_tmp" "$spec" --format singleline 2>/dev/null \
     | grep -E 'in API POST /api/console/config/releases .*request property `configPayloadJson` became required.*\[request-property-became-required\]' \
       >> "$clarification_ignore_tmp" || true
+  # 配置包行内修正 DTO 在 base 代码中已用 @NotBlank 强制 previewToken；这里只补录漏写的既有运行时契约。
+  # 仅允许精确端点与字段，其他请求新增必填属性仍由 breaking gate 拦截。
+  oasdiff breaking "$base_tmp" "$spec" --format singleline 2>/dev/null \
+    | grep -E 'in API POST /api/console/config/tenant-package/excel/preview/\{uploadToken\}/patch .*added the new required request property `previewToken`.*\[new-required-request-property\]' \
+      >> "$clarification_ignore_tmp" || true
   # PR #1066（2026-09-27）经用户批准移除六个旧 toggle 路由，统一改用
   # PATCH /{id}/enabled。仅忽略下列精确路径，其他端点移除仍须阻断。
   # AI 对话已由调用方切换到 SSE，用户明确要求不保留旧 JSON 路由。

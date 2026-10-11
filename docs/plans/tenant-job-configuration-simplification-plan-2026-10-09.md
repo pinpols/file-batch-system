@@ -1,7 +1,7 @@
 # 租户作业配置与资源边界收敛计划
 
 > 状态：配置包/API、资源写入口和前端体验在特性分支实施，完整验收仍未完成。运行期规则已收敛为：允许编辑；执行/重试使用实例创建时已解析的执行参数；监控阈值实时生效于现存实例。不建设通用配置快照平台，不因定义缓存版本差异拒绝 Launch，不做无证据的 Worker 主链改造。跨租户复制的目标已有渠道值由 MERGE 保留，新目标须在目标环境配置。本计划不建设平台资源备份/恢复产品，也不承接计划外的通用部署、CI 或主链路重构。
-> 方案复核基线：`main` @ `daa42986e`（2026-10-10）。本轮实施盘点基线及阶段门见[阶段 0 基线报告](../audit/tenant-job-configuration-phase0-baseline-2026-10-10.md)。
+> 方案复核基线：`main` @ `daa42986e`（2026-10-10）。[阶段 0 基线报告](../audit/tenant-job-configuration-phase0-baseline-2026-10-10.md)是改造前的历史快照，不代表当前实现状态；当前决议、进度和验收证据以本计划为准。
 
 ## 范围决策澄清（2026-10-11）
 
@@ -17,7 +17,17 @@ Excel SQL 注释/字符串关键字误判属于旁支质量问题，记录为后
 
 后端与前端实施分支均已确认并保留为 `feature/tenant-job-config-simplification`。本节只记录当前分支内容，不代表已合并或已完成阶段验收。
 
-阶段判定（2026-10-11 更新）：A（基线与契约决议）已有阶段 0 报告，目标租户规模、路由公平性量化和平台运维决议仍待确认；B（Excel/API 契约）本地代码及旧包/新包、MERGE、Apply 冲突/回滚/幂等和上传边界测试已落地；C（资源写入口收敛）租户可达 Job/Pipeline/Workflow/文件通道及配置包写路径有真实 PG/HTTP 与授权测试，容量目标仍待 A 的规模输入；D 按决议复用现有执行参数快照、动态读取监控策略且不因缓存版本差异拒绝 Launch，定向 54 项通过；E 已完成核心向导/模板和真实后端角色路径验证。F 的迁移 dry-run、分租户灰度、部署故障恢复仍是环境/运维门槛，不在本地宣称完成。完整 Sim 与生产同构验证尚未执行，整体计划仍未完成。
+阶段状态矩阵（2026-10-11；依据本计划现有实施与验证记录汇总，不构成独立代码复审或阶段签收）：
+
+| 阶段 | 范围 | 当前状态 | 未关闭的退出条件 |
+|---|---|---|---|
+| 0. 基线与决议 | 固定前后端基线，确认权限、配置语义、规模与运维边界 | **部分完成**：历史基线报告已归档；运行期配置语义等决议已写入本计划 | 目标租户规模、路由公平性量化及平台运维相关决议/证据仍未全部闭合 |
+| 1. Excel/API 契约 | 场景模板、旧包、MERGE、预览与 Apply 契约 | **实现及定向验证已推进，阶段未签收**：本计划记录了真实 PG/HTTP、冲突、回滚、幂等和上传边界验证 | 完整契约矩阵及计划定义的阶段退出条件尚未整体复核签收；不得用若干定向测试等同全阶段通过 |
+| 2. 资源写入口收敛 | 租户可达写入口权限、资源映射与审计 | **实现及定向验证已推进，阶段未签收**：Job/Pipeline/Workflow、文件通道和配置包路径已有授权及真实 PG/HTTP 验证记录 | 目标租户规模下的容量/公平性结论和资源映射预览等退出条件仍需闭合 |
+| 3. 业务向导与配置包体验 | 向导、场景模板、角色态、预览差异与错误定位 | **核心体验及相关联测已完成多项，阶段未签收**：计划记录了角色化浏览器流程、模板和配置包 E2E | 完整业务旅程、组合场景矩阵及完整 Sim 等整体验收仍未完成 |
+| 4. 迁移、联测与发布 | 只读盘点、映射预览、分租户启用、回滚与发布 | **未完成** | 迁移 dry-run、分租户灰度、部署故障恢复及生产同构验证需在目标环境完成 |
+
+交付切片 A–F 与阶段 0–4 的映射见后文“阶段与交付切片映射”。D 横跨阶段 0/4，不另算阶段。阶段 0 基线报告只承担改造前事实快照；后续阶段的当前状态和证据统一在本计划维护，不为每阶段复制一份内容重复的审计报告。整体计划仍未完成。
 
 续验记录（2026-10-11）：后端针对配置包、资源写入口、SLA/监控、Launch/Trigger 与 Worker 配置边界的 Maven 定向组 **138 项通过，0 失败、0 错误、0 跳过**；使用 Docker Testcontainers PostgreSQL 17.11、Kafka 4.1.2、MinIO 与 Valkey。前端在隔离特性 API `127.0.0.1:18089`、Vite `127.0.0.1:5181` 上运行 `E2E_BASE_URL=http://127.0.0.1:5181 BC_API_BASE=http://127.0.0.1:18089 npm run test:e2e -- e2e/job-definition-crud.spec.ts e2e/job-definition-wizard-detail.spec.ts --project=chromium --workers=1 --retries=0`，**7 项通过**；复跑前修正了过时的步骤标题及告警空态断言，并新增平台/租户管理员资源字段可见性对照，无产品逻辑变更。前端 `e2e/excel-import.spec.ts` 同环境复跑 **13 项通过**；合计 **20 项相关 Chromium E2E**（两个命令独立运行，非一次 20 项套件）。`npx prettier --check e2e/job-definition-wizard-detail.spec.ts` 与 `npm run typecheck` 通过。以上不替代完整 SIM；运行全套 `sim-harness all` 会清理平台与业务运行态，当前共享 Docker 栈/主环境未证明具备独立业务库、Kafka、对象存储和 Valkey 隔离，因此未对共享数据执行破坏性 reset。阶段 F 的 staging dry-run、灰度与恢复演练仍待部署环境。
 
@@ -91,6 +101,7 @@ Excel SQL 注释/字符串关键字误判属于旁支质量问题，记录为后
 - 作业、通道、文件模板、Pipeline、Workflow 更新时，空白选填字段保留现值；Pipeline step 与日历 holiday 集合改为按稳定键 upsert，不因本次文件缺项而删除旧项。删除仍通过对应配置维护入口显式执行。日历/窗口字段的真实 PG 稀疏 MERGE 断言、监控策略保留平台阈值的真实 PG 断言均已完成；其余尚未明确纳入本业务包的实体不能据此推断已覆盖。
 - 场景示例不再引用未随模板提供的资源队列、日历或窗口；平台资源 Sheet 不进入场景模板。
 - 配置包 apply 现允许 `ROLE_ADMIN` 与 `ROLE_TENANT_ADMIN`；服务端按可信 `ConsolePrincipal` 二次授权。租户管理员的包若包含资源队列行、作业物理队列/Worker 分组，或平台运行阈值则拒绝整包；平台管理员仍可处理旧全量包。业务 SLA 字段仍可由租户管理员维护。前端只对平台/租户管理员显示 Apply。
+- SIM 阶段 29/30 已于 2026-10-11 本地实跑。阶段 29 在隔离 Console 实例上完成 9 组真实模板下载、Sheet/列投影、上传与预览，全部 `invalidRows=0`、`issues=[]` 且返回 `previewToken`；未 Apply。此前旧 Console 的一次 `HTTP 500 SYSTEM_ERROR` 在本次新打包实例上未复现，原进程没有可回溯日志，故不能声称已定位旧 500 根因。首轮复跑曾被共享 Redis 的昂贵操作限流返回 `429`，最终验证仅在临时 Console 进程把该接口限额提高到 100/min，未改共享 Redis 状态或生产配置。阶段 30 使用隔离 Kafka、隔离数据库和本地 Trigger/Orchestrator/Atomic Worker：实例 A 在运行时修改定义后仍以创建时的 `/bin/sleep`、`EXPONENTIAL`、300 秒快照成功完成；实例 B 使用更新后的 `/bin/echo updated-config`、`NONE`、60 秒快照并成功完成；结束后已确认恢复作业原始配置。验证时发现并修正脚本竞态：Trigger 接受请求是异步的，需等待实例快照落库后再断言，不能在立即查询为空时提前进入 `finally` 恢复配置。隔离数据库 schema 为 V233 且无待执行迁移；其克隆 Flyway checksum 与当前源码不一致，因此本次临时 Orchestrator 关闭了 Flyway checksum 启动校验及对应自检项，未执行 `repair`、未改迁移历史。该限制不影响本次已应用 schema 上的运行时快照验证，但本轮不作为 Flyway 迁移一致性证据。监控策略即时影响在途实例的告警判定仍由既有真实 PG IT 覆盖，不在这两条 SIM 中重复实现。
 - Job Definition、Pipeline 和 Workflow REST 写入均在服务层守卫平台物理路由：租户不能新设或改写队列/Worker 分组；复制作业会清除来源物理路由；Workflow 全图更新在租户省略字段时保留原有平台分组。旧 Excel 配置包 Apply 也检查 Job、Pipeline、Workflow 节点和资源队列中的平台字段并拒绝租户整包写入。对应真实 HTTP/PG IT 与权限单测通过。批量初始化、跨租户复制、Config Sync、Job Bundle 和配置发布的所有 `batchInit` 调用方已核对：其入口均受 `ROLE_ADMIN` 控制；资源快照独立交付与恢复仍未验收。
 - 本地真实 PostgreSQL IT 覆盖单场景、组合场景和旧 `ALL` 模板的生成/上传/预览；另验证重复 MERGE 时空白作业选填字段、文件模板描述和 Pipeline 描述保留，工作簿省略的现有 Pipeline steps 不被删除。Apply HTTP IT 验证租户管理员可应用不含平台资源的业务场景包，且旧全量包含资源队列时整包被拒绝；授权逻辑另有单测。调度场景真实 HTTP + PostgreSQL IT 验证省略平台监控列后保留平台运行阈值，同时更新业务 SLA；旧工作簿省略监控策略 Sheet 的真实 HTTP + PostgreSQL IT 也验证六项策略值均保留。日历/窗口的稀疏 UPSERT 另由真实 PG + HTTP IT 覆盖；渠道 JSON 的 Excel 与 API 序列化边界有专项测试。MERGE 的真实 PG 证据不能外推到其他实体或所有权限/安全边界。
 - 渠道导出不再序列化 `file_channel_config.config_json` 与 `target_endpoint`；场景指南将凭据字段改为可选，空白同租户 MERGE 保留数据库现值，新建渠道仍须显式提供连接参数。真实 PG + HTTP 集成测试验证导出 Excel 单元格为空、租户管理员回导后 JSONB 凭据和 endpoint 均不变；JSON Config Sync/Job Bundle DTO 也将两字段标记为 write-only。该修复不证明 `default_params`、`step_params`、`node_params` 等动态 JSON 不含敏感信息，也不代表 SecretVersion 引用已接入 Dispatch 运行时。

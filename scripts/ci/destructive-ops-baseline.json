@@ -221,8 +221,8 @@
   "scripts/sim/04-seed-source-data.sh|filesystem-remove": 1,
   "scripts/sim/06-sdk-worker-verify.sh|filesystem-remove": 1,
   "scripts/sim/20-dispatch-stage5c.sh|filesystem-remove": 3,
+  "scripts/sim/29-tenant-config-scenarios.sh|filesystem-remove": 2,
   "scripts/sim/sql/cleanup-sim-output-files.sql|database-delete": 2,
   "scripts/sim/sql/quiesce-schedules.sql|database-delete": 1,
-  "scripts/sim/sql/reset-business-runtime.sql|database-truncate": 1,
-  "scripts/sim/sql/reset-platform-runtime.sql|database-truncate": 1
+  "scripts/sim/sql/reset-business-runtime.sql|database-truncate": 1
 }

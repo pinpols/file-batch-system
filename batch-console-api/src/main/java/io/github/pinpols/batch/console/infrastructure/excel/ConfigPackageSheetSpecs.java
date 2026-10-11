@@ -1,10 +1,8 @@
 package io.github.pinpols.batch.console.infrastructure.excel;
 
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.AUTH_TYPES;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.BATCH_WINDOW_SHEET;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.BUSINESS_CALENDAR_SHEET;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.CHANNEL_SHEET;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.CHANNEL_TYPES;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_AUTH_TYPE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_BIZ_TYPE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_CALENDAR_CODE;
@@ -63,26 +61,15 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WORKFLOW_NAME;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WORKFLOW_TYPE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WORKFLOW_VERSION;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.EDGE_TYPES;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.EXECUTION_MODES;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.JOB_SHEET;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.JOB_TYPES;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.NODE_TYPES;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.PIPELINE_SHEET;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.PIPELINE_TYPES;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.RECEIPT_POLICIES;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.RETRY_POLICIES;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.SCHEDULE_TYPES;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.SHARD_STRATEGIES;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.STAGE_CODES;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.STEP_SHEET;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.WF_DEF_SHEET;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.WF_EDGE_SHEET;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.WF_NODE_SHEET;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.WORKFLOW_TYPES;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.BATCH_WINDOW_COLUMNS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.BUSINESS_CALENDAR_COLUMNS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.CHANNEL_COLUMNS;
@@ -102,9 +89,13 @@ import static io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.r
 import io.github.pinpols.batch.common.enums.BatchWindowEndStrategy;
 import io.github.pinpols.batch.common.enums.CatchUpPolicyType;
 import io.github.pinpols.batch.common.enums.DictEnum;
+import io.github.pinpols.batch.common.enums.ExecutionMode;
+import io.github.pinpols.batch.common.enums.FileChannelAuthType;
+import io.github.pinpols.batch.common.enums.FileChannelType;
 import io.github.pinpols.batch.common.enums.FileChecksumType;
 import io.github.pinpols.batch.common.enums.FileCompressType;
 import io.github.pinpols.batch.common.enums.FileEncryptType;
+import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
 import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.enums.FileTemplateType;
 import io.github.pinpols.batch.common.enums.HolidayRollRule;
@@ -113,7 +104,12 @@ import io.github.pinpols.batch.common.enums.OutOfWindowAction;
 import io.github.pinpols.batch.common.enums.PipelineType;
 import io.github.pinpols.batch.common.enums.QueuePriorityPolicy;
 import io.github.pinpols.batch.common.enums.ResourceQueueType;
+import io.github.pinpols.batch.common.enums.RetryPolicyType;
 import io.github.pinpols.batch.common.enums.ScheduleType;
+import io.github.pinpols.batch.common.enums.ShardStrategy;
+import io.github.pinpols.batch.common.enums.WorkflowEdgeType;
+import io.github.pinpols.batch.common.enums.WorkflowNodeType;
+import io.github.pinpols.batch.common.enums.WorkflowType;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.ColumnGuide;
 import java.util.ArrayList;
@@ -182,6 +178,43 @@ public final class ConfigPackageSheetSpecs {
     "RETRY",
     "COMPENSATE"
   };
+
+  private static final String[] RETRY_POLICY_DROPDOWN =
+      DictEnum.codeList(RetryPolicyType.class).toArray(String[]::new);
+  private static final String[] CHANNEL_TYPE_DROPDOWN =
+      DictEnum.codeList(FileChannelType.class).toArray(String[]::new);
+  private static final String[] AUTH_TYPE_DROPDOWN =
+      DictEnum.codeList(FileChannelAuthType.class).toArray(String[]::new);
+  private static final String[] RECEIPT_POLICY_DROPDOWN =
+      DictEnum.codeList(FileReceiptPolicy.class).toArray(String[]::new);
+  private static final String[] QUEUE_TYPE_DROPDOWN =
+      DictEnum.codeList(ResourceQueueType.class).toArray(String[]::new);
+  private static final String[] PRIORITY_POLICY_DROPDOWN =
+      DictEnum.codeList(QueuePriorityPolicy.class).toArray(String[]::new);
+  private static final String[] HOLIDAY_ROLL_RULE_DROPDOWN =
+      DictEnum.codeList(HolidayRollRule.class).toArray(String[]::new);
+  private static final String[] CATCH_UP_POLICY_DROPDOWN =
+      DictEnum.codeList(CatchUpPolicyType.class).toArray(String[]::new);
+  private static final String[] WINDOW_END_STRATEGY_DROPDOWN =
+      DictEnum.codeList(BatchWindowEndStrategy.class).toArray(String[]::new);
+  private static final String[] OUT_OF_WINDOW_ACTION_DROPDOWN =
+      DictEnum.codeList(OutOfWindowAction.class).toArray(String[]::new);
+  private static final String[] EXECUTION_MODE_DROPDOWN =
+      DictEnum.codeList(ExecutionMode.class).toArray(String[]::new);
+  private static final String[] SHARD_STRATEGY_DROPDOWN =
+      DictEnum.codeList(ShardStrategy.class).toArray(String[]::new);
+  private static final String[] WORKFLOW_TYPE_DROPDOWN =
+      DictEnum.codeList(WorkflowType.class).toArray(String[]::new);
+  private static final String[] WORKFLOW_NODE_TYPE_DROPDOWN =
+      DictEnum.codeList(WorkflowNodeType.class).toArray(String[]::new);
+  private static final String[] WORKFLOW_EDGE_TYPE_DROPDOWN =
+      DictEnum.codeList(WorkflowEdgeType.class).toArray(String[]::new);
+  private static final String[] FILE_CHECKSUM_TYPE_DROPDOWN =
+      DictEnum.codeList(FileChecksumType.class).toArray(String[]::new);
+  private static final String[] FILE_COMPRESS_TYPE_DROPDOWN =
+      DictEnum.codeList(FileCompressType.class).toArray(String[]::new);
+  private static final String[] FILE_ENCRYPT_TYPE_DROPDOWN =
+      DictEnum.codeList(FileEncryptType.class).toArray(String[]::new);
 
   private static final String GUIDE_IMPORT = "IMPORT";
   private static final String GUIDE_TIMEOUT_DESC = "超时秒数。";
@@ -812,149 +845,135 @@ public final class ConfigPackageSheetSpecs {
   }
 
   private void applyJobValidations(Sheet sheet, Locale locale) {
-    addDropdownValidation(
+    addColumnDropdownValidation(
         sheet,
-        3,
-        JOB_TYPES.toArray(String[]::new),
+        COL_JOB_TYPE,
+        JOB_TYPE_DROPDOWN,
         "excel.job.def.job_type.prompt_title",
         "excel.job.def.job_type.prompt_box",
-        messageSource,
         locale);
-    addDropdownValidation(
+    addColumnDropdownValidation(
         sheet,
-        7,
-        SCHEDULE_TYPES.toArray(String[]::new),
+        COL_SCHEDULE_TYPE,
+        SCHEDULE_TYPE_DROPDOWN,
         "excel.job.def.schedule_type.prompt_title",
         "excel.job.def.schedule_type.prompt_box",
-        messageSource,
         locale);
-    addDropdownValidation(
+    addColumnDropdownValidation(
         sheet,
-        11,
-        RETRY_POLICIES.toArray(String[]::new),
+        COL_RETRY_POLICY,
+        RETRY_POLICY_DROPDOWN,
         "excel.job.def.retry_policy.prompt_title",
         "excel.job.def.retry_policy.prompt_box",
-        messageSource,
         locale);
-    addDropdownValidation(
+    addColumnDropdownValidation(
         sheet,
-        14,
-        SHARD_STRATEGIES.toArray(String[]::new),
+        COL_SHARD_STRATEGY,
+        SHARD_STRATEGY_DROPDOWN,
         "excel.job.def.shard_strategy.prompt_title",
         "excel.job.def.shard_strategy.prompt_box",
-        messageSource,
         locale);
-    addDropdownValidation(
+    addColumnDropdownValidation(
         sheet,
-        15,
-        EXECUTION_MODES.toArray(String[]::new),
+        COL_EXECUTION_MODE,
+        EXECUTION_MODE_DROPDOWN,
         "excel.job.def.execution_mode.prompt_title",
         "excel.job.def.execution_mode.prompt_box",
-        messageSource,
         locale);
-    boolDropdown(sheet, 20, locale);
+    boolDropdown(sheet, COL_ENABLED, locale);
   }
 
   private void applyJobMonitoringPolicyValidations(Sheet sheet, Locale locale) {
-    for (int columnIndex : List.of(3, 5, 9)) {
-      addDropdownValidation(
+    for (String columnName : List.of(
+        COL_SOFT_RUNTIME_SEVERITY, COL_START_GRACE_SEVERITY, COL_COMPLETION_DEADLINE_SEVERITY)) {
+      addColumnDropdownValidation(
           sheet,
-          columnIndex,
+          columnName,
           JOB_MONITORING_SEVERITY_CHOICES,
           "excel.common.severity.prompt_title",
           "excel.common.severity.prompt_box",
-          messageSource,
           locale);
     }
   }
 
   private void applyChannelValidations(Sheet sheet, Locale locale) {
-    addDropdownValidation(
+    addColumnDropdownValidation(
         sheet,
-        3,
-        CHANNEL_TYPES.toArray(String[]::new),
+        COL_CHANNEL_TYPE,
+        CHANNEL_TYPE_DROPDOWN,
         "excel.channel.channel_type.prompt_title",
         "excel.channel.channel_type.prompt_box",
-        messageSource,
         locale);
-    addDropdownValidation(
+    addColumnDropdownValidation(
         sheet,
-        5,
-        AUTH_TYPES.toArray(String[]::new),
+        COL_AUTH_TYPE,
+        AUTH_TYPE_DROPDOWN,
         "excel.channel.auth_type.prompt_title",
         "excel.channel.auth_type.prompt_box",
-        messageSource,
         locale);
-    addDropdownValidation(
+    addColumnDropdownValidation(
         sheet,
-        7,
-        RECEIPT_POLICIES.toArray(String[]::new),
+        COL_RECEIPT_POLICY,
+        RECEIPT_POLICY_DROPDOWN,
         "excel.channel.receipt_policy.prompt_title",
         "excel.channel.receipt_policy.prompt_box",
-        messageSource,
         locale);
-    boolDropdown(sheet, 9, locale);
+    boolDropdown(sheet, COL_ENABLED, locale);
   }
 
   private void applyResourceQueueValidations(Sheet sheet, Locale locale) {
-    addDropdownValidation(
+    addColumnDropdownValidation(
         sheet,
-        3,
-        QUEUE_TYPES.toArray(String[]::new),
+        "queue_type",
+        QUEUE_TYPE_DROPDOWN,
         "excel.queue.queue_type.prompt_title",
         "excel.queue.queue_type.prompt_box",
-        messageSource,
         locale);
-    addDropdownValidation(
+    addColumnDropdownValidation(
         sheet,
-        9,
-        PRIORITY_POLICIES.toArray(String[]::new),
+        "priority_policy",
+        PRIORITY_POLICY_DROPDOWN,
         "excel.queue.priority_policy.prompt_title",
         "excel.queue.priority_policy.prompt_box",
-        messageSource,
         locale);
-    boolDropdown(sheet, 11, locale);
+    boolDropdown(sheet, COL_ENABLED, locale);
   }
 
   private void applyBusinessCalendarValidations(Sheet sheet, Locale locale) {
-    addDropdownValidation(
+    addColumnDropdownValidation(
         sheet,
-        4,
-        HOLIDAY_ROLL_RULES.toArray(String[]::new),
+        ConfigPackageExcelSchema.BusinessCalendar.COL_HOLIDAY_ROLL_RULE,
+        HOLIDAY_ROLL_RULE_DROPDOWN,
         "excel.calendar.holiday_roll_rule.prompt_title",
         "excel.calendar.holiday_roll_rule.prompt_box",
-        messageSource,
         locale);
-    addDropdownValidation(
+    addColumnDropdownValidation(
         sheet,
-        5,
-        CATCH_UP_POLICIES.toArray(String[]::new),
+        ConfigPackageExcelSchema.BusinessCalendar.COL_CATCH_UP_POLICY,
+        CATCH_UP_POLICY_DROPDOWN,
         "excel.calendar.catch_up_policy.prompt_title",
         "excel.calendar.catch_up_policy.prompt_box",
-        messageSource,
         locale);
-    boolDropdown(sheet, 8, locale);
+    boolDropdown(sheet, COL_ENABLED, locale);
   }
 
   private void applyBatchWindowValidations(Sheet sheet, Locale locale) {
-    addDropdownValidation(
+    addColumnDropdownValidation(
         sheet,
-        6,
-        END_STRATEGIES.toArray(String[]::new),
+        ConfigPackageExcelSchema.BatchWindow.COL_END_STRATEGY,
+        WINDOW_END_STRATEGY_DROPDOWN,
         "excel.window.end_strategy.prompt_title",
         "excel.window.end_strategy.prompt_box",
-        messageSource,
         locale);
-    addDropdownValidation(
+    addColumnDropdownValidation(
         sheet,
-        7,
-        OUT_OF_WINDOW_ACTIONS.toArray(String[]::new),
+        ConfigPackageExcelSchema.BatchWindow.COL_OUT_OF_WINDOW_ACTION,
+        OUT_OF_WINDOW_ACTION_DROPDOWN,
         "excel.window.out_of_window_action.prompt_title",
         "excel.window.out_of_window_action.prompt_box",
-        messageSource,
         locale);
-    boolDropdown(sheet, 8, locale);
-    boolDropdown(sheet, 9, locale);
+    boolDropdown(sheet, ConfigPackageExcelSchema.BatchWindow.COL_ALLOW_CROSS_DAY, locale);
+    boolDropdown(sheet, COL_ENABLED, locale);
   }
 
   private void applyFileTemplateValidations(Sheet sheet, Locale locale) {
@@ -969,42 +988,42 @@ public final class ConfigPackageSheetSpecs {
     addColumnDropdownValidation(
         sheet,
         ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_TYPE,
-        allowedTemplateTypes.toArray(String[]::new),
+        orderedChoices(FileTemplateType.class, allowedTemplateTypes),
         "excel.template.template_type.prompt_title",
         "excel.template.template_type.prompt_box",
         locale);
     addColumnDropdownValidation(
         sheet,
         ConfigPackageExcelSchema.FileTemplate.COL_FILE_FORMAT_TYPE,
-        allowedFileFormats.toArray(String[]::new),
+        orderedChoices(FileTemplateFormat.class, allowedFileFormats),
         "excel.template.file_format_type.prompt_title",
         "excel.template.file_format_type.prompt_box",
         locale);
     addColumnDropdownValidation(
         sheet,
         ConfigPackageExcelSchema.FileTemplate.COL_CHECKSUM_TYPE,
-        CHECKSUM_TYPES.toArray(String[]::new),
+        FILE_CHECKSUM_TYPE_DROPDOWN,
         "excel.template.checksum_type.prompt_title",
         "excel.template.checksum_type.prompt_box",
         locale);
     addColumnDropdownValidation(
         sheet,
         ConfigPackageExcelSchema.FileTemplate.COL_COMPRESS_TYPE,
-        COMPRESS_TYPES.toArray(String[]::new),
+        FILE_COMPRESS_TYPE_DROPDOWN,
         "excel.template.compress_type.prompt_title",
         "excel.template.compress_type.prompt_box",
         locale);
     addColumnDropdownValidation(
         sheet,
         ConfigPackageExcelSchema.FileTemplate.COL_ENCRYPT_TYPE,
-        ENCRYPT_TYPES.toArray(String[]::new),
+        FILE_ENCRYPT_TYPE_DROPDOWN,
         "excel.template.encrypt_type.prompt_title",
         "excel.template.encrypt_type.prompt_box",
         locale);
     for (String column : FILE_TEMPLATE_BOOLEAN_COLUMNS) {
       int columnIndex = columnIndex(sheet, column);
       if (columnIndex >= 0) {
-        boolDropdown(sheet, columnIndex, locale);
+        addBooleanDropdownValidation(sheet, columnIndex, locale);
       }
     }
   }
@@ -1036,16 +1055,22 @@ public final class ConfigPackageSheetSpecs {
     return -1;
   }
 
+  private static <E extends Enum<E> & DictEnum> String[] orderedChoices(
+      Class<E> enumType, Set<String> allowedValues) {
+    return DictEnum.codeList(enumType).stream()
+        .filter(allowedValues::contains)
+        .toArray(String[]::new);
+  }
+
   private void applyPipelineValidations(Sheet sheet, Locale locale) {
-    addDropdownValidation(
+    addColumnDropdownValidation(
         sheet,
-        3,
-        PIPELINE_TYPES.toArray(String[]::new),
+        COL_PIPELINE_TYPE,
+        PIPELINE_TYPE_DROPDOWN,
         "excel.pipeline.def.pipeline_type.prompt_title",
         "excel.pipeline.def.pipeline_type.prompt_box",
-        messageSource,
         locale);
-    boolDropdown(sheet, 7, locale);
+    boolDropdown(sheet, COL_ENABLED, locale);
   }
 
   void applyStepValidations(Sheet sheet, Locale locale) {
@@ -1054,21 +1079,19 @@ public final class ConfigPackageSheetSpecs {
 
   void applyStepValidations(
       Sheet sheet, Locale locale, Map<String, List<String>> registeredImplCodesByModule) {
-    addDropdownValidation(
+    addColumnDropdownValidation(
         sheet,
-        4,
-        STAGE_CODES.toArray(String[]::new),
+        COL_STAGE_CODE,
+        STAGE_CODE_DROPDOWN,
         "excel.pipeline.step.stage_code.prompt_title",
         "excel.pipeline.step.stage_code.prompt_box",
-        messageSource,
         locale);
-    addDropdownValidation(
+    addColumnDropdownValidation(
         sheet,
-        9,
-        RETRY_POLICIES.toArray(String[]::new),
+        COL_RETRY_POLICY,
+        RETRY_POLICY_DROPDOWN,
         "excel.pipeline.step.retry_policy.prompt_title",
         "excel.pipeline.step.retry_policy.prompt_box",
-        messageSource,
         locale);
     // impl_code(第 7 列 index=6):动态下拉,格式 MODULE:beanName 让用户一眼看出模块归属。
     // registry 空时不加下拉(首次部署没 worker 启动过也能下载模板)。
@@ -1080,64 +1103,66 @@ public final class ConfigPackageSheetSpecs {
         }
       });
       if (EmptyChecks.isNotEmpty(options)) {
-        addDropdownValidation(
+        addColumnDropdownValidation(
             sheet,
-            6,
+            ConfigPackageExcelSchema.PipelineStep.COL_IMPL_CODE,
             options.toArray(String[]::new),
             "excel.package.impl_code.prompt_title",
             "excel.package.impl_code.prompt_box",
-            messageSource,
             locale);
       }
     }
-    boolDropdown(sheet, 11, locale);
+    boolDropdown(sheet, COL_ENABLED, locale);
   }
 
   private void applyWfDefValidations(Sheet sheet, Locale locale) {
-    addDropdownValidation(
+    addColumnDropdownValidation(
         sheet,
-        3,
-        WORKFLOW_TYPES.toArray(String[]::new),
+        COL_WORKFLOW_TYPE,
+        WORKFLOW_TYPE_DROPDOWN,
         "excel.workflow.def.workflow_type.prompt_title",
         "excel.workflow.def.workflow_type.prompt_box",
-        messageSource,
         locale);
-    boolDropdown(sheet, 5, locale);
+    boolDropdown(sheet, COL_ENABLED, locale);
   }
 
   private void applyWfNodeValidations(Sheet sheet, Locale locale) {
-    addDropdownValidation(
+    addColumnDropdownValidation(
         sheet,
-        5,
-        NODE_TYPES.toArray(String[]::new),
+        COL_NODE_TYPE,
+        WORKFLOW_NODE_TYPE_DROPDOWN,
         "excel.workflow.node.node_type.prompt_title",
         "excel.workflow.node.node_type.prompt_box",
-        messageSource,
         locale);
-    addDropdownValidation(
+    addColumnDropdownValidation(
         sheet,
-        11,
-        RETRY_POLICIES.toArray(String[]::new),
+        COL_RETRY_POLICY,
+        RETRY_POLICY_DROPDOWN,
         "excel.workflow.node.retry_policy.prompt_title",
         "excel.workflow.node.retry_policy.prompt_box",
-        messageSource,
         locale);
-    boolDropdown(sheet, 15, locale);
+    boolDropdown(sheet, COL_ENABLED, locale);
   }
 
   private void applyWfEdgeValidations(Sheet sheet, Locale locale) {
-    addDropdownValidation(
+    addColumnDropdownValidation(
         sheet,
-        5,
-        EDGE_TYPES.toArray(String[]::new),
+        COL_EDGE_TYPE,
+        WORKFLOW_EDGE_TYPE_DROPDOWN,
         "excel.workflow.edge.edge_type.prompt_title",
         "excel.workflow.edge.edge_type.prompt_box",
-        messageSource,
         locale);
-    boolDropdown(sheet, 7, locale);
+    boolDropdown(sheet, COL_ENABLED, locale);
   }
 
-  private void boolDropdown(Sheet sheet, int columnIndex, Locale locale) {
+  private void boolDropdown(Sheet sheet, String columnName, Locale locale) {
+    int columnIndex = columnIndex(sheet, columnName);
+    if (columnIndex >= 0) {
+      addBooleanDropdownValidation(sheet, columnIndex, locale);
+    }
+  }
+
+  private void addBooleanDropdownValidation(Sheet sheet, int columnIndex, Locale locale) {
     addDropdownValidation(
         sheet,
         columnIndex,

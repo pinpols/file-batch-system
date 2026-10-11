@@ -499,6 +499,7 @@ python3 scripts/ci/check-test-conventions.py --check-baseline \
 ```bash
 bash scripts/ci/check-db-scripts-safety.sh
 python3 scripts/ci/check-destructive-ops-governance.py
+python3 -m unittest scripts/ci/tests/test_sim_runtime_cleanup.py
 python3 -m unittest scripts/ci/tests/test_check_destructive_ops_governance.py
 ```
 
@@ -666,8 +667,9 @@ python3 -m unittest scripts/ci/tests/test_check_java_structured_string_concat.py
 
 ## `check-java-suppression-registry.py`
 
-检查生产 Java 的 `@SuppressWarnings` 是否使用已审核的精确规则。它不要求 suppression 数量归零，
-但会阻断未登记的新规则，防止静态检查例外在重构中无理由扩散。规则用途和移除条件见
+检查生产 Java 的 `@SuppressWarnings` 与生产 `application*.yml` / `application*.yaml` 中的 IntelliJ
+`noinspection` 是否使用已审核的精确规则，并按路径和数量对账。它不要求 suppression 数量归零，
+但会阻断未登记的新规则、位置或数量，防止静态检查例外在重构中无理由扩散。规则用途和移除条件见
 `docs/standards/java-suppression-registry.md`。
 
 ```bash

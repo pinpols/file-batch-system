@@ -79,14 +79,70 @@ class JavaSuppressionRegistryTest(unittest.TestCase):
         self.assertEqual(
             [path.relative_to(MODULE.ROOT).as_posix() for path in kept], [production_rel])
 
+    def test_yaml_candidate_filter_only_keeps_application_configs(self) -> None:
+        application = "batch-trigger/src/main/resources/application.yml"
+        unrelated = "batch-trigger/src/main/resources/logback-spring.xml"
+        test_config = "batch-trigger/src/test/resources/application-test.yml"
+
+        kept = MODULE.production_yaml_configs([application, unrelated, test_config])
+
+        self.assertEqual(
+            [path.relative_to(MODULE.ROOT).as_posix() for path in kept], [application])
+
+    def test_yaml_ide_suppressions_are_scanned(self) -> None:
+        original_java = MODULE.production_sources
+        original_yaml = MODULE.production_yaml_configs
+        with tempfile.TemporaryDirectory(dir=MODULE.ROOT) as tmp:
+            probe = Path(tmp) / "application-probe.yml"
+            probe.write_text("# noinspection SpringBootApplicationYaml\n", encoding="utf-8")
+            MODULE.production_sources = lambda _candidates=None: []
+            MODULE.production_yaml_configs = lambda _candidates=None: [probe]
+            try:
+                findings = MODULE.scan()
+            finally:
+                MODULE.production_sources = original_java
+                MODULE.production_yaml_configs = original_yaml
+
+        self.assertEqual(
+            findings,
+            [(probe.relative_to(MODULE.ROOT).as_posix(), 1, "SpringBootApplicationYaml")],
+        )
+
+    def test_unregistered_yaml_inspection_is_rejected(self) -> None:
+        self.assertEqual(
+            MODULE.unregistered([("batch-trigger/src/main/resources/application.yml", 1, "UnknownInspection")]),
+            [("batch-trigger/src/main/resources/application.yml", 1, "UnknownInspection")],
+        )
+
+    def test_new_known_yaml_inspection_still_requires_baseline_entry(self) -> None:
+        original_java = MODULE.production_sources
+        original_yaml = MODULE.production_yaml_configs
+        original_baseline = MODULE.BASELINE
+        with tempfile.TemporaryDirectory(dir=MODULE.ROOT) as tmp:
+            probe = Path(tmp) / "application-probe.yml"
+            probe.write_text("# noinspection SpringBootApplicationYaml\n", encoding="utf-8")
+            MODULE.production_sources = lambda _candidates=None: []
+            MODULE.production_yaml_configs = lambda _candidates=None: [probe]
+            MODULE.BASELINE = Path(tmp) / "baseline.tsv"
+            MODULE.BASELINE.write_text("", encoding="utf-8")
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(MODULE.main([]), 1)
+            finally:
+                MODULE.production_sources = original_java
+                MODULE.production_yaml_configs = original_yaml
+                MODULE.BASELINE = original_baseline
+
     def test_main_flags_unregistered_rule(self) -> None:
         """未知规则失败；既有明确登记的 suppression 可通过。"""
         original = MODULE.production_sources
+        original_yaml = MODULE.production_yaml_configs
         original_baseline = MODULE.BASELINE
         # 临时目录建在仓库内，scan() 才能算出相对路径。
         with tempfile.TemporaryDirectory(dir=MODULE.ROOT) as tmp:
             probe = Path(tmp) / "ZzSuppressionProbe.java"
             MODULE.production_sources = lambda _candidates=None: [probe]
+            MODULE.production_yaml_configs = lambda _candidates=None: []
             MODULE.BASELINE = Path(tmp) / "baseline.tsv"
             try:
                 probe.write_text(
@@ -111,11 +167,13 @@ class JavaSuppressionRegistryTest(unittest.TestCase):
                     self.assertEqual(MODULE.main([]), 0)
             finally:
                 MODULE.production_sources = original
+                MODULE.production_yaml_configs = original_yaml
                 MODULE.BASELINE = original_baseline
 
     def test_known_rule_addition_requires_baseline_update(self) -> None:
         """全局已知规则不能让新文件中的 suppression 自动豁免。"""
         original = MODULE.production_sources
+        original_yaml = MODULE.production_yaml_configs
         original_baseline = MODULE.BASELINE
         with tempfile.TemporaryDirectory(dir=MODULE.ROOT) as tmp:
             probe = Path(tmp) / "ZzNewSuppression.java"
@@ -124,6 +182,7 @@ class JavaSuppressionRegistryTest(unittest.TestCase):
                 encoding="utf-8",
             )
             MODULE.production_sources = lambda _candidates=None: [probe]
+            MODULE.production_yaml_configs = lambda _candidates=None: []
             MODULE.BASELINE = Path(tmp) / "baseline.tsv"
             MODULE.BASELINE.write_text("", encoding="utf-8")
             try:
@@ -131,6 +190,7 @@ class JavaSuppressionRegistryTest(unittest.TestCase):
                     self.assertEqual(MODULE.main([]), 1)
             finally:
                 MODULE.production_sources = original
+                MODULE.production_yaml_configs = original_yaml
                 MODULE.BASELINE = original_baseline
 
 

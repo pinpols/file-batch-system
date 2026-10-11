@@ -218,6 +218,7 @@ jobs:
           source scripts/lib/gate-result.sh
           gate_run PR_SCRIPT_GOVERNANCE "脚本治理" python3 scripts/ci/check-script-governance.py
           gate_run PR_DESTRUCTIVE_OPS_GOVERNANCE "高风险操作清单" python3 scripts/ci/check-destructive-ops-governance.py
+          gate_run PR_SIM_RUNTIME_CLEANUP_TEST "Sim 初始化清理边界" python3 -m unittest scripts/ci/tests/test_sim_runtime_cleanup.py
           gate_run PR_SHELL_SCRIPTS "Shell 语法与 ShellCheck" bash scripts/ci/check-shell-scripts.sh
           gate_run PR_SHELL_LINUX_PORTABILITY "Shell Linux 兼容性" python3 scripts/ci/check-shell-linux-portability.py
           gate_run PR_TESTCONTAINERS_REUSE_LABEL "Testcontainers 复用标签判定" python3 scripts/ci/check-testcontainers-reuse-label.py
@@ -581,12 +582,12 @@ jobs:
         # @Disabled 必须带非空 reason(防覆盖率被静默掏空)。
         run: bash scripts/ci/run-gate.sh PR_NO_SILENT_DISABLED_TESTS "测试禁用原因检查" -- bash scripts/ci/check-no-silent-disabled-tests.sh
 
-      - name: Java suppression registry
-        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
+      - name: Production suppression registry
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         run: |
-          bash scripts/ci/run-gate.sh PR_JAVA_SUPPRESSION_REGISTRY "Java 抑制项注册表" -- python3 scripts/ci/check-java-suppression-registry.py
-          bash scripts/ci/run-gate.sh PR_JAVA_SUPPRESSION_REGISTRY_TEST "Java 抑制项注册表门禁测试" -- python3 -m unittest scripts/ci/tests/test_check_java_suppression_registry.py
+          bash scripts/ci/run-gate.sh PR_JAVA_SUPPRESSION_REGISTRY "生产代码静态检查抑制项注册表" -- python3 scripts/ci/check-java-suppression-registry.py
+          bash scripts/ci/run-gate.sh PR_JAVA_SUPPRESSION_REGISTRY_TEST "静态检查抑制项注册表门禁测试" -- python3 -m unittest scripts/ci/tests/test_check_java_suppression_registry.py
 
       - name: Report all policy check failures
         if: always()
