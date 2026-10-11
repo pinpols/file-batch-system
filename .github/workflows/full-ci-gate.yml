@@ -436,20 +436,6 @@ jobs:
             --path batch-orchestrator --path batch-worker/core \
             --path sdk/java/core --path sdk/java/spring --path sdk/java/testkit
 
-      - name: Upload Sonar coverage input
-        if: success()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: full-ci-sonar-input-unit-it-a
-          path: |
-            batch-orchestrator/target/site/jacoco/jacoco.xml
-            batch-worker/core/target/site/jacoco/jacoco.xml
-            sdk/java/core/target/site/jacoco/jacoco.xml
-            sdk/java/spring/target/site/jacoco/jacoco.xml
-            sdk/java/testkit/target/site/jacoco/jacoco.xml
-          if-no-files-found: error
-          retention-days: 1
-
       - name: Upload Surefire Reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -510,20 +496,6 @@ jobs:
             --path batch-common --path batch-trigger \
             --path batch-worker/process --path batch-worker/dispatch
 
-      - name: Upload Sonar coverage input
-        if: success()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: full-ci-sonar-input-unit-it-b1
-          path: |
-            batch-common/target/site/jacoco/jacoco.xml
-            batch-test-support/target/site/jacoco/jacoco.xml
-            batch-trigger/target/site/jacoco/jacoco.xml
-            batch-worker/process/target/site/jacoco/jacoco.xml
-            batch-worker/dispatch/target/site/jacoco/jacoco.xml
-          if-no-files-found: error
-          retention-days: 1
-
       - name: Upload Surefire Reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -583,18 +555,6 @@ jobs:
             --path batch-worker/import --path batch-worker/export \
             --path batch-worker/atomic
 
-      - name: Upload Sonar coverage input
-        if: success()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: full-ci-sonar-input-unit-it-b2-workers
-          path: |
-            batch-worker/import/target/site/jacoco/jacoco.xml
-            batch-worker/export/target/site/jacoco/jacoco.xml
-            batch-worker/atomic/target/site/jacoco/jacoco.xml
-          if-no-files-found: error
-          retention-days: 1
-
       - name: Upload Surefire Reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -650,15 +610,6 @@ jobs:
           BASE="${{ github.event.before }}"
           [[ -n "$BASE" && ! "$BASE" =~ ^0+$ ]] || BASE="HEAD^"
           python3 scripts/ci/check-diff-coverage.py --base "$BASE" --path batch-console-api
-
-      - name: Upload Sonar coverage input
-        if: success()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: full-ci-sonar-input-unit-it-b2-console
-          path: batch-console-api/target/site/jacoco/jacoco.xml
-          if-no-files-found: error
-          retention-days: 1
 
       - name: Upload Surefire Reports
         if: always()
@@ -976,17 +927,6 @@ jobs:
           path: build/ci-quality/**
           retention-days: 90
 
-  sonar-quality-gate:
-    name: Sonar quality gate
-    if: github.event_name == 'push'
-    needs: [unit-it-a, unit-it-b1, unit-it-b2-workers, unit-it-b2]
-    permissions:
-      actions: read
-      contents: read
-    uses: ./.github/workflows/sonar-gate.yml
-    with:
-      reuse_coverage: true
-
   main-failure-triage:
     name: main full-gate failure triage
     if: >-
@@ -1003,7 +943,6 @@ jobs:
         needs.e2e-shard.result == 'failure' ||
         needs.scheduled-test-quality.result == 'failure' ||
         needs.quality-trend.result == 'failure'
-        || needs.sonar-quality-gate.result == 'failure'
       )
     needs:
       - static-checks
@@ -1016,7 +955,6 @@ jobs:
       - e2e-shard
       - scheduled-test-quality
       - quality-trend
-      - sonar-quality-gate
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

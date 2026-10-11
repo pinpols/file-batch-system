@@ -28,7 +28,7 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 >
 > `staging-gate` 仍存在，但当前仅由手动事件触发；名称不代表它会部署到 staging 集群。其职责是 GitHub-hosted runner 上的独立全量 E2E 与 Java 治理复验。
 
-其他独立工作流：`codeql.yml` 在 PR、main push 和每周定时运行（当前未配置手动触发）；`sdk-orchestrator-e2e.yml` 在相关 main 变更后/手动执行五语言真实 Orchestrator E2E（非 required），先构建一次 Orchestrator/Trigger 镜像并预热 BuildKit GHA 缓存，五个语言 job 仍各自启动隔离服务栈；`workflow-lint.yml` 检查 workflow/action 文件变更；`license-review.yml` 检查依赖许可变更；`strict-verify.yml` 提供手动严格校验及 PR dry-run；`sonar-gate.yml` 在 Full Gate 成功后消费同 SHA 的 JaCoCo 报告，在 SDK Java 独立变更、夜间和手动场景保留独立构建；`fuzzing.yml` 按其 workflow 配置单独运行。以上工作流是否 required 以仓库 Ruleset 当前配置为准，不由 workflow 文件名推断。
+其他独立工作流：`codeql.yml` 在 PR、main push 和每周定时运行（当前未配置手动触发）；`sdk-orchestrator-e2e.yml` 在相关 main 变更后/手动执行五语言真实 Orchestrator E2E（非 required），先构建一次 Orchestrator/Trigger 镜像并预热 BuildKit GHA 缓存，五个语言 job 仍各自启动隔离服务栈；`workflow-lint.yml` 检查 workflow/action 文件变更；`license-review.yml` 检查依赖许可变更；`strict-verify.yml` 提供手动严格校验及 PR dry-run；`sonar-gate.yml` 独立于 Full Gate，在 main Java/构建相关变更、夜间和手动场景运行，不延迟 Full Gate；`fuzzing.yml` 按其 workflow 配置单独运行。以上工作流是否 required 以仓库 Ruleset 当前配置为准，不由 workflow 文件名推断。
 
 ## CI 依赖与安全扫描版本基线
 
@@ -552,6 +552,6 @@ pom.xml                      # 父 pom：JaCoCo agent、PMD、Spotless 插件配
 
 ### SonarQube CI
 
-`.github/workflows/sonar-gate.yml` 由 main push 的 Full Gate 以 reusable workflow 在同一 run 内调用；四个 unit/IT shard 成功后，Sonar 校验 14 个模块 JaCoCo XML 完整，再只执行 `test-compile` 并复用覆盖率。报告缺失或不完整时回退独立 `clean test`，不会把缺报告当成零覆盖率。Full Gate 手动/定时运行不调用 Sonar；SDK Java push、每日 18:23 UTC（北京时间次日 02:23）和手动触发仍独立测试构建。Community Build 仅支持 main 分析，非 main 手动运行会明确失败；夜间仅在最近 24 小时有 Java、Maven、Sonar 扫描脚本/辅助脚本或该 workflow 改动时继续。无需外部 Sonar 主机、GitHub Sonar secret 或管理员 token：工作流在 runner 上启动固定 digest 的 SonarQube Community Build 容器（6 GiB、3 CPU），执行 Sonar Way Quality Gate，并将新代码基线设为滚动 30 天；最后删除容器。扫描报告作为短期 workflow artifact 保留 7 天。
+`.github/workflows/sonar-gate.yml` 是独立工作流，不是 Full Gate 的 job 或 required check。main Java/构建/Sonar 工具变更会单独触发它；此外每日 18:23 UTC（北京时间次日 02:23）按最近 24 小时相关变更条件运行，也支持手动触发。该工作流独立执行 `clean test` 和 JaCoCo 报告，不消费 Full Gate artifact；因此它可能在 Full Gate 之后完成或失败，但不延迟 Full Gate 结果。Community Build 仅支持 main 分析，非 main 手动运行会明确失败；夜间仅在最近 24 小时有 Java、Maven、Sonar 扫描脚本/辅助脚本或该 workflow 改动时继续。无需外部 Sonar 主机、GitHub Sonar secret 或管理员 token：工作流在 runner 上启动固定 digest 的 SonarQube Community Build 容器（6 GiB、3 CPU），执行 Sonar Way Quality Gate，并将新代码基线设为滚动 30 天；最后删除容器。扫描报告作为短期 workflow artifact 保留 7 天。
 
-容器和数据库不跨任务持久化，因此 issue 状态、分析历史和项目配置不会保留；质量门禁每次按完整 Git 历史计算最近 30 天新代码，不依赖 Sonar 历史。Full Gate JaCoCo artifact 限于同一 run 内部消费，保留 1 天；Sonar 不执行 artifact 中的内容，也不接受 PR artifact。该方案不对 PR 执行 Sonar 分支分析，也不提供跨提交的 issue 生命周期/趋势。Java PR 的 Sonar 变更行审阅仍使用本地增量扫描。不得将临时扫描结果描述成持久 Sonar 项目状态。Sonar 不替代现有 PMD、Spotless、SpotBugs、依赖扫描和测试门禁；是否作为 required check 仍以仓库 Ruleset 为准。
+容器和数据库不跨任务持久化，因此 issue 状态、分析历史和项目配置不会保留；质量门禁每次按完整 Git 历史计算最近 30 天新代码，不依赖 Sonar 历史。Sonar 工作流独立构建测试，不消费 Full Gate artifact，也不接受 PR artifact。该方案不对 PR 执行 Sonar 分支分析，也不提供跨提交的 issue 生命周期/趋势。Java PR 的 Sonar 变更行审阅仍使用本地增量扫描。不得将临时扫描结果描述成持久 Sonar 项目状态。Sonar 不替代现有 PMD、Spotless、SpotBugs、依赖扫描和测试门禁；是否作为 required check 仍以仓库 Ruleset 为准。
