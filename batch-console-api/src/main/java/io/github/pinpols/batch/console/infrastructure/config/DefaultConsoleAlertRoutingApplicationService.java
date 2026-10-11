@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.application.contract.request.config.AlertRoutingSaveRequest;
 import io.github.pinpols.batch.console.domain.notification.application.ConsoleAlertRoutingApplicationService;
+import io.github.pinpols.batch.console.domain.notification.application.contract.query.AlertRoutingQueryRequest;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertRoutingResponse;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertRoutingConfigMapper;
 import io.github.pinpols.batch.console.domain.param.AlertRoutingConfigUpsertParam;
@@ -28,21 +29,24 @@ public class DefaultConsoleAlertRoutingApplicationService
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
   @Override
-  public PageResponse<ConsoleAlertRoutingResponse> list(
-      String tenantId,
-      String keyword,
-      String routeCode,
-      String team,
-      String severity,
-      Boolean enabled,
-      int pageNo,
-      int pageSize) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    PageRequest pageRequest = new PageRequest(pageNo, pageSize);
+  public PageResponse<ConsoleAlertRoutingResponse> list(AlertRoutingQueryRequest request) {
+    String resolved = tenantGuard.resolveTenant(request.getTenantId());
+    PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
     long total = alertRoutingConfigMapper.countByQuery(
-        resolved, keyword, routeCode, team, severity, enabled);
+        resolved,
+        request.getKeyword(),
+        request.getRouteCode(),
+        request.getTeam(),
+        request.getSeverity(),
+        request.getEnabled());
     List<Map<String, Object>> items = alertRoutingConfigMapper.selectByQuery(
-        resolved, keyword, routeCode, team, severity, enabled, pageRequest);
+        resolved,
+        request.getKeyword(),
+        request.getRouteCode(),
+        request.getTeam(),
+        request.getSeverity(),
+        request.getEnabled(),
+        pageRequest);
     return new PageResponse<>(
         total,
         pageRequest.pageNo(),
