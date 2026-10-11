@@ -1,0 +1,427 @@
+name: compose-cd
+
+on:
+  workflow_dispatch:
+    inputs:
+      frontend_sha:
+        description: Frontend main commit to release; empty selects its current main head
+        required: false
+        type: string
+      deploy_staging:
+        description: Deploy the built release to the configured staging Docker host
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compose-cd-staging
+  cancel-in-progress: false
+
+jobs:
+  resolve-revisions:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      backend_sha: ${{ steps.revisions.outputs.backend_sha }}
+      frontend_sha: ${{ steps.revisions.outputs.frontend_sha }}
+    steps:
+      - name: Checkout backend main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout frontend main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: pinpols/batch-console
+          ref: main
+          path: frontend-source
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Pin reviewed main revisions
+        id: revisions
+        env:
+          DISPATCH_REF: ${{ github.ref }}
+          REQUESTED_FRONTEND_SHA: ${{ inputs.frontend_sha }}
+          WORKFLOW_BACKEND_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$DISPATCH_REF" == refs/heads/main ]] || {
+            echo "::error::Compose CD may only be dispatched from main."
+            exit 2
+          }
+          git fetch origin main
+          git -C frontend-source fetch origin main
+          git merge-base --is-ancestor "$WORKFLOW_BACKEND_SHA" origin/main || {
+            echo "::error::Backend revision is not reachable from main."
+            exit 2
+          }
+          frontend_sha="${REQUESTED_FRONTEND_SHA:-$(git -C frontend-source rev-parse origin/main)}"
+          [[ "$frontend_sha" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::frontend_sha must be a full 40-character commit SHA."
+            exit 2
+          }
+          git -C frontend-source cat-file -e "${frontend_sha}^{commit}"
+          git -C frontend-source merge-base --is-ancestor "$frontend_sha" origin/main || {
+            echo "::error::Frontend revision is not reachable from main."
+            exit 2
+          }
+          echo "backend_sha=$WORKFLOW_BACKEND_SHA" >> "$GITHUB_OUTPUT"
+          echo "frontend_sha=$frontend_sha" >> "$GITHUB_OUTPUT"
+
+  build-backend:
+    needs: resolve-revisions
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/docker-image-build.yml
+    with:
+      publish: true
+
+  build-frontend:
+    needs: resolve-revisions
+    permissions:
+      contents: read
+      packages: write
+    uses: pinpols/batch-console/.github/workflows/build-image.yml@d9aaec37c508bad61a38097ab9ef242010428004 # PR #300 reusable build contract
+    with:
+      source_ref: ${{ needs.resolve-revisions.outputs.frontend_sha }}
+      backend_ref: ${{ needs.resolve-revisions.outputs.backend_sha }}
+    secrets:
+      VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+
+  assemble-release:
+    needs:
+      - resolve-revisions
+      - build-backend
+      - build-frontend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      release_id: ${{ steps.manifest.outputs.release_id }}
+    steps:
+      - name: Checkout backend release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.resolve-revisions.outputs.backend_sha }}
+          persist-credentials: false
+
+      - name: Checkout selected frontend deployment files
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: pinpols/batch-console
+          ref: ${{ needs.resolve-revisions.outputs.frontend_sha }}
+          path: frontend-source
+          persist-credentials: false
+
+      - name: Assemble and validate immutable release set
+        id: manifest
+        env:
+          BACKEND_IMAGE_SET: ${{ needs.build-backend.outputs.backend_image_set }}
+          FRONTEND_DIGEST: ${{ needs.build-frontend.outputs.image_digest }}
+          BACKEND_SHA: ${{ needs.resolve-revisions.outputs.backend_sha }}
+          FRONTEND_SHA: ${{ needs.resolve-revisions.outputs.frontend_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$FRONTEND_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "::error::Frontend reusable workflow did not return an immutable digest."
+            exit 2
+          }
+          mkdir -p build/release/bundle/backend/scripts/deploy \
+            build/release/bundle/backend/scripts/lib \
+            build/release/bundle/backend/deploy/docker/compose \
+            build/release/bundle/frontend
+          printf '%s\n' "$BACKEND_IMAGE_SET" > build/release/backend-image-set.json
+          release_id="cd-${BACKEND_SHA:0:12}-${FRONTEND_SHA:0:12}"
+          python3 scripts/deploy/release_manifest.py platform-manifest \
+            --backend build/release/backend-image-set.json \
+            --backend-sha "$BACKEND_SHA" \
+            --frontend-sha "$FRONTEND_SHA" \
+            --frontend-digest "$FRONTEND_DIGEST" \
+            --release-id "$release_id" \
+            --output build/release/bundle/release-manifest.json
+          python3 scripts/deploy/release_manifest.py validate build/release/bundle/release-manifest.json
+          cp scripts/deploy/compose-release.sh scripts/deploy/release_manifest.py \
+            build/release/bundle/backend/scripts/deploy/
+          cp scripts/lib/python-runtime.sh build/release/bundle/backend/scripts/lib/
+          cp deploy/docker/compose/app.yml deploy/docker/compose/app.deploy.yml \
+            deploy/docker/compose/app.external.deploy.yml \
+            build/release/bundle/backend/deploy/docker/compose/
+          cp frontend-source/docker-compose.yml frontend-source/docker-compose.deploy.yml \
+            build/release/bundle/frontend/
+          tar -czf build/release/platform-release.tar.gz -C build/release/bundle .
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Platform release set"
+            echo "- Release: \`$release_id\`"
+            echo "- Backend: \`$BACKEND_SHA\`"
+            echo "- Frontend: \`$FRONTEND_SHA\`"
+            echo "- Frontend image: \`ghcr.io/pinpols/batch-console@$FRONTEND_DIGEST\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload immutable release bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: platform-release-${{ steps.manifest.outputs.release_id }}
+          path: build/release/platform-release.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+
+  deploy-staging:
+    needs:
+      - resolve-revisions
+      - assemble-release
+    if: inputs.deploy_staging
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: staging
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Download immutable release bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: platform-release-${{ needs.assemble-release.outputs.release_id }}
+          path: release
+
+      - name: Validate staging deployment configuration
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_SSH_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_SSH_USER }}
+          DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+          DEPLOY_ROOT: ${{ vars.DEPLOY_ROOT }}
+          DEPLOY_ENV_FILE: ${{ vars.DEPLOY_ENV_FILE }}
+          STAGING_URL: ${{ vars.STAGING_URL }}
+          E2E_USERNAME: ${{ secrets.STAGING_E2E_USERNAME }}
+          E2E_PASSWORD: ${{ secrets.STAGING_E2E_PASSWORD }}
+        run: |
+          set -euo pipefail
+          is_normalized_absolute_path() {
+            local path="$1"
+            [[ "$path" == /* && "$path" != / && "$path" != */ ]] || return 1
+            local -a segments
+            IFS=/ read -r -a segments <<< "$path"
+            local segment
+            for segment in "${segments[@]}"; do
+              [[ -n "$segment" && "$segment" != . && "$segment" != .. ]] || return 1
+            done
+          }
+          [[ "$DEPLOY_HOST" =~ ^[A-Za-z0-9.-]+$ ]] || { echo "::error::Invalid DEPLOY_SSH_HOST"; exit 2; }
+          if [[ ! "$DEPLOY_PORT" =~ ^[0-9]{1,5}$ ]] || ((DEPLOY_PORT < 1 || DEPLOY_PORT > 65535)); then
+            echo "::error::Invalid DEPLOY_SSH_PORT"
+            exit 2
+          fi
+          [[ "$DEPLOY_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]] || { echo "::error::Invalid DEPLOY_SSH_USER"; exit 2; }
+          [[ -n "$DEPLOY_KEY" && -n "$DEPLOY_KNOWN_HOSTS" ]] || { echo "::error::SSH key and pinned known_hosts are required"; exit 2; }
+          if [[ ! "$DEPLOY_ROOT" =~ ^/[A-Za-z0-9/_-]+$ ]] || ! is_normalized_absolute_path "$DEPLOY_ROOT"; then
+            echo "::error::DEPLOY_ROOT must be a normalized dedicated absolute path"
+            exit 2
+          fi
+          if [[ ! "$DEPLOY_ENV_FILE" =~ ^/[A-Za-z0-9/_.-]+$ ]] || ! is_normalized_absolute_path "$DEPLOY_ENV_FILE"; then
+            echo "::error::DEPLOY_ENV_FILE must be a normalized absolute host path"
+            exit 2
+          fi
+          [[ "$STAGING_URL" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?(/[^[:space:]]*)?$ ]] || { echo "::error::STAGING_URL must be an HTTPS URL"; exit 2; }
+          [[ -n "$E2E_USERNAME" && -n "$E2E_PASSWORD" ]] || { echo "::error::staging E2E credentials are required"; exit 2; }
+
+      - name: Deploy release set over verified SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_SSH_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_SSH_USER }}
+          DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+          DEPLOY_ROOT: ${{ vars.DEPLOY_ROOT }}
+          DEPLOY_ENV_FILE: ${{ vars.DEPLOY_ENV_FILE }}
+          RELEASE_ID: ${{ needs.assemble-release.outputs.release_id }}
+          BACKEND_SHA: ${{ needs.resolve-revisions.outputs.backend_sha }}
+        run: |
+          set -euo pipefail
+          key_file="$RUNNER_TEMP/deploy-key"
+          known_hosts_file="$RUNNER_TEMP/known_hosts"
+          printf '%s\n' "$DEPLOY_KEY" > "$key_file"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$known_hosts_file"
+          chmod 600 "$key_file" "$known_hosts_file"
+          ssh_opts=(-i "$key_file" -p "$DEPLOY_PORT" -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known_hosts_file")
+          remote="$DEPLOY_USER@$DEPLOY_HOST"
+          archive="$DEPLOY_ROOT/incoming/$GITHUB_RUN_ID.tar.gz"
+          # shellcheck disable=SC2029
+          ssh "${ssh_opts[@]}" "$remote" "install -d -m 700 '$DEPLOY_ROOT/incoming' '$DEPLOY_ROOT/releases/$RELEASE_ID'"
+          scp -i "$key_file" -P "$DEPLOY_PORT" -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known_hosts_file" \
+            release/platform-release.tar.gz "$remote:$archive"
+          # shellcheck disable=SC2029
+          ssh "${ssh_opts[@]}" "$remote" \
+            "tar -xzf '$archive' -C '$DEPLOY_ROOT/releases/$RELEASE_ID' && rm -f '$archive' && IMAGE_TAG='sha-$BACKEND_SHA' BATCH_RELEASE_ENV_FILE='$DEPLOY_ENV_FILE' BATCH_RELEASE_STATE_DIR='$DEPLOY_ROOT/state' BATCH_RELEASE_COMPOSE_MODE=external BATCH_RELEASE_PROJECT_NAME=batch-platform-staging BATCH_RELEASE_FRONTEND_COMPOSE_FILE='$DEPLOY_ROOT/releases/$RELEASE_ID/frontend/docker-compose.yml' BATCH_RELEASE_FRONTEND_DEPLOY_COMPOSE_FILE='$DEPLOY_ROOT/releases/$RELEASE_ID/frontend/docker-compose.deploy.yml' bash '$DEPLOY_ROOT/releases/$RELEASE_ID/backend/scripts/deploy/compose-release.sh' deploy '$DEPLOY_ROOT/releases/$RELEASE_ID/release-manifest.json' staging"
+          rm -f "$key_file" "$known_hosts_file"
+
+  staging-smoke:
+    needs:
+      - resolve-revisions
+      - deploy-staging
+    if: inputs.deploy_staging
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: staging
+    steps:
+      - name: Verify deployed frontend revision and security headers
+        env:
+          STAGING_URL: ${{ vars.STAGING_URL }}
+          EXPECTED_FRONTEND_SHA: ${{ needs.resolve-revisions.outputs.frontend_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$STAGING_URL" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?(/[^[:space:]]*)?$ ]] || {
+            echo "::error::STAGING_URL must be an HTTPS URL."
+            exit 2
+          }
+          curl --fail --silent --show-error --max-time 15 "$STAGING_URL/healthz" >/dev/null
+          actual_sha=$(curl --fail --silent --show-error --max-time 15 "$STAGING_URL/version.json" | jq -r '.gitSha')
+          [[ "$actual_sha" == "$EXPECTED_FRONTEND_SHA" ]] || {
+            echo "::error::Deployed frontend SHA mismatch: expected=$EXPECTED_FRONTEND_SHA actual=$actual_sha"
+            exit 1
+          }
+          curl --fail --silent --show-error --max-time 15 --dump-header "$RUNNER_TEMP/staging-headers" \
+            --output /dev/null "$STAGING_URL/"
+          for header in strict-transport-security content-security-policy x-content-type-options \
+            x-frame-options referrer-policy permissions-policy; do
+            grep -qi "^${header}:" "$RUNNER_TEMP/staging-headers" || {
+              echo "::error::Missing required security header: ${header}"
+              exit 1
+            }
+          done
+
+  staging-e2e:
+    needs:
+      - resolve-revisions
+      - staging-smoke
+    if: inputs.deploy_staging && needs.staging-smoke.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    environment: staging
+    steps:
+      - name: Checkout selected frontend revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: pinpols/batch-console
+          ref: ${{ needs.resolve-revisions.outputs.frontend_sha }}
+          path: frontend
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: frontend/.node-version
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend test dependencies
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Playwright Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      - name: Check staging security headers
+        working-directory: frontend
+        env:
+          FRONTEND_BASE_URL: ${{ vars.STAGING_URL }}
+        run: node scripts/check-security-headers.mjs
+
+      - name: Run end-to-end suite against deployed staging
+        working-directory: frontend
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ vars.STAGING_URL }}
+          E2E_USERNAME: ${{ secrets.STAGING_E2E_USERNAME }}
+          E2E_PASSWORD: ${{ secrets.STAGING_E2E_PASSWORD }}
+        run: npm run test:e2e:all
+
+      - name: Run visual regression suite
+        working-directory: frontend
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ vars.STAGING_URL }}
+        run: npm run test:e2e:visual
+
+      - name: Run cross-browser staging smoke
+        working-directory: frontend
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ vars.STAGING_URL }}
+          CROSS_BROWSER: '1'
+        run: npm run test:e2e:all -- e2e/smoke.spec.ts --grep @cross-browser
+
+  staging-lighthouse:
+    needs:
+      - resolve-revisions
+      - staging-smoke
+    if: inputs.deploy_staging && needs.staging-smoke.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: staging
+    steps:
+      - name: Checkout selected frontend budget
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: pinpols/batch-console
+          ref: ${{ needs.resolve-revisions.outputs.frontend_sha }}
+          persist-credentials: false
+
+      - name: Run Lighthouse against deployed staging
+        uses: treosh/lighthouse-ci-action@3e7e23fb74242897f95c0ba9cabad3d0227b9b18 # v12
+        with:
+          urls: |
+            ${{ vars.STAGING_URL }}/
+            ${{ vars.STAGING_URL }}/login
+          uploadArtifacts: true
+          temporaryPublicStorage: false
+          configPath: .github/lighthouse-budget.json
+
+  rollback-staging-on-smoke-failure:
+    needs:
+      - resolve-revisions
+      - assemble-release
+      - deploy-staging
+      - staging-smoke
+      - staging-e2e
+      - staging-lighthouse
+    if: >-
+      always() && needs.deploy-staging.result == 'success' &&
+      (needs.staging-smoke.result == 'failure' || needs.staging-e2e.result == 'failure' ||
+      needs.staging-lighthouse.result == 'failure')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: staging
+    steps:
+      - name: Restore previous stable release
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_SSH_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_SSH_USER }}
+          DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+          DEPLOY_ROOT: ${{ vars.DEPLOY_ROOT }}
+          DEPLOY_ENV_FILE: ${{ vars.DEPLOY_ENV_FILE }}
+          RELEASE_ID: ${{ needs.assemble-release.outputs.release_id }}
+        run: |
+          set -euo pipefail
+          key_file="$RUNNER_TEMP/deploy-key"
+          known_hosts_file="$RUNNER_TEMP/known_hosts"
+          printf '%s\n' "$DEPLOY_KEY" > "$key_file"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$known_hosts_file"
+          chmod 600 "$key_file" "$known_hosts_file"
+          ssh_opts=(-i "$key_file" -p "$DEPLOY_PORT" -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known_hosts_file")
+          remote="$DEPLOY_USER@$DEPLOY_HOST"
+          release_dir="$DEPLOY_ROOT/releases/$RELEASE_ID"
+          # shellcheck disable=SC2029
+          ssh "${ssh_opts[@]}" "$remote" \
+            "BATCH_RELEASE_ENV_FILE='$DEPLOY_ENV_FILE' BATCH_RELEASE_STATE_DIR='$DEPLOY_ROOT/state' BATCH_RELEASE_COMPOSE_MODE=external BATCH_RELEASE_PROJECT_NAME=batch-platform-staging BATCH_RELEASE_FRONTEND_COMPOSE_FILE='$release_dir/frontend/docker-compose.yml' BATCH_RELEASE_FRONTEND_DEPLOY_COMPOSE_FILE='$release_dir/frontend/docker-compose.deploy.yml' bash '$release_dir/backend/scripts/deploy/compose-release.sh' rollback staging"
+          rm -f "$key_file" "$known_hosts_file"

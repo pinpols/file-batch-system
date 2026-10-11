@@ -17,33 +17,41 @@
 
 services:
   console-api:
+    build: !reset null
     image: ghcr.io/pinpols/console-api:${IMAGE_TAG:?Set IMAGE_TAG to a verified immutable image tag}
     pull_policy: always
 
   trigger:
+    build: !reset null
     image: ghcr.io/pinpols/trigger:${IMAGE_TAG:?Set IMAGE_TAG to a verified immutable image tag}
     pull_policy: always
 
   orchestrator:
+    build: !reset null
     image: ghcr.io/pinpols/orchestrator:${IMAGE_TAG:?Set IMAGE_TAG to a verified immutable image tag}
     pull_policy: always
 
   worker-import:
+    build: !reset null
     image: ghcr.io/pinpols/worker-import:${IMAGE_TAG:?Set IMAGE_TAG to a verified immutable image tag}
     pull_policy: always
 
   worker-export:
+    build: !reset null
     image: ghcr.io/pinpols/worker-export:${IMAGE_TAG:?Set IMAGE_TAG to a verified immutable image tag}
     pull_policy: always
 
   worker-process:
+    build: !reset null
     image: ghcr.io/pinpols/worker-process:${IMAGE_TAG:?Set IMAGE_TAG to a verified immutable image tag}
     pull_policy: always
 
   worker-dispatch:
+    build: !reset null
     image: ghcr.io/pinpols/worker-dispatch:${IMAGE_TAG:?Set IMAGE_TAG to a verified immutable image tag}
     pull_policy: always
   # ADR-029 专用 atomic worker(原子任务);服务定义在 app.yml,这里只覆盖镜像
   worker-atomic:
+    build: !reset null
     image: ghcr.io/pinpols/worker-atomic:${IMAGE_TAG:?Set IMAGE_TAG to a verified immutable image tag}
     pull_policy: always

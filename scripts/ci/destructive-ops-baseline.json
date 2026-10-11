@@ -1,4 +1,5 @@
 {
+  ".github/workflows/compose-cd.yml|filesystem-remove": 3,
   ".github/workflows/daily-sim-strict-validation.yml|docker-delete": 1,
   ".github/workflows/daily-sim-strict-validation.yml|filesystem-remove": 1,
   ".github/workflows/sonar-gate.yml|docker-delete": 1,

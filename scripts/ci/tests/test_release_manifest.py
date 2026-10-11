@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -23,15 +25,14 @@ class ReleaseManifestTest(unittest.TestCase):
             )
         )
 
-    def test_example_manifest_is_valid_and_renders_all_backend_services(self) -> None:
+    def test_example_manifest_is_valid_and_renders_all_platform_services(self) -> None:
         release_manifest.validate_manifest(self.manifest)
 
         rendered = release_manifest.render_compose(self.manifest)
 
-        for service in release_manifest.BACKEND_SERVICES:
+        for service in release_manifest.ALL_SERVICES:
             self.assertIn(f"  {service}:\n", rendered)
             self.assertIn(self.manifest["images"][service], rendered)
-        self.assertNotIn("  frontend:\n", rendered)
 
     def test_mutable_image_tag_is_rejected(self) -> None:
         self.manifest["images"]["console-api"] = "ghcr.io/pinpols/console-api:latest"
@@ -119,6 +120,97 @@ class ReleaseManifestTest(unittest.TestCase):
             written = json.loads(output_path.read_text(encoding="utf-8"))
 
         self.assertEqual(result, written)
+
+    def test_platform_manifest_combines_exact_frontend_and_backend_digests(self) -> None:
+        digest = "sha256:" + "a" * 64
+        backend = {
+            "kind": "BackendImageSet",
+            "gitSha": "b" * 40,
+            "images": {
+                service: f"ghcr.io/pinpols/{service}@{digest}"
+                for service in release_manifest.BACKEND_SERVICES
+            },
+        }
+
+        manifest = release_manifest.platform_manifest(
+            backend, "b" * 40, "c" * 40, digest, "cd-test"
+        )
+
+        self.assertEqual("b" * 40, manifest["commits"]["backend"])
+        self.assertEqual("c" * 40, manifest["commits"]["frontend"])
+        self.assertEqual(f"ghcr.io/pinpols/batch-console@{digest}", manifest["images"]["frontend"])
+        self.assertEqual(set(release_manifest.ALL_SERVICES), set(manifest["images"]))
+        release_manifest.validate_manifest(manifest)
+
+    def test_platform_manifest_rejects_malformed_digest_or_incomplete_backend_set(self) -> None:
+        backend = {
+            "kind": "BackendImageSet",
+            "gitSha": "b" * 40,
+            "images": {"console-api": "ghcr.io/pinpols/console-api@sha256:" + "a" * 64},
+        }
+
+        with self.assertRaisesRegex(release_manifest.ManifestError, "全部后端服务"):
+            release_manifest.platform_manifest(
+                backend, "b" * 40, "c" * 40, "sha256:" + "a" * 64, "cd-test"
+            )
+
+    def test_platform_manifest_rejects_backend_revision_drift(self) -> None:
+        digest = "sha256:" + "a" * 64
+        backend = {
+            "kind": "BackendImageSet",
+            "gitSha": "b" * 40,
+            "images": {
+                service: f"ghcr.io/pinpols/{service}@{digest}"
+                for service in release_manifest.BACKEND_SERVICES
+            },
+        }
+
+        with self.assertRaisesRegex(release_manifest.ManifestError, "不一致"):
+            release_manifest.platform_manifest(
+                backend, "c" * 40, "d" * 40, digest, "cd-drift"
+            )
+
+    def test_cli_writes_complete_platform_manifest(self) -> None:
+        digest = "sha256:" + "d" * 64
+        backend = {
+            "kind": "BackendImageSet",
+            "gitSha": "e" * 40,
+            "images": {
+                service: f"ghcr.io/pinpols/{service}@{digest}"
+                for service in release_manifest.BACKEND_SERVICES
+            },
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            backend_path = Path(directory) / "backend.json"
+            output_path = Path(directory) / "release.json"
+            backend_path.write_text(json.dumps(backend), encoding="utf-8")
+            result = release_manifest.platform_manifest(
+                backend, "e" * 40, "f" * 40, digest, "cd-cli"
+            )
+
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(MODULE_PATH),
+                    "platform-manifest",
+                    "--backend",
+                    str(backend_path),
+                    "--backend-sha",
+                    "e" * 40,
+                    "--frontend-sha",
+                    "f" * 40,
+                    "--frontend-digest",
+                    digest,
+                    "--release-id",
+                    "cd-cli",
+                    "--output",
+                    str(output_path),
+                ],
+                check=True,
+            )
+            written = json.loads(output_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(result["images"], written["images"])
 
 
 if __name__ == "__main__":

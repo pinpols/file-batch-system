@@ -10,8 +10,12 @@ source "$ROOT/scripts/lib/python-runtime.sh"
 readonly MANIFEST_TOOL="$ROOT/scripts/deploy/release_manifest.py"
 readonly BASE_COMPOSE="$ROOT/docker-compose.yml"
 readonly APP_COMPOSE="$ROOT/deploy/docker/compose/app.yml"
+readonly APP_DEPLOY_COMPOSE="$ROOT/deploy/docker/compose/app.deploy.yml"
+readonly EXTERNAL_APP_COMPOSE="$ROOT/deploy/docker/compose/app.external.deploy.yml"
+readonly DEFAULT_FRONTEND_DIR="$ROOT/../batch-console"
 readonly DEFAULT_STATE_DIR="/var/lib/batch-platform/releases"
 readonly SERVICES=(
+  frontend
   console-api trigger orchestrator worker-import worker-export worker-process worker-dispatch
   worker-atomic
 )
@@ -37,8 +41,11 @@ Usage:
 
 Required for deploy/verify/rollback:
   BATCH_RELEASE_ENV_FILE       Compose env file on the deployment host
+  BATCH_RELEASE_FRONTEND_COMPOSE_FILE       Frontend docker-compose.yml
+  BATCH_RELEASE_FRONTEND_DEPLOY_COMPOSE_FILE Frontend docker-compose.deploy.yml
 
 Optional:
+  BATCH_RELEASE_COMPOSE_MODE   external (default for CD) or local (include root infrastructure)
   BATCH_RELEASE_STATE_DIR      Release state directory (default /var/lib/batch-platform/releases)
   BATCH_RELEASE_PROJECT_NAME   Compose project name (default batch-platform-ENVIRONMENT)
   BATCH_RELEASE_HEALTH_TIMEOUT Health wait seconds (default 180)
@@ -103,11 +110,25 @@ compose_args() {
   COMPOSE_ARGS=(
     --project-name "$(compose_project_name "$environment")"
     --env-file "$BATCH_RELEASE_ENV_FILE"
-    -f "$BASE_COMPOSE"
-    -f "$APP_COMPOSE"
-    -f "$overlay"
     --profile apps
     --profile replica
+  )
+  case "${BATCH_RELEASE_COMPOSE_MODE:-external}" in
+    external)
+      COMPOSE_ARGS+=( -f "$APP_COMPOSE" -f "$APP_DEPLOY_COMPOSE" -f "$EXTERNAL_APP_COMPOSE" )
+      ;;
+    local)
+      COMPOSE_ARGS+=( -f "$BASE_COMPOSE" -f "$APP_COMPOSE" -f "$APP_DEPLOY_COMPOSE" )
+      ;;
+    *)
+      echo "ERROR: BATCH_RELEASE_COMPOSE_MODE must be external or local" >&2
+      return 2
+      ;;
+  esac
+  COMPOSE_ARGS+=(
+    -f "${BATCH_RELEASE_FRONTEND_COMPOSE_FILE:-$DEFAULT_FRONTEND_DIR/docker-compose.yml}"
+    -f "${BATCH_RELEASE_FRONTEND_DEPLOY_COMPOSE_FILE:-$DEFAULT_FRONTEND_DIR/docker-compose.deploy.yml}"
+    -f "$overlay"
   )
 }
 
@@ -120,8 +141,21 @@ precheck() {
     echo "ERROR: release manifest not found: $manifest" >&2
     return 2
   }
-  [[ -f "$BASE_COMPOSE" && -f "$APP_COMPOSE" ]] || {
-    echo "ERROR: deployment bundle is missing Compose files" >&2
+  [[ -f "$APP_COMPOSE" && -f "$APP_DEPLOY_COMPOSE" && -f "$EXTERNAL_APP_COMPOSE" ]] || {
+    echo "ERROR: backend deployment Compose files are missing" >&2
+    return 2
+  }
+  if [[ "${BATCH_RELEASE_COMPOSE_MODE:-external}" == local && ! -f "$BASE_COMPOSE" ]]; then
+    echo "ERROR: local Compose mode requires the root docker-compose.yml" >&2
+    return 2
+  fi
+  [[ -f "${BATCH_RELEASE_FRONTEND_COMPOSE_FILE:-$DEFAULT_FRONTEND_DIR/docker-compose.yml}" ]] \
+    && [[ -f "${BATCH_RELEASE_FRONTEND_DEPLOY_COMPOSE_FILE:-$DEFAULT_FRONTEND_DIR/docker-compose.deploy.yml}" ]] || {
+    echo "ERROR: frontend deployment Compose files are missing" >&2
+    return 2
+  }
+  [[ "${BATCH_RELEASE_COMPOSE_MODE:-external}" == external || "${BATCH_RELEASE_COMPOSE_MODE:-external}" == local ]] || {
+    echo "ERROR: BATCH_RELEASE_COMPOSE_MODE must be external or local" >&2
     return 2
   }
   [[ -n "${BATCH_RELEASE_ENV_FILE:-}" && -f "$BATCH_RELEASE_ENV_FILE" ]] || {
@@ -240,6 +274,7 @@ activate_manifest() {
   render_overlay "$manifest" "$overlay"
   compose_args "$environment" "$overlay"
 
+  docker compose "${COMPOSE_ARGS[@]}" config --quiet
   docker compose "${COMPOSE_ARGS[@]}" pull "${SERVICES[@]}"
   docker compose "${COMPOSE_ARGS[@]}" up -d --no-build "${SERVICES[@]}"
   if verify_release "$manifest"; then
