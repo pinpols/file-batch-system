@@ -12,6 +12,8 @@ on:
       - '.mvn/**'
       - 'mvnw'
       - 'scripts/dev/sonar-*'
+      - 'scripts/dev/sonar_quality_gate.py'
+      - 'scripts/dev/tests/test_sonar_quality_gate.py'
       - 'scripts/dev/sql/sonar-*'
       - 'scripts/lib/process.sh'
       - 'scripts/lib/python-runtime.sh'
@@ -56,6 +58,9 @@ jobs:
           java-version: '21'
           cache: maven
 
+      - name: Test Sonar Quality Gate validation
+        run: python3 -m unittest scripts.dev.tests.test_sonar_quality_gate
+
       - name: Check for recent code changes
         id: nightly
         if: github.event_name == 'schedule'
@@ -63,7 +68,7 @@ jobs:
         run: |
           set -euo pipefail
           changed_files="$(git log --since='24 hours ago' --name-only --format= HEAD | sort -u)"
-          if printf '%s\n' "$changed_files" | grep -Eq '(^|/)([^/]+\.java|pom\.xml)$|^\.mvn/|^mvnw$|^scripts/dev/sonar-.*|^scripts/dev/sql/sonar-.*|^scripts/lib/(process|python-runtime)\.sh$|^\.github/workflows/sonar-gate\.yml$'; then
+          if printf '%s\n' "$changed_files" | grep -Eq '(^|/)([^/]+\.java|pom\.xml)$|^\.mvn/|^mvnw$|^scripts/dev/sonar-.*|^scripts/dev/sonar_quality_gate\.py$|^scripts/dev/tests/test_sonar_quality_gate\.py$|^scripts/dev/sql/sonar-.*|^scripts/lib/(process|python-runtime)\.sh$|^\.github/workflows/sonar-gate\.yml$'; then
             echo '最近 24 小时存在 Java、构建或 Sonar CI 变更，将执行夜间扫描。'
           else
             echo '最近 24 小时没有 Java、构建或 Sonar CI 变更，跳过夜间扫描。'
