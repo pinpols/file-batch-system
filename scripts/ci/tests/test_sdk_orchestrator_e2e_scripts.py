@@ -196,6 +196,22 @@ class SdkOrchestratorE2eScriptsTest(unittest.TestCase):
                 worker_log.read_text(encoding="utf-8"),
             )
 
+    def test_typescript_sample_ci_lockfile_is_tracked(self) -> None:
+        lockfile = (
+            ROOT
+            / "examples/self-hosted-sdk/sample-tenant-worker-typescript/package-lock.json"
+        )
+        self.assertTrue(lockfile.is_file(), "npm ci requires the sample lockfile")
+        tracked = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", str(lockfile.relative_to(ROOT))],
+            cwd=ROOT,
+            text=True,
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(tracked.returncode, 0, "sample lockfile must be committed")
+
     def test_python_dependency_failure_is_logged_and_propagated(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             python_bin = Path(temp_dir) / "fake-python"
