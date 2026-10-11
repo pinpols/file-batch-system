@@ -52,6 +52,13 @@ scripts/sim/
 重试策略和超时，断言旧实例保持创建时快照、新实例读取新配置，并恢复 SIM 作业定义。它验证执行/重试配置
 的实例生效时点，不代表模板/Pipeline/通道配置具备同实例快照，也不替代监控策略动态生效的 PG IT。
 
+### 29/30 数据清理边界
+
+- 29 的本地 Cookie、下载工作簿和响应文件由退出 trap 清理；服务端上传/预览会话使用既有 30 分钟 TTL，不通过清空 Redis 回收。未执行 Apply，不产生作业定义。
+- 30 的实例、任务、触发请求、Outbox 和 Console 操作审计由下一次 `all` 的 reset 清理。`00-reset-runtime.sh` 与 harness 共用 `scripts/local/sql/reset-platform-runtime.sql`，不再各自维护平台表清单。报告日志保留作为验证证据。
+- 30 在正常结束、断言失败、SIGTERM 或 Ctrl-C 时通过 `finally` 尝试恢复原配置；恢复 API 失败会使阶段失败，不能当作已恢复。SIGKILL/机器断电无法执行恢复。默认 `default-tenant/atomic_shell_demo` 在下一次 `all` 的 `prereq` 中由 `ensure-sim-atomic-prerequisites.sql` 重置为标准 fixture；单独 `reset` 不改定义。自定义 `SIM_ATOMIC_TENANT_ID/SIM_ATOMIC_JOB_CODE` 不受该 fixture 重置覆盖，必须使用专用测试作业并在异常后核对、恢复配置。
+- 单独运行 `sim` 或某个阶段不自动 reset；清理共享运行数据前须停止相关应用写入，优先使用含静默步骤的 `all`。
+
 ```bash
 bash scripts/local/sim-harness.sh all
 ```

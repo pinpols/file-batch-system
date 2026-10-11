@@ -499,6 +499,7 @@ python3 scripts/ci/check-test-conventions.py --check-baseline \
 ```bash
 bash scripts/ci/check-db-scripts-safety.sh
 python3 scripts/ci/check-destructive-ops-governance.py
+python3 -m unittest scripts/ci/tests/test_sim_runtime_cleanup.py
 python3 -m unittest scripts/ci/tests/test_check_destructive_ops_governance.py
 ```
 

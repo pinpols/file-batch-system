@@ -196,7 +196,7 @@ fixture_compat_check() {
 reset() {
   echo "== reset:运行态 + biz 数据回基线(保留 definition/config/tenant/user)=="
   batch_require_compose_container "$PG" || return $?
-  # 平台运行态:沿用 00-reset 的平台段(它平台段是好的;失败的是 biz 段的硬编码列表)
+  # 与 00-reset 共用平台 SQL；这里只加载连接配置，不清除作业定义。
   set -a; . ./.env.local; set +a
   # biz 数据:动态枚举 biz 现有基表(非分区子表)TRUNCATE CASCADE,避免硬编码撞缺表
   if sim_business_sql reset-business-runtime.sql >/dev/null; then

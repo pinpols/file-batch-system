@@ -33,15 +33,8 @@ PG_BIZ_C="${PG_BUSINESS_CONTAINER:-$PG_CONTAINER}"
 PG_BIZ_U="${PG_BUSINESS_USER:-$POSTGRES_USER}"
 PG_BIZ_D="${PG_BUSINESS_DB:-$BUSINESS_DB}"
 
-# 平台运行态(分区父表 TRUNCATE 自动级联子分区;Citus 下 sequential 防分片死锁;CASCADE 兜 FK 依赖)
-PLAT_TABLES="batch.job_instance, batch.job_instance_dedup_key, batch.job_task, batch.job_partition, batch.job_step_instance,
-  batch.job_execution_log, batch.pipeline_instance, batch.pipeline_progress, batch.pipeline_step_run,
-  batch.trigger_request, batch.trigger_outbox_event, batch.trigger_misfire_pending, batch.trigger_runtime_state,
-  batch.outbox_event, batch.outbox_event_dedup_key, batch.event_outbox_retry, batch.event_delivery_log,
-  batch.file_record, batch.file_dispatch_record, batch.file_error_record, batch.file_channel_health, batch.file_audit_log,
-  batch.custom_task_type_registry, batch.worker_registry, batch.worker_report_outbox,
-  batch.dead_letter_task, batch.process_staging,
-  batch.console_operation_audit, batch.console_ai_audit_log, batch.batch_day_operation_audit, batch.console_push_job_notification"
+# 与 sim-harness 共用平台清理清单，避免新阶段仅在其中一个入口清理。
+PLATFORM_RESET_SQL="$ROOT/scripts/local/sql/reset-platform-runtime.sql"
 
 BIZ_TABLES="biz.customer_account, biz.transaction, biz.risk_score, biz.risk_alert,
   biz.settlement_batch, biz.settlement_detail, biz.process_account_summary, biz.process_event_copy,
@@ -54,7 +47,7 @@ fi
 
 echo "==> reset 平台运行态(${PG_PLAT_C}/${PG_PLAT_D})"
 docker exec -e PGOPTIONS='-c batch.destructive_ops=sim-reset' -i "$PG_PLAT_C" psql -U "$PG_PLAT_U" -d "$PG_PLAT_D" -v ON_ERROR_STOP=1 \
-  -v reset_tables="$PLAT_TABLES" -f /dev/stdin < "$SQL_DIR/reset-platform-runtime.sql"
+  -f /dev/stdin < "$PLATFORM_RESET_SQL"
 plat_rc=$?
 
 echo "==> reset biz 业务数据(${PG_BIZ_C}/${PG_BIZ_D})"
