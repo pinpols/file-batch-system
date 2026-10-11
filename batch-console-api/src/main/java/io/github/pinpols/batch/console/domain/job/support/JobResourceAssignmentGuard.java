@@ -3,7 +3,10 @@ package io.github.pinpols.batch.console.domain.job.support;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
+import java.util.Objects;
+import java.util.function.Function;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -66,21 +69,21 @@ public class JobResourceAssignmentGuard {
   }
 
   private static boolean changes(
-      String requested, String current, java.util.function.Function<String, String> normalize) {
-    return requested != null
-        && !java.util.Objects.equals(normalize.apply(requested), normalize.apply(current));
+      String requested, String current, Function<String, String> normalize) {
+    return EmptyChecks.isNotNull(requested)
+        && !Objects.equals(normalize.apply(requested), normalize.apply(current));
   }
 
   private static boolean isPlatformAdmin() {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    return authentication != null
+    return EmptyChecks.isNotNull(authentication)
         && authentication.isAuthenticated()
         && hasAuthority(authentication, ConsoleRoles.ADMIN);
   }
 
   private static void requireTenantAdmin() {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    if (authentication == null
+    if (EmptyChecks.isNull(authentication)
         || !authentication.isAuthenticated()
         || !hasAuthority(authentication, ConsoleRoles.TENANT_ADMIN)) {
       throw forbidden();
@@ -93,7 +96,7 @@ public class JobResourceAssignmentGuard {
   }
 
   private static boolean hasText(String value) {
-    return value != null && !value.isBlank();
+    return EmptyChecks.isNotNull(value) && EmptyChecks.isNotEmpty(value);
   }
 
   private static BizException forbidden() {

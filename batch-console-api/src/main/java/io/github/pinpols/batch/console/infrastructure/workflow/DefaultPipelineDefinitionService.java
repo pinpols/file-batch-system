@@ -226,7 +226,8 @@ public class DefaultPipelineDefinitionService implements PipelineDefinitionServi
       stepParams.put("step_order", step.getStepOrder() != null ? step.getStepOrder() : 0);
       stepParams.put("impl_code", step.getImplCode());
       Map<String, Object> existing = existingSteps.get(step.getStepCode());
-      String stored = existing == null ? null : jsonValue(existing.get(KEY_STEP_PARAMS));
+      String stored =
+          EmptyChecks.isNull(existing) ? null : jsonValue(existing.get(KEY_STEP_PARAMS));
       stepParams.put(KEY_STEP_PARAMS, resolveStepParams(step.getStepParams(), stored));
       stepParams.put(
           "timeout_seconds", step.getTimeoutSeconds() != null ? step.getTimeoutSeconds() : 0);
@@ -281,8 +282,9 @@ public class DefaultPipelineDefinitionService implements PipelineDefinitionServi
     if (!Texts.hasText(submitted)) {
       return submitted;
     }
-    String resolved =
-        stored == null ? submitted : SecretMasking.preserveMaskedJson(submitted, stored);
+    String resolved = EmptyChecks.isNull(stored)
+        ? submitted
+        : SecretMasking.preserveMaskedJson(submitted, stored);
     if (SecretMasking.containsMaskedSensitiveValue(resolved)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT, "error.config.masked_secret_requires_value");
@@ -291,7 +293,7 @@ public class DefaultPipelineDefinitionService implements PipelineDefinitionServi
   }
 
   private static String jsonValue(Object value) {
-    if (value == null) {
+    if (EmptyChecks.isNull(value)) {
       return null;
     }
     return value instanceof Map<?, ?> || value instanceof List<?>

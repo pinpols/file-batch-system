@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.infrastructure.workflow;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
@@ -272,7 +273,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
   }
 
   private void assertNodeRoutingOnCreate(List<WorkflowDefinitionSaveRequest.NodeItem> nodes) {
-    if (nodes == null) {
+    if (EmptyChecks.isNull(nodes)) {
       return;
     }
     for (WorkflowDefinitionSaveRequest.NodeItem node : nodes) {
@@ -284,7 +285,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
 
   private void assertAndPreserveNodeRouting(
       String tenantId, Long definitionId, List<WorkflowDefinitionSaveRequest.NodeItem> nodes) {
-    if (nodes == null) {
+    if (EmptyChecks.isNull(nodes)) {
       return;
     }
     Map<String, String> existingGroups = new HashMap<>();
@@ -300,7 +301,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
     for (WorkflowDefinitionSaveRequest.NodeItem node : nodes) {
       String existingGroup = existingGroups.get(node.getNodeCode());
       resourceAssignmentGuard.assertUpdateAllowed(null, node.getWorkerGroup(), null, existingGroup);
-      if (node.getWorkerGroup() == null && existingGroup != null) {
+      if (EmptyChecks.isNull(node.getWorkerGroup()) && EmptyChecks.isNotNull(existingGroup)) {
         node.setWorkerGroup(existingGroup);
       }
     }

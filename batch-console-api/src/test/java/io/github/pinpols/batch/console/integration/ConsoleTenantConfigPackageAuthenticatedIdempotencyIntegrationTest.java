@@ -16,7 +16,6 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -28,6 +27,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.client.MultipartBodyBuilder;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.TestConstructor;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.reactive.function.BodyInserters;
 
@@ -41,6 +41,7 @@ import org.springframework.web.reactive.function.BodyInserters;
     })
 @Import(ConsoleTenantConfigPackageAuthenticatedIdempotencyIntegrationTest.SecurityMode.class)
 @DisplayName("租户配置包认证 Apply 幂等: 成功提交后同键重放不重复写入")
+@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class ConsoleTenantConfigPackageAuthenticatedIdempotencyIntegrationTest
     extends AbstractIntegrationTest {
 
@@ -65,11 +66,15 @@ class ConsoleTenantConfigPackageAuthenticatedIdempotencyIntegrationTest
   @LocalServerPort
   private int port;
 
-  @Autowired
-  private ConsoleJwtService jwtService;
+  private final ConsoleJwtService jwtService;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private final JdbcTemplate jdbcTemplate;
+
+  ConsoleTenantConfigPackageAuthenticatedIdempotencyIntegrationTest(
+      ConsoleJwtService jwtService, JdbcTemplate jdbcTemplate) {
+    this.jwtService = jwtService;
+    this.jdbcTemplate = jdbcTemplate;
+  }
 
   @Test
   @DisplayName("真实 JWT/CSRF 上传、预览、Apply 后同键重放返回 409 且业务行只写一次")

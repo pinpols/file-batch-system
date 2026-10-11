@@ -21,12 +21,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.quartz.Scheduler;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.TestConstructor;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.web.client.RestClient;
 
@@ -44,16 +44,23 @@ import org.springframework.web.client.RestClient;
     })
 @Import(TriggerServiceIntegrationTest.TestConfig.class)
 @DisplayName("Trigger 启动链路集成:同一幂等键重复提交只落一条 ACCEPTED 请求,审批补跑同事务写出箱事件而非直连编排服务")
+@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private TriggerService triggerService;
+  private final TriggerService triggerService;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private final JdbcTemplate jdbcTemplate;
 
-  @Autowired
-  private TriggerDefinitionLoader triggerDefinitionLoader;
+  private final TriggerDefinitionLoader triggerDefinitionLoader;
+
+  TriggerServiceIntegrationTest(
+      TriggerService triggerService,
+      JdbcTemplate jdbcTemplate,
+      TriggerDefinitionLoader triggerDefinitionLoader) {
+    this.triggerService = triggerService;
+    this.jdbcTemplate = jdbcTemplate;
+    this.triggerDefinitionLoader = triggerDefinitionLoader;
+  }
 
   @MockitoBean
   private RestClient orchestratorRestClient;

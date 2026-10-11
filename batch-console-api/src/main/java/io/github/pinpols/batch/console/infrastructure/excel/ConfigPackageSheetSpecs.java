@@ -117,12 +117,15 @@ import io.github.pinpols.batch.common.enums.ScheduleType;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.ColumnGuide;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.springframework.context.MessageSource;
@@ -414,24 +417,24 @@ public final class ConfigPackageSheetSpecs {
         continue;
       }
       List<String> columns = projectedColumns(def.name(), def.columns(), scenarios);
-      Map<String, ColumnGuide> guides = new java.util.LinkedHashMap<>();
+      Map<String, ColumnGuide> guides = new LinkedHashMap<>();
       for (String column : columns) {
         ColumnGuide guide = def.guides().get(column);
-        if (guide != null) {
+        if (EmptyChecks.isNotNull(guide)) {
           guides.put(column, guide);
         }
       }
       Set<String> focusedFormats = focusedFileFormats(scenarios);
       String focusedDirection = focusedFileDirection(scenarios);
       BiConsumer<Sheet, Locale> validationApplier = def.validationApplier();
-      if (FILE_TEMPLATE_SHEET.equals(def.name()) && focusedFormats != null) {
+      if (FILE_TEMPLATE_SHEET.equals(def.name()) && EmptyChecks.isNotNull(focusedFormats)) {
         Set<String> focusedTypes =
-            focusedDirection == null ? FILE_TEMPLATE_TYPES : Set.of(focusedDirection);
+            EmptyChecks.isNull(focusedDirection) ? FILE_TEMPLATE_TYPES : Set.of(focusedDirection);
         validationApplier = (sheet, locale) ->
             applyFileTemplateValidations(sheet, locale, focusedFormats, focusedTypes);
         replaceGuideChoices(
             guides, ConfigPackageExcelSchema.FileTemplate.COL_FILE_FORMAT_TYPE, focusedFormats);
-        if (focusedDirection != null) {
+        if (EmptyChecks.isNotNull(focusedDirection)) {
           replaceGuideChoices(
               guides, ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_TYPE, focusedTypes);
         }
@@ -580,7 +583,7 @@ public final class ConfigPackageSheetSpecs {
 
   private static Set<String> fileTemplateColumns(Set<String> scenarios) {
     List<ConfigPackageFileScenario> profiles = fileProfiles(scenarios);
-    if (!profiles.isEmpty()
+    if (EmptyChecks.isNotEmpty(profiles)
         && !scenarios.contains("IMPORT")
         && !scenarios.contains("EXPORT")
         && !scenarios.contains("WORKFLOW")) {
@@ -620,7 +623,7 @@ public final class ConfigPackageSheetSpecs {
   private static List<ConfigPackageFileScenario> fileProfiles(Set<String> scenarios) {
     return scenarios.stream()
         .map(ConfigPackageFileScenario::fromCode)
-        .flatMap(java.util.Optional::stream)
+        .flatMap(Optional::stream)
         .toList();
   }
 
@@ -636,7 +639,7 @@ public final class ConfigPackageSheetSpecs {
         formats.add(profile.format().code());
       }
     }
-    return formats.isEmpty() ? null : formats;
+    return EmptyChecks.isEmpty(formats) ? null : formats;
   }
 
   private static String focusedFileDirection(Set<String> scenarios) {
@@ -647,14 +650,14 @@ public final class ConfigPackageSheetSpecs {
     }
     Set<String> directions = fileProfiles(scenarios).stream()
         .map(ConfigPackageFileScenario::direction)
-        .collect(java.util.stream.Collectors.toSet());
+        .collect(Collectors.toSet());
     return directions.size() == 1 ? directions.iterator().next() : null;
   }
 
   private static void replaceGuideChoices(
       Map<String, ColumnGuide> guides, String columnName, Set<String> choices) {
     ColumnGuide guide = guides.get(columnName);
-    if (guide != null) {
+    if (EmptyChecks.isNotNull(guide)) {
       guides.put(
           columnName,
           new ColumnGuide(
@@ -1014,7 +1017,7 @@ public final class ConfigPackageSheetSpecs {
 
   private static int columnIndex(Sheet sheet, String columnName) {
     Row header = sheet.getRow(0);
-    if (header == null) {
+    if (EmptyChecks.isNull(header)) {
       return -1;
     }
     for (int index = 0; index < header.getLastCellNum(); index++) {

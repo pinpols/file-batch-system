@@ -12,6 +12,7 @@ import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
@@ -501,19 +502,21 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
 
   private RetryPolicyPlan resolveRetryPolicy(JobInstanceEntity jobInstance) {
     Map<String, Object> snapshot = executionPolicySnapshot(jobInstance);
-    if (snapshot != null) {
+    if (EmptyChecks.isNotNull(snapshot)) {
       String retryPolicy = stringValue(snapshot.get("retryPolicy"));
       Integer retryMaxCount = integerValue(snapshot.get("retryMaxCount"));
       return new RetryPolicyPlan(
           Texts.hasText(retryPolicy) ? retryPolicy : RetryPolicyType.FIXED.code(),
-          retryMaxCount == null ? governance.retry().getDefaultMaxRetryCount() : retryMaxCount);
+          EmptyChecks.isNull(retryMaxCount)
+              ? governance.retry().getDefaultMaxRetryCount()
+              : retryMaxCount);
     }
     return resolveRetryPolicy(jobInstance.getJobDefinitionId());
   }
 
   @SuppressWarnings("unchecked")
   private Map<String, Object> executionPolicySnapshot(JobInstanceEntity jobInstance) {
-    if (jobInstance == null || !Texts.hasText(jobInstance.getParamsSnapshot())) {
+    if (EmptyChecks.isNull(jobInstance) || !Texts.hasText(jobInstance.getParamsSnapshot())) {
       return null;
     }
     try {
@@ -535,14 +538,14 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
   }
 
   private String stringValue(Object value) {
-    return value == null ? null : String.valueOf(value);
+    return EmptyChecks.isNull(value) ? null : String.valueOf(value);
   }
 
   private Integer integerValue(Object value) {
     if (value instanceof Number number) {
       return number.intValue();
     }
-    if (value instanceof String text && !text.isBlank()) {
+    if (value instanceof String text && EmptyChecks.isNotEmpty(text)) {
       try {
         return Integer.valueOf(text);
       } catch (NumberFormatException ignored) {

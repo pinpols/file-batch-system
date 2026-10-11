@@ -55,7 +55,7 @@ public final class WorkflowDefinitionWriteSupport {
     return nodeMapper
         .selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, definitionId, null))
         .stream()
-        .filter(node -> node.getNodeParams() != null)
+        .filter(node -> EmptyChecks.isNotNull(node.getNodeParams()))
         .collect(Collectors.toMap(
             WorkflowNodeEntity::getNodeCode,
             WorkflowNodeEntity::getNodeParams,
@@ -110,8 +110,9 @@ public final class WorkflowDefinitionWriteSupport {
     if (!Texts.hasText(submitted)) {
       return submitted;
     }
-    String resolved =
-        stored == null ? submitted : SecretMasking.preserveMaskedJson(submitted, stored);
+    String resolved = EmptyChecks.isNull(stored)
+        ? submitted
+        : SecretMasking.preserveMaskedJson(submitted, stored);
     if (SecretMasking.containsMaskedSensitiveValue(resolved)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT, "error.config.masked_secret_requires_value");

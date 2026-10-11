@@ -201,7 +201,7 @@ public class ReceiveStep implements ImportStageStep {
       importPayload =
           enrichFromFileRecord(importPayload, attrs.get(PipelineRuntimeKeys.FILE_RECORD));
     }
-    if (!templateConfig.isEmpty()) {
+    if (EmptyChecks.isNotEmpty(templateConfig)) {
       attrs.put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);
     }
     attrs.put(PipelineRuntimeKeys.IMPORT_PAYLOAD, importPayload);
@@ -246,7 +246,7 @@ public class ReceiveStep implements ImportStageStep {
   private Map<String, Object> resolveTemplateConfig(
       Map<String, Object> attributes, String tenantId, String templateCode) {
     Object existing = attributes.get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
-    if (existing instanceof Map<?, ?> snapshot && !snapshot.isEmpty()) {
+    if (existing instanceof Map<?, ?> snapshot && EmptyChecks.isNotEmpty(snapshot)) {
       return objectMapper.convertValue(
           existing,
           objectMapper
@@ -258,11 +258,11 @@ public class ReceiveStep implements ImportStageStep {
     }
     Map<String, Object> template = pipelineDefinitions.loadLatestTemplateConfig(
         tenantId, templateCode, ImportWorkerType.IMPORT);
-    return template == null ? Map.of() : template;
+    return EmptyChecks.isNull(template) ? Map.of() : template;
   }
 
   private Map<String, Object> resolveTemplateSecurity(Map<String, Object> template) {
-    if (template.isEmpty()) {
+    if (EmptyChecks.isEmpty(template)) {
       return Map.of();
     }
     Map<String, Object> security = new LinkedHashMap<>();

@@ -376,7 +376,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
     PackageExcelSession currentSession = loadSession(uploadToken);
     long configurationRevision = currentConfigurationRevision(currentSession.tenantId());
     PreviewSnapshot snapshot = importStore.issuePreviewSnapshot(uploadToken, configurationRevision);
-    if (snapshot == null) {
+    if (EmptyChecks.isNull(snapshot)) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.config_package.apply_in_progress");
     }
     PackageExcelSession session = snapshot.session();
@@ -518,7 +518,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
   private long currentConfigurationRevision(String tenantId) {
     Long revision = jdbcTemplate.queryForObject(
         "select batch.current_tenant_configuration_revision(?)", Long.class, tenantId);
-    if (revision == null) {
+    if (EmptyChecks.isNull(revision)) {
       throw new IllegalStateException("tenant configuration revision is missing");
     }
     return revision;
@@ -527,7 +527,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
   private long lockConfigurationRevision(String tenantId) {
     Long revision = jdbcTemplate.queryForObject(
         "select batch.lock_tenant_configuration_revision(?)", Long.class, tenantId);
-    if (revision == null) {
+    if (EmptyChecks.isNull(revision)) {
       throw new IllegalStateException("tenant configuration revision is missing");
     }
     return revision;
@@ -805,7 +805,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
   }
 
   private void assertSessionOwner(PackageExcelSession session) {
-    if (session.uploadedBy() == null) {
+    if (EmptyChecks.isNull(session.uploadedBy())) {
       return;
     }
     ConsoleRequestMetadata metadata = requestMetadataResolver.current();
@@ -817,7 +817,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
 
   private static Set<String> currentPermissionScope() {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    if (authentication == null || !authentication.isAuthenticated()) {
+    if (EmptyChecks.isNull(authentication) || !authentication.isAuthenticated()) {
       return Set.of();
     }
     return authentication.getAuthorities().stream()
@@ -859,7 +859,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
     List<String> unknown = headerIndex.keySet().stream()
         .filter(header -> !supported.contains(header))
         .toList();
-    if (!unknown.isEmpty()) {
+    if (EmptyChecks.isNotEmpty(unknown)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
           ResultCode.INVALID_ARGUMENT.detailKey(),

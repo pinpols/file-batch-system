@@ -497,7 +497,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
   }
 
   private String textValue(Object value) {
-    return value == null ? null : String.valueOf(value);
+    return EmptyChecks.isNull(value) ? null : String.valueOf(value);
   }
 
   @SuppressWarnings("unchecked")

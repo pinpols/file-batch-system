@@ -8,8 +8,10 @@ import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.enums.PipelineType;
 import io.github.pinpols.batch.common.exception.BizException;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.apache.poi.ss.usermodel.DataValidation;
 import org.apache.poi.ss.usermodel.Row;
@@ -123,8 +125,8 @@ class ConfigPackageWorkbookGuidanceTest {
     ConfigPackageExcelWorkbookWriter writer =
         new ConfigPackageExcelWorkbookWriter(ms, List.of("IMPORT"));
     byte[] bytes;
-    try (java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
-      writer.writeFocusedTemplateWorkbook(out, java.util.Map.of());
+    try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+      writer.writeFocusedTemplateWorkbook(out, Map.of());
       bytes = out.toByteArray();
     }
     try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {

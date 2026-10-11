@@ -21,31 +21,40 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.test.context.TestConstructor;
 
 /** 预览出错行内联编辑:preview 返回 errorRows + patchRow 改单元格后重校验。 */
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @DisplayName("租户配置包 Excel 预览与行内修正: 出错行透出,单元格修订后重校验通过")
+@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class ConsoleTenantConfigPackageExcelPatchIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private TenantConfigPackageExcelService service;
+  private final TenantConfigPackageExcelService service;
 
-  @Autowired
-  private TenantConfigPackageExcelImportStore importStore;
+  private final TenantConfigPackageExcelImportStore importStore;
 
-  @Autowired
-  private StringRedisTemplate redisTemplate;
+  private final StringRedisTemplate redisTemplate;
 
-  @Autowired
-  private ObjectMapper objectMapper;
+  private final ObjectMapper objectMapper;
 
-  @Autowired
-  private BatchObjectCryptoService cryptoService;
+  private final BatchObjectCryptoService cryptoService;
+
+  ConsoleTenantConfigPackageExcelPatchIntegrationTest(
+      TenantConfigPackageExcelService service,
+      TenantConfigPackageExcelImportStore importStore,
+      StringRedisTemplate redisTemplate,
+      ObjectMapper objectMapper,
+      BatchObjectCryptoService cryptoService) {
+    this.service = service;
+    this.importStore = importStore;
+    this.redisTemplate = redisTemplate;
+    this.objectMapper = objectMapper;
+    this.cryptoService = cryptoService;
+  }
 
   @Test
   @DisplayName("预览暴露校验失败行及其单元格值,补齐必填列后该行通过重校验且失败行数下降")

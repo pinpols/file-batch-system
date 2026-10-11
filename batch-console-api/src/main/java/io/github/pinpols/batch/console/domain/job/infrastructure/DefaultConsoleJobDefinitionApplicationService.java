@@ -263,7 +263,7 @@ public class DefaultConsoleJobDefinitionApplicationService
         request.getWatermarkField() != null
             ? request.getWatermarkField()
             : existing.getWatermarkField());
-    if (request.getDefaultParams() != null) {
+    if (EmptyChecks.isNotNull(request.getDefaultParams())) {
       param.setDefaultParams(
           resolveDefaultParams(request.getDefaultParams(), existing.getDefaultParams()));
       param.setDefaultParamsSpecified(true);
@@ -480,8 +480,9 @@ public class DefaultConsoleJobDefinitionApplicationService
     if (!Texts.hasText(submitted)) {
       return null;
     }
-    String resolved =
-        stored == null ? submitted : SecretMasking.preserveMaskedJson(submitted, stored);
+    String resolved = EmptyChecks.isNull(stored)
+        ? submitted
+        : SecretMasking.preserveMaskedJson(submitted, stored);
     if (SecretMasking.containsMaskedSensitiveValue(resolved)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT, "error.config.masked_secret_requires_value");

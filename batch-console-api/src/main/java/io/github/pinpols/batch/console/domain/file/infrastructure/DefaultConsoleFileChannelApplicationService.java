@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.SecretMasking;
@@ -152,12 +153,12 @@ public class DefaultConsoleFileChannelApplicationService
 
   private static String preserveMaskedConfig(String submitted, Object storedValue) {
     String normalized = normalizeConfigJson(submitted);
-    String stored = storedValue == null ? null : storedValue.toString();
+    String stored = EmptyChecks.isNull(storedValue) ? null : storedValue.toString();
     return SecretMasking.preserveMaskedJson(normalized, stored);
   }
 
   private static String normalizeConfigJson(String configJson) {
-    if (configJson == null || configJson.isBlank()) {
+    if (EmptyChecks.isNull(configJson) || EmptyChecks.isBlank(configJson)) {
       return "{}";
     }
     try {

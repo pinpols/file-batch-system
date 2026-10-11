@@ -195,7 +195,7 @@ final class ConfigPackageExcelRowValidators {
         && "FIXED_WIDTH".equals(normalizeEnum(row.get("file_format_type")));
     if (fixedWidthImport) {
       validateFixedWidthMappings(fieldMappings, ri);
-    } else if (fieldMappings != null && fieldMappings.isArray()) {
+    } else if (EmptyChecks.isNotNull(fieldMappings) && fieldMappings.isArray()) {
       validateNamedMappings(fieldMappings, ri);
     }
     JsonNode qps = tryReadJson(normalize(row.get("query_param_schema")));
@@ -215,7 +215,9 @@ final class ConfigPackageExcelRowValidators {
   }
 
   private static void validateFixedWidthMappings(JsonNode mappings, List<String> ri) {
-    if (mappings == null || !mappings.isArray() || mappings.isEmpty()) {
+    if (EmptyChecks.isNull(mappings)
+        || !mappings.isArray()
+        || mappings.isEmpty()) { // empty-check: allow - JsonNode container semantics
       ri.add("FIXED_WIDTH imports require at least one field mapping");
       return;
     }

@@ -20,10 +20,12 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
@@ -34,19 +36,20 @@ import org.apache.poi.xssf.usermodel.XSSFRelation;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.support.StaticMessageSource;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.TestConstructor;
 
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = "batch.console.security.rate-limit.expensive-op-user-limit-per-minute=1000")
 @DisplayName("租户配置包 Excel 上传: 解析成功并回显各工作表命中行数")
+@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractIntegrationTest {
 
   private static final String EXCEL_CONTENT_TYPE =
@@ -55,11 +58,15 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
   @LocalServerPort
   private int port;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private final JdbcTemplate jdbcTemplate;
 
-  @Autowired
-  private StringRedisTemplate redisTemplate;
+  private final StringRedisTemplate redisTemplate;
+
+  ConsoleTenantConfigPackageExcelUploadIntegrationTest(
+      JdbcTemplate jdbcTemplate, StringRedisTemplate redisTemplate) {
+    this.jdbcTemplate = jdbcTemplate;
+    this.redisTemplate = redisTemplate;
+  }
 
   @Test
   @DisplayName("上传租户配置包: 返回成功,并回显文件通道与文件模板各命中一行")
@@ -769,7 +776,7 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
       String scenario = String.join("+", selectedScenarios);
       String scenarioQuery = selectedScenarios.stream()
           .map(value -> "scenarios=" + value)
-          .collect(java.util.stream.Collectors.joining("&"));
+          .collect(Collectors.joining("&"));
       HttpResponse<byte[]> templateResponse = HttpClient.newHttpClient()
           .send(
               HttpRequest.newBuilder(URI.create("http://localhost:" + port
@@ -873,7 +880,7 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
       try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(response.body()))) {
         Sheet sheet = workbook.getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET);
         assertThat(sheet).as("file template sheet for %s", scenario.getKey()).isNotNull();
-        List<String> headers = new java.util.ArrayList<>();
+        List<String> headers = new ArrayList<>();
         Row header = sheet.getRow(0);
         for (int column = 0; column < header.getLastCellNum(); column++) {
           headers.add(header.getCell(column).getStringCellValue());
@@ -924,7 +931,7 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
   @DisplayName("配置包中段写入失败时整包事务回滚前序实体")
   void shouldRollbackAllConfigurationWritesWhenApplyStepFails() throws Exception {
     String tenantId = "config-apply-rollback-it";
-    String suffix = java.util.UUID.randomUUID().toString().replace("-", "");
+    String suffix = UUID.randomUUID().toString().replace("-", "");
     String functionName = "test_fail_config_apply_" + suffix;
     String triggerName = "test_fail_config_apply_" + suffix;
     jdbcTemplate.execute("CREATE FUNCTION public." + functionName + "() RETURNS trigger "
@@ -1428,7 +1435,7 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
       sheets.get(11).clear();
       sheets
           .get(11)
-          .add(new java.util.LinkedHashMap<>(Map.of(
+          .add(new LinkedHashMap<>(Map.of(
               "workflow_code", "WF_CUSTOMER_EOD",
               "workflow_version", "1",
               "from_node_code", "START",
@@ -1481,8 +1488,7 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
         new ConfigPackageExcelWorkbookWriter(messages, List.of("IMPORT"));
     byte[] workbookBytes =
         writer.buildExportWorkbook(ConfigPackageSampleDataFactory.sampleSheets("IMPORT"));
-    try (XSSFWorkbook workbook =
-        new XSSFWorkbook(new java.io.ByteArrayInputStream(workbookBytes))) {
+    try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
       Sheet jobs = workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
       Row jobHeader = jobs.getRow(0);
       Row jobData = jobs.getRow(1);

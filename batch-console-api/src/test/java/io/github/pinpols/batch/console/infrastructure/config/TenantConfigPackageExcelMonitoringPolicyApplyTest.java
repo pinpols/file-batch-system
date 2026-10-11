@@ -37,6 +37,7 @@ import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.PackageValidationResult;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.SheetResult;
 import java.time.LocalTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -221,7 +222,7 @@ class TenantConfigPackageExcelMonitoringPolicyApplyTest {
         "enabled", false);
     when(fileChannelConfigMapper.selectByUniqueKey("tenant-a", "PARTNER_SFTP"))
         .thenReturn(existing);
-    Map<String, String> channelRow = new java.util.LinkedHashMap<>();
+    Map<String, String> channelRow = new LinkedHashMap<>();
     channelRow.put("channel_code", "PARTNER_SFTP");
     channelRow.put("channel_name", "Updated name");
     channelRow.put("channel_type", "");
@@ -258,7 +259,7 @@ class TenantConfigPackageExcelMonitoringPolicyApplyTest {
   @DisplayName("新建渠道的配置 JSON 留空时使用空对象，不写入非法 JSON")
   void shouldUseEmptyObject_whenNewChannelConfigurationIsBlank() {
     when(fileChannelConfigMapper.selectByUniqueKey("tenant-a", "NEW_CHANNEL")).thenReturn(null);
-    Map<String, String> channelRow = new java.util.LinkedHashMap<>();
+    Map<String, String> channelRow = new LinkedHashMap<>();
     channelRow.put("channel_code", "NEW_CHANNEL");
     channelRow.put("channel_name", "New channel");
     channelRow.put("channel_type", "LOCAL");
@@ -288,7 +289,7 @@ class TenantConfigPackageExcelMonitoringPolicyApplyTest {
   @DisplayName("新建需要认证的渠道时拒绝空配置")
   void shouldRejectBlankConfiguration_whenCreatingAuthenticatedChannel() {
     when(fileChannelConfigMapper.selectByUniqueKey("tenant-a", "NEW_SFTP")).thenReturn(null);
-    Map<String, String> channelRow = new java.util.LinkedHashMap<>();
+    Map<String, String> channelRow = new LinkedHashMap<>();
     channelRow.put("channel_code", "NEW_SFTP");
     channelRow.put("channel_name", "New SFTP");
     channelRow.put("channel_type", "SFTP");

@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.SecretMasking;
@@ -164,7 +165,7 @@ public class DefaultConsoleNotificationApplicationService
     Map<String, Object> existing = Guard.requireFound(
         channelMapper.selectByCode(resolved, channelCode), ERR_CHANNEL_NOT_FOUND + channelCode);
     requireKnownChannelType(request.getChannelType());
-    String configJson = request.getConfigJson() != null
+    String configJson = EmptyChecks.isNotNull(request.getConfigJson())
         ? preserveMaskedChannelConfig(request.getConfigJson(), existing.get(COL_CONFIG_JSON))
         : null;
     validateWebhookChannelUrl(request.getChannelType(), configJson);
@@ -180,7 +181,7 @@ public class DefaultConsoleNotificationApplicationService
   }
 
   private static String preserveMaskedChannelConfig(String submittedJson, Object storedValue) {
-    if (storedValue == null || !submittedJson.contains(SecretMasking.MASKED_VALUE)) {
+    if (EmptyChecks.isNull(storedValue) || !submittedJson.contains(SecretMasking.MASKED_VALUE)) {
       return submittedJson;
     }
     return SecretMasking.preserveMaskedJson(

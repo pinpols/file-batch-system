@@ -73,7 +73,7 @@ public final class SecretMasking {
     for (Map.Entry<String, Object> entry : source.entrySet()) {
       String key = entry.getKey();
       Object value = entry.getValue();
-      if (isSensitive(key, additionalSensitiveKeys) && value != null) {
+      if (isSensitive(key, additionalSensitiveKeys) && EmptyChecks.isNotNull(value)) {
         masked.put(key, MASKED_VALUE);
       } else {
         masked.put(key, maskNestedValue(value, additionalSensitiveKeys));
@@ -144,23 +144,25 @@ public final class SecretMasking {
     }
     try {
       URI uri = URI.create(endpoint);
-      if (uri.getScheme() == null || uri.isOpaque()) {
+      if (EmptyChecks.isNull(uri.getScheme()) || uri.isOpaque()) {
         return endpoint;
       }
       URI storedUri = restore && Texts.hasText(storedEndpoint) ? URI.create(storedEndpoint) : null;
       String authority = uri.getRawAuthority();
-      if (uri.getRawUserInfo() != null) {
+      if (EmptyChecks.isNotNull(uri.getRawUserInfo())) {
         String userInfo = uri.getRawUserInfo();
-        if (restore && MASKED_VALUE.equals(userInfo) && storedUri != null) {
+        if (restore && MASKED_VALUE.equals(userInfo) && EmptyChecks.isNotNull(storedUri)) {
           userInfo = storedUri.getRawUserInfo();
         } else if (!restore) {
           userInfo = MASKED_VALUE;
         }
         int at = authority.lastIndexOf('@');
-        authority = (userInfo == null ? "" : userInfo) + authority.substring(at);
+        authority = (EmptyChecks.isNull(userInfo) ? "" : userInfo) + authority.substring(at);
       }
       String query = transformQuery(
-          uri.getRawQuery(), storedUri == null ? null : storedUri.getRawQuery(), restore);
+          uri.getRawQuery(),
+          EmptyChecks.isNull(storedUri) ? null : storedUri.getRawQuery(),
+          restore);
       return renderUri(uri, authority, query);
     } catch (IllegalArgumentException ignored) {
       return endpoint.matches("(?i)^[a-z][a-z0-9+.-]*://.*") ? MASKED_VALUE : endpoint;
@@ -168,11 +170,12 @@ public final class SecretMasking {
   }
 
   private static String transformQuery(String query, String storedQuery, boolean restore) {
-    if (query == null) {
+    if (EmptyChecks.isNull(query)) {
       return null;
     }
     String[] parameters = query.split("&", -1);
-    String[] storedParameters = storedQuery == null ? new String[0] : storedQuery.split("&", -1);
+    String[] storedParameters =
+        EmptyChecks.isNull(storedQuery) ? new String[0] : storedQuery.split("&", -1);
     for (int index = 0; index < parameters.length; index++) {
       int equals = parameters[index].indexOf('=');
       String rawName = equals < 0 ? parameters[index] : parameters[index].substring(0, equals);
@@ -186,7 +189,7 @@ public final class SecretMasking {
         String value = parameters[index].substring(equals + 1);
         if (restore && MASKED_VALUE.equals(value)) {
           String storedValue = queryValue(storedParameters, name);
-          if (storedValue != null) {
+          if (EmptyChecks.isNotNull(storedValue)) {
             value = storedValue;
           }
         } else if (!restore) {
@@ -214,16 +217,16 @@ public final class SecretMasking {
 
   private static String renderUri(URI uri, String authority, String query) {
     StringBuilder rendered = new StringBuilder(uri.getScheme()).append(':');
-    if (authority != null) {
+    if (EmptyChecks.isNotNull(authority)) {
       rendered.append("//").append(authority);
     }
-    if (uri.getRawPath() != null) {
+    if (EmptyChecks.isNotNull(uri.getRawPath())) {
       rendered.append(uri.getRawPath());
     }
-    if (query != null) {
+    if (EmptyChecks.isNotNull(query)) {
       rendered.append('?').append(query);
     }
-    if (uri.getRawFragment() != null) {
+    if (EmptyChecks.isNotNull(uri.getRawFragment())) {
       rendered.append('#').append(uri.getRawFragment());
     }
     return rendered.toString();
@@ -247,7 +250,7 @@ public final class SecretMasking {
         Object nested = entry.getValue();
         masked.put(
             key,
-            isSensitive(key, additionalSensitiveKeys) && nested != null
+            isSensitive(key, additionalSensitiveKeys) && EmptyChecks.isNotNull(nested)
                 ? MASKED_VALUE
                 : maskNestedValue(nested, additionalSensitiveKeys));
       }

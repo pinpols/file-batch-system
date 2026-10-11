@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.JobDefinitionSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.PipelineDefinitionSpec;
@@ -46,7 +47,7 @@ public class TenantConfigReferenceResolver {
 
   /** 仅规范化不透明 JSON 中已识别的配置引用。 */
   public static String normalizeConfigReferences(String raw) {
-    if (!StringUtils.hasText(raw)) {
+    if (EmptyChecks.isBlank(raw)) {
       return raw;
     }
     try {
@@ -63,7 +64,7 @@ public class TenantConfigReferenceResolver {
     if (value instanceof Map<?, ?> map) {
       Map<String, Object> normalized = new LinkedHashMap<>();
       map.forEach((key, entryValue) -> {
-        String name = key == null ? "" : key.toString();
+        String name = EmptyChecks.isNull(key) ? "" : key.toString();
         if (entryValue instanceof String reference
             && (TEMPLATE_KEYS.contains(name) || CHANNEL_KEYS.contains(name))) {
           String canonical = CodeNormalizer.toConfigFormOrNull(reference);

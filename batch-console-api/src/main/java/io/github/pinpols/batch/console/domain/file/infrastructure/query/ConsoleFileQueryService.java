@@ -440,8 +440,8 @@ public class ConsoleFileQueryService {
   }
 
   private String maskedJsonValue(Map<String, Object> row, String key) {
-    Object rawValue = row == null ? null : row.get(key);
-    if (rawValue == null) {
+    Object rawValue = EmptyChecks.isNull(row) ? null : row.get(key);
+    if (EmptyChecks.isNull(rawValue)) {
       return null;
     }
     String masked = SecretMasking.maskSensitiveJson(String.valueOf(rawValue));
@@ -515,8 +515,8 @@ public class ConsoleFileQueryService {
   }
 
   private String rawValue(Map<String, Object> row, String key) {
-    Object value = row == null ? null : row.get(key);
-    return value == null ? null : String.valueOf(value);
+    Object value = EmptyChecks.isNull(row) ? null : row.get(key);
+    return EmptyChecks.isNull(value) ? null : String.valueOf(value);
   }
 
   private ConsoleFileArrivalGroupResponse toFileArrivalGroupResponse(

@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.enums.RunMode;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.entity.CustomTaskTypeRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
@@ -285,7 +286,7 @@ public class LaunchParamResolver {
   }
 
   private Map<String, Object> executionPolicySnapshot(JobDefinitionEntity jobDefinition) {
-    if (jobDefinition == null) {
+    if (EmptyChecks.isNull(jobDefinition)) {
       return Map.of();
     }
     Map<String, Object> snapshot = new LinkedHashMap<>();

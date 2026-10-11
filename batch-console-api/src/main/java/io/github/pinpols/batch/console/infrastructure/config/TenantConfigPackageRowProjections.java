@@ -48,6 +48,7 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WORKFLOW_CODE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WORKFLOW_VERSION;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
@@ -177,7 +178,7 @@ public class TenantConfigPackageRowProjections {
           pipelineStepDefinitionMapper.selectByPipelineDefinitionId(pipelineId)) {
         Map<String, Object> enriched = new LinkedHashMap<>(step);
         Object stepParams = step.get("step_params");
-        if (stepParams != null) {
+        if (EmptyChecks.isNotNull(stepParams)) {
           String json = stepParams instanceof Map<?, ?> || stepParams instanceof List<?>
               ? JsonUtils.toJson(stepParams)
               : stepParams.toString();

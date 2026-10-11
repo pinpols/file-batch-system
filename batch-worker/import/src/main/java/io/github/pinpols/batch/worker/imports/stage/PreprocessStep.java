@@ -109,7 +109,7 @@ public class PreprocessStep implements ImportStageStep {
           ERROR_OBJECT_MAPPER);
     }
     try {
-      if (importPayload != null
+      if (EmptyChecks.isNotNull(importPayload)
           && Texts.hasText(importPayload.templateCode())
           && !hasTemplateConfigSnapshot(attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG))) {
         Map<String, Object> templateConfig = pipelineDefinitions.loadLatestTemplateConfig(
@@ -204,7 +204,7 @@ public class PreprocessStep implements ImportStageStep {
   }
 
   private boolean hasTemplateConfigSnapshot(Object value) {
-    return value instanceof Map<?, ?> map && !map.isEmpty();
+    return value instanceof Map<?, ?> map && EmptyChecks.isNotEmpty(map);
   }
 
   /**

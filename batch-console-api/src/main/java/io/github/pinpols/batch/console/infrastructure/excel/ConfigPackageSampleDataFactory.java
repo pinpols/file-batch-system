@@ -11,6 +11,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /** 生成 12-Sheet 配置包的场景化示例数据。示例值只用于模板引导，不代表生产默认配置。 */
@@ -56,7 +57,7 @@ public final class ConfigPackageSampleDataFactory {
     }
     scenarios.stream()
         .map(ConfigPackageFileScenario::fromCode)
-        .flatMap(java.util.Optional::stream)
+        .flatMap(Optional::stream)
         .forEach(profile -> {
           if (SCENARIO_IMPORT.equals(profile.direction())) {
             putImport(sheets, profile.format().code());

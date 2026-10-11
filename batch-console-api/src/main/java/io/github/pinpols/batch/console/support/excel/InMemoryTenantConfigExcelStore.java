@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.support.excel;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -40,7 +41,7 @@ public class InMemoryTenantConfigExcelStore implements TenantConfigPackageExcelI
   @Override
   public PreviewSnapshot issuePreviewSnapshot(String uploadToken, long configurationRevision) {
     PackageExcelSession session = sessions.getIfPresent(uploadToken);
-    if (session == null) {
+    if (EmptyChecks.isNull(session)) {
       return null;
     }
     synchronized (session) {
@@ -62,7 +63,9 @@ public class InMemoryTenantConfigExcelStore implements TenantConfigPackageExcelI
   @Override
   public boolean claimForApply(String uploadToken, String previewToken, String applyOwnerToken) {
     PackageExcelSession session = sessions.getIfPresent(uploadToken);
-    if (session == null || previewToken == null || applyOwnerToken == null) {
+    if (EmptyChecks.isNull(session)
+        || EmptyChecks.isNull(previewToken)
+        || EmptyChecks.isNull(applyOwnerToken)) {
       return false;
     }
     synchronized (session) {
@@ -78,7 +81,7 @@ public class InMemoryTenantConfigExcelStore implements TenantConfigPackageExcelI
       throw new IllegalStateException("config upload apply claim lost its owner");
     }
     Long revision = previewRevisions.getIfPresent(uploadToken);
-    if (revision == null) {
+    if (EmptyChecks.isNull(revision)) {
       throw new IllegalStateException("config upload apply claim lost its preview revision");
     }
     return revision;
@@ -92,7 +95,9 @@ public class InMemoryTenantConfigExcelStore implements TenantConfigPackageExcelI
       String replacementPreviewToken,
       long configurationRevision) {
     PackageExcelSession current = sessions.getIfPresent(uploadToken);
-    if (current == null || expectedPreviewToken == null || replacementPreviewToken == null) {
+    if (EmptyChecks.isNull(current)
+        || EmptyChecks.isNull(expectedPreviewToken)
+        || EmptyChecks.isNull(replacementPreviewToken)) {
       return false;
     }
     synchronized (current) {
@@ -111,7 +116,7 @@ public class InMemoryTenantConfigExcelStore implements TenantConfigPackageExcelI
   @Override
   public void completeApply(String uploadToken, String applyOwnerToken) {
     PackageExcelSession session = sessions.getIfPresent(uploadToken);
-    if (session == null) {
+    if (EmptyChecks.isNull(session)) {
       return;
     }
     synchronized (session) {

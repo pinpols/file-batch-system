@@ -537,8 +537,8 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
   }
 
   private String rawStringValue(Map<String, Object> row, String key) {
-    Object value = row == null ? null : row.get(key);
-    return value == null ? null : String.valueOf(value);
+    Object value = EmptyChecks.isNull(row) ? null : row.get(key);
+    return EmptyChecks.isNull(value) ? null : String.valueOf(value);
   }
 
   private ConsoleAlertEventResponse toAlertEventResponse(AlertEventEntity entity) {

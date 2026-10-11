@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.sla;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
@@ -96,7 +97,7 @@ public class JobSlaViolationProcessor {
     Map<String, Object> extra = new LinkedHashMap<>(buildExtra(candidate, now));
     extra.put("escalationDelaySeconds", delaySeconds);
     extra.put("slaAlertedAt", candidate.getSlaAlertedAt());
-    if (candidate.getSlaAlertedAt() != null) {
+    if (EmptyChecks.isNotNull(candidate.getSlaAlertedAt())) {
       extra.put(
           "alertedElapsedSeconds",
           Duration.between(candidate.getSlaAlertedAt(), now).getSeconds());
@@ -111,14 +112,15 @@ public class JobSlaViolationProcessor {
     extra.put("instanceStatus", candidate.getInstanceStatus());
     extra.put("deadlineAt", candidate.getDeadlineAt());
     extra.put("expectedDurationSeconds", candidate.getExpectedDurationSeconds());
-    if (candidate.getDeadlineAt() != null && candidate.getDeadlineAt().isBefore(now)) {
+    if (EmptyChecks.isNotNull(candidate.getDeadlineAt())
+        && candidate.getDeadlineAt().isBefore(now)) {
       extra.put(KEY_VIOLATION_REASON, "DEADLINE_EXCEEDED");
       extra.put(
           "deadlineDelaySeconds",
           Duration.between(candidate.getDeadlineAt(), now).getSeconds());
-    } else if (candidate.getExpectedDurationSeconds() != null
+    } else if (EmptyChecks.isNotNull(candidate.getExpectedDurationSeconds())
         && candidate.getExpectedDurationSeconds() > 0
-        && candidate.getStartedAt() != null) {
+        && EmptyChecks.isNotNull(candidate.getStartedAt())) {
       Instant expectedFinish =
           candidate.getStartedAt().plusSeconds(candidate.getExpectedDurationSeconds());
       extra.put(KEY_VIOLATION_REASON, "EXPECTED_DURATION_EXCEEDED");

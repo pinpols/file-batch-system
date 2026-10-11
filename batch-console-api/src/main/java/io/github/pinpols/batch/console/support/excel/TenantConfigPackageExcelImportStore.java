@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.support.excel;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -91,7 +92,7 @@ public interface TenantConfigPackageExcelImportStore {
           workflowNodeRows,
           workflowEdgeRows,
           actorId,
-          authorities == null ? Set.of() : Set.copyOf(authorities));
+          EmptyChecks.isNull(authorities) ? Set.of() : Set.copyOf(authorities));
     }
 
     public PackageExcelSession(

@@ -173,7 +173,7 @@ public class TenantConfigPackageExcelApplyService {
           ctx.tenantId(), calendar.calendarCode());
       BusinessCalendarUpsertParam calendarParam =
           BusinessCalendarExcelRowParser.toUpsertParam(calendar, safeOp(ctx.operatorId()));
-      if (existing != null) {
+      if (EmptyChecks.isNotNull(existing)) {
         preserveCalendarOptionalValues(row, existing, calendarParam);
       }
       businessCalendarMapper.upsertBusinessCalendar(calendarParam);
@@ -199,7 +199,7 @@ public class TenantConfigPackageExcelApplyService {
       Map<String, Object> existing =
           batchWindowMapper.selectByUniqueKey(ctx.tenantId(), window.windowCode());
       BatchWindowUpsertParam windowParam = BatchWindowExcelRowParser.toUpsertParam(window);
-      if (existing != null) {
+      if (EmptyChecks.isNotNull(existing)) {
         preserveWindowOptionalValues(row, existing, windowParam);
       }
       batchWindowMapper.upsertBatchWindow(windowParam);
@@ -388,7 +388,7 @@ public class TenantConfigPackageExcelApplyService {
 
   private static Integer mergeInteger(Map<String, String> row, String key, Integer currentValue) {
     Integer requested = parseInteger(row.get(key));
-    return requested == null ? currentValue : requested;
+    return EmptyChecks.isNull(requested) ? currentValue : requested;
   }
 
   private static String mergeConfigCode(Map<String, String> row, String key, String currentValue) {
@@ -525,7 +525,7 @@ public class TenantConfigPackageExcelApplyService {
       param.setAuthType(normalizeEnum(values.get(COL_AUTH_TYPE)));
       String configJson = values.get(COL_CONFIG_JSON);
       if (!Texts.hasText(configJson)) {
-        if (existing == null && !"NONE".equals(param.getAuthType())) {
+        if (EmptyChecks.isNull(existing) && !"NONE".equals(param.getAuthType())) {
           throw BizException.of(
               ResultCode.INVALID_ARGUMENT, "error.config_package.channel_config_required");
         }
@@ -623,7 +623,7 @@ public class TenantConfigPackageExcelApplyService {
               normalize(values.get("step_params")));
           if (Texts.hasText(stepParams)) {
             String storedStepParams =
-                existingStep == null ? null : jsonText(existingStep.get("step_params"));
+                EmptyChecks.isNull(existingStep) ? null : jsonText(existingStep.get("step_params"));
             stepParams = SecretMasking.preserveMaskedJson(stepParams, storedStepParams);
             rejectUnresolvedSecretMasks(stepParams);
             values.put("step_params", stepParams);
@@ -659,15 +659,19 @@ public class TenantConfigPackageExcelApplyService {
       WorkflowDefinitionUpsertParam defParam = new WorkflowDefinitionUpsertParam();
       defParam.setTenantId(ctx.tenantId());
       defParam.setWorkflowCode(wfCode);
-      defParam.setWorkflowName(
-          mergeText(row, COL_WORKFLOW_NAME, existing == null ? null : existing.getWorkflowName()));
-      defParam.setWorkflowType(
-          mergeEnum(row, COL_WORKFLOW_TYPE, existing == null ? null : existing.getWorkflowType()));
+      defParam.setWorkflowName(mergeText(
+          row,
+          COL_WORKFLOW_NAME,
+          EmptyChecks.isNull(existing) ? null : existing.getWorkflowName()));
+      defParam.setWorkflowType(mergeEnum(
+          row,
+          COL_WORKFLOW_TYPE,
+          EmptyChecks.isNull(existing) ? null : existing.getWorkflowType()));
       defParam.setVersion(version);
-      defParam.setEnabled(
-          parseBoolean(row.get(COL_ENABLED), existing == null || existing.getEnabled()));
-      defParam.setDescription(
-          mergeText(row, COL_DESCRIPTION, existing == null ? null : existing.getDescription()));
+      defParam.setEnabled(parseBoolean(
+          row.get(COL_ENABLED), EmptyChecks.isNull(existing) || existing.getEnabled()));
+      defParam.setDescription(mergeText(
+          row, COL_DESCRIPTION, EmptyChecks.isNull(existing) ? null : existing.getDescription()));
       defParam.setCreatedBy(safeOp(ctx.operatorId()));
       defParam.setUpdatedBy(safeOp(ctx.operatorId()));
       workflowDefinitionMapper.upsertWorkflowDefinition(defParam);
@@ -700,35 +704,47 @@ public class TenantConfigPackageExcelApplyService {
       p.setTenantId(tenantId);
       p.setWorkflowDefinitionId(defId);
       p.setNodeCode(normalize(node.get(COL_NODE_CODE)));
-      p.setNodeName(
-          mergeText(values, COL_NODE_NAME, existing == null ? null : existing.getNodeName()));
-      p.setNodeType(
-          mergeEnum(values, COL_NODE_TYPE, existing == null ? null : existing.getNodeType()));
+      p.setNodeName(mergeText(
+          values, COL_NODE_NAME, EmptyChecks.isNull(existing) ? null : existing.getNodeName()));
+      p.setNodeType(mergeEnum(
+          values, COL_NODE_TYPE, EmptyChecks.isNull(existing) ? null : existing.getNodeType()));
       p.setRelatedJobCode(mergeText(
-          values, COL_RELATED_JOB_CODE, existing == null ? null : existing.getRelatedJobCode()));
+          values,
+          COL_RELATED_JOB_CODE,
+          EmptyChecks.isNull(existing) ? null : existing.getRelatedJobCode()));
       p.setRelatedPipelineCode(mergeText(
           values,
           COL_RELATED_PIPELINE_CODE,
-          existing == null ? null : existing.getRelatedPipelineCode()));
+          EmptyChecks.isNull(existing) ? null : existing.getRelatedPipelineCode()));
       p.setWorkerGroup(mergeWorkerGroup(
-          values, COL_WORKER_GROUP, existing == null ? null : existing.getWorkerGroup()));
+          values,
+          COL_WORKER_GROUP,
+          EmptyChecks.isNull(existing) ? null : existing.getWorkerGroup()));
       p.setWindowCode(mergeConfigCode(
-          values, COL_WINDOW_CODE, existing == null ? null : existing.getWindowCode()));
-      p.setNodeOrder(
-          mergeInteger(values, COL_NODE_ORDER, existing == null ? null : existing.getNodeOrder()));
-      p.setRetryPolicy(
-          mergeEnum(values, COL_RETRY_POLICY, existing == null ? null : existing.getRetryPolicy()));
+          values, COL_WINDOW_CODE, EmptyChecks.isNull(existing) ? null : existing.getWindowCode()));
+      p.setNodeOrder(mergeInteger(
+          values, COL_NODE_ORDER, EmptyChecks.isNull(existing) ? null : existing.getNodeOrder()));
+      p.setRetryPolicy(mergeEnum(
+          values,
+          COL_RETRY_POLICY,
+          EmptyChecks.isNull(existing) ? null : existing.getRetryPolicy()));
       p.setRetryMaxCount(mergeInteger(
-          values, COL_RETRY_MAX_COUNT, existing == null ? null : existing.getRetryMaxCount()));
+          values,
+          COL_RETRY_MAX_COUNT,
+          EmptyChecks.isNull(existing) ? null : existing.getRetryMaxCount()));
       p.setTimeoutSeconds(mergeInteger(
-          values, COL_TIMEOUT_SECONDS, existing == null ? null : existing.getTimeoutSeconds()));
+          values,
+          COL_TIMEOUT_SECONDS,
+          EmptyChecks.isNull(existing) ? null : existing.getTimeoutSeconds()));
       p.setNodeParams(TenantConfigReferenceResolver.normalizeConfigReferences(mergeNodeParams(
-          values.get(COL_NODE_PARAMS), existing == null ? null : existing.getNodeParams())));
-      p.setEnabled(
-          parseBoolean(values.get(COL_ENABLED), existing == null || existing.getEnabled()));
-      p.setCrossDayDependencies(existing == null ? null : existing.getCrossDayDependencies());
+          values.get(COL_NODE_PARAMS),
+          EmptyChecks.isNull(existing) ? null : existing.getNodeParams())));
+      p.setEnabled(parseBoolean(
+          values.get(COL_ENABLED), EmptyChecks.isNull(existing) || existing.getEnabled()));
+      p.setCrossDayDependencies(
+          EmptyChecks.isNull(existing) ? null : existing.getCrossDayDependencies());
       p.setCrossDayDependencyTimeoutSeconds(
-          existing == null ? null : existing.getCrossDayDependencyTimeoutSeconds());
+          EmptyChecks.isNull(existing) ? null : existing.getCrossDayDependencyTimeoutSeconds());
       workflowNodeMapper.upsertWorkflowNode(p);
     }
   }
@@ -747,12 +763,14 @@ public class TenantConfigPackageExcelApplyService {
       p.setWorkflowDefinitionId(defId);
       p.setFromNodeCode(fromNodeCode);
       p.setToNodeCode(toNodeCode);
-      p.setEdgeType(
-          mergeEnum(values, COL_EDGE_TYPE, existing == null ? null : existing.getEdgeType()));
+      p.setEdgeType(mergeEnum(
+          values, COL_EDGE_TYPE, EmptyChecks.isNull(existing) ? null : existing.getEdgeType()));
       p.setConditionExpr(mergeText(
-          values, COL_CONDITION_EXPR, existing == null ? null : existing.getConditionExpr()));
-      p.setEnabled(
-          parseBoolean(values.get(COL_ENABLED), existing == null || existing.getEnabled()));
+          values,
+          COL_CONDITION_EXPR,
+          EmptyChecks.isNull(existing) ? null : existing.getConditionExpr()));
+      p.setEnabled(parseBoolean(
+          values.get(COL_ENABLED), EmptyChecks.isNull(existing) || existing.getEnabled()));
       workflowEdgeMapper.upsertWorkflowEdge(p);
     }
   }
@@ -784,7 +802,7 @@ public class TenantConfigPackageExcelApplyService {
   }
 
   private static Map<String, Object> workflowNodeValues(WorkflowNodeEntity node) {
-    if (node == null) {
+    if (EmptyChecks.isNull(node)) {
       return null;
     }
     Map<String, Object> values = new LinkedHashMap<>();
@@ -805,7 +823,7 @@ public class TenantConfigPackageExcelApplyService {
   }
 
   private static Map<String, Object> workflowEdgeValues(WorkflowEdgeEntity edge) {
-    if (edge == null) {
+    if (EmptyChecks.isNull(edge)) {
       return null;
     }
     Map<String, Object> values = new LinkedHashMap<>();
@@ -837,7 +855,7 @@ public class TenantConfigPackageExcelApplyService {
   private static Map<String, String> mergeExistingValues(
       Map<String, String> incoming, Map<String, ?> existing, List<String> columns) {
     Map<String, String> merged = new LinkedHashMap<>(incoming);
-    if (existing == null) {
+    if (EmptyChecks.isNull(existing)) {
       return merged;
     }
     for (String column : columns) {
@@ -846,10 +864,10 @@ public class TenantConfigPackageExcelApplyService {
         continue;
       }
       Object current = existing.get(column);
-      if (current == null) {
+      if (EmptyChecks.isNull(current)) {
         current = existing.get(toDatabaseColumn(column));
       }
-      if (current != null) {
+      if (EmptyChecks.isNotNull(current)) {
         merged.put(
             column,
             current instanceof Map<?, ?> || current instanceof List<?>
@@ -870,7 +888,7 @@ public class TenantConfigPackageExcelApplyService {
   }
 
   private static String jsonText(Object value) {
-    if (value == null) {
+    if (EmptyChecks.isNull(value)) {
       return null;
     }
     return value instanceof Map<?, ?> || value instanceof List<?>
