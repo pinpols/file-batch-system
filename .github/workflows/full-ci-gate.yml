@@ -976,6 +976,17 @@ jobs:
           path: build/ci-quality/**
           retention-days: 90
 
+  sonar-quality-gate:
+    name: Sonar quality gate
+    if: github.event_name == 'push'
+    needs: [unit-it-a, unit-it-b1, unit-it-b2-workers, unit-it-b2]
+    permissions:
+      actions: read
+      contents: read
+    uses: ./.github/workflows/sonar-gate.yml
+    with:
+      reuse_coverage: true
+
   main-failure-triage:
     name: main full-gate failure triage
     if: >-
@@ -992,6 +1003,7 @@ jobs:
         needs.e2e-shard.result == 'failure' ||
         needs.scheduled-test-quality.result == 'failure' ||
         needs.quality-trend.result == 'failure'
+        || needs.sonar-quality-gate.result == 'failure'
       )
     needs:
       - static-checks
@@ -1004,6 +1016,7 @@ jobs:
       - e2e-shard
       - scheduled-test-quality
       - quality-trend
+      - sonar-quality-gate
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

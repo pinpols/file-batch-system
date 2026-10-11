@@ -3,10 +3,13 @@ name: SonarQube CI
 # Community Build 仅分析 main；完整 Git 历史用于 30 天新代码基线。
 # 夜间只在最近 24 小时有相关代码/构建变更时扫描。
 on:
-  workflow_run:
-    workflows: [full-ci-gate]
-    types: [completed]
-    branches: [main]
+  workflow_call:
+    inputs:
+      reuse_coverage:
+        description: Reuse JaCoCo reports uploaded by the calling Full Gate run
+        required: false
+        type: boolean
+        default: false
   # BYO Java SDK 不触发 full-ci-gate；它保留独立 Sonar 全量构建与测试。
   push:
     branches: [main]
@@ -26,7 +29,6 @@ concurrency:
 
 jobs:
   sonar:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.event == 'push'
     name: Sonar analysis and quality gate
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -43,7 +45,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -70,51 +72,43 @@ jobs:
 
       - name: Download Full Gate JaCoCo reports
         id: coverage-download
-        if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && steps.nightly.outputs.skip != 'true'
+        if: inputs.reuse_coverage && steps.nightly.outputs.skip != 'true'
         # non-gate-failure-policy: 缺少优化制品时回退独立测试，Sonar 门禁仍保持阻断。
         continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: full-ci-sonar-input-unit-it-a
           path: .
-          run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ github.token }}
 
       - name: Download remaining Full Gate JaCoCo reports
         id: coverage-download-rest
-        if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && steps.nightly.outputs.skip != 'true'
+        if: inputs.reuse_coverage && steps.nightly.outputs.skip != 'true'
         # non-gate-failure-policy: 缺少优化制品时回退独立测试，Sonar 门禁仍保持阻断。
         continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: full-ci-sonar-input-unit-it-b1
           path: .
-          run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ github.token }}
 
       - name: Download worker JaCoCo reports
         id: coverage-download-workers
-        if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && steps.nightly.outputs.skip != 'true'
+        if: inputs.reuse_coverage && steps.nightly.outputs.skip != 'true'
         # non-gate-failure-policy: 缺少优化制品时回退独立测试，Sonar 门禁仍保持阻断。
         continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: full-ci-sonar-input-unit-it-b2-workers
           path: .
-          run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ github.token }}
 
       - name: Download Console JaCoCo report
         id: coverage-download-console
-        if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && steps.nightly.outputs.skip != 'true'
+        if: inputs.reuse_coverage && steps.nightly.outputs.skip != 'true'
         # non-gate-failure-policy: 缺少优化制品时回退独立测试，Sonar 门禁仍保持阻断。
         continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: full-ci-sonar-input-unit-it-b2-console
           path: batch-console-api/target/site/jacoco
-          run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ github.token }}
 
       - name: Select coverage source
         id: coverage-source
@@ -122,8 +116,7 @@ jobs:
         shell: bash
         run: |
           reuse=false
-          if [[ "$GITHUB_EVENT_NAME" == "workflow_run" && \
-                "${{ github.event.workflow_run.conclusion }}" == "success" && \
+          if [[ "${{ inputs.reuse_coverage }}" == "true" && \
                 "${{ steps.coverage-download.outcome }}" == "success" && \
                 "${{ steps.coverage-download-rest.outcome }}" == "success" && \
                 "${{ steps.coverage-download-workers.outcome }}" == "success" && \

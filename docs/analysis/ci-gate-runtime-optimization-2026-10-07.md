@@ -111,8 +111,8 @@ Staging Gate 采用相同路由：治理组与 6 个全量 E2E shard 并发，E2
 1. 五语言 SDK Orchestrator E2E 新增镜像缓存预热 job。Orchestrator/Trigger 通过现有 BuildKit GHA Maven 层缓存构建一次，各语言 job 从缓存加载镜像，但仍各自运行独立服务栈和真实 transport 测试。
 2. Console OpenAPI 路径检查从共享构建环境 setup 移出，在 PR、Full Gate、手动 Staging Gate 各自静态治理 job 中执行一次，避免每个 Maven shard 重复运行。
 3. Trivy 漏洞扫描改为扫描当前提交生成的 CycloneDX SBOM，IaC misconfiguration 扫描仍保留；CRITICAL/HIGH 仍是阻断阈值。移除只为 Trivy 依赖解析而安装 Maven reactor 的前置步骤，SBOM 生成和同步校验仍由供应链门禁负责。
-4. main push 的 Full Gate 测试 shard 上传短期 JaCoCo XML artifact。对应 SHA 的 Full Gate 成功后，Sonar 校验 14 个模块报告完整，再运行 `test-compile` 并复用这些覆盖率；缺报告、下载失败或 Full Gate 失败时回退到原有独立 `clean test`。SDK Java、定时和手动 Sonar 扫描仍独立构建。artifact 只按源 workflow run ID 获取，不消费 PR 产物。
+4. main push 的 Full Gate 测试 shard 上传短期 JaCoCo XML artifact，并在同一 workflow run 内调用 Sonar reusable workflow。Sonar 校验 14 个模块报告完整，再运行 `test-compile` 并复用覆盖率；报告缺失或不完整时回退独立 `clean test`。SDK Java、定时和手动 Sonar 扫描仍独立构建。artifact 不跨 workflow 获取，不消费 PR 产物。
 
-本地 action/workflow 静态检查只能证明定义、路径和权限符合约束，不能证明 GitHub hosted runner 命中 BuildKit 缓存、跨 workflow artifact 实际下载成功或墙钟时间下降。在线 PR/Full Gate/Sonar/E2E 结果及连续运行耗时需在本分支 PR 后复核；至少积累 10 次可比运行后再判断是否达到耗时目标。
+本地 action/workflow 静态检查只能证明定义、路径和权限符合约束，不能证明 GitHub hosted runner 命中 BuildKit 缓存、同 run artifact 实际下载成功或墙钟时间下降。在线 PR/Full Gate/Sonar/E2E 结果及连续运行耗时需在本分支 PR 后复核；至少积累 10 次可比运行后再判断是否达到耗时目标。
 
 同日 main Sonar run `38102247541` 另暴露既有门禁解析缺陷：分析任务完成且报告导出成功，但 `SONAR_QUALITY_GATE_INCOMPLETE` 输出 `expected=4 | evaluated=`。脚本以 Python 字面 `\\t` 连接字段、再由 Bash 按真实 Tab 拆分，导致状态和条件数量没有正确解析。修复为输出实际 Tab；本地验证解析逻辑后仍需观察线上 Sonar run，确认真实 Quality Gate 条件结果，不预先宣称通过。
