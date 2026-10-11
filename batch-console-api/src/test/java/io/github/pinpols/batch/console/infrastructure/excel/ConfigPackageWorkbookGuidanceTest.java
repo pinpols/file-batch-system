@@ -3,9 +3,20 @@ package io.github.pinpols.batch.console.infrastructure.excel;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.pinpols.batch.common.enums.BatchWindowEndStrategy;
+import io.github.pinpols.batch.common.enums.CatchUpPolicyType;
 import io.github.pinpols.batch.common.enums.DictEnum;
+import io.github.pinpols.batch.common.enums.FileChannelAuthType;
+import io.github.pinpols.batch.common.enums.FileChannelType;
+import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
+import io.github.pinpols.batch.common.enums.HolidayRollRule;
 import io.github.pinpols.batch.common.enums.JobType;
+import io.github.pinpols.batch.common.enums.OutOfWindowAction;
 import io.github.pinpols.batch.common.enums.PipelineType;
+import io.github.pinpols.batch.common.enums.ScheduleType;
+import io.github.pinpols.batch.common.enums.WorkflowEdgeType;
+import io.github.pinpols.batch.common.enums.WorkflowNodeType;
+import io.github.pinpols.batch.common.enums.WorkflowType;
 import io.github.pinpols.batch.common.exception.BizException;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -141,6 +152,77 @@ class ConfigPackageWorkbookGuidanceTest {
           .isNull();
       assertThat(workbook.getSheet(ConfigPackageWorkbookSupplementWriter.SHEET_NAME_BUNDLE))
           .isNull();
+    }
+  }
+
+  @Test
+  @DisplayName("精简场景模板的下拉验证按字段名定位且选项与后端枚举一致")
+  void shouldAlignDropdownsWithProjectedColumns() throws Exception {
+    try (XSSFWorkbook workbook = buildFocusedTemplate(List.of("ALL"))) {
+      assertDropdownValues(
+          workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET),
+          "job_type",
+          DictEnum.codeList(JobType.class));
+      assertDropdownValues(
+          workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET),
+          "schedule_type",
+          DictEnum.codeList(ScheduleType.class));
+      assertDropdownValues(
+          workbook.getSheet(ConfigPackageExcelValidator.CHANNEL_SHEET),
+          "channel_type",
+          DictEnum.codeList(FileChannelType.class));
+      assertDropdownValues(
+          workbook.getSheet(ConfigPackageExcelValidator.CHANNEL_SHEET),
+          "auth_type",
+          DictEnum.codeList(FileChannelAuthType.class));
+      assertDropdownValues(
+          workbook.getSheet(ConfigPackageExcelValidator.CHANNEL_SHEET),
+          "receipt_policy",
+          DictEnum.codeList(FileReceiptPolicy.class));
+      assertDropdownValues(
+          workbook.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET),
+          "pipeline_type",
+          DictEnum.codeList(PipelineType.class));
+      assertDropdownValues(
+          workbook.getSheet(ConfigPackageExcelValidator.WF_DEF_SHEET),
+          "workflow_type",
+          DictEnum.codeList(WorkflowType.class));
+      assertDropdownValues(
+          workbook.getSheet(ConfigPackageExcelValidator.WF_NODE_SHEET),
+          "node_type",
+          DictEnum.codeList(WorkflowNodeType.class));
+      assertDropdownValues(
+          workbook.getSheet(ConfigPackageExcelValidator.WF_EDGE_SHEET),
+          "edge_type",
+          DictEnum.codeList(WorkflowEdgeType.class));
+      assertDropdownValues(
+          workbook.getSheet(ConfigPackageExcelValidator.BUSINESS_CALENDAR_SHEET),
+          "holiday_roll_rule",
+          DictEnum.codeList(HolidayRollRule.class));
+      assertDropdownValues(
+          workbook.getSheet(ConfigPackageExcelValidator.BUSINESS_CALENDAR_SHEET),
+          "catch_up_policy",
+          DictEnum.codeList(CatchUpPolicyType.class));
+      assertDropdownValues(
+          workbook.getSheet(ConfigPackageExcelValidator.BATCH_WINDOW_SHEET),
+          "end_strategy",
+          DictEnum.codeList(BatchWindowEndStrategy.class));
+      assertDropdownValues(
+          workbook.getSheet(ConfigPackageExcelValidator.BATCH_WINDOW_SHEET),
+          "out_of_window_action",
+          DictEnum.codeList(OutOfWindowAction.class));
+      assertDropdownValues(
+          workbook.getSheet(ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET),
+          "completion_deadline_severity",
+          List.of("WARN", "ERROR", "CRITICAL"));
+      assertDropdownValues(
+          workbook.getSheet(ConfigPackageExcelValidator.STEP_SHEET),
+          "stage_code",
+          List.of(ConfigPackageSheetSpecs.STAGE_CODE_DROPDOWN));
+      assertDropdownValues(
+          workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET),
+          "enabled",
+          List.of("TRUE", "FALSE"));
     }
   }
 
@@ -454,6 +536,19 @@ class ConfigPackageWorkbookGuidanceTest {
       }
     }
     throw new AssertionError("missing header: " + name);
+  }
+
+  private static void assertDropdownValues(Sheet sheet, String headerName, List<String> expected) {
+    int columnIndex = headerIndex(sheet, headerName);
+    DataValidation validation = sheet.getDataValidations().stream()
+        .filter(candidate -> candidate.getValidationConstraint().getExplicitListValues() != null)
+        .filter(candidate ->
+            candidate.getRegions().getCellRangeAddress(0).getFirstColumn() == columnIndex)
+        .findFirst()
+        .orElseThrow(() ->
+            new AssertionError("missing dropdown for " + sheet.getSheetName() + "." + headerName));
+    assertThat(validation.getValidationConstraint().getExplicitListValues())
+        .containsExactlyElementsOf(expected);
   }
 
   @Test

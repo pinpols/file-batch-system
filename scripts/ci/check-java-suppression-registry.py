@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Require production Java suppressions to use the reviewed rule registry."""
+"""Require production Java/YAML suppressions to use the reviewed rule registry."""
 
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ SOURCE_PREFIXES = (
 )
 ANNOTATION = re.compile(r"@SuppressWarnings\s*\((?P<body>.*?)\)", re.DOTALL)
 RULE = re.compile(r'"(?P<rule>[^"\\]+)"')
+INSPECTION_COMMENT = re.compile(r"#\s*noinspection\s+(?P<rule>[A-Za-z][A-Za-z0-9_.]*)\b")
 
 # 此清单采用精确匹配。新增例外必须经过评审，并在此登记及
 # docs/standards/java-suppression-registry.md 中说明原因。
@@ -31,6 +32,7 @@ KNOWN_RULES = {
     "deprecation",
     "ConfigurationProperties",
     "SpringJavaInjectionPointsAutowiringInspection",
+    "SpringBootApplicationYaml",
     "PMD.ExcessiveParameterList",
     "PMD.NcssCount",
     "java:S112",
@@ -56,7 +58,7 @@ SCOPED_RULES = {
     },
 }
 GATE_CODE = "JAVA_SUPPRESSION_REGISTRY"
-GATE_NAME = "Java SuppressWarnings 登记"
+GATE_NAME = "生产代码静态检查抑制项登记"
 BASELINE = ROOT / "scripts/ci/java-suppression-baseline.tsv"
 
 
@@ -86,15 +88,48 @@ def production_sources(candidates: list[str] | None = None) -> list[Path]:
     )
 
 
+def production_yaml_configs(candidates: list[str] | None = None) -> list[Path]:
+    if candidates is not None:
+        return sorted(
+            ROOT / relative
+            for relative in candidates
+            if Path(relative).name.startswith("application")
+            and Path(relative).suffix in {".yml", ".yaml"}
+            and "/src/main/resources/" in relative
+            and (ROOT / relative).is_file()
+            and relative.startswith(SOURCE_PREFIXES)
+        )
+    result = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", *SOURCE_PREFIXES],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return sorted(
+        ROOT / relative
+        for relative in result.stdout.splitlines()
+        if Path(relative).name.startswith("application")
+        and Path(relative).suffix in {".yml", ".yaml"}
+        and "/src/main/resources/" in relative
+    )
+
+
 def scan(candidates: list[str] | None = None) -> list[tuple[str, int, str]]:
     findings: list[tuple[str, int, str]] = []
-    for path in production_sources(candidates):
+    for path in production_sources(candidates) + production_yaml_configs(candidates):
         source = path.read_text(encoding="utf-8")
         relative = path.relative_to(ROOT).as_posix()
-        for match in ANNOTATION.finditer(source):
-            line = source.count("\n", 0, match.start()) + 1
-            for rule_match in RULE.finditer(match.group("body")):
-                findings.append((relative, line, rule_match.group("rule")))
+        if path.suffix == ".java":
+            for match in ANNOTATION.finditer(source):
+                line = source.count("\n", 0, match.start()) + 1
+                for rule_match in RULE.finditer(match.group("body")):
+                    findings.append((relative, line, rule_match.group("rule")))
+        else:
+            for line_number, line in enumerate(source.splitlines(), start=1):
+                match = INSPECTION_COMMENT.search(line)
+                if match:
+                    findings.append((relative, line_number, match.group("rule")))
     return findings
 
 
@@ -133,7 +168,7 @@ def read_baseline() -> Counter[tuple[str, str]]:
 
 def write_baseline(findings: list[tuple[str, int, str]]) -> None:
     lines = [
-        "# Reviewed production Java @SuppressWarnings inventory.",
+        "# Reviewed production Java @SuppressWarnings and YAML IDE inspection inventory.",
         "# Update only after reviewing the source change and documenting its reason.",
         "# Format: repository-relative path<TAB>rule<TAB>approved occurrence count.",
     ]
@@ -156,7 +191,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     unknown = unregistered(findings)
     counts = Counter(rule for _, _, rule in findings)
-    print(f"Java production suppressions: {len(findings)}")
+    print(f"Production Java/YAML suppressions: {len(findings)}")
     print("Reviewed rules: " + ", ".join(f"{rule}={counts[rule]}" for rule in sorted(counts)))
     if not BASELINE.is_file():
         print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | baseline missing: {BASELINE}")

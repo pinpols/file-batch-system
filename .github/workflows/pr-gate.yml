@@ -581,12 +581,12 @@ jobs:
         # @Disabled 必须带非空 reason(防覆盖率被静默掏空)。
         run: bash scripts/ci/run-gate.sh PR_NO_SILENT_DISABLED_TESTS "测试禁用原因检查" -- bash scripts/ci/check-no-silent-disabled-tests.sh
 
-      - name: Java suppression registry
-        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
+      - name: Production suppression registry
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         run: |
-          bash scripts/ci/run-gate.sh PR_JAVA_SUPPRESSION_REGISTRY "Java 抑制项注册表" -- python3 scripts/ci/check-java-suppression-registry.py
-          bash scripts/ci/run-gate.sh PR_JAVA_SUPPRESSION_REGISTRY_TEST "Java 抑制项注册表门禁测试" -- python3 -m unittest scripts/ci/tests/test_check_java_suppression_registry.py
+          bash scripts/ci/run-gate.sh PR_JAVA_SUPPRESSION_REGISTRY "生产代码静态检查抑制项注册表" -- python3 scripts/ci/check-java-suppression-registry.py
+          bash scripts/ci/run-gate.sh PR_JAVA_SUPPRESSION_REGISTRY_TEST "静态检查抑制项注册表门禁测试" -- python3 -m unittest scripts/ci/tests/test_check_java_suppression_registry.py
 
       - name: Report all policy check failures
         if: always()

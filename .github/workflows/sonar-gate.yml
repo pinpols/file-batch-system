@@ -109,7 +109,11 @@ jobs:
           SONAR_PORT: '9001'
           SONAR_ANONYMOUS_ACCESS: 'false'
           SONAR_PUBLIC_PROJECT: 'false'
-        run: bash scripts/dev/sonar-scan.sh --full --skip-build --quality-gate
+        run: |
+          # 临时 SonarQube 每次从空数据库启动；第一次分析只建立项目基线，Sonar 不计算质量门。
+          bash scripts/dev/sonar-scan.sh --full --skip-build
+          # 第二次分析才有可评估的分析历史；仍按脚本逐项校验真实 Quality Gate 条件。
+          bash scripts/dev/sonar-scan.sh --full --skip-build --quality-gate
 
       - name: Upload Sonar report
         if: always() && steps.nightly.outputs.skip != 'true'

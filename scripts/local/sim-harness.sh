@@ -7,7 +7,7 @@
 #   reset         数据重制到基线(清运行态 + biz 数据,保留 definition/config/tenant/user)
 #   prereq        幂等装配先决条件(biz 表+RLS+只读角色、shard-1、下游 sftp/mockserver、租户导入)
 #   verify-data   真实数据验证(两片真实 PG 活体路由,幂等可重复)
-#   sim           跑全量 sim 阶段 04→28(前置:preflight + prereq 已过,不跳过阶段)
+#   sim           跑全量 sim 阶段 04→30(前置:preflight + prereq 已过,不跳过阶段)
 #   all           preflight → reset → prereq → verify-data → sim 一条龙
 #
 # 本 harness 固化了若干踩过的问题(见各 check 注释):
@@ -345,7 +345,7 @@ ensure_worker_registrations() {
 }
 
 # ---------------------------------------------------------
-# sim:全量阶段 04→28
+# sim:全量阶段 04→30
 # restart_import:为特定 stage 切换 worker-import 互斥配置。
 #   default    = checkpoint off + no skip(17 PARTITION_REPLACE_COPY 需 checkpoint=false)
 #                注:checkpoint 默认值已在 P0 翻 true,故 default 基线必须**显式** -D=false,
@@ -435,7 +435,7 @@ restart_process_batch_claim() {
 
 # ---------------------------------------------------------
 sim() {
-  echo "== sim:全量 04→28(零跳过) =="
+  echo "== sim:全量 04→30(零跳过) =="
   clean_stale_env
   ( unset BATCH_ENV_LOADED BATCH_ENV_COMMON_ROOT; source scripts/sim/env-common.sh >/dev/null 2>&1
     local active_import_mode=default active_process_batch_claim=default
@@ -517,7 +517,7 @@ sim() {
           ;;
       esac
       case "$n" in *load*|*stage*) sleep 20;; esac
-    done < <(find scripts/sim -maxdepth 1 -type f -name '[0-2][0-9]-*.sh' | sort)
+    done < <(find scripts/sim -maxdepth 1 -type f -name '[0-3][0-9]-*.sh' | sort)
     echo "== sim 完成 ==" | tee -a "$sum"
     exit "$sim_failed" )
 }

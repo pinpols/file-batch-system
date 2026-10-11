@@ -1,6 +1,7 @@
-# Java Suppression 登记表
+# 生产代码静态检查抑制项登记表
 
-> 维护范围：生产 Java（`src/main/java`）。测试代码的局部 `unchecked` 等 fixture 例外不进入本表。
+> 维护范围：生产 Java（`src/main/java`）中的 `@SuppressWarnings`，以及生产配置 `application*.yml` / `application*.yaml` 中的 IntelliJ `noinspection`。
+> 测试代码的局部 `unchecked` 等 fixture 例外不进入本表。
 > 自动校验：`python3 scripts/ci/check-java-suppression-registry.py`。扫描范围为已跟踪文件加上尚未
 > `git add` 的新文件（`git ls-files --cached --others --exclude-standard`），因此本地在途新增的
 > suppression 在提交前就会被拦下，而不是等到提交后才暴露。
@@ -27,7 +28,8 @@
 | `java:S5164` | 导出格式在单次 generate 作用域内复用严格字符编码器，并由 `AutoCloseable` 作用域在长寿命 worker 线程返回前强制 `ThreadLocal.remove()` | worker export | 编码器缓存改为显式 generate 上下文且不增加每字段分配 |
 | `java:S6218` | Java record/数组/协议载荷的不可避免参数形态 | console、orchestrator、worker、SDK | 改为命名对象且不降低传输契约可读性 |
 | `ConfigurationProperties` | 多个 properties 类型共享同一前缀但子键不重叠 | common、worker、orchestrator | 前缀拆分或 Spring 元数据能准确表达同一配置边界 |
-| `SpringJavaInjectionPointsAutowiringInspection` | Spring 自动配置的条件 bean / `ObjectProvider` 注入点 IDE 误报 | common | IDE 与 Spring Boot 配置元数据无误报 |
+| `SpringJavaInjectionPointsAutowiringInspection` | Spring 自动配置的条件 bean / `ObjectProvider` 注入点 IntelliJ 检查误报 | common、orchestrator、worker | IDE 与 Spring Boot 配置元数据无误报 |
+| `SpringBootApplicationYaml` | Qodana 单模块索引无法解析依赖 JAR 中 `batch-defaults.yml` 的 classpath 导入 | console、orchestrator、trigger、worker | Qodana 能解析依赖资源，或配置检查不再误报 |
 | `deprecation` | 预留但尚未启用的 `DistributedLock` 配套切面 | common | 该预留 SPI 删除，或正式采用并移除 deprecated 标记 |
 
 ## 审核规则
@@ -39,6 +41,7 @@
 5. 删除代码时同步删除对应 suppression；本阶段已移除 `DistributedLockAspect` 中无运行时用途的 `SimpleLock` 编译守卫。
 6. `ConfigurationProperties` 必须标在**所有**共享该前缀的类型上（含跨模块的另一侧），并在行尾注释里点名共享方，便于一眼看出该前缀有多个绑定方。子键**重叠**的共享不适用本条：应改为合并绑定，或保留重复绑定但补一致性测试（当前唯一例外见 `ConsoleReadReplicaProperties`）。
 7. `unchecked` 仅可用于解析 JSON 动态对象后的边界转换；必须确认数据由 JSON 解析器构造，并在消费处完成字段类型校验。实例与分区快照当前保留 Map 结构以兼容存量参数，重试策略和派发快照只读取其已知字段。
+8. YAML `noinspection` 仅允许登记的 inspection ID；必须紧邻被抑制配置，并说明 Qodana/IDE 无法解析的具体资源或边界，不得用文件级宽泛抑制隐藏其他配置问题。
 
 ## 复查命令
 

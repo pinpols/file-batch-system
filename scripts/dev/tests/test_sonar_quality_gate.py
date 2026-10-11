@@ -1,4 +1,6 @@
+import re
 import unittest
+from pathlib import Path
 
 from scripts.dev.sonar_quality_gate import evaluate_quality_gate
 
@@ -87,6 +89,20 @@ class SonarQualityGateTest(unittest.TestCase):
 
         self.assertFalse(passed)
         self.assertIn("status=ERROR", detail)
+
+    def test_ephemeral_ci_bootstraps_analysis_before_enforcing_gate(self) -> None:
+        workflow = (
+            Path(__file__).resolve().parents[3] / ".github/workflows/sonar-gate.yml"
+        ).read_text(encoding="utf-8")
+        commands = re.findall(
+            r"bash scripts/dev/sonar-scan\.sh (--full --skip-build(?: --quality-gate)?)",
+            workflow,
+        )
+
+        self.assertEqual(
+            commands,
+            ["--full --skip-build", "--full --skip-build --quality-gate"],
+        )
 
 
 if __name__ == "__main__":
