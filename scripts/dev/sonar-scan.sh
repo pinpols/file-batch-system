@@ -237,9 +237,10 @@ if period.get("type") != "NUMBER_OF_DAYS" or str(period.get("value")) != "30":
     printf '❌ 不通过 | code=SONAR_QUALITY_GATE_UNCONFIGURED | gate=Sonar质量门禁 | project=%s\n' "$PROJECT_KEY" >&2
     exit 1
   fi
-  GATE_CONFIG_CONDITION_COUNT="$(curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" \
+  GATE_CONFIG_JSON="$(curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" \
     --get --data-urlencode "name=${GATE_NAME}" \
-    "${SONAR_URL}/api/qualitygates/show" \
+    "${SONAR_URL}/api/qualitygates/show")"
+  GATE_CONFIG_CONDITION_COUNT="$(printf '%s' "$GATE_CONFIG_JSON" \
     | "$PYTHON_BIN" -c "import json,sys; print(len(json.load(sys.stdin).get('conditions',[])))")"
   if [[ "$GATE_CONFIG_CONDITION_COUNT" -eq 0 ]]; then
     printf '❌ 不通过 | code=SONAR_QUALITY_GATE_UNCONFIGURED | gate=Sonar质量门禁 | project=%s\n' "$PROJECT_KEY" >&2
@@ -569,24 +570,8 @@ if $QUALITY_GATE; then
   GATE_JSON="$(curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" \
     --get --data-urlencode "analysisId=${ANALYSIS_ID}" \
     "${SONAR_URL}/api/qualitygates/project_status")"
-  GATE_SUMMARY="$(printf '%s' "$GATE_JSON" | "$PYTHON_BIN" -c '
-import json,sys
-status=json.load(sys.stdin)["projectStatus"]
-conditions=status.get("conditions", [])
-failed=[str(c.get("metricKey"))+"="+str(c.get("actualValue")) for c in conditions if c.get("status")=="ERROR"]
-print("\t".join([status.get("status", "UNKNOWN"), str(len(conditions)), ",".join(failed)]))')"
-  IFS=$'\t' read -r GATE_STATUS GATE_RESULT_CONDITION_COUNT GATE_FAILURES <<< "$GATE_SUMMARY"
-  if [[ "$GATE_RESULT_CONDITION_COUNT" -ne "$GATE_CONFIG_CONDITION_COUNT" ]]; then
-    printf '❌ 不通过 | code=SONAR_QUALITY_GATE_INCOMPLETE | gate=Sonar质量门禁 | expected=%s | evaluated=%s\n' \
-      "$GATE_CONFIG_CONDITION_COUNT" "$GATE_RESULT_CONDITION_COUNT" >&2
-    exit 1
-  fi
-  if [[ "$GATE_STATUS" != "OK" ]]; then
-    printf '❌ 不通过 | code=SONAR_QUALITY_GATE | gate=Sonar质量门禁 | status=%s | failed=%s\n' \
-      "$GATE_STATUS" "${GATE_FAILURES:-none}" >&2
-    exit 1
-  fi
-  printf '✅ 通过 | code=SONAR_QUALITY_GATE | gate=Sonar质量门禁 | quality_gate=%s | configured_conditions=%s | new_code_period=30d\n' \
-    "$GATE_NAME" "$GATE_CONFIG_CONDITION_COUNT"
+  SONAR_GATE_CONFIG_JSON="$GATE_CONFIG_JSON" \
+    SONAR_GATE_RESULT_JSON="$GATE_JSON" \
+    "$PYTHON_BIN" "${PROJECT_ROOT}/scripts/dev/sonar_quality_gate.py" --gate "$GATE_NAME"
 fi
 echo -e "${YELLOW}Tip:${NC} Run with --stop to shut down the SonarQube container when done."
