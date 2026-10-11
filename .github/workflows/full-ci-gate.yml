@@ -125,6 +125,7 @@ jobs:
           gate_run FULL_SHELL_LINUX_PORTABILITY "Shell Linux 兼容性" python3 scripts/ci/check-shell-linux-portability.py
           gate_run FULL_TESTCONTAINERS_REUSE_LABEL "Testcontainers 复用标签判定" python3 scripts/ci/check-testcontainers-reuse-label.py
           gate_run FULL_POSTGRES_CLIENT_FALLBACK "PostgreSQL 客户端 fallback" bash scripts/ci/check-postgres-client-fallback.sh
+          gate_run FULL_SDK_ORCHESTRATOR_E2E_SCRIPT_TEST "SDK 真栈 E2E 启动脚本回归测试" python3 -m unittest scripts/ci/tests/test_sdk_orchestrator_e2e_scripts.py
 
       - name: Verify GitHub Actions SHA pinning
         shell: bash

@@ -191,13 +191,34 @@ curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" -X POST \
   --data-urlencode "name=${PROJECT_NAME}" \
   --data-urlencode "project=${PROJECT_KEY}" &>/dev/null || true
 if $QUALITY_GATE; then
+  # 创建项目不会自动授予当前管理员账号项目级 Administer；缺少该权限时，Sonar
+  # 的 set 接口可能返回成功但不保存新代码定义，因此显式补齐项目范围权限。
+  curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" -X POST \
+    "${SONAR_URL}/api/permissions/add_user" \
+    --data-urlencode "login=${SONAR_ADMIN_USER}" \
+    --data-urlencode "permission=admin" \
+    --data-urlencode "projectKey=${PROJECT_KEY}" >/dev/null
   curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" -X POST \
     "${SONAR_URL}/api/new_code_periods/set" \
     --data-urlencode "project=${PROJECT_KEY}" \
     --data-urlencode "type=NUMBER_OF_DAYS" \
     --data-urlencode "value=30" >/dev/null
-  NEW_CODE_PERIOD_JSON="$(curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" \
+  SONAR_MAIN_BRANCH="$(curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" \
     --get --data-urlencode "project=${PROJECT_KEY}" \
+    "${SONAR_URL}/api/project_branches/list" \
+    | "$PYTHON_BIN" -c '
+import json,sys
+branches=json.load(sys.stdin).get("branches",[])
+print(next((branch["name"] for branch in branches if branch.get("isMain")), ""))
+')"
+  if [[ -z "$SONAR_MAIN_BRANCH" ]]; then
+    printf '❌ 不通过 | code=SONAR_MAIN_BRANCH_UNAVAILABLE | gate=Sonar新代码基线 | project=%s\n' "$PROJECT_KEY" >&2
+    exit 1
+  fi
+  NEW_CODE_PERIOD_JSON="$(curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" \
+    --get \
+    --data-urlencode "project=${PROJECT_KEY}" \
+    --data-urlencode "branch=${SONAR_MAIN_BRANCH}" \
     "${SONAR_URL}/api/new_code_periods/show")"
   if ! printf '%s' "$NEW_CODE_PERIOD_JSON" | "$PYTHON_BIN" -c '
 import json,sys

@@ -24,7 +24,9 @@ batch_bootstrap_business_database() {
 
   local attempt
   for attempt in $(seq 1 60); do
-    if docker exec "$pg_container" pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; then
+    # PostgreSQL 官方镜像执行 initdb 脚本时会先启动只监听 Unix socket 的临时服务。
+    # 必须等待最终 TCP 服务，避免在 batch_business 尚未创建时提前灌入 DDL。
+    if docker exec "$pg_container" pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; then
       break
     fi
     if [[ "$attempt" -eq 60 ]]; then
@@ -37,7 +39,7 @@ batch_bootstrap_business_database() {
   echo "==> 应用业务库 DDL（biz.* + batch.process_staging）..."
   if ! docker exec -i "$pg_container" psql -U "$PGUSER" -d "$BUSINESS_DB" -v ON_ERROR_STOP=1 \
       < "$root/scripts/db/business/create_biz_tables.sql" >/dev/null; then
-    echo "ERROR: 业务库 DDL apply 失败（详见 docker logs $pg_container）" >&2
+    echo "ERROR: 业务库 DDL apply 失败（详见 docker logs ${pg_container}）" >&2
     return 1
   fi
 

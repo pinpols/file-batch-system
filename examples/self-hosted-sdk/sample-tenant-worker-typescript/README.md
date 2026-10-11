@@ -68,6 +68,7 @@ npm start              # node --experimental-strip-types src/main.ts
 ```
 
 `npm start` needs a **live platform + broker** to actually register and consume.
+The sample follows the SDK runtime matrix and supports maintained Node 22 / 24 releases.
 
 ## Verify offline (no platform/broker)
 

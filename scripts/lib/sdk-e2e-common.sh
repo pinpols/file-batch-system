@@ -203,9 +203,9 @@ sdk_e2e_start_worker() {
         python_bin="$(command -v python)"
       fi
       if "$python_bin" -m pip --version >/dev/null 2>&1; then
-        "$python_bin" -m pip install -q -e "$root/sdk/python" >>"$logf" 2>&1
+        "$python_bin" -m pip install -q -e "$root/sdk/python" >>"$logf" 2>&1 || return 1
         "$python_bin" -m pip install -q -e \
-          "$root/examples/self-hosted-sdk/sample-tenant-worker-python" >>"$logf" 2>&1
+          "$root/examples/self-hosted-sdk/sample-tenant-worker-python" >>"$logf" 2>&1 || return 1
       fi
       ( cd "$root/examples/self-hosted-sdk/sample-tenant-worker-python" \
         && PYTHONPATH="$root/sdk/python/src:$root/examples/self-hosted-sdk/sample-tenant-worker-python/src${PYTHONPATH:+:$PYTHONPATH}" \
@@ -220,22 +220,25 @@ sdk_e2e_start_worker() {
     typescript)
       # SDK 的 kafka adapter(sdk/typescript/kafka)import 'kafkajs',它从 SDK 自身的
       # node_modules 解析(样例经相对路径引 SDK,样例的 node_modules 不在 SDK 解析树上),
-      # 故须先在 sdk/typescript 装 devDeps(含 kafkajs)。
-      npm --prefix "$root/sdk/typescript" ci --ignore-scripts --silent >/dev/null 2>&1
-      ( cd "$root/examples/self-hosted-sdk/sample-tenant-worker-typescript" && npm ci --ignore-scripts --silent >/dev/null 2>&1 \
+      # 故须先在 sdk/typescript 和样例目录安装锁定依赖。安装必须在返回 worker PID 前
+      # 同步完成并保留日志，否则 npm 失败会伪装成“worker 提前退出”且没有根因输出。
+      npm --prefix "$root/sdk/typescript" ci --ignore-scripts --silent >>"$logf" 2>&1 || return 1
+      npm --prefix "$root/examples/self-hosted-sdk/sample-tenant-worker-typescript" \
+        ci --ignore-scripts --silent >>"$logf" 2>&1 || return 1
+      ( cd "$root/examples/self-hosted-sdk/sample-tenant-worker-typescript" \
         && BATCH_BASE_URL="${SDK_E2E_WORKER_BASE_URL:-$ORCH_URL}" BATCH_API_KEY="$raw" BATCH_TENANT_ID="$TENANT" \
            BATCH_WORKER_CODE="$wc" KAFKA_BOOTSTRAP="$KAFKA_BOOTSTRAP" \
            BATCH_SDK_CONTROL_E2E="${SDK_CONTROL_E2E:-false}" \
            BATCH_SDK_CONTROL_E2E_DELAY_MS="${SDK_CONTROL_E2E_DELAY_MS:-0}" \
-           node --experimental-strip-types src/main.ts ) >"$logf" 2>&1 & echo $! ;;
+           node --experimental-strip-types src/main.ts ) >>"$logf" 2>&1 & echo $! ;;
     java)
       # 先 install SDK 到本地 m2(样例硬依赖 batch-worker-sdk + testkit),再 package 样例。
       # 样例用 maven-jar-plugin + copy-dependencies(lib/ classpath),非 Spring Boot 嵌套 fat-jar,
       # 启动不走嵌套 jar loader,本机可靠。Java 样例环境变量名是 BATCH_KAFKA(非 KAFKA_BOOTSTRAP)。
       mvn -q -f "$root/pom.xml" -pl sdk/java/core,sdk/java/testkit -am install \
-        -DskipTests -Dspotless.check.skip=true >>"$logf" 2>&1
+        -DskipTests -Dspotless.check.skip=true >>"$logf" 2>&1 || return 1
       local jdir="$root/examples/self-hosted-sdk/sample-tenant-worker-java"
-      mvn -q -U -f "$jdir/pom.xml" package -DskipTests -Dspotless.check.skip=true >>"$logf" 2>&1
+      mvn -q -U -f "$jdir/pom.xml" package -DskipTests -Dspotless.check.skip=true >>"$logf" 2>&1 || return 1
       ( cd "$jdir" \
         && BATCH_BASE_URL="${SDK_E2E_WORKER_BASE_URL:-$ORCH_URL}" BATCH_API_KEY="$raw" BATCH_TENANT_ID="$TENANT" \
            BATCH_WORKER_CODE="$wc" BATCH_KAFKA="$KAFKA_BOOTSTRAP" \
@@ -248,7 +251,7 @@ sdk_e2e_start_worker() {
       # Rust 样例环境变量:KAFKA_BOOTSTRAP(同 Go/TS)。
       local cargo_path="$HOME/.cargo/bin"
       local rdir="$root/examples/self-hosted-sdk/sample-tenant-worker-rust"
-      PATH="$cargo_path:/usr/local/bin:$PATH" cargo build --manifest-path "$rdir/Cargo.toml" >>"$logf" 2>&1
+      PATH="$cargo_path:/usr/local/bin:$PATH" cargo build --manifest-path "$rdir/Cargo.toml" >>"$logf" 2>&1 || return 1
       ( cd "$rdir" \
         && PATH="$cargo_path:/usr/local/bin:$PATH" \
            BATCH_BASE_URL="${SDK_E2E_WORKER_BASE_URL:-$ORCH_URL}" BATCH_API_KEY="$raw" BATCH_TENANT_ID="$TENANT" \

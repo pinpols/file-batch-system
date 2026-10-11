@@ -41,6 +41,8 @@ KEEP=1 bash scripts/local/sdk-e2e-local.sh go   # 不清理探针(调试)
 起样例 worker / 逐阶段断言 / 清理)。本地入口 `scripts/local/sdk-e2e-local.sh` 已 source 它;
 CI 入口 `scripts/ci/run-sdk-orchestrator-e2e.sh` 可复用同一套(自己 boot 栈后调相同断言函数)。
 加一门语言只在 `sdk_e2e_start_worker` 里加一个 case,本地 + CI 同时生效。
+CI 冷启动会等待 PostgreSQL 完成 initdb 并开放最终 TCP 服务后再灌入业务库 DDL；样例 worker
+的同步构建/依赖安装必须成功后才返回进程 PID，失败输出保留在 worker 日志中，不能伪装成注册超时。
 
 ## 控制指令真实栈验证
 

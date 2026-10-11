@@ -137,9 +137,13 @@ strict 只以环境成功启动为前置，不要求 SIM 成功；SIM 失败或�
 此测试接入本地 pre-commit 和 PR / Full 的 CI 质量守护组。
 `test_daily_validation_workflow.py` 在 PR / Full 的 CI 质量守护组执行，
 防止 strict 改回隐式成功依赖或吞掉失败退出码。
+`test_sdk_orchestrator_e2e_scripts.py` 在脚本域的本地、PR 与 Full 门禁执行，模拟 PostgreSQL
+initdb 临时服务，以及 Java、Python、TypeScript、Rust 样例准备失败，防止真栈 E2E 再次出现
+冷启动竞态或空诊断日志。Go 样例直接以受监控的 `go run` 进程启动，不存在独立准备阶段。
 
 ```bash
 python3 -m unittest scripts/ci/tests/test_daily_validation_workflow.py
+python3 -m unittest scripts/ci/tests/test_sdk_orchestrator_e2e_scripts.py
 ```
 
 `check-sql-config-boundaries.py` 是同名 `.sh` 稳定入口的实现，两者都登记，避免包装层与实现层单独漂移。

@@ -8,6 +8,7 @@
 
 ## [Unreleased]
 
+- 修复临时 Sonar 首次扫描无法设置 30 天新代码基线的问题：为扫描管理账号补齐项目级管理权限，并按项目实际主分支回读验证，避免 Sonar API 空响应掩盖配置未生效。
 - 修复批次日回放详情默认“全部”筛选因空状态被 SQL 等值过滤而显示空列表的问题；保留指定状态筛选及租户隔离。
 - 批量日回放改为“先预览、再确认提交”：预览生成短时一次性凭证，提交时重新核对候选快照并原子消费，防止候选变化或重复提交造成预览与执行不一致；补充回放预览令牌迁移及并发/过期测试。
 - 集中多个后端集成测试重复的测试 profile 默认配置，并增加 CI/pre-push 守卫，避免模块测试 YAML 重新复制共享配置；场景专属属性覆盖保持不变。
@@ -77,6 +78,7 @@
 
 ### Fixed
 
+- 修复 SDK 真 Orchestrator E2E 冷启动时把 PostgreSQL initdb 临时 Unix socket 误判为数据库初始化完成，以及 Java、Python、TypeScript、Rust 样例准备失败被后台 PID 掩盖、诊断日志缺失的问题。
 - 修复四份 Sim 租户配置包 Excel 的作业监控策略表头仍使用旧字段、导致线上 `daily-sim-strict-validation` 在场景执行前失败的问题；PR、Full Gate 与本地提交预检新增配置包 schema 防漂移检查。
 - Prevent cross-tenant Alertmanager grouping/inhibition and closing one event from resolving a group that still has active peers; document alert hold, deduplication, repeat-notification, and recovery semantics.
 - 修复 Trivy 报告的 AsyncHttpClient WebSocket 解压 DoS/连接上下文复用及 Kafka LZ4 临时文件代码执行高危依赖；统一升级到修复版本并刷新入库 SBOM。
