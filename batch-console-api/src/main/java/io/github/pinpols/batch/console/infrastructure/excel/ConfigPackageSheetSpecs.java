@@ -139,6 +139,8 @@ import org.springframework.context.MessageSource;
 public final class ConfigPackageSheetSpecs {
 
   private static final String EMPTY = "";
+  private static final String SCENARIO_IMPORT = "IMPORT";
+  private static final String SCENARIO_EXPORT = "EXPORT";
   private static final String[] JOB_MONITORING_SEVERITY_CHOICES = {"WARN", "ERROR", "CRITICAL"};
 
   /**
@@ -369,11 +371,11 @@ public final class ConfigPackageSheetSpecs {
     }
 
     Set<String> includedSheets = new LinkedHashSet<>();
-    includedSheets.add(ConfigPackageExcelValidator.JOB_SHEET);
+    includedSheets.add(JOB_SHEET);
     for (String scenario : scenarios) {
       switch (scenario) {
-        case "IMPORT", "EXPORT" -> {
-          includedSheets.add(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET);
+        case SCENARIO_IMPORT, SCENARIO_EXPORT -> {
+          includedSheets.add(FILE_TEMPLATE_SHEET);
           includePipelineSheets(includedSheets);
         }
         case "IMPORT_DELIMITED",
@@ -385,21 +387,21 @@ public final class ConfigPackageSheetSpecs {
             "EXPORT_FIXED_WIDTH",
             "EXPORT_EXCEL",
             "EXPORT_JSON" -> {
-          includedSheets.add(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET);
+          includedSheets.add(FILE_TEMPLATE_SHEET);
           includePipelineSheets(includedSheets);
         }
         case "PROCESS" -> includePipelineSheets(includedSheets);
         case "DISPATCH" -> {
-          includedSheets.add(ConfigPackageExcelValidator.CHANNEL_SHEET);
+          includedSheets.add(CHANNEL_SHEET);
           includePipelineSheets(includedSheets);
         }
         case "WORKFLOW" -> {
-          includedSheets.add(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET);
-          includedSheets.add(ConfigPackageExcelValidator.CHANNEL_SHEET);
+          includedSheets.add(FILE_TEMPLATE_SHEET);
+          includedSheets.add(CHANNEL_SHEET);
           includePipelineSheets(includedSheets);
-          includedSheets.add(ConfigPackageExcelValidator.WF_DEF_SHEET);
-          includedSheets.add(ConfigPackageExcelValidator.WF_NODE_SHEET);
-          includedSheets.add(ConfigPackageExcelValidator.WF_EDGE_SHEET);
+          includedSheets.add(WF_DEF_SHEET);
+          includedSheets.add(WF_NODE_SHEET);
+          includedSheets.add(WF_EDGE_SHEET);
         }
         case "SCHEDULE" -> {
           includedSheets.add(BUSINESS_CALENDAR_SHEET);
@@ -448,29 +450,29 @@ public final class ConfigPackageSheetSpecs {
   public static Set<String> requiredImportHeaders(String sheetName, List<String> columns) {
     Set<String> required =
         switch (sheetName) {
-          case ConfigPackageExcelValidator.JOB_SHEET ->
+          case JOB_SHEET ->
             Set.of(
                 COL_JOB_CODE,
                 COL_JOB_NAME,
                 COL_JOB_TYPE,
                 ConfigPackageExcelSchema.COL_SCHEDULE_TYPE);
-          case ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET -> Set.of(COL_JOB_CODE);
-          case ConfigPackageExcelValidator.CHANNEL_SHEET ->
+          case JOB_MONITORING_POLICY_SHEET -> Set.of(COL_JOB_CODE);
+          case CHANNEL_SHEET ->
             Set.of(
                 COL_CHANNEL_CODE,
                 COL_CHANNEL_NAME,
                 ConfigPackageExcelSchema.COL_CHANNEL_TYPE,
                 ConfigPackageExcelSchema.COL_AUTH_TYPE,
                 COL_RECEIPT_POLICY);
-          case ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET ->
+          case FILE_TEMPLATE_SHEET ->
             Set.of(
                 ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_CODE,
                 ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_NAME,
                 ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_TYPE,
                 ConfigPackageExcelSchema.FileTemplate.COL_FILE_FORMAT_TYPE);
-          case ConfigPackageExcelValidator.PIPELINE_SHEET ->
+          case PIPELINE_SHEET ->
             Set.of(COL_JOB_CODE, COL_PIPELINE_NAME, COL_PIPELINE_TYPE, COL_VERSION);
-          case ConfigPackageExcelValidator.STEP_SHEET ->
+          case STEP_SHEET ->
             Set.of(
                 COL_JOB_CODE,
                 COL_VERSION,
@@ -479,11 +481,11 @@ public final class ConfigPackageSheetSpecs {
                 COL_STAGE_CODE,
                 ConfigPackageExcelSchema.PipelineStep.COL_STEP_ORDER,
                 ConfigPackageExcelSchema.PipelineStep.COL_IMPL_CODE);
-          case ConfigPackageExcelValidator.WF_DEF_SHEET ->
+          case WF_DEF_SHEET ->
             Set.of(COL_WORKFLOW_CODE, COL_WORKFLOW_NAME, COL_WORKFLOW_TYPE, COL_VERSION);
-          case ConfigPackageExcelValidator.WF_NODE_SHEET ->
+          case WF_NODE_SHEET ->
             Set.of(COL_WORKFLOW_CODE, COL_WORKFLOW_VERSION, COL_NODE_CODE, COL_NODE_TYPE);
-          case ConfigPackageExcelValidator.WF_EDGE_SHEET ->
+          case WF_EDGE_SHEET ->
             Set.of(
                 COL_WORKFLOW_CODE,
                 COL_WORKFLOW_VERSION,
@@ -500,15 +502,15 @@ public final class ConfigPackageSheetSpecs {
   }
 
   private static void includePipelineSheets(Set<String> includedSheets) {
-    includedSheets.add(ConfigPackageExcelValidator.PIPELINE_SHEET);
-    includedSheets.add(ConfigPackageExcelValidator.STEP_SHEET);
+    includedSheets.add(PIPELINE_SHEET);
+    includedSheets.add(STEP_SHEET);
   }
 
   private static List<String> projectedColumns(
       String sheetName, List<String> allColumns, Set<String> scenarios) {
     Set<String> selected =
         switch (sheetName) {
-          case ConfigPackageExcelValidator.JOB_SHEET ->
+          case JOB_SHEET ->
             Set.of(
                 COL_JOB_CODE,
                 COL_JOB_NAME,
@@ -522,8 +524,8 @@ public final class ConfigPackageSheetSpecs {
                 COL_DEFAULT_PARAMS,
                 COL_ENABLED,
                 COL_DESCRIPTION);
-          case ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET -> fileTemplateColumns(scenarios);
-          case ConfigPackageExcelValidator.CHANNEL_SHEET ->
+          case FILE_TEMPLATE_SHEET -> fileTemplateColumns(scenarios);
+          case CHANNEL_SHEET ->
             Set.of(
                 COL_CHANNEL_CODE,
                 COL_CHANNEL_NAME,
@@ -541,7 +543,7 @@ public final class ConfigPackageSheetSpecs {
                 COL_COMPLETION_DEADLINE_DAY_OFFSET,
                 COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS,
                 COL_COMPLETION_DEADLINE_SEVERITY);
-          case ConfigPackageExcelValidator.PIPELINE_SHEET ->
+          case PIPELINE_SHEET ->
             Set.of(
                 COL_JOB_CODE,
                 COL_PIPELINE_NAME,
@@ -550,7 +552,7 @@ public final class ConfigPackageSheetSpecs {
                 COL_VERSION,
                 COL_ENABLED,
                 COL_DESCRIPTION);
-          case ConfigPackageExcelValidator.STEP_SHEET ->
+          case STEP_SHEET ->
             Set.of(
                 COL_JOB_CODE,
                 COL_VERSION,
@@ -561,7 +563,7 @@ public final class ConfigPackageSheetSpecs {
                 ConfigPackageExcelSchema.PipelineStep.COL_IMPL_CODE,
                 ConfigPackageExcelSchema.PipelineStep.COL_STEP_PARAMS,
                 COL_ENABLED);
-          case ConfigPackageExcelValidator.WF_NODE_SHEET ->
+          case WF_NODE_SHEET ->
             Set.of(
                 COL_WORKFLOW_CODE,
                 COL_WORKFLOW_VERSION,
@@ -584,8 +586,8 @@ public final class ConfigPackageSheetSpecs {
   private static Set<String> fileTemplateColumns(Set<String> scenarios) {
     List<ConfigPackageFileScenario> profiles = fileProfiles(scenarios);
     if (EmptyChecks.isNotEmpty(profiles)
-        && !scenarios.contains("IMPORT")
-        && !scenarios.contains("EXPORT")
+        && !scenarios.contains(SCENARIO_IMPORT)
+        && !scenarios.contains(SCENARIO_EXPORT)
         && !scenarios.contains("WORKFLOW")) {
       return focusedFileTemplateColumns(profiles);
     }
@@ -608,10 +610,10 @@ public final class ConfigPackageSheetSpecs {
         COL_VERSION,
         COL_ENABLED,
         COL_DESCRIPTION));
-    if (scenarios.contains("IMPORT") || scenarios.contains("WORKFLOW")) {
+    if (scenarios.contains(SCENARIO_IMPORT) || scenarios.contains("WORKFLOW")) {
       selected.add(ConfigPackageExcelSchema.FileTemplate.COL_VALIDATION_RULE_SET);
     }
-    if (scenarios.contains("EXPORT") || scenarios.contains("WORKFLOW")) {
+    if (scenarios.contains(SCENARIO_EXPORT) || scenarios.contains("WORKFLOW")) {
       selected.add(ConfigPackageExcelSchema.FileTemplate.COL_NAMING_RULE);
       selected.add(ConfigPackageExcelSchema.FileTemplate.COL_DEFAULT_QUERY_CODE);
       selected.add(ConfigPackageExcelSchema.FileTemplate.COL_DEFAULT_QUERY_SQL);
@@ -628,8 +630,8 @@ public final class ConfigPackageSheetSpecs {
   }
 
   private static Set<String> focusedFileFormats(Set<String> scenarios) {
-    if (scenarios.contains("IMPORT")
-        || scenarios.contains("EXPORT")
+    if (scenarios.contains(SCENARIO_IMPORT)
+        || scenarios.contains(SCENARIO_EXPORT)
         || scenarios.contains("WORKFLOW")) {
       return null;
     }
@@ -643,8 +645,8 @@ public final class ConfigPackageSheetSpecs {
   }
 
   private static String focusedFileDirection(Set<String> scenarios) {
-    if (scenarios.contains("IMPORT")
-        || scenarios.contains("EXPORT")
+    if (scenarios.contains(SCENARIO_IMPORT)
+        || scenarios.contains(SCENARIO_EXPORT)
         || scenarios.contains("WORKFLOW")) {
       return null;
     }
@@ -682,7 +684,7 @@ public final class ConfigPackageSheetSpecs {
         COL_ENABLED,
         COL_DESCRIPTION));
     for (ConfigPackageFileScenario profile : profiles) {
-      if ("IMPORT".equals(profile.direction())) {
+      if (SCENARIO_IMPORT.equals(profile.direction())) {
         selected.add(ConfigPackageExcelSchema.FileTemplate.COL_VALIDATION_RULE_SET);
       } else {
         selected.add(ConfigPackageExcelSchema.FileTemplate.COL_NAMING_RULE);
@@ -732,7 +734,13 @@ public final class ConfigPackageSheetSpecs {
         Map.entry(
             "queue_type",
             requiredColumn(
-                "队列类型。", GUIDE_ENUM, GUIDE_IMPORT, GUIDE_IMPORT, "EXPORT", "DISPATCH", "MIXED")),
+                "队列类型。",
+                GUIDE_ENUM,
+                GUIDE_IMPORT,
+                GUIDE_IMPORT,
+                SCENARIO_EXPORT,
+                "DISPATCH",
+                "MIXED")),
         Map.entry("max_running_jobs", requiredColumn("最大并发作业数。", GUIDE_INT, "10")),
         Map.entry("max_running_partitions", requiredColumn("最大并发分区数。", GUIDE_INT, "20")),
         Map.entry("max_qps", requiredColumn("最大派发 QPS。", GUIDE_INT, "100")),
@@ -1151,7 +1159,7 @@ public final class ConfigPackageSheetSpecs {
                 "作业类型。",
                 GUIDE_ENUM,
                 GUIDE_IMPORT,
-                // 与 JobType enum / ConfigPackageExcelValidator.JOB_TYPES 对齐：
+                // 与 JobType enum / JOB_TYPES 对齐：
                 // 直接从 JobType 生成，包含五类 Worker、GENERAL/WORKFLOW 与文件束类型。
                 JOB_TYPE_DROPDOWN)),
         Map.entry(COL_BIZ_TYPE, optionalColumn("业务类型标识。", GUIDE_STR, "CUSTOMER")),
@@ -1163,7 +1171,7 @@ public final class ConfigPackageSheetSpecs {
                 "调度类型。",
                 GUIDE_ENUM,
                 "MANUAL",
-                // 与 ScheduleType enum / ConfigPackageExcelValidator.SCHEDULE_TYPES 对齐：
+                // 与 ScheduleType enum / SCHEDULE_TYPES 对齐：
                 // CRON / FIXED_RATE / MANUAL（不再包含历史值 EVENT / ONE_TIME，validator 已拒收）
                 SCHEDULE_TYPE_DROPDOWN)),
         Map.entry(COL_SCHEDULE_EXPR, optionalColumn("调度表达式，CRON 时填写。", GUIDE_STR, "0 2 * * *")),
@@ -1307,7 +1315,8 @@ public final class ConfigPackageSheetSpecs {
         Map.entry("template_name", requiredColumn("文件模板名称。", GUIDE_STR, "客户导入模板")),
         Map.entry(
             "template_type",
-            requiredColumn("模板类型。", GUIDE_ENUM, GUIDE_IMPORT, GUIDE_IMPORT, "EXPORT", "SHARED")),
+            requiredColumn(
+                "模板类型。", GUIDE_ENUM, GUIDE_IMPORT, GUIDE_IMPORT, SCENARIO_EXPORT, "SHARED")),
         Map.entry(COL_BIZ_TYPE, optionalColumn("业务类型。", GUIDE_STR, "CUSTOMER")),
         Map.entry(
             "file_format_type",
@@ -1419,7 +1428,7 @@ public final class ConfigPackageSheetSpecs {
                 "流水线类型。",
                 GUIDE_ENUM,
                 GUIDE_IMPORT,
-                // 与 PipelineType enum / ConfigPackageExcelValidator.PIPELINE_TYPES 对齐：
+                // 与 PipelineType enum / PIPELINE_TYPES 对齐：
                 // IMPORT / EXPORT / PROCESS / DISPATCH
                 PIPELINE_TYPE_DROPDOWN)),
         Map.entry(COL_BIZ_TYPE, optionalColumn("业务类型。", GUIDE_STR, "CUSTOMER")),

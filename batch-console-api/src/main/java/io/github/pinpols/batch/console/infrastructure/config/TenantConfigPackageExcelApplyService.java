@@ -289,91 +289,120 @@ public class TenantConfigPackageExcelApplyService {
     int inserted = 0;
     int updated = 0;
     for (Map<String, String> row : rows) {
-      String jobCode = normalize(row.get(COL_JOB_CODE));
-      JobDefinitionEntity existing = jobDefinitionMapper.selectByUniqueKey(ctx.tenantId(), jobCode);
-      if (existing == null) {
-        JobDefinitionEntity entity = new JobDefinitionEntity();
-        entity.setTenantId(ctx.tenantId());
-        entity.setJobCode(jobCode);
-        entity.setJobName(normalize(row.get(COL_JOB_NAME)));
-        entity.setJobType(normalizeEnum(row.get(COL_JOB_TYPE)));
-        entity.setBizType(normalize(row.get(COL_BIZ_TYPE)));
-        entity.setQueueCode(CodeNormalizer.toConfigFormOrNull(row.get(COL_QUEUE_CODE)));
-        entity.setWorkerGroup(CodeNormalizer.toUpperOrNull(row.get(COL_WORKER_GROUP)));
-        entity.setScheduleType(normalizeEnum(row.get(COL_SCHEDULE_TYPE)));
-        entity.setScheduleExpr(normalize(row.get(COL_SCHEDULE_EXPR)));
-        entity.setDependsOnJobCode(normalize(row.get(COL_DEPENDS_ON_JOB_CODE)));
-        entity.setCalendarCode(CodeNormalizer.toConfigFormOrNull(row.get(COL_CALENDAR_CODE)));
-        entity.setWindowCode(CodeNormalizer.toConfigFormOrNull(row.get(COL_WINDOW_CODE)));
-        entity.setRetryPolicy(normalizeEnum(row.get(COL_RETRY_POLICY)));
-        entity.setRetryMaxCount(parseInteger(row.get(COL_RETRY_MAX_COUNT)));
-        entity.setTimeoutSeconds(parseInteger(row.get(COL_TIMEOUT_SECONDS)));
-        entity.setShardStrategy(normalizeEnum(row.get(COL_SHARD_STRATEGY)));
-        entity.setExecutionMode(resolveExecutionMode(row));
-        entity.setWatermarkField(normalize(row.get(COL_WATERMARK_FIELD)));
-        entity.setExecutionHandler(normalize(row.get(COL_EXECUTION_HANDLER)));
-        entity.setParamSchema(TenantConfigReferenceResolver.normalizeConfigReferences(
-            normalize(row.get(COL_PARAM_SCHEMA))));
-        String defaultParams = TenantConfigReferenceResolver.normalizeConfigReferences(
-            normalize(row.get(COL_DEFAULT_PARAMS)));
-        rejectUnresolvedSecretMasks(defaultParams);
-        entity.setDefaultParams(defaultParams);
-        entity.setEnabled(parseBoolean(row.get(COL_ENABLED), true));
-        entity.setDescription(normalize(row.get(COL_DESCRIPTION)));
-        entity.setCreatedBy(safeOp(ctx.operatorId()));
-        entity.setUpdatedBy(safeOp(ctx.operatorId()));
-        jobDefinitionMapper.insert(entity);
-        jobDefinitionMapper.upsertJobMonitoringPolicy(JobMonitoringPolicyUpsertParam.builder()
-            .tenantId(ctx.tenantId())
-            .jobDefinitionId(entity.getId())
-            .softRuntimeSeconds(monitoringDefaults.getSoftRuntimeSeconds())
-            .softRuntimeSeverity("WARN")
-            .startGraceSeconds(
-                isStartGraceMonitored(entity) ? monitoringDefaults.getStartGraceSeconds() : 0)
-            .startGraceSeverity("WARN")
-            .completionDeadlineLocalTime(null)
-            .completionDeadlineDayOffset(0)
-            .dependencyCompletionWindowSeconds(0)
-            .completionDeadlineSeverity("WARN")
-            .updatedBy(safeOp(ctx.operatorId()))
-            .build());
+      boolean insertedJob = applyJob(row, ctx);
+      if (insertedJob) {
         inserted++;
       } else {
-        JobDefinitionMaintenanceUpdateParam param = new JobDefinitionMaintenanceUpdateParam();
-        param.setTenantId(ctx.tenantId());
-        param.setJobCode(jobCode);
-        param.setJobName(mergeText(row, COL_JOB_NAME, existing.getJobName()));
-        param.setQueueCode(mergeConfigCode(row, COL_QUEUE_CODE, existing.getQueueCode()));
-        param.setWorkerGroup(mergeWorkerGroup(row, COL_WORKER_GROUP, existing.getWorkerGroup()));
-        param.setScheduleExpr(mergeText(row, COL_SCHEDULE_EXPR, existing.getScheduleExpr()));
-        param.setDependsOnJobCode(
-            mergeText(row, COL_DEPENDS_ON_JOB_CODE, existing.getDependsOnJobCode()));
-        param.setCalendarCode(mergeConfigCode(row, COL_CALENDAR_CODE, existing.getCalendarCode()));
-        param.setWindowCode(mergeConfigCode(row, COL_WINDOW_CODE, existing.getWindowCode()));
-        param.setRetryPolicy(mergeEnum(row, COL_RETRY_POLICY, existing.getRetryPolicy()));
-        param.setRetryMaxCount(mergeInteger(row, COL_RETRY_MAX_COUNT, existing.getRetryMaxCount()));
-        param.setTimeoutSeconds(
-            mergeInteger(row, COL_TIMEOUT_SECONDS, existing.getTimeoutSeconds()));
-        param.setShardStrategy(mergeEnum(row, COL_SHARD_STRATEGY, existing.getShardStrategy()));
-        param.setExecutionMode(mergeEnum(row, COL_EXECUTION_MODE, existing.getExecutionMode()));
-        param.setWatermarkField(mergeText(row, COL_WATERMARK_FIELD, existing.getWatermarkField()));
-        String defaultParams = TenantConfigReferenceResolver.normalizeConfigReferences(
-            normalize(row.get(COL_DEFAULT_PARAMS)));
-        if (Texts.hasText(defaultParams)) {
-          defaultParams =
-              SecretMasking.preserveMaskedJson(defaultParams, existing.getDefaultParams());
-          rejectUnresolvedSecretMasks(defaultParams);
-          param.setDefaultParams(defaultParams);
-          param.setDefaultParamsSpecified(true);
-        }
-        param.setEnabled(parseBoolean(row.get(COL_ENABLED), existing.getEnabled()));
-        param.setDescription(mergeText(row, COL_DESCRIPTION, existing.getDescription()));
-        param.setUpdatedBy(safeOp(ctx.operatorId()));
-        jobDefinitionMapper.updateJobDefinitionMaintenance(param);
         updated++;
       }
     }
     return new ApplyStats(inserted, updated);
+  }
+
+  private boolean applyJob(Map<String, String> row, ApplyContext ctx) {
+    String jobCode = normalize(row.get(COL_JOB_CODE));
+    JobDefinitionEntity existing = jobDefinitionMapper.selectByUniqueKey(ctx.tenantId(), jobCode);
+    if (existing == null) {
+      insertJob(row, ctx, jobCode);
+      return true;
+    }
+    updateJob(row, ctx, jobCode, existing);
+    return false;
+  }
+
+  private void insertJob(Map<String, String> row, ApplyContext ctx, String jobCode) {
+    JobDefinitionEntity entity = newJobEntity(row, ctx, jobCode);
+    jobDefinitionMapper.insert(entity);
+    jobDefinitionMapper.upsertJobMonitoringPolicy(JobMonitoringPolicyUpsertParam.builder()
+        .tenantId(ctx.tenantId())
+        .jobDefinitionId(entity.getId())
+        .softRuntimeSeconds(monitoringDefaults.getSoftRuntimeSeconds())
+        .softRuntimeSeverity("WARN")
+        .startGraceSeconds(
+            isStartGraceMonitored(entity) ? monitoringDefaults.getStartGraceSeconds() : 0)
+        .startGraceSeverity("WARN")
+        .completionDeadlineLocalTime(null)
+        .completionDeadlineDayOffset(0)
+        .dependencyCompletionWindowSeconds(0)
+        .completionDeadlineSeverity("WARN")
+        .updatedBy(safeOp(ctx.operatorId()))
+        .build());
+  }
+
+  private JobDefinitionEntity newJobEntity(
+      Map<String, String> row, ApplyContext ctx, String jobCode) {
+    JobDefinitionEntity entity = new JobDefinitionEntity();
+    entity.setTenantId(ctx.tenantId());
+    entity.setJobCode(jobCode);
+    entity.setJobName(normalize(row.get(COL_JOB_NAME)));
+    entity.setJobType(normalizeEnum(row.get(COL_JOB_TYPE)));
+    entity.setBizType(normalize(row.get(COL_BIZ_TYPE)));
+    entity.setQueueCode(CodeNormalizer.toConfigFormOrNull(row.get(COL_QUEUE_CODE)));
+    entity.setWorkerGroup(CodeNormalizer.toUpperOrNull(row.get(COL_WORKER_GROUP)));
+    entity.setScheduleType(normalizeEnum(row.get(COL_SCHEDULE_TYPE)));
+    entity.setScheduleExpr(normalize(row.get(COL_SCHEDULE_EXPR)));
+    entity.setDependsOnJobCode(normalize(row.get(COL_DEPENDS_ON_JOB_CODE)));
+    entity.setCalendarCode(CodeNormalizer.toConfigFormOrNull(row.get(COL_CALENDAR_CODE)));
+    entity.setWindowCode(CodeNormalizer.toConfigFormOrNull(row.get(COL_WINDOW_CODE)));
+    entity.setRetryPolicy(normalizeEnum(row.get(COL_RETRY_POLICY)));
+    entity.setRetryMaxCount(parseInteger(row.get(COL_RETRY_MAX_COUNT)));
+    entity.setTimeoutSeconds(parseInteger(row.get(COL_TIMEOUT_SECONDS)));
+    entity.setShardStrategy(normalizeEnum(row.get(COL_SHARD_STRATEGY)));
+    entity.setExecutionMode(resolveExecutionMode(row));
+    entity.setWatermarkField(normalize(row.get(COL_WATERMARK_FIELD)));
+    entity.setExecutionHandler(normalize(row.get(COL_EXECUTION_HANDLER)));
+    entity.setParamSchema(TenantConfigReferenceResolver.normalizeConfigReferences(
+        normalize(row.get(COL_PARAM_SCHEMA))));
+    String defaultParams = TenantConfigReferenceResolver.normalizeConfigReferences(
+        normalize(row.get(COL_DEFAULT_PARAMS)));
+    rejectUnresolvedSecretMasks(defaultParams);
+    entity.setDefaultParams(defaultParams);
+    entity.setEnabled(parseBoolean(row.get(COL_ENABLED), true));
+    entity.setDescription(normalize(row.get(COL_DESCRIPTION)));
+    entity.setCreatedBy(safeOp(ctx.operatorId()));
+    entity.setUpdatedBy(safeOp(ctx.operatorId()));
+    return entity;
+  }
+
+  private void updateJob(
+      Map<String, String> row, ApplyContext ctx, String jobCode, JobDefinitionEntity existing) {
+    JobDefinitionMaintenanceUpdateParam param = new JobDefinitionMaintenanceUpdateParam();
+    param.setTenantId(ctx.tenantId());
+    param.setJobCode(jobCode);
+    param.setJobName(mergeText(row, COL_JOB_NAME, existing.getJobName()));
+    param.setQueueCode(mergeConfigCode(row, COL_QUEUE_CODE, existing.getQueueCode()));
+    param.setWorkerGroup(mergeWorkerGroup(row, COL_WORKER_GROUP, existing.getWorkerGroup()));
+    param.setScheduleExpr(mergeText(row, COL_SCHEDULE_EXPR, existing.getScheduleExpr()));
+    param.setDependsOnJobCode(
+        mergeText(row, COL_DEPENDS_ON_JOB_CODE, existing.getDependsOnJobCode()));
+    param.setCalendarCode(mergeConfigCode(row, COL_CALENDAR_CODE, existing.getCalendarCode()));
+    param.setWindowCode(mergeConfigCode(row, COL_WINDOW_CODE, existing.getWindowCode()));
+    param.setRetryPolicy(mergeEnum(row, COL_RETRY_POLICY, existing.getRetryPolicy()));
+    param.setRetryMaxCount(mergeInteger(row, COL_RETRY_MAX_COUNT, existing.getRetryMaxCount()));
+    param.setTimeoutSeconds(mergeInteger(row, COL_TIMEOUT_SECONDS, existing.getTimeoutSeconds()));
+    param.setShardStrategy(mergeEnum(row, COL_SHARD_STRATEGY, existing.getShardStrategy()));
+    param.setExecutionMode(mergeEnum(row, COL_EXECUTION_MODE, existing.getExecutionMode()));
+    param.setWatermarkField(mergeText(row, COL_WATERMARK_FIELD, existing.getWatermarkField()));
+    updateDefaultParams(row, existing, param);
+    param.setEnabled(parseBoolean(row.get(COL_ENABLED), existing.getEnabled()));
+    param.setDescription(mergeText(row, COL_DESCRIPTION, existing.getDescription()));
+    param.setUpdatedBy(safeOp(ctx.operatorId()));
+    jobDefinitionMapper.updateJobDefinitionMaintenance(param);
+  }
+
+  private void updateDefaultParams(
+      Map<String, String> row,
+      JobDefinitionEntity existing,
+      JobDefinitionMaintenanceUpdateParam param) {
+    String defaultParams = TenantConfigReferenceResolver.normalizeConfigReferences(
+        normalize(row.get(COL_DEFAULT_PARAMS)));
+    if (!Texts.hasText(defaultParams)) {
+      return;
+    }
+    defaultParams = SecretMasking.preserveMaskedJson(defaultParams, existing.getDefaultParams());
+    rejectUnresolvedSecretMasks(defaultParams);
+    param.setDefaultParams(defaultParams);
+    param.setDefaultParamsSpecified(true);
   }
 
   private static String mergeText(Map<String, String> row, String key, String currentValue) {

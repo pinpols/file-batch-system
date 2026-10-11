@@ -43,6 +43,7 @@ import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWo
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageSampleDataFactory;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageSheetSpecs;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageWorkbookLimits;
+import io.github.pinpols.batch.console.mapper.TenantConfigRevisionMapper;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles;
@@ -77,7 +78,6 @@ import org.apache.poi.xssf.usermodel.XSSFRelation;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.context.MessageSource;
 import org.springframework.http.ResponseEntity;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -125,7 +125,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   private final TenantConfigPackageExcelImportStore importStore;
-  private final JdbcTemplate jdbcTemplate;
+  private final TenantConfigRevisionMapper tenantConfigRevisionMapper;
   private final JobDefinitionMapper jobDefinitionMapper;
   private final ResourceQueueMapper resourceQueueMapper;
   private final BusinessCalendarMapper businessCalendarMapper;
@@ -525,8 +525,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
   }
 
   private long currentConfigurationRevision(String tenantId) {
-    Long revision = jdbcTemplate.queryForObject(
-        "select batch.current_tenant_configuration_revision(?)", Long.class, tenantId);
+    Long revision = tenantConfigRevisionMapper.currentConfigurationRevision(tenantId);
     if (EmptyChecks.isNull(revision)) {
       throw new IllegalStateException("tenant configuration revision is missing");
     }
@@ -534,8 +533,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
   }
 
   private long lockConfigurationRevision(String tenantId) {
-    Long revision = jdbcTemplate.queryForObject(
-        "select batch.lock_tenant_configuration_revision(?)", Long.class, tenantId);
+    Long revision = tenantConfigRevisionMapper.lockConfigurationRevision(tenantId);
     if (EmptyChecks.isNull(revision)) {
       throw new IllegalStateException("tenant configuration revision is missing");
     }
@@ -626,7 +624,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
   private static void rejectFormulaCells(Workbook workbook) {
     for (Sheet sheet : workbook) {
       for (Row row : sheet) {
-        for (org.apache.poi.ss.usermodel.Cell cell : row) {
+        for (Cell cell : row) {
           if (cell.getCellType() == CellType.FORMULA) {
             throw BizException.of(
                 ResultCode.INVALID_ARGUMENT,

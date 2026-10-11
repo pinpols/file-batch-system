@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 import java.util.Objects;
 import java.util.function.Function;
@@ -96,7 +97,7 @@ public class JobResourceAssignmentGuard {
   }
 
   private static boolean hasText(String value) {
-    return EmptyChecks.isNotNull(value) && EmptyChecks.isNotEmpty(value);
+    return Texts.hasText(value);
   }
 
   private static BizException forbidden() {

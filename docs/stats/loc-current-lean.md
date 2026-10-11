@@ -1,18 +1,18 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `d2f581ad4`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `421686d90`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,924 | 527,888 | 272,268 | 51.6% |
+| 4,926 | 527,947 | 272,294 | 51.6% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| prod | 2,802 | 258,337 | 118,430 | 45.8% |
+| prod | 2,804 | 258,396 | 118,456 | 45.8% |
 | test | 1,298 | 196,243 | 107,298 | 54.7% |
 | script | 661 | 55,997 | 35,340 | 63.1% |
 | config | 65 | 9,217 | 6,801 | 73.8% |
@@ -23,11 +23,11 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,607 | 384,789 | 198,698 | 51.6% |
+| Java | 3,608 | 384,837 | 198,721 | 51.6% |
 | Shell | 210 | 32,108 | 25,289 | 78.8% |
 | Python | 262 | 37,474 | 19,343 | 51.6% |
 | YAML | 108 | 13,776 | 10,556 | 76.6% |
-| XML | 183 | 22,283 | 6,958 | 31.2% |
+| XML | 184 | 22,294 | 6,961 | 31.2% |
 | TypeScript | 37 | 6,667 | 3,141 | 47.1% |
 | Rust | 23 | 8,499 | 2,856 | 33.6% |
 | Properties | 5 | 2,933 | 2,407 | 82.1% |
@@ -50,9 +50,9 @@
 | `deploy/docker/compose/app.yml` | config | YAML | 735 | 652 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java` | prod | Java | 1,026 | 621 |
 | `scripts/ci/run-full-regression.sh` | script | Shell | 700 | 580 |
+| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigPackageExcelApplyService.java` | prod | Java | 949 | 568 |
 | `scripts/local/validate-seed-scenarios.sh` | script | Shell | 769 | 561 |
 | `scripts/fix-fixture-xlsx.py` | script | Python | 985 | 559 |
-| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigPackageExcelApplyService.java` | prod | Java | 920 | 553 |
 | `scripts/local/start-all.sh` | script | Shell | 645 | 518 |
 | `pom.xml` | config | XML | 845 | 512 |
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationServiceTest.java` | test | Java | 814 | 503 |
