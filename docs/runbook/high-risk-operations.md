@@ -19,6 +19,7 @@
 | 本地 HA 故障演练 | `scripts/local/pg-replica-failover-drill.sh`、`scripts/local/redis-sentinel-ha-drill.sh` | 仅接受本机 Docker context；每次生成唯一隔离 Compose project，失败先打印日志，退出清理仅作用于该 project 的容器、网络和专用卷。不得用生产/共享 Docker context 执行。 |
 | Docker Compose 栈 | `scripts/docker/reset-dev.sh` | 默认预览；执行需 `--apply` 和输入 project 名或 `--yes`；拒绝生产类 project 名和远程 Docker context，只按 Compose 标签清理。 |
 | GitHub Actions 临时 SonarQube | `.github/workflows/sonar-gate.yml` | 每个 job 仅启动固定名称 `sonarqube-batch` 的临时容器，退出时只删除该容器；不清理镜像、卷或其他 Docker 资源。端口只绑定 runner loopback，容器限制 6 GiB/3 CPU，报告以短期 Actions artifact 保存。 |
+| Compose CD 部署临时文件 | `.github/workflows/compose-cd.yml` | SSH 私钥和固定 host key 数据只写入当前 GitHub-hosted ephemeral runner 的 `$RUNNER_TEMP`，部署后删除；远端只删除当前 `GITHUB_RUN_ID` 上传并已解包的 release archive，不删除 release 目录、stable manifest 或服务数据。 |
 | PostgreSQL sim reset | `scripts/sim/00-reset-runtime.sh`、`scripts/local/sim-harness.sh` | 仅允许本机 Docker socket 上当前 Compose project 管理的 PG 容器。reset SQL 要求 `batch.destructive_ops=sim-reset` 会话标记；单独直接执行 SQL 会失败。 |
 | PostgreSQL DR drill | `scripts/db/backup/dr-drill.sh` | 默认恢复至 `_dr` 旁路库；所有模式要求本机 Compose PG 容器。原地 DROP/重建还要求 `--yes` 和精确 `--confirm-databases <platform>,<business>`，生产/预发布命名库拒绝执行。 |
 | PostgreSQL / Kafka / MinIO 四日清理 | `scripts/sim-4day/00-clean.sh` | 清空 platform/business 运行数据、删除 `batch.*` Kafka 历史消息并清空整个 MinIO bucket。只允许本机 Compose project 的 PG/Kafka/MinIO 容器和仓库默认本地端点；SQL 有独立 session guard。运行前必须确认 bucket 可丢弃、应用处于静默状态。 |
