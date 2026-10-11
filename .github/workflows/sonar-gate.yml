@@ -3,14 +3,24 @@ name: SonarQube CI
 # Community Build 仅分析 main；完整 Git 历史用于 30 天新代码基线。
 # 夜间只在最近 24 小时有相关代码/构建变更时扫描。
 on:
+  workflow_call:
+    inputs:
+      reuse_coverage:
+        description: Reuse JaCoCo reports uploaded by the calling Full Gate run
+        required: false
+        type: boolean
+        default: false
+  # BYO Java SDK 不触发 full-ci-gate；它保留独立 Sonar 全量构建与测试。
   push:
-    branches:
-      - main
+    branches: [main]
+    paths:
+      - 'sdk/java/**'
   schedule:
     - cron: '23 18 * * *'
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -35,6 +45,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -59,9 +70,82 @@ jobs:
             echo 'skip=true' >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Download Full Gate JaCoCo reports
+        id: coverage-download
+        if: inputs.reuse_coverage && steps.nightly.outputs.skip != 'true'
+        # non-gate-failure-policy: 缺少优化制品时回退独立测试，Sonar 门禁仍保持阻断。
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: full-ci-sonar-input-unit-it-a
+          path: .
+
+      - name: Download remaining Full Gate JaCoCo reports
+        id: coverage-download-rest
+        if: inputs.reuse_coverage && steps.nightly.outputs.skip != 'true'
+        # non-gate-failure-policy: 缺少优化制品时回退独立测试，Sonar 门禁仍保持阻断。
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: full-ci-sonar-input-unit-it-b1
+          path: .
+
+      - name: Download worker JaCoCo reports
+        id: coverage-download-workers
+        if: inputs.reuse_coverage && steps.nightly.outputs.skip != 'true'
+        # non-gate-failure-policy: 缺少优化制品时回退独立测试，Sonar 门禁仍保持阻断。
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: full-ci-sonar-input-unit-it-b2-workers
+          path: .
+
+      - name: Download Console JaCoCo report
+        id: coverage-download-console
+        if: inputs.reuse_coverage && steps.nightly.outputs.skip != 'true'
+        # non-gate-failure-policy: 缺少优化制品时回退独立测试，Sonar 门禁仍保持阻断。
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: full-ci-sonar-input-unit-it-b2-console
+          path: batch-console-api/target/site/jacoco
+
+      - name: Select coverage source
+        id: coverage-source
+        if: always()
+        shell: bash
+        run: |
+          reuse=false
+          if [[ "${{ inputs.reuse_coverage }}" == "true" && \
+                "${{ steps.coverage-download.outcome }}" == "success" && \
+                "${{ steps.coverage-download-rest.outcome }}" == "success" && \
+                "${{ steps.coverage-download-workers.outcome }}" == "success" && \
+                "${{ steps.coverage-download-console.outcome }}" == "success" ]]; then
+            modules=(
+              batch-common batch-test-support batch-console-api batch-orchestrator batch-trigger
+              batch-worker/core batch-worker/import batch-worker/export batch-worker/process
+              batch-worker/dispatch batch-worker/atomic sdk/java/core sdk/java/spring sdk/java/testkit
+            )
+            reuse=true
+            for module in "${modules[@]}"; do
+              report="$module/target/site/jacoco/jacoco.xml"
+              if [[ ! -s "$report" ]]; then
+                echo "Missing Full Gate coverage report: $report" >&2
+                reuse=false
+                break
+              fi
+            done
+          fi
+          echo "reuse=$reuse" >> "$GITHUB_OUTPUT"
+          echo "Sonar coverage source: $([[ "$reuse" == true ]] && echo Full Gate artifact || echo independent Maven test run)"
+
       - name: Run Maven tests and generate JaCoCo reports
-        if: steps.nightly.outputs.skip != 'true'
+        if: steps.nightly.outputs.skip != 'true' && steps.coverage-source.outputs.reuse != 'true'
         run: ./mvnw -B clean test org.jacoco:jacoco-maven-plugin:0.8.15:report --projects '!batch-e2e-tests'
+
+      - name: Compile sources for Sonar using Full Gate coverage
+        if: steps.nightly.outputs.skip != 'true' && steps.coverage-source.outputs.reuse == 'true'
+        run: ./mvnw -B test-compile -DskipTests --projects '!batch-e2e-tests'
 
       - name: Start ephemeral SonarQube container
         if: steps.nightly.outputs.skip != 'true'

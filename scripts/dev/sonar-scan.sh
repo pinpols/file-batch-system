@@ -574,7 +574,7 @@ import json,sys
 status=json.load(sys.stdin)["projectStatus"]
 conditions=status.get("conditions", [])
 failed=[str(c.get("metricKey"))+"="+str(c.get("actualValue")) for c in conditions if c.get("status")=="ERROR"]
-print("\\t".join([status.get("status", "UNKNOWN"), str(len(conditions)), ",".join(failed)]))')"
+print("\t".join([status.get("status", "UNKNOWN"), str(len(conditions)), ",".join(failed)]))')"
   IFS=$'\t' read -r GATE_STATUS GATE_RESULT_CONDITION_COUNT GATE_FAILURES <<< "$GATE_SUMMARY"
   if [[ "$GATE_RESULT_CONDITION_COUNT" -ne "$GATE_CONFIG_CONDITION_COUNT" ]]; then
     printf '❌ 不通过 | code=SONAR_QUALITY_GATE_INCOMPLETE | gate=Sonar质量门禁 | expected=%s | evaluated=%s\n' \

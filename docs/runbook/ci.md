@@ -28,7 +28,7 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 >
 > `staging-gate` 仍存在，但当前仅由手动事件触发；名称不代表它会部署到 staging 集群。其职责是 GitHub-hosted runner 上的独立全量 E2E 与 Java 治理复验。
 
-其他独立工作流：`codeql.yml` 在 PR、main push 和每周定时运行（当前未配置手动触发）；`sdk-orchestrator-e2e.yml` 每日定时/手动执行五语言真实 Orchestrator E2E（非 required）；`workflow-lint.yml` 检查 workflow/action 文件变更；`license-review.yml` 检查依赖许可变更；`strict-verify.yml` 提供手动严格校验及 PR dry-run；`sonar-gate.yml` 在 main push 和夜间有相关代码变更时使用临时 SonarQube 容器运行（Community Build 仅分析 main）；`fuzzing.yml` 按其 workflow 配置单独运行。以上工作流是否 required 以仓库 Ruleset 当前配置为准，不由 workflow 文件名推断。
+其他独立工作流：`codeql.yml` 在 PR、main push 和每周定时运行（当前未配置手动触发）；`sdk-orchestrator-e2e.yml` 在相关 main 变更后/手动执行五语言真实 Orchestrator E2E（非 required），先构建一次 Orchestrator/Trigger 镜像并预热 BuildKit GHA 缓存，五个语言 job 仍各自启动隔离服务栈；`workflow-lint.yml` 检查 workflow/action 文件变更；`license-review.yml` 检查依赖许可变更；`strict-verify.yml` 提供手动严格校验及 PR dry-run；`sonar-gate.yml` 在 Full Gate 成功后消费同 SHA 的 JaCoCo 报告，在 SDK Java 独立变更、夜间和手动场景保留独立构建；`fuzzing.yml` 按其 workflow 配置单独运行。以上工作流是否 required 以仓库 Ruleset 当前配置为准，不由 workflow 文件名推断。
 
 ## CI 依赖与安全扫描版本基线
 
@@ -124,7 +124,7 @@ gh pr create --base main --head revert/main-broken-<short-sha> --title "revert: 
 | **单元测试路由** | 四个保守分片信号；公共边界全跑，叶子模块只跑所属分片 | 永远全跑 |
 | **Maven 范围** | 每个被选分片先用 `install -DskipTests -am` 构建依赖，再只测试本分片模块；PR unit 分片排除 `*IntegrationTest` | 全部固定分片并发执行；依赖只构建一次/分片，目标模块执行完整 unit + IT |
 | **E2E suite** | 不运行，由合入后门禁回退 | 28 个测试按实测 LPT 拆为 6 个并发 shard |
-| **Hadolint / Trivy fs** | ❌ 不跑 | ✅ 跑 |
+| **Hadolint / Trivy SBOM 与配置扫描** | ❌ 不跑 | ✅ 跑 |
 | **文本 UTF-8 编码** | PR 相对目标分支扫描变更文本 | 全仓扫描 |
 | **测试约定（`@DisplayName` + 方法命名）** | 相对 `docs/governance/test-conventions-baseline.txt` 只拦**新增**缺口（中文 `@DisplayName` 类级/方法级；方法名只接受 `shouldXxx_whenYyy` / `方法名_条件_预期`，禁用形状直接失败） | 同一份基线全量复核 |
 | **运行时 UTF-8 配置** | Java / SDK / config / CI 变更时核对 Compose、Dockerfile、Helm、Testcontainers | 全量核对 |
@@ -188,7 +188,7 @@ SDK 五语言契约矩阵。
 | 检查项 | 工具 / 脚本 | 触发流水线 |
 |---|---|---|
 | 应用与基础设施版本对齐 | `check-version-alignment.sh`：应用发布版本、基础服务镜像环境值、Testcontainers 镜像和 Compose/Sim 运行入口对齐 | PR Gate；Full CI Gate |
-| OpenAPI 路径对齐 | `check-console-openapi-paths.py` | 全部（setup-build-env） |
+| OpenAPI 路径对齐 | `check-console-openapi-paths.py` | PR 静态策略、Full Gate 静态检查、手动 Staging Gate；每个流程执行一次 |
 | Flyway 文件结构与 checksum 漂移 | `validate-flyway-schema.sh` | PR：database / CI 文件域；已有迁移 checksum 变化阻断 |
 | Flyway 危险 DDL | `check-migration-safety.sh`（Squawk，diff-only） | PR：database / CI 文件域；扫描新增或修改的迁移文件，危险 DDL 阻断 |
 | 新增数据库对象注释覆盖 | `check-db-comment-coverage.sh`（diff-only） | PR 与 Full CI：database 变更 |
@@ -219,9 +219,9 @@ SDK 五语言契约矩阵。
 | Spotless 代码格式 | `spotless-maven-plugin` | 全部（run-full-regression） | Palantir Java Format 2.92.0（Google 风格兼容、120 列） |
 | 覆盖率门禁 | JaCoCo `jacoco:check` | 全部（run-full-regression） | 行覆盖率 ≥ 60%，初始阈值，后续提升 |
 | Secret 扫描 | `security-scan.sh --mode=secret` | pr-gate、full-ci-gate | 扫描密钥泄漏 |
-| 依赖漏洞扫描 | Trivy `fs`（vuln） | full-ci-gate | 已知 CVE；OWASP dependency-check 的 NVD 全量下载在 CI 上过慢（5 分钟超时仍下不到 1/5）且不拦门禁，2026-08 起 CI 由 trivy 覆盖，`--mode=deps` 保留本地按需使用 |
+| 依赖漏洞扫描 | Trivy `sbom`（CRITICAL/HIGH） | PR 供应链门禁（依赖/镜像/部署输入变更）；Full Gate | 扫描当前提交生成的 CycloneDX 依赖清单；不需要为 Trivy 单独编译安装整个 Maven reactor。容器/Helm 配置仍由 Trivy `fs --scanners misconfig` 扫描。OWASP dependency-check 的 NVD 全量下载在 CI 上过慢且不拦门禁，2026-08 起由 Trivy 覆盖；`--mode=deps` 保留本地按需使用 |
 | Dockerfile lint | Hadolint | full-ci-gate | `deploy/docker/Dockerfile.app`、`deploy/docker/Dockerfile.ops-toolbox` |
-| 文件系统安全扫描 | Trivy `fs` | full-ci-gate | CRITICAL/HIGH 漏洞 + IaC 配置；漏洞扫描读取带治理元数据的 `.trivyignore`，配置误报仅允许在 `.trivyignore.yaml` 中按规则和路径精确豁免；扫描前运行 `bash scripts/ci/install-upstream-modules.sh` 预热 Maven 本地缓存并安装 reactor 产物，降低依赖解析触发 Maven Central 限流的概率 |
+| 文件系统安全扫描 | Trivy `sbom` + `fs --scanners misconfig` | PR Gate（供应链变更）；Full Gate | 漏洞扫描读取当前提交的 CycloneDX BOM 并阻断 CRITICAL/HIGH；IaC 配置扫描继续检查文件系统。漏洞豁免读取带治理元数据的 `.trivyignore`，配置误报仅允许在 `.trivyignore.yaml` 中按规则和路径精确豁免 |
 | K8s manifest 安全 | Checkov | full-ci-gate | Helm chart 安全基线 |
 
 > **提醒项升阻断策略**：移除对应步骤的 `continue-on-error: true`（workflow）或脚本中的 `|| true`（run-full-regression.sh），
@@ -526,7 +526,7 @@ bash scripts/ci/run-flaky-quarantine.sh
     docker-image-build.yml   # 手动 / reusable 镜像构建
     label-automerge.yml      # automerge 标签自动归并
   actions/
-    setup-build-env/         # 共享 setup：JDK、Maven cache、OpenAPI 校验；Testcontainers 缓存可关闭
+    setup-build-env/         # 共享 setup：JDK、Maven cache；Testcontainers 镜像缓存可关闭
     detect-change-scope/     # 共享变更范围探测入口
   renovate.json              # 依赖自动更新配置
 
@@ -552,6 +552,6 @@ pom.xml                      # 父 pom：JaCoCo agent、PMD、Spotless 插件配
 
 ### SonarQube CI
 
-`.github/workflows/sonar-gate.yml` 在 `main` push、每日 18:23 UTC（北京时间次日 02:23）和手动触发时运行；Community Build 仅支持 main 分析，非 main 手动运行会明确失败。夜间运行仅在最近 24 小时有 Java、Maven、Sonar 扫描脚本/辅助脚本或该 workflow 改动时继续。无需外部 Sonar 主机、GitHub Sonar secret 或管理员 token：工作流在 runner 上启动固定 digest 的 SonarQube Community Build 容器（6 GiB、3 CPU），执行 Sonar Way Quality Gate，并将新代码基线设为滚动 30 天；最后删除容器。扫描报告作为短期 workflow artifact 保留 7 天。
+`.github/workflows/sonar-gate.yml` 由 main push 的 Full Gate 以 reusable workflow 在同一 run 内调用；四个 unit/IT shard 成功后，Sonar 校验 14 个模块 JaCoCo XML 完整，再只执行 `test-compile` 并复用覆盖率。报告缺失或不完整时回退独立 `clean test`，不会把缺报告当成零覆盖率。Full Gate 手动/定时运行不调用 Sonar；SDK Java push、每日 18:23 UTC（北京时间次日 02:23）和手动触发仍独立测试构建。Community Build 仅支持 main 分析，非 main 手动运行会明确失败；夜间仅在最近 24 小时有 Java、Maven、Sonar 扫描脚本/辅助脚本或该 workflow 改动时继续。无需外部 Sonar 主机、GitHub Sonar secret 或管理员 token：工作流在 runner 上启动固定 digest 的 SonarQube Community Build 容器（6 GiB、3 CPU），执行 Sonar Way Quality Gate，并将新代码基线设为滚动 30 天；最后删除容器。扫描报告作为短期 workflow artifact 保留 7 天。
 
-容器和数据库不跨任务持久化，因此 issue 状态、分析历史和项目配置不会保留；质量门禁每次按完整 Git 历史计算最近 30 天新代码，不依赖 Sonar 历史。该方案不对 PR 执行 Sonar 分支分析，也不提供跨提交的 issue 状态同步或长期趋势。Java PR 的 Sonar 变更行审阅仍使用本地增量扫描。不得将临时扫描结果描述成持久 Sonar 项目状态。Sonar 不替代现有 PMD、Spotless、SpotBugs、依赖扫描和测试门禁；是否作为 required check 仍以仓库 Ruleset 为准。
+容器和数据库不跨任务持久化，因此 issue 状态、分析历史和项目配置不会保留；质量门禁每次按完整 Git 历史计算最近 30 天新代码，不依赖 Sonar 历史。Full Gate JaCoCo artifact 限于同一 run 内部消费，保留 1 天；Sonar 不执行 artifact 中的内容，也不接受 PR artifact。该方案不对 PR 执行 Sonar 分支分析，也不提供跨提交的 issue 生命周期/趋势。Java PR 的 Sonar 变更行审阅仍使用本地增量扫描。不得将临时扫描结果描述成持久 Sonar 项目状态。Sonar 不替代现有 PMD、Spotless、SpotBugs、依赖扫描和测试门禁；是否作为 required check 仍以仓库 Ruleset 为准。

@@ -41,6 +41,9 @@ jobs:
         with:
           cache-testcontainers: 'false'
 
+      - name: Verify Console OpenAPI matches controllers
+        run: python3 scripts/ci/check-console-openapi-paths.py
+
       - name: Verify governance test inventory
         shell: bash
         run: python3 scripts/ci/check-java-governance-test-coverage.py

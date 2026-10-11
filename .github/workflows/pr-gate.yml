@@ -649,11 +649,6 @@ jobs:
         shell: bash
         run: bash scripts/ci/run-gate.sh PR_TRIVY_IGNORE_EXPIRY "Trivy 忽略项有效期" -- python3 scripts/ci/check-trivy-ignore-expiry.py
 
-      - name: Warm Maven cache for Trivy dependency resolution
-        if: steps.supply.outputs.trivy-required == 'true'
-        shell: bash
-        run: bash scripts/ci/run-gate.sh PR_TRIVY_MAVEN_CACHE "Trivy Maven 依赖缓存预热" -- ./mvnw -B -ntp -DskipTests -Dmaven.test.skip=true -pl '!batch-e2e-tests' install
-
       - name: Verify tracked SBOM matches Maven dependencies
         if: needs.changes.outputs.maven == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
@@ -669,7 +664,11 @@ jobs:
             curl -fsSL -o /tmp/trivy.tar.gz "https://github.com/aquasecurity/trivy/releases/download/v${trivy_version}/trivy_${trivy_version}_Linux-64bit.tar.gz"
             tar -xzf /tmp/trivy.tar.gz -C /tmp trivy
             sudo mv /tmp/trivy /usr/local/bin/trivy
-            trivy fs --scanners vuln --ignorefile .trivyignore --severity CRITICAL,HIGH --exit-code 1 .
+            if [[ ! -s target/bom.json ]]; then
+              ./mvnw -q -P compliance cyclonedx:makeAggregateBom -DskipTests
+            fi
+            test -s target/bom.json
+            trivy sbom --ignorefile .trivyignore --severity CRITICAL,HIGH --exit-code 1 target/bom.json
             trivy fs --scanners misconfig --ignorefile .trivyignore.yaml --severity CRITICAL,HIGH --exit-code 1 .
           }
           gate_run PR_TRIVY_FS_SCAN "Trivy 供应链文件扫描" run_trivy_fs_scan
