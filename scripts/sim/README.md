@@ -48,7 +48,8 @@ scripts/sim/
 任何阶段未执行、未命中目标路径或未达业务终态都返回失败，不以 `SKIP` 或编排侧部分成功代替。
 
 新增配置简化 SIM 阶段：29 通过 Console API 生成七类租户场景、组合及 ALL 工作簿，检查 Sheet/列投影，
-再执行 upload → preview，**不 Apply 配置**；30 在 Atomic shell 任务运行期间通过 Console API 修改默认参数、
+再执行 upload → preview，**不 Apply 配置**。该矩阵跨越 Console 昂贵操作每用户 10 次/分钟默认限额；遇到 429 时等待限流窗口后有限重试，
+不调整或关闭服务端限流；30 在 Atomic shell 任务运行期间通过 Console API 修改默认参数、
 重试策略和超时，断言旧实例保持创建时快照、新实例读取新配置，并恢复 SIM 作业定义。它验证执行/重试配置
 的实例生效时点，不代表模板/Pipeline/通道配置具备同实例快照，也不替代监控策略动态生效的 PG IT。
 

@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -135,6 +136,10 @@ class DefaultLaunchServiceTest {
         timezoneProvider,
         new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider),
         mock(io.github.pinpols.batch.orchestrator.mapper.CustomTaskTypeRegistryMapper.class));
+    DispatchSecretSnapshotResolver secretSnapshotResolver =
+        mock(DispatchSecretSnapshotResolver.class);
+    when(secretSnapshotResolver.pin(anyString(), anyString(), any(), anyMap()))
+        .thenAnswer(invocation -> invocation.getArgument(3));
     service = new DefaultLaunchService(
         launchValidationService,
         partitionDispatchService,
@@ -144,6 +149,7 @@ class DefaultLaunchServiceTest {
         launchBatchDayService,
         batchDayGateService,
         launchParamResolver,
+        secretSnapshotResolver,
         jobExecutionLogMapper,
         batchDayTransactionManager,
         new LaunchPhaseMetrics(new SimpleMeterRegistry()),

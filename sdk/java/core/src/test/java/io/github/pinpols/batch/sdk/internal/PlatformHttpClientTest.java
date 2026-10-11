@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.sun.net.httpserver.HttpServer;
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
@@ -39,6 +43,7 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 /** {@link PlatformHttpClient} 真 HTTP 测试使用 JDK {@link HttpServer} 或 MockWebServer 启动 stub。 */
 @DisplayName("PlatformHttpClient — 真实 HTTP 请求、传输策略与取消行为")
@@ -181,13 +186,30 @@ class PlatformHttpClientTest {
       ex.close();
     });
 
-    assertThatThrownBy(() -> newClient().heartbeat("w-1", Map.of()))
-        .isInstanceOf(PlatformHttpException.class)
-        .hasMessageContaining("HTTP 403")
-        .hasMessageContaining("/internal/workers/w-1/heartbeat")
-        .hasMessageNotContaining("FORBIDDEN")
-        .hasMessageNotContaining("secret-abc")
-        .hasMessageNotContaining("body=");
+    Logger logger = (Logger) LoggerFactory.getLogger(PlatformHttpClient.class);
+    Level previousLevel = logger.getLevel();
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.setLevel(Level.DEBUG);
+    logger.addAppender(appender);
+    try {
+      assertThatThrownBy(() -> newClient().heartbeat("w-1", Map.of()))
+          .isInstanceOf(PlatformHttpException.class)
+          .hasMessageContaining("HTTP 403")
+          .hasMessageContaining("/internal/workers/w-1/heartbeat")
+          .hasMessageNotContaining("FORBIDDEN")
+          .hasMessageNotContaining("secret-abc")
+          .hasMessageNotContaining("body=");
+      assertThat(appender.list)
+          .extracting(ILoggingEvent::getFormattedMessage)
+          .anySatisfy(message -> assertThat(message)
+              .contains("responseBytes=")
+              .doesNotContain("secret-abc", "FORBIDDEN", "url="));
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(previousLevel);
+      appender.stop();
+    }
   }
 
   @Test

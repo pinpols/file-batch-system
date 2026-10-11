@@ -245,8 +245,8 @@ public class ValidateStep implements ImportStageStep {
   }
 
   /**
-   * ADR-041 Phase1.2:控制金额对账。声明总额与累加和不符且 blocker=true 时,记失败记录并以 IMPORT_VALIDATE_CONTROL_TOTAL
-   * 失败整个阶段;默认告警(evaluator 内部 log.warn)则返回 null 放行。
+   * ADR-041 Phase1.2:启用控制金额对账后，缺少核对依据或声明总额与累加和超出容差均记失败记录，并以
+   * IMPORT_VALIDATE_CONTROL_TOTAL 阻断阶段。
    */
   private ImportStageResult processControlTotal(
       ImportJobContext context, ValidationSession session, Path validatedRecordsPath) {
@@ -462,7 +462,7 @@ public class ValidateStep implements ImportStageStep {
       String errorCode,
       String errorMessage,
       Object rawRecord) {
-    if (!recordGovernanceService.isSkippable(errorCode)) {
+    if (isReconciliationGate(errorCode) || !recordGovernanceService.isSkippable(errorCode)) {
       recordGovernanceService.recordFailedRecord(
           context, stage(), recordNo, errorCode, errorMessage, rawRecord);
       return ValidationErrorOutcome.stop(errorCode, errorMessage);
@@ -473,6 +473,12 @@ public class ValidateStep implements ImportStageStep {
       return ValidationErrorOutcome.stop(errorCode, "skip action FAIL_BATCH");
     }
     return ValidationErrorOutcome.CONTINUE;
+  }
+
+  private boolean isReconciliationGate(String errorCode) {
+    return ImportValidationErrorCode.CONTROL_RECORD.code().equals(errorCode)
+        || ImportValidationErrorCode.CONTROL_TOTAL.code().equals(errorCode)
+        || ImportValidationErrorCode.ROW_COUNT.code().equals(errorCode);
   }
 
   /** P1: 校验错误处置结果,替代原 IllegalStateException 控流。 */

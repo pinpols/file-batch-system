@@ -33,6 +33,7 @@ class ChannelConfigMergeTest {
     row.put("sftp_host", "legacy.example.com");
     Map<String, Object> cj = new LinkedHashMap<>();
     cj.put("sftp_host", "override.example.com"); // 白名单内：允许覆盖
+    cj.put("secret_ref", "dispatch/credentials"); // 非敏感引用,供实例绑定 SecretVersion。
     cj.put("sftp_port", 2222); // 白名单内：允许设置
     cj.put("tenant_id", "should-not-override-column"); // 非白名单：忽略
     cj.put("enabled", false); // 策略字段：必须忽略（原黑名单漏了这个）
@@ -46,6 +47,7 @@ class ChannelConfigMergeTest {
     Map<String, Object> merged = ChannelConfigMerge.merge(row, objectMapper);
     assertThat(merged).containsEntry("tenant_id", "t1");
     assertThat(merged).containsEntry("sftp_host", "override.example.com");
+    assertThat(merged).containsEntry("secret_ref", "dispatch/credentials");
     assertThat(merged).containsEntry("sftp_port", 2222);
     assertThat(merged).containsEntry("receipt_poll_url", "http://callback.example/receipt");
     assertThat(merged).containsEntry("dispatch_manifest_enabled", false);

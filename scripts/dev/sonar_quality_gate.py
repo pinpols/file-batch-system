@@ -99,9 +99,15 @@ def parse_measures(payload: dict) -> dict[str, Decimal]:
             continue
         value = measure.get("value")
         if value is None:
-            periods = measure.get("periods")
-            if isinstance(periods, list) and periods:
-                value = periods[-1].get("value")
+            period = measure.get("period")
+            if isinstance(period, dict):
+                value = period.get("value")
+            if value is None:
+                periods = measure.get("periods")
+                if isinstance(periods, list) and periods:
+                    latest_period = periods[-1]
+                    if isinstance(latest_period, dict):
+                        value = latest_period.get("value")
         try:
             if value is not None:
                 parsed = Decimal(str(value))

@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.common.utils.AlertLabels;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.config.AlertmanagerEmitProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.http.OrchestratorOutboundTransport;
@@ -78,7 +79,9 @@ public class AlertmanagerEmitPublisher {
           new ThreadPoolExecutor.AbortPolicy());
       this.executor = pool;
       this.alertsUri = stripTrailingSlash(props.getEndpoint()) + ALERTS_PATH;
-      log.info("AlertmanagerEmitPublisher enabled: endpoint={}", props.getEndpoint());
+      log.info(
+          "AlertmanagerEmitPublisher enabled: endpoint={}",
+          SecretMasking.maskEndpoint(props.getEndpoint()));
     } else {
       this.executor = null;
       this.alertsUri = null;

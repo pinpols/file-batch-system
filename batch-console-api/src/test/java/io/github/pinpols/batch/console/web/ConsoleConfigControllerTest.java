@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -121,6 +122,9 @@ class ConsoleConfigControllerTest {
             Instant.EPOCH,
             null,
             "reason",
+            null,
+            null,
+            null,
             "u1",
             "u2",
             Instant.EPOCH,
@@ -149,5 +153,22 @@ class ConsoleConfigControllerTest {
         .perform(get("/api/console/config/change-logs").param("tenantId", "t1"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data[0].changeAction").value("CREATE"));
+  }
+
+  @Test
+  @DisplayName("撤销指定密钥版本时, 将租户与原因交给应用服务并返回成功")
+  void shouldRevokeSecretVersion() throws Exception {
+    mockMvc
+        .perform(post("/api/console/config/secrets/42/revoke")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-42")
+            .contentType(APPLICATION_JSON)
+            .content("""
+                {"tenantId":"t1","reason":"credential compromised"}
+                """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("SUCCESS"));
+
+    verify(configApplicationService)
+        .revokeSecretVersion(org.mockito.ArgumentMatchers.eq(42L), any());
   }
 }

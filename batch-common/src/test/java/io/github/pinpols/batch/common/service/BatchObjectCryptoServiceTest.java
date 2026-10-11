@@ -57,6 +57,28 @@ class BatchObjectCryptoServiceTest {
   }
 
   @Test
+  @DisplayName("结构化密钥载荷加密后可供受信运行时解密")
+  void secretPayloadProtector_shouldRoundTrip() {
+    SecretPayloadProtector protector = new SecretPayloadProtector(cryptoService);
+    String secretJson = "{\"smtp_password\":\"secret-value\"}";
+
+    String protectedJson = protector.protect(secretJson);
+
+    assertThat(protectedJson).doesNotContain("secret-value");
+    assertThat(protector.reveal(protectedJson)).isEqualTo(secretJson);
+  }
+
+  @Test
+  @DisplayName("拒绝 JSON null 作为受保护密钥载荷")
+  void secretPayloadProtector_rejectsNullEnvelope() {
+    SecretPayloadProtector protector = new SecretPayloadProtector(cryptoService);
+
+    assertThatThrownBy(() -> protector.reveal("null"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("unsupported protected secret payload format");
+  }
+
+  @Test
   @DisplayName("加密结果前置 8 字节魔数头,便于导入侧识别已加密内容")
   void encryptedBytes_shouldStartWithMagicHeader() {
     byte[] ciphertext = cryptoService.encrypt("test".getBytes(StandardCharsets.UTF_8), KEY_REF);

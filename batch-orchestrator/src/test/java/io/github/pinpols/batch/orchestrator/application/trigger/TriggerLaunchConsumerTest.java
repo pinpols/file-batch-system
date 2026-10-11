@@ -17,6 +17,7 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
 import io.github.pinpols.batch.orchestrator.config.TriggerConsumerProperties;
+import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.infrastructure.trigger.TriggerLaunchConsumer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
@@ -56,6 +57,9 @@ class TriggerLaunchConsumerTest {
   @Mock
   private Acknowledgment ack;
 
+  @Mock
+  private OrchestratorGracefulShutdown gracefulShutdown;
+
   private SimpleMeterRegistry meterRegistry;
   private TriggerLaunchConsumer consumer;
 
@@ -64,7 +68,9 @@ class TriggerLaunchConsumerTest {
     meterRegistry = new SimpleMeterRegistry();
     TriggerConsumerProperties properties = new TriggerConsumerProperties();
     properties.getErrorHandler().setRetryBackoffMs(1234L);
-    consumer = new TriggerLaunchConsumer(launchApplicationService, meterRegistry, properties);
+    when(gracefulShutdown.isDraining()).thenReturn(false);
+    consumer = new TriggerLaunchConsumer(
+        launchApplicationService, gracefulShutdown, meterRegistry, properties);
   }
 
   @Test
@@ -134,6 +140,20 @@ class TriggerLaunchConsumerTest {
     verify(ack, never()).acknowledge();
     verify(ack).nack(Duration.ofMillis(1234L));
     assertThat(failed("rate_limited")).isEqualTo(1.0);
+  }
+
+  @Test
+  @DisplayName("Orchestrator 排空期间延迟确认 Launch 消息,不创建新作业实例")
+  void consume_duringDrainNacksWithoutLaunching() {
+    when(gracefulShutdown.isDraining()).thenReturn(true);
+
+    consumer.consume(consumerRecord(sampleEnvelope("tenant-a", "req-drain")), ack);
+
+    verify(launchApplicationService, never()).launchFromTrustedQueue(any());
+    verify(ack, never()).acknowledge();
+    verify(ack).nack(Duration.ofMillis(1234L));
+    assertThat(meterRegistry.counter("batch.trigger.launch.deferred.total").count())
+        .isEqualTo(1.0);
   }
 
   @Test

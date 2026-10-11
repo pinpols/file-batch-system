@@ -129,7 +129,7 @@ public final class SampleTenantWorker {
 
     @Override
     public SdkTaskResult execute(SdkTaskContext ctx) {
-      log.info("echo handler taskId={} params={}", ctx.taskId(), ctx.parameters());
+      log.info("echo handler taskId={} parameterCount={}", ctx.taskId(), ctx.parameters().size());
       return SdkTaskResult.ok("echoed", Map.copyOf(ctx.parameters()));
     }
   }
@@ -148,7 +148,7 @@ public final class SampleTenantWorker {
 
     @Override
     public SdkTaskResult execute(SdkTaskContext ctx) {
-      log.info("ATOMIC base handler taskId={} params={}", ctx.taskId(), ctx.parameters());
+      log.info("ATOMIC base handler taskId={} parameterCount={}", ctx.taskId(), ctx.parameters().size());
       long delayMillis = controlE2eDelayMillis();
       if (delayMillis > 0) {
         log.info("control-e2e handler started taskId={} delayMs={}", ctx.taskId(), delayMillis);

@@ -28,6 +28,7 @@ import io.github.pinpols.batch.console.domain.entity.ConfigChangeLogEntity;
 import io.github.pinpols.batch.console.domain.entity.ConfigReleaseEntity;
 import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleDashboardQueryMapper;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.ConfigDependentView;
+import io.github.pinpols.batch.console.domain.ops.application.contract.request.SecretVersionRevokeRequest;
 import io.github.pinpols.batch.console.domain.ops.application.contract.request.SecretVersionRotateRequest;
 import io.github.pinpols.batch.console.domain.query.ConfigChangeLogQuery;
 import io.github.pinpols.batch.console.domain.query.ConfigReleaseQuery;
@@ -86,6 +87,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
   private static final String KEY_GRAY_SCOPE_JSON = "grayScopeJson";
   private static final String KEY_RELEASE_ID = "releaseId";
   private static final String KEY_SECRET_STATUS = "secretStatus";
+  private static final String KEY_SECRET_VERSION_ID = "secretVersionId";
   private static final String EMPTY_JSON_OBJECT = "{}";
   private static final String REDACTED_SECRET_PAYLOAD = "{\"redacted\":true}";
 
@@ -290,6 +292,40 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
                 nextStatus)));
     logChange(changeLogCommand);
     return Long.valueOf(nextVersionNo);
+  }
+
+  @Override
+  @Transactional
+  public void revokeSecretVersion(Long secretVersionId, SecretVersionRevokeRequest request) {
+    String tenantId = resolveTenant(request.getTenantId());
+    SecretVersionEntity version = Guard.requireFound(
+        secretVersionMapper.selectById(
+            mapOf(KEY_TENANT_ID, tenantId, KEY_SECRET_VERSION_ID, secretVersionId)),
+        "secret version not found: " + secretVersionId);
+    if (ConfigLifecycleStatus.DRAFT.code().equals(version.getSecretStatus())) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
+    }
+    if (version.getRevokedAt() != null) {
+      return;
+    }
+    String operator = currentOperator();
+    String reason = ConsoleTextSanitizer.safeInput(request.getReason(), 512);
+    int updated = secretVersionMapper.revokeSecretVersion(mapOf(
+        KEY_TENANT_ID,
+        tenantId,
+        KEY_SECRET_VERSION_ID,
+        secretVersionId,
+        "revokedBy",
+        operator,
+        "revokeReason",
+        reason));
+    if (updated == 0) {
+      return;
+    }
+    logChange(new ChangeLogCommand(
+        new ChangeLogContext(tenantId, operator, currentTraceId(), reason),
+        new ChangeLogTarget("SECRET", version.getSecretRef(), version.getVersionNo()),
+        new ChangeLogChange("REVOKE", "SUCCESS", Map.of(KEY_SECRET_VERSION_ID, secretVersionId))));
   }
 
   @Override
@@ -522,7 +558,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     String resolved = resolveTenant(tenantId);
     SecretVersionEntity entity = Guard.requireFound(
         secretVersionMapper.selectById(
-            mapOf(KEY_TENANT_ID, resolved, "secretVersionId", secretVersionId)),
+            mapOf(KEY_TENANT_ID, resolved, KEY_SECRET_VERSION_ID, secretVersionId)),
         "secret version not found: " + secretVersionId);
     return toSecretVersionResponse(entity);
   }
@@ -583,6 +619,9 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
         entity.getEffectiveToAt(),
         REDACTED_SECRET_PAYLOAD,
         ConsoleTextSanitizer.safeDisplay(entity.getRotationReason()),
+        entity.getRevokedAt(),
+        ConsoleTextSanitizer.safeDisplay(entity.getRevokedBy()),
+        ConsoleTextSanitizer.safeDisplay(entity.getRevokeReason()),
         ConsoleTextSanitizer.safeDisplay(entity.getCreatedBy()),
         ConsoleTextSanitizer.safeDisplay(entity.getUpdatedBy()),
         entity.getCreatedAt(),

@@ -73,6 +73,6 @@ public class ImportEchoHandler extends SdkAbstractImportHandler<String> {
   @Override
   protected void loadBatch(SdkTaskContext ctx, List<String> batch) {
     // 真业务:批量 INSERT 到租户自家表;这里只 log
-    log.info("import sample: loadBatch size={} rows={}", batch.size(), batch);
+    log.info("import sample: loadBatch size={}", batch.size());
   }
 }

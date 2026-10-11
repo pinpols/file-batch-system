@@ -23,6 +23,7 @@ public final class DispatchRuntimeKeys {
   public static final String RECEIPT_STATUS = "receiptStatus";
   public static final String RETRY_REQUESTED = "retryRequested";
   public static final String RETRY_RECOVERED = "retryRecovered";
+  public static final String DISPATCH_SECRET_BINDINGS = "_dispatchSecretBindings";
 
   /** 渠道编码键：dispatch payload 字段、file_record metadata 与审计明细三处同名同义。 */
   public static final String CHANNEL_CODE = "channelCode";

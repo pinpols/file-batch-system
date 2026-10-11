@@ -122,7 +122,7 @@ public class BatchPlatformClient {
         .build();
     try {
       PlatformHttpClient.WorkerRegistrationResponse resp = httpClient.register(request);
-      log.info("BatchPlatformClient registered: response={}", resp);
+      log.info("BatchPlatformClient registered: workerId={} status={}", resp.id(), resp.status());
     } catch (IOException e) {
       throw new BatchSdkClientException(
           BatchSdkClientException.Stage.REGISTER, "worker register failed", e);

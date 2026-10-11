@@ -8,6 +8,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.console.config.ConsolePushProperties;
 import io.github.pinpols.batch.console.domain.notification.entity.ConsolePushSubscriptionEntity;
@@ -29,6 +32,7 @@ import org.bouncycastle.jce.interfaces.ECPublicKey;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 @DisplayName("推送发送器: 开关判定, 初始化失败兜底与投递目标查找的生命周期")
 class ConsolePushSenderTest {
@@ -79,6 +83,33 @@ class ConsolePushSenderTest {
 
     verify(service).send(any(Notification.class));
     verify(repository).touchLastPushedAt(any(), any());
+  }
+
+  @Test
+  @DisplayName("推送异常日志不包含 endpoint 的 userinfo 和 query 凭据")
+  void shouldMaskEndpointSecretsFromPushFailureLog() throws Exception {
+    PushAsyncService service = mock(PushAsyncService.class);
+    when(service.send(any(Notification.class)))
+        .thenReturn(CompletableFuture.failedFuture(new IllegalStateException(
+            "failed for https://push-user:push-password@push.example/send?token=endpoint-secret")));
+    pushServiceRef(sender).set(service);
+    when(repository.findByTenantAndUser("tenant-a", "alice")).thenReturn(List.of(subscription()));
+
+    Logger logger = (Logger) LoggerFactory.getLogger(ConsolePushSender.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      sender.sendToUser("tenant-a", "alice", new PushPayload("title", null, null, null));
+    } finally {
+      logger.detachAppender(appender);
+      appender.stop();
+    }
+
+    String logged = appender.list.stream()
+        .map(ILoggingEvent::getFormattedMessage)
+        .reduce("", (left, right) -> left + right);
+    assertThat(logged).doesNotContain("push-user", "push-password", "endpoint-secret");
   }
 
   @Test

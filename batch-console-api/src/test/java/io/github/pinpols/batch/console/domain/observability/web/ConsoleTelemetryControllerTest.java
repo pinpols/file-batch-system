@@ -7,6 +7,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.core.read.ListAppender;
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -15,6 +17,7 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
@@ -54,6 +57,34 @@ class ConsoleTelemetryControllerTest {
                     "{\"app\":\"console\",\"events\":[{\"type\":\"route\",\"name\":\"page_view\",\"page\":\"/home\"}]}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
+  }
+
+  @Test
+  @DisplayName("遥测日志不写入调用方提供的事件名称和页面内容")
+  void shouldNotLogCallerControlledTelemetryText() throws Exception {
+    Logger logger = (Logger) LoggerFactory.getLogger(ConsoleTelemetryController.class);
+    ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      mockMvc
+          .perform(
+              post("/api/console/telemetry/events")
+                  .contentType(APPLICATION_JSON)
+                  .content(
+                      "{\"app\":\"console\",\"events\":[{\"type\":\"error\",\"name\":\"secret-value\",\"page\":\"/ops?token=page-secret\"}]}"))
+          .andExpect(status().isOk());
+    } finally {
+      logger.detachAppender(appender);
+      appender.stop();
+    }
+
+    String logged = appender.list.stream()
+        .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
+        .reduce("", (left, right) -> left + right);
+    org.assertj.core.api.Assertions.assertThat(logged)
+        .contains("nameLength=12", "pagePresent=true")
+        .doesNotContain("secret-value", "page-secret", "token=");
   }
 
   @Test

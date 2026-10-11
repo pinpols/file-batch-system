@@ -3,8 +3,6 @@ package io.github.pinpols.batch.console.domain.observability.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.logging.BatchMdc;
-import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.observability.application.contract.request.FrontendTelemetryRequest;
 import io.github.pinpols.batch.console.domain.observability.application.contract.request.FrontendTelemetryRequest.Event;
@@ -39,43 +37,32 @@ public class ConsoleTelemetryController {
   @PostMapping("/events")
   public CommonResponse<Void> receiveEvents(@RequestBody @Valid FrontendTelemetryRequest request) {
     validateProps(request);
-    BatchMdc.put(StructuredLogField.FRONTEND_APP, request.app());
-    if (request.userId() != null) {
-      BatchMdc.put(StructuredLogField.FRONTEND_USER_ID, request.userId());
-    }
-    try {
-      for (Event event : request.events()) {
-        BatchMdc.put(StructuredLogField.FRONTEND_EVENT_TYPE, event.type());
-        BatchMdc.put(StructuredLogField.FRONTEND_PAGE, event.page());
-        try {
-          // P2-2(2026-05-16):不再把 props 整体序列化进结构化日志,只记 props key 数量。
-          // 原写法 props={整个 JSON} 让登录用户任意撑大日志,且潜在把 token/密码等敏感字段
-          // 顺手写进 Loki。结构化追踪如确需 props,可加专门的 telemetry table / OTLP 出口,
-          // 不要再 piggyback 应用日志。
-          int propsKeys = event.props() == null ? 0 : event.props().size();
-          if ("error".equals(event.type())) {
-            log.error(
-                "[frontend:error] {} | page={} propsKeys={}",
-                event.name(),
-                event.page(),
-                propsKeys);
-          } else {
-            log.info(
-                "[frontend:{}] {} | page={} propsKeys={}",
-                event.type(),
-                event.name(),
-                event.page(),
-                propsKeys);
-          }
-        } finally {
-          BatchMdc.removeAll(
-              StructuredLogField.FRONTEND_EVENT_TYPE, StructuredLogField.FRONTEND_PAGE);
-        }
+    for (Event event : request.events()) {
+      // 保留聚合诊断信息，不输出调用方控制的事件文本或页面值。
+      int propsKeys = event.props() == null ? 0 : event.props().size();
+      if ("error".equals(event.type())) {
+        log.error(
+            "[frontend:error] telemetry event received nameLength={} pagePresent={} propsKeys={}",
+            event.name().length(),
+            event.page() != null && !event.page().isBlank(),
+            propsKeys);
+      } else {
+        log.info(
+            "[frontend] telemetry event received type={} nameLength={} pagePresent={} propsKeys={}",
+            safeEventType(event.type()),
+            event.name().length(),
+            event.page() != null && !event.page().isBlank(),
+            propsKeys);
       }
-    } finally {
-      BatchMdc.removeAll(StructuredLogField.FRONTEND_APP, StructuredLogField.FRONTEND_USER_ID);
     }
     return responseFactory.success(null);
+  }
+
+  private static String safeEventType(String eventType) {
+    return switch (eventType) {
+      case "route", "click", "api", "error" -> eventType;
+      default -> "custom";
+    };
   }
 
   private void validateProps(FrontendTelemetryRequest request) {

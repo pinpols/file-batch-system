@@ -22,7 +22,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 
-@DisplayName("维护模式过滤器: 全屏拦截、只读放行与管理员旁路")
+@DisplayName("维护模式过滤器: 全屏拦截、只读放行与管理员受限旁路")
 class MaintenanceModeFilterTest {
 
   private ConsoleMaintenanceProperties properties;
@@ -104,10 +104,8 @@ class MaintenanceModeFilterTest {
   }
 
   @Test
-  @DisplayName("维护全屏拦截时管理员写请求仍被放行, 响应头标记管理员旁路")
-  void shouldAllowAdminWrite_whenMaintenanceFullBlock() throws Exception {
-    // 维护期全屏 503,但 ROLE_ADMIN 可旁路继续操作(运维场景);响应头标 admin-bypass,
-    // 前端 banner 据此显示"当前为维护期 admin 旁路"提示。
+  @DisplayName("维护全屏期间管理员普通业务写请求仍被拦截")
+  void shouldBlockAdminWrite_whenMaintenanceFullBlock() throws Exception {
     properties.setEnabled(true);
     properties.setReadOnly(false);
     refresh();
@@ -118,9 +116,44 @@ class MaintenanceModeFilterTest {
     MockHttpServletRequest post = new MockHttpServletRequest("POST", "/api/console/jobs");
     filter.doFilterInternal(post, response, chain);
 
-    assertThat(chainInvoked).as("admin POST 应被放行").isTrue();
+    assertThat(chainInvoked).as("admin 普通业务 POST 也应被冻结").isFalse();
+    assertThat(response.getStatus()).isEqualTo(503);
+    assertThat(response.getHeader("X-Maintenance")).isEqualTo("blocked");
+  }
+
+  @Test
+  @DisplayName("维护全屏期间管理员可读取运维信息, 但响应明确标记旁路")
+  void shouldAllowAdminRead_whenMaintenanceFullBlock() throws Exception {
+    properties.setEnabled(true);
+    properties.setReadOnly(false);
+    refresh();
+    SecurityContextHolder.getContext()
+        .setAuthentication(new UsernamePasswordAuthenticationToken(
+            "ops-admin", null, List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+
+    filter.doFilterInternal(get("/api/console/jobs"), response, chain);
+
+    assertThat(chainInvoked).isTrue();
     assertThat(response.getStatus()).isEqualTo(200);
     assertThat(response.getHeader("X-Maintenance")).isEqualTo("admin-bypass");
+  }
+
+  @Test
+  @DisplayName("维护全屏期间维护控制接口仍可供管理员关闭维护")
+  void shouldAllowMaintenanceControlWrite_whenMaintenanceFullBlock() throws Exception {
+    properties.setEnabled(true);
+    refresh();
+    SecurityContextHolder.getContext()
+        .setAuthentication(new UsernamePasswordAuthenticationToken(
+            "ops-admin", null, List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+
+    filter.doFilterInternal(
+        new MockHttpServletRequest("PUT", "/api/console/admin/system/maintenance"),
+        response,
+        chain);
+
+    assertThat(chainInvoked).isTrue();
+    assertThat(response.getStatus()).isEqualTo(200);
   }
 
   @Test

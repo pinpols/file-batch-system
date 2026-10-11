@@ -16,6 +16,7 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
 import io.github.pinpols.batch.orchestrator.config.OrchestratorKafkaConsumerConfiguration;
 import io.github.pinpols.batch.orchestrator.config.TriggerConsumerProperties;
+import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -58,6 +59,7 @@ public class TriggerLaunchConsumer {
   private static final String METRIC_CONSUMED = "batch.trigger.launch.consumed.total";
   private static final String METRIC_DEDUPED = "batch.trigger.launch.deduped.total";
   private static final String METRIC_FAILED = "batch.trigger.launch.failed.total";
+  private static final String METRIC_DEFERRED = "batch.trigger.launch.deferred.total";
   private static final String METRIC_CONSUME_DURATION = "batch.trigger.launch.consume.duration";
   private static final String METRIC_KAFKA_QUEUE_AGE = "batch.trigger.launch.kafka.queue.age";
 
@@ -80,6 +82,7 @@ public class TriggerLaunchConsumer {
   }
 
   private final LaunchApplicationService launchApplicationService;
+  private final OrchestratorGracefulShutdown gracefulShutdown;
   private final MeterRegistry meterRegistry;
   private final Timer consumeTimer;
   private final Timer kafkaQueueAgeTimer;
@@ -88,9 +91,11 @@ public class TriggerLaunchConsumer {
 
   public TriggerLaunchConsumer(
       LaunchApplicationService launchApplicationService,
+      OrchestratorGracefulShutdown gracefulShutdown,
       MeterRegistry meterRegistry,
       TriggerConsumerProperties consumerProperties) {
     this.launchApplicationService = launchApplicationService;
+    this.gracefulShutdown = gracefulShutdown;
     this.meterRegistry = meterRegistry;
     this.consumeTimer = Timer.builder(METRIC_CONSUME_DURATION).register(meterRegistry);
     this.kafkaQueueAgeTimer = Timer.builder(METRIC_KAFKA_QUEUE_AGE).register(meterRegistry);
@@ -103,11 +108,17 @@ public class TriggerLaunchConsumer {
   }
 
   @KafkaListener(
+      id = OrchestratorKafkaConsumerConfiguration.TRIGGER_LAUNCH_LISTENER_ID,
       topics = BatchTopics.TRIGGER_LAUNCH_V1,
       groupId = "${batch.trigger.consumer.group-id:orchestrator-trigger-launch}",
       containerFactory = OrchestratorKafkaConsumerConfiguration.TRIGGER_LISTENER_FACTORY)
   public void consume(ConsumerRecord<String, String> consumerRecord, Acknowledgment ack) {
     recordKafkaQueueAge(consumerRecord);
+    if (gracefulShutdown.isDraining()) {
+      counter(METRIC_DEFERRED).increment();
+      ack.nack(rateLimitBackoff);
+      return;
+    }
     LaunchEnvelope envelope;
     try {
       envelope = JsonUtils.fromJson(consumerRecord.value(), LaunchEnvelope.class);

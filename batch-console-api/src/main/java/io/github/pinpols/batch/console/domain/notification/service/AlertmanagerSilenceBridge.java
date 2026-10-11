@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.common.utils.AlertLabels;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.config.AlertmanagerNotifyProperties;
 import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
@@ -81,7 +82,9 @@ public class AlertmanagerSilenceBridge {
           },
           new ThreadPoolExecutor.AbortPolicy());
       this.executor = pool;
-      log.info("AlertmanagerSilenceBridge enabled: apiBaseUrl={}", props.getApiBaseUrl());
+      log.info(
+          "AlertmanagerSilenceBridge enabled: apiBaseUrl={}",
+          SecretMasking.maskEndpoint(props.getApiBaseUrl()));
     } else {
       this.executor = null;
       log.info("AlertmanagerSilenceBridge disabled (silence.enabled=false or apiBaseUrl blank)");

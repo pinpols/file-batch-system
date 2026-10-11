@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.worker.imports.infrastructure.quality;
 
-import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.booleanValue;
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.decimalValue;
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.enabled;
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.firstNonNull;
@@ -17,12 +16,14 @@ import org.springframework.stereotype.Component;
 
 /**
  * ADR-041 Phase1.2:控制金额对账。跨 chunk 累加 amountField 金额,所有记录处理完后与声明总额(规则 expected 或 P1.1 trailer 声明的
- * declaredControlTotal)比对。默认告警,blocker=true 才阻断。控制总额只验「数对不对」(传输完整性), 不裁定业务对错(ADR-021 边界)。
+ * declaredControlTotal)比对。规则启用后按容差作阻断性校验;控制总额只验「数对不对」(传输完整性), 不裁定业务对错(ADR-021 边界)。
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class ControlTotalEvaluator {
+
+  private static final String CONTROL_TOTAL_CHECK = "control_total_check";
 
   static final String ATTR_RUNNING_SUM = "controlTotalRunningSum";
 
@@ -56,8 +57,8 @@ public class ControlTotalEvaluator {
   }
 
   /**
-   * 所有 chunk 结束后调用:running sum vs 声明总额。容差内 → null;超差 + blocker → ValidationIssue;超差 + !blocker → 仅
-   * warn 返回 null。声明总额取自规则 expected,缺省回落 P1.1 trailer 声明值。
+   * 所有 chunk 结束后调用:running sum vs 声明总额。容差内通过;超差或缺少核对依据时返回阻断性 issue。
+   * 声明总额取自规则 expected,缺省回落 P1.1 trailer 声明值;容差缺省为零。
    */
   public ValidationIssue finalizeCheck(ValidationSession session) {
     if (session == null || session.context() == null) {
@@ -69,18 +70,28 @@ public class ControlTotalEvaluator {
     }
     String amountField = amountField(rule);
     if (!Texts.hasText(amountField)) {
-      return null;
+      session.appliedChecks().add(CONTROL_TOTAL_CHECK);
+      return new ValidationIssue(
+          null,
+          ImportValidationErrorCode.CONTROL_TOTAL.code(),
+          "control-total check requires amountField",
+          Map.of("reason", "MISSING_AMOUNT_FIELD"));
     }
     BigDecimal declared = declared(session, rule);
     if (declared == null) {
+      session.appliedChecks().add(CONTROL_TOTAL_CHECK);
       log.warn(
           "control-total check enabled but no declared total (expected/trailer): tenantId={},"
               + " fileId={}",
           session.context().getTenantId(),
           session.context().getFileId());
-      return null;
+      return new ValidationIssue(
+          null,
+          ImportValidationErrorCode.CONTROL_TOTAL.code(),
+          "control-total check requires a declared total",
+          Map.of("reason", "MISSING_DECLARED_TOTAL", "field", amountField));
     }
-    session.appliedChecks().add("control_total_check");
+    session.appliedChecks().add(CONTROL_TOTAL_CHECK);
     BigDecimal actual = runningSum(session);
     BigDecimal tolerance = decimalValue(rule.get("tolerance"));
     if (tolerance == null) {
@@ -89,25 +100,14 @@ public class ControlTotalEvaluator {
     if (actual.subtract(declared).abs().compareTo(tolerance) <= 0) {
       return null;
     }
-    if (booleanValue(rule.get("blocker"), false)) {
-      return new ValidationIssue(
-          null,
-          ImportValidationErrorCode.CONTROL_TOTAL.code(),
-          "control-total mismatch, declared="
-              + declared.toPlainString()
-              + ", actual="
-              + actual.toPlainString(),
-          Map.of("declared", declared, "actual", actual, "field", amountField));
-    }
-    log.warn(
-        "control-total mismatch (alert-only): declared={}, actual={}, field={}, tenantId={},"
-            + " fileId={}",
-        declared.toPlainString(),
-        actual.toPlainString(),
-        amountField,
-        session.context().getTenantId(),
-        session.context().getFileId());
-    return null;
+    return new ValidationIssue(
+        null,
+        ImportValidationErrorCode.CONTROL_TOTAL.code(),
+        "control-total mismatch, declared="
+            + declared.toPlainString()
+            + ", actual="
+            + actual.toPlainString(),
+        Map.of("declared", declared, "actual", actual, "field", amountField));
   }
 
   private Map<String, Object> rule(ValidationSession session) {

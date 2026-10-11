@@ -224,6 +224,29 @@ class DefaultRetryGovernanceServiceTest {
     verify(retryScheduleMapper, never()).insert(any());
   }
 
+  @ParameterizedTest
+  @DisplayName("密钥版本阻断错误直接生成业务死信,不自动切换版本重试")
+  @ValueSource(
+      strings = {
+        "DISPATCH_SECRET_BINDING_MISSING",
+        "DISPATCH_SECRET_VERSION_MISSING",
+        "DISPATCH_SECRET_VERSION_INVALID",
+        "DISPATCH_SECRET_REVOKED_OR_EXPIRED",
+        "DISPATCH_SECRET_FIELD_NOT_ALLOWED",
+        "DISPATCH_SECRET_PAYLOAD_EMPTY",
+        "DISPATCH_SECRET_PAYLOAD_INVALID"
+      })
+  void shouldDeadLetterSecretVersionFailuresWithoutRetry(String errorCode) {
+    when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 3));
+
+    boolean scheduled = service.scheduleRetryIfNecessary(
+        task("t1", 1L, 1L), partition(1L, 0), jobInstance(1L), errorCode, "secret blocked");
+
+    assertThat(scheduled).isFalse();
+    verify(deadLetterTaskMapper).insert(any());
+    verify(retryScheduleMapper, never()).insert(any());
+  }
+
   @Test
   @DisplayName("作业定义不存在时使用默认重试策略并生成重试计划")
   void shouldUseDefaultRetryPolicyWhenJobDefinitionNotFound() {

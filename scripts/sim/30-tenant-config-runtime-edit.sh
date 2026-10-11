@@ -20,7 +20,6 @@ export SIM_RUNTIME_CONFIG_SQL_DIR="$ROOT/scripts/sim/sql"
 import http.cookiejar
 import json
 import os
-import signal
 import subprocess
 import time
 import urllib.error
@@ -212,15 +211,6 @@ original_timeout = original.get("timeoutSeconds") or 0
 sleep_params = {"taskType": "shell", "command": "/bin/sleep", "args": ["20"]}
 edited_params = {"taskType": "shell", "command": "/bin/echo", "args": ["updated-config"]}
 old_instance_request = None
-
-
-def interrupt_run(signum, _frame):
-    # 转成正常栈展开，让 SIGTERM / Ctrl-C 也执行配置恢复；SIGKILL 无法捕获。
-    raise SystemExit(128 + signum)
-
-
-signal.signal(signal.SIGTERM, interrupt_run)
-signal.signal(signal.SIGINT, interrupt_run)
 try:
     update_definition(job_id, sleep_params, "EXPONENTIAL", 1, 300)
     old_instance_request = launch("in-flight")

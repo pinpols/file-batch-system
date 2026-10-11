@@ -10,6 +10,7 @@ import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelSc
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageSampleDataFactory;
+import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageSheetSpecs;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageWorkbookLimits;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.io.ByteArrayInputStream;
@@ -22,8 +23,10 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
@@ -567,6 +570,54 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
   }
 
   @Test
+  @DisplayName("真实 HTTP 场景模板下载: IMPORT+EXPORT 保留必需配置列且不暴露平台资源列")
+  void shouldDownloadFocusedWorkbookWithImportAndExportColumns() throws Exception {
+    HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port
+            + "/api/console/config/tenant-package/excel/scenario-template"
+            + "?scenarios=IMPORT&scenarios=EXPORT"))
+        .timeout(Duration.ofSeconds(60))
+        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, "excel-upload-ta")
+        .header("X-Console-Roles", "ROLE_TENANT_ADMIN")
+        .GET()
+        .build();
+
+    HttpResponse<byte[]> response =
+        HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofByteArray());
+
+    assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
+    assertThat(response.headers().firstValue("Content-Disposition").orElse(""))
+        .contains("tenant-config-package-export-import.xlsx");
+    try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(response.body()))) {
+      assertThat(workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET)).isNotNull();
+      assertThat(workbook.getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET))
+          .isNotNull();
+      assertThat(workbook.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET)).isNotNull();
+      assertThat(workbook.getSheet(ConfigPackageExcelValidator.STEP_SHEET)).isNotNull();
+      assertThat(workbook.getSheet(ConfigPackageExcelValidator.CHANNEL_SHEET)).isNull();
+      assertThat(workbook.getSheet(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET))
+          .isNull();
+
+      assertHeaderColumns(
+          workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET),
+          Set.of("job_code", "job_name", "job_type", "schedule_type", "default_params"));
+      assertHeaderColumns(
+          workbook.getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET),
+          Set.of(
+              "template_code",
+              "file_format_type",
+              "charset",
+              "target_charset",
+              "delimiter",
+              "header_rows",
+              "query_param_schema",
+              "default_query_sql"));
+      assertHeaderColumns(
+          workbook.getSheet(ConfigPackageExcelValidator.STEP_SHEET),
+          Set.of("job_code", "step_code", "stage_code", "step_params"));
+    }
+  }
+
+  @Test
   @DisplayName("场景化示例工作簿可直接上传预览，且不依赖资源队列与监控阈值 sheet")
   void shouldUploadScenarioWorkbookGeneratedByTemplateEndpointContract() throws Exception {
     StaticMessageSource messages = new StaticMessageSource();
@@ -770,6 +821,7 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
         List.of("DISPATCH"),
         List.of("ATOMIC"),
         List.of("WORKFLOW"),
+        List.of("SCHEDULE"),
         List.of("IMPORT", "EXPORT"),
         List.of("ALL"));
     for (List<String> selectedScenarios : scenarioSelections) {
@@ -789,6 +841,7 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
       assertThat(templateResponse.statusCode())
           .as("template download for %s", scenario)
           .isEqualTo(HttpStatus.OK.value());
+      assertScenarioTemplateSheets(templateResponse.body(), selectedScenarios);
 
       String boundary = "excel-upload-scenario-" + scenario.toLowerCase();
       HttpResponse<String> uploadResponse = HttpClient.newHttpClient()
@@ -834,6 +887,94 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
               "preview validation issues for %s: %s",
               scenario, preview.path("data").path("issues"))
           .isZero();
+    }
+  }
+
+  private static void assertScenarioTemplateSheets(byte[] workbookBytes, List<String> scenarios)
+      throws Exception {
+    Set<String> sheets = new LinkedHashSet<>();
+    try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
+      for (Sheet sheet : workbook) {
+        sheets.add(sheet.getSheetName());
+      }
+
+      ConfigPackageSheetSpecs specs = new ConfigPackageSheetSpecs(new StaticMessageSource());
+      for (ConfigPackageSheetSpecs.SheetDef expectedSheet : specs.project(scenarios)) {
+        Sheet actualSheet = workbook.getSheet(expectedSheet.name());
+        assertThat(actualSheet).as("projected sheet %s", expectedSheet.name()).isNotNull();
+
+        Row header = actualSheet.getRow(0);
+        assertThat(header).as("header row for %s", expectedSheet.name()).isNotNull();
+        List<String> actualColumns = new ArrayList<>();
+        for (int columnIndex = 0; columnIndex < header.getLastCellNum(); columnIndex++) {
+          actualColumns.add(header.getCell(columnIndex).getStringCellValue());
+        }
+        assertThat(actualColumns)
+            .as("complete ordered columns for %s in scenarios %s", expectedSheet.name(), scenarios)
+            .containsExactlyElementsOf(expectedSheet.columns());
+      }
+    }
+
+    assertThat(sheets).contains("job_definition", "字段说明");
+    if (scenarios.contains("ALL")) {
+      assertThat(sheets)
+          .contains(
+              ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET,
+              ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET,
+              ConfigPackageExcelValidator.BUSINESS_CALENDAR_SHEET,
+              ConfigPackageExcelValidator.BATCH_WINDOW_SHEET,
+              ConfigPackageExcelValidator.CHANNEL_SHEET,
+              ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET,
+              ConfigPackageExcelValidator.PIPELINE_SHEET,
+              ConfigPackageExcelValidator.STEP_SHEET,
+              ConfigPackageExcelValidator.WF_DEF_SHEET,
+              ConfigPackageExcelValidator.WF_NODE_SHEET,
+              ConfigPackageExcelValidator.WF_EDGE_SHEET);
+      return;
+    }
+
+    if (scenarios.contains("IMPORT") || scenarios.contains("EXPORT")) {
+      assertThat(sheets)
+          .contains(
+              ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET,
+              ConfigPackageExcelValidator.PIPELINE_SHEET,
+              ConfigPackageExcelValidator.STEP_SHEET);
+    }
+    if (scenarios.contains("PROCESS") || scenarios.contains("DISPATCH")) {
+      assertThat(sheets)
+          .contains(
+              ConfigPackageExcelValidator.PIPELINE_SHEET, ConfigPackageExcelValidator.STEP_SHEET);
+    }
+    if (scenarios.contains("DISPATCH")) {
+      assertThat(sheets).contains(ConfigPackageExcelValidator.CHANNEL_SHEET);
+    }
+    if (scenarios.contains("WORKFLOW")) {
+      assertThat(sheets)
+          .contains(
+              ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET,
+              ConfigPackageExcelValidator.CHANNEL_SHEET,
+              ConfigPackageExcelValidator.WF_DEF_SHEET,
+              ConfigPackageExcelValidator.WF_NODE_SHEET,
+              ConfigPackageExcelValidator.WF_EDGE_SHEET);
+    }
+    if (scenarios.contains("SCHEDULE")) {
+      assertThat(sheets)
+          .contains(
+              ConfigPackageExcelValidator.BUSINESS_CALENDAR_SHEET,
+              ConfigPackageExcelValidator.BATCH_WINDOW_SHEET,
+              ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET);
+    }
+    if (scenarios.contains("ATOMIC")) {
+      assertThat(sheets)
+          .doesNotContain(
+              ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET,
+              ConfigPackageExcelValidator.PIPELINE_SHEET,
+              ConfigPackageExcelValidator.CHANNEL_SHEET,
+              ConfigPackageExcelValidator.WF_DEF_SHEET);
+    }
+    assertThat(sheets).doesNotContain(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET);
+    if (!scenarios.contains("SCHEDULE")) {
+      assertThat(sheets).doesNotContain(ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET);
     }
   }
 
@@ -1651,6 +1792,18 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
       }
     }
     throw new IllegalArgumentException("Missing workbook column: " + columnName);
+  }
+
+  private static void assertHeaderColumns(Sheet sheet, Set<String> expectedColumns) {
+    Row header = sheet.getRow(0);
+    assertThat(header).as("header row for %s", sheet.getSheetName()).isNotNull();
+    Set<String> actualColumns = new LinkedHashSet<>();
+    for (int index = 0; index < header.getLastCellNum(); index++) {
+      actualColumns.add(header.getCell(index).getStringCellValue());
+    }
+    assertThat(actualColumns)
+        .as("columns for %s", sheet.getSheetName())
+        .containsAll(expectedColumns);
   }
 
   private static Row rowForValue(Sheet sheet, int columnIndex, String value) {

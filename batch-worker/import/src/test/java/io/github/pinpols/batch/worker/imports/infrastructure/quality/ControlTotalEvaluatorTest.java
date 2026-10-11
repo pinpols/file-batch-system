@@ -51,13 +51,26 @@ class ControlTotalEvaluatorTest {
   }
 
   @Test
-  @DisplayName("默认告警(blocker 缺省):金额不符也不阻断,无 issue")
-  void mismatchAlertOnly_noIssue() {
+  @DisplayName("未配置容差时按零容差阻断金额差异")
+  void mismatchWithDefaultTolerance_blocksDelivery() {
     ValidationSession session =
         session(Map.of("controlTotalCheck", Map.of("amountField", "amount", "expected", "999.00")));
     evaluator.accumulate(session, rows("100.00", "200.00"));
-    assertThat(evaluator.finalizeCheck(session)).isNull();
+    ValidationIssue issue = evaluator.finalizeCheck(session);
+    assertThat(issue).isNotNull();
+    assertThat(issue.errorCode()).isEqualTo("IMPORT_VALIDATE_CONTROL_TOTAL");
     assertThat(session.appliedChecks()).contains("control_total_check");
+  }
+
+  @Test
+  @DisplayName("旧配置 blocker=false 也不能绕过已启用的对账阻断")
+  void blocksMismatch_whenLegacyConfigRequestsAlertOnly() {
+    ValidationSession session = session(Map.of(
+        "controlTotalCheck",
+        Map.of("amountField", "amount", "expected", "999.00", "blocker", false)));
+    evaluator.accumulate(session, rows("100.00", "200.00"));
+
+    assertThat(evaluator.finalizeCheck(session)).isNotNull();
   }
 
   @Test
@@ -92,6 +105,29 @@ class ControlTotalEvaluatorTest {
     evaluator.accumulate(session, rows("100.00"));
     assertThat(evaluator.finalizeCheck(session)).isNull();
     assertThat(session.appliedChecks()).doesNotContain("control_total_check");
+  }
+
+  @Test
+  @DisplayName("启用金额对账但缺少声明总额时阻断交付")
+  void enabledCheckWithoutDeclaredTotal_blocksDelivery() {
+    ValidationSession session =
+        session(Map.of("controlTotalCheck", Map.of("amountField", "amount")));
+
+    ValidationIssue issue = evaluator.finalizeCheck(session);
+
+    assertThat(issue).isNotNull();
+    assertThat(issue.errorMessage()).contains("requires a declared total");
+  }
+
+  @Test
+  @DisplayName("启用金额对账但缺少 amountField 时阻断交付")
+  void enabledCheckWithoutAmountField_blocksDelivery() {
+    ValidationSession session = session(Map.of("controlTotalCheck", Map.of("expected", "0.00")));
+
+    ValidationIssue issue = evaluator.finalizeCheck(session);
+
+    assertThat(issue).isNotNull();
+    assertThat(issue.errorMessage()).contains("requires amountField");
   }
 
   private ValidationSession session(Map<String, Object> ruleSet) {

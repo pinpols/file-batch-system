@@ -49,6 +49,13 @@ flowchart LR
 | `file_dispatch_record` | 分发记录 | 记录渠道、目标系统、回执、重发情况 |
 | `file_audit_log` | 文件审计日志 | 记录下载、重导、重发、归档、删除等人工操作 |
 
+#### 外部投递幂等边界
+
+- 若 `DispatchPayload.externalRequestId` 未提供，Worker 使用租户、流水线实例、文件和渠道生成稳定请求号；同一流水线实例重试时不会重新生成。
+- HTTP/API 渠道将业务请求号放入请求体，并对其稳定派生符合 HTTP header 字符约束的 UUID 作为 `Idempotency-Key`。接收端必须按该键持久化去重，才能在“服务端已受理、响应丢失”后安全重试；只回显/记录请求号不构成幂等保证。
+- 平台数据库与外部系统之间没有分布式事务。SMTP、未实现幂等协议的 HTTP 接收端以及无法查询受理状态的渠道，超时结果可能未知；不能宣称 exactly-once，也不能仅凭本地 FAILED 判定远端未执行。运维应先用外部请求号核对接收端，再决定重投。
+- 新增下游渠道或启用自动重试前，需明确其去重键、保留期限、结果查询能力和人工核对流程；本地测试只能证明请求号稳定传递，不能替代真实接收端的持久去重验证。
+
 #### 文件类型模型建议
 
 文件类型不应只等同于扩展名，而应是平台级配置对象，至少包含：
@@ -310,15 +317,16 @@ MANIFEST 模式的**完整性校验链**（复用既有阶段，不重复下载�
 上游清算/对账文件常带一行 trailer（尾记录），声明本批笔数 / 控制总额。开启后 PARSE 阶段剥离 trailer（结构性末行，不进 parser），把声明值 stash 进上下文，VALIDATE 阶段 `controlRecordCheck` 对账声明笔数 vs 实际解析记录数。
 
 - `template_config.trailer_template`：`{"present":true,"delimiter":",","recordCountIndex":1,"controlTotalIndex":2}`。`present=false` 或不配 → 不剥离（与历史行为等价）。仅支持 in-memory 文本路径，spool 落盘 / 二进制 payload 跳过并告警。
-- `rule_set.controlRecordCheck`：`{"enabled":true,"blocker":false}`。**默认告警**（`log.warn`，不阻断）；`blocker=true` 才升级为阻断性 `IMPORT_VALIDATE_CONTROL_RECORD`（每流可配）。trailer 未带出笔数则不参与（仅告警）。
+- `rule_set.controlRecordCheck`：`{"enabled":true}`。检查保持显式启用；启用后缺少 trailer 声明笔数或声明与实际不一致均阻断交付(`IMPORT_VALIDATE_CONTROL_RECORD`)。`blocker` 不用于关闭阻断。
+- trailer、manifest `recordCount` 或启用的 `rowCountCheck` 产生的数据集行数差异使用硬阻断，不受坏记录跳过 allowlist 或 skip threshold 影响；只有逐行质量错误仍按坏记录治理策略处置。
 - 控制总额（金额合计）对账留待 Phase1.2（需在 VALIDATE 记录循环里累加金额列）。
 
 **5c）控制金额对账（ADR-041 Phase1.2，默认关闭，opt-in）**
 
 VALIDATE 阶段跨 chunk 累加金额列,全量记录处理完后与声明总额比对(声明总额来源:规则 `expected`,缺省回落 P1.1 trailer 剥离出的 `declaredControlTotal`)。只验「金额合计数对不对/全不全」(传输完整性),**不裁定业务对错**(ADR-021 边界)。
 
-- `rule_set.controlTotalCheck`：`{"enabled":true,"amountField":"amount","expected":"50000000.00","tolerance":"0.00","blocker":false}`。`amountField` 指金额列名;`tolerance` 容忍小数尾差(默认 0)。
-- **默认告警**(`log.warn`),`blocker=true` 才升级为阻断性 `IMPORT_VALIDATE_CONTROL_TOTAL`(每流可配)。未配 `expected` 且无 trailer 声明总额 → 仅告警不参与。
+- `rule_set.controlTotalCheck`：`{"enabled":true,"amountField":"amount","expected":"50000000.00","tolerance":"0.00"}`。`amountField` 指金额列名;`tolerance` 容忍小数尾差(默认严格零容差)。规则启用后缺少核对字段/声明或超差均阻断；`blocker` 不用于关闭阻断。
+- 检查保持显式启用；启用后缺少 `amountField`、声明总额或实际金额超出容差均阻断交付(`IMPORT_VALIDATE_CONTROL_TOTAL`)。容差缺省为严格零容差；`blocker` 不用于关闭阻断。
 - 累加范围 = 到达的全量数据记录(含将被判无效的行),与上游 trailer「发出的总额」口径对齐;JSON 反序列化失败的畸形行无法取金额,不计入(由笔数校验 P1.1 回退)。
 
 **6）导入字符集与编码处理规则**

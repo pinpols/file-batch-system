@@ -10,6 +10,9 @@ import org.slf4j.LoggerFactory;
 public final class OpenTelemetryLogbackBridge implements AutoCloseable {
 
   static final String APPENDER_NAME = "OTEL";
+  private static final String CAPTURED_MDC_ATTRIBUTES =
+      "service,tenantId,traceId,requestId,jobInstanceId,workflowRunId,partitionId,taskId,"
+          + "batchDay,attempt,topic,workerId,workerType,runMode,stage,fileId";
 
   private final Logger rootLogger;
   private final OpenTelemetryAppender appender;
@@ -24,8 +27,8 @@ public final class OpenTelemetryLogbackBridge implements AutoCloseable {
     OpenTelemetryAppender otelAppender = new OpenTelemetryAppender();
     otelAppender.setName(APPENDER_NAME);
     otelAppender.setContext(loggerContext);
-    otelAppender.setCaptureMdcAttributes("*");
-    otelAppender.setCaptureKeyValuePairAttributes(true);
+    otelAppender.setCaptureMdcAttributes(CAPTURED_MDC_ATTRIBUTES);
+    otelAppender.setCaptureKeyValuePairAttributes(false);
     otelAppender.setOpenTelemetry(openTelemetry);
     otelAppender.start();
     rootLogger.addAppender(otelAppender);

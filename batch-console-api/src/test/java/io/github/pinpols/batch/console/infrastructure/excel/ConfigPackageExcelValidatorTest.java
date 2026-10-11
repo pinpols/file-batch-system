@@ -345,6 +345,78 @@ class ConfigPackageExcelValidatorTest {
         .anySatisfy(issue -> assertThat(issue.message()).contains("must not use SELECT *"));
   }
 
+  @Test
+  @DisplayName("导出 SQL:注释和字符串常量中的写关键字不应误报")
+  void shouldAllowWriteKeywordsInsideCommentsAndStringLiterals() {
+    Map<String, String> row = new LinkedHashMap<>(fileTemplateRow("TPL", "1"));
+    row.put(
+        "default_query_sql",
+        "SELECT 'INSERT UPDATE DELETE SELECT *' AS note FROM biz.customer_account "
+            + "WHERE tenant_id = :tenantId /* DROP ALTER TRUNCATE */ -- GRANT EXEC");
+
+    ConfigPackageExcelValidator.PackageValidationResult result =
+        validator().validate(session(List.of(row)));
+
+    assertThat(result.allIssues())
+        .noneSatisfy(issue -> assertThat(issue.message()).contains("default_query_sql"));
+  }
+
+  @Test
+  @DisplayName("导出 SQL:真正的写语句仍在预览阶段被拒绝")
+  void shouldRejectWriteStatements_whenExportSqlIsNotSelect() {
+    for (String sql : List.of(
+        "INSERT INTO biz.customer_account (id) VALUES (1)",
+        "UPDATE biz.customer_account SET status = 'CLOSED' WHERE id = 1",
+        "DELETE FROM biz.customer_account WHERE id = 1",
+        "DROP TABLE biz.customer_account",
+        "SELECT id FROM biz.customer_account; DELETE FROM biz.customer_account")) {
+      Map<String, String> row = new LinkedHashMap<>(fileTemplateRow("TPL", "1"));
+      row.put("default_query_sql", sql);
+
+      ConfigPackageExcelValidator.PackageValidationResult result =
+          validator().validate(session(List.of(row)));
+
+      assertThat(result.allIssues())
+          .anySatisfy(issue -> assertThat(issue.message())
+              .contains("default_query_sql must be a single SELECT/WITH query"));
+    }
+  }
+
+  @Test
+  @DisplayName("导出 SQL:拒绝把写入语句藏在 WITH 子句中")
+  void shouldRejectDataModifyingCommonTableExpression() {
+    Map<String, String> row = new LinkedHashMap<>(fileTemplateRow("TPL", "1"));
+    row.put(
+        "default_query_sql",
+        "WITH changed AS (DELETE FROM biz.customer_account WHERE id = 1 RETURNING id) "
+            + "SELECT id FROM changed");
+
+    ConfigPackageExcelValidator.PackageValidationResult result =
+        validator().validate(session(List.of(row)));
+
+    assertThat(result.allIssues())
+        .anySatisfy(issue -> assertThat(issue.message())
+            .contains("default_query_sql must be a single SELECT/WITH query"));
+  }
+
+  @Test
+  @DisplayName("导出 SQL:拒绝 SELECT INTO 和 FOR UPDATE 等非只读查询")
+  void shouldRejectSelectWithWriteOrLockClause() {
+    for (String sql : List.of(
+        "SELECT id INTO biz.customer_copy FROM biz.customer_account",
+        "SELECT id FROM biz.customer_account FOR UPDATE")) {
+      Map<String, String> row = new LinkedHashMap<>(fileTemplateRow("TPL", "1"));
+      row.put("default_query_sql", sql);
+
+      ConfigPackageExcelValidator.PackageValidationResult result =
+          validator().validate(session(List.of(row)));
+
+      assertThat(result.allIssues())
+          .anySatisfy(issue -> assertThat(issue.message())
+              .contains("default_query_sql must be a single SELECT/WITH query"));
+    }
+  }
+
   private static ConfigPackageExcelValidator validator() {
     return new ConfigPackageExcelValidator(
         mock(JobDefinitionMapper.class),

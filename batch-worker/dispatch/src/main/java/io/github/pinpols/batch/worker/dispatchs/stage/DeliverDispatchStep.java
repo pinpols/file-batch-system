@@ -14,6 +14,8 @@ import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchSecretBlockedException;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchSecretResolver;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchCommand;
@@ -23,6 +25,7 @@ import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchR
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.OptionalLong;
+import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -44,14 +47,17 @@ public class DeliverDispatchStep implements DispatchStageStep {
   private final FileDispatchRepository fileDispatchRepository;
   private final DispatchChannelGateway dispatchChannelGateway;
   private final PlatformFileRecordRepository fileRecords;
+  private final DispatchSecretResolver dispatchSecretResolver;
 
   public DeliverDispatchStep(
       FileDispatchRepository fileDispatchRepository,
       DispatchChannelGateway dispatchChannelGateway,
-      PlatformFileRecordRepository fileRecords) {
+      PlatformFileRecordRepository fileRecords,
+      DispatchSecretResolver dispatchSecretResolver) {
     this.fileDispatchRepository = fileDispatchRepository;
     this.dispatchChannelGateway = dispatchChannelGateway;
     this.fileRecords = fileRecords;
+    this.dispatchSecretResolver = dispatchSecretResolver;
   }
 
   @Override
@@ -99,6 +105,37 @@ public class DeliverDispatchStep implements DispatchStageStep {
       attrs.put(PipelineRuntimeKeys.DRY_RUN_SKIPPED, "DISPATCH_EXTERNAL_DELIVERY");
       return DispatchStageResult.success(stage());
     }
+    try {
+      Set<String> resolvedSecretKeys = dispatchSecretResolver.resolveInto(
+          context.getTenantId(),
+          dispatchPayload.channelCode(),
+          readRawPayload(context),
+          channelConfig);
+      try {
+        return deliver(context, dispatchPayload, attrs, fileId, fileRecord, channelConfig);
+      } finally {
+        resolvedSecretKeys.forEach(channelConfig::remove);
+      }
+    } catch (DispatchSecretBlockedException exception) {
+      attrs.put(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.FALSE);
+      attrs.remove(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE);
+      return DispatchStageResult.failure(
+          stage(),
+          exception.errorCode(),
+          "error.dispatch.secret.blocked",
+          new Object[0],
+          exception.errorCode(),
+          ERROR_OBJECT_MAPPER);
+    }
+  }
+
+  private DispatchStageResult deliver(
+      DispatchJobContext context,
+      DispatchPayload dispatchPayload,
+      Map<String, Object> attrs,
+      Long fileId,
+      Map<String, Object> fileRecord,
+      Map<String, Object> channelConfig) {
     boolean dispatchRecordExists = fileDispatchRepository.existsLatestDispatchRecord(
         context.getTenantId(), fileId, dispatchPayload.channelCode());
     if (!dispatchRecordExists) {
@@ -174,6 +211,13 @@ public class DeliverDispatchStep implements DispatchStageStep {
     }
     attrs.put(DispatchRuntimeKeys.DISPATCH_RECORD, dispatchPayload);
     return DispatchStageResult.success(stage());
+  }
+
+  private Map<String, Object> readRawPayload(DispatchJobContext context) {
+    Object raw = context.getAttributes().get(DispatchRuntimeKeys.DISPATCH_SECRET_BINDINGS);
+    return raw instanceof Map<?, ?>
+        ? Map.of(DispatchRuntimeKeys.DISPATCH_SECRET_BINDINGS, raw)
+        : Map.of();
   }
 
   /**

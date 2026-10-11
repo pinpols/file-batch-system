@@ -11,10 +11,12 @@ import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKe
 import jakarta.annotation.PreDestroy;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import okhttp3.Dns;
 import okhttp3.MediaType;
@@ -93,7 +95,8 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
 
     Request.Builder builder = new Request.Builder()
         .url(endpoint)
-        .post(RequestBody.create(JsonUtils.toJson(requestPayload), JSON));
+        .post(RequestBody.create(JsonUtils.toJson(requestPayload), JSON))
+        .header("Idempotency-Key", idempotencyKey(receipt.externalRequestId()));
     String ct = String.valueOf(channelConfig.getOrDefault("channel_type", ""));
     if ("API_PUSH".equalsIgnoreCase(ct)) {
       Object apiKey = channelConfig.get("api_push_api_key");
@@ -150,5 +153,10 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
     okHttpClient.dispatcher().cancelAll();
     okHttpClient.dispatcher().executorService().shutdown();
     okHttpClient.connectionPool().evictAll();
+  }
+
+  private static String idempotencyKey(String externalRequestId) {
+    return UUID.nameUUIDFromBytes(externalRequestId.getBytes(StandardCharsets.UTF_8))
+        .toString();
   }
 }

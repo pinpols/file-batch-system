@@ -118,10 +118,10 @@ public class HttpPollSensorPolicy implements SensorPolicy {
       }
       return SensorProbeResult.notYet();
     } catch (IOException e) {
-      log.debug("HTTP_POLL timeout url={} err={}", url, SwallowedExceptionLogger.summary(e));
+      log.debug("HTTP_POLL timeout err={}", SwallowedExceptionLogger.summary(e));
       return SensorProbeResult.notYet();
     } catch (Exception e) {
-      log.warn("HTTP_POLL probe error url={} err={}", url, SwallowedExceptionLogger.summary(e));
+      log.warn("HTTP_POLL probe error err={}", SwallowedExceptionLogger.summary(e));
       return SensorProbeResult.error(
           "error.workflow.sensor_probe_failed",
           List.of(

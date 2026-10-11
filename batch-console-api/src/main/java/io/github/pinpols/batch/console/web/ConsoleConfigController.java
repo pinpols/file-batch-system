@@ -13,6 +13,7 @@ import io.github.pinpols.batch.console.application.contract.response.config.Conf
 import io.github.pinpols.batch.console.application.contract.response.config.ConfigReleaseDiffResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.ConsoleConfigChangeLogResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.ConsoleConfigReleaseResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.request.SecretVersionRevokeRequest;
 import io.github.pinpols.batch.console.domain.ops.application.contract.request.SecretVersionRotateRequest;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -118,6 +119,17 @@ public class ConsoleConfigController {
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody SecretVersionRotateRequest request) {
     return responseFactory.success(applicationService.rotateSecretVersion(request));
+  }
+
+  /** 紧急撤销密钥版本；已创建实例和重试仍绑定原版本，但下一次外发会被阻断。 */
+  @PostMapping("/secrets/{secretVersionId}/revoke")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+  public CommonResponse<Void> revokeSecretVersion(
+      @PathVariable Long secretVersionId,
+      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+      @Valid @RequestBody SecretVersionRevokeRequest request) {
+    applicationService.revokeSecretVersion(secretVersionId, request);
+    return responseFactory.success(null);
   }
 
   /** 查询配置变更日志。 */

@@ -95,10 +95,41 @@ class SonarQualityGateTest(unittest.TestCase):
             {
                 "component": {
                     "measures": [
-                        {"metric": "new_lines", "periods": [{"value": "12"}]},
+                        {"metric": "new_lines", "period": {"value": "12"}},
                         {"metric": "new_security_hotspots", "value": "0"},
                         {"metric": "new_coverage", "value": "NaN"},
                     ]
+                }
+            }
+        )
+
+        self.assertEqual(measures, {"new_lines": 12, "new_security_hotspots": 0})
+
+    def test_parses_legacy_periods_measure_shape(self) -> None:
+        measures = parse_measures(
+            {
+                "component": {
+                    "measures": [
+                        {"metric": "new_lines", "periods": [{"value": "12"}]}
+                    ]
+                }
+            }
+        )
+
+        self.assertEqual(measures, {"new_lines": 12})
+
+    def test_parses_new_code_evidence_from_modern_measure_period(self) -> None:
+        measures = parse_measures(
+            {
+                "component": {
+                    "measures": [
+                        {"metric": "new_lines", "period": {"value": "12"}},
+                        {
+                            "metric": "new_security_hotspots",
+                            "period": {"value": "0"},
+                        },
+                    ],
+                    "period": {"mode": "NUMBER_OF_DAYS", "parameter": "30"},
                 }
             }
         )
@@ -160,6 +191,13 @@ class SonarQualityGateTest(unittest.TestCase):
             commands,
             ["--full --skip-build", "--full --skip-build --quality-gate"],
         )
+
+    def test_quality_gate_requests_modern_period_metadata(self) -> None:
+        script = (
+            Path(__file__).resolve().parents[3] / "scripts/dev/sonar-scan.sh"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('--data-urlencode "additionalFields=period"', script)
 
 
 if __name__ == "__main__":

@@ -2653,6 +2653,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseLong'
+  /api/console/config/secrets/{secretVersionId}/revoke:
+    post:
+      tags: [Config]
+      summary: Revoke a secret version for emergency dispatch blocking
+      operationId: revokeSecretVersion
+      parameters:
+        - name: secretVersionId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecretVersionRevokeRequest'
+      responses:
+        '200':
+          description: Secret version revoked; subsequent dispatch attempts are blocked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
   /api/console/config/change-logs:
     get:
       tags: [Config]
@@ -13346,6 +13372,16 @@ components:
         reason:
           type: string
       required: [tenantId, secretRef, secretName]
+    SecretVersionRevokeRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 512
+      required: [tenantId, reason]
     ConfigReleaseApprovalSubmitRequest:
       type: object
       properties:
@@ -16083,6 +16119,16 @@ components:
           example: '{"redacted":true}'
         rotationReason:
           type: string
+        revokedAt:
+          type: string
+          format: date-time
+          nullable: true
+        revokedBy:
+          type: string
+          nullable: true
+        revokeReason:
+          type: string
+          nullable: true
         createdBy:
           type: string
         updatedBy:
