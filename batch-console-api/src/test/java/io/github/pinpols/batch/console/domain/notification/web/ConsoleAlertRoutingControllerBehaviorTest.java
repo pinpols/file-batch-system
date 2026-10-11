@@ -18,6 +18,7 @@ import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.application.contract.request.config.AlertRoutingSaveRequest;
 import io.github.pinpols.batch.console.domain.notification.application.ConsoleAlertRoutingApplicationService;
+import io.github.pinpols.batch.console.domain.notification.application.contract.query.AlertRoutingQueryRequest;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertRoutingResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
@@ -74,7 +75,7 @@ class ConsoleAlertRoutingControllerBehaviorTest {
   @Test
   @DisplayName("清单查询把租户, 路由编码, 团队, 级别与启用状态全部透传给服务")
   void shouldPassAllFilters_whenListingRoutings() throws Exception {
-    when(service.list("ta", "RT_A", "ops", "WARN", true, 1, 20))
+    when(service.list(any(AlertRoutingQueryRequest.class)))
         .thenReturn(new PageResponse<>(0L, 1, 20, List.of()));
     mockMvc
         .perform(get("/api/console/alert-routings")
@@ -84,7 +85,16 @@ class ConsoleAlertRoutingControllerBehaviorTest {
             .param("severity", "WARN")
             .param("enabled", "true"))
         .andExpect(status().isOk());
-    verify(service).list("ta", "RT_A", "ops", "WARN", true, 1, 20);
+    org.mockito.ArgumentCaptor<AlertRoutingQueryRequest> captor =
+        org.mockito.ArgumentCaptor.forClass(AlertRoutingQueryRequest.class);
+    verify(service).list(captor.capture());
+    org.junit.jupiter.api.Assertions.assertEquals("ta", captor.getValue().getTenantId());
+    org.junit.jupiter.api.Assertions.assertEquals("RT_A", captor.getValue().getRouteCode());
+    org.junit.jupiter.api.Assertions.assertEquals("ops", captor.getValue().getTeam());
+    org.junit.jupiter.api.Assertions.assertEquals("WARN", captor.getValue().getSeverity());
+    org.junit.jupiter.api.Assertions.assertTrue(captor.getValue().getEnabled());
+    org.junit.jupiter.api.Assertions.assertEquals(1, captor.getValue().getPageNo());
+    org.junit.jupiter.api.Assertions.assertEquals(20, captor.getValue().getPageSize());
   }
 
   @Test

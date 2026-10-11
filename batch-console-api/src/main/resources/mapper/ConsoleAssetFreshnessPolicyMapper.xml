@@ -47,7 +47,20 @@
            and enabled = #{enabled}
         </if>
          order by enabled desc, asset_code asc
-         limit #{limit}
+         limit #{page.pageSize} offset (#{page.pageNo} - 1) * #{page.pageSize}
+    </select>
+
+    <select id="countByTenant" resultType="long">
+        select count(1)
+          from batch.asset_freshness_policy
+         where tenant_id = #{tenantId}
+           and asset_type = 'JOB'
+        <if test="assetCode != null and assetCode != ''">
+           and asset_code = #{assetCode}
+        </if>
+        <if test="enabled != null">
+           and enabled = #{enabled}
+        </if>
     </select>
 
     <select id="findById" resultMap="assetFreshnessPolicyMap">

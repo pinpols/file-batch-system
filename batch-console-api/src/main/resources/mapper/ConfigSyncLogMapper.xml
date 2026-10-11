@@ -20,7 +20,13 @@
           FROM batch.config_sync_log
          WHERE tenant_id = #{tenantId}
          ORDER BY id DESC
-         LIMIT #{limit}
+         LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countByTenant" resultType="long">
+        SELECT count(1)
+          FROM batch.config_sync_log
+         WHERE tenant_id = #{tenantId}
     </select>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">

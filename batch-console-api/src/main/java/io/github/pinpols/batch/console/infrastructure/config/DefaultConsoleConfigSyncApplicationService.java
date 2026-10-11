@@ -2,6 +2,8 @@ package io.github.pinpols.batch.console.infrastructure.config;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.model.PageRequest;
+import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigSyncApplicationService;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigCopyService;
@@ -119,12 +121,17 @@ public class DefaultConsoleConfigSyncApplicationService
   }
 
   @Override
-  public List<ConfigSyncLogResponse> logs(String tenantId, int limit) {
-    return configSyncLogMapper
-        .selectByTenant(tenantGuard.resolveTenant(tenantId), Math.min(Math.max(limit, 1), 200))
+  public PageResponse<ConfigSyncLogResponse> logs(String tenantId, int pageNo, int pageSize) {
+    String resolvedTenant = tenantGuard.resolveTenant(tenantId);
+    PageRequest page = new PageRequest(pageNo, pageSize);
+    long total = configSyncLogMapper.countByTenant(resolvedTenant);
+    List<ConfigSyncLogResponse> items = configSyncLogMapper
+        .selectByTenant(
+            resolvedTenant, (long) (page.pageNo() - 1) * page.pageSize(), page.pageSize())
         .stream()
         .map(ConfigSyncLogResponse::from)
         .toList();
+    return new PageResponse<>(total, page.pageNo(), page.pageSize(), items);
   }
 
   private void markLogFailed(String tenantId, Long logId, int failedItems, String errorMessage) {

@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.console.application.contract.request.config.AlertRoutingSaveRequest;
 import io.github.pinpols.batch.console.domain.notification.application.ConsoleAlertRoutingApplicationService;
+import io.github.pinpols.batch.console.domain.notification.application.contract.query.AlertRoutingQueryRequest;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertRoutingResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -29,15 +30,8 @@ public class ConsoleAlertRoutingController {
 
   @GetMapping
   public CommonResponse<PageResponse<ConsoleAlertRoutingResponse>> list(
-      @RequestParam("tenantId") String tenantId,
-      @RequestParam(value = "routeCode", required = false) String routeCode,
-      @RequestParam(value = "team", required = false) String team,
-      @RequestParam(value = "severity", required = false) String severity,
-      @RequestParam(value = "enabled", required = false) Boolean enabled,
-      @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
-      @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
-    PageResponse<ConsoleAlertRoutingResponse> page = alertRoutingApplicationService.list(
-        tenantId, routeCode, team, severity, enabled, pageNo, pageSize);
+      @Valid @ModelAttribute AlertRoutingQueryRequest request) {
+    PageResponse<ConsoleAlertRoutingResponse> page = alertRoutingApplicationService.list(request);
     return responseFactory.success(page);
   }
 

@@ -198,7 +198,7 @@ class DefaultConsoleTenantConfigCopyServiceTest {
             anyString(), isNull(), isNull(), any(PageRequest.class)))
         .thenReturn(List.of());
     when(alertRoutingConfigMapper.selectByQuery(
-            anyString(), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
+            anyString(), isNull(), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
         .thenReturn(List.of());
   }
 }

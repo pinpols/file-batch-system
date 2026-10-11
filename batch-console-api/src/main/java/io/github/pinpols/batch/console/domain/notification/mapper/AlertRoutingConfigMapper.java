@@ -10,6 +10,7 @@ public interface AlertRoutingConfigMapper {
 
   List<Map<String, Object>> selectByQuery(
       @Param("tenantId") String tenantId,
+      @Param("keyword") String keyword,
       @Param("routeCode") String routeCode,
       @Param("team") String team,
       @Param("severity") String severity,
@@ -18,6 +19,7 @@ public interface AlertRoutingConfigMapper {
 
   long countByQuery(
       @Param("tenantId") String tenantId,
+      @Param("keyword") String keyword,
       @Param("routeCode") String routeCode,
       @Param("team") String team,
       @Param("severity") String severity,

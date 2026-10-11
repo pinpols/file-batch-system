@@ -1622,17 +1622,18 @@ paths:
           name: enabled
           required: false
           schema: { type: boolean }
-        - in: query
-          name: limit
+        - $ref: '#/components/parameters/PageNoQuery'
+        - name: pageSize
+          in: query
           required: false
-          schema: { type: integer, format: int32, default: 100, minimum: 1, maximum: 500 }
+          schema: { type: integer, format: int32, minimum: 1, maximum: 200, default: 15 }
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseAssetFreshnessPolicyList'
+                $ref: '#/components/schemas/CommonResponseAssetFreshnessPolicyPage'
     post:
       tags: [Ops]
       summary: 创建或按 tenant/asset upsert JOB asset freshness policy
@@ -7015,20 +7016,27 @@ paths:
           required: true
           schema:
             type: string
-        - name: limit
+        - name: pageNo
           in: query
           required: false
           schema:
             type: integer
             format: int32
-            default: 50
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            default: 15
       responses:
         '200':
           description: Sync log list
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseConfigSyncLogList'
+                $ref: '#/components/schemas/CommonResponseConfigSyncLogPage'
   /api/console/config/releases/{releaseId}:
     get:
       tags: [Config]
@@ -7208,6 +7216,12 @@ paths:
           required: true
           schema:
             type: string
+        - name: keyword
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 256
         - name: routeCode
           in: query
           required: false
@@ -11523,6 +11537,22 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/ConfigSyncLogResponse'
+    ConfigSyncLogPageResponse:
+      type: object
+      required: [total, pageNo, pageSize, items]
+      properties:
+        total: { type: integer, format: int64 }
+        pageNo: { type: integer, format: int32 }
+        pageSize: { type: integer, format: int32 }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ConfigSyncLogResponse' }
+    CommonResponseConfigSyncLogPage:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ConfigSyncLogPageResponse' }
     CapacityProfileResponse:
       type: object
       required: [generatedAt, tenantId, window, groupBy, scope, rows, totals, coverage]
@@ -11848,6 +11878,22 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/AssetFreshnessPolicy'
+    AssetFreshnessPolicyPageResponse:
+      type: object
+      required: [total, pageNo, pageSize, items]
+      properties:
+        total: { type: integer, format: int64 }
+        pageNo: { type: integer, format: int32 }
+        pageSize: { type: integer, format: int32 }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AssetFreshnessPolicy' }
+    CommonResponseAssetFreshnessPolicyPage:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/AssetFreshnessPolicyPageResponse' }
     AssetPartitionReadiness:
       type: object
       description: 作业账期 readiness 裁决及命中的 EFFECTIVE asset_partition 快照。
