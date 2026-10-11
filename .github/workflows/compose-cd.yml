@@ -89,7 +89,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: pinpols/batch-console/.github/workflows/build-image.yml@d9aaec37c508bad61a38097ab9ef242010428004 # PR #300 reusable build contract
+    uses: pinpols/batch-console/.github/workflows/build-image.yml@3c558746637335574c80d6dd3d46670456435a8b # batch-console PR #301 reusable build contract
     with:
       source_ref: ${{ needs.resolve-revisions.outputs.frontend_sha }}
       backend_ref: ${{ needs.resolve-revisions.outputs.backend_sha }}
