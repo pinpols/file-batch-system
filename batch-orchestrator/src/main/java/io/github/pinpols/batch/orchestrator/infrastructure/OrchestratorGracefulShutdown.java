@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.config.OrchestratorKafkaConsumerConfiguration;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -101,7 +102,7 @@ public class OrchestratorGracefulShutdown
   private MessageListenerContainer triggerLaunchListener() {
     MessageListenerContainer listener = listenerRegistry.getListenerContainer(
         OrchestratorKafkaConsumerConfiguration.TRIGGER_LAUNCH_LISTENER_ID);
-    if (listener == null) {
+    if (EmptyChecks.isNull(listener)) {
       throw new IllegalStateException("Trigger launch Kafka listener is not registered");
     }
     return listener;
@@ -114,7 +115,7 @@ public class OrchestratorGracefulShutdown
   }
 
   private void publishReadiness(ReadinessState state) {
-    if (eventPublisher == null) {
+    if (EmptyChecks.isNull(eventPublisher)) {
       return;
     }
     try {

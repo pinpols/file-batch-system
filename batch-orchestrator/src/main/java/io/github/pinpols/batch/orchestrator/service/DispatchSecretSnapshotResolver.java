@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.entity.DispatchSecretBindingEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
@@ -46,14 +47,14 @@ public class DispatchSecretSnapshotResolver {
     }
     Set<String> channelCodes = new LinkedHashSet<>();
     collectChannels(trustedParams, channelCodes);
-    if (JobType.WORKFLOW.code().equals(jobType) && workflowDefinitionId != null) {
+    if (JobType.WORKFLOW.code().equals(jobType) && EmptyChecks.isNotNull(workflowDefinitionId)) {
       List<WorkflowNodeEntity> nodes =
           workflowNodeMapper.selectByWorkflowDefinitionId(workflowDefinitionId);
       for (WorkflowNodeEntity node : nodes) {
         collectChannels(parseObject(node.getNodeParams()), channelCodes);
       }
     }
-    if (channelCodes.isEmpty()) {
+    if (EmptyChecks.isEmpty(channelCodes)) {
       return trustedParams;
     }
 
@@ -61,7 +62,8 @@ public class DispatchSecretSnapshotResolver {
     Map<String, Object> bindings = new LinkedHashMap<>();
     for (DispatchSecretBindingEntity binding :
         bindingMapper.selectCurrentByChannels(tenantId, new ArrayList<>(channelCodes))) {
-      if (binding.secretVersionId() == null || binding.versionNo() == null) {
+      if (EmptyChecks.isNull(binding.secretVersionId())
+          || EmptyChecks.isNull(binding.versionNo())) {
         throw BizException.of(
             ResultCode.CREDENTIAL_REF_UNRESOLVED,
             ResultCode.CREDENTIAL_REF_UNRESOLVED.detailKey(),
@@ -73,15 +75,15 @@ public class DispatchSecretSnapshotResolver {
       reference.put("versionNo", binding.versionNo());
       bindings.put(binding.channelCode(), reference);
     }
-    if (!bindings.isEmpty()) {
+    if (EmptyChecks.isNotEmpty(bindings)) {
       pinned.put(SNAPSHOT_KEY, bindings);
     }
     return pinned;
   }
 
   private Map<String, Object> withoutCallerBindings(Map<String, Object> effectiveParams) {
-    if (effectiveParams == null || !effectiveParams.containsKey(SNAPSHOT_KEY)) {
-      return effectiveParams == null ? Map.of() : effectiveParams;
+    if (EmptyChecks.isNull(effectiveParams) || !effectiveParams.containsKey(SNAPSHOT_KEY)) {
+      return EmptyChecks.isNull(effectiveParams) ? Map.of() : effectiveParams;
     }
     Map<String, Object> sanitized = new LinkedHashMap<>(effectiveParams);
     sanitized.remove(SNAPSHOT_KEY);
@@ -94,8 +96,8 @@ public class DispatchSecretSnapshotResolver {
         String key = String.valueOf(entry.getKey());
         Object nested = entry.getValue();
         if (CHANNEL_KEYS.contains(key)
-            && nested != null
-            && !String.valueOf(nested).isBlank()) {
+            && EmptyChecks.isNotNull(nested)
+            && EmptyChecks.isNotBlank(String.valueOf(nested))) {
           channels.add(String.valueOf(nested).trim());
         }
         collectChannels(nested, channels);
@@ -110,7 +112,7 @@ public class DispatchSecretSnapshotResolver {
   }
 
   private Map<String, Object> parseObject(String json) {
-    if (json == null || json.isBlank()) {
+    if (EmptyChecks.isBlank(json)) {
       return Map.of();
     }
     try {

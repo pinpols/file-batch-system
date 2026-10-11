@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
@@ -72,9 +73,9 @@ public class PrepareDispatchStep implements DispatchStageStep {
       } else {
         payload = objectMapper.treeToValue(rawPayload, DispatchPayload.class);
       }
-      if (rawPayload != null) {
+      if (EmptyChecks.isNotNull(rawPayload)) {
         JsonNode secretBindings = rawPayload.get(DispatchRuntimeKeys.DISPATCH_SECRET_BINDINGS);
-        if (secretBindings != null && secretBindings.isObject()) {
+        if (EmptyChecks.isNotNull(secretBindings) && secretBindings.isObject()) {
           attrs.put(
               DispatchRuntimeKeys.DISPATCH_SECRET_BINDINGS,
               objectMapper.convertValue(
@@ -156,12 +157,14 @@ public class PrepareDispatchStep implements DispatchStageStep {
 
   private static DispatchPayload withStableExternalRequestId(
       DispatchJobContext context, DispatchPayload payload) {
-    if (payload.externalRequestId() != null && !payload.externalRequestId().isBlank()) {
+    if (EmptyChecks.isNotBlank(payload.externalRequestId())) {
       return payload;
     }
     Object pipelineInstanceId =
         context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID);
-    if (pipelineInstanceId == null || payload.fileId() == null || payload.channelCode() == null) {
+    if (EmptyChecks.isNull(pipelineInstanceId)
+        || EmptyChecks.isNull(payload.fileId())
+        || EmptyChecks.isNull(payload.channelCode())) {
       return payload;
     }
     String requestIdentity = String.join(

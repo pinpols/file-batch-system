@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.common.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.nio.charset.StandardCharsets;
@@ -35,7 +36,7 @@ public class SecretPayloadProtector {
       throw new IllegalArgumentException("unsupported protected secret payload format");
     }
     Object ciphertext = envelope.get("ciphertext");
-    if (!(ciphertext instanceof String encoded) || encoded.isBlank()) {
+    if (!(ciphertext instanceof String encoded) || EmptyChecks.isBlank(encoded)) {
       throw new IllegalArgumentException("protected secret ciphertext is missing");
     }
     byte[] decrypted = cryptoService.decrypt(Base64.getDecoder().decode(encoded));

@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.observability.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.observability.application.contract.request.FrontendTelemetryRequest;
 import io.github.pinpols.batch.console.domain.observability.application.contract.request.FrontendTelemetryRequest.Event;
@@ -39,19 +40,19 @@ public class ConsoleTelemetryController {
     validateProps(request);
     for (Event event : request.events()) {
       // 保留聚合诊断信息，不输出调用方控制的事件文本或页面值。
-      int propsKeys = event.props() == null ? 0 : event.props().size();
+      int propsKeys = EmptyChecks.isNull(event.props()) ? 0 : event.props().size();
       if ("error".equals(event.type())) {
         log.error(
             "[frontend:error] telemetry event received nameLength={} pagePresent={} propsKeys={}",
             event.name().length(),
-            event.page() != null && !event.page().isBlank(),
+            EmptyChecks.isNotBlank(event.page()),
             propsKeys);
       } else {
         log.info(
             "[frontend] telemetry event received type={} nameLength={} pagePresent={} propsKeys={}",
             safeEventType(event.type()),
             event.name().length(),
-            event.page() != null && !event.page().isBlank(),
+            EmptyChecks.isNotBlank(event.page()),
             propsKeys);
       }
     }

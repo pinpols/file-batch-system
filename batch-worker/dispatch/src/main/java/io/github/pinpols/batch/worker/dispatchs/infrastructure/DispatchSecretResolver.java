@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.dispatchs.mapper.DispatchSecretVersionMapper;
 import java.util.LinkedHashMap;
@@ -30,7 +31,7 @@ public class DispatchSecretResolver {
       Map<String, Object> channelConfig) {
     Map<String, Object> bindings = map(payload.get(DispatchRuntimeKeys.DISPATCH_SECRET_BINDINGS));
     Map<String, Object> binding = map(bindings.get(channelCode));
-    if (binding.isEmpty()) {
+    if (EmptyChecks.isEmpty(binding)) {
       if (channelConfig.get("secret_ref") instanceof String secretRef && Texts.hasText(secretRef)) {
         throw new DispatchSecretBlockedException("DISPATCH_SECRET_BINDING_MISSING");
       }
@@ -44,7 +45,7 @@ public class DispatchSecretResolver {
       throw new DispatchSecretBlockedException("DISPATCH_SECRET_VERSION_INVALID");
     }
     Object rawId = binding.get("secretVersionId");
-    if (rawId == null) {
+    if (EmptyChecks.isNull(rawId)) {
       throw new DispatchSecretBlockedException("DISPATCH_SECRET_VERSION_MISSING");
     }
     Long secretVersionId;
@@ -55,7 +56,7 @@ public class DispatchSecretResolver {
     }
     String protectedPayload =
         secretVersionMapper.selectPayloadForDispatch(tenantId, secretVersionId);
-    if (protectedPayload == null || protectedPayload.isBlank()) {
+    if (EmptyChecks.isBlank(protectedPayload)) {
       throw new DispatchSecretBlockedException("DISPATCH_SECRET_REVOKED_OR_EXPIRED");
     }
     Map<String, Object> credentials;
@@ -67,7 +68,7 @@ public class DispatchSecretResolver {
     if (!ALLOWED_CREDENTIAL_KEYS.containsAll(credentials.keySet())) {
       throw new DispatchSecretBlockedException("DISPATCH_SECRET_FIELD_NOT_ALLOWED");
     }
-    if (credentials.isEmpty()) {
+    if (EmptyChecks.isEmpty(credentials)) {
       throw new DispatchSecretBlockedException("DISPATCH_SECRET_PAYLOAD_EMPTY");
     }
     channelConfig.putAll(credentials);
@@ -77,7 +78,7 @@ public class DispatchSecretResolver {
   private Map<String, Object> parseCredentials(String json) {
     try {
       Map<String, Object> parsed = objectMapper.readValue(json, new TypeReference<>() {});
-      return parsed == null ? Map.of() : parsed;
+      return EmptyChecks.isNull(parsed) ? Map.of() : parsed;
     } catch (Exception exception) {
       throw new DispatchSecretBlockedException("DISPATCH_SECRET_PAYLOAD_INVALID");
     }

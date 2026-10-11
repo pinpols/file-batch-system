@@ -211,12 +211,11 @@ final class ConfigPackageExcelRowValidators {
 
       @Override
       public <S> Void visit(PlainSelect plainSelect, S context) {
-        if ((plainSelect.getIntoTables() != null && !plainSelect.getIntoTables().isEmpty())
-            || plainSelect.getIntoTempTable() != null
-            || plainSelect.getMySqlSelectIntoClause() != null
-            || plainSelect.getForUpdate() != null
-            || (plainSelect.getForUpdateTables() != null
-                && !plainSelect.getForUpdateTables().isEmpty())) {
+        if (EmptyChecks.isNotEmpty(plainSelect.getIntoTables())
+            || EmptyChecks.isNotNull(plainSelect.getIntoTempTable())
+            || EmptyChecks.isNotNull(plainSelect.getMySqlSelectIntoClause())
+            || EmptyChecks.isNotNull(plainSelect.getForUpdate())
+            || EmptyChecks.isNotEmpty(plainSelect.getForUpdateTables())) {
           found = true;
         }
         return super.visit(plainSelect, context);

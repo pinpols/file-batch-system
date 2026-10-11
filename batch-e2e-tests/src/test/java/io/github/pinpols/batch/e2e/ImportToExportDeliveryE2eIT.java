@@ -32,13 +32,13 @@ import javax.sql.DataSource;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.TestConstructor;
 import org.springframework.test.context.jdbc.Sql;
 
 /** 验证同一份导入数据经真实 Import/Export worker 与对象存储形成可核对的交付产物。 */
@@ -47,6 +47,7 @@ import org.springframework.test.context.jdbc.Sql;
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = "batch.worker.import.worker-type=IMPORT")
 @E2eBusinessSchema
+@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 @Sql(
     scripts = {
       E2eTestSql.IMPORT_TEMPLATE_SEED,
@@ -60,24 +61,27 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
   @TempDir
   private Path dispatchTempDir;
 
-  @Autowired
-  private LaunchService launchService;
+  private final LaunchService launchService;
+  private final JdbcTemplate jdbcTemplate;
+  private final E2eOutboxPublishSupport outboxPublishSupport;
+  private final InstanceManagementApplicationService instanceManagementService;
+  private final Environment environment;
+  private final DataSource businessDataSource;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
-
-  @Autowired
-  private E2eOutboxPublishSupport outboxPublishSupport;
-
-  @Autowired
-  private InstanceManagementApplicationService instanceManagementService;
-
-  @Autowired
-  private Environment environment;
-
-  @Autowired
-  @Qualifier("importBusinessDataSource")
-  private DataSource businessDataSource;
+  ImportToExportDeliveryE2eIT(
+      LaunchService launchService,
+      JdbcTemplate jdbcTemplate,
+      E2eOutboxPublishSupport outboxPublishSupport,
+      InstanceManagementApplicationService instanceManagementService,
+      Environment environment,
+      @Qualifier("importBusinessDataSource") DataSource businessDataSource) {
+    this.launchService = launchService;
+    this.jdbcTemplate = jdbcTemplate;
+    this.outboxPublishSupport = outboxPublishSupport;
+    this.instanceManagementService = instanceManagementService;
+    this.environment = environment;
+    this.businessDataSource = businessDataSource;
+  }
 
   @Test
   @DisplayName("导入记录经业务库核对、MinIO 导出和 Dispatch 本地 outbox 完成交付闭环")

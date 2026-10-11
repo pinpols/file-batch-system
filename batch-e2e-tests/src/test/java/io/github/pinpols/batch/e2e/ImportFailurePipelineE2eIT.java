@@ -21,10 +21,10 @@ import javax.sql.DataSource;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.TestConstructor;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
@@ -44,6 +44,7 @@ import org.springframework.test.context.jdbc.Sql;
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = "batch.worker.import.worker-type=IMPORT")
 @E2eBusinessSchema
+@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 @Sql(
     scripts = {
       E2eTestSql.IMPORT_TEMPLATE_SEED,
@@ -54,18 +55,21 @@ class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
 
-  @Autowired
-  private LaunchService launchService;
+  private final LaunchService launchService;
+  private final JdbcTemplate jdbcTemplate;
+  private final DataSource businessDataSource;
+  private final E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
-
-  @Autowired
-  @Qualifier("importBusinessDataSource")
-  private DataSource businessDataSource;
-
-  @Autowired
-  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+  ImportFailurePipelineE2eIT(
+      LaunchService launchService,
+      JdbcTemplate jdbcTemplate,
+      @Qualifier("importBusinessDataSource") DataSource businessDataSource,
+      E2eOutboxPublishSupport e2eOutboxPublishSupport) {
+    this.launchService = launchService;
+    this.jdbcTemplate = jdbcTemplate;
+    this.businessDataSource = businessDataSource;
+    this.e2eOutboxPublishSupport = e2eOutboxPublishSupport;
+  }
 
   @Test
   @DisplayName("输入内容不是可解析的 JSON 时解析环节失败, 任务收敛为失败终态, 作业实例终态为失败或部分失败")

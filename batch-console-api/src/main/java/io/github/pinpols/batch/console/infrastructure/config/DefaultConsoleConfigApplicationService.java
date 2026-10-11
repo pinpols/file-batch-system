@@ -305,7 +305,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     if (ConfigLifecycleStatus.DRAFT.code().equals(version.getSecretStatus())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
     }
-    if (version.getRevokedAt() != null) {
+    if (EmptyChecks.isNotNull(version.getRevokedAt())) {
       return;
     }
     String operator = currentOperator();

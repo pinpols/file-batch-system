@@ -346,7 +346,9 @@ public class DefaultLaunchService implements LaunchService {
     Map<String, Object> executionParams = dispatchSecretSnapshotResolver.pin(
         request.tenantId(),
         loaded.jobDefinition().jobType(),
-        loaded.workflowDefinition() == null ? null : loaded.workflowDefinition().id(),
+        EmptyChecks.isNull(loaded.workflowDefinition())
+            ? null
+            : loaded.workflowDefinition().id(),
         effectiveParams);
     Instant batchDaySlaDeadlineAt = launchBatchDayService.resolveBatchDaySlaDeadlineAt(
         request.tenantId(), loaded.jobDefinition().calendarCode(), request.bizDate());
