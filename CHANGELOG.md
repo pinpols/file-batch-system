@@ -8,6 +8,7 @@
 
 ## [Unreleased]
 
+- 修复 Compose CD 调用前端 reusable build workflow 时引用错误提交的问题，并将 Sentry DSN secret 与前端 `workflow_call` 契约对齐。
 - 新增受控的前后端 Compose CD：同一 release manifest 固定两仓 commit 与全部镜像 digest；可手动部署 staging 并执行 health/version、Playwright、视觉/跨浏览器 smoke 与 Lighthouse 验收，失败时恢复上一稳定 release。真实主机配置和 production 晋级仍待外部接入。
 - 修复临时 Sonar 首次扫描无法设置 30 天新代码基线的问题：为扫描管理账号补齐项目级管理权限，并按项目实际主分支回读验证，避免 Sonar API 空响应掩盖配置未生效。
 - 修复批次日回放详情默认“全部”筛选因空状态被 SQL 等值过滤而显示空列表的问题；保留指定状态筛选及租户隔离。
