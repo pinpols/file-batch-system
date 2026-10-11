@@ -17,6 +17,7 @@ import io.github.pinpols.batch.trigger.web.request.TriggerLaunchRequest;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -122,7 +123,7 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("Trigger 启停更新作业定义版本，供实例快照识别配置变更")
   void shouldIncrementJobDefinitionVersionWhenTriggerChangesEnabledState() {
-    String jobCode = "version-" + java.util.UUID.randomUUID().toString().replace("-", "");
+    String jobCode = "version-" + UUID.randomUUID().toString().replace("-", "");
     jdbcTemplate.update(
         "insert into batch.job_definition "
             + "(tenant_id, job_code, job_name, job_type, schedule_type, timezone, enabled) "
