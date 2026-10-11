@@ -302,7 +302,7 @@ public class TenantConfigPackageExcelApplyService {
   private boolean applyJob(Map<String, String> row, ApplyContext ctx) {
     String jobCode = normalize(row.get(COL_JOB_CODE));
     JobDefinitionEntity existing = jobDefinitionMapper.selectByUniqueKey(ctx.tenantId(), jobCode);
-    if (existing == null) {
+    if (EmptyChecks.isNull(existing)) {
       insertJob(row, ctx, jobCode);
       return true;
     }
