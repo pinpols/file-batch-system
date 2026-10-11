@@ -366,7 +366,7 @@ bash scripts/python.sh scripts/ci/check-env-variable-governance.py
 
 ## `check-five-worker-parity.py`
 
-校验 Import / Export / Process / Dispatch / Atomic 五类内建 Worker 在 topic、租户 ACL、Kafka lag 告警、消费路由、sim 恢复和配置包示例中的横向完整性。Pipeline stage 仍只覆盖前四类；Atomic 是单任务执行器，并由独立隔离模板部署。
+校验 Import / Export / Process / Dispatch / Atomic 五类内建 Worker 在 topic、租户 ACL、Kafka lag 告警、消费路由、sim 恢复和配置包示例中的横向完整性。配置包场景还包括 `SCHEDULE`，它是业务配置场景而不是 Worker 类型。Pipeline stage 仍只覆盖前四类；Atomic 是单任务执行器，并由独立隔离模板部署。
 
 ```bash
 python3 scripts/ci/check-five-worker-parity.py

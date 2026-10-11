@@ -157,13 +157,14 @@ public class ConsoleTenantConfigPackageExcelController {
 
   /**
    * 将已通过预览的配置包数据在单一事务内全量写入/更新，并记录配置变更。
+   * 租户管理员必须提交预览令牌；平台管理员保留旧客户端的无令牌调用方式。
    *
    * @param idempotencyKey 请求头幂等键，防重复提交
    * @param uploadToken 与预览阶段相同
    * @param request 可选变更说明（见 {@link TenantConfigPackageExcelApplyRequest}）
    */
   @PostMapping("/apply/{uploadToken}")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_WITH_PREVIEW_TOKEN)
   public CommonResponse<TenantConfigPackageExcelApplyResponse> apply(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable String uploadToken,

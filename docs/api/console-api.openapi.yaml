@@ -17912,11 +17912,10 @@ components:
       properties:
         previewToken:
           type: string
-          description: One-time token returned by the latest successful preview; invalidated by a subsequent preview or row patch.
+          description: One-time token returned by the latest successful preview; tenant administrators must provide it. Platform administrators may omit it for compatibility with existing clients.
         reason:
           type: string
           maxLength: 512
-      required: [previewToken]
     TenantConfigPackageExcelUploadResponse:
       type: object
       properties:

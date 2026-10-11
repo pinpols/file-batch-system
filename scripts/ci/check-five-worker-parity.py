@@ -111,7 +111,7 @@ def main() -> int:
     require_all(
         errors,
         "docs/api/console-api.openapi.yaml",
-        ("enum: [ALL, IMPORT, EXPORT, PROCESS, DISPATCH, ATOMIC, WORKFLOW]",),
+        ("enum: [ALL, IMPORT, EXPORT, PROCESS, DISPATCH, ATOMIC, WORKFLOW, SCHEDULE]",),
     )
     # Atomic 隔离要求更严格，因此不能使用通用资源池模板。
     require_all(

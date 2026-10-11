@@ -18,6 +18,11 @@ public final class ConsoleSecurityExpressions {
       + AUTHORITY_SEPARATOR
       + ConsoleRoles.TENANT_ADMIN
       + EXPRESSION_SUFFIX;
+  public static final String ADMIN_OR_TENANT_ADMIN_WITH_PREVIEW_TOKEN = "hasAuthority('"
+      + ConsoleRoles.ADMIN
+      + "') or (hasAuthority('"
+      + ConsoleRoles.TENANT_ADMIN
+      + "') and #request.previewToken != null)";
   public static final String ADMIN_OR_TENANT_USER = HAS_ANY_AUTHORITY
       + ConsoleRoles.ADMIN
       + AUTHORITY_SEPARATOR

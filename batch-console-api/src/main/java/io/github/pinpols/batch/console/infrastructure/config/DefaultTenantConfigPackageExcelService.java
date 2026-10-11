@@ -464,8 +464,17 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
   public TenantConfigPackageExcelApplyResponse apply(
       String uploadToken, TenantConfigPackageExcelApplyRequest request) {
     PackageExcelSession session = loadSession(uploadToken);
+    String previewToken = request.getPreviewToken();
+    if (EmptyChecks.isNull(previewToken)) {
+      PreviewSnapshot currentPreview = importStore.issuePreviewSnapshot(
+          uploadToken, currentConfigurationRevision(session.tenantId()));
+      if (EmptyChecks.isNull(currentPreview)) {
+        throw BizException.of(ResultCode.STATE_CONFLICT, "error.config_package.preview_stale");
+      }
+      previewToken = currentPreview.previewToken();
+    }
     String applyOwnerToken = UUID.randomUUID().toString().replace("-", "");
-    if (!importStore.claimForApply(uploadToken, request.getPreviewToken(), applyOwnerToken)) {
+    if (!importStore.claimForApply(uploadToken, previewToken, applyOwnerToken)) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.config_package.preview_stale");
     }
     boolean completionRegistered = false;

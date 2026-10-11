@@ -160,6 +160,20 @@ class ConsoleTenantConfigPackageAuthenticatedIdempotencyIntegrationTest
       assertThat(previewToken).isNotBlank();
 
       String applyUri = "/api/console/config/tenant-package/excel/apply/" + uploadToken;
+      client
+          .post()
+          .uri(applyUri)
+          .cookie("batch_console_token", jwt)
+          .cookie("XSRF-TOKEN", csrfCookie.getValue())
+          .header("X-XSRF-TOKEN", csrfCookie.getValue())
+          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT_ID)
+          .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-apply-no-preview-" + suffix)
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue("{}")
+          .exchange()
+          .expectStatus()
+          .isForbidden();
+
       String idempotencyKey = "idem-apply-" + suffix;
       client
           .post()
