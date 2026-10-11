@@ -19,6 +19,7 @@ import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.failure.PersistenceConflictDetectionPort;
