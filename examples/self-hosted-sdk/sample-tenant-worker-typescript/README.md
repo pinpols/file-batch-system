@@ -53,7 +53,7 @@ The SDK is **not published**; it is imported by relative path from source:
 ## Run
 
 ```bash
-npm install            # fetch kafkajs (the SDK's kafka adapter depends on it)
+npm ci                 # install the locked kafkajs dependency
 
 export BATCH_BASE_URL=https://batch.example.com
 export BATCH_API_KEY=...
