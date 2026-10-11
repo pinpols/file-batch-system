@@ -39,7 +39,7 @@ public class TenantConfigPackageExcelApplyAuthorization {
     if (!authorities.contains(ConsoleRoles.TENANT_ADMIN)) {
       throw forbidden();
     }
-    if (!result.validResourceQueues().isEmpty()
+    if (EmptyChecks.isNotEmpty(result.validResourceQueues())
         || hasValues(result.validJobs(), Set.of(COL_QUEUE_CODE, COL_WORKER_GROUP))
         || hasValues(result.validPipelines(), Set.of(COL_WORKER_GROUP))
         || hasValues(result.validWfNodes(), Set.of(COL_WORKER_GROUP))

@@ -832,7 +832,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
       String header =
           TenantConfigPackageExcelValueSupport.normalize(fmt.formatCellValue(headerRow.getCell(c)));
       if (Texts.hasText(header)) {
-        if (index.putIfAbsent(header, c) != null) {
+        if (EmptyChecks.isNotNull(index.putIfAbsent(header, c))) {
           throw BizException.of(
               ResultCode.INVALID_ARGUMENT,
               ResultCode.INVALID_ARGUMENT.detailKey(),

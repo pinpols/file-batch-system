@@ -71,7 +71,7 @@ public class InMemoryTenantConfigExcelStore implements TenantConfigPackageExcelI
     synchronized (session) {
       return sessions.getIfPresent(uploadToken) == session
           && previewToken.equals(previewTokens.getIfPresent(uploadToken))
-          && applying.putIfAbsent(uploadToken, applyOwnerToken) == null;
+          && EmptyChecks.isNull(applying.putIfAbsent(uploadToken, applyOwnerToken));
     }
   }
 
