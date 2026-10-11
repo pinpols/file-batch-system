@@ -632,7 +632,7 @@ jobs:
             exit 0
           fi
           changed="$(git diff --name-only "$GUARD_BASE"...HEAD)"
-          if printf '%s\n' "$changed" | grep -Eq '(^pom\.xml$|/pom\.xml$|(^|/)Dockerfile[^/]*$|(^|/)docker-bake.*\.hcl$|(^|/)docker-compose.*\.ya?ml$|^deploy/docker/|^helm/|^\.trivyignore(\.yaml)?$)'; then
+          if printf '%s\n' "$changed" | grep -Eq '(^pom\.xml$|/pom\.xml$|(^|/)Dockerfile[^/]*$|(^|/)docker-bake.*\.hcl$|(^|/)docker-compose.*\.ya?ml$|^deploy/docker/|^helm/|^\.trivyignore(\.yaml)?$|^\.github/workflows/(pr-gate|full-ci-gate)\.yml$)'; then
             echo "trivy-required=true" >> "$GITHUB_OUTPUT"
           else
             echo "trivy-required=false" >> "$GITHUB_OUTPUT"
