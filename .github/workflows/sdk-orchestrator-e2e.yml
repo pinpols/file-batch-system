@@ -57,8 +57,34 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  warm-sdk-runtime-image-cache:
+    name: Build shared SDK E2E runtime images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      APP_IMAGE_TAG: dev
+      BUILD_REVISION: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+
+      - name: Warm shared Maven image layers
+        uses: docker/bake-action@018cb6412ab401ebaa809aa5f85966b74628600f # v7
+        with:
+          files: |
+            docker-bake.hcl
+            docker-bake.ci.hcl
+          targets: orchestrator,trigger
+          load: false
+          push: false
+
   sdk-orchestrator-e2e:
     name: sdk e2e (${{ matrix.lang }})
+    needs: warm-sdk-runtime-image-cache
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -72,6 +98,8 @@ jobs:
       KAFKA_HOST_PORT: '19092'
       KAFKA_CONTAINER: batch-kafka
       TENANT: default-tenant
+      APP_IMAGE_TAG: dev
+      BUILD_REVISION: ${{ github.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -127,13 +155,18 @@ jobs:
             echo "SPRING_PROFILES_ACTIVE=ci"
           } >> .env.local
 
-      - name: Use Maven Central for image build (CI runners)
-        # Dockerfile.app COPY deploy/docker/settings.xml 强制 aliyun mirror(为团队 China dev
-        # 环境避开其 18081 代理下的 Central 不稳);但 GitHub US runner 打 aliyun 反而
-        # 频繁 502 / 慢。CI 里覆盖成无 mirror 的默认 settings,走 Maven Central(GH→Central
-        # 稳定且有缓存)。仅改本次 checkout 工作副本,不影响仓库提交的 dev 默认。
-        # 无 <?xml?> 声明的最简 settings(根元素前的空白无害,避免 heredoc 缩进破坏声明)。
-        run: echo '<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"></settings>' > deploy/docker/settings.xml
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+
+      - name: Build SDK E2E runtime images from shared cache
+        uses: docker/bake-action@018cb6412ab401ebaa809aa5f85966b74628600f # v7
+        with:
+          files: |
+            docker-bake.hcl
+            docker-bake.ci.hcl
+          targets: orchestrator,trigger
+          load: true
+          push: false
 
       - name: Boot orchestrator (owns Flyway; migrates platform schema on start)
         # orchestrator 自带 Flyway(compose 未对它 disable),启动即迁移 batch.* 全 schema。

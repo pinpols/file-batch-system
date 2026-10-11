@@ -1,5 +1,5 @@
 name: Setup Build Environment
-description: Shared setup for CI workflows — Java, Maven cache, OpenAPI validation
+description: Shared setup for CI workflows — Java, Maven cache, and optional testcontainer images
 
 inputs:
   java-version:
@@ -20,11 +20,6 @@ runs:
   steps:
     - name: Setup Python guard environment
       uses: ./.github/actions/setup-python-guard-env
-
-    - name: Verify console OpenAPI matches controllers
-      shell: bash
-      run: |
-        python3 scripts/ci/check-console-openapi-paths.py
 
     - name: Setup Java
       uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6

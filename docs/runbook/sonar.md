@@ -62,14 +62,15 @@ Java PR 的本地审阅按需运行增量模式，并检查变更行 issues 与�
 
 工作流：[`.github/workflows/sonar-gate.yml`](../../.github/workflows/sonar-gate.yml)
 
-- 触发：push `main`、每日夜间、`workflow_dispatch`；手动运行仅允许选择 `main`。Community Build 不支持多分支/PR 分析，因此不配置 `pull_request` 触发；Java PR 仍可运行本地增量扫描。
+- 触发：main 的 Full Gate push run 完成后、SDK Java 文件 push、每日夜间、`workflow_dispatch`；Full Gate 手动/定时运行不触发 Sonar。手动运行仅允许选择 `main`。Community Build 不支持多分支/PR 分析，因此不配置 `pull_request` 触发；Java PR 仍可运行本地增量扫描。
 - 夜间仅在最近 24 小时有 Java、Maven、Sonar 扫描脚本/辅助脚本或该 workflow 改动时执行。
-- Maven 测试和 JaCoCo 先运行；随后在 GitHub-hosted runner 本机启动固定 digest 的 SonarQube Community Build 容器（6 GiB、3 CPU），扫描后检查该分析对应的 Sonar Way Quality Gate。
+- Full Gate push 成功时，从同一 workflow run 下载并校验完整的 14 个 Maven 模块 JaCoCo XML，只补 `test-compile` 后复用覆盖率；artifact 下载失败或不完整时执行独立 `clean test`。SDK Java、夜间和手动扫描独立运行 Maven 测试并生成 JaCoCo。随后在 GitHub-hosted runner 本机启动固定 digest 的 SonarQube Community Build 容器（6 GiB、3 CPU），扫描后检查该分析对应的 Sonar Way Quality Gate。
 - 每次扫描将新代码定义设为滚动 30 天，并在分析前按项目实际主分支回读验证；创建项目后会显式授予当前 Sonar 管理账号该项目的 `Administer` 权限，因为新建项目不会自动赋予此项目级权限。`fetch-depth: 0` 提供 SCM 历史。门禁还会确认项目绑定了至少一条 Quality Gate 条件，在扫描后确认分析任务完成、Quality Gate 状态为 `OK` 且返回了所有配置条件；空门禁或未完整评估均失败。
 - 容器只绑定 runner 的 loopback 地址，并在成功、失败或取消后由 workflow cleanup 删除；数据库无持久卷，不保留 issue 状态、分析历史或项目配置。
 - 无需 Sonar token/管理员 secret。Sonar 结果报告作为 workflow artifact 保留 7 天。
 - 每次运行都是 main 当前代码快照；滚动 30 天的变更判定依靠 Git SCM 历史，不依靠 Sonar 分析历史。系统不能提供跨提交的 issue 生命周期/趋势，也不执行 PR 分支分析。
 - Quality Gate 成功只表示该次分析使用的临时项目门禁通过；是否属于 required check 以仓库 Ruleset 为准。
+- Quality Gate 条件解析必须按真实 Tab 分隔状态、条件数和失败项；如果看到 `SONAR_QUALITY_GATE_INCOMPLETE` 且 `evaluated` 为空，先检查 `sonar-scan.sh` 的 Python 输出分隔符与 Bash `IFS` 是否一致，不要将分析成功当作门禁通过。
 - 源码中已审核的 `@SuppressWarnings("java:S...")` 按 [Java suppression 标准](../standards/java-suppression-registry.md)维护；临时 Sonar 服务不做 issue 状态同步。
 - Sonar **不替代**现有 PMD / Spotless / SpotBugs / 依赖扫描 / 测试门禁。
 
