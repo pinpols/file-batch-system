@@ -1,6 +1,6 @@
 # 前后端持续部署路线：Compose CD → Kubernetes GitOps
 
-> 状态：Phase 1 本地制品与部署脚本已落地；前端制品、GitHub Environments 和 staging/production 接入待外部实施
+> 状态：前后端 digest 构建、统一 release manifest 与手动 staging CD 工作流已实现；staging 主机/Environment 尚未接入，production 晋级尚未实现
 > 适用仓库：file-batch-system + batch-console
 > 决策：当前优先 Docker Compose CD；Helm / Kubernetes / Argo CD 保留为后续高可用路线。
 
@@ -34,6 +34,11 @@
 6. 发布前保存上一稳定 release set；健康、版本或关键 smoke 失败时恢复。
 7. SSH、registry、测试账号等凭据只进入 GitHub Environment/Secrets 或服务器本地 secret。
 
+当前 `.github/workflows/compose-cd.yml` 只允许从后端 `main` 手动触发，前端提交必须是前端 `main`
+可达的完整 SHA。默认只构建并上传 release bundle；显式启用 `deploy_staging` 后才连接 staging。
+这属于受控首阶段，不会因普通 main push 自动部署。production 还没有可执行晋级工作流，不能把
+staging 的构建或部署结果描述成生产发布能力。
+
 ## 3. 统一 release manifest
 
 一次平台发布至少记录：
@@ -53,7 +58,9 @@
 
 ## 4. Compose 部署边界
 
-后端复用 deploy/docker/compose/app.deploy.yml，前端复用 batch-console/docker-compose.deploy.yml。
+后端复用 `deploy/docker/compose/app.yml`、`app.deploy.yml` 和外部依赖 overlay；前端复用
+`batch-console/docker-compose.yml` 与 `docker-compose.deploy.yml`。部署 bundle 只带 Compose 定义、
+manifest 与部署脚本，不包含源码或构建工具链；部署机不构建镜像。
 
 当前 Compose 主要以 IMAGE_TAG 选择镜像。实施 CD 时需要支持由 release manifest 注入不可变 digest。统一 Git SHA 可以继续作为展示标签，但运行容器必须能反查 RepoDigest 并与 manifest 一致。
 
@@ -105,28 +112,54 @@ Phase 2 继续复用 Phase 1 的 build-once、digest 晋级、release set、stag
 ### P0：Compose CD 最小闭环
 
 - [x] 后端 `docker-image-build` 在 `publish=true` 时推送 SHA 镜像，并输出每个模块 immutable digest 的 backend image set。
-- [ ] 前端 build-image 输出 frontend immutable digest。
+- [x] 前端 `build-image` 可作为 reusable workflow 调用并返回 frontend immutable digest。
 - [x] 定义统一 release manifest schema、示例、校验器，以及部署机 manifest retention / JSONL 审计方式。
 - [ ] 建立 staging / production GitHub Environments；production 开人工审批。
 - [ ] 配置 staging/prod SSH host、user、key、known_hosts，禁止关闭 host key 校验。
-- [x] Linux deploy 脚本：precheck → pull → up → health → image digest verify。
-- [ ] staging 在制品完成后自动部署。
-- [ ] staging 串联后端 smoke 与前端真实 E2E/Lighthouse。
+- [x] Linux deploy 脚本纳入前端服务：precheck → pull → up → health → 前后端 image digest verify。
+- [x] staging 手动 CD：制品构建后可选择 SSH + Compose 部署；主机与环境仍需配置。
+- [x] staging 部署后检查 frontend health/version，运行前端 Playwright、视觉、跨浏览器 smoke 与 Lighthouse。
+- [ ] 环境配置完成并至少成功演练一次后，再决定是否将 staging 部署改为 main 合并后自动触发。
 - [x] 保存上一 stable manifest，实现失败自动回滚。
 - [ ] production 只允许晋级 staging 已通过的同一 release set。
 - [ ] production 发布后再次 health/version/digest verify。
-- [ ] Actions summary 记录目标/上一 digest、环境和结果。
+- [x] Actions Summary 记录 release id、前后端 SHA 与前端 digest；部署结果由 workflow/job 状态和远端 JSONL 审计记录。
 
 ### P1：可靠性与安全
 
 - [ ] SSH 最小权限部署用户。
 - [ ] GHCR 生产凭据只需 pull。
-- [x] 部署机同一环境进程锁；GitHub Environment concurrency 仍随自动部署工作流补齐。
+- [x] 部署机同一环境进程锁；GitHub staging workflow 使用固定 concurrency group。
 - [x] 部署超时、失败日志与容器状态快照。
 - [ ] Flyway 向前兼容/不可逆迁移回滚规则。
 - [x] 最近 N 个已验证 release set retention。
 - [ ] 演练前端失败、单后端模块失败、健康失败、SSH 中断、pull 失败。
 - [ ] break-glass 手工发布/回滚 runbook。
+
+#### 首次接入 staging 前的外部配置
+
+在后端仓库创建 GitHub Environment `staging`，配置：
+
+| 类型 | 名称 | 用途 |
+|---|---|---|
+| Secret | `DEPLOY_SSH_HOST` / `DEPLOY_SSH_PORT` / `DEPLOY_SSH_USER` | staging SSH endpoint 与专用低权限用户 |
+| Secret | `DEPLOY_SSH_PRIVATE_KEY` | 仅允许写入 release 目录并调用 Docker Compose 的部署密钥 |
+| Secret | `DEPLOY_SSH_KNOWN_HOSTS` | 预先核验并固定的主机公钥；workflow 严格启用 host key 校验 |
+| Secret | `STAGING_E2E_USERNAME` / `STAGING_E2E_PASSWORD` | staging Playwright 专用测试账号 |
+| Variable | `DEPLOY_ROOT` | staging 主机专用、由部署用户持有的绝对目录 |
+| Variable | `DEPLOY_ENV_FILE` | 主机上权限受限的外部依赖/运行密钥 env 文件绝对路径 |
+| Variable | `STAGING_URL` | staging 对外 HTTPS 地址 |
+
+主机还必须预先创建 `APP_EXTERNAL_NETWORK` 对应 Docker 网络、配置可拉取 GHCR 镜像的只读凭据，
+安装支持 `!reset` 的 Docker Compose v2.24+，并由部署用户可读运行 env 文件、可写 `DEPLOY_ROOT`、
+可访问 Docker daemon。`DEPLOY_ENV_FILE` 中需有 `IMAGE_TAG`、`APP_EXTERNAL_NETWORK`、
+`BACKEND_UPSTREAM_HOST=console-api:18080` 和后端外部依赖/服务密钥。不得将这些值提交到仓库或
+通过 Actions 日志打印。前端 GHCR package 必须授权后端仓库的 workflow token 写入权限。
+
+staging 必须先有一个已验证的 `stable.json` 基线 release；首个基线尚不存在时，失败无法自动回滚到旧版本，
+不能把首次安装当作回滚演练。首轮应先人工部署并验证基线，再通过 CD 演练失败回滚和再次部署。
+production Environment、人工审批、仅晋级
+staging 已验收 manifest 的 workflow 仍是独立待办。
 
 ### P2：GitOps / HA
 

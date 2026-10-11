@@ -14,6 +14,10 @@ on:
         required: false
         default: false
         type: boolean
+    outputs:
+      backend_image_set:
+        description: JSON object containing immutable digests for all backend images
+        value: ${{ jobs.build.outputs.backend_image_set }}
 
 permissions:
   contents: read
@@ -26,6 +30,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      backend_image_set: ${{ steps.release.outputs.backend_image_set }}
     permissions:
       contents: read
       packages: write
@@ -78,6 +84,11 @@ jobs:
             --plan build/release/bake-plan.json \
             --git-sha "$GITHUB_SHA" \
             --output build/release/backend-image-set.json
+
+      - name: Export backend image set to reusable workflow callers
+        id: release
+        if: inputs.publish
+        run: echo "backend_image_set=$(jq -c . build/release/backend-image-set.json)" >> "$GITHUB_OUTPUT"
 
       - name: Upload backend image set
         if: inputs.publish

@@ -7,7 +7,7 @@ import argparse
 import json
 import re
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -166,7 +166,7 @@ def render_compose(manifest: dict[str, Any]) -> str:
     validate_manifest(manifest)
     images = manifest["images"]
     lines = ["# 由 release_manifest.py 生成；不要手工编辑。", "services:"]
-    for service in BACKEND_SERVICES:
+    for service in ALL_SERVICES:
         lines.extend(
             (
                 f"  {service}:",
@@ -226,6 +226,52 @@ def backend_fragment(
     }
 
 
+def platform_manifest(
+    backend: dict[str, Any],
+    backend_sha: str,
+    frontend_sha: str,
+    frontend_digest: str,
+    release_id: str,
+) -> dict[str, Any]:
+    if backend.get("kind") != "BackendImageSet":
+        raise ManifestError("backend fragment kind 必须是 BackendImageSet")
+    fragment_sha = backend.get("gitSha")
+    if not isinstance(backend_sha, str) or not SHA_PATTERN.fullmatch(backend_sha):
+        raise ManifestError("backend-sha 必须是 40 位小写 Git SHA")
+    if fragment_sha != backend_sha:
+        raise ManifestError("backend fragment gitSha 与 backend-sha 不一致")
+    if not isinstance(frontend_sha, str) or not SHA_PATTERN.fullmatch(frontend_sha):
+        raise ManifestError("frontend-sha 必须是 40 位小写 Git SHA")
+    if not isinstance(frontend_digest, str) or not re.fullmatch(
+        r"sha256:[0-9a-f]{64}", frontend_digest
+    ):
+        raise ManifestError("frontend-digest 必须是 sha256:<64 位小写十六进制>")
+    if not isinstance(release_id, str) or not RELEASE_ID_PATTERN.fullmatch(release_id):
+        raise ManifestError("release-id 只能包含字母、数字、点、下划线和连字符")
+
+    backend_images = backend.get("images")
+    if not isinstance(backend_images, dict) or set(backend_images) != set(BACKEND_SERVICES):
+        raise ManifestError("backend fragment images 必须且只能包含全部后端服务")
+    images = {
+        "frontend": f"ghcr.io/pinpols/batch-console@{frontend_digest}",
+        **backend_images,
+    }
+    manifest = {
+        "schemaVersion": 1,
+        "releaseId": release_id,
+        "createdAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "previousStableReleaseId": None,
+        "commits": {"backend": backend_sha, "frontend": frontend_sha},
+        "images": images,
+        "verification": {
+            "staging": {"status": "PENDING", "verifiedAt": None, "workflowRunUrl": None},
+            "production": {"status": "PENDING", "verifiedAt": None, "workflowRunUrl": None},
+        },
+    }
+    validate_manifest(manifest)
+    return manifest
+
+
 def _repository_from_image_name(image_name: str) -> str:
     without_digest = image_name.split("@", 1)[0]
     last_slash = without_digest.rfind("/")
@@ -260,6 +306,16 @@ def parse_args() -> argparse.Namespace:
     fragment.add_argument("--plan", required=True, type=Path)
     fragment.add_argument("--git-sha", required=True)
     fragment.add_argument("--output", required=True, type=Path)
+
+    assemble = subparsers.add_parser(
+        "platform-manifest", help="合并前后端不可变镜像 digest 为平台发布清单"
+    )
+    assemble.add_argument("--backend", required=True, type=Path)
+    assemble.add_argument("--backend-sha", required=True)
+    assemble.add_argument("--frontend-sha", required=True)
+    assemble.add_argument("--frontend-digest", required=True)
+    assemble.add_argument("--release-id", required=True)
+    assemble.add_argument("--output", required=True, type=Path)
     return parser.parse_args()
 
 
@@ -287,6 +343,17 @@ def main() -> int:
                 args.output,
                 backend_fragment(
                     read_json(args.metadata), read_json(args.plan), args.git_sha
+                ),
+            )
+        elif args.command == "platform-manifest":
+            write_json(
+                args.output,
+                platform_manifest(
+                    read_json(args.backend),
+                    args.backend_sha,
+                    args.frontend_sha,
+                    args.frontend_digest,
+                    args.release_id,
                 ),
             )
     except ManifestError as exc:
