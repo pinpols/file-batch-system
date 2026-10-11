@@ -9,6 +9,7 @@ for attempt in $(seq 1 "$attempts"); do
   printf 'Install upstream Maven modules (attempt %s/%s)\n' "$attempt" "$attempts"
   if ./mvnw -U install \
       -DskipTests \
+      -Dspring-boot.repackage.skip=true \
       -pl '!batch-e2e-tests' \
       -B \
       -Dmaven.wagon.http.retryHandler.count=5 \
