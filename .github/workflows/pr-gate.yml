@@ -669,7 +669,7 @@ jobs:
             fi
             test -s target/bom.json
             trivy sbom --ignorefile .trivyignore --severity CRITICAL,HIGH --exit-code 1 target/bom.json
-            trivy fs --scanners misconfig --ignorefile .trivyignore.yaml --severity CRITICAL,HIGH --exit-code 1 .
+            trivy config --ignorefile .trivyignore.yaml --severity CRITICAL,HIGH --exit-code 1 .
           }
           gate_run PR_TRIVY_FS_SCAN "Trivy 供应链文件扫描" run_trivy_fs_scan
 

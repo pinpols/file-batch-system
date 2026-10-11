@@ -219,9 +219,9 @@ SDK 五语言契约矩阵。
 | Spotless 代码格式 | `spotless-maven-plugin` | 全部（run-full-regression） | Palantir Java Format 2.92.0（Google 风格兼容、120 列） |
 | 覆盖率门禁 | JaCoCo `jacoco:check` | 全部（run-full-regression） | 行覆盖率 ≥ 60%，初始阈值，后续提升 |
 | Secret 扫描 | `security-scan.sh --mode=secret` | pr-gate、full-ci-gate | 扫描密钥泄漏 |
-| 依赖漏洞扫描 | Trivy `sbom`（CRITICAL/HIGH） | PR 供应链门禁（依赖/镜像/部署输入变更）；Full Gate | 扫描当前提交生成的 CycloneDX 依赖清单；不需要为 Trivy 单独编译安装整个 Maven reactor。容器/Helm 配置仍由 Trivy `fs --scanners misconfig` 扫描。OWASP dependency-check 的 NVD 全量下载在 CI 上过慢且不拦门禁，2026-08 起由 Trivy 覆盖；`--mode=deps` 保留本地按需使用 |
+| 依赖漏洞扫描 | Trivy `sbom`（CRITICAL/HIGH） | PR 供应链门禁（依赖/镜像/部署输入变更）；Full Gate | 扫描当前提交生成的 CycloneDX 依赖清单；不需要为 Trivy 单独编译安装整个 Maven reactor。容器/Helm 配置改由专用 `trivy config` 扫描器检查，避免文件系统扫描器解析 Maven POM 并访问远端依赖仓库。OWASP dependency-check 的 NVD 全量下载在 CI 上过慢且不拦门禁，2026-08 起由 Trivy 覆盖；`--mode=deps` 保留本地按需使用 |
 | Dockerfile lint | Hadolint | full-ci-gate | `deploy/docker/Dockerfile.app`、`deploy/docker/Dockerfile.ops-toolbox` |
-| 文件系统安全扫描 | Trivy `sbom` + `fs --scanners misconfig` | PR Gate（供应链变更）；Full Gate | 漏洞扫描读取当前提交的 CycloneDX BOM 并阻断 CRITICAL/HIGH；IaC 配置扫描继续检查文件系统。漏洞豁免读取带治理元数据的 `.trivyignore`，配置误报仅允许在 `.trivyignore.yaml` 中按规则和路径精确豁免 |
+| 文件系统安全扫描 | Trivy `sbom` + `config` | PR Gate（供应链变更）；Full Gate | 漏洞扫描读取当前提交的 CycloneDX BOM 并阻断 CRITICAL/HIGH；IaC 配置扫描使用 `trivy config`，同样阻断 CRITICAL/HIGH。漏洞豁免读取带治理元数据的 `.trivyignore`，配置误报仅允许在 `.trivyignore.yaml` 中按规则和路径精确豁免 |
 | K8s manifest 安全 | Checkov | full-ci-gate | Helm chart 安全基线 |
 
 > **提醒项升阻断策略**：移除对应步骤的 `continue-on-error: true`（workflow）或脚本中的 `|| true`（run-full-regression.sh），
