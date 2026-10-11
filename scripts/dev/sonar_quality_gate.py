@@ -7,12 +7,14 @@ import argparse
 import json
 import os
 import sys
+from decimal import Decimal, InvalidOperation
 
 
-IGNORABLE_METRICS = {"new_security_hotspots_reviewed"}
+SMALL_CHANGE_METRICS = {"new_coverage", "new_duplicated_lines_density"}
+MINIMUM_NEW_LINES_FOR_SMALL_CHANGE_METRICS = 20
 
 
-def evaluate_quality_gate(config: dict, result: dict) -> tuple[bool, str]:
+def evaluate_quality_gate(config: dict, result: dict, measures: dict) -> tuple[bool, str]:
     configured_conditions = config.get("conditions")
     project_status = result.get("projectStatus")
     if not isinstance(configured_conditions, list) or not configured_conditions:
@@ -43,15 +45,19 @@ def evaluate_quality_gate(config: dict, result: dict) -> tuple[bool, str]:
     missing = configured_metrics - evaluated_metrics
     unexpected = evaluated_metrics - configured_metrics
     ignored_conditions = project_status.get("ignoredConditions") is True
-    ignored_hotspot_only = (
-        ignored_conditions and missing == IGNORABLE_METRICS
-    )
+    ignored_metrics: set[str] = set()
+    if missing & SMALL_CHANGE_METRICS:
+        new_lines = measures.get("new_lines")
+        if new_lines is not None and new_lines < MINIMUM_NEW_LINES_FOR_SMALL_CHANGE_METRICS:
+            ignored_metrics.update(missing & SMALL_CHANGE_METRICS)
+    if "new_security_hotspots_reviewed" in missing and measures.get("new_security_hotspots") == 0:
+        ignored_metrics.add("new_security_hotspots_reviewed")
     if unexpected:
         return False, f"analysis returned unconfigured conditions: {', '.join(sorted(unexpected))}"
-    if missing and not ignored_hotspot_only:
+    if missing != ignored_metrics:
         return False, f"configured conditions were not evaluated: {', '.join(sorted(missing))}"
-    if ignored_conditions and not ignored_hotspot_only:
-        return False, "Sonar ignored conditions outside the supported hotspot-review case"
+    if ignored_conditions != bool(ignored_metrics):
+        return False, "Sonar ignored conditions without matching no-data evidence"
 
     invalid_statuses = [
         f"{condition['metricKey']}={condition.get('status', 'UNKNOWN')}"
@@ -74,9 +80,36 @@ def evaluate_quality_gate(config: dict, result: dict) -> tuple[bool, str]:
         f"quality_gate=OK | configured={len(configured_metrics)}"
         f" | evaluated={len(evaluated_metrics)}"
     )
-    if ignored_hotspot_only:
-        summary += " | ignored=new_security_hotspots_reviewed"
+    if ignored_metrics:
+        summary += f" | ignored={','.join(sorted(ignored_metrics))}"
     return True, summary
+
+
+def parse_measures(payload: dict) -> dict[str, Decimal]:
+    component = payload.get("component")
+    if not isinstance(component, dict):
+        return {}
+    measure_list = component.get("measures")
+    if not isinstance(measure_list, list):
+        return {}
+
+    measures: dict[str, Decimal] = {}
+    for measure in measure_list:
+        if not isinstance(measure, dict) or not isinstance(measure.get("metric"), str):
+            continue
+        value = measure.get("value")
+        if value is None:
+            periods = measure.get("periods")
+            if isinstance(periods, list) and periods:
+                value = periods[-1].get("value")
+        try:
+            if value is not None:
+                parsed = Decimal(str(value))
+                if parsed.is_finite():
+                    measures[measure["metric"]] = parsed
+        except (InvalidOperation, ValueError):
+            continue
+    return measures
 
 
 def main() -> int:
@@ -87,11 +120,12 @@ def main() -> int:
     try:
         config = json.loads(os.environ["SONAR_GATE_CONFIG_JSON"])
         result = json.loads(os.environ["SONAR_GATE_RESULT_JSON"])
+        measures = parse_measures(json.loads(os.environ["SONAR_GATE_MEASURES_JSON"]))
     except (KeyError, json.JSONDecodeError) as exc:
         print(f"❌ 不通过 | code=SONAR_QUALITY_GATE_RESPONSE_INVALID | detail={exc}", file=sys.stderr)
         return 1
 
-    passed, detail = evaluate_quality_gate(config, result)
+    passed, detail = evaluate_quality_gate(config, result, measures)
     if not passed:
         print(f"❌ 不通过 | code=SONAR_QUALITY_GATE_INVALID | gate={args.gate} | {detail}", file=sys.stderr)
         return 1

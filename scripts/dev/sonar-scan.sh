@@ -570,8 +570,14 @@ if $QUALITY_GATE; then
   GATE_JSON="$(curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" \
     --get --data-urlencode "analysisId=${ANALYSIS_ID}" \
     "${SONAR_URL}/api/qualitygates/project_status")"
+  GATE_MEASURES_JSON="$(curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" \
+    --get \
+    --data-urlencode "component=${PROJECT_KEY}" \
+    --data-urlencode "metricKeys=new_lines,new_security_hotspots" \
+    "${SONAR_URL}/api/measures/component")"
   SONAR_GATE_CONFIG_JSON="$GATE_CONFIG_JSON" \
     SONAR_GATE_RESULT_JSON="$GATE_JSON" \
+    SONAR_GATE_MEASURES_JSON="$GATE_MEASURES_JSON" \
     "$PYTHON_BIN" "${PROJECT_ROOT}/scripts/dev/sonar_quality_gate.py" --gate "$GATE_NAME"
 fi
 echo -e "${YELLOW}Tip:${NC} Run with --stop to shut down the SonarQube container when done."
