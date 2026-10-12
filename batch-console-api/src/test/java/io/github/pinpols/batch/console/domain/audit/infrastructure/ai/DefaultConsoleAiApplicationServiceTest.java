@@ -510,6 +510,20 @@ class DefaultConsoleAiApplicationServiceTest {
     assertThat(captor.getValue().promptTokens()).isZero();
   }
 
+  @Test
+  @DisplayName("成功响应缺少 metadata 时按预留金额结算")
+  void shouldSettleReserved_whenSuccessfulResponseHasNoMetadata() {
+    ChatResponse noMetadata = mock(ChatResponse.class);
+    when(noMetadata.getResult()).thenReturn(new Generation(new AssistantMessage("答复")));
+    when(noMetadata.getMetadata()).thenReturn(null);
+    stubApprovedChatClient(noMetadata);
+
+    AiChatResponse response = service.chat(request("tenant-1", "查询失败作业"), "idem-1");
+
+    assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.APPROVED.code());
+    verify(costService).settleReserved(any());
+  }
+
   // ── ② 调用限流 ────────────────────────────────────────────────────────────
 
   @Test
