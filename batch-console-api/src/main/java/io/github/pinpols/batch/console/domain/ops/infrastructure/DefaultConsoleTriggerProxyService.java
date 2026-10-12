@@ -79,7 +79,11 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
           CommonResponse<List<ConsoleTriggerStatusResponse>> response = triggerInternalRestClient
               .client()
               .get()
-              .uri("/api/triggers/management/list")
+              .uri(
+                  EmptyChecks.isNotNull(tenantScope)
+                      ? "/api/triggers/management/list?tenantId={tenantId}"
+                      : "/api/triggers/management/list",
+                  tenantScope)
               .retrieve()
               .body(LIST_RESPONSE);
           return filterByTenant(

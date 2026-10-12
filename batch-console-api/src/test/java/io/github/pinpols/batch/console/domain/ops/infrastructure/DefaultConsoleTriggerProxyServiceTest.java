@@ -71,7 +71,7 @@ class DefaultConsoleTriggerProxyServiceTest {
     when(restClientFactory.client()).thenReturn(restClient);
     when(restClient
             .get()
-            .uri(any(String.class))
+            .uri(any(String.class), any(Object[].class))
             .retrieve()
             .body(any(ParameterizedTypeReference.class)))
         .thenReturn(CommonResponse.success(downstream));

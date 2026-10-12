@@ -26,11 +26,15 @@ public class TriggerStatusQueryFacade implements TriggerStatusQueryService {
   private final Scheduler scheduler;
 
   @Override
-  public List<TriggerStatusInfo> listRegisteredTriggers() {
+  public List<TriggerStatusInfo> listRegisteredTriggers(String tenantId) {
     try {
       List<TriggerStatusInfo> result = new ArrayList<>();
       for (JobKey jobKey :
           scheduler.getJobKeys(GroupMatcher.jobGroupEquals(TriggerSchedulerFacade.JOB_GROUP))) {
+        if (EmptyChecks.isNotNull(tenantId)
+            && !tenantId.equals(parseJobIdentity(jobKey).tenantId())) {
+          continue;
+        }
         JobDetail detail = scheduler.getJobDetail(jobKey);
         if (EmptyChecks.isNotNull(detail)) {
           result.add(toTriggerStatusInfo(jobKey, detail));

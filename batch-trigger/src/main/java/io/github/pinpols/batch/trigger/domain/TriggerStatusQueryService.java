@@ -5,7 +5,7 @@ import java.util.List;
 /** Trigger 状态只读查询端口，与注册、暂停、恢复等写操作隔离。 */
 public interface TriggerStatusQueryService {
 
-  List<TriggerStatusInfo> listRegisteredTriggers();
+  List<TriggerStatusInfo> listRegisteredTriggers(String tenantId);
 
   String schedulerStatus();
 }

@@ -36,7 +36,7 @@ class TriggerProxyJsonContractTest {
     RestClient.Builder builder = RestClient.builder().baseUrl("http://trigger.test");
     MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
     server
-        .expect(requestTo("http://trigger.test/api/triggers/management/list"))
+        .expect(requestTo("http://trigger.test/api/triggers/management/list?tenantId=ta"))
         .andRespond(withSuccess("""
             {"code":"SUCCESS","data":[
               {"tenantId":"ta","jobCode":"JOB_A","status":"NORMAL","nextFireTime":"2026-10-07T00:00:00Z"},
