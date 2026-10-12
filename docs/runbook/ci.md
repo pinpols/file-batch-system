@@ -193,6 +193,7 @@ SDK 五语言契约矩阵。
 | Flyway 文件结构与 checksum 漂移 | `validate-flyway-schema.sh` | PR：database / CI 文件域；已有迁移 checksum 变化阻断 |
 | Flyway 危险 DDL | `check-migration-safety.sh`（Squawk，diff-only） | PR：database / CI 文件域；扫描新增或修改的迁移文件，危险 DDL 阻断 |
 | 新增数据库对象注释覆盖 | `check-db-comment-coverage.sh`（diff-only） | PR 与 Full CI：database 变更 |
+| 新增平台表文档登记 | `check-new-table-doc-coverage.py`（增量） | PR 与 Full CI：database、docs 变更；新增 `batch` / `archive` 表须登记，已有表目录条目不得删除 |
 | 注释语言 | `check-comment-language.py --staged` | 本地 pre-commit 增量预检；暂不阻断 PR / Full CI |
 | 文本编码 | `check-utf8-encoding.py --staged` | 本地只检查暂存文件；PR 检查目标分支差异；Full Gate 全仓扫描 |
 | 应用及基础设施 locale | `check-infrastructure-utf8.py` | 配置/Java/SDK/CI 变更时核对全量配置矩阵 |

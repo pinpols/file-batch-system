@@ -1,5 +1,16 @@
 # TODO Master · 当前待办唯一索引
 
+## 前后端约定与 CI 漂移治理（2026-10-12）
+
+范围和静态证据见[前后端治理漂移复核](../audit/cross-repo-governance-drift-review-2026-10-12.md)；下表是待修缺口，不代表 CI 或目标环境已验证。
+
+| ID | 事项 | 状态 | 完成条件 |
+|---|---|---|---|
+| **GDRIFT-1** | 前端 staging 普通 E2E 的 URL、API origin 和测试账号来源对齐 | ⏳ 待修 | workflow 输入与 Playwright/global setup 使用同一目标环境；错误 origin/缺失凭据先于测试失败；定向回归和真实 staging run 留证 |
+| **GDRIFT-2** | 后端机器可读治理契约的 PR 变更范围路由 | ⏳ 待修 | 四份治理文件逐项触发对应专项守卫，普通 Markdown 不被误路由；分类器正反例通过 |
+| **GDRIFT-3** | 前后端存量治理基线受控变更 | ⏳ 待设计并实现 | 降低基线自动接受；扩张必须可见、经 owner 审查并有理由/删除条件，不能和新缺口同 PR 静默放行 |
+| **GDRIFT-4** | 前端发布必验 E2E 的条件跳过审计 | ⏳ 待修 | 必需 seed 缺失阻断验收，可选场景明确 SKIP；发布报告按场景区分 PASS/SKIP/FAIL，不以绿色 job 代替业务覆盖 |
+
 ## 产品用户旅程对抗审计（2026-10-10）
 
 ✅ **编码实施完成；端到端验收未签收**：用户旅程改造方案阶段 1–4 的计划内编码已在当前本地交付范围落地，包括重放预览绑定/分页/失效及提交断连后的原请求结果查询、取消/终止状态反馈、批量逐项结果和版本选择；作业创建向导、独立配置入口、任务式导航；SQL AST 只读预览、严格零容差笔数/金额门禁及连续 Import→Export→MinIO→Dispatch 链路。前端 mocked-API Chromium 18/18、相关 Vitest 17/17、类型检查、变更文件 ESLint、i18n、Prettier、生产构建通过；定向检查覆盖 390px 移动端、820px 页面溢出、指定 axe 规则及键盘导航。后端配置包校验/模板/上传预览、JWT-CSRF 权限、写操作授权与幂等测试合计 85/85；另有 Apply 和作业创建认证 Testcontainers IT。Dispatch 幂等键定向测试 32/32，连续链路及 Import/Dispatch 故障 E2E 4/4 通过。上述是本地代码及定向测试证据，不是 PR/CI 或完整旅程签收。仍属**验收而非待编码**：真实四角色浏览器跨租户与完整审计、全 Console 屏幕阅读器/无障碍验收、staging 资源策略、真实外部下游响应丢失恢复、NAS/HTTP 配置环境及大/多文件端到端。SMTP 等不承诺 exactly-once。阶段 3 并发冲突由现有 CAS/idempotency 保护；真实并发操作与端到端审计仍待验收，不为填矩阵引入通用调度/补偿复杂度。逐项范围见[对抗审计](../audit/product-journey-adversarial-audit-2026-10-10.md)。
