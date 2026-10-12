@@ -29,6 +29,14 @@ class JobResourceAssignmentGuardTest {
   }
 
   @Test
+  @DisplayName("未认证访问不能维护或保留物理资源分配")
+  void shouldRejectAnonymous_whenManagingPhysicalResources() {
+    assertThatThrownBy(() -> guard.assertCreateAllowed(null, null))
+        .isInstanceOf(BizException.class);
+    assertThatThrownBy(guard::shouldPreserveExistingRouting).isInstanceOf(BizException.class);
+  }
+
+  @Test
   @DisplayName("租户管理员创建作业时不能指定物理资源")
   void shouldRejectTenantAdmin_whenAssigningResourcesOnCreate() {
     authenticate("ROLE_TENANT_ADMIN");

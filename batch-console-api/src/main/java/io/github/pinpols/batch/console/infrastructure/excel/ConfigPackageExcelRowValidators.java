@@ -73,6 +73,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import javax.annotation.Nullable;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.Statements;
@@ -245,7 +246,8 @@ final class ConfigPackageExcelRowValidators {
         && "FIXED_WIDTH".equals(normalizeEnum(row.get("file_format_type")));
     if (fixedWidthImport) {
       validateFixedWidthMappings(fieldMappings, ri);
-    } else if (EmptyChecks.isNotNull(fieldMappings) && fieldMappings.isArray()) {
+    } else if (fieldMappings != null // empty-check: allow - Sonar S2259
+        && fieldMappings.isArray()) { // empty-check: allow - Sonar S2259
       validateNamedMappings(fieldMappings, ri);
     }
     JsonNode qps = tryReadJson(normalize(row.get("query_param_schema")));
@@ -264,8 +266,8 @@ final class ConfigPackageExcelRowValidators {
     }
   }
 
-  private static void validateFixedWidthMappings(JsonNode mappings, List<String> ri) {
-    if (EmptyChecks.isNull(mappings)
+  private static void validateFixedWidthMappings(@Nullable JsonNode mappings, List<String> ri) {
+    if (mappings == null // empty-check: allow - Sonar S2259
         || !mappings.isArray()
         || mappings.isEmpty()) { // empty-check: allow - JsonNode container semantics
       ri.add("FIXED_WIDTH imports require at least one field mapping");

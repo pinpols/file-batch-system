@@ -413,11 +413,6 @@ public final class ConfigPackageSampleDataFactory {
   }
 
   private static Map<String, Object> fileTemplate(
-      String code, String name, String type, String namingRule) {
-    return fileTemplate(code, name, type, namingRule, "DELIMITED");
-  }
-
-  private static Map<String, Object> fileTemplate(
       String code, String name, String type, String namingRule, String fileFormat) {
     return row(
         COL_TENANT_ID,

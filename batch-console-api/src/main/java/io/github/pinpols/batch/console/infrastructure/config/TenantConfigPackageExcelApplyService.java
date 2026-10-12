@@ -59,6 +59,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import javax.annotation.Nullable;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -734,46 +735,67 @@ public class TenantConfigPackageExcelApplyService {
       p.setWorkflowDefinitionId(defId);
       p.setNodeCode(normalize(node.get(COL_NODE_CODE)));
       p.setNodeName(mergeText(
-          values, COL_NODE_NAME, EmptyChecks.isNull(existing) ? null : existing.getNodeName()));
+          values,
+          COL_NODE_NAME,
+          existing == null ? null : existing.getNodeName())); // empty-check: allow - Sonar S2259
       p.setNodeType(mergeEnum(
-          values, COL_NODE_TYPE, EmptyChecks.isNull(existing) ? null : existing.getNodeType()));
+          values,
+          COL_NODE_TYPE,
+          existing == null ? null : existing.getNodeType())); // empty-check: allow - Sonar S2259
       p.setRelatedJobCode(mergeText(
           values,
           COL_RELATED_JOB_CODE,
-          EmptyChecks.isNull(existing) ? null : existing.getRelatedJobCode()));
+          existing == null // empty-check: allow - Sonar S2259
+              ? null
+              : existing.getRelatedJobCode())); // empty-check: allow - Sonar S2259
       p.setRelatedPipelineCode(mergeText(
           values,
           COL_RELATED_PIPELINE_CODE,
-          EmptyChecks.isNull(existing) ? null : existing.getRelatedPipelineCode()));
+          existing == null // empty-check: allow - Sonar S2259
+              ? null
+              : existing.getRelatedPipelineCode())); // empty-check: allow - Sonar S2259
       p.setWorkerGroup(mergeWorkerGroup(
           values,
           COL_WORKER_GROUP,
-          EmptyChecks.isNull(existing) ? null : existing.getWorkerGroup()));
+          existing == null ? null : existing.getWorkerGroup())); // empty-check: allow - Sonar S2259
       p.setWindowCode(mergeConfigCode(
-          values, COL_WINDOW_CODE, EmptyChecks.isNull(existing) ? null : existing.getWindowCode()));
+          values,
+          COL_WINDOW_CODE,
+          existing == null ? null : existing.getWindowCode())); // empty-check: allow - Sonar S2259
       p.setNodeOrder(mergeInteger(
-          values, COL_NODE_ORDER, EmptyChecks.isNull(existing) ? null : existing.getNodeOrder()));
+          values,
+          COL_NODE_ORDER,
+          existing == null ? null : existing.getNodeOrder())); // empty-check: allow - Sonar S2259
       p.setRetryPolicy(mergeEnum(
           values,
           COL_RETRY_POLICY,
-          EmptyChecks.isNull(existing) ? null : existing.getRetryPolicy()));
+          existing == null ? null : existing.getRetryPolicy())); // empty-check: allow - Sonar S2259
       p.setRetryMaxCount(mergeInteger(
           values,
           COL_RETRY_MAX_COUNT,
-          EmptyChecks.isNull(existing) ? null : existing.getRetryMaxCount()));
+          existing == null // empty-check: allow - Sonar S2259
+              ? null
+              : existing.getRetryMaxCount())); // empty-check: allow - Sonar S2259
       p.setTimeoutSeconds(mergeInteger(
           values,
           COL_TIMEOUT_SECONDS,
-          EmptyChecks.isNull(existing) ? null : existing.getTimeoutSeconds()));
+          existing == null // empty-check: allow - Sonar S2259
+              ? null
+              : existing.getTimeoutSeconds())); // empty-check: allow - Sonar S2259
       p.setNodeParams(TenantConfigReferenceResolver.normalizeConfigReferences(mergeNodeParams(
           values.get(COL_NODE_PARAMS),
-          EmptyChecks.isNull(existing) ? null : existing.getNodeParams())));
+          existing == null ? null : existing.getNodeParams()))); // empty-check: allow - Sonar S2259
       p.setEnabled(parseBoolean(
-          values.get(COL_ENABLED), EmptyChecks.isNull(existing) || existing.getEnabled()));
+          values.get(COL_ENABLED),
+          existing == null || existing.getEnabled())); // empty-check: allow - Sonar S2259
       p.setCrossDayDependencies(
-          EmptyChecks.isNull(existing) ? null : existing.getCrossDayDependencies());
+          existing == null // empty-check: allow - Sonar S2259
+              ? null
+              : existing.getCrossDayDependencies()); // empty-check: allow - Sonar S2259
       p.setCrossDayDependencyTimeoutSeconds(
-          EmptyChecks.isNull(existing) ? null : existing.getCrossDayDependencyTimeoutSeconds());
+          existing == null // empty-check: allow - Sonar S2259
+              ? null
+              : existing.getCrossDayDependencyTimeoutSeconds()); // empty-check: allow - Sonar S2259
       workflowNodeMapper.upsertWorkflowNode(p);
     }
   }
@@ -793,13 +815,18 @@ public class TenantConfigPackageExcelApplyService {
       p.setFromNodeCode(fromNodeCode);
       p.setToNodeCode(toNodeCode);
       p.setEdgeType(mergeEnum(
-          values, COL_EDGE_TYPE, EmptyChecks.isNull(existing) ? null : existing.getEdgeType()));
+          values,
+          COL_EDGE_TYPE,
+          existing == null ? null : existing.getEdgeType())); // empty-check: allow - Sonar S2259
       p.setConditionExpr(mergeText(
           values,
           COL_CONDITION_EXPR,
-          EmptyChecks.isNull(existing) ? null : existing.getConditionExpr()));
+          existing == null // empty-check: allow - Sonar S2259
+              ? null
+              : existing.getConditionExpr())); // empty-check: allow - Sonar S2259
       p.setEnabled(parseBoolean(
-          values.get(COL_ENABLED), EmptyChecks.isNull(existing) || existing.getEnabled()));
+          values.get(COL_ENABLED),
+          existing == null || existing.getEnabled())); // empty-check: allow - Sonar S2259
       workflowEdgeMapper.upsertWorkflowEdge(p);
     }
   }
@@ -831,8 +858,8 @@ public class TenantConfigPackageExcelApplyService {
   }
 
   private static Map<String, Object> workflowNodeValues(WorkflowNodeEntity node) {
-    if (EmptyChecks.isNull(node)) {
-      return null;
+    if (node == null) { // empty-check: allow - Sonar S2259
+      return Map.of();
     }
     Map<String, Object> values = new LinkedHashMap<>();
     values.put(COL_NODE_CODE, node.getNodeCode());
@@ -852,8 +879,8 @@ public class TenantConfigPackageExcelApplyService {
   }
 
   private static Map<String, Object> workflowEdgeValues(WorkflowEdgeEntity edge) {
-    if (EmptyChecks.isNull(edge)) {
-      return null;
+    if (edge == null) { // empty-check: allow - Sonar S2259
+      return Map.of();
     }
     Map<String, Object> values = new LinkedHashMap<>();
     values.put(COL_FROM_NODE_CODE, edge.getFromNodeCode());
@@ -882,9 +909,9 @@ public class TenantConfigPackageExcelApplyService {
   }
 
   private static Map<String, String> mergeExistingValues(
-      Map<String, String> incoming, Map<String, ?> existing, List<String> columns) {
+      Map<String, String> incoming, @Nullable Map<String, ?> existing, List<String> columns) {
     Map<String, String> merged = new LinkedHashMap<>(incoming);
-    if (EmptyChecks.isNull(existing)) {
+    if (existing == null) { // empty-check: allow - Sonar S2259
       return merged;
     }
     for (String column : columns) {

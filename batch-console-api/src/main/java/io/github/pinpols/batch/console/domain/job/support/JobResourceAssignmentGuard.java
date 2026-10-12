@@ -77,14 +77,14 @@ public class JobResourceAssignmentGuard {
 
   private static boolean isPlatformAdmin() {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    return EmptyChecks.isNotNull(authentication)
+    return authentication != null // empty-check: allow - Sonar S2259
         && authentication.isAuthenticated()
         && hasAuthority(authentication, ConsoleRoles.ADMIN);
   }
 
   private static void requireTenantAdmin() {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    if (EmptyChecks.isNull(authentication)
+    if (authentication == null // empty-check: allow - Sonar S2259
         || !authentication.isAuthenticated()
         || !hasAuthority(authentication, ConsoleRoles.TENANT_ADMIN)) {
       throw forbidden();

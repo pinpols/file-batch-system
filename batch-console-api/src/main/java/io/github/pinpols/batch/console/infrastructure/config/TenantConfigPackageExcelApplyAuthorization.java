@@ -54,7 +54,7 @@ public class TenantConfigPackageExcelApplyAuthorization {
 
   private static ConsolePrincipal currentPrincipal() {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    if (EmptyChecks.isNotNull(authentication)
+    if (authentication != null // empty-check: allow - Sonar S2259
         && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
       return principal;
     }

@@ -72,6 +72,8 @@ Sonar issue 是候选，不是缺陷判决；`SKIP_FP`、`DEFERRED` 等标注是
 
 2026-10-12 在 `029a75540aee0d9bf7a149bf8049a905ea9390c3` 完成全量 clean test、JaCoCo 与 Sonar 分析；Quality Gate 返回 `ERROR`，因为 `new_violations=108`，不是质量门禁脚本缺失热点条件时的诊断错误。该次新代码覆盖率 85.4%、重复率 0%；全局 OPEN issue 1,365（Bug 49、Vulnerability 0、Code Smell 1,316、Security Hotspot 0）。随后以最新 `origin/main` 基线运行增量扫描，13 个 Java 文件的变更行 issue/hotspot 均为 0；该证据只代表当前差异，不更新旧 SHA 的全量 Gate 状态。扫描任务、报告位置和新代码初步分诊见[治理实施计划](../plans/static-analysis-governance-plan-2026-10-12.md)。
 
+2026-10-12 后续修复分支的标准增量扫描以 `origin/main` SHA `fa5f53fc75b6adf678ade16945afd47568947ee` 为基线，Sonar 任务 `bddf2967-f663-4cad-9557-2838db9db5c4` 成功；14 个 Java 变更文件的变更行 issue/hotspot 均为 0。30 天新代码周期 OPEN issue 从 86 降至 68，确认的 `java:S2259` 空值候选从 18 降至 0；剩余 68 条包含测试断言、可读性和空值契约候选，仍须按风险分诊，不作机械清零。增量扫描未运行 Quality Gate；PR CI 尚待验证。
+
 2026-10-12 对 `51bf78e70` 的全量报告曾记录 1,173 个 OPEN issues（12 Bug、1 Vulnerability、1,160 Code Smell，覆盖率 68.9%）。唯一 Vulnerability 是 `java:S5443`：Excel 上传临时文件落在公共系统临时根目录；本轮已改用 owner-only `PrivateTempFiles` 并增加成功/失败路径测试。`./scripts/dev/sonar-scan.sh --incremental --base-ref origin/main` 的全 reactor 扫描运行超过 17 分钟未产出最终报告，已中断，不能算全量扫描通过。随后对同一工作树内容执行单文件范围 Sonar 分析（临时项目 `file-batch-system-console-review-20261012`、配置 `Batch Platform Sonar Way`、只纳入 `DefaultTenantConfigPackageExcelService.java`）；分析任务 `63939472-6d92-4f2a-8550-d52f98eccc0b` 为 `SUCCESS`，服务端查询该文件的 `java:S5443` OPEN 数为 0。此结果只验证指定文件和规则，不代表全 reactor 分析或 Quality Gate 通过。历史全量快照不代表当前最新 main；后续报告以最新 main 的实际扫描和 Quality Gate 校验为准。旧的带日期分析留作历史快照，不应继续作为当前待办源。
 
 ## 分阶段完成状态
@@ -81,7 +83,7 @@ Sonar issue 是候选，不是缺陷判决；`SKIP_FP`、`DEFERRED` 等标注是
 | A. 事实源收敛 | 本文矩阵、Sonar SOP 与脚本索引一致 | 已落实；由 `check-docs-structure.py` 和人工核对 workflow 维护 |
 | B. 抑制形式覆盖 | 扩展现有注册检查器覆盖生产 `NOSONAR`、SpotBugs 注解和全部生产 YAML IDE inspection | 已落实；测试覆盖正反例，生产基线未增加现有抑制 |
 | C. 存量例外复核 | 按上方优先级逐项核验安全抑制与宽作用域误报 | 安全敏感五规则已完成本轮复核；其余 246 个当前出现项仍需按规则/模块排期复核，不把计数基线当逐项审计 |
-| D. Sonar 债务处置 | 最新 main 快照中确认漏洞/高风险 issue，按规则分批修复 | S5443 临时文件问题已修并完成单文件规则复核；当前分支全 reactor Sonar 与最新 main 扫描仍未完成，Code Smell 继续分批治理 |
+| D. Sonar 债务处置 | 最新 main 快照中确认漏洞/高风险 issue，按规则分批修复 | S5443 临时文件问题已修并完成单文件规则复核；后续修复分支全 reactor 增量扫描已完成且变更行 0 issue/0 hotspot，但未运行 Quality Gate；剩余新代码周期和存量 Code Smell 按风险继续分批治理 |
 | E. PR Sonar 策略 | 评估是否需要变更行 PR 级 Sonar 检查 | 暂不新增全量 PR Sonar；只有明确的 PR 阻断需求和可持续运行成本后另行决策 |
 
 当前 PR/Full Gate 对确定性规则继续硬阻断；复杂误报、作用域是否合理和是否值得重构保留人工判断。该治理不另建质量平台，不引入外部质量数据库，也不改变现有模块架构。
