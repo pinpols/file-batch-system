@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.domain.param;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -32,7 +33,7 @@ public final class UpdateBatchDayReplaySessionStatusParam {
     this.toStatus = Objects.requireNonNull(toStatus, "toStatus");
     this.expectedStatuses =
         List.copyOf(Objects.requireNonNull(expectedStatuses, "expectedStatuses"));
-    if (this.expectedStatuses.isEmpty()) {
+    if (EmptyChecks.isEmpty(this.expectedStatuses)) {
       throw new IllegalArgumentException("expectedStatuses must not be empty");
     }
     SessionStatusDetails resolvedDetails = Objects.requireNonNull(details, "details");

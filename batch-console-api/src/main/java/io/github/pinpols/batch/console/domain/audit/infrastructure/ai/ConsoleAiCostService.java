@@ -240,7 +240,7 @@ public class ConsoleAiCostService {
   public record MeasuredUsage(String provider, int promptTokens, int completionTokens) {
     public MeasuredUsage {
       Objects.requireNonNull(provider, "provider");
-      if (provider.isBlank()) {
+      if (EmptyChecks.isBlank(provider)) {
         throw new IllegalArgumentException("provider must not be blank");
       }
       if (promptTokens < 0 || completionTokens < 0) {

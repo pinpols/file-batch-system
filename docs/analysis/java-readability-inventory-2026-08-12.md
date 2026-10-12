@@ -7,17 +7,17 @@
 
 | 指标 | 数量 |
 |---|---:|
-| 生产 Java 源文件 | 2453 |
+| 生产 Java 源文件 | 2455 |
 | CGLIB 自注入类 | 0 |
-| `Map<String, Object>` 出现次数 | 2094 |
+| `Map<String, Object>` 出现次数 | 2095 |
 | 含 Map 的源文件 | 453 |
 | public Map 契约候选 | 56 |
 | public Map 契约候选文件 | 36 |
-| `@SuppressWarnings` | 254 |
-| 含 suppression 的源文件 | 184 |
+| `@SuppressWarnings` | 253 |
+| 含 suppression 的源文件 | 183 |
 | `@Configuration` 类 | 49 |
 | 大于等于 700 行的源文件 | 13 |
-| `PMD.ExcessiveParameterList` 显式例外 | 38 |
+| `PMD.ExcessiveParameterList` 显式例外 | 37 |
 
 ## 模块源文件
 
@@ -25,7 +25,7 @@
 |---|---:|
 | `batch-common` | 333 |
 | `batch-console-api` | 993 |
-| `batch-orchestrator` | 563 |
+| `batch-orchestrator` | 565 |
 | `batch-trigger` | 76 |
 | `batch-worker` | 387 |
 | `sdk` | 92 |
@@ -41,8 +41,8 @@
 | 文件 | 行数 |
 |---|---:|
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageSheetSpecs.java` | 1583 |
-| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java` | 1043 |
-| `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | 1031 |
+| `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | 1036 |
+| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java` | 1032 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java` | 1026 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigPackageExcelApplyService.java` | 976 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java` | 975 |
@@ -121,7 +121,6 @@
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/ResultVersionEntity.java` | 1 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/WorkerRegistryEntity.java` | 3 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/mq/OutboxPollScheduler.java` | 1 |
-| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/mapper/BatchDayReplayEntryMapper.java` | 1 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/mapper/BatchDayReplaySessionMapper.java` | 1 |
 | `batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/runtime/AtomicWorkerLoop.java` | 1 |
 | `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/HttpTaskExecutionClient.java` | 1 |
