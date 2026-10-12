@@ -10,7 +10,11 @@ import sys
 from decimal import Decimal, InvalidOperation
 
 
-SMALL_CHANGE_METRICS = {"new_coverage", "new_duplicated_lines_density"}
+# CI 和默认本地扫描镜像固定为 SonarQube Community Build 24.04。
+SMALL_CHANGE_METRICS = {
+    "new_coverage",
+    "new_duplicated_lines_density",
+}
 MINIMUM_NEW_LINES_FOR_SMALL_CHANGE_METRICS = 20
 
 
@@ -44,22 +48,30 @@ def evaluate_quality_gate(config: dict, result: dict, measures: dict) -> tuple[b
 
     missing = configured_metrics - evaluated_metrics
     unexpected = evaluated_metrics - configured_metrics
-    ignored_conditions = project_status.get("ignoredConditions") is True
     ignored_metrics: set[str] = set()
-    ignored_flag_required = False
-    if missing & SMALL_CHANGE_METRICS:
-        new_lines = measures.get("new_lines")
-        if new_lines is not None and new_lines < MINIMUM_NEW_LINES_FOR_SMALL_CHANGE_METRICS:
-            ignored_metrics.update(missing & SMALL_CHANGE_METRICS)
-            ignored_flag_required = True
+    missing_small_change_metrics = missing & SMALL_CHANGE_METRICS
+    new_lines = measures.get("new_lines")
+    if (
+        missing_small_change_metrics
+        and new_lines is not None
+        and new_lines < MINIMUM_NEW_LINES_FOR_SMALL_CHANGE_METRICS
+    ):
+        ignored_metrics.update(missing_small_change_metrics)
     if "new_security_hotspots_reviewed" in missing and measures.get("new_security_hotspots") == 0:
         ignored_metrics.add("new_security_hotspots_reviewed")
     if unexpected:
         return False, f"analysis returned unconfigured conditions: {', '.join(sorted(unexpected))}"
     if missing != ignored_metrics:
-        return False, f"configured conditions were not evaluated: {', '.join(sorted(missing))}"
-    if ignored_flag_required and not ignored_conditions:
-        return False, "Sonar ignored conditions without matching no-data evidence"
+        small_change_evidence = (
+            f"new_lines < {MINIMUM_NEW_LINES_FOR_SMALL_CHANGE_METRICS} required for "
+            f"{', '.join(sorted(missing_small_change_metrics))}"
+            if missing_small_change_metrics
+            else "none"
+        )
+        return False, (
+            f"configured conditions were not evaluated: {', '.join(sorted(missing))}; "
+            f"small-change evidence: {small_change_evidence}"
+        )
 
     invalid_statuses = [
         f"{condition['metricKey']}={condition.get('status', 'UNKNOWN')}"
