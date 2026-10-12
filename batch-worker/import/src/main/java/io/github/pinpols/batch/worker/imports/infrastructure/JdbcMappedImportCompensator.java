@@ -49,7 +49,6 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @Slf4j
 @Component
-@SuppressWarnings("java:S2077")
 public class JdbcMappedImportCompensator implements PipelineCompensator {
 
   private static final String RUN_BINDING_BATCH_NO = "${batchNo}";
@@ -76,6 +75,7 @@ public class JdbcMappedImportCompensator implements PipelineCompensator {
   }
 
   @Override
+  @SuppressWarnings("java:S2077")
   public CompensationResult compensate(
       String tenantId, Long pipelineInstanceId, Long fileId, Map<String, Object> attributes) {
     try {

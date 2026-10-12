@@ -20,9 +20,14 @@ SOURCE_PREFIXES = (
     "sdk/java/",
     "security-scan/",
 )
-ANNOTATION = re.compile(r"@SuppressWarnings\s*\((?P<body>.*?)\)", re.DOTALL)
+ANNOTATION = re.compile(
+    r"@(?P<annotation>SuppressWarnings|SuppressFBWarnings)\s*\((?P<body>.*?)\)",
+    re.DOTALL,
+)
 RULE = re.compile(r'"(?P<rule>[^"\\]+)"')
+FB_WARNINGS_VALUE = re.compile(r"\bvalue\s*=\s*(?P<value>\{[^}]*\}|\"(?:\\\\.|[^\"])*\")", re.DOTALL)
 INSPECTION_COMMENT = re.compile(r"#\s*noinspection\s+(?P<rule>[A-Za-z][A-Za-z0-9_.]*)\b")
+NOSONAR_MARKER = re.compile(r"^\s*NOSONAR\b")
 
 # 此清单采用精确匹配。新增例外必须经过评审，并在此登记及
 # docs/standards/java-suppression-registry.md 中说明原因。
@@ -93,8 +98,7 @@ def production_yaml_configs(candidates: list[str] | None = None) -> list[Path]:
         return sorted(
             ROOT / relative
             for relative in candidates
-            if Path(relative).name.startswith("application")
-            and Path(relative).suffix in {".yml", ".yaml"}
+            if Path(relative).suffix in {".yml", ".yaml"}
             and "/src/main/resources/" in relative
             and (ROOT / relative).is_file()
             and relative.startswith(SOURCE_PREFIXES)
@@ -109,10 +113,75 @@ def production_yaml_configs(candidates: list[str] | None = None) -> list[Path]:
     return sorted(
         ROOT / relative
         for relative in result.stdout.splitlines()
-        if Path(relative).name.startswith("application")
-        and Path(relative).suffix in {".yml", ".yaml"}
+        if Path(relative).suffix in {".yml", ".yaml"}
         and "/src/main/resources/" in relative
     )
+
+
+def nosonar_comment_lines(source: str) -> list[int]:
+    """Return actual Java line comments containing a Sonar NOSONAR directive."""
+    lines: list[int] = []
+    state = "code"
+    line = 1
+    index = 0
+    while index < len(source):
+        current = source[index]
+        following = source[index : index + 2]
+        if current == "\n":
+            line += 1
+            if state == "line-comment":
+                state = "code"
+            index += 1
+            continue
+        if state == "line-comment":
+            index += 1
+            continue
+        if state == "block-comment":
+            if following == "*/":
+                state = "code"
+                index += 2
+            else:
+                index += 1
+            continue
+        if state == "text-block":
+            if source[index : index + 3] == '\"\"\"':
+                state = "code"
+                index += 3
+            else:
+                index += 1
+            continue
+        if state in {"string", "char"}:
+            if current == "\\":
+                index += 2
+            elif (state == "string" and current == '\"') or (state == "char" and current == "'"):
+                state = "code"
+                index += 1
+            else:
+                index += 1
+            continue
+        if source[index : index + 3] == '\"\"\"':
+            state = "text-block"
+            index += 3
+        elif following == "//":
+            comment_end = source.find("\n", index + 2)
+            if comment_end < 0:
+                comment_end = len(source)
+            if NOSONAR_MARKER.search(source[index + 2 : comment_end]):
+                lines.append(line)
+            state = "line-comment"
+            index += 2
+        elif following == "/*":
+            state = "block-comment"
+            index += 2
+        elif current == '\"':
+            state = "string"
+            index += 1
+        elif current == "'":
+            state = "char"
+            index += 1
+        else:
+            index += 1
+    return lines
 
 
 def scan(candidates: list[str] | None = None) -> list[tuple[str, int, str]]:
@@ -123,14 +192,58 @@ def scan(candidates: list[str] | None = None) -> list[tuple[str, int, str]]:
         if path.suffix == ".java":
             for match in ANNOTATION.finditer(source):
                 line = source.count("\n", 0, match.start()) + 1
-                for rule_match in RULE.finditer(match.group("body")):
-                    findings.append((relative, line, rule_match.group("rule")))
+                body = match.group("body")
+                annotation = match.group("annotation")
+                if annotation == "SuppressFBWarnings":
+                    value_attribute = FB_WARNINGS_VALUE.search(body)
+                    body = (
+                        value_attribute.group("value")
+                        if value_attribute
+                        else re.split(r",\s*justification\s*=", body, maxsplit=1)[0]
+                    )
+                for rule_match in RULE.finditer(body):
+                    rule = rule_match.group("rule")
+                    if annotation == "SuppressFBWarnings":
+                        rule = f"spotbugs:{rule}"
+                    findings.append((relative, line, rule))
+            findings.extend((relative, line, "NOSONAR") for line in nosonar_comment_lines(source))
         else:
             for line_number, line in enumerate(source.splitlines(), start=1):
                 match = INSPECTION_COMMENT.search(line)
                 if match:
                     findings.append((relative, line_number, match.group("rule")))
     return findings
+
+
+def suppression_targets_type(source: str, line_number: int) -> bool:
+    """Whether an annotation on this line applies to a type rather than a member."""
+    type_declaration = re.compile(
+        r"^(?:(?:public|protected|private|abstract|final|static|sealed|non-sealed)\s+)*"
+        r"(?:class|interface|enum|record)\b"
+    )
+    for line in source.splitlines()[line_number:]:
+        candidate = line.strip()
+        if (
+            not candidate
+            or candidate.startswith(("//", "/*", "*", "*/"))
+            or candidate.startswith("@")
+        ):
+            continue
+        return type_declaration.match(candidate) is not None
+    return False
+
+
+def broad_scope_suppressions(
+    findings: list[tuple[str, int, str]],
+) -> list[tuple[str, int, str]]:
+    violations = []
+    for path, line, rule in findings:
+        if rule != "java:S2077":
+            continue
+        source = (ROOT / path).read_text(encoding="utf-8")
+        if suppression_targets_type(source, line):
+            violations.append((path, line, rule))
+    return violations
 
 
 def unregistered(findings: list[tuple[str, int, str]]) -> list[tuple[str, int, str]]:
@@ -190,6 +303,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Wrote reviewed suppression baseline: {BASELINE} ({len(findings)} occurrences)")
         return 0
     unknown = unregistered(findings)
+    broad_scope = broad_scope_suppressions(findings)
     counts = Counter(rule for _, _, rule in findings)
     print(f"Production Java/YAML suppressions: {len(findings)}")
     print("Reviewed rules: " + ", ".join(f"{rule}={counts[rule]}" for rule in sorted(counts)))
@@ -222,6 +336,11 @@ def main(argv: list[str] | None = None) -> int:
         for path, rule, current, approved in increased:
             print(f"  - {path}: {rule} current={current} approved={approved}")
         print("Review the exception reason and update the baseline deliberately.")
+        return 1
+    if broad_scope:
+        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | broad S2077 scope")
+        for path, line, rule in broad_scope:
+            print(f"  - {path}:{line}: {rule} must be scoped to the SQL sink method")
         return 1
     print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME}")
     return 0

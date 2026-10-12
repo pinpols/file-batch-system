@@ -58,6 +58,7 @@ SONAR_URL="http://localhost:${SONAR_PORT}"
 SONAR_ADMIN_USER="${SONAR_ADMIN_USER:-admin}"
 SONAR_ADMIN_PASS="${SONAR_ADMIN_PASS:-admin}"
 SONAR_IMAGE="${SONAR_IMAGE:-sonarqube@sha256:d4899d380ad9d7b63ebaa751e047f5a4f064f8902cdf7c1a3c3c96f7d71600ed}"
+TOKEN_CREATED=false
 BASE_PROJECT_KEY="${SONAR_PROJECT_KEY:-file-batch-system}"
 BASE_PROJECT_NAME="${SONAR_PROJECT_NAME:-File Batch System}"
 if [[ "$SCAN_MODE" == "incremental" ]]; then
@@ -174,9 +175,18 @@ curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" -X POST \
   "${SONAR_URL}/api/user_tokens/revoke" \
   -d "name=${TOKEN_NAME}" &>/dev/null || true
 
+revoke_scan_token() {
+  if $TOKEN_CREATED; then
+    curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" -X POST \
+      "${SONAR_URL}/api/user_tokens/revoke" \
+      -d "name=${TOKEN_NAME}" &>/dev/null || warn "Unable to revoke temporary Sonar analysis token."
+  fi
+}
+trap revoke_scan_token EXIT
 TOKEN_JSON=$(curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" -X POST \
   "${SONAR_URL}/api/user_tokens/generate" \
   -d "name=${TOKEN_NAME}&type=GLOBAL_ANALYSIS_TOKEN")
+TOKEN_CREATED=true
 SONAR_TOKEN=$(echo "$TOKEN_JSON" | "$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['token'])")
 ok "Token generated."
 
@@ -339,10 +349,10 @@ if ! $COVERAGE_ENABLED; then
   )
 fi
 set +e
-"$MAVEN_WRAPPER" "org.sonarsource.scanner.maven:sonar-maven-plugin:${SONAR_MAVEN_PLUGIN_VERSION}:sonar" \
+SONAR_TOKEN="${SONAR_TOKEN}" "$MAVEN_WRAPPER" \
+  "org.sonarsource.scanner.maven:sonar-maven-plugin:${SONAR_MAVEN_PLUGIN_VERSION}:sonar" \
   --projects '!batch-e2e-tests' \
   -Dsonar.host.url="${SONAR_URL}" \
-  -Dsonar.token="${SONAR_TOKEN}" \
   -Dsonar.projectKey="${PROJECT_KEY}" \
   -Dsonar.projectName="${PROJECT_NAME}" \
   -Dsonar.java.source=21 \

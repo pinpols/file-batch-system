@@ -79,8 +79,9 @@ class JavaSuppressionRegistryTest(unittest.TestCase):
         self.assertEqual(
             [path.relative_to(MODULE.ROOT).as_posix() for path in kept], [production_rel])
 
-    def test_yaml_candidate_filter_only_keeps_application_configs(self) -> None:
+    def test_yaml_candidate_filter_covers_all_production_resource_configs(self) -> None:
         application = "batch-trigger/src/main/resources/application.yml"
+        worker_defaults = "batch-worker/dispatch/src/main/resources/dispatch-worker.yml"
         unrelated = "batch-trigger/src/main/resources/logback-spring.xml"
         test_config = "batch-trigger/src/test/resources/application-test.yml"
 
@@ -88,6 +89,12 @@ class JavaSuppressionRegistryTest(unittest.TestCase):
 
         self.assertEqual(
             [path.relative_to(MODULE.ROOT).as_posix() for path in kept], [application])
+
+        kept = MODULE.production_yaml_configs([application, worker_defaults, unrelated, test_config])
+        self.assertEqual(
+            [path.relative_to(MODULE.ROOT).as_posix() for path in kept],
+            [application, worker_defaults],
+        )
 
     def test_yaml_ide_suppressions_are_scanned(self) -> None:
         original_java = MODULE.production_sources
@@ -113,6 +120,58 @@ class JavaSuppressionRegistryTest(unittest.TestCase):
             MODULE.unregistered([("batch-trigger/src/main/resources/application.yml", 1, "UnknownInspection")]),
             [("batch-trigger/src/main/resources/application.yml", 1, "UnknownInspection")],
         )
+
+    def test_spotbugs_suppression_is_inventoried_and_requires_registration(self) -> None:
+        original_java = MODULE.production_sources
+        original_yaml = MODULE.production_yaml_configs
+        with tempfile.TemporaryDirectory(dir=MODULE.ROOT) as tmp:
+            probe = Path(tmp) / "SpotbugsProbe.java"
+            probe.write_text(
+                '@SuppressFBWarnings(value = {"NP_NULL_ON_SOME_PATH", "EI_EXPOSE_REP"}, '
+                'justification = "Not justified")\n'
+                "class SpotbugsProbe {}\n",
+                encoding="utf-8",
+            )
+            MODULE.production_sources = lambda _candidates=None: [probe]
+            MODULE.production_yaml_configs = lambda _candidates=None: []
+            try:
+                self.assertEqual(
+                    MODULE.scan(),
+                    [
+                        (probe.relative_to(MODULE.ROOT).as_posix(), 1, "spotbugs:NP_NULL_ON_SOME_PATH"),
+                        (probe.relative_to(MODULE.ROOT).as_posix(), 1, "spotbugs:EI_EXPOSE_REP"),
+                    ],
+                )
+                self.assertTrue(MODULE.unregistered(MODULE.scan()))
+            finally:
+                MODULE.production_sources = original_java
+                MODULE.production_yaml_configs = original_yaml
+
+    def test_nosonar_comment_is_detected_but_string_and_text_block_are_not(self) -> None:
+        source = '''
+class Probe {
+  String example = "// NOSONAR";
+  String template = """
+      // NOSONAR
+      """;
+  // NOSONAR: hide analyzer findings
+}
+'''
+        self.assertEqual(MODULE.nosonar_comment_lines(source), [7])
+
+    def test_s2077_suppression_must_target_a_method_not_a_type(self) -> None:
+        class_source = '''
+@SuppressWarnings("java:S2077")
+@Component
+public class DynamicSqlAdapter {}
+'''
+        method_source = '''
+@SuppressWarnings("java:S2077")
+public void executeValidatedSql() {}
+'''
+
+        self.assertTrue(MODULE.suppression_targets_type(class_source, 2))
+        self.assertFalse(MODULE.suppression_targets_type(method_source, 2))
 
     def test_new_known_yaml_inspection_still_requires_baseline_entry(self) -> None:
         original_java = MODULE.production_sources

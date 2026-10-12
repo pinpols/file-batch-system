@@ -268,10 +268,15 @@ class JobMonitoringMapperIntegrationTest {
     long definitionId = createJobDefinition(tenant, "LIVE_POLICY", "MANUAL");
     savePolicy(tenant, definitionId, 300, 0, null, 0, 0);
     long instanceId = insertSlaCandidate(tenant, definitionId);
+    String controlTenant = "monitor-live-policy-control-" + UUID.randomUUID();
+    long controlDefinitionId = createJobDefinition(controlTenant, "CONTROL", "MANUAL");
+    savePolicy(controlTenant, controlDefinitionId, 0, 0, null, 0, 0);
+    long controlInstanceId = insertSlaCandidate(controlTenant, controlDefinitionId);
 
     try (SqlSession session = sqlSessionFactory.openSession(true)) {
       assertThat(session.getMapper(JobMonitoringMapper.class).selectSlaViolationCandidates(100))
           .extracting(JobInstanceEntity::getId)
+          .contains(controlInstanceId)
           .doesNotContain(instanceId);
     }
     jdbcTemplate.update(

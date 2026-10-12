@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.config.TenantConfigPackageExcelService;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigPackageExcelApplyRequest;
@@ -345,7 +346,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
       throw BizException.of(ResultCode.FORBIDDEN, "error.config_package.session_actor_required");
     }
     PackageExcelSession session;
-    Path temporaryWorkbook = Files.createTempFile("tenant-config-package-", ".xlsx");
+    Path temporaryWorkbook = PrivateTempFiles.createTempFile("tenant-config-package-", ".xlsx");
     try {
       file.transferTo(temporaryWorkbook);
       session = parseWorkbook(temporaryWorkbook, tenantId, fileName)

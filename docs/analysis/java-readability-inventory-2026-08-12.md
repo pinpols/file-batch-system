@@ -13,7 +13,7 @@
 | 含 Map 的源文件 | 453 |
 | public Map 契约候选 | 56 |
 | public Map 契约候选文件 | 36 |
-| `@SuppressWarnings` | 246 |
+| `@SuppressWarnings` | 254 |
 | 含 suppression 的源文件 | 184 |
 | `@Configuration` 类 | 49 |
 | 大于等于 700 行的源文件 | 13 |
@@ -46,7 +46,7 @@
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java` | 1026 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java` | 975 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigPackageExcelApplyService.java` | 949 |
-| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultTenantConfigPackageExcelService.java` | 897 |
+| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultTenantConfigPackageExcelService.java` | 898 |
 | `batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanner.java` | 780 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/application/ops/infrastructure/DefaultConsoleOrchestratorProxyService.java` | 755 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultRetryGovernanceService.java` | 742 |
@@ -65,7 +65,7 @@
 | `batch-common/src/main/java/io/github/pinpols/batch/common/diagnostics/BatchRuntimeStatusEndpoint.java` | `L51: public Map<String, Object> status` |
 | `batch-common/src/main/java/io/github/pinpols/batch/common/page/CursorCodec.java` | `L45: public static Map<String, Object> decode` |
 | `batch-common/src/main/java/io/github/pinpols/batch/common/utils/JsonUtils.java` | `L91: public static Map<String, Object> toMap` |
-| `batch-common/src/main/java/io/github/pinpols/batch/common/utils/SecretMasking.java` | `L62: public static Map<String, Object> maskSensitiveKeys`<br>`L67: public static Map<String, Object> maskSensitiveKeys` |
+| `batch-common/src/main/java/io/github/pinpols/batch/common/utils/SecretMasking.java` | `L64: public static Map<String, Object> maskSensitiveKeys`<br>`L70: public static Map<String, Object> maskSensitiveKeys` |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/ops/infrastructure/ConsoleJobOpsSupport.java` | `L226: public Map<String, Object> parsePayload` |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelSchema.java` | `L135: public static Map<String, Object> toExportRow` |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/shared/query/ConsoleQuerySupport.java` | `L74: public static Map<String, Object> requireRow` |
@@ -86,7 +86,7 @@
 | `batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchChannelHealthRepository.java` | `L30: public List<Map<String, Object>> findEnabledProbeChannels` |
 | `batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/config/ExportConfigValueSupport.java` | `L18: public static Map<String, Object> toMap` |
 | `batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/GenericJdbcMappedExportDataPlugin.java` | `L57: public Map<String, Object> loadBatch` |
-| `batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/SqlTemplateExportDataPlugin.java` | `L80: public Map<String, Object> loadBatch` |
+| `batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/SqlTemplateExportDataPlugin.java` | `L79: public Map<String, Object> loadBatch` |
 | `batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/infrastructure/quality/ValidationConfigSupport.java` | `L21: public Map<String, Object> toMap`<br>`L41: public Map<String, Object> firstMap`<br>`L49: public Map<String, Object> payloadToMap` |
 | `batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/infrastructure/quality/ValidationRuleSetMerger.java` | `L31: public Map<String, Object> merge` |
 | `batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/format/ParseSupport.java` | `L61: public Map<String, Object> parseHints`<br>`L75: public Map<String, Object> readJsonObject` |

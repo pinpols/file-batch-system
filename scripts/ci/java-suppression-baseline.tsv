@@ -159,9 +159,9 @@ batch-worker/dispatch/src/main/resources/application.yml	SpringBootApplicationYa
 batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/config/ExportConfigValueSupport.java	unchecked	1
 batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/jdbc/JdbcMappedExportSpec.java	unchecked	1
 batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/ExportKeysetRangePlanner.java	unchecked	1
-batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/GenericJdbcMappedExportDataPlugin.java	java:S2077	1
+batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/GenericJdbcMappedExportDataPlugin.java	java:S2077	3
 batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/GenericJdbcMappedExportDataPlugin.java	java:S6218	1
-batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/SqlTemplateExportDataPlugin.java	java:S2077	1
+batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/SqlTemplateExportDataPlugin.java	java:S2077	3
 batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/runtime/ExportTaskConsumer.java	SpringJavaInjectionPointsAutowiringInspection	1
 batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/GenerateStep.java	unchecked	1
 batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/PrepareStep.java	java:S2259	1
@@ -177,7 +177,7 @@ batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/infrast
 batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/infrastructure/JdbcMappedImportCompensator.java	java:S2077	1
 batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/infrastructure/quality/ValidationRuleSetMerger.java	unchecked	1
 batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/jdbc/JdbcMappedImportSpec.java	unchecked	2
-batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/plugin/GenericJdbcMappedImportLoadPlugin.java	java:S2077	1
+batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/plugin/GenericJdbcMappedImportLoadPlugin.java	java:S2077	5
 batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/preprocess/ImportPreprocessPipeline.java	java:S2259	1
 batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/runtime/ImportTaskConsumer.java	SpringJavaInjectionPointsAutowiringInspection	1
 batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/PreprocessStep.java	java:S2259	1

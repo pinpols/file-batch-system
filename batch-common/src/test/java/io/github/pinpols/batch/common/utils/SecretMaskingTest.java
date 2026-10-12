@@ -9,6 +9,16 @@ import org.junit.jupiter.api.Test;
 class SecretMaskingTest {
 
   @Test
+  @DisplayName("null 配置输入保持 null-safe 语义")
+  void shouldPreserveNullInputs() {
+    assertThat(SecretMasking.maskSensitiveJson(null)).isNull();
+    assertThat(SecretMasking.removeSensitiveJsonFields(null)).isNull();
+    assertThat(SecretMasking.preserveMaskedJson(null, null)).isNull();
+    assertThat(SecretMasking.maskEndpoint(null)).isNull();
+    assertThat(SecretMasking.preserveMaskedEndpoint(null, null)).isNull();
+  }
+
+  @Test
   @DisplayName("递归脱敏对象和数组中的敏感字段")
   void shouldMaskSensitiveKeysRecursively() {
     String masked = SecretMasking.maskSensitiveJson(

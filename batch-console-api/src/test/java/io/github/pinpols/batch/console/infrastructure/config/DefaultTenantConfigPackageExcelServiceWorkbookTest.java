@@ -73,6 +73,8 @@ class DefaultTenantConfigPackageExcelServiceWorkbookTest {
 
     verify(file).transferTo(temporaryFile.capture());
     verify(file, never()).getBytes();
+    assertThat(temporaryFile.getValue().getParent().getFileName())
+        .hasToString("file-batch-private");
     assertThat(temporaryFile.getValue()).doesNotExist();
   }
 
@@ -90,6 +92,8 @@ class DefaultTenantConfigPackageExcelServiceWorkbookTest {
     assertThatThrownBy(() -> service.upload(file, "ta")).isInstanceOf(BizException.class);
 
     verify(file).transferTo(temporaryFile.capture());
+    assertThat(temporaryFile.getValue().getParent().getFileName())
+        .hasToString("file-batch-private");
     assertThat(temporaryFile.getValue()).doesNotExist();
   }
 

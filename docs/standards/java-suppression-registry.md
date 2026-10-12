@@ -1,12 +1,12 @@
 # 生产代码静态检查抑制项登记表
 
-> 维护范围：生产 Java（`src/main/java`）中的 `@SuppressWarnings`，以及生产配置 `application*.yml` / `application*.yaml` 中的 IntelliJ `noinspection`。
+> 维护范围：生产 Java（`src/main/java`）中的 `@SuppressWarnings`、SpotBugs `@SuppressFBWarnings`、Sonar `//NOSONAR`，以及模块 `src/main/resources` 下 YAML 中的 IntelliJ/Qodana `noinspection`。
 > 测试代码的局部 `unchecked` 等 fixture 例外不进入本表。
 > 自动校验：`python3 scripts/ci/check-java-suppression-registry.py`。扫描范围为已跟踪文件加上尚未
 > `git add` 的新文件（`git ls-files --cached --others --exclude-standard`），因此本地在途新增的
 > suppression 在提交前就会被拦下，而不是等到提交后才暴露。
 
-这不是鼓励增加 suppression 的白名单。每个新增例外都必须先确认能否通过类型、结构或安全校验消除；确实不能消除时，才登记规则、模块归属、保留原因和后续移除条件。除规则登记外，CI 还按“源码路径 + 规则”核对存量计数；新增位置或增加数量会失败，不能仅凭规则已知自动放行。基线变更须在源码或评审中说明具体理由，并经人工审核后再更新。
+这不是鼓励增加 suppression 的白名单。每个新增例外都必须先确认能否通过类型、结构或安全校验消除；确实不能消除时，才登记规则、模块归属、保留原因和后续移除条件。除规则登记外，CI 还按“源码路径 + 规则”核对存量计数；新增位置或增加数量会失败，不能仅凭规则已知自动放行。基线变更须在源码或评审中说明具体理由，并经人工审核后再更新。门禁覆盖的是登记范围内的出现项计数，不等同于逐个证明存量理由；逐次变更仍须审代码位置和作用域。
 
 ## 当前规则归属
 
@@ -22,7 +22,7 @@
 | `java:S1313` | SSRF 防护内置的云元数据地址阻断规则 | worker atomic | 安全规则改由同等强度的集中策略提供 |
 | `java:S1452` | 仅 `OwnerOnlyFiles.attributes` 适配 JDK 创建 API 的异构 `FileAttribute<?>` 数组；保留实际文件系统权限校验，不用于领域返回类型 | common | JDK 提供无需通配符且支持异构属性的等价创建接口 |
 | `java:S2068` | 仅用于检测出厂默认密码常量的安全守卫 | console | 默认凭据改为首次 provision 随机生成且无兼容保留 |
-| `java:S2077` | 动态 SQL/存储过程名称仅在 allowlist、schema 和固定片段校验后执行 | orchestrator、worker | 全部调用改为参数化且不再需要动态标识符 |
+| `java:S2077` | 动态 SQL/存储过程名称仅在 allowlist、schema 和固定片段校验后执行；抑制必须贴在实际 SQL sink 方法，不得放在类级 | orchestrator、worker | 全部调用改为参数化且不再需要动态标识符 |
 | `java:S2259`, `java:S2583`, `java:S2589` | Spring/Lombok/配置驱动的可达性或空值分析误报 | common、console、orchestrator、worker、trigger | 静态分析能识别实际控制流，或代码改为显式判定 |
 | `java:S3330`, `java:S4502` | Cookie/CSRF 与内部无状态链路的安全配置由代码显式承担 | console、trigger | 安全配置迁移到等价且可审计的框架配置 |
 | `java:S5164` | 导出格式在单次 generate 作用域内复用严格字符编码器，并由 `AutoCloseable` 作用域在长寿命 worker 线程返回前强制 `ThreadLocal.remove()` | worker export | 编码器缓存改为显式 generate 上下文且不增加每字段分配 |
@@ -42,6 +42,8 @@
 6. `ConfigurationProperties` 必须标在**所有**共享该前缀的类型上（含跨模块的另一侧），并在行尾注释里点名共享方，便于一眼看出该前缀有多个绑定方。子键**重叠**的共享不适用本条：应改为合并绑定，或保留重复绑定但补一致性测试（当前唯一例外见 `ConsoleReadReplicaProperties`）。
 7. `unchecked` 仅可用于解析 JSON 动态对象后的边界转换；必须确认数据由 JSON 解析器构造，并在消费处完成字段类型校验。实例与分区快照当前保留 Map 结构以兼容存量参数，重试策略和派发快照只读取其已知字段。
 8. YAML `noinspection` 仅允许登记的 inspection ID；必须紧邻被抑制配置，并说明 Qodana/IDE 无法解析的具体资源或边界，不得用文件级宽泛抑制隐藏其他配置问题。
+9. `@SuppressFBWarnings` 的规则记为 `spotbugs:<bug-pattern>`，必须逐规则登记；SpotBugs 未登记规则默认阻断。`//NOSONAR` 会隐藏该行所有 Sonar 规则，默认禁止，不作为常规登记方式。
+10. `java:S2077` 只允许对具体执行经过白名单/标识符校验的动态 SQL sink 方法局部抑制；类级抑制会遮蔽该类型中未来新增的、未经校验的 SQL sink，因此禁止。
 
 ## 复查命令
 

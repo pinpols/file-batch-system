@@ -46,17 +46,19 @@ def evaluate_quality_gate(config: dict, result: dict, measures: dict) -> tuple[b
     unexpected = evaluated_metrics - configured_metrics
     ignored_conditions = project_status.get("ignoredConditions") is True
     ignored_metrics: set[str] = set()
+    ignored_flag_required = False
     if missing & SMALL_CHANGE_METRICS:
         new_lines = measures.get("new_lines")
         if new_lines is not None and new_lines < MINIMUM_NEW_LINES_FOR_SMALL_CHANGE_METRICS:
             ignored_metrics.update(missing & SMALL_CHANGE_METRICS)
+            ignored_flag_required = True
     if "new_security_hotspots_reviewed" in missing and measures.get("new_security_hotspots") == 0:
         ignored_metrics.add("new_security_hotspots_reviewed")
     if unexpected:
         return False, f"analysis returned unconfigured conditions: {', '.join(sorted(unexpected))}"
     if missing != ignored_metrics:
         return False, f"configured conditions were not evaluated: {', '.join(sorted(missing))}"
-    if ignored_metrics and not ignored_conditions:
+    if ignored_flag_required and not ignored_conditions:
         return False, "Sonar ignored conditions without matching no-data evidence"
 
     invalid_statuses = [

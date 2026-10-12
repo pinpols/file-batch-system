@@ -56,11 +56,11 @@ public class TriggerSecurityConfiguration {
     return http.build();
   }
 
-  private static final class InternalSecretRequestMatcher implements RequestMatcher {
+  static final class InternalSecretRequestMatcher implements RequestMatcher {
 
     private final BatchSecurityProperties securityProperties;
 
-    private InternalSecretRequestMatcher(BatchSecurityProperties securityProperties) {
+    InternalSecretRequestMatcher(BatchSecurityProperties securityProperties) {
       this.securityProperties = securityProperties;
     }
 
