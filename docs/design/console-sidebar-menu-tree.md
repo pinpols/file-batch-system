@@ -115,7 +115,7 @@
 
 | 页面 | 可见角色 | 对应接口 | 说明 |
 |------|----------|----------|------|
-| 租户列表 | `ROLE_ADMIN` / `ROLE_TENANT_ADMIN` | `GET /api/console/tenants` | 支持 keyword、status 过滤 |
+| 租户列表页面 | `ROLE_ADMIN` / `ROLE_TENANT_ADMIN` | `GET /api/console/tenants` | 页面仍按管理角色显示；接口另允许 `ROLE_AUDITOR` 查询跨租户选择器所需的列表，不授予详情或管理权限 |
 | 租户详情 | `ROLE_ADMIN` / `ROLE_TENANT_ADMIN` | `GET /api/console/tenants/{tenantId}` | |
 | 新建租户 | `ROLE_ADMIN` | `POST /api/console/tenants` | tenantId 格式受正则约束 |
 | 编辑租户 | `ROLE_ADMIN` | `PUT /api/console/tenants/{tenantId}` | 仅 name/description 可改 |
