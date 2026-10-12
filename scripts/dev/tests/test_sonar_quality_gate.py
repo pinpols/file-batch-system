@@ -41,6 +41,13 @@ class SonarQualityGateTest(unittest.TestCase):
 
         self.assertTrue(passed)
 
+    def test_accepts_all_evaluated_conditions_with_ignored_conditions_flag(self) -> None:
+        self.result["projectStatus"]["ignoredConditions"] = True
+
+        passed, _ = evaluate_quality_gate(self.config, self.result, {})
+
+        self.assertTrue(passed)
+
     def test_accepts_only_sonars_ignored_hotspot_condition(self) -> None:
         status = self.result["projectStatus"]
         status["conditions"] = status["conditions"][:-1]
