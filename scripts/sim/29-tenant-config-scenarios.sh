@@ -16,12 +16,31 @@ source "$ROOT/scripts/sim/env-common.sh"
 
 batch_require_python
 
+RATE_LIMIT_RETRY_DELAY_SECONDS=65
+RATE_LIMIT_MAX_RETRIES=2
+
 TENANT_ID="${SIM_TENANT_CONFIG_TENANT_ID:-ta}"
 COOKIE_JAR=""
 TMP_DIR="$(mktemp -d)"
 trap '[[ -z "$COOKIE_JAR" ]] || rm -f "$COOKIE_JAR"; rm -rf "$TMP_DIR"' EXIT
 
 echo "==> 租户场景模板 API / Excel / upload-preview 矩阵 (tenant=$TENANT_ID)"
+
+# 每次模板下载、上传和预览都会计入 Console 的昂贵操作限流；9 个场景共 27 次请求，
+# 超过默认 10 次/分钟。429 是限流保护生效，不应让完整契约矩阵偶发失败。
+curl_expensive_with_retry() {
+  local attempt=0 code
+  while true; do
+    attempt=$((attempt + 1))
+    code="$(curl "$@" || true)"
+    if [[ "$code" != 429 || "$attempt" -gt "$RATE_LIMIT_MAX_RETRIES" ]]; then
+      printf '%s' "$code"
+      return 0
+    fi
+    echo "  Console rate limit returned 429; retrying in ${RATE_LIMIT_RETRY_DELAY_SECONDS}s (${attempt}/${RATE_LIMIT_MAX_RETRIES})" >&2
+    sleep "$RATE_LIMIT_RETRY_DELAY_SECONDS"
+  done
+}
 
 if [[ -n "${CONSOLE_TOKEN:-}" ]]; then
   AUTH_ARGS=(-H "Cookie: batch_console_token=$CONSOLE_TOKEN")
@@ -56,7 +75,7 @@ run_case() {
   query="${query#&}"
 
   local download_code
-  download_code="$(curl -sS --max-time 60 --connect-timeout 5 -o "$workbook" -w '%{http_code}' \
+  download_code="$(curl_expensive_with_retry -sS --max-time 60 --connect-timeout 5 -o "$workbook" -w '%{http_code}' \
     -H "X-Tenant-Id: $TENANT_ID" "${AUTH_ARGS[@]}" \
     "$CONSOLE_BASE/api/console/config/tenant-package/excel/scenario-template?$query" || true)"
   if [[ ! "$download_code" =~ ^2 ]]; then
@@ -105,7 +124,7 @@ PY
   key="sim-tenant-scenario-${index}-$(date +%s)"
   local upload_body="$TMP_DIR/upload-$index.json"
   local upload_code
-  upload_code="$(curl -sS --max-time 90 --connect-timeout 5 -o "$upload_body" -w '%{http_code}' -X POST \
+  upload_code="$(curl_expensive_with_retry -sS --max-time 90 --connect-timeout 5 -o "$upload_body" -w '%{http_code}' -X POST \
     -H "X-Tenant-Id: $TENANT_ID" "${AUTH_ARGS[@]}" \
     -H "Idempotency-Key: $key" -H "X-Request-Id: $key" \
     -F "file=@$workbook;type=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" \
@@ -130,7 +149,7 @@ PY
 
   local preview_body="$TMP_DIR/preview-$index.json"
   local preview_code
-  preview_code="$(curl -sS --max-time 60 --connect-timeout 5 -o "$preview_body" -w '%{http_code}' \
+  preview_code="$(curl_expensive_with_retry -sS --max-time 60 --connect-timeout 5 -o "$preview_body" -w '%{http_code}' \
     -H "X-Tenant-Id: $TENANT_ID" "${AUTH_ARGS[@]}" \
     "$CONSOLE_BASE/api/console/config/tenant-package/excel/preview/$upload_token" || true)"
   if [[ ! "$preview_code" =~ ^2 ]]; then

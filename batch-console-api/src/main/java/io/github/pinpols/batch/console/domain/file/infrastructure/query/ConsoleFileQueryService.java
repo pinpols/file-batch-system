@@ -388,7 +388,8 @@ public class ConsoleFileQueryService {
       if (errorLineMaskingEnabled && EmptyChecks.isNotNull(row.getErrorMessage())) {
         row.setErrorMessage(ContentMaskingUtils.maskPlainText(row.getErrorMessage(), ruleSet));
       }
-      if (EmptyChecks.isNotNull(row.getRawRecord())) {
+      if ((previewMaskingEnabled || errorLineMaskingEnabled)
+          && EmptyChecks.isNotNull(row.getRawRecord())) {
         row.setRawRecord(ContentMaskingUtils.maskPlainText(row.getRawRecord(), ruleSet));
       }
     }
