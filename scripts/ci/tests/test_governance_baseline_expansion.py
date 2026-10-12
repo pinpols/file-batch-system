@@ -113,6 +113,5 @@ class GovernanceBaselineExpansionTest(unittest.TestCase):
 
         self.assertEqual({"entry-a": "present"}, items)
 
-
 if __name__ == "__main__":
     unittest.main()

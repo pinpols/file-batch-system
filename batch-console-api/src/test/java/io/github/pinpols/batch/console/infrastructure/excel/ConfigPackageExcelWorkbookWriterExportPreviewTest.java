@@ -48,6 +48,7 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
       ConfigPackageWorkbookSupplementWriter.SHEET_NAME_DEPENDENCY,
       ConfigPackageWorkbookSupplementWriter.SHEET_NAME_FIVE_WORKER,
       ConfigPackageWorkbookSupplementWriter.SHEET_NAME_BUNDLE,
+      ConsoleExcelStyles.SHEET_NAME_DICT,
       ConsoleExcelStyles.SHEET_NAME_GUIDE,
       ConsoleExcelStyles.SHEET_NAME_VALIDATION);
 

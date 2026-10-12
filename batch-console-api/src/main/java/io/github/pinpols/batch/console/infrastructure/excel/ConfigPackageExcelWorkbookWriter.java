@@ -38,6 +38,7 @@ import org.apache.poi.ss.usermodel.Hyperlink;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.ss.util.CellRangeAddressList;
 import org.apache.poi.ss.util.CellReference;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
@@ -175,6 +176,7 @@ public class ConfigPackageExcelWorkbookWriter {
       supplementWriter.createDependencyGuideSheet(wb);
       supplementWriter.createFiveWorkerExampleSheet(wb);
       supplementWriter.createBundleExampleSheet(wb);
+      supplementWriter.createDictionarySheet(wb, locale);
       createFieldGuideSheet(wb);
       ConsoleExcelStyles.createValidationSheet(wb);
       wb.write(out);
@@ -218,6 +220,7 @@ public class ConfigPackageExcelWorkbookWriter {
       supplementWriter.createDependencyGuideSheet(wb);
       supplementWriter.createFiveWorkerExampleSheet(wb);
       supplementWriter.createBundleExampleSheet(wb);
+      supplementWriter.createDictionarySheet(wb, locale);
       createFieldGuideSheet(wb);
       ConsoleExcelStyles.createValidationSheet(wb);
       wb.write(out);
@@ -235,6 +238,7 @@ public class ConfigPackageExcelWorkbookWriter {
       }
       supplementWriter.createFocusedReadmeSheet(wb, locale, sheetDefs);
       supplementWriter.createFillOrderSheet(wb, sheetDefs);
+      supplementWriter.createDictionarySheet(wb, locale);
       createFieldGuideSheet(wb);
       ConsoleExcelStyles.createValidationSheet(wb);
       wb.write(out);
@@ -316,17 +320,23 @@ public class ConfigPackageExcelWorkbookWriter {
     Sheet sheet = wb.createSheet(def.name());
     sheet.createFreezePane(0, 1, 0, 1);
     writeTemplateHeaders(sheet, def.columns(), def.guides(), wb, messageSource, locale);
+    CellStyle textStyle =
+        ConsoleExcelStyles.applyTextDataStyleToColumns(wb, sheet, def.columns().size());
     int idx = 1;
     for (Map<String, Object> row : dataRows) {
       Row dataRow = sheet.createRow(idx++);
       for (int c = 0; c < def.columns().size(); c++) {
         Object val = row.get(def.columns().get(c));
-        dataRow
-            .createCell(c)
-            .setCellValue(
-                val == null ? EMPTY : ConsoleExcelStyles.escapeFormula(String.valueOf(val)));
+        Cell cell = dataRow.createCell(c);
+        cell.setCellStyle(textStyle);
+        cell.setCellValue(
+            EmptyChecks.isNull(val)
+                ? EMPTY
+                : ConsoleExcelStyles.escapeFormula(String.valueOf(val)));
       }
     }
+    sheet.setAutoFilter(
+        new CellRangeAddress(0, Math.max(0, idx - 1), 0, def.columns().size() - 1));
     applyValidations(def, sheet, locale, registeredImplCodesByModule);
     applyRequiredColumnValidations(def, sheet);
     setWidths(sheet, def.columns());
@@ -343,14 +353,20 @@ public class ConfigPackageExcelWorkbookWriter {
     sheet.createFreezePane(0, 1, 0, 1);
     CellStyle headerStyle = ConsoleExcelStyles.createHeaderStyle(wb);
     writeHeaders(sheet, def.columns(), headerStyle);
+    CellStyle textStyle =
+        ConsoleExcelStyles.applyTextDataStyleToColumns(wb, sheet, def.columns().size());
     int idx = 1;
     for (Map<String, String> row : dataRows) {
       Row dataRow = sheet.createRow(idx++);
       for (int c = 0; c < def.columns().size(); c++) {
         String val = row.get(def.columns().get(c));
-        dataRow.createCell(c).setCellValue(val == null ? EMPTY : val);
+        Cell cell = dataRow.createCell(c);
+        cell.setCellStyle(textStyle);
+        cell.setCellValue(EmptyChecks.isNull(val) ? EMPTY : val);
       }
     }
+    sheet.setAutoFilter(
+        new CellRangeAddress(0, Math.max(0, idx - 1), 0, def.columns().size() - 1));
     applyValidations(def, sheet, locale, registeredImplCodesByModule);
     applyRequiredColumnValidations(def, sheet);
     ConsoleExcelPreviewWorkbookSupport.addIssueComments(sheet, def.columns(), sheetIssues, 0);
@@ -436,8 +452,7 @@ public class ConfigPackageExcelWorkbookWriter {
       int sectionEnd = rowIdx - 1;
       // 单 sheet 多列时合并第一列；单列 sheet 无需合并
       if (sectionEnd > sectionStart) {
-        sheet.addMergedRegion(
-            new org.apache.poi.ss.util.CellRangeAddress(sectionStart, sectionEnd, 0, 0));
+        sheet.addMergedRegion(new CellRangeAddress(sectionStart, sectionEnd, 0, 0));
       }
     }
   }

@@ -18,15 +18,19 @@ import io.github.pinpols.batch.common.enums.WorkflowEdgeType;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.enums.WorkflowType;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.apache.poi.ss.SpreadsheetVersion;
 import org.apache.poi.ss.usermodel.DataValidation;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -118,7 +122,7 @@ class ConfigPackageWorkbookGuidanceTest {
   @DisplayName("完整模板路径保持原有工作簿结构和完整字段")
   void shouldPreserveLegacyFullWorkbook_whenBuildingTemplate() throws Exception {
     try (XSSFWorkbook wb = buildTemplate()) {
-      assertThat(wb.getNumberOfSheets()).isEqualTo(19);
+      assertThat(wb.getNumberOfSheets()).isEqualTo(20);
       assertThat(wb.getSheet(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET)).isNotNull();
       assertThat(wb.getSheet(ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET))
           .isNotNull();
@@ -499,6 +503,7 @@ class ConfigPackageWorkbookGuidanceTest {
   void shouldConstrainFormatDropdownAndAlignSampleFormat() throws Exception {
     try (XSSFWorkbook blankTemplate = buildFocusedTemplate(List.of("IMPORT_EXCEL"))) {
       Sheet sheet = blankTemplate.getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET);
+      assertThat(sheet.getColumnStyle(0).getDataFormatString()).isEqualTo("@");
       int formatColumn = headerIndex(sheet, "file_format_type");
       DataValidation formatValidation = sheet.getDataValidations().stream()
           .filter(validation ->
@@ -515,6 +520,8 @@ class ConfigPackageWorkbookGuidanceTest {
           .orElseThrow();
       assertThat(typeValidation.getValidationConstraint().getExplicitListValues())
           .containsExactly("IMPORT");
+      assertThat(typeValidation.getRegions().getCellRangeAddress(0).getLastRow())
+          .isEqualTo(SpreadsheetVersion.EXCEL2007.getLastRowIndex());
     }
     try (XSSFWorkbook sampleTemplate = buildSampleTemplate("IMPORT_EXCEL")) {
       assertThat(cellByHeader(
@@ -523,6 +530,41 @@ class ConfigPackageWorkbookGuidanceTest {
               1))
           .isEqualTo("EXCEL");
     }
+  }
+
+  @Test
+  @DisplayName("模板提供可筛选字典说明且导出数据保留文本格式和完整筛选范围")
+  void shouldImproveWorkbookDictionaryAndDataSheetUsability() throws Exception {
+    try (XSSFWorkbook workbook = buildSampleTemplate("IMPORT")) {
+      Sheet dictionary = workbook.getSheet(ConsoleExcelStyles.SHEET_NAME_DICT);
+      assertThat(dictionary).isNotNull();
+      assertThat(((XSSFSheet) dictionary).getCTWorksheet().getAutoFilter().getRef())
+          .isEqualTo("A2:C" + (dictionary.getLastRowNum() + 1));
+      assertThat(dictionary.getRow(0).getCell(0).getStringCellValue()).contains("数据 Sheet 请填写编码");
+      assertThat(dictionary.getRow(1).getCell(0).getStringCellValue()).isEqualTo("字典类别");
+      assertThat(dictionary.getRow(1).getCell(2).getStringCellValue()).isEqualTo("含义");
+      assertThat(dictionaryRows(dictionary)).anySatisfy(row -> {
+        assertThat(row.getCell(0).getStringCellValue()).isEqualTo("作业类型");
+        assertThat(row.getCell(1).getStringCellValue()).isEqualTo("IMPORT");
+        assertThat(row.getCell(2).getStringCellValue()).isEqualTo("导入任务");
+      });
+
+      Sheet jobSheet = workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
+      assertThat(jobSheet.getRow(1).getCell(0).getCellStyle().getDataFormatString())
+          .isEqualTo("@");
+      CellRangeAddress filterRange = CellRangeAddress.valueOf(
+          ((XSSFSheet) jobSheet).getCTWorksheet().getAutoFilter().getRef());
+      assertThat(filterRange.getFirstRow()).isZero();
+      assertThat(filterRange.getLastRow()).isEqualTo(jobSheet.getLastRowNum());
+    }
+  }
+
+  private static List<Row> dictionaryRows(Sheet sheet) {
+    List<Row> rows = new ArrayList<>();
+    for (int rowIndex = 2; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+      rows.add(sheet.getRow(rowIndex));
+    }
+    return rows;
   }
 
   private static List<String> fileTemplateColumns(ConfigPackageSheetSpecs specs, String scenario) {
