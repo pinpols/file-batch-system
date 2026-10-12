@@ -321,8 +321,14 @@ def main() -> int:
         ROOT
         / "batch-common/src/main/java/io/github/pinpols/batch/common/logging/OpenTelemetryLogbackBridge.java"
     ).read_text(encoding="utf-8")
-    if 'setCaptureMdcAttributes("*")' not in bridge:
-        errors.append("OpenTelemetry Logback bridge must preserve structured MDC fields")
+    if "setCaptureMdcAttributes(CAPTURED_MDC_ATTRIBUTES)" not in bridge:
+        errors.append("OpenTelemetry Logback bridge must use the reviewed MDC allowlist")
+    mdc_allowlist = bridge.partition("CAPTURED_MDC_ATTRIBUTES")[2]
+    if '"*"' in mdc_allowlist:
+        errors.append("OpenTelemetry Logback bridge must not capture arbitrary MDC fields")
+    for field in ("service", "tenantId", "traceId", "requestId", "jobInstanceId", "taskId"):
+        if field not in mdc_allowlist:
+            errors.append(f"OpenTelemetry Logback MDC allowlist must include {field}")
     defaults = load_yaml(
         ROOT / "batch-common/src/main/resources/batch-defaults.yml"
     )

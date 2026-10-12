@@ -54,6 +54,8 @@ public class OrchestratorKafkaConsumerConfiguration {
   public static final String TRIGGER_LISTENER_FACTORY =
       "triggerLaunchKafkaListenerContainerFactory";
 
+  public static final String TRIGGER_LAUNCH_LISTENER_ID = "orchestratorTriggerLaunchListener";
+
   // R-audit-p0: 与 TriggerLaunchConsumer#METRIC_FAILED 同名同 tag 风格,
   // 让"重试耗尽跳过"与消费失败其它原因(deserialize/business/runtime)汇入同一 metric 便于统一告警。
   private static final String METRIC_FAILED = "batch.trigger.launch.failed.total";

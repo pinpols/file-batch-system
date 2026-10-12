@@ -645,8 +645,11 @@ public final class ConfigPackageSheetSpecs {
         COL_DESCRIPTION));
     if (scenarios.contains(SCENARIO_IMPORT) || scenarios.contains("WORKFLOW")) {
       selected.add(ConfigPackageExcelSchema.FileTemplate.COL_VALIDATION_RULE_SET);
+      selected.add(ConfigPackageExcelSchema.FileTemplate.COL_TRAILER_TEMPLATE);
     }
     if (scenarios.contains(SCENARIO_EXPORT) || scenarios.contains("WORKFLOW")) {
+      selected.add(ConfigPackageExcelSchema.FileTemplate.COL_TARGET_CHARSET);
+      selected.add(ConfigPackageExcelSchema.FileTemplate.COL_TRAILER_TEMPLATE);
       selected.add(ConfigPackageExcelSchema.FileTemplate.COL_NAMING_RULE);
       selected.add(ConfigPackageExcelSchema.FileTemplate.COL_DEFAULT_QUERY_CODE);
       selected.add(ConfigPackageExcelSchema.FileTemplate.COL_DEFAULT_QUERY_SQL);

@@ -7,6 +7,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-10-12 | **维护冻结与实例排空收口**：全冻结期间 `ROLE_ADMIN` 仅保留非写诊断旁路，普通业务写请求仍返回 503；Orchestrator `/internal/orchestrator/drain/enable` 暂停当前实例的 Trigger Launch Kafka listener，`disable` 恢复消费，不影响 OpenLineage listener。 |
 | 2026-10-11 | **控制台管理列表分页补齐**：告警路由、资产新鲜度策略和配置同步日志列表统一支持分页查询，响应使用既有 `PageResponse` envelope；筛选参数与租户隔离语义保持不变。 |
 | 2026-10-11 | **租户配置包 Excel 场景化导入**：增加场景模板、上传、预览、逐行修订、授权应用与幂等写入契约；平台资源分配和运行监控阈值不由租户配置包控制，配置快照在实例创建时固定。预览返回的一次性 `previewToken` 绑定预览内容和内部租户配置修订号；逐行修订必须提交当前 token 并取得新 token，Apply 必须提交最新 token。配置在预览后发生变化时 Apply 返回冲突，用户需重新预览；内部修订号不作为租户填写或维护的配置字段。 |
 | 2026-10-09 | **Console OIDC 单点登录与身份绑定**：新增 provider 能力查询和管理员维护 OIDC subject 到本地账号的绑定端点；登录采用授权码 + PKCE，身份映射后仍按本地账号状态、租户和角色签发平台 JWT Cookie，不直接信任 IdP 角色。OIDC 按部署配置启用，既有本地登录路径保持不变。 |
@@ -251,7 +252,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 | Config modify (create / update / Excel import) | ✅ | ❌ | ✅ | ❌ |
 | Config delete / reset | ✅ | ❌ | ❌ | ❌ |
 | Ops actions (compensate / rerun / approve / dead-letter) | ✅ | ❌ | ❌ | ❌ |
-| Notification channel / rule CRUD | ✅ | ❌ | ✅ | ✅ |
+| Notification channel / rule CRUD | ✅ | ❌ | ✅ | ❌ |
 | Notification delivery log view | ✅ | ✅ | ✅ | ✅ |
 | Config approval (submit / approve / reject) | ✅ | ❌ | ❌ | ❌ |
 | Config approval detail view | ✅ | ✅ | ✅ | ❌ |
@@ -262,7 +263,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 | Alert management | ✅ | ❌ | ✅ | ❌ |
 | **Tenant management (CRUD)** | ✅ | ❌ | ❌ | ❌ |
 | **Tenant list / detail view** | ✅ | ❌ | ✅ | ❌ |
-| **User account management (CRUD)** | ✅ | ❌ | ❌ | ❌ |
+| **User account management (CRUD)** | ✅ | ❌ | ✅ (own tenant and grantable roles only) | ❌ |
 
 ### Tenant Rules
 
@@ -818,6 +819,7 @@ Deployment note:
 - `GET /api/console/config/secrets`
 - `GET /api/console/config/secrets/{secretVersionId}`
 - `POST /api/console/config/secrets/rotate`
+- `POST /api/console/config/secrets/{secretVersionId}/revoke` — 管理员紧急撤销指定租户密钥版本；请求携带 `Idempotency-Key` 和撤销原因，响应仅含版本状态与撤销元数据，不返回密钥载荷。
 - `GET /api/console/config/dependencies` — query config item dependencies; params: `tenantId`, `configType` (QUEUE / CALENDAR / WINDOW / WORKER_GROUP), `configCode`
 - `GET /api/console/config/releases/diff` — diff two release versions; params: `tenantId`, `releaseIdA`, `releaseIdB`
 - `GET /api/console/config/change-logs`
@@ -925,7 +927,7 @@ Deployment note:
 - `POST /api/console/users/{id}/reset-password` — reset password (Argon2id hash stored, raw password never persisted)
 - `POST /api/console/users/{id}/enable` — enable account
 - `POST /api/console/users/{id}/disable` — disable account
-- All operations require `ROLE_ADMIN`.
+- All operations require `ROLE_ADMIN` or `ROLE_TENANT_ADMIN`. Tenant administrators are forced to their authenticated tenant and may grant only `ROLE_TENANT_ADMIN` or `ROLE_TENANT_USER`; cross-tenant targets and platform roles are rejected.
 - `username` is globally unique (case-insensitive). Format: alphanumeric + `.` `_` `-`, min 2 chars.
 - `authoritiesCsv` is a comma-separated list containing only `ROLE_ADMIN`, `ROLE_AUDITOR`, `ROLE_TENANT_ADMIN`, or `ROLE_TENANT_USER`; default is `ROLE_TENANT_USER`.
 - Password minimum 8 characters; only the Argon2id hash is stored, raw password is discarded after hashing.
@@ -1183,9 +1185,8 @@ Notes:
 - `PUT /api/console/notifications/rules/{ruleId}` — update rule
 - `DELETE /api/console/notifications/rules/{ruleId}` — delete rule
 - `GET /api/console/notifications/delivery-logs` — list delivery logs (param: `tenantId`, `limit`)
-- Channel CRUD and rule CRUD require `ROLE_ADMIN`, `ROLE_TENANT_ADMIN`, or `ROLE_TENANT_USER`.
-- Delivery log view additionally allows `ROLE_AUDITOR`.
-- Channel delete requires `ROLE_ADMIN` or `ROLE_TENANT_USER`.
+- Channel and rule reads, plus delivery-log reads, allow all four console roles.
+- Channel and rule create/update/delete, and real test sends, require `ROLE_ADMIN` or `ROLE_TENANT_ADMIN`.
 - Database tables: `notification_channel`, `subscription_rule`, `notification_delivery_log` (V49 migration).
 
 ### Config Approval Flow

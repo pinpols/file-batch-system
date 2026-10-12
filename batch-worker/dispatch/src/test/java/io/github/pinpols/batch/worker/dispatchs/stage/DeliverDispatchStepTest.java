@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.dispatchs.stage;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -16,10 +17,15 @@ import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchSecretBlockedException;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchSecretResolver;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchCommand;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -40,11 +46,18 @@ class DeliverDispatchStepTest {
   @Mock
   private PlatformFileRecordRepository fileRecords;
 
+  @Mock
+  private DispatchSecretResolver dispatchSecretResolver;
+
   private DeliverDispatchStep step;
 
   @BeforeEach
   void setUp() {
-    step = new DeliverDispatchStep(fileDispatchRepository, dispatchChannelGateway, fileRecords);
+    step = new DeliverDispatchStep(
+        fileDispatchRepository, dispatchChannelGateway, fileRecords, dispatchSecretResolver);
+    lenient()
+        .when(dispatchSecretResolver.resolveInto(any(), any(), any(), any()))
+        .thenReturn(Set.of());
   }
 
   @Test
@@ -194,6 +207,53 @@ class DeliverDispatchStepTest {
         .containsEntry(DispatchRuntimeKeys.RECEIPT_CODE, "DRY_RUN_RECEIPT_CH1");
     verifyNoInteractions(fileDispatchRepository, dispatchChannelGateway);
     verify(fileRecords, never()).updateFileStatus(any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("密钥已撤销时在外发前阻断且不进入自动重试")
+  void execute_blocksRevokedSecretBeforeExternalDispatch() {
+    Map<String, Object> fileRecord = Map.of("id", 10L);
+    Map<String, Object> channelConfig =
+        Map.of("channel_type", "SFTP", "secret_ref", "dispatch/key");
+    DispatchJobContext context = buildContext(fileRecord, channelConfig);
+    when(dispatchSecretResolver.resolveInto(eq("t1"), eq("CH1"), any(), eq(channelConfig)))
+        .thenThrow(new DispatchSecretBlockedException("DISPATCH_SECRET_REVOKED_OR_EXPIRED"));
+
+    DispatchStageResult result = step.execute(context);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("DISPATCH_SECRET_REVOKED_OR_EXPIRED");
+    assertThat(context.getAttributes())
+        .containsEntry(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.FALSE)
+        .doesNotContainKey(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE);
+    verifyNoInteractions(fileDispatchRepository, dispatchChannelGateway);
+  }
+
+  @Test
+  @DisplayName("外发和回读结束后从运行态渠道配置移除本次解密的凭据")
+  void execute_clearsResolvedCredentialsAfterDelivery() {
+    setupMocksForNewRecord();
+    when(dispatchChannelGateway.dispatch(any())).thenAnswer(invocation -> {
+      DispatchCommand command = invocation.getArgument(0);
+      assertThat(command.channelConfig()).containsEntry("sftp_password", "runtime-secret");
+      return successResult();
+    });
+    when(fileDispatchRepository.markSent(any(), any(), any(), any(), any(), any()))
+        .thenReturn(1);
+    Map<String, Object> channelConfig =
+        new LinkedHashMap<>(Map.of("channel_type", "SFTP", "secret_ref", "dispatch/key"));
+    DispatchJobContext context = buildContext(Map.of("id", 10L), channelConfig);
+    when(dispatchSecretResolver.resolveInto(eq("t1"), eq("CH1"), any(), eq(channelConfig)))
+        .thenAnswer(invocation -> {
+          channelConfig.put("sftp_password", "runtime-secret");
+          return Set.of("sftp_password");
+        });
+
+    DispatchStageResult result = step.execute(context);
+
+    verify(dispatchChannelGateway).dispatch(any());
+    assertThat(result.success()).isTrue();
+    assertThat(channelConfig).doesNotContainKey("sftp_password");
   }
 
   private void setupMocksForNewRecord() {

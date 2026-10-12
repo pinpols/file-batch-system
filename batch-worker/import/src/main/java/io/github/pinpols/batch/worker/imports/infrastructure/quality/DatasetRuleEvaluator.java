@@ -4,7 +4,6 @@ import static io.github.pinpols.batch.worker.imports.infrastructure.quality.Vali
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.KEY_MAX;
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.KEY_MIN;
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.MSG_ACTUAL_SUFFIX;
-import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.booleanValue;
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.digest;
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.enabled;
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.firstNonNull;
@@ -131,7 +130,7 @@ public class DatasetRuleEvaluator {
 
   // ADR-041 Phase1.1:trailer 声明笔数 vs 实际解析记录数对账。
   // 声明笔数由 ParseStep 剥离 trailer 后写入 context attributes;未配 trailer / 解析不出笔数则不参与。
-  // 默认告警(log.warn),blocker=true 才升级为阻断性 ValidationIssue。控制总额(金额合计)对账留待 Phase1.2。
+  // 规则启用后必须能与 trailer 声明值比较;缺少声明或笔数不一致均阻断交付。
   private void evaluateControlRecord(ValidationSession session) {
     Map<String, Object> rule =
         configSupport.firstMap(session.ruleSet(), "controlRecordCheck", "control_record_check");
@@ -141,11 +140,18 @@ public class DatasetRuleEvaluator {
     Object declared =
         session.context().getAttributes().get(TrailerControlRecord.ATTR_DECLARED_RECORD_COUNT);
     if (!(declared instanceof Number declaredNumber)) {
-      // 配了 controlRecordCheck 但 trailer 没带出笔数:告警提示配置/文件不一致,但不阻断。
       log.warn(
           "control-record check enabled but no declared count from trailer: tenantId={}, fileId={}",
           session.context().getTenantId(),
           session.context().getFileId());
+      session.appliedChecks().add("control_record_check");
+      session
+          .datasetIssues()
+          .add(new ValidationIssue(
+              null,
+              ImportValidationErrorCode.CONTROL_RECORD.code(),
+              "control-record check requires a declared count",
+              Map.of("reason", "MISSING_DECLARED_COUNT")));
       return;
     }
     session.appliedChecks().add("control_record_check");
@@ -154,26 +160,16 @@ public class DatasetRuleEvaluator {
     if (declaredCount == actualCount) {
       return;
     }
-    if (booleanValue(rule.get("blocker"), false)) {
-      session
-          .datasetIssues()
-          .add(new ValidationIssue(
-              null,
-              ImportValidationErrorCode.CONTROL_RECORD.code(),
-              "control-record count mismatch, declared="
-                  + declaredCount
-                  + MSG_ACTUAL_SUFFIX
-                  + actualCount,
-              Map.of("declared", declaredCount, KEY_ACTUAL, actualCount)));
-      return;
-    }
-    log.warn(
-        "control-record count mismatch (alert-only): declared={}, actual={}, tenantId={},"
-            + " fileId={}",
-        declaredCount,
-        actualCount,
-        session.context().getTenantId(),
-        session.context().getFileId());
+    session
+        .datasetIssues()
+        .add(new ValidationIssue(
+            null,
+            ImportValidationErrorCode.CONTROL_RECORD.code(),
+            "control-record count mismatch, declared="
+                + declaredCount
+                + MSG_ACTUAL_SUFFIX
+                + actualCount,
+            Map.of("declared", declaredCount, KEY_ACTUAL, actualCount)));
   }
 
   private void evaluateChecksum(

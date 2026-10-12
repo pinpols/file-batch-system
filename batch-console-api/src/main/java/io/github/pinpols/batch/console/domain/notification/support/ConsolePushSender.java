@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.notification.support;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.console.config.ConsolePushProperties;
 import io.github.pinpols.batch.console.domain.notification.entity.ConsolePushSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsolePushSubscriptionMapper;
@@ -142,35 +143,28 @@ public class ConsolePushSender {
         repository.touchLastPushedAt(sub.getId(), Instant.now());
       } else if (code == 404 || code == 410) {
         // 浏览器推送服务告知:此 endpoint 已永久失效 → 物理删除
-        log.info(
-            "[push] endpoint gone ({}), purging sub id={} tenant={} user={}",
-            code,
-            sub.getId(),
-            sub.getTenantId(),
-            sub.getUsername());
+        log.info("[push] endpoint gone ({}), purging sub id={}", code, sub.getId());
         repository.deleteAllByEndpoint(sub.getEndpoint());
       } else {
-        log.warn(
-            "[push] send non-2xx status={} sub_id={} endpoint={}",
-            code,
-            sub.getId(),
-            sub.getEndpoint());
+        log.warn("[push] send non-2xx status={} sub_id={}", code, sub.getId());
       }
     } catch (InterruptedException ie) {
       Thread.currentThread().interrupt();
     } catch (TimeoutException te) {
       // 慢 endpoint:本次跳过、不重试、不立刻清理 sub(避免短瞬抖动误删),只 warn 留痕。
       // web-push 6.x 升级后可引入「连续 N 次超时 → 暂时禁用 endpoint」更精细策略。
-      log.warn(
-          "[push] send timeout after {}s, sub_id={} endpoint={}",
-          SEND_TIMEOUT_SECONDS,
-          sub.getId(),
-          sub.getEndpoint());
+      log.warn("[push] send timeout after {}s, sub_id={}", SEND_TIMEOUT_SECONDS, sub.getId());
     } catch (ExecutionException | RuntimeException e) {
-      log.error("[push] send failed sub_id={} endpoint={}", sub.getId(), sub.getEndpoint(), e);
+      log.error(
+          "[push] send failed sub_id={} error={}",
+          sub.getId(),
+          SwallowedExceptionLogger.summary(e));
     } catch (Exception e) {
       // web-push 抛 JoseException / GeneralSecurityException / IOException 等 checked exception 回退
-      log.error("[push] send unexpected sub_id={} endpoint={}", sub.getId(), sub.getEndpoint(), e);
+      log.error(
+          "[push] send unexpected sub_id={} error={}",
+          sub.getId(),
+          SwallowedExceptionLogger.summary(e));
     }
   }
 }

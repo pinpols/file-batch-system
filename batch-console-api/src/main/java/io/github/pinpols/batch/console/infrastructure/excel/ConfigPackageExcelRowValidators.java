@@ -62,6 +62,7 @@ import static io.github.pinpols.batch.console.support.excel.SheetValidationHelpe
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.sql.SelectSqlAstValidator;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -70,10 +71,16 @@ import io.github.pinpols.batch.console.domain.job.mapper.StepRegistryQueryMapper
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Pattern;
+import net.sf.jsqlparser.parser.CCJSqlParserUtil;
+import net.sf.jsqlparser.statement.Statement;
+import net.sf.jsqlparser.statement.Statements;
+import net.sf.jsqlparser.statement.select.ParenthesedSelect;
+import net.sf.jsqlparser.statement.select.PlainSelect;
+import net.sf.jsqlparser.statement.select.Select;
+import net.sf.jsqlparser.statement.select.WithItem;
+import net.sf.jsqlparser.util.TablesNamesFinder;
 
 /**
  * 配置包 Excel 各 sheet 的行级校验器（从 {@link ConfigPackageExcelValidator} 拆出）。 只做单行格式/枚举/JSON 结构校验与
@@ -81,6 +88,9 @@ import java.util.regex.Pattern;
  * WorkflowGraphTopologyValidator} 负责。
  */
 final class ConfigPackageExcelRowValidators {
+
+  private static final String INVALID_EXPORT_SQL_MESSAGE =
+      "default_query_sql must be a single SELECT/WITH query";
 
   private final StepRegistryQueryMapper stepRegistryQueryMapper;
   private final FileTemplateConfigMapper fileTemplateConfigMapper;
@@ -152,10 +162,6 @@ final class ConfigPackageExcelRowValidators {
     }
   }
 
-  private static final Pattern SELECT_STAR = Pattern.compile("(?i)select\\s+\\*");
-  private static final Pattern FORBIDDEN_SQL =
-      Pattern.compile("(?i)\\b(UPDATE|DELETE|INSERT|DROP|ALTER|TRUNCATE|GRANT|MERGE|EXEC)\\b");
-
   /** #4a file_format_type=DELIMITED 时 delimiter 必填(否则 CSV 解析无分隔符,运行期才失败)。 */
   static void validateFormatConditionals(Map<String, String> row, List<String> ri) {
     if ("DELIMITED".equals(normalizeEnum(row.get("file_format_type")))
@@ -165,23 +171,67 @@ final class ConfigPackageExcelRowValidators {
   }
 
   /**
-   * #3 default_query_sql 预览期轻治理:只允许 SELECT/WITH,禁 SELECT * 与 DML/DDL(worker 期仍做 JSqlParser 全治理)。
+   * #3 default_query_sql 预览期只允许单条 SELECT/WITH。按语法树识别语句类型，避免把注释和字符串常量中的
+   * DML/DDL 单词误判为写操作；worker 期仍执行完整 SQL 安全治理。
    */
   static void validateExportSql(Map<String, String> row, List<String> ri) {
     String sql = normalize(row.get("default_query_sql"));
     if (!hasText(sql)) {
       return;
     }
-    String upper = sql.trim().toUpperCase(Locale.ROOT);
-    if (!upper.startsWith("SELECT") && !upper.startsWith("WITH")) {
-      ri.add("default_query_sql must be a single SELECT/WITH query");
+
+    Statements parsedStatements;
+    try {
+      parsedStatements = CCJSqlParserUtil.parseStatements(sql);
+    } catch (Exception e) {
+      ri.add(INVALID_EXPORT_SQL_MESSAGE);
+      return;
     }
-    if (SELECT_STAR.matcher(sql).find()) {
+
+    if (parsedStatements.size() != 1 || !(parsedStatements.get(0) instanceof Select select)) {
+      ri.add(INVALID_EXPORT_SQL_MESSAGE);
+      return;
+    }
+    if (containsNonReadOnlyQuery(select)) {
+      ri.add(INVALID_EXPORT_SQL_MESSAGE);
+      return;
+    }
+    if (SelectSqlAstValidator.containsSelectStar(select)) {
       ri.add("default_query_sql must not use SELECT * (list columns explicitly)");
     }
-    if (FORBIDDEN_SQL.matcher(sql).find()) {
-      ri.add("default_query_sql must not contain DML/DDL keywords (UPDATE/DELETE/INSERT/...)");
+  }
+
+  private static boolean containsNonReadOnlyQuery(Select select) {
+    class ReadOnlyCteFinder extends TablesNamesFinder<Void> {
+      private boolean found;
+
+      boolean foundNonReadOnlyQuery() {
+        return found;
+      }
+
+      @Override
+      public <S> Void visit(PlainSelect plainSelect, S context) {
+        if (EmptyChecks.isNotEmpty(plainSelect.getIntoTables())
+            || EmptyChecks.isNotNull(plainSelect.getIntoTempTable())
+            || EmptyChecks.isNotNull(plainSelect.getMySqlSelectIntoClause())
+            || EmptyChecks.isNotNull(plainSelect.getForUpdate())
+            || EmptyChecks.isNotEmpty(plainSelect.getForUpdateTables())) {
+          found = true;
+        }
+        return super.visit(plainSelect, context);
+      }
+
+      @Override
+      public <S> Void visit(WithItem<?> withItem, S context) {
+        if (!(withItem.getParenthesedStatement() instanceof ParenthesedSelect)) {
+          found = true;
+        }
+        return super.visit(withItem, context);
+      }
     }
+    ReadOnlyCteFinder finder = new ReadOnlyCteFinder();
+    finder.getTables((Statement) select);
+    return finder.foundNonReadOnlyQuery();
   }
 
   /**

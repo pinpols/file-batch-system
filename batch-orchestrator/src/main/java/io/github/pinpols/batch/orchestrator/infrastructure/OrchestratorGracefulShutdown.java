@@ -2,6 +2,8 @@ package io.github.pinpols.batch.orchestrator.infrastructure;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.orchestrator.config.OrchestratorKafkaConsumerConfiguration;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
@@ -11,6 +13,8 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.ApplicationEventPublisherAware;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
+import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.stereotype.Component;
 
 /**
@@ -28,6 +32,7 @@ import org.springframework.stereotype.Component;
 public class OrchestratorGracefulShutdown
     implements ApplicationListener<ContextClosedEvent>, ApplicationEventPublisherAware {
 
+  private final KafkaListenerEndpointRegistry listenerRegistry;
   private final AtomicBoolean draining = new AtomicBoolean(false);
   private volatile Instant drainingSince;
   private volatile String reason;
@@ -40,6 +45,10 @@ public class OrchestratorGracefulShutdown
   /** 对外稳定的 drain 状态契约。 */
   public record DrainStatus(boolean draining, Instant drainingSince, String reason) {}
 
+  public OrchestratorGracefulShutdown(KafkaListenerEndpointRegistry listenerRegistry) {
+    this.listenerRegistry = listenerRegistry;
+  }
+
   @Override
   public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
     this.eventPublisher = applicationEventPublisher;
@@ -47,46 +56,75 @@ public class OrchestratorGracefulShutdown
 
   @Override
   public void onApplicationEvent(ContextClosedEvent event) {
-    startDraining("context-closed");
-  }
-
-  public void startDraining(String source) {
-    if (draining.compareAndSet(false, true)) {
-      drainingSince = BatchDateTimeSupport.utcNow();
-      reason = source;
-      log.info("Orchestrator graceful shutdown initiated: draining=true, source={}", source);
-      // R3-P1-1：发 AvailabilityChangeEvent(REFUSING_TRAFFIC) → Spring Boot 自动把
-      // /actuator/health/readiness 翻 DOWN → K8s 在一个 readinessProbe.period 内把 pod
-      // 从 Service endpoints 摘除。否则 manual pre-drain 期间 readiness 仍绿，client 看到 503。
-      if (eventPublisher != null) {
-        try {
-          AvailabilityChangeEvent.publish(eventPublisher, this, ReadinessState.REFUSING_TRAFFIC);
-        } catch (RuntimeException ex) {
-          log.warn(
-              "publish REFUSING_TRAFFIC failed (non-fatal): {}",
-              SwallowedExceptionLogger.summary(ex));
-        }
-      }
+    try {
+      startDraining("context-closed");
+    } catch (RuntimeException ex) {
+      // 上下文正在关闭时，即使 listener 尚未注册或 pause 失败，也不能阻止 Spring 继续关闭容器。
+      log.error(
+          "failed to pause trigger launch listener during shutdown; Spring will close it with the context: {}",
+          SwallowedExceptionLogger.summary(ex),
+          ex);
+      beginDrainState("context-closed");
+      publishReadiness(ReadinessState.REFUSING_TRAFFIC);
     }
   }
 
-  public void stopDraining(String source) {
-    // 诊断字段只在 CAS 赢家分支里更新:并发 start/stop 时,输家不得覆盖 reason/drainingSince,
-    // 否则 status() 展示与 draining 实际状态对不上。
-    if (draining.compareAndSet(true, false)) {
+  public synchronized void startDraining(String source) {
+    if (draining.get()) {
+      return;
+    }
+    beginDrainState(source);
+    try {
+      triggerLaunchListener().pause();
+    } catch (RuntimeException ex) {
+      draining.set(false);
       drainingSince = null;
-      reason = source;
-      log.info("Orchestrator drain cancelled: source={}", source);
-      // 取消 drain → 重新接受流量
-      if (eventPublisher != null) {
-        try {
-          AvailabilityChangeEvent.publish(eventPublisher, this, ReadinessState.ACCEPTING_TRAFFIC);
-        } catch (RuntimeException ex) {
-          log.warn(
-              "publish ACCEPTING_TRAFFIC failed (non-fatal): {}",
-              SwallowedExceptionLogger.summary(ex));
-        }
-      }
+      reason = "drain-pause-failed";
+      throw ex;
+    }
+    log.info("Orchestrator graceful shutdown initiated: draining=true, source={}", source);
+    // 状态先拒绝新 launch，再请求 Kafka pause；已进入 listener 的消息由消费端延迟重投。
+    publishReadiness(ReadinessState.REFUSING_TRAFFIC);
+  }
+
+  public synchronized void stopDraining(String source) {
+    if (!draining.get()) {
+      return;
+    }
+    triggerLaunchListener().resume();
+    draining.set(false);
+    drainingSince = null;
+    reason = source;
+    log.info("Orchestrator drain cancelled: source={}", source);
+    publishReadiness(ReadinessState.ACCEPTING_TRAFFIC);
+  }
+
+  private MessageListenerContainer triggerLaunchListener() {
+    MessageListenerContainer listener = listenerRegistry.getListenerContainer(
+        OrchestratorKafkaConsumerConfiguration.TRIGGER_LAUNCH_LISTENER_ID);
+    if (EmptyChecks.isNull(listener)) {
+      throw new IllegalStateException("Trigger launch Kafka listener is not registered");
+    }
+    return listener;
+  }
+
+  private void beginDrainState(String source) {
+    drainingSince = BatchDateTimeSupport.utcNow();
+    reason = source;
+    draining.set(true);
+  }
+
+  private void publishReadiness(ReadinessState state) {
+    if (EmptyChecks.isNull(eventPublisher)) {
+      return;
+    }
+    try {
+      AvailabilityChangeEvent.publish(eventPublisher, this, state);
+    } catch (RuntimeException ex) {
+      log.warn(
+          "publish readiness state {} failed (non-fatal): {}",
+          state,
+          SwallowedExceptionLogger.summary(ex));
     }
   }
 

@@ -40,6 +40,6 @@ public class ProcessEchoHandler extends SdkAbstractProcessHandler<String, String
 
   @Override
   protected void upsert(SdkTaskContext ctx, List<String> batch) {
-    log.info("process sample: upsert size={} rows={}", batch.size(), batch);
+    log.info("process sample: upsert size={}", batch.size());
   }
 }

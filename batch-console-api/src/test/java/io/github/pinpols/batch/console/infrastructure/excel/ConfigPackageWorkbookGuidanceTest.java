@@ -299,6 +299,7 @@ class ConfigPackageWorkbookGuidanceTest {
             "record_length",
             "header_rows",
             "footer_rows",
+            "trailer_template",
             "field_mappings",
             "validation_rule_set",
             "enabled",
@@ -314,6 +315,7 @@ class ConfigPackageWorkbookGuidanceTest {
             "biz_type",
             "file_format_type",
             "charset",
+            "target_charset",
             "with_bom",
             "line_separator",
             "delimiter",
@@ -322,6 +324,7 @@ class ConfigPackageWorkbookGuidanceTest {
             "record_length",
             "header_rows",
             "footer_rows",
+            "trailer_template",
             "naming_rule",
             "field_mappings",
             "default_query_code",
@@ -438,9 +441,11 @@ class ConfigPackageWorkbookGuidanceTest {
         .findFirst()
         .orElseThrow()
         .columns();
-    assertThat(importColumns).contains("validation_rule_set").doesNotContain("default_query_sql");
+    assertThat(importColumns)
+        .contains("validation_rule_set", "trailer_template")
+        .doesNotContain("default_query_sql", "target_charset");
     assertThat(exportColumns)
-        .contains("default_query_sql", "query_param_schema")
+        .contains("default_query_sql", "query_param_schema", "target_charset", "trailer_template")
         .doesNotContain("validation_rule_set");
   }
 

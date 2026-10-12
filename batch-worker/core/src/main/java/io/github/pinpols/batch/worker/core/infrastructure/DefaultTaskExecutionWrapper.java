@@ -72,23 +72,25 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
 
   static final String TIMEOUT_ERROR_CODE = "WORKER_EXECUTION_TIMEOUT";
   static final String CANCELLED_ERROR_CODE = "WORKER_EXECUTION_CANCELLED";
+  private static final String FAILURE_CLASS_TIMEOUT = "TIMEOUT";
+  private static final String FAILURE_CLASS_CONFIG = "CONFIG";
 
   /** errorCode → failureClass 归一映射；未知错误码返回 null（不归类）。 */
-  private static final Map<String, String> FAILURE_CLASS_BY_CODE = Map.of(
-      TIMEOUT_ERROR_CODE,
-      "TIMEOUT",
-      "TIMEOUT",
-      "TIMEOUT",
-      "CONFIG_INVALID",
-      "CONFIG",
-      "SECURITY_REJECTED",
-      "CONFIG",
-      "NO_EXECUTOR",
-      "CONFIG",
-      "RESOURCE_EXHAUSTED",
-      "INFRASTRUCTURE",
-      "EXECUTOR_FAILURE",
-      "CONFIG");
+  private static final Map<String, String> FAILURE_CLASS_BY_CODE = Map.ofEntries(
+      Map.entry(TIMEOUT_ERROR_CODE, FAILURE_CLASS_TIMEOUT),
+      Map.entry(FAILURE_CLASS_TIMEOUT, FAILURE_CLASS_TIMEOUT),
+      Map.entry("CONFIG_INVALID", FAILURE_CLASS_CONFIG),
+      Map.entry("DISPATCH_SECRET_BINDING_MISSING", FAILURE_CLASS_CONFIG),
+      Map.entry("DISPATCH_SECRET_VERSION_MISSING", FAILURE_CLASS_CONFIG),
+      Map.entry("DISPATCH_SECRET_VERSION_INVALID", FAILURE_CLASS_CONFIG),
+      Map.entry("DISPATCH_SECRET_REVOKED_OR_EXPIRED", FAILURE_CLASS_CONFIG),
+      Map.entry("DISPATCH_SECRET_FIELD_NOT_ALLOWED", FAILURE_CLASS_CONFIG),
+      Map.entry("DISPATCH_SECRET_PAYLOAD_EMPTY", FAILURE_CLASS_CONFIG),
+      Map.entry("DISPATCH_SECRET_PAYLOAD_INVALID", FAILURE_CLASS_CONFIG),
+      Map.entry("SECURITY_REJECTED", FAILURE_CLASS_CONFIG),
+      Map.entry("NO_EXECUTOR", FAILURE_CLASS_CONFIG),
+      Map.entry("RESOURCE_EXHAUSTED", "INFRASTRUCTURE"),
+      Map.entry("EXECUTOR_FAILURE", FAILURE_CLASS_CONFIG));
 
   private final StepExecutionAdapter stepExecutionAdapter;
   private final TaskExecutionClient taskExecutionClient;

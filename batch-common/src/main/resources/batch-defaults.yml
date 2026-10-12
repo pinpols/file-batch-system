@@ -234,6 +234,15 @@ logging:
   structured:
     format:
       console: ${BATCH_LOG_FORMAT:}    # 生产设为 ecs；本地留空
+    json:
+      exclude:
+        - requestedTenantId
+        - xffHeaderValue
+        - operatorId
+        - frontendApp
+        - frontendUserId
+        - frontendEventType
+        - frontendPage
   pattern:
     console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] [%X{service:-} %X{tenantId:-} %X{traceId:-} %X{requestId:-} %X{jobInstanceId:-} %X{fileId:-}] %logger{40} - %msg%n"
   level:

@@ -50,6 +50,18 @@ class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegr
         """.formatted(jobCode, dependency).stripTrailing();
   }
 
+  private String createBodyWithType(String jobCode, String jobType) {
+    return """
+        {
+          "tenantId": "int-ta",
+          "jobCode": "%s",
+          "jobName": "integration test",
+          "jobType": "%s",
+          "scheduleType": "MANUAL"
+        }
+        """.formatted(jobCode, jobType).stripTrailing();
+  }
+
   private String createBodyWithQueue(String jobCode, String queueCode) {
     return """
         {
@@ -118,6 +130,83 @@ class ConsoleJobDefinitionMutationIntegrationTest extends AbstractMutationIntegr
 
     // 清理
     jdbcTemplate.update("DELETE FROM batch.job_definition WHERE job_code = ?", jobCode);
+  }
+
+  @Test
+  @DisplayName("租户管理员通过真实 API 创建五类 Worker 作业定义且不写入平台物理资源")
+  void shouldCreateFiveWorkerJobTypesWithoutPlatformRouting() {
+    List<String> jobTypes = List.of("IMPORT", "EXPORT", "PROCESS", "DISPATCH", "ATOMIC");
+    String runId = Long.toString(System.nanoTime());
+    List<String> jobCodes = jobTypes.stream()
+        .map(type -> "int_test_worker_" + type.toLowerCase() + "_" + runId)
+        .toList();
+    try {
+      for (int index = 0; index < jobTypes.size(); index++) {
+        String jobCode = jobCodes.get(index);
+        String jobType = jobTypes.get(index);
+        client
+            .post()
+            .uri("/api/console/job-definitions")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-worker-" + jobCode)
+            .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, "int-ta")
+            .header("X-Console-Roles", "ROLE_TENANT_ADMIN")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(createBodyWithType(jobCode, jobType))
+            .exchange()
+            .expectStatus()
+            .isOk()
+            .expectBody(String.class)
+            .value(body -> assertThat(body)
+                .contains("\"jobCode\":\"" + jobCode + "\"")
+                .contains("\"jobType\":\"" + jobType + "\""));
+      }
+
+      List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+          "SELECT job_code, job_type, queue_code, worker_group "
+              + "FROM batch.job_definition WHERE tenant_id = ? AND job_code LIKE ?",
+          "int-ta",
+          "int_test_worker_%_" + runId);
+      assertThat(rows).hasSize(jobTypes.size());
+      assertThat(rows)
+          .extracting(row -> row.get("job_type"))
+          .containsExactlyInAnyOrderElementsOf(jobTypes);
+      assertThat(rows).allSatisfy(row -> {
+        assertThat(row.get("queue_code")).isNull();
+        assertThat(row.get("worker_group")).isNull();
+      });
+    } finally {
+      jdbcTemplate.update(
+          "DELETE FROM batch.job_definition WHERE tenant_id = ? AND job_code LIKE ?",
+          "int-ta",
+          "int_test_worker_%_" + runId);
+    }
+  }
+
+  @Test
+  @DisplayName("只读审计员和租户操作员不能创建作业定义")
+  void shouldRejectJobDefinitionCreationForReadOnlyAndOperatorRoles() {
+    String runId = Long.toString(System.nanoTime());
+    for (String role : List.of("ROLE_AUDITOR", "ROLE_TENANT_USER")) {
+      String jobCode = "int_test_forbidden_" + role.toLowerCase() + "_" + runId;
+      client
+          .post()
+          .uri("/api/console/job-definitions")
+          .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-forbidden-" + jobCode)
+          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, "int-ta")
+          .header("X-Console-Roles", role)
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue(createBody(jobCode))
+          .exchange()
+          .expectStatus()
+          .isForbidden();
+    }
+
+    Long createdCount = jdbcTemplate.queryForObject(
+        "SELECT COUNT(*) FROM batch.job_definition WHERE tenant_id = ? AND job_code LIKE ?",
+        Long.class,
+        "int-ta",
+        "int_test_forbidden_%_" + runId);
+    assertThat(createdCount).isZero();
   }
 
   @Test

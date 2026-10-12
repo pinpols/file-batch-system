@@ -19,6 +19,7 @@ import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.failure.PersistenceConflictDetectionPort;
@@ -78,6 +79,7 @@ public class DefaultLaunchService implements LaunchService {
   private final LaunchBatchDayService launchBatchDayService;
   private final BatchDayGateService batchDayGateService;
   private final LaunchParamResolver launchParamResolver;
+  private final DispatchSecretSnapshotResolver dispatchSecretSnapshotResolver;
   private final JobExecutionLogMapper jobExecutionLogMapper;
   private final PlatformTransactionManager transactionManager;
   private final LaunchPhaseMetrics launchPhaseMetrics;
@@ -101,7 +103,6 @@ public class DefaultLaunchService implements LaunchService {
     if (!gateDecision.allowed()) {
       return LaunchResponse.skipped(traceId);
     }
-
     // T1：先把 instance/workflow 写入数据库并提交，避免 T2 执行期间持有更长时间锁。
     PreparedLaunch prepared;
     try {
@@ -126,7 +127,7 @@ public class DefaultLaunchService implements LaunchService {
 
     launchPhaseMetrics.record(
         Phase.DISPATCH_TRANSACTION,
-        () -> dispatchAndMarkLaunched(request, effectiveParams, traceId, prepared));
+        () -> dispatchAndMarkLaunched(request, prepared.effectiveParams(), traceId, prepared));
     return new LaunchResponse(prepared.jobInstance().getInstanceNo(), traceId);
   }
 
@@ -343,10 +344,17 @@ public class DefaultLaunchService implements LaunchService {
       LaunchLoadResult loaded,
       Map<String, Object> effectiveParams,
       String traceId) {
+    Map<String, Object> executionParams = dispatchSecretSnapshotResolver.pin(
+        request.tenantId(),
+        loaded.jobDefinition().jobType(),
+        EmptyChecks.isNull(loaded.workflowDefinition())
+            ? null
+            : loaded.workflowDefinition().id(),
+        effectiveParams);
     Instant batchDaySlaDeadlineAt = launchBatchDayService.resolveBatchDaySlaDeadlineAt(
         request.tenantId(), loaded.jobDefinition().calendarCode(), request.bizDate());
     JobInstanceEntity jobInstance =
-        buildJobInstanceEntity(request, loaded, effectiveParams, traceId, batchDaySlaDeadlineAt);
+        buildJobInstanceEntity(request, loaded, executionParams, traceId, batchDaySlaDeadlineAt);
     int inserted = jobMappers.jobInstanceMapper.insert(jobInstance);
     if (inserted <= 0) {
       throw new DuplicateKeyException("duplicate job_instance idempotency key: tenant="
@@ -358,15 +366,15 @@ public class DefaultLaunchService implements LaunchService {
     }
     if (!Boolean.TRUE.equals(request.dryRun())) {
       launchBatchDayService.upsertBatchDayInstance(
-          request, loaded.jobDefinition(), effectiveParams, batchDaySlaDeadlineAt);
+          request, loaded.jobDefinition(), executionParams, batchDaySlaDeadlineAt);
     }
 
     Instant startedAt = BatchDateTimeSupport.utcNow();
     if (JobType.WORKFLOW.code().equals(loaded.jobDefinition().jobType())) {
       return prepareWorkflowRunAndNodes(
-          request, loaded, effectiveParams, traceId, jobInstance, startedAt);
+          request, loaded, executionParams, traceId, jobInstance, startedAt);
     }
-    return new PreparedLaunch(jobInstance, null, List.of(), startedAt);
+    return new PreparedLaunch(jobInstance, null, List.of(), startedAt, executionParams);
   }
 
   private PreparedLaunch prepareJobInstanceInTransaction(
@@ -550,7 +558,7 @@ public class DefaultLaunchService implements LaunchService {
     startNodeRun.setFinishedAt(startedAt);
     workflowMappers.workflowNodeRunMapper.insert(startNodeRun);
 
-    return new PreparedLaunch(jobInstance, workflowRun, initialNodes, startedAt);
+    return new PreparedLaunch(jobInstance, workflowRun, initialNodes, startedAt, effectiveParams);
   }
 
   private String resolveInitialCurrentNode(
@@ -649,5 +657,6 @@ public class DefaultLaunchService implements LaunchService {
       JobInstanceEntity jobInstance,
       WorkflowRunEntity workflowRun,
       List<WorkflowDagService.DagNodeResolution> initialNodes,
-      Instant startedAt) {}
+      Instant startedAt,
+      Map<String, Object> effectiveParams) {}
 }

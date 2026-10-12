@@ -1,6 +1,6 @@
 # 维护 / 降级模式 SOP
 
-> 当前基线：维护状态的后端拦截、公共状态接口、管理员热更新、V215 多副本共享状态、版本 CAS、失联写保护和基础指标已实现；统一写按钮冻结、503 即时跳转和 staging 双实例联测仍是完善项。实施方案见 [Console 维护与服务降级完善方案](../plans/maintenance-degradation-hardening-plan-2026-09-29.md)。
+> 当前基线：维护状态的后端拦截、公共状态接口、管理员热更新、V215 多副本共享状态、版本 CAS、失联写保护和基础指标已实现；Orchestrator 支持单实例 Launch 消费排空。统一写按钮冻结、503 即时跳转、Console/Orchestrator 多实例 staging 联测仍是完善项。实施方案见 [Console 维护与服务降级完善方案](../plans/maintenance-degradation-hardening-plan-2026-09-29.md)。
 
 > 适用场景:DB 灰度切换 / 上线滚动期 / 紧急回滚 / 数据修复等需要冻结所有(或仅写)操作的窗口。
 
@@ -9,7 +9,7 @@
 | 模式 | enabled | readOnly | 行为 |
 |---|---|---|---|
 | 关闭 | `false` | — | 正常 |
-| 全冻结 | `true` | `false` | 除白名单外整站返 `503`,前端跳 `/maintenance` 降级页 |
+| 全冻结 | `true` | `false` | 普通请求返 `503` 并跳转 `/maintenance`；管理员仅可读取诊断信息，不能写普通业务数据；维护控制接口仍放行 |
 | 只读 | `true` | `true` | `GET` 通过(响应带 `X-Maintenance: read-only` header),`POST/PUT/PATCH/DELETE` 返 `503`,前端禁用写按钮 + 顶部红条 |
 
 ## 2. 白名单路径(维护期始终放行)
@@ -20,6 +20,8 @@
 - `/api/console/system/maintenance`(状态接口,前端轮询恢复)
 
 `MaintenanceModeFilter` 用 `AntPathMatcher` 匹配上述模式。
+
+全冻结下，管理员只对非写请求保留诊断旁路（响应头 `X-Maintenance: admin-bypass`）；不能通过 `ROLE_ADMIN` 绕过普通业务写冻结。维护状态查询和管理员维护控制端点单独列入白名单，并仍由 Spring Security 校验权限。
 
 ## 3. 开启 / 关闭
 
@@ -93,3 +95,15 @@ curl -i http://localhost:18080/api/console/jobs
 - 后端:`batch-console-api/.../config/ConsoleMaintenanceProperties.java`、`support/maintenance/MaintenanceModeFilter.java`、`web/ConsoleSystemController.java`
 - 前端:`stores/app.ts maintenance state`、`composables/useMaintenancePolling.ts`、`components/common/MaintenanceBanner.vue`、`views/error/MaintenancePage.vue`
 - 安全链:`ConsoleSecurityConfiguration` 在认证后、RateLimit 前执行 `MaintenanceModeFilter`，并放行 `/api/console/system/maintenance`
+
+## 9. Orchestrator 实例排空
+
+Console 维护开关只控制 Console API，不会自动冻结全平台服务。计划维护单个 Orchestrator 实例时，先调用内部 drain API：
+
+```text
+GET  /internal/orchestrator/drain/status
+POST /internal/orchestrator/drain/enable
+POST /internal/orchestrator/drain/disable
+```
+
+`enable` 先将实例标记为 draining，使后续进入 listener 的 Launch 消息延迟重投，再暂停该实例的 Trigger Launch listener 并将 Readiness 置为拒绝流量；已经进入 launch 业务处理的单条消息允许完成。消息继续遵循 Kafka 手动确认与幂等重投语义。同一 Kafka 工厂中的 OpenLineage listener 不受影响。确认 Pod 已从 Service endpoints 摘除、Launch 消费已暂停后再进行滚动维护；取消维护时调用 `disable` 恢复 listener 和 Readiness。应用进程收到关闭事件时也会进入同一排空流程。

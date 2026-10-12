@@ -45,9 +45,14 @@ class OpenTelemetryLogbackBridgeTest {
       OpenTelemetry telemetry =
           OpenTelemetrySdk.builder().setLoggerProvider(provider).build();
       BatchMdc.put(StructuredLogField.TENANT_ID, "tenant-a");
+      BatchMdc.put(StructuredLogField.XFF_HEADER_VALUE, "198.51.100.1, 203.0.113.2");
+      BatchMdc.put(StructuredLogField.FRONTEND_PAGE, "/ops?token=not-for-export");
 
       try (OpenTelemetryLogbackBridge ignored = new OpenTelemetryLogbackBridge(telemetry)) {
-        LoggerFactory.getLogger("otel-bridge-test").info("otel-bridge-probe");
+        LoggerFactory.getLogger("otel-bridge-test")
+            .atInfo()
+            .addKeyValue("apiToken", "not-for-export")
+            .log("otel-bridge-probe");
       } finally {
         BatchMdc.clear();
       }
@@ -57,6 +62,11 @@ class OpenTelemetryLogbackBridgeTest {
       assertThat(record.getBodyValue().asString()).isEqualTo("otel-bridge-probe");
       assertThat(record.getAttributes().get(AttributeKey.stringKey("tenantId")))
           .isEqualTo("tenant-a");
+      assertThat(record.getAttributes().get(AttributeKey.stringKey("xffHeaderValue")))
+          .isNull();
+      assertThat(record.getAttributes().get(AttributeKey.stringKey("frontendPage")))
+          .isNull();
+      assertThat(record.getAttributes().get(AttributeKey.stringKey("apiToken"))).isNull();
     });
   }
 

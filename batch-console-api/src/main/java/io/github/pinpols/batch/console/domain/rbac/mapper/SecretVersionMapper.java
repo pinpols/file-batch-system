@@ -20,4 +20,6 @@ public interface SecretVersionMapper {
   int deactivateCurrentVersion(Map<String, Object> params);
 
   int updateSecretVersionStatus(Map<String, Object> params);
+
+  int revokeSecretVersion(Map<String, Object> params);
 }

@@ -28,6 +28,7 @@ import io.github.pinpols.batch.console.domain.entity.ConfigChangeLogEntity;
 import io.github.pinpols.batch.console.domain.entity.ConfigReleaseEntity;
 import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleDashboardQueryMapper;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.ConfigDependentView;
+import io.github.pinpols.batch.console.domain.ops.application.contract.request.SecretVersionRevokeRequest;
 import io.github.pinpols.batch.console.domain.ops.application.contract.request.SecretVersionRotateRequest;
 import io.github.pinpols.batch.console.domain.rbac.entity.SecretVersionEntity;
 import io.github.pinpols.batch.console.domain.rbac.mapper.SecretVersionMapper;
@@ -425,6 +426,45 @@ class DefaultConsoleConfigApplicationServiceTest {
     ConsoleSecretVersionResponse resp = service.secretVersionDetail(TENANT, 7L);
     assertThat(resp.id()).isEqualTo(7L);
     assertThat(resp.secretPayloadJson()).isEqualTo("{\"redacted\":true}");
+  }
+
+  @Test
+  @DisplayName("撤销已发布密钥版本时记录操作者和原因,并写入审计日志")
+  void shouldRevokeSecretVersionAndAudit() {
+    when(secretVersionMapper.selectById(anyMap())).thenReturn(secret(7L, "ref"));
+    when(secretVersionMapper.revokeSecretVersion(anyMap())).thenReturn(1);
+    SecretVersionRevokeRequest request = new SecretVersionRevokeRequest();
+    request.setTenantId(TENANT);
+    request.setReason("credential exposed");
+
+    service.revokeSecretVersion(7L, request);
+
+    ArgumentCaptor<Map<String, Object>> params = mapCaptor();
+    verify(secretVersionMapper).revokeSecretVersion(params.capture());
+    assertThat(params.getValue())
+        .containsEntry("tenantId", TENANT)
+        .containsEntry("secretVersionId", 7L)
+        .containsEntry("revokedBy", "admin")
+        .containsEntry("revokeReason", "credential exposed");
+    ArgumentCaptor<Map<String, Object>> audit = mapCaptor();
+    verify(configChangeLogMapper).insertConfigChangeLog(audit.capture());
+    assertThat(audit.getValue()).containsEntry("changeAction", "REVOKE");
+  }
+
+  @Test
+  @DisplayName("重复撤销密钥版本幂等返回,不重复写审计记录")
+  void shouldKeepSecretRevocationIdempotent() {
+    SecretVersionEntity revoked = secret(7L, "ref");
+    revoked.setRevokedAt(Instant.parse("2026-10-01T00:00:00Z"));
+    when(secretVersionMapper.selectById(anyMap())).thenReturn(revoked);
+    SecretVersionRevokeRequest request = new SecretVersionRevokeRequest();
+    request.setTenantId(TENANT);
+    request.setReason("repeat request");
+
+    service.revokeSecretVersion(7L, request);
+
+    verify(secretVersionMapper, never()).revokeSecretVersion(anyMap());
+    verify(configChangeLogMapper, never()).insertConfigChangeLog(anyMap());
   }
 
   @Test

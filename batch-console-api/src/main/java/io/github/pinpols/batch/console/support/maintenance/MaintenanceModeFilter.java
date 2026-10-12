@@ -28,11 +28,11 @@ import org.springframework.web.filter.OncePerRequestFilter;
 /**
  * 维护模式拦截器。
  *
- * <p>{@link MaintenanceStateHolder} 控制运行时状态:enabled=true 时除白名单/admin 外整站 503; readOnly=true 时 GET
- * 放行、写方法 503。
+ * <p>{@link MaintenanceStateHolder} 控制运行时状态:enabled=true 时除白名单和管理员只读诊断外整站 503; readOnly=true 时 GET
+ * 放行、写方法 503。管理员旁路不得绕过普通业务写请求的冻结。
  *
- * <p><b>ROLE_ADMIN 旁路</b>:已认证 admin 用户(JWT 含 ROLE_ADMIN)在维护期 **全程透传**,让运维灰度时仍可登 console 操作。响应头加
- * {@code X-Maintenance: admin-bypass} 让前端 banner 标识"当前为维护期 admin 旁路"。
+ * <p><b>ROLE_ADMIN 旁路</b>:维护期间仅允许已认证管理员读取非写接口以便诊断；普通业务写操作仍冻结。响应头加
+ * {@code X-Maintenance: admin-bypass} 标记诊断旁路。维护控制入口单独列入白名单。
  *
  * <p>顺序:必须在 RateLimit/Auth 之前,避免维护期还做 rate limit/auth 检查浪费资源。 **admin 旁路晚于 Auth filter 处理**(JWT
  * 验签在前),这里只读 SecurityContextHolder。
@@ -81,8 +81,8 @@ public class MaintenanceModeFilter extends OncePerRequestFilter {
       chain.doFilter(request, response);
       return;
     }
-    if (isAdmin()) {
-      // admin 旁路:维护期间运维仍可登 console 操作,头部 banner 提示当前为维护期
+    if (isAdmin() && !WRITE_METHODS.contains(request.getMethod())) {
+      // 管理员仅保留读取诊断能力；普通写操作必须继续受维护冻结约束。
       metrics.recordRequest("admin_bypass");
       response.setHeader("X-Maintenance", "admin-bypass");
       chain.doFilter(request, response);

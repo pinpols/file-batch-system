@@ -306,7 +306,7 @@ public class ConsoleFileQueryService {
         request.getSkipped(),
         pageRequest);
     List<FileErrorRecordEntity> rows = fileMappers.fileErrorRecordMapper.selectByQuery(query);
-    applyErrorLineMasking(query.tenantId(), request.getFileId(), rows);
+    applyFileContentMasking(query.tenantId(), request.getFileId(), rows);
     long total = fileMappers.fileErrorRecordMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toFileErrorRecordResponse);
   }
@@ -358,7 +358,7 @@ public class ConsoleFileQueryService {
     return "true".equalsIgnoreCase(String.valueOf(value));
   }
 
-  private void applyErrorLineMasking(
+  private void applyFileContentMasking(
       String tenantId, Long fileId, List<FileErrorRecordEntity> rows) {
     if (batchSecurityProperties.isBypassMode()
         || EmptyChecks.isEmpty(rows)
@@ -373,14 +373,19 @@ public class ConsoleFileQueryService {
     Map<String, Object> sec =
         fileMappers.fileTemplateConfigMapper.selectSecurityFlagsByTemplateCode(
             tenantId, templateCode);
-    if (EmptyChecks.isNull(sec) || !truthy(sec.get("error_line_masking_enabled"))) {
+    if (EmptyChecks.isNull(sec)) {
+      return;
+    }
+    boolean previewMaskingEnabled = truthy(sec.get("preview_masking_enabled"));
+    boolean errorLineMaskingEnabled = truthy(sec.get("error_line_masking_enabled"));
+    if (!previewMaskingEnabled && !errorLineMaskingEnabled) {
       return;
     }
     String ruleSet = EmptyChecks.isNull(sec.get("masking_rule_set"))
         ? null
         : String.valueOf(sec.get("masking_rule_set"));
     for (FileErrorRecordEntity row : rows) {
-      if (EmptyChecks.isNotNull(row.getErrorMessage())) {
+      if (errorLineMaskingEnabled && EmptyChecks.isNotNull(row.getErrorMessage())) {
         row.setErrorMessage(ContentMaskingUtils.maskPlainText(row.getErrorMessage(), ruleSet));
       }
       if (EmptyChecks.isNotNull(row.getRawRecord())) {

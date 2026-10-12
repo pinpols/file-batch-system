@@ -17,12 +17,14 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.TestConstructor;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
@@ -42,24 +44,32 @@ import org.springframework.test.context.jdbc.Sql;
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = "batch.worker.import.worker-type=IMPORT")
 @E2eBusinessSchema
+@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 @Sql(
     scripts = {
       E2eTestSql.IMPORT_TEMPLATE_SEED,
     })
 @Tag("critical")
-@DisplayName("端到端测试: 导入失败链路从触发受理, 事件派发, 任务领取到失败回报的闭环, 验证解析异常与尾行控制合计不一致两类失败均收敛为失败终态并给出归因")
+@DisplayName("端到端测试: 导入失败链路从触发受理, 事件派发, 任务领取到失败回报的闭环, 验证解析异常与对账不一致均收敛为失败且不写入业务数据")
 class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
 
-  @Autowired
-  private LaunchService launchService;
+  private final LaunchService launchService;
+  private final JdbcTemplate jdbcTemplate;
+  private final DataSource businessDataSource;
+  private final E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
-
-  @Autowired
-  private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+  ImportFailurePipelineE2eIT(
+      LaunchService launchService,
+      JdbcTemplate jdbcTemplate,
+      @Qualifier("importBusinessDataSource") DataSource businessDataSource,
+      E2eOutboxPublishSupport e2eOutboxPublishSupport) {
+    this.launchService = launchService;
+    this.jdbcTemplate = jdbcTemplate;
+    this.businessDataSource = businessDataSource;
+    this.e2eOutboxPublishSupport = e2eOutboxPublishSupport;
+  }
 
   @Test
   @DisplayName("输入内容不是可解析的 JSON 时解析环节失败, 任务收敛为失败终态, 作业实例终态为失败或部分失败")
@@ -107,7 +117,7 @@ class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
   }
 
   @Test
-  @DisplayName("定界文件尾行声明的记录数与合计金额同明细不一致时校验环节阻断, 任务收敛为失败终态, 作业实例终态为失败或部分失败, 错误归因到控制记录或控制合计校验")
+  @DisplayName("定界文件尾行声明的记录数与合计金额不一致时校验阻断, 任务失败且明细不进入业务表")
   void shouldReportFailed_whenTrailerControlTotalsMismatch() {
     String templateCode = "IMP-CONTROL-TOTAL-E2E-" + System.nanoTime();
     insertControlTotalTemplate(templateCode);
@@ -152,6 +162,15 @@ class ImportFailurePipelineE2eIT extends AbstractIntegrationTest {
           assertThat(String.valueOf(row.get("error_code")))
               .containsAnyOf("IMPORT_VALIDATE_CONTROL_RECORD", "IMPORT_VALIDATE_CONTROL_TOTAL");
         });
+
+    JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
+    Integer importedRows = businessJdbc.queryForObject(
+        "select count(*)::int from biz.customer_account where tenant_id = ? and customer_no in (?, ?)",
+        Integer.class,
+        TENANT,
+        "CTL-1",
+        "CTL-2");
+    assertThat(importedRows).isZero();
   }
 
   private void insertControlTotalTemplate(String templateCode) {

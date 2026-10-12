@@ -10,6 +10,7 @@ import io.github.pinpols.batch.console.application.contract.response.config.Conf
 import io.github.pinpols.batch.console.application.contract.response.config.ConfigReleaseDiffResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.ConsoleConfigChangeLogResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.ConsoleConfigReleaseResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.request.SecretVersionRevokeRequest;
 import io.github.pinpols.batch.console.domain.ops.application.contract.request.SecretVersionRotateRequest;
 import io.github.pinpols.batch.console.shared.view.ConsoleSecretVersionResponse;
 import java.util.List;
@@ -27,6 +28,8 @@ public interface ConsoleConfigApplicationService {
   List<ConsoleSecretVersionResponse> secretVersions(SecretVersionQueryRequest request);
 
   Long rotateSecretVersion(SecretVersionRotateRequest request);
+
+  void revokeSecretVersion(Long secretVersionId, SecretVersionRevokeRequest request);
 
   List<ConsoleConfigChangeLogResponse> configChangeLogs(ConfigChangeLogQueryRequest request);
 

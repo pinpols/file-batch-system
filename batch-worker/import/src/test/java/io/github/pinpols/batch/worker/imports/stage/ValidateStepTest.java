@@ -186,6 +186,88 @@ class ValidateStepTest {
   }
 
   @Test
+  @DisplayName("对账笔数不一致属于硬阻断,坏记录策略不能跳过")
+  void shouldBlockControlRecordMismatch_evenWhenGovernanceAllowsSkip() throws Exception {
+    Path parsed = writeNdjson(List.of(row("C1")));
+    ImportJobContext ctx = baseContext();
+    ctx.getAttributes().put(PipelineRuntimeKeys.PARSED_RECORDS_PATH, parsed.toString());
+
+    ValidationSession session = sessionWithDatasetIssues(List.of(new ValidationIssue(
+        0L, "IMPORT_VALIDATE_CONTROL_RECORD", "control-record count mismatch", null)));
+    when(qualityService.beginValidation(any(), anyLong(), any())).thenReturn(session);
+    ImportStageResult result = step.execute(ctx);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("IMPORT_VALIDATE_CONTROL_RECORD");
+    verify(governance)
+        .recordFailedRecord(
+            any(),
+            eq(ImportStage.VALIDATE),
+            eq(0L),
+            eq("IMPORT_VALIDATE_CONTROL_RECORD"),
+            any(),
+            any());
+    verify(governance, never())
+        .recordSkippedRecord(
+            any(), any(), anyLong(), eq("IMPORT_VALIDATE_CONTROL_RECORD"), any(), any());
+    verify(governance, never()).isSkippable("IMPORT_VALIDATE_CONTROL_RECORD");
+  }
+
+  @Test
+  @DisplayName("manifest 行数不一致属于硬阻断,坏记录策略不能跳过")
+  void shouldBlockManifestRowCountMismatch_evenWhenGovernanceAllowsSkip() throws Exception {
+    Path parsed = writeNdjson(List.of(row("C1")));
+    ImportJobContext ctx = baseContext();
+    ctx.getAttributes().put(PipelineRuntimeKeys.PARSED_RECORDS_PATH, parsed.toString());
+
+    ValidationSession session = sessionWithDatasetIssues(List.of(new ValidationIssue(
+        0L, "IMPORT_VALIDATE_ROW_COUNT", "row count mismatch", Map.of("source", "manifest"))));
+    when(qualityService.beginValidation(any(), anyLong(), any())).thenReturn(session);
+
+    ImportStageResult result = step.execute(ctx);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("IMPORT_VALIDATE_ROW_COUNT");
+    verify(governance)
+        .recordFailedRecord(
+            any(), eq(ImportStage.VALIDATE), eq(0L), eq("IMPORT_VALIDATE_ROW_COUNT"), any(), any());
+    verify(governance, never()).isSkippable("IMPORT_VALIDATE_ROW_COUNT");
+  }
+
+  @Test
+  @DisplayName("金额对账超出零容差时属于硬阻断,坏记录策略不能跳过")
+  void shouldBlockControlTotalMismatch_evenWhenGovernanceAllowsSkip() throws Exception {
+    Path parsed = writeNdjson(List.of(Map.of("customerNo", "C1", "amount", "10.00")));
+    ImportJobContext ctx = baseContext();
+    ctx.getAttributes().put(PipelineRuntimeKeys.PARSED_RECORDS_PATH, parsed.toString());
+    ctx.getAttributes().put(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, 1L);
+
+    ValidationSession session = sessionWithRuleSet(
+        ctx,
+        Map.of(
+            "controlTotalCheck",
+            Map.of("enabled", true, "amountField", "amount", "expected", "9.99")));
+    when(qualityService.beginValidation(any(), anyLong(), any())).thenReturn(session);
+    when(qualityService.validateChunkRows(any(), any(), anyLong())).thenReturn(Map.of());
+    ImportStageResult result = step.execute(ctx);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("IMPORT_VALIDATE_CONTROL_TOTAL");
+    verify(governance)
+        .recordFailedRecord(
+            any(),
+            eq(ImportStage.VALIDATE),
+            eq(0L),
+            eq("IMPORT_VALIDATE_CONTROL_TOTAL"),
+            any(),
+            any());
+    verify(governance, never())
+        .recordSkippedRecord(
+            any(), any(), anyLong(), eq("IMPORT_VALIDATE_CONTROL_TOTAL"), any(), any());
+    verify(governance, never()).isSkippable("IMPORT_VALIDATE_CONTROL_TOTAL");
+  }
+
+  @Test
   @DisplayName("数据集级问题可跳过但超出阈值时,返回跳过超限失败")
   void shouldFail_whenDatasetIssueSkippableButThresholdExceeded() throws Exception {
     Path parsed = writeNdjson(List.of(row("C1")));
@@ -361,9 +443,29 @@ class ValidateStepTest {
   }
 
   private ValidationSession sessionWithDatasetIssues(List<ValidationIssue> issues) {
+    return sessionWithRuleSetAndIssues(Map.of(), issues);
+  }
+
+  private ValidationSession sessionWithRuleSet(
+      ImportJobContext context, Map<String, Object> ruleSet) {
+    return new ValidationSession(
+        context,
+        ruleSet,
+        0L,
+        null,
+        null,
+        List.of(),
+        new LinkedHashMap<>(),
+        new ArrayList<>(),
+        new LinkedHashMap<>(),
+        new LinkedHashSet<>());
+  }
+
+  private ValidationSession sessionWithRuleSetAndIssues(
+      Map<String, Object> ruleSet, List<ValidationIssue> issues) {
     return new ValidationSession(
         null,
-        Map.of(),
+        ruleSet,
         0L,
         null,
         null,

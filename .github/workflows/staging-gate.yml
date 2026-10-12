@@ -86,7 +86,8 @@ jobs:
               AtomicSeedStrictVerifyE2eIT,
               AtomicTaskPipelineE2eIT,
               ImportFailurePipelineE2eIT,
-              DedupJobLaunchE2eIT
+              DedupJobLaunchE2eIT,
+              ImportToExportDeliveryE2eIT
           - id: 3
             label: "177s baseline"
             tests: >-

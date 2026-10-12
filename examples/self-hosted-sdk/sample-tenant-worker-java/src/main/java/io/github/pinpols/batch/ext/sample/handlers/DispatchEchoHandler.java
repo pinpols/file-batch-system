@@ -34,12 +34,12 @@ public class DispatchEchoHandler extends SdkAbstractDispatchHandler<String> {
   @Override
   protected Object push(SdkTaskContext ctx, Object request) {
     // 真业务:HTTP POST / SFTP put;这里只 log + 返回模拟响应
-    log.info("dispatch sample: push request={}", request);
+    log.info("dispatch sample: request prepared");
     return "200 OK";
   }
 
   @Override
   protected void onResponse(SdkTaskContext ctx, String item, Object response) {
-    log.info("dispatch sample: onResponse item={} response={}", item, response);
+    log.info("dispatch sample: response received");
   }
 }

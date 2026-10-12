@@ -6,7 +6,6 @@ import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.dispatcher.HeartbeatDirective;
 import io.github.pinpols.batch.sdk.wire.RegisterRequest;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
@@ -189,19 +188,9 @@ public class PlatformHttpClient {
         }
         return objectMapper.readValue(responseBytes, responseType);
       }
-      // errBody 不进 exception message — 避免错误链一路打 INFO/WARN 时把平台错误 payload 写满日志,
-      // 也防止 token / 敏感字段泄露。完整 body 仅 DEBUG 级输出,排障开 DEBUG 看。见 #SDK-P1-3。
-      if (log.isDebugEnabled() && !EmptyChecks.isEmpty(responseBytes)) {
-        String errBody = new String(responseBytes, StandardCharsets.UTF_8);
-        log.debug(
-            "non-2xx response: status={} url={} body={}", resp.code(), url, truncate(errBody, 500));
-      }
-      throw new PlatformHttpException(resp.code(), "HTTP " + resp.code() + " from " + url);
+      log.debug("non-2xx response: status={} responseBytes={}", resp.code(), responseBytes.length);
+      throw new PlatformHttpException(resp.code(), "HTTP " + resp.code() + " from " + path);
     }
-  }
-
-  private static String truncate(String s, int max) {
-    return s.length() <= max ? s : s.substring(0, max) + "...";
   }
 
   /** register 回包中 SDK 实际消费和记录的稳定字段；平台新增字段由 Jackson 向后兼容忽略。 */

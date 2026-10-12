@@ -573,6 +573,7 @@ if $QUALITY_GATE; then
   GATE_MEASURES_JSON="$(curl -sf -u "${SONAR_ADMIN_USER}:${SONAR_ADMIN_PASS}" \
     --get \
     --data-urlencode "component=${PROJECT_KEY}" \
+    --data-urlencode "additionalFields=period" \
     --data-urlencode "metricKeys=new_lines,new_security_hotspots" \
     "${SONAR_URL}/api/measures/component")"
   SONAR_GATE_CONFIG_JSON="$GATE_CONFIG_JSON" \

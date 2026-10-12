@@ -19,6 +19,9 @@ public class SecretVersionEntity {
   private Instant effectiveToAt;
   private String secretPayload;
   private String rotationReason;
+  private Instant revokedAt;
+  private String revokedBy;
+  private String revokeReason;
   private String createdBy;
   private String updatedBy;
   private Instant createdAt;

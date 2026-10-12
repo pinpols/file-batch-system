@@ -1,8 +1,12 @@
 package io.github.pinpols.batch.worker.dispatchs.stage;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
@@ -14,7 +18,9 @@ import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.ChannelConfigMerge;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.UUID;
 import org.springframework.stereotype.Component;
 
 /**
@@ -59,10 +65,24 @@ public class PrepareDispatchStep implements DispatchStageStep {
     }
     try {
       Map<String, Object> attrs = context.getAttributes();
-      DispatchPayload payload =
-          attrs.get(DispatchRuntimeKeys.DISPATCH_PAYLOAD) instanceof DispatchPayload dispatchPayload
-              ? dispatchPayload
-              : objectMapper.readValue(context.getRawPayload(), DispatchPayload.class);
+      Object existingPayload = attrs.get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
+      JsonNode rawPayload = readOptionalPayload(context.getRawPayload(), existingPayload);
+      DispatchPayload payload;
+      if (existingPayload instanceof DispatchPayload dispatchPayload) {
+        payload = dispatchPayload;
+      } else {
+        payload = objectMapper.treeToValue(rawPayload, DispatchPayload.class);
+      }
+      if (EmptyChecks.isNotNull(rawPayload)) {
+        JsonNode secretBindings = rawPayload.get(DispatchRuntimeKeys.DISPATCH_SECRET_BINDINGS);
+        if (EmptyChecks.isNotNull(secretBindings) && secretBindings.isObject()) {
+          attrs.put(
+              DispatchRuntimeKeys.DISPATCH_SECRET_BINDINGS,
+              objectMapper.convertValue(
+                  secretBindings, new TypeReference<Map<String, Object>>() {}));
+        }
+      }
+      payload = withStableExternalRequestId(context, payload);
       attrs.put(DispatchRuntimeKeys.DISPATCH_PAYLOAD, payload);
       Long fileId = payload.fileId() == null || payload.fileId().isBlank()
           ? null
@@ -121,5 +141,50 @@ public class PrepareDispatchStep implements DispatchStageStep {
           objectMapper);
     }
     return DispatchStageResult.success(stage());
+  }
+
+  private JsonNode readOptionalPayload(String rawPayload, Object existingPayload)
+      throws JsonProcessingException {
+    try {
+      return objectMapper.readTree(rawPayload);
+    } catch (JsonProcessingException exception) {
+      if (!(existingPayload instanceof DispatchPayload)) {
+        throw exception;
+      }
+      return null;
+    }
+  }
+
+  private static DispatchPayload withStableExternalRequestId(
+      DispatchJobContext context, DispatchPayload payload) {
+    if (EmptyChecks.isNotBlank(payload.externalRequestId())) {
+      return payload;
+    }
+    Object pipelineInstanceId =
+        context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID);
+    if (EmptyChecks.isNull(pipelineInstanceId)
+        || EmptyChecks.isNull(payload.fileId())
+        || EmptyChecks.isNull(payload.channelCode())) {
+      return payload;
+    }
+    String requestIdentity = String.join(
+        "|",
+        context.getTenantId(),
+        String.valueOf(pipelineInstanceId),
+        payload.fileId(),
+        payload.channelCode());
+    String externalRequestId =
+        UUID.nameUUIDFromBytes(requestIdentity.getBytes(StandardCharsets.UTF_8)).toString();
+    return new DispatchPayload(
+        payload.fileId(),
+        payload.fileCode(),
+        payload.channelCode(),
+        payload.dispatchTarget(),
+        externalRequestId,
+        payload.receiptCode(),
+        payload.ackRequired(),
+        payload.forceRetry(),
+        payload.runMode(),
+        payload.metadata());
   }
 }

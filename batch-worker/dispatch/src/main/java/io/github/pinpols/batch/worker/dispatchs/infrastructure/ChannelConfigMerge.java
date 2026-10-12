@@ -33,6 +33,7 @@ public final class ChannelConfigMerge {
   private static final Set<String> ALLOWED_CONFIG_KEYS = Set.of(
       // ── 通用 ──
       "target_endpoint",
+      "secret_ref",
       "dispatch_manifest_enabled",
       "dispatch_manifest_suffix",
       // ADR-041 Phase1.5:投递后回读校验 opt-in 开关

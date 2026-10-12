@@ -83,25 +83,12 @@ class ConsoleTenantConfigPackageAuthenticatedIdempotencyIntegrationTest
     String channelCode = "idem_apply_" + suffix;
     String templateCode = "idem_template_" + suffix;
     String uploadToken = null;
-    String jwt = jwtService
-        .issueToken("config-idempotency-tenant-admin", TENANT_ID, Set.of("ROLE_TENANT_ADMIN"))
-        .accessToken();
     WebTestClient client = WebTestClient.bindToServer()
         .baseUrl("http://127.0.0.1:" + port)
         .responseTimeout(Duration.ofSeconds(60))
         .build();
-
-    ResponseCookie csrfCookie = client
-        .get()
-        .uri("/api/console/auth/check")
-        .cookie("batch_console_token", jwt)
-        .exchange()
-        .expectStatus()
-        .isNoContent()
-        .returnResult(Void.class)
-        .getResponseCookies()
-        .getFirst("XSRF-TOKEN");
-    assertThat(csrfCookie).isNotNull();
+    AuthenticatedClient tenantAdmin = authenticatedClient(
+        client, "config-idempotency-tenant-admin", TENANT_ID, "ROLE_TENANT_ADMIN");
 
     try {
       byte[] workbook = workbookWithUniqueCodes(channelCode, templateCode);
@@ -119,9 +106,9 @@ class ConsoleTenantConfigPackageAuthenticatedIdempotencyIntegrationTest
       String uploadBody = client
           .post()
           .uri("/api/console/config/tenant-package/excel/upload")
-          .cookie("batch_console_token", jwt)
-          .cookie("XSRF-TOKEN", csrfCookie.getValue())
-          .header("X-XSRF-TOKEN", csrfCookie.getValue())
+          .cookie("batch_console_token", tenantAdmin.jwt())
+          .cookie("XSRF-TOKEN", tenantAdmin.csrfToken())
+          .header("X-XSRF-TOKEN", tenantAdmin.csrfToken())
           .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT_ID)
           .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-upload-" + suffix)
           .contentType(MediaType.MULTIPART_FORM_DATA)
@@ -143,7 +130,7 @@ class ConsoleTenantConfigPackageAuthenticatedIdempotencyIntegrationTest
       String previewBody = client
           .get()
           .uri("/api/console/config/tenant-package/excel/preview/{token}", uploadToken)
-          .cookie("batch_console_token", jwt)
+          .cookie("batch_console_token", tenantAdmin.jwt())
           .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT_ID)
           .exchange()
           .expectStatus()
@@ -160,52 +147,63 @@ class ConsoleTenantConfigPackageAuthenticatedIdempotencyIntegrationTest
       assertThat(previewToken).isNotBlank();
 
       String applyUri = "/api/console/config/tenant-package/excel/apply/" + uploadToken;
-      client
-          .post()
-          .uri(applyUri)
-          .cookie("batch_console_token", jwt)
-          .cookie("XSRF-TOKEN", csrfCookie.getValue())
-          .header("X-XSRF-TOKEN", csrfCookie.getValue())
-          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT_ID)
-          .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-apply-no-preview-" + suffix)
-          .contentType(MediaType.APPLICATION_JSON)
-          .bodyValue("{}")
-          .exchange()
+      apply(client, applyUri, tenantAdmin, "idem-apply-no-preview-" + suffix, "{}")
           .expectStatus()
           .isForbidden();
 
+      for (String role : Set.of("ROLE_AUDITOR", "ROLE_TENANT_USER")) {
+        AuthenticatedClient readOnly =
+            authenticatedClient(client, "config-idempotency-" + role + suffix, TENANT_ID, role);
+        apply(
+                client,
+                applyUri,
+                readOnly,
+                "idem-apply-denied-" + role + suffix,
+                "{\"previewToken\":\"" + previewToken + "\"}")
+            .expectStatus()
+            .isForbidden();
+      }
+
+      AuthenticatedClient otherTenantAdmin = authenticatedClient(
+          client,
+          "config-idempotency-other-tenant-admin" + suffix,
+          "excel-upload-other-tenant",
+          "ROLE_TENANT_ADMIN");
+      apply(
+              client,
+              applyUri,
+              otherTenantAdmin,
+              "idem-apply-cross-tenant-" + suffix,
+              "{\"previewToken\":\"" + previewToken + "\"}")
+          .expectStatus()
+          .isForbidden();
+      assertThat(channelCount(channelCode)).isZero();
+      assertThat(templateCount(templateCode)).isZero();
+
       String idempotencyKey = "idem-apply-" + suffix;
-      client
-          .post()
-          .uri(applyUri)
-          .cookie("batch_console_token", jwt)
-          .cookie("XSRF-TOKEN", csrfCookie.getValue())
-          .header("X-XSRF-TOKEN", csrfCookie.getValue())
-          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT_ID)
-          .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
-          .contentType(MediaType.APPLICATION_JSON)
-          .bodyValue("{\"previewToken\":\"" + previewToken + "\"}")
-          .exchange()
+      apply(
+              client,
+              applyUri,
+              tenantAdmin,
+              idempotencyKey,
+              "{\"previewToken\":\"" + previewToken + "\"}")
           .expectStatus()
           .isOk();
 
       assertThat(channelCount(channelCode)).isEqualTo(1);
+      assertThat(templateCount(templateCode)).isEqualTo(1);
 
-      client
-          .post()
-          .uri(applyUri)
-          .cookie("batch_console_token", jwt)
-          .cookie("XSRF-TOKEN", csrfCookie.getValue())
-          .header("X-XSRF-TOKEN", csrfCookie.getValue())
-          .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT_ID)
-          .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
-          .contentType(MediaType.APPLICATION_JSON)
-          .bodyValue("{\"previewToken\":\"" + previewToken + "\"}")
-          .exchange()
+      apply(
+              client,
+              applyUri,
+              tenantAdmin,
+              idempotencyKey,
+              "{\"previewToken\":\"" + previewToken + "\"}")
           .expectStatus()
           .isEqualTo(409);
 
       assertThat(channelCount(channelCode)).isEqualTo(1);
+      assertThat(templateCount(templateCode)).isEqualTo(1);
     } finally {
       if (uploadToken != null) {
         jdbcTemplate.update(
@@ -220,12 +218,58 @@ class ConsoleTenantConfigPackageAuthenticatedIdempotencyIntegrationTest
     }
   }
 
+  private AuthenticatedClient authenticatedClient(
+      WebTestClient client, String username, String tenantId, String role) {
+    String jwt = jwtService.issueToken(username, tenantId, Set.of(role)).accessToken();
+    ResponseCookie csrfCookie = client
+        .get()
+        .uri("/api/console/auth/check")
+        .cookie("batch_console_token", jwt)
+        .exchange()
+        .expectStatus()
+        .isNoContent()
+        .returnResult(Void.class)
+        .getResponseCookies()
+        .getFirst("XSRF-TOKEN");
+    assertThat(csrfCookie).isNotNull();
+    return new AuthenticatedClient(jwt, csrfCookie.getValue());
+  }
+
+  private WebTestClient.ResponseSpec apply(
+      WebTestClient client,
+      String uri,
+      AuthenticatedClient auth,
+      String idempotencyKey,
+      String body) {
+    return client
+        .post()
+        .uri(uri)
+        .cookie("batch_console_token", auth.jwt())
+        .cookie("XSRF-TOKEN", auth.csrfToken())
+        .header("X-XSRF-TOKEN", auth.csrfToken())
+        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT_ID)
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue(body)
+        .exchange();
+  }
+
+  private record AuthenticatedClient(String jwt, String csrfToken) {}
+
   private Integer channelCount(String channelCode) {
     return jdbcTemplate.queryForObject(
         "select count(*) from batch.file_channel_config where tenant_id = ? and channel_code = ?",
         Integer.class,
         TENANT_ID,
         channelCode);
+  }
+
+  private Integer templateCount(String templateCode) {
+    return jdbcTemplate.queryForObject(
+        "select count(*) from batch.file_template_config where tenant_id = ? and template_code = ?",
+        Integer.class,
+        TENANT_ID,
+        templateCode);
   }
 
   private static byte[] workbookWithUniqueCodes(String channelCode, String templateCode)

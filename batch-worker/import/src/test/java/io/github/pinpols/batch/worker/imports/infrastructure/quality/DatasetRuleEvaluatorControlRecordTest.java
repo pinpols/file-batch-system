@@ -52,19 +52,20 @@ class DatasetRuleEvaluatorControlRecordTest {
   }
 
   @Test
-  @DisplayName("默认告警(blocker 缺省=false):不符也不阻断,无 issue")
-  void mismatchAlertOnly_noIssue() {
+  @DisplayName("规则启用后即阻断声明笔数与实际笔数差异")
+  void mismatch_blocksDeliveryWithoutBlockerFlag() {
     List<ValidationIssue> issues = new ArrayList<>();
     Set<String> applied = new LinkedHashSet<>();
     evaluator.evaluate(session(
         Map.of("controlRecordCheck", Map.of("enabled", true)), 10L, 1000L, issues, applied));
-    assertThat(issues).isEmpty();
+    assertThat(issues).hasSize(1);
+    assertThat(issues.get(0).errorCode()).isEqualTo("IMPORT_VALIDATE_CONTROL_RECORD");
     assertThat(applied).contains("control_record_check");
   }
 
   @Test
-  @DisplayName("trailer 未带出声明笔数 → 不参与(不入 appliedChecks,不抛)")
-  void noDeclaredCount_skips() {
+  @DisplayName("已启用对账但 trailer 未带出声明笔数 → 阻断交付")
+  void noDeclaredCount_blocksDelivery() {
     List<ValidationIssue> issues = new ArrayList<>();
     Set<String> applied = new LinkedHashSet<>();
     evaluator.evaluate(session(
@@ -73,8 +74,9 @@ class DatasetRuleEvaluatorControlRecordTest {
         1000L,
         issues,
         applied));
-    assertThat(issues).isEmpty();
-    assertThat(applied).doesNotContain("control_record_check");
+    assertThat(issues).hasSize(1);
+    assertThat(issues.get(0).errorMessage()).contains("requires a declared count");
+    assertThat(applied).contains("control_record_check");
   }
 
   private ValidationSession session(

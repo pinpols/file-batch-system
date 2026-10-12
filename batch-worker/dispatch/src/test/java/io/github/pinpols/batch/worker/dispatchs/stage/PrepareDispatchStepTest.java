@@ -119,7 +119,80 @@ class PrepareDispatchStepTest {
     assertThat(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)).isEqualTo(10L);
     assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.FILE_RECORD, fileRecord);
     assertThat(context.getAttributes().get(PipelineRuntimeKeys.CHANNEL_CONFIG)).isNotNull();
+    DispatchPayload preparedPayload =
+        (DispatchPayload) context.getAttributes().get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
+    assertThat(preparedPayload.externalRequestId()).isNotBlank();
     verify(pipelineRuns).bindFileToPipelineInstance(100L, 10L);
+  }
+
+  @Test
+  @DisplayName("同一流水线实例重试时复用稳定外部请求号,不同实例生成不同请求号")
+  void execute_generatesStableExternalRequestIdPerPipelineFileAndChannel() {
+    Map<String, Object> fileRecord = Map.of("id", 10L);
+    Map<String, Object> channelRow = Map.of("channel_type", "API", "channel_code", "CH1");
+    when(fileDispatchRepository.loadFile("t1", 10L)).thenReturn(fileRecord);
+    when(fileDispatchRepository.loadChannel("t1", "CH1")).thenReturn(channelRow);
+
+    DispatchJobContext firstAttempt = buildContext("{\"fileId\":\"10\",\"channelCode\":\"CH1\"}");
+    firstAttempt.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, 100L);
+    step.execute(firstAttempt);
+    String requestId = ((DispatchPayload)
+            firstAttempt.getAttributes().get(DispatchRuntimeKeys.DISPATCH_PAYLOAD))
+        .externalRequestId();
+
+    DispatchJobContext retryAttempt = buildContext("{\"fileId\":\"10\",\"channelCode\":\"CH1\"}");
+    retryAttempt.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, 100L);
+    step.execute(retryAttempt);
+    String retryRequestId = ((DispatchPayload)
+            retryAttempt.getAttributes().get(DispatchRuntimeKeys.DISPATCH_PAYLOAD))
+        .externalRequestId();
+
+    DispatchJobContext laterInstance = buildContext("{\"fileId\":\"10\",\"channelCode\":\"CH1\"}");
+    laterInstance.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, 101L);
+    step.execute(laterInstance);
+    String laterRequestId = ((DispatchPayload)
+            laterInstance.getAttributes().get(DispatchRuntimeKeys.DISPATCH_PAYLOAD))
+        .externalRequestId();
+
+    assertThat(retryRequestId).isEqualTo(requestId);
+    assertThat(laterRequestId).isNotEqualTo(requestId);
+  }
+
+  @Test
+  @DisplayName("调用方提供的外部请求号保持不变")
+  void execute_preservesProvidedExternalRequestId() {
+    when(fileDispatchRepository.loadFile("t1", 10L)).thenReturn(Map.of("id", 10L));
+    when(fileDispatchRepository.loadChannel("t1", "CH1"))
+        .thenReturn(Map.of("channel_type", "API", "channel_code", "CH1"));
+    DispatchJobContext context = buildContext(
+        "{\"fileId\":\"10\",\"channelCode\":\"CH1\",\"externalRequestId\":\"business-request-1\"}");
+    context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, 100L);
+
+    step.execute(context);
+
+    DispatchPayload preparedPayload =
+        (DispatchPayload) context.getAttributes().get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
+    assertThat(preparedPayload.externalRequestId()).isEqualTo("business-request-1");
+  }
+
+  @Test
+  @DisplayName("准备阶段保留实例固定的密钥版本引用,不携带密钥明文")
+  void execute_preservesPinnedSecretBinding() {
+    when(fileDispatchRepository.loadFile("t1", 10L)).thenReturn(Map.of("id", 10L));
+    when(fileDispatchRepository.loadChannel("t1", "CH1"))
+        .thenReturn(Map.of("channel_type", "LOCAL", "channel_code", "CH1"));
+    DispatchJobContext context = buildContext("{\"fileId\":\"10\",\"channelCode\":\"CH1\","
+        + "\"_dispatchSecretBindings\":{\"CH1\":{\"secretRef\":\"dispatch/key\","
+        + "\"secretVersionId\":42,\"versionNo\":3}}}");
+
+    DispatchStageResult result = step.execute(context);
+
+    assertThat(result.success()).isTrue();
+    assertThat(context.getAttributes())
+        .containsEntry(
+            DispatchRuntimeKeys.DISPATCH_SECRET_BINDINGS,
+            Map.of(
+                "CH1", Map.of("secretRef", "dispatch/key", "secretVersionId", 42, "versionNo", 3)));
   }
 
   @Test
@@ -155,6 +228,32 @@ class PrepareDispatchStepTest {
 
     DispatchStageResult result = step.execute(context);
     assertThat(result.success()).isTrue();
+  }
+
+  @Test
+  @DisplayName("复用已解析载荷时仍保留原始载荷中的固定密钥版本引用")
+  void execute_preservesSecretBindingWhenPayloadWasAlreadyParsed() {
+    DispatchPayload prebuilt =
+        new DispatchPayload("10", null, "CH1", null, null, null, null, null, null, null);
+    when(fileDispatchRepository.loadFile("t1", 10L)).thenReturn(Map.of("id", 10L));
+    when(fileDispatchRepository.loadChannel("t1", "CH1"))
+        .thenReturn(Map.of("channel_type", "LOCAL", "channel_code", "CH1"));
+
+    DispatchJobContext context = new DispatchJobContext();
+    context.setTenantId("t1");
+    context.setRawPayload("{\"fileId\":\"10\",\"channelCode\":\"CH1\","
+        + "\"_dispatchSecretBindings\":{\"CH1\":{\"secretRef\":\"dispatch/key\","
+        + "\"secretVersionId\":42,\"versionNo\":3}}}");
+    context.getAttributes().put(DispatchRuntimeKeys.DISPATCH_PAYLOAD, prebuilt);
+
+    DispatchStageResult result = step.execute(context);
+
+    assertThat(result.success()).isTrue();
+    assertThat(context.getAttributes())
+        .containsEntry(
+            DispatchRuntimeKeys.DISPATCH_SECRET_BINDINGS,
+            Map.of(
+                "CH1", Map.of("secretRef", "dispatch/key", "secretVersionId", 42, "versionNo", 3)));
   }
 
   @Test

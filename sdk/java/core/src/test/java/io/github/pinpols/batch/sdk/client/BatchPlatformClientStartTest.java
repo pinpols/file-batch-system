@@ -136,7 +136,8 @@ class BatchPlatformClientStartTest {
         .register(new IdempotentHandlerWithoutStore())
         .build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
-    when(http.register(any())).thenReturn(null);
+    when(http.register(any()))
+        .thenReturn(new PlatformHttpClient.WorkerRegistrationResponse(1L, "tx", "w-1", "ACTIVE"));
     inject(client, "httpClient", http);
 
     assertThatThrownBy(client::start)
@@ -156,7 +157,8 @@ class BatchPlatformClientStartTest {
     BatchPlatformClient client =
         BatchPlatformClient.builder(cfg()).register(stub("type-a")).build();
     PlatformHttpClient http = mock(PlatformHttpClient.class);
-    when(http.register(any())).thenReturn(null);
+    when(http.register(any()))
+        .thenReturn(new PlatformHttpClient.WorkerRegistrationResponse(1L, "tx", "w-1", "ACTIVE"));
     inject(client, "httpClient", http);
 
     try (MockedConstruction<TaskDispatcher> dispatchers = mockConstruction(TaskDispatcher.class);

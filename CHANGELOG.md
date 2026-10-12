@@ -8,9 +8,15 @@
 
 ## [Unreleased]
 
+- Dispatch 渠道可通过非敏感 `secret_ref` 绑定 SecretVersion；实例创建时固定版本，Worker 外发前检查撤销/有效期并从加密载荷取凭据。紧急撤销新增租户隔离的管理员 API 与审计；被撤销/失效的重试不会切换到新版本。路由和队列模型不变。
+- 收敛日志与运行时配置的敏感信息边界：遮盖遥测 MDC、Push endpoint、SDK 外部错误响应与配置 URL 日志中的敏感值；全量动态数据分类和真实 Loki 查询验收仍待完成。
+- 配置包 SQL 预览改用单语句 SELECT/WITH AST 校验，避免注释和字符串常量中的 DML/DDL 单词误报，同时拒绝真实写语句、多语句和写入型 CTE。
+- Dispatch 缺省外部请求号改为按租户、流水线实例、文件和渠道稳定生成；HTTP/API 重试携带相同 `Idempotency-Key`，并记录平台无法替下游承诺 exactly-once 的接收端契约边界。
+- 启用导入笔数/金额对账后，缺少声明依据或对账超差会阻断交付；trailer、manifest 和数据集行数对账不受坏记录跳过策略影响，金额容差缺省为零，未启用的作业保持原行为。
 - 统一 Sim 两个初始化入口的平台运行态清理，补齐触发请求、任务和审计记录；运行中配置编辑场景在终止信号下也尝试恢复原配置，上传预览会话仍按短期 TTL 回收。
 - 修复 TypeScript 自托管 Worker E2E 因样例缺少锁文件导致 `npm ci` 必然失败的问题，并保留依赖安装错误日志。
 - 修复临时 SonarQube 仅执行一次分析导致 Quality Gate 未计算、Sonar CI 恒失败的问题；先建立分析基线，再严格校验第二次分析结果。
+- 修复 SonarQube 10+ 新代码指标使用 `period.value`、而门禁仍只读取旧 `periods[]` 导致忽略证据缺失；显式请求 period 元数据并保留严格缺项校验。
 - 告警路由查询支持关键词服务端筛选；资产新鲜度策略和配置同步日志改为返回带总数的分页响应，避免列表只取固定数量或无分页加载。
 - 新增幂等 Worker 能力列补偿迁移，修复历史版本号漂移导致 `worker_registry.task_capabilities` 缺失、Console Worker 查询返回 HTTP 500 的问题。
 - 修复 Compose CD 调用前端 reusable build workflow 时引用错误提交的问题，并将 Sentry DSN secret 与前端 `workflow_call` 契约对齐。
@@ -18,6 +24,7 @@
 - 修复临时 Sonar 首次扫描无法设置 30 天新代码基线的问题：为扫描管理账号补齐项目级管理权限，并按项目实际主分支回读验证，避免 Sonar API 空响应掩盖配置未生效。
 - 修复批次日回放详情默认“全部”筛选因空状态被 SQL 等值过滤而显示空列表的问题；保留指定状态筛选及租户隔离。
 ### Security
+- Console 文件错误记录的 `rawRecord` 响应现按模板 `preview_masking_enabled` 执行脱敏；`error_line_masking_enabled` 仍负责错误消息和原始行，两项策略可独立配置。
 - 配置包 Excel 解析失败时不再将 POI 原始异常文本回显给调用方；服务端保留经过清理的诊断摘要。
 - 作业/步骤结果、实例快照及执行日志扩展字段的查询响应递归掩码凭据类 JSON 键；告警、审批、文件流水线、配置审计、通知投递和结构化错误载荷在响应投影/渲染时同样掩码，不改持久化值或 Worker/投递输入。自由文本中的任意凭据不在本次覆盖范围内。
 - 文件通道、通知渠道响应递归掩码动态 JSON 敏感字段；文件 endpoint 同时遮盖 URI 凭据。更新请求回传掩码值时保留数据库原值，显式删除仍可清除。
@@ -97,6 +104,7 @@
 
 ### Fixed
 
+- 维护全冻结期间收窄管理员旁路为只读诊断，普通业务写请求不再因 `ROLE_ADMIN` 放行；Orchestrator 手动 drain 暂停 Trigger Launch Kafka listener，并将当前 poll 中尚未开始的消息延迟重投，恢复 drain 时再继续消费。
 - 修复作业实例创建后重试策略被作业定义变更覆盖的问题；重试排程优先使用实例执行参数快照，历史实例缺少快照时保留原定义回退行为。
 - 修复 SDK 真 Orchestrator E2E 冷启动时把 PostgreSQL initdb 临时 Unix socket 误判为数据库初始化完成，以及 Java、Python、TypeScript、Rust 样例准备失败被后台 PID 掩盖、诊断日志缺失的问题。
 - 修复四份 Sim 租户配置包 Excel 的作业监控策略表头仍使用旧字段、导致线上 `daily-sim-strict-validation` 在场景执行前失败的问题；PR、Full Gate 与本地提交预检新增配置包 schema 防漂移检查。

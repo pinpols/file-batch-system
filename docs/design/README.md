@@ -34,6 +34,7 @@
 | 17 | [tenant-config-package-excel-9plus2-design.md](./tenant-config-package-excel-9plus2-design.md) | 当前已实现的租户配置包设计基线：9 个业务 sheet + 可选依赖、字段说明与跨 sheet 校验 | 核对现行配置包实现 |
 | 17a | [租户作业配置与资源边界收敛计划](../plans/tenant-job-configuration-simplification-plan-2026-10-09.md) | 待实施方案：降低租户填写量、场景化模板、平台托管资源配置及旧包迁移 | 规划配置包与租户资源权限改造 |
 | 18 | [pipeline-stage-progress-display.md](./pipeline-stage-progress-display.md) | Pipeline step 进度展示与 SSE 刷新设计：低频 dirty event、轮询快照、Worker 支持矩阵、降级策略 | 改 Pipeline Observability / SSE / Worker progress 前 |
+| 19 | [dispatch-secret-version-runtime-lifecycle.md](./dispatch-secret-version-runtime-lifecycle.md) | Dispatch 实例固定密钥版本、紧急撤销、投递重试及明文驻留边界 | 改 Dispatch 凭据解析或撤销语义前 |
 
 ## 专题设计
 
