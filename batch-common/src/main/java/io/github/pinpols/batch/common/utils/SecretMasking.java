@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import javax.annotation.Nullable;
 
 /**
  * R-4.10：日志 / 审计输出的凭证脱敏。
@@ -45,7 +46,7 @@ public final class SecretMasking {
   private SecretMasking() {}
 
   /** 判断 key 名是否敏感（null-safe；大小写不敏感；按 contains 匹配关键词）。 */
-  public static boolean isSensitive(String key) {
+  public static boolean isSensitive(@Nullable String key) {
     if (!Texts.hasText(key)) {
       return false;
     }
@@ -59,13 +60,15 @@ public final class SecretMasking {
   }
 
   /** 返回原 map 的拷贝，敏感字段值替换为 {@link #MASKED_VALUE}。null-in → null-out。 */
-  public static Map<String, Object> maskSensitiveKeys(Map<String, Object> source) {
+  @Nullable
+  public static Map<String, Object> maskSensitiveKeys(@Nullable Map<String, Object> source) {
     return maskSensitiveKeys(source, Set.of());
   }
 
   /** 返回原 map 的拷贝，并将额外指定的字段按敏感值处理。 */
+  @Nullable
   public static Map<String, Object> maskSensitiveKeys(
-      Map<String, Object> source, Set<String> additionalSensitiveKeys) {
+      @Nullable Map<String, Object> source, Set<String> additionalSensitiveKeys) {
     if (source == null) {
       return null;
     }
@@ -83,12 +86,15 @@ public final class SecretMasking {
   }
 
   /** 对动态 JSON 做递归凭据脱敏；无效 JSON 由调用方决定如何降级处理。 */
-  public static String maskSensitiveJson(String json) {
+  @Nullable
+  public static String maskSensitiveJson(@Nullable String json) {
     return maskSensitiveJson(json, Set.of());
   }
 
   /** 对动态 JSON 做递归凭据脱敏，并将额外指定的字段按敏感值处理。 */
-  public static String maskSensitiveJson(String json, Set<String> additionalSensitiveKeys) {
+  @Nullable
+  public static String maskSensitiveJson(
+      @Nullable String json, Set<String> additionalSensitiveKeys) {
     if (!Texts.hasText(json)) {
       return json;
     }
@@ -97,7 +103,7 @@ public final class SecretMasking {
   }
 
   /** 判断动态 JSON 是否仍含有未恢复的敏感字段掩码。 */
-  public static boolean containsMaskedSensitiveValue(String json) {
+  public static boolean containsMaskedSensitiveValue(@Nullable String json) {
     if (!Texts.hasText(json)) {
       return false;
     }
@@ -105,7 +111,8 @@ public final class SecretMasking {
   }
 
   /** 从跨租户配置副本中递归移除敏感字段，避免复制源环境凭据或租户级密钥引用。 */
-  public static String removeSensitiveJsonFields(String json) {
+  @Nullable
+  public static String removeSensitiveJsonFields(@Nullable String json) {
     if (!Texts.hasText(json)) {
       return json;
     }
@@ -113,13 +120,18 @@ public final class SecretMasking {
   }
 
   /** 更新请求回传脱敏 JSON 时，从当前数据库值恢复相同位置的掩码凭据。 */
-  public static String preserveMaskedJson(String submittedJson, String storedJson) {
+  @Nullable
+  public static String preserveMaskedJson(
+      @Nullable String submittedJson, @Nullable String storedJson) {
     return preserveMaskedJson(submittedJson, storedJson, Set.of());
   }
 
   /** 更新回传脱敏 JSON 时，从当前数据库值恢复敏感键和额外指定字段的掩码值。 */
+  @Nullable
   public static String preserveMaskedJson(
-      String submittedJson, String storedJson, Set<String> additionalSensitiveKeys) {
+      @Nullable String submittedJson,
+      @Nullable String storedJson,
+      Set<String> additionalSensitiveKeys) {
     if (!Texts.hasText(submittedJson) || !Texts.hasText(storedJson)) {
       return submittedJson;
     }
@@ -129,16 +141,20 @@ public final class SecretMasking {
   }
 
   /** 脱敏 URI 中的 userinfo 和敏感 query 参数；普通文件路径及非敏感 URI 保持不变。 */
-  public static String maskEndpoint(String endpoint) {
+  @Nullable
+  public static String maskEndpoint(@Nullable String endpoint) {
     return transformEndpoint(endpoint, null, false);
   }
 
   /** 更新回传已脱敏端点时，从存量端点恢复 userinfo 和对应 query 凭据。 */
-  public static String preserveMaskedEndpoint(String submitted, String stored) {
+  @Nullable
+  public static String preserveMaskedEndpoint(@Nullable String submitted, @Nullable String stored) {
     return transformEndpoint(submitted, stored, true);
   }
 
-  private static String transformEndpoint(String endpoint, String storedEndpoint, boolean restore) {
+  @Nullable
+  private static String transformEndpoint(
+      @Nullable String endpoint, @Nullable String storedEndpoint, boolean restore) {
     if (!Texts.hasText(endpoint)) {
       return endpoint;
     }
@@ -169,7 +185,9 @@ public final class SecretMasking {
     }
   }
 
-  private static String transformQuery(String query, String storedQuery, boolean restore) {
+  @Nullable
+  private static String transformQuery(
+      @Nullable String query, @Nullable String storedQuery, boolean restore) {
     if (EmptyChecks.isNull(query)) {
       return null;
     }
@@ -201,6 +219,7 @@ public final class SecretMasking {
     return String.join("&", parameters);
   }
 
+  @Nullable
   private static String queryValue(String[] parameters, String expectedName) {
     for (String parameter : parameters) {
       int equals = parameter.indexOf('=');
@@ -215,7 +234,7 @@ public final class SecretMasking {
     return null;
   }
 
-  private static String renderUri(URI uri, String authority, String query) {
+  private static String renderUri(URI uri, String authority, @Nullable String query) {
     StringBuilder rendered = new StringBuilder(uri.getScheme()).append(':');
     if (EmptyChecks.isNotNull(authority)) {
       rendered.append("//").append(authority);
@@ -233,16 +252,20 @@ public final class SecretMasking {
   }
 
   /** 对动态 JSON 值递归脱敏；保留 Map/List 类型供既有响应契约使用。 */
-  public static Object maskSensitiveValue(Object value, Set<String> additionalSensitiveKeys) {
+  @Nullable
+  public static Object maskSensitiveValue(
+      @Nullable Object value, Set<String> additionalSensitiveKeys) {
     return maskNestedValue(value, additionalSensitiveKeys);
   }
 
-  private static boolean isSensitive(String key, Set<String> additionalSensitiveKeys) {
+  private static boolean isSensitive(@Nullable String key, Set<String> additionalSensitiveKeys) {
     return isSensitive(key)
         || additionalSensitiveKeys.stream().anyMatch(candidate -> candidate.equalsIgnoreCase(key));
   }
 
-  private static Object maskNestedValue(Object value, Set<String> additionalSensitiveKeys) {
+  @Nullable
+  private static Object maskNestedValue(
+      @Nullable Object value, Set<String> additionalSensitiveKeys) {
     if (value instanceof Map<?, ?> source) {
       Map<String, Object> masked = new LinkedHashMap<>(source.size());
       for (Map.Entry<?, ?> entry : source.entrySet()) {
@@ -266,8 +289,9 @@ public final class SecretMasking {
     return value;
   }
 
+  @Nullable
   private static Object restoreMaskedValue(
-      Object submitted, Object stored, Set<String> additionalSensitiveKeys) {
+      @Nullable Object submitted, @Nullable Object stored, Set<String> additionalSensitiveKeys) {
     if (submitted instanceof Map<?, ?> submittedMap) {
       Map<?, ?> storedMap = stored instanceof Map<?, ?> map ? map : Map.of();
       Map<String, Object> restored = new LinkedHashMap<>(submittedMap.size());
@@ -297,7 +321,7 @@ public final class SecretMasking {
     return submitted;
   }
 
-  private static boolean containsMaskedSensitiveValue(Object value) {
+  private static boolean containsMaskedSensitiveValue(@Nullable Object value) {
     if (value instanceof Map<?, ?> map) {
       for (Map.Entry<?, ?> entry : map.entrySet()) {
         String key = String.valueOf(entry.getKey());
@@ -319,7 +343,8 @@ public final class SecretMasking {
     return false;
   }
 
-  private static Object removeSensitiveFields(Object value) {
+  @Nullable
+  private static Object removeSensitiveFields(@Nullable Object value) {
     if (value instanceof Map<?, ?> map) {
       Map<String, Object> sanitized = new LinkedHashMap<>(map.size());
       for (Map.Entry<?, ?> entry : map.entrySet()) {

@@ -70,7 +70,7 @@ Java PR 的本地审阅按需运行增量模式，并检查变更行 issues 与�
 - 无需 Sonar token/管理员 secret。Sonar 结果报告作为 workflow artifact 保留 7 天。
 - 每次运行都是 main 当前代码快照；滚动 30 天的变更判定依靠 Git SCM 历史，不依靠 Sonar 分析历史。系统不能提供跨提交的 issue 生命周期/趋势，也不执行 PR 分支分析。
 - Quality Gate 成功只表示第二次分析使用的临时项目门禁通过；临时项目没有跨运行的 issue 生命周期/趋势。是否属于 required check 以仓库 Ruleset 为准。
-- Quality Gate 校验将配置条件与本次分析返回的 metric 逐项对照，并要求整体状态为 `OK`。Sonar 在新代码少于 20 行时会忽略覆盖率/重复率条件；没有新增安全热点时也可能不返回热点审查率条件。校验器调用 `api/measures/component` 时请求 `additionalFields=period`，并从现代响应的 measure `period.value` 读取新代码证据，同时兼容旧版 `periods[]`；缺失条件只有在 `ignoredConditions=true` 且有对应无数据证据（`new_lines < 20` 或 `new_security_hotspots = 0`）时才接受。若所有已配置条件都已返回并逐项校验，即使 Sonar 的全局 `ignoredConditions` 标记为 `true` 也不因此判失败，因为没有配置条件被漏检。其它缺项、空结果、失败或未知状态仍失败。该规则由 `scripts/dev/tests/test_sonar_quality_gate.py` 覆盖。
+- Quality Gate 校验将配置条件与本次分析返回的 metric 逐项对照，并要求整体状态为 `OK`。Sonar 在新代码少于 20 行时会忽略覆盖率/重复率条件；没有新增安全热点时也可能不返回热点审查率条件。校验器调用 `api/measures/component` 时请求 `additionalFields=period`，并从现代响应的 measure `period.value` 读取新代码证据，同时兼容旧版 `periods[]`。缺失的覆盖率/重复率条件只有在 `ignoredConditions=true` 且有 `new_lines < 20` 证据时才接受；热点审查率条件缺失则要求 `new_security_hotspots = 0`，该零热点证据本身足以说明没有待审热点，不依赖全局 `ignoredConditions` 标记。所有配置条件均返回时，`ignoredConditions` 为 `true` 不构成失败。其它缺项、空结果、失败或未知状态仍失败；失败诊断应报告真实 Gate 状态和失败指标。该规则由 `scripts/dev/tests/test_sonar_quality_gate.py` 覆盖。
 - 源码中已审核的 Sonar 与其他静态分析抑制项按 [Java suppression 标准](../standards/java-suppression-registry.md)维护；临时 Sonar 服务不做 issue 状态同步。
 - Sonar **不替代**现有 PMD / Spotless / SpotBugs / 依赖扫描 / 测试门禁。
 
@@ -78,6 +78,8 @@ Java PR 的本地审阅按需运行增量模式，并检查变更行 issues 与�
 
 - 2026-08-06 本地验收（`docs/verifications/sonar-report-2026-08-06.md`）：Quality Gate `OK`、新代码覆盖率 `83.0%`（门槛 80%）、新代码违规 `0`。
 - 历史全量快照：`docs/verifications/sonar-report-2026-08-05.md` / `sonar-report-2026-08-06.md`。
+- 2026-10-12 全量扫描：SHA `029a75540aee0d9bf7a149bf8049a905ea9390c3`；clean test、14 份 JaCoCo XML 和 Sonar 分析均成功，Sonar 任务 `57ba30ee-b250-4b9e-8d35-a1d6cb581dc3`。Quality Gate **ERROR**，真实失败条件为 `new_violations=108`；新代码覆盖率 `85.4%`、重复率 `0%`。全局 OPEN issue 1,365（Bug 49、Vulnerability 0、Code Smell 1,316、Security Hotspot 0）。报告目录 `reports/sonar/2026-10-12_15-01-53/` 被 git 忽略。该快照不包含后续 null 契约与测试断言修正；这些变更尚无新的全量 Gate 结果。
+- 2026-10-12 后续 PR 增量扫描：以最新 `origin/main` 为基线，分析覆盖 13 个 Java 文件，变更行 OPEN issue `0`、待审 hotspot `0`；Sonar 任务 `0c53ed56-d68a-4831-b2c3-8e42fe3fcf73`，报告目录 `reports/sonar/2026-10-12_15-31-59/`。该本地变更行结果不能替代 PR CI，也不更新前一条全量扫描的 Quality Gate 结论。
 - 判定口径：以 **新增代码（new code）** 为准；存量 issue 通过 `annotate-sonar-report.py` 分类标注，不阻塞迭代。
 
 ## 5. 常见问题

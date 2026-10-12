@@ -356,7 +356,7 @@ class ConfigPackageWorkbookGuidanceTest {
             .filter(sheet -> ConfigPackageExcelValidator.JOB_SHEET.equals(sheet.name()))
             .findFirst()
             .orElseThrow();
-    assertThat(jobs.columns()).doesNotContain("queue_code", "worker_group");
+    assertThat(jobs.columns()).isNotEmpty().doesNotContain("queue_code", "worker_group");
   }
 
   @Test

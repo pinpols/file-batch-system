@@ -157,15 +157,33 @@ class SonarQualityGateTest(unittest.TestCase):
         self.assertFalse(passed)
         self.assertIn("new_coverage", detail)
 
-    def test_rejects_missing_hotspot_condition_when_not_marked_ignored(self) -> None:
+    def test_accepts_missing_hotspot_condition_when_no_new_hotspots_even_if_flag_is_false(self) -> None:
         status = self.result["projectStatus"]
         status["conditions"] = status["conditions"][:-1]
 
-        passed, _ = evaluate_quality_gate(
+        passed, detail = evaluate_quality_gate(
+            self.config, self.result, {"new_security_hotspots": 0}
+        )
+
+        self.assertTrue(passed)
+        self.assertIn(HOTSPOT_METRIC, detail)
+
+    def test_reports_actual_gate_failure_when_only_hotspot_condition_is_omitted(self) -> None:
+        status = self.result["projectStatus"]
+        status["status"] = "ERROR"
+        status["conditions"][0] = {
+            **condition("new_violations", "ERROR"),
+            "actualValue": "108",
+        }
+        status["conditions"] = status["conditions"][:-1]
+
+        passed, detail = evaluate_quality_gate(
             self.config, self.result, {"new_security_hotspots": 0}
         )
 
         self.assertFalse(passed)
+        self.assertIn("quality gate status=ERROR", detail)
+        self.assertIn("new_violations=108", detail)
 
     def test_rejects_empty_and_unconfigured_results(self) -> None:
         status = self.result["projectStatus"]

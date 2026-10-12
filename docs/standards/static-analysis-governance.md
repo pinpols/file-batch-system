@@ -70,6 +70,8 @@ CI 的实际覆盖以 `.github/workflows/` 为准，Ruleset 的 required 状态�
 
 Sonar issue 是候选，不是缺陷判决；`SKIP_FP`、`DEFERRED` 等标注是分诊结论，不等于源码 suppression 或告警已关闭。先确认漏洞、可复现 Bug、安全热点和新代码问题，再按规则/模块处理存量 Code Smell。每份扫描快照必须记录 commit、时间、扫描命令、测试/coverage 状态、真实 Quality Gate 返回及未覆盖范围。
 
+2026-10-12 在 `029a75540aee0d9bf7a149bf8049a905ea9390c3` 完成全量 clean test、JaCoCo 与 Sonar 分析；Quality Gate 返回 `ERROR`，因为 `new_violations=108`，不是质量门禁脚本缺失热点条件时的诊断错误。该次新代码覆盖率 85.4%、重复率 0%；全局 OPEN issue 1,365（Bug 49、Vulnerability 0、Code Smell 1,316、Security Hotspot 0）。随后以最新 `origin/main` 基线运行增量扫描，13 个 Java 文件的变更行 issue/hotspot 均为 0；该证据只代表当前差异，不更新旧 SHA 的全量 Gate 状态。扫描任务、报告位置和新代码初步分诊见[治理实施计划](../plans/static-analysis-governance-plan-2026-10-12.md)。
+
 2026-10-12 对 `51bf78e70` 的全量报告曾记录 1,173 个 OPEN issues（12 Bug、1 Vulnerability、1,160 Code Smell，覆盖率 68.9%）。唯一 Vulnerability 是 `java:S5443`：Excel 上传临时文件落在公共系统临时根目录；本轮已改用 owner-only `PrivateTempFiles` 并增加成功/失败路径测试。`./scripts/dev/sonar-scan.sh --incremental --base-ref origin/main` 的全 reactor 扫描运行超过 17 分钟未产出最终报告，已中断，不能算全量扫描通过。随后对同一工作树内容执行单文件范围 Sonar 分析（临时项目 `file-batch-system-console-review-20261012`、配置 `Batch Platform Sonar Way`、只纳入 `DefaultTenantConfigPackageExcelService.java`）；分析任务 `63939472-6d92-4f2a-8550-d52f98eccc0b` 为 `SUCCESS`，服务端查询该文件的 `java:S5443` OPEN 数为 0。此结果只验证指定文件和规则，不代表全 reactor 分析或 Quality Gate 通过。历史全量快照不代表当前最新 main；后续报告以最新 main 的实际扫描和 Quality Gate 校验为准。旧的带日期分析留作历史快照，不应继续作为当前待办源。
 
 ## 分阶段完成状态
