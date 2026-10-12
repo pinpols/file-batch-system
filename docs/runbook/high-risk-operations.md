@@ -36,6 +36,7 @@
 - `scripts/local/pre-commit-checks.sh` 将本次门禁错误汇总写入由 `mktemp` 创建的独立临时文件，并仅在退出时删除该文件；路径由脚本创建，不接受调用方覆盖，清理不触碰仓库或服务数据。
 - `scripts/ci/check-destructive-ops-governance.py` 盘点普通及强制 `rm`、PG `DROP`/`TRUNCATE`/`DELETE`/`dropdb`/`pg_restore --clean`、S3 删除/同步删除、Kafka topic/group/record 删除、Redis/Valkey `DEL`/`UNLINK`/`FLUSH*`，以及 Docker/Kubernetes 清理操作；支持识别反斜杠续行和 `minio_mc` 包装器。扫描范围包含 `scripts/`、`load-tests/scripts/`、`db/`、`deploy/`、`.github/workflows/` 和 `docs/runbook/`。相对 `scripts/ci/destructive-ops-baseline.json` 新增或扩大时 PR/Full Gate 失败，审查后才更新基线。
 - 作业监控清理按实例保留期，仅删除即将清理的 `job_instance` 对应的 `job_monitoring_alert_claim`；其无外键是为适配按业务日分区的实例表，清理在删除实例前执行。V225/V228 只替换本功能先前版本创建的 CHECK 约束，先验证扩展约束再删除旧约束，不删除业务行或告警事件。以上新增操作已纳入增量基线。
+- V234 替换 `config_change_log` 的 action CHECK 约束以纳入 `REVOKE` 审计动作；只删除旧约束定义，不删除表或业务记录，随后创建并验证新约束。该迁移的 `DROP CONSTRAINT` 已登记在增量基线。
 - 该基线是增量治理，不是命令沙箱：无法约束开发者在仓库外执行命令，也无法阻止有 DB 超级用户/云管理员权限的人绕过脚本。生产必须使用独立账号、最小权限和变更审批。
 
 ## 操作前清单

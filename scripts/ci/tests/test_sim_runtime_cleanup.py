@@ -64,7 +64,10 @@ class SimRuntimeCleanupTest(unittest.TestCase):
         self.assertEqual(143, raised.exception.code)
         self.assertLess(source.index("signal.signal(signal.SIGTERM"),
                         source.index('update_definition(job_id, sleep_params'))
-        self.assertIn("finally:\n    update_definition(", source)
+        finally_block = source.index("finally:")
+        restore_call = source.index("update_definition(", finally_block)
+        self.assertLess(source.index("signal.signal(signal.SIGTERM, signal.SIG_IGN)", finally_block),
+                        restore_call)
 
 
 if __name__ == "__main__":

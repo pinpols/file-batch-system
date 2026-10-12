@@ -799,7 +799,8 @@ jobs:
               ExportFailurePipelineE2eIT,
               ProcessFailurePipelineE2eIT,
               OutboxForwarderE2eIT,
-              SdkAgainstStubOrchestratorE2eIT
+              SdkAgainstStubOrchestratorE2eIT,
+              ImportToExportDeliveryE2eIT
           - id: 6
             label: "148s baseline"
             tests: >-

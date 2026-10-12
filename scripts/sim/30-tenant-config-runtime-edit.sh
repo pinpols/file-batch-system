@@ -20,6 +20,7 @@ export SIM_RUNTIME_CONFIG_SQL_DIR="$ROOT/scripts/sim/sql"
 import http.cookiejar
 import json
 import os
+import signal
 import subprocess
 import time
 import urllib.error
@@ -37,6 +38,10 @@ PG_CONTAINER = os.environ["PG_CONTAINER"]
 PG_USER = os.environ["POSTGRES_USER"]
 PLATFORM_DB = os.environ["PLATFORM_DB"]
 BIZ_DATE = os.environ["BIZ_DATE"]
+
+
+def interrupt_run(signum, _frame):
+    raise SystemExit(128 + signum)
 
 
 def psql_file(name, variables):
@@ -208,6 +213,10 @@ original_policy = original.get("retryPolicy") or "NONE"
 original_retry_count = original.get("retryMaxCount") or 0
 original_timeout = original.get("timeoutSeconds") or 0
 
+# 更新运行态配置前安装处理器；异常退出仍进入 finally 恢复原定义。
+signal.signal(signal.SIGTERM, interrupt_run)
+signal.signal(signal.SIGINT, interrupt_run)
+
 sleep_params = {"taskType": "shell", "command": "/bin/sleep", "args": ["20"]}
 edited_params = {"taskType": "shell", "command": "/bin/echo", "args": ["updated-config"]}
 old_instance_request = None
@@ -240,6 +249,9 @@ try:
         flush=True,
     )
 finally:
+    # 恢复期间忽略重复中断，避免第二个信号打断配置回滚。
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
     update_definition(
         job_id,
         original_params,
