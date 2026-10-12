@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.service;
 
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
+import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.FailureClass;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.JobType;
@@ -22,6 +23,7 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.application.plan.BundlePlanParams;
 import io.github.pinpols.batch.orchestrator.application.service.failure.PersistenceConflictDetectionPort;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.application.service.task.PartitionDispatchService;
@@ -98,6 +100,7 @@ public class DefaultLaunchService implements LaunchService {
     LaunchRequest routedRequest = launchBatchDayService.routeLateArrivalIfNeeded(request, loaded);
     Map<String, Object> effectiveParams =
         launchParamResolver.mergeLaunchParams(loaded.jobDefinition(), routedRequest);
+    validateBundleParamsBeforeInstanceCreation(request, loaded, effectiveParams);
     BatchDayGateService.GateDecision gateDecision =
         batchDayGateService.evaluateAndApply(routedRequest, loaded, effectiveParams, traceId);
     if (!gateDecision.allowed()) {
@@ -129,6 +132,18 @@ public class DefaultLaunchService implements LaunchService {
         Phase.DISPATCH_TRANSACTION,
         () -> dispatchAndMarkLaunched(request, prepared.effectiveParams(), traceId, prepared));
     return new LaunchResponse(prepared.jobInstance().getInstanceNo(), traceId);
+  }
+
+  private void validateBundleParamsBeforeInstanceCreation(
+      LaunchRequest request, LaunchLoadResult loaded, Map<String, Object> effectiveParams) {
+    JobType jobType = DictEnum.fromCode(JobType.class, loaded.jobDefinition().jobType());
+    try {
+      BundlePlanParams.validate(effectiveParams, jobType);
+    } catch (BizException ex) {
+      jobMappers.triggerRequestMapper.updateAcceptance(
+          request.tenantId(), request.requestId(), TriggerRequestStatus.REJECTED.code(), null);
+      throw ex;
+    }
   }
 
   /**
@@ -212,8 +227,7 @@ public class DefaultLaunchService implements LaunchService {
       return;
     }
     try {
-      inNewTransaction(
-          () -> markJobInstanceFailedDueToDispatch(request, jobInstance, dispatchFailure));
+      finalizeDispatchFailure(request, jobInstance, dispatchFailure);
     } catch (RuntimeException reverseEx) {
       SwallowedExceptionLogger.info(
           DefaultLaunchService.class, "catch:finalizeJobInstanceOnDispatchFailure", reverseEx);
@@ -233,7 +247,19 @@ public class DefaultLaunchService implements LaunchService {
   }
 
   /** T2 fail-fast 后把 job_instance CREATED → FAILED,避免长期停留在无 task 的不可执行状态。 */
-  public void markJobInstanceFailedDueToDispatch(
+  @Override
+  public void finalizeDispatchFailure(
+      LaunchRequest request, JobInstanceEntity jobInstance, BizException dispatchFailure) {
+    if (EmptyChecks.isNull(jobInstance)
+        || EmptyChecks.isNull(jobInstance.getId())
+        || EmptyChecks.isNull(dispatchFailure)) {
+      return;
+    }
+    inNewTransaction(
+        () -> markJobInstanceFailedDueToDispatch(request, jobInstance, dispatchFailure));
+  }
+
+  private void markJobInstanceFailedDueToDispatch(
       LaunchRequest request, JobInstanceEntity jobInstance, BizException dispatchFailure) {
     Long expectedVersion = jobInstance.getVersion() == null ? 0L : jobInstance.getVersion();
     Instant now = BatchDateTimeSupport.utcNow();

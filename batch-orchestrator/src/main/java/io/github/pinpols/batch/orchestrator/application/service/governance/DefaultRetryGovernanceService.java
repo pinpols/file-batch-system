@@ -85,6 +85,8 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
       "DISPATCH_SECRET_PAYLOAD_EMPTY",
       "DISPATCH_SECRET_PAYLOAD_INVALID",
       "EXPORT_GENERATE_NO_PAYLOAD",
+      // 已存在的导出路径 checksum 冲突是幂等目标与内容不一致；重放不会改变既有 file_record。
+      "EXPORT_REGISTER_CHECKSUM_CONFLICT",
       // Worker WorkerConfigException → 模板/参数配置缺字段, 等多久也不自愈
       "IMPORT_LOAD_CONFIG_INVALID",
       "EXPORT_GENERATE_CONFIG_INVALID",

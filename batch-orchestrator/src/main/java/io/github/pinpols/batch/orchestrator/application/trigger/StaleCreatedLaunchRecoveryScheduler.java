@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -14,6 +15,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
+import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -48,10 +50,13 @@ public class StaleCreatedLaunchRecoveryScheduler {
 
   private static final String METRIC_RECOVERED = "batch.trigger.launch.created_recovered.total";
   private static final String METRIC_FAILED = "batch.trigger.launch.created_recovery_failed.total";
+  private static final String METRIC_REJECTED =
+      "batch.trigger.launch.created_recovery_rejected.total";
 
   private final JobInstanceMapper jobInstanceMapper;
   private final TriggerRequestMapper triggerRequestMapper;
   private final PartitionDispatchService partitionDispatchService;
+  private final LaunchService launchService;
   private final OrchestratorGracefulShutdown gracefulShutdown;
   private final MeterRegistry meterRegistry;
   private final StaleCreatedLaunchRecoveryProperties properties;
@@ -132,7 +137,23 @@ public class StaleCreatedLaunchRecoveryScheduler {
             jobInstance, null, List.of(), BatchDateTimeSupport.utcNow());
     PartitionDispatchService.DispatchContext dispatchContext =
         PartitionDispatchService.DispatchContext.of(dispatchRequest, dispatchRuntime);
-    partitionDispatchService.dispatch(dispatchContext);
+    try {
+      partitionDispatchService.dispatch(dispatchContext);
+    } catch (RuntimeException ex) {
+      BizException invalidBundle = findPermanentBundleFailure(ex);
+      if (EmptyChecks.isNull(invalidBundle)) {
+        throw ex;
+      }
+      launchService.finalizeDispatchFailure(request, jobInstance, invalidBundle);
+      log.info(
+          "stale CREATED launch rejected as a permanent bundle configuration error:"
+              + " tenantId={} jobInstanceId={} requestId={}",
+          jobInstance.getTenantId(),
+          jobInstance.getId(),
+          triggerRequest.getRequestId());
+      counter(METRIC_REJECTED, "tenant", jobInstance.getTenantId()).increment();
+      return false;
+    }
     // dispatch(自带事务)提交后任务已实际恢复;reconcileLaunched 在其事务外,失败不能把本次
     // 恢复记成 failed(误导监控)——trigger_request 滞留 ACCEPTED 会由 TriggerRequestLaunchReconciler
     // (ADR-010,扫"ACCEPTED 且已有 job_instance")下一轮自愈,此处降级为 WARN。
@@ -151,6 +172,20 @@ public class StaleCreatedLaunchRecoveryScheduler {
     }
     counter(METRIC_RECOVERED, "tenant", jobInstance.getTenantId()).increment();
     return true;
+  }
+
+  private BizException findPermanentBundleFailure(RuntimeException exception) {
+    Throwable current = exception;
+    while (EmptyChecks.isNotNull(current)) {
+      if (current instanceof BizException bizException
+          && "error.partition.dispatch_business_error".equals(bizException.getMessageKey())
+          && EmptyChecks.isNotEmpty(bizException.getMessageArgs())
+          && "ADR-046_BUNDLE_INVALID".equals(String.valueOf(bizException.getMessageArgs()[0]))) {
+        return bizException;
+      }
+      current = current.getCause();
+    }
+    return null;
   }
 
   private boolean isRecoverableRequestStatus(

@@ -20,6 +20,7 @@ import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.FailureClass;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
+import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
@@ -248,6 +249,39 @@ class DefaultLaunchServiceTest {
     String expectedDayStatus = !now.isBefore(cutoffAt) ? "CUTOFF" : "OPEN";
     assertThat(saved.dayStatus()).isEqualTo(expectedDayStatus);
     assertThat(saved.slaDeadlineAt()).isEqualTo(expectedSlaDeadline());
+  }
+
+  @Test
+  @DisplayName("Bundle 启动缺少绑定时先拒绝请求，不创建 CREATED 实例")
+  void shouldRejectBundleLaunchBeforeCreatingInstanceWhenBindingsMissing() {
+    LaunchRequest request = new LaunchRequest(
+        "t1",
+        "BUNDLE_JOB",
+        LocalDate.of(2026, Month.MARCH, 27),
+        TriggerType.API,
+        "req-bundle-invalid",
+        "trace-bundle-invalid",
+        Map.of());
+    TriggerRequestEntity triggerRequest = new TriggerRequestEntity();
+    JobDefinitionEntity definition = JobDefinitionEntity.builder()
+        .id(501L)
+        .tenantId("t1")
+        .jobCode("BUNDLE_JOB")
+        .jobType(JobType.BUNDLE_DISPATCH.code())
+        .defaultParams(Map.of())
+        .build();
+    when(launchValidationService.load(request))
+        .thenReturn(
+            new LaunchValidationService.LaunchLoadResult(triggerRequest, definition, null, null));
+
+    assertThatThrownBy(() -> service.launch(request))
+        .isInstanceOf(BizException.class)
+        .hasMessage("error.partition.dispatch_business_error");
+
+    verify(triggerRequestMapper)
+        .updateAcceptance("t1", "req-bundle-invalid", TriggerRequestStatus.REJECTED.code(), null);
+    verify(jobInstanceMapper, never()).insert(any());
+    verify(partitionDispatchService, never()).dispatch(any());
   }
 
   @Test

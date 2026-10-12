@@ -353,8 +353,11 @@ class DefaultSchedulePlanBuilderTest {
             Map.of("sourceFileId", 102, "templateCode", "TPL_B")));
 
     org.assertj.core.api.Assertions.assertThatThrownBy(() -> builder.build(command(params)))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("bundle partition count mismatch");
+        .isInstanceOf(io.github.pinpols.batch.common.exception.BizException.class)
+        .satisfies(error -> assertThat(
+                ((io.github.pinpols.batch.common.exception.BizException) error).getMessageArgs()[1])
+            .asString()
+            .contains("bundle partition count mismatch"));
   }
 
   @Test
@@ -367,8 +370,8 @@ class DefaultSchedulePlanBuilderTest {
     Map<String, Object> params = Map.of("bundleFiles", List.of(Map.of("sourceFileId", 101)));
 
     org.assertj.core.api.Assertions.assertThatThrownBy(() -> builder.build(command(params)))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("bundleFiles required");
+        .isInstanceOf(io.github.pinpols.batch.common.exception.BizException.class)
+        .hasMessage("error.partition.dispatch_business_error");
   }
 
   @Test

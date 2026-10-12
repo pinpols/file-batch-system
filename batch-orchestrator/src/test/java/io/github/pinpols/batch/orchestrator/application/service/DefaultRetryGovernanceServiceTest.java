@@ -207,9 +207,15 @@ class DefaultRetryGovernanceServiceTest {
   // 3 个畸形夹具任务在 dead_letter 无限循环(653 行 / replay_count 恒 1)。对照上面同 FIXED/3
   // 策略下可重试码会 insert retry_schedule,这里永久码必须 false + BUSINESS 死信 + 不排重试。
   @ParameterizedTest
-  @DisplayName("导入类永久失败错误直接生成业务死信, 不排重试")
-  @ValueSource(strings = {"IMPORT_PARSE_FAILED", "IMPORT_PARSE_EMPTY", "IMPORT_LOAD_FAILED"})
-  void shouldDeadLetterAsBusinessForPermanentImportErrors(String errorCode) {
+  @DisplayName("永久数据与导出冲突错误直接生成业务死信, 不排重试")
+  @ValueSource(
+      strings = {
+        "IMPORT_PARSE_FAILED",
+        "IMPORT_PARSE_EMPTY",
+        "IMPORT_LOAD_FAILED",
+        "EXPORT_REGISTER_CHECKSUM_CONFLICT"
+      })
+  void shouldDeadLetterAsBusinessForPermanentDataErrors(String errorCode) {
     when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 3));
 
     boolean result = service.scheduleRetryIfNecessary(

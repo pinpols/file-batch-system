@@ -18,6 +18,7 @@ class ReadReplicaCredentialGuardTest {
       environment.setActiveProfiles(activeProfile);
     }
     ConsoleReadReplicaProperties props = new ConsoleReadReplicaProperties();
+    props.setEnabled(true);
     props.getPrimary().setPassword(primaryPassword);
     props.getReplica().setPassword(replicaPassword);
     return new ReadReplicaCredentialGuard(props, environment);
@@ -69,6 +70,21 @@ class ReadReplicaCredentialGuardTest {
     ReadReplicaCredentialGuard guard = guard("local", "batch_pass_123", "batch_pass_123");
 
     assertThatCode(guard::afterSingletonsInstantiated).doesNotThrowAnyException();
+  }
+
+  @Test
+  @DisplayName("读写分离关闭时不审计未启用的主从库口令")
+  void disabledReadReplica_skipsCredentialAudit() {
+    MockEnvironment environment = new MockEnvironment();
+    environment.setActiveProfiles("local");
+    ConsoleReadReplicaProperties props = new ConsoleReadReplicaProperties();
+    props.setEnabled(false);
+    props.getPrimary().setPassword("batch_pass_123");
+    props.getReplica().setPassword("batch_pass_123");
+
+    assertThatCode(
+            () -> new ReadReplicaCredentialGuard(props, environment).afterSingletonsInstantiated())
+        .doesNotThrowAnyException();
   }
 
   @Test
