@@ -38,6 +38,7 @@ import org.apache.poi.ss.usermodel.Hyperlink;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.ss.util.CellRangeAddressList;
 import org.apache.poi.ss.util.CellReference;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
@@ -175,6 +176,7 @@ public class ConfigPackageExcelWorkbookWriter {
       supplementWriter.createDependencyGuideSheet(wb);
       supplementWriter.createFiveWorkerExampleSheet(wb);
       supplementWriter.createBundleExampleSheet(wb);
+      supplementWriter.createDictionarySheet(wb, locale);
       createFieldGuideSheet(wb);
       ConsoleExcelStyles.createValidationSheet(wb);
       wb.write(out);
@@ -218,6 +220,7 @@ public class ConfigPackageExcelWorkbookWriter {
       supplementWriter.createDependencyGuideSheet(wb);
       supplementWriter.createFiveWorkerExampleSheet(wb);
       supplementWriter.createBundleExampleSheet(wb);
+      supplementWriter.createDictionarySheet(wb, locale);
       createFieldGuideSheet(wb);
       ConsoleExcelStyles.createValidationSheet(wb);
       wb.write(out);
@@ -235,6 +238,7 @@ public class ConfigPackageExcelWorkbookWriter {
       }
       supplementWriter.createFocusedReadmeSheet(wb, locale, sheetDefs);
       supplementWriter.createFillOrderSheet(wb, sheetDefs);
+      supplementWriter.createDictionarySheet(wb, locale);
       createFieldGuideSheet(wb);
       ConsoleExcelStyles.createValidationSheet(wb);
       wb.write(out);
@@ -316,17 +320,23 @@ public class ConfigPackageExcelWorkbookWriter {
     Sheet sheet = wb.createSheet(def.name());
     sheet.createFreezePane(0, 1, 0, 1);
     writeTemplateHeaders(sheet, def.columns(), def.guides(), wb, messageSource, locale);
+    CellStyle textStyle = ConsoleExcelStyles.createTextDataStyle(wb);
+    for (int column = 0; column < def.columns().size(); column++) {
+      sheet.setDefaultColumnStyle(column, textStyle);
+    }
     int idx = 1;
     for (Map<String, Object> row : dataRows) {
       Row dataRow = sheet.createRow(idx++);
       for (int c = 0; c < def.columns().size(); c++) {
         Object val = row.get(def.columns().get(c));
-        dataRow
-            .createCell(c)
-            .setCellValue(
-                val == null ? EMPTY : ConsoleExcelStyles.escapeFormula(String.valueOf(val)));
+        Cell cell = dataRow.createCell(c);
+        cell.setCellStyle(textStyle);
+        cell.setCellValue(
+            val == null ? EMPTY : ConsoleExcelStyles.escapeFormula(String.valueOf(val)));
       }
     }
+    sheet.setAutoFilter(
+        new CellRangeAddress(0, Math.max(0, idx - 1), 0, def.columns().size() - 1));
     applyValidations(def, sheet, locale, registeredImplCodesByModule);
     applyRequiredColumnValidations(def, sheet);
     setWidths(sheet, def.columns());
@@ -343,14 +353,22 @@ public class ConfigPackageExcelWorkbookWriter {
     sheet.createFreezePane(0, 1, 0, 1);
     CellStyle headerStyle = ConsoleExcelStyles.createHeaderStyle(wb);
     writeHeaders(sheet, def.columns(), headerStyle);
+    CellStyle textStyle = ConsoleExcelStyles.createTextDataStyle(wb);
+    for (int column = 0; column < def.columns().size(); column++) {
+      sheet.setDefaultColumnStyle(column, textStyle);
+    }
     int idx = 1;
     for (Map<String, String> row : dataRows) {
       Row dataRow = sheet.createRow(idx++);
       for (int c = 0; c < def.columns().size(); c++) {
         String val = row.get(def.columns().get(c));
-        dataRow.createCell(c).setCellValue(val == null ? EMPTY : val);
+        Cell cell = dataRow.createCell(c);
+        cell.setCellStyle(textStyle);
+        cell.setCellValue(val == null ? EMPTY : val);
       }
     }
+    sheet.setAutoFilter(
+        new CellRangeAddress(0, Math.max(0, idx - 1), 0, def.columns().size() - 1));
     applyValidations(def, sheet, locale, registeredImplCodesByModule);
     applyRequiredColumnValidations(def, sheet);
     ConsoleExcelPreviewWorkbookSupport.addIssueComments(sheet, def.columns(), sheetIssues, 0);

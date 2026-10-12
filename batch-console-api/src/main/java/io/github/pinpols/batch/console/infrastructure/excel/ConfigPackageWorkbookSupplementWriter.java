@@ -2,8 +2,33 @@ package io.github.pinpols.batch.console.infrastructure.excel;
 
 import static io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.createReadmeTitleStyle;
 
+import io.github.pinpols.batch.common.enums.BatchWindowEndStrategy;
+import io.github.pinpols.batch.common.enums.CatchUpPolicyType;
+import io.github.pinpols.batch.common.enums.DictEnum;
+import io.github.pinpols.batch.common.enums.ExecutionMode;
+import io.github.pinpols.batch.common.enums.FileChannelAuthType;
+import io.github.pinpols.batch.common.enums.FileChannelType;
+import io.github.pinpols.batch.common.enums.FileChecksumType;
+import io.github.pinpols.batch.common.enums.FileCompressType;
+import io.github.pinpols.batch.common.enums.FileEncryptType;
+import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
+import io.github.pinpols.batch.common.enums.FileTemplateFormat;
+import io.github.pinpols.batch.common.enums.FileTemplateType;
+import io.github.pinpols.batch.common.enums.HolidayRollRule;
+import io.github.pinpols.batch.common.enums.JobType;
+import io.github.pinpols.batch.common.enums.OutOfWindowAction;
+import io.github.pinpols.batch.common.enums.PipelineType;
+import io.github.pinpols.batch.common.enums.QueuePriorityPolicy;
+import io.github.pinpols.batch.common.enums.ResourceQueueType;
+import io.github.pinpols.batch.common.enums.RetryPolicyType;
+import io.github.pinpols.batch.common.enums.ScheduleType;
+import io.github.pinpols.batch.common.enums.ShardStrategy;
+import io.github.pinpols.batch.common.enums.WorkflowEdgeType;
+import io.github.pinpols.batch.common.enums.WorkflowNodeType;
+import io.github.pinpols.batch.common.enums.WorkflowType;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import org.apache.poi.common.usermodel.HyperlinkType;
@@ -30,6 +55,32 @@ class ConfigPackageWorkbookSupplementWriter {
   static final String SHEET_NAME_BUNDLE = "文件束示例";
   private static final String READONLY_SHEET_HINT =
       "本 sheet 为只读说明，不参与导入解析与 apply；请复制片段到对应数据 sheet 后修改。";
+  private static final String DICTIONARY_SHEET_HINT =
+      "以下为配置包常用枚举的编码与含义；数据 Sheet 请填写编码，具体可选范围以列下拉和字段说明为准。";
+  private static final List<EnumDictionary> ENUM_DICTIONARIES = List.of(
+      new EnumDictionary("作业类型", JobType.class),
+      new EnumDictionary("调度类型", ScheduleType.class),
+      new EnumDictionary("重试策略", RetryPolicyType.class),
+      new EnumDictionary("分片策略", ShardStrategy.class),
+      new EnumDictionary("执行模式", ExecutionMode.class),
+      new EnumDictionary("资源队列类型", ResourceQueueType.class),
+      new EnumDictionary("队列优先级策略", QueuePriorityPolicy.class),
+      new EnumDictionary("文件渠道类型", FileChannelType.class),
+      new EnumDictionary("文件渠道认证类型", FileChannelAuthType.class),
+      new EnumDictionary("文件回执策略", FileReceiptPolicy.class),
+      new EnumDictionary("文件模板类型", FileTemplateType.class),
+      new EnumDictionary("文件格式", FileTemplateFormat.class),
+      new EnumDictionary("文件校验算法", FileChecksumType.class),
+      new EnumDictionary("文件压缩方式", FileCompressType.class),
+      new EnumDictionary("文件加密方式", FileEncryptType.class),
+      new EnumDictionary("节假日顺延规则", HolidayRollRule.class),
+      new EnumDictionary("补数策略", CatchUpPolicyType.class),
+      new EnumDictionary("窗口结束策略", BatchWindowEndStrategy.class),
+      new EnumDictionary("超出窗口处理方式", OutOfWindowAction.class),
+      new EnumDictionary("流水线类型", PipelineType.class),
+      new EnumDictionary("工作流类型", WorkflowType.class),
+      new EnumDictionary("工作流节点类型", WorkflowNodeType.class),
+      new EnumDictionary("工作流依赖边类型", WorkflowEdgeType.class));
 
   static final String[] DEPENDENCY_HEADERS = GUIDANCE.sheet("dependency").headers();
   static final List<String[]> DEPENDENCY_ROWS = GUIDANCE.sheet("dependency").rows();
@@ -147,11 +198,37 @@ class ConfigPackageWorkbookSupplementWriter {
     createReadOnlyTableSheet(wb, SHEET_NAME_BUNDLE, BUNDLE_HEADERS, BUNDLE_ROWS);
   }
 
+  void createDictionarySheet(Workbook wb, Locale locale) {
+    List<String[]> rows = ENUM_DICTIONARIES.stream()
+        .flatMap(dictionary -> Arrays.stream(dictionary.type().getEnumConstants())
+            .map(value -> new String[] {
+              dictionary.name(),
+              value.code(),
+              messageSource.getMessage(value.messageKey(), null, value.label(), locale)
+            }))
+        .toList();
+    createReadOnlyTableSheet(
+        wb,
+        ConsoleExcelStyles.SHEET_NAME_DICT,
+        new String[] {"字典类别", "编码", "含义"},
+        rows,
+        DICTIONARY_SHEET_HINT);
+    Sheet sheet = wb.getSheet(ConsoleExcelStyles.SHEET_NAME_DICT);
+    sheet.setColumnWidth(0, 30 * 256);
+    sheet.setColumnWidth(1, 28 * 256);
+    sheet.setColumnWidth(2, 44 * 256);
+  }
+
   private void createReadOnlyTableSheet(
       Workbook wb, String sheetName, String[] headers, List<String[]> rows) {
+    createReadOnlyTableSheet(wb, sheetName, headers, rows, READONLY_SHEET_HINT);
+  }
+
+  private void createReadOnlyTableSheet(
+      Workbook wb, String sheetName, String[] headers, List<String[]> rows, String hint) {
     Sheet sheet = wb.createSheet(sheetName);
     Row hintRow = sheet.createRow(0);
-    hintRow.createCell(0).setCellValue(READONLY_SHEET_HINT);
+    hintRow.createCell(0).setCellValue(hint);
     CellStyle headerStyle = ConsoleExcelStyles.createHeaderStyle(wb);
     CellStyle bodyStyle = ConsoleExcelStyles.createDataStyle(wb);
     bodyStyle.setWrapText(true);
@@ -174,6 +251,7 @@ class ConfigPackageWorkbookSupplementWriter {
     for (int c = 0; c < headers.length; c++) {
       sheet.setColumnWidth(c, 12000);
     }
+    sheet.setAutoFilter(new CellRangeAddress(1, Math.max(1, rowIdx - 1), 0, headers.length - 1));
   }
 
   private static void writeBodyCell(Row row, int columnIndex, String value, CellStyle style) {
@@ -237,4 +315,6 @@ class ConfigPackageWorkbookSupplementWriter {
       default -> EMPTY;
     };
   }
+
+  private record EnumDictionary(String name, Class<? extends DictEnum> type) {}
 }

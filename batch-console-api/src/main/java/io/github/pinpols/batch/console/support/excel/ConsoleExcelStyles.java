@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.apache.poi.ss.SpreadsheetVersion;
 import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -155,6 +156,13 @@ public final class ConsoleExcelStyles {
     return style;
   }
 
+  /** 配置值按文本写入，避免 Excel 将长编码、前导零和表达式字符串自动转型。 */
+  public static CellStyle createTextDataStyle(Workbook workbook) {
+    CellStyle style = createDataStyle(workbook);
+    style.setDataFormat(workbook.createDataFormat().getFormat("@"));
+    return style;
+  }
+
   public static CellStyle createRequiredMarkStyle(Workbook workbook) {
     return createFilledDataStyle(
         workbook,
@@ -293,8 +301,8 @@ public final class ConsoleExcelStyles {
     sheet.setColumnWidth(2, 36 * 256);
   }
 
-  /** 数据校验下拉默认作用行数:从第 2 行(数据区起点)到第 5001 行;批量导入超 5000 行需手动扩。 */
-  public static final int DEFAULT_DROPDOWN_MAX_ROW = 5000;
+  /** 数据校验覆盖 XLSX 的全部数据行，避免超过 5000 行后下拉约束悄然失效。 */
+  public static final int DEFAULT_DROPDOWN_MAX_ROW = SpreadsheetVersion.EXCEL2007.getLastRowIndex();
 
   public static void addDropdownValidation(
       Sheet sheet, int columnIndex, String[] values, String promptTitle, String promptText) {
@@ -464,6 +472,7 @@ public final class ConsoleExcelStyles {
     for (int i = 0; i < widths.length; i++) {
       sheet.setColumnWidth(i, widths[i] * 256);
     }
+    sheet.setAutoFilter(new CellRangeAddress(0, Math.max(0, rowIndex - 1), 0, headers.size() - 1));
   }
 
   private static CellStyle resolveTemplateHeaderStyle(
