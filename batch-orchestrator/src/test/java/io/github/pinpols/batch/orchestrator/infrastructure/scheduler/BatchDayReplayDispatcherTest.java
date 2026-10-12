@@ -23,6 +23,7 @@ import io.github.pinpols.batch.orchestrator.config.BatchDayReplayDispatchPropert
 import io.github.pinpols.batch.orchestrator.domain.command.CompensationSubmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplayEntryStatusParam;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayEntryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplaySessionMapper;
@@ -185,8 +186,11 @@ class BatchDayReplayDispatcherTest {
 
     dispatcher.scheduledDispatch();
 
-    verify(entryMapper)
-        .updateStatus(eq(1L), eq("FAILED"), any(), any(), any(), any(), any(), any());
+    ArgumentCaptor<UpdateBatchDayReplayEntryStatusParam> statusUpdate =
+        ArgumentCaptor.forClass(UpdateBatchDayReplayEntryStatusParam.class);
+    verify(entryMapper).updateStatus(statusUpdate.capture());
+    assertThat(statusUpdate.getValue().getId()).isEqualTo(1L);
+    assertThat(statusUpdate.getValue().getToStatus()).isEqualTo("FAILED");
   }
 
   @Test

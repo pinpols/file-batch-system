@@ -114,7 +114,8 @@
         limit 1
     </select>
 
-    <update id="updateStatus">
+    <update id="updateStatus"
+            parameterType="io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplayEntryStatusParam">
         update batch.batch_day_replay_entry
         set status            = #{toStatus},
             rerun_instance_id = coalesce(#{rerunInstanceId}, rerun_instance_id),

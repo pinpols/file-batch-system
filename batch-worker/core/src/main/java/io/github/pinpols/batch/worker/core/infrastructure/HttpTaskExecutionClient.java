@@ -94,10 +94,7 @@ public class HttpTaskExecutionClient
    * 旧 orchestrator(P1-2.1 之前)claim 返空 body 时回的占位:fields 全 null,worker 走 fallback 到
    * TaskDispatchMessage 旧字段。语义上等价于"claim 成功但无 fresh config"。
    */
-  private static final EffectiveTaskConfig EMPTY_EFFECTIVE_CONFIG = new EffectiveTaskConfig(
-      null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-      null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-      null, null);
+  private static final EffectiveTaskConfig EMPTY_EFFECTIVE_CONFIG = EffectiveTaskConfig.empty();
 
   @Override
   public Optional<EffectiveTaskConfig> claim(String tenantId, Long taskId, String workerId) {

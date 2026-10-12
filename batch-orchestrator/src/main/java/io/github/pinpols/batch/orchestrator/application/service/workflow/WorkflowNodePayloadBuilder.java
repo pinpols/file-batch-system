@@ -106,7 +106,7 @@ public class WorkflowNodePayloadBuilder {
       return;
     }
     List<JobPartitionEntity> siblings = jobMappers.jobPartitionMapper.selectByQuery(
-        new JobPartitionQuery(jobInstance.getTenantId(), jobInstance.getId(), null, null));
+        JobPartitionQuery.ofJobInstance(jobInstance.getTenantId(), jobInstance.getId()));
     if (EmptyChecks.isEmpty(siblings)) {
       return;
     }

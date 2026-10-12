@@ -235,6 +235,6 @@ public final class TaskOutcomeInstanceProgressor {
 
   private List<JobPartitionEntity> loadPartitions(TaskOutcomeCommand command, JobTaskEntity task) {
     return jobMappers.jobPartitionMapper.selectByQuery(
-        new JobPartitionQuery(command.tenantId(), task.getJobInstanceId(), null, null));
+        JobPartitionQuery.ofJobInstance(command.tenantId(), task.getJobInstanceId()));
   }
 }

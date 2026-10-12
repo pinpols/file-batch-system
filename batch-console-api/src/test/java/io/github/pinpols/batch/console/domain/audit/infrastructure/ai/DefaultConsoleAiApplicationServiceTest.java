@@ -7,11 +7,10 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -28,6 +27,7 @@ import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiApplicationService;
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiChatResponse;
 import io.github.pinpols.batch.console.domain.audit.command.AiAuditCommand;
+import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiMonthlyUsageMapper;
 import io.github.pinpols.batch.console.domain.audit.service.ConsoleAiAuthorizationService;
 import io.github.pinpols.batch.console.domain.audit.service.ConsoleAiPromptGuard;
 import io.github.pinpols.batch.console.domain.audit.support.AiPromptGateResult;
@@ -112,8 +112,10 @@ class DefaultConsoleAiApplicationServiceTest {
   @Mock
   private ConsoleAiAttachmentService attachmentService;
 
-  @Mock
   private ConsoleAiCostService costService;
+
+  @Mock
+  private ConsoleAiMonthlyUsageMapper monthlyUsageMapper;
 
   @Mock
   private ConsoleAiKnowledgeBase knowledgeBase;
@@ -147,13 +149,7 @@ class DefaultConsoleAiApplicationServiceTest {
     aiProperties.setRequestTimeout(Duration.ofSeconds(5));
     meterRegistry = new SimpleMeterRegistry();
     aiMetrics = new ConsoleAiMetrics(meterRegistry);
-    lenient()
-        .when(costService.reserve(anyString(), anyString(), anyString(), anyInt()))
-        .thenReturn(new ConsoleAiCostService.Reservation(null, null, null, false));
-    lenient()
-        .when(costService.settle(
-            any(), nullable(String.class), nullable(Integer.class), nullable(Integer.class)))
-        .thenReturn(new ConsoleAiCostService.CostResult(null, "UNPRICED"));
+    costService = spy(new ConsoleAiCostService(monthlyUsageMapper, aiProperties));
     service = new DefaultConsoleAiApplicationService(
         chatClientsProvider,
         aiProperties,
@@ -492,8 +488,7 @@ class DefaultConsoleAiApplicationServiceTest {
 
     assertThat(cancelled.get()).isTrue();
     assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.FAILED.code());
-    verify(costService)
-        .settle(any(), nullable(String.class), nullable(Integer.class), nullable(Integer.class));
+    verify(costService).settleReserved(any());
     ArgumentCaptor<AiAuditCommand> captor = ArgumentCaptor.forClass(AiAuditCommand.class);
     verify(auditService).record(captor.capture());
     assertThat(captor.getValue().promptDecision()).isEqualTo(AiPromptDecision.FAILED.code());
@@ -767,8 +762,9 @@ class DefaultConsoleAiApplicationServiceTest {
         .thenReturn(turn);
     BizException budgetDenied =
         BizException.of(ResultCode.RATE_LIMITED, "error.common.rate_limited_detail");
-    when(costService.reserve(anyString(), anyString(), anyString(), anyInt()))
-        .thenThrow(budgetDenied);
+    doThrow(budgetDenied)
+        .when(costService)
+        .reserve(anyString(), anyString(), anyString(), anyInt());
 
     assertThatThrownBy(() -> service.chat(request("tenant-1", "查询失败的作业实例"), "idem-1"))
         .isSameAs(budgetDenied);

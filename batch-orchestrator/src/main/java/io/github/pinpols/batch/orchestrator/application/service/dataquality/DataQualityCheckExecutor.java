@@ -126,7 +126,7 @@ public class DataQualityCheckExecutor {
               "SKIPPED";
             default -> STATUS_ERROR;
           };
-      writeCheck(instance, rule, severity, status, null, null, now);
+      writeCheckWithoutDetails(instance, rule, severity, status, now);
       return RuleFinding.builder()
           .ruleCode(rule.getRuleCode())
           .ruleType(type)
@@ -137,7 +137,7 @@ public class DataQualityCheckExecutor {
     } catch (RuntimeException ex) {
       SwallowedExceptionLogger.warn(
           DataQualityCheckExecutor.class, "catch:dq_rule_execute_failure", ex);
-      writeCheck(instance, rule, severity, STATUS_ERROR, null, null, now);
+      writeCheckWithoutDetails(instance, rule, severity, STATUS_ERROR, now);
       return RuleFinding.builder()
           .ruleCode(rule.getRuleCode())
           .ruleType(type)
@@ -193,6 +193,15 @@ public class DataQualityCheckExecutor {
     }
     return !(min instanceof Number minN && actual < minN.longValue())
         && !(max instanceof Number maxN && actual > maxN.longValue());
+  }
+
+  private void writeCheckWithoutDetails(
+      JobInstanceEntity instance,
+      DataQualityRuleEntity rule,
+      String severity,
+      String status,
+      Instant now) {
+    writeCheck(instance, rule, severity, status, null, null, now);
   }
 
   private void writeCheck(

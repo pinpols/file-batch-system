@@ -248,14 +248,17 @@ public final class SelectSqlAstValidator {
       @Override
       public <S> Void visit(SetOperationList setOpList, S context) {
         Void r = super.visit(setOpList, context);
-        acceptScalarClauses(
-            null,
-            null,
-            setOpList.getOrderByElements(),
-            setOpList.getLimit(),
-            setOpList.getOffset(),
-            context);
+        acceptSetOperationScalarClauses(
+            setOpList.getOrderByElements(), setOpList.getLimit(), setOpList.getOffset(), context);
         return r;
+      }
+
+      private <S> void acceptSetOperationScalarClauses(
+          List<OrderByElement> orderBy,
+          net.sf.jsqlparser.statement.select.Limit limit,
+          net.sf.jsqlparser.statement.select.Offset offset,
+          S context) {
+        acceptScalarClauses(null, null, orderBy, limit, offset, context);
       }
 
       /** 补走 TablesNamesFinder 缺席的标量表达式子句:GROUP BY / HAVING / ORDER BY / LIMIT / OFFSET。 */

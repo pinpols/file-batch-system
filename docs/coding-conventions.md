@@ -192,6 +192,15 @@ return Optional.ofNullable(value).map(String::trim).orElse("");
 - null guard、类型匹配、范围/位运算、白名单枚举、短路防御和简单的两项条件保持 inline。不得按 `&&` / `||` 数量机械提取，以免把相邻校验拆成难以追踪的临时变量。
 - 同一复合规则在多个调用点重复出现时，再抽取为具名谓词或领域方法；抽取不得改变短路顺序、异常时机、外部调用次数或事务边界。
 
+### 1.6 多个 null 与参数对象合法状态
+
+- 公共方法不得用多个 nullable 参数的不同组合选择运行模式，例如 `settle(reservation, provider, null, null)`。不同业务模式使用具名入口、命令类型或判别字段表达，例如 `settleMeasured(reservation, usage)` 与 `settleReserved(reservation)`。
+- 参数对象的必填字段必须在构造边界校验；Lombok `@Builder` 不能被当成必填约束。无法用 Java 类型系统直接表达时，在构造器或静态工厂中 fail-fast，并为每个必填字段补负向测试。
+- 参数对象存在互斥状态或不同必填字段集合时，优先使用私有构造器 + 具名静态工厂；不得同时暴露通用 Builder 或公共全参构造器，使调用方重新以 `null` 拼出任意组合。工厂签名应直接展示该状态真正需要的参数。
+- 可选字段只有“缺失时保留原值”等单一、明确语义时才允许为 null；同一字段在不同调用点代表“保留”“清空”“自动计算”等多种含义时，改用独立 command、显式操作枚举或值对象。
+- 参数对象应只允许领域合法状态。不要为了减少签名参数，把互斥模式和无关字段合并成所有字段都 nullable 的万能对象。
+- 框架 DTO、数据库 nullable 行、外部兼容协议可以保留 nullable 边界；进入应用/领域逻辑时尽早转换为明确类型，不把兼容性空值向内部扩散。
+
 ---
 
 ## 2. 全限定类名（FQN）禁令
@@ -543,6 +552,8 @@ nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, def.getId(), p
 ```
 
 **已有工厂方法的 Query 类：**`JobDefinitionQuery.ofTenant`、`WorkflowDefinitionQuery.ofTenant`、`WorkflowNodeQuery.ofDefinition`、`WorkflowEdgeQuery.ofDefinition`
+
+`PositionalArgsConventionTest` 对已治理 Query 的生产调用侧执行高精度守护：Query 自身可在具名工厂内部组装 nullable 筛选字段，其他生产类不得再用两个及以上字面量 `null` 直接位置构造这些 Query。该规则不扩展到任意 DTO 或任意单个 `null`，避免误拦数据库 nullable 行、兼容协议和 JDK/SDK API。
 
 ### 8.2 Domain 子包与代码风格（按职责）
 

@@ -10,6 +10,10 @@ public interface ConsoleQuotaPolicyApplicationService {
   PageResponse<QuotaPolicyResponse> list(
       String tenantId, String policyCode, Boolean enabled, int pageNo, int pageSize);
 
+  default PageResponse<QuotaPolicyResponse> listAll(String tenantId, int pageNo, int pageSize) {
+    return list(tenantId, null, null, pageNo, pageSize);
+  }
+
   QuotaPolicyResponse create(QuotaPolicySaveRequest request);
 
   QuotaPolicyResponse update(Long id, QuotaPolicySaveRequest request);

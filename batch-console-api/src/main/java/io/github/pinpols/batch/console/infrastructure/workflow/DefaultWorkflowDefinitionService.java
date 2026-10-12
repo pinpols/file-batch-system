@@ -300,7 +300,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
     }
     for (WorkflowDefinitionSaveRequest.NodeItem node : nodes) {
       String existingGroup = existingGroups.get(node.getNodeCode());
-      resourceAssignmentGuard.assertUpdateAllowed(null, node.getWorkerGroup(), null, existingGroup);
+      resourceAssignmentGuard.assertWorkerGroupUpdateAllowed(node.getWorkerGroup(), existingGroup);
       if (EmptyChecks.isNull(node.getWorkerGroup()) && EmptyChecks.isNotNull(existingGroup)) {
         node.setWorkerGroup(existingGroup);
       }

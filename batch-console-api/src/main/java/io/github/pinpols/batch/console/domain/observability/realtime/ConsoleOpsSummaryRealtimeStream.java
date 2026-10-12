@@ -101,7 +101,7 @@ public class ConsoleOpsSummaryRealtimeStream implements ConsoleOpsSummaryRealtim
   public SseEmitter subscribe(String tenantId, Long heartbeatMillis, boolean initialSnapshot) {
     String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
     SseEmitter emitter =
-        realtimeEventHub.subscribe(resolvedTenantId, STREAM, null, null, heartbeatMillis);
+        realtimeEventHub.subscribeAllEvents(resolvedTenantId, STREAM, heartbeatMillis);
     if (initialSnapshot) {
       publishRefresh(resolvedTenantId, true);
     }

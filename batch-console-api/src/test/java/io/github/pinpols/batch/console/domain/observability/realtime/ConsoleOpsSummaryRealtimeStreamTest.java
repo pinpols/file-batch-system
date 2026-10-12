@@ -68,7 +68,7 @@ class ConsoleOpsSummaryRealtimeStreamTest {
     when(tenantGuard.resolveTenant(anyString()))
         .thenAnswer(invocation -> invocation.getArgument(0));
     when(cursorFactory.nextCursor()).thenReturn("cursor-1");
-    when(realtimeEventHub.subscribe(anyString(), anyString(), isNull(), isNull(), isNull()))
+    when(realtimeEventHub.subscribeAllEvents(anyString(), anyString(), isNull()))
         .thenReturn(new SseEmitter());
   }
 
@@ -83,7 +83,7 @@ class ConsoleOpsSummaryRealtimeStreamTest {
     SseEmitter emitter = stream.subscribe("t1", null, false);
 
     assertThat(emitter).isNotNull();
-    verify(realtimeEventHub).subscribe("t1", "ops-summary", null, null, null);
+    verify(realtimeEventHub).subscribeAllEvents("t1", "ops-summary", null);
     verify(realtimeEventHub, never()).publish(any());
     verify(opsApplicationService, never()).summary(anyString());
   }

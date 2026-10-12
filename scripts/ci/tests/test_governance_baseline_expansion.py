@@ -97,6 +97,22 @@ class GovernanceBaselineExpansionTest(unittest.TestCase):
         self.assertTrue(any("approval expired" in error for error in errors))
         self.assertTrue(any("approval is stale" in error for error in errors))
 
+    def test_rejects_invalid_count_in_base_revision(self) -> None:
+        baseline = MODULE.BASELINE_FILES[2]
+        path = self.root / baseline
+        path.write_text('{"schema_version": 1, "counts": {"nullable": true}}\n', encoding="utf-8")
+        self.git("add", baseline)
+        self.git("commit", "-qm", "invalid base")
+        path.write_text('{"schema_version": 1, "counts": {"nullable": 0}}\n', encoding="utf-8")
+
+        with self.assertRaisesRegex(ValueError, "invalid baseline count"):
+            MODULE.check(self.root, "HEAD", date(2026, 10, 12))
+
+    def test_diagnostic_label_does_not_select_baseline_format(self) -> None:
+        items = MODULE.parse_baseline_items("entry-a\n", "baseline.txt", "HEAD:baseline")
+
+        self.assertEqual({"entry-a": "present"}, items)
+
 
 if __name__ == "__main__":
     unittest.main()

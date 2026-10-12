@@ -208,6 +208,7 @@ SDK 五语言契约矩阵。
 > 约定/架构守护（`*ArchTest`、`*ConventionTest`，如 `RepositoryMapReturnConventionTest`、`PositionalArgsConventionTest`）
 > 由 PR / Full / Staging 的 `java-governance` job 独立执行，业务 unit/IT 显式排除这两类后缀。
 > `check-java-governance-test-coverage.py --verify-reports` 要求每个源码类都产生 Surefire XML，零用例或漏跑会阻断。
+> `PositionalArgsConventionTest` 还守护已治理 Query 不回退为多 `null` 位置构造，并确保状态型参数对象不重新暴露通用 Builder 或公共全参构造器；语义上是否应纳入受控工厂集合仍由代码审查决定。
 > 这类测试型守卫的登记入口是 [约定约束与漂移防护总账](../audit/convention-drift-guard-index.md) 的守卫矩阵（`check-*` / `validate-*` 脚本另由 [scripts/ci/README.md](../../scripts/ci/README.md) 登记）。
 > Python / Shell / 配置/契约守卫在 PR 的 `static-policy`、Full/Staging 的 `static-checks` 中独立命名执行，不混入 Maven unit/IT；
 > PR 的 SBOM/Trivy 与 PMD/Spotless 分别由 `static-supply-chain`、`static-java-quality` 并发执行，稳定的 `static-checks` 只聚合结果。

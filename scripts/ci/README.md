@@ -623,6 +623,8 @@ python3 -m unittest scripts/ci/tests/test_check_java_logging_governance.py
 `@Configuration` 显式声明 `proxyBeanMethods = false`。前者让业务、状态机和基础设施边界
 显式表达类型；后者避免没有 bean 方法互调需求的配置类重新引入 CGLIB 代理。
 脚本会忽略注释、Javadoc、字符串、字符字面量和测试代码，不会误报文档示例或业务文本。
+门禁输出显式标注 `scope=explicit-type,configuration-proxy`；通过不代表嵌套调用、参数合法状态、
+多个 `null` 或抽象适度性已经完成语义审查。
 
 ```bash
 python3 scripts/ci/check-java-readability.py

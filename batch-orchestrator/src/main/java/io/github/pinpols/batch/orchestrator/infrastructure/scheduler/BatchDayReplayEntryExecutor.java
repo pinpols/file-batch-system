@@ -10,6 +10,7 @@ import io.github.pinpols.batch.orchestrator.domain.command.CompensationSubmitCom
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.CompensationCommandEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplayEntryStatusParam;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayEntryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.CompensationCommandMapper;
 import java.time.Instant;
@@ -25,9 +26,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @RequiredArgsConstructor
 class BatchDayReplayEntryExecutor {
-
-  private static final String ENTRY_RUNNING = "RUNNING";
-  private static final String ENTRY_FAILED = "FAILED";
 
   private record PlanSnapshot(Integer jobDefinitionVersion, Map<String, Object> defaultParams) {}
 
@@ -72,15 +70,13 @@ class BatchDayReplayEntryExecutor {
     CompensationCommandEntity compensation =
         compensationCommandMapper.selectByCommandNo(session.tenantId(), commandNo);
     if (compensation != null && compensation.getRelatedJobInstanceId() != null) {
-      entryMapper.updateStatus(
-          entry.id(),
-          ENTRY_RUNNING,
-          compensation.getRelatedJobInstanceId(),
-          null,
-          null,
-          now,
-          null,
-          dateTimeSupport.nowInstant());
+      UpdateBatchDayReplayEntryStatusParam statusUpdate =
+          UpdateBatchDayReplayEntryStatusParam.running(
+              entry.id(),
+              compensation.getRelatedJobInstanceId(),
+              now,
+              dateTimeSupport.nowInstant());
+      entryMapper.updateStatus(statusUpdate);
     }
   }
 
@@ -89,8 +85,10 @@ class BatchDayReplayEntryExecutor {
   void markFailed(
       BatchDayReplaySessionEntity session, BatchDayReplayEntryEntity entry, Exception failure) {
     Instant now = dateTimeSupport.nowInstant();
-    entryMapper.updateStatus(
-        entry.id(), ENTRY_FAILED, null, null, truncate(failure.getMessage(), 1024), now, now, now);
+    UpdateBatchDayReplayEntryStatusParam statusUpdate =
+        UpdateBatchDayReplayEntryStatusParam.failedOnSubmission(
+            entry.id(), truncate(failure.getMessage(), 1024), now);
+    entryMapper.updateStatus(statusUpdate);
     log.warn(
         "batch_day_replay compensation submit failed: sessionId={}, entryId={}, jobCode={}, msg={}",
         session.id(),

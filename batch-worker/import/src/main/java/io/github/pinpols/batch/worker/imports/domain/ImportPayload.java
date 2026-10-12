@@ -31,4 +31,12 @@ public record ImportPayload(
     Integer headerRows,
     Integer footerRows,
     Boolean withHeader,
-    Map<String, Object> metadata) {}
+    Map<String, Object> metadata) {
+
+  /** 无可解析载荷时使用的兼容占位，避免调用侧暴露整组无业务语义的 {@code null}。 */
+  public static ImportPayload empty() {
+    return new ImportPayload(
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, Map.of());
+  }
+}

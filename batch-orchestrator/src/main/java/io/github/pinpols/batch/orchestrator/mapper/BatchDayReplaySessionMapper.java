@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplaySessionStatusParam;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -21,15 +22,7 @@ public interface BatchDayReplaySessionMapper {
       @Param("bizDate") LocalDate bizDate);
 
   /** 推进 status；仅当当前 status 在期望集合里才生效，避免并发抢占覆写。 */
-  int updateStatus(
-      @Param("tenantId") String tenantId,
-      @Param("id") Long id,
-      @Param("toStatus") String toStatus,
-      @Param("expectedStatuses") List<String> expectedStatuses,
-      @Param("startedAt") Instant startedAt,
-      @Param("completedAt") Instant completedAt,
-      @Param("approvedBy") String approvedBy,
-      @Param("now") Instant now);
+  int updateStatus(UpdateBatchDayReplaySessionStatusParam param);
 
   /** 写计数（succeeded/failed/inFlight/total）。 */
   int updateCounts(

@@ -93,4 +93,13 @@ public record EffectiveTaskConfig(
      * ADR-014: 本轮分区认领 invocation id（读 {@code job_partition.current_invocation_id}）。worker
      * renew/report 可选带上做幂等与过期 worker 隔离。
      */
-    String partitionInvocationId) {}
+    String partitionInvocationId) {
+
+  /** 旧 orchestrator 领取成功但未返回实时配置时使用的兼容占位。 */
+  public static EffectiveTaskConfig empty() {
+    return new EffectiveTaskConfig(
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null);
+  }
+}

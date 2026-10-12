@@ -282,12 +282,10 @@ public class ConsoleFileQueryService {
   public PageResponse<ConsoleFileArrivalGroupResponse> fileArrivalGroups(
       FileArrivalGroupQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-    FileArrivalGroupQuery query = new FileArrivalGroupQuery(
+    FileArrivalGroupQuery query = FileArrivalGroupQuery.ofState(
         TenantScope.requireTenant(resolveTenant(tenantGuard, request.getTenantId())),
         request.getFileGroupCode(),
         request.getArrivalState(),
-        null,
-        null,
         pageRequest);
     List<FileArrivalGroupEntity> rows = fileMappers.fileArrivalGroupMapper.selectByQuery(query);
     long total = fileMappers.fileArrivalGroupMapper.countByQuery(query);

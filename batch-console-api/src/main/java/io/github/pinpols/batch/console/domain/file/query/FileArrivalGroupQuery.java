@@ -9,4 +9,11 @@ public record FileArrivalGroupQuery(
     String arrivalState,
     Instant fromTime,
     Instant toTime,
-    PageRequest pageRequest) {}
+    PageRequest pageRequest) {
+
+  public static FileArrivalGroupQuery ofState(
+      String tenantId, String fileGroupCode, String arrivalState, PageRequest pageRequest) {
+    return new FileArrivalGroupQuery(
+        tenantId, fileGroupCode, arrivalState, null, null, pageRequest);
+  }
+}

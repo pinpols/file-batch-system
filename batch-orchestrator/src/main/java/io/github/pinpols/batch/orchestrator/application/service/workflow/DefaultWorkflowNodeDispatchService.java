@@ -318,7 +318,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     }
     SchedulePlanSupport.applySchedulingDecision(plan, decision);
     List<JobPartitionEntity> existingPartitions = jobMappers.jobPartitionMapper.selectByQuery(
-        new JobPartitionQuery(jobInstance.getTenantId(), jobInstance.getId(), null, null));
+        JobPartitionQuery.ofJobInstance(jobInstance.getTenantId(), jobInstance.getId()));
     int nextPartitionNo = existingPartitions.stream()
             .map(JobPartitionEntity::getPartitionNo)
             .filter(Objects::nonNull)

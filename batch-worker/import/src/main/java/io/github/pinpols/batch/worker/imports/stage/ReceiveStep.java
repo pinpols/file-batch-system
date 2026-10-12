@@ -286,16 +286,12 @@ public class ReceiveStep implements ImportStageStep {
     }
     String rawPayload = context.getRawPayload();
     if (!Texts.hasText(rawPayload) || !rawPayload.trim().startsWith("{")) {
-      return new ImportPayload(
-          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-          null, null, null, null, null, null, null, Map.of());
+      return ImportPayload.empty();
     }
     try {
       ImportPayload importPayload = objectMapper.readValue(rawPayload, ImportPayload.class);
       if (importPayload == null) {
-        return new ImportPayload(
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null, Map.of());
+        return ImportPayload.empty();
       }
 
       // content 可能不在顶层（例如 params/content）。当解析出来的 content 为空时做一次递归回填。
@@ -321,9 +317,7 @@ public class ReceiveStep implements ImportStageStep {
     } catch (Exception ignored) {
       SwallowedExceptionLogger.warn(ReceiveStep.class, "catch:Exception", ignored);
 
-      return new ImportPayload(
-          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-          null, null, null, null, null, null, null, Map.of());
+      return ImportPayload.empty();
     }
   }
 

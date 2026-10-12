@@ -64,4 +64,9 @@ public record QuotaRuntimeStateEntity(
         BatchDateTimeSupport.utcNow(),
         version);
   }
+
+  public QuotaRuntimeStateEntity withoutRuntimeWindow(
+      String quotaResetPolicy, Instant lastResetAt) {
+    return withRefresh(quotaResetPolicy, null, null, 0, lastResetAt);
+  }
 }

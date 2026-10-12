@@ -140,12 +140,18 @@ def main(argv: list[str] | None = None) -> int:
                 )
 
     if errors:
-        print(f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1")
+        print(
+            f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | "
+            "scope=explicit-type,configuration-proxy | exit_code=1"
+        )
         for error in errors:
             print(f"  - {error}")
         return 1
 
-    print(f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME}")
+    print(
+        f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME} | "
+        "scope=explicit-type,configuration-proxy"
+    )
     return 0
 
 

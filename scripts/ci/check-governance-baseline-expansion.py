@@ -39,31 +39,30 @@ def text_entries(content: str) -> set[str]:
     return {line.strip() for line in content.splitlines() if line.strip() and not line.lstrip().startswith("#")}
 
 
-def baseline_items(root: Path, path: str) -> dict[str, str]:
-    content = (root / path).read_text(encoding="utf-8")
+def parse_baseline_items(content: str, path: str, source: str | None = None) -> dict[str, str]:
+    diagnostic_source = source or path
     if path.endswith(".txt"):
         return {entry: "present" for entry in text_entries(content)}
     document = json.loads(content)
     counts = document.get("counts")
     if document.get("schema_version") != 1 or not isinstance(counts, dict):
-        raise ValueError(f"{path}: expected schema_version=1 and counts object")
+        raise ValueError(f"{diagnostic_source}: expected schema_version=1 and counts object")
     items: dict[str, str] = {}
     for key, value in counts.items():
         if not isinstance(key, str) or not isinstance(value, int) or isinstance(value, bool) or value < 0:
-            raise ValueError(f"{path}: invalid baseline count {key!r}={value!r}")
+            raise ValueError(f"{diagnostic_source}: invalid baseline count {key!r}={value!r}")
         items[f"counts:{key}"] = str(value)
     return items
 
 
+def baseline_items(root: Path, path: str) -> dict[str, str]:
+    content = (root / path).read_text(encoding="utf-8")
+    return parse_baseline_items(content, path)
+
+
 def base_items(root: Path, ref: str, path: str) -> dict[str, str]:
     content = git_show(root, ref, path)
-    if path.endswith(".txt"):
-        return {entry: "present" for entry in text_entries(content)}
-    document = json.loads(content)
-    counts = document.get("counts")
-    if document.get("schema_version") != 1 or not isinstance(counts, dict):
-        raise ValueError(f"{ref}:{path}: expected schema_version=1 and counts object")
-    return {f"counts:{key}": str(value) for key, value in counts.items()}
+    return parse_baseline_items(content, path, f"{ref}:{path}")
 
 
 def check(root: Path, base_ref: str, today: date | None = None) -> list[str]:
