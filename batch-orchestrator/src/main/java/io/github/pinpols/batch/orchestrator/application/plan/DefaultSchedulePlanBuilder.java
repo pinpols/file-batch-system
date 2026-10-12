@@ -96,17 +96,17 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
     List<BundlePlanParams.BundleFile> bundleFiles =
         bundleJob ? BundlePlanParams.extract(planParams, bundleType) : List.of();
     if (bundleJob && bundleFiles.isEmpty()) {
-      throw new IllegalStateException(
-          "ADR-046 bundleFiles required for " + bundleType + " and must contain usable bindings");
+      throw BundlePlanParams.invalidBundle(
+          "bundleFiles must contain usable bindings for " + bundleType);
     }
     if (bundleJob && !bundleFiles.isEmpty() && bundleFiles.size() != partitionCount) {
       // 数量须吻合,否则是配置错(束作业须 shardStrategy=DYNAMIC 让 BundlePartitionCountResolver 生效,
       // 且束大小 ≤ maxPartitionCount=256)。fail-fast,绝不静默丢绑定项。
-      throw new IllegalStateException("ADR-046 bundle partition count mismatch: items="
+      throw BundlePlanParams.invalidBundle("bundle partition count mismatch: items="
           + bundleFiles.size()
           + " partitions="
           + partitionCount
-          + " (bundle 须 shardStrategy=DYNAMIC 且 bundleFiles 数 ≤ 256)");
+          + " (bundle requires DYNAMIC shard strategy and at most 256 items)");
     }
 
     for (int partitionNo = 1; partitionNo <= partitionCount; partitionNo++) {

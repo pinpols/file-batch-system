@@ -2,6 +2,8 @@ package io.github.pinpols.batch.orchestrator.service;
 
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 
 /**
  * 任务启动服务。 接收启动请求，完成参数校验、实例创建及首次调度推进，返回包含实例 ID 与初始状态的启动响应。 是 Orchestrator 对外暴露的任务触发入口，调用方包括 Trigger
@@ -10,4 +12,8 @@ import io.github.pinpols.batch.common.dto.LaunchResponse;
 public interface LaunchService {
 
   LaunchResponse launch(LaunchRequest request);
+
+  /** 将不可重试的派发业务错误收敛为实例 FAILED、请求 REJECTED。 */
+  void finalizeDispatchFailure(
+      LaunchRequest request, JobInstanceEntity jobInstance, BizException dispatchFailure);
 }

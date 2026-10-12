@@ -39,6 +39,9 @@ public class ReadReplicaCredentialGuard implements SmartInitializingSingleton {
 
   @Override
   public void afterSingletonsInstantiated() {
+    if (!readReplicaProperties.isEnabled()) {
+      return;
+    }
     String primaryPassword = readReplicaProperties.getPrimary().getPassword();
     String replicaPassword = readReplicaProperties.getReplica().getPassword();
     if (BatchProfileSupport.isProductionProfile(environment)) {

@@ -1,6 +1,9 @@
 package io.github.pinpols.batch.orchestrator.application.plan;
 
 import io.github.pinpols.batch.common.enums.JobType;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -36,7 +39,7 @@ public final class BundlePlanParams {
   @SuppressWarnings("unchecked")
   public static List<BundleFile> extract(Map<String, Object> params, JobType bundleType) {
     List<BundleFile> result = new ArrayList<>();
-    if (params == null || bundleType == null || !bundleType.isBundle()) {
+    if (EmptyChecks.isNull(params) || EmptyChecks.isNull(bundleType) || !bundleType.isBundle()) {
       return result;
     }
     Object raw = params.get(PARAM_BUNDLE_FILES);
@@ -59,13 +62,35 @@ public final class BundlePlanParams {
     return result;
   }
 
+  /** 校验束作业的 launch 参数；在 T1 创建实例前调用，避免永久无效请求进入 CREATED 恢复队列。 */
+  public static void validate(Map<String, Object> params, JobType bundleType) {
+    if (EmptyChecks.isNull(bundleType) || !bundleType.isBundle()) {
+      return;
+    }
+    List<BundleFile> bundleFiles = extract(params, bundleType);
+    if (EmptyChecks.isEmpty(bundleFiles)) {
+      throw invalidBundle("bundleFiles must contain usable bindings for " + bundleType);
+    }
+    if (bundleFiles.size() > 256) {
+      throw invalidBundle("bundleFiles exceeds the maximum of 256 items for " + bundleType);
+    }
+  }
+
+  public static BizException invalidBundle(String reason) {
+    return BizException.of(
+        ResultCode.BUSINESS_ERROR,
+        "error.partition.dispatch_business_error",
+        "ADR-046_BUNDLE_INVALID",
+        reason);
+  }
+
   /** 按绑定 profile 校验必填绑定字段是否齐备。 */
   private static boolean hasRequiredBinding(
       JobType bundleType, Long fileId, String templateCode, String targetRef) {
     return switch (bundleType) {
-      case BUNDLE_IMPORT -> fileId != null && templateCode != null;
-      case BUNDLE_EXPORT -> templateCode != null;
-      case BUNDLE_DISPATCH -> fileId != null && targetRef != null;
+      case BUNDLE_IMPORT -> EmptyChecks.isNotNull(fileId) && EmptyChecks.isNotNull(templateCode);
+      case BUNDLE_EXPORT -> EmptyChecks.isNotNull(templateCode);
+      case BUNDLE_DISPATCH -> EmptyChecks.isNotNull(fileId) && EmptyChecks.isNotNull(targetRef);
       default -> false;
     };
   }
@@ -74,7 +99,7 @@ public final class BundlePlanParams {
     if (value instanceof Number n) {
       return n.longValue();
     }
-    if (value == null) {
+    if (EmptyChecks.isNull(value)) {
       return null;
     }
     try {
@@ -85,7 +110,7 @@ public final class BundlePlanParams {
   }
 
   private static String toStr(Object value) {
-    if (value == null) {
+    if (EmptyChecks.isNull(value)) {
       return null;
     }
     String s = String.valueOf(value).trim();
