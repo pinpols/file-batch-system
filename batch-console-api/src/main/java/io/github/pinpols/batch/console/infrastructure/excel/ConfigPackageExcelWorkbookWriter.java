@@ -452,8 +452,7 @@ public class ConfigPackageExcelWorkbookWriter {
       int sectionEnd = rowIdx - 1;
       // 单 sheet 多列时合并第一列；单列 sheet 无需合并
       if (sectionEnd > sectionStart) {
-        sheet.addMergedRegion(
-            new org.apache.poi.ss.util.CellRangeAddress(sectionStart, sectionEnd, 0, 0));
+        sheet.addMergedRegion(new CellRangeAddress(sectionStart, sectionEnd, 0, 0));
       }
     }
   }
