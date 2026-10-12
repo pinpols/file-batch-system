@@ -17,6 +17,7 @@
 | `HttpPollSensorPolicy`、Alertmanager emit/silence | 配置 URL 可能包含 userinfo 或 query 凭据 | 不再记录原始 URL；Alertmanager 日志只输出经脱敏 endpoint |
 | Java SDK `PlatformHttpClient` | DEBUG 曾记录完整错误响应正文；异常文本包含完整 URL | DEBUG 仅记录状态码和正文长度；异常保留请求路径，不输出响应正文和完整 URL |
 | Self-hosted SDK 示例 | 将租户参数、行数据或 dispatch 请求/响应写入示例日志，容易被复制到生产 | 示例改为不输出动态载荷，仅保留安全摘要或移除数据日志 |
+| Console 下游错误边界 | 原始响应正文写入 warn 日志；解析失败时原文作为 API 文案返回；下游 5xx 的内部 message 可能含连接/凭据细节 | 只记录 HTTP 状态和正文长度；无法解析或 5xx 使用业务码默认文案；合法下游 4xx CommonResponse 文案继续按既有契约透传 |
 
 Collector 当前使用 `allow_all_keys` 并按键名模式拦截属性。该规则只能作为第二道防线，不能替代业务代码对消息正文、URL 和动态字段的限制。当前还未通过本地 Docker 观测栈确认 Console API 日志能否在 Loki 查询到；参见 `docs/runbook/observability-stack.md` 的运行验收步骤。
 
@@ -38,6 +39,7 @@ Collector 当前使用 `allow_all_keys` 并按键名模式拦截属性。该规�
 ## 验收边界
 
 - 本地定向测试通过：`OpenTelemetryLogbackBridgeTest` 2 项、`ConsoleTelemetryControllerTest` 5 项、`ConsolePushSenderTest` 5 项、`HttpPollSensorPolicyTest` 9 项、`AlertmanagerEmitPublisherTest` 2 项、`PlatformHttpClientTest` 11 项（1 项跳过）。命令分别为 `./mvnw -pl batch-common,batch-console-api,batch-orchestrator,sdk/java/core -am -Dtest=OpenTelemetryLogbackBridgeTest,ConsoleTelemetryControllerTest,ConsolePushSenderTest,AlertmanagerEmitPublisherTest,HttpPollSensorPolicyTest,PlatformHttpClientTest -Dsurefire.failIfNoSpecifiedTests=false test` 和 `./mvnw -pl batch-console-api -am -Dtest=ConsolePushSenderTest -Dsurefire.failIfNoSpecifiedTests=false test`。
-- `./mvnw -q spotless:check`、Ruby YAML 解析、`python3 scripts/ci/check-docs-structure.py`、`python3 scripts/ci/check-changelog-sync.py --base origin/main` 和 `git diff --check` 均通过。
+- `./mvnw -q spotless:check`、Ruby YAML 解析、`python3 scripts/ci/check-docs-structure.py`、`python3 scripts/ci/check-changelog-sync.py --base origin/main` 和 `git diff --check` 均通过（记录的是此前敏感日志批次的验证，不覆盖本轮新增 Console 异常处理修改）。
+- 本轮新增 Console 下游错误边界测试覆盖无法解析响应体和已解析 5xx 的安全默认文案；测试执行结果单独记录在本次交付，不据此宣称导出/诊断全量分级完成。
 - 本次没有执行真实 Loki 查询、生产 profile 配置核实、全量 API/导出响应数据分级，也没有执行配置变更与运行实例并发的真实 PostgreSQL 端到端复现。
 - 因而敏感日志改动是针对已确认路径的修正，不代表全仓敏感数据审计完成；配置漂移结论是源代码行为证据，不代表已观测到生产数据损坏。
