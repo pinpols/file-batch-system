@@ -1,0 +1,56 @@
+package io.github.pinpols.batch.trigger.infrastructure;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
+import java.util.Set;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobKey;
+import org.quartz.Scheduler;
+import org.quartz.impl.matchers.GroupMatcher;
+
+@DisplayName("触发器状态查询：按租户隔离注册作业")
+class TriggerStatusQueryFacadeTest {
+
+  @Test
+  @DisplayName("指定租户时只读取匹配租户的作业详情")
+  void tenant_scope_loads_only_matching_tenant_job_details() throws Exception {
+    Scheduler scheduler = mock(Scheduler.class);
+    JobKey tenantA = JobKey.jobKey("tenant-a:job-a", TriggerSchedulerFacade.JOB_GROUP);
+    JobKey tenantB = JobKey.jobKey("tenant-b:job-b", TriggerSchedulerFacade.JOB_GROUP);
+    JobDetail detail = mock(JobDetail.class);
+    when(detail.getJobDataMap()).thenReturn(new JobDataMap());
+    when(scheduler.getJobKeys(GroupMatcher.jobGroupEquals(TriggerSchedulerFacade.JOB_GROUP)))
+        .thenReturn(Set.of(tenantA, tenantB));
+    when(scheduler.getJobDetail(tenantA)).thenReturn(detail);
+    when(scheduler.getTriggersOfJob(tenantA)).thenReturn(List.of());
+
+    var results = new TriggerStatusQueryFacade(scheduler).listRegisteredTriggers("tenant-a");
+
+    assertThat(results).hasSize(1);
+    assertThat(results.get(0).tenantId()).isEqualTo("tenant-a");
+    assertThat(results.get(0).jobCode()).isEqualTo("job-a");
+    verify(scheduler, never()).getJobDetail(tenantB);
+  }
+
+  @Test
+  @DisplayName("未指定租户时保留全局查询行为")
+  void missing_tenant_scope_keeps_global_listing() throws Exception {
+    Scheduler scheduler = mock(Scheduler.class);
+    JobKey tenantA = JobKey.jobKey("tenant-a:job-a", TriggerSchedulerFacade.JOB_GROUP);
+    when(scheduler.getJobKeys(GroupMatcher.jobGroupEquals(TriggerSchedulerFacade.JOB_GROUP)))
+        .thenReturn(Set.of(tenantA));
+    when(scheduler.getJobDetail(tenantA)).thenReturn(null);
+
+    assertThat(new TriggerStatusQueryFacade(scheduler).listRegisteredTriggers(null))
+        .isEmpty();
+    verify(scheduler).getJobDetail(tenantA);
+  }
+}

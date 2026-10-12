@@ -131,8 +131,9 @@ flowchart LR
 ## 读图要点
 
 - `console-api` 既查库，也通过 HTTP 把触发和高危动作交给 `trigger` 或 `orchestrator`。
-- `trigger` 自己维护 `batch.trigger_request` 和 Quartz 调度表，然后通过 HTTP 调 `orchestrator` 发起正式调度。
+- `trigger` 自己维护 `batch.trigger_request` 和 Quartz 调度表；启动事件通过 outbox 发布到 Kafka，由 `orchestrator` 消费并发起正式调度。
 - `orchestrator` 是调度状态的收敛点，负责维护 `job_instance`、`job_partition`、`job_task`、`workflow_run`、`workflow_node_run`、`worker_registry`、`retry_schedule`、`dead_letter_task`、`outbox_event` 等核心表。
+- Trigger 状态查询由 Console 按当前租户作用域传递 `tenantId`；Trigger 在构造返回 DTO 前按 Quartz job identity 限域。平台级 Console 调用不传 `tenantId`，可查看全量。Console 仍保留租户过滤作为纵深防御。
 - worker 不是直接从库里扫任务，而是先消费 Kafka，再通过 HTTP 回 `orchestrator` 做 `claim`、`heartbeat`、`renew`、`report`。
 - worker 仍然会直连数据库，但直连的是执行阶段需要的业务表或文件类平台表，不直接接管调度状态主表。
 - `batch-worker-export` 还会额外访问 MinIO，把导出产物写到对象存储。

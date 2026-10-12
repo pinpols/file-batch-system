@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.quartz.SchedulerException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /** Trigger 只读状态查询接口。写操作保留在 {@link TriggerManagementController}。 */
@@ -23,8 +24,9 @@ public class TriggerStatusController {
   private final TriggerGracefulShutdown gracefulShutdown;
 
   @GetMapping("/list")
-  public CommonResponse<List<TriggerStatusInfo>> list() {
-    return CommonResponse.success(triggerStatusQueryService.listRegisteredTriggers());
+  public CommonResponse<List<TriggerStatusInfo>> list(
+      @RequestParam(value = "tenantId", required = false) String tenantId) {
+    return CommonResponse.success(triggerStatusQueryService.listRegisteredTriggers(tenantId));
   }
 
   @GetMapping("/scheduler-status")
