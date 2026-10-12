@@ -351,6 +351,19 @@ jobs:
           fi
           bash scripts/ci/run-gate.sh FULL_DB_COMMENT_COVERAGE "数据库注释覆盖" -- bash scripts/ci/check-db-comment-coverage.sh "$BASE"
 
+      - name: New table schema documentation and catalog integrity
+        shell: bash
+        run: |
+          BASE="${{ github.event.before }}"
+          if [[ -z "$BASE" || "$BASE" =~ ^0+$ ]]; then
+            BASE="origin/main"
+          fi
+          bash scripts/ci/run-gate.sh FULL_NEW_TABLE_DOC_COVERAGE "新增数据库表文档登记" -- python3 scripts/ci/check-new-table-doc-coverage.py --base "$BASE"
+
+      - name: Test new table documentation guard
+        shell: bash
+        run: python3 -m unittest scripts/ci/tests/test_check_new_table_doc_coverage.py
+
       - name: Required Java architecture documentation
         shell: bash
         run: bash scripts/ci/run-gate.sh FULL_REQUIRED_JAVA_DOCS "Java 架构文档完整性" -- bash scripts/ci/check-required-java-docs.sh

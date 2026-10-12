@@ -514,6 +514,16 @@ jobs:
         # 新建业务表及状态/策略/载荷/幂等等关键字段必须在同一迁移声明注释；历史基线见审计文档。
         run: bash scripts/ci/run-gate.sh PR_DB_COMMENT_COVERAGE "数据库注释覆盖" -- bash scripts/ci/check-db-comment-coverage.sh "$GUARD_BASE"
 
+      - name: New table schema documentation (diff-only)
+        if: needs.changes.outputs.database == 'true' || needs.changes.outputs.docs == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        run: bash scripts/ci/run-gate.sh PR_NEW_TABLE_DOC_COVERAGE "新增数据库表文档登记" -- python3 scripts/ci/check-new-table-doc-coverage.py --base "$GUARD_BASE"
+
+      - name: Test new table documentation guard
+        if: needs.changes.outputs.database == 'true' || needs.changes.outputs.docs == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        run: bash scripts/ci/run-gate.sh PR_NEW_TABLE_DOC_COVERAGE_TEST "新增数据库表文档守卫测试" -- python3 -m unittest scripts/ci/tests/test_check_new_table_doc_coverage.py
+
       - name: Required Java architecture documentation
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash

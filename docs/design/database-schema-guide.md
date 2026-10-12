@@ -189,8 +189,16 @@ Workflow 关系和 DAG 配置示例见 [Workflow 依赖指南](../architecture/w
 | `console_ai_audit_log` | AI 请求审计、token 用量、费用估算和内容哈希；审计表与对话正文分离 |
 | `console_ai_conversation`、`console_ai_turn` | AI 会话和轮次；复合租户键关联，按配置选择持久化，轮次正文由应用加密后保存并按到期时间清理 |
 | `console_ai_monthly_usage` | AI 租户月度 token、已计费用和预算预留台账；不代表供应商最终账单 |
+| `alert_escalation_notification_outbox` | 告警升级通知的事务 Outbox，避免通知发布与升级状态写入脱节；生命周期见[告警升级运行手册](../runbook/alert-escalation.md) |
 | `console_maintenance_state` | Console 维护模式共享单例（`id=1`）；跨副本事实源，以 `version` 做 CAS |
 | `console_usage_daily` | Console 操作使用率派生日聚合；按月分区并强制 RLS，不作为审计、计费或业务结果事实源 |
+| `console_usage_daily_default` | `console_usage_daily` 的默认分区；承接未命中已建月份分区的数据，由分区维护流程治理 |
+| `console_ai_attachment`、`console_ai_object_cleanup` | AI 对话附件元数据与对象清理队列；文件内容留在对象存储，清理任务记录异步删除状态 |
+| `console_user_batch_operation` | Console 批量开户操作及处理结果，不保存初始密码明文 |
+| `console_external_identity` | 外部 OIDC 身份与本地用户的关联，按 issuer/subject 建立外部身份映射 |
+| `job_monitoring_policy`、`job_monitoring_alert_claim` | 作业监控策略和告警认领/去重控制；策略语义见 [SLA 与质量设计](./sla-and-quality.md) |
+| `batch_day_replay_preview_token` | 批量日重放 Preview/Apply 的短期并发与确认令牌，不是业务幂等键 |
+| `tenant_configuration_revision` | 租户配置发布修订栅栏，阻止旧版本配置写入覆盖较新修订 |
 | `forensic_export_log` | 取证导出元数据 |
 | `step_registry`、`biz_table_schema`、`atomic_task_config`、`custom_task_type_registry` | Worker 能力登记、业务 schema 上报及可配置任务类型 |
 | `business_shard_catalog`、`business_tenant_placement` | 业务分片拓扑和租户分片位置映射 |
@@ -203,6 +211,9 @@ Workflow 关系和 DAG 配置示例见 [Workflow 依赖指南](../architecture/w
 - AI 表结构定义在 [V218](../../db/migration/V218__console_ai_conversations_and_cost_usage.sql)：`console_ai_conversation` 与 `console_ai_turn` 通过 `(tenant_id, id)` 复合主外键关联；`console_ai_monthly_usage` 以 `(tenant_id, billing_month)` 为主键。会话、轮次和月度用量表启用并强制 RLS。AI 审计表 `console_ai_audit_log` 独立保留审计元数据，不等同于可恢复的会话记录。
 - 维护单例定义在 [V215](../../db/migration/V215__create_console_maintenance_state.sql)，固定只有 `id=1`；`affected_services` 当前仅用于公告展示，不据此动态路由。
 - 使用率表定义在 [V216](../../db/migration/V216__create_console_usage_daily.sql)，主键包含统计日和租户/指标维度，按 `stat_date` 月分区并启用强制 RLS。该表是 best-effort 派生统计，不做 archive 镜像，也不能用作审计、计费或审批证据。
+- AI 附件元数据和对象清理队列定义在 [V219](../../db/migration/V219__console_ai_image_attachments.sql)；数据库不保存附件字节。批量开户操作记录定义在 [V220](../../db/migration/V220__console_user_batch_provisioning.sql)，外部 OIDC 身份映射定义在 [V222](../../db/migration/V222__console_oidc_external_identity.sql)。
+- 作业监控策略及告警认领控制分别定义在 [V224](../../db/migration/V224__job_monitoring_policy_and_alert_claim.sql)；重放预览令牌定义在 [V230](../../db/migration/V230__batch_day_replay_preview_token.sql)；租户配置修订栅栏定义在 [V232](../../db/migration/V232__tenant_configuration_revision_fence.sql)。
+- 告警升级通知 Outbox 定义在 [V214](../../db/migration/V214__alert_escalation_notification_outbox.sql)，与告警升级状态一同持久化，通知投递可重试；详细投递语义见[运行手册](../runbook/alert-escalation.md)。
 
 ### 3.7 归档和 Quartz
 
@@ -271,7 +282,7 @@ ORDER BY conrelid::regclass::text, conname;
 ## 6. 相关资料
 
 - [完整迁移目录](../../db/migration/)
-- Console AI / 维护 / 使用率结构：[V215](../../db/migration/V215__create_console_maintenance_state.sql)、[V216](../../db/migration/V216__create_console_usage_daily.sql)、[V218](../../db/migration/V218__console_ai_conversations_and_cost_usage.sql)
+- Console AI / 维护 / 使用率结构：[V214](../../db/migration/V214__alert_escalation_notification_outbox.sql)、[V215](../../db/migration/V215__create_console_maintenance_state.sql)、[V216](../../db/migration/V216__create_console_usage_daily.sql)、[V218](../../db/migration/V218__console_ai_conversations_and_cost_usage.sql)、[V219](../../db/migration/V219__console_ai_image_attachments.sql)、[V220](../../db/migration/V220__console_user_batch_provisioning.sql)、[V222](../../db/migration/V222__console_oidc_external_identity.sql)、[V224](../../db/migration/V224__job_monitoring_policy_and_alert_claim.sql)、[V230](../../db/migration/V230__batch_day_replay_preview_token.sql)、[V232](../../db/migration/V232__tenant_configuration_revision_fence.sql)
 - [数据模型 DDL 与演进背景](./data-model-ddl.md)
 - [Outbox 表关系与生命周期](../architecture/outbox-architecture.md)
 - [Workflow DAG 关系](../architecture/workflow-dependency-guide.md)
