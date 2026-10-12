@@ -320,10 +320,8 @@ public class ConfigPackageExcelWorkbookWriter {
     Sheet sheet = wb.createSheet(def.name());
     sheet.createFreezePane(0, 1, 0, 1);
     writeTemplateHeaders(sheet, def.columns(), def.guides(), wb, messageSource, locale);
-    CellStyle textStyle = ConsoleExcelStyles.createTextDataStyle(wb);
-    for (int column = 0; column < def.columns().size(); column++) {
-      sheet.setDefaultColumnStyle(column, textStyle);
-    }
+    CellStyle textStyle =
+        ConsoleExcelStyles.applyTextDataStyleToColumns(wb, sheet, def.columns().size());
     int idx = 1;
     for (Map<String, Object> row : dataRows) {
       Row dataRow = sheet.createRow(idx++);
@@ -332,7 +330,9 @@ public class ConfigPackageExcelWorkbookWriter {
         Cell cell = dataRow.createCell(c);
         cell.setCellStyle(textStyle);
         cell.setCellValue(
-            val == null ? EMPTY : ConsoleExcelStyles.escapeFormula(String.valueOf(val)));
+            EmptyChecks.isNull(val)
+                ? EMPTY
+                : ConsoleExcelStyles.escapeFormula(String.valueOf(val)));
       }
     }
     sheet.setAutoFilter(
@@ -353,10 +353,8 @@ public class ConfigPackageExcelWorkbookWriter {
     sheet.createFreezePane(0, 1, 0, 1);
     CellStyle headerStyle = ConsoleExcelStyles.createHeaderStyle(wb);
     writeHeaders(sheet, def.columns(), headerStyle);
-    CellStyle textStyle = ConsoleExcelStyles.createTextDataStyle(wb);
-    for (int column = 0; column < def.columns().size(); column++) {
-      sheet.setDefaultColumnStyle(column, textStyle);
-    }
+    CellStyle textStyle =
+        ConsoleExcelStyles.applyTextDataStyleToColumns(wb, sheet, def.columns().size());
     int idx = 1;
     for (Map<String, String> row : dataRows) {
       Row dataRow = sheet.createRow(idx++);
@@ -364,7 +362,7 @@ public class ConfigPackageExcelWorkbookWriter {
         String val = row.get(def.columns().get(c));
         Cell cell = dataRow.createCell(c);
         cell.setCellStyle(textStyle);
-        cell.setCellValue(val == null ? EMPTY : val);
+        cell.setCellValue(EmptyChecks.isNull(val) ? EMPTY : val);
       }
     }
     sheet.setAutoFilter(

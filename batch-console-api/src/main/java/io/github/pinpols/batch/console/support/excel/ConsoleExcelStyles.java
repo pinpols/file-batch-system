@@ -163,6 +163,15 @@ public final class ConsoleExcelStyles {
     return style;
   }
 
+  public static CellStyle applyTextDataStyleToColumns(
+      Workbook workbook, Sheet sheet, int columnCount) {
+    CellStyle style = createTextDataStyle(workbook);
+    for (int column = 0; column < columnCount; column++) {
+      sheet.setDefaultColumnStyle(column, style);
+    }
+    return style;
+  }
+
   public static CellStyle createRequiredMarkStyle(Workbook workbook) {
     return createFilledDataStyle(
         workbook,
