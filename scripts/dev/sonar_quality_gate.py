@@ -56,7 +56,7 @@ def evaluate_quality_gate(config: dict, result: dict, measures: dict) -> tuple[b
         return False, f"analysis returned unconfigured conditions: {', '.join(sorted(unexpected))}"
     if missing != ignored_metrics:
         return False, f"configured conditions were not evaluated: {', '.join(sorted(missing))}"
-    if ignored_conditions != bool(ignored_metrics):
+    if ignored_metrics and not ignored_conditions:
         return False, "Sonar ignored conditions without matching no-data evidence"
 
     invalid_statuses = [

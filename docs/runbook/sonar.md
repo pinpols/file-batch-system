@@ -70,7 +70,7 @@ Java PR 的本地审阅按需运行增量模式，并检查变更行 issues 与�
 - 无需 Sonar token/管理员 secret。Sonar 结果报告作为 workflow artifact 保留 7 天。
 - 每次运行都是 main 当前代码快照；滚动 30 天的变更判定依靠 Git SCM 历史，不依靠 Sonar 分析历史。系统不能提供跨提交的 issue 生命周期/趋势，也不执行 PR 分支分析。
 - Quality Gate 成功只表示第二次分析使用的临时项目门禁通过；临时项目没有跨运行的 issue 生命周期/趋势。是否属于 required check 以仓库 Ruleset 为准。
-- Quality Gate 校验将配置条件与本次分析返回的 metric 逐项对照，并要求整体状态为 `OK`。Sonar 在新代码少于 20 行时会忽略覆盖率/重复率条件；没有新增安全热点时也可能不返回热点审查率条件。校验器调用 `api/measures/component` 时请求 `additionalFields=period`，并从现代响应的 measure `period.value` 读取新代码证据，同时兼容旧版 `periods[]`；仅在 `ignoredConditions=true` 且证据满足 `new_lines < 20`、`new_security_hotspots = 0` 时接受对应缺项。其它缺项、空结果、失败或未知状态仍失败。该规则由 `scripts/dev/tests/test_sonar_quality_gate.py` 覆盖。
+- Quality Gate 校验将配置条件与本次分析返回的 metric 逐项对照，并要求整体状态为 `OK`。Sonar 在新代码少于 20 行时会忽略覆盖率/重复率条件；没有新增安全热点时也可能不返回热点审查率条件。校验器调用 `api/measures/component` 时请求 `additionalFields=period`，并从现代响应的 measure `period.value` 读取新代码证据，同时兼容旧版 `periods[]`；缺失条件只有在 `ignoredConditions=true` 且有对应无数据证据（`new_lines < 20` 或 `new_security_hotspots = 0`）时才接受。若所有已配置条件都已返回并逐项校验，即使 Sonar 的全局 `ignoredConditions` 标记为 `true` 也不因此判失败，因为没有配置条件被漏检。其它缺项、空结果、失败或未知状态仍失败。该规则由 `scripts/dev/tests/test_sonar_quality_gate.py` 覆盖。
 - 源码中已审核的 `@SuppressWarnings("java:S...")` 按 [Java suppression 标准](../standards/java-suppression-registry.md)维护；临时 Sonar 服务不做 issue 状态同步。
 - Sonar **不替代**现有 PMD / Spotless / SpotBugs / 依赖扫描 / 测试门禁。
 
