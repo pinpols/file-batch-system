@@ -63,7 +63,6 @@ public class WorkerStartupRuntimeAudit {
           core.get("configurationCount"),
           core.get("registeredWorkers"));
     }
-    log.debug("worker startup runtime audit details: core={}, contributors={}", core, contributors);
   }
 
   Map<String, Object> auditCore() {
@@ -169,7 +168,7 @@ public class WorkerStartupRuntimeAudit {
     } catch (RuntimeException ex) {
       SwallowedExceptionLogger.warn(WorkerStartupRuntimeAudit.class, "catch:RuntimeException", ex);
 
-      put(details, "statsError", ex.getMessage());
+      put(details, "statsError", ex.getClass().getSimpleName());
       issues.add("report outbox stats query failed");
     }
     return details;
@@ -199,7 +198,7 @@ public class WorkerStartupRuntimeAudit {
     } catch (RuntimeException ex) {
       SwallowedExceptionLogger.warn(WorkerStartupRuntimeAudit.class, "catch:RuntimeException", ex);
 
-      put(results, name, auditContributorDetails(false, Map.of(), ex.getMessage()));
+      put(results, name, auditContributorDetails(false, Map.of(), ex.getClass().getSimpleName()));
       unhealthy.add(name);
     }
   }

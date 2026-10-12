@@ -155,6 +155,45 @@ class ConsoleApiExceptionHandlerTest {
 
     assertThat(response.getStatusCode().value()).isEqualTo(500);
     assertThat(bodyOf(response).code()).isEqualTo(ResultCode.SYSTEM_ERROR);
+    assertThat(bodyOf(response).message()).isEqualTo(ResultCode.SYSTEM_ERROR.defaultMessage());
+  }
+
+  @Test
+  @DisplayName("下游不可解析的响应正文不透传到控制台 API")
+  void shouldNotExposeUnparseableDownstreamBody() {
+    String sensitiveBody = "password=top-secret";
+
+    ResponseEntity<?> response = handler()
+        .handleDownstreamRestError(restError(HttpStatus.INTERNAL_SERVER_ERROR, sensitiveBody));
+
+    assertThat(bodyOf(response).message()).doesNotContain("top-secret");
+    assertThat(bodyOf(response).message()).isEqualTo(ResultCode.SYSTEM_ERROR.defaultMessage());
+  }
+
+  @Test
+  @DisplayName("下游系统错误的响应文案不透传内部细节")
+  void shouldReplaceDownstreamServerErrorMessageWithDefault() {
+    String sensitiveBody = "{\"code\":\"SYSTEM_ERROR\",\"message\":\"password=top-secret\"}";
+
+    ResponseEntity<?> response = handler()
+        .handleDownstreamRestError(restError(HttpStatus.INTERNAL_SERVER_ERROR, sensitiveBody));
+
+    assertThat(bodyOf(response).code()).isEqualTo(ResultCode.SYSTEM_ERROR);
+    assertThat(bodyOf(response).message()).isEqualTo(ResultCode.SYSTEM_ERROR.defaultMessage());
+    assertThat(bodyOf(response).message()).doesNotContain("top-secret");
+  }
+
+  @Test
+  @DisplayName("下游客户端错误继续透传业务文案")
+  void shouldPreserveDownstreamClientErrorMessage() {
+    ResponseEntity<?> response = handler()
+        .handleDownstreamRestError(restError(
+            HttpStatus.BAD_REQUEST,
+            "{\"code\":\"INVALID_ARGUMENT\",\"message\":\"invalid business date\"}"));
+
+    assertThat(response.getStatusCode().value()).isEqualTo(400);
+    assertThat(bodyOf(response).code()).isEqualTo(ResultCode.INVALID_ARGUMENT);
+    assertThat(bodyOf(response).message()).isEqualTo("invalid business date");
   }
 
   @Test

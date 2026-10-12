@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.core.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -85,6 +86,32 @@ class WorkerStartupRuntimeAuditTest {
   }
 
   @Test
+  @DisplayName("发件箱统计异常只记录异常类型, 不保留异常消息")
+  void shouldOmitExceptionMessage_whenOutboxStatsFails() {
+    WorkerReportOutboxProperties outbox = new WorkerReportOutboxProperties();
+    outbox.setEnabled(true);
+    WorkerReportOutboxRepository repository = mock(WorkerReportOutboxRepository.class);
+    doThrow(new IllegalStateException("password=top-secret")).when(repository).stats(anyLong());
+    WorkerExecutionTimeoutProperties execution = new WorkerExecutionTimeoutProperties();
+    execution.setPoolSize(4);
+    WorkerStartupRuntimeAudit audit = new WorkerStartupRuntimeAudit(
+        provider(workerConfiguration()),
+        registeredRuntimeState(),
+        execution,
+        outbox,
+        provider(repository),
+        provider(List.of()),
+        concurrencyProperties(4));
+
+    Map<String, Object> details = audit.auditCore();
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> reportOutbox = (Map<String, Object>) details.get("reportOutbox");
+    assertThat(reportOutbox).containsEntry("statsError", "IllegalStateException");
+    assertThat(reportOutbox.toString()).doesNotContain("top-secret", "password=");
+  }
+
+  @Test
   @DisplayName("启动健康时只输出汇总与贡献者名称, 不展开配置明细")
   void shouldLogSummaryWithoutContributorDetails_whenStartupHealthy(CapturedOutput output) {
     WorkerRuntimeState runtimeState = new WorkerRuntimeState();
@@ -136,6 +163,15 @@ class WorkerStartupRuntimeAuditTest {
         .contains("worker startup runtime audit WARN: unhealthy=[worker-core]")
         .contains("issues=[no registered worker in runtime state]")
         .doesNotContain("core={", "registeredWorkerIds=");
+  }
+
+  private WorkerRuntimeState registeredRuntimeState() {
+    WorkerRuntimeState runtimeState = new WorkerRuntimeState();
+    WorkerRegistration registration = new WorkerRegistration();
+    registration.setWorkerId("worker-1");
+    registration.setStatus("ONLINE");
+    runtimeState.put(registration);
+    return runtimeState;
   }
 
   private WorkerConfiguration workerConfiguration() {

@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.exception.SystemException;
 import io.github.pinpols.batch.common.i18n.BizMessageResolver;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import jakarta.servlet.http.HttpServletRequest;
@@ -55,8 +56,8 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
  *   <li><b>权限拒绝</b>（{@code AuthorizationDeniedException} / {@code AccessDeniedException}）： 统一 403 +
  *       {@code FORBIDDEN}，避免暴露内部授权逻辑细节。
  *   <li><b>下游调用异常</b>（{@link #handleDownstreamRestError}）：console 作为 BFF 调 orchestrator / trigger
- *       时， 优先解析下游 {@code CommonResponse} body 透传其 code + message，解析失败至少保留真实 HTTP status ——防止下游 409
- *       / 404 被一律降级为 500 误导前端。
+ *       时，优先解析下游 {@code CommonResponse} 透传业务错误码；仅对客户端错误保留业务文案，服务端错误和不可解析正文使用安全默认文案。
+ *       日志不记录下游响应正文。
  * </ul>
  *
  * <p>回退 {@link #handleException} 捕获未显式处理的 {@code Exception}，返回 500 + {@code SYSTEM_ERROR} 并 ERROR
@@ -181,20 +182,22 @@ public class ConsoleApiExceptionHandler {
       RestClientResponseException exception) {
     String body = exception.getResponseBodyAsString();
     log.warn(
-        "console downstream rest error: status={}, body={}",
+        "console downstream rest error: status={}, responseBodyLength={}",
         exception.getStatusCode().value(),
-        body);
+        EmptyChecks.isNull(body) ? 0 : body.length());
     try {
       CommonResponse<Object> downstream =
           JsonUtils.fromJson(body, new TypeReference<CommonResponse<Object>>() {});
       if (downstream != null && downstream.code() != null) {
         // 以业务 code 为准，HTTP status 使用 code.httpStatus()（更稳定、跨服务一致）
+        ResultCode code = downstream.code();
+        String message = code.httpStatus() >= 500
+            ? code.defaultMessage()
+            : EmptyChecks.isBlank(downstream.message())
+                ? code.defaultMessage()
+                : downstream.message();
         return ResponseEntity.status(downstream.code().httpStatus())
-            .body(responseFactory.failure(
-                downstream.code(),
-                downstream.message() == null || downstream.message().isBlank()
-                    ? downstream.code().defaultMessage()
-                    : downstream.message()));
+            .body(responseFactory.failure(code, message));
       }
     } catch (RuntimeException ignored) {
       SwallowedExceptionLogger.warn(
@@ -206,8 +209,7 @@ public class ConsoleApiExceptionHandler {
     // 避免 4xx（下游入参错误 / 资源冲突）被一律降级成 SYSTEM_ERROR 误导前端。
     ResultCode code = mapStatusToResultCode(exception.getStatusCode());
     return ResponseEntity.status(exception.getStatusCode())
-        .body(responseFactory.failure(
-            code, body == null || body.isBlank() ? exception.getMessage() : body));
+        .body(responseFactory.failure(code, code.defaultMessage()));
   }
 
   /**

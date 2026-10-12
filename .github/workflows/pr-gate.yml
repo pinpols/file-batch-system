@@ -237,9 +237,13 @@ jobs:
       - name: Verify CI quality governance guards
         if: needs.changes.outputs.ci == 'true'
         shell: bash
+        env:
+          BASELINE_BASE_REF: ${{ github.event.pull_request.base.sha || 'origin/main' }}
         run: |
           source scripts/lib/gate-result.sh
           gate_run PR_SOFT_GATES "软门禁治理" python3 scripts/ci/check-soft-gate-governance.py
+          gate_run PR_GOVERNANCE_BASELINE_EXPANSION "治理基线扩张审批" python3 scripts/ci/check-governance-baseline-expansion.py --base-ref "${BASELINE_BASE_REF}"
+          gate_run PR_GOVERNANCE_BASELINE_EXPANSION_TEST "治理基线扩张守卫测试" python3 -m unittest scripts/ci/tests/test_governance_baseline_expansion.py
           gate_run PR_FLAKY_QUARANTINE "flaky 测试隔离治理" python3 scripts/ci/check-flaky-test-governance.py
           gate_run PR_CI_QUALITY_GUARD_TESTS "CI 质量治理门禁测试" python3 -m unittest \
             scripts/ci/tests/test_check_flaky_test_governance.py \

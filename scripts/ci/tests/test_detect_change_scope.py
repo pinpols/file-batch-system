@@ -18,6 +18,27 @@ class DetectChangeScopeTest(unittest.TestCase):
         self.assertTrue(result["ci"])
         self.assertFalse(result["docs-only"])
 
+    def test_machine_readable_governance_files_route_to_ci(self) -> None:
+        paths = [
+            "docs/governance/baseline-expansion-approvals.json",
+            "docs/governance/soft-gates.json",
+            "docs/governance/application-governance-contract.yaml",
+            "docs/governance/direct-config-key-access-baseline.txt",
+            "docs/governance/test-conventions-baseline.txt",
+        ]
+
+        for path in paths:
+            with self.subTest(path=path):
+                result = MODULE.classify_paths([path])
+                self.assertTrue(result["ci"])
+                self.assertFalse(result["docs-only"])
+
+    def test_governance_explanatory_markdown_remains_docs_only(self) -> None:
+        result = MODULE.classify_paths(["docs/governance/README.md"])
+
+        self.assertTrue(result["docs-only"])
+        self.assertFalse(result["ci"])
+
     def test_docs_only_has_no_code_scope(self) -> None:
         result = MODULE.classify_paths(["docs/runbook/ci.md", "CHANGELOG.md"])
 

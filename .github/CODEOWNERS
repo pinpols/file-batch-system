@@ -37,6 +37,10 @@
 /scripts/local/be-acceptance.sh         @pinpols
 /scripts/local/strict-verify.sh         @pinpols
 
+# 治理基线扩张与审批需由维护者审阅
+/docs/governance/*baseline*             @pinpols
+/docs/governance/baseline-expansion-approvals.json @pinpols
+
 # 核心通用库
 /batch-common/src/main/java/            @pinpols
 

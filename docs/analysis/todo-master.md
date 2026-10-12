@@ -6,10 +6,10 @@
 
 | ID | 事项 | 状态 | 完成条件 |
 |---|---|---|---|
-| **GDRIFT-1** | 前端 staging 普通 E2E 的 URL、API origin 和测试账号来源对齐 | ⏳ 待修 | workflow 输入与 Playwright/global setup 使用同一目标环境；错误 origin/缺失凭据先于测试失败；定向回归和真实 staging run 留证 |
-| **GDRIFT-2** | 后端机器可读治理契约的 PR 变更范围路由 | ⏳ 待修 | 四份治理文件逐项触发对应专项守卫，普通 Markdown 不被误路由；分类器正反例通过 |
-| **GDRIFT-3** | 前后端存量治理基线受控变更 | ⏳ 待设计并实现 | 降低基线自动接受；扩张必须可见、经 owner 审查并有理由/删除条件，不能和新缺口同 PR 静默放行 |
-| **GDRIFT-4** | 前端发布必验 E2E 的条件跳过审计 | ⏳ 待修 | 必需 seed 缺失阻断验收，可选场景明确 SKIP；发布报告按场景区分 PASS/SKIP/FAIL，不以绿色 job 代替业务覆盖 |
+| **GDRIFT-1** | 前端 staging 普通 E2E 的 URL、API origin 和测试账号来源对齐 | ✅ 本地实现与配置回归通过；待 PR/CI 和真实 staging run | staging 显式使用前端/API origin 与凭据，拒绝 loopback/本地 API 回退；配置负例测试通过；真实 staging 仍须运行留证 |
+| **GDRIFT-2** | 后端机器可读治理契约的 PR 变更范围路由 | ✅ 本地实现与分类器正反例通过；待 PR/CI | 四份治理契约精确触发 CI 守卫，普通 Markdown 保持 docs-only；PR/Full 对治理基线文件执行相应检查 |
+| **GDRIFT-3** | 前后端存量治理基线受控变更 | ✅ 本地实现与正反例通过；待 PR/CI | 两端基线与目标分支比较；扩张要求 CODEOWNERS 审核和限期审批记录，内容须匹配新增/调高值；过期/陈旧审批失败 |
+| **GDRIFT-4** | 前端发布必验 E2E 的条件跳过审计 | ✅ 本地实现与报告器回归通过；待 PR/CI 和真实 staging run | 必需 seed 缺失或必验用例跳过/未运行阻断；没有发现必验场景也阻断；可选跳过进入 Actions Summary；目标环境通过仍待 staging 证据 |
 
 ## 产品用户旅程对抗审计（2026-10-10）
 
@@ -33,7 +33,7 @@
 | ID | 事项 | 优先级 / 状态 | 下一步 / 验收条件 |
 |---|---|---|---|
 | **TCFG-S1** | 配置包 SQL 预览关键字正则误报 | ✅ 本地实现并定向验证 | 已改为 JSqlParser 单语句只读 SELECT/WITH AST 校验；回归覆盖注释/字符串关键字、DML/DDL、多语句、写入型 CTE、SELECT INTO 和 FOR UPDATE。Maven reactor 定向测试 20 项通过；待 PR/CI。 |
-| **TCFG-S2** | 动态 JSON 与自由文本敏感信息分类 | ⏳ 已修复若干确认的日志出口；全量分类未完成 | 本地修正 telemetry/MDC、Push endpoint、SDK 错误响应体及配置 URL 日志；继续按响应、导出和诊断载荷分级。不得据此宣称全仓审计完成。证据见[核查记录](../audit/sensitive-logging-and-runtime-config-drift-2026-10-12.md)。 |
+| **TCFG-S2** | 动态 JSON 与自由文本敏感信息分类 | ⏳ 多个日志出口及下游 API 错误响应已定向收敛；导出/诊断载荷全量分类仍未完成 | 已修正 telemetry/MDC、Push endpoint、SDK 错误响应体、配置 URL 日志，以及 Console 下游错误原文日志/回包；继续按响应、导出和诊断载荷分级。不得据此宣称全仓审计完成。证据见[核查记录](../audit/sensitive-logging-and-runtime-config-drift-2026-10-12.md)。 |
 | **TCFG-S3** | SecretVersion 到 Dispatch 运行时接入 | ✅ 本地已实现；待本轮复核与 CI | 实例创建固定版本；Worker 外发前核对撤销/有效期并从加密载荷取凭据，既有实例重试不切换版本。复核租户边界、迁移和事务语义，并运行定向 IT；不扩建 Secret 平台。 |
 | **TCFG-S4** | Console API 日志进入 Loki | 先取证 | 核对采集配置、标签和真实查询结果；确认缺失后再修投递/标签，避免基于旧观察重复改观测栈。 |
 | **TCFG-S5** | 配置包上传并发容量 | 等待容量目标 | 先明确最大包大小、并发数和容器内存预算，再测堆/RSS、延迟、拒绝率及临时文件回收；不据单次探测改全局 multipart 上限。 |
