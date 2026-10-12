@@ -52,7 +52,7 @@ public class ConsoleTenantController {
   private final ConsoleResponseFactory responseFactory;
 
   @GetMapping
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)
   public CommonResponse<PageResponse<ConsoleTenantResponse>> list(
       @RequestParam(required = false) String keyword,
       @RequestParam(required = false) String status,

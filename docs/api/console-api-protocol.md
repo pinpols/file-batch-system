@@ -916,7 +916,7 @@ Deployment note:
 - Tenant is the platform-level isolation unit. Must exist in `batch.tenant` before any config can be pushed.
 - `tenantId` format: `^[a-z0-9][a-z0-9\-]*[a-z0-9]$` (lowercase, alphanumeric, hyphens).
 - `status` values: `ACTIVE`, `SUSPENDED`.
-- `GET` list and detail require `ROLE_ADMIN` or `ROLE_TENANT_ADMIN`. All write operations require `ROLE_ADMIN`.
+- `GET` list requires `ROLE_ADMIN`, `ROLE_TENANT_ADMIN`, or `ROLE_AUDITOR`; the cross-tenant auditor permission supports the tenant switcher and does not grant access to tenant details. `GET` detail requires `ROLE_ADMIN` or `ROLE_TENANT_ADMIN`. All write operations require `ROLE_ADMIN`.
 - Response fields: `id`, `tenantId`, `tenantName`, `status`, `description`, `createdBy`, `createdAt`, `updatedAt`.
 
 ### User Account Management
