@@ -80,6 +80,8 @@ Java PR 的本地审阅按需运行增量模式，并检查变更行 issues 与�
 - 历史全量快照：`docs/verifications/sonar-report-2026-08-05.md` / `sonar-report-2026-08-06.md`。
 - 2026-10-12 全量扫描：SHA `029a75540aee0d9bf7a149bf8049a905ea9390c3`；clean test、14 份 JaCoCo XML 和 Sonar 分析均成功，Sonar 任务 `57ba30ee-b250-4b9e-8d35-a1d6cb581dc3`。Quality Gate **ERROR**，真实失败条件为 `new_violations=108`；新代码覆盖率 `85.4%`、重复率 `0%`。全局 OPEN issue 1,365（Bug 49、Vulnerability 0、Code Smell 1,316、Security Hotspot 0）。报告目录 `reports/sonar/2026-10-12_15-01-53/` 被 git 忽略。该快照不包含后续 null 契约与测试断言修正；这些变更尚无新的全量 Gate 结果。
 - 2026-10-12 后续 PR 增量扫描：以最新 `origin/main` 为基线，分析覆盖 13 个 Java 文件，变更行 OPEN issue `0`、待审 hotspot `0`；Sonar 任务 `0c53ed56-d68a-4831-b2c3-8e42fe3fcf73`，报告目录 `reports/sonar/2026-10-12_15-31-59/`。该本地变更行结果不能替代 PR CI，也不更新前一条全量扫描的 Quality Gate 结论。
+- 2026-10-12 合入 PR #1226 后的本地增量复核：以 `origin/main` SHA `fa5f53fc75b6adf678ade16945afd47568947ee` 为基线；随后续修复分支扫描 14 个 Java 文件，变更行 OPEN issue `0`、待审 hotspot `0`，Sonar 任务 `0c75fdf3-139b-4d97-948c-063412deeb90`，报告目录 `reports/sonar/2026-10-12_16-42-45/`。该结果只证明该本地工作树的增量变更行通过；没有运行 Quality Gate，也不替代后续 PR CI 或全量 Gate。
+- 2026-10-12 后续修复的标准增量扫描：`bash scripts/dev/sonar-scan.sh --incremental --base-ref origin/main`，生产和测试字节码已在扫描前编译；Sonar 任务 `bddf2967-f663-4cad-9557-2838db9db5c4` 为 `SUCCESS`。14 个 Java 变更文件的新增/修改行 OPEN issue `0`、待审 hotspot `0`；30 天新代码周期 OPEN issue 从 86 降至 68（`java:S2259` 由 18 降至 0）。报告目录 `reports/sonar/2026-10-12_17-03-28/`。此命令未启用 `--quality-gate`，不能据此称 Quality Gate 或 PR CI 通过。
 - 判定口径：以 **新增代码（new code）** 为准；存量 issue 通过 `annotate-sonar-report.py` 分类标注，不阻塞迭代。
 
 ## 5. 常见问题

@@ -8,7 +8,6 @@ import io.github.pinpols.batch.common.enums.RunMode;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.entity.CustomTaskTypeRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
@@ -22,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import javax.annotation.Nullable;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -256,7 +256,7 @@ public class LaunchParamResolver {
   }
 
   String buildParamsSnapshot(
-      JobDefinitionEntity jobDefinition,
+      @Nullable JobDefinitionEntity jobDefinition,
       LaunchRequest request,
       Map<String, Object> effectiveParams,
       String traceId) {
@@ -285,8 +285,8 @@ public class LaunchParamResolver {
     return JsonUtils.toJson(snapshot);
   }
 
-  private Map<String, Object> executionPolicySnapshot(JobDefinitionEntity jobDefinition) {
-    if (EmptyChecks.isNull(jobDefinition)) {
+  private Map<String, Object> executionPolicySnapshot(@Nullable JobDefinitionEntity jobDefinition) {
+    if (jobDefinition == null) { // empty-check: allow - Sonar S2259
       return Map.of();
     }
     Map<String, Object> snapshot = new LinkedHashMap<>();

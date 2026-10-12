@@ -137,6 +137,7 @@ public final class ConfigPackageSheetSpecs {
   private static final String EMPTY = "";
   private static final String SCENARIO_IMPORT = "IMPORT";
   private static final String SCENARIO_EXPORT = "EXPORT";
+  private static final String SCENARIO_WORKFLOW = "WORKFLOW";
   private static final String[] JOB_MONITORING_SEVERITY_CHOICES = {"WARN", "ERROR", "CRITICAL"};
 
   /**
@@ -319,15 +320,6 @@ public final class ConfigPackageSheetSpecs {
 
   private static final Set<String> FILE_TEMPLATE_TYPES = DictEnum.codes(FileTemplateType.class);
   private static final Set<String> FILE_FORMAT_TYPES = DictEnum.codes(FileTemplateFormat.class);
-  private static final Set<String> CHECKSUM_TYPES = DictEnum.codes(FileChecksumType.class);
-  private static final Set<String> COMPRESS_TYPES = DictEnum.codes(FileCompressType.class);
-  private static final Set<String> ENCRYPT_TYPES = DictEnum.codes(FileEncryptType.class);
-  private static final Set<String> QUEUE_TYPES = DictEnum.codes(ResourceQueueType.class);
-  private static final Set<String> PRIORITY_POLICIES = DictEnum.codes(QueuePriorityPolicy.class);
-  private static final Set<String> HOLIDAY_ROLL_RULES = DictEnum.codes(HolidayRollRule.class);
-  private static final Set<String> CATCH_UP_POLICIES = DictEnum.codes(CatchUpPolicyType.class);
-  private static final Set<String> END_STRATEGIES = DictEnum.codes(BatchWindowEndStrategy.class);
-  private static final Set<String> OUT_OF_WINDOW_ACTIONS = DictEnum.codes(OutOfWindowAction.class);
   private static final String[] FILE_TEMPLATE_BOOLEAN_COLUMNS = {
     ConfigPackageExcelSchema.FileTemplate.COL_WITH_BOM,
     ConfigPackageExcelSchema.FileTemplate.COL_STREAMING_ENABLED,
@@ -406,77 +398,86 @@ public final class ConfigPackageSheetSpecs {
     Set<String> includedSheets = new LinkedHashSet<>();
     includedSheets.add(JOB_SHEET);
     for (String scenario : scenarios) {
-      switch (scenario) {
-        case SCENARIO_IMPORT, SCENARIO_EXPORT -> {
-          includedSheets.add(FILE_TEMPLATE_SHEET);
-          includePipelineSheets(includedSheets);
-        }
-        case "IMPORT_DELIMITED",
-            "IMPORT_FIXED_WIDTH",
-            "IMPORT_EXCEL",
-            "IMPORT_XML",
-            "IMPORT_JSON",
-            "EXPORT_DELIMITED",
-            "EXPORT_FIXED_WIDTH",
-            "EXPORT_EXCEL",
-            "EXPORT_JSON" -> {
-          includedSheets.add(FILE_TEMPLATE_SHEET);
-          includePipelineSheets(includedSheets);
-        }
-        case "PROCESS" -> includePipelineSheets(includedSheets);
-        case "DISPATCH" -> {
-          includedSheets.add(CHANNEL_SHEET);
-          includePipelineSheets(includedSheets);
-        }
-        case "WORKFLOW" -> {
-          includedSheets.add(FILE_TEMPLATE_SHEET);
-          includedSheets.add(CHANNEL_SHEET);
-          includePipelineSheets(includedSheets);
-          includedSheets.add(WF_DEF_SHEET);
-          includedSheets.add(WF_NODE_SHEET);
-          includedSheets.add(WF_EDGE_SHEET);
-        }
-        case "SCHEDULE" -> {
-          includedSheets.add(BUSINESS_CALENDAR_SHEET);
-          includedSheets.add(BATCH_WINDOW_SHEET);
-          includedSheets.add(JOB_MONITORING_POLICY_SHEET);
-        }
-        case "ATOMIC" -> {}
-        default -> throw new IllegalArgumentException("unsupported package scenario: " + scenario);
-      }
+      includeScenarioSheets(scenario, includedSheets);
     }
 
     List<SheetDef> projected = new ArrayList<>();
     for (SheetDef def : build()) {
-      if (!includedSheets.contains(def.name())) {
-        continue;
+      if (includedSheets.contains(def.name())) {
+        projected.add(projectSheet(def, scenarios));
       }
-      List<String> columns = projectedColumns(def.name(), def.columns(), scenarios);
-      Map<String, ColumnGuide> guides = new LinkedHashMap<>();
-      for (String column : columns) {
-        ColumnGuide guide = def.guides().get(column);
-        if (EmptyChecks.isNotNull(guide)) {
-          guides.put(column, guide);
-        }
-      }
-      Set<String> focusedFormats = focusedFileFormats(scenarios);
-      String focusedDirection = focusedFileDirection(scenarios);
-      BiConsumer<Sheet, Locale> validationApplier = def.validationApplier();
-      if (FILE_TEMPLATE_SHEET.equals(def.name()) && EmptyChecks.isNotNull(focusedFormats)) {
-        Set<String> focusedTypes =
-            EmptyChecks.isNull(focusedDirection) ? FILE_TEMPLATE_TYPES : Set.of(focusedDirection);
-        validationApplier = (sheet, locale) ->
-            applyFileTemplateValidations(sheet, locale, focusedFormats, focusedTypes);
-        replaceGuideChoices(
-            guides, ConfigPackageExcelSchema.FileTemplate.COL_FILE_FORMAT_TYPE, focusedFormats);
-        if (EmptyChecks.isNotNull(focusedDirection)) {
-          replaceGuideChoices(
-              guides, ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_TYPE, focusedTypes);
-        }
-      }
-      projected.add(new SheetDef(def.name(), columns, Map.copyOf(guides), validationApplier));
     }
     return List.copyOf(projected);
+  }
+
+  private static void includeScenarioSheets(String scenario, Set<String> includedSheets) {
+    switch (scenario) {
+      case SCENARIO_IMPORT,
+          SCENARIO_EXPORT,
+          "IMPORT_DELIMITED",
+          "IMPORT_FIXED_WIDTH",
+          "IMPORT_EXCEL",
+          "IMPORT_XML",
+          "IMPORT_JSON",
+          "EXPORT_DELIMITED",
+          "EXPORT_FIXED_WIDTH",
+          "EXPORT_EXCEL",
+          "EXPORT_JSON" -> {
+        includedSheets.add(FILE_TEMPLATE_SHEET);
+        includePipelineSheets(includedSheets);
+      }
+      case "PROCESS" -> includePipelineSheets(includedSheets);
+      case "DISPATCH" -> {
+        includedSheets.add(CHANNEL_SHEET);
+        includePipelineSheets(includedSheets);
+      }
+      case SCENARIO_WORKFLOW -> {
+        includedSheets.add(FILE_TEMPLATE_SHEET);
+        includedSheets.add(CHANNEL_SHEET);
+        includedSheets.add(WF_DEF_SHEET);
+        includedSheets.add(WF_NODE_SHEET);
+        includedSheets.add(WF_EDGE_SHEET);
+        includePipelineSheets(includedSheets);
+      }
+      case "SCHEDULE" -> {
+        includedSheets.add(BUSINESS_CALENDAR_SHEET);
+        includedSheets.add(BATCH_WINDOW_SHEET);
+        includedSheets.add(JOB_MONITORING_POLICY_SHEET);
+      }
+      case "ATOMIC" -> {
+        // Atomic 作业没有需要配置的专属 sheet，保留默认的作业定义 sheet 即可。
+      }
+      default -> throw new IllegalArgumentException("unsupported package scenario: " + scenario);
+    }
+  }
+
+  private SheetDef projectSheet(SheetDef definition, Set<String> scenarios) {
+    List<String> columns = projectedColumns(definition.name(), definition.columns(), scenarios);
+    Map<String, ColumnGuide> guides = new LinkedHashMap<>();
+    for (String column : columns) {
+      ColumnGuide guide = definition.guides().get(column);
+      if (EmptyChecks.isNotNull(guide)) {
+        guides.put(column, guide);
+      }
+    }
+
+    BiConsumer<Sheet, Locale> validationApplier = definition.validationApplier();
+    Optional<Set<String>> focusedFormats = focusedFileFormats(scenarios);
+    String focusedDirection = focusedFileDirection(scenarios);
+    if (FILE_TEMPLATE_SHEET.equals(definition.name()) && focusedFormats.isPresent()) {
+      Set<String> formats = focusedFormats.orElseThrow();
+      Set<String> focusedTypes =
+          EmptyChecks.isNull(focusedDirection) ? FILE_TEMPLATE_TYPES : Set.of(focusedDirection);
+      validationApplier =
+          (sheet, locale) -> applyFileTemplateValidations(sheet, locale, formats, focusedTypes);
+      replaceGuideChoices(
+          guides, ConfigPackageExcelSchema.FileTemplate.COL_FILE_FORMAT_TYPE, formats);
+      if (EmptyChecks.isNotNull(focusedDirection)) {
+        replaceGuideChoices(
+            guides, ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_TYPE, focusedTypes);
+      }
+    }
+    return new SheetDef(definition.name(), columns, Map.copyOf(guides), validationApplier);
   }
 
   /** 模板投影与工作簿解析共用的必需结构列。 */
@@ -621,7 +622,7 @@ public final class ConfigPackageSheetSpecs {
     if (EmptyChecks.isNotEmpty(profiles)
         && !scenarios.contains(SCENARIO_IMPORT)
         && !scenarios.contains(SCENARIO_EXPORT)
-        && !scenarios.contains("WORKFLOW")) {
+        && !scenarios.contains(SCENARIO_WORKFLOW)) {
       return focusedFileTemplateColumns(profiles);
     }
     Set<String> selected = new LinkedHashSet<>(Set.of(
@@ -643,11 +644,11 @@ public final class ConfigPackageSheetSpecs {
         COL_VERSION,
         COL_ENABLED,
         COL_DESCRIPTION));
-    if (scenarios.contains(SCENARIO_IMPORT) || scenarios.contains("WORKFLOW")) {
+    if (scenarios.contains(SCENARIO_IMPORT) || scenarios.contains(SCENARIO_WORKFLOW)) {
       selected.add(ConfigPackageExcelSchema.FileTemplate.COL_VALIDATION_RULE_SET);
       selected.add(ConfigPackageExcelSchema.FileTemplate.COL_TRAILER_TEMPLATE);
     }
-    if (scenarios.contains(SCENARIO_EXPORT) || scenarios.contains("WORKFLOW")) {
+    if (scenarios.contains(SCENARIO_EXPORT) || scenarios.contains(SCENARIO_WORKFLOW)) {
       selected.add(ConfigPackageExcelSchema.FileTemplate.COL_TARGET_CHARSET);
       selected.add(ConfigPackageExcelSchema.FileTemplate.COL_TRAILER_TEMPLATE);
       selected.add(ConfigPackageExcelSchema.FileTemplate.COL_NAMING_RULE);
@@ -665,11 +666,11 @@ public final class ConfigPackageSheetSpecs {
         .toList();
   }
 
-  private static Set<String> focusedFileFormats(Set<String> scenarios) {
+  private static Optional<Set<String>> focusedFileFormats(Set<String> scenarios) {
     if (scenarios.contains(SCENARIO_IMPORT)
         || scenarios.contains(SCENARIO_EXPORT)
-        || scenarios.contains("WORKFLOW")) {
-      return null;
+        || scenarios.contains(SCENARIO_WORKFLOW)) {
+      return Optional.empty();
     }
     Set<String> formats = new LinkedHashSet<>();
     for (ConfigPackageFileScenario profile : ConfigPackageFileScenario.values()) {
@@ -677,13 +678,13 @@ public final class ConfigPackageSheetSpecs {
         formats.add(profile.format().code());
       }
     }
-    return EmptyChecks.isEmpty(formats) ? null : formats;
+    return EmptyChecks.isEmpty(formats) ? Optional.empty() : Optional.of(Set.copyOf(formats));
   }
 
   private static String focusedFileDirection(Set<String> scenarios) {
     if (scenarios.contains(SCENARIO_IMPORT)
         || scenarios.contains(SCENARIO_EXPORT)
-        || scenarios.contains("WORKFLOW")) {
+        || scenarios.contains(SCENARIO_WORKFLOW)) {
       return null;
     }
     Set<String> directions = fileProfiles(scenarios).stream()

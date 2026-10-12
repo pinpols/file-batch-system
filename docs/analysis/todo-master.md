@@ -56,7 +56,7 @@
 
 ## 静态分析与 suppression 治理（2026-10-12）
 
-实施阶段与验收见[治理计划](../plans/static-analysis-governance-plan-2026-10-12.md)，工具职责、门禁事实和例外细则见[静态分析治理标准](../standards/static-analysis-governance.md)。Sonar、CodeQL、SpotBugs、IDE inspection 的工具职责、触发条件、门禁属性及例外流程已集中；生产 Java/YAML suppression 守护已扩围并有正反例测试。当前安全敏感五规则已复核，S2077 类级抑制已改为 sink 方法级，S5443 临时文件问题已修并有单文件 Sonar 证据。其余存量 suppression 仍需按规则分批复核；Sonar Code Smell 和最新主干全量扫描也未因规范/脚本落地而自动清零。跟踪状态、扫描证据及剩余范围只在治理标准/计划维护，避免本表复制动态计数。全量 Sonar 正在本地验收，完成后补录实际报告和 Quality Gate 状态；不得把扫描运行或本地结果表述成 PR/Full Gate 通过。
+实施阶段与验收见[治理计划](../plans/static-analysis-governance-plan-2026-10-12.md)，工具职责、门禁事实和例外细则见[静态分析治理标准](../standards/static-analysis-governance.md)。Sonar、CodeQL、SpotBugs、IDE inspection 的工具职责、触发条件、门禁属性及例外流程已集中；生产 Java/YAML suppression 守护已扩围并有正反例测试。当前安全敏感五规则已复核，S2077 类级抑制已改为 sink 方法级，S5443 临时文件问题已修并有单文件 Sonar 证据。其余存量 suppression 仍需按规则分批复核；Sonar Code Smell 和最新主干全量扫描也未因规范/脚本落地而自动清零。2026-10-12 后续本地增量 Sonar 扫描覆盖 14 个 Java 文件，变更行 OPEN issue/hotspot 均为 0；新代码周期 OPEN issue 由 86 降至 68，其中 S2259 从 18 降至 0。扫描没有运行 Quality Gate，后续修复分支 CI 也尚待 PR 检查；这些状态以[治理计划](../plans/static-analysis-governance-plan-2026-10-12.md)和[Sonar 运行手册](../runbook/sonar.md)为准，不得把本地增量结果表述成 PR/Full Gate 通过。
 
 ## 部署与持续交付
 

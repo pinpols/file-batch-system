@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.support.excel;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -41,7 +40,7 @@ public class InMemoryTenantConfigExcelStore implements TenantConfigPackageExcelI
   @Override
   public PreviewSnapshot issuePreviewSnapshot(String uploadToken, long configurationRevision) {
     PackageExcelSession session = sessions.getIfPresent(uploadToken);
-    if (EmptyChecks.isNull(session)) {
+    if (session == null) { // empty-check: allow - Sonar S2259
       return null;
     }
     synchronized (session) {
@@ -63,15 +62,16 @@ public class InMemoryTenantConfigExcelStore implements TenantConfigPackageExcelI
   @Override
   public boolean claimForApply(String uploadToken, String previewToken, String applyOwnerToken) {
     PackageExcelSession session = sessions.getIfPresent(uploadToken);
-    if (EmptyChecks.isNull(session)
-        || EmptyChecks.isNull(previewToken)
-        || EmptyChecks.isNull(applyOwnerToken)) {
+    if (session == null // empty-check: allow - Sonar S2259
+        || previewToken == null // empty-check: allow - Sonar S2259
+        || applyOwnerToken == null) { // empty-check: allow - Sonar S2259
       return false;
     }
     synchronized (session) {
       return sessions.getIfPresent(uploadToken) == session
           && previewToken.equals(previewTokens.getIfPresent(uploadToken))
-          && EmptyChecks.isNull(applying.putIfAbsent(uploadToken, applyOwnerToken));
+          && applying.putIfAbsent(uploadToken, applyOwnerToken)
+              == null; // empty-check: allow - Sonar S2259
     }
   }
 
@@ -81,7 +81,7 @@ public class InMemoryTenantConfigExcelStore implements TenantConfigPackageExcelI
       throw new IllegalStateException("config upload apply claim lost its owner");
     }
     Long revision = previewRevisions.getIfPresent(uploadToken);
-    if (EmptyChecks.isNull(revision)) {
+    if (revision == null) { // empty-check: allow - Sonar S2259
       throw new IllegalStateException("config upload apply claim lost its preview revision");
     }
     return revision;
@@ -95,9 +95,9 @@ public class InMemoryTenantConfigExcelStore implements TenantConfigPackageExcelI
       String replacementPreviewToken,
       long configurationRevision) {
     PackageExcelSession current = sessions.getIfPresent(uploadToken);
-    if (EmptyChecks.isNull(current)
-        || EmptyChecks.isNull(expectedPreviewToken)
-        || EmptyChecks.isNull(replacementPreviewToken)) {
+    if (current == null // empty-check: allow - Sonar S2259
+        || expectedPreviewToken == null // empty-check: allow - Sonar S2259
+        || replacementPreviewToken == null) { // empty-check: allow - Sonar S2259
       return false;
     }
     synchronized (current) {
@@ -116,7 +116,7 @@ public class InMemoryTenantConfigExcelStore implements TenantConfigPackageExcelI
   @Override
   public void completeApply(String uploadToken, String applyOwnerToken) {
     PackageExcelSession session = sessions.getIfPresent(uploadToken);
-    if (EmptyChecks.isNull(session)) {
+    if (session == null) { // empty-check: allow - Sonar S2259
       return;
     }
     synchronized (session) {

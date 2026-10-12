@@ -2,6 +2,7 @@ package io.github.pinpols.batch.common.utils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Collections;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -16,6 +17,14 @@ class SecretMaskingTest {
     assertThat(SecretMasking.preserveMaskedJson(null, null)).isNull();
     assertThat(SecretMasking.maskEndpoint(null)).isNull();
     assertThat(SecretMasking.preserveMaskedEndpoint(null, null)).isNull();
+  }
+
+  @Test
+  @DisplayName("额外敏感键集合中的 null 项不会中断脱敏")
+  void shouldIgnoreNullAdditionalSensitiveKey() {
+    assertThat(
+            SecretMasking.maskSensitiveJson("{\"label\":\"value\"}", Collections.singleton(null)))
+        .isEqualTo("{\"label\":\"value\"}");
   }
 
   @Test

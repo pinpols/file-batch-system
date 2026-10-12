@@ -47,7 +47,7 @@ public final class SecretMasking {
 
   /** 判断 key 名是否敏感（null-safe；大小写不敏感；按 contains 匹配关键词）。 */
   public static boolean isSensitive(@Nullable String key) {
-    if (!Texts.hasText(key)) {
+    if (key == null || key.isBlank()) { // empty-check: allow - Sonar S2259
       return false;
     }
     String lower = key.toLowerCase(Locale.ROOT);
@@ -95,7 +95,7 @@ public final class SecretMasking {
   @Nullable
   public static String maskSensitiveJson(
       @Nullable String json, Set<String> additionalSensitiveKeys) {
-    if (!Texts.hasText(json)) {
+    if (json == null || json.isBlank()) { // empty-check: allow - Sonar S2259
       return json;
     }
     return JsonUtils.toJson(
@@ -104,7 +104,7 @@ public final class SecretMasking {
 
   /** 判断动态 JSON 是否仍含有未恢复的敏感字段掩码。 */
   public static boolean containsMaskedSensitiveValue(@Nullable String json) {
-    if (!Texts.hasText(json)) {
+    if (json == null || json.isBlank()) { // empty-check: allow - Sonar S2259
       return false;
     }
     return containsMaskedSensitiveValue(JsonUtils.fromJson(json, Object.class));
@@ -113,7 +113,7 @@ public final class SecretMasking {
   /** 从跨租户配置副本中递归移除敏感字段，避免复制源环境凭据或租户级密钥引用。 */
   @Nullable
   public static String removeSensitiveJsonFields(@Nullable String json) {
-    if (!Texts.hasText(json)) {
+    if (json == null || json.isBlank()) { // empty-check: allow - Sonar S2259
       return json;
     }
     return JsonUtils.toJson(removeSensitiveFields(JsonUtils.fromJson(json, Object.class)));
@@ -132,7 +132,10 @@ public final class SecretMasking {
       @Nullable String submittedJson,
       @Nullable String storedJson,
       Set<String> additionalSensitiveKeys) {
-    if (!Texts.hasText(submittedJson) || !Texts.hasText(storedJson)) {
+    if (submittedJson == null // empty-check: allow - Sonar S2259
+        || submittedJson.isBlank() // empty-check: allow - Sonar S2259
+        || storedJson == null // empty-check: allow - Sonar S2259
+        || storedJson.isBlank()) { // empty-check: allow - Sonar S2259
       return submittedJson;
     }
     Object submitted = JsonUtils.fromJson(submittedJson, Object.class);
@@ -143,19 +146,25 @@ public final class SecretMasking {
   /** 脱敏 URI 中的 userinfo 和敏感 query 参数；普通文件路径及非敏感 URI 保持不变。 */
   @Nullable
   public static String maskEndpoint(@Nullable String endpoint) {
+    if (endpoint == null || endpoint.isBlank()) { // empty-check: allow - Sonar S2259
+      return endpoint;
+    }
     return transformEndpoint(endpoint, null, false);
   }
 
   /** 更新回传已脱敏端点时，从存量端点恢复 userinfo 和对应 query 凭据。 */
   @Nullable
   public static String preserveMaskedEndpoint(@Nullable String submitted, @Nullable String stored) {
+    if (submitted == null || submitted.isBlank()) { // empty-check: allow - Sonar S2259
+      return submitted;
+    }
     return transformEndpoint(submitted, stored, true);
   }
 
   @Nullable
   private static String transformEndpoint(
       @Nullable String endpoint, @Nullable String storedEndpoint, boolean restore) {
-    if (!Texts.hasText(endpoint)) {
+    if (endpoint == null || endpoint.isBlank()) { // empty-check: allow - Sonar S2259
       return endpoint;
     }
     try {
@@ -163,11 +172,17 @@ public final class SecretMasking {
       if (EmptyChecks.isNull(uri.getScheme()) || uri.isOpaque()) {
         return endpoint;
       }
-      URI storedUri = restore && Texts.hasText(storedEndpoint) ? URI.create(storedEndpoint) : null;
+      URI storedUri = restore
+              && storedEndpoint != null // empty-check: allow - Sonar S2259
+              && !storedEndpoint.isBlank() // empty-check: allow - Sonar S2259
+          ? URI.create(storedEndpoint)
+          : null;
       String authority = uri.getRawAuthority();
       if (EmptyChecks.isNotNull(uri.getRawUserInfo())) {
         String userInfo = uri.getRawUserInfo();
-        if (restore && MASKED_VALUE.equals(userInfo) && EmptyChecks.isNotNull(storedUri)) {
+        if (restore
+            && MASKED_VALUE.equals(userInfo)
+            && storedUri != null) { // empty-check: allow - Sonar S2259
           userInfo = storedUri.getRawUserInfo();
         } else if (!restore) {
           userInfo = MASKED_VALUE;
@@ -177,7 +192,9 @@ public final class SecretMasking {
       }
       String query = transformQuery(
           uri.getRawQuery(),
-          EmptyChecks.isNull(storedUri) ? null : storedUri.getRawQuery(),
+          storedUri == null // empty-check: allow - Sonar S2259
+              ? null
+              : storedUri.getRawQuery(),
           restore);
       return renderUri(uri, authority, query);
     } catch (IllegalArgumentException ignored) {
@@ -260,7 +277,9 @@ public final class SecretMasking {
 
   private static boolean isSensitive(@Nullable String key, Set<String> additionalSensitiveKeys) {
     return isSensitive(key)
-        || additionalSensitiveKeys.stream().anyMatch(candidate -> candidate.equalsIgnoreCase(key));
+        || additionalSensitiveKeys.stream()
+            .anyMatch(candidate -> candidate != null // empty-check: allow - Sonar S2259
+                && candidate.equalsIgnoreCase(key));
   }
 
   @Nullable

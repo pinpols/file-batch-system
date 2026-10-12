@@ -120,6 +120,15 @@ class LaunchParamResolverTest {
   }
 
   @Test
+  @DisplayName("作业定义缺失时参数快照保留空执行策略")
+  void shouldBuildSnapshotWithoutExecutionPolicy_whenJobDefinitionIsMissing() {
+    String snapshot = resolver.buildParamsSnapshot(
+        null, launchRequest(Map.of(), LocalDate.of(2026, Month.APRIL, 10)), Map.of(), "trace-1");
+
+    assertThat(snapshot).contains("\"executionPolicy\":{}");
+  }
+
+  @Test
   @DisplayName("参数显式声明重跑标记时判定为重跑")
   void shouldResolveRerunFlagFromParams() {
     Map<String, Object> params = new HashMap<>();

@@ -73,7 +73,7 @@ public class PrepareDispatchStep implements DispatchStageStep {
       } else {
         payload = objectMapper.treeToValue(rawPayload, DispatchPayload.class);
       }
-      if (EmptyChecks.isNotNull(rawPayload)) {
+      if (rawPayload != null) { // empty-check: allow - Sonar S2259
         JsonNode secretBindings = rawPayload.get(DispatchRuntimeKeys.DISPATCH_SECRET_BINDINGS);
         if (EmptyChecks.isNotNull(secretBindings) && secretBindings.isObject()) {
           attrs.put(

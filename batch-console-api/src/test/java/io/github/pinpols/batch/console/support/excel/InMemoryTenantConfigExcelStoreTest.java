@@ -17,6 +17,31 @@ import org.junit.jupiter.api.Test;
 class InMemoryTenantConfigExcelStoreTest {
 
   @Test
+  @DisplayName("领取配置包时缺少会话或令牌会被拒绝")
+  void shouldRejectClaimWhenSessionOrTokensAreMissing() {
+    InMemoryTenantConfigExcelStore store = new InMemoryTenantConfigExcelStore();
+    String token = store.save(emptySession());
+    String previewToken = store.issuePreviewSnapshot(token, 1L).previewToken();
+
+    assertThat(store.claimForApply("missing", previewToken, "owner")).isFalse();
+    assertThat(store.claimForApply(token, null, "owner")).isFalse();
+    assertThat(store.claimForApply(token, previewToken, null)).isFalse();
+  }
+
+  @Test
+  @DisplayName("替换配置包会话时缺少前后预览令牌会被拒绝")
+  void shouldRejectSessionReplacementWhenPreviewTokensAreMissing() {
+    InMemoryTenantConfigExcelStore store = new InMemoryTenantConfigExcelStore();
+    String token = store.save(emptySession());
+    String previewToken = store.issuePreviewSnapshot(token, 1L).previewToken();
+
+    assertThat(store.replaceSession(token, null, emptySession(), "next", 2L)).isFalse();
+    assertThat(store.replaceSession(token, previewToken, emptySession(), null, 2L))
+        .isFalse();
+    assertThat(store.get(token)).isNotNull();
+  }
+
+  @Test
   @DisplayName("并发应用同一会话时仅允许一个请求领取")
   void shouldAllowSingleClaim_whenApplyRequestsRace() throws Exception {
     InMemoryTenantConfigExcelStore store = new InMemoryTenantConfigExcelStore();
