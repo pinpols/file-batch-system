@@ -27,7 +27,7 @@
 | 06 | [analysis/](./analysis/README.md) | 当前待办、硬化事项、长期方案与历史分析快照 | `todo-master.md` |
 | 07 | [dict/](./dict/README.md) | **Reference dict**（错误码 / 配置键，自动生成）| `error-codes.md` + `config-keys.md` |
 | 08 | [compliance/](./compliance/README.md) | 第三方依赖许可 + SBOM | `THIRD-PARTY-LICENSES.md` |
-| 09 | [audit/](./audit/README.md) | 专项审计报告 + 漂移防护总账 | [convention-drift-guard-index.md](./audit/convention-drift-guard-index.md) |
+| 09 | [audit/](./audit/README.md) | 专项审计报告 + 漂移防护总账 | [convention-drift-guard-index.md](./audit/convention-drift-guard-index.md)（含 CI 难覆盖的人工/AI 周期审查） |
 | 10 | [backlog/](./backlog/README.md) | 专题治理背景与历史执行计划 | 当前待办仍以 `analysis/todo-master.md` 为准 |
 | 11 | [plans/](./plans/README.md) | 阶段计划 | SDK roadmap / HA / 多租隔离计划 |
 | 12 | [review/](./review/README.md) | 评审结论 | code review / project deep review |

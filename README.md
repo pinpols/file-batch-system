@@ -372,6 +372,7 @@ DB (job_task: READY)
 |------|------|
 | [文档总入口](docs/README.md) | `docs/` 目录分层、角色阅读路径、归档与状态规则 |
 | [文档治理](docs/standards/document-governance.md) | 文档索引、状态、待办、归档和漂移检查规则 |
+| [约定与 CI 周期复核](docs/audit/convention-drift-guard-index.md) | 前后端规范漂移、守卫漏扫/误拦与人工/AI 复核入口；本轮证据见[审计快照](docs/audit/cross-repo-governance-drift-review-2026-10-12.md) |
 | [运维手册总入口](docs/runbook/README.md) | 部署、容量、灰度、观测、应急和配置治理 SOP |
 | [设计文档索引](docs/design/README.md) | 系统设计文档入口，含数据模型、流程、接口与专题设计 |
 | [项目结构](docs/architecture/project-structure.md) | 当前 Maven reactor、平台运行时模块、SDK、文档/脚本目录与运行系统边界 |

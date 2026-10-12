@@ -1,6 +1,6 @@
 # 约定约束与漂移防护总账
 
-> 维护日期: 2026-10-10
+> 维护日期: 2026-10-12
 > 定位: 统一记录项目约定、约束、审计、审核、复扫与 CI 守卫入口,用于后续扫描时防止规范漂移。
 
 本文不是新的规范来源,也不替代 `docs/agent-baseline.md`、编码规约、ADR 或 runbook。它只做一件事:把分散在代码、文档、脚本、CI、审计报告里的约束集中成一张可复扫的总账。
@@ -17,7 +17,7 @@
 | 6 | [docs/audit/](./) + [docs/analysis/](../analysis/) + [docs/review/](../review/) | 审计、深扫、复盘、阶段评审 | 发现的问题没有闭环到规范、脚本、测试或 runbook |
 | 7 | `scripts/ci/` + `.github/workflows/` | 可执行守卫 | 文档写了但 CI 不拦,或 CI 新增后没人知道 |
 
-## 当前快照
+## 规模快照（历史统计，使用前复核）
 
 | 类别 | 当前规模 | 主要入口 | 说明 |
 |---|---:|---|---|
@@ -54,9 +54,31 @@ Nightly 验证顺序由 `scripts/ci/tests/test_daily_validation_workflow.py` 守
 
 基础设施抽象边界守护 `check-infrastructure-abstraction-boundaries.py` 以 PR merge-base 的引用语句与出现次数作为比较基线,只阻断新增引用;历史引用的日志安全修复不触发整文件清债。专项回归覆盖新增导入、重复引用增加及空白排版。完整历史收敛仍由治理计划和全量直连客户端守护承担。
 
+### CI 难以守住的人工/AI 周期审查
+
+PR/Full Gate 对已编码的规则和已写出的用例有效，但不能证明规范仍符合当前实现、测试仍代表真实场景、用户仍能完成业务操作。本表是**建议的人工/AI 审查节奏**，没有为它新增定时工作流。每月以“上次审查提交到当前 main”的增量为主；季度对高风险存量路径抽样，避免只审新增文件。配对前端的专项清单见 `../batch-console/docs/engineering/convention-drift-review.md`（本地配对仓库路径），本轮确认问题与证据见[前后端复核快照](./cross-repo-governance-drift-review-2026-10-12.md)。
+
+| 建议频率 | 审查主题 | CI 可能全绿但仍退化的原因 | 人工/AI 核对动作与入口 |
+|---|---|---|---|
+| 每月；主链改动后立即 | **业务语义与跨模块组合**：Trigger→Orchestrator→Worker 的状态、业务日、晚到/补跑、重试/补偿、checkpoint、最新结果选择 | 单项状态机或 E2E 用例通过，仍可能漏掉新旧功能组合、乱序事件、失败后恢复和账期结果对账 | 从[核心模型](../architecture/core-model.md)和相关 ADR 选本月改动的业务路径，沿入口、持久化、消息、Worker、终态和下游读取追踪；抽取一个失败/重试/并发反例，核对最终业务数据与操作语义 |
+| 每月；配置或页面改动后立即 | **租户配置与产品工作流**：Excel/REST 默认值、角色可见性、前台配置维护和运维动作 | OpenAPI、字段类型和接口测试可一致，但模板仍可能让用户填写平台资源，页面能提交却无法完成实际配置/恢复 | 依[产品旅程审计](./product-journey-adversarial-audit-2026-10-10.md)与配置方案，用四类角色分别走“建作业→运行→诊断→重试/补数”；核对前后端、模板说明、权限与结果反馈，不把 API 成功当作流程可用 |
+| 每月；新增测试基线或门禁后立即 | **测试代表性与 CI 覆盖空洞** | 断言与实现共用常量、mock 绕过生产 SQL/事务、fixture 过时、路径选择器漏测，都可能产生绿色假象 | 抽查变更链路的测试输入、独立预期、真实依赖层级、`skip`/隔离项、workflow 路由和最近失败记录；对照[测试质量治理](../standards/ci-test-quality-governance.md)与[验收计划](../testing/full-project-test-plan.md)，指出“已测什么”和“未测什么” |
+| 每季度；模块职责变化后立即 | **架构职责与抽象强度**：Controller/Application/Domain/Mapper、Trigger/Orchestrator/Worker、`batch-common`、SDK | 依赖方向守卫可通过，但业务决策可能迁入 Controller、同一数据出现多写入口、工具/策略类过度拆分或重复实现 | 对照[模块结构](../architecture/project-structure.md)、[边界规则](../architecture/bounded-context-rules.md)及 ADR，沿代表性调用链看职责归属、事务所有者、依赖方向和扩展点使用理由；检查新增抽象是否消除了真实复杂度 |
+| 每季度；权限/数据边界变化后立即 | **租户与安全语义**：跨租访问、审批/运维权限、动态 SQL、文件与密钥边界 | RLS/注解/CodeQL 可查到已知模式，但不能替代完整调用链授权、越权场景和安全例外理由 | 抽样真实入口到 Mapper/外部通道的租户上下文，构造跨租与低权限操作反例；逐项复核安全告警、豁免和 `bypass`/降级开关的实际暴露面，记录可复现证据 |
+| 每季度；配置路径变化后立即 | **配置事实来源和生命周期**：Spring 绑定、DB 动态配置、缓存、多副本、实例运行中配置版本 | key/默认值同步门禁难判断启动后是否真的加载、生效时机是否正确，或不同副本与既有实例是否看到同一策略 | 对照[配置治理](../runbook/config-governance.md)和[功能开关](../runbook/feature-switches.md)，追踪声明→加载→覆盖→刷新/失效→消费者；核对关闭态、回滚、运行中修改及配置审计 |
+| 每季度；文档或运维流程重写后立即 | **文档与运维可执行性**：ADR、结构图、runbook、脚本、待办和验收报告 | 链接/术语守卫只能证明文件存在；命令、截图、架构说明、完成状态和目标环境证据仍可能过时 | 对每个本季改动域选一份权威文档和一条操作路径，逐项对照当前代码/参数/权限/命令；将历史结论标成快照，未闭环事项仅登记到[`todo-master`](../analysis/todo-master.md) |
+| 每季度；规则/工作流变化后立即 | **治理守卫自身**：扫描范围、例外、软门禁、required checks、路径过滤与定时任务 | 检查执行成功也可能漏扫新模块，白名单扩张、规则延期或 `SKIP` 被当作通过 | 对照[CI 定时治理](../runbook/ci-schedule-governance.md)、`scripts/ci/README.md` 和本总账；抽样一条应拦截/一条应放行案例，核对豁免 owner/到期日、触发路径和主干实际 run |
+| 每季度；前端关键路径变更后立即 | **前端守卫有效性**：OpenAPI 生成、浏览器目标环境、角色/租户、i18n、UI 基线、条件跳过 | 类型/译文检查可能全绿但页面不可用；staging 变量、测试账号或 API origin 配错会让 E2E 未测到目标环境；基线提高可掩盖新债务 | 在配对仓逐项核对 workflow 输入→Playwright/global setup→目标 origin/凭据→测试结果；按四角色和中英文抽样页面，统计 SKIP 和基线扩张，确认目标环境业务结果 |
+| 每季度；扩容或大数据发布前立即 | **性能与资源设计**：热表/索引、PG 锁与连接池、线程/缓存/文件句柄、Kafka/对象存储背压 | 性能脚本只证明既定负载；增长后的表、租户分布、任务形状和实际瓶颈可能已经变化 | 对照[容量治理](../runbook/production-capacity-governance.md)及最近基线，抽查热点查询和业务耗时、资源水位、失败率与对账结果；无真实数据时只记录风险假设，不宣称优化收益 |
+| 上线前；故障/演练后复审 | **恢复与运维闭环**：DLQ、Outbox、卡实例、备份/PITR、HA、告警投递 | 单测/模拟可绿，但值班人员可能无法按 Console/runbook 恢复，目标环境故障切换未验证 | 依[HA readiness](../runbook/ha-readiness.md)及 runbook，从告警触发到定位、审批、执行、幂等重试和结果对账走一遍；记录环境、版本、RTO/RPO 与无法在本地验证的环节 |
+
+审查记录须写明基线提交、范围/抽样依据、正反例、证据层级和未覆盖项；结论区分**确认问题、待验证风险、暂缓事项、抽样未发现问题**。确认问题进入修复与回归，反复出现且可机器判断的规则再加入 CI。历史 audit/review 是风险线索，不直接代表当前事实；日常巡检、安全扫描和季度依赖盘点的实际 schedule 见[CI 定时策略](../runbook/ci-schedule-governance.md)及[季度依赖治理](../runbook/quarterly-dependency-governance.md)。
+
+### 变更触发的复扫
+
 | 场景 | 建议复扫动作 | 通过标准 |
 |---|---|---|
-| 每个 PR | 运行 PR gate、OpenAPI 路径检查、SQL/配置边界检查、迁移安全检查、PMD/Spotless | 新增变更不破坏既有规范; 失败项要么修复,要么有明确 ADR/文档例外 |
+| 每个 PR | 核对变更分类器选出的 PR gate 步骤、required check 状态和被跳过的专项守卫；相关代码变更再运行 OpenAPI、SQL/配置边界、迁移安全和 Java 规约检查 | 应运行的守卫确实执行且通过；SKIP 和报告性结果不算通过；失败项修复或有明确 ADR/文档例外 |
 | 改 Console API | 同步 OpenAPI、协议文档、前端 `api.generated.ts` 和调用方 | 前后端类型一致; 页面不依赖不存在的字段 |
 | 改 DB 迁移 | 复扫 tenant/RLS、archive schema、Flyway schema、迁移安全、位置列插入 | 租户隔离不退化; 迁移可前向执行; archive 与热表规则一致 |
 | 改 worker / SDK transport | 跑 SDK fixture、live transport、orchestrator e2e | Java/Python/Go/JS/Rust 行为不漂移; conformance 和生产链路一致 |
