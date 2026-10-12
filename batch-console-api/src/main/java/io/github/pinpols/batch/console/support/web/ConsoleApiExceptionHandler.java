@@ -191,11 +191,10 @@ public class ConsoleApiExceptionHandler {
       if (downstream != null && downstream.code() != null) {
         // 以业务 code 为准，HTTP status 使用 code.httpStatus()（更稳定、跨服务一致）
         ResultCode code = downstream.code();
-        String message = code.httpStatus() >= 500
-            ? code.defaultMessage()
-            : EmptyChecks.isBlank(downstream.message())
-                ? code.defaultMessage()
-                : downstream.message();
+        String message = downstream.message();
+        if (code.httpStatus() >= 500 || EmptyChecks.isBlank(message)) {
+          message = code.defaultMessage();
+        }
         return ResponseEntity.status(downstream.code().httpStatus())
             .body(responseFactory.failure(code, message));
       }

@@ -144,6 +144,32 @@ class WorkerStartupRuntimeAuditTest {
   }
 
   @Test
+  @DisplayName("启动审计贡献者异常时仅报告异常类型并标记不健康")
+  void shouldReportContributorExceptionTypeWithoutMessage_whenContributorAuditFails(
+      CapturedOutput output) {
+    WorkerExecutionTimeoutProperties execution = new WorkerExecutionTimeoutProperties();
+    execution.setPoolSize(4);
+    WorkerStartupAuditContributor contributor = mock(WorkerStartupAuditContributor.class);
+    when(contributor.name()).thenReturn("dispatch-channel-health");
+    doThrow(new IllegalStateException("password=top-secret")).when(contributor).audit();
+    WorkerStartupRuntimeAudit audit = new WorkerStartupRuntimeAudit(
+        provider(workerConfiguration()),
+        registeredRuntimeState(),
+        execution,
+        new WorkerReportOutboxProperties(),
+        absentProvider(),
+        provider(List.of(contributor)),
+        concurrencyProperties(4));
+
+    audit.auditOnReady();
+
+    assertThat(output.getOut())
+        .contains("worker startup runtime audit WARN: unhealthy=[dispatch-channel-health]")
+        .contains("IllegalStateException")
+        .doesNotContain("top-secret");
+  }
+
+  @Test
   @DisplayName("启动不健康时输出问题列表, 不打印完整核心快照")
   void shouldLogIssuesWithoutFullCoreSnapshot_whenStartupUnhealthy(CapturedOutput output) {
     WorkerExecutionTimeoutProperties execution = new WorkerExecutionTimeoutProperties();
