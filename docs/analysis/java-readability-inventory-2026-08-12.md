@@ -65,7 +65,7 @@
 | `batch-common/src/main/java/io/github/pinpols/batch/common/diagnostics/BatchRuntimeStatusEndpoint.java` | `L51: public Map<String, Object> status` |
 | `batch-common/src/main/java/io/github/pinpols/batch/common/page/CursorCodec.java` | `L45: public static Map<String, Object> decode` |
 | `batch-common/src/main/java/io/github/pinpols/batch/common/utils/JsonUtils.java` | `L91: public static Map<String, Object> toMap` |
-| `batch-common/src/main/java/io/github/pinpols/batch/common/utils/SecretMasking.java` | `L62: public static Map<String, Object> maskSensitiveKeys`<br>`L67: public static Map<String, Object> maskSensitiveKeys` |
+| `batch-common/src/main/java/io/github/pinpols/batch/common/utils/SecretMasking.java` | `L64: public static Map<String, Object> maskSensitiveKeys`<br>`L70: public static Map<String, Object> maskSensitiveKeys` |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/ops/infrastructure/ConsoleJobOpsSupport.java` | `L226: public Map<String, Object> parsePayload` |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelSchema.java` | `L135: public static Map<String, Object> toExportRow` |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/shared/query/ConsoleQuerySupport.java` | `L74: public static Map<String, Object> requireRow` |
