@@ -612,7 +612,7 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 | ID | 主题 | 阻塞类型 | 卡在哪 |
 |---|---|---|---|
 | **ADR10-S6/S7** | 异步路径灰度与同步入口清理 | — | 已完成；历史灰度步骤不再适用 |
-| **WK-up-1** | drain 接口和 claimed-tasks 的真实集群验证 | `[staging]` | 本地 E2E 已完成；剩余真实 Pod drain / 负载均衡验证 |
+| **WK-up-1** | drain 接口和 claimed-tasks 的真实集群验证 | `[staging]` | 本地定向 Playwright API 用例于 2026-10-12 复验通过（`3. drain 端点真实进入 DRAINING`，1/1）；剩余真实 Pod drain / 负载均衡验证 |
 | **WK-up-2** | 超时后接管的真实集群验证 | `[staging]` | 本地 E2E 已完成；剩余 Pod 驱逐后的真实重调度验证 |
 | **WK-up-3** | force-offline 紧急流程的真实集群验证 | `[staging]` | 本地 E2E 已完成；剩余多副本和运维操作留痕验证 |
 | **LIC-2** | SBOM 嵌入 artifact + 第三方清单 | `[ops]` 部分 | 本地能改 maven 配置，但 CI 注入 + artifact 校验需 ops |
