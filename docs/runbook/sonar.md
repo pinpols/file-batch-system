@@ -28,11 +28,11 @@
 ./scripts/dev/sonar-scan.sh --stop        # 停止并删除 SonarQube 容器
 ```
 
-脚本内置流程：起容器 → 等待 UP → 生成一次性分析 token → 应用自定义 quality profile → 跑分析 → 导出报告。
+脚本内置流程：起容器 → 等待 UP → 生成一次性分析 token → 应用自定义 quality profile → 跑分析 → 导出报告。token 通过 `SONAR_TOKEN` 环境变量传给 Maven，不作为命令行参数暴露；在脚本退出时（包括失败退出）撤销。Sonar 容器按本地开发约定保留，需手动清理时执行 `--stop`。
 
 `--incremental` 不会裁剪 Sonar 的静态分析上下文：它只执行全 reactor 的 `test-compile`，不运行测试，然后以 Git merge-base 到当前工作树的新增/修改 Java 行过滤报告。增量模式使用独立项目键 `<projectKey>-incremental`，且不采集覆盖率，避免污染全量项目的 JaCoCo 基线。需要同时验证覆盖率时显式增加 `--with-tests`。
 
-Java PR 的本地审阅按需运行增量模式，并检查变更行 issues 与待审 Security Hotspots。它仍会分析完整 Maven reactor，再按 Git 变更行生成增量报告，不是只分析改动文件。CI 工作流在 PR、`main` push 和有相关变更的夜间执行；是否属于 required check 以仓库 Ruleset 为准。未触发的夜间 job 不算扫描通过。
+Java PR 的本地审阅按需运行增量模式，并检查变更行 issues 与待审 Security Hotspots。它仍会分析完整 Maven reactor，再按 Git 变更行生成增量报告，不是只分析改动文件。Sonar CI 工作流不在 PR 上执行；它在 `main` 相关变更、符合变更条件的夜间和手动 `main` dispatch 时执行。CodeQL 是独立工作流，PR 扫描不能表述成 Sonar PR 分析。是否属于 required check 以仓库 Ruleset 为准；未触发的夜间 job 不算扫描通过。
 
 增量文件集同时覆盖分支提交、暂存/未暂存修改和未跟踪 Java 文件。基线默认是 `origin/main`，也可用 `SONAR_BASE_REF` 或 `--base-ref` 覆盖。
 
@@ -71,7 +71,7 @@ Java PR 的本地审阅按需运行增量模式，并检查变更行 issues 与�
 - 每次运行都是 main 当前代码快照；滚动 30 天的变更判定依靠 Git SCM 历史，不依靠 Sonar 分析历史。系统不能提供跨提交的 issue 生命周期/趋势，也不执行 PR 分支分析。
 - Quality Gate 成功只表示第二次分析使用的临时项目门禁通过；临时项目没有跨运行的 issue 生命周期/趋势。是否属于 required check 以仓库 Ruleset 为准。
 - Quality Gate 校验将配置条件与本次分析返回的 metric 逐项对照，并要求整体状态为 `OK`。Sonar 在新代码少于 20 行时会忽略覆盖率/重复率条件；没有新增安全热点时也可能不返回热点审查率条件。校验器调用 `api/measures/component` 时请求 `additionalFields=period`，并从现代响应的 measure `period.value` 读取新代码证据，同时兼容旧版 `periods[]`；缺失条件只有在 `ignoredConditions=true` 且有对应无数据证据（`new_lines < 20` 或 `new_security_hotspots = 0`）时才接受。若所有已配置条件都已返回并逐项校验，即使 Sonar 的全局 `ignoredConditions` 标记为 `true` 也不因此判失败，因为没有配置条件被漏检。其它缺项、空结果、失败或未知状态仍失败。该规则由 `scripts/dev/tests/test_sonar_quality_gate.py` 覆盖。
-- 源码中已审核的 `@SuppressWarnings("java:S...")` 按 [Java suppression 标准](../standards/java-suppression-registry.md)维护；临时 Sonar 服务不做 issue 状态同步。
+- 源码中已审核的 Sonar 与其他静态分析抑制项按 [Java suppression 标准](../standards/java-suppression-registry.md)维护；临时 Sonar 服务不做 issue 状态同步。
 - Sonar **不替代**现有 PMD / Spotless / SpotBugs / 依赖扫描 / 测试门禁。
 
 ## 4. 质量基线参考

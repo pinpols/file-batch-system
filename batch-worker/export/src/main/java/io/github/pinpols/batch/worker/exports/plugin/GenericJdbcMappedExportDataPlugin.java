@@ -23,7 +23,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /** 通用 JDBC 映射导出插件：从模板配置的白名单表/列中查询批次头部及明细分页数据。 */
 @Component
-@SuppressWarnings("java:S2077")
 public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
 
   private final JdbcTemplate jdbcTemplate;
@@ -54,6 +53,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
   }
 
   @Override
+  @SuppressWarnings("java:S2077")
   public Map<String, Object> loadBatch(ExportDataContext context) {
     JdbcMappedExportSpec spec = JdbcMappedExportSpec.parse(context.templateConfig(), objectMapper);
     spec.validateIdentifiers(securityProperties.getAllowedSchemas());
@@ -80,6 +80,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
   }
 
   @Override
+  @SuppressWarnings("java:S2077")
   public DetailPage loadDetailPage(
       ExportDataContext context, Long batchId, int pageSize, Object cursor) {
     if (EmptyChecks.isNull(batchId)) {
@@ -192,6 +193,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
   }
 
   /** 物理表游标列 [min,max];非数值列 → 元素 null(planner 退 hashtext)。复用只读 RLS tx。 */
+  @SuppressWarnings("java:S2077")
   private BigDecimal[] minMax(JdbcMappedExportSpec spec, Long batchId) {
     String fq = JdbcMappedSqlValidator.quotePg(spec.schema())
         + "."

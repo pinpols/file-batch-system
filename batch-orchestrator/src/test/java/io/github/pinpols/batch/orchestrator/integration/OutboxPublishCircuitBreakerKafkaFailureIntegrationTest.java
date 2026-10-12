@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.engine.DefaultScheduleForwarder;
 import io.github.pinpols.batch.orchestrator.application.engine.ScheduleForwarderResult;
@@ -138,7 +137,8 @@ class OutboxPublishCircuitBreakerKafkaFailureIntegrationTest extends AbstractInt
     event.setPublishStatus(OutboxPublishStatus.NEW.code());
     event.setPublishAttempt(0);
     event.setPriority(10);
-    event.setNextPublishAt(BatchDateTimeSupport.utcNow());
+    // 用 NULL 表示立即可投递，避免 JVM 与 PostgreSQL 容器时钟的微小偏差把新事件判为未到期。
+    event.setNextPublishAt(null);
     event.setTraceId("trace-" + key);
     outboxEventMapper.insert(event);
     return event;

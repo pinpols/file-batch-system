@@ -35,7 +35,7 @@
 | 14 | [stats/](./stats/README.md) | 规模统计 | LoC / 文档体量统计 |
 | 15 | [test-data/](./test-data/test-full-coverage-import-suite/README.md) | 测试数据（Excel 配置包）| E2E 准备 |
 | 16 | [verifications/](./verifications/README.md) | 验证记录 | 实测 / drill / go-live evidence |
-| 17 | [standards/](./standards/README.md) | 文档、CI 质量和开源工程治理 | 文档复扫 / Action 固定 / 安全响应与供应链治理 |
+| 17 | [standards/](./standards/README.md) | 文档、CI 质量和开源工程治理 | [静态分析与抑制项治理](./standards/static-analysis-governance.md) / 文档复扫 / 安全响应与供应链治理 |
 | 18 | [governance/](./governance/README.md) | 机器可读治理契约 | CI 规则输入 |
 | — | [archive/](./archive/README.md) | 历史快照（**不再维护**） | 仅审计参考 |
 | — | [spike/](./spike/README.md) | Spike 实验记录 | 临时技术验证 |

@@ -26,6 +26,7 @@
 - 修复临时 Sonar 首次扫描无法设置 30 天新代码基线的问题：为扫描管理账号补齐项目级管理权限，并按项目实际主分支回读验证，避免 Sonar API 空响应掩盖配置未生效。
 - 修复批次日回放详情默认“全部”筛选因空状态被 SQL 等值过滤而显示空列表的问题；保留指定状态筛选及租户隔离。
 ### Security
+- 配置包 Excel 上传的工作簿暂存改为使用 owner-only 私有临时目录，避免在共享系统临时根目录落盘；成功和解析失败路径均验证清理。
 - Console 文件错误记录的 `rawRecord` 响应现按模板 `preview_masking_enabled` 执行脱敏；`error_line_masking_enabled` 仍负责错误消息和原始行，两项策略可独立配置。
 - 配置包 Excel 解析失败时不再将 POI 原始异常文本回显给调用方；服务端保留经过清理的诊断摘要。
 - 作业/步骤结果、实例快照及执行日志扩展字段的查询响应递归掩码凭据类 JSON 键；告警、审批、文件流水线、配置审计、通知投递和结构化错误载荷在响应投影/渲染时同样掩码，不改持久化值或 Worker/投递输入。自由文本中的任意凭据不在本次覆盖范围内。
@@ -68,6 +69,7 @@
 
 ### Changed
 
+- 静态分析例外治理新增对生产 SpotBugs 抑制、Sonar `//NOSONAR` 与 YAML IDE inspection 的覆盖，并将动态 SQL `S2077` 抑制收窄到已校验的 sink 方法；新增类级 `S2077` 会被静态门禁拒绝。
 - 作业监控矩阵收敛为：Cron 与依赖作业支持开始过晚、完成过晚、运行耗时；独立固定频率及手动/API/外部触发仅支持运行耗时。依赖完成窗口以 EFFECTIVE 就绪时刻计算，运行耗时不统一启用默认值。
 
 - Testcontainers 跨 Maven 运行复用改为本地显式 opt-in：默认清理 PG、Kafka、Valkey 和 MinIO 测试容器；`local-testcontainers-reuse` profile 仅复用带专属 Docker label 的 Valkey/MinIO，避免 CI 或个人全局配置造成测试数据残留。

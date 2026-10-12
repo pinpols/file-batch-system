@@ -54,6 +54,10 @@
 
 本地实现与定向验收已完成；后端 PR #1160、前端 PR #284 均于 2026-10-07 合并（PR 元数据确认）。合并不单独证明 Full Gate、sim 或生产验收完成；这些验证状态以各自运行记录为准。不能按“全仓 S1192 清零”扩展范围或将动态 Map、SQL 业务状态集合机械统一。范围见 [治理计划](../plans/typed-contract-enum-constant-governance-plan-2026-10-07.md)，本地证据见 [验收记录](../audit/typed-contract-governance-verification-2026-10-07.md)。
 
+## 静态分析与 suppression 治理（2026-10-12）
+
+实施阶段与验收见[治理计划](../plans/static-analysis-governance-plan-2026-10-12.md)，工具职责、门禁事实和例外细则见[静态分析治理标准](../standards/static-analysis-governance.md)。Sonar、CodeQL、SpotBugs、IDE inspection 的工具职责、触发条件、门禁属性及例外流程已集中；生产 Java/YAML suppression 守护已扩围并有正反例测试。当前安全敏感五规则已复核，S2077 类级抑制已改为 sink 方法级，S5443 临时文件问题已修并有单文件 Sonar 证据。其余存量 suppression 仍需按规则分批复核；Sonar Code Smell 和最新主干全量扫描也未因规范/脚本落地而自动清零。跟踪状态、扫描证据及剩余范围只在治理标准/计划维护，避免本表复制动态计数。全量 Sonar 正在本地验收，完成后补录实际报告和 Quality Gate 状态；不得把扫描运行或本地结果表述成 PR/Full Gate 通过。
+
 ## 部署与持续交付
 
 Compose CD、生产拓扑、硬件起步规格和 Kubernetes/GitOps 最终目标的权威待办统一维护在 [Compose CD → Kubernetes GitOps 路线](../runbook/compose-cd-roadmap.md#8-待办)。本总表只保留领域入口，避免复制 P0/P1/P2 checkbox 后产生状态漂移。

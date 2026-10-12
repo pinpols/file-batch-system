@@ -135,4 +135,26 @@ class TriggerSecurityFilterTest {
     assertThat(SecurityContextHolder.getContext().getAuthentication().getName())
         .isEqualTo("internal");
   }
+
+  @Test
+  @DisplayName("CSRF 仅忽略带正确内部密钥的请求,缺失或错误密钥仍受保护")
+  void csrfMatcher_ignoresOnlyAuthenticatedInternalRequests() {
+    TriggerSecurityConfiguration.InternalSecretRequestMatcher matcher =
+        new TriggerSecurityConfiguration.InternalSecretRequestMatcher(securityProperties);
+    MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/triggers/launch");
+
+    assertThat(matcher.matches(request)).isFalse();
+
+    request.addHeader(HEADER, "wrong-secret");
+    assertThat(matcher.matches(request)).isFalse();
+
+    MockHttpServletRequest authenticatedRequest =
+        new MockHttpServletRequest("POST", "/api/triggers/launch");
+    authenticatedRequest.addHeader(HEADER, SECRET);
+    assertThat(matcher.matches(authenticatedRequest)).isTrue();
+
+    securityProperties.setBypassMode(true);
+    assertThat(matcher.matches(new MockHttpServletRequest("POST", "/api/triggers/launch")))
+        .isTrue();
+  }
 }

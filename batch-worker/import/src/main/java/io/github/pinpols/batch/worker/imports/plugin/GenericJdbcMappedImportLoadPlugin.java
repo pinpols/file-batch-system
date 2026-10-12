@@ -50,7 +50,6 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @Slf4j
 @Component
-@SuppressWarnings("java:S2077")
 public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
 
   private final JdbcTemplate jdbcTemplate;
@@ -88,6 +87,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
   }
 
   @Override
+  @SuppressWarnings("java:S2077")
   public int loadChunk(ImportLoadContext context, List<Map<String, Object>> records)
       throws Exception {
     if (records == null || records.isEmpty()) {
@@ -202,6 +202,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     return spec.loadStrategy() == ImportLoadStrategy.PARTITION_STAGE_SWAP_COPY;
   }
 
+  @SuppressWarnings("java:S2077")
   public void preparePartitionReplace(ImportLoadContext context) {
     JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(context.templateConfig(), objectMapper);
     spec.validateIdentifiers(
@@ -232,6 +233,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     });
   }
 
+  @SuppressWarnings("java:S2077")
   public void finishPartitionStageSwap(ImportLoadContext context) {
     JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(context.templateConfig(), objectMapper);
     spec.validateIdentifiers(
@@ -488,6 +490,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     return copyChunk(context, spec, insertCols, records, tableName(spec));
   }
 
+  @SuppressWarnings("java:S2077")
   private int copyChunk(
       ImportLoadContext context,
       JdbcMappedImportSpec spec,
@@ -576,6 +579,7 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     return "DELETE FROM " + tableName(spec) + " WHERE " + where;
   }
 
+  @SuppressWarnings("java:S2077")
   private void prepareStageSwapTable(ImportLoadContext context, JdbcMappedImportSpec spec) {
     String staging = stagingTableName(context, spec);
     jdbcTemplate.execute("DROP TABLE IF EXISTS " + staging);

@@ -679,8 +679,8 @@ python3 -m unittest scripts/ci/tests/test_check_java_structured_string_concat.py
 
 ## `check-java-suppression-registry.py`
 
-检查生产 Java 的 `@SuppressWarnings` 与生产 `application*.yml` / `application*.yaml` 中的 IntelliJ
-`noinspection` 是否使用已审核的精确规则，并按路径和数量对账。它不要求 suppression 数量归零，
+检查生产 Java 的 `@SuppressWarnings`、SpotBugs `@SuppressFBWarnings`、Sonar 行注释 `//NOSONAR`，以及模块
+`src/main/resources` 下所有 YAML 中的 IDE `noinspection` 是否使用已审核的精确规则，并按路径和数量对账。它不要求 suppression 数量归零，
 但会阻断未登记的新规则、位置或数量，防止静态检查例外在重构中无理由扩散。规则用途和移除条件见
 `docs/standards/java-suppression-registry.md`。
 

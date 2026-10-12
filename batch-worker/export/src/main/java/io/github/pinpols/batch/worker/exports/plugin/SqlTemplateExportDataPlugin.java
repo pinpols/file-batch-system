@@ -36,7 +36,6 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @Slf4j
 @Component
-@SuppressWarnings("java:S2077")
 public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
 
   public static final String PLUGIN_ID = WorkerPluginIds.EXPORT_DATA_SQL_TEMPLATE;
@@ -93,6 +92,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
   }
 
   @Override
+  @SuppressWarnings("java:S2077")
   public DetailPage loadDetailPage(
       ExportDataContext context, Long batchId, int pageSize, Object cursor) {
     if (context == null
@@ -201,6 +201,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
     return null;
   }
 
+  @SuppressWarnings("java:S2077")
   private void runExplainCheck(
       String baseSql, Map<String, Object> baseParams, ExportDataContext context) {
     String explainSql = "EXPLAIN (FORMAT JSON, ANALYZE FALSE) " + baseSql;
@@ -305,6 +306,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
   }
 
   /** 算游标列 [min,max];非数值列 → 元素 null(planner 据此退 hashtext)。复用只读 RLS tx。 */
+  @SuppressWarnings("java:S2077")
   private BigDecimal[] minMax(String baseSql, String cursorColumn, Map<String, Object> baseParams) {
     String cur = io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator.quotePg(cursorColumn);
     String mmSql =
