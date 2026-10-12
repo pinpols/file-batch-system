@@ -89,6 +89,45 @@ class SonarQualityGateTest(unittest.TestCase):
         self.assertFalse(passed)
         self.assertIn("new_coverage", detail)
 
+    def test_accepts_sonar_omission_with_small_change_evidence_when_flag_is_false(self) -> None:
+        status = self.result["projectStatus"]
+        status["conditions"] = [condition("new_violations"), condition(HOTSPOT_METRIC)]
+        status["ignoredConditions"] = False
+
+        passed, detail = evaluate_quality_gate(
+            self.config,
+            self.result,
+            {
+                "new_lines": 12,
+                "new_security_hotspots": 0,
+            },
+        )
+
+        self.assertTrue(passed)
+        self.assertIn("new_coverage", detail)
+        self.assertIn("new_duplicated_lines_density", detail)
+
+    def test_coverage_is_not_ignored_at_twenty_new_lines(self) -> None:
+        status = self.result["projectStatus"]
+        status["conditions"] = [
+            condition("new_violations"),
+            condition("new_duplicated_lines_density"),
+            condition(HOTSPOT_METRIC),
+        ]
+
+        passed, detail = evaluate_quality_gate(
+            self.config,
+            self.result,
+            {
+                "new_lines": 20,
+                "new_security_hotspots": 0,
+            },
+        )
+
+        self.assertFalse(passed)
+        self.assertIn("new_coverage", detail)
+        self.assertIn("new_lines < 20", detail)
+
     def test_rejects_missing_hotspot_condition_without_zero_hotspot_evidence(self) -> None:
         status = self.result["projectStatus"]
         status["conditions"] = status["conditions"][:-1]
@@ -110,7 +149,10 @@ class SonarQualityGateTest(unittest.TestCase):
             }
         )
 
-        self.assertEqual(measures, {"new_lines": 12, "new_security_hotspots": 0})
+        self.assertEqual(
+            measures,
+            {"new_lines": 12, "new_security_hotspots": 0},
+        )
 
     def test_parses_legacy_periods_measure_shape(self) -> None:
         measures = parse_measures(
@@ -223,6 +265,10 @@ class SonarQualityGateTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         self.assertIn('--data-urlencode "additionalFields=period"', script)
+        self.assertIn(
+            '--data-urlencode "metricKeys=new_lines,new_security_hotspots"',
+            script,
+        )
 
 
 if __name__ == "__main__":
