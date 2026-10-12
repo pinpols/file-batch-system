@@ -17,7 +17,7 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 | `pr-gate` | PR 合入门禁 | PR → main（opened / synchronize / reopened / ready_for_review，非草稿）、`merge_group`、手动 | 按变更范围执行静态检查和测试分片 | 各 job 单独设置，不设统一 workflow 超时 |
 | `sdk-contract-parity` | SDK 契约门禁 | 所有 PR（按 SDK 变更范围执行）、`merge_group`、手动 | 五语言共享契约验证；`sdk-contract-required` 聚合结果是稳定门禁，live transport 在 SDK 相关 PR 上运行但不属于 required 聚合 | 各 job 单独设置 |
 | `full-ci-gate` | main 全量回归 | main push、每周日 02:00 UTC、手动 | 主干静态检查、单元/集成测试、E2E 和安全检查；定时/手动还运行测试质量分析 | 各 job 单独设置，不设统一 workflow 超时 |
-| `staging-gate` | 手动 E2E 复验 | 手动 | GitHub-hosted runner 上的六片全量 E2E 与 Java 治理检查；不部署到 staging 集群，也不运行部署验证、负载测试或巡检。主干变更由 `full-ci-gate` 覆盖 | 各 job 单独设置 |
+| `staging-gate` | 手动 E2E 复验 | 手动 | GitHub-hosted runner 连接显式配置的 staging 前端/API origin 和账号；先校验两端健康及非 loopback 地址，再运行发布 E2E。必验场景缺失/跳过会失败，可选跳过会写入场景报告；不部署到 staging 集群，也不运行负载测试或巡检 | 各 job 单独设置 |
 | `daily-sim-strict-validation` | 变更感知的定时真实数据验证 | 每天 13:31 UTC（北京 21:31）、手动（`force=true` 可强制执行） | 检测当日代码/配置变化后运行 `sim-harness all` 和 BE-ACC strict；纯 Markdown/RST、`LICENSE`、`NOTICE` 不触发当天验证。手动运行按当前北京时间日期判断；定时运行使用计划触发时间所属日期。SIM 失败不跳过 strict，但启动失败/取消/runner 丢失不算通过。只有两项成功才构建 nightly 镜像 | 验证 job 240 min；内部步骤分别设限 |
 | `docker-image-build` | 变更感知的镜像构建 | 由 `daily-sim-strict-validation` 在当天有代码/配置变更且 sim + strict 成功后调用；也支持手动和复用调用 | 默认只用 Docker Bake 构建全部应用镜像和运维工具箱镜像；显式 `publish=true` 时登录 GHCR、推送 SHA 镜像并上传含 immutable digest 的 backend image set。CI 使用 Maven Central 配置并带依赖下载重试 | 30 min |
 | `compose-cd` | 受控手动交付 | 仅从 `main` 手动触发 | 固定前后端 main SHA，复用两个镜像构建工作流并组装统一 digest manifest；可选连接 staging Docker 主机执行 Compose、health/version、前端 Playwright 与 Lighthouse，验收失败时回滚。它不随 push 自动部署，真实 staging 需先配置 GitHub Environment 和主机凭据 | 分 job 设置；Playwright 50 min |
@@ -78,6 +78,8 @@ CodeQL 的 `Analyze (java)` 只有在 `codeql.yml` 已于 main 生效、并确�
 | 手动 `workflow_dispatch` | 可手动 | 可手动 |
 
 ## 关键设计
+
+- **治理基线扩张必须显式审批**：PR 和 Full Gate 将 `direct-config-key-access-baseline.txt`、`test-conventions-baseline.txt` 与 Java contract count 基线对比目标分支；新增/扩大项须在 `docs/governance/baseline-expansion-approvals.json` 登记 owner、理由、复核日期、移除条件，且 JSON 计数必须匹配批准值。精确治理文件变更进入 `ci` 范围，普通 Markdown 不因此触发 CI 专项守卫。
 
 - **feature 分支自己 push 不跑任何 gate** — 开发可频繁推送无成本,门禁压力全在 PR 时
 - **直推 main 跳过 pr-gate**(无审查),但 `full-ci-gate` 仍回退回归

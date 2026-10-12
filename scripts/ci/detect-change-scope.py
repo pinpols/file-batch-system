@@ -53,6 +53,13 @@ ROOT_TOOL_CONFIG_FILES = {
     ".trivyignore.yaml",
     "qodana.yaml",
 }
+GOVERNANCE_CONTRACT_FILES = {
+    "docs/governance/baseline-expansion-approvals.json",
+    "docs/governance/soft-gates.json",
+    "docs/governance/application-governance-contract.yaml",
+    "docs/governance/direct-config-key-access-baseline.txt",
+    "docs/governance/test-conventions-baseline.txt",
+}
 
 
 def under(path: str, prefix: str) -> bool:
@@ -93,7 +100,7 @@ def classify_path(path: str) -> set[str]:
 
     if normalized.startswith((".github/workflows/", ".github/actions/")) or under(
         normalized, "scripts/ci"
-    ) or normalized in {
+    ) or normalized in GOVERNANCE_CONTRACT_FILES | {
         "docs/governance/java-contract-governance.json",
         "docs/governance/java-contract-governance-baseline.json",
     }:

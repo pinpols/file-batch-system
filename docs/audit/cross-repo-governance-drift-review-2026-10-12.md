@@ -11,6 +11,19 @@
 | P1 | 前后端存量基线 | 后端 `check-direct-config-key-access.py`、`check-test-conventions.py` 仅计算 `current - baseline`；前端 `check-maintainability.mjs`、`check-ui-complexity.mjs` 直接接受当前 JSON 的上限。基线与新缺口在同一 PR 中一起扩大时，相应检查仍可通过。 | 对基线文件增加相对 merge-base 的“不得无理由扩张”守卫或受控例外审查；减少基线允许自动通过，增加须列出新增项、owner、理由、到期/删除条件，并验证正反例。 |
 | P1 | 前端 E2E 完整性 | staging 执行 `test:e2e:all`，但多个 spec 根据数据/权限/环境调用 `test.skip`，例如 `e2e/business-data-strict.spec.ts` 在 API 空列表时跳过字段校验；`e2e/monitor-row-actions.spec.ts` 在无实例时跳过。命令包含用例不等于用例实际验证了业务。 | 将发布必验场景的 seed 缺失改为失败或显式准入阻断；可选/破坏性场景保留 skip，但发布报告按场景列出 PASS/SKIP/FAIL 和原因，不以单个绿色 job 代表全覆盖。 |
 
+## 后续落地状态（2026-10-12）
+
+本分支对四项编码缺口做了定向收口；状态不代表 PR/CI 或真实 staging 已验证：
+
+| 项目 | 本地落地 | 尚未证明 |
+|---|---|---|
+| GDRIFT-1 staging 目标对齐 | workflow 显式接收前端/API origin 和账号；健康检查、非 loopback 检查；Playwright staging 不启本地 Vite；配置负例测试通过 | staging 凭据、网络可达性、部署 SHA 对齐和真实浏览器运行 |
+| GDRIFT-2 治理契约路由 | 4 份机器可读治理文件精确归入 CI scope，新增正反例；普通 Markdown 保持 docs-only | PR 与 Full Gate 实际 Actions 记录 |
+| GDRIFT-3 基线受控扩张 | 两端比较目标分支；新增长度/数量需要匹配、未过期的 owner 审批及 CODEOWNERS；定向测试通过 | 维护者实际审批和远端 CI 执行 |
+| GDRIFT-4 发布必验场景 | 必验 seed 缺失/跳过/未运行或标签全失效均失败；可选 skip 汇总到 Actions Summary | staging 实际数据下的场景通过率与业务正确性 |
+
+真实 staging 未运行前不得把本地 E2E 配置测试称为 staging 通过。
+
 ## 守卫边界与周期审查
 
 | 判断 | 当前证据 | 处理方式 |

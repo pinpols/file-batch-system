@@ -32,6 +32,7 @@
 
 | 方向 | 必看规范 | 可执行守卫 | 典型漂移 |
 |---|---|---|---|
+| 治理基线与范围路由 | `docs/governance/README.md`; `docs/runbook/ci.md` | `check-governance-baseline-expansion.py`; `detect-change-scope.py` 的治理文件正反例 | 存量基线与新问题同 PR 静默扩张；机器可读契约变更被误归为纯文档而漏跑专项 CI |
 | 多租户与数据库 | `docs/agent-baseline.md`; [bounded-context-rules.md](../architecture/bounded-context-rules.md); ADR-017/020/024 | `check-biz-table-tenant-rls.py`; `check-migration-safety.sh`; `validate-flyway-schema.sh`; `check-db-comment-coverage.sh`; `check-new-table-doc-coverage.py`; `check-no-positional-insert-select-star.py`; 相关租户/归档 ArchTest | 漏 `tenant_id`; 新表未登记或数据库结构目录条目被删; `ON CONFLICT` 幂等守卫退化; archive schema 和热表漂移; 位置列插入导致错列 |
 | API 契约 | [console-api-protocol.md](../api/console-api-protocol.md); [console-api.openapi.yaml](../api/console-api.openapi.yaml); [orchestrator-internal.openapi.yaml](../api/orchestrator-internal.openapi.yaml) | `check-console-openapi-paths.py`; `check-openapi-breaking.sh`; 前端 `gen:api:check` | Controller 改了但 OpenAPI/前端类型没同步; 返回体字段和页面假设不一致 |
 | 固定契约与协议值 | [治理计划](../plans/typed-contract-enum-constant-governance-plan-2026-10-07.md); [精确例外](../governance/java-contract-governance.json); [零债务基线](../governance/java-contract-governance-baseline.json) | `check-java-contract-governance.py` 及 19 个正反例自测；PR/local 增量、规则变更与 Full Gate 全量；枚举改动扩展复扫登记消费者 | 固定 DTO 退回 Map/Object；已确认同域的 enum code 重新散落；已有协议键常量未复用；动态 Map 宽泛豁免 |
