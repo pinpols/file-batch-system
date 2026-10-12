@@ -14,4 +14,9 @@ public record WorkflowNodeRunQuery(
     String nodeStatus,
     String traceId,
     PageRequest pageRequest,
-    Long cursorId) {}
+    Long cursorId) {
+
+  public static WorkflowNodeRunQuery ofWorkflowRun(String tenantId, Long workflowRunId) {
+    return new WorkflowNodeRunQuery(tenantId, workflowRunId, null, null, null, null, null);
+  }
+}

@@ -31,6 +31,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionE
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplaySessionStatusParam;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayPlanCalendarMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayEntryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayPreviewTokenMapper;
@@ -637,8 +638,7 @@ class BatchDayReplayServiceTest {
         .thenReturn(
             sessionAt("t1", 1L, ConfigLifecycleStatus.PENDING_APPROVAL.code(), "ALL_FAILED"))
         .thenReturn(sessionAt("t1", 1L, "RUNNING", "ALL_FAILED"));
-    when(sessionMapper.updateStatus(
-            eq("t1"), eq(1L), eq("RUNNING"), anyList(), any(), any(), eq("approver"), any()))
+    when(sessionMapper.updateStatus(any(UpdateBatchDayReplaySessionStatusParam.class)))
         .thenReturn(1);
 
     var result = service.approve("t1", 1L, "approver");
@@ -662,8 +662,7 @@ class BatchDayReplayServiceTest {
     when(sessionMapper.selectById("t1", 1L))
         .thenReturn(sessionAt("t1", 1L, "RUNNING", "ALL_FAILED"))
         .thenReturn(sessionAt("t1", 1L, "CANCELLED", "ALL_FAILED"));
-    when(sessionMapper.updateStatus(
-            eq("t1"), eq(1L), eq("CANCELLED"), anyList(), any(), any(), any(), any()))
+    when(sessionMapper.updateStatus(any(UpdateBatchDayReplaySessionStatusParam.class)))
         .thenReturn(1);
 
     var result = service.cancel("t1", 1L);

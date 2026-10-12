@@ -146,8 +146,8 @@ public class DefaultPipelineDefinitionService implements PipelineDefinitionServi
         pipelineDefinitionMapper.selectById(tenantId, id), "pipeline definition not found");
     String existingWorkerGroup = (String) existing.get(KEY_WORKER_GROUP);
     if (Texts.hasText(request.getWorkerGroup()) || Texts.hasText(existingWorkerGroup)) {
-      resourceAssignmentGuard.assertUpdateAllowed(
-          null, request.getWorkerGroup(), null, existingWorkerGroup);
+      resourceAssignmentGuard.assertWorkerGroupUpdateAllowed(
+          request.getWorkerGroup(), existingWorkerGroup);
     }
     Map<String, Object> params = new HashMap<>();
     params.put("tenant_id", tenantId);

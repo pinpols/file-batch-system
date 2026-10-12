@@ -6,6 +6,8 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplayEntryStatusParam;
+import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplaySessionStatusParam;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayEntryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplaySessionMapper;
 import java.time.Instant;
@@ -87,7 +89,10 @@ public class BatchDayReplayTerminalReconciler {
     }
     Instant now = dateTimeSupport.nowInstant();
     String entryStatus = mapInstanceTerminalToEntryStatus(session, instanceStatus);
-    entryMapper.updateStatus(entry.id(), entryStatus, jobInstanceId, null, null, null, now, now);
+    UpdateBatchDayReplayEntryStatusParam statusUpdate =
+        UpdateBatchDayReplayEntryStatusParam.completedRerun(
+            entry.id(), entryStatus, jobInstanceId, now, now);
+    entryMapper.updateStatus(statusUpdate);
     advanceSessionCounts(session, now);
   }
 
@@ -194,15 +199,14 @@ public class BatchDayReplayTerminalReconciler {
         && (SESSION_RUNNING.equals(session.status())
             || SESSION_PARTIAL_FAILED.equals(session.status()))) {
       String terminalStatus = failed > 0L ? SESSION_PARTIAL_FAILED : SESSION_SUCCEEDED;
-      int updated = sessionMapper.updateStatus(
-          session.tenantId(),
-          session.id(),
-          terminalStatus,
-          List.of(SESSION_RUNNING, SESSION_PARTIAL_FAILED),
-          null,
-          now,
-          null,
-          now);
+      UpdateBatchDayReplaySessionStatusParam statusUpdate =
+          UpdateBatchDayReplaySessionStatusParam.completed(
+              session.tenantId(),
+              session.id(),
+              terminalStatus,
+              List.of(SESSION_RUNNING, SESSION_PARTIAL_FAILED),
+              now);
+      int updated = sessionMapper.updateStatus(statusUpdate);
       if (updated > 0) {
         log.info(
             "replay session completed: tenantId={}, sessionId={}, terminalStatus={},"

@@ -230,7 +230,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
           String fatalMessage = verifierResult.firstFatalMessage() == null
               ? "ContentVerifier reported fatal failure"
               : verifierResult.firstFatalMessage();
-          handlePipelineFailure(attributes, fatalCode, fatalMessage, null, null);
+          handlePipelineFailureWithoutDetails(attributes, fatalCode, fatalMessage);
           return new StepExecutionResponse(false, fatalCode, fatalMessage);
         }
 
@@ -273,7 +273,8 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
             failure.getErrorArgs());
         return failure;
       }
-      handlePipelineFailure(attributes, unexpectedErrorCode(), exception.getMessage(), null, null);
+      handlePipelineFailureWithoutDetails(
+          attributes, unexpectedErrorCode(), exception.getMessage());
       return new StepExecutionResponse(false, unexpectedErrorCode(), exception.getMessage());
     }
   }
@@ -526,5 +527,10 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
     metadata.put("errorKey", errorKey);
     metadata.put("errorArgs", errorArgs);
     fileRecords.updateFileStatus(fileId, FileStatus.FAILED.code(), metadata);
+  }
+
+  private void handlePipelineFailureWithoutDetails(
+      Map<String, Object> attributes, String errorCode, String errorMessage) {
+    handlePipelineFailure(attributes, errorCode, errorMessage, null, null);
   }
 }

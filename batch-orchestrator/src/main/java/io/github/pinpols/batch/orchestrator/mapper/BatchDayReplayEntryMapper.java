@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplayEntryStatusParam;
 import io.github.pinpols.batch.orchestrator.mapper.view.BatchDayReplayAssetPartitionImpactView;
 import io.github.pinpols.batch.orchestrator.mapper.view.BatchDayReplayDispatchImpactView;
 import java.time.Instant;
@@ -9,7 +10,6 @@ import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
 /** ADR-020 batch_day_replay_entry MyBatis 映射。 */
-@SuppressWarnings("PMD.ExcessiveParameterList")
 public interface BatchDayReplayEntryMapper {
 
   int insert(BatchDayReplayEntryEntity entity);
@@ -60,15 +60,7 @@ public interface BatchDayReplayEntryMapper {
       @Param("sourceInstanceId") Long sourceInstanceId);
 
   /** 推进 status + 关联字段。 */
-  int updateStatus(
-      @Param("id") Long id,
-      @Param("toStatus") String toStatus,
-      @Param("rerunInstanceId") Long rerunInstanceId,
-      @Param("resultVersionId") Long resultVersionId,
-      @Param("failureReason") String failureReason,
-      @Param("startedAt") Instant startedAt,
-      @Param("finishedAt") Instant finishedAt,
-      @Param("now") Instant now);
+  int updateStatus(UpdateBatchDayReplayEntryStatusParam param);
 
   /** 用于 session 完成判断：每个状态各有多少 entry。 */
   long countBySessionAndStatus(@Param("sessionId") Long sessionId, @Param("status") String status);

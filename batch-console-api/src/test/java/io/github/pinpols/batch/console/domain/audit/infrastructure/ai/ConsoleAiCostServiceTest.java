@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -80,8 +82,9 @@ class ConsoleAiCostServiceTest {
     ConsoleAiCostService.Reservation reservation = new ConsoleAiCostService.Reservation(
         "tenant-a", YearMonth.now(ZoneOffset.UTC).atDay(1), new BigDecimal("0.01"), true);
 
-    ConsoleAiCostService.CostResult result =
-        service.settle(reservation, "test-provider", 1000, 500);
+    ConsoleAiCostService.MeasuredUsage usage =
+        new ConsoleAiCostService.MeasuredUsage("test-provider", 1000, 500);
+    ConsoleAiCostService.CostResult result = service.settleMeasured(reservation, usage);
 
     assertThat(result.status()).isEqualTo("PRICED");
     assertThat(result.amount()).isEqualByComparingTo("0.00600000");
@@ -101,10 +104,30 @@ class ConsoleAiCostServiceTest {
     ConsoleAiCostService.Reservation reservation = new ConsoleAiCostService.Reservation(
         "tenant-a", YearMonth.now(ZoneOffset.UTC).atDay(1), new BigDecimal("0.01"), true);
 
-    ConsoleAiCostService.CostResult result = service.settle(reservation, null, null, null);
+    ConsoleAiCostService.CostResult result = service.settleReserved(reservation);
 
     assertThat(result.status()).isEqualTo("RESERVED");
     assertThat(result.amount()).isEqualByComparingTo("0.01");
+  }
+
+  @Test
+  @DisplayName("实测用量结算:拒绝不完整或非法用量")
+  void shouldRejectIncompleteMeasuredUsage() {
+    ConsoleAiCostService.Reservation reservation = new ConsoleAiCostService.Reservation(
+        "tenant-a", YearMonth.now(ZoneOffset.UTC).atDay(1), new BigDecimal("0.01"), true);
+
+    assertThatNullPointerException()
+        .isThrownBy(() -> service.settleMeasured(reservation, null))
+        .withMessage("usage");
+    assertThatNullPointerException()
+        .isThrownBy(() -> new ConsoleAiCostService.MeasuredUsage(null, 1000, 500))
+        .withMessage("provider");
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> new ConsoleAiCostService.MeasuredUsage(" ", 1000, 500))
+        .withMessage("provider must not be blank");
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> new ConsoleAiCostService.MeasuredUsage("test-provider", -1, 500))
+        .withMessage("token counts must not be negative");
   }
 
   @Test

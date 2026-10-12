@@ -43,6 +43,11 @@ public class JobResourceAssignmentGuard {
     }
   }
 
+  public void assertWorkerGroupUpdateAllowed(
+      String requestedWorkerGroup, String currentWorkerGroup) {
+    assertUpdateAllowed(null, requestedWorkerGroup, null, currentWorkerGroup);
+  }
+
   public void assertCopyOverridesAllowed(String queueCode, String workerGroup) {
     if (isPlatformAdmin()) {
       return;

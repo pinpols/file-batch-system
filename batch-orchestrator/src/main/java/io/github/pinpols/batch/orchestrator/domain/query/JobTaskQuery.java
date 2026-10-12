@@ -33,4 +33,15 @@ public record JobTaskQuery(
   public static JobTaskQuery ofPartition(String tenantId, Long jobPartitionId) {
     return new JobTaskQuery(tenantId, null, jobPartitionId, null, null);
   }
+
+  /** 按实例与 partition 精确定位 task。 */
+  public static JobTaskQuery ofPartition(String tenantId, Long jobInstanceId, Long jobPartitionId) {
+    return new JobTaskQuery(tenantId, jobInstanceId, jobPartitionId, null, null);
+  }
+
+  /** 按实例、partition 与状态精确定位 task。 */
+  public static JobTaskQuery ofPartition(
+      String tenantId, Long jobInstanceId, Long jobPartitionId, String taskStatus) {
+    return new JobTaskQuery(tenantId, jobInstanceId, jobPartitionId, taskStatus, null);
+  }
 }

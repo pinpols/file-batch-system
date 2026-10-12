@@ -254,7 +254,7 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
           || state.peakBorrowedCount() != 0
           || state.windowStartedAt() != null
           || state.windowExpiresAt() != null) {
-        state = state.withRefresh(normalizedPolicy, null, null, 0, state.lastResetAt());
+        state = state.withoutRuntimeWindow(normalizedPolicy, state.lastResetAt());
         changed = true;
       }
       if (changed && persist) {

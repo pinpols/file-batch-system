@@ -1,20 +1,20 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `3830d5f20`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `44ba4d078`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,959 | 533,961 | 275,687 | 51.6% |
+| 4,967 | 534,711 | 276,164 | 51.6% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| prod | 2,814 | 259,468 | 119,036 | 45.9% |
-| test | 1,315 | 200,140 | 109,366 | 54.6% |
-| script | 667 | 57,042 | 36,085 | 63.3% |
+| prod | 2,816 | 259,700 | 119,179 | 45.9% |
+| test | 1,321 | 200,653 | 109,703 | 54.7% |
+| script | 667 | 57,047 | 36,082 | 63.2% |
 | config | 65 | 9,217 | 6,801 | 73.8% |
 | infra-config | 34 | 5,816 | 4,227 | 72.7% |
 | sql | 64 | 2,278 | 172 | 7.6% |
@@ -23,11 +23,11 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,630 | 389,044 | 200,991 | 51.7% |
+| Java | 3,638 | 389,773 | 201,459 | 51.7% |
 | Shell | 212 | 32,584 | 25,691 | 78.8% |
-| Python | 267 | 38,666 | 20,033 | 51.8% |
+| Python | 267 | 38,686 | 20,042 | 51.8% |
 | YAML | 108 | 13,785 | 10,565 | 76.6% |
-| XML | 186 | 22,395 | 6,982 | 31.2% |
+| XML | 186 | 22,396 | 6,982 | 31.2% |
 | TypeScript | 37 | 6,667 | 3,141 | 47.1% |
 | Rust | 23 | 8,499 | 2,856 | 33.6% |
 | Properties | 5 | 2,935 | 2,409 | 82.1% |
@@ -54,8 +54,8 @@
 | `scripts/local/validate-seed-scenarios.sh` | script | Shell | 769 | 561 |
 | `scripts/fix-fixture-xlsx.py` | script | Python | 985 | 559 |
 | `scripts/local/start-all.sh` | script | Shell | 645 | 518 |
+| `batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationServiceTest.java` | test | Java | 824 | 513 |
 | `pom.xml` | config | XML | 845 | 512 |
-| `batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationServiceTest.java` | test | Java | 814 | 503 |
 | `scripts/dev/sonar-scan.sh` | script | Shell | 594 | 499 |
 | `scripts/local/sim-harness.sh` | script | Shell | 641 | 498 |
 | `scripts/local/be-acceptance.sh` | script | Shell | 615 | 482 |

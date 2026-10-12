@@ -23,12 +23,37 @@ import org.junit.jupiter.api.Test;
  * <ol>
  *   <li>禁止 raw {@code new XxxParam(a, b, c, d, e, f, g)} 长构造（argc>6）
  *   <li>禁止 inline build：{@code mapper.x(XxxParam.builder()...build())}
+ *   <li>禁止已治理 Query 在生产调用侧用多个 {@code null} 拼位置构造
+ *   <li>状态型参数对象不得重新暴露公共构造器或通用 builder
  * </ol>
  *
  * <p>方案见 {@code docs/archive/analysis/positional-args-cleanup-plan.md} v3。
  */
-@DisplayName("方法位置参数规约守护: 已治理类型禁止长位置构造与实参位置内联构建")
+@DisplayName("方法位置参数规约守护: 已治理类型禁止构造与空值组合回潮")
 class PositionalArgsConventionTest {
+
+  private static final Set<String> CONTROLLED_FACTORY_TYPE_PATHS = Set.of(
+      "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/param/UpdateBatchDayReplayEntryStatusParam.java",
+      "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/param/UpdateBatchDayReplaySessionStatusParam.java");
+
+  private static final Set<String> GUARDED_QUERY_TYPES = Set.of(
+      "JobInstanceQuery",
+      "JobDefinitionQuery",
+      "JobStepInstanceQuery",
+      "WorkflowEdgeQuery",
+      "WorkflowNodeQuery",
+      "WorkflowDefinitionQuery",
+      "WorkflowRunQuery",
+      "WorkflowNodeRunQuery",
+      "FileTemplateConfigQuery",
+      "FilePipelineQuery",
+      "FileArrivalGroupQuery",
+      "FileErrorRecordQuery",
+      "ConsoleAiAuditLogQuery",
+      "OutboxDeliveryLogQuery",
+      "DeadLetterTaskQuery",
+      "RetryScheduleQuery",
+      "OutboxEventQuery");
 
   /** 已治理的类型白名单。新增治理类型追加到此即受守护。 */
   private static final Set<String> GUARDED_TYPES = Set.of(
@@ -84,6 +109,8 @@ class PositionalArgsConventionTest {
       "LaunchRequest",
       "CompensationSubmitCommand",
       "ArrivalGroupGovernanceCommand",
+      "UpdateBatchDayReplayEntryStatusParam",
+      "UpdateBatchDayReplaySessionStatusParam",
       // WorkerRegistryCache 内部 cache DTO
       "Entry");
 
@@ -167,6 +194,39 @@ class PositionalArgsConventionTest {
         .isEmpty();
   }
 
+  @Test
+  @DisplayName("已治理 Query 的生产调用侧不得用多个 null 拼位置构造")
+  void shouldRejectMultipleNullQueryConstructorOutsideQueryFactory() throws IOException {
+    List<String> violations = new ArrayList<>();
+    for (String module : SCAN_MODULES) {
+      Path root = REPO_ROOT.resolve(module).resolve("src/main/java");
+      try (Stream<Path> stream = Files.walk(root)) {
+        stream
+            .filter(path -> path.toString().endsWith(".java"))
+            .filter(path ->
+                !GUARDED_QUERY_TYPES.contains(path.getFileName().toString().replace(".java", "")))
+            .forEach(path -> collectMultipleNullQueryConstructors(path, violations));
+      }
+    }
+    assertThat(violations)
+        .as("已治理 Query 的生产调用侧禁止用多个 null 选择筛选模式；请使用具名工厂或 builder")
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("状态型参数对象只能通过受控具名工厂构造")
+  void shouldExposeOnlyControlledFactoriesForStateParams() throws IOException {
+    for (String relativePath : CONTROLLED_FACTORY_TYPE_PATHS) {
+      Path sourcePath = REPO_ROOT.resolve(relativePath);
+      String source = Files.readString(sourcePath, StandardCharsets.UTF_8);
+      String simpleName = sourcePath.getFileName().toString().replace(".java", "");
+      assertThat(source).as("%s 不得暴露通用 builder", relativePath).doesNotContain("@Builder");
+      assertThat(source)
+          .as("%s 不得暴露公共构造器", relativePath)
+          .doesNotMatch("(?s).*\\bpublic\\s+" + simpleName + "\\s*\\(.*");
+    }
+  }
+
   private static int countTopLevelArgs(String args) {
     int depth = 0;
     int count = 1;
@@ -246,6 +306,34 @@ class PositionalArgsConventionTest {
         }
         sink.add(file + ":" + (i + 1) + " -> inline " + type + ".builder()");
       }
+    }
+  }
+
+  private void collectMultipleNullQueryConstructors(Path file, List<String> sink) {
+    String content;
+    try {
+      content = Files.readString(file, StandardCharsets.UTF_8);
+    } catch (IOException e) {
+      return;
+    }
+    Matcher matcher = RAW_LONG_CTOR.matcher(content);
+    while (matcher.find()) {
+      String type = matcher.group(1);
+      if (!GUARDED_QUERY_TYPES.contains(type)) {
+        continue;
+      }
+      long nullCount =
+          Pattern.compile("\\bnull\\b").matcher(matcher.group(2)).results().count();
+      if (nullCount < 2) {
+        continue;
+      }
+      int lineNo = (int) content
+              .substring(0, matcher.start())
+              .chars()
+              .filter(ch -> ch == '\n')
+              .count()
+          + 1;
+      sink.add(file + ":" + lineNo + " -> new " + type + "(...) nulls=" + nullCount);
     }
   }
 }

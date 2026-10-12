@@ -86,7 +86,7 @@ public final class RetryRequeueCoordinator {
     }
     try {
       List<JobTaskEntity> tasks = jobTaskMapper.selectByQuery(
-          new JobTaskQuery(tenantId, jobInstance.getId(), partition.getId(), null, null));
+          JobTaskQuery.ofPartition(tenantId, jobInstance.getId(), partition.getId()));
       JobTaskEntity task = tasks.stream()
           .sorted((left, right) -> Integer.compare(
               left.getTaskSeq() == null ? 0 : left.getTaskSeq(),

@@ -52,12 +52,11 @@ public class PartitionReclaimUnit {
    */
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void reclaim(JobPartitionEntity partition) {
-    JobTaskQuery runningTaskQuery = new JobTaskQuery(
+    JobTaskQuery runningTaskQuery = JobTaskQuery.ofPartition(
         partition.getTenantId(),
         partition.getJobInstanceId(),
         partition.getId(),
-        TaskStatus.RUNNING.code(),
-        null);
+        TaskStatus.RUNNING.code());
     List<JobTaskEntity> tasks = jobTaskMapper.selectByQuery(runningTaskQuery);
     JobTaskEntity task = tasks.stream().findFirst().orElse(null);
 

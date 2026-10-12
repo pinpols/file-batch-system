@@ -266,8 +266,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       chatResponse = modelCall.response();
       modelName = resolveModelName(chatResponse, modelCall.provider());
     } catch (Exception exception) {
-      ConsoleAiCostService.CostResult failedCost =
-          costService.settle(reservation, null, null, null);
+      ConsoleAiCostService.CostResult failedCost = costService.settleReserved(reservation);
       if (exception instanceof InterruptedException) {
         Thread.currentThread().interrupt();
       }
@@ -417,17 +416,23 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
       promptTokens = usage.getPromptTokens();
       completionTokens = usage.getCompletionTokens();
     }
-    ConsoleAiCostService.CostResult cost = costService.settle(
-        execution.reservation(),
-        execution.modelCall().provider().provider(),
-        promptTokens,
-        completionTokens);
+    ConsoleAiCostService.CostResult cost;
+    boolean hasMeasuredUsage =
+        EmptyChecks.isNotNull(promptTokens) && EmptyChecks.isNotNull(completionTokens);
+    if (hasMeasuredUsage) {
+      String providerName = execution.modelCall().provider().provider();
+      ConsoleAiCostService.MeasuredUsage measuredUsage =
+          new ConsoleAiCostService.MeasuredUsage(providerName, promptTokens, completionTokens);
+      cost = costService.settleMeasured(execution.reservation(), measuredUsage);
+    } else {
+      cost = costService.settleReserved(execution.reservation());
+    }
     aiMetrics.recordTokens(promptTokens, completionTokens);
     aiMetrics.recordDecision(ConsoleAiMetrics.DECISION_APPROVED);
 
     String answer = extractContent(execution.chatResponse());
-    String grounded =
-        appendCitations(trim(answer, aiProperties.getMaxResponseLength()), execution.snippets());
+    String trimmedAnswer = trim(answer, aiProperties.getMaxResponseLength());
+    String grounded = appendCitations(trimmedAnswer, execution.snippets());
     answer = ConsoleTextSanitizer.safeDisplay(grounded, grounded.length());
 
     AiChatResponse response = new AiChatResponse();

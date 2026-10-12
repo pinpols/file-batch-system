@@ -79,16 +79,31 @@ public class ConsoleAiCostService {
   }
 
   @Transactional
-  public CostResult settle(
-      Reservation reservation, String provider, Integer promptTokens, Integer completionTokens) {
+  public CostResult settleMeasured(Reservation reservation, MeasuredUsage usage) {
+    Objects.requireNonNull(usage, "usage");
     if (EmptyChecks.isNull(reservation) || !reservation.priced()) {
       return new CostResult(null, "UNPRICED");
     }
-    boolean hasUsage =
-        EmptyChecks.isNotNull(promptTokens) && EmptyChecks.isNotNull(completionTokens);
-    BigDecimal amount = hasUsage
-        ? calculate(provider, promptTokens, completionTokens)
-        : reservation.reservedAmount();
+    BigDecimal amount = calculate(usage.provider(), usage.promptTokens(), usage.completionTokens());
+    return settlePricedReservation(
+        reservation, amount, usage.promptTokens(), usage.completionTokens(), "PRICED");
+  }
+
+  /** 模型调用未返回可靠用量时，按已预留金额保守结算。 */
+  @Transactional
+  public CostResult settleReserved(Reservation reservation) {
+    if (EmptyChecks.isNull(reservation) || !reservation.priced()) {
+      return new CostResult(null, "UNPRICED");
+    }
+    return settlePricedReservation(reservation, reservation.reservedAmount(), 0L, 0L, "RESERVED");
+  }
+
+  private CostResult settlePricedReservation(
+      Reservation reservation,
+      BigDecimal amount,
+      long promptTokens,
+      long completionTokens,
+      String status) {
     if (reservation.budgetReserved()) {
       mapper.setTenantContext(reservation.tenantId());
       mapper.settle(
@@ -96,10 +111,10 @@ public class ConsoleAiCostService {
           reservation.billingMonth(),
           reservation.reservedAmount(),
           amount,
-          EmptyChecks.isNull(promptTokens) ? 0L : promptTokens,
-          EmptyChecks.isNull(completionTokens) ? 0L : completionTokens);
+          promptTokens,
+          completionTokens);
     }
-    return new CostResult(amount, hasUsage ? "PRICED" : "RESERVED");
+    return new CostResult(amount, status);
   }
 
   @Transactional
@@ -218,6 +233,19 @@ public class ConsoleAiCostService {
 
     private boolean priced() {
       return EmptyChecks.isNotNull(reservedAmount);
+    }
+  }
+
+  /** 模型实际返回的完整用量；缺少任一字段时调用方必须选择 {@link #settleReserved(Reservation)}。 */
+  public record MeasuredUsage(String provider, int promptTokens, int completionTokens) {
+    public MeasuredUsage {
+      Objects.requireNonNull(provider, "provider");
+      if (EmptyChecks.isBlank(provider)) {
+        throw new IllegalArgumentException("provider must not be blank");
+      }
+      if (promptTokens < 0 || completionTokens < 0) {
+        throw new IllegalArgumentException("token counts must not be negative");
+      }
     }
   }
 

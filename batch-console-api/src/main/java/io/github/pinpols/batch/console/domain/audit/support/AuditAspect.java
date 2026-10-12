@@ -107,7 +107,7 @@ public class AuditAspect {
 
     try {
       Object result = pjp.proceed();
-      recordAudit(ann, aggregateId, targetTenantId, paramsJson, null, null);
+      recordSuccessfulAudit(ann, aggregateId, targetTenantId, paramsJson);
       return result;
     } catch (Throwable ex) {
       // 业务事务回滚会带走同事务 audit。用 REQUIRES_NEW 新事务写 FAILED 留痕,保证合规取证可见。
@@ -117,6 +117,11 @@ public class AuditAspect {
       recordInNewTransaction(ann, aggregateId, targetTenantId, paramsJson, errorCode, errorMsg);
       throw ex;
     }
+  }
+
+  private void recordSuccessfulAudit(
+      AuditAction ann, String aggregateId, String targetTenantId, String paramsJson) {
+    recordAudit(ann, aggregateId, targetTenantId, paramsJson, null, null);
   }
 
   /**

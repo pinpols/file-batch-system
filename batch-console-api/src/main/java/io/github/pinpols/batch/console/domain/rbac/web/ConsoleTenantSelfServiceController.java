@@ -48,7 +48,7 @@ public class ConsoleTenantSelfServiceController {
   @GetMapping("/quota")
   public CommonResponse<PageResponse<QuotaPolicyResponse>> quota(
       @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(quotaPolicyService.list(tenantId, null, null, 1, 100));
+    return responseFactory.success(quotaPolicyService.listAll(tenantId, 1, 100));
   }
 
   /** 查看租户配额用量摘要（从系统参数读取运行时统计）。 */

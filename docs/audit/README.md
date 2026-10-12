@@ -5,6 +5,7 @@
 
 | 文档 | 范围 |
 |---|---|
+| [code-readability-governance-2026-10-13.md](./code-readability-governance-2026-10-13.md) | 前后端方法调用、多个 `null`、合法状态、字符串、设计模式与数据结构治理闭环及验证边界 |
 | [cross-repo-governance-drift-review-2026-10-12.md](./cross-repo-governance-drift-review-2026-10-12.md) | 前后端 CI 守卫范围、基线与人工/AI 周期复核的证据快照；当前缺陷状态须重新核对 |
 | [tenant-job-configuration-phase0-baseline-2026-10-10.md](./tenant-job-configuration-phase0-baseline-2026-10-10.md) | **历史基线快照**：记录 2026-10-10 改造前的前后端事实与未决决策；阶段 0–4 当前状态统一见[租户作业配置改造计划](../plans/tenant-job-configuration-simplification-plan-2026-10-09.md)的阶段状态矩阵 |
 | [sensitive-logging-and-runtime-config-drift-2026-10-12.md](./sensitive-logging-and-runtime-config-drift-2026-10-12.md) | 动态日志敏感字段、Loki 验收边界，以及 Pipeline/模板/渠道运行时配置漂移核查 |

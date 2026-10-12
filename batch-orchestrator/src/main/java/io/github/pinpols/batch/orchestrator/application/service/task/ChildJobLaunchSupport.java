@@ -191,7 +191,7 @@ public class ChildJobLaunchSupport {
       String refJobCode,
       String idempotencyKey) {
     List<JobPartitionEntity> existingPartitions = jobMappers.jobPartitionMapper.selectByQuery(
-        new JobPartitionQuery(jobInstance.getTenantId(), jobInstance.getId(), null, null));
+        JobPartitionQuery.ofJobInstance(jobInstance.getTenantId(), jobInstance.getId()));
     int virtualPartitionNo = existingPartitions.stream()
             .map(JobPartitionEntity::getPartitionNo)
             .filter(Objects::nonNull)

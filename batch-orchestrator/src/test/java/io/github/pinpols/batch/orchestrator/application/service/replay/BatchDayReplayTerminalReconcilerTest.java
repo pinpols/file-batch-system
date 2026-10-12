@@ -3,9 +3,9 @@ package io.github.pinpols.batch.orchestrator.application.service.replay;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -20,6 +20,8 @@ import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplayEntryStatusParam;
+import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplaySessionStatusParam;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayEntryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplaySessionMapper;
 import java.time.Clock;
@@ -82,12 +84,17 @@ class BatchDayReplayTerminalReconcilerTest {
     reconciler.reconcileOnTerminal("t1", 7L, "JOB_A", 1001L, JOB_SUCCESS);
 
     verify(entryMapper)
-        .updateStatus(eq(11L), eq(ENTRY_SUCCEEDED), eq(1001L), any(), any(), any(), any(), any());
-    ArgumentCaptor<List<String>> expected = ArgumentCaptor.captor();
-    verify(sessionMapper)
-        .updateStatus(
-            eq("t1"), eq(7L), eq(ENTRY_SUCCEEDED), expected.capture(), any(), any(), any(), any());
-    assertThat(expected.getValue()).containsExactly("RUNNING", "PARTIAL_FAILED");
+        .updateStatus(argThat(param -> param.getId().equals(11L)
+            && param.getToStatus().equals(ENTRY_SUCCEEDED)
+            && param.getRerunInstanceId().equals(1001L)));
+    ArgumentCaptor<UpdateBatchDayReplaySessionStatusParam> sessionStatusUpdate =
+        ArgumentCaptor.forClass(UpdateBatchDayReplaySessionStatusParam.class);
+    verify(sessionMapper).updateStatus(sessionStatusUpdate.capture());
+    assertThat(sessionStatusUpdate.getValue().getTenantId()).isEqualTo("t1");
+    assertThat(sessionStatusUpdate.getValue().getId()).isEqualTo(7L);
+    assertThat(sessionStatusUpdate.getValue().getToStatus()).isEqualTo(ENTRY_SUCCEEDED);
+    assertThat(sessionStatusUpdate.getValue().getExpectedStatuses())
+        .containsExactly("RUNNING", "PARTIAL_FAILED");
   }
 
   @Test
@@ -109,18 +116,16 @@ class BatchDayReplayTerminalReconcilerTest {
 
     reconciler.reconcileOnTerminal("t1", 8L, "JOB_X", 2001L, JOB_FAILED);
 
-    verify(entryMapper)
-        .updateStatus(eq(20L), eq(ENTRY_FAILED), eq(2001L), any(), any(), any(), any(), any());
+    ArgumentCaptor<UpdateBatchDayReplayEntryStatusParam> statusUpdate =
+        ArgumentCaptor.forClass(UpdateBatchDayReplayEntryStatusParam.class);
+    verify(entryMapper).updateStatus(statusUpdate.capture());
+    assertThat(statusUpdate.getValue().getId()).isEqualTo(20L);
+    assertThat(statusUpdate.getValue().getToStatus()).isEqualTo(ENTRY_FAILED);
+    assertThat(statusUpdate.getValue().getRerunInstanceId()).isEqualTo(2001L);
     verify(sessionMapper)
-        .updateStatus(
-            eq("t1"),
-            eq(8L),
-            eq(JobInstanceStatus.PARTIAL_FAILED.code()),
-            anyList(),
-            any(),
-            any(),
-            any(),
-            any());
+        .updateStatus(argThat(param -> param.getTenantId().equals("t1")
+            && param.getId().equals(8L)
+            && param.getToStatus().equals(JobInstanceStatus.PARTIAL_FAILED.code())));
   }
 
   @Test
@@ -144,8 +149,7 @@ class BatchDayReplayTerminalReconcilerTest {
 
     verify(sessionMapper, times(1))
         .updateCounts(eq("t1"), eq(9L), eq(1), eq(0), eq(1), eq(2), any());
-    verify(sessionMapper, never())
-        .updateStatus(anyString(), anyLong(), anyString(), anyList(), any(), any(), any(), any());
+    verify(sessionMapper, never()).updateStatus(any(UpdateBatchDayReplaySessionStatusParam.class));
   }
 
   @Test
@@ -169,15 +173,10 @@ class BatchDayReplayTerminalReconcilerTest {
     reconciler.reconcileOnTerminal("t1", 10L, "JOB_RECOVERED", 4001L, JOB_SUCCESS);
 
     verify(sessionMapper)
-        .updateStatus(
-            eq("t1"),
-            eq(10L),
-            eq(ENTRY_SUCCEEDED),
-            eq(List.of("RUNNING", "PARTIAL_FAILED")),
-            any(),
-            any(),
-            any(),
-            any());
+        .updateStatus(argThat(param -> param.getTenantId().equals("t1")
+            && param.getId().equals(10L)
+            && param.getToStatus().equals(ENTRY_SUCCEEDED)
+            && param.getExpectedStatuses().equals(List.of("RUNNING", "PARTIAL_FAILED"))));
   }
 
   @Test
@@ -200,8 +199,7 @@ class BatchDayReplayTerminalReconcilerTest {
 
     reconciler.reconcileOnTerminal("t1", 50L, "JOB_X", 9999L, JOB_SUCCESS);
 
-    verify(entryMapper, never())
-        .updateStatus(anyLong(), anyString(), any(), any(), any(), any(), any(), any());
+    verify(entryMapper, never()).updateStatus(any(UpdateBatchDayReplayEntryStatusParam.class));
     verify(sessionMapper, never())
         .updateCounts(anyString(), anyLong(), anyInt(), anyInt(), anyInt(), anyInt(), any());
   }
@@ -241,7 +239,9 @@ class BatchDayReplayTerminalReconcilerTest {
         "t1", 60L, "JOB_DRY", 6001L, JobInstanceStatus.SUCCESS_DRY_RUN.code());
 
     verify(entryMapper)
-        .updateStatus(eq(61L), eq(ENTRY_SUCCEEDED), eq(6001L), any(), any(), any(), any(), any());
+        .updateStatus(argThat(param -> param.getId().equals(61L)
+            && param.getToStatus().equals(ENTRY_SUCCEEDED)
+            && param.getRerunInstanceId().equals(6001L)));
   }
 
   @Test
@@ -266,10 +266,13 @@ class BatchDayReplayTerminalReconcilerTest {
 
     reconciler.reconcileOnTerminal("t1", 70L, "JOB_DRY", 7001L, JobInstanceStatus.SUCCESS.code());
 
-    verify(entryMapper)
-        .updateStatus(eq(71L), eq("RUNNING"), eq(7001L), any(), any(), any(), any(), any());
-    verify(sessionMapper, never())
-        .updateStatus(eq("t1"), eq(70L), anyString(), anyList(), any(), any(), any(), any());
+    ArgumentCaptor<UpdateBatchDayReplayEntryStatusParam> statusUpdate =
+        ArgumentCaptor.forClass(UpdateBatchDayReplayEntryStatusParam.class);
+    verify(entryMapper).updateStatus(statusUpdate.capture());
+    assertThat(statusUpdate.getValue().getId()).isEqualTo(71L);
+    assertThat(statusUpdate.getValue().getToStatus()).isEqualTo("RUNNING");
+    assertThat(statusUpdate.getValue().getRerunInstanceId()).isEqualTo(7001L);
+    verify(sessionMapper, never()).updateStatus(any(UpdateBatchDayReplaySessionStatusParam.class));
   }
 
   // ── helpers ─────────────────────────────────────────────────────────────

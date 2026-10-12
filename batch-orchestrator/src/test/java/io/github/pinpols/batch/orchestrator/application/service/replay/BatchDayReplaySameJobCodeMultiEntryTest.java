@@ -1,10 +1,9 @@
 package io.github.pinpols.batch.orchestrator.application.service.replay;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -15,6 +14,7 @@ import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplayEntryStatusParam;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayEntryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplaySessionMapper;
 import java.time.Clock;
@@ -86,12 +86,15 @@ class BatchDayReplaySameJobCodeMultiEntryTest {
     reconciler.reconcileOnTerminal("t1", 7L, "JOB_DUP", 5001L, JOB_SUCCESS);
 
     // 断言: 更新的是 entryB (id=102),不是 entryA (id=101)
-    ArgumentCaptor<Long> updatedId = ArgumentCaptor.forClass(Long.class);
-    verify(entryMapper)
-        .updateStatus(
-            updatedId.capture(), eq(ENTRY_SUCCEEDED), eq(5001L), any(), any(), any(), any(), any());
-    assertThat(updatedId.getValue()).as("必须按 sourceInstanceId 命中第二条 entry").isEqualTo(102L);
-    assertThat(updatedId.getValue()).as("不得误更新第一条 entry").isNotEqualTo(entryA.id());
+    ArgumentCaptor<UpdateBatchDayReplayEntryStatusParam> statusUpdate =
+        ArgumentCaptor.forClass(UpdateBatchDayReplayEntryStatusParam.class);
+    verify(entryMapper).updateStatus(statusUpdate.capture());
+    assertThat(statusUpdate.getValue().getId())
+        .as("必须按 sourceInstanceId 命中第二条 entry")
+        .isEqualTo(102L);
+    assertThat(statusUpdate.getValue().getId()).as("不得误更新第一条 entry").isNotEqualTo(entryA.id());
+    assertThat(statusUpdate.getValue().getToStatus()).isEqualTo(ENTRY_SUCCEEDED);
+    assertThat(statusUpdate.getValue().getRerunInstanceId()).isEqualTo(5001L);
     // 不应回退到线性扫
     verify(entryMapper, never()).selectBySessionId(anyLong());
   }
@@ -118,7 +121,9 @@ class BatchDayReplaySameJobCodeMultiEntryTest {
 
     // 断言
     verify(entryMapper)
-        .updateStatus(eq(201L), eq(ENTRY_SUCCEEDED), eq(7100L), any(), any(), any(), any(), any());
+        .updateStatus(argThat(param -> param.getId().equals(201L)
+            && param.getToStatus().equals(ENTRY_SUCCEEDED)
+            && param.getRerunInstanceId().equals(7100L)));
     // 不需要 source 回退也不需要线性扫
     verify(entryMapper, never())
         .selectBySessionAndSourceInstanceId(anyLong(), anyString(), anyLong());
@@ -144,8 +149,12 @@ class BatchDayReplaySameJobCodeMultiEntryTest {
 
     reconciler.reconcileOnTerminal("t1", 9L, "JOB_LEGACY", 8000L, JOB_SUCCESS);
 
-    verify(entryMapper)
-        .updateStatus(eq(301L), eq(ENTRY_SUCCEEDED), eq(8000L), any(), any(), any(), any(), any());
+    ArgumentCaptor<UpdateBatchDayReplayEntryStatusParam> statusUpdate =
+        ArgumentCaptor.forClass(UpdateBatchDayReplayEntryStatusParam.class);
+    verify(entryMapper).updateStatus(statusUpdate.capture());
+    assertThat(statusUpdate.getValue().getId()).isEqualTo(301L);
+    assertThat(statusUpdate.getValue().getToStatus()).isEqualTo(ENTRY_SUCCEEDED);
+    assertThat(statusUpdate.getValue().getRerunInstanceId()).isEqualTo(8000L);
   }
 
   private static BatchDayReplaySessionEntity session(Long id, String status, int totalCount) {
