@@ -47,6 +47,17 @@ class PrePushModuleSelectionTest(unittest.TestCase):
             modules, self.select_modules([f"{module}/src/main/java/Example.java" for module in modules])
         )
 
+    def test_fallback_uses_reactor_module_path_for_sdk(self) -> None:
+        script = (ROOT / "scripts/local/pre-push-sdk-checks.sh").read_text(encoding="utf-8")
+        self.assertIn(
+            'MODULES="batch-orchestrator,sdk/java/core,batch-console-api"',
+            script,
+        )
+        self.assertNotIn(
+            'MODULES="batch-orchestrator,batch-worker-sdk,batch-console-api"',
+            script,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

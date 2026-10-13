@@ -580,7 +580,7 @@ if [[ $SKIP_BUILD -eq 0 ]] && [[ -n "$CHANGED_JAVA" ]]; then
   MODULES=$(grep -oE "(batch-[a-z0-9-]+|e2e-tests)" <<< "$CHANGED_JAVA" \
     | sort -u)
   if [[ -z "$MODULES" ]]; then
-    MODULES="batch-orchestrator,batch-worker-sdk,batch-console-api"
+    MODULES="batch-orchestrator,sdk/java/core,batch-console-api"
   else
     MODULES=$(echo "$MODULES" | tr '\n' ',' | sed 's/,$//')
   fi
