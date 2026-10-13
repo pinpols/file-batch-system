@@ -133,6 +133,19 @@ jobs:
             exit 1
           }
 
+      - name: Apply platform Flyway migrations
+        shell: bash
+        run: |
+          source scripts/lib/env-common.sh
+          batch_configure_local_jvm_database_env
+          flyway_classpath="$RUNNER_TEMP/flyway-classpath.txt"
+          ./mvnw -q -pl batch-orchestrator -am dependency:build-classpath \
+            -Dmdep.outputFile="$flyway_classpath"
+          java -cp "$(cat "$flyway_classpath")" scripts/ci/FlywayMigrate.java \
+            "$BATCH_PLATFORM_DB_URL" \
+            "$BATCH_PLATFORM_DB_USERNAME" \
+            "$BATCH_PLATFORM_DB_PASSWORD"
+
       - name: Build console-api jar (skip tests)
         shell: bash
         run: |
