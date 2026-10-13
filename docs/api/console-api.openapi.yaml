@@ -14641,8 +14641,9 @@ components:
           type: string
         triggerMode:
           type: string
-          enum: [SCHEDULED, API, MANUAL, EVENT, MIXED]
-          description: 作业定义声明的触发入口分类；不代表某次实例的实际触发来源，后者见 triggerType。
+          description: >-
+            作业定义声明的触发入口分类（SCHEDULED / API / MANUAL / EVENT / MIXED）；
+            服务端按公共 TriggerMode 词表校验。该字段不代表某次实例的实际触发来源，后者见 triggerType。
         workerGroup:
           type: string
           description: 平台管理的物理 Worker 分组；租户管理员创建时须省略。
@@ -14753,8 +14754,9 @@ components:
           type: string
         triggerMode:
           type: string
-          enum: [SCHEDULED, API, MANUAL, EVENT, MIXED]
-          description: 作业定义声明的触发入口分类；不代表某次实例的实际触发来源，后者见 triggerType。
+          description: >-
+            作业定义声明的触发入口分类（SCHEDULED / API / MANUAL / EVENT / MIXED）；
+            服务端按公共 TriggerMode 词表校验。该字段不代表某次实例的实际触发来源，后者见 triggerType。
         workerGroup:
           type: string
           description: 平台管理的物理 Worker 分组；租户管理员不可更改现有值。
