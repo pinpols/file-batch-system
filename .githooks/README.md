@@ -32,8 +32,8 @@ Maven 单测、Helm、Zizmor、镜像和依赖扫描保留在 pre-push / CI，�
 2. 新增生产 Java 代码必须使用 `EmptyChecks`
 3. 应用层不得直接依赖基础设施适配器或 Redis/Kafka 等直连客户端
 4. readiness 文档、Trivy ignore、SDK 配置环境变量和 Java 可读性清单保持同步
-5. Java 变更执行受影响模块 clean compile
-6. Java、POM 或相关 CI 路由变更执行全部 `*ArchTest` / `*ConventionTest`
+5. Java 变更的架构/约定守卫与受影响模块 clean compile 均在一次性 detached worktree 中使用仓库 Maven Wrapper 执行，避免本机 Maven 版本或共享构建产物竞态干扰结果
+6. Java、POM 或相关 CI 路由变更从干净字节码执行全部 `*ArchTest` / `*ConventionTest`
 
 pre-push 通过统一门禁执行器，分组为 `local-pre-push`，支持 `BATCH_GATE_MODE`、
 `BATCH_GATE_GROUP_MODES`、`BATCH_GATE_MODES` 和 `BATCH_GATE_ENABLED`。报告模式仍运行检查并输出实际退出码；忽略模式不执行检查；默认阻断。

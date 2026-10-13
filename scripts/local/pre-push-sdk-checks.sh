@@ -291,8 +291,25 @@ if [[ -n "$CHANGED_JAVA_GOVERNANCE" && $SKIP_BUILD -eq 0 ]]; then
   info "──────────────────────────────────────"
   info "Java 架构/约定守卫"
   info "──────────────────────────────────────"
-  if ! bash scripts/ci/run-java-governance-tests.sh; then
+  GOVERNANCE_WORKTREE="$(mktemp -d)"
+  governance_status=0
+  if ! git worktree add --detach "$GOVERNANCE_WORKTREE" HEAD >/tmp/sdk-precheck-governance-worktree.log 2>&1; then
+    governance_status=1
+    sed 's/^/    /' /tmp/sdk-precheck-governance-worktree.log
+    rmdir "$GOVERNANCE_WORKTREE" 2>/dev/null || true
+  elif ! (
+    cd "$GOVERNANCE_WORKTREE" &&
+      bash scripts/ci/run-java-governance-tests.sh
+  ); then
+    governance_status=1
+  fi
+  if [[ -d "$GOVERNANCE_WORKTREE" ]]; then
+    git worktree remove "$GOVERNANCE_WORKTREE" >/dev/null 2>&1 || governance_status=1
+  fi
+  if [[ $governance_status -ne 0 ]]; then
     fail "Java 架构/约定守卫失败"
+  else
+    ok "Java 架构/约定守卫通过（隔离 worktree）"
   fi
 fi
 
@@ -568,13 +585,25 @@ if [[ $SKIP_BUILD -eq 0 ]] && [[ -n "$CHANGED_JAVA" ]]; then
     MODULES=$(echo "$MODULES" | tr '\n' ',' | sed 's/,$//')
   fi
 
-  info "  clean compile -pl $MODULES"
-  if ! mvn clean compile -pl "$MODULES" -am -q -DskipTests 2>/tmp/sdk-precheck-build.log; then
+  BUILD_WORKTREE="$(mktemp -d)"
+  info "  clean compile -pl ${MODULES}（隔离 worktree）"
+  if ! git worktree add --detach "$BUILD_WORKTREE" HEAD >/tmp/sdk-precheck-worktree.log 2>&1; then
+    fail "clean compile 隔离 worktree 创建失败:"
+    sed 's/^/    /' /tmp/sdk-precheck-worktree.log
+    rmdir "$BUILD_WORKTREE" 2>/dev/null || true
+  elif ! (
+    cd "$BUILD_WORKTREE" &&
+      ./mvnw clean compile -pl "$MODULES" -am -q -DskipTests
+  ) 2>/tmp/sdk-precheck-build.log; then
     fail "clean compile 失败:"
     tail -30 /tmp/sdk-precheck-build.log | sed 's/^/    /'
     info "  完整日志: /tmp/sdk-precheck-build.log"
   else
     ok "clean compile 通过"
+  fi
+  if [[ -d "$BUILD_WORKTREE" ]]; then
+    git worktree remove "$BUILD_WORKTREE" >/dev/null 2>&1 || \
+      fail "clean compile 隔离 worktree 清理失败:$BUILD_WORKTREE"
   fi
 
   echo ""

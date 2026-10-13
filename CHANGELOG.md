@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+- 修复后端 pre-push clean compile 与 Java 治理测试使用不同 Maven 运行时、共享构建产物竞态及陈旧测试类导致的类缺失误报；治理测试改为 clean test，两类构建均使用仓库 Maven Wrapper 并在各自的一次性 detached worktree 中隔离运行，临时目录清理已按高风险操作治理登记。
+- 新增隔离的后端可靠性回归套件及每日 CI，覆盖 manifest 修复重扫、对象丢失恢复与替换检测、到达组并发去重、checkpoint 续跑、Outbox/Kafka 恢复和消费者反压，并明确本地测试、标准 Sim 与 staging DR 的证据边界。
 - 修复全量 CI 与 Sonar 中文件到达组集成测试仍把 checksum 期望值当作已校验证据的旧契约；测试现写入持久化 `integrityState=VERIFIED`，并同步配置注释与失败关闭语义。
 - 入站 MANIFEST 模式在登记前校验 manifest 文件名、协议字段、长度和原始对象 SHA-256；到达组 `require-verified` 改为要求实际字节验证状态，并由公共完整性状态枚举定义 `VERIFIED` 契约。文件系统对象写入/复制与 NAS dispatch 不支持原子 move 时失败关闭，避免退化为可观察到中间态的普通覆盖移动。
 - 新增文件完整性与故障恢复方案，明确入站/出站发布、到达组、重试和文件系统原子性边界。

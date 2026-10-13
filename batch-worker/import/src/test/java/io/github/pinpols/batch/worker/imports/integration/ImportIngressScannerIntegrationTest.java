@@ -7,17 +7,22 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.imports.BatchWorkerImportApplication;
+import io.github.pinpols.batch.worker.imports.config.ImportScannerProperties;
 import io.github.pinpols.batch.worker.imports.runtime.ImportIngressScanner;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.TestConstructor;
 import org.springframework.test.context.TestPropertySource;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -46,19 +51,30 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
       "batch.worker.import.scanner.batch-manifest-enabled=true"
     })
 @EnabledIf("s3BackendActive")
+@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 @DisplayName("导入入口扫描集成测试:对象存储文件发现,登记幂等与批次清单元数据回填")
 class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
+
+  private final ImportIngressScanner scanner;
+  private final PlatformFileRecordRepository runtimeRepository;
+  private final ImportScannerProperties scannerProperties;
+  private final JdbcTemplate jdbcTemplate;
+
+  ImportIngressScannerIntegrationTest(
+      ImportIngressScanner scanner,
+      PlatformFileRecordRepository runtimeRepository,
+      ImportScannerProperties scannerProperties,
+      JdbcTemplate jdbcTemplate) {
+    this.scanner = scanner;
+    this.runtimeRepository = runtimeRepository;
+    this.scannerProperties = scannerProperties;
+    this.jdbcTemplate = jdbcTemplate;
+  }
 
   @DynamicPropertySource
   static void orchestratorStub(DynamicPropertyRegistry registry) {
     OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
   }
-
-  @Autowired
-  private ImportIngressScanner scanner;
-
-  @Autowired
-  private PlatformFileRecordRepository runtimeRepository;
 
   @Test
   @DisplayName("扫描发现新文件后登记为平台文件记录,状态与字节数均正确")
@@ -243,6 +259,101 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
         .contains("TPL_ORDER_LATE")
         .contains("bundleJobCode")
         .contains("BUNDLE_IMPORT_LATE_IT");
+  }
+
+  @Test
+  @DisplayName("缺少或损坏的完成清单不登记文件,清单修复后校验真实对象并标记 VERIFIED")
+  void shouldWaitForValidManifest_beforeRegisteringVerifiedFile() throws Exception {
+    String bucket = s3Bucket();
+    String suffix = UUID.randomUUID().toString();
+    String prefix = "ingress/reliability-" + suffix + "/";
+    String objectName = prefix + "t1/orders.csv";
+    String manifestName = objectName + ".done";
+    byte[] content = "id,name\n1,Alice\n".getBytes(StandardCharsets.UTF_8);
+    S3Client client = s3Client();
+    String originalPrefix = scannerProperties.getPrefix();
+    boolean originalRequireDoneFile = scannerProperties.isRequireDoneFile();
+    ImportScannerProperties.DoneFileFormat originalDoneFileFormat =
+        scannerProperties.getDoneFileFormat();
+
+    scannerProperties.setPrefix(prefix);
+    scannerProperties.setRequireDoneFile(true);
+    scannerProperties.setDoneFileFormat(ImportScannerProperties.DoneFileFormat.MANIFEST);
+    try {
+      putObject(client, bucket, objectName, content);
+
+      scanner.scan();
+      assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName))
+          .as("数据对象单独到达时不能登记")
+          .isFalse();
+
+      putObject(
+          client, bucket, manifestName, "{\"schemaVersion\":".getBytes(StandardCharsets.UTF_8));
+      scanner.scan();
+      assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName))
+          .as("截断清单不能登记")
+          .isFalse();
+
+      String checksum =
+          HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));
+      putManifest(client, bucket, manifestName, "orders.csv", content.length + 1L, checksum);
+      scanner.scan();
+      assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName))
+          .as("清单长度与对象不符时不能登记")
+          .isFalse();
+
+      putManifest(client, bucket, manifestName, "orders.csv", content.length, "0".repeat(64));
+      scanner.scan();
+      assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName))
+          .as("清单摘要与对象字节不符时不能登记")
+          .isFalse();
+
+      putManifest(client, bucket, manifestName, "orders.csv", content.length, checksum);
+      scanner.scan();
+
+      Map<String, Object> row =
+          runtimeRepository.loadFileRecordByStoragePath("t1", bucket, objectName);
+      assertThat(row).isNotEmpty();
+      assertThat(row.get("checksum_value")).isEqualTo(checksum);
+      assertThat(String.valueOf(row.get("metadata_json")))
+          .contains("\"integrityState\"")
+          .contains("\"VERIFIED\"");
+    } finally {
+      scannerProperties.setPrefix(originalPrefix);
+      scannerProperties.setRequireDoneFile(originalRequireDoneFile);
+      scannerProperties.setDoneFileFormat(originalDoneFileFormat);
+      jdbcTemplate.update(
+          "delete from batch.file_audit_log where tenant_id = ? and evidence_ref = ?",
+          "t1",
+          objectName);
+      jdbcTemplate.update(
+          "delete from batch.file_record where tenant_id = ? and storage_bucket = ? and storage_path = ?",
+          "t1",
+          bucket,
+          objectName);
+      client.deleteObject(builder -> builder.bucket(bucket).key(manifestName));
+      client.deleteObject(builder -> builder.bucket(bucket).key(objectName));
+      client.close();
+    }
+  }
+
+  private static void putObject(S3Client client, String bucket, String key, byte[] content) {
+    client.putObject(
+        PutObjectRequest.builder().bucket(bucket).key(key).build(), RequestBody.fromBytes(content));
+  }
+
+  private static void putManifest(
+      S3Client client,
+      String bucket,
+      String key,
+      String fileName,
+      long sizeBytes,
+      String checksum) {
+    String manifest = """
+        {"schemaVersion":"file-sidecar-manifest-v1","fileName":"%s","sizeBytes":%d,
+         "checksumType":"SHA-256","checksumValue":"%s","checksumScope":"RAW_OBJECT"}
+        """.formatted(fileName, sizeBytes, checksum);
+    putObject(client, bucket, key, manifest.getBytes(StandardCharsets.UTF_8));
   }
 
   private S3Client s3Client() {

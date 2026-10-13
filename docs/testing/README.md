@@ -14,6 +14,7 @@
 | 06 | [realtime-sse-verification.md](./realtime-sse-verification.md) | 实时 SSE 推送链路验证 SOP | console 实时栏目验收 |
 | 07 | [load-test-report.md](./load-test-report.md) | 单实例 orchestrator 拐点压测报告（8 req/s）+ 生产容量推算 | 容量规划 |
 | 08 | [load-test-dimensions.md](./load-test-dimensions.md) | 压测维度矩阵：调度快照 / 端到尾完成 / 与指标分工 | 扩展 Gatling 场景前必读 |
+| 09 | [backend-sim-reliability.md](./backend-sim-reliability.md) | 后端 Sim 可靠性场景组：文件完整性、DB 并发、故障隔离与恢复的覆盖矩阵及验证分层 | 盘点可靠性场景、扩展 Sim 或安排 staging 演练 |
 
 ## 角色路径
 
@@ -23,6 +24,7 @@
 | Review PR | 05 |
 | 容量 / 性能 | 07 → 08 → [`../architecture/scalability-assessment.md`](../architecture/scalability-assessment.md) |
 | 写新 E2E | 03 → [`../runbook/worker-stage-coverage.md`](../runbook/worker-stage-coverage.md) |
+| 可靠性 / 故障恢复 | 09 → [`../design/file-integrity-recovery.md`](../design/file-integrity-recovery.md) → [`../runbook/go-live-staging-execution.md`](../runbook/go-live-staging-execution.md) |
 
 ## 与其他子目录的分工
 
