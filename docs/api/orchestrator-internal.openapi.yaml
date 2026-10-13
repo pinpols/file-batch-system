@@ -1256,10 +1256,10 @@ components:
           enum: [EXISTING_INSTANCES, SCHEDULE_PLAN]
         resultPolicy:
           type: string
-          enum: [CREATE_NEW_VERSION, KEEP_BOTH, MANUAL_CONFIRM_EFFECTIVE, DRY_RUN_ONLY]
+          x-extensible-enum: [CREATE_NEW_VERSION, KEEP_BOTH, MANUAL_CONFIRM_EFFECTIVE, DRY_RUN_ONLY]
         configVersionPolicy:
           type: string
-          enum: [USE_ORIGINAL_CONFIG, USE_LATEST_CONFIG, USE_SPECIFIED_VERSION]
+          x-extensible-enum: [USE_ORIGINAL_CONFIG, USE_LATEST_CONFIG, USE_SPECIFIED_VERSION]
         configVersion: {type: integer, format: int32, nullable: true}
         totalCount: {type: integer, format: int32}
         entries:
