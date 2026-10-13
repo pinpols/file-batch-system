@@ -12,6 +12,12 @@ import org.apache.ibatis.annotations.Param;
 @Mapper
 public interface ConsoleAiConversationMapper {
 
+  enum TurnStatus {
+    IN_PROGRESS,
+    COMPLETE,
+    FAILED
+  }
+
   String setTenantContext(@Param("tenantId") String tenantId);
 
   ConsoleAiConversationEntity selectForUpdate(
@@ -31,19 +37,39 @@ public interface ConsoleAiConversationMapper {
       @Param("expiresAt") OffsetDateTime expiresAt,
       @Param("contextVersion") String contextVersion);
 
-  List<ConsoleAiTurnEntity> selectRecentCompleteTurns(
+  default List<ConsoleAiTurnEntity> selectRecentCompleteTurns(
+      String tenantId, String conversationId, int limit) {
+    return selectRecentTurnsByStatuses(
+        tenantId,
+        conversationId,
+        limit,
+        List.of(TurnStatus.COMPLETE.name(), TurnStatus.FAILED.name()));
+  }
+
+  List<ConsoleAiTurnEntity> selectRecentTurnsByStatuses(
       @Param("tenantId") String tenantId,
       @Param("conversationId") String conversationId,
-      @Param("limit") int limit);
+      @Param("limit") int limit,
+      @Param("turnStatuses") List<String> turnStatuses);
 
-  int insertTurn(ConsoleAiTurnEntity turn);
+  default int insertTurn(ConsoleAiTurnEntity turn) {
+    return insertTurnWithStatus(turn, TurnStatus.IN_PROGRESS.name());
+  }
+
+  int insertTurnWithStatus(
+      @Param("turn") ConsoleAiTurnEntity turn, @Param("initialStatus") String initialStatus);
 
   ConsoleAiTurnEntity selectByClientTurnId(
       @Param("tenantId") String tenantId,
       @Param("ownerUserId") String ownerUserId,
       @Param("clientTurnId") UUID clientTurnId);
 
-  int completeTurn(ConsoleAiTurnEntity turn);
+  default int completeTurn(ConsoleAiTurnEntity turn) {
+    return completeTurnIfCurrent(turn, TurnStatus.IN_PROGRESS.name());
+  }
+
+  int completeTurnIfCurrent(
+      @Param("turn") ConsoleAiTurnEntity turn, @Param("expectedStatus") String expectedStatus);
 
   List<ConsoleAiConversationEntity> selectByOwner(
       @Param("tenantId") String tenantId,

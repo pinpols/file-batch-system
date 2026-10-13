@@ -1,10 +1,17 @@
 package io.github.pinpols.batch.worker.dispatchs.mapper;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 
 public interface DispatchChannelHealthMapper {
+
+  enum HealthStatus {
+    HEALTHY,
+    DEGRADED,
+    UNHEALTHY
+  }
 
   List<Map<String, Object>> findEnabledProbeChannels(
       @Param("types") List<String> types, @Param("limit") int limit);
@@ -23,13 +30,26 @@ public interface DispatchChannelHealthMapper {
   int tryClaimHalfOpenProbe(Map<String, Object> params);
 
   /** P2：成功结果原子 UPSERT —— 置 HEALTHY + consecutive_failures=0。 */
-  int upsertSuccess(Map<String, Object> params);
+  default int upsertSuccess(Map<String, Object> params) {
+    Map<String, Object> statementParams = new LinkedHashMap<>(params);
+    statementParams.put("healthyStatus", HealthStatus.HEALTHY.name());
+    return upsertSuccessWithStatus(statementParams);
+  }
+
+  int upsertSuccessWithStatus(Map<String, Object> params);
 
   /**
    * P2：失败结果原子 UPSERT —— consecutive_failures 按数据库 COALESCE+1 递增， 消除 Java 侧读-改-写的
    * lost-update；health_status 按 failureThreshold 动态判。
    */
-  int upsertFailureAndBump(Map<String, Object> params);
+  default int upsertFailureAndBump(Map<String, Object> params) {
+    Map<String, Object> statementParams = new LinkedHashMap<>(params);
+    statementParams.put("degradedStatus", HealthStatus.DEGRADED.name());
+    statementParams.put("unhealthyStatus", HealthStatus.UNHEALTHY.name());
+    return upsertFailureAndBumpWithStatuses(statementParams);
+  }
+
+  int upsertFailureAndBumpWithStatuses(Map<String, Object> params);
 
   /** P1：仅在失败次数仍等于本次递增结果时回写退避时间，避免并发旧结果覆盖新结果。 */
   int recalcBackoff(Map<String, Object> params);

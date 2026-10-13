@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
+import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.InvalidCapabilityTagsParam;
 import io.github.pinpols.batch.orchestrator.domain.param.TouchHeartbeatParam;
@@ -12,8 +13,15 @@ public interface WorkerRegistryMapper {
 
   int touchHeartbeat(TouchHeartbeatParam param);
 
-  int markDecommissioned(
-      @Param("tenantId") String tenantId, @Param("workerCode") String workerCode);
+  default int markDecommissioned(String tenantId, String workerCode) {
+    return updateStatusAndResetDrain(
+        tenantId, workerCode, WorkerRegistryStatus.DECOMMISSIONED.code());
+  }
+
+  int updateStatusAndResetDrain(
+      @Param("tenantId") String tenantId,
+      @Param("workerCode") String workerCode,
+      @Param("targetStatus") String targetStatus);
 
   /**
    * 把 {@code heartbeat_at &lt; current_timestamp - timeoutSeconds} 且当前是 ONLINE / DRAINING 的 worker
@@ -25,7 +33,17 @@ public interface WorkerRegistryMapper {
    * @param timeoutSeconds 心跳容忍秒数（含 grace period 的累加值）
    * @return 被更新的行数
    */
-  int markStaleHeartbeatsOffline(@Param("timeoutSeconds") long timeoutSeconds);
+  default int markStaleHeartbeatsOffline(long timeoutSeconds) {
+    return updateStaleHeartbeatsStatus(
+        timeoutSeconds,
+        WorkerRegistryStatus.OFFLINE.code(),
+        List.of(WorkerRegistryStatus.ONLINE.code(), WorkerRegistryStatus.DRAINING.code()));
+  }
+
+  int updateStaleHeartbeatsStatus(
+      @Param("timeoutSeconds") long timeoutSeconds,
+      @Param("targetStatus") String targetStatus,
+      @Param("expectedStatuses") List<String> expectedStatuses);
 
   /**
    * 扫描 ONLINE / DRAINING 的 worker，返回 {@code capability_tags} 不符合"字符串数组"约定的行。
@@ -115,14 +133,33 @@ public interface WorkerRegistryMapper {
       @Param("nextStatus") String nextStatus);
 
   /** 开始排空并使用数据库时间设置窗口；返回 0 表示并发状态冲突。 */
-  int startDrainIfCurrent(
+  default int startDrainIfCurrent(
+      String tenantId, String workerCode, String expectedStatus, int timeoutSeconds) {
+    return startDrainTransition(
+        tenantId, workerCode, expectedStatus, WorkerRegistryStatus.DRAINING.code(), timeoutSeconds);
+  }
+
+  int startDrainTransition(
       @Param("tenantId") String tenantId,
       @Param("workerCode") String workerCode,
       @Param("expectedStatus") String expectedStatus,
+      @Param("nextStatus") String nextStatus,
       @Param("timeoutSeconds") int timeoutSeconds);
 
   /** 仅允许 OFFLINE 转为 ONLINE；返回 0 表示状态已被并发修改。 */
-  int warmupIfOffline(@Param("tenantId") String tenantId, @Param("workerCode") String workerCode);
+  default int warmupIfOffline(String tenantId, String workerCode) {
+    return warmupTransition(
+        tenantId,
+        workerCode,
+        WorkerRegistryStatus.OFFLINE.code(),
+        WorkerRegistryStatus.ONLINE.code());
+  }
+
+  int warmupTransition(
+      @Param("tenantId") String tenantId,
+      @Param("workerCode") String workerCode,
+      @Param("expectedStatus") String expectedStatus,
+      @Param("nextStatus") String nextStatus);
 
   /**
    * 测试夹具兼容的整行更新。生产状态推进必须使用上述语义化 CAS，禁止调用本方法。

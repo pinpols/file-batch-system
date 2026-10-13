@@ -137,7 +137,7 @@
     <!-- 守卫:调用点覆盖 ACCEPTED/WAITING(含 batch-day 门闩重投场景,前态可为二者之一)多种前态写入
          LAUNCHED/REJECTED/WAITING/DUPLICATE,故不能锁死单一前态。已终态禁止回退/覆写;唯一例外是 catch-up
          审批已先标 LAUNCHED 但尚未关联实例时,orchestrator consumer 可原位补写一次 jobInstanceId。 -->
-    <update id="updateAcceptance">
+    <update id="updateAcceptanceGuarded">
         update batch.trigger_request
         set request_status = #{requestStatus},
             related_job_instance_id = #{relatedJobInstanceId,jdbcType=BIGINT},
@@ -145,10 +145,14 @@
         where tenant_id = #{tenantId}
           and request_id = #{requestId}
           and (
-            request_status not in ('LAUNCHED', 'REJECTED', 'DUPLICATE')
+            request_status not in
+            <foreach collection="protectedStatuses" item="protectedStatus"
+                     open="(" separator="," close=")">
+                #{protectedStatus}
+            </foreach>
             or (
-              request_status = 'LAUNCHED'
-              and #{requestStatus} = 'LAUNCHED'
+              request_status = #{launchedStatus}
+              and #{requestStatus} = #{launchedStatus}
               and related_job_instance_id is null
               and #{relatedJobInstanceId,jdbcType=BIGINT} is not null
             )
@@ -174,7 +178,7 @@
         <result column="job_instance_id" property="jobInstanceId"/>
     </resultMap>
 
-    <select id="selectStaleAcceptedWithJobInstance" resultMap="LaunchReconcileRowMap">
+    <select id="selectStaleByRequestAndExcludedInstanceStatus" resultMap="LaunchReconcileRowMap">
         select tr.tenant_id          as tenant_id,
                tr.request_id         as request_id,
                ji.id                 as job_instance_id
@@ -182,7 +186,7 @@
         join batch.job_instance ji
           on ji.tenant_id = tr.tenant_id
          and ji.trigger_request_id = tr.id
-        where tr.request_status = 'ACCEPTED'
+        where tr.request_status = #{requestStatus}
           and tr.related_job_instance_id is null
           and tr.created_at &lt; #{olderThan}
           -- audit fix(HIGH-1 静默丢作业):只回写"真正派发过"的实例。launch 的 T1(建 instance=CREATED)与
@@ -190,34 +194,32 @@
           -- partition。原查询不过滤状态,会把这种滞留实例也 JOIN 进来、经 reconcileLaunched 谎报成 LAUNCHED,
           -- 掩盖"作业从未真跑"。排除 CREATED 后,滞留实例保留为陈旧 ACCEPTED → 进入 ADR-010 既定的"过期
           -- ACCEPTED 告警 + 人工/恢复"路径,而非被静默闭环。
-          and ji.instance_status &lt;&gt; 'CREATED'
+          and ji.instance_status &lt;&gt; #{excludedInstanceStatus}
         order by tr.id asc
         limit #{limit}
     </select>
 
     <!-- CAS:仅当仍处于 ACCEPTED 且未被回写 jobInstanceId 时才推进到 LAUNCHED;
          避免与 consumer writeBack / 人工运维 路径抢同一行造成回退或覆写。 -->
-    <update id="reconcileLaunched">
+    <update id="reconcileStatus">
         update batch.trigger_request
-        set request_status = 'LAUNCHED',
+        set request_status = #{targetStatus},
             related_job_instance_id = #{jobInstanceId},
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and request_id = #{requestId}
-          and request_status = 'ACCEPTED'
-          and related_job_instance_id is null
-    </update>
-
-    <!-- CREATED 恢复器已先用 job_instance.trigger_request_id = trigger_request.id 证明同源；
-         此 CAS 仅允许 ACCEPTED 或该旧缺陷留下的 DUPLICATE 推进为 LAUNCHED。 -->
-    <update id="reconcileRecoveredCreatedLaunch">
-        update batch.trigger_request
-        set request_status = 'LAUNCHED',
-            related_job_instance_id = #{jobInstanceId},
-            updated_at = current_timestamp
-        where tenant_id = #{tenantId}
-          and request_id = #{requestId}
-          and request_status in ('ACCEPTED', 'DUPLICATE')
-          and (related_job_instance_id is null or related_job_instance_id = #{jobInstanceId})
+          and request_status in
+          <foreach collection="expectedStatuses" item="expectedStatus"
+                   open="(" separator="," close=")">
+              #{expectedStatus}
+          </foreach>
+          <choose>
+              <when test="requireUnboundInstance">
+                  and related_job_instance_id is null
+              </when>
+              <otherwise>
+                  and (related_job_instance_id is null or related_job_instance_id = #{jobInstanceId})
+              </otherwise>
+          </choose>
     </update>
 </mapper>

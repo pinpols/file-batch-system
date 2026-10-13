@@ -11,7 +11,7 @@
         <result column="cutoff_time" property="cutoffTime"/>
     </resultMap>
 
-    <select id="selectOpenCutoffCandidates" resultMap="BatchDayCutoffCandidateResultMap">
+    <select id="selectCutoffCandidatesByStatus" resultMap="BatchDayCutoffCandidateResultMap">
         select
             bdi.id,
             bdi.tenant_id,
@@ -25,21 +25,21 @@
                       on bc.tenant_id = bdi.tenant_id
                      and bc.calendar_code = bdi.calendar_code
                      and bc.enabled = true
-        where bdi.day_status = 'OPEN'
+        where bdi.day_status = #{dayStatus}
           and bdi.cutoff_at is null
         order by bdi.biz_date asc, bdi.id asc
     </select>
 
-    <update id="markCutoff">
+    <update id="transitionToCutoff">
         update batch.batch_day_instance
-        set day_status = 'CUTOFF',
+        set day_status = #{targetStatus},
             cutoff_at = #{cutoffAt},
             updated_at = current_timestamp
         where id = #{id}
           and tenant_id = #{tenantId}
           and calendar_code = #{calendarCode}
           and biz_date = #{bizDate}
-          and day_status = 'OPEN'
+          and day_status = #{expectedStatus}
           and cutoff_at is null
     </update>
 </mapper>

@@ -62,10 +62,13 @@
         returning id
     </select>
 
-    <select id="findEligibleRetries" resultMap="deliveryLogMap">
+    <select id="findEligibleRetriesByStatuses" resultMap="deliveryLogMap">
         select <include refid="selectColumns"/>
           from batch.webhook_delivery_log
-         where delivery_status in ('PENDING', 'EXHAUSTED')
+         where delivery_status in
+         <foreach collection="eligibleStatuses" item="status" open="(" separator="," close=")">
+             #{status}
+         </foreach>
            and next_retry_at is not null
            and next_retry_at &lt;= #{now}
          order by next_retry_at asc
@@ -80,17 +83,20 @@
          limit 1
     </select>
 
-    <update id="claimForRetry">
+    <update id="claimForRetryByStatuses">
         update batch.webhook_delivery_log
            set next_retry_at = null
          where id = #{id}
-           and delivery_status in ('PENDING', 'EXHAUSTED')
+           and delivery_status in
+           <foreach collection="eligibleStatuses" item="status" open="(" separator="," close=")">
+               #{status}
+           </foreach>
            and next_retry_at is not null
     </update>
 
-    <update id="markRetrySuccess">
+    <update id="updateRetrySuccess">
         update batch.webhook_delivery_log
-           set delivery_status = 'SUCCESS',
+           set delivery_status = #{deliveryStatus},
                http_status     = #{httpStatus},
                response_body   = null,
                attempt         = #{attempt},
@@ -98,19 +104,19 @@
          where id = #{id}
     </update>
 
-    <update id="markRetryFailure">
+    <update id="updateRetryFailure">
         update batch.webhook_delivery_log
            set attempt        = #{attempt},
                http_status    = #{httpStatus},
                response_body  = #{responseBody},
-               delivery_status = 'EXHAUSTED',
+               delivery_status = #{deliveryStatus},
                next_retry_at  = #{nextRetryAt}
          where id = #{id}
     </update>
 
-    <update id="markGiveUp">
+    <update id="updateGiveUp">
         update batch.webhook_delivery_log
-           set delivery_status = 'GIVE_UP',
+           set delivery_status = #{deliveryStatus},
                attempt         = #{attempt},
                http_status     = #{httpStatus},
                response_body   = #{responseBody},

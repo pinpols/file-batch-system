@@ -556,6 +556,8 @@ bash scripts/ci/check-e2e-run-completeness.sh "<逗号分隔类名>" <surefire-r
 
 `check-java-governance-test-coverage.py` 统一发现 `*ArchTest` 和 `*ConventionTest`。PR、
 Full 和 Staging Gate 的 `java-governance` job 单独执行这些测试；业务 unit/IT 分片不再重复执行。
+`MapperStatusWriteConventionTest` 在该分片扫描全部 Mapper XML，禁止写语句的
+`SET`（包括 `ON CONFLICT ... DO UPDATE SET`）回退为固定状态字面量；查询中的共享生命周期集合另由 Mapper 契约测试与枚举精确对照。
 
 ```bash
 python3 scripts/ci/check-java-governance-test-coverage.py

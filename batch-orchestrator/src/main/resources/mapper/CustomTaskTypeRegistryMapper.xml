@@ -36,19 +36,18 @@
         first_declared_at, last_declared_at, created_at, updated_at
     </sql>
 
-    <!-- SDK 上报 upsert:首次 insert(source=SDK_DECLARED / status=ACTIVE 走 DB DEFAULT),
+    <!-- SDK 上报 upsert:首次 insert 使用 Java 传入的 ACTIVE 状态,
          冲突(tenant_id, task_type_code)即刷新 descriptor / 版本 / 上报 worker / last_declared_at,
          并把曾被标 DEPRECATED 的 code 复活为 ACTIVE。 -->
-    <insert id="upsertDeclared"
-            parameterType="io.github.pinpols.batch.orchestrator.domain.param.CustomTaskTypeUpsertParam">
+    <insert id="upsertDeclaredWithStatus">
         insert into batch.custom_task_type_registry (
             tenant_id, task_type_code, display_name, descriptor, descriptor_version,
             source, declared_by_worker_code, status,
             first_declared_at, last_declared_at, created_at, updated_at
         ) values (
-            #{tenantId}, #{taskTypeCode}, #{displayName},
-            cast(#{descriptor} as jsonb), #{descriptorVersion},
-            'SDK_DECLARED', #{declaredByWorkerCode}, 'ACTIVE',
+            #{param.tenantId}, #{param.taskTypeCode}, #{param.displayName},
+            cast(#{param.descriptor} as jsonb), #{param.descriptorVersion},
+            'SDK_DECLARED', #{param.declaredByWorkerCode}, #{registryStatus},
             current_timestamp, current_timestamp, current_timestamp, current_timestamp
         )
         on conflict (tenant_id, task_type_code) do update
@@ -56,7 +55,7 @@
                descriptor              = excluded.descriptor,
                descriptor_version      = excluded.descriptor_version,
                declared_by_worker_code = excluded.declared_by_worker_code,
-               status                  = 'ACTIVE',
+               status                  = excluded.status,
                <!-- Citus:distributed/reference 表 DO UPDATE SET 函数须 IMMUTABLE;current_timestamp(STABLE)
                     改 excluded 引用(值=INSERT 同语句 current_timestamp,双栈语义等价) -->
                last_declared_at        = excluded.last_declared_at,

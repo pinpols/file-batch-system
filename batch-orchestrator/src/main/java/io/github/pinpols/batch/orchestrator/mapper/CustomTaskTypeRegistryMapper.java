@@ -12,8 +12,18 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface CustomTaskTypeRegistryMapper {
 
+  enum RegistryStatus {
+    ACTIVE
+  }
+
   /** SDK 上报 upsert — 冲突键 (tenant_id, task_type_code),命中刷新 descriptor / 版本 / 上报 worker。 */
-  int upsertDeclared(CustomTaskTypeUpsertParam param);
+  default int upsertDeclared(CustomTaskTypeUpsertParam param) {
+    return upsertDeclaredWithStatus(param, RegistryStatus.ACTIVE.name());
+  }
+
+  int upsertDeclaredWithStatus(
+      @Param("param") CustomTaskTypeUpsertParam param,
+      @Param("registryStatus") String registryStatus);
 
   CustomTaskTypeRegistryEntity selectByTenantAndCode(
       @Param("tenantId") String tenantId, @Param("taskTypeCode") String taskTypeCode);

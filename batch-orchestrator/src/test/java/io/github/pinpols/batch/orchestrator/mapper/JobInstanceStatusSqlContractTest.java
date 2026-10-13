@@ -4,7 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import java.io.InputStream;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.mapping.MappedStatement;
 import org.apache.ibatis.session.Configuration;
@@ -28,7 +32,22 @@ class JobInstanceStatusSqlContractTest {
     String id = JobInstanceMapper.class.getName() + "." + statementName;
     MappedStatement statement = configuration.getMappedStatement(id);
     String sql = statement.getBoundSql(Map.of()).getSql();
-    assertThat(sql).as(id).contains(JobInstanceStatus.terminalCodes().toArray(String[]::new));
+    assertThat(statusesInNotInClause(sql))
+        .as(id)
+        .containsExactlyInAnyOrderElementsOf(JobInstanceStatus.terminalCodes());
+  }
+
+  private static Set<String> statusesInNotInClause(String sql) {
+    Matcher clause =
+        Pattern.compile("(?is)instance_status\\s+not\\s+in\\s*\\(([^)]*)\\)").matcher(sql);
+    assertThat(clause.find()).as("instance_status NOT IN clause").isTrue();
+    Set<String> statuses = new HashSet<>();
+    Matcher status = Pattern.compile("'([A-Z][A-Z0-9_]*)'").matcher(clause.group(1));
+    while (status.find()) {
+      statuses.add(status.group(1));
+    }
+    assertThat(clause.find()).as("single instance_status NOT IN clause").isFalse();
+    return statuses;
   }
 
   private static Configuration loadJobInstanceMapper() {

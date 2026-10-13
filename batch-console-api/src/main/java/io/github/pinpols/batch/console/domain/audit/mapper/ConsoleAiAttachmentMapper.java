@@ -9,6 +9,32 @@ import org.apache.ibatis.annotations.Param;
 
 @Mapper
 public interface ConsoleAiAttachmentMapper {
+  enum AttachmentStatus {
+    UPLOADING,
+    DRAFT,
+    BOUND
+  }
+
+  record DraftTransitionParam(
+      String tenantId,
+      UUID id,
+      String mediaType,
+      long byteSize,
+      int width,
+      int height,
+      String expectedStatus,
+      String targetStatus) {}
+
+  record BindTransitionParam(
+      String tenantId,
+      UUID id,
+      String ownerUserId,
+      String conversationId,
+      long turnNo,
+      Instant expiresAt,
+      String expectedStatus,
+      String targetStatus) {}
+
   String setTenantContext(@Param("tenantId") String tenantId);
 
   int lockUploadQuota(@Param("tenantId") String tenantId);
@@ -33,21 +59,40 @@ public interface ConsoleAiAttachmentMapper {
 
   ConsoleAiAttachmentEntity byId(@Param("tenantId") String tenantId, @Param("id") UUID id);
 
-  int markDraft(
-      @Param("tenantId") String tenantId,
-      @Param("id") UUID id,
-      @Param("mediaType") String mediaType,
-      @Param("byteSize") long byteSize,
-      @Param("width") int width,
-      @Param("height") int height);
+  default int markDraft(
+      String tenantId, UUID id, String mediaType, long byteSize, int width, int height) {
+    return transitionToDraft(new DraftTransitionParam(
+        tenantId,
+        id,
+        mediaType,
+        byteSize,
+        width,
+        height,
+        AttachmentStatus.UPLOADING.name(),
+        AttachmentStatus.DRAFT.name()));
+  }
 
-  int bind(
-      @Param("tenantId") String tenantId,
-      @Param("id") UUID id,
-      @Param("ownerUserId") String ownerUserId,
-      @Param("conversationId") String conversationId,
-      @Param("turnNo") long turnNo,
-      @Param("expiresAt") Instant expiresAt);
+  int transitionToDraft(DraftTransitionParam param);
+
+  default int bind(
+      String tenantId,
+      UUID id,
+      String ownerUserId,
+      String conversationId,
+      long turnNo,
+      Instant expiresAt) {
+    return transitionToBound(new BindTransitionParam(
+        tenantId,
+        id,
+        ownerUserId,
+        conversationId,
+        turnNo,
+        expiresAt,
+        AttachmentStatus.DRAFT.name(),
+        AttachmentStatus.BOUND.name()));
+  }
+
+  int transitionToBound(BindTransitionParam param);
 
   List<ConsoleAiAttachmentEntity> byTurn(
       @Param("tenantId") String tenantId,

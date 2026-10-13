@@ -19,15 +19,14 @@
         <result column="updated_at" property="updatedAt"/>
     </resultMap>
 
-    <insert id="insertPending"
-            parameterType="io.github.pinpols.batch.common.persistence.entity.TriggerMisfirePendingEntity"
-            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+    <insert id="insertPendingWithStatus"
+            useGeneratedKeys="true" keyProperty="entity.id" keyColumn="id">
         insert into batch.trigger_misfire_pending (
             tenant_id, job_code, scheduled_fire_time,
             detected_at, status, expires_at, created_at, updated_at
         ) values (
-            #{tenantId}, #{jobCode}, #{scheduledFireTime},
-            now(), 'PENDING', #{expiresAt}, now(), now()
+            #{entity.tenantId}, #{entity.jobCode}, #{entity.scheduledFireTime},
+            now(), #{initialStatus}, #{entity.expiresAt}, now(), now()
         )
     </insert>
 
@@ -45,34 +44,26 @@
          limit 1
     </select>
 
-    <select id="selectPendingByTenant" resultMap="TriggerMisfirePendingResultMap">
+    <select id="selectByTenantAndStatus" resultMap="TriggerMisfirePendingResultMap">
         select *
           from batch.trigger_misfire_pending
          where tenant_id = #{tenantId}
-           and status = 'PENDING'
+           and status = #{status}
          order by detected_at desc
          limit #{limit}
     </select>
 
-    <update id="approve">
+    <update id="updateApprovalStatus">
         update batch.trigger_misfire_pending
-           set status = 'APPROVED',
+           set status = #{targetStatus},
                approved_by = #{approvedBy},
                approved_at = now(),
+               <if test="writeRejectionReason">
+                   rejection_reason = #{rejectionReason},
+               </if>
                updated_at = now()
          where id = #{id}
-           and status = 'PENDING'
-    </update>
-
-    <update id="reject">
-        update batch.trigger_misfire_pending
-           set status = 'REJECTED',
-               approved_by = #{approvedBy},
-               approved_at = now(),
-               rejection_reason = #{rejectionReason},
-               updated_at = now()
-         where id = #{id}
-           and status = 'PENDING'
+           and status = #{expectedStatus}
     </update>
 
     <update id="linkCatchUpRequest">
@@ -82,11 +73,11 @@
          where id = #{id}
     </update>
 
-    <update id="markExpired">
+    <update id="expireBefore">
         update batch.trigger_misfire_pending
-           set status = 'EXPIRED',
+           set status = #{targetStatus},
                updated_at = now()
-         where status = 'PENDING'
+         where status = #{expectedStatus}
            and expires_at &lt; #{now}
     </update>
 

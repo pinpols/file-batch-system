@@ -5,8 +5,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.domain.entity.CustomTaskTypeRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.CustomTaskTypeUpsertParam;
 import io.github.pinpols.batch.orchestrator.domain.value.JsonbString;
+import io.github.pinpols.batch.orchestrator.mapper.CustomTaskTypeRegistryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Instant;
@@ -25,6 +28,31 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
   private WorkerRegistryMapper workerRegistryMapper;
+
+  @Autowired
+  private CustomTaskTypeRegistryMapper customTaskTypeRegistryMapper;
+
+  @Test
+  @DisplayName("自定义任务类型上报时由 Java 语义方法提供活跃状态并正常落库")
+  void shouldPersistActiveCustomTaskTypeThroughSemanticMapperMethod() {
+    String taskTypeCode = "custom_it_" + BatchDateTimeSupport.utcEpochMillis();
+    CustomTaskTypeUpsertParam param = CustomTaskTypeUpsertParam.builder()
+        .tenantId("t1")
+        .taskTypeCode(taskTypeCode)
+        .displayName("Custom integration task")
+        .descriptor("{\"taskType\":\"" + taskTypeCode + "\"}")
+        .descriptorVersion("1")
+        .declaredByWorkerCode("worker-it-custom")
+        .build();
+
+    assertThat(customTaskTypeRegistryMapper.upsertDeclared(param)).isEqualTo(1);
+
+    CustomTaskTypeRegistryEntity stored =
+        customTaskTypeRegistryMapper.selectByTenantAndCode("t1", taskTypeCode);
+    assertThat(stored).isNotNull();
+    assertThat(stored.status())
+        .isEqualTo(CustomTaskTypeRegistryMapper.RegistryStatus.ACTIVE.name());
+  }
 
   @Test
   @DisplayName("在线节点入库后可按键读回,状态与所属分组保持写入值")

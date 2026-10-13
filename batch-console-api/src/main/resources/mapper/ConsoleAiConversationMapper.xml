@@ -71,23 +71,27 @@
         RETURNING next_turn_no - 1
     </select>
 
-    <select id="selectRecentCompleteTurns" resultMap="TurnMap">
+    <select id="selectRecentTurnsByStatuses" resultMap="TurnMap">
         SELECT id, tenant_id, conversation_id, turn_no, context_version, prompt_text, response_text,
                turn_status, prompt_decision, model_name, prompt_tokens, completion_tokens,
                estimated_cost_usd, created_at, completed_at
           FROM batch.console_ai_turn
          WHERE conversation_id = #{conversationId}
            AND tenant_id = #{tenantId}
-           AND turn_status IN ('COMPLETE', 'FAILED')
+           AND turn_status IN
+           <foreach collection="turnStatuses" item="turnStatus" open="(" separator="," close=")">
+               #{turnStatus}
+           </foreach>
          ORDER BY turn_no DESC
          LIMIT #{limit}
     </select>
 
-    <insert id="insertTurn">
+    <insert id="insertTurnWithStatus">
         INSERT INTO batch.console_ai_turn
             (tenant_id, conversation_id, turn_no, client_turn_id, context_version, prompt_text, turn_status)
         VALUES
-            (#{tenantId}, #{conversationId}, #{turnNo}, #{clientTurnId}, #{contextVersion}, #{promptText}, 'IN_PROGRESS')
+            (#{turn.tenantId}, #{turn.conversationId}, #{turn.turnNo}, #{turn.clientTurnId},
+             #{turn.contextVersion}, #{turn.promptText}, #{initialStatus})
         ON CONFLICT (tenant_id, client_turn_id) WHERE client_turn_id IS NOT NULL DO NOTHING
     </insert>
 
@@ -103,20 +107,20 @@
            AND c.owner_user_id = #{ownerUserId} AND c.expires_at > CURRENT_TIMESTAMP
     </select>
 
-    <update id="completeTurn">
+    <update id="completeTurnIfCurrent">
         UPDATE batch.console_ai_turn
-           SET response_text = #{responseText},
-               turn_status = #{turnStatus},
-               prompt_decision = #{promptDecision},
-               model_name = #{modelName},
-               prompt_tokens = #{promptTokens},
-               completion_tokens = #{completionTokens},
-               estimated_cost_usd = #{estimatedCostUsd},
+           SET response_text = #{turn.responseText},
+               turn_status = #{turn.turnStatus},
+               prompt_decision = #{turn.promptDecision},
+               model_name = #{turn.modelName},
+               prompt_tokens = #{turn.promptTokens},
+               completion_tokens = #{turn.completionTokens},
+               estimated_cost_usd = #{turn.estimatedCostUsd},
                completed_at = CURRENT_TIMESTAMP
-         WHERE tenant_id = #{tenantId}
-           AND conversation_id = #{conversationId}
-           AND turn_no = #{turnNo}
-           AND turn_status = 'IN_PROGRESS'
+         WHERE tenant_id = #{turn.tenantId}
+           AND conversation_id = #{turn.conversationId}
+           AND turn_no = #{turn.turnNo}
+           AND turn_status = #{expectedStatus}
     </update>
 
     <select id="selectByOwner" resultMap="ConversationMap">

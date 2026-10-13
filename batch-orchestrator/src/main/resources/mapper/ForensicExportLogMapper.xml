@@ -82,9 +82,9 @@
          limit #{limit}
     </select>
 
-    <update id="markCompleted">
+    <update id="complete">
         update batch.forensic_export_log
-           set status = 'COMPLETED',
+           set status = #{targetStatus},
                storage_path = #{storagePath},
                file_size_bytes = #{fileSizeBytes},
                sha256 = #{sha256},
@@ -94,9 +94,9 @@
            and export_id = #{exportId}
     </update>
 
-    <update id="markFailed">
+    <update id="fail">
         update batch.forensic_export_log
-           set status = 'FAILED',
+           set status = #{targetStatus},
                error_message = #{errorMessage},
                completed_at = #{completedAt}
          where tenant_id = #{tenantId}

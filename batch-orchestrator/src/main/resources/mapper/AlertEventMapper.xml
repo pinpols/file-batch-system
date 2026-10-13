@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.orchestrator.mapper.AlertEventMapper">
 
-    <insert id="insertOrMerge" parameterType="io.github.pinpols.batch.common.persistence.entity.AlertEventEntity">
+    <insert id="upsert">
         insert into batch.alert_event (
             tenant_id,
             service_name,
@@ -14,15 +14,15 @@
             trace_id,
             status
         ) values (
-            #{tenantId},
-            #{serviceName},
-            #{alertType},
-            #{severity},
-            #{title},
-            CAST(#{detailJson} AS jsonb),
-            #{dedupFingerprint},
-            #{traceId},
-            coalesce(#{status}, 'OPEN')
+            #{entity.tenantId},
+            #{entity.serviceName},
+            #{entity.alertType},
+            #{entity.severity},
+            #{entity.title},
+            CAST(#{entity.detailJson} AS jsonb),
+            #{entity.dedupFingerprint},
+            #{entity.traceId},
+            coalesce(#{entity.status}, #{defaultStatus})
         )
         on conflict (tenant_id, dedup_fingerprint) do update set
             title = excluded.title,
@@ -50,11 +50,11 @@
         limit #{limit}
     </select>
 
-    <select id="selectOverdueForEscalation"
+    <select id="selectOverdueByStatus"
             resultType="io.github.pinpols.batch.common.persistence.entity.AlertEventEntity">
         select *
         from batch.alert_event
-        where status = 'OPEN'
+        where status = #{status}
           and escalation_tier &lt; #{maxTier}
           and last_seen_at &lt; current_timestamp
               - make_interval(mins =&gt; #{slaMinutes} * (escalation_tier + 1))
@@ -62,23 +62,23 @@
         limit #{limit}
     </select>
 
-    <select id="selectOpenForReemit"
+    <select id="selectByStatusForReemit"
             resultType="io.github.pinpols.batch.common.persistence.entity.AlertEventEntity">
         select *
         from batch.alert_event
-        where status = 'OPEN'
+        where status = #{status}
         order by last_seen_at desc
         limit #{limit}
     </select>
 
-    <update id="markEscalated">
+    <update id="incrementEscalationTier">
         update batch.alert_event
         set escalation_tier = escalation_tier + 1,
             escalated_at = current_timestamp,
             updated_at = current_timestamp
         where id = #{id}
           and tenant_id = #{tenantId}
-          and status = 'OPEN'
+          and status = #{expectedStatus}
           and escalation_tier = #{expectedTier}
     </update>
 </mapper>

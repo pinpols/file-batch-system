@@ -679,6 +679,18 @@ nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, def.getId(), p
 
 - Mapper XML 放在 `classpath:mapper/*.xml`（或模块约定路径）
 - `type-aliases-package` 指向 domain 包
+- Mapper 参数采用“少量简单值直接传、成组业务条件/写入意图使用语义对象”的混合规则，不要求每个方法都包一层对象：
+  - 单个 `id`、实体、集合或已定义的 `XxxQuery` / `XxxParam` 直接传入；少量且语义单一的条件允许多个具名 `@Param`。
+  - Mapper 方法达到 6 个参数时必须封装为一个 `XxxQuery` 或 `XxxParam`；7 个及以上同样必须封装。多个参数表达同一筛选条件、在 `select/count` 等方法间重复，或包含多个可空字段/业务模式时，即使不足 6 个也应优先封装。
+  - 列表/分页筛选使用 `domain/query` 下的 `XxxQuery`，多个筛选方法共享同一口径时复用该 Query；查询条件不得用无名 `Map` 表达。
+  - 单次 `insert/update/CAS` 的字段组合使用 `domain/param` 下不可变 `XxxParam`，字段贴近该次 SQL 操作。完整行写入可直接接收 `XxxEntity`；不要仅为统一签名再复制一份同构 Param。
+  - XML 需要同时绑定多个简单参数时，每个参数显式标注 `@Param`；单个对象参数通常直接按对象属性映射，若 SQL 需要稳定的命名根节点，可显式使用 `@Param("query")` / `@Param("param")` 并在 XML 同步使用该前缀。
+- 参数对象只收纳一次操作真实需要的字段，不做跨 Mapper 的万能条件包。必填字段在构造边界校验；nullable 字段仅表示 SQL 允许缺省的数据，不用多个 `null` 组合选择业务模式。模式不同用具名 Mapper 方法、受控工厂或明确的判别字段表达。
+- 固定字段契约不得使用 `Map<String, Object>` 作为 Mapper 入参；仅在 JSONB、插件扩展字段或有意透传的动态键值边界保留 Map。Map 出参规则见 §1.2。
+- 状态转换应保留操作语义：业务调用方使用 `approve`、`markGiveUp`、`pause` 等具名方法；具名方法在 Java 侧从权威枚举或领域有限状态类型组装目标状态和允许来源集合，再委托参数化 Mapper 语句执行 CAS。不得把 `targetStatus` / `expectedStatuses` 直接开放给 Controller 或无约束的业务调用方。
+- Mapper XML 写语句的 `SET`（包括 `UPDATE SET` 和 `ON CONFLICT ... DO UPDATE SET`）不得固定写入状态字面量；目标状态由 Java 语义方法传入，`MapperStatusWriteConventionTest` 对全仓 Mapper XML 阻断回退。INSERT 的默认状态同样优先由实体、Param 或 Java 默认方法传入；数据库默认值和 SQL 派生状态确有所有权时应保留明确语义。
+- `WHERE` / `SELECT` 中的状态集合按业务口径治理：共享生命周期分类（活跃、终态、成功终态、非成功终态）应与权威枚举派生集合建立精确 Mapper 契约测试；SLA 纳入、失败筛选、正式成功、dry-run 隔离和恢复候选等专项策略保留明确 SQL 集合及专项测试。不得为了消除字面量把不同业务策略合并成一个通用状态参数。
+- 本规则优先约束新增和因相邻业务变更而修改的 Mapper 方法。历史宽参数及固定结构 Map 按重复条件、nullable 模式、状态语义和调用方数量分批处理；不为统计归零而机械改写简单 CRUD，也不在本轮顺带改变 SQL、事务或并发语义。
 
 ### 9.4 公共 SQL 片段(`CommonFragments.xml`)
 

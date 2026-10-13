@@ -20,6 +20,36 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface ResultVersionMapper {
 
+  enum VersionStatus {
+    PENDING,
+    EFFECTIVE,
+    SUPERSEDED,
+    ARCHIVED,
+    DRY_RUN
+  }
+
+  record SupersedeParam(
+      String tenantId,
+      String businessKey,
+      Instant deactivatedAt,
+      String expectedStatus,
+      String targetStatus) {}
+
+  record TransitionParam(
+      String tenantId,
+      Long id,
+      Instant transitionedAt,
+      String expectedStatus,
+      String targetStatus) {}
+
+  record ArchiveParam(
+      String tenantId,
+      Long id,
+      Instant now,
+      boolean clearPayload,
+      String expectedStatus,
+      String targetStatus) {}
+
   /** 新增一行 result_version。返回写入行数。 */
   int insert(ResultVersionEntity entity);
 
@@ -50,10 +80,16 @@ public interface ResultVersionMapper {
    *
    * <p>partial unique index 保证至多 1 行 EFFECTIVE，所以本 update 至多影响 1 行。
    */
-  int supersedePriorEffective(
-      @Param("tenantId") String tenantId,
-      @Param("businessKey") String businessKey,
-      @Param("deactivatedAt") Instant deactivatedAt);
+  default int supersedePriorEffective(String tenantId, String businessKey, Instant deactivatedAt) {
+    return supersede(new SupersedeParam(
+        tenantId,
+        businessKey,
+        deactivatedAt,
+        VersionStatus.EFFECTIVE.name(),
+        VersionStatus.SUPERSEDED.name()));
+  }
+
+  int supersede(SupersedeParam param);
 
   /** 查 (tenant_id, business_key) 的当前 EFFECTIVE 行；找不到返回 null。 */
   ResultVersionEntity selectEffective(
@@ -80,23 +116,33 @@ public interface ResultVersionMapper {
       @Param("tenantId") String tenantId, @Param("ids") Collection<Long> ids);
 
   /** PENDING → EFFECTIVE：CAS 到 EFFECTIVE，写 effective_at。 */
-  int promoteToEffective(
-      @Param("tenantId") String tenantId,
-      @Param("id") Long id,
-      @Param("effectiveAt") Instant effectiveAt);
+  default int promoteToEffective(String tenantId, Long id, Instant effectiveAt) {
+    return promote(new TransitionParam(
+        tenantId, id, effectiveAt, VersionStatus.PENDING.name(), VersionStatus.EFFECTIVE.name()));
+  }
+
+  int promote(TransitionParam param);
 
   /** PENDING → ARCHIVED 拒绝路径；不影响其它版本。 */
-  int rejectPending(
-      @Param("tenantId") String tenantId,
-      @Param("id") Long id,
-      @Param("deactivatedAt") Instant deactivatedAt);
+  default int rejectPending(String tenantId, Long id, Instant deactivatedAt) {
+    return reject(new TransitionParam(
+        tenantId, id, deactivatedAt, VersionStatus.PENDING.name(), VersionStatus.ARCHIVED.name()));
+  }
+
+  int reject(TransitionParam param);
 
   /** SUPERSEDED → ARCHIVED 由 retention scheduler 推进；可选清空 payload_json。 */
-  int archiveSuperseded(
-      @Param("tenantId") String tenantId,
-      @Param("id") Long id,
-      @Param("now") Instant now,
-      @Param("clearPayload") boolean clearPayload);
+  default int archiveSuperseded(String tenantId, Long id, Instant now, boolean clearPayload) {
+    return archive(new ArchiveParam(
+        tenantId,
+        id,
+        now,
+        clearPayload,
+        VersionStatus.SUPERSEDED.name(),
+        VersionStatus.ARCHIVED.name()));
+  }
+
+  int archive(ArchiveParam param);
 
   /** 找出所有 status='SUPERSEDED' 且 deactivated_at 早于 cutoff 的版本，scheduler 用。 */
   List<ResultVersionEntity> selectSupersededOlderThan(

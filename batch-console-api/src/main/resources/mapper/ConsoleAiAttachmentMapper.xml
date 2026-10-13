@@ -76,19 +76,19 @@
          WHERE tenant_id = #{tenantId} AND id = #{id}
     </select>
 
-    <update id="markDraft">
+    <update id="transitionToDraft">
         UPDATE batch.console_ai_attachment
-           SET status = 'DRAFT', media_type = #{mediaType}, byte_size = #{byteSize},
+           SET status = #{targetStatus}, media_type = #{mediaType}, byte_size = #{byteSize},
                width = #{width}, height = #{height}
-         WHERE tenant_id = #{tenantId} AND id = #{id} AND status = 'UPLOADING'
+         WHERE tenant_id = #{tenantId} AND id = #{id} AND status = #{expectedStatus}
     </update>
 
-    <update id="bind">
+    <update id="transitionToBound">
         UPDATE batch.console_ai_attachment
-           SET status = 'BOUND', conversation_id = #{conversationId}, turn_no = #{turnNo},
+           SET status = #{targetStatus}, conversation_id = #{conversationId}, turn_no = #{turnNo},
                expires_at = #{expiresAt}
          WHERE tenant_id = #{tenantId} AND id = #{id} AND owner_user_id = #{ownerUserId}
-           AND status = 'DRAFT' AND expires_at > CURRENT_TIMESTAMP
+           AND status = #{expectedStatus} AND expires_at > CURRENT_TIMESTAMP
     </update>
 
     <select id="byTurn" resultMap="AttachmentMap">

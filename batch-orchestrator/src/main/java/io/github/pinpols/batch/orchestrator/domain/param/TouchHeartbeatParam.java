@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.domain.param;
 
+import java.util.List;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -13,6 +14,7 @@ public class TouchHeartbeatParam {
   private final String tenantId;
   private final String workerCode;
   private final String nextStatus;
+  private final List<String> preservedStatuses;
   private final Integer currentLoad;
   private final String capabilityTags;
 }

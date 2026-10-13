@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
+import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
 import io.github.pinpols.batch.orchestrator.domain.query.OutboxEventQuery;
 import java.time.Instant;
@@ -110,10 +111,15 @@ public interface OutboxEventMapper {
    * Console 运维重投递：将指定 id 中、当前状态属于 fromStatuses（如 FAILED/GIVE_UP）的事件 reset 回 NEW， 让 OutboxForwarder
    * 重新拾起。受 ConsoleOutboxOps 应用层调用，console 通过 HTTP 转发触发。
    */
-  int resetToNew(
+  default int resetToNew(String tenantId, List<Long> ids, List<String> fromStatuses) {
+    return resetStatus(tenantId, ids, fromStatuses, OutboxPublishStatus.NEW.code());
+  }
+
+  int resetStatus(
       @Param("tenantId") String tenantId,
       @Param("ids") List<Long> ids,
-      @Param("fromStatuses") List<String> fromStatuses);
+      @Param("fromStatuses") List<String> fromStatuses,
+      @Param("targetStatus") String targetStatus);
 
   /** P1-3 dry-run: 统计满足 cleanup 条件的 PUBLISHED 行数(不删)。 */
   int countPublishedBefore(
