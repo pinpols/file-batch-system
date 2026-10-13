@@ -95,12 +95,12 @@ public final class ConsoleAiImageNormalizer {
 
   public record NormalizedImage(byte[] bytes, String mediaType, int width, int height) {
     public NormalizedImage {
-      bytes = bytes == null ? null : bytes.clone();
+      bytes = EmptyChecks.isNull(bytes) ? null : bytes.clone();
     }
 
     @Override
     public byte[] bytes() {
-      return bytes == null ? null : bytes.clone();
+      return EmptyChecks.isNull(bytes) ? null : bytes.clone();
     }
 
     @Override
@@ -128,7 +128,8 @@ public final class ConsoleAiImageNormalizer {
 
     @Override
     public String toString() {
-      return "NormalizedImage[byteCount=" + (bytes == null ? "null" : bytes.length) + ", mediaType="
+      return "NormalizedImage[byteCount=" + (EmptyChecks.isNull(bytes) ? "null" : bytes.length)
+          + ", mediaType="
           + mediaType + ", width=" + width + ", height=" + height + "]";
     }
   }
