@@ -173,9 +173,12 @@ jobs:
           echo "starting $JAR"
           nohup java -jar "$JAR" --spring.profiles.active=local \
             > /tmp/console-api.log 2>&1 &
-          # 本门禁只验证 Console + primary PG/Valkey；MinIO/Kafka 未启动，不能用聚合 health。
+          # 本门禁只启动 Console + primary PG/Valkey；聚合 health 可因未启动的范围外依赖返回
+          # 503，但其 JSON 响应足以证明应用与 Actuator 已完成启动，后续 strict 请求再验证行为。
           for i in $(seq 1 90); do
-            if curl -sf "http://localhost:${CONSOLE_PORT}/actuator/health/liveness" -o /dev/null 2>/dev/null; then
+            if curl -sS "http://localhost:${CONSOLE_PORT}/actuator/health" \
+                -o "$RUNNER_TEMP/console-health.json" 2>/dev/null \
+                && grep -q '"status"' "$RUNNER_TEMP/console-health.json"; then
               echo "console-api ready after ${i}*2s"
               exit 0
             fi
