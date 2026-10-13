@@ -140,17 +140,9 @@ jobs:
 
       - name: Run strict-verify (live, non-blocking)
         # soft-gate-id: STRICT_VERIFY_LIVE
-        # 报告型非阻断:`set +e` + `exit 0` 已保证本 step 不挂红整个 job,
-        # 真正想阻断时把 `exit 0` 改成 `exit $rc` 即可。
-        # 不再叠 `continue-on-error: true`,避免双重回退误读为「即使改回 exit $rc
-        # 也仍被吞」。MEMORY: project_strict_verify_local_only.md。
+        # 报告模式保留真实退出码和统一状态行，但不影响 workflow 结论。
         shell: bash
-        run: |
-          set +e
-          env CI=1 bash scripts/local/strict-verify.sh
-          rc=$?
-          echo "strict-verify exit code: $rc"
-          exit 0   # 永远返回 0,真正想阻断的话改这里为 exit $rc
+        run: bash scripts/ci/run-gate.sh --group acceptance --mode report STRICT_VERIFY_LIVE "在线 strict 验证" -- env CI=1 bash scripts/local/strict-verify.sh
 
       - name: Dump console-api log on failure
         if: always()

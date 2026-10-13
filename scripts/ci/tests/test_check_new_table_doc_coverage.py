@@ -79,7 +79,7 @@ CREATE TABLE archive.new_policy_archive (id bigint);
         result = self.run_gate(documented=False)
 
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assertIn("| action=检查失败详情并修复后重试", result.stderr)
+        self.assertIn("| action=fix_and_retry", result.stderr)
         self.assertIn("batch.new_policy", result.stdout)
 
     def run_gate(self, documented: bool) -> subprocess.CompletedProcess[str]:

@@ -32,7 +32,6 @@
 #   python3 scripts/ci/check-mapof-null-values.py            # 扫全仓生产代码
 #   python3 scripts/ci/check-mapof-null-values.py --self-test # 规则自测(CI 内先跑)
 #
-# escape hatch(仅 dev 本地 debug):BATCH_CI_SKIP_MAPOF_GATE=1
 #
 import os
 import re
@@ -199,10 +198,6 @@ def _self_test():
 def main(argv):
     if '--self-test' in argv:
         return _self_test()
-
-    if os.environ.get('BATCH_CI_SKIP_MAPOF_GATE', '0') == '1':
-        print('[mapof-gate] BATCH_CI_SKIP_MAPOF_GATE=1 —— 跳过(仅 dev 本地 debug 应使用)')
-        return 0
 
     # 先自测:规则本身失效则直接失败(避免「静默匹配为空 = 假绿」)。
     if _self_test() != 0:

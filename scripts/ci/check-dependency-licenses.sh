@@ -6,7 +6,8 @@
 #
 # 用法:
 #   ./scripts/ci/check-dependency-licenses.sh           # 跑完整流程,失败时 exit 1
-#   BATCH_CI_SKIP_LICENSE_GATE=1 ./scripts/ci/...      # CI escape hatch (谨慎使用,仅 dev 本地 debug)
+#   BATCH_GATE_MODE=ignore bash scripts/ci/run-gate.sh DEPENDENCY_LICENSE_REVIEW \
+#     "第三方依赖许可证审查" -- ./scripts/ci/check-dependency-licenses.sh
 #
 # 工作原理:
 #   1. mvn -P compliance license:aggregate-add-third-party 产出 target/generated-sources/license/THIRD-PARTY.txt
@@ -22,11 +23,6 @@
 # 仅允许精确组件 RocksDB JNI 的 GPL-2.0 行；其 SBOM 同时声明 Apache-2.0，项目选择 Apache 路径。
 
 set -euo pipefail
-
-if [[ "${BATCH_CI_SKIP_LICENSE_GATE:-0}" == "1" ]]; then
-  echo "[license-gate] BATCH_CI_SKIP_LICENSE_GATE=1 — 跳过(仅 dev 本地 debug 应使用)"
-  exit 0
-fi
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"

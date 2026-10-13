@@ -23,4 +23,5 @@ fi
 
 gate_reset_collected
 gate_assert_collected
+bash "$ROOT/scripts/ci/tests/test-gate-control.sh"
 echo "门禁聚合模式测试通过"

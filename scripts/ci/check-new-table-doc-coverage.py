@@ -126,8 +126,8 @@ def main() -> int:
         previous_guide = run_git("show", f"{args.base}:docs/design/database-schema-guide.md")
     except (OSError, subprocess.CalledProcessError) as exc:
         print(
-            f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=2 "
-            "| action=检查失败详情并修复后重试",
+            f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | group=database "
+            "| mode=enforce | exit_code=2 | action=fix_and_retry",
             file=sys.stderr,
         )
         print(f"无法完成检查: {exc}", file=sys.stderr)
@@ -137,8 +137,8 @@ def main() -> int:
     removed = removed_catalog_tables(previous_guide, guide)
     if missing or removed:
         print(
-            f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=1 "
-            "| action=检查失败详情并修复后重试",
+            f"❌ 不通过 | code={GATE_CODE} | gate={GATE_NAME} | group=database "
+            "| mode=enforce | exit_code=1 | action=fix_and_retry",
             file=sys.stderr,
         )
         if missing:
@@ -155,13 +155,15 @@ def main() -> int:
 
     if tables:
         print(
-            f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=0 | action=none"
+            f"✅ 通过 | code={GATE_CODE} | gate={GATE_NAME} | group=database "
+            "| mode=enforce | exit_code=0 | action=none"
         )
         print(f"已核对新增表登记数量: {len(tables)}")
     else:
         print(
-            f"⏭️ 跳过 | code={GATE_CODE} | gate={GATE_NAME} | exit_code=0 "
-            "| action=none | reason=未发现本次新增 batch/archive 表"
+            f"⏭️ 跳过 | code={GATE_CODE} | gate={GATE_NAME} | group=database "
+            "| mode=conditional | exit_code=0 | action=none "
+            "| reason=未发现本次新增 batch/archive 表"
         )
     return 0
 

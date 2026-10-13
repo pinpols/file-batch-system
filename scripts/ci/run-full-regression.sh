@@ -12,6 +12,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/python-runtime.sh
 source "$ROOT_DIR/scripts/lib/python-runtime.sh"
+source "$ROOT_DIR/scripts/lib/gate-result.sh"
 batch_require_python
 
 cd "$ROOT_DIR"
@@ -91,6 +92,14 @@ run_step() {
   current_step="$label"
   banner "$label"
   "$@"
+}
+
+run_grouped_gate() {
+  local group="$1"
+  local code="$2"
+  local name="$3"
+  shift 3
+  BATCH_GATE_GROUP="$group" gate_run "$code" "$name" "$@"
 }
 
 # 清理「孤儿」testcontainers 容器(无 org.testcontainers.hash label 即非 reuse 持有):
@@ -598,15 +607,10 @@ if [[ "$RUN_STATIC_GATES" == true ]]; then
     "MyBatis generated keys return only id" \
     "$PYTHON_BIN" scripts/ci/check-mybatis-generated-key-columns.py
 
-  # PMD 0 violation 基线达成 (2026-04-26 maturity §6 P1 #2 收尾)，让 PMD 真正阻断 CI。
-  # 调试模式可显式 export BATCH_CI_SKIP_PMD_GATE=1 让 dev 本地 escape；CI 不应设此变量。
-  if [[ "${BATCH_CI_SKIP_PMD_GATE:-}" == "1" ]]; then
-    echo "[PMD gate] skipped via BATCH_CI_SKIP_PMD_GATE=1 (debug only)"
-  else
-    # 注：必须先 test-compile 让 reactor 编译 batch-common 等 sibling 模块，否则下游
-    # 模块解析 io.github.pinpols.batch:batch-common:${revision} 失败（CI 干净 .m2 找不到）。
-    run_step "PMD — code conventions (fail PR if violations introduced)" run_mvn -DskipTests test-compile pmd:check -fae
-  fi
+  # 注：必须先 test-compile 让 reactor 编译 batch-common 等 sibling 模块，否则下游
+  # 模块解析 io.github.pinpols.batch:batch-common:${revision} 失败（CI 干净 .m2 找不到）。
+  run_step "PMD — code conventions (fail PR if violations introduced)" \
+    run_grouped_gate quality FULL_REGRESSION_PMD "PMD 代码规约" run_mvn -DskipTests test-compile pmd:check -fae
 
   run_step "Spotless — code formatting" run_mvn spotless:check -fae
 fi
@@ -615,15 +619,10 @@ if [[ "$RUN_DEFAULT_TESTS" == true ]]; then
   run_step \
     "Reactor Default Tests (*Test / *IntegrationTest)" \
     run_mvn test -fae
-  # Coverage gate — 真正阻断 CI（2026-04-26 启用）。阈值见 pom.xml jacoco-maven-plugin（起步 25% LINE）。
-  # 调试模式可显式 export BATCH_CI_SKIP_COVERAGE_GATE=1 让 dev 本地 escape；CI 不应设此变量。
-  if [[ "${BATCH_CI_SKIP_COVERAGE_GATE:-}" == "1" ]]; then
-    echo "[Coverage gate] skipped via BATCH_CI_SKIP_COVERAGE_GATE=1 (debug only)"
-  else
-    # 用 @check execution id 而非裸 jacoco:check —— 后者走 default-cli execution 拿不到 pom.xml
-    # check execution 配的 rules（因为 check execution phase=none，rules 只挂在该 execution 上）。
-    run_step "Coverage gate (jacoco:check@check, fail PR if below threshold)" run_mvn jacoco:check@check -fae
-  fi
+  # 用 @check execution id 而非裸 jacoco:check —— 后者走 default-cli execution 拿不到 pom.xml
+  # check execution 配的 rules（因为 check execution phase=none，rules 只挂在该 execution 上）。
+  run_step "Coverage gate (jacoco:check@check, fail PR if below threshold)" \
+    run_grouped_gate test FULL_REGRESSION_COVERAGE "JaCoCo 覆盖率" run_mvn jacoco:check@check -fae
 fi
 
 if [[ "$RUN_IT_SUITE" == true ]]; then
