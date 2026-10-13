@@ -9,7 +9,9 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Iterator;
+import java.util.Objects;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
@@ -91,5 +93,43 @@ public final class ConsoleAiImageNormalizer {
     return BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
   }
 
-  public record NormalizedImage(byte[] bytes, String mediaType, int width, int height) {}
+  public record NormalizedImage(byte[] bytes, String mediaType, int width, int height) {
+    public NormalizedImage {
+      bytes = bytes == null ? null : bytes.clone();
+    }
+
+    @Override
+    public byte[] bytes() {
+      return bytes == null ? null : bytes.clone();
+    }
+
+    @Override
+    public boolean equals(Object other) {
+      if (this == other) {
+        return true;
+      }
+      return other
+              instanceof
+              NormalizedImage(
+                  byte[] otherBytes,
+                  String otherMediaType,
+                  int otherWidth,
+                  int otherHeight)
+          && Arrays.equals(bytes, otherBytes)
+          && Objects.equals(mediaType, otherMediaType)
+          && width == otherWidth
+          && height == otherHeight;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(Arrays.hashCode(bytes), mediaType, width, height);
+    }
+
+    @Override
+    public String toString() {
+      return "NormalizedImage[byteCount=" + (bytes == null ? "null" : bytes.length) + ", mediaType="
+          + mediaType + ", width=" + width + ", height=" + height + "]";
+    }
+  }
 }

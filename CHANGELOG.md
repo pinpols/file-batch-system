@@ -8,6 +8,7 @@
 
 ## [Unreleased]
 
+- 修复线上 Sonar 报告中的上传文件名空值路径、AI 图片字节数组 record 值语义、异常凭据脱敏正则冗余分支及 OIDC 注册缓存的并发初始化实现；增加相应回归测试。
 - 修复后端 pre-push clean compile 与 Java 治理测试使用不同 Maven 运行时、共享构建产物竞态及陈旧测试类导致的类缺失误报；治理测试改为 clean test，两类构建均使用仓库 Maven Wrapper 并在各自的一次性 detached worktree 中隔离运行，临时目录清理已按高风险操作治理登记。
 - 新增隔离的后端可靠性回归套件及每日 CI，覆盖 manifest 修复重扫、对象丢失恢复与替换检测、到达组并发去重、checkpoint 续跑、Outbox/Kafka 恢复和消费者反压，并明确本地测试、标准 Sim 与 staging DR 的证据边界。
 - 修复全量 CI 与 Sonar 中文件到达组集成测试仍把 checksum 期望值当作已校验证据的旧契约；测试现写入持久化 `integrityState=VERIFIED`，并同步配置注释与失败关闭语义。

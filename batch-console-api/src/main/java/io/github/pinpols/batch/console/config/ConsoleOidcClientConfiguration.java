@@ -25,27 +25,21 @@ public class ConsoleOidcClientConfiguration {
       implements ClientRegistrationRepository {
 
     private final ConsoleOidcProperties properties;
-    private volatile ClientRegistration registration;
+    private ClientRegistration registration;
 
     private LazyClientRegistrationRepository(ConsoleOidcProperties properties) {
       this.properties = properties;
     }
 
     @Override
-    public ClientRegistration findByRegistrationId(String registrationId) {
+    public synchronized ClientRegistration findByRegistrationId(String registrationId) {
       if (!properties.getRegistrationId().equals(registrationId)) {
         return null;
       }
-      ClientRegistration cachedRegistration = registration;
-      if (EmptyChecks.isNotNull(cachedRegistration)) {
-        return cachedRegistration;
+      if (EmptyChecks.isNull(registration)) {
+        registration = discoverRegistration();
       }
-      synchronized (this) {
-        if (EmptyChecks.isNull(registration)) {
-          registration = discoverRegistration();
-        }
-        return registration;
-      }
+      return registration;
     }
 
     private ClientRegistration discoverRegistration() {

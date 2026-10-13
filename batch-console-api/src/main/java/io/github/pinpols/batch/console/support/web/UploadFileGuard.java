@@ -71,7 +71,7 @@ public final class UploadFileGuard {
   private static void requireExtension(MultipartFile file, Set<String> allowed) {
     String name = file.getOriginalFilename();
     if (name == null || name.isBlank()) {
-      reject(file, "uploaded file missing original filename");
+      throw invalidUpload(file, "uploaded file missing original filename");
     }
     int dot = name.lastIndexOf('.');
     if (dot < 0 || dot == name.length() - 1) {
@@ -119,7 +119,11 @@ public final class UploadFileGuard {
   }
 
   private static void reject(MultipartFile file, String reason) {
-    throw BizException.of(
+    throw invalidUpload(file, reason);
+  }
+
+  private static BizException invalidUpload(MultipartFile file, String reason) {
+    return BizException.of(
         ResultCode.INVALID_ARGUMENT,
         ResultCode.INVALID_ARGUMENT.detailKey(),
         "file rejected: name=" + file.getOriginalFilename() + ", reason=" + reason);

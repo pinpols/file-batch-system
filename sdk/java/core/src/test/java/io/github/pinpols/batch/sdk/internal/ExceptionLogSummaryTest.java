@@ -11,13 +11,14 @@ class ExceptionLogSummaryTest {
   @Test
   @DisplayName("摘要中密码、授权头与令牌被脱敏,换行被清理且超长截断")
   void shouldSanitizeMaskAndLimitExceptionMessage() {
-    IllegalStateException failure = new IllegalStateException(
-        "password=hunter2\r\nauthorization: Bearer abc {\"token\":\"secret\"} "
-            + "x".repeat(1_024));
+    IllegalStateException failure = new IllegalStateException("""
+        password=hunter2 apikey=raw-key
+        authorization: Bearer abc {"token":"secret"} %s\
+        """.formatted("x".repeat(1_024)));
 
     assertThat(ExceptionLogSummary.of(failure))
-        .doesNotContain("hunter2", "abc", "secret", "\r", "\n")
-        .contains("password=****", "authorization: ****", "\"token\":****")
+        .doesNotContain("hunter2", "raw-key", "abc", "secret", "\r", "\n")
+        .contains("password=****", "apikey=****", "authorization: ****", "\"token\":****")
         .hasSize(ExceptionLogSummary.MAX_LENGTH)
         .endsWith("...");
   }

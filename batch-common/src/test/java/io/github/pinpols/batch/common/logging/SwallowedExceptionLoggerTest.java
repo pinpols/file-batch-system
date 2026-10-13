@@ -28,13 +28,14 @@ class SwallowedExceptionLoggerTest {
   @Test
   @DisplayName("常见凭据字段(口令、令牌、接口密钥、地址内嵌账号口令与 Bearer 头)全部被掩码")
   void shouldMaskCommonCredentials() {
-    IllegalStateException failure =
-        new IllegalStateException("password=hunter2 token:abc authorization: Bearer auth-token "
-            + "{\"api_key\":\"json-key\"} Bearer standalone-token "
-            + "http://admin:secret@example.test");
+    IllegalStateException failure = new IllegalStateException("""
+        password=hunter2 token:abc apikey=raw-key authorization: Bearer auth-token \
+        {"api_key":"json-key"} Bearer standalone-token http://admin:secret@example.test\
+        """);
 
     assertThat(SwallowedExceptionLogger.summary(failure))
-        .isEqualTo("IllegalStateException: password=**** token:**** authorization: **** "
+        .isEqualTo("IllegalStateException: password=**** token:**** apikey=**** "
+            + "authorization: **** "
             + "{\"api_key\":****} Bearer **** http://****@example.test");
   }
 
