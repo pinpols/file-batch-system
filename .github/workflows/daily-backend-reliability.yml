@@ -1,0 +1,45 @@
+name: daily-backend-reliability
+
+on:
+  schedule:
+    # 在每日业务 Sim 窗口后运行，使用相互隔离的 Testcontainers 依赖。
+    - cron: '17 20 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-backend-reliability-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  reliability-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+
+      - name: Run isolated backend reliability suite
+        shell: bash
+        run: |
+          set -o pipefail
+          bash scripts/local/backend-reliability-tests.sh 2>&1 | tee /tmp/backend-reliability.log
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: backend-reliability-${{ github.run_id }}
+          path: |
+            /tmp/backend-reliability.log
+            batch-orchestrator/target/surefire-reports/**
+            batch-worker/*/target/surefire-reports/**
+          if-no-files-found: warn
+          retention-days: 14

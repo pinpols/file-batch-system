@@ -170,8 +170,8 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  @DisplayName("真实数据库查询保留完整性状态,开启完整性要求后已校验文件能够触发")
-  void shouldTriggerVerifiedGroup_whenDatabaseReturnsIntegrityState() {
+  @DisplayName("真实数据库下开启完整性要求后只有 VERIFIED 文件能够触发")
+  void shouldTriggerVerifiedGroup_whenDatabaseReturnsVerifiedIntegrityState() {
     String groupCode = "verified-group-" + suffix();
     String metadata = """
         {"fileGroupCode":"%s","requiredFileSet":"verified.csv","triggerOnComplete":true,"integrityState":"%s"}
@@ -199,6 +199,47 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
               TENANT_ID,
               fileId))
           .isEqualTo("TRIGGERED");
+    } finally {
+      fileGovernanceProperties.getArrival().setRequireVerified(original);
+    }
+  }
+
+  @Test
+  @DisplayName("真实数据库下 checksum 字段存在但没有 VERIFIED 背书时保持等待")
+  void shouldWaitForVerifiedGroup_whenOnlyChecksumColumnsArePresent() {
+    String groupCode = "unverified-group-" + suffix();
+    String metadata = """
+        {"fileGroupCode":"%s","requiredFileSet":"unverified.csv","triggerOnComplete":true}
+        """.formatted(groupCode);
+    Long fileId = insertFileRecord(new FileRecordSpec(
+        TENANT_ID,
+        "unverified.csv",
+        "INPUT",
+        FileStatus.RECEIVED.code(),
+        "LOCAL",
+        "incoming/" + groupCode + "/unverified.csv",
+        metadata));
+    jdbcTemplate.update(
+        "update batch.file_record set checksum_type = 'SHA-256', checksum_value = ? where tenant_id = ? and id = ?",
+        "a".repeat(64),
+        TENANT_ID,
+        fileId);
+    boolean original = fileGovernanceProperties.getArrival().isRequireVerified();
+    try {
+      fileGovernanceProperties.getArrival().setRequireVerified(true);
+      fileGovernanceScheduler.manageFileArrivalGroups();
+      assertThat(jdbcTemplate.queryForObject(
+              "select metadata_json->>'arrivalState' from batch.file_record where tenant_id = ? and id = ?",
+              String.class,
+              TENANT_ID,
+              fileId))
+          .isEqualTo("WAITING_ARRIVAL");
+      assertThat(jdbcTemplate.queryForObject(
+              "select metadata_json->>'arrivalReason' from batch.file_record where tenant_id = ? and id = ?",
+              String.class,
+              TENANT_ID,
+              fileId))
+          .isEqualTo("ARRIVED_PENDING_VERIFY");
     } finally {
       fileGovernanceProperties.getArrival().setRequireVerified(original);
     }

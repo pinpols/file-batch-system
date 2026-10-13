@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
@@ -19,7 +20,9 @@ import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.Map;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -52,6 +55,7 @@ class PreprocessStepObjectLoadIntegrationTest {
   private static String bucket;
   private static S3Client client;
   private static S3Presigner presigner;
+  private final ObjectMapper objectMapper = new ObjectMapper();
 
   @BeforeAll
   static void startMinio() {
@@ -79,12 +83,19 @@ class PreprocessStepObjectLoadIntegrationTest {
 
   /** 用本租户登记 {@code storage_path=registeredPath} 的 file_record stub 构造 step(归属校验放行该路径)。 */
   private PreprocessStep newStep(String registeredPath) {
+    return newStep(registeredPath, true);
+  }
+
+  private PreprocessStep newStep(String registeredPath, boolean bypassMode) {
     BatchSecurityProperties security = new BatchSecurityProperties();
-    security.setBypassMode(true); // 跳过解密,下载的明文直通 pipeline
+    security.setBypassMode(bypassMode); // 默认跳过解密；摘要场景启用正式校验路径
     PlatformFileRecordRepository runtimeRepo = mock(PlatformFileRecordRepository.class);
     PlatformPipelineDefinitionRepository pipelineDefinitions =
         mock(PlatformPipelineDefinitionRepository.class);
     when(pipelineDefinitions.loadLatestTemplateConfig(any(), any(), any())).thenReturn(Map.of());
+    BatchObjectCryptoService cryptoService = mock(BatchObjectCryptoService.class);
+    when(cryptoService.decrypt(any(byte[].class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
     // 归属校验:loadFileRecord 返回本租户登记的 storage_path,使该对象路径被放行。
     when(runtimeRepo.loadFileRecord(any(), any()))
         .thenReturn(Map.of("storage_path", registeredPath));
@@ -94,7 +105,7 @@ class PreprocessStepObjectLoadIntegrationTest {
         runtimeRepo,
         pipelineDefinitions,
         security,
-        mock(BatchObjectCryptoService.class),
+        cryptoService,
         props,
         new S3ObjectStore(client, presigner, props));
   }
@@ -124,32 +135,25 @@ class PreprocessStepObjectLoadIntegrationTest {
   }
 
   private ImportPayload objectPayload(String storagePath, String format) {
-    // 字段序见 ImportPayload:...,12 storageType,13 storagePath,14 storageBucket,15 templateCode,
-    //   16 batchNo,17 content,18 contentBase64,...,23 metadata。content/contentBase64 留空 = 走对象。
-    return new ImportPayload(
-        null,
-        null,
-        null,
-        null,
-        format,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        "S3",
-        storagePath,
-        bucket,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        Map.of());
+    return objectPayload(storagePath, format, null, null);
+  }
+
+  private ImportPayload objectPayload(
+      String storagePath, String format, String checksumType, String checksumValue) {
+    Map<String, Object> fields = new HashMap<>();
+    fields.put("fileFormatType", format);
+    fields.put("storageType", "S3");
+    fields.put("storagePath", storagePath);
+    fields.put("storageBucket", bucket);
+    if (checksumType != null) {
+      fields.put("checksumType", checksumType);
+      fields.put("checksumValue", checksumValue);
+    }
+    return objectMapper.convertValue(fields, ImportPayload.class);
+  }
+
+  private static String sha256(byte[] content) throws Exception {
+    return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));
   }
 
   @Test
@@ -178,6 +182,54 @@ class PreprocessStepObjectLoadIntegrationTest {
     String key = "ingress/objload-it/nope.json";
     ImportStageResult result = newStep(key).execute(contextWithBlankRawPayload(objectPayload(key)));
     assertThat(result.success()).isFalse();
+  }
+
+  @Test
+  @DisplayName("登记对象暂时丢失时预处理失败,对象恢复后同一文件可重试成功")
+  void recovers_whenRegisteredObjectIsRestoredAfterTemporaryLoss() throws Exception {
+    String key = "ingress/objload-it/recover.json";
+    byte[] content =
+        "{\"records\":[{\"customerNo\":\"RECOVER-001\"}]}".getBytes(StandardCharsets.UTF_8);
+    ImportPayload payload = objectPayload(key, "JSON", "SHA-256", sha256(content));
+
+    client.deleteObject(builder -> builder.bucket(bucket).key(key));
+    ImportJobContext failedContext = contextWithBlankRawPayload(payload);
+    ImportStageResult missing = newStep(key, false).execute(failedContext);
+    assertThat(missing.success())
+        .as("missing registered object must fail closed")
+        .isFalse();
+    assertThat(failedContext.getAttributes().get(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD))
+        .isNull();
+
+    client.putObject(
+        PutObjectRequest.builder().bucket(bucket).key(key).build(), RequestBody.fromBytes(content));
+    ImportJobContext recoveredContext = contextWithBlankRawPayload(payload);
+    ImportStageResult recovered = newStep(key, false).execute(recoveredContext);
+    assertThat(recovered.success()).as("restored object can be retried").isTrue();
+    assertThat(String.valueOf(
+            recoveredContext.getAttributes().get(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD)))
+        .as("retry consumes the restored bytes")
+        .contains("RECOVER-001");
+  }
+
+  @Test
+  @DisplayName("登记后对象内容被替换时摘要复核失败且不产生规整载荷")
+  void failsClosed_whenRegisteredObjectContentChanges() throws Exception {
+    String key = "ingress/objload-it/tampered.json";
+    byte[] registeredContent =
+        "{\"records\":[{\"customerNo\":\"ORIGINAL\"}]}".getBytes(StandardCharsets.UTF_8);
+    putObject(key, "{\"records\":[{\"customerNo\":\"TAMPERED\"}]}");
+    ImportJobContext context = contextWithBlankRawPayload(
+        objectPayload(key, "JSON", "SHA-256", sha256(registeredContent)));
+
+    ImportStageResult result = newStep(key, false).execute(context);
+
+    assertThat(result.success())
+        .as("changed object must fail checksum verification")
+        .isFalse();
+    assertThat(context.getAttributes().get(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD))
+        .as("changed bytes must not reach normalized payload")
+        .isNull();
   }
 
   @Test

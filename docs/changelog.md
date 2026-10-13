@@ -1,6 +1,8 @@
 # 变更记录（规范与架构权威条款变化）
 
 ### 2026-10-13
+- **pre-push Maven 运行时与构建产物隔离**：Java 治理测试从 clean test 开始，治理测试与受影响模块 compile 均使用仓库 Maven Wrapper 并在各自的一次性 detached worktree 中运行，避免本机 Maven 版本差异、陈旧测试类或共享 `target` 竞态造成类缺失误报；临时目录仅由 `mktemp` 创建并按高风险操作治理登记，门禁仍保持阻断模式。
+- **后端 Sim 可靠性场景组治理**：新增文件完整性、出站半写、数据库并发触发、Worker/依赖故障、故障隔离及恢复的覆盖矩阵；增加本地与每日 CI 共用的 Testcontainers 故障回归脚本，覆盖 manifest 重扫、对象丢失恢复与替换检测、到达组并发、checkpoint 续跑、NAS 发布、Kafka 熔断恢复、Outbox exactly-once 和消费者背压。区分单测/集成测试、标准业务 Sim 和 staging DR 证据，在 Sim、测试和 Runbook 索引登记场景组入口，不将本地结果宣称为真实灾备通过。
 - **前后端周期治理 skill 总控**：新增 `cross-repo-governance-review`，以月度增量、季度存量、发布前、事故后和首次全量基线五种模式固定覆盖两仓 20 个治理领域；新增 Agent Skill 使用指南，重整总控审查、后端专项、组合示例与交付路由，防止遗漏规范退化、代码腐化、测试假绿和治理守卫自身失效。
 - **前后端联合版本自动准备**：新增单一手动 workflow，校验双仓基线版本并按选择的 SemVer 级别创建同版本 Release PR；启用需配置最小权限 GitHub App，不自动合并、打 tag 或发布。
 - **Entity / Service / Controller 债务清理**：将 10 个 Orchestrator 与 2 个 Console 查询投影、值对象和上下文迁出领域 `entity` 包；23 个 Controller Entity 请求/响应改用独立 DTO，序列化契约测试确认 JSON 字段保持不变；实体命名与 Controller Entity 暴露门禁改为零存量断言，并加入 Controller 直连持久层约束。OpenAPI 补齐上述内部端点与 DTO schema，配对 Console BFF 消费独立响应 record，修正 SDK/Console DTO 注释。

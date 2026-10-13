@@ -88,7 +88,7 @@
 | 文件与对象存储 | [Filesystem](./object-storage-filesystem.md)、[S3 后端](./object-storage-s3-backends.md)、[文件完整性与恢复](../design/file-integrity-recovery.md)、[控制总数对账](./control-total-reconciliation-howto.md) |
 | 安全与权限 | [密码安全](./password-security-backlog.md)、[角色治理](./role-redesign-config-admin-audit.md)、[租户 Worker 接入](./per-tenant-worker-onboarding.md) |
 | 观测与韧性 | [SLO / SLI 目录](./slo-sli-catalog.md)、[分布式追踪](./distributed-tracing.md)、[锁检查](./distributed-locking-checklist.md)、[维护模式](./maintenance-mode.md)、[降级](./downstream-degradation.md)、[告警升级](./alert-escalation.md)、[OpenLineage](./openlineage-lineage.md)、[本地日志](./local-log-layout.md) |
-| 测试与 CI | [BE 验收](./be-acceptance.md)、[E2E 分层](./e2e-tier-strategy.md)、[种子校验](./seed-validation.md)、[CI 加速](./ci-speedup-2026-06-02.md)、[取证回放](./forensic-replay-howto.md) |
+| 测试与 CI | [BE 验收](./be-acceptance.md)、[E2E 分层](./e2e-tier-strategy.md)、[后端 Sim 可靠性场景组](../testing/backend-sim-reliability.md)、[种子校验](./seed-validation.md)、[CI 加速](./ci-speedup-2026-06-02.md)、[取证回放](./forensic-replay-howto.md) |
 | SDK 发布 | [双轨灰度](./sdk-dual-rollout.md)、[SDK 发布](./sdk-release.md)、[Python 发布](./sdk-python-release.md) |
 | 故障剧本 | [Playbooks 索引](./playbooks/README.md) |
 | CI 专项 | [CI Runbook 索引](./ci/README.md)；[前后端 CI 定时治理](./ci-schedule-governance.md) |

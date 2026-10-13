@@ -3,6 +3,19 @@
 模拟 ta / tb / tc 三个真实租户的 4 类 worker(IMPORT / EXPORT / DISPATCH / WORKFLOW)上下游交互,
 本地端到端验证调度链路。
 
+## Sim 分组
+
+后端 Sim 分为两个互补分组：
+
+| 分组 | 目标 | 当前入口与边界 |
+|---|---|---|
+| **业务主链组** | 多租户导入、导出、加工、分发、调度、文件束、批量 claim 和运行中配置快照 | `scripts/local/sim-harness.sh all`；标准阶段 04–30 |
+| **可靠性场景组** | 文件完整性与发布原子性、DB 并发幂等、Worker/依赖故障识别、故障隔离与恢复收敛 | 覆盖标准 Sim、模块 IT/E2E 和隔离 staging DR；当前不是独立的第二套 harness。完整矩阵见 [`docs/testing/backend-sim-reliability.md`](../../docs/testing/backend-sim-reliability.md) |
+
+可靠性场景组按故障风险组织验证资产，不表示每项都已进入标准 Sim。现有标准 Sim 的显式硬崩溃场景是 Stage 25；Worker 整队崩溃与 PITR 为单独 DR 脚本；PG failover、Kafka 短暂不可用及 DLQ 重放的 staging 证据仍按 [staging 执行清单](../../docs/runbook/go-live-staging-execution.md)独立验收。组件测试、E2E、Compose Sim 和真实 staging 演练必须分别报告。
+
+可在隔离环境日常回归的故障测试通过 `bash scripts/local/backend-reliability-tests.sh` 执行；`daily-backend-reliability` workflow 每日运行同一入口并归档 Surefire 报告。该套件以 Testcontainers 管理依赖，不连接本地 Compose Sim；PITR、HA failover 和 Worker 整队容器脚本仍需显式隔离目标。
+
 ## 设计
 
 | 租户 | 业务 | 4 类 worker job | 上游 source | 下游 sink |
@@ -43,7 +56,7 @@ scripts/sim/
 
 ## 推荐入口
 
-标准本地与 nightly 验证统一使用 harness。`sim` 会执行 04-30 全部阶段；26 文件束与
+标准本地与 nightly 验证统一使用 harness。`sim` 会执行 04-30 全部业务主链阶段；26 文件束与
 27 batch-claim 会由 harness 临时切换 Worker 配置，结束或异常退出时恢复默认配置。
 任何阶段未执行、未命中目标路径或未达业务终态都返回失败，不以 `SKIP` 或编排侧部分成功代替。
 

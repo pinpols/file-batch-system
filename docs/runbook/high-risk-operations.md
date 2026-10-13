@@ -34,6 +34,7 @@
 - Sim 平台 reset 两个入口共用 `scripts/local/sql/reset-platform-runtime.sql`。补入独立触发请求、任务和审计等原 `00-reset` 已覆盖的表，不依赖外键反向清理；保持本机 Compose 校验、`sim-reset` 会话守护和 `batch` schema 限定。仅用于可丢弃的仿真运行数据，配置与身份表保留；禁止连接生产库，清理前先静默应用。删除运行证据不可恢复，需要留档时先导出报告。
 - `scripts/ci/check-db-scripts-safety.sh` 扫描维护、sim、local、load-test SQL。`DROP`、`TRUNCATE`、`DELETE FROM` 和约束变更必须在文件头部标明风险及目标环境；seed SQL 也不豁免。
 - `scripts/local/pre-commit-checks.sh` 将本次门禁错误汇总写入由 `mktemp` 创建的独立临时文件，并仅在退出时删除该文件；路径由脚本创建，不接受调用方覆盖，清理不触碰仓库或服务数据。
+- `scripts/local/pre-push-sdk-checks.sh` 的 Java 治理与 clean compile 各自在 `mktemp -d` 创建的一次性 detached worktree 中运行；正常路径由 `git worktree remove` 清理，worktree 注册失败时仅对脚本刚创建且仍为空的精确临时目录执行 `rmdir`。目标不接受外部输入，不触碰仓库工作树或业务数据，失败后可直接重跑，无需业务恢复。
 - `scripts/ci/check-destructive-ops-governance.py` 盘点普通及强制 `rm`、PG `DROP`/`TRUNCATE`/`DELETE`/`dropdb`/`pg_restore --clean`、S3 删除/同步删除、Kafka topic/group/record 删除、Redis/Valkey `DEL`/`UNLINK`/`FLUSH*`，以及 Docker/Kubernetes 清理操作；支持识别反斜杠续行和 `minio_mc` 包装器。扫描范围包含 `scripts/`、`load-tests/scripts/`、`db/`、`deploy/`、`.github/workflows/` 和 `docs/runbook/`。相对 `scripts/ci/destructive-ops-baseline.json` 新增或扩大时 PR/Full Gate 失败，审查后才更新基线。
 - 作业监控清理按实例保留期，仅删除即将清理的 `job_instance` 对应的 `job_monitoring_alert_claim`；其无外键是为适配按业务日分区的实例表，清理在删除实例前执行。V225/V228 只替换本功能先前版本创建的 CHECK 约束，先验证扩展约束再删除旧约束，不删除业务行或告警事件。以上新增操作已纳入增量基线。
 - V234 替换 `config_change_log` 的 action CHECK 约束以纳入 `REVOKE` 审计动作；只删除旧约束定义，不删除表或业务记录，随后创建并验证新约束。该迁移的 `DROP CONSTRAINT` 已登记在增量基线。
