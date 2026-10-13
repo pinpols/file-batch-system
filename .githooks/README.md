@@ -17,6 +17,8 @@ git config core.hooksPath .githooks
 4. Workflow / composite action 变更执行 actionlint
 5. 文档、脚本分别执行结构和登记守护；仓库卫生守护始终执行
 
+变更范围复用 `scripts/ci/detect-change-scope.py --staged`，门禁分组为 `hygiene`、`quality`、`docs`、`config`、`supply-chain` 和 `governance`。支持全局、分组、单门禁模式开关（总开关关闭 > 单门禁 > 分组 > 全局 > 默认阻断）；例如 `BATCH_GATE_GROUP_MODES='quality=report,docs=ignore' git commit`。`report` 会实际执行并汇总失败但不阻断，`ignore` 不执行对应检查。仅对明确选定的本地 hook 使用这些模式；CI required checks 必须阻断。
+
 Maven 单测、Helm、Zizmor、镜像和依赖扫描保留在 pre-push / CI，避免每次提交过重。
 
 ### `pre-push` — PR 静态门禁预检
@@ -24,12 +26,17 @@ Maven 单测、Helm、Zizmor、镜像和依赖扫描保留在 pre-push / CI，�
 每次 `git push` 前执行 `scripts/local/pre-push-sdk-checks.sh`，按当前分支相对
 `origin/main` 的改动预检高频 CI 失败项。独立检查尽量完整执行，包含 clean compile，末尾汇总所有失败；环境缺失或参数错误等无法继续的前置问题会直接终止：
 
+变更范围使用同一分类器的 `--base <base> --head HEAD` 输入；Java 治理测试仅在 Java/Maven 或其明确入口变化时执行，不因任意 workflow 改动启动整个治理测试集。统一分组为 `local-pre-push`，支持上述模式开关。
+
 1. 拒绝直接推送 `main` / `master`
 2. 新增生产 Java 代码必须使用 `EmptyChecks`
 3. 应用层不得直接依赖基础设施适配器或 Redis/Kafka 等直连客户端
 4. readiness 文档、Trivy ignore、SDK 配置环境变量和 Java 可读性清单保持同步
 5. Java 变更执行受影响模块 clean compile
 6. Java、POM 或相关 CI 路由变更执行全部 `*ArchTest` / `*ConventionTest`
+
+pre-push 通过统一门禁执行器，分组为 `local-pre-push`，支持 `BATCH_GATE_MODE`、
+`BATCH_GATE_GROUP_MODES`、`BATCH_GATE_MODES` 和 `BATCH_GATE_ENABLED`。报告模式仍运行检查并输出实际退出码；忽略模式不执行检查；默认阻断。
 
 本机依赖：`python3`、JDK；提交 Shell 变更需 `shellcheck`，提交 Workflow 变更需 `actionlint`。
 `--skip-build` 同时跳过 clean compile 和 Java 治理测试，仅用于快速人工预检；正式 push 不应使用。
@@ -39,4 +46,4 @@ Maven 单测、Helm、Zizmor、镜像和依赖扫描保留在 pre-push / CI，�
 
 > **跳过 hook**（不推荐）：`git commit --no-verify`
 >
-> **紧急跳过 pre-push**（不推荐）：`SKIP_SDK_CHECKS=1 git push`
+> **显式忽略本地 pre-push**（不推荐）：`BATCH_GATE_GROUP_MODES=local-pre-push=ignore git push`

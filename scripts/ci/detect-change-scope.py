@@ -261,6 +261,16 @@ def changed_paths(base: str, head: str) -> list[str]:
     return [item.decode("utf-8") for item in result.stdout.split(b"\0") if item]
 
 
+def staged_paths() -> list[str]:
+    result = subprocess.run(
+        ["git", "diff", "--cached", "--name-only", "-z", "--"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+    )
+    return [item.decode("utf-8") for item in result.stdout.split(b"\0") if item]
+
+
 def write_outputs(result: dict[str, object], output_path: str | None) -> None:
     if not output_path:
         return
@@ -289,6 +299,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", default=os.environ.get("CHANGE_SCOPE_BASE", "origin/main"))
     parser.add_argument("--head", default=os.environ.get("CHANGE_SCOPE_HEAD", "HEAD"))
+    parser.add_argument("--staged", action="store_true", help="Classify paths staged for the next commit")
     parser.add_argument(
         "--event-name",
         default=os.environ.get("GITHUB_EVENT_NAME", "pull_request"),
@@ -298,7 +309,19 @@ def main() -> int:
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON")
     args = parser.parse_args()
 
-    if args.event_name != "pull_request":
+    if args.staged:
+        try:
+            paths = staged_paths()
+        except subprocess.CalledProcessError as exc:
+            detail = exc.stderr.decode("utf-8", errors="replace").strip() if exc.stderr else ""
+            message = f"unable to compute staged change scope: git diff exited {exc.returncode}"
+            if detail:
+                message += f": {detail}"
+            print(message, file=sys.stderr)
+            return 2
+        result = classify_paths(paths)
+        mode = "staged-index"
+    elif args.event_name != "pull_request":
         result = full_result()
         mode = f"full-fallback:{args.event_name}"
     else:

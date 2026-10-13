@@ -39,6 +39,13 @@ override_output="$(
 )"
 assert_contains "$override_output" "group=security | mode=ignore"
 
+local_hook_output="$(
+  BATCH_GATE_GROUP=local-pre-commit \
+  BATCH_GATE_GROUP_MODES='quality=report' \
+    gate_run PRE_COMMIT_JAVA_READABILITY "本地提交分组样例" true
+)"
+assert_contains "$local_hook_output" "group=quality | mode=report"
+
 disabled_output="$(BATCH_GATE_ENABLED=0 BATCH_GATE_GROUP=build gate_run TEST_DISABLED "总开关样例" false)"
 assert_contains "$disabled_output" "group=build | mode=ignore"
 

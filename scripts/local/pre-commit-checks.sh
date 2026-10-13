@@ -20,6 +20,12 @@ if ((${#staged_files[@]} == 0)); then
   exit 0
 fi
 
+staged_scopes_json="$($PYTHON_BIN scripts/ci/detect-change-scope.py --staged --json)"
+staged_scopes="$(printf '%s' "$staged_scopes_json" | "$PYTHON_BIN" -c 'import json,sys; print(" ".join(json.load(sys.stdin)["scopes"]))')"
+scope_has() {
+  [[ " ${staged_scopes} " == *" $1 "* ]]
+}
+
 BATCH_GATE_COLLECT=1
 BATCH_GATE_FAILURE_FILE="$(mktemp "${TMPDIR:-/tmp}/pre-commit-gates.XXXXXX")"
 export BATCH_GATE_COLLECT BATCH_GATE_FAILURE_FILE
@@ -66,8 +72,7 @@ for file in "${staged_files[@]}"; do
   [[ "$file" == *.sh ]] && shell_files+=("$file")
   [[ "$file" == *Mapper.xml ]] && mapper_xml_files+=("$file")
   [[ "$file" == *.md || "$file" == docs/* ]] && docs_changed=1
-  [[ "$file" == scripts/* || "$file" == load-tests/scripts/* || "$file" == .githooks/* ]] \
-    && scripts_changed=1
+  [[ "$file" == scripts/* || "$file" == load-tests/scripts/* || "$file" == .githooks/* ]] && scripts_changed=1
   [[ "$file" == .github/workflows/* || "$file" == .github/actions/* ]] && workflow_changed=1
   [[ "$file" == .env* ]] && env_file_changed=1
   [[ "$file" == *.yml || "$file" == *.yaml || "$file" == docker-compose*.yml || "$file" == .env* ]] \
@@ -97,6 +102,13 @@ for file in "${staged_files[@]}"; do
     esac
   fi
 done
+
+if scope_has scripts || scope_has ci; then
+  scripts_changed=1
+fi
+if scope_has docs; then
+  docs_changed=1
+fi
 
 if git diff --cached -G'@ConfigurationProperties' --name-only -- '*.java' | grep . >/dev/null; then
   config_registry_changed=1
@@ -234,14 +246,16 @@ if ((workflow_changed == 1)); then
   gate_run PRE_COMMIT_ACTIONLINT "GitHub Actions lint" check_workflows
 fi
 
-gate_run PRE_COMMIT_ACTION_PINNING "GitHub Actions SHA 固定" \
-  "$PYTHON_BIN" scripts/ci/check-github-action-pinning.py
-gate_run PRE_COMMIT_SOFT_GATES "软门禁治理" \
-  "$PYTHON_BIN" scripts/ci/check-soft-gate-governance.py
-gate_run PRE_COMMIT_FLAKY_QUARANTINE "flaky 测试隔离治理" \
-  "$PYTHON_BIN" scripts/ci/check-flaky-test-governance.py
-gate_run PRE_COMMIT_JAVA_GOVERNANCE_INVENTORY "Java 治理测试清单" \
-  "$PYTHON_BIN" scripts/ci/check-java-governance-test-coverage.py
+if ((scripts_changed == 1 || workflow_changed == 1)); then
+  gate_run PRE_COMMIT_ACTION_PINNING "GitHub Actions SHA 固定" \
+    "$PYTHON_BIN" scripts/ci/check-github-action-pinning.py
+  gate_run PRE_COMMIT_SOFT_GATES "软门禁治理" \
+    "$PYTHON_BIN" scripts/ci/check-soft-gate-governance.py
+  gate_run PRE_COMMIT_FLAKY_QUARANTINE "flaky 测试隔离治理" \
+    "$PYTHON_BIN" scripts/ci/check-flaky-test-governance.py
+  gate_run PRE_COMMIT_JAVA_GOVERNANCE_INVENTORY "Java 治理测试清单" \
+    "$PYTHON_BIN" scripts/ci/check-java-governance-test-coverage.py
+fi
 
 if ((scripts_changed == 1)); then
   gate_run PRE_COMMIT_SCRIPT_GOVERNANCE "脚本治理" \

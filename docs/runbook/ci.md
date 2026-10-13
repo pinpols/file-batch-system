@@ -263,6 +263,8 @@ PR 所有单元分片均设置 `-DskipITs=true`；集成和 E2E 由 Full Gate �
 
 - `pre-commit` 按暂存文件域路由，尽量只扫暂存命中的文件；CI 仍保留全量扫描。
 - `pre-push` 面向分支级轻量契约，允许使用 `origin/main...HEAD` 的增量基线。
+- 两个 hook 复用 `detect-change-scope.py`：pre-commit 使用 `--staged`，pre-push 使用 `--base/--head`；相同 scope 名称作为按需路由依据，不再独立维护第二套域分类。
+- hook 统一使用 `run-gate.sh` / `gate-result.sh` 的 `enforce`、`report`、`ignore` 控制；分组或单门禁覆盖只影响本地 hook，不得用于放宽 CI required checks。
 - 一个检查失败不阻断其他独立检查；pre-push 即使静态检查失败也继续运行适用的 clean compile，并在结尾报告失败总数与诊断项。
 - Maven 编译、PMD、单元/集成/E2E、镜像、安全全量扫描不放进 `pre-commit`，继续由 CI 负责。
 
@@ -289,6 +291,8 @@ PR 所有单元分片均设置 `-DskipITs=true`；集成和 E2E 由 Full Gate �
 | 数据库 / 脚本 / 文档 / 配置 / CI 变更 | 生产容量治理自动化 | 校验生产容量巡检脚本、只读 SQL、runbook、索引和 workflow 入口同步 |
 | tracked 源码/脚本/配置变更 | Lean LOC 快照重生成与校验 | 基于暂存树生成 `docs/stats/loc-current-lean.md` |
 | 所有提交 | 仓库卫生 | 全局仓库约束 |
+
+pre-commit 分组为 `hygiene`、`quality`、`docs`、`config`、`supply-chain`、`governance`；pre-push 使用 `local-pre-push`。模式控制示例：`BATCH_GATE_GROUP_MODES='quality=report,docs=ignore' git commit`，或 `BATCH_GATE_GROUP_MODES='local-pre-push=report' git push`。`report` 会执行并记录真实退出码但不阻断，`ignore` 不执行；默认仍为 `enforce`。
 
 ### pre-push
 

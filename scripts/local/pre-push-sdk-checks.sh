@@ -12,14 +12,13 @@
 #   - 无 Java 变更通常 < 30s；Java 治理测试本地基线约 1-2min
 #   - 独立静态检查或治理失败后仍继续其余检查与 clean compile,最后汇总失败项
 #   - 所有独立门禁尽量执行完,最后一次性汇总失败项
-#   - 可通过 SKIP_SDK_CHECKS=1 跳过(应急用,正常 PR 必跑)
+#   - 门禁模式由 scripts/ci/run-gate.sh 统一控制
 #   - CI=1 时关闭颜色 + 简化输出
 #
 # 用法:
 #   bash scripts/local/pre-push-sdk-checks.sh                    # 默认对比 origin/main
 #   bash scripts/local/pre-push-sdk-checks.sh --base origin/dev  # 自定义 base
 #   bash scripts/local/pre-push-sdk-checks.sh --skip-build       # 跳过 clean compile(快速预检)
-#   SKIP_SDK_CHECKS=1 git push                                   # 紧急绕过
 #
 # 集成方式:
 #   .git/hooks/pre-push 末尾 source 此脚本(见 README)
@@ -65,12 +64,6 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# ── 紧急绕过开关 ─────────────────────────────────────────
-if [[ "${SKIP_SDK_CHECKS:-0}" = "1" ]]; then
-  echo "⚠️  SKIP_SDK_CHECKS=1 设置,跳过 SDK 路线图自查(应急用,正常 PR 必跑)"
-  exit 0
-fi
-
 # ── 颜色 ─────────────────────────────────────────────────
 if [[ "${CI:-0}" = "1" ]] || [[ ! -t 1 ]]; then
   RED=""; YELLOW=""; GREEN=""; BLUE=""; RESET=""
@@ -110,6 +103,20 @@ if [[ -z "$CHANGED_FILES" ]]; then
   exit 0
 fi
 
+SCOPE_BASE_REF="$BASE_REF"
+if [[ -z "$SCOPE_BASE_REF" ]]; then
+  SCOPE_BASE_REF="HEAD~5"
+fi
+if ! SCOPE_JSON="$("$PYTHON_BIN" scripts/ci/detect-change-scope.py \
+  --base "$SCOPE_BASE_REF" --head HEAD --event-name pull_request --json)"; then
+  printf '❌ 不通过 | code=PRE_PUSH_SCOPE | gate=推送变更范围识别 | group=governance | mode=enforce | exit_code=2 | action=fix_and_retry | reason=无法安全计算增量门禁范围\n' >&2
+  exit 2
+fi
+CHANGE_SCOPES="$(printf '%s' "$SCOPE_JSON" | "$PYTHON_BIN" -c 'import json,sys; print(" ".join(json.load(sys.stdin)["scopes"]))')"
+scope_has() {
+  [[ " ${CHANGE_SCOPES} " == *" $1 "* ]]
+}
+
 CHANGED_JAVA=$(echo "$CHANGED_FILES" | grep -E "\.java$" || true)
 CHANGED_CTL=$(echo "$CHANGED_FILES" | grep -E "Controller\.java$" || true)
 CHANGED_YAML=$(echo "$CHANGED_FILES" | grep -E "openapi\.yaml$" || true)
@@ -130,9 +137,21 @@ CHANGED_ENV_GOVERNANCE=$(echo "$CHANGED_FILES" | grep -E "^(\.env\.example|docs/
 CHANGED_RUNTIME_CONFIG=$(echo "$CHANGED_FILES" | grep -E "^((scripts|load-tests/scripts)/.*\.sh|deploy/docker/|helm/|docker-compose.*\.ya?ml|Makefile|batch-.*/src/(main|test)/.*\.(java|ya?ml)|\.env[^/]*)$" || true)
 CHANGED_TEST_CONFIG_SOURCE=$(echo "$CHANGED_FILES" | grep -E "^(batch-.*/src/test/.*\.(java|ya?ml)|batch-test-support/src/main/resources/batch-test-defaults\.yml|scripts/ci/check-test-config-sources\.py)$" || true)
 CHANGED_RELEASE_SENSITIVE=$(echo "$CHANGED_FILES" | grep -E "^(db/migration/|deploy/docker/|deploy/ha/|helm/batch-platform/(templates|files)/|docs/api/sdk-contract-fixtures/|pom\.xml|\.env\.example|docker-compose(\.kafka-ha)?\.yml|helm/batch-platform/(Chart|values|values-canary)\.yaml|helm/values-prod\.yaml|docs/api/(console-api\.openapi|orchestrator-internal\.openapi|sdk-shared-constants)\.yaml|docs/agent-baseline\.md|docs/architecture/adr/)" || true)
-CHANGED_JAVA_GOVERNANCE=$(echo "$CHANGED_FILES" | grep -E "(^|/)(pom\.xml|.*\.java)$|^scripts/ci/(check-java-governance-test-coverage\.py|run-java-governance-tests\.sh)$|^\.github/workflows/(pr-gate|full-ci-gate|staging-gate)\.yml$" || true)
+CHANGED_JAVA_GOVERNANCE=""
+if scope_has java || scope_has maven; then
+  CHANGED_JAVA_GOVERNANCE=$(echo "$CHANGED_FILES" | grep -E '(^|/)(pom\.xml|.*\.java)$' || true)
+fi
+CHANGED_JAVA_GOVERNANCE_EXPLICIT=$(echo "$CHANGED_FILES" | grep -E "^scripts/ci/(check-java-governance-test-coverage\.py|run-java-governance-tests\.sh)$|^\.github/workflows/(pr-gate|full-ci-gate)\.yml$" || true)
+if [[ -n "$CHANGED_JAVA_GOVERNANCE_EXPLICIT" ]]; then
+  if [[ -n "$CHANGED_JAVA_GOVERNANCE" ]]; then
+    CHANGED_JAVA_GOVERNANCE+=$'\n'"$CHANGED_JAVA_GOVERNANCE_EXPLICIT"
+  else
+    CHANGED_JAVA_GOVERNANCE="$CHANGED_JAVA_GOVERNANCE_EXPLICIT"
+  fi
+fi
 
 info "本次 push 涉及:"
+info "  统一变更分组: ${CHANGE_SCOPES}"
 [[ -n "$CHANGED_JAVA" ]]     && info "  Java 文件 $(echo "$CHANGED_JAVA" | wc -l | tr -d ' ') 个"
 [[ -n "$CHANGED_CTL" ]]      && info "  Controller $(echo "$CHANGED_CTL" | wc -l | tr -d ' ') 个"
 [[ -n "$CHANGED_YAML" ]]     && info "  OpenAPI yaml $(echo "$CHANGED_YAML" | wc -l | tr -d ' ') 个"
@@ -574,6 +593,6 @@ else
   for failure in "${failures[@]}"; do
     printf '  - %s\n' "$failure" >&2
   done
-  warn "应急绕过:SKIP_SDK_CHECKS=1 git push(仅限明确知道问题但需要紧急 push 时)"
+  warn "如需显式报告/忽略本地 pre-push，请使用 BATCH_GATE_GROUP_MODES=local-pre-push=report 或 ignore"
   exit 1
 fi
