@@ -47,6 +47,8 @@ SQL_DIR="$ROOT/scripts/local/sql"
 source "$ROOT/scripts/lib/env-common.sh"
 # shellcheck source=scripts/lib/process.sh
 source "$ROOT/scripts/lib/process.sh"
+# shellcheck source=scripts/lib/console-api-readiness.sh
+source "$ROOT/scripts/lib/console-api-readiness.sh"
 
 CONSOLE_PORT="${CONSOLE_PORT:-$CONSOLE_API_PORT}"
 PG_CONTAINER="${PG_CONTAINER:-$BATCH_DEFAULT_POSTGRES_CONTAINER}"
@@ -129,7 +131,7 @@ if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -Fx "$PG_CONTAINER" >/de
   printf "${RED}[fatal]${RST} PG 容器 '%s' 未运行 — 请先 'docker compose up -d postgres' 或本地启动\n" "$PG_CONTAINER" >&2
   exit 2
 fi
-if ! curl -sf "${BASE}/actuator/health" -o /dev/null --max-time 5 2>/dev/null; then
+if ! console_api_is_ready "${BASE}/actuator/health" "$PYTHON_BIN"; then
   printf "${RED}[fatal]${RST} console-api %s 不可达 — 请先启动 console-api(scripts/local/start-all.sh)\n" "$BASE" >&2
   exit 2
 fi
@@ -269,7 +271,7 @@ if [[ "${RUN_MAINTENANCE_SWITCH:-0}" == "1" ]]; then
       # 用 "$@" 保留 env value 边界(value 含空格如 "strict-verify blocked" 不会被拆成 2 参)
       env "$@" SPRING_PROFILES_ACTIVE=local nohup java -jar "$CONSOLE_JAR" > /tmp/console-strict.log 2>&1 &
       local deadline=$(( $(date +%s) + 180 ))
-      until curl -sf --max-time 5 --connect-timeout 2 "$BASE/actuator/health" -o /dev/null 2>/dev/null; do
+      until console_api_is_ready "$BASE/actuator/health" "$PYTHON_BIN"; do
         if (( $(date +%s) > deadline )); then
           echo "  ✗ BE 起不来 180s timeout(看 /tmp/console-strict.log)" >&2
           return 1
@@ -302,7 +304,7 @@ if [[ "${RUN_MAINTENANCE_SWITCH:-0}" == "1" ]]; then
     sleep 2
     bash scripts/local/restart.sh console > /tmp/restart-normal.log 2>&1
     deadline=$(( $(date +%s) + 180 ))
-    until curl -sf --max-time 5 --connect-timeout 2 "$BASE/actuator/health" -o /dev/null 2>/dev/null; do
+    until console_api_is_ready "$BASE/actuator/health" "$PYTHON_BIN"; do
       if (( $(date +%s) > deadline )); then
         fail "maintenance 恢复后 BE 起不来 180s timeout" "看 /tmp/restart-normal.log"
         break
