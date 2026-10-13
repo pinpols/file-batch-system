@@ -34,9 +34,14 @@
 
 ## 技能
 
-遇到以下类型的工作时，按需使用 `.agents/skills/` 中对应的专项流程：
+先按任务层级选择总控，再使用 `.agents/skills/` 中的专项流程，避免每次重新发明项目治理清单：
 
-- `git-pr-workflow`：分支、提交、拉取请求、合并和分支清理的安全流程。
+- **双仓周期治理**：`cross-repo-governance-review`，用于月度/季度治理、全量深扫、规范防退化、代码腐化、发布前复核和事故后复盘，固定覆盖前后端 20 个领域。
+- **后端总控审查**：`project-engineering-review` 用于单仓项目级架构、质量、风险和维护评估；`adversarial-system-review` 只用于明确的跨信任边界攻击与故障审查；普通 PR/diff 使用 `code-review-and-gates`。
+- **交付流程**：`git-pr-workflow`，用于分支、提交、拉取请求、合并和分支清理。
+
+**后端专项：**
+
 - `code-review-and-gates`：正确性审查和验证范围选择。
 - `database-migration-safety`：数据库结构和数据迁移审查。
 - `script-sql-governance`：脚本和独立 SQL 的质量治理。
@@ -54,11 +59,10 @@
 - `scheduler-correctness`：Trigger 时序、业务日历、misfire、readiness 延迟和 pause/resume 行为。
 - `sql-query-performance`：基于证据的 PostgreSQL 查询、索引、分页和 JSONB 优化。
 - `disaster-recovery-validation`：备份、PITR、RPO/RTO 及恢复后业务一致性演练。
-- `adversarial-system-review`：跨信任边界的威胁和故障路径全面审查；仅在明确要求或确属系统级审查时使用，不替代普通差异审查。
-- `project-engineering-review`：项目级架构、质量、风险、治理和维护评估；整合当前权威文档与历史审查证据，并路由到专项技能。
 - `batch-scheduling-engineering`：批量业务、分布式执行与调度领域的设计、开发、评估和审查；核对业务日、状态一致性、并发恢复与容量证据。
 
 仓库专属命令和契约优先于通用技能清单。
+详细选择树、组合示例和调用方式见 [`docs/standards/agent-skills-guide.md`](docs/standards/agent-skills-guide.md)。
 
 ## 配对前端仓库
 

@@ -2,6 +2,7 @@
 
 | 文档 | 权威范围 |
 |---|---|
+| [agent-skills-guide.md](./agent-skills-guide.md) | 总控、专项、交付 Skill 的选择、组合、调用示例和证据边界 |
 | [document-governance.md](./document-governance.md) | 文档状态、待办、归档和扫描规则 |
 | [java-suppression-registry.md](./java-suppression-registry.md) | Java suppression 允许项、责任与退出条件 |
 | [static-analysis-governance.md](./static-analysis-governance.md) | 静态分析工具矩阵、Sonar 触发边界与抑制项治理策略 |
