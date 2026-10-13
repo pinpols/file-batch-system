@@ -626,6 +626,10 @@ python3 -m unittest scripts/ci/tests/test_check_java_logging_governance.py
 门禁输出显式标注 `scope=explicit-type,configuration-proxy`；通过不代表嵌套调用、参数合法状态、
 多个 `null` 或抽象适度性已经完成语义审查。
 
+`PositionalArgsConventionTest` 另按 PR 基线检查新增/修改的生产 Java 行：方法实参、构造实参或
+`return` 中存在至少三层连续调用时阻断。Javac AST 扫描不计入 fluent receiver 链和 lambda 函数体，
+历史未改代码与测试 fixture 不纳入该门禁；只用于定位高置信候选，不替代语义评审。
+
 ```bash
 python3 scripts/ci/check-java-readability.py
 ```
