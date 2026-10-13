@@ -2,6 +2,8 @@
 
 日期：2026-06-07
 
+> 本文记录 sidecar 的初始协议设计。当前入站校验与恢复语义以 [`file-integrity-recovery.md`](./file-integrity-recovery.md) 为准：scanner 在登记前验证原始对象 SHA-256，到达组 `require-verified` 检查持久化的 `integrityState=VERIFIED`，worker preprocess 继续复核。
+
 ## 背景
 
 当前系统已经有文件级元数据能力：
@@ -102,9 +104,9 @@ Console 到达组查询基于 `batch.file_record`：
 3. 读取 `.chk`，校验 JSON schema。
 4. 校验 `fileName` 指向当前数据文件。
 5. 校验 `sizeBytes`。
-6. worker 下载数据对象后，在 preprocess 阶段按 `checksumScope=RAW_OBJECT` 先校验原始字节的 `checksumValue`，再进入解压/解密/转码；显式 `VERIFY_DIGEST` 可覆盖为步骤级校验。
-7. 校验 `bizDate` / `batchNo` / `fileGroupCode` 等业务字段。
-8. 写入或更新 `file_record`：`checksum_type`、`checksum_value`、`file_size_bytes`、`metadata_json.integrityState=VERIFIED`。
+6. scanner 在登记前流式读取数据对象，核对实际长度和 `checksumScope=RAW_OBJECT` 的 SHA-256；摘要不匹配不登记、不触发。
+7. 校验 `bizDate` / `batchNo` / `fileGroupCode` 等业务字段，并由到达组治理校验成员完整性状态。
+8. 写入 `file_record`：`checksum_type`、`checksum_value`、`file_size_bytes`、`metadata_json.integrityState=VERIFIED`；worker preprocess 再对原始对象字节复核，覆盖登记后对象变化窗口。显式 `VERIFY_DIGEST` 用于步骤级内容校验。
 
 失败路径：
 

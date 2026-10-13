@@ -8,11 +8,13 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -297,6 +299,39 @@ class FilesystemObjectStoreTest {
     store.copy(BUCKET, "src", "dst");
     try (InputStream in = store.get(BUCKET, "dst")) {
       assertThat(in.readAllBytes()).isEqualTo(payload);
+    }
+  }
+
+  @Test
+  @DisplayName("底层不支持原子移动时写入与复制均拒绝发布并清理临时文件")
+  void shouldRejectPublication_whenAtomicMoveIsUnsupported(@TempDir Path root) throws Exception {
+    FilesystemObjectStore.AtomicFileMover unsupportedMove = (source, target, options) -> {
+      throw new AtomicMoveNotSupportedException(source.toString(), target.toString(), "test");
+    };
+    FilesystemObjectStore store = new FilesystemObjectStore(
+        root.toString(),
+        DOWNLOAD_BASE_URL,
+        SECRET,
+        Duration.ofMinutes(5),
+        200_000,
+        unsupportedMove);
+    byte[] payload = "atomic-only".getBytes(StandardCharsets.UTF_8);
+
+    assertThatThrownBy(() ->
+            store.put(BUCKET, "put.txt", new ByteArrayInputStream(payload), payload.length, "x"))
+        .isInstanceOf(ObjectStoreException.class)
+        .hasMessageContaining("requires atomic move");
+    assertThat(root.resolve(BUCKET)).isEmptyDirectory();
+
+    Files.write(root.resolve(BUCKET).resolve("source.txt"), payload);
+    assertThatThrownBy(() -> store.copy(BUCKET, "source.txt", "copy.txt"))
+        .isInstanceOf(ObjectStoreException.class)
+        .hasMessageContaining("requires atomic move");
+    assertThat(root.resolve(BUCKET).resolve("copy.txt")).doesNotExist();
+    try (Stream<Path> paths = Files.list(root.resolve(BUCKET))) {
+      assertThat(paths.filter(path ->
+              path.getFileName().toString().contains(FilesystemObjectStore.TEMP_SUFFIX_MARKER)))
+          .isEmpty();
     }
   }
 

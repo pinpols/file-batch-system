@@ -204,7 +204,7 @@ EOF
 
 `PostgresDatabaseGrowthHigh`(6h 净增 >10GB)/ `PostgresDatabaseSizeHigh`(绝对 >200GB,按盘容量调阈值)是**归档失效的最早可观测信号**。增长异常时排查顺序:
 
-1. **归档/清理调度是否在跑**(当前无 last-success 指标,看日志 + ShedLock):
+1. **归档/清理调度是否在跑**:查看 Prometheus `ArchiveSchedulerNeverSucceeded` / `ArchiveSchedulerStale`，再结合日志和 ShedLock 定位：
    - `OutboxArchiveScheduler`(outbox_event PUBLISHED → 归档,默认 03:30,ShedLock `outbox_archive`)
    - `WorkflowArchiveScheduler` / job_instance 归档(04:x)
    - `ProcessStagingOrphanCleaner`(process_staging 分区 DROP + 孤儿行清理)
@@ -213,7 +213,7 @@ EOF
 2. **保留策略是否符合预期**:`batch.outbox.archive.*` / run 表归档保留天数配置。
 3. **分区是否漏建/漏 DROP**:`process_staging` 是否按天分区、retentionDays 是否生效。
 
-> **后续改进(本次未做)**:给上述 scheduler 加 `batch_*_archive_last_success_timestamp_seconds` Gauge,即可把「哪个调度停了」从"看日志"升级为精确告警 `time() - batch_outbox_archive_last_success_seconds > 7200`。届时补进 `batch.capacity` group。
+> `ArchiveSchedulerHealthMetrics` 暴露 `batch_archive_scheduler_last_success_timestamp_seconds{scheduler=...}`。首次正常返回前告警为 `ArchiveSchedulerNeverSucceeded`；超出运行周期后由 `ArchiveSchedulerStale` 告警。当前阈值按默认周期设置：文件治理 5 分钟、每日归档 26 小时、每周实例归档 8 天；若调整调度周期，应同步调整规则。该指标表示调度调用正常返回，不表示每条归档记录均成功；文件逐条失败仍以审计记录和存储治理指标为准。`ProcessStagingOrphanCleaner` 已有独立的孤儿行计数和最老数据年龄指标。仅创建指标和告警不能证明归档数据完整，仍需核对归档结果与目标环境阈值。
 
 ---
 

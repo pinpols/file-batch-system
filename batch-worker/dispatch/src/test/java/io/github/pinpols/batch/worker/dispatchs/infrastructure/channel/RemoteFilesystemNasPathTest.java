@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -14,6 +15,7 @@ import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileConte
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -178,6 +180,22 @@ class RemoteFilesystemNasPathTest {
 
     assertThat(result.success()).isFalse();
     assertThat(result.message()).contains("stopping");
+  }
+
+  @Test
+  @DisplayName("底层不支持原子移动时 NAS 发布失败且保留原始目标")
+  void movePublishedFile_rejectsUnsupportedAtomicMove() throws Exception {
+    Path tempTarget = Files.writeString(tempDir.resolve("target.tmp"), "new");
+    Path target = Files.writeString(tempDir.resolve("target.dat"), "old");
+
+    assertThatThrownBy(() -> RemoteFilesystemDispatchSupport.movePublishedFile(
+            tempTarget, target, (source, destination, options) -> {
+              throw new AtomicMoveNotSupportedException(
+                  source.toString(), destination.toString(), "test");
+            }))
+        .isInstanceOf(IOException.class)
+        .hasMessageContaining("requires atomic move");
+    assertThat(target).hasContent("old");
   }
 
   private static String sha256(byte[] payload) throws Exception {

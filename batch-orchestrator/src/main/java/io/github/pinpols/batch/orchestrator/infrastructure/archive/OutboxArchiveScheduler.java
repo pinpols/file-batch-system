@@ -4,6 +4,8 @@ import io.github.pinpols.batch.orchestrator.application.archive.OutboxArchiveSer
 import io.github.pinpols.batch.orchestrator.application.archive.OutboxArchiveService.ArchiveBatchResult;
 import io.github.pinpols.batch.orchestrator.config.OutboxArchiveProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
+import io.github.pinpols.batch.orchestrator.infrastructure.metrics.ArchiveSchedulerHealthMetrics;
+import jakarta.annotation.PostConstruct;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +35,12 @@ public class OutboxArchiveScheduler {
   private final OutboxArchiveService outboxArchiveService;
   private final OutboxArchiveProperties properties;
   private final OrchestratorGracefulShutdown gracefulShutdown;
+  private final ArchiveSchedulerHealthMetrics schedulerHealthMetrics;
+
+  @PostConstruct
+  void registerHealthMetric() {
+    schedulerHealthMetrics.register("outbox");
+  }
 
   @Scheduled(
       cron = "${batch.outbox.archive.cron:0 30 3 * * *}",
@@ -61,6 +69,7 @@ public class OutboxArchiveScheduler {
           properties.getPublishedRetentionDays(),
           properties.getGiveUpRetentionDays());
     }
+    schedulerHealthMetrics.markSuccess("outbox");
   }
 
   private long drain(Supplier<ArchiveBatchResult> archiver, int batchSize, String label) {

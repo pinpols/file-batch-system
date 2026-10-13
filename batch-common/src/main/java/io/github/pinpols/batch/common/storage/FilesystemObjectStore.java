@@ -8,6 +8,7 @@ import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.CopyOption;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
@@ -32,8 +33,8 @@ import lombok.extern.slf4j.Slf4j;
  * <p>三大难点解法（对标 Hadoop / Iceberg / Rails ActiveStorage / jclouds filesystem provider）：
  *
  * <ul>
- *   <li><b>put 原子写</b>：写到 {@code <final>.tmp.<uuid>} → fsync → {@code ATOMIC_MOVE}；NFS 不支持原子 rename
- *       时 fallback {@code REPLACE_EXISTING} 并 warn。
+ *   <li><b>put 原子写</b>：写到 {@code <final>.tmp.<uuid>} → fsync → {@code ATOMIC_MOVE}；底层不支持原子 rename
+ *       时拒绝发布，不退化为普通 move。
  *   <li><b>getFrom(offset)</b>：{@code FileChannel.position(offset) + Channels.newInputStream}（关联
  *       stream close 会级联关闭 channel）。
  *   <li><b>list etag</b>：{@code size + mtime} 合成伪 etag（变更检测足够；内容完整性走独立 sha256，不在此接口）。
@@ -54,6 +55,7 @@ public class FilesystemObjectStore implements BatchObjectStore {
   private final String presignSecret;
   private final Duration defaultPresignTtl;
   private final long maxListScanEntries;
+  private final AtomicFileMover atomicFileMover;
 
   public FilesystemObjectStore(String root, String downloadBaseUrl, String presignSecret) {
     this(root, downloadBaseUrl, presignSecret, Duration.ofMinutes(5), 200_000L);
@@ -70,6 +72,16 @@ public class FilesystemObjectStore implements BatchObjectStore {
       String presignSecret,
       Duration defaultPresignTtl,
       long maxListScanEntries) {
+    this(root, downloadBaseUrl, presignSecret, defaultPresignTtl, maxListScanEntries, Files::move);
+  }
+
+  FilesystemObjectStore(
+      String root,
+      String downloadBaseUrl,
+      String presignSecret,
+      Duration defaultPresignTtl,
+      long maxListScanEntries,
+      AtomicFileMover atomicFileMover) {
     if (root == null || root.isBlank()) {
       throw new IllegalArgumentException("filesystem storage root must not be blank");
     }
@@ -81,6 +93,7 @@ public class FilesystemObjectStore implements BatchObjectStore {
             ? Duration.ofMinutes(5)
             : defaultPresignTtl;
     this.maxListScanEntries = maxListScanEntries <= 0 ? Long.MAX_VALUE : maxListScanEntries;
+    this.atomicFileMover = atomicFileMover;
     try {
       Files.createDirectories(this.root);
     } catch (IOException ex) {
@@ -108,14 +121,10 @@ public class FilesystemObjectStore implements BatchObjectStore {
         ch.force(true);
       }
       try {
-        Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE);
+        atomicFileMover.move(temp, target, StandardCopyOption.ATOMIC_MOVE);
       } catch (AtomicMoveNotSupportedException atomicEx) {
-        log.warn(
-            "filesystem store ATOMIC_MOVE not supported, falling back to REPLACE_EXISTING:"
-                + " bucket={} key={}",
-            bucket,
-            key);
-        Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
+        throw new ObjectStoreException(
+            "filesystem store requires atomic move to publish object safely", atomicEx);
       } catch (IOException moveEx) {
         // best-effort 清理临时文件
         Files.deleteIfExists(temp);
@@ -153,20 +162,22 @@ public class FilesystemObjectStore implements BatchObjectStore {
       }
       Files.setLastModifiedTime(temp, Files.getLastModifiedTime(src));
       try {
-        Files.move(temp, dst, StandardCopyOption.ATOMIC_MOVE);
+        atomicFileMover.move(temp, dst, StandardCopyOption.ATOMIC_MOVE);
       } catch (AtomicMoveNotSupportedException atomicEx) {
-        log.warn(
-            "filesystem copy ATOMIC_MOVE not supported, falling back to REPLACE_EXISTING: bucket={}"
-                + " dst={}",
-            bucket,
-            dstKey);
-        Files.move(temp, dst, StandardCopyOption.REPLACE_EXISTING);
+        cleanupTemp(temp);
+        throw new ObjectStoreException(
+            "filesystem store requires atomic move to publish copied object safely", atomicEx);
       }
     } catch (IOException | UncheckedIOException ex) {
       // 任何失败(copy 或 move 阶段)都清理临时文件,避免残留 .tmp 文件泄漏。
       cleanupTemp(temp);
       throw mapException("copy", bucket, srcKey, ex);
     }
+  }
+
+  @FunctionalInterface
+  interface AtomicFileMover {
+    Path move(Path source, Path target, CopyOption... options) throws IOException;
   }
 
   @Override

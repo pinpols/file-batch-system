@@ -269,3 +269,22 @@ tests:
             exp_annotations:
               summary: A scheduled job was not finished by its deadline
               description: A scheduled job instance was still unfinished at its configured local deadline, or completed after that deadline before the scan observed it. Inspect its execution timeline and downstream batch window.
+
+  - name: archive scheduler health is aggregated across ShedLock replicas
+    interval: 1m
+    input_series:
+      - series: 'process_uptime_seconds{job="batch-orchestrator", instance="orchestrator-a"}'
+        values: '100000+0x10'
+      - series: 'process_uptime_seconds{job="batch-orchestrator", instance="orchestrator-b"}'
+        values: '100000+0x10'
+      - series: 'batch_archive_scheduler_last_success_timestamp_seconds{job="batch-orchestrator", instance="orchestrator-a", scheduler="outbox"}'
+        values: '0+0x10'
+      - series: 'batch_archive_scheduler_last_success_timestamp_seconds{job="batch-orchestrator", instance="orchestrator-b", scheduler="outbox"}'
+        values: '300+0x10'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: ArchiveSchedulerNeverSucceeded
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: ArchiveSchedulerStale
+        exp_alerts: []

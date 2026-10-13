@@ -4,6 +4,8 @@ import io.github.pinpols.batch.orchestrator.application.archive.WorkflowArchiveS
 import io.github.pinpols.batch.orchestrator.application.archive.WorkflowArchiveService.ArchiveBatchResult;
 import io.github.pinpols.batch.orchestrator.config.WorkflowArchiveProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
+import io.github.pinpols.batch.orchestrator.infrastructure.metrics.ArchiveSchedulerHealthMetrics;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
@@ -36,6 +38,12 @@ public class WorkflowArchiveScheduler {
   private final WorkflowArchiveService workflowArchiveService;
   private final WorkflowArchiveProperties properties;
   private final OrchestratorGracefulShutdown gracefulShutdown;
+  private final ArchiveSchedulerHealthMetrics schedulerHealthMetrics;
+
+  @PostConstruct
+  void registerHealthMetric() {
+    schedulerHealthMetrics.register("workflow");
+  }
 
   @Scheduled(
       cron = "${batch.workflow.archive.cron:0 15 4 * * *}",
@@ -76,5 +84,6 @@ public class WorkflowArchiveScheduler {
           totalNodeRuns,
           properties.getRetentionDays());
     }
+    schedulerHealthMetrics.markSuccess("workflow");
   }
 }

@@ -4,6 +4,8 @@ import io.github.pinpols.batch.orchestrator.application.archive.SuccessInstanceA
 import io.github.pinpols.batch.orchestrator.application.archive.SuccessInstanceArchiveService.ArchiveBatchResult;
 import io.github.pinpols.batch.orchestrator.config.SuccessInstanceArchiveProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
+import io.github.pinpols.batch.orchestrator.infrastructure.metrics.ArchiveSchedulerHealthMetrics;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
@@ -36,6 +38,12 @@ public class SuccessInstanceArchiveScheduler {
   private final SuccessInstanceArchiveService archiveService;
   private final SuccessInstanceArchiveProperties properties;
   private final OrchestratorGracefulShutdown gracefulShutdown;
+  private final ArchiveSchedulerHealthMetrics schedulerHealthMetrics;
+
+  @PostConstruct
+  void registerHealthMetric() {
+    schedulerHealthMetrics.register("job_instance");
+  }
 
   @Scheduled(
       cron = "${batch.job-instance.archive.cron:0 30 4 * * SUN}",
@@ -72,5 +80,6 @@ public class SuccessInstanceArchiveScheduler {
           totalInstances,
           properties.getRetentionDays());
     }
+    schedulerHealthMetrics.markSuccess("job_instance");
   }
 }

@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.file;
 import static org.mockito.Mockito.verify;
 
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
+import io.github.pinpols.batch.orchestrator.infrastructure.metrics.ArchiveSchedulerHealthMetrics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,6 +21,9 @@ class FileGovernanceSchedulersTest {
   @Mock
   private OrchestratorGracefulShutdown gracefulShutdown;
 
+  @Mock
+  private ArchiveSchedulerHealthMetrics schedulerHealthMetrics;
+
   private FileGovernanceArchiveCleanupScheduler archiveCleanupScheduler;
   private FileGovernanceReconcileScheduler reconcileScheduler;
   private FileGovernanceArrivalGroupScheduler arrivalGroupScheduler;
@@ -28,8 +32,8 @@ class FileGovernanceSchedulersTest {
 
   @BeforeEach
   void setUp() {
-    archiveCleanupScheduler =
-        new FileGovernanceArchiveCleanupScheduler(fileGovernanceScheduler, gracefulShutdown);
+    archiveCleanupScheduler = new FileGovernanceArchiveCleanupScheduler(
+        fileGovernanceScheduler, gracefulShutdown, schedulerHealthMetrics);
     reconcileScheduler =
         new FileGovernanceReconcileScheduler(fileGovernanceScheduler, gracefulShutdown);
     arrivalGroupScheduler =
@@ -46,6 +50,15 @@ class FileGovernanceSchedulersTest {
     archiveCleanupScheduler.cleanupArchivedFiles();
 
     verify(fileGovernanceScheduler).cleanupArchivedFiles();
+    verify(schedulerHealthMetrics).markSuccess("file_governance");
+  }
+
+  @Test
+  @DisplayName("归档文件清理调度初始化时注册健康指标")
+  void shouldRegisterArchiveCleanupHealthMetric() {
+    archiveCleanupScheduler.registerHealthMetric();
+
+    verify(schedulerHealthMetrics).register("file_governance");
   }
 
   @Test

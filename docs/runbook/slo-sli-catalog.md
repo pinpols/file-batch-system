@@ -24,6 +24,7 @@
 | Worker 在线健康 | Worker 是否按能力和租约稳定参与执行 | `worker_registry` 心跳、lease renew、fast retry、offline count | [`rolling-upgrade-workers.md`](./rolling-upgrade-workers.md)、[`worker-stage-coverage.md`](./worker-stage-coverage.md) |
 | 下游 readiness 成功率 | 依赖上游结果的触发是否正确等待并在窗口内放行 | readiness defer、timeout、asset partition EFFECTIVE | [`dependency-aware-fire.md`](./dependency-aware-fire.md)、[`../design/asset-partition-readiness.md`](../design/asset-partition-readiness.md) |
 | 数据库迁移一致性 | 代码迁移文件与目标库 Flyway history 是否一致 | `flyway_schema_history`、schema governance report | [`db-migration-checklist.md`](./db-migration-checklist.md)、[`../design/database-schema-governance.md`](../design/database-schema-governance.md) |
+| 归档调度健康 | 归档与文件清理调度是否持续正常返回 | `batch_archive_scheduler_last_success_timestamp_seconds{scheduler=...}`、数据库增长与磁盘水位 | [`backup-and-pitr.md`](./backup-and-pitr.md) |
 
 ## 告警映射
 
@@ -37,6 +38,7 @@
 | `readiness timeout` / readiness retry high | 下游 readiness 成功率、调度准点率 | 确认上游真实终态和 asset partition,决定补跑、放弃或延长窗口 |
 | `oldest queued partition waited` | 运行积压深度 | 检查准入限制、资源队列、Worker 容量、Kafka lag 和 PG 锁等待 |
 | `PG lock / Hikari saturation` | 多个 SLI 的基础依赖 | 先保护写路径和主链路,再分析慢 SQL、连接池和迁移/清理任务 |
+| `ArchiveSchedulerNeverSucceeded` / `ArchiveSchedulerStale` | 归档调度健康 | 先按 `scheduler` 标签检查任务日志、ShedLock、数据库连通性和归档开关；此指标表示调度调用正常返回，不证明逐条归档成功 |
 
 Prometheus 规则入口：
 

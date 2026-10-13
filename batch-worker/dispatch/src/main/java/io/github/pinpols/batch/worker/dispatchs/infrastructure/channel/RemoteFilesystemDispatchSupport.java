@@ -22,6 +22,7 @@ import java.net.Socket;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.CopyOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -521,12 +522,22 @@ final class RemoteFilesystemDispatchSupport {
   }
 
   private static void movePublishedFile(Path tempTarget, Path target) throws IOException {
+    movePublishedFile(tempTarget, target, Files::move);
+  }
+
+  static void movePublishedFile(Path tempTarget, Path target, AtomicFileMover atomicFileMover)
+      throws IOException {
     try {
-      Files.move(
+      atomicFileMover.move(
           tempTarget, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-    } catch (AtomicMoveNotSupportedException ignored) {
-      Files.move(tempTarget, target, StandardCopyOption.REPLACE_EXISTING);
+    } catch (AtomicMoveNotSupportedException atomicEx) {
+      throw new IOException("NAS dispatch requires atomic move to publish safely", atomicEx);
     }
+  }
+
+  @FunctionalInterface
+  interface AtomicFileMover {
+    Path move(Path source, Path target, CopyOption... options) throws IOException;
   }
 
   private static String resolveExternalRequestId(DispatchCommand command) {
