@@ -8,6 +8,7 @@
 
 ## [Unreleased]
 
+- 修复 SDK 发布兼容性门禁对响应侧可扩展枚举的误判，并让在线 strict 验证只启动唯一的 Console API 可执行 fat jar，避免误选无 `Main-Class` 的普通库产物。
 - 更新自托管 Rust Worker 示例的 `quinn-proto` 锁定版本至 0.11.18，并同步其传递依赖，修复依赖安全告警。
 - 修复后端 pre-push clean compile 与 Java 治理测试使用不同 Maven 运行时、共享构建产物竞态及陈旧测试类导致的类缺失误报；治理测试改为 clean test，两类构建均使用仓库 Maven Wrapper 并在各自的一次性 detached worktree 中隔离运行，临时目录清理已按高风险操作治理登记。
 - 新增隔离的后端可靠性回归套件及每日 CI，覆盖 manifest 修复重扫、对象丢失恢复与替换检测、到达组并发去重、checkpoint 续跑、Outbox/Kafka 恢复和消费者反压，并明确本地测试、标准 Sim 与 staging DR 的证据边界。

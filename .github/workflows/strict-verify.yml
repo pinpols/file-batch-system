@@ -120,9 +120,14 @@ jobs:
       - name: Start console-api
         shell: bash
         run: |
-          JAR=$(find batch-console-api/target -maxdepth 1 -type f \
-            -name 'batch-console-api-*.jar' -print -quit)
-          [[ -n "$JAR" ]] || { echo "console-api jar not found" >&2; exit 1; }
+          mapfile -t JARS < <(find batch-console-api/target -maxdepth 1 -type f \
+            -name 'batch-console-api-*-exec.jar' -print)
+          [[ ${#JARS[@]} -eq 1 ]] || {
+            echo "expected exactly one executable console-api jar, found ${#JARS[@]}" >&2
+            printf 'candidate: %s\n' "${JARS[@]}" >&2
+            exit 1
+          }
+          JAR="${JARS[0]}"
           echo "starting $JAR"
           nohup java -jar "$JAR" --spring.profiles.active=local \
             > /tmp/console-api.log 2>&1 &
