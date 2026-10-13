@@ -43,6 +43,63 @@ class JobDefinitionMonitoringCategoryMapperXmlTest {
     }
   }
 
+  @Test
+  @DisplayName("前置作业过滤同时应用于列表和总数查询")
+  void shouldFilterDirectDependents_whenBuildingRowsAndCountQueries() throws Exception {
+    Configuration configuration = new Configuration();
+    parseMapper(configuration, "mapper/CommonFragments.xml");
+    parseMapper(configuration, "mapper/JobDefinitionMapper.xml");
+    JobDefinitionQuery query = JobDefinitionQuery.builder()
+        .tenantId("tenant-a")
+        .exactJobCode("CURRENT_JOB")
+        .dependsOnJobCode("UPSTREAM_JOB")
+        .pageRequest(new PageRequest(1, 20))
+        .build();
+
+    String selectSql = configuration
+        .getMappedStatement(JobDefinitionMapper.class.getName() + ".selectByQuery")
+        .getBoundSql(query)
+        .getSql();
+    String countSql = configuration
+        .getMappedStatement(JobDefinitionMapper.class.getName() + ".countByQuery")
+        .getBoundSql(query)
+        .getSql();
+
+    assertThat(selectSql).contains("jd.depends_on_job_code = ?");
+    assertThat(selectSql).contains("jd.job_code = ?");
+    assertThat(countSql).contains("depends_on_job_code = ?");
+    assertThat(countSql).contains("job_code = ?");
+  }
+
+  @Test
+  @DisplayName("作业定义查询默认只包含启用作业，includeDisabled 可显式移除启用条件")
+  void shouldPreserveEnabledDefaultUnlessDisabledJobsAreRequested() throws Exception {
+    Configuration configuration = new Configuration();
+    parseMapper(configuration, "mapper/CommonFragments.xml");
+    parseMapper(configuration, "mapper/JobDefinitionMapper.xml");
+    JobDefinitionQuery enabledOnly = JobDefinitionQuery.builder()
+        .tenantId("tenant-a")
+        .enabled(true)
+        .pageRequest(new PageRequest(1, 20))
+        .build();
+    JobDefinitionQuery allStatuses = JobDefinitionQuery.builder()
+        .tenantId("tenant-a")
+        .pageRequest(new PageRequest(1, 20))
+        .build();
+
+    String enabledSql = configuration
+        .getMappedStatement(JobDefinitionMapper.class.getName() + ".selectByQuery")
+        .getBoundSql(enabledOnly)
+        .getSql();
+    String allStatusesSql = configuration
+        .getMappedStatement(JobDefinitionMapper.class.getName() + ".selectByQuery")
+        .getBoundSql(allStatuses)
+        .getSql();
+
+    assertThat(enabledSql).contains("jd.enabled = ?");
+    assertThat(allStatusesSql).doesNotContain("jd.enabled = ?");
+  }
+
   private static String categoryPredicate(String category) {
     return switch (category) {
       case "DEPENDENCY" -> "nullif(btrim(jd.depends_on_job_code), '') is not null";
