@@ -2,16 +2,33 @@ package io.github.pinpols.batch.console.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.sun.source.tree.ClassTree;
+import com.sun.source.tree.LambdaExpressionTree;
+import com.sun.source.tree.MethodInvocationTree;
+import com.sun.source.tree.NewClassTree;
+import com.sun.source.tree.ReturnTree;
+import com.sun.source.tree.Tree;
+import com.sun.source.util.JavacTask;
+import com.sun.source.util.TreePathScanner;
+import com.sun.source.util.TreeScanner;
+import com.sun.source.util.Trees;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import javax.tools.DiagnosticCollector;
+import javax.tools.JavaCompiler;
+import javax.tools.SimpleJavaFileObject;
+import javax.tools.ToolProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -226,6 +243,208 @@ class PositionalArgsConventionTest {
           .doesNotMatch("(?s).*\\bpublic\\s+" + simpleName + "\\s*\\(.*");
     }
   }
+
+  @Test
+  @DisplayName("新增生产代码不得把三层以上调用嵌入方法实参或返回表达式")
+  void shouldRejectNewDeeplyNestedCallsites() throws IOException, InterruptedException {
+    String base = System.getenv("BATCH_GOVERNANCE_BASE_SHA");
+    if (base == null || base.isBlank()) {
+      base = gitOutput("merge-base", "origin/main", "HEAD").strip();
+    }
+    assertThat(base).as("可读性增量门禁必须能解析 main 基线").isNotBlank();
+
+    String diff = gitOutput("diff", "--unified=0", "--no-color", base, "--", "*.java");
+    Map<String, List<LineRange>> changedLines = parseAddedLineRanges(diff);
+    String untracked = gitOutput("ls-files", "--others", "--exclude-standard", "--", "*.java");
+    for (String relativePath : untracked.split("\\R")) {
+      if (!relativePath.isBlank() && relativePath.contains("/src/main/java/")) {
+        Path path = REPO_ROOT.resolve(relativePath);
+        if (Files.isRegularFile(path)) {
+          int lineCount = Files.readAllLines(path, StandardCharsets.UTF_8).size();
+          changedLines.putIfAbsent(relativePath, List.of(new LineRange(1, Math.max(1, lineCount))));
+        }
+      }
+    }
+    List<String> violations = new ArrayList<>();
+    for (Map.Entry<String, List<LineRange>> entry : changedLines.entrySet()) {
+      String relativePath = entry.getKey();
+      if (!relativePath.contains("/src/main/java/") || entry.getValue().isEmpty()) continue;
+      Path sourcePath = REPO_ROOT.resolve(relativePath);
+      if (!Files.isRegularFile(sourcePath)) continue;
+      String source = Files.readString(sourcePath, StandardCharsets.UTF_8);
+      violations.addAll(findDeepCallsiteViolations(relativePath, source, entry.getValue()));
+    }
+
+    assertThat(violations)
+        .as("新增/修改的生產 Java 實參或 return 含至少三層連續方法/构造调用；"
+            + "请提取有业务含义的局部变量。短 fluent receiver 链和回调函数体不计入")
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("调用现场候选门禁拦深层实参并放行短包装、fluent receiver 与回调")
+  void shouldClassifyCallsiteNestingWithoutFlaggingSimpleComposition() {
+    String source = """
+        class Sample {
+          Object submit() {
+            target(foo(bar(baz(value))));
+            target(wrapper(optional(value)));
+            target(value.map(x -> normalize(parse(x))).join());
+            return wrap(parse(normalize(value)));
+          }
+        }
+        """;
+
+    List<String> findings =
+        findDeepCallsiteViolations("Sample.java", source, List.of(new LineRange(1, 8)));
+
+    assertThat(findings).hasSize(2);
+    assertThat(findings).anySatisfy(finding -> assertThat(finding).contains(":3 -> 方法实参"));
+    assertThat(findings).anySatisfy(finding -> assertThat(finding).contains(":6 -> return 表达式"));
+    assertThat(findDeepCallsiteViolations("Sample.java", source, List.of(new LineRange(1, 2))))
+        .as("基线中未修改的调用不应被增量门禁报告")
+        .isEmpty();
+  }
+
+  private static String gitOutput(String... args) throws IOException, InterruptedException {
+    List<String> command = new ArrayList<>(List.of("git"));
+    command.addAll(List.of(args));
+    Process process = new ProcessBuilder(command)
+        .directory(REPO_ROOT.toFile())
+        .redirectErrorStream(true)
+        .start();
+    String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+    int exitCode = process.waitFor();
+    if (exitCode != 0) {
+      throw new IllegalStateException("git command failed (" + exitCode + "): " + output);
+    }
+    return output;
+  }
+
+  private static Map<String, List<LineRange>> parseAddedLineRanges(String diff) {
+    Map<String, List<LineRange>> files = new HashMap<>();
+    String currentFile = null;
+    Pattern hunkPattern = Pattern.compile("^@@ -\\d+(?:,\\d+)? \\+(\\d+)(?:,(\\d+))? @@");
+    for (String line : diff.split("\\R")) {
+      if (line.startsWith("+++ b/")) {
+        currentFile = line.substring("+++ b/".length());
+        files.computeIfAbsent(currentFile, ignored -> new ArrayList<>());
+        continue;
+      }
+      Matcher matcher = hunkPattern.matcher(line);
+      if (!matcher.find() || currentFile == null) continue;
+      int start = Integer.parseInt(matcher.group(1));
+      int count = matcher.group(2) == null ? 1 : Integer.parseInt(matcher.group(2));
+      if (count > 0) files.get(currentFile).add(new LineRange(start, start + count - 1));
+    }
+    return files;
+  }
+
+  private static List<String> findDeepCallsiteViolations(
+      String file, String source, List<LineRange> changedLines) {
+    JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+    if (compiler == null) throw new IllegalStateException("JDK compiler is required for AST gate");
+    SimpleJavaFileObject sourceFile =
+        new SimpleJavaFileObject(
+            URI.create("string:///" + file.replace(' ', '_')),
+            javax.tools.JavaFileObject.Kind.SOURCE) {
+          @Override
+          public CharSequence getCharContent(boolean ignoreEncodingErrors) {
+            return source;
+          }
+        };
+    DiagnosticCollector<javax.tools.JavaFileObject> diagnostics = new DiagnosticCollector<>();
+    JavacTask task = (JavacTask) compiler.getTask(
+        null,
+        null,
+        diagnostics,
+        List.of("-proc:none", "--release", "21"),
+        null,
+        List.of(sourceFile));
+    try {
+      var unit = task.parse().iterator().next();
+      var positions = Trees.instance(task).getSourcePositions();
+      List<String> findings = new ArrayList<>();
+      new TreePathScanner<Void, Void>() {
+        private void addFinding(Tree expression, String kind) {
+          long start = positions.getStartPosition(unit, expression);
+          long end = positions.getEndPosition(unit, expression);
+          if (start < 0 || end < start) return;
+          long firstLine = unit.getLineMap().getLineNumber(start);
+          long lastLine = unit.getLineMap().getLineNumber(end);
+          boolean changed = changedLines.stream()
+              .anyMatch(range -> range.first() <= lastLine && range.last() >= firstLine);
+          if (changed) findings.add(file + ":" + firstLine + " -> " + kind);
+        }
+
+        @Override
+        public Void visitMethodInvocation(MethodInvocationTree node, Void unused) {
+          for (var argument : node.getArguments()) {
+            if (nestedCallDepth(argument) >= 3) addFinding(argument, "方法实参");
+          }
+          return super.visitMethodInvocation(node, unused);
+        }
+
+        @Override
+        public Void visitNewClass(NewClassTree node, Void unused) {
+          for (var argument : node.getArguments()) {
+            if (nestedCallDepth(argument) >= 3) addFinding(argument, "构造实参");
+          }
+          return super.visitNewClass(node, unused);
+        }
+
+        @Override
+        public Void visitReturn(ReturnTree node, Void unused) {
+          if (node.getExpression() != null && nestedCallDepth(node.getExpression()) >= 3) {
+            addFinding(node.getExpression(), "return 表达式");
+          }
+          return super.visitReturn(node, unused);
+        }
+      }.scan(unit, null);
+      return findings.stream().distinct().toList();
+    } catch (IOException exception) {
+      throw new IllegalArgumentException("Unable to parse " + file, exception);
+    }
+  }
+
+  private static int nestedCallDepth(Tree expression) {
+    int[] maximum = {0};
+    new TreeScanner<Void, Integer>() {
+      @Override
+      public Void visitMethodInvocation(MethodInvocationTree node, Integer parentDepth) {
+        int depth = parentDepth + 1;
+        maximum[0] = Math.max(maximum[0], depth);
+        node.getArguments().forEach(argument -> scan(argument, depth));
+        return null;
+      }
+
+      @Override
+      public Void visitNewClass(NewClassTree node, Integer parentDepth) {
+        int depth = parentDepth + 1;
+        maximum[0] = Math.max(maximum[0], depth);
+        node.getArguments().forEach(argument -> scan(argument, depth));
+        return null;
+      }
+
+      @Override
+      public Void visitLambdaExpression(LambdaExpressionTree node, Integer parentDepth) {
+        return null;
+      }
+
+      @Override
+      public Void visitClass(ClassTree node, Integer parentDepth) {
+        return null;
+      }
+
+      @Override
+      public Void scan(Tree tree, Integer depth) {
+        return tree == null ? null : super.scan(tree, depth == null ? 0 : depth);
+      }
+    }.scan(expression, 0);
+    return maximum[0];
+  }
+
+  private record LineRange(int first, int last) {}
 
   private static int countTopLevelArgs(String args) {
     int depth = 0;

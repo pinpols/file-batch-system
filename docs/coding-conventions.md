@@ -185,6 +185,8 @@ return Optional.ofNullable(value).map(String::trim).orElse("");
 
 此约定适用于构造器、builder 和普通方法调用的实参及返回表达式，不限定为 `Command` / `Context` / `Param`。审查和统计工具用于发现候选，不以嵌套调用数量作为自动改写标准；按业务含义逐处判断，并通过针对性测试确认语义未变。
 
+`PositionalArgsConventionTest` 对当前 PR 相对目标分支新增/修改的生产 Java 行执行 AST 候选门禁：方法实参或 `return` 表达式中出现至少 3 层连续方法/构造调用时阻断。短 fluent receiver 链和 lambda 函数体不计入；测试代码和未变更的历史候选不扫描。它只判断嵌套深度，不强制如何命名或拆分，调用语义仍需在评审中确认。
+
 ### 1.5 复合条件与命名布尔
 
 - 当 3 个及以上判断共同表达业务状态、准入规则或状态机分支时，先用方法内局部 `boolean` 说明该事实，再进入 `if`；例如 `canAssociateCatchUpRequest`、`onlyTerminalChildStateResidual`。
