@@ -1,6 +1,8 @@
 # 变更记录（规范与架构权威条款变化）
 
 ### 2026-10-13
+- **Entity / Service / Controller 债务清理**：将 10 个 Orchestrator 与 2 个 Console 查询投影、值对象和上下文迁出领域 `entity` 包；23 个 Controller Entity 请求/响应改用独立 DTO，序列化契约测试确认 JSON 字段保持不变；实体命名与 Controller Entity 暴露门禁改为零存量断言，并加入 Controller 直连持久层约束。OpenAPI 补齐上述内部端点与 DTO schema，配对 Console BFF 消费独立响应 record，修正 SDK/Console DTO 注释。
+- **内部 OpenAPI 路径同步误报修正**：静态路径守卫识别无参 `@GetMapping` / `@PostMapping` 并映射到类级基路径，避免将 Console BFF 根路径误报为孤儿；保留精选 API 单向、log-only 的既有策略。
 - **前后端联合版本约定**：正式版与 RC 在两个仓库使用相同 SemVer；普通 PR 只累计 `[Unreleased]`，不逐 PR 递增版本。联合 Release PR 按发布周期最高变更级别决定版本，固定前后端 SHA 与镜像 digest，禁止移动或复用已发布 tag，并明确 RC 冻结和失败补齐边界。
 - **CI 门禁控制与输出统一**：共享执行器新增稳定分组及 `enforce`、`report`、`ignore` 三态，明确区分条件跳过、执行后仅报告和完全不执行；单门禁、分组、全局与总开关按固定优先级解析。状态行统一增加 `group`、`mode`，报告/忽略项继续要求 owner、基线和升级期限登记；移除各检查脚本散落的 `BATCH_CI_SKIP_*` 旁路，并补正反例自测与 CI Runbook。
 - **Mapper 状态写入与分类治理**：全仓 MyBatis `UPDATE SET` 状态写入改为 Java 具名语义方法提供目标值和允许来源集合，SQL 保持参数化 CAS；新增 `MapperStatusWriteConventionTest` 阻止固定状态赋值回退。共享实例/工作流生命周期集合使用枚举派生值做精确 Mapper 对照，SLA、正式成功、dry-run 隔离和恢复候选等专项业务口径继续保留在 SQL 并由专项测试维护；未改变既有迁移、并发或统计语义。

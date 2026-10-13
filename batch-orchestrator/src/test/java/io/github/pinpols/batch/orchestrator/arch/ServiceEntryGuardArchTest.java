@@ -33,24 +33,34 @@ class ServiceEntryGuardArchTest {
   @DisplayName("核心服务入口必须对空入参显式守护,任一实现缺少守护即判定违规")
   void shouldGuardAgainstNullInputs_whenScanningCoreServiceEntries() throws IOException {
     List<String> violations = new ArrayList<>();
-    for (Path rel : GUARDED_SERVICES) {
-      if (!Files.exists(rel)) {
-        violations.add(rel + " — file missing (refactor without updating guard test?)");
-        continue;
+    Path launchValidation = GUARDED_SERVICES.get(0);
+    Path batchDayGate = GUARDED_SERVICES.get(1);
+    requireSource(launchValidation, violations);
+    requireSource(batchDayGate, violations);
+
+    if (Files.exists(launchValidation)) {
+      String src = Files.readString(launchValidation);
+      if (!src.contains("validate(request);") || !src.contains("Guard.require(request != null")) {
+        violations.add(launchValidation.getFileName()
+            + " — load 必须调用 validate(request)，且 validate 必须守护 request 空值");
       }
-      String src = Files.readString(rel);
-      boolean hasGuard = src.contains("Guard.require")
-          || src.contains("Guard.requireFound")
-          || src.contains("Objects.requireNonNull")
-          || src.contains("== null")
-          || src.contains("!= null");
-      if (!hasGuard) {
-        violations.add(rel.getFileName() + " — 缺 null 守护(Guard.* / requireNonNull / == null 检查任一)");
+    }
+    if (Files.exists(batchDayGate)) {
+      String src = Files.readString(batchDayGate);
+      if (!src.contains("request == null || loaded == null")) {
+        violations.add(batchDayGate.getFileName()
+            + " — evaluateAndApply 必须对 request/loaded 空值采取显式 fail-safe 策略");
       }
     }
     assertThat(violations)
         .as("core service entries must defend against null inputs")
         .isEmpty();
+  }
+
+  private static void requireSource(Path rel, List<String> violations) {
+    if (!Files.exists(rel)) {
+      violations.add(rel + " — file missing (refactor without updating guard test?)");
+    }
   }
 
   @Test

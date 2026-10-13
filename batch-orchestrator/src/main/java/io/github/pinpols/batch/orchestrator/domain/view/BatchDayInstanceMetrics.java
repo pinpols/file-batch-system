@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.orchestrator.domain.entity;
+package io.github.pinpols.batch.orchestrator.domain.view;
 
 import lombok.Data;
 

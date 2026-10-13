@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.NodePartitionAssignment;
-import io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusRef;
+import io.github.pinpols.batch.orchestrator.domain.query.NodePartitionAssignment;
+import io.github.pinpols.batch.orchestrator.domain.query.PartitionStatusRef;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

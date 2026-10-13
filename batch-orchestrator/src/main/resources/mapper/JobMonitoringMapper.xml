@@ -81,7 +81,7 @@
           AND sla_alerted_at IS NOT NULL
           AND sla_alerted_at &lt; #{escalationBefore}
     </select>
-    <resultMap id="candidateMap" type="io.github.pinpols.batch.orchestrator.domain.entity.JobMonitoringAlertCandidate">
+    <resultMap id="candidateMap" type="io.github.pinpols.batch.orchestrator.domain.view.JobMonitoringAlertCandidate">
         <constructor>
             <arg column="tenant_id" javaType="java.lang.String"/>
             <arg column="job_instance_id" javaType="java.lang.Long"/>

@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.trigger;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.orchestrator.domain.entity.TriggerRequestLaunchReconcileRow;
+import io.github.pinpols.batch.orchestrator.domain.query.TriggerRequestLaunchReconcileRow;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.infrastructure.trigger.TriggerLaunchConsumer;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;

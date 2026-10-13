@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.domain.ops.application.contract.response;
 
-import io.github.pinpols.batch.console.domain.ops.entity.WorkerFingerprintSummaryRow;
+import io.github.pinpols.batch.console.domain.ops.view.WorkerFingerprintSummaryRow;
 
 /**
  * SDK Phase 5 / SDK-P5-3 (console Lane D):按 (buildId, sdkVersion) 聚合的 worker 数,供灰度切量可视化。

@@ -89,7 +89,7 @@
     </resultMap>
 
     <resultMap id="QueuePartitionBacklogStatsMap"
-               type="io.github.pinpols.batch.orchestrator.domain.entity.QueuePartitionBacklogStats">
+               type="io.github.pinpols.batch.orchestrator.domain.view.QueuePartitionBacklogStats">
         <constructor>
             <arg column="queue_code" javaType="java.lang.String"/>
             <arg column="created_partitions" javaType="long"/>
@@ -267,7 +267,7 @@
 
     <!-- perf(#5): REPORT 路径的轻量分区计数投影,只取 (id, partition_status),不拉 output_summary 等大列。 -->
     <resultMap id="PartitionStatusRefMap"
-               type="io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusRef">
+               type="io.github.pinpols.batch.orchestrator.domain.query.PartitionStatusRef">
         <constructor>
             <arg column="id" javaType="java.lang.Long"/>
             <arg column="partition_status" javaType="java.lang.String"/>
@@ -275,7 +275,7 @@
     </resultMap>
 
     <resultMap id="PartitionStatusSummaryMap"
-               type="io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusSummary">
+               type="io.github.pinpols.batch.orchestrator.domain.view.PartitionStatusSummary">
         <constructor>
             <arg column="total_count" javaType="java.lang.Long"/>
             <arg column="success_count" javaType="java.lang.Long"/>

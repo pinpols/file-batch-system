@@ -5,8 +5,8 @@ name: orchestrator-internal-openapi-drift
 # controller 之间是人肉同步链。本 wf 加一个机器化守护(log-only 起步)。
 #
 # 现状与取舍:
-#   - 该 openapi 是 SDK-facing 的**精选子集**(workers/tasks/files/readiness/
-#     batch-day-replay),不是全部 25 个 internal controller 的镜像。故只能做
+#   - 该 openapi 是 SDK/Trigger + Console BFF 实际上游路径的**精选子集**，不是
+#     全部 25 个 internal controller 的镜像。故只能做
 #     **spec → controller 路径存在性**校验(spec 声明的每条 /internal 路径必须对应
 #     一个真实 controller mapping;否则说明 spec 引用了已改名/删除的幽灵端点)。
 #     反向(controller 新增未文档化)是子集设计,不校验。
@@ -76,7 +76,10 @@ jobs:
                       spec_paths.add(norm(m.group(1)))
 
           # 2) controller 的全路径 = class @RequestMapping 基路径 + 方法 mapping value。
-          MAP_ANN = re.compile(r'@(?:Get|Post|Put|Delete|Patch|Request)Mapping\(\s*(?:value\s*=\s*)?"([^"]*)"')
+          MAP_ANN = re.compile(
+              r'@(?:Get|Post|Put|Delete|Patch|Request)Mapping'
+              r'(?:\(\s*(?:(?:value|path)\s*=\s*)?"([^"]*)"\s*\))?'
+          )
           REQ_BASE = re.compile(r'@RequestMapping\(\s*(?:value\s*=\s*)?"([^"]*)"')
           ctrl_paths = set()
           for f in glob.glob(CTRL_GLOB):
@@ -90,7 +93,8 @@ jobs:
                   base = bm.group(1)
               body = text[cls_idx:] if cls_idx > 0 else text
               for m in MAP_ANN.finditer(body):
-                  sub = m.group(1)
+                  # Spring 的无参数 mapping 注解等价于类级 base path。
+                  sub = m.group(1) or ""
                   full = base.rstrip("/") + ("/" + sub.lstrip("/") if sub else "")
                   if not full.startswith("/"):
                       full = "/" + full

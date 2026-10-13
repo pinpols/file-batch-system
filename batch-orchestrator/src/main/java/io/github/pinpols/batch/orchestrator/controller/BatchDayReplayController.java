@@ -4,6 +4,8 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayPreviewResponse;
 import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayService;
 import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplaySubmitCommand;
+import io.github.pinpols.batch.orchestrator.controller.response.BatchDayReplayEntryResponse;
+import io.github.pinpols.batch.orchestrator.controller.response.BatchDayReplaySessionResponse;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
 import java.util.List;
@@ -30,9 +32,11 @@ public class BatchDayReplayController {
   private final BatchDayReplayService replayService;
 
   @PostMapping("/sessions")
-  public CommonResponse<BatchDayReplaySessionEntity> submit(
+  public CommonResponse<BatchDayReplaySessionResponse> submit(
       @RequestBody BatchDayReplaySubmitCommand command) {
-    return CommonResponse.success(replayService.submit(command));
+    BatchDayReplaySessionEntity entity = replayService.submit(command);
+    BatchDayReplaySessionResponse response = BatchDayReplaySessionResponse.from(entity);
+    return CommonResponse.success(response);
   }
 
   @PostMapping("/sessions/preview")
@@ -42,40 +46,54 @@ public class BatchDayReplayController {
   }
 
   @GetMapping("/sessions")
-  public CommonResponse<List<BatchDayReplaySessionEntity>> list(
+  public CommonResponse<List<BatchDayReplaySessionResponse>> list(
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "status", required = false) String status,
       @RequestParam(value = "limit", required = false, defaultValue = "50") int limit) {
-    return CommonResponse.success(replayService.listSessions(tenantId, status, limit));
+    List<BatchDayReplaySessionEntity> sessions =
+        replayService.listSessions(tenantId, status, limit);
+    List<BatchDayReplaySessionResponse> responses =
+        sessions.stream().map(BatchDayReplaySessionResponse::from).toList();
+    return CommonResponse.success(responses);
   }
 
   @PostMapping("/sessions/{sessionId}/approve")
-  public CommonResponse<BatchDayReplaySessionEntity> approve(
+  public CommonResponse<BatchDayReplaySessionResponse> approve(
       @PathVariable("sessionId") Long sessionId,
       @RequestParam("tenantId") String tenantId,
       @RequestParam("approver") String approver) {
-    return CommonResponse.success(replayService.approve(tenantId, sessionId, approver));
+    BatchDayReplaySessionEntity entity = replayService.approve(tenantId, sessionId, approver);
+    BatchDayReplaySessionResponse response = BatchDayReplaySessionResponse.from(entity);
+    return CommonResponse.success(response);
   }
 
   @PostMapping("/sessions/{sessionId}/cancel")
-  public CommonResponse<BatchDayReplaySessionEntity> cancel(
+  public CommonResponse<BatchDayReplaySessionResponse> cancel(
       @PathVariable("sessionId") Long sessionId, @RequestParam("tenantId") String tenantId) {
-    return CommonResponse.success(replayService.cancel(tenantId, sessionId));
+    BatchDayReplaySessionEntity entity = replayService.cancel(tenantId, sessionId);
+    BatchDayReplaySessionResponse response = BatchDayReplaySessionResponse.from(entity);
+    return CommonResponse.success(response);
   }
 
   @GetMapping("/sessions/{sessionId}")
-  public CommonResponse<BatchDayReplaySessionEntity> detail(
+  public CommonResponse<BatchDayReplaySessionResponse> detail(
       @PathVariable("sessionId") Long sessionId, @RequestParam("tenantId") String tenantId) {
-    return CommonResponse.success(replayService.getSession(tenantId, sessionId));
+    BatchDayReplaySessionEntity entity = replayService.getSession(tenantId, sessionId);
+    BatchDayReplaySessionResponse response = BatchDayReplaySessionResponse.from(entity);
+    return CommonResponse.success(response);
   }
 
   /** entries 进度查询 — 给 UI 展示每条 instance / version 的执行状态。 */
   @GetMapping("/sessions/{sessionId}/entries")
-  public CommonResponse<List<BatchDayReplayEntryEntity>> entries(
+  public CommonResponse<List<BatchDayReplayEntryResponse>> entries(
       @PathVariable("sessionId") Long sessionId,
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "status", required = false) String status,
       @RequestParam(value = "limit", required = false, defaultValue = "500") int limit) {
-    return CommonResponse.success(replayService.listEntries(tenantId, sessionId, status, limit));
+    List<BatchDayReplayEntryEntity> entries =
+        replayService.listEntries(tenantId, sessionId, status, limit);
+    List<BatchDayReplayEntryResponse> responses =
+        entries.stream().map(BatchDayReplayEntryResponse::from).toList();
+    return CommonResponse.success(responses);
   }
 }

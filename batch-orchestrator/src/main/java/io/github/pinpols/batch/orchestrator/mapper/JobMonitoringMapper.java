@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobMonitoringAlertCandidate;
+import io.github.pinpols.batch.orchestrator.domain.view.JobMonitoringAlertCandidate;
 import java.time.Instant;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;

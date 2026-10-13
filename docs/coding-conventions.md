@@ -283,6 +283,16 @@ ConsoleFileChannelApplicationService           ← 接口（应用层）
 - `HeartbeatService` → `DefaultHeartbeatService`
 - `WorkerRegistryService` → `DefaultWorkerRegistryService`
 
+#### 4.1.1 Service 层职责与入口约定
+
+- Service/ApplicationService 承载用例编排、事务边界和领域策略调用；Controller 只做协议适配、校验触发与响应映射，Mapper 只负责持久化语句。
+- 一个 Service 可以协调多个 Mapper/Port；不要仅因类行数、依赖数量或方法数量达到固定阈值拆分。出现可独立描述和测试的策略、协议适配、查询投影或资源生命周期时，才按该职责拆分，并保持事务/幂等边界不变。
+- 对外公共入口校验调用方可控的必填对象/标识；允许空值的查询条件应保留其明确语义。不能以“文件任意位置有 null 判断”作为入口已校验的证据；校验应位于入口或其明确调用的校验方法。
+- 业务失败使用项目业务异常/结果类型；不得用裸 `NullPointerException` 表达业务拒绝。基础设施异常按边界保留 cause，日志按日志治理规范处理。
+- Service 接口只有在存在应用端口边界、多个实现/替换需求或测试隔离价值时才要求抽象；新代码不为满足命名模板机械新增空接口。既有 `XxxService`/`DefaultXxxService` 配对沿用，不借治理改动顺带重构调用图。
+
+Orchestrator 已有核心入口的空值策略由 `ServiceEntryGuardArchTest` 按入口语义精确守护：Launch 校验拒绝空请求，BatchDay gate 对缺失上下文采取 fail-safe allow。新增核心入口应在测试中明确拒绝还是 fail-safe，而不是复制某一种统一策略。
+
 ### 4.2 策略模式（Strategy）
 
 通过 Registry 管理多策略实现，运行时按 key 选择：
@@ -420,6 +430,15 @@ public CommonResponse<List<JobDefinitionDto>> listJobs(...) {
     return CommonResponse.success(service.list(...));
 }
 ```
+
+### 6.3 Controller 层边界与审核清单
+
+- Controller 是 HTTP 适配层：只负责绑定路径/查询/请求 DTO、触发参数校验、调用一个明确的应用用例并映射 HTTP 响应；业务决策、跨资源编排、事务和重试归 Application Service。
+- Controller 的公开方法不得把 `domain.entity` 持久化模型作为请求或响应类型（包括 `CommonResponse<Entity>`、集合/分页/可选值等泛型嵌套）。读写模型使用职责清晰的 request/response DTO；响应 DTO 不得因复用方便而暴露数据库内部字段。
+- Controller 不得直接依赖 Mapper、Repository 或基础设施实现；通过 Application Service / 用例接口访问业务能力。确需流式下载、协议级状态码或纯 HTTP 头处理时，保留在 Controller，并确保不夹带业务策略。
+- Controller 不重复实现 Service 已负责的领域校验、状态机、租户隔离或权限判断；边界授权/租户上下文解析可以在入口触发，但权威检查须由应用/领域入口保证，避免绕过其他调用路径。
+- 审核新增/修改端点时，检查：DTO 与 OpenAPI 是否同步；调用方反序列化和兼容性是否核实；敏感字段是否排除；校验与授权是否覆盖；错误码/HTTP 状态是否稳定；是否有针对成功、无效输入及关键拒绝路径的契约测试。
+- 内部 API 也按真实契约治理：`internal` 只描述访问范围，不代表可以把 Entity 当 DTO。迁移历史契约时保持既有 JSON 字段和语义，除非明确批准契约变更。
 
 ---
 
@@ -656,6 +675,13 @@ nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, def.getId(), p
 - Application **Command** 与 Mapper **Param** 是否未混在同一类型里？
 - `domain/view` 是否保持无写模型逻辑、无对 `entity` 的回写依赖？
 - 新增 `*Record` **类名**仅用于非持久化语义时，是否避免与「表行」误命名冲突（表行请用 `Entity`）？
+
+#### 8.2.10 Entity 与 Mapper 投影的边界
+
+- `domain/entity` 只放持久化表行主类型，且命名为 `XxxEntity`。查询聚合、Mapper 投影、候选行、跨 Mapper 装载上下文分别放在 `query`、`view` 或职责子包；不得因“由 Mapper 返回”就命名为 Entity。
+- `domain/entity` 不保留历史非表模型；查询/视图、值对象、命令和上下文分别放入表达职责的包。门禁要求该包顶层类型全部以 `Entity` 结尾。
+- Controller（包括内部 HTTP Controller）不得把持久化 Entity 作为请求或响应契约。通过稳定 request/response DTO 投影；改造已有内部 API 时要同步 OpenAPI、消费者反序列化和契约测试，保持 JSON 行为及敏感字段排除规则。
+- Application/Service 可以在事务和用例内部使用 Entity；跨 HTTP、SDK 或前后端边界不得泄露 Entity。Mapper 专用投影不是 Entity，必须有准确的查询/视图语义名称。
 
 ---
 

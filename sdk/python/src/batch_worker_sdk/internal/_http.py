@@ -131,8 +131,8 @@ class PlatformHttpClient:
         """POST /internal/workers/{code}/status —— 运维侧更新 worker 状态。
 
         对齐 orchestrator ``WorkerController.updateStatus`` —— **POST + body**
-        (WorkerHeartbeatDto schema),不是 GET。平台返回 ``WorkerRegistryEntity``
-        快照。SDK 一般不直接调用本端点(运维路径),保留是为了上层运维工具复用。
+        (WorkerHeartbeatDto schema),不是 GET。平台返回 ``WorkerRegistryResponse``
+        DTO 快照。SDK 一般不直接调用本端点(运维路径),保留是为了上层运维工具复用。
         """
         return await self._post_json(f"/internal/workers/{worker_code}/status", body)
 

@@ -3,7 +3,7 @@
 <mapper namespace="io.github.pinpols.batch.console.domain.ops.mapper.WorkerFingerprintMapper">
 
     <resultMap id="WorkerFingerprintResultMap"
-               type="io.github.pinpols.batch.console.domain.ops.entity.WorkerFingerprintRow">
+               type="io.github.pinpols.batch.console.domain.ops.query.WorkerFingerprintRow">
         <id     column="id"             property="id"/>
         <result column="tenant_id"      property="tenantId"/>
         <result column="worker_code"    property="workerCode"/>
@@ -15,7 +15,7 @@
     </resultMap>
 
     <resultMap id="WorkerFingerprintSummaryResultMap"
-               type="io.github.pinpols.batch.console.domain.ops.entity.WorkerFingerprintSummaryRow">
+               type="io.github.pinpols.batch.console.domain.ops.view.WorkerFingerprintSummaryRow">
         <result column="build_id"    property="buildId"/>
         <result column="sdk_version" property="sdkVersion"/>
         <result column="count"       property="count"/>

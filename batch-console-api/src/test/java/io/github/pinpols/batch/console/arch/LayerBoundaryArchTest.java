@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
  * <p>HTTP 请求、查询和响应契约统一放在对应 context 的 {@code application.contract} 包，应用层和基础设施层不得重新依赖
  * {@code web.request/query/response}。Controller 仍位于 {@code web}，只负责 HTTP 适配和契约转换。
  */
-@DisplayName("分层边界守护: 冻结 Web 层对映射器、基础设施、内部客户端与对象存储的依赖方向")
+@DisplayName("分层边界守护: 冻结 Web 层对持久层、基础设施、内部客户端与对象存储的依赖方向")
 class LayerBoundaryArchTest {
 
   private static final JavaClasses CLASSES = new ClassFileImporter()
@@ -26,14 +26,14 @@ class LayerBoundaryArchTest {
       .importPackages("io.github.pinpols.batch.console..");
 
   @Test
-  @DisplayName("Web 层不得直接依赖映射器, 数据访问只能经应用层或基础设施层")
-  void shouldRejectWebDependencyOnMapper_whenLayersChecked() {
+  @DisplayName("Web 层不得直接依赖 Mapper 或 Repository, 数据访问只能经应用层或基础设施层")
+  void shouldRejectWebDependencyOnPersistence_whenLayersChecked() {
     noClasses()
         .that()
         .resideInAPackage("..web..")
         .should()
         .dependOnClassesThat()
-        .resideInAPackage("..mapper..")
+        .resideInAnyPackage("..mapper..", "..repository..")
         .because("web 层禁止直连 mapper，数据访问统一经 application/infrastructure")
         .check(CLASSES);
   }

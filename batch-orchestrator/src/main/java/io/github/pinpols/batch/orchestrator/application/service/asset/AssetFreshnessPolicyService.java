@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
-import io.github.pinpols.batch.orchestrator.domain.entity.AssetFreshnessPolicyRecord;
+import io.github.pinpols.batch.orchestrator.domain.entity.AssetFreshnessPolicyEntity;
 import io.github.pinpols.batch.orchestrator.mapper.AssetFreshnessPolicyMapper;
 import java.time.DateTimeException;
 import java.time.Instant;
@@ -41,19 +41,19 @@ public class AssetFreshnessPolicyService {
     if (policyLimit <= 0) {
       return 0;
     }
-    List<AssetFreshnessPolicyRecord> policies = policyMapper.selectEnabledPolicies(policyLimit);
+    List<AssetFreshnessPolicyEntity> policies = policyMapper.selectEnabledPolicies(policyLimit);
     if (policies == null || policies.isEmpty()) {
       return 0;
     }
     Instant now = dateTimeSupport.nowInstant();
     int emitted = 0;
-    for (AssetFreshnessPolicyRecord policy : policies) {
+    for (AssetFreshnessPolicyEntity policy : policies) {
       emitted += scanPolicy(policy, now);
     }
     return emitted;
   }
 
-  int scanPolicy(AssetFreshnessPolicyRecord policy, Instant now) {
+  int scanPolicy(AssetFreshnessPolicyEntity policy, Instant now) {
     if (!validPolicy(policy)) {
       return 0;
     }
@@ -73,7 +73,7 @@ public class AssetFreshnessPolicyService {
   }
 
   FreshnessBreach evaluate(
-      AssetFreshnessPolicyRecord policy, LocalDate bizDate, Instant now, ZoneId zone) {
+      AssetFreshnessPolicyEntity policy, LocalDate bizDate, Instant now, ZoneId zone) {
     Instant expectedAt =
         ZonedDateTime.of(bizDate, policy.expectedByLocalTime(), zone).toInstant();
     if (now.isBefore(expectedAt)) {
@@ -97,7 +97,7 @@ public class AssetFreshnessPolicyService {
     return new FreshnessBreach(bizDate, expectedAt, staleAt, breachType, alertType, severity);
   }
 
-  private void emitBreach(AssetFreshnessPolicyRecord policy, FreshnessBreach breach) {
+  private void emitBreach(AssetFreshnessPolicyEntity policy, FreshnessBreach breach) {
     String resourceKey =
         policy.tenantId() + ":" + policy.assetCode() + ":" + breach.bizDate().toString();
     Map<String, Object> detail = new LinkedHashMap<>();
@@ -126,7 +126,7 @@ public class AssetFreshnessPolicyService {
     alertEventService.emit(alertRequest);
   }
 
-  private boolean validPolicy(AssetFreshnessPolicyRecord policy) {
+  private boolean validPolicy(AssetFreshnessPolicyEntity policy) {
     return policy != null
         && Boolean.TRUE.equals(policy.enabled())
         && Texts.hasText(policy.tenantId())
@@ -135,7 +135,7 @@ public class AssetFreshnessPolicyService {
         && policy.expectedByLocalTime() != null;
   }
 
-  private int safeLookbackDays(AssetFreshnessPolicyRecord policy) {
+  private int safeLookbackDays(AssetFreshnessPolicyEntity policy) {
     Integer value = policy.lookbackDays();
     if (value == null) {
       return 1;

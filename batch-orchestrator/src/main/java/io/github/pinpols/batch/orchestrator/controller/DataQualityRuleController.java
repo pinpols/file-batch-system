@@ -2,6 +2,8 @@ package io.github.pinpols.batch.orchestrator.controller;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.orchestrator.application.service.dq.DataQualityRuleApplicationService;
+import io.github.pinpols.batch.orchestrator.controller.request.DataQualityRuleRequest;
+import io.github.pinpols.batch.orchestrator.controller.response.DataQualityRuleResponse;
 import io.github.pinpols.batch.orchestrator.domain.entity.DataQualityRuleEntity;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -32,28 +34,37 @@ public class DataQualityRuleController {
 
   /** 按 (tenantId, businessKey 前缀) 列出 enabled 规则。 */
   @GetMapping
-  public CommonResponse<List<DataQualityRuleEntity>> list(
+  public CommonResponse<List<DataQualityRuleResponse>> list(
       @RequestParam("tenantId") String tenantId, @RequestParam("businessKey") String businessKey) {
-    return CommonResponse.success(ruleService.listEnabledByBusinessKey(tenantId, businessKey));
+    List<DataQualityRuleEntity> rules = ruleService.listEnabledByBusinessKey(tenantId, businessKey);
+    List<DataQualityRuleResponse> responses =
+        rules.stream().map(DataQualityRuleResponse::from).toList();
+    return CommonResponse.success(responses);
   }
 
   @GetMapping("/{id}")
-  public CommonResponse<DataQualityRuleEntity> get(
+  public CommonResponse<DataQualityRuleResponse> get(
       @PathVariable("id") Long id, @RequestParam("tenantId") String tenantId) {
-    return CommonResponse.success(ruleService.get(tenantId, id));
+    DataQualityRuleEntity entity = ruleService.get(tenantId, id);
+    DataQualityRuleResponse response = DataQualityRuleResponse.from(entity);
+    return CommonResponse.success(response);
   }
 
   @PostMapping
-  public CommonResponse<DataQualityRuleEntity> create(
-      @RequestParam("tenantId") String tenantId, @RequestBody DataQualityRuleEntity rule) {
-    return CommonResponse.success(ruleService.create(tenantId, rule));
+  public CommonResponse<DataQualityRuleResponse> create(
+      @RequestParam("tenantId") String tenantId, @RequestBody DataQualityRuleRequest rule) {
+    DataQualityRuleEntity entity = ruleService.create(tenantId, rule.toEntity());
+    DataQualityRuleResponse response = DataQualityRuleResponse.from(entity);
+    return CommonResponse.success(response);
   }
 
   @PutMapping("/{id}")
-  public CommonResponse<DataQualityRuleEntity> update(
+  public CommonResponse<DataQualityRuleResponse> update(
       @PathVariable("id") Long id,
       @RequestParam("tenantId") String tenantId,
-      @RequestBody DataQualityRuleEntity rule) {
-    return CommonResponse.success(ruleService.update(tenantId, id, rule));
+      @RequestBody DataQualityRuleRequest rule) {
+    DataQualityRuleEntity entity = ruleService.update(tenantId, id, rule.toEntity());
+    DataQualityRuleResponse response = DataQualityRuleResponse.from(entity);
+    return CommonResponse.success(response);
   }
 }

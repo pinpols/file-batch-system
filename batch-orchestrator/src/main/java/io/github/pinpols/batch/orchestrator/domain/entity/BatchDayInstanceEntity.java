@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.domain.entity;
 
+import io.github.pinpols.batch.orchestrator.domain.value.BatchDayManualOperation;
 import java.time.Instant;
 import java.time.LocalDate;
 import lombok.Builder;

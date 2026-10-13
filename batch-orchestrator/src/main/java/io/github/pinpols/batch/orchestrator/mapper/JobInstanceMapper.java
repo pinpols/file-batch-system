@@ -1,10 +1,10 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceMetrics;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkInstanceRunningParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateInstanceProgressParam;
 import io.github.pinpols.batch.orchestrator.domain.query.JobInstanceQuery;
+import io.github.pinpols.batch.orchestrator.domain.view.BatchDayInstanceMetrics;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Collection;

@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.metrics;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.QueuePartitionBacklogStats;
+import io.github.pinpols.batch.orchestrator.domain.view.QueuePartitionBacklogStats;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;

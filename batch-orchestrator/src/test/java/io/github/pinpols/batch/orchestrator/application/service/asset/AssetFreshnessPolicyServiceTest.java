@@ -13,7 +13,7 @@ import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
-import io.github.pinpols.batch.orchestrator.domain.entity.AssetFreshnessPolicyRecord;
+import io.github.pinpols.batch.orchestrator.domain.entity.AssetFreshnessPolicyEntity;
 import io.github.pinpols.batch.orchestrator.mapper.AssetFreshnessPolicyMapper;
 import java.time.Clock;
 import java.time.Instant;
@@ -50,7 +50,7 @@ class AssetFreshnessPolicyServiceTest {
   @Test
   @DisplayName("超过期望产出时间仍未就绪时发出资产缺失告警")
   void shouldEmitMissingAlert_whenExpectedTimePassed() {
-    AssetFreshnessPolicyRecord policy = policy("09:00", 14_400, 1, "Asia/Shanghai", "WARN");
+    AssetFreshnessPolicyEntity policy = policy("09:00", 14_400, 1, "Asia/Shanghai", "WARN");
     when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
     when(assetPartitionService.isJobPartitionReady(
             "t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 30)))
@@ -69,7 +69,7 @@ class AssetFreshnessPolicyServiceTest {
   @Test
   @DisplayName("超过宽限期仍未就绪时发出资产滞后告警")
   void shouldEmitStaleAlert_whenGraceWindowElapsed() {
-    AssetFreshnessPolicyRecord policy = policy("09:00", 60, 1, "Asia/Shanghai", "WARN");
+    AssetFreshnessPolicyEntity policy = policy("09:00", 60, 1, "Asia/Shanghai", "WARN");
     when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
     when(assetPartitionService.isJobPartitionReady(
             "t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 30)))
@@ -87,7 +87,7 @@ class AssetFreshnessPolicyServiceTest {
   @Test
   @DisplayName("未到期望产出时间时不查询就绪状态也不告警")
   void shouldSkip_whenBeforeExpectedTime() {
-    AssetFreshnessPolicyRecord policy = policy("12:00", 3600, 1, "Asia/Shanghai", "WARN");
+    AssetFreshnessPolicyEntity policy = policy("12:00", 3600, 1, "Asia/Shanghai", "WARN");
     when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
 
     int emitted = service.scanDuePolicies(10);
@@ -100,7 +100,7 @@ class AssetFreshnessPolicyServiceTest {
   @Test
   @DisplayName("资产已就绪时不发出任何告警")
   void shouldSkip_whenPartitionReady() {
-    AssetFreshnessPolicyRecord policy = policy("09:00", 60, 1, "Asia/Shanghai", "WARN");
+    AssetFreshnessPolicyEntity policy = policy("09:00", 60, 1, "Asia/Shanghai", "WARN");
     when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
     when(assetPartitionService.isJobPartitionReady(
             "t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 30)))
@@ -115,7 +115,7 @@ class AssetFreshnessPolicyServiceTest {
   @Test
   @DisplayName("按配置的回看天数扫描对应营业日并逐日告警")
   void shouldScanLookbackDays_whenPolicyConfigured() {
-    AssetFreshnessPolicyRecord policy = policy("09:00", 60, 2, "Asia/Shanghai", "ERROR");
+    AssetFreshnessPolicyEntity policy = policy("09:00", 60, 2, "Asia/Shanghai", "ERROR");
     when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
     when(assetPartitionService.isJobPartitionReady(
             "t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 30)))
@@ -133,7 +133,7 @@ class AssetFreshnessPolicyServiceTest {
   @DisplayName("重复扫描同一滞后资产时告警去重键保持稳定, 不会产生重复告警")
   void freshnessAlert_usesStableDedupKey_soRescanDoesNotStorm() {
     // arrange: same stale asset (same tenant/assetCode/bizDate), scan runs twice ~60s apart
-    AssetFreshnessPolicyRecord policy = policy("09:00", 14_400, 1, "Asia/Shanghai", "WARN");
+    AssetFreshnessPolicyEntity policy = policy("09:00", 14_400, 1, "Asia/Shanghai", "WARN");
     when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
     when(assetPartitionService.isJobPartitionReady(
             "t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 30)))
@@ -170,13 +170,13 @@ class AssetFreshnessPolicyServiceTest {
     verify(policyMapper, never()).selectEnabledPolicies(0);
   }
 
-  private static AssetFreshnessPolicyRecord policy(
+  private static AssetFreshnessPolicyEntity policy(
       String expectedBy,
       int staleAfterSeconds,
       int lookbackDays,
       String timezone,
       String severity) {
-    return new AssetFreshnessPolicyRecord(
+    return new AssetFreshnessPolicyEntity(
         1L,
         "t1",
         "JOB_A",

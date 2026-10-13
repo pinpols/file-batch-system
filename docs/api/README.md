@@ -10,7 +10,7 @@
 |---|---|---|---|
 | 01 | [console-api-protocol.md](./console-api-protocol.md) | 人读协议总文档：权限 / JWT / tenant / 幂等 / 分页 / 错误码 / 兼容性 / Excel 配置维护 / 安全响应头 | 第一次对接 / 加新端点前 |
 | 02 | [console-api.openapi.yaml](./console-api.openapi.yaml) | 机读 OpenAPI 3.0 规范（前端代码生成 + mock 用） | 前端集成 |
-| 03 | [orchestrator-internal.openapi.yaml](./orchestrator-internal.openapi.yaml) | Orchestrator 内部 HTTP 契约 | Worker / Trigger / SDK 对接 |
+| 03 | [orchestrator-internal.openapi.yaml](./orchestrator-internal.openapi.yaml) | Orchestrator 内部 HTTP 契约精选集（SDK/Trigger 与 Console BFF 上游） | 修改已登记的 `/internal/**` 契约前 |
 | 04 | [orchestrator-internal-openapi-sync.md](./orchestrator-internal-openapi-sync.md) | 内部 OpenAPI 同步边界和校验方式 | 修改 `/internal/**` 前 |
 | 05 | [sdk-shared-constants.yaml](./sdk-shared-constants.yaml) | 五语言 SDK 共用常量权威源 | 修改协议常量前 |
 | 06 | [sdk-contract-fixtures/](./sdk-contract-fixtures/README.md) | 跨语言 conformance fixtures | SDK 协议回归 |

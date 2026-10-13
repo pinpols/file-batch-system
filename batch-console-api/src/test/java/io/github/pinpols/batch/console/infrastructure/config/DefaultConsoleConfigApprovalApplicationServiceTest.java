@@ -20,6 +20,8 @@ import io.github.pinpols.batch.console.application.contract.request.config.Confi
 import io.github.pinpols.batch.console.domain.entity.ConfigReleaseEntity;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleConfigApprovalDetailResponse;
 import io.github.pinpols.batch.console.domain.ops.mapper.ConfigApprovalMapper;
+import io.github.pinpols.batch.console.domain.ops.param.ConfigApprovalInsertParam;
+import io.github.pinpols.batch.console.domain.ops.param.ConfigApprovalTransitionParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.mapper.ConfigChangeLogMapper;
 import io.github.pinpols.batch.console.mapper.ConfigReleaseMapper;
@@ -80,7 +82,7 @@ class DefaultConsoleConfigApprovalApplicationServiceTest {
     service.submit(10L, request);
 
     verify(configReleaseApplyService).validate("JOB", "job-1", "{\"jobCode\":\"job-1\"}");
-    verify(configApprovalMapper).insert(anyMap());
+    verify(configApprovalMapper).insert(any(ConfigApprovalInsertParam.class));
     verify(configReleaseMapper).updateConfigReleaseStatus(anyMap());
     verify(configChangeLogMapper).insertConfigChangeLog(anyMap());
   }
@@ -100,7 +102,7 @@ class DefaultConsoleConfigApprovalApplicationServiceTest {
 
     org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.submit(10L, request))
         .isInstanceOf(IllegalArgumentException.class);
-    verify(configApprovalMapper, never()).insert(anyMap());
+    verify(configApprovalMapper, never()).insert(any(ConfigApprovalInsertParam.class));
     verify(configReleaseMapper, never()).updateConfigReleaseStatus(anyMap());
   }
 
@@ -112,7 +114,8 @@ class DefaultConsoleConfigApprovalApplicationServiceTest {
         .thenReturn(Map.of(
             "id", 9L, "releaseId", 10L, "approvalStatus", "PENDING", "requestedBy", "requester"));
     when(configReleaseMapper.selectById(anyMap())).thenReturn(release);
-    when(configApprovalMapper.approve(anyMap())).thenReturn(1);
+    when(configApprovalMapper.transition(any(ConfigApprovalTransitionParam.class)))
+        .thenReturn(1);
     when(configApprovalMapper.selectLatestByRelease("t1", 10L))
         .thenReturn(Map.of("approvalStatus", "APPROVED"));
 
@@ -123,7 +126,7 @@ class DefaultConsoleConfigApprovalApplicationServiceTest {
     ConsoleConfigApprovalDetailResponse result = service.approve(9L, request);
 
     assertThat(result.configStatus()).isEqualTo(ConfigLifecycleStatus.PENDING_APPROVAL.code());
-    verify(configApprovalMapper).approve(anyMap());
+    verify(configApprovalMapper).transition(any(ConfigApprovalTransitionParam.class));
     verify(configReleaseApplyService).apply(release, "admin", "config-approval-9");
     verify(configReleaseMapper).updateConfigReleaseStatus(anyMap());
     verify(configChangeLogMapper).insertConfigChangeLog(anyMap());
@@ -151,7 +154,8 @@ class DefaultConsoleConfigApprovalApplicationServiceTest {
         .thenReturn(Map.of(
             "id", 9L, "releaseId", 10L, "approvalStatus", "PENDING", "requestedBy", "requester"));
     when(configReleaseMapper.selectById(anyMap())).thenReturn(release);
-    when(configApprovalMapper.approve(anyMap())).thenReturn(1);
+    when(configApprovalMapper.transition(any(ConfigApprovalTransitionParam.class)))
+        .thenReturn(1);
     doThrow(new IllegalStateException("apply failed"))
         .when(configReleaseApplyService)
         .apply(release, "admin", "config-approval-9");

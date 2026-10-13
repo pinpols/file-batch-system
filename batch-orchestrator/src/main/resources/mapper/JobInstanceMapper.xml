@@ -482,7 +482,7 @@
          )
     </select>
 
-    <select id="selectBatchDayMetrics" resultType="io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceMetrics">
+    <select id="selectBatchDayMetrics" resultType="io.github.pinpols.batch.orchestrator.domain.view.BatchDayInstanceMetrics">
         select
             count(1) as "totalCount",
             coalesce(sum(case when ji.instance_status in ('CREATED', 'WAITING', 'READY', 'RUNNING', 'PAUSED') then 1 else 0 end), 0) as "activeCount",
