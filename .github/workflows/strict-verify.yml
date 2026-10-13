@@ -162,6 +162,8 @@ jobs:
           export BATCH_CONSOLE_READ_REPLICA_ENABLED=false
           # strict-verify 不验证对象存储；禁用会主动写 MinIO 的启动探针，S3 客户端仍保持装配。
           export BATCH_STORAGE_STARTUP_CHECK_ENABLED=false
+          # 隔离的一次性 CI 栈使用 strict-verify 脚本提供的显式测试角色头，绝不用于生产部署。
+          export BATCH_SECURITY_BYPASS_MODE=true
           mapfile -t JARS < <(find batch-console-api/target -maxdepth 1 -type f \
             -name 'batch-console-api-*-exec.jar' -print)
           [[ ${#JARS[@]} -eq 1 ]] || {

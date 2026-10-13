@@ -56,6 +56,9 @@ PG_USER="${PG_USER:-$PGUSER}"
 PG_DB="${PG_DB:-$PLATFORM_DB}"
 VERIFY_TENANT_ID="${VERIFY_TENANT_ID:-$BATCH_DEFAULT_TENANT_ID}"
 BASE="http://localhost:${CONSOLE_PORT}"
+# cron-preview 是正式角色保护接口。live strict workflow 在隔离 CI 栈启用 bypass-mode，
+# 因此显式提供测试身份；普通本地栈若未启用 bypass-mode，仍需使用有效 Console 会话。
+STRICT_CONSOLE_AUTH_HEADERS=(-H "X-Console-User: strict-verify" -H "X-Console-Roles: ROLE_ADMIN")
 
 # CI 模式关闭 ANSI 颜色(避免 GitHub Actions 日志里 ^[[32m 噪音);本地保留高亮
 if [[ "${CI:-}" == "1" || "${CI:-}" == "true" || ! -t 1 ]]; then
@@ -190,7 +193,7 @@ fi
 # ───────────────────────────────────────────────────────────
 hdr "2. cron-preview 真实 Quartz 引擎"
 
-simple=$(curl -s --max-time 30 --connect-timeout 5 -G --data-urlencode "expr=0 0 2 * * ?" --data-urlencode "count=3" "$BASE/api/console/system/cron-preview")
+simple=$(curl -s --max-time 30 --connect-timeout 5 "${STRICT_CONSOLE_AUTH_HEADERS[@]}" -G --data-urlencode "expr=0 0 2 * * ?" --data-urlencode "count=3" "$BASE/api/console/system/cron-preview")
 valid_field=$(echo "$simple" | "$PYTHON_BIN" -c "import sys,json;print(json.load(sys.stdin)['data']['valid'])" 2>/dev/null)
 runs_count=$(echo "$simple" | "$PYTHON_BIN" -c "import sys,json;print(len(json.load(sys.stdin)['data']['nextRuns']))" 2>/dev/null)
 [[ "$valid_field" == "True" && "$runs_count" == "3" ]] \
@@ -198,14 +201,14 @@ runs_count=$(echo "$simple" | "$PYTHON_BIN" -c "import sys,json;print(len(json.l
   || fail "简单 expr 异常" "valid=$valid_field runs=$runs_count"
 
 # Quartz L 表达式（当月最后一个周五）
-quartz_l=$(curl -s --max-time 30 --connect-timeout 5 -G --data-urlencode "expr=0 15 10 ? * 6L" --data-urlencode "count=2" "$BASE/api/console/system/cron-preview")
+quartz_l=$(curl -s --max-time 30 --connect-timeout 5 "${STRICT_CONSOLE_AUTH_HEADERS[@]}" -G --data-urlencode "expr=0 15 10 ? * 6L" --data-urlencode "count=2" "$BASE/api/console/system/cron-preview")
 l_valid=$(echo "$quartz_l" | "$PYTHON_BIN" -c "import sys,json;print(json.load(sys.stdin)['data']['valid'])" 2>/dev/null)
 [[ "$l_valid" == "True" ]] \
   && pass "Quartz L 高级语法 (0 15 10 ? * 6L)" "valid=true (本地自实现解析必然失败)" \
   || fail "Quartz L 解析失败" "valid=$l_valid"
 
 # 非法表达式不抛 500
-invalid=$(curl -s --max-time 30 --connect-timeout 5 -G --data-urlencode "expr=garbage" "$BASE/api/console/system/cron-preview")
+invalid=$(curl -s --max-time 30 --connect-timeout 5 "${STRICT_CONSOLE_AUTH_HEADERS[@]}" -G --data-urlencode "expr=garbage" "$BASE/api/console/system/cron-preview")
 i_valid=$(echo "$invalid" | "$PYTHON_BIN" -c "import sys,json;print(json.load(sys.stdin)['data']['valid'])" 2>/dev/null)
 i_err=$(echo "$invalid" | "$PYTHON_BIN" -c "import sys,json;print(json.load(sys.stdin)['data']['error'])" 2>/dev/null)
 [[ "$i_valid" == "False" && -n "$i_err" && "$i_err" != "None" ]] \
@@ -220,7 +223,7 @@ for entry in \
   "0 0 10 ? * 3#2|每月第 2 个周三 10 点" \
   "0 0 0/2 * * ?|每 2 小时"; do
   expr="${entry%%|*}"; label="${entry##*|}"
-  r=$(curl -s --max-time 30 --connect-timeout 5 -G --data-urlencode "expr=$expr" --data-urlencode "count=2" "$BASE/api/console/system/cron-preview")
+  r=$(curl -s --max-time 30 --connect-timeout 5 "${STRICT_CONSOLE_AUTH_HEADERS[@]}" -G --data-urlencode "expr=$expr" --data-urlencode "count=2" "$BASE/api/console/system/cron-preview")
   v=$(echo "$r" | "$PYTHON_BIN" -c "import sys,json;print(json.load(sys.stdin)['data']['valid'])" 2>/dev/null)
   c=$(echo "$r" | "$PYTHON_BIN" -c "import sys,json;print(len(json.load(sys.stdin)['data']['nextRuns']))" 2>/dev/null)
   [[ "$v" == "True" && "$c" -ge 1 ]] \
@@ -371,7 +374,7 @@ with open('$OPENAPI_YAML') as f:
 schema = spec.get('components', {}).get('schemas', {}).get('CronPreview', {})
 print(','.join(sorted(schema.get('properties', {}).keys())))
 " 2>/dev/null)
-  be_cron=$(curl -s --max-time 30 --connect-timeout 5 -G --data-urlencode "expr=0 0 2 * * ?" "$BASE/api/console/system/cron-preview" | \
+  be_cron=$(curl -s --max-time 30 --connect-timeout 5 "${STRICT_CONSOLE_AUTH_HEADERS[@]}" -G --data-urlencode "expr=0 0 2 * * ?" "$BASE/api/console/system/cron-preview" | \
     "$PYTHON_BIN" -c "import sys,json;d=json.load(sys.stdin)['data'];print(','.join(sorted(d.keys())))")
   if [[ "$yaml_cron" == "$be_cron" ]]; then
     pass "CronPreview schema 对齐" "$yaml_cron"
