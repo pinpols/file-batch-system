@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 
 /**
- * ADR-020 批次日重放 session 响应（console 透传 orchestrator {@code BatchDayReplaySessionEntity} 的 JSON 投影）。
+ * ADR-020 批次日重放 session 响应（console 透传 orchestrator {@code BatchDayReplaySessionResponse} 的 JSON 投影）。
  */
 public record ConsoleBatchDayReplaySessionResponse(
     Long id,

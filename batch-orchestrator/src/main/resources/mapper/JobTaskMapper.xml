@@ -36,7 +36,7 @@
     </resultMap>
 
     <resultMap id="TaskOutcomePersistenceContextMap"
-               type="io.github.pinpols.batch.orchestrator.domain.entity.TaskOutcomePersistenceContext">
+               type="io.github.pinpols.batch.orchestrator.domain.context.TaskOutcomePersistenceContext">
         <association property="task" resultMap="JobTaskResultMap" columnPrefix="task_"/>
         <association property="partition"
                      resultMap="io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper.JobPartitionResultMap"
@@ -253,7 +253,7 @@
     </select>
 
     <resultMap id="NodePartitionAssignmentMap"
-               type="io.github.pinpols.batch.orchestrator.domain.entity.NodePartitionAssignment">
+               type="io.github.pinpols.batch.orchestrator.domain.query.NodePartitionAssignment">
         <constructor>
             <arg column="job_partition_id" javaType="java.lang.Long"/>
             <arg column="node_code" javaType="java.lang.String"/>

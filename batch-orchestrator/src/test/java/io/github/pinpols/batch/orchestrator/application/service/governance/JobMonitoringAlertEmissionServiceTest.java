@@ -10,7 +10,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.orchestrator.application.service.governance.JobMonitoringAlertEmissionService.Violation;
 import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobMonitoringAlertCandidate;
+import io.github.pinpols.batch.orchestrator.domain.view.JobMonitoringAlertCandidate;
 import io.github.pinpols.batch.orchestrator.mapper.JobMonitoringMapper;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;

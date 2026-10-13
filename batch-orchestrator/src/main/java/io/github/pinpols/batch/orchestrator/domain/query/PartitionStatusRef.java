@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.orchestrator.domain.entity;
+package io.github.pinpols.batch.orchestrator.domain.query;
 
 /**
  * job_partition → (id, partition_status) 的轻量投影。

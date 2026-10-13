@@ -11,7 +11,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.orchestrator.application.service.governance.JobMonitoringAlertEmissionService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.JobMonitoringAlertEmissionService.Violation;
 import io.github.pinpols.batch.orchestrator.config.SlaGovernanceProperties;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobMonitoringAlertCandidate;
+import io.github.pinpols.batch.orchestrator.domain.view.JobMonitoringAlertCandidate;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.JobMonitoringMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;

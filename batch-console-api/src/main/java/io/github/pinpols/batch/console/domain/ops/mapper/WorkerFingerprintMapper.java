@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.domain.ops.mapper;
 
-import io.github.pinpols.batch.console.domain.ops.entity.WorkerFingerprintRow;
-import io.github.pinpols.batch.console.domain.ops.entity.WorkerFingerprintSummaryRow;
+import io.github.pinpols.batch.console.domain.ops.query.WorkerFingerprintRow;
+import io.github.pinpols.batch.console.domain.ops.view.WorkerFingerprintSummaryRow;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 

@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.controller;
 
 import io.github.pinpols.batch.orchestrator.application.scheduler.TenantSchedulerSnapshotService;
 import io.github.pinpols.batch.orchestrator.controller.response.SchedulerSnapshotResponse;
-import io.github.pinpols.batch.orchestrator.domain.entity.TenantSchedulerSnapshotEntity;
+import io.github.pinpols.batch.orchestrator.controller.response.TenantSchedulerSnapshotResponse;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,9 +27,11 @@ public class SchedulerSnapshotController {
   }
 
   @GetMapping("/snapshot/history")
-  public List<TenantSchedulerSnapshotEntity> history(
+  public List<TenantSchedulerSnapshotResponse> history(
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "limit", defaultValue = "20") int limit) {
-    return tenantSchedulerSnapshotService.history(tenantId, limit);
+    return tenantSchedulerSnapshotService.history(tenantId, limit).stream()
+        .map(TenantSchedulerSnapshotResponse::from)
+        .toList();
   }
 }

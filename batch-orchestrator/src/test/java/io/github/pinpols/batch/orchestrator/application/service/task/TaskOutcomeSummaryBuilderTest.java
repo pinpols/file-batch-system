@@ -130,9 +130,9 @@ class TaskOutcomeSummaryBuilderTest {
         .build();
 
     // 轻量投影(与列表同一批分区状态)。
-    List<io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusRef> statusRefs =
+    List<io.github.pinpols.batch.orchestrator.domain.query.PartitionStatusRef> statusRefs =
         partitions.stream()
-            .map(p -> new io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusRef(
+            .map(p -> new io.github.pinpols.batch.orchestrator.domain.query.PartitionStatusRef(
                 p.getId(), p.getPartitionStatus()))
             .toList();
     long successCount = statusRefs.stream()

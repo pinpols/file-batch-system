@@ -28,14 +28,14 @@ import io.github.pinpols.batch.orchestrator.application.service.version.ResultVe
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
+import io.github.pinpols.batch.orchestrator.domain.context.TaskOutcomePersistenceContext;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusSummary;
-import io.github.pinpols.batch.orchestrator.domain.entity.TaskOutcomePersistenceContext;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkPartitionStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleEventMapper;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.StateTransition;
+import io.github.pinpols.batch.orchestrator.domain.view.PartitionStatusSummary;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper;

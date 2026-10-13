@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.orchestrator.domain.entity;
+package io.github.pinpols.batch.orchestrator.domain.query;
 
 /**
  * job_task → (job_partition_id, workflowNodeCode) 的轻量投影。

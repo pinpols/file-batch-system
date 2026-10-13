@@ -1,13 +1,13 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
 import io.github.pinpols.batch.common.enums.TaskStatus;
+import io.github.pinpols.batch.orchestrator.domain.context.TaskOutcomePersistenceContext;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.NodePartitionAssignment;
-import io.github.pinpols.batch.orchestrator.domain.entity.TaskOutcomePersistenceContext;
 import io.github.pinpols.batch.orchestrator.domain.param.AssignWorkerParam;
 import io.github.pinpols.batch.orchestrator.domain.param.FinishTaskParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateTaskStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.query.JobTaskQuery;
+import io.github.pinpols.batch.orchestrator.domain.query.NodePartitionAssignment;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 

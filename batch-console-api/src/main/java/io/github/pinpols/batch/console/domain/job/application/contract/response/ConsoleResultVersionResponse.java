@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.domain.job.application.contract.response
 import java.time.Instant;
 
 /**
- * ADR-017 结果版本响应（console 透传 orchestrator {@code ResultVersionEntity} 的 JSON 投影）。 字段与下游 record
+ * ADR-017 结果版本响应（console 透传 orchestrator {@code ResultVersionResponse} 的 JSON 投影）。 字段与下游 record
  * 一一对应，console 不引入 orchestrator 模块，故本地镜像其序列化形态。
  */
 public record ConsoleResultVersionResponse(

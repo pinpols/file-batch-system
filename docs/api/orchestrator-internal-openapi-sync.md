@@ -30,6 +30,10 @@ log-only 起步:`continue-on-error` + 只写 job summary。稳定一轮后把脚
 
 在字段级 diff 落地前,手写 yaml 仍靠 code review + 本页的路径守护 + `SdkPlatformContractTest`(SDK 侧字段集契约)三者兜底。
 
+## Controller Entity 边界（2026-10-13）
+
+Orchestrator/Console Controller 的公开 HTTP 方法签名现在由 `EntityApiBoundaryArchTest` 断言不得暴露持久化 Entity；两模块的 `EntityModelNamingArchTest` 断言领域 `entity` 包只包含 `XxxEntity`；`ControllerPersistenceBoundaryArchTest` 禁止 Controller 直连 Mapper/Repository。对迁移的响应 DTO，测试逐字段比较 Entity 与 DTO 的 Jackson JSON，保持既有 wire 字段和数据形态。以上是 Java 治理测试门禁，不代表本文件的 SDK 子集已经提供完整字段级 OpenAPI 自动 diff；该 follow-up 仍按上节登记。
+
 ## 关联
 
 - 契约:`docs/api/orchestrator-internal.openapi.yaml`

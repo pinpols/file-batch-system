@@ -1,4 +1,6 @@
-package io.github.pinpols.batch.orchestrator.domain.entity;
+package io.github.pinpols.batch.orchestrator.domain.view;
+
+import io.github.pinpols.batch.orchestrator.domain.query.PartitionStatusRef;
 
 /**
  * job_partition 按实例聚合后的状态摘要。

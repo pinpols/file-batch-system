@@ -14,10 +14,9 @@ import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiAttachmentMa
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiConversationMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookDeliveryLogMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.ConfigApprovalMapper;
+import io.github.pinpols.batch.console.domain.ops.param.ConfigApprovalTransitionParam;
 import java.time.Instant;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -88,23 +87,23 @@ class MapperStatusDefaultsTest {
   }
 
   @Test
-  @DisplayName("配置审批复制输入并补充待审与目标状态")
-  void shouldCopyApprovalParamsAndAddStatuses() {
-    ConfigApprovalMapper mapper = mock(ConfigApprovalMapper.class, CALLS_REAL_METHODS);
+  @DisplayName("配置审批转换参数由具名工厂固定待审与目标状态")
+  void shouldBuildApprovalTransitionParamsWithFixedStatuses() {
+    ConfigApprovalMapper mapper = mock(ConfigApprovalMapper.class);
     doReturn(1).when(mapper).transition(any());
-    Map<String, Object> input = new LinkedHashMap<>(Map.of("tenantId", "tenant-a", "id", 3L));
-    ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.captor();
+    ConfigApprovalTransitionParam approved =
+        ConfigApprovalTransitionParam.approved("tenant-a", 3L, "reviewer", "ok");
+    ConfigApprovalTransitionParam rejected =
+        ConfigApprovalTransitionParam.rejected("tenant-a", 3L, "reviewer", "not ok");
+    ArgumentCaptor<ConfigApprovalTransitionParam> captor = ArgumentCaptor.captor();
 
-    assertThat(mapper.approve(input)).isEqualTo(1);
-    assertThat(mapper.reject(input)).isEqualTo(1);
+    assertThat(mapper.transition(approved)).isEqualTo(1);
+    assertThat(mapper.transition(rejected)).isEqualTo(1);
     verify(mapper, org.mockito.Mockito.times(2)).transition(captor.capture());
 
-    assertThat(input).containsOnlyKeys("tenantId", "id");
-    assertThat(captor.getAllValues().get(0))
-        .containsEntry("expectedStatus", "PENDING")
-        .containsEntry("targetStatus", "APPROVED");
-    assertThat(captor.getAllValues().get(1))
-        .containsEntry("expectedStatus", "PENDING")
-        .containsEntry("targetStatus", "REJECTED");
+    assertThat(captor.getAllValues().get(0).getExpectedStatus()).isEqualTo("PENDING");
+    assertThat(captor.getAllValues().get(0).getTargetStatus()).isEqualTo("APPROVED");
+    assertThat(captor.getAllValues().get(1).getExpectedStatus()).isEqualTo("PENDING");
+    assertThat(captor.getAllValues().get(1).getTargetStatus()).isEqualTo("REJECTED");
   }
 }

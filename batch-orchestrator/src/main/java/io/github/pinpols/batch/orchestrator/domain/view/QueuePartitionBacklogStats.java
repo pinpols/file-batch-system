@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.orchestrator.domain.entity;
+package io.github.pinpols.batch.orchestrator.domain.view;
 
 /**
  * 资源队列在 job_partition 维度的实时积压统计。

@@ -211,6 +211,7 @@ SDK 五语言契约矩阵。
 > 由 PR / Full / Staging 的 `java-governance` job 独立执行，业务 unit/IT 显式排除这两类后缀。
 > `check-java-governance-test-coverage.py --verify-reports` 要求每个源码类都产生 Surefire XML，零用例或漏跑会阻断。
 > `MapperStatusWriteConventionTest` 扫描各应用模块的 Mapper XML，禁止普通 `UPDATE SET` 与 `ON CONFLICT ... DO UPDATE SET` 固定写入状态字面量；使用 `bash scripts/ci/run-java-governance-tests.sh` 执行。它不审查 `WHERE` / `SELECT` 的业务状态集合，共享生命周期还需 Mapper 契约测试，专项业务筛选由专项测试维护。
+> `ServiceEntryGuardArchTest` 按入口语义验证核心服务入口 fail-safe 行为；`ControllerPersistenceBoundaryArchTest` 禁止 Orchestrator/Console Controller 直接依赖 Mapper/Repository；Orchestrator 与 Console 的 `EntityModelNamingArchTest` 强制领域 `entity` 包只含 `XxxEntity`；`EntityApiBoundaryArchTest` 强制 Orchestrator 与 Console HTTP 方法签名不暴露 Entity，零豁免。Controller/Service/Entity 分层规范见 `docs/coding-conventions.md` §4.1.1、§6.3、§8.2.10。执行入口：`bash scripts/ci/run-java-governance-tests.sh`。
 > `PositionalArgsConventionTest` 还守护已治理 Query 不回退为多 `null` 位置构造，并确保状态型参数对象不重新暴露通用 Builder 或公共全参构造器；语义上是否应纳入受控工厂集合仍由代码审查决定。
 > 同一测试还按当前 PR 的变更行检查生产 Java 方法实参与 `return` 的三层以上嵌套调用；短 fluent receiver、lambda 函数体、测试代码和未变更历史代码排除。
 > 这类测试型守卫的登记入口是 [约定约束与漂移防护总账](../audit/convention-drift-guard-index.md) 的守卫矩阵（`check-*` / `validate-*` 脚本另由 [scripts/ci/README.md](../../scripts/ci/README.md) 登记）。

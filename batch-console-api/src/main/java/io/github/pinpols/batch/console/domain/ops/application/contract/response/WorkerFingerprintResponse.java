@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.domain.ops.application.contract.response;
 
 import io.github.pinpols.batch.console.domain.ops.dto.WorkerCompatibility;
-import io.github.pinpols.batch.console.domain.ops.entity.WorkerFingerprintRow;
+import io.github.pinpols.batch.console.domain.ops.query.WorkerFingerprintRow;
 import java.time.Instant;
 
 /**
