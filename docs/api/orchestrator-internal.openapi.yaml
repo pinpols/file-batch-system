@@ -7,7 +7,7 @@ info:
     - date: "2026-10-04"
       summary: "[Pipeline Progress] 心跳增加可选任务级 pipelineProgress；仅保留按 pipeline 查询进度；移除 workerCode 查询与 Java/Python SDK 标量上报。"
     - date: "2026-10-13"
-      summary: "内部 HTTP 响应改用独立 Response DTO，保持历史 JSON 字段，避免持久化 Entity 成为 Worker/Console 契约。"
+      summary: "内部 HTTP 响应改用独立 Response DTO，保持历史 JSON 字段；补齐 Worker 与 Console BFF 实际消费端点契约。"
     - date: "2026-06-30"
       summary: "[Batch Day Replay] 登记 /internal/orchestrator/batch-day-replay/sessions 与 /sessions/preview,供 Console BFF 提交和只读影响预览。"
     - date: "2026-06-30"
@@ -19,13 +19,13 @@ info:
     - date: "2026-05-31"
       summary: "[Phase 0] 初版立 yaml(plan §2 决策 #2)。覆盖 /internal/workers/* 和 /internal/tasks/* 给 SDK / 准客户消费;不含管理面 console-api 路径(见 console-api.openapi.yaml)。"
   description: >
-    Orchestrator 暴露给 self-hosted SDK / 内部 worker 的 `/internal/*` 协议。这套接口的 schema
-    是 ADR-035 §9 「两套绑定」契约的 source of truth —— SDK 端的 wire DTOs
-    (`io.github.pinpols.batch.sdk.wire.*`) 必须保持一致,字段重命名 / 删除 / 新增走
-    `docs/runbook/sdk-dual-rollout.md` 双向滚动纪律。
+    Orchestrator `/internal/*` 协议的精选契约：包括 self-hosted SDK/worker、Trigger，以及 Console BFF
+    实际调用的内部路径；不是全部 internal controller 的镜像。SDK wire DTOs
+    (`io.github.pinpols.batch.sdk.wire.*`) 的字段演进仍走 `docs/runbook/sdk-dual-rollout.md` 双向滚动纪律。
 
-    本文件**只描述 SDK 可见的内部协议**,不暴露给 FE / 外部消费者(不在 console-api Swagger UI)。
-    pr-gate CI 会对照 `WorkerController` / `TaskController` 漂移检测(见 `docs/agent-baseline.md` 「API 文档同步」段)。
+    Console 面向前端的 `/api/console/**` 契约仍以 `console-api.openapi.yaml` 为准。本文件列出的 Console BFF
+    上游路径用于同步其实际调用的 Orchestrator 响应 DTO；内部契约漂移检查见
+    `orchestrator-internal-openapi-sync.md`。
 
 servers:
   - url: http://orchestrator-internal:8081
@@ -42,6 +42,8 @@ tags:
     description: Trigger 调用的上游 asset partition 就绪查询(`OrchestratorReadinessController`)
   - name: batch-day-replay
     description: Console BFF 调用的批次日重放内部接口(`BatchDayReplayController`)
+  - name: console-bff
+    description: Console BFF 实际调用的内部查询与治理接口；不是 BYO Worker SDK 的接入清单
 
 paths:
   /internal/pipeline-progress/by-pipeline:
@@ -584,10 +586,37 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseBatchDayReplaySession'
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/Forbidden'}
         '409': {$ref: '#/components/responses/Conflict'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+    get:
+      tags: [batch-day-replay]
+      summary: 查询批次日重放 session 列表
+      operationId: listBatchDayReplaySessionsInternal
+      parameters:
+        - in: query
+          name: tenantId
+          required: true
+          schema: {type: string}
+        - in: query
+          name: status
+          required: false
+          schema: {type: string}
+        - in: query
+          name: limit
+          required: false
+          schema: {type: integer, default: 50}
+      responses:
+        '200':
+          description: session 列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseBatchDayReplaySessionList'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
         '5XX': {$ref: '#/components/responses/ServerError'}
 
   /internal/orchestrator/batch-day-replay/sessions/preview:
@@ -609,6 +638,425 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseBatchDayReplayPreview'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+
+  /internal/orchestrator/batch-day-replay/sessions/{sessionId}/approve:
+    x-protocol-stability: internal-only
+    post:
+      tags: [batch-day-replay]
+      summary: 审批批次日重放 session
+      operationId: approveBatchDayReplayInternal
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: {type: integer, format: int64}
+        - in: query
+          name: tenantId
+          required: true
+          schema: {type: string}
+        - in: query
+          name: approver
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: session 审批完成
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseBatchDayReplaySession'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+
+  /internal/orchestrator/batch-day-replay/sessions/{sessionId}/cancel:
+    x-protocol-stability: internal-only
+    post:
+      tags: [batch-day-replay]
+      summary: 取消批次日重放 session
+      operationId: cancelBatchDayReplayInternal
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: {type: integer, format: int64}
+        - in: query
+          name: tenantId
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: session 已取消
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseBatchDayReplaySession'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+
+  /internal/orchestrator/batch-day-replay/sessions/{sessionId}:
+    x-protocol-stability: internal-only
+    get:
+      tags: [batch-day-replay]
+      summary: 查询批次日重放 session 详情
+      operationId: getBatchDayReplaySessionInternal
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: {type: integer, format: int64}
+        - in: query
+          name: tenantId
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: session 详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseBatchDayReplaySession'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+
+  /internal/orchestrator/batch-day-replay/sessions/{sessionId}/entries:
+    x-protocol-stability: internal-only
+    get:
+      tags: [batch-day-replay]
+      summary: 查询批次日重放明细
+      operationId: listBatchDayReplayEntriesInternal
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: {type: integer, format: int64}
+        - in: query
+          name: tenantId
+          required: true
+          schema: {type: string}
+        - in: query
+          name: status
+          required: false
+          schema: {type: string}
+        - in: query
+          name: limit
+          required: false
+          schema: {type: integer, default: 500}
+      responses:
+        '200':
+          description: entry 列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseBatchDayReplayEntryList'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+
+  /internal/orchestrator/dq/rules:
+    x-protocol-stability: internal-only
+    get:
+      tags: [console-bff]
+      summary: 按业务键前缀列出启用的数据质量规则
+      operationId: listDataQualityRulesInternal
+      parameters:
+        - in: query
+          name: tenantId
+          required: true
+          schema: {type: string}
+        - in: query
+          name: businessKey
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: 数据质量规则列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseDataQualityRuleList'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+    post:
+      tags: [console-bff]
+      summary: 创建数据质量规则
+      operationId: createDataQualityRuleInternal
+      parameters:
+        - in: query
+          name: tenantId
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DataQualityRuleRequest'
+      responses:
+        '200':
+          description: 创建后的数据质量规则
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseDataQualityRule'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+
+  /internal/orchestrator/dq/rules/{id}:
+    x-protocol-stability: internal-only
+    get:
+      tags: [console-bff]
+      summary: 查询数据质量规则
+      operationId: getDataQualityRuleInternal
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: {type: integer, format: int64}
+        - in: query
+          name: tenantId
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: 数据质量规则
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseDataQualityRule'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+    put:
+      tags: [console-bff]
+      summary: 替换数据质量规则
+      operationId: updateDataQualityRuleInternal
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: {type: integer, format: int64}
+        - in: query
+          name: tenantId
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DataQualityRuleRequest'
+      responses:
+        '200':
+          description: 更新后的数据质量规则
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseDataQualityRule'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+
+  /internal/orchestrator/result-versions:
+    x-protocol-stability: internal-only
+    get:
+      tags: [console-bff]
+      summary: 列出结果版本
+      operationId: listResultVersionsInternal
+      parameters:
+        - in: query
+          name: tenantId
+          required: true
+          schema: {type: string}
+        - in: query
+          name: businessKey
+          required: true
+          schema: {type: string}
+        - in: query
+          name: limit
+          required: false
+          schema: {type: integer, default: 50}
+      responses:
+        '200':
+          description: 结果版本列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseResultVersionList'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+
+  /internal/orchestrator/result-versions/effective:
+    x-protocol-stability: internal-only
+    get:
+      tags: [console-bff]
+      summary: 查询当前生效结果版本
+      operationId: getEffectiveResultVersionInternal
+      parameters:
+        - in: query
+          name: tenantId
+          required: true
+          schema: {type: string}
+        - in: query
+          name: businessKey
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: 当前生效版本；不存在时 data 为 null
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseNullableResultVersion'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+
+  /internal/orchestrator/result-versions/{id}:
+    x-protocol-stability: internal-only
+    get:
+      tags: [console-bff]
+      summary: 查询结果版本详情
+      operationId: getResultVersionInternal
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: {type: integer, format: int64}
+        - in: query
+          name: tenantId
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: 结果版本详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseResultVersion'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+
+  /internal/orchestrator/result-versions/{id}/promote:
+    x-protocol-stability: internal-only
+    post:
+      tags: [console-bff]
+      summary: 提升结果版本
+      operationId: promoteResultVersionInternal
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: {type: integer, format: int64}
+        - in: query
+          name: tenantId
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: 提升后的结果版本
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseResultVersion'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+
+  /internal/orchestrator/result-versions/{id}/reject:
+    x-protocol-stability: internal-only
+    post:
+      tags: [console-bff]
+      summary: 驳回待定结果版本
+      operationId: rejectResultVersionInternal
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: {type: integer, format: int64}
+        - in: query
+          name: tenantId
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: 驳回后的结果版本
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseResultVersion'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+
+  /internal/scheduler/snapshot:
+    x-protocol-stability: internal-only
+    get:
+      tags: [console-bff]
+      summary: 查询实时调度快照
+      operationId: getSchedulerSnapshotInternal
+      parameters:
+        - in: query
+          name: tenantId
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: 实时调度快照
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchedulerSnapshotResponse'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+
+  /internal/scheduler/snapshot/history:
+    x-protocol-stability: internal-only
+    get:
+      tags: [console-bff]
+      summary: 查询历史调度快照
+      operationId: listSchedulerSnapshotHistoryInternal
+      parameters:
+        - in: query
+          name: tenantId
+          required: true
+          schema: {type: string}
+        - in: query
+          name: limit
+          required: false
+          schema: {type: integer, default: 20}
+      responses:
+        '200':
+          description: 历史调度快照列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TenantSchedulerSnapshotResponse'
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/Forbidden'}
         '5XX': {$ref: '#/components/responses/ServerError'}
@@ -666,6 +1114,89 @@ components:
         message: {type: string}
         data:
           $ref: '#/components/schemas/BatchDayReplayPreview'
+      required: [success, code, message, data]
+
+    CommonResponseBatchDayReplaySession:
+      type: object
+      properties:
+        success: {type: boolean}
+        code: {type: string}
+        message: {type: string}
+        data: {$ref: '#/components/schemas/BatchDayReplaySessionResponse'}
+      required: [success, code, message, data]
+
+    CommonResponseBatchDayReplaySessionList:
+      type: object
+      properties:
+        success: {type: boolean}
+        code: {type: string}
+        message: {type: string}
+        data:
+          type: array
+          items: {$ref: '#/components/schemas/BatchDayReplaySessionResponse'}
+      required: [success, code, message, data]
+
+    CommonResponseBatchDayReplayEntryList:
+      type: object
+      properties:
+        success: {type: boolean}
+        code: {type: string}
+        message: {type: string}
+        data:
+          type: array
+          items: {$ref: '#/components/schemas/BatchDayReplayEntryResponse'}
+      required: [success, code, message, data]
+
+    CommonResponseDataQualityRule:
+      type: object
+      properties:
+        success: {type: boolean}
+        code: {type: string}
+        message: {type: string}
+        data: {$ref: '#/components/schemas/DataQualityRuleResponse'}
+      required: [success, code, message, data]
+
+    CommonResponseDataQualityRuleList:
+      type: object
+      properties:
+        success: {type: boolean}
+        code: {type: string}
+        message: {type: string}
+        data:
+          type: array
+          items: {$ref: '#/components/schemas/DataQualityRuleResponse'}
+      required: [success, code, message, data]
+
+    CommonResponseResultVersion:
+      type: object
+      properties:
+        success: {type: boolean}
+        code: {type: string}
+        message: {type: string}
+        data: {$ref: '#/components/schemas/ResultVersionResponse'}
+      required: [success, code, message, data]
+
+    CommonResponseNullableResultVersion:
+      type: object
+      properties:
+        success: {type: boolean}
+        code: {type: string}
+        message: {type: string}
+        data:
+          oneOf:
+            - {$ref: '#/components/schemas/ResultVersionResponse'}
+            - {type: 'null'}
+      required: [success, code, message, data]
+
+    CommonResponseResultVersionList:
+      type: object
+      properties:
+        success: {type: boolean}
+        code: {type: string}
+        message: {type: string}
+        data:
+          type: array
+          items: {$ref: '#/components/schemas/ResultVersionResponse'}
       required: [success, code, message, data]
 
     BatchDayReplaySubmitCommand:
@@ -921,6 +1452,210 @@ components:
           nullable: true
           description: "稳定 Kafka 路由池代码；旧记录回退为 workerCode"
         taskCapabilities: {description: Raw JSON task capability value; null when absent}
+
+    BatchDayReplaySessionResponse:
+      type: object
+      description: ADR-020 重放会话的 HTTP 投影；JSON 字段与原响应兼容
+      properties:
+        id: {type: integer, format: int64}
+        tenantId: {type: string}
+        calendarCode: {type: string, nullable: true}
+        bizDate: {type: string, format: date, nullable: true}
+        scope: {type: string, nullable: true}
+        executionMode: {type: string, nullable: true}
+        candidateSource: {type: string, nullable: true}
+        scopePayload: {type: string, nullable: true}
+        resultPolicy: {type: string, nullable: true}
+        configVersionPolicy: {type: string, nullable: true}
+        configVersion: {type: integer, format: int32, nullable: true}
+        reason: {type: string, nullable: true}
+        approvalId: {type: integer, format: int64, nullable: true}
+        status: {type: string}
+        totalCount: {type: integer, format: int32, nullable: true}
+        succeededCount: {type: integer, format: int32, nullable: true}
+        failedCount: {type: integer, format: int32, nullable: true}
+        inFlightCount: {type: integer, format: int32, nullable: true}
+        requestedBy: {type: string, nullable: true}
+        approvedBy: {type: string, nullable: true}
+        startedAt: {type: string, format: date-time, nullable: true}
+        completedAt: {type: string, format: date-time, nullable: true}
+        traceId: {type: string, nullable: true}
+        createdAt: {type: string, format: date-time, nullable: true}
+        updatedAt: {type: string, format: date-time, nullable: true}
+
+    BatchDayReplayEntryResponse:
+      type: object
+      description: ADR-020 重放明细的 HTTP 投影；JSON 字段与原响应兼容
+      properties:
+        id: {type: integer, format: int64}
+        sessionId: {type: integer, format: int64}
+        tenantId: {type: string}
+        jobCode: {type: string}
+        sourceInstanceId: {type: integer, format: int64, nullable: true}
+        rerunInstanceId: {type: integer, format: int64, nullable: true}
+        status: {type: string, nullable: true}
+        failureReason: {type: string, nullable: true}
+        startedAt: {type: string, format: date-time, nullable: true}
+        finishedAt: {type: string, format: date-time, nullable: true}
+        resultVersionId: {type: integer, format: int64, nullable: true}
+        planSnapshot: {type: string, nullable: true}
+        createdAt: {type: string, format: date-time, nullable: true}
+        updatedAt: {type: string, format: date-time, nullable: true}
+
+    DataQualityRuleRequest:
+      type: object
+      description: 创建或替换数据质量规则的 HTTP 请求
+      properties:
+        id: {type: integer, format: int64, nullable: true}
+        tenantId: {type: string, nullable: true}
+        ruleCode: {type: string, nullable: true}
+        ruleName: {type: string, nullable: true}
+        ruleType: {type: string, nullable: true}
+        scopeBusinessKey: {type: string, nullable: true}
+        expression: {type: string, nullable: true}
+        thresholdJson: {type: string, nullable: true}
+        severity: {type: string, nullable: true}
+        enabled: {type: boolean, nullable: true}
+        description: {type: string, nullable: true}
+        createdAt: {type: string, format: date-time, nullable: true}
+        updatedAt: {type: string, format: date-time, nullable: true}
+
+    DataQualityRuleResponse:
+      type: object
+      description: 数据质量规则响应投影
+      properties:
+        id: {type: integer, format: int64}
+        tenantId: {type: string}
+        ruleCode: {type: string}
+        ruleName: {type: string, nullable: true}
+        ruleType: {type: string, nullable: true}
+        scopeBusinessKey: {type: string, nullable: true}
+        expression: {type: string, nullable: true}
+        thresholdJson: {type: string, nullable: true}
+        severity: {type: string, nullable: true}
+        enabled: {type: boolean, nullable: true}
+        description: {type: string, nullable: true}
+        createdAt: {type: string, format: date-time, nullable: true}
+        updatedAt: {type: string, format: date-time, nullable: true}
+
+    ResultVersionResponse:
+      type: object
+      description: 结果版本稳定 HTTP 投影
+      properties:
+        id: {type: integer, format: int64}
+        tenantId: {type: string}
+        businessKey: {type: string}
+        versionNo: {type: integer, format: int32, nullable: true}
+        jobInstanceId: {type: integer, format: int64, nullable: true}
+        status: {type: string, nullable: true}
+        effectiveAt: {type: string, format: date-time, nullable: true}
+        deactivatedAt: {type: string, format: date-time, nullable: true}
+        payloadStorage: {type: string, nullable: true}
+        payloadJson: {type: string, nullable: true}
+        payloadRef: {type: string, nullable: true}
+        generatedAt: {type: string, format: date-time, nullable: true}
+        generatedBy: {type: string, nullable: true}
+        promotionPolicy: {type: string, nullable: true}
+        approvalId: {type: integer, format: int64, nullable: true}
+        createdAt: {type: string, format: date-time, nullable: true}
+        updatedAt: {type: string, format: date-time, nullable: true}
+        dqGateStatus: {type: string, nullable: true}
+
+    TenantSchedulerSnapshotResponse:
+      type: object
+      description: 已持久化调度历史快照的 HTTP 投影
+      properties:
+        id: {type: integer, format: int64}
+        tenantId: {type: string}
+        snapshotAt: {type: string, format: date-time}
+        fairShareGroup: {type: string, nullable: true}
+        policyCode: {type: string, nullable: true}
+        activeJobs: {type: integer, format: int32, nullable: true}
+        activePartitions: {type: integer, format: int32, nullable: true}
+        maxJobsBase: {type: integer, format: int32, nullable: true}
+        burstLimit: {type: integer, format: int32, nullable: true}
+        effectiveJobCap: {type: integer, format: int32, nullable: true}
+        groupActiveJobs: {type: integer, format: int32, nullable: true}
+        groupMaxJobs: {type: integer, format: int32, nullable: true}
+        quotaResetPolicy: {type: string, nullable: true}
+        onlineWorkers: {type: integer, format: int32, nullable: true}
+        detailJson: {description: Raw JSON detail value; null when absent}
+
+    SchedulerSnapshotResponse:
+      type: object
+      description: 实时调度快照
+      properties:
+        generatedAt: {type: string, format: date-time}
+        tenantId: {type: string}
+        policies:
+          type: array
+          items: {$ref: '#/components/schemas/SchedulerPolicySnapshot'}
+        queues:
+          type: array
+          items: {$ref: '#/components/schemas/SchedulerQueueSnapshot'}
+        workers:
+          type: array
+          items: {$ref: '#/components/schemas/SchedulerWorkerLoadSnapshot'}
+
+    SchedulerPolicySnapshot:
+      type: object
+      properties:
+        policyCode: {type: string}
+        fairShareGroup: {type: string, nullable: true}
+        fairShareWeight: {type: integer, format: int32, nullable: true}
+        maxRunningJobsPerTenant: {type: integer, format: int32, nullable: true}
+        burstLimit: {type: integer, format: int32, nullable: true}
+        partitionBurstLimit: {type: integer, format: int32, nullable: true}
+        quotaResetPolicy: {type: string, nullable: true}
+        quotaBurstPeakBorrowed: {type: integer, format: int32, nullable: true}
+        quotaBurstRemaining: {type: integer, format: int32, nullable: true}
+        quotaResetWindowStartedAt: {type: string, format: date-time, nullable: true}
+        quotaResetWindowExpiresAt: {type: string, format: date-time, nullable: true}
+        groupSharedMaxRunningJobs: {type: integer, format: int32, nullable: true}
+        activeJobs: {type: integer, format: int64}
+        activePartitions: {type: integer, format: int64}
+        groupActiveJobs: {type: integer, format: int64}
+        effectiveTenantJobCap: {type: integer, format: int32}
+        effectiveTenantPartitionCap: {type: integer, format: int32}
+
+    SchedulerQueueSnapshot:
+      type: object
+      properties:
+        queueCode: {type: string}
+        fairShareGroup: {type: string, nullable: true}
+        fairShareWeight: {type: integer, format: int32, nullable: true}
+        maxRunningJobs: {type: integer, format: int32, nullable: true}
+        maxRunningPartitions: {type: integer, format: int32, nullable: true}
+        burstLimit: {type: integer, format: int32, nullable: true}
+        effectiveMaxRunningJobs: {type: integer, format: int32}
+        effectiveMaxRunningPartitions: {type: integer, format: int32}
+        quotaResetPolicy: {type: string, nullable: true}
+        quotaBurstPeakBorrowed: {type: integer, format: int32, nullable: true}
+        quotaBurstRemaining: {type: integer, format: int32, nullable: true}
+        quotaResetWindowStartedAt: {type: string, format: date-time, nullable: true}
+        quotaResetWindowExpiresAt: {type: string, format: date-time, nullable: true}
+        groupSharedMaxRunningJobs: {type: integer, format: int32, nullable: true}
+        activeJobs: {type: integer, format: int64}
+        createdPartitions: {type: integer, format: int64}
+        waitingPartitions: {type: integer, format: int64}
+        readyPartitions: {type: integer, format: int64}
+        runningPartitions: {type: integer, format: int64}
+        retryingPartitions: {type: integer, format: int64}
+        queuedPartitions: {type: integer, format: int64}
+        activePartitions: {type: integer, format: int64}
+        oldestWaitingSeconds: {type: integer, format: int64}
+        tenantWaitingSharePermille: {type: integer, format: int32}
+        partitionSaturationPermille: {type: integer, format: int32}
+        bottleneckReason: {type: string, nullable: true}
+
+    SchedulerWorkerLoadSnapshot:
+      type: object
+      properties:
+        workerCode: {type: string}
+        workerGroup: {type: string, nullable: true}
+        currentLoad: {type: integer, format: int32, nullable: true}
+        heartbeatAt: {type: string, format: date-time, nullable: true}
+        status: {type: string}
 
     JobTaskResponse:
       type: object

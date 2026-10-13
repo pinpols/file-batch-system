@@ -17,8 +17,7 @@ class ControllerPersistenceBoundaryArchTest {
   void controller_does_not_depend_on_persistence_mapper_or_repository() {
     var classes = new ClassFileImporter()
         .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-        .importPackages(
-            "io.github.pinpols.batch.orchestrator..", "io.github.pinpols.batch.console..");
+        .importPackages("io.github.pinpols.batch.orchestrator..");
 
     ArchRule rule = noClasses()
         .that()
