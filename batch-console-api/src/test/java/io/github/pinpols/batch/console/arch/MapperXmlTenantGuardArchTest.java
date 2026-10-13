@@ -65,10 +65,10 @@ class MapperXmlTenantGuardArchTest extends BaseMapperXmlTenantGuardArchTest {
         "ConsolePushSubscriptionMapper#deleteAllByEndpoint",
         "ConsolePushSubscriptionMapper#deleteIfStaleSince",
         // Webhook 投递重试:重试调度器全局认领后按投递 id 推进状态(非用户可达的按 id 直改)
-        "ConsoleWebhookDeliveryLogMapper#claimForRetry",
-        "ConsoleWebhookDeliveryLogMapper#markRetrySuccess",
-        "ConsoleWebhookDeliveryLogMapper#markRetryFailure",
-        "ConsoleWebhookDeliveryLogMapper#markGiveUp",
+        "ConsoleWebhookDeliveryLogMapper#claimForRetryByStatuses",
+        "ConsoleWebhookDeliveryLogMapper#updateRetrySuccess",
+        "ConsoleWebhookDeliveryLogMapper#updateRetryFailure",
+        "ConsoleWebhookDeliveryLogMapper#updateGiveUp",
         // AI 审计留存是显式开关控制的后台清理任务，按全局截止时间清理所有租户的过期证据。
         "ConsoleAiAuditLogMapper#deleteBefore",
         // 维护模式是单例系统状态，不属于任何租户；CAS 更新必须按 singleton id/version 写入。

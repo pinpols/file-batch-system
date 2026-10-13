@@ -28,6 +28,8 @@ BFS 的下游 readiness 不能只看 `job_instance` 最新 attempt 是否成功�
 
 > **2026-07-01 守卫**:`asset_partition` 不是权威表,不能只因为表里还指着旧 EFFECTIVE 就判 ready。重跑产生更高版本 `PENDING/FAILED` 时,旧版本虽仍可能暂时 EFFECTIVE,但下游 readiness 必须等待最新成功版本生效后再放行。V189 之后,物化读按最新 EFFECTIVE 校验,写入按版本号单调更新,避免乱序提交或旧物化行把下游带回过期结果。
 
+> **2026-10-13 Mapper 状态写入治理**:`ResultVersionMapper` 的状态写入值由 Java 语义方法集中提供,Mapper SQL 改为接收状态参数；本次仅消除 XML 中重复维护的状态字面量,结果版本流转、EFFECTIVE 判定与 readiness 语义均保持不变。
+
 ## 调度与清理迁移边界
 
 - V180 将上游 readiness 未满足时的定时触发改为可重检的 defer，并固定原始 fire 时刻对应的 `bizDate`；就绪、超时或放弃后清空 defer 时间。

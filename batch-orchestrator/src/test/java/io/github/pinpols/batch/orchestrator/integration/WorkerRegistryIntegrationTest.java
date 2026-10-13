@@ -16,21 +16,27 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.TestConstructor;
 
 /** 集成测试：WorkerRegistryMapper 在真实数据库上的持久化和查询。 覆盖排空生命周期：ONLINE → DRAINING → DECOMMISSIONED。 */
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 @DisplayName("工作节点注册表持久化集成:验证真实数据库上注册写入与按键查询 + 排空及退役状态流转 + 条件更新防止旧状态覆盖 + 端口落库回读与不带端口的心跳保留")
 class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private WorkerRegistryMapper workerRegistryMapper;
+  private final WorkerRegistryMapper workerRegistryMapper;
 
-  @Autowired
-  private CustomTaskTypeRegistryMapper customTaskTypeRegistryMapper;
+  private final CustomTaskTypeRegistryMapper customTaskTypeRegistryMapper;
+
+  WorkerRegistryIntegrationTest(
+      WorkerRegistryMapper workerRegistryMapper,
+      CustomTaskTypeRegistryMapper customTaskTypeRegistryMapper) {
+    this.workerRegistryMapper = workerRegistryMapper;
+    this.customTaskTypeRegistryMapper = customTaskTypeRegistryMapper;
+  }
 
   @Test
   @DisplayName("自定义任务类型上报时由 Java 语义方法提供活跃状态并正常落库")
