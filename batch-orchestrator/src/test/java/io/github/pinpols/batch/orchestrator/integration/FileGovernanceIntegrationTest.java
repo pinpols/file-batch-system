@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.common.config.BatchClockConfig;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.common.enums.FileIntegrityState;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.config.FileGovernanceProperties;
@@ -169,12 +170,12 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  @DisplayName("真实数据库查询保留成员校验类型,开启完整性要求后已校验文件能够触发")
-  void shouldTriggerVerifiedGroup_whenDatabaseReturnsChecksumType() {
+  @DisplayName("真实数据库查询保留完整性状态,开启完整性要求后已校验文件能够触发")
+  void shouldTriggerVerifiedGroup_whenDatabaseReturnsIntegrityState() {
     String groupCode = "verified-group-" + suffix();
     String metadata = """
-        {"fileGroupCode":"%s","requiredFileSet":"verified.csv","triggerOnComplete":true}
-        """.formatted(groupCode);
+        {"fileGroupCode":"%s","requiredFileSet":"verified.csv","triggerOnComplete":true,"integrityState":"%s"}
+        """.formatted(groupCode, FileIntegrityState.VERIFIED.code());
     Long fileId = insertFileRecord(new FileRecordSpec(
         TENANT_ID,
         "verified.csv",

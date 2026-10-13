@@ -124,7 +124,7 @@ public class FileGovernanceProperties {
     /** 文件齐全时是否自动触发下游。false → 仅打标，等人工 confirm。 */
     private boolean triggerOnComplete = true;
 
-    /** 触发前是否要求每个成员都已完整性背书(checksum_type!=NONE);默认 false。详见 file-pipeline-design。 */
+    /** 触发前是否要求每个成员都持久化 {@code integrityState=VERIFIED}；默认 false。 */
     private boolean requireVerified = false;
 
     /** {@code MANUAL_CONFIRM} 模式下"延长等待"按钮单次延长秒数。 */
