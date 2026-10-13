@@ -56,13 +56,15 @@ public class ConsoleJobQueryService {
     JobDefinitionQuery query = new JobDefinitionQuery(
         resolveTenant(tenantGuard, request.getTenantId()),
         request.getJobCode(),
+        request.getExactJobCode(),
+        request.getDependsOnJobCode(),
         request.getJobName(),
         request.getJobType(),
         request.getWorkerGroup(),
         request.getQueueCode(),
         request.getScheduleType(),
         request.getMonitoringCategory(),
-        request.getEnabled(),
+        Boolean.TRUE.equals(request.getIncludeDisabled()) ? null : request.getEnabled(),
         pageRequest);
     List<JobDefinitionEntity> rows = jobMappers.jobDefinitionMapper.selectByQuery(query);
     long total = jobMappers.jobDefinitionMapper.countByQuery(query);

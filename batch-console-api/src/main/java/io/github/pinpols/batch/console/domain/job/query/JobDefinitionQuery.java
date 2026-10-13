@@ -7,6 +7,8 @@ import lombok.Builder;
 public record JobDefinitionQuery(
     String tenantId,
     String jobCode,
+    String exactJobCode,
+    String dependsOnJobCode,
     String jobName,
     String jobType,
     String workerGroup,

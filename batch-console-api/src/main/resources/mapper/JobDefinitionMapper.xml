@@ -67,6 +67,12 @@
         <if test="jobCode != null and jobCode != ''">
             and jd.job_code like concat('%', #{jobCode}, '%')
         </if>
+        <if test="exactJobCode != null and exactJobCode != ''">
+            and jd.job_code = #{exactJobCode}
+        </if>
+        <if test="dependsOnJobCode != null and dependsOnJobCode != ''">
+            and jd.depends_on_job_code = #{dependsOnJobCode}
+        </if>
         <if test="jobName != null and jobName != ''">
             and jd.job_name like concat('%', #{jobName}, '%')
         </if>
@@ -106,6 +112,12 @@
         where tenant_id = #{tenantId}
         <if test="jobCode != null and jobCode != ''">
             and job_code like concat('%', #{jobCode}, '%')
+        </if>
+        <if test="exactJobCode != null and exactJobCode != ''">
+            and job_code = #{exactJobCode}
+        </if>
+        <if test="dependsOnJobCode != null and dependsOnJobCode != ''">
+            and depends_on_job_code = #{dependsOnJobCode}
         </if>
         <if test="jobName != null and jobName != ''">
             and job_name like concat('%', #{jobName}, '%')
