@@ -90,7 +90,7 @@ from openpyxl import load_workbook
 
 path, case_name, expected = sys.argv[1:]
 expected_business_sheets = expected.split(",")
-support_sheets = ["填写说明", "填写顺序", "字段说明", "校验"]
+support_sheets = ["填写说明", "填写顺序", "字典", "字段说明", "校验"]
 expected_sheets = expected_business_sheets + support_sheets
 workbook = load_workbook(path, read_only=True, data_only=True)
 try:
