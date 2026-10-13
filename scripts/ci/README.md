@@ -93,7 +93,7 @@ Git hook、GitHub workflow 和独立事实来源检查统一输出最终状态�
 ⏭️ 忽略 | code=LOCAL_EXPERIMENT | gate=本地实验检查 | group=quality | mode=ignore | exit_code=0 | action=none | reason=统一控制配置未执行该门禁
 ```
 
-字段顺序固定为状态、`code`、`gate`、`group`、`mode`、`exit_code`、`action`；存在补充说明时只在固定字段后追加 `reason`。共享 shell 门禁由 `scripts/lib/gate-result.sh` / `scripts/ci/run-gate.sh` 生成，Python/Node 独立检查器也必须遵循同一格式。具体诊断仍由检查脚本输出。workflow 中不要直接调用门禁脚本；多项检查要逐项调用 `gate_run`，避免一项失败掩盖同一步其余门禁的独立状态。扫描器报告、测试清单和运行进度不是门禁状态行，不强行改成该格式。
+字段顺序固定为状态、`code`、`gate`、`group`、`mode`、`exit_code`、`action`；存在补充说明时只在固定字段后追加 `reason`。共享 shell 门禁由 `scripts/lib/gate-result.sh` / `scripts/ci/run-gate.sh` 生成。`gate_run` 会过滤被调用检查器输出的旧式状态行（缺少 `group` 或 `mode`），保留诊断内容和已合规的嵌套状态行，再输出本门禁唯一权威结果；因此 CI workflow 中必须经统一执行器调用门禁。独立检查器直接运行时仍应遵循同一格式。扫描器报告、测试清单和运行进度不是门禁状态行，不强行改成该格式。
 
 ### 分组、开关和模式
 

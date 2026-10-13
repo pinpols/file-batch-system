@@ -46,6 +46,18 @@ local_hook_output="$(
 )"
 assert_contains "$local_hook_output" "group=quality | mode=report"
 
+filtered_output="$(
+  BATCH_GATE_GROUP=quality gate_run TEST_FILTER "统一输出格式样例" bash -c \
+    'printf "诊断详情\n✅ 通过 | code=LEGACY_CHILD | gate=旧状态\n✅ 通过 | code=NESTED | gate=嵌套门禁 | group=testing | mode=enforce | exit_code=0 | action=none\n"'
+)"
+assert_contains "$filtered_output" "诊断详情"
+assert_contains "$filtered_output" "code=NESTED | gate=嵌套门禁 | group=testing | mode=enforce"
+assert_contains "$filtered_output" "group=quality | mode=enforce"
+if [[ "$filtered_output" == *"LEGACY_CHILD"* ]]; then
+  echo "旧格式子检查状态没有被统一 runner 收敛" >&2
+  exit 1
+fi
+
 disabled_output="$(BATCH_GATE_ENABLED=0 BATCH_GATE_GROUP=build gate_run TEST_DISABLED "总开关样例" false)"
 assert_contains "$disabled_output" "group=build | mode=ignore"
 

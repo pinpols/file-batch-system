@@ -142,6 +142,20 @@ gate_result() {
   fi
 }
 
+gate_filter_legacy_status_lines() {
+  local line
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    case "$line" in
+      '✅ 通过 | code='*|'❌ 不通过 | code='*|'⚠️ 报告 | code='*|'⏭️ 忽略 | code='*|'⏭️ 跳过 | code='*)
+        if [[ "$line" != *' | group='* || "$line" != *' | mode='* ]]; then
+          continue
+        fi
+        ;;
+    esac
+    printf '%s\n' "$line"
+  done
+}
+
 gate_run() {
   local code="$1"
   local name="$2"
@@ -165,7 +179,7 @@ gate_run() {
     gate_result IGNORE "$code" "$name" "统一控制配置未执行该门禁" "$group" "$mode"
     return 0
   fi
-  if "$@"; then
+  if "$@" > >(gate_filter_legacy_status_lines) 2> >(gate_filter_legacy_status_lines >&2); then
     gate_result PASS "$code" "$name" 0 "$group" "$mode"
   else
     local exit_code=$?
