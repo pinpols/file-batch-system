@@ -43,6 +43,7 @@ jobs:
           ref: main
           fetch-depth: 0
           token: ${{ steps.release-token.outputs.token }}
+          persist-credentials: false
 
       - name: Checkout frontend main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -52,6 +53,7 @@ jobs:
           path: frontend-source
           fetch-depth: 0
           token: ${{ steps.release-token.outputs.token }}
+          persist-credentials: false
 
       - name: Calculate and prepare the coordinated version
         id: release
@@ -72,6 +74,7 @@ jobs:
           BUMP_TYPE: ${{ inputs.bump_type }}
         run: |
           set -euo pipefail
+          gh auth setup-git --hostname github.com
           branch="release/platform-v${RELEASE_VERSION}"
           existing_pr=$(gh pr list --repo pinpols/file-batch-system \
             --state open --head "pinpols:${branch}" --json number,url --jq '.[0] // empty')
@@ -108,6 +111,7 @@ jobs:
           BACKEND_PR_URL: ${{ steps.backend-pr.outputs.pr_url }}
         run: |
           set -euo pipefail
+          gh auth setup-git --hostname github.com
           branch="release/platform-v${RELEASE_VERSION}"
           RELEASE_DATE="$(TZ=Asia/Shanghai date +%F)"
           export RELEASE_DATE
