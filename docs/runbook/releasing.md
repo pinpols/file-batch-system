@@ -165,14 +165,13 @@ bash scripts/ci/check-version-alignment.sh
 ### 2.4 当前自动化边界
 
 - 后端 `bump-version.sh` 自动同步本仓库版本落点，`check-version-alignment.sh` 负责阻止本仓库内部漂移。
-- 前端 release-please 自动整理 Release PR、Changelog、tag 和 GitHub Release，但它不是联合版本号的权威来源。
+- 后端 `prepare-platform-release` workflow 可手动选择 patch/minor/major；它校验前后端当前版本一致，计算下一版本，并在两仓创建同名 Release PR。普通功能/修复 PR 不自动递增版本。
+- 前端由联合 workflow 同步 `package.json`、lockfile、平台版本清单和 Changelog；前端不再单独运行 release-please。
 - `compose-cd` 自动固定前后端 SHA、构建不可变镜像、生成 Release Manifest，并可部署和验收 staging。
-- 当前尚未有一个 workflow 自动创建两仓 Release PR 或自动核对两仓目标版本，因此发布负责人必须在合并前人工确认版本一致，并把实际 SHA/digest 写入 Release Notes。
-- 普通 PR 不触发版本递增。未来增加跨仓编排时，也只能创建或更新 Release PR；tag、GitHub Release 与生产晋级必须等待 staging 成功和受保护环境批准，不得因普通 PR 合并自动发布。
+- 首次启用需要同一个 GitHub App 安装到 `file-batch-system` 与 `batch-console`，授予仓库级 `Contents: read/write`、`Pull requests: read/write`；在后端仓库配置变量 `RELEASE_AUTOMATION_APP_CLIENT_ID` 和 secret `RELEASE_AUTOMATION_APP_PRIVATE_KEY`。没有配置凭据时 workflow 无法运行。
+- 自动化只准备/创建 Release PR，不自动合并、不打 tag、不创建 GitHub Release，也不部署生产。两个 PR 应作为一个版本一起审核合并；tag、GitHub Release 与生产晋级仍等待 staging 成功和受保护环境批准。
 
-后续跨仓自动化应以一个显式输入的 `release_version` 为唯一目标值，并至少执行：SemVer 单调递增检查、
-两仓版本一致性、后端 OpenAPI 与前端生成类型漂移检查、双仓 Release PR 创建/更新、Release Manifest
-与验收结果关联。自动化不得推断并静默升级 `MAJOR`，也不得移动已存在 tag。
+重复运行时 workflow 以目标版本分支名查找已有 PR，避免为同一版本创建重复 PR；若上次运行只成功创建了一侧 PR，可重跑以补齐另一侧。自动化不推断版本级别，发布负责人需按本周期最高影响选择 bump 类型；不得移动已存在 tag。
 
 ## 3. Patch 发布 flow（hotfix）
 
