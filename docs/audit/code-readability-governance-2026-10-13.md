@@ -78,7 +78,7 @@
 
 ## 为什么原门禁没有拦住
 
-原有自动检查覆盖格式、类型、i18n key、Java `var`/配置类、文本块格式、结构化字符串拼接、宽参数白名单和可读性快照，但不能可靠判断：
+自动检查覆盖格式、类型、i18n key、Java `var`/配置类、文本块格式、结构化字符串拼接、宽参数白名单和可读性快照。本次新增 Java AST 候选门禁，针对 PR 新增/修改生产行中的三层以上方法实参与 return 嵌套；前端新增 TypeScript AST 候选门禁，覆盖相同深度的实参/构造/return，测试与生成类型排除。两者不扫描历史未改代码，不判断局部变量命名业务含义。仍不能可靠自动判断：
 
 1. 嵌套调用是否遮住业务含义；
 2. 一个 `null` 是数据库缺失、兼容协议，还是在选择业务模式；
@@ -87,7 +87,7 @@
 
 这类判断若按括号或 `null` 数量全量阻断，会误报 builder、Vue render tree、query 工厂、JDK/SDK API 与 fixture。治理采用“高精度自动门禁 + 全量候选清单 + 语义评审”：机械事实自动阻断，语义候选必须在评审清单逐项定性，不以扫描数量直接判失败。
 
-`JAVA_READABILITY` 的稳定检查范围实际是显式局部类型与 Spring `@Configuration(proxyBeanMethods = false)`。脚本输出已增加 `scope=explicit-type,configuration-proxy`，避免把绿色结果误读为完成全仓语义可读性审查；嵌套调用、合法状态和抽象适度性仍按本审计清单人工/AI 复核。
+`JAVA_READABILITY` 的稳定检查范围实际是显式局部类型与 Spring `@Configuration(proxyBeanMethods = false)`。脚本输出已增加 `scope=explicit-type,configuration-proxy`，避免把绿色结果误读为完成全仓语义可读性审查；嵌套调用的阈值以下候选、合法状态语义和抽象适度性仍按本审计清单人工/AI 复核。
 
 ## 持续约束
 

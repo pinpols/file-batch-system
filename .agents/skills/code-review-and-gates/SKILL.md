@@ -37,9 +37,9 @@ description: 用户要求审查代码变更、评估实现风险，或在创建 
 
 ### 自动门禁覆盖边界
 
-每次审查先从 `docs/runbook/ci.md` 与 `scripts/ci/README.md` 核对当前门禁和本轮实际结果。当前 Java 自动化只覆盖部分可机械判定的规则：Spotless 格式；PMD 的明确规则（例如参数数阈值和 NCSS）；`check-java-readability.py` 的显式类型与 `@Configuration(proxyBeanMethods = false)`；依赖注入治理；以及 `PositionalArgsConventionTest` 对登记类型的长位置构造/inline Builder 调用点守护。`*ConventionTest` / `*ArchTest` 由 PR、Full、Staging 的独立 `java-governance` job 执行，标准业务测试分片会排除它们。具体范围以当前脚本和 workflow 为准，不能仅凭工具名称推断覆盖面。
+每次审查先从 `docs/runbook/ci.md` 与 `scripts/ci/README.md` 核对当前门禁和本轮实际结果。当前 Java 自动化覆盖部分可机械判定的规则：Spotless 格式；PMD 明确规则（例如参数数阈值和 NCSS）；`check-java-readability.py` 的显式类型与 `@Configuration(proxyBeanMethods = false)`；依赖注入治理；`PositionalArgsConventionTest` 对登记类型的长位置构造/inline Builder/多 null Query/受控状态构造回潮，以及 PR 新增/修改生产行中至少三层连续调用的 AST 候选。该嵌套调用规则仅覆盖实参与 return，不判断是否存在业务命名、不扫描旧代码或测试 fixture。`*ConventionTest` / `*ArchTest` 由 PR、Full、Staging 的独立 `java-governance` job 执行，标准业务测试分片会排除它们。具体范围以当前脚本和 workflow 为准，不能仅凭工具名称推断覆盖面。
 
-以下事项目前没有通用、可靠的阻断门禁，必须由本 skill 做语义审查：任意普通方法调用的嵌套实参和复杂 `return` 表达式；复合判断是否值得提取命名 boolean；4-6 个参数是否表达一个内聚概念、以及参数对象是否只是把复杂度搬到调用点；方法职责是否混杂、某个单方法转调是无价值套壳还是有效边界；中间变量是否有业务含义；注释是否解释 WHY；类型/工厂/接口抽取是否真的减少复杂度。
+以下事项目前没有通用、可靠的阻断门禁，必须由本 skill 做语义审查：低于三层阈值但仍难理解的嵌套实参、方法表达式和复杂 `return`；复合判断是否值得提取命名 boolean；4-6 个参数是否表达一个内聚概念、以及参数对象是否只是把复杂度搬到调用点；方法职责是否混杂、某个单方法转调是无价值套壳还是有效边界；中间变量是否有业务含义；注释是否解释 WHY；类型/工厂/接口抽取是否真的减少复杂度。
 
 这些人工项不应被括号计数、方法行数阈值或固定命名规则替代。可用 AST/静态分析生成候选清单，但除非能证明低误报并覆盖正反例，否则只作提示，不阻断提交；项目已有的精确门禁继续阻止其明确违规范围。
 
