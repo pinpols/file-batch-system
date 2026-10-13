@@ -7,6 +7,7 @@ import io.github.pinpols.batch.console.application.contract.response.Maintenance
 import io.github.pinpols.batch.console.domain.observability.application.CronPreviewService;
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder;
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
+import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -36,6 +37,8 @@ public class ConsoleSystemController {
         state.readOnly(),
         state.message(),
         state.etaAt() != null ? state.etaAt().toString() : null,
+        EmptyChecks.isNull(state.startsAt()) ? null : state.startsAt().toString(),
+        state.active(Instant.now()),
         state.affectedServices(),
         state.version(),
         EmptyChecks.isNull(state.updatedAt()) ? null : state.updatedAt().toString());

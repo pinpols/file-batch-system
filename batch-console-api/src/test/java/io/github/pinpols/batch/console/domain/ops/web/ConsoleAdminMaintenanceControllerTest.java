@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.ops.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -63,9 +62,7 @@ class ConsoleAdminMaintenanceControllerTest {
     properties = new ConsoleMaintenanceProperties();
     mapper = mock(MaintenanceStateMapper.class);
     when(mapper.selectSingleton()).thenAnswer(invocation -> entityFromProperties());
-    when(mapper.updateIfVersion(
-            any(boolean.class), any(boolean.class), any(), any(), any(), any(), anyLong()))
-        .thenReturn(1);
+    when(mapper.updateIfVersion(any())).thenReturn(1);
     stateHolder = new MaintenanceStateHolder(properties, mapper, new ObjectMapper());
     // PostConstruct 在 standalone setup 下需手动调
     ReflectionTestUtils.invokeMethod(stateHolder, "initFromProperties");
@@ -93,10 +90,11 @@ class ConsoleAdminMaintenanceControllerTest {
   @Test
   @DisplayName("热更新:部分字段更新后状态就地替换, 服务列表与更新时间一并回填")
   void shouldHotUpdateState_whenUpdating() throws Exception {
+    String startsAt = "2099-05-20T14:00:00Z";
     String body = """
         {"enabled":true,"readOnly":true,"message":"DB 灰度中","etaAt":"2026-05-20T15:00:00Z",
-         "affectedServices":["job-schedule","file-download"]}
-        """;
+         "startsAt":"%s","affectedServices":["job-schedule","file-download"]}
+        """.formatted(startsAt);
     mockMvc
         .perform(put("/api/console/admin/system/maintenance")
             .contentType(APPLICATION_JSON)
@@ -104,6 +102,8 @@ class ConsoleAdminMaintenanceControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.enabled").value(true))
         .andExpect(jsonPath("$.data.readOnly").value(true))
+        .andExpect(jsonPath("$.data.active").value(false))
+        .andExpect(jsonPath("$.data.startsAt").value(startsAt))
         .andExpect(jsonPath("$.data.message").value("DB 灰度中"))
         .andExpect(jsonPath("$.data.affectedServices[0]").value("job-schedule"))
         .andExpect(jsonPath("$.data.affectedServices[1]").value("file-download"))
@@ -113,6 +113,7 @@ class ConsoleAdminMaintenanceControllerTest {
     assertThat(current.enabled()).isTrue();
     assertThat(current.readOnly()).isTrue();
     assertThat(current.message()).isEqualTo("DB 灰度中");
+    assertThat(current.startsAt()).isEqualTo(Instant.parse(startsAt));
     assertThat(current.affectedServices()).containsExactly("job-schedule", "file-download");
     assertThat(current.updatedAt()).isNotNull();
   }
@@ -143,6 +144,22 @@ class ConsoleAdminMaintenanceControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.affectedServices").isArray())
         .andExpect(jsonPath("$.data.affectedServices.length()").value(0));
+  }
+
+  @Test
+  @DisplayName("计划开始时间随公告返回且后端报告尚未生效")
+  void shouldReportScheduledMaintenanceAsNotActive() throws Exception {
+    Instant startsAt = Instant.now().plusSeconds(3600);
+    String body = "{\"enabled\":true,\"readOnly\":true,\"startsAt\":\"" + startsAt + "\"}";
+
+    mockMvc
+        .perform(put("/api/console/admin/system/maintenance")
+            .contentType(APPLICATION_JSON)
+            .content(body))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.enabled").value(true))
+        .andExpect(jsonPath("$.data.active").value(false))
+        .andExpect(jsonPath("$.data.startsAt").value(startsAt.toString()));
   }
 
   private MaintenanceStateEntity entityFromProperties() {

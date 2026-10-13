@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsoleMaintenanceProperties;
 import io.github.pinpols.batch.console.domain.ops.mapper.MaintenanceStateMapper;
+import io.github.pinpols.batch.console.domain.ops.param.MaintenanceStateUpdateParam;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.time.Instant;
@@ -55,18 +56,20 @@ public class MaintenanceStateHolder {
 
   @PostConstruct
   void initFromProperties() {
-    state.set(new MaintenanceState(
+    List<String> affectedServices = EmptyChecks.isNull(properties.getAffectedServices())
+        ? List.of()
+        : List.copyOf(properties.getAffectedServices());
+    MaintenanceState initialState = new MaintenanceState(
         properties.isEnabled(),
         properties.isReadOnly(),
         properties.getMessage(),
         properties.getEtaAt(),
-        List.copyOf(
-            EmptyChecks.isNull(properties.getAffectedServices())
-                ? List.of()
-                : properties.getAffectedServices()),
+        null,
+        affectedServices,
         0L,
         Instant.now(),
-        false));
+        false);
+    state.set(initialState);
     refreshFromStore();
     refreshExecutor.scheduleWithFixedDelay(this::refreshFromStore, 5, 5, TimeUnit.SECONDS);
   }
@@ -89,20 +92,24 @@ public class MaintenanceStateHolder {
         next.readOnly(),
         next.message(),
         next.etaAt(),
+        next.startsAt(),
         normalizeServices(next.affectedServices()),
         state.get().version(),
         state.get().updatedAt(),
         true);
     MaintenanceState current = state.get();
     String servicesJson = writeServices(normalized.affectedServices());
-    int updated = mapper.updateIfVersion(
-        normalized.enabled(),
-        normalized.readOnly(),
-        normalized.message(),
-        normalized.etaAt(),
-        servicesJson,
-        EmptyChecks.isBlank(operator) ? "console-admin" : operator,
-        current.version());
+    MaintenanceStateUpdateParam updateParam = MaintenanceStateUpdateParam.builder()
+        .enabled(normalized.enabled())
+        .readOnly(normalized.readOnly())
+        .message(normalized.message())
+        .etaAt(normalized.etaAt())
+        .startsAt(normalized.startsAt())
+        .affectedServicesJson(servicesJson)
+        .updatedBy(EmptyChecks.isBlank(operator) ? "console-admin" : operator)
+        .expectedVersion(current.version())
+        .build();
+    int updated = mapper.updateIfVersion(updateParam);
     if (updated != 1) {
       refreshFromStore();
       throw new ConcurrentModificationException("maintenance state changed; reload and retry");
@@ -112,6 +119,7 @@ public class MaintenanceStateHolder {
         normalized.readOnly(),
         normalized.message(),
         normalized.etaAt(),
+        normalized.startsAt(),
         normalized.affectedServices(),
         current.version() + 1,
         Instant.now(),
@@ -143,6 +151,7 @@ public class MaintenanceStateHolder {
           entity.isReadOnly(),
           entity.getMessage(),
           entity.getEtaAt(),
+          entity.getStartsAt(),
           normalizeServices(services),
           entity.getVersion(),
           entity.getUpdatedAt(),
@@ -174,6 +183,7 @@ public class MaintenanceStateHolder {
    * @param readOnly true=只读(GET 通过 / 写拒);false 且 enabled=true → 整站拒
    * @param message 用户可见原因(自由文本,前端 banner 展示)
    * @param etaAt 预计恢复时间(ISO-8601,可空)
+   * @param startsAt 计划开始维护时间;空表示保存后立即生效
    * @param affectedServices 受影响子系统 code 列表(前端按 service 展示,空 list=整站)
    * @param version 共享状态版本,用于乐观 CAS
    * @param updatedAt 最近一次共享状态更新时间
@@ -184,6 +194,7 @@ public class MaintenanceStateHolder {
       boolean readOnly,
       String message,
       Instant etaAt,
+      Instant startsAt,
       List<String> affectedServices,
       long version,
       Instant updatedAt,
@@ -194,16 +205,38 @@ public class MaintenanceStateHolder {
         String message,
         Instant etaAt,
         List<String> affectedServices) {
-      this(enabled, readOnly, message, etaAt, affectedServices, 0L, null, false);
+      this(enabled, readOnly, message, etaAt, null, affectedServices, 0L, null, false);
+    }
+
+    public MaintenanceState(
+        boolean enabled,
+        boolean readOnly,
+        String message,
+        Instant etaAt,
+        Instant startsAt,
+        List<String> affectedServices) {
+      this(enabled, readOnly, message, etaAt, startsAt, affectedServices, 0L, null, false);
     }
 
     public static MaintenanceState disabled() {
-      return new MaintenanceState(false, false, null, null, List.of(), 0L, null, false);
+      return new MaintenanceState(false, false, null, null, null, List.of(), 0L, null, false);
     }
 
     private MaintenanceState withSharedStateAvailable(boolean available) {
       return new MaintenanceState(
-          enabled, readOnly, message, etaAt, affectedServices, version, updatedAt, available);
+          enabled,
+          readOnly,
+          message,
+          etaAt,
+          startsAt,
+          affectedServices,
+          version,
+          updatedAt,
+          available);
+    }
+
+    public boolean active(Instant now) {
+      return enabled && (EmptyChecks.isNull(startsAt) || !startsAt.isAfter(now));
     }
   }
 }
