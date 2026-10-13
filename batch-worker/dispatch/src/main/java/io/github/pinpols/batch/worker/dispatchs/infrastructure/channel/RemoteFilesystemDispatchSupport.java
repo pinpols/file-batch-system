@@ -524,8 +524,8 @@ final class RemoteFilesystemDispatchSupport {
     try {
       Files.move(
           tempTarget, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-    } catch (AtomicMoveNotSupportedException ignored) {
-      Files.move(tempTarget, target, StandardCopyOption.REPLACE_EXISTING);
+    } catch (AtomicMoveNotSupportedException atomicEx) {
+      throw new IOException("NAS dispatch requires atomic move to publish safely", atomicEx);
     }
   }
 

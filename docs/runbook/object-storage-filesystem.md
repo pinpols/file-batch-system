@@ -63,7 +63,7 @@ mount -t nfs <server>:/export/batch /nas/batch \
 - **`sync`**：写穿透（不用客户端 write-back）。配合 `put` 原子写路径里的 `FileChannel.force(true)` fsync，保证 rename 后断电不丢数据。
 - **`hard`**：网络抖动时阻塞重试而非返回 EIO（避免业务路径误判存储故障）。
 
-**ATOMIC_MOVE 兼容性**：`FilesystemObjectStore.put` 默认走 `Files.move(StandardCopyOption.ATOMIC_MOVE)`。绝大多数 Linux 本地 FS / NFSv4 都支持；若挂的是某些 NFSv3 或异构 FS 抛 `AtomicMoveNotSupportedException`，自动 fallback `REPLACE_EXISTING` 并 warn。**fallback 路径下短暂窗口可能让并发 `list` 看到 0 字节文件**——内网批量场景可接受，公网高并发请用 S3 后端。
+**ATOMIC_MOVE 兼容性**：`FilesystemObjectStore.put/copy` 和 NAS dispatch 必须能在目标目录内执行原子 move。若底层抛 `AtomicMoveNotSupportedException`，操作失败并清理临时文件，不会降级为普通覆盖移动。部署前应在真实挂载上验证 rename；不支持时改用支持原子发布的 S3 后端或调整存储挂载，不能将普通 move 作为等价方案。
 
 ## 5. presign 端点带宽考虑
 

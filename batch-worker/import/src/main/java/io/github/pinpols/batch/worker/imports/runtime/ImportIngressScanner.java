@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.enums.FileAuditOperationType;
+import io.github.pinpols.batch.common.enums.FileIntegrityState;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.enums.OperationResult;
@@ -22,14 +23,18 @@ import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepo
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.imports.config.ImportScannerProperties;
 import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -258,20 +263,17 @@ public class ImportIngressScanner {
         && snapshot.objectName().endsWith(scannerProperties.getBatchManifestSuffix())) {
       return; // 批次清单对象本身不当数据文件登记
     }
-    SidecarManifest manifest = null;
+    String marker = null;
     if (scannerProperties.isRequireDoneFile()) {
-      String marker = resolveDoneMarker(snapshot.objectName());
+      marker = resolveDoneMarker(snapshot.objectName());
       if (!currentObjects.contains(marker)) {
         return;
       }
-      if (isManifestMode()) {
-        manifest = readAndVerifyManifest(marker, snapshot);
-        if (manifest == null) {
-          return; // manifest 缺失 / 解析失败 / size 不符 → 视为未完整,不登记(下轮重试或人工介入)
-        }
+      if (!isStable(snapshot)) {
+        return;
       }
     }
-    if (!isStable(snapshot)) {
+    if (!scannerProperties.isRequireDoneFile() && !isStable(snapshot)) {
       return;
     }
     // 多租户:从 prefix 解析 tenant;解析不到时 fallback 到 worker 自身 tenantId(兼容旧布局)
@@ -291,6 +293,13 @@ public class ImportIngressScanner {
       // ADR-040 Phase2:数据文件先到、清单后到 —— 对已登记成员回填 required_file_set(幂等)
       backfillBatchManifestArrival(snapshot, resolvedTenant, batchManifests);
       return;
+    }
+    SidecarManifest manifest = null;
+    if (scannerProperties.isRequireDoneFile() && isManifestMode()) {
+      manifest = readAndVerifyManifest(marker, snapshot);
+      if (EmptyChecks.isNull(manifest)) {
+        return; // manifest 缺失 / 解析失败 / size 或 checksum 不符 → 不登记,后续扫描可重试
+      }
     }
     String fileName = baseName(snapshot.objectName());
     LocalDate bizDate = resolveScannerBizDate(snapshot.objectName());
@@ -323,6 +332,8 @@ public class ImportIngressScanner {
       metadata.put(
           "manifestChecksumScope",
           Texts.hasText(manifest.checksumScope()) ? manifest.checksumScope() : "RAW_OBJECT");
+      metadata.put("integrityState", FileIntegrityState.VERIFIED.code());
+      metadata.put("integrityVerifiedAt", BatchDateTimeSupport.utcNow().toString());
       if (manifest.recordCount() != null) {
         metadata.put("expectedRecordCount", manifest.recordCount());
       }
@@ -543,7 +554,7 @@ public class ImportIngressScanner {
     return scannerProperties.getDoneFileFormat().isManifest();
   }
 
-  /** 读 .chk JSON manifest:解析 + 免下载 size 校验;失败/不符返回 null。 */
+  /** 读 .chk JSON manifest 并验证原始对象字节;失败/不符返回 null。 */
   private SidecarManifest readAndVerifyManifest(String markerName, ObjectSnapshot snapshot) {
     try (InputStream in = objectStore.get(s3StorageProperties.getBucket(), markerName)) {
       byte[] bytes = in.readNBytes((int) MAX_MANIFEST_BYTES + 1);
@@ -552,12 +563,20 @@ public class ImportIngressScanner {
         return null;
       }
       SidecarManifest manifest = objectMapper.readValue(bytes, SidecarManifest.class);
-      if (manifest.sizeBytes() != null && manifest.sizeBytes() != snapshot.size()) {
+      if (!isSupportedManifest(manifest, snapshot)) {
+        log.warn("sidecar manifest fields invalid, skip register: marker={}", markerName);
+        return null;
+      }
+      if (manifest.sizeBytes() != snapshot.size()) {
         log.warn(
             "manifest size mismatch, skip register: object={}, manifestSize={}, actualSize={}",
             snapshot.objectName(),
             manifest.sizeBytes(),
             snapshot.size());
+        return null;
+      }
+      if (!verifyObjectChecksum(snapshot, manifest.checksumType(), manifest.checksumValue())) {
+        log.warn("manifest checksum mismatch, skip register: object={}", snapshot.objectName());
         return null;
       }
       return manifest;
@@ -568,6 +587,50 @@ public class ImportIngressScanner {
           SwallowedExceptionLogger.summary(ex));
       return null;
     }
+  }
+
+  private boolean isSupportedManifest(SidecarManifest manifest, ObjectSnapshot snapshot) {
+    if (EmptyChecks.isNull(manifest)
+        || !"file-sidecar-manifest-v1".equals(manifest.schemaVersion())
+        || !baseName(snapshot.objectName()).equals(manifest.fileName())
+        || EmptyChecks.isNull(manifest.sizeBytes())
+        || manifest.sizeBytes() < 0
+        || !Texts.hasText(manifest.checksumType())
+        || !Set.of("SHA-256", "SHA256", "MD5")
+            .contains(manifest.checksumType().trim().toUpperCase(Locale.ROOT))
+        || !Texts.hasText(manifest.checksumValue())
+        || !"RAW_OBJECT"
+            .equalsIgnoreCase(
+                Texts.hasText(manifest.checksumScope())
+                    ? manifest.checksumScope().trim()
+                    : "RAW_OBJECT")) {
+      return false;
+    }
+    String checksum = manifest.checksumValue().trim();
+    int expectedHexLength = "MD5".equalsIgnoreCase(manifest.checksumType().trim()) ? 32 : 64;
+    return checksum.matches("(?i)[0-9a-f]{%d}".formatted(expectedHexLength));
+  }
+
+  private boolean verifyObjectChecksum(
+      ObjectSnapshot snapshot, String checksumType, String expectedChecksum)
+      throws NoSuchAlgorithmException, IOException {
+    String algorithm = "MD5".equalsIgnoreCase(checksumType.trim()) ? "MD5" : "SHA-256";
+    MessageDigest digest = MessageDigest.getInstance(algorithm);
+    long bytesRead = 0;
+    byte[] buffer = new byte[64 * 1024];
+    try (InputStream data =
+        objectStore.get(s3StorageProperties.getBucket(), snapshot.objectName())) {
+      int read;
+      while ((read = data.read(buffer)) != -1) {
+        if (read > snapshot.size() - bytesRead) {
+          return false;
+        }
+        bytesRead += read;
+        digest.update(buffer, 0, read);
+      }
+    }
+    return bytesRead == snapshot.size()
+        && HexFormat.of().formatHex(digest.digest()).equalsIgnoreCase(expectedChecksum.trim());
   }
 
   /** 写入到达组 metadata(到达组 SLA + 满足条件判定所需);group/requiredFileSet 已按批次清单或静态配置解析。 */

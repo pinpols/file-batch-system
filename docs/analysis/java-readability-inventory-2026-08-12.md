@@ -7,9 +7,9 @@
 
 | 指标 | 数量 |
 |---|---:|
-| 生产 Java 源文件 | 2467 |
+| 生产 Java 源文件 | 2469 |
 | CGLIB 自注入类 | 0 |
-| `Map<String, Object>` 出现次数 | 2096 |
+| `Map<String, Object>` 出现次数 | 2098 |
 | 含 Map 的源文件 | 453 |
 | public Map 契约候选 | 56 |
 | public Map 契约候选文件 | 36 |
@@ -23,9 +23,9 @@
 
 | 模块 | 生产 Java 文件 |
 |---|---:|
-| `batch-common` | 333 |
+| `batch-common` | 334 |
 | `batch-console-api` | 997 |
-| `batch-orchestrator` | 573 |
+| `batch-orchestrator` | 574 |
 | `batch-trigger` | 76 |
 | `batch-worker` | 387 |
 | `sdk` | 92 |
@@ -47,7 +47,7 @@
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigPackageExcelApplyService.java` | 976 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java` | 975 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultTenantConfigPackageExcelService.java` | 898 |
-| `batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanner.java` | 780 |
+| `batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanner.java` | 843 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/application/ops/infrastructure/DefaultConsoleOrchestratorProxyService.java` | 755 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultRetryGovernanceService.java` | 744 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultCompensationService.java` | 724 |

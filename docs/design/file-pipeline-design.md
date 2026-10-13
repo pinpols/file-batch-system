@@ -272,15 +272,15 @@ BIN / 自定义二进制报文**不作为一期标准能力**，但系统应预�
 | 取值 | 含义 |
 |---|---|
 | `MARKER`（默认） | 空标记，仅守门「文件传完了」，不校验内容 |
-| `MANIFEST` | `.chk` 为 JSON sidecar（协议见 `docs/design/file-integrity-sidecar-manifest-design-2026-06-07.md`，命名 `<全名>.chk`）。登记时**免下载校验 `sizeBytes`**（与对象 stat 比对，不符则不登记），并把 `checksumType`/`checksumValue` 注入 `file_record`、`recordCount` 注入 `metadata.expectedRecordCount` |
+| `MANIFEST` | `.chk` 为 JSON sidecar（协议见 `docs/design/file-integrity-sidecar-manifest-design-2026-06-07.md`，命名 `<全名>.chk`）。登记时校验文件名、协议字段和 `sizeBytes`，流式读取原始对象验证 SHA-256 后才登记 `integrityState=VERIFIED`；同时把 checksum 和 `recordCount` 写入 `file_record` / metadata |
 
-MANIFEST 模式的**完整性校验链**（复用既有阶段，不重复下载）：
+MANIFEST 模式的**完整性校验链**：
 
-1. **size**：scanner 登记时即校验（免下载）。
-2. **checksum**：注入 `file_record` → worker 在 preprocess 阶段校验。无显式 `VERIFY_DIGEST` 时，隐式校验固定针对**入站原始对象字节**；如果要校验解压/解密/转码后的内容，必须在 `preprocess_pipeline` 中把 `VERIFY_DIGEST` 显式放到对应步骤之后。
+1. **size**：scanner 与对象存储快照比对，并在流式摘要读取时再次核对实际字节数。
+2. **checksum**：scanner 在登记前校验 manifest 的 SHA-256（兼容旧 sidecar 的 MD5），并将 `integrityState=VERIFIED` 写入记录；worker preprocess 再校验一次，覆盖登记后对象被替换/损坏的窗口。无显式 `VERIFY_DIGEST` 时，隐式校验固定针对**入站原始对象字节**；如果要校验解压/解密/转码后的内容，必须在 `preprocess_pipeline` 中把 `VERIFY_DIGEST` 显式放到对应步骤之后。
 3. **recordCount**：注入 metadata → validate `row_count_check` 作为期望行数。
 
-> 到达组「成员都正确」由各成员各自的 MANIFEST 校验保证（一文件一 `.chk`）。组判定默认按 `requiredFileSet` 文件名满足条件触发；开 `file-governance.arrival.require-verified=true` 后，**还要求每个成员都已完整性背书**（`checksum_type != NONE`），否则文件名虽齐也保持 `WAITING_ARRIVAL`（reason `ARRIVED_PENDING_VERIFY`），超时仍走 `timeout-action`。
+> 到达组 `require-verified=true` 要求每个成员的 `metadata.integrityState=VERIFIED`，仅有 `checksum_type != NONE` 不构成验证证据。MARKER 模式只表示上游声明传输完成，不提供 checksum 保证。
 
 束作业启动以持久化触发请求和启动响应为准，不把门禁的“无实例”响应当成启动成功：
 

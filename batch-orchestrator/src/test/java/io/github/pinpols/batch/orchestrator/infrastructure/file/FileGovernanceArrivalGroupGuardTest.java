@@ -132,14 +132,15 @@ class FileGovernanceArrivalGroupGuardTest {
   }
 
   @Test
-  @DisplayName("开启校验要求时,成员均具备校验值则正常触发")
+  @DisplayName("开启校验要求时,只有原始对象已校验才正常触发")
   void shouldTriggerWhenRequireVerifiedAndAllMembersHaveChecksum() {
-    // require-verified=true + 成员 checksum_type 非 NONE(有 manifest 背书)→ 正常触发
+    // checksum_type 只是期望值;只有 scanner 已验证实际字节并持久化 VERIFIED 才可触发。
     when(properties.getArrival().isRequireVerified()).thenReturn(true);
     Map<String, Object> file =
         baseFile(5401L, "ready.csv", "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES");
     file.put("required_file_set", "ready.csv");
     file.put("checksum_type", "SHA-256");
+    file.put("metadata_json", "{\"integrityState\":\"VERIFIED\"}");
     when(repository.selectArrivalGovernanceCandidates(anyInt()))
         .thenReturn(candidateViews(List.of(file)));
 

@@ -41,7 +41,7 @@
 | 主题 | 文档 |
 |---|---|
 | API 与安全 | [API abuse protection](./api-abuse-protection.md)、[登录防暴力破解](./console-login-bruteforce-protection.md)、[i18n](./i18n.md) |
-| 文件与存储 | [对象存储抽象](./object-storage-abstraction.md)、[文件完整性 sidecar](./file-integrity-sidecar-manifest-design-2026-06-07.md)、[字段映射推断](./import-export-column-mapping-default-inference-2026-06-20.md) |
+| 文件与存储 | [对象存储抽象](./object-storage-abstraction.md)、[文件完整性 sidecar](./file-integrity-sidecar-manifest-design-2026-06-07.md)、[文件完整性与恢复](./file-integrity-recovery.md)、[字段映射推断](./import-export-column-mapping-default-inference-2026-06-20.md) |
 | Pipeline / Workflow | [边界定义](./pipeline-vs-workflow-definition.md)、[DAG 设计器](./workflow-dag-designer.md)、[动态 fan-out](./workflow-dynamic-fanout.md)、[状态机](./status-state-machines.md) |
 | 幂等与 readiness | [分区幂等](./partition-idempotency-decision.md)、[资产分区 readiness](./asset-partition-readiness.md) |
 | Worker / SDK | [Task SPI](./task-spi-design.md)、[部署模型](./worker-deployment-models.md)、[task type 配置](./sdk-task-type-configuration.md)、[行业对标](./sdk-industry-benchmark.md) |
