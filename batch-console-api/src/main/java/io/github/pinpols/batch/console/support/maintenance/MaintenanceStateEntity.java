@@ -12,6 +12,7 @@ public class MaintenanceStateEntity {
   private boolean readOnly;
   private String message;
   private Instant etaAt;
+  private Instant startsAt;
   private String affectedServicesJson;
   private long version;
   private String updatedBy;

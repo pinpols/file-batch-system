@@ -8,6 +8,7 @@
         <result column="read_only" property="readOnly"/>
         <result column="message" property="message"/>
         <result column="eta_at" property="etaAt"/>
+        <result column="starts_at" property="startsAt"/>
         <result column="affected_services_json" property="affectedServicesJson"/>
         <result column="version" property="version"/>
         <result column="updated_by" property="updatedBy"/>
@@ -15,7 +16,7 @@
     </resultMap>
 
     <select id="selectSingleton" resultMap="maintenanceStateMap">
-        select id, enabled, read_only, message, eta_at,
+        select id, enabled, read_only, message, eta_at, starts_at,
                affected_services::text as affected_services_json,
                version, updated_by, updated_at
           from batch.console_maintenance_state
@@ -24,15 +25,16 @@
 
     <update id="updateIfVersion">
         update batch.console_maintenance_state
-           set enabled = #{enabled},
-               read_only = #{readOnly},
-               message = #{message},
-               eta_at = #{etaAt},
-               affected_services = #{affectedServicesJson}::jsonb,
+           set enabled = #{param.enabled},
+               read_only = #{param.readOnly},
+               message = #{param.message},
+               eta_at = #{param.etaAt},
+               starts_at = #{param.startsAt},
+               affected_services = #{param.affectedServicesJson}::jsonb,
                version = version + 1,
-               updated_by = #{updatedBy},
+               updated_by = #{param.updatedBy},
                updated_at = current_timestamp
          where id = 1
-           and version = #{expectedVersion}
+           and version = #{param.expectedVersion}
     </update>
 </mapper>

@@ -1,6 +1,6 @@
 # 维护 / 降级模式 SOP
 
-> 当前基线：维护状态的后端拦截、公共状态接口、管理员热更新、V215 多副本共享状态、版本 CAS、失联写保护和基础指标已实现；Orchestrator 支持单实例 Launch 消费排空。统一写按钮冻结、503 即时跳转、Console/Orchestrator 多实例 staging 联测仍是完善项。实施方案见 [Console 维护与服务降级完善方案](../plans/maintenance-degradation-hardening-plan-2026-09-29.md)。
+> 当前基线：维护状态的后端拦截、公共状态接口、管理员热更新、V215 多副本共享状态、版本 CAS、失联写保护和基础指标已实现；Console 支持计划开始时间，后端以 `active` 字段和请求拦截器按同一共享状态生效。前端对已审计写操作显式禁用，Axios 拦截器和后端过滤器分别作为兜底；全站每个写按钮的视觉覆盖及 Console/Orchestrator 多实例 staging 联测仍需验收。实施方案见 [Console 维护与服务降级完善方案](../plans/maintenance-degradation-hardening-plan-2026-09-29.md)。
 
 > 适用场景:DB 灰度切换 / 上线滚动期 / 紧急回滚 / 数据修复等需要冻结所有(或仅写)操作的窗口。
 
@@ -11,6 +11,9 @@
 | 关闭 | `false` | — | 正常 |
 | 全冻结 | `true` | `false` | 普通请求返 `503` 并跳转 `/maintenance`；管理员仅可读取诊断信息，不能写普通业务数据；维护控制接口仍放行 |
 | 只读 | `true` | `true` | `GET` 通过(响应带 `X-Maintenance: read-only` header),`POST/PUT/PATCH/DELETE` 返 `503`,前端禁用写按钮 + 顶部红条 |
+| 计划维护 | `true` | 任意 | `startsAt` 到达前仅展示公告和倒计时，业务请求仍按正常模式处理；到时后 `active=true`，按 `readOnly` 转入只读或全冻结 |
+
+`startsAt` 为空表示立即生效。公共状态接口返回服务端计算的 `active`；前端不以本地倒计时代替服务端裁决。计划开始前可取消公告或调整计划；如果提交的开始时间已过，则视为立即生效。
 
 ## 2. 白名单路径(维护期始终放行)
 
@@ -75,9 +78,10 @@ curl -i http://localhost:18080/api/console/jobs
 ## 5. 前端配合
 
 - 当前实现：启动 + 每 30s 调一次 `GET /system/maintenance`,根据 `enabled` 切换:
-  - 顶部全局 banner(`message` + ETA 倒计时)
+  - 顶部全局 banner(`message` + 计划开始倒计时 / ETA 恢复提示)
   - 维护页状态
-- 统一接入全部业务写按钮、503 后即时跳转和安全回跳，属于 [完善方案](../plans/maintenance-degradation-hardening-plan-2026-09-29.md) 的 P0，不把当前局部页面行为误记为已完成。
+- 计划公告在 `startsAt` 到点后最多约 5 秒由前端轮询更新按钮状态；后端从到点起立即拦截写请求，不依赖前端轮询。
+- `useWriteAvailability` / 权限计算负责已接入页面的按钮禁用，Axios 拦截器阻止遗漏页面提交写请求。全站视觉禁用需以实际写 API 到按钮的映射清单验收，不能仅凭请求拦截器宣称所有按钮都已禁用。
 - 移动端 MAppBar 顶部红条,逻辑共享 `useAppStore` 的 `maintenance` 字段
 
 ## 6. 监控

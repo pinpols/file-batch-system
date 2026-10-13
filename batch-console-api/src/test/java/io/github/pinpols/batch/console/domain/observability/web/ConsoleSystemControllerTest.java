@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.domain.observability.web;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -57,9 +56,7 @@ class ConsoleSystemControllerTest {
     properties = new ConsoleMaintenanceProperties();
     mapper = mock(MaintenanceStateMapper.class);
     when(mapper.selectSingleton()).thenAnswer(invocation -> entityFromProperties());
-    when(mapper.updateIfVersion(
-            any(boolean.class), any(boolean.class), any(), any(), any(), any(), anyLong()))
-        .thenReturn(1);
+    when(mapper.updateIfVersion(any())).thenReturn(1);
     stateHolder = new MaintenanceStateHolder(properties, mapper, new ObjectMapper());
     ReflectionTestUtils.invokeMethod(stateHolder, "initFromProperties");
 
@@ -96,6 +93,21 @@ class ConsoleSystemControllerTest {
         .andExpect(jsonPath("$.data.message").value("DB 灰度中"))
         .andExpect(jsonPath("$.data.affectedServices[0]").value("job-schedule"))
         .andExpect(jsonPath("$.data.updatedAt").isNotEmpty());
+  }
+
+  @Test
+  @DisplayName("维护状态:计划开始前返回公告时间且尚未实际生效")
+  void shouldReturnInactiveAnnouncement_whenMaintenanceStartsInFuture() throws Exception {
+    Instant startsAt = Instant.parse("2099-05-20T14:00:00Z");
+    stateHolder.update(
+        new MaintenanceState(true, true, "计划维护", null, startsAt, List.of("job-schedule")));
+
+    mockMvc
+        .perform(get("/api/console/system/maintenance"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.enabled").value(true))
+        .andExpect(jsonPath("$.data.active").value(false))
+        .andExpect(jsonPath("$.data.startsAt").value(startsAt.toString()));
   }
 
   @Test

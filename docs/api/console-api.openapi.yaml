@@ -438,12 +438,13 @@ paths:
       operationId: updateAdminMaintenanceState
       description: |
         ROLE_ADMIN only. Replaces the runtime maintenance state in
-        `MaintenanceStateHolder` (AtomicReference). Takes effect immediately on next
-        request — no restart needed. Whitelisted by `MaintenanceModeFilter` so admins
+        `MaintenanceStateHolder` (AtomicReference). With `startsAt` omitted, takes effect
+        immediately on the next request; a future `startsAt` announces maintenance and
+        activates it at that timestamp without a restart. Whitelisted by `MaintenanceModeFilter` so admins
         can disable maintenance even during a maintenance window.
 
         Typical SOP:
-        - Pre-rollout: PUT `{enabled:true, readOnly:false, message:..., etaAt:...,
+        - Pre-rollout: PUT `{enabled:true, readOnly:false, startsAt:..., message:..., etaAt:...,
           affectedServices:["job-schedule"]}`
         - Post-rollout: PUT `{enabled:false}`
         The state is stored in a database singleton and updated with a version CAS, so all
@@ -11118,7 +11119,7 @@ components:
               $ref: '#/components/schemas/CronPreview'
     MaintenanceStatus:
       type: object
-      required: [enabled, readOnly, version, updatedAt]
+      required: [enabled, readOnly, active, version, updatedAt]
       properties:
         enabled:
           type: boolean
@@ -11126,6 +11127,14 @@ components:
         readOnly:
           type: boolean
           description: When true, GET requests pass through but POST/PUT/PATCH/DELETE return 503
+        active:
+          type: boolean
+          description: Server-computed effective maintenance state; false while startsAt is in the future
+        startsAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Planned start timestamp; null means immediate activation when enabled
         message:
           type: string
           nullable: true
@@ -11187,6 +11196,10 @@ components:
         etaAt:
           type: string
           description: ISO-8601 estimated recovery timestamp
+        startsAt:
+          type: string
+          format: date-time
+          description: Planned start timestamp; omit for immediate activation
         affectedServices:
           type: array
           maxItems: 50

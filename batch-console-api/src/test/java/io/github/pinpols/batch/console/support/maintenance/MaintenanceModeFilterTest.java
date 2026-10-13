@@ -2,13 +2,13 @@ package io.github.pinpols.batch.console.support.maintenance;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.console.config.ConsoleMaintenanceProperties;
 import io.github.pinpols.batch.console.domain.ops.mapper.MaintenanceStateMapper;
+import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
 import jakarta.servlet.FilterChain;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -40,9 +40,7 @@ class MaintenanceModeFilterTest {
     properties = new ConsoleMaintenanceProperties();
     mapper = mock(MaintenanceStateMapper.class);
     when(mapper.selectSingleton()).thenAnswer(invocation -> entityFromProperties());
-    when(mapper.updateIfVersion(
-            any(boolean.class), any(boolean.class), any(), any(), any(), any(), anyLong()))
-        .thenReturn(1);
+    when(mapper.updateIfVersion(any())).thenReturn(1);
     stateHolder = new MaintenanceStateHolder(properties, mapper, new ObjectMapper());
     stateHolder.initFromProperties();
     metrics = mock(MaintenanceStateMetrics.class);
@@ -68,6 +66,42 @@ class MaintenanceModeFilterTest {
     filter.doFilterInternal(get("/api/console/jobs"), response, chain);
     assertThat(chainInvoked).isTrue();
     assertThat(response.getStatus()).isEqualTo(200);
+  }
+
+  @Test
+  @DisplayName("计划维护开始前公告生效但业务写请求仍放行")
+  void shouldAllowWritesBeforeScheduledStart() throws Exception {
+    stateHolder.update(new MaintenanceState(
+        true,
+        true,
+        "planned maintenance",
+        null,
+        java.time.Instant.now().plusSeconds(3600),
+        List.of()));
+
+    filter.doFilterInternal(
+        new MockHttpServletRequest("POST", "/api/console/jobs"), response, chain);
+
+    assertThat(chainInvoked).isTrue();
+    assertThat(response.getStatus()).isEqualTo(200);
+  }
+
+  @Test
+  @DisplayName("计划开始时间到达后维护拦截立即生效")
+  void shouldBlockAfterScheduledStart() throws Exception {
+    stateHolder.update(new MaintenanceState(
+        true,
+        true,
+        "maintenance active",
+        null,
+        java.time.Instant.now().minusSeconds(1),
+        List.of()));
+
+    filter.doFilterInternal(
+        new MockHttpServletRequest("POST", "/api/console/jobs"), response, chain);
+
+    assertThat(chainInvoked).isFalse();
+    assertThat(response.getStatus()).isEqualTo(503);
   }
 
   @Test

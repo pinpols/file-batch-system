@@ -27,6 +27,9 @@ public class UpdateMaintenanceRequest {
   /** 预计恢复时间(ISO-8601)。 */
   private Instant etaAt;
 
+  /** 计划开始时间;空表示保存后立即生效。 */
+  private Instant startsAt;
+
   /** 受影响子系统 code 列表(<= 50 项,每项 <= 64 字符)。 */
   @Size(max = 50)
   private List<@Size(max = 64) String> affectedServices;

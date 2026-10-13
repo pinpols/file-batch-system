@@ -11,6 +11,7 @@ import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolde
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import jakarta.validation.Valid;
+import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -59,6 +60,7 @@ public class ConsoleAdminMaintenanceController {
         request.isReadOnly(),
         request.getMessage(),
         request.getEtaAt(),
+        request.getStartsAt(),
         affected);
     MaintenanceState applied =
         stateHolder.update(next, requestMetadataResolver.current().operatorId());
@@ -66,13 +68,16 @@ public class ConsoleAdminMaintenanceController {
   }
 
   private static MaintenanceStatusResponse toResponse(MaintenanceState state) {
-    return new MaintenanceStatusResponse(
+    MaintenanceStatusResponse response = new MaintenanceStatusResponse(
         state.enabled(),
         state.readOnly(),
         state.message(),
         state.etaAt() != null ? state.etaAt().toString() : null,
+        EmptyChecks.isNull(state.startsAt()) ? null : state.startsAt().toString(),
+        state.active(Instant.now()),
         state.affectedServices(),
         state.version(),
         EmptyChecks.isNull(state.updatedAt()) ? null : state.updatedAt().toString());
+    return response;
   }
 }

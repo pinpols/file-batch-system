@@ -28,7 +28,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 /**
  * 维护模式拦截器。
  *
- * <p>{@link MaintenanceStateHolder} 控制运行时状态:enabled=true 时除白名单和管理员只读诊断外整站 503; readOnly=true 时 GET
+ * <p>{@link MaintenanceStateHolder} 控制运行时状态:active=true 时除白名单和管理员只读诊断外整站 503; readOnly=true 时 GET
  * 放行、写方法 503。管理员旁路不得绕过普通业务写请求的冻结。
  *
  * <p><b>ROLE_ADMIN 旁路</b>:维护期间仅允许已认证管理员读取非写接口以便诊断；普通业务写操作仍冻结。响应头加
@@ -73,7 +73,7 @@ public class MaintenanceModeFilter extends OncePerRequestFilter {
       writeMaintenanceResponse(response, state, "maintenance state unavailable; writes blocked");
       return;
     }
-    if (!state.enabled()) {
+    if (!state.active(Instant.now())) {
       chain.doFilter(request, response);
       return;
     }
