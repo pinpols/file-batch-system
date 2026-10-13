@@ -1,6 +1,7 @@
 # 变更记录（规范与架构权威条款变化）
 
 ### 2026-10-13
+- **前后端联合版本约定**：正式版与 RC 在两个仓库使用相同 SemVer；普通 PR 只累计 `[Unreleased]`，不逐 PR 递增版本。联合 Release PR 按发布周期最高变更级别决定版本，固定前后端 SHA 与镜像 digest，禁止移动或复用已发布 tag，并明确 RC 冻结和失败补齐边界。
 - **CI 门禁控制与输出统一**：共享执行器新增稳定分组及 `enforce`、`report`、`ignore` 三态，明确区分条件跳过、执行后仅报告和完全不执行；单门禁、分组、全局与总开关按固定优先级解析。状态行统一增加 `group`、`mode`，报告/忽略项继续要求 owner、基线和升级期限登记；移除各检查脚本散落的 `BATCH_CI_SKIP_*` 旁路，并补正反例自测与 CI Runbook。
 - **Mapper 状态写入与分类治理**：全仓 MyBatis `UPDATE SET` 状态写入改为 Java 具名语义方法提供目标值和允许来源集合，SQL 保持参数化 CAS；新增 `MapperStatusWriteConventionTest` 阻止固定状态赋值回退。共享实例/工作流生命周期集合使用枚举派生值做精确 Mapper 对照，SLA、正式成功、dry-run 隔离和恢复候选等专项业务口径继续保留在 SQL 并由专项测试维护；未改变既有迁移、并发或统计语义。
 - **MyBatis Mapper 参数治理口径**：在 `coding-conventions.md` §9.3 固化混合参数规则：简单 CRUD 保留少量具名参数，宽参数/重复查询条件/固定字段写入优先使用 Query 或 Param；固定状态转换保留具名语义，动态 Map 仅用于真实扩展边界。基线与漂移总账同步引用；历史 Mapper 按相邻改动分批治理。
