@@ -8,6 +8,7 @@ cd "$ROOT"
 source "$ROOT/scripts/lib/python-runtime.sh"
 source "$ROOT/scripts/lib/gate-result.sh"
 batch_require_python
+export BATCH_GATE_GROUP="${BATCH_GATE_GROUP:-local-pre-commit}"
 
 staged_files=()
 while IFS= read -r -d '' file; do

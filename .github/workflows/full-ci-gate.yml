@@ -47,6 +47,7 @@ jobs:
     timeout-minutes: 15
     env:
       BATCH_GATE_COLLECT: '1'
+      BATCH_GATE_GROUP: full-static
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

@@ -8,7 +8,9 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 
 长期治理原则见 [CI 与测试质量治理](../standards/ci-test-quality-governance.md)；本文只说明具体工作流与操作入口。
 前后端 schedule 的保留依据、代码变更检测要求和季度复核清单见[CI 定时治理](./ci-schedule-governance.md)。
-全部 CI 守卫的分类目录、判定正反例以及快速失败/失败汇总边界见[CI 脚本说明](../../scripts/ci/README.md#完整守护清单)。该目录的 80 个可执行守卫由脚本治理检查登记；新增或调整门禁时须同步更新守卫清单、对应工作流路由和本 runbook。
+全部 CI 守卫的分类目录、判定正反例以及快速失败/失败汇总边界见[CI 脚本说明](../../scripts/ci/README.md#完整守护清单)。该目录的 83 个可执行守卫由脚本治理检查登记；新增或调整门禁时须同步更新守卫清单、对应工作流路由和本 runbook。
+
+门禁统一通过 `scripts/lib/gate-result.sh` / `scripts/ci/run-gate.sh` 执行。`group` 表示稳定职责分组，`mode` 只有 `enforce`、`report`、`ignore`：阻断模式执行并传播失败，报告模式执行但只记录真实退出码，忽略模式明确不执行；范围路由未命中则是 `SKIP / mode=conditional`。模式控制使用 `BATCH_GATE_MODE`、`BATCH_GATE_GROUP_MODES`、`BATCH_GATE_MODES` 或单次调用的 `--mode`，优先级和命令示例见[CI 脚本说明](../../scripts/ci/README.md#分组开关和模式)。required checks 必须保持 `enforce`；仓库 workflow 中任何报告/忽略项都要以 `soft-gate-id` 登记到 `docs/governance/soft-gates.json`，不得用散落的 `BATCH_CI_SKIP_*`、`|| true` 或裸 `exit 0` 吞掉结果。
 
 项目有两条主要代码门禁流程（PR Gate、main Full CI Gate），另有补充验证与失败处理自动化。补充流程不替代代码合并门禁：
 
@@ -231,8 +233,7 @@ SDK 五语言契约矩阵。
 | 文件系统安全扫描 | Trivy `sbom` + `config` | PR Gate（供应链或 PR/Full Gate 安全工作流变更）；Full Gate | 漏洞扫描读取当前提交的 CycloneDX BOM 并阻断 CRITICAL/HIGH；IaC 配置扫描使用 `trivy config`，同样阻断 CRITICAL/HIGH。漏洞豁免读取带治理元数据的 `.trivyignore`，配置误报仅允许在 `.trivyignore.yaml` 中按规则和路径精确豁免 |
 | K8s manifest 安全 | Checkov | full-ci-gate | Helm chart 安全基线 |
 
-> **提醒项升阻断策略**：移除对应步骤的 `continue-on-error: true`（workflow）或脚本中的 `|| true`（run-full-regression.sh），
-> 阈值稳定后逐步收紧，不建议一次全部升级。
+> **提醒项升阻断策略**：优先把统一执行模式从 `report` 改为 `enforce`，并同步删除 `soft-gates.json` 中的临时登记；工具或 job 级适配仍使用 `continue-on-error` 时，也必须先改为真实失败退出再移除适配。阈值稳定后逐步收紧，不建议一次全部升级。
 
 ---
 
@@ -474,7 +475,7 @@ bash scripts/ci/run-flaky-quarantine.sh
 - PR / Full Gate 的 Java shard 使用 `check-diff-coverage.py` 校验本次变更的可执行行覆盖率，最低 80%；存量 Bundle 25% 和核心类 80% 棘轮继续保留。
 - 每周及手动 Full Gate 使用 `run-critical-mutation.sh` 对 `FileStateMachine` 和 `DefaultLifecycleEventMapper` 运行 PIT，阈值为变异杀死率 70%、覆盖率 80%。范围保持小而稳定，不做全仓变异测试。
 - `quality-trend` job 汇总当前 Surefire/Failsafe XML，并读取最近 30 次 `full-ci-gate` 的成功率和耗时；JSON/Markdown 产物保留 90 天。报告包含测试总量、失败/跳过、首次失败重跑、E2E 成功、失败类型、禁用测试和软门禁数量。
-- 软门禁统一登记在 `docs/governance/soft-gates.json`；每项必须有 owner、当前基线、升级期限和目标。CodeQL 上传的有限重试属于传输容错，不计为软门禁。
+- 报告/忽略模式统一登记在 `docs/governance/soft-gates.json`；每项必须有分组、模式、控制方式、owner、当前基线、升级期限和目标。CodeQL 上传的有限重试属于传输容错，不计为软门禁。
 
 ---
 

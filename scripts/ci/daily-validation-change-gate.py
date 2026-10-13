@@ -23,6 +23,8 @@ def output(key: str, value: str) -> None:
 
 
 def report_gate_result(status: str, code: str, detail: str = "0") -> None:
+    gate_environment = os.environ.copy()
+    gate_environment.setdefault("BATCH_GATE_GROUP", "scheduled-validation")
     subprocess.run(
         [
             "bash",
@@ -36,6 +38,7 @@ def report_gate_result(status: str, code: str, detail: str = "0") -> None:
             detail,
         ],
         check=True,
+        env=gate_environment,
     )
 
 
@@ -147,7 +150,8 @@ if __name__ == "__main__":
         except (OSError, subprocess.CalledProcessError):
             print(
                 "❌ 不通过 | code=DAILY_SIM_STRICT_CHANGE_DETECTION | "
-                "gate=每日仿真与严格验证变更检测 | exit_code=2",
+                "gate=每日仿真与严格验证变更检测 | group=scheduled-validation | "
+                "mode=enforce | exit_code=2 | action=fix_and_retry",
                 file=sys.stderr,
             )
         print(f"检测错误详情：{exc}", file=sys.stderr)

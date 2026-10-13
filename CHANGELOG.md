@@ -62,6 +62,7 @@
 
 ### Added
 
+- 统一 CI 门禁的职责分组、开关和执行模式：`enforce` 真实阻断、`report` 执行后仅报告、`ignore` 明确不执行；固定状态行新增 `group` / `mode`，报告与忽略例外继续受 owner、期限和升级目标治理。
 - 补齐平台告警闭环：新增核心控制面 target 消失检测、Alertmanager 停机/通知失败/配置重载失败告警，以及 Console 实际渠道投递失败计数；Docker 与 Helm 统一服务 `job` 标签并增加规则正反例验证。Prometheus / Alertmanager 自身故障仍需集群外独立监控，真实通知渠道送达需按目标环境验收。
 - 新增作业级耗时过久、启动过晚和完成过晚三类旁路告警；完整配置包导入与导出统一包含必需的 `job_monitoring_policy` sheet，每个作业一行集中维护阈值和告警等级；不兼容缺少该 sheet 的旧工作簿，并提供 Console 独立维护页。
 - Console 增加默认关闭的单试点 OIDC 企业登录：使用 Authorization Code + PKCE、Redis 一次性 state、显式外部身份绑定和本地 RBAC；登录成功复用平台 HttpOnly Cookie。IdP discovery 延迟到首次 OIDC 请求，服务启动与密码登录不依赖 IdP 可用性；Security 链过滤器不再被 Servlet 容器重复注册。同步提供条件展示的 Console 登录入口、配置/Secret 注入、迁移及隔离 IdP 协议集成测试；真实 IdP 联测仍待试点配置。

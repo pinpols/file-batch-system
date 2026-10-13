@@ -99,6 +99,7 @@ jobs:
     timeout-minutes: 30
     env:
       BATCH_GATE_COLLECT: '1'
+      BATCH_GATE_GROUP: policy
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -621,6 +622,7 @@ jobs:
     timeout-minutes: 20
     env:
       BATCH_GATE_COLLECT: '1'
+      BATCH_GATE_GROUP: supply-chain
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -708,6 +710,7 @@ jobs:
     timeout-minutes: 20
     env:
       BATCH_GATE_COLLECT: '1'
+      BATCH_GATE_GROUP: quality
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

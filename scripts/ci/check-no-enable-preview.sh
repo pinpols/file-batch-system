@@ -16,14 +16,10 @@
 #
 # 用法:
 #   ./scripts/ci/check-no-enable-preview.sh                 # 扫全仓构建/运行配置
-#   BATCH_CI_SKIP_PREVIEW_GATE=1 ./scripts/ci/check-...sh   # escape hatch(仅 dev 本地)
+#   BATCH_GATE_MODES=PR_NO_ENABLE_PREVIEW=ignore bash scripts/ci/run-gate.sh \
+#     PR_NO_ENABLE_PREVIEW "禁止生产启用 JDK preview" -- ./scripts/ci/check-no-enable-preview.sh
 
 set -euo pipefail
-
-if [[ "${BATCH_CI_SKIP_PREVIEW_GATE:-0}" == "1" ]]; then
-  echo "[preview-gate] BATCH_CI_SKIP_PREVIEW_GATE=1 — 跳过(仅 dev 本地 debug 应使用)"
-  exit 0
-fi
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
@@ -86,7 +82,7 @@ if [[ ${#VIOLATIONS[@]} -gt 0 ]]; then
   echo "[preview-gate] 处理建议:"
   echo "  - preview/incubator(Structured Concurrency / Stable Values / Primitive Patterns / Vector API 等)"
   echo "    禁止进入生产 profile;只能在 load-tests(benchmark)模块做隔离实验。"
-  echo "  - 若确需本地临时跑 preview spike,设 BATCH_CI_SKIP_PREVIEW_GATE=1(不要提交带 --enable-preview 的配置)。"
+  echo "  - 若确需本地临时跑 preview spike,通过 run-gate 的 ignore 模式显式忽略(不要提交带 --enable-preview 的配置)。"
   echo "  - 背景见 docs/analysis/jdk-feature-usage-analysis-*.md「不建议现在使用」小节。"
   exit 1
 fi

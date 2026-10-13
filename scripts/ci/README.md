@@ -24,7 +24,7 @@
 | SDK 配置 | `check-sdk-config-env-parity.py`（Java/Python env 工厂和五语言 live transport 前缀）、`check-sdk-runtime-alignment.py`（仓库 Node 入口、SDK/前端声明与 CI 版本矩阵） |
 | SDK 双栈 | `run-sdk-happy-eyeballs-gate.sh`（五语言真实 loopback socket 单栈/双栈/黑洞矩阵） |
 | 文档与变更 | `check-docs-structure.py`、`check-doc-timestamp-policy.py`、`check-code-doc-references.py`、`check-terminology-doc-sync.py`、`check-changelog-sync.py`、`check-loc-snapshot.py`、`check-readiness-doc-sync.py`、`check-slo-sli-catalog.py`、`check-comment-language.py` |
-| 脚本与仓库 | `check-shell-scripts.sh`、`check-shell-linux-portability.py`、`check-script-governance.py`、`check-destructive-ops-governance.py`（删除类命令增量基线）、`check-governance-baseline-expansion.py`（治理基线扩张的限期审批）、`check-repository-hygiene.py`、`check-env-file-shell-safety.py`、`check-hardcoded-runtime-config.sh`（含 BE 验收脚本的平台服务端口来源）、`check-utf8-encoding.py`（全仓 UTF-8 字节扫描）、`check-testcontainers-reuse-label.py`（Testcontainers 复用容器清理谓词）、`check-github-action-pinning.py`（外部 Action 固定 40 位 SHA并保留版本注释）、`check-soft-gate-governance.py`（软门禁责任与期限） |
+| 脚本与仓库 | `check-shell-scripts.sh`、`check-shell-linux-portability.py`、`check-script-governance.py`、`check-destructive-ops-governance.py`（删除类命令增量基线）、`check-governance-baseline-expansion.py`（治理基线扩张的限期审批）、`check-repository-hygiene.py`、`check-env-file-shell-safety.py`、`check-hardcoded-runtime-config.sh`（含 BE 验收脚本的平台服务端口来源）、`check-utf8-encoding.py`（全仓 UTF-8 字节扫描）、`check-testcontainers-reuse-label.py`（Testcontainers 复用容器清理谓词）、`check-github-action-pinning.py`（外部 Action 固定 40 位 SHA并保留版本注释）、`check-soft-gate-governance.py`（报告/忽略模式责任与期限） |
 | 配置与部署 | `check-config-defaults-sync.py`、`check-config-governance.py`、`check-direct-config-key-access.py`、`check-env-variable-governance.py`、`check-feature-switch-registry.py`、`check-five-worker-parity.py`、`check-keda-autoscaling.py`、`check-helm-env-sync.py`、`check-infrastructure-utf8.py`（Compose/Sim/Dockerfile/Helm/Testcontainers locale 与数据库编码）、`check-production-capacity-governance.py`、`check-production-overlay-safety.py`、`check-version-alignment.sh`、`validate-kafka-topics.sh`（全仓 topic 字面量 ↔ `BatchTopics.java`：env 模板 / `batch-defaults.yml` / helm / init 脚本 / load-tests） |
 | 数据库与 SQL | `check-biz-table-tenant-rls.py`、`check-db-comment-coverage.sh`、`check-db-scripts-safety.sh`、`check-migration-safety.sh`、`check-mybatis-generated-key-columns.py`、`check-new-table-doc-coverage.py`、`check-no-positional-insert-select-star.py`、`check-postgres-client-fallback.sh`、`check-schema-governance-assets.py`、`check-sql-config-boundaries.py`、`check-sql-config-boundaries.sh`、`validate-flyway-schema.sh` |
 | API 与兼容 | `check-console-openapi-paths.py`、`check-openapi-breaking.sh` |
@@ -87,16 +87,35 @@ bash scripts/ci/check-version-alignment.sh
 Git hook、GitHub workflow 和独立事实来源检查统一输出最终状态行：
 
 ```text
-✅ 通过 | code=TEST_CONFIG_SOURCES | gate=测试配置事实来源 | exit_code=0 | action=none
-❌ 不通过 | code=TEST_CONFIG_SOURCES | gate=测试配置事实来源 | exit_code=1 | action=fix_and_retry
+✅ 通过 | code=TEST_CONFIG_SOURCES | gate=测试配置事实来源 | group=policy | mode=enforce | exit_code=0 | action=none
+❌ 不通过 | code=TEST_CONFIG_SOURCES | gate=测试配置事实来源 | group=policy | mode=enforce | exit_code=1 | action=fix_and_retry
+⚠️ 报告 | code=STRICT_VERIFY_LIVE | gate=在线 strict 验证 | group=acceptance | mode=report | exit_code=1 | action=review_report
+⏭️ 忽略 | code=LOCAL_EXPERIMENT | gate=本地实验检查 | group=quality | mode=ignore | exit_code=0 | action=none | reason=统一控制配置未执行该门禁
 ```
 
-字段顺序固定为状态、`code`、`gate`、`exit_code`、`action`；跳过结果仅在固定字段后追加 `reason`。共享 shell 门禁由 `scripts/lib/gate-result.sh` / `scripts/ci/run-gate.sh` 生成，Python/Node 独立检查器也必须遵循同一格式。具体诊断仍由检查脚本输出。workflow 中不要直接调用门禁脚本；多项检查要逐项调用 `gate_run`，避免一项失败掩盖同一步其余门禁的独立状态。扫描器报告、测试清单和运行进度不是门禁状态行，不强行改成该格式。
+字段顺序固定为状态、`code`、`gate`、`group`、`mode`、`exit_code`、`action`；存在补充说明时只在固定字段后追加 `reason`。共享 shell 门禁由 `scripts/lib/gate-result.sh` / `scripts/ci/run-gate.sh` 生成，Python/Node 独立检查器也必须遵循同一格式。具体诊断仍由检查脚本输出。workflow 中不要直接调用门禁脚本；多项检查要逐项调用 `gate_run`，避免一项失败掩盖同一步其余门禁的独立状态。扫描器报告、测试清单和运行进度不是门禁状态行，不强行改成该格式。
 
-PR 与 Full Gate 的静态检查 job 设置 `BATCH_GATE_COLLECT=1`。业务门禁失败时
+### 分组、开关和模式
+
+统一执行模式只有三种：`enforce` 执行并按真实退出码阻断；`report` 执行并保留真实退出码到状态行，但执行器返回成功；`ignore` 不执行命令并明确输出忽略状态。条件未命中产生的 `SKIP` 是路由结果，`mode=conditional`，不等同于人工忽略或检查通过。
+
+控制优先级从高到低是总开关关闭、单门禁覆盖、分组覆盖、全局模式、默认 `enforce`：
+
+```bash
+bash scripts/ci/run-gate.sh --group quality --mode report LOCAL_PMD "PMD" -- ./mvnw pmd:check
+BATCH_GATE_GROUP=quality BATCH_GATE_MODE=report gate_run LOCAL_PMD "PMD" ./mvnw pmd:check
+BATCH_GATE_GROUP_MODES='quality=report,docs=ignore' bash scripts/local/pre-commit-checks.sh
+BATCH_GATE_MODES='PRE_COMMIT_SPOTLESS=enforce,PRE_COMMIT_JAVA_READABILITY=ignore' bash scripts/local/pre-commit-checks.sh
+BATCH_GATE_ENABLED=0 bash scripts/ci/run-gate.sh --group quality LOCAL_PMD "PMD" -- ./mvnw pmd:check
+```
+
+`BATCH_GATE_ENABLED=0` 等价于全局 `ignore`，用于明确关闭当前执行上下文；CI 不得把 required 门禁配置为 `report` 或 `ignore`。仓库 workflow 中的报告/忽略模式必须紧邻 `soft-gate-id` 登记，并在 `docs/governance/soft-gates.json` 记录 `group`、`mode`、控制方式、owner、基线、升级期限和目标。`continue-on-error` 或工具原生非阻断能力只作为无法由统一执行器包裹的适配方式，仍受同一登记守卫约束。各检查脚本不再自行读取 `BATCH_CI_SKIP_*`。
+
+分组用于状态汇总和控制，不改变工作流职责：PR 静态检查使用 `policy`、`supply-chain`、`quality`，Full Gate 静态检查使用 `full-static`；其他入口按 `contract`、`test`、`build`、`release`、`acceptance`、`operations` 等稳定职责命名。不得为了绕过门禁临时改组。
+
+PR、Full Gate 和本地 hook 的静态检查设置 `BATCH_GATE_COLLECT=1`。`enforce` 模式的业务门禁失败时
 `gate_run` 会记录错误并继续执行后续检查，末尾由 `gate_assert_collected` 汇总全部失败后
-统一返回非零；checkout、运行时安装等前置环境步骤仍保持立即失败。本地钩子未设置该变量，
-继续采用首错即停。
+统一返回非零；`report` 与 `ignore` 不进入失败集合。checkout、运行时安装等前置环境步骤仍保持立即失败。
 
 本地 pre-commit 对三类确定性派生产物自动同步并暂存：代码量快照、POM 对应的 SBOM、
 `@ConfigurationProperties` 对应的配置治理目录。自动同步前会检查权威源不存在未暂存或
