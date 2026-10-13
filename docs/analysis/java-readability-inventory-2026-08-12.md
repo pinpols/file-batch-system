@@ -7,9 +7,9 @@
 
 | 指标 | 数量 |
 |---|---:|
-| 生产 Java 源文件 | 2455 |
+| 生产 Java 源文件 | 2466 |
 | CGLIB 自注入类 | 0 |
-| `Map<String, Object>` 出现次数 | 2103 |
+| `Map<String, Object>` 出现次数 | 2096 |
 | 含 Map 的源文件 | 453 |
 | public Map 契约候选 | 56 |
 | public Map 契约候选文件 | 36 |
@@ -24,8 +24,8 @@
 | 模块 | 生产 Java 文件 |
 |---|---:|
 | `batch-common` | 333 |
-| `batch-console-api` | 993 |
-| `batch-orchestrator` | 565 |
+| `batch-console-api` | 996 |
+| `batch-orchestrator` | 573 |
 | `batch-trigger` | 76 |
 | `batch-worker` | 387 |
 | `sdk` | 92 |
@@ -117,9 +117,9 @@
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/BatchDayReplaySessionEntity.java` | 1 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/BusinessCalendarEntity.java` | 1 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/JobDefinitionEntity.java` | 1 |
-| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/JobMonitoringAlertCandidate.java` | 1 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/ResultVersionEntity.java` | 1 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/WorkerRegistryEntity.java` | 3 |
+| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/view/JobMonitoringAlertCandidate.java` | 1 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/mq/OutboxPollScheduler.java` | 1 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/mapper/BatchDayReplaySessionMapper.java` | 1 |
 | `batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/runtime/AtomicWorkerLoop.java` | 1 |

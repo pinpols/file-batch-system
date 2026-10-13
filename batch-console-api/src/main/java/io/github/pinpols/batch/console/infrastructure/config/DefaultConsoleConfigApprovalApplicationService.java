@@ -16,6 +16,8 @@ import io.github.pinpols.batch.console.application.contract.request.config.Confi
 import io.github.pinpols.batch.console.domain.entity.ConfigReleaseEntity;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleConfigApprovalDetailResponse;
 import io.github.pinpols.batch.console.domain.ops.mapper.ConfigApprovalMapper;
+import io.github.pinpols.batch.console.domain.ops.param.ConfigApprovalInsertParam;
+import io.github.pinpols.batch.console.domain.ops.param.ConfigApprovalTransitionParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.mapper.ConfigChangeLogMapper;
 import io.github.pinpols.batch.console.mapper.ConfigReleaseMapper;
@@ -88,19 +90,11 @@ public class DefaultConsoleConfigApprovalApplicationService
     if (latest != null && STATUS_PENDING.equals(String.valueOf(latest.get(KEY_APPROVAL_STATUS)))) {
       throw BizException.of(ResultCode.CONFLICT, "error.config_approval.already_pending");
     }
-    configApprovalMapper.insert(ConsoleMapSupport.mapOf(
-        KEY_TENANT_ID,
-        tenantId,
-        KEY_RELEASE_ID,
-        releaseId,
-        KEY_APPROVAL_STATUS,
-        STATUS_PENDING,
-        "requestedBy",
-        currentOperator(),
-        "reviewComment",
-        ConsoleTextSanitizer.safeInput(request.getReason(), 1024),
-        "expiredAt",
-        null));
+    String submittedBy = currentOperator();
+    String reviewComment = ConsoleTextSanitizer.safeInput(request.getReason(), 1024);
+    ConfigApprovalInsertParam insertParam =
+        new ConfigApprovalInsertParam(tenantId, releaseId, submittedBy, reviewComment, null);
+    configApprovalMapper.insert(insertParam);
     transitionRelease(tenantId, release, PENDING_APPROVAL, null, currentOperator());
     logChange(
         tenantId,
@@ -150,15 +144,11 @@ public class DefaultConsoleConfigApprovalApplicationService
     if (!PENDING_APPROVAL.equals(release.getConfigStatus())) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.config_approval.release_not_pending");
     }
-    int rows = configApprovalMapper.approve(ConsoleMapSupport.mapOf(
-        KEY_TENANT_ID,
-        tenantId,
-        "id",
-        approvalId,
-        "reviewedBy",
-        currentOperator(),
-        "reviewComment",
-        ConsoleTextSanitizer.safeInput(request.getReason(), 1024)));
+    String reviewedBy = currentOperator();
+    String reviewComment = ConsoleTextSanitizer.safeInput(request.getReason(), 1024);
+    ConfigApprovalTransitionParam transitionParam =
+        ConfigApprovalTransitionParam.approved(tenantId, approvalId, reviewedBy, reviewComment);
+    int rows = configApprovalMapper.transition(transitionParam);
     if (rows == 0) {
       throw BizException.of(ResultCode.CONFLICT, "error.config_approval.already_processed");
     }
@@ -193,15 +183,11 @@ public class DefaultConsoleConfigApprovalApplicationService
     acquireReleaseLock(release);
     release = loadRelease(tenantId, releaseId);
     validateLatestVersion(tenantId, release);
-    int rows = configApprovalMapper.reject(ConsoleMapSupport.mapOf(
-        KEY_TENANT_ID,
-        tenantId,
-        "id",
-        approvalId,
-        "reviewedBy",
-        currentOperator(),
-        "reviewComment",
-        ConsoleTextSanitizer.safeInput(request.getReason(), 1024)));
+    String reviewedBy = currentOperator();
+    String reviewComment = ConsoleTextSanitizer.safeInput(request.getReason(), 1024);
+    ConfigApprovalTransitionParam transitionParam =
+        ConfigApprovalTransitionParam.rejected(tenantId, approvalId, reviewedBy, reviewComment);
+    int rows = configApprovalMapper.transition(transitionParam);
     if (rows == 0) {
       throw BizException.of(ResultCode.CONFLICT, "error.config_approval.already_processed");
     }

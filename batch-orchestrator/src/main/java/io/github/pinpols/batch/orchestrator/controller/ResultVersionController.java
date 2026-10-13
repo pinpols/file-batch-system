@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionPromoteService;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionQueryService;
+import io.github.pinpols.batch.orchestrator.controller.response.ResultVersionResponse;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -37,35 +39,47 @@ public class ResultVersionController {
   private final ResultVersionPromoteService promoteService;
 
   @GetMapping
-  public CommonResponse<List<ResultVersionEntity>> list(
+  public CommonResponse<List<ResultVersionResponse>> list(
       @RequestParam("tenantId") String tenantId,
       @RequestParam("businessKey") String businessKey,
       @RequestParam(value = "limit", required = false, defaultValue = "50") int limit) {
-    return CommonResponse.success(queryService.listVersions(tenantId, businessKey, limit));
+    List<ResultVersionEntity> versions = queryService.listVersions(tenantId, businessKey, limit);
+    List<ResultVersionResponse> responses =
+        versions.stream().map(ResultVersionResponse::from).toList();
+    return CommonResponse.success(responses);
   }
 
   @GetMapping("/effective")
-  public CommonResponse<ResultVersionEntity> effective(
+  public CommonResponse<ResultVersionResponse> effective(
       @RequestParam("tenantId") String tenantId, @RequestParam("businessKey") String businessKey) {
-    return CommonResponse.success(
-        queryService.findEffective(tenantId, businessKey).orElse(null));
+    ResultVersionEntity entity =
+        queryService.findEffective(tenantId, businessKey).orElse(null);
+    ResultVersionResponse response =
+        EmptyChecks.isNull(entity) ? null : ResultVersionResponse.from(entity);
+    return CommonResponse.success(response);
   }
 
   @GetMapping("/{id}")
-  public CommonResponse<ResultVersionEntity> detail(
+  public CommonResponse<ResultVersionResponse> detail(
       @PathVariable("id") Long id, @RequestParam("tenantId") String tenantId) {
-    return CommonResponse.success(queryService.getByIdOrThrow(tenantId, id));
+    ResultVersionEntity entity = queryService.getByIdOrThrow(tenantId, id);
+    ResultVersionResponse response = ResultVersionResponse.from(entity);
+    return CommonResponse.success(response);
   }
 
   @PostMapping("/{id}/promote")
-  public CommonResponse<ResultVersionEntity> promote(
+  public CommonResponse<ResultVersionResponse> promote(
       @PathVariable("id") Long id, @RequestParam("tenantId") String tenantId) {
-    return CommonResponse.success(promoteService.promote(tenantId, id));
+    ResultVersionEntity entity = promoteService.promote(tenantId, id);
+    ResultVersionResponse response = ResultVersionResponse.from(entity);
+    return CommonResponse.success(response);
   }
 
   @PostMapping("/{id}/reject")
-  public CommonResponse<ResultVersionEntity> reject(
+  public CommonResponse<ResultVersionResponse> reject(
       @PathVariable("id") Long id, @RequestParam("tenantId") String tenantId) {
-    return CommonResponse.success(promoteService.rejectPending(tenantId, id));
+    ResultVersionEntity entity = promoteService.rejectPending(tenantId, id);
+    ResultVersionResponse response = ResultVersionResponse.from(entity);
+    return CommonResponse.success(response);
   }
 }

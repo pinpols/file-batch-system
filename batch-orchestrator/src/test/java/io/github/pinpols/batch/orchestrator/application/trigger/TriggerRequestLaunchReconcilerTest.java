@@ -9,7 +9,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.TriggerRequestLaunchReconcileRow;
+import io.github.pinpols.batch.orchestrator.domain.query.TriggerRequestLaunchReconcileRow;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;

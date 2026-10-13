@@ -15,6 +15,7 @@ import io.github.pinpols.batch.console.domain.file.application.contract.query.Fi
 import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FilePipelineStepRunMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
+import io.github.pinpols.batch.console.domain.file.query.FilePipelineStepRunQuery;
 import io.github.pinpols.batch.console.domain.file.support.ConsoleFileQueryMappers;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import java.util.List;
@@ -71,7 +72,7 @@ class ConsoleFileConfigurationProjectionTest {
   @Test
   @DisplayName("文件流水线步骤摘要在响应中递归遮罩凭据字段")
   void shouldMaskCredentialsInPipelineStepSummaries() {
-    when(stepRunMapper.selectByQuery(anyString(), any(), any(), any(), any(), any(), any()))
+    when(stepRunMapper.selectByQuery(any(FilePipelineStepRunQuery.class)))
         .thenReturn(List.of(Map.of(
             "id", 1L,
             "pipeline_instance_id", 12L,
@@ -79,8 +80,7 @@ class ConsoleFileConfigurationProjectionTest {
             "stage_code", "LOAD",
             "input_summary", "{\"source\":\"upload.csv\",\"auth\":{\"clientSecret\":\"raw\"}}",
             "output_summary", "{\"rows\":5,\"auth\":{\"password\":\"raw\"}}")));
-    when(stepRunMapper.countByQuery(anyString(), any(), any(), any(), any(), any()))
-        .thenReturn(1L);
+    when(stepRunMapper.countByQuery(any(FilePipelineStepRunQuery.class))).thenReturn(1L);
 
     FilePipelineStepQueryRequest request = new FilePipelineStepQueryRequest();
     request.setTenantId("tenant-a");

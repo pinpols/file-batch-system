@@ -7,7 +7,8 @@ import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRa
 import io.github.pinpols.batch.orchestrator.application.service.governance.WorkerDrainGovernanceService;
 import io.github.pinpols.batch.orchestrator.controller.request.WorkerDrainRequest;
 import io.github.pinpols.batch.orchestrator.controller.request.WorkerTenantRequest;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
+import io.github.pinpols.batch.orchestrator.controller.response.JobTaskResponse;
+import io.github.pinpols.batch.orchestrator.controller.response.WorkerRegistryResponse;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.orchestrator.service.WorkerRegistryServerService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -39,7 +40,7 @@ public class WorkerController {
   private final TenantActionRateLimiter tenantActionRateLimiter;
 
   @PostMapping("/register")
-  public WorkerRegistryEntity register(
+  public WorkerRegistryResponse register(
       @RequestBody WorkerHeartbeatDto request, HttpServletRequest httpRequest) {
     WorkerHeartbeatDto normalized = normalize(request, httpRequest);
     // 缺口①:per-tenant worker 注册限流(opt-in,默认 max=0/disabled 直接放行)。
@@ -49,7 +50,7 @@ public class WorkerController {
       throw new ResponseStatusException(
           HttpStatus.TOO_MANY_REQUESTS, "worker register rate limit exceeded");
     }
-    return workerRegistryService.register(normalized);
+    return WorkerRegistryResponse.from(workerRegistryService.register(normalized));
   }
 
   // SDK Phase 2 §2.3:心跳回包从 WorkerRegistryEntity 改为下发 platform directive。
@@ -73,57 +74,66 @@ public class WorkerController {
   }
 
   @PostMapping("/{workerCode}/status")
-  public WorkerRegistryEntity updateStatus(
+  public WorkerRegistryResponse updateStatus(
       @PathVariable String workerCode,
       @RequestBody WorkerHeartbeatDto request,
       HttpServletRequest httpRequest) {
-    return workerRegistryService.updateStatus(
+    WorkerRegistryEntity worker = workerRegistryService.updateStatus(
         resolveTenant(request, httpRequest), workerCode, request.status());
+    return WorkerRegistryResponse.from(worker);
   }
 
   @PostMapping("/{workerCode}/drain")
-  public WorkerRegistryEntity drain(
+  public WorkerRegistryResponse drain(
       @PathVariable String workerCode,
       @RequestBody WorkerDrainRequest request,
       HttpServletRequest httpRequest) {
     String tenantId = InternalRequestTenantGuard.resolveTenant(
         httpRequest, request == null ? null : request.tenantId());
-    return workerDrainGovernanceService.startDrain(
+    WorkerRegistryEntity worker = workerDrainGovernanceService.startDrain(
         tenantId, workerCode, request == null ? null : request.timeoutSeconds());
+    return WorkerRegistryResponse.from(worker);
   }
 
   @PostMapping("/{workerCode}/force-offline")
-  public WorkerRegistryEntity forceOffline(
+  public WorkerRegistryResponse forceOffline(
       @PathVariable String workerCode,
       @RequestBody WorkerTenantRequest request,
       HttpServletRequest httpRequest) {
-    return workerDrainGovernanceService.forceOffline(
-        resolveTenant(request, httpRequest), workerCode);
+    WorkerRegistryEntity worker =
+        workerDrainGovernanceService.forceOffline(resolveTenant(request, httpRequest), workerCode);
+    return WorkerRegistryResponse.from(worker);
   }
 
   @PostMapping("/{workerCode}/takeover")
-  public WorkerRegistryEntity takeover(
+  public WorkerRegistryResponse takeover(
       @PathVariable String workerCode,
       @RequestBody WorkerTenantRequest request,
       HttpServletRequest httpRequest) {
-    return workerDrainGovernanceService.takeover(resolveTenant(request, httpRequest), workerCode);
+    WorkerRegistryEntity worker =
+        workerDrainGovernanceService.takeover(resolveTenant(request, httpRequest), workerCode);
+    return WorkerRegistryResponse.from(worker);
   }
 
   @PostMapping("/{workerCode}/warmup")
-  public WorkerRegistryEntity warmup(
+  public WorkerRegistryResponse warmup(
       @PathVariable String workerCode,
       @RequestBody WorkerTenantRequest request,
       HttpServletRequest httpRequest) {
-    return workerDrainGovernanceService.warmup(resolveTenant(request, httpRequest), workerCode);
+    WorkerRegistryEntity worker =
+        workerDrainGovernanceService.warmup(resolveTenant(request, httpRequest), workerCode);
+    return WorkerRegistryResponse.from(worker);
   }
 
   @GetMapping("/{workerCode}/claimed-tasks")
-  public List<JobTaskEntity> claimedTasks(
+  public List<JobTaskResponse> claimedTasks(
       @PathVariable String workerCode,
       @RequestParam String tenantId,
       HttpServletRequest httpRequest) {
-    return workerDrainGovernanceService.listClaimedTasks(
-        InternalRequestTenantGuard.resolveTenant(httpRequest, tenantId), workerCode);
+    List<io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity> tasks =
+        workerDrainGovernanceService.listClaimedTasks(
+            InternalRequestTenantGuard.resolveTenant(httpRequest, tenantId), workerCode);
+    return tasks.stream().map(JobTaskResponse::from).toList();
   }
 
   private static WorkerHeartbeatDto normalize(

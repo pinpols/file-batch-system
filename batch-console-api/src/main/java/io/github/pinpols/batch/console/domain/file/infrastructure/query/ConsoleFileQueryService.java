@@ -42,6 +42,7 @@ import io.github.pinpols.batch.console.domain.file.query.FileArrivalGroupQuery;
 import io.github.pinpols.batch.console.domain.file.query.FileDispatchRecordQuery;
 import io.github.pinpols.batch.console.domain.file.query.FileErrorRecordQuery;
 import io.github.pinpols.batch.console.domain.file.query.FilePipelineQuery;
+import io.github.pinpols.batch.console.domain.file.query.FilePipelineStepRunQuery;
 import io.github.pinpols.batch.console.domain.file.query.FileRecordQuery;
 import io.github.pinpols.batch.console.domain.file.query.FileTemplateConfigQuery;
 import io.github.pinpols.batch.console.domain.file.support.ConsoleFileQueryMappers;
@@ -142,21 +143,17 @@ public class ConsoleFileQueryService {
       FilePipelineStepQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
     String tenantId = resolveTenant(tenantGuard, request.getTenantId());
-    List<Map<String, Object>> rows = fileMappers.filePipelineStepRunMapper.selectByQuery(
-        tenantId,
-        request.getKeyword(),
-        request.getPipelineInstanceId(),
-        request.getStepCode(),
-        request.getStageCode(),
-        request.getStepStatus(),
-        pageRequest);
-    long total = fileMappers.filePipelineStepRunMapper.countByQuery(
-        tenantId,
-        request.getKeyword(),
-        request.getPipelineInstanceId(),
-        request.getStepCode(),
-        request.getStageCode(),
-        request.getStepStatus());
+    FilePipelineStepRunQuery query = FilePipelineStepRunQuery.builder()
+        .tenantId(tenantId)
+        .keyword(request.getKeyword())
+        .pipelineInstanceId(request.getPipelineInstanceId())
+        .stepCode(request.getStepCode())
+        .stageCode(request.getStageCode())
+        .stepStatus(request.getStepStatus())
+        .pageRequest(pageRequest)
+        .build();
+    List<Map<String, Object>> rows = fileMappers.filePipelineStepRunMapper.selectByQuery(query);
+    long total = fileMappers.filePipelineStepRunMapper.countByQuery(query.withoutPage());
     return page(pageRequest, total, rows, this::toFilePipelineStepResponse);
   }
 

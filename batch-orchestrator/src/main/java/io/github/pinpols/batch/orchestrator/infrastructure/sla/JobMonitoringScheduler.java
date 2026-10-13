@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.service.governance.JobMonitoringAlertEmissionService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.JobMonitoringAlertEmissionService.Violation;
 import io.github.pinpols.batch.orchestrator.config.SlaGovernanceProperties;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobMonitoringAlertCandidate;
+import io.github.pinpols.batch.orchestrator.domain.view.JobMonitoringAlertCandidate;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.JobMonitoringMapper;
 import io.micrometer.core.instrument.MeterRegistry;

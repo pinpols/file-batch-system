@@ -45,20 +45,21 @@
             tenant_id, release_id, approval_status, requested_by, review_comment, expired_at,
             created_at, updated_at
         ) VALUES (
-            #{tenantId}, #{releaseId}, #{approvalStatus}, #{requestedBy}, #{reviewComment}, #{expiredAt},
+            #{param.tenantId}, #{param.releaseId}, #{param.approvalStatus}, #{param.requestedBy},
+            #{param.reviewComment}, #{param.expiredAt},
             CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
         )
     </insert>
 
     <update id="transition">
         UPDATE batch.config_approval
-           SET approval_status = #{targetStatus},
-               reviewed_by = #{reviewedBy},
+           SET approval_status = #{param.targetStatus},
+               reviewed_by = #{param.reviewedBy},
                reviewed_at = CURRENT_TIMESTAMP,
-               review_comment = #{reviewComment},
+               review_comment = #{param.reviewComment},
                updated_at = CURRENT_TIMESTAMP
-         WHERE tenant_id = #{tenantId}
-           AND id = #{id}
-           AND approval_status = #{expectedStatus}
+         WHERE tenant_id = #{param.tenantId}
+           AND id = #{param.id}
+           AND approval_status = #{param.expectedStatus}
     </update>
 </mapper>

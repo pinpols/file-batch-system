@@ -11,9 +11,9 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
 import io.github.pinpols.batch.orchestrator.controller.response.SchedulerSnapshotResponse;
-import io.github.pinpols.batch.orchestrator.domain.entity.QueuePartitionBacklogStats;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResourceQueueEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.QueuePartitionBacklogStats;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ResourceQueueMapper;

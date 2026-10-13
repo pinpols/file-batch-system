@@ -32,7 +32,7 @@
     </select>
 
     <resultMap id="TriggerLaunchPersistenceContextMap"
-               type="io.github.pinpols.batch.orchestrator.domain.entity.TriggerLaunchPersistenceContext">
+               type="io.github.pinpols.batch.orchestrator.domain.context.TriggerLaunchPersistenceContext">
         <association property="triggerRequest"
                      resultMap="TriggerRequestResultMap"
                      columnPrefix="tr_"/>
@@ -172,7 +172,7 @@
          JOIN 使用 job_instance.trigger_request_id 这个真实来源键，避免 RERUN 或同一业务 dedup_key 的
          多次请求跨账期关联到错误实例；V196 已为该外键补索引。
          olderThan 过滤掉刚 ack 的请求(避免与 consumer writeBack 抢同一行,留 5min 静默期)。 -->
-    <resultMap id="LaunchReconcileRowMap" type="io.github.pinpols.batch.orchestrator.domain.entity.TriggerRequestLaunchReconcileRow">
+    <resultMap id="LaunchReconcileRowMap" type="io.github.pinpols.batch.orchestrator.domain.query.TriggerRequestLaunchReconcileRow">
         <result column="tenant_id" property="tenantId"/>
         <result column="request_id" property="requestId"/>
         <result column="job_instance_id" property="jobInstanceId"/>

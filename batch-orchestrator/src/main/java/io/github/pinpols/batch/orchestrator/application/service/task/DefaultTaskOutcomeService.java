@@ -15,11 +15,11 @@ import io.github.pinpols.batch.orchestrator.application.service.governance.Retry
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeDispatchService;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskExecutionResult;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
+import io.github.pinpols.batch.orchestrator.domain.context.TaskOutcomePersistenceContext;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.TaskOutcomePersistenceContext;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.FinishTaskParam;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkPartitionStatusParam;

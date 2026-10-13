@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.metrics;
 
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
-import io.github.pinpols.batch.orchestrator.domain.entity.QueuePartitionBacklogStats;
+import io.github.pinpols.batch.orchestrator.domain.view.QueuePartitionBacklogStats;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.micrometer.core.instrument.MeterRegistry;

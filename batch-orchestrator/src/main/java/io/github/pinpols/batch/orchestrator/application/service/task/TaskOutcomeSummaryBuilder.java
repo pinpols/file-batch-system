@@ -8,7 +8,7 @@ import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.PartitionStatusRef;
+import io.github.pinpols.batch.orchestrator.domain.query.PartitionStatusRef;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;

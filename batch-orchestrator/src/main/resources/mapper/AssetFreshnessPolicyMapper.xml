@@ -4,7 +4,7 @@
 <mapper namespace="io.github.pinpols.batch.orchestrator.mapper.AssetFreshnessPolicyMapper">
 
     <resultMap id="AssetFreshnessPolicyResultMap"
-               type="io.github.pinpols.batch.orchestrator.domain.entity.AssetFreshnessPolicyRecord">
+               type="io.github.pinpols.batch.orchestrator.domain.entity.AssetFreshnessPolicyEntity">
         <constructor>
             <idArg column="id"                     javaType="java.lang.Long"/>
             <arg   column="tenant_id"              javaType="java.lang.String"/>

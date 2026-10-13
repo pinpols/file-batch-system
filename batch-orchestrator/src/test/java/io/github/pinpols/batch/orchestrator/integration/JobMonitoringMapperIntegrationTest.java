@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobMonitoringAlertCandidate;
+import io.github.pinpols.batch.orchestrator.domain.view.JobMonitoringAlertCandidate;
 import io.github.pinpols.batch.orchestrator.mapper.JobMonitoringMapper;
 import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.sql.Timestamp;

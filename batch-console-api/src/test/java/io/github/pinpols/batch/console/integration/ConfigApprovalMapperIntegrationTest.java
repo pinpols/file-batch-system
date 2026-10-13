@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.domain.ops.mapper.ConfigApprovalMapper;
+import io.github.pinpols.batch.console.domain.ops.param.ConfigApprovalTransitionParam;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
@@ -56,15 +57,8 @@ class ConfigApprovalMapperIntegrationTest extends AbstractIntegrationTest {
         .containsEntry("releaseId", releaseId)
         .containsEntry("approvalStatus", "PENDING");
 
-    int updated = configApprovalMapper.approve(Map.of(
-        "tenantId",
-        tenantId,
-        "id",
-        approvalId,
-        "reviewedBy",
-        "reviewer",
-        "reviewComment",
-        "approved"));
+    int updated = configApprovalMapper.transition(
+        ConfigApprovalTransitionParam.approved(tenantId, approvalId, "reviewer", "approved"));
     assertThat(updated).isEqualTo(1);
   }
 }
