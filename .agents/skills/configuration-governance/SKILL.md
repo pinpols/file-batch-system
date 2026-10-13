@@ -23,6 +23,8 @@ description: 审查或修改配置类、环境变量、功能开关、Helm/Compo
 
 - 配置类或开关变化后，优先运行仓库已有同步检查：`check-config-defaults-sync.py`、`check-feature-switch-registry.py`、`check-helm-env-sync.py`、`check-env-variable-governance.py`、`check-production-overlay-safety.py`、`check-config-governance.py`。
 - 检查脚本的输出格式要统一，便于 CI 和本地预检解析。
+- 脚本访问 Console、Orchestrator 等平台服务时，从 `scripts/lib/env-common.sh` 读取公共地址；不要在观测或验收脚本另设同一服务的默认地址。`check-hardcoded-runtime-config.sh` 负责拦截已登记的平台地址边界，检查增减时同步 `docs/runbook/ci.md` 与守卫矩阵。
+- 运行配置门禁结果通过统一 runner 输出，按 CI 所在策略组归类；脚本诊断与门禁最终状态行分开维护。
 - 环境变量新增后确认本地、容器、Helm、CI 和文档是否全部覆盖；只在单一环境可用的变量要注明边界。
 - 不把压测临时参数混入默认生产配置；需要实验值时使用独立 benchmark profile 或脚本参数。
 
