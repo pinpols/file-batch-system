@@ -31,6 +31,7 @@ ENUM_SOURCES = {
         "ScheduleType",
         "StepInstanceStatus",
         "TaskStatus",
+        "TriggerMode",
         "TriggerType",
         "TriggerRequestStatus",
         "WorkflowEdgeType",
@@ -52,6 +53,7 @@ DOCUMENTS = (
 REQUIRED_MARKERS = {
     "docs/dict/glossary.md": {
         "ScheduleType",
+        "TriggerMode",
         "TriggerType",
         "WorkflowEdgeType",
         "WorkflowJoinMode",

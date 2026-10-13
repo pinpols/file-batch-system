@@ -88,6 +88,19 @@
         <if test="scheduleType != null and scheduleType != ''">
             and jd.schedule_type = #{scheduleType}
         </if>
+        <if test="triggerMode != null and triggerMode != ''">
+            and jd.trigger_mode = #{triggerMode}
+        </if>
+        <if test="hasUpstreamDependency != null">
+            <choose>
+                <when test="hasUpstreamDependency">
+                    and nullif(btrim(jd.depends_on_job_code), '') is not null
+                </when>
+                <otherwise>
+                    and nullif(btrim(jd.depends_on_job_code), '') is null
+                </otherwise>
+            </choose>
+        </if>
         <if test="monitoringCategory == 'DEPENDENCY'">
             and nullif(btrim(jd.depends_on_job_code), '') is not null
         </if>
@@ -283,6 +296,7 @@
         update batch.job_definition
         set job_name = #{jobName},
             depends_on_job_code = #{dependsOnJobCode},
+            trigger_mode = coalesce(#{triggerMode}, trigger_mode),
             queue_code = #{queueCode},
             worker_group = #{workerGroup},
             schedule_expr = #{scheduleExpr},

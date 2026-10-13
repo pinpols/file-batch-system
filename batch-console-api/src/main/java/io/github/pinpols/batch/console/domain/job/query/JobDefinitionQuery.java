@@ -14,6 +14,8 @@ public record JobDefinitionQuery(
     String workerGroup,
     String queueCode,
     String scheduleType,
+    String triggerMode,
+    Boolean hasUpstreamDependency,
     String monitoringCategory,
     Boolean enabled,
     PageRequest pageRequest) {
