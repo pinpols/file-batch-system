@@ -1,16 +1,16 @@
 # 批量类型分类法与系统缺口分析
 
-> 评估日期：2026-04-27。
+> 评估日期：2026-10-14（触发与依赖分类复核；其余章节仍以原评估日期为准）。
 >
-> 本文目的：把"批量"这件事拆成业务/执行/触发三个正交维度，把系统现状映射到这套模型上，识别**模型层缺口（已经在用但没有一等公民化）**、**能力层缺口（业务上需要但还没做）**、**暗债（多个并行枚举 / 固化阶段 / 配置注入分裂）**，并给出"做 / 不做 / 待评估"三档建议。
+> 本文目的：把批量业务和执行方式分类，并进一步拆清调度、触发入口、实例来源、事件来源和依赖关系；映射系统现状，识别**模型层缺口（已经在用但没有一等公民化）**、**能力层缺口（业务上需要但还没做）**、**暗债（多个并行枚举 / 固化阶段 / 配置注入分裂）**，并给出"做 / 不做 / 待评估"三档建议。
 >
 > 与 [`capability-assessment.md`](./capability-assessment.md) 的分工：能力评估是"现在能做什么"；本文是"模型上还应该长什么"。
 >
 > 与 [`api-gap-analysis.md`](./api-gap-analysis.md) 的分工：API 缺口分析是接口层；本文是领域模型层。
 
-## 1. 三维分类法
+## 1. 分类法与启动关系
 
-工业上"批量"没有统一定义。落到本平台，最有用的拆法是 3 个正交维度。
+工业上"批量"没有统一定义。落到本平台，业务类型与执行模式描述作业本身；启动链再拆成时间计划、定义级入口、实例级来源、事件来源和依赖关系，字段之间不互相替代。
 
 ### 1.1 BatchType（业务类型）—— 数据从哪来 / 到哪去
 
@@ -32,26 +32,36 @@
 
 注：分片（按 ID range / hash / 时间分区）是**正交**于 ExecutionMode 的能力，不是同一档枚举值。
 
-### 1.3 TriggerType（触发方式）—— 谁让这次跑起来
+### 1.3 调度与触发分类——配置如何启动、一次运行从哪里来
 
-| 触发器 | 来源 | 配套能力 |
-|---|---|---|
-| **SCHEDULED** | cron / 固定频率 | misfire / catch-up |
-| **EVENT** | 文件到达 / 上游事件 / 领域事件 | 幂等去重 |
-| **MANUAL / API** | 人触发 / 外部接口触发 | 审批 / 限流 |
-| **DEPENDENCY** | 上游 workflow 完成 → 下游启动 | DAG join 等待 |
-| **CATCH_UP / RERUN** | 补数 / 重跑 | 节流 / 漂移检测 |
+“调度”和“触发”分开表达，不能把事件、依赖条件塞进 `ScheduleType`：
 
-### 1.4 三个维度交叉示例
-
-| BatchType | ExecutionMode | TriggerType | 业务实例 |
+| 维度 | 字段 / 枚举 | 表达内容 | 当前取值 / 语义 |
 |---|---|---|---|
-| IMPORT | FULL | SCHEDULED | 每日凌晨从远端 SFTP 拉客户全量名单入库 |
-| IMPORT | INCREMENTAL | EVENT | Kafka 流入交易明细，按 offset 增量入库 |
-| EXPORT | INCREMENTAL | SCHEDULED | 每日 T+1 增量导出昨日新增风险告警 |
-| PROCESS | FULL | DEPENDENCY | 等导入完成后跑完整日报聚合 |
-| DISPATCH | — | EVENT | 文件入库成功后立即下发 MQ 通知下游 |
-| SYNC | INCREMENTAL（CDC） | EVENT（binlog）| 把订单库的状态实时同步到分析库 |
+| 时间调度 | `scheduleType` / `ScheduleType` | 是否以及如何按时间计划 fire | `CRON`、`FIXED_RATE`、`MANUAL`（无自动时间计划）；不代表事件来源 |
+| 定义级触发入口 | `triggerMode` / `TriggerMode` | 作业定义声明的入口分类 | `SCHEDULED`、`API`、`MANUAL`、`EVENT`、`MIXED`；当前用于定义/Quartz 上下文传递，不应被解释为已实现完整入口授权策略 |
+| 实例级触发来源 | `triggerType` / `TriggerType` | 某次 trigger request / job instance 的实际来源 | `API`、`MANUAL`、`EVENT`、`CATCH_UP`、`SCHEDULED`、`RERUN` |
+| 事件子类型 | 尚无定义级字段 | 事件由什么外部信号产生 | 文件到达已有 producer，但定义尚无 `eventSourceType` / `eventType`；泛化领域事件订阅未由枚举值自动代表 |
+
+`DEPENDENCY` 不是现有 `TriggerType`。作业上游依赖是在计划触发前做 readiness gate；workflow 节点依赖则在已启动的 workflow DAG 中由 edge 表达，两者都不应伪装成时间调度类型。
+
+### 1.4 依赖分类——等待什么就绪、满足什么条件
+
+| 维度 | 当前模型 | 当前语义 | 尚未建模 |
+|---|---|---|---|
+| 作业定义上游 | `dependsOnJobCode` | 单个上游 job，同一租户、同一 `bizDate` 的上游成功就绪后才允许下游 scheduled fire | 多上游、跨日对齐配置、SUCCESS / FAILURE / ALWAYS 等可选条件 |
+| 文件到达 | 文件到达组治理 + `TriggerType.EVENT` producer | 文件组满足到达/验证条件后触发；这是事件生产链，不是 `dependsOnJobCode` 的一种值 | 作业定义级文件组引用、事件过滤与来源可见性 |
+| Workflow edge | `WorkflowEdgeType` | workflow 内节点间 `SUCCESS` / `FAILURE` / `CONDITION` / `ALWAYS` 边关系 | 不应复用为 job definition 上游依赖条件，除非另行定义跨域契约 |
+
+### 1.5 类型交叉示例
+
+| JobType | ExecutionMode | ScheduleType / TriggerMode | 单次 TriggerType | 业务实例 |
+|---|---|---|---|---|
+| IMPORT | FULL | CRON / SCHEDULED | SCHEDULED | 每日按计划导入客户全量名单 |
+| IMPORT | INCREMENTAL | 事件入口 / EVENT | EVENT | 文件到达组完整并通过验证后启动导入 |
+| EXPORT | INCREMENTAL | CRON / SCHEDULED | SCHEDULED | 每日 T+1 增量导出昨日风险告警 |
+| PROCESS | FULL | CRON + 上游 readiness gate | SCHEDULED | 等同业务日导入作业成功后，再运行日报聚合 |
+| DISPATCH | FULL | 外部事件 / EVENT | EVENT | 文件处理完成后启动下游分发 |
 
 ---
 
@@ -86,18 +96,18 @@
 - **没有"全量 / 增量"这层抽象**。增量目前靠业务在 SQL 模板里手写 `where update_time > :last_high_water_mark`，框架层完全无知 —— 没办法统一管理水位、补数窗口、乱序回退。
 - 分片（ShardStrategy）和"按数据范围切分一次执行的内容"是**两件事**，但当前模型里两个一起决定行为。
 
-### 2.3 TriggerType ↔ `TriggerType`
+### 2.3 ScheduleType / TriggerMode / TriggerType / Dependency
 
-| 维度 | 系统现状 | 实现位置 |
-|---|---|---|
-| SCHEDULED | ✅ `TriggerType.SCHEDULED` + Quartz JDBC JobStore | `batch-trigger/.../infrastructure/QuartzLaunchJob.java` |
-| EVENT | ✅ `TriggerType.EVENT` | `TriggerController` |
-| MANUAL / API | ✅ `TriggerType.MANUAL` / `TriggerType.API` | `TriggerController` |
-| **DEPENDENCY**（跨 workflow） | ⚠️ workflow 内部节点 dependency 通过 `workflow_edge` 表达；**跨 workflow 的依赖触发**没有专门的 trigger 通道 | — |
-| CATCH_UP | ✅ + 漂移检测（drift detection）+ 审批（MANUAL_APPROVAL / AUTO / NONE 三策略） | `QuartzLaunchJob` |
-| RERUN | ✅（V62 加） | DDL: `db/migration/V62__rerun_semantics_and_batch_day_cas.sql` |
+| 维度 | 系统现状 | 实现位置 | 评价 |
+|---|---|---|---|
+| 时间调度 | ✅ `CRON`、`FIXED_RATE`、`MANUAL` | `ScheduleType`、job definition | `MANUAL` 是兼容调度配置值，不能用来筛选事件来源 |
+| 定义级触发入口 | ✅ `SCHEDULED`、`API`、`MANUAL`、`EVENT`、`MIXED` | `TriggerMode`、job definition / Quartz `JobDataMap` | 字典与字段已存在；Console 创建/编辑/列表及 OpenAPI 的响应字段此前没有完全贯通；该字段目前不是完整的授权策略 |
+| 实例级来源 | ✅ `API`、`MANUAL`、`EVENT`、`CATCH_UP`、`SCHEDULED`、`RERUN` | `TriggerType`、trigger request / `job_instance` | 记录实际来源；不是作业定义可选项 |
+| 文件事件来源 | ⚠️ 文件到达 producer 会用 `EVENT` 启动；import scanner 的 object-arrival 通知只提前扫描登记，不直接 launch | `BundleArrivalLauncher`、`docs/runbook/event-driven-arrival.md` | 有实际事件链，但定义与实例没有通用 event source/type 分类字段；禁止把“收到对象通知”等同于“作业已触发” |
+| 作业上游依赖 | ✅ 单个 `dependsOnJobCode` + 同 `bizDate` readiness gate | `ADR-043`、`UpstreamReadinessChecker` | 已支持就绪闸；没有定义级 `dependencyType` 或可选依赖条件，不代表任意 DAG dependency |
+| Workflow edge | ✅ `SUCCESS` / `FAILURE` / `CONDITION` / `ALWAYS` | `WorkflowEdgeType`、`workflow_edge` | 只用于已启动 workflow 内的节点关系，和 job definition readiness gate 分开 |
 
-> 现有 6 类（API / MANUAL / EVENT / CATCH_UP / SCHEDULED / RERUN）比 PD 提的 3 类更细，**该维度已经超过最初模型**。唯一缺口是**跨 workflow 的 DEPENDENCY 触发**。
+后续若扩展依赖，应先决定是否支持多上游、对齐日、等待窗口、上游成功条件和文件组引用，再引入显式 dependency object；不能只新增一个含义不清的 `dependencyType` 字符串。事件扩展则应独立定义 `eventSourceType`、事件标识与幂等/过滤契约，不扩充 `ScheduleType`。
 
 ### 2.4 维度交叉支持矩阵（当前能跑通的组合）
 

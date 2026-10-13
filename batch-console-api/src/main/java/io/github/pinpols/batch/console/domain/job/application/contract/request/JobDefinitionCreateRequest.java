@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.job.application.contract.request;
 
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.JobType;
+import io.github.pinpols.batch.common.enums.TriggerMode;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.validation.ValidResourceCode;
 import io.github.pinpols.batch.common.validation.ValidTenantId;
@@ -19,6 +20,7 @@ import org.springframework.scheduling.support.CronExpression;
 @Data
 public class JobDefinitionCreateRequest {
   private static final Set<String> SUPPORTED_JOB_TYPES = DictEnum.codes(JobType.class);
+  private static final Set<String> SUPPORTED_TRIGGER_MODES = DictEnum.codes(TriggerMode.class);
 
   @ValidTenantId
   private String tenantId;
@@ -147,6 +149,11 @@ public class JobDefinitionCreateRequest {
   @AssertTrue(message = "jobType must be a supported JobType")
   public boolean isJobTypeSupported() {
     return EmptyChecks.isBlank(jobType) || SUPPORTED_JOB_TYPES.contains(jobType);
+  }
+
+  @AssertTrue(message = "triggerMode must be a supported TriggerMode")
+  public boolean isTriggerModeSupported() {
+    return triggerMode == null || SUPPORTED_TRIGGER_MODES.contains(triggerMode);
   }
 
   @AssertTrue(message = "monitoring thresholds must match the job schedule type and dependency")

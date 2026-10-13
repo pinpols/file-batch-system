@@ -13,6 +13,7 @@ public class JobDefinitionMaintenanceUpdateParam {
   private String queueCode;
   private String workerGroup;
   private String scheduleExpr;
+  private String triggerMode;
   private String calendarCode;
   private String windowCode;
   private String retryPolicy;

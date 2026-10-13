@@ -63,6 +63,8 @@ public class ConsoleJobQueryService {
         request.getWorkerGroup(),
         request.getQueueCode(),
         request.getScheduleType(),
+        request.getTriggerMode(),
+        request.getHasUpstreamDependency(),
         request.getMonitoringCategory(),
         Boolean.TRUE.equals(request.getIncludeDisabled()) ? null : request.getEnabled(),
         pageRequest);

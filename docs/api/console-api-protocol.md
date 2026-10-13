@@ -643,9 +643,9 @@ Deployment note:
 
   | Key | 说明 |
   |---|---|
-  | `triggerType` | 触发类型 |
-  | `scheduleType` | 调度类型（CRON / FIXED_RATE / MANUAL）|
-  | `triggerMode` | 触发模式（SCHEDULED / API / MANUAL / EVENT / MIXED）|
+  | `triggerType` | 单次实例的实际触发来源（API / MANUAL / EVENT / CATCH_UP / SCHEDULED / RERUN）|
+  | `scheduleType` | 作业定义的时间调度方式（CRON / FIXED_RATE / MANUAL）；`MANUAL` 表示无自动时间计划，不表示事件来源 |
+  | `triggerMode` | 作业定义声明的触发入口分类（SCHEDULED / API / MANUAL / EVENT / MIXED）；不替代单次实例的 `triggerType` |
   | `catchUpPolicy` | 补跑策略 |
   | `jobType` | 作业类型 |
   | `shardStrategy` | 分片策略 |

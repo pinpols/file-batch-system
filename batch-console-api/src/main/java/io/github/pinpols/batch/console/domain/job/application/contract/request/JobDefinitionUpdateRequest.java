@@ -1,14 +1,20 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.request;
 
+import io.github.pinpols.batch.common.enums.DictEnum;
+import io.github.pinpols.batch.common.enums.TriggerMode;
 import io.github.pinpols.batch.common.validation.ValidTenantId;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.LocalTime;
+import java.util.Set;
 import lombok.Data;
 
 @Data
 public class JobDefinitionUpdateRequest {
+  private static final Set<String> SUPPORTED_TRIGGER_MODES = DictEnum.codes(TriggerMode.class);
+
   @ValidTenantId
   private String tenantId;
 
@@ -77,4 +83,9 @@ public class JobDefinitionUpdateRequest {
   private Integer priority;
   private Boolean enabled;
   private String description;
+
+  @AssertTrue(message = "triggerMode must be a supported TriggerMode")
+  public boolean isTriggerModeSupported() {
+    return triggerMode == null || SUPPORTED_TRIGGER_MODES.contains(triggerMode);
+  }
 }

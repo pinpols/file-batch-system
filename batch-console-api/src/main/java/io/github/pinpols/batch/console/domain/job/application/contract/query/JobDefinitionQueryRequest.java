@@ -1,14 +1,19 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.query;
 
+import io.github.pinpols.batch.common.enums.DictEnum;
+import io.github.pinpols.batch.common.enums.TriggerMode;
 import io.github.pinpols.batch.common.validation.ValidTenantId;
 import io.github.pinpols.batch.console.application.contract.query.PageQueryRequest;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Size;
+import java.util.Set;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 @EqualsAndHashCode(callSuper = false)
 @Data
 public class JobDefinitionQueryRequest extends PageQueryRequest {
+  private static final Set<String> SUPPORTED_TRIGGER_MODES = DictEnum.codes(TriggerMode.class);
 
   @ValidTenantId
   private String tenantId;
@@ -37,6 +42,10 @@ public class JobDefinitionQueryRequest extends PageQueryRequest {
   @Size(max = 64, message = "scheduleType too long (max 64)")
   private String scheduleType;
 
+  private String triggerMode;
+
+  private Boolean hasUpstreamDependency;
+
   @jakarta.validation.constraints.Pattern(
       regexp = "^(SCHEDULED|DEPENDENCY|RUNTIME_ONLY)?$",
       message = "monitoringCategory must be SCHEDULED, DEPENDENCY, or RUNTIME_ONLY")
@@ -46,4 +55,9 @@ public class JobDefinitionQueryRequest extends PageQueryRequest {
 
   /** 显式包含已启用和已停用作业；未传时仍只查询启用作业。 */
   private Boolean includeDisabled = false;
+
+  @AssertTrue(message = "triggerMode must be a supported TriggerMode")
+  public boolean isTriggerModeSupported() {
+    return triggerMode == null || SUPPORTED_TRIGGER_MODES.contains(triggerMode);
+  }
 }
