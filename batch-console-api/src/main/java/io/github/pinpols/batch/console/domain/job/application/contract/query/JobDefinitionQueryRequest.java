@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.job.application.contract.query;
 
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.TriggerMode;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.validation.ValidTenantId;
 import io.github.pinpols.batch.console.application.contract.query.PageQueryRequest;
 import jakarta.validation.constraints.AssertTrue;
@@ -58,6 +59,6 @@ public class JobDefinitionQueryRequest extends PageQueryRequest {
 
   @AssertTrue(message = "triggerMode must be a supported TriggerMode")
   public boolean isTriggerModeSupported() {
-    return triggerMode == null || SUPPORTED_TRIGGER_MODES.contains(triggerMode);
+    return EmptyChecks.isNull(triggerMode) || SUPPORTED_TRIGGER_MODES.contains(triggerMode);
   }
 }

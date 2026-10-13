@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.job.application.contract.request;
 
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.TriggerMode;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.validation.ValidTenantId;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Min;
@@ -86,6 +87,6 @@ public class JobDefinitionUpdateRequest {
 
   @AssertTrue(message = "triggerMode must be a supported TriggerMode")
   public boolean isTriggerModeSupported() {
-    return triggerMode == null || SUPPORTED_TRIGGER_MODES.contains(triggerMode);
+    return EmptyChecks.isNull(triggerMode) || SUPPORTED_TRIGGER_MODES.contains(triggerMode);
   }
 }

@@ -153,7 +153,7 @@ public class JobDefinitionCreateRequest {
 
   @AssertTrue(message = "triggerMode must be a supported TriggerMode")
   public boolean isTriggerModeSupported() {
-    return triggerMode == null || SUPPORTED_TRIGGER_MODES.contains(triggerMode);
+    return EmptyChecks.isNull(triggerMode) || SUPPORTED_TRIGGER_MODES.contains(triggerMode);
   }
 
   @AssertTrue(message = "monitoring thresholds must match the job schedule type and dependency")

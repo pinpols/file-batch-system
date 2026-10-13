@@ -202,7 +202,9 @@ public class DefaultConsoleJobDefinitionApplicationService
     param.setJobCode(existing.getJobCode());
     param.setDependsOnJobCode(dependsOnJobCode);
     param.setTriggerMode(
-        request.getTriggerMode() != null ? request.getTriggerMode() : existing.getTriggerMode());
+        EmptyChecks.isNotNull(request.getTriggerMode())
+            ? request.getTriggerMode()
+            : existing.getTriggerMode());
     param.setJobName(request.getJobName() != null ? request.getJobName() : existing.getJobName());
     param.setQueueCode(
         request.getQueueCode() != null
