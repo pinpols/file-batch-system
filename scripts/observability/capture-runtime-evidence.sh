@@ -5,9 +5,13 @@ set -euo pipefail
 # 地址全部由环境变量提供，既可用于 Docker，也可用于 staging 或宿主机部署。
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=scripts/lib/env-common.sh
+source "${ROOT_DIR}/scripts/lib/env-common.sh"
+batch_load_default_env
+
 EVIDENCE_DIR="${EVIDENCE_DIR:-${ROOT_DIR}/artifacts/observability/$(date -u +%Y%m%dT%H%M%SZ)}"
-CONSOLE_URL="${CONSOLE_URL:-http://localhost:18080}"
-ORCHESTRATOR_URL="${ORCHESTRATOR_URL:-http://localhost:18082}"
+CONSOLE_URL="${CONSOLE_URL:-${CONSOLE_BASE_URL}}"
+ORCHESTRATOR_URL="${ORCHESTRATOR_URL:-${ORCHESTRATOR_BASE_URL}}"
 OTEL_COLLECTOR_METRICS_URL="${OTEL_COLLECTOR_METRICS_URL:-http://localhost:8888/metrics}"
 PROMETHEUS_URL="${PROMETHEUS_URL:-http://localhost:19090}"
 TRACEPARENT="${TRACEPARENT:-00-$(printf '%032d' 1)-$(printf '%016d' 1)-01}"
