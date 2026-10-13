@@ -120,6 +120,10 @@ jobs:
       - name: Start console-api
         shell: bash
         run: |
+          source scripts/lib/env-common.sh
+          batch_load_default_env
+          # 此 job 只启动 primary PG；禁止 local env 把应用指向未启动的 replica。
+          export BATCH_CONSOLE_READ_REPLICA_ENABLED=false
           mapfile -t JARS < <(find batch-console-api/target -maxdepth 1 -type f \
             -name 'batch-console-api-*-exec.jar' -print)
           [[ ${#JARS[@]} -eq 1 ]] || {
@@ -131,9 +135,9 @@ jobs:
           echo "starting $JAR"
           nohup java -jar "$JAR" --spring.profiles.active=local \
             > /tmp/console-api.log 2>&1 &
-          # 等 actuator/health UP
+          # 本门禁只验证 Console + primary PG；MinIO/Kafka/Valkey 未启动，不能用聚合 health。
           for i in $(seq 1 90); do
-            if curl -sf "http://localhost:${CONSOLE_PORT}/actuator/health" -o /dev/null 2>/dev/null; then
+            if curl -sf "http://localhost:${CONSOLE_PORT}/actuator/health/liveness" -o /dev/null 2>/dev/null; then
               echo "console-api ready after ${i}*2s"
               exit 0
             fi
