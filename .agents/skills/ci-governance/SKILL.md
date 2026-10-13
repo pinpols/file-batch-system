@@ -11,6 +11,7 @@ description: 审查或修改 GitHub Actions、PR gate、full-ci-gate、merge que
 - `success`、`skipped`、`cancelled`、`timed_out` 和 `neutral` 要分别报告。跳过不等于通过，排队或运行中也不算通过。
 - 主干 full gate 失败时，先定位 `head_sha`、工作流、失败 job 和最近合入 PR；不要继续发版或移动 tag，直到有修复、回滚或明确豁免。
 - 开源或多人协作场景优先依赖 required checks、ruleset/branch protection 和 merge queue，不依赖个人本地钩子兜底。
+- 门禁统一经 `scripts/ci/run-gate.sh` / `scripts/lib/gate-result.sh` 输出；状态行字段顺序固定为状态、`code`、`gate`、`group`、`mode`、`exit_code`、`action`，补充信息只追加 `reason`。新增门禁必须分配稳定分组，并在 `scripts/ci/README.md`、`docs/runbook/ci.md` 和守卫矩阵登记触发范围。
 
 ## Workflow 变更
 
@@ -31,6 +32,7 @@ description: 审查或修改 GitHub Actions、PR gate、full-ci-gate、merge que
 - 门禁失败时先保留失败命令、首个有效错误和 revision，判断是产品代码/测试缺陷、环境或依赖故障、门禁本身误报；不能用重复运行或清理失败记录代替诊断。
 - 代码或测试缺陷应修复根因；修后先重跑失败门禁，再跑受影响的完整验证域。环境故障说明影响并恢复环境后重测，不能标为代码通过。
 - 只有最小复现证明误报、错误范围或过期契约时才改门禁。新增/修改规则应验证正例与反例、增量与全量路径及相关 workflow；对增量规则确认未变更违规不会误报、变更新增违规会被拦截。
+- 检查器保留详细诊断，最终状态使用统一格式；给新格式或分组加正反例，并确认 workflow 路由下的 group 与文档分类一致。
 - 不以扩大豁免、全局 suppress、降低 required 状态或弱化断言来消除红灯。确需例外时限定文件/规则/期限与理由，并遵循项目登记流程。
 
 ## 常见收口
