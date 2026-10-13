@@ -8,6 +8,7 @@
 
 ## [Unreleased]
 
+- 修复 SDK 发布校验的独立 Java 消费工程错误启用 Maven 离线模式、因 runner 未缓存默认编译插件而误报发布包失败的问题；SDK 仍从前一步安装的本地仓库解析。
 - 修复 SDK 发布兼容性门禁对响应侧可扩展枚举的误判，并让在线 strict 验证只启动唯一的 Console API 可执行 fat jar，避免误选无 `Main-Class` 的普通库产物。
 - 更新自托管 Rust Worker 示例的 `quinn-proto` 锁定版本至 0.11.18，并同步其传递依赖，修复依赖安全告警。
 - 修复后端 pre-push clean compile 与 Java 治理测试使用不同 Maven 运行时、共享构建产物竞态及陈旧测试类导致的类缺失误报；治理测试改为 clean test，两类构建均使用仓库 Maven Wrapper 并在各自的一次性 detached worktree 中隔离运行，临时目录清理已按高风险操作治理登记。

@@ -330,7 +330,9 @@ jobs:
               }
           }
           EOF
-          ( cd "$SMOKE" && "$GITHUB_WORKSPACE/mvnw" -B -o compile )
+          # SDK 产物来自上一步的本地仓库；构建插件仍允许从 Maven Central 解析，
+          # 避免把 runner 是否恰好缓存 Maven 默认插件误判为 SDK 包装失败。
+          ( cd "$SMOKE" && "$GITHUB_WORKSPACE/mvnw" -B compile )
 
   package-go:
     name: package check (go tag-based, no artifact)
