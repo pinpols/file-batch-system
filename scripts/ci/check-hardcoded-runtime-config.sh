@@ -112,6 +112,11 @@ assert_no_matches \
   '\$\{(CONSOLE_PORT|BATCH_(ORCHESTRATOR|TRIGGER|CONSOLE|WORKER_(IMPORT|EXPORT|PROCESS|DISPATCH|ATOMIC))_PORT):-[0-9]+\}' \
   'scripts/local/be-acceptance.sh'
 
+assert_no_matches \
+  '观测脚本必须从公共环境配置读取 Console/Orchestrator 地址' \
+  'localhost:(18080|18082)([^0-9]|$)' \
+  'scripts/observability/*.sh'
+
 while IFS= read -r test_file; do
   if grep -q '@SpringBootTest' "$test_file" && ! grep -q 'extends AbstractIntegrationTest' "$test_file"; then
     echo "FAIL: Spring Boot 集成测试使用统一基础设施时必须继承 AbstractIntegrationTest" >&2
