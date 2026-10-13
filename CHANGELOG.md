@@ -8,6 +8,7 @@
 
 ## [Unreleased]
 
+- 修复全量 CI 与 Sonar 中文件到达组集成测试仍把 checksum 期望值当作已校验证据的旧契约；测试现写入持久化 `integrityState=VERIFIED`，并同步配置注释与失败关闭语义。
 - 入站 MANIFEST 模式在登记前校验 manifest 文件名、协议字段、长度和原始对象 SHA-256；到达组 `require-verified` 改为要求实际字节验证状态，并由公共完整性状态枚举定义 `VERIFIED` 契约。文件系统对象写入/复制与 NAS dispatch 不支持原子 move 时失败关闭，避免退化为可观察到中间态的普通覆盖移动。
 - 新增文件完整性与故障恢复方案，明确入站/出站发布、到达组、重试和文件系统原子性边界。
 - 为 Outbox、Workflow、作业实例和文件治理归档调度增加最近成功时间指标，并按 Orchestrator 副本汇总后告警首次运行失败及超出预期周期未成功，避免 ShedLock 未持有副本误报。

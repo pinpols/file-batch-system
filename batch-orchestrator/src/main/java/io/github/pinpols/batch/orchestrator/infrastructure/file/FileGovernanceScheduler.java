@@ -292,7 +292,7 @@ public class FileGovernanceScheduler {
     }
     if (EmptyChecks.isNotEmpty(requiredFiles) && EmptyChecks.isEmpty(missingFiles)) {
       if (properties.getArrival().isRequireVerified() && !allMembersVerified(groupFiles)) {
-        // 文件名虽齐,但有成员缺完整性背书(checksum_type=NONE)→ 保持等待,不放行;超时已在上方走 timeoutAction
+        // 文件名虽齐，但有成员缺少实际字节校验形成的 VERIFIED 证据：保持等待，超时仍走 timeoutAction。
         ArrivalGroupUpdateState updateState =
             new ArrivalGroupUpdateState(STATUS_WAITING_ARRIVAL, "ARRIVED_PENDING_VERIFY", now);
         ArrivalGroupUpdateFiles updateFiles =
