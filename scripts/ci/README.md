@@ -152,6 +152,11 @@ strict 只以环境成功启动为前置，不要求 SIM 成功；SIM 失败或�
 工作流总限时 240 分钟；主动取消、Runner 丢失或环境启动失败无法保证继续验证，
 这些情况必须按未执行报告，不能记为通过。步骤摘要分别展示环境、SIM、strict 的结果。
 
+strict-verify 的 Console 探活检查 Actuator 响应为有效 JSON 且包含字符串 `status`，不要求 HTTP 200：
+最小验证栈未启动的可选依赖可能让聚合健康端点返回 503，但这仍证明应用已响应。无响应、无效 JSON
+或缺少状态字段仍会按未启动处理。回归测试 `test_console_api_readiness.py` 在本地 pre-commit、PR 与 Full Gate 执行：
+`python3 -m unittest scripts/ci/tests/test_console_api_readiness.py`。
+
 预推送模块选择由 `tests/test_pre_push_module_selection.py` 守护：保留 `batch-e2e-tests`
 等带数字的完整模块名、同一 Worker 聚合模块去重，不再静默截断超过五个的改动模块。
 此测试接入本地 pre-commit 和 PR / Full 的 CI 质量守护组。
