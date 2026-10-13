@@ -35,7 +35,7 @@
 | 14 | [stats/](./stats/README.md) | 规模统计 | LoC / 文档体量统计 |
 | 15 | [test-data/](./test-data/test-full-coverage-import-suite/README.md) | 测试数据（Excel 配置包）| E2E 准备 |
 | 16 | [verifications/](./verifications/README.md) | 验证记录 | 实测 / drill / go-live evidence |
-| 17 | [standards/](./standards/README.md) | 文档、CI 质量和开源工程治理 | [静态分析与抑制项治理](./standards/static-analysis-governance.md) / 文档复扫 / 安全响应与供应链治理 |
+| 17 | [standards/](./standards/README.md) | Agent Skill、文档、CI 质量和开源工程治理 | [Agent Skill 使用指南](./standards/agent-skills-guide.md) / [静态分析与抑制项治理](./standards/static-analysis-governance.md) / 文档复扫 / 安全响应与供应链治理 |
 | 18 | [governance/](./governance/README.md) | 机器可读治理契约 | CI 规则输入 |
 | — | [archive/](./archive/README.md) | 历史快照（**不再维护**） | 仅审计参考 |
 | — | [spike/](./spike/README.md) | Spike 实验记录 | 临时技术验证 |
@@ -54,7 +54,7 @@
 | 规范复扫 / PR 审核 | 09 audit (`convention-drift-guard-index.md`) → `agent-baseline.md` → 顶层 02 coding-conventions → `scripts/ci/README.md` |
 | 开源治理 / 安全响应 | 17 standards (`open-source-governance.md`) → 根 `SECURITY.md` → 04 runbook (`security-scan.md`) |
 | 文档维护 / 目录调整 | 17 standards (`document-governance.md`) → 本 README → 受影响子目录 README → `scripts/ci/check-docs-structure.py` |
-| AI 协作 | 顶层 01 agent-baseline → 02 coding-conventions；项目级审查使用 [project-engineering-review](../.agents/skills/project-engineering-review/SKILL.md)，批量调度领域开发与评估使用 [batch-scheduling-engineering](../.agents/skills/batch-scheduling-engineering/SKILL.md)，再按技能路由进入专项流程 |
+| AI 协作 | [Agent Skill 使用指南](./standards/agent-skills-guide.md) → 顶层 01 agent-baseline → 02 coding-conventions，再按任务层级进入总控或专项 Skill |
 
 ## 维护约束（来自 agent-baseline.md）
 

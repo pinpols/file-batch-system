@@ -1,6 +1,6 @@
 ---
 name: project-engineering-review
-description: 对 file-batch-system 做项目级架构、质量、风险、治理或维护评估时使用；整合现行规范与历史审查证据，并路由到专项技能。普通单 PR 缺陷审查优先使用 code-review-and-gates。
+description: 对 file-batch-system 单仓做项目级架构、质量、风险、治理或维护评估时使用；整合现行规范与历史证据并路由专项技能。前后端周期治理使用 cross-repo-governance-review，普通单 PR 审查使用 code-review-and-gates。
 ---
 
 # 项目工程审查与维护
@@ -8,6 +8,8 @@ description: 对 file-batch-system 做项目级架构、质量、风险、治理
 ## 目标与边界
 
 用于系统级或跨模块任务：全面审查、成熟度/差距评估、工程治理规划、维护性盘点，以及把审查结论转化为可验证的修复。不是要求每次改动都做全仓扫描，也不代替专项技能。
+
+当用户要求月度/季度复核、规范防退化、代码腐化、发布前治理或前后端一起审查时，先使用 `cross-repo-governance-review` 固定两仓覆盖面；本技能承接其中后端单仓的架构、质量和维护性深查。
 
 先判断用户要的是评估、实施、复核还是报告。用户只要求评估时不擅自改代码；明确要求修复时，先确认问题证据，再按影响范围实施。提交、推送、合并、删除分支仍须遵守用户本轮授权和 `git-pr-workflow`。
 
