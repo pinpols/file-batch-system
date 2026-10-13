@@ -6,6 +6,7 @@ import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayR
 import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplaySubmitCommand;
 import io.github.pinpols.batch.orchestrator.controller.response.BatchDayReplayEntryResponse;
 import io.github.pinpols.batch.orchestrator.controller.response.BatchDayReplaySessionResponse;
+import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -49,7 +50,7 @@ public class BatchDayReplayController {
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "status", required = false) String status,
       @RequestParam(value = "limit", required = false, defaultValue = "50") int limit) {
-    List<io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity> sessions =
+    List<BatchDayReplaySessionEntity> sessions =
         replayService.listSessions(tenantId, status, limit);
     List<BatchDayReplaySessionResponse> responses =
         sessions.stream().map(BatchDayReplaySessionResponse::from).toList();
@@ -89,7 +90,7 @@ public class BatchDayReplayController {
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "status", required = false) String status,
       @RequestParam(value = "limit", required = false, defaultValue = "500") int limit) {
-    List<io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity> entries =
+    List<BatchDayReplayEntryEntity> entries =
         replayService.listEntries(tenantId, sessionId, status, limit);
     List<BatchDayReplayEntryResponse> responses =
         entries.stream().map(BatchDayReplayEntryResponse::from).toList();
