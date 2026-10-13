@@ -9,6 +9,9 @@
 ## [Unreleased]
 
 - 修复线上 Sonar 报告中的上传文件名空值路径、AI 图片字节数组 record 值语义、异常凭据脱敏正则冗余分支及 OIDC 注册缓存的并发初始化实现；增加相应回归测试。
+- 修复 SDK 发布校验的独立 Java 消费工程错误启用 Maven 离线模式、因 runner 未缓存默认编译插件而误报发布包失败的问题；SDK 仍从前一步安装的本地仓库解析。
+- 修复 SDK 发布兼容性门禁对响应侧可扩展枚举的误判；在线 strict 验证只启动唯一的 Console API 可执行 fat jar，并在启动 JVM 前加载本地环境、为临时 PG 执行正式 Flyway 迁移、关闭未启动的读副本、启动必需的 Valkey、禁用范围外的对象存储启动探针并使用 liveness 探针，避免误选普通库产物或因最小验证栈缺少 schema/运行依赖而误判；同时修正本地 pre-push 对 SDK reactor 模块的错误选择。
+- 更新自托管 Rust Worker 示例的 `quinn-proto` 锁定版本至 0.11.18，并同步其传递依赖，修复依赖安全告警。
 - 修复后端 pre-push clean compile 与 Java 治理测试使用不同 Maven 运行时、共享构建产物竞态及陈旧测试类导致的类缺失误报；治理测试改为 clean test，两类构建均使用仓库 Maven Wrapper 并在各自的一次性 detached worktree 中隔离运行，临时目录清理已按高风险操作治理登记。
 - 新增隔离的后端可靠性回归套件及每日 CI，覆盖 manifest 修复重扫、对象丢失恢复与替换检测、到达组并发去重、checkpoint 续跑、Outbox/Kafka 恢复和消费者反压，并明确本地测试、标准 Sim 与 staging DR 的证据边界。
 - 修复全量 CI 与 Sonar 中文件到达组集成测试仍把 checksum 期望值当作已校验证据的旧契约；测试现写入持久化 `integrityState=VERIFIED`，并同步配置注释与失败关闭语义。
