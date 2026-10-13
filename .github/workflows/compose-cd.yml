@@ -335,7 +335,7 @@ jobs:
         working-directory: frontend
         env:
           FRONTEND_BASE_URL: ${{ vars.STAGING_URL }}
-        run: node scripts/check-security-headers.mjs
+        run: bash scripts/ci/run-gate.sh --group security CD_SECURITY_HEADERS "安全响应头" -- node scripts/check-security-headers.mjs
 
       - name: Run end-to-end suite against deployed staging
         working-directory: frontend
@@ -343,20 +343,20 @@ jobs:
           PLAYWRIGHT_BASE_URL: ${{ vars.STAGING_URL }}
           E2E_USERNAME: ${{ secrets.STAGING_E2E_USERNAME }}
           E2E_PASSWORD: ${{ secrets.STAGING_E2E_PASSWORD }}
-        run: npm run test:e2e:all
+        run: bash scripts/ci/run-gate.sh --group testing CD_E2E "端到端测试" -- npm run test:e2e:all
 
       - name: Run visual regression suite
         working-directory: frontend
         env:
           PLAYWRIGHT_BASE_URL: ${{ vars.STAGING_URL }}
-        run: npm run test:e2e:visual
+        run: bash scripts/ci/run-gate.sh --group testing CD_E2E_VISUAL "视觉回归测试" -- npm run test:e2e:visual
 
       - name: Run cross-browser staging smoke
         working-directory: frontend
         env:
           PLAYWRIGHT_BASE_URL: ${{ vars.STAGING_URL }}
           CROSS_BROWSER: '1'
-        run: npm run test:e2e:all -- e2e/smoke.spec.ts --grep @cross-browser
+        run: bash scripts/ci/run-gate.sh --group testing CD_E2E_CROSS_BROWSER "跨浏览器冒烟测试" -- npm run test:e2e:all -- e2e/smoke.spec.ts --grep @cross-browser
 
   staging-lighthouse:
     needs:

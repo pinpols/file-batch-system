@@ -12,6 +12,30 @@ gate_group_valid() {
   [[ "$1" =~ ^[a-z0-9][a-z0-9-]*$ ]]
 }
 
+gate_local_group_for_code() {
+  case "$1" in
+    PRE_COMMIT_DIFF_CHECK|PRE_COMMIT_UTF8_ENCODING*|PRE_COMMIT_COMMENT_LANGUAGE)
+      printf 'hygiene'
+      ;;
+    PRE_COMMIT_*DOC*)
+      printf 'docs'
+      ;;
+    PRE_COMMIT_*CONFIG*|PRE_COMMIT_*ENV*|PRE_COMMIT_*HELM*|PRE_COMMIT_FEATURE_SWITCH*|PRE_COMMIT_INFRASTRUCTURE_UTF8|PRE_COMMIT_PRODUCTION_OVERLAY)
+      printf 'config'
+      ;;
+    PRE_COMMIT_*SBOM*|PRE_COMMIT_DEPENDENCY_*)
+      printf 'supply-chain'
+      ;;
+    PRE_COMMIT_*JAVA*|PRE_COMMIT_*SHELL*|PRE_COMMIT_*MYBATIS*|PRE_COMMIT_MAPOF*|PRE_COMMIT_PIPELINE*|PRE_COMMIT_TEST_CONVENTIONS*)
+      printf 'quality'
+      ;;
+    PRE_COMMIT_*|GATE_COLLECTION_SUMMARY)
+      printf 'governance'
+      ;;
+    *) printf '%s' "${BATCH_GATE_GROUP:-general}" ;;
+  esac
+}
+
 gate_control_error() {
   local detail="$1"
   printf '❌ 不通过 | code=GATE_MODE_INVALID | gate=门禁模式控制 | group=governance | mode=enforce | exit_code=2 | action=fix_and_retry | reason=%s\n' "$detail" >&2
@@ -118,12 +142,29 @@ gate_result() {
   fi
 }
 
+gate_filter_legacy_status_lines() {
+  local line
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    case "$line" in
+      '✅ 通过 | code='*|'❌ 不通过 | code='*|'⚠️ 报告 | code='*|'⏭️ 忽略 | code='*|'⏭️ 跳过 | code='*)
+        if [[ "$line" != *' | group='* || "$line" != *' | mode='* ]]; then
+          continue
+        fi
+        ;;
+    esac
+    printf '%s\n' "$line"
+  done
+}
+
 gate_run() {
   local code="$1"
   local name="$2"
   shift 2
   local group="${BATCH_GATE_GROUP:-general}"
   local mode
+  if [[ "$group" == local-pre-commit ]]; then
+    group="$(gate_local_group_for_code "$code")"
+  fi
   if ! gate_group_valid "$group"; then
     gate_control_error "无效门禁分组: ${group}"
     return 2
@@ -138,7 +179,7 @@ gate_run() {
     gate_result IGNORE "$code" "$name" "统一控制配置未执行该门禁" "$group" "$mode"
     return 0
   fi
-  if "$@"; then
+  if "$@" > >(gate_filter_legacy_status_lines) 2> >(gate_filter_legacy_status_lines >&2); then
     gate_result PASS "$code" "$name" 0 "$group" "$mode"
   else
     local exit_code=$?

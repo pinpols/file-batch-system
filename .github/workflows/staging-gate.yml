@@ -42,15 +42,15 @@ jobs:
           cache-testcontainers: 'false'
 
       - name: Verify Console OpenAPI matches controllers
-        run: python3 scripts/ci/check-console-openapi-paths.py
+        run: bash scripts/ci/run-gate.sh --group contract STAGING_CONSOLE_OPENAPI "Console controller 与 OpenAPI 路由同步" -- python3 scripts/ci/check-console-openapi-paths.py
 
       - name: Verify governance test inventory
         shell: bash
-        run: python3 scripts/ci/check-java-governance-test-coverage.py
+        run: bash scripts/ci/run-gate.sh --group governance STAGING_JAVA_GOVERNANCE_INVENTORY "Java 治理测试清单" -- python3 scripts/ci/check-java-governance-test-coverage.py
 
       - name: Run Java architecture and convention guards
         shell: bash
-        run: bash scripts/ci/run-java-governance-tests.sh
+        run: bash scripts/ci/run-gate.sh --group governance STAGING_JAVA_GOVERNANCE_TESTS "Java 架构与约定检查" -- bash scripts/ci/run-java-governance-tests.sh
 
       - name: Upload Java governance reports
         if: always()

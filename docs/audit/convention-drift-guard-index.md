@@ -53,6 +53,12 @@ Nightly 验证顺序由 `scripts/ci/tests/test_daily_validation_workflow.py` 守
 预推送编译模块选择由 `scripts/ci/tests/test_pre_push_module_selection.py` 守护，
 保护数字模块名、聚合模块去重和完整改动集合，接入本地 pre-commit 及 PR / Full 同一守护组。
 
+本地提交/推送 hook 的变更分类与门禁模式由 `scripts/ci/detect-change-scope.py`、
+`scripts/lib/gate-result.sh` 和 `scripts/ci/run-gate.sh` 统一维护：pre-commit 对 staged 路径分类，
+pre-push 对分支差异分类；`report` 必须执行并保留失败码，`ignore` 明确不执行，CI required checks 不得使用本地放宽模式。
+日常修改门禁分组、模式优先级或触发范围时，对照 [CI 脚本说明](../../scripts/ci/README.md)
+和 [CI runbook](../runbook/ci.md) 审查对应入口及文档是否同步。
+
 基础设施抽象边界守护 `check-infrastructure-abstraction-boundaries.py` 以 PR merge-base 的引用语句与出现次数作为比较基线,只阻断新增引用;历史引用的日志安全修复不触发整文件清债。专项回归覆盖新增导入、重复引用增加及空白排版。完整历史收敛仍由治理计划和全量直连客户端守护承担。
 
 ### CI 难以守住的人工/AI 周期审查

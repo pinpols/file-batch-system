@@ -93,7 +93,7 @@ Git hook、GitHub workflow 和独立事实来源检查统一输出最终状态�
 ⏭️ 忽略 | code=LOCAL_EXPERIMENT | gate=本地实验检查 | group=quality | mode=ignore | exit_code=0 | action=none | reason=统一控制配置未执行该门禁
 ```
 
-字段顺序固定为状态、`code`、`gate`、`group`、`mode`、`exit_code`、`action`；存在补充说明时只在固定字段后追加 `reason`。共享 shell 门禁由 `scripts/lib/gate-result.sh` / `scripts/ci/run-gate.sh` 生成，Python/Node 独立检查器也必须遵循同一格式。具体诊断仍由检查脚本输出。workflow 中不要直接调用门禁脚本；多项检查要逐项调用 `gate_run`，避免一项失败掩盖同一步其余门禁的独立状态。扫描器报告、测试清单和运行进度不是门禁状态行，不强行改成该格式。
+字段顺序固定为状态、`code`、`gate`、`group`、`mode`、`exit_code`、`action`；存在补充说明时只在固定字段后追加 `reason`。共享 shell 门禁由 `scripts/lib/gate-result.sh` / `scripts/ci/run-gate.sh` 生成。`gate_run` 会过滤被调用检查器输出的旧式状态行（缺少 `group` 或 `mode`），保留诊断内容和已合规的嵌套状态行，再输出本门禁唯一权威结果；因此 CI workflow 中必须经统一执行器调用门禁。独立检查器直接运行时仍应遵循同一格式。扫描器报告、测试清单和运行进度不是门禁状态行，不强行改成该格式。
 
 ### 分组、开关和模式
 
@@ -105,6 +105,7 @@ Git hook、GitHub workflow 和独立事实来源检查统一输出最终状态�
 bash scripts/ci/run-gate.sh --group quality --mode report LOCAL_PMD "PMD" -- ./mvnw pmd:check
 BATCH_GATE_GROUP=quality BATCH_GATE_MODE=report gate_run LOCAL_PMD "PMD" ./mvnw pmd:check
 BATCH_GATE_GROUP_MODES='quality=report,docs=ignore' bash scripts/local/pre-commit-checks.sh
+BATCH_GATE_GROUP_MODES='local-pre-push=report' git push
 BATCH_GATE_MODES='PRE_COMMIT_SPOTLESS=enforce,PRE_COMMIT_JAVA_READABILITY=ignore' bash scripts/local/pre-commit-checks.sh
 BATCH_GATE_ENABLED=0 bash scripts/ci/run-gate.sh --group quality LOCAL_PMD "PMD" -- ./mvnw pmd:check
 ```
@@ -193,7 +194,10 @@ SDK 契约 workflow 与 PR gate 共用同一探测器。
 ```bash
 # 本地查看当前分支相对 main 的范围
 python3 scripts/ci/detect-change-scope.py --base origin/main --head HEAD --json
+python3 scripts/ci/detect-change-scope.py --staged --json
 ```
+
+本地 `pre-commit` 用 `--staged` 对暂存路径执行相同分类；`pre-push` 用 `--base/--head` 对分支差异分类。两种本地输入都输出相同 scope 名称，避免 hook 各自维护路径分类规则。提交钩子只运行命中范围的快速检查，推送钩子运行分支级契约和适用的 clean compile；二者均通过统一门禁执行器支持分组与单项控制。`report` 仍执行检查并汇总真实失败但不阻断，`ignore` 明确不运行；不要将这两种本地便利模式用于 CI required checks。
 
 PR 事件使用 `base` 与已检出的 `head` 提交树直接比较；merge queue、push、schedule 和手工触发没有
 可靠 PR diff 时回退为全范围，避免误跳过门禁。探测器本身只负责分类，不决定哪些检查

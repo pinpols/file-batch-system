@@ -62,7 +62,7 @@ jobs:
           cache-testcontainers: 'false'
 
       - name: Verify Console OpenAPI matches controllers
-        run: python3 scripts/ci/check-console-openapi-paths.py
+        run: bash scripts/ci/run-gate.sh --group contract FULL_CONSOLE_OPENAPI "Console controller 与 OpenAPI 路由同步" -- python3 scripts/ci/check-console-openapi-paths.py
 
       - name: Verify repository text encoding
         shell: bash
@@ -339,7 +339,7 @@ jobs:
           bash scripts/ci/run-gate.sh FULL_READINESS_DOC_SYNC "Readiness 契约文档同步" -- python3 scripts/ci/check-readiness-doc-sync.py --base "$BASE"
 
       - name: Test readiness documentation sync guard
-        run: python3 -m unittest scripts/ci/tests/test_check_readiness_doc_sync.py
+        run: bash scripts/ci/run-gate.sh --group docs FULL_READINESS_DOC_SYNC_TEST "Readiness 文档同步门禁测试" -- python3 -m unittest scripts/ci/tests/test_check_readiness_doc_sync.py
 
       - name: Verify Trivy ignore expiry metadata
         shell: bash
@@ -369,7 +369,7 @@ jobs:
 
       - name: Test new table documentation guard
         shell: bash
-        run: python3 -m unittest scripts/ci/tests/test_check_new_table_doc_coverage.py
+        run: bash scripts/ci/run-gate.sh --group docs FULL_NEW_TABLE_DOC_COVERAGE_TEST "新增数据库表文档门禁测试" -- python3 -m unittest scripts/ci/tests/test_check_new_table_doc_coverage.py
 
       - name: Required Java architecture documentation
         shell: bash
@@ -664,7 +664,7 @@ jobs:
 
       - name: Verify governance test inventory
         shell: bash
-        run: python3 scripts/ci/check-java-governance-test-coverage.py
+        run: bash scripts/ci/run-gate.sh --group governance FULL_JAVA_GOVERNANCE_INVENTORY "Java 治理测试清单" -- python3 scripts/ci/check-java-governance-test-coverage.py
 
       - name: Run Java architecture and convention guards
         shell: bash

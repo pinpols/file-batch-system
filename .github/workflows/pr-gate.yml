@@ -484,7 +484,7 @@ jobs:
         run: bash scripts/ci/run-gate.sh PR_READINESS_DOC_SYNC "Readiness 契约文档同步" -- python3 scripts/ci/check-readiness-doc-sync.py --base "$GUARD_BASE"
 
       - name: Test readiness documentation sync guard
-        run: python3 -m unittest scripts/ci/tests/test_check_readiness_doc_sync.py
+        run: bash scripts/ci/run-gate.sh --group docs PR_READINESS_DOC_SYNC_TEST "Readiness 文档同步门禁测试" -- python3 -m unittest scripts/ci/tests/test_check_readiness_doc_sync.py
 
       - name: Verify e2e shard lists cover all *E2eIT
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
@@ -1003,7 +1003,7 @@ jobs:
 
       - name: Verify governance test inventory
         shell: bash
-        run: python3 scripts/ci/check-java-governance-test-coverage.py
+        run: bash scripts/ci/run-gate.sh --group governance PR_JAVA_GOVERNANCE_INVENTORY "Java 治理测试清单" -- python3 scripts/ci/check-java-governance-test-coverage.py
 
       - name: Run Java architecture and convention guards
         shell: bash
