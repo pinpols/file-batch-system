@@ -34,8 +34,9 @@ public interface ConsoleWebhookDeliveryLogMapper {
 
   /** Relay 候选扫描：取 PENDING/EXHAUSTED 且到期需投递的行，{@code FOR UPDATE SKIP LOCKED} 防止多 relay 实例抢同一批。 */
   default List<WebhookDeliveryLogEntity> findEligibleRetries(Instant now, int limit) {
-    return findEligibleRetriesByStatuses(
-        now, limit, List.of(PersistenceStatus.PENDING.name(), PersistenceStatus.EXHAUSTED.name()));
+    List<String> eligibleStatuses =
+        List.of(PersistenceStatus.PENDING.name(), PersistenceStatus.EXHAUSTED.name());
+    return findEligibleRetriesByStatuses(now, limit, eligibleStatuses);
   }
 
   List<WebhookDeliveryLogEntity> findEligibleRetriesByStatuses(
@@ -47,8 +48,9 @@ public interface ConsoleWebhookDeliveryLogMapper {
 
   /** Relay CAS 抢占：把 next_retry_at 置 null，返回 1=本实例独占成功，0=被其他 relay 抢先。 */
   default int claimForRetry(Long id) {
-    return claimForRetryByStatuses(
-        id, List.of(PersistenceStatus.PENDING.name(), PersistenceStatus.EXHAUSTED.name()));
+    List<String> eligibleStatuses =
+        List.of(PersistenceStatus.PENDING.name(), PersistenceStatus.EXHAUSTED.name());
+    return claimForRetryByStatuses(id, eligibleStatuses);
   }
 
   int claimForRetryByStatuses(

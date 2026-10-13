@@ -40,9 +40,9 @@ public interface DeadLetterTaskMapper {
 
   /** V90: 选出自动重放到期 + 未达上限 + SYSTEM 类的死信记录。 */
   default List<DeadLetterTaskEntity> selectDueAutoRetries(int batchSize) {
-    return selectDueAutoRetriesByStatuses(
-        batchSize,
-        List.of(DeadLetterReplayStatus.NEW.code(), DeadLetterReplayStatus.FAILED.code()));
+    List<String> replayStatuses =
+        List.of(DeadLetterReplayStatus.NEW.code(), DeadLetterReplayStatus.FAILED.code());
+    return selectDueAutoRetriesByStatuses(batchSize, replayStatuses);
   }
 
   List<DeadLetterTaskEntity> selectDueAutoRetriesByStatuses(

@@ -61,7 +61,7 @@ public interface ConsoleAiAttachmentMapper {
 
   default int markDraft(
       String tenantId, UUID id, String mediaType, long byteSize, int width, int height) {
-    return transitionToDraft(new DraftTransitionParam(
+    DraftTransitionParam transition = new DraftTransitionParam(
         tenantId,
         id,
         mediaType,
@@ -69,7 +69,8 @@ public interface ConsoleAiAttachmentMapper {
         width,
         height,
         AttachmentStatus.UPLOADING.name(),
-        AttachmentStatus.DRAFT.name()));
+        AttachmentStatus.DRAFT.name());
+    return transitionToDraft(transition);
   }
 
   int transitionToDraft(DraftTransitionParam param);
@@ -81,7 +82,7 @@ public interface ConsoleAiAttachmentMapper {
       String conversationId,
       long turnNo,
       Instant expiresAt) {
-    return transitionToBound(new BindTransitionParam(
+    BindTransitionParam transition = new BindTransitionParam(
         tenantId,
         id,
         ownerUserId,
@@ -89,7 +90,8 @@ public interface ConsoleAiAttachmentMapper {
         turnNo,
         expiresAt,
         AttachmentStatus.DRAFT.name(),
-        AttachmentStatus.BOUND.name()));
+        AttachmentStatus.BOUND.name());
+    return transitionToBound(transition);
   }
 
   int transitionToBound(BindTransitionParam param);

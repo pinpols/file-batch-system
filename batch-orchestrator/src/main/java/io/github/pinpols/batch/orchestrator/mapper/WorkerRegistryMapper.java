@@ -34,10 +34,10 @@ public interface WorkerRegistryMapper {
    * @return 被更新的行数
    */
   default int markStaleHeartbeatsOffline(long timeoutSeconds) {
+    List<String> expectedStatuses =
+        List.of(WorkerRegistryStatus.ONLINE.code(), WorkerRegistryStatus.DRAINING.code());
     return updateStaleHeartbeatsStatus(
-        timeoutSeconds,
-        WorkerRegistryStatus.OFFLINE.code(),
-        List.of(WorkerRegistryStatus.ONLINE.code(), WorkerRegistryStatus.DRAINING.code()));
+        timeoutSeconds, WorkerRegistryStatus.OFFLINE.code(), expectedStatuses);
   }
 
   int updateStaleHeartbeatsStatus(

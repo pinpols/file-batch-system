@@ -81,12 +81,13 @@ public interface ResultVersionMapper {
    * <p>partial unique index 保证至多 1 行 EFFECTIVE，所以本 update 至多影响 1 行。
    */
   default int supersedePriorEffective(String tenantId, String businessKey, Instant deactivatedAt) {
-    return supersede(new SupersedeParam(
+    SupersedeParam transition = new SupersedeParam(
         tenantId,
         businessKey,
         deactivatedAt,
         VersionStatus.EFFECTIVE.name(),
-        VersionStatus.SUPERSEDED.name()));
+        VersionStatus.SUPERSEDED.name());
+    return supersede(transition);
   }
 
   int supersede(SupersedeParam param);
@@ -117,29 +118,32 @@ public interface ResultVersionMapper {
 
   /** PENDING → EFFECTIVE：CAS 到 EFFECTIVE，写 effective_at。 */
   default int promoteToEffective(String tenantId, Long id, Instant effectiveAt) {
-    return promote(new TransitionParam(
-        tenantId, id, effectiveAt, VersionStatus.PENDING.name(), VersionStatus.EFFECTIVE.name()));
+    TransitionParam transition = new TransitionParam(
+        tenantId, id, effectiveAt, VersionStatus.PENDING.name(), VersionStatus.EFFECTIVE.name());
+    return promote(transition);
   }
 
   int promote(TransitionParam param);
 
   /** PENDING → ARCHIVED 拒绝路径；不影响其它版本。 */
   default int rejectPending(String tenantId, Long id, Instant deactivatedAt) {
-    return reject(new TransitionParam(
-        tenantId, id, deactivatedAt, VersionStatus.PENDING.name(), VersionStatus.ARCHIVED.name()));
+    TransitionParam transition = new TransitionParam(
+        tenantId, id, deactivatedAt, VersionStatus.PENDING.name(), VersionStatus.ARCHIVED.name());
+    return reject(transition);
   }
 
   int reject(TransitionParam param);
 
   /** SUPERSEDED → ARCHIVED 由 retention scheduler 推进；可选清空 payload_json。 */
   default int archiveSuperseded(String tenantId, Long id, Instant now, boolean clearPayload) {
-    return archive(new ArchiveParam(
+    ArchiveParam transition = new ArchiveParam(
         tenantId,
         id,
         now,
         clearPayload,
         VersionStatus.SUPERSEDED.name(),
-        VersionStatus.ARCHIVED.name()));
+        VersionStatus.ARCHIVED.name());
+    return archive(transition);
   }
 
   int archive(ArchiveParam param);

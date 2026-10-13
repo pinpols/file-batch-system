@@ -48,7 +48,7 @@ public interface ForensicExportLogMapper {
       String sha256,
       String rowCountsJson,
       Instant completedAt) {
-    return complete(new CompletionParam(
+    CompletionParam completion = new CompletionParam(
         tenantId,
         exportId,
         storagePath,
@@ -56,7 +56,8 @@ public interface ForensicExportLogMapper {
         sha256,
         rowCountsJson,
         completedAt,
-        ExportStatus.COMPLETED.name()));
+        ExportStatus.COMPLETED.name());
+    return complete(completion);
   }
 
   int complete(CompletionParam param);
@@ -64,8 +65,9 @@ public interface ForensicExportLogMapper {
   /** 失败时回写 status=FAILED + error_message。 */
   default int markFailed(
       String tenantId, String exportId, String errorMessage, Instant completedAt) {
-    return fail(new FailureParam(
-        tenantId, exportId, errorMessage, completedAt, ExportStatus.FAILED.name()));
+    FailureParam failure =
+        new FailureParam(tenantId, exportId, errorMessage, completedAt, ExportStatus.FAILED.name());
+    return fail(failure);
   }
 
   int fail(FailureParam param);

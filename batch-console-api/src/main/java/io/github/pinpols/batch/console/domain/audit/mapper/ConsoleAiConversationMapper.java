@@ -39,11 +39,8 @@ public interface ConsoleAiConversationMapper {
 
   default List<ConsoleAiTurnEntity> selectRecentCompleteTurns(
       String tenantId, String conversationId, int limit) {
-    return selectRecentTurnsByStatuses(
-        tenantId,
-        conversationId,
-        limit,
-        List.of(TurnStatus.COMPLETE.name(), TurnStatus.FAILED.name()));
+    List<String> terminalStatuses = List.of(TurnStatus.COMPLETE.name(), TurnStatus.FAILED.name());
+    return selectRecentTurnsByStatuses(tenantId, conversationId, limit, terminalStatuses);
   }
 
   List<ConsoleAiTurnEntity> selectRecentTurnsByStatuses(

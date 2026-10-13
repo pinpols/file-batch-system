@@ -30,15 +30,16 @@ public interface TriggerRequestMapper {
 
   default int updateAcceptance(
       String tenantId, String requestId, String requestStatus, Long relatedJobInstanceId) {
+    List<String> protectedStatuses = List.of(
+        TriggerRequestStatus.LAUNCHED.code(),
+        TriggerRequestStatus.REJECTED.code(),
+        TriggerRequestStatus.DUPLICATE.code());
     return updateAcceptanceGuarded(
         tenantId,
         requestId,
         requestStatus,
         relatedJobInstanceId,
-        List.of(
-            TriggerRequestStatus.LAUNCHED.code(),
-            TriggerRequestStatus.REJECTED.code(),
-            TriggerRequestStatus.DUPLICATE.code()),
+        protectedStatuses,
         TriggerRequestStatus.LAUNCHED.code());
   }
 
@@ -70,8 +71,10 @@ public interface TriggerRequestMapper {
    */
   default List<TriggerRequestLaunchReconcileRow> selectStaleAcceptedWithJobInstance(
       Instant olderThan, int limit) {
+    String requestStatus = TriggerRequestStatus.ACCEPTED.code();
+    String excludedInstanceStatus = JobInstanceStatus.CREATED.code();
     return selectStaleByRequestAndExcludedInstanceStatus(
-        olderThan, limit, TriggerRequestStatus.ACCEPTED.code(), JobInstanceStatus.CREATED.code());
+        olderThan, limit, requestStatus, excludedInstanceStatus);
   }
 
   List<TriggerRequestLaunchReconcileRow> selectStaleByRequestAndExcludedInstanceStatus(
@@ -85,12 +88,13 @@ public interface TriggerRequestMapper {
    * 0 表示并发已被其它路径(consumer writeBack / 运维操作)改走,本次跳过即可。
    */
   default int reconcileLaunched(String tenantId, String requestId, Long jobInstanceId) {
+    List<String> expectedStatuses = List.of(TriggerRequestStatus.ACCEPTED.code());
     return reconcileStatus(
         tenantId,
         requestId,
         jobInstanceId,
         TriggerRequestStatus.LAUNCHED.code(),
-        List.of(TriggerRequestStatus.ACCEPTED.code()),
+        expectedStatuses,
         true);
   }
 
@@ -100,12 +104,14 @@ public interface TriggerRequestMapper {
    */
   default int reconcileRecoveredCreatedLaunch(
       String tenantId, String requestId, Long jobInstanceId) {
+    List<String> expectedStatuses =
+        List.of(TriggerRequestStatus.ACCEPTED.code(), TriggerRequestStatus.DUPLICATE.code());
     return reconcileStatus(
         tenantId,
         requestId,
         jobInstanceId,
         TriggerRequestStatus.LAUNCHED.code(),
-        List.of(TriggerRequestStatus.ACCEPTED.code(), TriggerRequestStatus.DUPLICATE.code()),
+        expectedStatuses,
         false);
   }
 
