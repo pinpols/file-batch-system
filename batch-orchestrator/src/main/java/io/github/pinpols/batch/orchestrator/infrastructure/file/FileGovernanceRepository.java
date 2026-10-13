@@ -157,7 +157,9 @@ public class FileGovernanceRepository {
         "dispatchRecordId",
         dispatchRecordId,
         "dispatchCreatedStatus",
-        FileDispatchStatus.CREATED.name()));
+        FileDispatchStatus.CREATED.code(),
+        "receiptNoneStatus",
+        FileReceiptStatus.NONE.code()));
   }
 
   List<FileGovernanceMaintenanceViews.ArchivedFileCleanupView> selectArchivedFilesForCleanup(

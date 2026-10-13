@@ -19,30 +19,27 @@
         <result column="updated_at"       property="updatedAt"/>
     </resultMap>
 
-    <insert id="insert"
-            parameterType="io.github.pinpols.batch.common.persistence.entity.TriggerOutboxEventEntity"
-            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+    <insert id="insertWithDefaultStatus"
+            useGeneratedKeys="true" keyProperty="entity.id" keyColumn="id">
         INSERT INTO batch.trigger_outbox_event (
             tenant_id, request_id, topic, payload, publish_status, publish_attempt,
             trace_id, next_publish_at
         ) VALUES (
-            #{tenantId},
-            #{requestId},
+            #{entity.tenantId},
+            #{entity.requestId},
             <choose>
-                <when test="topic != null">#{topic}</when>
+                <when test="entity.topic != null">#{entity.topic}</when>
                 <otherwise>'batch.trigger.launch.v1'</otherwise>
             </choose>,
-            #{payload,jdbcType=VARCHAR}::jsonb,
+            #{entity.payload,jdbcType=VARCHAR}::jsonb,
             <choose>
-                <when test="publishStatus != null">#{publishStatus}</when>
-                <!-- V80 CHECK 只允许 NEW/PUBLISHING/PUBLISHED/FAILED/GIVE_UP;之前默认 'PENDING' 是
-                     无效枚举,任何漏传调用方都会撞 ck_trigger_outbox_status。改 NEW。 -->
-                <otherwise>'NEW'</otherwise>
+                <when test="entity.publishStatus != null">#{entity.publishStatus}</when>
+                <otherwise>#{defaultStatus}</otherwise>
             </choose>,
-            #{publishAttempt},
-            #{traceId},
+            #{entity.publishAttempt},
+            #{entity.traceId},
             <choose>
-                <when test="nextPublishAt != null">#{nextPublishAt}</when>
+                <when test="entity.nextPublishAt != null">#{entity.nextPublishAt}</when>
                 <otherwise>CURRENT_TIMESTAMP</otherwise>
             </choose>
         )

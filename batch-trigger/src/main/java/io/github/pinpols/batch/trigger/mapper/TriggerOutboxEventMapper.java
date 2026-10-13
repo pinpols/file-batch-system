@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.trigger.mapper;
 
+import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.persistence.entity.TriggerOutboxEventEntity;
 import java.time.Instant;
 import java.util.List;
@@ -19,13 +20,19 @@ import org.apache.ibatis.annotations.Param;
 public interface TriggerOutboxEventMapper {
 
   /**
-   * 与 trigger_request INSERT 同事务调用,落 PENDING 状态行。返回受影响行数(unique 约束冲突时业务侧应拦截
+   * 与 trigger_request INSERT 同事务调用,落 NEW 状态行。返回受影响行数(unique 约束冲突时业务侧应拦截
    * IntegrityConstraintException 而非到这里)。
    */
-  int insert(TriggerOutboxEventEntity entity);
+  default int insert(TriggerOutboxEventEntity entity) {
+    return insertWithDefaultStatus(entity, OutboxPublishStatus.NEW.code());
+  }
+
+  int insertWithDefaultStatus(
+      @Param("entity") TriggerOutboxEventEntity entity,
+      @Param("defaultStatus") String defaultStatus);
 
   /**
-   * 取一批待发事件:{@code publish_status IN ('PENDING','FAILED') AND next_publish_at <= now()}, 按 {@code
+   * 取一批待发事件:{@code publish_status IN ('NEW','FAILED') AND next_publish_at <= now()}, 按 {@code
    * created_at ASC} 排序,锁定行(SKIP LOCKED)防多实例 trigger 重发。
    */
   List<TriggerOutboxEventEntity> selectPending(
@@ -34,7 +41,7 @@ public interface TriggerOutboxEventMapper {
       @Param("pendingStatus1") String pendingStatus1,
       @Param("pendingStatus2") String pendingStatus2);
 
-  /** 标记为 PUBLISHING(投递前状态),只对 PENDING/FAILED 行生效。 返回 1 表示成功抢占,0 表示已被其它 relay 实例抢走。 */
+  /** 标记为 PUBLISHING(投递前状态),只对 NEW/FAILED 行生效。 返回 1 表示成功抢占,0 表示已被其它 relay 实例抢走。 */
   int markPublishing(
       @Param("id") Long id,
       @Param("publishingStatus") String publishingStatus,

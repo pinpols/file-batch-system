@@ -50,27 +50,15 @@
         )
     </insert>
 
-    <update id="approve">
+    <update id="transition">
         UPDATE batch.config_approval
-           SET approval_status = 'APPROVED',
+           SET approval_status = #{targetStatus},
                reviewed_by = #{reviewedBy},
                reviewed_at = CURRENT_TIMESTAMP,
                review_comment = #{reviewComment},
                updated_at = CURRENT_TIMESTAMP
          WHERE tenant_id = #{tenantId}
            AND id = #{id}
-           AND approval_status = 'PENDING'
-    </update>
-
-    <update id="reject">
-        UPDATE batch.config_approval
-           SET approval_status = 'REJECTED',
-               reviewed_by = #{reviewedBy},
-               reviewed_at = CURRENT_TIMESTAMP,
-               review_comment = #{reviewComment},
-               updated_at = CURRENT_TIMESTAMP
-         WHERE tenant_id = #{tenantId}
-           AND id = #{id}
-           AND approval_status = 'PENDING'
+           AND approval_status = #{expectedStatus}
     </update>
 </mapper>

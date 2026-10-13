@@ -28,25 +28,25 @@
         released_by, created_at, updated_at
     </sql>
 
-    <insert id="insert"
-            parameterType="io.github.pinpols.batch.orchestrator.domain.entity.BatchDayWaitingLaunchEntity">
+    <insert id="insertWithStatus">
         insert into batch.batch_day_waiting_launch (
             tenant_id, calendar_code, job_code, biz_date, request_id, trace_id, trigger_type,
             wait_reason, launch_payload, wait_status, released_at, released_by, created_at, updated_at
         ) values (
-            #{tenantId}, #{calendarCode}, #{jobCode}, #{bizDate}, #{requestId}, #{traceId}, #{triggerType},
-            #{waitReason}, cast(#{launchPayload} as jsonb),
+            #{entity.tenantId}, #{entity.calendarCode}, #{entity.jobCode}, #{entity.bizDate},
+            #{entity.requestId}, #{entity.traceId}, #{entity.triggerType},
+            #{entity.waitReason}, cast(#{entity.launchPayload} as jsonb),
             <choose>
-                <when test="waitStatus != null">#{waitStatus}</when>
-                <otherwise>'WAITING'</otherwise>
+                <when test="entity.waitStatus != null">#{entity.waitStatus}</when>
+                <otherwise>#{initialStatus}</otherwise>
             </choose>,
-            #{releasedAt}, #{releasedBy},
+            #{entity.releasedAt}, #{entity.releasedBy},
             <choose>
-                <when test="createdAt != null">#{createdAt}</when>
+                <when test="entity.createdAt != null">#{entity.createdAt}</when>
                 <otherwise>current_timestamp</otherwise>
             </choose>,
             <choose>
-                <when test="updatedAt != null">#{updatedAt}</when>
+                <when test="entity.updatedAt != null">#{entity.updatedAt}</when>
                 <otherwise>current_timestamp</otherwise>
             </choose>
         )
@@ -60,10 +60,10 @@
            and request_id = #{requestId}
     </select>
 
-    <select id="selectWaiting" resultMap="BatchDayWaitingLaunchMap">
+    <select id="selectByStatus" resultMap="BatchDayWaitingLaunchMap">
         select <include refid="columns"/>
           from batch.batch_day_waiting_launch
-         where wait_status = 'WAITING'
+         where wait_status = #{waitStatus}
         <if test="tenantId != null and tenantId != ''">
            and tenant_id = #{tenantId}
         </if>
@@ -71,10 +71,10 @@
          limit #{limit}
     </select>
 
-    <select id="selectWaitingByCalendarBizDate" resultMap="BatchDayWaitingLaunchMap">
+    <select id="selectByCalendarBizDateAndStatus" resultMap="BatchDayWaitingLaunchMap">
         select <include refid="columns"/>
           from batch.batch_day_waiting_launch
-         where wait_status = 'WAITING'
+         where wait_status = #{waitStatus}
            and tenant_id = #{tenantId}
            and calendar_code = #{calendarCode}
            and biz_date = #{bizDate}
@@ -82,14 +82,14 @@
          limit #{limit}
     </select>
 
-    <update id="markReleased">
+    <update id="transitionStatus">
         update batch.batch_day_waiting_launch
-           set wait_status = 'RELEASED',
+           set wait_status = #{targetStatus},
                released_at = current_timestamp,
                released_by = #{releasedBy},
                updated_at = current_timestamp
          where tenant_id = #{tenantId}
            and request_id = #{requestId}
-           and wait_status = 'WAITING'
+           and wait_status = #{expectedStatus}
     </update>
 </mapper>

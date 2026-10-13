@@ -185,9 +185,9 @@
           and updated_at &lt; #{beforeTime}
     </delete>
 
-    <update id="resetToNew">
+    <update id="resetStatus">
         update batch.outbox_event
-        set publish_status = 'NEW',
+        set publish_status = #{targetStatus},
             next_publish_at = current_timestamp,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}

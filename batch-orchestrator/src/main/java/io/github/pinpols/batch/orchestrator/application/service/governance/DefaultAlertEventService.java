@@ -58,7 +58,7 @@ public class DefaultAlertEventService implements AlertEventService {
     entity.setDetailJson(request.detailJson());
     entity.setDedupFingerprint(fingerprint);
     entity.setTraceId(request.traceId());
-    entity.setStatus(AlertStatus.OPEN.name());
+    entity.setStatus(AlertStatus.OPEN.code());
 
     alertEventMapper.insertOrMerge(entity);
 

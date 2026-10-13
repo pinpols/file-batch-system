@@ -5,26 +5,60 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.domain.entity.CustomTaskTypeRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.CustomTaskTypeUpsertParam;
 import io.github.pinpols.batch.orchestrator.domain.value.JsonbString;
+import io.github.pinpols.batch.orchestrator.mapper.CustomTaskTypeRegistryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.TestConstructor;
 
 /** 集成测试：WorkerRegistryMapper 在真实数据库上的持久化和查询。 覆盖排空生命周期：ONLINE → DRAINING → DECOMMISSIONED。 */
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 @DisplayName("工作节点注册表持久化集成:验证真实数据库上注册写入与按键查询 + 排空及退役状态流转 + 条件更新防止旧状态覆盖 + 端口落库回读与不带端口的心跳保留")
 class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
 
-  @Autowired
-  private WorkerRegistryMapper workerRegistryMapper;
+  private final WorkerRegistryMapper workerRegistryMapper;
+
+  private final CustomTaskTypeRegistryMapper customTaskTypeRegistryMapper;
+
+  WorkerRegistryIntegrationTest(
+      WorkerRegistryMapper workerRegistryMapper,
+      CustomTaskTypeRegistryMapper customTaskTypeRegistryMapper) {
+    this.workerRegistryMapper = workerRegistryMapper;
+    this.customTaskTypeRegistryMapper = customTaskTypeRegistryMapper;
+  }
+
+  @Test
+  @DisplayName("自定义任务类型上报时由 Java 语义方法提供活跃状态并正常落库")
+  void shouldPersistActiveCustomTaskTypeThroughSemanticMapperMethod() {
+    String taskTypeCode = "custom_it_" + BatchDateTimeSupport.utcEpochMillis();
+    CustomTaskTypeUpsertParam param = CustomTaskTypeUpsertParam.builder()
+        .tenantId("t1")
+        .taskTypeCode(taskTypeCode)
+        .displayName("Custom integration task")
+        .descriptor("{\"taskType\":\"" + taskTypeCode + "\"}")
+        .descriptorVersion("1")
+        .declaredByWorkerCode("worker-it-custom")
+        .build();
+
+    assertThat(customTaskTypeRegistryMapper.upsertDeclared(param)).isEqualTo(1);
+
+    CustomTaskTypeRegistryEntity stored =
+        customTaskTypeRegistryMapper.selectByTenantAndCode("t1", taskTypeCode);
+    assertThat(stored).isNotNull();
+    assertThat(stored.status())
+        .isEqualTo(CustomTaskTypeRegistryMapper.RegistryStatus.ACTIVE.name());
+  }
 
   @Test
   @DisplayName("在线节点入库后可按键读回,状态与所属分组保持写入值")

@@ -287,6 +287,8 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
         .tenantId(request.tenantId())
         .workerCode(workerCode)
         .nextStatus(newStatus)
+        .preservedStatuses(List.of(
+            WorkerRegistryStatus.DECOMMISSIONED.code(), WorkerRegistryStatus.DRAINING.code()))
         .currentLoad(newLoad)
         .capabilityTags(newTags == null ? null : newTags.getValue())
         .build());

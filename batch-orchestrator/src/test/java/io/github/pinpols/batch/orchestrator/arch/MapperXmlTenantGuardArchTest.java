@@ -47,6 +47,8 @@ class MapperXmlTenantGuardArchTest extends BaseMapperXmlTenantGuardArchTest {
         // 跨租后台 reaper:按状态/时间全表扫僵尸行,加 tenant 谓词会破坏(by-design 跨租)
         "CompensationCommandMapper#markStaleRunningFailed",
         "OutboxEventMapper#resetStalePublishing",
+        // worker heartbeat reaper 按最后心跳全局扫描过期注册行,不得受当前租户上下文限制。
+        "WorkerRegistryMapper#updateStaleHeartbeatsStatus",
         "WorkerRegistryMapper#markStaleHeartbeatsOffline",
         // 发件箱发布器状态机:发布器全局轮询、按全局行 id 推进,无 tenant 上下文(by-design 系统组件)
         "OutboxEventMapper#deleteByIds",

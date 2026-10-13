@@ -11,7 +11,12 @@
     <update id="touchHeartbeat" parameterType="io.github.pinpols.batch.orchestrator.domain.param.TouchHeartbeatParam">
         update batch.worker_registry
            set status = case
-                            when status in ('DECOMMISSIONED', 'DRAINING') then status
+                            when status in
+                            <foreach collection="preservedStatuses" item="preservedStatus"
+                                     open="(" separator="," close=")">
+                                #{preservedStatus}
+                            </foreach>
+                            then status
                             else #{nextStatus}
                         end,
                heartbeat_at  = current_timestamp,
@@ -22,9 +27,9 @@
            and worker_code = #{workerCode}
     </update>
 
-    <update id="markDecommissioned">
+    <update id="updateStatusAndResetDrain">
         update batch.worker_registry
-           set status           = 'DECOMMISSIONED',
+           set status           = #{targetStatus},
                heartbeat_at     = current_timestamp,
                drain_started_at = null,
                drain_deadline_at = null,
@@ -37,11 +42,15 @@
          不动 DECOMMISSIONED（已由运维/人工终止的不能被扫描复活）。
          cutoff 由 DB 自身计算（current_timestamp - timeoutSeconds），
          避免 orchestrator JVM 与 DB / worker 时钟漂移导致提前/延后误判。 -->
-    <update id="markStaleHeartbeatsOffline">
+    <update id="updateStaleHeartbeatsStatus">
         update batch.worker_registry
-           set status     = 'OFFLINE',
+           set status     = #{targetStatus},
                updated_at = current_timestamp
-         where status in ('ONLINE', 'DRAINING')
+         where status in
+         <foreach collection="expectedStatuses" item="expectedStatus"
+                  open="(" separator="," close=")">
+             #{expectedStatus}
+         </foreach>
            and heartbeat_at &lt; current_timestamp - (#{timeoutSeconds} * interval '1 second')
     </update>
 
@@ -269,9 +278,9 @@
            and status = #{expectedStatus}
     </update>
 
-    <update id="startDrainIfCurrent">
+    <update id="startDrainTransition">
         update batch.worker_registry
-           set status            = 'DRAINING',
+           set status            = #{nextStatus},
                heartbeat_at      = current_timestamp,
                drain_started_at  = current_timestamp,
                drain_deadline_at = current_timestamp + (#{timeoutSeconds} * interval '1 second'),
@@ -281,16 +290,16 @@
            and status = #{expectedStatus}
     </update>
 
-    <update id="warmupIfOffline">
+    <update id="warmupTransition">
         update batch.worker_registry
-           set status            = 'ONLINE',
+           set status            = #{nextStatus},
                heartbeat_at      = current_timestamp,
                drain_started_at  = null,
                drain_deadline_at = null,
                updated_at        = current_timestamp
          where tenant_id = #{tenantId}
            and worker_code = #{workerCode}
-           and status = 'OFFLINE'
+           and status = #{expectedStatus}
     </update>
 
     <!-- 仅供集成测试夹具保存快照；生产代码禁止使用。 -->

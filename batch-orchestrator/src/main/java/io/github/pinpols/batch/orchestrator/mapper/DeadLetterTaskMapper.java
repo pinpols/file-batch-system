@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
+import io.github.pinpols.batch.common.enums.DeadLetterReplayStatus;
 import io.github.pinpols.batch.orchestrator.domain.entity.DeadLetterTaskEntity;
 import java.time.Instant;
 import java.util.List;
@@ -38,8 +39,22 @@ public interface DeadLetterTaskMapper {
       @Param("nextReplayAt") Instant nextReplayAt);
 
   /** V90: 选出自动重放到期 + 未达上限 + SYSTEM 类的死信记录。 */
-  List<DeadLetterTaskEntity> selectDueAutoRetries(@Param("batchSize") int batchSize);
+  default List<DeadLetterTaskEntity> selectDueAutoRetries(int batchSize) {
+    List<String> replayStatuses =
+        List.of(DeadLetterReplayStatus.NEW.code(), DeadLetterReplayStatus.FAILED.code());
+    return selectDueAutoRetriesByStatuses(batchSize, replayStatuses);
+  }
+
+  List<DeadLetterTaskEntity> selectDueAutoRetriesByStatuses(
+      @Param("batchSize") int batchSize, @Param("replayStatuses") List<String> replayStatuses);
 
   /** V90: 自动重放达到 max_replay_count 后，关闭自动重放，转 GIVE_UP（人工仍可触发 /internal/dead-letters/{id}/replay）。 */
-  int markGiveUp(@Param("tenantId") String tenantId, @Param("id") Long id);
+  default int markGiveUp(String tenantId, Long id) {
+    return updateGiveUp(tenantId, id, DeadLetterReplayStatus.GIVE_UP.code());
+  }
+
+  int updateGiveUp(
+      @Param("tenantId") String tenantId,
+      @Param("id") Long id,
+      @Param("targetStatus") String targetStatus);
 }

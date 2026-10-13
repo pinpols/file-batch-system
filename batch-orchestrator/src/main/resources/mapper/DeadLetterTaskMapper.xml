@@ -100,10 +100,13 @@
     </select>
 
     <!-- V90: 自动重放调度. error_class=SYSTEM + 已到 next_replay_at + 未达 max_replay_count -->
-    <select id="selectDueAutoRetries" resultMap="DeadLetterTaskResultMap">
+    <select id="selectDueAutoRetriesByStatuses" resultMap="DeadLetterTaskResultMap">
         select *
         from batch.dead_letter_task
-        where replay_status in ('NEW', 'FAILED')
+        where replay_status in
+        <foreach collection="replayStatuses" item="status" open="(" separator="," close=")">
+            #{status}
+        </foreach>
           and error_class = 'SYSTEM'
           and next_replay_at is not null
           and next_replay_at &lt;= current_timestamp
@@ -112,9 +115,9 @@
         limit #{batchSize}
     </select>
 
-    <update id="markGiveUp">
+    <update id="updateGiveUp">
         update batch.dead_letter_task
-        set replay_status = 'GIVE_UP',
+        set replay_status = #{targetStatus},
             next_replay_at = null,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}

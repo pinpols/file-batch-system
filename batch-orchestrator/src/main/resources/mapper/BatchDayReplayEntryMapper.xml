@@ -72,20 +72,20 @@
         limit #{limit}
     </select>
 
-    <update id="claimPending">
+    <update id="claimIfCurrent">
         update batch.batch_day_replay_entry
-        set status = 'RUNNING',
+        set status = #{targetStatus},
             started_at = #{now},
             updated_at = #{now}
         where id = #{id}
           and tenant_id = #{tenantId}
           and session_id = #{sessionId}
-          and status = 'PENDING'
+          and status = #{expectedStatus}
     </update>
 
-    <update id="resetStaleUnboundRunning">
+    <update id="resetStaleUnbound">
         update batch.batch_day_replay_entry
-        set status = 'PENDING',
+        set status = #{targetStatus},
             started_at = null,
             failure_reason = null,
             updated_at = #{now}
@@ -95,7 +95,7 @@
               from batch.batch_day_replay_session
               where id = #{sessionId}
           )
-          and status = 'RUNNING'
+          and status = #{expectedStatus}
           and rerun_instance_id is null
           and started_at &lt; #{cutoff}
     </update>

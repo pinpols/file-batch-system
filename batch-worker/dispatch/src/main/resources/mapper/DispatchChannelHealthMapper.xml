@@ -41,19 +41,19 @@
       P2：成功结果原子 UPSERT。first insert：consecutive_failures=0；conflict 上直接清零。
       语义与旧 upsertHealth 等价，但独立出来让成功/失败走不同路径，避免共享 count 参数。
     -->
-    <insert id="upsertSuccess" parameterType="map">
+    <insert id="upsertSuccessWithStatus" parameterType="map">
         insert into batch.file_channel_health (
             tenant_id, channel_code, channel_type, health_status, consecutive_failures,
             last_probe_at, last_success_at, last_failure_at, next_probe_at,
             probe_message, probe_evidence, updated_at
         ) values (
-            #{tenantId}, #{channelCode}, #{channelType}, 'HEALTHY', 0,
+            #{tenantId}, #{channelCode}, #{channelType}, #{healthyStatus}, 0,
             #{now}, #{now}, null, #{nextProbeAt},
             #{probeMessage}, #{probeEvidence}, current_timestamp
         )
         on conflict (tenant_id, channel_code) do update set
             channel_type          = excluded.channel_type,
-            health_status         = 'HEALTHY',
+            health_status         = excluded.health_status,
             consecutive_failures  = 0,
             last_probe_at         = excluded.last_probe_at,
             last_success_at       = excluded.last_success_at,
@@ -68,14 +68,14 @@
       COALESCE(...) + 1 递增，消除"Java 侧读-改-写"的 lost-update；health_status 按 threshold
       动态判定 UNHEALTHY / DEGRADED。next_probe_at 按新的 failures 指数退避由调用方先行计算。
     -->
-    <select id="upsertFailureAndBump" parameterType="map" resultType="int" affectData="true">
+    <select id="upsertFailureAndBumpWithStatuses" parameterType="map" resultType="int" affectData="true">
         insert into batch.file_channel_health (
             tenant_id, channel_code, channel_type, health_status, consecutive_failures,
             last_probe_at, last_success_at, last_failure_at, next_probe_at,
             probe_message, probe_evidence, updated_at
         ) values (
             #{tenantId}, #{channelCode}, #{channelType},
-            case when 1 &gt;= #{failureThreshold} then 'UNHEALTHY' else 'DEGRADED' end,
+            case when 1 &gt;= #{failureThreshold} then #{unhealthyStatus} else #{degradedStatus} end,
             1,
             #{now}, null, #{now}, #{firstFailureBackoffAt},
             #{probeMessage}, #{probeEvidence}, current_timestamp
@@ -86,7 +86,7 @@
             health_status        = case
                 when coalesce(batch.file_channel_health.consecutive_failures, 0) + 1
                      &gt;= #{failureThreshold}
-                then 'UNHEALTHY' else 'DEGRADED' end,
+                then #{unhealthyStatus} else #{degradedStatus} end,
             last_probe_at        = excluded.last_probe_at,
             last_failure_at      = excluded.last_failure_at,
             next_probe_at        = batch.file_channel_health.next_probe_at, -- 先占位，后面再按新 count 更新

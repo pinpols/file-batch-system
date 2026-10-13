@@ -147,14 +147,14 @@
           and business_key = #{businessKey}
     </select>
 
-    <update id="supersedePriorEffective">
+    <update id="supersede">
         update batch.result_version
-        set status         = 'SUPERSEDED',
+        set status         = #{targetStatus},
             deactivated_at = #{deactivatedAt},
             updated_at     = #{deactivatedAt}
         where tenant_id    = #{tenantId}
           and business_key = #{businessKey}
-          and status       = 'EFFECTIVE'
+          and status       = #{expectedStatus}
     </update>
 
     <select id="selectEffective" resultMap="ResultVersionResultMap">
@@ -200,27 +200,27 @@
             </foreach>
     </select>
 
-    <update id="promoteToEffective">
+    <update id="promote">
         update batch.result_version
-        set status         = 'EFFECTIVE',
-            effective_at   = #{effectiveAt},
-            updated_at     = #{effectiveAt}
+        set status         = #{targetStatus},
+            effective_at   = #{transitionedAt},
+            updated_at     = #{transitionedAt}
         where tenant_id = #{tenantId}
           and id = #{id}
-          and status = 'PENDING'
+          and status = #{expectedStatus}
     </update>
 
-    <update id="rejectPending">
+    <update id="reject">
         update batch.result_version
-        set status         = 'ARCHIVED',
-            deactivated_at = #{deactivatedAt},
-            updated_at     = #{deactivatedAt}
+        set status         = #{targetStatus},
+            deactivated_at = #{transitionedAt},
+            updated_at     = #{transitionedAt}
         where tenant_id = #{tenantId}
           and id = #{id}
-          and status = 'PENDING'
+          and status = #{expectedStatus}
     </update>
 
-    <update id="archiveSuperseded">
+    <update id="archive">
         with archived as (
             insert into archive.result_version_archive (
                 id,
@@ -248,7 +248,7 @@
                 business_key,
                 version_no,
                 job_instance_id,
-                'ARCHIVED',
+                #{targetStatus},
                 effective_at,
                 deactivated_at,
                 payload_storage,
@@ -264,7 +264,7 @@
             from batch.result_version
             where tenant_id = #{tenantId}
               and id = #{id}
-              and status = 'SUPERSEDED'
+              and status = #{expectedStatus}
             on conflict (id) do update set
                 status = excluded.status,
                 payload_json = excluded.payload_json,
@@ -272,14 +272,14 @@
             returning id
         )
         update batch.result_version
-        set status = 'ARCHIVED',
+        set status = #{targetStatus},
             updated_at = #{now}
             <if test="clearPayload">
             , payload_json = null
             </if>
         where tenant_id = #{tenantId}
           and id in (select id from archived)
-          and status = 'SUPERSEDED'
+          and status = #{expectedStatus}
     </update>
 
     <select id="selectSupersededOlderThan" resultMap="ResultVersionResultMap">

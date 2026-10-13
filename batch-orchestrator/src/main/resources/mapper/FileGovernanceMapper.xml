@@ -76,7 +76,7 @@
     <update id="resetDispatchRecordForRedispatch">
         update batch.file_dispatch_record
         set dispatch_status = #{dispatchCreatedStatus},
-            receipt_status = 'NONE',
+            receipt_status = #{receiptNoneStatus},
             error_code = null,
             error_message = null,
             error_key = null,

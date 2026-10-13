@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.trigger.mapper;
 
+import io.github.pinpols.batch.common.enums.MisfirePendingStatus;
 import io.github.pinpols.batch.common.persistence.entity.TriggerMisfirePendingEntity;
 import java.time.Instant;
 import java.util.List;
@@ -24,7 +25,13 @@ public interface TriggerMisfirePendingMapper {
    *
    * @return 影响行数(1=新建,0=已存在,撞键时由调用方捕获 DuplicateKey)
    */
-  int insertPending(TriggerMisfirePendingEntity entity);
+  default int insertPending(TriggerMisfirePendingEntity entity) {
+    return insertPendingWithStatus(entity, MisfirePendingStatus.PENDING.code());
+  }
+
+  int insertPendingWithStatus(
+      @Param("entity") TriggerMisfirePendingEntity entity,
+      @Param("initialStatus") String initialStatus);
 
   TriggerMisfirePendingEntity selectById(@Param("id") Long id);
 
@@ -34,21 +41,56 @@ public interface TriggerMisfirePendingMapper {
       @Param("scheduledFireTime") Instant scheduledFireTime);
 
   /** 待审列表(给 console UI 展示用)。 */
-  List<TriggerMisfirePendingEntity> selectPendingByTenant(
-      @Param("tenantId") String tenantId, @Param("limit") int limit);
+  default List<TriggerMisfirePendingEntity> selectPendingByTenant(String tenantId, int limit) {
+    return selectByTenantAndStatus(tenantId, MisfirePendingStatus.PENDING.code(), limit);
+  }
+
+  List<TriggerMisfirePendingEntity> selectByTenantAndStatus(
+      @Param("tenantId") String tenantId,
+      @Param("status") String status,
+      @Param("limit") int limit);
 
   /** 审批通过(只更新 status / approvedBy / approvedAt)。 */
-  int approve(@Param("id") Long id, @Param("approvedBy") String approvedBy);
+  default int approve(Long id, String approvedBy) {
+    return updateApprovalStatus(
+        id,
+        approvedBy,
+        null,
+        false,
+        MisfirePendingStatus.APPROVED.code(),
+        MisfirePendingStatus.PENDING.code());
+  }
 
   /** 审批拒绝(status=REJECTED + 写 rejection_reason)。 */
-  int reject(
+  default int reject(Long id, String approvedBy, String rejectionReason) {
+    return updateApprovalStatus(
+        id,
+        approvedBy,
+        rejectionReason,
+        true,
+        MisfirePendingStatus.REJECTED.code(),
+        MisfirePendingStatus.PENDING.code());
+  }
+
+  int updateApprovalStatus(
       @Param("id") Long id,
       @Param("approvedBy") String approvedBy,
-      @Param("rejectionReason") String rejectionReason);
+      @Param("rejectionReason") String rejectionReason,
+      @Param("writeRejectionReason") boolean writeRejectionReason,
+      @Param("targetStatus") String targetStatus,
+      @Param("expectedStatus") String expectedStatus);
 
   /** 审批通过后补 fire 完成,关联 trigger_request.id。 */
   int linkCatchUpRequest(@Param("id") Long id, @Param("catchUpRequestId") Long catchUpRequestId);
 
   /** 周期任务:把超期未审批的 PENDING 改 EXPIRED。 */
-  int markExpired(@Param("now") Instant now);
+  default int markExpired(Instant now) {
+    return expireBefore(
+        now, MisfirePendingStatus.EXPIRED.code(), MisfirePendingStatus.PENDING.code());
+  }
+
+  int expireBefore(
+      @Param("now") Instant now,
+      @Param("targetStatus") String targetStatus,
+      @Param("expectedStatus") String expectedStatus);
 }

@@ -12,6 +12,11 @@ import org.apache.ibatis.annotations.Param;
 /** ADR-020 batch_day_replay_entry MyBatis 映射。 */
 public interface BatchDayReplayEntryMapper {
 
+  enum ReplayEntryStatus {
+    PENDING,
+    RUNNING
+  }
+
   int insert(BatchDayReplayEntryEntity entity);
 
   /** 批量插入；MyBatis foreach 拼 INSERT 多 VALUES。 */
@@ -33,17 +38,36 @@ public interface BatchDayReplayEntryMapper {
   }
 
   /** PENDING → RUNNING 原子抢占；返回 1 才允许创建实例。 */
-  int claimPending(
+  default int claimPending(Long id, String tenantId, Long sessionId, Instant now) {
+    return claimIfCurrent(
+        id,
+        tenantId,
+        sessionId,
+        now,
+        ReplayEntryStatus.PENDING.name(),
+        ReplayEntryStatus.RUNNING.name());
+  }
+
+  int claimIfCurrent(
       @Param("id") Long id,
       @Param("tenantId") String tenantId,
       @Param("sessionId") Long sessionId,
-      @Param("now") Instant now);
+      @Param("now") Instant now,
+      @Param("expectedStatus") String expectedStatus,
+      @Param("targetStatus") String targetStatus);
 
   /** 回收启动前崩溃留下的 RUNNING entry；已绑定 rerun instance 的行绝不回收。 */
-  int resetStaleUnboundRunning(
+  default int resetStaleUnboundRunning(Long sessionId, Instant cutoff, Instant now) {
+    return resetStaleUnbound(
+        sessionId, cutoff, now, ReplayEntryStatus.RUNNING.name(), ReplayEntryStatus.PENDING.name());
+  }
+
+  int resetStaleUnbound(
       @Param("sessionId") Long sessionId,
       @Param("cutoff") Instant cutoff,
-      @Param("now") Instant now);
+      @Param("now") Instant now,
+      @Param("expectedStatus") String expectedStatus,
+      @Param("targetStatus") String targetStatus);
 
   /** 根据 rerun_instance_id 反查（terminal 回填用）。 */
   BatchDayReplayEntryEntity selectByRerunInstanceId(
