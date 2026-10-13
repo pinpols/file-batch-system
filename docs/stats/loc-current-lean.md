@@ -1,32 +1,32 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `4d5b38dfd`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `82fa9fffb`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 4,995 | 537,903 | 277,828 | 51.7% |
+| 5,000 | 538,478 | 278,200 | 51.7% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| prod | 2,828 | 260,811 | 119,542 | 45.8% |
-| test | 1,336 | 202,458 | 110,790 | 54.7% |
+| prod | 2,830 | 261,012 | 119,665 | 45.8% |
+| test | 1,339 | 202,755 | 110,977 | 54.7% |
 | script | 668 | 57,323 | 36,296 | 63.3% |
-| config | 65 | 9,217 | 6,801 | 73.8% |
-| infra-config | 34 | 5,816 | 4,227 | 72.7% |
+| config | 65 | 9,265 | 6,841 | 73.8% |
+| infra-config | 34 | 5,845 | 4,249 | 72.7% |
 | sql | 64 | 2,278 | 172 | 7.6% |
 
 ## 按语言
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,664 | 392,548 | 202,804 | 51.7% |
+| Java | 3,669 | 393,046 | 203,114 | 51.7% |
 | Shell | 213 | 32,775 | 25,862 | 78.9% |
 | Python | 268 | 38,898 | 20,176 | 51.9% |
-| YAML | 108 | 13,785 | 10,565 | 76.6% |
+| YAML | 108 | 13,862 | 10,627 | 76.7% |
 | XML | 186 | 22,410 | 6,996 | 31.2% |
 | TypeScript | 37 | 6,667 | 3,141 | 47.1% |
 | Rust | 23 | 8,499 | 2,856 | 33.6% |
@@ -42,8 +42,8 @@
 | `load-tests/scripts/run-p2-capacity-profile.sh` | script | Shell | 1,385 | 1,271 |
 | `batch-common/src/main/resources/messages.properties` | prod | Properties | 1,457 | 1,204 |
 | `batch-common/src/main/resources/messages_zh_CN.properties` | prod | Properties | 1,455 | 1,204 |
-| `deploy/docker/observability/prometheus-batch-rules.yml` | config | YAML | 1,386 | 1,170 |
-| `helm/batch-platform/files/prometheus-batch-rules.yml` | infra-config | YAML | 1,386 | 1,170 |
+| `deploy/docker/observability/prometheus-batch-rules.yml` | config | YAML | 1,415 | 1,192 |
+| `helm/batch-platform/files/prometheus-batch-rules.yml` | infra-config | YAML | 1,415 | 1,192 |
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/ConsoleTenantConfigPackageExcelUploadIntegrationTest.java` | test | Java | 2,204 | 939 |
 | `load-tests/scripts/run-control-plane-worker-benchmark.sh` | script | Shell | 879 | 796 |
 | `helm/batch-platform/values.yaml` | infra-config | YAML | 1,017 | 734 |

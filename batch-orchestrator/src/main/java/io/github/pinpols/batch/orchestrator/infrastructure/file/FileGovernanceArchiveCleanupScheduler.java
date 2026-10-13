@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.file;
 
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
+import io.github.pinpols.batch.orchestrator.infrastructure.metrics.ArchiveSchedulerHealthMetrics;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -19,6 +21,12 @@ public class FileGovernanceArchiveCleanupScheduler {
 
   private final FileGovernanceScheduler fileGovernanceScheduler;
   private final OrchestratorGracefulShutdown gracefulShutdown;
+  private final ArchiveSchedulerHealthMetrics schedulerHealthMetrics;
+
+  @PostConstruct
+  void registerHealthMetric() {
+    schedulerHealthMetrics.register("file_governance");
+  }
 
   @Scheduled(fixedDelayString = "${batch.file-governance.archive.cleanup-interval-millis:60000}")
   @SchedulerLock(
@@ -30,5 +38,6 @@ public class FileGovernanceArchiveCleanupScheduler {
       return;
     }
     fileGovernanceScheduler.cleanupArchivedFiles();
+    schedulerHealthMetrics.markSuccess("file_governance");
   }
 }

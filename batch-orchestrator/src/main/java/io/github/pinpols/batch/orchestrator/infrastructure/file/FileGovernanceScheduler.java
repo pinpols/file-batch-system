@@ -1,9 +1,13 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.file;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import io.github.pinpols.batch.common.enums.FileIntegrityState;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 import io.github.pinpols.batch.orchestrator.config.FileGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.FileGovernanceMetricsCacheService;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -454,16 +458,34 @@ public class FileGovernanceScheduler {
     }
   }
 
-  /** 组内每个成员都有完整性背书(checksum_type 非空且非 NONE,即入站 MANIFEST 注入了 checksum)。 */
+  /** 组内每个成员都已完成原始对象字节校验，不能仅凭记录上有期望 checksum 判定通过。 */
   private boolean allMembersVerified(
       List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles) {
     for (FileGovernanceArrivalViews.ArrivalCandidateView file : groupFiles) {
-      String checksumType = file.checksumType();
-      if (EmptyChecks.isBlank(checksumType) || "NONE".equalsIgnoreCase(checksumType)) {
+      if (!hasVerifiedIntegrityState(file.metadataJson())) {
         return false;
       }
     }
     return true;
+  }
+
+  private boolean hasVerifiedIntegrityState(Object metadataJson) {
+    if (metadataJson instanceof Map<?, ?> metadata) {
+      return FileIntegrityState.VERIFIED.code().equals(metadata.get("integrityState"));
+    }
+    String json =
+        metadataJson instanceof String text ? text : PostgresqlJsonbTexts.tryExtract(metadataJson);
+    if (EmptyChecks.isBlank(json)) {
+      return false;
+    }
+    try {
+      Map<String, Object> metadata =
+          JsonUtils.fromJson(json, new TypeReference<Map<String, Object>>() {});
+      return EmptyChecks.isNotNull(metadata)
+          && FileIntegrityState.VERIFIED.code().equals(metadata.get("integrityState"));
+    } catch (RuntimeException exception) {
+      return false;
+    }
   }
 
   private Set<String> parseRequiredFileSet(String value) {

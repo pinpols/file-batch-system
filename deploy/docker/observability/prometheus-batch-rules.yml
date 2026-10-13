@@ -1236,10 +1236,7 @@ groups:
   #   应用级 backlog 告警,缺"磁盘 / 库体积"这道回退——磁盘写满是所有组件的共因故障。
   #   历史教训:process_staging 曾积压 118GB dead、Docker.raw 147G bloat 才被发现。
   # 数据源:node-exporter(9100)/ postgres-exporter(9187)/ cadvisor,均已在 prometheus.yml scrape。
-  # 注:归档调度"最近成功时间"目前无直接指标(scheduler 未埋点);此处用「库体积持续增长 +
-  #   磁盘水位」作代理——归档失效必然表现为这两者异常。要精确定位"哪个调度停了",
-  #   后续给 OutboxArchiveScheduler / WorkflowArchiveScheduler / FileGovernanceScheduler 加
-  #   last-success 时间戳 Gauge,再补 `time() - batch_*_archive_last_success_seconds > N` 告警。
+  # 归档调度自身暴露最近成功时间；库体积和磁盘告警继续作为增长异常的独立信号。
   # ===========================================================================
   - name: batch.capacity
     rules:
@@ -1328,6 +1325,38 @@ groups:
           summary: "PostgreSQL backup is stale or missing ({{ $labels.datname }})"
           description: "距上次成功备份已超 26h,或备份新鲜度指标缺失。备份链路(pg_basebackup / pg_dump / WAL 归档)可能已断——这是数据安全底线,立刻排查备份 cron 与归档目标可写性。"
           runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/backup-and-pitr.md#备份新鲜度监控"
+
+      - alert: ArchiveSchedulerNeverSucceeded
+        expr: |
+          (max by (job, scheduler) (batch_archive_scheduler_last_success_timestamp_seconds{scheduler="file_governance"}) == 0 and on(job) (min by (job) (process_uptime_seconds{job="batch-orchestrator"}) > 300))
+          or (max by (job, scheduler) (batch_archive_scheduler_last_success_timestamp_seconds{scheduler="outbox"}) == 0 and on(job) (min by (job) (process_uptime_seconds{job="batch-orchestrator"}) > 26 * 3600))
+          or (max by (job, scheduler) (batch_archive_scheduler_last_success_timestamp_seconds{scheduler="workflow"}) == 0 and on(job) (min by (job) (process_uptime_seconds{job="batch-orchestrator"}) > 26 * 3600))
+          or (max by (job, scheduler) (batch_archive_scheduler_last_success_timestamp_seconds{scheduler="job_instance"}) == 0 and on(job) (min by (job) (process_uptime_seconds{job="batch-orchestrator"}) > 8 * 24 * 3600))
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: capacity
+        annotations:
+          summary: "Archive scheduler {{ $labels.scheduler }} has never completed a run"
+          description: "Enabled archive scheduler {{ $labels.scheduler }} has not recorded a run that returned normally within its expected interval after process startup. Check its logs, ShedLock state, database connectivity, and feature configuration."
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/backup-and-pitr.md#库体积增长治理"
+
+      - alert: ArchiveSchedulerStale
+        expr: |
+          ((time() - max by (job, scheduler) (batch_archive_scheduler_last_success_timestamp_seconds{scheduler="file_governance"}) > 300) and max by (job, scheduler) (batch_archive_scheduler_last_success_timestamp_seconds{scheduler="file_governance"}) > 0)
+          or ((time() - max by (job, scheduler) (batch_archive_scheduler_last_success_timestamp_seconds{scheduler="outbox"}) > 26 * 3600) and max by (job, scheduler) (batch_archive_scheduler_last_success_timestamp_seconds{scheduler="outbox"}) > 0)
+          or ((time() - max by (job, scheduler) (batch_archive_scheduler_last_success_timestamp_seconds{scheduler="workflow"}) > 26 * 3600) and max by (job, scheduler) (batch_archive_scheduler_last_success_timestamp_seconds{scheduler="workflow"}) > 0)
+          or ((time() - max by (job, scheduler) (batch_archive_scheduler_last_success_timestamp_seconds{scheduler="job_instance"}) > 8 * 24 * 3600) and max by (job, scheduler) (batch_archive_scheduler_last_success_timestamp_seconds{scheduler="job_instance"}) > 0)
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: capacity
+        annotations:
+          summary: "Archive scheduler {{ $labels.scheduler }} has not completed a run within its expected interval"
+          description: "Last normally completed archive run was {{ $value | humanizeDuration }} ago. Check scheduler logs, ShedLock state, database connectivity, and whether the archive is falling behind."
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/backup-and-pitr.md#库体积增长治理"
 
   # ── readiness 超时 + DB 锁等待 ───────────────────────────────────
   # 体检维度8 补漏:这两类此前只有 metric(readiness)或根本没指标(锁等待),无 alert rule。

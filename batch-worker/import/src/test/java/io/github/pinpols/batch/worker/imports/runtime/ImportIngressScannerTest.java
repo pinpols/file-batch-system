@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.imports.runtime;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -13,18 +14,23 @@ import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.storage.ObjectListing;
 import io.github.pinpols.batch.common.storage.ObjectSummary;
+import io.github.pinpols.batch.worker.core.infrastructure.FileRecordParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.imports.config.ImportScannerProperties;
 import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -93,8 +99,8 @@ class ImportIngressScannerTest {
   }
 
   @Test
-  @DisplayName("完成标记为 JSON 形态时先读取校验其内容,再登记文件")
-  void scan_readsAndValidatesSidecar_whenDoneFileFormatIsJsonAlias() {
+  @DisplayName("MANIFEST 模式校验 schema、文件名、长度和原始对象摘要后再登记")
+  void scan_readsAndValidatesSidecar_whenDoneFileFormatIsJsonAlias() throws Exception {
     scannerProperties.setRequireDoneFile(true);
     scannerProperties.setDefaultBizDate("2026-07-23");
     scannerProperties.setDoneFileFormat(ImportScannerProperties.DoneFileFormat.JSON);
@@ -103,8 +109,17 @@ class ImportIngressScannerTest {
         new ObjectSummary("ingress/t1/orders.csv.done", 15L, Instant.now(), "e2");
     when(objectStore.list(any(), any(), any(), anyInt()))
         .thenReturn(new ObjectListing(List.of(data, marker), null));
+    byte[] dataBytes = "hello".getBytes(StandardCharsets.UTF_8);
+    String checksum =
+        HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(dataBytes));
     when(objectStore.get("batch-dev", "ingress/t1/orders.csv.done"))
-        .thenReturn(new ByteArrayInputStream("{\"sizeBytes\":5}".getBytes(StandardCharsets.UTF_8)));
+        .thenReturn(
+            new ByteArrayInputStream(("""
+                    {"schemaVersion":"file-sidecar-manifest-v1","fileName":"orders.csv","sizeBytes":5,
+                     "checksumType":"SHA-256","checksumValue":"%s","checksumScope":"RAW_OBJECT"}
+                    """).formatted(checksum).getBytes(StandardCharsets.UTF_8)));
+    when(objectStore.get("batch-dev", "ingress/t1/orders.csv"))
+        .thenReturn(new ByteArrayInputStream(dataBytes));
     when(runtimeRepository.existsFileRecordByStoragePath(
             "t1", "batch-dev", "ingress/t1/orders.csv"))
         .thenReturn(false);
@@ -113,7 +128,36 @@ class ImportIngressScannerTest {
     scanner.scan();
 
     verify(objectStore).get("batch-dev", "ingress/t1/orders.csv.done");
-    verify(runtimeRepository).createFileRecord(any());
+    verify(objectStore).get("batch-dev", "ingress/t1/orders.csv");
+    ArgumentCaptor<FileRecordParam> recordCaptor = ArgumentCaptor.forClass(FileRecordParam.class);
+    verify(runtimeRepository).createFileRecord(recordCaptor.capture());
+    assertThat(((Map<?, ?>) recordCaptor.getValue().getMetadata()).get("integrityState"))
+        .isEqualTo("VERIFIED");
+  }
+
+  @Test
+  @DisplayName("MANIFEST 摘要与原始对象不一致时拒绝登记")
+  void scan_skipsRegistration_whenManifestChecksumDoesNotMatchObject() {
+    scannerProperties.setRequireDoneFile(true);
+    scannerProperties.setDefaultBizDate("2026-07-23");
+    scannerProperties.setDoneFileFormat(ImportScannerProperties.DoneFileFormat.MANIFEST);
+    ObjectSummary data = new ObjectSummary("ingress/t1/orders.csv", 5L, Instant.now(), "e1");
+    ObjectSummary marker =
+        new ObjectSummary("ingress/t1/orders.csv.done", 15L, Instant.now(), "e2");
+    when(objectStore.list(any(), any(), any(), anyInt()))
+        .thenReturn(new ObjectListing(List.of(data, marker), null));
+    String invalidManifest = """
+        {"schemaVersion":"file-sidecar-manifest-v1","fileName":"orders.csv","sizeBytes":5,
+         "checksumType":"SHA-256","checksumValue":"%s","checksumScope":"RAW_OBJECT"}
+        """.formatted("0".repeat(64));
+    when(objectStore.get("batch-dev", "ingress/t1/orders.csv.done"))
+        .thenReturn(new ByteArrayInputStream(invalidManifest.getBytes(StandardCharsets.UTF_8)));
+    when(objectStore.get("batch-dev", "ingress/t1/orders.csv"))
+        .thenReturn(new ByteArrayInputStream("hello".getBytes(StandardCharsets.UTF_8)));
+
+    scanner.scan();
+
+    verify(runtimeRepository, never()).createFileRecord(any());
   }
 
   @Test

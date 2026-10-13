@@ -33,7 +33,8 @@ class ConsoleMetaEnumRegistrationTest {
       "ResultCode", // RPC 错误码协议，非业务字典
       "WorkflowNodeCode", // 内部节点标记常量（仅 START/END）
       "JobStatus", // 死代码（无其它引用），候选移除
-      "BatchLifecycleStatus" // 派生公共投影，非可选字典；用户仍选具体 *Status，UI 不暴露
+      "BatchLifecycleStatus", // 派生公共投影，非可选字典；用户仍选具体 *Status，UI 不暴露
+      "FileIntegrityState" // 文件元数据内部校验标记，不是 Console 可选字典
       );
 
   @Test
