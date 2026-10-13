@@ -8,6 +8,7 @@
 
 ## [Unreleased]
 
+- 新增手动触发的前后端联合版本准备 workflow，按 patch/minor/major 校验版本并创建两仓 Release PR；不自动合并或发布。
 - 治理 Orchestrator 与 Console 的实体、服务和控制层边界：迁移非表投影模型，Controller 使用独立请求/响应 DTO 并保持 JSON 字段兼容，新增零存量架构门禁和分层约定文档。
 - 收敛批次日回放条目状态更新的长位置参数与空值组合，改用具名参数对象和状态入口；AI 无用量结算改为明确入口，治理基线当前版本与基准版本统一执行同一套结构校验；同步前后端可读性联合审计，不改变 SQL、API、事务或业务状态语义。
 - 修复临时 Sonar Quality Gate 在小变更条件已省略但 `ignoredConditions=false` 时误报；仍要求 `new_lines < 20` 的明确证据，其他未解释的缺失条件继续失败。

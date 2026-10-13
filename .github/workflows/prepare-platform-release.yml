@@ -1,0 +1,145 @@
+name: prepare-platform-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: Version increment for the complete release window
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prepare-platform-release
+  cancel-in-progress: false
+
+jobs:
+  prepare-release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Create repository-scoped release token
+        id: release-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
+        with:
+          client-id: ${{ vars.RELEASE_AUTOMATION_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_AUTOMATION_APP_PRIVATE_KEY }}
+          owner: pinpols
+          repositories: |
+            file-batch-system
+            batch-console
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Checkout backend main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ steps.release-token.outputs.token }}
+          persist-credentials: false
+
+      - name: Checkout frontend main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: pinpols/batch-console
+          ref: main
+          path: frontend-source
+          fetch-depth: 0
+          token: ${{ steps.release-token.outputs.token }}
+          persist-credentials: false
+
+      - name: Calculate and prepare the coordinated version
+        id: release
+        env:
+          BUMP_TYPE: ${{ inputs.bump_type }}
+        run: |
+          set -euo pipefail
+          python3 scripts/ci/prepare-platform-release.py \
+            --frontend-root frontend-source \
+            --bump "$BUMP_TYPE" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Create or update backend release PR
+        id: backend-pr
+        env:
+          GH_TOKEN: ${{ steps.release-token.outputs.token }}
+          RELEASE_VERSION: ${{ steps.release.outputs.release_version }}
+          BUMP_TYPE: ${{ inputs.bump_type }}
+        run: |
+          set -euo pipefail
+          gh auth setup-git --hostname github.com
+          branch="release/platform-v${RELEASE_VERSION}"
+          existing_pr=$(gh pr list --repo pinpols/file-batch-system \
+            --state open --head "pinpols:${branch}" --json number,url --jq '.[0] // empty')
+
+          if [[ -z "$existing_pr" ]]; then
+            git switch -c "$branch"
+            git config user.name "Platform Release Automation"
+            git config user.email "platform-release-automation@users.noreply.github.com"
+            git add CHANGELOG.md pom.xml docs/api/orchestrator-internal.openapi.yaml \
+              docs/sdk/quickstart.md helm/batch-platform/Chart.yaml helm/values-prod.yaml
+            git diff --cached --quiet && {
+              echo "::error::Version preparation produced no backend changes."
+              exit 1
+            }
+            git commit -m "release: prepare platform v${RELEASE_VERSION}"
+            git push --set-upstream origin "$branch"
+            pr_url=$(gh pr create --repo pinpols/file-batch-system \
+              --base main --head "$branch" \
+              --title "release: prepare platform v${RELEASE_VERSION}" \
+              --body "Automated ${BUMP_TYPE} release preparation for the coordinated frontend/backend platform release v${RELEASE_VERSION}. Review this PR together with the frontend release PR. This PR prepares version metadata; it does not publish or deploy the release.")
+          else
+            pr_url=$(jq -r '.url' <<<"$existing_pr")
+            echo "Existing backend release PR: $pr_url"
+          fi
+
+          echo "pr_url=$pr_url" >> "$GITHUB_OUTPUT"
+          echo "Backend Release PR: $pr_url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create or update frontend release PR
+        env:
+          GH_TOKEN: ${{ steps.release-token.outputs.token }}
+          RELEASE_VERSION: ${{ steps.release.outputs.release_version }}
+          BUMP_TYPE: ${{ inputs.bump_type }}
+          BACKEND_PR_URL: ${{ steps.backend-pr.outputs.pr_url }}
+        run: |
+          set -euo pipefail
+          gh auth setup-git --hostname github.com
+          branch="release/platform-v${RELEASE_VERSION}"
+          RELEASE_DATE="$(TZ=Asia/Shanghai date +%F)"
+          export RELEASE_DATE
+          cd frontend-source
+          node scripts/prepare-platform-release.mjs "$BUMP_TYPE" "$RELEASE_VERSION"
+          npm run check:version -- "$RELEASE_VERSION"
+          cd ..
+          git -C frontend-source config user.name "Platform Release Automation"
+          git -C frontend-source config user.email "platform-release-automation@users.noreply.github.com"
+          existing_pr=$(gh pr list --repo pinpols/batch-console \
+            --state open --head "pinpols:${branch}" --json number,url --jq '.[0] // empty')
+
+          if [[ -z "$existing_pr" ]]; then
+            git -C frontend-source switch -c "$branch"
+            git -C frontend-source add CHANGELOG.md package.json package-lock.json .platform-release-manifest.json
+            git -C frontend-source diff --cached --quiet && {
+              echo "::error::Version preparation produced no frontend changes."
+              exit 1
+            }
+            git -C frontend-source commit -m "release: prepare platform v${RELEASE_VERSION}"
+            git -C frontend-source push --set-upstream origin "$branch"
+            pr_url=$(gh pr create --repo pinpols/batch-console \
+              --base main --head "$branch" \
+              --title "release: prepare platform v${RELEASE_VERSION}" \
+              --body "Automated ${BUMP_TYPE} version alignment for coordinated platform release v${RELEASE_VERSION}. Backend Release PR: ${BACKEND_PR_URL}. Review these PRs together. This PR prepares version metadata and changelog; it does not publish or deploy the release.")
+          else
+            pr_url=$(jq -r '.url' <<<"$existing_pr")
+            echo "Existing frontend release PR: $pr_url"
+          fi
+
+          echo "Frontend Release PR: $pr_url" >> "$GITHUB_STEP_SUMMARY"
