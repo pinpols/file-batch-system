@@ -23,6 +23,7 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 | `daily-sim-strict-validation` | 变更感知的定时真实数据验证 | 每天 13:31 UTC（北京 21:31）、手动（`force=true` 可强制执行） | 检测当日代码/配置变化后运行 `sim-harness all` 和 BE-ACC strict；纯 Markdown/RST、`LICENSE`、`NOTICE` 不触发当天验证。手动运行按当前北京时间日期判断；定时运行使用计划触发时间所属日期。SIM 失败不跳过 strict，但启动失败/取消/runner 丢失不算通过。只有两项成功才构建 nightly 镜像 | 验证 job 240 min；内部步骤分别设限 |
 | `docker-image-build` | 变更感知的镜像构建 | 由 `daily-sim-strict-validation` 在当天有代码/配置变更且 sim + strict 成功后调用；也支持手动和复用调用 | 默认只用 Docker Bake 构建全部应用镜像和运维工具箱镜像；显式 `publish=true` 时登录 GHCR、推送 SHA 镜像并上传含 immutable digest 的 backend image set。CI 使用 Maven Central 配置并带依赖下载重试 | 30 min |
 | `compose-cd` | 受控手动交付 | 仅从 `main` 手动触发 | 固定前后端 main SHA，复用两个镜像构建工作流并组装统一 digest manifest；可选连接 staging Docker 主机执行 Compose、health/version、前端 Playwright 与 Lighthouse，验收失败时回滚。它不随 push 自动部署，真实 staging 需先配置 GitHub Environment 和主机凭据 | 分 job 设置；Playwright 50 min |
+| `prepare-platform-release` | 联合版本准备 | 维护者手动选择 patch/minor/major | 校验双仓版本后计算同一目标版本，并创建/补齐两仓 Release PR；需要安装到两仓的 GitHub App 凭据，不合并、不打 tag、不发布 | 15 min |
 | `OpenSSF Scorecard` | 供应链治理报告 | push main、每周三、手动 | 生成 SARIF 并上传 Code Scanning；不按总分阻断 PR | 20 min |
 | `quarterly-dependency-review` | 依赖集中治理盘点 | 每季度首日、手动 | 生成多生态 artifact 与 Actions Summary；不创建 Issue/PR | 25 min |
 | `main-failure-triage`（job） | 失败处理自动化 | `full-ci-gate` 核心 job 失败 | 自动标记关联 PR 并评论处理要求；无关联 PR 时创建 issue | job 级 |

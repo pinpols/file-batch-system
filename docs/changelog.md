@@ -1,6 +1,7 @@
 # 变更记录（规范与架构权威条款变化）
 
 ### 2026-10-13
+- **前后端联合版本自动准备**：新增单一手动 workflow，校验双仓基线版本并按选择的 SemVer 级别创建同版本 Release PR；启用需配置最小权限 GitHub App，不自动合并、打 tag 或发布。
 - **前后端联合版本约定**：正式版与 RC 在两个仓库使用相同 SemVer；普通 PR 只累计 `[Unreleased]`，不逐 PR 递增版本。联合 Release PR 按发布周期最高变更级别决定版本，固定前后端 SHA 与镜像 digest，禁止移动或复用已发布 tag，并明确 RC 冻结和失败补齐边界。
 - **CI 门禁控制与输出统一**：共享执行器新增稳定分组及 `enforce`、`report`、`ignore` 三态，明确区分条件跳过、执行后仅报告和完全不执行；单门禁、分组、全局与总开关按固定优先级解析。状态行统一增加 `group`、`mode`，报告/忽略项继续要求 owner、基线和升级期限登记；移除各检查脚本散落的 `BATCH_CI_SKIP_*` 旁路，并补正反例自测与 CI Runbook。
 - **Mapper 状态写入与分类治理**：全仓 MyBatis `UPDATE SET` 状态写入改为 Java 具名语义方法提供目标值和允许来源集合，SQL 保持参数化 CAS；新增 `MapperStatusWriteConventionTest` 阻止固定状态赋值回退。共享实例/工作流生命周期集合使用枚举派生值做精确 Mapper 对照，SLA、正式成功、dry-run 隔离和恢复候选等专项业务口径继续保留在 SQL 并由专项测试维护；未改变既有迁移、并发或统计语义。
