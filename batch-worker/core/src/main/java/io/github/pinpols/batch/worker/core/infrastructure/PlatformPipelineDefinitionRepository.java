@@ -46,8 +46,9 @@ public class PlatformPipelineDefinitionRepository {
     if (EmptyChecks.isNull(row) || row.isEmpty()) {
       return null;
     }
-    return new PipelineDefinitionReference(
-        toLong(row.get(ID)), stringValue(row.get("pipeline_type")));
+    Long definitionId = toLong(row.get(ID));
+    String pipelineType = stringValue(row.get("pipeline_type"));
+    return new PipelineDefinitionReference(definitionId, pipelineType);
   }
 
   public record PipelineDefinitionReference(Long id, String pipelineType) {}

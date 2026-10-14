@@ -541,9 +541,9 @@ public class TenantConfigInitApplyHandlers {
   private void updatePipelineDefinition(
       String tenantId, Long id, PipelineDefinitionSpec spec, Map<String, Object> existing) {
     if (!EmptyChecks.isNull(spec.getSteps())) {
-      validatePipelineSteps(
-          Nullables.coalesce(spec.getPipelineType(), String.valueOf(existing.get("pipeline_type"))),
-          spec.getSteps());
+      String existingPipelineType = String.valueOf(existing.get("pipeline_type"));
+      String pipelineType = Nullables.coalesce(spec.getPipelineType(), existingPipelineType);
+      validatePipelineSteps(pipelineType, spec.getSteps());
     }
     Map<String, Object> params = new HashMap<>();
     params.put("tenant_id", tenantId);
