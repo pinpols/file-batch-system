@@ -161,6 +161,30 @@ class ImportIngressScannerTest {
   }
 
   @Test
+  @DisplayName("MANIFEST 拒绝 MD5 校验类型，避免弱摘要被当作完整性证明")
+  void scan_skipsRegistration_whenManifestUsesMd5() {
+    scannerProperties.setRequireDoneFile(true);
+    scannerProperties.setDefaultBizDate("2026-07-23");
+    scannerProperties.setDoneFileFormat(ImportScannerProperties.DoneFileFormat.MANIFEST);
+    ObjectSummary data = new ObjectSummary("ingress/t1/orders.csv", 5L, Instant.now(), "e1");
+    ObjectSummary marker =
+        new ObjectSummary("ingress/t1/orders.csv.done", 15L, Instant.now(), "e2");
+    when(objectStore.list(any(), any(), any(), anyInt()))
+        .thenReturn(new ObjectListing(List.of(data, marker), null));
+    String legacyManifest = """
+        {"schemaVersion":"file-sidecar-manifest-v1","fileName":"orders.csv","sizeBytes":5,
+         "checksumType":"MD5","checksumValue":"%s","checksumScope":"RAW_OBJECT"}
+        """.formatted("a".repeat(32));
+    when(objectStore.get("batch-dev", "ingress/t1/orders.csv.done"))
+        .thenReturn(new ByteArrayInputStream(legacyManifest.getBytes(StandardCharsets.UTF_8)));
+
+    scanner.scan();
+
+    verify(objectStore, never()).get("batch-dev", "ingress/t1/orders.csv");
+    verify(runtimeRepository, never()).createFileRecord(any());
+  }
+
+  @Test
   @DisplayName("标记模式保持向后兼容,不读取标记文件内容")
   void scan_keepsMarkerModeBackwardCompatible_withoutReadingSidecar() {
     scannerProperties.setRequireDoneFile(true);
