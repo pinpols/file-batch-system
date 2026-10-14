@@ -39,6 +39,7 @@ import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinition
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -604,7 +605,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     spec.setPipelineType("IMPORT");
     spec.setBizType("settlement");
     spec.setWorkerGroup("default");
-    List<PipelineDefinitionSpec.StepSpec> steps = new java.util.ArrayList<>();
+    List<PipelineDefinitionSpec.StepSpec> steps = new ArrayList<>();
     for (int index = 0; index < stages.size(); index++) {
       String stage = stages.get(index);
       PipelineDefinitionSpec.StepSpec step = new PipelineDefinitionSpec.StepSpec();
