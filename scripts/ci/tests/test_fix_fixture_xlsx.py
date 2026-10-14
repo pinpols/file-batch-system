@@ -29,6 +29,31 @@ class FixFixtureXlsxTest(unittest.TestCase):
                 result = MODULE.verify(MODULE.SUITE_DIR / name)
                 self.assertFalse(MODULE.verify_failed(result), result)
 
+    def test_current_sim_fixtures_use_complete_ordered_pipeline_stages(self) -> None:
+        for name in MODULE.TARGETS:
+            with self.subTest(name=name):
+                result = MODULE.verify(MODULE.SUITE_DIR / name)
+                self.assertFalse(result["pipeline_stage_sequence_mismatches"], result)
+
+    def test_pipeline_stage_sequence_mismatch_is_detected(self) -> None:
+        source = MODULE.SUITE_DIR / MODULE.TARGETS[0]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target = Path(temp_dir) / source.name
+            workbook = load_workbook(source)
+            worksheet = workbook["pipeline_step_definition"]
+            headers = [cell.value for cell in worksheet[1]]
+            job_code_column = headers.index("job_code") + 1
+            stage_code_column = headers.index("stage_code") + 1
+            for row in range(2, worksheet.max_row + 1):
+                if worksheet.cell(row=row, column=job_code_column).value == "TA_IMPORT_CUSTOMER":
+                    worksheet.cell(row=row, column=stage_code_column).value = "PREPROCESS"
+                    break
+            workbook.save(target)
+
+            result = MODULE.verify(target)
+
+        self.assertTrue(result["pipeline_stage_sequence_mismatches"])
+
     def test_legacy_monitoring_header_is_rejected(self) -> None:
         source = MODULE.SUITE_DIR / MODULE.TARGETS[0]
         with tempfile.TemporaryDirectory() as temp_dir:

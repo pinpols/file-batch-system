@@ -15,6 +15,7 @@ Patches applied to ta/tb/tc-tenant-config-package-test.xlsx:
   5. file_template_config JSON/SQL preview hardening:
      - field_mappings entries must carry name.
      - export default_query_sql must list columns explicitly.
+  6. pipeline_step_definition follows each pipeline type's complete ordered stage chain.
 """
 from __future__ import annotations
 
@@ -277,12 +278,40 @@ JOB_DEFAULT_PARAMS: dict[str, dict[str, object]] = {
 }
 
 IMPORT_STAGE_CHAIN = [
-    ("STEP_RECEIVE", "接收文件", "RECEIVE", 1, "IMPORT_RECEIVE"),
-    ("STEP_PREPROCESS", "预处理", "PREPROCESS", 2, "IMPORT_PREPROCESS"),
-    ("STEP_PARSE", "解析", "PARSE", 3, "IMPORT_PARSE"),
-    ("STEP_VALIDATE", "校验", "VALIDATE", 4, "IMPORT_VALIDATE"),
-    ("STEP_LOAD", "入库", "LOAD", 5, "IMPORT_LOAD"),
+    ("STEP_RECEIVE", "接收文件", "RECEIVE", 0, "IMPORT_RECEIVE"),
+    ("STEP_PREPROCESS", "预处理", "PREPROCESS", 1, "IMPORT_PREPROCESS"),
+    ("STEP_PARSE", "解析", "PARSE", 2, "IMPORT_PARSE"),
+    ("STEP_VALIDATE", "校验", "VALIDATE", 3, "IMPORT_VALIDATE"),
+    ("STEP_LOAD", "入库", "LOAD", 4, "IMPORT_LOAD"),
+    ("STEP_FEEDBACK", "回执写回", "FEEDBACK", 5, "IMPORT_FEEDBACK"),
 ]
+
+PIPELINE_STAGE_CHAINS = {
+    "IMPORT": [stage for _, _, stage, _, _ in IMPORT_STAGE_CHAIN],
+    "EXPORT": ["PREPARE", "GENERATE", "STORE", "REGISTER", "COMPLETE"],
+    "PROCESS": ["PREPARE", "COMPUTE", "VALIDATE", "COMMIT", "FEEDBACK"],
+    "DISPATCH": ["PREPARE", "DISPATCH", "ACK", "RETRY", "COMPENSATE", "COMPLETE"],
+}
+
+PIPELINE_STAGE_NAMES = {
+    "PREPARE": "执行前准备",
+    "RECEIVE": "接收文件",
+    "PREPROCESS": "预处理",
+    "PARSE": "解析",
+    "VALIDATE": "校验",
+    "COMPUTE": "计算",
+    "LOAD": "入库",
+    "STORE": "存储",
+    "REGISTER": "登记",
+    "COMMIT": "提交",
+    "ACK": "确认",
+    "RETRY": "重试",
+    "COMPENSATE": "补偿",
+    "GENERATE": "生成",
+    "DISPATCH": "分发",
+    "COMPLETE": "完成",
+    "FEEDBACK": "回执写回",
+}
 
 IMPORT_JOBS = {
     "TA_IMPORT_CUSTOMER",
@@ -622,6 +651,67 @@ def patch_import_pipeline_steps(ws) -> int:
     return fixed
 
 
+def patch_pipeline_stage_sequences(pipeline_ws, step_ws) -> int:
+    pipeline_headers = [cell.value for cell in pipeline_ws[1]]
+    step_headers = [cell.value for cell in step_ws[1]]
+    pipeline_idx = {header: index for index, header in enumerate(pipeline_headers)}
+    step_idx = {header: index for index, header in enumerate(step_headers)}
+    rows_by_pipeline: dict[tuple[object, object], list] = {}
+    for row in step_ws.iter_rows(min_row=2):
+        job_code = row[step_idx["job_code"]].value
+        version = row[step_idx["version"]].value
+        if job_code not in (None, ""):
+            rows_by_pipeline.setdefault((job_code, version), []).append(row)
+
+    fixed = 0
+    for pipeline in pipeline_ws.iter_rows(min_row=2):
+        job_code = pipeline[pipeline_idx["job_code"]].value
+        version = pipeline[pipeline_idx["version"]].value
+        pipeline_type = str(pipeline[pipeline_idx["pipeline_type"]].value or "").upper()
+        stages = PIPELINE_STAGE_CHAINS.get(pipeline_type)
+        if job_code in (None, "") or stages is None:
+            continue
+
+        rows = rows_by_pipeline.setdefault((job_code, version), [])
+        rows_by_stage = {row[step_idx["stage_code"]].value: row for row in rows}
+        for order, stage_code in enumerate(stages):
+            row = rows_by_stage.get(stage_code)
+            if row is None:
+                values = [None] * len(step_headers)
+                defaults = {
+                    "job_code": job_code,
+                    "version": version,
+                    "step_code": f"STEP_{stage_code}",
+                    "step_name": PIPELINE_STAGE_NAMES[stage_code],
+                    "stage_code": stage_code,
+                    "step_order": order,
+                    "impl_code": f"{pipeline_type}_{stage_code}",
+                    "step_params": "{}",
+                    "timeout_seconds": 300,
+                    "retry_policy": "NONE",
+                    "retry_max_count": 0,
+                    "enabled": "TRUE",
+                }
+                for column, value in defaults.items():
+                    values[step_idx[column]] = value
+                step_ws.append(values)
+                rows_by_pipeline[(job_code, version)].append(
+                    step_ws[step_ws.max_row]
+                )
+                fixed += 1
+                continue
+
+            order_cell = row[step_idx["step_order"]]
+            if order_cell.value != order:
+                order_cell.value = order
+                fixed += 1
+            enabled_cell = row[step_idx["enabled"]]
+            if str(enabled_cell.value).upper() != "TRUE":
+                enabled_cell.value = "TRUE"
+                fixed += 1
+    return fixed
+
+
 def ensure_mapping_names(raw: object, template_type: str) -> str | None:
     if raw in (None, ""):
         return None
@@ -823,6 +913,10 @@ def process(path: Path) -> dict:
         result["import_pipeline_steps_fixed"] = patch_import_pipeline_steps(
             wb["pipeline_step_definition"]
         )
+        if "pipeline_definition" in wb.sheetnames:
+            result["pipeline_stage_sequences_fixed"] = patch_pipeline_stage_sequences(
+                wb["pipeline_definition"], wb["pipeline_step_definition"]
+            )
     nodes_touched, edges_added = ensure_workflow_boundary_nodes(wb)
     result["workflow_nodes_touched"] = nodes_touched
     result["workflow_edges_added"] = edges_added
@@ -922,19 +1016,45 @@ def verify(path: Path) -> dict:
         ws = wb["pipeline_step_definition"]
         headers = [c.value for c in ws[1]]
         idx = {h: i for i, h in enumerate(headers)}
-        seen: dict[str, list[tuple[int, str]]] = {}
+        steps_by_pipeline: dict[tuple[object, object], list[tuple[object, str, object]]] = {}
         for row in ws.iter_rows(min_row=2, values_only=True):
             job_code = row[idx["job_code"]]
-            if job_code in IMPORT_JOBS and str(row[idx["enabled"]]).upper() == "TRUE":
-                seen.setdefault(job_code, []).append(
-                    (int(row[idx["step_order"]] or 0), str(row[idx["stage_code"]]))
+            version = row[idx["version"]]
+            if job_code not in (None, ""):
+                steps_by_pipeline.setdefault((job_code, version), []).append(
+                    (row[idx["step_order"]], str(row[idx["stage_code"]]), row[idx["enabled"]])
                 )
-        expected = [stage for _, _, stage, _, _ in IMPORT_STAGE_CHAIN]
-        out["import_stage_chain_mismatches"] = {
-            job_code: [stage for _, stage in sorted(stages)]
-            for job_code, stages in seen.items()
-            if [stage for _, stage in sorted(stages)][: len(expected)] != expected
-        }
+        pipeline_ws = wb["pipeline_definition"]
+        pipeline_headers = [cell.value for cell in pipeline_ws[1]]
+        pipeline_idx = {header: i for i, header in enumerate(pipeline_headers)}
+        mismatches = {}
+        for row in pipeline_ws.iter_rows(min_row=2, values_only=True):
+            job_code = row[pipeline_idx["job_code"]]
+            version = row[pipeline_idx["version"]]
+            pipeline_type = str(row[pipeline_idx["pipeline_type"]] or "").upper()
+            expected = PIPELINE_STAGE_CHAINS.get(pipeline_type)
+            if job_code in (None, "") or expected is None:
+                continue
+            configured = steps_by_pipeline.get((job_code, version), [])
+            ordered = sorted(
+                configured,
+                key=lambda item: step_order_sort_key(item[0]),
+            )
+            actual_stages = [stage for _, stage, _ in ordered]
+            actual_orders = [order for order, _, _ in ordered]
+            expected_orders = list(range(len(expected)))
+            if (
+                actual_stages != expected
+                or actual_orders != expected_orders
+                or any(str(enabled).upper() != "TRUE" for _, _, enabled in ordered)
+            ):
+                mismatches[job_code] = {
+                    "expected_stages": expected,
+                    "actual_stages": actual_stages,
+                    "expected_orders": expected_orders,
+                    "actual_orders": actual_orders,
+                }
+        out["pipeline_stage_sequence_mismatches"] = mismatches
     if "workflow_node" in wb.sheetnames:
         ws = wb["workflow_node"]
         headers = [c.value for c in ws[1]]
@@ -955,6 +1075,13 @@ def verify(path: Path) -> dict:
     return out
 
 
+def step_order_sort_key(value: object) -> tuple[int, int]:
+    try:
+        return 0, int(value)
+    except (TypeError, ValueError):
+        return 1, 0
+
+
 def verify_failed(result: dict) -> bool:
     return bool(result.get("header_mismatches")) \
         or result.get("non_quartz_schedule_count", 0) != 0 \
@@ -963,7 +1090,7 @@ def verify_failed(result: dict) -> bool:
         or result.get("field_mapping_missing_name_count", 0) != 0 \
         or result.get("export_select_star_count", 0) != 0 \
         or bool(result.get("import_specs_missing")) \
-        or bool(result.get("import_stage_chain_mismatches")) \
+        or bool(result.get("pipeline_stage_sequence_mismatches")) \
         or result.get("workflow_boundary_ok") is False
 
 
