@@ -31,6 +31,8 @@ import io.github.pinpols.batch.console.infrastructure.excel.ResourceQueueExcelRo
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import io.github.pinpols.batch.console.support.excel.TenantConfigPackageExcelImportStore.PackageExcelSession;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -169,8 +171,7 @@ public class ConfigPackageExcelValidator {
       "ACK",
       "RETRY",
       "COMPENSATE");
-  public static final Map<String, Set<String>> STAGES_BY_TYPE = java.util.Arrays.stream(
-          PipelineType.values())
+  public static final Map<String, Set<String>> STAGES_BY_TYPE = Arrays.stream(PipelineType.values())
       .collect(Collectors.toUnmodifiableMap(PipelineType::code, type -> Set.copyOf(type.stages())));
   public static final Set<String> WORKFLOW_TYPES = DictEnum.codes(WorkflowType.class);
   public static final Set<String> NODE_TYPES = DictEnum.codes(WorkflowNodeType.class);
@@ -439,7 +440,7 @@ public class ConfigPackageExcelValidator {
       List<String> expected = PipelineType.stages(type);
       List<Map<String, String>> configured = stepsByPipeline.getOrDefault(key, List.of());
       List<Map<String, String>> ordered = configured.stream()
-          .sorted(java.util.Comparator.comparingInt(row -> {
+          .sorted(Comparator.comparingInt(row -> {
             Integer order = parseIntegerWithoutIssue(row.get(COL_STEP_ORDER));
             return EmptyChecks.isNull(order) ? Integer.MAX_VALUE : order;
           }))

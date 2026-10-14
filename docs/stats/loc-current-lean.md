@@ -1,18 +1,18 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `10afb2bca`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `000ebded0`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 5,008 | 539,590 | 278,914 | 51.7% |
+| 5,008 | 539,591 | 278,916 | 51.7% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| prod | 2,830 | 261,271 | 119,822 | 45.9% |
+| prod | 2,830 | 261,272 | 119,824 | 45.9% |
 | test | 1,344 | 203,402 | 111,382 | 54.8% |
 | script | 671 | 57,529 | 36,448 | 63.4% |
 | config | 65 | 9,265 | 6,841 | 73.8% |
@@ -23,7 +23,7 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,674 | 393,864 | 203,600 | 51.7% |
+| Java | 3,674 | 393,865 | 203,602 | 51.7% |
 | Shell | 215 | 32,939 | 26,007 | 79.0% |
 | Python | 269 | 39,006 | 20,246 | 51.9% |
 | YAML | 108 | 13,862 | 10,627 | 76.7% |
@@ -56,9 +56,9 @@
 | `scripts/local/start-all.sh` | script | Shell | 645 | 518 |
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationServiceTest.java` | test | Java | 824 | 513 |
 | `pom.xml` | config | XML | 845 | 512 |
+| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java` | prod | Java | 1,020 | 499 |
 | `scripts/dev/sonar-scan.sh` | script | Shell | 594 | 499 |
 | `scripts/local/sim-harness.sh` | script | Shell | 641 | 498 |
-| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java` | prod | Java | 1,019 | 497 |
 
 ## 复跑
 

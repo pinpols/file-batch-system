@@ -124,7 +124,7 @@ public class ConsoleMetaQueryService {
   }
 
   /** 固定阶段序列由公共 PipelineType 枚举维护，供元数据展示与定义校验共用。 */
-  private static final Map<String, List<String>> PIPELINE_STAGES = java.util.Arrays.stream(
+  private static final Map<String, List<String>> PIPELINE_STAGES = Arrays.stream(
           PipelineType.values())
       .collect(Collectors.toUnmodifiableMap(PipelineType::code, PipelineType::stages));
 
