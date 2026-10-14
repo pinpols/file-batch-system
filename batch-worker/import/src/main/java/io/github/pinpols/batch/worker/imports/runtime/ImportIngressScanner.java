@@ -579,7 +579,7 @@ public class ImportIngressScanner {
             snapshot.size());
         return null;
       }
-      if (!verifyObjectChecksum(snapshot, manifest.checksumType(), manifest.checksumValue())) {
+      if (!verifyObjectChecksum(snapshot, manifest.checksumValue())) {
         log.warn("manifest checksum mismatch, skip register: object={}", snapshot.objectName());
         return null;
       }
@@ -600,7 +600,7 @@ public class ImportIngressScanner {
         || EmptyChecks.isNull(manifest.sizeBytes())
         || manifest.sizeBytes() < 0
         || !Texts.hasText(manifest.checksumType())
-        || !Set.of("SHA-256", "SHA256", "MD5")
+        || !Set.of("SHA-256", "SHA256")
             .contains(manifest.checksumType().trim().toUpperCase(Locale.ROOT))
         || !Texts.hasText(manifest.checksumValue())
         || !"RAW_OBJECT"
@@ -611,15 +611,12 @@ public class ImportIngressScanner {
       return false;
     }
     String checksum = manifest.checksumValue().trim();
-    int expectedHexLength = "MD5".equalsIgnoreCase(manifest.checksumType().trim()) ? 32 : 64;
-    return checksum.matches("(?i)[0-9a-f]{%d}".formatted(expectedHexLength));
+    return checksum.matches("(?i)[0-9a-f]{64}");
   }
 
-  private boolean verifyObjectChecksum(
-      ObjectSnapshot snapshot, String checksumType, String expectedChecksum)
+  private boolean verifyObjectChecksum(ObjectSnapshot snapshot, String expectedChecksum)
       throws NoSuchAlgorithmException, IOException {
-    String algorithm = "MD5".equalsIgnoreCase(checksumType.trim()) ? "MD5" : "SHA-256";
-    MessageDigest digest = MessageDigest.getInstance(algorithm);
+    MessageDigest digest = MessageDigest.getInstance("SHA-256");
     long bytesRead = 0;
     byte[] buffer = new byte[64 * 1024];
     try (InputStream data =

@@ -22,7 +22,7 @@
 ### MANIFEST 模式
 
 - 数据对象先完整发布，`.chk` manifest 最后发布；对象存储使用完整对象 PUT，文件系统使用临时文件、flush/force 和同文件系统原子 rename。
-- manifest 必须声明 `schemaVersion=file-sidecar-manifest-v1`、同目录 `fileName`、`sizeBytes`、支持的 `checksumType` 和格式正确的 `checksumValue`。新生产者使用 `SHA-256`；为兼容既有 sidecar，入站也接受 `MD5`，但它只能检测偶发损坏，不能抵御恶意碰撞。默认 `checksumScope=RAW_OBJECT`；其他 scope 不允许被误当作原始对象校验。
+- manifest 必须声明 `schemaVersion=file-sidecar-manifest-v1`、同目录 `fileName`、`sizeBytes`、`checksumType=SHA-256`（兼容拼写 `SHA256`）和 64 位十六进制 `checksumValue`。入站不再接受 MD5 sidecar：MD5 不能抵御恶意碰撞，且不能作为 `integrityState=VERIFIED` 的依据。使用 MD5 的上游必须先切换为 SHA-256，否则文件会被拒绝登记，到达组可能持续等待。默认 `checksumScope=RAW_OBJECT`；其他 scope 不允许被误当作原始对象校验。
 - scanner 先检查标记存在、数据对象稳定、manifest 格式/文件名/长度有效，再对对象流式计算 SHA-256。流式计数必须等于扫描快照长度，摘要必须常量时间/安全比较通过后，才写入带 `integrityState=VERIFIED` 的记录。
 - 同一摘要仍在导入 preprocess 阶段复核，作为存储到处理之间的第二道检查。摘要不匹配时不得 launch/import；已登记对象的 preprocess 校验失败仍进入既有失败状态，不自动把失败任务标记成功。
 - 校验失败不创建可触发的已验证记录。scanner 记录脱敏错误摘要并继续重试；对象被上游修复/重新发布后，后续扫描可成功登记。重试日志需限频，不能输出内容、凭据或绝对路径。
@@ -30,7 +30,7 @@
 ### MARKER 模式与兼容
 
 - `MARKER` 只代表上游声明传输结束，不提供字节完整性保证。保留现有配置和行为，不将空 marker 宣称为 checksum 验证。
-- `MANIFEST` 协议缺字段、未知算法或不支持的 checksum scope 按验证失败处理，不静默降级为 marker。MD5 到 SHA-256 的生产者迁移应单独完成，切换前不能删除入站兼容。
+- `MANIFEST` 协议缺字段、MD5/未知算法或不支持的 checksum scope 按验证失败处理，不静默降级为 marker。上游必须在启用 MANIFEST 前发布 SHA-256 sidecar，并确认其校验值覆盖原始对象字节。
 - 对旧 `file_record`，只有有可信校验来源且确认已完成实际摘要比较时，才能回填 `integrityState=VERIFIED`；不能仅依据 `checksum_type != NONE` 回填。
 
 ## 到达组与数据库并发

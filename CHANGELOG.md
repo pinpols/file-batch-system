@@ -8,6 +8,7 @@
 
 ## [Unreleased]
 
+- 安全加固：入站 MANIFEST 仅接受 SHA-256，拒绝 MD5 sidecar，避免弱摘要文件被标记为 `integrityState=VERIFIED`；SDK 与自托管示例锁定 rustls 0.23.46，修复当前 RustSec 公告中的漏洞。
 - 固化四类 Pipeline 的完整阶段顺序为公共类型契约；定义保存和配置包导入拒绝缺失、重复或重排阶段及不匹配的 `step_order`，Worker 在执行前校验定义类型与自身类型一致。Pipeline 仍按租户与 Job 查找定义，保留 Job 级实现和运行参数配置。
 - 修复线上 Sonar 报告中的上传文件名空值路径、AI 图片字节数组 record 值语义、异常凭据脱敏正则冗余分支及 OIDC 注册缓存的并发初始化实现；增加相应回归测试。
 - 修复 strict 验证用 HTTP 成功码判断 Console API 探活、导致依赖降级时聚合健康端点 503 被误报为服务未启动的问题；现在要求 Actuator 返回有效 JSON 和状态字段，并覆盖 200、503 与无效响应。

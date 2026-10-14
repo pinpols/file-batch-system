@@ -60,7 +60,7 @@
 - `schemaVersion` 必填，便于未来扩展。
 - `fileName` 必须是同目录数据文件名，禁止路径穿越。
 - `sizeBytes` 必填。
-- `checksumType` 默认 `SHA-256`，不建议继续引入 MD5。
+- `checksumType` 必须为 `SHA-256`（可使用 `SHA256` 别名）；MD5 sidecar 会被拒绝，不能作为完整性验证证据。上游须先切换算法再启用 MANIFEST。
 - `checksumValue` 必填。
 - `checksumScope` 默认 `RAW_OBJECT`，表示 checksum 针对数据对象的原始字节（压缩包就是压缩包字节）。历史 `.chk` 不带该字段时按 `RAW_OBJECT` 解释；如需校验解压/解密/转码后的内容，走模板 `preprocess_pipeline` 的显式 `VERIFY_DIGEST`。
 - `bizDate` / `batchNo` / `fileGroupCode` 用于业务组完整性判断。

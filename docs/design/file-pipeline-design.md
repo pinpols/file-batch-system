@@ -277,7 +277,7 @@ BIN / 自定义二进制报文**不作为一期标准能力**，但系统应预�
 MANIFEST 模式的**完整性校验链**：
 
 1. **size**：scanner 与对象存储快照比对，并在流式摘要读取时再次核对实际字节数。
-2. **checksum**：scanner 在登记前校验 manifest 的 SHA-256（兼容旧 sidecar 的 MD5），并将 `integrityState=VERIFIED` 写入记录；worker preprocess 再校验一次，覆盖登记后对象被替换/损坏的窗口。无显式 `VERIFY_DIGEST` 时，隐式校验固定针对**入站原始对象字节**；如果要校验解压/解密/转码后的内容，必须在 `preprocess_pipeline` 中把 `VERIFY_DIGEST` 显式放到对应步骤之后。
+2. **checksum**：scanner 在登记前校验 manifest 的 SHA-256（接受 `SHA256` 拼写别名，不接受 MD5），并将 `integrityState=VERIFIED` 写入记录；worker preprocess 再校验一次，覆盖登记后对象被替换/损坏的窗口。无显式 `VERIFY_DIGEST` 时，隐式校验固定针对**入站原始对象字节**；如果要校验解压/解密/转码后的内容，必须在 `preprocess_pipeline` 中把 `VERIFY_DIGEST` 显式放到对应步骤之后。
 3. **recordCount**：注入 metadata → validate `row_count_check` 作为期望行数。
 
 > 到达组 `require-verified=true` 要求每个成员的 `metadata.integrityState=VERIFIED`，仅有 `checksum_type != NONE` 不构成验证证据。MARKER 模式只表示上游声明传输完成，不提供 checksum 保证。
