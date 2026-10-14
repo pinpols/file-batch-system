@@ -134,6 +134,38 @@ class ProcessStepExecutionAdapterTest {
   }
 
   @Test
+  @SuppressWarnings("unchecked")
+  @DisplayName("流水线定义缺失、无 ID 或没有步骤时返回明确错误且不创建运行实例")
+  void execute_rejectsMissingDefinitionAndSteps() {
+    ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
+        processStageExecutor,
+        new ObjectMapper(),
+        pipelineDefinitions,
+        pipelineRuns,
+        fileRecords,
+        (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
+        (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
+    StepExecutionRequest request =
+        new StepExecutionRequest("tenant-a", "job-process", "PROCESS", "worker-1", Map.of());
+
+    when(pipelineDefinitions.findPipelineDefinition("tenant-a", "job-process"))
+        .thenReturn(null)
+        .thenReturn(
+            new PlatformPipelineDefinitionRepository.PipelineDefinitionReference(null, "PROCESS"))
+        .thenReturn(
+            new PlatformPipelineDefinitionRepository.PipelineDefinitionReference(10L, "PROCESS"));
+    when(pipelineDefinitions.loadPipelineSteps(10L)).thenReturn(List.of());
+
+    assertThat(adapter.execute(request).errorKey())
+        .isEqualTo("error.pipeline.definition_not_found");
+    assertThat(adapter.execute(request).errorKey())
+        .isEqualTo("error.pipeline.definition_not_found");
+    assertThat(adapter.execute(request).errorKey())
+        .isEqualTo("error.pipeline.step_definition_missing");
+    verify(pipelineRuns, never()).createPipelineInstance(any());
+  }
+
+  @Test
   @DisplayName("阶段失败结果带本地化业务异常时,响应保留错误码、错误键与参数摘要,且默认不进入补偿")
   @SuppressWarnings("unchecked")
   void execute_preservesLocalizedErrorFromFailedStageResult() {

@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.infrastructure.excel;
 
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelSchema.*;
 
+import io.github.pinpols.batch.common.enums.PipelineType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -244,12 +245,7 @@ public final class ConfigPackageSampleDataFactory {
     sheets.get(6).add(fileTemplate(tpl, "客户导入模板", SCENARIO_IMPORT, null, fileFormat));
     sheets.get(3).add(job(job, "客户导入", SCENARIO_IMPORT, "{\"templateCode\":\"" + tpl + "\"}"));
     sheets.get(7).add(pipeline(job, "客户导入流水线", SCENARIO_IMPORT));
-    sheets.get(8).add(step(job, "RECEIVE", "接收文件", "RECEIVE", 1, "fileReceive", "{}"));
-    sheets.get(8).add(step(job, "PARSE", "解析文件", "PARSE", 2, "csvParser", "{}"));
-    sheets
-        .get(8)
-        .add(
-            step(job, "LOAD", "加载入库", "LOAD", 3, "jdbcLoad", "{\"templateCode\":\"" + tpl + "\"}"));
+    addFixedStages(sheets, job, "IMPORT", "LOAD", "{\"templateCode\":\"" + tpl + "\"}");
   }
 
   private static void putExport(List<List<Map<String, Object>>> sheets) {
@@ -266,36 +262,19 @@ public final class ConfigPackageSampleDataFactory {
         .add(fileTemplate(tpl, "客户导出模板", SCENARIO_EXPORT, "customer_${batchDate}", fileFormat));
     sheets.get(3).add(job(job, "客户导出", SCENARIO_EXPORT, "{\"templateCode\":\"" + tpl + "\"}"));
     sheets.get(7).add(pipeline(job, "客户导出流水线", SCENARIO_EXPORT));
-    sheets.get(8).add(step(job, "PREPARE", "准备导出", "PREPARE", 1, "exportPrepare", "{}"));
-    sheets
-        .get(8)
-        .add(step(
-            job,
-            "GENERATE",
-            "生成文件",
-            "GENERATE",
-            2,
-            "csvExport",
-            "{\"templateCode\":\"" + tpl + "\"}"));
-    sheets.get(8).add(step(job, "STORE", "保存文件", "STORE", 3, "objectStore", "{}"));
+    addFixedStages(sheets, job, "EXPORT", "GENERATE", "{\"templateCode\":\"" + tpl + "\"}");
   }
 
   private static void putProcess(List<List<Map<String, Object>>> sheets) {
     String job = "JOB_PROCESS_CUSTOMER";
     sheets.get(3).add(job(job, "客户汇总加工", SCENARIO_PROCESS, "{}"));
     sheets.get(7).add(pipeline(job, "客户汇总加工流水线", SCENARIO_PROCESS));
-    sheets
-        .get(8)
-        .add(
-            step(
-                job,
-                "COMPUTE",
-                "计算汇总",
-                "COMPUTE",
-                1,
-                "sqlCompute",
-                "{\"targetSchema\":\"biz\",\"targetTable\":\"customer_summary\",\"sql\":\"SELECT customer_no, count(*) AS cnt FROM biz.customer_account WHERE tenant_id = :tenantId GROUP BY customer_no\"}"));
-    sheets.get(8).add(step(job, "COMMIT", "提交结果", "COMMIT", 2, "jdbcCommit", "{}"));
+    addFixedStages(
+        sheets,
+        job,
+        "PROCESS",
+        "COMPUTE",
+        "{\"targetSchema\":\"biz\",\"targetTable\":\"customer_summary\",\"sql\":\"SELECT customer_no, count(*) AS cnt FROM biz.customer_account WHERE tenant_id = :tenantId GROUP BY customer_no\"}");
   }
 
   private static void putDispatch(List<List<Map<String, Object>>> sheets) {
@@ -325,17 +304,21 @@ public final class ConfigPackageSampleDataFactory {
             true));
     sheets.get(3).add(job(job, "客户文件派发", SCENARIO_DISPATCH, "{}"));
     sheets.get(7).add(pipeline(job, "客户文件派发流水线", SCENARIO_DISPATCH));
-    sheets
-        .get(8)
-        .add(step(
-            job,
-            SCENARIO_DISPATCH,
-            "派发文件",
-            SCENARIO_DISPATCH,
-            1,
-            "sftpDispatch",
-            "{\"channelCode\":\"" + CHANNEL + "\"}"));
-    sheets.get(8).add(step(job, "ACK", "等待回执", "ACK", 2, "dispatchAck", "{}"));
+    addFixedStages(sheets, job, "DISPATCH", "DISPATCH", "{\"channelCode\":\"" + CHANNEL + "\"}");
+  }
+
+  private static void addFixedStages(
+      List<List<Map<String, Object>>> sheets,
+      String job,
+      String pipelineType,
+      String configuredStage,
+      String configuredParams) {
+    List<String> stages = PipelineType.stages(pipelineType);
+    for (int index = 0; index < stages.size(); index++) {
+      String stage = stages.get(index);
+      String params = stage.equals(configuredStage) ? configuredParams : "{}";
+      sheets.get(8).add(step(job, stage, stage, stage, index, pipelineType + "_" + stage, params));
+    }
   }
 
   /** Atomic 是单任务执行器，不创建 pipeline_definition / pipeline_step_definition。 */

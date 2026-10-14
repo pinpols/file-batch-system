@@ -439,6 +439,9 @@ public class ConfigPackageExcelValidator {
       String type = normalize(pipeline.get(COL_PIPELINE_TYPE));
       List<String> expected = PipelineType.stages(type);
       List<Map<String, String>> configured = stepsByPipeline.getOrDefault(key, List.of());
+      if (EmptyChecks.isEmpty(configured)) {
+        continue;
+      }
       List<Map<String, String>> ordered = configured.stream()
           .sorted(Comparator.comparingInt(row -> {
             Integer order = parseIntegerWithoutIssue(row.get(COL_STEP_ORDER));

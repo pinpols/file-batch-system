@@ -68,6 +68,21 @@ class PlatformRepositoryTest {
   }
 
   @Test
+  @DisplayName("缺少租户或作业编码以及查询未命中时不返回流水线定义")
+  void shouldReturnNullWhenPipelineDefinitionIsUnavailable() {
+    PlatformFileRuntimeMapper mapper = mock(PlatformFileRuntimeMapper.class);
+    PlatformPipelineDefinitionRepository repository =
+        new PlatformPipelineDefinitionRepository(mapper);
+
+    assertThat(repository.findPipelineDefinition(" ", "job-a")).isNull();
+    assertThat(repository.findPipelineDefinition("tenant-a", " ")).isNull();
+    when(mapper.selectLatestPipelineDefinition(anyMap())).thenReturn(Map.of()).thenReturn(null);
+
+    assertThat(repository.findPipelineDefinition("tenant-a", "job-a")).isNull();
+    assertThat(repository.findPipelineDefinition("tenant-a", "job-b")).isNull();
+  }
+
+  @Test
   @DisplayName("创建流水线实例时以作业编码写入实例表, 参数中不含流水线编码")
   void shouldUseJobCode_whenCreatingPipelineInstance() {
     PlatformFileRuntimeMapper mapper = mock(PlatformFileRuntimeMapper.class);

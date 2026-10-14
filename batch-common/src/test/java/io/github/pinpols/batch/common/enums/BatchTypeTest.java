@@ -65,6 +65,20 @@ class BatchTypeTest {
   }
 
   @Test
+  @DisplayName("管道阶段序列与固定顺序契约一致,未知类型没有阶段")
+  void shouldExposeCompleteFixedStagesInOrder() {
+    assertThat(PipelineType.IMPORT.stages())
+        .containsExactly("RECEIVE", "PREPROCESS", "PARSE", "VALIDATE", "LOAD", "FEEDBACK");
+    assertThat(PipelineType.EXPORT.stages())
+        .containsExactly("PREPARE", "GENERATE", "STORE", "REGISTER", "COMPLETE");
+    assertThat(PipelineType.PROCESS.stages())
+        .containsExactly("PREPARE", "COMPUTE", "VALIDATE", "COMMIT", "FEEDBACK");
+    assertThat(PipelineType.DISPATCH.stages())
+        .containsExactly("PREPARE", "DISPATCH", "ACK", "RETRY", "COMPENSATE", "COMPLETE");
+    assertThat(PipelineType.stages("unknown")).isEmpty();
+  }
+
+  @Test
   @DisplayName("同一业务类型下作业类型与管道类型的投影结果必须一致")
   void shouldAgreeBetweenJobTypeAndPipelineType_whenProjectingSharedBusinessTypes() {
     // 两个枚举对同一业务类型的投影必须一致,否则 console 配置和 worker 执行会脱钩
