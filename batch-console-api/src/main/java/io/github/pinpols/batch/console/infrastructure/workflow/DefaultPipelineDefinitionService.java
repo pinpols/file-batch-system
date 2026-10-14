@@ -65,7 +65,7 @@ public class DefaultPipelineDefinitionService implements PipelineDefinitionServi
       String pipelineType, List<PipelineDefinitionSaveRequest.StepItem> steps) {
     List<String> allowedStages =
         metaQueryService.pipelineStages().getOrDefault(pipelineType, List.of());
-    if (steps == null
+    if (EmptyChecks.isNull(steps)
         || !steps.stream()
             .map(PipelineDefinitionSaveRequest.StepItem::getStageCode)
             .toList()
@@ -76,7 +76,7 @@ public class DefaultPipelineDefinitionService implements PipelineDefinitionServi
     Set<String> registeredImpls = new HashSet<>(metaQueryService.stepImpls(null));
     for (int index = 0; index < steps.size(); index++) {
       PipelineDefinitionSaveRequest.StepItem step = steps.get(index);
-      if (step.getStepOrder() != null && step.getStepOrder() != index) {
+      if (!EmptyChecks.isNull(step.getStepOrder()) && step.getStepOrder() != index) {
         throw BizException.of(
             ResultCode.INVALID_ARGUMENT, "error.pipeline.step_order_must_match_stage", index + 1);
       }
@@ -223,7 +223,7 @@ public class DefaultPipelineDefinitionService implements PipelineDefinitionServi
       Long pipelineDefinitionId,
       List<PipelineDefinitionSaveRequest.StepItem> steps,
       Map<String, Map<String, Object>> existingSteps) {
-    if (steps == null) {
+    if (EmptyChecks.isNull(steps)) {
       return;
     }
     for (int index = 0; index < steps.size(); index++) {
@@ -233,7 +233,8 @@ public class DefaultPipelineDefinitionService implements PipelineDefinitionServi
       stepParams.put("step_code", step.getStepCode());
       stepParams.put("step_name", step.getStepName());
       stepParams.put("stage_code", step.getStageCode());
-      stepParams.put("step_order", step.getStepOrder() != null ? step.getStepOrder() : index);
+      stepParams.put(
+          "step_order", EmptyChecks.isNull(step.getStepOrder()) ? index : step.getStepOrder());
       stepParams.put("impl_code", step.getImplCode());
       Map<String, Object> existing = existingSteps.get(step.getStepCode());
       String stored =

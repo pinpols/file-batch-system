@@ -441,7 +441,7 @@ public class ConfigPackageExcelValidator {
       List<Map<String, String>> ordered = configured.stream()
           .sorted(java.util.Comparator.comparingInt(row -> {
             Integer order = parseIntegerWithoutIssue(row.get(COL_STEP_ORDER));
-            return order == null ? Integer.MAX_VALUE : order;
+            return EmptyChecks.isNull(order) ? Integer.MAX_VALUE : order;
           }))
           .toList();
       List<String> actual =
@@ -449,16 +449,15 @@ public class ConfigPackageExcelValidator {
       boolean orderMatches = true;
       for (int index = 0; index < ordered.size(); index++) {
         Integer order = parseIntegerWithoutIssue(ordered.get(index).get(COL_STEP_ORDER));
-        if ((order != null && order != index)
+        if ((!EmptyChecks.isNull(order) && order != index)
             || "false".equalsIgnoreCase(normalize(ordered.get(index).get(COL_ENABLED)))) {
           orderMatches = false;
           break;
         }
       }
       if (!actual.equals(expected) || !orderMatches) {
-        int rowNo = parseIntegerWithoutIssue(pipeline.get(INTERNAL_ROW_NO)) == null
-            ? 0
-            : parseIntegerWithoutIssue(pipeline.get(INTERNAL_ROW_NO));
+        Integer parsedRowNo = parseIntegerWithoutIssue(pipeline.get(INTERNAL_ROW_NO));
+        int rowNo = EmptyChecks.isNull(parsedRowNo) ? 0 : parsedRowNo;
         issues.add(new WorkbookIssue(
             PIPELINE_SHEET,
             rowNo,

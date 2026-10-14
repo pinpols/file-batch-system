@@ -158,7 +158,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
     Long fileId = PlatformRuntimeValues.toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
     PlatformPipelineDefinitionRepository.PipelineDefinitionReference pipelineDefinition =
         pipelineDefinitions.findPipelineDefinition(request.tenantId(), jobCode);
-    if (pipelineDefinition == null || pipelineDefinition.id() == null) {
+    if (EmptyChecks.isNull(pipelineDefinition) || EmptyChecks.isNull(pipelineDefinition.id())) {
       BizException exception =
           BizException.of(ResultCode.NOT_FOUND, "error.pipeline.definition_not_found");
       return StepExecutionResponse.failure(exception, ERROR_OBJECT_MAPPER);

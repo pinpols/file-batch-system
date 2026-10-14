@@ -540,7 +540,7 @@ public class TenantConfigInitApplyHandlers {
 
   private void updatePipelineDefinition(
       String tenantId, Long id, PipelineDefinitionSpec spec, Map<String, Object> existing) {
-    if (spec.getSteps() != null) {
+    if (!EmptyChecks.isNull(spec.getSteps())) {
       validatePipelineSteps(
           Nullables.coalesce(spec.getPipelineType(), String.valueOf(existing.get("pipeline_type"))),
           spec.getSteps());
@@ -559,7 +559,7 @@ public class TenantConfigInitApplyHandlers {
     params.put(
         "description", Nullables.coalesce(spec.getDescription(), existing.get("description")));
     definitionMappers.pipelineDefinition.update(params);
-    if (spec.getSteps() != null) {
+    if (!EmptyChecks.isNull(spec.getSteps())) {
       definitionMappers.pipelineStepDefinition.deleteByPipelineDefinitionId(id);
       insertPipelineSteps(id, spec.getSteps());
     }
@@ -567,7 +567,7 @@ public class TenantConfigInitApplyHandlers {
 
   private void insertPipelineSteps(
       Long pipelineDefinitionId, List<PipelineDefinitionSpec.StepSpec> steps) {
-    if (steps == null || steps.isEmpty()) {
+    if (EmptyChecks.isNull(steps) || steps.isEmpty()) {
       return;
     }
     // 批量插入: 把 N 次单行往返折成 1 次,租户初始化场景下减少 ~10x DB round trip + 事务时长。
@@ -594,7 +594,7 @@ public class TenantConfigInitApplyHandlers {
   private static void validatePipelineSteps(
       String pipelineType, List<PipelineDefinitionSpec.StepSpec> steps) {
     List<String> expectedStages = PipelineType.stages(pipelineType);
-    if (steps == null
+    if (EmptyChecks.isNull(steps)
         || !steps.stream()
             .map(PipelineDefinitionSpec.StepSpec::getStageCode)
             .toList()
@@ -604,7 +604,7 @@ public class TenantConfigInitApplyHandlers {
     }
     for (int index = 0; index < steps.size(); index++) {
       Integer configuredOrder = steps.get(index).getStepOrder();
-      if (configuredOrder != null && configuredOrder != index) {
+      if (!EmptyChecks.isNull(configuredOrder) && configuredOrder != index) {
         throw BizException.of(
             ResultCode.INVALID_ARGUMENT, "error.pipeline.step_order_must_match_stage", index + 1);
       }

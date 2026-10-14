@@ -9,6 +9,7 @@ import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntime
 import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.toLong;
 import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.toMap;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
@@ -42,7 +43,7 @@ public class PlatformPipelineDefinitionRepository {
     }
     Map<String, Object> row =
         mapper.selectLatestPipelineDefinition(params(TENANT_ID, tenantId, "jobCode", jobCode));
-    if (row == null || row.isEmpty()) {
+    if (EmptyChecks.isNull(row) || row.isEmpty()) {
       return null;
     }
     return new PipelineDefinitionReference(
