@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.infrastructure.excel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
@@ -29,6 +30,36 @@ class ConfigPackageExcelValidatorTest {
     assertThat(ConfigPackageExcelValidator.STAGES_BY_TYPE.get("PROCESS"))
         .containsExactlyInAnyOrder("PREPARE", "COMPUTE", "VALIDATE", "COMMIT", "FEEDBACK");
     assertThat(ConfigPackageExcelValidator.STAGE_CODES).contains("COMPUTE", "COMMIT");
+  }
+
+  @Test
+  @DisplayName("流水线步骤必须完整有序且全部启用,违规时在预览交叉校验阶段拦截")
+  void shouldRejectPipelineStepsWithWrongOrderOrDisabledStage() {
+    List<Map<String, String>> orderedSteps = pipelineStepRows();
+    List<Map<String, String>> reorderedSteps = new ArrayList<>(pipelineStepRows());
+    String firstStage = reorderedSteps.get(0).get("stage_code");
+    reorderedSteps.get(0).put("stage_code", reorderedSteps.get(1).get("stage_code"));
+    reorderedSteps.get(1).put("stage_code", firstStage);
+    List<Map<String, String>> incorrectOrder = pipelineStepRows();
+    incorrectOrder.get(1).put("step_order", "0");
+    List<Map<String, String>> disabledStage = pipelineStepRows();
+    disabledStage.get(1).put("enabled", "false");
+
+    for (List<Map<String, String>> steps :
+        List.of(reorderedSteps, incorrectOrder, disabledStage, orderedSteps)) {
+      PackageExcelSession session = sessionWithPipelines(List.of(pipelineRow()), steps);
+
+      ConfigPackageExcelValidator.PackageValidationResult result = validator().validate(session);
+
+      if (steps == orderedSteps) {
+        assertThat(result.crossRefIssues()).isEmpty();
+      } else {
+        assertThat(result.crossRefIssues()).anySatisfy(issue -> {
+          assertThat(issue.sheetName()).isEqualTo(ConfigPackageExcelValidator.PIPELINE_SHEET);
+          assertThat(issue.message()).contains("complete fixed stage order");
+        });
+      }
+    }
   }
 
   @Test
@@ -418,10 +449,12 @@ class ConfigPackageExcelValidatorTest {
   }
 
   private static ConfigPackageExcelValidator validator() {
+    var stepRegistry = mock(StepRegistryQueryMapper.class);
+    when(stepRegistry.selectImplCodesByModule("IMPORT")).thenReturn(List.of());
     return new ConfigPackageExcelValidator(
         mock(JobDefinitionMapper.class),
         mock(PipelineDefinitionMapper.class),
-        mock(StepRegistryQueryMapper.class),
+        stepRegistry,
         mock(FileTemplateConfigMapper.class),
         mock(ResourceQueueMapper.class),
         mock(BusinessCalendarMapper.class),
@@ -471,6 +504,57 @@ class ConfigPackageExcelValidatorTest {
         List.of(),
         List.of(),
         List.of());
+  }
+
+  private static PackageExcelSession sessionWithPipelines(
+      List<Map<String, String>> pipelineRows, List<Map<String, String>> stepRows) {
+    return new PackageExcelSession(
+        "package.xlsx",
+        "t1",
+        Instant.EPOCH,
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(jobRow("", "", "")),
+        List.of(),
+        List.of(),
+        List.of(),
+        pipelineRows,
+        stepRows,
+        List.of(),
+        List.of(),
+        List.of());
+  }
+
+  private static Map<String, String> pipelineRow() {
+    return new LinkedHashMap<>(Map.of(
+        "job_code", "JOB_IMPORT_CUSTOMER",
+        "pipeline_name", "Import pipeline",
+        "pipeline_type", "IMPORT",
+        "version", "1"));
+  }
+
+  private static List<Map<String, String>> pipelineStepRows() {
+    List<Map<String, String>> rows = new ArrayList<>();
+    List<String> stages = io.github.pinpols.batch.common.enums.PipelineType.stages("IMPORT");
+    for (int index = 0; index < stages.size(); index++) {
+      String stage = stages.get(index);
+      Map<String, String> row = new LinkedHashMap<>();
+      row.put("job_code", "JOB_IMPORT_CUSTOMER");
+      row.put("version", "1");
+      row.put("step_code", stage);
+      row.put("step_name", stage);
+      row.put("stage_code", stage);
+      row.put("step_order", String.valueOf(index));
+      row.put("impl_code", "impl_" + stage);
+      row.put("step_params", "{}");
+      row.put("timeout_seconds", "0");
+      row.put("retry_policy", "NONE");
+      row.put("retry_max_count", "0");
+      row.put("enabled", "true");
+      rows.add(row);
+    }
+    return rows;
   }
 
   private static Map<String, String> fileTemplateRow(String templateCode, String version) {

@@ -72,6 +72,28 @@ class DefaultPipelineDefinitionServiceValidationTest {
     verifyNoInteractions(mapper);
   }
 
+  @Test
+  @DisplayName("阶段顺序正确时拒绝禁用固定阶段")
+  void shouldRejectDisabledFixedStage() {
+    var mapper = mock(PipelineDefinitionMapper.class);
+    var meta = mock(ConsoleMetaQueryService.class);
+    var guard = mock(ConsoleTenantGuard.class);
+    when(guard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+    when(meta.pipelineStages()).thenReturn(Map.of("IMPORT", PipelineType.stages("IMPORT")));
+    var service = new DefaultPipelineDefinitionService(
+        mapper,
+        mock(PipelineStepDefinitionMapper.class),
+        guard,
+        mock(ConsoleRealtimeEventPort.class),
+        meta,
+        mock(JobResourceAssignmentGuard.class));
+    PipelineDefinitionSaveRequest request = request(PipelineType.stages("IMPORT"));
+    request.getSteps().get(1).setEnabled(false);
+
+    assertThatThrownBy(() -> service.create(request)).isInstanceOf(BizException.class);
+    verifyNoInteractions(mapper);
+  }
+
   private static PipelineDefinitionSaveRequest request(List<String> stages) {
     PipelineDefinitionSaveRequest request = new PipelineDefinitionSaveRequest();
     request.setTenantId("tenant-a");
