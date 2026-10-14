@@ -643,7 +643,7 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
     assertThat(response.body()).contains("\"jobRows\":1");
     assertThat(response.body()).contains("\"fileTemplateRows\":1");
     assertThat(response.body()).contains("\"pipelineRows\":1");
-    assertThat(response.body()).contains("\"pipelineStepRows\":3");
+    assertThat(response.body()).contains("\"pipelineStepRows\":6");
     assertThat(response.body()).contains("\"resourceQueueRows\":0");
 
     JsonNode uploadResponse = new ObjectMapper().readTree(response.body());
@@ -1484,7 +1484,7 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
             Integer.class,
             tenantId,
             jobCode))
-        .isEqualTo(3);
+        .isEqualTo(6);
   }
 
   @Test

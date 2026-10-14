@@ -13,7 +13,7 @@ public interface PlatformFileRuntimeMapper {
 
   Map<String, Object> selectLatestTemplateConfig(Map<String, Object> params);
 
-  Long selectLatestPipelineDefinitionId(Map<String, Object> params);
+  Map<String, Object> selectLatestPipelineDefinition(Map<String, Object> params);
 
   List<Map<String, Object>> selectPipelineStepDefinitions(Map<String, Object> params);
 

@@ -123,15 +123,10 @@ public class ConsoleMetaQueryService {
     this.stepRegistryQueryMapper = stepRegistryQueryMapper;
   }
 
-  /**
-   * Pipeline 固定 9 stages 按 jobType 分组（与 {@code ConfigPackageExcelValidator.STAGES_BY_TYPE} 保持一致；该
-   * Map 是导入校验白名单的事实源）。
-   */
-  private static final Map<String, List<String>> PIPELINE_STAGES = Map.of(
-      "IMPORT", List.of("RECEIVE", "PREPROCESS", "PARSE", "VALIDATE", "LOAD", "FEEDBACK"),
-      "EXPORT", List.of("PREPARE", "GENERATE", "STORE", "REGISTER", "COMPLETE"),
-      "PROCESS", List.of("PREPARE", "COMPUTE", "VALIDATE", "COMMIT", "FEEDBACK"),
-      "DISPATCH", List.of("PREPARE", "DISPATCH", "ACK", "RETRY", "COMPENSATE", "COMPLETE"));
+  /** 固定阶段序列由公共 PipelineType 枚举维护，供元数据展示与定义校验共用。 */
+  private static final Map<String, List<String>> PIPELINE_STAGES = Arrays.stream(
+          PipelineType.values())
+      .collect(Collectors.toUnmodifiableMap(PipelineType::code, PipelineType::stages));
 
   public Map<String, List<String>> pipelineStages() {
     return PIPELINE_STAGES;

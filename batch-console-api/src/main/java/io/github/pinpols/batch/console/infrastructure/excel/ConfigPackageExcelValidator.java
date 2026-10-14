@@ -31,6 +31,8 @@ import io.github.pinpols.batch.console.infrastructure.excel.ResourceQueueExcelRo
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import io.github.pinpols.batch.console.support.excel.TenantConfigPackageExcelImportStore.PackageExcelSession;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -96,6 +98,7 @@ public class ConfigPackageExcelValidator {
   public static final String COL_SEVERITY = ConfigPackageExcelSchema.COL_SEVERITY;
   public static final String COL_PIPELINE_TYPE = ConfigPackageExcelSchema.COL_PIPELINE_TYPE;
   public static final String COL_STAGE_CODE = ConfigPackageExcelSchema.COL_STAGE_CODE;
+  public static final String COL_STEP_ORDER = ConfigPackageExcelSchema.PipelineStep.COL_STEP_ORDER;
   public static final String COL_WORKFLOW_CODE = ConfigPackageExcelSchema.COL_WORKFLOW_CODE;
   public static final String COL_WORKFLOW_NAME = ConfigPackageExcelSchema.COL_WORKFLOW_NAME;
   public static final String COL_WORKFLOW_TYPE = ConfigPackageExcelSchema.COL_WORKFLOW_TYPE;
@@ -149,9 +152,7 @@ public class ConfigPackageExcelValidator {
   public static final Set<String> AUTH_TYPES = DictEnum.codes(FileChannelAuthType.class);
   public static final Set<String> RECEIPT_POLICIES = DictEnum.codes(FileReceiptPolicy.class);
   public static final Set<String> PIPELINE_TYPES = DictEnum.codes(PipelineType.class);
-  // 旧的 STAGE_CODES 是跨 module 的 union，现在只保留做"基础形状校验"；精确校验按
-  // pipeline_type 查 STAGES_BY_TYPE（对齐 worker 侧 ImportStage / ExportStage / DispatchStage
-  // 三个 enum 的实际值，避免 Excel 里填 PREPROCESS 到 EXPORT 管线这种 cross-module 错配）。
+  // 旧的 STAGE_CODES 是跨 module 的 union，现在只保留做基础形状校验；精确且有序的阶段序列来自 PipelineType。
   public static final Set<String> STAGE_CODES = Set.of(
       "RECEIVE",
       "PREPROCESS",
@@ -170,11 +171,8 @@ public class ConfigPackageExcelValidator {
       "ACK",
       "RETRY",
       "COMPENSATE");
-  public static final Map<String, Set<String>> STAGES_BY_TYPE = Map.of(
-      "IMPORT", Set.of("RECEIVE", "PREPROCESS", "PARSE", "VALIDATE", "LOAD", "FEEDBACK"),
-      "EXPORT", Set.of("PREPARE", "GENERATE", "STORE", "REGISTER", "COMPLETE"),
-      "PROCESS", Set.of("PREPARE", "COMPUTE", "VALIDATE", "COMMIT", "FEEDBACK"),
-      "DISPATCH", Set.of("PREPARE", "DISPATCH", "ACK", "RETRY", "COMPENSATE", "COMPLETE"));
+  public static final Map<String, Set<String>> STAGES_BY_TYPE = Arrays.stream(PipelineType.values())
+      .collect(Collectors.toUnmodifiableMap(PipelineType::code, type -> Set.copyOf(type.stages())));
   public static final Set<String> WORKFLOW_TYPES = DictEnum.codes(WorkflowType.class);
   public static final Set<String> NODE_TYPES = DictEnum.codes(WorkflowNodeType.class);
   public static final Set<String> EDGE_TYPES = DictEnum.codes(WorkflowEdgeType.class);
@@ -403,6 +401,7 @@ public class ConfigPackageExcelValidator {
         steps.validRows(),
         wfNodes.validRows(),
         session.pipelineRows());
+    crossIssues.addAll(validatePipelineStageSequences(pipelines.validRows(), steps.validRows()));
     // ADR-025:Excel import 阶段静态 DAG 拓扑校验,拒绝有环/不可达/孤立终端/CONDITION 缺 expr/
     // DSL 引用非法或非上游节点的图。复杂规则(V9/V10 GATEWAY join_mode 与 V16 WAIT sensor_spec)留 enable 时由
     // orchestrator WorkflowGraphValidator 回退,Excel 阶段先拦截致命问题。
@@ -422,6 +421,55 @@ public class ConfigPackageExcelValidator {
         wfNodes,
         wfEdges,
         crossIssues);
+  }
+
+  private static List<WorkbookIssue> validatePipelineStageSequences(
+      List<Map<String, String>> pipelines, List<Map<String, String>> steps) {
+    Map<String, List<Map<String, String>>> stepsByPipeline = steps.stream()
+        .collect(Collectors.groupingBy(
+            row ->
+                normalize(row.get(COL_JOB_CODE)) + KEY_SEP_COLON + normalize(row.get(COL_VERSION)),
+            LinkedHashMap::new,
+            Collectors.toList()));
+    List<WorkbookIssue> issues = new ArrayList<>();
+    for (Map<String, String> pipeline : pipelines) {
+      String key = normalize(pipeline.get(COL_JOB_CODE))
+          + KEY_SEP_COLON
+          + normalize(pipeline.get(COL_VERSION));
+      String type = normalize(pipeline.get(COL_PIPELINE_TYPE));
+      List<String> expected = PipelineType.stages(type);
+      List<Map<String, String>> configured = stepsByPipeline.getOrDefault(key, List.of());
+      if (EmptyChecks.isEmpty(configured)) {
+        continue;
+      }
+      List<Map<String, String>> ordered = configured.stream()
+          .sorted(Comparator.comparingInt(row -> {
+            Integer order = parseIntegerWithoutIssue(row.get(COL_STEP_ORDER));
+            return EmptyChecks.isNull(order) ? Integer.MAX_VALUE : order;
+          }))
+          .toList();
+      List<String> actual =
+          ordered.stream().map(row -> normalize(row.get(COL_STAGE_CODE))).toList();
+      boolean orderMatches = true;
+      for (int index = 0; index < ordered.size(); index++) {
+        Integer order = parseIntegerWithoutIssue(ordered.get(index).get(COL_STEP_ORDER));
+        if ((!EmptyChecks.isNull(order) && order != index)
+            || "false".equalsIgnoreCase(normalize(ordered.get(index).get(COL_ENABLED)))) {
+          orderMatches = false;
+          break;
+        }
+      }
+      if (!actual.equals(expected) || !orderMatches) {
+        Integer parsedRowNo = parseIntegerWithoutIssue(pipeline.get(INTERNAL_ROW_NO));
+        int rowNo = EmptyChecks.isNull(parsedRowNo) ? 0 : parsedRowNo;
+        issues.add(new WorkbookIssue(
+            PIPELINE_SHEET,
+            rowNo,
+            COL_PIPELINE_TYPE,
+            "pipeline steps must exactly match the complete fixed stage order for " + type));
+      }
+    }
+    return issues;
   }
 
   private SheetResult validateResourceQueueRows(String tenantId, List<Map<String, String>> rows) {

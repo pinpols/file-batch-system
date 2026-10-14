@@ -5,16 +5,20 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.PipelineType;
+import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.FileChannelSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.FileTemplateSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.InitMode;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.JobDefinitionSpec;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.PipelineDefinitionSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.WorkflowDefinitionSpec;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse;
 import io.github.pinpols.batch.console.config.JobMonitoringDefaultsProperties;
@@ -35,12 +39,14 @@ import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinition
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -400,6 +406,90 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   // ------------------------------------------------------------------ workflow definitions
 
   @Test
+  @DisplayName("流水线创建按固定完整阶段序列批量写入步骤并补齐默认值")
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  void batchInit_createsPipelineWithCompleteOrderedStages() {
+    TenantConfigBatchInitRequest request = requestWithPipeline("pipeline-a", List.of("t1"));
+    when(pipelineDefinitionMapper.selectByQuery(
+            eq("t1"), eq("pipeline-a"), eq("IMPORT"), isNull(), any(PageRequest.class)))
+        .thenReturn(List.of());
+    when(pipelineDefinitionMapper.insert(any())).thenAnswer(invocation -> {
+      Map<String, Object> params = invocation.getArgument(0);
+      params.put("id", 101L);
+      return 1;
+    });
+
+    TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "pipeline-valid");
+
+    assertThat(response.results().get(0).pipelineDefinitions().created()).isEqualTo(1);
+    ArgumentCaptor<List> rowsCaptor = ArgumentCaptor.forClass(List.class);
+    verify(pipelineStepDefinitionMapper).insertBatch(rowsCaptor.capture());
+    List<?> rows = rowsCaptor.getValue();
+    assertThat(rows).hasSize(PipelineType.stages("IMPORT").size());
+    Map<?, ?> loadStep = (Map<?, ?>) rows.get(4);
+    assertThat(loadStep.get("pipeline_definition_id")).isEqualTo(101L);
+    assertThat(loadStep.get("step_order")).isEqualTo(4);
+    assertThat(loadStep.get("timeout_seconds")).isEqualTo(0);
+    assertThat(loadStep.get("retry_policy")).isEqualTo("NONE");
+    assertThat(loadStep.get("retry_max_count")).isEqualTo(0);
+    assertThat(loadStep.get("enabled")).isEqualTo(true);
+  }
+
+  @Test
+  @DisplayName("流水线阶段缺失、顺序不符或禁用固定阶段时拒绝写入")
+  void batchInit_rejectsInvalidPipelineStages() {
+    when(pipelineDefinitionMapper.selectByQuery(
+            anyString(), anyString(), any(), isNull(), any(PageRequest.class)))
+        .thenReturn(List.of());
+    List<PipelineDefinitionSpec> invalidSpecs = List.of(
+        pipelineSpec("pipeline-incomplete", PipelineType.stages("IMPORT").subList(0, 5)),
+        pipelineSpec("pipeline-order", PipelineType.stages("IMPORT")),
+        pipelineSpec("pipeline-disabled", PipelineType.stages("IMPORT")));
+    invalidSpecs.get(1).getSteps().get(1).setStepOrder(0);
+    invalidSpecs.get(2).getSteps().get(1).setEnabled(false);
+
+    for (PipelineDefinitionSpec spec : invalidSpecs) {
+      TenantConfigBatchInitRequest request = new TenantConfigBatchInitRequest();
+      request.setTargetTenantIds(List.of("t1"));
+      request.setPipelineDefinitions(List.of(spec));
+
+      TenantConfigBatchInitResponse response =
+          service.batchInit(request, "admin", "pipeline-invalid");
+
+      assertThat(response.results().get(0).pipelineDefinitions().failed()).isEqualTo(1);
+    }
+    verify(pipelineDefinitionMapper, never()).insert(any());
+    verify(pipelineStepDefinitionMapper, never()).insertBatch(any());
+  }
+
+  @Test
+  @DisplayName("覆盖流水线时按既有类型校验阶段并替换已配置步骤")
+  void batchInit_updatesPipelineAndReplacesStages() {
+    TenantConfigBatchInitRequest request = requestWithPipeline("pipeline-a", List.of("t1"));
+    request.setMode(InitMode.UPSERT);
+    PipelineDefinitionSpec spec = request.getPipelineDefinitions().getFirst();
+    spec.setPipelineType(null);
+    Map<String, Object> existing = Map.of(
+        "id", 101L,
+        "pipeline_type", "IMPORT",
+        "pipeline_name", "Existing pipeline",
+        "biz_type", "settlement",
+        "worker_group", "default",
+        "enabled", true,
+        "description", "existing");
+    when(pipelineDefinitionMapper.selectByQuery(
+            eq("t1"), eq("pipeline-a"), isNull(), isNull(), any(PageRequest.class)))
+        .thenReturn(List.of(existing));
+    TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "pipeline-update");
+
+    assertThat(response.results().get(0).pipelineDefinitions().updated()).isEqualTo(1);
+    verify(pipelineDefinitionMapper)
+        .update(argThat(params -> "IMPORT".equals(params.get("pipeline_type"))));
+    verify(pipelineStepDefinitionMapper).deleteByPipelineDefinitionId(101L);
+    verify(pipelineStepDefinitionMapper).insertBatch(any());
+  }
+
+  @Test
   @DisplayName("工作流定义不存在时,新建并计入创建数")
   void batchInit_createsWorkflowWhenNotExists() {
     TenantConfigBatchInitRequest request = requestWithWorkflow("wf-1", List.of("t1"));
@@ -499,6 +589,35 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     spec.setEnabled(true);
     request.setFileTemplates(List.of(spec));
     return request;
+  }
+
+  private TenantConfigBatchInitRequest requestWithPipeline(String jobCode, List<String> tenants) {
+    TenantConfigBatchInitRequest request = new TenantConfigBatchInitRequest();
+    request.setTargetTenantIds(tenants);
+    request.setPipelineDefinitions(List.of(pipelineSpec(jobCode, PipelineType.stages("IMPORT"))));
+    return request;
+  }
+
+  private PipelineDefinitionSpec pipelineSpec(String jobCode, List<String> stages) {
+    PipelineDefinitionSpec spec = new PipelineDefinitionSpec();
+    spec.setJobCode(jobCode);
+    spec.setPipelineName("Pipeline " + jobCode);
+    spec.setPipelineType("IMPORT");
+    spec.setBizType("settlement");
+    spec.setWorkerGroup("default");
+    List<PipelineDefinitionSpec.StepSpec> steps = new ArrayList<>();
+    for (int index = 0; index < stages.size(); index++) {
+      String stage = stages.get(index);
+      PipelineDefinitionSpec.StepSpec step = new PipelineDefinitionSpec.StepSpec();
+      step.setStepCode(stage);
+      step.setStepName(stage);
+      step.setStageCode(stage);
+      step.setStepOrder(index);
+      step.setImplCode("IMPORT_" + stage);
+      steps.add(step);
+    }
+    spec.setSteps(steps);
+    return spec;
   }
 
   private TenantConfigBatchInitRequest requestWithWorkflow(

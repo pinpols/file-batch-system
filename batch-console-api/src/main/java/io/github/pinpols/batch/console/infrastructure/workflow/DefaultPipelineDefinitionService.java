@@ -63,19 +63,28 @@ public class DefaultPipelineDefinitionService implements PipelineDefinitionServi
   /** 校验每个 step 的 stageCode 属于该 pipelineType 允许集、implCode 已在 step 注册表登记(FE 下拉之外的越界拦截)。 */
   private void validateSteps(
       String pipelineType, List<PipelineDefinitionSaveRequest.StepItem> steps) {
-    if (steps == null || steps.isEmpty()) {
-      return;
-    }
     List<String> allowedStages =
         metaQueryService.pipelineStages().getOrDefault(pipelineType, List.of());
+    if (EmptyChecks.isNull(steps)
+        || !steps.stream()
+            .map(PipelineDefinitionSaveRequest.StepItem::getStageCode)
+            .toList()
+            .equals(allowedStages)) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.pipeline.stages_must_match_type", pipelineType);
+    }
     Set<String> registeredImpls = new HashSet<>(metaQueryService.stepImpls(null));
-    for (PipelineDefinitionSaveRequest.StepItem step : steps) {
-      if (!allowedStages.contains(step.getStageCode())) {
+    for (int index = 0; index < steps.size(); index++) {
+      PipelineDefinitionSaveRequest.StepItem step = steps.get(index);
+      if (!EmptyChecks.isNull(step.getStepOrder()) && step.getStepOrder() != index) {
+        throw BizException.of(
+            ResultCode.INVALID_ARGUMENT, "error.pipeline.step_order_must_match_stage", index + 1);
+      }
+      if (Boolean.FALSE.equals(step.getEnabled())) {
         throw BizException.of(
             ResultCode.INVALID_ARGUMENT,
-            "error.pipeline.stage_not_allowed_for_type",
-            step.getStageCode(),
-            pipelineType);
+            "error.pipeline.fixed_stage_cannot_be_disabled",
+            step.getStageCode());
       }
       if (!registeredImpls.contains(step.getImplCode())) {
         throw BizException.of(
@@ -214,16 +223,18 @@ public class DefaultPipelineDefinitionService implements PipelineDefinitionServi
       Long pipelineDefinitionId,
       List<PipelineDefinitionSaveRequest.StepItem> steps,
       Map<String, Map<String, Object>> existingSteps) {
-    if (steps == null) {
+    if (EmptyChecks.isNull(steps)) {
       return;
     }
-    for (PipelineDefinitionSaveRequest.StepItem step : steps) {
+    for (int index = 0; index < steps.size(); index++) {
+      PipelineDefinitionSaveRequest.StepItem step = steps.get(index);
       Map<String, Object> stepParams = new HashMap<>();
       stepParams.put("pipeline_definition_id", pipelineDefinitionId);
       stepParams.put("step_code", step.getStepCode());
       stepParams.put("step_name", step.getStepName());
       stepParams.put("stage_code", step.getStageCode());
-      stepParams.put("step_order", step.getStepOrder() != null ? step.getStepOrder() : 0);
+      stepParams.put(
+          "step_order", EmptyChecks.isNull(step.getStepOrder()) ? index : step.getStepOrder());
       stepParams.put("impl_code", step.getImplCode());
       Map<String, Object> existing = existingSteps.get(step.getStepCode());
       String stored =

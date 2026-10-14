@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.enums.PipelineType;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,27 @@ import org.springframework.http.MediaType;
 class ConsolePipelineDefinitionMutationIntegrationTest extends AbstractMutationIntegrationTest {
 
   private String body(String jobCode, String pipelineType) {
+    return body(jobCode, pipelineType, null, null);
+  }
+
+  private String body(
+      String jobCode, String pipelineType, String loadImplCode, String loadStepParams) {
+    String steps = java.util.stream.IntStream.range(
+            0, PipelineType.stages(pipelineType).size())
+        .mapToObj(index -> {
+          String stage = PipelineType.stages(pipelineType).get(index);
+          String implCode = stage.equals("LOAD") && loadImplCode != null
+              ? loadImplCode
+              : pipelineType + "_" + stage;
+          String stepParams = stage.equals("LOAD") && loadStepParams != null
+              ? io.github.pinpols.batch.common.utils.JsonUtils.toJson(loadStepParams)
+              : "\"{}\"";
+          return """
+              {"stepCode":"%s","stepName":"%s","stageCode":"%s","stepOrder":%d,
+               "implCode":"%s","stepParams":%s}
+              """.formatted(stage, stage, stage, index, implCode, stepParams).strip();
+        })
+        .collect(java.util.stream.Collectors.joining(","));
     return """
         {
           "tenantId": "int-pd-ta",
@@ -37,15 +59,38 @@ class ConsolePipelineDefinitionMutationIntegrationTest extends AbstractMutationI
           "bizType": "settlement",
           "workerGroup": "default",
           "enabled": false,
-          "steps": []
+          "steps": [%s]
         }
-        """.formatted(jobCode, pipelineType).stripTrailing();
+        """.formatted(jobCode, pipelineType, steps).stripTrailing();
+  }
+
+  private void registerStages(String pipelineType, String customImplCode) {
+    PipelineType.stages(pipelineType).forEach(stage -> {
+      String implCode = stage.equals("LOAD") && customImplCode != null
+          ? customImplCode
+          : pipelineType + "_" + stage;
+      jdbcTemplate.update(
+          "INSERT INTO batch.step_registry(module, impl_code, impl_class) VALUES (?, ?, ?) "
+              + "ON CONFLICT (module, impl_code) DO NOTHING",
+          pipelineType,
+          implCode,
+          getClass().getName());
+    });
+  }
+
+  private void deletePipelineDefinitions(String jobCode) {
+    jdbcTemplate.update(
+        "DELETE FROM batch.pipeline_step_definition WHERE pipeline_definition_id IN "
+            + "(SELECT id FROM batch.pipeline_definition WHERE job_code = ?)",
+        jobCode);
+    jdbcTemplate.update("DELETE FROM batch.pipeline_definition WHERE job_code = ?", jobCode);
   }
 
   @Test
   @DisplayName("创建流水线定义: 返回成功,落库的租户,类型与业务类型与请求一致")
   void shouldCreatePipelineDefinitionWithValidCode() {
     String code = "int_pd_create_" + System.currentTimeMillis();
+    registerStages("IMPORT", null);
 
     client
         .post()
@@ -65,7 +110,7 @@ class ConsolePipelineDefinitionMutationIntegrationTest extends AbstractMutationI
     assertThat(row).containsEntry("pipeline_type", "IMPORT");
     assertThat(row).containsEntry("biz_type", "settlement");
 
-    jdbcTemplate.update("DELETE FROM batch.pipeline_definition WHERE job_code = ?", code);
+    deletePipelineDefinitions(code);
   }
 
   @Test
@@ -77,11 +122,11 @@ class ConsolePipelineDefinitionMutationIntegrationTest extends AbstractMutationI
         "INSERT INTO batch.step_registry(module, impl_code, impl_class) VALUES ('IMPORT', ?, ?)",
         implCode,
         getClass().getName());
+    registerStages("IMPORT", implCode);
     Long definitionId = null;
     try {
-      String createBody = body(code, "IMPORT").replace("\"steps\": []", """
-              "steps": [{"stepCode":"load","stepName":"Load","stageCode":"LOAD","stepOrder":0,"implCode":"%s","stepParams":"{\\"apiKey\\":\\"pipeline-secret\\",\\"label\\":\\"old\\"}"}]
-              """.formatted(implCode));
+      String createBody =
+          body(code, "IMPORT", implCode, "{\"apiKey\":\"pipeline-secret\",\"label\":\"old\"}");
       String created = client
           .post()
           .uri("/api/console/pipeline-definitions")
@@ -132,7 +177,8 @@ class ConsolePipelineDefinitionMutationIntegrationTest extends AbstractMutationI
       assertThat(updated).contains("****").doesNotContain("pipeline-secret");
       var storedParams = jdbcTemplate.queryForMap(
           "SELECT step_params->>'apiKey' AS api_key, step_params->>'label' AS label "
-              + "FROM batch.pipeline_step_definition WHERE pipeline_definition_id = ?",
+              + "FROM batch.pipeline_step_definition WHERE pipeline_definition_id = ? "
+              + "AND stage_code = 'LOAD'",
           definitionId);
       assertThat(storedParams).containsEntry("api_key", "pipeline-secret");
       assertThat(storedParams).containsEntry("label", "new");
@@ -214,6 +260,7 @@ class ConsolePipelineDefinitionMutationIntegrationTest extends AbstractMutationI
   @DisplayName("作业编码重复: 第二次写入失败,不产生重复定义")
   void shouldRejectDuplicateJobCode() {
     String code = "int_pd_dup_" + System.currentTimeMillis();
+    registerStages("IMPORT", null);
     client
         .post()
         .uri("/api/console/pipeline-definitions")
@@ -234,6 +281,6 @@ class ConsolePipelineDefinitionMutationIntegrationTest extends AbstractMutationI
         .expectStatus()
         .value(s -> assertThat(s).isIn(400, 409, 500));
 
-    jdbcTemplate.update("DELETE FROM batch.pipeline_definition WHERE job_code = ?", code);
+    deletePipelineDefinitions(code);
   }
 }

@@ -9,6 +9,7 @@ import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntime
 import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.toLong;
 import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.toMap;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
@@ -36,12 +37,21 @@ public class PlatformPipelineDefinitionRepository {
     return config == null ? Map.of() : config;
   }
 
-  public Long findPipelineDefinition(String tenantId, String jobCode) {
+  public PipelineDefinitionReference findPipelineDefinition(String tenantId, String jobCode) {
     if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode)) {
       return null;
     }
-    return mapper.selectLatestPipelineDefinitionId(params(TENANT_ID, tenantId, "jobCode", jobCode));
+    Map<String, Object> row =
+        mapper.selectLatestPipelineDefinition(params(TENANT_ID, tenantId, "jobCode", jobCode));
+    if (EmptyChecks.isNull(row) || row.isEmpty()) {
+      return null;
+    }
+    Long definitionId = toLong(row.get(ID));
+    String pipelineType = stringValue(row.get("pipeline_type"));
+    return new PipelineDefinitionReference(definitionId, pipelineType);
   }
+
+  public record PipelineDefinitionReference(Long id, String pipelineType) {}
 
   public List<PipelineStepDefinition> loadPipelineSteps(Long pipelineDefinitionId) {
     if (pipelineDefinitionId == null) {

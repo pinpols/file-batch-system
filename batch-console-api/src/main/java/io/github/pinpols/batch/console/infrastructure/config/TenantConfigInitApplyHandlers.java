@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.enums.PipelineType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
@@ -521,6 +522,7 @@ public class TenantConfigInitApplyHandlers {
   }
 
   private void insertPipelineDefinition(String tenantId, PipelineDefinitionSpec spec) {
+    validatePipelineSteps(spec.getPipelineType(), spec.getSteps());
     Map<String, Object> params = new HashMap<>();
     params.put("tenant_id", tenantId);
     params.put("job_code", spec.getJobCode());
@@ -538,6 +540,11 @@ public class TenantConfigInitApplyHandlers {
 
   private void updatePipelineDefinition(
       String tenantId, Long id, PipelineDefinitionSpec spec, Map<String, Object> existing) {
+    if (!EmptyChecks.isNull(spec.getSteps())) {
+      String existingPipelineType = String.valueOf(existing.get("pipeline_type"));
+      String pipelineType = Nullables.coalesce(spec.getPipelineType(), existingPipelineType);
+      validatePipelineSteps(pipelineType, spec.getSteps());
+    }
     Map<String, Object> params = new HashMap<>();
     params.put("tenant_id", tenantId);
     params.put(KEY_ID, id);
@@ -552,7 +559,7 @@ public class TenantConfigInitApplyHandlers {
     params.put(
         "description", Nullables.coalesce(spec.getDescription(), existing.get("description")));
     definitionMappers.pipelineDefinition.update(params);
-    if (spec.getSteps() != null) {
+    if (!EmptyChecks.isNull(spec.getSteps())) {
       definitionMappers.pipelineStepDefinition.deleteByPipelineDefinitionId(id);
       insertPipelineSteps(id, spec.getSteps());
     }
@@ -560,18 +567,19 @@ public class TenantConfigInitApplyHandlers {
 
   private void insertPipelineSteps(
       Long pipelineDefinitionId, List<PipelineDefinitionSpec.StepSpec> steps) {
-    if (steps == null || steps.isEmpty()) {
+    if (EmptyChecks.isNull(steps) || steps.isEmpty()) {
       return;
     }
     // 批量插入: 把 N 次单行往返折成 1 次,租户初始化场景下减少 ~10x DB round trip + 事务时长。
     List<Map<String, Object>> rows = new ArrayList<>(steps.size());
-    for (PipelineDefinitionSpec.StepSpec step : steps) {
+    for (int index = 0; index < steps.size(); index++) {
+      PipelineDefinitionSpec.StepSpec step = steps.get(index);
       Map<String, Object> stepParams = new HashMap<>();
       stepParams.put("pipeline_definition_id", pipelineDefinitionId);
       stepParams.put("step_code", step.getStepCode());
       stepParams.put("step_name", step.getStepName());
       stepParams.put("stage_code", step.getStageCode());
-      stepParams.put("step_order", Nullables.coalesce(step.getStepOrder(), 0));
+      stepParams.put("step_order", Nullables.coalesce(step.getStepOrder(), index));
       stepParams.put("impl_code", step.getImplCode());
       stepParams.put("step_params", step.getStepParams());
       stepParams.put("timeout_seconds", Nullables.coalesce(step.getTimeoutSeconds(), 0));
@@ -581,6 +589,32 @@ public class TenantConfigInitApplyHandlers {
       rows.add(stepParams);
     }
     definitionMappers.pipelineStepDefinition.insertBatch(rows);
+  }
+
+  private static void validatePipelineSteps(
+      String pipelineType, List<PipelineDefinitionSpec.StepSpec> steps) {
+    List<String> expectedStages = PipelineType.stages(pipelineType);
+    if (EmptyChecks.isNull(steps)
+        || !steps.stream()
+            .map(PipelineDefinitionSpec.StepSpec::getStageCode)
+            .toList()
+            .equals(expectedStages)) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.pipeline.stages_must_match_type", pipelineType);
+    }
+    for (int index = 0; index < steps.size(); index++) {
+      Integer configuredOrder = steps.get(index).getStepOrder();
+      if (!EmptyChecks.isNull(configuredOrder) && configuredOrder != index) {
+        throw BizException.of(
+            ResultCode.INVALID_ARGUMENT, "error.pipeline.step_order_must_match_stage", index + 1);
+      }
+      if (Boolean.FALSE.equals(steps.get(index).getEnabled())) {
+        throw BizException.of(
+            ResultCode.INVALID_ARGUMENT,
+            "error.pipeline.fixed_stage_cannot_be_disabled",
+            steps.get(index).getStageCode());
+      }
+    }
   }
 
   ItemStats applyFileChannels(List<FileChannelSpec> specs, ApplyContext ctx) {

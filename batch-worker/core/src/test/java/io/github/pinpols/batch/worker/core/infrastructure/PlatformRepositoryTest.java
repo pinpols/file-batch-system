@@ -52,16 +52,34 @@ class PlatformRepositoryTest {
     PlatformPipelineDefinitionRepository repository =
         new PlatformPipelineDefinitionRepository(mapper);
 
-    when(mapper.selectLatestPipelineDefinitionId(anyMap())).thenReturn(4601L);
+    when(mapper.selectLatestPipelineDefinition(anyMap()))
+        .thenReturn(Map.of("id", 4601L, "pipeline_type", "IMPORT"));
 
-    Long pipelineDefinitionId = repository.findPipelineDefinition("tenant-a", "job-a");
+    PlatformPipelineDefinitionRepository.PipelineDefinitionReference pipelineDefinition =
+        repository.findPipelineDefinition("tenant-a", "job-a");
 
-    assertThat(pipelineDefinitionId).isEqualTo(4601L);
+    assertThat(pipelineDefinition)
+        .isEqualTo(
+            new PlatformPipelineDefinitionRepository.PipelineDefinitionReference(4601L, "IMPORT"));
     verify(mapper)
-        .selectLatestPipelineDefinitionId(
-            argThat(params -> "tenant-a".equals(params.get("tenantId"))
-                && "job-a".equals(params.get(PipelineRuntimeKeys.JOB_CODE))
-                && !params.containsKey("pipelineCode")));
+        .selectLatestPipelineDefinition(argThat(params -> "tenant-a".equals(params.get("tenantId"))
+            && "job-a".equals(params.get(PipelineRuntimeKeys.JOB_CODE))
+            && !params.containsKey("pipelineCode")));
+  }
+
+  @Test
+  @DisplayName("缺少租户或作业编码以及查询未命中时不返回流水线定义")
+  void shouldReturnNullWhenPipelineDefinitionIsUnavailable() {
+    PlatformFileRuntimeMapper mapper = mock(PlatformFileRuntimeMapper.class);
+    PlatformPipelineDefinitionRepository repository =
+        new PlatformPipelineDefinitionRepository(mapper);
+
+    assertThat(repository.findPipelineDefinition(" ", "job-a")).isNull();
+    assertThat(repository.findPipelineDefinition("tenant-a", " ")).isNull();
+    when(mapper.selectLatestPipelineDefinition(anyMap())).thenReturn(Map.of()).thenReturn(null);
+
+    assertThat(repository.findPipelineDefinition("tenant-a", "job-a")).isNull();
+    assertThat(repository.findPipelineDefinition("tenant-a", "job-b")).isNull();
   }
 
   @Test

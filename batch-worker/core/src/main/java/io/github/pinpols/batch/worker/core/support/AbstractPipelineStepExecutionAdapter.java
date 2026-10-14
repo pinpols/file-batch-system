@@ -156,13 +156,22 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
       StepExecutionRequest request, Map<String, Object> attributes, String traceId) {
     String jobCode = resolveJobCode(request, attributes);
     Long fileId = PlatformRuntimeValues.toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
-    Long pipelineDefinitionId =
+    PlatformPipelineDefinitionRepository.PipelineDefinitionReference pipelineDefinition =
         pipelineDefinitions.findPipelineDefinition(request.tenantId(), jobCode);
-    if (pipelineDefinitionId == null) {
+    if (EmptyChecks.isNull(pipelineDefinition) || EmptyChecks.isNull(pipelineDefinition.id())) {
       BizException exception =
           BizException.of(ResultCode.NOT_FOUND, "error.pipeline.definition_not_found");
       return StepExecutionResponse.failure(exception, ERROR_OBJECT_MAPPER);
     }
+    if (!pipelineType().equalsIgnoreCase(pipelineDefinition.pipelineType())) {
+      BizException exception = BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.pipeline.definition_type_mismatch",
+          pipelineDefinition.pipelineType(),
+          pipelineType());
+      return StepExecutionResponse.failure(exception, ERROR_OBJECT_MAPPER);
+    }
+    Long pipelineDefinitionId = pipelineDefinition.id();
     List<PipelineStepDefinition> pipelineSteps =
         pipelineDefinitions.loadPipelineSteps(pipelineDefinitionId);
     if (pipelineSteps.isEmpty()) {
