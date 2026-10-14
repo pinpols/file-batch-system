@@ -29,14 +29,25 @@ import org.springframework.http.MediaType;
 class ConsolePipelineDefinitionMutationIntegrationTest extends AbstractMutationIntegrationTest {
 
   private String body(String jobCode, String pipelineType) {
+    return body(jobCode, pipelineType, null, null);
+  }
+
+  private String body(
+      String jobCode, String pipelineType, String loadImplCode, String loadStepParams) {
     String steps = java.util.stream.IntStream.range(
             0, PipelineType.stages(pipelineType).size())
         .mapToObj(index -> {
           String stage = PipelineType.stages(pipelineType).get(index);
+          String implCode = stage.equals("LOAD") && loadImplCode != null
+              ? loadImplCode
+              : pipelineType + "_" + stage;
+          String stepParams = stage.equals("LOAD") && loadStepParams != null
+              ? io.github.pinpols.batch.common.utils.JsonUtils.toJson(loadStepParams)
+              : "\"{}\"";
           return """
               {"stepCode":"%s","stepName":"%s","stageCode":"%s","stepOrder":%d,
-               "implCode":"%s_%s","stepParams":"{}"}
-              """.formatted(stage, stage, stage, index, pipelineType, stage).strip();
+               "implCode":"%s","stepParams":%s}
+              """.formatted(stage, stage, stage, index, implCode, stepParams).strip();
         })
         .collect(java.util.stream.Collectors.joining(","));
     return """
@@ -114,14 +125,8 @@ class ConsolePipelineDefinitionMutationIntegrationTest extends AbstractMutationI
     registerStages("IMPORT", implCode);
     Long definitionId = null;
     try {
-      String createBody = body(code, "IMPORT")
-          .replace("\"implCode\":\"IMPORT_LOAD\"", "\"implCode\":\"" + implCode + "\"")
-          .replace(
-              "\"stageCode\":\"LOAD\",\"stepOrder\":4,\"implCode\":\"" + implCode
-                  + "\",\"stepParams\":\"{}\"",
-              "\"stageCode\":\"LOAD\",\"stepOrder\":4,"
-                  + "\"implCode\":\"" + implCode + "\",\"stepParams\":\"{\\\"apiKey\\\":"
-                  + "\\\"pipeline-secret\\\",\\\"label\\\":\\\"old\\\"}\"");
+      String createBody =
+          body(code, "IMPORT", implCode, "{\"apiKey\":\"pipeline-secret\",\"label\":\"old\"}");
       String created = client
           .post()
           .uri("/api/console/pipeline-definitions")
