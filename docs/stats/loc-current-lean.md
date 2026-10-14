@@ -1,19 +1,19 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `4233ce879`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `a09fcc6fe`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 5,007 | 539,340 | 278,754 | 51.7% |
+| 5,008 | 539,588 | 278,908 | 51.7% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| prod | 2,830 | 261,148 | 119,740 | 45.9% |
-| test | 1,343 | 203,275 | 111,304 | 54.8% |
+| prod | 2,830 | 261,269 | 119,816 | 45.9% |
+| test | 1,344 | 203,402 | 111,382 | 54.8% |
 | script | 671 | 57,529 | 36,448 | 63.4% |
 | config | 65 | 9,265 | 6,841 | 73.8% |
 | infra-config | 34 | 5,845 | 4,249 | 72.7% |
@@ -23,14 +23,14 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,673 | 393,622 | 203,448 | 51.7% |
+| Java | 3,674 | 393,862 | 203,594 | 51.7% |
 | Shell | 215 | 32,939 | 26,007 | 79.0% |
 | Python | 269 | 39,006 | 20,246 | 51.9% |
 | YAML | 108 | 13,862 | 10,627 | 76.7% |
 | XML | 186 | 22,424 | 7,001 | 31.2% |
 | TypeScript | 37 | 6,667 | 3,141 | 47.1% |
 | Rust | 23 | 8,499 | 2,856 | 33.6% |
-| Properties | 5 | 2,935 | 2,409 | 82.1% |
+| Properties | 5 | 2,943 | 2,417 | 82.1% |
 | SQL | 449 | 12,003 | 1,497 | 12.5% |
 | Go | 34 | 7,049 | 1,302 | 18.5% |
 | TOML | 8 | 334 | 220 | 65.9% |
@@ -40,8 +40,8 @@
 | File | Group | Language | Physical LOC | Lean logical LOC |
 |---|---|---|---:|---:|
 | `load-tests/scripts/run-p2-capacity-profile.sh` | script | Shell | 1,385 | 1,271 |
-| `batch-common/src/main/resources/messages.properties` | prod | Properties | 1,457 | 1,204 |
-| `batch-common/src/main/resources/messages_zh_CN.properties` | prod | Properties | 1,455 | 1,204 |
+| `batch-common/src/main/resources/messages.properties` | prod | Properties | 1,461 | 1,208 |
+| `batch-common/src/main/resources/messages_zh_CN.properties` | prod | Properties | 1,459 | 1,208 |
 | `deploy/docker/observability/prometheus-batch-rules.yml` | config | YAML | 1,415 | 1,192 |
 | `helm/batch-platform/files/prometheus-batch-rules.yml` | infra-config | YAML | 1,415 | 1,192 |
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/ConsoleTenantConfigPackageExcelUploadIntegrationTest.java` | test | Java | 2,204 | 939 |
@@ -58,7 +58,7 @@
 | `pom.xml` | config | XML | 845 | 512 |
 | `scripts/dev/sonar-scan.sh` | script | Shell | 594 | 499 |
 | `scripts/local/sim-harness.sh` | script | Shell | 641 | 498 |
-| `scripts/local/pre-push-sdk-checks.sh` | script | Shell | 627 | 490 |
+| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java` | prod | Java | 1,020 | 496 |
 
 ## 复跑
 

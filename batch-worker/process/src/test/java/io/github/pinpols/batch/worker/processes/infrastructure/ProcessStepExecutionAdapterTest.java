@@ -81,7 +81,9 @@ class ProcessStepExecutionAdapterTest {
         fileRecords,
         (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
         (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
-    when(pipelineDefinitions.findPipelineDefinition("tenant-a", "job-process")).thenReturn(10L);
+    when(pipelineDefinitions.findPipelineDefinition("tenant-a", "job-process"))
+        .thenReturn(
+            new PlatformPipelineDefinitionRepository.PipelineDefinitionReference(10L, "PROCESS"));
     when(pipelineDefinitions.loadPipelineSteps(10L)).thenReturn(List.of(processStep()));
     when(pipelineRuns.createPipelineInstance(any())).thenReturn(20L);
     when(processStageExecutor.execute(any()))
@@ -106,6 +108,32 @@ class ProcessStepExecutionAdapterTest {
   }
 
   @Test
+  @DisplayName("流水线定义类型与当前 Worker 不一致时拒绝执行且不创建实例")
+  @SuppressWarnings("unchecked")
+  void execute_rejectsPipelineDefinitionOfDifferentType() {
+    ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
+        processStageExecutor,
+        new ObjectMapper(),
+        pipelineDefinitions,
+        pipelineRuns,
+        fileRecords,
+        (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
+        (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
+    when(pipelineDefinitions.findPipelineDefinition("tenant-a", "job-process"))
+        .thenReturn(
+            new PlatformPipelineDefinitionRepository.PipelineDefinitionReference(10L, "IMPORT"));
+
+    StepExecutionResponse response = adapter.execute(new StepExecutionRequest(
+        "tenant-a", "job-process", "PROCESS", "worker-1", Map.of("payload", "{}")));
+
+    assertThat(response.success()).isFalse();
+    assertThat(response.errorKey()).isEqualTo("error.pipeline.definition_type_mismatch");
+    verify(pipelineDefinitions, never()).loadPipelineSteps(any());
+    verify(pipelineRuns, never()).createPipelineInstance(any());
+    verify(processStageExecutor, never()).execute(any());
+  }
+
+  @Test
   @DisplayName("阶段失败结果带本地化业务异常时,响应保留错误码、错误键与参数摘要,且默认不进入补偿")
   @SuppressWarnings("unchecked")
   void execute_preservesLocalizedErrorFromFailedStageResult() {
@@ -118,7 +146,9 @@ class ProcessStepExecutionAdapterTest {
         fileRecords,
         (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
         (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
-    when(pipelineDefinitions.findPipelineDefinition("tenant-a", "job-process")).thenReturn(10L);
+    when(pipelineDefinitions.findPipelineDefinition("tenant-a", "job-process"))
+        .thenReturn(
+            new PlatformPipelineDefinitionRepository.PipelineDefinitionReference(10L, "PROCESS"));
     when(pipelineDefinitions.loadPipelineSteps(10L)).thenReturn(List.of(processStep()));
     when(pipelineRuns.createPipelineInstance(any())).thenReturn(20L);
     when(processStageExecutor.execute(any()))

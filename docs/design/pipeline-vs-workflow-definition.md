@@ -7,23 +7,26 @@
 
 | 体系 | 定义表 | 运行表 | 适用场景 | 用户可定制 |
 |---|---|---|---|---|
-| **Pipeline** | `pipeline_definition` `pipeline_step_definition` | `pipeline_instance` `pipeline_step_run` | 文件处理流水线（IMPORT/EXPORT/DISPATCH/PROCESS） | ❌ 内置 9 stages 固定 |
+| **Pipeline** | `pipeline_definition` `pipeline_step_definition` | `pipeline_instance` `pipeline_step_run` | 文件处理流水线（IMPORT/EXPORT/DISPATCH/PROCESS） | ❌ 类型对应的阶段集合与顺序固定；步骤实现参数可配置 |
 | **Workflow** | `workflow_definition` `workflow_node` `workflow_edge` | `workflow_run` `workflow_node_run` | 用户 DAG 编排（多 Job 组合 / 分支 / 并发 / 补偿） | ✅ 前端配置 |
 | **Job** | `job_definition` | `job_instance` `job_partition` `job_task` | 单个执行单元（最小调度粒度） | ✅ 配置参数 |
 
 ## 2. Pipeline —— 文件处理专用
 
-### 2.1 内置 9 stages（按 pipeline_type 分组）
+### 2.1 内置固定阶段（按 pipeline_type 分组）
 
 - **IMPORT**：RECEIVE → PREPROCESS → PARSE → VALIDATE → LOAD → FEEDBACK
 - **EXPORT**：PREPARE → GENERATE → STORE → REGISTER → COMPLETE
-- **DISPATCH**：PREPARE → DISPATCH → ACK → COMPLETE
+- **DISPATCH**：PREPARE → DISPATCH → ACK → RETRY → COMPENSATE → COMPLETE
 - **PROCESS**：PREPARE → COMPUTE → VALIDATE → COMMIT → FEEDBACK（WAP 模式）
 
 ### 2.2 设计意图
 
-Pipeline = "**文件处理黄金路径**"，把成熟的 9 阶段固化下来：
+Pipeline = "**文件处理黄金路径**"，把各类型成熟阶段固化下来：
 - 不允许用户拖拽节点改顺序（保持流水线可观测、可重试、可补偿语义一致）
+- 定义必须完整包含对应类型的全部阶段，不能缺失、重复或重排；`step_order` 由固定阶段位置决定
+- Worker 只执行与自身 `pipeline_type` 一致的定义，避免按 Job 找到异类型配置后执行错误阶段
+- 定义仍按 `tenant_id + job_code` 查找，用于承载每个 Job 的实现编码、参数、重试/超时等配置，不代表阶段骨架可变
 - step 失败的重试 / 补偿 / 跳过策略全在 worker 内部实现
 - 运维只看 pipeline_step_run 的 stage 进度，不需要理解用户自定义图
 
@@ -89,7 +92,7 @@ Workflow (workflow_definition)
   │   ↓ → 创建子 Job 实例
   │       Child Job (job_type=IMPORT)
   │       ↓
-  │       Pipeline (pipeline_type=IMPORT, 9 stages)
+  │       Pipeline (pipeline_type=IMPORT, fixed stages)
   └─ Node B (FILE_STEP, related_pipeline_code=child_pipeline_1)
       ↓ → 直接跑 Pipeline 不创建 Job 中介
 ```
@@ -101,9 +104,9 @@ Workflow (workflow_definition)
   ↓
 是不是文件处理（解析 / 生成 / 派发 / WAP）？
   │
-  ├─ 是 → 9 阶段固定够用？
+  ├─ 是 → 对应类型的固定阶段够用？
   │       ├─ 是 → Pipeline + Job(job_type=IMPORT/EXPORT/...)
-  │       └─ 否 → 9 阶段不够，需要分支 / 跨 Pipeline → Workflow + 多个 FILE_STEP 节点
+  │       └─ 否 → 类型对应的固定阶段不够，需要分支 / 跨 Pipeline → Workflow + 多个 FILE_STEP 节点
   │
   └─ 否 → 单一 Job 能完成？
           ├─ 是 → Job(job_type=GENERAL) + handler 跑代码
@@ -142,7 +145,7 @@ SELECT instance_no, status, started_at FROM batch.workflow_run WHERE tenant_id =
 
 V4/V5（早期）只有 workflow_definition + workflow_node。V6 加 pipeline_definition + pipeline_step_run，原因：
 
-- 早期 workflow 节点支持任意 handler，但 IMPORT 等场景的 9 阶段总是手写一套，工程上抽象成"内置 pipeline"简化处理
+- 早期 workflow 节点支持任意 handler，但 IMPORT 等场景的固定阶段总是手写一套，工程上抽象成"内置 pipeline"简化处理
 - pipeline_step_run 比 workflow_node_run 维度更细（精确到 stage），观测性更好
 
 ### 7.2 是否考虑合并两套体系

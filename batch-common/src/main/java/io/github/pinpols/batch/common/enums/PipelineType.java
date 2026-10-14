@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.enums;
 
+import java.util.List;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
@@ -15,13 +16,24 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Getter
 public enum PipelineType implements DictEnum {
-  IMPORT("IMPORT", "导入"),
-  EXPORT("EXPORT", "导出"),
-  PROCESS("PROCESS", "加工"),
-  DISPATCH("DISPATCH", "派发");
+  IMPORT("IMPORT", "导入", List.of("RECEIVE", "PREPROCESS", "PARSE", "VALIDATE", "LOAD", "FEEDBACK")),
+  EXPORT("EXPORT", "导出", List.of("PREPARE", "GENERATE", "STORE", "REGISTER", "COMPLETE")),
+  PROCESS("PROCESS", "加工", List.of("PREPARE", "COMPUTE", "VALIDATE", "COMMIT", "FEEDBACK")),
+  DISPATCH(
+      "DISPATCH", "派发", List.of("PREPARE", "DISPATCH", "ACK", "RETRY", "COMPENSATE", "COMPLETE"));
 
   private final String code;
   private final String label;
+  private final List<String> stages;
+
+  public static List<String> stages(String code) {
+    for (PipelineType type : values()) {
+      if (type.code.equals(code)) {
+        return type.stages;
+      }
+    }
+    return List.of();
+  }
 
   /** 投影到公共业务类型字典 {@link BatchType}。每个枚举值必须有非空映射。 */
   public BatchType batchType() {

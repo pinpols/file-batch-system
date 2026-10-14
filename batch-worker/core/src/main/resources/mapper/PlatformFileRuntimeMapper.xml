@@ -69,8 +69,8 @@
         limit 1
     </select>
 
-    <select id="selectLatestPipelineDefinitionId" resultType="java.lang.Long">
-        select id
+    <select id="selectLatestPipelineDefinition" resultType="map">
+        select id, pipeline_type
         from batch.pipeline_definition
         where tenant_id = #{tenantId}
           and job_code = #{jobCode}

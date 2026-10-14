@@ -36,12 +36,20 @@ public class PlatformPipelineDefinitionRepository {
     return config == null ? Map.of() : config;
   }
 
-  public Long findPipelineDefinition(String tenantId, String jobCode) {
+  public PipelineDefinitionReference findPipelineDefinition(String tenantId, String jobCode) {
     if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode)) {
       return null;
     }
-    return mapper.selectLatestPipelineDefinitionId(params(TENANT_ID, tenantId, "jobCode", jobCode));
+    Map<String, Object> row =
+        mapper.selectLatestPipelineDefinition(params(TENANT_ID, tenantId, "jobCode", jobCode));
+    if (row == null || row.isEmpty()) {
+      return null;
+    }
+    return new PipelineDefinitionReference(
+        toLong(row.get(ID)), stringValue(row.get("pipeline_type")));
   }
+
+  public record PipelineDefinitionReference(Long id, String pipelineType) {}
 
   public List<PipelineStepDefinition> loadPipelineSteps(Long pipelineDefinitionId) {
     if (pipelineDefinitionId == null) {
