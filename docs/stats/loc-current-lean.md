@@ -1,20 +1,20 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `142f7430e`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `214a15b81`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 5,009 | 540,071 | 279,216 | 51.7% |
+| 5,009 | 540,223 | 279,304 | 51.7% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
 | prod | 2,830 | 261,255 | 119,827 | 45.9% |
-| test | 1,345 | 203,899 | 111,679 | 54.8% |
-| script | 671 | 57,529 | 36,448 | 63.4% |
+| test | 1,345 | 203,924 | 111,700 | 54.8% |
+| script | 671 | 57,656 | 36,515 | 63.3% |
 | config | 65 | 9,265 | 6,841 | 73.8% |
 | infra-config | 34 | 5,845 | 4,249 | 72.7% |
 | sql | 64 | 2,278 | 172 | 7.6% |
@@ -25,7 +25,7 @@
 |---|---:|---:|---:|---:|
 | Java | 3,675 | 394,345 | 203,902 | 51.7% |
 | Shell | 215 | 32,939 | 26,007 | 79.0% |
-| Python | 269 | 39,006 | 20,246 | 51.9% |
+| Python | 269 | 39,158 | 20,334 | 51.9% |
 | YAML | 108 | 13,862 | 10,627 | 76.7% |
 | XML | 186 | 22,424 | 7,001 | 31.2% |
 | TypeScript | 37 | 6,667 | 3,141 | 47.1% |
@@ -48,11 +48,11 @@
 | `load-tests/scripts/run-control-plane-worker-benchmark.sh` | script | Shell | 879 | 796 |
 | `helm/batch-platform/values.yaml` | infra-config | YAML | 1,017 | 734 |
 | `deploy/docker/compose/app.yml` | config | YAML | 735 | 652 |
+| `scripts/fix-fixture-xlsx.py` | script | Python | 1,112 | 626 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java` | prod | Java | 1,026 | 621 |
 | `scripts/ci/run-full-regression.sh` | script | Shell | 699 | 582 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigPackageExcelApplyService.java` | prod | Java | 976 | 569 |
 | `scripts/local/validate-seed-scenarios.sh` | script | Shell | 769 | 561 |
-| `scripts/fix-fixture-xlsx.py` | script | Python | 985 | 559 |
 | `scripts/local/start-all.sh` | script | Shell | 645 | 518 |
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationServiceTest.java` | test | Java | 824 | 513 |
 | `pom.xml` | config | XML | 845 | 512 |

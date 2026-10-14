@@ -82,23 +82,23 @@ def update_ta():
     # impl_code 必须匹配 worker 启动时上报的 step_registry：模式 = "{MODULE}_{STAGE}"
     # 例：IMPORT/RECEIVE → IMPORT_RECEIVE；validator 在 preview 时校验
     import_steps = [
-        ("STEP_RECEIVE",   "接收文件","RECEIVE",   1,"IMPORT_RECEIVE"),
-        ("STEP_PREPROCESS","预处理",  "PREPROCESS",2,"IMPORT_PREPROCESS"),
-        ("STEP_PARSE",     "解析",    "PARSE",     3,"IMPORT_PARSE"),
-        ("STEP_VALIDATE",  "校验",    "VALIDATE",  4,"IMPORT_VALIDATE"),
-        ("STEP_LOAD",      "入库",    "LOAD",      5,"IMPORT_LOAD"),
-        ("STEP_FEEDBACK",  "回执写回","FEEDBACK",  6,"IMPORT_FEEDBACK"),
+        ("STEP_RECEIVE",   "接收文件","RECEIVE",   0,"IMPORT_RECEIVE"),
+        ("STEP_PREPROCESS","预处理",  "PREPROCESS",1,"IMPORT_PREPROCESS"),
+        ("STEP_PARSE",     "解析",    "PARSE",     2,"IMPORT_PARSE"),
+        ("STEP_VALIDATE",  "校验",    "VALIDATE",  3,"IMPORT_VALIDATE"),
+        ("STEP_LOAD",      "入库",    "LOAD",      4,"IMPORT_LOAD"),
+        ("STEP_FEEDBACK",  "回执写回","FEEDBACK",  5,"IMPORT_FEEDBACK"),
     ]
     for sc, sn, stage, order, impl in import_steps:
         append_if_new(ps, [0,2], ["TA_IMPORT_ORDER", sc], [
             "TA_IMPORT_ORDER",1,sc,sn,stage,order,impl,"{}",300,"FIXED",2,"TRUE",
         ])
     export_steps = [
-        ("STEP_PREPARE",  "生成前准备","PREPARE",  1,"EXPORT_PREPARE"),
-        ("STEP_GENERATE", "生成文件",  "GENERATE", 2,"EXPORT_GENERATE"),
-        ("STEP_STORE",    "落盘存档",  "STORE",    3,"EXPORT_STORE"),
-        ("STEP_REGISTER", "登记 FileRecord","REGISTER",4,"EXPORT_REGISTER"),
-        ("STEP_COMPLETE", "完结",      "COMPLETE", 5,"EXPORT_COMPLETE"),
+        ("STEP_PREPARE",  "生成前准备","PREPARE",  0,"EXPORT_PREPARE"),
+        ("STEP_GENERATE", "生成文件",  "GENERATE", 1,"EXPORT_GENERATE"),
+        ("STEP_STORE",    "落盘存档",  "STORE",    2,"EXPORT_STORE"),
+        ("STEP_REGISTER", "登记 FileRecord","REGISTER",3,"EXPORT_REGISTER"),
+        ("STEP_COMPLETE", "完结",      "COMPLETE", 4,"EXPORT_COMPLETE"),
     ]
     for sc, sn, stage, order, impl in export_steps:
         append_if_new(ps, [0,2], ["TA_EXPORT_REPORT", sc], [
@@ -141,12 +141,12 @@ def update_tb():
     ps = wb["pipeline_step_definition"]
     # step_params 必须带路由提示,否则 ACK 成功后顺延落到 COMPENSATE 把已成功记录冲正(参见 tc 正确配置)。
     dispatch_steps = [
-        ("STEP_PREPARE",   "分发前准备","PREPARE",   1,"DISPATCH_PREPARE",   "{}"),
-        ("STEP_DISPATCH",  "实际下发",  "DISPATCH",  2,"DISPATCH_DISPATCH",  "{}"),
-        ("STEP_ACK",       "回执确认",  "ACK",       3,"DISPATCH_ACK",       '{"onSuccessNextStageCode": "COMPLETE"}'),
-        ("STEP_RETRY",     "失败重试",  "RETRY",     4,"DISPATCH_RETRY",     '{"onFailureNextStageCode": "COMPENSATE"}'),
-        ("STEP_COMPENSATE","补偿冲正",  "COMPENSATE",5,"DISPATCH_COMPENSATE",'{"terminalOnSuccess": true}'),
-        ("STEP_COMPLETE",  "完结",      "COMPLETE",  6,"DISPATCH_COMPLETE",  '{"terminalOnSuccess": true}'),
+        ("STEP_PREPARE",   "分发前准备","PREPARE",   0,"DISPATCH_PREPARE",   "{}"),
+        ("STEP_DISPATCH",  "实际下发",  "DISPATCH",  1,"DISPATCH_DISPATCH",  "{}"),
+        ("STEP_ACK",       "回执确认",  "ACK",       2,"DISPATCH_ACK",       '{"onSuccessNextStageCode": "COMPLETE"}'),
+        ("STEP_RETRY",     "失败重试",  "RETRY",     3,"DISPATCH_RETRY",     '{"onFailureNextStageCode": "COMPENSATE"}'),
+        ("STEP_COMPENSATE","补偿冲正",  "COMPENSATE",4,"DISPATCH_COMPENSATE",'{"terminalOnSuccess": true}'),
+        ("STEP_COMPLETE",  "完结",      "COMPLETE",  5,"DISPATCH_COMPLETE",  '{"terminalOnSuccess": true}'),
     ]
     for sc, sn, stage, order, impl, params in dispatch_steps:
         append_if_new(ps, [0,2], ["TB_DISPATCH_SETTLE", sc], [
