@@ -98,7 +98,9 @@ public class BatchSecurityProperties implements EnvironmentAware {
           + " is empty; inject a real credential through a secret manager or environment variable");
     }
     // 归一化：trim + lowercase + 去掉 _ / - 后比对占位符前缀，覆盖 CHANGE_ME / change-me / changeme 等变体
-    String normalized = value.trim().toLowerCase().replaceAll("[_\\-]", "");
+    String trimmedValue = value.trim();
+    String lowerCaseValue = trimmedValue.toLowerCase();
+    String normalized = lowerCaseValue.replaceAll("[_\\-]", "");
     for (String prefix : PLACEHOLDER_PREFIXES) {
       if (normalized.startsWith(prefix)) {
         throw new IllegalStateException("FATAL: production secret is not configured: " + key
@@ -106,11 +108,11 @@ public class BatchSecurityProperties implements EnvironmentAware {
             + "'); inject a real credential through a secret manager or environment variable");
       }
     }
-    if (value.trim().length() < MIN_SECRET_LENGTH) {
+    if (trimmedValue.length() < MIN_SECRET_LENGTH) {
       throw new IllegalStateException("FATAL: production secret is too weak: "
           + key
           + " length="
-          + value.trim().length()
+          + trimmedValue.length()
           + " < minimum "
           + MIN_SECRET_LENGTH
           + "; inject a high-entropy secret through a secret manager");

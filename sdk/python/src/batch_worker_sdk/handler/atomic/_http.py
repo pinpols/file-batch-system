@@ -57,7 +57,8 @@ class HttpAtomicConfig:
         if self.max_response_bytes <= 0:
             raise ValueError("max_response_bytes must be > 0")
         # 归一化:大写 method 的 frozenset;空集默认回退。
-        methods = frozenset(m.upper() for m in self.allowed_methods) or _DEFAULT_METHODS
+        normalized_methods = frozenset(method.upper() for method in self.allowed_methods)
+        methods = normalized_methods or _DEFAULT_METHODS
         object.__setattr__(self, "allowed_methods", methods)
         object.__setattr__(self, "blocked_host_patterns", frozenset(self.blocked_host_patterns))
 
@@ -104,7 +105,10 @@ class HttpAtomicHandler(SdkAbstractAtomicHandler):
         url = params.get("url")
         if not isinstance(url, str) or not url.strip():
             raise ValueError("missing required parameter: url")
-        method = str(params.get("method") or "GET").upper()
+        raw_method = params.get("method")
+        method_value = raw_method or "GET"
+        method_text = str(method_value)
+        method = method_text.upper()
         headers_raw = params.get("headers") or {}
         if not isinstance(headers_raw, dict):
             raise ValueError("parameter 'headers' must be a dict[str, str]")
@@ -166,7 +170,8 @@ class HttpAtomicHandler(SdkAbstractAtomicHandler):
                         f"SSRF blocked: private/loopback IP for host {host} ({ip})"
                     )
         for pattern in self._config.blocked_host_patterns:
-            if pattern in host or _matches_regex(host, pattern):
+            host_matches_blocked_pattern = pattern in host or _matches_regex(host, pattern)
+            if host_matches_blocked_pattern:
                 raise PermissionError(f"SSRF blocked: host matches blocked pattern {pattern}")
 
 

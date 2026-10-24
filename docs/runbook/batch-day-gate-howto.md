@@ -120,7 +120,33 @@ SELECT tenant_id, request_id, released_at, released_by
 | 故障期间错过的批量 | `triggerType=CATCH_UP` 补跑,绕过 frozen + 前日门闩 |
 | 同一日重跑 | `triggerType=RERUN` 绕过 frozen,但仍受前日门闩约束 |
 
-## 7. 常见问题排查
+## 7. 日切停机恢复进度
+
+`BatchDayOpenScheduler` 每轮最多扫描 `BATCH_BATCH_DAY_CATCHUP_DAYS_PER_SCAN` 个原始日期，后续周期会从持久化游标继续。通过 Prometheus 查看：
+
+- `batch_batch_day_open_catchup_remaining_days`：最近一次完整成功扫描后，所有启用日历中最大的剩余日期数。
+- `batch_batch_day_open_catchup_calendars_behind`：该扫描后仍有原始日期待检查的日历数。
+- `batch_batch_day_open_catchup_scan_failures_total`：扫描失败累计次数；失败时积压 gauge 保留上一次完整快照。
+
+## 8. CUTOFF 空日自动结算
+
+`BatchDaySettleScheduler` 只对已到 `CUTOFF` 且没有任何已创建实例的批量日尝试自动结算。它在同一短事务里检查预期 occurrence、定时定义覆盖、尚未派发的 Trigger 请求、跨日历/作业依赖等待；检查通过后才 CAS 到 `SETTLED` 并写 `AUTO_EMPTY_NO_EXPECTED_WORK` 审计原因。
+
+`FILE_GROUP` 作业用 `/internal/file-group-expectations` 配置每日预期；外部事件作业用 `/internal/event-expectations` 配置 `eventCode`、预期本地时间和可选同日截止时间。业务日首次开启时生成逐日 `EXPECTED` 项。事件消费方发起 EVENT 触发时必须在 Trigger 请求中传入同一 `externalEventCode`；系统会将其持久化到对应 `trigger_request`。请求达到 `LAUNCHED` 后，消费方调用 `/internal/event-expectations/satisfied` 并携带原 `triggerRequestId` 和 `eventCode`；服务校验请求与预期事件编码一致，避免同一作业的另一个事件误满足该项，重复调用幂等。未到事件仍阻止自动结算，即使超过 due 时间也不会自动忽略。启用的 EVENT/MIXED 作业若没有任何逐日预期规则，日历继续失败关闭；不要仅凭 `job_instance` 为零推断当天无工作。
+
+当积压持续大于 0 时，先核对 Orchestrator `batch_day_open` 调度器和数据库错误日志；扫描失败计数增加时，修复失败原因后等待下一轮周期扫描。不要直接更新 `batch_day_open_cursor`。这组全局指标不列出具体租户/日历，也不覆盖 cursor 锚点之前的历史缺口；定位单个日历的锚点前缺口时，使用下方 Console 历史缺口候选查询，不据此手工改游标。
+
+Console「批量日」页面的「日切补齐预览」可按当前租户和日历显示下轮将评估的原始日期范围、游标来源及剩余日期数。预览只读，不会创建批量日或推进游标；`LATEST_BATCH_DAY_BASELINE` 表示系统首次初始化游标时以最近一条已落库批量日为锚点，锚点之前的历史缺口不在本预览范围，也不会由后台自动回溯。节假日滚动、依赖阻塞和灾难日规则会在真正扫描时按当前策略判断；预览中的原始日期不代表一定新建同日批量日。
+
+管理员可在同一预览面板暂停/恢复一个日历的自动历史 catch-up，必须填写原因。暂停仅停止该日历游标推进，当前业务日正常开启、日历依赖等待恢复和积压指标仍继续；恢复后从原游标续扫。操作及操作者、原因会追加审计事件。若暂停期间继续积累 backlog，先确认依赖/日历配置和运行容量，再恢复；不要手工改游标或将暂停当作历史补跑审批。
+
+### 部署前历史缺口盘点
+
+上线或切换调度策略前，在 Console「批量日」页面选择租户和日历，使用「历史缺口候选」填写明确的起止日期（最多 90 天），记录缺失日期，并由业务负责人核对当时适用的节假日、滚动规则、灾难日覆盖和依赖结果。该查询仅按“日期范围内没有批量日记录”列候选，不推断历史上该日是否应开批，也不触发作业；结果是人工核对清单，不是自动回填指令。
+
+上线后由持久化游标负责在线 catch-up；游标锚点之前的缺口仍需单独治理。目前没有为缺失 `batch_day_instance` 建立历史业务日的生产回填流程。现有 `BatchDayReplay` 审批链面向已有实例重跑；`SCHEDULE_PLAN` 仅支持 dry-run，不能据当前作业定义发起历史生产作业。确认需要补建时，记录候选日期并按组织既有变更审批流程评估；在专用回填能力交付前，不得宣称已批准/已回填，不得用当前日历规则自动推演历史，也不得直接插入 `batch_day_instance` 或移动游标。
+
+## 8. 常见问题排查
 
 ### Q1. 配了 `WAIT_PREVIOUS_DAY`,Day-2 还是直接跑了
 
@@ -144,7 +170,53 @@ SELECT tenant_id, request_id, released_at, released_by
 
 查 `BatchDayOperationServiceTest#shouldReleaseWaitingLaunchesForNextBizDate` 验证逻辑;若线上确实卡住,可能命中已知边界:同 requestId 二次 launch 被 gate 再次卡为 WAIT 时,`on conflict do nothing` 会让原行保留 — 此时 `wait_status` 仍是 WAITING,等下一轮 settle 完成会被 auto-release 重试。若反复多次仍未释放,人工 `RELEASE` 操作回退。
 
-## 8. 相关代码 / 文档
+## 8. 文件组预期到达登记
+
+先配置周期文件组规则；每个批量日首次打开成功时，系统按该日历工作日自动创建当天 EXPECTED 项，重复开日不会重复建账。规则的 expected/due 使用日历时区的本地时间，due 必须晚于 expected 且落在同一个业务日。
+
+```http
+PUT /internal/file-group-expectations
+X-Internal-Secret: <service secret>
+Content-Type: application/json
+```
+
+```json
+{
+  "tenantId": "tenantA",
+  "calendarCode": "IMPORT_DAILY",
+  "jobCode": "IMPORT_ORDERS",
+  "fileGroupCode": "ORDERS_DAILY",
+  "expectedLocalTime": "09:00:00",
+  "dueLocalTime": "11:00:00",
+  "enabled": true
+}
+```
+
+规则日历必须匹配作业定义的 `calendar_code`。文件记录里的 `fileGroupCode` 和 `bundleJobCode` 要与规则一致，bundle 到达后才会推进同一预期项。
+
+如上游业务清单要覆盖单个日期或补偿已打开日期，可调用逐日登记接口；否则系统无法从尚不存在的 `file_record` 推断缺失文件。接口幂等身份为 tenant + calendar + job + fileGroupCode + bizDate。
+
+```http
+POST /internal/expected-work-occurrences/file-groups
+X-Internal-Secret: <service secret>
+Content-Type: application/json
+```
+
+```json
+{
+  "tenantId": "tenantA",
+  "calendarCode": "IMPORT_DAILY",
+  "jobCode": "IMPORT_ORDERS",
+  "fileGroupCode": "ORDERS_20261014",
+  "bizDate": "2026-10-14",
+  "expectedAt": "2026-10-14T01:00:00Z",
+  "dueAt": "2026-10-14T03:00:00Z"
+}
+```
+
+登记成功后，`EXPECTED` 会阻止该业务日空结算；bundle 到达时复用相同身份推进为 `ARRIVED`，Trigger 请求已接受或等待依赖后转为 `SATISFIED`。相同请求重放会返回 `inserted=false`。`dueLocalTime` 目前只记录期限，尚未自动生成超时终态；文件未到时仍保持阻塞，直至运维处置。
+
+## 9. 相关代码 / 文档
 
 - `batch-orchestrator/.../BatchDayGateService.java` — 门闩判定
 - `batch-orchestrator/.../BatchDayWaitingReleaseScheduler.java` — 自动释放

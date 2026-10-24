@@ -13,6 +13,7 @@ import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
 import java.util.Map;
@@ -55,7 +56,7 @@ class SqlAtomicHandlerTest {
   }
 
   @Test
-  @DisplayName("SELECT → resultSet + rowCount,success")
+  @DisplayName("查询成功时返回结果集和行数")
   void shouldReturnResultSet_whenSelect() throws Exception {
     // 准备
     stubRoleGateAllows();
@@ -254,7 +255,7 @@ class SqlAtomicHandlerTest {
   @DisplayName("defaultAutoCommit=false + 执行异常 → rollback")
   void shouldRollback_onErrorWhenAutoCommitFalse() throws Exception {
     stubRoleGateAllows();
-    when(statement.execute(anyString())).thenThrow(new java.sql.SQLException("boom"));
+    when(statement.execute(anyString())).thenThrow(new SQLException("boom"));
     var cfg = new SqlAtomicConfig("sql", 30, 10000, 50, false, true);
 
     SdkTaskResult result = new SqlAtomicHandler(cfg, dataSource).execute(ctx("UPDATE t SET x=1"));

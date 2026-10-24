@@ -10,4 +10,7 @@ import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceScheduling
 public interface ResourceScheduler {
 
   ResourceSchedulingDecision schedule(ResourceSchedulingRequest request);
+
+  /** WAITING 候选的路由和优先级预评估；不取得容量锁、不预留突发额度、不消费派发令牌。 */
+  ResourceSchedulingDecision preview(ResourceSchedulingRequest request);
 }

@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.LazyConnectionDataSourceProxy;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -189,10 +190,14 @@ class ReadReplicaHappyPathIntegrationTest extends AbstractIntegrationTest {
   }
 
   private String dbFromTransaction(boolean readOnly) {
+    final String selectCurrentDatabaseSql = """
+        SELECT current_database()
+    """;
+
     TransactionTemplate tx = new TransactionTemplate(transactionManager);
     tx.setReadOnly(readOnly);
     return tx.execute(status ->
-        new JdbcTemplate(dataSource).queryForObject("SELECT current_database()", String.class));
+        new JdbcTemplate(dataSource).queryForObject(selectCurrentDatabaseSql, String.class));
   }
 
   /**
@@ -209,7 +214,7 @@ class ReadReplicaHappyPathIntegrationTest extends AbstractIntegrationTest {
     try {
       String db = dbFromTransaction(true);
       assertThat(db).as(description + " — 静默 fail-open 应落 primary").isEqualTo("batch_platform");
-    } catch (org.springframework.dao.DataAccessResourceFailureException ex) {
+    } catch (DataAccessResourceFailureException ex) {
       // I/O error 路径：pause 截断 in-flight 连接，等价于 fail-open 触发但没机会切换 routing key。
       // ReadReplicaRoutingDataSource 在 catch 内已递增 failover 计数器；下次请求 quarantine 生效。
       // 这里不 fail，只记日志便于调试。

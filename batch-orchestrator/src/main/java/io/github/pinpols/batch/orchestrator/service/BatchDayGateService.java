@@ -59,13 +59,14 @@ public class BatchDayGateService {
       return GateDecision.allow();
     }
     JobDefinitionEntity job = loaded.jobDefinition();
-    if (!Texts.hasText(job.calendarCode()) || request.bizDate() == null) {
+    String calendarCode = loaded.effectiveCalendarCode();
+    if (!Texts.hasText(calendarCode) || request.bizDate() == null) {
       return GateDecision.allow();
     }
     // FROZEN 优先于前日门闩。CATCH_UP / RERUN 显式覆盖 frozen 限制(运维补救路径)。
     if (!isFrozenBypassTrigger(request.triggerType())) {
       BatchDayInstanceEntity currentDay = batchDayInstanceMapper.selectByTenantCalendarBizDate(
-          request.tenantId(), job.calendarCode(), request.bizDate());
+          request.tenantId(), calendarCode, request.bizDate());
       if (currentDay != null && Boolean.TRUE.equals(currentDay.frozen())) {
         String reason = "BATCH_DAY_FROZEN";
         reject(request, currentDay, reason);
@@ -77,7 +78,7 @@ public class BatchDayGateService {
       return GateDecision.allow();
     }
     BusinessCalendarEntity calendar =
-        configCacheService.findEnabledBusinessCalendar(request.tenantId(), job.calendarCode());
+        configCacheService.findEnabledBusinessCalendar(request.tenantId(), calendarCode);
     String policy = "INHERIT".equals(scope)
         ? normalize(calendar == null ? null : calendar.dayRolloverPolicy(), POLICY_ALLOW_OVERLAP)
         : POLICY_WAIT_PREVIOUS_DAY;
@@ -86,7 +87,7 @@ public class BatchDayGateService {
     }
     LocalDate prevBizDate = request.bizDate().minusDays(1);
     BatchDayInstanceEntity previous = batchDayInstanceMapper.selectByTenantCalendarBizDate(
-        request.tenantId(), job.calendarCode(), prevBizDate);
+        request.tenantId(), calendarCode, prevBizDate);
     // SAME_JOB / SAME_JOB_GROUP 细粒度: 在 batch_day_instance 之外, 还要看
     // job_instance 维度的实际终态(防止 calendar 已 SETTLED 但同组某 job 上一日还在 RUNNING)。
     if ("SAME_JOB".equals(scope) || "SAME_JOB_GROUP".equals(scope)) {

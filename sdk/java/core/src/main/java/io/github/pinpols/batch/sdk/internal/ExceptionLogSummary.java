@@ -35,7 +35,8 @@ public final class ExceptionLogSummary {
     if (message == null || message.isBlank()) { // empty-check: allow - SDK 保持 JDK-only
       return "";
     }
-    String singleLine = CONTROL_CHARACTERS.matcher(message).replaceAll(" ").trim();
+    String controlCharactersReplaced = CONTROL_CHARACTERS.matcher(message).replaceAll(" ");
+    String singleLine = controlCharactersReplaced.trim();
     String credentialsMasked =
         QUOTED_SENSITIVE_ASSIGNMENT.matcher(singleLine).replaceAll("$1" + MASK);
     credentialsMasked = SENSITIVE_ASSIGNMENT.matcher(credentialsMasked).replaceAll("$1" + MASK);

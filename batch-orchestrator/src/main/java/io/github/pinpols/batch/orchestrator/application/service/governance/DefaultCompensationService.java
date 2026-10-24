@@ -16,6 +16,7 @@ import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
+import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService;
 import io.github.pinpols.batch.orchestrator.domain.command.CompensationSubmitCommand;
@@ -27,8 +28,8 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateCompensationStatusParam;
+import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.CompensationCommandMapper;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -66,7 +67,8 @@ public class DefaultCompensationService implements CompensationService {
   private final OrchestratorJobMappers jobMappers;
   private final RetryGovernanceService retryGovernanceService;
   private final FileGovernanceService fileGovernanceService;
-  private final ObjectProvider<LaunchService> launchServiceProvider;
+  private final ObjectProvider<LaunchApplicationService> launchApplicationServiceProvider;
+  private final OrchestratorConfigCacheService configCacheService;
   private final TaskAssignmentService taskAssignmentService;
   private final CompensationTransactionExecutor transactionExecutor;
 
@@ -482,6 +484,16 @@ public class DefaultCompensationService implements CompensationService {
 
   private LaunchResponse launchCompensation(CompensationLaunchRequest request) {
     boolean replayEntry = request.replaySessionId() != null && request.replayEntryId() != null;
+    var job = configCacheService.findEnabledJobDefinition(
+        request.target().tenantId(), request.target().jobCode());
+    if (job == null || job.id() == null) {
+      throw BizException.of(ResultCode.NOT_FOUND, "error.job.definition_not_found");
+    }
+    var workflow = configCacheService.findEnabledSingleJobWorkflowDefinition(
+        request.target().tenantId(), job.id());
+    if (workflow == null || workflow.id() == null) {
+      throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.single_job_definition_not_found");
+    }
     String requestId = replayEntry
         ? "replay-" + request.replaySessionId() + "-" + request.replayEntryId()
         : IdGenerator.newBusinessNo("req");
@@ -489,7 +501,7 @@ public class DefaultCompensationService implements CompensationService {
     triggerRequest.setTenantId(request.target().tenantId());
     triggerRequest.setRequestId(requestId);
     triggerRequest.setTriggerType(request.target().triggerType().code());
-    triggerRequest.setJobCode(request.target().jobCode());
+    triggerRequest.setWorkflowDefinitionId(workflow.id());
     triggerRequest.setBizDate(request.target().bizDate());
     triggerRequest.setDedupKey(
         replayEntry
@@ -505,7 +517,7 @@ public class DefaultCompensationService implements CompensationService {
     }
     LaunchRequest launchRequest = LaunchRequest.builder()
         .tenantId(request.target().tenantId())
-        .jobCode(request.target().jobCode())
+        .workflowDefinitionId(workflow.id())
         .bizDate(request.target().bizDate())
         .triggerType(request.target().triggerType())
         .requestId(requestId)
@@ -514,7 +526,7 @@ public class DefaultCompensationService implements CompensationService {
         .replaySessionId(request.replaySessionId())
         .dryRun(Boolean.TRUE.equals(request.dryRun()))
         .build();
-    return launchServiceProvider.getObject().launch(launchRequest);
+    return launchApplicationServiceProvider.getObject().launchFromTrustedQueue(launchRequest);
   }
 
   private CompensationCommandEntity buildCommandEntity(

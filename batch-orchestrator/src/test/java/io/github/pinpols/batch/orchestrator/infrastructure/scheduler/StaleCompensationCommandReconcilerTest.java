@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
+import io.github.pinpols.batch.orchestrator.domain.param.StaleCompensationFailureParam;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -25,18 +26,12 @@ class StaleCompensationCommandReconcilerTest {
     properties.setBatchSize(25);
     StaleCompensationCommandReconciler reconciler =
         new StaleCompensationCommandReconciler(mapper, properties);
-    when(mapper.markStaleRunningFailed(any(), any(), any(), any(), any(), anyInt()))
+    when(mapper.markStaleRunningFailed(org.mockito.ArgumentMatchers.any(StaleCompensationFailureParam.class)))
         .thenReturn(2);
 
     reconciler.reconcile();
 
     verify(mapper)
-        .markStaleRunningFailed(
-            eq(CompensationCommandStatus.RUNNING.code()),
-            eq(CompensationCommandStatus.FAILED.code()),
-            any(Instant.class),
-            eq(StaleCompensationCommandReconciler.ERROR_CODE),
-            eq("compensation command stayed RUNNING beyond timeout; marked failed by reconciler"),
-            eq(25));
+        .markStaleRunningFailed(org.mockito.ArgumentMatchers.argThat(param -> param != null && java.util.Objects.equals(param.runningStatus(), CompensationCommandStatus.RUNNING.code()) && java.util.Objects.equals(param.failedStatus(), CompensationCommandStatus.FAILED.code()) && param.cutoff() != null && java.util.Objects.equals(param.errorCode(), StaleCompensationCommandReconciler.ERROR_CODE) && java.util.Objects.equals(param.errorMessage(), "compensation command stayed RUNNING beyond timeout; marked failed by reconciler") && java.util.Objects.equals(param.limit(), 25)));
   }
 }

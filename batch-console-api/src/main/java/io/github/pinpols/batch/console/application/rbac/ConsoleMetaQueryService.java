@@ -63,6 +63,7 @@ import io.github.pinpols.batch.common.enums.ShardStrategy;
 import io.github.pinpols.batch.common.enums.SkipAction;
 import io.github.pinpols.batch.common.enums.SkipThresholdMode;
 import io.github.pinpols.batch.common.enums.StepInstanceStatus;
+import io.github.pinpols.batch.common.enums.SystemPipelineCatalog;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.enums.TenantConfigInitAction;
 import io.github.pinpols.batch.common.enums.TenantStatus;
@@ -123,13 +124,15 @@ public class ConsoleMetaQueryService {
     this.stepRegistryQueryMapper = stepRegistryQueryMapper;
   }
 
-  /** 固定阶段序列由公共 PipelineType 枚举维护，供元数据展示与定义校验共用。 */
-  private static final Map<String, List<String>> PIPELINE_STAGES = Arrays.stream(
-          PipelineType.values())
-      .collect(Collectors.toUnmodifiableMap(PipelineType::code, PipelineType::stages));
-
+  /**
+   * Pipeline 固定 9 stages 按 jobType 分组（与 {@code ConfigPackageExcelValidator.STAGES_BY_TYPE} 保持一致；该
+   * Map 是导入校验白名单的事实源）。
+   */
   public Map<String, List<String>> pipelineStages() {
-    return PIPELINE_STAGES;
+    Map<String, List<String>> stages = new LinkedHashMap<>();
+    SystemPipelineCatalog.definitions()
+        .forEach(definition -> stages.put(definition.code(), definition.stages()));
+    return Map.copyOf(stages);
   }
 
   public List<String> stepImpls(String module) {

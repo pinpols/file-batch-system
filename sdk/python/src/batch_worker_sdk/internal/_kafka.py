@@ -85,10 +85,12 @@ class _PauseAwareRebalanceListener(ConsumerRebalanceListener):
         self._parent = parent
 
     async def on_partitions_revoked(self, revoked: set[TopicPartition]) -> None:
-        logger.info("kafka rebalance: partitions revoked=%s", sorted(map(str, revoked)))
+        revoked_partition_names = sorted(map(str, revoked))
+        logger.info("kafka rebalance: partitions revoked=%s", revoked_partition_names)
 
     async def on_partitions_assigned(self, assigned: set[TopicPartition]) -> None:
-        logger.info("kafka rebalance: partitions assigned=%s", sorted(map(str, assigned)))
+        assigned_partition_names = sorted(map(str, assigned))
+        logger.info("kafka rebalance: partitions assigned=%s", assigned_partition_names)
         # aiokafka 的 pause 状态是按 partition 维度的;清容量缓存,让下一次
         # backpressure tick 在新分配上重新评估(rebalance 后 Kafka 把所有新
         # 分配的分区默认置为 RESUMED)。
@@ -265,7 +267,8 @@ class KafkaTaskConsumer:
     async def _poll_loop(self) -> None:
         """单任务的 poll 循环;``self._running == False`` 时退出。"""
         assert self._consumer is not None
-        poll_ms = int(self._config.kafka_poll_interval.total_seconds() * 1000)
+        poll_interval_seconds = self._config.kafka_poll_interval.total_seconds()
+        poll_ms = int(poll_interval_seconds * 1000)
         try:
             while self._running:
                 self.apply_backpressure()

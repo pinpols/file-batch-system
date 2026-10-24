@@ -38,7 +38,7 @@ public class PlatformPipelineRunRepository {
   private final PlatformFileRuntimeMapper mapper;
 
   public Long createPipelineInstance(CreatePipelineInstanceParam param) {
-    if (!Texts.hasText(param.tenantId()) || param.pipelineDefinitionId() == null) {
+    if (!Texts.hasText(param.tenantId()) || !Texts.hasText(param.systemPipelineCode())) {
       return null;
     }
     Map<String, Object> values = params(
@@ -46,6 +46,10 @@ public class PlatformPipelineRunRepository {
         param.tenantId(),
         PIPELINE_DEFINITION_ID,
         param.pipelineDefinitionId(),
+        "systemPipelineCode",
+        param.systemPipelineCode(),
+        "systemPipelineVersion",
+        param.systemPipelineVersion(),
         "jobCode",
         param.jobCode(),
         "pipelineType",

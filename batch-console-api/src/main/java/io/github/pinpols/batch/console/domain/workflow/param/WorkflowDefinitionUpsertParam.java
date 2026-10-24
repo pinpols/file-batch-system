@@ -11,6 +11,14 @@ public class WorkflowDefinitionUpsertParam {
   private String workflowType;
   private Integer version;
   private Boolean enabled;
+  private Long singleJobDefinitionId;
+  private Boolean scheduleEnabled;
+  private String scheduleType;
+  private String scheduleExpr;
+  private String timezone;
+  private String triggerMode;
+  private String calendarCode;
+  private String dependsOnJobCode;
   private String description;
   private String createdBy;
   private String updatedBy;

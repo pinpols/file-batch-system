@@ -4,8 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -18,7 +16,6 @@ import io.github.pinpols.batch.console.domain.workflow.application.contract.requ
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest.NodeItem;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
-import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
 import java.util.ArrayList;
@@ -34,16 +31,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 /**
  * 纯单测 WorkflowDagValidator(no Spring),每条规则一个 case + 成功路径 + 边界。
  *
- * <p>Pipeline 存在性校验:mock PipelineDefinitionMapper.countByJobCode,只在涉及 FILE_STEP 的 case 调用。
+ * <p>FILE_STEP 写入已退役；兼容迁移与历史读取由独立路径负责。
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("编排 DAG 校验: 节点拓扑、网关汇聚与跨编排环检测")
 class WorkflowDagValidatorTest {
 
   private static final String TENANT = "ta";
-
-  @Mock
-  private PipelineDefinitionMapper pipelineDefinitionMapper;
 
   @Mock
   private WorkflowJobReferencePort workflowJobReferencePort;
@@ -68,7 +62,6 @@ class WorkflowDagValidatorTest {
 
     // 执行并断言
     assertThatCode(() -> validator.validate(TENANT, req)).doesNotThrowAnyException();
-    verify(pipelineDefinitionMapper, never()).countByJobCode(anyString(), anyString());
   }
 
   @Test
@@ -192,46 +185,39 @@ class WorkflowDagValidatorTest {
   }
 
   @Test
-  @DisplayName("FILE_STEP related_pipeline_code 空 → file_step_related_pipeline_missing")
+  @DisplayName("FILE_STEP 节点在新 Workflow 定义中已退役")
   void shouldFail_whenFileStepPipelineCodeMissing() {
     WorkflowDefinitionSaveRequest req = baseRequest();
     NodeItem fs = node("fs", "FILE_STEP");
     req.setNodes(Arrays.asList(node("start", "START"), fs, node("end", "END")));
     req.setEdges(Arrays.asList(edge("start", "fs"), edge("fs", "end")));
 
-    assertBizError(req, "error.workflow.dag.file_step_related_pipeline_missing");
+    assertBizError(req, "error.workflow.dag.file_step_retired");
   }
 
   @Test
-  @DisplayName("FILE_STEP pipelineCode 在 pipeline_definition 不存在 → file_step_pipeline_not_found")
+  @DisplayName("FILE_STEP 不因旧 Pipeline 定义仍存在而重新开放")
   void shouldFail_whenFileStepPipelineNotFound() {
     WorkflowDefinitionSaveRequest req = baseRequest();
     NodeItem fs = node("fs", "FILE_STEP");
     fs.setRelatedPipelineCode("ghost_pipeline");
     req.setNodes(Arrays.asList(node("start", "START"), fs, node("end", "END")));
     req.setEdges(Arrays.asList(edge("start", "fs"), edge("fs", "end")));
-    when(pipelineDefinitionMapper.countByJobCode(TENANT, "ghost_pipeline")).thenReturn(0L);
-
-    // 不能走 assertBizError helper(那个 helper 会 lenient stub 覆盖此处的 0L)
-    assertThatThrownBy(() -> validator.validate(TENANT, req))
-        .isInstanceOfSatisfying(BizException.class, ex -> {
-          assertThat(ex.getCode()).isEqualTo(ResultCode.VALIDATION_ERROR);
-          assertThat(ex.getMessageKey())
-              .isEqualTo("error.workflow.dag.file_step_pipeline_not_found");
-        });
+    assertBizError(req, "error.workflow.dag.file_step_retired");
   }
 
   @Test
-  @DisplayName("FILE_STEP pipelineCode 存在 → 通过")
-  void shouldPass_whenFileStepPipelineExists() {
+  @DisplayName("FILE_STEP 已退役，即使旧 Pipeline 定义存在也拒绝新写入")
+  void shouldFail_whenFileStepPipelineExists() {
     WorkflowDefinitionSaveRequest req = baseRequest();
     NodeItem fs = node("fs", "FILE_STEP");
     fs.setRelatedPipelineCode("known_pipeline");
     req.setNodes(Arrays.asList(node("start", "START"), fs, node("end", "END")));
     req.setEdges(Arrays.asList(edge("start", "fs"), edge("fs", "end")));
-    when(pipelineDefinitionMapper.countByJobCode(TENANT, "known_pipeline")).thenReturn(1L);
-
-    assertThatCode(() -> validator.validate(TENANT, req)).doesNotThrowAnyException();
+    assertThatThrownBy(() -> validator.validate(TENANT, req))
+        .isInstanceOfSatisfying(
+            BizException.class,
+            ex -> assertThat(ex.getMessageKey()).isEqualTo("error.workflow.dag.file_step_retired"));
   }
 
   @Test
@@ -413,10 +399,6 @@ class WorkflowDagValidatorTest {
   }
 
   private void assertBizError(WorkflowDefinitionSaveRequest req, String expectedKey) {
-    // 部分 case 下 mapper 可能被 stub 但不触发,保留 lenient 防 strict 噪音(仅在含 FILE_STEP 的 path 才会被调用)
-    lenient()
-        .when(pipelineDefinitionMapper.countByJobCode(anyString(), anyString()))
-        .thenReturn(1L);
     assertThatThrownBy(() -> validator.validate(TENANT, req))
         .isInstanceOfSatisfying(BizException.class, ex -> {
           assertThat(ex.getCode()).isEqualTo(ResultCode.VALIDATION_ERROR);

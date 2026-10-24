@@ -66,7 +66,7 @@ public final class TaskOutcomeServiceFixture {
         dependencies.failureClassifier(),
         finalizer,
         dag,
-        new TaskOutcomeParentTaskSignaler(),
+        new TaskOutcomeParentTaskSignaler(unresolvedTaskOutcomeServiceProvider()),
         workflow);
     DefaultTaskOutcomeService service = new DefaultTaskOutcomeService(
         jobMappers,
@@ -81,5 +81,10 @@ public final class TaskOutcomeServiceFixture {
         progressor);
     service.initialize();
     return service;
+  }
+
+  @SuppressWarnings("unchecked")
+  private static ObjectProvider<TaskOutcomeService> unresolvedTaskOutcomeServiceProvider() {
+    return org.mockito.Mockito.mock(ObjectProvider.class);
   }
 }

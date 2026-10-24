@@ -19,11 +19,20 @@ public interface WorkflowDefinitionMapper {
       @Param("workflowCode") String workflowCode,
       @Param("enabled") Boolean enabled);
 
+  /** 解析显式配置的受管单作业 Workflow 关联；不得按相同代码推断。 */
+  WorkflowDefinitionEntity selectFirstByTenantAndSingleJobDefinitionIdAndEnabled(
+      @Param("tenantId") String tenantId,
+      @Param("singleJobDefinitionId") Long singleJobDefinitionId,
+      @Param("enabled") Boolean enabled);
+
   /** 列出指定 tenant 下指定启用状态的全部 workflow 定义；console 列表 / 缓存预热用。 */
   List<WorkflowDefinitionEntity> selectByTenantAndEnabled(
       @Param("tenantId") String tenantId, @Param("enabled") Boolean enabled);
 
   WorkflowDefinitionEntity selectById(@Param("id") Long id);
+
+  WorkflowDefinitionEntity selectByTenantAndIdAndEnabled(
+      @Param("tenantId") String tenantId, @Param("id") Long id, @Param("enabled") Boolean enabled);
 
   /** ADR-025 reconciler：跨租户列出 enabled=true 全量。 */
   List<WorkflowDefinitionEntity> selectAllEnabled(@Param("limit") int limit);

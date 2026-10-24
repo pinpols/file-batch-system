@@ -225,12 +225,7 @@ public class DefaultConsoleConfigSyncApplicationService
   }
 
   private static List<String> configTypes() {
-    return List.of(
-        "jobDefinitions",
-        "workflowDefinitions",
-        "pipelineDefinitions",
-        "fileChannels",
-        "fileTemplates");
+    return List.of("jobDefinitions", "workflowDefinitions", "fileChannels", "fileTemplates");
   }
 
   private int totalCount(ConfigSyncBundlePayload bundle) {

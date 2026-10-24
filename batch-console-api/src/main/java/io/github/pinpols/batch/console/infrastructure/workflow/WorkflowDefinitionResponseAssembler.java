@@ -30,6 +30,13 @@ public final class WorkflowDefinitionResponseAssembler {
         definition.getWorkflowCode(),
         definition.getWorkflowName(),
         definition.getWorkflowType(),
+        definition.getSingleJobDefinitionId(),
+        definition.getScheduleType(),
+        definition.getScheduleExpr(),
+        definition.getTimezone(),
+        definition.getTriggerMode(),
+        definition.getCalendarCode(),
+        definition.getDependsOnJobCode(),
         definition.getVersion(),
         definition.getEnabled(),
         definition.getDescription(),
@@ -50,6 +57,13 @@ public final class WorkflowDefinitionResponseAssembler {
     historicalDefinition.setWorkflowCode(snapshot.getWorkflowCode());
     historicalDefinition.setWorkflowName(snapshot.getWorkflowName());
     historicalDefinition.setWorkflowType(snapshot.getWorkflowType());
+    historicalDefinition.setSingleJobDefinitionId(currentDefinition.getSingleJobDefinitionId());
+    historicalDefinition.setScheduleType(snapshot.getScheduleType());
+    historicalDefinition.setScheduleExpr(snapshot.getScheduleExpr());
+    historicalDefinition.setTimezone(snapshot.getTimezone());
+    historicalDefinition.setTriggerMode(snapshot.getTriggerMode());
+    historicalDefinition.setCalendarCode(snapshot.getCalendarCode());
+    historicalDefinition.setDependsOnJobCode(snapshot.getDependsOnJobCode());
     historicalDefinition.setVersion(snapshot.getVersion());
     historicalDefinition.setEnabled(snapshot.getEnabled());
     historicalDefinition.setDescription(currentDefinition.getDescription());

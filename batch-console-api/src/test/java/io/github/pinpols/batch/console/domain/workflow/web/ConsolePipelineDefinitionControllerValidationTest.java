@@ -158,9 +158,8 @@ class ConsolePipelineDefinitionControllerValidationTest {
   }
 
   @Test
-  @DisplayName("作业编码与嵌套步骤均合法时, 请求通过校验并创建成功")
-  void shouldAcceptValidRequest_whenNestedStepsProvided() throws Exception {
-    when(service.create(ArgumentMatchers.any())).thenReturn(null);
+  @DisplayName("作业编码与嵌套步骤均合法时, 校验通过但退役写入仍被拒绝")
+  void rejectsValidRequest_whenTenantPipelineWritesAreRetired() throws Exception {
     String body = """
         {
           "tenantId": "ta",
@@ -176,8 +175,8 @@ class ConsolePipelineDefinitionControllerValidationTest {
         .perform(post("/api/console/pipeline-definitions")
             .contentType(APPLICATION_JSON)
             .content(body))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code").value("SUCCESS"));
-    verify(service).create(ArgumentMatchers.any());
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("STATE_CONFLICT"));
+    verify(service, never()).create(ArgumentMatchers.any());
   }
 }

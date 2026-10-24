@@ -6,6 +6,8 @@
         <result column="tenant_id" property="tenantId"/>
         <result column="job_code" property="jobCode"/>
         <result column="depends_on_job_code" property="dependsOnJobCode"/>
+        <result column="depends_on_job_codes" property="dependsOnJobCodesCsv"/>
+        <result column="dependency_rules_json" property="dependencyRulesJson"/>
         <result column="job_name" property="jobName"/>
         <result column="job_type" property="jobType"/>
         <result column="biz_type" property="bizType"/>
@@ -38,6 +40,7 @@
         <result column="default_params" property="defaultParams"/>
         <result column="priority" property="priority"/>
         <result column="version" property="version"/>
+        <result column="default_workflow_definition_id" property="defaultWorkflowDefinitionId"/>
         <result column="description" property="description"/>
         <result column="enabled" property="enabled"/>
         <result column="created_by" property="createdBy"/>
@@ -48,6 +51,24 @@
 
     <select id="selectByQuery" resultMap="JobDefinitionResultMap">
         select jd.*,
+               swf.id as default_workflow_definition_id,
+               coalesce((select string_agg(jdep.upstream_job_code, chr(31) order by jdep.dependency_order)
+                         from batch.job_dependency jdep
+                         where jdep.tenant_id = jd.tenant_id
+                           and jdep.downstream_job_code = jd.job_code), jd.depends_on_job_code)
+                   as depends_on_job_codes,
+               coalesce((select jsonb_agg(jsonb_build_object(
+                                     'upstreamJobCode', jdep.upstream_job_code,
+                                     'bizDateAlignment', jdep.biz_date_alignment)
+                                     order by jdep.dependency_order)::text
+                         from batch.job_dependency jdep
+                         where jdep.tenant_id = jd.tenant_id
+                           and jdep.downstream_job_code = jd.job_code),
+                        case when jd.depends_on_job_code is null then '[]'
+                             else jsonb_build_array(jsonb_build_object(
+                                 'upstreamJobCode', jd.depends_on_job_code,
+                                 'bizDateAlignment', 'SAME_DAY'))::text end)
+                   as dependency_rules_json,
                coalesce(mp.soft_runtime_seconds, 0) as soft_runtime_seconds,
                coalesce(mp.soft_runtime_severity, 'WARN') as soft_runtime_severity,
                coalesce(mp.start_grace_seconds, 0) as start_grace_seconds,
@@ -61,6 +82,8 @@
                coalesce(mp.completion_deadline_day_offset, 0) as completion_deadline_day_offset,
                coalesce(mp.completion_deadline_severity, 'WARN') as completion_deadline_severity
         from batch.job_definition jd
+        left join batch.workflow_definition swf
+          on swf.tenant_id = jd.tenant_id and swf.single_job_definition_id = jd.id
         left join batch.job_monitoring_policy mp
           on mp.tenant_id = jd.tenant_id and mp.job_definition_id = jd.id
         where jd.tenant_id = #{tenantId}
@@ -71,7 +94,10 @@
             and jd.job_code = #{exactJobCode}
         </if>
         <if test="dependsOnJobCode != null and dependsOnJobCode != ''">
-            and jd.depends_on_job_code = #{dependsOnJobCode}
+            and exists (select 1 from batch.job_dependency jdep
+                        where jdep.tenant_id = jd.tenant_id
+                          and jdep.downstream_job_code = jd.job_code
+                          and jdep.upstream_job_code = #{dependsOnJobCode})
         </if>
         <if test="jobName != null and jobName != ''">
             and jd.job_name like concat('%', #{jobName}, '%')
@@ -102,15 +128,21 @@
             </choose>
         </if>
         <if test="monitoringCategory == 'DEPENDENCY'">
-            and nullif(btrim(jd.depends_on_job_code), '') is not null
+            and exists (select 1 from batch.job_dependency jdep
+                        where jdep.tenant_id = jd.tenant_id
+                          and jdep.downstream_job_code = jd.job_code)
         </if>
         <if test="monitoringCategory == 'SCHEDULED'">
             and jd.schedule_type = 'CRON'
-            and nullif(btrim(jd.depends_on_job_code), '') is null
+            and not exists (select 1 from batch.job_dependency jdep
+                            where jdep.tenant_id = jd.tenant_id
+                              and jdep.downstream_job_code = jd.job_code)
         </if>
         <if test="monitoringCategory == 'RUNTIME_ONLY'">
             and jd.schedule_type != 'CRON'
-            and nullif(btrim(jd.depends_on_job_code), '') is null
+            and not exists (select 1 from batch.job_dependency jdep
+                            where jdep.tenant_id = jd.tenant_id
+                              and jdep.downstream_job_code = jd.job_code)
         </if>
         <if test="enabled != null">
             and jd.enabled = #{enabled}
@@ -130,7 +162,10 @@
             and job_code = #{exactJobCode}
         </if>
         <if test="dependsOnJobCode != null and dependsOnJobCode != ''">
-            and depends_on_job_code = #{dependsOnJobCode}
+            and exists (select 1 from batch.job_dependency jdep
+                        where jdep.tenant_id = job_definition.tenant_id
+                          and jdep.downstream_job_code = job_definition.job_code
+                          and jdep.upstream_job_code = #{dependsOnJobCode})
         </if>
         <if test="jobName != null and jobName != ''">
             and job_name like concat('%', #{jobName}, '%')
@@ -148,15 +183,21 @@
             and schedule_type = #{scheduleType}
         </if>
         <if test="monitoringCategory == 'DEPENDENCY'">
-            and nullif(btrim(depends_on_job_code), '') is not null
+            and exists (select 1 from batch.job_dependency jdep
+                        where jdep.tenant_id = job_definition.tenant_id
+                          and jdep.downstream_job_code = job_definition.job_code)
         </if>
         <if test="monitoringCategory == 'SCHEDULED'">
             and schedule_type = 'CRON'
-            and nullif(btrim(depends_on_job_code), '') is null
+            and not exists (select 1 from batch.job_dependency jdep
+                            where jdep.tenant_id = job_definition.tenant_id
+                              and jdep.downstream_job_code = job_definition.job_code)
         </if>
         <if test="monitoringCategory == 'RUNTIME_ONLY'">
             and schedule_type != 'CRON'
-            and nullif(btrim(depends_on_job_code), '') is null
+            and not exists (select 1 from batch.job_dependency jdep
+                            where jdep.tenant_id = job_definition.tenant_id
+                              and jdep.downstream_job_code = job_definition.job_code)
         </if>
         <if test="enabled != null">
             and enabled = #{enabled}
@@ -165,6 +206,24 @@
 
     <select id="selectByUniqueKey" resultMap="JobDefinitionResultMap">
         select jd.*,
+               swf.id as default_workflow_definition_id,
+               coalesce((select string_agg(jdep.upstream_job_code, chr(31) order by jdep.dependency_order)
+                         from batch.job_dependency jdep
+                         where jdep.tenant_id = jd.tenant_id
+                           and jdep.downstream_job_code = jd.job_code), jd.depends_on_job_code)
+                   as depends_on_job_codes,
+               coalesce((select jsonb_agg(jsonb_build_object(
+                                     'upstreamJobCode', jdep.upstream_job_code,
+                                     'bizDateAlignment', jdep.biz_date_alignment)
+                                     order by jdep.dependency_order)::text
+                         from batch.job_dependency jdep
+                         where jdep.tenant_id = jd.tenant_id
+                           and jdep.downstream_job_code = jd.job_code),
+                        case when jd.depends_on_job_code is null then '[]'
+                             else jsonb_build_array(jsonb_build_object(
+                                 'upstreamJobCode', jd.depends_on_job_code,
+                                 'bizDateAlignment', 'SAME_DAY'))::text end)
+                   as dependency_rules_json,
                coalesce(mp.soft_runtime_seconds, 0) as soft_runtime_seconds,
                coalesce(mp.soft_runtime_severity, 'WARN') as soft_runtime_severity,
                coalesce(mp.start_grace_seconds, 0) as start_grace_seconds,
@@ -178,6 +237,8 @@
                coalesce(mp.completion_deadline_day_offset, 0) as completion_deadline_day_offset,
                coalesce(mp.completion_deadline_severity, 'WARN') as completion_deadline_severity
         from batch.job_definition jd
+        left join batch.workflow_definition swf
+          on swf.tenant_id = jd.tenant_id and swf.single_job_definition_id = jd.id
         left join batch.job_monitoring_policy mp
           on mp.tenant_id = jd.tenant_id and mp.job_definition_id = jd.id
         where jd.tenant_id = #{tenantId}
@@ -186,6 +247,24 @@
 
     <select id="selectById" resultMap="JobDefinitionResultMap">
         select jd.*,
+               swf.id as default_workflow_definition_id,
+               coalesce((select string_agg(jdep.upstream_job_code, chr(31) order by jdep.dependency_order)
+                         from batch.job_dependency jdep
+                         where jdep.tenant_id = jd.tenant_id
+                           and jdep.downstream_job_code = jd.job_code), jd.depends_on_job_code)
+                   as depends_on_job_codes,
+               coalesce((select jsonb_agg(jsonb_build_object(
+                                     'upstreamJobCode', jdep.upstream_job_code,
+                                     'bizDateAlignment', jdep.biz_date_alignment)
+                                     order by jdep.dependency_order)::text
+                         from batch.job_dependency jdep
+                         where jdep.tenant_id = jd.tenant_id
+                           and jdep.downstream_job_code = jd.job_code),
+                        case when jd.depends_on_job_code is null then '[]'
+                             else jsonb_build_array(jsonb_build_object(
+                                 'upstreamJobCode', jd.depends_on_job_code,
+                                 'bizDateAlignment', 'SAME_DAY'))::text end)
+                   as dependency_rules_json,
                coalesce(mp.soft_runtime_seconds, 0) as soft_runtime_seconds,
                coalesce(mp.soft_runtime_severity, 'WARN') as soft_runtime_severity,
                coalesce(mp.start_grace_seconds, 0) as start_grace_seconds,
@@ -199,6 +278,8 @@
                coalesce(mp.completion_deadline_day_offset, 0) as completion_deadline_day_offset,
                coalesce(mp.completion_deadline_severity, 'WARN') as completion_deadline_severity
         from batch.job_definition jd
+        left join batch.workflow_definition swf
+          on swf.tenant_id = jd.tenant_id and swf.single_job_definition_id = jd.id
         left join batch.job_monitoring_policy mp
           on mp.tenant_id = jd.tenant_id and mp.job_definition_id = jd.id
         where jd.tenant_id = #{tenantId} and jd.id = #{id}
@@ -274,6 +355,31 @@
                 ELSE batch.job_monitoring_policy.completion_deadline_updated_at
             END
     </insert>
+
+    <delete id="deleteDependencies">
+        delete from batch.job_dependency
+        where tenant_id = #{tenantId}
+          and downstream_job_code = #{downstreamJobCode}
+    </delete>
+
+    <insert id="insertDependencyRules">
+        insert into batch.job_dependency
+            (tenant_id, downstream_job_code, upstream_job_code, dependency_order,
+             readiness_mode, biz_date_alignment)
+        values
+        <foreach collection="rules" item="rule" index="index" separator=",">
+            (#{tenantId}, #{downstreamJobCode}, #{rule.upstreamJobCode}, #{index},
+             'EFFECTIVE_RESULT', #{rule.bizDateAlignment})
+        </foreach>
+    </insert>
+
+    <select id="selectAllDependencies" resultType="io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper$JobDependencyEdge">
+        select downstream_job_code as downstreamJobCode,
+               upstream_job_code as upstreamJobCode
+        from batch.job_dependency
+        where tenant_id = #{tenantId}
+        order by downstream_job_code, dependency_order
+    </select>
 
     <insert id="copyJobMonitoringPolicy">
         insert into batch.job_monitoring_policy (

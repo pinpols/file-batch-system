@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
  * next_replay_at &lt;= now AND replay_count &lt; max_replay_count} 的死信记录，逐条调用 {@link
  * RetryGovernanceService#autoRetryDueDeadLetters()}。
  *
- * <p>BUSINESS 类的死信（文件缺失、渠道未配等不会自愈的硬错）不参与自动重放，仅人工 {@code /internal/dead-letters/{id}/replay} 触发；超过
+ * <p>BUSINESS 类的死信（文件缺失、渠道未配等不会自愈的硬错）不参与自动重放，仅经 Console 审批后由补偿服务触发；超过
  * {@code max_replay_count} 后 service 转 GIVE_UP。
  */
 @Component

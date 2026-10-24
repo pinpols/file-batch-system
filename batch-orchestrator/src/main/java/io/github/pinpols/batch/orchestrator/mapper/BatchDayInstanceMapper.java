@@ -43,7 +43,55 @@ public interface BatchDayInstanceMapper {
       @Param("calendarCode") String calendarCode,
       @Param("bizDate") LocalDate bizDate);
 
+  /** 最近一个不晚于当前日期的批量日，用于按日期顺序恢复调度器停机期间的缺口。 */
+  LocalDate selectLatestBizDateAtOrBefore(
+      @Param("tenantId") String tenantId,
+      @Param("calendarCode") String calendarCode,
+      @Param("bizDate") LocalDate bizDate);
+
+  List<LocalDate> selectBizDatesInRange(
+      @Param("tenantId") String tenantId,
+      @Param("calendarCode") String calendarCode,
+      @Param("fromDate") LocalDate fromDate,
+      @Param("throughDate") LocalDate throughDate);
+
+  int initializeOpenCursor(
+      @Param("tenantId") String tenantId,
+      @Param("calendarCode") String calendarCode,
+      @Param("lastScannedBizDate") LocalDate lastScannedBizDate);
+
+  LocalDate selectOpenCursorForUpdate(
+      @Param("tenantId") String tenantId, @Param("calendarCode") String calendarCode);
+
+  LocalDate selectOpenCursorDate(
+      @Param("tenantId") String tenantId, @Param("calendarCode") String calendarCode);
+
+  int advanceOpenCursor(
+      @Param("tenantId") String tenantId,
+      @Param("calendarCode") String calendarCode,
+      @Param("expectedBizDate") LocalDate expectedBizDate,
+      @Param("nextBizDate") LocalDate nextBizDate,
+      @Param("scannedAt") java.time.Instant scannedAt);
+
   /** 扫描指定状态集合的批次日实例（用于 cutoff / settle 调度器候选过滤）。 */
   List<BatchDayInstanceEntity> selectByDayStatusIn(
       @Param("dayStatuses") Collection<String> dayStatuses);
+
+  /** Failed days whose configured catch-up still has an unaccepted or retryable request. */
+  List<BatchDayInstanceEntity> selectFailedDaysNeedingCatchUp(@Param("limit") int limit);
+
+  /** Counts unaccounted scheduled Quartz occurrences before allowing an empty-day settlement. */
+  int countBlockingScheduledOccurrences(
+      @Param("tenantId") String tenantId,
+      @Param("calendarCode") String calendarCode,
+      @Param("bizDate") LocalDate bizDate);
+
+  int countUncoveredScheduledDefinitions(
+      @Param("tenantId") String tenantId,
+      @Param("calendarCode") String calendarCode,
+      @Param("cutoffAt") java.time.Instant cutoffAt);
+
+  /** Event/mixed-trigger jobs lack a per-day expected-work ledger, so automation must fail closed. */
+  int countUntrackedTriggerDefinitions(
+      @Param("tenantId") String tenantId, @Param("calendarCode") String calendarCode);
 }

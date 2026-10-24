@@ -61,7 +61,7 @@ public class AssetPartitionService {
     }
     if (materialized != null
         && Objects.equals(latest.get().versionNo(), materialized.versionNo())) {
-      return Optional.of(materialized);
+      return Optional.of(withResultVersionId(materialized, latest.get().id()));
     }
     return latest
         .filter(row -> FRESHNESS_EFFECTIVE.equals(row.status()))
@@ -139,7 +139,25 @@ public class AssetPartitionService {
         row.effectiveAt(),
         row.payloadStorage(),
         row.payloadJson(),
-        row.payloadRef());
+        row.payloadRef(),
+        row.id());
+  }
+
+  private AssetPartitionSnapshot withResultVersionId(AssetPartitionSnapshot snapshot, Long id) {
+    return new AssetPartitionSnapshot(
+        snapshot.tenantId(),
+        snapshot.assetCode(),
+        snapshot.bizDate(),
+        snapshot.partitionKey(),
+        snapshot.businessKey(),
+        snapshot.freshnessStatus(),
+        snapshot.versionNo(),
+        snapshot.jobInstanceId(),
+        snapshot.effectiveAt(),
+        snapshot.payloadStorage(),
+        snapshot.payloadJson(),
+        snapshot.payloadRef(),
+        id);
   }
 
   private String toPartitionKey(LocalDate bizDate) {

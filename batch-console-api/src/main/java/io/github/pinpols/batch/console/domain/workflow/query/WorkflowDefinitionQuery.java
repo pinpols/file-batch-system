@@ -11,6 +11,8 @@ public record WorkflowDefinitionQuery(
     String workflowCode,
     String workflowName,
     String workflowType,
+    String relatedJobCode,
+    Boolean singleJobWorkflow,
     Integer version,
     Boolean enabled,
     PageRequest pageRequest) {

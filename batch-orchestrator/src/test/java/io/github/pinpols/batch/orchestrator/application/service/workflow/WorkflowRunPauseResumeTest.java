@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.service.workflow;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -12,6 +13,7 @@ import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
+import io.github.pinpols.batch.orchestrator.application.service.task.WorkflowRunResumeProgressor;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateWorkflowRunStatusParam;
 import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
@@ -24,7 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("workflow_run pause/resume(ADR-044)")
+@DisplayName("Workflow 运行暂停与恢复的状态契约")
 class WorkflowRunPauseResumeTest {
 
   @Mock
@@ -43,6 +45,9 @@ class WorkflowRunPauseResumeTest {
   private ObjectProvider<WorkflowNodeDispatchService> dispatchProvider;
 
   @Mock
+  private ObjectProvider<WorkflowRunResumeProgressor> resumeProgressorProvider;
+
+  @Mock
   private OrchestratorJobMappers jobMappers;
 
   @Mock
@@ -58,9 +63,11 @@ class WorkflowRunPauseResumeTest {
         workflowTerminalOutboxService,
         workflowDagService,
         dispatchProvider,
+        resumeProgressorProvider,
         jobMappers,
         logProvider,
-        alertProvider);
+        alertProvider,
+        mock(WorkflowNodeTerminalFinalizer.class));
   }
 
   private static WorkflowRunEntity run(String status) {
@@ -98,8 +105,11 @@ class WorkflowRunPauseResumeTest {
     when(workflowRunMapper.selectById("t1", 7L)).thenReturn(run("PAUSED"));
     when(workflowRunMapper.updateStatus(any(UpdateWorkflowRunStatusParam.class)))
         .thenReturn(1);
+    WorkflowRunResumeProgressor progressor = mock(WorkflowRunResumeProgressor.class);
+    when(resumeProgressorProvider.getObject()).thenReturn(progressor);
 
     assertThat(service().resume("t1", 7L).status()).isEqualTo("RUNNING");
+    verify(progressor).resume("t1", 7L);
   }
 
   @Test

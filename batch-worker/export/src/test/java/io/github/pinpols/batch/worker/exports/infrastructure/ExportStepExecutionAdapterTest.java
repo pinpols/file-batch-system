@@ -10,7 +10,6 @@ import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import io.github.pinpols.batch.worker.exports.domain.ExportPayload;
@@ -40,9 +39,6 @@ class ExportStepExecutionAdapterTest {
   private PlatformFileRecordRepository runtimeRepository;
 
   @Mock
-  private PlatformPipelineDefinitionRepository pipelineDefinitions;
-
-  @Mock
   private PlatformPipelineRunRepository pipelineRuns;
 
   private ExportStepExecutionAdapter adapter;
@@ -52,7 +48,6 @@ class ExportStepExecutionAdapterTest {
     adapter = new ExportStepExecutionAdapter(
         stageExecutor,
         new ObjectMapper(),
-        pipelineDefinitions,
         pipelineRuns,
         runtimeRepository,
         emptyProvider(),

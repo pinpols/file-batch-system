@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.common.enums.PipelineType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
@@ -28,13 +27,21 @@ import io.github.pinpols.batch.console.config.JobMonitoringDefaultsProperties;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.param.JobDefinitionMaintenanceUpdateParam;
 import io.github.pinpols.batch.console.domain.job.param.JobMonitoringPolicyUpsertParam;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionUpsertParam;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowEdgeUpsertParam;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowNodeUpsertParam;
+import io.github.pinpols.batch.console.domain.workflow.query.WorkflowDefinitionQuery;
+import io.github.pinpols.batch.console.infrastructure.excel.LegacyPipelineJobParameterConverter;
+import io.github.pinpols.batch.console.infrastructure.excel.LegacyPipelineJobParameterConverter.Result;
+import io.github.pinpols.batch.console.infrastructure.workflow.DefaultSingleJobWorkflowProvisioner;
+import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionWriteSupport;
+import io.github.pinpols.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -66,18 +73,40 @@ public class TenantConfigInitApplyHandlers {
   private final TenantFileConfigApplySupport fileConfigSupport;
   private final TenantOperationalConfigApplySupport operationalConfigSupport;
   private final JobMonitoringDefaultsProperties monitoringDefaults;
+  private final WorkflowDefinitionWriteSupport workflowWriteSupport;
+  private final DefaultSingleJobWorkflowProvisioner singleJobWorkflowProvisioner;
 
   public TenantConfigInitApplyHandlers(
       TenantDefinitionConfigMappers definitionMappers,
       PlatformTransactionManager transactionManager,
       TenantFileConfigApplySupport fileConfigSupport,
       TenantOperationalConfigApplySupport operationalConfigSupport,
-      JobMonitoringDefaultsProperties monitoringDefaults) {
+      JobMonitoringDefaultsProperties monitoringDefaults,
+      WorkflowDefinitionWriteSupport workflowWriteSupport,
+      DefaultSingleJobWorkflowProvisioner singleJobWorkflowProvisioner) {
     this.definitionMappers = definitionMappers;
     this.transactionManager = transactionManager;
     this.fileConfigSupport = fileConfigSupport;
     this.operationalConfigSupport = operationalConfigSupport;
     this.monitoringDefaults = monitoringDefaults;
+    this.workflowWriteSupport = workflowWriteSupport;
+    this.singleJobWorkflowProvisioner = singleJobWorkflowProvisioner;
+  }
+
+  void ensureManagedSingleJobWorkflows(List<JobDefinitionSpec> jobSpecs, String tenantId) {
+    if (jobSpecs == null) {
+      return;
+    }
+    for (JobDefinitionSpec spec : jobSpecs) {
+      if (!Texts.hasText(spec.getJobCode())) {
+        continue;
+      }
+      JobDefinitionEntity job =
+          definitionMappers.jobDefinition.selectByUniqueKey(tenantId, spec.getJobCode());
+      if (job != null) {
+        singleJobWorkflowProvisioner.provision(job);
+      }
+    }
   }
 
   /** 上下文：一次 apply 调用所需的四个不变量，避免在 10 个 apply* 方法中重复传参。 */
@@ -230,10 +259,17 @@ public class TenantConfigInitApplyHandlers {
     entity.setJobName(spec.getJobName());
     entity.setJobType(spec.getJobType());
     entity.setBizType(spec.getBizType());
-    entity.setScheduleType(spec.getScheduleType());
+    String jobScheduleType = Nullables.coalesce(spec.getScheduleType(), "MANUAL");
+    entity.setScheduleType(jobScheduleType);
     entity.setScheduleExpr(spec.getScheduleExpr());
     entity.setTimezone(Nullables.coalesce(spec.getTimezone(), CommonConstants.DEFAULT_TIMEZONE_ID));
-    entity.setTriggerMode(Nullables.coalesce(spec.getTriggerMode(), "SCHEDULED"));
+    entity.setTriggerMode(Nullables.coalesce(
+        spec.getTriggerMode(),
+        switch (jobScheduleType) {
+          case "CRON", "FIXED_RATE" -> "SCHEDULED";
+          case "EVENT" -> "EVENT";
+          default -> "MANUAL";
+        }));
     entity.setWorkerGroup(CodeNormalizer.toUpperOrNull(spec.getWorkerGroup()));
     entity.setQueueCode(CodeNormalizer.toConfigFormOrNull(spec.getQueueCode()));
     entity.setCalendarCode(CodeNormalizer.toConfigFormOrNull(spec.getCalendarCode()));
@@ -324,6 +360,10 @@ public class TenantConfigInitApplyHandlers {
         Nullables.coalesce(spec.getExecutionMode(), existing.getExecutionMode()));
     param.setWatermarkField(
         Nullables.coalesce(spec.getWatermarkField(), existing.getWatermarkField()));
+    if (spec.getDefaultParams() != null) {
+      param.setDefaultParams(spec.getDefaultParams());
+      param.setDefaultParamsSpecified(true);
+    }
     param.setUpdatedBy(operator);
     definitionMappers.jobDefinition.updateJobDefinitionMaintenance(param);
     definitionMappers.jobDefinition.upsertJobMonitoringPolicy(
@@ -437,28 +477,91 @@ public class TenantConfigInitApplyHandlers {
         SpecHandler.of(
             "workflow",
             WorkflowDefinitionSpec::getWorkflowCode,
-            (tid, s) -> Optional.ofNullable(definitionMappers.workflowDefinition.selectByUniqueKey(
-                tid, s.getWorkflowCode(), 1)),
+            (tid, s) -> Optional.ofNullable(findWorkflowForImport(tid, s)),
             (c, s) -> upsertWorkflowDefinition(c.tenantId(), null, s, c.operator()),
             (c, s, existing) ->
                 upsertWorkflowDefinition(c.tenantId(), existing.getId(), s, c.operator())));
   }
 
+  private WorkflowDefinitionEntity findWorkflowForImport(
+      String tenantId, WorkflowDefinitionSpec spec) {
+    if (Texts.hasText(spec.getSingleJobCode())) {
+      JobDefinitionEntity job = definitionMappers.jobDefinition.selectByUniqueKey(
+          tenantId, spec.getSingleJobCode().trim());
+      if (job != null) {
+        WorkflowDefinitionEntity managed =
+            definitionMappers.workflowDefinition.selectBySingleJobDefinitionId(
+                tenantId, job.getId());
+        if (managed != null) {
+          return managed;
+        }
+      }
+    }
+    return definitionMappers
+        .workflowDefinition
+        .selectByQuery(WorkflowDefinitionQuery.builder()
+            .tenantId(tenantId)
+            .workflowCode(spec.getWorkflowCode())
+            .pageRequest(new PageRequest(1, 1))
+            .build())
+        .stream()
+        .findFirst()
+        .orElse(null);
+  }
+
   private void upsertWorkflowDefinition(
       String tenantId, Long existingId, WorkflowDefinitionSpec spec, String operator) {
+    Long singleJobDefinitionId = null;
+    if (Texts.hasText(spec.getSingleJobCode())) {
+      JobDefinitionEntity singleJob = definitionMappers.jobDefinition.selectByUniqueKey(
+          tenantId, spec.getSingleJobCode().trim());
+      if (singleJob == null) {
+        throw BizException.of(
+            ResultCode.NOT_FOUND,
+            ResultCode.NOT_FOUND.detailKey(),
+            "Managed Workflow Job not found: " + spec.getSingleJobCode());
+      }
+      singleJobDefinitionId = singleJob.getId();
+    }
     WorkflowDefinitionUpsertParam param = new WorkflowDefinitionUpsertParam();
     param.setTenantId(tenantId);
     param.setWorkflowCode(spec.getWorkflowCode());
     param.setWorkflowName(spec.getWorkflowName());
     param.setWorkflowType(spec.getWorkflowType());
-    param.setVersion(1);
+    WorkflowDefinitionEntity current = existingId == null
+        ? null
+        : definitionMappers.workflowDefinition.selectById(tenantId, existingId);
+    if (current == null && singleJobDefinitionId != null) {
+      current = definitionMappers.workflowDefinition.selectBySingleJobDefinitionId(
+          tenantId, singleJobDefinitionId);
+    }
+    String workflowCode = current == null ? spec.getWorkflowCode() : current.getWorkflowCode();
+    param.setWorkflowCode(workflowCode);
+    param.setVersion(current == null ? 1 : current.getVersion());
     param.setEnabled(spec.getEnabled() != null && spec.getEnabled());
+    param.setSingleJobDefinitionId(singleJobDefinitionId);
+    param.setScheduleEnabled(spec.getScheduleEnabled() != null && spec.getScheduleEnabled());
+    String scheduleType = Nullables.coalesce(spec.getScheduleType(), "MANUAL");
+    param.setScheduleType(scheduleType);
+    param.setScheduleExpr(spec.getScheduleExpr());
+    param.setTimezone(Nullables.coalesce(spec.getTimezone(), CommonConstants.DEFAULT_TIMEZONE_ID));
+    param.setTriggerMode(Nullables.coalesce(
+        spec.getTriggerMode(),
+        switch (scheduleType) {
+          case "CRON", "FIXED_RATE" -> "SCHEDULED";
+          case "EVENT" -> "EVENT";
+          default -> "MANUAL";
+        }));
+    param.setCalendarCode(spec.getCalendarCode());
+    param.setDependsOnJobCode(spec.getDependsOnJobCode());
     param.setCreatedBy(operator);
     param.setUpdatedBy(operator);
     definitionMappers.workflowDefinition.upsertWorkflowDefinition(param);
 
-    WorkflowDefinitionEntity saved =
-        definitionMappers.workflowDefinition.selectByUniqueKey(tenantId, spec.getWorkflowCode(), 1);
+    WorkflowDefinitionEntity saved = current == null
+        ? definitionMappers.workflowDefinition.selectByUniqueKey(
+            tenantId, workflowCode, param.getVersion())
+        : current;
     if (saved == null) {
       return;
     }
@@ -502,119 +605,205 @@ public class TenantConfigInitApplyHandlers {
         }
       }
     }
-  }
 
-  ItemStats applyPipelineDefinitions(List<PipelineDefinitionSpec> specs, ApplyContext ctx) {
-    return applySpecs(
-        specs,
-        ctx,
-        SpecHandler.<PipelineDefinitionSpec, Map<String, Object>>of(
-            "pipeline",
-            s -> s.getJobCode() + ":" + s.getPipelineType(),
-            (tid, s) -> {
-              List<Map<String, Object>> rows = definitionMappers.pipelineDefinition.selectByQuery(
-                  tid, s.getJobCode(), s.getPipelineType(), null, new PageRequest(1, 1));
-              return rows.isEmpty() ? Optional.empty() : Optional.of(rows.getFirst());
-            },
-            (c, s) -> insertPipelineDefinition(c.tenantId(), s),
-            (c, s, existing) -> updatePipelineDefinition(
-                c.tenantId(), ((Number) existing.get(KEY_ID)).longValue(), s, existing)));
-  }
-
-  private void insertPipelineDefinition(String tenantId, PipelineDefinitionSpec spec) {
-    validatePipelineSteps(spec.getPipelineType(), spec.getSteps());
-    Map<String, Object> params = new HashMap<>();
-    params.put("tenant_id", tenantId);
-    params.put("job_code", spec.getJobCode());
-    params.put("pipeline_name", spec.getPipelineName());
-    params.put("pipeline_type", spec.getPipelineType());
-    params.put("biz_type", spec.getBizType());
-    params.put("worker_group", spec.getWorkerGroup());
-    params.put("version", 1);
-    params.put(KEY_ENABLED, spec.getEnabled() != null && spec.getEnabled());
-    params.put("description", spec.getDescription());
-    definitionMappers.pipelineDefinition.insert(params);
-    Long defId = ((Number) params.get(KEY_ID)).longValue();
-    insertPipelineSteps(defId, spec.getSteps());
-  }
-
-  private void updatePipelineDefinition(
-      String tenantId, Long id, PipelineDefinitionSpec spec, Map<String, Object> existing) {
-    if (!EmptyChecks.isNull(spec.getSteps())) {
-      String existingPipelineType = String.valueOf(existing.get("pipeline_type"));
-      String pipelineType = Nullables.coalesce(spec.getPipelineType(), existingPipelineType);
-      validatePipelineSteps(pipelineType, spec.getSteps());
-    }
-    Map<String, Object> params = new HashMap<>();
-    params.put("tenant_id", tenantId);
-    params.put(KEY_ID, id);
-    params.put(
-        "pipeline_name", Nullables.coalesce(spec.getPipelineName(), existing.get("pipeline_name")));
-    params.put(
-        "pipeline_type", Nullables.coalesce(spec.getPipelineType(), existing.get("pipeline_type")));
-    params.put("biz_type", Nullables.coalesce(spec.getBizType(), existing.get("biz_type")));
-    params.put(
-        "worker_group", Nullables.coalesce(spec.getWorkerGroup(), existing.get("worker_group")));
-    params.put(KEY_ENABLED, Nullables.coalesce(spec.getEnabled(), existing.get(KEY_ENABLED)));
-    params.put(
-        "description", Nullables.coalesce(spec.getDescription(), existing.get("description")));
-    definitionMappers.pipelineDefinition.update(params);
-    if (!EmptyChecks.isNull(spec.getSteps())) {
-      definitionMappers.pipelineStepDefinition.deleteByPipelineDefinitionId(id);
-      insertPipelineSteps(id, spec.getSteps());
-    }
-  }
-
-  private void insertPipelineSteps(
-      Long pipelineDefinitionId, List<PipelineDefinitionSpec.StepSpec> steps) {
-    if (EmptyChecks.isNull(steps) || steps.isEmpty()) {
-      return;
-    }
-    // 批量插入: 把 N 次单行往返折成 1 次,租户初始化场景下减少 ~10x DB round trip + 事务时长。
-    List<Map<String, Object>> rows = new ArrayList<>(steps.size());
-    for (int index = 0; index < steps.size(); index++) {
-      PipelineDefinitionSpec.StepSpec step = steps.get(index);
-      Map<String, Object> stepParams = new HashMap<>();
-      stepParams.put("pipeline_definition_id", pipelineDefinitionId);
-      stepParams.put("step_code", step.getStepCode());
-      stepParams.put("step_name", step.getStepName());
-      stepParams.put("stage_code", step.getStageCode());
-      stepParams.put("step_order", Nullables.coalesce(step.getStepOrder(), index));
-      stepParams.put("impl_code", step.getImplCode());
-      stepParams.put("step_params", step.getStepParams());
-      stepParams.put("timeout_seconds", Nullables.coalesce(step.getTimeoutSeconds(), 0));
-      stepParams.put("retry_policy", Nullables.coalesce(step.getRetryPolicy(), "NONE"));
-      stepParams.put("retry_max_count", Nullables.coalesce(step.getRetryMaxCount(), 0));
-      stepParams.put(KEY_ENABLED, Nullables.coalesce(step.getEnabled(), true));
-      rows.add(stepParams);
-    }
-    definitionMappers.pipelineStepDefinition.insertBatch(rows);
-  }
-
-  private static void validatePipelineSteps(
-      String pipelineType, List<PipelineDefinitionSpec.StepSpec> steps) {
-    List<String> expectedStages = PipelineType.stages(pipelineType);
-    if (EmptyChecks.isNull(steps)
-        || !steps.stream()
-            .map(PipelineDefinitionSpec.StepSpec::getStageCode)
-            .toList()
-            .equals(expectedStages)) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.pipeline.stages_must_match_type", pipelineType);
-    }
-    for (int index = 0; index < steps.size(); index++) {
-      Integer configuredOrder = steps.get(index).getStepOrder();
-      if (!EmptyChecks.isNull(configuredOrder) && configuredOrder != index) {
+    int nextVersion = current == null ? 1 : current.getVersion() + 1;
+    if (current != null) {
+      int rows = definitionMappers.workflowDefinition.updateAndBumpVersion(
+          tenantId,
+          defId,
+          current.getVersion(),
+          Nullables.coalesce(spec.getWorkflowName(), current.getWorkflowName()),
+          Nullables.coalesce(spec.getWorkflowType(), current.getWorkflowType()),
+          Nullables.coalesce(spec.getEnabled(), current.getEnabled()),
+          param.getScheduleEnabled(),
+          scheduleType,
+          spec.getScheduleExpr(),
+          param.getTimezone(),
+          param.getTriggerMode(),
+          spec.getCalendarCode(),
+          spec.getDependsOnJobCode());
+      if (rows == 0) {
         throw BizException.of(
-            ResultCode.INVALID_ARGUMENT, "error.pipeline.step_order_must_match_stage", index + 1);
-      }
-      if (Boolean.FALSE.equals(steps.get(index).getEnabled())) {
-        throw BizException.of(
-            ResultCode.INVALID_ARGUMENT,
-            "error.pipeline.fixed_stage_cannot_be_disabled",
-            steps.get(index).getStageCode());
+            ResultCode.CONFLICT,
+            "error.workflow_full_update.version_conflict",
+            current.getVersion(),
+            current.getVersion());
       }
     }
+    WorkflowDefinitionSaveRequest snapshot = new WorkflowDefinitionSaveRequest();
+    snapshot.setTenantId(tenantId);
+    snapshot.setWorkflowCode(spec.getWorkflowCode());
+    snapshot.setWorkflowName(spec.getWorkflowName());
+    snapshot.setWorkflowType(Nullables.coalesce(spec.getWorkflowType(), "DAG"));
+    snapshot.setEnabled(Nullables.coalesce(spec.getEnabled(), true));
+    snapshot.setScheduleType(scheduleType);
+    snapshot.setScheduleExpr(spec.getScheduleExpr());
+    snapshot.setTimezone(param.getTimezone());
+    snapshot.setTriggerMode(param.getTriggerMode());
+    snapshot.setCalendarCode(spec.getCalendarCode());
+    snapshot.setDependsOnJobCode(spec.getDependsOnJobCode());
+    workflowWriteSupport.appendVersionSnapshot(
+        tenantId, defId, workflowCode, nextVersion, snapshot, param.getScheduleEnabled(), operator);
+  }
+
+  ItemStats migrateLegacyPipelineDefinitions(
+      List<JobDefinitionSpec> jobSpecs,
+      List<PipelineDefinitionSpec> pipelineSpecs,
+      ApplyContext ctx) {
+    if (pipelineSpecs == null || pipelineSpecs.isEmpty()) {
+      return ItemStats.empty();
+    }
+    List<JobDefinitionSpec> mutableJobs = jobSpecs == null ? new ArrayList<>() : jobSpecs;
+    Map<String, JobDefinitionSpec> jobsByCode = new LinkedHashMap<>();
+    mutableJobs.stream()
+        .filter(spec -> Texts.hasText(spec.getJobCode()))
+        .forEach(spec -> jobsByCode.putIfAbsent(spec.getJobCode(), spec));
+
+    ItemStatsAccumulator stats = new ItemStatsAccumulator();
+    List<PipelineDefinitionSpec> candidates = new ArrayList<>();
+    for (PipelineDefinitionSpec pipeline : pipelineSpecs) {
+      String jobCode = pipeline.getJobCode();
+      JobDefinitionSpec job = jobsByCode.get(jobCode);
+      JobDefinitionEntity existing =
+          definitionMappers.jobDefinition.selectByUniqueKey(ctx.tenantId(), jobCode);
+      if (existing != null && ctx.mode() == InitMode.SKIP_EXISTING) {
+        stats.recordSkipped(
+            migrationCode(pipeline),
+            "target Job is skipped; legacy Pipeline settings were not applied");
+        continue;
+      }
+      if (job == null && existing != null) {
+        job = new JobDefinitionSpec();
+        job.setJobCode(existing.getJobCode());
+        job.setJobType(existing.getJobType());
+        job.setDefaultParams(existing.getDefaultParams());
+        mutableJobs.add(job);
+        jobsByCode.put(jobCode, job);
+      }
+      candidates.add(pipeline);
+    }
+
+    if (candidates.isEmpty()) {
+      return stats.toItemStats();
+    }
+    Map<Integer, String> codeByRowNo = new LinkedHashMap<>();
+    List<Map<String, String>> jobRows = new ArrayList<>();
+    int nextRowNo = 2;
+    for (JobDefinitionSpec job : mutableJobs) {
+      if (!jobsByCode.containsKey(job.getJobCode())) {
+        continue;
+      }
+      codeByRowNo.put(nextRowNo, job.getJobCode());
+      jobRows.add(migrationRow(
+          nextRowNo++,
+          "job_code",
+          job.getJobCode(),
+          "job_type",
+          job.getJobType(),
+          "default_params",
+          job.getDefaultParams()));
+    }
+
+    List<Map<String, String>> pipelineRows = new ArrayList<>();
+    List<Map<String, String>> stepRows = new ArrayList<>();
+    Map<Integer, PipelineDefinitionSpec> pipelineByRowNo = new LinkedHashMap<>();
+    for (PipelineDefinitionSpec pipeline : candidates) {
+      int rowNo = nextRowNo++;
+      pipelineByRowNo.put(rowNo, pipeline);
+      codeByRowNo.put(rowNo, pipeline.getJobCode());
+      Map<String, String> pipelineRow = migrationRow(
+          rowNo,
+          "job_code",
+          pipeline.getJobCode(),
+          "pipeline_type",
+          pipeline.getPipelineType(),
+          "version",
+          String.valueOf(Nullables.coalesce(pipeline.getVersion(), 1)),
+          "enabled",
+          String.valueOf(Nullables.coalesce(pipeline.getEnabled(), true)),
+          "worker_group",
+          pipeline.getWorkerGroup(),
+          "biz_type",
+          pipeline.getBizType());
+      pipelineRows.add(pipelineRow);
+      List<PipelineDefinitionSpec.StepSpec> steps =
+          pipeline.getSteps() == null ? List.of() : pipeline.getSteps();
+      for (PipelineDefinitionSpec.StepSpec step : steps) {
+        stepRows.add(migrationRow(
+            rowNo,
+            "job_code",
+            pipeline.getJobCode(),
+            "version",
+            String.valueOf(Nullables.coalesce(pipeline.getVersion(), 1)),
+            "stage_code",
+            step.getStageCode(),
+            "step_order",
+            String.valueOf(Nullables.coalesce(step.getStepOrder(), 0)),
+            "impl_code",
+            step.getImplCode(),
+            "step_params",
+            step.getStepParams(),
+            "timeout_seconds",
+            String.valueOf(Nullables.coalesce(step.getTimeoutSeconds(), 0)),
+            "retry_policy",
+            Nullables.coalesce(step.getRetryPolicy(), "NONE"),
+            "retry_max_count",
+            String.valueOf(Nullables.coalesce(step.getRetryMaxCount(), 0)),
+            "enabled",
+            String.valueOf(Nullables.coalesce(step.getEnabled(), true))));
+      }
+    }
+
+    Result converted = LegacyPipelineJobParameterConverter.convert(
+        ctx.tenantId(), jobRows, pipelineRows, stepRows, definitionMappers.jobDefinition);
+    Map<String, String> convertedDefaults = new HashMap<>();
+    for (Map<String, String> row : converted.jobRows()) {
+      convertedDefaults.put(row.get("job_code"), row.get("default_params"));
+    }
+    Map<String, List<String>> failuresByJob = new LinkedHashMap<>();
+    for (WorkbookIssue issue : converted.issues()) {
+      String jobCode = codeByRowNo.get(issue.rowNo());
+      if (jobCode == null) {
+        candidates.forEach(pipeline -> failuresByJob
+            .computeIfAbsent(pipeline.getJobCode(), ignored -> new ArrayList<>())
+            .add(issue.message()));
+      } else {
+        failuresByJob.computeIfAbsent(jobCode, ignored -> new ArrayList<>()).add(issue.message());
+      }
+    }
+    mutableJobs.removeIf(job -> failuresByJob.containsKey(job.getJobCode()));
+    for (Map.Entry<String, JobDefinitionSpec> entry : jobsByCode.entrySet()) {
+      if (!failuresByJob.containsKey(entry.getKey())
+          && convertedDefaults.containsKey(entry.getKey())) {
+        entry.getValue().setDefaultParams(convertedDefaults.get(entry.getKey()));
+      }
+    }
+    for (Map.Entry<Integer, PipelineDefinitionSpec> entry : pipelineByRowNo.entrySet()) {
+      String jobCode = entry.getValue().getJobCode();
+      List<String> errors = failuresByJob.get(jobCode);
+      String code = migrationCode(entry.getValue());
+      if (errors == null || errors.isEmpty()) {
+        stats.recordMigrated(code, "legacy settings converted to Job default_params by Job type");
+      } else {
+        stats.recordFailed(code, String.join("; ", errors));
+      }
+    }
+    return stats.toItemStats();
+  }
+
+  private static Map<String, String> migrationRow(int rowNo, String... entries) {
+    Map<String, String> row = new LinkedHashMap<>();
+    for (int index = 0; index + 1 < entries.length; index += 2) {
+      if (entries[index + 1] != null) {
+        row.put(entries[index], entries[index + 1]);
+      }
+    }
+    row.put("__excel_row_no", String.valueOf(rowNo));
+    return row;
+  }
+
+  private static String migrationCode(PipelineDefinitionSpec pipeline) {
+    return pipeline.getJobCode() + ":" + pipeline.getPipelineType();
   }
 
   ItemStats applyFileChannels(List<FileChannelSpec> specs, ApplyContext ctx) {

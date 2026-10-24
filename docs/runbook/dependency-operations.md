@@ -50,7 +50,7 @@ bash scripts/ops/inspect-dependencies.sh all
 | Broker 不可达 | Broker health、网络、认证、DNS | 暂停新增派发或启用已有 admission/backpressure；不要在应用侧建本地持久队列 |
 | lag 持续增长 | group lag、worker heartbeat、PG 写入延迟 | 按 worker 类型扩容；检查分区数和单分区热点 |
 | rebalance 卡住 | [kafka-rebalance-stuck.md](./playbooks/kafka-rebalance-stuck.md) | 先 drain，再处理消费者实例；不手工改 offset |
-| DLQ 增长 | DLQ 原因码和 tenant/task | 使用现有 `heal-dead-letters.sh`，重放前确认幂等键和业务审批 |
+| DLQ 增长 | DLQ 原因码和 tenant/task | 用 `inspect-dead-letters.sh` 只读核对；人工重放经 Console 审批，UNKNOWN 还须核实未执行并一次性恢复 |
 
 生产 Kafka 至少应满足 `replication.factor >= 3`、`min.insync.replicas >= 2`、关闭 unclean leader
 election；本地 Compose 是单 Broker，只能用于功能和故障注入，不代表 HA 证据。

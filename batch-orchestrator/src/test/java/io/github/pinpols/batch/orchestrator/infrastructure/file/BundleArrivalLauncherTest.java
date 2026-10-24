@@ -15,6 +15,8 @@ import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
+import io.github.pinpols.batch.orchestrator.mapper.ExpectedWorkOccurrenceMapper;
+import io.github.pinpols.batch.orchestrator.mapper.JobDependencyMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import java.time.LocalDate;
@@ -36,6 +38,8 @@ class BundleArrivalLauncherTest {
 
   private LaunchService launchService;
   private TriggerRequestMapper triggerRequestMapper;
+  private ExpectedWorkOccurrenceMapper expectedWorkOccurrenceMapper;
+  private JobDependencyMapper jobDependencyMapper;
   private BundleArrivalLauncher launcher;
 
   @BeforeEach
@@ -43,9 +47,12 @@ class BundleArrivalLauncherTest {
   void setUp() {
     launchService = mock(LaunchService.class);
     triggerRequestMapper = mock(TriggerRequestMapper.class);
+    expectedWorkOccurrenceMapper = mock(ExpectedWorkOccurrenceMapper.class);
+    jobDependencyMapper = mock(JobDependencyMapper.class);
     ObjectProvider<LaunchService> provider = mock(ObjectProvider.class);
     when(provider.getObject()).thenReturn(launchService);
-    launcher = new BundleArrivalLauncher(provider, triggerRequestMapper);
+    launcher = new BundleArrivalLauncher(
+        provider, triggerRequestMapper, expectedWorkOccurrenceMapper, jobDependencyMapper);
   }
 
   private static FileGovernanceArrivalViews.ArrivalCandidateView file(
@@ -90,6 +97,56 @@ class BundleArrivalLauncherTest {
     Assertions.assertThat(captor.getValue().jobCode()).isEqualTo("BUNDLE_IMPORT_DAILY");
     Assertions.assertThat(captor.getValue().bizDate())
         .isEqualTo(LocalDate.of(2026, Month.JUNE, 21));
+  }
+
+  @Test
+  @DisplayName("完整文件束登记并结清对应业务日预期项")
+  void shouldSatisfyExpectedWorkAfterBundleRequestIsAccepted() {
+    when(jobDependencyMapper.selectCalendarCodeByTenantAndJob("t1", "BUNDLE_IMPORT_DAILY"))
+        .thenReturn("CALENDAR_A");
+    when(launchService.launch(any()))
+        .thenReturn(new LaunchResponse("INST-EXPECTED", "trace-expected"));
+
+    launcher.launchIfBundle(
+        "t1",
+        "GROUP-EXPECTED",
+        List.of(
+            file(
+                801,
+                "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_EXPECTED\"}")));
+
+    verify(expectedWorkOccurrenceMapper)
+        .insertIfAbsent(
+            org.mockito.ArgumentMatchers.eq("t1"),
+            org.mockito.ArgumentMatchers.eq("CALENDAR_A"),
+            org.mockito.ArgumentMatchers.eq(LocalDate.of(2026, 6, 21)),
+            org.mockito.ArgumentMatchers.eq("BUNDLE_IMPORT_DAILY"),
+            org.mockito.ArgumentMatchers.eq("FILE_GROUP"),
+            org.mockito.ArgumentMatchers.eq("GROUP-EXPECTED"),
+            any(),
+            org.mockito.ArgumentMatchers.isNull());
+    verify(expectedWorkOccurrenceMapper)
+        .transitionStatus(
+            "t1",
+            "CALENDAR_A",
+            "BUNDLE_IMPORT_DAILY",
+            "FILE_GROUP",
+            "GROUP-EXPECTED",
+            LocalDate.of(2026, 6, 21),
+            "EXPECTED",
+            "ARRIVED",
+            null);
+    verify(expectedWorkOccurrenceMapper)
+        .transitionStatus(
+            org.mockito.ArgumentMatchers.eq("t1"),
+            org.mockito.ArgumentMatchers.eq("CALENDAR_A"),
+            org.mockito.ArgumentMatchers.eq("BUNDLE_IMPORT_DAILY"),
+            org.mockito.ArgumentMatchers.eq("FILE_GROUP"),
+            org.mockito.ArgumentMatchers.eq("GROUP-EXPECTED"),
+            org.mockito.ArgumentMatchers.eq(LocalDate.of(2026, 6, 21)),
+            org.mockito.ArgumentMatchers.eq("ARRIVED"),
+            org.mockito.ArgumentMatchers.eq("SATISFIED"),
+            org.mockito.ArgumentMatchers.anyString());
   }
 
   @Test

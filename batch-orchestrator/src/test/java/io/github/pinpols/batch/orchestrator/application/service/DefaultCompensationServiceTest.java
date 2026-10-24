@@ -12,25 +12,30 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.orchestrator.application.service.governance.CompensationTransactionExecutor;
 import io.github.pinpols.batch.orchestrator.application.service.governance.DefaultCompensationService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.FileGovernanceService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RetryGovernanceService;
+import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService;
 import io.github.pinpols.batch.orchestrator.domain.command.CompensationSubmitCommand;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.CompensationCommandMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -47,8 +52,9 @@ class DefaultCompensationServiceTest {
   private OrchestratorJobMappers jobMappers;
   private RetryGovernanceService retryGovernanceService;
   private FileGovernanceService fileGovernanceService;
-  private LaunchService launchService;
-  private ObjectProvider<LaunchService> launchServiceProvider;
+  private LaunchApplicationService launchApplicationService;
+  private ObjectProvider<LaunchApplicationService> launchApplicationServiceProvider;
+  private OrchestratorConfigCacheService configCacheService;
   private TaskAssignmentService taskAssignmentService;
   private DefaultCompensationService service;
 
@@ -63,8 +69,9 @@ class DefaultCompensationServiceTest {
         mock(TriggerRequestMapper.class));
     retryGovernanceService = mock(RetryGovernanceService.class);
     fileGovernanceService = mock(FileGovernanceService.class);
-    launchService = mock(LaunchService.class);
-    launchServiceProvider = mock(ObjectProvider.class);
+    launchApplicationService = mock(LaunchApplicationService.class);
+    launchApplicationServiceProvider = mock(ObjectProvider.class);
+    configCacheService = mock(OrchestratorConfigCacheService.class);
     taskAssignmentService = mock(TaskAssignmentService.class);
 
     service = new DefaultCompensationService(
@@ -72,7 +79,8 @@ class DefaultCompensationServiceTest {
         jobMappers,
         retryGovernanceService,
         fileGovernanceService,
-        launchServiceProvider,
+        launchApplicationServiceProvider,
+        configCacheService,
         taskAssignmentService,
         new CompensationTransactionExecutor(new PlatformTransactionManager() {
           @Override
@@ -86,7 +94,7 @@ class DefaultCompensationServiceTest {
           @Override
           public void rollback(TransactionStatus status) {}
         }));
-    when(launchServiceProvider.getObject()).thenReturn(launchService);
+    when(launchApplicationServiceProvider.getObject()).thenReturn(launchApplicationService);
   }
 
   // ── validate() ────────────────────────────────────────────────────────────
@@ -296,7 +304,8 @@ class DefaultCompensationServiceTest {
     sourceInstance.setBatchNo("batch-100");
     sourceInstance.setTraceId("trace-source");
     when(jobMappers.jobInstanceMapper.selectById("t1", 100L)).thenReturn(sourceInstance);
-    when(launchService.launch(any(LaunchRequest.class)))
+    stubManagedWorkflow("JOB_CODE", 10L);
+    when(launchApplicationService.launchFromTrustedQueue(any(LaunchRequest.class)))
         .thenReturn(new LaunchResponse("inst-101", "trace-new"));
 
     JobInstanceEntity launched = new JobInstanceEntity();
@@ -307,8 +316,15 @@ class DefaultCompensationServiceTest {
     String commandNo = service.submit(cmd);
 
     assertThat(commandNo).isNotBlank();
-    verify(launchService).launch(any(LaunchRequest.class));
-    verify(jobMappers.triggerRequestMapper).insert(Mockito.any());
+    ArgumentCaptor<LaunchRequest> launchCaptor = ArgumentCaptor.forClass(LaunchRequest.class);
+    verify(launchApplicationService).launchFromTrustedQueue(launchCaptor.capture());
+    assertThat(launchCaptor.getValue().workflowDefinitionId()).isEqualTo(110L);
+    assertThat(launchCaptor.getValue().jobCode()).isNull();
+    ArgumentCaptor<TriggerRequestEntity> triggerCaptor =
+        ArgumentCaptor.forClass(TriggerRequestEntity.class);
+    verify(jobMappers.triggerRequestMapper).insert(triggerCaptor.capture());
+    assertThat(triggerCaptor.getValue().getWorkflowDefinitionId()).isEqualTo(110L);
+    assertThat(triggerCaptor.getValue().getJobCode()).isNull();
   }
 
   @Test
@@ -333,18 +349,34 @@ class DefaultCompensationServiceTest {
     when(compensationCommandMapper.countRunningByTarget(
             anyString(), anyString(), any(), anyString()))
         .thenReturn(0);
-    when(launchService.launch(any(LaunchRequest.class)))
+    stubManagedWorkflow("BATCH_JOB_CODE", 20L);
+    when(launchApplicationService.launchFromTrustedQueue(any(LaunchRequest.class)))
         .thenReturn(new LaunchResponse("inst-200", "trace-batch"));
     when(jobMappers.jobInstanceMapper.selectByInstanceNo("t1", "inst-200")).thenReturn(null);
 
     String commandNo = service.submit(cmd);
 
     assertThat(commandNo).isNotBlank();
-    verify(launchService).launch(any(LaunchRequest.class));
+    verify(launchApplicationService).launchFromTrustedQueue(any(LaunchRequest.class));
     verify(jobMappers.triggerRequestMapper).insert(Mockito.any());
   }
 
   // ── helpers ───────────────────────────────────────────────────────────────
+
+  private void stubManagedWorkflow(String jobCode, Long jobId) {
+    when(configCacheService.findEnabledJobDefinition("t1", jobCode))
+        .thenReturn(JobDefinitionEntity.builder()
+            .id(jobId)
+            .tenantId("t1")
+            .jobCode(jobCode)
+            .jobType("GENERAL")
+            .version(1)
+            .enabled(true)
+            .build());
+    when(configCacheService.findEnabledSingleJobWorkflowDefinition("t1", jobId))
+        .thenReturn(new WorkflowDefinitionEntity(
+            jobId + 100, "t1", "WF_" + jobCode, "WF " + jobCode, "SINGLE_JOB", 1, true, jobId));
+  }
 
   private static CompensationSubmitCommand command(
       String tenantId, String compensationType, Long targetId) {

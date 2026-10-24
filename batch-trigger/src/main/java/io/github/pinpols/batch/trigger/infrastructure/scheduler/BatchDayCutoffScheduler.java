@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.trigger.infrastructure.scheduler;
 
+import io.github.pinpols.batch.trigger.domain.param.BatchDayInstanceMarkCutoffParam;
+
+
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -69,12 +72,15 @@ public class BatchDayCutoffScheduler {
       if (localTime.isBefore(cutoffTime)) {
         continue;
       }
+      BatchDayInstanceMarkCutoffParam batchDayInstanceMarkCutoffParam = BatchDayInstanceMarkCutoffParam.builder()
+          .id(candidate.getId())
+          .tenantId(candidate.getTenantId())
+          .calendarCode(candidate.getCalendarCode())
+          .bizDate(candidate.getBizDate())
+          .cutoffAt(now)
+          .build();
       int updated = batchDayInstanceMapper.markCutoff(
-          candidate.getId(),
-          candidate.getTenantId(),
-          candidate.getCalendarCode(),
-          candidate.getBizDate(),
-          now);
+          batchDayInstanceMarkCutoffParam);
       if (updated > 0) {
         log.info(
             "batch day cutoff applied: tenantId={}, calendarCode={}, bizDate={}," + " cutoffAt={}",

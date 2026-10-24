@@ -1,0 +1,185 @@
+{
+  "baseline": "before fixture relocation in this worktree",
+  "files": [
+    {
+      "source": "docs/test-data/sim-stage6c-trigger-fixtures.sql",
+      "target": "test-data/sim/sim-stage6c-trigger-fixtures.sql",
+      "sha256": "85bbc4af469fc8500c1c23b1beb90b0e70ff3801b5c5e181227455eee6a6c6c3"
+    },
+    {
+      "source": "docs/test-data/sim-stage2d-reset-errors.sql",
+      "target": "test-data/sim/sim-stage2d-reset-errors.sql",
+      "sha256": "6f5b838e43b36b0b9d23f3e28338c7d339a30e9f44c5967b77728e1c8b6e2bac"
+    },
+    {
+      "source": "docs/test-data/sim-stage2e-import-checkpoint-business.sql",
+      "target": "test-data/sim/sim-stage2e-import-checkpoint-business.sql",
+      "sha256": "38422006d7a24251c47663f1128341da74ae5bc863fec14611fc3d62dd9ef872"
+    },
+    {
+      "source": "docs/test-data/sim-stage5c-dispatch-file.sql",
+      "target": "test-data/sim/sim-stage5c-dispatch-file.sql",
+      "sha256": "8705e79d97e70e01740569467254729ac59c6c1ec96fe088a924d665aef0ba2e"
+    },
+    {
+      "source": "docs/test-data/sim-stage2b-import-fixtures.sql",
+      "target": "test-data/sim/sim-stage2b-import-fixtures.sql",
+      "sha256": "b341c883c62a7789e62102f108961337eef85f96c4ffd094b49caeb7b633f008"
+    },
+    {
+      "source": "docs/test-data/sim-stage2c-import-matrix-fixtures.sql",
+      "target": "test-data/sim/sim-stage2c-import-matrix-fixtures.sql",
+      "sha256": "106a1ea7857f106132e37059d1ba8197b6381bd90cb8010cee93b1c159039b38"
+    },
+    {
+      "source": "docs/test-data/sim-stage6d-trigger-pause.sql",
+      "target": "test-data/sim/sim-stage6d-trigger-pause.sql",
+      "sha256": "52d5ec645430873d21533ca3d8051d2a040357191c36703935f426aa2120bdba"
+    },
+    {
+      "source": "docs/test-data/sim-import-tenants-verify.sql",
+      "target": "test-data/sim/sim-import-tenants-verify.sql",
+      "sha256": "57b20e69123631a2c9ecbf50e866ace8a6fc9c1c11ab1464a3c8f7b2669fdfdd"
+    },
+    {
+      "source": "docs/test-data/sim-stage4-process-platform-fixtures.sql",
+      "target": "test-data/sim/sim-stage4-process-platform-fixtures.sql",
+      "sha256": "3fbe65da8273ce2969c9d478683bd4da0341c0893ead0c60ad0f21c15a3a2a7c"
+    },
+    {
+      "source": "docs/test-data/sim-stage5-dispatch-file.sql",
+      "target": "test-data/sim/sim-stage5-dispatch-file.sql",
+      "sha256": "41e31a7339c17343e579ffb3c22045f56374a54dbb995ef9286ae4e72628ae4b"
+    },
+    {
+      "source": "docs/test-data/sim-stage2e-import-checkpoint.sql",
+      "target": "test-data/sim/sim-stage2e-import-checkpoint.sql",
+      "sha256": "8cfad05954c53c03351d973ddcc2dba832b45f2bc2e11ada7f2cf57cb4e8d4ef"
+    },
+    {
+      "source": "docs/test-data/sim-stage4c-process-business.sql",
+      "target": "test-data/sim/sim-stage4c-process-business.sql",
+      "sha256": "226030dd8c45749a9d948eddfb176b5c79e81b193616f1d0aeab5f4d96445c59"
+    },
+    {
+      "source": "docs/test-data/sim-bundle-import-fixtures.sql",
+      "target": "test-data/sim/sim-bundle-import-fixtures.sql",
+      "sha256": "e356075b525990d29d25a1e0f0fefd345963754549d269b0894a92ab2541ae7e"
+    },
+    {
+      "source": "docs/test-data/sim-stage2c-import-matrix-business.sql",
+      "target": "test-data/sim/sim-stage2c-import-matrix-business.sql",
+      "sha256": "5d36611a729627f990bed7fb8357e36963e2a9894815c83306d15bab67c85485"
+    },
+    {
+      "source": "docs/test-data/sim-stage4-process-business-fixtures.sql",
+      "target": "test-data/sim/sim-stage4-process-business-fixtures.sql",
+      "sha256": "c1afcbec8ed36f1b5387ad706f4bb4a67f7a2991ed0470346003c5f030cccb11"
+    },
+    {
+      "source": "docs/test-data/sim-stage3c-export-source.sql",
+      "target": "test-data/sim/sim-stage3c-export-source.sql",
+      "sha256": "83a6a7deeb7c2425a1714217b175e10cd3f5b2cac3540313e41fcf01cd55aa22"
+    },
+    {
+      "source": "docs/test-data/sim06-sdk-dispatch-echo-fixtures.sql",
+      "target": "test-data/sim/sim06-sdk-dispatch-echo-fixtures.sql",
+      "sha256": "28cde9060cd75d53fd8e9d6f135045be2fac83cdddc4f1d8c39ab146f874eb38"
+    },
+    {
+      "source": "docs/test-data/sim-stage6d-trigger-fixtures.sql",
+      "target": "test-data/sim/sim-stage6d-trigger-fixtures.sql",
+      "sha256": "55829272bbd325db4a9c3f7de0a19553122ccd1d9dfca8eab39c46c66eece5d0"
+    },
+    {
+      "source": "docs/test-data/sim-stage3b-export-source.sql",
+      "target": "test-data/sim/sim-stage3b-export-source.sql",
+      "sha256": "0d98080c7762f0506f7dabbe665ace4519c33fdde6c720b0f80bda546cace99b"
+    },
+    {
+      "source": "docs/test-data/sim-stage6d-trigger-outbox-retry.sql",
+      "target": "test-data/sim/sim-stage6d-trigger-outbox-retry.sql",
+      "sha256": "6eb23b1635ff9d0809ad30fa975bdce65a78db6053bb621c4715598db876316c"
+    },
+    {
+      "source": "docs/test-data/sim-stage4c-process-platform.sql",
+      "target": "test-data/sim/sim-stage4c-process-platform.sql",
+      "sha256": "5c6f69d2eae71529677799073041b69811d530850c11a545c21e237fb5856f04"
+    },
+    {
+      "source": "docs/test-data/sim-stage5b-dispatch-fixtures.sql",
+      "target": "test-data/sim/sim-stage5b-dispatch-fixtures.sql",
+      "sha256": "00d98ea8df5bf03df8b25f4b72fcd5cdcbf01c91d1f9d62ec41101ab671f8422"
+    },
+    {
+      "source": "docs/test-data/sim-stage2c-import-matrix-stale.sql",
+      "target": "test-data/sim/sim-stage2c-import-matrix-stale.sql",
+      "sha256": "52b47aa70ecc34a5de8b57cd45d31002edf894e4e3c78cd468c0675942877ec4"
+    },
+    {
+      "source": "docs/test-data/sim-e2e-bootstrap.sql",
+      "target": "test-data/sim/sim-e2e-bootstrap.sql",
+      "sha256": "0fd91eceeec7b120ff7c8fbd590d0b5e17b5f36fa94db6088b47ee4f68b999a7"
+    },
+    {
+      "source": "docs/test-data/sim-stage3b-export-fixtures.sql",
+      "target": "test-data/sim/sim-stage3b-export-fixtures.sql",
+      "sha256": "c147185000de94760cf7c5a69f10b0ad19f4961fad7c2e8723701042abd65860"
+    },
+    {
+      "source": "docs/test-data/sim-stage6d-trigger-resume.sql",
+      "target": "test-data/sim/sim-stage6d-trigger-resume.sql",
+      "sha256": "5d5d1640281919afd870c832ce8dbf0240d5a36d9ae880f5fd4b0adbb30b8322"
+    },
+    {
+      "source": "docs/test-data/sim-stage5c-atomic-params.json",
+      "target": "test-data/sim/sim-stage5c-atomic-params.json",
+      "sha256": "28de9a429fd17fedbd61d0e6ab7935d82f850f0e9cf4c836c099364bfb4e3632"
+    },
+    {
+      "source": "docs/test-data/sim-stage3-export-source.sql",
+      "target": "test-data/sim/sim-stage3-export-source.sql",
+      "sha256": "c391b1ba746c464173d592344694a19addeff2671eae7fe43c83401135937acc"
+    },
+    {
+      "source": "docs/test-data/sim-stage4b-process-source-v1.sql",
+      "target": "test-data/sim/sim-stage4b-process-source-v1.sql",
+      "sha256": "083038cfe4b8a8597e40c8ebd7cf14aa2ee84a4494785e8912dfac6433381d25"
+    },
+    {
+      "source": "docs/test-data/sim-stage5c-dispatch-channels-platform.sql",
+      "target": "test-data/sim/sim-stage5c-dispatch-channels-platform.sql",
+      "sha256": "a3a27a9dce087af4d53bd93c71be8275a023c497f977f9f1e276cd6d4f72e3e3"
+    },
+    {
+      "source": "docs/test-data/sim-stage4b-process-stale-staging.sql",
+      "target": "test-data/sim/sim-stage4b-process-stale-staging.sql",
+      "sha256": "e9ced4f6a9540580e692524e31f709840233f2a10eb1a9e60bec1c30e5878bb9"
+    },
+    {
+      "source": "docs/test-data/sim-stage4b-process-source-v2.sql",
+      "target": "test-data/sim/sim-stage4b-process-source-v2.sql",
+      "sha256": "0169663947f5f7cf3a7646646e76e73b400f327dc140b0aed7bc5f72c67a2bd6"
+    },
+    {
+      "source": "docs/test-data/test-full-coverage-import-suite/ta-tenant-config-package-test.xlsx",
+      "target": "test-data/tenant-config-packages/ta-tenant-config-package-test.xlsx",
+      "sha256": "53dae12cb8ec2bbecbecf797a9db04cc63a20b9e37f7cebe2f71bead21673eac"
+    },
+    {
+      "source": "docs/test-data/test-full-coverage-import-suite/tb-tenant-config-package-test.xlsx",
+      "target": "test-data/tenant-config-packages/tb-tenant-config-package-test.xlsx",
+      "sha256": "659f2b000147e06e927e8ef19b8b1762d61247e37cfe8c73f9f58d66d7bc149a"
+    },
+    {
+      "source": "docs/test-data/test-full-coverage-import-suite/tc-tenant-config-package-test.xlsx",
+      "target": "test-data/tenant-config-packages/tc-tenant-config-package-test.xlsx",
+      "sha256": "83c17e1ec2e7d2f577a17361a0374aec0bebd87b565ef257868e24ffc4141fe1"
+    },
+    {
+      "source": "docs/test-data/test-full-coverage-import-suite/default-tenant-config-package-test.xlsx",
+      "target": "test-data/tenant-config-packages/default-tenant-config-package-test.xlsx",
+      "sha256": "be9ec2bd081bc17e6900d7114f73918e2a3103bdd1f0e389692e9f23df37c1ae"
+    }
+  ]
+}

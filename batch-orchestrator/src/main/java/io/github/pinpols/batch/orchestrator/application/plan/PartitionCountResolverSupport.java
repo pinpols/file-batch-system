@@ -35,7 +35,9 @@ final class PartitionCountResolverSupport {
       return number.intValue();
     }
     try {
-      return Integer.parseInt(String.valueOf(value).trim());
+      String rawValue = String.valueOf(value);
+      String normalizedValue = rawValue.trim();
+      return Integer.parseInt(normalizedValue);
     } catch (NumberFormatException ignored) {
       SwallowedExceptionLogger.info(owner, "catch:NumberFormatException", ignored);
       return 0;
@@ -50,7 +52,9 @@ final class PartitionCountResolverSupport {
       return number.longValue();
     }
     try {
-      return Long.parseLong(String.valueOf(value).trim());
+      String rawValue = String.valueOf(value);
+      String normalizedValue = rawValue.trim();
+      return Long.parseLong(normalizedValue);
     } catch (NumberFormatException ignored) {
       SwallowedExceptionLogger.info(owner, "catch:NumberFormatException", ignored);
       return 0L;

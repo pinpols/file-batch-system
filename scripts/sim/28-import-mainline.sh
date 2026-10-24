@@ -28,6 +28,7 @@ import json
 import os
 import subprocess
 import sys
+from scripts.sim.launch_contract import workflow_id_for_fixture
 import time
 import urllib.request
 
@@ -108,7 +109,7 @@ def launch(tenant, job, template_code, header, row_builder):
     content = f"{header}\n{rows}\n"
     body = {
         "tenantId": tenant,
-        "jobCode": job,
+        "workflowDefinitionId": workflow_id_for_fixture(tenant, job),
         "triggerType": "API",
         "bizDate": BIZ,
         "requestId": request_id,

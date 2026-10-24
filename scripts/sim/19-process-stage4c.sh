@@ -26,10 +26,10 @@ batch_require_python
 echo "==> seed process stage4c fixtures"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
   -v ON_ERROR_STOP=1 -v biz_date="$BIZ_DATE" \
-  -f /dev/stdin < docs/test-data/sim-stage4c-process-business.sql >/dev/null
+  -f /dev/stdin < test-data/sim/sim-stage4c-process-business.sql >/dev/null
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 \
-  -f /dev/stdin < docs/test-data/sim-stage4c-process-platform.sql >/dev/null
+  -f /dev/stdin < test-data/sim/sim-stage4c-process-platform.sql >/dev/null
 
 START_TS="$(docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -tA -f /dev/stdin < "$SIM_SQL_DIR/select-current-timestamp.sql")"
@@ -37,6 +37,7 @@ export START_TS
 
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/process-stage4c.log"
 import json, os, subprocess, sys, time, urllib.error, urllib.parse, urllib.request
+from scripts.sim.launch_contract import workflow_id_for_fixture
 from pathlib import Path
 
 BASE = os.environ["TRIGGER_BASE"]
@@ -60,7 +61,7 @@ def launch(job, label, params):
     rid = f"sim-stage4c-{label}-{int(time.time()*1000)%100000000}"
     body = {
         "tenantId": "ta",
-        "jobCode": job,
+        "workflowDefinitionId": workflow_id_for_fixture("ta", job),
         "triggerType": "API",
         "bizDate": BIZ,
         "requestId": rid,
@@ -166,8 +167,21 @@ cancel_status = ""
 while time.time() < deadline:
     out = psql_file(os.environ["PLATFORM_DB"], "select-process-stage4c-cancel-status-value.sql", {"tenant_id": "ta", "instance_id": cancel_instance}, tuples=True)
     cancel_status = (out.stdout or "").strip()
-    if cancel_status and not any(x in cancel_status for x in ("RUNNING", "READY", "CREATED")):
-        break
+    if cancel_status:
+        values = cancel_status.split("|", 4)
+        if len(values) == 5:
+            instance_status, partition_status, task_status, _, _ = values
+            instance_terminal = instance_status in (
+                "SUCCESS", "FAILED", "PARTIAL_FAILED", "CANCELLED", "TERMINATED"
+            )
+            partition_terminal = partition_status in (
+                "SUCCESS", "FAILED", "CANCELLED", "TERMINATED"
+            )
+            task_terminal = task_status in (
+                "SUCCESS", "FAILED", "CANCELLED", "TERMINATED"
+            )
+            if instance_terminal and partition_terminal and task_terminal:
+                break
     time.sleep(3)
 
 print("\n-- cancel_status --", flush=True)
@@ -181,7 +195,20 @@ if not summary.startswith("4|4|16|296.00|16|16|"):
 if cancel_http != "200":
     print("❌ Process Stage4c cancel API assertion failed", flush=True)
     sys.exit(1)
-if not cancel_status.startswith("FAILED|FAILED|FAILED"):
+cancel_values = cancel_status.split("|", 4)
+if len(cancel_values) != 5:
+    print(f"❌ Process Stage4c cancel terminal state is incomplete: {cancel_status}", flush=True)
+    sys.exit(1)
+instance_status, partition_status, task_status, cancel_requested, error_code = cancel_values
+# FAILED 和 CANCELLED 是不同的分区终态；实例汇总会将
+# 两者都计为失败。保持 Worker 取消信号精确，避免误接收其他失败。
+if (
+    instance_status != "FAILED"
+    or partition_status not in ("FAILED", "CANCELLED")
+    or task_status != "CANCELLED"
+    or cancel_requested != "true"
+    or error_code != "WORKER_EXECUTION_CANCELLED"
+):
     print("❌ Process Stage4c cancel interrupt assertion failed", flush=True)
     sys.exit(1)
 

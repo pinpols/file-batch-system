@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.CalendarDependencyWaitMapper">
+
+    <resultMap id="CalendarDependencyWaitResultMap"
+               type="io.github.pinpols.batch.orchestrator.domain.entity.CalendarDependencyWaitEntity">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="calendar_code" javaType="java.lang.String"/>
+            <arg column="biz_date" javaType="java.time.LocalDate"/>
+            <arg column="wait_status" javaType="java.lang.String"/>
+            <arg column="blocked_reason" javaType="java.lang.String"/>
+            <arg column="first_waiting_at" javaType="java.time.Instant"/>
+            <arg column="last_checked_at" javaType="java.time.Instant"/>
+            <arg column="attempt_count" javaType="java.lang.Integer"/>
+            <arg column="cutoff_at" javaType="java.time.Instant"/>
+            <arg column="sla_deadline_at" javaType="java.time.Instant"/>
+            <arg column="timezone_snapshot" javaType="java.lang.String"/>
+            <arg column="dst_policy_snapshot" javaType="java.lang.String"/>
+            <arg column="opened_at" javaType="java.time.Instant"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+            <arg column="timeout_alerted_at" javaType="java.time.Instant"/>
+            <arg column="dependency_snapshot" javaType="java.lang.String"/>
+            <arg column="manual_action" javaType="java.lang.String"/>
+            <arg column="manual_operator_id" javaType="java.lang.String"/>
+            <arg column="manual_reason" javaType="java.lang.String"/>
+            <arg column="manual_requested_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="upsertWaiting"
+            parameterType="io.github.pinpols.batch.orchestrator.domain.entity.CalendarDependencyWaitEntity">
+        insert into batch.calendar_dependency_wait (
+            tenant_id, calendar_code, biz_date, wait_status, blocked_reason,
+            first_waiting_at, last_checked_at, attempt_count, cutoff_at,
+            sla_deadline_at, timezone_snapshot, dst_policy_snapshot, dependency_snapshot
+        ) values (
+            #{tenantId}, #{calendarCode}, #{bizDate}, 'WAITING', #{blockedReason},
+            #{firstWaitingAt}, #{lastCheckedAt}, 1, #{cutoffAt}, #{slaDeadlineAt},
+            #{timezoneSnapshot}, #{dstPolicySnapshot}, #{dependencySnapshot}::jsonb
+        )
+        on conflict (tenant_id, calendar_code, biz_date) do update
+        set blocked_reason = excluded.blocked_reason,
+            last_checked_at = excluded.last_checked_at,
+            attempt_count = batch.calendar_dependency_wait.attempt_count + 1,
+            updated_at = current_timestamp
+        where batch.calendar_dependency_wait.wait_status = 'WAITING'
+    </insert>
+
+    <select id="selectByTenantCalendarBizDate" resultMap="CalendarDependencyWaitResultMap">
+        select *
+        from batch.calendar_dependency_wait
+        where tenant_id = #{tenantId}
+          and calendar_code = #{calendarCode}
+          and biz_date = #{bizDate}
+    </select>
+
+    <select id="countWaitingByTenantCalendarBizDate" resultType="int">
+        select count(*)
+          from batch.calendar_dependency_wait
+         where tenant_id = #{tenantId}
+           and calendar_code = #{calendarCode}
+           and biz_date = #{bizDate}
+           and wait_status = 'WAITING'
+    </select>
+
+    <select id="selectWaitingForUpdate" resultMap="CalendarDependencyWaitResultMap">
+        select *
+        from batch.calendar_dependency_wait
+        where tenant_id = #{tenantId}
+          and calendar_code = #{calendarCode}
+          and wait_status = 'WAITING'
+          and last_checked_at &lt; #{checkedBefore}
+        order by biz_date, id
+        limit #{limit}
+        for update skip locked
+    </select>
+
+    <update id="updateCheckResult">
+        update batch.calendar_dependency_wait
+        set blocked_reason = #{blockedReason},
+            last_checked_at = #{checkedAt},
+            attempt_count = attempt_count + 1,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and wait_status = 'WAITING'
+    </update>
+
+    <update id="updateStatus">
+        update batch.calendar_dependency_wait
+        set wait_status = #{waitStatus},
+            opened_at = #{openedAt},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and wait_status = 'WAITING'
+    </update>
+
+    <update id="claimTimeoutAlert">
+        update batch.calendar_dependency_wait
+        set timeout_alerted_at = #{alertedAt},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and wait_status = 'WAITING'
+          and timeout_alerted_at is null
+    </update>
+
+    <select id="selectRecent" resultMap="CalendarDependencyWaitResultMap">
+        select *
+          from batch.calendar_dependency_wait
+         where tenant_id = #{tenantId}
+        <if test="calendarCode != null and calendarCode != ''">
+           and calendar_code = #{calendarCode}
+        </if>
+        <if test="waitStatus != null and waitStatus != ''">
+           and wait_status = #{waitStatus}
+        </if>
+         order by case when wait_status = 'WAITING' then 0 else 1 end,
+                  biz_date desc, id desc
+         limit #{limit}
+    </select>
+
+    <update id="requestManualAction">
+        update batch.calendar_dependency_wait
+           set manual_action = #{manualAction},
+               manual_operator_id = #{operatorId},
+               manual_reason = #{reason},
+               manual_requested_at = #{requestedAt},
+               updated_at = current_timestamp
+         where tenant_id = #{tenantId}
+           and id = #{id}
+           and wait_status = 'WAITING'
+           and manual_action is null
+    </update>
+</mapper>

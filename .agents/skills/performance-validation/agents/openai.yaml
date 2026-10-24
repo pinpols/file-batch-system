@@ -1,0 +1,3 @@
+interface:
+  display_name: "性能与容量验证"
+  short_description: "规划可比较的负载与容量验证，以真实业务结果评估性能改动风险"

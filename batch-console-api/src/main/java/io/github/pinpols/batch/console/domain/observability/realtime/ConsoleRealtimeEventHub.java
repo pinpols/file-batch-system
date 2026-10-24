@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeSubscriptionPort;
 import io.github.pinpols.batch.console.config.ConsoleAsyncConfiguration;
@@ -97,21 +98,20 @@ public class ConsoleRealtimeEventHub implements ConsoleRealtimeSubscriptionPort 
     registerLifecycle(subscription);
 
     long interval = resolveHeartbeatInterval(heartbeatMillis);
-    subscription.heartbeatFuture.set(scheduler.scheduleAtFixedRate(
-        () -> sendHeartbeat(subscription),
-        Instant.now().plusMillis(interval),
-        Duration.ofMillis(interval)));
+    Runnable heartbeatTask = () -> sendHeartbeat(subscription);
+    Instant scheduledNow = Instant.now();
+    Instant firstHeartbeatAt = scheduledNow.plusMillis(interval);
+    Duration heartbeatPeriod = Duration.ofMillis(interval);
+    ScheduledFuture<?> heartbeatFuture =
+        scheduler.scheduleAtFixedRate(heartbeatTask, firstHeartbeatAt, heartbeatPeriod);
+    subscription.heartbeatFuture.set(heartbeatFuture);
 
     // 订阅建立后立即回一个 ready 事件，前端可据此确认流已连通并拿到当前 cursor/stream。
-    sendLifecycleEvent(
-        subscription,
-        "ready",
-        new ConsoleSseEventResponse(
-            resolvedStream,
-            "ready",
-            cursor,
-            eventSnapshot(subscription, "connected"),
-            BatchDateTimeSupport.utcNow()));
+    Object readySnapshot = eventSnapshot(subscription, "connected");
+    Instant readyEmittedAt = BatchDateTimeSupport.utcNow();
+    ConsoleSseEventResponse readyEvent =
+        new ConsoleSseEventResponse(resolvedStream, "ready", cursor, readySnapshot, readyEmittedAt);
+    sendLifecycleEvent(subscription, "ready", readyEvent);
     replay(subscription);
     return emitter;
   }
@@ -142,15 +142,7 @@ public class ConsoleRealtimeEventHub implements ConsoleRealtimeSubscriptionPort 
       if (!matches(subscription, event)) {
         continue;
       }
-      sendLifecycleEvent(
-          subscription,
-          event.eventType(),
-          new ConsoleSseEventResponse(
-              event.stream(),
-              event.eventType(),
-              event.cursor(),
-              event.data(),
-              event.emittedAt() != null ? event.emittedAt() : BatchDateTimeSupport.utcNow()));
+      sendLifecycleEvent(subscription, event.eventType(), toResponse(event));
     }
   }
 
@@ -178,15 +170,13 @@ public class ConsoleRealtimeEventHub implements ConsoleRealtimeSubscriptionPort 
       return;
     }
     // 心跳只用于保活和连接探测，不承载业务数据。
-    sendLifecycleEvent(
-        subscription,
-        "heartbeat",
-        new ConsoleSseEventResponse(
-            subscription.stream,
-            "heartbeat",
-            subscription.cursor,
-            eventSnapshot(subscription, "alive"),
-            BatchDateTimeSupport.utcNow()));
+    String stream = subscription.stream;
+    String cursor = subscription.cursor;
+    Object heartbeatSnapshot = eventSnapshot(subscription, "alive");
+    Instant heartbeatEmittedAt = BatchDateTimeSupport.utcNow();
+    ConsoleSseEventResponse heartbeatEvent = new ConsoleSseEventResponse(
+        stream, "heartbeat", cursor, heartbeatSnapshot, heartbeatEmittedAt);
+    sendLifecycleEvent(subscription, "heartbeat", heartbeatEvent);
   }
 
   private void sendLifecycleEvent(
@@ -242,15 +232,7 @@ public class ConsoleRealtimeEventHub implements ConsoleRealtimeSubscriptionPort 
     for (ConsoleRealtimeStreamEnvelope envelope : replayBatch.events()) {
       ConsoleSseEvent event = toEvent(envelope);
       if (event != null) {
-        sendLifecycleEvent(
-            subscription,
-            event.eventType(),
-            new ConsoleSseEventResponse(
-                event.stream(),
-                event.eventType(),
-                event.cursor(),
-                event.data(),
-                event.emittedAt() != null ? event.emittedAt() : BatchDateTimeSupport.utcNow()));
+        sendLifecycleEvent(subscription, event.eventType(), toResponse(event));
       }
     }
     realtimeMetrics.recordReplayDelivered(
@@ -302,6 +284,16 @@ public class ConsoleRealtimeEventHub implements ConsoleRealtimeSubscriptionPort 
 
   private String normalizeFilter(String value) {
     return value == null || value.isBlank() ? null : value.trim();
+  }
+
+  private static ConsoleSseEventResponse toResponse(ConsoleSseEvent event) {
+    String stream = event.stream();
+    String eventType = event.eventType();
+    String cursor = event.cursor();
+    Object data = event.data();
+    Instant emittedAt =
+        EmptyChecks.isNotNull(event.emittedAt()) ? event.emittedAt() : BatchDateTimeSupport.utcNow();
+    return new ConsoleSseEventResponse(stream, eventType, cursor, data, emittedAt);
   }
 
   private Object eventSnapshot(Subscription subscription, String status) {

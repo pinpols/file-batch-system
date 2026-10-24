@@ -21,7 +21,7 @@
 - Retry topics: `tenantId:jobCode:instanceNo:partitionId:attemptNo`
 - Dead-letter topics: `tenantId:jobCode:instanceNo:partitionId:taskId`
 - Outbox topics: `tenantId:eventName:aggregateType:aggregateId`
-- Trigger launch (`batch.trigger.launch.v1`): `tenantId:jobCode`
+- Trigger launch (`batch.trigger.launch.v1`): `tenantId:requestId`; launch roots identify a Workflow with `workflowDefinitionId` and do not accept a JobCode root.
 
 ## 事件体字段
 

@@ -33,6 +33,8 @@ SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 
 bootstrap_server="${KAFKA_BOOTSTRAP_SERVER:-$BATCH_DEFAULT_KAFKA_CONTAINER_BOOTSTRAP}"
 kafka_container_bin_dir="${KAFKA_CONTAINER_BIN_DIR:-$BATCH_DEFAULT_KAFKA_CONTAINER_BIN_DIR}"
+topic_namespace="${BATCH_KAFKA_NAMESPACE:-}"
+batch_validate_kafka_namespace "$topic_namespace"
 tenants_csv="${TENANTS:?TENANTS env required, e.g. TENANTS=bigcorp,acme}"
 worker_types_csv="${WORKER_TYPES:-import,export,process,dispatch,atomic}"
 partitions="${KAFKA_PARTITIONS_DISPATCH:-${KAFKA_TOPIC_PARTITIONS:-4}}"
@@ -124,6 +126,7 @@ for raw_tenant in $(IFS=','; echo "$tenants_csv"); do
     wt="$(echo "${raw_type}" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
     [ -n "${wt}" ] || continue
     topic="batch.task.dispatch.${wt}.${tenant}"
+    topic="$(batch_namespace_kafka_name "$topic" "$topic_namespace")"
     echo "Creating ${topic} (partitions=${partitions}, rf=${replication_factor})"
     ensure_topic "${topic}"
   done

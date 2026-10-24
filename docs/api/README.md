@@ -53,4 +53,4 @@ python3 scripts/ci/check-console-openapi-paths.py
 |---|---|
 | 控制台菜单树 + 角色可见性 | [`../design/console-sidebar-menu-tree.md`](../design/console-sidebar-menu-tree.md) |
 | Console-API 读写分离 | [`../runbook/read-replica.md`](../runbook/read-replica.md) |
-| Console-API 历史 gap 快照 | [`../design/api-gap-analysis.md`](../design/api-gap-analysis.md)；当前契约以本目录 OpenAPI 为准 |
+| Console-API 历史 gap 快照 | [`../design/api-gap-analysis.md`](../archive/analysis/api-gap-analysis-2026-04-10.md)；当前契约以本目录 OpenAPI 为准 |

@@ -103,7 +103,7 @@ MinIO 主进程及 `minio-init` 应为 1001:1001，Valkey 的 PID 1 与服务进
 - Loki
 - Grafana
 
-对应脚本在 [scripts/docker/observability/](../../scripts/docker/observability/)。
+对应脚本在 [scripts/docker/observability/](../../scripts/docker/observability)。
 
 如果你只需要业务运行，不需要监控面板和 trace/log 链路，这一层可以不启。
 业务栈和观测栈仍然是分开的 compose 文件，但会通过 `${COMPOSE_PROJECT_NAME:-batch-platform}_batch-network` 共享网络互通。

@@ -14,17 +14,25 @@ import io.github.pinpols.batch.console.domain.job.application.ConsoleJobDefiniti
 import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDefinitionCopyRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDefinitionCreateRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDefinitionUpdateRequest;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDependencyRuleRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleJobDefinitionResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.JobDependencyRuleResponse;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.param.JobDefinitionMaintenanceUpdateParam;
 import io.github.pinpols.batch.console.domain.job.param.JobMonitoringPolicyUpsertParam;
 import io.github.pinpols.batch.console.domain.job.support.BuiltinTaskTypeGuard;
 import io.github.pinpols.batch.console.domain.job.support.JobResourceAssignmentGuard;
+import io.github.pinpols.batch.console.infrastructure.workflow.DefaultSingleJobWorkflowProvisioner;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.time.LocalTime;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -60,6 +68,7 @@ public class DefaultConsoleJobDefinitionApplicationService
   private final JobMonitoringDefaultsProperties monitoringDefaults;
   private final BuiltinTaskTypeGuard builtinTaskTypeGuard;
   private final JobResourceAssignmentGuard resourceAssignmentGuard;
+  private final DefaultSingleJobWorkflowProvisioner singleJobWorkflowProvisioner;
 
   @Override
   public ConsoleJobDefinitionResponse detail(Long id, String tenantId) {
@@ -76,13 +85,17 @@ public class DefaultConsoleJobDefinitionApplicationService
     // ADR-035 §使用边界:builtin SPI 4 件套(shell/sql/stored_proc/http)只许平台 ADMIN 引用,
     // 租户走 SDK 自托管。controller 类级 @PreAuthorize ROLE_ADMIN 已是第一道,本守门 defense in depth。
     builtinTaskTypeGuard.assertAllowed(request.getJobType());
+    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+    List<JobDependencyRuleRequest> dependencyRules = resolveCreateDependencyRules(request);
+    List<String> dependencyCodes =
+        dependencyRules.stream().map(JobDependencyRuleRequest::upstreamJobCode).toList();
+    validateDependencies(tenantId, request.getJobCode(), dependencyCodes);
     validateScheduledMonitoring(
         request.getScheduleType(),
-        request.getDependsOnJobCode(),
+        dependencyCodes.isEmpty() ? null : dependencyCodes.get(0),
         request.getStartGraceSeconds(),
         request.getCompletionDeadlineLocalTime(),
         request.getDependencyCompletionWindowSeconds());
-    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     JobDefinitionEntity existing =
         jobDefinitionMapper.selectByUniqueKey(tenantId, request.getJobCode());
     if (existing != null) {
@@ -94,7 +107,7 @@ public class DefaultConsoleJobDefinitionApplicationService
     JobDefinitionEntity entity = new JobDefinitionEntity();
     entity.setTenantId(tenantId);
     entity.setJobCode(request.getJobCode());
-    entity.setDependsOnJobCode(CodeNormalizer.trimToNull(request.getDependsOnJobCode()));
+    entity.setDependsOnJobCode(dependencyCodes.isEmpty() ? null : dependencyCodes.get(0));
     entity.setJobName(request.getJobName());
     entity.setJobType(request.getJobType());
     entity.setBizType(request.getBizType());
@@ -124,7 +137,7 @@ public class DefaultConsoleJobDefinitionApplicationService
     entity.setSoftRuntimeSeverity(severityOrWarn(request.getSoftRuntimeSeverity()));
     entity.setStartGraceSeconds(resolveStartGraceSeconds(
         request.getScheduleType(),
-        request.getDependsOnJobCode(),
+        dependencyCodes.isEmpty() ? null : dependencyCodes.get(0),
         request.getStartGraceSeconds(),
         monitoringDefaults));
     entity.setStartGraceSeverity(severityOrWarn(request.getStartGraceSeverity()));
@@ -149,6 +162,8 @@ public class DefaultConsoleJobDefinitionApplicationService
     entity.setCreatedBy(operator);
     entity.setUpdatedBy(operator);
     jobDefinitionMapper.insert(entity);
+    replaceDependencyRules(tenantId, entity.getJobCode(), dependencyRules);
+    singleJobWorkflowProvisioner.provision(entity);
     jobDefinitionMapper.upsertJobMonitoringPolicy(JobMonitoringPolicyUpsertParam.builder()
         .tenantId(tenantId)
         .jobDefinitionId(entity.getId())
@@ -173,14 +188,18 @@ public class DefaultConsoleJobDefinitionApplicationService
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     JobDefinitionEntity existing = Guard.requireFound(
         jobDefinitionMapper.selectById(tenantId, id), "job definition not found");
+    assertWorkflowOwnedScheduleUnchanged(request, existing);
     resourceAssignmentGuard.assertUpdateAllowed(
         request.getQueueCode(),
         request.getWorkerGroup(),
         existing.getQueueCode(),
         existing.getWorkerGroup());
-    String dependsOnJobCode = EmptyChecks.isNull(request.getDependsOnJobCode())
-        ? existing.getDependsOnJobCode()
-        : CodeNormalizer.trimToNull(request.getDependsOnJobCode());
+    List<JobDependencyRuleRequest> dependencyRules =
+        resolveUpdateDependencyRules(request, existing);
+    List<String> dependencyCodes =
+        dependencyRules.stream().map(JobDependencyRuleRequest::upstreamJobCode).toList();
+    validateDependencies(tenantId, existing.getJobCode(), dependencyCodes);
+    String dependsOnJobCode = dependencyCodes.isEmpty() ? null : dependencyCodes.get(0);
     LocalTime completionDeadlineLocalTime = resolveCompletionDeadlineLocalTime(request, existing);
     if (Boolean.TRUE.equals(request.getCompletionDeadlineEnabled())
         && EmptyChecks.isNull(completionDeadlineLocalTime)) {
@@ -277,6 +296,7 @@ public class DefaultConsoleJobDefinitionApplicationService
         request.getDescription() != null ? request.getDescription() : existing.getDescription());
     param.setUpdatedBy(operator);
     jobDefinitionMapper.updateJobDefinitionMaintenance(param);
+    replaceDependencyRules(tenantId, existing.getJobCode(), dependencyRules);
     jobDefinitionMapper.upsertJobMonitoringPolicy(JobMonitoringPolicyUpsertParam.builder()
         .tenantId(tenantId)
         .jobDefinitionId(id)
@@ -293,6 +313,27 @@ public class DefaultConsoleJobDefinitionApplicationService
         .build());
     cacheInvalidationService.evictJobDefinition(tenantId, existing.getJobCode());
     return toResponse(jobDefinitionMapper.selectById(tenantId, id));
+  }
+
+  private static void assertWorkflowOwnedScheduleUnchanged(
+      JobDefinitionUpdateRequest request, JobDefinitionEntity existing) {
+    if (changed(request.getScheduleType(), existing.getScheduleType())
+        || changed(request.getScheduleExpr(), existing.getScheduleExpr())
+        || changed(request.getTimezone(), existing.getTimezone())
+        || changed(request.getTriggerMode(), existing.getTriggerMode())
+        || changed(request.getCalendarCode(), existing.getCalendarCode())
+        || changed(request.getWindowCode(), existing.getWindowCode())) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.schedule_managed_by_workflow");
+    }
+  }
+
+  private static boolean changed(String requested, String existing) {
+    if (requested == null) {
+      return false;
+    }
+    String normalizedRequest = Texts.hasText(requested) ? requested.trim() : null;
+    String normalizedExisting = Texts.hasText(existing) ? existing.trim() : null;
+    return !Objects.equals(normalizedRequest, normalizedExisting);
   }
 
   @Override
@@ -322,6 +363,8 @@ public class DefaultConsoleJobDefinitionApplicationService
   @Transactional
   public ConsoleJobDefinitionResponse copy(Long id, String tenantId, String newJobCode) {
     String resolved = tenantGuard.resolveTenant(tenantId);
+    JobDefinitionEntity source = Guard.requireFound(
+        jobDefinitionMapper.selectById(resolved, id), "source job definition not found");
     boolean resolveRouting = resourceAssignmentGuard.shouldResolveRoutingForCopy();
     JobDefinitionEntity existing = jobDefinitionMapper.selectByUniqueKey(resolved, newJobCode);
     if (existing != null) {
@@ -335,6 +378,8 @@ public class DefaultConsoleJobDefinitionApplicationService
     JobDefinitionEntity copied = Guard.requireFound(
         jobDefinitionMapper.selectByUniqueKey(resolved, newJobCode),
         "source job definition not found");
+    replaceDependencyRules(resolved, newJobCode, resolveExistingDependencyRules(source));
+    singleJobWorkflowProvisioner.provision(copied);
     jobDefinitionMapper.copyJobMonitoringPolicy(resolved, id, copied.getId(), operator);
     copied = Guard.requireFound(
         jobDefinitionMapper.selectById(resolved, copied.getId()),
@@ -349,6 +394,8 @@ public class DefaultConsoleJobDefinitionApplicationService
     resourceAssignmentGuard.assertCopyOverridesAllowed(
         request.getQueueCode(), request.getWorkerGroup());
     String resolved = tenantGuard.resolveTenant(request.getTenantId());
+    JobDefinitionEntity source = Guard.requireFound(
+        jobDefinitionMapper.selectById(resolved, id), "source job definition not found");
     boolean resolveRouting = resourceAssignmentGuard.shouldResolveRoutingForCopy();
     JobDefinitionEntity existing =
         jobDefinitionMapper.selectByUniqueKey(resolved, request.getNewJobCode());
@@ -367,6 +414,9 @@ public class DefaultConsoleJobDefinitionApplicationService
     JobDefinitionEntity copied = Guard.requireFound(
         jobDefinitionMapper.selectByUniqueKey(resolved, request.getNewJobCode()),
         "source job definition not found");
+    replaceDependencyRules(
+        resolved, request.getNewJobCode(), resolveExistingDependencyRules(source));
+    singleJobWorkflowProvisioner.provision(copied);
     jobDefinitionMapper.copyJobMonitoringPolicy(resolved, id, copied.getId(), operator);
     copied = Guard.requireFound(
         jobDefinitionMapper.selectById(resolved, copied.getId()),
@@ -438,6 +488,8 @@ public class DefaultConsoleJobDefinitionApplicationService
         e.getTenantId(),
         e.getJobCode(),
         e.getDependsOnJobCode(),
+        resolveExistingDependencies(e),
+        resolveExistingDependencyResponses(e),
         e.getJobName(),
         e.getJobType(),
         e.getBizType(),
@@ -477,7 +529,163 @@ public class DefaultConsoleJobDefinitionApplicationService
         e.getEnabled(),
         e.getDescription(),
         e.getCreatedAt(),
-        e.getUpdatedAt());
+        e.getUpdatedAt(),
+        e.getDefaultWorkflowDefinitionId());
+  }
+
+  private List<JobDependencyRuleRequest> resolveCreateDependencyRules(
+      JobDefinitionCreateRequest request) {
+    if (request.getJobDependencyRules() != null) {
+      List<JobDependencyRuleRequest> rules =
+          normalizeDependencyRules(request.getJobDependencyRules());
+      List<String> legacyCodes =
+          normalizeDependencies(request.getDependsOnJobCodes(), request.getDependsOnJobCode());
+      if (!legacyCodes.isEmpty()
+          && !legacyCodes.equals(
+              rules.stream().map(JobDependencyRuleRequest::upstreamJobCode).toList())) {
+        throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
+      }
+      return rules;
+    }
+    return normalizeDependencies(request.getDependsOnJobCodes(), request.getDependsOnJobCode())
+        .stream()
+        .map(code -> new JobDependencyRuleRequest(code, "SAME_DAY"))
+        .toList();
+  }
+
+  private List<JobDependencyRuleRequest> resolveUpdateDependencyRules(
+      JobDefinitionUpdateRequest request, JobDefinitionEntity existing) {
+    if (request.getJobDependencyRules() != null) {
+      List<JobDependencyRuleRequest> rules =
+          normalizeDependencyRules(request.getJobDependencyRules());
+      List<String> legacyCodes =
+          normalizeDependencies(request.getDependsOnJobCodes(), request.getDependsOnJobCode());
+      if (!legacyCodes.isEmpty()
+          && !legacyCodes.equals(
+              rules.stream().map(JobDependencyRuleRequest::upstreamJobCode).toList())) {
+        throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
+      }
+      return rules;
+    }
+    if (request.getDependsOnJobCodes() != null) {
+      return preserveAlignments(
+          normalizeDependencies(request.getDependsOnJobCodes(), null), existing);
+    }
+    if (request.getDependsOnJobCode() != null) {
+      return preserveAlignments(
+          normalizeDependencies(null, request.getDependsOnJobCode()), existing);
+    }
+    return resolveExistingDependencyRules(existing);
+  }
+
+  private static List<JobDependencyRuleRequest> normalizeDependencyRules(
+      List<JobDependencyRuleRequest> rules) {
+    LinkedHashSet<String> seen = new LinkedHashSet<>();
+    if (rules.stream()
+        .anyMatch(rule -> rule == null
+            || CodeNormalizer.trimToNull(rule.upstreamJobCode()) == null
+            || !Set.of("SAME_DAY", "PREVIOUS_BIZ_DAY").contains(rule.bizDateAlignment()))) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
+    }
+    return rules.stream()
+        .map(rule -> new JobDependencyRuleRequest(
+            CodeNormalizer.trimToNull(rule.upstreamJobCode()),
+            rule.bizDateAlignment().trim().toUpperCase(java.util.Locale.ROOT)))
+        .filter(rule -> rule.upstreamJobCode() != null && seen.add(rule.upstreamJobCode()))
+        .toList();
+  }
+
+  private static List<JobDependencyRuleRequest> preserveAlignments(
+      List<String> codes, JobDefinitionEntity existing) {
+    Map<String, String> alignments = new java.util.HashMap<>();
+    for (JobDependencyRuleResponse rule : resolveExistingDependencyResponses(existing)) {
+      alignments.put(rule.upstreamJobCode(), rule.bizDateAlignment());
+    }
+    return codes.stream()
+        .map(code -> new JobDependencyRuleRequest(code, alignments.getOrDefault(code, "SAME_DAY")))
+        .toList();
+  }
+
+  private static List<String> normalizeDependencies(List<String> codes, String legacyCode) {
+    LinkedHashSet<String> normalized = new LinkedHashSet<>();
+    if (codes != null) {
+      for (String code : codes) {
+        String value = CodeNormalizer.trimToNull(code);
+        if (value != null) normalized.add(value);
+      }
+    } else {
+      String value = CodeNormalizer.trimToNull(legacyCode);
+      if (value != null) normalized.add(value);
+    }
+    if (normalized.size() > 32) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
+    }
+    return List.copyOf(normalized);
+  }
+
+  private static List<String> resolveExistingDependencies(JobDefinitionEntity entity) {
+    if (entity.getDependsOnJobCodes() != null && !entity.getDependsOnJobCodes().isEmpty()) {
+      return entity.getDependsOnJobCodes();
+    }
+    String legacy = CodeNormalizer.trimToNull(entity.getDependsOnJobCode());
+    return legacy == null ? List.of() : List.of(legacy);
+  }
+
+  private static List<JobDependencyRuleRequest> resolveExistingDependencyRules(
+      JobDefinitionEntity entity) {
+    return resolveExistingDependencyResponses(entity).stream()
+        .map(rule -> new JobDependencyRuleRequest(rule.upstreamJobCode(), rule.bizDateAlignment()))
+        .toList();
+  }
+
+  private static List<JobDependencyRuleResponse> resolveExistingDependencyResponses(
+      JobDefinitionEntity entity) {
+    if (entity.getJobDependencyRules() != null
+        && !entity.getJobDependencyRules().isEmpty()) {
+      return entity.getJobDependencyRules();
+    }
+    return resolveExistingDependencies(entity).stream()
+        .map(code -> new JobDependencyRuleResponse(code, "SAME_DAY"))
+        .toList();
+  }
+
+  private void validateDependencies(String tenantId, String downstream, List<String> upstreams) {
+    Map<String, Set<String>> graph = new HashMap<>();
+    for (JobDefinitionMapper.JobDependencyEdge edge :
+        jobDefinitionMapper.selectAllDependencies(tenantId)) {
+      if (!edge.downstreamJobCode().equals(downstream)) {
+        graph
+            .computeIfAbsent(edge.downstreamJobCode(), ignored -> new LinkedHashSet<>())
+            .add(edge.upstreamJobCode());
+      }
+    }
+    for (String upstream : upstreams) {
+      if (downstream.equals(upstream)
+          || jobDefinitionMapper.selectByUniqueKey(tenantId, upstream) == null) {
+        throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
+      }
+      if (reaches(graph, upstream, downstream, new LinkedHashSet<>())) {
+        throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
+      }
+    }
+  }
+
+  private static boolean reaches(
+      Map<String, Set<String>> graph, String current, String target, Set<String> visited) {
+    if (current.equals(target)) return true;
+    if (!visited.add(current)) return false;
+    for (String next : graph.getOrDefault(current, Set.of())) {
+      if (reaches(graph, next, target, visited)) return true;
+    }
+    return false;
+  }
+
+  private void replaceDependencyRules(
+      String tenantId, String downstream, List<JobDependencyRuleRequest> rules) {
+    jobDefinitionMapper.deleteDependencies(tenantId, downstream);
+    if (!rules.isEmpty()) {
+      jobDefinitionMapper.insertDependencyRules(tenantId, downstream, rules);
+    }
   }
 
   private static String resolveDefaultParams(String submitted, String stored) {

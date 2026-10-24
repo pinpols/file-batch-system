@@ -4,9 +4,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.dispatcher.HeartbeatDirective;
+import io.github.pinpols.batch.sdk.task.SdkDependencyResultReference;
 import io.github.pinpols.batch.sdk.wire.RegisterRequest;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -197,8 +199,18 @@ public class PlatformHttpClient {
   public record WorkerRegistrationResponse(
       Long id, String tenantId, String workerCode, String status) {}
 
-  /** claim 回包中 SDK 执行栅栏需要的稳定字段。 */
-  public record TaskClaimResponse(String partitionInvocationId) {}
+  /** claim 回包中 SDK 执行所需的稳定字段；新字段对旧平台/旧调用方保持可选。 */
+  public record TaskClaimResponse(
+      String partitionInvocationId, List<SdkDependencyResultReference> dependencyResultSnapshot) {
+    public TaskClaimResponse {
+      dependencyResultSnapshot =
+          dependencyResultSnapshot == null ? List.of() : List.copyOf(dependencyResultSnapshot);
+    }
+
+    public TaskClaimResponse(String partitionInvocationId) {
+      this(partitionInvocationId, List.of());
+    }
+  }
 
   /** renew 回包中的取消指令。 */
   public record TaskRenewResponse(boolean cancelRequested) {}

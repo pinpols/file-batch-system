@@ -243,6 +243,8 @@ public class ConsoleJobQueryService {
         display(entity.getTenantId()),
         display(entity.getJobCode()),
         display(entity.getDependsOnJobCode()),
+        entity.getDependsOnJobCodes() == null ? List.of() : entity.getDependsOnJobCodes(),
+        entity.getJobDependencyRules() == null ? List.of() : entity.getJobDependencyRules(),
         display(entity.getJobName()),
         display(entity.getJobType()),
         display(entity.getBizType()),
@@ -278,7 +280,8 @@ public class ConsoleJobQueryService {
         entity.getEnabled(),
         display(entity.getDescription()),
         entity.getCreatedAt(),
-        entity.getUpdatedAt());
+        entity.getUpdatedAt(),
+        entity.getDefaultWorkflowDefinitionId());
   }
 
   private ConsoleJobInstanceResponse toJobInstanceResponse(JobInstanceEntity entity) {

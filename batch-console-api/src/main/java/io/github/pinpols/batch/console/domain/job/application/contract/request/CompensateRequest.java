@@ -30,4 +30,10 @@ public class CompensateRequest {
   private String operatorId;
   private String approvalId;
   private String strategy;
+  private String resultPolicy;
+  private String configVersionPolicy;
+  private Integer configVersion;
+  private Long sourceWorkflowRunId;
+  private Long sourceWorkflowNodeRunId;
+  private Long replayOperationId;
 }

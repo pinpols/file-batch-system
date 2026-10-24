@@ -10,6 +10,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.dto.DependencyResultReference;
 import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
@@ -442,7 +443,12 @@ class DefaultTaskAssignmentServiceTest {
     instance.setJobCode("JOB_A");
     instance.setParamsSnapshot("""
         {"executionPolicy":{"executionMode":"INCREMENTAL","watermarkField":"updated_at",
-         "retryPolicy":"FIXED","retryMaxCount":2,"timeoutSeconds":900}}
+         "retryPolicy":"FIXED","retryMaxCount":2,"timeoutSeconds":900},
+         "dependencyResultSnapshot":[{"upstreamJobCode":"UPSTREAM_JOB",
+         "bizDateAlignment":"PREVIOUS_BIZ_DAY","upstreamBizDate":"2026-04-30",
+         "businessKey":"job:UPSTREAM_JOB:2026-04-30","versionNo":4,
+         "resultVersionId":9001,"sourceJobInstanceId":8001,
+         "effectiveAt":"2026-05-01T00:00:00Z"}]}
         """);
     when(jobInstanceMapper.selectById("ta", 11L)).thenReturn(instance);
     when(jobDefinitionMapper.selectById(20L))
@@ -462,6 +468,16 @@ class DefaultTaskAssignmentServiceTest {
     assertThat(config.retryPolicy()).isEqualTo("FIXED");
     assertThat(config.retryMaxCount()).isEqualTo(2);
     assertThat(config.timeoutSeconds()).isEqualTo(900);
+    assertThat(config.dependencyResultSnapshot())
+        .containsExactly(new DependencyResultReference(
+            "UPSTREAM_JOB",
+            "PREVIOUS_BIZ_DAY",
+            java.time.LocalDate.parse("2026-04-30"),
+            "job:UPSTREAM_JOB:2026-04-30",
+            4,
+            9001L,
+            8001L,
+            Instant.parse("2026-05-01T00:00:00Z")));
   }
 
   // ===== renewLeaseBatch (PERF 5.3) =====

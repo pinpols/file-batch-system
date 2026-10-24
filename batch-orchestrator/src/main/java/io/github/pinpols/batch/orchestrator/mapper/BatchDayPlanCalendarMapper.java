@@ -10,4 +10,9 @@ public interface BatchDayPlanCalendarMapper {
       @Param("tenantId") String tenantId,
       @Param("calendarCode") String calendarCode,
       @Param("bizDate") LocalDate bizDate);
+
+  LocalDate selectPreviousBusinessDate(
+      @Param("tenantId") String tenantId,
+      @Param("calendarCode") String calendarCode,
+      @Param("bizDate") LocalDate bizDate);
 }

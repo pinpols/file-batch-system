@@ -1,0 +1,10 @@
+{
+  "keep_days": {
+    "runs": 7,
+    "app": 7,
+    "verification": 30,
+    "legacy": 30
+  },
+  "archive_days": 90,
+  "max_source_mib": 256
+}

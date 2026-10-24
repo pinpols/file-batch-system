@@ -1,7 +1,9 @@
 package io.github.pinpols.batch.worker.core.domain;
 
+import io.github.pinpols.batch.common.dto.DependencyResultReference;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import lombok.Data;
 
 /**
@@ -63,6 +65,9 @@ public class PulledTask {
 
   /** ADR-014: partition 认领 invocation id（claim 返回的 EffectiveTaskConfig 快照）。 */
   private String partitionInvocationId;
+
+  /** Immutable upstream result identities observed by the orchestrator launch dependency gate. */
+  private List<DependencyResultReference> dependencyResultSnapshot = List.of();
 
   /**
    * P0-1: task 超时秒数 (从 EffectiveTaskConfig.timeoutSeconds 透传, 即 step_definition.timeout_seconds).

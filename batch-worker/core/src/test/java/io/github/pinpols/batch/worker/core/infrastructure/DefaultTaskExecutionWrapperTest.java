@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.dto.DependencyResultReference;
 import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.worker.core.config.WorkerConcurrencyProperties;
@@ -359,6 +360,31 @@ class DefaultTaskExecutionWrapperTest {
           .containsEntry(PipelineRuntimeKeys.RANGE_START_INCLUSIVE, 500L)
           .containsEntry(PipelineRuntimeKeys.RANGE_END_EXCLUSIVE, 750L)
           .containsEntry(PipelineRuntimeKeys.EXPECTED_ROWS, 250L);
+      return StepExecutionResponse.successResponse();
+    });
+
+    wrapper.execute(task);
+  }
+
+  @Test
+  @DisplayName("依赖闸门观察到的上游版本引用透传到 Worker 执行上下文")
+  void shouldExposeDependencyResultSnapshotInExecutionContext() {
+    PulledTask task = sampleTask("1015", "t1", "w1");
+    DependencyResultReference reference = new DependencyResultReference(
+        "UPSTREAM_JOB",
+        "PREVIOUS_BIZ_DAY",
+        java.time.LocalDate.parse("2026-04-30"),
+        "job:UPSTREAM_JOB:2026-04-30",
+        4,
+        9001L,
+        8001L,
+        Instant.parse("2026-05-01T00:00:00Z"));
+    task.setDependencyResultSnapshot(java.util.List.of(reference));
+    when(stepExecutionAdapter.execute(any(StepExecutionRequest.class))).thenAnswer(invocation -> {
+      StepExecutionRequest request = invocation.getArgument(0);
+      assertThat(request.context())
+          .containsEntry(
+              PipelineRuntimeKeys.DEPENDENCY_RESULT_SNAPSHOT, java.util.List.of(reference));
       return StepExecutionResponse.successResponse();
     });
 

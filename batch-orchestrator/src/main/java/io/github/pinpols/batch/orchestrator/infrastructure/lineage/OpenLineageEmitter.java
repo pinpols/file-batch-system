@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.lineage;
 
+import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
@@ -86,16 +87,21 @@ public class OpenLineageEmitter {
       throw new IllegalStateException("OpenLineage endpoint is not configured");
     }
     try {
-      String body =
-          JsonUtils.toJson(buildRunEvent(run, terminalStatus, finishedAt, datasetsFor(run)));
-      OutboundHttpResponse response = httpTransport.execute(OutboundHttpRequest.post(
-          props.getEndpoint(),
+      List<OpenLineageDatasetRow> inputDatasets = datasetsFor(run);
+      Map<String, Object> runEvent = buildRunEvent(run, terminalStatus, finishedAt, inputDatasets);
+      String body = JsonUtils.toJson(runEvent);
+      String endpoint = props.getEndpoint();
+      Duration connectTimeout = Duration.ofMillis(props.getConnectTimeoutMs());
+      Duration requestTimeout = Duration.ofMillis(props.getRequestTimeoutMs());
+      OutboundHttpContent httpContent = new OutboundHttpContent(body, "application/json; charset=utf-8");
+      OutboundHttpRequest request = OutboundHttpRequest.post(
+          endpoint,
           Map.of(),
-          body,
-          "application/json; charset=utf-8",
-          Duration.ofMillis(props.getConnectTimeoutMs()),
-          Duration.ofMillis(props.getRequestTimeoutMs()),
-          OutboundAddressPolicy.TRUSTED));
+          httpContent,
+          connectTimeout,
+          requestTimeout,
+          OutboundAddressPolicy.TRUSTED);
+      OutboundHttpResponse response = httpTransport.execute(request);
       if (!response.isSuccessful()) {
         recordLineageMetric("http_error", terminalStatus);
         throw new IllegalStateException(
@@ -126,10 +132,13 @@ public class OpenLineageEmitter {
 
     Map<String, Object> nominalTime = new LinkedHashMap<>();
     if (run.getStartedAt() != null) {
-      nominalTime.put("nominalStartTime", run.getStartedAt().toString());
+      Instant startedAt = run.getStartedAt();
+      String nominalStartTime = startedAt.toString();
+      nominalTime.put("nominalStartTime", nominalStartTime);
     }
     if (finishedAt != null) {
-      nominalTime.put("nominalEndTime", finishedAt.toString());
+      String nominalEndTime = finishedAt.toString();
+      nominalTime.put("nominalEndTime", nominalEndTime);
     }
 
     Map<String, Object> runFacets = new LinkedHashMap<>();
@@ -172,11 +181,14 @@ public class OpenLineageEmitter {
 
     Map<String, Object> event = new LinkedHashMap<>();
     event.put("eventType", success ? "COMPLETE" : "FAIL");
-    event.put("eventTime", eventTime.toString());
+    String eventTimeText = eventTime.toString();
+    event.put("eventTime", eventTimeText);
     event.put("run", runNode);
     event.put("job", jobNode);
-    event.put("inputs", buildDatasets(datasets, true));
-    event.put("outputs", buildDatasets(datasets, false));
+    List<Map<String, Object>> inputDatasets = buildDatasets(datasets, true);
+    event.put("inputs", inputDatasets);
+    List<Map<String, Object>> outputDatasets = buildDatasets(datasets, false);
+    event.put("outputs", outputDatasets);
     event.put("producer", props.getProducer());
     event.put("schemaURL", SCHEMA_URL);
     return event;
@@ -269,9 +281,10 @@ public class OpenLineageEmitter {
   }
 
   static String deterministicRunId(Long workflowRunId) {
-    return UUID.nameUUIDFromBytes(
-            ("file-batch-system:workflow-run:" + workflowRunId).getBytes(StandardCharsets.UTF_8))
-        .toString();
+    String runIdSeed = "file-batch-system:workflow-run:" + workflowRunId;
+    byte[] runIdSeedBytes = runIdSeed.getBytes(StandardCharsets.UTF_8);
+    UUID deterministicRunId = UUID.nameUUIDFromBytes(runIdSeedBytes);
+    return deterministicRunId.toString();
   }
 
   private void recordLineageMetric(String outcome, String terminalStatus) {

@@ -13,6 +13,7 @@ import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitAction;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import java.time.LocalDate;
 import java.util.Map;
@@ -42,12 +43,15 @@ class LaunchApplicationServiceTest {
   @Mock
   private TenantActionRateLimiter rateLimiter;
 
+  @Mock
+  private WorkflowRunLaunchService workflowRunLaunchService;
+
   private LaunchApplicationService service;
 
   @BeforeEach
   void setUp() {
     MockitoAnnotations.openMocks(this);
-    service = new LaunchApplicationService(launchService, rateLimiter);
+    service = new LaunchApplicationService(launchService, rateLimiter, workflowRunLaunchService);
   }
 
   private LaunchRequest request(String tenantId) {
@@ -93,6 +97,27 @@ class LaunchApplicationServiceTest {
     assertThat(result).isSameAs(expected);
     verify(rateLimiter, never()).tryConsume(anyString(), any());
     verify(launchService).launch(req);
+  }
+
+  @Test
+  @DisplayName("Workflow ID 目标进入唯一根 Workflow Launch 服务，不伪装成 Job Launch")
+  void shouldRouteWorkflowTargetToRootWorkflowLauncher() {
+    LaunchRequest req = LaunchRequest.builder()
+        .tenantId("ta")
+        .workflowDefinitionId(71L)
+        .bizDate(LocalDate.now())
+        .triggerType(TriggerType.API)
+        .requestId("req-wf")
+        .traceId("trace-wf")
+        .params(Map.of())
+        .build();
+    LaunchResponse expected = new LaunchResponse("workflow-71", "trace-wf");
+    when(rateLimiter.tryConsume("ta", RateLimitAction.LAUNCH)).thenReturn(true);
+    when(workflowRunLaunchService.launch(req)).thenReturn(expected);
+
+    assertThat(service.launch(req)).isSameAs(expected);
+    verify(workflowRunLaunchService).launch(req);
+    verify(launchService, never()).launch(any());
   }
 
   @Test

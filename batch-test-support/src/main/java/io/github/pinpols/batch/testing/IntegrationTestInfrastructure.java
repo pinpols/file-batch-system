@@ -42,12 +42,24 @@ final class IntegrationTestInfrastructure {
       KafkaContainer kafka,
       TestObjectStoreEndpoint objectStore,
       GenericContainer<?> redis) {
+    registerDynamicProperties(
+        registry, platformPostgres, businessPostgres, kafka, objectStore, redis, true);
+  }
+
+  static void registerDynamicProperties(
+      DynamicPropertyRegistry registry,
+      PostgreSQLContainer platformPostgres,
+      PostgreSQLContainer businessPostgres,
+      KafkaContainer kafka,
+      TestObjectStoreEndpoint objectStore,
+      GenericContainer<?> redis,
+      boolean securityBypassMode) {
     registerPlatformDatabaseProperties(registry, platformPostgres);
     registerKafkaProperties(registry, kafka);
     registerBusinessDatabaseProperties(registry, businessPostgres);
     registerObjectStoreProperties(registry, objectStore);
     registerRedisProperties(registry, redis);
-    registerSecurityProperties(registry);
+    registerSecurityProperties(registry, securityBypassMode);
   }
 
   static void registerPlatformDatabaseProperties(
@@ -112,7 +124,11 @@ final class IntegrationTestInfrastructure {
   }
 
   static void registerSecurityProperties(DynamicPropertyRegistry registry) {
-    registry.add("batch.security.bypass-mode", () -> true);
+    registerSecurityProperties(registry, true);
+  }
+
+  static void registerSecurityProperties(DynamicPropertyRegistry registry, boolean bypassMode) {
+    registry.add("batch.security.bypass-mode", () -> bypassMode);
     registry.add("batch.security.kms.default-key-ref", () -> DEFAULT_KMS_KEY_REF);
     registry.add("batch.security.kms.keys." + DEFAULT_KMS_KEY_REF, () -> DEFAULT_KMS_KEY_MATERIAL);
     // 单 JVM 长耗时 IT：覆盖 application-test.yml merge 漂移，禁用会与 claim / launch 并发竞态的后台 Bean

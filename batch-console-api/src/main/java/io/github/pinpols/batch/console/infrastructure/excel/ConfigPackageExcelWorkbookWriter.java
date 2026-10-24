@@ -119,6 +119,7 @@ public class ConfigPackageExcelWorkbookWriter {
   public static final List<String> WF_EDGE_COLUMNS = ConfigPackageExcelSchema.WorkflowEdge.COLUMNS;
 
   private final List<ConfigPackageSheetSpecs.SheetDef> sheetDefs;
+  private final List<ConfigPackageSheetSpecs.SheetDef> exportSheetDefs;
   private final List<ConfigPackageSheetSpecs.SheetDef> allSheetDefs;
   private final MessageSource messageSource;
   private final ConfigPackageWorkbookSupplementWriter supplementWriter;
@@ -134,6 +135,11 @@ public class ConfigPackageExcelWorkbookWriter {
     this.sheetSpecs = new ConfigPackageSheetSpecs(messageSource);
     this.allSheetDefs = sheetSpecs.build();
     this.sheetDefs = sheetSpecs.project(scenarios);
+    // Keep legacy Pipeline sheets in the import/preview contract so old packages can be
+    // validated and converted, but never offer them as editable configuration in new artifacts.
+    this.exportSheetDefs = sheetDefs.stream()
+        .filter(def -> !PIPELINE_SHEET.equals(def.name()) && !STEP_SHEET.equals(def.name()))
+        .toList();
   }
 
   public byte[] buildExportWorkbook(List<List<Map<String, Object>>> sheetDataList) {
@@ -167,12 +173,12 @@ public class ConfigPackageExcelWorkbookWriter {
     Locale locale = LocaleContextHolder.getLocale();
     Map<String, List<String>> implRegistry = copyImplRegistry(registeredImplCodesByModule);
     try (SXSSFWorkbook wb = new SXSSFWorkbook(50)) {
-      for (ConfigPackageSheetSpecs.SheetDef def : sheetDefs) {
+      for (ConfigPackageSheetSpecs.SheetDef def : exportSheetDefs) {
         int sourceIndex = sheetIndex(def.name());
         writeDataSheet(wb, def, sheetDataList.get(sourceIndex), locale, implRegistry);
       }
       supplementWriter.createReadmeSheet(wb, locale);
-      supplementWriter.createFillOrderSheet(wb, sheetDefs);
+      supplementWriter.createFillOrderSheet(wb, exportSheetDefs);
       supplementWriter.createDependencyGuideSheet(wb);
       supplementWriter.createFiveWorkerExampleSheet(wb);
       supplementWriter.createBundleExampleSheet(wb);
@@ -212,11 +218,11 @@ public class ConfigPackageExcelWorkbookWriter {
     Locale locale = LocaleContextHolder.getLocale();
     Map<String, List<String>> implRegistry = copyImplRegistry(registeredImplCodesByModule);
     try (SXSSFWorkbook wb = new SXSSFWorkbook(50)) {
-      for (ConfigPackageSheetSpecs.SheetDef def : sheetDefs) {
+      for (ConfigPackageSheetSpecs.SheetDef def : exportSheetDefs) {
         writeDataSheet(wb, def, List.of(), locale, implRegistry);
       }
       supplementWriter.createReadmeSheet(wb, locale);
-      supplementWriter.createFillOrderSheet(wb, sheetDefs);
+      supplementWriter.createFillOrderSheet(wb, exportSheetDefs);
       supplementWriter.createDependencyGuideSheet(wb);
       supplementWriter.createFiveWorkerExampleSheet(wb);
       supplementWriter.createBundleExampleSheet(wb);
@@ -233,11 +239,11 @@ public class ConfigPackageExcelWorkbookWriter {
     Locale locale = LocaleContextHolder.getLocale();
     Map<String, List<String>> implRegistry = copyImplRegistry(registeredImplCodesByModule);
     try (SXSSFWorkbook wb = new SXSSFWorkbook(50)) {
-      for (ConfigPackageSheetSpecs.SheetDef def : sheetDefs) {
+      for (ConfigPackageSheetSpecs.SheetDef def : exportSheetDefs) {
         writeDataSheet(wb, def, List.of(), locale, implRegistry);
       }
-      supplementWriter.createFocusedReadmeSheet(wb, locale, sheetDefs);
-      supplementWriter.createFillOrderSheet(wb, sheetDefs);
+      supplementWriter.createFocusedReadmeSheet(wb, locale, exportSheetDefs);
+      supplementWriter.createFillOrderSheet(wb, exportSheetDefs);
       supplementWriter.createDictionarySheet(wb, locale);
       createFieldGuideSheet(wb);
       ConsoleExcelStyles.createValidationSheet(wb);
@@ -433,7 +439,7 @@ public class ConfigPackageExcelWorkbookWriter {
     writeGuideHeader(sheet, styles.head());
     int rowIdx = 1;
     // 记录每个 sheet 的起止行号，最后做第一列合并（per-sheet 一段，垂直居中），更美观、可读
-    for (ConfigPackageSheetSpecs.SheetDef spec : sheetDefs) {
+    for (ConfigPackageSheetSpecs.SheetDef spec : exportSheetDefs) {
       int sectionStart = rowIdx;
       for (int ci = 0; ci < spec.columns().size(); ci++) {
         String colName = spec.columns().get(ci);

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.audit.entity;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.Data;
@@ -20,7 +21,7 @@ public class ConsoleAiTurnEntity {
   private String modelName;
   private Integer promptTokens;
   private Integer completionTokens;
-  private java.math.BigDecimal estimatedCostUsd;
+  private BigDecimal estimatedCostUsd;
   private Instant createdAt;
   private Instant completedAt;
 }

@@ -9,6 +9,7 @@ public class EventOutboxRetryEntity {
   private Long id;
   private String tenantId;
   private Long outboxEventId;
+  private Instant outboxEventCreatedAt;
   private String eventKey;
 
   /**

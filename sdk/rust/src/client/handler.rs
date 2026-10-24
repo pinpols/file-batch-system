@@ -19,7 +19,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 
 use crate::client::checkpoint::{
-    BreakPosition, InMemoryCheckpoint, SdkCheckpoint, SdkCheckpointState, SdkTaskStopped,
+    BreakPosition, InMemoryCheckpoint, JsonValue, SdkCheckpoint, SdkCheckpointState, SdkTaskStopped,
 };
 use crate::protocol::error_code;
 
@@ -97,10 +97,13 @@ pub struct TaskContext {
     pub partition_invocation_id: Option<String>,
     /// `runtimeAttributes.traceId` passthrough (OTel link), empty if absent.
     pub trace_id: String,
+    /// Immutable dependency-gate evidence returned by Orchestrator CLAIM.
+    pub dependency_result_snapshot: Vec<crate::client::transport::DependencyResultReference>,
     /// Whether business side effects must be suppressed for this task.
     pub dry_run: bool,
-    /// Effective task config / business parameters (claim response snapshot).
-    pub parameters: BTreeMap<String, String>,
+    /// Authoritative business parameters from the persisted task payload returned by CLAIM.
+    /// Nested values are retained so Workflow cross-day snapshots are not flattened or lost.
+    pub parameters: BTreeMap<String, JsonValue>,
     pub cancellation: CancellationSignal,
     pub progress: Box<dyn ProgressReporter>,
     /// ADR-037 决策一 — the checkpoint store backing
@@ -131,6 +134,7 @@ impl TaskContext {
             task_type: task_type.to_string(),
             partition_invocation_id: None,
             trace_id: String::new(),
+            dependency_result_snapshot: Vec::new(),
             dry_run: false,
             parameters: BTreeMap::new(),
             cancellation: CancellationSignal::new(),
@@ -158,6 +162,51 @@ impl TaskContext {
     pub fn with_partition_invocation_id(mut self, id: Option<String>) -> Self {
         self.partition_invocation_id = id;
         self
+    }
+
+    /// Replace the parameters with the authoritative object resolved by the Orchestrator at CLAIM.
+    pub fn with_parameters(mut self, parameters: BTreeMap<String, JsonValue>) -> Self {
+        self.parameters = parameters;
+        self
+    }
+
+    /// Decode the authoritative JSON object returned in the Orchestrator CLAIM payload.
+    #[cfg(feature = "serde")]
+    pub fn with_payload_json(mut self, payload: &str) -> Result<Self, String> {
+        let parameters: BTreeMap<String, JsonValue> = serde_json::from_str(payload)
+            .map_err(|error| format!("invalid claim payload: {error}"))?;
+        self.parameters = parameters;
+        Ok(self)
+    }
+
+    /// Apply the payload returned by a successful Orchestrator CLAIM response.
+    #[cfg(feature = "serde")]
+    pub fn with_claim_response(
+        mut self,
+        claim: &crate::client::transport::TaskClaimResponse,
+    ) -> Result<Self, String> {
+        self.apply_claim_response(claim)?;
+        Ok(self)
+    }
+
+    /// Apply CLAIM fields to an existing context while preserving injected runtime collaborators.
+    #[cfg(feature = "serde")]
+    pub fn apply_claim_response(
+        &mut self,
+        claim: &crate::client::transport::TaskClaimResponse,
+    ) -> Result<(), String> {
+        if let Some(payload) = claim.payload.as_deref() {
+            self.parameters = serde_json::from_str(payload)
+                .map_err(|error| format!("invalid claim payload: {error}"))?;
+        }
+        if let Some(trace_id) = claim.trace_id.as_deref() {
+            self.trace_id = trace_id.to_string();
+        }
+        if let Some(invocation_id) = claim.partition_invocation_id.as_deref() {
+            self.partition_invocation_id = Some(invocation_id.to_string());
+        }
+        self.dependency_result_snapshot = claim.dependency_result_snapshot.clone();
+        Ok(())
     }
 
     /// Builder-style: inject a tenant's [`SdkCheckpoint`] implementation.
@@ -282,7 +331,10 @@ impl TaskContext {
             let total = succeed_count + fail_count;
             let percent = if total > 0 {
                 // succeed/total clamped to 0..=100 (best-effort, no total-rows known).
-                ((succeed_count.max(0) as f64 / total as f64) * 100.0).round() as u8
+                let non_negative_succeed_count = succeed_count.max(0);
+                let success_ratio = non_negative_succeed_count as f64 / total as f64;
+                let percentage = (success_ratio * 100.0).round();
+                percentage as u8
             } else {
                 0
             };
@@ -406,10 +458,13 @@ pub trait StoppableTaskHandler: Send {
 pub fn map_stopped_result(outcome: Result<TaskResult, SdkTaskStopped>) -> TaskResult {
     match outcome {
         Ok(result) => result,
-        Err(stopped) => TaskResult::cancelled(&format!(
-            "stopped at safe-point ({} break-position key(s))",
-            stopped.break_position.len()
-        )),
+        Err(stopped) => {
+            let cancellation_summary = format!(
+                "stopped at safe-point ({} break-position key(s))",
+                stopped.break_position.len()
+            );
+            TaskResult::cancelled(&cancellation_summary)
+        }
     }
 }
 
@@ -448,6 +503,42 @@ impl ProgressReporter for RecordingProgressReporter {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn claim_payload_preserves_nested_workflow_parameters() {
+        let ctx = TaskContext::new("t1", "tenant-a", "demo")
+            .with_payload_json(r#"{"crossDay":{"prior":{"resultVersionId":8}}}"#)
+            .expect("valid object payload");
+        let JsonValue::Obj(cross_day) = &ctx.parameters["crossDay"] else {
+            panic!("crossDay must remain an object");
+        };
+        assert!(cross_day.contains_key("prior"));
+        assert!(TaskContext::new("t2", "tenant-a", "demo")
+            .with_payload_json("[]")
+            .is_err());
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn claim_response_supplies_authoritative_parameters_and_metadata() {
+        let response = crate::client::transport::HttpResponse::new(
+            200,
+            r#"{"payload":"{\"crossDay\":{\"prior\":{\"resultVersionId\":8}}}","traceId":"tr-9","partitionInvocationId":"inv-4","dependencyResultSnapshot":[{"upstreamJobCode":"prior-job","bizDateAlignment":"PREVIOUS_BIZ_DAY","upstreamBizDate":"2026-10-20","businessKey":"account","versionNo":2,"resultVersionId":8,"sourceJobInstanceId":17,"effectiveAt":"2026-10-20T23:00:00Z"}]}"#,
+        );
+        let claim = crate::client::transport::decode_claim_response(&response).unwrap();
+        let ctx = TaskContext::new("t1", "tenant-a", "demo")
+            .with_claim_response(&claim)
+            .unwrap();
+        assert_eq!(ctx.trace_id, "tr-9");
+        assert_eq!(ctx.partition_invocation_id.as_deref(), Some("inv-4"));
+        assert_eq!(ctx.dependency_result_snapshot.len(), 1);
+        assert_eq!(ctx.dependency_result_snapshot[0].result_version_id, Some(8));
+        let JsonValue::Obj(cross_day) = &ctx.parameters["crossDay"] else {
+            panic!("crossDay must remain an object");
+        };
+        assert!(cross_day.contains_key("prior"));
+    }
 
     #[test]
     fn task_result_success_and_codes() {

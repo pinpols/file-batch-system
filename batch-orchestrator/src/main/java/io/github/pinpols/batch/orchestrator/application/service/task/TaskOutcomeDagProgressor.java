@@ -75,11 +75,12 @@ final class TaskOutcomeDagProgressor {
         ctx.workflowRun().getId(), ctx.currentNodeCode(), resolveCurrentNodeType(ctx.task()));
     recordFinish(NodeRunFinishCommand.of(currentKey, currentOutcome));
 
-    List<WorkflowDagService.DagNodeResolution> nextNodes = workflowDagService.resolveNextNodes(
-        ctx.workflowRun().getWorkflowDefinitionId(),
-        ctx.currentNodeCode(),
-        ctx.nodeProgress().failedCount() == 0,
-        ctx.task().getTaskPayload());
+    List<WorkflowDagService.DagNodeResolution> nextNodes =
+        workflowDagService.resolveNextNodesForRun(
+            ctx.workflowRun(),
+            ctx.currentNodeCode(),
+            ctx.nodeProgress().failedCount() == 0,
+            ctx.task().getTaskPayload());
     for (WorkflowDagService.DagNodeResolution nextNode : nextNodes) {
       if (EmptyChecks.isNull(nextNode)) {
         continue;
@@ -103,19 +104,13 @@ final class TaskOutcomeDagProgressor {
     }
     if (ctx.nodeProgress().failedCount() > 0) {
       // 失败节点无法再满足 SUCCESS-edge，显式跳过下游，避免 ALL-mode join 永久等待。
-      workflowDagService.cascadeSkipDownstream(
-          ctx.workflowRun().getId(),
-          ctx.workflowRun().getWorkflowDefinitionId(),
-          ctx.currentNodeCode());
+      workflowDagService.cascadeSkipDownstreamForRun(ctx.workflowRun(), ctx.currentNodeCode());
     }
   }
 
   private void completeEndNodeIfReady(Context ctx, WorkflowDagService.DagNodeResolution nextNode) {
-    if (!workflowDagService.isNodeReadyForDispatch(
-        ctx.workflowRun().getId(),
-        ctx.workflowRun().getWorkflowDefinitionId(),
-        nextNode.nodeCode(),
-        ctx.task().getTaskPayload())) {
+    if (!workflowDagService.isNodeReadyForRunDispatch(
+        ctx.workflowRun(), nextNode.nodeCode(), ctx.task().getTaskPayload())) {
       return;
     }
     nodeRunRecorder.recordStart(

@@ -5,12 +5,16 @@ import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.orchestrator.mapper.ExpectedWorkOccurrenceMapper;
+import io.github.pinpols.batch.orchestrator.mapper.JobDependencyMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import java.nio.charset.StandardCharsets;
@@ -61,12 +65,18 @@ public class BundleArrivalLauncher {
 
   private final ObjectProvider<LaunchService> launchServiceProvider;
   private final TriggerRequestMapper triggerRequestMapper;
+  private final ExpectedWorkOccurrenceMapper expectedWorkOccurrenceMapper;
+  private final JobDependencyMapper jobDependencyMapper;
 
   public BundleArrivalLauncher(
       ObjectProvider<LaunchService> launchServiceProvider,
-      TriggerRequestMapper triggerRequestMapper) {
+      TriggerRequestMapper triggerRequestMapper,
+      ExpectedWorkOccurrenceMapper expectedWorkOccurrenceMapper,
+      JobDependencyMapper jobDependencyMapper) {
     this.launchServiceProvider = launchServiceProvider;
     this.triggerRequestMapper = triggerRequestMapper;
+    this.expectedWorkOccurrenceMapper = expectedWorkOccurrenceMapper;
+    this.jobDependencyMapper = jobDependencyMapper;
   }
 
   public enum LaunchOutcome {
@@ -84,6 +94,14 @@ public class BundleArrivalLauncher {
     if (groupFiles == null || groupFiles.isEmpty() || !Texts.hasText(tenantId)) {
       return LaunchOutcome.NOT_BUNDLE;
     }
+    return RlsTenantContextHolder.runWithTenant(
+        tenantId, () -> launchIfBundleForTenant(tenantId, fileGroupCode, groupFiles));
+  }
+
+  private LaunchOutcome launchIfBundleForTenant(
+      String tenantId,
+      String fileGroupCode,
+      List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles) {
     BundleLaunchCandidate candidate = collectCandidate(tenantId, fileGroupCode, groupFiles);
     if (candidate.bundleJobCode() == null) {
       return LaunchOutcome.NOT_BUNDLE; // 普通到达组,不是文件束
@@ -223,10 +241,35 @@ public class BundleArrivalLauncher {
 
   private LaunchOutcome launchCandidate(
       String tenantId, String fileGroupCode, BundleLaunchCandidate candidate) {
+    String calendarCode =
+        jobDependencyMapper.selectCalendarCodeByTenantAndJob(tenantId, candidate.bundleJobCode());
+    if (Texts.hasText(calendarCode)) {
+      expectedWorkOccurrenceMapper.insertIfAbsent(
+          tenantId,
+          calendarCode,
+          candidate.bizDate(),
+          candidate.bundleJobCode(),
+          "FILE_GROUP",
+          fileGroupCode,
+          BatchDateTimeSupport.utcNow(),
+          null);
+      expectedWorkOccurrenceMapper.transitionStatus(
+          tenantId,
+          calendarCode,
+          candidate.bundleJobCode(),
+          "FILE_GROUP",
+          fileGroupCode,
+          candidate.bizDate(),
+          "EXPECTED",
+          "ARRIVED",
+          null);
+    }
     // 确定性 requestId:同组同 bizDate 只 launch 一次(trigger_request UNIQUE 回退)
     String requestId = requestId(tenantId, fileGroupCode, candidate.bizDate());
     LaunchOutcome existingOutcome = persistedOutcome(tenantId, requestId);
     if (EmptyChecks.isNotNull(existingOutcome)) {
+      markExpectedWorkSatisfied(
+          tenantId, calendarCode, fileGroupCode, candidate, requestId, existingOutcome);
       return existingOutcome;
     }
     String traceId = IdGenerator.newTraceId();
@@ -267,6 +310,7 @@ public class BundleArrivalLauncher {
     if (EmptyChecks.isNull(outcome)) {
       throw new IllegalStateException("bundle launch returned no instance or durable outcome");
     }
+    markExpectedWorkSatisfied(tenantId, calendarCode, fileGroupCode, candidate, requestId, outcome);
     log.info(
         "bundle arrival outcome={}: tenantId={}, fileGroupCode={}, jobCode={}, fileCount={},"
             + " bizDate={}, requestId={}",
@@ -278,6 +322,29 @@ public class BundleArrivalLauncher {
         candidate.bizDate(),
         requestId);
     return outcome;
+  }
+
+  private void markExpectedWorkSatisfied(
+      String tenantId,
+      String calendarCode,
+      String fileGroupCode,
+      BundleLaunchCandidate candidate,
+      String requestId,
+      LaunchOutcome outcome) {
+    if (!Texts.hasText(calendarCode)
+        || (outcome != LaunchOutcome.LAUNCHED && outcome != LaunchOutcome.WAITING)) {
+      return;
+    }
+    expectedWorkOccurrenceMapper.transitionStatus(
+        tenantId,
+        calendarCode,
+        candidate.bundleJobCode(),
+        "FILE_GROUP",
+        fileGroupCode,
+        candidate.bizDate(),
+        "ARRIVED",
+        "SATISFIED",
+        requestId);
   }
 
   private LaunchOutcome persistedOutcome(String tenantId, String requestId) {

@@ -36,11 +36,11 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
       ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET,
       ConfigPackageExcelValidator.CHANNEL_SHEET,
       ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET,
-      ConfigPackageExcelValidator.PIPELINE_SHEET,
-      ConfigPackageExcelValidator.STEP_SHEET,
       ConfigPackageExcelValidator.WF_DEF_SHEET,
       ConfigPackageExcelValidator.WF_NODE_SHEET,
       ConfigPackageExcelValidator.WF_EDGE_SHEET);
+
+  private static final int LEGACY_IMPORT_SHEET_COUNT = 12;
 
   private static final List<String> SUPPLEMENT_SHEET_NAMES = List.of(
       ConsoleExcelStyles.SHEET_NAME_README,
@@ -128,20 +128,16 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
   }
 
   @Test
-  @DisplayName("导出工作簿:步骤实现编码列按注册表生成动态下拉")
-  void shouldApplyStepImplDropdown_whenRegistryProvidesImplCodes() throws Exception {
+  @DisplayName("导出工作簿:不再提供可编辑的 Pipeline 定义和步骤表")
+  void shouldOmitLegacyPipelineConfigurationSheetsFromExports() throws Exception {
     List<List<Map<String, Object>>> sheetData = emptyExportData();
     sheetData.set(
         8, List.of(row("job_code", "JOB_PROCESS", "version", "1", "impl_code", "sqlCompute")));
 
     try (XSSFWorkbook wb = read(workbookWriter()
         .buildExportWorkbook(sheetData, Map.of("PROCESS", List.of("sqlCompute"))))) {
-      Sheet stepSheet = wb.getSheet(ConfigPackageExcelValidator.STEP_SHEET);
-      // impl_code 列(index 6)有动态下拉
-      assertThat(stepSheet.getDataValidations()).anySatisfy(dv -> {
-        String formula = dv.getValidationConstraint().getFormula1();
-        assertThat(formula).contains("PROCESS:sqlCompute");
-      });
+      assertThat(wb.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET)).isNull();
+      assertThat(wb.getSheet(ConfigPackageExcelValidator.STEP_SHEET)).isNull();
     }
   }
 
@@ -211,6 +207,9 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
       assertThat(validationSheet.getRow(2).getCell(0).getStringCellValue())
           .isEqualTo(ConfigPackageExcelValidator.PIPELINE_SHEET);
       assertThat(validationSheet.getRow(2).getCell(3).getStringCellValue()).contains("JOB_MISSING");
+      assertThat(wb.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET))
+          .as("legacy Pipeline sheets remain available in upload preview")
+          .isNotNull();
     }
   }
 
@@ -240,7 +239,7 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
 
   private static List<List<Map<String, Object>>> emptyExportData() {
     List<List<Map<String, Object>>> data = new ArrayList<>();
-    for (int i = 0; i < DATA_SHEET_NAMES.size(); i++) {
+    for (int i = 0; i < LEGACY_IMPORT_SHEET_COUNT; i++) {
       data.add(List.of());
     }
     return data;

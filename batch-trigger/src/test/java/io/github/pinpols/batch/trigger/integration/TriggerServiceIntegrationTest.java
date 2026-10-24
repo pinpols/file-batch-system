@@ -121,36 +121,258 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  @DisplayName("Trigger 启停更新作业定义版本，供实例快照识别配置变更")
-  void shouldIncrementJobDefinitionVersionWhenTriggerChangesEnabledState() {
+  @DisplayName("Workflow 触发保存独立 Workflow 身份且不伪造 JobCode")
+  void shouldPersistWorkflowAsExplicitLaunchTarget() {
+    String workflowCode = "direct-workflow-" + UUID.randomUUID().toString().replace("-", "");
+    jdbcTemplate.update(
+        "insert into batch.workflow_definition "
+            + "(tenant_id, workflow_code, workflow_name, workflow_type, version, enabled) "
+            + "values ('t1', ?, ?, 'DAG', 1, true)",
+        workflowCode,
+        workflowCode);
+    Long workflowDefinitionId = jdbcTemplate.queryForObject(
+        "select id from batch.workflow_definition where tenant_id = 't1' and workflow_code = ?",
+        Long.class,
+        workflowCode);
+    try {
+      TriggerLaunchRequest request = new TriggerLaunchRequest();
+      request.setTenantId("t1");
+      request.setWorkflowDefinitionId(workflowDefinitionId);
+      request.setBizDate(LocalDate.of(2026, Month.MARCH, 27));
+      request.setTriggerType(TriggerType.API);
+
+      triggerService.launch(
+          new TriggerLaunchCommand(request, "idem-direct-workflow", "req-direct-wf", "trace-wf"));
+
+      Map<String, Object> target = jdbcTemplate.queryForMap(
+          "select job_code, workflow_definition_id from batch.trigger_request "
+              + "where tenant_id = 't1' and request_id = 'req-direct-wf'");
+      assertThat(target.get("job_code")).isNull();
+      assertThat(((Number) target.get("workflow_definition_id")).longValue())
+          .isEqualTo(workflowDefinitionId);
+    } finally {
+      jdbcTemplate.update(
+          "delete from batch.trigger_request where tenant_id = 't1' and request_id = 'req-direct-wf'");
+      jdbcTemplate.update(
+          "delete from batch.workflow_definition where tenant_id = 't1' and id = ?",
+          workflowDefinitionId);
+    }
+  }
+
+  @Test
+  @DisplayName("Trigger 启停只更新 Workflow 调度开关，不改变 Job 执行启用状态或版本")
+  void shouldToggleWorkflowScheduleWithoutChangingJobExecutionState() {
     String jobCode = "version-" + UUID.randomUUID().toString().replace("-", "");
     jdbcTemplate.update(
         "insert into batch.job_definition "
             + "(tenant_id, job_code, job_name, job_type, schedule_type, timezone, enabled) "
             + "values (?, ?, ?, 'GENERAL', 'MANUAL', 'UTC', true)",
-        "t1",
+        "system",
         jobCode,
         jobCode);
+    Long jobDefinitionId = jdbcTemplate.queryForObject(
+        "select id from batch.job_definition where tenant_id = ? and job_code = ?",
+        Long.class,
+        "system",
+        jobCode);
+    String workflowCode = "SINGLE-" + jobCode;
+    jdbcTemplate.update(
+        "insert into batch.workflow_definition "
+            + "(tenant_id, workflow_code, workflow_name, workflow_type, version, enabled,"
+            + " single_job_definition_id) values ('system', ?, ?, 'DAG', 1, true, ?)",
+        workflowCode,
+        workflowCode,
+        jobDefinitionId);
     try {
       Integer initialVersion = jdbcTemplate.queryForObject(
           "select version from batch.job_definition where tenant_id = ? and job_code = ?",
           Integer.class,
-          "t1",
+          "system",
           jobCode);
 
-      int updated = triggerDefinitionLoader.setEnabled("t1", jobCode, false);
+      int updated = triggerDefinitionLoader.setScheduleEnabled("system", jobCode, false);
 
-      Integer updatedVersion = jdbcTemplate.queryForObject(
-          "select version from batch.job_definition where tenant_id = ? and job_code = ?",
-          Integer.class,
-          "t1",
+      Map<String, Object> job = jdbcTemplate.queryForMap(
+          "select version, enabled from batch.job_definition where tenant_id = ? and job_code = ?",
+          "system",
           jobCode);
+      Boolean scheduleEnabled = jdbcTemplate.queryForObject(
+          "select schedule_enabled from batch.workflow_definition where tenant_id = 'system'"
+              + " and workflow_code = ?",
+          Boolean.class,
+          workflowCode);
       assertThat(updated).isEqualTo(1);
-      assertThat(updatedVersion).isEqualTo(initialVersion + 1);
+      assertThat(job.get("version")).isEqualTo(initialVersion);
+      assertThat(job.get("enabled")).isEqualTo(true);
+      assertThat(scheduleEnabled).isFalse();
     } finally {
       jdbcTemplate.update(
-          "delete from batch.job_definition where tenant_id = ? and job_code = ?", "t1", jobCode);
+          "delete from batch.workflow_definition where tenant_id = ? and workflow_code = ?",
+          "system",
+          workflowCode);
+      jdbcTemplate.update(
+          "delete from batch.job_definition where tenant_id = ? and job_code = ?",
+          "system",
+          jobCode);
     }
+  }
+
+  @Test
+  @DisplayName("定时定义从受管 Workflow 读取调度字段，并保留关联 Job 的执行目标")
+  void shouldLoadScheduledFieldsFromManagedWorkflow() {
+    String jobCode = "workflow-schedule-" + UUID.randomUUID().toString().replace("-", "");
+    String workflowCode = "JOB-WF-" + UUID.randomUUID().toString().replace("-", "");
+    jdbcTemplate.update(
+        "insert into batch.job_definition "
+            + "(tenant_id, job_code, job_name, job_type, schedule_type, schedule_expr, timezone,"
+            + " trigger_mode, enabled) values (?, ?, ?, 'IMPORT', 'MANUAL', null, 'UTC', 'MANUAL',"
+            + " true)",
+        "system",
+        jobCode,
+        jobCode);
+    Long jobDefinitionId = jdbcTemplate.queryForObject(
+        "select id from batch.job_definition where tenant_id = ? and job_code = ?",
+        Long.class,
+        "system",
+        jobCode);
+    jdbcTemplate.update("""
+        insert into batch.workflow_definition (
+            tenant_id, workflow_code, workflow_name, workflow_type, version, enabled,
+            single_job_definition_id, schedule_type, schedule_expr, timezone, trigger_mode,
+            calendar_code, depends_on_job_code
+        ) values (?, ?, ?, 'DAG', 7, true, ?, 'CRON', '0 15 2 * * ?', 'Asia/Shanghai',
+                  'SCHEDULED', 'BUSINESS_DAY', 'UPSTREAM')
+        """, "system", workflowCode, workflowCode, jobDefinitionId);
+    try {
+      var descriptor = triggerDefinitionLoader.loadByJobCode("system", jobCode);
+
+      assertThat(descriptor).isNotNull().satisfies(value -> {
+        assertThat(value.getJobCode()).isEqualTo(jobCode);
+        assertThat(value.getJobDefinitionId()).isEqualTo(jobDefinitionId);
+        assertThat(value.getWorkflowCode()).isEqualTo(workflowCode);
+        assertThat(value.getWorkflowVersion()).isEqualTo(7);
+        assertThat(value.getScheduleType()).isEqualTo("CRON");
+        assertThat(value.getScheduleExpression()).isEqualTo("0 15 2 * * ?");
+        assertThat(value.getTimezone()).isEqualTo("Asia/Shanghai");
+        assertThat(value.getTriggerMode()).isEqualTo("SCHEDULED");
+        assertThat(value.getCalendarCode()).isEqualTo("BUSINESS_DAY");
+        assertThat(value.getDependsOnJobCode()).isEqualTo("UPSTREAM");
+        assertThat(value.isEnabled()).isTrue();
+      });
+      assertThat(triggerDefinitionLoader.loadAll())
+          .anySatisfy(value -> assertThat(value.getWorkflowCode()).isEqualTo(workflowCode));
+    } finally {
+      jdbcTemplate.update(
+          "delete from batch.workflow_definition where tenant_id = ? and workflow_code = ?",
+          "system",
+          workflowCode);
+      jdbcTemplate.update(
+          "delete from batch.job_definition where tenant_id = ? and job_code = ?",
+          "system",
+          jobCode);
+    }
+  }
+
+  @Test
+  @DisplayName("组合 Workflow 可按自身身份注册定时描述，不要求关联包装 Job")
+  void shouldLoadScheduledComposedWorkflowWithoutJobDefinition() {
+    String workflowCode = "composed-schedule-" + UUID.randomUUID().toString().replace("-", "");
+    jdbcTemplate.update(
+        "insert into batch.workflow_definition "
+            + "(tenant_id, workflow_code, workflow_name, workflow_type, version, enabled,"
+            + " schedule_enabled, schedule_type, schedule_expr, timezone, trigger_mode) "
+            + "values ('system', ?, ?, 'DAG', 1, true, true, 'CRON', '0 0 3 * * ?', 'UTC',"
+            + " 'SCHEDULED')",
+        workflowCode,
+        workflowCode);
+    try {
+      var descriptor = triggerDefinitionLoader.loadByWorkflowCode("system", workflowCode);
+
+      assertThat(descriptor).isNotNull().satisfies(value -> {
+        assertThat(value.getWorkflowCode()).isEqualTo(workflowCode);
+        assertThat(value.getWorkflowDefinitionId()).isNotNull();
+        assertThat(value.getJobCode()).isNull();
+        assertThat(value.getScheduleType()).isEqualTo("CRON");
+        assertThat(value.isEnabled()).isTrue();
+      });
+      assertThat(triggerDefinitionLoader.loadAll())
+          .anySatisfy(value -> assertThat(value.getWorkflowCode()).isEqualTo(workflowCode));
+
+      int updated =
+          triggerDefinitionLoader.setWorkflowScheduleEnabled("system", workflowCode, false);
+      assertThat(updated).isEqualTo(1);
+      assertThat(
+              triggerDefinitionLoader.loadByWorkflowCode("system", workflowCode).isEnabled())
+          .isFalse();
+    } finally {
+      jdbcTemplate.update(
+          "delete from batch.workflow_definition where tenant_id = 'system' and workflow_code = ?",
+          workflowCode);
+    }
+  }
+
+  @Test
+  @DisplayName("Trigger 只加载同日依赖执行早期 readiness gate，旧标量依赖仍兼容")
+  void shouldLoadNormalizedDependenciesAndPreserveLegacyScalarWrites() {
+    String suffix = UUID.randomUUID().toString().replace("-", "");
+    String upstreamA = "UP_A_" + suffix;
+    String upstreamB = "UP_B_" + suffix;
+    String downstream = "DOWN_" + suffix;
+    try {
+      insertScheduledDefinition(upstreamA, null);
+      insertScheduledDefinition(upstreamB, null);
+      insertScheduledDefinition(downstream, upstreamA);
+      jdbcTemplate.update(
+          "insert into batch.job_dependency"
+              + " (tenant_id, downstream_job_code, upstream_job_code, dependency_order,"
+              + " biz_date_alignment) values ('t1', ?, ?, 1, 'PREVIOUS_BIZ_DAY')",
+          downstream,
+          upstreamB);
+
+      var descriptor = triggerDefinitionLoader.loadByJobCode("t1", downstream);
+      assertThat(descriptor.getDependsOnJobCode()).isEqualTo(upstreamA);
+      // Trigger 的早期 readiness gate 只做同业务日检查；跨日依赖留给 Orchestrator。
+      assertThat(descriptor.getDependsOnJobCodes()).containsExactly(upstreamA);
+
+      jdbcTemplate.update(
+          "update batch.job_dependency set biz_date_alignment = 'PREVIOUS_BIZ_DAY' "
+              + "where tenant_id = 't1' and downstream_job_code = ? and upstream_job_code = ?",
+          downstream,
+          upstreamA);
+      var previousDayOnly = triggerDefinitionLoader.loadByJobCode("t1", downstream);
+      assertThat(previousDayOnly.getDependsOnJobCode()).isEqualTo(upstreamA);
+      assertThat(previousDayOnly.getDependsOnJobCodes()).isEmpty();
+
+      jdbcTemplate.update(
+          "delete from batch.job_dependency where tenant_id = 't1' and downstream_job_code = ?",
+          downstream);
+
+      jdbcTemplate.update(
+          "update batch.job_definition set depends_on_job_code = ?"
+              + " where tenant_id = 't1' and job_code = ?",
+          upstreamB,
+          downstream);
+      var legacyUpdated = triggerDefinitionLoader.loadByJobCode("t1", downstream);
+      assertThat(legacyUpdated.getDependsOnJobCode()).isEqualTo(upstreamB);
+      assertThat(legacyUpdated.getDependsOnJobCodes()).containsExactly(upstreamB);
+    } finally {
+      jdbcTemplate.update(
+          "delete from batch.job_definition where tenant_id = 't1' and job_code in (?, ?, ?)",
+          downstream,
+          upstreamA,
+          upstreamB);
+    }
+  }
+
+  private void insertScheduledDefinition(String jobCode, String dependsOnJobCode) {
+    jdbcTemplate.update(
+        "insert into batch.job_definition"
+            + " (tenant_id, job_code, job_name, job_type, schedule_type, schedule_expr, timezone,"
+            + " trigger_mode, depends_on_job_code) values ('t1', ?, ?, 'GENERAL', 'CRON',"
+            + " '0 0 1 * * ?', 'Asia/Shanghai', 'SCHEDULED', ?)",
+        jobCode,
+        jobCode,
+        dependsOnJobCode);
   }
 
   @Test

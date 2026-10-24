@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.trigger.mapper.ExternalEventDeliveryMapper">
+    <select id="setTenantContext" resultType="string">
+        select set_config('app.tenant_id', #{tenantId}, true)
+    </select>
+
+    <resultMap id="ExternalEventDeliveryResultMap" type="io.github.pinpols.batch.trigger.domain.entity.ExternalEventDeliveryEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="event_source" property="eventSource"/>
+        <result column="event_id" property="eventId"/>
+        <result column="event_code" property="eventCode"/>
+        <result column="biz_date" property="bizDate"/>
+        <result column="request_id" property="requestId"/>
+        <result column="payload_snapshot" property="payloadSnapshot"/>
+        <result column="target_workflow_definition_ids" property="targetWorkflowDefinitionIds"/>
+        <result column="trace_id" property="traceId"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <resultMap id="ExternalEventTargetStatusResultMap" type="io.github.pinpols.batch.trigger.domain.ExternalEventTargetStatus">
+        <constructor>
+            <arg column="workflow_definition_id" javaType="java.lang.Long"/>
+            <arg column="workflow_code" javaType="java.lang.String"/>
+            <arg column="request_id" javaType="java.lang.String"/>
+            <arg column="trace_id" javaType="java.lang.String"/>
+            <arg column="request_status" javaType="java.lang.String"/>
+            <arg column="workflow_run_id" javaType="java.lang.Long"/>
+            <arg column="workflow_run_status" javaType="java.lang.String"/>
+            <arg column="related_job_instance_id" javaType="java.lang.Long"/>
+            <arg column="instance_status" javaType="java.lang.String"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="insert" parameterType="io.github.pinpols.batch.trigger.domain.entity.ExternalEventDeliveryEntity"
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        insert into batch.external_event_delivery (
+            tenant_id, event_source, event_id, event_code, biz_date, request_id,
+            payload_snapshot, target_workflow_definition_ids, trace_id
+        ) values (
+            #{tenantId}, #{eventSource}, #{eventId}, #{eventCode}, #{bizDate}, #{requestId},
+            cast(#{payloadSnapshot} as jsonb), cast(#{targetWorkflowDefinitionIds} as jsonb), #{traceId}
+        )
+        on conflict (tenant_id, event_source, event_id) do nothing
+    </insert>
+
+    <select id="selectByIdentityForUpdate" resultMap="ExternalEventDeliveryResultMap">
+        select *
+        from batch.external_event_delivery
+        where tenant_id = #{tenantId}
+          and event_source = #{eventSource}
+          and event_id = #{eventId}
+        for update
+    </select>
+
+    <insert id="insertAlias">
+        insert into batch.external_event_delivery_alias (tenant_id, idempotency_key, delivery_id)
+        values (#{tenantId}, #{idempotencyKey}, #{deliveryId})
+        on conflict (tenant_id, idempotency_key) do nothing
+    </insert>
+
+    <select id="selectAliasDeliveryId" resultType="long">
+        select delivery_id
+        from batch.external_event_delivery_alias
+        where tenant_id = #{tenantId}
+          and idempotency_key = #{idempotencyKey}
+    </select>
+
+    <select id="containsWorkflowTarget" resultType="boolean">
+        select exists (
+            select 1
+            from batch.external_event_delivery
+            where tenant_id = #{tenantId}
+              and event_source = #{eventSource}
+              and event_id = #{eventId}
+              and jsonb_exists(target_workflow_definition_ids, cast(#{workflowDefinitionId} as varchar))
+        )
+    </select>
+
+    <select id="selectByIdentity" resultMap="ExternalEventDeliveryResultMap">
+        select *
+        from batch.external_event_delivery
+        where tenant_id = #{tenantId}
+          and event_source = #{eventSource}
+          and event_id = #{eventId}
+    </select>
+
+    <select id="selectByAlias" resultMap="ExternalEventDeliveryResultMap">
+        select delivery.*
+        from batch.external_event_delivery_alias alias
+        join batch.external_event_delivery delivery
+          on delivery.tenant_id = alias.tenant_id
+         and delivery.id = alias.delivery_id
+        where alias.tenant_id = #{tenantId}
+          and alias.idempotency_key = #{idempotencyKey}
+          and delivery.event_source = #{eventSource}
+    </select>
+
+    <select id="selectTargetStatuses" resultMap="ExternalEventTargetStatusResultMap">
+        select tr.workflow_definition_id,
+               wf.workflow_code,
+               tr.request_id,
+               tr.trace_id,
+               tr.request_status,
+               wr.id as workflow_run_id,
+               wr.run_status as workflow_run_status,
+               tr.related_job_instance_id,
+               ji.instance_status,
+               greatest(tr.updated_at, coalesce(wr.updated_at, tr.updated_at),
+                   coalesce(ji.updated_at, tr.updated_at)) as updated_at
+        from batch.trigger_request tr
+        join batch.workflow_definition wf
+          on wf.tenant_id = tr.tenant_id
+         and wf.id = tr.workflow_definition_id
+        left join batch.workflow_run wr
+          on wr.tenant_id = tr.tenant_id
+         and wr.trigger_request_id = tr.id
+        left join batch.job_instance ji
+          on ji.tenant_id = tr.tenant_id
+         and ji.id = tr.related_job_instance_id
+        where tr.tenant_id = #{tenantId}
+          and tr.external_event_source = #{eventSource}
+          and tr.external_event_id = #{eventId}
+        order by tr.workflow_definition_id
+    </select>
+</mapper>

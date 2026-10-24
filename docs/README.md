@@ -19,26 +19,26 @@
 
 | # | 目录 | 视角 | 关键入口 |
 |---|---|---|---|
-| 01 | [architecture/](./architecture/README.md) | 工程向 / 运行态架构 | [运行时兼容约束](./architecture/runtime-compatibility-contract-2026-09-01.md) / `system-flow-overview.md` |
+| 01 | [architecture/](./architecture/README.md) | 工程向 / 运行态架构 | [运行时兼容约束](architecture/runtime-compatibility-contract.md) / `system-flow-overview.md` |
 | 02 | [design/](./design/README.md) | 业务向 / 静态设计 | `database-schema-guide.md` 表目录与关系图 |
 | 03 | [api/](./api/README.md) | 前后端契约 | `console-api-protocol.md` + OpenAPI |
 | 04 | [runbook/](./runbook/README.md) | 运维 SOP（应急 / 部署 / 容量 / 灰度 / 观测）| `incident-response.md` + `feature-switches.md` |
 | 05 | [testing/](./testing/README.md) | 测试计划 / 覆盖矩阵 / release-gate | `full-project-test-plan.md` |
-| 06 | [analysis/](./analysis/README.md) | 当前待办、硬化事项、长期方案与历史分析快照 | `todo-master.md` |
+| 06 | [analysis/](plans/README.md) | 当前事项与持续硬化台账 | `todo-master.md` |
 | 07 | [dict/](./dict/README.md) | **Reference dict**（错误码 / 配置键，自动生成）| `error-codes.md` + `config-keys.md` |
 | 08 | [compliance/](./compliance/README.md) | 第三方依赖许可 + SBOM | `THIRD-PARTY-LICENSES.md` |
-| 09 | [audit/](./audit/README.md) | 专项审计报告 + 漂移防护总账 | [convention-drift-guard-index.md](./audit/convention-drift-guard-index.md)（含 CI 难覆盖的人工/AI 周期审查） |
-| 10 | [backlog/](./backlog/README.md) | 专题治理背景与历史执行计划 | 当前待办仍以 `analysis/todo-master.md` 为准 |
+| 09 | [audit/](./audit/README.md) | 日期化专项审计报告 | 按审计主题和原基线日期查找结论；持续守护规范见 standards/ |
+| 10 | [backlog/](plans/README.md) | 专题治理背景与历史执行计划 | 当前待办仍以 `analysis/todo-master.md` 为准 |
 | 11 | [plans/](./plans/README.md) | 阶段计划 | SDK roadmap / HA / 多租隔离计划 |
 | 12 | [review/](./review/README.md) | 评审结论 | code review / project deep review |
 | 13 | [sdk/](./sdk/README.md) | SDK 使用与接入 | BYO worker / quickstart |
 | 14 | [stats/](./stats/README.md) | 规模统计 | LoC / 文档体量统计 |
-| 15 | [test-data/](./test-data/test-full-coverage-import-suite/README.md) | 测试数据（Excel 配置包）| E2E 准备 |
+| 15 | [test-data/](../test-data/tenant-config-packages/README.md) | 测试数据（Excel 配置包）| E2E 准备 |
 | 16 | [verifications/](./verifications/README.md) | 验证记录 | 实测 / drill / go-live evidence |
-| 17 | [standards/](./standards/README.md) | Agent Skill、文档、CI 质量和开源工程治理 | [Agent Skill 使用指南](./standards/agent-skills-guide.md) / [静态分析与抑制项治理](./standards/static-analysis-governance.md) / 文档复扫 / 安全响应与供应链治理 |
+| 17 | [standards/](./standards/README.md) | Agent Skill、文档、CI 质量和开源工程治理 | [Agent Skill 使用指南](./standards/agent-skills-guide.md)：开发与本地构建、提交前 CI 预检、只读运维分析及专项路由 / [静态分析与抑制项治理](./standards/static-analysis-governance.md) / 安全响应与供应链治理 |
 | 18 | [governance/](./governance/README.md) | 机器可读治理契约 | CI 规则输入 |
 | — | [archive/](./archive/README.md) | 历史快照（**不再维护**） | 仅审计参考 |
-| — | [spike/](./spike/README.md) | Spike 实验记录 | 临时技术验证 |
+| — | [spike/](verifications/README.md) | Spike 实验记录 | 临时技术验证 |
 
 ## 常用角色路径
 
@@ -47,11 +47,15 @@
 | 新人入门 | 顶层 02 coding-conventions → 子目录 01 architecture (`system-flow-overview.md` / `project-structure.md`) → 04 runbook (`local-development.md`) |
 | 配置维护者 | 04 runbook (`first-tenant-config-quickstart.md` 手把手建第一个租户配置) → 下载 Excel 配置模板的「字段说明 / 五类Worker示例」sheet → `credential-matrix.md`(渠道/密码等凭据怎么存、怎么注入) |
 | 业务开发 | 02 design → 03 api → 02 coding-conventions §22 代码模式 |
-| 运维 / SRE | 04 runbook (`credential-matrix.md` 上线前逐行核对凭据 + prod fail-fast 项) → 01 architecture (`scalability-assessment.md`)|
+| 后端测试类 / fixture | 17 standards (`agent-skills-guide.md`) → `backend-testing-governance` → `coding-conventions.md` §14 / `testing/README.md` |
+| 运维 / SRE | 04 runbook (`credential-matrix.md` 上线前逐行核对凭据 + prod fail-fast 项) → 01 architecture (`heavy-workload-guarantees.md`)|
 | 救火值班 | 04 runbook (`incident-response.md` → `troubleshooting-decision-tree.md`) |
 | 上线评审 | 05 testing (`release-gate.md`) → 04 runbook (`docker-deployment.md` 或 `feature-switches.md`)|
 | 架构改动 | 01 architecture (`project-structure.md` / adr) → 顶层 03 changelog 追规范 |
 | 规范复扫 / PR 审核 | 09 audit (`convention-drift-guard-index.md`) → `agent-baseline.md` → 顶层 02 coding-conventions → `scripts/ci/README.md` |
+| 开发 / 提交前 CI 预检 | 17 standards (`agent-skills-guide.md`) → `developer-workflow` → 按需 `code-review-and-gates` / `ci-governance` / `git-pr-workflow` |
+| 功能 / Bug / Issue 多 PR 交付 | 17 standards (`agent-skills-guide.md`) → `git-pr-workflow` → 盘点依赖、共享文件/契约、合并顺序和交付证据 |
+| 只读运维分析 | 17 standards (`agent-skills-guide.md`) → `operations-analysis` → 对应运行手册和只读专项 Skill |
 | 开源治理 / 安全响应 | 17 standards (`open-source-governance.md`) → 根 `SECURITY.md` → 04 runbook (`security-scan.md`) |
 | 文档维护 / 目录调整 | 17 standards (`document-governance.md`) → 本 README → 受影响子目录 README → `scripts/ci/check-docs-structure.py` |
 | AI 协作 | [Agent Skill 使用指南](./standards/agent-skills-guide.md) → 顶层 01 agent-baseline → 02 coding-conventions，再按任务层级进入总控或专项 Skill |
@@ -62,6 +66,6 @@
 - **规范变更日志**：修改 `agent-baseline.md` 已有规范条款，必须追加 `changelog.md`
 - **Feature / Bug / 运维事件不进规范基线**：以 git commit + 对应模块文档（`architecture/*` / `runbook/*` / `analysis/*`）为权威
 - **archive/ 只读**：归档文件不再维护，新内容写到主干目录
-- **待办唯一入口**：当前待办以 [`analysis/todo-master.md`](./analysis/todo-master.md) 为准；`archive/` 中的待办只代表历史时点
+- **待办唯一入口**：当前待办以 [`analysis/todo-master.md`](plans/todo-master.md) 为准；`archive/` 中的待办只代表历史时点
 - **文档状态治理**：详见 [`standards/document-governance.md`](./standards/document-governance.md)
 - **索引同步**：新增、移动、归档文档时，必须同步本 README、对应子目录 README 和必要的根 README 入口；`check-docs-structure.py` 会检查主目录 README 覆盖和仓库内链接。

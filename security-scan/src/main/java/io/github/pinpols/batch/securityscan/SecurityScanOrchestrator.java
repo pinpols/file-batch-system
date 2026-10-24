@@ -21,7 +21,9 @@ public final class SecurityScanOrchestrator {
                 System.out.println("==> " + step.displayName() + " / " + command.label());
                 ScanResult result = executor.execute(command, options.dryRun());
                 report.add(result);
-                if (!options.continueOnError() && result.exitCode() != 0 && !result.skipped()) {
+                boolean shouldStopAfterFailure =
+                        !options.continueOnError() && result.exitCode() != 0 && !result.skipped();
+                if (shouldStopAfterFailure) {
                     return report;
                 }
             }

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.archive;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.inOrder;
@@ -77,10 +78,26 @@ class WorkflowArchiveServiceTest {
     assertThat(result.candidates()).isEqualTo(3);
     assertThat(result.workflowRunsDeleted()).isEqualTo(3);
     assertThat(result.workflowNodeRunsDeleted()).isEqualTo(7);
-    // 顺序断言：node_runs 先于 runs
+    // 冷根及节点复制并核对一致后，才允许按父子顺序删除热数据。
     var inOrder = inOrder(mapper);
+    inOrder.verify(mapper).archiveWorkflowNodeRunsByWorkflowRunIds(ids);
+    inOrder.verify(mapper).archiveWorkflowRunsByIds(ids);
+    inOrder.verify(mapper).countArchiveCopyMismatches(ids);
     inOrder.verify(mapper).deleteNodeRunsByWorkflowRunIds(ids);
     inOrder.verify(mapper).deleteByIds(ids);
+  }
+
+  @Test
+  @DisplayName("冷副本不一致时抛出异常，禁止删除热根和热节点")
+  void shouldRetainHotTree_whenArchiveCopyMismatches() {
+    List<Long> ids = List.of(1L);
+    when(mapper.selectArchivableIds(any(Instant.class), anyInt())).thenReturn(ids);
+    when(mapper.countArchiveCopyMismatches(ids)).thenReturn(1L);
+
+    assertThatThrownBy(service::archiveOnce)
+        .hasMessageContaining("Workflow archive copy verification failed");
+    verify(mapper, never()).deleteNodeRunsByWorkflowRunIds(any());
+    verify(mapper, never()).deleteByIds(any());
   }
 
   @Test

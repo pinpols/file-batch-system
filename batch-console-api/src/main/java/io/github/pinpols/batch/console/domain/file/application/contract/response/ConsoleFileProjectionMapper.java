@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.file.application.contract.response;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -14,22 +15,37 @@ public final class ConsoleFileProjectionMapper {
   private ConsoleFileProjectionMapper() {}
 
   public static ConsoleFileChannelResponse channel(Map<String, Object> row) {
-    return row == null
-        ? null
-        : new ConsoleFileChannelResponse(
-            longValue(row, "id"),
-            stringValue(row, "tenant_id"),
-            stringValue(row, "channel_code"),
-            stringValue(row, "channel_name"),
-            stringValue(row, "channel_type"),
-            SecretMasking.maskEndpoint(stringValue(row, "target_endpoint")),
-            stringValue(row, "auth_type"),
-            safeMaskedConfigJson(row),
-            stringValue(row, "receipt_policy"),
-            intValue(row, "timeout_seconds"),
-            booleanValue(row, "enabled"),
-            instantValue(row, "created_at"),
-            instantValue(row, "updated_at"));
+    if (EmptyChecks.isNull(row)) {
+      return null;
+    }
+    Long id = longValue(row, "id");
+    String tenantId = stringValue(row, "tenant_id");
+    String channelCode = stringValue(row, "channel_code");
+    String channelName = stringValue(row, "channel_name");
+    String channelType = stringValue(row, "channel_type");
+    String rawTargetEndpoint = stringValue(row, "target_endpoint");
+    String maskedTargetEndpoint = SecretMasking.maskEndpoint(rawTargetEndpoint);
+    String authType = stringValue(row, "auth_type");
+    String configJson = safeMaskedConfigJson(row);
+    String receiptPolicy = stringValue(row, "receipt_policy");
+    Integer timeoutSeconds = intValue(row, "timeout_seconds");
+    Boolean enabled = booleanValue(row, "enabled");
+    Instant createdAt = instantValue(row, "created_at");
+    Instant updatedAt = instantValue(row, "updated_at");
+    return new ConsoleFileChannelResponse(
+        id,
+        tenantId,
+        channelCode,
+        channelName,
+        channelType,
+        maskedTargetEndpoint,
+        authType,
+        configJson,
+        receiptPolicy,
+        timeoutSeconds,
+        enabled,
+        createdAt,
+        updatedAt);
   }
 
   private static String safeMaskedConfigJson(Map<String, Object> row) {
@@ -139,7 +155,9 @@ public final class ConsoleFileProjectionMapper {
       // MyBatis HTTP proxy in integration tests serializes PostgreSQL timestamps without an offset.
       // These configuration timestamps are stored and exposed as UTC, so retain the former wire
       // value.
-      return LocalDateTime.parse(text.replace(' ', 'T')).toInstant(ZoneOffset.UTC);
+      String localDateTimeText = text.replace(' ', 'T');
+      LocalDateTime localDateTime = LocalDateTime.parse(localDateTimeText);
+      return localDateTime.toInstant(ZoneOffset.UTC);
     }
   }
 }

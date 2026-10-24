@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.domain.workflow.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -12,6 +12,8 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
+import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.support.JobResourceAssignmentGuard;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
@@ -41,6 +43,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -64,6 +68,8 @@ class WorkflowDefinitionVersionTest {
   private WorkflowNodeMapper nodeMapper;
   private WorkflowEdgeMapper edgeMapper;
   private WorkflowDefinitionVersionMapper versionMapper;
+  private JobDefinitionMapper jobDefinitionMapper;
+  private BusinessCalendarMapper businessCalendarMapper;
   private WorkflowDesignLockService lockService;
   private DefaultWorkflowDefinitionService service;
 
@@ -73,6 +79,10 @@ class WorkflowDefinitionVersionTest {
     nodeMapper = mock(WorkflowNodeMapper.class);
     edgeMapper = mock(WorkflowEdgeMapper.class);
     versionMapper = mock(WorkflowDefinitionVersionMapper.class);
+    jobDefinitionMapper = mock(JobDefinitionMapper.class);
+    businessCalendarMapper = mock(BusinessCalendarMapper.class);
+    when(businessCalendarMapper.selectActiveByTenantAndCalendarCode(TENANT, "cn_workday"))
+        .thenReturn(Map.of("calendarCode", "cn_workday"));
     lockService = mock(WorkflowDesignLockService.class);
     ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
     when(tenantGuard.resolveTenant(TENANT)).thenReturn(TENANT);
@@ -90,8 +100,10 @@ class WorkflowDefinitionVersionTest {
         new WorkflowDefinitionResponseAssembler(),
         new WorkflowDefinitionWriteSupport(
             nodeMapper, edgeMapper, versionMapper, new ObjectMapper()),
-        new WorkflowDefinitionDagInspector(mock(JobDefinitionMapper.class)),
-        mock(JobResourceAssignmentGuard.class));
+        new WorkflowDefinitionDagInspector(jobDefinitionMapper),
+        mock(JobResourceAssignmentGuard.class),
+        jobDefinitionMapper,
+        businessCalendarMapper);
   }
 
   @Test
@@ -99,10 +111,24 @@ class WorkflowDefinitionVersionTest {
   void shouldAppendSnapshot_whenFullUpdateSucceeds() {
     // 准备
     WorkflowDefinitionEntity def = defEntity(3);
+    def.setScheduleEnabled(true);
+    def.setScheduleType("CRON");
+    def.setScheduleExpr("0 0 * * * ?");
+    def.setTimezone("Asia/Shanghai");
+    def.setTriggerMode("SCHEDULED");
+    def.setCalendarCode("CN_WORKDAY");
+    def.setDependsOnJobCode("PREPARE_DATA");
+    JobDefinitionEntity dependency = new JobDefinitionEntity();
+    dependency.setId(101L);
+    dependency.setJobCode("PREPARE_DATA");
+    when(jobDefinitionMapper.selectByUniqueKey(TENANT, "PREPARE_DATA")).thenReturn(dependency);
     when(definitionMapper.selectById(TENANT, DEF_ID)).thenReturn(def);
     when(lockService.currentHolder(TENANT, DEF_ID))
         .thenReturn(new LockHolder(USER, Instant.now().plusSeconds(60)));
-    when(definitionMapper.updateAndBumpVersion(eq(TENANT), eq(DEF_ID), eq(3), any(), any(), any()))
+    when(definitionMapper.updateAndBumpVersion(
+            argThat(value -> Objects.equals(value.tenantId(), TENANT)
+                && Objects.equals(value.id(), DEF_ID)
+                && Objects.equals(value.expectedVersion(), 3))))
         .thenReturn(1);
     when(nodeMapper.selectByQuery(any(WorkflowNodeQuery.class)))
         .thenReturn(List.of(nodeEntity("start", "START"), nodeEntity("end", "END")));
@@ -121,6 +147,13 @@ class WorkflowDefinitionVersionTest {
     assertThat(p.getWorkflowDefinitionId()).isEqualTo(DEF_ID);
     assertThat(p.getWorkflowCode()).isEqualTo(WORKFLOW_CODE);
     assertThat(p.getVersion()).isEqualTo(4); // bumped from 3
+    assertThat(p.getScheduleEnabled()).isTrue();
+    assertThat(p.getScheduleType()).isEqualTo("CRON");
+    assertThat(p.getScheduleExpr()).isEqualTo("0 0 * * * ?");
+    assertThat(p.getTimezone()).isEqualTo("Asia/Shanghai");
+    assertThat(p.getTriggerMode()).isEqualTo("SCHEDULED");
+    assertThat(p.getCalendarCode()).isEqualTo("cn_workday");
+    assertThat(p.getDependsOnJobCode()).isEqualTo("PREPARE_DATA");
     assertThat(p.getSavedBy()).isEqualTo(USER);
     assertThat(p.getNodesJson()).contains("\"nodeCode\":\"start\"");
     assertThat(p.getEdgesJson()).contains("\"fromNodeCode\":\"start\"");
@@ -136,7 +169,8 @@ class WorkflowDefinitionVersionTest {
     when(definitionMapper.selectById(TENANT, DEF_ID)).thenReturn(def, defEntity(2));
     when(lockService.currentHolder(TENANT, DEF_ID))
         .thenReturn(new LockHolder(USER, Instant.now().plusSeconds(60)));
-    when(definitionMapper.updateAndBumpVersion(eq(TENANT), eq(DEF_ID), any(), any(), any(), any()))
+    when(definitionMapper.updateAndBumpVersion(argThat(value ->
+            Objects.equals(value.tenantId(), TENANT) && Objects.equals(value.id(), DEF_ID))))
         .thenReturn(1);
     when(nodeMapper.selectByQuery(any(WorkflowNodeQuery.class)))
         .thenReturn(Collections.emptyList());

@@ -14,6 +14,7 @@ public class TriggerMisfirePendingEntity {
 
   private Long id;
   private String tenantId;
+  private Long workflowDefinitionId;
   private String jobCode;
 
   /** 错过的预定 fire 时刻。 */

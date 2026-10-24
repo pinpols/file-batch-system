@@ -11,6 +11,7 @@ import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
+import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
@@ -166,7 +167,7 @@ class PreprocessStepEncodingTest {
   }
 
   private static byte[] gbk(String text) {
-    return text.getBytes(io.github.pinpols.batch.common.utils.EncodingUtils.GBK);
+    return text.getBytes(EncodingUtils.GBK);
   }
 
   private ImportJobContext contextWithRawPayload(String raw) {

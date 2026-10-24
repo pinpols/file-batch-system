@@ -143,6 +143,16 @@ public class TenantConfigBatchInitRequest {
 
     private String workflowType;
     private Boolean enabled;
+    /** Portable managed association: the destination tenant resolves this Job code to its local id. */
+    private String singleJobCode;
+
+    private Boolean scheduleEnabled;
+    private String scheduleType;
+    private String scheduleExpr;
+    private String timezone;
+    private String triggerMode;
+    private String calendarCode;
+    private String dependsOnJobCode;
     private List<NodeSpec> nodes;
     private List<EdgeSpec> edges;
 
@@ -183,6 +193,10 @@ public class TenantConfigBatchInitRequest {
 
     @Size(max = 32)
     private String pipelineType;
+
+    /** Legacy source version, retained only to detect conflicts during migration into Job params. */
+    @Min(1)
+    private Integer version;
 
     @Size(max = 64)
     private String bizType;

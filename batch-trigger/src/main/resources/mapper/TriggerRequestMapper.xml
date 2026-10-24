@@ -1,21 +1,97 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.trigger.mapper.TriggerRequestMapper">
+    <select id="acquireIdempotencyFence" resultType="long">
+        with acquired as materialized (
+            select pg_advisory_xact_lock(
+                hashtextextended(concat(octet_length(#{tenantId}), ':', #{tenantId},
+                    octet_length(#{idempotencyKey}), ':', #{idempotencyKey}), 0)
+            )
+        )
+        select 1 from acquired
+    </select>
+
+    <select id="acquireExternalEventIdentityFence" resultType="long">
+        with acquired as materialized (
+            select pg_advisory_xact_lock(
+                hashtextextended(concat(octet_length(#{tenantId}), ':', #{tenantId},
+                    octet_length(#{eventSource}), ':', #{eventSource},
+                    octet_length(#{eventId}), ':', #{eventId}), 1)
+            )
+        )
+        select 1 from acquired
+    </select>
+    <!-- SHARE 与启停更新的行锁冲突；锁随 request/outbox 同事务释放，暂停确认后不再接纳新 fire。
+         已观察的 readiness 等待仍是原业务义务，不因仅暂停日程被丢弃。 -->
+    <select id="lockScheduledWorkflowAdmission" resultType="java.lang.Boolean">
+        select wf.enabled and (
+            (wf.version = #{workflowVersion} and wf.schedule_enabled) or exists (
+                select 1 from batch.scheduled_occurrence occurrence
+                where occurrence.tenant_id = wf.tenant_id
+                  and occurrence.workflow_definition_id = wf.id
+                  and occurrence.scheduled_fire_time = #{scheduledFireTime}
+                  and occurrence.occurrence_status = 'WAITING_READINESS'
+            )
+        ) as admitted
+        from batch.workflow_definition wf
+        where wf.tenant_id = #{tenantId} and wf.id = #{workflowDefinitionId}
+        for share of wf
+    </select>
+
+    <select id="isWorkflowVersionCurrent" resultType="boolean">
+        select exists (
+            select 1 from batch.workflow_definition
+            where tenant_id = #{tenantId}
+              and id = #{workflowDefinitionId}
+              and version = #{workflowVersion}
+        )
+    </select>
+
+    <select id="existsEnabledWorkflowDefinition" resultType="boolean">
+        select exists (
+            select 1
+            from batch.workflow_definition
+            where tenant_id = #{tenantId}
+              and id = #{workflowDefinitionId}
+              and enabled = true
+        )
+    </select>
+
+    <select id="selectEnabledExternalEventWorkflowTargets" resultType="long">
+        select wf.id
+        from batch.external_event_expectation_definition expectation
+        join batch.workflow_definition wf
+          on wf.tenant_id = expectation.tenant_id
+         and wf.id = expectation.workflow_definition_id
+         and wf.calendar_code = expectation.calendar_code
+        where expectation.tenant_id = #{tenantId}
+          and expectation.event_code = #{eventCode}
+          and expectation.enabled = true
+          and wf.enabled = true
+        order by wf.id
+        for share of expectation, wf
+    </select>
+
     <resultMap id="TriggerRequestResultMap" type="io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity">
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="request_id" property="requestId"/>
         <result column="trigger_type" property="triggerType"/>
         <result column="job_code" property="jobCode"/>
+        <result column="workflow_definition_id" property="workflowDefinitionId"/>
         <result column="biz_date" property="bizDate"/>
         <result column="dedup_key" property="dedupKey"/>
         <result column="request_status" property="requestStatus"/>
         <result column="related_job_instance_id" property="relatedJobInstanceId"/>
         <result column="trace_id" property="traceId"/>
+        <result column="launch_payload" property="launchPayload"/>
         <result column="forward_retry_count" property="forwardRetryCount"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
         <result column="dry_run" property="dryRun"/>
+        <result column="external_event_code" property="externalEventCode"/>
+        <result column="external_event_source" property="externalEventSource"/>
+        <result column="external_event_id" property="externalEventId"/>
     </resultMap>
 
     <resultMap id="TriggerLaunchStatusMap" type="io.github.pinpols.batch.trigger.domain.TriggerLaunchStatus">
@@ -59,10 +135,34 @@
     </select>
 
     <select id="selectByTenantAndDedupKey" resultMap="TriggerRequestResultMap">
-        select *
+        select tr.*
+        from batch.trigger_request tr
+        left join batch.trigger_request_idempotency_alias alias
+          on alias.tenant_id = tr.tenant_id
+         and alias.request_id = tr.request_id
+         and alias.idempotency_key = #{dedupKey}
+        where tr.tenant_id = #{tenantId}
+          and (tr.dedup_key = #{dedupKey} or alias.idempotency_key is not null)
+        order by (tr.dedup_key = #{dedupKey}) desc
+        limit 1
+    </select>
+
+    <select id="selectByExternalEventIdentity" resultMap="TriggerRequestResultMap">
+        select * from batch.trigger_request
+        where tenant_id = #{tenantId}
+          and workflow_definition_id = #{workflowDefinitionId}
+          and external_event_source = #{externalEventSource}
+          and external_event_id = #{externalEventId}
+    </select>
+
+    <select id="selectWorkflowTargetsByExternalEventIdentity" resultType="long">
+        select workflow_definition_id
         from batch.trigger_request
         where tenant_id = #{tenantId}
-          and dedup_key = #{dedupKey}
+          and external_event_source = #{externalEventSource}
+          and external_event_id = #{externalEventId}
+        order by workflow_definition_id
+        for update
     </select>
 
     <!--
@@ -82,7 +182,46 @@
           on ji.tenant_id = tr.tenant_id
          and ji.id = tr.related_job_instance_id
         where tr.tenant_id = #{tenantId}
-          and tr.dedup_key = #{dedupKey}
+          and (tr.dedup_key = #{dedupKey} or exists (
+              select 1 from batch.trigger_request_idempotency_alias alias
+              where alias.tenant_id = tr.tenant_id
+                and alias.request_id = tr.request_id
+                and alias.idempotency_key = #{dedupKey}
+          ))
+          and (cast(#{externalEventSource,jdbcType=VARCHAR} as varchar) is null
+               or tr.external_event_source = #{externalEventSource})
+    </select>
+
+    <insert id="insertIdempotencyAlias">
+        insert into batch.trigger_request_idempotency_alias (tenant_id, idempotency_key, request_id)
+        values (#{tenantId}, #{idempotencyKey}, #{requestId})
+        on conflict (tenant_id, idempotency_key) do nothing
+    </insert>
+
+    <select id="selectIdempotencyAliasRequestId" resultType="string">
+        select request_id from batch.trigger_request_idempotency_alias
+        where tenant_id = #{tenantId} and idempotency_key = #{idempotencyKey}
+    </select>
+
+    <select id="acquireBatchDaySettlementFence" resultType="long">
+        select case
+                   when cast(#{bizDate,jdbcType=DATE} as date) is null
+                        or target.calendar_code is null then 0::bigint
+                   else batch.acquire_batch_day_settlement_fence(
+                       #{tenantId}, target.calendar_code, #{bizDate,jdbcType=DATE})
+               end
+          from (
+              select coalesce(
+                         (select workflow.calendar_code
+                            from batch.workflow_definition workflow
+                           where workflow.tenant_id = #{tenantId}
+                             and workflow.id = #{workflowDefinitionId}),
+                         (select job.calendar_code
+                            from batch.job_definition job
+                           where job.tenant_id = #{tenantId}
+                             and job.job_code = #{jobCode})
+                     ) as calendar_code
+          ) target
     </select>
 
     <insert id="insert" parameterType="io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity"
@@ -92,16 +231,22 @@
             request_id,
             trigger_type,
             job_code,
+            workflow_definition_id,
             biz_date,
             dedup_key,
             request_status,
             trace_id,
-            dry_run
+            dry_run,
+            external_event_code,
+            external_event_source,
+            external_event_id,
+            launch_payload
         ) values (
             #{tenantId},
             #{requestId},
             #{triggerType},
             #{jobCode},
+            #{workflowDefinitionId},
             #{bizDate},
             #{dedupKey},
             #{requestStatus},
@@ -109,8 +254,15 @@
             <choose>
                 <when test="dryRun != null">#{dryRun}</when>
                 <otherwise>false</otherwise>
-            </choose>
+            </choose>,
+            #{externalEventCode},
+            #{externalEventSource},
+            #{externalEventId},
+            cast(#{launchPayload,jdbcType=VARCHAR} as jsonb)
         )
+        on conflict (tenant_id, workflow_definition_id, external_event_source, external_event_id)
+            where external_event_source is not null
+            do nothing
     </insert>
 
     <update id="updateRequestStatus">
@@ -130,11 +282,4 @@
           and request_status = #{expectedStatus}
     </update>
 
-    <update id="updateRelatedJobInstanceId">
-        update batch.trigger_request
-        set related_job_instance_id = #{relatedJobInstanceId},
-            updated_at = current_timestamp
-        where tenant_id = #{tenantId}
-          and request_id = #{requestId}
-    </update>
 </mapper>

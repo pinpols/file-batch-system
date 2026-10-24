@@ -8,16 +8,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
-import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanBuilder;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.dryrun.JdbcDryRunSqlProbe;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
-import io.github.pinpols.batch.orchestrator.mapper.WorkflowEdgeMapper;
-import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.List;
@@ -40,9 +37,6 @@ class DefaultDryRunPlanServiceTest {
   void setUp() {
     configCache = mock(OrchestratorConfigCacheService.class);
     planBuilder = mock(SchedulePlanBuilder.class);
-    WorkflowNodeMapper nodeMapper = mock(WorkflowNodeMapper.class);
-    WorkflowEdgeMapper edgeMapper = mock(WorkflowEdgeMapper.class);
-    BatchTimezoneProvider tz = new BatchTimezoneProvider(new BatchTimezoneProperties());
     jdbcTemplate = mock(JdbcTemplate.class);
     @SuppressWarnings("unchecked")
     ObjectProvider<JdbcTemplate> jdbcTemplateProvider = mock(ObjectProvider.class);
@@ -51,19 +45,15 @@ class DefaultDryRunPlanServiceTest {
     service = new DefaultDryRunPlanService(
         configCache,
         planBuilder,
-        nodeMapper,
-        edgeMapper,
-        tz,
         new JdbcDryRunSqlProbe(jdbcTemplateProvider),
         objectStorageProbe,
         request -> new OutboundHttpResponse(200, ""));
   }
 
   @Test
-  @DisplayName("作业定义与流程定义都不存在时给出错误提示, 计划判定失败")
+  @DisplayName("Job 定义不存在时拒绝预检，不推断同名 Workflow")
   void shouldReportError_whenJobDefinitionMissing() {
     when(configCache.findEnabledJobDefinition("t1", "JOB_A")).thenReturn(null);
-    when(configCache.findEnabledWorkflowDefinition("t1", "JOB_A")).thenReturn(null);
 
     DryRunPlanResult result = service.plan(DryRunPlanRequest.builder()
         .tenantId("t1")
@@ -78,8 +68,57 @@ class DefaultDryRunPlanServiceTest {
   }
 
   @Test
-  @DisplayName("调度表达式合法时计划通过并给出表达式正常提示")
-  void shouldPass_whenCronExpressionValid() {
+  @DisplayName("Job 预检不要求由 Workflow 所有的日程字段")
+  void shouldValidateJob_whenScheduleOwnedByWorkflow() {
+    JobDefinitionEntity job = JobDefinitionEntity.builder()
+        .id(1L)
+        .tenantId("t1")
+        .jobCode("JOB_A")
+        .build();
+    when(configCache.findEnabledJobDefinition("t1", "JOB_A")).thenReturn(job);
+    DryRunPlanRequest request = DryRunPlanRequest.builder()
+        .tenantId("t1")
+        .jobCode("JOB_A")
+        .level(DryRunLevel.CONFIG_VALIDATE)
+        .build();
+
+    DryRunPlanResult result = service.plan(request);
+
+    assertThat(result.success()).isTrue();
+    assertThat(result.summary()).containsEntry("jobCode", "JOB_A");
+    assertThat(result.summary()).doesNotContainKeys("scheduleType", "scheduleExpr", "workflowCode");
+    verify(configCache, never()).findEnabledWorkflowDefinition(anyString(), anyString());
+  }
+
+  @Test
+  @DisplayName("同名 Workflow 不会成为 Job 预检隐式目标")
+  void shouldIgnoreWorkflow_whenCodeMatchesUnrelatedJob() {
+    JobDefinitionEntity job = JobDefinitionEntity.builder()
+        .id(1L)
+        .tenantId("t1")
+        .jobCode("JOB_A")
+        .scheduleType("MANUAL")
+        .build();
+    WorkflowDefinitionEntity unrelatedWorkflow = new WorkflowDefinitionEntity(
+        99L, "t1", "JOB_A", "Unrelated workflow", "DAG", 1, true, null, "calendar_a");
+    when(configCache.findEnabledJobDefinition("t1", "JOB_A")).thenReturn(job);
+    when(configCache.findEnabledWorkflowDefinition("t1", "JOB_A")).thenReturn(unrelatedWorkflow);
+    DryRunPlanRequest request = DryRunPlanRequest.builder()
+        .tenantId("t1")
+        .jobCode("JOB_A")
+        .level(DryRunLevel.CONFIG_VALIDATE)
+        .build();
+
+    DryRunPlanResult result = service.plan(request);
+
+    assertThat(result.success()).isTrue();
+    assertThat(result.summary()).doesNotContainKey("workflowCode");
+    verify(configCache, never()).findEnabledWorkflowDefinition(anyString(), anyString());
+  }
+
+  @Test
+  @DisplayName("Job 残留 cron 字段不会被声明为 Workflow 日程已验证")
+  void shouldSkipScheduleValidation_whenOnlyJobTargetProvided() {
     when(configCache.findEnabledJobDefinition("t1", "JOB_A"))
         .thenReturn(JobDefinitionEntity.builder()
             .id(1L)
@@ -97,12 +136,14 @@ class DefaultDryRunPlanServiceTest {
         .build());
 
     assertThat(result.success()).isTrue();
-    assertThat(result.findings()).extracting(DryRunFinding::code).contains("JOB_CRON_OK");
+    assertThat(result.findings()).extracting(DryRunFinding::code).contains("JOB_DEFINITION_OK");
+    assertThat(result.summary()).containsEntry("workflowValidated", false);
+    assertThat(result.summary()).doesNotContainKeys("scheduleType", "scheduleExpr");
   }
 
   @Test
-  @DisplayName("调度表达式非法时给出错误提示, 计划判定失败")
-  void shouldReportError_whenCronExpressionInvalid() {
+  @DisplayName("Job 的残留日程表达式不参与独立 Job 参数预检")
+  void shouldIgnoreJobSchedule_whenPreflightingJobParameters() {
     when(configCache.findEnabledJobDefinition("t1", "JOB_A"))
         .thenReturn(JobDefinitionEntity.builder()
             .id(1L)
@@ -119,10 +160,9 @@ class DefaultDryRunPlanServiceTest {
         .level(DryRunLevel.CONFIG_VALIDATE)
         .build());
 
-    assertThat(result.success()).isFalse();
-    assertThat(result.findings())
-        .extracting(DryRunFinding::code)
-        .contains("JOB_SCHEDULE_EXPR_INVALID");
+    assertThat(result.success()).isTrue();
+    assertThat(result.findings()).extracting(DryRunFinding::code).contains("JOB_DEFINITION_OK");
+    assertThat(result.summary()).containsEntry("workflowValidated", false);
   }
 
   @Test
@@ -332,6 +372,8 @@ class DefaultDryRunPlanServiceTest {
   @Test
   @DisplayName("单条查询探针走执行计划校验并给出通过提示")
   void shouldRunExplain_whenProbingSingleSelect() {
+    final String explainStatementSql = "EXPLAIN (ANALYZE FALSE, COSTS FALSE) SELECT count(*) FROM batch.job_instance";
+
     DryRunPlanResult result = probeExecutionSql("SELECT count(*) FROM batch.job_instance");
 
     assertThat(result.findings())
@@ -339,6 +381,6 @@ class DefaultDryRunPlanServiceTest {
         .contains("EXEC_SQL_EXPLAIN_OK")
         .doesNotContain("EXEC_SQL_MULTISTATEMENT_REJECTED");
     verify(jdbcTemplate)
-        .execute("EXPLAIN (ANALYZE FALSE, COSTS FALSE) SELECT count(*) FROM batch.job_instance");
+        .execute(explainStatementSql);
   }
 }

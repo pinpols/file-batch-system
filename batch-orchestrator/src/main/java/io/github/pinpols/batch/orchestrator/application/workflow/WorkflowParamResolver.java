@@ -71,7 +71,9 @@ public class WorkflowParamResolver {
   private Map<String, Object> resolveMap(Map<?, ?> source, WorkflowRunContext context) {
     Map<String, Object> result = new LinkedHashMap<>();
     for (Map.Entry<?, ?> entry : source.entrySet()) {
-      result.put(String.valueOf(entry.getKey()), resolve(entry.getValue(), context));
+      String key = String.valueOf(entry.getKey());
+      Object resolvedValue = resolve(entry.getValue(), context);
+      result.put(key, resolvedValue);
     }
     return result;
   }
@@ -79,7 +81,8 @@ public class WorkflowParamResolver {
   private List<Object> resolveList(List<?> source, WorkflowRunContext context) {
     List<Object> result = new ArrayList<>(source.size());
     for (Object item : source) {
-      result.add(resolve(item, context));
+      Object resolvedItem = resolve(item, context);
+      result.add(resolvedItem);
     }
     return result;
   }

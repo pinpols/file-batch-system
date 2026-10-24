@@ -78,6 +78,7 @@ import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xssf.usermodel.XSSFRelation;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -94,22 +95,21 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
  * <p><b>3 阶段导入流程</b>：
  *
  * <ol>
- *   <li>{@link #upload} — 从临时文件解析 Excel（12 sheet），构建 {@code PackageExcelSession} 存入 {@link
+ *   <li>{@link #upload} — 从临时文件解析新格式或旧版兼容 Excel，构建 {@code PackageExcelSession} 存入 {@link
  *       TenantConfigPackageExcelImportStore}，返回短期 token（内存 TTL）。
  *   <li>{@link #preview} — 用 token 取回 session，调 {@link ConfigPackageExcelValidator} 做 跨 sheet
- *       依赖校验（如 pipelineStep 引用的 jobCode 必须存在），返回每 sheet 的 valid/invalid 统计和逐行错误列表，不写库。
- *   <li>{@link #apply} — 再次 validate；若 {@code totalInvalid > 0} 直接拒绝；否则在单事务内 按 resourceQueue →
- *       businessCalendar → batchWindow → fileTemplate → channel → job → pipeline+step →
- *       workflow+node+edge 顺序写库， 完成后 {@code importStore.remove(token)}。
+ *       依赖校验（包括旧 Pipeline Sheet 到 Job 参数的转换），返回每 sheet 的 valid/invalid 统计和逐行错误列表，不写库。
+ *   <li>{@link #apply} — 再次 validate；若 {@code totalInvalid > 0} 直接拒绝；否则在单事务内按资源、作业、工作流依赖顺序写库；旧
+ *       Pipeline Sheet 只转换为 Job 默认参数，不写 Pipeline 定义/步骤表；完成后 {@code importStore.remove(token)}。
  * </ol>
  *
- * <p><b>12 sheets</b>：作业监控策略单独放在 {@code job_monitoring_policy}，与 {@code job_definition} 分开维护。
- * 该 sheet 可省略；缺失表示不修改已有监控策略，避免旧包回导清除当前设置。
+ * <p>新导出和模板不再提供 Pipeline 定义/步骤表；旧包上传与预览继续识别这些表以便兼容转换。作业监控策略单独放在
+ * {@code job_monitoring_policy}，与 {@code job_definition} 分开维护；该 sheet 可省略，缺失表示不修改已有策略。
  *
  * <p><b>多级结构写法</b>：
  *
  * <ul>
- *   <li>Pipeline：步骤按 {@code jobCode:version} 分组后与父行对应，apply 时先删再重插 step。
+ *   <li>Legacy Pipeline：旧步骤按 {@code jobCode:version} 分组后迁移有效业务参数；不再作为可写定义应用。
  *   <li>Workflow：节点和边按 {@code wfCode:version} 分组，upsert 节点/边（不删旧节点，依赖 Mapper 的 ON CONFLICT UPDATE
  *       语义）。
  * </ul>
@@ -184,15 +184,11 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
         fileChannelConfigMapper.selectByQuery(tid, null, null, null, null));
     List<Map<String, Object>> fileTemplates =
         fileTemplateConfigMapper.selectByQuery(FileTemplateConfigQuery.ofTenant(tid, null));
-    List<Map<String, Object>> pipelines =
-        pipelineDefinitionMapper.selectByQuery(tid, null, null, null, null);
-    if (!includePlatformFields) {
-      pipelines = rowProjections.withoutPlatformWorkerGroups(pipelines);
-    }
-    List<Map<String, Object>> steps = rowProjections.collectPipelineSteps(pipelines);
     List<WorkflowDefinitionEntity> wfEntities =
         workflowDefinitionMapper.selectByQuery(WorkflowDefinitionQuery.ofTenant(tid, null));
-    List<Map<String, Object>> wfDefs = rowProjections.toWfDefRows(wfEntities);
+    Map<Long, String> jobCodeById = jobDefinitions.stream()
+        .collect(Collectors.toMap(JobDefinitionEntity::getId, JobDefinitionEntity::getJobCode));
+    List<Map<String, Object>> wfDefs = rowProjections.toWfDefRows(wfEntities, jobCodeById);
     List<Map<String, Object>> wfNodes = rowProjections.collectWorkflowNodes(tid, wfEntities);
     if (!includePlatformFields) {
       wfNodes = rowProjections.withoutPlatformWorkerGroups(wfNodes);
@@ -206,8 +202,10 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
         jobMonitoringPolicies,
         channels,
         fileTemplates,
-        pipelines,
-        steps,
+        // Keep legacy import sheet indexes stable for the writer, but never query or export the
+        // retired per-Job Pipeline configuration relationship.
+        List.of(),
+        List.of(),
         wfDefs,
         wfNodes,
         wfEdges);
@@ -736,6 +734,12 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
         .toList();
     int total = sheets.stream().mapToInt(SheetStats::totalRows).sum();
     int valid = sheets.stream().mapToInt(SheetStats::validRows).sum();
+    List<String> migrationNotes = result.pipelines().total() == 0
+        ? List.of()
+        : List.of(messageSource.getMessage(
+            "config.package.legacy_pipeline_migration",
+            new Object[] {result.pipelines().total(), result.steps().total()},
+            LocaleContextHolder.getLocale()));
     return new TenantConfigPackageExcelPreviewResponse(
         uploadToken,
         previewToken,
@@ -745,7 +749,8 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
         total - valid,
         sheets,
         issues,
-        toErrorRows(session, result));
+        toErrorRows(session, result),
+        migrationNotes);
   }
 
   /** 按 (sheet, rowNo) 聚合出错行 + 该行整行单元格值,供前端内联编辑。保持 issue 出现顺序。 */

@@ -70,14 +70,16 @@ public class PlatformFileRecordRepository {
     String storagePath = param.getStoragePath();
     String sourceType = param.getSourceType();
     String fileStatus = param.getFileStatus();
-    if (!Texts.hasText(tenantId)
+    boolean fileRecordHasMissingRequiredFields =
+        !Texts.hasText(tenantId)
         || !Texts.hasText(fileCategory)
         || !Texts.hasText(fileName)
         || !Texts.hasText(fileFormatType)
         || !Texts.hasText(storageType)
         || !Texts.hasText(storagePath)
         || !Texts.hasText(sourceType)
-        || !Texts.hasText(fileStatus)) {
+        || !Texts.hasText(fileStatus);
+    if (fileRecordHasMissingRequiredFields) {
       return null;
     }
     FileStateMachine.assertInitialStatus(fileStatus);
@@ -93,31 +95,41 @@ public class PlatformFileRecordRepository {
     String fileVersion =
         Texts.hasText(param.getFileVersion()) ? param.getFileVersion() : "v" + nextGenerationNo;
     LocalDate bizDate = param.getBizDate();
+    String bizType = param.getBizType();
+    String originalFileName = param.getOriginalFileName();
+    String fileExt = resolveFileExt(fileName);
+    String charset = param.getCharset();
+    String mimeType = resolveMimeType(fileFormatType);
+    long fileSizeBytes = Math.max(param.getFileSizeBytes(), 0L);
+    String checksumType = defaultText(param.getChecksumType(), "NONE");
+    String sourceRef = param.getSourceRef();
+    String traceId = param.getTraceId();
+    String metadataJson = toJson(param.getMetadata());
     Map<String, Object> values = params(
         TENANT_ID,
         tenantId,
         "fileCode",
         fileCode,
         "bizType",
-        param.getBizType(),
+        bizType,
         "fileCategory",
         fileCategory,
         "fileName",
         fileName,
         "originalFileName",
-        param.getOriginalFileName(),
+        originalFileName,
         "fileExt",
-        resolveFileExt(fileName),
+        fileExt,
         "fileFormatType",
         fileFormatType,
         "charset",
-        param.getCharset(),
+        charset,
         "mimeType",
-        resolveMimeType(fileFormatType),
+        mimeType,
         "fileSizeBytes",
-        Math.max(param.getFileSizeBytes(), 0L),
+        fileSizeBytes,
         "checksumType",
-        defaultText(param.getChecksumType(), "NONE"),
+        checksumType,
         "checksumValue",
         checksumValue,
         "storageType",
@@ -133,15 +145,15 @@ public class PlatformFileRecordRepository {
         "sourceType",
         sourceType,
         "sourceRef",
-        param.getSourceRef(),
+        sourceRef,
         "fileStatus",
         fileStatus,
         "bizDate",
         bizDate,
         "traceId",
-        param.getTraceId(),
+        traceId,
         "metadataJson",
-        toJson(param.getMetadata()));
+        metadataJson);
 
     // 无 checksum 的重试先按存储路径复用既有记录，避免唯一约束冲突后事务进入 aborted 状态。
     if (!Texts.hasText(checksumValue)) {
@@ -158,13 +170,15 @@ public class PlatformFileRecordRepository {
               tenantId,
               storagePath,
               existing.get(ID));
-          return toLong(existing.get(ID));
+          Object existingIdValue = existing.get(ID);
+          return toLong(existingIdValue);
         }
       }
     }
     try {
       mapper.insertFileRecord(values);
-      return toLong(values.get(ID));
+      Object insertedIdValue = values.get(ID);
+      return toLong(insertedIdValue);
     } catch (DuplicateKeyException ex) {
       if (!Texts.hasText(checksumValue)) {
         log.warn(
@@ -186,8 +200,9 @@ public class PlatformFileRecordRepository {
       return;
     }
     FileStateMachine.assertTransition(currentStatus, fileStatus);
+    String metadataJson = toJson(metadata);
     mapper.updateFileRecordStatus(
-        params(FILE_ID, fileId, "fileStatus", fileStatus, "metadataJson", toJson(metadata)));
+        params(FILE_ID, fileId, "fileStatus", fileStatus, "metadataJson", metadataJson));
   }
 
   public String currentFileStatus(Long fileId) {
@@ -196,7 +211,8 @@ public class PlatformFileRecordRepository {
 
   public void updateFileMetadata(Long fileId, Object metadata) {
     if (fileId != null) {
-      mapper.updateFileRecordMetadata(params(FILE_ID, fileId, "metadataJson", toJson(metadata)));
+      String metadataJson = toJson(metadata);
+      mapper.updateFileRecordMetadata(params(FILE_ID, fileId, "metadataJson", metadataJson));
     }
   }
 

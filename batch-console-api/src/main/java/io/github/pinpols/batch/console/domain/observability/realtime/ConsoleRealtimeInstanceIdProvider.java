@@ -31,7 +31,8 @@ public class ConsoleRealtimeInstanceIdProvider {
     if (EmptyChecks.isNotBlank(configured)) {
       return configured.trim();
     }
-    String generated = UUID.randomUUID().toString();
+    UUID generatedId = UUID.randomUUID();
+    String generated = generatedId.toString();
     log.warn(
         "BATCH_CONSOLE_INSTANCE_ID is not configured; generated random console realtime"
             + " instance id={}",

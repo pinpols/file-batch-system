@@ -11,6 +11,7 @@ public class DeadLetterTaskEntity {
   private String sourceType;
   private Long sourceId;
   private String deadLetterReason;
+  private String errorClass;
   private String payloadRef;
   private String replayStatus;
   private Integer replayCount;

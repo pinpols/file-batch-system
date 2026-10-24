@@ -379,7 +379,9 @@ public class TaskDispatcher {
         msg.runtimeAttributes() == null ? Map.of() : msg.runtimeAttributes(),
         msg.schedulingContext(),
         cancellation,
-        progress);
+        progress,
+        null,
+        claimResult.response().dependencyResultSnapshot());
 
     SdkTaskResult result;
     try {

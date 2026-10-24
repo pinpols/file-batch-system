@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper">
+
+    <resultMap id="ReplayOperationResultMap"
+               type="io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="operation_key" javaType="java.lang.String"/>
+            <arg column="operation_type" javaType="java.lang.String"/>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="calendar_code" javaType="java.lang.String"/>
+            <arg column="from_date" javaType="java.time.LocalDate"/>
+            <arg column="through_date" javaType="java.time.LocalDate"/>
+            <arg column="scope" javaType="java.lang.String"/>
+            <arg column="execution_mode" javaType="java.lang.String"/>
+            <arg column="candidate_source" javaType="java.lang.String"/>
+            <arg column="scope_payload" javaType="java.lang.String"/>
+            <arg column="result_policy" javaType="java.lang.String"/>
+            <arg column="config_version_policy" javaType="java.lang.String"/>
+            <arg column="config_version" javaType="java.lang.Integer"/>
+            <arg column="source_workflow_run_id" javaType="java.lang.Long"/>
+            <arg column="source_workflow_node_run_id" javaType="java.lang.Long"/>
+            <arg column="source_job_instance_id" javaType="java.lang.Long"/>
+            <arg column="target_request_id" javaType="java.lang.String"/>
+            <arg column="target_workflow_run_id" javaType="java.lang.Long"/>
+            <arg column="request_hash" javaType="java.lang.String"/>
+            <arg column="snapshot_hash" javaType="java.lang.String"/>
+            <arg column="snapshot_payload" javaType="java.lang.String"/>
+            <arg column="reason" javaType="java.lang.String"/>
+            <arg column="requested_by" javaType="java.lang.String"/>
+            <arg column="approved_by" javaType="java.lang.String"/>
+            <arg column="total_count" javaType="java.lang.Integer"/>
+            <arg column="succeeded_count" javaType="java.lang.Integer"/>
+            <arg column="failed_count" javaType="java.lang.Integer"/>
+            <arg column="in_flight_count" javaType="java.lang.Integer"/>
+            <arg column="started_at" javaType="java.time.Instant"/>
+            <arg column="completed_at" javaType="java.time.Instant"/>
+            <arg column="trace_id" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="columns">
+        id, tenant_id, operation_key, operation_type, status, calendar_code, from_date,
+        through_date, scope, execution_mode, candidate_source, scope_payload, result_policy,
+        config_version_policy, config_version, source_workflow_run_id, source_workflow_node_run_id,
+        source_job_instance_id, target_request_id, target_workflow_run_id, request_hash,
+        snapshot_hash, snapshot_payload, reason, requested_by, approved_by, total_count,
+        succeeded_count, failed_count, in_flight_count, started_at, completed_at, trace_id,
+        created_at, updated_at
+    </sql>
+
+    <insert id="insert" parameterType="io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity">
+        insert into batch.replay_operation (
+            tenant_id, operation_key, operation_type, status, calendar_code, from_date,
+            through_date, scope, execution_mode, candidate_source, scope_payload, result_policy,
+            config_version_policy, config_version, source_workflow_run_id, source_workflow_node_run_id,
+            source_job_instance_id, target_request_id, target_workflow_run_id, request_hash,
+            snapshot_hash, snapshot_payload, reason, requested_by, approved_by, total_count,
+            succeeded_count, failed_count, in_flight_count, started_at, completed_at, trace_id,
+            created_at, updated_at
+        ) values (
+            #{tenantId}, #{operationKey}::uuid, #{operationType}, #{status}, #{calendarCode}, #{fromDate},
+            #{throughDate}, #{scope}, #{executionMode}, #{candidateSource},
+            #{scopePayload,jdbcType=VARCHAR}::jsonb, #{resultPolicy}, #{configVersionPolicy},
+            #{configVersion}, #{sourceWorkflowRunId}, #{sourceWorkflowNodeRunId},
+            #{sourceJobInstanceId}, #{targetRequestId}, #{targetWorkflowRunId}, #{requestHash},
+            #{snapshotHash}, #{snapshotPayload,jdbcType=VARCHAR}::jsonb, #{reason}, #{requestedBy},
+            #{approvedBy}, #{totalCount}, #{succeededCount}, #{failedCount}, #{inFlightCount},
+            #{startedAt}, #{completedAt}, #{traceId}, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <select id="selectById" resultMap="ReplayOperationResultMap">
+        select <include refid="columns"/> from batch.replay_operation
+        where tenant_id = #{tenantId} and id = #{id}
+    </select>
+
+    <select id="selectByIdentity" resultMap="ReplayOperationResultMap">
+        select <include refid="columns"/> from batch.replay_operation
+        where tenant_id = #{tenantId} and operation_key = #{operationKey}::uuid
+    </select>
+
+    <select id="selectRecentByTenant" resultMap="ReplayOperationResultMap">
+        select <include refid="columns"/> from batch.replay_operation
+        where tenant_id = #{tenantId}
+        order by created_at desc, id desc
+        limit #{limit}
+    </select>
+
+    <select id="selectForUpdate" resultMap="ReplayOperationResultMap">
+        select <include refid="columns"/> from batch.replay_operation
+        where tenant_id = #{tenantId} and id = #{id} for update
+    </select>
+
+    <select id="selectByStatus" resultMap="ReplayOperationResultMap">
+        select <include refid="columns"/> from batch.replay_operation
+        where status = #{status} order by updated_at asc, id asc limit #{limit}
+    </select>
+
+    <select id="selectChildSessionIds" resultType="java.lang.Long">
+        select id from batch.batch_day_replay_session
+        where tenant_id = #{tenantId} and replay_operation_id = #{operationId}
+        order by biz_date, id
+    </select>
+
+    <update id="updateProgress">
+        update batch.replay_operation
+        set status = #{status}, total_count = #{totalCount}, succeeded_count = #{succeededCount},
+            failed_count = #{failedCount}, in_flight_count = #{inFlightCount},
+            approved_by = coalesce(#{approvedBy}, approved_by),
+            started_at = coalesce(#{startedAt}, started_at),
+            completed_at = coalesce(#{completedAt}, completed_at), updated_at = #{now}
+        where tenant_id = #{tenantId} and id = #{id}
+    </update>
+
+    <update id="refreshFromChildSessions">
+        update batch.replay_operation operation
+        set total_count = aggregate.total_count,
+            succeeded_count = aggregate.succeeded_count,
+            failed_count = aggregate.failed_count,
+            in_flight_count = aggregate.in_flight_count,
+            status = aggregate.operation_status,
+            started_at = case when aggregate.has_running then coalesce(operation.started_at, #{now})
+                              else operation.started_at end,
+            completed_at = case when aggregate.in_flight_count = 0
+                                then coalesce(operation.completed_at, #{now})
+                                else null end,
+            updated_at = #{now}
+        from (
+            select child.tenant_id,
+                   child.replay_operation_id,
+                   count(*)::int as total_count,
+                   count(*) filter (where child.status = 'SUCCEEDED')::int as succeeded_count,
+                   count(*) filter (where child.status in ('FAILED', 'PARTIAL_FAILED'))::int as failed_count,
+                   count(*) filter (where child.status in ('PENDING_APPROVAL', 'RUNNING'))::int
+                       as in_flight_count,
+                   bool_or(child.status = 'RUNNING') as has_running,
+                   case
+                       when bool_or(child.status = 'RUNNING') then 'RUNNING'
+                       when bool_or(child.status = 'PENDING_APPROVAL') then 'PENDING_APPROVAL'
+                       when bool_or(child.status = 'CANCELLED')
+                            and bool_or(child.status in ('SUCCEEDED', 'FAILED', 'PARTIAL_FAILED'))
+                           then 'PARTIAL_FAILED'
+                       when bool_or(child.status = 'CANCELLED') then 'CANCELLED'
+                       when count(*) filter (where child.status in ('FAILED', 'PARTIAL_FAILED')) > 0
+                            and count(*) filter (where child.status = 'SUCCEEDED') > 0
+                           then 'PARTIAL_FAILED'
+                       when count(*) filter (where child.status in ('FAILED', 'PARTIAL_FAILED')) > 0
+                           then 'FAILED'
+                       else 'SUCCEEDED'
+                   end as operation_status
+            from batch.batch_day_replay_session child
+            where child.tenant_id = #{tenantId}
+              and child.replay_operation_id = #{operationId}
+            group by child.tenant_id, child.replay_operation_id
+        ) aggregate
+        where operation.tenant_id = aggregate.tenant_id
+          and operation.id = aggregate.replay_operation_id
+    </update>
+
+    <update id="recordApproval">
+        update batch.replay_operation
+        set approved_by = #{approver}, started_at = coalesce(started_at, #{now}), updated_at = #{now}
+        where tenant_id = #{tenantId} and id = #{operationId} and status = 'PENDING_APPROVAL'
+    </update>
+</mapper>

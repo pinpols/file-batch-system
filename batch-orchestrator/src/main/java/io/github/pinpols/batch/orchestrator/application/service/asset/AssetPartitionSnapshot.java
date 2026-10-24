@@ -21,4 +21,35 @@ public record AssetPartitionSnapshot(
     Instant effectiveAt,
     String payloadStorage,
     String payloadJson,
-    String payloadRef) {}
+    String payloadRef,
+    Long resultVersionId) {
+
+  public AssetPartitionSnapshot(
+      String tenantId,
+      String assetCode,
+      LocalDate bizDate,
+      String partitionKey,
+      String businessKey,
+      String freshnessStatus,
+      Integer versionNo,
+      Long jobInstanceId,
+      Instant effectiveAt,
+      String payloadStorage,
+      String payloadJson,
+      String payloadRef) {
+    this(
+        tenantId,
+        assetCode,
+        bizDate,
+        partitionKey,
+        businessKey,
+        freshnessStatus,
+        versionNo,
+        jobInstanceId,
+        effectiveAt,
+        payloadStorage,
+        payloadJson,
+        payloadRef,
+        null);
+  }
+}

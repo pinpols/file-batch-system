@@ -12,6 +12,15 @@ SPEC.loader.exec_module(MODULE)
 
 
 class StructuredStringConcatTest(unittest.TestCase):
+    def test_ignores_redacted_diagnostic_description(self):
+        source = '''class Example {
+  String description = "Source[id=" + id
+      + ", definitionId=" + definitionId
+      + ", version=" + version
+      + ", rootParams=<redacted>]";
+}'''
+        self.assertEqual([], MODULE.scan_source(source))
+
     def test_detects_multiline_json_fixture(self):
         source = r'''class Example {
   String body = "{" +

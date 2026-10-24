@@ -5,13 +5,22 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.sun.net.httpserver.HttpServer;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookDeliveryLogMapper;
 import io.github.pinpols.batch.console.support.security.SsrfGuardedDns;
 import java.lang.reflect.Method;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.Base64;
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -122,8 +131,8 @@ class WebhookDispatcherTest {
     // 这里会静默连到内网。注:字面量内网 IP 由 OkHttp 短路不走 Dns,但那类在建订阅时已被 CallbackUrlValidator 拦。
     WebhookSubscriptionEntity subscription = new WebhookSubscriptionEntity();
     subscription.setCallbackUrl("https://localhost:9/hook");
-    WebhookEventPayload payload = new WebhookEventPayload(
-        "tenant-a", "TEST", "stream-1", null, java.time.Instant.now(), java.util.Map.of());
+    WebhookEventPayload payload =
+        new WebhookEventPayload("tenant-a", "TEST", "stream-1", null, Instant.now(), Map.of());
 
     WebhookDeliveryResult result = dispatcher.attemptDelivery(subscription, payload, "{}");
 
@@ -138,13 +147,61 @@ class WebhookDispatcherTest {
     // 若没有这道兜底,租户建 WEBHOOK 渠道 url=169.254.169.254 点测试即打云 metadata。
     WebhookSubscriptionEntity subscription = new WebhookSubscriptionEntity();
     subscription.setCallbackUrl("https://169.254.169.254/latest/meta-data/");
-    WebhookEventPayload payload = new WebhookEventPayload(
-        "tenant-a", "TEST", "stream-1", null, java.time.Instant.now(), java.util.Map.of());
+    WebhookEventPayload payload =
+        new WebhookEventPayload("tenant-a", "TEST", "stream-1", null, Instant.now(), Map.of());
 
     WebhookDeliveryResult result = dispatcher.attemptDelivery(subscription, payload, "{}");
 
     assertThat(result.success()).isFalse();
     assertThat(result.errorSummary()).contains("restricted network range");
+  }
+
+  @Test
+  @DisplayName("只有正式 Job/Workflow 终态有事实幂等键,普通变更游标不能被错误合并")
+  void shouldApplyTerminalIdempotencyOnlyToTerminalBusinessEvents() throws Exception {
+    var received = new LinkedBlockingQueue<Optional<String>>();
+    var endpoint = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    endpoint.createContext("/headers", exchange -> {
+      received.add(Optional.ofNullable(exchange.getRequestHeaders().getFirst("Idempotency-Key")));
+      exchange.getRequestBody().readAllBytes();
+      exchange.sendResponseHeaders(200, -1);
+      exchange.close();
+    });
+    String original = System.getProperty("batch.security.ssrf-guard.allow-private");
+    System.setProperty("batch.security.ssrf-guard.allow-private", "true");
+    endpoint.start();
+    try {
+      var subscription = new WebhookSubscriptionEntity();
+      subscription.setCallbackUrl(
+          "http://127.0.0.1:" + endpoint.getAddress().getPort() + "/headers");
+      for (String type : List.of(
+          "JOB_SUCCESS",
+          "JOB_FAILED",
+          "WORKFLOW_SUCCESS",
+          "WORKFLOW_FAILED",
+          "JOB_CHANGED",
+          "WORKFLOW_CHANGED")) {
+        String stream = type.startsWith("JOB_") ? "job-instances" : "workflow-runs";
+        String cursor = "ta:" + type;
+        var payload = new WebhookEventPayload("ta", type, stream, cursor, Instant.now(), Map.of());
+        assertThat(dispatcher.attemptDelivery(subscription, payload, "{}").success())
+            .isTrue();
+        var key = received.poll(5, TimeUnit.SECONDS);
+        assertThat(key).isNotNull();
+        if (type.endsWith("CHANGED")) {
+          assertThat(key).isEmpty();
+        } else {
+          assertThat(key).isPresent();
+          assertThat(new String(
+                  Base64.getUrlDecoder().decode(key.orElseThrow()), StandardCharsets.UTF_8))
+              .isEqualTo(cursor);
+        }
+      }
+    } finally {
+      endpoint.stop(0);
+      if (original == null) System.clearProperty("batch.security.ssrf-guard.allow-private");
+      else System.setProperty("batch.security.ssrf-guard.allow-private", original);
+    }
   }
 
   @Test

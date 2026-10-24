@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -742,6 +743,92 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
     assertThat(jobStats).isNotNull();
     assertThat(jobStats.path("invalidRows").asInt()).isEqualTo(1);
     assertThat(preview.path("issues").toString()).contains(missingJobCode);
+  }
+
+  @Test
+  @DisplayName("配置包可导入多上游依赖并按配置顺序持久化")
+  void shouldApplyMultipleJobDependenciesFromPackage() throws Exception {
+    String suffix = UUID.randomUUID().toString().replace("-", "").toUpperCase(Locale.ROOT);
+    String downstream = "JOB_DOWNSTREAM_" + suffix;
+    String upstreamOne = "JOB_UPSTREAM_A_" + suffix;
+    String upstreamTwo = "JOB_UPSTREAM_B_" + suffix;
+    byte[] workbookBytes = tenantPackageWorkbook(true);
+    try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(workbookBytes))) {
+      Sheet jobs = workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
+      appendDataRow(
+          jobs,
+          ConfigPackageExcelSchema.JobDefinition.COLUMNS,
+          row(
+              "tenant_id", "excel-upload-ta",
+              "job_code", downstream,
+              "job_name", "Downstream",
+              "job_type", "IMPORT",
+              "schedule_type", "CRON",
+              "schedule_expr", "0 0 2 * * ?",
+              "depends_on_job_codes", upstreamOne + "," + upstreamTwo,
+              "depends_on_biz_date_alignments", "SAME_DAY,PREVIOUS_BIZ_DAY",
+              "param_schema", "{}",
+              "default_params", "{}",
+              "enabled", "true"));
+      appendDataRow(
+          jobs,
+          ConfigPackageExcelSchema.JobDefinition.COLUMNS,
+          row(
+              "tenant_id", "excel-upload-ta",
+              "job_code", upstreamOne,
+              "job_name", "Upstream A",
+              "job_type", "IMPORT",
+              "schedule_type", "MANUAL",
+              "param_schema", "{}",
+              "default_params", "{}",
+              "enabled", "true"));
+      appendDataRow(
+          jobs,
+          ConfigPackageExcelSchema.JobDefinition.COLUMNS,
+          row(
+              "tenant_id", "excel-upload-ta",
+              "job_code", upstreamTwo,
+              "job_name", "Upstream B",
+              "job_type", "IMPORT",
+              "schedule_type", "MANUAL",
+              "param_schema", "{}",
+              "default_params", "{}",
+              "enabled", "true"));
+      ByteArrayOutputStream output = new ByteArrayOutputStream();
+      workbook.write(output);
+      workbookBytes = output.toByteArray();
+    }
+
+    HttpResponse<String> previewResponse = previewWorkbookAsRole(
+        workbookBytes,
+        "multi-dependency-package-" + suffix.toLowerCase(Locale.ROOT),
+        "ROLE_ADMIN",
+        "excel-upload-ta");
+    JsonNode preview = new ObjectMapper().readTree(previewResponse.body()).path("data");
+    assertThat(preview.path("invalidRows").asInt())
+        .as("multi-dependency package preview: %s", preview)
+        .isZero();
+    HttpResponse<String> applyResponse = postApply(
+        preview.path("uploadToken").asText(),
+        preview.path("previewToken").asText(),
+        "idem-multi-dependency-" + suffix.toLowerCase(Locale.ROOT));
+    assertThat(applyResponse.statusCode())
+        .as("multi-dependency package apply response: %s", applyResponse.body())
+        .isEqualTo(HttpStatus.OK.value());
+    assertThat(jdbcTemplate.queryForList(
+            "select upstream_job_code from batch.job_dependency "
+                + "where tenant_id = ? and downstream_job_code = ? order by dependency_order",
+            String.class,
+            "excel-upload-ta",
+            downstream))
+        .containsExactly(upstreamOne, upstreamTwo);
+    assertThat(jdbcTemplate.queryForList(
+            "select biz_date_alignment from batch.job_dependency "
+                + "where tenant_id = ? and downstream_job_code = ? order by dependency_order",
+            String.class,
+            "excel-upload-ta",
+            downstream))
+        .containsExactly("SAME_DAY", "PREVIOUS_BIZ_DAY");
   }
 
   @Test

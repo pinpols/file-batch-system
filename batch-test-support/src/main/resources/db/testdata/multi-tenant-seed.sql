@@ -18,8 +18,6 @@ VALUES
    'FIXED',       2, jsonb_build_object('templateCode', 'EXP-ORDER-EXCEL'), now(), now()),
   ('ta', 'TA_DISPATCH_ORDER',  'TA Order Dispatch',     'DISPATCH', 'MANUAL',     NULL,           'MANUAL',    'Asia/Shanghai',
    'FIXED',       1, jsonb_build_object(), now(), now()),
-  ('ta', 'TA_WF_SETTLEMENT',   'TA Settlement Workflow','WORKFLOW', 'MANUAL',     NULL,           'MANUAL',    'Asia/Shanghai',
-   'EXPONENTIAL', 3, jsonb_build_object(), now(), now()),
 
 -- ── tenant tb: 金融业务 ────────────────────────────────────────────────────────
 
@@ -27,8 +25,6 @@ VALUES
    'EXPONENTIAL', 3, jsonb_build_object('templateCode', 'IMP-TRANSACTION-CSV'), now(), now()),
   ('tb', 'TB_EXPORT_STATEMENT',   'TB Statement Export',    'EXPORT',   'MANUAL', NULL,             'MANUAL',    'Asia/Shanghai',
    'FIXED',       2, jsonb_build_object('templateCode', 'EXP-STATEMENT-EXCEL'), now(), now()),
-  ('tb', 'TB_WF_RECONCILE',       'TB Reconcile Workflow',  'WORKFLOW', 'MANUAL', NULL,             'MANUAL',    'Asia/Shanghai',
-   'EXPONENTIAL', 3, jsonb_build_object(), now(), now()),
 
 -- ── tenant tc: 风控业务 ────────────────────────────────────────────────────────
 
@@ -40,9 +36,7 @@ VALUES
   ('tc', 'TC_EXPORT_RISK_ALERT',  'TC Risk Alert Export',     'EXPORT',   'MANUAL', NULL,            'MANUAL',   'Asia/Shanghai',
    'FIXED',       3, jsonb_build_object('templateCode', 'EXP-RISK-ALERT-JSON'), now(), now()),
   ('tc', 'TC_DISPATCH_REVIEW',    'TC Review Dispatch',       'DISPATCH', 'MANUAL', NULL,           'MANUAL',  'Asia/Shanghai',
-   'NONE',        0, jsonb_build_object(), now(), now()),
-  ('tc', 'TC_WF_RISK_PIPELINE',   'TC Risk Pipeline Workflow','WORKFLOW', 'EVENT',  NULL,           'EVENT',   'Asia/Shanghai',
-   'EXPONENTIAL', 5, jsonb_build_object(), now(), now())
+   'NONE',        0, jsonb_build_object(), now(), now())
 ON CONFLICT DO NOTHING;
 
 UPDATE batch.job_definition
@@ -433,7 +427,7 @@ SET default_query_sql = 'SELECT id, alert_id, entity_id, alert_type, severity, a
     updated_at = now()
 WHERE tenant_id = 'tc' AND template_code = 'EXP-RISK-ALERT-JSON';
 
--- ── workflow definitions (与上方 WORKFLOW 类型的 job_definition 对应) ────────────
+-- 工作流定义（顶层根节点；独立于作业定义）
 
 INSERT INTO batch.workflow_definition
   (tenant_id, workflow_code, workflow_name, workflow_type, version, enabled, description, created_by, updated_by, created_at, updated_at)
@@ -474,13 +468,6 @@ SELECT d.tenant_id, d.id, v.from_node_code, v.to_node_code, 'SUCCESS', true, now
        ) AS v(from_node_code, to_node_code)
  WHERE d.tenant_id = 'ta' AND d.workflow_code = 'TA_WF_WAIT_FILE'
 ON CONFLICT (tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type) DO NOTHING;
-
-INSERT INTO batch.job_definition
-  (tenant_id, job_code, job_name, job_type, schedule_type, timezone, trigger_mode,
-   queue_code, worker_group, window_code, priority, enabled, created_at, updated_at)
-VALUES
-  ('ta','TA_WF_WAIT_FILE','TA Wait File Workflow','WORKFLOW','MANUAL','Asia/Shanghai','SCHEDULED','default_queue','IMPORT','always_open',5,true,now(),now())
-ON CONFLICT (tenant_id, job_code) DO NOTHING;
 
 INSERT INTO batch.workflow_node
   (tenant_id, workflow_definition_id, node_code, node_name, node_type, node_order, retry_policy, retry_max_count, timeout_seconds, enabled, created_at, updated_at)
@@ -622,19 +609,11 @@ FROM batch.workflow_definition wd, (VALUES
 WHERE wd.tenant_id='default-tenant' AND wd.workflow_code=v.wc AND wd.version=1
 ON CONFLICT DO NOTHING;
 
-INSERT INTO batch.job_definition
-  (tenant_id, job_code, job_name, job_type, schedule_type, timezone, trigger_mode,
-   queue_code, worker_group, window_code, priority, enabled, created_at, updated_at)
-VALUES
-  ('default-tenant','wf_probe_pipeline','Probe PIPELINE','WORKFLOW','MANUAL','Asia/Shanghai','SCHEDULED','export_queue','EXPORT','always_open',5,true,now(),now()),
-  ('default-tenant','wf_probe_gateway','Probe GATEWAY','WORKFLOW','MANUAL','Asia/Shanghai','SCHEDULED','export_queue','EXPORT','always_open',5,true,now(),now())
-ON CONFLICT (tenant_id, job_code) DO NOTHING;
-
--- MIXED workflow_type + 含 FILE_STEP 节点：完整覆盖 workflow_definition.workflow_type 枚举
+-- MIXED workflow_type + TASK 节点：完整覆盖 workflow_definition.workflow_type 枚举
 INSERT INTO batch.workflow_definition
   (tenant_id, workflow_code, workflow_name, workflow_type, version, enabled, description, created_by, updated_by, created_at, updated_at)
 VALUES
-  ('default-tenant','wf_probe_mixed','Probe MIXED workflow','MIXED',1,true,'P2 seed - MIXED type (TASK + FILE_STEP mixed)','seed','seed',now(),now())
+  ('default-tenant','wf_probe_mixed','Probe MIXED workflow','MIXED',1,true,'P2 seed - MIXED type (TASK nodes)','seed','seed',now(),now())
 ON CONFLICT (tenant_id, workflow_code, version) DO NOTHING;
 
 INSERT INTO batch.workflow_node
@@ -644,7 +623,7 @@ FROM batch.workflow_definition wd, (VALUES
   ('wf_probe_mixed','START','Start','START',NULL::text,0,'{"entry":true}'),
   ('wf_probe_mixed','PROCESS','Process Task','TASK','export_settlement_job',1,'{"step":"process"}'),
   -- ADR-009: REPORT 节点演示用 $.nodes.<X>.output.<key> DSL 引用上游 PROCESS 节点产出
-  ('wf_probe_mixed','REPORT','Generate Report','FILE_STEP','export_settlement_job',2,
+  ('wf_probe_mixed','REPORT','Generate Report','TASK','export_settlement_job',2,
    '{"step":"report","upstreamProcessedCount":"$.nodes.PROCESS.output.processedCount","bizDate":"$.workflowRun.bizDate"}'),
   ('wf_probe_mixed','END','End','END',NULL::text,3,'{"entry":false}')
 ) AS v(wc,nc,nn,nt,rjc,no_,np)
@@ -661,13 +640,6 @@ FROM batch.workflow_definition wd, (VALUES
 ) AS v(wc,f,t,et)
 WHERE wd.tenant_id='default-tenant' AND wd.workflow_code=v.wc AND wd.version=1
 ON CONFLICT DO NOTHING;
-
-INSERT INTO batch.job_definition
-  (tenant_id, job_code, job_name, job_type, schedule_type, timezone, trigger_mode,
-   queue_code, worker_group, window_code, priority, enabled, created_at, updated_at)
-VALUES
-  ('default-tenant','wf_probe_mixed','Probe MIXED','WORKFLOW','MANUAL','Asia/Shanghai','SCHEDULED','export_queue','EXPORT','always_open',5,true,now(),now())
-ON CONFLICT (tenant_id, job_code) DO NOTHING;
 
 -- API / API_PUSH dispatch channel：本地开发用 MockServer / mockoon / 或 python3 -m http.server 的自建 mock
 -- 启动本地 mock 的快速命令（Python 3.9+）：

@@ -204,12 +204,17 @@ class _RecordingHandler:
 
 
 async def _run_with_handler(
-    handler: _RecordingHandler, msg: dict[str, Any], httpx_mock: HTTPXMock
+    handler: _RecordingHandler,
+    msg: dict[str, Any],
+    httpx_mock: HTTPXMock,
+    claim_response: dict[str, Any] | None = None,
 ) -> list[Any]:
     cfg = _cfg()
     http = PlatformHttpClient(cfg)
     httpx_mock.add_response(
-        url=cfg.base_url + f"/internal/tasks/{msg['taskId']}/claim", status_code=200, json={}
+        url=cfg.base_url + f"/internal/tasks/{msg['taskId']}/claim",
+        status_code=200,
+        json=claim_response or {},
     )
     httpx_mock.add_response(
         url=cfg.base_url + f"/internal/tasks/{msg['taskId']}/report", status_code=200, json={}
@@ -221,6 +226,22 @@ async def _run_with_handler(
     finally:
         await http.close()
     return [r for r in httpx_mock.get_requests() if r.url.path.endswith("/report")]
+
+
+async def test_claim_payload_is_authoritative_for_handler_context(httpx_mock: HTTPXMock) -> None:
+    handler = _RecordingHandler("echo", SdkTaskResult.success_with())
+    await _run_with_handler(
+        handler,
+        _msg(),
+        httpx_mock,
+        {
+            "payload": '{"batchSize":20,"crossDay":{"upstream":{"resultVersionId":8}}}',
+        },
+    )
+    assert handler.calls[0].parameters == {
+        "batchSize": 20,
+        "crossDay": {"upstream": {"resultVersionId": 8}},
+    }
 
 
 def _report_body(report_reqs: list[Any]) -> dict[str, Any]:

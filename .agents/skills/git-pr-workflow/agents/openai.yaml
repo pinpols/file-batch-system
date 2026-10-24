@@ -1,0 +1,3 @@
+interface:
+  display_name: "Git 分支与 PR 交付"
+  short_description: "管理分支、提交、PR 生命周期、多 PR 依赖冲突、合并核验和分支清理"

@@ -117,8 +117,12 @@
 
     <select id="countByHealthStatus" resultType="long">
         select count(*)
-          from batch.file_channel_health
-         where health_status = #{healthStatus}
+          from batch.file_channel_health health
+          join batch.file_channel_config config
+            on config.tenant_id = health.tenant_id and config.channel_code = health.channel_code
+         where config.enabled = true
+           and config.is_deleted = false
+           and health.health_status = #{healthStatus}
     </select>
 
     <!--
@@ -129,10 +133,14 @@
     -->
     <select id="countProbeOverdue" resultType="long">
         select count(*)
-          from batch.file_channel_health
-         where health_status = 'UNHEALTHY'
-           and next_probe_at is not null
-           and next_probe_at &lt;= #{now}
+          from batch.file_channel_health health
+          join batch.file_channel_config config
+            on config.tenant_id = health.tenant_id and config.channel_code = health.channel_code
+         where config.enabled = true
+           and config.is_deleted = false
+           and health.health_status = 'UNHEALTHY'
+           and health.next_probe_at is not null
+           and health.next_probe_at &lt;= #{now}
     </select>
 
     <insert id="upsertHealth" parameterType="map">

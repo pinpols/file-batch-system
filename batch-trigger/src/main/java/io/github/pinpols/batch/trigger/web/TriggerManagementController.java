@@ -54,6 +54,40 @@ public class TriggerManagementController {
     return CommonResponse.success(new TriggerActionResult(tenantId, jobCode, "NORMAL"));
   }
 
+  @PostMapping("/workflow/register")
+  public CommonResponse<TriggerActionResult> registerWorkflow(
+      @RequestParam(KEY_TENANT_ID) String tenantId,
+      @RequestParam("workflowCode") String workflowCode) {
+    triggerRegistrationService.registerByWorkflowCode(tenantId, workflowCode);
+    return CommonResponse.success(
+        new TriggerActionResult(tenantId, null, workflowCode, "REGISTERED"));
+  }
+
+  @PostMapping("/workflow/unregister")
+  public CommonResponse<TriggerActionResult> unregisterWorkflow(
+      @RequestParam(KEY_TENANT_ID) String tenantId,
+      @RequestParam("workflowCode") String workflowCode) {
+    triggerRegistrationService.unregisterByWorkflowCode(tenantId, workflowCode);
+    return CommonResponse.success(
+        new TriggerActionResult(tenantId, null, workflowCode, "UNREGISTERED"));
+  }
+
+  @PostMapping("/workflow/pause")
+  public CommonResponse<TriggerActionResult> pauseWorkflow(
+      @RequestParam(KEY_TENANT_ID) String tenantId,
+      @RequestParam("workflowCode") String workflowCode) {
+    triggerRegistrationService.pauseByWorkflowCode(tenantId, workflowCode);
+    return CommonResponse.success(new TriggerActionResult(tenantId, null, workflowCode, "PAUSED"));
+  }
+
+  @PostMapping("/workflow/resume")
+  public CommonResponse<TriggerActionResult> resumeWorkflow(
+      @RequestParam(KEY_TENANT_ID) String tenantId,
+      @RequestParam("workflowCode") String workflowCode) {
+    triggerRegistrationService.resumeByWorkflowCode(tenantId, workflowCode);
+    return CommonResponse.success(new TriggerActionResult(tenantId, null, workflowCode, "NORMAL"));
+  }
+
   @PostMapping("/pause-all")
   public CommonResponse<TriggerSchedulerStatus> pauseAll() {
     triggerRegistrationService.pauseAll();

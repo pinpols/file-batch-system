@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.console.domain.notification.mapper.JobPushDeliveryMapper">
+    <select id="bindTenant" resultType="string">
+        select set_config('app.tenant_id',#{tenantId},true)
+    </select>
+    <!-- The tenant registry is control-plane metadata; device queues remain FORCE RLS scoped. -->
+    <select id="tenantPage" resultType="string">
+        select tenant_id from batch.tenant where tenant_id &gt; #{after}
+        order by tenant_id limit #{limit}
+    </select>
+    <update id="reconcileStopped">
+        with due as (
+            select id from batch.console_push_job_delivery
+             where tenant_id=#{tenantId} and record_type='DEVICE'
+               and ((delivery_status='IN_FLIGHT' and delivery_claim_until &lt;= #{now})
+                    or (delivery_status='PENDING' and attempt &gt;= #{maxAttempts}))
+             order by coalesce(delivery_claim_until,next_retry_at),id limit #{limit}
+        )
+        update batch.console_push_job_delivery d
+           set error_message=case when d.delivery_status='IN_FLIGHT'
+                   then 'UNKNOWN: in-flight claim expired; manual reconciliation required'
+                   else 'BUDGET: delivery attempts exhausted; manual reconciliation required' end,
+               delivery_status='EXHAUSTED',next_retry_at=null,
+               delivery_claim_token=null,delivery_claim_until=null
+         where d.tenant_id=#{tenantId} and d.id in (select id from due)
+           and ((d.delivery_status='IN_FLIGHT' and d.delivery_claim_until &lt;= #{now})
+                or (d.delivery_status='PENDING' and d.attempt &gt;= #{maxAttempts}))
+    </update>
+    <select id="pending" resultType="io.github.pinpols.batch.console.domain.notification.entity.JobPushDelivery">
+        select id,tenant_id,terminal_event_key,operator_id,subscription_id,subscription_fingerprint,
+               payload_json::text,attempt from batch.console_push_job_delivery
+         where tenant_id=#{tenantId} and record_type='DEVICE' and delivery_status='PENDING'
+           and next_retry_at &lt;= #{now}
+         order by next_retry_at,id limit #{limit}
+    </select>
+    <update id="claim">
+        update batch.console_push_job_delivery
+           set delivery_status='IN_FLIGHT',next_retry_at=null,attempt=attempt+1,
+               delivery_claim_token=#{token}::uuid,delivery_claim_until=#{until}
+         where tenant_id=#{row.tenantId} and id=#{row.id} and terminal_event_key=#{row.terminalEventKey}
+           and record_type='DEVICE' and delivery_status='PENDING' and next_retry_at &lt;= #{now}
+           and attempt &lt; #{maxAttempts}
+    </update>
+    <update id="finish">
+        update batch.console_push_job_delivery
+           set delivery_status=#{status},next_retry_at=#{nextRetry,jdbcType=TIMESTAMP_WITH_TIMEZONE},
+               http_status=#{httpStatus,jdbcType=INTEGER},error_message=#{error,jdbcType=VARCHAR},
+               attempt=case when #{refundAttempt} then greatest(attempt-1,0) else attempt end,
+               delivery_claim_token=null,delivery_claim_until=null
+         where tenant_id=#{row.tenantId} and id=#{row.id} and terminal_event_key=#{row.terminalEventKey}
+           and record_type='DEVICE' and delivery_status='IN_FLIGHT'
+           and delivery_claim_token=#{token}::uuid
+    </update>
+    <insert id="insertDecision">
+        insert into batch.console_push_job_delivery
+            (tenant_id,terminal_event_key,job_instance_id,operator_id,record_type,decision,event_type,payload_json)
+        values (#{tenantId},#{eventKey},#{jobId},#{operator,jdbcType=VARCHAR},'DECISION',#{decision},#{eventType},#{payload}::jsonb)
+        on conflict (tenant_id,terminal_event_key,subscription_id) do nothing
+    </insert>
+    <insert id="insertDevice">
+        insert into batch.console_push_job_delivery
+            (tenant_id,terminal_event_key,job_instance_id,operator_id,record_type,subscription_id,
+             subscription_fingerprint,event_type,payload_json,delivery_status,next_retry_at)
+        values (#{tenantId},#{eventKey},#{jobId},#{operator},'DEVICE',#{subscriptionId},
+             #{fingerprint},#{eventType},#{payload}::jsonb,'PENDING',current_timestamp)
+        on conflict (tenant_id,terminal_event_key,subscription_id) do nothing
+    </insert>
+</mapper>

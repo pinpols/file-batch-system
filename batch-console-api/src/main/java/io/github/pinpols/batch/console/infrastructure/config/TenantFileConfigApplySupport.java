@@ -41,8 +41,9 @@ final class TenantFileConfigApplySupport {
   }
 
   Map<String, Object> findTemplate(String tenantId, FileTemplateSpec spec) {
-    return fileTemplateConfigMapper.selectByUniqueKey(
-        tenantId, spec.getTemplateCode(), Nullables.coalesce(spec.getVersion(), 1));
+    String templateCode = spec.getTemplateCode();
+    Integer templateVersion = Nullables.coalesce(spec.getVersion(), 1);
+    return fileTemplateConfigMapper.selectByUniqueKey(tenantId, templateCode, templateVersion);
   }
 
   void upsertTemplate(String tenantId, FileTemplateSpec spec, String operator) {

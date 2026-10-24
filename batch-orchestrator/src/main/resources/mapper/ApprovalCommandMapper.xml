@@ -32,7 +32,17 @@
             cast(#{payloadJson} as jsonb), #{approvalStatus}, #{requesterId}, #{sourceTraceId}, #{sourceIdempotencyKey},
             #{approvalReason}, current_timestamp, current_timestamp
         )
+        on conflict (tenant_id, source_idempotency_key)
+        where source_idempotency_key is not null
+        do nothing
     </insert>
+
+    <select id="selectByTenantAndSourceIdempotencyKey" resultMap="approvalCommandMap">
+        select *
+        from batch.approval_command
+        where tenant_id = #{tenantId}
+          and source_idempotency_key = #{sourceIdempotencyKey}
+    </select>
 
     <select id="selectByTenantAndApprovalNo" resultMap="approvalCommandMap">
         select *

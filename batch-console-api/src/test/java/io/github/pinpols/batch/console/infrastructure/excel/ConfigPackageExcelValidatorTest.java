@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.infrastructure.excel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
@@ -33,33 +32,150 @@ class ConfigPackageExcelValidatorTest {
   }
 
   @Test
-  @DisplayName("流水线步骤必须完整有序且全部启用,违规时在预览交叉校验阶段拦截")
-  void shouldRejectPipelineStepsWithWrongOrderOrDisabledStage() {
-    List<Map<String, String>> orderedSteps = pipelineStepRows();
-    List<Map<String, String>> reorderedSteps = new ArrayList<>(pipelineStepRows());
-    String firstStage = reorderedSteps.get(0).get("stage_code");
-    reorderedSteps.get(0).put("stage_code", reorderedSteps.get(1).get("stage_code"));
-    reorderedSteps.get(1).put("stage_code", firstStage);
-    List<Map<String, String>> incorrectOrder = pipelineStepRows();
-    incorrectOrder.get(1).put("step_order", "0");
-    List<Map<String, String>> disabledStage = pipelineStepRows();
-    disabledStage.get(1).put("enabled", "false");
+  @DisplayName("旧配置包的 Pipeline 类型必须由 Job 类型唯一决定")
+  void shouldRejectLegacyPipelineTypeThatDoesNotMatchJobType() {
+    Map<String, String> job = new LinkedHashMap<>();
+    job.put("tenant_id", "t1");
+    job.put("job_code", "JOB_IMPORT");
+    job.put("job_name", "导入任务");
+    job.put("job_type", "IMPORT");
+    job.put("schedule_type", "MANUAL");
+    Map<String, String> pipeline = new LinkedHashMap<>();
+    pipeline.put("tenant_id", "t1");
+    pipeline.put("job_code", "JOB_IMPORT");
+    pipeline.put("pipeline_name", "错误的导出流水线");
+    pipeline.put("pipeline_type", "EXPORT");
+    pipeline.put("version", "1");
+    PackageExcelSession session = new PackageExcelSession(
+        "package.xlsx",
+        "t1",
+        Instant.EPOCH,
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(job),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(pipeline),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of());
 
-    for (List<Map<String, String>> steps :
-        List.of(reorderedSteps, incorrectOrder, disabledStage, orderedSteps)) {
-      PackageExcelSession session = sessionWithPipelines(List.of(pipelineRow()), steps);
+    ConfigPackageExcelValidator.PackageValidationResult result = validator().validate(session);
 
-      ConfigPackageExcelValidator.PackageValidationResult result = validator().validate(session);
+    assertThat(result.allIssues()).anySatisfy(issue -> {
+      assertThat(issue.sheetName()).isEqualTo(ConfigPackageExcelValidator.PIPELINE_SHEET);
+      assertThat(issue.columnName()).isEqualTo(ConfigPackageExcelValidator.COL_PIPELINE_TYPE);
+      assertThat(issue.message()).contains("requires Pipeline type IMPORT");
+    });
+  }
 
-      if (steps == orderedSteps) {
-        assertThat(result.crossRefIssues()).isEmpty();
-      } else {
-        assertThat(result.crossRefIssues()).anySatisfy(issue -> {
-          assertThat(issue.sheetName()).isEqualTo(ConfigPackageExcelValidator.PIPELINE_SHEET);
-          assertThat(issue.message()).contains("complete fixed stage order");
-        });
+  @Test
+  @DisplayName("旧配置包的阶段必须完整且严格按系统 Pipeline 顺序")
+  void shouldRejectIncompleteLegacyPipelineStageSequence() {
+    Map<String, String> job = new LinkedHashMap<>();
+    job.put("tenant_id", "t1");
+    job.put("job_code", "JOB_IMPORT");
+    job.put("job_name", "导入任务");
+    job.put("job_type", "IMPORT");
+    job.put("schedule_type", "MANUAL");
+    Map<String, String> pipeline = new LinkedHashMap<>();
+    pipeline.put("tenant_id", "t1");
+    pipeline.put("job_code", "JOB_IMPORT");
+    pipeline.put("pipeline_name", "旧导入流水线");
+    pipeline.put("pipeline_type", "IMPORT");
+    pipeline.put("version", "1");
+    Map<String, String> step = new LinkedHashMap<>();
+    step.put("job_code", "JOB_IMPORT");
+    step.put("version", "1");
+    step.put("step_code", "RECEIVE");
+    step.put("step_name", "接收");
+    step.put("stage_code", "RECEIVE");
+    step.put("step_order", "1");
+    PackageExcelSession session = new PackageExcelSession(
+        "package.xlsx",
+        "t1",
+        Instant.EPOCH,
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(job),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(pipeline),
+        List.of(step),
+        List.of(),
+        List.of(),
+        List.of());
+
+    ConfigPackageExcelValidator.PackageValidationResult result = validator().validate(session);
+
+    assertThat(result.allIssues()).anySatisfy(issue -> {
+      assertThat(issue.sheetName()).isEqualTo(ConfigPackageExcelValidator.PIPELINE_SHEET);
+      assertThat(issue.message()).contains("stages must match the fixed IMPORT sequence");
+    });
+  }
+
+  @Test
+  @DisplayName("旧 Pipeline 的阶段业务参数转换到 Job.default_params")
+  void shouldConvertLegacyStepParamsIntoJobDefaults() {
+    Map<String, String> job = new LinkedHashMap<>();
+    job.put("tenant_id", "t1");
+    job.put("job_code", "JOB_IMPORT");
+    job.put("job_name", "导入任务");
+    job.put("job_type", "IMPORT");
+    job.put("schedule_type", "MANUAL");
+    Map<String, String> pipeline = new LinkedHashMap<>();
+    pipeline.put("tenant_id", "t1");
+    pipeline.put("job_code", "JOB_IMPORT");
+    pipeline.put("pipeline_name", "旧导入流水线");
+    pipeline.put("pipeline_type", "IMPORT");
+    pipeline.put("version", "1");
+    List<String> stages = List.of("RECEIVE", "PREPROCESS", "PARSE", "VALIDATE", "LOAD", "FEEDBACK");
+    List<Map<String, String>> steps = new ArrayList<>();
+    for (int index = 0; index < stages.size(); index++) {
+      String stage = stages.get(index);
+      Map<String, String> step = new LinkedHashMap<>();
+      step.put("job_code", "JOB_IMPORT");
+      step.put("version", "1");
+      step.put("step_code", "IMPORT_" + stage);
+      step.put("step_name", stage);
+      step.put("stage_code", stage);
+      step.put("step_order", String.valueOf(index + 1));
+      step.put("impl_code", "IMPORT_" + stage);
+      if ("LOAD".equals(stage)) {
+        step.put("step_params", "{\"targetSchema\":\"biz\",\"targetTable\":\"customer\"}");
       }
+      steps.add(step);
     }
+    PackageExcelSession session = new PackageExcelSession(
+        "package.xlsx",
+        "t1",
+        Instant.EPOCH,
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(job),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(pipeline),
+        steps,
+        List.of(),
+        List.of(),
+        List.of());
+
+    ConfigPackageExcelValidator.PackageValidationResult result = validator().validate(session);
+
+    assertThat(result.allIssues()).isEmpty();
+    assertThat(result.validJobs()).hasSize(1);
+    assertThat(result.validJobs().getFirst().get("default_params"))
+        .contains("systemPipelineStepParams")
+        .contains("targetSchema")
+        .contains("customer");
   }
 
   @Test
@@ -197,6 +313,71 @@ class ConfigPackageExcelValidatorTest {
       assertThat(issue.columnName()).isEqualTo(ConfigPackageExcelValidator.COL_DEFAULT_PARAMS);
       assertThat(issue.message()).contains("tpl_missing");
     });
+  }
+
+  @Test
+  @DisplayName("多上游作业依赖:配置包校验拒绝环并允许逗号分隔的多个上游")
+  void shouldRejectCyclesInMultiJobDependencies() {
+    Map<String, String> first = new LinkedHashMap<>(jobRow("", "", ""));
+    first.put("job_code", "JOB_FIRST");
+    first.put("job_name", "作业一");
+    first.put("depends_on_job_codes", "JOB_SECOND, JOB_THIRD");
+    Map<String, String> second = new LinkedHashMap<>(jobRow("", "", ""));
+    second.put("job_code", "JOB_SECOND");
+    second.put("job_name", "作业二");
+    second.put("depends_on_job_codes", "JOB_FIRST");
+    Map<String, String> third = new LinkedHashMap<>(jobRow("", "", ""));
+    third.put("job_code", "JOB_THIRD");
+    third.put("job_name", "作业三");
+
+    ConfigPackageExcelValidator.PackageValidationResult result =
+        validator().validate(session(List.of(), List.of(first, second, third)));
+
+    assertThat(result.allIssues())
+        .anySatisfy(
+            issue -> assertThat(issue.message()).contains("dependency graph contains a cycle"));
+  }
+
+  @Test
+  @DisplayName("逐边业务日对齐规则数量必须与上游作业编码一致")
+  void shouldRejectMisalignedJobDependencyDateAlignments() {
+    Map<String, String> downstream = new LinkedHashMap<>(jobRow("", "", ""));
+    downstream.put("job_code", "JOB_DOWNSTREAM");
+    downstream.put("job_name", "下游作业");
+    downstream.put("depends_on_job_codes", "JOB_UPSTREAM_A,JOB_UPSTREAM_B");
+    downstream.put("depends_on_biz_date_alignments", "PREVIOUS_BIZ_DAY");
+    Map<String, String> upstreamA = new LinkedHashMap<>(jobRow("", "", ""));
+    upstreamA.put("job_code", "JOB_UPSTREAM_A");
+    upstreamA.put("job_name", "上游作业 A");
+    Map<String, String> upstreamB = new LinkedHashMap<>(jobRow("", "", ""));
+    upstreamB.put("job_code", "JOB_UPSTREAM_B");
+    upstreamB.put("job_name", "上游作业 B");
+
+    ConfigPackageExcelValidator.PackageValidationResult result =
+        validator().validate(session(List.of(), List.of(downstream, upstreamA, upstreamB)));
+
+    assertThat(result.allIssues())
+        .anySatisfy(issue -> assertThat(issue.columnName())
+            .isEqualTo(ConfigPackageExcelValidator.COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS));
+  }
+
+  @Test
+  @DisplayName("多上游作业依赖:数量上限与 Console 契约保持一致")
+  void shouldRejectMoreThanThirtyTwoJobDependencies() {
+    Map<String, String> downstream = new LinkedHashMap<>(jobRow("", "", ""));
+    downstream.put("job_code", "JOB_DOWNSTREAM");
+    downstream.put("job_name", "下游作业");
+    downstream.put(
+        "depends_on_job_codes",
+        java.util.stream.IntStream.range(0, 33)
+            .mapToObj(index -> "UPSTREAM_" + index)
+            .collect(java.util.stream.Collectors.joining(",")));
+
+    ConfigPackageExcelValidator.PackageValidationResult result =
+        validator().validate(session(List.of(), List.of(downstream)));
+
+    assertThat(result.allIssues())
+        .anySatisfy(issue -> assertThat(issue.message()).contains("at most 32 upstream jobs"));
   }
 
   @Test
@@ -449,12 +630,10 @@ class ConfigPackageExcelValidatorTest {
   }
 
   private static ConfigPackageExcelValidator validator() {
-    var stepRegistry = mock(StepRegistryQueryMapper.class);
-    when(stepRegistry.selectImplCodesByModule("IMPORT")).thenReturn(List.of());
     return new ConfigPackageExcelValidator(
         mock(JobDefinitionMapper.class),
         mock(PipelineDefinitionMapper.class),
-        stepRegistry,
+        mock(StepRegistryQueryMapper.class),
         mock(FileTemplateConfigMapper.class),
         mock(ResourceQueueMapper.class),
         mock(BusinessCalendarMapper.class),
@@ -504,57 +683,6 @@ class ConfigPackageExcelValidatorTest {
         List.of(),
         List.of(),
         List.of());
-  }
-
-  private static PackageExcelSession sessionWithPipelines(
-      List<Map<String, String>> pipelineRows, List<Map<String, String>> stepRows) {
-    return new PackageExcelSession(
-        "package.xlsx",
-        "t1",
-        Instant.EPOCH,
-        List.of(),
-        List.of(),
-        List.of(),
-        List.of(jobRow("", "", "")),
-        List.of(),
-        List.of(),
-        List.of(),
-        pipelineRows,
-        stepRows,
-        List.of(),
-        List.of(),
-        List.of());
-  }
-
-  private static Map<String, String> pipelineRow() {
-    return new LinkedHashMap<>(Map.of(
-        "job_code", "JOB_IMPORT_CUSTOMER",
-        "pipeline_name", "Import pipeline",
-        "pipeline_type", "IMPORT",
-        "version", "1"));
-  }
-
-  private static List<Map<String, String>> pipelineStepRows() {
-    List<Map<String, String>> rows = new ArrayList<>();
-    List<String> stages = io.github.pinpols.batch.common.enums.PipelineType.stages("IMPORT");
-    for (int index = 0; index < stages.size(); index++) {
-      String stage = stages.get(index);
-      Map<String, String> row = new LinkedHashMap<>();
-      row.put("job_code", "JOB_IMPORT_CUSTOMER");
-      row.put("version", "1");
-      row.put("step_code", stage);
-      row.put("step_name", stage);
-      row.put("stage_code", stage);
-      row.put("step_order", String.valueOf(index));
-      row.put("impl_code", "impl_" + stage);
-      row.put("step_params", "{}");
-      row.put("timeout_seconds", "0");
-      row.put("retry_policy", "NONE");
-      row.put("retry_max_count", "0");
-      row.put("enabled", "true");
-      rows.add(row);
-    }
-    return rows;
   }
 
   private static Map<String, String> fileTemplateRow(String templateCode, String version) {

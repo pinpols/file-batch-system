@@ -12,6 +12,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -88,15 +89,21 @@ public class AtomicExecutorProductionGuard {
     Set<String> enforced = new HashSet<>();
     for (String p : guardProperties.getEnforceProfiles()) {
       if (EmptyChecks.isNotBlank(p)) {
-        enforced.add(p.trim().toLowerCase(Locale.ROOT));
+        String trimmedProfile = p.trim();
+        String normalizedProfile = trimmedProfile.toLowerCase(Locale.ROOT);
+        enforced.add(normalizedProfile);
       }
     }
     if (EmptyChecks.isEmpty(enforced) || EmptyChecks.isNull(activeProfiles)) {
       return false;
     }
     for (String active : activeProfiles) {
-      if (active != null && enforced.contains(active.trim().toLowerCase(Locale.ROOT))) {
-        return true;
+      if (EmptyChecks.isNotNull(active)) {
+        String trimmedProfile = active.trim();
+        String normalizedProfile = trimmedProfile.toLowerCase(Locale.ROOT);
+        if (enforced.contains(normalizedProfile)) {
+          return true;
+        }
       }
     }
     return false;
@@ -118,10 +125,12 @@ public class AtomicExecutorProductionGuard {
           + " 限定可调用的 schema(默认空=允许全部,prod 风险过大)");
     }
     HttpExecutorProperties http = httpProps.getIfAvailable();
-    if (http != null
-        && http.isEnabled()
-        && http.getAllowedHostPatterns().isEmpty()
-        && !http.isEnforceAllowlist()) {
+    boolean httpEnabledWithEmptyUnenforcedAllowlist =
+        EmptyChecks.isNotNull(http)
+            && http.isEnabled()
+            && EmptyChecks.isEmpty(Objects.requireNonNull(http.getAllowedHostPatterns()))
+            && !http.isEnforceAllowlist();
+    if (httpEnabledWithEmptyUnenforcedAllowlist) {
       violations.add("batch.worker.executors.http.enabled=true 但 allowedHostPatterns 为空且"
           + " enforceAllowlist=false — prod profile 必须二选一:"
           + "(a) 配 batch.worker.executors.http.allowed-host-patterns 列出可访问的出口域名 glob;"

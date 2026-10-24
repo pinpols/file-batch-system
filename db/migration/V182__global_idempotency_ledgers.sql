@@ -1,9 +1,9 @@
--- V182: Restore global idempotency keys weakened by monthly partitioning.
+-- V182：恢复月度分区削弱的全局幂等键。
 --
--- V172/V173 had to include the partition key in UNIQUE constraints, which made
--- outbox_event 和 job_instance 分区后的幂等性。精简台账表保留原有全局键，
--- 并与对应业务写入在同一事务中更新。
--- as the business row via INSERT ... ON CONFLICT DO NOTHING.
+-- V172/V173 必须在 UNIQUE 约束中包含分区键，导致 outbox_event 和 job_instance 分区后无法保持全局幂等。
+-- 精简台账表保留原有全局键，并与对应业务记录在同一事务中更新。
+
+
 
 CREATE TABLE IF NOT EXISTS batch.outbox_event_dedup_key (
     tenant_id    VARCHAR(64)  NOT NULL,

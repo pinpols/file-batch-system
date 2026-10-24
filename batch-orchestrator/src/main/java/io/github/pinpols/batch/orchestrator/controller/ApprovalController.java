@@ -45,28 +45,33 @@ public class ApprovalController {
   @GetMapping("/{approvalNo}")
   public ApprovalRecordResponse get(
       @PathVariable String approvalNo, @RequestParam String tenantId) {
-    return new ApprovalRecordResponse(approvalWorkflowService.get(tenantId, approvalNo));
+    ApprovalWorkflowService.ApprovalRecord record =
+        approvalWorkflowService.get(tenantId, approvalNo);
+    return new ApprovalRecordResponse(record);
   }
 
   @PostMapping("/{approvalNo}/approve")
   public ApprovalRecordResponse approve(
       @PathVariable String approvalNo, @RequestBody ApprovalActionRequest request) {
-    return new ApprovalRecordResponse(approvalWorkflowService.approve(
-        request.tenantId(), approvalNo, request.operatorId(), request.reason()));
+    ApprovalWorkflowService.ApprovalRecord record = approvalWorkflowService.approve(
+        request.tenantId(), approvalNo, request.operatorId(), request.reason());
+    return new ApprovalRecordResponse(record);
   }
 
   @PostMapping("/{approvalNo}/reject")
   public ApprovalRecordResponse reject(
       @PathVariable String approvalNo, @RequestBody ApprovalActionRequest request) {
-    return new ApprovalRecordResponse(approvalWorkflowService.reject(
-        request.tenantId(), approvalNo, request.operatorId(), request.reason()));
+    ApprovalWorkflowService.ApprovalRecord record = approvalWorkflowService.reject(
+        request.tenantId(), approvalNo, request.operatorId(), request.reason());
+    return new ApprovalRecordResponse(record);
   }
 
   @PostMapping("/{approvalNo}/executed")
   public ApprovalRecordResponse executed(
       @PathVariable String approvalNo, @RequestBody ApprovalTenantRequest request) {
-    return new ApprovalRecordResponse(
-        approvalWorkflowService.markExecuted(request.tenantId(), approvalNo));
+    ApprovalWorkflowService.ApprovalRecord record =
+        approvalWorkflowService.markExecuted(request.tenantId(), approvalNo);
+    return new ApprovalRecordResponse(record);
   }
 
   public record ApprovalRequest(

@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.orchestrator.domain.context.TriggerLaunchPersistenceContext;
+import io.github.pinpols.batch.orchestrator.domain.query.TriggerLaunchContinuityMetrics;
 import io.github.pinpols.batch.orchestrator.domain.query.TriggerRequestLaunchReconcileRow;
 import java.time.Instant;
 import java.util.List;
@@ -25,8 +26,26 @@ public interface TriggerRequestMapper {
   TriggerLaunchPersistenceContext selectLaunchPersistenceContext(
       @Param("tenantId") String tenantId, @Param("requestId") String requestId);
 
+  /** Verifies an internal launch against either its frozen Workflow snapshot or legacy live node. */
+  boolean isValidParentWorkflowNodeLaunch(
+      @Param("tenantId") String tenantId,
+      @Param("parentWorkflowRunId") Long parentWorkflowRunId,
+      @Param("parentJobInstanceId") Long parentJobInstanceId,
+      @Param("parentNodeCode") String parentNodeCode,
+      @Param("parentVirtualTaskId") Long parentVirtualTaskId,
+      @Param("childJobCode") String childJobCode,
+      @Param("existingChildJobInstanceId") Long existingChildJobInstanceId,
+      @Param("frozenWorkflowSnapshot") boolean frozenWorkflowSnapshot);
+
   TriggerRequestEntity selectByTenantAndDedupKey(
       @Param("tenantId") String tenantId, @Param("dedupKey") String dedupKey);
+
+  /** Count requests that may still create a job instance for the target batch day. */
+  int countUnlaunchedForCalendarBizDate(
+      @Param("tenantId") String tenantId,
+      @Param("calendarCode") String calendarCode,
+      @Param("bizDate") java.time.LocalDate bizDate,
+      @Param("pendingStatuses") List<String> pendingStatuses);
 
   default int updateAcceptance(
       String tenantId, String requestId, String requestStatus, Long relatedJobInstanceId) {
@@ -82,6 +101,10 @@ public interface TriggerRequestMapper {
       @Param("limit") int limit,
       @Param("requestStatus") String requestStatus,
       @Param("excludedInstanceStatus") String excludedInstanceStatus);
+
+  TriggerLaunchContinuityMetrics selectLaunchContinuityMetrics(
+      @Param("staleOlderThan") Instant staleOlderThan,
+      @Param("completedSince") Instant completedSince);
 
   /**
    * CAS 把 trigger_request 从 ACCEPTED + relatedJobInstanceId IS NULL 推到 LAUNCHED + jobInstanceId。 返回

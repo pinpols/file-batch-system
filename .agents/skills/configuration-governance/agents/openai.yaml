@@ -1,0 +1,3 @@
+interface:
+  display_name: "配置治理"
+  short_description: "核查配置事实源、环境变量、功能开关、密钥生命周期和环境间漂移"

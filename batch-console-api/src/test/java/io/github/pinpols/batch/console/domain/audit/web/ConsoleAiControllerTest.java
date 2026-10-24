@@ -30,6 +30,7 @@ import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolve
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -150,10 +151,10 @@ class ConsoleAiControllerTest {
         .andReturn()
         .getResponse()
         .getContentAsString();
-    org.junit.jupiter.api.Assertions.assertTrue(stream.contains("event:started"));
-    org.junit.jupiter.api.Assertions.assertTrue(stream.contains("event:delta"));
-    org.junit.jupiter.api.Assertions.assertTrue(stream.contains("event:completed"));
-    org.junit.jupiter.api.Assertions.assertTrue(stream.contains("hello world"));
+    Assertions.assertTrue(stream.contains("event:started"));
+    Assertions.assertTrue(stream.contains("event:delta"));
+    Assertions.assertTrue(stream.contains("event:completed"));
+    Assertions.assertTrue(stream.contains("hello world"));
   }
 
   @Test
@@ -178,7 +179,7 @@ class ConsoleAiControllerTest {
                 """))
         .andExpect(request().asyncStarted())
         .andReturn();
-    org.junit.jupiter.api.Assertions.assertTrue(entered.await(2, TimeUnit.SECONDS));
+    Assertions.assertTrue(entered.await(2, TimeUnit.SECONDS));
     when(requestMetadataResolver.current())
         .thenReturn(
             new ConsoleRequestMetadata("req-cancel", "trace-cancel", "t1", "other", null, null));

@@ -17,17 +17,24 @@ import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BusinessCalendarEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.view.BatchDayInstanceMetrics;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
+import io.github.pinpols.batch.orchestrator.mapper.BatchDayWaitingLaunchMapper;
+import io.github.pinpols.batch.orchestrator.mapper.CalendarDependencyWaitMapper;
+import io.github.pinpols.batch.orchestrator.mapper.ExpectedWorkOccurrenceMapper;
+import io.github.pinpols.batch.orchestrator.mapper.JobDependencyWaitingLaunchMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import io.github.pinpols.batch.orchestrator.mapper.WorkflowDefinitionMapper;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -45,36 +52,130 @@ import org.springframework.transaction.TransactionStatus;
 class BatchDaySettleSchedulerTest {
 
   private BatchDayInstanceMapper batchDayInstanceMapper;
+  private BatchDayWaitingLaunchMapper batchDayWaitingLaunchMapper;
+  private JobDependencyWaitingLaunchMapper jobDependencyWaitingLaunchMapper;
+  private CalendarDependencyWaitMapper calendarDependencyWaitMapper;
+  private ExpectedWorkOccurrenceMapper expectedWorkOccurrenceMapper;
   private JobInstanceMapper jobInstanceMapper;
   private JobExecutionLogMapper jobExecutionLogMapper;
   private TriggerRequestMapper triggerRequestMapper;
+  private WorkflowDefinitionMapper workflowDefinitionMapper;
   private OrchestratorConfigCacheService configCacheService;
-  private LaunchService launchService;
+  private LaunchApplicationService launchApplicationService;
   private OrchestratorGracefulShutdown gracefulShutdown;
   private BatchDaySettleScheduler scheduler;
 
   @BeforeEach
   void setUp() {
     batchDayInstanceMapper = mock(BatchDayInstanceMapper.class);
+    batchDayWaitingLaunchMapper = mock(BatchDayWaitingLaunchMapper.class);
+    jobDependencyWaitingLaunchMapper = mock(JobDependencyWaitingLaunchMapper.class);
+    calendarDependencyWaitMapper = mock(CalendarDependencyWaitMapper.class);
+    expectedWorkOccurrenceMapper = mock(ExpectedWorkOccurrenceMapper.class);
     jobInstanceMapper = mock(JobInstanceMapper.class);
     jobExecutionLogMapper = mock(JobExecutionLogMapper.class);
     triggerRequestMapper = mock(TriggerRequestMapper.class);
+    workflowDefinitionMapper = mock(WorkflowDefinitionMapper.class);
     configCacheService = mock(OrchestratorConfigCacheService.class);
-    launchService = mock(LaunchService.class);
+    launchApplicationService = mock(LaunchApplicationService.class);
     gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
     PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
     when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
     scheduler = new BatchDaySettleScheduler(
         batchDayInstanceMapper,
+        batchDayWaitingLaunchMapper,
+        jobDependencyWaitingLaunchMapper,
+        calendarDependencyWaitMapper,
+        expectedWorkOccurrenceMapper,
         jobInstanceMapper,
         jobExecutionLogMapper,
         triggerRequestMapper,
+        workflowDefinitionMapper,
         configCacheService,
-        launchService,
+        launchApplicationService,
         gracefulShutdown,
         new BatchDateTimeSupport(
             Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties())),
         transactionManager);
+    when(batchDayWaitingLaunchMapper.selectWaitingByCalendarBizDate(
+            anyString(), anyString(), any(), eq(1)))
+        .thenReturn(List.of());
+    when(calendarDependencyWaitMapper.countWaitingByTenantCalendarBizDate(
+            anyString(), anyString(), any()))
+        .thenReturn(0);
+    when(expectedWorkOccurrenceMapper.countBlockingByCalendarBizDate(
+            anyString(), anyString(), any()))
+        .thenReturn(0);
+  }
+
+  @Test
+  @DisplayName("CUTOFF 空日只有无预期作业时自动结算")
+  void shouldAutoSettleCutoffDayWhenNoExpectedWorkExists() {
+    BatchDayInstanceEntity cutoff = candidate("CUTOFF");
+    when(batchDayInstanceMapper.selectByDayStatusIn(any())).thenReturn(List.of(cutoff));
+    when(jobInstanceMapper.selectBatchDayMetrics("t1", "CAL", cutoff.bizDate()))
+        .thenReturn(metrics(0L, 0L, 0L, 0L));
+    when(batchDayInstanceMapper.countUncoveredScheduledDefinitions(anyString(), anyString(), any()))
+        .thenReturn(0);
+    when(batchDayInstanceMapper.countUntrackedTriggerDefinitions("t1", "CAL")).thenReturn(0);
+    when(batchDayInstanceMapper.updateWithCas(any())).thenReturn(1);
+
+    scheduler.settle();
+
+    ArgumentCaptor<BatchDayInstanceEntity> captor =
+        ArgumentCaptor.forClass(BatchDayInstanceEntity.class);
+    verify(batchDayInstanceMapper).updateWithCas(captor.capture());
+    assertThat(captor.getValue().dayStatus()).isEqualTo("SETTLED");
+    assertThat(captor.getValue().settledAt()).isNotNull();
+    ArgumentCaptor<io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity> audit =
+        ArgumentCaptor.forClass(
+            io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity.class);
+    verify(jobExecutionLogMapper).insert(audit.capture());
+    assertThat(audit.getValue().getExtraJson()).contains("AUTO_EMPTY_NO_EXPECTED_WORK");
+  }
+
+  @Test
+  @DisplayName("未完成的显式文件/事件预期项阻止 CUTOFF 空日自动结算")
+  void shouldKeepCutoffDayOpenWhenExpectedWorkIsOutstanding() {
+    BatchDayInstanceEntity cutoff = candidate("CUTOFF");
+    when(batchDayInstanceMapper.selectByDayStatusIn(any())).thenReturn(List.of(cutoff));
+    when(jobInstanceMapper.selectBatchDayMetrics("t1", "CAL", cutoff.bizDate()))
+        .thenReturn(metrics(0L, 0L, 0L, 0L));
+    when(expectedWorkOccurrenceMapper.countBlockingByCalendarBizDate("t1", "CAL", cutoff.bizDate()))
+        .thenReturn(1);
+
+    scheduler.settle();
+
+    verify(batchDayInstanceMapper, never()).updateWithCas(any());
+  }
+
+  @Test
+  @DisplayName("事件作业无独立预期清单时空日保持 CUTOFF")
+  void shouldKeepCutoffDayWhenEventWorkHasNoExpectationLedger() {
+    BatchDayInstanceEntity cutoff = candidate("CUTOFF");
+    when(batchDayInstanceMapper.selectByDayStatusIn(any())).thenReturn(List.of(cutoff));
+    when(jobInstanceMapper.selectBatchDayMetrics("t1", "CAL", cutoff.bizDate()))
+        .thenReturn(metrics(0L, 0L, 0L, 0L));
+    when(batchDayInstanceMapper.countUntrackedTriggerDefinitions("t1", "CAL")).thenReturn(1);
+
+    scheduler.settle();
+
+    verify(batchDayInstanceMapper, never()).updateWithCas(any());
+  }
+
+  @Test
+  @DisplayName("已有作业生命周期的 IN_FLIGHT 空日不走自动空日结算")
+  void shouldNotAutoSettleEmptyInFlightDay() {
+    BatchDayInstanceEntity inFlight = candidate("IN_FLIGHT");
+    when(batchDayInstanceMapper.selectByDayStatusIn(any())).thenReturn(List.of(inFlight));
+    when(jobInstanceMapper.selectBatchDayMetrics("t1", "CAL", inFlight.bizDate()))
+        .thenReturn(metrics(0L, 0L, 0L, 0L));
+
+    scheduler.settle();
+
+    verify(batchDayInstanceMapper, never()).updateWithCas(any());
+    verify(batchDayInstanceMapper, never())
+        .countUntrackedTriggerDefinitions(anyString(), anyString());
   }
 
   @Test
@@ -171,9 +272,20 @@ class BatchDaySettleSchedulerTest {
     when(jobInstanceMapper.selectBatchDayCatchUpCandidates("t1", "CAL", candidate.bizDate()))
         .thenReturn(List.of(failedJob));
     when(configCacheService.findEnabledBusinessCalendar("t1", "CAL")).thenReturn(calendar);
+    when(configCacheService.findEnabledJobDefinition("t1", "FAILED_JOB"))
+        .thenReturn(JobDefinitionEntity.builder()
+            .id(501L)
+            .tenantId("t1")
+            .jobCode("FAILED_JOB")
+            .build());
+    when(workflowDefinitionMapper.selectFirstByTenantAndSingleJobDefinitionIdAndEnabled(
+            "t1", 501L, true))
+        .thenReturn(new WorkflowDefinitionEntity(
+            801L, "t1", "WF_FAILED_JOB", "Failed job", "SINGLE_JOB", 1, true, 501L));
     when(triggerRequestMapper.selectByTenantAndDedupKey(eq("t1"), anyString())).thenReturn(null);
     when(batchDayInstanceMapper.updateWithCas(any())).thenReturn(1);
-    when(launchService.launch(any())).thenReturn(new LaunchResponse("inst-001", "trace-001"));
+    when(launchApplicationService.launchFromTrustedQueue(any()))
+        .thenReturn(new LaunchResponse("inst-001", "trace-001"));
 
     scheduler.settle();
 
@@ -182,11 +294,50 @@ class BatchDaySettleSchedulerTest {
     verify(batchDayInstanceMapper, times(2)).updateWithCas(batchCaptor.capture());
     assertThat(batchCaptor.getAllValues().get(0).dayStatus()).isEqualTo("SETTLING");
     assertThat(batchCaptor.getAllValues().get(1).dayStatus()).isEqualTo("FAILED");
-    verify(triggerRequestMapper).insert(any());
+    ArgumentCaptor<io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity>
+        triggerCaptor = ArgumentCaptor.forClass(
+            io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity.class);
+    verify(triggerRequestMapper).insert(triggerCaptor.capture());
+    assertThat(triggerCaptor.getValue().getWorkflowDefinitionId()).isEqualTo(801L);
+    assertThat(triggerCaptor.getValue().getJobCode()).isNull();
     ArgumentCaptor<LaunchRequest> launchCaptor = ArgumentCaptor.forClass(LaunchRequest.class);
-    verify(launchService).launch(launchCaptor.capture());
+    verify(launchApplicationService).launchFromTrustedQueue(launchCaptor.capture());
     assertThat(launchCaptor.getValue().triggerType()).isEqualTo(TriggerType.CATCH_UP);
-    assertThat(launchCaptor.getValue().jobCode()).isEqualTo("FAILED_JOB");
+    assertThat(launchCaptor.getValue().workflowDefinitionId()).isEqualTo(801L);
+    assertThat(launchCaptor.getValue().jobCode()).isNull();
+  }
+
+  @Test
+  @DisplayName("进程错过失败日提交后的补跑回调时仍会重扫并派发")
+  void shouldRecoverCatchUpForAlreadyFailedDay() {
+    BatchDayInstanceEntity failedDay = candidate("FAILED");
+    JobInstanceEntity failedJob = jobInstance("FAILED_JOB", 103L);
+
+    when(batchDayInstanceMapper.selectByDayStatusIn(any())).thenReturn(List.of());
+    when(batchDayInstanceMapper.selectFailedDaysNeedingCatchUp(100)).thenReturn(List.of(failedDay));
+    when(jobInstanceMapper.selectBatchDayCatchUpCandidates("t1", "CAL", failedDay.bizDate()))
+        .thenReturn(List.of(failedJob));
+    when(configCacheService.findEnabledBusinessCalendar("t1", "CAL")).thenReturn(calendar("AUTO"));
+    when(configCacheService.findEnabledJobDefinition("t1", "FAILED_JOB"))
+        .thenReturn(JobDefinitionEntity.builder()
+            .id(501L)
+            .tenantId("t1")
+            .jobCode("FAILED_JOB")
+            .build());
+    when(workflowDefinitionMapper.selectFirstByTenantAndSingleJobDefinitionIdAndEnabled(
+            "t1", 501L, true))
+        .thenReturn(new WorkflowDefinitionEntity(
+            801L, "t1", "WF_FAILED_JOB", "Failed job", "SINGLE_JOB", 1, true, 501L));
+    when(triggerRequestMapper.selectByTenantAndDedupKey(eq("t1"), anyString())).thenReturn(null);
+    when(launchApplicationService.launchFromTrustedQueue(any()))
+        .thenReturn(new LaunchResponse("inst-002", "trace-002"));
+
+    scheduler.settle();
+
+    verify(batchDayInstanceMapper).selectFailedDaysNeedingCatchUp(100);
+    verify(triggerRequestMapper).insert(any());
+    verify(launchApplicationService).launchFromTrustedQueue(any());
+    verify(batchDayInstanceMapper, never()).updateWithCas(any());
   }
 
   @Test
@@ -206,14 +357,65 @@ class BatchDaySettleSchedulerTest {
     when(jobInstanceMapper.selectBatchDayCatchUpCandidates("t1", "CAL", candidate.bizDate()))
         .thenReturn(List.of(failedJob));
     when(configCacheService.findEnabledBusinessCalendar("t1", "CAL")).thenReturn(calendar);
+    when(configCacheService.findEnabledJobDefinition("t1", "FAILED_JOB"))
+        .thenReturn(JobDefinitionEntity.builder()
+            .id(501L)
+            .tenantId("t1")
+            .jobCode("FAILED_JOB")
+            .build());
+    when(workflowDefinitionMapper.selectFirstByTenantAndSingleJobDefinitionIdAndEnabled(
+            "t1", 501L, true))
+        .thenReturn(new WorkflowDefinitionEntity(
+            801L, "t1", "WF_FAILED_JOB", "Failed job", "SINGLE_JOB", 1, true, 501L));
     when(triggerRequestMapper.selectByTenantAndDedupKey(eq("t1"), anyString())).thenReturn(null);
     when(batchDayInstanceMapper.updateWithCas(any())).thenReturn(1);
 
     scheduler.settle();
 
     verify(batchDayInstanceMapper, atLeastOnce()).updateWithCas(any());
-    verify(triggerRequestMapper).insert(any());
-    verify(launchService, never()).launch(any());
+    ArgumentCaptor<io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity>
+        triggerCaptor = ArgumentCaptor.forClass(
+            io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity.class);
+    verify(triggerRequestMapper).insert(triggerCaptor.capture());
+    assertThat(triggerCaptor.getValue().getWorkflowDefinitionId()).isEqualTo(801L);
+    assertThat(triggerCaptor.getValue().getJobCode()).isNull();
+    verify(launchApplicationService, never()).launchFromTrustedQueue(any());
+  }
+
+  @Test
+  @DisplayName("单作业 Workflow 关联缺失时拒绝补跑而不回退到独立 Job Launch")
+  void shouldRejectCatchUpWhenManagedSingleJobWorkflowIsMissing() {
+    BatchDayInstanceEntity candidate = candidate("IN_FLIGHT");
+    BatchDayInstanceEntity settling = candidate("SETTLING");
+    JobInstanceEntity failedJob = jobInstance("FAILED_JOB", 103L);
+    when(batchDayInstanceMapper.selectByDayStatusIn(any())).thenReturn(List.of(candidate));
+    when(jobInstanceMapper.selectBatchDayMetrics("t1", "CAL", candidate.bizDate()))
+        .thenReturn(metrics(2L, 0L, 1L, 1L));
+    when(batchDayInstanceMapper.selectByTenantCalendarBizDate("t1", "CAL", candidate.bizDate()))
+        .thenReturn(settling);
+    when(jobInstanceMapper.selectBatchDayCatchUpCandidates("t1", "CAL", candidate.bizDate()))
+        .thenReturn(List.of(failedJob));
+    when(configCacheService.findEnabledBusinessCalendar("t1", "CAL")).thenReturn(calendar("AUTO"));
+    when(configCacheService.findEnabledJobDefinition("t1", "FAILED_JOB"))
+        .thenReturn(JobDefinitionEntity.builder()
+            .id(501L)
+            .tenantId("t1")
+            .jobCode("FAILED_JOB")
+            .build());
+    when(workflowDefinitionMapper.selectFirstByTenantAndSingleJobDefinitionIdAndEnabled(
+            "t1", 501L, true))
+        .thenReturn(null);
+    when(triggerRequestMapper.selectByTenantAndDedupKey(eq("t1"), anyString())).thenReturn(null);
+    when(batchDayInstanceMapper.updateWithCas(any())).thenReturn(1);
+
+    scheduler.settle();
+
+    ArgumentCaptor<io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity>
+        triggerCaptor = ArgumentCaptor.forClass(
+            io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity.class);
+    verify(triggerRequestMapper).insert(triggerCaptor.capture());
+    assertThat(triggerCaptor.getValue().getRequestStatus()).isEqualTo("REJECTED");
+    verify(launchApplicationService, never()).launchFromTrustedQueue(any());
   }
 
   @Test

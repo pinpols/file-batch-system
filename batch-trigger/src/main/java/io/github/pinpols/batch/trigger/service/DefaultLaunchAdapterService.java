@@ -59,6 +59,8 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
         .dataIntervalStart(request.getDataIntervalStart())
         .dataIntervalEnd(request.getDataIntervalEnd())
         .dryRun(Boolean.TRUE.equals(request.getDryRun()))
+        .workflowDefinitionId(request.getWorkflowDefinitionId())
+        .externalEventCode(request.getExternalEventCode())
         .build();
   }
 
@@ -81,6 +83,15 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
     params.put("calendarCode", descriptor.getCalendarCode());
     params.put("catchUpPolicy", descriptor.getCatchUpPolicy());
     params.put("scheduledAt", command.fireTime().toString());
+    if (descriptor.getWorkflowDefinitionId() != null) {
+      params.put("workflowDefinitionId", descriptor.getWorkflowDefinitionId());
+    }
+    if (descriptor.getWorkflowCode() != null) {
+      params.put("workflowCode", descriptor.getWorkflowCode());
+    }
+    if (descriptor.getWorkflowVersion() != null) {
+      params.put("workflowVersion", descriptor.getWorkflowVersion());
+    }
     // catchUp / catchUpApprovalRequired 写入 params 供 Orchestrator 决策 catch-up 审批流程
     params.put("catchUp", TriggerType.CATCH_UP == triggerType);
     params.put(
@@ -95,7 +106,8 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
         command.fireTime());
     return LaunchRequest.builder()
         .tenantId(descriptor.getTenantId())
-        .jobCode(descriptor.getJobCode())
+        .jobCode(descriptor.getWorkflowDefinitionId() == null ? descriptor.getJobCode() : null)
+        .workflowDefinitionId(descriptor.getWorkflowDefinitionId())
         .bizDate(bizDate)
         .triggerType(triggerType)
         .requestId(command.requestId())

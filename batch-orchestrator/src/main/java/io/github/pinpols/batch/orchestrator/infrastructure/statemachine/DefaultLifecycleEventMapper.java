@@ -27,8 +27,8 @@ public class DefaultLifecycleEventMapper<T> implements LifecycleEventMapper<T> {
   public StateTransition map(T target, String event) {
     String fromState = resolveState(target);
     String normalizedEvent = normalizeEvent(event);
-    return new StateTransition(
-        fromState, normalizedEvent, resolveToState(fromState, normalizedEvent));
+    String toState = resolveToState(fromState, normalizedEvent);
+    return new StateTransition(fromState, normalizedEvent, toState);
   }
 
   private String resolveState(T target) {
@@ -47,7 +47,11 @@ public class DefaultLifecycleEventMapper<T> implements LifecycleEventMapper<T> {
   }
 
   private String normalizeEvent(String event) {
-    return Texts.hasText(event) ? event.trim().toUpperCase(Locale.ROOT) : "NOOP";
+    if (!Texts.hasText(event)) {
+      return "NOOP";
+    }
+    String trimmedEvent = event.trim();
+    return trimmedEvent.toUpperCase(Locale.ROOT);
   }
 
   private String resolveToState(String fromState, String event) {

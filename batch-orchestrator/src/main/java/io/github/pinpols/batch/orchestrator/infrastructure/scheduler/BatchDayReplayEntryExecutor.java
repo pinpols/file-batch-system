@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.BatchDayReplayExecutionMode;
 import io.github.pinpols.batch.common.enums.ConfigVersionPolicy;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.governance.CompensationService;
 import io.github.pinpols.batch.orchestrator.domain.command.CompensationSubmitCommand;
@@ -43,13 +44,17 @@ class BatchDayReplayEntryExecutor {
     PlanSnapshot planSnapshot = entry.planSnapshot() == null
         ? null
         : JsonUtils.fromJson(entry.planSnapshot(), PlanSnapshot.class);
+    boolean dryRun = BatchDayReplayExecutionMode.DRY_RUN.code().equals(session.executionMode());
+    String batchNoOverride = dryRun || EmptyChecks.isNull(entry.sourceInstanceId())
+        ? "dry-run-session-" + session.id() + "-entry-" + entry.id()
+        : null;
     CompensationSubmitCommand command = CompensationSubmitCommand.builder()
         .tenantId(session.tenantId())
         .compensationType(entry.sourceInstanceId() == null ? "BATCH" : "JOB")
         .targetId(entry.sourceInstanceId())
         .jobCode(entry.jobCode())
         .bizDate(session.bizDate())
-        .batchNo("dry-run-session-" + session.id() + "-entry-" + entry.id())
+        .batchNo(batchNoOverride)
         .reason("BATCH_DAY_REPLAY:" + session.reason())
         .operatorId(session.requestedBy())
         .resultPolicy(session.resultPolicy())
@@ -63,7 +68,7 @@ class BatchDayReplayEntryExecutor {
         .replaySessionId(session.id())
         .replayEntryId(entry.id())
         .launchParams(planSnapshot == null ? null : planSnapshot.defaultParams())
-        .dryRun(BatchDayReplayExecutionMode.DRY_RUN.code().equals(session.executionMode()))
+        .dryRun(dryRun)
         .traceId(session.traceId())
         .build();
     String commandNo = compensationService.submit(command);
@@ -89,12 +94,16 @@ class BatchDayReplayEntryExecutor {
         UpdateBatchDayReplayEntryStatusParam.failedOnSubmission(
             entry.id(), truncate(failure.getMessage(), 1024), now);
     entryMapper.updateStatus(statusUpdate);
+    Long sessionId = session.id();
+    Long entryId = entry.id();
+    String jobCode = entry.jobCode();
+    String causeSummary = SwallowedExceptionLogger.summary(failure);
     log.warn(
         "batch_day_replay compensation submit failed: sessionId={}, entryId={}, jobCode={}, msg={}",
-        session.id(),
-        entry.id(),
-        entry.jobCode(),
-        SwallowedExceptionLogger.summary(failure));
+        sessionId,
+        entryId,
+        jobCode,
+        causeSummary);
   }
 
   private static String truncate(String text, int max) {

@@ -1,5 +1,5 @@
 -- =========================================================
--- V24 - Quota runtime state for CALENDAR_DAY / SLIDING_WINDOW
+-- V25：增加 CALENDAR_DAY / SLIDING_WINDOW 配额运行状态。
 -- 说明：
 -- 1) 按租户和归属范围持久化运行时配额重置状态。
 -- 2) 同时支持自然日和滑动窗口配额策略。

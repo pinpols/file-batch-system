@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.console.domain.notification.infrastructure;
 
+import io.github.pinpols.batch.console.domain.notification.query.AlertEventCountActiveAlertsInAmGroupQuery;
+
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
@@ -58,8 +61,8 @@ public class DefaultConsoleAlertApplicationService implements ConsoleAlertApplic
   private ConsoleAlertActionResponse transition(
       Long alertId, AlertActionRequest request, String nextStatus, String action) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    AlertEventEntity entity =
-        Guard.requireFound(alertEventMapper.selectById(tenantId, alertId), "alert event not found");
+    AlertEventEntity entity = alertEventMapper.selectById(tenantId, alertId);
+    Guard.requireFound(entity, "alert event not found");
     String currentStatus = normalizeStatus(entity.getStatus());
     if (nextStatus.equals(currentStatus)) {
       return new ConsoleAlertActionResponse(alertId, tenantId, action, currentStatus);
@@ -105,12 +108,15 @@ public class DefaultConsoleAlertApplicationService implements ConsoleAlertApplic
 
   private void resolveAmGroupIfInactive(AlertEventEntity entity) {
     try {
+      AlertEventCountActiveAlertsInAmGroupQuery alertEventCountActiveAlertsInAmGroupQuery = AlertEventCountActiveAlertsInAmGroupQuery.builder()
+          .tenantId(entity.getTenantId())
+          .serviceName(entity.getServiceName())
+          .alertType(entity.getAlertType())
+          .severity(entity.getSeverity())
+          .excludingId(entity.getId())
+          .build();
       long activePeers = alertEventMapper.countActiveAlertsInAmGroup(
-          entity.getTenantId(),
-          entity.getServiceName(),
-          entity.getAlertType(),
-          entity.getSeverity(),
-          entity.getId());
+          alertEventCountActiveAlertsInAmGroupQuery);
       if (activePeers == 0) {
         alertmanagerSilenceBridge.resolve(entity);
       }

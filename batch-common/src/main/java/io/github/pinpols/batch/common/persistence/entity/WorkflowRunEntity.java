@@ -12,8 +12,14 @@ public class WorkflowRunEntity implements Stateful {
   private Long id;
   private String tenantId;
   private Long workflowDefinitionId;
+  private Long singleJobDefinitionId;
   private Long relatedJobInstanceId;
+  private Long triggerRequestId;
+  private Integer workflowVersionSnapshot;
   private LocalDate bizDate;
+  private Instant dataIntervalStart;
+  private Instant dataIntervalEnd;
+  private String executionSnapshot;
   private String runStatus;
   private String currentNodeCode;
   private String traceId;

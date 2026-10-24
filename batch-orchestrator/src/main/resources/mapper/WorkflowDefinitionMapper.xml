@@ -4,7 +4,7 @@
     <!--
       WorkflowDefinitionEntity 是 java record（不可变），用 <constructor> 显式映射构造器参数，
       参数顺序必须与 record canonical constructor 完全一致：
-        (id, tenantId, workflowCode, workflowName, workflowType, version, enabled)
+        (id, tenantId, workflowCode, workflowName, workflowType, version, enabled, singleJobDefinitionId, calendarCode)
       列名按 V4 DDL。
     -->
     <resultMap id="workflowDefinitionMap"
@@ -17,11 +17,14 @@
             <arg column="workflow_type" javaType="java.lang.String"/>
             <arg column="version" javaType="java.lang.Integer"/>
             <arg column="enabled" javaType="java.lang.Boolean"/>
+            <arg column="single_job_definition_id" javaType="java.lang.Long"/>
+            <arg column="calendar_code" javaType="java.lang.String"/>
         </constructor>
     </resultMap>
 
     <sql id="columns">
-        id, tenant_id, workflow_code, workflow_name, workflow_type, version, enabled
+        id, tenant_id, workflow_code, workflow_name, workflow_type, version, enabled,
+        single_job_definition_id, calendar_code
     </sql>
 
     <select id="selectFirstByTenantAndCodeAndEnabled" resultMap="workflowDefinitionMap">
@@ -29,6 +32,16 @@
           from batch.workflow_definition
          where tenant_id = #{tenantId}
            and workflow_code = #{workflowCode}
+           and enabled = #{enabled}
+         order by version desc, id desc
+         limit 1
+    </select>
+
+    <select id="selectFirstByTenantAndSingleJobDefinitionIdAndEnabled" resultMap="workflowDefinitionMap">
+        select <include refid="columns"/>
+          from batch.workflow_definition
+         where tenant_id = #{tenantId}
+           and single_job_definition_id = #{singleJobDefinitionId}
            and enabled = #{enabled}
          order by version desc, id desc
          limit 1
@@ -46,6 +59,14 @@
         select <include refid="columns"/>
           from batch.workflow_definition
          where id = #{id}
+    </select>
+
+    <select id="selectByTenantAndIdAndEnabled" resultMap="workflowDefinitionMap">
+        select <include refid="columns"/>
+          from batch.workflow_definition
+         where tenant_id = #{tenantId}
+           and id = #{id}
+           and enabled = #{enabled}
     </select>
 
     <select id="selectAllEnabled" resultMap="workflowDefinitionMap">

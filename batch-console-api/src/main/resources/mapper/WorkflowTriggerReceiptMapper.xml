@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowTriggerReceiptMapper">
+    <resultMap id="Receipt" type="io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowTriggerStatusResponse">
+        <constructor>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="workflow_definition_id" javaType="java.lang.Long"/>
+            <arg column="biz_date" javaType="java.time.LocalDate"/>
+            <arg column="request_id" javaType="java.lang.String"/>
+            <arg column="trace_id" javaType="java.lang.String"/>
+            <arg column="request_status" javaType="java.lang.String"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+    <select id="selectByIdentity" resultMap="Receipt">
+        select tr.tenant_id, tr.workflow_definition_id, tr.biz_date,
+               tr.request_id, tr.trace_id, tr.request_status, tr.updated_at
+        from batch.trigger_request tr
+        where tr.tenant_id = #{tenantId}
+          and tr.workflow_definition_id = #{workflowDefinitionId}
+          and (tr.dedup_key = #{idempotencyKey} or exists (
+              select 1 from batch.trigger_request_idempotency_alias alias
+              where alias.tenant_id = tr.tenant_id
+                and alias.request_id = tr.request_id
+                and alias.idempotency_key = #{idempotencyKey}
+          ))
+    </select>
+</mapper>

@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.console.domain.notification.infrastructure;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsoleAsyncConfiguration;
 import io.github.pinpols.batch.console.domain.notification.service.SubscriptionRuleWebhookDispatcher;
 import io.github.pinpols.batch.console.domain.notification.service.WebhookDispatcher;
 import io.github.pinpols.batch.console.shared.event.ConsoleRealtimeDomainEvent;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -32,7 +34,9 @@ public class ConsoleWebhookDomainEventListener {
   @Async(ConsoleAsyncConfiguration.PUSH_TASK_EXECUTOR)
   @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
   public void onDomainEvent(ConsoleRealtimeDomainEvent event) {
-    if (event == null || event.tenantId() == null || event.tenantId().isBlank()) {
+    boolean eventIsMissingTenant =
+        EmptyChecks.isNull(event) || EmptyChecks.isNull(event.tenantId()) || EmptyChecks.isBlank(Objects.requireNonNull(event.tenantId()));
+    if (eventIsMissingTenant) {
       return;
     }
     webhookDispatcher.dispatchAsync(

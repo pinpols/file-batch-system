@@ -7,6 +7,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-10-14 | **Workflow 调度配置进入定义契约**：Workflow create/update/full detail 增加 `scheduleType`、`scheduleExpr`、`timezone`、`triggerMode`、`calendarCode` 和兼容期 `dependsOnJobCode`。字段缺省时旧客户端更新保留已存调度；显式 `MANUAL` 可清除表达式。版本历史快照同时保存新调度字段，V241 前的快照保留 null，不伪造历史调度。Trigger 权威数据源仍未切换，Job 调度字段暂作兼容来源。 |
 | 2026-10-12 | **维护冻结与实例排空收口**：全冻结期间 `ROLE_ADMIN` 仅保留非写诊断旁路，普通业务写请求仍返回 503；Orchestrator `/internal/orchestrator/drain/enable` 暂停当前实例的 Trigger Launch Kafka listener，`disable` 恢复消费，不影响 OpenLineage listener。 |
 | 2026-10-11 | **控制台管理列表分页补齐**：告警路由、资产新鲜度策略和配置同步日志列表统一支持分页查询，响应使用既有 `PageResponse` envelope；筛选参数与租户隔离语义保持不变。 |
 | 2026-10-11 | **租户配置包 Excel 场景化导入**：增加场景模板、上传、预览、逐行修订、授权应用与幂等写入契约；平台资源分配和运行监控阈值不由租户配置包控制，配置快照在实例创建时固定。预览返回的一次性 `previewToken` 绑定预览内容和内部租户配置修订号；逐行修订必须提交当前 token 并取得新 token，Apply 必须提交最新 token。配置在预览后发生变化时 Apply 返回冲突，用户需重新预览；内部修订号不作为租户填写或维护的配置字段。 |
@@ -555,6 +556,8 @@ Deployment note:
 - `PUT /api/console/pipeline-definitions/{id}`
 - `PATCH /api/console/pipeline-definitions/{id}/enabled`
 - `GET /api/console/pipeline-definitions/events`
+
+`GET` 列表/详情与运行观测继续服务历史定义和排障；`POST`、`PUT`、`PATCH /{id}/enabled` 已退役，返回 `STATE_CONFLICT`。新执行不再由租户定义绑定 Pipeline，系统阶段由 Job 类型决定；Job 和 Workflow 仍是独立、联动的定义。
 - Create and update are transactional: definition and step list are persisted or replaced atomically.
 - Detail response (`PipelineDefinitionDetailResponse`) includes the ordered step list.
 - `GET /api/console/pipeline-definitions/events` is the domain-level realtime entry for pipeline editing screens. It subscribes to the same event hub used by the other realtime console streams, but keeps the route close to the pipeline-definition UX.

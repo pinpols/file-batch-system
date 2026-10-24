@@ -53,4 +53,29 @@ class TriggerStatusQueryFacadeTest {
         .isEmpty();
     verify(scheduler).getJobDetail(tenantA);
   }
+
+  @Test
+  @DisplayName("Workflow Quartz 身份返回 WorkflowCode 而不伪造 JobCode")
+  void workflow_identity_is_returned_as_workflow_code() throws Exception {
+    Scheduler scheduler = mock(Scheduler.class);
+    JobKey workflowKey = JobKey.jobKey("tenant-a:WF:FLOW_A", TriggerSchedulerFacade.JOB_GROUP);
+    JobDetail detail = mock(JobDetail.class);
+    JobDataMap data = new JobDataMap();
+    data.put(QuartzLaunchJob.WORKFLOW_CODE, "FLOW_A");
+    data.put(QuartzLaunchJob.WORKFLOW_DEFINITION_ID, 71L);
+    when(detail.getJobDataMap()).thenReturn(data);
+    when(scheduler.getJobKeys(GroupMatcher.jobGroupEquals(TriggerSchedulerFacade.JOB_GROUP)))
+        .thenReturn(Set.of(workflowKey));
+    when(scheduler.getJobDetail(workflowKey)).thenReturn(detail);
+    when(scheduler.getTriggersOfJob(workflowKey)).thenReturn(List.of());
+
+    var result = new TriggerStatusQueryFacade(scheduler).listRegisteredTriggers("tenant-a");
+
+    assertThat(result).singleElement().satisfies(info -> {
+      assertThat(info.tenantId()).isEqualTo("tenant-a");
+      assertThat(info.workflowCode()).isEqualTo("FLOW_A");
+      assertThat(info.workflowDefinitionId()).isEqualTo(71L);
+      assertThat(info.jobCode()).isNull();
+    });
+  }
 }

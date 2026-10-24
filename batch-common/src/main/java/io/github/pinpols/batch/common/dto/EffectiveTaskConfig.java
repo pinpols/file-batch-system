@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.common.dto;
 
 import java.time.Instant;
+import java.util.List;
 
 /**
  * Worker CLAIM 任务时由 orchestrator 返回的"生效配置快照"。
@@ -93,7 +94,85 @@ public record EffectiveTaskConfig(
      * ADR-014: 本轮分区认领 invocation id（读 {@code job_partition.current_invocation_id}）。worker
      * renew/report 可选带上做幂等与过期 worker 隔离。
      */
-    String partitionInvocationId) {
+    String partitionInvocationId,
+    /** Gate-observed dependency result identities; consumers must verify/pin before claiming exact use. */
+    List<DependencyResultReference> dependencyResultSnapshot) {
+
+  /** Source-compatible constructor for workers compiled against the previous CLAIM contract. */
+  @SuppressWarnings("PMD.ExcessiveParameterList")
+  public EffectiveTaskConfig(
+      String tenantId,
+      Long taskId,
+      Long jobInstanceId,
+      Long jobPartitionId,
+      String instanceNo,
+      String jobCode,
+      String taskType,
+      Integer taskSeq,
+      String workerType,
+      String priorityBand,
+      String businessKey,
+      String idempotencyKey,
+      String payload,
+      String traceId,
+      String executionMode,
+      String watermarkField,
+      String highWaterMarkIn,
+      String retryPolicy,
+      Integer retryMaxCount,
+      Integer timeoutSeconds,
+      Integer partitionNo,
+      Integer partitionCount,
+      String partitionKey,
+      Integer partitionPlanVersion,
+      Integer shardIndex,
+      Integer shardTotal,
+      Long rangeStartInclusive,
+      Long rangeEndExclusive,
+      Long expectedRows,
+      Instant dataIntervalStart,
+      Instant dataIntervalEnd,
+      String partitionInvocationId) {
+    this(
+        tenantId,
+        taskId,
+        jobInstanceId,
+        jobPartitionId,
+        instanceNo,
+        jobCode,
+        taskType,
+        taskSeq,
+        workerType,
+        priorityBand,
+        businessKey,
+        idempotencyKey,
+        payload,
+        traceId,
+        executionMode,
+        watermarkField,
+        highWaterMarkIn,
+        retryPolicy,
+        retryMaxCount,
+        timeoutSeconds,
+        partitionNo,
+        partitionCount,
+        partitionKey,
+        partitionPlanVersion,
+        shardIndex,
+        shardTotal,
+        rangeStartInclusive,
+        rangeEndExclusive,
+        expectedRows,
+        dataIntervalStart,
+        dataIntervalEnd,
+        partitionInvocationId,
+        List.of());
+  }
+
+  public EffectiveTaskConfig {
+    dependencyResultSnapshot =
+        dependencyResultSnapshot == null ? List.of() : List.copyOf(dependencyResultSnapshot);
+  }
 
   /** 旧 orchestrator 领取成功但未返回实时配置时使用的兼容占位。 */
   public static EffectiveTaskConfig empty() {

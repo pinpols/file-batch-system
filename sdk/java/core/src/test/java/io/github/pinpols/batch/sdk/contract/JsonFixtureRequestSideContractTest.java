@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.github.pinpols.batch.sdk.wire.RegisterRequest;
 import io.github.pinpols.batch.sdk.wire.RenewRequest;
 import io.github.pinpols.batch.sdk.wire.ReportRequest;
@@ -36,8 +37,7 @@ import org.junit.jupiter.params.provider.MethodSource;
  */
 class JsonFixtureRequestSideContractTest {
 
-  private static final ObjectMapper JSON =
-      new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+  private static final ObjectMapper JSON = new ObjectMapper().registerModule(new JavaTimeModule());
 
   private static Path repoRoot() {
     for (Path p = Paths.get("").toAbsolutePath(); p != null; p = p.getParent()) {

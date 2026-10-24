@@ -72,7 +72,6 @@ batch-console-api/src/main/resources/application.yml	SpringBootApplicationYaml	1
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/engine/TaskDispatchOutboxService.java	unchecked	2
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/plan/BundlePlanParams.java	unchecked	1
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/dataquality/DataQualityCheckExecutor.java	unchecked	1
-batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/dryrun/DefaultDryRunPlanService.java	PMD.ExcessiveParameterList	1
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultCompensationService.java	unchecked	1
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultRetryGovernanceService.java	unchecked	1
 batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplaySubmitCommand.java	PMD.ExcessiveParameterList	1

@@ -42,6 +42,31 @@ class WorkflowWaitSensorSpecValidatorTest {
 
     assertThat(codes(wait("FILE_ARRIVAL", "{\"pattern\":\"daily-*\",\"maxAgeSeconds\":60}")))
         .isEmpty();
+    assertThat(codes(wait(
+            "FILE_ARRIVAL",
+            "{\"pattern\":\"daily-*\",\"maxAgeSeconds\":60,"
+                + "\"fileGroupCode\":\"SETTLEMENT\",\"requireCompleteGroup\":true,"
+                + "\"bizDate\":\"2026-05-07\"}")))
+        .isEmpty();
+    assertThat(codes(wait(
+            "FILE_ARRIVAL",
+            "{\"pattern\":\"daily-*\",\"maxAgeSeconds\":60,"
+                + "\"fileGroupCode\":\"SETTLEMENT\",\"requireCompleteGroup\":true,"
+                + "\"bindWorkflowBizDate\":true}")))
+        .isEmpty();
+    assertThat(codes(wait(
+            "FILE_ARRIVAL",
+            "{\"pattern\":\"daily-*\",\"maxAgeSeconds\":60,"
+                + "\"fileGroupCode\":\"SETTLEMENT\",\"requireCompleteGroup\":true}")))
+        .contains("V16-c");
+    assertThat(codes(wait(
+            "FILE_ARRIVAL",
+            "{\"pattern\":\"daily-*\",\"maxAgeSeconds\":60," + "\"requireCompleteGroup\":true}")))
+        .contains("V16-c");
+    assertThat(codes(wait(
+            "FILE_ARRIVAL",
+            "{\"pattern\":\"daily-*\",\"maxAgeSeconds\":60,\"bizDate\":\"yesterday\"}")))
+        .contains("V16-c");
     assertThat(codes(wait("HTTP_POLL", "{\"url\":\"https://example.test\",\"matchExpr\":\"ok\"}")))
         .isEmpty();
     assertThat(

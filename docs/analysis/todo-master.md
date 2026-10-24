@@ -1,5 +1,47 @@
 # TODO Master · 当前待办唯一索引
 
+## 跨模块设计闭环缺陷（2026-10-14）
+
+证据与修复方向见[设计闭环复核](../audit/design-closure-review-2026-10-14.md)。最后核查日期为 2026-10-14，以下均为 P1 待修项；只完成 PROCESS 清理 SQL 的真实 PostgreSQL 临时表复现，其余五项有静态调用链证据、仍待定向运行复现。它们属于本轮新增代码缺陷，不能沿用下文历史条目的“只待环境验收”判断。未授权或执行代码修复、提交与发布。
+
+| ID | 事项与负责人边界 | 当前证据 | 下一步 / 完成条件 |
+|---|---|---|---|
+| **SEAM-1** | PROCESS staging 清理与发布完整性；Process Worker / 业务库 | 已复现跨分区 ctid 误删：选 1 条旧行实际删 2 条，含新行 | 修正跨分区删除身份；真实 PG 验证新分区数据不受影响、批量上限及清理与发布交错 |
+| **SEAM-2** | Export 已登记产物的重试保护；Export Worker / 对象存储 | 静态确认覆盖 final object 后才检查旧摘要 | 明确不可变产物和发布提交点；真实加密、REGISTER 后中断重试，验证对象与元数据保持一致 |
+| **SEAM-3** | 补跑原配置/指定版本选择；Console 契约 / Orchestrator | 策略目前只透传与记录，执行仍加载当前定义 | 纳入 ALIGN-READ / I4，扩充 R17；v1 运行后修改 v2，三种补跑策略分别核对实际 CLAIM 配置，非法版本拒绝 |
+| **SEAM-4** | 主动取消与失败重试协议；Worker Core / Orchestrator | Worker 取消码与控制端判定不一致 | 真实取消报文得到取消终态，且无 retry_schedule、误入死信或新增派发；补 R15 具体场景 |
+| **SEAM-5** | 分区取消后的 task 与父实例收口；Orchestrator | 只写分区取消，父实例完成计数未包含取消分区 | 真 PG 验证一分区取消、另一分区成功及并发顺序，父子状态与资源均收敛 |
+| **SEAM-6** | 批量 CLAIM 与续租/执行生命周期；Worker Core / Orchestrator | 静态确认排队已认领任务不续租；开关默认关闭 | 启用前以受控时钟与阻塞任务验证：lease 回收后旧 invocation 不再开始执行，并补容量准入回归 |
+
+## Workflow 与每日连续性共同整合门槛（2026-10-14 修订）
+
+用户确认不兼容旧系统、全新数据库部署；当前契约 `2026-10-14.2` 见 [ADR-048](../architecture/adr/ADR-048-workflow-fresh-database-cutover.md)。[整合计划](../plans/workflow-daily-integration-plan-2026-10-14.md)定义 I0–I5，[验证矩阵](../plans/workflow-daily-integration-validation-2026-10-14.md)定义 R01–R24。当前测试仍有失败，不具备发布条件。
+
+| ID | 事项 | 当前状态 / 完成条件 |
+|---|---|---|
+| **ALIGN-CONTRACT** | 新模型单一入口、DTO/调用方、旧入口拒绝 | ADR-048 与新库范围已确定；旧构造/目标仍待退出，API/SDK/Console 同步待完成 |
+| **ALIGN-TEST** | 恢复整合测试基线 | Trigger 32 项中 2 项失败；Orchestrator testCompile 两处不存在的 launchService；先修装配与新模型 fixture，再补真实行为断言 |
+| **ALIGN-RUN** | Workflow occurrence、根/节点运行、日期和覆盖冻结 | I2 未完成；真实并发/重复/恢复通过 A1/A2/A5，不再建设旧 key 映射 |
+| **ALIGN-DAY** | 输入及业务义务、接纳/结算事务围栏 | I3 未完成；A3 覆盖未知、在途、失败和迟到都不能误结算 |
+| **ALIGN-READ** | 新模型实际消费版本、Pipeline/参数及恢复 | I4 未完成；A4 的真实读取版本与副作用证据，不能用 gate 快照替代 |
+| **ALIGN-FRESH-DB** | 最终新库结构、种子、隔离环境、停旧启新 | I1/I5 未完成；新库测试尚未执行，SQL 安全工具缺依赖；A6 不含旧库升级或旧历史导入 |
+
+
+## Workflow 统一运行与 Pipeline 按类型关联（2026-10-14）
+
+> 以下为来源分支实施记录；当前任务以顶部 `.2` 整合门槛为准，旧兼容/转换事项不再排期。
+
+目标与验收见[实施方案](../plans/workflow-unified-execution-and-system-pipeline-plan-2026-10-14.md)。Pipeline 模型保留，按 Job 类型选择系统固定定义；作业定义和工作流定义是两个独立、联动的实体。当前实施中，系统 Pipeline/Worker、显式单作业 Workflow 关系、Trigger 调度迁移、双菜单部分联动和旧配置兼容转换已部分落地；组合 Workflow 统一运行和真实端到端验收未完成。
+
+| ID | 事项 | 状态 | 完成条件 |
+|---|---|---|---|
+| **WF-0** | 目标契约、现状差距、实施切片与验收矩阵 | 文档已编写，静态检查通过 | 区分目标与现状，明确两个菜单、四类文件 Pipeline 和统一顶层运行 |
+| **WF-1** | 系统 Pipeline 目录与 Job 执行参数迁移 | 部分实施 | 类型/阶段/版本匹配；PROCESS 插件与业务参数保留；存量 DB 数据对账、滚动恢复验证 |
+| **WF-2** | 单作业受管 Workflow 与统一节点执行 | 部分实施 | 唯一起止边界；组合图节点实例、并行汇合、失败、去重与恢复验证 |
+| **WF-3** | Workflow 触发、调度与批量日入口 | 部分实施 | 组合 Workflow 根 Launch；Workflow 身份的 Trigger/批量日/补跑；真实 misfire 和恢复验证 |
+| **WF-4** | 双菜单联动、整体运行视图与配置包/API | 部分实施 | 双向联动和配置包旧值转换已落地；Workflow Run 节点可展开 Job Instance、分页分区/阶段和 Pipeline 观测入口；真实前后端链路与恢复旅程仍待验收 |
+| **WF-5** | Job-Pipeline 手工关联与旧引用收敛 | 依赖前置切片与兼容验收 | 仅退出 Job 手工选择/绑定租户 Pipeline 的配置入口，不删除 Pipeline/Definition/Step/Instance 模型或历史查询；旧节点字段/包装任务、归档和运行兼容逐步收敛并通过迁移恢复验证 |
+
 ## 前后端约定与 CI 漂移治理（2026-10-12）
 
 范围和静态证据见[前后端治理漂移复核](../audit/cross-repo-governance-drift-review-2026-10-12.md)；下表是待修缺口，不代表 CI 或目标环境已验证。

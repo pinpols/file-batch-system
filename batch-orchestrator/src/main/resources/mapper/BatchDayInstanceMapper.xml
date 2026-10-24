@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper">
+    <select id="acquireSettlementFence" resultType="long">
+        select batch.acquire_batch_day_settlement_fence(#{tenantId}, #{calendarCode}, #{bizDate})
+    </select>
     <!--
       BatchDayInstanceEntity 是 java record（不可变），用 <constructor> 显式映射构造器参数。
       参数顺序必须与 record canonical constructor 完全一致：
@@ -86,6 +89,54 @@
            and biz_date = #{bizDate}
     </select>
 
+    <select id="selectLatestBizDateAtOrBefore" resultType="java.time.LocalDate">
+        select max(biz_date)
+          from batch.batch_day_instance
+         where tenant_id = #{tenantId}
+           and calendar_code = #{calendarCode}
+           and biz_date &lt;= #{bizDate}
+    </select>
+
+    <select id="selectBizDatesInRange" resultType="java.time.LocalDate">
+        select biz_date
+          from batch.batch_day_instance
+         where tenant_id = #{tenantId}
+           and calendar_code = #{calendarCode}
+           and biz_date between #{fromDate} and #{throughDate}
+         order by biz_date
+    </select>
+
+    <insert id="initializeOpenCursor">
+        insert into batch.batch_day_open_cursor (tenant_id, calendar_code, last_scanned_biz_date)
+        values (#{tenantId}, #{calendarCode}, #{lastScannedBizDate})
+        on conflict (tenant_id, calendar_code) do nothing
+    </insert>
+
+    <select id="selectOpenCursorForUpdate" resultType="java.time.LocalDate">
+        select last_scanned_biz_date
+          from batch.batch_day_open_cursor
+         where tenant_id = #{tenantId}
+           and calendar_code = #{calendarCode}
+         for update
+    </select>
+
+    <select id="selectOpenCursorDate" resultType="java.time.LocalDate">
+        select last_scanned_biz_date
+          from batch.batch_day_open_cursor
+         where tenant_id = #{tenantId}
+           and calendar_code = #{calendarCode}
+    </select>
+
+    <update id="advanceOpenCursor">
+        update batch.batch_day_open_cursor
+           set last_scanned_biz_date = #{nextBizDate},
+               last_scan_at = #{scannedAt},
+               updated_at = current_timestamp
+         where tenant_id = #{tenantId}
+           and calendar_code = #{calendarCode}
+           and last_scanned_biz_date = #{expectedBizDate}
+    </update>
+
     <select id="selectByDayStatusIn" resultMap="batchDayInstanceMap">
         select *
           from batch.batch_day_instance
@@ -94,5 +145,120 @@
             #{status}
         </foreach>
         order by biz_date desc
+    </select>
+
+    <select id="selectFailedDaysNeedingCatchUp" resultMap="batchDayInstanceMap">
+        select day.*
+          from batch.batch_day_instance day
+          join batch.business_calendar calendar
+            on calendar.tenant_id = day.tenant_id
+           and calendar.calendar_code = day.calendar_code
+           and calendar.enabled = true
+         where day.day_status = 'FAILED'
+           and calendar.catch_up_policy in ('AUTO', 'MANUAL_APPROVAL')
+           and exists (
+               select 1
+                 from batch.job_instance failed
+                 join batch.job_definition definition
+                   on definition.tenant_id = failed.tenant_id
+                  and definition.id = failed.job_definition_id
+                where failed.tenant_id = day.tenant_id
+                  and definition.calendar_code = day.calendar_code
+                  and failed.biz_date = day.biz_date
+                  and failed.instance_status in ('FAILED', 'PARTIAL_FAILED')
+                  and not exists (
+                      select 1
+                        from batch.trigger_request request
+                       where request.tenant_id = day.tenant_id
+                         and request.dedup_key = day.tenant_id || ':batch-day-catchup:'
+                             || day.calendar_code || ':' || day.biz_date::text || ':' || failed.job_code
+                         and (
+                             calendar.catch_up_policy = 'MANUAL_APPROVAL'
+                             or request.request_status not in ('LAUNCHED', 'REJECTED', 'DUPLICATE')
+                         )
+                  )
+           )
+         order by day.settled_at, day.id
+         limit #{limit}
+    </select>
+
+    <select id="countBlockingScheduledOccurrences" resultType="int">
+        select count(*)
+          from batch.scheduled_occurrence
+         where tenant_id = #{tenantId}
+           and calendar_code = #{calendarCode}
+           and biz_date = #{bizDate}
+           and (
+               occurrence_status in (
+                   'PLANNED', 'WAITING_READINESS', 'MISFIRE_PENDING'
+               )
+               or (
+                   occurrence_status = 'REQUESTED'
+                   and not exists (
+                       select 1
+                         from batch.trigger_request tr
+                         join batch.workflow_run workflow_run
+                           on workflow_run.tenant_id = tr.tenant_id
+                          and workflow_run.trigger_request_id = tr.id
+                          and workflow_run.workflow_definition_id = batch.scheduled_occurrence.workflow_definition_id
+                          and workflow_run.biz_date is not distinct from batch.scheduled_occurrence.biz_date
+                          and workflow_run.dry_run = false
+                        where tr.tenant_id = batch.scheduled_occurrence.tenant_id
+                          and tr.workflow_definition_id = batch.scheduled_occurrence.workflow_definition_id
+                          and tr.request_id = batch.scheduled_occurrence.request_id
+                   )
+               )
+           )
+    </select>
+
+    <select id="countUncoveredScheduledDefinitions" resultType="int">
+        select count(*)
+          from batch.workflow_definition wf
+         where wf.tenant_id = #{tenantId}
+           and wf.calendar_code = #{calendarCode}
+           and wf.enabled = true
+           and wf.schedule_enabled = true
+           and wf.schedule_type in ('CRON', 'FIXED_RATE')
+           and wf.trigger_mode in ('SCHEDULED', 'MIXED')
+           and not exists (
+               select 1
+                 from batch.scheduled_occurrence_coverage coverage
+                where coverage.tenant_id = wf.tenant_id
+                  and coverage.workflow_definition_id = wf.id
+                  and coverage.schedule_version = wf.version
+                  and coverage.calendar_code is not distinct from wf.calendar_code
+                  and coverage.coverage_from_at &lt;= #{cutoffAt}
+                  and coverage.coverage_through_at &gt;= #{cutoffAt}
+                  and coverage.last_success_at &gt;= coalesce(
+                      (select revision.updated_at
+                         from batch.tenant_configuration_revision revision
+                        where revision.tenant_id = wf.tenant_id),
+                      '-infinity'::timestamptz)
+           )
+    </select>
+
+    <select id="countUntrackedTriggerDefinitions" resultType="int">
+        select count(*)
+          from batch.workflow_definition wd
+         where wd.tenant_id = #{tenantId}
+           and wd.calendar_code = #{calendarCode}
+           and wd.enabled = true
+           and wd.trigger_mode in ('EVENT', 'MIXED')
+           and not exists (
+               select 1
+                 from batch.external_event_expectation_definition expectation
+                where expectation.tenant_id = wd.tenant_id
+                  and expectation.calendar_code = wd.calendar_code
+                  and expectation.workflow_definition_id = wd.id
+                  and expectation.enabled = true
+           )
+           and not exists (
+               select 1
+                 from batch.file_group_expectation_definition expectation
+                where expectation.tenant_id = wd.tenant_id
+                  and expectation.calendar_code = wd.calendar_code
+                  and expectation.workflow_definition_id = wd.id
+                  and expectation.enabled = true
+           )
     </select>
 </mapper>

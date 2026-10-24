@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -21,6 +22,7 @@ import io.github.pinpols.batch.orchestrator.application.service.task.TaskCreatio
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService.DagNodeResolution;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper;
@@ -29,6 +31,7 @@ import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
+import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -101,6 +104,9 @@ class DefaultWorkflowNodeDispatchServiceAllTypesTest {
   @Mock
   private CrossDayDependencyResolver crossDayDependencyResolver;
 
+  @Mock
+  private WorkflowNodeTerminalFinalizer workflowNodeTerminalFinalizer;
+
   private DefaultWorkflowNodeDispatchService service;
 
   @BeforeEach
@@ -124,9 +130,18 @@ class DefaultWorkflowNodeDispatchServiceAllTypesTest {
         taskCreationService,
         payloadBuilder,
         childJobLaunchSupport,
-        crossDayDependencyResolver);
+        crossDayDependencyResolver,
+        workflowNodeTerminalFinalizer);
     // 通用 stub:让流程能走到 nodeType 分派点
     when(workflowNodeRunMapper.selectLatestForUpdate(anyLong(), anyString())).thenReturn(null);
+    doAnswer(invocation -> {
+          ((WorkflowNodeRunEntity) invocation.getArgument(0)).setId(900L);
+          return 1;
+        })
+        .when(workflowNodeRunMapper)
+        .insert(any());
+    when(workflowNodeRunMapper.attachJobInstance(anyString(), anyLong(), anyLong()))
+        .thenReturn(1);
     when(workflowDagService.isNodeReadyForDispatch(anyLong(), anyLong(), anyString(), any()))
         .thenReturn(true);
   }
@@ -135,6 +150,7 @@ class DefaultWorkflowNodeDispatchServiceAllTypesTest {
     JobInstanceEntity j = new JobInstanceEntity();
     j.setId(100L);
     j.setTenantId("ta");
+    j.setBizDate(LocalDate.of(2026, 6, 29));
     return j;
   }
 
@@ -176,6 +192,55 @@ class DefaultWorkflowNodeDispatchServiceAllTypesTest {
   }
 
   @Test
+  @DisplayName("无根 Workflow 的 JOB 节点以 Workflow Run 为上下文，不要求合成父 Job Instance")
+  void shouldRouteRootlessJobNodeWithoutParentInstance() {
+    WorkflowRunEntity rootlessRun = workflowRun();
+    rootlessRun.setRelatedJobInstanceId(null);
+    when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(50L, "n1"))
+        .thenReturn(nodeWithType(WorkflowNodeType.JOB.code()));
+    when(childJobLaunchSupport.dispatchJobNode(any(), any(), any(), any(), any(), any()))
+        .thenReturn(1);
+
+    // A report caller may pass the completed node's Job Instance. Rootless Workflow ownership
+    // must still prevent it from becoming a synthetic parent for the next node.
+    int result = service.dispatchNode(
+        instance(), rootlessRun, new DagNodeResolution("n1", "JOB"), null, "trace");
+
+    assertThat(result).isEqualTo(1);
+    verify(childJobLaunchSupport)
+        .dispatchJobNode(
+            org.mockito.ArgumentMatchers.isNull(),
+            org.mockito.ArgumentMatchers.eq(rootlessRun),
+            any(),
+            any(),
+            any(),
+            anyString());
+    verify(schedulePlanBuilder, never()).build(any());
+  }
+
+  @Test
+  @DisplayName("受管单作业 Workflow 的根 JOB 节点直接派发根实例，不递归启动子作业")
+  void shouldDispatchManagedSingleJobRootInline() {
+    JobInstanceEntity root = instance();
+    root.setId(41L);
+    root.setJobCode("JOB_X");
+    root.setJobDefinitionId(41L);
+    WorkflowRunEntity run = workflowRun();
+    run.setSingleJobDefinitionId(41L);
+    run.setRelatedJobInstanceId(41L);
+    when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(50L, "n1"))
+        .thenReturn(nodeWithType(WorkflowNodeType.JOB.code()));
+
+    int result = service.dispatchNode(root, run, new DagNodeResolution("n1", "JOB"), null, "trace");
+
+    assertThat(result).isZero();
+    verify(schedulePlanBuilder).build(any());
+    verify(workflowNodeRunMapper).attachJobInstance("ta", 900L, 41L);
+    verify(childJobLaunchSupport, never())
+        .dispatchJobNode(any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
   @DisplayName(
       "GATEWAY 节点 → 走 dispatchGatewayNode (无工作负载),不调 childJobLaunchSupport / schedulePlanBuilder")
   void shouldRouteToGateway_whenNodeIsGateway() {
@@ -189,6 +254,7 @@ class DefaultWorkflowNodeDispatchServiceAllTypesTest {
     verify(childJobLaunchSupport, never())
         .dispatchJobNode(any(), any(), any(), any(), any(), any());
     verify(schedulePlanBuilder, never()).build(any());
+    verify(workflowNodeTerminalFinalizer).finalizeIfAllNodesTerminal(any());
   }
 
   @Test
@@ -203,5 +269,6 @@ class DefaultWorkflowNodeDispatchServiceAllTypesTest {
     verify(childJobLaunchSupport, never())
         .dispatchJobNode(any(), any(), any(), any(), any(), any());
     verify(schedulePlanBuilder, never()).build(any());
+    verify(workflowNodeTerminalFinalizer).finalizeIfAllNodesTerminal(any());
   }
 }

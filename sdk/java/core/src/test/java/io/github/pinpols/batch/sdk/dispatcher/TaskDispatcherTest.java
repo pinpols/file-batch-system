@@ -13,10 +13,14 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpException;
+import io.github.pinpols.batch.sdk.task.SdkDependencyResultReference;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.io.IOException;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -169,6 +173,42 @@ class TaskDispatcherTest {
     verify(http).report(eq(42L), anyString(), reportBody.capture());
     assertThat(reportBody.getValue()).containsEntry("partitionInvocationId", "inv-from-claim");
     assertThat(dispatcher.partitionInvocation(42L)).isNull();
+  }
+
+  @Test
+  @DisplayName("依赖结果引用从 CLAIM 回包透传给自托管 Worker handler")
+  void shouldExposeDependencyResultSnapshotFromClaimResponse() throws Exception {
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    SdkDependencyResultReference reference = new SdkDependencyResultReference(
+        "UPSTREAM_JOB",
+        "PREVIOUS_BIZ_DAY",
+        LocalDate.parse("2026-04-30"),
+        "job:UPSTREAM_JOB:2026-04-30",
+        4,
+        9001L,
+        8001L,
+        Instant.parse("2026-05-01T00:00:00Z"));
+    when(http.claim(eq(42L), anyString(), any()))
+        .thenReturn(new PlatformHttpClient.TaskClaimResponse("inv-1", List.of(reference)));
+    AtomicReference<SdkTaskContext> observed = new AtomicReference<>();
+    SdkTaskHandler handler = new SdkTaskHandler() {
+      @Override
+      public String taskType() {
+        return "tt";
+      }
+
+      @Override
+      public SdkTaskResult execute(SdkTaskContext ctx) {
+        observed.set(ctx);
+        return SdkTaskResult.ok("done", Map.of());
+      }
+    };
+    dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http);
+
+    dispatcher.processInWorkerThread(
+        new TaskDispatchMessage(42L, "tx", "job-1", "tt", "ti-9", Map.of(), Map.of()));
+
+    assertThat(observed.get().dependencyResultSnapshot()).containsExactly(reference);
   }
 
   // ─── handler 异常回退 ────────────────────────────────────────────────────────

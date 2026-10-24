@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.console.domain.rbac.service;
 
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleApiKeyInsertParam;
+
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.security.ApiKeyHasher;
@@ -25,12 +28,14 @@ public class ConsoleApiKeyService {
   private final ConsoleTenantGuard tenantGuard;
 
   public List<ApiKeyEntity> list(String tenantId) {
-    return repository.findAllByTenant(tenantGuard.resolveTenant(tenantId));
+    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
+    return repository.findAllByTenant(resolvedTenantId);
   }
 
   public ApiKeyEntity detail(String tenantId, Long id) {
+    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
     return repository
-        .findByTenantAndId(tenantGuard.resolveTenant(tenantId), id)
+        .findByTenantAndId(resolvedTenantId, id)
         .orElseThrow(() -> BizException.of(ResultCode.NOT_FOUND, "error.api_key.not_found"));
   }
 
@@ -45,20 +50,23 @@ public class ConsoleApiKeyService {
 
     String rawKey = generateRawKey();
     String prefix = rawKey.substring(0, 8);
-    // P1-1(2026-06-03,docs/archive/analysis/2026-06-03-deep-scan-be-security.md):
+    // P1-1(2026-06-03,docs/archive/analysis/deep-scan-be-security-2026-06-03.md):
     // 新 key 一律 PBKDF2-HMAC-SHA256 + per-key 16B salt(裸 SHA-256 仅 verifier 兼容老行)。
     ApiKeyHasher.SaltedHash hashed = ApiKeyHasher.hashWithSaltKdf(rawKey);
 
+    ConsoleApiKeyInsertParam consoleApiKeyInsertParam = ConsoleApiKeyInsertParam.builder()
+        .tenantId(resolved)
+        .keyName(keyName)
+        .keyPrefix(prefix)
+        .keyHash(hashed.hash())
+        .salt(hashed.salt())
+        .keyHashAlgo(ApiKeyHasher.ALGO_PBKDF2)
+        .scopes(scopes == null || scopes.isBlank() ? "*" : scopes)
+        .expiresAt(expiresAt)
+        .operator(operator)
+        .build();
     repository.insert(
-        resolved,
-        keyName,
-        prefix,
-        hashed.hash(),
-        hashed.salt(),
-        ApiKeyHasher.ALGO_PBKDF2,
-        scopes == null || scopes.isBlank() ? "*" : scopes,
-        expiresAt,
-        operator);
+        consoleApiKeyInsertParam);
 
     ApiKeyEntity entity = repository
         .findByTenantAndName(resolved, keyName)
@@ -79,7 +87,9 @@ public class ConsoleApiKeyService {
   private String generateRawKey() {
     byte[] bytes = new byte[RAW_KEY_BYTES];
     SECURE_RANDOM.nextBytes(bytes);
-    return "bk_" + Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    Base64.Encoder urlEncoder = Base64.getUrlEncoder().withoutPadding();
+    String encodedKey = urlEncoder.encodeToString(bytes);
+    return "bk_" + encodedKey;
   }
 
   public record CreateResult(ApiKeyEntity entity, String rawKey) {}

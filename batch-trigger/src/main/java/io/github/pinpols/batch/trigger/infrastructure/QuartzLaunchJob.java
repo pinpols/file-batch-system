@@ -2,6 +2,7 @@ package io.github.pinpols.batch.trigger.infrastructure;
 
 import io.github.pinpols.batch.common.enums.CatchUpPolicyType;
 import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.enums.ScheduledOccurrenceStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -10,6 +11,7 @@ import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
 import io.github.pinpols.batch.trigger.domain.MisfireHandler;
 import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
+import io.github.pinpols.batch.trigger.service.ScheduledOccurrenceRecorder;
 import io.github.pinpols.batch.trigger.service.TriggerService;
 import io.github.pinpols.batch.trigger.service.UpstreamNotReadyException;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
@@ -17,6 +19,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,8 +47,8 @@ import org.springframework.stereotype.Component;
  *   <li>drift ≥ 阈值 + {@code catchUpPolicy=NONE}，或超过 maxDays → 降级为 {@code SCHEDULED} （不追赶，视作正常触发）。
  * </ol>
  *
- * <p><b>租户暂停自愈</b>：若 {@link TriggerService} 抛出"tenant is suspended"异常， 自动调用 {@link
- * TriggerRegistrationService#pauseByJobCode} 暂停 Quartz job， 防止暂停租户的 job 持续触发产生 warn 日志风暴。
+ * <p><b>租户暂停自愈</b>：若 {@link TriggerService} 抛出 "tenant is suspended" 异常，自动暂停对应 Workflow 的 Quartz 调度，
+ * 防止已停用租户的调度持续触发产生 warn 日志风暴；旧 Quartz JobDataMap 暂时沿用 JobCode 兼容处理。
  */
 @Slf4j
 @Component
@@ -54,12 +57,17 @@ public class QuartzLaunchJob implements Job {
 
   public static final String TENANT_ID = "tenantId";
   public static final String JOB_CODE = "jobCode";
+  public static final String WORKFLOW_DEFINITION_ID = "workflowDefinitionId";
+  public static final String WORKFLOW_CODE = "workflowCode";
+  public static final String WORKFLOW_VERSION = "workflowVersion";
+  public static final String JOB_DEFINITION_VERSION = "jobDefinitionVersion";
   public static final String SCHEDULE_TYPE = "scheduleType";
   public static final String SCHEDULE_EXPRESSION = "scheduleExpression";
   public static final String TIMEZONE = "timezone";
   public static final String TRIGGER_MODE = "triggerMode";
   public static final String CALENDAR_CODE = "calendarCode";
   public static final String DEPENDS_ON_JOB_CODE = "dependsOnJobCode";
+  public static final String DEPENDS_ON_JOB_CODES = "dependsOnJobCodes";
   public static final String CATCH_UP_POLICY = "catchUpPolicy";
   public static final String CATCH_UP_MAX_DAYS = "catchUpMaxDays";
   public static final String MISFIRE_ORIGINAL_FIRE_TIME = "misfireOriginalFireTime";
@@ -72,6 +80,7 @@ public class QuartzLaunchJob implements Job {
   private final TriggerRuntimeProperties triggerRuntimeProperties;
   private final TriggerRegistrationService triggerRegistrationService;
   private final MeterRegistry meterRegistry;
+  private final ScheduledOccurrenceRecorder occurrenceRecorder;
 
   @Override
   public void execute(JobExecutionContext context) throws JobExecutionException {
@@ -79,12 +88,27 @@ public class QuartzLaunchJob implements Job {
     TriggerDescriptor descriptor = new TriggerDescriptor();
     descriptor.setTenantId(jobDataMap.getString(TENANT_ID));
     descriptor.setJobCode(jobDataMap.getString(JOB_CODE));
+    if (jobDataMap.containsKey(WORKFLOW_DEFINITION_ID)) {
+      descriptor.setWorkflowDefinitionId(jobDataMap.getLongValue(WORKFLOW_DEFINITION_ID));
+    }
+    descriptor.setWorkflowCode(jobDataMap.getString(WORKFLOW_CODE));
+    if (jobDataMap.containsKey(WORKFLOW_VERSION)) {
+      descriptor.setWorkflowVersion(jobDataMap.getIntValue(WORKFLOW_VERSION));
+    }
+    descriptor.setJobDefinitionVersion(resolveDefinitionVersion(jobDataMap));
     descriptor.setScheduleType(jobDataMap.getString(SCHEDULE_TYPE));
     descriptor.setScheduleExpression(jobDataMap.getString(SCHEDULE_EXPRESSION));
     descriptor.setTimezone(jobDataMap.getString(TIMEZONE));
     descriptor.setTriggerMode(jobDataMap.getString(TRIGGER_MODE));
     descriptor.setCalendarCode(jobDataMap.getString(CALENDAR_CODE));
     descriptor.setDependsOnJobCode(jobDataMap.getString(DEPENDS_ON_JOB_CODE));
+    Object dependencyCodes = jobDataMap.get(DEPENDS_ON_JOB_CODES);
+    if (dependencyCodes instanceof List<?> codes) {
+      descriptor.setDependsOnJobCodes(codes.stream()
+          .filter(String.class::isInstance)
+          .map(String.class::cast)
+          .toList());
+    }
     descriptor.setCatchUpPolicy(jobDataMap.getString(CATCH_UP_POLICY));
     descriptor.setCatchUpMaxDays(resolveCatchUpMaxDays(jobDataMap));
     descriptor.setEnabled(true);
@@ -92,7 +116,7 @@ public class QuartzLaunchJob implements Job {
     Instant actualFireTime = context.getFireTime().toInstant();
     boolean readinessRetry = jobDataMap.containsKey(READINESS_ORIGINAL_FIRE_TIME);
     if (!readinessRetry && requiresManualApproval(descriptor, scheduledFireTime, actualFireTime)) {
-      misfireHandler.handle(descriptor.getTenantId() + ":" + descriptor.getJobCode());
+      misfireHandler.handle(TriggerSchedulerFacade.quartzIdentity(descriptor));
       ScheduledTriggerCommand catchUpCommand = new ScheduledTriggerCommand(
           descriptor,
           scheduledFireTime,
@@ -118,17 +142,28 @@ public class QuartzLaunchJob implements Job {
       // i18n 错误信息文本变动不再让此分支静默失效。
       if (e.getCode() == ResultCode.TENANT_SUSPENDED) {
         log.warn(
-            "tenant is suspended, auto-pausing quartz job: tenantId={}, jobCode={}",
+            "tenant is suspended, auto-pausing workflow schedule: tenantId={}, workflowCode={}",
             descriptor.getTenantId(),
-            descriptor.getJobCode());
-        triggerRegistrationService.pauseByJobCode(
-            descriptor.getTenantId(), descriptor.getJobCode());
+            descriptor.getWorkflowCode());
+        if (descriptor.getWorkflowCode() == null) {
+          triggerRegistrationService.pauseByJobCode(
+              descriptor.getTenantId(), descriptor.getJobCode());
+        } else {
+          triggerRegistrationService.pauseByWorkflowCode(
+              descriptor.getTenantId(), descriptor.getWorkflowCode());
+        }
       } else {
         throw new JobExecutionException(e, false);
       }
     } catch (UpstreamNotReadyException e) {
+      occurrenceRecorder.record(
+          descriptor,
+          scheduledFireTime,
+          e.getBizDate(),
+          ScheduledOccurrenceStatus.WAITING_READINESS,
+          null);
       scheduleReadinessRetry(
-          context, jobDataMap, scheduledFireTime, actualFireTime, triggerType, e);
+          context, jobDataMap, descriptor, scheduledFireTime, actualFireTime, triggerType, e);
     }
   }
 
@@ -145,6 +180,7 @@ public class QuartzLaunchJob implements Job {
   private void scheduleReadinessRetry(
       JobExecutionContext context,
       JobDataMap jobDataMap,
+      TriggerDescriptor descriptor,
       Instant originalFireTime,
       Instant actualFireTime,
       TriggerType triggerType,
@@ -155,6 +191,12 @@ public class QuartzLaunchJob implements Job {
         : actualFireTime;
     Duration waited = Duration.between(deferredSince, actualFireTime);
     if (waited.getSeconds() >= triggerRuntimeProperties.getReadinessWindowSeconds()) {
+      occurrenceRecorder.record(
+          descriptor,
+          originalFireTime,
+          cause.getBizDate(),
+          ScheduledOccurrenceStatus.READINESS_TIMEOUT,
+          null);
       meterRegistry.counter("batch.trigger.quartz.readiness.timeout").increment();
       log.error(
           "upstream readiness window exceeded, giving up scheduled fire: tenantId={}, jobCode={},"
@@ -199,6 +241,11 @@ public class QuartzLaunchJob implements Job {
     }
   }
 
+  private int resolveDefinitionVersion(JobDataMap jobDataMap) {
+    Object value = jobDataMap.get(JOB_DEFINITION_VERSION);
+    return value instanceof Number number ? number.intValue() : 0;
+  }
+
   private TriggerType resolveTriggerType(
       TriggerDescriptor descriptor, Instant scheduledFireTime, Instant actualFireTime) {
     if (EmptyChecks.isNull(scheduledFireTime) || EmptyChecks.isNull(actualFireTime)) {
@@ -207,7 +254,7 @@ public class QuartzLaunchJob implements Job {
     long driftSeconds =
         Math.max(0L, actualFireTime.getEpochSecond() - scheduledFireTime.getEpochSecond());
     if (driftSeconds >= triggerRuntimeProperties.getMisfireCatchUpThresholdSeconds()) {
-      misfireHandler.handle(descriptor.getTenantId() + ":" + descriptor.getJobCode());
+      misfireHandler.handle(TriggerSchedulerFacade.quartzIdentity(descriptor));
       return resolveCatchUpPolicy(descriptor, scheduledFireTime, actualFireTime);
     }
     return TriggerType.SCHEDULED;

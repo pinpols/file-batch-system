@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.config.HttpDispatchChannelProperties;
@@ -16,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import okhttp3.Dns;
@@ -93,59 +95,90 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
     requestPayload.put(PipelineRuntimeKeys.FILE_RECORD, command.fileRecord());
     requestPayload.put(DispatchRuntimeKeys.DISPATCH_PAYLOAD, command.payload());
 
-    Request.Builder builder = new Request.Builder()
-        .url(endpoint)
-        .post(RequestBody.create(JsonUtils.toJson(requestPayload), JSON))
-        .header("Idempotency-Key", idempotencyKey(receipt.externalRequestId()));
+    Request.Builder builder = new Request.Builder().url(endpoint);
+    String requestPayloadJson = JsonUtils.toJson(requestPayload);
+    RequestBody requestBody = RequestBody.create(requestPayloadJson, JSON);
+    builder.post(requestBody);
+    String idempotencyKey = idempotencyKey(receipt.externalRequestId());
+    builder.header("Idempotency-Key", idempotencyKey);
     String ct = String.valueOf(channelConfig.getOrDefault("channel_type", ""));
     if ("API_PUSH".equalsIgnoreCase(ct)) {
       Object apiKey = channelConfig.get("api_push_api_key");
-      if (apiKey != null && !String.valueOf(apiKey).isBlank()) {
-        builder.addHeader("X-Api-Key", String.valueOf(apiKey).trim());
+      String apiKeyPresenceText = EmptyChecks.isNull(apiKey) ? null : String.valueOf(apiKey);
+      if (EmptyChecks.isNotNull(apiKey) && !EmptyChecks.isBlank(Objects.requireNonNull(apiKeyPresenceText))) {
+        String rawApiKey = String.valueOf(apiKey);
+        String normalizedApiKey = rawApiKey.trim();
+        builder.addHeader("X-Api-Key", normalizedApiKey);
       }
       Object authorization = channelConfig.get("authorization");
-      if (authorization != null && !String.valueOf(authorization).isBlank()) {
-        builder.addHeader("Authorization", String.valueOf(authorization).trim());
+      String authorizationPresenceText =
+          EmptyChecks.isNull(authorization) ? null : String.valueOf(authorization);
+      if (EmptyChecks.isNotNull(authorization) && !EmptyChecks.isBlank(Objects.requireNonNull(authorizationPresenceText))) {
+        String rawAuthorization = String.valueOf(authorization);
+        String normalizedAuthorization = rawAuthorization.trim();
+        builder.addHeader("Authorization", normalizedAuthorization);
       }
     }
     Request request = builder.build();
-    try {
-      if (!securityProperties.isBypassMode()) {
+    boolean receiverIdempotencySupported =
+        Boolean.TRUE.equals(channelConfig.get("receiver_idempotency_supported"));
+    if (!securityProperties.isBypassMode()) {
+      try {
         DnsResolveGuard.resolveAllAndValidate(request.url().host());
-      }
-      // S-2.6: DNS 解析 + IP 校验在构造期注入的 Dns 实现里完成，这里直接复用单例 Client
-      try (Response response = okHttpClient.newCall(request).execute()) {
-        if (!response.isSuccessful()) {
-          return new DispatchResult(
-              false,
-              receipt.externalRequestId(),
-              receipt.receiptCode(),
-              false,
-              false,
-              "dispatch api responded " + response.code(),
-              null);
-        }
+      } catch (Exception ex) {
+        SwallowedExceptionLogger.warn(HttpDispatchChannelAdapter.class, "catch:Exception", ex);
+
         return new DispatchResult(
-            true,
+            false,
             receipt.externalRequestId(),
             receipt.receiptCode(),
-            receipt.acknowledged(),
-            receipt.pending(),
-            "dispatched via http adapter",
+            false,
+            false,
+            ex.getMessage(),
             endpoint);
       }
+    }
+
+    // S-2.6: 使用构造期注入的 DNS 校验结果及共享 Client 执行请求。
+    try (Response response = okHttpClient.newCall(request).execute()) {
+      if (!response.isSuccessful()) {
+        String responseMessage = "dispatch api responded " + response.code();
+        return failedResult(receipt, endpoint, responseMessage, receiverIdempotencySupported);
+      }
+
+      return new DispatchResult(
+          true,
+          receipt.externalRequestId(),
+          receipt.receiptCode(),
+          receipt.acknowledged(),
+          receipt.pending(),
+          "dispatched via http adapter",
+          endpoint);
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(HttpDispatchChannelAdapter.class, "catch:Exception", ex);
 
-      return new DispatchResult(
-          false,
-          receipt.externalRequestId(),
-          receipt.receiptCode(),
-          false,
-          false,
-          ex.getMessage(),
-          endpoint);
+      return failedResult(receipt, endpoint, ex.getMessage(), receiverIdempotencySupported);
     }
+  }
+
+  private static DispatchResult failedResult(
+      DispatchReceiptSupport.Receipt receipt,
+      String endpoint,
+      String message,
+      boolean receiverIdempotencySupported) {
+    if (!receiverIdempotencySupported) {
+      return DispatchResult.externalOutcomeUnknown(
+          receipt.externalRequestId(), receipt.receiptCode(), message);
+    }
+
+    return new DispatchResult(
+        false,
+        receipt.externalRequestId(),
+        receipt.receiptCode(),
+        false,
+        false,
+        message,
+        endpoint);
   }
 
   @PreDestroy
@@ -156,7 +189,8 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
   }
 
   private static String idempotencyKey(String externalRequestId) {
-    return UUID.nameUUIDFromBytes(externalRequestId.getBytes(StandardCharsets.UTF_8))
-        .toString();
+    byte[] requestIdBytes = externalRequestId.getBytes(StandardCharsets.UTF_8);
+    UUID deterministicId = UUID.nameUUIDFromBytes(requestIdBytes);
+    return deterministicId.toString();
   }
 }

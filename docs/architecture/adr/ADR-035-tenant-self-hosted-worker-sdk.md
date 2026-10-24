@@ -295,6 +295,8 @@ SDK 侧 `TaskDispatchMessage` 用 `@JsonIgnoreProperties(ignoreUnknown=true)` �
 | `POST /internal/tasks/{taskId}/renew` | `TaskClaimRequest` | 同上 |
 | `POST /internal/tasks/{taskId}/report` | `TaskExecutionReportDto` | taskId / tenantId / workerId / success / message / outputs(注意是复数,不是 output)/ errorCode / resultSummary |
 
+CLAIM 成功响应包含 `EffectiveTaskConfig`。可选字段 `dependencyResultSnapshot` 表示 Orchestrator 启动依赖闸门观察到的上游业务键、结果版本和来源实例；Java SDK 将其提供为 `SdkTaskContext.dependencyResultSnapshot()`。该字段是闸门判定证据，不自动 pin 外部业务表读取；业务 handler 若要求严格版本一致，必须按 `resultVersionId` 读取受控结果，或自行验证版本引用仍有效。旧平台缺少该字段时 SDK 返回空列表。
+
 ### Wire-protocol 契约守门
 
 `sdk/java/core/src/test/.../dispatcher/SdkPlatformContractTest`:fail-fast 守门测试,任何 BE DTO 字段重命名 / 删除会让本测试失败。**改 BE DTO 必须同步改 SDK + 契约测试**(ADR §9 两套绑定一个 wire 协议)。

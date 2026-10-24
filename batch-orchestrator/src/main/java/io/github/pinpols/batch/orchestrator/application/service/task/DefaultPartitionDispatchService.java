@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.enums.WorkflowNodeCode;
+import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
@@ -358,6 +359,16 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     Map<String, Object> payload = new LinkedHashMap<>();
     if (EmptyChecks.isNotNull(params)) {
       payload.putAll(params);
+    }
+    Object parentNodeCode = payload.get("_parentNodeCode");
+    if (payload.containsKey("_parentWorkflowRunId")
+        && parentNodeCode instanceof String nodeCode
+        && EmptyChecks.isNotBlank(nodeCode)) {
+      // Rootless Workflow nodes execute as standalone Job Instances. Preserve the owning node
+      // identity on each worker task so parallel node outcomes do not depend on a single active
+      // node being inferable from workflow_run.current_node_code.
+      payload.put("workflowNodeCode", nodeCode);
+      payload.put("workflowNodeType", WorkflowNodeType.JOB.code());
     }
     if (!payload.containsKey("batchNo") && !payload.containsKey("batch_no")) {
       String batchNo = EmptyChecks.isNull(jobInstance) ? null : jobInstance.getBatchNo();

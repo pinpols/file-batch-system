@@ -2,7 +2,7 @@
 
 > **目标**:让其他语言(Go / Python / TypeScript / Rust …)团队照协议规范自研 worker SDK,平台不维护多语言代码,只稳协议。当前已有官方实现:Go / Python / TypeScript / Rust(+ 参考实现 Java),**无 .NET 实现**。
 > **协议权威源(双轨)**:[`docs/sdk/wire-protocol.md`](wire-protocol.md)(读者视图)+ [`docs/api/orchestrator-internal.openapi.yaml`](../api/orchestrator-internal.openapi.yaml)(机器视图)。
-> **行为对账**:[`docs/api/sdk-contract-fixtures/`](../api/sdk-contract-fixtures/) — language-agnostic JSON 契约用例,任何实现都可写 runner 跑通验证。
+> **行为对账**:[`docs/api/sdk-contract-fixtures/`](../api/sdk-contract-fixtures) — language-agnostic JSON 契约用例,任何实现都可写 runner 跑通验证。
 > **配套**:[ADR-035](../architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md) §3/§4/§9/§11、[`docs/sdk/quickstart.md`](quickstart.md)(Java SDK 五分钟接入)、[`docs/sdk/troubleshooting.md`](troubleshooting.md)。
 > **五语言对齐矩阵(亲核、带 `文件:行号` 证据)**:[`docs/sdk/sdk-parity-matrix.md`](sdk-parity-matrix.md) —— 回答"哪些对齐 / 哪些没对齐",并记录了自动化审查在此题上系统性误报的根因与复核守则。
 
@@ -146,7 +146,7 @@ BYO SDK **必须**实现等价校验,代码层留 hook 供租户扩 deny-list。
 
 ## 3. 测试自检(契约 fixtures)
 
-[`docs/api/sdk-contract-fixtures/`](../api/sdk-contract-fixtures/) 提供 language-agnostic JSON 契约用例。
+[`docs/api/sdk-contract-fixtures/`](../api/sdk-contract-fixtures) 提供 language-agnostic JSON 契约用例。
 
 **用法**:SDK conformance runner 按 fixture JSON 的 `given` 构造输入、`when` 执行决策或模拟 transport，再断言 `then`。当前 fixtures 的 schema 校验和五语言 conformance 已由 `sdk-contract-parity.yml` 执行；它不替代真实 Kafka broker、真实平台 API 或发布包安装验证。用例清单见 [`fixture README`](../api/sdk-contract-fixtures/README.md)。
 
@@ -200,14 +200,14 @@ BYO SDK **必须**实现等价校验,代码层留 hook 供租户扩 deny-list。
 
 ## 5. 参考实现
 
-- **Java SDK(参考实现 + 协议主版本守护)**:[`sdk/java/core/`](../../sdk/java/core/) — 包含 `BatchPlatformClient` / `PlatformHttpClient` / `KafkaTaskConsumer` / `HeartbeatScheduler` / `LeaseRenewalScheduler` / `TaskDispatcher` 完整链路。
-- **Java SDK 示例租户 worker**:[`examples/self-hosted-sdk/sample-tenant-worker-java/`](../../examples/self-hosted-sdk/sample-tenant-worker-java/) —— plain Java(无 Spring)、200 行起一个 worker 进程。
+- **Java SDK(参考实现 + 协议主版本守护)**:[`sdk/java/core/`](../../sdk/java/core) — 包含 `BatchPlatformClient` / `PlatformHttpClient` / `KafkaTaskConsumer` / `HeartbeatScheduler` / `LeaseRenewalScheduler` / `TaskDispatcher` 完整链路。
+- **Java SDK 示例租户 worker**:[`examples/self-hosted-sdk/sample-tenant-worker-java/`](../../examples/self-hosted-sdk/sample-tenant-worker-java) —— plain Java(无 Spring)、200 行起一个 worker 进程。
 - **Java SDK 契约测试**:[`sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/dispatcher/SdkPlatformContractTest.java`](../../sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/dispatcher/SdkPlatformContractTest.java) —— 字段集守护;本 lane 抽出的 JSON fixtures 即源自此。
 - **多语言示例租户 worker**(命名统一 `sample-tenant-worker-<lang>`):
-  - [`examples/self-hosted-sdk/sample-tenant-worker-go/`](../../examples/self-hosted-sdk/sample-tenant-worker-go/) —— `sdk/go` 运行时 + segmentio/kafka-go(可 `go build`)。
-  - [`examples/self-hosted-sdk/sample-tenant-worker-typescript/`](../../examples/self-hosted-sdk/sample-tenant-worker-typescript/) —— `sdk/typescript` 运行时 + kafkajs(Node ≥20)。
-  - [`examples/self-hosted-sdk/sample-tenant-worker-rust/`](../../examples/self-hosted-sdk/sample-tenant-worker-rust/) —— `sdk/rust` + rdkafka,**已接 `ReqwestTransport`(真 HTTP),本机实测全链路绿**(见 `local-e2e-coverage.md`)。
-  - [`examples/self-hosted-sdk/sample-tenant-worker-python/`](../../examples/self-hosted-sdk/sample-tenant-worker-python/) —— Python 3.12 asyncio。
+  - [`examples/self-hosted-sdk/sample-tenant-worker-go/`](../../examples/self-hosted-sdk/sample-tenant-worker-go) —— `sdk/go` 运行时 + segmentio/kafka-go(可 `go build`)。
+  - [`examples/self-hosted-sdk/sample-tenant-worker-typescript/`](../../examples/self-hosted-sdk/sample-tenant-worker-typescript) —— `sdk/typescript` 运行时 + kafkajs(Node ≥20)。
+  - [`examples/self-hosted-sdk/sample-tenant-worker-rust/`](../../examples/self-hosted-sdk/sample-tenant-worker-rust) —— `sdk/rust` + rdkafka,**已接 `ReqwestTransport`(真 HTTP),本机实测全链路绿**(见 `local-e2e-coverage.md`)。
+  - [`examples/self-hosted-sdk/sample-tenant-worker-python/`](../../examples/self-hosted-sdk/sample-tenant-worker-python) —— Python 3.12 asyncio。
 
 ---
 
@@ -223,7 +223,7 @@ BYO SDK **必须**实现等价校验,代码层留 hook 供租户扩 deny-list。
 
 - 协议读者视图:[`docs/sdk/wire-protocol.md`](wire-protocol.md)
 - 协议机器视图:[`docs/api/orchestrator-internal.openapi.yaml`](../api/orchestrator-internal.openapi.yaml)
-- 契约 fixtures:[`docs/api/sdk-contract-fixtures/`](../api/sdk-contract-fixtures/)
+- 契约 fixtures:[`docs/api/sdk-contract-fixtures/`](../api/sdk-contract-fixtures)
 - ADR-035 §9 两套绑定:[`docs/architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md`](../architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md)
 - 双轨滚动:[`docs/runbook/sdk-dual-rollout.md`](../runbook/sdk-dual-rollout.md)
 - 上线流程:[`docs/runbook/per-tenant-worker-onboarding.md`](../runbook/per-tenant-worker-onboarding.md)

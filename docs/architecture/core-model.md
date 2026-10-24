@@ -180,6 +180,10 @@ job_instance.expected_       ──┘                ↓
 
 **反例**：不要在 `PartitionCountResolver` 里塞业务切分逻辑——它只决定数量，不决定字段。详见 [`ADR-005-partition-count-resolver-chain.md`](./adr/ADR-005-partition-count-resolver-chain.md)。
 
+#### 3.6.4 作业依赖结果引用
+
+Orchestrator 在启动依赖闸门记录它观察到的上游 `businessKey`、结果版本号/ID、来源实例和对齐业务日，并在 Worker CLAIM 的 `EffectiveTaskConfig.dependencyResultSnapshot` 返回。内置 Worker core 将该列表放入 `PipelineRuntimeKeys.DEPENDENCY_RESULT_SNAPSHOT`，供自定义步骤读取。它是启动时的判定证据，不自动锁住业务表或平台结果版本；消费者必须显式按版本 ID 读取，或在执行期间校验引用仍有效。当前外部业务表消费者与自托管 SDK 的端到端 pinning 尚未完成，不得把此字段当作已证明的实际消费 lineage。
+
 ### 3.7 Step / Stage 边界
 
 `Step` 和 `Stage` 不是同义词，不能互换。

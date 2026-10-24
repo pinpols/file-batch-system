@@ -70,6 +70,7 @@ public class TenantSchedulerSnapshotRecorder {
       }
       SchedulerSnapshotResponse.PolicySnapshot p = snap.policies().getFirst();
       long online = onlineByTenant.getOrDefault(tenantId, 0L);
+      String snapshotJson = JsonUtils.toJson(snap);
       TenantSchedulerSnapshotEntity snapshot = new TenantSchedulerSnapshotEntity(
           null,
           tenantId,
@@ -85,7 +86,7 @@ public class TenantSchedulerSnapshotRecorder {
           p.groupSharedMaxRunningJobs(),
           p.quotaResetPolicy(),
           (int) Math.min(Integer.MAX_VALUE, online),
-          JsonbString.of(JsonUtils.toJson(snap)));
+          JsonbString.of(snapshotJson));
       rows.add(snapshot);
     }
     if (!rows.isEmpty()) {

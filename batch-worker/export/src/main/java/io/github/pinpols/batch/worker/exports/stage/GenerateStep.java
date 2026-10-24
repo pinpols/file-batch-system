@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.logging.ThrottledLogger;
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.OwnerOnlyFiles;
@@ -27,6 +28,7 @@ import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import io.github.pinpols.batch.worker.exports.domain.ExportPayload;
 import io.github.pinpols.batch.worker.exports.domain.ExportStage;
 import io.github.pinpols.batch.worker.exports.domain.ExportStageResult;
+import io.github.pinpols.batch.worker.exports.domain.ExportWorkerType;
 import io.github.pinpols.batch.worker.exports.plugin.ExportDataPluginRegistry;
 import io.github.pinpols.batch.worker.exports.stage.format.ExportFormatContext;
 import io.github.pinpols.batch.worker.exports.stage.format.ExportFormatStrategy;
@@ -97,6 +99,14 @@ public class GenerateStep implements ExportStageStep {
     return ExportStage.GENERATE;
   }
 
+  ReplayCapabilityDeclaration replayCapability(Map<String, Object> frozenTemplateConfig) {
+    String exportDataRef = resolveExportDataRef(frozenTemplateConfig);
+    if (!Texts.hasText(exportDataRef)) {
+      return ReplayCapabilityDeclaration.unknown(ExportWorkerType.EXPORT);
+    }
+    return exportDataPluginRegistry.replayCapability(exportDataRef, frozenTemplateConfig);
+  }
+
   @Override
   public ExportStageResult execute(ExportJobContext context) {
     Object payload = EmptyChecks.isNull(context)
@@ -117,7 +127,7 @@ public class GenerateStep implements ExportStageStep {
     boolean keepPartialFileOnFailure = false;
     try {
       Map<String, Object> attrs = context.getAttributes();
-      String exportDataRef = resolveExportDataRef(context, exportPayload);
+      String exportDataRef = resolveExportDataRef(context);
       attrs.put(ExportRuntimeKeys.EXPORT_DATA_REF, exportDataRef);
       ExportDataContext dataCtx = buildExportDataContext(context, exportPayload);
       ExportDataPlugin dataPlugin = exportDataPluginRegistry.require(exportDataRef);
@@ -136,9 +146,10 @@ public class GenerateStep implements ExportStageStep {
       long maxRows =
           workerConfiguration != null ? workerConfiguration.effectiveMaxExportRows() : 500_000L;
       Object totalCountObj = batch.get("total_count");
-      if (totalCountObj instanceof Number totalCount
-          && maxRows > 0
-          && totalCount.longValue() > maxRows) {
+      Number totalCount = totalCountObj instanceof Number number ? number : null;
+      boolean totalCountExceedsMaxRows =
+          EmptyChecks.isNotNull(totalCount) && maxRows > 0 && totalCount.longValue() > maxRows;
+      if (totalCountExceedsMaxRows) {
         return ExportStageResult.failure(
             stage(),
             "EXPORT_EXCEEDS_MAX_ROWS",
@@ -149,8 +160,9 @@ public class GenerateStep implements ExportStageStep {
       }
       int pageSize = resolvePageSize(context);
       int chunkSize = resolveChunkSize(context);
-      String fileFormatType = String.valueOf(attrs.getOrDefault(
-          PipelineRuntimeKeys.EXPORT_FILE_FORMAT_TYPE, FileTemplateFormat.JSON.code()));
+      Object configuredFileFormatType = attrs.getOrDefault(
+          PipelineRuntimeKeys.EXPORT_FILE_FORMAT_TYPE, FileTemplateFormat.JSON.code());
+      String fileFormatType = String.valueOf(configuredFileFormatType);
       // 导出编码选项：target_charset / with_bom / line_separator 由模板声明，透传给格式策略与 REGISTER 登记。
       ExportEncodingOptions encoding = resolveExportEncodingOptions(context, fileFormatType);
       attrs.put(ExportRuntimeKeys.EXPORT_CHARSET, encoding.charset().name());
@@ -169,13 +181,16 @@ public class GenerateStep implements ExportStageStep {
       if (checkpointEnabled) {
         ProcessingPosition pos = positionStore.load(
             context.getTenantId(), checkpointInstanceId, ProcessingStage.GENERATE);
-        if (pos.completed() && Files.exists(generatedFile)) {
+        boolean checkpointCompletedFileExists = pos.completed() && Files.exists(generatedFile);
+        if (checkpointCompletedFileExists) {
           // P1-2 文件指纹校验:GENERATE 已 completed,但完成 marker 记录的字节数须与残文件实际字节数一致
           // 才幂等跳过。双故障(完成后 fresh 半写又崩)下字节数不符 → 拒绝跳过、落到下面走全量重写(安全)。
           long expectedSize =
               GenerateCheckpoint.parseCompletedFileSize(cursorCodec, pos.positionMarker());
           long actualSize = Files.size(generatedFile);
-          if (expectedSize >= 0 && actualSize == expectedSize) {
+          boolean completedFileSizeMatchesCheckpoint =
+              expectedSize >= 0 && actualSize == expectedSize;
+          if (completedFileSizeMatchesCheckpoint) {
             // 幂等跳过:GENERATE 已整体完成且文件完整(STORE 尚未消费)→ 重派不重生成,补齐下游 attribute 即可。
             return completeWithoutRegenerate(context, batch, generatedFile, pos.processedCount());
           }
@@ -219,7 +234,8 @@ public class GenerateStep implements ExportStageStep {
       attrs.put(PipelineRuntimeKeys.GENERATED_FILE_PATH, generatedFile.toString());
       attrs.put(PipelineRuntimeKeys.RECORD_COUNT, recordCount);
       attrs.put("totalAmount", batch.getOrDefault("total_amount", BigDecimal.ZERO));
-      attrs.put(PipelineRuntimeKeys.FILE_SIZE_BYTES, Files.size(generatedFile));
+      long fileSizeBytes = Files.size(generatedFile);
+      attrs.put(PipelineRuntimeKeys.FILE_SIZE_BYTES, fileSizeBytes);
       // stage 结束清理当前 task/stage，避免下一次心跳继续展示已完成任务。
       progressRegistry.clear(context, stage().name());
       return ExportStageResult.success(stage());
@@ -233,12 +249,19 @@ public class GenerateStep implements ExportStageStep {
         deleteQuietly(generatedFile);
       }
       boolean configError = ex instanceof WorkerConfigException;
+      ExportStage failureStage = stage();
+      String failureCode = configError ? "EXPORT_GENERATE_CONFIG_INVALID" : "EXPORT_GENERATE_FAILED";
+      String failureMessageKey = configError
+          ? "error.export.generate.config_invalid"
+          : "error.export.generate.failed";
+      String localizedMessageArgument = ex.getMessage();
+      String fallbackMessage = ex.getMessage();
       return ExportStageResult.failure(
-          stage(),
-          configError ? "EXPORT_GENERATE_CONFIG_INVALID" : "EXPORT_GENERATE_FAILED",
-          configError ? "error.export.generate.config_invalid" : "error.export.generate.failed",
-          new Object[] {ex.getMessage()},
-          ex.getMessage(),
+          failureStage,
+          failureCode,
+          failureMessageKey,
+          new Object[] {localizedMessageArgument},
+          fallbackMessage,
           objectMapper);
     }
   }
@@ -291,7 +314,9 @@ public class GenerateStep implements ExportStageStep {
       return def;
     }
     try {
-      return Integer.parseInt(String.valueOf(value).trim());
+      String textValue = String.valueOf(value);
+      String trimmedValue = textValue.trim();
+      return Integer.parseInt(trimmedValue);
     } catch (NumberFormatException ignored) {
       return def;
     }
@@ -307,11 +332,18 @@ public class GenerateStep implements ExportStageStep {
     return Map.of();
   }
 
-  private String resolveExportDataRef(ExportJobContext context, ExportPayload exportPayload) {
-    Map<String, Object> tc = templateConfigMap(context);
+  private String resolveExportDataRef(ExportJobContext context) {
+    return resolveExportDataRef(templateConfigMap(context));
+  }
+
+  private String resolveExportDataRef(Map<String, Object> tc) {
     Object v = tc.get("export_data_ref");
-    if (v != null && Texts.hasText(String.valueOf(v))) {
-      return String.valueOf(v).trim();
+    if (EmptyChecks.isNotNull(v)) {
+      String presenceText = String.valueOf(v);
+      if (Texts.hasText(presenceText)) {
+        String rawExportDataRef = String.valueOf(v);
+        return rawExportDataRef.trim();
+      }
     }
     // 与 JdbcMappedImportSpec.extractJdbcMappedImport 的双层 lookup 对齐：顶层没有时再查
     // query_param_schema 里的 export_data_ref。schema 里 file_template_config 没有独立
@@ -319,8 +351,12 @@ public class GenerateStep implements ExportStageStep {
     Object qps = tc.get("query_param_schema");
     Map<String, Object> qpsMap = toStringKeyMap(qps);
     Object nested = qpsMap.get("export_data_ref");
-    if (nested != null && Texts.hasText(String.valueOf(nested))) {
-      return String.valueOf(nested).trim();
+    if (EmptyChecks.isNotNull(nested)) {
+      String nestedPresenceText = String.valueOf(nested);
+      if (Texts.hasText(nestedPresenceText)) {
+        String rawNestedExportDataRef = String.valueOf(nested);
+        return rawNestedExportDataRef.trim();
+      }
     }
     return null;
   }
@@ -382,7 +418,11 @@ public class GenerateStep implements ExportStageStep {
     }
     Map<String, Object> tc = templateConfigMap(context);
     Object targetRaw = firstConfigured(tc.get("target_charset"), tc.get("charset"));
-    String target = targetRaw == null ? "" : String.valueOf(targetRaw).trim();
+    String target = "";
+    if (EmptyChecks.isNotNull(targetRaw)) {
+      String rawTarget = String.valueOf(targetRaw);
+      target = rawTarget.trim();
+    }
     Charset charset = StandardCharsets.UTF_8;
     if (Texts.hasText(target)) {
       try {
@@ -396,21 +436,29 @@ public class GenerateStep implements ExportStageStep {
             + " (allowed: UTF-8, GBK, GB18030, ISO-8859-1)");
       }
     }
-    return new ExportEncodingOptions(
-        charset,
-        asBoolean(tc.get("with_bom")),
-        normalizeExportLineSeparator(tc.get("line_separator")));
+    boolean withBom = asBoolean(tc.get("with_bom"));
+    String lineSeparator = normalizeExportLineSeparator(tc.get("line_separator"));
+    return new ExportEncodingOptions(charset, withBom, lineSeparator);
   }
 
   private static Object firstConfigured(Object first, Object second) {
-    return first != null && Texts.hasText(String.valueOf(first)) ? first : second;
+    if (EmptyChecks.isNull(first)) {
+      return second;
+    }
+    String firstText = String.valueOf(first);
+    return Texts.hasText(firstText) ? first : second;
   }
 
   private static boolean asBoolean(Object value) {
     if (value instanceof Boolean b) {
       return b;
     }
-    return value != null && "true".equalsIgnoreCase(String.valueOf(value).trim());
+    if (EmptyChecks.isNull(value)) {
+      return false;
+    }
+    String textValue = String.valueOf(value);
+    String trimmedValue = textValue.trim();
+    return "true".equalsIgnoreCase(trimmedValue);
   }
 
   /**
@@ -435,9 +483,10 @@ public class GenerateStep implements ExportStageStep {
       ExportJobContext context, ExportPayload payload, String fileFormatType) throws IOException {
     String suffix = formatStrategyRegistry.resolve(fileFormatType).fileSuffix();
     Path dir = privateExportDirectory();
-    Path created = Files.createTempFile(
-        dir, BatchFileConstants.exportStagePrefix(context.getTenantId(), payload.batchNo()),
-        suffix, OwnerOnlyFiles.attributes(dir, false));
+    String filePrefix =
+        BatchFileConstants.exportStagePrefix(context.getTenantId(), payload.batchNo());
+    Path created =
+        Files.createTempFile(dir, filePrefix, suffix, OwnerOnlyFiles.attributes(dir, false));
     OwnerOnlyFiles.protectExisting(created, false);
     return created;
   }
@@ -504,7 +553,8 @@ public class GenerateStep implements ExportStageStep {
     context.getAttributes().put(PipelineRuntimeKeys.GENERATED_FILE_PATH, generatedFile.toString());
     context.getAttributes().put(PipelineRuntimeKeys.RECORD_COUNT, recordCount);
     context.getAttributes().put("totalAmount", batch.getOrDefault("total_amount", BigDecimal.ZERO));
-    context.getAttributes().put(PipelineRuntimeKeys.FILE_SIZE_BYTES, Files.size(generatedFile));
+    long fileSizeBytes = Files.size(generatedFile);
+    context.getAttributes().put(PipelineRuntimeKeys.FILE_SIZE_BYTES, fileSizeBytes);
     progressRegistry.clear(context, stage().name());
     return ExportStageResult.success(stage());
   }
@@ -517,7 +567,9 @@ public class GenerateStep implements ExportStageStep {
       return null;
     }
     try {
-      return Long.parseLong(String.valueOf(value).trim());
+      String textValue = String.valueOf(value);
+      String trimmedValue = textValue.trim();
+      return Long.parseLong(trimmedValue);
     } catch (NumberFormatException ex) {
       return null;
     }

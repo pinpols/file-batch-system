@@ -6,11 +6,14 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.worker.core.infrastructure.FileRecordParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
+import io.github.pinpols.batch.worker.core.support.FrozenFileTemplateResolver;
+import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
 import java.util.HashMap;
@@ -21,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -40,16 +44,20 @@ class ReceiveStepPayloadSizeLimitTest {
   @Mock
   private BatchSecurityProperties batchSecurityProperties;
 
+  @Mock
+  private SecretPayloadProtector secretPayloadProtector;
+
   private ReceiveStep receiveStep;
 
   @BeforeEach
   void setUp() {
-    io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties payloadProps =
-        new io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties();
+    WorkerImportPayloadProperties payloadProps = new WorkerImportPayloadProperties();
     payloadProps.setMaxPayloadSizeMb(1);
+    FrozenFileTemplateResolver templateResolver =
+        new FrozenFileTemplateResolver(pipelineDefinitions, secretPayloadProtector);
     receiveStep = new ReceiveStep(
         runtimeRepository,
-        pipelineDefinitions,
+        templateResolver,
         pipelineRuns,
         batchSecurityProperties,
         new ObjectMapper(),
@@ -123,8 +131,7 @@ class ReceiveStepPayloadSizeLimitTest {
     assertThat(receiveStep.execute(second).success()).isTrue();
 
     ArgumentCaptor<FileRecordParam> records = ArgumentCaptor.forClass(FileRecordParam.class);
-    org.mockito.Mockito.verify(runtimeRepository, org.mockito.Mockito.times(2))
-        .createFileRecord(records.capture());
+    Mockito.verify(runtimeRepository, Mockito.times(2)).createFileRecord(records.capture());
     assertThat(records.getAllValues())
         .extracting(FileRecordParam::getStoragePath)
         .containsExactly(

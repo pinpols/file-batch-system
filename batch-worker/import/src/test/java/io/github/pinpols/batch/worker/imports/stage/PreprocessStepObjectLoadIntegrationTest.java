@@ -20,6 +20,8 @@ import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.HashMap;
 import java.util.HexFormat;
@@ -283,11 +285,11 @@ class PreprocessStepObjectLoadIntegrationTest {
     assertThat(context.getAttributes().get(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD))
         .as("PREPROCESS should NOT materialize normalizedPayload for large object")
         .isNull();
-    java.nio.file.Path spool = java.nio.file.Path.of(spoolPath.toString());
-    assertThat(java.nio.file.Files.size(spool))
+    Path spool = Path.of(spoolPath.toString());
+    assertThat(Files.size(spool))
         .as("spool file should hold the streamed object bytes")
         .isEqualTo(sb.toString().getBytes(StandardCharsets.UTF_8).length);
     assertThat(context.getAttributes()).doesNotContainKey(PipelineRuntimeKeys.PARTITION_PRESLICED);
-    java.nio.file.Files.deleteIfExists(spool);
+    Files.deleteIfExists(spool);
   }
 }

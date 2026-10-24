@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.workflow.web;
 
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -9,6 +10,7 @@ import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.console.domain.workflow.application.ConsoleWorkflowTriggerService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowDefinitionDetailResponse;
@@ -56,8 +58,8 @@ class ConsoleWorkflowVersionsControllerTest {
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleWorkflowDefinitionController(service, responseFactory, lockService))
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleWorkflowDefinitionController(
+            service, responseFactory, lockService, mock(ConsoleWorkflowTriggerService.class)))
         .setControllerAdvice(exceptionHandler)
         .build();
   }
@@ -123,6 +125,13 @@ class ConsoleWorkflowVersionsControllerTest {
         "wf_ok",
         "wf",
         "DAG",
+        null,
+        "MANUAL",
+        null,
+        null,
+        "MANUAL",
+        null,
+        null,
         3,
         Boolean.TRUE,
         null,

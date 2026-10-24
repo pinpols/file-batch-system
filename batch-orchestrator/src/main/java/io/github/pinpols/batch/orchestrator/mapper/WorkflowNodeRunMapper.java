@@ -11,6 +11,11 @@ public interface WorkflowNodeRunMapper {
 
   int insert(WorkflowNodeRunEntity entity);
 
+  int attachJobInstance(
+      @Param("tenantId") String tenantId,
+      @Param("nodeRunId") Long nodeRunId,
+      @Param("jobInstanceId") Long jobInstanceId);
+
   WorkflowNodeRunEntity selectLatestByWorkflowRunIdAndNodeCode(
       @Param("workflowRunId") Long workflowRunId, @Param("nodeCode") String nodeCode);
 
@@ -38,6 +43,9 @@ public interface WorkflowNodeRunMapper {
   /** ADR-028 S3：扫到期 WAIT 节点（node_type=WAIT, status=RUNNING, next_probe_at &le; now）。 */
   List<WorkflowNodeRunEntity> selectDueWaitNodes(
       @Param("now") Instant now, @Param("limit") int limit);
+
+  /** 原子认领仍处于到期 RUNNING 状态的 WAIT 行；受影响行数为零表示其他扫描者已推进。 */
+  int claimDueWaitNode(@Param("id") Long id, @Param("now") Instant now);
 
   /** ADR-028 S3：探测后更新 sensor 状态字段，不动 node_status（status 由 recordNodeRunFinish 推进）。 */
   int updateSensorProbeState(

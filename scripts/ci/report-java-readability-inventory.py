@@ -117,7 +117,7 @@ def markdown(facts: list[SourceFact]) -> str:
     config_files = [fact for fact in facts if fact.configuration_count]
 
     lines = [
-        "# Java 可读性治理扫描快照",
+        "# Java 可读性治理当前机器清单",
         "",
         "> 由 `bash scripts/python.sh scripts/ci/report-java-readability-inventory.py` 生成。",
         "> 本报告只列候选，不把行数、Map 或 suppression 数量直接判定为缺陷。",

@@ -367,6 +367,11 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
         PipelineRuntimeKeys.TRACE_ID, task.getTraceId() == null ? "" : task.getTraceId());
     executionContext.put(PipelineRuntimeKeys.JOB_INSTANCE_ID, task.getJobInstanceId());
     executionContext.put("jobPartitionId", task.getJobPartitionId());
+    if (task.getDependencyResultSnapshot() != null
+        && !task.getDependencyResultSnapshot().isEmpty()) {
+      executionContext.put(
+          PipelineRuntimeKeys.DEPENDENCY_RESULT_SNAPSHOT, task.getDependencyResultSnapshot());
+    }
     executionContext.put("taskSeq", task.getTaskSeq());
     executionContext.put(
         "idempotencyKey", task.getIdempotencyKey() == null ? "" : task.getIdempotencyKey());

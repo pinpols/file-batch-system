@@ -55,9 +55,9 @@ public class HttpDispatchHandler extends SdkAbstractTaskHandler {
     this.config = Objects.requireNonNull(config, "config");
     this.dataSource = Objects.requireNonNull(dataSource, "dataSource");
     this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper");
-    this.httpClient = HttpClient.newBuilder()
-        .connectTimeout(Duration.ofSeconds(config.timeoutSeconds()))
-        .build();
+    HttpClient.Builder httpClientBuilder = HttpClient.newBuilder();
+    Duration connectTimeout = Duration.ofSeconds(config.timeoutSeconds());
+    this.httpClient = httpClientBuilder.connectTimeout(connectTimeout).build();
   }
 
   @Override
@@ -102,8 +102,10 @@ public class HttpDispatchHandler extends SdkAbstractTaskHandler {
     }
     String json = objectMapper.writeValueAsString(row);
     try {
-      HttpRequest req = HttpRequest.newBuilder(uri)
-          .timeout(Duration.ofSeconds(config.timeoutSeconds()))
+      HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(uri);
+      Duration requestTimeout = Duration.ofSeconds(config.timeoutSeconds());
+      HttpRequest req = requestBuilder
+          .timeout(requestTimeout)
           .header("Content-Type", "application/json")
           .POST(BodyPublishers.ofString(json, StandardCharsets.UTF_8))
           .build();

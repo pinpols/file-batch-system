@@ -1,6 +1,8 @@
 -- =========================================================
 -- cleanup-outbox-events.sql
--- 清理 outbox_event 表的历史事件，避免无限膨胀拖慢 OutboxPollScheduler 的 SELECT。
+-- 清理 outbox_event 及其 delivery/retry 子行的历史记录，避免无限膨胀拖慢 OutboxPollScheduler 的 SELECT。
+-- V306 后子引用身份固定为 (tenant_id, outbox_event_id, outbox_event_created_at)，
+-- 脚本按该完整身份先删 event_delivery_log / event_outbox_retry，再删父事件以满足 NO ACTION FK。
 --
 -- 保留策略（可通过 psql -v 覆盖）：
 --   PUBLISHED 事件保留 :outbox_published_retention_days 天（默认 7 天）
@@ -44,19 +46,36 @@ ORDER BY 1;
 
 BEGIN;
 
--- 0) 先清 event_delivery_log（外键引用 outbox_event.id），按相同保留窗口删
-DELETE FROM batch.event_delivery_log
-WHERE outbox_event_id IN (
-  SELECT id FROM batch.outbox_event
-  WHERE publish_status = 'PUBLISHED'
-    AND created_at < now() - (:outbox_published_retention_days || ' days')::interval
-);
-DELETE FROM batch.event_delivery_log
-WHERE outbox_event_id IN (
-  SELECT id FROM batch.outbox_event
-  WHERE publish_status = 'GIVE_UP'
-    AND created_at < now() - (:outbox_giveup_retention_days || ' days')::interval
-);
+-- 0) 先清两类 Outbox 子表。完整租户/事件/分区键来自父行；保留窗口与父事件一致。
+DELETE FROM batch.event_delivery_log child
+USING batch.outbox_event parent
+WHERE child.tenant_id = parent.tenant_id
+  AND child.outbox_event_id = parent.id
+  AND child.outbox_event_created_at = parent.created_at
+  AND parent.publish_status = 'PUBLISHED'
+  AND parent.created_at < now() - (:outbox_published_retention_days || ' days')::interval;
+DELETE FROM batch.event_delivery_log child
+USING batch.outbox_event parent
+WHERE child.tenant_id = parent.tenant_id
+  AND child.outbox_event_id = parent.id
+  AND child.outbox_event_created_at = parent.created_at
+  AND parent.publish_status = 'GIVE_UP'
+  AND parent.created_at < now() - (:outbox_giveup_retention_days || ' days')::interval;
+
+DELETE FROM batch.event_outbox_retry child
+USING batch.outbox_event parent
+WHERE child.tenant_id = parent.tenant_id
+  AND child.outbox_event_id = parent.id
+  AND child.outbox_event_created_at = parent.created_at
+  AND parent.publish_status = 'PUBLISHED'
+  AND parent.created_at < now() - (:outbox_published_retention_days || ' days')::interval;
+DELETE FROM batch.event_outbox_retry child
+USING batch.outbox_event parent
+WHERE child.tenant_id = parent.tenant_id
+  AND child.outbox_event_id = parent.id
+  AND child.outbox_event_created_at = parent.created_at
+  AND parent.publish_status = 'GIVE_UP'
+  AND parent.created_at < now() - (:outbox_giveup_retention_days || ' days')::interval;
 
 -- 1) PUBLISHED 已成功投递，仅保留近 N 天用于回查
 DELETE FROM batch.outbox_event

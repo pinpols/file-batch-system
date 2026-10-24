@@ -1,5 +1,10 @@
 package io.github.pinpols.batch.console.domain.audit.infrastructure.ai;
 
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiConversationAllocateTurnNoParam;
+import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiConversationSelectPageByOwnerQuery;
+import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiConversationSelectTurnsQuery;
+
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -67,7 +72,7 @@ class ConsoleAiConversationServiceTest {
     when(mapper.selectRecentCompleteTurns(eq("tenant-a"), anyString(), eq(12)))
         .thenReturn(List.of());
     when(mapper.allocateTurnNo(
-            eq("tenant-a"), anyString(), anyString(), any(OffsetDateTime.class), anyString()))
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "tenant-a") && parameters.conversationId() != null && parameters.ownerUserId() != null && parameters.expiresAt() != null && parameters.contextVersion() != null)))
         .thenReturn(1L);
 
     ConsoleAiConversationService.StartedTurn turn =
@@ -88,7 +93,7 @@ class ConsoleAiConversationServiceTest {
     when(mapper.selectRecentCompleteTurns(eq("tenant-a"), anyString(), eq(12)))
         .thenReturn(List.of());
     when(mapper.allocateTurnNo(
-            eq("tenant-a"), anyString(), anyString(), any(OffsetDateTime.class), anyString()))
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "tenant-a") && parameters.conversationId() != null && parameters.ownerUserId() != null && parameters.expiresAt() != null && parameters.contextVersion() != null)))
         .thenReturn(1L);
     when(mapper.insertTurn(any())).thenReturn(0);
 
@@ -120,11 +125,7 @@ class ConsoleAiConversationServiceTest {
     conversation.setExpiresAt(OffsetDateTime.now(ZoneOffset.UTC).plusDays(1));
     when(mapper.selectForUpdate("tenant-a", "conversation-1")).thenReturn(conversation);
     when(mapper.allocateTurnNo(
-            eq("tenant-a"),
-            eq("conversation-1"),
-            eq("operator-a"),
-            any(OffsetDateTime.class),
-            eq("v1")))
+            org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "tenant-a") && java.util.Objects.equals(parameters.conversationId(), "conversation-1") && java.util.Objects.equals(parameters.ownerUserId(), "operator-a") && parameters.expiresAt() != null && java.util.Objects.equals(parameters.contextVersion(), "v1"))))
         .thenReturn(null);
 
     assertThatThrownBy(() ->
@@ -164,7 +165,7 @@ class ConsoleAiConversationServiceTest {
         .isInstanceOfSatisfying(
             BizException.class,
             exception -> assertThat(exception.getCode()).isEqualTo(ResultCode.NOT_FOUND));
-    verify(mapper, never()).selectTurns(anyString(), anyString(), anyString(), any(), anyInt());
+    verify(mapper, never()).selectTurns(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.tenantId() != null && parameters.conversationId() != null && parameters.ownerUserId() != null));
   }
 
   @Test
@@ -194,9 +195,15 @@ class ConsoleAiConversationServiceTest {
     ConsoleAiConversationEntity third = conversation("conversation-3", updatedAt);
     ConsoleAiConversationEntity second = conversation("conversation-2", updatedAt);
     ConsoleAiConversationEntity first = conversation("conversation-1", updatedAt);
-    when(mapper.selectPageByOwner(eq("tenant-a"), eq("operator-a"), isNull(), isNull(), eq(3)))
+    when(mapper.selectPageByOwner(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && java.util.Objects.equals(parameters.tenantId(), "tenant-a") && java.util.Objects.equals(parameters.ownerUserId(), "operator-a") && parameters.beforeUpdatedAt() == null && parameters.beforeId() == null && java.util.Objects.equals(parameters.limit(), 3))))
         .thenReturn(List.of(third, second, first));
-    when(mapper.selectPageByOwner("tenant-a", "operator-a", updatedAt, "conversation-2", 3))
+    when(mapper.selectPageByOwner(ConsoleAiConversationSelectPageByOwnerQuery.builder()
+        .tenantId("tenant-a")
+        .ownerUserId("operator-a")
+        .beforeUpdatedAt(updatedAt)
+        .beforeId("conversation-2")
+        .limit(3)
+        .build()))
         .thenReturn(List.of(first));
 
     PageResponse<ConsoleAiConversationService.ConversationView> firstPage =
@@ -224,7 +231,7 @@ class ConsoleAiConversationServiceTest {
     assertThatThrownBy(() -> service.page("tenant-a", "operator-a", "not-a-cursor", 20))
         .isInstanceOf(BizException.class);
     verify(mapper, never())
-        .selectPageByOwner(anyString(), anyString(), any(), anyString(), anyInt());
+        .selectPageByOwner(org.mockito.ArgumentMatchers.argThat(parameters -> parameters != null && parameters.tenantId() != null && parameters.ownerUserId() != null && parameters.beforeId() != null));
   }
 
   private static ConsoleAiConversationEntity conversation(String id, Instant updatedAt) {

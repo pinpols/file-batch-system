@@ -8,6 +8,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.support.WorkerConsumptionControl;
 import io.github.pinpols.batch.worker.core.support.WorkerLoadProvider;
@@ -153,7 +154,7 @@ class DefaultHeartbeatServiceTest {
 
     WorkerRegistration renewed = new WorkerRegistration();
     renewed.setWorkerId("w-drain");
-    renewed.setStatus(io.github.pinpols.batch.common.enums.WorkerRegistryStatus.DRAINING.code());
+    renewed.setStatus(WorkerRegistryStatus.DRAINING.code());
     when(registrationService.renew(any())).thenReturn(renewed);
     WorkerConsumptionControl control = mock(WorkerConsumptionControl.class);
     when(consumptionControls.orderedStream()).thenReturn(Stream.of(control));

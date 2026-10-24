@@ -6,10 +6,12 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.jdbc.JdbcMappedSqlValidator;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.logging.ThrottledLogger;
+import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import io.github.pinpols.batch.common.rls.RlsTenantSessionSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessPayload;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
@@ -21,6 +23,7 @@ import java.time.Duration;
 import java.time.temporal.TemporalAccessor;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.sql.DataSource;
@@ -62,6 +65,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
       SqlTransformComputeConstants.METADATA_PARAM_PREFIX;
 
   private static final String PARAM_BATCH_KEY = "batchKey";
+  private static final String PARAM_STAGING_GENERATION_ID = "stagingGenerationId";
   private static final String PARAM_TENANT_ID = "tenantId";
   private static final String PARAM_TARGET_SCHEMA = "targetSchema";
   private static final String PARAM_TARGET_TABLE = "targetTable";
@@ -88,8 +92,10 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
       ProcessMetrics metrics) {
     this.businessDataSource = processBusinessDataSource;
     JdbcTemplate template = new JdbcTemplate(processBusinessDataSource);
-    template.setQueryTimeout(
-        Math.max(1, EmptyChecks.isNull(security) ? 60 : security.getQueryTimeoutSeconds()));
+    int configuredQueryTimeoutSeconds =
+        EmptyChecks.isNull(security) ? 60 : security.getQueryTimeoutSeconds();
+    int effectiveQueryTimeoutSeconds = Math.max(1, configuredQueryTimeoutSeconds);
+    template.setQueryTimeout(effectiveQueryTimeoutSeconds);
     this.jdbc = new NamedParameterJdbcTemplate(template);
     this.objectMapper = objectMapper;
     this.security = security;
@@ -100,6 +106,11 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   @Override
   public String implCode() {
     return PLUGIN_ID;
+  }
+
+  @Override
+  public IdempotencyCapability idempotencyCapability() {
+    return IdempotencyCapability.IDEMPOTENT_BY_PLUGIN_LOGIC;
   }
 
   // ─── PREPARE ─────────────────────────────────────────────────────────────────
@@ -148,12 +159,16 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
       return ProcessStageResult.success(ProcessStage.COMPUTE);
     }
 
+    ensureOpenStagingGeneration(context, batchKey);
+    applyStagingGenerationScope(context);
+
     // Pre-DELETE:吃掉同 (batchKey, tenantId, targetSchema, targetTable) 上一轮 crash-mid-flow
     // 留下的 staging 行。稳定 batchKey 重跑路径(ProcessStepExecutionAdapter:74-77 由 payload 显式
     // 携带 batchKey)若不清,COMPUTE 重 INSERT 会与旧行累加,COMMIT publish 把两轮并集都搬到 target。
     // 默认每次 task 生成新 batchKey 时 DELETE 0 行,代价可忽略。
     Map<String, Object> preCleanParams = new LinkedHashMap<>();
     preCleanParams.put(PARAM_BATCH_KEY, batchKey);
+    preCleanParams.put(PARAM_STAGING_GENERATION_ID, requireStagingGenerationUuid(context));
     preCleanParams.put(PARAM_TENANT_ID, context.getTenantId());
     preCleanParams.put(PARAM_TARGET_SCHEMA, spec.targetSchema());
     preCleanParams.put(PARAM_TARGET_TABLE, spec.targetTable());
@@ -161,6 +176,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
         "DELETE FROM "
             + STAGING_TABLE
             + " WHERE batch_key = :batchKey"
+            + " AND staging_generation_id = :stagingGenerationId"
             + " AND tenant_id = :tenantId"
             + " AND target_schema = :targetSchema"
             + " AND target_table = :targetTable",
@@ -196,9 +212,11 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
 
     // P1-6:超过 maxStagedRows 立即清本批 staging,避免后续 stage 处理超大集合 / target 表雪崩。
     // 在事务边界外删除即可,因 PR-3 P0-3 已让 commit+cleanup 同事务,这里只是补"提前刹车"。
-    if (stagedRows > spec.maxStagedRows()) {
+    int maxStagedRows = spec.maxStagedRows();
+    if (stagedRows > maxStagedRows) {
       Map<String, Object> cleanParams = new LinkedHashMap<>();
       cleanParams.put(PARAM_BATCH_KEY, batchKey);
+      cleanParams.put(PARAM_STAGING_GENERATION_ID, requireStagingGenerationUuid(context));
       cleanParams.put(PARAM_TENANT_ID, context.getTenantId());
       cleanParams.put(PARAM_TARGET_SCHEMA, spec.targetSchema());
       cleanParams.put(PARAM_TARGET_TABLE, spec.targetTable());
@@ -206,6 +224,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
           "DELETE FROM "
               + STAGING_TABLE
               + " WHERE batch_key = :batchKey"
+              + " AND staging_generation_id = :stagingGenerationId"
               + " AND tenant_id = :tenantId"
               + " AND target_schema = :targetSchema"
               + " AND target_table = :targetTable",
@@ -218,25 +237,26 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
           spec.targetSchema(),
           spec.targetTable(),
           stagedRows,
-          spec.maxStagedRows());
+          maxStagedRows);
       return ProcessStageResult.failure(
           ProcessStage.COMPUTE,
           "PROCESS_STAGED_OVERFLOW",
           "error.process.staged.overflow",
-          new Object[] {stagedRows, spec.maxStagedRows(), batchKey},
+          new Object[] {stagedRows, maxStagedRows, batchKey},
           "staged rows "
               + stagedRows
               + " exceeded maxStagedRows "
-              + spec.maxStagedRows()
+              + maxStagedRows
               + " for batchKey="
               + batchKey,
           objectMapper);
     }
 
     if (Texts.hasText(spec.watermarkColumn())) {
-      Object highWaterMarkOut = queryMaxWatermark(spec, batchKey, context.getTenantId());
+      Object highWaterMarkOut = queryMaxWatermark(spec, context);
       if (EmptyChecks.isNotNull(highWaterMarkOut)) {
-        attrs.put(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, String.valueOf(highWaterMarkOut));
+        String highWaterMarkText = String.valueOf(highWaterMarkOut);
+        attrs.put(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, highWaterMarkText);
       }
     }
     log.info(
@@ -257,13 +277,19 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     RlsTenantSessionSupport.applyIfPresent(businessDataSource);
     SqlTransformComputeSpec spec = parsedSpec(context);
     String batchKey = requireBatchKey(context);
-    return transformModeOps(spec).validate(context, spec, batchKey);
+    if (spec.stagingMode() == SqlTransformComputeSpec.StagingMode.JSONB) {
+      assertOpenStagingGeneration(context, batchKey);
+      applyStagingGenerationScope(context);
+    }
+    SqlTransformModeOps modeOps = transformModeOps(spec);
+    return modeOps.validate(context, spec, batchKey);
   }
 
   private ProcessStageResult validateStaged(
       ProcessJobContext context, SqlTransformComputeSpec spec, String batchKey) {
-    int stagedRows =
-        toIntegerOrZero(context.getAttributes().get(ProcessRuntimeKeys.PROCESS_STAGED_COUNT));
+    Object rawStagedRowCount =
+        context.getAttributes().get(ProcessRuntimeKeys.PROCESS_STAGED_COUNT);
+    int stagedRows = toIntegerOrZero(rawStagedRowCount);
     if (stagedRows == 0) {
       if (spec.emptyResultPolicy() == SqlTransformComputeSpec.EmptyResultPolicy.SUCCESS) {
         return ProcessStageResult.success(ProcessStage.VALIDATE);
@@ -278,6 +304,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     }
     Map<String, Object> params = new LinkedHashMap<>();
     params.put(PARAM_BATCH_KEY, batchKey);
+    params.put(PARAM_STAGING_GENERATION_ID, requireStagingGenerationUuid(context));
     params.put(PARAM_TENANT_ID, context.getTenantId());
     params.put(PARAM_TARGET_SCHEMA, spec.targetSchema());
     params.put(PARAM_TARGET_TABLE, spec.targetTable());
@@ -303,16 +330,17 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
       Object pass = row.get("pass");
       if (!Boolean.TRUE.equals(pass)) {
         Object message = row.get("message");
+        Object displayedMessage = EmptyChecks.isNull(message) ? "(no message)" : message;
         metrics.incrementValidationFailed(context.getTenantId(), rule.name());
         return ProcessStageResult.failure(
             ProcessStage.VALIDATE,
             "PROCESS_VALIDATION_FAILED",
             "error.process.validation.failed",
-            new Object[] {rule.name(), EmptyChecks.isNull(message) ? "(no message)" : message},
+            new Object[] {rule.name(), displayedMessage},
             "validation '"
                 + rule.name()
                 + "' failed: "
-                + (EmptyChecks.isNull(message) ? "(no message)" : message),
+                + displayedMessage,
             objectMapper);
       }
     }
@@ -328,18 +356,35 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     RlsTenantSessionSupport.applyIfPresent(businessDataSource);
     SqlTransformComputeSpec spec = parsedSpec(context);
     String batchKey = requireBatchKey(context);
-    return transformModeOps(spec).commit(context, spec, batchKey);
+    if (spec.stagingMode() == SqlTransformComputeSpec.StagingMode.JSONB) {
+      assertOpenStagingGeneration(context, batchKey);
+      applyStagingGenerationScope(context);
+    }
+    SqlTransformModeOps modeOps = transformModeOps(spec);
+    return modeOps.commit(context, spec, batchKey);
   }
 
   private ProcessStageResult commitStaged(
       ProcessJobContext context, SqlTransformComputeSpec spec, String batchKey) {
     Map<String, Object> params = new LinkedHashMap<>();
     params.put(PARAM_BATCH_KEY, batchKey);
+    params.put(PARAM_STAGING_GENERATION_ID, requireStagingGenerationUuid(context));
     params.put(PARAM_TENANT_ID, context.getTenantId());
     params.put(PARAM_TARGET_SCHEMA, spec.targetSchema());
     params.put(PARAM_TARGET_TABLE, spec.targetTable());
     String publishSql = SqlTransformComputeSqlBuilder.buildPublishSql(spec);
     int publishedRows = jdbc.update(publishSql, params);
+    Object rawStagedRowCount =
+        context.getAttributes().get(ProcessRuntimeKeys.PROCESS_STAGED_COUNT);
+    int expectedRows = toIntegerOrZero(rawStagedRowCount);
+    if (publishedRows != expectedRows) {
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT,
+          "error.process.staging.changed",
+          batchKey,
+          expectedRows,
+          publishedRows);
+    }
     int cleaned = cleanupCommittedStaging(params);
     context.getAttributes().put(ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT, publishedRows);
     metrics.recordCommitPublishedRows(context.getTenantId(), publishedRows);
@@ -363,7 +408,12 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     RlsTenantSessionSupport.applyIfPresent(businessDataSource);
     String batchKey = requireBatchKey(context);
     SqlTransformComputeSpec spec = parsedSpec(context);
-    return transformModeOps(spec).feedback(context, spec, batchKey);
+    if (spec.stagingMode() == SqlTransformComputeSpec.StagingMode.JSONB) {
+      assertOpenStagingGeneration(context, batchKey);
+      applyStagingGenerationScope(context);
+    }
+    SqlTransformModeOps modeOps = transformModeOps(spec);
+    return modeOps.feedback(context, spec, batchKey);
   }
 
   private ProcessStageResult feedbackDirect(ProcessJobContext context, String batchKey) {
@@ -379,6 +429,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
       ProcessJobContext context, SqlTransformComputeSpec spec, String batchKey) {
     Map<String, Object> params = new LinkedHashMap<>();
     params.put(PARAM_BATCH_KEY, batchKey);
+    params.put(PARAM_STAGING_GENERATION_ID, requireStagingGenerationUuid(context));
     params.put(PARAM_TENANT_ID, context.getTenantId());
     params.put(PARAM_TARGET_SCHEMA, spec.targetSchema());
     params.put(PARAM_TARGET_TABLE, spec.targetTable());
@@ -457,7 +508,9 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     // A2-C fix(2026-05-29):空 map 应 fallback 到当前 step 的 step_params,不然 COMPUTE step
     // 配 {} 会"压住"PREPARE/VALIDATE 等同步 step 上配置的 validations / emptyResultPolicy,
     // 静默通过。原代码只 null check,空 map 命中后导致 spec.validations() 为空。
-    if (EmptyChecks.isNull(value) || (value instanceof Map<?, ?> m && EmptyChecks.isEmpty(m))) {
+    boolean computeStepParamsNeedFallback =
+        EmptyChecks.isNull(value) || (value instanceof Map<?, ?> m && EmptyChecks.isEmpty(m));
+    if (computeStepParamsNeedFallback) {
       Object current =
           context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_CURRENT_STEP_PARAMS);
       if (EmptyChecks.isNotNull(current)) {
@@ -498,6 +551,84 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     return batchKey;
   }
 
+  private String requireStagingGenerationId(ProcessJobContext context) {
+    String generationId = context.getStagingGenerationId();
+    if (!Texts.hasText(generationId)) {
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.process.staging_generation_missing");
+    }
+    return generationId;
+  }
+
+  private UUID requireStagingGenerationUuid(ProcessJobContext context) {
+    try {
+      String generationId = requireStagingGenerationId(context);
+      return UUID.fromString(generationId);
+    } catch (IllegalArgumentException exception) {
+      SwallowedExceptionLogger.info(
+          SqlTransformComputePlugin.class, "catch:IllegalArgumentException", exception);
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.process.staging_generation_missing");
+    }
+  }
+
+  private void ensureOpenStagingGeneration(ProcessJobContext context, String batchKey) {
+    String generationId = requireStagingGenerationId(context);
+    Map<String, Object> params = stagingGenerationParams(context, batchKey);
+    jdbc.update("""
+        INSERT INTO batch.process_staging_generation (
+            generation_id, tenant_id, job_task_id, batch_key, generation_status)
+        VALUES (CAST(:generationId AS uuid), :tenantId, :taskId, :batchKey, 'OPEN')
+        ON CONFLICT (generation_id) DO NOTHING
+        """, params);
+    assertOpenStagingGeneration(context, batchKey);
+  }
+
+  private void assertOpenStagingGeneration(ProcessJobContext context, String batchKey) {
+    Map<String, Object> params = stagingGenerationParams(context, batchKey);
+    String state;
+    try {
+      state = jdbc.queryForObject("""
+          SELECT generation_status
+          FROM batch.process_staging_generation
+          WHERE generation_id = CAST(:generationId AS uuid)
+            AND tenant_id = :tenantId
+            AND job_task_id IS NOT DISTINCT FROM :taskId
+            AND batch_key = :batchKey
+          FOR SHARE
+          """, params, String.class);
+    } catch (EmptyResultDataAccessException exception) {
+      SwallowedExceptionLogger.info(
+          SqlTransformComputePlugin.class, "catch:EmptyResultDataAccessException", exception);
+      throw stagingGenerationClosed();
+    }
+    if (!"OPEN".equals(state)) {
+      throw stagingGenerationClosed();
+    }
+  }
+
+  private Map<String, Object> stagingGenerationParams(ProcessJobContext context, String batchKey) {
+    Map<String, Object> params = new LinkedHashMap<>();
+    params.put("generationId", requireStagingGenerationUuid(context));
+    params.put(PARAM_TENANT_ID, context.getTenantId());
+    Object taskIdValue = context.getAttributes().get(PipelineRuntimeKeys.TASK_ID);
+    Long taskId = PlatformRuntimeValues.toLong(taskIdValue);
+    params.put("taskId", taskId);
+    params.put(PARAM_BATCH_KEY, batchKey);
+    return params;
+  }
+
+  private void applyStagingGenerationScope(ProcessJobContext context) {
+    JdbcTemplate jdbcTemplate = jdbc.getJdbcTemplate();
+    String stagingGenerationId = requireStagingGenerationId(context);
+    jdbcTemplate.queryForObject(
+        "select set_config('app.process_staging_generation_id', ?, true)",
+        String.class,
+        stagingGenerationId);
+  }
+
+  private static BizException stagingGenerationClosed() {
+    return BizException.of(ResultCode.STATE_CONFLICT, "error.process.staging_generation_missing");
+  }
+
   private void requireTargetTableExists(SqlTransformComputeSpec spec) {
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("schema", spec.targetSchema());
@@ -521,6 +652,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
    *
    * <ol>
    *   <li>内置(平台保留): tenantId / jobCode / workerId / traceId / stepCode / highWaterMarkIn / batchKey
+   *       / stagingGenerationId
    *       / targetSchema / targetTable / bizDate。spec.params 不可覆盖(由 {@link
    *       SqlTransformComputeSpec#validateIdentifiers()} 拦截);本方法也以"先 put 内置,后 putAll
    *       spec.params"作为防御性双重保护。
@@ -544,6 +676,11 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
         PipelineRuntimeKeys.HIGH_WATER_MARK_IN,
         context.getAttributes().get(PipelineRuntimeKeys.HIGH_WATER_MARK_IN));
     params.put(PARAM_BATCH_KEY, context.getBatchKey());
+    String optionalStagingGenerationId = context.getStagingGenerationId();
+    UUID stagingGenerationUuid = EmptyChecks.isNull(optionalStagingGenerationId)
+        ? null
+        : requireStagingGenerationUuid(context);
+    params.put(PARAM_STAGING_GENERATION_ID, stagingGenerationUuid);
     params.put(PARAM_TARGET_SCHEMA, spec.targetSchema());
     params.put(PARAM_TARGET_TABLE, spec.targetTable());
     params.put(
@@ -556,13 +693,16 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
         PipelineRuntimeKeys.PARTITION_KEY,
         context.getAttributes().get(PipelineRuntimeKeys.PARTITION_KEY));
     // 2. 业务级 bizDate + payload.metadata 展开
-    if (context.getAttributes().get(PipelineRuntimeKeys.PROCESS_PAYLOAD)
-        instanceof ProcessPayload typedPayload) {
-      if (Texts.hasText(typedPayload.bizDate())) {
-        params.put(PipelineRuntimeKeys.BIZ_DATE, typedPayload.bizDate());
+    Object rawProcessPayload =
+        context.getAttributes().get(PipelineRuntimeKeys.PROCESS_PAYLOAD);
+    if (rawProcessPayload instanceof ProcessPayload typedPayload) {
+      String payloadBizDate = typedPayload.bizDate();
+      if (Texts.hasText(payloadBizDate)) {
+        params.put(PipelineRuntimeKeys.BIZ_DATE, payloadBizDate);
       }
-      if (EmptyChecks.isNotNull(typedPayload.metadata())) {
-        typedPayload.metadata().forEach((key, value) -> putMetadataParam(params, key, value));
+      Map<String, Object> payloadMetadata = typedPayload.metadata();
+      if (EmptyChecks.isNotNull(payloadMetadata)) {
+        payloadMetadata.forEach((key, value) -> putMetadataParam(params, key, value));
       }
     } else {
       // 回退:某些路径(如插件单测)可能还没把 ProcessPayload 注入到 attributes,
@@ -581,11 +721,13 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     if (EmptyChecks.isBlank(key)) {
       return;
     }
-    if (EmptyChecks.isNotNull(value)
+    boolean metadataValueIsUnsupportedStructure =
+        EmptyChecks.isNotNull(value)
         && !(value instanceof String)
         && !(value instanceof Number)
         && !(value instanceof Boolean)
-        && !(value instanceof TemporalAccessor)) {
+        && !(value instanceof TemporalAccessor);
+    if (metadataValueIsUnsupportedStructure) {
       // 复杂值(嵌套 Map / List)不直接绑定为 SQL 参数,业务需要先在 metadata 里展平。
       return;
     }
@@ -609,18 +751,20 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     Map<String, Object> params = buildSqlParams(context, spec);
     int publishedRows;
     if (Texts.hasText(spec.watermarkColumn())) {
-      Map<String, Object> result = jdbc.queryForMap(
-          SqlTransformComputeSqlBuilder.buildDirectPublishMetricsSql(spec), params);
-      publishedRows = toIntegerOrZero(result.get("published_rows"));
+      String directPublishMetricsSql =
+          SqlTransformComputeSqlBuilder.buildDirectPublishMetricsSql(spec);
+      Map<String, Object> result = jdbc.queryForMap(directPublishMetricsSql, params);
+      Object rawPublishedRows = result.get("published_rows");
+      publishedRows = toIntegerOrZero(rawPublishedRows);
       Object highWaterMarkOut = result.get("high_water_mark");
       if (EmptyChecks.isNotNull(highWaterMarkOut)) {
-        context
-            .getAttributes()
-            .put(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, String.valueOf(highWaterMarkOut));
+        Map<String, Object> attrs = context.getAttributes();
+        String highWaterMarkText = String.valueOf(highWaterMarkOut);
+        attrs.put(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, highWaterMarkText);
       }
     } else {
-      publishedRows =
-          jdbc.update(SqlTransformComputeSqlBuilder.buildDirectPublishSql(spec), params);
+      String directPublishSql = SqlTransformComputeSqlBuilder.buildDirectPublishSql(spec);
+      publishedRows = jdbc.update(directPublishSql, params);
     }
     context.getAttributes().put(ProcessRuntimeKeys.PROCESS_STAGED_COUNT, publishedRows);
     context.getAttributes().put(ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT, publishedRows);
@@ -637,10 +781,11 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     return ProcessStageResult.success(ProcessStage.COMMIT);
   }
 
-  private Object queryMaxWatermark(SqlTransformComputeSpec spec, String batchKey, String tenantId) {
+  private Object queryMaxWatermark(SqlTransformComputeSpec spec, ProcessJobContext context) {
     Map<String, Object> params = new LinkedHashMap<>();
-    params.put(PARAM_BATCH_KEY, batchKey);
-    params.put(PARAM_TENANT_ID, tenantId);
+    params.put(PARAM_BATCH_KEY, requireBatchKey(context));
+    params.put(PARAM_STAGING_GENERATION_ID, requireStagingGenerationUuid(context));
+    params.put(PARAM_TENANT_ID, context.getTenantId());
     params.put(PARAM_TARGET_SCHEMA, spec.targetSchema());
     params.put(PARAM_TARGET_TABLE, spec.targetTable());
     params.put("watermarkColumn", spec.watermarkColumn());
@@ -648,6 +793,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
         SELECT max((payload ->> :watermarkColumn)::numeric)
         FROM %s
         WHERE batch_key = :batchKey
+          AND staging_generation_id = :stagingGenerationId
           AND tenant_id = :tenantId
           AND target_schema = :targetSchema
           AND target_table = :targetTable
@@ -656,13 +802,15 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   }
 
   private int cleanupCommittedStaging(Map<String, Object> params) {
-    return jdbc.update("""
+    String cleanupSql = """
         DELETE FROM %s
         WHERE batch_key = :batchKey
+          AND staging_generation_id = :stagingGenerationId
           AND tenant_id = :tenantId
           AND target_schema = :targetSchema
           AND target_table = :targetTable
-        """.formatted(STAGING_TABLE), params);
+        """.formatted(STAGING_TABLE);
+    return jdbc.update(cleanupSql, params);
   }
 
   private static int toIntegerOrZero(Object value) {

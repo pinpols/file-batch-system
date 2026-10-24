@@ -1,19 +1,28 @@
 package io.github.pinpols.batch.orchestrator.service;
 
+import io.github.pinpols.batch.orchestrator.domain.param.TriggerRequestIsValidParentWorkflowNodeLaunchParam;
+
+
 import io.github.pinpols.batch.common.dto.LaunchRequest;
-import io.github.pinpols.batch.common.enums.JobType;
+import io.github.pinpols.batch.common.dto.ReplayExecutionGuard;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
+import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunExecutionSnapshot;
 import io.github.pinpols.batch.orchestrator.domain.context.TriggerLaunchPersistenceContext;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
+import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
+import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -23,9 +32,8 @@ import org.springframework.stereotype.Service;
  * {@link DefaultLaunchService} 使用；校验失败会把 {@code trigger_request} 打成 REJECTED 再抛异常， 避免请求挂在 ACCEPTED
  * 永远没落地。
  *
- * <p>job_definition / workflow_definition 走 Redis 缓存（{@code OrchestratorConfigCacheService}），
- * launch 热路径上不直连 DB 读配置。WORKFLOW 类型强制有 workflow_definition，其他类型（IMPORT/EXPORT/DISPATCH/GENERAL）
- * 不要求。
+ * <p>根运行只能由 WorkflowRunLaunchService 接纳。Job 节点子请求从冻结的父 Workflow 快照加载 Job；旧 WORKFLOW Job
+ * wrapper 会在这里被拒绝，不再按同编码回退加载 Workflow。
  */
 @Slf4j
 @Service
@@ -34,6 +42,7 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
 
   private final TriggerRequestMapper triggerRequestMapper;
   private final OrchestratorConfigCacheService configCacheService;
+  private final WorkflowRunMapper workflowRunMapper;
 
   /**
    * 注意副作用：job/workflow 定义缺失时，本方法会把 trigger_request 状态更新为 REJECTED 后再抛 {@code
@@ -52,38 +61,172 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
     }
     TriggerRequestEntity triggerRequest = persistenceContext.getTriggerRequest();
 
+    boolean parentNodeLaunch = hasParentWorkflowNodeContext(triggerRequest);
+    ParentWorkflowJobSnapshot parentJobSnapshot =
+        parentNodeLaunch ? loadJobDefinitionFromWorkflowSnapshot(request, triggerRequest) : null;
     JobDefinitionEntity jobDefinition =
-        configCacheService.findEnabledJobDefinition(request.tenantId(), request.jobCode());
+        EmptyChecks.isNull(parentJobSnapshot) ? null : parentJobSnapshot.jobDefinition();
+    String workflowCalendarCode =
+        EmptyChecks.isNull(parentJobSnapshot) ? null : parentJobSnapshot.workflowCalendarCode();
+    if (EmptyChecks.isNull(jobDefinition)) {
+      jobDefinition =
+          configCacheService.findEnabledJobDefinition(request.tenantId(), request.jobCode());
+    }
     if (jobDefinition == null) {
-      warnIfNotUpdated(
-          triggerRequestMapper.updateAcceptance(
-              request.tenantId(), request.requestId(), TriggerRequestStatus.REJECTED.code(), null),
-          request);
+      int updatedRows = triggerRequestMapper.updateAcceptance(
+          request.tenantId(), request.requestId(), TriggerRequestStatus.REJECTED.code(), null);
+      warnIfNotUpdated(updatedRows, request);
       throw BizException.of(ResultCode.NOT_FOUND, "error.job.definition_not_found");
     }
 
-    // workflow definition 仅对 WORKFLOW 类型 job 必须存在；IMPORT/EXPORT/DISPATCH/GENERAL 无需关联 workflow
-    // definition
-    WorkflowDefinitionEntity workflowDefinition = null;
-    if (JobType.WORKFLOW.code().equals(jobDefinition.jobType())) {
-      workflowDefinition =
-          configCacheService.findEnabledWorkflowDefinition(request.tenantId(), request.jobCode());
-      if (workflowDefinition == null) {
-        warnIfNotUpdated(
-            triggerRequestMapper.updateAcceptance(
-                request.tenantId(),
-                request.requestId(),
-                TriggerRequestStatus.REJECTED.code(),
-                null),
-            request);
-        throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.definition_not_found_for_job");
-      }
+    if ("WORKFLOW".equals(jobDefinition.jobType())) {
+      int updatedRows = triggerRequestMapper.updateAcceptance(
+          request.tenantId(), request.requestId(), TriggerRequestStatus.REJECTED.code(), null);
+      warnIfNotUpdated(updatedRows, request);
+      throw BizException.of(ResultCode.VALIDATION_ERROR, "error.workflow.wrapper_job_retired");
+    }
+
+    if (!parentNodeLaunch) {
+      int updatedRows = triggerRequestMapper.updateAcceptance(
+          request.tenantId(), request.requestId(), TriggerRequestStatus.REJECTED.code(), null);
+      warnIfNotUpdated(updatedRows, request);
+      throw BizException.of(ResultCode.VALIDATION_ERROR, "error.workflow.root_job_launch_retired");
+    }
+
+    if (parentNodeLaunch
+        && !isValidParentWorkflowNodeLaunch(
+            request,
+            triggerRequest,
+            persistenceContext,
+            EmptyChecks.isNotNull(parentJobSnapshot))) {
+      int updatedRows = triggerRequestMapper.updateAcceptance(
+          request.tenantId(), request.requestId(), TriggerRequestStatus.REJECTED.code(), null);
+      warnIfNotUpdated(updatedRows, request);
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.parent_node_launch_invalid");
     }
 
     JobInstanceEntity existingInstance = persistenceContext.getExistingInstance();
 
     return new LaunchLoadResult(
-        triggerRequest, jobDefinition, workflowDefinition, existingInstance);
+        triggerRequest,
+        jobDefinition,
+        null,
+        workflowCalendarCode,
+        existingInstance,
+        EmptyChecks.isNull(parentJobSnapshot)
+            ? null
+            : parentJobSnapshot.workflowReplayExecutionBinding());
+  }
+
+  private ParentWorkflowJobSnapshot loadJobDefinitionFromWorkflowSnapshot(
+      LaunchRequest request, TriggerRequestEntity triggerRequest) {
+    if (EmptyChecks.isNull(triggerRequest.getParentWorkflowRunId())
+        || EmptyChecks.isNull(triggerRequest.getParentNodeCode())) {
+      rejectInvalidExecutionSnapshot(request, triggerRequest);
+    }
+    WorkflowRunEntity run =
+        workflowRunMapper.selectById(request.tenantId(), triggerRequest.getParentWorkflowRunId());
+    WorkflowRunExecutionSnapshot snapshot = WorkflowRunExecutionSnapshot.from(run);
+    if (EmptyChecks.isNull(snapshot)) {
+      rejectInvalidExecutionSnapshot(request, triggerRequest);
+    }
+    Integer schemaVersion = snapshot.schemaVersion();
+    if (EmptyChecks.isNull(schemaVersion) || schemaVersion < 2) {
+      rejectInvalidExecutionSnapshot(request, triggerRequest);
+    }
+    boolean snapshotTenantMatches = request.tenantId().equals(run.getTenantId());
+    if (!snapshotTenantMatches) {
+      rejectInvalidExecutionSnapshot(request, triggerRequest);
+    }
+    boolean snapshotWorkflowMatches =
+        Objects.equals(run.getWorkflowDefinitionId(), snapshot.workflowDefinitionId());
+    if (!snapshotWorkflowMatches) {
+      rejectInvalidExecutionSnapshot(request, triggerRequest);
+    }
+    WorkflowNodeEntity node = snapshot.node(triggerRequest.getParentNodeCode());
+    JobDefinitionEntity definition = snapshot.jobDefinition(triggerRequest.getParentNodeCode());
+    if (EmptyChecks.isNull(node)) {
+      rejectInvalidExecutionSnapshot(request, triggerRequest);
+    }
+    boolean nodeReferencesRequestedJob = Objects.equals(node.getRelatedJobCode(), request.jobCode());
+    if (!nodeReferencesRequestedJob) {
+      rejectInvalidExecutionSnapshot(request, triggerRequest);
+    }
+    if (EmptyChecks.isNull(definition)) {
+      rejectInvalidExecutionSnapshot(request, triggerRequest);
+    }
+    boolean definitionTenantMatches = request.tenantId().equals(definition.tenantId());
+    if (!definitionTenantMatches) {
+      rejectInvalidExecutionSnapshot(request, triggerRequest);
+    }
+    boolean definitionJobMatches = request.jobCode().equals(definition.jobCode());
+    if (!definitionJobMatches) {
+      rejectInvalidExecutionSnapshot(request, triggerRequest);
+    }
+    WorkflowReplayExecutionBinding replayBinding = null;
+    if (EmptyChecks.isNotNull(snapshot.replayOperationId())) {
+      Long replayOperationId = snapshot.replayOperationId();
+      Long workflowRunId = run.getId();
+      String nodeCode = triggerRequest.getParentNodeCode();
+      ReplayExecutionGuard executionGuard =
+          snapshot.replayExecutionGuard(triggerRequest.getParentNodeCode());
+      Map<String, String> protectedFileTemplateSnapshots =
+          snapshot.frozenFileTemplateSnapshots(triggerRequest.getParentNodeCode());
+      Map<String, String> protectedDispatchChannelSnapshots =
+          snapshot.frozenDispatchChannelSnapshots(triggerRequest.getParentNodeCode());
+      Map<String, Object> dispatchSecretBindings =
+          snapshot.dispatchSecretBindings(triggerRequest.getParentNodeCode());
+      replayBinding = new WorkflowReplayExecutionBinding(
+          replayOperationId,
+          workflowRunId,
+          nodeCode,
+          executionGuard,
+          protectedFileTemplateSnapshots,
+          protectedDispatchChannelSnapshots,
+          dispatchSecretBindings);
+    }
+    return new ParentWorkflowJobSnapshot(
+        definition, snapshot.workflowCalendarCode(), replayBinding);
+  }
+
+  private record ParentWorkflowJobSnapshot(
+      JobDefinitionEntity jobDefinition,
+      String workflowCalendarCode,
+      WorkflowReplayExecutionBinding workflowReplayExecutionBinding) {}
+
+  private void rejectInvalidExecutionSnapshot(
+      LaunchRequest request, TriggerRequestEntity triggerRequest) {
+    int updatedRows = triggerRequestMapper.updateAcceptance(
+        request.tenantId(), request.requestId(), TriggerRequestStatus.REJECTED.code(), null);
+    warnIfNotUpdated(updatedRows, request);
+    throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
+  }
+
+  private boolean hasParentWorkflowNodeContext(TriggerRequestEntity triggerRequest) {
+    return EmptyChecks.isNotNull(triggerRequest.getParentWorkflowRunId())
+        || EmptyChecks.isNotNull(triggerRequest.getParentNodeCode());
+  }
+
+  private boolean isValidParentWorkflowNodeLaunch(
+      LaunchRequest request,
+      TriggerRequestEntity triggerRequest,
+      TriggerLaunchPersistenceContext persistenceContext,
+      boolean frozenWorkflowSnapshot) {
+    if (EmptyChecks.isNull(triggerRequest.getParentWorkflowRunId())
+        || EmptyChecks.isNull(triggerRequest.getParentNodeCode())
+        || EmptyChecks.isBlank(triggerRequest.getParentNodeCode())) {
+      return false;
+    }
+    JobInstanceEntity existingInstance = persistenceContext.getExistingInstance();
+    TriggerRequestIsValidParentWorkflowNodeLaunchParam triggerRequestIsValidParentWorkflowNodeLaunchParam = TriggerRequestIsValidParentWorkflowNodeLaunchParam.builder()
+        .tenantId(request.tenantId())
+        .parentWorkflowRunId(triggerRequest.getParentWorkflowRunId())
+        .parentNodeCode(triggerRequest.getParentNodeCode())
+        .existingChildJobInstanceId(EmptyChecks.isNull(existingInstance) ? null : existingInstance.getId())
+        .frozenWorkflowSnapshot(frozenWorkflowSnapshot)
+        .build();
+    return triggerRequestMapper.isValidParentWorkflowNodeLaunch(
+        triggerRequestIsValidParentWorkflowNodeLaunchParam);
   }
 
   /** updateAcceptance 0 行受影响时,行已是终态(LAUNCHED/REJECTED/DUPLICATE),仅告警不抛异常。 */

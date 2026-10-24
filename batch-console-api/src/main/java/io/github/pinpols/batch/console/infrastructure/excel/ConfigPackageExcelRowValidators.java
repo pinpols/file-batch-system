@@ -7,7 +7,9 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_CHANNEL_NAME;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_CHANNEL_TYPE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_CONFIG_JSON;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_DEPENDS_ON_JOB_CODE;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_DEPENDS_ON_JOB_CODES;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_EDGE_TYPE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_EXECUTION_MODE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_FROM_NODE_CODE;
@@ -31,6 +33,7 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_STEP_CODE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_STEP_NAME;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_TO_NODE_CODE;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_TRIGGER_MODE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_VERSION;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WORKFLOW_CODE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WORKFLOW_NAME;
@@ -66,6 +69,7 @@ import io.github.pinpols.batch.common.sql.SelectSqlAstValidator;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.StepRegistryQueryMapper;
 import java.util.HashMap;
@@ -117,11 +121,32 @@ final class ConfigPackageExcelRowValidators {
     optionalEnum(
         normalizeEnum(row.get(COL_EXECUTION_MODE)), COL_EXECUTION_MODE, EXECUTION_MODES, ri);
     validateOptionalJobCodeRef(normalize(row.get(COL_DEPENDS_ON_JOB_CODE)), ri);
+    for (String upstream : splitDependencyCodes(row.get(COL_DEPENDS_ON_JOB_CODES))) {
+      validateOptionalJobCodeRef(upstream, ri);
+    }
+    for (String alignment : splitDependencyCodes(row.get(COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS))) {
+      optionalEnum(
+          normalizeEnum(alignment),
+          COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS,
+          Set.of("SAME_DAY", "PREVIOUS_BIZ_DAY"),
+          ri);
+    }
     validateJsonField(row.get(COL_PARAM_SCHEMA), COL_PARAM_SCHEMA, false, ri);
     validateCronSchedule(row, ri);
     if (hasText(jobCode) && !seen.add(tenantId + KEY_SEP_HASH + jobCode)) {
       ri.add("duplicate job_code in excel: " + jobCode);
     }
+  }
+
+  private static List<String> splitDependencyCodes(String value) {
+    if (!Texts.hasText(value)) {
+      return List.of();
+    }
+    return java.util.Arrays.stream(value.split(","))
+        .map(String::trim)
+        .filter(Texts::hasText)
+        .distinct()
+        .toList();
   }
 
   /**
@@ -473,6 +498,12 @@ final class ConfigPackageExcelRowValidators {
     requireField(ri, wfCode, COL_WORKFLOW_CODE);
     requireField(ri, normalize(row.get(COL_WORKFLOW_NAME)), COL_WORKFLOW_NAME);
     requiredEnum(normalizeEnum(row.get(COL_WORKFLOW_TYPE)), COL_WORKFLOW_TYPE, WORKFLOW_TYPES, ri);
+    optionalEnum(normalizeEnum(row.get(COL_SCHEDULE_TYPE)), COL_SCHEDULE_TYPE, SCHEDULE_TYPES, ri);
+    optionalEnum(
+        normalizeEnum(row.get(COL_TRIGGER_MODE)),
+        COL_TRIGGER_MODE,
+        Set.of("SCHEDULED", "API", "MANUAL", "EVENT", "MIXED"),
+        ri);
     requireIntField(version, "version", ri);
     if (hasText(wfCode)
         && hasText(version)

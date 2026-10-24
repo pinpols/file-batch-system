@@ -170,10 +170,12 @@
 
     <insert id="archivePipelineInstancesByInstanceIds">
         insert into archive.pipeline_instance_archive (
-            id, tenant_id, pipeline_definition_id, job_code, pipeline_type, file_id,
+            id, tenant_id, pipeline_definition_id, system_pipeline_code, system_pipeline_version,
+            job_code, pipeline_type, file_id,
             related_job_instance_id, current_stage, last_success_stage, run_status, trace_id, started_at,
             finished_at, created_at, updated_at)
-        select id, tenant_id, pipeline_definition_id, job_code, pipeline_type, file_id,
+        select id, tenant_id, pipeline_definition_id, system_pipeline_code, system_pipeline_version,
+            job_code, pipeline_type, file_id,
             related_job_instance_id, current_stage, last_success_stage, run_status, trace_id, started_at,
             finished_at, created_at, updated_at
         from batch.pipeline_instance
@@ -299,9 +301,9 @@
 
     <insert id="archiveWorkflowRunsByInstanceIds">
         insert into archive.workflow_run_archive (
-            id, tenant_id, workflow_definition_id, related_job_instance_id, biz_date, run_status,
+            id, tenant_id, workflow_definition_id, single_job_definition_id, related_job_instance_id, biz_date, run_status,
             current_node_code, trace_id, started_at, finished_at, created_at, updated_at, dry_run)
-        select id, tenant_id, workflow_definition_id, related_job_instance_id, biz_date, run_status,
+        select id, tenant_id, workflow_definition_id, single_job_definition_id, related_job_instance_id, biz_date, run_status,
             current_node_code, trace_id, started_at, finished_at, created_at, updated_at, dry_run
         from batch.workflow_run
         where related_job_instance_id in
@@ -313,9 +315,11 @@
         insert into archive.workflow_node_run_archive (
             id, workflow_run_id, node_code, node_type, run_seq, node_status, retry_count, error_code,
             error_message, started_at, finished_at, duration_ms, output, error_key, error_args,
+            skip_reason_code, skip_reason,
             sensor_next_probe_at, sensor_last_probe_at, sensor_probe_count, sensor_error_count)
         select id, workflow_run_id, node_code, node_type, run_seq, node_status, retry_count, error_code,
             error_message, started_at, finished_at, duration_ms, output, error_key, error_args,
+            skip_reason_code, skip_reason,
             sensor_next_probe_at, sensor_last_probe_at, sensor_probe_count, sensor_error_count
         from batch.workflow_node_run
         where workflow_run_id in (

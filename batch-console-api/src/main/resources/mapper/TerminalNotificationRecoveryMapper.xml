@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.console.domain.notification.mapper.TerminalNotificationRecoveryMapper">
+    <sql id="table">
+        <choose><when test="source == 'WEBHOOK'">batch.webhook_delivery_log</when>
+            <otherwise>batch.notification_delivery_log</otherwise></choose>
+    </sql>
+    <sql id="error">
+        <choose><when test="source == 'WEBHOOK'">response_body</when><otherwise>error_message</otherwise></choose>
+    </sql>
+    <select id="list" resultType="io.github.pinpols.batch.console.domain.notification.application.contract.response.TerminalDeliveryRecoveryResponse">
+        select * from (
+            select 'WEBHOOK'::text as source,id,terminal_event_key,event_type,delivery_status,attempt,
+                   next_retry_at,delivery_claim_until as claim_until,response_body as error_message,created_at
+              from batch.webhook_delivery_log where tenant_id=#{tenantId} and terminal_event_key is not null
+            union all
+            select 'RULE'::text as source,id,terminal_event_key,event_type,delivery_status,attempt,
+                   next_retry_at,delivery_claim_until as claim_until,error_message,created_at
+              from batch.notification_delivery_log where tenant_id=#{tenantId} and terminal_event_key is not null
+        ) deliveries order by created_at desc,id desc,source limit #{limit}
+    </select>
+    <select id="lock" resultType="io.github.pinpols.batch.console.domain.notification.application.contract.response.TerminalDeliveryRecoveryResponse">
+        select #{source}::text as source,id,terminal_event_key,event_type,delivery_status,attempt,
+               next_retry_at,delivery_claim_until as claim_until,<include refid="error"/> as error_message,created_at
+          from <include refid="table"/>
+         where tenant_id=#{tenantId} and id=#{id} and terminal_event_key is not null for update
+    </select>
+    <select id="replayAudit" resultType="string">
+        select params::text from batch.console_operation_audit
+         where tenant_id=#{tenantId} and aggregate_type='NOTIFICATION_DELIVERY'
+           and aggregate_id=#{aggregateId} and action='NOTIFICATION_DELIVERY_RETRY' and request_id=#{requestId}
+    </select>
+    <update id="rearm">
+        update <include refid="table"/>
+           set attempt=0,delivery_status='PENDING',next_retry_at=current_timestamp,
+               delivery_claim_token=null,delivery_claim_until=null
+         where tenant_id=#{tenantId} and id=#{id} and terminal_event_key is not null
+           and delivery_status='EXHAUSTED' and next_retry_at is null
+           and (delivery_claim_until is null or delivery_claim_until &lt;= current_timestamp)
+    </update>
+</mapper>

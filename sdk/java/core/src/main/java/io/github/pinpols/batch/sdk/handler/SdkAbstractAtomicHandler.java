@@ -23,7 +23,9 @@ public abstract class SdkAbstractAtomicHandler<R> extends SdkAbstractTaskHandler
   @Override
   protected final SdkTaskResult doExecute(SdkTaskContext ctx) {
     try {
-      return SdkTaskResult.ok("invoked", asOutput(doInvoke(ctx)));
+      R invocationResult = doInvoke(ctx);
+      Map<String, Object> outputs = asOutput(invocationResult);
+      return SdkTaskResult.ok("invoked", outputs);
     } catch (Exception e) {
       return SdkTaskResult.fail(e);
     }

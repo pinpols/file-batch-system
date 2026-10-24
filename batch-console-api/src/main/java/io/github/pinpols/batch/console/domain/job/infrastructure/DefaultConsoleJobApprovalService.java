@@ -9,7 +9,6 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.console.application.ops.ConsoleJobOperationsPort;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobApprovalService;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchDayCatchUpRequest;
@@ -17,6 +16,9 @@ import io.github.pinpols.batch.console.domain.job.application.contract.response.
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayCatchUpResponse;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchDayMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
+import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
+import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
+import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper;
 import io.github.pinpols.batch.console.shared.client.TriggerInternalRestClient;
 import io.github.pinpols.batch.console.shared.command.ApprovalSubmitContext;
 import io.github.pinpols.batch.console.shared.command.ConsoleCatchUpApprovalRequest;
@@ -46,6 +48,8 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   private final BatchDayMapper batchDayMapper;
   private final BusinessCalendarMapper businessCalendarMapper;
+  private final JobDefinitionMapper jobDefinitionMapper;
+  private final WorkflowDefinitionMapper workflowDefinitionMapper;
 
   @Override
   public String approveCatchUp(ConsoleCatchUpApprovalRequest request, String idempotencyKey) {
@@ -79,6 +83,7 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
     ConsoleLaunchCommand launchCommand = new ConsoleLaunchCommand(
         tenantId,
         ConsoleTextSanitizer.safeInput(request.getJobCode(), 128),
+        resolveManagedWorkflowId(tenantId, request.getJobCode()),
         request.getBizDate(),
         TriggerType.CATCH_UP,
         params,
@@ -104,7 +109,6 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
         resolveJobCodes(tenantId, calendarCode, ops.parseBizDate(bizDate), request.getJobCodes());
     List<ConsoleBatchDayCatchUpItemResponse> items = new ArrayList<>();
     for (String jobCode : jobCodes) {
-      String itemRequestId = IdGenerator.newBusinessNo("catchup");
       String itemIdempotencyKey = idempotencyKey + ":" + jobCode;
       if (policyType == CatchUpPolicyType.AUTO) {
         Map<String, Object> params = new LinkedHashMap<>();
@@ -117,14 +121,19 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
         params.put("reason", ConsoleTextSanitizer.safeInput(request.getReason(), 512));
         params.put("catchUpPolicy", catchUpPolicy);
         ConsoleLaunchCommand launchCommand = new ConsoleLaunchCommand(
-            tenantId, jobCode, bizDate, TriggerType.CATCH_UP, params, itemIdempotencyKey);
+            tenantId,
+            jobCode,
+            resolveManagedWorkflowId(tenantId, jobCode),
+            bizDate,
+            TriggerType.CATCH_UP,
+            params,
+            itemIdempotencyKey);
         String instanceNo = ops.delegateLaunch(launchCommand);
         items.add(new ConsoleBatchDayCatchUpItemResponse(
             jobCode, "LAUNCHED", instanceNo, TriggerType.CATCH_UP.code(), "LAUNCHED"));
       } else {
         ConsoleCatchUpApprovalRequest approvalRequest = new ConsoleCatchUpApprovalRequest();
         approvalRequest.setTenantId(tenantId);
-        approvalRequest.setRequestId(itemRequestId);
         approvalRequest.setJobCode(jobCode);
         approvalRequest.setBizDate(bizDate);
         approvalRequest.setScheduledAt(BatchDateTimeSupport.utcNow().toString());
@@ -176,6 +185,27 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
     List<String> failedJobCodes =
         batchDayMapper.selectFailedJobCodes(tenantId, calendarCode, bizDate);
     return failedJobCodes == null ? List.of() : failedJobCodes;
+  }
+
+  private Long resolveManagedWorkflowId(String tenantId, String jobCode) {
+    var job = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
+    if (job == null) {
+      throw BizException.of(ResultCode.NOT_FOUND, "error.job.definition_not_found");
+    }
+    if (Boolean.FALSE.equals(job.getEnabled())) {
+      throw BizException.of(ResultCode.VALIDATION_ERROR, "error.job.definition_disabled");
+    }
+    Long workflowDefinitionId = job.getDefaultWorkflowDefinitionId();
+    WorkflowDefinitionEntity workflow = workflowDefinitionId == null
+        ? null
+        : workflowDefinitionMapper.selectById(tenantId, workflowDefinitionId);
+    if (workflow == null
+        || !Boolean.TRUE.equals(workflow.getEnabled())
+        || job.getId() == null
+        || !job.getId().equals(workflow.getSingleJobDefinitionId())) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.single_job_link_missing");
+    }
+    return workflowDefinitionId;
   }
 
   private String stringValue(Object value) {

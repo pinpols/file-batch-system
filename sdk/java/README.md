@@ -32,6 +32,8 @@ public class MyImportHandler implements SdkTaskHandler {
 
 完整 5 步(配 client / 注册 / start)见 [`core/README.md`](core/README.md) 与 [`docs/sdk/quickstart.md`](../../docs/sdk/quickstart.md)。
 
+当作业声明了上游依赖时，handler 可通过 `ctx.dependencyResultSnapshot()` 查看启动闸门观察到的业务键、结果版本与来源实例。该列表只记录闸门证据；需要精确版本时，handler 必须按 `resultVersionId` 读取或校验结果。旧平台不返回此字段时 getter 返回空列表。
+
 ## 环境 / 构建
 
 - JDK：随平台根 pom(`<java.version>`,当前 JDK 21);运行兼容性见 `core/README.md`。

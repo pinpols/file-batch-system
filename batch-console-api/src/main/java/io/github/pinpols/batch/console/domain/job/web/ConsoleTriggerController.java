@@ -14,7 +14,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * 触发器运维（Ops-only）：register / unregister / pause / resume 属于 <b>救急修复入口</b>，
+ * Workflow 调度运维（Ops-only）：register / unregister / pause / resume 属于 <b>救急修复入口</b>，
  * 同步更新 DB 权威源与 Quartz JobStore，确保人工操作不会被下一轮对账悄悄覆盖。
  *
  * <p>日常禁用 job 仍建议走 {@code POST /api/console/job-definitions/{id}/toggle-enabled}—— DB 是权威源，trigger 侧的
@@ -39,29 +39,31 @@ public class ConsoleTriggerController {
     return responseFactory.success(triggerProxyService.triggerList());
   }
 
-  @PostMapping("/{jobCode}/register")
+  @PostMapping("/{workflowCode}/register")
   public CommonResponse<ConsoleTriggerActionResponse> register(
-      @PathVariable String jobCode, @RequestParam("tenantId") String tenantId) {
+      @PathVariable String workflowCode, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(
-        triggerProxyService.triggerAction(tenantId, jobCode, "register"));
+        triggerProxyService.triggerAction(tenantId, workflowCode, "register"));
   }
 
-  @PostMapping("/{jobCode}/unregister")
+  @PostMapping("/{workflowCode}/unregister")
   public CommonResponse<ConsoleTriggerActionResponse> unregister(
-      @PathVariable String jobCode, @RequestParam("tenantId") String tenantId) {
+      @PathVariable String workflowCode, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(
-        triggerProxyService.triggerAction(tenantId, jobCode, "unregister"));
+        triggerProxyService.triggerAction(tenantId, workflowCode, "unregister"));
   }
 
-  @PostMapping("/{jobCode}/pause")
+  @PostMapping("/{workflowCode}/pause")
   public CommonResponse<ConsoleTriggerActionResponse> pause(
-      @PathVariable String jobCode, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(triggerProxyService.triggerAction(tenantId, jobCode, "pause"));
+      @PathVariable String workflowCode, @RequestParam("tenantId") String tenantId) {
+    return responseFactory.success(
+        triggerProxyService.triggerAction(tenantId, workflowCode, "pause"));
   }
 
-  @PostMapping("/{jobCode}/resume")
+  @PostMapping("/{workflowCode}/resume")
   public CommonResponse<ConsoleTriggerActionResponse> resume(
-      @PathVariable String jobCode, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(triggerProxyService.triggerAction(tenantId, jobCode, "resume"));
+      @PathVariable String workflowCode, @RequestParam("tenantId") String tenantId) {
+    return responseFactory.success(
+        triggerProxyService.triggerAction(tenantId, workflowCode, "resume"));
   }
 }

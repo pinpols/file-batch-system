@@ -170,9 +170,10 @@ class SdkAbstractTaskHandler(ABC):
                 getattr(ctx, "task_id", None),
                 t,
             )
+            failure_message = str(t) or type(t).__name__
             return SdkTaskResult.fail(
                 HANDLER_ERROR_CODE,
-                str(t) or type(t).__name__,
+                failure_message,
                 cause=t,
             )
         finally:

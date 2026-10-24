@@ -11,6 +11,7 @@ import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
 import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerSchedulerFacade;
+import io.github.pinpols.batch.trigger.service.TriggerScheduledOccurrencePlanner;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import java.util.List;
 import java.util.Set;
@@ -46,6 +47,9 @@ class TriggerReconcilerTest {
   @Mock
   private TriggerGracefulShutdown gracefulShutdown;
 
+  @Mock
+  private TriggerScheduledOccurrencePlanner occurrencePlanner;
+
   @InjectMocks
   private TriggerReconciler reconciler;
 
@@ -63,21 +67,39 @@ class TriggerReconcilerTest {
 
     reconciler.reconcile();
 
-    verify(registration).registerByJobCode("t1", "JOB_A");
-    verify(registration, never()).unregisterByJobCode(any(), any());
+    verify(registration).registerByWorkflowCode("t1", "WF-JOB_A");
+    verify(registration, never()).removeQuartzJob(any(), any());
   }
 
   @Test
-  @DisplayName("Quartz 存在 DB 已无的孤儿作业时按 tenant:jobCode 拆解清理")
+  @DisplayName("应用启动就绪时立即对账,不等待首个 30 秒周期")
+  void applicationReady_reconcilesImmediately() throws Exception {
+    TriggerDescriptor enabled = enabledDescriptor("t1", "JOB_STARTUP");
+    when(loader.loadAll()).thenReturn(List.of(enabled));
+    when(scheduler.getJobKeys(ArgumentMatchers.<GroupMatcher<JobKey>>any())).thenReturn(Set.of());
+
+    reconciler.onApplicationReady();
+
+    verify(registration).registerByWorkflowCode("t1", "WF-JOB_STARTUP");
+  }
+
+  @Test
+  @DisplayName("Quartz 存在 DB 已无的孤儿 Workflow 时按稳定身份拆解清理")
   void quartzOnly_unregistersOrphanedJob() throws Exception {
     when(loader.loadAll()).thenReturn(List.of());
-    JobKey orphan = JobKey.jobKey("t1:STALE_JOB", TriggerSchedulerFacade.JOB_GROUP);
+    JobKey orphan = JobKey.jobKey("t1:WF:WF-STALE", TriggerSchedulerFacade.JOB_GROUP);
     when(scheduler.getJobKeys(ArgumentMatchers.<GroupMatcher<JobKey>>any()))
         .thenReturn(Set.of(orphan));
 
     reconciler.reconcile();
 
-    verify(registration).unregisterByJobCode("t1", "STALE_JOB");
+    verify(registration).removeQuartzJob("t1", "WF:WF-STALE");
+    verify(registration, never()).registerByWorkflowCode(any(), any());
+    verify(occurrencePlanner)
+        .supersedeFuturePlans(
+            org.mockito.ArgumentMatchers.eq("t1"),
+            org.mockito.ArgumentMatchers.eq("WF-STALE"),
+            any());
     verify(registration, never()).registerByJobCode(any(), any());
   }
 
@@ -85,30 +107,51 @@ class TriggerReconcilerTest {
   @DisplayName("DB 与 Quartz 完全一致时不产生任何注册或清理动作")
   void dbAndQuartzAligned_noChanges() throws Exception {
     TriggerDescriptor enabled = enabledDescriptor("t1", "JOB_A");
-    JobKey existing = JobKey.jobKey("t1:JOB_A", TriggerSchedulerFacade.JOB_GROUP);
+    JobKey existing = JobKey.jobKey("t1:WF:WF-JOB_A", TriggerSchedulerFacade.JOB_GROUP);
     when(loader.loadAll()).thenReturn(List.of(enabled));
     when(scheduler.getJobKeys(ArgumentMatchers.<GroupMatcher<JobKey>>any()))
         .thenReturn(Set.of(existing));
 
     reconciler.reconcile();
 
-    verify(registration, never()).registerByJobCode(any(), any());
-    verify(registration, never()).unregisterByJobCode(any(), any());
+    verify(registration, never()).registerByWorkflowCode(any(), any());
+    verify(registration, never()).removeQuartzJob(any(), any());
+  }
+
+  @Test
+  @DisplayName("已对齐的 Quartz 主 Trigger 也周期物化预期 occurrence")
+  void alignedSchedule_materializesUpcomingOccurrences() throws Exception {
+    TriggerDescriptor enabled = enabledDescriptor("t1", "JOB_A");
+    JobKey existing = JobKey.jobKey("t1:WF:WF-JOB_A", TriggerSchedulerFacade.JOB_GROUP);
+    CronTrigger primary = org.quartz.TriggerBuilder.newTrigger()
+        .withIdentity(existing.getName(), existing.getGroup())
+        .forJob(existing)
+        .withSchedule(org.quartz.CronScheduleBuilder.cronSchedule("0 0 1 * * ?")
+            .inTimeZone(TimeZone.getTimeZone("UTC")))
+        .build();
+    when(loader.loadAll()).thenReturn(List.of(enabled));
+    when(scheduler.getJobKeys(ArgumentMatchers.<GroupMatcher<JobKey>>any()))
+        .thenReturn(Set.of(existing));
+    doReturn(List.of(primary)).when(scheduler).getTriggersOfJob(existing);
+
+    reconciler.reconcile();
+
+    verify(occurrencePlanner).materialize(any(TriggerDescriptor.class), any(), any());
   }
 
   @Test
   @DisplayName("DB 已停用的作业若仍留在 Quartz 中,对账应将其清理")
   void disabledDescriptor_unregistersExistingQuartzJob() throws Exception {
     TriggerDescriptor disabled = disabledDescriptor("t1", "JOB_A");
-    JobKey existing = JobKey.jobKey("t1:JOB_A", TriggerSchedulerFacade.JOB_GROUP);
+    JobKey existing = JobKey.jobKey("t1:WF:WF-JOB_A", TriggerSchedulerFacade.JOB_GROUP);
     when(loader.loadAll()).thenReturn(List.of(disabled));
     when(scheduler.getJobKeys(ArgumentMatchers.<GroupMatcher<JobKey>>any()))
         .thenReturn(Set.of(existing));
 
     reconciler.reconcile();
 
-    verify(registration).unregisterByJobCode("t1", "JOB_A");
-    verify(registration, never()).registerByJobCode(any(), any());
+    verify(registration).removeQuartzJob("t1", "WF:WF-JOB_A");
+    verify(registration, never()).registerByWorkflowCode(any(), any());
   }
 
   @Test
@@ -119,8 +162,8 @@ class TriggerReconcilerTest {
     reconciler.reconcile();
 
     verify(loader, never()).loadAll();
-    verify(registration, never()).registerByJobCode(any(), any());
-    verify(registration, never()).unregisterByJobCode(any(), any());
+    verify(registration, never()).registerByWorkflowCode(any(), any());
+    verify(registration, never()).removeQuartzJob(any(), any());
   }
 
   @Test
@@ -130,11 +173,11 @@ class TriggerReconcilerTest {
     descriptor.setScheduleType("CRON");
     descriptor.setScheduleExpression("0 0 2 * * ?"); // DB expects every day 02:00 (Quartz)
     descriptor.setTimezone("Asia/Shanghai");
-    JobKey existing = JobKey.jobKey("t1:JOB_A", TriggerSchedulerFacade.JOB_GROUP);
+    JobKey existing = JobKey.jobKey("t1:WF:WF-JOB_A", TriggerSchedulerFacade.JOB_GROUP);
 
     CronTrigger quartzTrigger = mock(CronTrigger.class);
     when(quartzTrigger.getKey())
-        .thenReturn(TriggerKey.triggerKey("t1:JOB_A", TriggerSchedulerFacade.JOB_GROUP));
+        .thenReturn(TriggerKey.triggerKey("t1:WF:WF-JOB_A", TriggerSchedulerFacade.JOB_GROUP));
     when(quartzTrigger.getCronExpression()).thenReturn("0 0 3 * * ?"); // Quartz still has old
     // timezone stub 被 short-circuit 跳过（cron 不同已命中 drift），故不 stub 以避免 strict mode 报错
 
@@ -145,8 +188,8 @@ class TriggerReconcilerTest {
 
     reconciler.reconcile();
 
-    verify(registration).registerByJobCode("t1", "JOB_A");
-    verify(registration, never()).unregisterByJobCode(any(), any());
+    verify(registration).registerByWorkflowCode("t1", "WF-JOB_A");
+    verify(registration, never()).removeQuartzJob(any(), any());
   }
 
   @Test
@@ -156,14 +199,14 @@ class TriggerReconcilerTest {
     descriptor.setScheduleType("CRON");
     descriptor.setScheduleExpression("0 0 2 * * ?");
     descriptor.setTimezone("Asia/Shanghai");
-    JobKey existing = JobKey.jobKey("t1:JOB_A", TriggerSchedulerFacade.JOB_GROUP);
+    JobKey existing = JobKey.jobKey("t1:WF:WF-JOB_A", TriggerSchedulerFacade.JOB_GROUP);
 
     SimpleTrigger recoveryTrigger = mock(SimpleTrigger.class);
     when(recoveryTrigger.getKey())
         .thenReturn(TriggerKey.triggerKey("misfire-recovery-1", "batch-trigger-recovery"));
     CronTrigger primaryTrigger = mock(CronTrigger.class);
     when(primaryTrigger.getKey())
-        .thenReturn(TriggerKey.triggerKey("t1:JOB_A", TriggerSchedulerFacade.JOB_GROUP));
+        .thenReturn(TriggerKey.triggerKey("t1:WF:WF-JOB_A", TriggerSchedulerFacade.JOB_GROUP));
     when(primaryTrigger.getCronExpression()).thenReturn("0 0 2 * * ?");
     when(primaryTrigger.getTimeZone()).thenReturn(TimeZone.getTimeZone("Asia/Shanghai"));
 
@@ -174,8 +217,8 @@ class TriggerReconcilerTest {
 
     reconciler.reconcile();
 
-    verify(registration, never()).registerByJobCode(any(), any());
-    verify(registration, never()).unregisterByJobCode(any(), any());
+    verify(registration, never()).registerByWorkflowCode(any(), any());
+    verify(registration, never()).removeQuartzJob(any(), any());
   }
 
   @Test
@@ -188,13 +231,14 @@ class TriggerReconcilerTest {
 
     reconciler.reconcile();
 
-    verify(registration, never()).unregisterByJobCode(any(), any());
+    verify(registration, never()).removeQuartzJob(any(), any());
   }
 
   private TriggerDescriptor enabledDescriptor(String tenantId, String jobCode) {
     TriggerDescriptor d = new TriggerDescriptor();
     d.setTenantId(tenantId);
     d.setJobCode(jobCode);
+    d.setWorkflowCode("WF-" + jobCode);
     d.setEnabled(true);
     return d;
   }
@@ -203,6 +247,7 @@ class TriggerReconcilerTest {
     TriggerDescriptor d = new TriggerDescriptor();
     d.setTenantId(tenantId);
     d.setJobCode(jobCode);
+    d.setWorkflowCode("WF-" + jobCode);
     d.setEnabled(false);
     return d;
   }

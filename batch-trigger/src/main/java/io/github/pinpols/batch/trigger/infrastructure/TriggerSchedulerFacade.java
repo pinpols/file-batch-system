@@ -38,8 +38,8 @@ import org.springframework.stereotype.Service;
 /**
  * Quartz 调度器门面，实现 {@link TriggerRegistrationService} 接口，集中管理所有 Quartz job 的 注册、暂停、恢复和状态查询。
  *
- * <p><b>JobKey 格式</b>：{@code tenantId:jobCode}，group 固定为 {@code batch-trigger}； {@link
- * #pauseByTenant}/{@link #resumeByTenant} 通过前缀匹配实现租户级批量操作。
+ * <p><b>JobKey 格式</b>：新触发使用 {@code tenantId:WF:workflowCode}；旧 JobCode 运维入口只作为兼容别名解析到 Workflow。
+ * group 固定为 {@code batch-trigger}；{@link #pauseByTenant}/{@link #resumeByTenant} 通过租户前缀实现批量操作。
  *
  * <p><b>调度类型支持</b>：
  *
@@ -99,8 +99,20 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
   @Override
   public void registerByJobCode(String tenantId, String jobCode) {
     runManaged("registerByJobCode", () -> {
-      triggerDefinitionLoader.setEnabled(tenantId, jobCode, true);
+      triggerDefinitionLoader.setScheduleEnabled(tenantId, jobCode, true);
       TriggerDescriptor descriptor = triggerDefinitionLoader.loadByJobCode(tenantId, jobCode);
+      if (EmptyChecks.isNotNull(descriptor) && descriptor.isEnabled()) {
+        scheduleDescriptor(descriptor);
+      }
+    });
+  }
+
+  @Override
+  public void registerByWorkflowCode(String tenantId, String workflowCode) {
+    runManaged("registerByWorkflowCode", () -> {
+      triggerDefinitionLoader.setWorkflowScheduleEnabled(tenantId, workflowCode, true);
+      TriggerDescriptor descriptor =
+          triggerDefinitionLoader.loadByWorkflowCode(tenantId, workflowCode);
       if (EmptyChecks.isNotNull(descriptor) && descriptor.isEnabled()) {
         scheduleDescriptor(descriptor);
       }
@@ -110,38 +122,57 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
   @Override
   public void unregisterByJobCode(String tenantId, String jobCode) {
     runManaged("unregisterByJobCode", () -> {
-      try {
-        JobKey jobKey = JobKey.jobKey(tenantId + ":" + jobCode, JOB_GROUP);
-        if (scheduler.checkExists(jobKey)) {
-          scheduler.deleteJob(jobKey);
-        }
-        triggerDefinitionLoader.setEnabled(tenantId, jobCode, false);
-      } catch (SchedulerException e) {
-        throw new IllegalStateException("failed to unregister trigger: " + jobCode, e);
-      }
+      deleteQuartzForJobAlias(tenantId, jobCode);
+      triggerDefinitionLoader.setScheduleEnabled(tenantId, jobCode, false);
     });
+  }
+
+  @Override
+  public void unregisterByWorkflowCode(String tenantId, String workflowCode) {
+    runManaged("unregisterByWorkflowCode", () -> {
+      deleteQuartzForDescriptor(triggerDefinitionLoader.loadByWorkflowCode(tenantId, workflowCode));
+      triggerDefinitionLoader.setWorkflowScheduleEnabled(tenantId, workflowCode, false);
+    });
+  }
+
+  @Override
+  public void removeQuartzJob(String tenantId, String quartzJobIdentity) {
+    runManaged("removeQuartzJob", () -> removeQuartzByIdentity(tenantId, quartzJobIdentity));
   }
 
   @Override
   public void pauseByJobCode(String tenantId, String jobCode) {
     runManaged("pauseByJobCode", () -> {
-      try {
-        JobKey jobKey = JobKey.jobKey(tenantId + ":" + jobCode, JOB_GROUP);
-        if (scheduler.checkExists(jobKey)) {
-          scheduler.deleteJob(jobKey);
-        }
-        triggerDefinitionLoader.setEnabled(tenantId, jobCode, false);
-      } catch (SchedulerException e) {
-        throw new IllegalStateException("failed to pause trigger: " + jobCode, e);
-      }
+      deleteQuartzForJobAlias(tenantId, jobCode);
+      triggerDefinitionLoader.setScheduleEnabled(tenantId, jobCode, false);
+    });
+  }
+
+  @Override
+  public void pauseByWorkflowCode(String tenantId, String workflowCode) {
+    runManaged("pauseByWorkflowCode", () -> {
+      deleteQuartzForDescriptor(triggerDefinitionLoader.loadByWorkflowCode(tenantId, workflowCode));
+      triggerDefinitionLoader.setWorkflowScheduleEnabled(tenantId, workflowCode, false);
     });
   }
 
   @Override
   public void resumeByJobCode(String tenantId, String jobCode) {
     runManaged("resumeByJobCode", () -> {
-      triggerDefinitionLoader.setEnabled(tenantId, jobCode, true);
+      triggerDefinitionLoader.setScheduleEnabled(tenantId, jobCode, true);
       TriggerDescriptor descriptor = triggerDefinitionLoader.loadByJobCode(tenantId, jobCode);
+      if (EmptyChecks.isNotNull(descriptor) && descriptor.isEnabled()) {
+        scheduleDescriptor(descriptor);
+      }
+    });
+  }
+
+  @Override
+  public void resumeByWorkflowCode(String tenantId, String workflowCode) {
+    runManaged("resumeByWorkflowCode", () -> {
+      triggerDefinitionLoader.setWorkflowScheduleEnabled(tenantId, workflowCode, true);
+      TriggerDescriptor descriptor =
+          triggerDefinitionLoader.loadByWorkflowCode(tenantId, workflowCode);
       if (EmptyChecks.isNotNull(descriptor) && descriptor.isEnabled()) {
         scheduleDescriptor(descriptor);
       }
@@ -224,7 +255,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
       log.warn(
           "skipping invalid trigger descriptor for job={}/{}: {}",
           descriptor.getTenantId(),
-          descriptor.getJobCode(),
+          descriptor.getWorkflowCode(),
           SwallowedExceptionLogger.summary(e));
     }
   }
@@ -261,7 +292,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
             "invalid timezone for job " + descriptor.getJobCode() + ": '" + timezone + "'", e);
       }
     }
-    String identity = descriptor.getTenantId() + ":" + descriptor.getJobCode();
+    String identity = quartzIdentity(descriptor);
     JobDetail jobDetail = buildJobDetail(descriptor);
     CronTrigger trigger = TriggerBuilder.newTrigger()
         .withIdentity(identity, JOB_GROUP)
@@ -275,7 +306,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
 
   private void scheduleFixedRateDescriptor(TriggerDescriptor descriptor) {
     int intervalSeconds = parseFixedRateIntervalSeconds(descriptor);
-    String identity = descriptor.getTenantId() + ":" + descriptor.getJobCode();
+    String identity = quartzIdentity(descriptor);
     JobDetail jobDetail = buildJobDetail(descriptor);
     Trigger trigger = TriggerBuilder.newTrigger()
         .withIdentity(identity, JOB_GROUP)
@@ -289,16 +320,36 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
   }
 
   private JobDetail buildJobDetail(TriggerDescriptor descriptor) {
-    String identity = descriptor.getTenantId() + ":" + descriptor.getJobCode();
+    String identity = quartzIdentity(descriptor);
     JobDataMap jobDataMap = new JobDataMap();
     jobDataMap.put(QuartzLaunchJob.TENANT_ID, descriptor.getTenantId());
-    jobDataMap.put(QuartzLaunchJob.JOB_CODE, descriptor.getJobCode());
+    if (descriptor.getJobCode() != null) {
+      jobDataMap.put(QuartzLaunchJob.JOB_CODE, descriptor.getJobCode());
+    }
+    if (descriptor.getWorkflowDefinitionId() != null) {
+      jobDataMap.put(QuartzLaunchJob.WORKFLOW_DEFINITION_ID, descriptor.getWorkflowDefinitionId());
+    }
+    if (descriptor.getWorkflowCode() != null) {
+      jobDataMap.put(QuartzLaunchJob.WORKFLOW_CODE, descriptor.getWorkflowCode());
+    }
+    if (descriptor.getWorkflowVersion() != null) {
+      jobDataMap.put(QuartzLaunchJob.WORKFLOW_VERSION, descriptor.getWorkflowVersion());
+    }
+    jobDataMap.put(
+        QuartzLaunchJob.JOB_DEFINITION_VERSION,
+        descriptor.getJobDefinitionVersion() == null ? 0 : descriptor.getJobDefinitionVersion());
     jobDataMap.put(QuartzLaunchJob.SCHEDULE_TYPE, descriptor.getScheduleType());
     jobDataMap.put(QuartzLaunchJob.SCHEDULE_EXPRESSION, descriptor.getScheduleExpression());
     jobDataMap.put(QuartzLaunchJob.TIMEZONE, descriptor.getTimezone());
     jobDataMap.put(QuartzLaunchJob.TRIGGER_MODE, descriptor.getTriggerMode());
     jobDataMap.put(QuartzLaunchJob.CALENDAR_CODE, descriptor.getCalendarCode());
     jobDataMap.put(QuartzLaunchJob.DEPENDS_ON_JOB_CODE, descriptor.getDependsOnJobCode());
+    if (descriptor.getDependsOnJobCodes() != null
+        && !descriptor.getDependsOnJobCodes().isEmpty()) {
+      jobDataMap.put(
+          QuartzLaunchJob.DEPENDS_ON_JOB_CODES,
+          new java.util.ArrayList<>(descriptor.getDependsOnJobCodes()));
+    }
     jobDataMap.put(QuartzLaunchJob.CATCH_UP_POLICY, descriptor.getCatchUpPolicy());
     jobDataMap.put(QuartzLaunchJob.CATCH_UP_MAX_DAYS, descriptor.getCatchUpMaxDays());
     return JobBuilder.newJob(QuartzLaunchJob.class)
@@ -306,6 +357,49 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
         .usingJobData(jobDataMap)
         .storeDurably()
         .build();
+  }
+
+  public static String quartzIdentity(TriggerDescriptor descriptor) {
+    if (descriptor == null
+        || descriptor.getTenantId() == null
+        || descriptor.getWorkflowCode() == null
+        || descriptor.getWorkflowCode().isBlank()) {
+      throw new IllegalArgumentException("Scheduled triggers require a Workflow identity");
+    }
+    return descriptor.getTenantId() + ":WF:" + descriptor.getWorkflowCode();
+  }
+
+  private void deleteQuartzForDescriptor(TriggerDescriptor descriptor) {
+    if (descriptor == null) {
+      return;
+    }
+    try {
+      JobKey jobKey = JobKey.jobKey(quartzIdentity(descriptor), JOB_GROUP);
+      if (scheduler.checkExists(jobKey)) {
+        scheduler.deleteJob(jobKey);
+      }
+    } catch (SchedulerException exception) {
+      throw new IllegalStateException(
+          "failed to delete Quartz trigger: " + quartzIdentity(descriptor), exception);
+    }
+  }
+
+  private void deleteQuartzForJobAlias(String tenantId, String jobCode) {
+    deleteQuartzForDescriptor(triggerDefinitionLoader.loadByJobCode(tenantId, jobCode));
+    // Remove pre-cutover Quartz identity during the compatibility window.
+    removeQuartzByIdentity(tenantId, jobCode);
+  }
+
+  private void removeQuartzByIdentity(String tenantId, String quartzJobIdentity) {
+    try {
+      JobKey jobKey = JobKey.jobKey(tenantId + ":" + quartzJobIdentity, JOB_GROUP);
+      if (scheduler.checkExists(jobKey)) {
+        scheduler.deleteJob(jobKey);
+      }
+    } catch (SchedulerException exception) {
+      throw new IllegalStateException(
+          "failed to delete Quartz trigger: " + quartzJobIdentity, exception);
+    }
   }
 
   private void scheduleWithReplace(JobDetail jobDetail, Trigger trigger) {

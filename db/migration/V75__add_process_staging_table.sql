@@ -23,16 +23,18 @@ CREATE TABLE IF NOT EXISTS batch.process_staging (
 );
 
 -- batch_key 单独索引:VALIDATE / COMMIT / FEEDBACK 三阶段都按 batch_key 过滤。
+
 CREATE INDEX IF NOT EXISTS idx_process_staging_batch_key
     ON batch.process_staging (batch_key);
 
 -- staged_at 索引:运维清理孤儿 staging 行(任务挂了没走到 FEEDBACK 阶段)用。
+
 CREATE INDEX IF NOT EXISTS idx_process_staging_staged_at
     ON batch.process_staging (staged_at);
 
 COMMENT ON TABLE batch.process_staging IS
-    'PROCESS WAP pipeline staging area; rows written at COMPUTE, validated at VALIDATE, published at COMMIT, cleaned at FEEDBACK.';
+    'PROCESS 的 WAP 流水线暂存区；COMPUTE 写入数据，VALIDATE 校验，COMMIT 发布，FEEDBACK 清理。';
 COMMENT ON COLUMN batch.process_staging.batch_key IS
-    'Per-task unique key generated at PREPARE (taskId + uuid suffix); ties together rows of one PROCESS run.';
+    'PREPARE 阶段为每个任务生成的唯一键（taskId 加 UUID 后缀），用于关联一次 PROCESS 运行的所有行。';
 COMMENT ON COLUMN batch.process_staging.payload IS
-    'JSONB row body keyed by target column name; restored at COMMIT via jsonb_populate_record(NULL::<target>, payload).';
+    '按目标列名组织的 JSONB 行数据；COMMIT 阶段通过 jsonb_populate_record(NULL::<target>, payload) 还原。';

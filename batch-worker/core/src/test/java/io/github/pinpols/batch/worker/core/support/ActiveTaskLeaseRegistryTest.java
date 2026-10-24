@@ -5,9 +5,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.worker.core.infrastructure.ActiveTaskLeaseRegistry;
 import java.time.Duration;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -132,19 +134,19 @@ class ActiveTaskLeaseRegistryTest {
     // 保证 remove 总在 awaitDrain 已实际进入 wait/检查循环后发生，结果确定。
     registry.register("task-1", "t1", "w1");
 
-    java.util.concurrent.CountDownLatch awaitStarted = new java.util.concurrent.CountDownLatch(1);
+    CountDownLatch awaitStarted = new CountDownLatch(1);
     ExecutorService pool = Executors.newSingleThreadExecutor();
     Future<Boolean> f = pool.submit(() -> {
       awaitStarted.countDown();
       return registry.awaitDrain(Duration.ofSeconds(2));
     });
 
-    awaitStarted.await(1, java.util.concurrent.TimeUnit.SECONDS);
+    awaitStarted.await(1, TimeUnit.SECONDS);
     // 给 awaitDrain 线程从 countDown 到进入 monitor wait 的极短窗口（不再依赖 200ms 业务等待）
     Thread.yield();
     registry.remove("task-1");
 
-    Boolean drained = f.get(3, java.util.concurrent.TimeUnit.SECONDS);
+    Boolean drained = f.get(3, TimeUnit.SECONDS);
     pool.shutdown();
     assertThat(drained).isTrue();
     assertThat(registry.snapshot()).isEmpty();

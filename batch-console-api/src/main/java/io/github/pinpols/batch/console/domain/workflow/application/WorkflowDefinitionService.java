@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.workflow.application;
 
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionFullUpdateRequest;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowScheduleUpdateRequest;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowDefinitionDetailResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowDefinitionVersionSummaryResponse;
 import java.util.List;
@@ -24,6 +25,11 @@ public interface WorkflowDefinitionService {
       Long id, WorkflowDefinitionFullUpdateRequest request, String currentUser);
 
   void toggleEnabled(Long id, String tenantId, Boolean enabled);
+
+  void toggleScheduleEnabled(Long id, String tenantId, Boolean scheduleEnabled);
+
+  WorkflowDefinitionDetailResponse updateSchedule(
+      Long id, WorkflowScheduleUpdateRequest request, String currentUser);
 
   DagValidationResult validate(Long id, String tenantId);
 

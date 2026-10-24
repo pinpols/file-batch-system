@@ -40,7 +40,7 @@ def production_java_files() -> list[Path]:
     return sorted(
         path
         for path in ROOT.glob("**/src/main/java/**/*.java")
-        if "/target/" not in path.as_posix()
+        if not {"build", "target"}.intersection(path.relative_to(ROOT).parts)
     )
 
 

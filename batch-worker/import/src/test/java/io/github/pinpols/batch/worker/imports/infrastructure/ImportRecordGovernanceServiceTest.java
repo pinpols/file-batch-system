@@ -19,6 +19,7 @@ import io.github.pinpols.batch.worker.imports.config.ImportSkipProperties;
 import io.github.pinpols.batch.worker.imports.domain.ImportBadRecordEntity;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportStage;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -370,7 +371,7 @@ class ImportRecordGovernanceServiceTest {
     ctx.getAttributes()
         .put(
             "badRecords",
-            new java.util.ArrayList<>(List.of(new ImportBadRecordEntity(
+            new ArrayList<>(List.of(new ImportBadRecordEntity(
                 1L, "PARSE", "E", "m", null, false, "CONTINUE", null, null, null))));
 
     service.finalizeErrorOutput(ctx);
@@ -388,7 +389,7 @@ class ImportRecordGovernanceServiceTest {
 
     ImportJobContext ctx = context();
     // 注入混入异型对象的旧列表
-    ctx.getAttributes().put("badRecords", new java.util.ArrayList<>(List.of("not-a-record")));
+    ctx.getAttributes().put("badRecords", new ArrayList<>(List.of("not-a-record")));
 
     service.recordSkippedRecord(ctx, ImportStage.PARSE, 1L, "E", "m", "raw");
 

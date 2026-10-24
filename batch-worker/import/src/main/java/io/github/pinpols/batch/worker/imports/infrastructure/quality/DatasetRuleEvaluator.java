@@ -12,6 +12,7 @@ import static io.github.pinpols.batch.worker.imports.infrastructure.quality.Vali
 import static io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationCoercions.stringValue;
 
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
@@ -21,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -36,12 +38,13 @@ public class DatasetRuleEvaluator {
   private final ValidationConfigSupport configSupport;
 
   public void evaluate(ValidationSession session) {
-    evaluateRowCount(
-        session.totalCount(),
-        session.ruleSet(),
-        session.datasetIssues(),
-        session.appliedChecks(),
-        manifestExpectedCount(session.context()));
+    long totalCount = session.totalCount();
+    Map<String, Object> ruleSet = session.ruleSet();
+    List<ValidationIssue> datasetIssues = session.datasetIssues();
+    Set<String> appliedChecks = session.appliedChecks();
+    ImportJobContext context = session.context();
+    Integer manifestExpectedCount = manifestExpectedCount(context);
+    evaluateRowCount(totalCount, ruleSet, datasetIssues, appliedChecks, manifestExpectedCount);
     evaluateControlRecord(session);
     evaluateChecksum(
         session.normalizedPayload(),
@@ -67,7 +70,8 @@ public class DatasetRuleEvaluator {
     if (context == null) {
       return null;
     }
-    return integerValue(context.getAttributes().get(ATTR_EXPECTED_RECORD_COUNT));
+    Object expectedRecordCount = context.getAttributes().get(ATTR_EXPECTED_RECORD_COUNT);
+    return integerValue(expectedRecordCount);
   }
 
   private void evaluateRowCount(
@@ -84,10 +88,14 @@ public class DatasetRuleEvaluator {
     boolean fromManifest = ruleExact == null && manifestExpectedCount != null;
     Integer exactCount =
         ruleExact != null ? ruleExact : (fromManifest ? manifestExpectedCount : null);
-    Integer minCount =
-        ruleEnabled ? integerValue(firstNonNull(rule.get(KEY_MIN), rule.get("minimum"))) : null;
-    Integer maxCount =
-        ruleEnabled ? integerValue(firstNonNull(rule.get(KEY_MAX), rule.get("maximum"))) : null;
+    Integer minCount = null;
+    Integer maxCount = null;
+    if (ruleEnabled) {
+      Object minCountSetting = firstNonNull(rule.get(KEY_MIN), rule.get("minimum"));
+      minCount = integerValue(minCountSetting);
+      Object maxCountSetting = firstNonNull(rule.get(KEY_MAX), rule.get("maximum"));
+      maxCount = integerValue(maxCountSetting);
+    }
     // 既无模板 rowCountCheck、又无 manifest 声明 → 无可对账,直接跳过。
     if (!ruleEnabled && exactCount == null) {
       return;
@@ -100,31 +108,47 @@ public class DatasetRuleEvaluator {
       if (fromManifest) {
         details.put("source", "manifest");
       }
-      datasetIssues.add(new ValidationIssue(
+      String rowCountErrorCode = ImportValidationErrorCode.ROW_COUNT.code();
+      String rowCountMismatchMessage = "row count mismatch, expected="
+          + exactCount
+          + (fromManifest ? " (manifest)" : "")
+          + MSG_ACTUAL_SUFFIX
+          + actualCount;
+      Map<String, Object> rowCountMismatchDetails = Map.copyOf(details);
+      ValidationIssue rowCountMismatchIssue = new ValidationIssue(
           null,
-          ImportValidationErrorCode.ROW_COUNT.code(),
-          "row count mismatch, expected="
-              + exactCount
-              + (fromManifest ? " (manifest)" : "")
-              + MSG_ACTUAL_SUFFIX
-              + actualCount,
-          Map.copyOf(details)));
+          rowCountErrorCode,
+          rowCountMismatchMessage,
+          rowCountMismatchDetails);
+      datasetIssues.add(rowCountMismatchIssue);
       return;
     }
     if (minCount != null && actualCount < minCount) {
-      datasetIssues.add(new ValidationIssue(
+      String rowCountErrorCode = ImportValidationErrorCode.ROW_COUNT.code();
+      String minimumRowCountMessage =
+          "row count below minimum, min=" + minCount + MSG_ACTUAL_SUFFIX + actualCount;
+      Map<String, Object> minimumRowCountDetails =
+          Map.of(KEY_MIN, minCount, KEY_ACTUAL, actualCount);
+      ValidationIssue minimumRowCountIssue = new ValidationIssue(
           null,
-          ImportValidationErrorCode.ROW_COUNT.code(),
-          "row count below minimum, min=" + minCount + MSG_ACTUAL_SUFFIX + actualCount,
-          Map.of(KEY_MIN, minCount, KEY_ACTUAL, actualCount)));
+          rowCountErrorCode,
+          minimumRowCountMessage,
+          minimumRowCountDetails);
+      datasetIssues.add(minimumRowCountIssue);
       return;
     }
     if (maxCount != null && actualCount > maxCount) {
-      datasetIssues.add(new ValidationIssue(
+      String rowCountErrorCode = ImportValidationErrorCode.ROW_COUNT.code();
+      String maximumRowCountMessage =
+          "row count exceeds maximum, max=" + maxCount + MSG_ACTUAL_SUFFIX + actualCount;
+      Map<String, Object> maximumRowCountDetails =
+          Map.of(KEY_MAX, maxCount, KEY_ACTUAL, actualCount);
+      ValidationIssue maximumRowCountIssue = new ValidationIssue(
           null,
-          ImportValidationErrorCode.ROW_COUNT.code(),
-          "row count exceeds maximum, max=" + maxCount + MSG_ACTUAL_SUFFIX + actualCount,
-          Map.of(KEY_MAX, maxCount, KEY_ACTUAL, actualCount)));
+          rowCountErrorCode,
+          maximumRowCountMessage,
+          maximumRowCountDetails);
+      datasetIssues.add(maximumRowCountIssue);
     }
   }
 
@@ -134,7 +158,8 @@ public class DatasetRuleEvaluator {
   private void evaluateControlRecord(ValidationSession session) {
     Map<String, Object> rule =
         configSupport.firstMap(session.ruleSet(), "controlRecordCheck", "control_record_check");
-    if (rule.isEmpty() || !enabled(rule)) {
+    boolean ruleIsNotConfiguredOrDisabled = EmptyChecks.isEmpty(Objects.requireNonNull(rule)) || !enabled(rule);
+    if (ruleIsNotConfiguredOrDisabled) {
       return;
     }
     Object declared =
@@ -145,13 +170,16 @@ public class DatasetRuleEvaluator {
           session.context().getTenantId(),
           session.context().getFileId());
       session.appliedChecks().add("control_record_check");
-      session
-          .datasetIssues()
-          .add(new ValidationIssue(
-              null,
-              ImportValidationErrorCode.CONTROL_RECORD.code(),
-              "control-record check requires a declared count",
-              Map.of("reason", "MISSING_DECLARED_COUNT")));
+      List<ValidationIssue> datasetIssues = session.datasetIssues();
+      String controlRecordErrorCode = ImportValidationErrorCode.CONTROL_RECORD.code();
+      Map<String, Object> missingDeclaredCountDetails =
+          Map.of("reason", "MISSING_DECLARED_COUNT");
+      ValidationIssue missingDeclaredCountIssue = new ValidationIssue(
+          null,
+          controlRecordErrorCode,
+          "control-record check requires a declared count",
+          missingDeclaredCountDetails);
+      datasetIssues.add(missingDeclaredCountIssue);
       return;
     }
     session.appliedChecks().add("control_record_check");
@@ -160,16 +188,20 @@ public class DatasetRuleEvaluator {
     if (declaredCount == actualCount) {
       return;
     }
-    session
-        .datasetIssues()
-        .add(new ValidationIssue(
-            null,
-            ImportValidationErrorCode.CONTROL_RECORD.code(),
-            "control-record count mismatch, declared="
-                + declaredCount
-                + MSG_ACTUAL_SUFFIX
-                + actualCount,
-            Map.of("declared", declaredCount, KEY_ACTUAL, actualCount)));
+    List<ValidationIssue> datasetIssues = session.datasetIssues();
+    String controlRecordErrorCode = ImportValidationErrorCode.CONTROL_RECORD.code();
+    String controlRecordCountMismatchMessage = "control-record count mismatch, declared="
+        + declaredCount
+        + MSG_ACTUAL_SUFFIX
+        + actualCount;
+    Map<String, Object> controlRecordCountMismatchDetails =
+        Map.of("declared", declaredCount, KEY_ACTUAL, actualCount);
+    ValidationIssue controlRecordCountMismatchIssue = new ValidationIssue(
+        null,
+        controlRecordErrorCode,
+        controlRecordCountMismatchMessage,
+        controlRecordCountMismatchDetails);
+    datasetIssues.add(controlRecordCountMismatchIssue);
   }
 
   private void evaluateChecksum(
@@ -179,33 +211,41 @@ public class DatasetRuleEvaluator {
       List<ValidationIssue> datasetIssues,
       Set<String> appliedChecks) {
     Map<String, Object> rule = configSupport.firstMap(ruleSet, "checksumCheck", "checksum_check");
-    if (rule.isEmpty() || !enabled(rule)) {
+    boolean ruleIsNotConfiguredOrDisabled = EmptyChecks.isEmpty(Objects.requireNonNull(rule)) || !enabled(rule);
+    if (ruleIsNotConfiguredOrDisabled) {
       return;
     }
-    String configuredAlgorithm = stringValue(firstNonNull(
+    Object configuredAlgorithmValue = firstNonNull(
         rule.get("algorithm"),
         rule.get(PipelineRuntimeKeys.CHECKSUM_TYPE),
-        importPayload == null ? null : importPayload.checksumType()));
+        EmptyChecks.isNull(importPayload) ? null : importPayload.checksumType());
+    String configuredAlgorithm = stringValue(configuredAlgorithmValue);
     String algorithm =
         !Texts.hasText(configuredAlgorithm) || "NONE".equalsIgnoreCase(configuredAlgorithm)
             ? CryptoAlgorithms.SHA_256
             : configuredAlgorithm;
-    String expectedChecksum = stringValue(firstNonNull(
+    Object expectedChecksumValue = firstNonNull(
         rule.get("expected"),
         rule.get("expectedValue"),
-        importPayload == null ? null : importPayload.checksumValue()));
+        EmptyChecks.isNull(importPayload) ? null : importPayload.checksumValue());
+    String expectedChecksum = stringValue(expectedChecksumValue);
     if (!Texts.hasText(expectedChecksum) || normalizedPayload == null) {
       return;
     }
     appliedChecks.add("checksum_check");
     String actualChecksum = digest(algorithm, normalizedPayload);
     if (!expectedChecksum.equalsIgnoreCase(actualChecksum)) {
-      datasetIssues.add(new ValidationIssue(
+      String checksumErrorCode = ImportValidationErrorCode.CHECKSUM.code();
+      String checksumMismatchMessage =
+          "checksum mismatch, expected=" + expectedChecksum + MSG_ACTUAL_SUFFIX + actualChecksum;
+      Map<String, Object> checksumMismatchDetails = Map.of(
+          "algorithm", algorithm, "expected", expectedChecksum, KEY_ACTUAL, actualChecksum);
+      ValidationIssue checksumMismatchIssue = new ValidationIssue(
           null,
-          ImportValidationErrorCode.CHECKSUM.code(),
-          "checksum mismatch, expected=" + expectedChecksum + MSG_ACTUAL_SUFFIX + actualChecksum,
-          Map.of(
-              "algorithm", algorithm, "expected", expectedChecksum, KEY_ACTUAL, actualChecksum)));
+          checksumErrorCode,
+          checksumMismatchMessage,
+          checksumMismatchDetails);
+      datasetIssues.add(checksumMismatchIssue);
     }
   }
 
@@ -215,7 +255,8 @@ public class DatasetRuleEvaluator {
       List<ValidationIssue> datasetIssues,
       Set<String> appliedChecks) {
     Map<String, Object> rule = configSupport.firstMap(ruleSet, "schemaCheck", "schema_check");
-    if (rule.isEmpty() || !enabled(rule)) {
+    boolean ruleIsNotConfiguredOrDisabled = EmptyChecks.isEmpty(Objects.requireNonNull(rule)) || !enabled(rule);
+    if (ruleIsNotConfiguredOrDisabled) {
       return;
     }
     if (schemaFields.isEmpty()) {
@@ -225,20 +266,24 @@ public class DatasetRuleEvaluator {
     Set<String> actualFields = schemaFields.stream()
         .filter(Texts::hasText)
         .collect(Collectors.toCollection(LinkedHashSet::new));
-    List<String> requiredFields =
-        stringList(firstNonNull(rule.get("requiredFields"), rule.get("required_fields")));
-    List<String> allowedFields =
-        stringList(firstNonNull(rule.get("allowedFields"), rule.get("allowed_fields")));
+    Object requiredFieldsSetting =
+        firstNonNull(rule.get("requiredFields"), rule.get("required_fields"));
+    List<String> requiredFields = stringList(requiredFieldsSetting);
+    Object allowedFieldsSetting =
+        firstNonNull(rule.get("allowedFields"), rule.get("allowed_fields"));
+    List<String> allowedFields = stringList(allowedFieldsSetting);
     List<String> missingFields = requiredFields.stream()
         .filter(Texts::hasText)
         .filter(requiredField -> !actualFields.contains(requiredField))
         .toList();
     if (!missingFields.isEmpty()) {
-      datasetIssues.add(new ValidationIssue(
-          null,
-          ImportValidationErrorCode.SCHEMA.code(),
-          "schema missing required fields: " + String.join(",", missingFields),
-          Map.of("requiredFields", requiredFields, "actualFields", schemaFields)));
+      String errorCode = ImportValidationErrorCode.SCHEMA.code();
+      String missingFieldsText = String.join(",", missingFields);
+      String message = "schema missing required fields: " + missingFieldsText;
+      Map<String, Object> details =
+          Map.of("requiredFields", requiredFields, "actualFields", schemaFields);
+      ValidationIssue issue = new ValidationIssue(null, errorCode, message, details);
+      datasetIssues.add(issue);
       return;
     }
     if (!allowedFields.isEmpty()) {
@@ -247,11 +292,13 @@ public class DatasetRuleEvaluator {
           .filter(actualField -> !allowedFieldSet.contains(actualField))
           .toList();
       if (!unexpectedFields.isEmpty()) {
-        datasetIssues.add(new ValidationIssue(
-            null,
-            ImportValidationErrorCode.SCHEMA.code(),
-            "schema contains unexpected fields: " + String.join(",", unexpectedFields),
-            Map.of("allowedFields", allowedFields, "actualFields", schemaFields)));
+        String errorCode = ImportValidationErrorCode.SCHEMA.code();
+        String unexpectedFieldsText = String.join(",", unexpectedFields);
+        String message = "schema contains unexpected fields: " + unexpectedFieldsText;
+        Map<String, Object> details =
+            Map.of("allowedFields", allowedFields, "actualFields", schemaFields);
+        ValidationIssue issue = new ValidationIssue(null, errorCode, message, details);
+        datasetIssues.add(issue);
       }
     }
   }

@@ -6,13 +6,13 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.common.enums.PipelineType;
-import io.github.pinpols.batch.common.model.PageRequest;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.FileChannelSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.FileTemplateSpec;
@@ -33,13 +33,17 @@ import io.github.pinpols.batch.console.domain.notification.mapper.AlertRoutingCo
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantQuotaPolicyMapper;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
-import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
-import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineStepDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper;
+import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionVersionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
+import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionUpsertParam;
+import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionVersionInsertParam;
+import io.github.pinpols.batch.console.domain.workflow.query.WorkflowEdgeQuery;
+import io.github.pinpols.batch.console.domain.workflow.query.WorkflowNodeQuery;
+import io.github.pinpols.batch.console.infrastructure.workflow.DefaultSingleJobWorkflowProvisioner;
+import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionWriteSupport;
 import java.lang.reflect.Method;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -87,10 +91,10 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   private WorkflowEdgeMapper workflowEdgeMapper;
 
   @Mock
-  private PipelineDefinitionMapper pipelineDefinitionMapper;
+  private WorkflowDefinitionVersionMapper workflowDefinitionVersionMapper;
 
   @Mock
-  private PipelineStepDefinitionMapper pipelineStepDefinitionMapper;
+  private DefaultSingleJobWorkflowProvisioner singleJobWorkflowProvisioner;
 
   @Mock
   private FileChannelConfigMapper fileChannelConfigMapper;
@@ -122,12 +126,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   void setUp() {
     TenantConfigInitApplyHandlers handlers = new TenantConfigInitApplyHandlers(
         new TenantDefinitionConfigMappers(
-            jobDefinitionMapper,
-            workflowDefinitionMapper,
-            workflowNodeMapper,
-            workflowEdgeMapper,
-            pipelineDefinitionMapper,
-            pipelineStepDefinitionMapper),
+            jobDefinitionMapper, workflowDefinitionMapper, workflowNodeMapper, workflowEdgeMapper),
         new PlatformTransactionManager() {
           @Override
           public TransactionStatus getTransaction(TransactionDefinition definition) {
@@ -152,7 +151,13 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
             calendarHolidayMapper,
             tenantQuotaPolicyMapper,
             alertRoutingConfigMapper),
-        new JobMonitoringDefaultsProperties());
+        new JobMonitoringDefaultsProperties(),
+        new WorkflowDefinitionWriteSupport(
+            workflowNodeMapper,
+            workflowEdgeMapper,
+            workflowDefinitionVersionMapper,
+            new ObjectMapper()),
+        singleJobWorkflowProvisioner);
     service = new DefaultConsoleTenantConfigInitApplicationService(
         new TenantConfigInitTenantExecutor(handlers));
   }
@@ -216,6 +221,63 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
 
     service.batchInit(request, "admin", "batch-test-inc-nowm");
 
+    verify(jobDefinitionMapper, never()).insert(any());
+  }
+
+  @Test
+  @DisplayName("旧 Pipeline 初始化只迁移业务参数到 Job，不再写租户 Pipeline 定义")
+  void batchInit_migratesLegacyPipelineParametersIntoJobDefaults() {
+    TenantConfigBatchInitRequest request = requestWithJobDef("legacy-import", List.of("t1"));
+    request.getJobDefinitions().get(0).setJobType("IMPORT");
+    PipelineDefinitionSpec pipeline = new PipelineDefinitionSpec();
+    pipeline.setJobCode("legacy-import");
+    pipeline.setPipelineType("IMPORT");
+    pipeline.setVersion(4);
+    pipeline.setEnabled(true);
+    List<PipelineDefinitionSpec.StepSpec> steps = new java.util.ArrayList<>();
+    String[] stages = {"RECEIVE", "PREPROCESS", "PARSE", "VALIDATE", "LOAD", "FEEDBACK"};
+    for (int index = 0; index < stages.length; index++) {
+      PipelineDefinitionSpec.StepSpec step = new PipelineDefinitionSpec.StepSpec();
+      step.setStageCode(stages[index]);
+      step.setStepOrder(index + 1);
+      step.setStepParams(index == 0 ? "{\"businessOption\":\"kept\"}" : "{}");
+      step.setTimeoutSeconds(0);
+      step.setRetryPolicy("NONE");
+      step.setRetryMaxCount(0);
+      step.setEnabled(true);
+      steps.add(step);
+    }
+    pipeline.setSteps(steps);
+    request.setPipelineDefinitions(List.of(pipeline));
+    when(jobDefinitionMapper.selectByUniqueKey("t1", "legacy-import")).thenReturn(null);
+
+    TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-migrate");
+
+    assertThat(response.results().getFirst().pipelineDefinitions().migrated()).isEqualTo(1);
+    assertThat(response.results().getFirst().pipelineDefinitions().failed()).isZero();
+    verify(jobDefinitionMapper)
+        .insert(argThat(job -> job.getDefaultParams() != null
+            && job.getDefaultParams().contains("systemPipelineStepParams")
+            && job.getDefaultParams().contains("businessOption")
+            && job.getDefaultParams().contains("kept")));
+  }
+
+  @Test
+  @DisplayName("旧 Pipeline 初始化遇到类型不匹配时失败关闭且不迁移参数")
+  void batchInit_rejectsLegacyPipelineTypeMismatch() {
+    TenantConfigBatchInitRequest request = requestWithJobDef("legacy-import", List.of("t1"));
+    request.getJobDefinitions().get(0).setJobType("IMPORT");
+    PipelineDefinitionSpec pipeline = new PipelineDefinitionSpec();
+    pipeline.setJobCode("legacy-import");
+    pipeline.setPipelineType("EXPORT");
+    pipeline.setEnabled(true);
+    request.setPipelineDefinitions(List.of(pipeline));
+    when(jobDefinitionMapper.selectByUniqueKey("t1", "legacy-import")).thenReturn(null);
+
+    TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-invalid");
+
+    assertThat(response.results().getFirst().pipelineDefinitions().failed()).isEqualTo(1);
+    assertThat(response.results().getFirst().jobDefinitions().created()).isZero();
     verify(jobDefinitionMapper, never()).insert(any());
   }
 
@@ -406,93 +468,27 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   // ------------------------------------------------------------------ workflow definitions
 
   @Test
-  @DisplayName("流水线创建按固定完整阶段序列批量写入步骤并补齐默认值")
-  @SuppressWarnings({"rawtypes", "unchecked"})
-  void batchInit_createsPipelineWithCompleteOrderedStages() {
-    TenantConfigBatchInitRequest request = requestWithPipeline("pipeline-a", List.of("t1"));
-    when(pipelineDefinitionMapper.selectByQuery(
-            eq("t1"), eq("pipeline-a"), eq("IMPORT"), isNull(), any(PageRequest.class)))
-        .thenReturn(List.of());
-    when(pipelineDefinitionMapper.insert(any())).thenAnswer(invocation -> {
-      Map<String, Object> params = invocation.getArgument(0);
-      params.put("id", 101L);
-      return 1;
-    });
-
-    TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "pipeline-valid");
-
-    assertThat(response.results().get(0).pipelineDefinitions().created()).isEqualTo(1);
-    ArgumentCaptor<List> rowsCaptor = ArgumentCaptor.forClass(List.class);
-    verify(pipelineStepDefinitionMapper).insertBatch(rowsCaptor.capture());
-    List<?> rows = rowsCaptor.getValue();
-    assertThat(rows).hasSize(PipelineType.stages("IMPORT").size());
-    Map<?, ?> loadStep = (Map<?, ?>) rows.get(4);
-    assertThat(loadStep.get("pipeline_definition_id")).isEqualTo(101L);
-    assertThat(loadStep.get("step_order")).isEqualTo(4);
-    assertThat(loadStep.get("timeout_seconds")).isEqualTo(0);
-    assertThat(loadStep.get("retry_policy")).isEqualTo("NONE");
-    assertThat(loadStep.get("retry_max_count")).isEqualTo(0);
-    assertThat(loadStep.get("enabled")).isEqualTo(true);
-  }
-
-  @Test
-  @DisplayName("流水线阶段缺失、顺序不符或禁用固定阶段时拒绝写入")
-  void batchInit_rejectsInvalidPipelineStages() {
-    when(pipelineDefinitionMapper.selectByQuery(
-            anyString(), anyString(), any(), isNull(), any(PageRequest.class)))
-        .thenReturn(List.of());
-    List<PipelineDefinitionSpec> invalidSpecs = List.of(
-        pipelineSpec("pipeline-incomplete", PipelineType.stages("IMPORT").subList(0, 5)),
-        pipelineSpec("pipeline-order", PipelineType.stages("IMPORT")),
-        pipelineSpec("pipeline-disabled", PipelineType.stages("IMPORT")));
-    invalidSpecs.get(1).getSteps().get(1).setStepOrder(0);
-    invalidSpecs.get(2).getSteps().get(1).setEnabled(false);
-
-    for (PipelineDefinitionSpec spec : invalidSpecs) {
-      TenantConfigBatchInitRequest request = new TenantConfigBatchInitRequest();
-      request.setTargetTenantIds(List.of("t1"));
-      request.setPipelineDefinitions(List.of(spec));
-
-      TenantConfigBatchInitResponse response =
-          service.batchInit(request, "admin", "pipeline-invalid");
-
-      assertThat(response.results().get(0).pipelineDefinitions().failed()).isEqualTo(1);
-    }
-    verify(pipelineDefinitionMapper, never()).insert(any());
-    verify(pipelineStepDefinitionMapper, never()).insertBatch(any());
-  }
-
-  @Test
-  @DisplayName("覆盖流水线时按既有类型校验阶段并替换已配置步骤")
-  void batchInit_updatesPipelineAndReplacesStages() {
-    TenantConfigBatchInitRequest request = requestWithPipeline("pipeline-a", List.of("t1"));
-    request.setMode(InitMode.UPSERT);
-    PipelineDefinitionSpec spec = request.getPipelineDefinitions().getFirst();
-    spec.setPipelineType(null);
-    Map<String, Object> existing = Map.of(
-        "id", 101L,
-        "pipeline_type", "IMPORT",
-        "pipeline_name", "Existing pipeline",
-        "biz_type", "settlement",
-        "worker_group", "default",
-        "enabled", true,
-        "description", "existing");
-    when(pipelineDefinitionMapper.selectByQuery(
-            eq("t1"), eq("pipeline-a"), isNull(), isNull(), any(PageRequest.class)))
-        .thenReturn(List.of(existing));
-    TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "pipeline-update");
-
-    assertThat(response.results().get(0).pipelineDefinitions().updated()).isEqualTo(1);
-    verify(pipelineDefinitionMapper)
-        .update(argThat(params -> "IMPORT".equals(params.get("pipeline_type"))));
-    verify(pipelineStepDefinitionMapper).deleteByPipelineDefinitionId(101L);
-    verify(pipelineStepDefinitionMapper).insertBatch(any());
-  }
-
-  @Test
   @DisplayName("工作流定义不存在时,新建并计入创建数")
   void batchInit_createsWorkflowWhenNotExists() {
     TenantConfigBatchInitRequest request = requestWithWorkflow("wf-1", List.of("t1"));
+    lenient()
+        .when(workflowNodeMapper.selectByQuery(any(WorkflowNodeQuery.class)))
+        .thenReturn(List.of());
+    lenient()
+        .when(workflowEdgeMapper.selectByQuery(any(WorkflowEdgeQuery.class)))
+        .thenReturn(List.of());
+    WorkflowDefinitionSpec spec = request.getWorkflowDefinitions().get(0);
+    spec.setScheduleType("CRON");
+    spec.setScheduleExpr("0 0 2 * * *");
+    spec.setTimezone("Asia/Shanghai");
+    spec.setTriggerMode("SCHEDULED");
+    spec.setScheduleEnabled(true);
+    spec.setSingleJobCode("job-1");
+    JobDefinitionEntity managedJob = new JobDefinitionEntity();
+    managedJob.setId(51L);
+    managedJob.setJobCode("job-1");
+    when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1")).thenReturn(managedJob);
+    when(workflowDefinitionMapper.selectByQuery(any())).thenReturn(List.of());
     when(workflowDefinitionMapper.selectByUniqueKey("t1", "wf-1", 1)).thenReturn(null);
     // After upsert, simulate saved entity
     WorkflowDefinitionEntity saved = new WorkflowDefinitionEntity();
@@ -506,7 +502,13 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
 
     assertThat(response.results().get(0).workflowDefinitions().created()).isEqualTo(1);
-    verify(workflowDefinitionMapper).upsertWorkflowDefinition(any());
+    ArgumentCaptor<WorkflowDefinitionUpsertParam> paramCaptor =
+        ArgumentCaptor.forClass(WorkflowDefinitionUpsertParam.class);
+    verify(workflowDefinitionMapper).upsertWorkflowDefinition(paramCaptor.capture());
+    assertThat(paramCaptor.getValue().getScheduleType()).isEqualTo("CRON");
+    assertThat(paramCaptor.getValue().getScheduleExpr()).isEqualTo("0 0 2 * * *");
+    assertThat(paramCaptor.getValue().getScheduleEnabled()).isTrue();
+    assertThat(paramCaptor.getValue().getSingleJobDefinitionId()).isEqualTo(51L);
   }
 
   @Test
@@ -515,12 +517,78 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     TenantConfigBatchInitRequest request = requestWithWorkflow("wf-1", List.of("t1"));
     WorkflowDefinitionEntity existing = new WorkflowDefinitionEntity();
     existing.setId(1L);
-    when(workflowDefinitionMapper.selectByUniqueKey("t1", "wf-1", 1)).thenReturn(existing);
+    when(workflowDefinitionMapper.selectByQuery(any())).thenReturn(List.of(existing));
 
     TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
 
     assertThat(response.results().get(0).workflowDefinitions().skipped()).isEqualTo(1);
     verify(workflowDefinitionMapper, never()).upsertWorkflowDefinition(any());
+  }
+
+  @Test
+  @DisplayName("覆盖工作流定义时以目标版本CAS递增并保存调度快照")
+  void batchInit_updatesWorkflowVersionAndSnapshotInUpsertMode() {
+    TenantConfigBatchInitRequest request = requestWithWorkflow("wf-1", List.of("t1"));
+    request.setMode(InitMode.UPSERT);
+    request.getWorkflowDefinitions().getFirst().setSingleJobCode("JOB_A");
+    WorkflowDefinitionEntity existing = new WorkflowDefinitionEntity();
+    existing.setId(21L);
+    existing.setWorkflowCode("TARGET-WF-55");
+    existing.setWorkflowName("Existing workflow");
+    existing.setWorkflowType("DAG");
+    existing.setVersion(3);
+    existing.setEnabled(true);
+    JobDefinitionEntity managedJob = new JobDefinitionEntity();
+    managedJob.setId(70L);
+    managedJob.setJobCode("JOB_A");
+    when(jobDefinitionMapper.selectByUniqueKey("t1", "JOB_A")).thenReturn(managedJob);
+    when(workflowDefinitionMapper.selectById("t1", 21L)).thenReturn(existing);
+    when(workflowDefinitionMapper.selectBySingleJobDefinitionId("t1", 70L)).thenReturn(existing);
+    when(workflowDefinitionMapper.upsertWorkflowDefinition(any())).thenReturn(1);
+    when(workflowDefinitionMapper.updateAndBumpVersion(
+            anyString(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any()))
+        .thenReturn(1);
+
+    TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-upsert");
+
+    assertThat(response.results().getFirst().workflowDefinitions().updated()).isEqualTo(1);
+    ArgumentCaptor<WorkflowDefinitionVersionInsertParam> snapshotCaptor =
+        ArgumentCaptor.forClass(WorkflowDefinitionVersionInsertParam.class);
+    verify(workflowDefinitionVersionMapper).insertVersionSnapshot(snapshotCaptor.capture());
+    assertThat(snapshotCaptor.getValue().getVersion()).isEqualTo(4);
+    assertThat(snapshotCaptor.getValue().getWorkflowCode()).isEqualTo("TARGET-WF-55");
+    ArgumentCaptor<WorkflowDefinitionUpsertParam> upsertCaptor =
+        ArgumentCaptor.forClass(WorkflowDefinitionUpsertParam.class);
+    verify(workflowDefinitionMapper).upsertWorkflowDefinition(upsertCaptor.capture());
+    assertThat(upsertCaptor.getValue().getWorkflowCode()).isEqualTo("TARGET-WF-55");
+    assertThat(upsertCaptor.getValue().getSingleJobDefinitionId()).isEqualTo(70L);
+    verify(workflowDefinitionMapper)
+        .updateAndBumpVersion(
+            eq("t1"),
+            eq(21L),
+            eq(3),
+            eq("Existing workflow"),
+            eq("DAG"),
+            eq(true),
+            eq(false),
+            eq("MANUAL"),
+            isNull(),
+            eq("Asia/Shanghai"),
+            eq("MANUAL"),
+            isNull(),
+            isNull());
   }
 
   // ------------------------------------------------------------------ dry-run & batchOperationId
@@ -589,35 +657,6 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     spec.setEnabled(true);
     request.setFileTemplates(List.of(spec));
     return request;
-  }
-
-  private TenantConfigBatchInitRequest requestWithPipeline(String jobCode, List<String> tenants) {
-    TenantConfigBatchInitRequest request = new TenantConfigBatchInitRequest();
-    request.setTargetTenantIds(tenants);
-    request.setPipelineDefinitions(List.of(pipelineSpec(jobCode, PipelineType.stages("IMPORT"))));
-    return request;
-  }
-
-  private PipelineDefinitionSpec pipelineSpec(String jobCode, List<String> stages) {
-    PipelineDefinitionSpec spec = new PipelineDefinitionSpec();
-    spec.setJobCode(jobCode);
-    spec.setPipelineName("Pipeline " + jobCode);
-    spec.setPipelineType("IMPORT");
-    spec.setBizType("settlement");
-    spec.setWorkerGroup("default");
-    List<PipelineDefinitionSpec.StepSpec> steps = new ArrayList<>();
-    for (int index = 0; index < stages.size(); index++) {
-      String stage = stages.get(index);
-      PipelineDefinitionSpec.StepSpec step = new PipelineDefinitionSpec.StepSpec();
-      step.setStepCode(stage);
-      step.setStepName(stage);
-      step.setStageCode(stage);
-      step.setStepOrder(index);
-      step.setImplCode("IMPORT_" + stage);
-      steps.add(step);
-    }
-    spec.setSteps(steps);
-    return spec;
   }
 
   private TenantConfigBatchInitRequest requestWithWorkflow(

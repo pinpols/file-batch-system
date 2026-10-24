@@ -40,11 +40,4 @@ public interface PipelineDefinitionMapper {
    * BE Spike(workflow-dag-designer): 下拉数据源,仅 enabled=true,按 jobCode 升序返回 (jobCode, pipelineName)。
    */
   List<Map<String, Object>> selectActiveCodeNames(@Param("tenantId") String tenantId);
-
-  /**
-   * MVP DAG 回退校验:FILE_STEP.related_pipeline_code 是否在同租户 pipeline_definition 存在(任意 enabled)。
-   *
-   * <p>单一查询 method:返回该 jobCode 在同租户下的记录数,>0 即存在。
-   */
-  long countByJobCode(@Param("tenantId") String tenantId, @Param("jobCode") String jobCode);
 }

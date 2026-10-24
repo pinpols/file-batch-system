@@ -16,7 +16,7 @@
 #     + 5 跳传递闭包,见 select-affected-tests.py。
 #
 # 这是 POC 脚本,**不接入 pr-gate.yml**,待人工 review 后再决定是否启用。
-# 详见 docs/runbook/tia-poc-2026-05-22.md。
+# 详见 docs/archive/testing/tia-poc-2026-05-22.md。
 
 set -euo pipefail
 

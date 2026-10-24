@@ -1,0 +1,3 @@
+interface:
+  display_name: "脚本与 SQL 治理"
+  short_description: "审查 Shell、Python 和独立 SQL 的可移植性、配置来源、幂等及失败处理"

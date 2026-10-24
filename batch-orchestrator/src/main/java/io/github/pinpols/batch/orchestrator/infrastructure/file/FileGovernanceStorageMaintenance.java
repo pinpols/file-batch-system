@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.file;
 
 import io.github.pinpols.batch.common.enums.FileStatus;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.storage.ObjectNotFoundException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.FileStateMachine;
 import io.github.pinpols.batch.orchestrator.config.FileGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.S3GovernanceStorage.StorageObjectView;
@@ -37,7 +39,9 @@ final class FileGovernanceStorageMaintenance {
         repository.selectArchivedFilesForCleanup(
             cutoff, properties.getArchive().getCleanupBatchSize());
     for (FileGovernanceMaintenanceViews.ArchivedFileCleanupView file : files) {
-      cleanupArchivedFile(file);
+      if (EmptyChecks.isNotNull(file)) {
+        RlsTenantContextHolder.runWithTenant(file.tenantId(), () -> cleanupArchivedFile(file));
+      }
     }
   }
 
@@ -55,7 +59,10 @@ final class FileGovernanceStorageMaintenance {
     long cleaned = 0L;
     long skipped = 0L;
     for (FileGovernanceMaintenanceViews.OrphanUploadSessionView session : sessions) {
-      if (cleanupOrphanUploadSession(session)) {
+      boolean didCleanup = EmptyChecks.isNotNull(session)
+          && RlsTenantContextHolder.runWithTenant(
+              session.tenantId(), () -> cleanupOrphanUploadSession(session));
+      if (didCleanup) {
         cleaned++;
       } else {
         skipped++;
@@ -79,7 +86,8 @@ final class FileGovernanceStorageMaintenance {
         properties.getReconcile().getBatchSize(),
         properties.getReconcile().isIncludeTemporaryObjects());
     for (StorageObjectView object : objects) {
-      reconcileObject(object);
+      RlsTenantContextHolder.runWithTenant(
+          properties.getReconcile().getDefaultTenantId(), () -> reconcileObject(object));
     }
   }
 
@@ -228,10 +236,12 @@ final class FileGovernanceStorageMaintenance {
     String fileCategory = resolveFileCategory(object.objectName());
     String fileStatus = resolveFileStatus(fileCategory);
     String traceId = "reconcile-" + sanitizeTrace(fileName);
+    String fileFormatType = resolveFileFormatType(fileName);
     FileGovernanceRepository.FileIdentity fileIdentity = new FileGovernanceRepository.FileIdentity(
-        tenantId, fileCategory, fileName, resolveFileFormatType(fileName));
+        tenantId, fileCategory, fileName, fileFormatType);
     FileGovernanceRepository.FileStorage fileStorage =
         new FileGovernanceRepository.FileStorage("S3", object.objectName(), object.bucket());
+    Map<String, Object> reconcileMetadata = buildReconcileMetadata(object);
     FileGovernanceRepository.ReconciledFileRecordCommand recordCommand =
         new FileGovernanceRepository.ReconciledFileRecordCommand(
             fileIdentity,
@@ -240,7 +250,7 @@ final class FileGovernanceStorageMaintenance {
             ACTOR_SYSTEM,
             fileStatus,
             traceId,
-            buildReconcileMetadata(object));
+            reconcileMetadata);
     Long fileId = repository.createReconciledFileRecord(recordCommand);
     FileGovernanceRepository.FileAuditCommand auditCommand =
         new FileGovernanceRepository.FileAuditCommand(
@@ -254,7 +264,7 @@ final class FileGovernanceStorageMaintenance {
     repository.appendAudit(auditCommand);
   }
 
-  private Object buildReconcileMetadata(StorageObjectView object) {
+  private Map<String, Object> buildReconcileMetadata(StorageObjectView object) {
     Map<String, Object> metadata = new LinkedHashMap<>();
     metadata.put("reconciled", true);
     metadata.put("etag", object.etag());

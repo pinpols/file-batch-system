@@ -17,5 +17,7 @@ public interface ConsoleConfigSyncApplicationService {
 
   ConfigSyncImportResponse importBundle(ConfigSyncImportRequest request);
 
+  ConfigSyncLogResponse reconcile(String tenantId, Long logId);
+
   PageResponse<ConfigSyncLogResponse> logs(String tenantId, int pageNo, int pageSize);
 }

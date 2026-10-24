@@ -126,6 +126,7 @@ public final class WorkflowDefinitionWriteSupport {
       String workflowCode,
       Integer version,
       WorkflowDefinitionSaveRequest body,
+      Boolean scheduleEnabled,
       String savedBy) {
     List<WorkflowNodeEntity> nodes =
         nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, definitionId, null));
@@ -139,6 +140,13 @@ public final class WorkflowDefinitionWriteSupport {
     param.setWorkflowName(body.getWorkflowName());
     param.setWorkflowType(body.getWorkflowType());
     param.setEnabled(body.getEnabled());
+    param.setScheduleEnabled(scheduleEnabled);
+    param.setScheduleType(body.getScheduleType());
+    param.setScheduleExpr(body.getScheduleExpr());
+    param.setTimezone(body.getTimezone());
+    param.setTriggerMode(body.getTriggerMode());
+    param.setCalendarCode(body.getCalendarCode());
+    param.setDependsOnJobCode(body.getDependsOnJobCode());
     try {
       param.setNodesJson(objectMapper.writeValueAsString(nodes));
       param.setEdgesJson(objectMapper.writeValueAsString(edges));

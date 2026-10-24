@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.validation.ValidResourceCode;
 import io.github.pinpols.batch.common.validation.ValidTenantId;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
@@ -17,6 +18,10 @@ public class TriggerLaunchRequest {
 
   @ValidResourceCode
   private String jobCode;
+
+  /** Explicit top-level Workflow target; mutually exclusive with {@code jobCode}. */
+  @Positive(message = "workflowDefinitionId must be positive")
+  private Long workflowDefinitionId;
 
   @NotNull(message = "bizDate is required")
   private LocalDate bizDate;
@@ -36,4 +41,7 @@ public class TriggerLaunchRequest {
 
   /** ADR-026 dry-run 演练模式；true = 不副作用（不写业务表 / 不发外部 IO / 不进 EFFECTIVE 链）。null/false 默认实盘。 */
   private Boolean dryRun;
+
+  /** Event identity for EVENT launches originating from an external event source. */
+  private String externalEventCode;
 }

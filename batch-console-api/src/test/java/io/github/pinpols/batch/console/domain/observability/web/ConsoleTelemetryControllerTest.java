@@ -8,12 +8,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -63,7 +65,7 @@ class ConsoleTelemetryControllerTest {
   @DisplayName("遥测日志不写入调用方提供的事件名称和页面内容")
   void shouldNotLogCallerControlledTelemetryText() throws Exception {
     Logger logger = (Logger) LoggerFactory.getLogger(ConsoleTelemetryController.class);
-    ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> appender = new ListAppender<>();
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
     appender.start();
     logger.addAppender(appender);
     try {
@@ -80,9 +82,9 @@ class ConsoleTelemetryControllerTest {
     }
 
     String logged = appender.list.stream()
-        .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
+        .map(ILoggingEvent::getFormattedMessage)
         .reduce("", (left, right) -> left + right);
-    org.assertj.core.api.Assertions.assertThat(logged)
+    Assertions.assertThat(logged)
         .contains("nameLength=12", "pagePresent=true")
         .doesNotContain("secret-value", "page-secret", "token=");
   }

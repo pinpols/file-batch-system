@@ -1,4 +1,5 @@
 -- AI 图片是私有加密对象；数据库只保存元数据和持久化清理意图。
+
 ALTER TABLE batch.console_ai_turn ADD COLUMN client_turn_id UUID;
 CREATE UNIQUE INDEX uk_console_ai_turn_client_id
     ON batch.console_ai_turn (tenant_id, client_turn_id) WHERE client_turn_id IS NOT NULL;

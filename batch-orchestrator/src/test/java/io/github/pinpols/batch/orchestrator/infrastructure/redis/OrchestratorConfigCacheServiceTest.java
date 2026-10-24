@@ -162,6 +162,23 @@ class OrchestratorConfigCacheServiceTest {
   }
 
   @Test
+  @DisplayName("单作业 Workflow 按显式 Job 定义 ID 查找并使用短期本地缓存")
+  void shouldResolveSingleJobWorkflowByDefinitionId() {
+    WorkflowDefinitionEntity workflow =
+        new WorkflowDefinitionEntity(91L, "t1", "JOB-WF-41", "Job Workflow", "DAG", 1, true, 41L);
+    when(workflowDefinitionMapper.selectFirstByTenantAndSingleJobDefinitionIdAndEnabled(
+            "t1", 41L, true))
+        .thenReturn(workflow);
+
+    assertThat(service.findEnabledSingleJobWorkflowDefinition("t1", 41L)).isSameAs(workflow);
+    assertThat(service.findEnabledSingleJobWorkflowDefinition("t1", 41L)).isSameAs(workflow);
+
+    verify(workflowDefinitionMapper)
+        .selectFirstByTenantAndSingleJobDefinitionIdAndEnabled("t1", 41L, true);
+    verify(redis, never()).getJson(anyString(), eq(WorkflowDefinitionEntity.class));
+  }
+
+  @Test
   @DisplayName("按工作流定义类型清除本地缓存后重新读取")
   void shouldReloadWorkflowDefinition_whenTypeCacheEvicted() {
     WorkflowDefinitionEntity fromDb = workflowDefinitionRecord("t1", "WF1");

@@ -30,8 +30,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
-/** P1: ConsolePipelineDefinitionController CRUD 行为(原 ValidationTest 仅守 @ValidResourceCode)。 */
-@DisplayName("流水线定义控制器行为: 列表筛选、明细查询、新建、更新与启停的委托与响应")
+/** Pipeline definition reads remain available; tenant-owned writes are retired. */
+@DisplayName("流水线定义控制器行为: 读取保留，租户定义写入退役")
 class ConsolePipelineDefinitionControllerBehaviorTest {
 
   private final PipelineDefinitionService service = mock(PipelineDefinitionService.class);
@@ -88,43 +88,43 @@ class ConsolePipelineDefinitionControllerBehaviorTest {
   }
 
   @Test
-  @DisplayName("新建流水线定义时, 响应体返回落库后的明细标识")
-  void shouldReturnPersistedDetail_whenCreatingPipeline() throws Exception {
-    when(service.create(any(PipelineDefinitionSaveRequest.class)))
-        .thenReturn(detailFixture(11L, "JOB_NEW"));
+  @DisplayName("新建流水线定义被拒绝并提示按作业类型使用系统流水线")
+  void rejectsCreate_whenTenantPipelineDefinitionsAreRetired() throws Exception {
     mockMvc
         .perform(
             post("/api/console/pipeline-definitions")
                 .contentType(APPLICATION_JSON)
                 .content(
                     "{\"tenantId\":\"ta\",\"jobCode\":\"JOB_NEW\",\"pipelineName\":\"p\",\"pipelineType\":\"IMPORT\"}"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.id").value(11));
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("STATE_CONFLICT"));
+    verify(service, org.mockito.Mockito.never()).create(any(PipelineDefinitionSaveRequest.class));
   }
 
   @Test
-  @DisplayName("更新流水线定义时, 路径标识作为入参传给服务")
-  void shouldPassPathId_whenUpdatingPipeline() throws Exception {
-    when(service.update(eq(7L), any(PipelineDefinitionSaveRequest.class)))
-        .thenReturn(detailFixture(7L, "JOB_U"));
+  @DisplayName("更新流水线定义被拒绝且不调用写服务")
+  void rejectsUpdate_whenTenantPipelineDefinitionsAreRetired() throws Exception {
     mockMvc
         .perform(
             put("/api/console/pipeline-definitions/7")
                 .contentType(APPLICATION_JSON)
                 .content(
                     "{\"tenantId\":\"ta\",\"jobCode\":\"JOB_U\",\"pipelineName\":\"p\",\"pipelineType\":\"IMPORT\"}"))
-        .andExpect(status().isOk());
-    verify(service).update(eq(7L), any(PipelineDefinitionSaveRequest.class));
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("STATE_CONFLICT"));
+    verify(service, org.mockito.Mockito.never())
+        .update(eq(7L), any(PipelineDefinitionSaveRequest.class));
   }
 
   @Test
-  @DisplayName("启停流水线定义时, 服务收到路径标识、租户与目标状态")
-  void shouldDelegateToggle_whenSettingEnabled() throws Exception {
+  @DisplayName("启停流水线定义被拒绝且不调用写服务")
+  void rejectsToggle_whenTenantPipelineDefinitionsAreRetired() throws Exception {
     mockMvc
         .perform(patch("/api/console/pipeline-definitions/9/enabled")
             .contentType(APPLICATION_JSON)
             .content("{\"tenantId\":\"ta\",\"enabled\":true}"))
-        .andExpect(status().isOk());
-    verify(service).toggle(9L, "ta", true);
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("STATE_CONFLICT"));
+    verify(service, org.mockito.Mockito.never()).toggle(9L, "ta", true);
   }
 }

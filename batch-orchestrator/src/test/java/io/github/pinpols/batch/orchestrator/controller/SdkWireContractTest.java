@@ -345,9 +345,7 @@ class SdkWireContractTest {
     assertThat(tree.get("schemaVersion").asText()).isEqualTo("v2");
 
     // SDK 端反序列化能识别 schemaVersion 且认可 v2。
-    io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage sdk = MAPPER.readValue(
-        MAPPER.writeValueAsBytes(platform),
-        io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage.class);
+    var sdk = SdkTaskDispatchMessageReader.read(MAPPER, MAPPER.writeValueAsBytes(platform));
     assertThat(sdk.schemaVersion()).isEqualTo("v2");
     assertThat(sdk.isSchemaSupported()).isTrue();
   }
@@ -383,18 +381,15 @@ class SdkWireContractTest {
     assertThat(tree.get("workerType").asText()).isEqualTo("echo");
 
     // SDK 反序列化后,handler 路由键 taskType() 必须等于平台的 workerType —— 否则 handlers.get() 必拿 null。
-    io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage sdk = MAPPER.readValue(
-        MAPPER.writeValueAsBytes(platform),
-        io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage.class);
+    var sdk = SdkTaskDispatchMessageReader.read(MAPPER, MAPPER.writeValueAsBytes(platform));
     assertThat(sdk.taskType())
         .as("平台 workerType 必须绑定到 SDK handler 路由键 taskType()")
         .isEqualTo("echo");
     assertThat(sdk.taskId()).isEqualTo(42L);
 
     // 向后兼容:v1 旧字段名 `taskType` 经 @JsonAlias 仍能被 SDK 解析为同一路由键。
-    io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage legacy = MAPPER.readValue(
-        "{\"schemaVersion\":\"v1\",\"taskId\":7,\"taskType\":\"echo\"}",
-        io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage.class);
+    var legacy = SdkTaskDispatchMessageReader.read(
+        MAPPER, "{\"schemaVersion\":\"v1\",\"taskId\":7,\"taskType\":\"echo\"}");
     assertThat(legacy.taskType()).isEqualTo("echo");
   }
 }

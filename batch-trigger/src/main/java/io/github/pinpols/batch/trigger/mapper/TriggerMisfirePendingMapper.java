@@ -37,7 +37,7 @@ public interface TriggerMisfirePendingMapper {
 
   TriggerMisfirePendingEntity selectBySchedule(
       @Param("tenantId") String tenantId,
-      @Param("jobCode") String jobCode,
+      @Param("workflowDefinitionId") Long workflowDefinitionId,
       @Param("scheduledFireTime") Instant scheduledFireTime);
 
   /** 待审列表(给 console UI 展示用)。 */
@@ -93,4 +93,13 @@ public interface TriggerMisfirePendingMapper {
       @Param("now") Instant now,
       @Param("targetStatus") String targetStatus,
       @Param("expectedStatus") String expectedStatus);
+
+  /** Expire pending rows and converge their still-unlaunched request and occurrence atomically. */
+  int expireAndCloseUnlaunched(@Param("now") Instant now);
+
+  /** Converge pending rows whose central CATCH_UP approval has been rejected. */
+  int rejectAndCloseCentrallyRejected();
+
+  /** Converge pending rows whose central CATCH_UP approval has been approved or executed. */
+  int approveCentrallyApproved();
 }

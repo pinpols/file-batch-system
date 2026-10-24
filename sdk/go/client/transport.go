@@ -79,7 +79,8 @@ func NewReportRequest(taskID, tenantID, workerID, partitionInvocationID string, 
 	if err != nil {
 		// map[string]string 的 json.Marshal 实际不会失败;兜底 payload 同样取自规范常量,
 		// 不另写一份字面量。
-		summaryJSON = []byte(fmt.Sprintf(`{"code":%q,"message":""}`, protocol.ErrorCodeSuccess))
+		fallbackSummaryJSONText := fmt.Sprintf(`{"code":%q,"message":""}`, protocol.ErrorCodeSuccess)
+		summaryJSON = []byte(fallbackSummaryJSONText)
 	}
 	return ReportRequest{
 		TaskID:                taskID,
@@ -138,6 +139,8 @@ type HeartbeatRequest struct {
 
 // ClaimResult carries the EffectiveTaskConfig snapshot + lease bound.
 type ClaimResult struct {
+	// Payload is the authoritative business-parameter JSON read from the persisted task at claim time.
+	Payload               string         `json:"payload"`
 	EffectiveConfig       map[string]any `json:"effectiveConfig"`
 	LeaseUntil            string         `json:"leaseUntil"`
 	TraceID               string         `json:"traceId"`
@@ -314,8 +317,10 @@ func NewHTTPTransport(baseURL string, opts ...HTTPTransportOption) *HTTPTranspor
 	if v := os.Getenv("BATCH_SDK_TENANT_ID"); v != "" {
 		t.tenantID = v
 	}
-	if v := strings.TrimSpace(os.Getenv("BATCH_SDK_REQUEST_SIGNING_ENABLED")); v != "" {
-		t.requestSigningEnabled = parseSdkBool(v)
+	rawSigningEnabled := os.Getenv("BATCH_SDK_REQUEST_SIGNING_ENABLED")
+	signingEnabled := strings.TrimSpace(rawSigningEnabled)
+	if signingEnabled != "" {
+		t.requestSigningEnabled = parseSdkBool(signingEnabled)
 	}
 	for _, o := range opts {
 		o(t)
@@ -376,7 +381,8 @@ func (t *HTTPTransport) doJSON(ctx context.Context, method, path string, body an
 		// 请求签名(方案 A, opt-in):仅对写请求(POST/PUT/PATCH/DELETE)且开关开启
 		// 且有 api_key 时附加。timestamp/nonce/signature 与服务端逐字节一致。
 		if t.requestSigningEnabled && isWriteMethod(method) {
-			timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
+			timestampMillis := time.Now().UnixMilli()
+			timestamp := strconv.FormatInt(timestampMillis, 10)
 			nonce := newNonce()
 			sig := signRequest(t.apiKey, method, path, timestamp, nonce, payload)
 			req.Header.Set(HeaderSignatureTimestamp, timestamp)
@@ -405,7 +411,8 @@ func (t *HTTPTransport) call(ctx context.Context, method, path string, body any,
 	if attempts <= 0 {
 		attempts = protocol.DefaultRetryMaxAttempts
 	}
-	backoff := protocol.ExponentialBackoff(firstPositive(baseMs, protocol.DefaultRetryBaseMs), attempts)
+	effectiveBaseMs := firstPositive(baseMs, protocol.DefaultRetryBaseMs)
+	backoff := protocol.ExponentialBackoff(effectiveBaseMs, attempts)
 	// wire-protocol §C: heartbeat / renew are periodic ticks — a single failure
 	// waits for the next tick, NO internal backoff (fixture 25). retryable=false
 	// caps the loop at a single attempt without changing ClassifyHTTP semantics.
@@ -434,7 +441,8 @@ func (t *HTTPTransport) call(ctx context.Context, method, path string, body any,
 			status = 0 // transport error -> classify as retryable
 		}
 
-		decision := protocol.ClassifyHTTP(status, int(t.clientErrorCount.Load()), baseMs, attempts)
+		clientErrorCount := int(t.clientErrorCount.Load())
+		decision := protocol.ClassifyHTTP(status, clientErrorCount, baseMs, attempts)
 		switch decision.Action {
 		case "success":
 			return raw, false, nil

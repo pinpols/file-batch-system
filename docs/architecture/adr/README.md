@@ -54,6 +54,8 @@
 | 044 | [ADR-044-instance-pause-resume-batch-day-serial.md](./ADR-044-instance-pause-resume-batch-day-serial.md) | 实例/工作流 pause-resume 决策；`PAUSED` 状态与相关 API/派发约束已存在，完整业务场景和并发验收需以专项测试报告为准 |
 | 045 | [ADR-045-console-ai-ops-assistant.md](./ADR-045-console-ai-ops-assistant.md) | 控制台 AI 运维助手定位:只读问答(指路 + 取数)、默认关、不裁定业务对错/不写状态/不进主链、可无损下沉移除（Accepted） |
 | 046 | [ADR-046-file-bundle-aggregation.md](./ADR-046-file-bundle-aggregation.md) | 文件束聚合；基础迁移、编排入口和集成测试已存在，完整 profile 覆盖及性能结论仍按专项测试/压测分别确认 |
+| 047 | [ADR-047-workflow-scheduling-and-daily-obligations.md](./ADR-047-workflow-scheduling-and-daily-obligations.md) | 历史共同契约；Superseded by ADR-048，旧兼容及旧库升级要求已退出范围 |
+| 048 | [ADR-048-workflow-fresh-database-cutover.md](./ADR-048-workflow-fresh-database-cutover.md) | 当前契约 2026-10-14.2：全新库、单一 Workflow 运行、停旧启新；保留新模型恢复，联合验收待完成 |
 
 ### 历史优先级与范围边界
 

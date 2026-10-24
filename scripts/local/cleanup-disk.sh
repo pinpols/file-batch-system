@@ -35,7 +35,7 @@ usage() {
   --include-anonymous-volumes   同时处理无引用的 Docker 匿名卷
   --include-run-logs            同时处理 logs/runs 下的历史运行目录
   --include-build-artifacts     同时处理仓库内 Maven target 目录
-  --include-app-logs            同时清理 logs/archive/app 下的历史应用归档日志
+  --include-app-logs            同时清理 logs/archive/app-<component> 下的历史应用归档日志
   --include-observability-volumes 同时清理本地观测栈命名卷
   --include-build-cache         清理超过保留期的 BuildKit 缓存
   --all-build-cache             清理全部未使用的 BuildKit 缓存，忽略保留周期

@@ -77,11 +77,14 @@ public class BatchTimezoneProvider {
     try {
       return ZoneId.of(text);
     } catch (DateTimeException invalid) {
+      String preferredText = text;
+      ZoneId fallbackZone = defaultZone;
+      String causeSummary = SwallowedExceptionLogger.summary(invalid);
       log.warn(
           "invalid preferred timezone='{}', falling back to default {}: {}",
-          text,
-          defaultZone,
-          SwallowedExceptionLogger.summary(invalid));
+          preferredText,
+          fallbackZone,
+          causeSummary);
       return defaultZone;
     }
   }

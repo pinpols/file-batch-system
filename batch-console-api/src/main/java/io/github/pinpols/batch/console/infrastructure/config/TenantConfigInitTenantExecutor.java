@@ -5,12 +5,16 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.InitMode;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.JobDefinitionSpec;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.ItemStats;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.TenantInitResult;
 import io.github.pinpols.batch.console.infrastructure.config.DefaultConsoleTenantConfigInitApplicationService.StrictBundleAbortedException;
 import io.github.pinpols.batch.console.infrastructure.config.TenantConfigInitApplyHandlers.ApplyContext;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,9 +47,12 @@ class TenantConfigInitTenantExecutor {
     ItemStats quotaStats;
     ItemStats alertStats;
     try {
-      jobStats = applyHandlers.applyJobDefinitions(request.getJobDefinitions(), ctx);
+      List<JobDefinitionSpec> jobSpecs = copyJobSpecs(request.getJobDefinitions());
+      pipelineStats = applyHandlers.migrateLegacyPipelineDefinitions(
+          jobSpecs, request.getPipelineDefinitions(), ctx);
+      jobStats = applyHandlers.applyJobDefinitions(jobSpecs, ctx);
       workflowStats = applyHandlers.applyWorkflowDefinitions(request.getWorkflowDefinitions(), ctx);
-      pipelineStats = applyHandlers.applyPipelineDefinitions(request.getPipelineDefinitions(), ctx);
+      applyHandlers.ensureManagedSingleJobWorkflows(jobSpecs, tenantId);
       channelStats = applyHandlers.applyFileChannels(request.getFileChannels(), ctx);
       templateStats = applyHandlers.applyFileTemplates(request.getFileTemplates(), ctx);
       queueStats = applyHandlers.applyResourceQueues(request.getResourceQueues(), ctx);
@@ -90,5 +97,18 @@ class TenantConfigInitTenantExecutor {
         calendarStats,
         quotaStats,
         alertStats);
+  }
+
+  private static List<JobDefinitionSpec> copyJobSpecs(List<JobDefinitionSpec> source) {
+    if (source == null || source.isEmpty()) {
+      return new ArrayList<>();
+    }
+    List<JobDefinitionSpec> copies = new ArrayList<>(source.size());
+    for (JobDefinitionSpec spec : source) {
+      JobDefinitionSpec copy = new JobDefinitionSpec();
+      BeanUtils.copyProperties(spec, copy);
+      copies.add(copy);
+    }
+    return copies;
   }
 }

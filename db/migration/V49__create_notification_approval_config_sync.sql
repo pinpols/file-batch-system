@@ -78,12 +78,14 @@ CREATE INDEX IF NOT EXISTS idx_config_approval_tenant_status
 CREATE INDEX IF NOT EXISTS idx_config_approval_release
     ON batch.config_approval (release_id);
 
--- expand config_release status CHECK to include PENDING_APPROVAL
+-- 扩展 config_release 状态 CHECK，加入 PENDING_APPROVAL。
+
 ALTER TABLE batch.config_release DROP CONSTRAINT IF EXISTS ck_config_release_status;
 ALTER TABLE batch.config_release ADD CONSTRAINT ck_config_release_status
     CHECK (config_status IN ('DRAFT', 'PENDING_APPROVAL', 'PUBLISHED', 'GRAY', 'ROLLED_BACK'));
 
--- expand config_change_log action CHECK to include SUBMIT_APPROVAL / APPROVE / REJECT
+-- 扩展 config_change_log 动作 CHECK，加入 SUBMIT_APPROVAL / APPROVE / REJECT。
+
 ALTER TABLE batch.config_change_log DROP CONSTRAINT IF EXISTS ck_config_change_log_action;
 ALTER TABLE batch.config_change_log ADD CONSTRAINT ck_config_change_log_action
     CHECK (change_action IN ('CREATE', 'PUBLISH', 'GRAY', 'ROLLBACK', 'ROTATE', 'SUBMIT_APPROVAL', 'APPROVE', 'REJECT'));

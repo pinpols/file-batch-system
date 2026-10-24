@@ -120,6 +120,6 @@ mvn -pl batch-e2e-tests test -DexcludedGroups='smoke,critical'
 ## 关联
 
 - Round-1 TOP-7 反馈:`docs/analysis/...`(TOP-7 表)
-- 当前 e2e shard 分组依据：[`../analysis/ci-gate-runtime-optimization-2026-10-07.md`](../analysis/ci-gate-runtime-optimization-2026-10-07.md)
-- 历史四片优化记录：`docs/runbook/e2e-it-optimization-2026-05-22.md`
+- 当前 e2e shard 分组依据：[`../analysis/ci-gate-runtime-optimization-2026-10-07.md`](../verifications/ci-gate-runtime-optimization-2026-10-07.md)
+- 历史四片优化记录：`docs/archive/testing/e2e-it-optimization-2026-05-22.md`
 - 测试约定:`docs/agent-baseline.md` §测试约定

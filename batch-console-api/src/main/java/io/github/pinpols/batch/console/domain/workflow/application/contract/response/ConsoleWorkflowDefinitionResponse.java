@@ -8,8 +8,16 @@ public record ConsoleWorkflowDefinitionResponse(
     String workflowCode,
     String workflowName,
     String workflowType,
+    String scheduleType,
+    String scheduleExpr,
+    String timezone,
+    String triggerMode,
+    String calendarCode,
+    String dependsOnJobCode,
     Integer version,
     Boolean enabled,
+    Boolean scheduleEnabled,
     String description,
     Instant createdAt,
-    Instant updatedAt) {}
+    Instant updatedAt,
+    Long singleJobDefinitionId) {}

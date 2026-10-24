@@ -60,6 +60,12 @@ public final class TaskOutcomeInstanceProgressor {
       Consumer<TaskOutcomeCommand> parentOutcomeApplier) {
     WorkflowRunEntity workflowRun = workflowMappers.workflowRunMapper.selectByRelatedJobInstanceId(
         command.tenantId(), jobInstance.getId());
+    boolean nodeOwnedWorkflow = workflowRun == null;
+    if (nodeOwnedWorkflow) {
+      workflowRun = workflowMappers.workflowRunMapper.selectByNodeJobInstanceId(
+          command.tenantId(), jobInstance.getId());
+      nodeOwnedWorkflow = workflowRun != null;
+    }
     boolean dagInstance = EmptyChecks.isNotNull(workflowRun);
     List<PartitionStatusRef> statusRefs = dagInstance
         ? jobMappers.jobPartitionMapper.selectStatusRefsByInstance(
@@ -192,7 +198,9 @@ public final class TaskOutcomeInstanceProgressor {
           instanceFailureClass,
           loadPartitions(command, task));
     }
-    if (jobFullyComplete && TaskOutcomeStatePolicy.isTerminalJobInstanceStatus(instanceStatus)) {
+    if (!nodeOwnedWorkflow
+        && jobFullyComplete
+        && TaskOutcomeStatePolicy.isTerminalJobInstanceStatus(instanceStatus)) {
       parentTaskSignaler
           .buildParentOutcome(jobInstance, instanceStatus, command)
           .ifPresent(parentOutcomeApplier);

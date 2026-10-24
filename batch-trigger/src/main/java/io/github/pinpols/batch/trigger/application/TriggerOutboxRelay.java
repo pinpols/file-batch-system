@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.trigger.application;
 
+import io.github.pinpols.batch.trigger.domain.param.TriggerOutboxEventMarkFailedParam;
+
+
 import io.github.pinpols.batch.common.dto.LaunchEnvelope;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
@@ -11,6 +14,7 @@ import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
 import io.github.pinpols.batch.trigger.mapper.TriggerOutboxEventMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -85,6 +89,7 @@ public class TriggerOutboxRelay {
   private final AtomicReference<ScheduledFuture<?>> scheduledTask = new AtomicReference<>();
   private Counter giveUpCounter;
   private Counter releaseBudgetExhaustedCounter;
+  private Counter negativePublishLatencyCounter;
 
   public TriggerOutboxRelay(
       TriggerOutboxEventMapper mapper,
@@ -110,8 +115,8 @@ public class TriggerOutboxRelay {
 
   // R3-P1-3：单条 outbox 事件 NEW→PUBLISHED 端到端延迟分位，按 result tag (ok/fail) 拆分。
   // 之前只有积压 gauge，无法区分 Kafka 慢 vs relay 调度慢。
-  private io.micrometer.core.instrument.Timer publishLatencyOk;
-  private io.micrometer.core.instrument.Timer publishLatencyFail;
+  private Timer publishLatencyOk;
+  private Timer publishLatencyFail;
 
   /**
    * R3-P1-9：从 {@code @PostConstruct} 改为 {@code @EventListener(ApplicationReadyEvent.class)} — 之前
@@ -138,6 +143,11 @@ public class TriggerOutboxRelay {
         .description(
             "Trigger outbox relay polls deferred because the per-second release budget was exhausted")
         .register(meterRegistry);
+    negativePublishLatencyCounter = Counter.builder(
+            "batch.trigger.outbox.publish.latency.negative_duration")
+        .description(
+            "Negative monotonic duration samples skipped for trigger outbox publish latency")
+        .register(meterRegistry);
     meterRegistry.gauge(
         "batch.trigger.outbox.release_budget.reserved",
         releaseBudget,
@@ -146,20 +156,18 @@ public class TriggerOutboxRelay {
         "batch.trigger.outbox.release_budget.limit",
         releaseGovernor,
         TriggerOutboxReleaseGovernor::effectiveLimit);
-    publishLatencyOk = io.micrometer.core.instrument.Timer.builder(
-            "batch.trigger.outbox.publish.latency")
+    publishLatencyOk = Timer.builder("batch.trigger.outbox.publish.latency")
         .description("trigger_outbox publishOne latency (single event)")
         .tags("result", "ok")
         .publishPercentiles(0.5, 0.95, 0.99)
         .register(meterRegistry);
-    publishLatencyFail = io.micrometer.core.instrument.Timer.builder(
-            "batch.trigger.outbox.publish.latency")
+    publishLatencyFail = Timer.builder("batch.trigger.outbox.publish.latency")
         .description("trigger_outbox publishOne latency (single event)")
         .tags("result", "fail")
         .publishPercentiles(0.5, 0.95, 0.99)
         .register(meterRegistry);
-    scheduledTask.set(scheduler.scheduleWithFixedDelay(
-        this::poll, Duration.ofMillis(properties.getPollIntervalMillis())));
+    Duration pollInterval = Duration.ofMillis(properties.getPollIntervalMillis());
+    scheduledTask.set(scheduler.scheduleWithFixedDelay(this::poll, pollInterval));
     log.info(
         "TriggerOutboxRelay started: poll={}ms batch={} release_budget={}events/s backoff_max={}s",
         properties.getPollIntervalMillis(),
@@ -222,13 +230,16 @@ public class TriggerOutboxRelay {
       }
       lockingTaskExecutor.executeWithLock((Runnable) this::pollLocked, lockConfig());
     } catch (DataAccessException dae) {
+      Throwable mostSpecificCause = dae.getMostSpecificCause();
+      Throwable failureCause =
+          EmptyChecks.isNull(mostSpecificCause) ? dae : dae.getMostSpecificCause();
+      String failureSummary = SwallowedExceptionLogger.summary(failureCause);
       log.warn(
           "TriggerOutboxRelay transient DB failure; retrying on the next cycle: {}",
-          EmptyChecks.isNull(dae.getMostSpecificCause())
-              ? SwallowedExceptionLogger.summary(dae)
-              : SwallowedExceptionLogger.summary(dae.getMostSpecificCause()));
+          failureSummary);
     } catch (Exception t) {
-      if (stopping.get() && isRedisStopping(t)) {
+      boolean redisFailureIsShutdownNoise = stopping.get() && isRedisStopping(t);
+      if (redisFailureIsShutdownNoise) {
         log.info(
             "TriggerOutboxRelay poll skipped during shutdown: {}",
             SwallowedExceptionLogger.summary(t));
@@ -331,13 +342,12 @@ public class TriggerOutboxRelay {
         future = CompletableFuture.completedFuture(
             TriggerEventPublisher.PublishResult.fail("kafka send init: " + ex.getMessage()));
       }
-      inFlight.add(new InFlight(
-          event,
+      CompletableFuture<TriggerEventPublisher.PublishResult> resolvedFuture =
           EmptyChecks.isNotNull(future)
               ? future
               : CompletableFuture.completedFuture(
-                  TriggerEventPublisher.PublishResult.fail("null publish future")),
-          startedNanos));
+                  TriggerEventPublisher.PublishResult.fail("null publish future"));
+      inFlight.add(new InFlight(event, resolvedFuture, startedNanos));
     }
 
     awaitAcknowledgements(inFlight);
@@ -346,7 +356,9 @@ public class TriggerOutboxRelay {
 
   private LaunchEnvelope deserializeOrGiveUp(TriggerOutboxEventEntity event, long startedNanos) {
     try {
-      return JsonUtils.fromJson(event.getPayload(), LaunchEnvelope.class);
+      String payloadJson = event.getPayload();
+      LaunchEnvelope envelope = JsonUtils.fromJson(payloadJson, LaunchEnvelope.class);
+      return envelope;
     } catch (IllegalArgumentException ex) {
       log.error(
           "TriggerOutboxRelay failed to deserialize payload; marking GIVE_UP: id={} requestId={}",
@@ -361,8 +373,9 @@ public class TriggerOutboxRelay {
 
   private void awaitAcknowledgements(List<InFlight> inFlight) {
     if (EmptyChecks.isNotEmpty(inFlight)) {
-      CompletableFuture.allOf(
-              inFlight.stream().map(InFlight::future).toArray(CompletableFuture[]::new))
+      CompletableFuture<?>[] acknowledgementFutures =
+          inFlight.stream().map(InFlight::future).toArray(CompletableFuture[]::new);
+      CompletableFuture.allOf(acknowledgementFutures)
           // 单条 future 异常时也必须进入 flushOutcomes，否则整批卡 PUBLISHING 等 stale 回收。
           .orTimeout(properties.getPublishingTimeoutSeconds(), TimeUnit.SECONDS)
           .exceptionally(ignored -> null)
@@ -398,7 +411,9 @@ public class TriggerOutboxRelay {
 
   private static TriggerEventPublisher.PublishResult completedResult(
       CompletableFuture<TriggerEventPublisher.PublishResult> future) {
-    if (!future.isDone() || future.isCancelled() || future.isCompletedExceptionally()) {
+    boolean futureFailed =
+        !future.isDone() || future.isCancelled() || future.isCompletedExceptionally();
+    if (futureFailed) {
       return TriggerEventPublisher.PublishResult.fail("kafka publish future failed");
     }
     TriggerEventPublisher.PublishResult result = future.getNow(null);
@@ -409,9 +424,22 @@ public class TriggerOutboxRelay {
 
   private void recordPublishLatency(boolean success, long startedNanos) {
     if (EmptyChecks.isNotNull(publishLatencyOk)) {
-      (success ? publishLatencyOk : publishLatencyFail)
-          .record(System.nanoTime() - startedNanos, TimeUnit.NANOSECONDS);
+      recordLatencySample(
+          success ? publishLatencyOk : publishLatencyFail,
+          negativePublishLatencyCounter,
+          startedNanos,
+          System.nanoTime());
     }
+  }
+
+  static void recordLatencySample(
+      Timer timer, Counter negativeDurationCounter, long startedNanos, long finishedNanos) {
+    long durationNanos = finishedNanos - startedNanos;
+    if (durationNanos < 0) {
+      negativeDurationCounter.increment();
+      return;
+    }
+    timer.record(durationNanos, TimeUnit.NANOSECONDS);
   }
 
   private void markPublishFailure(TriggerOutboxEventEntity event, String errorMessage) {
@@ -427,13 +455,21 @@ public class TriggerOutboxRelay {
       markGiveUp(event, errorMessage);
       return;
     }
-    Instant retryAt = BatchDateTimeSupport.utcNow().plusSeconds(backoffSeconds(nextAttempt));
+    Instant retryBaseTime = BatchDateTimeSupport.utcNow();
+    long retryBackoffSeconds = backoffSeconds(nextAttempt);
+    Instant retryAt = retryBaseTime.plusSeconds(retryBackoffSeconds);
+    Long eventId = event.getId();
+    String failedStatus = OutboxPublishStatus.FAILED.code();
+    String truncatedErrorMessage = truncate(errorMessage);
+    TriggerOutboxEventMarkFailedParam triggerOutboxEventMarkFailedParam = TriggerOutboxEventMarkFailedParam.builder()
+        .id(eventId)
+        .status(failedStatus)
+        .lastError(truncatedErrorMessage)
+        .nextPublishAt(retryAt)
+        .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+        .build();
     int updated = mapper.markFailed(
-        event.getId(),
-        OutboxPublishStatus.FAILED.code(),
-        truncate(errorMessage),
-        retryAt,
-        OutboxPublishStatus.PUBLISHING.code());
+        triggerOutboxEventMarkFailedParam);
     if (updated == 0) {
       log.warn(
           "TriggerOutboxRelay markFailed(FAILED) affected 0 rows; another instance took over the event: id={}",
@@ -442,12 +478,20 @@ public class TriggerOutboxRelay {
   }
 
   private void markGiveUp(TriggerOutboxEventEntity event, String errorMessage) {
+    Long eventId = event.getId();
+    String giveUpStatus = OutboxPublishStatus.GIVE_UP.code();
+    String truncatedErrorMessage = truncate(errorMessage);
+    Instant retryBaseTime = BatchDateTimeSupport.utcNow();
+    Instant giveUpRetryAt = retryBaseTime.plusSeconds(MAX_BACKOFF_SECONDS);
+    TriggerOutboxEventMarkFailedParam triggerOutboxEventMarkFailedParam2 = TriggerOutboxEventMarkFailedParam.builder()
+        .id(eventId)
+        .status(giveUpStatus)
+        .lastError(truncatedErrorMessage)
+        .nextPublishAt(giveUpRetryAt)
+        .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+        .build();
     int updated = mapper.markFailed(
-        event.getId(),
-        OutboxPublishStatus.GIVE_UP.code(),
-        truncate(errorMessage),
-        BatchDateTimeSupport.utcNow().plusSeconds(MAX_BACKOFF_SECONDS),
-        OutboxPublishStatus.PUBLISHING.code());
+        triggerOutboxEventMarkFailedParam2);
     if (updated == 0) {
       log.warn(
           "TriggerOutboxRelay markFailed(GIVE_UP) affected 0 rows; another instance took over the event: id={}",
@@ -491,15 +535,19 @@ public class TriggerOutboxRelay {
   }
 
   private void sampleBacklog() {
-    pendingEvents.set(mapper.countByStatuses(
-        List.of(OutboxPublishStatus.NEW.code(), OutboxPublishStatus.FAILED.code())));
-    stalePublishingEvents.set(mapper.countStalePublishing(
-        OutboxPublishStatus.PUBLISHING.code(), properties.getPublishingTimeoutSeconds()));
+    List<String> pendingStatuses =
+        List.of(OutboxPublishStatus.NEW.code(), OutboxPublishStatus.FAILED.code());
+    long pendingCount = mapper.countByStatuses(pendingStatuses);
+    pendingEvents.set(pendingCount);
+    long stalePublishingCount = mapper.countStalePublishing(
+        OutboxPublishStatus.PUBLISHING.code(), properties.getPublishingTimeoutSeconds());
+    stalePublishingEvents.set(stalePublishingCount);
   }
 
   private LockConfiguration lockConfig() {
-    Duration lockAtMost =
-        Duration.ofSeconds(properties.getPublishingTimeoutSeconds()).plus(LOCK_AT_MOST_BUFFER);
+    long publishingTimeoutSeconds = properties.getPublishingTimeoutSeconds();
+    Duration publishingTimeout = Duration.ofSeconds(publishingTimeoutSeconds);
+    Duration lockAtMost = publishingTimeout.plus(LOCK_AT_MOST_BUFFER);
     Duration lockAtLeast = Duration.ofMillis(properties.getPollIntervalMillis());
     if (lockAtLeast.compareTo(lockAtMost) > 0) {
       lockAtLeast = lockAtMost;

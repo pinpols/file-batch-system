@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.service;
 
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
@@ -13,10 +14,14 @@ import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayOperationAudit
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayWaitingLaunchEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.value.BatchDayManualOperation;
+import io.github.pinpols.batch.orchestrator.domain.view.BatchDayInstanceMetrics;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayOperationAuditMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayWaitingLaunchMapper;
+import io.github.pinpols.batch.orchestrator.mapper.JobDependencyWaitingLaunchMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
+import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
+import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
@@ -40,9 +45,16 @@ public class BatchDayOperationService {
   private final BatchDayWaitingLaunchMapper waitingLaunchMapper;
   private final JobExecutionLogMapper jobExecutionLogMapper;
   private final BatchDayOperationAuditMapper batchDayOperationAuditMapper;
+  private final JobInstanceMapper jobInstanceMapper;
+  private final JobDependencyWaitingLaunchMapper jobDependencyWaitingLaunchMapper;
+  private final TriggerRequestMapper triggerRequestMapper;
   private final LaunchService launchService;
   private final BatchDateTimeSupport dateTimeSupport;
 
+  /**
+   * SETTLE_EMPTY 是人工确认动作而非自动推断：只允许 CUTOFF 且汇总实例数为零的业务日，原因进入 comment，
+   * 固定 reason_code 表示操作类型。待处理的日历依赖和作业依赖启动请求必须先收敛，避免之后重检又在空日启动作业。
+   */
   @Transactional
   public BatchDayOperationResult operate(BatchDayOperateCommand command) {
     if (command == null
@@ -56,6 +68,9 @@ public class BatchDayOperationService {
         command.tenantId(), command.calendarCode(), command.bizDate());
     if (current == null) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.batch_day.not_found");
+    }
+    if (command.action() == BatchDayOperation.SETTLE_EMPTY) {
+      requireEmptyDayCanSettle(current, command.reason());
     }
     Instant now = dateTimeSupport.nowInstant();
     String operator = Texts.hasText(command.operatorId()) ? command.operatorId() : "UNKNOWN";
@@ -76,6 +91,64 @@ public class BatchDayOperationService {
     return new BatchDayOperationResult(target, released);
   }
 
+  private void requireEmptyDayCanSettle(BatchDayInstanceEntity current, String reason) {
+    if (!"CUTOFF".equals(normalize(current.dayStatus()))) {
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT,
+          "error.batch_day.empty_settle_state_invalid",
+          current.dayStatus());
+    }
+    if (!Texts.hasText(reason)) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.batch_day.empty_settle_reason_required");
+    }
+    BatchDayInstanceMetrics metrics = jobInstanceMapper.selectBatchDayMetrics(
+        current.tenantId(), current.calendarCode(), current.bizDate());
+    if (metrics == null || value(metrics.getTotalCount()) != 0L) {
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT,
+          "error.batch_day.empty_settle_has_jobs",
+          metrics == null ? "unknown" : value(metrics.getTotalCount()));
+    }
+    boolean hasCalendarWait = !waitingLaunchMapper
+        .selectWaitingByCalendarBizDate(
+            current.tenantId(), current.calendarCode(), current.bizDate(), 1)
+        .isEmpty();
+    int dependencyWaitCount = jobDependencyWaitingLaunchMapper.countWaitingForCalendarBizDate(
+        current.tenantId(), current.calendarCode(), current.bizDate());
+    int unlaunchedRequestCount = triggerRequestMapper.countUnlaunchedForCalendarBizDate(
+        current.tenantId(),
+        current.calendarCode(),
+        current.bizDate(),
+        List.of(
+            TriggerRequestStatus.PENDING.code(),
+            TriggerRequestStatus.PROCESSING.code(),
+            TriggerRequestStatus.ACCEPTED.code(),
+            TriggerRequestStatus.WAITING.code()));
+    int scheduledOccurrenceCount = batchDayInstanceMapper.countBlockingScheduledOccurrences(
+        current.tenantId(), current.calendarCode(), current.bizDate());
+    int uncoveredScheduleCount = batchDayInstanceMapper.countUncoveredScheduledDefinitions(
+        current.tenantId(), current.calendarCode(), current.cutoffAt());
+    if (hasCalendarWait
+        || dependencyWaitCount > 0
+        || unlaunchedRequestCount > 0
+        || scheduledOccurrenceCount > 0
+        || uncoveredScheduleCount > 0) {
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT,
+          "error.batch_day.empty_settle_has_waits",
+          hasCalendarWait,
+          dependencyWaitCount,
+          unlaunchedRequestCount,
+          scheduledOccurrenceCount,
+          uncoveredScheduleCount);
+    }
+  }
+
+  private long value(Long value) {
+    return value == null ? 0L : value;
+  }
+
   private void insertOperationAudit(
       BatchDayOperateCommand command,
       BatchDayInstanceEntity from,
@@ -89,6 +162,11 @@ public class BatchDayOperationService {
     payload.put("action", command.action().name());
     payload.put("reason", command.reason());
     payload.put("operatorId", operator);
+    String auditReasonCode = command.action() == BatchDayOperation.SETTLE_EMPTY
+        ? "EMPTY_DAY_CONFIRMED"
+        : command.reason();
+    String auditComment =
+        command.action() == BatchDayOperation.SETTLE_EMPTY ? command.reason() : null;
     BatchDayOperationAuditEntity audit = BatchDayOperationAuditEntity.builder()
         .tenantId(from.tenantId())
         .calendarCode(from.calendarCode())
@@ -100,8 +178,8 @@ public class BatchDayOperationService {
         .toFrozen(to.frozen())
         .operatorId(operator)
         .operatorType(AuditLogConstants.OPERATOR_TYPE_REQUEST)
-        .reasonCode(command.reason())
-        .comment(null)
+        .reasonCode(auditReasonCode)
+        .comment(auditComment)
         .approvalId(null)
         .requestPayload(JsonUtils.toJson(payload))
         .traceId(null)
@@ -151,6 +229,8 @@ public class BatchDayOperationService {
             }
             yield base.dayStatus("SETTLED").frozen(false).settledAt(now).build();
           }
+          case SETTLE_EMPTY ->
+            base.dayStatus("SETTLED").frozen(false).settledAt(now).build();
         };
     return current.withManualOperation(op);
   }
@@ -255,7 +335,8 @@ public class BatchDayOperationService {
     RELEASE,
     SKIP,
     REOPEN,
-    CLOSE
+    CLOSE,
+    SETTLE_EMPTY
   }
 
   public record BatchDayOperationResult(BatchDayInstanceEntity batchDay, int releasedLaunchCount) {}

@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.JobDependencyWaitingLaunchMapper">
+    <resultMap id="WaitingLaunchResultMap" type="io.github.pinpols.batch.orchestrator.domain.entity.JobDependencyWaitingLaunchEntity">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="request_id" javaType="java.lang.String"/>
+            <arg column="job_code" javaType="java.lang.String"/>
+            <arg column="biz_date" javaType="java.time.LocalDate"/>
+            <arg column="dependency_snapshot" javaType="java.lang.String"/>
+            <arg column="launch_payload" javaType="java.lang.String"/>
+            <arg column="wait_status" javaType="java.lang.String"/>
+            <arg column="attempt_count" javaType="java.lang.Integer"/>
+            <arg column="last_not_ready_reason" javaType="java.lang.String"/>
+            <arg column="last_checked_at" javaType="java.time.Instant"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+            <arg column="released_at" javaType="java.time.Instant"/>
+            <arg column="timeout_alerted_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="WaitingLaunchSummaryResultMap" type="io.github.pinpols.batch.orchestrator.domain.query.JobDependencyWaitingLaunchSummary">
+        <constructor>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="request_id" javaType="java.lang.String"/>
+            <arg column="job_code" javaType="java.lang.String"/>
+            <arg column="biz_date" javaType="java.time.LocalDate"/>
+            <arg column="dependency_snapshot" javaType="java.lang.String"/>
+            <arg column="wait_status" javaType="java.lang.String"/>
+            <arg column="attempt_count" javaType="java.lang.Integer"/>
+            <arg column="last_not_ready_reason" javaType="java.lang.String"/>
+            <arg column="last_checked_at" javaType="java.time.Instant"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+            <arg column="timeout_alerted_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="Columns">
+        id, tenant_id, request_id, job_code, biz_date,
+        dependency_snapshot::text as dependency_snapshot, launch_payload::text as launch_payload,
+        wait_status, attempt_count, last_not_ready_reason, last_checked_at, created_at, updated_at,
+        released_at, timeout_alerted_at
+    </sql>
+
+    <insert id="insertIfAbsent">
+        insert into batch.job_dependency_waiting_launch
+            (tenant_id, request_id, job_code, biz_date, dependency_snapshot, launch_payload)
+        values
+            (#{tenantId}, #{requestId}, #{jobCode}, #{bizDate},
+             #{dependencySnapshot}::jsonb,
+             #{launchPayload}::jsonb)
+        on conflict (tenant_id, request_id) do nothing
+    </insert>
+
+    <select id="selectByTenantAndRequestId" resultMap="WaitingLaunchResultMap">
+        select <include refid="Columns"/>
+        from batch.job_dependency_waiting_launch
+        where tenant_id = #{tenantId} and request_id = #{requestId}
+    </select>
+
+    <select id="selectWaiting" resultMap="WaitingLaunchResultMap">
+        select <include refid="Columns"/>
+        from batch.job_dependency_waiting_launch
+        where tenant_id = #{tenantId} and wait_status = 'WAITING'
+        order by updated_at, id
+        limit #{limit}
+    </select>
+
+    <select id="countWaitingForCalendarBizDate" resultType="int">
+        select count(*)
+        from batch.job_dependency_waiting_launch w
+        join batch.job_definition job
+          on job.tenant_id = w.tenant_id
+         and job.job_code = w.job_code
+        where w.tenant_id = #{tenantId}
+          and job.calendar_code = #{calendarCode}
+          and w.biz_date = #{bizDate}
+          and w.wait_status = 'WAITING'
+    </select>
+
+    <select id="selectRecent" resultMap="WaitingLaunchSummaryResultMap">
+        select tenant_id, request_id, job_code, biz_date,
+               dependency_snapshot::text as dependency_snapshot, wait_status, attempt_count,
+               last_not_ready_reason, last_checked_at, created_at, updated_at, timeout_alerted_at
+        from batch.job_dependency_waiting_launch
+        where tenant_id = #{tenantId}
+          and (#{waitStatus} is null or wait_status = #{waitStatus})
+          and (#{jobCode} is null or job_code = #{jobCode})
+        order by updated_at desc, id desc
+        limit #{limit}
+    </select>
+
+    <select id="selectBacklogMetrics"
+            resultType="io.github.pinpols.batch.orchestrator.domain.query.JobDependencyWaitBacklog">
+        select count(*) as "waitingCount",
+               coalesce(max(extract(epoch from (current_timestamp - created_at))), 0)::bigint
+                   as "oldestAgeSeconds"
+        from batch.job_dependency_waiting_launch
+        where wait_status = 'WAITING'
+    </select>
+
+    <update id="recordCheck">
+        update batch.job_dependency_waiting_launch
+        set attempt_count = attempt_count + 1,
+            last_not_ready_reason = #{reason},
+            last_checked_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+        where tenant_id = #{tenantId} and request_id = #{requestId} and wait_status = 'WAITING'
+    </update>
+
+    <update id="transitionStatus">
+        update batch.job_dependency_waiting_launch
+        set wait_status = #{targetStatus},
+            released_at = CASE WHEN #{targetStatus} = 'RELEASED' THEN CURRENT_TIMESTAMP ELSE released_at END,
+            updated_at = CURRENT_TIMESTAMP
+        where tenant_id = #{tenantId} and request_id = #{requestId}
+          and wait_status = #{expectedStatus}
+    </update>
+
+    <update id="claimTimeoutAlert">
+        update batch.job_dependency_waiting_launch
+        set timeout_alerted_at = #{alertedAt}, updated_at = CURRENT_TIMESTAMP
+        where tenant_id = #{tenantId} and request_id = #{requestId}
+          and wait_status = 'WAITING' and timeout_alerted_at is null
+    </update>
+</mapper>

@@ -10,7 +10,6 @@ import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
@@ -41,9 +40,6 @@ class DispatchStepExecutionAdapterTest {
   private PlatformFileRecordRepository fileRecords;
 
   @Mock
-  private PlatformPipelineDefinitionRepository pipelineDefinitions;
-
-  @Mock
   private PlatformPipelineRunRepository pipelineRuns;
 
   private DispatchStepExecutionAdapter adapter;
@@ -53,7 +49,6 @@ class DispatchStepExecutionAdapterTest {
     adapter = new DispatchStepExecutionAdapter(
         stageExecutor,
         new ObjectMapper(),
-        pipelineDefinitions,
         pipelineRuns,
         fileRecords,
         emptyProvider(),

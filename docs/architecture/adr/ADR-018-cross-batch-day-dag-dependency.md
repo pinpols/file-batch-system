@@ -60,6 +60,10 @@
 | `scope` | enum | REQUIRED：缺则等；OPTIONAL：缺则跳过引用，节点照常启动 |
 | `consumeVersionStrategy` | enum | `EFFECTIVE_ONLY`（默认）/ `LATEST_INCLUDING_PENDING` / `SPECIFIC_VERSION`（需配 `version_no`） |
 
+`SPECIFIC_VERSION` 必须按租户、business key 和 version number 精确读取；不得先读取有限条数的展示列表再筛选，也不得在指定版本不存在时回退到其它版本。结果条目携带稳定 `resultVersionId`，供下游执行快照和消费审计定位所选版本。
+
+当前新模型只支持 `INLINE_JSON`：resolver 将 JSON 对象解析并写入 `crossDay.<alias>.output`，同时保留 `resultVersionId`、`versionNo`、`businessKey` 等审计身份；JOB 节点启动子 Job 时冻结整份参数。handler 按 `output.<key>` 消费所选版本，不能在执行时重新查询 effective/latest。`EXTERNAL_REF` 和 `FILE_RECORD` 尚无受验收的读取、租户授权及保留契约，resolver 对这些类型以及非法/非对象 inline JSON 失败关闭；不得通过透传 `payloadRef` 让节点看似可运行。`payload_ref` DSL 保留为后续契约扩展，本轮不得配置使用。
+
 ### 解析时机
 
 ```

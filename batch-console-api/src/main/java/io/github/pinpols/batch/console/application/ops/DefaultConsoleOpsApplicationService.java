@@ -49,38 +49,46 @@ public class DefaultConsoleOpsApplicationService implements ConsoleOpsSummaryPor
   }
 
   private ConsoleOpsSummaryResponse loadSummary(String resolvedTenantId) {
-    OpsSummaryMetrics metrics = new OpsSummaryMetrics(
-        approvalCommandMapper.countByStatus(resolvedTenantId, "PENDING"),
-        new AlertMetrics(
-            alertEventMapper.countByStatus(resolvedTenantId, "OPEN"),
-            alertEventMapper.countBySeverityAndStatus(resolvedTenantId, "CRITICAL", "OPEN")),
-        new JobMetrics(
-            jobInstanceMapper.countByStatuses(
-                resolvedTenantId, List.of(JobInstanceStatus.RUNNING.code())),
-            jobInstanceMapper.countByStatuses(
-                resolvedTenantId,
-                List.of(JobInstanceStatus.FAILED.code(), JobInstanceStatus.PARTIAL_FAILED.code())),
-            jobInstanceMapper.countSlaBreaches(
-                resolvedTenantId,
-                List.of(
-                    JobInstanceStatus.CREATED.code(),
-                    JobInstanceStatus.WAITING.code(),
-                    JobInstanceStatus.READY.code(),
-                    JobInstanceStatus.RUNNING.code(),
-                    JobInstanceStatus.PARTIAL_FAILED.code()))),
-        new WorkerMetrics(
-            workerRegistryMapper.countByStatus(
-                resolvedTenantId, WorkerRegistryStatus.ONLINE.code()),
-            workerRegistryMapper.countByStatus(
-                resolvedTenantId, WorkerRegistryStatus.DRAINING.code()),
-            workerRegistryMapper.countByStatus(
-                    resolvedTenantId, WorkerRegistryStatus.OFFLINE.code())
-                + workerRegistryMapper.countByStatus(
-                    resolvedTenantId, WorkerRegistryStatus.DECOMMISSIONED.code())),
-        new OutboxMetrics(
-            outboxRetryLogMapper.countByStatuses(
-                resolvedTenantId, List.of("WAITING", "RUNNING", "FAILED")),
-            outboxDeliveryLogMapper.countByStatus(resolvedTenantId, "FAILED")));
+    long pendingApprovals = approvalCommandMapper.countByStatus(resolvedTenantId, "PENDING");
+
+    long openAlerts = alertEventMapper.countByStatus(resolvedTenantId, "OPEN");
+    long criticalAlerts =
+        alertEventMapper.countBySeverityAndStatus(resolvedTenantId, "CRITICAL", "OPEN");
+    AlertMetrics alerts = new AlertMetrics(openAlerts, criticalAlerts);
+
+    long runningJobs = jobInstanceMapper.countByStatuses(
+        resolvedTenantId, List.of(JobInstanceStatus.RUNNING.code()));
+    long failedJobs = jobInstanceMapper.countByStatuses(
+        resolvedTenantId,
+        List.of(JobInstanceStatus.FAILED.code(), JobInstanceStatus.PARTIAL_FAILED.code()));
+    long slaBreaches = jobInstanceMapper.countSlaBreaches(
+        resolvedTenantId,
+        List.of(
+            JobInstanceStatus.CREATED.code(),
+            JobInstanceStatus.WAITING.code(),
+            JobInstanceStatus.READY.code(),
+            JobInstanceStatus.RUNNING.code(),
+            JobInstanceStatus.PARTIAL_FAILED.code()));
+    JobMetrics jobs = new JobMetrics(runningJobs, failedJobs, slaBreaches);
+
+    long onlineWorkers =
+        workerRegistryMapper.countByStatus(resolvedTenantId, WorkerRegistryStatus.ONLINE.code());
+    long drainingWorkers =
+        workerRegistryMapper.countByStatus(resolvedTenantId, WorkerRegistryStatus.DRAINING.code());
+    long offlineWorkers =
+        workerRegistryMapper.countByStatus(resolvedTenantId, WorkerRegistryStatus.OFFLINE.code());
+    long decommissionedWorkers = workerRegistryMapper.countByStatus(
+        resolvedTenantId, WorkerRegistryStatus.DECOMMISSIONED.code());
+    WorkerMetrics workers =
+        new WorkerMetrics(onlineWorkers, drainingWorkers, offlineWorkers + decommissionedWorkers);
+
+    long outboxRetryBacklog = outboxRetryLogMapper.countByStatuses(
+        resolvedTenantId, List.of("WAITING", "RUNNING", "FAILED"));
+    long outboxDeliveryFailures = outboxDeliveryLogMapper.countByStatus(resolvedTenantId, "FAILED");
+    OutboxMetrics outbox = new OutboxMetrics(outboxRetryBacklog, outboxDeliveryFailures);
+
+    OpsSummaryMetrics metrics =
+        new OpsSummaryMetrics(pendingApprovals, alerts, jobs, workers, outbox);
     return toResponse(resolvedTenantId, metrics);
   }
 

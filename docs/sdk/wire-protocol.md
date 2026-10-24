@@ -125,8 +125,8 @@ SDK 收到后 `TaskDispatcher.applyPlatformDirective()`:
 每个任务:
   orch ──Kafka dispatch──► SDK
   SDK 收到 → claim ──HTTP POST /internal/tasks/{id}/claim──► orch
-                              ◄── { effectiveConfig, leaseUntil }
-  SDK handler.execute(ctx)    (ctx 持有 CancellationSignal + ProgressReporter)
+                              ◄── EffectiveTaskConfig (含可选 dependencyResultSnapshot)
+  SDK handler.execute(ctx)    (ctx 持有 CancellationSignal + ProgressReporter + 依赖闸门观察到的版本引用)
   SDK ──report──► orch        SUCCESS / FAILED / TERMINATED 终态
 
 心跳(每 30s):

@@ -4,11 +4,14 @@ import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.TriggerMode;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.validation.ValidTenantId;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.Set;
 import lombok.Data;
 
@@ -25,6 +28,15 @@ public class JobDefinitionUpdateRequest {
       message = "dependsOnJobCode must start with a letter and contain only letters, digits,"
           + " underscore or hyphen")
   private String dependsOnJobCode;
+
+  /** 提供后将替换完整上游集合；传入空列表会清除所有上游。 */
+  @Size(max = 32)
+  private List<@Size(max = 64) @Pattern(regexp = "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$") String>
+      dependsOnJobCodes;
+
+  /** 提供后将替换依赖边集合，包括各边的业务日期对齐方式。 */
+  @Size(max = 32)
+  private List<@Valid JobDependencyRuleRequest> jobDependencyRules;
 
   @Size(max = 256)
   private String jobName;
@@ -69,7 +81,7 @@ public class JobDefinitionUpdateRequest {
   private LocalTime completionDeadlineLocalTime;
 
   @Min(0)
-  @jakarta.validation.constraints.Max(1)
+  @Max(1)
   private Integer completionDeadlineDayOffset;
 
   @Pattern(regexp = "^(WARN|ERROR|CRITICAL)$")
@@ -81,7 +93,11 @@ public class JobDefinitionUpdateRequest {
   private String executionHandler;
   private String paramSchema;
   private String defaultParams;
+
+  @Min(value = 1, message = "priority must be between 1 and 9")
+  @Max(value = 9, message = "priority must be between 1 and 9")
   private Integer priority;
+
   private Boolean enabled;
   private String description;
 

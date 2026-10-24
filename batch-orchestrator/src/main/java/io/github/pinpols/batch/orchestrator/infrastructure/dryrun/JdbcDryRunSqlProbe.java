@@ -117,7 +117,9 @@ public final class JdbcDryRunSqlProbe implements DryRunSqlProbe {
       return SingleSelectCheck.UNPARSEABLE;
     }
     List<Statement> list = statements;
-    if (EmptyChecks.isNotNull(list) && list.size() == 1 && list.get(0) instanceof Select) {
+    boolean containsExactlyOneSelect =
+        EmptyChecks.isNotNull(list) && list.size() == 1 && list.get(0) instanceof Select;
+    if (containsExactlyOneSelect) {
       return SingleSelectCheck.SINGLE_SELECT;
     }
     return SingleSelectCheck.MULTI_OR_NON_SELECT;

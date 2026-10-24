@@ -1,11 +1,11 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.support.AbstractPipelineStepExecutionAdapter;
 import io.github.pinpols.batch.worker.core.support.PipelineCompensationHook;
@@ -31,24 +31,31 @@ public class DispatchStepExecutionAdapter
     extends AbstractPipelineStepExecutionAdapter<DispatchJobContext, DispatchStageResult> {
 
   private final DispatchStageExecutor dispatchStageExecutor;
+  private final DispatchReplayCapabilityResolver replayCapabilityResolver;
   private final ObjectMapper objectMapper;
 
   public DispatchStepExecutionAdapter(
       DispatchStageExecutor dispatchStageExecutor,
+      DispatchReplayCapabilityResolver replayCapabilityResolver,
       ObjectMapper objectMapper,
-      PlatformPipelineDefinitionRepository pipelineDefinitions,
       PlatformPipelineRunRepository pipelineRuns,
       PlatformFileRecordRepository fileRecords,
       ObjectProvider<PipelineVerifierHook> verifierHookProvider,
       ObjectProvider<PipelineCompensationHook> compensationHookProvider) {
     super(
-        pipelineDefinitions,
         pipelineRuns,
         fileRecords,
+        dispatchStageExecutor,
         verifierHookProvider,
         compensationHookProvider);
     this.dispatchStageExecutor = dispatchStageExecutor;
+    this.replayCapabilityResolver = replayCapabilityResolver;
     this.objectMapper = objectMapper;
+  }
+
+  @Override
+  public ReplayCapabilityDeclaration resolveReplayCapability(StepExecutionRequest request) {
+    return replayCapabilityResolver.resolve(request);
   }
 
   @Override
@@ -66,9 +73,13 @@ public class DispatchStepExecutionAdapter
       StepExecutionRequest request, Map<String, Object> contextMap, Long fileId) throws Exception {
     DispatchJobContext context = new DispatchJobContext();
     populateCommonFields(context, request, contextMap);
-    context.setBizDate(String.valueOf(contextMap.getOrDefault(PipelineRuntimeKeys.BIZ_DATE, "")));
-    context.setDispatchId(String.valueOf(contextMap.getOrDefault(
-        PipelineRuntimeKeys.TASK_ID, contextMap.getOrDefault("dispatchId", ""))));
+    Object bizDateContextValue = contextMap.getOrDefault(PipelineRuntimeKeys.BIZ_DATE, "");
+    String bizDate = String.valueOf(bizDateContextValue);
+    context.setBizDate(bizDate);
+    Object taskIdValue = contextMap.getOrDefault(
+        PipelineRuntimeKeys.TASK_ID, contextMap.getOrDefault("dispatchId", ""));
+    String dispatchId = String.valueOf(taskIdValue);
+    context.setDispatchId(dispatchId);
     Object dispatchPayload = contextMap.get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
     if (dispatchPayload == null
         && context.getRawPayload() != null

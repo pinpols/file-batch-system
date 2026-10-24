@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
@@ -8,8 +9,10 @@ import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.context.TaskOutcomePersistenceContext;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -19,12 +22,11 @@ import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionQuery;
 import io.github.pinpols.batch.orchestrator.domain.query.JobTaskQuery;
 import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.WorkerRegistryCache;
 import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture;
-import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.LaunchSeed;
+import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.WorkflowLaunchSeed;
 import io.github.pinpols.batch.orchestrator.integration.support.WorkerRegistryCacheTestSupport;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.LocalDate;
 import java.time.Month;
@@ -62,7 +64,7 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.JANUARY, 15);
 
   @Autowired
-  private LaunchService launchService;
+  private WorkflowRunLaunchService workflowRunLaunchService;
 
   @Autowired
   private TaskExecutionService taskExecutionService;
@@ -91,24 +93,25 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
   @Test
   @DisplayName("认领后由原工作节点续约并上报成功时,任务与分区及作业实例应逐级达到成功终态,非认领者的续约尝试应被拒绝")
   void worker_claim_renewLease_reportSuccess_taskAndPartitionAndInstanceReachSuccess() {
-    LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
+    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
         jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
 
     // 1) Launch
     LaunchRequest launchRequest = LaunchRequest.builder()
         .tenantId(TENANT)
-        .jobCode(seed.jobCode())
+        .workflowDefinitionId(seed.workflowDefinitionId())
         .bizDate(BIZ_DATE)
         .triggerType(TriggerType.API)
         .requestId(seed.requestId())
         .traceId("trace-wk-" + seed.requestId())
         .params(Map.of())
         .build();
-    LaunchResponse response = launchService.launch(launchRequest);
+    LaunchResponse response = workflowRunLaunchService.launch(launchRequest);
     assertThat(response.instanceNo()).isNotBlank();
 
-    JobInstanceEntity jobInstance =
-        jobInstanceMapper.selectByTenantAndDedupKey(TENANT, seed.dedupKey());
+    Long jobInstanceId = LaunchIntegrationFixture.selectDispatchedJobInstanceId(
+        jdbcTemplate, TENANT, response.instanceNo());
+    JobInstanceEntity jobInstance = jobInstanceMapper.selectById(TENANT, jobInstanceId);
     assertThat(jobInstance).isNotNull();
 
     List<JobTaskEntity> tasks = jobTaskMapper.selectByQuery(
@@ -174,24 +177,92 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
   }
 
   @Test
+  @DisplayName("Worker 成功回报引用另一租户文件时整笔回报回滚并拒绝跨租户步骤关联")
+  void reportSuccess_rejectsRelatedFileFromAnotherTenant() {
+    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
+        jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
+    LaunchRequest launchRequest = LaunchRequest.builder()
+        .tenantId(TENANT)
+        .workflowDefinitionId(seed.workflowDefinitionId())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.API)
+        .requestId(seed.requestId())
+        .traceId("trace-cross-file-" + seed.requestId())
+        .params(Map.of())
+        .build();
+    LaunchResponse response = workflowRunLaunchService.launch(launchRequest);
+    Long jobInstanceId = LaunchIntegrationFixture.selectDispatchedJobInstanceId(
+        jdbcTemplate, TENANT, response.instanceNo());
+    JobInstanceEntity jobInstance = jobInstanceMapper.selectById(TENANT, jobInstanceId);
+    List<JobTaskEntity> tasks =
+        jobTaskMapper.selectByQuery(new JobTaskQuery(TENANT, jobInstanceId, null, null, null));
+    assertThat(tasks).isNotEmpty();
+    JobTaskEntity task = tasks.get(0);
+    JobPartitionQuery partitionQuery = new JobPartitionQuery(TENANT, jobInstanceId, null, null);
+    List<JobPartitionEntity> partitions = jobPartitionMapper.selectByQuery(partitionQuery);
+    JobPartitionEntity partition = partitions.get(0);
+
+    String insertForeignOutputFileSql = """
+        insert into batch.file_record(
+          tenant_id, file_category, file_name, file_format_type, storage_type,
+          storage_path, source_type, file_status
+        ) values ('t2', 'OUTPUT', 'foreign-output.bin', 'BINARY', 'LOCAL', ?, 'SYSTEM', 'RECEIVED')
+        returning id
+        """;
+    String foreignOutputStoragePath = "cross-tenant-output/" + seed.requestId();
+    Long foreignFileId = jdbcTemplate.queryForObject(
+        insertForeignOutputFileSql, Long.class, foreignOutputStoragePath);
+
+    LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
+    taskExecutionService.assignWorker(TENANT, task.getId(), seed.workerCode());
+    JobPartitionEntity runningPartition = jobPartitionMapper.selectById(TENANT, partition.getId());
+    String resultSummary = "{\"records\":1,\"relatedFileId\":" + foreignFileId + "}";
+    TaskOutcomeCommand outcome = TaskOutcomeCommand.builder()
+        .tenantId(TENANT)
+        .taskId(task.getId())
+        .success(true)
+        .resultSummary(resultSummary)
+        .partitionInvocationId(runningPartition.getCurrentInvocationId())
+        .build();
+
+    assertThatThrownBy(() -> taskExecutionService.applyTaskOutcome(outcome))
+        .isInstanceOf(BizException.class);
+
+    assertThat(jobTaskMapper.selectById(TENANT, task.getId()).getTaskStatus())
+        .isEqualTo(TaskStatus.RUNNING.code());
+    assertThat(jobPartitionMapper.selectById(TENANT, partition.getId()).getPartitionStatus())
+        .isEqualTo(PartitionStatus.RUNNING.code());
+    assertThat(jobInstanceMapper.selectById(TENANT, jobInstanceId).getInstanceStatus())
+        .isEqualTo(JobInstanceStatus.RUNNING.code());
+    String relatedStepFileCountSql = """
+        select count(*) from batch.job_step_instance
+        where job_task_id = ? and related_file_id is not null
+        """;
+    Integer relatedStepFileCount = jdbcTemplate.queryForObject(
+        relatedStepFileCountSql, Integer.class, task.getId());
+    assertThat(relatedStepFileCount).isZero();
+  }
+
+  @Test
   @DisplayName("已有认领者时另一工作节点再次认领,应返回同一任务行且原认领者保持不变,不产生第二个运行中任务")
   void secondWorkerClaim_afterFirstClaim_returnsSameTask_notASecondRunning() {
-    LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
+    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
         jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
 
     LaunchRequest launchRequest2 = LaunchRequest.builder()
         .tenantId(TENANT)
-        .jobCode(seed.jobCode())
+        .workflowDefinitionId(seed.workflowDefinitionId())
         .bizDate(BIZ_DATE)
         .triggerType(TriggerType.API)
         .requestId(seed.requestId())
         .traceId("trace-wk2-" + seed.requestId())
         .params(Map.of())
         .build();
-    launchService.launch(launchRequest2);
+    var response = workflowRunLaunchService.launch(launchRequest2);
 
-    JobInstanceEntity jobInstance =
-        jobInstanceMapper.selectByTenantAndDedupKey(TENANT, seed.dedupKey());
+    Long jobInstanceId = LaunchIntegrationFixture.selectDispatchedJobInstanceId(
+        jdbcTemplate, TENANT, response.instanceNo());
+    JobInstanceEntity jobInstance = jobInstanceMapper.selectById(TENANT, jobInstanceId);
     List<JobTaskEntity> tasks = jobTaskMapper.selectByQuery(
         new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null));
     assertThat(tasks).isNotEmpty();

@@ -9,6 +9,7 @@
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="job_instance_id" property="jobInstanceId"/>
+        <result column="job_instance_biz_date" property="jobInstanceBizDate"/>
         <result column="partition_no" property="partitionNo"/>
         <result column="partition_key" property="partitionKey"/>
         <result column="partition_status" property="partitionStatus"/>
@@ -68,6 +69,8 @@
         <result column="expected_partition_count" property="expectedPartitionCount"/>
         <result column="success_partition_count" property="successPartitionCount"/>
         <result column="failed_partition_count" property="failedPartitionCount"/>
+        <result column="cancelled_partition_count" property="cancelledPartitionCount"/>
+        <result column="terminated_partition_count" property="terminatedPartitionCount"/>
         <result column="trace_id" property="traceId"/>
         <result column="params_snapshot" property="paramsSnapshot"/>
         <result column="calendar_code" property="calendarCode"/>
@@ -134,6 +137,7 @@
         insert into batch.job_partition (
             tenant_id,
             job_instance_id,
+            job_instance_biz_date,
             partition_no,
             partition_key,
             partition_status,
@@ -152,6 +156,7 @@
         ) values (
             #{tenantId},
             #{jobInstanceId},
+            #{jobInstanceBizDate},
             #{partitionNo},
             #{partitionKey},
             #{partitionStatus},
@@ -181,6 +186,7 @@
         insert into batch.job_partition (
             tenant_id,
             job_instance_id,
+            job_instance_biz_date,
             partition_no,
             partition_key,
             partition_status,
@@ -201,6 +207,7 @@
             (
                 #{e.tenantId},
                 #{e.jobInstanceId},
+                #{e.jobInstanceBizDate},
                 #{e.partitionNo},
                 #{e.partitionKey},
                 #{e.partitionStatus},
@@ -280,6 +287,8 @@
             <arg column="total_count" javaType="java.lang.Long"/>
             <arg column="success_count" javaType="java.lang.Long"/>
             <arg column="failed_count" javaType="java.lang.Long"/>
+            <arg column="cancelled_count" javaType="java.lang.Long"/>
+            <arg column="terminated_count" javaType="java.lang.Long"/>
             <arg column="broad_failed_count" javaType="java.lang.Long"/>
         </constructor>
     </resultMap>
@@ -301,6 +310,8 @@
         select count(*) as total_count,
                count(*) filter (where partition_status = 'SUCCESS') as success_count,
                count(*) filter (where partition_status = 'FAILED') as failed_count,
+               count(*) filter (where partition_status = 'CANCELLED') as cancelled_count,
+               count(*) filter (where partition_status = 'TERMINATED') as terminated_count,
                count(*) filter (where partition_status in ('FAILED', 'CANCELLED', 'TERMINATED'))
                    as broad_failed_count
         from batch.job_partition
@@ -412,12 +423,16 @@
                 + case when #{partitionStatus} = #{terminalStatus1} then 1 else 0 end,
             failed_partition_count = failed_partition_count
                 + case when #{partitionStatus} = #{terminalStatus2} then 1 else 0 end,
+            cancelled_partition_count = cancelled_partition_count
+                + case when #{partitionStatus} = #{terminalStatus3} then 1 else 0 end,
+            terminated_partition_count = terminated_partition_count
+                + case when #{partitionStatus} = #{terminalStatus4} then 1 else 0 end,
             version = version + 1,
             updated_at = current_timestamp
         from transitioned p
         where ji.tenant_id = p.tenant_id
           and ji.id = p.job_instance_id
-          and #{partitionStatus} in (#{terminalStatus1}, #{terminalStatus2})
+          and #{partitionStatus} in (#{terminalStatus1}, #{terminalStatus2}, #{terminalStatus3}, #{terminalStatus4})
         returning ji.*
         )
     </sql>
@@ -511,16 +526,48 @@
       终态分区人工重试/文件重派时反向扣减实例计数；RUNNING lease reclaim 等非终态复位 delta=0。
       candidate 锁定旧状态，transitioned 与 progressed 在一条语句内提交，避免分区已重开但计数未回退。
     -->
-    <select id="resetForDispatch" resultType="int" flushCache="true" affectData="true">
-        with candidate as (
+    <sql id="ResetForDispatchCandidateBase">
         select tenant_id, id, job_instance_id, partition_status
         from batch.job_partition
         where tenant_id = #{tenantId}
           and id = #{id}
           and version = #{expectedVersion}
-          and (lease_expire_at is null or lease_expire_at &lt; current_timestamp)
-        for update
-        ), transitioned as (
+    </sql>
+
+    <sql id="DispatchablePartitionParentPredicate">
+          and exists (
+              select 1 from batch.job_instance parent_instance
+              where parent_instance.tenant_id = #{tenantId}
+                and parent_instance.id = job_partition.job_instance_id
+                and parent_instance.instance_status in ('CREATED', 'WAITING', 'READY', 'RUNNING')
+          )
+          and not exists (
+              select 1 from batch.workflow_node_run parent_node
+              join batch.workflow_run parent_workflow on parent_workflow.id = parent_node.workflow_run_id
+              where parent_workflow.tenant_id = #{tenantId}
+                and parent_node.job_instance_id = job_partition.job_instance_id
+                and parent_workflow.run_status not in ('CREATED', 'RUNNING')
+          )
+    </sql>
+
+    <sql id="LeaseReclaimablePartitionParentPredicate">
+          and exists (
+              select 1 from batch.job_instance parent_instance
+              where parent_instance.tenant_id = #{tenantId}
+                and parent_instance.id = job_partition.job_instance_id
+                and parent_instance.instance_status in ('CREATED', 'WAITING', 'READY', 'RUNNING', 'PAUSED')
+          )
+          and not exists (
+              select 1 from batch.workflow_node_run parent_node
+              join batch.workflow_run parent_workflow on parent_workflow.id = parent_node.workflow_run_id
+              where parent_workflow.tenant_id = #{tenantId}
+                and parent_node.job_instance_id = job_partition.job_instance_id
+                and parent_workflow.run_status not in ('CREATED', 'RUNNING', 'PAUSED')
+          )
+    </sql>
+
+    <sql id="ResetForDispatchTransition">
+        , transitioned as (
         update batch.job_partition p
         set partition_status = #{readyStatus},
             worker_code = null,
@@ -545,15 +592,45 @@
                 0,
                 failed_partition_count
                     - case when p.previous_status = 'FAILED' then 1 else 0 end),
+            cancelled_partition_count = greatest(
+                0,
+                cancelled_partition_count
+                    - case when p.previous_status = 'CANCELLED' then 1 else 0 end),
+            terminated_partition_count = greatest(
+                0,
+                terminated_partition_count
+                    - case when p.previous_status = 'TERMINATED' then 1 else 0 end),
             version = version + 1,
             updated_at = current_timestamp
         from transitioned p
         where ji.tenant_id = p.tenant_id
           and ji.id = p.job_instance_id
-          and p.previous_status in ('SUCCESS', 'FAILED')
+          and p.previous_status in ('SUCCESS', 'FAILED', 'CANCELLED', 'TERMINATED')
         returning ji.id
         )
         select count(*)::integer from transitioned
+    </sql>
+
+    <!-- 普通重试/文件重派只准入活跃父级，Job 或 Workflow 暂停时等待恢复。 -->
+    <select id="resetForDispatch" resultType="int" flushCache="true" affectData="true">
+        with candidate as (
+          <include refid="ResetForDispatchCandidateBase"/>
+          <include refid="DispatchablePartitionParentPredicate"/>
+          and (lease_expire_at is null or lease_expire_at &lt; current_timestamp)
+          for update
+        )
+        <include refid="ResetForDispatchTransition"/>
+    </select>
+
+    <!-- 只供过期 lease 回收恢复已派发分区；暂停不终结已在途工作，但终态父级仍拒绝。 -->
+    <select id="resetForLeaseReclaim" resultType="int" flushCache="true" affectData="true">
+        with candidate as (
+          <include refid="ResetForDispatchCandidateBase"/>
+          <include refid="LeaseReclaimablePartitionParentPredicate"/>
+          and (lease_expire_at is null or lease_expire_at &lt; current_timestamp)
+          for update
+        )
+        <include refid="ResetForDispatchTransition"/>
     </select>
 
     <update id="promoteStatus">
@@ -684,6 +761,20 @@
                   and jp.job_instance_id = ji.id
                   and jp.partition_status = 'FAILED')
                 + case when #{targetPartitionStatus} = 'FAILED' then d.closed_count else 0 end,
+            cancelled_partition_count = (
+                select count(*)::integer
+                from batch.job_partition jp
+                where jp.tenant_id = ji.tenant_id
+                  and jp.job_instance_id = ji.id
+                  and jp.partition_status = 'CANCELLED')
+                + case when #{targetPartitionStatus} = 'CANCELLED' then d.closed_count else 0 end,
+            terminated_partition_count = (
+                select count(*)::integer
+                from batch.job_partition jp
+                where jp.tenant_id = ji.tenant_id
+                  and jp.job_instance_id = ji.id
+                  and jp.partition_status = 'TERMINATED')
+                + case when #{targetPartitionStatus} = 'TERMINATED' then d.closed_count else 0 end,
             version = version + 1,
             updated_at = current_timestamp
         from transition_delta d

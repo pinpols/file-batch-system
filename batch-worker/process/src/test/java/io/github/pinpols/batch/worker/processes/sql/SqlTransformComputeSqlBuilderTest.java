@@ -22,6 +22,8 @@ class SqlTransformComputeSqlBuilderTest {
 
     assertThat(sql)
         .contains("INSERT INTO batch.process_staging")
+        .contains("staging_generation_id")
+        .contains(":stagingGenerationId")
         .contains("'account_id', base.\"source_account\"")
         .contains("'amount', base.\"source_amount\"")
         .contains(":batchKey", "select source_account, source_amount from biz.source_rows");
@@ -35,6 +37,7 @@ class SqlTransformComputeSqlBuilderTest {
     assertThat(sql)
         .contains("INSERT INTO \"biz\".\"daily_summary\"")
         .contains("jsonb_populate_record(NULL::\"biz\".\"daily_summary\", payload)")
+        .contains("staging_generation_id = :stagingGenerationId")
         .contains("ORDER BY (rec).\"account_id\"")
         .contains("ON CONFLICT (\"account_id\") DO UPDATE SET \"amount\" = EXCLUDED.\"amount\"");
   }

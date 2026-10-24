@@ -60,9 +60,7 @@ class MapperXmlTenantGuardArchTest extends BaseMapperXmlTenantGuardArchTest {
         "CalendarHolidayMapper#deleteById", // 当前无 Java 调用方(死 SQL,保留守护待清理)
         "CalendarHolidayMapper#deleteByCalendarId", // 当前无 Java 调用方(死 SQL,保留守护待清理)
         "CalendarHolidayMapper#deleteByCalendarIdAndId",
-        // Web Push 订阅:按浏览器 push endpoint(全局唯一)或订阅 id;touch/stale 由推送发件器/清理任务驱动
-        "ConsolePushSubscriptionMapper#touchLastPushedAt",
-        "ConsolePushSubscriptionMapper#deleteAllByEndpoint",
+        // Web Push:stale 为后台过期清理；provider 回执更新/失效清理必须匹配租户和原凭据版本。
         "ConsolePushSubscriptionMapper#deleteIfStaleSince",
         // Webhook 投递重试:重试调度器全局认领后按投递 id 推进状态(非用户可达的按 id 直改)
         "ConsoleWebhookDeliveryLogMapper#claimForRetryByStatuses",

@@ -71,6 +71,14 @@
          limit 1
     </select>
 
+    <select id="lockJobDefinitionForPolicyWrite" resultType="java.lang.Long">
+        select id
+          from batch.job_definition
+         where tenant_id = #{tenantId}
+           and job_code = #{jobCode}
+         for key share
+    </select>
+
     <insert id="upsert">
         insert into batch.asset_freshness_policy (
             tenant_id,

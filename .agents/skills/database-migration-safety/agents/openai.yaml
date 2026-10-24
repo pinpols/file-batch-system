@@ -1,0 +1,3 @@
+interface:
+  display_name: "数据库迁移安全"
+  short_description: "评估数据库结构、Flyway、约束、索引与回填的兼容、锁和恢复风险"

@@ -34,11 +34,8 @@ public class ConsolePipelineDefinitionRealtimeController {
       @RequestParam(value = "eventType", required = false) String eventType,
       @RequestParam(value = "cursor", required = false) String cursor,
       @RequestParam(value = "heartbeatMillis", required = false) Long heartbeatMillis) {
+    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
     return realtimeEventHub.subscribe(
-        tenantGuard.resolveTenant(tenantId),
-        "pipeline-definitions",
-        eventType,
-        cursor,
-        heartbeatMillis);
+        resolvedTenantId, "pipeline-definitions", eventType, cursor, heartbeatMillis);
   }
 }

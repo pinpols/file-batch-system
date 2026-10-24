@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.imports.domain.CustomerImportPayload;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -30,7 +29,9 @@ public class ValidationConfigSupport {
       return Map.of();
     }
     try {
-      return objectMapper.readValue(String.valueOf(value), new TypeReference<>() {});
+      String jsonText = String.valueOf(value);
+      Map<String, Object> parsedConfig = objectMapper.readValue(jsonText, new TypeReference<>() {});
+      return parsedConfig;
     } catch (Exception ignored) {
       SwallowedExceptionLogger.warn(ValidationConfigSupport.class, "catch:Exception", ignored);
 
@@ -39,11 +40,13 @@ public class ValidationConfigSupport {
   }
 
   public Map<String, Object> firstMap(Map<String, Object> container, String... keys) {
-    return Arrays.stream(keys)
-        .map(key -> toMap(container.get(key)))
-        .filter(EmptyChecks::isNotEmpty)
-        .findFirst()
-        .orElseGet(Map::of);
+    for (String key : keys) {
+      Map<String, Object> candidate = toMap(container.get(key));
+      if (EmptyChecks.isNotEmpty(candidate)) {
+        return candidate;
+      }
+    }
+    return Map.of();
   }
 
   public Map<String, Object> payloadToMap(CustomerImportPayload payload) {

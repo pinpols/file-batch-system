@@ -90,9 +90,11 @@ public final class SdkRetryPolicy {
    * @return 下一次间隔(指数策略递增封顶;固定策略恒等)
    */
   public Duration nextDelay(Duration current) {
-    long next = (long) (current.toMillis() * multiplier);
-    long capped = Math.min(next, maxDelay.toMillis());
-    return Duration.ofMillis(capped);
+    long currentMillis = current.toMillis();
+    long scaledMillis = (long) (currentMillis * multiplier);
+    long maxDelayMillis = maxDelay.toMillis();
+    long cappedMillis = Math.min(scaledMillis, maxDelayMillis);
+    return Duration.ofMillis(cappedMillis);
   }
 
   /** 按当前策略阻塞退避;中断转 {@link IllegalStateException}。供装饰器复用。 */

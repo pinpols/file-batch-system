@@ -30,13 +30,14 @@ fi
 LAN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/env-common.sh
 source "$LAN_ROOT/scripts/lib/env-common.sh"
+export BATCH_NO="${BATCH_NO:-sim-lan-$(date +%Y%m%d%H%M%S)}"
 
 # 2) BE / FE / 模拟器 host 端口(对齐 .env.local 默认值)
 export LAN_HOST
 CONSOLE_BASE="http://$(batch_format_host_port "$LAN_HOST" "${CONSOLE_PORT:-18080}")"
 TRIGGER_BASE="http://$(batch_format_host_port "$LAN_HOST" "${TRIGGER_PORT:-18081}")"
 ORCH_BASE="http://$(batch_format_host_port "$LAN_HOST" "${ORCHESTRATOR_PORT:-18082}")"
-MOCK_BASE="http://$(batch_format_host_port "$LAN_HOST" "${MOCKSERVER_HOST_PORT:-11080}")"
+MOCK_BASE="http://$(batch_format_host_port "$LAN_HOST" "${MOCKSERVER_HOST_PORT}")"
 export CONSOLE_BASE TRIGGER_BASE ORCH_BASE MOCK_BASE
 
 # Infra(脚本里 docker exec 不依赖这些,但客户端 / DataGrip 用得着)
@@ -61,6 +62,7 @@ cat <<EOF
   KAFKA_BOOTSTRAP    = $KAFKA_BOOTSTRAP
   MINIO_URL          = $MINIO_URL
   SFTP_HOST:PORT     = $(batch_format_host_port "$SFTP_HOST" "$SFTP_PORT")
+  BATCH_NO           = $BATCH_NO
 
 LAN 访问从手机 / 别人电脑也用同款 URL(host 同网段即可)。
 EOF

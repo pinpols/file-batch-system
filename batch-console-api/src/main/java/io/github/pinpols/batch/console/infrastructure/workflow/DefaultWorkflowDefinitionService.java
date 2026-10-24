@@ -7,6 +7,8 @@ import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
+import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.support.JobResourceAssignmentGuard;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService;
@@ -14,6 +16,9 @@ import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesig
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService.LockHolder;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionFullUpdateRequest;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest.EdgeItem;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest.NodeItem;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowScheduleUpdateRequest;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowDefinitionDetailResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowDefinitionVersionSummaryResponse;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
@@ -30,6 +35,8 @@ import io.github.pinpols.batch.console.domain.workflow.validation.WorkflowDagVal
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -77,6 +84,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
   private final WorkflowDefinitionWriteSupport writeSupport;
   private final WorkflowDefinitionDagInspector dagInspector;
   private final JobResourceAssignmentGuard resourceAssignmentGuard;
+  private final JobDefinitionMapper jobDefinitionMapper;
 
   @Override
   public WorkflowDefinitionDetailResponse getById(Long id, String tenantId) {
@@ -115,6 +123,9 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
     entity.setWorkflowCode(request.getWorkflowCode());
     entity.setWorkflowName(request.getWorkflowName());
     entity.setWorkflowType(request.getWorkflowType());
+    applyScheduleConfiguration(entity, request, null);
+    entity.setDependsOnJobCode(
+        validateScheduleDependency(resolvedTenant, request.getDependsOnJobCode(), null));
     entity.setVersion(1);
     entity.setEnabled(request.getEnabled() == null || request.getEnabled());
     definitionMapper.insert(entity);
@@ -133,6 +144,10 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
 
     WorkflowDefinitionEntity def = Guard.requireFound(
         definitionMapper.selectById(resolvedTenant, id), ERR_WORKFLOW_NOT_FOUND + id);
+    assertManagedSingleJobGraph(resolvedTenant, def, request);
+    applyScheduleConfiguration(def, request, def);
+    String dependsOnJobCode = validateScheduleDependency(
+        resolvedTenant, def.getDependsOnJobCode(), def.getSingleJobDefinitionId());
     assertAndPreserveNodeRouting(resolvedTenant, id, request.getNodes());
 
     // BE 回退:与 fullUpdate 同源校验。update 不改 workflowCode,用持久化 def 的 code 作环检测 root。
@@ -144,7 +159,14 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
         id,
         request.getWorkflowName(),
         request.getWorkflowType(),
-        request.getEnabled());
+        request.getEnabled(),
+        def.getScheduleEnabled(),
+        def.getScheduleType(),
+        def.getScheduleExpr(),
+        def.getTimezone(),
+        def.getTriggerMode(),
+        def.getCalendarCode(),
+        dependsOnJobCode);
 
     Map<String, String> existingNodeParams = writeSupport.readNodeParams(resolvedTenant, id);
     nodeMapper.deleteByWorkflowDefinitionId(id);
@@ -184,6 +206,10 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
           ResultCode.CONFLICT, "error.workflow_design_lock.held_by_other", holder.lockedBy());
     }
 
+    assertManagedSingleJobGraph(resolvedTenant, def, body);
+    applyScheduleConfiguration(def, body, def);
+    String dependsOnJobCode = validateScheduleDependency(
+        resolvedTenant, def.getDependsOnJobCode(), def.getSingleJobDefinitionId());
     assertAndPreserveNodeRouting(resolvedTenant, id, body.getNodes());
 
     // BE 回退:DAG 拓扑 + 引用完整性校验(范围 = 拓扑;业务对错见 ADR-021,不在此处)
@@ -198,7 +224,14 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
         request.getExpectedVersion(),
         body.getWorkflowName(),
         body.getWorkflowType(),
-        body.getEnabled() != null ? body.getEnabled() : def.getEnabled());
+        body.getEnabled() != null ? body.getEnabled() : def.getEnabled(),
+        def.getScheduleEnabled(),
+        def.getScheduleType(),
+        def.getScheduleExpr(),
+        def.getTimezone(),
+        def.getTriggerMode(),
+        def.getCalendarCode(),
+        dependsOnJobCode);
     if (rows == 0) {
       throw BizException.of(
           ResultCode.CONFLICT,
@@ -217,7 +250,13 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
     // 避免基于 request DTO 序列化导致下游字段差异。
     Integer newVersion = def.getVersion() + 1;
     writeSupport.appendVersionSnapshot(
-        resolvedTenant, id, def.getWorkflowCode(), newVersion, body, currentUser);
+        resolvedTenant,
+        id,
+        def.getWorkflowCode(),
+        newVersion,
+        body,
+        def.getScheduleEnabled(),
+        currentUser);
 
     cacheInvalidationService.evictWorkflowDefinition(resolvedTenant, def.getWorkflowCode());
     publishRefresh(resolvedTenant, "workflow-definition-full-updated");
@@ -240,6 +279,96 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
       cacheInvalidationService.evictWorkflowDefinition(resolvedTenant, def.getWorkflowCode());
     }
     publishRefresh(resolvedTenant, "workflow-definition-toggled");
+  }
+
+  @Override
+  @Transactional
+  public void toggleScheduleEnabled(Long id, String tenantId, Boolean scheduleEnabled) {
+    String resolvedTenant = tenantGuard.resolveTenant(tenantId);
+    int rows = definitionMapper.toggleScheduleEnabled(resolvedTenant, id, scheduleEnabled);
+    if (rows == 0) {
+      throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.not_found", id);
+    }
+    WorkflowDefinitionEntity def = definitionMapper.selectById(resolvedTenant, id);
+    if (def != null) {
+      cacheInvalidationService.evictWorkflowDefinition(resolvedTenant, def.getWorkflowCode());
+    }
+    publishRefresh(resolvedTenant, "workflow-schedule-toggled");
+  }
+
+  @Override
+  @Transactional
+  public WorkflowDefinitionDetailResponse updateSchedule(
+      Long id, WorkflowScheduleUpdateRequest request, String currentUser) {
+    String resolvedTenant = tenantGuard.resolveTenant(request.getTenantId());
+    WorkflowDefinitionEntity current = Guard.requireFound(
+        definitionMapper.selectById(resolvedTenant, id), ERR_WORKFLOW_NOT_FOUND + id);
+    String dependsOnJobCode = validateScheduleDependency(
+        resolvedTenant, request.getDependsOnJobCode(), current.getSingleJobDefinitionId());
+    String scheduleType = request.getScheduleType().trim();
+    String triggerMode = Texts.hasText(request.getTriggerMode())
+        ? request.getTriggerMode().trim()
+        : defaultTriggerMode(scheduleType);
+    String scheduleExpr = "CRON".equals(scheduleType) || "FIXED_RATE".equals(scheduleType)
+        ? request.getScheduleExpr()
+        : null;
+    int rows = definitionMapper.updateScheduleConfiguration(
+        resolvedTenant,
+        id,
+        request.getExpectedVersion(),
+        scheduleType,
+        scheduleExpr,
+        request.getTimezone(),
+        triggerMode,
+        request.getCalendarCode(),
+        dependsOnJobCode);
+    if (rows == 0) {
+      throw BizException.of(
+          ResultCode.CONFLICT,
+          "error.workflow_full_update.version_conflict",
+          request.getExpectedVersion(),
+          current.getVersion());
+    }
+    WorkflowDefinitionEntity updated = Guard.requireFound(
+        definitionMapper.selectById(resolvedTenant, id), ERR_WORKFLOW_NOT_FOUND + id);
+    WorkflowDefinitionSaveRequest snapshot = new WorkflowDefinitionSaveRequest();
+    snapshot.setWorkflowName(updated.getWorkflowName());
+    snapshot.setWorkflowType(updated.getWorkflowType());
+    snapshot.setEnabled(updated.getEnabled());
+    snapshot.setScheduleType(updated.getScheduleType());
+    snapshot.setScheduleExpr(updated.getScheduleExpr());
+    snapshot.setTimezone(updated.getTimezone());
+    snapshot.setTriggerMode(updated.getTriggerMode());
+    snapshot.setCalendarCode(updated.getCalendarCode());
+    snapshot.setDependsOnJobCode(updated.getDependsOnJobCode());
+    writeSupport.appendVersionSnapshot(
+        resolvedTenant,
+        id,
+        updated.getWorkflowCode(),
+        updated.getVersion(),
+        snapshot,
+        updated.getScheduleEnabled(),
+        currentUser);
+    cacheInvalidationService.evictWorkflowDefinition(resolvedTenant, updated.getWorkflowCode());
+    publishRefresh(resolvedTenant, "workflow-schedule-updated");
+    return loadDetail(resolvedTenant, id);
+  }
+
+  private String validateScheduleDependency(
+      String tenantId, String requestedJobCode, Long managedJobDefinitionId) {
+    if (!Texts.hasText(requestedJobCode)) {
+      return null;
+    }
+    String jobCode = requestedJobCode.trim();
+    JobDefinitionEntity upstream = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
+    if (upstream == null) {
+      throw BizException.of(
+          ResultCode.NOT_FOUND, "error.workflow.schedule_dependency_job_not_found", jobCode);
+    }
+    if (managedJobDefinitionId != null && managedJobDefinitionId.equals(upstream.getId())) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.schedule_self_dependency");
+    }
+    return jobCode;
   }
 
   @Override
@@ -281,6 +410,123 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
         resourceAssignmentGuard.assertCreateAllowed(null, node.getWorkerGroup());
       }
     }
+  }
+
+  /** Managed single-job workflows may change metadata, but their system graph is immutable. */
+  private void assertManagedSingleJobGraph(
+      String tenantId, WorkflowDefinitionEntity definition, WorkflowDefinitionSaveRequest request) {
+    if (definition.getSingleJobDefinitionId() == null) {
+      return;
+    }
+    List<NodeItem> submittedNodes = request.getNodes();
+    List<EdgeItem> submittedEdges = request.getEdges();
+    if (!"DAG".equals(definition.getWorkflowType())
+        || (request.getWorkflowType() != null && !"DAG".equals(request.getWorkflowType()))
+        || submittedNodes == null
+        || submittedNodes.size() != 3
+        || submittedNodes.stream().anyMatch(Objects::isNull)
+        || submittedEdges == null
+        || submittedEdges.size() != 2
+        || submittedEdges.stream().anyMatch(Objects::isNull)) {
+      throw managedGraphConflict();
+    }
+
+    Map<String, NodeItem> nodesByCode = new HashMap<>();
+    for (NodeItem node : submittedNodes) {
+      if (nodesByCode.putIfAbsent(node.getNodeCode(), node) != null) {
+        throw managedGraphConflict();
+      }
+    }
+    String jobCode =
+        nodeMapper
+            .selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, definition.getId(), null))
+            .stream()
+            .filter(node -> "JOB".equals(node.getNodeType()))
+            .map(WorkflowNodeEntity::getRelatedJobCode)
+            .filter(Texts::hasText)
+            .findFirst()
+            .orElseThrow(DefaultWorkflowDefinitionService::managedGraphConflict);
+    if (!isManagedNode(nodesByCode.get("START"), "START", "START", 0, null)
+        || !isManagedNode(nodesByCode.get("JOB"), "JOB", "JOB", 1, jobCode)
+        || !isManagedNode(nodesByCode.get("END"), "END", "END", 2, null)) {
+      throw managedGraphConflict();
+    }
+    Set<String> edges = submittedEdges.stream()
+        .map(edge -> edge.getFromNodeCode() + ">" + edge.getToNodeCode() + ":"
+            + (edge.getEdgeType() == null ? "SUCCESS" : edge.getEdgeType()))
+        .collect(java.util.stream.Collectors.toSet());
+    boolean defaultEdges = edges.size() == 2
+        && edges.contains("START>JOB:SUCCESS")
+        && edges.contains("JOB>END:SUCCESS")
+        && submittedEdges.stream()
+            .allMatch(edge -> !Texts.hasText(edge.getConditionExpr())
+                && !Boolean.FALSE.equals(edge.getEnabled()));
+    if (!defaultEdges) {
+      throw managedGraphConflict();
+    }
+  }
+
+  private static boolean isManagedNode(
+      NodeItem node, String nodeCode, String nodeType, int nodeOrder, String relatedJobCode) {
+    return node != null
+        && nodeCode.equals(node.getNodeCode())
+        && nodeType.equals(node.getNodeType())
+        && Objects.equals(relatedJobCode, node.getRelatedJobCode())
+        && Objects.equals(nodeOrder, node.getNodeOrder())
+        && !Texts.hasText(node.getRelatedPipelineCode())
+        && !Texts.hasText(node.getWorkerGroup())
+        && !Texts.hasText(node.getNodeParams())
+        && !Texts.hasText(node.getCrossDayDependencies())
+        && (!Texts.hasText(node.getRetryPolicy()) || "NONE".equals(node.getRetryPolicy()))
+        && (node.getRetryMaxCount() == null || node.getRetryMaxCount() == 0)
+        && (node.getTimeoutSeconds() == null || node.getTimeoutSeconds() == 0)
+        && !Boolean.FALSE.equals(node.getEnabled());
+  }
+
+  private static BizException managedGraphConflict() {
+    return BizException.of(ResultCode.CONFLICT, "error.workflow.single_job_graph_managed");
+  }
+
+  /** Keep schedule ownership in Workflow while old Console clients omit the new fields. */
+  private static void applyScheduleConfiguration(
+      WorkflowDefinitionEntity target,
+      WorkflowDefinitionSaveRequest request,
+      WorkflowDefinitionEntity existing) {
+    String requestedType = request.getScheduleType();
+    if (!Texts.hasText(requestedType) && existing != null) {
+      request.setScheduleType(existing.getScheduleType());
+      request.setScheduleExpr(existing.getScheduleExpr());
+      request.setTimezone(existing.getTimezone());
+      request.setTriggerMode(existing.getTriggerMode());
+      request.setCalendarCode(existing.getCalendarCode());
+      request.setDependsOnJobCode(existing.getDependsOnJobCode());
+      return;
+    }
+
+    String scheduleType = Texts.hasText(requestedType) ? requestedType.trim() : "MANUAL";
+    String triggerMode = request.getTriggerMode();
+    if (!Texts.hasText(triggerMode)) {
+      triggerMode = existing != null && scheduleType.equals(existing.getScheduleType())
+          ? existing.getTriggerMode()
+          : defaultTriggerMode(scheduleType);
+    }
+    target.setScheduleType(scheduleType);
+    target.setScheduleExpr("MANUAL".equals(scheduleType) ? null : request.getScheduleExpr());
+    target.setTimezone(request.getTimezone());
+    target.setTriggerMode(triggerMode);
+    target.setCalendarCode(request.getCalendarCode());
+    target.setDependsOnJobCode(request.getDependsOnJobCode());
+    request.setScheduleType(scheduleType);
+    request.setScheduleExpr(target.getScheduleExpr());
+    request.setTriggerMode(triggerMode);
+  }
+
+  private static String defaultTriggerMode(String scheduleType) {
+    return switch (scheduleType) {
+      case "EVENT" -> "EVENT";
+      case "CRON", "FIXED_RATE", "ONE_TIME" -> "SCHEDULED";
+      default -> "MANUAL";
+    };
   }
 
   private void assertAndPreserveNodeRouting(

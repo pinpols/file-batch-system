@@ -3,6 +3,8 @@
 > 面向"我要让一个作业等另一个作业完成才跑"或者"等多个作业都完成才跑"的人。
 > 系统通过 `workflow_definition` + `workflow_node` + `workflow_edge` 三表把多个 `job_definition` 编排成 DAG。
 
+> **统一运行迁移状态（2026-10-14）**：目标是单 Job 和组合图均以 Workflow Run 为顶层入口；单 Job 由系统生成 `START → JOB → END`，Workflow 节点引用 Job，文件 Job 再按类型解析系统 Pipeline。Pipeline 定义/步骤/实例/阶段历史模型保留，但新 Workflow 不直接绑定租户 Pipeline。当前单 Job Workflow 显式关联和 Workflow schedule source 已部分落地；组合 Workflow 根 Launch、`TASK/FILE_STEP` 旧图转换和配置包迁移仍未完成。本文的“当前实现”章节说明的是迁移中的现状，不应当作目标模型。
+
 Workflow 不支持 `APPROVAL` 人工审批节点；设计器与保存接口均不提供该类型。补跑、配置发布等独立运维审批不受此限制。
 
 ---
@@ -49,7 +51,7 @@ erDiagram
   workflow_definition ||--o{ workflow_node : has
   workflow_definition ||--o{ workflow_edge : has
   workflow_node }o--|| job_definition : "JOB.related_job_code"
-  workflow_node }o--|| pipeline_definition : "TASK/FILE_STEP.related_pipeline_code"
+  job_definition }o..|| system_pipeline_catalog : "job_type (file types only)"
 
   workflow_definition {
     bigint id PK
@@ -64,8 +66,8 @@ erDiagram
     bigint workflow_definition_id FK
     string node_code "唯一标识 START/END/JOB_X/MERGE..."
     string node_type "START/END/JOB/TASK/FILE_STEP/GATEWAY/WAIT"
-    string related_job_code "node_type=JOB 时指向 job_definition.job_code"
-    string related_pipeline_code
+    string related_job_code "目标执行节点指向 job_definition.job_code"
+    string related_pipeline_code "legacy FILE_STEP 字段；迁移后不供新写入使用"
     string worker_group
     int    node_order
     string retry_policy
@@ -89,7 +91,7 @@ erDiagram
 | 枚举 | 取值 | 含义 |
 |---|---|---|
 | `WorkflowType` | `DAG` / `PIPELINE` / `MIXED` | DAG 自由有向无环图；PIPELINE 严格线性；MIXED 混合 |
-| `WorkflowNodeType` | `START` / `END` / `JOB` / `TASK` / `FILE_STEP` / `GATEWAY` / `WAIT` | JOB = 嵌套独立子作业；TASK = workflow 内 pipeline step；GATEWAY = 路由/汇聚；WAIT = Sensor 等待节点（当前未完成稳定 E2E 验收） |
+| `WorkflowNodeType` | `START` / `END` / `JOB` / `TASK` / `FILE_STEP` / `GATEWAY` / `WAIT` | 迁移目标执行节点统一引用 Job；当前 JOB 会拉起子作业，TASK/FILE_STEP 仍走另一派发路径，语义并非同义。旧 FILE_STEP 直绑 Pipeline 的配置待转换；GATEWAY = 路由/汇聚；WAIT = Sensor 等待节点（当前未完成稳定 E2E 验收） |
 | `WorkflowEdgeType` | `SUCCESS` / `FAILURE` / `CONDITION` / `ALWAYS` | 边的触发条件 |
 | `WorkflowJoinMode` | `ALL` / `ANY` / `N_OF` | GATEWAY 等多上游的 join 策略 |
 

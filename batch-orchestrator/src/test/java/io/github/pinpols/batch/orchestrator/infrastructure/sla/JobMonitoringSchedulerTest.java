@@ -3,11 +3,13 @@ package io.github.pinpols.batch.orchestrator.infrastructure.sla;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.orchestrator.application.service.governance.JobMonitoringAlertEmissionService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.JobMonitoringAlertEmissionService.Violation;
 import io.github.pinpols.batch.orchestrator.config.SlaGovernanceProperties;
@@ -127,10 +129,36 @@ class JobMonitoringSchedulerTest {
     verify(emissionService).emitOnce(failedPartition, Violation.FAILED_PARTITION);
   }
 
+  @Test
+  @DisplayName("跨租户监控候选在各自租户上下文中声明告警并清理上下文")
+  void shouldEmitEachCandidateUnderItsTenantContext() {
+    JobMonitoringAlertCandidate t1 = candidate(21L, "tenant-a");
+    JobMonitoringAlertCandidate t2 = candidate(22L, "tenant-b");
+    when(mapper.selectRunningTooLong(anyInt())).thenReturn(List.of(t1, t2));
+    when(mapper.selectNotStarted(anyInt())).thenReturn(List.of());
+    when(mapper.selectNotCompletedByDeadline(anyInt())).thenReturn(List.of());
+    when(mapper.selectFinalPartitionFailures(anyInt(), anyInt())).thenReturn(List.of());
+    doAnswer(invocation -> {
+          JobMonitoringAlertCandidate candidate = invocation.getArgument(0);
+          assertThat(RlsTenantContextHolder.get()).isEqualTo(candidate.tenantId());
+          return true;
+        })
+        .when(emissionService)
+        .emitOnce(any(), any());
+
+    scheduler.scan();
+
+    assertThat(RlsTenantContextHolder.get()).isNull();
+  }
+
   private static JobMonitoringAlertCandidate candidate(long id) {
+    return candidate(id, "tenant-a");
+  }
+
+  private static JobMonitoringAlertCandidate candidate(long id, String tenantId) {
     Instant now = Instant.now();
     return new JobMonitoringAlertCandidate(
-        "tenant-a",
+        tenantId,
         id,
         "JOB_A",
         "instance-" + id,

@@ -2,13 +2,18 @@ package io.github.pinpols.batch.orchestrator.application.service.sensor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.orchestrator.infrastructure.sensor.FileArrivalSensorPolicy;
 import io.github.pinpols.batch.orchestrator.mapper.SensorFileArrivalMapper;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -40,7 +45,15 @@ class FileArrivalSensorPolicyTest {
     Map<String, Object> hit = new LinkedHashMap<>();
     hit.put("fileId", 42L);
     hit.put("fileName", "settle-001.csv");
-    when(mapper.selectLatestArrival(eq("ta"), eq("settle-%"), any(), any())).thenReturn(hit);
+    when(mapper.selectLatestArrival(
+            eq("ta"),
+            eq("settle-%"),
+            any(),
+            any(),
+            nullable(LocalDate.class),
+            nullable(String.class),
+            anyBoolean()))
+        .thenReturn(hit);
 
     SensorProbeResult r = policy.probe(ctx(Map.of("pattern", "settle-*", "maxAgeSeconds", 3600)));
 
@@ -51,7 +64,15 @@ class FileArrivalSensorPolicyTest {
   @Test
   @DisplayName("没有到达记录时判定为未就绪")
   void probe_noHit_returnsNotYet() {
-    when(mapper.selectLatestArrival(any(), any(), any(), any())).thenReturn(null);
+    when(mapper.selectLatestArrival(
+            any(),
+            any(),
+            any(),
+            any(),
+            nullable(LocalDate.class),
+            nullable(String.class),
+            anyBoolean()))
+        .thenReturn(null);
     SensorProbeResult r = policy.probe(ctx(Map.of("pattern", "x-*", "maxAgeSeconds", 600)));
     assertThat(r.status()).isEqualTo(SensorProbeStatus.NOT_YET);
   }
@@ -67,7 +88,14 @@ class FileArrivalSensorPolicyTest {
   @Test
   @DisplayName("查询过程抛异常时判定为探针失败并给出错误键")
   void probe_mapperThrows_returnsError() {
-    when(mapper.selectLatestArrival(any(), any(), any(), any()))
+    when(mapper.selectLatestArrival(
+            any(),
+            any(),
+            any(),
+            any(),
+            nullable(LocalDate.class),
+            nullable(String.class),
+            anyBoolean()))
         .thenThrow(new RuntimeException("db down"));
     SensorProbeResult r = policy.probe(ctx(Map.of("pattern", "*.csv", "maxAgeSeconds", 3600)));
     assertThat(r.status()).isEqualTo(SensorProbeStatus.ERROR);
@@ -77,16 +105,138 @@ class FileArrivalSensorPolicyTest {
   @Test
   @DisplayName("渠道来源为文件传输时按该来源类型过滤并带出时间下界")
   void probe_channelCodeSftp_filterSftpSourceType() {
-    when(mapper.selectLatestArrival(any(), any(), any(), any())).thenReturn(null);
+    when(mapper.selectLatestArrival(
+            any(),
+            any(),
+            any(),
+            any(),
+            nullable(LocalDate.class),
+            nullable(String.class),
+            anyBoolean()))
+        .thenReturn(null);
     policy.probe(ctx(Map.of(
         "channelCode", "sftp_bank_in",
         "pattern", "*.csv",
         "maxAgeSeconds", 3600)));
     ArgumentCaptor<String> srcCap = ArgumentCaptor.forClass(String.class);
     ArgumentCaptor<OffsetDateTime> sinceCap = ArgumentCaptor.forClass(OffsetDateTime.class);
-    verify(mapper).selectLatestArrival(eq("ta"), eq("%.csv"), srcCap.capture(), sinceCap.capture());
+    verify(mapper)
+        .selectLatestArrival(
+            eq("ta"),
+            eq("%.csv"),
+            srcCap.capture(),
+            sinceCap.capture(),
+            nullable(LocalDate.class),
+            nullable(String.class),
+            anyBoolean());
     assertThat(srcCap.getValue()).isEqualTo("SFTP");
     assertThat(sinceCap.getValue()).isNotNull();
+  }
+
+  @Test
+  @DisplayName("显式绑定 workflow 业务日并可要求到达组完整后才命中")
+  void probe_completeGroup_usesWorkflowBizDate() {
+    when(mapper.selectLatestArrival(any(), any(), any(), any(), any(), any(), anyBoolean()))
+        .thenReturn(Map.of("fileId", 91L, "bizDate", "2026-05-07"));
+
+    SensorProbeResult result = policy.probe(new SensorContext(
+        "ta",
+        100L,
+        Map.of(
+            "pattern",
+            "settle-*.csv",
+            "maxAgeSeconds",
+            3600,
+            "fileGroupCode",
+            "SETTLEMENT",
+            "requireCompleteGroup",
+            true,
+            "bindWorkflowBizDate",
+            true),
+        Map.of("bizDate", "2026-05-07"),
+        Duration.ofMinutes(30)));
+
+    assertThat(result.status()).isEqualTo(SensorProbeStatus.MATCHED);
+    verify(mapper)
+        .selectLatestArrival(
+            eq("ta"),
+            eq("settle-%.csv"),
+            any(),
+            any(),
+            eq(LocalDate.parse("2026-05-07")),
+            eq("SETTLEMENT"),
+            eq(true));
+  }
+
+  @Test
+  @DisplayName("旧配置不自动追加 workflow 业务日过滤")
+  void probe_legacyConfig_keepsUnscopedBizDate() {
+    when(mapper.selectLatestArrival(
+            any(),
+            any(),
+            any(),
+            any(),
+            nullable(LocalDate.class),
+            nullable(String.class),
+            anyBoolean()))
+        .thenReturn(null);
+
+    policy.probe(new SensorContext(
+        "ta",
+        100L,
+        Map.of("pattern", "*.csv", "maxAgeSeconds", 600),
+        Map.of("bizDate", "2026-05-07"),
+        Duration.ofMinutes(30)));
+
+    verify(mapper)
+        .selectLatestArrival(eq("ta"), eq("%.csv"), any(), any(), isNull(), isNull(), eq(false));
+  }
+
+  @Test
+  @DisplayName("要求完整到达组却未指定组编码时返回配置错误")
+  void probe_completeGroupWithoutGroupCode_returnsError() {
+    SensorProbeResult result = policy.probe(
+        ctx(Map.of("pattern", "*.csv", "maxAgeSeconds", 600, "requireCompleteGroup", true)));
+
+    assertThat(result.status()).isEqualTo(SensorProbeStatus.ERROR);
+    assertThat(result.errorKey()).isEqualTo("error.workflow.sensor_spec_invalid");
+  }
+
+  @Test
+  @DisplayName("完整到达组查询未绑定业务日时拒绝探测")
+  void probe_completeGroupWithoutBizDate_returnsError() {
+    SensorProbeResult result = policy.probe(new SensorContext(
+        "ta",
+        100L,
+        Map.of(
+            "pattern",
+            "*.csv",
+            "maxAgeSeconds",
+            600,
+            "fileGroupCode",
+            "SETTLEMENT",
+            "requireCompleteGroup",
+            true),
+        Map.of(),
+        Duration.ofMinutes(30)));
+
+    assertThat(result.status()).isEqualTo(SensorProbeStatus.ERROR);
+    assertThat(result.errorKey()).isEqualTo("error.workflow.sensor_spec_invalid");
+    verifyNoInteractions(mapper);
+  }
+
+  @Test
+  @DisplayName("workflow 业务日格式错误时拒绝探测")
+  void probe_invalidWorkflowBizDate_returnsError() {
+    SensorProbeResult result = policy.probe(new SensorContext(
+        "ta",
+        100L,
+        Map.of("pattern", "*.csv", "maxAgeSeconds", 600, "bindWorkflowBizDate", true),
+        Map.of("bizDate", "not-a-date"),
+        Duration.ofMinutes(30)));
+
+    assertThat(result.status()).isEqualTo(SensorProbeStatus.ERROR);
+    assertThat(result.errorKey()).isEqualTo("error.workflow.sensor_spec_invalid");
   }
 
   private static SensorContext ctx(Map<String, Object> spec) {

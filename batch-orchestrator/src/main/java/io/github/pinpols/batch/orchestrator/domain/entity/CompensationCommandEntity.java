@@ -15,12 +15,14 @@ public class CompensationCommandEntity extends AbstractLocalizedErrorEntity {
   private String commandNo;
   private String compensationType;
   private Long targetId;
+  private Long sourceWorkflowRunId;
   private String jobCode;
   private LocalDate bizDate;
   private String batchNo;
   private Long relatedJobInstanceId;
   private Long relatedFileId;
   private String approvalId;
+  private String requestFingerprint;
   private String operatorId;
   private String reason;
   private String strategy;

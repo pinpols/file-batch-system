@@ -2,10 +2,10 @@ package io.github.pinpols.batch.console.application.contract.response.ops;
 
 import java.time.Instant;
 
-/** 触发器注册状态的固定传输契约，租户过滤直接使用 tenantId。 */
+/** Workflow 调度注册状态的固定传输契约，租户过滤直接使用 tenantId。 */
 public record ConsoleTriggerStatusResponse(
     String tenantId,
-    String jobCode,
+    String workflowCode,
     String scheduleType,
     String scheduleExpression,
     String timezone,

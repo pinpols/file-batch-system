@@ -6,7 +6,9 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.query.PartitionStatusRef;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -111,8 +113,7 @@ class TaskOutcomeSummaryBuilderTest {
   @Test
   @DisplayName("perf(#5): 计数版 buildJobInstanceResultSummary 与列表版逐字段等价")
   void shouldEqualListBased_whenBuildingCountBasedSummary() {
-    io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity jobInstance =
-        new io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity();
+    JobInstanceEntity jobInstance = new JobInstanceEntity();
     jobInstance.setId(77L);
     List<JobPartitionEntity> partitions = List.of(
         partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of()),
@@ -130,11 +131,9 @@ class TaskOutcomeSummaryBuilderTest {
         .build();
 
     // 轻量投影(与列表同一批分区状态)。
-    List<io.github.pinpols.batch.orchestrator.domain.query.PartitionStatusRef> statusRefs =
-        partitions.stream()
-            .map(p -> new io.github.pinpols.batch.orchestrator.domain.query.PartitionStatusRef(
-                p.getId(), p.getPartitionStatus()))
-            .toList();
+    List<PartitionStatusRef> statusRefs = partitions.stream()
+        .map(p -> new PartitionStatusRef(p.getId(), p.getPartitionStatus()))
+        .toList();
     long successCount = statusRefs.stream()
         .filter(r -> PartitionStatus.SUCCESS.code().equals(r.partitionStatus()))
         .count();

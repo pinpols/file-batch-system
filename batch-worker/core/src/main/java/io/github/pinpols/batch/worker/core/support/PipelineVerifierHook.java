@@ -159,6 +159,8 @@ public class PipelineVerifierHook {
     if (pipelineType == null || pipelineType.isBlank()) {
       return null;
     }
-    return DictEnum.fromCode(JobType.class, pipelineType.trim().toUpperCase());
+    String trimmedPipelineType = pipelineType.trim();
+    String normalizedPipelineType = trimmedPipelineType.toUpperCase();
+    return DictEnum.fromCode(JobType.class, normalizedPipelineType);
   }
 }

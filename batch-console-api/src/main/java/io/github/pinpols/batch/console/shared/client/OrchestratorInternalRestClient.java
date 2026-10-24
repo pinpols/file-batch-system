@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.shared.client;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.i18n.AcceptLanguageRequestInterceptor;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.config.ConsoleOrchestratorClientProperties;
@@ -11,6 +12,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
 import org.springframework.boot.http.client.HttpClientSettings;
 import org.springframework.core.env.Environment;
+import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.function.SingletonSupplier;
 import org.springframework.web.client.RestClient;
@@ -65,15 +67,19 @@ public class OrchestratorInternalRestClient {
         "batch.console.orchestrator.base-url");
     Guard.requireText(baseUrl, "orchestrator base url is not configured");
     String secret = batchSecurityProperties.getInternalSecret();
+    HttpClientSettings httpClientSettings = HttpClientSettings.defaults();
+    Duration connectTimeout =
+        Duration.ofMillis(orchestratorClientProperties.getConnectTimeoutMillis());
+    httpClientSettings = httpClientSettings.withConnectTimeout(connectTimeout);
+    Duration readTimeout = Duration.ofMillis(orchestratorClientProperties.getReadTimeoutMillis());
+    httpClientSettings = httpClientSettings.withReadTimeout(readTimeout);
+    ClientHttpRequestFactory requestFactory =
+        ClientHttpRequestFactoryBuilder.detect().build(httpClientSettings);
     RestClient.Builder builder = restClientBuilderProvider
         .getObject()
         .baseUrl(baseUrl)
-        .requestFactory(ClientHttpRequestFactoryBuilder.detect()
-            .build(HttpClientSettings.defaults()
-                .withConnectTimeout(
-                    Duration.ofMillis(orchestratorClientProperties.getConnectTimeoutMillis()))
-                .withReadTimeout(
-                    Duration.ofMillis(orchestratorClientProperties.getReadTimeoutMillis()))));
+        .requestInterceptor(new AcceptLanguageRequestInterceptor())
+        .requestFactory(requestFactory);
     if (Texts.hasText(secret)) {
       builder = builder.defaultHeader(X_INTERNAL_SECRET_HEADER, secret);
     }
@@ -145,7 +151,39 @@ public class OrchestratorInternalRestClient {
         .toBodilessEntity();
   }
 
+  public void rejectWorkflowNodeReplayOperation(Long operationId, String tenantId) {
+    client()
+        .post()
+        .uri("/internal/compensations/workflow-node/replay-operations/{id}/reject", operationId)
+        .body(new ApprovalTenantRequest(tenantId))
+        .retrieve()
+        .toBodilessEntity();
+  }
+
+  public void approveWorkflowRunReplayOperation(
+      Long operationId, String tenantId, String approver) {
+    client()
+        .post()
+        .uri("/internal/orchestrator/workflow-replay/operations/{id}/approve", operationId)
+        .body(new WorkflowRunReplayApprovalRequest(tenantId, approver))
+        .retrieve()
+        .toBodilessEntity();
+  }
+
+  public void rejectWorkflowRunReplayOperation(Long operationId, String tenantId) {
+    client()
+        .post()
+        .uri("/internal/orchestrator/workflow-replay/operations/{id}/reject", operationId)
+        .body(new WorkflowRunReplayRejectRequest(tenantId))
+        .retrieve()
+        .toBodilessEntity();
+  }
+
   private record ApprovalActionRequest(String tenantId, String operatorId, String reason) {}
 
   private record ApprovalTenantRequest(String tenantId) {}
+
+  private record WorkflowRunReplayApprovalRequest(String tenantId, String approver) {}
+
+  private record WorkflowRunReplayRejectRequest(String tenantId) {}
 }

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.security.SensitiveDataValidator;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.ops.dto.AtomicTaskTypeSchema;
 import io.github.pinpols.batch.console.domain.ops.dto.AtomicTaskTypeSchema.ParamSpec;
 import io.github.pinpols.batch.console.domain.ops.entity.AtomicTaskConfigEntity;
@@ -143,9 +144,11 @@ public class ConsoleAtomicTaskConfigService {
         continue;
       }
       Object value = parameters.get(spec.name());
-      if (value == null
+      boolean requiredParameterIsMissing =
+          EmptyChecks.isNull(value)
           || (value instanceof String strValue && strValue.isBlank())
-          || (value instanceof Map<?, ?> mapValue && mapValue.isEmpty())) {
+          || (value instanceof Map<?, ?> mapValue && EmptyChecks.isEmpty(mapValue));
+      if (requiredParameterIsMissing) {
         requiredMissing.add(spec.name());
       }
     }

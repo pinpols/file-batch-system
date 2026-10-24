@@ -137,15 +137,20 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
         continue;
       }
       try {
+        Long reclaimTaskId = task.getId();
+        String reclaimEventKey =
+            OutboxEventKeyGenerator.forReclaim(tenantId, task.getId(), workerCode);
         retryGovernanceService.reclaimTask(
             tenantId,
-            task.getId(),
-            OutboxEventKeyGenerator.forReclaim(tenantId, task.getId(), workerCode));
+            reclaimTaskId,
+            reclaimEventKey);
       } catch (RuntimeException ex) {
+        Long taskId = task.getId();
+        String causeSummary = SwallowedExceptionLogger.summary(ex);
         log.warn(
             "drain takeover failed for taskId={}: {}",
-            task.getId(),
-            SwallowedExceptionLogger.summary(ex));
+            taskId,
+            causeSummary);
       }
     }
   }
@@ -157,9 +162,9 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
   }
 
   private WorkerRegistryEntity requireRegistry(String tenantId, String workerCode) {
-    return Guard.requireFound(
-        workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode),
-        "worker not registered");
+    WorkerRegistryEntity loadedWorker =
+        workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
+    return Guard.requireFound(loadedWorker, "worker not registered");
   }
 
   private void validateTenant(String tenantId) {

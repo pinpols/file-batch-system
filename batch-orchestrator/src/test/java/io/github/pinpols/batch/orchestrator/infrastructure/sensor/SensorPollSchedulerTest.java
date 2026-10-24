@@ -74,6 +74,21 @@ class SensorPollSchedulerTest {
     assertThat(RlsTenantContextHolder.get()).isNull();
   }
 
+  @Test
+  @DisplayName("无法解析 WAIT 节点的工作流租户时失败关闭,不在无租户上下文下探测")
+  void shouldSkipProbe_whenOwningTenantCannotBeResolved() {
+    WorkflowNodeRunEntity nodeRun = new WorkflowNodeRunEntity();
+    nodeRun.setId(7L);
+    nodeRun.setWorkflowRunId(11L);
+    when(transactionExecutor.fetchDue(any(Instant.class), anyInt())).thenReturn(List.of(nodeRun));
+    when(workflowRunMapper.selectByIdAnyTenant(11L)).thenReturn(null);
+
+    scheduler().scan();
+
+    verify(transactionExecutor, never()).probeOne(any(), any());
+    assertThat(RlsTenantContextHolder.get()).isNull();
+  }
+
   private SensorPollScheduler scheduler() {
     return new SensorPollScheduler(
         transactionExecutor, new SensorProperties(), gracefulShutdown, workflowRunMapper);

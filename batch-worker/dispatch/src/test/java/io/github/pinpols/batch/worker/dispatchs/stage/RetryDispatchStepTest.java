@@ -20,6 +20,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -73,6 +74,7 @@ class RetryDispatchStepTest {
   @Test
   @DisplayName("重试投递与落库标记都成功时判定成功,路由到确认并标记重试已恢复且尝试次数加一")
   void execute_succeedsAndRoutesToAckWhenRetrySucceeds() {
+    when(fileDispatchRepository.beginAttempt("t1", 10L, "CH1")).thenReturn(1);
     when(dispatchChannelGateway.dispatch(any()))
         .thenReturn(new DispatchResult(true, "ext-retry", "R-retry", true, false, "ok", null));
     when(fileDispatchRepository.markSent(any(), any(), any(), any(), any(), any()))
@@ -86,15 +88,17 @@ class RetryDispatchStepTest {
         .containsEntry(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.ACK.name());
     assertThat(context.getAttributes())
         .containsEntry(DispatchRuntimeKeys.RETRY_RECOVERED, Boolean.TRUE);
-    verify(fileDispatchRepository).incrementAttempt("t1", 10L, "CH1");
+    verify(fileDispatchRepository).beginAttempt("t1", 10L, "CH1");
   }
 
   @Test
   @DisplayName("重试投递失败时判定失败,给出重试失败错误码并路由到补偿")
   void execute_failsAndRoutesToCompensateWhenRetryFails() {
+    when(fileDispatchRepository.beginAttempt("t1", 10L, "CH1")).thenReturn(1);
     when(dispatchChannelGateway.dispatch(any()))
         .thenReturn(new DispatchResult(false, null, null, false, false, "network error", null));
-    when(fileDispatchRepository.markFailed(any(), any(), any(), any(), any())).thenReturn(1);
+    when(fileDispatchRepository.markAttemptFailed(any(), any(), any(), any(), any()))
+        .thenReturn(1);
 
     DispatchJobContext context = buildContextWithRetryRequested();
     DispatchStageResult result = step.execute(context);
@@ -107,8 +111,28 @@ class RetryDispatchStepTest {
   }
 
   @Test
+  @DisplayName("重试结果不确定时不自动补偿或再次外发")
+  void execute_doesNotRouteToCompensationWhenExternalOutcomeIsUnknown() {
+    when(fileDispatchRepository.beginAttempt("t1", 10L, "CH1")).thenReturn(1);
+    when(dispatchChannelGateway.dispatch(any()))
+        .thenReturn(DispatchResult.externalOutcomeUnknown("ext-retry", null, "response lost"));
+    when(fileDispatchRepository.markAttemptFailed(any(), any(), any(), any(), any()))
+        .thenReturn(1);
+
+    DispatchJobContext context = buildContextWithRetryRequested();
+    DispatchStageResult result = step.execute(context);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("EXTERNAL_OUTCOME_UNKNOWN");
+    assertThat(context.getAttributes())
+        .containsEntry(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.FALSE)
+        .doesNotContainKey(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE);
+  }
+
+  @Test
   @DisplayName("重试投递成功但落库标记影响行数为零时判定失败,并路由到补偿")
   void execute_failsWhenMarkSentAfterRetryReturnsZero() {
+    when(fileDispatchRepository.beginAttempt("t1", 10L, "CH1")).thenReturn(1);
     when(dispatchChannelGateway.dispatch(any()))
         .thenReturn(new DispatchResult(true, "ext-retry", "R-retry", true, false, "ok", null));
     when(fileDispatchRepository.markSent(any(), any(), any(), any(), any(), any()))
@@ -118,10 +142,26 @@ class RetryDispatchStepTest {
     DispatchStageResult result = step.execute(context);
 
     assertThat(result.success()).isFalse();
-    assertThat(result.code()).isEqualTo("DISPATCH_RETRY_FAILED");
+    assertThat(result.code()).isEqualTo("EXTERNAL_OUTCOME_UNKNOWN");
     assertThat(context.getAttributes())
-        .containsEntry(
-            PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
+        .containsEntry(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.FALSE)
+        .doesNotContainKey(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE);
+  }
+
+  @Test
+  @DisplayName("无法原子建立重试外发闸门时禁止调用渠道并停止补偿路由")
+  void execute_doesNotCallChannelWhenAttemptGateWasNotAcquired() {
+    when(fileDispatchRepository.beginAttempt("t1", 10L, "CH1")).thenReturn(0);
+
+    DispatchJobContext context = buildContextWithRetryRequested();
+    DispatchStageResult result = step.execute(context);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("DISPATCH_ATTEMPT_STATE_CONFLICT");
+    assertThat(context.getAttributes())
+        .containsEntry(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.FALSE)
+        .doesNotContainKey(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE);
+    Mockito.verifyNoInteractions(dispatchChannelGateway);
   }
 
   private DispatchJobContext buildContext() {

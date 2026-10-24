@@ -113,11 +113,9 @@ public abstract class AbstractStageExecutor<
       pipelineRuns.updatePipelineStage(
           pipelineInstanceId, currentStep.stageCode(), lastSuccessStage);
       injectCurrentStepAttributes(context, currentStep);
+      Map<String, Object> inputSummary = buildInputSummary(context, currentStep);
       Long stepRunId = pipelineRuns.startStepRun(
-          pipelineInstanceId,
-          currentStep.stepCode(),
-          currentStep.stageCode(),
-          buildInputSummary(context, currentStep));
+          pipelineInstanceId, currentStep.stepCode(), currentStep.stageCode(), inputSummary);
       context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_RUN_ID, stepRunId);
 
       R result = executeOneStep(context, currentStep);
@@ -127,15 +125,17 @@ public abstract class AbstractStageExecutor<
         context
             .getAttributes()
             .put(PipelineRuntimeKeys.PIPELINE_LAST_SUCCESS_STAGE, currentStep.stageCode());
-        pipelineRuns.finishStepRunSuccess(stepRunId, buildOutputSummary(context, result));
+        Map<String, Object> outputSummary = buildOutputSummary(context, result);
+        pipelineRuns.finishStepRunSuccess(stepRunId, outputSummary);
       } else {
+        Map<String, Object> outputSummary = buildOutputSummary(context, result);
         pipelineRuns.finishStepRunFailure(
             stepRunId,
             result.code(),
             result.message(),
             result.errorKey(),
             result.errorArgs(),
-            buildOutputSummary(context, result));
+            outputSummary);
       }
       currentStep = PipelineStepFlowSupport.resolveNextStep(
           currentStep, result.success(), configuredSteps, context.getAttributes());

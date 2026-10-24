@@ -1,10 +1,17 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
+import io.github.pinpols.batch.console.domain.file.query.FileChannelConfigSelectByQueryQuery;
+import io.github.pinpols.batch.console.domain.notification.query.AlertRoutingConfigSelectByQueryQuery;
+
+
+import io.github.pinpols.batch.console.domain.ops.query.ResourceQueueQuery;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.model.PageRequest;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.SecretMasking;
+import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigCopyService;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
@@ -15,7 +22,6 @@ import io.github.pinpols.batch.console.application.contract.request.config.Tenan
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.FileChannelSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.FileTemplateSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.JobDefinitionSpec;
-import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.PipelineDefinitionSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.ResourceQueueSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.TenantQuotaPolicySpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.WorkflowDefinitionSpec;
@@ -33,6 +39,7 @@ import io.github.pinpols.batch.console.application.contract.response.config.Tena
 import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.query.FileTemplateConfigQuery;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDependencyRuleRequest;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
@@ -45,8 +52,6 @@ import io.github.pinpols.batch.console.domain.rbac.mapper.TenantQuotaPolicyMappe
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
-import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
-import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineStepDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
@@ -66,16 +71,25 @@ import java.util.function.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 /**
  * 跨租户配置复制服务。
  *
  * <p>从源租户读取配置，转换为 Spec 列表，然后委托给 batch-init 逻辑执行。
+ * 源配置的多次查询必须观察同一快照；独立事务避免继承调用方的 READ COMMITTED。
+ * 同类内部构建完整包、单Job包及预览也共享该快照，各目标写入继续使用独立租户事务。
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@Transactional(
+    readOnly = true,
+    isolation = Isolation.REPEATABLE_READ,
+    propagation = Propagation.REQUIRES_NEW)
 public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfigCopyService {
 
   // ── duplicate literal constants ─────────────────────────────────────────
@@ -110,8 +124,6 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
   private final WorkflowDefinitionMapper workflowDefinitionMapper;
   private final WorkflowNodeMapper workflowNodeMapper;
   private final WorkflowEdgeMapper workflowEdgeMapper;
-  private final PipelineDefinitionMapper pipelineDefinitionMapper;
-  private final PipelineStepDefinitionMapper pipelineStepDefinitionMapper;
   private final FileChannelConfigMapper fileChannelConfigMapper;
   private final FileTemplateConfigMapper fileTemplateConfigMapper;
   private final ResourceQueueMapper resourceQueueMapper;
@@ -130,19 +142,26 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     initRequest.setTargetTenantIds(request.getTargetTenantIds());
     initRequest.setMode(request.getMode());
     initRequest.setDryRun(request.isDryRun());
+    initRequest.setStrict(true);
 
     ConfigSyncBundlePayload bundle = requestedCopyBundle(request);
     typeTransfers().forEach(t -> t.transferToRequest(bundle, initRequest));
     initRequest.setFileChannels(channelsWithoutEnvironmentCredentials(bundle.getFileChannels()));
 
+    String sourceTenantIdForLog = LogSanitizer.value(request.getSourceTenantId());
+    String targetTenantIdsForLog = LogSanitizer.value(request.getTargetTenantIds());
+    String configTypesForLog = LogSanitizer.value(request.getConfigTypes());
+    String jobCodesForLog = LogSanitizer.value(request.getJobCodes());
+    boolean dryRunForLog = request.isDryRun();
+    String batchOperationIdForLog = LogSanitizer.value(batchOperationId);
     log.info(
         "[TenantConfigCopy] source={} targets={} types={} jobCodes={} dryRun={} batchOp={}",
-        LogSanitizer.value(request.getSourceTenantId()),
-        LogSanitizer.value(request.getTargetTenantIds()),
-        LogSanitizer.value(request.getConfigTypes()),
-        LogSanitizer.value(request.getJobCodes()),
-        request.isDryRun(),
-        LogSanitizer.value(batchOperationId));
+        sourceTenantIdForLog,
+        targetTenantIdsForLog,
+        configTypesForLog,
+        jobCodesForLog,
+        dryRunForLog,
+        batchOperationIdForLog);
 
     return initService.batchInit(initRequest, operator, batchOperationId);
   }
@@ -152,31 +171,37 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     if (EmptyChecks.isEmpty(source)) {
       return source;
     }
-    return source.stream()
-        .map(channel -> {
-          FileChannelSpec target = new FileChannelSpec();
-          target.setChannelCode(channel.getChannelCode());
-          target.setChannelName(channel.getChannelName());
-          target.setChannelType(channel.getChannelType());
-          target.setAuthType(channel.getAuthType());
-          target.setReceiptPolicy(channel.getReceiptPolicy());
-          target.setTimeoutSeconds(channel.getTimeoutSeconds());
-          target.setEnabled(channel.getEnabled());
-          return target;
-        })
-        .toList();
+    return source.stream().map(this::copyChannelWithoutEnvironmentCredentials).toList();
+  }
+
+  private FileChannelSpec copyChannelWithoutEnvironmentCredentials(FileChannelSpec source) {
+    FileChannelSpec target = new FileChannelSpec();
+    target.setChannelCode(source.getChannelCode());
+    target.setChannelName(source.getChannelName());
+    target.setChannelType(source.getChannelType());
+    // 不会复制环境专属端点和凭据。保留一个
+    // 有效的空 JSON 对象，因为 file_channel_config.config_json 不允许为 NULL。
+    target.setConfigJson("{}");
+    target.setAuthType(source.getAuthType());
+    target.setReceiptPolicy(source.getReceiptPolicy());
+    target.setTimeoutSeconds(source.getTimeoutSeconds());
+    target.setEnabled(source.getEnabled());
+    return target;
   }
 
   @Override
   public ConfigSyncBundlePayload buildBundle(String sourceTenantId, Set<ConfigType> configTypes) {
-    boolean allTypes = configTypes == null || configTypes.isEmpty();
-    ConfigSyncBundlePayload bundle = new ConfigSyncBundlePayload();
-    for (ConfigTypeTransfer<?> t : typeTransfers()) {
-      if (allTypes || configTypes.contains(t.type())) {
-        t.fillBundle(sourceTenantId, bundle);
+    return RlsTenantContextHolder.runWithTenant(sourceTenantId, () -> {
+      jobDefinitionMapper.setTenantContext(sourceTenantId);
+      boolean allTypes = EmptyChecks.isEmpty(configTypes);
+      ConfigSyncBundlePayload bundle = new ConfigSyncBundlePayload();
+      for (ConfigTypeTransfer<?> t : typeTransfers()) {
+        if (allTypes || configTypes.contains(t.type())) {
+          t.fillBundle(sourceTenantId, bundle);
+        }
       }
-    }
-    return bundle;
+      return bundle;
+    });
   }
 
   @Override
@@ -191,38 +216,37 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     }
 
     JobDefinitionSpec job = jobs.get(0);
-    List<PipelineDefinitionSpec> relatedPipelines =
-        filter(all.getPipelineDefinitions(), p -> jobCode.equals(p.getJobCode()));
+    Predicate<WorkflowDefinitionSpec> workflowIncludesJob = workflow ->
+        EmptyChecks.isNotNull(workflow.getNodes())
+            && workflow.getNodes().stream()
+                .anyMatch(node -> jobCode.equals(node.getRelatedJobCode()));
     List<WorkflowDefinitionSpec> relatedWorkflows = filter(
-        all.getWorkflowDefinitions(),
-        w -> w.getNodes() != null
-            && w.getNodes().stream()
-                .anyMatch(n -> jobCode.equals(n.getRelatedJobCode())
-                    || jobCode.equals(n.getRelatedPipelineCode())));
+        all.getWorkflowDefinitions(), workflowIncludesJob);
     TenantConfigReferenceResolver.References refs =
-        referenceResolver.resolve(job, relatedPipelines, relatedWorkflows);
+        referenceResolver.resolve(job, relatedWorkflows);
 
-    bundle.setPipelineDefinitions(relatedPipelines);
     bundle.setWorkflowDefinitions(relatedWorkflows);
     bundle.setResourceQueues(
         filter(all.getResourceQueues(), q -> equalsNullable(job.getQueueCode(), q.getQueueCode())));
+    Predicate<BatchWindowSpec> isJobOrReferencedWindow = window ->
+        equalsNullable(job.getWindowCode(), window.getWindowCode())
+            || hasReference(refs.windowCodes(), window.getWindowCode());
     bundle.setBatchWindows(filter(
-        all.getBatchWindows(),
-        w -> equalsNullable(job.getWindowCode(), w.getWindowCode())
-            || refs.windowCodes().contains(w.getWindowCode())));
+        all.getBatchWindows(), isJobOrReferencedWindow));
     bundle.setBusinessCalendars(filter(
-        all.getBusinessCalendars(),
-        c -> equalsNullable(job.getCalendarCode(), c.getCalendarCode())));
-    bundle.setFileTemplates(filter(
-        all.getFileTemplates(),
-        t -> refs.templateCodes().contains(t.getTemplateCode())
+        all.getBusinessCalendars(), c -> hasReference(refs.calendarCodes(), c.getCalendarCode())));
+    Predicate<FileTemplateSpec> isReferencedTemplateOrJobTypeFallback = template ->
+        hasReference(refs.templateCodes(), template.getTemplateCode())
             || (EmptyChecks.isEmpty(refs.templateCodes())
-                && equalsNullable(job.getBizType(), t.getBizType()))));
-    bundle.setFileChannels(filter(
-        all.getFileChannels(),
-        c -> refs.channelCodes().contains(c.getChannelCode())
+                && equalsNullable(job.getBizType(), template.getBizType()));
+    bundle.setFileTemplates(filter(
+        all.getFileTemplates(), isReferencedTemplateOrJobTypeFallback));
+    Predicate<FileChannelSpec> isReferencedChannelOrJobTypeFallback = channel ->
+        hasReference(refs.channelCodes(), channel.getChannelCode())
             || (EmptyChecks.isEmpty(refs.channelCodes())
-                && equalsNullable(job.getBizType(), c.getChannelCode()))));
+                && equalsNullable(job.getBizType(), channel.getChannelCode()));
+    bundle.setFileChannels(filter(
+        all.getFileChannels(), isReferencedChannelOrJobTypeFallback));
     bundle.setQuotaPolicies(all.getQuotaPolicies());
     bundle.setAlertRoutings(all.getAlertRoutings());
     return bundle;
@@ -251,7 +275,8 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     }
     ConfigSyncBundlePayload bundle = new ConfigSyncBundlePayload();
     for (String jobCode : request.getJobCodes()) {
-      mergeInto(bundle, buildJobBundle(request.getSourceTenantId(), jobCode));
+      ConfigSyncBundlePayload jobBundle = buildJobBundle(request.getSourceTenantId(), jobCode);
+      mergeInto(bundle, jobBundle);
     }
     return filterBundle(bundle, request.getConfigTypes());
   }
@@ -262,7 +287,8 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     }
     ConfigSyncBundlePayload bundle = new ConfigSyncBundlePayload();
     for (String jobCode : request.getJobCodes()) {
-      mergeInto(bundle, buildJobBundle(request.getSourceTenantId(), jobCode));
+      ConfigSyncBundlePayload jobBundle = buildJobBundle(request.getSourceTenantId(), jobCode);
+      mergeInto(bundle, jobBundle);
     }
     return filterBundle(bundle, request.getConfigTypes());
   }
@@ -274,7 +300,8 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     }
     ConfigSyncBundlePayload bundle = new ConfigSyncBundlePayload();
     for (String jobCode : request.getJobCodes()) {
-      mergeInto(bundle, buildJobBundle(tenantId, jobCode));
+      ConfigSyncBundlePayload jobBundle = buildJobBundle(tenantId, jobCode);
+      mergeInto(bundle, jobBundle);
     }
     return filterBundle(bundle, request.getConfigTypes());
   }
@@ -295,16 +322,14 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
       unchangedCount += tenantResult.unchangedCount();
       deleteCandidateCount += tenantResult.deleteCandidateCount();
     }
+    String sourceTenantId = request.getSourceTenantId();
+    List<String> targetTenantIdsForCopy = request.getTargetTenantIds();
+    List<String> copiedTargetTenantIds = List.copyOf(targetTenantIdsForCopy);
+    int targetTenantCount = request.getTargetTenantIds().size();
+    Summary summary =
+        new Summary(targetTenantCount, addCount, updateCount, unchangedCount, deleteCandidateCount);
     return new TenantConfigDiffPreviewResponse(
-        request.getSourceTenantId(),
-        List.copyOf(request.getTargetTenantIds()),
-        tenants,
-        new Summary(
-            request.getTargetTenantIds().size(),
-            addCount,
-            updateCount,
-            unchangedCount,
-            deleteCandidateCount));
+        sourceTenantId, copiedTargetTenantIds, tenants, summary);
   }
 
   private TenantDiffResult diffTenant(
@@ -315,7 +340,9 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     List<ConfigDiffItem> items = new ArrayList<>();
     ConfigSyncBundlePayload overlay = new ConfigSyncBundlePayload();
     for (ConfigType type : selectedTypes(request.getConfigTypes())) {
-      appendDiffs(type, listOf(source, type), listOf(target, type), request, items, overlay);
+      List<?> sourceItems = listOf(source, type);
+      List<?> targetItems = listOf(target, type);
+      appendDiffs(type, sourceItems, targetItems, request, items, overlay);
     }
     int addCount = count(items, "ADD");
     int updateCount = count(items, "UPDATE");
@@ -359,25 +386,23 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
         overlayItems.add(sourceEntry.getValue());
       }
       if (request.isIncludeUnchanged() || !"UNCHANGED".equals(action)) {
+        Map<String, Object> sourceSpec = specMap(sourceEntry.getValue());
+        Map<String, Object> targetSpec = specMap(targetItem);
         items.add(new ConfigDiffItem(
-            type.name(),
-            sourceEntry.getKey(),
-            action,
-            reason,
-            specMap(sourceEntry.getValue()),
-            specMap(targetItem)));
+            type.name(), sourceEntry.getKey(), action, reason, sourceSpec, targetSpec));
       }
     }
     if (request.isIncludeDeleteCandidates()) {
       for (Map.Entry<String, Object> targetEntry : targetByKey.entrySet()) {
         if (!sourceByKey.containsKey(targetEntry.getKey())) {
+          Map<String, Object> targetSpec = specMap(targetEntry.getValue());
           items.add(new ConfigDiffItem(
               type.name(),
               targetEntry.getKey(),
               "DELETE_CANDIDATE",
               "exists only in target tenant; preview never deletes automatically",
               Map.of(),
-              specMap(targetEntry.getValue())));
+              targetSpec));
         }
       }
     }
@@ -390,10 +415,12 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
       if ("UNCHANGED".equals(item.action())) {
         continue;
       }
-      if (ConfigType.FILE_CHANNEL.name().equals(item.configType())
+      boolean configImpactRequiresEnvironmentReview =
+          ConfigType.FILE_CHANNEL.name().equals(item.configType())
           || ConfigType.RESOURCE_QUEUE.name().equals(item.configType())
           || ConfigType.BATCH_WINDOW.name().equals(item.configType())
-          || ConfigType.BUSINESS_CALENDAR.name().equals(item.configType())) {
+          || ConfigType.BUSINESS_CALENDAR.name().equals(item.configType());
+      if (configImpactRequiresEnvironmentReview) {
         impacts.add(new ConfigImpactItem(
             "ENV_SPECIFIC_REVIEW",
             item.configType() + ":" + item.configKey(),
@@ -413,7 +440,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     return impacts;
   }
 
-  /** 构建 10 条传输描述符。每次按需创建；方法引用是懒求值，不会在此处调用 mapper。 */
+  /** 构建传输描述符；历史 Pipeline 定义不再作为新的可复制配置资源。 */
   private List<ConfigTypeTransfer<?>> typeTransfers() {
     return List.of(
         new ConfigTypeTransfer<>(
@@ -428,12 +455,6 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
             ConfigSyncBundlePayload::setWorkflowDefinitions,
             ConfigSyncBundlePayload::getWorkflowDefinitions,
             TenantConfigBatchInitRequest::setWorkflowDefinitions),
-        new ConfigTypeTransfer<>(
-            ConfigType.PIPELINE_DEFINITION,
-            this::readPipelineDefinitions,
-            ConfigSyncBundlePayload::setPipelineDefinitions,
-            ConfigSyncBundlePayload::getPipelineDefinitions,
-            TenantConfigBatchInitRequest::setPipelineDefinitions),
         new ConfigTypeTransfer<>(
             ConfigType.FILE_CHANNEL,
             this::readFileChannels,
@@ -485,6 +506,16 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     List<JobDefinitionSpec> specs = new ArrayList<>(entities.size());
     for (JobDefinitionEntity e : entities) {
       JobDefinitionSpec s = new JobDefinitionSpec();
+      List<JobDependencyRuleRequest> dependencyRules = e.getJobDependencyRules().stream()
+          .map(
+              rule -> new JobDependencyRuleRequest(rule.upstreamJobCode(), rule.bizDateAlignment()))
+          .toList();
+      boolean legacyDependencyFallbackIsRequired =
+          EmptyChecks.isEmpty(Objects.requireNonNull(dependencyRules)) && Texts.hasText(e.getDependsOnJobCode());
+      if (legacyDependencyFallbackIsRequired) {
+        dependencyRules =
+            List.of(new JobDependencyRuleRequest(e.getDependsOnJobCode(), "SAME_DAY"));
+      }
       s.setJobCode(e.getJobCode());
       s.setJobName(e.getJobName());
       s.setJobType(e.getJobType());
@@ -493,6 +524,10 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
       s.setScheduleExpr(e.getScheduleExpr());
       s.setTimezone(e.getTimezone());
       s.setTriggerMode(e.getTriggerMode());
+      String primaryDependencyCode =
+          EmptyChecks.isEmpty(Objects.requireNonNull(dependencyRules)) ? null : dependencyRules.getFirst().upstreamJobCode();
+      s.setDependsOnJobCode(primaryDependencyCode);
+      s.setDependencyRules(dependencyRules);
       s.setWorkerGroup(e.getWorkerGroup());
       s.setQueueCode(e.getQueueCode());
       s.setCalendarCode(e.getCalendarCode());
@@ -512,7 +547,8 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
       s.setDependencyCompletionWindowSeconds(e.getDependencyCompletionWindowSeconds());
       s.setExecutionHandler(e.getExecutionHandler());
       s.setParamSchema(e.getParamSchema());
-      s.setDefaultParams(SecretMasking.removeSensitiveJsonFields(e.getDefaultParams()));
+      String sanitizedDefaultParams = SecretMasking.removeSensitiveJsonFields(e.getDefaultParams());
+      s.setDefaultParams(sanitizedDefaultParams);
       s.setPriority(e.getPriority());
       s.setEnabled(e.getEnabled());
       s.setDescription(e.getDescription());
@@ -532,6 +568,22 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
       s.setWorkflowName(e.getWorkflowName());
       s.setWorkflowType(e.getWorkflowType());
       s.setEnabled(e.getEnabled());
+      s.setScheduleEnabled(e.getScheduleEnabled());
+      s.setScheduleType(e.getScheduleType());
+      s.setScheduleExpr(e.getScheduleExpr());
+      s.setTimezone(e.getTimezone());
+      s.setTriggerMode(e.getTriggerMode());
+      s.setCalendarCode(e.getCalendarCode());
+      s.setDependsOnJobCode(e.getDependsOnJobCode());
+      if (EmptyChecks.isNotNull(e.getSingleJobDefinitionId())) {
+        JobDefinitionEntity singleJob =
+            jobDefinitionMapper.selectById(tenantId, e.getSingleJobDefinitionId());
+        if (EmptyChecks.isNull(singleJob)) {
+          throw new IllegalStateException(
+              "Managed single-job Workflow references a missing tenant Job definition");
+        }
+        s.setSingleJobCode(singleJob.getJobCode());
+      }
 
       // nodes —— definition-id 作用域:tenantId 故意为 null,靠已经过 ofTenant 过滤的
       // workflowDefinitionId(FK)收敛,非跨租扫描。此处**不**走 TenantScope.requireTenant。
@@ -545,14 +597,14 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
         ns.setNodeName(n.getNodeName());
         ns.setNodeType(n.getNodeType());
         ns.setRelatedJobCode(n.getRelatedJobCode());
-        ns.setRelatedPipelineCode(n.getRelatedPipelineCode());
         ns.setWorkerGroup(n.getWorkerGroup());
         ns.setWindowCode(n.getWindowCode());
         ns.setNodeOrder(n.getNodeOrder());
         ns.setRetryPolicy(n.getRetryPolicy());
         ns.setRetryMaxCount(n.getRetryMaxCount());
         ns.setTimeoutSeconds(n.getTimeoutSeconds());
-        ns.setNodeParams(SecretMasking.removeSensitiveJsonFields(n.getNodeParams()));
+        String sanitizedNodeParams = SecretMasking.removeSensitiveJsonFields(n.getNodeParams());
+        ns.setNodeParams(sanitizedNodeParams);
         ns.setEnabled(n.getEnabled());
         nodeSpecs.add(ns);
       }
@@ -579,51 +631,16 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     return specs;
   }
 
-  private List<PipelineDefinitionSpec> readPipelineDefinitions(String tenantId) {
-    List<Map<String, Object>> entities = pipelineDefinitionMapper.selectByQuery(
-        tenantId, null, null, null, new PageRequest(1, MAX_PAGE_SIZE));
-    List<PipelineDefinitionSpec> specs = new ArrayList<>(entities.size());
-    for (Map<String, Object> e : entities) {
-      PipelineDefinitionSpec s = new PipelineDefinitionSpec();
-      s.setJobCode(str(e, "job_code"));
-      s.setPipelineName(str(e, "pipeline_name"));
-      s.setPipelineType(str(e, "pipeline_type"));
-      s.setBizType(str(e, "biz_type"));
-      s.setWorkerGroup(str(e, "worker_group"));
-      s.setEnabled(bool(e, KEY_ENABLED));
-      s.setDescription(str(e, KEY_DESCRIPTION));
-
-      Long defId = num(e, "id");
-      if (defId != null) {
-        List<Map<String, Object>> steps =
-            pipelineStepDefinitionMapper.selectByPipelineDefinitionId(defId);
-        if (steps != null && !steps.isEmpty()) {
-          List<PipelineDefinitionSpec.StepSpec> stepSpecs = new ArrayList<>(steps.size());
-          for (Map<String, Object> step : steps) {
-            PipelineDefinitionSpec.StepSpec ss = new PipelineDefinitionSpec.StepSpec();
-            ss.setStepCode(str(step, "step_code"));
-            ss.setStepName(str(step, "step_name"));
-            ss.setStageCode(str(step, "stage_code"));
-            ss.setStepOrder(intVal(step, "step_order"));
-            ss.setImplCode(str(step, "impl_code"));
-            ss.setStepParams(SecretMasking.removeSensitiveJsonFields(str(step, "step_params")));
-            ss.setTimeoutSeconds(intVal(step, "timeout_seconds"));
-            ss.setRetryPolicy(str(step, "retry_policy"));
-            ss.setRetryMaxCount(intVal(step, "retry_max_count"));
-            ss.setEnabled(bool(step, KEY_ENABLED));
-            stepSpecs.add(ss);
-          }
-          s.setSteps(stepSpecs);
-        }
-      }
-      specs.add(s);
-    }
-    return specs;
-  }
-
   private List<FileChannelSpec> readFileChannels(String tenantId) {
+    FileChannelConfigSelectByQueryQuery fileChannelConfigSelectByQueryQuery = FileChannelConfigSelectByQueryQuery.builder()
+        .tenantId(tenantId)
+        .channelCode(null)
+        .channelType(null)
+        .enabled(null)
+        .pageRequest(new PageRequest(1, MAX_PAGE_SIZE))
+        .build();
     List<Map<String, Object>> entities = fileChannelConfigMapper.selectByQuery(
-        tenantId, null, null, null, new PageRequest(1, MAX_PAGE_SIZE));
+        fileChannelConfigSelectByQueryQuery);
     List<FileChannelSpec> specs = new ArrayList<>(entities.size());
     for (Map<String, Object> e : entities) {
       FileChannelSpec s = new FileChannelSpec();
@@ -642,8 +659,9 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
   }
 
   private List<FileTemplateSpec> readFileTemplates(String tenantId) {
-    List<Map<String, Object>> entities = fileTemplateConfigMapper.selectByQuery(
-        FileTemplateConfigQuery.ofTenant(tenantId, new PageRequest(1, MAX_PAGE_SIZE)));
+    FileTemplateConfigQuery query =
+        FileTemplateConfigQuery.ofTenant(tenantId, new PageRequest(1, MAX_PAGE_SIZE));
+    List<Map<String, Object>> entities = fileTemplateConfigMapper.selectByQuery(query);
     List<FileTemplateSpec> specs = new ArrayList<>(entities.size());
     for (Map<String, Object> e : entities) {
       FileTemplateSpec s = new FileTemplateSpec();
@@ -662,17 +680,17 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
       s.setRecordLength(intVal(e, "record_length"));
       s.setHeaderRows(intVal(e, "header_rows"));
       s.setFooterRows(intVal(e, "footer_rows"));
-      s.setHeaderTemplateJson(str(e, "header_template_json"));
-      s.setTrailerTemplateJson(str(e, "trailer_template_json"));
+      s.setHeaderTemplateJson(str(e, "header_template"));
+      s.setTrailerTemplateJson(str(e, "trailer_template"));
       s.setChecksumType(str(e, "checksum_type"));
       s.setCompressType(str(e, "compress_type"));
       s.setEncryptType(str(e, "encrypt_type"));
       s.setNamingRule(str(e, "naming_rule"));
-      s.setFieldMappingsJson(str(e, "field_mappings_json"));
-      s.setValidationRuleSetJson(str(e, "validation_rule_set_json"));
+      s.setFieldMappingsJson(str(e, "field_mappings"));
+      s.setValidationRuleSetJson(str(e, "validation_rule_set"));
       s.setDefaultQueryCode(str(e, "default_query_code"));
       s.setDefaultQuerySql(str(e, "default_query_sql"));
-      s.setQueryParamSchemaJson(str(e, "query_param_schema_json"));
+      s.setQueryParamSchemaJson(str(e, "query_param_schema"));
       s.setStreamingEnabled(bool(e, "streaming_enabled"));
       s.setPageSize(intVal(e, "page_size"));
       s.setFetchSize(intVal(e, "fetch_size"));
@@ -693,8 +711,9 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
   }
 
   private List<ResourceQueueSpec> readResourceQueues(String tenantId) {
-    List<Map<String, Object>> rows = resourceQueueMapper.selectByQuery(
-        tenantId, null, null, null, new PageRequest(1, MAX_PAGE_SIZE));
+    PageRequest pageRequest = new PageRequest(1, MAX_PAGE_SIZE);
+    ResourceQueueQuery query = ResourceQueueQuery.forTenant(tenantId, pageRequest);
+    List<Map<String, Object>> rows = resourceQueueMapper.selectByQuery(query);
     List<ResourceQueueSpec> specs = new ArrayList<>(rows.size());
     for (Map<String, Object> r : rows) {
       ResourceQueueSpec s = new ResourceQueueSpec();
@@ -742,12 +761,12 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     List<BusinessCalendarSpec> specs = new ArrayList<>(rows.size());
     for (Map<String, Object> r : rows) {
       BusinessCalendarSpec s = new BusinessCalendarSpec();
-      s.setCalendarCode(str(r, "calendar_code"));
-      s.setCalendarName(str(r, "calendar_name"));
+      s.setCalendarCode(str(r, "calendarCode"));
+      s.setCalendarName(str(r, "calendarName"));
       s.setTimezone(str(r, KEY_TIMEZONE));
-      s.setHolidayRollRule(str(r, "holiday_roll_rule"));
-      s.setCatchUpPolicy(str(r, "catch_up_policy"));
-      s.setCatchUpMaxDays(intVal(r, "catch_up_max_days"));
+      s.setHolidayRollRule(str(r, "holidayRollRule"));
+      s.setCatchUpPolicy(str(r, "catchUpPolicy"));
+      s.setCatchUpMaxDays(intVal(r, "catchUpMaxDays"));
       s.setEnabled(bool(r, KEY_ENABLED));
       Long calendarId = num(r, "id");
       if (calendarId != null) {
@@ -755,7 +774,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
         if (holidays != null && !holidays.isEmpty()) {
           List<String> dates = new ArrayList<>(holidays.size());
           for (Map<String, Object> h : holidays) {
-            String d = str(h, "holiday_date");
+            String d = str(h, "bizDate");
             if (d != null) {
               dates.add(d);
             }
@@ -787,8 +806,17 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
   }
 
   private List<AlertRoutingSpec> readAlertRoutings(String tenantId) {
+    AlertRoutingConfigSelectByQueryQuery alertRoutingConfigSelectByQueryQuery = AlertRoutingConfigSelectByQueryQuery.builder()
+        .tenantId(tenantId)
+        .keyword(null)
+        .routeCode(null)
+        .team(null)
+        .severity(null)
+        .enabled(null)
+        .pageRequest(new PageRequest(1, MAX_PAGE_SIZE))
+        .build();
     List<Map<String, Object>> rows = alertRoutingConfigMapper.selectByQuery(
-        tenantId, null, null, null, null, null, new PageRequest(1, MAX_PAGE_SIZE));
+        alertRoutingConfigSelectByQueryQuery);
     List<AlertRoutingSpec> specs = new ArrayList<>(rows.size());
     for (Map<String, Object> r : rows) {
       AlertRoutingSpec s = new AlertRoutingSpec();
@@ -828,7 +856,10 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
 
   private void mergeInto(ConfigSyncBundlePayload target, ConfigSyncBundlePayload source) {
     for (ConfigType type : ConfigType.values()) {
-      setList(target, type, mergeByKey(type, listOf(target, type), listOf(source, type)));
+      List<?> targetItems = listOf(target, type);
+      List<?> sourceItems = listOf(source, type);
+      List<?> mergedItems = mergeByKey(type, targetItems, sourceItems);
+      setList(target, type, mergedItems);
     }
   }
 
@@ -867,9 +898,6 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     }
     if (item instanceof WorkflowDefinitionSpec spec) {
       return spec.getWorkflowCode();
-    }
-    if (item instanceof PipelineDefinitionSpec spec) {
-      return spec.getJobCode();
     }
     if (item instanceof FileChannelSpec spec) {
       return spec.getChannelCode();
@@ -919,11 +947,6 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
             ConfigSyncBundlePayload::getWorkflowDefinitions,
             (bundle, values) ->
                 bundle.setWorkflowDefinitions((List<WorkflowDefinitionSpec>) values)),
-        ConfigType.PIPELINE_DEFINITION,
-        accessor(
-            ConfigSyncBundlePayload::getPipelineDefinitions,
-            (bundle, values) ->
-                bundle.setPipelineDefinitions((List<PipelineDefinitionSpec>) values)),
         ConfigType.FILE_CHANNEL,
         accessor(
             ConfigSyncBundlePayload::getFileChannels,
@@ -1015,6 +1038,10 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
 
   private static boolean equalsNullable(String left, String right) {
     return left != null && !left.isBlank() && left.equals(right);
+  }
+
+  private static boolean hasReference(List<String> references, String code) {
+    return Texts.hasText(code) && references.contains(code);
   }
 
   private static <T> List<T> filter(List<T> source, Predicate<T> predicate) {

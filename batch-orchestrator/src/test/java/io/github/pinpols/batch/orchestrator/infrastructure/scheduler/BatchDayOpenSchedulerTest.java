@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -10,14 +11,24 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.orchestrator.application.service.batchday.ExternalEventExpectationService;
+import io.github.pinpols.batch.orchestrator.application.service.batchday.FileGroupExpectationService;
+import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
+import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
+import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayCatchupControlEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BusinessCalendarEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.CalendarDependencyEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.CalendarDependencyWaitEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.DisasterDayOverrideEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
+import io.github.pinpols.batch.orchestrator.infrastructure.metrics.BatchDayCatchupMetrics;
+import io.github.pinpols.batch.orchestrator.mapper.BatchDayCatchupControlMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
+import io.github.pinpols.batch.orchestrator.mapper.BatchDayPlanCalendarMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.orchestrator.mapper.CalendarDependencyMapper;
+import io.github.pinpols.batch.orchestrator.mapper.CalendarDependencyWaitMapper;
 import io.github.pinpols.batch.orchestrator.mapper.DisasterDayOverrideMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
 import io.github.pinpols.batch.orchestrator.service.BatchDayTimePolicyResolver;
@@ -28,10 +39,12 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.Month;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
@@ -42,9 +55,16 @@ class BatchDayOpenSchedulerTest {
 
   private BusinessCalendarMapper businessCalendarMapper;
   private BatchDayInstanceMapper batchDayInstanceMapper;
+  private BatchDayCatchupControlMapper catchupControlMapper;
+  private BatchDayPlanCalendarMapper planCalendarMapper;
   private JobExecutionLogMapper jobExecutionLogMapper;
   private OrchestratorGracefulShutdown gracefulShutdown;
   private CalendarDependencyMapper calendarDependencyMapper;
+  private CalendarDependencyWaitMapper calendarDependencyWaitMapper;
+  private FileGroupExpectationService fileGroupExpectationService;
+  private ExternalEventExpectationService externalEventExpectationService;
+  private AlertEventService alertEventService;
+  private BatchDayCatchupMetrics catchupMetrics;
   private DisasterDayOverrideMapper disasterDayOverrideMapper;
   private BatchDayOpenScheduler scheduler;
 
@@ -52,21 +72,47 @@ class BatchDayOpenSchedulerTest {
   void setUp() {
     businessCalendarMapper = mock(BusinessCalendarMapper.class);
     batchDayInstanceMapper = mock(BatchDayInstanceMapper.class);
+    catchupControlMapper = mock(BatchDayCatchupControlMapper.class);
+    AtomicReference<LocalDate> openCursor = new AtomicReference<>();
+    doAnswer(invocation -> {
+          openCursor.compareAndSet(null, invocation.getArgument(2));
+          return 1;
+        })
+        .when(batchDayInstanceMapper)
+        .initializeOpenCursor(any(), any(), any());
+    when(batchDayInstanceMapper.selectOpenCursorForUpdate(any(), any()))
+        .thenAnswer(invocation -> openCursor.get());
+    when(batchDayInstanceMapper.advanceOpenCursor(any(), any(), any(), any(), any()))
+        .thenAnswer(invocation ->
+            openCursor.compareAndSet(invocation.getArgument(2), invocation.getArgument(3)) ? 1 : 0);
+    planCalendarMapper = mock(BatchDayPlanCalendarMapper.class);
     jobExecutionLogMapper = mock(JobExecutionLogMapper.class);
     gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
     calendarDependencyMapper = mock(CalendarDependencyMapper.class);
+    calendarDependencyWaitMapper = mock(CalendarDependencyWaitMapper.class);
+    fileGroupExpectationService = mock(FileGroupExpectationService.class);
+    externalEventExpectationService = mock(ExternalEventExpectationService.class);
+    alertEventService = mock(AlertEventService.class);
+    catchupMetrics = mock(BatchDayCatchupMetrics.class);
     disasterDayOverrideMapper = mock(DisasterDayOverrideMapper.class);
     BatchTimezoneProvider timezoneProvider =
         new BatchTimezoneProvider(new BatchTimezoneProperties());
     scheduler = new BatchDayOpenScheduler(
         businessCalendarMapper,
         batchDayInstanceMapper,
+        catchupControlMapper,
+        planCalendarMapper,
         jobExecutionLogMapper,
         gracefulShutdown,
         timezoneProvider,
         new BatchDayTimePolicyResolver(timezoneProvider, new CutoffScheduleResolver()),
         new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider),
         calendarDependencyMapper,
+        calendarDependencyWaitMapper,
+        fileGroupExpectationService,
+        externalEventExpectationService,
+        alertEventService,
+        catchupMetrics,
         disasterDayOverrideMapper,
         noopTransactionManager());
   }
@@ -113,6 +159,60 @@ class BatchDayOpenSchedulerTest {
     assertThat(opened.cutoffAt()).isEqualTo(Instant.parse("2026-05-05T22:00:00Z"));
     assertThat(opened.slaDeadlineAt()).isEqualTo(Instant.parse("2026-05-06T00:00:00Z"));
     verify(jobExecutionLogMapper).insert(any());
+    verify(fileGroupExpectationService)
+        .materializeForOpenedBusinessDay(
+            "t1", "CAL", LocalDate.of(2026, Month.MAY, 5), "Asia/Shanghai");
+    verify(externalEventExpectationService)
+        .materializeForOpenedBusinessDay(
+            "t1", "CAL", LocalDate.of(2026, Month.MAY, 5), "Asia/Shanghai");
+  }
+
+  @Test
+  @DisplayName("有限 catch-up 扫描报告提交后的原始日期积压")
+  void shouldReportRemainingRawDateBacklogAfterBoundedScan() {
+    Instant now = Instant.parse("2026-05-05T00:30:00Z");
+    LocalDate latest = LocalDate.of(2026, Month.MAY, 1);
+    when(businessCalendarMapper.selectByEnabled(true)).thenReturn(List.of(calendar()));
+    when(batchDayInstanceMapper.selectLatestBizDateAtOrBefore(
+            "t1", "CAL", LocalDate.of(2026, Month.MAY, 5)))
+        .thenReturn(latest);
+    when(calendarDependencyMapper.selectEnabledByDownstream("t1", "CAL")).thenReturn(List.of());
+    when(batchDayInstanceMapper.insert(any())).thenReturn(1);
+    ReflectionTestUtils.setField(scheduler, "catchupDaysPerScan", 1);
+
+    scheduler.openDueBatchDays(now);
+
+    verify(catchupMetrics).beginScan();
+    verify(catchupMetrics).recordCalendarLag(3);
+    verify(catchupMetrics).completeScan();
+  }
+
+  @Test
+  @DisplayName("暂停 catch-up 时保留积压指标且不初始化或推进日期游标")
+  void shouldKeepBacklogVisibleWithoutScanningWhileCatchupIsPaused() {
+    Instant now = Instant.parse("2026-05-05T00:30:00Z");
+    LocalDate cursor = LocalDate.of(2026, Month.MAY, 1);
+    when(businessCalendarMapper.selectByEnabled(true)).thenReturn(List.of(calendar()));
+    when(catchupControlMapper.selectForUpdate("t1", "CAL"))
+        .thenReturn(new BatchDayCatchupControlEntity(
+            "t1", "CAL", true, now.minusSeconds(60), "operator", "maintenance", now));
+    when(batchDayInstanceMapper.selectOpenCursorDate("t1", "CAL")).thenReturn(cursor);
+    when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
+            "t1", "CAL", LocalDate.of(2026, Month.MAY, 5)))
+        .thenReturn(null);
+    when(batchDayInstanceMapper.insert(any())).thenReturn(1);
+
+    scheduler.openDueBatchDays(now);
+
+    verify(catchupControlMapper).selectForUpdate("t1", "CAL");
+    verify(catchupMetrics).recordCalendarLag(4);
+    verify(batchDayInstanceMapper).selectOpenCursorDate("t1", "CAL");
+    verify(batchDayInstanceMapper, never()).initializeOpenCursor(any(), any(), any());
+    verify(batchDayInstanceMapper, never()).advanceOpenCursor(any(), any(), any(), any(), any());
+    ArgumentCaptor<BatchDayInstanceEntity> opened =
+        ArgumentCaptor.forClass(BatchDayInstanceEntity.class);
+    verify(batchDayInstanceMapper).insert(opened.capture());
+    assertThat(opened.getValue().bizDate()).isEqualTo(LocalDate.of(2026, Month.MAY, 5));
   }
 
   @Test
@@ -132,6 +232,110 @@ class BatchDayOpenSchedulerTest {
     verify(batchDayInstanceMapper).insert(captor.capture());
     assertThat(captor.getValue().bizDate()).isEqualTo(LocalDate.of(2026, Month.MAY, 4));
     assertThat(captor.getValue().cutoffAt()).isEqualTo(Instant.parse("2026-05-04T22:00:00Z"));
+  }
+
+  @Test
+  @DisplayName("SKIP 节假日写入可审计终态,避免批量日永久停留在空的 OPEN 状态")
+  void shouldPersistSkippedHolidayAsTerminalBatchDay() {
+    Instant now = Instant.parse("2026-05-05T00:30:00Z");
+    LocalDate bizDate = LocalDate.of(2026, Month.MAY, 5);
+    when(businessCalendarMapper.selectByEnabled(true)).thenReturn(List.of(calendar()));
+    when(planCalendarMapper.selectEffectiveDayType("t1", "CAL", bizDate)).thenReturn("HOLIDAY");
+    when(batchDayInstanceMapper.selectByTenantCalendarBizDate("t1", "CAL", bizDate))
+        .thenReturn(null);
+    when(disasterDayOverrideMapper.selectActiveByCalendarBizDate("t1", "CAL", bizDate, now))
+        .thenReturn(null);
+    when(batchDayInstanceMapper.insert(any())).thenReturn(1);
+
+    scheduler.openDueBatchDays(now);
+
+    ArgumentCaptor<BatchDayInstanceEntity> captor =
+        ArgumentCaptor.forClass(BatchDayInstanceEntity.class);
+    verify(batchDayInstanceMapper).insert(captor.capture());
+    BatchDayInstanceEntity skipped = captor.getValue();
+    assertThat(skipped.bizDate()).isEqualTo(bizDate);
+    assertThat(skipped.dayStatus()).isEqualTo("SKIPPED");
+    assertThat(skipped.settledAt()).isEqualTo(now);
+    assertThat(skipped.operationReason()).isEqualTo("CALENDAR_HOLIDAY_SKIP");
+    verify(jobExecutionLogMapper).insert(any());
+  }
+
+  @Test
+  @DisplayName("NEXT_WORKDAY 节假日滚动到首个工作日并只打开滚动后的业务日")
+  void shouldRollHolidayToNextWorkday() {
+    Instant now = Instant.parse("2026-05-05T00:30:00Z");
+    LocalDate holiday = LocalDate.of(2026, Month.MAY, 5);
+    LocalDate nextWorkday = holiday.plusDays(1);
+    BusinessCalendarEntity calendar = calendar("NEXT_WORKDAY");
+    when(businessCalendarMapper.selectByEnabled(true)).thenReturn(List.of(calendar));
+    when(planCalendarMapper.selectEffectiveDayType("t1", "CAL", holiday)).thenReturn("HOLIDAY");
+    when(planCalendarMapper.selectEffectiveDayType("t1", "CAL", nextWorkday)).thenReturn("WORKDAY");
+    when(batchDayInstanceMapper.selectByTenantCalendarBizDate("t1", "CAL", nextWorkday))
+        .thenReturn(null);
+    when(disasterDayOverrideMapper.selectActiveByCalendarBizDate("t1", "CAL", nextWorkday, now))
+        .thenReturn(null);
+    when(batchDayInstanceMapper.insert(any())).thenReturn(1);
+
+    scheduler.openDueBatchDays(now);
+
+    ArgumentCaptor<BatchDayInstanceEntity> captor =
+        ArgumentCaptor.forClass(BatchDayInstanceEntity.class);
+    verify(batchDayInstanceMapper).insert(captor.capture());
+    assertThat(captor.getValue().bizDate()).isEqualTo(nextWorkday);
+    assertThat(captor.getValue().dayStatus()).isEqualTo("OPEN");
+  }
+
+  @Test
+  @DisplayName("PREV_WORKDAY 节假日滚动到最近的前一工作日")
+  void shouldRollHolidayToPreviousWorkday() {
+    Instant now = Instant.parse("2026-05-05T00:30:00Z");
+    LocalDate holiday = LocalDate.of(2026, Month.MAY, 5);
+    LocalDate previousWorkday = holiday.minusDays(1);
+    when(businessCalendarMapper.selectByEnabled(true))
+        .thenReturn(List.of(calendar("PREV_WORKDAY")));
+    when(planCalendarMapper.selectEffectiveDayType("t1", "CAL", holiday)).thenReturn("HOLIDAY");
+    when(planCalendarMapper.selectEffectiveDayType("t1", "CAL", previousWorkday))
+        .thenReturn("WORKDAY");
+    when(batchDayInstanceMapper.selectByTenantCalendarBizDate("t1", "CAL", holiday))
+        .thenReturn(null);
+    when(batchDayInstanceMapper.selectByTenantCalendarBizDate("t1", "CAL", previousWorkday))
+        .thenReturn(null);
+    when(disasterDayOverrideMapper.selectActiveByCalendarBizDate("t1", "CAL", holiday, now))
+        .thenReturn(null);
+    when(disasterDayOverrideMapper.selectActiveByCalendarBizDate("t1", "CAL", previousWorkday, now))
+        .thenReturn(null);
+    when(batchDayInstanceMapper.insert(any())).thenReturn(1);
+
+    scheduler.openDueBatchDays(now);
+
+    ArgumentCaptor<BatchDayInstanceEntity> captor =
+        ArgumentCaptor.forClass(BatchDayInstanceEntity.class);
+    verify(batchDayInstanceMapper).insert(captor.capture());
+    assertThat(captor.getValue().bizDate()).isEqualTo(previousWorkday);
+  }
+
+  @Test
+  @DisplayName("WORKDAY_OVERRIDE 优先于假日滚动规则")
+  void shouldKeepWorkdayOverrideOnConfiguredDate() {
+    Instant now = Instant.parse("2026-05-05T00:30:00Z");
+    LocalDate bizDate = LocalDate.of(2026, Month.MAY, 5);
+    when(businessCalendarMapper.selectByEnabled(true))
+        .thenReturn(List.of(calendar("NEXT_WORKDAY")));
+    when(planCalendarMapper.selectEffectiveDayType("t1", "CAL", bizDate))
+        .thenReturn("WORKDAY_OVERRIDE");
+    when(batchDayInstanceMapper.selectByTenantCalendarBizDate("t1", "CAL", bizDate))
+        .thenReturn(null);
+    when(disasterDayOverrideMapper.selectActiveByCalendarBizDate("t1", "CAL", bizDate, now))
+        .thenReturn(null);
+    when(batchDayInstanceMapper.insert(any())).thenReturn(1);
+
+    scheduler.openDueBatchDays(now);
+
+    ArgumentCaptor<BatchDayInstanceEntity> captor =
+        ArgumentCaptor.forClass(BatchDayInstanceEntity.class);
+    verify(batchDayInstanceMapper).insert(captor.capture());
+    assertThat(captor.getValue().bizDate()).isEqualTo(bizDate);
+    assertThat(captor.getValue().dayStatus()).isEqualTo("OPEN");
   }
 
   @Test
@@ -164,6 +368,65 @@ class BatchDayOpenSchedulerTest {
 
     scheduler.openDueBatchDays(now);
 
+    verify(batchDayInstanceMapper, never()).insert(any());
+    ArgumentCaptor<CalendarDependencyWaitEntity> waitCaptor =
+        ArgumentCaptor.forClass(CalendarDependencyWaitEntity.class);
+    verify(calendarDependencyWaitMapper).upsertWaiting(waitCaptor.capture());
+    assertThat(waitCaptor.getValue().bizDate()).isEqualTo(LocalDate.of(2026, Month.MAY, 5));
+    assertThat(waitCaptor.getValue().blockedReason()).contains("CAL_CN");
+    assertThat(waitCaptor.getValue().dependencySnapshot())
+        .contains("CAL_CN")
+        .contains("WAIT_SETTLED");
+  }
+
+  @Test
+  @DisplayName("依赖等待超过阈值后仅认领并发送一次告警,但仍保留自动恢复")
+  void shouldEmitTimeoutAlertOnceForLongCalendarDependencyWait() {
+    Instant now = Instant.parse("2026-05-05T00:30:00Z");
+    LocalDate bizDate = LocalDate.of(2026, Month.MAY, 5);
+    CalendarDependencyWaitEntity oldWait = CalendarDependencyWaitEntity.builder()
+        .id(7L)
+        .tenantId("t1")
+        .calendarCode("CAL")
+        .bizDate(bizDate)
+        .waitStatus(CalendarDependencyWaitEntity.STATUS_WAITING)
+        .blockedReason("blocked")
+        .firstWaitingAt(now.minusSeconds(86_401))
+        .lastCheckedAt(now.minusSeconds(86_400))
+        .attemptCount(10)
+        .cutoffAt(now)
+        .slaDeadlineAt(now)
+        .timezoneSnapshot("Asia/Shanghai")
+        .dstPolicySnapshot("snapshot")
+        .build();
+    when(businessCalendarMapper.selectByEnabled(true)).thenReturn(List.of(calendar()));
+    when(batchDayInstanceMapper.selectByTenantCalendarBizDate("t1", "CAL", bizDate))
+        .thenReturn(null);
+    when(calendarDependencyMapper.selectEnabledByDownstream("t1", "CAL"))
+        .thenReturn(List.of(CalendarDependencyEntity.builder()
+            .upstreamCode("CAL_CN")
+            .downstreamCode("CAL")
+            .rule("WAIT_SETTLED")
+            .enabled(true)
+            .build()));
+    when(batchDayInstanceMapper.selectByTenantCalendarBizDate("t1", "CAL_CN", bizDate))
+        .thenReturn(BatchDayInstanceEntity.builder()
+            .tenantId("t1")
+            .calendarCode("CAL_CN")
+            .bizDate(bizDate)
+            .dayStatus("IN_FLIGHT")
+            .build());
+    when(calendarDependencyWaitMapper.selectByTenantCalendarBizDate("t1", "CAL", bizDate))
+        .thenReturn(oldWait);
+    when(calendarDependencyWaitMapper.claimTimeoutAlert("t1", 7L, now)).thenReturn(1);
+
+    scheduler.openDueBatchDays(now);
+
+    ArgumentCaptor<AlertEmitRequest> alertCaptor = ArgumentCaptor.forClass(AlertEmitRequest.class);
+    verify(alertEventService).emit(alertCaptor.capture());
+    assertThat(alertCaptor.getValue().alertType())
+        .isEqualTo("BATCH_CALENDAR_DEPENDENCY_WAIT_TIMEOUT");
+    assertThat(alertCaptor.getValue().resourceKey()).contains("CAL").contains(bizDate.toString());
     verify(batchDayInstanceMapper, never()).insert(any());
   }
 
@@ -280,13 +543,17 @@ class BatchDayOpenSchedulerTest {
   }
 
   private BusinessCalendarEntity calendar() {
+    return calendar("SKIP");
+  }
+
+  private BusinessCalendarEntity calendar(String holidayRollRule) {
     return new BusinessCalendarEntity(
         1L,
         "t1",
         "CAL",
         "Calendar",
         "Asia/Shanghai",
-        "SKIP",
+        holidayRollRule,
         "AUTO",
         30,
         LocalTime.of(6, 0),

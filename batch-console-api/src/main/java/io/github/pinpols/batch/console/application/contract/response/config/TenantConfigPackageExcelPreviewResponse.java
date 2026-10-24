@@ -13,7 +13,8 @@ public record TenantConfigPackageExcelPreviewResponse(
     int invalidRows,
     List<SheetStats> sheets,
     List<IssueDto> issues,
-    List<ErrorRowDto> errorRows) {
+    List<ErrorRowDto> errorRows,
+    List<String> migrationNotes) {
 
   /** 单个 sheet 的行统计。 */
   public record SheetStats(String sheetName, int totalRows, int validRows, int invalidRows) {}

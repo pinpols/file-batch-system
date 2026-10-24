@@ -3,7 +3,7 @@
 # gen-default-tenant-excel.py
 # 依据 multi-tenant-seed.sql 里 default-tenant 的 "v4 硬化批次" 新增项
 # 生成与 ta/tb/tc-tenant-config-package-test.xlsx 同结构的配置包 Excel，
-# v4 结构（12 sheet）：8 业务核心（含独立作业监控策略）+ 3 可选基础依赖。
+# 当前结构：Job、监控策略、文件配置、Workflow 拓扑及 3 个可选基础依赖。
 #
 # 历史变化：alert_routing_config 已剔除（走 /config/excel?domain=alert-routings
 # 独立入口）；file_template_config 进核心（含 Import 目标表 / Export SQL）；
@@ -12,7 +12,7 @@
 import json
 from openpyxl import Workbook
 
-OUT = "docs/test-data/test-full-coverage-import-suite/default-tenant-config-package-test.xlsx"
+OUT = "test-data/tenant-config-packages/default-tenant-config-package-test.xlsx"
 
 # ─── 8 业务核心 sheet 列定义 ──────────────────────────────────────────────────
 JOB_COLS = [
@@ -42,20 +42,12 @@ FILE_TEMPLATE_COLS = [
     "error_line_masking_enabled","log_masking_enabled","content_encryption_enabled",
     "encryption_key_ref","download_requires_approval","masking_rule_set","enabled","version","description",
 ]
-PIPELINE_COLS = [
-    "tenant_id","job_code","pipeline_name","pipeline_type","biz_type","worker_group",
-    "version","enabled","description",
-]
-STEP_COLS = [
-    "job_code","version","step_code","step_name","stage_code","step_order","impl_code",
-    "step_params","timeout_seconds","retry_policy","retry_max_count","enabled",
-]
 WF_DEF_COLS = [
     "tenant_id","workflow_code","workflow_name","workflow_type","version","enabled","description",
 ]
 WF_NODE_COLS = [
     "tenant_id","workflow_code","workflow_version","node_code","node_name","node_type",
-    "related_job_code","related_pipeline_code","worker_group","window_code",
+    "related_job_code","worker_group","window_code",
     "node_order","retry_policy","retry_max_count","timeout_seconds","node_params","enabled",
 ]
 WF_EDGE_COLS = [
@@ -80,22 +72,7 @@ BATCH_WINDOW_COLS = [
 
 TENANT = "default-tenant"
 
-def jd(job_code, job_name):
-    # 与 seed SQL `INSERT INTO batch.job_definition` (line 534-540, 572-577) 对齐：
-    # job_type=WORKFLOW, schedule_type=MANUAL, queue_code=export_queue,
-    # worker_group=EXPORT, window_code=always_open, priority=5
-    return [
-        TENANT, job_code, job_name, "WORKFLOW", None, "export_queue", "EXPORT",
-        "MANUAL", None, None, None, "always_open", "NONE",
-        0, 14400, "NONE", "FULL", None, None,
-        "{}", "{}", "TRUE", f"P2 seed aligned - {job_name}",
-    ]
-
-JOB_ROWS = [
-    jd("wf_probe_pipeline", "Probe PIPELINE"),
-    jd("wf_probe_gateway",  "Probe GATEWAY"),
-    jd("wf_probe_mixed",    "Probe MIXED"),
-]
+JOB_ROWS = []
 
 def ch(code, name, ctype, endpoint, cfg, auth="NONE", receipt="NONE", timeout=30):
     return [TENANT, code, name, ctype, endpoint, auth, json.dumps(cfg, ensure_ascii=False),
@@ -129,7 +106,7 @@ def wdef(code, name, wftype, desc):
 WF_DEF_ROWS = [
     wdef("wf_probe_pipeline","Probe PIPELINE workflow","PIPELINE","P2 seed - PIPELINE type"),
     wdef("wf_probe_gateway", "Probe GATEWAY + ANY join","DAG",    "P2 seed - GATEWAY + ANY join"),
-    wdef("wf_probe_mixed",   "Probe MIXED workflow","MIXED",      "P2 seed - MIXED type (TASK + FILE_STEP mixed)"),
+    wdef("wf_probe_mixed",   "Probe MIXED workflow","MIXED",      "P2 seed - MIXED type (TASK nodes)"),
 ]
 
 def wn(wf, nc, nn, nt, rjc, order, params):
@@ -148,7 +125,7 @@ WF_NODE_ROWS = [
     wn("wf_probe_gateway","END","End","END",None,5,{"entry":False}),
     wn("wf_probe_mixed","START","Start","START",None,0,{"entry":True}),
     wn("wf_probe_mixed","PROCESS","Process Task","TASK","exp_settlement_daily",1,{"step":"process"}),
-    wn("wf_probe_mixed","REPORT","Generate Report","FILE_STEP","exp_settlement_daily",2,{"step":"report"}),
+    wn("wf_probe_mixed","REPORT","Generate Report","TASK","exp_settlement_daily",2,{"step":"report"}),
     wn("wf_probe_mixed","END","End","END",None,3,{"entry":False}),
 ]
 
@@ -191,8 +168,6 @@ def main():
     write_sheet(wb, "job_monitoring_policy",     JOB_MONITORING_POLICY_COLS, [])
     write_sheet(wb, "file_channel_config",      CHANNEL_COLS,           CHANNEL_ROWS)
     write_sheet(wb, "file_template_config",     FILE_TEMPLATE_COLS,     [])
-    write_sheet(wb, "pipeline_definition",      PIPELINE_COLS,          [])
-    write_sheet(wb, "pipeline_step_definition", STEP_COLS,              [])
     write_sheet(wb, "workflow_definition",      WF_DEF_COLS,            WF_DEF_ROWS)
     write_sheet(wb, "workflow_node",            WF_NODE_COLS,           WF_NODE_ROWS)
     write_sheet(wb, "workflow_edge",            WF_EDGE_COLS,           WF_EDGE_ROWS)

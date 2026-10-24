@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.sdk.handler.typed;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.sdk.handler.SdkRowResult;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
@@ -70,8 +71,7 @@ public abstract class SdkAbstractTypedImportHandler<I, O, R>
     super(SdkTypedParameters.defaultObjectMapper(), SdkAbstractTypedImportHandler.class);
   }
 
-  protected SdkAbstractTypedImportHandler(
-      com.fasterxml.jackson.databind.ObjectMapper objectMapper) {
+  protected SdkAbstractTypedImportHandler(ObjectMapper objectMapper) {
     super(objectMapper, SdkAbstractTypedImportHandler.class);
   }
 
@@ -139,7 +139,9 @@ public abstract class SdkAbstractTypedImportHandler<I, O, R>
       if (!buf.isEmpty()) {
         flush(input, ctx, buf, counts);
       }
-      ctx.commitCoordinator().markCompleted(breakPosition(input, List.of()));
+      List<R> emptyBatch = List.of();
+      Map<String, Object> completedBreakPosition = breakPosition(input, emptyBatch);
+      ctx.commitCoordinator().markCompleted(completedBreakPosition);
       return result(input, counts, "imported " + counts.success() + " rows");
     } catch (SdkTaskStoppedException stopped) {
       throw stopped; // 决策三:协作取消穿透到模板顶层落 cancelled,业务不得吞。

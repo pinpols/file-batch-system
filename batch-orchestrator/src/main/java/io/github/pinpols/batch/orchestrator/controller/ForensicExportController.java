@@ -74,11 +74,12 @@ public class ForensicExportController {
     HttpHeaders headers = new HttpHeaders();
     headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + exportId + ".zip\"");
     headers.add("X-Forensic-Sha256", log.sha256() == null ? "" : log.sha256());
-    return ResponseEntity.ok()
+    ResponseEntity.BodyBuilder responseBuilder = ResponseEntity.ok()
         .headers(headers)
-        .contentType(MediaType.APPLICATION_OCTET_STREAM)
-        .contentLength(Files.size(file))
-        .body(new FileSystemResource(file));
+        .contentType(MediaType.APPLICATION_OCTET_STREAM);
+    long contentLength = Files.size(file);
+    FileSystemResource resource = new FileSystemResource(file);
+    return responseBuilder.contentLength(contentLength).body(resource);
   }
 
   /** 内部 API request body（不暴露给业务方）。 */

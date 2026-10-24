@@ -8,11 +8,15 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.governance.JobMonitoringAlertEmissionService.Violation;
 import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
 import io.github.pinpols.batch.orchestrator.domain.view.JobMonitoringAlertCandidate;
 import io.github.pinpols.batch.orchestrator.mapper.JobMonitoringMapper;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -55,6 +59,13 @@ class JobMonitoringAlertEmissionServiceTest {
       assertThat(request.tenantId()).isEqualTo("tenant-a");
       assertThat(request.resourceKey()).isEqualTo("42");
       assertThat(request.traceId()).isEqualTo("trace-42");
+      Map<String, Object> details =
+          JsonUtils.fromJson(request.detailJson(), new TypeReference<>() {});
+      assertThat(details)
+          .containsEntry("jobInstanceId", "42")
+          .containsEntry("bizDate", "2026-10-11")
+          .containsEntry("workflowRunId", "84")
+          .containsEntry("nodeCode", "IMPORT_NODE");
     });
   }
 
@@ -90,6 +101,7 @@ class JobMonitoringAlertEmissionServiceTest {
     return new JobMonitoringAlertCandidate(
         "tenant-a",
         42L,
+        LocalDate.parse("2026-10-11"),
         "JOB_A",
         "instance-42",
         "RUNNING",
@@ -101,6 +113,8 @@ class JobMonitoringAlertEmissionServiceTest {
         now.minusSeconds(50),
         30,
         2,
-        severity);
+        severity,
+        84L,
+        "IMPORT_NODE");
   }
 }

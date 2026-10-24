@@ -38,8 +38,11 @@ public class ConsoleOidcController {
 
   @GetMapping("/provider")
   public CommonResponse<ConsoleOidcProviderResponse> provider() {
-    return responseFactory.success(new ConsoleOidcProviderResponse(
-        properties.isEnabled(), properties.isEnabled() ? properties.getRegistrationId() : null));
+    boolean enabled = properties.isEnabled();
+    boolean registrationAvailable = properties.isEnabled();
+    String registrationId = registrationAvailable ? properties.getRegistrationId() : null;
+    ConsoleOidcProviderResponse response = new ConsoleOidcProviderResponse(enabled, registrationId);
+    return responseFactory.success(response);
   }
 
   @GetMapping("/identities")
@@ -59,8 +62,9 @@ public class ConsoleOidcController {
       @RequestParam String tenantId,
       @Valid @RequestBody ConsoleOidcIdentityRequest request,
       Authentication authentication) {
-    return responseFactory.success(
-        identityService.bind(tenantId, request, resolveUsername(authentication)));
+    String username = resolveUsername(authentication);
+    ConsoleOidcIdentityResponse identity = identityService.bind(tenantId, request, username);
+    return responseFactory.success(identity);
   }
 
   @DeleteMapping("/identities/{id}")

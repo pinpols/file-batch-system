@@ -4,7 +4,7 @@
 #
 #   投 2 个数据文件 + 1 个 .batch.json v2 清单到 MinIO ingress/ta/ →
 #   ImportIngressScanner 扫到、按清单 fileMapping 给每文件 file_record 落
-#   bundleTemplateCode + bundleJobCode → 到达组满足完整性条件 → BundleArrivalLauncher 发
+#   bundleTemplateCode + bundleWorkflowCode → 到达组满足完整性条件 → BundleArrivalLauncher 发
 #   TA_BUNDLE_IMPORT(BUNDLE_IMPORT)launch → DefaultSchedulePlanBuilder 展 2 个
 #   绑定异构 partition → import worker 各自复用 file_record 按模板导入 biz.customer_account。
 #
@@ -30,18 +30,20 @@ batch_require_python
 
 echo "==> apply bootstrap + bundle-import fixtures"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PG_PLATFORM_DB" \
-  -v ON_ERROR_STOP=1 -v mockserver_host_port="${MOCKSERVER_HOST_PORT:-11080}" \
-  -f /dev/stdin < docs/test-data/sim-e2e-bootstrap.sql >/dev/null
+  -v ON_ERROR_STOP=1 -v mockserver_host_port="${MOCKSERVER_HOST_PORT}" \
+  -f /dev/stdin < test-data/sim/sim-e2e-bootstrap.sql >/dev/null
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PG_PLATFORM_DB" \
-  -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-bundle-import-fixtures.sql >/dev/null
+  -v ON_ERROR_STOP=1 -f /dev/stdin < test-data/sim/sim-bundle-import-fixtures.sql >/dev/null
 
 export MINIO_CONTAINER="${MINIO_CONTAINER:-batch-minio}"
 
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/bundle-import.log"
+import atexit
 import json
 import os
 import subprocess
 import sys
+from scripts.sim.launch_contract import workflow_id_for_fixture
 import time
 import urllib.request
 from pathlib import Path
@@ -83,11 +85,21 @@ def psql_file(db, sql_file, variables=None, tuples=True):
     return sh(args, input=(SQL_DIR / sql_file).read_text(encoding="utf-8"), check=True)
 
 
+WORKFLOW_ID = workflow_id_for_fixture("ta", JOB_CODE)
+WORKFLOW_CODE = psql_file(
+    os.environ["PG_PLATFORM_DB"],
+    "select-workflow-code-by-id.sql",
+    {"tenant_id": "ta", "workflow_id": WORKFLOW_ID},
+).stdout.strip()
+if not WORKFLOW_CODE:
+    raise RuntimeError(f"managed Workflow code not found for ta/{JOB_CODE}")
+
+
 def launch(job_code, params):
     request_id = f"sim-bundle-{job_code.lower()}-{RUN}-{int(time.time() * 1000) % 100000}"
     body = {
         "tenantId": "ta",
-        "jobCode": job_code,
+        "workflowDefinitionId": workflow_id_for_fixture("ta", job_code),
         "triggerType": "EVENT",
         "bizDate": BIZ,
         "requestId": request_id,
@@ -176,18 +188,41 @@ def upload(object_name, data):
     print(f"  ✓ uploaded {object_name} ({len(data)} bytes)")
 
 
-# 1) 生成 2 个数据文件 + v2 清单(声明本束 → TA_BUNDLE_IMPORT,逐文件用 ta_import_customer_tpl 模板)
+# 1) 生成 2 个数据文件 + v2 清单(声明本束 → ${WORKFLOW_CODE},逐文件用 ta_import_customer_tpl 模板)
 f1 = f"bundle-a-{BIZ_COMPACT}-{RUN}.csv"
 f2 = f"bundle-b-{BIZ_COMPACT}-{RUN}.csv"
 customer_prefixes = [f"BNDLA{RUN}-", f"BNDLB{RUN}-"]
 data1 = csv_rows(customer_prefixes[0], 10)
 data2 = csv_rows(customer_prefixes[1], 15)
+
+
+def cleanup_uploaded_objects():
+    objects = [f"ingress/ta/{name}" for name in (f1, f2, f"{GROUP}.batch.json")]
+    failures = []
+    for object_name in objects:
+        result = sh([
+            "bash", MINIO_MC_HELPER, "rm", "--force", "--quiet",
+            f"local/{BUCKET}/{object_name}",
+        ])
+        if result.returncode != 0:
+            failures.append(object_name)
+            print(f"❌ cleanup failed for owned bundle input: {object_name}: {result.stderr.strip()}",
+                  file=sys.stderr, flush=True)
+    if failures:
+        print(f"❌ failed to remove {len(failures)} owned bundle input object(s)",
+              file=sys.stderr, flush=True)
+        os._exit(1)
+    print(f"  ✓ removed {len(objects)} run-owned bundle input objects", flush=True)
+
+
+atexit.register(cleanup_uploaded_objects)
+
 manifest = {
     "schemaVersion": "batch-manifest-v2",
     "fileGroupCode": GROUP,
     "bizDate": BIZ,
     "tenantId": "ta",
-    "jobCode": JOB_CODE,
+    "workflowCode": WORKFLOW_CODE,
     "requiredFiles": [f1, f2],
     "fileMapping": [
         {"fileName": f1, "templateCode": TEMPLATE},
@@ -205,7 +240,8 @@ upload(f"{prefix}/{GROUP}.batch.json", json.dumps(manifest, ensure_ascii=False))
 
 # 2) 轮询:扫描器登记 → 到达组满足完整性条件 → BUNDLE_IMPORT launch → 分区展开
 print(f"==> 等待 scanner→到达组→BUNDLE_IMPORT launch(group={GROUP})")
-instance_id = wait_instance(JOB_CODE, f"bundle-arrival-ta-{GROUP}-{BIZ}", before_import)
+instance_id = wait_instance(
+    JOB_CODE, f"bundle-arrival-ta-{WORKFLOW_ID}-{GROUP}-{BIZ}", before_import)
 
 if instance_id is None:
     print("❌ FAIL:超时未见 TA_BUNDLE_IMPORT job_instance(检查 scanner batch-manifest/arrival 配置是否开启)")

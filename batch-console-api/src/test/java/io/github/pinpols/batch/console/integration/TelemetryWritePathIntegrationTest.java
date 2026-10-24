@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -98,7 +99,7 @@ class TelemetryWritePathIntegrationTest extends AbstractIntegrationTest {
   @DisplayName("事件条数超过上限: 返回请求不合法")
   void shouldRejectEvents_whenCountAboveLimit() {
     // events @Size(max=50)
-    List<Map<String, Object>> events = new java.util.ArrayList<>();
+    List<Map<String, Object>> events = new ArrayList<>();
     for (int i = 0; i < 51; i++) {
       events.add(Map.of("type", "info", "name", "evt-" + i));
     }

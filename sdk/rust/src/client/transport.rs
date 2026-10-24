@@ -17,6 +17,49 @@ use std::sync::{Arc, Mutex};
 
 use crate::decide::{classify_http, Decision};
 
+/// CLAIM success body returned by the Orchestrator.
+///
+/// The business `payload` is read from the persisted task at claim time and is
+/// authoritative over any copy in the Kafka dispatch message.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
+pub struct DependencyResultReference {
+    pub upstream_job_code: String,
+    pub biz_date_alignment: String,
+    pub upstream_biz_date: String,
+    pub business_key: String,
+    pub version_no: i32,
+    pub result_version_id: Option<i64>,
+    pub source_job_instance_id: Option<i64>,
+    pub effective_at: Option<String>,
+}
+
+#[cfg(feature = "serde")]
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskClaimResponse {
+    pub payload: Option<String>,
+    pub trace_id: Option<String>,
+    pub partition_invocation_id: Option<String>,
+    #[serde(default)]
+    pub dependency_result_snapshot: Vec<DependencyResultReference>,
+}
+
+/// Decode a successful CLAIM response. Callers must classify HTTP status first:
+/// in particular, 409 is idempotent success and has no task to execute.
+#[cfg(feature = "serde")]
+pub fn decode_claim_response(response: &HttpResponse) -> Result<TaskClaimResponse, String> {
+    if !(200..300).contains(&response.status) {
+        return Err(format!(
+            "cannot decode unsuccessful CLAIM response: status {}",
+            response.status
+        ));
+    }
+    serde_json::from_str(&response.body)
+        .map_err(|error| format!("invalid CLAIM response body: {error}"))
+}
+
 /// A raw HTTP response from a control-plane call: the status code (or `<= 0`
 /// for a transport error) plus an opaque body the caller parses.
 #[derive(Debug, Clone, Default)]
@@ -276,15 +319,26 @@ impl Transport for FakeTransport {
     }
 }
 
-// NOTE on parsing: the engine reuses the phase-1 decision functions, which take
-// typed structs (`HeartbeatResponse` / `RenewResponse`). Turning a raw response
-// body into those structs is the future real adapter's job (JSON with
-// ignore-unknown, §1.2); the scheduler tests construct the typed responses
-// directly, so no JSON parser is needed in this std-only phase.
+// CLAIM response decoding is available behind `serde`, which is enabled by the
+// real `http` and `kafka` features. Heartbeat/renew response decoding remains
+// the responsibility of the consuming runtime; their decision tests use typed
+// projections and the default core stays free of JSON dependencies.
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn claim_response_decoder_requires_success_and_valid_json() {
+        let response = HttpResponse::new(200, r#"{"payload":"{\"x\":1}"}"#);
+        assert_eq!(
+            decode_claim_response(&response).unwrap().payload.as_deref(),
+            Some("{\"x\":1}")
+        );
+        assert!(decode_claim_response(&HttpResponse::new(409, "{}")).is_err());
+        assert!(decode_claim_response(&HttpResponse::new(200, "not-json")).is_err());
+    }
 
     #[test]
     fn retry_outcome_from_5xx() {

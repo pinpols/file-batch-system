@@ -38,6 +38,8 @@ public final class ConfigPackageExcelSchema {
   public static final String COL_SCHEDULE_TYPE = "schedule_type";
   public static final String COL_SCHEDULE_EXPR = "schedule_expr";
   public static final String COL_DEPENDS_ON_JOB_CODE = "depends_on_job_code";
+  public static final String COL_DEPENDS_ON_JOB_CODES = "depends_on_job_codes";
+  public static final String COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS = "depends_on_biz_date_alignments";
   public static final String COL_CALENDAR_CODE = "calendar_code";
   public static final String COL_QUEUE_CODE = "queue_code";
   public static final String COL_PARAM_SCHEMA = "param_schema";
@@ -51,6 +53,10 @@ public final class ConfigPackageExcelSchema {
   public static final String COL_WORKFLOW_NAME = "workflow_name";
   public static final String COL_WORKFLOW_TYPE = "workflow_type";
   public static final String COL_WORKFLOW_VERSION = "workflow_version";
+  public static final String COL_SINGLE_JOB_CODE = "single_job_code";
+  public static final String COL_SCHEDULE_ENABLED = "schedule_enabled";
+  public static final String COL_TIMEZONE = "timezone";
+  public static final String COL_TRIGGER_MODE = "trigger_mode";
   public static final String COL_NODE_CODE = "node_code";
   public static final String COL_NODE_NAME = "node_name";
   public static final String COL_NODE_TYPE = "node_type";
@@ -185,6 +191,8 @@ public final class ConfigPackageExcelSchema {
         COL_SCHEDULE_TYPE,
         COL_SCHEDULE_EXPR,
         COL_DEPENDS_ON_JOB_CODE,
+        COL_DEPENDS_ON_JOB_CODES,
+        COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS,
         COL_CALENDAR_CODE,
         COL_WINDOW_CODE,
         COL_RETRY_POLICY,
@@ -365,7 +373,15 @@ public final class ConfigPackageExcelSchema {
         COL_WORKFLOW_NAME,
         COL_WORKFLOW_TYPE,
         COL_VERSION,
+        COL_SINGLE_JOB_CODE,
         COL_ENABLED,
+        COL_SCHEDULE_ENABLED,
+        COL_SCHEDULE_TYPE,
+        COL_SCHEDULE_EXPR,
+        COL_TIMEZONE,
+        COL_TRIGGER_MODE,
+        COL_CALENDAR_CODE,
+        COL_DEPENDS_ON_JOB_CODE,
         COL_DESCRIPTION);
 
     private WorkflowDefinition() {}

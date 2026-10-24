@@ -12,7 +12,7 @@ import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
 import io.github.pinpols.batch.e2e.support.E2eTestSql;
 import io.github.pinpols.batch.e2e.support.verifier.ExportFileVerifier;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -60,7 +60,7 @@ class ExportContentVerificationE2eIT extends AbstractIntegrationTest {
   private static final String BATCH_NO = "E2E-CONTENT-VERIFY-1";
 
   @Autowired
-  private LaunchService launchService;
+  private WorkflowRunLaunchService launchService;
 
   @Autowired
   private JdbcTemplate jdbcTemplate;
@@ -86,25 +86,34 @@ class ExportContentVerificationE2eIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("导出任务终态成功后做内容级复核:文件记录有存储路径,产物达到最小非空行数且包含两条结算明细编号,结算批次汇总金额非空且主数据仍可查询")
   void shouldProduceNonEmptyExportFileAndKeepSettlementData_whenExportSucceeds() throws Exception {
-    JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
-
-    Long batchId = businessJdbc.queryForObject("""
+    final String insertSettlementBatchSql = """
             insert into biz.settlement_batch (
                 tenant_id, batch_no, biz_date, accounting_period, batch_status,
                 total_record_count, total_amount, currency
             ) values (?, ?, date '2026-01-15', '202601', 'READY', 2, 0, 'CNY')
             returning id
-            """, Long.class, TENANT, BATCH_NO);
-    assertThat(batchId).isNotNull();
-
-    businessJdbc.update("""
+            """;
+    final String insertSettlementDetailSql = """
         insert into biz.settlement_detail (
             tenant_id, batch_id, settlement_no, customer_no, biz_date, accounting_period,
             gross_amount, fee_amount, net_amount, currency, settlement_status
         ) values
             (?, ?, 'E2E-CV-001', 'C-CV-1', date '2026-01-15', '202601', 100.00, 5.00, 95.00, 'CNY', 'READY'),
             (?, ?, 'E2E-CV-002', 'C-CV-2', date '2026-01-15', '202601', 200.00, 10.00, 190.00, 'CNY', 'READY')
-        """, TENANT, batchId, TENANT, batchId);
+        """;
+
+    final String selectTaskStatusSql = """
+                      select t.task_status from batch.job_task t
+                      join batch.job_instance ji on ji.id = t.job_instance_id
+                      where ji.tenant_id = ? and ji.dedup_key = ?
+                      """;
+
+    JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
+
+    Long batchId = businessJdbc.queryForObject(insertSettlementBatchSql, Long.class, TENANT, BATCH_NO);
+    assertThat(batchId).isNotNull();
+
+    businessJdbc.update(insertSettlementDetailSql, TENANT, batchId, TENANT, batchId);
 
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "EXPORT", "export", TriggerType.API);
@@ -118,7 +127,7 @@ class ExportContentVerificationE2eIT extends AbstractIntegrationTest {
 
     launchService.launch(new LaunchRequest(
         TENANT,
-        seed.jobCode(),
+        seed.workflowDefinitionId(),
         LocalDate.of(2026, 1, 15),
         TriggerType.API,
         seed.requestId(),
@@ -132,11 +141,7 @@ class ExportContentVerificationE2eIT extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          String status = jdbcTemplate.queryForObject("""
-                      select t.task_status from batch.job_task t
-                      join batch.job_instance ji on ji.id = t.job_instance_id
-                      where ji.tenant_id = ? and ji.dedup_key = ?
-                      """, String.class, TENANT, seed.dedupKey());
+          String status = jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
           assertThat(status).isEqualTo("SUCCESS");
         });
 

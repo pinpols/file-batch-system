@@ -83,10 +83,11 @@ class ConsoleInstanceAuthenticatedIdempotencyIntegrationTest extends AbstractInt
         .build();
 
     try {
-      jdbcTemplate.update(
-          "delete from batch.console_operation_audit where action = ? and aggregate_id = ?",
-          action,
-          Long.toString(instanceId));
+      String clearInstanceAuditSql = """
+          delete from batch.console_operation_audit where action = ? and aggregate_id = ?
+          """;
+      String aggregateId = Long.toString(instanceId);
+      jdbcTemplate.update(clearInstanceAuditSql, action, aggregateId);
 
       AuthenticatedClient admin =
           authenticatedClient(client, "journey-admin-" + suffix, "ROLE_ADMIN");
@@ -118,10 +119,11 @@ class ConsoleInstanceAuthenticatedIdempotencyIntegrationTest extends AbstractInt
       verifyNoInteractions(orchestrator);
       assertThat(auditCount(action, instanceId)).isEqualTo(1);
     } finally {
-      jdbcTemplate.update(
-          "delete from batch.console_operation_audit where action = ? and aggregate_id = ?",
-          action,
-          Long.toString(instanceId));
+      String clearInstanceAuditSql = """
+          delete from batch.console_operation_audit where action = ? and aggregate_id = ?
+          """;
+      String aggregateId = Long.toString(instanceId);
+      jdbcTemplate.update(clearInstanceAuditSql, action, aggregateId);
     }
   }
 
@@ -162,11 +164,11 @@ class ConsoleInstanceAuthenticatedIdempotencyIntegrationTest extends AbstractInt
   }
 
   private int auditCount(String action, long instanceId) {
-    return jdbcTemplate.queryForObject(
-        "select count(*) from batch.console_operation_audit where action = ? and aggregate_id = ?",
-        Integer.class,
-        action,
-        Long.toString(instanceId));
+    String instanceAuditCountSql = """
+        select count(*) from batch.console_operation_audit where action = ? and aggregate_id = ?
+        """;
+    String aggregateId = Long.toString(instanceId);
+    return jdbcTemplate.queryForObject(instanceAuditCountSql, Integer.class, action, aggregateId);
   }
 
   private record AuthenticatedClient(String jwt, String csrfToken) {}

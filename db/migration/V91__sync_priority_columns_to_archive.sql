@@ -6,6 +6,7 @@
 --
 -- 注意: archive 表只是冷库, 不需要 CHECK / 索引 / NOT NULL — 数据从 batch.* INSERT-SELECT-* 进来,
 -- 列定义存在即可让 SELECT * 列对齐。
+
 ALTER TABLE archive.job_task_archive
     ADD COLUMN IF NOT EXISTS priority INTEGER;
 

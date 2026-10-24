@@ -3,6 +3,7 @@ package io.github.pinpols.batch.common.dto;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 import lombok.Builder;
 
@@ -40,7 +41,13 @@ public record LaunchRequest(
      * <p>装箱为 {@link Boolean} 是为了让 JSON 反序列化容忍缺省字段（旧 trigger / 测试构造的 launch 请求未发送 该字段时，记录构造器收到
      * {@code null}），下游 setter 按需将 null 视为 false（DB 列默认值回退）。
      */
-    Boolean dryRun) {
+    Boolean dryRun,
+    /** 外部事件规则编码；只描述事件类别，具体投递幂等身份仍由请求契约确定。 */
+    String externalEventCode,
+    /** Orchestrator 就绪检查观察到的上游版本；不代表处理器已经按此版本读取。 */
+    List<DependencyResultReference> dependencyResultSnapshot,
+    /** 顶层 Workflow 目标；旧 Job 请求和内部节点请求保留 jobCode。 */
+    Long workflowDefinitionId) {
 
   /** 简洁回退构造器: 不带 interval 的旧调用方 (RERUN / 历史路径) 直接传 7 参. */
   public LaunchRequest(
@@ -62,7 +69,10 @@ public record LaunchRequest(
         null,
         null,
         null,
-        false);
+        false,
+        null,
+        null,
+        null);
   }
 
   /** 9 参兼容构造：仅带 data interval，replay_session_id + dry_run 默认 null/false。 */
@@ -88,7 +98,10 @@ public record LaunchRequest(
         dataIntervalStart,
         dataIntervalEnd,
         null,
-        false);
+        false,
+        null,
+        null,
+        null);
   }
 
   /** 10 参兼容构造：含 replay_session_id，dry_run 默认 false。 */
@@ -115,6 +128,72 @@ public record LaunchRequest(
         dataIntervalStart,
         dataIntervalEnd,
         replaySessionId,
-        false);
+        false,
+        null,
+        null,
+        null);
+  }
+
+  /** 保留旧调用方含 dry-run 的构造入口。 */
+  @SuppressWarnings("PMD.ExcessiveParameterList")
+  public LaunchRequest(
+      String tenantId,
+      String jobCode,
+      LocalDate bizDate,
+      TriggerType triggerType,
+      String requestId,
+      String traceId,
+      Map<String, Object> params,
+      Instant dataIntervalStart,
+      Instant dataIntervalEnd,
+      Long replaySessionId,
+      Boolean dryRun) {
+    this(
+        tenantId,
+        jobCode,
+        bizDate,
+        triggerType,
+        requestId,
+        traceId,
+        params,
+        dataIntervalStart,
+        dataIntervalEnd,
+        replaySessionId,
+        dryRun,
+        null,
+        null,
+        null);
+  }
+
+  /** 保留每日连续性分支含外部事件规则编码的构造入口。 */
+  @SuppressWarnings("PMD.ExcessiveParameterList")
+  public LaunchRequest(
+      String tenantId,
+      String jobCode,
+      LocalDate bizDate,
+      TriggerType triggerType,
+      String requestId,
+      String traceId,
+      Map<String, Object> params,
+      Instant dataIntervalStart,
+      Instant dataIntervalEnd,
+      Long replaySessionId,
+      Boolean dryRun,
+      String externalEventCode) {
+    this(
+        tenantId,
+        jobCode,
+        bizDate,
+        triggerType,
+        requestId,
+        traceId,
+        params,
+        dataIntervalStart,
+        dataIntervalEnd,
+        replaySessionId,
+        dryRun,
+        externalEventCode,
+        null,
+        null);
   }
 }

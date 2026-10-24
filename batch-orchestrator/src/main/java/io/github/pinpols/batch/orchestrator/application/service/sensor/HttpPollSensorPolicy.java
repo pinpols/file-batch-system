@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service.sensor;
 
+import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -122,11 +123,11 @@ public class HttpPollSensorPolicy implements SensorPolicy {
       return SensorProbeResult.notYet();
     } catch (Exception e) {
       log.warn("HTTP_POLL probe error err={}", SwallowedExceptionLogger.summary(e));
+      String errorDetail =
+          Objects.requireNonNullElse(e.getMessage(), e.getClass().getSimpleName());
+      List<String> errorArguments = List.of("HTTP_POLL", errorDetail);
       return SensorProbeResult.error(
-          "error.workflow.sensor_probe_failed",
-          List.of(
-              "HTTP_POLL",
-              Objects.requireNonNullElse(e.getMessage(), e.getClass().getSimpleName())));
+          "error.workflow.sensor_probe_failed", errorArguments);
     }
   }
 
@@ -136,21 +137,29 @@ public class HttpPollSensorPolicy implements SensorPolicy {
     String body = SensorSpecs.string(spec, "body");
     Duration timeout = props.getHttpRequestTimeout();
     return switch (method) {
-      case "GET" ->
-        httpTransport.execute(
-            OutboundHttpRequest.get(url, headers, timeout, timeout, OutboundAddressPolicy.GUARDED));
-      case "HEAD" ->
-        httpTransport.execute(OutboundHttpRequest.head(
-            url, headers, timeout, timeout, OutboundAddressPolicy.GUARDED));
-      case "POST" ->
-        httpTransport.execute(OutboundHttpRequest.post(
+      case "GET" -> {
+        OutboundHttpRequest request =
+            OutboundHttpRequest.get(url, headers, timeout, timeout, OutboundAddressPolicy.GUARDED);
+        yield httpTransport.execute(request);
+      }
+      case "HEAD" -> {
+        OutboundHttpRequest request = OutboundHttpRequest.head(
+            url, headers, timeout, timeout, OutboundAddressPolicy.GUARDED);
+        yield httpTransport.execute(request);
+      }
+      case "POST" -> {
+        String requestBody = Objects.requireNonNullElse(body, "");
+        String contentType = resolveContentType(headers);
+        OutboundHttpContent httpContent = new OutboundHttpContent(requestBody, contentType);
+        OutboundHttpRequest request = OutboundHttpRequest.post(
             url,
             headers,
-            Objects.requireNonNullElse(body, ""),
-            resolveContentType(headers),
+            httpContent,
             timeout,
             timeout,
-            OutboundAddressPolicy.GUARDED));
+            OutboundAddressPolicy.GUARDED);
+        yield httpTransport.execute(request);
+      }
       default -> throw new IllegalArgumentException("unsupported sensor HTTP method: " + method);
     };
   }
@@ -190,17 +199,21 @@ public class HttpPollSensorPolicy implements SensorPolicy {
       throw new IllegalArgumentException("matchExpr must contain '==' operator");
     }
     String lhs = expr.substring(0, eq).trim();
-    String rhs = stripQuotes(expr.substring(eq + 2).trim());
+    String unquotedRhsCandidate = expr.substring(eq + 2).trim();
+    String rhs = stripQuotes(unquotedRhsCandidate);
 
     if ("status".equals(lhs)) {
       if (rhs.endsWith("xx")) {
-        int prefix = Integer.parseInt(rhs.substring(0, 1));
+        String statusClassDigit = rhs.substring(0, 1);
+        int prefix = Integer.parseInt(statusClassDigit);
         return status / 100 == prefix;
       }
       return Integer.toString(status).equals(rhs);
     }
     if (lhs.startsWith("$.")) {
-      String pointer = "/" + lhs.substring(2).replace('.', '/');
+      String dottedJsonPath = lhs.substring(2);
+      String jsonPointerPath = dottedJsonPath.replace('.', '/');
+      String pointer = "/" + jsonPointerPath;
       try {
         JsonNode root = objectMapper.readTree(body);
         JsonNode found = root.at(pointer);
@@ -226,6 +239,10 @@ public class HttpPollSensorPolicy implements SensorPolicy {
   }
 
   private static String upperOrDefault(String s, String dflt) {
-    return Texts.hasText(s) ? s.trim().toUpperCase() : dflt;
+    if (!Texts.hasText(s)) {
+      return dflt;
+    }
+    String trimmedValue = s.trim();
+    return trimmedValue.toUpperCase();
   }
 }

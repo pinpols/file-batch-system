@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.support.excel;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.Locale;
 
 /** Shared scalar conversion helpers for Excel validation rules. */
@@ -12,7 +13,11 @@ public final class ConsoleExcelValueSupport {
   }
 
   public static String upper(String value) {
-    return value == null ? null : value.trim().toUpperCase(Locale.ROOT);
+    if (EmptyChecks.isNull(value)) {
+      return null;
+    }
+    String trimmedValue = value.trim();
+    return trimmedValue.toUpperCase(Locale.ROOT);
   }
 
   public static boolean isBlank(String value) {

@@ -166,8 +166,10 @@ public class ReadReplicaRoutingDataSource extends AbstractRoutingDataSource {
     List<Class<?>> interfaces = new ArrayList<>(interfaceSet);
     InvocationHandler handler =
         (proxy, method, args) -> invokeObserved(target, proxy, method, args);
+    ClassLoader targetClassLoader = target.getClass().getClassLoader();
+    Class<?>[] proxyInterfaces = interfaces.toArray(Class<?>[]::new);
     return (T) Proxy.newProxyInstance(
-        target.getClass().getClassLoader(), interfaces.toArray(Class<?>[]::new), handler);
+        targetClassLoader, proxyInterfaces, handler);
   }
 
   private Object invokeObserved(Object target, Object proxy, Method method, Object[] args)

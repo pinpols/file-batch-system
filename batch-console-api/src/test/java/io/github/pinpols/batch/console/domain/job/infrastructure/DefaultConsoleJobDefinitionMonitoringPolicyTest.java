@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -19,6 +20,7 @@ import io.github.pinpols.batch.console.domain.job.param.JobDefinitionMaintenance
 import io.github.pinpols.batch.console.domain.job.param.JobMonitoringPolicyUpsertParam;
 import io.github.pinpols.batch.console.domain.job.support.BuiltinTaskTypeGuard;
 import io.github.pinpols.batch.console.domain.job.support.JobResourceAssignmentGuard;
+import io.github.pinpols.batch.console.infrastructure.workflow.DefaultSingleJobWorkflowProvisioner;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -55,6 +57,9 @@ class DefaultConsoleJobDefinitionMonitoringPolicyTest {
   @Mock
   private JobResourceAssignmentGuard resourceAssignmentGuard;
 
+  @Mock
+  private DefaultSingleJobWorkflowProvisioner singleJobWorkflowProvisioner;
+
   @InjectMocks
   private DefaultConsoleJobDefinitionApplicationService service;
 
@@ -69,7 +74,8 @@ class DefaultConsoleJobDefinitionMonitoringPolicyTest {
         cacheInvalidationService,
         defaults,
         builtinTaskTypeGuard,
-        resourceAssignmentGuard);
+        resourceAssignmentGuard,
+        singleJobWorkflowProvisioner);
   }
 
   private void stubTenantAndOperator() {
@@ -167,6 +173,29 @@ class DefaultConsoleJobDefinitionMonitoringPolicyTest {
     assertThat(policyCaptor.getValue().getCompletionDeadlineLocalTime()).isNull();
     assertThat(policyCaptor.getValue().getDependencyCompletionWindowSeconds()).isEqualTo(900);
     verify(cacheInvalidationService).evictJobDefinition("tenant-a", "JOB_CHILD");
+  }
+
+  @Test
+  @DisplayName("Job 更新入口拒绝修改由关联 Workflow 管理的调度字段")
+  void shouldRejectScheduleMutation_whenUpdatingJob() {
+    JobDefinitionEntity existing = new JobDefinitionEntity();
+    existing.setId(52L);
+    existing.setTenantId("tenant-a");
+    existing.setJobCode("JOB_SCHEDULED");
+    existing.setScheduleType("CRON");
+    existing.setScheduleExpr("0 0 2 * * *");
+    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+    when(jobDefinitionMapper.selectById("tenant-a", 52L)).thenReturn(existing);
+    JobDefinitionUpdateRequest request = new JobDefinitionUpdateRequest();
+    request.setTenantId("tenant-a");
+    request.setScheduleExpr("0 0 3 * * *");
+
+    assertThatThrownBy(() -> service.update(52L, request))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.job.schedule_managed_by_workflow");
+
+    verify(jobDefinitionMapper, never())
+        .updateJobDefinitionMaintenance(any(JobDefinitionMaintenanceUpdateParam.class));
   }
 
   @Test

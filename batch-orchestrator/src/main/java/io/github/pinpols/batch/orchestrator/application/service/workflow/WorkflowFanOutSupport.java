@@ -52,7 +52,8 @@ public final class WorkflowFanOutSupport {
     Object maxObj = fan.get("maxFanOut");
     int maxFanOut =
         maxObj instanceof Number n && n.intValue() > 0 ? n.intValue() : DEFAULT_MAX_FAN_OUT;
-    return new FanOutSpec(expr.trim(), itemParam, maxFanOut);
+    String trimmedItemsExpression = expr.trim();
+    return new FanOutSpec(trimmedItemsExpression, itemParam, maxFanOut);
   }
 
   /** 把 plan 的分区列表替换为 N 份(以原首个分区为模板克隆 worker route / status)。 */
@@ -81,11 +82,13 @@ public final class WorkflowFanOutSupport {
    */
   public static void bindDispatchTargetRefs(
       SchedulePlan plan, List<Object> items, List<SchedulePlan.PartitionPlan> partitions) {
-    if (EmptyChecks.isNull(plan)
-        || !"DISPATCH".equalsIgnoreCase(plan.getDefaultWorkerType())
-        || EmptyChecks.isNull(items)
-        || EmptyChecks.isNull(partitions)
-        || items.size() != partitions.size()) {
+    boolean dispatchPlanHasUnmatchedFanOutInputs =
+        EmptyChecks.isNull(plan)
+            || !"DISPATCH".equalsIgnoreCase(plan.getDefaultWorkerType())
+            || EmptyChecks.isNull(items)
+            || EmptyChecks.isNull(partitions)
+            || items.size() != partitions.size();
+    if (dispatchPlanHasUnmatchedFanOutInputs) {
       return;
     }
     for (int index = 0; index < items.size(); index++) {
@@ -102,8 +105,12 @@ public final class WorkflowFanOutSupport {
     }
     for (String key : List.of("channelCode", "dispatchChannelCode", "targetChannelCode")) {
       Object value = itemMap.get(key);
-      if (EmptyChecks.isNotNull(value) && EmptyChecks.isNotBlank(String.valueOf(value))) {
-        return String.valueOf(value).trim();
+      if (EmptyChecks.isNotNull(value)) {
+        String checkedChannelCode = String.valueOf(value);
+        if (EmptyChecks.isNotBlank(checkedChannelCode)) {
+          String returnedChannelCode = String.valueOf(value);
+          return returnedChannelCode.trim();
+        }
       }
     }
     return null;
@@ -112,8 +119,8 @@ public final class WorkflowFanOutSupport {
   /** 给某个 fan-out 分区的 task payload 注入它负责的 item + 索引信息。 */
   public static String injectItem(
       String basePayload, String itemParam, Object item, int index, int total) {
-    Map<String, Object> merged =
-        new LinkedHashMap<>(WorkflowNodePayloadBuilder.parsePayloadMap(basePayload));
+    Map<String, Object> parsedPayload = WorkflowNodePayloadBuilder.parsePayloadMap(basePayload);
+    Map<String, Object> merged = new LinkedHashMap<>(parsedPayload);
     merged.put(itemParam, item);
     merged.put("fanOutIndex", index);
     merged.put("fanOutTotal", total);

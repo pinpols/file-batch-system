@@ -24,12 +24,16 @@ public final class IdGenerator {
     if (otel != null) {
       return otel;
     }
-    return UUID.randomUUID().toString().replace("-", "");
+    UUID uuid = UUID.randomUUID();
+    String uuidText = uuid.toString();
+    return uuidText.replace("-", "");
   }
 
   /** ADR-014:每个分区的 CLAIM invocation id(绝不从 OTel 桥接而来 —— 独立的 stale-worker 守护)。 */
   public static String newInvocationId() {
-    return UUID.randomUUID().toString().replace("-", "");
+    UUID uuid = UUID.randomUUID();
+    String uuidText = uuid.toString();
+    return uuidText.replace("-", "");
   }
 
   public static String newBusinessNo(String prefix) {
@@ -64,7 +68,10 @@ public final class IdGenerator {
    * 长度可控,前缀便于日志检索 + grep。
    */
   public static String newIdempotencyKey() {
-    return "idem-" + UUID.randomUUID().toString().replace("-", "");
+    UUID uuid = UUID.randomUUID();
+    String uuidText = uuid.toString();
+    String compactUuid = uuidText.replace("-", "");
+    return "idem-" + compactUuid;
   }
 
   private static final DateTimeFormatter COMPACT_UTC =
@@ -77,6 +84,9 @@ public final class IdGenerator {
 
   /** 16 位 16 进制随机后缀。 */
   private static String shortRandomSuffix() {
-    return UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+    UUID uuid = UUID.randomUUID();
+    String uuidText = uuid.toString();
+    String compactUuid = uuidText.replace("-", "");
+    return compactUuid.substring(0, 16);
   }
 }

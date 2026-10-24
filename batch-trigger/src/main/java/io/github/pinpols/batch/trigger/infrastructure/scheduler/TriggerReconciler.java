@@ -5,9 +5,12 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
 import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
+import io.github.pinpols.batch.trigger.infrastructure.QuartzMisfireRecoveryListener;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerSchedulerFacade;
+import io.github.pinpols.batch.trigger.service.TriggerScheduledOccurrencePlanner;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -30,18 +33,19 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 定期对账 {@code job_definition} DB 状态与 Quartz JobStore 执行态，使两者保持一致。
+ * 定期对账 Workflow 权威调度配置与 Quartz JobStore 执行态，使两者保持一致。
  *
- * <p><b>权威源</b>：{@code job_definition.enabled=true AND schedule_type IN ('CRON','FIXED_RATE') AND
- * trigger_mode IN ('SCHEDULED','MIXED')}（由 {@link TriggerDefinitionLoader#loadAll} 过滤）。
+ * <p><b>权威源</b>：启用的 Workflow（包括没有单作业关联的组合 Workflow），其 Workflow 自身的
+ * {@code schedule_type/schedule_expr/timezone/trigger_mode/schedule_enabled} 决定 Quartz 注册；Workflow 和关联 Job 仍须启用，
+ * Job enabled 作为执行准入，而 schedule_enabled 独立表达暂停调度。组合 Workflow 没有关联 Job 时仍可定时触发；若关联 Job 已禁用，则不注册。
  *
  * <p><b>对账规则</b>：
  *
  * <ul>
- *   <li>DB 有 + Quartz 无 → {@link TriggerRegistrationService#registerByJobCode} 注册
- *   <li>DB 无 + Quartz 有 → {@link TriggerRegistrationService#unregisterByJobCode} 清理
+ *   <li>DB 有 + Quartz 无 → {@link TriggerRegistrationService#registerByWorkflowCode} 注册
+ *   <li>DB 无 + Quartz 有 → {@link TriggerRegistrationService#removeQuartzJob} 清理 Quartz 残留，不改权威启停状态
  *   <li>DB 有 + Quartz 有 且 schedule drift（cron / interval / timezone 不一致）→ 触发 {@code
- *       registerByJobCode}，由 {@link TriggerSchedulerFacade#scheduleWithReplace} 的 delete-and-add
+ *       registerByWorkflowCode}，由 {@link TriggerSchedulerFacade#scheduleWithReplace} 的 delete-and-add
  *       语义把 Quartz 表达式替换为 DB 最新值
  *   <li>DB 有 + Quartz 有 且完全一致 → 保持
  * </ul>
@@ -60,8 +64,11 @@ public class TriggerReconciler {
   private final TriggerRegistrationService triggerRegistrationService;
   private final Scheduler scheduler;
   private final TriggerGracefulShutdown gracefulShutdown;
+  private final TriggerScheduledOccurrencePlanner occurrencePlanner;
+  private final QuartzMisfireRecoveryListener misfireRecoveryListener;
 
   @EventListener(ApplicationReadyEvent.class)
+  @SchedulerLock(name = "trigger_reconciler", lockAtMostFor = "PT5M", lockAtLeastFor = "PT10S")
   public void onApplicationReady() {
     log.info("trigger reconciler initial run on application ready");
     reconcile();
@@ -92,12 +99,11 @@ public class TriggerReconciler {
         continue;
       }
       JobKey key = JobKey.jobKey(
-          descriptor.getTenantId() + ":" + descriptor.getJobCode(),
-          TriggerSchedulerFacade.JOB_GROUP);
+          TriggerSchedulerFacade.quartzIdentity(descriptor), TriggerSchedulerFacade.JOB_GROUP);
       expectedJobs.add(key);
       if (!quartzJobs.contains(key)) {
-        triggerRegistrationService.registerByJobCode(
-            descriptor.getTenantId(), descriptor.getJobCode());
+        triggerRegistrationService.reconcileByWorkflowCode(
+            descriptor.getTenantId(), descriptor.getWorkflowCode());
         registered++;
       } else if (hasScheduleDrift(key, descriptor)) {
         log.info(
@@ -105,10 +111,21 @@ public class TriggerReconciler {
             key,
             descriptor.getScheduleExpression(),
             descriptor.getTimezone());
-        triggerRegistrationService.registerByJobCode(
-            descriptor.getTenantId(), descriptor.getJobCode());
+        triggerRegistrationService.reconcileByWorkflowCode(
+            descriptor.getTenantId(), descriptor.getWorkflowCode());
         replaced++;
       }
+      materializeUpcomingOccurrences(key, descriptor);
+      misfireRecoveryListener.restorePendingMisfires(descriptor, key);
+    }
+    // 在当前业务日期之后重新检查已持久化日期；截止时间到达时，存储日期不会漂移。
+    // 创建业务日记录或其义务前，先获取与结算相同的事务围栏，
+    List<TriggerDescriptor> pendingMisfireDefinitions =
+        triggerDefinitionLoader.loadPendingMisfireDefinitions();
+    for (TriggerDescriptor descriptor : pendingMisfireDefinitions) {
+      JobKey key = TriggerSchedulerFacade.recoveryJobKey(descriptor);
+      expectedJobs.add(key);
+      triggerRegistrationService.registerRecoveryJob(descriptor);
     }
     int unregistered = 0;
     for (JobKey key : quartzJobs) {
@@ -120,8 +137,23 @@ public class TriggerReconciler {
         log.warn("trigger reconciler skipping malformed quartz JobKey: {}", key);
         continue;
       }
-      triggerRegistrationService.unregisterByJobCode(parts[0], parts[1]);
+      triggerRegistrationService.removeQuartzJob(parts[0], parts[1]);
+      if (parts[1].startsWith("WF:")) {
+        String workflowCode = parts[1].substring("WF:".length());
+        occurrencePlanner.supersedeFuturePlans(parts[0], workflowCode, Instant.now());
+      } else if (!parts[1].startsWith("RECOVERY:")) {
+        log.warn(
+            "trigger reconciler removed a non-Workflow Quartz identity without ledger cleanup: {}",
+            key);
+      }
       unregistered++;
+    }
+    // 使开日和最终结算遵循同一加锁顺序。
+    // 将终态日历跳过与 Trigger 准入串行化，并保留已
+    for (TriggerDescriptor descriptor : pendingMisfireDefinitions) {
+      JobKey recoveryJobKey = TriggerSchedulerFacade.recoveryJobKey(descriptor);
+      misfireRecoveryListener.restorePendingMisfires(
+          descriptor.getTenantId(), descriptor.getWorkflowDefinitionId(), recoveryJobKey);
     }
     if (registered > 0 || unregistered > 0 || replaced > 0) {
       log.info(
@@ -131,6 +163,20 @@ public class TriggerReconciler {
           replaced,
           unregistered,
           expectedJobs.size());
+    }
+  }
+
+  private void materializeUpcomingOccurrences(JobKey key, TriggerDescriptor descriptor) {
+    try {
+      List<? extends Trigger> triggers = scheduler.getTriggersOfJob(key);
+      Trigger primary = primaryTrigger(key, triggers);
+      if (EmptyChecks.isNull(primary)) {
+        return;
+      }
+      occurrencePlanner.materialize(descriptor, primary, Instant.now());
+    } catch (SchedulerException | RuntimeException exception) {
+      SwallowedExceptionLogger.warn(
+          TriggerReconciler.class, "scheduled-occurrence-materialization-failed", exception);
     }
   }
 
@@ -214,7 +260,8 @@ public class TriggerReconciler {
       return -1L;
     }
     try {
-      return Long.parseLong(expression.trim());
+      String trimmedExpression = expression.trim();
+      return Long.parseLong(trimmedExpression);
     } catch (NumberFormatException ignored) {
       SwallowedExceptionLogger.info(
           TriggerReconciler.class, "catch:NumberFormatException", ignored);
@@ -225,8 +272,10 @@ public class TriggerReconciler {
 
   private Set<JobKey> loadQuartzJobKeys() {
     try {
-      return Set.copyOf(
-          scheduler.getJobKeys(GroupMatcher.jobGroupEquals(TriggerSchedulerFacade.JOB_GROUP)));
+      GroupMatcher<JobKey> quartzJobGroup =
+          GroupMatcher.jobGroupEquals(TriggerSchedulerFacade.JOB_GROUP);
+      Set<JobKey> quartzJobKeys = scheduler.getJobKeys(quartzJobGroup);
+      return Set.copyOf(quartzJobKeys);
     } catch (SchedulerException exception) {
       throw new IllegalStateException("failed to list quartz job keys", exception);
     }

@@ -18,6 +18,7 @@
 | 02c | [batch-day-timezone-dst-optimized-design.md](./batch-day-timezone-dst-optimized-design.md) | 基于 02 / 02a / 02b 的优化收敛设计 | 改批量日、cron 时区、DST、前日门闩 |
 | 02d | [time-date-semantics.md](./time-date-semantics.md) | 当前运行口径：事件时间、业务日期、文件接收时间、调度与 Console 展示时区 | 配置跨时区租户 / 排查日期差异 |
 | 03 | [file-pipeline-design.md](./file-pipeline-design.md) | 文件处理链路（preprocess / receive / dispatch / publish）| 写新 file step |
+| 03a | [Workflow 统一运行与 Pipeline 按类型关联实施方案](../plans/workflow-unified-execution-and-system-pipeline-plan-2026-10-14.md) | Pipeline 模型保留、定义表退出；作业/工作流双菜单联动、统一顶层运行与迁移验收 | 实施新运行模型前；当前为方案，代码待迁移 |
 | 04 | [redis-usage-design.md](./redis-usage-design.md) | Redis 使用清单（quota / rate-limit / cache / pub-sub / SSE replay）| 改任何 Redis 相关代码 |
 | 05 | [logging-architecture.md](./logging-architecture.md) | 日志架构（MDC / 结构化 / Loki 分发） | 加日志埋点前 |
 | 06 | [delete-strategy.md](./delete-strategy.md) | 删除策略（job_instance / file_record / outbox archive 等）| 删数据前 |

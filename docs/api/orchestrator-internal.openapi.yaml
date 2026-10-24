@@ -2,12 +2,16 @@ openapi: 3.1.0
 info:
   title: Orchestrator Internal API (SDK ↔ Orch protocol)
   version: 1.0.0
-  x-last-updated: "2026-10-13"
+  x-last-updated: "2026-10-23"
   x-changelog:
+    - date: "2026-10-23"
+      summary: "[ADR-049] 整 Workflow 只读预览返回完整冻结图、逐节点配置版本、Worker 插件声明及阻塞原因；暂不签发提交凭证。"
     - date: "2026-10-04"
       summary: "[Pipeline Progress] 心跳增加可选任务级 pipelineProgress；仅保留按 pipeline 查询进度；移除 workerCode 查询与 Java/Python SDK 标量上报。"
     - date: "2026-10-13"
       summary: "内部 HTTP 响应改用独立 Response DTO，保持历史 JSON 字段；补齐 Worker 与 Console BFF 实际消费端点契约。"
+    - date: "2026-10-15"
+      summary: "文件组与外部事件预期、逐日文件预期登记改用 workflowDefinitionId，统一每日义务归属。"
     - date: "2026-06-30"
       summary: "[Batch Day Replay] 登记 /internal/orchestrator/batch-day-replay/sessions 与 /sessions/preview,供 Console BFF 提交和只读影响预览。"
     - date: "2026-06-30"
@@ -42,10 +46,86 @@ tags:
     description: Trigger 调用的上游 asset partition 就绪查询(`OrchestratorReadinessController`)
   - name: batch-day-replay
     description: Console BFF 调用的批次日重放内部接口(`BatchDayReplayController`)
+  - name: workflow-replay
+    description: 历史 Workflow 完整图及重放证据预览；不属于 Worker HTTP 协议
+  - name: batch-day-obligations
+    description: Workflow 归属的文件/事件输入义务及逐日登记
   - name: console-bff
     description: Console BFF 实际调用的内部查询与治理接口；不是 BYO Worker SDK 的接入清单
 
 paths:
+  /internal/file-group-expectations:
+    x-protocol-stability: internal-only
+    put:
+      tags: [batch-day-obligations]
+      summary: 配置 Workflow 的每日文件组预期
+      operationId: configureFileGroupExpectation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/FileGroupExpectationConfig'}
+      responses:
+        '200':
+          description: 配置结果
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/FileGroupExpectationConfigResult'}
+        '422': {description: Workflow 不存在、未启用或日历不匹配}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+
+  /internal/event-expectations:
+    x-protocol-stability: internal-only
+    put:
+      tags: [batch-day-obligations]
+      summary: 配置 Workflow 的每日外部事件预期
+      operationId: configureExternalEventExpectation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ExternalEventExpectationConfig'}
+      responses:
+        '200': {description: 返回新增或更新的记录数, content: {application/json: {schema: {type: integer}}}}
+        '422': {description: Workflow 不存在、未启用或日历不匹配}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+  /internal/event-expectations/satisfied:
+    x-protocol-stability: internal-only
+    post:
+      tags: [batch-day-obligations]
+      summary: 由已启动的 Workflow EVENT 请求结清输入预期
+      operationId: satisfyExternalEventExpectation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ExternalEventExpectationSatisfaction'}
+      responses:
+        '200': {description: 是否完成状态转换, content: {application/json: {schema: {type: boolean}}}}
+        '409': {description: 关联请求未启动或事件/Workflow/业务日不匹配}
+        '422': {description: Workflow 不存在、未启用或日历不匹配}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+
+  /internal/expected-work-occurrences/file-groups:
+    x-protocol-stability: internal-only
+    post:
+      tags: [batch-day-obligations]
+      summary: 到达前幂等登记 Workflow 的文件组预期
+      operationId: registerExpectedWorkflowFileGroup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ExpectedWorkflowFileGroupRegistration'}
+      responses:
+        '200':
+          description: 幂等登记结果
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ExpectedWorkflowFileGroupRegistrationResult'}
+        '422': {description: Workflow 不存在、未启用或日历不匹配}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+
   /internal/pipeline-progress/by-pipeline:
     x-protocol-stability: internal-only
     get:
@@ -638,6 +718,208 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseBatchDayReplayPreview'
+  /internal/orchestrator/batch-day-replay/operations/date-range/preview:
+    x-protocol-stability: internal-only
+    post:
+      tags: [batch-day-replay]
+      summary: ADR-049 预览批次日 replay operation 区间影响
+      operationId: previewBatchDayReplayRangeInternal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BatchDayReplayRangeCommand'}
+      responses:
+        '200':
+          description: 按当前日历和单日 replay 语义生成冻结区间预览
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CommonResponseReplayOperationPreview'}
+  /internal/orchestrator/workflow-replay/preview:
+    x-protocol-stability: internal-only
+    post:
+      tags: [workflow-replay]
+      summary: 预览完整历史 Workflow 图及逐节点重放证据
+      description: >
+        返回来源运行的图版本、业务日、日历、全部节点和边，按策略选择 Job 配置并核对 ONLINE Worker
+        的选定插件声明。成功节点同样进入预览；未固定插件或依赖版本、UNKNOWN 等原因逐节点返回。
+        当前端点只读，不创建 operation、审批、运行或一次性提交凭证；能力声明一致不表示整个操作已准入。
+      operationId: previewWorkflowRunReplayInternal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/WorkflowRunReplayCommand'}
+      responses:
+        '200':
+          description: 完整图和阻塞明细；不包含根参数、节点参数或密钥
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CommonResponseWorkflowRunReplayPreview'}
+        '400':
+          description: 操作身份或配置/结果策略无效
+        '409':
+          description: 来源运行不是终态，或缺少完整冻结图、业务日和日历
+  /internal/compensations/workflow-node/replay-preview:
+    x-protocol-stability: internal-only
+    post:
+      tags: [console-bff]
+      summary: Freeze and preview one exact failed Workflow JOB node replay
+      operationId: previewWorkflowNodeReplayInternal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/WorkflowNodeReplayCommand'}
+      responses:
+        '200':
+          description: Frozen source identity, policies, warnings, and one-use token
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WorkflowNodeReplayPreview'}
+  /internal/compensations/workflow-node/replay-operations:
+    x-protocol-stability: internal-only
+    post:
+      tags: [console-bff]
+      summary: Consume the preview and create the pending-approval replay parent
+      operationId: submitWorkflowNodeReplayForApprovalInternal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/WorkflowNodeReplayCommand'}
+      responses:
+        '200':
+          description: Durable pending approval parent identity
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WorkflowNodeReplayAdmission'}
+  /internal/orchestrator/batch-day-replay/operations/date-range:
+    x-protocol-stability: internal-only
+    post:
+      tags: [batch-day-replay]
+      summary: 原子创建 replay operation 和每日 session
+      operationId: submitBatchDayReplayRangeInternal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BatchDayReplayRangeCommand'}
+      responses:
+        '200':
+          description: operation 及全部子 session 在单一数据库事务中受理
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CommonResponseReplayOperation'}
+  /internal/orchestrator/batch-day-replay/operations/{operationId}:
+    x-protocol-stability: internal-only
+    get:
+      tags: [batch-day-replay]
+      summary: 查询 replay operation
+      operationId: getReplayOperationInternal
+      parameters:
+        - in: path
+          name: operationId
+          required: true
+          schema: {type: integer, format: int64}
+        - in: query
+          name: tenantId
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: operation 状态与聚合进度
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CommonResponseReplayOperation'}
+  /internal/orchestrator/batch-day-replay/operations/{operationId}/sessions:
+    x-protocol-stability: internal-only
+    get:
+      tags: [batch-day-replay]
+      summary: 查询日期区间 replay operation 的每日子 session
+      operationId: listReplayOperationSessionsInternal
+      parameters:
+        - in: path
+          name: operationId
+          required: true
+          schema: {type: integer, format: int64}
+        - in: query
+          name: tenantId
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: 按业务日期排序的子 session 及每日进度
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CommonResponseBatchDayReplaySessionList'}
+  /internal/orchestrator/batch-day-replay/operations:
+    x-protocol-stability: internal-only
+    get:
+      tags: [batch-day-replay]
+      summary: 查询租户最近的日期区间 replay operation
+      operationId: listReplayOperationsInternal
+      parameters:
+        - in: query
+          name: tenantId
+          required: true
+          schema: {type: string}
+        - in: query
+          name: limit
+          required: false
+          schema: {type: integer, minimum: 1, maximum: 200, default: 50}
+      responses:
+        '200':
+          description: 最近创建的 operation 与聚合进度
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CommonResponseReplayOperationList'}
+  /internal/orchestrator/batch-day-replay/operations/{operationId}/approve:
+    x-protocol-stability: internal-only
+    post:
+      tags: [batch-day-replay]
+      summary: 审批 replay operation 的所有子 session
+      operationId: approveReplayOperationInternal
+      parameters:
+        - in: path
+          name: operationId
+          required: true
+          schema: {type: integer, format: int64}
+        - in: query
+          name: tenantId
+          required: true
+          schema: {type: string}
+        - in: query
+          name: approver
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: operation 和子 session 原子审批
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CommonResponseReplayOperation'}
+  /internal/orchestrator/batch-day-replay/operations/{operationId}/cancel:
+    x-protocol-stability: internal-only
+    post:
+      tags: [batch-day-replay]
+      summary: 取消 replay operation 尚未终结的子 session
+      operationId: cancelReplayOperationInternal
+      parameters:
+        - in: path
+          name: operationId
+          required: true
+          schema: {type: integer, format: int64}
+        - in: query
+          name: tenantId
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: 返回 operation 聚合状态
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CommonResponseReplayOperation'}
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/Forbidden'}
         '5XX': {$ref: '#/components/responses/ServerError'}
@@ -759,6 +1041,45 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseBatchDayReplayEntryList'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '5XX': {$ref: '#/components/responses/ServerError'}
+
+  /internal/orchestrator/batch-day-replay/sessions/{sessionId}/entries/{entryId}/retry-submission:
+    x-protocol-stability: internal-only
+    post:
+      tags: [batch-day-replay]
+      summary: 重试未创建子运行的失败重放条目
+      operationId: retryBatchDayReplaySubmissionInternal
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: {type: integer, format: int64}
+        - in: path
+          name: entryId
+          required: true
+          schema: {type: integer, format: int64}
+        - in: query
+          name: tenantId
+          required: true
+          schema: {type: string}
+        - in: query
+          name: operatorId
+          required: true
+          schema: {type: string}
+        - in: query
+          name: reason
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: 更新后的重放会话
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseBatchDayReplaySession'
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/Forbidden'}
         '404': {$ref: '#/components/responses/NotFound'}
@@ -1095,6 +1416,61 @@ components:
             $ref: '#/components/schemas/ErrorBody'
 
   schemas:
+    FileGroupExpectationConfig:
+      type: object
+      required: [tenantId, calendarCode, workflowDefinitionId, fileGroupCode, expectedLocalTime, enabled]
+      properties:
+        tenantId: {type: string, maxLength: 64}
+        calendarCode: {type: string, maxLength: 128}
+        workflowDefinitionId: {type: integer, format: int64}
+        fileGroupCode: {type: string, maxLength: 128}
+        expectedLocalTime: {type: string, format: partial-time}
+        dueLocalTime: {type: string, format: partial-time, nullable: true}
+        enabled: {type: boolean}
+    FileGroupExpectationConfigResult:
+      type: object
+      required: [configured, fileGroupCode]
+      properties:
+        configured: {type: boolean}
+        fileGroupCode: {type: string}
+    ExternalEventExpectationConfig:
+      type: object
+      required: [tenantId, calendarCode, workflowDefinitionId, eventCode, expectedLocalTime, enabled]
+      properties:
+        tenantId: {type: string, maxLength: 64}
+        calendarCode: {type: string, maxLength: 128}
+        workflowDefinitionId: {type: integer, format: int64}
+        eventCode: {type: string, maxLength: 128}
+        expectedLocalTime: {type: string, format: partial-time}
+        dueLocalTime: {type: string, format: partial-time, nullable: true}
+        enabled: {type: boolean}
+    ExternalEventExpectationSatisfaction:
+      type: object
+      required: [tenantId, calendarCode, workflowDefinitionId, eventCode, bizDate, triggerRequestId]
+      properties:
+        tenantId: {type: string, maxLength: 64}
+        calendarCode: {type: string, maxLength: 128}
+        workflowDefinitionId: {type: integer, format: int64}
+        eventCode: {type: string, maxLength: 128}
+        bizDate: {type: string, format: date}
+        triggerRequestId: {type: string, maxLength: 128}
+    ExpectedWorkflowFileGroupRegistration:
+      type: object
+      required: [tenantId, calendarCode, workflowDefinitionId, fileGroupCode, bizDate, expectedAt]
+      properties:
+        tenantId: {type: string, maxLength: 64}
+        calendarCode: {type: string, maxLength: 128}
+        workflowDefinitionId: {type: integer, format: int64}
+        fileGroupCode: {type: string, maxLength: 256}
+        bizDate: {type: string, format: date}
+        expectedAt: {type: string, format: date-time}
+        dueAt: {type: string, format: date-time, nullable: true}
+    ExpectedWorkflowFileGroupRegistrationResult:
+      type: object
+      required: [inserted, fileGroupCode]
+      properties:
+        inserted: {type: boolean}
+        fileGroupCode: {type: string}
     CommonResponseObject:
       type: object
       properties:
@@ -1238,6 +1614,246 @@ components:
         autoApprove: {type: boolean}
         traceId: {type: string}
       required: [tenantId, calendarCode, bizDate, scope, reason, requestedBy]
+
+    BatchDayReplayRangeCommand:
+      type: object
+      description: ADR-049 closed date interval; operationKey and previewToken are returned by preview and required for submit.
+      properties:
+        tenantId: {type: string}
+        calendarCode: {type: string}
+        fromDate: {type: string, format: date}
+        throughDate: {type: string, format: date}
+        scope: {type: string, enum: [ALL, ALL_FAILED, SUBSET_JOB_CODES, OUTPUTS_ONLY]}
+        jobCodes: {type: array, items: {type: string}}
+        versionIds: {type: array, items: {type: integer, format: int64}}
+        resultPolicy: {type: string}
+        configVersionPolicy: {type: string}
+        configVersion: {type: integer, format: int32}
+        reason: {type: string}
+        requestedBy: {type: string}
+        autoApprove: {type: boolean, default: false}
+        traceId: {type: string}
+        executionMode: {type: string, enum: [REPLAY, DRY_RUN], default: REPLAY}
+        candidateSource: {type: string, enum: [EXISTING_INSTANCES, SCHEDULE_PLAN], default: EXISTING_INSTANCES}
+        operationKey: {type: string, format: uuid}
+        previewToken: {type: string}
+      required: [tenantId, calendarCode, fromDate, throughDate, scope, reason, requestedBy]
+
+    ReplayOperationPreview:
+      type: object
+      properties:
+        tenantId: {type: string}
+        operationKey: {type: string, format: uuid}
+        operationType: {type: string, enum: [BATCH_DAY_RANGE]}
+        calendarCode: {type: string}
+        fromDate: {type: string, format: date}
+        throughDate: {type: string, format: date}
+        scope: {type: string}
+        totalCandidateCount: {type: integer, format: int32}
+        previewToken: {type: string}
+        expiresAt: {type: string, format: date-time}
+        days:
+          type: array
+          items:
+            type: object
+            properties:
+              bizDate: {type: string, format: date}
+              disposition: {type: string, enum: [READY, NO_CANDIDATES, CALENDAR_BLOCKED]}
+              candidateCount: {type: integer, format: int32}
+              entries: {type: array, items: {$ref: '#/components/schemas/BatchDayReplayPreviewEntry'}}
+              resultVersionImpacts: {type: array, items: {$ref: '#/components/schemas/BatchDayReplayResultVersionImpact'}}
+              assetPartitionImpacts: {type: array, items: {$ref: '#/components/schemas/BatchDayReplayAssetPartitionImpact'}}
+              dispatchImpacts: {type: array, items: {$ref: '#/components/schemas/BatchDayReplayDispatchImpact'}}
+              warnings: {type: array, items: {type: string}}
+      required: [tenantId, operationKey, operationType, calendarCode, fromDate, throughDate, scope, totalCandidateCount, previewToken, expiresAt, days]
+
+    WorkflowRunReplayCommand:
+      type: object
+      properties:
+        tenantId: {type: string}
+        workflowRunId: {type: integer, format: int64, minimum: 1}
+        reason: {type: string}
+        requestedBy: {type: string}
+        resultPolicy: {type: string, enum: [CREATE_NEW_VERSION, KEEP_BOTH, MANUAL_CONFIRM_EFFECTIVE]}
+        configVersionPolicy: {type: string, enum: [USE_ORIGINAL_CONFIG, USE_LATEST_CONFIG, USE_SPECIFIED_VERSION]}
+        configVersion: {type: integer, format: int32, minimum: 1}
+        traceId: {type: string}
+      required: [tenantId, workflowRunId, reason, requestedBy]
+
+    CommonResponseWorkflowRunReplayPreview:
+      type: object
+      properties:
+        code: {type: string}
+        message: {type: string}
+        data: {$ref: '#/components/schemas/WorkflowRunReplayPreview'}
+        meta: {type: object, nullable: true, additionalProperties: true}
+      required: [code, message, data]
+
+    WorkflowRunReplayPreview:
+      type: object
+      properties:
+        tenantId: {type: string}
+        sourceWorkflowRunId: {type: integer, format: int64}
+        workflowDefinitionId: {type: integer, format: int64}
+        workflowVersion: {type: integer, format: int32}
+        bizDate: {type: string, format: date}
+        calendarCode: {type: string}
+        dataIntervalStart: {type: string, format: date-time, nullable: true}
+        dataIntervalEnd: {type: string, format: date-time, nullable: true}
+        resultPolicy: {type: string}
+        configVersionPolicy: {type: string}
+        configVersion: {type: integer, format: int32, nullable: true}
+        nodes:
+          type: array
+          items: {$ref: '#/components/schemas/WorkflowRunReplayNodePreview'}
+        edges:
+          type: array
+          items:
+            type: object
+            properties:
+              fromNodeCode: {type: string}
+              toNodeCode: {type: string}
+              edgeType: {type: string}
+              enabled: {type: boolean, nullable: true}
+      required: [tenantId, sourceWorkflowRunId, workflowDefinitionId, workflowVersion, bizDate, calendarCode, resultPolicy, configVersionPolicy, nodes, edges]
+
+    WorkflowRunReplayNodePreview:
+      type: object
+      properties:
+        nodeCode: {type: string}
+        nodeType: {type: string}
+        enabled: {type: boolean, nullable: true}
+        jobCode: {type: string, nullable: true}
+        jobDefinitionId: {type: integer, format: int64, nullable: true}
+        jobDefinitionVersion: {type: integer, format: int32, nullable: true}
+        workerGroup: {type: string, nullable: true}
+        pluginId: {type: string, nullable: true}
+        capability:
+          type: object
+          nullable: true
+          properties:
+            status:
+              type: string
+              enum: [DECLARED_CONSISTENT, WORKER_GROUP_NOT_FROZEN, PLUGIN_SELECTION_NOT_FROZEN, NO_ONLINE_WORKERS, MISSING_OR_AMBIGUOUS_DECLARATION, REPLAY_SAFETY_UNPROVEN, WORKER_DECLARATIONS_DIFFER]
+            workerCount: {type: integer, format: int32}
+            declaration:
+              type: object
+              nullable: true
+              properties:
+                pluginId: {type: string}
+                pluginVersion: {type: string}
+                externalEffectCategories: {type: array, items: {type: string}}
+                idempotencyCapability: {type: string}
+                idempotencyKeyScope: {type: string}
+                recoveryProtocolId: {type: string}
+                contractVersion: {type: integer, format: int32}
+        blockers:
+          type: array
+          items: {type: string}
+      required: [nodeCode, nodeType, blockers]
+
+    WorkflowNodeReplayCommand:
+      type: object
+      properties:
+        tenantId: {type: string}
+        workflowRunId: {type: integer, format: int64}
+        workflowNodeRunId: {type: integer, format: int64}
+        reason: {type: string, maxLength: 512}
+        requestedBy: {type: string}
+        resultPolicy: {type: string, enum: [CREATE_NEW_VERSION, KEEP_BOTH, MANUAL_CONFIRM_EFFECTIVE]}
+        configVersionPolicy: {type: string, enum: [USE_ORIGINAL_CONFIG, USE_LATEST_CONFIG, USE_SPECIFIED_VERSION]}
+        configVersion: {type: integer, format: int32}
+        traceId: {type: string}
+        operationKey: {type: string, format: uuid}
+        previewToken: {type: string}
+      required: [tenantId, workflowRunId, workflowNodeRunId, reason, requestedBy]
+
+    WorkflowNodeReplayPreview:
+      type: object
+      properties:
+        tenantId: {type: string}
+        operationKey: {type: string, format: uuid}
+        sourceWorkflowRunId: {type: integer, format: int64}
+        sourceWorkflowNodeRunId: {type: integer, format: int64}
+        sourceNodeCode: {type: string}
+        sourceNodeRunSeq: {type: integer, format: int32}
+        sourceJobInstanceId: {type: integer, format: int64}
+        jobCode: {type: string}
+        bizDate: {type: string, format: date}
+        sourceConfigVersion: {type: integer, format: int32, nullable: true}
+        resultPolicy: {type: string}
+        configVersionPolicy: {type: string}
+        configVersion: {type: integer, format: int32, nullable: true}
+        previewToken: {type: string}
+        expiresAt: {type: string, format: date-time}
+        warnings: {type: array, items: {type: string}}
+      required: [tenantId, operationKey, sourceWorkflowRunId, sourceWorkflowNodeRunId, sourceNodeCode, sourceJobInstanceId, jobCode, bizDate, resultPolicy, configVersionPolicy, previewToken, expiresAt, warnings]
+
+    WorkflowNodeReplayAdmission:
+      type: object
+      properties:
+        replayOperationId: {type: integer, format: int64}
+      required: [replayOperationId]
+
+    ReplayOperation:
+      type: object
+      properties:
+        id: {type: integer, format: int64}
+        tenantId: {type: string}
+        operationKey: {type: string}
+        operationType: {type: string}
+        status: {type: string}
+        calendarCode: {type: string, nullable: true}
+        fromDate: {type: string, format: date, nullable: true}
+        throughDate: {type: string, format: date, nullable: true}
+        scope: {type: string, nullable: true}
+        executionMode: {type: string, nullable: true}
+        candidateSource: {type: string, nullable: true}
+        resultPolicy: {type: string, nullable: true}
+        configVersionPolicy: {type: string, nullable: true}
+        configVersion: {type: integer, format: int32, nullable: true}
+        reason: {type: string}
+        requestedBy: {type: string}
+        approvedBy: {type: string, nullable: true}
+        totalCount: {type: integer, format: int32}
+        succeededCount: {type: integer, format: int32}
+        failedCount: {type: integer, format: int32}
+        inFlightCount: {type: integer, format: int32}
+        startedAt: {type: string, format: date-time, nullable: true}
+        completedAt: {type: string, format: date-time, nullable: true}
+        traceId: {type: string, nullable: true}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+      required: [id, tenantId, operationKey, operationType, status, totalCount, succeededCount, failedCount, inFlightCount]
+
+    CommonResponseReplayOperationPreview:
+      type: object
+      properties:
+        code: {type: string}
+        message: {type: string}
+        data: {$ref: '#/components/schemas/ReplayOperationPreview'}
+        meta: {type: object, nullable: true, additionalProperties: true}
+      required: [code, message, data]
+
+    CommonResponseReplayOperation:
+      type: object
+      properties:
+        code: {type: string}
+        message: {type: string}
+        data: {$ref: '#/components/schemas/ReplayOperation'}
+        meta: {type: object, nullable: true, additionalProperties: true}
+      required: [code, message, data]
+
+    CommonResponseReplayOperationList:
+      type: object
+      properties:
+        code: {type: string}
+        message: {type: string}
+        data:
+          type: array
+          items: {$ref: '#/components/schemas/ReplayOperation'}
+        meta: {type: object, nullable: true, additionalProperties: true}
+      required: [code, message, data]
 
     BatchDayReplayPreview:
       type: object
@@ -1459,6 +2075,7 @@ components:
       properties:
         id: {type: integer, format: int64}
         tenantId: {type: string}
+        replayOperationId: {type: integer, format: int64, nullable: true}
         calendarCode: {type: string, nullable: true}
         bizDate: {type: string, format: date, nullable: true}
         scope: {type: string, nullable: true}
@@ -1767,6 +2384,22 @@ components:
     EffectiveTaskConfig:
       type: object
       description: claim 成功时平台返回的业务参数实时快照(字段集见 batch-common/.../EffectiveTaskConfig.java)
+      properties:
+        dependencyResultSnapshot:
+          type: array
+          description: 启动依赖闸门观察到的 EFFECTIVE 上游版本引用；仅为判定证据，不保证 Worker 已按该版本读取
+          items:
+            type: object
+            properties:
+              upstreamJobCode: {type: string}
+              bizDateAlignment: {type: string, enum: [SAME_DAY, PREVIOUS_BIZ_DAY]}
+              upstreamBizDate: {type: string, format: date}
+              businessKey: {type: string}
+              versionNo: {type: integer}
+              resultVersionId: {type: integer, format: int64, nullable: true}
+              sourceJobInstanceId: {type: integer, format: int64, nullable: true}
+              effectiveAt: {type: string, format: date-time, nullable: true}
+            required: [upstreamJobCode, bizDateAlignment, upstreamBizDate, businessKey, versionNo]
 
     TaskLeaseRenewBatchRequest:
       type: object

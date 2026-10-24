@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.infrastructure.config;
 
 import io.github.pinpols.batch.common.config.ConfigCacheInvalidationEvent;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
+import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.config.ConfigInvalidationStore;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Component;
 public class RedisConfigInvalidationStore implements ConfigInvalidationStore {
 
   private final StringRedisTemplate redisTemplate;
+  private final BatchRedisNamespace redisNamespace;
 
   @Override
   public boolean delete(String key) {
@@ -25,7 +27,7 @@ public class RedisConfigInvalidationStore implements ConfigInvalidationStore {
 
   @Override
   public long scanAndDelete(String pattern, int batchSize) {
-    return RedisKeyUtils.scanAndDeleteOrThrow(redisTemplate, pattern, batchSize);
+    return RedisKeyUtils.scanAndDeleteOrThrow(redisTemplate, pattern, batchSize, redisNamespace);
   }
 
   @Override
@@ -43,6 +45,7 @@ public class RedisConfigInvalidationStore implements ConfigInvalidationStore {
   @Override
   public void publish(ConfigCacheInvalidationEvent event) {
     redisTemplate.convertAndSend(
-        ConsoleConfigCacheInvalidationService.INVALIDATION_CHANNEL, JsonUtils.toJson(event));
+        redisNamespace.channel(ConsoleConfigCacheInvalidationService.INVALIDATION_CHANNEL),
+        JsonUtils.toJson(event));
   }
 }

@@ -17,6 +17,7 @@ description: 设计、开发、评估或审查 file-batch-system 的批量业务
 - 主执行链按当前契约核对 `DB -> Outbox -> Kafka -> CLAIM -> EXECUTE -> REPORT`。状态与 Outbox 的事务边界、租户身份、幂等键、CAS、终态保护和重放语义必须沿写路径验证。
 - 把“计划触发时间”“事件发生时间”“租户业务日期”“批处理业务日”区分开。时区、日历、cutoff、DST、跨午夜、补跑日期和 catch-up 语义必须显式；不以 JVM 默认时区推断业务日。
 - 分布式协调要考虑多实例并发、重复投递、超时重试、lease 过期、旧 leader 恢复、进程崩溃和依赖故障。只证明最终状态，不足以证明业务副作用恰好一次；检查外部副作用幂等和恢复路径。
+- 调度或运行模型改造必须建立旧语义承接清单，逐项核对：JobInstance 创建时机及跨日业务日期、配置/版本冻结、同日与跨日 Job/Workflow 依赖、DAG 分支与 Join、重放/补跑/跳批、失败重试与人工补偿、告警触发/去重/通知重试、分区/分片/fan-out 和 checkpoint 恢复。每项标明保留、改变、退役或未验证，并关联计划中的验收场景；不能用“增加测试覆盖”替代有影响时的实现调整。
 - 资源控制要覆盖 claim 前准入、队列/线程/连接池/文件大小边界、租户公平性、Kafka 与 Outbox 积压、DB 锁等待和失败重试放大。不能把“增加 Worker”当成未测容量的结论。
 - Worker、SDK、控制面和 Console 的职责及协议边界按当前实现确认；fixture/conformance、集成、真实 transport、SIM、严格真实数据和 staging 是不同证据层级。
 
@@ -36,7 +37,10 @@ description: 设计、开发、评估或审查 file-batch-system 的批量业务
 | 维度 | 核心问题 |
 |---|---|
 | 批次与业务日期 | 哪个租户日历/时区决定日期？跨午夜、DST、补跑和重试是否固定到原业务日？ |
-| 调度语义 | fire、misfire、readiness defer、catch-up、pause/resume 是否会丢触发、重复建实例或复活终态？ |
+| 调度语义 | fire、misfire、readiness defer、catch-up、pause/resume、人工跳批、重放/补跑是否会丢触发、重复建实例或复活终态？ |
+| 依赖与 DAG | 同日/跨日 Job 与 Workflow 依赖、结果版本、分支/Join/跳过节点是否保持原准入和推进语义？ |
+| 告警闭环 | 告警触发条件、业务日/实例关联、去重、恢复通知、路由/升级、投递失败重试及审计是否保持？ |
+| 实例与分片 | 实例创建时机、计划/配置冻结点、分区数量、动态 fan-out、并发度、分片身份及 checkpoint/reclaim 是否一致？ |
 | 状态与一致性 | 状态写、Outbox、去重键是否原子？所有写入者是否有 CAS/终态谓词？失败重试后是否有残留或重复副作用？ |
 | 分布式并发 | 多 Trigger/Orchestrator/Worker 实例、重复消息、旧 lease/leader 和超时竞态是否有明确胜者及恢复路径？ |
 | 执行和契约 | 五类 Worker 的执行前 claim、续租、心跳、取消、报告、优雅停机和 SDK 版本兼容是否覆盖？ |

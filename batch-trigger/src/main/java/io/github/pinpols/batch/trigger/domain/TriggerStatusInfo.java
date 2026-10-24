@@ -7,6 +7,8 @@ import lombok.Builder;
 public record TriggerStatusInfo(
     String tenantId,
     String jobCode,
+    Long workflowDefinitionId,
+    String workflowCode,
     String scheduleType,
     String scheduleExpression,
     String timezone,

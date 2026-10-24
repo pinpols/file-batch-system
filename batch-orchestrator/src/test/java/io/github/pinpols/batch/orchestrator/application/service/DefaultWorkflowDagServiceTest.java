@@ -12,6 +12,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
+import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.DefaultWorkflowDagService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowConditionEvaluator;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
@@ -24,9 +26,11 @@ import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import io.github.pinpols.batch.testing.TestConstants.Edge;
 import io.github.pinpols.batch.testing.TestConstants.Workflow;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 @DisplayName("流程有向图服务: 出边解析, 汇聚就绪判定与不可达下游级联跳过口径")
 class DefaultWorkflowDagServiceTest {
@@ -121,6 +125,55 @@ class DefaultWorkflowDagServiceTest {
 
     assertThat(result).hasSize(1);
     assertThat(result.get(0).nodeCode()).isEqualTo("NODE_B");
+  }
+
+  @Test
+  @DisplayName("运行快照存在时解析固定拓扑,不读取已编辑的实时定义")
+  void shouldResolveNextNodeFromRunSnapshotAfterDefinitionChanges() {
+    WorkflowEdgeEntity pinnedEdge = edge("NODE_A", "PINNED_NODE", Edge.ALWAYS, null);
+    pinnedEdge.setEnabled(true);
+    pinnedEdge.setTenantId("tenant-a");
+    pinnedEdge.setWorkflowDefinitionId(9L);
+    WorkflowNodeEntity sourceNode = node("NODE_A", WorkflowNodeType.TASK.code());
+    sourceNode.setTenantId("tenant-a");
+    sourceNode.setWorkflowDefinitionId(9L);
+    WorkflowNodeEntity pinnedNode = node("PINNED_NODE", WorkflowNodeType.JOB.code());
+    pinnedNode.setTenantId("tenant-a");
+    pinnedNode.setWorkflowDefinitionId(9L);
+    pinnedNode.setRelatedJobCode("PINNED_JOB");
+    WorkflowNodeEntity editedNode = node("LIVE_EDITED_NODE", WorkflowNodeType.JOB.code());
+    editedNode.setTenantId("tenant-a");
+    editedNode.setWorkflowDefinitionId(9L);
+    editedNode.setRelatedJobCode("EDITED_JOB");
+    WorkflowRunEntity run = new WorkflowRunEntity();
+    run.setId(77L);
+    run.setTenantId("tenant-a");
+    run.setWorkflowDefinitionId(9L);
+    run.setWorkflowVersionSnapshot(3);
+    run.setExecutionSnapshot(JsonUtils.toJson(Map.of(
+        "schemaVersion",
+        2,
+        "workflowDefinitionId",
+        9,
+        "workflowVersion",
+        3,
+        "nodes",
+        List.of(sourceNode, pinnedNode, editedNode),
+        "edges",
+        List.of(pinnedEdge),
+        "jobDefinitions",
+        Map.of(
+            "PINNED_NODE", frozenJob("PINNED_JOB"),
+            "LIVE_EDITED_NODE", frozenJob("EDITED_JOB")))));
+
+    List<WorkflowDagService.DagNodeResolution> result =
+        dagService.resolveNextNodesForRun(run, "NODE_A", true, null);
+
+    assertThat(result)
+        .containsExactly(
+            new WorkflowDagService.DagNodeResolution("PINNED_NODE", WorkflowNodeType.JOB.code()));
+    verify(edgeMapper, never()).selectOutgoingEdges(9L, "NODE_A");
+    verify(nodeMapper, never()).selectByWorkflowDefinitionIdAndNodeCode(9L, "PINNED_NODE");
   }
 
   @Test
@@ -348,7 +401,11 @@ class DefaultWorkflowDagServiceTest {
     List<String> skipped = dagService.cascadeSkipDownstream(10L, 1L, "FAIL_NODE");
 
     assertThat(skipped).containsExactly("NEXT");
-    verify(nodeRunMapper).insert(any());
+    ArgumentCaptor<WorkflowNodeRunEntity> inserted =
+        ArgumentCaptor.forClass(WorkflowNodeRunEntity.class);
+    verify(nodeRunMapper).insert(inserted.capture());
+    assertThat(inserted.getValue().getSkipReasonCode()).isEqualTo("UPSTREAM_FAILED");
+    assertThat(inserted.getValue().getSkipReason()).isNull();
   }
 
   @Test
@@ -448,5 +505,30 @@ class DefaultWorkflowDagServiceTest {
     run.setNodeCode(nodeCode);
     run.setNodeStatus(status);
     return run;
+  }
+
+  private static Map<String, Object> frozenJob(String jobCode) {
+    Map<String, Object> executionDefinition = Map.of(
+        "id",
+        jobCode.equals("PINNED_JOB") ? 101 : 102,
+        "tenantId",
+        "tenant-a",
+        "jobCode",
+        jobCode,
+        "jobType",
+        "GENERAL",
+        "version",
+        1);
+    return Map.of(
+        "jobDefinitionId",
+        executionDefinition.get("id"),
+        "jobCode",
+        jobCode,
+        "jobType",
+        "GENERAL",
+        "jobDefinitionVersion",
+        1,
+        "executionDefinition",
+        executionDefinition);
   }
 }

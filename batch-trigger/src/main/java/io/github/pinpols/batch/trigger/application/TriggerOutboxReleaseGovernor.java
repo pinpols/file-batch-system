@@ -37,10 +37,13 @@ final class TriggerOutboxReleaseGovernor {
       effectiveLimit = minimum;
     } else if (lag >= properties.getLagHardThreshold()) {
       knownSampleReceived = true;
-      effectiveLimit = Math.max(minimum, Math.floorDiv(effectiveLimit + 1, 2));
+      int halvedLimit = Math.floorDiv(effectiveLimit + 1, 2);
+      effectiveLimit = Math.max(minimum, halvedLimit);
     } else if (lag >= properties.getLagSoftThreshold()) {
       knownSampleReceived = true;
-      effectiveLimit = Math.max(minimum, effectiveLimit - Math.max(1, effectiveLimit / 4));
+      int quarterRateReduction = Math.max(1, effectiveLimit / 4);
+      int reducedLimit = effectiveLimit - quarterRateReduction;
+      effectiveLimit = Math.max(minimum, reducedLimit);
     } else if (!knownSampleReceived) {
       knownSampleReceived = true;
       effectiveLimit = configuredLimit;

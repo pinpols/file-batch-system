@@ -1,7 +1,9 @@
 package io.github.pinpols.batch.orchestrator.service;
 
+import io.github.pinpols.batch.common.dto.DependencyResultReference;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
+import io.github.pinpols.batch.common.dto.ReplayExecutionGuard;
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.FailureClass;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
@@ -10,30 +12,31 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.ResultVersionPolicy;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
-import io.github.pinpols.batch.common.enums.WorkflowNodeCode;
-import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
-import io.github.pinpols.batch.common.enums.WorkflowNodeType;
-import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.application.engine.JobTerminalOutboxService;
 import io.github.pinpols.batch.orchestrator.application.plan.BundlePlanParams;
 import io.github.pinpols.batch.orchestrator.application.service.failure.PersistenceConflictDetectionPort;
+import io.github.pinpols.batch.orchestrator.application.service.governance.RelatedFileReferenceValidator;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.application.service.task.PartitionDispatchService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunExecutionSnapshot;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateInstanceProgressParam;
-import io.github.pinpols.batch.orchestrator.domain.param.UpdateWorkflowRunStatusParam;
 import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
 import io.github.pinpols.batch.orchestrator.observability.LaunchPhaseMetrics;
 import io.github.pinpols.batch.orchestrator.observability.LaunchPhaseMetrics.Phase;
@@ -41,10 +44,10 @@ import io.github.pinpols.batch.orchestrator.service.LaunchValidationService.Laun
 import io.micrometer.observation.annotation.Observed;
 import java.time.Instant;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.Objects;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -77,15 +80,19 @@ public class DefaultLaunchService implements LaunchService {
   private final PartitionDispatchService partitionDispatchService;
   private final OrchestratorJobMappers jobMappers;
   private final OrchestratorWorkflowMappers workflowMappers;
-  private final WorkflowDagService workflowDagService;
   private final LaunchBatchDayService launchBatchDayService;
   private final BatchDayGateService batchDayGateService;
+  private final JobDependencyWaitingLaunchService jobDependencyWaitingLaunchService;
   private final LaunchParamResolver launchParamResolver;
+  private final RelatedFileReferenceValidator relatedFileReferenceValidator;
   private final DispatchSecretSnapshotResolver dispatchSecretSnapshotResolver;
+  private final DispatchChannelSnapshotService dispatchChannelSnapshotService;
+  private final FileTemplateSnapshotService fileTemplateSnapshotService;
   private final JobExecutionLogMapper jobExecutionLogMapper;
   private final PlatformTransactionManager transactionManager;
   private final LaunchPhaseMetrics launchPhaseMetrics;
   private final PersistenceConflictDetectionPort persistenceConflictDetection;
+  private final JobTerminalOutboxService terminalOutbox;
 
   @Override
   @Observed(name = "orch.launch", contextualName = "orch.launch")
@@ -94,6 +101,7 @@ public class DefaultLaunchService implements LaunchService {
         launchPhaseMetrics.record(Phase.VALIDATION, () -> launchValidationService.load(request));
     LaunchResponse duplicateShortCircuit = maybeShortCircuitDuplicate(request, loaded);
     if (duplicateShortCircuit != null) {
+      attachJobInstanceToWorkflowNodeInNewTransaction(loaded, loaded.existingInstance());
       return duplicateShortCircuit;
     }
     String traceId = resolveTraceId(request);
@@ -101,17 +109,32 @@ public class DefaultLaunchService implements LaunchService {
     Map<String, Object> effectiveParams =
         launchParamResolver.mergeLaunchParams(loaded.jobDefinition(), routedRequest);
     validateBundleParamsBeforeInstanceCreation(request, loaded, effectiveParams);
+    validateRelatedFileReference(request, effectiveParams);
+    validateParentInstanceReference(request, effectiveParams);
     BatchDayGateService.GateDecision gateDecision =
         batchDayGateService.evaluateAndApply(routedRequest, loaded, effectiveParams, traceId);
     if (!gateDecision.allowed()) {
       return LaunchResponse.skipped(traceId);
     }
+    Optional<List<DependencyResultReference>> dependencySnapshot =
+        jobDependencyWaitingLaunchService.captureOrDefer(routedRequest);
+    if (!dependencySnapshot.isPresent()) {
+      return LaunchResponse.skipped(traceId);
+    }
+    LaunchRequest launchRequestWithDependencySnapshot = routedRequest.toBuilder()
+        .dependencyResultSnapshot(dependencySnapshot.get())
+        .build();
     // T1：先把 instance/workflow 写入数据库并提交，避免 T2 执行期间持有更长时间锁。
     PreparedLaunch prepared;
     try {
       prepared = launchPhaseMetrics.record(
           Phase.PREPARE_TRANSACTION,
-          () -> prepareJobInstanceInTransaction(routedRequest, loaded, effectiveParams, traceId));
+          () -> prepareJobInstanceInTransaction(
+              launchRequestWithDependencySnapshot, loaded, effectiveParams, traceId));
+    } catch (TemplateCaptureRejected rejection) {
+      jobMappers.triggerRequestMapper.updateAcceptance(
+          request.tenantId(), request.requestId(), TriggerRequestStatus.REJECTED.code(), null);
+      throw rejection.businessFailure;
     } catch (DataIntegrityViolationException exception) {
       SwallowedExceptionLogger.info(
           DefaultLaunchService.class, "catch:DataIntegrityViolationException", exception);
@@ -130,7 +153,8 @@ public class DefaultLaunchService implements LaunchService {
 
     launchPhaseMetrics.record(
         Phase.DISPATCH_TRANSACTION,
-        () -> dispatchAndMarkLaunched(request, prepared.effectiveParams(), traceId, prepared));
+        () -> dispatchAndMarkLaunched(
+            request, prepared.effectiveParams(), traceId, prepared, loaded.jobDefinition()));
     return new LaunchResponse(prepared.jobInstance().getInstanceNo(), traceId);
   }
 
@@ -139,11 +163,44 @@ public class DefaultLaunchService implements LaunchService {
     JobType jobType = DictEnum.fromCode(JobType.class, loaded.jobDefinition().jobType());
     try {
       BundlePlanParams.validate(effectiveParams, jobType);
+      for (BundlePlanParams.BundleFile bundleFile :
+          BundlePlanParams.extract(effectiveParams, jobType)) {
+        relatedFileReferenceValidator.validate(request.tenantId(), bundleFile.sourceFileId());
+      }
     } catch (BizException ex) {
       jobMappers.triggerRequestMapper.updateAcceptance(
           request.tenantId(), request.requestId(), TriggerRequestStatus.REJECTED.code(), null);
       throw ex;
     }
+  }
+
+  private void validateRelatedFileReference(
+      LaunchRequest request, Map<String, Object> effectiveParams) {
+    Long relatedFileId = launchParamResolver.resolveRelatedFileId(effectiveParams);
+    try {
+      relatedFileReferenceValidator.validate(request.tenantId(), relatedFileId);
+    } catch (BizException exception) {
+      jobMappers.triggerRequestMapper.updateAcceptance(
+          request.tenantId(), request.requestId(), TriggerRequestStatus.REJECTED.code(), null);
+      throw exception;
+    }
+  }
+
+  private void validateParentInstanceReference(
+      LaunchRequest request, Map<String, Object> effectiveParams) {
+    Long parentInstanceId = launchParamResolver.resolveParentInstanceId(effectiveParams);
+    if (EmptyChecks.isNull(parentInstanceId)) {
+      return;
+    }
+    JobInstanceEntity parentInstance =
+        jobMappers.jobInstanceMapper.selectById(request.tenantId(), parentInstanceId);
+    if (EmptyChecks.isNotNull(parentInstance)
+        && request.tenantId().equals(parentInstance.getTenantId())) {
+      return;
+    }
+    jobMappers.triggerRequestMapper.updateAcceptance(
+        request.tenantId(), request.requestId(), TriggerRequestStatus.REJECTED.code(), null);
+    throw BizException.of(ResultCode.NOT_FOUND, "error.job.instance_not_found");
   }
 
   /**
@@ -188,21 +245,22 @@ public class DefaultLaunchService implements LaunchService {
       LaunchRequest request,
       Map<String, Object> effectiveParams,
       String traceId,
-      PreparedLaunch prepared) {
+      PreparedLaunch prepared,
+      JobDefinitionEntity executionDefinition) {
     try {
-      partitionDispatchService.dispatch(PartitionDispatchService.DispatchContext.of(
-          new PartitionDispatchService.DispatchRequest(request, effectiveParams, traceId),
+      PartitionDispatchService.DispatchRequest dispatchRequest =
+          new PartitionDispatchService.DispatchRequest(
+              request, effectiveParams, traceId, executionDefinition);
+      PartitionDispatchService.DispatchRuntime dispatchRuntime =
           new PartitionDispatchService.DispatchRuntime(
               prepared.jobInstance(),
               prepared.workflowRun(),
               prepared.initialNodes(),
-              prepared.startedAt())));
+              prepared.startedAt());
+      PartitionDispatchService.DispatchContext dispatchContext =
+          PartitionDispatchService.DispatchContext.of(dispatchRequest, dispatchRuntime);
+      partitionDispatchService.dispatch(dispatchContext);
     } catch (RuntimeException ex) {
-      // A1-B fix(2026-05-29):T1 已 commit workflow_run(CREATED + current_node_code=NODE_A,NODE_B
-      // 之类的 fan-out 展开)。T2 dispatch 抛 BUSINESS_ERROR(典型 dispatch_business_error 资源调度
-      // failFast)时,workflow_run 留半态:CREATED + current_node_code 指向"假装在跑"的下游。
-      // 此处反向 finalize 为 FAILED,避免运维误判。
-      finalizeWorkflowRunOnDispatchFailure(prepared.workflowRun());
       finalizeJobInstanceOnDispatchBusinessError(request, prepared.jobInstance(), ex);
       throw ex;
     }
@@ -263,18 +321,24 @@ public class DefaultLaunchService implements LaunchService {
       LaunchRequest request, JobInstanceEntity jobInstance, BizException dispatchFailure) {
     Long expectedVersion = jobInstance.getVersion() == null ? 0L : jobInstance.getVersion();
     Instant now = BatchDateTimeSupport.utcNow();
-    int rows = jobMappers.jobInstanceMapper.updateProgress(UpdateInstanceProgressParam.builder()
+    UpdateInstanceProgressParam.UpdateInstanceProgressParamBuilder progressUpdate = UpdateInstanceProgressParam.builder()
         .tenantId(jobInstance.getTenantId())
         .id(jobInstance.getId())
         .instanceStatus(JobInstanceStatus.FAILED.code())
         .successPartitionCount(0)
         .failedPartitionCount(0)
-        .resultSummary(buildDispatchRejectSummary(dispatchFailure))
-        .finishedAt(now)
-        .expectedVersion(expectedVersion)
-        .failureClass(FailureClass.BUSINESS_RULE.code())
-        .build());
+        .cancelledPartitionCount(0)
+        .terminatedPartitionCount(0);
+    String dispatchRejectSummary = buildDispatchRejectSummary(dispatchFailure);
+    int rows = jobMappers.jobInstanceMapper.updateProgress(
+        progressUpdate
+            .resultSummary(dispatchRejectSummary)
+            .finishedAt(now)
+            .expectedVersion(expectedVersion)
+            .failureClass(FailureClass.BUSINESS_RULE.code())
+            .build());
     if (rows > 0) {
+      terminalOutbox.writeTerminalEvent(jobInstance.getTenantId(), jobInstance.getId());
       int updated = jobMappers.triggerRequestMapper.updateAcceptance(
           request.tenantId(),
           request.requestId(),
@@ -327,41 +391,13 @@ public class DefaultLaunchService implements LaunchService {
     logEntity.setTraceId(jobInstance.getTraceId());
     logEntity.setMessage("JOB_INSTANCE_DISPATCH_REJECTED");
     logEntity.setDetailRef("job_instance.dispatch_rejected");
-    logEntity.setExtraJson(buildDispatchRejectSummary(dispatchFailure));
+    String dispatchRejectSummary = buildDispatchRejectSummary(dispatchFailure);
+    logEntity.setExtraJson(dispatchRejectSummary);
     jobExecutionLogMapper.insert(logEntity);
   }
 
   /**
-   * A1-B fix:dispatch 拒收后把 workflow_run CREATED → FAILED,清掉 current_node_code 残留。
-   * 独立事务不被 T2 失败回滚波及。
-   */
-  private void finalizeWorkflowRunOnDispatchFailure(WorkflowRunEntity workflowRun) {
-    if (workflowRun == null || workflowRun.getId() == null) {
-      return;
-    }
-    try {
-      inNewTransaction(() -> markWorkflowRunFailedDueToDispatch(workflowRun));
-    } catch (RuntimeException reverseEx) {
-      // 反向 finalize 失败,静默捕获并抑制(不掩盖原始 dispatch 异常 cause;reverseEx 仅 oncall 视角看一眼)
-      SwallowedExceptionLogger.info(
-          DefaultLaunchService.class, "catch:finalizeWorkflowRunOnDispatchFailure", reverseEx);
-    }
-  }
-
-  /** A1-B fix:独立事务把 workflow_run CREATED → FAILED(CAS 守护防覆盖正常 outcome 回报)。 */
-  public void markWorkflowRunFailedDueToDispatch(WorkflowRunEntity workflowRun) {
-    workflowMappers.workflowRunMapper.updateStatus(UpdateWorkflowRunStatusParam.builder()
-        .tenantId(workflowRun.getTenantId())
-        .id(workflowRun.getId())
-        .runStatus(WorkflowRunStatus.FAILED.code())
-        .currentNodeCode(WorkflowNodeCode.END.code())
-        .finishedAt(BatchDateTimeSupport.utcNow())
-        .expectedStatuses(List.of(WorkflowRunStatus.CREATED.code()))
-        .build());
-  }
-
-  /**
-   * T1 事务：创建 {@code job_instance}/{@code workflow_run}，并补齐 START 节点运行态。
+   * T1 事务：创建 Job 实例准备态。
    *
    * <p>该事务只做"准备态写入数据库"，不触碰高竞争的 task/partition/outbox 表，从而缩短锁持有时间。
    */
@@ -370,17 +406,47 @@ public class DefaultLaunchService implements LaunchService {
       LaunchLoadResult loaded,
       Map<String, Object> effectiveParams,
       String traceId) {
-    Map<String, Object> executionParams = dispatchSecretSnapshotResolver.pin(
-        request.tenantId(),
-        loaded.jobDefinition().jobType(),
-        EmptyChecks.isNull(loaded.workflowDefinition())
-            ? null
-            : loaded.workflowDefinition().id(),
-        effectiveParams);
+    ReplayExecutionGuard replayExecutionGuard = resolveReplayExecutionGuard(request, loaded);
+    LaunchValidationService.WorkflowReplayExecutionBinding replayBinding = loaded.workflowReplayExecutionBinding();
+    Map<String, Object> credentialParams = EmptyChecks.isNull(replayBinding)
+        ? dispatchSecretSnapshotResolver.pin(
+            request.tenantId(), loaded.jobDefinition().jobType(), effectiveParams)
+        : effectiveParams;
+    Map<String, Object> executionParams;
+    try {
+      if (EmptyChecks.isNotNull(replayBinding)) {
+        if (EmptyChecks.isNull(replayExecutionGuard)
+            || !Objects.equals(
+                replayBinding.replayOperationId(),
+                replayExecutionGuard.replayOperationId())) {
+          throw BizException.of(
+              ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
+        }
+        Map<String, Object> dispatchParams = dispatchChannelSnapshotService.pinWorkflowReplay(
+            request.tenantId(),
+            loaded.jobDefinition().jobType(),
+            credentialParams,
+            replayBinding.protectedDispatchChannelSnapshots(),
+            replayBinding.dispatchSecretBindings());
+        executionParams = fileTemplateSnapshotService.pinWorkflowReplay(
+            request,
+            loaded.jobDefinition(),
+            dispatchParams,
+            replayBinding);
+      } else {
+        Map<String, Object> dispatchParams = dispatchChannelSnapshotService.pin(
+            request.tenantId(), loaded.jobDefinition().jobType(), credentialParams);
+        executionParams =
+            fileTemplateSnapshotService.pin(request, loaded.jobDefinition(), dispatchParams);
+      }
+    } catch (BizException rejectedTemplate) {
+      // 必须先回滚 T1，再由调用方事务把请求标为拒绝。
+      throw new TemplateCaptureRejected(rejectedTemplate);
+    }
     Instant batchDaySlaDeadlineAt = launchBatchDayService.resolveBatchDaySlaDeadlineAt(
-        request.tenantId(), loaded.jobDefinition().calendarCode(), request.bizDate());
-    JobInstanceEntity jobInstance =
-        buildJobInstanceEntity(request, loaded, executionParams, traceId, batchDaySlaDeadlineAt);
+        request.tenantId(), loaded.effectiveCalendarCode(), request.bizDate());
+    JobInstanceEntity jobInstance = buildJobInstanceEntity(
+        request, loaded, executionParams, traceId, batchDaySlaDeadlineAt, replayExecutionGuard);
     int inserted = jobMappers.jobInstanceMapper.insert(jobInstance);
     if (inserted <= 0) {
       throw new DuplicateKeyException("duplicate job_instance idempotency key: tenant="
@@ -392,14 +458,14 @@ public class DefaultLaunchService implements LaunchService {
     }
     if (!Boolean.TRUE.equals(request.dryRun())) {
       launchBatchDayService.upsertBatchDayInstance(
-          request, loaded.jobDefinition(), executionParams, batchDaySlaDeadlineAt);
+          request,
+          loaded.jobDefinition(),
+          loaded.effectiveCalendarCode(),
+          executionParams,
+          batchDaySlaDeadlineAt);
     }
 
     Instant startedAt = BatchDateTimeSupport.utcNow();
-    if (JobType.WORKFLOW.code().equals(loaded.jobDefinition().jobType())) {
-      return prepareWorkflowRunAndNodes(
-          request, loaded, executionParams, traceId, jobInstance, startedAt);
-    }
     return new PreparedLaunch(jobInstance, null, List.of(), startedAt, executionParams);
   }
 
@@ -408,8 +474,84 @@ public class DefaultLaunchService implements LaunchService {
       LaunchLoadResult loaded,
       Map<String, Object> effectiveParams,
       String traceId) {
-    return newTransaction(TransactionDefinition.PROPAGATION_REQUIRED)
-        .execute(status -> prepareJobInstance(request, loaded, effectiveParams, traceId));
+    TransactionTemplate transaction = newTransaction(TransactionDefinition.PROPAGATION_REQUIRED);
+    return transaction.execute(
+        status -> preparePendingJobInstance(request, loaded, effectiveParams, traceId));
+  }
+
+  private static final class TemplateCaptureRejected extends RuntimeException {
+
+    private final BizException businessFailure;
+
+    private TemplateCaptureRejected(BizException businessFailure) {
+      super(businessFailure);
+      this.businessFailure = businessFailure;
+    }
+  }
+
+  private PreparedLaunch preparePendingJobInstance(
+      LaunchRequest request,
+      LaunchLoadResult loaded,
+      Map<String, Object> effectiveParams,
+      String traceId) {
+    TriggerRequestEntity current =
+        jobMappers.triggerRequestMapper.selectByTenantAndRequestIdForUpdate(
+            request.tenantId(), request.requestId());
+    LaunchRequestIdentityGuard.requirePending(request, current);
+    if (!Objects.equals(loaded.triggerRequest().getId(), current.getId())) {
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT,
+          ResultCode.STATE_CONFLICT.detailKey(),
+          "Original trigger request changed before Job Instance preparation");
+    }
+    PreparedLaunch prepared = prepareJobInstance(request, loaded, effectiveParams, traceId);
+    attachJobInstanceToWorkflowNode(loaded, prepared.jobInstance());
+    return prepared;
+  }
+
+  /**
+   * 在同一事务中，将异步启动的子 Job 关联到其 Workflow 节点，且与
+   * Job Instance 创建一并提交。BatchDayGate WAIT 请求也适用；这些 Job 会稍后由
+   * 等待释放调度器启动，而不是通过 ChildJobLaunchSupport 同步调用启动。
+   */
+  private void attachJobInstanceToWorkflowNodeInNewTransaction(
+      LaunchLoadResult loaded, JobInstanceEntity jobInstance) {
+    if (!hasWorkflowNodeParent(loaded, jobInstance)) {
+      return;
+    }
+    inNewTransaction(() -> attachJobInstanceToWorkflowNode(loaded, jobInstance));
+  }
+
+  private void attachJobInstanceToWorkflowNode(
+      LaunchLoadResult loaded, JobInstanceEntity jobInstance) {
+    if (!hasWorkflowNodeParent(loaded, jobInstance)) {
+      return;
+    }
+    TriggerRequestEntity triggerRequest = loaded.triggerRequest();
+    WorkflowNodeRunEntity nodeRun =
+        workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
+            triggerRequest.getParentWorkflowRunId(), triggerRequest.getParentNodeCode());
+    Guard.require(
+        EmptyChecks.isNotNull(nodeRun) && EmptyChecks.isNotNull(nodeRun.getId()),
+        ResultCode.STATE_CONFLICT,
+        "error.workflow.parent_node_launch_invalid");
+    int linked = workflowMappers.workflowNodeRunMapper.attachJobInstance(
+        triggerRequest.getTenantId(), nodeRun.getId(), jobInstance.getId());
+    Guard.require(
+        linked > 0, ResultCode.STATE_CONFLICT, "error.workflow.node_job_instance_link_conflict");
+  }
+
+  private boolean hasWorkflowNodeParent(LaunchLoadResult loaded, JobInstanceEntity jobInstance) {
+    boolean parentLaunchContextIncomplete = EmptyChecks.isNull(loaded)
+        || EmptyChecks.isNull(loaded.triggerRequest())
+        || EmptyChecks.isNull(jobInstance)
+        || EmptyChecks.isNull(jobInstance.getId());
+    if (parentLaunchContextIncomplete) {
+      return false;
+    }
+    TriggerRequestEntity triggerRequest = loaded.triggerRequest();
+    return EmptyChecks.isNotNull(triggerRequest.getParentWorkflowRunId())
+        && EmptyChecks.isNotNull(triggerRequest.getParentNodeCode());
   }
 
   private void inNewTransaction(Runnable action) {
@@ -428,7 +570,8 @@ public class DefaultLaunchService implements LaunchService {
       LaunchLoadResult loaded,
       Map<String, Object> effectiveParams,
       String traceId,
-      Instant batchDaySlaDeadlineAt) {
+      Instant batchDaySlaDeadlineAt,
+      ReplayExecutionGuard replayExecutionGuard) {
     String dedupKey = loaded.triggerRequest().getDedupKey();
     Long explicitParent = launchParamResolver.resolveParentInstanceId(effectiveParams);
     Long parentInstanceId = explicitParent != null
@@ -443,17 +586,23 @@ public class DefaultLaunchService implements LaunchService {
     entity.setJobDefinitionId(loaded.jobDefinition().id());
     entity.setTriggerRequestId(loaded.triggerRequest().getId());
     entity.setJobCode(request.jobCode());
-    entity.setInstanceNo(IdGenerator.newBusinessNo("inst"));
+    String instanceNo = IdGenerator.newBusinessNo("inst");
+    entity.setInstanceNo(instanceNo);
     entity.setBizDate(request.bizDate());
     entity.setTriggerType(request.triggerType().code());
     entity.setInstanceStatus(JobInstanceStatus.CREATED.code());
-    entity.setBatchNo(launchParamResolver.resolveBatchNo(request.bizDate(), effectiveParams));
-    entity.setOperatorId(LaunchParamResolver.resolveOperatorId(effectiveParams));
-    entity.setRerunFlag(
-        launchParamResolver.resolveRerunFlag(request.triggerType(), effectiveParams));
-    entity.setRetryFlag(launchParamResolver.resolveRetryFlag(effectiveParams));
-    entity.setRerunReason(launchParamResolver.resolveRerunReason(effectiveParams));
-    entity.setRelatedFileId(launchParamResolver.resolveRelatedFileId(effectiveParams));
+    String batchNo = launchParamResolver.resolveBatchNo(request.bizDate(), effectiveParams);
+    entity.setBatchNo(batchNo);
+    String operatorId = LaunchParamResolver.resolveOperatorId(effectiveParams);
+    entity.setOperatorId(operatorId);
+    boolean rerunFlag = launchParamResolver.resolveRerunFlag(request.triggerType(), effectiveParams);
+    entity.setRerunFlag(rerunFlag);
+    boolean retryFlag = launchParamResolver.resolveRetryFlag(effectiveParams);
+    entity.setRetryFlag(retryFlag);
+    String rerunReason = launchParamResolver.resolveRerunReason(effectiveParams);
+    entity.setRerunReason(rerunReason);
+    Long relatedFileId = launchParamResolver.resolveRelatedFileId(effectiveParams);
+    entity.setRelatedFileId(relatedFileId);
     entity.setParentInstanceId(parentInstanceId);
     entity.setQueueCode(loaded.jobDefinition().queueCode());
     entity.setWorkerGroup(loaded.jobDefinition().workerGroup());
@@ -461,32 +610,61 @@ public class DefaultLaunchService implements LaunchService {
     entity.setDedupKey(dedupKey);
     entity.setRunAttempt(runAttempt);
     entity.setJobDefinitionVersion(loaded.jobDefinition().version());
-    entity.setRerunPolicySnapshot(
-        buildRerunPolicySnapshot(request, effectiveParams, parentInstanceId, runAttempt));
+    String rerunPolicySnapshot =
+        buildRerunPolicySnapshot(request, effectiveParams, parentInstanceId, runAttempt);
+    entity.setRerunPolicySnapshot(rerunPolicySnapshot);
     entity.setVersion(0L);
     entity.setExpectedPartitionCount(0);
     entity.setSuccessPartitionCount(0);
     entity.setFailedPartitionCount(0);
     entity.setTraceId(traceId);
-    entity.setParamsSnapshot(launchParamResolver.buildParamsSnapshot(
-        loaded.jobDefinition(), request, effectiveParams, traceId));
+    String paramsSnapshot = launchParamResolver.buildParamsSnapshot(
+        loaded.jobDefinition(), request, effectiveParams, traceId, replayExecutionGuard);
+    entity.setParamsSnapshot(paramsSnapshot);
     // V93 P0-4: 创建时从 jobDefinition 抓 calendarCode 快照, 之后 config 变更不污染历史 instance
-    entity.setCalendarCode(loaded.jobDefinition().calendarCode());
+    entity.setCalendarCode(loaded.effectiveCalendarCode());
     // V94: data_interval 直接透传 LaunchRequest 的字段; trigger 侧已计算好, orchestrator 不再算
     entity.setDataIntervalStart(request.dataIntervalStart());
     entity.setDataIntervalEnd(request.dataIntervalEnd());
-    entity.setDeadlineAt(launchParamResolver.resolveDeadlineAt(
-        BatchDateTimeSupport.utcNow(),
+    Instant deadlineEvaluationTime = BatchDateTimeSupport.utcNow();
+    Instant deadlineAt = launchParamResolver.resolveDeadlineAt(
+        deadlineEvaluationTime,
         request.bizDate(),
         loaded.jobDefinition(),
         effectiveParams,
-        batchDaySlaDeadlineAt));
-    entity.setExpectedDurationSeconds(launchParamResolver.resolveExpectedDurationSeconds(
-        loaded.jobDefinition(), effectiveParams));
+        batchDaySlaDeadlineAt);
+    entity.setDeadlineAt(deadlineAt);
+    Integer expectedDurationSeconds =
+        launchParamResolver.resolveExpectedDurationSeconds(loaded.jobDefinition(), effectiveParams);
+    entity.setExpectedDurationSeconds(expectedDurationSeconds);
     entity.setHighWaterMarkIn(highWaterMarkIn);
     entity.setReplaySessionId(request.replaySessionId());
     entity.setDryRun(request.dryRun());
     return entity;
+  }
+
+  private ReplayExecutionGuard resolveReplayExecutionGuard(
+      LaunchRequest request, LaunchLoadResult loaded) {
+    if (EmptyChecks.isNull(loaded.triggerRequest())
+        || EmptyChecks.isNull(loaded.triggerRequest().getParentWorkflowRunId())) {
+      return null;
+    }
+    WorkflowRunEntity parentRun = workflowMappers.workflowRunMapper.selectById(
+        request.tenantId(), loaded.triggerRequest().getParentWorkflowRunId());
+    if (EmptyChecks.isNull(parentRun)) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
+    }
+    WorkflowRunExecutionSnapshot snapshot = WorkflowRunExecutionSnapshot.from(parentRun);
+    if (EmptyChecks.isNull(snapshot) || EmptyChecks.isNull(snapshot.replayOperationId())) {
+      return null;
+    }
+    ReplayExecutionGuard replayExecutionGuard =
+        snapshot.replayExecutionGuard(loaded.triggerRequest().getParentNodeCode());
+    if (EmptyChecks.isNull(replayExecutionGuard)
+        || !Objects.equals(replayExecutionGuard.replayOperationId(), snapshot.replayOperationId())) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
+    }
+    return replayExecutionGuard;
   }
 
   private String buildRerunPolicySnapshot(
@@ -500,22 +678,23 @@ public class DefaultLaunchService implements LaunchService {
         request.triggerType() == null ? null : request.triggerType().code());
     snapshot.put("runAttempt", runAttempt);
     snapshot.put("parentInstanceId", parentInstanceId);
-    snapshot.put(
-        "rerunFlag", launchParamResolver.resolveRerunFlag(request.triggerType(), effectiveParams));
-    snapshot.put("rerunReason", launchParamResolver.resolveRerunReason(effectiveParams));
-    snapshot.put("retryFlag", launchParamResolver.resolveRetryFlag(effectiveParams));
+    boolean rerunFlag =
+        launchParamResolver.resolveRerunFlag(request.triggerType(), effectiveParams);
+    snapshot.put("rerunFlag", rerunFlag);
+    String rerunReason = launchParamResolver.resolveRerunReason(effectiveParams);
+    snapshot.put("rerunReason", rerunReason);
+    boolean retryFlag = launchParamResolver.resolveRetryFlag(effectiveParams);
+    snapshot.put("retryFlag", retryFlag);
     // §5.5 — 用户显式策略 > 平台默认。effectiveParams 由 DefaultCompensationService 注入。
     snapshot.put("resultIsolation", "NEW_JOB_INSTANCE_PER_RUN_ATTEMPT");
-    snapshot.put(
-        "resultPolicy",
-        firstNonBlank(
-            stringValue(effectiveParams.get("_rerunResultPolicy")),
-            ResultVersionPolicy.CREATE_NEW_VERSION.code()));
-    snapshot.put(
-        "configVersionPolicy",
-        firstNonBlank(
-            stringValue(effectiveParams.get("_rerunConfigVersionPolicy")),
-            "SNAPSHOT_JOB_DEFINITION_VERSION_ON_CREATE"));
+    String configuredResultPolicy = stringValue(effectiveParams.get("_rerunResultPolicy"));
+    String resultPolicy =
+        firstNonBlank(configuredResultPolicy, ResultVersionPolicy.CREATE_NEW_VERSION.code());
+    snapshot.put("resultPolicy", resultPolicy);
+    String configuredVersionPolicy = stringValue(effectiveParams.get("_rerunConfigVersionPolicy"));
+    String versionPolicy =
+        firstNonBlank(configuredVersionPolicy, "SNAPSHOT_JOB_DEFINITION_VERSION_ON_CREATE");
+    snapshot.put("configVersionPolicy", versionPolicy);
     Object specifiedVersion = effectiveParams.get("_rerunConfigVersion");
     if (specifiedVersion != null) {
       snapshot.put("configVersion", specifiedVersion);
@@ -547,59 +726,6 @@ public class DefaultLaunchService implements LaunchService {
     JobInstanceEntity prev =
         jobMappers.jobInstanceMapper.selectLastSuccessByJobDefinition(tenantId, jobDefinitionId);
     return prev == null ? null : prev.getHighWaterMarkOut();
-  }
-
-  private PreparedLaunch prepareWorkflowRunAndNodes(
-      LaunchRequest request,
-      LaunchLoadResult loaded,
-      Map<String, Object> effectiveParams,
-      String traceId,
-      JobInstanceEntity jobInstance,
-      Instant startedAt) {
-    List<WorkflowDagService.DagNodeResolution> initialNodes =
-        workflowDagService.resolveInitialNodes(
-            loaded.workflowDefinition().id(),
-            launchParamResolver.buildPayloadJson(effectiveParams));
-
-    WorkflowRunEntity workflowRun = new WorkflowRunEntity();
-    workflowRun.setTenantId(request.tenantId());
-    workflowRun.setWorkflowDefinitionId(loaded.workflowDefinition().id());
-    workflowRun.setRelatedJobInstanceId(jobInstance.getId());
-    workflowRun.setBizDate(request.bizDate());
-    workflowRun.setRunStatus(WorkflowRunStatus.CREATED.code());
-    workflowRun.setCurrentNodeCode(resolveInitialCurrentNode(initialNodes));
-    workflowRun.setTraceId(traceId);
-    workflowRun.setDryRun(request.dryRun());
-    workflowMappers.workflowRunMapper.insert(workflowRun);
-
-    WorkflowNodeRunEntity startNodeRun = new WorkflowNodeRunEntity();
-    startNodeRun.setWorkflowRunId(workflowRun.getId());
-    startNodeRun.setNodeCode(WorkflowNodeCode.START.code());
-    startNodeRun.setNodeType(WorkflowNodeType.START.code());
-    startNodeRun.setRunSeq(1);
-    startNodeRun.setNodeStatus(WorkflowNodeRunStatus.SUCCESS.code());
-    startNodeRun.setRetryCount(0);
-    startNodeRun.setDurationMs(0L);
-    startNodeRun.setStartedAt(startedAt);
-    startNodeRun.setFinishedAt(startedAt);
-    workflowMappers.workflowNodeRunMapper.insert(startNodeRun);
-
-    return new PreparedLaunch(jobInstance, workflowRun, initialNodes, startedAt, effectiveParams);
-  }
-
-  private String resolveInitialCurrentNode(
-      List<WorkflowDagService.DagNodeResolution> initialNodes) {
-    if (initialNodes == null || initialNodes.isEmpty()) {
-      return WorkflowNodeCode.START.code();
-    }
-    Set<String> activeNodes = new LinkedHashSet<>();
-    for (WorkflowDagService.DagNodeResolution node : initialNodes) {
-      if (node == null || WorkflowNodeCode.START.code().equals(node.nodeCode())) {
-        continue;
-      }
-      activeNodes.add(node.nodeCode());
-    }
-    return activeNodes.isEmpty() ? WorkflowNodeCode.START.code() : String.join(",", activeNodes);
   }
 
   /**

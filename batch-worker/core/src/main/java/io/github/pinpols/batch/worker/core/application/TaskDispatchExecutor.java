@@ -233,6 +233,7 @@ public class TaskDispatchExecutor {
     task.setRangeEndExclusive(effective.rangeEndExclusive());
     task.setExpectedRows(effective.expectedRows());
     task.setPartitionInvocationId(effective.partitionInvocationId());
+    task.setDependencyResultSnapshot(effective.dependencyResultSnapshot());
     task.setTimeoutSeconds(effective.timeoutSeconds());
     // V94: data_interval 透传给 worker, 业务 SQL 拼时间窗
     task.setDataIntervalStart(effective.dataIntervalStart());

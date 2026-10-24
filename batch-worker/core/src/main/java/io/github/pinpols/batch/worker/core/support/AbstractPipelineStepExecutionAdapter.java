@@ -3,6 +3,9 @@ package io.github.pinpols.batch.worker.core.support;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.enums.SystemPipelineCatalog;
+import io.github.pinpols.batch.common.enums.SystemPipelineDefinition;
+import io.github.pinpols.batch.common.enums.SystemPipelineTaskKeys;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
@@ -12,30 +15,31 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
+import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.CreatePipelineInstanceParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.micrometer.core.annotation.Timed;
+import jakarta.annotation.PostConstruct;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.beans.factory.ObjectProvider;
 
 /**
- * worker 链路共用的 pipeline 生命周期模板：读取已 provision 的 pipeline 定义 → 创建 pipeline 实例 → 执行各阶段 → 标记实例最终状态。
+ * worker 链路共用的 pipeline 生命周期模板：按系统目录生成固定步骤 → 创建 pipeline 实例 → 执行各阶段 → 标记实例最终状态。
  *
  * <p><b>执行流程（{@link #execute} → {@link #doExecute}）</b>：
  *
  * <ol>
- *   <li>通过 {@link PlatformPipelineDefinitionRepository#findPipelineDefinition} 查找已由 Console / Orchestrator
- *       provision 的 pipeline 定义；Worker 执行期间不创建平台配置。
+ *   <li>按 Worker 类型从 {@link SystemPipelineCatalog} 解析内置定义，并使用已注册的不可变阶段模板；不查询租户 Pipeline 配置。
  *   <li>创建本次执行的 pipeline 实例（{@code pipeline_instance}），写入初始阶段和 traceId。
  *   <li>将 pipelineDefinitionId、pipelineInstanceId、stepDefinitions 注入 {@code attributes}， 再构建业务上下文
  *       {@code C}，调用子类 {@link #executeStages(Object)} 执行所有阶段。
@@ -59,9 +63,9 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
 
   private static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
-  private final PlatformPipelineDefinitionRepository pipelineDefinitions;
   private final PlatformPipelineRunRepository pipelineRuns;
   private final PlatformFileRecordRepository fileRecords;
+  private final PipelineStepTemplateProvider stepTemplateProvider;
 
   /**
    * ADR-030 §C: 可选注入。Spring 在 batch-worker-core 上下文里有 PipelineVerifierHook 时由构造器注入; 测试 / 无 hook
@@ -79,14 +83,14 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
   private final PipelineCompensationHook compensationHook;
 
   protected AbstractPipelineStepExecutionAdapter(
-      PlatformPipelineDefinitionRepository pipelineDefinitions,
       PlatformPipelineRunRepository pipelineRuns,
       PlatformFileRecordRepository fileRecords,
+      PipelineStepTemplateProvider stepTemplateProvider,
       ObjectProvider<PipelineVerifierHook> verifierHookProvider,
       ObjectProvider<PipelineCompensationHook> compensationHookProvider) {
-    this.pipelineDefinitions = pipelineDefinitions;
     this.pipelineRuns = pipelineRuns;
     this.fileRecords = fileRecords;
+    this.stepTemplateProvider = stepTemplateProvider;
     this.verifierHook = verifierHookProvider.getIfAvailable();
     this.compensationHook = compensationHookProvider.getIfAvailable();
   }
@@ -154,34 +158,38 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
 
   private StepExecutionResponse doExecute(
       StepExecutionRequest request, Map<String, Object> attributes, String traceId) {
+    if (!pipelineType().equalsIgnoreCase(request.stepCode())) {
+      BizException exception = BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.worker.task_type_mismatch",
+          request.stepCode(),
+          pipelineType());
+      return StepExecutionResponse.failure(exception, ERROR_OBJECT_MAPPER);
+    }
     String jobCode = resolveJobCode(request, attributes);
     Long fileId = PlatformRuntimeValues.toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
-    PlatformPipelineDefinitionRepository.PipelineDefinitionReference pipelineDefinition =
-        pipelineDefinitions.findPipelineDefinition(request.tenantId(), jobCode);
-    if (EmptyChecks.isNull(pipelineDefinition) || EmptyChecks.isNull(pipelineDefinition.id())) {
+    SystemPipelineDefinition systemPipeline =
+        SystemPipelineCatalog.forJobType(pipelineType()).orElse(null);
+    if (systemPipeline == null) {
       BizException exception =
           BizException.of(ResultCode.NOT_FOUND, "error.pipeline.definition_not_found");
       return StepExecutionResponse.failure(exception, ERROR_OBJECT_MAPPER);
     }
-    if (!pipelineType().equalsIgnoreCase(pipelineDefinition.pipelineType())) {
-      BizException exception = BizException.of(
-          ResultCode.INVALID_ARGUMENT,
-          "error.pipeline.definition_type_mismatch",
-          pipelineDefinition.pipelineType(),
-          pipelineType());
-      return StepExecutionResponse.failure(exception, ERROR_OBJECT_MAPPER);
-    }
-    Long pipelineDefinitionId = pipelineDefinition.id();
-    List<PipelineStepDefinition> pipelineSteps =
-        pipelineDefinitions.loadPipelineSteps(pipelineDefinitionId);
+    List<PipelineStepDefinition> pipelineSteps = systemSteps(systemPipeline, attributes);
     if (pipelineSteps.isEmpty()) {
       BizException exception =
           BizException.of(ResultCode.NOT_FOUND, "error.pipeline.step_definition_missing");
       return StepExecutionResponse.failure(exception, ERROR_OBJECT_MAPPER);
     }
+    BizException identityMismatch = validateSystemPipelineIdentity(attributes, systemPipeline);
+    if (identityMismatch != null) {
+      return StepExecutionResponse.failure(identityMismatch, ERROR_OBJECT_MAPPER);
+    }
     CreatePipelineInstanceParam createParam = new CreatePipelineInstanceParam(
         request.tenantId(),
-        pipelineDefinitionId,
+        null,
+        systemPipeline.code(),
+        systemPipeline.semanticVersion(),
         jobCode,
         pipelineType(),
         fileId,
@@ -191,7 +199,8 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
     Long pipelineInstanceId = pipelineRuns.createPipelineInstance(createParam);
     attributes.put(PipelineRuntimeKeys.TRACE_ID, traceId);
     attributes.put(PipelineRuntimeKeys.JOB_CODE, jobCode);
-    attributes.put(PipelineRuntimeKeys.PIPELINE_DEFINITION_ID, pipelineDefinitionId);
+    attributes.put(PipelineRuntimeKeys.SYSTEM_PIPELINE_CODE, systemPipeline.code());
+    attributes.put(PipelineRuntimeKeys.SYSTEM_PIPELINE_VERSION, systemPipeline.semanticVersion());
     attributes.put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, pipelineInstanceId);
     attributes.put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, pipelineSteps);
     // ADR-026: dry-run 标记从 task payload (orchestrator 写) 提取到 attributes,
@@ -286,6 +295,86 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
           attributes, unexpectedErrorCode(), exception.getMessage());
       return new StepExecutionResponse(false, unexpectedErrorCode(), exception.getMessage());
     }
+  }
+
+  /** 启动时拒绝缺失/错序的阶段实现，避免租户运行时才发现系统 Pipeline 契约漂移。 */
+  @PostConstruct
+  private void validateSystemPipelineRegistration() {
+    SystemPipelineDefinition definition = SystemPipelineCatalog.forJobType(pipelineType())
+        .orElseThrow(() ->
+            new IllegalStateException("worker has no system pipeline mapping: " + pipelineType()));
+    systemSteps(definition, Map.of());
+  }
+
+  private List<PipelineStepDefinition> systemSteps(
+      SystemPipelineDefinition definition, Map<String, Object> attributes) {
+    List<PipelineStepTemplate> templates = stepTemplateProvider.defaultStepDefinitions();
+    List<String> actualStages =
+        templates.stream().map(PipelineStepTemplate::stageCode).toList();
+    if (!Objects.equals(definition.stages(), actualStages)) {
+      throw new IllegalStateException("system pipeline stage contract mismatch for "
+          + definition.code() + ": expected=" + definition.stages() + ", actual=" + actualStages);
+    }
+    return SystemPipelineStepConfiguration.apply(templates, resolveStepParams(attributes));
+  }
+
+  private Map<String, Object> resolveStepParams(Map<String, Object> attributes) {
+    Object configured = attributes.get(SystemPipelineTaskKeys.STEP_PARAMS);
+    if (configured == null) {
+      Object rawPayload = attributes.get(PipelineRuntimeKeys.PAYLOAD);
+      if (rawPayload instanceof String payload && !payload.isBlank()) {
+        try {
+          Object parsed = JsonUtils.fromJson(payload, Object.class);
+          if (parsed instanceof Map<?, ?> map) {
+            configured = map.get(SystemPipelineTaskKeys.STEP_PARAMS);
+          }
+        } catch (IllegalArgumentException exception) {
+          SwallowedExceptionLogger.info(
+              AbstractPipelineStepExecutionAdapter.class,
+              "catch:IllegalArgumentException",
+              exception);
+        }
+      }
+    }
+    if (configured == null) {
+      return Map.of();
+    }
+    if (configured instanceof Map<?, ?> rawMap) {
+      Map<String, Object> mapped = new LinkedHashMap<>();
+      rawMap.forEach((key, value) -> mapped.put(String.valueOf(key), value));
+      return mapped;
+    }
+    throw new IllegalArgumentException("system Pipeline step parameters must be an object");
+  }
+
+  /** Reject a pinned task when it targets a different system Pipeline contract. */
+  private BizException validateSystemPipelineIdentity(
+      Map<String, Object> attributes, SystemPipelineDefinition expected) {
+    String requestedCode = resolveText(attributes, PipelineRuntimeKeys.SYSTEM_PIPELINE_CODE);
+    if (!Texts.hasText(requestedCode)) {
+      requestedCode = extractFromPayloadJson(attributes, PipelineRuntimeKeys.SYSTEM_PIPELINE_CODE);
+    }
+    String requestedVersion = resolveText(attributes, PipelineRuntimeKeys.SYSTEM_PIPELINE_VERSION);
+    if (!Texts.hasText(requestedVersion)) {
+      requestedVersion =
+          extractFromPayloadJson(attributes, PipelineRuntimeKeys.SYSTEM_PIPELINE_VERSION);
+    }
+    // Pre-change queued tasks do not carry a system identity. They remain executable during the
+    // rolling transition; newly emitted tasks are pinned by WorkflowNodePayloadBuilder.
+    if (!Texts.hasText(requestedCode) && !Texts.hasText(requestedVersion)) {
+      return null;
+    }
+    if (expected.code().equals(requestedCode)
+        && Integer.toString(expected.semanticVersion()).equals(requestedVersion)) {
+      return null;
+    }
+    return BizException.of(
+        ResultCode.INVALID_ARGUMENT,
+        "error.pipeline.system_definition_mismatch",
+        String.valueOf(requestedCode),
+        String.valueOf(requestedVersion),
+        expected.code(),
+        expected.semanticVersion());
   }
 
   protected PlatformFileRecordRepository fileRecords() {

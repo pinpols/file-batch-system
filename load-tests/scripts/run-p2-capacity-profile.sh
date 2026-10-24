@@ -34,7 +34,7 @@ FAIRNESS_GROUP_SHARED_MAX_RUNNING_JOBS="${FAIRNESS_GROUP_SHARED_MAX_RUNNING_JOBS
 FAIRNESS_LAUNCH_WEIGHTS="${FAIRNESS_LAUNCH_WEIGHTS:-p2fa:1,p2fb:1,p2fc:1}"
 FAIRNESS_WAIT_SECONDS="${FAIRNESS_WAIT_SECONDS:-1200}"
 # 默认使用真实 Trigger 入口，使每个请求在异步 Orchestrator 启动前都创建对应 trigger_request。
-# 仅在已预置 trigger_request 时设置 FAIRNESS_MODE=orchestrator。
+# Workflow 根运行必须通过 Trigger 创建并持久化 admission request。
 FAIRNESS_MODE="${FAIRNESS_MODE:-trigger}"
 # 10w 画像用于测量容量上限，响应时间可能超过低延迟断言。默认只生成报告；
 # CI 或发布检查可将实测失败设为硬失败，而不必修改画像配置。
@@ -523,11 +523,11 @@ cleanup() {
     fi
   fi
   if [[ "$RUN_10W_STORM" == "1" && "$STORM_TERMINAL_VERIFIED" == "1" && "$CAPACITY_LOCK_HELD" == "1" ]]; then
-    if ! psql_platform -v capacity_tenant_id="$CAPACITY_TENANT_ID" \
-        -f "$LOAD_DIR/sql/cleanup-p2-capacity-policy.sql" >&2; then
+    if ! evict_capacity_config_cache >&2; then
       rc=1
     fi
-    if ! evict_capacity_config_cache >&2; then
+    if ! psql_platform -v capacity_tenant_id="$CAPACITY_TENANT_ID" \
+        -f "$LOAD_DIR/sql/cleanup-p2-capacity-policy.sql" >&2; then
       rc=1
     fi
     release_capacity_lock
@@ -538,10 +538,10 @@ cleanup() {
     rc=1
   fi
   if [[ "$FAIRNESS_STARTED" == "1" && "$FAIRNESS_LOCK_HELD" == "1" ]]; then
-    if ! psql_platform -f "$LOAD_DIR/sql/cleanup-p2-multitenant-fairness-policy.sql" >&2; then
+    if ! evict_fairness_config_cache >&2; then
       rc=1
     fi
-    if ! evict_fairness_config_cache >&2; then
+    if ! psql_platform -f "$LOAD_DIR/sql/cleanup-p2-multitenant-fairness-policy.sql" >&2; then
       rc=1
     fi
     release_fairness_lock
@@ -902,10 +902,16 @@ verify_kafka_stability() {
 }
 
 evict_fairness_config_cache() {
-  local tenant_id
+  local tenant_id workflow_id workflow_code
   for tenant_id in p2fa p2fb p2fc; do
+    workflow_id="$(resolve_single_job_workflow_id "$tenant_id" atomic_sql_demo)"
+    workflow_code="$(psql_platform -At -v tenant_id="$tenant_id" -v workflow_id="$workflow_id" \
+      -f "$ROOT_DIR/scripts/sim/sql/select-workflow-code-by-id.sql")"
     curl --fail --silent --show-error --request POST \
       "${CONSOLE_BASE_URL}/api/console/ops/cache/evict-job-definition?tenantId=${tenant_id}&jobCode=atomic_sql_demo" \
+      >/dev/null
+    curl --fail --silent --show-error --request POST \
+      "${CONSOLE_BASE_URL}/api/console/ops/cache/evict-workflow-definition?tenantId=${tenant_id}&workflowCode=${workflow_code}" \
       >/dev/null
     curl --fail --silent --show-error --request POST \
       "${CONSOLE_BASE_URL}/api/console/ops/cache/evict-quota-policies?tenantId=${tenant_id}" \
@@ -914,8 +920,15 @@ evict_fairness_config_cache() {
 }
 
 evict_capacity_config_cache() {
+  local workflow_id workflow_code
+  workflow_id="$(resolve_single_job_workflow_id "$CAPACITY_TENANT_ID" atomic_sql_demo)"
+  workflow_code="$(psql_platform -At -v tenant_id="$CAPACITY_TENANT_ID" -v workflow_id="$workflow_id" \
+    -f "$ROOT_DIR/scripts/sim/sql/select-workflow-code-by-id.sql")"
   curl --fail --silent --show-error --request POST \
     "${CONSOLE_BASE_URL}/api/console/ops/cache/evict-job-definition?tenantId=${CAPACITY_TENANT_ID}&jobCode=atomic_sql_demo" \
+    >/dev/null
+  curl --fail --silent --show-error --request POST \
+    "${CONSOLE_BASE_URL}/api/console/ops/cache/evict-workflow-definition?tenantId=${CAPACITY_TENANT_ID}&workflowCode=${workflow_code}" \
     >/dev/null
   curl --fail --silent --show-error --request POST \
     "${CONSOLE_BASE_URL}/api/console/ops/cache/evict-quota-policies?tenantId=${CAPACITY_TENANT_ID}" \
@@ -1208,6 +1221,9 @@ run_10w_storm() {
       PROFILE_RC=1
       return
     fi
+    psql_platform -v tenant_id="$CAPACITY_TENANT_ID" -v job_code=atomic_sql_demo \
+      -v fixture_tag=p2-capacity \
+      -f "$ROOT_DIR/scripts/local/sql/provision-single-job-workflow.sql"
     evict_capacity_config_cache
     storm_tenant_id="$CAPACITY_TENANT_ID"
   fi
@@ -1300,6 +1316,12 @@ run_fairness() {
     PROFILE_RC=1
     return
   fi
+  local fairness_tenant
+  for fairness_tenant in p2fa p2fb p2fc; do
+    psql_platform -v tenant_id="$fairness_tenant" -v job_code=atomic_sql_demo \
+      -v fixture_tag=p2-fairness \
+      -f "$ROOT_DIR/scripts/local/sql/provision-single-job-workflow.sql"
+  done
   echo "==> evict p2fa/p2fb/p2fc job-definition and quota-policy caches after direct SQL setup"
   evict_fairness_config_cache
   echo "==> multi-tenant fairness run_id=${RUN_ID}, total=${FAIRNESS_TOTAL_REQUESTS}, group_cap=${FAIRNESS_GROUP_SHARED_MAX_RUNNING_JOBS}, policy_weights=p2fa:3,p2fb:1,p2fc:1, launch_weights=${FAIRNESS_LAUNCH_WEIGHTS}"

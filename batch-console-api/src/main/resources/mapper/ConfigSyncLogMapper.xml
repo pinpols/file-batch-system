@@ -2,25 +2,58 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.console.mapper.ConfigSyncLogMapper">
 
+    <select id="setTenantContext" resultType="string">
+        SELECT set_config('app.tenant_id', #{tenantId}, true)
+    </select>
+
     <select id="selectByTenant" resultType="map">
         SELECT id,
-               tenant_id AS tenantId,
-               sync_direction AS syncDirection,
-               source_env AS sourceEnv,
-               target_env AS targetEnv,
-               config_types AS configTypes,
-               total_items AS totalItems,
-               success_items AS successItems,
-               failed_items AS failedItems,
-               skipped_items AS skippedItems,
-               sync_status AS syncStatus,
-               detail_json AS detailJson,
-               operator_id AS operatorId,
-               created_at AS createdAt
+               tenant_id AS "tenantId",
+               sync_direction AS "syncDirection",
+               source_env AS "sourceEnv",
+               target_env AS "targetEnv",
+               config_types AS "configTypes",
+               total_items AS "totalItems",
+               success_items AS "successItems",
+               failed_items AS "failedItems",
+               skipped_items AS "skippedItems",
+               sync_status AS "syncStatus",
+               detail_json AS "detailJson",
+               operator_id AS "operatorId",
+               created_at AS "createdAt"
           FROM batch.config_sync_log
          WHERE tenant_id = #{tenantId}
          ORDER BY id DESC
          LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="selectByIdForUpdate" resultType="map">
+        SELECT id,
+               tenant_id AS "tenantId",
+               sync_direction AS "syncDirection",
+               source_env AS "sourceEnv",
+               target_env AS "targetEnv",
+               config_types AS "configTypes",
+               total_items AS "totalItems",
+               success_items AS "successItems",
+               failed_items AS "failedItems",
+               skipped_items AS "skippedItems",
+               sync_status AS "syncStatus",
+               detail_json::text AS "detailJson",
+               operator_id AS "operatorId",
+               created_at AS "createdAt"
+          FROM batch.config_sync_log
+         WHERE tenant_id = #{tenantId}
+           AND id = #{logId}
+         FOR UPDATE
+    </select>
+
+    <select id="selectIdByRequestKey" resultType="long">
+        SELECT id
+          FROM batch.config_sync_log
+         WHERE tenant_id = #{tenantId}
+           AND sync_direction = 'IMPORT'
+           AND detail_json->>'requestKeyHash' = #{requestKeyHash}
     </select>
 
     <select id="countByTenant" resultType="long">
@@ -47,8 +80,17 @@
                failed_items = #{failedItems},
                skipped_items = #{skippedItems},
                sync_status = #{syncStatus},
-               detail_json = #{detailJson,jdbcType=VARCHAR}::jsonb
+               detail_json =
+               <choose>
+                   <when test="mergeDetail == true">
+                       coalesce(detail_json, '{}'::jsonb) || #{detailJson,jdbcType=VARCHAR}::jsonb
+                   </when>
+                   <otherwise>
+                       #{detailJson,jdbcType=VARCHAR}::jsonb
+                   </otherwise>
+               </choose>
          WHERE tenant_id = #{tenantId}
            AND id = #{id}
+           AND (sync_status = 'RUNNING' OR #{syncStatus} != 'RUNNING')
     </update>
 </mapper>

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
+import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -59,24 +60,27 @@ public class WeComNotificationSender implements NotificationSender {
     }
     String body = buildTextMessage(message);
     try {
-      OutboundHttpResponse response = httpTransport.execute(OutboundHttpRequest.post(
+      OutboundHttpContent httpContent = new OutboundHttpContent(body, JSON_MEDIA_TYPE);
+      OutboundHttpRequest request = OutboundHttpRequest.post(
           url,
           Map.of(),
-          body,
-          JSON_MEDIA_TYPE,
+          httpContent,
           CONNECT_TIMEOUT,
           REQUEST_TIMEOUT,
-          OutboundAddressPolicy.GUARDED));
+          OutboundAddressPolicy.GUARDED);
+      OutboundHttpResponse response = httpTransport.execute(request);
       return interpret(response);
     } catch (Exception e) {
       if (e instanceof InterruptedException) {
         Thread.currentThread().interrupt();
       }
       // 净化:不打 url，只记异常类型，避免泄露群机器人密钥
+      String sanitizedTenantId = LogSanitizer.value(message.tenantId());
+      String sanitizedChannelCode = LogSanitizer.value(message.channelCode());
       log.warn(
           "WeCom notification delivery failed: tenantId={} channelCode={} cause={}",
-          LogSanitizer.value(message.tenantId()),
-          LogSanitizer.value(message.channelCode()),
+          sanitizedTenantId,
+          sanitizedChannelCode,
           e.getClass().getSimpleName());
       return WebhookDeliveryResult.failure(null, e.getClass().getSimpleName());
     }

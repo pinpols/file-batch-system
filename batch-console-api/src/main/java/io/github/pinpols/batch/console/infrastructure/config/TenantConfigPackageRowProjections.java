@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelSchema.COL_CONFIG_JSON;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelSchema.COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelSchema.COL_DEPENDS_ON_JOB_CODES;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelSchema.FileChannel.COL_TARGET_ENDPOINT;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_BIZ_TYPE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_CALENDAR_CODE;
@@ -28,7 +30,6 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_PARAM_SCHEMA;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_QUEUE_CODE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_RELATED_JOB_CODE;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_RELATED_PIPELINE_CODE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_RETRY_MAX_COUNT;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_RETRY_POLICY;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SCHEDULE_EXPR;
@@ -49,17 +50,17 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WORKFLOW_VERSION;
 
 import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.SecretMasking;
+import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
-import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineStepDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowEdgeQuery;
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowNodeQuery;
+import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelSchema;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -78,9 +79,6 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class TenantConfigPackageRowProjections {
 
-  private static final String KEY_ID = "id";
-
-  private final PipelineStepDefinitionMapper pipelineStepDefinitionMapper;
   private final WorkflowNodeMapper workflowNodeMapper;
   private final WorkflowEdgeMapper workflowEdgeMapper;
 
@@ -99,6 +97,14 @@ public class TenantConfigPackageRowProjections {
           m.put(COL_SCHEDULE_TYPE, e.getScheduleType());
           m.put(COL_SCHEDULE_EXPR, e.getScheduleExpr());
           m.put(COL_DEPENDS_ON_JOB_CODE, e.getDependsOnJobCode());
+          m.put(
+              COL_DEPENDS_ON_JOB_CODES,
+              EmptyChecks.isNull(e.getDependsOnJobCodesCsv())
+                  ? e.getDependsOnJobCode()
+                  : e.getDependsOnJobCodesCsv().replace('\u001f', ','));
+          m.put(
+              COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS,
+              dependencyBizDateAlignments(e));
           m.put(COL_CALENDAR_CODE, e.getCalendarCode());
           m.put(COL_WINDOW_CODE, e.getWindowCode());
           m.put(COL_RETRY_POLICY, e.getRetryPolicy());
@@ -109,12 +115,25 @@ public class TenantConfigPackageRowProjections {
           m.put(COL_WATERMARK_FIELD, e.getWatermarkField());
           m.put(COL_EXECUTION_HANDLER, e.getExecutionHandler());
           m.put(COL_PARAM_SCHEMA, e.getParamSchema());
-          m.put(COL_DEFAULT_PARAMS, SecretMasking.maskSensitiveJson(e.getDefaultParams()));
+          String maskedDefaultParams = SecretMasking.maskSensitiveJson(e.getDefaultParams());
+          m.put(COL_DEFAULT_PARAMS, maskedDefaultParams);
           m.put(COL_ENABLED, e.getEnabled());
           m.put(COL_DESCRIPTION, e.getDescription());
           return m;
         })
         .collect(Collectors.toList());
+  }
+
+  private String dependencyBizDateAlignments(JobDefinitionEntity entity) {
+    boolean dependencyRulesAreMissing =
+        EmptyChecks.isNull(entity.getJobDependencyRules())
+            || EmptyChecks.isEmpty(entity.getJobDependencyRules());
+    if (dependencyRulesAreMissing) {
+      return Texts.hasText(entity.getDependsOnJobCode()) ? "SAME_DAY" : null;
+    }
+    return entity.getJobDependencyRules().stream()
+        .map(rule -> rule.bizDateAlignment())
+        .collect(Collectors.joining(","));
   }
 
   List<Map<String, Object>> toJobMonitoringPolicyRows(
@@ -168,31 +187,8 @@ public class TenantConfigPackageRowProjections {
         .toList();
   }
 
-  List<Map<String, Object>> collectPipelineSteps(List<Map<String, Object>> pipelines) {
-    List<Map<String, Object>> allSteps = new ArrayList<>();
-    for (Map<String, Object> pipeline : pipelines) {
-      Long pipelineId = ((Number) pipeline.get(KEY_ID)).longValue();
-      String jobCode = String.valueOf(pipeline.get(COL_JOB_CODE));
-      String version = String.valueOf(pipeline.get(COL_VERSION));
-      for (Map<String, Object> step :
-          pipelineStepDefinitionMapper.selectByPipelineDefinitionId(pipelineId)) {
-        Map<String, Object> enriched = new LinkedHashMap<>(step);
-        Object stepParams = step.get("step_params");
-        if (EmptyChecks.isNotNull(stepParams)) {
-          String json = stepParams instanceof Map<?, ?> || stepParams instanceof List<?>
-              ? JsonUtils.toJson(stepParams)
-              : stepParams.toString();
-          enriched.put("step_params", SecretMasking.maskSensitiveJson(json));
-        }
-        enriched.put(COL_JOB_CODE, jobCode);
-        enriched.put(COL_VERSION, version);
-        allSteps.add(enriched);
-      }
-    }
-    return allSteps;
-  }
-
-  List<Map<String, Object>> toWfDefRows(List<WorkflowDefinitionEntity> entities) {
+  List<Map<String, Object>> toWfDefRows(
+      List<WorkflowDefinitionEntity> entities, Map<Long, String> jobCodeById) {
     return entities.stream()
         .map(e -> {
           Map<String, Object> m = new LinkedHashMap<>();
@@ -201,7 +197,17 @@ public class TenantConfigPackageRowProjections {
           m.put("workflow_name", e.getWorkflowName());
           m.put("workflow_type", e.getWorkflowType());
           m.put(COL_VERSION, e.getVersion());
+          m.put(
+              ConfigPackageExcelSchema.COL_SINGLE_JOB_CODE,
+              jobCodeById.get(e.getSingleJobDefinitionId()));
           m.put(COL_ENABLED, e.getEnabled());
+          m.put(ConfigPackageExcelSchema.COL_SCHEDULE_ENABLED, e.getScheduleEnabled());
+          m.put(COL_SCHEDULE_TYPE, e.getScheduleType());
+          m.put(COL_SCHEDULE_EXPR, e.getScheduleExpr());
+          m.put(ConfigPackageExcelSchema.COL_TIMEZONE, e.getTimezone());
+          m.put(ConfigPackageExcelSchema.COL_TRIGGER_MODE, e.getTriggerMode());
+          m.put(COL_CALENDAR_CODE, e.getCalendarCode());
+          m.put(COL_DEPENDS_ON_JOB_CODE, e.getDependsOnJobCode());
           m.put(COL_DESCRIPTION, e.getDescription());
           return m;
         })
@@ -227,14 +233,14 @@ public class TenantConfigPackageRowProjections {
         m.put(COL_NODE_NAME, node.getNodeName());
         m.put(COL_NODE_TYPE, node.getNodeType());
         m.put(COL_RELATED_JOB_CODE, node.getRelatedJobCode());
-        m.put(COL_RELATED_PIPELINE_CODE, node.getRelatedPipelineCode());
         m.put(COL_WORKER_GROUP, node.getWorkerGroup());
         m.put(COL_WINDOW_CODE, node.getWindowCode());
         m.put(COL_NODE_ORDER, node.getNodeOrder());
         m.put(COL_RETRY_POLICY, node.getRetryPolicy());
         m.put(COL_RETRY_MAX_COUNT, node.getRetryMaxCount());
         m.put(COL_TIMEOUT_SECONDS, node.getTimeoutSeconds());
-        m.put(COL_NODE_PARAMS, SecretMasking.maskSensitiveJson(node.getNodeParams()));
+        String maskedNodeParams = SecretMasking.maskSensitiveJson(node.getNodeParams());
+        m.put(COL_NODE_PARAMS, maskedNodeParams);
         m.put(COL_ENABLED, node.getEnabled());
         result.add(m);
       }

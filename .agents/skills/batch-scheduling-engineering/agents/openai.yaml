@@ -1,0 +1,3 @@
+interface:
+  display_name: "批量调度工程"
+  short_description: "设计和审查批量业务日、实例状态、依赖调度、并发恢复与容量语义"

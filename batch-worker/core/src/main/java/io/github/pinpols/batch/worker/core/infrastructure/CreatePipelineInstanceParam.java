@@ -4,6 +4,8 @@ package io.github.pinpols.batch.worker.core.infrastructure;
 public record CreatePipelineInstanceParam(
     String tenantId,
     Long pipelineDefinitionId,
+    String systemPipelineCode,
+    Integer systemPipelineVersion,
     String jobCode,
     String pipelineType,
     Long fileId,

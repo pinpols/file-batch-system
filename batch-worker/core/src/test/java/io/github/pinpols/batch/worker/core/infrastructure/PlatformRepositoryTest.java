@@ -46,43 +46,6 @@ class PlatformRepositoryTest {
   }
 
   @Test
-  @DisplayName("查询流水线定义时按租户与作业编码过滤, 查询条件不含流水线编码")
-  void shouldFilterByTenantAndJobCode_whenFindingPipelineDefinition() {
-    PlatformFileRuntimeMapper mapper = mock(PlatformFileRuntimeMapper.class);
-    PlatformPipelineDefinitionRepository repository =
-        new PlatformPipelineDefinitionRepository(mapper);
-
-    when(mapper.selectLatestPipelineDefinition(anyMap()))
-        .thenReturn(Map.of("id", 4601L, "pipeline_type", "IMPORT"));
-
-    PlatformPipelineDefinitionRepository.PipelineDefinitionReference pipelineDefinition =
-        repository.findPipelineDefinition("tenant-a", "job-a");
-
-    assertThat(pipelineDefinition)
-        .isEqualTo(
-            new PlatformPipelineDefinitionRepository.PipelineDefinitionReference(4601L, "IMPORT"));
-    verify(mapper)
-        .selectLatestPipelineDefinition(argThat(params -> "tenant-a".equals(params.get("tenantId"))
-            && "job-a".equals(params.get(PipelineRuntimeKeys.JOB_CODE))
-            && !params.containsKey("pipelineCode")));
-  }
-
-  @Test
-  @DisplayName("缺少租户或作业编码以及查询未命中时不返回流水线定义")
-  void shouldReturnNullWhenPipelineDefinitionIsUnavailable() {
-    PlatformFileRuntimeMapper mapper = mock(PlatformFileRuntimeMapper.class);
-    PlatformPipelineDefinitionRepository repository =
-        new PlatformPipelineDefinitionRepository(mapper);
-
-    assertThat(repository.findPipelineDefinition(" ", "job-a")).isNull();
-    assertThat(repository.findPipelineDefinition("tenant-a", " ")).isNull();
-    when(mapper.selectLatestPipelineDefinition(anyMap())).thenReturn(Map.of()).thenReturn(null);
-
-    assertThat(repository.findPipelineDefinition("tenant-a", "job-a")).isNull();
-    assertThat(repository.findPipelineDefinition("tenant-a", "job-b")).isNull();
-  }
-
-  @Test
   @DisplayName("创建流水线实例时以作业编码写入实例表, 参数中不含流水线编码")
   void shouldUseJobCode_whenCreatingPipelineInstance() {
     PlatformFileRuntimeMapper mapper = mock(PlatformFileRuntimeMapper.class);
@@ -95,12 +58,13 @@ class PlatformRepositoryTest {
     });
 
     Long pipelineInstanceId = repository.createPipelineInstance(new CreatePipelineInstanceParam(
-        "tenant-a", 4601L, "job-a", "IMPORT", 5201L, 4001L, "VALIDATE", "trace-a"));
+        "tenant-a", 4601L, "IMPORT", 1, "job-a", "IMPORT", 5201L, 4001L, "VALIDATE", "trace-a"));
 
     assertThat(pipelineInstanceId).isEqualTo(5301L);
     verify(mapper)
         .insertPipelineInstance(argThat(params -> "tenant-a".equals(params.get("tenantId"))
             && "job-a".equals(params.get(PipelineRuntimeKeys.JOB_CODE))
+            && "IMPORT".equals(params.get("systemPipelineCode"))
             && !params.containsKey("pipelineCode")));
   }
 

@@ -7,7 +7,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * {@link DownstreamFallback} 内部 resilience4j CircuitBreaker 的配置。
  *
  * <p>每个 {@code service} 标签对应一个 per-service CircuitBreaker 实例(如 {@code trigger} / {@code
- * orchestrator});默认值取 spike 文档(docs/spike/resilience4j-sb4-compat.md)建议基线。{@link #enabled} 为
+ * orchestrator});默认值取 spike 文档(docs/verifications/resilience4j-sb4-compat-2026-09-25.md)建议基线。{@link #enabled} 为
  * kill-switch:关闭后 {@link DownstreamFallback} 退化为纯 try/catch 降级模板(不经熔断状态机),对外契约不变。
  */
 @Data

@@ -29,6 +29,9 @@ class SensorProbeTransactionExecutor {
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   void probeOne(WorkflowNodeRunEntity nodeRun, Instant now) {
+    if (nodeRunMapper.claimDueWaitNode(nodeRun.getId(), now) == 0) {
+      return;
+    }
     stateMachine.probeAndAdvance(nodeRun, now);
   }
 }

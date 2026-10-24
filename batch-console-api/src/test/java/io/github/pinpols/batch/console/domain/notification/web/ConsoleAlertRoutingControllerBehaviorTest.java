@@ -25,9 +25,11 @@ import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
@@ -85,16 +87,16 @@ class ConsoleAlertRoutingControllerBehaviorTest {
             .param("severity", "WARN")
             .param("enabled", "true"))
         .andExpect(status().isOk());
-    org.mockito.ArgumentCaptor<AlertRoutingQueryRequest> captor =
-        org.mockito.ArgumentCaptor.forClass(AlertRoutingQueryRequest.class);
+    ArgumentCaptor<AlertRoutingQueryRequest> captor =
+        ArgumentCaptor.forClass(AlertRoutingQueryRequest.class);
     verify(service).list(captor.capture());
-    org.junit.jupiter.api.Assertions.assertEquals("ta", captor.getValue().getTenantId());
-    org.junit.jupiter.api.Assertions.assertEquals("RT_A", captor.getValue().getRouteCode());
-    org.junit.jupiter.api.Assertions.assertEquals("ops", captor.getValue().getTeam());
-    org.junit.jupiter.api.Assertions.assertEquals("WARN", captor.getValue().getSeverity());
-    org.junit.jupiter.api.Assertions.assertTrue(captor.getValue().getEnabled());
-    org.junit.jupiter.api.Assertions.assertEquals(1, captor.getValue().getPageNo());
-    org.junit.jupiter.api.Assertions.assertEquals(20, captor.getValue().getPageSize());
+    Assertions.assertEquals("ta", captor.getValue().getTenantId());
+    Assertions.assertEquals("RT_A", captor.getValue().getRouteCode());
+    Assertions.assertEquals("ops", captor.getValue().getTeam());
+    Assertions.assertEquals("WARN", captor.getValue().getSeverity());
+    Assertions.assertTrue(captor.getValue().getEnabled());
+    Assertions.assertEquals(1, captor.getValue().getPageNo());
+    Assertions.assertEquals(20, captor.getValue().getPageSize());
   }
 
   @Test

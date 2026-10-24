@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.sensor;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -12,6 +13,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.SensorType;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService.NodeRunFinishCommand;
@@ -74,6 +76,11 @@ class SensorStateMachineTest {
   @Mock
   private WorkflowNodeDispatchService dispatchService;
 
+  @Mock
+  private io.github.pinpols.batch.orchestrator.application.service.workflow
+          .WorkflowNodeTerminalFinalizer
+      workflowNodeTerminalFinalizer;
+
   private SensorStateMachine sm;
   private static final Instant NOW = Instant.parse("2026-05-13T12:00:00Z");
   private static final Instant STARTED = Instant.parse("2026-05-13T11:59:00Z"); // 60s elapsed
@@ -94,7 +101,8 @@ class SensorStateMachineTest {
         objectMapper,
         jobMappers,
         workflowDagService,
-        dispatchProvider);
+        dispatchProvider,
+        workflowNodeTerminalFinalizer);
     when(filePolicy.type()).thenReturn(SensorType.FILE_ARRIVAL);
     when(registry.resolve(SensorType.FILE_ARRIVAL)).thenReturn(filePolicy);
   }
@@ -242,7 +250,7 @@ class SensorStateMachineTest {
   void matched_dispatchesDownstreamJobNode() {
     seedHappyPathWithJobInstance();
     when(filePolicy.probe(any())).thenReturn(SensorProbeResult.matched(Map.of("fileId", 7L)));
-    when(workflowDagService.resolveNextNodes(eq(7L), eq("wait-1"), eq(true), any()))
+    when(workflowDagService.resolveNextNodesForRun(any(), eq("wait-1"), eq(true), any()))
         .thenReturn(java.util.List.of(new DagNodeResolution("job-a", "JOB")));
 
     sm.probeAndAdvance(nodeRun(0, 0), NOW);
@@ -257,14 +265,31 @@ class SensorStateMachineTest {
   }
 
   @Test
+  @DisplayName("下游派发失败时向上传播异常以回滚 WAIT 完结并由后续扫描重试")
+  void matched_dispatchFailure_propagatesForTransactionalRetry() {
+    seedHappyPathWithJobInstance();
+    when(filePolicy.probe(any())).thenReturn(SensorProbeResult.matched(Map.of("fileId", 7L)));
+    DagNodeResolution downstream = new DagNodeResolution("job-a", "JOB");
+    when(workflowDagService.resolveNextNodes(eq(7L), eq("wait-1"), eq(true), any()))
+        .thenReturn(java.util.List.of(downstream));
+    when(dispatchService.dispatchNode(any(), any(), eq(downstream), any(), any()))
+        .thenThrow(new IllegalStateException("outbox unavailable"));
+
+    assertThatThrownBy(() -> sm.probeAndAdvance(nodeRun(0, 0), NOW))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("outbox unavailable");
+
+    verify(taskOutcomeService).recordNodeRunFinish(any());
+  }
+
+  @Test
   @DisplayName("探测命中后下一节点为终点时只记录完结, 不派发下游")
   void matched_endNode_recordsFinishWithoutDispatch() {
     seedHappyPathWithJobInstance();
     when(filePolicy.probe(any())).thenReturn(SensorProbeResult.matched(Map.of()));
-    when(workflowDagService.resolveNextNodes(eq(7L), eq("wait-1"), eq(true), any()))
+    when(workflowDagService.resolveNextNodesForRun(any(), eq("wait-1"), eq(true), any()))
         .thenReturn(java.util.List.of(new DagNodeResolution("END", "END")));
-    when(workflowDagService.isNodeReadyForDispatch(eq(1L), eq(7L), eq("END"), any()))
-        .thenReturn(true);
+    when(workflowDagService.isNodeReadyForRunDispatch(any(), eq("END"), any())).thenReturn(true);
 
     sm.probeAndAdvance(nodeRun(0, 0), NOW);
 
@@ -274,17 +299,65 @@ class SensorStateMachineTest {
   }
 
   @Test
-  @DisplayName("缺少作业实例时下游派发被跳过, 等待节点仍标记成功")
-  void matched_noJobInstance_skipsDownstreamGracefully() {
-    seedHappyPath(); // no jobInstance stubbed
+  @DisplayName("无根作业实例的组合 Workflow 仍推进等待节点的下游 Job")
+  void matched_rootlessWorkflow_dispatchesDownstreamJob() {
+    seedHappyPath();
     when(filePolicy.probe(any())).thenReturn(SensorProbeResult.matched(Map.of()));
-    when(workflowDagService.resolveNextNodes(any(), any(), eq(true), any()))
+    when(workflowDagService.resolveNextNodesForRun(any(), eq("wait-1"), eq(true), any()))
         .thenReturn(java.util.List.of(new DagNodeResolution("job-a", "JOB")));
 
     sm.probeAndAdvance(nodeRun(0, 0), NOW);
 
-    // WAIT 仍然标 SUCCESS，但下游 dispatch 跳过（warn log）
     verify(taskOutcomeService).recordNodeRunFinish(any());
+    verify(dispatchService)
+        .dispatchNode(eq(null), any(), eq(new DagNodeResolution("job-a", "JOB")), eq(null), any());
+  }
+
+  @Test
+  @DisplayName("新快照中的 WAIT 参数和边界图用于 rootless Workflow 推进")
+  void matched_rootlessWorkflow_usesFrozenSensorDefinitionAndGraph() {
+    WorkflowRunEntity wfRun = new WorkflowRunEntity();
+    wfRun.setId(1L);
+    wfRun.setTenantId("ta");
+    wfRun.setWorkflowDefinitionId(7L);
+    wfRun.setWorkflowVersionSnapshot(2);
+    wfRun.setExecutionSnapshot(JsonUtils.toJson(Map.of(
+        "schemaVersion",
+        2,
+        "workflowDefinitionId",
+        7,
+        "workflowVersion",
+        2,
+        "nodes",
+        java.util.List.of(Map.of(
+            "nodeCode", "wait-1",
+            "nodeType", "WAIT",
+            "tenantId", "ta",
+            "workflowDefinitionId", 7,
+            "nodeParams", """
+                {"sensor_type":"FILE_ARRIVAL","sensor_spec":{},"timeout_seconds":120,
+                 "poll_interval_seconds":30,"on_timeout":"FAIL"}
+                """)),
+        "edges",
+        java.util.List.of(Map.of(
+            "tenantId", "ta",
+            "workflowDefinitionId", 7,
+            "fromNodeCode", "wait-1",
+            "toNodeCode", "END",
+            "edgeType", "SUCCESS",
+            "enabled", true)),
+        "jobDefinitions",
+        Map.of())));
+    when(workflowRunMapper.selectByIdAnyTenant(1L)).thenReturn(wfRun);
+    when(filePolicy.probe(any())).thenReturn(SensorProbeResult.matched(Map.of("frozen", true)));
+    when(workflowDagService.resolveNextNodesForRun(any(), eq("wait-1"), eq(true), any()))
+        .thenReturn(java.util.List.of(new DagNodeResolution("END", "END")));
+    when(workflowDagService.isNodeReadyForRunDispatch(any(), eq("END"), any())).thenReturn(true);
+
+    sm.probeAndAdvance(nodeRun(0, 0), NOW);
+
+    verify(nodeMapper, never()).selectByWorkflowDefinitionIdAndNodeCode(7L, "wait-1");
+    verify(taskOutcomeService, times(2)).recordNodeRunFinish(any());
     verify(dispatchService, never()).dispatchNode(any(), any(), any(), any(), any());
   }
 
@@ -294,7 +367,7 @@ class SensorStateMachineTest {
     seedHappyPathWithJobInstance();
     WorkflowNodeRunEntity stale = nodeRun(10, 0);
     stale.setStartedAt(NOW.minusSeconds(3600));
-    when(workflowDagService.resolveNextNodes(eq(7L), eq("wait-1"), eq(false), any()))
+    when(workflowDagService.resolveNextNodesForRun(any(), eq("wait-1"), eq(false), any()))
         .thenReturn(java.util.List.of(new DagNodeResolution("on-fail-node", "TASK")));
 
     sm.probeAndAdvance(stale, NOW);

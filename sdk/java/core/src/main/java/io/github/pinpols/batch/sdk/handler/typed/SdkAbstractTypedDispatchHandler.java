@@ -76,7 +76,10 @@ public abstract class SdkAbstractTypedDispatchHandler<I, O, R> extends SdkAbstra
           log.warn("typed dispatch item failed: {}", ExceptionLogSummary.of(itemEx));
         }
       }
-      return result(input, counts, "dispatched " + counts.success() + "/" + counts.total());
+      long successfulCount = counts.success();
+      long totalCount = counts.total();
+      String defaultMessage = "dispatched " + successfulCount + "/" + totalCount;
+      return result(input, counts, defaultMessage);
     } catch (Exception e) {
       return SdkTaskResult.fail(e);
     }

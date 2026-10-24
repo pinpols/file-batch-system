@@ -50,7 +50,7 @@ class AlertmanagerEmitPublisherTest {
   }
 
   @Test
-  @DisplayName("labels 全是低基数枚举 + severity 词形;高基数进 annotations")
+  @DisplayName("labels 保留实体指纹与 severity 词形;追踪信息进 annotations")
   void buildPostableAlert_mapsLabelsAndAnnotations() {
     Map<String, Object> alert = publisher(true).buildPostableAlert(entity());
 
@@ -63,8 +63,8 @@ class AlertmanagerEmitPublisherTest {
         .containsEntry("service", "batch-orchestrator")
         .containsEntry("alert_group", "sla")
         .containsEntry("team", "batch-sla");
-    // 基数守则:高基数键绝不进 labels
-    assertThat(labels).doesNotContainKeys("resource", "trace_id", "alert_id", "fingerprint");
+    assertThat(labels).containsEntry("fingerprint", "fp-123");
+    assertThat(labels).doesNotContainKeys("resource", "trace_id", "alert_id");
 
     @SuppressWarnings("unchecked")
     Map<String, String> ann = (Map<String, String>) alert.get("annotations");

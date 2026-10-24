@@ -22,6 +22,28 @@ public interface LaunchValidationService {
       TriggerRequestEntity triggerRequest,
       JobDefinitionEntity jobDefinition,
       WorkflowDefinitionEntity workflowDefinition,
+      String workflowCalendarCode,
       JobInstanceEntity existingInstance // 非空表示重复请求
-      ) {}
+      ) {
+
+    public LaunchLoadResult(
+        TriggerRequestEntity triggerRequest,
+        JobDefinitionEntity jobDefinition,
+        WorkflowDefinitionEntity workflowDefinition,
+        JobInstanceEntity existingInstance) {
+      this(
+          triggerRequest,
+          jobDefinition,
+          workflowDefinition,
+          workflowDefinition == null ? null : workflowDefinition.calendarCode(),
+          existingInstance);
+    }
+
+    public String effectiveCalendarCode() {
+      if (workflowCalendarCode != null && !workflowCalendarCode.isBlank()) {
+        return workflowCalendarCode;
+      }
+      return jobDefinition == null ? null : jobDefinition.calendarCode();
+    }
+  }
 }

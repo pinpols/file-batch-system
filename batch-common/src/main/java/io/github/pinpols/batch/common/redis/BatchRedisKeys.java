@@ -11,7 +11,9 @@ public final class BatchRedisKeys {
    * 速率累积，无需客户端窗口对齐。
    */
   public static String rateLimitBucket(String tenantId, String action) {
-    return "ratelimit:%s:%s".formatted(safe(tenantId), safe(action));
+    String safeTenantId = safe(tenantId);
+    String safeAction = safe(action);
+    return "ratelimit:%s:%s".formatted(safeTenantId, safeAction);
   }
 
   public static String outboxCircuit() {
@@ -19,11 +21,16 @@ public final class BatchRedisKeys {
   }
 
   public static String shedLock(String environment, String name) {
-    return "shedlock:%s:%s".formatted(safe(environment), safe(name));
+    String safeEnvironment = safe(environment);
+    String safeName = safe(name);
+    return "shedlock:%s:%s".formatted(safeEnvironment, safeName);
   }
 
   public static String config(String tenantId, String type, String code) {
-    return "config:%s:%s:%s".formatted(safe(tenantId), safe(type), safe(code));
+    String safeTenantId = safe(tenantId);
+    String safeType = safe(type);
+    String safeCode = safe(code);
+    return "config:%s:%s:%s".formatted(safeTenantId, safeType, safeCode);
   }
 
   public static String configInvalidationGlobalRevision() {
@@ -31,8 +38,10 @@ public final class BatchRedisKeys {
   }
 
   public static String configInvalidationKeyRevision(String tenantId, String type, String code) {
-    return "config:invalidation:revision:%s:%s:%s"
-        .formatted(safe(tenantId), safe(type), safe(code));
+    String safeTenantId = safe(tenantId);
+    String safeType = safe(type);
+    String safeCode = safe(code);
+    return "config:invalidation:revision:%s:%s:%s".formatted(safeTenantId, safeType, safeCode);
   }
 
   public static String fileGovernanceMetrics(String tenantId) {
@@ -44,7 +53,10 @@ public final class BatchRedisKeys {
    * QUEUE_JOBS / QUEUE_PARTITIONS。
    */
   public static String quotaState(String tenantId, String scope, String ownerCode) {
-    return "quota:state:%s:%s:%s".formatted(safe(tenantId), safe(scope), safe(ownerCode));
+    String safeTenantId = safe(tenantId);
+    String safeScope = safe(scope);
+    String safeOwnerCode = safe(ownerCode);
+    return "quota:state:%s:%s:%s".formatted(safeTenantId, safeScope, safeOwnerCode);
   }
 
   /** 配额状态索引（按租户）：用于 snapshot 调度器扫描某租户下所有 owner，避免全库 SCAN。 */

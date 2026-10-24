@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.trigger.domain;
 
 /**
- * 触发器注册管理服务接口，定义调度器中触发器的完整生命周期操作契约。 实现类须保证 {@code registerAll} 在应用启动时幂等执行；单个任务的注册/注销/暂停/恢复
- * 支持动态热更新，不影响其他已注册触发器的运行状态。 租户级别的批量暂停/恢复用于租户隔离场景，{@code schedulerStatus} 反映底层调度引擎的整体健康状态。
+ * 触发器注册管理服务接口。注册、注销、暂停和恢复以 WorkflowCode 为权威目标，JobCode 方法仅兼容显式受管单作业 Workflow；
+ * 调度操作不得改变 Job 执行启用状态。{@code registerAll} 在应用启动时幂等执行，租户级批量暂停/恢复不改变持久化 Workflow 调度配置。
  */
 public interface TriggerRegistrationService {
 
@@ -10,11 +10,21 @@ public interface TriggerRegistrationService {
 
   void registerByJobCode(String tenantId, String jobCode);
 
+  void registerByWorkflowCode(String tenantId, String workflowCode);
+
   void unregisterByJobCode(String tenantId, String jobCode);
+
+  void unregisterByWorkflowCode(String tenantId, String workflowCode);
+
+  void removeQuartzJob(String tenantId, String quartzJobIdentity);
 
   void pauseByJobCode(String tenantId, String jobCode);
 
+  void pauseByWorkflowCode(String tenantId, String workflowCode);
+
   void resumeByJobCode(String tenantId, String jobCode);
+
+  void resumeByWorkflowCode(String tenantId, String workflowCode);
 
   void pauseByTenant(String tenantId);
 

@@ -10,6 +10,7 @@ import java.time.Instant;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 import org.springframework.scheduling.TaskScheduler;
 
 @DisplayName("等待分片派发合并触发:容量释放事件在计划派发执行前的合并与延迟调度行为")
@@ -19,8 +20,8 @@ class WaitingPartitionDispatchKickTest {
   @DisplayName("计划派发尚未执行时多次容量释放合并为一次调度,执行后再次释放重新安排派发")
   void shouldCoalesceCapacityReleases_whenScheduledDispatchNotYetExecuted() {
     WaitingPartitionDispatchScheduler dispatchScheduler =
-        org.mockito.Mockito.mock(WaitingPartitionDispatchScheduler.class);
-    TaskScheduler taskScheduler = org.mockito.Mockito.mock(TaskScheduler.class);
+        Mockito.mock(WaitingPartitionDispatchScheduler.class);
+    TaskScheduler taskScheduler = Mockito.mock(TaskScheduler.class);
     ResourceSchedulerProperties properties = new ResourceSchedulerProperties();
     properties.setWaitingDispatchKickDelayMillis(0);
     WaitingPartitionDispatchKick kick = new WaitingPartitionDispatchKick(
@@ -35,7 +36,6 @@ class WaitingPartitionDispatchKickTest {
     verify(dispatchScheduler).dispatchWaitingPartitions();
 
     kick.onCapacityReleased(new WaitingCapacityReleasedEvent("tenant-c"));
-    verify(taskScheduler, org.mockito.Mockito.times(2))
-        .schedule(any(Runnable.class), any(Instant.class));
+    verify(taskScheduler, Mockito.times(2)).schedule(any(Runnable.class), any(Instant.class));
   }
 }

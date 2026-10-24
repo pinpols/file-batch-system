@@ -67,6 +67,7 @@ public class LaunchBatchDayService {
   void upsertBatchDayInstance(
       LaunchRequest request,
       JobDefinitionEntity jobDefinition,
+      String calendarCode,
       Map<String, Object> effectiveParams,
       Instant batchDaySlaDeadlineAt) {
     DataAccessException last = null;
@@ -74,7 +75,7 @@ public class LaunchBatchDayService {
       try {
         newBatchDayTransaction()
             .executeWithoutResult(ignored -> doUpsertBatchDayInstance(
-                request, jobDefinition, effectiveParams, batchDaySlaDeadlineAt));
+                request, jobDefinition, calendarCode, effectiveParams, batchDaySlaDeadlineAt));
         return;
       } catch (OptimisticLockingFailureException conflict) {
         SwallowedExceptionLogger.info(
@@ -109,12 +110,13 @@ public class LaunchBatchDayService {
   public void doUpsertBatchDayInstance(
       LaunchRequest request,
       JobDefinitionEntity jobDefinition,
+      String calendarCode,
       Map<String, Object> effectiveParams,
       Instant batchDaySlaDeadlineAt) {
     if (isMissingLaunchContext(request, jobDefinition)) {
       return;
     }
-    String calendarCode = LaunchParamResolver.textValue(jobDefinition.calendarCode());
+    calendarCode = LaunchParamResolver.textValue(calendarCode);
     if (!Texts.hasText(calendarCode)) {
       return;
     }
@@ -126,6 +128,20 @@ public class LaunchBatchDayService {
     } else {
       updateExistingBatchDay(request, ctx, existing, batchDaySlaDeadlineAt);
     }
+  }
+
+  /** Compatibility overload for focused service tests and pre-Workflow callers. */
+  public void doUpsertBatchDayInstance(
+      LaunchRequest request,
+      JobDefinitionEntity jobDefinition,
+      Map<String, Object> effectiveParams,
+      Instant batchDaySlaDeadlineAt) {
+    doUpsertBatchDayInstance(
+        request,
+        jobDefinition,
+        jobDefinition == null ? null : jobDefinition.calendarCode(),
+        effectiveParams,
+        batchDaySlaDeadlineAt);
   }
 
   private TransactionTemplate newBatchDayTransaction() {
@@ -448,7 +464,7 @@ public class LaunchBatchDayService {
     if (triggerType == TriggerType.RERUN || triggerType == TriggerType.CATCH_UP) {
       return request;
     }
-    String calendarCode = LaunchParamResolver.textValue(loaded.jobDefinition().calendarCode());
+    String calendarCode = LaunchParamResolver.textValue(loaded.effectiveCalendarCode());
     if (!Texts.hasText(calendarCode)) {
       return request;
     }

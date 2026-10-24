@@ -460,6 +460,11 @@ orchestrator:
     largeTargetItems: 500000
     standardTargetBytes: 536870912
     largeTargetBytes: 268435456
+  batchDay:
+    dependencyWaitTimeoutSeconds: 86400
+    catchupDaysPerScan: 14
+  jobDependencyWait:
+    timeoutAlertSeconds: 86400
   mqRouting:
     mode: "TENANT"
   quota:

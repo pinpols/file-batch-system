@@ -6,6 +6,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LOAD_DIR="$ROOT_DIR/load-tests"
 # shellcheck source=env.sh
 source "$LOAD_DIR/scripts/env.sh"
+validate_load_test_run_id "$RUN_ID"
 SQL_DIR="$ROOT_DIR/load-tests/sql"
 
 psql_platform() {

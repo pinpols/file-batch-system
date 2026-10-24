@@ -10,8 +10,15 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
-BIZ_DATE="${BIZ_DATE:-$(date +%Y%m%d)}"
-BIZ_DAY="${BIZ_DATE:0:4}-${BIZ_DATE:4:2}-${BIZ_DATE:6:2}"
+BIZ_DATE="${BIZ_DATE:-$(date +%Y-%m-%d)}"
+if [[ "$BIZ_DATE" =~ ^[0-9]{8}$ ]]; then
+  BIZ_DATE="${BIZ_DATE:0:4}-${BIZ_DATE:4:2}-${BIZ_DATE:6:2}"
+fi
+if ! [[ "$BIZ_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+  echo "❌ BIZ_DATE must be YYYY-MM-DD or YYYYMMDD, got: $BIZ_DATE" >&2
+  exit 2
+fi
+BIZ_DAY="$BIZ_DATE"
 SFTP_CONTAINER="${SFTP_CONTAINER:-batch-sim-sftp}"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
@@ -39,7 +46,10 @@ cat > "$TMP/tc-risk-score-${BIZ_DATE}.csv" << 'EOF'
 entity_id,entity_type,score_value,score_band,score_date
 EOF
 for i in $(seq 1 50); do
-  echo "TC-ENTITY-$(printf '%06d' $i),ACCOUNT,$((RANDOM % 100)),$([ $((RANDOM % 3)) -eq 0 ] && echo HIGH || echo LOW),${BIZ_DAY}" >> "$TMP/tc-risk-score-${BIZ_DATE}.csv"
+  score=$((i * 37 % 100))
+  band=LOW
+  [ "$score" -ge 80 ] && band=HIGH
+  echo "TC-ENTITY-$(printf '%06d' $i),ACCOUNT,${score},${band},${BIZ_DAY}" >> "$TMP/tc-risk-score-${BIZ_DATE}.csv"
 done
 
 echo "==> 投放到 SFTP /inbound/(用户各自 chroot)"
@@ -49,6 +59,9 @@ for t in ta tb tc; do
     tb) f="tb-transaction-${BIZ_DATE}.csv" ;;
     tc) f="tc-risk-score-${BIZ_DATE}.csv" ;;
   esac
+  # 这些确切名称归当前 SIM 夹具所有。替换它们可使重复运行保持
+  # 结果确定，同时保留 SFTP 卷中与测试无关的用户文件。
+  docker exec "$SFTP_CONTAINER" rm -f "/home/$t/inbound/$f"
   docker cp "$TMP/$f" "$SFTP_CONTAINER:/home/$t/inbound/$f"
   docker exec "$SFTP_CONTAINER" chown "$t:users" "/home/$t/inbound/$f"
   size=$(docker exec "$SFTP_CONTAINER" stat -c %s "/home/$t/inbound/$f" 2>/dev/null || echo "?")

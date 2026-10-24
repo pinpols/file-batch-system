@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.enums.FileIntegrityState;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -60,6 +61,7 @@ public class FileGovernanceScheduler {
   private final AtomicLong arrivalDelayViolations = new AtomicLong();
   private final AtomicLong arrivalDelayMaxSeconds = new AtomicLong();
   private final AtomicLong arrivalGroupWaitingCount = new AtomicLong();
+  private final AtomicLong arrivalGroupOldestWaitSeconds = new AtomicLong();
   private final AtomicLong arrivalGroupTriggeredCount = new AtomicLong();
   private final AtomicLong arrivalGroupTimeoutCount = new AtomicLong();
   private final AtomicLong processingDelayViolations = new AtomicLong();
@@ -86,6 +88,8 @@ public class FileGovernanceScheduler {
     meterRegistry.gauge("batch.file.arrival.delay.violations", arrivalDelayViolations);
     meterRegistry.gauge("batch.file.arrival.delay.max.seconds", arrivalDelayMaxSeconds);
     meterRegistry.gauge("batch.file.arrival.group.waiting.count", arrivalGroupWaitingCount);
+    meterRegistry.gauge(
+        "batch.file.arrival.group.oldest_wait.seconds", arrivalGroupOldestWaitSeconds);
     meterRegistry.gauge("batch.file.arrival.group.triggered.count", arrivalGroupTriggeredCount);
     meterRegistry.gauge("batch.file.arrival.group.timeout.count", arrivalGroupTimeoutCount);
     meterRegistry.gauge("batch.pipeline.processing.delay.violations", processingDelayViolations);
@@ -183,9 +187,9 @@ public class FileGovernanceScheduler {
     Map<ArrivalGroupKey, List<FileGovernanceArrivalViews.ArrivalCandidateView>> grouped =
         new HashMap<>();
     if (EmptyChecks.isEmpty(candidates)) {
-      arrivalGroupWaitingCount.set(0L);
       arrivalGroupTriggeredCount.set(0L);
       arrivalGroupTimeoutCount.set(0L);
+      refreshArrivalGroupBacklogMetrics();
       return;
     }
     for (FileGovernanceArrivalViews.ArrivalCandidateView candidate : candidates) {
@@ -195,27 +199,44 @@ public class FileGovernanceScheduler {
       }
       grouped.computeIfAbsent(key, ignored -> new ArrayList<>()).add(candidate);
     }
-    long waitingGroups = 0L;
     long triggeredGroups = 0L;
     long timeoutGroups = 0L;
     Instant now = BatchDateTimeSupport.utcNow();
     for (Map.Entry<ArrivalGroupKey, List<FileGovernanceArrivalViews.ArrivalCandidateView>> entry :
         grouped.entrySet()) {
-      ArrivalGroupDecision decision = evaluateArrivalGroup(entry.getKey(), entry.getValue(), now);
+      ArrivalGroupKey key = entry.getKey();
+      ArrivalGroupDecision decision = RlsTenantContextHolder.runWithTenant(
+          key.tenantId(), () -> evaluateArrivalGroup(key, entry.getValue(), now));
       if (EmptyChecks.isNull(decision) || EmptyChecks.isNull(decision.state())) {
         continue;
       }
       switch (decision.state()) {
-        case STATUS_WAITING_ARRIVAL, "WAITING_FILE_GROUP", STATUS_WAITING_MANUAL_CONFIRM ->
-          waitingGroups++;
+        case STATUS_WAITING_ARRIVAL, "WAITING_FILE_GROUP", STATUS_WAITING_MANUAL_CONFIRM -> {}
         case STATUS_TRIGGERED -> triggeredGroups++;
         case STATUS_TIMEOUT -> timeoutGroups++;
         default -> {}
       }
     }
-    arrivalGroupWaitingCount.set(waitingGroups);
     arrivalGroupTriggeredCount.set(triggeredGroups);
     arrivalGroupTimeoutCount.set(timeoutGroups);
+    refreshArrivalGroupBacklogMetrics();
+  }
+
+  private void refreshArrivalGroupBacklogMetrics() {
+    try {
+      FileGovernanceArrivalViews.ArrivalGroupBacklogView backlog =
+          fileGovernanceRepository.selectArrivalGroupBacklogMetrics();
+      arrivalGroupWaitingCount.set(Math.max(0L, valueOrZero(backlog.waitingGroups())));
+      arrivalGroupOldestWaitSeconds.set(Math.max(0L, valueOrZero(backlog.oldestWaitSeconds())));
+    } catch (RuntimeException failure) {
+      log.warn(
+          "file arrival group backlog metrics refresh failed: {}",
+          SwallowedExceptionLogger.summary(failure));
+    }
+  }
+
+  private long valueOrZero(Long value) {
+    return value == null ? 0L : value;
   }
 
   public void cleanupArchivedFiles() {

@@ -11,18 +11,26 @@ import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BusinessCalendarEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.view.BatchDayInstanceMetrics;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
+import io.github.pinpols.batch.orchestrator.mapper.BatchDayWaitingLaunchMapper;
+import io.github.pinpols.batch.orchestrator.mapper.CalendarDependencyWaitMapper;
+import io.github.pinpols.batch.orchestrator.mapper.ExpectedWorkOccurrenceMapper;
+import io.github.pinpols.batch.orchestrator.mapper.JobDependencyWaitingLaunchMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import io.github.pinpols.batch.orchestrator.mapper.WorkflowDefinitionMapper;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
@@ -56,13 +64,19 @@ public class BatchDaySettleScheduler {
   private static final String STATUS_IN_FLIGHT = "IN_FLIGHT";
   private static final List<String> TRACKED_STATUSES =
       List.of("CUTOFF", STATUS_IN_FLIGHT, STATUS_SETTLING);
+  private static final int FAILED_CATCH_UP_RECOVERY_LIMIT = 100;
 
   private final BatchDayInstanceMapper batchDayInstanceMapper;
+  private final BatchDayWaitingLaunchMapper batchDayWaitingLaunchMapper;
+  private final JobDependencyWaitingLaunchMapper jobDependencyWaitingLaunchMapper;
+  private final CalendarDependencyWaitMapper calendarDependencyWaitMapper;
+  private final ExpectedWorkOccurrenceMapper expectedWorkOccurrenceMapper;
   private final JobInstanceMapper jobInstanceMapper;
   private final JobExecutionLogMapper jobExecutionLogMapper;
   private final TriggerRequestMapper triggerRequestMapper;
+  private final WorkflowDefinitionMapper workflowDefinitionMapper;
   private final OrchestratorConfigCacheService configCacheService;
-  private final LaunchService launchService;
+  private final LaunchApplicationService launchApplicationService;
   private final OrchestratorGracefulShutdown gracefulShutdown;
   private final BatchDateTimeSupport dateTimeSupport;
   private final PlatformTransactionManager transactionManager;
@@ -81,6 +95,7 @@ public class BatchDaySettleScheduler {
     List<BatchDayInstanceEntity> candidates =
         batchDayInstanceMapper.selectByDayStatusIn(TRACKED_STATUSES);
     if (candidates == null || candidates.isEmpty()) {
+      recoverFailedCatchUps();
       return;
     }
     Instant now = dateTimeSupport.nowInstant();
@@ -107,6 +122,23 @@ public class BatchDaySettleScheduler {
             candidate.bizDate(),
             SwallowedExceptionLogger.summary(conflict));
       }
+    }
+    recoverFailedCatchUps();
+  }
+
+  /**
+   * FAILED 状态已在主结算事务中提交，afterCommit 派发可能遇到进程退出或临时异常。
+   * 重新扫描仍缺少补跑请求或 AUTO 请求尚未 LAUNCHED 的日期；请求 dedup key 使重复派发收敛。
+   */
+  private void recoverFailedCatchUps() {
+    List<BatchDayInstanceEntity> failedDays =
+        batchDayInstanceMapper.selectFailedDaysNeedingCatchUp(FAILED_CATCH_UP_RECOVERY_LIMIT);
+    if (failedDays == null || failedDays.isEmpty()) return;
+    Instant now = dateTimeSupport.nowInstant();
+    for (BatchDayInstanceEntity failedDay : failedDays) {
+      if (failedDay == null || !Texts.hasText(failedDay.tenantId())) continue;
+      RlsTenantContextHolder.runWithTenant(
+          failedDay.tenantId(), () -> driveCatchUp(failedDay, now));
     }
   }
 
@@ -174,6 +206,16 @@ public class BatchDaySettleScheduler {
       return false;
     }
     if (totalCount <= 0L) {
+      if ("CUTOFF".equals(candidate.dayStatus())
+          && !hasExpectedOrUnresolvedWork(
+              candidate.tenantId(),
+              candidate.calendarCode(),
+              candidate.bizDate(),
+              candidate.cutoffAt())) {
+        BatchDayInstanceEntity settled = candidate.withSettled("SETTLED", now, now);
+        casUpdate(settled);
+        appendBatchDayAuditLog(candidate, settled, "AUTO_EMPTY_NO_EXPECTED_WORK");
+      }
       return false;
     }
     BatchDayInstanceEntity claimed = candidate.withDayStatus(STATUS_SETTLING, now);
@@ -253,6 +295,34 @@ public class BatchDaySettleScheduler {
         claimed.bizDate());
   }
 
+  private boolean hasExpectedOrUnresolvedWork(
+      String tenantId, String calendarCode, LocalDate bizDate, Instant cutoffAt) {
+    return expectedWorkOccurrenceMapper.countBlockingByCalendarBizDate(
+                tenantId, calendarCode, bizDate)
+            > 0
+        || calendarDependencyWaitMapper.countWaitingByTenantCalendarBizDate(
+                tenantId, calendarCode, bizDate)
+            > 0
+        || !batchDayWaitingLaunchMapper
+            .selectWaitingByCalendarBizDate(tenantId, calendarCode, bizDate, 1)
+            .isEmpty()
+        || jobDependencyWaitingLaunchMapper.countWaitingForCalendarBizDate(
+                tenantId, calendarCode, bizDate)
+            > 0
+        || triggerRequestMapper.countUnlaunchedForCalendarBizDate(
+                tenantId,
+                calendarCode,
+                bizDate,
+                List.of("PENDING", "PROCESSING", "ACCEPTED", "WAITING"))
+            > 0
+        || batchDayInstanceMapper.countBlockingScheduledOccurrences(tenantId, calendarCode, bizDate)
+            > 0
+        || batchDayInstanceMapper.countUncoveredScheduledDefinitions(
+                tenantId, calendarCode, cutoffAt)
+            > 0
+        || batchDayInstanceMapper.countUntrackedTriggerDefinitions(tenantId, calendarCode) > 0;
+  }
+
   private long value(Long value) {
     return value == null ? 0L : value;
   }
@@ -287,6 +357,24 @@ public class BatchDaySettleScheduler {
           || candidate.getJobCode().isBlank()) {
         continue;
       }
+      JobDefinitionEntity jobDefinition =
+          configCacheService.findEnabledJobDefinition(batchDay.tenantId(), candidate.getJobCode());
+      WorkflowDefinitionEntity workflow = jobDefinition == null || jobDefinition.id() == null
+          ? null
+          : workflowDefinitionMapper.selectFirstByTenantAndSingleJobDefinitionIdAndEnabled(
+              batchDay.tenantId(), jobDefinition.id(), true);
+      if (workflow == null || workflow.id() == null) {
+        persistUnlinkedCatchUpRequest(batchDay, candidate);
+        log.error(
+            "batch day catch-up rejected because managed single-job Workflow is missing:"
+                + " tenantId={}, calendarCode={}, bizDate={}, jobCode={}, jobDefinitionId={}",
+            batchDay.tenantId(),
+            batchDay.calendarCode(),
+            batchDay.bizDate(),
+            candidate.getJobCode(),
+            jobDefinition == null ? null : jobDefinition.id());
+        continue;
+      }
       String dedupKey = buildCatchUpDedupKey(batchDay, candidate);
       TriggerRequestEntity existing =
           triggerRequestMapper.selectByTenantAndDedupKey(batchDay.tenantId(), dedupKey);
@@ -296,24 +384,39 @@ public class BatchDaySettleScheduler {
         request.setTenantId(batchDay.tenantId());
         request.setRequestId(IdGenerator.newBusinessNo("catchup"));
         request.setTriggerType(TriggerType.CATCH_UP.code());
-        request.setJobCode(candidate.getJobCode());
+        request.setWorkflowDefinitionId(workflow.id());
         request.setBizDate(batchDay.bizDate());
         request.setDedupKey(dedupKey);
         request.setRequestStatus(TriggerRequestStatus.ACCEPTED.code());
         request.setTraceId(IdGenerator.newTraceId());
         triggerRequestMapper.insert(request);
       }
+      if (!workflow.id().equals(request.getWorkflowDefinitionId())) {
+        triggerRequestMapper.updateAcceptance(
+            request.getTenantId(),
+            request.getRequestId(),
+            TriggerRequestStatus.REJECTED.code(),
+            null);
+        log.error(
+            "batch day catch-up rejected because existing request is not pinned to the managed"
+                + " single-job Workflow: tenantId={}, requestId={}, jobCode={}, workflowDefinitionId={}",
+            batchDay.tenantId(),
+            request.getRequestId(),
+            candidate.getJobCode(),
+            request.getWorkflowDefinitionId());
+        continue;
+      }
       if ("AUTO".equalsIgnoreCase(calendar.catchUpPolicy()) && isLaunchable(request)) {
         LaunchRequest launchRequest = LaunchRequest.builder()
             .tenantId(request.getTenantId())
-            .jobCode(request.getJobCode())
+            .workflowDefinitionId(request.getWorkflowDefinitionId())
             .bizDate(request.getBizDate())
             .triggerType(TriggerType.CATCH_UP)
             .requestId(request.getRequestId())
             .traceId(request.getTraceId())
             .params(buildCatchUpParams(batchDay, candidate, calendar, now))
             .build();
-        LaunchResponse response = launchService.launch(launchRequest);
+        LaunchResponse response = launchApplicationService.launchFromTrustedQueue(launchRequest);
         log.info(
             "batch day catch-up launched: tenantId={}, calendarCode={}, bizDate={},"
                 + " jobCode={}, requestId={}, instanceNo={}",
@@ -325,6 +428,32 @@ public class BatchDaySettleScheduler {
             response == null ? null : response.instanceNo());
       }
     }
+  }
+
+  /** Record a visible rejected request instead of routing around the canonical Workflow link. */
+  private void persistUnlinkedCatchUpRequest(
+      BatchDayInstanceEntity batchDay, JobInstanceEntity candidate) {
+    String dedupKey = buildCatchUpDedupKey(batchDay, candidate);
+    TriggerRequestEntity existing =
+        triggerRequestMapper.selectByTenantAndDedupKey(batchDay.tenantId(), dedupKey);
+    if (existing != null) {
+      triggerRequestMapper.updateAcceptance(
+          existing.getTenantId(),
+          existing.getRequestId(),
+          TriggerRequestStatus.REJECTED.code(),
+          null);
+      return;
+    }
+    TriggerRequestEntity request = new TriggerRequestEntity();
+    request.setTenantId(batchDay.tenantId());
+    request.setRequestId(IdGenerator.newBusinessNo("catchup"));
+    request.setTriggerType(TriggerType.CATCH_UP.code());
+    request.setJobCode(candidate.getJobCode());
+    request.setBizDate(batchDay.bizDate());
+    request.setDedupKey(dedupKey);
+    request.setRequestStatus(TriggerRequestStatus.REJECTED.code());
+    request.setTraceId(IdGenerator.newTraceId());
+    triggerRequestMapper.insert(request);
   }
 
   private void appendBatchDayAuditLog(

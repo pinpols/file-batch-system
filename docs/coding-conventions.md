@@ -73,9 +73,12 @@ XML、YAML、SQL、Markdown、CSV、PEM、INI、properties、Lua 或 Shell 脚�
 
 | 参数数量 | 要求                                       |
 | ---- | ---------------------------------------- |
-| ≤ 5  | 允许直接传参                                   |
+| ≤ 4  | 允许直接传参                                   |
+| = 5  | 一般方法建议封装；Mapper 公共方法 **必须** 封装     |
 | = 6  | 建议封装；Mapper 公共方法和 Service 公共接口 **必须** 封装 |
 | ≥ 7  | **必须** 封装为参数对象                           |
+
+Mapper 公共方法的 5 个及以上参数应使用一个具名参数对象，不再通过多个 `@Param` 暴露位置性参数。简单 CRUD 也遵循该边界；参数对象应只包含该 SQL 所需字段，不得扩张为通用查询上下文。
 
 
 **封装类型选择：**
@@ -333,7 +336,7 @@ SQL 和配置不能随意混进 shell / service 代码。按以下边界执行�
 |---|---|
 | schema / 版本迁移 | `db/migration/*.sql` |
 | 稳定业务 CRUD / 查询 | MyBatis Mapper XML 或 repository |
-| sim / e2e fixture | `docs/test-data/*.sql` / JSON / YAML |
+| sim / e2e fixture | `test-data/sim/*.sql` / JSON / YAML |
 | load-test 准备、清理、报表 SQL | `load-tests/sql/*.sql` |
 | local 验证辅助 SQL | `scripts/local/sql/*.sql` |
 | ops inspect / heal SQL | `scripts/ops/sql/*.sql` |
@@ -708,11 +711,11 @@ nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, def.getId(), p
 - Mapper XML 放在 `classpath:mapper/*.xml`（或模块约定路径）
 - `type-aliases-package` 指向 domain 包
 - Mapper 参数采用“少量简单值直接传、成组业务条件/写入意图使用语义对象”的混合规则，不要求每个方法都包一层对象：
-  - 单个 `id`、实体、集合或已定义的 `XxxQuery` / `XxxParam` 直接传入；少量且语义单一的条件允许多个具名 `@Param`。
-  - Mapper 方法达到 6 个参数时必须封装为一个 `XxxQuery` 或 `XxxParam`；7 个及以上同样必须封装。多个参数表达同一筛选条件、在 `select/count` 等方法间重复，或包含多个可空字段/业务模式时，即使不足 6 个也应优先封装。
+  - 单个 `id`、实体、集合或已定义的 `XxxQuery` / `XxxParam` 直接传入；总数不超过 4 个且语义单一的条件允许多个具名 `@Param`。
+  - Mapper 公共方法达到 5 个参数时必须封装为一个 `XxxQuery` 或 `XxxParam`；6 个参数的 Service 公共接口也必须封装，7 个及以上的任何方法必须封装。多个参数表达同一筛选条件、在 `select/count` 等方法间重复，或包含多个可空字段/业务模式时，即使不足阈值也应优先封装。
   - 列表/分页筛选使用 `domain/query` 下的 `XxxQuery`，多个筛选方法共享同一口径时复用该 Query；查询条件不得用无名 `Map` 表达。
   - 单次 `insert/update/CAS` 的字段组合使用 `domain/param` 下不可变 `XxxParam`，字段贴近该次 SQL 操作。完整行写入可直接接收 `XxxEntity`；不要仅为统一签名再复制一份同构 Param。
-  - XML 需要同时绑定多个简单参数时，每个参数显式标注 `@Param`；单个对象参数通常直接按对象属性映射，若 SQL 需要稳定的命名根节点，可显式使用 `@Param("query")` / `@Param("param")` 并在 XML 同步使用该前缀。
+  - XML 需要同时绑定多个简单参数时，每个参数显式标注 `@Param`，且仅适用于少于 5 个参数；5 个及以上改用单一具名参数对象。单个对象参数通常直接按对象属性映射，若 SQL 需要稳定的命名根节点，可显式使用 `@Param("query")` / `@Param("param")` 并在 XML 同步使用该前缀。
 - 参数对象只收纳一次操作真实需要的字段，不做跨 Mapper 的万能条件包。必填字段在构造边界校验；nullable 字段仅表示 SQL 允许缺省的数据，不用多个 `null` 组合选择业务模式。模式不同用具名 Mapper 方法、受控工厂或明确的判别字段表达。
 - 固定字段契约不得使用 `Map<String, Object>` 作为 Mapper 入参；仅在 JSONB、插件扩展字段或有意透传的动态键值边界保留 Map。Map 出参规则见 §1.2。
 - 状态转换应保留操作语义：业务调用方使用 `approve`、`markGiveUp`、`pause` 等具名方法；具名方法在 Java 侧从权威枚举或领域有限状态类型组装目标状态和允许来源集合，再委托参数化 Mapper 语句执行 CAS。不得把 `targetStatus` / `expectedStatuses` 直接开放给 Controller 或无约束的业务调用方。
@@ -1144,6 +1147,8 @@ assertThatThrownBy(() -> service.doSth()).isInstanceOf(BizException.class);
 - 不把所有状态、角色、租户标识、JSON 字段或测试参数机械集中到全局常量类。只抽取语义稳定、确有多处复用且所有权明确的值；业务策略不同的值保持局部表达，并用专项测试说明口径。
 - fixture/mock 只能证明其模拟边界内的行为。事务、SQL、并发和租户隔离按风险使用真实数据库集成测试；消息传输、调度和浏览器链路按风险选择集成或端到端验证，并区分 mock、容器与真实环境证据。
 - `scripts/ci/check-test-config-sources.py` 校验各模块的 `application-test.yml` 已导入共享配置，且未重复声明共享配置项；它不禁止 Java 测试为验证行为而显式覆盖配置。修改共享测试配置、模块测试 profile 或该门禁时，应运行其自测和全量扫描。
+- E2E 需要建立或核对数据库状态时，使用 `JdbcTemplate` 对真实测试数据库做场景准备与持久化结果回读；主业务动作仍通过被测 API、调度或 Worker 链路执行，不得直接 SQL 改状态来替代业务行为。Mapper SQL 本身应由真实数据库 Mapper 集成测试覆盖。
+- Java 测试中的 `JdbcTemplate` SQL 应先赋给语义明确的局部变量（如 `selectJobInstanceSql`），再传入 `update`、`query`、`execute` 等调用；多行 SQL 使用 Java text block，避免把 SQL 直接嵌在断言/调用参数中或用字符串拼接组装。动态表名、角色名等无法使用绑定参数的片段，应在调用点附近单独构造具名 SQL，并保持原有求值时机。
 
 ---
 
@@ -1218,12 +1223,12 @@ batch-console-api       ← 控制台 BFF（面向前端）
 
 | 字段                                  | 枚举类                   | 允许值                                                              |
 | ----------------------------------- | --------------------- | ---------------------------------------------------------------- |
-| `job_definition.job_type`           | `JobType`             | <!-- enum-sync:JobType:start -->`GENERAL`, `IMPORT`, `EXPORT`, `PROCESS`, `DISPATCH`, `WORKFLOW`, `ATOMIC`, `BUNDLE_IMPORT`, `BUNDLE_EXPORT`, `BUNDLE_DISPATCH`<!-- enum-sync:JobType:end --> |
+| `job_definition.job_type`           | `JobType`             | <!-- enum-sync:JobType:start -->`GENERAL`, `IMPORT`, `EXPORT`, `PROCESS`, `DISPATCH`, `ATOMIC`, `BUNDLE_IMPORT`, `BUNDLE_EXPORT`, `BUNDLE_DISPATCH`<!-- enum-sync:JobType:end --> |
 | `job_definition.schedule_type`      | `ScheduleType`        | <!-- enum-sync:ScheduleType:start -->`CRON`, `FIXED_RATE`, `MANUAL`<!-- enum-sync:ScheduleType:end --> |
 | `job_definition.retry_policy`       | `RetryPolicyType`     | <!-- enum-sync:RetryPolicyType:start -->`NONE`, `FIXED`, `EXPONENTIAL`<!-- enum-sync:RetryPolicyType:end --> |
 | `job_definition.catch_up_policy`    | `CatchUpPolicyType`   | <!-- enum-sync:CatchUpPolicyType:start -->`NONE`, `AUTO`, `MANUAL_APPROVAL`<!-- enum-sync:CatchUpPolicyType:end --> |
 | `workflow_definition.workflow_type` | `WorkflowType`        | <!-- enum-sync:WorkflowType:start -->`DAG`, `PIPELINE`, `MIXED`<!-- enum-sync:WorkflowType:end --> |
-| `workflow_node.node_type`           | `WorkflowNodeType`    | <!-- enum-sync:WorkflowNodeType:start -->`TASK`, `GATEWAY`, `FILE_STEP`, `START`, `END`, `JOB`, `WAIT`<!-- enum-sync:WorkflowNodeType:end --> |
+| `workflow_node.node_type`           | `WorkflowNodeType`    | <!-- enum-sync:WorkflowNodeType:start -->`TASK`, `GATEWAY`, `START`, `END`, `JOB`, `WAIT`<!-- enum-sync:WorkflowNodeType:end --> |
 | `workflow_edge.edge_type`           | `WorkflowEdgeType`    | <!-- enum-sync:WorkflowEdgeType:start -->`SUCCESS`, `FAILURE`, `CONDITION`, `ALWAYS`<!-- enum-sync:WorkflowEdgeType:end --> |
 | `file_channel_config.channel_type`  | `FileChannelType`     | <!-- enum-sync:FileChannelType:start -->`SFTP`, `API`, `API_PUSH`, `EMAIL`, `NAS`, `OSS`, `LOCAL`<!-- enum-sync:FileChannelType:end --> |
 | `file_channel_config.auth_type`     | `FileChannelAuthType` | <!-- enum-sync:FileChannelAuthType:start -->`NONE`, `PASSWORD`, `KEY_PAIR`, `TOKEN`, `OAUTH2`, `CUSTOM`<!-- enum-sync:FileChannelAuthType:end --> |

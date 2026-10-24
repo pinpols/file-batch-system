@@ -10,7 +10,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.enums.TaskErrorCodes;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
@@ -18,6 +21,7 @@ import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.support.StageFailureCode;
+import io.github.pinpols.batch.worker.core.support.TaskExecutionClient;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
@@ -26,6 +30,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,9 +39,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-
 // LENIENT 保留:setUp() 预置了 startStepRun 共享 stub,
 // 但 defaultStepDefinitions / 缺 PREPARE bean 直接抛错等用例并不触达这些 stub,严格模式会误报 UnnecessaryStubbing。
+
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("处理阶段执行器:默认步骤定义、五阶段顺序与失败短路、插件解析回退,以及阶段级续跑的开关与降级边界")
@@ -47,6 +52,9 @@ class DefaultProcessStageExecutorTest {
 
   @Mock
   private PlatformPipelineRunRepository pipelineRuns;
+
+  @Mock
+  private TaskExecutionClient taskExecutionClient;
 
   private static final Long PIPELINE_INSTANCE_ID = 100L;
   private static final Long STEP_RUN_ID = 200L;
@@ -80,6 +88,268 @@ class DefaultProcessStageExecutorTest {
             "PROCESS_VALIDATE",
             "PROCESS_COMMIT",
             "PROCESS_FEEDBACK");
+  }
+
+  @Test
+  @DisplayName("PROCESS 重放能力由实际选择的插件按冻结配置解析")
+  void replayCapability_resolvesSelectedPluginAndConfig() {
+    Map<String, Object> frozenConfig = Map.of("target", "ledger");
+    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+    when(plugin.implCode()).thenReturn("ledger_compute");
+    ReplayCapabilityDeclaration expectedDeclaration = ReplayCapabilityDeclaration.unknown("ledger_compute");
+    when(plugin.replayCapability(frozenConfig)).thenReturn(expectedDeclaration);
+    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+        allStageStepBeans(),
+        List.of(plugin),
+        pipelineDefinitions,
+        pipelineRuns,
+        ProcessMetrics.noop(),
+        disabledStageSkip());
+
+    ReplayCapabilityDeclaration actualDeclaration =
+        executor.replayCapability("ledger_compute", frozenConfig);
+
+    assertThat(actualDeclaration).isEqualTo(expectedDeclaration);
+  }
+
+  @Test
+  @DisplayName("PROCESS 能力预检复用执行时的 payload 插件回退和冻结 COMPUTE 参数")
+  void replayCapability_resolvesPayloadPluginFromSystemComputeDefinition() {
+    Map<String, Object> frozenConfig = Map.of("targetTable", "daily_summary");
+    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+    when(plugin.implCode()).thenReturn("dailySummary");
+    ReplayCapabilityDeclaration expectedDeclaration = ReplayCapabilityDeclaration.unknown("dailySummary");
+    when(plugin.replayCapability(frozenConfig)).thenReturn(expectedDeclaration);
+    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+        allStageStepBeans(),
+        List.of(plugin),
+        pipelineDefinitions,
+        pipelineRuns,
+        ProcessMetrics.noop(),
+        disabledStageSkip());
+    PipelineStepDefinition computeStep = PipelineStepDefinition.builder()
+        .stageCode(ProcessStage.COMPUTE.name())
+        .implCode("PROCESS_COMPUTE")
+        .stepParams(frozenConfig)
+        .build();
+    Map<String, Object> attributes = Map.of("processImplCode", "dailySummary");
+
+    ReplayCapabilityDeclaration actualDeclaration =
+        executor.replayCapability(List.of(computeStep), attributes);
+
+    assertThat(actualDeclaration).isEqualTo(expectedDeclaration);
+    verify(plugin).replayCapability(frozenConfig);
+  }
+
+  @Test
+  @DisplayName("PROCESS 能力预检对未注册的 COMPUTE 插件返回 UNKNOWN")
+  void replayCapability_returnsUnknownForUnregisteredComputePlugin() {
+    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+        allStageStepBeans(),
+        List.of(),
+        pipelineDefinitions,
+        pipelineRuns,
+        ProcessMetrics.noop(),
+        disabledStageSkip());
+    PipelineStepDefinition computeStep = PipelineStepDefinition.builder()
+        .stageCode(ProcessStage.COMPUTE.name())
+        .implCode("missingCompute")
+        .stepParams(Map.of())
+        .build();
+
+    ReplayCapabilityDeclaration actualDeclaration =
+        executor.replayCapability(List.of(computeStep), Map.of());
+
+    assertThat(actualDeclaration)
+        .isEqualTo(ReplayCapabilityDeclaration.unknown("missingCompute"));
+  }
+
+  @Test
+  @DisplayName("PROCESS 插件未注册时拒绝返回能力声明")
+  void replayCapability_rejectsUnknownPlugin() {
+    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+        allStageStepBeans(),
+        List.of(),
+        pipelineDefinitions,
+        pipelineRuns,
+        ProcessMetrics.noop(),
+        disabledStageSkip());
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> executor.replayCapability("missing", Map.of()))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("missing");
+  }
+
+  @Test
+  @DisplayName("每个实际执行的 PROCESS 阶段都经过 invocation fence")
+  void execute_fencesEveryStage() {
+    AtomicInteger fenceCalls = new AtomicInteger();
+    ProcessInvocationFence invocationFence = (context, stage, stageExecution) -> {
+      fenceCalls.incrementAndGet();
+      return stageExecution.get();
+    };
+    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+        allStageStepBeans(),
+        List.of(),
+        pipelineDefinitions,
+        pipelineRuns,
+        ProcessMetrics.noop(),
+        disabledStageSkip(),
+        invocationFence);
+    ProcessJobContext context = newContext();
+    context
+        .getAttributes()
+        .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith(null));
+
+    List<ProcessStageResult> results = executor.execute(context);
+
+    assertThat(results).hasSize(5).allMatch(ProcessStageResult::success);
+    assertThat(fenceCalls).hasValue(5);
+  }
+
+  @Test
+  @DisplayName("未知幂等能力的 PROCESS 插件先持久化执行围栏,围栏失败时不进入业务阶段")
+  void execute_rejectsPluginWrite_whenReplayFenceCannotBeConfirmed() {
+    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+    when(plugin.implCode()).thenReturn("externalPlugin");
+    when(plugin.idempotencyCapability()).thenReturn(IdempotencyCapability.UNKNOWN);
+    when(taskExecutionClient.markNonIdempotentExecutionStarted("t1", 42L, "w1", "inv-1"))
+        .thenReturn(false);
+    AtomicInteger invocationFenceCalls = new AtomicInteger();
+    ProcessInvocationFence invocationFence = (context, stage, stageExecution) -> {
+      invocationFenceCalls.incrementAndGet();
+      return stageExecution.get();
+    };
+    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+        allStageStepBeans(),
+        List.of(plugin),
+        pipelineDefinitions,
+        pipelineRuns,
+        ProcessMetrics.noop(),
+        disabledStageSkip(),
+        invocationFence,
+        new ProcessPluginExecutionFence(taskExecutionClient));
+
+    ProcessJobContext context = newContext();
+    context.getAttributes().put(PipelineRuntimeKeys.PARTITION_INVOCATION_ID, "inv-1");
+    context
+        .getAttributes()
+        .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("externalPlugin"));
+
+    List<ProcessStageResult> results = executor.execute(context);
+
+    assertThat(results).hasSize(2);
+    assertThat(results.get(1).success()).isFalse();
+    assertThat(results.get(1).code()).isEqualTo(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN);
+    assertThat(invocationFenceCalls).hasValue(1);
+    verify(taskExecutionClient).markNonIdempotentExecutionStarted("t1", 42L, "w1", "inv-1");
+    verify(plugin, never()).compute(any());
+  }
+
+  @Test
+  @DisplayName("未知幂等能力的 PROCESS 插件缺少持久任务身份时失败关闭")
+  void execute_rejectsPluginWrite_whenPersistedTaskIdentityIsMissing() {
+    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+    when(plugin.implCode()).thenReturn("externalPlugin");
+    when(plugin.idempotencyCapability()).thenReturn(IdempotencyCapability.UNKNOWN);
+    when(plugin.compute(any())).thenReturn(ProcessStageResult.success(ProcessStage.COMPUTE));
+    AtomicInteger invocationFenceCalls = new AtomicInteger();
+    ProcessInvocationFence invocationFence = (context, stage, stageExecution) -> {
+      invocationFenceCalls.incrementAndGet();
+      return stageExecution.get();
+    };
+    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+        allStageStepBeans(),
+        List.of(plugin),
+        pipelineDefinitions,
+        pipelineRuns,
+        ProcessMetrics.noop(),
+        disabledStageSkip(),
+        invocationFence,
+        new ProcessPluginExecutionFence(taskExecutionClient));
+
+    ProcessJobContext context = newContext();
+    context.getAttributes().remove(PipelineRuntimeKeys.TASK_ID);
+    context.getAttributes().put(PipelineRuntimeKeys.PARTITION_INVOCATION_ID, "inv-1");
+    context
+        .getAttributes()
+        .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("externalPlugin"));
+
+    List<ProcessStageResult> results = executor.execute(context);
+
+    assertThat(results).hasSize(2);
+    assertThat(results.get(1).success()).isFalse();
+    assertThat(results.get(1).code()).isEqualTo(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN);
+    assertThat(invocationFenceCalls).hasValue(1);
+    verify(taskExecutionClient, never())
+        .markNonIdempotentExecutionStarted(any(), any(), any(), any());
+    verify(plugin, never()).compute(any());
+  }
+
+  @Test
+  @DisplayName("明确声明幂等的 PROCESS 插件不需要非幂等执行围栏")
+  void execute_skipsReplayFence_whenPluginDeclaresReplaySafety() {
+    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+    when(plugin.implCode()).thenReturn("idempotentPlugin");
+    when(plugin.idempotencyCapability())
+        .thenReturn(IdempotencyCapability.IDEMPOTENT_BY_PLUGIN_LOGIC);
+    when(plugin.compute(any())).thenReturn(ProcessStageResult.success(ProcessStage.COMPUTE));
+    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+        allStageStepBeans(),
+        List.of(plugin),
+        pipelineDefinitions,
+        pipelineRuns,
+        ProcessMetrics.noop(),
+        disabledStageSkip(),
+        (context, stage, stageExecution) -> stageExecution.get(),
+        new ProcessPluginExecutionFence(taskExecutionClient));
+
+    ProcessJobContext context = newContext();
+    context.getAttributes().put(PipelineRuntimeKeys.PARTITION_INVOCATION_ID, "inv-1");
+    context
+        .getAttributes()
+        .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("idempotentPlugin"));
+
+    List<ProcessStageResult> results = executor.execute(context);
+
+    assertThat(results).hasSize(5).allMatch(ProcessStageResult::success);
+    verify(taskExecutionClient, never())
+        .markNonIdempotentExecutionStarted(any(), any(), any(), any());
+    verify(plugin).compute(context);
+  }
+
+  @Test
+  @DisplayName("dry-run 跳过 PROCESS 业务写阶段时不设置非幂等执行围栏")
+  void execute_skipsReplayFence_whenDryRunSkipsPluginWrites() {
+    ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
+    when(plugin.implCode()).thenReturn("externalPlugin");
+    when(plugin.idempotencyCapability()).thenReturn(IdempotencyCapability.UNKNOWN);
+    DefaultProcessStageExecutor executor = new DefaultProcessStageExecutor(
+        allStageStepBeans(),
+        List.of(plugin),
+        pipelineDefinitions,
+        pipelineRuns,
+        ProcessMetrics.noop(),
+        disabledStageSkip(),
+        (context, stage, stageExecution) -> stageExecution.get(),
+        new ProcessPluginExecutionFence(taskExecutionClient));
+
+    ProcessJobContext context = newContext();
+    context.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
+    context.getAttributes().put(PipelineRuntimeKeys.PARTITION_INVOCATION_ID, "inv-1");
+    context
+        .getAttributes()
+        .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("externalPlugin"));
+
+    List<ProcessStageResult> results = executor.execute(context);
+
+    assertThat(results).hasSize(5).allMatch(ProcessStageResult::success);
+    verify(taskExecutionClient, never())
+        .markNonIdempotentExecutionStarted(any(), any(), any(), any());
+    verify(plugin, never()).compute(any());
+    verify(plugin, never()).commit(any());
+    verify(plugin, never()).feedback(any());
   }
 
   @Test

@@ -10,6 +10,8 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowValidationResult.ValidationIssue;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -45,8 +47,10 @@ final class WorkflowWaitSensorSpecValidator {
           ? JsonUtils.fromJson(node.getNodeParams(), SENSOR_MAP_TYPE)
           : Map.of();
     } catch (Exception e) {
-      errors.add(issue(
-          "V16", "WAIT node_params JSON parse failed: " + e.getMessage(), node.getNodeCode()));
+      String failureMessage = e.getMessage();
+      String validationMessage = "WAIT node_params JSON parse failed: " + failureMessage;
+      String nodeCode = node.getNodeCode();
+      errors.add(issue("V16", validationMessage, nodeCode));
       return;
     }
     if (EmptyChecks.isNull(params)) params = Map.of();
@@ -57,10 +61,9 @@ final class WorkflowWaitSensorSpecValidator {
       return;
     }
     if (!SENSOR_TYPES.contains(sensorType)) {
-      errors.add(issue(
-          "V16-b",
-          "WAIT sensor_type invalid: " + sensorType + " (allowed: " + SENSOR_TYPES + ")",
-          node.getNodeCode()));
+      String validationMessage =
+          "WAIT sensor_type invalid: " + sensorType + " (allowed: " + SENSOR_TYPES + ")";
+      errors.add(issue("V16-b", validationMessage, node.getNodeCode()));
       return;
     }
 
@@ -71,8 +74,12 @@ final class WorkflowWaitSensorSpecValidator {
       validateSensorSpecByType(sensorType, spec.orElseThrow(), node.getNodeCode(), errors);
     }
 
-    long timeout = Objects.requireNonNullElse(asLong(params.get("timeout_seconds")), 0L);
-    long pollInterval = Objects.requireNonNullElse(asLong(params.get("poll_interval_seconds")), 0L);
+    Object timeoutSecondsValue = params.get("timeout_seconds");
+    Long parsedTimeoutSeconds = asLong(timeoutSecondsValue);
+    long timeout = Objects.requireNonNullElse(parsedTimeoutSeconds, 0L);
+    Object pollIntervalSecondsValue = params.get("poll_interval_seconds");
+    Long parsedPollIntervalSeconds = asLong(pollIntervalSecondsValue);
+    long pollInterval = Objects.requireNonNullElse(parsedPollIntervalSeconds, 0L);
     if (timeout <= 0) {
       errors.add(issue(V16D, "WAIT timeout_seconds missing or <=0", node.getNodeCode()));
     }
@@ -90,10 +97,9 @@ final class WorkflowWaitSensorSpecValidator {
     if (!Texts.hasText(onTimeout)) {
       errors.add(issue("V16-e", "WAIT on_timeout missing", node.getNodeCode()));
     } else if (!SENSOR_TIMEOUT_ACTIONS.contains(onTimeout)) {
-      errors.add(issue(
-          "V16-e",
-          "WAIT on_timeout invalid: " + onTimeout + " (allowed: " + SENSOR_TIMEOUT_ACTIONS + ")",
-          node.getNodeCode()));
+      String validationMessage =
+          "WAIT on_timeout invalid: " + onTimeout + " (allowed: " + SENSOR_TIMEOUT_ACTIONS + ")";
+      errors.add(issue("V16-e", validationMessage, node.getNodeCode()));
     }
   }
 
@@ -115,44 +121,94 @@ final class WorkflowWaitSensorSpecValidator {
 
   private void validateFileArrivalSensorSpec(
       Map<String, Object> spec, String nodeCode, List<ValidationIssue> errors) {
-    if (!Texts.hasText(asString(spec.get("pattern")))) {
+    Object patternValue = spec.get("pattern");
+    String pattern = asString(patternValue);
+    if (!Texts.hasText(pattern)) {
       errors.add(issue(V16C, "FILE_ARRIVAL sensor_spec.pattern required", nodeCode));
     }
-    long age = Objects.requireNonNullElse(asLong(spec.get("maxAgeSeconds")), 0L);
+    Object maxAgeValue = spec.get("maxAgeSeconds");
+    Long parsedMaxAge = asLong(maxAgeValue);
+    long age = Objects.requireNonNullElse(parsedMaxAge, 0L);
     if (age <= 0) {
       errors.add(issue(V16C, "FILE_ARRIVAL sensor_spec.maxAgeSeconds required", nodeCode));
+    }
+    if (Boolean.TRUE.equals(spec.get("requireCompleteGroup"))) {
+      Object fileGroupCodeValue = spec.get("fileGroupCode");
+      String fileGroupCode = asString(fileGroupCodeValue);
+      if (!Texts.hasText(fileGroupCode)) {
+        errors.add(issue(
+            V16C,
+            "FILE_ARRIVAL sensor_spec.fileGroupCode required when requireCompleteGroup=true",
+            nodeCode));
+      }
+    }
+    String bizDate = asString(spec.get("bizDate"));
+    if (Boolean.TRUE.equals(spec.get("requireCompleteGroup"))
+        && !Texts.hasText(bizDate)
+        && !Boolean.TRUE.equals(spec.get("bindWorkflowBizDate"))) {
+      errors.add(issue(
+          V16C,
+          "FILE_ARRIVAL sensor_spec.bizDate or bindWorkflowBizDate required when requireCompleteGroup=true",
+          nodeCode));
+    }
+    if (Boolean.TRUE.equals(spec.get("bindWorkflowBizDate")) && Texts.hasText(bizDate)) {
+      errors.add(issue(
+          V16C,
+          "FILE_ARRIVAL sensor_spec configure either bizDate or bindWorkflowBizDate",
+          nodeCode));
+    }
+    if (Texts.hasText(bizDate)) {
+      try {
+        LocalDate.parse(bizDate);
+      } catch (DateTimeParseException invalidDate) {
+        errors.add(issue(V16C, "FILE_ARRIVAL sensor_spec.bizDate must be ISO-8601", nodeCode));
+      }
     }
   }
 
   private void validateHttpPollSensorSpec(
       Map<String, Object> spec, String nodeCode, List<ValidationIssue> errors) {
-    if (!Texts.hasText(asString(spec.get("url")))) {
+    Object urlValue = spec.get("url");
+    String url = asString(urlValue);
+    if (!Texts.hasText(url)) {
       errors.add(issue(V16C, "HTTP_POLL sensor_spec.url required", nodeCode));
     }
-    if (!Texts.hasText(asString(spec.get("matchExpr")))) {
+    Object matchExpressionValue = spec.get("matchExpr");
+    String matchExpression = asString(matchExpressionValue);
+    if (!Texts.hasText(matchExpression)) {
       errors.add(issue(V16C, "HTTP_POLL sensor_spec.matchExpr required", nodeCode));
     }
   }
 
   private void validateKafkaOffsetSensorSpec(
       Map<String, Object> spec, String nodeCode, List<ValidationIssue> errors) {
-    if (!Texts.hasText(asString(spec.get("topic")))) {
+    Object topicValue = spec.get("topic");
+    String topic = asString(topicValue);
+    if (!Texts.hasText(topic)) {
       errors.add(issue(V16C, "KAFKA_OFFSET sensor_spec.topic required", nodeCode));
     }
-    if (EmptyChecks.isNull(asLong(spec.get("partition")))) {
+    Object partitionValue = spec.get("partition");
+    Long partition = asLong(partitionValue);
+    if (EmptyChecks.isNull(partition)) {
       errors.add(issue(V16C, "KAFKA_OFFSET sensor_spec.partition required", nodeCode));
     }
-    if (EmptyChecks.isNull(asLong(spec.get("minOffset")))) {
+    Object minimumOffsetValue = spec.get("minOffset");
+    Long minimumOffset = asLong(minimumOffsetValue);
+    if (EmptyChecks.isNull(minimumOffset)) {
       errors.add(issue(V16C, "KAFKA_OFFSET sensor_spec.minOffset required", nodeCode));
     }
   }
 
   private void validateDbRowExistsSensorSpec(
       Map<String, Object> spec, String nodeCode, List<ValidationIssue> errors) {
-    if (!Texts.hasText(asString(spec.get("schema")))) {
+    Object schemaValue = spec.get("schema");
+    String schema = asString(schemaValue);
+    if (!Texts.hasText(schema)) {
       errors.add(issue(V16C, "DB_ROW_EXISTS sensor_spec.schema required", nodeCode));
     }
-    if (!Texts.hasText(asString(spec.get("sql")))) {
+    Object sqlValue = spec.get("sql");
+    String sql = asString(sqlValue);
+    if (!Texts.hasText(sql)) {
       errors.add(issue(V16C, "DB_ROW_EXISTS sensor_spec.sql required", nodeCode));
     }
   }
@@ -184,7 +240,8 @@ final class WorkflowWaitSensorSpecValidator {
     if (EmptyChecks.isNull(value)) return null;
     if (value instanceof Number number) return number.longValue();
     try {
-      return Long.parseLong(value.toString().trim());
+      String trimmedValue = value.toString().trim();
+      return Long.parseLong(trimmedValue);
     } catch (NumberFormatException e) {
       return null;
     }

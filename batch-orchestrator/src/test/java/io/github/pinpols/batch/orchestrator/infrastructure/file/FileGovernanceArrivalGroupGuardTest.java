@@ -41,6 +41,7 @@ class FileGovernanceArrivalGroupGuardTest {
   private FileGovernanceProperties properties;
   private BundleArrivalLauncher bundleArrivalLauncher;
   private FileGovernanceScheduler scheduler;
+  private SimpleMeterRegistry meterRegistry;
 
   @BeforeEach
   void setUp() {
@@ -52,13 +53,35 @@ class FileGovernanceArrivalGroupGuardTest {
     when(properties.getArrival().getDefaultTimeoutAction()).thenReturn("MANUAL_CONFIRM");
 
     bundleArrivalLauncher = mock(BundleArrivalLauncher.class);
+    meterRegistry = new SimpleMeterRegistry();
+    when(repository.selectArrivalGroupBacklogMetrics())
+        .thenReturn(new FileGovernanceArrivalViews.ArrivalGroupBacklogView(0L, 0L));
     scheduler = new FileGovernanceScheduler(
         repository,
         mock(S3GovernanceStorage.class),
         properties,
         mock(FileGovernanceMetricsCacheService.class),
-        new SimpleMeterRegistry(),
+        meterRegistry,
         bundleArrivalLauncher);
+    scheduler.initializeMeters();
+  }
+
+  @Test
+  @DisplayName("等待组指标读取全量持久化聚合,候选页为空时也不会误报零")
+  void shouldRefreshArrivalGroupBacklogFromDatabaseAggregate() {
+    when(repository.selectArrivalGroupBacklogMetrics())
+        .thenReturn(new FileGovernanceArrivalViews.ArrivalGroupBacklogView(37L, 9_200L));
+
+    scheduler.manageFileArrivalGroups();
+
+    assertThat(
+            meterRegistry.get("batch.file.arrival.group.waiting.count").gauge().value())
+        .isEqualTo(37.0);
+    assertThat(meterRegistry
+            .get("batch.file.arrival.group.oldest_wait.seconds")
+            .gauge()
+            .value())
+        .isEqualTo(9_200.0);
   }
 
   @Test

@@ -53,7 +53,7 @@ CONSOLE_PORT="${CONSOLE_PORT:-$CONSOLE_API_PORT}"
 FE_PORT="${FE_PORT:-5173}"
 DOCKER_CONTAINER_NAME_PATTERN="${DOCKER_CONTAINER_NAME_PATTERN:-batch-(postgres|kafka|valkey|minio)}"
 BE_MODULES=(orchestrator trigger console worker-import worker-export worker-process worker-dispatch worker-atomic)
-mkdir -p "$ROOT_DIR/docs/backlog"
+mkdir -p "$ROOT_DIR/reports/acceptance"
 
 GREEN='\033[32m' RED='\033[31m' YELLOW='\033[33m' BLUE='\033[34m' DIM='\033[2m' RST='\033[0m'
 RUN_STEPS=()   # 实际要跑的步骤号(1-based)
@@ -453,7 +453,7 @@ step_9_restore_mvnd() {
 
 step_10_backlog() {
   hdr 10 "$(step_name 10)"
-  local f; f="docs/backlog/be-acceptance-$(date +%Y-%m-%d).md"
+  local f; f="reports/acceptance/be-acceptance-$(date +%Y-%m-%d).md"
   if [[ -f "$f" ]]; then
     note "已存在 $f,不覆盖"
     return 0

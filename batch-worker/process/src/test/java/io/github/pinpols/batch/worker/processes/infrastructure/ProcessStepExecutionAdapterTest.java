@@ -16,8 +16,9 @@ import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
+import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
+import io.github.pinpols.batch.worker.core.support.PipelineStepTemplateProvider;
 import io.github.pinpols.batch.worker.core.support.PipelineCompensationHook;
 import io.github.pinpols.batch.worker.core.support.PipelineVerifierHook;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
@@ -25,6 +26,7 @@ import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
 import io.github.pinpols.batch.worker.processes.domain.ProcessWorkerType;
 import io.github.pinpols.batch.worker.processes.stage.ProcessStageExecutor;
+import io.github.pinpols.batch.worker.processes.stage.ProcessRuntimeKeys;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,13 +46,13 @@ class ProcessStepExecutionAdapterTest {
   private ProcessStageExecutor processStageExecutor;
 
   @Mock
-  private PlatformPipelineDefinitionRepository pipelineDefinitions;
-
-  @Mock
   private PlatformPipelineRunRepository pipelineRuns;
 
   @Mock
   private PlatformFileRecordRepository fileRecords;
+
+  @Mock
+  private PipelineStepTemplateProvider stepTemplateProvider;
 
   @Test
   @DisplayName("适配器描述处理流水线:类型为处理,起始阶段为准备阶段")
@@ -59,9 +61,9 @@ class ProcessStepExecutionAdapterTest {
     ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
         processStageExecutor,
         new ObjectMapper(),
-        pipelineDefinitions,
         pipelineRuns,
         fileRecords,
+        stepTemplateProvider,
         (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
         (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
 
@@ -76,15 +78,12 @@ class ProcessStepExecutionAdapterTest {
     ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
         processStageExecutor,
         new ObjectMapper(),
-        pipelineDefinitions,
         pipelineRuns,
         fileRecords,
+        stepTemplateProvider,
         (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
         (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
-    when(pipelineDefinitions.findPipelineDefinition("tenant-a", "job-process"))
-        .thenReturn(
-            new PlatformPipelineDefinitionRepository.PipelineDefinitionReference(10L, "PROCESS"));
-    when(pipelineDefinitions.loadPipelineSteps(10L)).thenReturn(List.of(processStep()));
+    when(stepTemplateProvider.defaultStepDefinitions()).thenReturn(processTemplates());
     when(pipelineRuns.createPipelineInstance(any())).thenReturn(20L);
     when(processStageExecutor.execute(any()))
         .thenReturn(List.of(ProcessStageResult.success(ProcessStage.PREPARE)));
@@ -93,7 +92,10 @@ class ProcessStepExecutionAdapterTest {
         "job-process",
         "PROCESS",
         "worker-1",
-        Map.of("payload", "{\"processImplCode\":\"dailySummary\"}"));
+        Map.of(
+            "payload",
+            "{\"processImplCode\":\"dailySummary\","
+                + "\"systemPipelineStepParams\":{\"COMPUTE\":{\"targetTable\":\"daily_summary\"}}}"));
 
     StepExecutionResponse response = adapter.execute(request);
 
@@ -103,66 +105,11 @@ class ProcessStepExecutionAdapterTest {
         ArgumentCaptor.forClass(ProcessJobContext.class);
     verify(processStageExecutor).execute(contextCaptor.capture());
     assertThat(contextCaptor.getValue().getAttributes())
-        .containsEntry("processImplCode", "dailySummary");
+        .containsEntry("processImplCode", "dailySummary")
+        .containsEntry(
+            ProcessRuntimeKeys.PROCESS_COMPUTE_STEP_PARAMS,
+            Map.of("targetTable", "daily_summary"));
     verify(pipelineRuns).markPipelineSuccess(20L, "PREPARE", "PREPARE");
-  }
-
-  @Test
-  @DisplayName("流水线定义类型与当前 Worker 不一致时拒绝执行且不创建实例")
-  @SuppressWarnings("unchecked")
-  void execute_rejectsPipelineDefinitionOfDifferentType() {
-    ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
-        processStageExecutor,
-        new ObjectMapper(),
-        pipelineDefinitions,
-        pipelineRuns,
-        fileRecords,
-        (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
-        (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
-    when(pipelineDefinitions.findPipelineDefinition("tenant-a", "job-process"))
-        .thenReturn(
-            new PlatformPipelineDefinitionRepository.PipelineDefinitionReference(10L, "IMPORT"));
-
-    StepExecutionResponse response = adapter.execute(new StepExecutionRequest(
-        "tenant-a", "job-process", "PROCESS", "worker-1", Map.of("payload", "{}")));
-
-    assertThat(response.success()).isFalse();
-    assertThat(response.errorKey()).isEqualTo("error.pipeline.definition_type_mismatch");
-    verify(pipelineDefinitions, never()).loadPipelineSteps(any());
-    verify(pipelineRuns, never()).createPipelineInstance(any());
-    verify(processStageExecutor, never()).execute(any());
-  }
-
-  @Test
-  @SuppressWarnings("unchecked")
-  @DisplayName("流水线定义缺失、无 ID 或没有步骤时返回明确错误且不创建运行实例")
-  void execute_rejectsMissingDefinitionAndSteps() {
-    ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
-        processStageExecutor,
-        new ObjectMapper(),
-        pipelineDefinitions,
-        pipelineRuns,
-        fileRecords,
-        (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
-        (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
-    StepExecutionRequest request =
-        new StepExecutionRequest("tenant-a", "job-process", "PROCESS", "worker-1", Map.of());
-
-    when(pipelineDefinitions.findPipelineDefinition("tenant-a", "job-process"))
-        .thenReturn(null)
-        .thenReturn(
-            new PlatformPipelineDefinitionRepository.PipelineDefinitionReference(null, "PROCESS"))
-        .thenReturn(
-            new PlatformPipelineDefinitionRepository.PipelineDefinitionReference(10L, "PROCESS"));
-    when(pipelineDefinitions.loadPipelineSteps(10L)).thenReturn(List.of());
-
-    assertThat(adapter.execute(request).errorKey())
-        .isEqualTo("error.pipeline.definition_not_found");
-    assertThat(adapter.execute(request).errorKey())
-        .isEqualTo("error.pipeline.definition_not_found");
-    assertThat(adapter.execute(request).errorKey())
-        .isEqualTo("error.pipeline.step_definition_missing");
-    verify(pipelineRuns, never()).createPipelineInstance(any());
   }
 
   @Test
@@ -173,15 +120,12 @@ class ProcessStepExecutionAdapterTest {
     ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
         processStageExecutor,
         objectMapper,
-        pipelineDefinitions,
         pipelineRuns,
         fileRecords,
+        stepTemplateProvider,
         (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
         (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
-    when(pipelineDefinitions.findPipelineDefinition("tenant-a", "job-process"))
-        .thenReturn(
-            new PlatformPipelineDefinitionRepository.PipelineDefinitionReference(10L, "PROCESS"));
-    when(pipelineDefinitions.loadPipelineSteps(10L)).thenReturn(List.of(processStep()));
+    when(stepTemplateProvider.defaultStepDefinitions()).thenReturn(processTemplates());
     when(pipelineRuns.createPipelineInstance(any())).thenReturn(20L);
     when(processStageExecutor.execute(any()))
         .thenReturn(List.of(ProcessStageResult.failure(
@@ -206,15 +150,36 @@ class ProcessStepExecutionAdapterTest {
   }
 
   @Test
+  @DisplayName("Worker 收到与实现类型不一致的任务时拒绝执行且不创建 Pipeline 实例")
+  @SuppressWarnings("unchecked")
+  void shouldRejectMismatchedTaskTypeBeforeCreatingPipelineInstance() {
+    ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
+        processStageExecutor,
+        new ObjectMapper(),
+        pipelineRuns,
+        fileRecords,
+        stepTemplateProvider,
+        (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
+        (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
+
+    StepExecutionResponse response = adapter.execute(new StepExecutionRequest(
+        "tenant-a", "job-process", "EXPORT", "worker-1", Map.of("payload", "{}")));
+
+    assertThat(response.success()).isFalse();
+    verify(pipelineRuns, never()).createPipelineInstance(any());
+    verify(processStageExecutor, never()).execute(any());
+  }
+
+  @Test
   @SuppressWarnings("unchecked")
   @DisplayName("ADR-041 Phase1.3:buildSuccessResponse 输出归一化 count 信封 inputCount/outputCount")
   void buildSuccessResponse_emitsNormalizedCountEnvelope() {
     ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
         processStageExecutor,
         new ObjectMapper(),
-        pipelineDefinitions,
         pipelineRuns,
         fileRecords,
+        stepTemplateProvider,
         (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
         (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
     ProcessJobContext context = new ProcessJobContext();
@@ -236,9 +201,9 @@ class ProcessStepExecutionAdapterTest {
     ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
         processStageExecutor,
         new ObjectMapper(),
-        pipelineDefinitions,
         pipelineRuns,
         fileRecords,
+        stepTemplateProvider,
         (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
         (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
     ProcessJobContext context = new ProcessJobContext();
@@ -267,5 +232,29 @@ class ProcessStepExecutionAdapterTest {
         "NONE",
         0,
         true);
+  }
+
+  private List<PipelineStepTemplate> processTemplates() {
+    return List.of(
+        template("PREPARE", 1),
+        template("COMPUTE", 2),
+        template("VALIDATE", 3),
+        template("COMMIT", 4),
+        template("FEEDBACK", 5));
+  }
+
+  private PipelineStepTemplate template(String stage, int order) {
+    return PipelineStepTemplate.builder()
+        .stepCode("process-" + stage.toLowerCase())
+        .stepName(stage)
+        .stageCode(stage)
+        .stepOrder(order)
+        .implCode("process-" + stage.toLowerCase())
+        .stepParams(Map.of())
+        .timeoutSeconds(0)
+        .retryPolicy("NONE")
+        .retryMaxCount(0)
+        .enabled(true)
+        .build();
   }
 }

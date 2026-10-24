@@ -58,6 +58,7 @@ class TriggerSchedulerFacadeTest {
   void shouldScheduleEnabledCronDefinitionsWithCatchUpMetadata() throws Exception {
     TriggerDescriptor dependentCron = cronDescriptor("t1", "JOB_CRON", true);
     dependentCron.setDependsOnJobCode("UPSTREAM_JOB");
+    dependentCron.setDependsOnJobCodes(List.of("UPSTREAM_JOB", "UPSTREAM_AUDIT"));
     when(triggerDefinitionLoader.loadAll())
         .thenReturn(List.of(dependentCron, cronDescriptor("t1", "JOB_DISABLED", false)));
 
@@ -68,11 +69,16 @@ class TriggerSchedulerFacadeTest {
     verify(scheduler).scheduleJob(jobDetailCaptor.capture(), triggerCaptor.capture());
 
     JobDetail jobDetail = jobDetailCaptor.getValue();
-    assertThat(jobDetail.getKey().getName()).isEqualTo("t1:JOB_CRON");
+    assertThat(jobDetail.getKey().getName()).isEqualTo("t1:WF:WF_JOB_CRON");
     assertThat(jobDetail.getKey().getGroup()).isEqualTo(TriggerSchedulerFacade.JOB_GROUP);
     assertThat(jobDetail.getJobDataMap())
         .containsEntry(QuartzLaunchJob.CALENDAR_CODE, "BIZ_CAL")
         .containsEntry(QuartzLaunchJob.DEPENDS_ON_JOB_CODE, "UPSTREAM_JOB")
+        .containsEntry(QuartzLaunchJob.WORKFLOW_DEFINITION_ID, 42L)
+        .containsEntry(QuartzLaunchJob.WORKFLOW_CODE, "WF_JOB_CRON")
+        .containsEntry(QuartzLaunchJob.WORKFLOW_VERSION, 3)
+        .containsEntry(
+            QuartzLaunchJob.DEPENDS_ON_JOB_CODES, List.of("UPSTREAM_JOB", "UPSTREAM_AUDIT"))
         .containsEntry(QuartzLaunchJob.CATCH_UP_POLICY, CatchUpPolicyType.AUTO.code())
         .containsEntry(QuartzLaunchJob.CATCH_UP_MAX_DAYS, 3);
     assertThat(triggerCaptor.getValue().getCronExpression()).isEqualTo("0 0 1 * * ?");
@@ -104,45 +110,78 @@ class TriggerSchedulerFacadeTest {
     facade.registerByJobCode("t1", "JOB_REENABLE");
 
     var inOrder = inOrder(triggerDefinitionLoader, scheduler);
-    inOrder.verify(triggerDefinitionLoader).setEnabled("t1", "JOB_REENABLE", true);
+    inOrder.verify(triggerDefinitionLoader).setScheduleEnabled("t1", "JOB_REENABLE", true);
     inOrder.verify(triggerDefinitionLoader).loadByJobCode("t1", "JOB_REENABLE");
     inOrder.verify(scheduler).scheduleJob(any(JobDetail.class), any(CronTrigger.class));
   }
 
   @Test
+  @DisplayName("按 Workflow Code 注册组合流程，不依赖合成 JobCode")
+  void shouldRegisterComposedWorkflowWithoutJobCode() throws Exception {
+    TriggerDescriptor descriptor = cronDescriptor("t1", "IGNORED", true);
+    descriptor.setJobCode(null);
+    descriptor.setWorkflowCode("COMPOSED_FLOW");
+    when(triggerDefinitionLoader.loadByWorkflowCode("t1", "COMPOSED_FLOW")).thenReturn(descriptor);
+
+    facade.registerByWorkflowCode("t1", "COMPOSED_FLOW");
+
+    ArgumentCaptor<JobDetail> jobCaptor = ArgumentCaptor.forClass(JobDetail.class);
+    verify(scheduler).scheduleJob(jobCaptor.capture(), any(CronTrigger.class));
+    assertThat(jobCaptor.getValue().getKey().getName()).isEqualTo("t1:WF:COMPOSED_FLOW");
+    assertThat(jobCaptor.getValue().getJobDataMap())
+        .containsEntry(QuartzLaunchJob.WORKFLOW_CODE, "COMPOSED_FLOW")
+        .doesNotContainKey(QuartzLaunchJob.JOB_CODE);
+    verify(triggerDefinitionLoader).setWorkflowScheduleEnabled("t1", "COMPOSED_FLOW", true);
+  }
+
+  @Test
   @DisplayName("单作业注销先删 Quartz 再落库置停用,避免留下无法解释的残留调度")
   void shouldPersistDisabledAfterUnregisteringSingleJob() throws Exception {
-    when(scheduler.checkExists(JobKey.jobKey("t1:JOB_STOP", TriggerSchedulerFacade.JOB_GROUP)))
+    when(triggerDefinitionLoader.loadByJobCode("t1", "JOB_STOP"))
+        .thenReturn(cronDescriptor("t1", "JOB_STOP", true));
+    when(scheduler.checkExists(
+            JobKey.jobKey("t1:WF:WF_JOB_STOP", TriggerSchedulerFacade.JOB_GROUP)))
         .thenReturn(true);
 
     facade.unregisterByJobCode("t1", "JOB_STOP");
 
     var inOrder = inOrder(scheduler, triggerDefinitionLoader);
+    inOrder.verify(triggerDefinitionLoader).loadByJobCode("t1", "JOB_STOP");
+    inOrder
+        .verify(scheduler)
+        .checkExists(JobKey.jobKey("t1:WF:WF_JOB_STOP", TriggerSchedulerFacade.JOB_GROUP));
+    inOrder
+        .verify(scheduler)
+        .deleteJob(JobKey.jobKey("t1:WF:WF_JOB_STOP", TriggerSchedulerFacade.JOB_GROUP));
     inOrder
         .verify(scheduler)
         .checkExists(JobKey.jobKey("t1:JOB_STOP", TriggerSchedulerFacade.JOB_GROUP));
-    inOrder
-        .verify(scheduler)
-        .deleteJob(JobKey.jobKey("t1:JOB_STOP", TriggerSchedulerFacade.JOB_GROUP));
-    inOrder.verify(triggerDefinitionLoader).setEnabled("t1", "JOB_STOP", false);
+    inOrder.verify(triggerDefinitionLoader).setScheduleEnabled("t1", "JOB_STOP", false);
   }
 
   @Test
   @DisplayName("暂停单作业与注销同语义:删除 Quartz 作业后落库置停用")
   void shouldDeleteQuartzJobAndPersistDisabledWhenPausingSingleJob() throws Exception {
-    when(scheduler.checkExists(JobKey.jobKey("t1:JOB_PAUSE", TriggerSchedulerFacade.JOB_GROUP)))
+    when(triggerDefinitionLoader.loadByJobCode("t1", "JOB_PAUSE"))
+        .thenReturn(cronDescriptor("t1", "JOB_PAUSE", true));
+    when(scheduler.checkExists(
+            JobKey.jobKey("t1:WF:WF_JOB_PAUSE", TriggerSchedulerFacade.JOB_GROUP)))
         .thenReturn(true);
 
     facade.pauseByJobCode("t1", "JOB_PAUSE");
 
     var inOrder = inOrder(scheduler, triggerDefinitionLoader);
+    inOrder.verify(triggerDefinitionLoader).loadByJobCode("t1", "JOB_PAUSE");
+    inOrder
+        .verify(scheduler)
+        .checkExists(JobKey.jobKey("t1:WF:WF_JOB_PAUSE", TriggerSchedulerFacade.JOB_GROUP));
+    inOrder
+        .verify(scheduler)
+        .deleteJob(JobKey.jobKey("t1:WF:WF_JOB_PAUSE", TriggerSchedulerFacade.JOB_GROUP));
     inOrder
         .verify(scheduler)
         .checkExists(JobKey.jobKey("t1:JOB_PAUSE", TriggerSchedulerFacade.JOB_GROUP));
-    inOrder
-        .verify(scheduler)
-        .deleteJob(JobKey.jobKey("t1:JOB_PAUSE", TriggerSchedulerFacade.JOB_GROUP));
-    inOrder.verify(triggerDefinitionLoader).setEnabled("t1", "JOB_PAUSE", false);
+    inOrder.verify(triggerDefinitionLoader).setScheduleEnabled("t1", "JOB_PAUSE", false);
   }
 
   @Test
@@ -154,7 +193,7 @@ class TriggerSchedulerFacadeTest {
     facade.resumeByJobCode("t1", "JOB_RESUME");
 
     var inOrder = inOrder(triggerDefinitionLoader, scheduler);
-    inOrder.verify(triggerDefinitionLoader).setEnabled("t1", "JOB_RESUME", true);
+    inOrder.verify(triggerDefinitionLoader).setScheduleEnabled("t1", "JOB_RESUME", true);
     inOrder.verify(triggerDefinitionLoader).loadByJobCode("t1", "JOB_RESUME");
     inOrder.verify(scheduler).scheduleJob(any(JobDetail.class), any(CronTrigger.class));
   }
@@ -186,7 +225,7 @@ class TriggerSchedulerFacadeTest {
     verify(scheduler).scheduleJob(jobDetailCaptor.capture(), triggerCaptor.capture());
 
     JobDetail jobDetail = jobDetailCaptor.getValue();
-    assertThat(jobDetail.getKey().getName()).isEqualTo("t1:JOB_FIXED");
+    assertThat(jobDetail.getKey().getName()).isEqualTo("t1:WF:WF_JOB_FIXED");
     assertThat(jobDetail.getJobDataMap())
         .containsEntry(QuartzLaunchJob.SCHEDULE_TYPE, "FIXED_RATE")
         .containsEntry(QuartzLaunchJob.SCHEDULE_EXPRESSION, "300");
@@ -310,6 +349,10 @@ class TriggerSchedulerFacadeTest {
     TriggerDescriptor d = new TriggerDescriptor();
     d.setTenantId(tenantId);
     d.setJobCode(jobCode);
+    d.setWorkflowCode("WF_" + jobCode);
+    d.setWorkflowDefinitionId(42L);
+    d.setWorkflowCode("WF_" + jobCode);
+    d.setWorkflowVersion(3);
     d.setScheduleType("CRON");
     d.setScheduleExpression("0 0 1 * * ?");
     d.setTimezone("UTC");
@@ -326,6 +369,7 @@ class TriggerSchedulerFacadeTest {
     TriggerDescriptor d = new TriggerDescriptor();
     d.setTenantId(tenantId);
     d.setJobCode(jobCode);
+    d.setWorkflowCode("WF_" + jobCode);
     d.setScheduleType("FIXED_RATE");
     d.setScheduleExpression(intervalSeconds);
     d.setTimezone("UTC");

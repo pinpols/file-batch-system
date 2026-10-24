@@ -14,7 +14,7 @@ import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
 import io.github.pinpols.batch.e2e.support.E2eStatusLogger;
 import io.github.pinpols.batch.e2e.support.E2eTestSql;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Timestamp;
 import java.time.Duration;
@@ -74,7 +74,7 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
   private static final String T2 = "t2";
 
   @Autowired
-  private LaunchService launchService;
+  private WorkflowRunLaunchService launchService;
 
   @Autowired
   private JdbcTemplate jdbcTemplate;
@@ -89,6 +89,46 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("并发导入隔离验收: 两租户同时触发并等待终态, 实例与任务互不可见, 事件不挂到对方租户, 错误明细无跨租户污染, 配额峰值各自独立")
   void shouldKeepTenantsIsolated_whenConcurrentImportJobsBothSucceed() throws Exception {
+    final String selectCountSql = """
+        select count(*) from batch.job_instance where tenant_id = ? and dedup_key = ?
+    """;
+    final String selectCountSql2 = """
+            select count(*) from batch.job_task t
+            join batch.job_instance ji on ji.id = t.job_instance_id
+            where ji.tenant_id = ? and ji.dedup_key = ?
+            """;
+    final String selectIdSql = """
+        select id from batch.job_instance where tenant_id = ? and dedup_key = ?
+    """;
+    final String selectCountSql3 = """
+            select count(*)
+            from batch.outbox_event oe
+            join batch.job_task t on t.id = oe.aggregate_id
+            where oe.aggregate_type = 'JOB_TASK'
+              and oe.tenant_id = ?
+              and t.job_instance_id = ?
+            """;
+    final String selectCountSql4 = """
+            select count(*) from batch.file_error_record fer
+            where fer.tenant_id = ? and fer.file_id in (
+                select fr.id from batch.file_record fr
+                join batch.job_task t on t.job_instance_id = ?
+                where fr.tenant_id = ?
+            )
+            """;
+    final String selectCountSql5 = """
+            select count(*) from batch.file_error_record fer
+            where fer.tenant_id = ? and fer.file_id in (
+                select fr.id from batch.file_record fr where fr.tenant_id = ?
+            )
+            """;
+    final String selectCountSql6 = """
+        select count(*) from batch.quota_runtime_state where tenant_id = ?
+    """;
+    final String selectPeakBorrowedCountSql = """
+        select peak_borrowed_count from batch.quota_runtime_state where tenant_id = ?
+    """;
+
     awaitWorkerOnline(T1, "e2e-import-1", "IMPORT");
     seedTenantTemplates(T2);
     seedWorkerRegistry(T2, "e2e-import-1", "import");
@@ -129,7 +169,7 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
                 """.stripTrailing());
         launchService.launch(new LaunchRequest(
             T1,
-            t1Seed.jobCode(),
+            t1Seed.workflowDefinitionId(),
             LocalDate.of(2026, 1, 15),
             TriggerType.API,
             t1Seed.requestId(),
@@ -161,7 +201,7 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
                 """.stripTrailing());
         launchService.launch(new LaunchRequest(
             T2,
-            t2Seed.jobCode(),
+            t2Seed.workflowDefinitionId(),
             LocalDate.of(2026, 1, 15),
             TriggerType.API,
             t2Seed.requestId(),
@@ -200,7 +240,7 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
 
     // t1's dedup_key must not be visible under t2
     Long t2CanSeeT1Instance = jdbcTemplate.queryForObject(
-        "select count(*) from batch.job_instance where tenant_id = ? and dedup_key = ?",
+        selectCountSql,
         Long.class,
         T2,
         t1Seed.dedupKey());
@@ -208,7 +248,7 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
 
     // t2's dedup_key must not be visible under t1
     Long t1CanSeeT2Instance = jdbcTemplate.queryForObject(
-        "select count(*) from batch.job_instance where tenant_id = ? and dedup_key = ?",
+        selectCountSql,
         Long.class,
         T1,
         t2Seed.dedupKey());
@@ -216,16 +256,8 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
 
     // ── Isolation assertion 2: job_task ────────────────────────────────────
 
-    Long t1TaskCount = jdbcTemplate.queryForObject("""
-            select count(*) from batch.job_task t
-            join batch.job_instance ji on ji.id = t.job_instance_id
-            where ji.tenant_id = ? and ji.dedup_key = ?
-            """, Long.class, T1, t1Seed.dedupKey());
-    Long t2TaskCount = jdbcTemplate.queryForObject("""
-            select count(*) from batch.job_task t
-            join batch.job_instance ji on ji.id = t.job_instance_id
-            where ji.tenant_id = ? and ji.dedup_key = ?
-            """, Long.class, T2, t2Seed.dedupKey());
+    Long t1TaskCount = jdbcTemplate.queryForObject(selectCountSql2, Long.class, T1, t1Seed.dedupKey());
+    Long t2TaskCount = jdbcTemplate.queryForObject(selectCountSql2, Long.class, T2, t2Seed.dedupKey());
     assertThat(t1TaskCount).isGreaterThanOrEqualTo(1L);
     assertThat(t2TaskCount).isGreaterThanOrEqualTo(1L);
 
@@ -235,12 +267,12 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
     // under the
     // correct tenant. aggregate_id stores job_task.id, not job_instance.id.
     Long t1JobInstanceId = jdbcTemplate.queryForObject(
-        "select id from batch.job_instance where tenant_id = ? and dedup_key = ?",
+        selectIdSql,
         Long.class,
         T1,
         t1Seed.dedupKey());
     Long t2JobInstanceId = jdbcTemplate.queryForObject(
-        "select id from batch.job_instance where tenant_id = ? and dedup_key = ?",
+        selectIdSql,
         Long.class,
         T2,
         t2Seed.dedupKey());
@@ -249,52 +281,21 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
     assertThat(t2JobInstanceId).isNotNull();
 
     // No outbox event linked to t1's tasks should carry t2's tenant_id, and vice versa.
-    Long t1OutboxUnderT2 = jdbcTemplate.queryForObject("""
-            select count(*)
-            from batch.outbox_event oe
-            join batch.job_task t on t.id = oe.aggregate_id
-            where oe.aggregate_type = 'JOB_TASK'
-              and oe.tenant_id = ?
-              and t.job_instance_id = ?
-            """, Long.class, T2, t1JobInstanceId);
-    Long t2OutboxUnderT1 = jdbcTemplate.queryForObject("""
-            select count(*)
-            from batch.outbox_event oe
-            join batch.job_task t on t.id = oe.aggregate_id
-            where oe.aggregate_type = 'JOB_TASK'
-              and oe.tenant_id = ?
-              and t.job_instance_id = ?
-            """, Long.class, T1, t2JobInstanceId);
+    Long t1OutboxUnderT2 = jdbcTemplate.queryForObject(selectCountSql3, Long.class, T2, t1JobInstanceId);
+    Long t2OutboxUnderT1 = jdbcTemplate.queryForObject(selectCountSql3, Long.class, T1, t2JobInstanceId);
     assertThat(t1OutboxUnderT2).isZero();
     assertThat(t2OutboxUnderT1).isZero();
 
     // ── Isolation assertion 4: file_error_record (if any) ──────────────────
 
     // Since both jobs succeeded, no error records should exist for either tenant under the other
-    Long t1ErrorUnderT2 = jdbcTemplate.queryForObject("""
-            select count(*) from batch.file_error_record fer
-            where fer.tenant_id = ? and fer.file_id in (
-                select fr.id from batch.file_record fr
-                join batch.job_task t on t.job_instance_id = ?
-                where fr.tenant_id = ?
-            )
-            """, Long.class, T2, t1JobInstanceId, T1);
+    Long t1ErrorUnderT2 = jdbcTemplate.queryForObject(selectCountSql4, Long.class, T2, t1JobInstanceId, T1);
     assertThat(t1ErrorUnderT2).isZero();
 
-    Long t2ErrorsOnT1Files = jdbcTemplate.queryForObject("""
-            select count(*) from batch.file_error_record fer
-            where fer.tenant_id = ? and fer.file_id in (
-                select fr.id from batch.file_record fr where fr.tenant_id = ?
-            )
-            """, Long.class, T2, T1);
+    Long t2ErrorsOnT1Files = jdbcTemplate.queryForObject(selectCountSql5, Long.class, T2, T1);
     assertThat(t2ErrorsOnT1Files).isZero();
 
-    Long t1ErrorsOnT2Files = jdbcTemplate.queryForObject("""
-            select count(*) from batch.file_error_record fer
-            where fer.tenant_id = ? and fer.file_id in (
-                select fr.id from batch.file_record fr where fr.tenant_id = ?
-            )
-            """, Long.class, T1, T2);
+    Long t1ErrorsOnT2Files = jdbcTemplate.queryForObject(selectCountSql5, Long.class, T1, T2);
     assertThat(t1ErrorsOnT2Files).isZero();
 
     // ── Quota isolation assertion (best-effort) ─────────────────────────────
@@ -302,16 +303,16 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
     // quota_runtime_state rows are written on demand; verify that if they exist, they are
     // per-tenant
     Long t1QuotaCount = jdbcTemplate.queryForObject(
-        "select count(*) from batch.quota_runtime_state where tenant_id = ?", Long.class, T1);
+        selectCountSql6, Long.class, T1);
     Long t2QuotaCount = jdbcTemplate.queryForObject(
-        "select count(*) from batch.quota_runtime_state where tenant_id = ?", Long.class, T2);
+        selectCountSql6, Long.class, T2);
 
     // If quota rows exist for both tenants, their peak_borrowed_count must be independent
     if (t1QuotaCount != null && t1QuotaCount > 0 && t2QuotaCount != null && t2QuotaCount > 0) {
       List<Map<String, Object>> t1Quotas = jdbcTemplate.queryForList(
-          "select peak_borrowed_count from batch.quota_runtime_state where tenant_id = ?", T1);
+          selectPeakBorrowedCountSql, T1);
       List<Map<String, Object>> t2Quotas = jdbcTemplate.queryForList(
-          "select peak_borrowed_count from batch.quota_runtime_state where tenant_id = ?", T2);
+          selectPeakBorrowedCountSql, T2);
 
       // Each tenant's quota rows must reference only their own tenant
       List<Object> t1Peaks = new ArrayList<>();
@@ -336,6 +337,10 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("非并发实例隔离验收: 两租户分别触发后各自实例计数为一, 按对方去重键查询均为零")
   void shouldIsolateJobInstances_whenTwoTenantsLaunchSeparately() {
+    final String selectCountSql = """
+        select count(*) from batch.job_instance where tenant_id = ? and dedup_key = ?
+    """;
+
     seedTenantTemplates(T2);
     LaunchSeed t1Seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, T1, "IMPORT", "import", TriggerType.API);
@@ -344,7 +349,7 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
 
     launchService.launch(new LaunchRequest(
         T1,
-        t1Seed.jobCode(),
+        t1Seed.workflowDefinitionId(),
         LocalDate.of(2026, 1, 15),
         TriggerType.API,
         t1Seed.requestId(),
@@ -353,7 +358,7 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
 
     launchService.launch(new LaunchRequest(
         T2,
-        t2Seed.jobCode(),
+        t2Seed.workflowDefinitionId(),
         LocalDate.of(2026, 1, 15),
         TriggerType.API,
         t2Seed.requestId(),
@@ -362,7 +367,7 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
 
     // t1 can see its own instance
     Long t1Own = jdbcTemplate.queryForObject(
-        "select count(*) from batch.job_instance where tenant_id = ? and dedup_key = ?",
+        selectCountSql,
         Long.class,
         T1,
         t1Seed.dedupKey());
@@ -370,7 +375,7 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
 
     // t2 cannot see t1's instance by t1's dedup_key
     Long t2SeesT1 = jdbcTemplate.queryForObject(
-        "select count(*) from batch.job_instance where tenant_id = ? and dedup_key = ?",
+        selectCountSql,
         Long.class,
         T2,
         t1Seed.dedupKey());
@@ -378,7 +383,7 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
 
     // t2 can see its own instance
     Long t2Own = jdbcTemplate.queryForObject(
-        "select count(*) from batch.job_instance where tenant_id = ? and dedup_key = ?",
+        selectCountSql,
         Long.class,
         T2,
         t2Seed.dedupKey());
@@ -386,7 +391,7 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
 
     // t1 cannot see t2's instance by t2's dedup_key
     Long t1SeesT2 = jdbcTemplate.queryForObject(
-        "select count(*) from batch.job_instance where tenant_id = ? and dedup_key = ?",
+        selectCountSql,
         Long.class,
         T1,
         t2Seed.dedupKey());
@@ -397,12 +402,19 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("事件隔离验收: 单租户触发后本租户事件计数至少为一, 另一租户无导入类型事件")
   void shouldIsolateOutboxEvents_whenSingleTenantLaunches() {
+    final String selectCountSql = """
+        select count(*) from batch.outbox_event where tenant_id = ?
+    """;
+    final String selectCountSql2 = """
+        select count(*) from batch.outbox_event where tenant_id = ? and event_type = 'IMPORT'
+    """;
+
     LaunchSeed t1Seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, T1, "IMPORT", "import", TriggerType.API);
 
     launchService.launch(new LaunchRequest(
         T1,
-        t1Seed.jobCode(),
+        t1Seed.workflowDefinitionId(),
         LocalDate.of(2026, 1, 15),
         TriggerType.API,
         t1Seed.requestId(),
@@ -410,9 +422,9 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
         Map.of()));
 
     Long t1OutboxCount = jdbcTemplate.queryForObject(
-        "select count(*) from batch.outbox_event where tenant_id = ?", Long.class, T1);
+        selectCountSql, Long.class, T1);
     Long t2OutboxCount = jdbcTemplate.queryForObject(
-        "select count(*) from batch.outbox_event where tenant_id = ? and event_type = 'IMPORT'",
+        selectCountSql2,
         Long.class,
         T2);
 
@@ -424,7 +436,7 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
   // ── helpers ───────────────────────────────────────────────────────────────
 
   private void seedTenantTemplates(String tenantId) {
-    jdbcTemplate.update("""
+    final String insertFileTemplateConfigSql = """
         insert into batch.file_template_config (
             tenant_id, template_code, template_name, template_type, biz_type,
             file_format_type, charset, target_charset, with_bom,
@@ -452,21 +464,28 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
         where tenant_id = ?
           and template_code = 'IMP-CUSTOMER-JSON-ARRAY'
         on conflict do nothing
-        """, tenantId, T1);
+        """;
+
+    jdbcTemplate.update(insertFileTemplateConfigSql, tenantId, T1);
   }
 
   private void seedWorkerRegistry(String tenantId, String workerCode, String workerGroup) {
-    jdbcTemplate.update(
-        "delete from batch.worker_registry where tenant_id = ? and worker_code = ?",
-        tenantId,
-        workerCode);
-    jdbcTemplate.update(
-        """
+    final String deleteWorkerRegistrySql = """
+        delete from batch.worker_registry where tenant_id = ? and worker_code = ?
+    """;
+    final String insertWorkerRegistrySql = """
         insert into batch.worker_registry (
             tenant_id, worker_code, worker_group, capability_tags, resource_tag,
             status, heartbeat_at, current_load, drain_started_at, drain_deadline_at
         ) values (?, ?, ?, '[]'::jsonb, null, 'ONLINE', ?, 0, null, null)
-        """,
+        """;
+
+    jdbcTemplate.update(
+        deleteWorkerRegistrySql,
+        tenantId,
+        workerCode);
+    jdbcTemplate.update(
+        insertWorkerRegistrySql,
         tenantId,
         workerCode,
         CodeNormalizer.toUpperOrNull(workerGroup),
@@ -474,30 +493,34 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
   }
 
   private void awaitWorkerOnline(String tenantId, String workerCode, String workerGroup) {
-    await()
-        .atMost(Duration.ofSeconds(30))
-        .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(() -> {
-          Integer count = jdbcTemplate.queryForObject(
-              """
+    final String selectCountSql = """
                       select count(1)::int
                       from batch.worker_registry
                       where tenant_id = ?
                         and worker_code = ?
                         and worker_group = ?
                         and status = 'ONLINE'
-                      """, Integer.class, tenantId, workerCode, CodeNormalizer.toUpperOrNull(workerGroup));
+                      """;
+
+    await()
+        .atMost(Duration.ofSeconds(30))
+        .pollInterval(Duration.ofMillis(200))
+        .untilAsserted(() -> {
+          Integer count = jdbcTemplate.queryForObject(
+              selectCountSql, Integer.class, tenantId, workerCode, CodeNormalizer.toUpperOrNull(workerGroup));
           assertThat(count).isEqualTo(1);
         });
   }
 
   private String taskStatus(String tenantId, String dedupKey) {
-    try {
-      return jdbcTemplate.queryForObject("""
+    final String selectTaskStatusSql = """
           select t.task_status from batch.job_task t
           join batch.job_instance ji on ji.id = t.job_instance_id
           where ji.tenant_id = ? and ji.dedup_key = ?
-          """, String.class, tenantId, dedupKey);
+          """;
+
+    try {
+      return jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, tenantId, dedupKey);
     } catch (EmptyResultDataAccessException ex) {
       return null;
     } catch (DataAccessException ex) {

@@ -17,6 +17,8 @@ import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcome
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService.DagNodeResolution;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeDispatchService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeTerminalFinalizer;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunExecutionSnapshot;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
@@ -65,6 +67,7 @@ public class SensorStateMachine {
   private final OrchestratorJobMappers jobMappers;
   private final WorkflowDagService workflowDagService;
   private final ObjectProvider<WorkflowNodeDispatchService> dispatchServiceProvider;
+  private final WorkflowNodeTerminalFinalizer workflowNodeTerminalFinalizer;
 
   /** scheduler 入口：对单个到期 WAIT 节点跑一次探测并推进状态。 */
   public void probeAndAdvance(WorkflowNodeRunEntity nodeRun, Instant now) {
@@ -73,8 +76,11 @@ public class SensorStateMachine {
       log.warn("WAIT probe skipped: workflow_run id={} not found", nodeRun.getWorkflowRunId());
       return;
     }
-    WorkflowNodeEntity node = nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(
-        wfRun.getWorkflowDefinitionId(), nodeRun.getNodeCode());
+    WorkflowRunExecutionSnapshot snapshot = WorkflowRunExecutionSnapshot.from(wfRun);
+    WorkflowNodeEntity node = snapshot == null
+        ? nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(
+            wfRun.getWorkflowDefinitionId(), nodeRun.getNodeCode())
+        : snapshot.node(nodeRun.getNodeCode());
     if (node == null || !"WAIT".equals(node.getNodeType())) {
       log.warn(
           "WAIT probe skipped: node definition missing or wrong type wfDefId={} code={}",
@@ -246,14 +252,17 @@ public class SensorStateMachine {
   private void advanceDownstream(
       WorkflowRunEntity wfRun, String currentNodeCode, boolean success, Instant now) {
     JobInstanceEntity jobInstance = loadJobInstanceForDispatch(wfRun);
-    if (jobInstance == null) {
+    if (jobInstance == null
+        && (wfRun.getRelatedJobInstanceId() != null || wfRun.getSingleJobDefinitionId() != null)) {
       log.warn(
-          "advanceDownstream skipped: workflow_run={} has no related job_instance", wfRun.getId());
+          "advanceDownstream skipped: single-job workflow_run={} has no related job_instance",
+          wfRun.getId());
       return;
     }
-    List<DagNodeResolution> nextNodes = workflowDagService.resolveNextNodes(
-        wfRun.getWorkflowDefinitionId(), currentNodeCode, success, null);
+    List<DagNodeResolution> nextNodes =
+        workflowDagService.resolveNextNodesForRun(wfRun, currentNodeCode, success, null);
     if (nextNodes == null || nextNodes.isEmpty()) {
+      workflowNodeTerminalFinalizer.finalizeIfAllNodesTerminal(wfRun);
       return;
     }
     WorkflowNodeDispatchService dispatchService = dispatchServiceProvider.getObject();
@@ -261,27 +270,20 @@ public class SensorStateMachine {
       if (next == null) {
         continue;
       }
-      try {
-        if (WorkflowNodeCode.END.code().equals(next.nodeCode())) {
-          dispatchEndNode(wfRun, next, success, now);
-        } else {
-          dispatchService.dispatchNode(jobInstance, wfRun, next, null, wfRun.getTraceId());
-        }
-      } catch (Exception e) {
-        log.warn(
-            "advanceDownstream dispatch failed: wfRunId={} from={} -> {} err={}",
-            wfRun.getId(),
-            currentNodeCode,
-            next.nodeCode(),
-            SwallowedExceptionLogger.summary(e));
+      if (WorkflowNodeCode.END.code().equals(next.nodeCode())) {
+        dispatchEndNode(wfRun, next, success, now);
+      } else {
+        // Keep downstream activation in the probeOne transaction. Let failures escape so the
+        // WAIT terminal transition rolls back and the durable sensor scan can retry the node.
+        dispatchService.dispatchNode(jobInstance, wfRun, next, null, wfRun.getTraceId());
       }
     }
+    workflowNodeTerminalFinalizer.finalizeIfAllNodesTerminal(wfRun);
   }
 
   private void dispatchEndNode(
       WorkflowRunEntity wfRun, DagNodeResolution endNode, boolean success, Instant now) {
-    if (!workflowDagService.isNodeReadyForDispatch(
-        wfRun.getId(), wfRun.getWorkflowDefinitionId(), endNode.nodeCode(), null)) {
+    if (!workflowDagService.isNodeReadyForRunDispatch(wfRun, endNode.nodeCode(), null)) {
       return;
     }
     NodeRunOutcome endOutcome =

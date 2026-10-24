@@ -54,6 +54,7 @@ class AssetPartitionServiceTest {
         .thenReturn(snapshot);
     when(resultVersionQueryService.findLatestByJob("t1", "JOB_A", bizDate))
         .thenReturn(Optional.of(ResultVersionEntity.builder()
+            .id(700L)
             .tenantId("t1")
             .businessKey("job:JOB_A:2026-06-30")
             .versionNo(4)
@@ -64,7 +65,9 @@ class AssetPartitionServiceTest {
     Optional<AssetPartitionSnapshot> found =
         service.findEffectiveJobPartition("t1", "JOB_A", bizDate);
 
-    assertThat(found).contains(snapshot);
+    assertThat(found).isPresent();
+    assertThat(found.orElseThrow().resultVersionId()).isEqualTo(700L);
+    assertThat(found.orElseThrow().versionNo()).isEqualTo(snapshot.versionNo());
     verify(resultVersionQueryService, never()).findEffectiveByJob("t1", "JOB_A", bizDate);
   }
 

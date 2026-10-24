@@ -43,7 +43,7 @@ ALTER TABLE batch.workflow_node ADD CONSTRAINT ck_workflow_node_cross_day_timeou
     CHECK (cross_day_dependency_timeout_seconds >= 0);
 
 COMMENT ON COLUMN batch.workflow_node.cross_day_dependencies IS
-    'ADR-018 跨批量日上游依赖声明; JSONB array of {alias, jobCode, bizDateOffset|bizDateRange, scope, consumeVersionStrategy, specificVersionNo?}; NULL = 无跨日依赖';
+    'ADR-018 跨批量日上游依赖声明；JSONB 数组元素包含 alias、jobCode、bizDateOffset 或 bizDateRange、scope、consumeVersionStrategy 和可选 specificVersionNo；NULL 表示无跨日依赖。';
 COMMENT ON COLUMN batch.workflow_node.cross_day_dependency_timeout_seconds IS
     'ADR-018 依赖未齐的等待上限秒数; 0 表示永不超时; 超时后按 scope: REQUIRED→FAIL, OPTIONAL→continue';
 
@@ -63,5 +63,6 @@ ALTER TABLE batch.workflow_node_run ADD CONSTRAINT ck_workflow_node_run_status
 -- =====================================================================
 -- 等待依赖审计日志辅助：扩展现有 job_execution_log，无 schema 改动
 -- =====================================================================
+
 COMMENT ON TABLE batch.workflow_node IS
     'Workflow 节点定义；ADR-018 起新增 cross_day_dependencies / cross_day_dependency_timeout_seconds 支持跨批量日依赖';

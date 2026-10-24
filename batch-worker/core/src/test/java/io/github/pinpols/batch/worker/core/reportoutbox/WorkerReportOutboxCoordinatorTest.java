@@ -6,6 +6,8 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.worker.core.config.OrchestratorTaskClientProperties;
+import io.github.pinpols.batch.worker.core.config.WorkerBatchClaimProperties;
+import io.github.pinpols.batch.worker.core.config.WorkerLeaseProperties;
 import io.github.pinpols.batch.worker.core.domain.TaskExecutionReport;
 import io.github.pinpols.batch.worker.core.infrastructure.HttpTaskExecutionClient;
 import io.github.pinpols.batch.worker.core.infrastructure.WorkerTaskLeaseRenewer;
@@ -97,8 +99,8 @@ class WorkerReportOutboxCoordinatorTest {
           new MockEnvironment(),
           null,
           coordinatorProvider,
-          new io.github.pinpols.batch.worker.core.config.WorkerLeaseProperties(),
-          new io.github.pinpols.batch.worker.core.config.WorkerBatchClaimProperties());
+          new WorkerLeaseProperties(),
+          new WorkerBatchClaimProperties());
 
       @SuppressWarnings("unchecked")
       ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
@@ -115,15 +117,19 @@ class WorkerReportOutboxCoordinatorTest {
       TaskExecutionReport report = report();
       client.report(report);
 
-      assertThat(jdbc.queryForObject(
-              "SELECT COUNT(*) FROM worker_report_outbox WHERE publish_status='NEW'",
-              Integer.class))
+      final String selectWorkerReportOutboxSql = """
+          SELECT COUNT(*) FROM worker_report_outbox WHERE publish_status='NEW'
+      """;
+      assertThat(jdbc.queryForObject(selectWorkerReportOutboxSql, Integer.class))
           .isEqualTo(1);
 
       server.enqueue(new MockResponse.Builder().code(200).build());
       coordinator.pollDeferredReports();
 
-      assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM worker_report_outbox", Integer.class))
+      final String selectWorkerReportOutboxSqlValue1 = """
+          SELECT COUNT(*) FROM worker_report_outbox
+      """;
+      assertThat(jdbc.queryForObject(selectWorkerReportOutboxSqlValue1, Integer.class))
           .isZero();
     }
   }

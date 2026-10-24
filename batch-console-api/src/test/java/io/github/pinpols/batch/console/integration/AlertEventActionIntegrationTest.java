@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.console.integration;
 
+import io.github.pinpols.batch.console.domain.notification.query.AlertEventCountActiveAlertsInAmGroupQuery;
+
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
@@ -94,19 +97,37 @@ class AlertEventActionIntegrationTest extends AbstractIntegrationTest {
     alertApplicationService.close(firstId, alertRequest(tenantId), "idem-group-1");
 
     assertThat(alertEventMapper.countActiveAlertsInAmGroup(
-            tenantId, "batch-orchestrator", "JOB_RUNNING_TOO_LONG", "WARN", firstId))
+            AlertEventCountActiveAlertsInAmGroupQuery.builder()
+                .tenantId(tenantId)
+                .serviceName("batch-orchestrator")
+                .alertType("JOB_RUNNING_TOO_LONG")
+                .severity("WARN")
+                .excludingId(firstId)
+                .build()))
         .isEqualTo(2);
 
     alertApplicationService.close(ackedId, alertRequest(tenantId), "idem-group-2");
 
     assertThat(alertEventMapper.countActiveAlertsInAmGroup(
-            tenantId, "batch-orchestrator", "JOB_RUNNING_TOO_LONG", "WARN", ackedId))
+            AlertEventCountActiveAlertsInAmGroupQuery.builder()
+                .tenantId(tenantId)
+                .serviceName("batch-orchestrator")
+                .alertType("JOB_RUNNING_TOO_LONG")
+                .severity("WARN")
+                .excludingId(ackedId)
+                .build()))
         .isEqualTo(1);
 
     alertApplicationService.close(suppressedId, alertRequest(tenantId), "idem-group-3");
 
     assertThat(alertEventMapper.countActiveAlertsInAmGroup(
-            tenantId, "batch-orchestrator", "JOB_RUNNING_TOO_LONG", "WARN", suppressedId))
+            AlertEventCountActiveAlertsInAmGroupQuery.builder()
+                .tenantId(tenantId)
+                .serviceName("batch-orchestrator")
+                .alertType("JOB_RUNNING_TOO_LONG")
+                .severity("WARN")
+                .excludingId(suppressedId)
+                .build()))
         .isZero();
   }
 
@@ -120,29 +141,34 @@ class AlertEventActionIntegrationTest extends AbstractIntegrationTest {
 
   private long insertAlertEvent(
       String tenantId, String alertType, String severity, String status, String title) {
+    final String insertAlertEventSql = """
+    INSERT INTO batch.alert_event
+    (tenant_id, service_name, alert_type, severity, title, detail_json, dedup_fingerprint,
+    occurrence_count, first_seen_at, last_seen_at, status, created_at, updated_at)
+    VALUES (?, 'batch-orchestrator', ?, ?, ?, '{}', ?,
+    1, ?, ?, ?, now(), now())
+    """;
+    String dedupFingerprint = tenantId + ":" + alertType + ":" + System.nanoTime();
+    Timestamp firstSeenAt = Timestamp.from(BatchDateTimeSupport.utcNow());
+    Timestamp lastSeenAt = Timestamp.from(BatchDateTimeSupport.utcNow());
     jdbcTemplate.update(
-        """
-        INSERT INTO batch.alert_event
-          (tenant_id, service_name, alert_type, severity, title, detail_json, dedup_fingerprint,
-           occurrence_count, first_seen_at, last_seen_at, status, created_at, updated_at)
-        VALUES (?, 'batch-orchestrator', ?, ?, ?, '{}', ?,
-                1, ?, ?, ?, now(), now())
-        """,
+        insertAlertEventSql,
         tenantId,
         alertType,
         severity,
         title,
-        tenantId + ":" + alertType + ":" + System.nanoTime(),
-        Timestamp.from(BatchDateTimeSupport.utcNow()),
-        Timestamp.from(BatchDateTimeSupport.utcNow()),
+        dedupFingerprint,
+        firstSeenAt,
+        lastSeenAt,
         status);
-    Long id = jdbcTemplate.queryForObject("""
-            select id
-            from batch.alert_event
-            where tenant_id = ?
-            order by id desc
-            limit 1
-            """, Long.class, tenantId);
+    final String latestAlertEventIdSql = """
+    select id
+    from batch.alert_event
+    where tenant_id = ?
+    order by id desc
+    limit 1
+    """;
+    Long id = jdbcTemplate.queryForObject(latestAlertEventIdSql, Long.class, tenantId);
     return id == null ? -1L : id;
   }
 

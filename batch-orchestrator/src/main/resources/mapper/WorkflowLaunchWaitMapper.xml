@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.WorkflowLaunchWaitMapper">
+    <select id="setTenantContext" resultType="string">
+        select set_config('app.tenant_id', #{tenantId}, true)
+    </select>
+
+    <resultMap id="WaitResult" type="io.github.pinpols.batch.orchestrator.domain.query.WorkflowLaunchWaitClaim">
+        <constructor>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="request_id" javaType="java.lang.String"/>
+            <arg column="launch_payload" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="defer">
+        insert into batch.workflow_launch_wait (
+            tenant_id, request_id, workflow_definition_id, biz_date, dry_run, launch_payload)
+        select #{tenantId}, #{requestId}, #{workflowDefinitionId}, #{bizDate}, #{dryRun}, #{launchPayload}::jsonb
+        from batch.trigger_request request
+        where request.tenant_id = #{tenantId} and request.request_id = #{requestId}
+          and request.workflow_definition_id = #{workflowDefinitionId}
+          and request.request_status in ('ACCEPTED', 'PROCESSING')
+        on conflict (tenant_id, request_id) do update
+        set updated_at = CURRENT_TIMESTAMP
+        where batch.workflow_launch_wait.wait_status = 'WAITING'
+    </insert>
+
+    <!-- Slot eligibility matches uk_workflow_run_active, rather than all nonterminal run states. -->
+    <select id="claimDue" resultMap="WaitResult" affectData="true" flushCache="true">
+        with first_per_slot as (
+            select distinct on (waiting.workflow_definition_id, waiting.biz_date, waiting.dry_run)
+                   waiting.id
+            from batch.workflow_launch_wait waiting
+            join batch.trigger_request request
+              on request.tenant_id = waiting.tenant_id and request.request_id = waiting.request_id
+            where waiting.tenant_id = #{tenantId} and waiting.wait_status = 'WAITING'
+              and waiting.next_attempt_at &lt;= CURRENT_TIMESTAMP
+              and (exists (
+                  select 1 from batch.workflow_run own_run
+                  where own_run.tenant_id = waiting.tenant_id
+                    and own_run.trigger_request_id = request.id
+              ) or not exists (
+                  select 1 from batch.workflow_run run
+                  where run.tenant_id = waiting.tenant_id
+                    and run.workflow_definition_id = waiting.workflow_definition_id
+                    and run.biz_date = waiting.biz_date and run.dry_run = waiting.dry_run
+                    and run.run_status in ('CREATED', 'RUNNING')
+              ))
+            order by waiting.workflow_definition_id, waiting.biz_date, waiting.dry_run,
+                     waiting.created_at, waiting.id
+        ), candidates as (
+            select waiting.id
+            from batch.workflow_launch_wait waiting
+            join first_per_slot first on first.id = waiting.id
+            where waiting.tenant_id = #{tenantId}
+            order by waiting.created_at, waiting.id
+            limit #{limit}
+            for update of waiting skip locked
+        )
+        update batch.workflow_launch_wait waiting
+        set next_attempt_at = #{nextAttemptAt}, attempt_count = attempt_count + 1,
+            updated_at = CURRENT_TIMESTAMP
+        from candidates candidate
+        where waiting.tenant_id = #{tenantId} and waiting.id = candidate.id
+          and waiting.wait_status = 'WAITING' and waiting.next_attempt_at &lt;= CURRENT_TIMESTAMP
+        returning waiting.tenant_id, waiting.request_id, waiting.launch_payload::text
+    </select>
+
+    <update id="updateStatus">
+        update batch.workflow_launch_wait set wait_status = #{targetStatus}, updated_at = CURRENT_TIMESTAMP
+        where tenant_id = #{tenantId} and request_id = #{requestId} and wait_status = #{expectedStatus}
+    </update>
+</mapper>

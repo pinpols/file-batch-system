@@ -45,9 +45,9 @@ public record TenantConfigBatchInitResponse(
   }
 
   public record ItemStats(
-      int created, int updated, int skipped, int failed, List<ItemDetail> details) {
+      int created, int updated, int skipped, int failed, int migrated, List<ItemDetail> details) {
     public static ItemStats empty() {
-      return new ItemStats(0, 0, 0, 0, List.of());
+      return new ItemStats(0, 0, 0, 0, 0, List.of());
     }
   }
 
@@ -58,6 +58,8 @@ public record TenantConfigBatchInitResponse(
     public static final String UPDATED = "UPDATED";
     public static final String SKIPPED = "SKIPPED";
     public static final String FAILED = "FAILED";
+
+    public static final String MIGRATED = "MIGRATED";
   }
 
   /** 可变的 ItemStats 构建器，收集明细后一次性转换为不可变 record。 */
@@ -66,6 +68,7 @@ public record TenantConfigBatchInitResponse(
     private int updated;
     private int skipped;
     private int failed;
+    private int migrated;
     private final List<ItemDetail> details = new ArrayList<>();
 
     public void recordCreated(String code) {
@@ -83,13 +86,23 @@ public record TenantConfigBatchInitResponse(
       details.add(new ItemDetail(code, ItemDetail.SKIPPED, null));
     }
 
+    public void recordSkipped(String code, String detail) {
+      skipped++;
+      details.add(new ItemDetail(code, ItemDetail.SKIPPED, detail));
+    }
+
     public void recordFailed(String code, String errorMessage) {
       failed++;
       details.add(new ItemDetail(code, ItemDetail.FAILED, errorMessage));
     }
 
+    public void recordMigrated(String code, String detail) {
+      migrated++;
+      details.add(new ItemDetail(code, ItemDetail.MIGRATED, detail));
+    }
+
     public ItemStats toItemStats() {
-      return new ItemStats(created, updated, skipped, failed, List.copyOf(details));
+      return new ItemStats(created, updated, skipped, failed, migrated, List.copyOf(details));
     }
   }
 }

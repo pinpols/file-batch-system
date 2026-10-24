@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
@@ -9,7 +10,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.dto.LaunchRequest;
+import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
@@ -21,10 +25,16 @@ import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
+import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
+import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
+import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import java.time.LocalDate;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
@@ -53,7 +63,13 @@ class ChildJobLaunchSupportTest {
   private TriggerRequestMapper triggerRequestMapper;
 
   @Mock
-  private OrchestratorWorkflowMappers workflowMappers;
+  private WorkflowNodeMapper workflowNodeMapper;
+
+  @Mock
+  private WorkflowRunMapper workflowRunMapper;
+
+  @Mock
+  private WorkflowNodeRunMapper workflowNodeRunMapper;
 
   @Mock
   private TaskCreationService taskCreationService;
@@ -72,7 +88,12 @@ class ChildJobLaunchSupportTest {
         jobStepInstanceMapper,
         triggerRequestMapper);
     return new ChildJobLaunchSupport(
-        jobMappers, workflowMappers, taskCreationService, launchServiceProvider, payloadBuilder);
+        jobMappers,
+        new OrchestratorWorkflowMappers(
+            workflowNodeMapper, workflowRunMapper, workflowNodeRunMapper),
+        taskCreationService,
+        launchServiceProvider,
+        payloadBuilder);
   }
 
   private JobInstanceEntity instance(Long id, String jobCode, Long parentInstanceId) {
@@ -168,5 +189,91 @@ class ChildJobLaunchSupportTest {
 
     // 确认确实沿 parent 链上溯到了 WF_A
     verify(jobInstanceMapper).selectById(TENANT, 1L);
+  }
+
+  @Test
+  @DisplayName("无根 Workflow 直接创建节点 Job，不创建虚拟父分区或父任务")
+  void shouldLaunchJobNodeWithoutSyntheticParentInstance() {
+    ChildJobLaunchSupport support = newSupport();
+    WorkflowRunEntity workflowRun = run();
+    workflowRun.setRelatedJobInstanceId(null);
+    workflowRun.setBizDate(LocalDate.of(2026, 10, 14));
+    workflowRun.setDryRun(true);
+    when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(900L, "N1"))
+        .thenReturn(null);
+    org.mockito.Mockito.doAnswer(invocation -> {
+          io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity nodeRun =
+              invocation.getArgument(0);
+          nodeRun.setId(901L);
+          return 1;
+        })
+        .when(workflowNodeRunMapper)
+        .insert(any());
+
+    LaunchService launchService = org.mockito.Mockito.mock(LaunchService.class);
+    when(launchServiceProvider.getObject()).thenReturn(launchService);
+    when(launchService.launch(any(LaunchRequest.class)))
+        .thenReturn(new LaunchResponse("child-1", "trace-1"));
+    JobInstanceEntity child = instance(7L, "JOB_B", null);
+    when(jobInstanceMapper.selectByInstanceNo(TENANT, "child-1")).thenReturn(child);
+    when(workflowNodeRunMapper.attachJobInstance(TENANT, 901L, 7L)).thenReturn(1);
+
+    int dispatched = support.dispatchJobNode(
+        null, workflowRun, resolution(), jobNode("JOB_B"), "{\"source\":\"test\"}", "trace-1");
+
+    assertThat(dispatched).isEqualTo(1);
+    ArgumentCaptor<TriggerRequestEntity> triggerCaptor =
+        ArgumentCaptor.forClass(TriggerRequestEntity.class);
+    verify(triggerRequestMapper).insert(triggerCaptor.capture());
+    assertThat(triggerCaptor.getValue().getParentWorkflowRunId()).isEqualTo(900L);
+    assertThat(triggerCaptor.getValue().getParentJobInstanceId()).isNull();
+    assertThat(triggerCaptor.getValue().getParentVirtualTaskId()).isNull();
+    assertThat(triggerCaptor.getValue().getDryRun()).isTrue();
+    ArgumentCaptor<LaunchRequest> launchCaptor = ArgumentCaptor.forClass(LaunchRequest.class);
+    verify(launchService).launch(launchCaptor.capture());
+    Map<String, Object> params = launchCaptor.getValue().params();
+    assertThat(params)
+        .containsEntry("_parentWorkflowRunId", 900L)
+        .containsEntry("_parentNodeCode", "N1")
+        .doesNotContainKey("_parentVirtualTaskId")
+        .doesNotContainKey("parentInstanceId");
+    assertThat(launchCaptor.getValue().dryRun()).isTrue();
+    verify(workflowNodeRunMapper).attachJobInstance(TENANT, 901L, 7L);
+    verifyNoInteractions(jobPartitionMapper, taskCreationService);
+  }
+
+  @Test
+  @DisplayName("批量日闸门等待时保留 READY 节点,不要求同步创建 Job Instance")
+  void shouldKeepNodeReadyWhenBatchDayGateDefersChildLaunch() {
+    ChildJobLaunchSupport support = newSupport();
+    WorkflowRunEntity workflowRun = run();
+    workflowRun.setRelatedJobInstanceId(null);
+    workflowRun.setBizDate(LocalDate.of(2026, 10, 14));
+    when(workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(900L, "N1"))
+        .thenReturn(null);
+    org.mockito.Mockito.doAnswer(invocation -> {
+          io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity nodeRun =
+              invocation.getArgument(0);
+          nodeRun.setId(901L);
+          return 1;
+        })
+        .when(workflowNodeRunMapper)
+        .insert(any());
+    LaunchService launchService = org.mockito.Mockito.mock(LaunchService.class);
+    when(launchServiceProvider.getObject()).thenReturn(launchService);
+    when(launchService.launch(any(LaunchRequest.class)))
+        .thenReturn(LaunchResponse.skipped("trace-wait"));
+    TriggerRequestEntity waiting = new TriggerRequestEntity();
+    waiting.setRequestStatus(
+        io.github.pinpols.batch.common.enums.TriggerRequestStatus.WAITING.code());
+    when(triggerRequestMapper.selectByTenantAndRequestId(anyString(), anyString()))
+        .thenReturn(waiting);
+
+    int dispatched = support.dispatchJobNode(
+        null, workflowRun, resolution(), jobNode("JOB_B"), "{}", "trace-wait");
+
+    assertThat(dispatched).isZero();
+    verify(workflowNodeRunMapper, never()).attachJobInstance(anyString(), anyLong(), anyLong());
+    verifyNoInteractions(jobPartitionMapper, taskCreationService);
   }
 }

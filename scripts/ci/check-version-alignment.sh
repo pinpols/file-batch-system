@@ -8,6 +8,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 FAIL=0
 
+# shellcheck source=../lib/runtime-defaults.sh
+source "$ROOT/scripts/lib/runtime-defaults.sh"
 # shellcheck source=scripts/lib/python-runtime.sh
 source "$ROOT/scripts/lib/python-runtime.sh"
 batch_require_python
@@ -324,14 +326,34 @@ check_image_reference "deploy/docker/compose/test.yml" 'mockserver/mockserver:${
 check_image_reference "docs/runbook/base-services-deployment.md" '${MINIO_IMAGE_REPOSITORY}:${MINIO_IMAGE_TAG}' "部署手册"
 check_image_reference "deploy/ha/30-redis-failover.yaml" "valkey/valkey:${VALKEY_TAG}" "HA manifest"
 check_image_reference "docs/runbook/base-services-deployment.md" 'valkey/valkey:${VALKEY_IMAGE_TAG}' "部署手册"
-for container_name in batch-sim-sftp batch-sim-mockserver; do
-  if ! grep -Fq -- "container_name: ${container_name}" "$ROOT/scripts/sim/compose.yml"; then
-    echo "  ✗ Sim 容器名缺少 batch-sim 前缀: ${container_name}" >&2
+while IFS=: read -r container_variable container_name compose_file; do
+  [[ -n "$container_variable" ]] || continue
+  if ! grep -Fq -- "container_name: \${${container_variable}:-${container_name}}" "$ROOT/$compose_file"; then
+    echo "  ✗ Compose 容器名默认值漂移: ${container_variable}=${container_name}" >&2
     FAIL=1
   else
-    echo "  ✓ Sim 容器名 ${container_name}"
+    echo "  ✓ Compose 容器名可隔离且默认值为 ${container_name}"
   fi
-done
+done <<CONTAINER_DEFAULTS
+PG_CONTAINER:${BATCH_DEFAULT_POSTGRES_CONTAINER}:docker-compose.yml
+PG_REPLICA_CONTAINER:batch-postgres-replica:docker-compose.yml
+BIZ_SHARD_1_CONTAINER:batch-postgres-biz-shard-1:docker-compose.yml
+KAFKA_CONTAINER:${BATCH_DEFAULT_KAFKA_CONTAINER}:docker-compose.yml
+KAFKA_INIT_CONTAINER:batch-kafka-init:docker-compose.yml
+KAFKA_UI_CONTAINER:batch-kafka-ui:docker-compose.yml
+MINIO_CONTAINER:${BATCH_DEFAULT_MINIO_CONTAINER}:docker-compose.yml
+MINIO_INIT_CONTAINER:batch-minio-init:docker-compose.yml
+REDIS_CONTAINER:${BATCH_DEFAULT_REDIS_CONTAINER}:docker-compose.yml
+OPS_TOOLBOX_CONTAINER:batch-ops-toolbox:docker-compose.yml
+SFTP_CONTAINER:batch-sim-sftp:scripts/sim/compose.yml
+MOCKSERVER_CONTAINER:batch-sim-mockserver:scripts/sim/compose.yml
+CONTAINER_DEFAULTS
+if ! grep -Fq -- 'name: ${SFTP_DATA_VOLUME_NAME:-batch-sim-sftp-data}' "$ROOT/scripts/sim/compose.yml"; then
+  echo "  ✗ SIM SFTP 持久卷默认值未固定或不可隔离" >&2
+  FAIL=1
+else
+  echo "  ✓ SIM SFTP 持久卷可隔离且默认值保持兼容"
+fi
 if grep -REn -- 'docker (exec|inspect) (sftp|mockserver)([[:space:]]|$)' "$ROOT/scripts/sim"; then
   echo "  ✗ Sim 脚本仍用服务名作为容器名；请使用 batch-sim-* 容器名" >&2
   FAIL=1

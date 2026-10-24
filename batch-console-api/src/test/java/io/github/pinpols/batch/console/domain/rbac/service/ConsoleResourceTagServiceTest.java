@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.console.domain.rbac.service;
 
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleResourceTagUpsertParam;
+
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
@@ -14,6 +17,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 @DisplayName("资源标签服务: 标签查询、写入、删除与资源类型规范化")
 class ConsoleResourceTagServiceTest {
@@ -76,11 +80,41 @@ class ConsoleResourceTagServiceTest {
   }
 
   @Test
+  @DisplayName("写入标签前验证同租户资源确实存在")
+  void shouldRejectTagForMissingResource() {
+    when(repository.selectResourceTagTarget("t1", "JOB", "missing-job")).thenReturn(null);
+
+    assertThatThrownBy(() -> service.upsert("t1", "JOB", "missing-job", "env", "prod", "admin"))
+        .isInstanceOf(BizException.class);
+    verify(repository).lockResourceTagIdentity("t1", "JOB", "missing-job");
+    verify(repository, Mockito.never()).upsert(ConsoleResourceTagUpsertParam.builder()
+        .tenantId("t1")
+        .resourceType("JOB")
+        .resourceCode("missing-job")
+        .tagKey("env")
+        .tagValue("prod")
+        .operator("admin")
+        .build());
+  }
+
+  @Test
   @DisplayName("写入标签按租户与资源维度下发下游")
   void shouldUpsertTag() {
+    when(repository.lockResourceTagIdentity("t1", "JOB", "job-001")).thenReturn(1L);
+    when(repository.selectResourceTagTarget("t1", "JOB", "job-001")).thenReturn(1L);
+
     service.upsert("t1", "JOB", "job-001", "env", "prod", "admin");
 
-    verify(repository).upsert("t1", "JOB", "job-001", "env", "prod", "admin");
+    verify(repository).lockResourceTagIdentity("t1", "JOB", "job-001");
+    verify(repository).selectResourceTagTarget("t1", "JOB", "job-001");
+    verify(repository).upsert(ConsoleResourceTagUpsertParam.builder()
+        .tenantId("t1")
+        .resourceType("JOB")
+        .resourceCode("job-001")
+        .tagKey("env")
+        .tagValue("prod")
+        .operator("admin")
+        .build());
   }
 
   @Test
@@ -114,7 +148,14 @@ class ConsoleResourceTagServiceTest {
   void shouldNormalizeResourceTypeToUpperCase() {
     service.upsert("t1", "job", "job-001", "env", "prod", "admin");
 
-    verify(repository).upsert("t1", "JOB", "job-001", "env", "prod", "admin");
+    verify(repository).upsert(ConsoleResourceTagUpsertParam.builder()
+        .tenantId("t1")
+        .resourceType("JOB")
+        .resourceCode("job-001")
+        .tagKey("env")
+        .tagValue("prod")
+        .operator("admin")
+        .build());
   }
 
   @Test

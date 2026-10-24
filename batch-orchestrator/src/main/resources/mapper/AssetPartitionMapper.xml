@@ -18,6 +18,7 @@
             <arg column="payload_storage"  javaType="java.lang.String"/>
             <arg column="payload_json"     javaType="java.lang.String"/>
             <arg column="payload_ref"      javaType="java.lang.String"/>
+            <arg column="result_version_id" javaType="java.lang.Long"/>
         </constructor>
     </resultMap>
 
@@ -122,7 +123,8 @@
             ap.effective_at,
             ap.payload_storage,
             rv.payload_json::text as payload_json,
-            ap.payload_ref
+            ap.payload_ref,
+            ap.result_version_id
         from batch.asset_partition ap
         join batch.result_version rv
           on rv.tenant_id = ap.tenant_id

@@ -16,6 +16,7 @@ import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.Set;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -80,10 +81,8 @@ class ConsolePushSubscriptionServiceTest {
     service.subscribe("tenant-a", "alice", validRequest(), "browser");
     var captured = ArgumentCaptor.forClass(ConsolePushSubscriptionEntity.class);
     verify(repository).upsert(captured.capture());
-    org.assertj.core.api.Assertions.assertThat(captured.getValue().getTenantId())
-        .isEqualTo("tenant-a");
-    org.assertj.core.api.Assertions.assertThat(captured.getValue().getAuthSecret())
-        .isEqualTo("auth");
+    Assertions.assertThat(captured.getValue().getTenantId()).isEqualTo("tenant-a");
+    Assertions.assertThat(captured.getValue().getAuthSecret()).isEqualTo("auth");
   }
 
   private void assertInvalid(ConsolePushSubscribeRequest request) {

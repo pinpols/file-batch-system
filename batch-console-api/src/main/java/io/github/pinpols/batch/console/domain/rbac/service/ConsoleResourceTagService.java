@@ -1,7 +1,11 @@
 package io.github.pinpols.batch.console.domain.rbac.service;
 
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleResourceTagUpsertParam;
+
+
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.domain.rbac.entity.ResourceTagEntity;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleResourceTagMapper;
@@ -25,8 +29,9 @@ public class ConsoleResourceTagService {
 
   public List<ResourceTagEntity> listByResource(
       String tenantId, String resourceType, String resourceCode) {
-    return repository.findByResource(
-        tenantGuard.resolveTenant(tenantId), validateResourceType(resourceType), resourceCode);
+    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
+    String normalizedResourceType = validateResourceType(resourceType);
+    return repository.findByResource(resolvedTenantId, normalizedResourceType, resourceCode);
   }
 
   public List<ResourceTagEntity> listByTagKey(String tenantId, String tagKey, String tagValue) {
@@ -38,7 +43,8 @@ public class ConsoleResourceTagService {
   }
 
   public List<String> listDistinctKeys(String tenantId) {
-    return repository.findDistinctTagKeys(tenantGuard.resolveTenant(tenantId));
+    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
+    return repository.findDistinctTagKeys(resolvedTenantId);
   }
 
   @Transactional
@@ -49,28 +55,41 @@ public class ConsoleResourceTagService {
       String tagKey,
       String tagValue,
       String operator) {
+    String resolvedTenant = tenantGuard.resolveTenant(tenantId);
+    String normalizedType = validateResourceType(resourceType);
+    Guard.requireText(resourceCode, "resourceCode is required");
+    repository.lockResourceTagIdentity(resolvedTenant, normalizedType, resourceCode);
+    if (EmptyChecks.isNull(repository.selectResourceTagTarget(resolvedTenant, normalizedType, resourceCode))) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          ResultCode.INVALID_ARGUMENT.detailKey(),
+          "resource does not exist in tenant: " + normalizedType + "/" + resourceCode);
+    }
+    ConsoleResourceTagUpsertParam consoleResourceTagUpsertParam = ConsoleResourceTagUpsertParam.builder()
+        .tenantId(resolvedTenant)
+        .resourceType(normalizedType)
+        .resourceCode(resourceCode)
+        .tagKey(tagKey)
+        .tagValue(tagValue == null ? "" : tagValue)
+        .operator(operator)
+        .build();
     repository.upsert(
-        tenantGuard.resolveTenant(tenantId),
-        validateResourceType(resourceType),
-        resourceCode,
-        tagKey,
-        tagValue == null ? "" : tagValue,
-        operator);
+        consoleResourceTagUpsertParam);
   }
 
   @Transactional
   public void delete(String tenantId, String resourceType, String resourceCode, String tagKey) {
+    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
+    String normalizedResourceType = validateResourceType(resourceType);
     repository.deleteByResourceAndKey(
-        tenantGuard.resolveTenant(tenantId),
-        validateResourceType(resourceType),
-        resourceCode,
-        tagKey);
+        resolvedTenantId, normalizedResourceType, resourceCode, tagKey);
   }
 
   @Transactional
   public void deleteAllByResource(String tenantId, String resourceType, String resourceCode) {
-    repository.deleteAllByResource(
-        tenantGuard.resolveTenant(tenantId), validateResourceType(resourceType), resourceCode);
+    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
+    String normalizedResourceType = validateResourceType(resourceType);
+    repository.deleteAllByResource(resolvedTenantId, normalizedResourceType, resourceCode);
   }
 
   private String validateResourceType(String resourceType) {

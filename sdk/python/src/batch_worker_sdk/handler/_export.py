@@ -57,14 +57,15 @@ class SdkAbstractExportHandler[R](SdkAbstractTaskHandler):
             async for row in self._query_rows(ctx):
                 await self._write_row(ctx, row)
                 counts.inc_success()
-            return SdkTaskResult.success_with(
-                output=counts.to_output(),
-                message=f"exported {counts.success()} rows",
-            )
+            output = counts.to_output()
+            successful_count = counts.success()
+            summary_message = f"exported {successful_count} rows"
+            return SdkTaskResult.success_with(output=output, message=summary_message)
         except Exception as ex:
+            failure_message = str(ex) or type(ex).__name__
             return SdkTaskResult.fail(
                 HANDLER_ERROR_CODE,
-                str(ex) or type(ex).__name__,
+                failure_message,
                 cause=ex,
             )
         finally:

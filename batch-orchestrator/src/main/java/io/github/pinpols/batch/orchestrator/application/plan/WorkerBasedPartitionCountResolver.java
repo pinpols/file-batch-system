@@ -29,9 +29,11 @@ public class WorkerBasedPartitionCountResolver implements PartitionCountResolver
     if (onlineWorkerCount <= 0) {
       return 0;
     }
+    Object configuredPartitionFactor = params.get("partitionFactor");
+    Object legacyPartitionFactor = params.get("workerPartitionFactor");
     int partitionFactor = firstPositiveInt(
-        params.get("partitionFactor"),
-        params.get("workerPartitionFactor"),
+        configuredPartitionFactor,
+        legacyPartitionFactor,
         shardStrategy == ShardStrategy.DYNAMIC ? 2 : 1);
     return (int) Math.min(256L, onlineWorkerCount * partitionFactor);
   }
@@ -39,7 +41,9 @@ public class WorkerBasedPartitionCountResolver implements PartitionCountResolver
   private long resolveOnlineWorkerCount(
       JobDefinitionEntity jobDefinition, Map<String, Object> params) {
     if (jobDefinition == null || !Texts.hasText(jobDefinition.tenantId())) {
-      return firstPositiveLong(params.get("onlineWorkerCount"), params.get("workerCount"));
+      Object onlineWorkerCount = params.get("onlineWorkerCount");
+      Object legacyWorkerCount = params.get("workerCount");
+      return firstPositiveLong(onlineWorkerCount, legacyWorkerCount);
     }
     if (Texts.hasText(jobDefinition.workerGroup())) {
       return workerRegistryMapper.countByTenantAndWorkerGroupAndStatus(
@@ -79,7 +83,9 @@ public class WorkerBasedPartitionCountResolver implements PartitionCountResolver
       return number.intValue();
     }
     try {
-      return Integer.parseInt(String.valueOf(value).trim());
+      String rawValue = String.valueOf(value);
+      String normalizedValue = rawValue.trim();
+      return Integer.parseInt(normalizedValue);
     } catch (NumberFormatException ignored) {
       SwallowedExceptionLogger.info(
           WorkerBasedPartitionCountResolver.class, "catch:NumberFormatException", ignored);
@@ -96,7 +102,9 @@ public class WorkerBasedPartitionCountResolver implements PartitionCountResolver
       return number.longValue();
     }
     try {
-      return Long.parseLong(String.valueOf(value).trim());
+      String rawValue = String.valueOf(value);
+      String normalizedValue = rawValue.trim();
+      return Long.parseLong(normalizedValue);
     } catch (NumberFormatException ignored) {
       SwallowedExceptionLogger.info(
           WorkerBasedPartitionCountResolver.class, "catch:NumberFormatException", ignored);

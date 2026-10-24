@@ -23,7 +23,8 @@ import org.springframework.stereotype.Service;
  *       LAST_4_WEEKS}。
  * </ul>
  *
- * <p>当前实现按"工作日 = 周一至周五"近似处理；节假日感知（business_calendar.holiday_roll_rule）留给后续 iteration —— 调用方需要时再扩展。
+ * <p>该工具提供不绑定租户日历的自然周基线算术。需要租户节假日语义的作业依赖由
+ * {@code JobDependencyWaitingLaunchService} 结合 {@code calendar_holiday} 解析，并固化结果日期。
  */
 @Service
 public class BizDateArithmetic {
@@ -52,10 +53,14 @@ public class BizDateArithmetic {
     if (bizDate == null || !Texts.hasText(namedOffset)) {
       return null;
     }
-    String tag = namedOffset.trim().toUpperCase(Locale.ROOT);
+    String trimmedOffset = namedOffset.trim();
+    String tag = trimmedOffset.toUpperCase(Locale.ROOT);
     return switch (tag) {
       case "MONTH_START" -> bizDate.withDayOfMonth(1);
-      case "MONTH_END" -> bizDate.with(YearMonth.from(bizDate).atEndOfMonth());
+      case "MONTH_END" -> {
+        YearMonth month = YearMonth.from(bizDate);
+        yield bizDate.with(month.atEndOfMonth());
+      }
       case "QUARTER_START" -> {
         int month = ((bizDate.getMonthValue() - 1) / 3) * 3 + 1;
         yield LocalDate.of(bizDate.getYear(), month, 1);
@@ -87,10 +92,12 @@ public class BizDateArithmetic {
     if (bizDate == null || !Texts.hasText(rangeTag)) {
       return Collections.emptyList();
     }
-    String tag = rangeTag.trim().toUpperCase(Locale.ROOT);
+    String trimmedRangeTag = rangeTag.trim();
+    String tag = trimmedRangeTag.toUpperCase(Locale.ROOT);
 
     if (tag.startsWith("PREV_") && tag.endsWith("_BIZ_DAYS")) {
-      int n = parseLeadingInt(tag.substring("PREV_".length()));
+      String dayCountText = tag.substring("PREV_".length());
+      int n = parseLeadingInt(dayCountText);
       if (n <= 0 || n > RANGE_MAX_DAYS) {
         return Collections.emptyList();
       }
@@ -102,7 +109,8 @@ public class BizDateArithmetic {
       return inclusiveRange(start, end);
     }
     if (tag.startsWith("LAST_") && tag.endsWith("_WEEKS")) {
-      int weeks = parseLeadingInt(tag.substring("LAST_".length()));
+      String weekCountText = tag.substring("LAST_".length());
+      int weeks = parseLeadingInt(weekCountText);
       if (weeks <= 0 || weeks > 13) {
         return Collections.emptyList();
       }

@@ -9,5 +9,9 @@ public interface TriggerDefinitionMapper {
 
   TriggerDescriptor selectByJobCode(String tenantId, String jobCode);
 
-  int updateEnabled(String tenantId, String jobCode, boolean enabled);
+  TriggerDescriptor selectByWorkflowCode(String tenantId, String workflowCode);
+
+  int updateScheduleEnabled(String tenantId, String jobCode, boolean enabled);
+
+  int updateWorkflowScheduleEnabled(String tenantId, String workflowCode, boolean enabled);
 }

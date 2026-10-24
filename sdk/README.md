@@ -70,9 +70,13 @@ Java / Python SDK 提供 5 类 worker 的内建或抽象 handler：
 
 租户可以继承抽象基类，也可以直接使用 typed handler。Go / TS / Rust 不提供内置业务 handler，需由租户实现。
 
+## 新 Orchestrator 的任务参数
+
+Trigger 以 Workflow 为根运行对象；SDK 仍按派发的 Job Task 执行，不需要自行创建或推导 WorkflowRun。handler 的业务参数以 CLAIM 成功回包中的 `payload` 为准，它来自持久化任务载荷，可能包含嵌套的 `crossDay` 依赖结果。不得用 Kafka 派发消息中的旧参数覆盖 CLAIM 结果；旧平台未返回 `payload` 时，Java、Go、Python、TypeScript 保留兼容读取路径。Rust 消费端可先用 `decode_claim_response` 解码 CLAIM 成功回包，再用 `TaskContext::with_claim_response` 绑定载荷、调用链标识和依赖门禁快照（启用 `serde` feature）。
+
 ## 测试与验证
 
-Python 仓库开发与 CI 按 `sdk/python/uv.lock` 使用 `uv sync --locked`；CI 同时验证最低支持版本与当前稳定版本。其他语言使用各自的 manifest/lockfile，并由 [`docs/architecture/runtime-compatibility-contract-2026-09-01.md`](../docs/architecture/runtime-compatibility-contract-2026-09-01.md) 集中记录运行边界。
+Python 仓库开发与 CI 按 `sdk/python/uv.lock` 使用 `uv sync --locked`；CI 同时验证最低支持版本与当前稳定版本。其他语言使用各自的 manifest/lockfile，并由 [`docs/architecture/runtime-compatibility-contract.md`](../docs/architecture/runtime-compatibility-contract.md) 集中记录运行边界。
 
 | 范围 | 入口 | 说明 |
 |---|---|---|

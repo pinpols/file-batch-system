@@ -2,6 +2,7 @@ package io.github.pinpols.batch.sdk.task;
 
 import io.github.pinpols.batch.sdk.checkpoint.SdkCheckpoint;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -27,6 +28,7 @@ import java.util.Objects;
  * @param progress Phase 4 进度上报槽;由 dispatcher 注入,null 时构造器补一个空槽(handler 调 reportProgress 即写入)
  * @param commitCoordinator ADR-037 三合一可靠提交协调器;由续跑模板 / dispatcher 注入,null 时构造器补一个内存断点的空协调器(getter
  *     null-safe)
+ * @param dependencyResultSnapshot Orchestrator dependency-gate evidence; consumers must pin or validate reads explicitly
  */
 public record SdkTaskContext(
     String tenantId,
@@ -39,7 +41,8 @@ public record SdkTaskContext(
     SdkSchedulingContext schedulingContext,
     CancellationSignal cancellation,
     ProgressReporter progress,
-    SdkCommitCoordinator commitCoordinator) {
+    SdkCommitCoordinator commitCoordinator,
+    List<SdkDependencyResultReference> dependencyResultSnapshot) {
 
   @SuppressWarnings("PMD.ExcessiveParameterList")
   public SdkTaskContext {
@@ -48,12 +51,43 @@ public record SdkTaskContext(
     Objects.requireNonNull(taskId, "taskId");
     parameters = parameters == null ? Map.of() : Map.copyOf(parameters);
     runtimeAttributes = runtimeAttributes == null ? Map.of() : Map.copyOf(runtimeAttributes);
+    dependencyResultSnapshot =
+        dependencyResultSnapshot == null ? List.of() : List.copyOf(dependencyResultSnapshot);
     cancellation = cancellation == null ? new CancellationSignal() : cancellation;
     progress = progress == null ? new ProgressReporter() : progress;
     // ADR-037: 默认空协调器(内存断点 + 默认限流),让未走续跑模板的 handler 调 commit/checkpoint 也 null-safe。
     commitCoordinator = commitCoordinator == null
         ? new SdkCommitCoordinator(String.valueOf(taskId), null, progress, cancellation, true, 1)
         : commitCoordinator;
+  }
+
+  /** 11 参兼容构造器 —— ADR-037 前完整调用方式继续可用。 */
+  @SuppressWarnings("PMD.ExcessiveParameterList")
+  public SdkTaskContext(
+      String tenantId,
+      String jobCode,
+      String taskInstanceId,
+      Long taskId,
+      String workerId,
+      Map<String, Object> parameters,
+      Map<String, Object> runtimeAttributes,
+      SdkSchedulingContext schedulingContext,
+      CancellationSignal cancellation,
+      ProgressReporter progress,
+      SdkCommitCoordinator commitCoordinator) {
+    this(
+        tenantId,
+        jobCode,
+        taskInstanceId,
+        taskId,
+        workerId,
+        parameters,
+        runtimeAttributes,
+        schedulingContext,
+        cancellation,
+        progress,
+        commitCoordinator,
+        List.of());
   }
 
   /** 10 参兼容构造器 —— ADR-037 前的构造方式继续可用,commit 走默认协调器。 */

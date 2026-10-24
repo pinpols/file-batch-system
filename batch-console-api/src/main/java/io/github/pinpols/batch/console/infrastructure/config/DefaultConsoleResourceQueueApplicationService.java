@@ -1,9 +1,12 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
+import io.github.pinpols.batch.console.domain.ops.query.ResourceQueueQuery;
+import io.github.pinpols.batch.console.application.contract.request.config.ResourceQueueListRequest;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
+import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.application.config.ConsoleResourceQueueApplicationService;
 import io.github.pinpols.batch.console.application.contract.request.config.ResourceQueueCreateRequest;
@@ -27,19 +30,17 @@ public class DefaultConsoleResourceQueueApplicationService
   private final ConsoleTenantGuard tenantGuard;
 
   @Override
-  public PageResponse<ResourceQueueResponse> list(
-      String tenantId,
-      String queueCode,
-      String queueType,
-      Boolean enabled,
-      int pageNo,
-      int pageSize) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    PageRequest pageRequest = new PageRequest(pageNo, pageSize);
-    long total = resourceQueueMapper.countByQuery(resolved, queueCode, queueType, enabled);
+  public PageResponse<ResourceQueueResponse> list(ResourceQueueListRequest request) {
+    String resolved = tenantGuard.resolveTenant(request.tenantId());
+    String normalizedQueueCode = CodeNormalizer.normalizeConfigCode(request.queueCode(), "queueCode");
+    PageRequest pageRequest = new PageRequest(request.pageNo(), request.pageSize());
+    ResourceQueueQuery query = new ResourceQueueQuery(
+        resolved, normalizedQueueCode, request.queueType(), request.enabled(), pageRequest);
+    long total =
+        resourceQueueMapper.countByQuery(query);
     List<ResourceQueueResponse> items =
         resourceQueueMapper
-            .selectByQuery(resolved, queueCode, queueType, enabled, pageRequest)
+            .selectByQuery(query)
             .stream()
             .map(ResourceQueueResponse::from)
             .toList();
@@ -49,8 +50,8 @@ public class DefaultConsoleResourceQueueApplicationService
   @Override
   public ResourceQueueResponse create(ResourceQueueCreateRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    Map<String, Object> existing =
-        resourceQueueMapper.selectByUniqueKey(tenantId, request.getQueueCode());
+    String queueCode = CodeNormalizer.normalizeConfigCode(request.getQueueCode(), "queueCode");
+    Map<String, Object> existing = resourceQueueMapper.selectByUniqueKey(tenantId, queueCode);
     if (existing != null) {
       throw BizException.of(
           ResultCode.CONFLICT,
@@ -59,7 +60,7 @@ public class DefaultConsoleResourceQueueApplicationService
     }
     Map<String, Object> params = new HashMap<>();
     params.put("tenant_id", tenantId);
-    params.put("queue_code", request.getQueueCode());
+    params.put("queue_code", queueCode);
     params.put("queue_name", request.getQueueName());
     params.put("queue_type", request.getQueueType());
     params.put(
@@ -80,14 +81,15 @@ public class DefaultConsoleResourceQueueApplicationService
     params.put("description", request.getDescription());
     resourceQueueMapper.insert(params);
     Long id = ((Number) params.get("id")).longValue();
-    return ResourceQueueResponse.from(resourceQueueMapper.selectById(tenantId, id));
+    Map<String, Object> createdQueue = resourceQueueMapper.selectById(tenantId, id);
+    return ResourceQueueResponse.from(createdQueue);
   }
 
   @Override
   public ResourceQueueResponse update(Long id, ResourceQueueUpdateRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    Map<String, Object> existing = Guard.requireFound(
-        resourceQueueMapper.selectById(tenantId, id), "resource queue not found");
+    Map<String, Object> selectedQueue = resourceQueueMapper.selectById(tenantId, id);
+    Map<String, Object> existing = Guard.requireFound(selectedQueue, "resource queue not found");
     Map<String, Object> params = new HashMap<>();
     params.put("tenant_id", tenantId);
     params.put("id", id);
@@ -131,7 +133,8 @@ public class DefaultConsoleResourceQueueApplicationService
         "description",
         request.getDescription() != null ? request.getDescription() : existing.get("description"));
     resourceQueueMapper.update(params);
-    return ResourceQueueResponse.from(resourceQueueMapper.selectById(tenantId, id));
+    Map<String, Object> updatedQueue = resourceQueueMapper.selectById(tenantId, id);
+    return ResourceQueueResponse.from(updatedQueue);
   }
 
   @Override

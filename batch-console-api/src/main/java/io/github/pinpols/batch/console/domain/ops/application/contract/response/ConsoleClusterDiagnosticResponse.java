@@ -19,10 +19,15 @@ public record ConsoleClusterDiagnosticResponse(
     if (row == null) {
       return null;
     }
-    return new ConsoleClusterDiagnosticResponse(
-        ConsoleShedLockStatusResponse.from(asMap(row.get("shedLock"))),
-        ConsoleWorkerConsistencyResponse.from(asMap(row.get("workers"))),
-        ConsoleOutboxHealthResponse.from(asMap(row.get("outbox"))),
-        ConsoleTerminalChildrenHealthResponse.from(asMap(row.get("terminalChildren"))));
+    Map<String, Object> shedLockRow = asMap(row.get("shedLock"));
+    ConsoleShedLockStatusResponse shedLock = ConsoleShedLockStatusResponse.from(shedLockRow);
+    Map<String, Object> workersRow = asMap(row.get("workers"));
+    ConsoleWorkerConsistencyResponse workers = ConsoleWorkerConsistencyResponse.from(workersRow);
+    Map<String, Object> outboxRow = asMap(row.get("outbox"));
+    ConsoleOutboxHealthResponse outbox = ConsoleOutboxHealthResponse.from(outboxRow);
+    Map<String, Object> terminalChildrenRow = asMap(row.get("terminalChildren"));
+    ConsoleTerminalChildrenHealthResponse terminalChildren =
+        ConsoleTerminalChildrenHealthResponse.from(terminalChildrenRow);
+    return new ConsoleClusterDiagnosticResponse(shedLock, workers, outbox, terminalChildren);
   }
 }

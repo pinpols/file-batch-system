@@ -3,15 +3,16 @@ package io.github.pinpols.batch.worker.processes.infrastructure;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.constants.NodeOutputKeys;
+import io.github.pinpols.batch.common.enums.SystemPipelineTaskKeys;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.support.AbstractPipelineStepExecutionAdapter;
 import io.github.pinpols.batch.worker.core.support.PipelineCompensationHook;
+import io.github.pinpols.batch.worker.core.support.PipelineStepTemplateProvider;
 import io.github.pinpols.batch.worker.core.support.PipelineVerifierHook;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessPayload;
@@ -40,15 +41,15 @@ public class ProcessStepExecutionAdapter
   public ProcessStepExecutionAdapter(
       ProcessStageExecutor processStageExecutor,
       ObjectMapper objectMapper,
-      PlatformPipelineDefinitionRepository pipelineDefinitions,
       PlatformPipelineRunRepository pipelineRuns,
       PlatformFileRecordRepository fileRecords,
+      PipelineStepTemplateProvider stepTemplateProvider,
       ObjectProvider<PipelineVerifierHook> verifierHookProvider,
       ObjectProvider<PipelineCompensationHook> compensationHookProvider) {
     super(
-        pipelineDefinitions,
         pipelineRuns,
         fileRecords,
+        stepTemplateProvider,
         verifierHookProvider,
         compensationHookProvider);
     this.processStageExecutor = processStageExecutor;
@@ -96,6 +97,13 @@ public class ProcessStepExecutionAdapter
       Object processImplCode = payloadAttributes.get(ComputeStep.ATTR_PROCESS_IMPL_CODE);
       if (EmptyChecks.isNotNull(processImplCode)) {
         attributes.putIfAbsent(ComputeStep.ATTR_PROCESS_IMPL_CODE, String.valueOf(processImplCode));
+      }
+      Object systemStepParams = payloadAttributes.get(SystemPipelineTaskKeys.STEP_PARAMS);
+      if (systemStepParams instanceof Map<?, ?> steps) {
+        Object computeParams = steps.get(ProcessStage.COMPUTE.name());
+        if (computeParams instanceof Map<?, ?>) {
+          attributes.putIfAbsent(ProcessRuntimeKeys.PROCESS_COMPUTE_STEP_PARAMS, computeParams);
+        }
       }
     }
     // 与 IMPORT/EXPORT 一致:除散开 Map 外,再放一份强类型 ProcessPayload,业务 stage 可按需取

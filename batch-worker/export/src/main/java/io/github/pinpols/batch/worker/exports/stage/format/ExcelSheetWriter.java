@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.exports.stage.format;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.exports.stage.format.AbstractExportFormat.ColumnLayout;
 import io.github.pinpols.batch.worker.exports.stage.format.AbstractExportFormat.ColumnType;
 import java.time.Instant;
@@ -84,10 +85,12 @@ final class ExcelSheetWriter {
     Row row = currentSheet.createRow(rowNoInSheet++);
     for (int i = 0; i < columns.size(); i++) {
       Cell cell = row.createCell(i);
+      ColumnLayout column = columns.get(i);
+      Object resolvedValue = helper.resolveDelimitedValue(batch, detail, column.source());
       writeTypedCell(
           cell,
-          columns.get(i),
-          helper.resolveDelimitedValue(batch, detail, columns.get(i).source()),
+          column,
+          resolvedValue,
           i);
     }
     rowsInCurrentSheet++;
@@ -112,7 +115,10 @@ final class ExcelSheetWriter {
       Row row = currentSheet.createRow(rowNoInSheet++);
       for (int c = 0; c < columns.size(); c++) {
         Cell cell = row.createCell(c);
-        cell.setCellValue(ExcelStyleSupport.escapeFormula(columns.get(c).header()));
+        ColumnLayout column = columns.get(c);
+        String header = column.header();
+        String escapedHeader = ExcelStyleSupport.escapeFormula(header);
+        cell.setCellValue(escapedHeader);
         if (headerStyle != null) {
           cell.setCellStyle(headerStyle);
         }
@@ -120,8 +126,10 @@ final class ExcelSheetWriter {
     }
     if (styleOptions.autoWidth()) {
       for (int c = 0; c < columns.size(); c++) {
-        currentSheet.setColumnWidth(
-            c, ExcelStyleSupport.autoColumnWidth(columns.get(c).header()));
+        ColumnLayout column = columns.get(c);
+        String header = column.header();
+        int columnWidth = ExcelStyleSupport.autoColumnWidth(header);
+        currentSheet.setColumnWidth(c, columnWidth);
       }
     }
     if (styleOptions.freezeHeader()) {
@@ -140,7 +148,9 @@ final class ExcelSheetWriter {
         continue;
       }
       Cell cell = groupRow.createCell(from);
-      cell.setCellValue(ExcelStyleSupport.escapeFormula(group.title()));
+      String groupTitle = group.title();
+      String escapedGroupTitle = ExcelStyleSupport.escapeFormula(groupTitle);
+      cell.setCellValue(escapedGroupTitle);
       if (headerStyle != null) {
         cell.setCellStyle(headerStyle);
       }
@@ -185,7 +195,9 @@ final class ExcelSheetWriter {
     }
     // STRING 或上述类型解析失败 → 文本回退。
     String text = helper.textValue(value);
-    cell.setCellValue(ExcelStyleSupport.escapeFormula(text == null ? String.valueOf(value) : text));
+    String valueToEscape = EmptyChecks.isNull(text) ? String.valueOf(value) : text;
+    String escapedValue = ExcelStyleSupport.escapeFormula(valueToEscape);
+    cell.setCellValue(escapedValue);
   }
 
   /** 取(或建)该列的数字 / 日期格式样式并缓存复用;未声明 format 串则不套样式(默认通用格式)。 */
@@ -208,7 +220,8 @@ final class ExcelSheetWriter {
       return number.doubleValue();
     }
     try {
-      String text = String.valueOf(value).trim();
+      String rawText = String.valueOf(value);
+      String text = rawText.trim();
       return text.isEmpty() ? null : Double.valueOf(text);
     } catch (NumberFormatException ignored) {
       return null;
@@ -220,7 +233,8 @@ final class ExcelSheetWriter {
     if (value instanceof Boolean bool) {
       return bool;
     }
-    String text = String.valueOf(value).trim();
+    String rawText = String.valueOf(value);
+    String text = rawText.trim();
     if (text.equalsIgnoreCase("true") || text.equals("1")) {
       return Boolean.TRUE;
     }
@@ -238,20 +252,29 @@ final class ExcelSheetWriter {
       return Date.from(instant);
     }
     if (value instanceof LocalDateTime ldt) {
-      return Date.from(ldt.toInstant(ZoneOffset.UTC));
+      Instant utcInstant = ldt.toInstant(ZoneOffset.UTC);
+      return Date.from(utcInstant);
     }
     if (value instanceof LocalDate ld) {
-      return Date.from(ld.atStartOfDay().toInstant(ZoneOffset.UTC));
+      LocalDateTime startOfDay = ld.atStartOfDay();
+      Instant utcInstant = startOfDay.toInstant(ZoneOffset.UTC);
+      return Date.from(utcInstant);
     }
-    String text = String.valueOf(value).trim();
+    String rawText = String.valueOf(value);
+    String text = rawText.trim();
     if (text.isEmpty()) {
       return null;
     }
     try {
-      return Date.from(LocalDateTime.parse(text, ISO_DATE_TIME).toInstant(ZoneOffset.UTC));
+      LocalDateTime parsedDateTime = LocalDateTime.parse(text, ISO_DATE_TIME);
+      Instant utcInstant = parsedDateTime.toInstant(ZoneOffset.UTC);
+      return Date.from(utcInstant);
     } catch (Exception ignoredDateTime) {
       try {
-        return Date.from(LocalDate.parse(text).atStartOfDay().toInstant(ZoneOffset.UTC));
+        LocalDate parsedDate = LocalDate.parse(text);
+        LocalDateTime startOfDay = parsedDate.atStartOfDay();
+        Instant utcInstant = startOfDay.toInstant(ZoneOffset.UTC);
+        return Date.from(utcInstant);
       } catch (Exception ignoredDate) {
         return null;
       }

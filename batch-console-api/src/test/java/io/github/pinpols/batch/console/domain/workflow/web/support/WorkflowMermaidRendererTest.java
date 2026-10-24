@@ -119,7 +119,25 @@ class WorkflowMermaidRendererTest {
   private static WorkflowDefinitionDetailResponse detail(
       List<ConsoleWorkflowNodeResponse> nodes, List<ConsoleWorkflowEdgeResponse> edges) {
     return new WorkflowDefinitionDetailResponse(
-        1L, "t1", "WF_DEMO", "Demo", "DAG", 1, true, "demo workflow", null, null, nodes, edges);
+        1L,
+        "t1",
+        "WF_DEMO",
+        "Demo",
+        "DAG",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        1,
+        true,
+        "demo workflow",
+        null,
+        null,
+        nodes,
+        edges);
   }
 
   private static ConsoleWorkflowNodeResponse node(String code, String name, String type) {

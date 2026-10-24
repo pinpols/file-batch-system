@@ -104,7 +104,7 @@ class ConfigPackageWorkbookGuidanceTest {
     try (XSSFWorkbook processWb = buildSampleTemplate("PROCESS")) {
       assertThat(processWb.getSheet(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET))
           .isNull();
-      assertThat(processWb.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET)).isNotNull();
+      assertThat(processWb.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET)).isNull();
       assertThat(processWb.getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET))
           .isNull();
     }
@@ -119,10 +119,12 @@ class ConfigPackageWorkbookGuidanceTest {
   }
 
   @Test
-  @DisplayName("完整模板路径保持原有工作簿结构和完整字段")
+  @DisplayName("新完整模板不再提供可编辑 Pipeline 定义表")
   void shouldPreserveLegacyFullWorkbook_whenBuildingTemplate() throws Exception {
     try (XSSFWorkbook wb = buildTemplate()) {
-      assertThat(wb.getNumberOfSheets()).isEqualTo(20);
+      assertThat(wb.getNumberOfSheets()).isEqualTo(18);
+      assertThat(wb.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET)).isNull();
+      assertThat(wb.getSheet(ConfigPackageExcelValidator.STEP_SHEET)).isNull();
       assertThat(wb.getSheet(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET)).isNotNull();
       assertThat(wb.getSheet(ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET))
           .isNotNull();
@@ -183,10 +185,7 @@ class ConfigPackageWorkbookGuidanceTest {
           workbook.getSheet(ConfigPackageExcelValidator.CHANNEL_SHEET),
           "receipt_policy",
           DictEnum.codeList(FileReceiptPolicy.class));
-      assertDropdownValues(
-          workbook.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET),
-          "pipeline_type",
-          DictEnum.codeList(PipelineType.class));
+      assertThat(workbook.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET)).isNull();
       assertDropdownValues(
           workbook.getSheet(ConfigPackageExcelValidator.WF_DEF_SHEET),
           "workflow_type",
@@ -219,10 +218,7 @@ class ConfigPackageWorkbookGuidanceTest {
           workbook.getSheet(ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET),
           "completion_deadline_severity",
           List.of("WARN", "ERROR", "CRITICAL"));
-      assertDropdownValues(
-          workbook.getSheet(ConfigPackageExcelValidator.STEP_SHEET),
-          "stage_code",
-          List.of(ConfigPackageSheetSpecs.STAGE_CODE_DROPDOWN));
+      assertThat(workbook.getSheet(ConfigPackageExcelValidator.STEP_SHEET)).isNull();
       assertDropdownValues(
           workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET),
           "enabled",
@@ -268,6 +264,8 @@ class ConfigPackageWorkbookGuidanceTest {
             "schedule_type",
             "schedule_expr",
             "depends_on_job_code",
+            "depends_on_job_codes",
+            "depends_on_biz_date_alignments",
             "calendar_code",
             "window_code",
             "default_params",
@@ -718,11 +716,11 @@ class ConfigPackageWorkbookGuidanceTest {
       // job_type 必须都是合法 JobType enum code(束类型新增/改名而示例未同步即挂)。
       Set<String> jobCodes = DictEnum.codes(JobType.class);
       assertThat(jobTypes).allMatch(jobCodes::contains);
-      // 每行的 manifest 示例必须是真实非空 .batch.json v2(含 schemaVersion + jobCode),不是占位。
+      // 每行的 manifest 示例必须是真实非空 .batch.json v2(含 schemaVersion + workflowCode),不是占位。
       assertThat(manifestExamples)
           .allSatisfy(m -> assertThat(m)
               .contains("batch-manifest-v2")
-              .contains("jobCode")
+              .contains("workflowCode")
               .contains("fileMapping"));
       // 导出束清单不含 requiredFiles(manifest-only 触发);导入/分发含。
       assertThat(manifestExamples.get(1)).doesNotContain("requiredFiles");

@@ -68,11 +68,13 @@ public class ConsoleOidcProperties {
   private static URI parseAbsoluteUri(String value, String name) {
     try {
       URI uri = URI.create(value);
-      if (!uri.isAbsolute()
+      boolean uriIsInvalid =
+          !uri.isAbsolute()
           || EmptyChecks.isNull(uri.getHost())
           || EmptyChecks.isNotNull(uri.getUserInfo())
           || EmptyChecks.isNotNull(uri.getQuery())
-          || EmptyChecks.isNotNull(uri.getFragment())) {
+          || EmptyChecks.isNotNull(uri.getFragment());
+      if (uriIsInvalid) {
         throw invalid(name + " must be an absolute URI without user-info, query, or fragment");
       }
       return uri;

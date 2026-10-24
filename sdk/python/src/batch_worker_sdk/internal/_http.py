@@ -72,7 +72,8 @@ class PlatformHttpClient:
             self._client = client
             self._owns_client = False
         else:
-            timeout = httpx.Timeout(config.http_timeout.total_seconds())
+            timeout_seconds = config.http_timeout.total_seconds()
+            timeout = httpx.Timeout(timeout_seconds)
             self._client = httpx.AsyncClient(
                 base_url=config.base_url,
                 timeout=timeout,
@@ -220,7 +221,9 @@ class PlatformHttpClient:
         """
         if not (self.config.request_signing_enabled and self.config.api_key):
             return {}
-        timestamp = str(int(time.time() * 1000))
+        epoch_seconds = time.time()
+        epoch_millis = int(epoch_seconds * 1000)
+        timestamp = str(epoch_millis)
         nonce = str(uuid.uuid4())
         signature = _signing.sign(
             self.config.api_key,
@@ -257,10 +260,11 @@ class PlatformHttpClient:
 
         # max_attempts=None → 默认重试预算;heartbeat/renew 传 1 走 §C no-backoff 豁免。
         attempts = max_attempts if max_attempts is not None else self.config.retry_max_attempts
+        base_delay_seconds = self.config.retry_base_delay.total_seconds()
         return await with_retry(
             factory,
             max_attempts=attempts,
-            base_delay_s=self.config.retry_base_delay.total_seconds(),
+            base_delay_s=base_delay_seconds,
             counter=self._counter,
         )
 

@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.imports.stage;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
@@ -14,6 +15,7 @@ import io.github.pinpols.batch.worker.core.support.StageFailureCode;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportStage;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
+import io.github.pinpols.batch.worker.imports.domain.ImportStagingFiles;
 import io.github.pinpols.batch.worker.imports.domain.ImportWorkerType;
 import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
 import io.micrometer.core.instrument.Counter;
@@ -69,26 +71,50 @@ public class DefaultImportStageExecutor
 
   @Override
   public List<ImportStageResult> execute(ImportJobContext context) {
+    ImportStagingFiles stagingFiles = new ImportStagingFiles();
+    if (EmptyChecks.isNotNull(context)) {
+      context.setStagingFiles(stagingFiles);
+    }
     // 主链路：执行 stage loop；无论成功/失败都尝试收敛错误明细产物（用于对账/审计）。
     try {
-      return runStageLoop(context);
+      List<ImportStageResult> results = runStageLoop(context);
+      if (EmptyChecks.isNotEmpty(results)
+          && results.stream().allMatch(ImportStageResult::success)) {
+        stagingFiles.markSuccessful();
+      }
+      return results;
     } finally {
       try {
-        recordImportRowsMetrics(context);
-      } catch (Exception exception) {
-        log.warn(
-            "failed to record import row metrics: {}",
-            SwallowedExceptionLogger.summary(exception),
-            exception);
+        finalizeImport(context);
+      } finally {
+        if (EmptyChecks.isNotNull(context)) {
+          context.setStagingFiles(null);
+        }
+        try {
+          stagingFiles.close();
+        } catch (Exception exception) {
+          log.warn("failed to clean up import staging files", exception);
+        }
       }
-      try {
-        recordGovernanceService.finalizeErrorOutput(context);
-      } catch (Exception exception) {
-        log.warn(
-            "failed to finalize import error output: {}",
-            SwallowedExceptionLogger.summary(exception),
-            exception);
-      }
+    }
+  }
+
+  private void finalizeImport(ImportJobContext context) {
+    try {
+      recordImportRowsMetrics(context);
+    } catch (Exception exception) {
+      log.warn(
+          "failed to record import row metrics: {}",
+          SwallowedExceptionLogger.summary(exception),
+          exception);
+    }
+    try {
+      recordGovernanceService.finalizeErrorOutput(context);
+    } catch (Exception exception) {
+      log.warn(
+          "failed to finalize import error output: {}",
+          SwallowedExceptionLogger.summary(exception),
+          exception);
     }
   }
 
@@ -120,6 +146,19 @@ public class DefaultImportStageExecutor
   @Override
   public List<PipelineStepTemplate> defaultStepDefinitions() {
     return defaultStepDefinitions;
+  }
+
+  @Override
+  public ReplayCapabilityDeclaration resolveReplayCapability(ImportJobContext context) {
+    ImportStageStep receiveStage = stepsByStage.get(ImportStage.RECEIVE);
+    ImportStageStep loadStage = stepsByStage.get(ImportStage.LOAD);
+    if (EmptyChecks.isNull(context)
+        || !(receiveStage instanceof ReceiveStep receiveStep)
+        || !(loadStage instanceof LoadStep loadStep)) {
+      return ReplayCapabilityDeclaration.unknown(ImportWorkerType.IMPORT);
+    }
+    Map<String, Object> frozenTemplateConfig = receiveStep.resolveTemplateConfig(context);
+    return loadStep.replayCapability(frozenTemplateConfig);
   }
 
   @Override
@@ -172,12 +211,14 @@ public class DefaultImportStageExecutor
           context.getTenantId(),
           context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
           exception);
+      String localizedMessageArgument = exception.getMessage();
+      String fallbackMessage = exception.getMessage();
       return ImportStageResult.failure(
           stage,
           StageFailureCode.INFRA_ERROR.name(),
           "error.worker.stage_infra_error",
-          new Object[] {exception.getMessage()},
-          exception.getMessage(),
+          new Object[] {localizedMessageArgument},
+          fallbackMessage,
           ERROR_OBJECT_MAPPER);
     }
   }
@@ -270,8 +311,13 @@ public class DefaultImportStageExecutor
       if (step == null) {
         throw new IllegalStateException("missing import step bean for stage: " + stage.name());
       }
-      ordered.add(
-          new StepDescriptor(step.stepCode(), step.stepName(), step.implCode(), stage.name()));
+      String stepCode = step.stepCode();
+      String stepName = step.stepName();
+      String implementationCode = step.implCode();
+      String stageCode = stage.name();
+      StepDescriptor descriptor =
+          new StepDescriptor(stepCode, stepName, implementationCode, stageCode);
+      ordered.add(descriptor);
     }
     return buildStepTemplates(ordered);
   }

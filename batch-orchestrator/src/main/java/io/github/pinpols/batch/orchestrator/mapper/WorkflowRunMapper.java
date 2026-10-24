@@ -13,11 +13,18 @@ public interface WorkflowRunMapper {
 
   WorkflowRunEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
+  WorkflowRunEntity selectByTenantAndTriggerRequestId(
+      @Param("tenantId") String tenantId, @Param("triggerRequestId") Long triggerRequestId);
+
   /** ADR-018 reconciler：跨租户扫 WAITING_DEPENDENCY 时按 id 直查（id 全局唯一 BIGSERIAL）。 */
   WorkflowRunEntity selectByIdAnyTenant(@Param("id") Long id);
 
   WorkflowRunEntity selectByRelatedJobInstanceId(
       @Param("tenantId") String tenantId, @Param("relatedJobInstanceId") Long relatedJobInstanceId);
+
+  /** Resolve the owning direct Workflow run through the JOB node's explicit execution link. */
+  WorkflowRunEntity selectByNodeJobInstanceId(
+      @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
   List<WorkflowRunEntity> selectByQuery(WorkflowRunQuery query);
 

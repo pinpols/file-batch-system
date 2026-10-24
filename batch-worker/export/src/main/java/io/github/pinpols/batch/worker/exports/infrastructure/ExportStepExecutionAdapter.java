@@ -7,7 +7,6 @@ import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.core.support.AbstractPipelineStepExecutionAdapter;
@@ -52,15 +51,14 @@ public class ExportStepExecutionAdapter
   public ExportStepExecutionAdapter(
       ExportStageExecutor exportStageExecutor,
       ObjectMapper objectMapper,
-      PlatformPipelineDefinitionRepository pipelineDefinitions,
       PlatformPipelineRunRepository pipelineRuns,
       PlatformFileRecordRepository fileRecords,
       ObjectProvider<PipelineVerifierHook> verifierHookProvider,
       ObjectProvider<PipelineCompensationHook> compensationHookProvider) {
     super(
-        pipelineDefinitions,
         pipelineRuns,
         fileRecords,
+        exportStageExecutor,
         verifierHookProvider,
         compensationHookProvider);
     this.exportStageExecutor = exportStageExecutor;

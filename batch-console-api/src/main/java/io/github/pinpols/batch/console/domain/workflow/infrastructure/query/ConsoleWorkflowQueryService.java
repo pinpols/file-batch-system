@@ -55,6 +55,8 @@ public class ConsoleWorkflowQueryService {
         request.getWorkflowCode(),
         request.getWorkflowName(),
         request.getWorkflowType(),
+        request.getRelatedJobCode(),
+        request.getSingleJobWorkflow(),
         request.getVersion(),
         request.getEnabled(),
         pageRequest);
@@ -216,11 +218,19 @@ public class ConsoleWorkflowQueryService {
         display(entity.getWorkflowCode()),
         display(entity.getWorkflowName()),
         display(entity.getWorkflowType()),
+        display(entity.getScheduleType()),
+        display(entity.getScheduleExpr()),
+        display(entity.getTimezone()),
+        display(entity.getTriggerMode()),
+        display(entity.getCalendarCode()),
+        display(entity.getDependsOnJobCode()),
         entity.getVersion(),
         entity.getEnabled(),
+        entity.getScheduleEnabled(),
         display(entity.getDescription()),
         entity.getCreatedAt(),
-        entity.getUpdatedAt());
+        entity.getUpdatedAt(),
+        entity.getSingleJobDefinitionId());
   }
 
   private ConsoleWorkflowNodeResponse toWorkflowNodeResponse(WorkflowNodeEntity entity) {
@@ -281,6 +291,7 @@ public class ConsoleWorkflowQueryService {
     return new ConsoleWorkflowNodeRunResponse(
         entity.getId(),
         entity.getWorkflowRunId(),
+        entity.getJobInstanceId(),
         display(entity.getNodeCode()),
         display(entity.getNodeType()),
         entity.getRunSeq(),
@@ -288,6 +299,8 @@ public class ConsoleWorkflowQueryService {
         entity.getRetryCount(),
         display(entity.getErrorCode()),
         display(errorMessage),
+        display(entity.getSkipReasonCode()),
+        display(entity.getSkipReason()),
         entity.getStartedAt(),
         entity.getFinishedAt(),
         entity.getDurationMs());

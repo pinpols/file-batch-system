@@ -1,5 +1,36 @@
 # 变更记录（规范与架构权威条款变化）
 
+### 2026-10-14
+- **跨模块设计闭环复核归档**：新增[六项缺陷记录](./audit/design-closure-review-2026-10-14.md)，包含 PROCESS 分区清理误删的真实 PostgreSQL 临时表复现及其他五项静态调用链证据；登记 TODO Master 的 SEAM-1–6、模块责任和验收条件。仅归档发现，未实施业务修复。
+- **全新库整合范围与验证修订**：按用户确认以 [ADR-048](./architecture/adr/ADR-048-workflow-fresh-database-cutover.md)取代 ADR-047，取消旧系统兼容和旧库升级；完善单一入口、事务边界、日期/覆盖、结算竞态、停旧启新与首次业务写入后的恢复边界。新增 [R01–R24 验证矩阵](./plans/workflow-daily-integration-validation-2026-10-14.md)，记录本轮 2 项 Trigger 失败及阻断空库测试的 testCompile 错误；本轮仅改文档，未宣称系统可用。
+- **Workflow 与每日连续性隔离整合**：将契约 `2026-10-14.1` 收敛至 [ADR-047](./architecture/adr/ADR-047-workflow-scheduling-and-daily-obligations.md)，两来源方案引用共同决策；新增[整合计划](./plans/workflow-daily-integration-plan-2026-10-14.md)，记录固定来源快照、迁移重编号、共享字段合并、实际验证和未完成的运行/结算缺口。来源方案的历史测试不作为整合验收，暂停来源任务尚未实际执行。
+- **Workflow 节点跳过归因与无根流程恢复**：节点运行和冷归档记录跳过原因类别及人工说明；rootless Workflow 人工跳过后沿冻结图继续派发后继节点。
+- **无根组合 Workflow 并行节点身份**：子 Job 的 worker task payload 现在带上对应的 Workflow 节点编码；真实 PostgreSQL/Kafka/MinIO/Valkey 集成用例覆盖两个并行节点独立完成、Workflow 不提前终止并在最后一个分支完成后只生成一个 END。失败分支和重启恢复仍待验证。
+- **Pipeline 写 API 退役阶段**：租户定义的 POST/PUT/启停返回 `STATE_CONFLICT`，列表/详情仍供历史查询；系统 Pipeline 概念、运行模型和观测不删除，按 Job 类型确定关联。配置包和初始化写路径仍待迁移。
+- **Workflow 统一与系统 Pipeline 改造进行中**：新增公共固定 Pipeline 目录及 Job 类型映射；Worker 从注册阶段模板执行并写入系统 Pipeline code/version；Job 与 Workflow 响应包含显式关联 ID，新增 Job/复制/配置包导入事务中生成受管 `START→JOB→END` Workflow，并支持按 Job 编码筛选引用它的 Workflow。V236–V238 增加 Pipeline 历史身份、单作业关联并为存量非 WORKFLOW Job 回填默认 Workflow；不删除 Pipeline 模型或旧配置表。已有 PostgreSQL 集成验证覆盖全量迁移及带存量 Job 的回填。WF-1 尚缺类型/版本载荷核验、PROCESS 参数迁移和旧配置写路径退出；节点运行/统一 Launch/Trigger、legacy WORKFLOW 转换、前端完整联动和配置包退役仍未完成，不代表可部署切换。
+- **Workflow 统一运行与系统 Pipeline 方案**：固定作业定义/工作流定义两个联动菜单、全流程一组 START/END，以及 Job 按类型选择代码内置 Pipeline 的目标契约；保留 Pipeline 执行/观测模型。当前系统目录、单 Job Workflow 关系、Job 类型 Pipeline 身份和部分前端双向定位已实现；组合根 Launch、旧关联/API/配置包转换及统一运行详情仍在实施，不代表可部署切换。
+- **Workflow 调度 API 与历史快照**：Workflow create/update/detail 契约可读写调度元数据；V241 将调度字段同步到热/冷定义版本，旧快照保持未知值。V242 将旧 WORKFLOW wrapper schedule 迁入 Workflow；单作业 Workflow 的 Trigger 定义现从 Workflow 读取调度字段并携带 Workflow ID/code/version，同时保留 JobCode Launch 兼容目标。组合 Workflow 根 Launch 未完成，前端调度编辑暂不开放。
+- **作业依赖日期对齐接入业务日历**：`PREVIOUS_BIZ_DAY` 现按下游作业绑定日历的显式 HOLIDAY/WORKDAY_OVERRIDE 和周末基线计算；第一次进入依赖等待时保存解析日期，等待恢复固定使用快照。未配置日历仍兼容周一至周五算法。
+- **MANUAL_APPROVAL misfire 审批/过期状态收敛**：Trigger 每 30 秒通过 ShedLock 对账统一审批结果和 pending expiry；批准时收敛 pending/occurrence，拒绝或过期时只关闭仍为 ACCEPTED 的补跑请求，并把 occurrence 推到 `MISFIRE_SKIPPED`。三个持久化状态在单条 PostgreSQL statement 内完成 CAS 收敛，重扫幂等。
+- **空批量日依赖预期调度连续覆盖区间**：Quartz occurrence 物化与当前调度版本覆盖区间在同一事务写入，重启后从最后成功位置续扫；超出枚举容量时不推进水位。空日结算验证 cutoff 落在每个启用 CRON/FIXED_RATE 定义的连续覆盖区间内，避免把停机缺口当作无预期作业。
+- **空批量日人工确认结算**：CUTOFF 且实例数为零、没有跨日历或作业依赖等待请求的业务日可由 Console 管理员以 `SETTLE_EMPTY` 显式确认并结算，要求操作原因，服务端二次校验并从认证上下文记录操作者；自动结算仍需预期作业清单，零实例不会自动等同成功。
+- **修复 Workflow WAIT 节点未进入 sensor 轮询**：派发服务过去把 WAIT 当成普通 TASK，节点停在 READY 并创建 worker 任务，SensorPollScheduler 却只扫描 RUNNING。现在专用路由只创建 RUNNING 节点运行记录；真实 PostgreSQL 测试覆盖工作流启动、完整文件组命中和 WAIT→END 推进，并断言未创建 worker task/partition。
+- **Workflow WAIT 到真实 TASK 派发的事务故障注入**：真实 PostgreSQL trigger 在 TASK outbox 插入时抛错，验证 WAIT 成功状态、下游节点运行记录、任务、分区和 outbox 均回滚；撤销故障后再次探测恢复并只产生一套持久派发记录。真实状态机测试显式运行于 `REQUIRES_NEW`，避免手工构造执行器绕过 Spring 事务代理造成假阳性。
+- **Workflow WAIT sensor 节点级并发认领和重建恢复**：逐节点独立事务重验节点仍为到期 RUNNING WAIT，再进入状态机；ShedLock 不再承担唯一并发正确性保证。真实 PostgreSQL 测试覆盖并发候选、派发失败回滚及新建轮询器实例从数据库恢复重试。
+- **日切历史缺口部署前盘点流程**：将现有最多 90 天的只读历史缺口候选查询纳入部署前运行手册，明确人工核对历史日历规则的责任和限制；自动部署门禁与审批式历史回填仍未实现。
+- **作业依赖结果版本与重跑语义**：依赖等待只认对齐业务日的最新 EFFECTIVE 版本；更新版本 PENDING 会阻断等待恢复；已启动下游不自动级联，修订消费需显式 replay。通过真实 PostgreSQL 集成回归验证，并将已启动普通作业缺少消费版本快照列为后续 lineage 缺口。
+- **依赖与初始化文档漂移修复**：同步依赖运维手册中的跨日规则、节假日日历和人工 override 现状；补充 Trigger Reconciler 启动就绪时立即对账的测试证据，澄清 Quartz、批量日和作业实例的初始化边界。
+- **多上游作业依赖兼容切片**：新增 `job_dependency` 关系和旧标量同步，Console API、定义表单和租户配置包 Excel 支持多个上游，Trigger 对同业务日 EFFECTIVE_RESULT 采用 AND readiness。该切片暂不覆盖跨日偏移及不同 trigger 类型策略；迁移后仍由旧字段提供单上游兼容投影。
+- **Orchestrator 作业依赖等待恢复**：所有 LaunchRequest 入口在同日上游未达 EFFECTIVE_RESULT 时保存完整请求和依赖快照，由租户 RLS reconciler 重放原业务日请求；超时通过一次性告警提示，不自动取消等待。
+- **作业依赖等待只读运维查询**：Console 作业定义页可查看 WAITING 下游、业务日、上游快照、阻塞原因、检查次数和超时告警时间；后端投影不泄露完整 LaunchRequest，且不提供绕过依赖的人工动作。
+- **作业依赖等待超时告警**：超过可配置阈值后通过 CAS 只告警一次，WAITING 不取消、不跳过，Console 同步显示告警时间；告警阈值独立于执行完成 SLA。
+- **日切 catch-up 积压可观测性**：新增最大剩余原始日期、落后日历数和扫描失败计数指标及 Prometheus 告警；使用无租户/日历标签的低基数 gauge，并保留完整扫描快照语义。
+- **日切 catch-up 只读预览**：Console 可按租户/日历查看下轮原始日期扫描范围及游标来源；不执行补建，不覆盖游标锚点前历史缺口，也不承诺预览原始日期必然新建批量日。
+- **日切 catch-up 暂停与恢复**：管理员可按租户/日历填写原因暂停或恢复自动历史补齐；RLS 控制表和不可变操作事件审计状态变化，暂停不影响当前日开启、依赖等待恢复或 backlog 观测。
+- **日切持续运行闭环方案**：新增日历日、跨日依赖恢复、作业依赖、文件到达/Workflow 触发及运维观测的分阶段方案；明确停机跨日补齐边界与后续缺口。
+- **跨日历依赖等待人工治理**：新增管理员等待列表及 RELEASE/SKIP 请求；动作、操作者、原因与请求时间持久化，由 Orchestrator reconciler 执行并写批量日审计，OpenAPI 和配对 Console 同步。
+- **批量日原始日期扫描游标**：新增 `batch_day_open_cursor`，让有限批量 catch-up 在 holiday-roll 产生未来日期及依赖等待时仍能幂等续扫；表启用并强制租户 RLS。
+
 ### 2026-10-13
 - **pre-push Maven 运行时与构建产物隔离**：Java 治理测试从 clean test 开始，治理测试与受影响模块 compile 均使用仓库 Maven Wrapper 并在各自的一次性 detached worktree 中运行，避免本机 Maven 版本差异、陈旧测试类或共享 `target` 竞态造成类缺失误报；临时目录仅由 `mktemp` 创建并按高风险操作治理登记，门禁仍保持阻断模式。
 - **后端 Sim 可靠性场景组治理**：新增文件完整性、出站半写、数据库并发触发、Worker/依赖故障、故障隔离及恢复的覆盖矩阵；增加本地与每日 CI 共用的 Testcontainers 故障回归脚本，覆盖 manifest 重扫、对象丢失恢复与替换检测、到达组并发、checkpoint 续跑、NAS 发布、Kafka 熔断恢复、Outbox exactly-once 和消费者背压。区分单测/集成测试、标准业务 Sim 和 staging DR 证据，在 Sim、测试和 Runbook 索引登记场景组入口，不将本地结果宣称为真实灾备通过。

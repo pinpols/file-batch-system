@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.console.domain.file.infrastructure;
 
+import io.github.pinpols.batch.console.domain.file.query.FileChannelConfigSelectByQueryQuery;
+
+
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.FileChannelType;
 import io.github.pinpols.batch.common.enums.ResultCode;
@@ -42,12 +45,15 @@ public class DefaultConsoleFileChannelApplicationService
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
     long total = mapper.countByQuery(
         tenantId, request.getChannelCode(), request.getChannelType(), request.getEnabled());
+    FileChannelConfigSelectByQueryQuery fileChannelConfigSelectByQueryQuery = FileChannelConfigSelectByQueryQuery.builder()
+        .tenantId(tenantId)
+        .channelCode(request.getChannelCode())
+        .channelType(request.getChannelType())
+        .enabled(request.getEnabled())
+        .pageRequest(pageRequest)
+        .build();
     List<Map<String, Object>> items = mapper.selectByQuery(
-        tenantId,
-        request.getChannelCode(),
-        request.getChannelType(),
-        request.getEnabled(),
-        pageRequest);
+        fileChannelConfigSelectByQueryQuery);
     return new PageResponse<>(
         total,
         pageRequest.pageNo(),
@@ -58,8 +64,9 @@ public class DefaultConsoleFileChannelApplicationService
   @Override
   public ConsoleFileChannelResponse get(Long id, String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    return ConsoleFileProjectionMapper.channel(
-        Guard.requireFound(mapper.selectById(resolved, id), "file channel not found: " + id));
+    Map<String, Object> row = mapper.selectById(resolved, id);
+    Map<String, Object> foundRow = Guard.requireFound(row, "file channel not found: " + id);
+    return ConsoleFileProjectionMapper.channel(foundRow);
   }
 
   @Override
@@ -77,11 +84,15 @@ public class DefaultConsoleFileChannelApplicationService
     param.setTenantId(tenantId);
     param.setChannelCode(request.getChannelCode());
     param.setChannelName(request.getChannelName());
-    param.setChannelType(normalizeChannelType(request.getChannelType()));
+    String requestedChannelType = request.getChannelType();
+    String normalizedChannelType = normalizeChannelType(requestedChannelType);
+    param.setChannelType(normalizedChannelType);
     param.setTargetEndpoint(request.getTargetEndpoint());
     param.setAuthType(request.getAuthType());
     // DB 这两列 NOT NULL,FE 不传时给安全默认
-    param.setConfigJson(normalizeConfigJson(request.getConfigJson()));
+    String requestedConfigJson = request.getConfigJson();
+    String normalizedConfigJson = normalizeConfigJson(requestedConfigJson);
+    param.setConfigJson(normalizedConfigJson);
     param.setReceiptPolicy(
         request.getReceiptPolicy() != null ? request.getReceiptPolicy() : "NONE");
     param.setTimeoutSeconds(request.getTimeoutSeconds() != null ? request.getTimeoutSeconds() : 30);
@@ -92,8 +103,8 @@ public class DefaultConsoleFileChannelApplicationService
     // 命中软删残留行(is_deleted=true)时 on conflict do update 复活,避免纯 INSERT 撞 UNIQUE → 500。
     // 与 notification/webhook/alert 三张兄弟表的软删复活约定一致。
     mapper.upsertFileChannelConfig(param);
-    return ConsoleFileProjectionMapper.channel(
-        mapper.selectByUniqueKey(tenantId, request.getChannelCode()));
+    Map<String, Object> createdRow = mapper.selectByUniqueKey(tenantId, request.getChannelCode());
+    return ConsoleFileProjectionMapper.channel(createdRow);
   }
 
   @Override
@@ -109,21 +120,32 @@ public class DefaultConsoleFileChannelApplicationService
         request.getChannelName() != null
             ? request.getChannelName()
             : (String) existing.get("channel_name"));
-    param.setChannelType(
-        request.getChannelType() != null
-            ? normalizeChannelType(request.getChannelType())
-            : (String) existing.get("channel_type"));
-    param.setTargetEndpoint(
-        request.getTargetEndpoint() != null
-            ? SecretMasking.preserveMaskedEndpoint(
-                request.getTargetEndpoint(), (String) existing.get("target_endpoint"))
-            : (String) existing.get("target_endpoint"));
+    String updatedChannelType = EmptyChecks.isNotNull(request.getChannelType())
+        ? normalizeChannelType(request.getChannelType())
+        : (String) existing.get("channel_type");
+    param.setChannelType(updatedChannelType);
+    String requestedTargetEndpoint = request.getTargetEndpoint();
+    String targetEndpoint;
+    if (EmptyChecks.isNotNull(requestedTargetEndpoint)) {
+      String existingTargetEndpoint = (String) existing.get("target_endpoint");
+      targetEndpoint =
+          SecretMasking.preserveMaskedEndpoint(requestedTargetEndpoint, existingTargetEndpoint);
+    } else {
+      targetEndpoint = (String) existing.get("target_endpoint");
+    }
+    param.setTargetEndpoint(targetEndpoint);
     param.setAuthType(
         request.getAuthType() != null ? request.getAuthType() : (String) existing.get("auth_type"));
-    param.setConfigJson(
-        request.getConfigJson() != null
-            ? preserveMaskedConfig(request.getConfigJson(), existing.get("config_json"))
-            : existing.get("config_json") != null ? existing.get("config_json").toString() : null);
+    String requestedConfigJson = request.getConfigJson();
+    String configJson;
+    if (EmptyChecks.isNotNull(requestedConfigJson)) {
+      Object existingConfigJson = existing.get("config_json");
+      configJson = preserveMaskedConfig(requestedConfigJson, existingConfigJson);
+    } else {
+      Object existingConfigJson = existing.get("config_json");
+      configJson = EmptyChecks.isNull(existingConfigJson) ? null : existingConfigJson.toString();
+    }
+    param.setConfigJson(configJson);
     param.setReceiptPolicy(
         request.getReceiptPolicy() != null
             ? request.getReceiptPolicy()
@@ -136,7 +158,8 @@ public class DefaultConsoleFileChannelApplicationService
         request.getEnabled() != null ? request.getEnabled() : (Boolean) existing.get("enabled"));
     param.setUpdatedBy(operator);
     mapper.updateFileChannelConfig(param);
-    return ConsoleFileProjectionMapper.channel(mapper.selectById(tenantId, id));
+    Map<String, Object> updatedChannelRow = mapper.selectById(tenantId, id);
+    return ConsoleFileProjectionMapper.channel(updatedChannelRow);
   }
 
   private static String normalizeChannelType(String channelType) {

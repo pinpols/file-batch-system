@@ -153,16 +153,17 @@ class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
       String tenantId, String jobCode, String status, String instanceNo, String traceId) {
     long jobDefinitionId = ensureJobDefinitionId(tenantId, jobCode);
 
+    final String insertJobInstanceSql = """
+    INSERT INTO batch.job_instance
+    (tenant_id, job_definition_id, job_code, instance_no, biz_date,
+    trigger_type, instance_status, priority, dedup_key, trace_id,
+    created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?,
+    'MANUAL', ?, 5, ?, ?,
+    now(), now())
+    """;
     jdbcTemplate.update(
-        """
-        INSERT INTO batch.job_instance
-          (tenant_id, job_definition_id, job_code, instance_no, biz_date,
-           trigger_type, instance_status, priority, dedup_key, trace_id,
-           created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?,
-                'MANUAL', ?, 5, ?, ?,
-                now(), now())
-        """,
+        insertJobInstanceSql,
         tenantId,
         jobDefinitionId,
         jobCode,
@@ -174,19 +175,21 @@ class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
   }
 
   private long ensureJobDefinitionId(String tenantId, String jobCode) {
+    String findJobDefinitionIdSql = """
+        select id from batch.job_definition where tenant_id = ? and job_code = ? limit 1
+        """;
     Long existing = jdbcTemplate.query(
-        "select id from batch.job_definition where tenant_id = ? and job_code = ? limit 1",
-        rs -> rs.next() ? rs.getLong(1) : null,
-        tenantId,
-        jobCode);
+        findJobDefinitionIdSql, rs -> rs.next() ? rs.getLong(1) : null, tenantId, jobCode);
     if (existing != null) {
       return existing;
     }
-    return jdbcTemplate.queryForObject("""
+    String insertJobDefinitionSql = """
         INSERT INTO batch.job_definition
           (tenant_id, job_code, job_name, job_type, schedule_type, timezone, created_at, updated_at)
         VALUES (?, ?, ?, 'GENERAL', 'MANUAL', 'Asia/Shanghai', now(), now())
         RETURNING id
-        """, Long.class, tenantId, jobCode, jobCode + "-name");
+        """;
+    return jdbcTemplate.queryForObject(
+        insertJobDefinitionSql, Long.class, tenantId, jobCode, jobCode + "-name");
   }
 }

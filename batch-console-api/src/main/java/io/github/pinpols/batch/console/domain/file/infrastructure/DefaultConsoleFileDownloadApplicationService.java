@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.storage.ObjectNotFoundException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileDownloadApplicationService;
 import io.github.pinpols.batch.console.domain.file.entity.FileErrorRecordEntity;
@@ -110,15 +111,15 @@ public class DefaultConsoleFileDownloadApplicationService
           return -1;
         }
       };
-      return ResponseEntity.ok()
-          .header(
-              HttpHeaders.CONTENT_DISPOSITION,
-              ContentDisposition.attachment()
-                  .filename(fileName == null ? objectName : fileName)
-                  .build()
-                  .toString())
-          .contentType(MediaType.parseMediaType(contentType))
-          .body(resource);
+      ResponseEntity.BodyBuilder responseBuilder = ResponseEntity.ok();
+      ContentDisposition contentDisposition = ContentDisposition.attachment()
+          .filename(EmptyChecks.isNull(fileName) ? objectName : fileName)
+          .build();
+      String contentDispositionHeader = contentDisposition.toString();
+      responseBuilder.header(HttpHeaders.CONTENT_DISPOSITION, contentDispositionHeader);
+      MediaType mediaType = MediaType.parseMediaType(contentType);
+      responseBuilder.contentType(mediaType);
+      return responseBuilder.body(resource);
     } catch (ObjectNotFoundException exception) {
       // 存储中对象不存在(NoSuchKey,常见于 ingress 导入文件处理后已被消费)→ 404 优雅提示,
       // 不是 500 系统错误(操作员点下载得到的应是"内容已失效"而非崩溃)。
@@ -164,7 +165,8 @@ public class DefaultConsoleFileDownloadApplicationService
           .append(e.getCreatedAt())
           .append('\n');
     }
-    byte[] bytes = csv.toString().getBytes(StandardCharsets.UTF_8);
+    String csvText = csv.toString();
+    byte[] bytes = csvText.getBytes(StandardCharsets.UTF_8);
     InputStreamResource resource = new InputStreamResource(new ByteArrayInputStream(bytes));
     String filename = "file-errors-" + fileId + ".csv";
     return ResponseEntity.ok()

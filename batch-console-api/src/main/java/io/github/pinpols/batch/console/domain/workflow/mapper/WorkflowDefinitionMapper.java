@@ -16,6 +16,10 @@ public interface WorkflowDefinitionMapper {
 
   WorkflowDefinitionEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
+  WorkflowDefinitionEntity selectBySingleJobDefinitionId(
+      @Param("tenantId") String tenantId,
+      @Param("singleJobDefinitionId") Long singleJobDefinitionId);
+
   int insert(WorkflowDefinitionEntity entity);
 
   int updateWorkflowDefinition(
@@ -23,12 +27,35 @@ public interface WorkflowDefinitionMapper {
       @Param("id") Long id,
       @Param("workflowName") String workflowName,
       @Param("workflowType") String workflowType,
-      @Param("enabled") Boolean enabled);
+      @Param("enabled") Boolean enabled,
+      @Param("scheduleEnabled") Boolean scheduleEnabled,
+      @Param("scheduleType") String scheduleType,
+      @Param("scheduleExpr") String scheduleExpr,
+      @Param("timezone") String timezone,
+      @Param("triggerMode") String triggerMode,
+      @Param("calendarCode") String calendarCode,
+      @Param("dependsOnJobCode") String dependsOnJobCode);
 
   int deleteByTenantAndId(@Param("tenantId") String tenantId, @Param("id") Long id);
 
   int toggleEnabled(
       @Param("tenantId") String tenantId, @Param("id") Long id, @Param("enabled") Boolean enabled);
+
+  int toggleScheduleEnabled(
+      @Param("tenantId") String tenantId,
+      @Param("id") Long id,
+      @Param("scheduleEnabled") Boolean scheduleEnabled);
+
+  int updateScheduleConfiguration(
+      @Param("tenantId") String tenantId,
+      @Param("id") Long id,
+      @Param("expectedVersion") Integer expectedVersion,
+      @Param("scheduleType") String scheduleType,
+      @Param("scheduleExpr") String scheduleExpr,
+      @Param("timezone") String timezone,
+      @Param("triggerMode") String triggerMode,
+      @Param("calendarCode") String calendarCode,
+      @Param("dependsOnJobCode") String dependsOnJobCode);
 
   int upsertWorkflowDefinition(WorkflowDefinitionUpsertParam param);
 
@@ -39,5 +66,12 @@ public interface WorkflowDefinitionMapper {
       @Param("expectedVersion") Integer expectedVersion,
       @Param("workflowName") String workflowName,
       @Param("workflowType") String workflowType,
-      @Param("enabled") Boolean enabled);
+      @Param("enabled") Boolean enabled,
+      @Param("scheduleEnabled") Boolean scheduleEnabled,
+      @Param("scheduleType") String scheduleType,
+      @Param("scheduleExpr") String scheduleExpr,
+      @Param("timezone") String timezone,
+      @Param("triggerMode") String triggerMode,
+      @Param("calendarCode") String calendarCode,
+      @Param("dependsOnJobCode") String dependsOnJobCode);
 }

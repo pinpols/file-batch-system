@@ -19,6 +19,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
+import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
@@ -242,10 +243,28 @@ class ConsoleJwtServiceTest {
   @DisplayName("非法令牌:格式错误的内容解析失败并抛出令牌异常")
   void authenticate_garbageTokenRejected() {
     ConsoleJwtService svc = newService();
-    assertThatThrownBy(() -> svc.authenticate("not.a.jwt"))
-        .isInstanceOf(org.springframework.security.oauth2.jwt.JwtException.class);
+    assertThatThrownBy(() -> svc.authenticate("not.a.jwt")).isInstanceOf(JwtException.class);
     // ConsoleJwtService 直接调 decoder.decode，Nimbus 抛 JwtException；不被包装成 BizException
     // —— 这是已知行为，调用方（ConsoleAuthenticationFilter）catch 后转 ResultCode.UNAUTHORIZED
+  }
+
+  @Test
+  @DisplayName("JWT 密钥轮换:旧实例与新实例不互认令牌,轮换后的新令牌只由新密钥验签")
+  void rotateSigningSecret_invalidatesOldTokensAndRejectsMixedKeyInstances() {
+    ConsoleJwtService oldKeyInstance = newService();
+    String oldToken =
+        oldKeyInstance.issueToken("alice", "t1", Set.of("ROLE_ADMIN")).accessToken();
+
+    properties.setJwtSecret("rotated-signing-secret-2026-with-sufficient-entropy");
+    ConsoleJwtService newKeyInstance = newService();
+    String newToken =
+        newKeyInstance.issueToken("alice", "t1", Set.of("ROLE_ADMIN")).accessToken();
+
+    assertThatThrownBy(() -> newKeyInstance.authenticate(oldToken))
+        .isInstanceOf(JwtException.class);
+    assertThatCode(() -> newKeyInstance.authenticate(newToken)).doesNotThrowAnyException();
+    assertThatThrownBy(() -> oldKeyInstance.authenticate(newToken))
+        .isInstanceOf(JwtException.class);
   }
 
   // 必要的 ArgumentMatchers any() 使用以保留 lenient stubbing 模式

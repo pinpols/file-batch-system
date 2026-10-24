@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
+import io.github.pinpols.batch.orchestrator.domain.param.AlertEventQueryParam;
 import io.github.pinpols.batch.common.enums.AlertStatus;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import java.util.List;
@@ -14,12 +15,7 @@ public interface AlertEventMapper {
   int upsert(
       @Param("entity") AlertEventEntity entity, @Param("defaultStatus") String defaultStatus);
 
-  List<AlertEventEntity> selectByQuery(
-      @Param("tenantId") String tenantId,
-      @Param("severity") String severity,
-      @Param("status") String status,
-      @Param("alertType") String alertType,
-      @Param("limit") Integer limit);
+  List<AlertEventEntity> selectByQuery(AlertEventQueryParam param);
 
   /**
    * 选出超过 ack-SLA 仍 OPEN 且未达最高 tier 的告警,供升级 sweep 处理。

@@ -30,7 +30,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * <ol>
  *   <li>全部 biz 表配好 policy → health UP
  *   <li>新建 biz 表不加 policy → health DOWN 且 missing 列出该表(旧硬编码清单做不到)
- *   <li>分区表不误报:父表有 policy → UP,分区子表不进 missing
+ *   <li>分区父表和叶子分别配置 policy → UP
+ *   <li>分区叶子缺 policy → health DOWN 并列出具体叶子
  *   <li>豁免清单:把漏配表加进 exempt → 回 UP
  *   <li>startup-fail-fast:缺表时守门组件抛 IllegalStateException
  * </ol>
@@ -53,6 +54,13 @@ class RlsClosedWorldCheckIntegrationTest {
   @SuppressWarnings("resource")
   @BeforeAll
   static void startContainer() {
+    final String createSchemaSql = """
+        CREATE SCHEMA IF NOT EXISTS biz
+    """;
+    final String createDatabaseSql = """
+        CREATE DATABASE shard_one
+    """;
+
     postgres = TestPostgresContainers.business();
     postgres.start();
 
@@ -64,10 +72,10 @@ class RlsClosedWorldCheckIntegrationTest {
     dataSource = new HikariDataSource(cfg);
     jdbc = new JdbcTemplate(dataSource);
 
-    jdbc.execute("CREATE SCHEMA IF NOT EXISTS biz");
+    jdbc.execute(createSchemaSql);
 
     // 第二个物理库(shard-1):同容器另建一个 database,独立 biz schema,模拟多分片。
-    jdbc.execute("CREATE DATABASE shard_one");
+    jdbc.execute(createDatabaseSql);
     HikariConfig shard1Cfg = new HikariConfig();
     shard1Cfg.setJdbcUrl(
         postgres.getJdbcUrl().replace("/" + postgres.getDatabaseName(), "/shard_one"));
@@ -76,7 +84,7 @@ class RlsClosedWorldCheckIntegrationTest {
     shard1Cfg.setMaximumPoolSize(4);
     shard1DataSource = new HikariDataSource(shard1Cfg);
     shard1Jdbc = new JdbcTemplate(shard1DataSource);
-    shard1Jdbc.execute("CREATE SCHEMA IF NOT EXISTS biz");
+    shard1Jdbc.execute(createSchemaSql);
   }
 
   @AfterAll
@@ -94,10 +102,25 @@ class RlsClosedWorldCheckIntegrationTest {
 
   @AfterEach
   void dropAllBizTables() {
-    jdbc.execute("DROP SCHEMA IF EXISTS biz CASCADE");
-    jdbc.execute("CREATE SCHEMA biz");
-    shard1Jdbc.execute("DROP SCHEMA IF EXISTS biz CASCADE");
-    shard1Jdbc.execute("CREATE SCHEMA biz");
+    final String dropSchemaSql = """
+        DROP SCHEMA IF EXISTS biz CASCADE
+    """;
+    final String createSchemaSql = """
+        CREATE SCHEMA biz
+    """;
+    final String dropSchemaSql2 = """
+        DROP SCHEMA IF EXISTS batch CASCADE
+    """;
+    final String createSchemaSql2 = """
+        CREATE SCHEMA batch
+    """;
+
+    jdbc.execute(dropSchemaSql);
+    jdbc.execute(createSchemaSql);
+    jdbc.execute(dropSchemaSql2);
+    jdbc.execute(createSchemaSql2);
+    shard1Jdbc.execute(dropSchemaSql);
+    shard1Jdbc.execute(createSchemaSql);
   }
 
   // ─── 建表 + 施 policy 套路(对齐 rls-phase-a.sql) ──────────────────────────
@@ -107,9 +130,10 @@ class RlsClosedWorldCheckIntegrationTest {
   }
 
   private void createPlainTableWithRls(JdbcTemplate target, String table) {
-    target.execute("CREATE TABLE biz."
-        + table
-        + " (id BIGSERIAL, tenant_id VARCHAR(64) NOT NULL, PRIMARY KEY (tenant_id, id))");
+    final String createStatementSql = """
+        CREATE TABLE biz.%s (id BIGSERIAL, tenant_id VARCHAR(64) NOT NULL, PRIMARY KEY (tenant_id, id))\
+        """.formatted(table);
+    target.execute(createStatementSql);
     applyRls(target, "biz." + table);
   }
 
@@ -118,29 +142,35 @@ class RlsClosedWorldCheckIntegrationTest {
   }
 
   private void createPlainTableNoRls(JdbcTemplate target, String table) {
-    target.execute("CREATE TABLE biz."
-        + table
-        + " (id BIGSERIAL, tenant_id VARCHAR(64) NOT NULL, PRIMARY KEY (tenant_id, id))");
+    final String createStatementSql = """
+        CREATE TABLE biz.%s (id BIGSERIAL, tenant_id VARCHAR(64) NOT NULL, PRIMARY KEY (tenant_id, id))\
+        """.formatted(table);
+    target.execute(createStatementSql);
   }
 
-  /** 分区父表 + 4 个 hash 子表(对齐 customer_account 在 create_biz_tables.sql 的形态)。RLS 仅施于父表。 */
+  /** 分区父表 + 4 个 hash 子表;直接访问每个叶子也必须通过其 strict policy。 */
   private void createPartitionedTableWithRls(String table) {
-    jdbc.execute("CREATE TABLE biz."
-        + table
-        + " (id BIGSERIAL, tenant_id VARCHAR(64) NOT NULL, PRIMARY KEY (tenant_id, id))"
-        + " PARTITION BY HASH (tenant_id)");
+    createPartitionedTable(table, true);
+  }
+
+  private void createPartitionedTable(String table, boolean applyChildPolicies) {
+    final String createStatementSql = """
+        CREATE TABLE biz.%s (id BIGSERIAL, tenant_id VARCHAR(64) NOT NULL, PRIMARY KEY (tenant_id, id))\s\
+        PARTITION BY HASH (tenant_id)\
+        """.formatted(table);
+    jdbc.execute(createStatementSql);
     for (int i = 0; i < 4; i++) {
-      jdbc.execute("CREATE TABLE biz."
-          + table
-          + "_p"
-          + i
-          + " PARTITION OF biz."
-          + table
-          + " FOR VALUES WITH (MODULUS 4, REMAINDER "
-          + i
-          + ")");
+      final String createPartitionChildTableSql = """
+          CREATE TABLE biz.%s_p%s PARTITION OF biz.%s FOR VALUES WITH (MODULUS 4, REMAINDER %s)\
+          """.formatted(table, i, table, i);
+      jdbc.execute(createPartitionChildTableSql);
     }
     applyRls("biz." + table);
+    if (applyChildPolicies) {
+      for (int i = 0; i < 4; i++) {
+        applyRls("biz." + table + "_p" + i);
+      }
+    }
   }
 
   private void applyRls(String fqTable) {
@@ -148,23 +178,76 @@ class RlsClosedWorldCheckIntegrationTest {
   }
 
   private void applyRls(JdbcTemplate target, String fqTable) {
-    target.execute("ALTER TABLE " + fqTable + " ENABLE ROW LEVEL SECURITY");
-    target.execute("ALTER TABLE " + fqTable + " FORCE ROW LEVEL SECURITY");
-    target.execute("CREATE POLICY tenant_isolation_strict ON "
-        + fqTable
-        + " AS PERMISSIVE FOR ALL TO PUBLIC"
-        + " USING (tenant_id = current_setting('app.tenant_id', true))"
-        + " WITH CHECK (tenant_id = current_setting('app.tenant_id', true))");
+    final String alterStatementSql = """
+        ALTER TABLE %s ENABLE ROW LEVEL SECURITY
+    """.formatted(fqTable);
+    target.execute(alterStatementSql);
+    final String forceRlsSql = """
+        ALTER TABLE %s FORCE ROW LEVEL SECURITY
+    """.formatted(fqTable);
+    target.execute(forceRlsSql);
+    final String createPolicySql = """
+        CREATE POLICY tenant_isolation_strict ON %s AS PERMISSIVE FOR ALL TO PUBLIC
+        USING (tenant_id = current_setting('app.tenant_id', true))
+        WITH CHECK (tenant_id = current_setting('app.tenant_id', true))
+        """.formatted(fqTable);
+    target.execute(createPolicySql);
+  }
+
+  private void createProcessStagingWithPolicy(String predicate) {
+    final String createSchemaSql = """
+        CREATE SCHEMA IF NOT EXISTS batch
+    """;
+    final String createProcessStagingSql = """
+        CREATE TABLE batch.process_staging (row_seq BIGINT NOT NULL, tenant_id TEXT NOT NULL,\s\
+        staging_generation_id UUID NOT NULL, staged_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (row_seq, staged_at))\s\
+        PARTITION BY RANGE (staged_at)\
+        """;
+    final String createProcessStagingDefaultSql = """
+        CREATE TABLE batch.process_staging_default PARTITION OF batch.process_staging DEFAULT\
+        """;
+
+    jdbc.execute(createSchemaSql);
+    jdbc.execute(createProcessStagingSql);
+    jdbc.execute(createProcessStagingDefaultSql);
+    applyProcessStagingRls("batch.process_staging", predicate);
+    applyProcessStagingRls("batch.process_staging_default", predicate);
+  }
+
+  private void applyProcessStagingRls(String fqTable, String predicate) {
+    final String alterStatementSql = """
+        ALTER TABLE %s ENABLE ROW LEVEL SECURITY
+    """.formatted(fqTable);
+    jdbc.execute(alterStatementSql);
+    final String forceRlsSql = """
+        ALTER TABLE %s FORCE ROW LEVEL SECURITY
+    """.formatted(fqTable);
+    jdbc.execute(forceRlsSql);
+    final String createPolicySql = """
+        CREATE POLICY tenant_isolation_strict ON %s AS PERMISSIVE FOR ALL TO PUBLIC
+        USING (%s) WITH CHECK (%s)
+        """.formatted(fqTable, predicate, predicate);
+    jdbc.execute(createPolicySql);
   }
 
   /** 建表 + ENABLE/FORCE RLS + 施一个**同名但语义坏**的 policy(policyClause 决定坏法)。 */
   private void createTableWithNamedPolicy(String table, String policyClause) {
-    jdbc.execute("CREATE TABLE biz."
-        + table
-        + " (id BIGSERIAL, tenant_id VARCHAR(64) NOT NULL, PRIMARY KEY (tenant_id, id))");
-    jdbc.execute("ALTER TABLE biz." + table + " ENABLE ROW LEVEL SECURITY");
-    jdbc.execute("ALTER TABLE biz." + table + " FORCE ROW LEVEL SECURITY");
-    jdbc.execute("CREATE POLICY tenant_isolation_strict ON biz." + table + " " + policyClause);
+    final String createStatementSql = """
+        CREATE TABLE biz.%s
+          (id BIGSERIAL, tenant_id VARCHAR(64) NOT NULL, PRIMARY KEY (tenant_id, id))
+        """.formatted(table);
+    jdbc.execute(createStatementSql);
+    final String alterStatementSql = """
+        ALTER TABLE biz.%s ENABLE ROW LEVEL SECURITY
+    """.formatted(table);
+    jdbc.execute(alterStatementSql);
+    final String forceRlsSql = """
+        ALTER TABLE biz.%s FORCE ROW LEVEL SECURITY
+    """.formatted(table);
+    jdbc.execute(forceRlsSql);
+    final String createPolicySql =
+        "CREATE POLICY tenant_isolation_strict ON biz.%s %s".formatted(table, policyClause);
+    jdbc.execute(createPolicySql);
   }
 
   // ─── 用例 ──────────────────────────────────────────────────────────────
@@ -179,6 +262,33 @@ class RlsClosedWorldCheckIntegrationTest {
 
     assertThat(health.getStatus()).isEqualTo(Status.UP);
     assertThat(health.getDetails()).doesNotContainKey("missingRlsTables");
+  }
+
+  @Test
+  @DisplayName("batch.process_staging 需要租户和generation双重RLS,父表与分区均识别为有效")
+  void processStagingGenerationScopedPolicies_healthUp() {
+    String predicate = "tenant_id = current_setting('app.tenant_id', true)"
+        + " AND staging_generation_id::text = current_setting('app.process_staging_generation_id', true)";
+    createProcessStagingWithPolicy(predicate);
+
+    Health health = new RlsPolicyHealthIndicator(dataSource).health();
+
+    assertThat(health.getStatus()).isEqualTo(Status.UP);
+    assertThat(health.getDetails()).doesNotContainKey("missingRlsTables");
+  }
+
+  @Test
+  @DisplayName("batch.process_staging 只有租户RLS但缺generation边界时仍判定失败")
+  void processStagingTenantOnlyPolicy_healthDown() {
+    createProcessStagingWithPolicy("tenant_id = current_setting('app.tenant_id', true)");
+
+    Health health = new RlsPolicyHealthIndicator(dataSource).health();
+
+    assertThat(health.getStatus()).isEqualTo(Status.DOWN);
+    @SuppressWarnings("unchecked")
+    List<String> missing = (List<String>) health.getDetails().get("missingPolicy");
+    assertThat(missing)
+        .containsExactlyInAnyOrder("batch.process_staging", "batch.process_staging_default");
   }
 
   @Test
@@ -201,14 +311,30 @@ class RlsClosedWorldCheckIntegrationTest {
   }
 
   @Test
-  @DisplayName("③ 分区表不误报:父表有 policy → UP,分区子表 customer_account_p0.. 不进 missing")
-  void partitionChildren_notFalsePositive() {
+  @DisplayName("③ 分区父表和每个叶子都有 strict policy → health UP")
+  void partitionChildrenWithPolicies_healthUp() {
     createPartitionedTableWithRls("customer_account");
 
     Health health = new RlsPolicyHealthIndicator(dataSource).health();
 
-    assertThat(health.getStatus()).as("分区父表配好 RLS,子表继承,不该因子表无 policy 报 DOWN").isEqualTo(Status.UP);
+    assertThat(health.getStatus()).isEqualTo(Status.UP);
     assertThat(health.getDetails()).doesNotContainKey("missingRlsTables");
+  }
+
+  @Test
+  @DisplayName("分区父表策略不能代替叶子策略:缺一个叶子 policy 时 health DOWN")
+  void partitionChildMissingPolicy_healthDownAndNamesLeaf() {
+    createPartitionedTable("customer_account", false);
+    applyRls("biz.customer_account_p0");
+    applyRls("biz.customer_account_p1");
+    applyRls("biz.customer_account_p2");
+
+    Health health = new RlsPolicyHealthIndicator(dataSource).health();
+
+    assertThat(health.getStatus()).isEqualTo(Status.DOWN);
+    @SuppressWarnings("unchecked")
+    List<String> missing = (List<String>) health.getDetails().get("missingRlsTables");
+    assertThat(missing).containsExactly("biz.customer_account_p3");
   }
 
   @Test

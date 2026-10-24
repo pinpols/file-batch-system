@@ -1,0 +1,43 @@
+package io.github.pinpols.batch.orchestrator.controller;
+
+import io.github.pinpols.batch.orchestrator.application.service.batchday.FileGroupExpectationService;
+import io.github.pinpols.batch.orchestrator.application.service.batchday.FileGroupExpectationService.DefinitionRequest;
+import java.time.LocalTime;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+/** Internal configuration endpoint for recurring file-group expectations. */
+@RestController
+@RequestMapping("/internal/file-group-expectations")
+@RequiredArgsConstructor
+public class FileGroupExpectationController {
+
+  private final FileGroupExpectationService expectationService;
+
+  @PutMapping
+  public ConfigureResponse configure(@RequestBody ConfigureRequest request) {
+    int rows = expectationService.configure(new DefinitionRequest(
+        request.tenantId(),
+        request.calendarCode(),
+        request.workflowDefinitionId(),
+        request.fileGroupCode(),
+        request.expectedLocalTime(),
+        request.dueLocalTime(),
+        request.enabled()));
+    return new ConfigureResponse(rows == 1, request.fileGroupCode());
+  }
+
+  public record ConfigureRequest(
+      String tenantId,
+      String calendarCode,
+      Long workflowDefinitionId,
+      String fileGroupCode,
+      LocalTime expectedLocalTime,
+      LocalTime dueLocalTime,
+      boolean enabled) {}
+
+  public record ConfigureResponse(boolean configured, String fileGroupCode) {}
+}

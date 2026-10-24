@@ -287,6 +287,9 @@ data:
   BATCH_ORCHESTRATOR_PERSISTENCE_LARGE_TARGET_ITEMS: {{ (.Values.orchestrator.persistenceGranularity).largeTargetItems | default 500000 | quote }}
   BATCH_ORCHESTRATOR_PERSISTENCE_STANDARD_TARGET_BYTES: {{ (.Values.orchestrator.persistenceGranularity).standardTargetBytes | default 536870912 | quote }}
   BATCH_ORCHESTRATOR_PERSISTENCE_LARGE_TARGET_BYTES: {{ (.Values.orchestrator.persistenceGranularity).largeTargetBytes | default 268435456 | quote }}
+  BATCH_BATCH_DAY_DEPENDENCY_WAIT_TIMEOUT_SECONDS: {{ (.Values.orchestrator.batchDay).dependencyWaitTimeoutSeconds | default 86400 | quote }}
+  BATCH_JOB_DEPENDENCY_WAIT_TIMEOUT_SECONDS: {{ (.Values.orchestrator.jobDependencyWait).timeoutAlertSeconds | default 86400 | quote }}
+  BATCH_BATCH_DAY_CATCHUP_DAYS_PER_SCAN: {{ (.Values.orchestrator.batchDay).catchupDaysPerScan | default 14 | quote }}
   BATCH_MQ_ROUTING_MODE: {{ (.Values.orchestrator.mqRouting).mode | default "TENANT" | quote }}
   BATCH_QUOTA_RUNTIME_STORE: {{ (.Values.orchestrator.quota).runtimeStore | default "redis" | quote }}
   BATCH_QUOTA_REDIS_FAILURE_MODE: {{ (.Values.orchestrator.quota).redisFailureMode | default "FAIL_CLOSED" | quote }}

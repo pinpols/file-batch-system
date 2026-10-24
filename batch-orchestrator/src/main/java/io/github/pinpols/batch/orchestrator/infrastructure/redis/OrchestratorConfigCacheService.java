@@ -44,6 +44,7 @@ public class OrchestratorConfigCacheService {
   private final Cache<String, Boolean> negativeCache;
   private final Cache<String, JobDefinitionEntity> jobDefinitionLocalCache;
   private final Cache<String, WorkflowDefinitionEntity> workflowDefinitionLocalCache;
+  private final Cache<String, WorkflowDefinitionEntity> singleJobWorkflowLocalCache;
   private final Cache<String, TenantQuotaPolicyEntity> quotaPolicyLocalCache;
 
   private final OrchestratorRedisSupport redis;
@@ -81,6 +82,11 @@ public class OrchestratorConfigCacheService {
         .recordStats()
         .build();
     this.workflowDefinitionLocalCache = Caffeine.newBuilder()
+        .expireAfterWrite(localPositiveTtl)
+        .maximumSize(properties.getLocalPositiveMaximumSize())
+        .recordStats()
+        .build();
+    this.singleJobWorkflowLocalCache = Caffeine.newBuilder()
         .expireAfterWrite(localPositiveTtl)
         .maximumSize(properties.getLocalPositiveMaximumSize())
         .recordStats()
@@ -170,6 +176,30 @@ public class OrchestratorConfigCacheService {
     return loaded;
   }
 
+  /**
+   * Resolve a Job's managed single-Job Workflow by the explicit relation key. This lookup uses only
+   * the bounded short-lived local cache so relation changes share the existing after-commit
+   * workflow invalidation path without creating a second Redis key lifecycle.
+   */
+  public WorkflowDefinitionEntity findEnabledSingleJobWorkflowDefinition(
+      String tenantId, Long jobDefinitionId) {
+    if (!Texts.hasText(tenantId) || jobDefinitionId == null) {
+      return null;
+    }
+    String key = tenantId + ":" + jobDefinitionId;
+    WorkflowDefinitionEntity cached = singleJobWorkflowLocalCache.getIfPresent(key);
+    if (cached != null) {
+      return cached;
+    }
+    WorkflowDefinitionEntity loaded = configMappers
+        .workflowDefinition()
+        .selectFirstByTenantAndSingleJobDefinitionIdAndEnabled(tenantId, jobDefinitionId, true);
+    if (loaded != null) {
+      singleJobWorkflowLocalCache.put(key, loaded);
+    }
+    return loaded;
+  }
+
   public BusinessCalendarEntity findEnabledBusinessCalendar(String tenantId, String calendarCode) {
     if (!Texts.hasText(tenantId) || !Texts.hasText(calendarCode)) {
       return null;
@@ -250,6 +280,7 @@ public class OrchestratorConfigCacheService {
 
   public void evictWorkflowDefinition(String tenantId, String workflowCode) {
     evictConfig(tenantId, WORKFLOW_DEFINITION_CACHE_TYPE, workflowCode);
+    singleJobWorkflowLocalCache.invalidateAll();
   }
 
   public void evictBusinessCalendar(String tenantId, String calendarCode) {
@@ -283,6 +314,7 @@ public class OrchestratorConfigCacheService {
   public void evictAllLocal() {
     jobDefinitionLocalCache.invalidateAll();
     workflowDefinitionLocalCache.invalidateAll();
+    singleJobWorkflowLocalCache.invalidateAll();
     quotaPolicyLocalCache.invalidateAll();
     negativeCache.invalidateAll();
   }
@@ -301,6 +333,7 @@ public class OrchestratorConfigCacheService {
       jobDefinitionLocalCache.invalidateAll();
     } else if (WORKFLOW_DEFINITION_CACHE_TYPE.equals(type)) {
       workflowDefinitionLocalCache.invalidateAll();
+      singleJobWorkflowLocalCache.invalidateAll();
     } else if ("tenant-quota-policy".equals(type)) {
       quotaPolicyLocalCache.invalidateAll();
     }
@@ -312,6 +345,7 @@ public class OrchestratorConfigCacheService {
       jobDefinitionLocalCache.invalidate(key);
     } else if (WORKFLOW_DEFINITION_CACHE_TYPE.equals(type)) {
       workflowDefinitionLocalCache.invalidate(key);
+      singleJobWorkflowLocalCache.invalidateAll();
     } else if ("tenant-quota-policy".equals(type)) {
       quotaPolicyLocalCache.invalidate(key);
     }

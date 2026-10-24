@@ -120,6 +120,8 @@ flowchart TB
 |---|---|
 | `tenant` | 平台租户主数据和隔离根标识 |
 | `job_definition` | 作业定义、调度、队列、Worker 组、重试和参数默认值 |
+| `job_dependency` | 规范化的作业依赖边及 `biz_date_alignment`；现支持 `SAME_DAY` 与 `PREVIOUS_BIZ_DAY`（使用下游作业日历的假日和工作日覆盖，并在等待快照固定解析日期；未配置日历时按周一至周五兼容）；旧 `depends_on_job_code` 仍作为兼容投影 |
+| `job_dependency_waiting_launch` | 作业上游未就绪时持久化原始 LaunchRequest、业务日和依赖规则快照；租户 RLS 下由 Orchestrator reconciler 重放 |
 | `job_instance` | 一次作业运行及状态机权威记录；参数在创建时快照 |
 | `job_instance_dedup_key` | 分区表之外的实例幂等账本 |
 | `job_partition` | 实例拆分出的可并行工作单元和领取状态 |
@@ -163,8 +165,8 @@ Workflow 关系和 DAG 配置示例见 [Workflow 依赖指南](../architecture/w
 |---|---|
 | `business_calendar`、`calendar_group`、`calendar_holiday` | 日历、共享节假日和业务日期输入 |
 | `batch_window` | 作业允许运行的时间窗口 |
-| `calendar_dependency`、`disaster_day_override` | 跨日历依赖和灾难日覆盖 |
-| `batch_day_instance`、`batch_day_waiting_launch` | 批量日权威状态和等待前序闸门的启动意图 |
+| `calendar_dependency`、`calendar_dependency_wait`、`disaster_day_override` | 跨日历依赖定义、固定业务日/依赖规则快照的持久化等待事实和灾难日覆盖；等待行由开启调度器恢复重检，超时首次告警由 CAS 认领 |
+| `batch_day_instance`、`batch_day_waiting_launch`、`batch_day_open_cursor`、`batch_day_catchup_control`、`batch_day_catchup_control_event` | 批量日权威状态、等待前序闸门的启动意图、原始日期扫描位置、按日历暂停控制及不可变操作审计 |
 | `batch_day_replay_session`、`batch_day_replay_entry`、`batch_day_operation_audit` | 批量日重放会话、作业重放结果和操作审计 |
 | `result_version` | 同一业务键的结果版本和有效版本裁决 |
 | `data_asset`、`asset_partition`、`asset_freshness_policy` | 最小资产目录、结果分区新鲜度读模型及 SLA 规则 |
@@ -282,6 +284,7 @@ ORDER BY conrelid::regclass::text, conname;
 ## 6. 相关资料
 
 - [完整迁移目录](../../db/migration/)
+- 日切 catch-up 游标与运维控制：[V239](../../db/migration/V254__batch_day_open_cursor.sql)、[V244](../../db/migration/V259__batch_day_catchup_control.sql)
 - Console AI / 维护 / 使用率结构：[V214](../../db/migration/V214__alert_escalation_notification_outbox.sql)、[V215](../../db/migration/V215__create_console_maintenance_state.sql)、[V216](../../db/migration/V216__create_console_usage_daily.sql)、[V218](../../db/migration/V218__console_ai_conversations_and_cost_usage.sql)、[V219](../../db/migration/V219__console_ai_image_attachments.sql)、[V220](../../db/migration/V220__console_user_batch_provisioning.sql)、[V222](../../db/migration/V222__console_oidc_external_identity.sql)、[V224](../../db/migration/V224__job_monitoring_policy_and_alert_claim.sql)、[V230](../../db/migration/V230__batch_day_replay_preview_token.sql)、[V232](../../db/migration/V232__tenant_configuration_revision_fence.sql)
 - [数据模型 DDL 与演进背景](./data-model-ddl.md)
 - [Outbox 表关系与生命周期](../architecture/outbox-architecture.md)

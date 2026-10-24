@@ -1,15 +1,19 @@
 package io.github.pinpols.batch.console.domain.workflow.web;
 
+import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
+import io.github.pinpols.batch.console.domain.workflow.application.ConsoleWorkflowTriggerService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService.DagValidationResult;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService.LockHolder;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionFullUpdateRequest;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowScheduleUpdateRequest;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowTriggerRequest;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowDefinitionDetailResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowDefinitionVersionSummaryResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowDesignLockResponse;
@@ -34,6 +38,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -48,12 +53,23 @@ public class ConsoleWorkflowDefinitionController {
   private final WorkflowDefinitionService workflowDefinitionService;
   private final ConsoleResponseFactory responseFactory;
   private final WorkflowDesignLockService designLockService;
+  private final ConsoleWorkflowTriggerService triggerService;
 
   @GetMapping("/{id}")
   @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
   public CommonResponse<WorkflowDefinitionDetailResponse> getById(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(workflowDefinitionService.getById(id, tenantId));
+  }
+
+  /** Trigger a complete Workflow as one top-level run. */
+  @PostMapping("/{id}/trigger")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_TENANT_USER)
+  public CommonResponse<String> trigger(
+      @PathVariable Long id,
+      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+      @Valid @RequestBody WorkflowTriggerRequest request) {
+    return responseFactory.success(triggerService.trigger(id, request, idempotencyKey));
   }
 
   @PostMapping
@@ -77,6 +93,25 @@ public class ConsoleWorkflowDefinitionController {
       @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
     workflowDefinitionService.toggleEnabled(id, request.getTenantId(), request.getEnabled());
     return responseFactory.success(null);
+  }
+
+  /** Pause or resume scheduled fires without disabling manual/API workflow execution. */
+  @PatchMapping("/{id}/schedule-enabled")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+  public CommonResponse<Void> patchScheduleEnabled(
+      @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
+    workflowDefinitionService.toggleScheduleEnabled(
+        id, request.getTenantId(), request.getEnabled());
+    return responseFactory.success(null);
+  }
+
+  /** Update schedule fields without replacing the Workflow graph; definition version is CAS guarded. */
+  @PutMapping("/{id}/schedule")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+  public CommonResponse<WorkflowDefinitionDetailResponse> updateSchedule(
+      @PathVariable Long id, @Valid @RequestBody WorkflowScheduleUpdateRequest request) {
+    return responseFactory.success(
+        workflowDefinitionService.updateSchedule(id, request, currentUsername()));
   }
 
   @PostMapping("/{id}/validate")

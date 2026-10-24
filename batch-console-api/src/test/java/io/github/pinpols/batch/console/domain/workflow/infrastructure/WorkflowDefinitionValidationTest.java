@@ -74,7 +74,8 @@ class WorkflowDefinitionValidationTest {
         new WorkflowDefinitionWriteSupport(
             nodeMapper, edgeMapper, versionMapper, new ObjectMapper()),
         new WorkflowDefinitionDagInspector(jobDefinitionMapper),
-        mock(JobResourceAssignmentGuard.class));
+        mock(JobResourceAssignmentGuard.class),
+        jobDefinitionMapper);
   }
 
   @Test

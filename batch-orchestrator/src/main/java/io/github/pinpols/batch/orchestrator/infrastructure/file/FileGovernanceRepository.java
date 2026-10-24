@@ -211,6 +211,13 @@ public class FileGovernanceRepository {
         .toList();
   }
 
+  FileGovernanceArrivalViews.ArrivalGroupBacklogView selectArrivalGroupBacklogMetrics() {
+    Map<String, Object> row = fileGovernanceMapper.selectArrivalGroupBacklogMetrics();
+    return EmptyChecks.isNull(row) || EmptyChecks.isEmpty(row)
+        ? new FileGovernanceArrivalViews.ArrivalGroupBacklogView(0L, 0L)
+        : FileGovernanceArrivalViews.arrivalGroupBacklog(row);
+  }
+
   public List<FileGovernanceArrivalViews.ArrivalGroupSummaryView> selectArrivalGroupSummaries(
       String tenantId, String fileGroupCode, String arrivalState) {
     return fileGovernanceMapper
@@ -300,12 +307,13 @@ public class FileGovernanceRepository {
     if (!Texts.hasText(tenantId)) {
       return List.of();
     }
-    return fileGovernanceMapper.selectProcessingDelaySamples(params(
+    Map<String, Object> queryParams = params(
         KEY_TENANT_ID, tenantId,
         KEY_THRESHOLD_SECONDS, thresholdSeconds,
         KEY_MAX_AGE_SECONDS, maxAgeSeconds,
         KEY_LIMIT, limit,
-        KEY_RUNNING_STATUS, FileDispatchRunStatus.RUNNING.code()));
+        KEY_RUNNING_STATUS, FileDispatchRunStatus.RUNNING.code());
+    return fileGovernanceMapper.selectProcessingDelaySamples(queryParams);
   }
 
   public boolean existsFileRecordByStoragePath(
@@ -432,7 +440,8 @@ public class FileGovernanceRepository {
    */
   public int updateFileStatus(
       String tenantId, Long fileId, String currentStatus, String nextStatus, Object metadata) {
-    return fileGovernanceMapper.updateFileStatus(params(
+    String metadataJson = toJson(metadata);
+    Map<String, Object> update = params(
         KEY_TENANT_ID,
         tenantId,
         KEY_FILE_ID,
@@ -442,15 +451,29 @@ public class FileGovernanceRepository {
         "nextStatus",
         nextStatus,
         "metadataJson",
-        toJson(metadata)));
+        metadataJson);
+    return fileGovernanceMapper.updateFileStatus(update);
   }
 
   public void updateFileMetadata(String tenantId, Long fileId, Object metadata) {
     if (!Texts.hasText(tenantId) || fileId == null) {
       return;
     }
-    fileGovernanceMapper.updateFileMetadata(
-        params(KEY_TENANT_ID, tenantId, KEY_FILE_ID, fileId, "metadataJson", toJson(metadata)));
+    String metadataJson = toJson(metadata);
+    Map<String, Object> update =
+        params(KEY_TENANT_ID, tenantId, KEY_FILE_ID, fileId, "metadataJson", metadataJson);
+    fileGovernanceMapper.updateFileMetadata(update);
+  }
+
+  public int updateArrivalGroupMetadataIfNonTerminal(
+      String tenantId, Long fileId, Object metadata) {
+    if (!Texts.hasText(tenantId) || EmptyChecks.isNull(fileId)) {
+      return 0;
+    }
+    String metadataJson = toJson(metadata);
+    Map<String, Object> update =
+        params(KEY_TENANT_ID, tenantId, KEY_FILE_ID, fileId, "metadataJson", metadataJson);
+    return fileGovernanceMapper.updateArrivalGroupMetadataIfNonTerminal(update);
   }
 
   public void markFileArrivalConfirmed(
@@ -458,15 +481,18 @@ public class FileGovernanceRepository {
     if (!Texts.hasText(tenantId) || fileId == null) {
       return;
     }
-    fileGovernanceMapper.markFileArrivalConfirmed(params(
+    long normalizedFileSize = Math.max(fileSizeBytes, 0L);
+    String metadataJson = toJson(metadata);
+    Map<String, Object> update = params(
         KEY_TENANT_ID,
         tenantId,
         KEY_FILE_ID,
         fileId,
         "fileSizeBytes",
-        Math.max(fileSizeBytes, 0L),
+        normalizedFileSize,
         "metadataJson",
-        toJson(metadata)));
+        metadataJson);
+    fileGovernanceMapper.markFileArrivalConfirmed(update);
   }
 
   public void appendAudit(FileAuditCommand command) {
@@ -477,23 +503,34 @@ public class FileGovernanceRepository {
         || !Texts.hasText(command.operationResult())) {
       return;
     }
-    fileGovernanceMapper.insertFileAuditLog(params(
+    String auditTenantId = command.tenantId();
+    Long auditFileId = command.fileId();
+    String auditOperationType = command.operationType();
+    String auditOperationResult = command.operationResult();
+    String auditOperatorType = defaultText(
+        EmptyChecks.isNull(command.actor()) ? null : command.actor().operatorType(), "API");
+    String auditOperatorId =
+        EmptyChecks.isNull(command.actor()) ? null : command.actor().operatorId();
+    String auditTraceId = command.traceId();
+    String detailSummaryJson = toJson(command.detailSummary());
+    Map<String, Object> auditParams = params(
         KEY_TENANT_ID,
-        command.tenantId(),
+        auditTenantId,
         KEY_FILE_ID,
-        command.fileId(),
+        auditFileId,
         "operationType",
-        command.operationType(),
+        auditOperationType,
         "operationResult",
-        command.operationResult(),
+        auditOperationResult,
         "operatorType",
-        defaultText(command.actor() == null ? null : command.actor().operatorType(), "API"),
+        auditOperatorType,
         "operatorId",
-        command.actor() == null ? null : command.actor().operatorId(),
+        auditOperatorId,
         "traceId",
-        command.traceId(),
+        auditTraceId,
         "detailSummaryJson",
-        toJson(command.detailSummary())));
+        detailSummaryJson);
+    fileGovernanceMapper.insertFileAuditLog(auditParams);
   }
 
   public OperationDetailView operationDetail(

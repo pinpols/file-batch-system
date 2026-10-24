@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.job.mapper;
 
+import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDependencyRuleRequest;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.param.JobDefinitionMaintenanceUpdateParam;
 import io.github.pinpols.batch.console.domain.job.param.JobMonitoringPolicyUpsertParam;
@@ -21,6 +22,18 @@ public interface JobDefinitionMapper {
   int insert(JobDefinitionEntity entity);
 
   int upsertJobMonitoringPolicy(JobMonitoringPolicyUpsertParam param);
+
+  int deleteDependencies(
+      @Param("tenantId") String tenantId, @Param("downstreamJobCode") String downstreamJobCode);
+
+  int insertDependencyRules(
+      @Param("tenantId") String tenantId,
+      @Param("downstreamJobCode") String downstreamJobCode,
+      @Param("rules") List<JobDependencyRuleRequest> rules);
+
+  List<JobDependencyEdge> selectAllDependencies(@Param("tenantId") String tenantId);
+
+  record JobDependencyEdge(String downstreamJobCode, String upstreamJobCode) {}
 
   int copyJobMonitoringPolicy(
       @Param("tenantId") String tenantId,

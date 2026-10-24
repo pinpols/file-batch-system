@@ -26,8 +26,8 @@ import io.github.pinpols.batch.console.domain.job.query.JobDefinitionQuery;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertRoutingConfigMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantQuotaPolicyMapper;
-import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
-import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineStepDefinitionMapper;
+import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
+import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
@@ -46,8 +46,6 @@ class DefaultConsoleTenantConfigCopyServiceTest {
   private WorkflowDefinitionMapper workflowDefinitionMapper;
   private WorkflowNodeMapper workflowNodeMapper;
   private WorkflowEdgeMapper workflowEdgeMapper;
-  private PipelineDefinitionMapper pipelineDefinitionMapper;
-  private PipelineStepDefinitionMapper pipelineStepDefinitionMapper;
   private FileChannelConfigMapper fileChannelConfigMapper;
   private FileTemplateConfigMapper fileTemplateConfigMapper;
   private ResourceQueueMapper resourceQueueMapper;
@@ -65,8 +63,6 @@ class DefaultConsoleTenantConfigCopyServiceTest {
     workflowDefinitionMapper = mock(WorkflowDefinitionMapper.class);
     workflowNodeMapper = mock(WorkflowNodeMapper.class);
     workflowEdgeMapper = mock(WorkflowEdgeMapper.class);
-    pipelineDefinitionMapper = mock(PipelineDefinitionMapper.class);
-    pipelineStepDefinitionMapper = mock(PipelineStepDefinitionMapper.class);
     fileChannelConfigMapper = mock(FileChannelConfigMapper.class);
     fileTemplateConfigMapper = mock(FileTemplateConfigMapper.class);
     resourceQueueMapper = mock(ResourceQueueMapper.class);
@@ -81,8 +77,6 @@ class DefaultConsoleTenantConfigCopyServiceTest {
         workflowDefinitionMapper,
         workflowNodeMapper,
         workflowEdgeMapper,
-        pipelineDefinitionMapper,
-        pipelineStepDefinitionMapper,
         fileChannelConfigMapper,
         fileTemplateConfigMapper,
         resourceQueueMapper,
@@ -96,12 +90,13 @@ class DefaultConsoleTenantConfigCopyServiceTest {
   }
 
   @Test
-  @DisplayName("组装作业同步包时,文件模板与通道只保留显式引用到的项")
+  @DisplayName("作业同步包不再包含 Pipeline 定义,从 Job 参数解析模板与通道引用")
   void shouldBuildBundleWithExplicitReferences_whenJobBundleIsAssembled() {
     stubExplicitReferenceBundle();
 
     ConfigSyncBundlePayload bundle = service.buildJobBundle("ta", "JOB_A");
 
+    assertThat(bundle.getPipelineDefinitions()).isNull();
     assertThat(bundle.getFileTemplates())
         .extracting("templateCode")
         .containsExactly("tpl-from-job", "tpl-from-step");
@@ -110,6 +105,24 @@ class DefaultConsoleTenantConfigCopyServiceTest {
         .singleElement()
         .extracting("dependencyCompletionWindowSeconds")
         .isEqualTo(900);
+    assertThat(bundle.getJobDefinitions()).singleElement().satisfies(job -> {
+      assertThat(job.getScheduleType()).isNull();
+      assertThat(job.getScheduleExpr()).isNull();
+    });
+    assertThat(bundle.getWorkflowDefinitions()).singleElement().satisfies(workflow -> {
+      assertThat(workflow.getSingleJobCode()).isEqualTo("JOB_A");
+      assertThat(workflow.getScheduleType()).isEqualTo("CRON");
+      assertThat(workflow.getScheduleExpr()).isEqualTo("0 0 2 * * *");
+      assertThat(workflow.getTimezone()).isEqualTo("Asia/Shanghai");
+    });
+    assertThat(bundle.getBusinessCalendars())
+        .extracting("calendarCode")
+        .containsExactlyInAnyOrder("cn", "workflow-cn");
+    assertThat(bundle.getBusinessCalendars())
+        .filteredOn(calendar -> "workflow-cn".equals(calendar.getCalendarCode()))
+        .singleElement()
+        .extracting("holidays")
+        .isEqualTo(List.of("2026-10-01"));
   }
 
   @Test
@@ -131,6 +144,7 @@ class DefaultConsoleTenantConfigCopyServiceTest {
     TenantConfigBatchInitRequest delegated = captor.getValue();
     assertThat(delegated.getTargetTenantIds()).containsExactly("tb");
     assertThat(delegated.getJobDefinitions()).extracting("jobCode").containsExactly("JOB_A");
+    assertThat(delegated.getPipelineDefinitions()).isNull();
     assertThat(delegated.getFileTemplates())
         .extracting("templateCode")
         .containsExactly("tpl-from-job", "tpl-from-step");
@@ -145,33 +159,35 @@ class DefaultConsoleTenantConfigCopyServiceTest {
 
   private void stubExplicitReferenceBundle() {
     JobDefinitionEntity job = new JobDefinitionEntity();
+    job.setId(101L);
     job.setJobCode("JOB_A");
     job.setBizType("PAYROLL");
     job.setQueueCode("q1");
     job.setWindowCode("nightly");
     job.setCalendarCode("cn");
     job.setDependencyCompletionWindowSeconds(900);
-    job.setDefaultParams("{\"fileTemplateCode\":\"tpl-from-job\"}");
+    job.setDefaultParams("{\"fileTemplateCode\":\"tpl-from-job\","
+        + "\"systemPipelineStepParams\":{\"GENERATE\":{"
+        + "\"templateCode\":\"tpl-from-step\",\"channelCode\":\"chan-explicit\"}}}");
     when(jobDefinitionMapper.selectByQuery(any(JobDefinitionQuery.class))).thenReturn(List.of(job));
-    when(pipelineDefinitionMapper.selectByQuery(
-            anyString(), isNull(), isNull(), isNull(), any(PageRequest.class)))
-        .thenReturn(List.of(Map.of(
-            "id", 10L,
-            "job_code", "JOB_A",
-            "pipeline_name", "pipe",
-            "pipeline_type", "EXPORT",
-            "biz_type", "PAYROLL",
-            "enabled", true)));
-    when(pipelineStepDefinitionMapper.selectByPipelineDefinitionId(10L))
-        .thenReturn(List.of(Map.of(
-            "step_code",
-            "generate",
-            "step_params",
-            "{\"templateCode\":\"tpl-from-step\",\"channelCode\":\"chan-explicit\"}",
-            "enabled",
-            true)));
+    WorkflowDefinitionEntity workflow = new WorkflowDefinitionEntity();
+    workflow.setId(201L);
+    workflow.setWorkflowCode("JOB-WF-101");
+    workflow.setSingleJobDefinitionId(job.getId());
+    workflow.setScheduleEnabled(true);
+    workflow.setScheduleType("CRON");
+    workflow.setScheduleExpr("0 0 2 * * *");
+    workflow.setTimezone("Asia/Shanghai");
+    workflow.setCalendarCode("workflow-cn");
+    workflow.setTriggerMode("SCHEDULED");
+    WorkflowNodeEntity node = new WorkflowNodeEntity();
+    node.setNodeCode("job");
+    node.setRelatedJobCode("JOB_A");
     when(workflowDefinitionMapper.selectByQuery(any(WorkflowDefinitionQuery.class)))
-        .thenReturn(List.of());
+        .thenReturn(List.of(workflow));
+    when(workflowNodeMapper.selectByQuery(any())).thenReturn(List.of(node));
+    when(workflowEdgeMapper.selectByQuery(any())).thenReturn(List.of());
+    when(jobDefinitionMapper.selectById("ta", job.getId())).thenReturn(job);
     when(resourceQueueMapper.selectByQuery(
             anyString(), isNull(), isNull(), isNull(), any(PageRequest.class)))
         .thenReturn(List.of(Map.of("queue_code", "q1", "enabled", true)));
@@ -179,7 +195,16 @@ class DefaultConsoleTenantConfigCopyServiceTest {
         .thenReturn(List.of(Map.of("window_code", "nightly", "enabled", true)));
     when(businessCalendarMapper.selectByQuery(
             anyString(), isNull(), isNull(), any(PageRequest.class)))
-        .thenReturn(List.of(Map.of("calendar_code", "cn", "enabled", true)));
+        .thenReturn(List.of(
+            Map.of("id", 301L, "calendar_code", "cn", "enabled", true),
+            Map.of("id", 302L, "calendar_code", "workflow-cn", "enabled", true),
+            Map.of("id", 303L, "calendar_code", "unrelated", "enabled", true)));
+    when(calendarHolidayMapper.selectByCalendarId(301L))
+        .thenReturn(List.of(Map.of("holiday_date", "2026-01-01")));
+    when(calendarHolidayMapper.selectByCalendarId(302L))
+        .thenReturn(List.of(Map.of("holiday_date", "2026-10-01")));
+    when(calendarHolidayMapper.selectByCalendarId(303L))
+        .thenReturn(List.of(Map.of("holiday_date", "2026-12-25")));
     when(fileTemplateConfigMapper.selectByQuery(any(FileTemplateConfigQuery.class)))
         .thenReturn(List.of(
             Map.of("template_code", "tpl-from-job", "biz_type", "OTHER", "enabled", true),

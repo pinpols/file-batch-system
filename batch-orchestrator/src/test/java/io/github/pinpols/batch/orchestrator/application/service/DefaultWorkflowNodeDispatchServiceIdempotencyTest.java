@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
+import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanBuilder;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceScheduler;
@@ -21,15 +22,20 @@ import io.github.pinpols.batch.orchestrator.application.service.workflow.Orchest
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodePayloadBuilder;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
+import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
+import io.github.pinpols.batch.orchestrator.mapper.JobDependencyWaitingLaunchMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
+import io.github.pinpols.batch.orchestrator.mapper.WorkflowDefinitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
+import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -61,6 +67,12 @@ class DefaultWorkflowNodeDispatchServiceIdempotencyTest {
 
   @Mock
   WorkflowRunMapper workflowRunMapper;
+
+  @Mock
+  BatchDayInstanceMapper batchDayInstanceMapper;
+
+  @Mock
+  WorkflowDefinitionMapper workflowDefinitionMapper;
 
   @Mock
   WorkflowNodeRunMapper workflowNodeRunMapper;
@@ -112,7 +124,26 @@ class DefaultWorkflowNodeDispatchServiceIdempotencyTest {
         taskCreationService,
         payloadBuilder,
         childJobLaunchSupport,
-        mock(CrossDayDependencyResolver.class));
+        mock(CrossDayDependencyResolver.class),
+        mock(
+            io.github.pinpols.batch.orchestrator.application.service.workflow
+                .WorkflowNodeTerminalFinalizer.class),
+        mock(SecretPayloadProtector.class),
+        mock(JobDependencyWaitingLaunchMapper.class),
+        batchDayInstanceMapper,
+        workflowDefinitionMapper);
+    when(workflowDefinitionMapper.selectById(5L))
+        .thenReturn(new WorkflowDefinitionEntity(
+            5L, "t1", "FLOW", "Flow", "COMPOSITE", 1, true, null, "CAL"));
+    when(workflowRunMapper.selectByTenantAndIdForUpdate("t1", 10L)).thenAnswer(invocation -> {
+      WorkflowRunEntity current = new WorkflowRunEntity();
+      current.setId(10L);
+      current.setTenantId("t1");
+      current.setWorkflowDefinitionId(5L);
+      current.setBizDate(LocalDate.of(2026, 6, 29));
+      current.setRunStatus("RUNNING");
+      return current;
+    });
   }
 
   @Test
@@ -134,8 +165,9 @@ class DefaultWorkflowNodeDispatchServiceIdempotencyTest {
     WorkflowRunEntity workflowRun = new WorkflowRunEntity();
     workflowRun.setId(10L);
     workflowRun.setTenantId("t1");
-    workflowRun.setRelatedJobInstanceId(100L);
     workflowRun.setWorkflowDefinitionId(5L);
+    workflowRun.setBizDate(LocalDate.of(2026, 6, 29));
+    workflowRun.setRunStatus("RUNNING");
 
     WorkflowDagService.DagNodeResolution node =
         new WorkflowDagService.DagNodeResolution("NODE_A", "TASK");

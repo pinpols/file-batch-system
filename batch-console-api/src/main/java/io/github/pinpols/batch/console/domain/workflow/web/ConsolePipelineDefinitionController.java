@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.console.domain.workflow.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.domain.workflow.application.PipelineDefinitionService;
@@ -65,7 +67,7 @@ public class ConsolePipelineDefinitionController {
       targetTenantParam = "#request.tenantId")
   public CommonResponse<PipelineDefinitionDetailResponse> create(
       @Valid @RequestBody PipelineDefinitionSaveRequest request) {
-    return responseFactory.success(pipelineDefinitionService.create(request));
+    throw retiredWrite();
   }
 
   @PutMapping("/{id}")
@@ -76,7 +78,7 @@ public class ConsolePipelineDefinitionController {
       targetTenantParam = "#request.tenantId")
   public CommonResponse<PipelineDefinitionDetailResponse> update(
       @PathVariable Long id, @Valid @RequestBody PipelineDefinitionSaveRequest request) {
-    return responseFactory.success(pipelineDefinitionService.update(id, request));
+    throw retiredWrite();
   }
 
   @PatchMapping("/{id}/enabled")
@@ -87,7 +89,10 @@ public class ConsolePipelineDefinitionController {
       targetTenantParam = "#request.tenantId")
   public CommonResponse<Void> setEnabled(
       @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
-    pipelineDefinitionService.toggle(id, request.getTenantId(), request.getEnabled());
-    return responseFactory.success(null);
+    throw retiredWrite();
+  }
+
+  private static BizException retiredWrite() {
+    return BizException.of(ResultCode.STATE_CONFLICT, "error.pipeline.definition_write_retired");
   }
 }

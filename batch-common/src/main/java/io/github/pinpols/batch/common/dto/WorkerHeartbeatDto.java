@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.dto;
 
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.time.Instant;
 import java.util.List;
@@ -44,7 +45,9 @@ public record WorkerHeartbeatDto(
     // 并发任务阶段进度；缺省或空列表表示本轮没有活跃阶段。
     List<WorkerPipelineProgressDto> pipelineProgress,
     // 注册时上报执行器能力；调度仍以 worker capabilityTags/resourceTag 为准。
-    List<WorkerTaskCapabilityDto> taskCapabilities) {
+    List<WorkerTaskCapabilityDto> taskCapabilities,
+    // Replay 预览用的插件能力目录；仅 register 上报，heartbeat/status 不更新。
+    List<ReplayCapabilityDeclaration> replayCapabilities) {
 
   public WorkerHeartbeatDto {
     Integer normalizedCurrentLoad = currentLoad;
@@ -64,6 +67,12 @@ public record WorkerHeartbeatDto(
         throw new IllegalArgumentException("taskCapabilities must contain at most 128 entries");
       }
       taskCapabilities = List.copyOf(taskCapabilities);
+    }
+    if (EmptyChecks.isNotNull(replayCapabilities)) {
+      if (replayCapabilities.size() > 128) {
+        throw new IllegalArgumentException("replayCapabilities must contain at most 128 entries");
+      }
+      replayCapabilities = List.copyOf(replayCapabilities);
     }
   }
 }

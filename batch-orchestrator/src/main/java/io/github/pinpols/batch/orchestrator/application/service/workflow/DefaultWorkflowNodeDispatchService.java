@@ -50,7 +50,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 工作流 DAG 节点派发：按节点类型分三条路径派发，所有路径的幂等由 {@link #isNodeAlreadyActivated} 配合 {@code workflow_node_run}
  * 行锁保证（见 {@code C-3}），防止同一节点被并发 dispatch 重复激活。
  *
- * <p>三种派发模式：
+ * <p>四种派发模式：
  *
  * <ul>
  *   <li><b>GATEWAY / START</b>：本身无工作负载，合成"立即完成"的 node_run（RUNNING→SUCCESS 同事务） 后按条件解析下游节点并递归
@@ -58,6 +58,7 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li><b>JOB</b>：通过启动一个独立子 Job 实例来派发，在父 Job 中插入一对"虚拟"分区 + 任务 （状态直接为 RUNNING），子 Job 终态时通过 params
  *       snapshot 中的 {@code _parentVirtualTaskId} 回指父任务，复用 {@code DefaultTaskOutcomeService} 基于分区的
  *       DAG 推进逻辑，避免再写一套子作业监听。
+ *   <li><b>WAIT</b>：创建 RUNNING workflow_node_run 供 SensorPollScheduler 持久化轮询，不创建 worker 任务或分区。
  *   <li><b>TASK / FILE_STEP</b>：普通节点，走 {@code SchedulePlanBuilder} 生成分片 + 资源调度决策 + 创建任务 + 落 outbox
  *       派发事件（同事务）。
  * </ul>
@@ -82,6 +83,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
   private final ChildJobLaunchSupport childJobLaunchSupport;
   // ADR-018 跨批量日依赖解析；NULL（无依赖）跳过；REQUIRED 缺失 → WAITING_DEPENDENCY；解析失败 → FAILED
   private final CrossDayDependencyResolver crossDayDependencyResolver;
+  private final WorkflowNodeTerminalFinalizer workflowNodeTerminalFinalizer;
 
   /**
    * 派发 DAG 单个节点。依据 {@code nodeType} 路由到 gateway / JOB / task 三条路径之一；返回新建成的分片数量， 调用方据此推进 {@code
@@ -96,7 +98,14 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
       WorkflowDagService.DagNodeResolution node,
       String sourcePayload,
       String traceId) {
-    if (jobInstance == null || workflowRun == null || node == null) {
+    if (workflowRun == null || node == null) {
+      return 0;
+    }
+    if (workflowRun.getRelatedJobInstanceId() == null) {
+      // Reports from a completed node carry that node's Job Instance. It is execution detail,
+      // never a synthetic parent for the next node in a rootless Workflow.
+      jobInstance = null;
+    } else if (jobInstance == null) {
       return 0;
     }
     // ADR-044:workflow_run 暂停时不推进下游节点,resume 后再继续。
@@ -110,16 +119,15 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     if (isNodeAlreadyActivated(workflowRun.getId(), node.nodeCode())) {
       return 0;
     }
-    if (!workflowDagService.isNodeReadyForDispatch(
-        workflowRun.getId(),
-        workflowRun.getWorkflowDefinitionId(),
-        node.nodeCode(),
-        sourcePayload)) {
+    if (!workflowDagService.isNodeReadyForRunDispatch(
+        workflowRun, node.nodeCode(), sourcePayload)) {
       return 0;
     }
-    WorkflowNodeEntity workflowNode =
-        workflowMappers.workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(
-            workflowRun.getWorkflowDefinitionId(), node.nodeCode());
+    WorkflowRunExecutionSnapshot executionSnapshot = WorkflowRunExecutionSnapshot.from(workflowRun);
+    WorkflowNodeEntity workflowNode = executionSnapshot == null
+        ? workflowMappers.workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(
+            workflowRun.getWorkflowDefinitionId(), node.nodeCode())
+        : executionSnapshot.node(node.nodeCode());
     if (workflowNode == null) {
       return 0;
     }
@@ -134,11 +142,54 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
       return dispatchGatewayNode(jobInstance, workflowRun, node, effectivePayload);
     }
     if (isJobNode(workflowNode.getNodeType())) {
+      if (jobInstance != null
+          && isManagedSingleJobRootNode(jobInstance, workflowRun, workflowNode)) {
+        // The root Job Instance is the single business Job execution, not a synthetic workflow
+        // wrapper. Dispatch its partitions directly so the managed START→JOB→END graph does not
+        // recursively launch the same Job as a child.
+        return dispatchTaskNode(
+            jobInstance, workflowRun, node, workflowNode, effectivePayload, traceId);
+      }
       return childJobLaunchSupport.dispatchJobNode(
           jobInstance, workflowRun, node, workflowNode, effectivePayload, traceId);
     }
+    if (isWaitNode(workflowNode.getNodeType())) {
+      return dispatchWaitNode(workflowRun, node);
+    }
+
+    if (jobInstance == null) {
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT, "error.workflow.legacy_task_node_requires_job_migration");
+    }
     return dispatchTaskNode(
         jobInstance, workflowRun, node, workflowNode, effectivePayload, traceId);
+  }
+
+  private boolean isManagedSingleJobRootNode(
+      JobInstanceEntity jobInstance,
+      WorkflowRunEntity workflowRun,
+      WorkflowNodeEntity workflowNode) {
+    return workflowRun.getSingleJobDefinitionId() != null
+        && workflowRun.getSingleJobDefinitionId().equals(jobInstance.getJobDefinitionId())
+        && jobInstance.getJobCode().equals(workflowNode.getRelatedJobCode());
+  }
+
+  /** WAIT 由持久化 sensor 扫描器驱动；保持 RUNNING 才会进入到期探测查询。 */
+  private int dispatchWaitNode(
+      WorkflowRunEntity workflowRun, WorkflowDagService.DagNodeResolution node) {
+    Instant now = BatchDateTimeSupport.utcNow();
+    WorkflowNodeRunEntity runningNode = new WorkflowNodeRunEntity();
+    runningNode.setWorkflowRunId(workflowRun.getId());
+    runningNode.setNodeCode(node.nodeCode());
+    runningNode.setNodeType(WorkflowNodeType.WAIT.code());
+    runningNode.setRunSeq(WorkflowNodeRunSupport.nextRunSeq(
+        workflowMappers.workflowNodeRunMapper, workflowRun.getId(), node.nodeCode()));
+    runningNode.setNodeStatus(WorkflowNodeRunStatus.RUNNING.code());
+    runningNode.setRetryCount(0);
+    runningNode.setStartedAt(now);
+    runningNode.setDurationMs(0L);
+    workflowMappers.workflowNodeRunMapper.insert(runningNode);
+    return 0;
   }
 
   /**
@@ -156,8 +207,10 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     if (jsonSpec == null || jsonSpec.isBlank()) {
       return CrossDayDependencyOutcome.proceed(sourcePayload);
     }
-    ResolutionResult result = crossDayDependencyResolver.resolve(
-        jobInstance.getTenantId(), jobInstance.getBizDate(), jsonSpec);
+    String tenantId = jobInstance == null ? workflowRun.getTenantId() : jobInstance.getTenantId();
+    java.time.LocalDate bizDate =
+        jobInstance == null ? workflowRun.getBizDate() : jobInstance.getBizDate();
+    ResolutionResult result = crossDayDependencyResolver.resolve(tenantId, bizDate, jsonSpec);
     if (result.isResolved()) {
       return CrossDayDependencyOutcome.proceed(
           mergeCrossDayPayload(sourcePayload, result.getResolved()));
@@ -167,7 +220,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
       log.info(
           "workflow_node WAITING_DEPENDENCY: tenantId={}, workflowRunId={}, nodeCode={},"
               + " reasons={}",
-          jobInstance.getTenantId(),
+          tenantId,
           workflowRun.getId(),
           node.nodeCode(),
           result.getWaitingReasons());
@@ -178,7 +231,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     log.warn(
         "workflow_node cross-day dep FAILED: tenantId={}, workflowRunId={}, nodeCode={},"
             + " failureCode={}",
-        jobInstance.getTenantId(),
+        tenantId,
         workflowRun.getId(),
         node.nodeCode(),
         result.getFailureCode());
@@ -257,7 +310,17 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
       WorkflowNodeEntity workflowNode,
       String sourcePayload,
       String traceId) {
-    recordNodeRunReady(workflowRun.getId(), node.nodeCode(), node.nodeType());
+    WorkflowNodeRunEntity nodeRun =
+        recordNodeRunReady(workflowRun.getId(), node.nodeCode(), node.nodeType());
+    if (isJobNode(node.nodeType())
+        && isManagedSingleJobRootNode(jobInstance, workflowRun, workflowNode)) {
+      int linked = workflowMappers.workflowNodeRunMapper.attachJobInstance(
+          jobInstance.getTenantId(), nodeRun.getId(), jobInstance.getId());
+      if (linked == 0) {
+        throw BizException.of(
+            ResultCode.STATE_CONFLICT, "error.workflow.node_job_instance_link_conflict");
+      }
+    }
     String targetJobCode = workflowNode.getRelatedJobCode() == null
             || workflowNode.getRelatedJobCode().isBlank()
         ? jobInstance.getJobCode()
@@ -294,6 +357,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
           "error.workflow_node.related_job_definition_missing",
           targetJobCode);
     }
+    baseTaskPayload =
+        payloadBuilder.pinSystemPipelineIdentity(baseTaskPayload, plan.getDefaultWorkerType());
     plan.setDryRun(Boolean.TRUE.equals(jobInstance.getDryRun()));
     plan.setWindowCode(
         workflowNode.getWindowCode() == null || workflowNode.getWindowCode().isBlank()
@@ -460,17 +525,23 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         .durationMs(0L)
         .finishedAt(now)
         .build());
-    List<WorkflowDagService.DagNodeResolution> nextNodes = workflowDagService.resolveNextNodes(
-        workflowRun.getWorkflowDefinitionId(), node.nodeCode(), true, sourcePayload);
+    List<WorkflowDagService.DagNodeResolution> nextNodes =
+        workflowDagService.resolveNextNodesForRun(
+            workflowRun, node.nodeCode(), true, sourcePayload);
     int dispatchedCount = 0;
     for (WorkflowDagService.DagNodeResolution nextNode : nextNodes) {
       if (WorkflowNodeCode.END.code().equals(nextNode.nodeCode())) {
         createTerminalNodeRun(workflowRun.getId(), nextNode, now);
         continue;
       }
-      dispatchedCount +=
-          dispatchNode(jobInstance, workflowRun, nextNode, sourcePayload, jobInstance.getTraceId());
+      dispatchedCount += dispatchNode(
+          jobInstance,
+          workflowRun,
+          nextNode,
+          sourcePayload,
+          jobInstance == null ? workflowRun.getTraceId() : jobInstance.getTraceId());
     }
+    workflowNodeTerminalFinalizer.finalizeIfAllNodesTerminal(workflowRun);
     return dispatchedCount;
   }
 
@@ -497,6 +568,10 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
 
   private boolean isJobNode(String nodeType) {
     return WorkflowNodeType.JOB.code().equalsIgnoreCase(nodeType);
+  }
+
+  private boolean isWaitNode(String nodeType) {
+    return WorkflowNodeType.WAIT.code().equalsIgnoreCase(nodeType);
   }
 
   private boolean isNodeAlreadyActivated(Long workflowRunId, String nodeCode) {
@@ -530,8 +605,9 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     return null;
   }
 
-  private void recordNodeRunReady(Long workflowRunId, String nodeCode, String nodeType) {
-    WorkflowNodeRunSupport.recordReady(
+  private WorkflowNodeRunEntity recordNodeRunReady(
+      Long workflowRunId, String nodeCode, String nodeType) {
+    return WorkflowNodeRunSupport.recordReady(
         workflowMappers.workflowNodeRunMapper, workflowRunId, nodeCode, nodeType);
   }
 }

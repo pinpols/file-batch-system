@@ -63,14 +63,16 @@ class SdkAbstractDispatchHandler[T](SdkAbstractTaskHandler):
                 except Exception as item_ex:
                     counts.inc_failed()
                     logger.warning("dispatch item failed: %s", item_ex)
-            return SdkTaskResult.success_with(
-                output=counts.to_output(),
-                message=f"dispatched {counts.success()}/{counts.total()}",
-            )
+            output = counts.to_output()
+            successful_count = counts.success()
+            total_count = counts.total()
+            summary_message = f"dispatched {successful_count}/{total_count}"
+            return SdkTaskResult.success_with(output=output, message=summary_message)
         except Exception as ex:
+            failure_message = str(ex) or type(ex).__name__
             return SdkTaskResult.fail(
                 HANDLER_ERROR_CODE,
-                str(ex) or type(ex).__name__,
+                failure_message,
                 cause=ex,
             )
 

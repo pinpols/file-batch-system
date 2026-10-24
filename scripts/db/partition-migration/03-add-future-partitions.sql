@@ -1,24 +1,19 @@
 -- =========================================================
 -- 03-add-future-partitions.sql
--- 持续维护：每月跑一次，在 outbox_event / job_instance 上创建未来 N 个月的分区，
--- 防止数据落到 DEFAULT 分区（DEFAULT 一旦有数据后再加常规分区会失败）。
---
--- 推荐 cron（每月 1 号 02:00）：
---   0 2 1 * *  PGPASSWORD=$PGPW psql -U batch_user -d batch_platform \
---               -v ON_ERROR_STOP=1 -v months_ahead=6 \
---               -f /opt/batch/scripts/db/partition-migration/03-add-future-partitions.sql
+-- 演练入口：在 outbox_event / job_instance 上创建当前月到未来 N 个月的分区。
+-- 生产维护责任与审批按本目录 README / PostgreSQL 分区运维手册执行。
+-- DEFAULT 中只有落在目标新边界内的行会与该分区创建冲突。
 --
 -- 自定义未来月份数：psql ... -v months_ahead=12 -f ...
 --
--- 【容错设计】每个 (表, 月) 的分区创建独立成块并捕获异常：单个月失败不再级联中止
--- 后续月份与另一张表（旧版单 DO 块 + ON_ERROR_STOP 会因一处报错整段回滚，令分区维护
--- 静默瘫痪、数据持续堆入 DEFAULT）。失败会 RAISE WARNING 且末尾汇总 RAISE EXCEPTION，
--- 使脚本非零退出，cron/告警能感知——失败不静默。
+-- 【整批事务】内层异常块允许继续尝试其它 (表, 月) 并汇总失败；它不单独提交 DDL。
+-- 任一创建失败时，末尾 RAISE EXCEPTION 回滚本次 DO 中全部新建分区并让脚本非零退出。
+-- 本次执行前已提交的分区保持不变；全部创建成功才整体提交，重复执行保持幂等。
 --
 -- 最常见失败：DEFAULT 分区已捕获目标月数据（漏跑一次 cron，或 biz_date 被 backfill/
 -- 前置到未来窗口之外），此时该月 attach 报 "default partition would be violated by some row"。
--- 本脚本不自动 DETACH+迁数据（有并发写风险，不宜在无人值守 cron 里做）；处置见
--- docs/runbook 里的手工步骤：DETACH DEFAULT → CREATE 该月分区 → 从旧 DEFAULT 迁回该月行 → 重新 ATTACH DEFAULT。
+-- 本脚本不自动 DETACH 或迁移数据；冲突时按 docs/runbook/pg-table-partitioning.md
+-- 保存边界与行数证据，提交 DBA 制定受控变更方案，不以手工改表绕过失败。
 -- =========================================================
 
 \set ON_ERROR_STOP on
@@ -53,7 +48,7 @@ BEGIN
             end_month := start_month + interval '1 month';
             pname := target_table || '_p_' || to_char(start_month, 'YYYY_MM');
             parent := 'batch.' || target_table;
-            -- 每个分区独立子块：失败只跳过本月,不影响其余月份与另一张表。
+            -- 子块失败后继续收集其它月份的问题；最终任一失败会回滚整个 DO。
             BEGIN
                 EXECUTE format(
                     'CREATE TABLE IF NOT EXISTS batch.%I PARTITION OF %s '
@@ -70,7 +65,7 @@ BEGIN
 
     IF failed > 0 THEN
         -- 汇总后抛出,使脚本非零退出被 cron/告警捕获——失败不静默。
-        -- 最常见根因:DEFAULT 分区已含目标月行,需手工 DETACH+迁数据(见文件头注释)。
+        -- DEFAULT 中目标月已有行时，需按受控数据库变更流程处置，不能自动迁移。
         RAISE EXCEPTION 'add-future-partitions: % 个分区创建失败,分区维护未完全成功:%', failed, failed_list;
     END IF;
 END$$;

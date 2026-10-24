@@ -8,16 +8,19 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.CatchUpPolicyType;
+import io.github.pinpols.batch.common.enums.ScheduledOccurrenceStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
 import io.github.pinpols.batch.trigger.domain.MisfireHandler;
 import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
+import io.github.pinpols.batch.trigger.service.ScheduledOccurrenceRecorder;
 import io.github.pinpols.batch.trigger.service.TriggerService;
 import io.github.pinpols.batch.trigger.service.UpstreamNotReadyException;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.Date;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -46,6 +49,9 @@ class QuartzLaunchJobTest {
   private TriggerRegistrationService triggerRegistrationService;
 
   @Mock
+  private ScheduledOccurrenceRecorder occurrenceRecorder;
+
+  @Mock
   private JobExecutionContext context;
 
   @Mock
@@ -65,7 +71,8 @@ class QuartzLaunchJobTest {
         misfireHandler,
         properties,
         triggerRegistrationService,
-        new SimpleMeterRegistry());
+        new SimpleMeterRegistry(),
+        occurrenceRecorder);
   }
 
   @Test
@@ -86,7 +93,7 @@ class QuartzLaunchJobTest {
     assertThat(captor.getValue().descriptor().getCatchUpPolicy())
         .isEqualTo(CatchUpPolicyType.MANUAL_APPROVAL.code());
     assertThat(captor.getValue().descriptor().getCatchUpMaxDays()).isEqualTo(2);
-    verify(misfireHandler).handle("t1:IMPORT_JOB");
+    verify(misfireHandler).handle("t1:WF:WF_IMPORT_JOB");
     verify(triggerService, never()).launchScheduled(any());
   }
 
@@ -111,7 +118,9 @@ class QuartzLaunchJobTest {
   @Test
   @DisplayName("AUTO 策略且漂移未超最大天数时直接以 CATCH_UP 类型补跑,并保留上游依赖作业")
   void shouldLaunchCatchUpWhenAutoPolicyIsWithinMaxDays() throws Exception {
-    when(context.getMergedJobDataMap()).thenReturn(jobDataMap(CatchUpPolicyType.AUTO.code(), 2));
+    JobDataMap data = jobDataMap(CatchUpPolicyType.AUTO.code(), 2);
+    data.put(QuartzLaunchJob.DEPENDS_ON_JOB_CODES, List.of("UPSTREAM_JOB", "UPSTREAM_AUDIT"));
+    when(context.getMergedJobDataMap()).thenReturn(data);
     when(context.getScheduledFireTime())
         .thenReturn(Date.from(Instant.parse("2026-03-25T00:00:00Z")));
     when(context.getFireTime()).thenReturn(Date.from(Instant.parse("2026-03-26T00:01:00Z")));
@@ -125,8 +134,10 @@ class QuartzLaunchJobTest {
     assertThat(captor.getValue().descriptor().getCatchUpPolicy())
         .isEqualTo(CatchUpPolicyType.AUTO.code());
     assertThat(captor.getValue().descriptor().getDependsOnJobCode()).isEqualTo("UPSTREAM_JOB");
+    assertThat(captor.getValue().descriptor().getDependsOnJobCodes())
+        .containsExactly("UPSTREAM_JOB", "UPSTREAM_AUDIT");
     verify(triggerService, never()).createPendingCatchUp(any());
-    verify(misfireHandler).handle("t1:IMPORT_JOB");
+    verify(misfireHandler).handle("t1:WF:WF_IMPORT_JOB");
   }
 
   @Test
@@ -144,7 +155,7 @@ class QuartzLaunchJobTest {
     verify(triggerService).launchScheduled(captor.capture());
     assertThat(captor.getValue().triggerType()).isEqualTo(TriggerType.SCHEDULED);
     verify(triggerService, never()).createPendingCatchUp(any());
-    verify(misfireHandler).handle("t1:IMPORT_JOB");
+    verify(misfireHandler).handle("t1:WF:WF_IMPORT_JOB");
   }
 
   @Test
@@ -162,7 +173,31 @@ class QuartzLaunchJobTest {
     verify(triggerService).launchScheduled(captor.capture());
     assertThat(captor.getValue().triggerType()).isEqualTo(TriggerType.SCHEDULED);
     verify(triggerService, never()).createPendingCatchUp(any());
-    verify(misfireHandler).handle("t1:IMPORT_JOB");
+    verify(misfireHandler).handle("t1:WF:WF_IMPORT_JOB");
+  }
+
+  @Test
+  @DisplayName("Quartz scheduled fire 以 Workflow ID 为唯一启动目标，不伪造 JobCode")
+  void shouldLaunchScheduledWorkflowAsRootTarget() throws Exception {
+    JobDataMap data = jobDataMap(CatchUpPolicyType.NONE.code(), 2);
+    data.remove(QuartzLaunchJob.JOB_CODE);
+    data.put(QuartzLaunchJob.WORKFLOW_DEFINITION_ID, 79L);
+    data.put(QuartzLaunchJob.WORKFLOW_CODE, "FLOW_ROOT");
+    data.put(QuartzLaunchJob.WORKFLOW_VERSION, 4);
+    when(context.getMergedJobDataMap()).thenReturn(data);
+    when(context.getScheduledFireTime())
+        .thenReturn(Date.from(Instant.parse("2026-03-27T00:00:00Z")));
+    when(context.getFireTime()).thenReturn(Date.from(Instant.parse("2026-03-27T00:00:01Z")));
+
+    job.execute(context);
+
+    ArgumentCaptor<ScheduledTriggerCommand> captor =
+        ArgumentCaptor.forClass(ScheduledTriggerCommand.class);
+    verify(triggerService).launchScheduled(captor.capture());
+    assertThat(captor.getValue().descriptor().getWorkflowDefinitionId()).isEqualTo(79L);
+    assertThat(captor.getValue().descriptor().getWorkflowCode()).isEqualTo("FLOW_ROOT");
+    assertThat(captor.getValue().descriptor().getWorkflowVersion()).isEqualTo(4);
+    assertThat(captor.getValue().descriptor().getJobCode()).isNull();
   }
 
   @Test
@@ -190,6 +225,13 @@ class QuartzLaunchJobTest {
         .isEqualTo(originalFireTime.toEpochMilli());
     assertThat(retry.getJobDataMap().getString(QuartzLaunchJob.READINESS_TRIGGER_TYPE))
         .isEqualTo(TriggerType.SCHEDULED.name());
+    verify(occurrenceRecorder)
+        .record(
+            any(),
+            org.mockito.ArgumentMatchers.eq(originalFireTime),
+            org.mockito.ArgumentMatchers.isNull(),
+            org.mockito.ArgumentMatchers.eq(ScheduledOccurrenceStatus.WAITING_READINESS),
+            org.mockito.ArgumentMatchers.isNull());
   }
 
   @Test
@@ -211,11 +253,21 @@ class QuartzLaunchJobTest {
     job.execute(context);
 
     verify(context, never()).getScheduler();
+    verify(occurrenceRecorder)
+        .record(
+            any(),
+            org.mockito.ArgumentMatchers.eq(originalFireTime),
+            org.mockito.ArgumentMatchers.isNull(),
+            org.mockito.ArgumentMatchers.eq(ScheduledOccurrenceStatus.READINESS_TIMEOUT),
+            org.mockito.ArgumentMatchers.isNull());
   }
 
   private JobDataMap jobDataMap(String catchUpPolicy, Integer catchUpMaxDays) {
     JobDataMap jobDataMap = new JobDataMap();
     jobDataMap.put(QuartzLaunchJob.TENANT_ID, "t1");
+    jobDataMap.put(QuartzLaunchJob.WORKFLOW_DEFINITION_ID, 71L);
+    jobDataMap.put(QuartzLaunchJob.WORKFLOW_CODE, "WF_IMPORT_JOB");
+    jobDataMap.put(QuartzLaunchJob.WORKFLOW_VERSION, 4);
     jobDataMap.put(QuartzLaunchJob.JOB_CODE, "IMPORT_JOB");
     jobDataMap.put(QuartzLaunchJob.SCHEDULE_TYPE, "CRON");
     jobDataMap.put(QuartzLaunchJob.SCHEDULE_EXPRESSION, "0 0 1 * * ?");

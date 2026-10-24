@@ -40,9 +40,11 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_RELATED_PIPELINE_CODE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_RETRY_MAX_COUNT;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_RETRY_POLICY;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SCHEDULE_ENABLED;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SCHEDULE_EXPR;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SCHEDULE_TYPE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SHARD_STRATEGY;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SINGLE_JOB_CODE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SOFT_RUNTIME_SECONDS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SOFT_RUNTIME_SEVERITY;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_STAGE_CODE;
@@ -52,7 +54,9 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_STEP_NAME;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_TENANT_ID;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_TIMEOUT_SECONDS;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_TIMEZONE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_TO_NODE_CODE;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_TRIGGER_MODE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_VERSION;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WATERMARK_FIELD;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WINDOW_CODE;
@@ -553,6 +557,8 @@ public final class ConfigPackageSheetSpecs {
                 COL_SCHEDULE_TYPE,
                 COL_SCHEDULE_EXPR,
                 COL_DEPENDS_ON_JOB_CODE,
+                ConfigPackageExcelValidator.COL_DEPENDS_ON_JOB_CODES,
+                ConfigPackageExcelValidator.COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS,
                 COL_CALENDAR_CODE,
                 COL_WINDOW_CODE,
                 COL_DEFAULT_PARAMS,
@@ -1208,6 +1214,16 @@ public final class ConfigPackageSheetSpecs {
             COL_DEPENDS_ON_JOB_CODE,
             optionalColumn(
                 "上游作业编码；填写后 scheduled fire 前会等待同 bizDate 上游就绪。", GUIDE_STR, GUIDE_JOB_EXAMPLE)),
+        Map.entry(
+            ConfigPackageExcelValidator.COL_DEPENDS_ON_JOB_CODES,
+            optionalColumn(
+                "多个上游作业编码用英文逗号分隔；所有上游在同 bizDate 均就绪后才触发。", GUIDE_STR, "IMPORT_A,IMPORT_B")),
+        Map.entry(
+            ConfigPackageExcelValidator.COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS,
+            optionalColumn(
+                "依赖日期对齐枚举，与上游编码按位置对应；留空按 SAME_DAY；PREVIOUS_BIZ_DAY 按下游作业业务日历解析，未配置业务日历时按周一至周五计算。",
+                GUIDE_STR,
+                "SAME_DAY,PREVIOUS_BIZ_DAY")),
         Map.entry(COL_CALENDAR_CODE, optionalColumn("业务日历编码。", GUIDE_STR, "default-calendar")),
         Map.entry(COL_WINDOW_CODE, optionalColumn("批量窗口编码。", GUIDE_STR, "always-open")),
         Map.entry(
@@ -1522,8 +1538,25 @@ public final class ConfigPackageSheetSpecs {
             requiredColumn("工作流拓扑类型。", GUIDE_ENUM, "DAG", "DAG", "PIPELINE", "MIXED")),
         Map.entry(COL_VERSION, requiredColumn("版本号。", GUIDE_INT, GUIDE_VERSION_ONE)),
         Map.entry(
+            COL_SINGLE_JOB_CODE,
+            optionalColumn("受管单作业工作流关联的作业编码；必须在本包或目标租户中存在。组合工作流留空。", GUIDE_STR, GUIDE_JOB_EXAMPLE)),
+        Map.entry(
             COL_ENABLED,
             optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+        Map.entry(
+            COL_SCHEDULE_ENABLED,
+            optionalColumn("是否启用此工作流的定时触发。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
+        Map.entry(
+            COL_SCHEDULE_TYPE,
+            optionalColumn("工作流调度类型。", GUIDE_ENUM, "MANUAL", "CRON", "FIXED_RATE", "MANUAL")),
+        Map.entry(COL_SCHEDULE_EXPR, optionalColumn("CRON/FIXED_RATE 表达式。", GUIDE_STR, EMPTY)),
+        Map.entry(COL_TIMEZONE, optionalColumn("调度时区。", GUIDE_STR, "UTC")),
+        Map.entry(
+            COL_TRIGGER_MODE,
+            optionalColumn(
+                "工作流触发模式。", GUIDE_ENUM, "MANUAL", "SCHEDULED", "API", "MANUAL", "EVENT", "MIXED")),
+        Map.entry(COL_CALENDAR_CODE, optionalColumn("关联业务日历编码。", GUIDE_STR, EMPTY)),
+        Map.entry(COL_DEPENDS_ON_JOB_CODE, optionalColumn("依赖作业编码。", GUIDE_STR, EMPTY)),
         Map.entry(COL_DESCRIPTION, optionalColumn(GUIDE_DESC_DESC, GUIDE_STR, "清算批量工作流")));
   }
 

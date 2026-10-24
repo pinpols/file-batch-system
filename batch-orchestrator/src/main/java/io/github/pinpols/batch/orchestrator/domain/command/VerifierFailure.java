@@ -13,12 +13,17 @@ public record VerifierFailure(String code, String message, Object evidence) {
       return List.of();
     }
     return failures.stream()
-        .map(failure -> EmptyChecks.isNull(failure)
-            ? null
-            : new VerifierFailure(
-                stringValue(failure.get("code")),
-                stringValue(failure.get("message")),
-                failure.get("evidence")))
+        .map(failure -> {
+          if (EmptyChecks.isNull(failure)) {
+            return null;
+          }
+          Object codeValue = failure.get("code");
+          String code = stringValue(codeValue);
+          Object messageValue = failure.get("message");
+          String message = stringValue(messageValue);
+          Object evidence = failure.get("evidence");
+          return new VerifierFailure(code, message, evidence);
+        })
         .toList();
   }
 

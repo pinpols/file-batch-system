@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.dto.DependencyResultReference;
 import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
 import io.github.pinpols.batch.common.kafka.SchedulingContext;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
@@ -87,7 +88,16 @@ class TaskDispatchExecutorTest {
         100L,
         null,
         null,
-        "inv-fresh");
+        "inv-fresh",
+        List.of(new DependencyResultReference(
+            "UPSTREAM_JOB",
+            "PREVIOUS_BIZ_DAY",
+            LocalDate.parse("2026-04-30"),
+            "job:UPSTREAM_JOB:2026-04-30",
+            4,
+            9001L,
+            8001L,
+            Instant.parse("2026-05-01T00:00:00Z"))));
     when(taskExecutionWrapper.claim("t1", 42L, "w1")).thenReturn(Optional.of(fresh));
     when(taskExecutionWrapper.execute(any())).thenReturn(new WorkerExecutionResult("42", true, ""));
 
@@ -118,6 +128,16 @@ class TaskDispatchExecutorTest {
     assertThat(task.getRangeEndExclusive()).isEqualTo(100L);
     assertThat(task.getExpectedRows()).isEqualTo(100L);
     assertThat(task.getPartitionInvocationId()).isEqualTo("inv-fresh");
+    assertThat(task.getDependencyResultSnapshot())
+        .containsExactly(new DependencyResultReference(
+            "UPSTREAM_JOB",
+            "PREVIOUS_BIZ_DAY",
+            LocalDate.parse("2026-04-30"),
+            "job:UPSTREAM_JOB:2026-04-30",
+            4,
+            9001L,
+            8001L,
+            Instant.parse("2026-05-01T00:00:00Z")));
   }
 
   @Test

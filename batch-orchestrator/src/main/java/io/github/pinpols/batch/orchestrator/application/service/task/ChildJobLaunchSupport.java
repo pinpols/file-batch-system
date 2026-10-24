@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import io.github.pinpols.batch.common.dto.LaunchRequest;
+import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TaskStatus;
@@ -17,6 +18,7 @@ import io.github.pinpols.batch.orchestrator.application.service.WorkflowNodeRunS
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodePayloadBuilder;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunExecutionSnapshot;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -94,6 +96,9 @@ public class ChildJobLaunchSupport {
       WorkflowNodeEntity workflowNode,
       String sourcePayload,
       String traceId) {
+    if (jobInstance == null) {
+      return dispatchRootlessJobNode(workflowRun, node, workflowNode, sourcePayload, traceId);
+    }
     String refJobCode = workflowNode.getRelatedJobCode();
     if (EmptyChecks.isBlank(refJobCode)) {
       return 0;
@@ -105,7 +110,7 @@ public class ChildJobLaunchSupport {
     guardAgainstNestingCycle(jobInstance, refJobCode, node.nodeCode());
 
     // 与 TASK/FILE_STEP 节点一致：立即将节点标为 READY
-    WorkflowNodeRunSupport.recordReady(
+    var nodeRun = WorkflowNodeRunSupport.recordReady(
         workflowMappers.workflowNodeRunMapper,
         workflowRun.getId(),
         node.nodeCode(),
@@ -120,8 +125,8 @@ public class ChildJobLaunchSupport {
     incrementExpectedPartitionCount(jobInstance, node.nodeCode());
 
     // 为子作业写入 trigger_request，供 LaunchValidationService.load() 加载
-    String childRequestId =
-        writeTriggerRequestForChildJob(jobInstance, refJobCode, idempotencyKey, traceId);
+    String childRequestId = writeTriggerRequestForChildJob(
+        jobInstance, workflowRun, node, virtualTask, refJobCode, idempotencyKey, traceId);
 
     // 子作业启动参数含回指字段，便于子作业完成后回写本虚拟 task
     ChildLaunchContext launchCtx = ChildLaunchContext.builder()
@@ -133,12 +138,112 @@ public class ChildJobLaunchSupport {
         .childRequestId(childRequestId)
         .traceId(traceId)
         .virtualTask(virtualTask)
+        .nodeRun(nodeRun)
         .workflowNode(workflowNode)
         .build();
     LaunchRequest childLaunchRequest = buildChildLaunchRequest(launchCtx);
-    launchServiceProvider.getObject().launch(childLaunchRequest);
+    LaunchResponse childResponse = launchServiceProvider.getObject().launch(childLaunchRequest);
+    if (isWaitingForBatchDay(childResponse, jobInstance.getTenantId(), childRequestId)) {
+      return 0;
+    }
+    Guard.require(
+        childResponse != null && !EmptyChecks.isBlank(childResponse.instanceNo()),
+        ResultCode.STATE_CONFLICT,
+        "error.workflow.child_job_instance_missing");
+    JobInstanceEntity childInstance = jobMappers.jobInstanceMapper.selectByInstanceNo(
+        jobInstance.getTenantId(), childResponse.instanceNo());
+    Guard.require(
+        childInstance != null && childInstance.getId() != null,
+        ResultCode.STATE_CONFLICT,
+        "error.workflow.child_job_instance_missing");
+    int linked = workflowMappers.workflowNodeRunMapper.attachJobInstance(
+        jobInstance.getTenantId(), nodeRun.getId(), childInstance.getId());
+    Guard.require(
+        linked > 0, ResultCode.STATE_CONFLICT, "error.workflow.node_job_instance_link_conflict");
 
     return 1; // 向父 job 新增了一个虚拟分区
+  }
+
+  /**
+   * Rootless Workflow dispatch: the Workflow Run owns the node and the child Job Instance is its
+   * execution detail. No synthetic parent Job, virtual partition, or parent task is created.
+   */
+  private int dispatchRootlessJobNode(
+      WorkflowRunEntity workflowRun,
+      WorkflowDagService.DagNodeResolution node,
+      WorkflowNodeEntity workflowNode,
+      String sourcePayload,
+      String traceId) {
+    if (workflowRun == null || workflowRun.getRelatedJobInstanceId() != null) {
+      return 0;
+    }
+    String refJobCode = workflowNode.getRelatedJobCode();
+    if (EmptyChecks.isBlank(refJobCode)) {
+      return 0;
+    }
+    var nodeRun = WorkflowNodeRunSupport.recordReady(
+        workflowMappers.workflowNodeRunMapper,
+        workflowRun.getId(),
+        node.nodeCode(),
+        node.nodeType());
+    String idempotencyKey =
+        workflowRun.getTenantId() + ":wf:" + workflowRun.getId() + ":" + node.nodeCode();
+    String childRequestId = IdGenerator.newTraceId();
+    TriggerRequestEntity triggerRequest = new TriggerRequestEntity();
+    triggerRequest.setTenantId(workflowRun.getTenantId());
+    triggerRequest.setRequestId(childRequestId);
+    triggerRequest.setTriggerType(TriggerType.EVENT.code());
+    triggerRequest.setJobCode(refJobCode);
+    triggerRequest.setBizDate(workflowRun.getBizDate());
+    triggerRequest.setDedupKey(idempotencyKey + ":child");
+    triggerRequest.setRequestStatus(TriggerRequestStatus.ACCEPTED.code());
+    triggerRequest.setTraceId(traceId);
+    triggerRequest.setDryRun(Boolean.TRUE.equals(workflowRun.getDryRun()));
+    triggerRequest.setParentWorkflowRunId(workflowRun.getId());
+    triggerRequest.setParentNodeCode(node.nodeCode());
+    jobMappers.triggerRequestMapper.insert(triggerRequest);
+
+    Map<String, Object> childParams = new LinkedHashMap<>();
+    WorkflowNodePayloadBuilder.parsePayloadMap(sourcePayload).forEach((key, value) -> {
+      if (!WORKFLOW_INTERNAL_PAYLOAD_KEYS.contains(key)) {
+        childParams.put(key, value);
+      }
+    });
+    payloadBuilder.mergeNodeParams(childParams, workflowNode, workflowRun);
+    pinSystemPipelineIdentity(childParams, workflowRun, node.nodeCode());
+    childParams.put("_parentWorkflowRunId", workflowRun.getId());
+    childParams.put("_parentNodeCode", node.nodeCode());
+    LaunchResponse response = launchServiceProvider
+        .getObject()
+        .launch(LaunchRequest.builder()
+            .tenantId(workflowRun.getTenantId())
+            .jobCode(refJobCode)
+            .bizDate(workflowRun.getBizDate())
+            .triggerType(TriggerType.EVENT)
+            .requestId(childRequestId)
+            .traceId(traceId)
+            .params(childParams)
+            .replaySessionId(replaySessionId(workflowRun))
+            .dryRun(Boolean.TRUE.equals(workflowRun.getDryRun()))
+            .build());
+    if (isWaitingForBatchDay(response, workflowRun.getTenantId(), childRequestId)) {
+      return 0;
+    }
+    Guard.require(
+        response != null && !EmptyChecks.isBlank(response.instanceNo()),
+        ResultCode.STATE_CONFLICT,
+        "error.workflow.child_job_instance_missing");
+    JobInstanceEntity childInstance = jobMappers.jobInstanceMapper.selectByInstanceNo(
+        workflowRun.getTenantId(), response.instanceNo());
+    Guard.require(
+        childInstance != null && childInstance.getId() != null,
+        ResultCode.STATE_CONFLICT,
+        "error.workflow.child_job_instance_missing");
+    int linked = workflowMappers.workflowNodeRunMapper.attachJobInstance(
+        workflowRun.getTenantId(), nodeRun.getId(), childInstance.getId());
+    Guard.require(
+        linked > 0, ResultCode.STATE_CONFLICT, "error.workflow.node_job_instance_link_conflict");
+    return 1;
   }
 
   /**
@@ -262,7 +367,13 @@ public class ChildJobLaunchSupport {
   }
 
   private String writeTriggerRequestForChildJob(
-      JobInstanceEntity jobInstance, String refJobCode, String idempotencyKey, String traceId) {
+      JobInstanceEntity jobInstance,
+      WorkflowRunEntity workflowRun,
+      WorkflowDagService.DagNodeResolution node,
+      JobTaskEntity virtualTask,
+      String refJobCode,
+      String idempotencyKey,
+      String traceId) {
     String childRequestId = IdGenerator.newTraceId();
     String childDedupKey = idempotencyKey + ":child";
     TriggerRequestEntity triggerRequest = new TriggerRequestEntity();
@@ -274,6 +385,10 @@ public class ChildJobLaunchSupport {
     triggerRequest.setDedupKey(childDedupKey);
     triggerRequest.setRequestStatus(TriggerRequestStatus.ACCEPTED.code());
     triggerRequest.setTraceId(traceId);
+    triggerRequest.setParentWorkflowRunId(workflowRun.getId());
+    triggerRequest.setParentJobInstanceId(jobInstance.getId());
+    triggerRequest.setParentNodeCode(node.nodeCode());
+    triggerRequest.setParentVirtualTaskId(virtualTask.getId());
     jobMappers.triggerRequestMapper.insert(triggerRequest);
     return childRequestId;
   }
@@ -290,18 +405,50 @@ public class ChildJobLaunchSupport {
     // params。否则 JOB 节点在设计器里配的 templateCode / channelCode / seed payload 等字段
     // 永远无法传到子作业 job_instance.params_snapshot → worker 看不到 → import/export 凭空失败。
     payloadBuilder.mergeNodeParams(childParams, ctx.workflowNode(), ctx.workflowRun());
+    pinSystemPipelineIdentity(childParams, ctx.workflowRun(), ctx.node().nodeCode());
     childParams.put("parentInstanceId", ctx.jobInstance().getId());
     childParams.put("_parentVirtualTaskId", ctx.virtualTask().getId());
     childParams.put("_parentWorkflowRunId", ctx.workflowRun().getId());
     childParams.put("_parentNodeCode", ctx.node().nodeCode());
-    return new LaunchRequest(
-        ctx.jobInstance().getTenantId(),
-        ctx.refJobCode(),
-        ctx.jobInstance().getBizDate(),
-        TriggerType.EVENT,
-        ctx.childRequestId(),
-        ctx.traceId(),
-        childParams);
+    return LaunchRequest.builder()
+        .tenantId(ctx.jobInstance().getTenantId())
+        .jobCode(ctx.refJobCode())
+        .bizDate(ctx.jobInstance().getBizDate())
+        .triggerType(TriggerType.EVENT)
+        .requestId(ctx.childRequestId())
+        .traceId(ctx.traceId())
+        .params(childParams)
+        .replaySessionId(replaySessionId(ctx.workflowRun()))
+        .dryRun(Boolean.TRUE.equals(ctx.workflowRun().getDryRun()))
+        .build();
+  }
+
+  private Long replaySessionId(WorkflowRunEntity workflowRun) {
+    WorkflowRunExecutionSnapshot snapshot = WorkflowRunExecutionSnapshot.from(workflowRun);
+    return snapshot == null ? null : snapshot.replaySessionId();
+  }
+
+  /** A deferred child has no Job Instance yet; keep its node READY for the release scheduler. */
+  private boolean isWaitingForBatchDay(
+      LaunchResponse response, String tenantId, String childRequestId) {
+    if (response != null && !EmptyChecks.isBlank(response.instanceNo())) {
+      return false;
+    }
+    TriggerRequestEntity triggerRequest =
+        jobMappers.triggerRequestMapper.selectByTenantAndRequestId(tenantId, childRequestId);
+    if (triggerRequest != null
+        && TriggerRequestStatus.WAITING.code().equals(triggerRequest.getRequestStatus())) {
+      return true;
+    }
+    throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.child_job_launch_rejected");
+  }
+
+  private void pinSystemPipelineIdentity(
+      Map<String, Object> childParams, WorkflowRunEntity workflowRun, String nodeCode) {
+    WorkflowRunExecutionSnapshot snapshot = WorkflowRunExecutionSnapshot.from(workflowRun);
+    if (snapshot != null) {
+      snapshot.copySystemPipelineIdentity(nodeCode, childParams);
+    }
   }
 
   @Builder
@@ -314,5 +461,6 @@ public class ChildJobLaunchSupport {
       String childRequestId,
       String traceId,
       JobTaskEntity virtualTask,
+      io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity nodeRun,
       WorkflowNodeEntity workflowNode) {}
 }

@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.console.domain.observability.mapper;
 
+import io.github.pinpols.batch.console.domain.observability.query.ConsoleUsageDailyQuerySummaryQuery;
+
+
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -16,11 +19,7 @@ public interface ConsoleUsageDailyMapper {
   int insertDaily(@Param("row") DailyUsageRow row);
 
   List<DailyUsageRow> querySummary(
-      @Param("tenantId") String tenantId,
-      @Param("from") LocalDate from,
-      @Param("to") LocalDate to,
-      @Param("metricCode") String metricCode,
-      @Param("pageCode") String pageCode);
+      ConsoleUsageDailyQuerySummaryQuery parameters);
 
   record DailyUsageRow(
       LocalDate statDate,

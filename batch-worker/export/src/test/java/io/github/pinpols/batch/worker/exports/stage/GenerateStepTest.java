@@ -2,12 +2,19 @@ package io.github.pinpols.batch.worker.exports.stage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
+import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.worker.core.config.WorkerCheckpointProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineStageProgressRegistry;
@@ -27,6 +34,7 @@ import io.github.pinpols.batch.worker.exports.stage.format.JsonExportFormat;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -91,6 +99,21 @@ class GenerateStepTest {
             new PipelineStageProgressRegistry()));
   }
 
+  @Test
+  @DisplayName("回放能力用执行时同一 export_data_ref 选择插件并传入冻结模板")
+  void replayCapability_usesSelectedPluginAndFrozenTemplateConfig() {
+    Map<String, Object> frozenTemplateConfig = Map.of(
+        "query_param_schema", Map.of("export_data_ref", PLUGIN_ID),
+        "file_format_type", "DELIMITED");
+    ReplayCapabilityDeclaration expected = ReplayCapabilityDeclaration.unknown(PLUGIN_ID);
+    when(pluginRegistry.replayCapability(PLUGIN_ID, frozenTemplateConfig)).thenReturn(expected);
+
+    ReplayCapabilityDeclaration actual = generateStep.replayCapability(frozenTemplateConfig);
+
+    assertThat(actual).isEqualTo(expected);
+    verify(pluginRegistry).replayCapability(PLUGIN_ID, frozenTemplateConfig);
+  }
+
   // ── DELIMITED / CSV ────────────────────────────────────────────────────────
 
   @Test
@@ -111,9 +134,9 @@ class GenerateStepTest {
     Path generated = Path.of(
         context.getAttributes().get(PipelineRuntimeKeys.GENERATED_FILE_PATH).toString());
     assertThat(Files.getPosixFilePermissions(generated))
-        .isEqualTo(java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+        .isEqualTo(PosixFilePermissions.fromString("rw-------"));
     assertThat(Files.getPosixFilePermissions(generated.getParent()))
-        .isEqualTo(java.nio.file.attribute.PosixFilePermissions.fromString("rwx------"));
+        .isEqualTo(PosixFilePermissions.fromString("rwx------"));
   }
 
   @Test
@@ -207,7 +230,7 @@ class GenerateStepTest {
     assertThat(result.success()).isTrue();
     byte[] bytes = readGeneratedFileBytes(context);
     // 文件头必须是真的 GBK BOM 无关（GBK 无 BOM 约定），内容按 GBK 解码正确
-    String decoded = new String(bytes, io.github.pinpols.batch.common.utils.EncodingUtils.GBK);
+    String decoded = new String(bytes, EncodingUtils.GBK);
     assertThat(decoded).contains("客户");
     // CRLF：去掉 \r\n 后不应再残留裸 \n
     assertThat(decoded).contains("\r\n");

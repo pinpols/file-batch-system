@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.common.logging;
 
+import static org.slf4j.Logger.ROOT_LOGGER_NAME;
+
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
 import io.opentelemetry.api.OpenTelemetry;
@@ -23,7 +25,7 @@ public final class OpenTelemetryLogbackBridge implements AutoCloseable {
       appender = null;
       return;
     }
-    rootLogger = loggerContext.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
+    rootLogger = loggerContext.getLogger(ROOT_LOGGER_NAME);
     OpenTelemetryAppender otelAppender = new OpenTelemetryAppender();
     otelAppender.setName(APPENDER_NAME);
     otelAppender.setContext(loggerContext);

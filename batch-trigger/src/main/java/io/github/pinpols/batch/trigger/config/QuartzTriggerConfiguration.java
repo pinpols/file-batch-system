@@ -35,7 +35,9 @@ public class QuartzTriggerConfiguration {
     scheduler.setThreadNamePrefix("trigger-outbox-relay-");
     scheduler.setPhase(properties.getSchedulerPhase());
     scheduler.setWaitForTasksToCompleteOnShutdown(properties.isWaitForTasksToCompleteOnShutdown());
-    scheduler.setAwaitTerminationSeconds(Math.max(0, properties.getShutdownAwaitSeconds()));
+    int requestedShutdownWaitSeconds = properties.getShutdownAwaitSeconds();
+    int shutdownWaitSeconds = Math.max(0, requestedShutdownWaitSeconds);
+    scheduler.setAwaitTerminationSeconds(shutdownWaitSeconds);
     scheduler.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
     scheduler.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
     scheduler.setRemoveOnCancelPolicy(true);
@@ -51,7 +53,9 @@ public class QuartzTriggerConfiguration {
     scheduler.setThreadNamePrefix("trigger-launch-lag-monitor-");
     scheduler.setPhase(properties.getSchedulerPhase());
     scheduler.setWaitForTasksToCompleteOnShutdown(false);
-    scheduler.setAwaitTerminationSeconds(Math.max(0, properties.getShutdownAwaitSeconds()));
+    int requestedShutdownWaitSeconds = properties.getShutdownAwaitSeconds();
+    int shutdownWaitSeconds = Math.max(0, requestedShutdownWaitSeconds);
+    scheduler.setAwaitTerminationSeconds(shutdownWaitSeconds);
     scheduler.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
     scheduler.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
     scheduler.setRemoveOnCancelPolicy(true);

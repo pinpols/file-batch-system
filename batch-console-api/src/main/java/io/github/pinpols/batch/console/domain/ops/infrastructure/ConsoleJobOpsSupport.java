@@ -3,16 +3,22 @@ package io.github.pinpols.batch.console.domain.ops.infrastructure;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
+import io.github.pinpols.batch.common.dto.ScheduledOccurrenceCatchUpResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.console.application.ops.ConsoleJobOperationsPort;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.WorkflowNodeReplayPreviewRequest;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.WorkflowRunReplayRequest;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleWorkflowNodeReplayPreviewResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleWorkflowRunReplayPreviewResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleReplayOperationResponse;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalSubmitCommand;
-import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalTargetBinding;
 import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.shared.client.TriggerInternalRestClient;
 import io.github.pinpols.batch.console.shared.command.ApprovalSubmitContext;
@@ -20,16 +26,19 @@ import io.github.pinpols.batch.console.shared.command.CompensationCommandRequest
 import io.github.pinpols.batch.console.shared.command.CompensationPayload;
 import io.github.pinpols.batch.console.shared.command.ConsoleCatchUpApprovalRequest;
 import io.github.pinpols.batch.console.shared.command.ConsoleLaunchCommand;
+import io.github.pinpols.batch.console.shared.command.ConsoleScheduledOccurrenceCatchUpCommand;
+import io.github.pinpols.batch.console.shared.command.ConsoleWorkflowLaunchCommand;
 import io.github.pinpols.batch.console.shared.command.DeadLetterReplayRequest;
 import io.github.pinpols.batch.console.shared.command.PartitionReplayRequest;
 import io.github.pinpols.batch.console.shared.command.TaskReplayRequest;
-import io.github.pinpols.batch.console.shared.command.TriggerRequest;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.Map;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
@@ -38,8 +47,7 @@ import org.springframework.web.client.RestClient;
 /**
  * 作业运维操作的公共基础设施：审批提交、补偿提交、recovery 触发、trigger launch 委派、租户解析、事件广播。
  *
- * <p>被 {@code ConsoleJobTriggerService} / {@code DefaultConsoleJobRecoveryService} / {@code
- * ConsoleApprovalApplicationService} 三个拆分服务共享，避免重复代码。
+ * <p>被 {@code DefaultConsoleJobRecoveryService} / {@code ConsoleApprovalApplicationService} 两个拆分服务共享，避免重复代码。
  *
  * <p>关键约定：
  *
@@ -93,17 +101,27 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
 
   @Override
   public String delegateLaunch(ConsoleLaunchCommand command) {
+    boolean workflowTargetIsMissingOrInvalid =
+        EmptyChecks.isNull(command.workflowDefinitionId()) || command.workflowDefinitionId() <= 0;
+    if (workflowTargetIsMissingOrInvalid) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.trigger.workflow_target_required");
+    }
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
     // P0-1(2026-05-16):此前直接 restClientBuilder.baseUrl(...).build() 漏装
     // X-Internal-Secret,生产 bypass=false 后 trigger 侧 401。换走
     // TriggerInternalRestClient 统一注入 secret + 超时。
     RestClient restClient = triggerInternalRestClient.client();
+    String tenantId = command.tenantId();
+    Long workflowDefinitionId = command.workflowDefinitionId();
+    String businessDateText = command.bizDate();
+    LocalDate businessDate = parseBizDate(businessDateText);
+    TriggerType triggerType = command.triggerType();
     TriggerLaunchPayload launchPayload = new TriggerLaunchPayload(
-        command.tenantId(),
-        ConsoleTextSanitizer.safeInput(command.jobCode(), 128),
-        parseBizDate(command.bizDate()),
-        command.triggerType(),
-        command.params() == null ? Map.of() : command.params());
+        tenantId,
+        workflowDefinitionId,
+        businessDate,
+        triggerType,
+        EmptyChecks.isNull(command.params()) ? Map.of() : command.params());
     CommonResponse<LaunchResponse> response = restClient
         .post()
         .uri("/api/triggers/launch")
@@ -113,23 +131,98 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
         .body(launchPayload)
         .retrieve()
         .body(new ParameterizedTypeReference<CommonResponse<LaunchResponse>>() {});
-    if (response == null || response.data() == null) {
+    if (EmptyChecks.isNull(response)) {
       throw BizException.of(ResultCode.SYSTEM_ERROR, "error.trigger.empty_response");
     }
-    return response.data().instanceNo();
+    LaunchResponse launchResponse = response.data();
+    if (EmptyChecks.isNull(launchResponse)) {
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.trigger.empty_response");
+    }
+    return launchResponse.instanceNo();
   }
+
+  @Override
+  public String delegateWorkflowLaunch(ConsoleWorkflowLaunchCommand command) {
+    ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
+    RestClient restClient = triggerInternalRestClient.client();
+    WorkflowTriggerLaunchPayload launchPayload = new WorkflowTriggerLaunchPayload(
+        command.tenantId(),
+        command.workflowDefinitionId(),
+        command.bizDate(),
+        command.triggerType(),
+        EmptyChecks.isNull(command.params()) ? Map.of() : command.params());
+    CommonResponse<LaunchResponse> response = restClient
+        .post()
+        .uri("/api/triggers/launch")
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, command.idempotencyKey())
+        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
+        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
+        .body(launchPayload)
+        .retrieve()
+        .body(new ParameterizedTypeReference<CommonResponse<LaunchResponse>>() {});
+    if (EmptyChecks.isNull(response)) {
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.trigger.empty_response");
+    }
+    LaunchResponse launchResponse = response.data();
+    if (EmptyChecks.isNull(launchResponse)) {
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.trigger.empty_response");
+    }
+    return launchResponse.instanceNo();
+  }
+
+  @Override
+  public ScheduledOccurrenceCatchUpResponse delegateScheduledOccurrenceCatchUp(
+      ConsoleScheduledOccurrenceCatchUpCommand command) {
+    ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
+    CommonResponse<ScheduledOccurrenceCatchUpResponse> response = triggerInternalRestClient
+        .client()
+        .post()
+        .uri("/api/triggers/scheduled-occurrences/catch-up")
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, command.idempotencyKey())
+        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
+        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
+        .body(new ScheduledOccurrenceCatchUpPayload(
+            command.tenantId(),
+            command.workflowDefinitionId(),
+            command.scheduledFireTime(),
+            command.bizDate(),
+            command.requestedBy(),
+            command.reason()))
+        .retrieve()
+        .body(new ParameterizedTypeReference<>() {});
+    if (EmptyChecks.isNull(response)) {
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.trigger.empty_response");
+    }
+    ScheduledOccurrenceCatchUpResponse catchUpResponse = response.data();
+    if (EmptyChecks.isNull(catchUpResponse)) {
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.trigger.empty_response");
+    }
+    return catchUpResponse;
+  }
+
+  private record ScheduledOccurrenceCatchUpPayload(
+      String tenantId,
+      Long workflowDefinitionId,
+      Instant scheduledFireTime,
+      LocalDate bizDate,
+      String requestedBy,
+      String reason) {}
 
   @Override
   public String submitCompensation(CompensationPayload payload, String idempotencyKey) {
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
     RestClient restClient = orchestratorInternalRestClient.client();
+    CompensationPayload requestPayload = payload.toBuilder()
+        .traceId(requestMetadata.traceId())
+        .operatorId(requestMetadata.operatorId())
+        .build();
     CompensationResponse response = restClient
         .post()
         .uri("/internal/compensations")
         .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
         .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
         .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
-        .body(payload.toBuilder().traceId(requestMetadata.traceId()).build())
+        .body(requestPayload)
         .retrieve()
         .body(CompensationResponse.class);
     if (response == null || response.commandNo() == null) {
@@ -138,6 +231,191 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
     return response.commandNo();
   }
 
+  @Override
+  public ConsoleWorkflowNodeReplayPreviewResponse previewWorkflowNodeReplay(
+      WorkflowNodeReplayPreviewRequest request) {
+    ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
+    String resolvedTenantId = resolveTenant(request.getTenantId());
+    Long workflowRunId = request.getWorkflowRunId();
+    Long workflowNodeRunId = request.getWorkflowNodeRunId();
+    String reason = request.getReason();
+    String safeReason = ConsoleTextSanitizer.safeInput(reason, 512);
+    String operatorId = requestMetadata.operatorId();
+    String traceId = requestMetadata.traceId();
+    WorkflowNodeReplayPreviewCommand previewCommand = new WorkflowNodeReplayPreviewCommand(
+        resolvedTenantId,
+        workflowRunId,
+        workflowNodeRunId,
+        safeReason,
+        operatorId,
+        null,
+        null,
+        null,
+        traceId,
+        null,
+        null);
+    return orchestratorInternalRestClient.client()
+        .post()
+        .uri("/internal/compensations/workflow-node/replay-preview")
+        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
+        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
+        .body(previewCommand)
+        .retrieve()
+        .body(ConsoleWorkflowNodeReplayPreviewResponse.class);
+  }
+
+  @Override
+  public Long createPendingWorkflowNodeReplay(CompensationCommandRequest request) {
+    ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
+    String resolvedTenantId = resolveTenant(request.getTenantId());
+    Long sourceWorkflowRunId = request.getSourceWorkflowRunId();
+    Long sourceWorkflowNodeRunId = request.getSourceWorkflowNodeRunId();
+    String reason = request.getReason();
+    String requestedBy = requestMetadata.operatorId();
+    String resultPolicy = request.getResultPolicy();
+    String configVersionPolicy = request.getConfigVersionPolicy();
+    Integer configVersion = request.getConfigVersion();
+    String traceId = requestMetadata.traceId();
+    String operationKeyText = request.getOperationKey();
+    UUID operationKey = UUID.fromString(operationKeyText);
+    String previewToken = request.getPreviewToken();
+    WorkflowNodeReplayCommand command = new WorkflowNodeReplayCommand(
+        resolvedTenantId,
+        sourceWorkflowRunId,
+        sourceWorkflowNodeRunId,
+        reason,
+        requestedBy,
+        resultPolicy,
+        configVersionPolicy,
+        configVersion,
+        traceId,
+        operationKey,
+        previewToken);
+    WorkflowNodeReplayAdmissionResponse response = orchestratorInternalRestClient.client()
+        .post()
+        .uri("/internal/compensations/workflow-node/replay-operations")
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, request.getOperationKey())
+        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
+        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
+        .body(command)
+        .retrieve()
+        .body(WorkflowNodeReplayAdmissionResponse.class);
+    if (EmptyChecks.isNull(response) || EmptyChecks.isNull(response.replayOperationId())) {
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.workflow.replay_operation_not_persisted");
+    }
+    return response.replayOperationId();
+  }
+
+  @Override
+  public ConsoleWorkflowRunReplayPreviewResponse previewWorkflowRunReplay(
+      WorkflowRunReplayRequest request) {
+    ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
+    WorkflowRunReplayCommand command = workflowRunReplayCommand(request, requestMetadata, false);
+    CommonResponse<ConsoleWorkflowRunReplayPreviewResponse> response = orchestratorInternalRestClient
+        .client()
+        .post()
+        .uri("/internal/orchestrator/workflow-replay/preview")
+        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
+        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
+        .body(command)
+        .retrieve()
+        .body(new ParameterizedTypeReference<>() {});
+    if (EmptyChecks.isNull(response) || EmptyChecks.isNull(response.data())) {
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.workflow.workflow_run_replay_operation_not_persisted");
+    }
+    return response.data();
+  }
+
+  @Override
+  public Long createPendingWorkflowRunReplay(WorkflowRunReplayRequest request) {
+    ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
+    WorkflowRunReplayCommand command = workflowRunReplayCommand(request, requestMetadata, true);
+    CommonResponse<ConsoleReplayOperationResponse> response = orchestratorInternalRestClient
+        .client()
+        .post()
+        .uri("/internal/orchestrator/workflow-replay/submit")
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, request.getOperationKey())
+        .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
+        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
+        .body(command)
+        .retrieve()
+        .body(new ParameterizedTypeReference<>() {});
+    ConsoleReplayOperationResponse replayOperation = EmptyChecks.isNull(response) ? null : response.data();
+    Long replayOperationId = EmptyChecks.isNull(replayOperation) ? null : replayOperation.id();
+    if (EmptyChecks.isNull(replayOperationId)) {
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.workflow.replay_operation_not_persisted");
+    }
+    return replayOperationId;
+  }
+
+  private WorkflowRunReplayCommand workflowRunReplayCommand(
+      WorkflowRunReplayRequest request, ConsoleRequestMetadata requestMetadata, boolean submission) {
+    String tenantId = resolveTenant(request.getTenantId());
+    UUID operationKey = submission ? UUID.fromString(request.getOperationKey()) : null;
+    Long workflowRunId = request.getWorkflowRunId();
+    String reason = request.getReason();
+    String safeReason = ConsoleTextSanitizer.safeInput(reason, 512);
+    String requestedBy = requestMetadata.operatorId();
+    String resultPolicy = request.getResultPolicy();
+    String configVersionPolicy = request.getConfigVersionPolicy();
+    Integer configVersion = request.getConfigVersion();
+    String traceId = requestMetadata.traceId();
+    String previewToken = submission ? request.getPreviewToken() : null;
+    return new WorkflowRunReplayCommand(
+        tenantId,
+        workflowRunId,
+        safeReason,
+        requestedBy,
+        resultPolicy,
+        configVersionPolicy,
+        configVersion,
+        traceId,
+        operationKey,
+        previewToken);
+  }
+
+  private record WorkflowRunReplayCommand(
+      String tenantId,
+      Long workflowRunId,
+      String reason,
+      String requestedBy,
+      String resultPolicy,
+      String configVersionPolicy,
+      Integer configVersion,
+      String traceId,
+      UUID operationKey,
+      String previewToken) {}
+
+  private record WorkflowRunReplayApprovalPayload(String tenantId, Long replayOperationId) {}
+
+  private record WorkflowNodeReplayPreviewCommand(
+      String tenantId,
+      Long workflowRunId,
+      Long workflowNodeRunId,
+      String reason,
+      String requestedBy,
+      String resultPolicy,
+      String configVersionPolicy,
+      Integer configVersion,
+      String traceId,
+      UUID operationKey,
+      String previewToken) {}
+
+  private record WorkflowNodeReplayCommand(
+      String tenantId,
+      Long workflowRunId,
+      Long workflowNodeRunId,
+      String reason,
+      String requestedBy,
+      String resultPolicy,
+      String configVersionPolicy,
+      Integer configVersion,
+      String traceId,
+      UUID operationKey,
+      String previewToken) {}
+
+  private record WorkflowNodeReplayAdmissionResponse(Long replayOperationId) {}
+
   private record RecoveryOperationResponse(String operationNo) {}
 
   @Override
@@ -145,7 +423,7 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
       String tenantId, String uriTemplate, Long targetId, String idempotencyKey) {
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
     RestClient restClient = orchestratorInternalRestClient.client();
-    CommonResponse<RecoveryOperationResponse> response = restClient
+    RecoveryOperationResponse response = restClient
         .post()
         .uri(uriTemplate, targetId)
         .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
@@ -153,22 +431,29 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
         .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
         .body(Map.of("tenantId", tenantId))
         .retrieve()
-        .body(new ParameterizedTypeReference<CommonResponse<RecoveryOperationResponse>>() {});
-    if (response == null || response.data() == null) {
+        .body(RecoveryOperationResponse.class);
+    String operationNo = EmptyChecks.isNull(response) ? null : response.operationNo();
+    if (EmptyChecks.isBlank(operationNo)) {
       throw BizException.of(ResultCode.SYSTEM_ERROR, "error.orchestrator.empty_recovery");
     }
-    return response.data().operationNo();
+    return operationNo;
   }
 
   @Override
   public String submitApproval(ApprovalSubmitContext ctx) {
-    ApprovalSubmitCommand command = ApprovalSubmitCommand.builder()
-        .tenantId(resolveTenant(extractTenantId(ctx.payload())))
+    OrchestratorApprovalClient.ApprovalSubmitCommand.ApprovalSubmitCommandBuilder commandBuilder = ApprovalSubmitCommand.builder();
+    Object approvalPayload = ctx.payload();
+    String payloadTenantId = extractTenantId(approvalPayload);
+    String tenantId = resolveTenant(payloadTenantId);
+    commandBuilder
+        .tenantId(tenantId)
         .approvalType(ctx.approvalType())
         .actionType(ctx.actionType())
         .targetType(ctx.targetType())
-        .targetId(ctx.targetId())
-        .payloadJson(JsonUtils.toJson(ctx.payload()))
+        .targetId(ctx.targetId());
+    String payloadJson = JsonUtils.toJson(ctx.payload());
+    ApprovalSubmitCommand command = commandBuilder
+        .payloadJson(payloadJson)
         .approvalReason(ctx.approvalReason())
         .idempotencyKey(ctx.idempotencyKey())
         .build();
@@ -176,12 +461,12 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
   }
 
   /**
-   * 校验审批已通过态（APPROVED/EXECUTED）。作业运维路径保留原有的<b>不绑定目标</b>行为（{@link ApprovalTargetBinding#none()}）——
-   * 本次重构只做去重不改此路径对外行为；作业侧的目标绑定加固是独立的后续项。
+   * 校验审批已通过态、动作与完整执行载荷，防止已批准单被用于另一实例或变更后的业务参数。
    */
   @Override
-  public void requireApprovedApproval(String tenantId, String approvalNo) {
-    approvalClient.requireApprovedApproval(tenantId, approvalNo, ApprovalTargetBinding.none());
+  public void requireApprovedApproval(
+      String tenantId, String approvalNo, String actionType, Object executionPayload) {
+    approvalClient.requireApprovedExecution(tenantId, approvalNo, actionType, executionPayload);
   }
 
   @Override
@@ -195,7 +480,9 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
       return defaultTriggerType;
     }
     try {
-      return TriggerType.valueOf(triggerTypeValue.trim().toUpperCase());
+      String trimmedTriggerType = triggerTypeValue.trim();
+      String normalizedTriggerType = trimmedTriggerType.toUpperCase();
+      return TriggerType.valueOf(normalizedTriggerType);
     } catch (IllegalArgumentException exception) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
@@ -235,9 +522,6 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
   }
 
   private String extractTenantId(Object payload) {
-    if (payload instanceof TriggerRequest request) {
-      return request.getTenantId();
-    }
     if (payload instanceof CompensationCommandRequest request) {
       return request.getTenantId();
     }
@@ -253,12 +537,20 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
     if (payload instanceof ConsoleCatchUpApprovalRequest request) {
       return request.getTenantId();
     }
-    return null;
+    Object payloadTenantId = JsonUtils.toMap(payload).get("tenantId");
+    return payloadTenantId instanceof String tenantId ? tenantId : null;
   }
 
   private record TriggerLaunchPayload(
       String tenantId,
-      String jobCode,
+      Long workflowDefinitionId,
+      LocalDate bizDate,
+      TriggerType triggerType,
+      Map<String, Object> params) {}
+
+  private record WorkflowTriggerLaunchPayload(
+      String tenantId,
+      Long workflowDefinitionId,
       LocalDate bizDate,
       TriggerType triggerType,
       Map<String, Object> params) {}

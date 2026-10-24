@@ -12,8 +12,8 @@
 | 依赖和 Java 基线 | [`pom.xml`](../../pom.xml) |
 | 环境变量与本地默认值 | [`.env.example`](../../.env.example) |
 | 生产安全与运行参数 | [`helm/values-prod.yaml`](../../helm/values-prod.yaml)；网络拓扑由部署环境私有 values 注入，字段模板见 [`helm/values-site.example.yaml`](../../helm/values-site.example.yaml) |
-| 数据库迁移版本 | [`db/migration/`](../../db/migration/) |
-| 当前待办 | [`analysis/todo-master.md`](../analysis/todo-master.md) |
+| 数据库迁移版本 | [`db/migration/`](../../db/migration) |
+| 当前待办 | [`analysis/todo-master.md`](../plans/todo-master.md) |
 
 2026-04-09 的完整架构快照已移至
 [`archive/architecture/architecture-truth-2026-04-09.md`](../archive/architecture/architecture-truth-2026-04-09.md)，

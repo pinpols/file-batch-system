@@ -2,6 +2,7 @@ package io.github.pinpols.batch.common.health;
 
 import com.zaxxer.hikari.HikariDataSource;
 import com.zaxxer.hikari.HikariPoolMXBean;
+import java.util.Map;
 import javax.sql.DataSource;
 import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.HealthIndicator;
@@ -48,7 +49,8 @@ public class HikariSaturationHealthIndicator implements HealthIndicator {
         .withDetail("threshold", saturationThreshold);
     if (waiting > 0) {
       // 有线程在排队等连接 = 池子已经事实饱和,即使 active < threshold 也下沉
-      builder = Health.down().withDetails(builder.build().getDetails());
+      Map<String, Object> healthDetails = builder.build().getDetails();
+      builder = Health.down().withDetails(healthDetails);
     }
     return builder.build();
   }

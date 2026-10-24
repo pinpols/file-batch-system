@@ -133,9 +133,10 @@ ALTER TABLE batch.outbox_event RENAME TO outbox_event_legacy;
 ALTER TABLE batch.outbox_event_p RENAME TO outbox_event;
 
 -- 重建 FK（注意：PG 不允许跨分区表 FK；这里维持原 FK 形态需要 partition pruning 路径）
--- 由于分区键是 created_at，event_delivery_log 不带 created_at 列，做不到 native FK；
--- 改为应用层守护：cleanup-outbox-events.sql 已有级联删 event_delivery_log 步骤
--- 不重建 FK，留 doc 注释提醒。
+-- 此迁移脚本建立分区父表时，event_delivery_log 尚未携带 created_at，因此当时无法建立 native FK。
+-- 后续 V306 为 delivery/retry 子表补齐 outbox_event_created_at，并建立
+-- (tenant_id, outbox_event_id, outbox_event_created_at) -> (tenant_id, id, created_at) 原生 NO ACTION FK；
+-- 应用写入、归档并发协议及清理顺序见 docs/architecture/outbox-architecture.md。
 
 COMMIT;
 

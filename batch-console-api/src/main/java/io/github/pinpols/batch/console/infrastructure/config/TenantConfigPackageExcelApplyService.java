@@ -8,6 +8,7 @@ import static io.github.pinpols.batch.console.infrastructure.config.TenantConfig
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.*;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.*;
 
+import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
@@ -19,6 +20,7 @@ import io.github.pinpols.batch.console.config.JobMonitoringDefaultsProperties;
 import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.param.FileChannelConfigUpsertParam;
+import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDependencyRuleRequest;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
@@ -29,11 +31,10 @@ import io.github.pinpols.batch.console.domain.job.param.BusinessCalendarUpsertPa
 import io.github.pinpols.batch.console.domain.job.param.JobDefinitionMaintenanceUpdateParam;
 import io.github.pinpols.batch.console.domain.job.param.JobMonitoringPolicyUpsertParam;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
-import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
-import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineStepDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
@@ -50,6 +51,8 @@ import io.github.pinpols.batch.console.infrastructure.excel.FileTemplateExcelRow
 import io.github.pinpols.batch.console.infrastructure.excel.FileTemplateExcelRowParser.TemplateRow;
 import io.github.pinpols.batch.console.infrastructure.excel.ResourceQueueExcelRowParser;
 import io.github.pinpols.batch.console.infrastructure.excel.ResourceQueueExcelRowParser.QueueRow;
+import io.github.pinpols.batch.console.infrastructure.workflow.DefaultSingleJobWorkflowProvisioner;
+import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionWriteSupport;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -81,12 +84,12 @@ public class TenantConfigPackageExcelApplyService {
   private final FileChannelConfigMapper fileChannelConfigMapper;
   private final FileTemplateConfigMapper fileTemplateConfigMapper;
   private final JobDefinitionMapper jobDefinitionMapper;
+  private final DefaultSingleJobWorkflowProvisioner singleJobWorkflowProvisioner;
   private final JobMonitoringDefaultsProperties monitoringDefaults;
-  private final PipelineDefinitionMapper pipelineDefinitionMapper;
-  private final PipelineStepDefinitionMapper pipelineStepDefinitionMapper;
   private final WorkflowDefinitionMapper workflowDefinitionMapper;
   private final WorkflowNodeMapper workflowNodeMapper;
   private final WorkflowEdgeMapper workflowEdgeMapper;
+  private final WorkflowDefinitionWriteSupport workflowWriteSupport;
 
   public record ApplyContext(String tenantId, String operatorId, String reason, String traceId) {}
 
@@ -116,7 +119,9 @@ public class TenantConfigPackageExcelApplyService {
     ApplyStats channelStats = applyChannels(result.validChannels(), ctx);
     ApplyStats jobStats = applyJobs(result.validJobs(), ctx);
     applyJobMonitoringPolicies(result.validJobMonitoringPolicies(), ctx);
-    ApplyStats pipelineStats = applyPipelines(result.validPipelines(), result.validSteps(), ctx);
+    // Legacy Pipeline sheets are converted into Job.default_params during validation. Pipeline
+    // definitions and steps are never written from a tenant config package after this cutover.
+    ApplyStats pipelineStats = new ApplyStats(0, 0);
     ApplyStats wfStats =
         applyWorkflows(result.validWfDefs(), result.validWfNodes(), result.validWfEdges(), ctx);
     return new ApplyCounts(
@@ -297,7 +302,58 @@ public class TenantConfigPackageExcelApplyService {
         updated++;
       }
     }
+    // Dependencies are replaced after all job rows exist so package-local forward references
+    // satisfy the normalized relation's foreign key regardless of workbook row order.
+    for (Map<String, String> row : rows) {
+      String jobCode = normalize(row.get(COL_JOB_CODE));
+      // Older workbooks only carried the scalar column. Preserve its established blank-means-keep
+      // behavior on updates; a populated list column takes precedence over the scalar projection.
+      if (!Texts.hasText(row.get(COL_DEPENDS_ON_JOB_CODES))
+          && !Texts.hasText(row.get(COL_DEPENDS_ON_JOB_CODE))
+          && !Texts.hasText(row.get(ConfigPackageExcelSchema.COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS))) {
+        continue;
+      }
+      List<JobDependencyRuleRequest> dependencies = parseJobDependencyRules(row);
+      jobDefinitionMapper.deleteDependencies(ctx.tenantId(), jobCode);
+      if (!dependencies.isEmpty()) {
+        jobDefinitionMapper.insertDependencyRules(ctx.tenantId(), jobCode, dependencies);
+      }
+    }
     return new ApplyStats(inserted, updated);
+  }
+
+  private List<String> parseJobDependencies(Map<String, String> row) {
+    if (Texts.hasText(row.get(COL_DEPENDS_ON_JOB_CODES))) {
+      return splitDependencies(row.get(COL_DEPENDS_ON_JOB_CODES));
+    }
+    return splitDependencies(row.get(COL_DEPENDS_ON_JOB_CODE));
+  }
+
+  private List<JobDependencyRuleRequest> parseJobDependencyRules(Map<String, String> row) {
+    List<String> codes = parseJobDependencies(row);
+    String configuredAlignments =
+        row.get(ConfigPackageExcelSchema.COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS);
+    List<String> alignments = Texts.hasText(configuredAlignments)
+        ? java.util.Arrays.stream(configuredAlignments.split(","))
+            .map(String::trim)
+            .filter(Texts::hasText)
+            .toList()
+        : List.of();
+    return java.util.stream.IntStream.range(0, codes.size())
+        .mapToObj(index -> new JobDependencyRuleRequest(
+            codes.get(index), index < alignments.size() ? alignments.get(index) : "SAME_DAY"))
+        .toList();
+  }
+
+  private List<String> splitDependencies(String configured) {
+    if (!Texts.hasText(configured)) {
+      return List.of();
+    }
+    return java.util.Arrays.stream(configured.split(","))
+        .map(String::trim)
+        .filter(Texts::hasText)
+        .distinct()
+        .toList();
   }
 
   private boolean applyJob(Map<String, String> row, ApplyContext ctx) {
@@ -314,6 +370,7 @@ public class TenantConfigPackageExcelApplyService {
   private void insertJob(Map<String, String> row, ApplyContext ctx, String jobCode) {
     JobDefinitionEntity entity = newJobEntity(row, ctx, jobCode);
     jobDefinitionMapper.insert(entity);
+    singleJobWorkflowProvisioner.provision(entity);
     jobDefinitionMapper.upsertJobMonitoringPolicy(JobMonitoringPolicyUpsertParam.builder()
         .tenantId(ctx.tenantId())
         .jobDefinitionId(entity.getId())
@@ -342,7 +399,8 @@ public class TenantConfigPackageExcelApplyService {
     entity.setWorkerGroup(CodeNormalizer.toUpperOrNull(row.get(COL_WORKER_GROUP)));
     entity.setScheduleType(normalizeEnum(row.get(COL_SCHEDULE_TYPE)));
     entity.setScheduleExpr(normalize(row.get(COL_SCHEDULE_EXPR)));
-    entity.setDependsOnJobCode(normalize(row.get(COL_DEPENDS_ON_JOB_CODE)));
+    List<String> dependencies = parseJobDependencies(row);
+    entity.setDependsOnJobCode(dependencies.isEmpty() ? null : dependencies.getFirst());
     entity.setCalendarCode(CodeNormalizer.toConfigFormOrNull(row.get(COL_CALENDAR_CODE)));
     entity.setWindowCode(CodeNormalizer.toConfigFormOrNull(row.get(COL_WINDOW_CODE)));
     entity.setRetryPolicy(normalizeEnum(row.get(COL_RETRY_POLICY)));
@@ -374,8 +432,13 @@ public class TenantConfigPackageExcelApplyService {
     param.setQueueCode(mergeConfigCode(row, COL_QUEUE_CODE, existing.getQueueCode()));
     param.setWorkerGroup(mergeWorkerGroup(row, COL_WORKER_GROUP, existing.getWorkerGroup()));
     param.setScheduleExpr(mergeText(row, COL_SCHEDULE_EXPR, existing.getScheduleExpr()));
-    param.setDependsOnJobCode(
-        mergeText(row, COL_DEPENDS_ON_JOB_CODE, existing.getDependsOnJobCode()));
+    if (Texts.hasText(row.get(COL_DEPENDS_ON_JOB_CODES))) {
+      List<String> dependencies = parseJobDependencies(row);
+      param.setDependsOnJobCode(dependencies.isEmpty() ? null : dependencies.getFirst());
+    } else {
+      param.setDependsOnJobCode(
+          mergeText(row, COL_DEPENDS_ON_JOB_CODE, existing.getDependsOnJobCode()));
+    }
     param.setCalendarCode(mergeConfigCode(row, COL_CALENDAR_CODE, existing.getCalendarCode()));
     param.setWindowCode(mergeConfigCode(row, COL_WINDOW_CODE, existing.getWindowCode()));
     param.setRetryPolicy(mergeEnum(row, COL_RETRY_POLICY, existing.getRetryPolicy()));
@@ -605,67 +668,6 @@ public class TenantConfigPackageExcelApplyService {
     return new ApplyStats(inserted, updated);
   }
 
-  private ApplyStats applyPipelines(
-      List<Map<String, String>> pipelineRows,
-      List<Map<String, String>> stepRows,
-      ApplyContext ctx) {
-    Map<String, List<Map<String, String>>> stepsByKey = stepRows.stream()
-        .collect(Collectors.groupingBy(
-            r -> normalize(r.get(COL_JOB_CODE)) + KEY_SEP_COLON + normalize(r.get(COL_VERSION))));
-    int inserted = 0;
-    int updated = 0;
-    for (Map<String, String> row : pipelineRows) {
-      String jobCode = normalize(row.get(COL_JOB_CODE));
-      int version = Integer.parseInt(normalize(row.get(COL_VERSION)));
-      Map<String, Object> existing =
-          pipelineDefinitionMapper.selectByUniqueKey(ctx.tenantId(), jobCode, version);
-      Long pipelineId;
-      if (EmptyChecks.isEmpty(existing)) {
-        Map<String, Object> params = buildPipelineInsertParams(row, ctx);
-        pipelineDefinitionMapper.insert(params);
-        pipelineId = ((Number) params.get(KEY_ID)).longValue();
-        inserted++;
-      } else {
-        pipelineId = ((Number) existing.get(KEY_ID)).longValue();
-        Map<String, String> values =
-            mergeExistingValues(row, existing, ConfigPackageExcelSchema.PipelineDefinition.COLUMNS);
-        pipelineDefinitionMapper.update(buildPipelineUpdateParams(pipelineId, values, ctx));
-        updated++;
-      }
-      List<Map<String, String>> stepsForPipeline =
-          stepsByKey.getOrDefault(jobCode + KEY_SEP_COLON + version, List.of());
-      if (EmptyChecks.isNotEmpty(stepsForPipeline)) {
-        // Excel 导入大批量场景:同一 pipeline 平均 5-10 step,百级 pipeline 导入时
-        // 单插循环放大 5-10x;批量插入折成 1 次往返。
-        Map<String, Map<String, Object>> existingStepsByCode =
-            pipelineStepDefinitionMapper.selectByPipelineDefinitionId(pipelineId).stream()
-                .collect(Collectors.toMap(
-                    step -> String.valueOf(step.get(COL_STEP_CODE)),
-                    step -> step,
-                    (first, ignored) -> first));
-        List<Map<String, Object>> batchStepRows = new ArrayList<>(stepsForPipeline.size());
-        for (Map<String, String> step : stepsForPipeline) {
-          Map<String, Object> existingStep =
-              existingStepsByCode.get(normalize(step.get(COL_STEP_CODE)));
-          Map<String, String> values = mergeExistingValues(
-              step, existingStep, ConfigPackageExcelSchema.PipelineStep.COLUMNS);
-          String stepParams = TenantConfigReferenceResolver.normalizeConfigReferences(
-              normalize(values.get("step_params")));
-          if (Texts.hasText(stepParams)) {
-            String storedStepParams =
-                EmptyChecks.isNull(existingStep) ? null : jsonText(existingStep.get("step_params"));
-            stepParams = SecretMasking.preserveMaskedJson(stepParams, storedStepParams);
-            rejectUnresolvedSecretMasks(stepParams);
-            values.put("step_params", stepParams);
-          }
-          batchStepRows.add(buildStepInsertParams(pipelineId, values));
-        }
-        pipelineStepDefinitionMapper.upsertBatch(batchStepRows);
-      }
-    }
-    return new ApplyStats(inserted, updated);
-  }
-
   private ApplyStats applyWorkflows(
       List<Map<String, String>> defRows,
       List<Map<String, String>> nodeRows,
@@ -682,13 +684,33 @@ public class TenantConfigPackageExcelApplyService {
     int inserted = 0;
     int updated = 0;
     for (Map<String, String> row : defRows) {
-      String wfCode = normalize(row.get(COL_WORKFLOW_CODE));
-      int version = Integer.parseInt(normalize(row.get(COL_VERSION)));
-      WorkflowDefinitionEntity existing =
-          workflowDefinitionMapper.selectByUniqueKey(ctx.tenantId(), wfCode, version);
+      String sourceWorkflowCode = normalize(row.get(COL_WORKFLOW_CODE));
+      int sourceVersion = Integer.parseInt(normalize(row.get(COL_VERSION)));
+      String singleJobCode = normalize(row.get(COL_SINGLE_JOB_CODE));
+      JobDefinitionEntity singleJob = Texts.hasText(singleJobCode)
+          ? jobDefinitionMapper.selectByUniqueKey(ctx.tenantId(), singleJobCode)
+          : null;
+      if (Texts.hasText(singleJobCode) && singleJob == null) {
+        throw BizException.of(ResultCode.NOT_FOUND, "error.job.definition_not_found");
+      }
+      WorkflowDefinitionEntity existing = workflowDefinitionMapper.selectByUniqueKey(
+          ctx.tenantId(), sourceWorkflowCode, sourceVersion);
+      if (existing == null && singleJob != null) {
+        existing = workflowDefinitionMapper.selectBySingleJobDefinitionId(
+            ctx.tenantId(), singleJob.getId());
+      }
+      if (existing != null
+          && singleJob != null
+          && !singleJob.getId().equals(existing.getSingleJobDefinitionId())) {
+        throw BizException.of(
+            ResultCode.STATE_CONFLICT, "error.workflow.single_job_relation_conflict");
+      }
+      String targetWorkflowCode =
+          existing == null ? sourceWorkflowCode : existing.getWorkflowCode();
+      int currentVersion = existing == null ? sourceVersion : existing.getVersion();
       WorkflowDefinitionUpsertParam defParam = new WorkflowDefinitionUpsertParam();
       defParam.setTenantId(ctx.tenantId());
-      defParam.setWorkflowCode(wfCode);
+      defParam.setWorkflowCode(targetWorkflowCode);
       defParam.setWorkflowName(mergeText(
           row,
           COL_WORKFLOW_NAME,
@@ -697,29 +719,102 @@ public class TenantConfigPackageExcelApplyService {
           row,
           COL_WORKFLOW_TYPE,
           EmptyChecks.isNull(existing) ? null : existing.getWorkflowType()));
-      defParam.setVersion(version);
+      defParam.setVersion(currentVersion);
       defParam.setEnabled(parseBoolean(
           row.get(COL_ENABLED), EmptyChecks.isNull(existing) || existing.getEnabled()));
+      defParam.setSingleJobDefinitionId(
+          singleJob == null
+              ? (existing == null ? null : existing.getSingleJobDefinitionId())
+              : singleJob.getId());
+      defParam.setScheduleEnabled(parseBoolean(
+          row.get(COL_SCHEDULE_ENABLED),
+          existing != null && Boolean.TRUE.equals(existing.getScheduleEnabled())));
+      defParam.setScheduleType(mergeEnum(
+          row,
+          COL_SCHEDULE_TYPE,
+          EmptyChecks.isNull(existing) ? "MANUAL" : existing.getScheduleType()));
+      defParam.setScheduleExpr(mergeText(
+          row,
+          COL_SCHEDULE_EXPR,
+          EmptyChecks.isNull(existing) ? null : existing.getScheduleExpr()));
+      defParam.setTimezone(mergeText(
+          row,
+          COL_TIMEZONE,
+          EmptyChecks.isNull(existing)
+              ? CommonConstants.DEFAULT_TIMEZONE_ID
+              : existing.getTimezone()));
+      defParam.setTriggerMode(mergeEnum(
+          row,
+          COL_TRIGGER_MODE,
+          EmptyChecks.isNull(existing) ? "MANUAL" : existing.getTriggerMode()));
+      defParam.setCalendarCode(mergeText(
+          row,
+          COL_CALENDAR_CODE,
+          EmptyChecks.isNull(existing) ? null : existing.getCalendarCode()));
+      defParam.setDependsOnJobCode(mergeText(
+          row,
+          COL_DEPENDS_ON_JOB_CODE,
+          EmptyChecks.isNull(existing) ? null : existing.getDependsOnJobCode()));
       defParam.setDescription(mergeText(
           row, COL_DESCRIPTION, EmptyChecks.isNull(existing) ? null : existing.getDescription()));
       defParam.setCreatedBy(safeOp(ctx.operatorId()));
       defParam.setUpdatedBy(safeOp(ctx.operatorId()));
-      workflowDefinitionMapper.upsertWorkflowDefinition(defParam);
       if (existing == null) {
+        workflowDefinitionMapper.upsertWorkflowDefinition(defParam);
         inserted++;
       } else {
+        int rows = workflowDefinitionMapper.updateAndBumpVersion(
+            ctx.tenantId(),
+            existing.getId(),
+            currentVersion,
+            defParam.getWorkflowName(),
+            defParam.getWorkflowType(),
+            defParam.getEnabled(),
+            defParam.getScheduleEnabled(),
+            defParam.getScheduleType(),
+            defParam.getScheduleExpr(),
+            defParam.getTimezone(),
+            defParam.getTriggerMode(),
+            defParam.getCalendarCode(),
+            defParam.getDependsOnJobCode());
+        if (rows == 0) {
+          throw BizException.of(
+              ResultCode.STATE_CONFLICT, "error.workflow.definition_version_conflict");
+        }
         updated++;
       }
 
-      WorkflowDefinitionEntity saved =
-          workflowDefinitionMapper.selectByUniqueKey(ctx.tenantId(), wfCode, version);
+      WorkflowDefinitionEntity saved = existing == null
+          ? workflowDefinitionMapper.selectByUniqueKey(
+              ctx.tenantId(), targetWorkflowCode, currentVersion)
+          : existing;
       if (saved == null || saved.getId() == null) {
         continue;
       }
       Long defId = saved.getId();
-      String wfKey = wfCode + KEY_SEP_COLON + version;
+      String wfKey = sourceWorkflowCode + KEY_SEP_COLON + sourceVersion;
       applyWfNodes(ctx.tenantId(), defId, nodesByWf.getOrDefault(wfKey, List.of()));
       applyWfEdges(ctx.tenantId(), defId, edgesByWf.getOrDefault(wfKey, List.of()));
+      WorkflowDefinitionSaveRequest snapshot = new WorkflowDefinitionSaveRequest();
+      snapshot.setTenantId(ctx.tenantId());
+      snapshot.setWorkflowCode(targetWorkflowCode);
+      snapshot.setWorkflowName(defParam.getWorkflowName());
+      snapshot.setWorkflowType(defParam.getWorkflowType());
+      snapshot.setEnabled(defParam.getEnabled());
+      snapshot.setScheduleType(defParam.getScheduleType());
+      snapshot.setScheduleExpr(defParam.getScheduleExpr());
+      snapshot.setTimezone(defParam.getTimezone());
+      snapshot.setTriggerMode(defParam.getTriggerMode());
+      snapshot.setCalendarCode(defParam.getCalendarCode());
+      snapshot.setDependsOnJobCode(defParam.getDependsOnJobCode());
+      workflowWriteSupport.appendVersionSnapshot(
+          ctx.tenantId(),
+          defId,
+          targetWorkflowCode,
+          existing == null ? currentVersion : currentVersion + 1,
+          snapshot,
+          defParam.getScheduleEnabled(),
+          ctx.operatorId());
     }
     return new ApplyStats(inserted, updated);
   }
@@ -831,32 +926,6 @@ public class TenantConfigPackageExcelApplyService {
     }
   }
 
-  private Map<String, Object> buildPipelineInsertParams(Map<String, String> row, ApplyContext ctx) {
-    // PipelineDefinitionMapper.xml 的 insert/update 绑定是 snake_case（#{tenant_id} 等），
-    // 这里 key 必须与之一致，否则 MyBatis 找不到变量 → 绑 null → 撞 NOT NULL 约束 500。
-    Map<String, Object> p = new LinkedHashMap<>();
-    p.put("tenant_id", ctx.tenantId());
-    p.put("job_code", normalize(row.get(COL_JOB_CODE)));
-    p.put("pipeline_name", normalize(row.get(COL_PIPELINE_NAME)));
-    p.put("pipeline_type", normalizeEnum(row.get(COL_PIPELINE_TYPE)));
-    p.put("biz_type", normalize(row.get(COL_BIZ_TYPE)));
-    p.put("worker_group", CodeNormalizer.toUpperOrNull(row.get(COL_WORKER_GROUP)));
-    p.put(COL_VERSION, parseInteger(row.get(COL_VERSION)));
-    p.put(COL_ENABLED, parseBoolean(row.get(COL_ENABLED), true));
-    p.put(COL_DESCRIPTION, normalize(row.get(COL_DESCRIPTION)));
-    p.put("created_by", safeOp(ctx.operatorId()));
-    p.put("updated_by", safeOp(ctx.operatorId()));
-    p.put(KEY_ID, null);
-    return p;
-  }
-
-  private Map<String, Object> buildPipelineUpdateParams(
-      Long id, Map<String, String> row, ApplyContext ctx) {
-    Map<String, Object> p = buildPipelineInsertParams(row, ctx);
-    p.put(KEY_ID, id);
-    return p;
-  }
-
   private static Map<String, Object> workflowNodeValues(WorkflowNodeEntity node) {
     if (node == null) { // empty-check: allow - Sonar S2259
       return Map.of();
@@ -889,23 +958,6 @@ public class TenantConfigPackageExcelApplyService {
     values.put(COL_CONDITION_EXPR, edge.getConditionExpr());
     values.put(COL_ENABLED, edge.getEnabled());
     return values;
-  }
-
-  private Map<String, Object> buildStepInsertParams(Long pipelineId, Map<String, String> step) {
-    // PipelineStepDefinitionMapper.xml 的 insert 绑定也是 snake_case
-    Map<String, Object> p = new LinkedHashMap<>();
-    p.put("pipeline_definition_id", pipelineId);
-    p.put("step_code", normalize(step.get(COL_STEP_CODE)));
-    p.put("step_name", normalize(step.get(COL_STEP_NAME)));
-    p.put("stage_code", normalizeEnum(step.get(COL_STAGE_CODE)));
-    p.put("step_order", parseInteger(step.get("step_order")));
-    p.put("impl_code", normalize(step.get("impl_code")));
-    p.put("step_params", normalize(step.get("step_params")));
-    p.put("timeout_seconds", parseInteger(step.get(COL_TIMEOUT_SECONDS)));
-    p.put("retry_policy", normalizeEnum(step.get(COL_RETRY_POLICY)));
-    p.put("retry_max_count", parseInteger(step.get(COL_RETRY_MAX_COUNT)));
-    p.put(COL_ENABLED, parseBoolean(step.get(COL_ENABLED), true));
-    return p;
   }
 
   private static Map<String, String> mergeExistingValues(
@@ -941,15 +993,6 @@ public class TenantConfigPackageExcelApplyService {
     String merged = SecretMasking.preserveMaskedJson(incoming, stored);
     rejectUnresolvedSecretMasks(merged);
     return merged;
-  }
-
-  private static String jsonText(Object value) {
-    if (EmptyChecks.isNull(value)) {
-      return null;
-    }
-    return value instanceof Map<?, ?> || value instanceof List<?>
-        ? JsonUtils.toJson(value)
-        : value.toString();
   }
 
   private static void rejectUnresolvedSecretMasks(String json) {

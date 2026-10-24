@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.atomic.shell;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
 import java.nio.file.Files;
@@ -179,10 +180,7 @@ class ShellTaskExecutorTest {
   @DisplayName("能力声明应反映配置: 任务类型为命令执行, 占用计算与磁盘资源且可取消, 非幂等")
   void shouldExposeCapability_whenExecutorConfigured() {
     assertThat(executor.taskType()).isEqualTo("shell");
-    assertThat(executor.capability().resourceKinds())
-        .contains(
-            io.github.pinpols.batch.common.spi.task.ResourceKind.CPU,
-            io.github.pinpols.batch.common.spi.task.ResourceKind.DISK);
+    assertThat(executor.capability().resourceKinds()).contains(ResourceKind.CPU, ResourceKind.DISK);
     assertThat(executor.capability().idempotent()).isFalse();
     assertThat(executor.capability().cancellable()).isTrue();
     assertThat(executor.capability().recommendedTimeout()).isEqualTo(Duration.ofSeconds(10));

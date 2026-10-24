@@ -16,14 +16,47 @@
 
     <!-- ============================================================
          docs/agent-baseline.md: 方法参数数量不能超过 6 个
-         minimum=7 => 参数 ≥ 7 时触发违规。
-         构造器（record / DTO / Spring DI）按规约豁免，
-         如需单独豁免请在构造器上添加：
-             @SuppressWarnings("PMD.ExcessiveParameterList")
+         PMD 对 minimum 使用严格大于比较，设为 6 才能拦截参数 ≥ 7 的方法。
+         构造器（record / DTO / Spring DI）按既有规约豁免；
+         XPath 只匹配当前报告节点所属构造器，不影响同文件的普通方法。
          ============================================================ -->
     <rule ref="category/java/design.xml/ExcessiveParameterList">
         <properties>
-            <property name="minimum" value="7"/>
+            <property name="minimum" value="6"/>
+            <property name="violationSuppressXPath" value="./ancestor-or-self::ConstructorDeclaration"/>
+        </properties>
+    </rule>
+
+    <!-- Mapper 的 5/6 参数与 Service 公共接口的 6 参数边界比一般方法更严格。 -->
+    <rule name="MapperParameterCount" language="java"
+          message="Mapper 公共方法达到 5 个参数，必须使用具名参数对象。"
+          class="net.sourceforge.pmd.lang.rule.xpath.XPathRule">
+        <description>落实 coding-conventions §1 的 Mapper 公共方法参数边界。</description>
+        <priority>3</priority>
+        <properties>
+            <property name="xpath">
+                <value><![CDATA[
+                    //MethodDeclaration[@Visibility = 'public']
+                      [ancestor::ClassDeclaration[1][ends-with(@SimpleName, 'Mapper')]]
+                      [count(FormalParameters/FormalParameter) >= 5
+                       and count(FormalParameters/FormalParameter) < 7]
+                ]]></value>
+            </property>
+        </properties>
+    </rule>
+    <rule name="ServicePublicParameterCount" language="java"
+          message="Service 公共接口达到 6 个参数，必须使用具名参数对象。"
+          class="net.sourceforge.pmd.lang.rule.xpath.XPathRule">
+        <description>落实 coding-conventions §1 的 Service 公共接口参数边界。</description>
+        <priority>3</priority>
+        <properties>
+            <property name="xpath">
+                <value><![CDATA[
+                    //MethodDeclaration[@Visibility = 'public']
+                      [ancestor::ClassDeclaration[1][ends-with(@SimpleName, 'Service')]]
+                      [count(FormalParameters/FormalParameter) = 6]
+                ]]></value>
+            </property>
         </properties>
     </rule>
 

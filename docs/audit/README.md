@@ -5,6 +5,7 @@
 
 | 文档 | 范围 |
 |---|---|
+| [design-closure-review-2026-10-14.md](./design-closure-review-2026-10-14.md) | PROCESS 清理、Export 发布重试、补跑配置版本、取消收口与批量 CLAIM 的六项缺陷；区分 SQL 实证与静态调用链证据 |
 | [code-readability-governance-2026-10-13.md](./code-readability-governance-2026-10-13.md) | 前后端方法调用、多个 `null`、合法状态、字符串、设计模式与数据结构治理闭环及验证边界 |
 | [cross-repo-governance-drift-review-2026-10-12.md](./cross-repo-governance-drift-review-2026-10-12.md) | 前后端 CI 守卫范围、基线与人工/AI 周期复核的证据快照；当前缺陷状态须重新核对 |
 | [tenant-job-configuration-phase0-baseline-2026-10-10.md](./tenant-job-configuration-phase0-baseline-2026-10-10.md) | **历史基线快照**：记录 2026-10-10 改造前的前后端事实与未决决策；阶段 0–4 当前状态统一见[租户作业配置改造计划](../plans/tenant-job-configuration-simplification-plan-2026-10-09.md)的阶段状态矩阵 |
